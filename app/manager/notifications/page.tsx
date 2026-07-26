@@ -1,0 +1,77 @@
+"use client";
+
+/*
+  관리자 알림 화면
+  - 신규 구매 / 신규 후기 / 신규 예약·취소 등 알림 누적
+  - 들어오면 전체 읽음 처리
+  - 누르면 해당 관리 화면으로 이동
+*/
+
+import { useEffect, useState } from "react";
+import Loading from "../../components/Loading";
+import ManagerNav from "../../components/ManagerNav";
+import {
+  fetchNotifications, markRead, deleteNotification, notiEmoji,
+  type Notification,
+} from "../../../lib/notifications";
+
+export default function ManagerNotificationsPage() {
+  const [list, setList] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const ns = await fetchNotifications();
+      setList(ns);
+      setLoading(false);
+      await markRead();
+    })();
+  }, []);
+
+  function handleClick(n: Notification) {
+    if (n.link) window.location.href = n.link;
+  }
+
+  async function handleDelete(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    await deleteNotification(id);
+    setList((prev) => prev.filter((n) => n.id !== id));
+  }
+
+  if (loading) return <Loading />;
+
+  return (
+    <div className="app-shell">
+      <div className="header">
+        <div className="title" style={{ fontSize: 20, fontWeight: 800 }}>알림</div>
+      </div>
+
+      {list.length === 0 ? (
+        <div className="empty-note" style={{ padding: "50px 20px", textAlign: "center", color: "var(--text-dim)" }}>
+          아직 알림이 없어요.
+        </div>
+      ) : (
+        <div className="noti-list">
+          {list.map((n) => (
+            <div
+              key={n.id}
+              className={`noti-row ${n.read ? "" : "unread"}`}
+              onClick={() => handleClick(n)}
+            >
+              <span className="noti-emoji">{notiEmoji(n.kind)}</span>
+              <div className="noti-main">
+                <div className="noti-title">{n.title}</div>
+                <div className="noti-body">{n.body}</div>
+                <div className="noti-time">{n.createdAt}</div>
+              </div>
+              <button className="noti-del" onClick={(e) => handleDelete(n.id, e)}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ height: 20 }} />
+      <ManagerNav />
+    </div>
+  );
+}

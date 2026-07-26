@@ -1,0 +1,78 @@
+"use client";
+
+/*
+  매니저 1:1 문의
+  - 자기 센터로 온 문의방 목록
+  - 채팅방에서 답변 (사진/글, 실시간)
+*/
+
+import { useEffect, useState } from "react";
+import Loading from "../../components/Loading";
+import ManagerNav from "../../components/ManagerNav";
+import InquiryChat from "../../components/InquiryChat";
+import { fetchCenterThreads, type InquiryThread } from "../../../lib/inquiries";
+
+export default function ManagerInquiriesPage() {
+  const [threads, setThreads] = useState<InquiryThread[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [active, setActive] = useState<{ id: string; title: string } | null>(null);
+
+  async function loadThreads() {
+    setThreads(await fetchCenterThreads());
+  }
+
+  useEffect(() => {
+    (async () => {
+      await loadThreads();
+      setLoading(false);
+    })();
+  }, []);
+
+  async function backToList() {
+    setActive(null);
+    await loadThreads();
+  }
+
+  if (loading) return <Loading />;
+
+  if (active) {
+    return (
+      <div className="app-shell">
+        <InquiryChat threadId={active.id} title={active.title} onBack={backToList} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-shell">
+      <div className="header">
+        <div className="title" style={{ fontSize: 20, fontWeight: 800 }}>1:1 문의</div>
+      </div>
+
+      {threads.length === 0 ? (
+        <div className="empty-note" style={{ padding: "50px 20px", textAlign: "center", color: "var(--text-dim)" }}>
+          아직 들어온 문의가 없어요.
+        </div>
+      ) : (
+        <div className="thread-list">
+          {threads.map((t) => (
+            <button key={t.id} className="thread-row" onClick={() => setActive({ id: t.id, title: t.centerName + " · 회원 문의" })}>
+              <div className="thread-avatar">💬</div>
+              <div className="thread-main">
+                <div className="thread-top">
+                  <span className="thread-name">{t.centerName} 회원</span>
+                  {t.lastMessageAt && <span className="thread-time">{t.lastMessageAt}</span>}
+                </div>
+                <div className="thread-preview">{t.lastMessage ?? "새 문의"}</div>
+              </div>
+              {t.unread > 0 && <span className="thread-unread">{t.unread}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ height: 20 }} />
+      <ManagerNav />
+    </div>
+  );
+}
