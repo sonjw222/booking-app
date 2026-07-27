@@ -8,7 +8,7 @@
   - 기술 목록은 1단계에서 만든 progress_categories 에서 실제로 불러옴
 */
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import ManagerNav from "../../../components/ManagerNav";
 import { useSearchParams } from "next/navigation";
 import Loading from "../../../components/Loading";
@@ -28,6 +28,14 @@ function fmtMD(d: string) {
 }
 
 export default function ProgressRecordPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <ProgressRecordContent />
+    </Suspense>
+  );
+}
+
+function ProgressRecordContent() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [centerId, setCenterId] = useState<string | null>(null);
   const [tree, setTree] = useState<CategoryNode[]>([]);

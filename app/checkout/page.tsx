@@ -7,7 +7,7 @@
   - 결제 수단 연동 전이므로 "결제하기" 시 주문 생성(pending) 후 완료 안내
 */
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { useSearchParams } from "next/navigation";
 import { fetchCenterDetail, fetchCenterProducts, type CenterProduct } from "../../lib/center";
@@ -30,6 +30,14 @@ const MY_COUPONS = [
 ];
 
 export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <CheckoutContent />
+    </Suspense>
+  );
+}
+
+function CheckoutContent() {
   const sp = useSearchParams();
   const centerId = sp.get("center") ?? "";
   const productId = sp.get("product") ?? "";

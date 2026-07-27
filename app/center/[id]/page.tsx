@@ -7,7 +7,8 @@
   - 로그인 없이도 열림 (승인된 센터만)
 */
 
-import { useCallback, useEffect, useState } from "react";import Loading from "../../components/Loading";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import Loading from "../../components/Loading";
 import { useParams, useSearchParams } from "next/navigation";
 import {
   fetchCenterDetail, fetchCenterClasses, centerPhotoUrl,
@@ -19,6 +20,14 @@ import { addToCart } from "../../../lib/cart";
 import { fetchReviews, myReviewFor, writeReview, deleteReview, uploadReviewPhoto, reviewPhotoUrl, type Review } from "../../../lib/reviews";
 
 export default function CenterDetailPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <CenterDetailContent />
+    </Suspense>
+  );
+}
+
+function CenterDetailContent() {
   const params = useParams();
   const centerId = String(params.id);
   const searchParams = useSearchParams();

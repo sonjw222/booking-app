@@ -7,7 +7,7 @@
   - 엑셀(CSV) 내보내기: 내보낼 항목 선택
 */
 
-import { useCallback, useEffect, useState, useRef } from "react";
+import { Suspense, useCallback, useEffect, useState, useRef } from "react";
 import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
 import { useSearchParams } from "next/navigation";
@@ -47,6 +47,14 @@ const CSV_COLUMNS = [
 const GRADE_COLORS = ["#E86A5E", "#F0B429", "#EC8FA8", "#5B8DEF", "#3E9C8C", "#8B6BB1"];
 
 export default function MembersPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <MembersContent />
+    </Suspense>
+  );
+}
+
+function MembersContent() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [centerId, setCenterId] = useState<string | null>(null);
   const [members, setMembers] = useState<CenterMember[]>([]);

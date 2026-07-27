@@ -66,7 +66,7 @@ export default function SalesPage() {
   const [staff, setStaff] = useState<{ accountId: string; name: string }[]>([]);
   const [fProfile, setFProfile] = useState("");
   const [fSaleType, setFSaleType] = useState("new");
-  const [saleProducts, setSaleProducts] = useState<{ id: string; name: string; price: number; totalCount: number | null }[]>([]);
+  const [saleProducts, setSaleProducts] = useState<{ id: string; name: string; price: number; totalCount: number | null; kind: "pass" | "goods"; unlimited: boolean }[]>([]);
   const [fProductId, setFProductId] = useState("");
   const [fGoodsId, setFGoodsId] = useState("");
 

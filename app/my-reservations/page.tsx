@@ -38,7 +38,7 @@ export default function MyReservationsPage() {
 
   const shown = history.filter((h) => {
     if (filter === "upcoming") return h.status === "confirmed" || h.status === "waitlisted";
-    if (filter === "past") return h.status === "completed" || h.status === "attended" || h.status === "no_show" || h.status === "cancelled";
+    if (filter === "past") return h.status === "attended" || h.status === "no_show" || h.status === "cancelled";
     return true;
   });
 

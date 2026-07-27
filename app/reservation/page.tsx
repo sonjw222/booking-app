@@ -11,7 +11,7 @@
   2. AUTH_SETUP.md 의 RLS 정책 실행 + 로그인 상태여야 함
 */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Loading from "../components/Loading";
 import { useSearchParams, useRouter } from "next/navigation";
 import BottomNav from "../components/BottomNav";
@@ -50,6 +50,14 @@ function buildCalendarGrid(year: number, month: number) {
 }
 
 export default function ReservationCalendar() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <ReservationCalendarContent />
+    </Suspense>
+  );
+}
+
+function ReservationCalendarContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const now = new Date();
