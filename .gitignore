@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# generated artifacts (not source — regenerate locally, don't commit)
+/graphify-out/
+/Project_Manual.pdf
