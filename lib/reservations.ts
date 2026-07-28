@@ -210,27 +210,35 @@ export async function reserveClass(
   return (data as any).status;
 }
 
-// 특정 프로필이 특정 센터에서 보유한 상품(goods) 목록 (예약 확인창에서 선택용)
+// 특정 프로필이 여러 센터에서 보유한 상품(goods) 목록을 한 번에 조회 (예약 확인창 선택용, N+1 방지)
+// 반환: centerId -> 그 센터에서 사용 가능한 상품 목록
 export type MyGoods = { id: string; name: string; remaining: number | null; unlimited: boolean };
 
-export async function fetchMyGoodsForCenter(profileId: string, centerId: string): Promise<MyGoods[]> {
+export async function fetchMyGoodsByCenter(
+  profileId: string, centerIds: string[]
+): Promise<Record<string, MyGoods[]>> {
+  if (centerIds.length === 0) return {};
   const { data, error } = await supabase
     .from("memberships")
-    .select("id, product_name, remaining_count, expires_at, status, products(product_kind, unlimited)")
+    .select("id, center_id, product_name, remaining_count, expires_at, status, products(product_kind, unlimited)")
     .eq("profile_id", profileId)
-    .eq("center_id", centerId)
+    .in("center_id", centerIds)
     .eq("status", "active");
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
-  return (data ?? [])
-    .filter((m: any) => m.products?.product_kind === "goods")
-    .filter((m: any) => m.products?.unlimited || (m.remaining_count ?? 0) > 0)
-    .filter((m: any) => !m.expires_at || m.expires_at >= new Date().toISOString().slice(0, 10))
-    .map((m: any) => ({
+  const today = new Date().toISOString().slice(0, 10);
+  const out: Record<string, MyGoods[]> = {};
+  for (const m of (data ?? []) as any[]) {
+    if (m.products?.product_kind !== "goods") continue;
+    if (!(m.products?.unlimited || (m.remaining_count ?? 0) > 0)) continue;
+    if (m.expires_at && m.expires_at < today) continue;
+    (out[m.center_id] ??= []).push({
       id: m.id,
       name: m.product_name,
       remaining: m.products?.unlimited ? null : m.remaining_count,
       unlimited: m.products?.unlimited ?? false,
-    }));
+    });
+  }
+  return out;
 }
 
 // 내 프로필 목록 (예약 주체 선택용)
@@ -280,22 +288,123 @@ export type UsableMembership = {
   isMine: boolean;        // 선택한 프로필 본인 것인지
 };
 
-// 이 수업에 이 프로필로 쓸 수 있는 수강권 목록
-export async function fetchUsableMemberships(
-  classId: string, profileId: string
-): Promise<UsableMembership[]> {
-  const { data, error } = await supabase.rpc("usable_memberships", {
-    p_class_id: classId, p_profile_id: profileId,
+// 여러 수업에 대해 이 프로필로 쓸 수 있는 수강권 목록을 한 번에 조회 (N+1 방지)
+// 반환: classId -> 그 수업에 사용 가능한 수강권 목록
+// ⚠ Supabase 함수 usable_memberships_for_classes()는 예약 시점에 실제로 쓰이는
+//   usable_memberships()/reserve_with_membership()과 판정 조건이 동일해야 함
+//   (fix_usable_memberships_shared.sql 참고) — 목록 표시와 실제 예약 가능 여부가 어긋나면 안 됨
+export async function fetchUsableMembershipsByClass(
+  classIds: string[], profileId: string
+): Promise<Record<string, UsableMembership[]>> {
+  if (classIds.length === 0) return {};
+  const { data, error } = await supabase.rpc("usable_memberships_for_classes", {
+    p_class_ids: classIds, p_profile_id: profileId,
   });
   if (error) throw new Error("수강권을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => ({
-    membershipId: r.membership_id,
-    productName: r.product_name,
-    remainingCount: r.remaining_count,
-    expiresAt: r.expires_at,
-    ownerProfile: r.owner_profile ?? "",
-    isMine: r.is_mine ?? false,
-  }));
+  const out: Record<string, UsableMembership[]> = {};
+  for (const r of (data ?? []) as any[]) {
+    (out[r.class_id] ??= []).push({
+      membershipId: r.membership_id,
+      productName: r.product_name,
+      remainingCount: r.remaining_count,
+      expiresAt: r.expires_at,
+      ownerProfile: r.owner_profile ?? "",
+      isMine: r.is_mine ?? false,
+    });
+  }
+  return out;
+}
+
+// 이 수업에 사용 가능하지만 아직 보유하지 않은, 구매 가능한 수강권
+// (예약 모달에서 "사용 가능한 수강권 없음"일 때 무엇을 사면 되는지 안내하기 위함)
+export type PurchasableProduct = {
+  productId: string;
+  productName: string;
+  price: number;
+  kind: "pass" | "goods";
+};
+
+// 여러 수업(각자의 센터)에 대해 "구매하면 이 수업에 쓸 수 있는 상품" 목록을 한 번에 조회
+// - class_allowed_products에 지정이 있으면 그 상품들만, 없으면 그 센터의 모든 판매중 상품
+//   (usable_memberships()의 "지정 없으면 전체 허용" 판정과 동일한 기준)
+// - 판매중지/비활성화/삭제 상품 제외, 다른 센터 상품 제외
+// - profileIds가 이미 보유(active) 중인 상품은 목록에서 제외 (schedule_rules로 이 수업엔 못 써도 "보유"로 간주)
+export async function fetchPurchasableProductsByClass(
+  classCenterPairs: { classId: string; centerId: string }[],
+  profileIds: string[]
+): Promise<Record<string, PurchasableProduct[]>> {
+  if (classCenterPairs.length === 0) return {};
+  const classIds = classCenterPairs.map((p) => p.classId);
+  const centerIdByClass: Record<string, string> = {};
+  for (const p of classCenterPairs) centerIdByClass[p.classId] = p.centerId;
+  const centerIds = Array.from(new Set(classCenterPairs.map((p) => p.centerId)));
+
+  const [linksRes, allProductsRes, ownedRes] = await Promise.all([
+    supabase
+      .from("class_allowed_products")
+      .select("class_id, products(id, name, price, product_kind, center_id, is_active, is_on_sale)")
+      .in("class_id", classIds),
+    supabase
+      .from("products")
+      .select("id, name, price, product_kind, center_id, is_active, is_on_sale")
+      .in("center_id", centerIds)
+      .eq("is_active", true)
+      .eq("is_on_sale", true),
+    profileIds.length > 0
+      ? supabase
+          .from("memberships")
+          .select("product_id, center_id, status, remaining_count, expires_at")
+          .in("profile_id", profileIds)
+          .in("center_id", centerIds)
+          .eq("status", "active")
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (linksRes.error) throw new Error("구매 가능한 수강권을 불러오지 못했어요: " + linksRes.error.message);
+  if (allProductsRes.error) throw new Error("구매 가능한 수강권을 불러오지 못했어요: " + allProductsRes.error.message);
+  if (ownedRes.error) throw new Error("보유 수강권을 확인하지 못했어요: " + ownedRes.error.message);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const ownedProductIds = new Set<string>();
+  for (const m of (ownedRes.data ?? []) as any[]) {
+    if (!m.product_id) continue;
+    const active = (m.remaining_count == null || m.remaining_count > 0) && (!m.expires_at || m.expires_at >= today);
+    if (active) ownedProductIds.add(m.product_id);
+  }
+
+  const toProduct = (p: any): PurchasableProduct => ({
+    productId: p.id,
+    productName: p.name,
+    price: p.price,
+    kind: p.product_kind === "goods" ? "goods" : "pass",
+  });
+
+  // 수업별 "지정된 상품" 목록 (없으면 미지정 = 전체 허용으로 아래에서 처리)
+  const restrictedByClass: Record<string, PurchasableProduct[]> = {};
+  const hasRestriction = new Set<string>();
+  for (const l of (linksRes.data ?? []) as any[]) {
+    hasRestriction.add(l.class_id);
+    const p = l.products;
+    if (!p) continue;
+    if (!p.is_active || !p.is_on_sale) continue;
+    if (p.center_id !== centerIdByClass[l.class_id]) continue;
+    if (ownedProductIds.has(p.id)) continue;
+    (restrictedByClass[l.class_id] ??= []).push(toProduct(p));
+  }
+
+  // 센터별 "판매중인 전체 상품" 목록 (지정 없는 수업에 사용)
+  const allByCenter: Record<string, PurchasableProduct[]> = {};
+  for (const p of (allProductsRes.data ?? []) as any[]) {
+    if (ownedProductIds.has(p.id)) continue;
+    (allByCenter[p.center_id] ??= []).push(toProduct(p));
+  }
+
+  const out: Record<string, PurchasableProduct[]> = {};
+  for (const { classId, centerId } of classCenterPairs) {
+    out[classId] = hasRestriction.has(classId)
+      ? (restrictedByClass[classId] ?? [])
+      : (allByCenter[centerId] ?? []);
+  }
+  return out;
 }
 
 // 수강권을 지정해서 예약

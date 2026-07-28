@@ -80,18 +80,49 @@
       권한 없는 스태프가 할 수 없는 작업의 버튼을 눌러보고서야 실패를 알게 되는 UX입니다 — [REQUIREMENTS.md](./REQUIREMENTS.md) "권한/역할" 절 참고.
     → 새 매니저/관리자 페이지를 추가할 때 이 체크를 빠뜨리기 쉬운 구조이므로, 페이지 템플릿화(공용 가드 컴포넌트/훅) 또는 최소한 체크리스트화를 권장합니다.
 
-13. **60개 이상의 SQL 마이그레이션을 수동 순서 실행 (가능성)**
+13. **`fix_usable_memberships_shared.sql`을 Supabase에 아직 실행하지 않음 [진행 필요]**
+    2026-07-28 예약창 수강권 표시 개선 작업으로 `usable_memberships`/`reserve_with_membership`를 "계정 공유" 기준으로
+    통일하고, 목록 조회용 `usable_memberships_for_classes()`를 새로 추가했습니다. 이 파일을 Supabase SQL Editor에서
+    실행하기 전까지는 예약창에서 수강권 조회 시 "function usable_memberships_for_classes does not exist" 오류가 납니다.
+    → 실행 후 `bound_profile_id`(`add_pass_binding.sql`에서 추가된 컬럼)는 어떤 함수에서도 더 이상 판정에 쓰이지 않는
+    죽은 컬럼이 됩니다. 실제로 더 이상 쓸 계획이 없다면 별도 승인 후 컬럼 삭제를 검토하세요(이번 작업 범위 밖).
+
+14. **60개 이상의 SQL 마이그레이션을 수동 순서 실행 (가능성)**
     마이그레이션 도구 없이 Supabase SQL Editor에 파일을 순서대로 붙여넣는 방식이라, 새 환경 구축 시 순서를 하나라도
     빠뜨리면 이후 파일이 참조하는 테이블/함수가 없어 실패할 수 있습니다. `README.md`가 일부 순서(공지→알림→알림트리거→문의)만
     명시하고 전체 60여 개 파일의 완전한 순서는 문서화되어 있지 않습니다. → [DATABASE.md](./DATABASE.md) 5절에 실행 순서를 정리해두었으니 갱신 시 참고.
 
+15. **예약 모달 "구매 가능한 수강권" 안내 → 구매 화면 필터는 UI 편의일 뿐, 실제 예약 가능 여부를 보장하지 않음 [설계상 한계]**
+    2026-07-28에 추가한 `fetchPurchasableProductsByClass()`는 `class_allowed_products` + `products.is_active/is_on_sale`
+    + 계정 보유(active) 수강권 제외 기준으로 "사면 이 수업에 쓸 수 있는 상품"을 보여줍니다. "수강권 구매하기" 버튼은 이 상품 id 목록을
+    `/center/[id]?buy=1&productIds=...`로 넘겨 구매 시트에서 필터링하지만, 이는 클라이언트 쪽 화면 필터일 뿐이며 "전체 상품 보기"로
+    언제든 해제할 수 있고 결제(`/checkout`) 단계에서 강제되지 않습니다. 또한 수강권 예약조건(`membership_schedule_rules`)은
+    상품 자체가 아니라 "언제 쓸 수 있는지"를 결정하므로, 구매 시점엔 노출한 상품이 이후 요일/시간 조건 때문에 결국 이 수업에
+    못 쓰일 가능성은 이론상 여전히 남아 있습니다(현재 조건 자체는 `usable_memberships()`와 동일 기준으로 이미 반영됨).
+
+16. **결제 완료 → 예약 자동 이어가기는 "주문 접수" 시점 기준이며, 실제 수강권 발급은 매니저 수동 확인 이후 [설계상 한계 — P0 #1과 연결]**
+    2026-07-28에 결제 완료(`app/checkout/page.tsx`) 후 약 1.8초 뒤 자동으로 그 예약 화면(날짜/센터/수업 모달 복원)으로 돌아가고,
+    돌아오면 보유 수강권을 다시 조회해 새로 산 수강권이 있으면 자동 선택(기존 `usablePassesByClass` 갱신 시 첫 항목 자동 선택 로직 재사용)되도록
+    연결했습니다. 다만 `lib/orders.ts`의 `createOrder()`는 `orders`를 `pending`으로만 만들고, 실제 `memberships` 발급은
+    `fulfill_order()`(`add_order_fulfillment.sql`)를 매니저가 `/manager/orders`에서 수동으로 실행해야 일어납니다(P0 #1 "실제 결제 연동 없음"과 동일 원인).
+    즉, 지금 상태로는 결제 완료 직후 예약 화면에 돌아와도 대부분 아직 "사용 가능한 수강권 없음"이 그대로 보이며, 매니저가 나중에
+    발급을 확인한 뒤 이 화면을 다시 열어야 새 수강권이 잡힙니다. PG 연동/자동 발급이 붙기 전까지는 "예약 버튼만 누르면 되는 흐름"이
+    완전히 즉시 이어지지는 않는다는 점을 안내 문구에도 반영해뒀습니다("수강권이 발급되면 예약을 이어서 진행할 수 있어요").
+
+17. **예약↔센터↔결제 화면 간 forward 파라미터 이름이 두 파일에 중복 기술됨 [경미, 리팩터링 후보]**
+    "돌아가는" URL(`/reservation?openClassId=...`)은 `lib/reservationNav.ts`의 `reservationReturnUrl()` 하나로 모아뒀지만,
+    반대 방향으로 "다음 단계로 넘어갈 때" 붙이는 파라미터(`reserveClassId`, `reserveDate`, `reserveCenter`, `productIds`, `showAll`)는
+    `app/reservation/page.tsx`(→ 센터로 이동), `app/center/[id]/page.tsx`(→ 결제로 이동) 두 곳에 각각 인라인 문자열로 조립되어 있습니다.
+    지금은 이름이 일치하지만, 둘 중 하나만 고치면 조용히 어긋날 수 있는 구조라 나중에 파라미터가 하나라도 늘면 `reservationReturnUrl()`처럼
+    공용 헬퍼로 뽑는 것을 권장합니다.
+
 ## P3 — 참고/모니터링 필요 (긴급하지 않음)
 
-14. **매니저 대시보드 일부 메뉴 미연동 가능성**
+18. **매니저 대시보드 일부 메뉴 미연동 가능성**
     `app/manager/page.tsx` 주석: "관리 메뉴: 수업/수강권조건/진도표/회원 (일부는 다음 단계에서 실연동)" — 이 주석이
     최신 상태를 반영하는지 재검증 필요(작성 시점과 현재 구현 상태가 다를 수 있음).
 
-15. **Tailwind가 설치·설정만 되어 있고 실제로는 적용되지 않음 [확인됨]**
+19. **Tailwind가 설치·설정만 되어 있고 실제로는 적용되지 않음 [확인됨]**
     `package.json`에 `tailwindcss`, `@tailwindcss/postcss`가 있고 `postcss.config.mjs`도 이를 플러그인으로 등록했지만,
     프로젝트의 유일한 CSS 파일인 `app/globals.css`에 `@import "tailwindcss"`/`@tailwind` 지시문이 전혀 없어 Tailwind 유틸리티 CSS가 생성되지 않습니다.
     그런데 `app/layout.tsx:30`은 `className="min-h-full flex flex-col"`처럼 Tailwind 유틸리티 클래스를 사용하고 있어,

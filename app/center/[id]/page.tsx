@@ -7,7 +7,7 @@
   - 로그인 없이도 열림 (승인된 센터만)
 */
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Loading from "../../components/Loading";
 import { useParams, useSearchParams } from "next/navigation";
 import {
@@ -18,6 +18,7 @@ import {
 import BottomNav from "../../components/BottomNav";
 import { addToCart } from "../../../lib/cart";
 import { fetchReviews, myReviewFor, writeReview, deleteReview, uploadReviewPhoto, reviewPhotoUrl, type Review } from "../../../lib/reviews";
+import { reservationReturnUrl } from "../../../lib/reservationNav";
 
 export default function CenterDetailPage() {
   return (
@@ -34,6 +35,20 @@ function CenterDetailContent() {
   // 예약창에서 "수강권 구매하기"로 넘어온 경우: 구매 후 바로 예약할 수업 정보
   const reserveClassId = searchParams.get("reserveClassId");
   const reserveDate = searchParams.get("reserveDate");
+  // 예약창에서 보고 있던 센터 필터 (뒤로가기/구매 완료 후 예약 화면 복원용)
+  const reserveCenter = searchParams.get("reserveCenter");
+  // 예약창에서 들어온 경우, 뒤로가기 시 홈이 아니라 그 예약 화면(날짜/센터/수업 모달까지)으로 복귀
+  const backHref = reserveClassId && reserveDate
+    ? reservationReturnUrl({ classId: reserveClassId, date: reserveDate, center: reserveCenter })
+    : "/";
+  // 예약창에서 특정 수업에 쓸 수 있는 상품만 필터링해서 보여달라고 넘어온 경우
+  const filterProductIds = useMemo(() => {
+    const raw = searchParams.get("productIds");
+    if (!raw) return null;
+    const ids = raw.split(",").filter(Boolean);
+    return ids.length > 0 ? new Set(ids) : null;
+  }, [searchParams]);
+  const [showAllProducts, setShowAllProducts] = useState(() => searchParams.get("showAll") === "1");
   const [center, setCenter] = useState<CenterDetail | null>(null);
   const [classes, setClasses] = useState<CenterClass[]>([]);
   const [products, setProducts] = useState<CenterProduct[]>([]);
@@ -102,10 +117,14 @@ function CenterDetailContent() {
   }
 
   function handlePurchase(p: CenterProduct) {
-    // 결제 화면으로 이동 (예약창에서 넘어온 경우, 예약할 수업 정보도 함께 전달)
+    // 결제 화면으로 이동 (예약창에서 넘어온 경우, 예약할 수업/필터 상태도 함께 전달해
+    // 결제 완료 후 또는 뒤로가기 시 지금 이 화면 상태로 되돌아올 수 있게 함)
     let url = `/checkout?center=${centerId}&product=${p.id}`;
     if (reserveClassId && reserveDate) {
       url += `&reserveClassId=${reserveClassId}&reserveDate=${encodeURIComponent(reserveDate)}`;
+      if (reserveCenter) url += `&reserveCenter=${reserveCenter}`;
+      if (filterProductIds) url += `&productIds=${Array.from(filterProductIds).join(",")}`;
+      if (showAllProducts) url += `&showAll=1`;
     }
     window.location.href = url;
   }
@@ -158,7 +177,7 @@ function CenterDetailContent() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/">‹</a>
+          <a className="side" href={backHref}>‹</a>
           <div className="title">센터 정보</div>
           <div className="side" />
         </div>
@@ -171,7 +190,7 @@ function CenterDetailContent() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/">‹</a>
+          <a className="side" href={backHref}>‹</a>
           <div className="title">센터 정보</div>
           <div className="side" />
         </div>
@@ -235,20 +254,33 @@ function CenterDetailContent() {
         </div>
       )}
 
-      {buySheet && (
+      {buySheet && (() => {
+        const applyFilter = filterProductIds && !showAllProducts;
+        const visibleProducts = applyFilter ? products.filter((p) => filterProductIds!.has(p.id)) : products;
+        return (
         <div className="sheet-overlay" onClick={() => setBuySheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">수강권 · 상품 구매</div>
             <a href="/cart" className="cart-link-btn">🛒 장바구니 보기</a>
-            {products.length === 0 ? (
-              <div className="daylist-empty" style={{ padding: 16 }}>판매 중인 상품이 없어요</div>
+            {filterProductIds && (
+              <div className="class-filter-notice">
+                <span>{applyFilter ? "이 수업에 사용할 수 있는 수강권만 표시 중" : "전체 상품 표시 중"}</span>
+                <button className="class-filter-clear-btn" onClick={() => setShowAllProducts((v) => !v)}>
+                  {applyFilter ? "전체 상품 보기" : "이 수업에 맞는 수강권 보기"}
+                </button>
+              </div>
+            )}
+            {visibleProducts.length === 0 ? (
+              <div className="daylist-empty" style={{ padding: 16 }}>
+                {applyFilter ? "이 수업에 쓸 수 있는 판매중인 상품이 없어요" : "판매 중인 상품이 없어요"}
+              </div>
             ) : (
               <>
-                {products.filter((p) => p.kind === "pass").length > 0 && (
+                {visibleProducts.filter((p) => p.kind === "pass").length > 0 && (
                   <>
                     <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>수강권</div>
                     <div className="center-products">
-                      {products.filter((p) => p.kind === "pass").map((p) => (
+                      {visibleProducts.filter((p) => p.kind === "pass").map((p) => (
                         <div key={p.id} className="center-product-row">
                           <button className="center-product-info" style={{ background: "none", border: "none", textAlign: "left", flex: 1, cursor: p.description ? "pointer" : "default" }} onClick={() => p.description && setDescProduct(p)}>
                             <div className="center-product-name">{p.name}{p.description ? " ⓘ" : ""}</div>
@@ -265,11 +297,11 @@ function CenterDetailContent() {
                     </div>
                   </>
                 )}
-                {products.filter((p) => p.kind === "goods").length > 0 && (
+                {visibleProducts.filter((p) => p.kind === "goods").length > 0 && (
                   <>
                     <div className="menu-section-label" style={{ padding: "10px 0 6px" }}>상품</div>
                     <div className="center-products">
-                      {products.filter((p) => p.kind === "goods").map((p) => (
+                      {visibleProducts.filter((p) => p.kind === "goods").map((p) => (
                         <div key={p.id} className="center-product-row">
                           <button className="center-product-info" style={{ background: "none", border: "none", textAlign: "left", flex: 1, cursor: p.description ? "pointer" : "default" }} onClick={() => p.description && setDescProduct(p)}>
                             <div className="center-product-name">{p.name}{p.description ? " ⓘ" : ""}</div>
@@ -291,7 +323,8 @@ function CenterDetailContent() {
             <button className="ghost-btn" style={{ width: "100%", marginTop: 12 }} onClick={() => setBuySheet(false)}>닫기</button>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* 후기 작성 */}
       {reviewSheet && (
@@ -365,7 +398,7 @@ function CenterDetailContent() {
       )}
 
       <div className="back-header">
-        <a className="side" href="/">‹</a>
+        <a className="side" href={backHref}>‹</a>
         <div className="title">센터 정보</div>
         <div className="side" />
       </div>

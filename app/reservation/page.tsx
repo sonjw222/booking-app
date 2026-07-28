@@ -17,8 +17,9 @@ import { useSearchParams, useRouter } from "next/navigation";
 import BottomNav from "../components/BottomNav";
 import {
   fetchMonthData,
-  reserveClass, fetchUsableMemberships, reserveWithMembership, type UsableMembership,
-  fetchMyGoodsForCenter,
+  reserveClass, fetchUsableMembershipsByClass, reserveWithMembership, type UsableMembership,
+  fetchMyGoodsByCenter,
+  fetchPurchasableProductsByClass, type PurchasableProduct,
   cancelReservation,
   fetchMyProfiles,
   type ClassInfo,
@@ -49,6 +50,18 @@ function buildCalendarGrid(year: number, month: number) {
   return cells;
 }
 
+// 사용 가능한 수강권이 여러 개일 때 기본으로 선택해줄 것을 고르는 우선순위
+// 1) 만료일이 가장 가까운 것 → 2) 만료일이 같으면 잔여횟수가 가장 적은 것 → 3) 그 외엔 조회된 순서 그대로(안정 정렬)
+// 어디까지나 "기본 선택"일 뿐이며, 사용자는 pass-pick-list에서 언제든 다른 수강권을 직접 고를 수 있음
+function pickDefaultMembership(list: UsableMembership[]): string | null {
+  if (list.length === 0) return null;
+  const sorted = [...list].sort((a, b) => {
+    if (a.expiresAt !== b.expiresAt) return a.expiresAt < b.expiresAt ? -1 : 1;
+    return a.remainingCount - b.remainingCount;
+  });
+  return sorted[0].membershipId;
+}
+
 export default function ReservationCalendar() {
   return (
     <Suspense fallback={<Loading />}>
@@ -70,23 +83,45 @@ function ReservationCalendarContent() {
   const [centerSheet, setCenterSheet] = useState(false);
   // 수강권 선택 시트
   const [passSheet, setPassSheet] = useState<ClassInfo | null>(null);
-  const [passList, setPassList] = useState<UsableMembership[]>([]);
   const [passPick, setPassPick] = useState<string | null>(null);
-  const [passBusy, setPassBusy] = useState(false);
+  // 선택된 날짜의 수업들에 대해 "사용 가능한 수강권"을 한 번에 조회한 결과 (classId -> 목록)
+  const [usablePassesByClass, setUsablePassesByClass] = useState<Record<string, UsableMembership[]>>({});
+  const [passesLoading, setPassesLoading] = useState(false);
+  const passesReqRef = useRef(0);
+  // 선택된 날짜의 수업들이 속한 센터별로 보유 상품(goods)을 한 번에 조회한 결과 (centerId -> 목록)
+  const [goodsByCenter, setGoodsByCenter] = useState<Record<string, MyGoods[]>>({});
+  const [goodsLoading, setGoodsLoading] = useState(false);
+  const goodsReqRef = useRef(0);
+  // 예약 모달에서 "사용 가능한 수강권 없음"일 때 보여줄, 구매하면 쓸 수 있는 상품 목록 (classId -> 목록)
+  const [purchasableByClass, setPurchasableByClass] = useState<Record<string, PurchasableProduct[]>>({});
+  const [purchasableLoading, setPurchasableLoading] = useState(false);
+  const purchasableReqRef = useRef(0);
   const [holidays, setHolidays] = useState<CenterHoliday[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyClassId, setBusyClassId] = useState<string | null>(null);
   // 예약 확인 모달
   const [confirmClass, setConfirmClass] = useState<ClassInfo | null>(null);
-  const [confirmGoods, setConfirmGoods] = useState<MyGoods[]>([]);
   const [selectedGoodsId, setSelectedGoodsId] = useState<string | null>(null);
-  const [loadingGoods, setLoadingGoods] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<BookingProfile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
 
   const cells = useMemo(() => buildCalendarGrid(year, month), [year, month]);
+  const selectedKey = dateKey(year, month, selectedDay);
+  // 선택한 날짜의 수업 id 목록 (센터/카테고리 필터와 무관하게 그 날짜의 전체 수업 기준)
+  const classIdsForSelectedDay = useMemo(
+    () => classes.filter((c) => c.date === selectedKey).map((c) => c.id),
+    [classes, selectedKey]
+  );
+  // 선택한 날짜의 수업 중 상품(goods) 사용이 허용된 수업들이 속한 센터 id 목록 (중복 제거)
+  const centerIdsForSelectedDay = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of classes) {
+      if (c.date === selectedKey && c.allowGoods) ids.add(c.centerId);
+    }
+    return Array.from(ids);
+  }, [classes, selectedKey]);
 
   // 이전/다음 달 이동
   function goPrevMonth() {
@@ -146,36 +181,150 @@ function ReservationCalendarContent() {
     }
   }, [loading, classes, activeProfileId, searchParams, year, month]);
 
+  // 결제 완료 후 자동으로 돌아온 경우(?purchased=1): 짧은 완료 안내 토스트 표시
+  // 지금 이 시스템은 결제 즉시 수강권이 발급되지 않고(매니저 수동 승인 후 발급) 관계로,
+  // 그 수업에 지금 바로 쓸 수 있는 수강권이 생겼는지(usablePassesByClass) 확인한 뒤 문구를 다르게 보여줌.
+  // 정확한 판단을 위해 위 자동 모달 오픈이 그 수업으로 완료되고(confirmClass 일치) + 그 날짜 배치 조회(passesLoading)가
+  // 끝날 때까지 기다렸다가 딱 한 번만 표시. 표시 후 URL에서 이 플래그만 제거(openClassId/openDate 등은 유지)
+  const purchasedToastShown = useRef(false);
+  useEffect(() => {
+    if (purchasedToastShown.current) return;
+    const openClassId = searchParams.get("openClassId");
+    if (searchParams.get("purchased") !== "1" || !openClassId) return;
+    if (passesLoading) return; // 사용 가능한 수강권 조회 결과를 먼저 봐야 판단 가능
+    if (!confirmClass || confirmClass.id !== openClassId) return; // 모달이 아직 그 수업으로 안 맞춰짐
+
+    purchasedToastShown.current = true;
+    const nowUsable = (usablePassesByClass[openClassId] ?? []).length > 0;
+    showToast(
+      nowUsable
+        ? "✅ 수강권 구매가 완료됐어요. 바로 예약을 진행할 수 있어요."
+        : "✅ 구매 요청이 완료됐어요. 수강권이 발급되면 예약을 진행할 수 있어요."
+    );
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("purchased");
+    router.replace(`/reservation?${params.toString()}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, confirmClass, passesLoading, usablePassesByClass]);
+
+  // 선택한 날짜의 수업들에 대해 "사용 가능한 수강권"을 한 번에 조회 (수업별 반복 조회 방지)
+  // activeProfileId나 날짜가 바뀔 때마다 다시 조회하며, 응답이 늦게 온 이전 요청은 무시함
+  //
+  // 이어서(같은 흐름 안에서): 사용 가능한 수강권이 하나도 없는 수업들만 골라
+  // "구매하면 이 수업에 쓸 수 있는 상품" 목록도 한 번에 미리 가져와둔다.
+  // → 모달을 실제로 열 때는 이미 준비된 결과를 읽기만 하므로 "확인 중..." 로딩이 거의 보이지 않음
+  //   (수업별로 모달을 열 때마다 따로 조회하던 이전 방식보다 호출 수도 줄어듦 — 사용 가능한 수강권이
+  //   있는 수업은 애초에 조회 대상에서 제외되기 때문)
+  useEffect(() => {
+    // 날짜/프로필이 바뀌면 이전에 캐시해둔 구매 가능 상품 목록도 함께 비움 (구매 후 등 상태가 달라졌을 수 있음)
+    // + 이전 날짜에서 아직 진행 중이던 구매 가능 상품 조회가 있다면 여기서 무효화(reqId 증가)해서,
+    //   나중에 그 응답이 늦게 도착해도 지금 날짜의 상태를 덮어쓰지 못하게 함
+    setPurchasableByClass({});
+    purchasableReqRef.current++;
+    if (!activeProfileId || classIdsForSelectedDay.length === 0) {
+      setUsablePassesByClass({});
+      setPassesLoading(false);
+      setPurchasableLoading(false);
+      return;
+    }
+    const reqId = ++passesReqRef.current;
+    setPassesLoading(true);
+    fetchUsableMembershipsByClass(classIdsForSelectedDay, activeProfileId)
+      .then((map) => {
+        if (passesReqRef.current !== reqId) return; // 더 최신 요청이 이미 있으면 버림
+        setUsablePassesByClass(map);
+
+        // 사용 가능한 수강권이 없는 수업만 골라 구매 가능 상품을 미리 조회
+        const emptyClassIds = classIdsForSelectedDay.filter((id) => (map[id] ?? []).length === 0);
+        if (emptyClassIds.length === 0) {
+          setPurchasableLoading(false);
+          return;
+        }
+        const pReqId = ++purchasableReqRef.current;
+        setPurchasableLoading(true);
+        const pairs = emptyClassIds
+          .map((id) => classes.find((c) => c.id === id))
+          .filter((c): c is ClassInfo => !!c)
+          .map((c) => ({ classId: c.id, centerId: c.centerId }));
+        fetchPurchasableProductsByClass(pairs, profiles.map((p) => p.id))
+          .then((pmap) => {
+            if (purchasableReqRef.current !== pReqId) return; // 더 최신 요청(날짜 전환 등)이 있으면 버림
+            setPurchasableByClass(pmap);
+          })
+          .catch(() => {
+            if (purchasableReqRef.current !== pReqId) return;
+            setPurchasableByClass({});
+          })
+          .finally(() => {
+            if (purchasableReqRef.current !== pReqId) return;
+            setPurchasableLoading(false);
+          });
+      })
+      .catch(() => {
+        if (passesReqRef.current !== reqId) return;
+        setUsablePassesByClass({});
+        setPurchasableLoading(false);
+      })
+      .finally(() => {
+        if (passesReqRef.current !== reqId) return;
+        setPassesLoading(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classIdsForSelectedDay, activeProfileId]);
+
+  // 선택한 날짜의 수업들이 속한 센터들에 대해 "보유 상품(goods)"을 한 번에 조회 (센터별 반복 조회 방지)
+  // activeProfileId나 날짜가 바뀔 때마다 다시 조회하며, 응답이 늦게 온 이전 요청은 무시함
+  useEffect(() => {
+    if (!activeProfileId || centerIdsForSelectedDay.length === 0) {
+      setGoodsByCenter({});
+      setGoodsLoading(false);
+      return;
+    }
+    const reqId = ++goodsReqRef.current;
+    setGoodsLoading(true);
+    fetchMyGoodsByCenter(activeProfileId, centerIdsForSelectedDay)
+      .then((map) => {
+        if (goodsReqRef.current !== reqId) return; // 더 최신 요청이 이미 있으면 버림
+        setGoodsByCenter(map);
+      })
+      .catch(() => {
+        if (goodsReqRef.current !== reqId) return;
+        setGoodsByCenter({});
+      })
+      .finally(() => {
+        if (goodsReqRef.current !== reqId) return;
+        setGoodsLoading(false);
+      });
+  }, [centerIdsForSelectedDay, activeProfileId]);
+
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
   }
 
-  async function handleReserve(cls: ClassInfo) {
-    // 예약 확인 모달 열기 (상품 허용 수업이면 보유 상품 로드)
+  // 이 프로필이 이 수업에 쓸 수 있는 수강권 이름 목록 (중복 제거)
+  function usableProductNames(classId: string): string[] {
+    const seen = new Set<string>();
+    for (const m of usablePassesByClass[classId] ?? []) seen.add(m.productName);
+    return Array.from(seen);
+  }
+
+  function handleReserve(cls: ClassInfo) {
+    // 예약 확인 모달 열기 — 수강권/상품 모두 이미 배치로 가져온 결과에서 즉시 계산
+    // (수업을 누른 시점에 추가 조회가 없으므로 이전 수업의 결과가 섞이거나 잠깐 보이는 일이 없음)
     setConfirmClass(cls);
     setSelectedGoodsId(null);
-    setConfirmGoods([]);
-    if (cls.allowGoods && activeProfileId) {
-      setLoadingGoods(true);
-      try {
-        const goods = await fetchMyGoodsForCenter(activeProfileId, cls.centerId);
-        setConfirmGoods(goods);
-      } catch { /* 상품 로드 실패해도 예약은 가능 */ }
-      finally { setLoadingGoods(false); }
-    }
-    // 사용할 수 있는 수강권 (계정 내 다른 프로필 것 포함)
-    if (activeProfileId) {
-      setPassBusy(true);
-      setPassPick(null);
-      try {
-        const list = await fetchUsableMemberships(cls.id, activeProfileId);
-        setPassList(list);
-        if (list.length > 0) setPassPick(list[0].membershipId);
-      } catch { setPassList([]); }
-      finally { setPassBusy(false); }
-    }
+    const list = usablePassesByClass[cls.id] ?? [];
+    setPassPick(pickDefaultMembership(list));
   }
+
+  // 배치 조회가 모달이 열린 뒤에 도착한 경우를 대비해, 결과가 갱신되면 기본 선택을 다시 맞춰줌
+  useEffect(() => {
+    if (!confirmClass) return;
+    const list = usablePassesByClass[confirmClass.id] ?? [];
+    setPassPick(pickDefaultMembership(list));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirmClass, usablePassesByClass]);
 
   async function doReserve() {
     const cls = confirmClass;
@@ -236,7 +385,6 @@ function ReservationCalendarContent() {
     ? new Set(centers.filter((c) => c.categories.includes(categoryFilter)).map((c) => c.id))
     : null;
 
-  const selectedKey = dateKey(year, month, selectedDay);
   const publicHoliday = PUBLIC_HOLIDAYS[selectedKey];
   const centerHolidays = holidays.filter((h) => h.date === selectedKey);
   const effectiveCenter = centerPick ?? centerFilter;
@@ -245,6 +393,9 @@ function ReservationCalendarContent() {
     .filter((c) => !effectiveCenter || c.centerId === effectiveCenter)
     .filter((c) => !categoryCenterIds || categoryCenterIds.has(c.centerId))
     .sort((a, b) => a.start.localeCompare(b.start));
+  // 예약 확인 모달에 표시할 수강권/상품 목록 (배치 조회 결과에서 파생 — 별도 조회 없음)
+  const passList = confirmClass ? (usablePassesByClass[confirmClass.id] ?? []) : [];
+  const confirmGoods = confirmClass ? (goodsByCenter[confirmClass.centerId] ?? []) : [];
 
   if (loading) {
     return (
@@ -412,6 +563,7 @@ function ReservationCalendarContent() {
             const mineRec = activeProfileId ? cls.myByProfile[activeProfileId] : undefined;
             const mine = !!mineRec;
             const busy = busyClassId === cls.id;
+            const passNames = usableProductNames(cls.id);
             return (
               <div key={cls.id} className={`class-row ${mine ? "mine" : ""}`}>
                 <div className="class-color" style={{ background: center?.color }} />
@@ -425,6 +577,20 @@ function ReservationCalendarContent() {
                     {cls.start}~{cls.end}
                   </div>
                   <div className="class-row-place">{cls.place}</div>
+                  <div className="center-class-passes">
+                    {passesLoading ? (
+                      <span className="class-pass-chip all">수강권 확인 중...</span>
+                    ) : passNames.length > 0 ? (
+                      <>
+                        <span className="class-pass-label">사용 가능:</span>
+                        {passNames.map((n) => (
+                          <span key={n} className="class-pass-chip">{n}</span>
+                        ))}
+                      </>
+                    ) : (
+                      <span className="class-pass-chip all">사용 가능한 수강권 없음</span>
+                    )}
+                  </div>
                 </div>
                 <div className="class-right">
                   <div className={`class-count ${full ? "full" : ""}`}>
@@ -456,7 +622,7 @@ function ReservationCalendarContent() {
             <div className="sheet-title">예약하시겠어요?</div>
 
             {/* 사용할 수강권 선택 (계정 내 공유) */}
-            {passBusy ? (
+            {passesLoading ? (
               <div className="perm-guide" style={{ margin: "0 0 10px" }}>수강권 확인 중...</div>
             ) : passList.length > 0 ? (
               <>
@@ -486,15 +652,33 @@ function ReservationCalendarContent() {
             ) : (
               <div className="no-pass-row">
                 <div className="perm-guide" style={{ margin: 0 }}>
-                  이 수업에 쓸 수 있는 수강권이 없어요.
+                  현재 사용할 수 있는 수강권이 없어요.
                 </div>
+                {purchasableLoading ? (
+                  <div className="perm-guide" style={{ margin: 0 }}>구매 가능한 수강권 확인 중...</div>
+                ) : (purchasableByClass[confirmClass.id]?.length ?? 0) > 0 ? (
+                  <div>
+                    <div className="perm-guide" style={{ margin: "0 0 6px" }}>
+                      이 수업은 아래 수강권으로 예약할 수 있어요.
+                    </div>
+                    <ul className="purchasable-pass-list">
+                      {(purchasableByClass[confirmClass.id] ?? []).map((p) => (
+                        <li key={p.productId} className="purchasable-pass-item">{p.productName}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <button
                   className="no-pass-buy-btn"
                   onClick={() => {
                     const c = confirmClass;
                     if (!c) return;
+                    const ids = (purchasableByClass[c.id] ?? []).map((p) => p.productId);
+                    const idsParam = ids.length > 0 ? `&productIds=${ids.join(",")}` : "";
+                    // 지금 보고 있던 센터 필터도 함께 넘겨서, 나중에 예약 화면으로 돌아올 때 그대로 복원되게 함
+                    const centerParam = effectiveCenter ? `&reserveCenter=${effectiveCenter}` : "";
                     router.push(
-                      `/center/${c.centerId}?buy=1&reserveClassId=${c.id}&reserveDate=${encodeURIComponent(c.date)}`
+                      `/center/${c.centerId}?buy=1&reserveClassId=${c.id}&reserveDate=${encodeURIComponent(c.date)}${centerParam}${idsParam}`
                     );
                   }}
                 >
@@ -510,7 +694,7 @@ function ReservationCalendarContent() {
             {confirmClass.allowGoods && (
               <>
                 <div className="menu-section-label" style={{ padding: "8px 0 6px" }}>보유 상품 사용 (선택)</div>
-                {loadingGoods ? (
+                {goodsLoading ? (
                   <div className="perm-guide" style={{ margin: 0 }}>상품 불러오는 중...</div>
                 ) : confirmGoods.length === 0 ? (
                   <div className="perm-guide" style={{ margin: 0 }}>사용 가능한 상품이 없어요</div>

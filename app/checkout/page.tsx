@@ -14,6 +14,7 @@ import { fetchCenterDetail, fetchCenterProducts, type CenterProduct } from "../.
 import { createOrder } from "../../lib/orders";
 import { fetchMyPoints, usePoints } from "../../lib/reviews";
 import Loading from "../components/Loading";
+import { reservationReturnUrl } from "../../lib/reservationNav";
 
 const PAY_METHODS = [
   { id: "card", label: "신용/체크카드", emoji: "💳" },
@@ -44,6 +45,21 @@ function CheckoutContent() {
   // 예약창 → 수강권 구매하기로 넘어온 경우, 구매 후 바로 예약할 수업 정보
   const reserveClassId = sp.get("reserveClassId");
   const reserveDate = sp.get("reserveDate");
+  // 센터 상세 화면의 필터/센터 상태 (뒤로가기 시 그대로 복원하기 위해 그대로 들고 다님)
+  const reserveCenter = sp.get("reserveCenter");
+  const productIds = sp.get("productIds");
+  const showAll = sp.get("showAll");
+  // 뒤로가기: 예약 흐름으로 들어온 경우 센터 상세의 구매 시트를 그 상태 그대로 다시 열어줌
+  const centerBackHref = reserveClassId && reserveDate
+    ? `/center/${centerId}?buy=1&reserveClassId=${reserveClassId}&reserveDate=${encodeURIComponent(reserveDate)}`
+      + (reserveCenter ? `&reserveCenter=${reserveCenter}` : "")
+      + (productIds ? `&productIds=${productIds}` : "")
+      + (showAll ? `&showAll=${showAll}` : "")
+    : `/center/${centerId}`;
+  // 결제 완료 후 예약 화면으로 자동 복귀할 때 쓸 URL (날짜/센터 복원 + 완료 토스트 표시)
+  const reservationBackUrl = reserveClassId && reserveDate
+    ? reservationReturnUrl({ classId: reserveClassId, date: reserveDate, center: reserveCenter, purchased: true })
+    : null;
 
   const [centerName, setCenterName] = useState("");
   const [allowedPay, setAllowedPay] = useState<string[] | null>(null);
@@ -75,6 +91,16 @@ function CheckoutContent() {
     finally { setLoading(false); }
   }, [centerId, productId]);
   useEffect(() => { load(); }, [load]);
+
+  // 예약창에서 들어온 구매를 완료하면, 잠깐 완료 안내를 보여준 뒤 자동으로 그 예약 화면으로 돌아감
+  // (기존 예약/결제 로직은 그대로 두고, 화면 전환만 자동화 — 즉시 클릭할 수 있는 버튼도 함께 남겨둠)
+  useEffect(() => {
+    if (!done || !reservationBackUrl) return;
+    const t = setTimeout(() => {
+      window.location.href = reservationBackUrl;
+    }, 1800);
+    return () => clearTimeout(t);
+  }, [done, reservationBackUrl]);
 
   function applyCoupon(code?: string) {
     const c = (code ?? couponInput).trim().toUpperCase();
@@ -126,7 +152,7 @@ function CheckoutContent() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href={`/center/${centerId}`}>‹</a>
+          <a className="side" href={centerBackHref}>‹</a>
           <div className="title">결제</div>
           <div className="side" />
         </div>
@@ -147,17 +173,18 @@ function CheckoutContent() {
             결제 연동 전이라 실제 결제는 아직이에요.<br />
             센터에서 확인 후 수강권을 발급해드려요.
           </div>
-          {reserveClassId && reserveDate ? (
+          {reservationBackUrl ? (
             <>
               <div className="checkout-done-sub" style={{ marginTop: 4 }}>
-                수강권이 발급되면 아래에서 아까 그 수업을 바로 예약할 수 있어요.
+                잠시 후 아까 그 수업 예약 화면으로 자동으로 돌아가요.<br />
+                수강권이 발급되면 예약을 이어서 진행할 수 있어요.
               </div>
               <a
                 className="primary-btn"
-                href={`/reservation?openClassId=${reserveClassId}&openDate=${encodeURIComponent(reserveDate)}`}
+                href={reservationBackUrl}
                 style={{ margin: "20px", display: "block", width: "calc(100% - 40px)", textAlign: "center" }}
               >
-                아까 그 수업 예약하러 가기
+                지금 바로 예약 이어가기
               </a>
               <a className="ghost-btn" href="/mypage" style={{ margin: "0 20px", display: "block", width: "calc(100% - 40px)", textAlign: "center" }}>
                 마이페이지로
@@ -182,7 +209,7 @@ function CheckoutContent() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href={`/center/${centerId}`}>‹</a>
+          <a className="side" href={centerBackHref}>‹</a>
           <div className="title">결제</div>
           <div className="side" />
         </div>
@@ -196,7 +223,7 @@ function CheckoutContent() {
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
       <div className="back-header">
-        <a className="side" href={`/center/${centerId}`}>‹</a>
+        <a className="side" href={centerBackHref}>‹</a>
         <div className="title">결제</div>
         <div className="side" />
       </div>

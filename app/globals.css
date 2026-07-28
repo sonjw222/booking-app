@@ -1861,9 +1861,10 @@ a.membership-card { text-decoration: none; display: block; }
 
 /* 센터 상세 - 소개 사진 / 수업 수강권 / 하단 고정바 */
 .center-intro-photo { width: calc(100% - 40px); margin: 0 20px 10px; border-radius: 14px; object-fit: cover; max-height: 220px; }
-.center-class-passes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.center-class-passes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
 .class-pass-chip { font-size: 10.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft, #eef4ff); padding: 2px 7px; border-radius: 999px; }
 .class-pass-chip.all { color: var(--text-dim); background: var(--surface); }
+.class-pass-label { font-size: 10.5px; font-weight: 700; color: var(--ink-soft); }
 .center-bottom-bar {
   position: fixed; left: 50%; transform: translateX(-50%);
   bottom: 84px; width: 100%; max-width: 480px;
@@ -2296,7 +2297,7 @@ a.membership-card { text-decoration: none; display: block; }
 
 /* 예약창 - 수강권 없을 때 구매 유도 */
 .no-pass-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
   margin: 0 0 10px;
 }
 .no-pass-buy-btn {
@@ -2306,6 +2307,20 @@ a.membership-card { text-decoration: none; display: block; }
   font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
 }
 .no-pass-buy-btn:active { opacity: 0.85; }
+.purchasable-pass-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.purchasable-pass-item { font-size: 13px; color: var(--text); }
+
+/* 센터 상세 - 구매 시트에서 특정 수업용 상품만 보여줄 때 안내 */
+.class-filter-notice {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 0 0 10px; padding: 10px 14px;
+  background: var(--surface); border: 1px solid var(--accent);
+  border-radius: 10px; font-size: 12.5px; color: var(--text); font-weight: 600;
+}
+.class-filter-clear-btn {
+  flex: 0 0 auto; background: none; border: none; padding: 0;
+  color: var(--accent); font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
 
 /* 후기 수정/삭제 */
 .review-actions { display: flex; gap: 6px; margin-top: 8px; }
