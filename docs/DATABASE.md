@@ -257,6 +257,7 @@ inquiry_threads 1──* inquiry_messages
 | `fix_profile_rls_restore.sql` | 긴급 복구: 프로필 조회 오류 |
 | `fix_rls_policies.sql` | RLS `with check` 누락 긴급 패치 |
 | `fix_staff_search.sql` | 스태프 검색 복구(무한 재귀 해결) |
+| `fix_usable_memberships_shared.sql` | `usable_memberships`/`reserve_with_membership`를 "계정 공유" 기준으로 통일(`add_pass_binding.sql`의 귀속 로직 폐기) + 목록 조회용 `usable_memberships_for_classes()` 신설(2026-07-28, 예약창 N+1 방지) |
 | `fix_waitlist.sql` | 대기자 자동 승격 수정(v2) |
 | `setup_storage.sql` | 사업자등록증 Storage 버킷 설정 |
 | `wire_settings.sql` | 운영 설정 → 예약/취소 규칙 실제 연동 |

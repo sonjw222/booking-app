@@ -11,6 +11,27 @@
 
 `README.md`에 명시된 기획 참고 서비스: 하이파이브, 스튜디오메이트, 다짐의 장점을 참고해 설계.
 
+### 개발 철학
+
+이 프로젝트는 단순히 예약 기능을 만드는 것이 아니라
+
+회원이
+
+생각하지 않아도
+
+예약 → 결제 → 수강
+
+까지 자연스럽게 이어지는 UX를 만드는 것을 목표로 한다.
+
+항상
+
+- UX 우선
+- 클릭 최소화
+- 유지보수 가능한 구조
+- 확장 가능한 구조
+
+를 기준으로 개발한다.
+
 ## 2. 주요 사용자
 
 세 부류의 사용자가 하나의 앱을 공유합니다.
@@ -99,5 +120,20 @@ booking-app/
 ├── package.json / tsconfig.json / next.config.ts / postcss.config.mjs
 └── .env.local                   # NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY (커밋 금지)
 ```
+
+---
+
+# AI 개발 환경
+
+본 프로젝트는 AI 협업을 전제로 개발한다.
+
+| 도구 | 역할 |
+|------|------|
+| ChatGPT | 기획, UX 검토, 리뷰, 우선순위 |
+| Claude Code | 구현 및 리팩토링 |
+| NotebookLM | 프로젝트 문서 및 지식 관리 |
+| Graphify | 구조 분석 |
+| GitHub | 버전 관리 |
+| Vercel | 배포 |
 
 자세한 라우트별 설명은 [ROUTES.md](./ROUTES.md), 테이블 구조는 [DATABASE.md](./DATABASE.md)를 참고하세요.
