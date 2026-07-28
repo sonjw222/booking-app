@@ -1,139 +1,406 @@
 # TODO
 
-> 코드(`app/`, `lib/`, `*.sql`)를 분석해 확인한 미완성 기능/버그 가능성을 중요도 순으로 정리했습니다.
-> "확인됨"은 코드/문구로 직접 근거를 찾은 항목, "가능성"은 구조상 추정되는 위험입니다.
-> 실제 우선순위는 비즈니스 판단(사용자 규모, 출시 일정)에 따라 조정하세요.
+## 1. 문서 메타데이터
 
-## P0 — 서비스 핵심 기능 관련 (출시/매출에 직접 영향)
+| 항목 | 값 |
+|---|---|
+| 문서 목적 | 확인된 미완성·확인 필요·운영 설정 필요 항목의 실행 목록 |
+| 최종 검증일 | 2026-07-28 |
+| 기준 문서 | [REQUIREMENTS.md](./REQUIREMENTS.md) · [DATABASE.md](./DATABASE.md) |
+| 상태 원칙 | 코드·운영 환경·사용자 결정의 완료 증거가 확인되기 전에는 완료 처리하지 않음 |
 
-1. **실제 결제(PG) 연동 없음 [확인됨]**
-   `app/checkout/page.tsx`, `app/cart/page.tsx`에서 "결제하기"를 눌러도 카드/간편결제가 처리되지 않고
-   `orders` 테이블에 `pending` 상태로만 기록됩니다. 매니저가 `/manager/orders`에서 수동으로 확인·발급해야 합니다.
-   실서비스로 운영하려면 PG(토스페이먼츠/아임포트 등) 연동이 필수입니다.
-   → 관련: `lib/orders.ts`, `payments.pg_transaction_id`/`virtual_account_*` 컬럼(스키마엔 이미 자리만 있음)
+## 2. 우선순위와 상태 기준
 
-2. **정기 알림 스케줄러 미설정 [확인됨]**
-   예약 3일전/당일 알림, 수강권 만료·소진 알림 DB 함수(`notify_upcoming_reservations`, `notify_expiring_passes`)는
-   존재하지만 이를 매일 호출하는 스케줄러(Supabase pg_cron 등)가 앱/저장소 어디에도 설정되어 있지 않습니다(`README.md` 5절 — "선택" 항목으로만 안내됨).
-   설정하지 않으면 알림이 영구히 발송되지 않습니다.
+### 우선순위
 
-3. **Row Level Security 회귀 이력이 많음 [확인됨 — 재발 위험]**
-   `fix_profile_rls_restore.sql`, `fix_rls_policies.sql`, `fix_membership_rls.sql`, `fix_staff_search.sql`,
-   `add_roster_rls.sql` 등 최소 5건의 "긴급 복구"성 RLS 패치 이력이 있습니다. API 서버 없이 RLS만으로 접근을 통제하는 구조라
-   RLS 정책을 건드리는 모든 변경은 회귀 가능성이 높습니다. 회귀 테스트 체크리스트나 자동화된 RLS 테스트가 없어
-   같은 유형의 버그가 다시 발생할 위험이 구조적으로 남아 있습니다.
+| 우선순위 | 기준 |
+|---|---|
+| **P0** | 결제·예약·알림 핵심 흐름, 권한 보안, 운영 DB 재현성과 직접 관련 |
+| **P1** | 사용자에게 노출된 미완성 기능 또는 돈·개인정보의 정합성 위험 |
+| **P2** | 운영 설정, 협업 오류, 유지보수 위험 또는 제품 결정이 필요한 기능 |
+| **P3** | 현재 화면과 연결되지 않은 향후 기능 후보 또는 존속 여부 확인 |
 
-## P1 — 사용자에게 노출되는 미구현/제한 기능
+### 현재 상태
 
-4. **네이버 소셜 로그인 미구현 [확인됨]**
-   `app/login/page.tsx:237`에서 네이버 버튼 클릭 시 "로그인 설정이 아직 안 되어 있어요" 메시지만 표시.
-   카카오/애플은 Supabase Provider 설정만 하면 동작하지만 네이버는 Supabase 기본 미지원으로 별도 Edge Function이 필요(`AUTH_SETUP.md` 3-3절).
+| 상태 | 의미 |
+|---|---|
+| **미완성** | 코드나 UI 일부만 존재하고 제품 흐름이 끝까지 동작하지 않음 |
+| **확인 필요** | 저장소에서 근거 일부는 확인했으나 운영 상태·관계·제품 결정을 확정할 수 없음 |
+| **운영 설정 필요** | 앱·SQL은 존재하지만 Supabase·OAuth·Realtime·Storage 등 외부 설정이 필요 |
 
-5. **푸시/알림톡 실제 발송 미구현 [확인됨]**
-   `/settings/notifications`의 on/off 설정은 기기 로컬 저장만 하며, 실제 SMS/푸시 발송 연동은 없습니다(`app/settings/notifications/page.tsx:6`).
-   `messages` 테이블(발송 기록용)은 스키마에 있으나 실제 발송기(SMS 게이트웨이/FCM 등) 연동 코드는 없습니다.
+### 완료 처리 규칙
 
-6. **앱 내 환불이 제한적 [확인됨]**
-   `/purchases`에서 "미발급 주문"은 앱에서 취소 불가하고 센터 문의로 안내됩니다(`app/purchases/page.tsx:49`).
-   발급 후 24시간 이내·미사용 건만 환불 버튼이 노출되는 등 환불 정책이 하드코딩되어 있어, 정책 변경 시 코드 수정이 필요합니다.
+1. 아래 “완료 조건”을 실제로 검증한 경우에만 완료 처리합니다.
+2. 파일을 추가한 것과 운영 환경에 적용한 것을 구분합니다.
+3. UI가 생긴 것과 데이터·권한 흐름이 연결된 것을 구분합니다.
+4. 운영 DB 상태는 SQL 파일 존재만으로 완료 처리하지 않습니다.
+5. 사용자 결정이 필요한 기능은 결정 기록 없이 완료 처리하지 않습니다.
+6. 완료된 항목은 [CHANGELOG.md](./CHANGELOG.md)에 근거와 함께 기록한 뒤 이 문서에서 제거하거나 완료 이력으로 이동합니다.
 
-## P2 — 데이터 정합성 / 유지보수성 위험 (가능성)
+## 3. P0 — 핵심 거래·알림·보안·DB 재현성
 
-7. **국경일(공휴일) 목록이 하드코딩됨 [확인됨]**
-   `app/reservation/page.tsx:33`: `PUBLIC_HOLIDAYS`가 `{ "2026-07-17": "제헌절" }` 단 하나만 들어 있고,
-   주석에 "나중에 공휴일 API 또는 테이블로 교체 가능"이라고 명시되어 있습니다.
-   현재 상태로는 2026-07-17 이후 국경일이 캘린더에 전혀 표시되지 않습니다. (센터별 휴무일인 `center_holidays`와는 별개 문제)
+### P0-1. 실제 PG 결제 연동
 
-8. **스키마에는 있으나 앱 코드에서 전혀 쓰이지 않는 테이블이 27개 확인됨 [확인됨]**
-   `lib/*.ts` 전체에서 `.from()` 호출을 검색한 결과, `reviews`(→`center_reviews`로 대체됨), `class_trainers`(수업별 복수 강사 배정),
-   `class_types`(수업 구분), `lockers`/`locker_assignments`(락커), `membership_transfers`(수강권 양도), `chat_messages`,
-   `community_posts`/`community_comments`, `competitions`, `leads`, `staff_salaries`/`staff_schedules`, `contract_templates`/`terms`/`contracts` 등
-   27개 테이블이 어느 화면에서도 조회/변경되지 않습니다. 전체 목록과 근거는 [DATABASE.md](./DATABASE.md) 1-8절.
-   일부(급여/계약서/상담고객)는 `permissions` 카탈로그에 권한 키까지 정의되어 있어 "화면만 아직 안 만든 로드맵 기능"으로 보이고,
-   일부(`reviews`, `chat_messages`)는 다른 테이블로 대체된 "죽은 스키마"로 보입니다 — 코드만으로는 구분할 수 없어 확인이 필요합니다.
-   → 실제 사용 계획이 없다면 정리하고, 있다면 로드맵 문서에 반영해 향후 작업자의 혼동을 줄이는 것을 권장합니다.
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **미완성** |
+| 근거 파일 | `app/checkout/page.tsx`, `app/cart/page.tsx`, `lib/orders.ts`, `add_orders.sql`, `schema.sql` |
+| 완료 조건 | 승인된 PG로 결제 생성·성공·실패·취소·중복 callback을 검증하고, 성공 주문만 발급되며 `orders`·`payments` 상태가 일치함. 테스트 결제와 환불 결과를 기록함 |
+| 관련 문서 | [REQUIREMENTS 6-1, 10-4](./REQUIREMENTS.md), [DATABASE 4-3, 7-3](./DATABASE.md), [ROUTES `/checkout`](./ROUTES.md) |
 
-9. **포인트 시스템이 두 테이블로 이원화되어 있음 [확인됨]**
-   매출/결제 화면(`app/manager/sales`, `lib/sales.ts`)은 `point_transactions` 테이블을 사용하고,
-   후기 작성 시 포인트 적립·잔액 조회(`lib/reviews.ts`)는 `point_accounts`(+`point_logs`, 이쪽은 미사용) 테이블을 사용합니다.
-   두 시스템이 하나의 회원 포인트 잔액을 공유하는 구조인지, 서로 다른 시점에 만들어진 별개의 포인트 시스템인지 코드로는 판단할 수 없었습니다.
-   회원이 실제로 보는 포인트 잔액 계산 로직을 반드시 재확인하세요 — 잘못 나뉘어 있다면 "매출에서 차감했는데 후기 화면 잔액은 그대로"같은
-   정합성 버그로 이어질 수 있습니다. → [DATABASE.md](./DATABASE.md) 1-3절.
+현재 “결제하기”는 `orders.status = pending` 주문만 만들고 매니저가 수동 발급합니다. 예약 화면으로 복귀하는 UX가 실제 결제·즉시 발급을 뜻하지 않도록 유지해야 합니다.
 
-10. **`.env.local.example` 파일 부재 [확인됨]**
-   `README.md`가 `cp .env.local.example .env.local`을 안내하지만 저장소에 해당 파일이 없어 새로 합류하는 사람/도구가
-   README를 그대로 따라 하면 실패합니다.
+### P0-2. 운영 DB migration ledger와 최종 객체 검증
 
-11. **TypeScript `any` 사용 약 243곳 [확인됨]**
-    대부분 `catch (e: any)` 패턴(54개 파일). [DEVELOPMENT_RULES.md](./DEVELOPMENT_RULES.md) 규칙 도입 이전 코드이며
-    당장 빌드를 막지는 않지만, 에러 객체의 실제 타입을 좁히지 않아 잘못된 필드 접근을 컴파일 타임에 잡지 못합니다.
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | 루트 SQL 67개, `schema.sql`, `reservation_functions.sql`, `README.md`, `docs/DATABASE.md` |
+| 완료 조건 | 운영 DB에 적용된 migration 파일·순서·적용일을 기록하고, 새 환경에서 같은 순서로 재현됨. 누락·중복 적용 여부를 확인함 |
+| 관련 문서 | [DATABASE 12절](./DATABASE.md), [DEVELOPMENT_RULES 6절](./DEVELOPMENT_RULES.md) |
 
-12. **전역 인증/권한 가드 부재, 그리고 실제로 가드가 빠진 페이지가 이미 존재함 [확인됨]**
-    `app/layout.tsx`에는 인증 체크가 없고, 각 매니저/관리자 페이지가 개별적으로 `fetchMyCenters()`/`checkPlatformAdmin()`을 호출해
-    권한을 확인하는 구조입니다. 실제로 코드 전체를 검사한 결과, 이 체크가 빠진 페이지를 확인했습니다:
-    - `/admin/categories`, `/admin/banners` — `checkPlatformAdmin()` 호출 없음. 비운영자도 URL로 직접 접속하면 관리 화면이 그대로 보입니다.
-      (`service_categories`/`home_banners`의 쓰기는 RLS(`is_platform_admin()`)로 막혀 있어 데이터 유출/변조는 없음 — [ROUTES.md](./ROUTES.md) 4절)
-    - `/manager/inquiries`, `/manager/notifications`, `/manager/staff/permissions` — `fetchMyCenters()` 호출 없음(RLS에만 의존)
-    - **세분화된 매니저 권한(`permissions`/`role_permissions`)은 어느 화면에서도 버튼/메뉴를 숨기거나 비활성화하는 데 쓰이지 않습니다.**
-      권한 판정 함수(`effectiveState()`)는 권한을 "설정"하는 `/manager/staff/permissions` 화면에서만 쓰이고, 실제 기능 화면들은
-      로그인한 사람의 권한과 무관하게 동일한 UI를 보여줍니다. 서버(`has_permission()` DB 함수)가 최종적으로 막아주므로 데이터는 안전하지만,
-      권한 없는 스태프가 할 수 없는 작업의 버튼을 눌러보고서야 실패를 알게 되는 UX입니다 — [REQUIREMENTS.md](./REQUIREMENTS.md) "권한/역할" 절 참고.
-    → 새 매니저/관리자 페이지를 추가할 때 이 체크를 빠뜨리기 쉬운 구조이므로, 페이지 템플릿화(공용 가드 컴포넌트/훅) 또는 최소한 체크리스트화를 권장합니다.
+README의 큰 순서만으로 전체 migration을 재현할 수 있는지 검증되지 않았습니다. SQL 파일 목록을 실행 순서로 간주하면 안 됩니다.
 
-13. **`fix_usable_memberships_shared.sql`을 Supabase에 아직 실행하지 않음 [진행 필요]**
-    2026-07-28 예약창 수강권 표시 개선 작업으로 `usable_memberships`/`reserve_with_membership`를 "계정 공유" 기준으로
-    통일하고, 목록 조회용 `usable_memberships_for_classes()`를 새로 추가했습니다. 이 파일을 Supabase SQL Editor에서
-    실행하기 전까지는 예약창에서 수강권 조회 시 "function usable_memberships_for_classes does not exist" 오류가 납니다.
-    → 실행 후 `bound_profile_id`(`add_pass_binding.sql`에서 추가된 컬럼)는 어떤 함수에서도 더 이상 판정에 쓰이지 않는
-    죽은 컬럼이 됩니다. 실제로 더 이상 쓸 계획이 없다면 별도 승인 후 컬럼 삭제를 검토하세요(이번 작업 범위 밖).
+### P0-3. 핵심 RPC의 운영 최종 본문 확인
 
-14. **60개 이상의 SQL 마이그레이션을 수동 순서 실행 (가능성)**
-    마이그레이션 도구 없이 Supabase SQL Editor에 파일을 순서대로 붙여넣는 방식이라, 새 환경 구축 시 순서를 하나라도
-    빠뜨리면 이후 파일이 참조하는 테이블/함수가 없어 실패할 수 있습니다. `README.md`가 일부 순서(공지→알림→알림트리거→문의)만
-    명시하고 전체 60여 개 파일의 완전한 순서는 문서화되어 있지 않습니다. → [DATABASE.md](./DATABASE.md) 5절에 실행 순서를 정리해두었으니 갱신 시 참고.
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `reservation_functions.sql`, `wire_settings.sql`, `add_*.sql`, `fix_*.sql`, 특히 `fix_usable_memberships_shared.sql` |
+| 완료 조건 | 운영 DB에서 `pg_get_functiondef()`로 핵심 RPC 본문을 추출해 저장소의 의도한 최종본과 대조하고 역할별 회귀 테스트를 통과함 |
+| 관련 문서 | [DATABASE 9절, 12-5](./DATABASE.md), [REQUIREMENTS 10절](./REQUIREMENTS.md) |
 
-15. **예약 모달 "구매 가능한 수강권" 안내 → 구매 화면 필터는 UI 편의일 뿐, 실제 예약 가능 여부를 보장하지 않음 [설계상 한계]**
-    2026-07-28에 추가한 `fetchPurchasableProductsByClass()`는 `class_allowed_products` + `products.is_active/is_on_sale`
-    + 계정 보유(active) 수강권 제외 기준으로 "사면 이 수업에 쓸 수 있는 상품"을 보여줍니다. "수강권 구매하기" 버튼은 이 상품 id 목록을
-    `/center/[id]?buy=1&productIds=...`로 넘겨 구매 시트에서 필터링하지만, 이는 클라이언트 쪽 화면 필터일 뿐이며 "전체 상품 보기"로
-    언제든 해제할 수 있고 결제(`/checkout`) 단계에서 강제되지 않습니다. 또한 수강권 예약조건(`membership_schedule_rules`)은
-    상품 자체가 아니라 "언제 쓸 수 있는지"를 결정하므로, 구매 시점엔 노출한 상품이 이후 요일/시간 조건 때문에 결국 이 수업에
-    못 쓰일 가능성은 이론상 여전히 남아 있습니다(현재 조건 자체는 `usable_memberships()`와 동일 기준으로 이미 반영됨).
+확인 대상:
 
-16. **결제 완료 → 예약 자동 이어가기는 "주문 접수" 시점 기준이며, 실제 수강권 발급은 매니저 수동 확인 이후 [설계상 한계 — P0 #1과 연결]**
-    2026-07-28에 결제 완료(`app/checkout/page.tsx`) 후 약 1.8초 뒤 자동으로 그 예약 화면(날짜/센터/수업 모달 복원)으로 돌아가고,
-    돌아오면 보유 수강권을 다시 조회해 새로 산 수강권이 있으면 자동 선택(기존 `usablePassesByClass` 갱신 시 첫 항목 자동 선택 로직 재사용)되도록
-    연결했습니다. 다만 `lib/orders.ts`의 `createOrder()`는 `orders`를 `pending`으로만 만들고, 실제 `memberships` 발급은
-    `fulfill_order()`(`add_order_fulfillment.sql`)를 매니저가 `/manager/orders`에서 수동으로 실행해야 일어납니다(P0 #1 "실제 결제 연동 없음"과 동일 원인).
-    즉, 지금 상태로는 결제 완료 직후 예약 화면에 돌아와도 대부분 아직 "사용 가능한 수강권 없음"이 그대로 보이며, 매니저가 나중에
-    발급을 확인한 뒤 이 화면을 다시 열어야 새 수강권이 잡힙니다. PG 연동/자동 발급이 붙기 전까지는 "예약 버튼만 누르면 되는 흐름"이
-    완전히 즉시 이어지지는 않는다는 점을 안내 문구에도 반영해뒀습니다("수강권이 발급되면 예약을 이어서 진행할 수 있어요").
+- `reserve_class`
+- `cancel_reservation`
+- `fulfill_order`
+- `manager_set_attendance`
+- `usable_memberships`
+- `usable_memberships_for_classes`
+- `reserve_with_membership`
+- `auto_book_membership`
+- `has_permission`
+- `is_platform_admin`
 
-17. **예약↔센터↔결제 화면 간 forward 파라미터 이름이 두 파일에 중복 기술됨 [경미, 리팩터링 후보]**
-    "돌아가는" URL(`/reservation?openClassId=...`)은 `lib/reservationNav.ts`의 `reservationReturnUrl()` 하나로 모아뒀지만,
-    반대 방향으로 "다음 단계로 넘어갈 때" 붙이는 파라미터(`reserveClassId`, `reserveDate`, `reserveCenter`, `productIds`, `showAll`)는
-    `app/reservation/page.tsx`(→ 센터로 이동), `app/center/[id]/page.tsx`(→ 결제로 이동) 두 곳에 각각 인라인 문자열로 조립되어 있습니다.
-    지금은 이름이 일치하지만, 둘 중 하나만 고치면 조용히 어긋날 수 있는 구조라 나중에 파라미터가 하나라도 늘면 `reservationReturnUrl()`처럼
-    공용 헬퍼로 뽑는 것을 권장합니다.
+특히 `fix_usable_memberships_shared.sql`의 운영 적용 여부는 저장소만으로 알 수 없습니다. 적용 확인 전에는 “미적용”이나 “적용 완료”로 단정하지 않습니다.
 
-## P3 — 참고/모니터링 필요 (긴급하지 않음)
+### P0-4. RLS 회귀 테스트와 운영 정책 확인
 
-18. **매니저 대시보드 일부 메뉴 미연동 가능성**
-    `app/manager/page.tsx` 주석: "관리 메뉴: 수업/수강권조건/진도표/회원 (일부는 다음 단계에서 실연동)" — 이 주석이
-    최신 상태를 반영하는지 재검증 필요(작성 시점과 현재 구현 상태가 다를 수 있음).
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `fix_profile_rls_restore.sql`, `fix_missing_primary_profile.sql`, `fix_rls_policies.sql`, `fix_membership_rls.sql`, `fix_staff_search.sql`, `add_roster_rls.sql`, `fix_member_status.sql`, `fix_center_reviews.sql` |
+| 완료 조건 | 비로그인·회원·스태프·매니저·오너·플랫폼 운영자별 핵심 테이블 read/write 테스트를 자동화하거나 반복 가능한 체크리스트로 실행하고 현재 `pg_policies` 결과를 기록함 |
+| 관련 문서 | [DATABASE 7절, 10절](./DATABASE.md), [REQUIREMENTS 4절](./REQUIREMENTS.md), [ROUTES 2절](./ROUTES.md) |
 
-19. **Tailwind가 설치·설정만 되어 있고 실제로는 적용되지 않음 [확인됨]**
-    `package.json`에 `tailwindcss`, `@tailwindcss/postcss`가 있고 `postcss.config.mjs`도 이를 플러그인으로 등록했지만,
-    프로젝트의 유일한 CSS 파일인 `app/globals.css`에 `@import "tailwindcss"`/`@tailwind` 지시문이 전혀 없어 Tailwind 유틸리티 CSS가 생성되지 않습니다.
-    그런데 `app/layout.tsx:30`은 `className="min-h-full flex flex-col"`처럼 Tailwind 유틸리티 클래스를 사용하고 있어,
-    **이 클래스들은 스타일이 적용되지 않는 죽은 클래스일 가능성이 높습니다**(`create-next-app` 스캐폴드 잔재로 추정 — `SETUP_INSTRUCTIONS.md`는
-    애초에 "Tailwind CSS: No"로 프로젝트를 만들라고 안내했습니다). 실제 렌더링에 문제가 없다면 CSS 상속/기본 스타일로 우연히 비슷하게 보이는 것일 수 있으니,
-    브라우저에서 `body`의 실제 적용 스타일을 확인하고 Tailwind 의존성 제거 또는 정상 연동 중 하나로 정리하는 것을 권장합니다.
+API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL이 반복되어 재발 위험이 큽니다.
 
----
+### P0-5. 정기 알림 스케줄러
 
-### 우선순위 판단 기준
-- **P0**: 사용자가 돈을 내거나 알림을 받는 핵심 흐름이 실제로 동작하지 않음 / 보안(RLS) 회귀 위험
-- **P1**: 사용자에게 "미구현" 상태가 노출되지만 안내 문구로 처리되어 있어 당장 오류는 아님
-- **P2**: 방치 시 데이터 혼란이나 협업 오류로 이어질 수 있는 유지보수성 문제
-- **P3**: 재검증이 필요한 불확실한 항목
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **운영 설정 필요** |
+| 근거 파일 | `add_notifications.sql`, `README.md`; 함수 `notify_upcoming_reservations()`, `notify_expiring_passes()` |
+| 완료 조건 | 운영 Supabase의 pg_cron 또는 승인된 scheduler가 정해진 주기로 두 함수를 실행하고, 중복 없이 알림이 생성되는 것을 운영 또는 staging에서 확인함 |
+| 관련 문서 | [REQUIREMENTS 6-2](./REQUIREMENTS.md), [DATABASE 9-3, 12-5](./DATABASE.md) |
+
+함수 존재만으로 자동 알림이 실행되는 것은 아닙니다.
+
+## 4. P1 — 사용자 노출 미완성·금전·권한 UX
+
+### P1-1. 포인트 원장 이원화 정합성
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `lib/sales.ts`, `lib/reviews.ts`, `add_sales.sql`, `add_reviews_points.sql`; `point_transactions`, `point_accounts`, `point_logs` |
+| 완료 조건 | 적립·사용·후기 보상·결제 사용의 기준 원장을 제품 정책으로 확정하고, 두 체계의 동기화 또는 migration을 구현해 모든 화면에서 같은 잔액을 검증함 |
+| 관련 문서 | [REQUIREMENTS 6-3, 10-4](./REQUIREMENTS.md), [DATABASE 4-3, 7-3](./DATABASE.md) |
+
+`point_logs`의 실제 기록·조회 역할도 함께 확인해야 합니다.
+
+### P1-2. 미발급 주문 취소와 환불 정책 설정
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **미완성** |
+| 근거 파일 | `app/purchases/page.tsx`, `app/mypage/page.tsx`, `lib/orders.ts`, `lib/mypage.ts`, `add_refund_and_membership.sql` |
+| 완료 조건 | 미발급 주문 취소 정책과 발급 후 환불 기간·사용 여부 정책을 확정하고, 회원·매니저 화면과 RPC가 같은 규칙을 사용하며 중복 환불을 차단함 |
+| 관련 문서 | [REQUIREMENTS 6-1, 10-4](./REQUIREMENTS.md), [ROUTES `/purchases`](./ROUTES.md) |
+
+현재 미발급 주문은 센터 문의로 안내하며 발급 후 환불은 24시간 이내·미사용 조건이 코드와 SQL에 고정되어 있습니다.
+
+### P1-3. 외부 푸시·알림톡 발송
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **미완성** |
+| 근거 파일 | `app/settings/notifications/page.tsx`, `add_notifications.sql`, `schema.sql`; `messages`, `notification_rules`, `notification_logs` |
+| 완료 조건 | 발송 채널과 opt-in 정책을 확정하고, 외부 발송기·재시도·실패 기록·수신 거부를 구현해 실제 기기 수신과 로그를 검증함 |
+| 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/settings/notifications`](./ROUTES.md) |
+
+현재 설정은 기기 `localStorage`에만 저장되며 실제 발송으로 이어지지 않습니다.
+
+### P1-4. 네이버 소셜 로그인
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **미완성** |
+| 근거 파일 | `app/login/page.tsx`, `AUTH_SETUP.md` |
+| 완료 조건 | 지원 여부와 인증 구조를 확정하고, callback·계정 생성·중복 이메일·실패 흐름을 staging에서 검증함. 미지원 결정 시 버튼과 문서를 일관되게 정리함 |
+| 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [ROUTES `/login`](./ROUTES.md) |
+
+현재 버튼은 미설정 안내만 표시합니다.
+
+### P1-5. 매니저 세부 권한 기반 UI
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **미완성** |
+| 근거 파일 | `lib/roles.ts`, `app/manager/staff/permissions/page.tsx`, 전체 `app/manager/**/page.tsx`, `add_personal_permissions.sql` |
+| 완료 조건 | 각 매니저 화면의 기능을 권한 키와 매핑하고 권한 없는 메뉴·버튼을 사전에 숨기거나 비활성화하며, RLS/RPC 거부도 그대로 유지해 역할별 검증을 통과함 |
+| 관련 문서 | [REQUIREMENTS 5-7, 6-1](./REQUIREMENTS.md), [DATABASE 7-1, 10절](./DATABASE.md), [ROUTES 5절](./ROUTES.md) |
+
+현재 `effectiveState()`는 권한 설정 화면에서만 사용되고 실제 기능 화면은 서버 거부 이후에야 권한 부족을 알 수 있습니다.
+
+### P1-6. 관리자·운영자 클라이언트 가드 누락
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **미완성** |
+| 근거 파일 | `app/admin/categories/page.tsx`, `app/admin/banners/page.tsx`, `app/manager/inquiries/page.tsx`, `app/manager/notifications/page.tsx`, `app/manager/staff/permissions/page.tsx` |
+| 완료 조건 | 플랫폼 운영자 2개 화면과 매니저 3개 화면에 일관된 사전 가드를 적용하고 비권한 사용자의 콘텐츠 미노출·친절한 오류·RLS 차단을 검증함 |
+| 관련 문서 | [REQUIREMENTS 7~8절](./REQUIREMENTS.md), [ROUTES 5~7절](./ROUTES.md), [DATABASE 10절](./DATABASE.md) |
+
+현재 데이터 쓰기는 RLS가 막지만 화면과 입력폼이 먼저 노출되는 페이지가 있습니다.
+
+### P1-7. 국경일 자동 갱신
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **미완성** |
+| 근거 파일 | `app/reservation/page.tsx`, `lib/holidays.ts`; `PUBLIC_HOLIDAYS` |
+| 완료 조건 | 승인된 공휴일 데이터 소스를 정하고 연도 변경에도 자동 조회·표시되며 센터 휴무일과 중복·충돌하지 않는지 검증함 |
+| 관련 문서 | [REQUIREMENTS 5-2, 12절](./REQUIREMENTS.md), [ROUTES `/reservation`](./ROUTES.md) |
+
+현재 국경일은 `2026-07-17` 제헌절 한 건만 하드코딩되어 있습니다.
+
+### P1-8. 담당회원·상담고객 화면
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **미완성 / 확인 필요** |
+| 근거 파일 | `app/manager/members/page.tsx`, `schema.sql`; `leads`, `customer.lead.*` 권한 |
+| 완료 조건 | 담당회원과 상담고객의 제품 정책·데이터 소유권·회원 전환 규칙을 확정하고 화면·lib·RLS를 연결해 CRUD를 검증함. 기능 제외 결정 시 준비 중 UI와 미사용 스키마 처리 방침을 기록함 |
+| 관련 문서 | [REQUIREMENTS 6-1, 12절](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/manager/members`](./ROUTES.md) |
+
+## 5. P2 — 운영 설정·개발환경·구조 검증
+
+### P2-1. 카카오·애플 OAuth 운영 설정
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **운영 설정 필요** |
+| 근거 파일 | `app/login/page.tsx`, `AUTH_SETUP.md` |
+| 완료 조건 | Supabase Provider, 각 제공자 설정, Redirect URL과 Vercel 환경을 구성하고 신규·기존 계정 로그인과 실패 callback을 검증함 |
+| 관련 문서 | [REQUIREMENTS 5-1, 6-2](./REQUIREMENTS.md), [ROUTES `/login`](./ROUTES.md) |
+
+### P2-2. Realtime publication과 문의·알림 RLS
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **운영 설정 필요 / 확인 필요** |
+| 근거 파일 | `lib/notifications.ts`, `lib/inquiries.ts`, `add_notifications.sql`, `add_inquiries.sql`; `notifications`, `inquiry_threads`, `inquiry_messages` |
+| 완료 조건 | 운영 Supabase publication과 RLS를 확인하고 회원·매니저 양쪽에서 실시간 수신, 재구독, 권한 격리와 channel cleanup을 검증함 |
+| 관련 문서 | [REQUIREMENTS 6-2](./REQUIREMENTS.md), [DATABASE 4-5, 12-5](./DATABASE.md), [ROUTES 알림·문의 항목](./ROUTES.md) |
+
+### P2-3. Storage bucket과 정책 운영 확인
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **운영 설정 필요 / 확인 필요** |
+| 근거 파일 | `lib/storage.ts`, `lib/profiles.ts`, `lib/center.ts`, `lib/reviews.ts`, `setup_storage.sql`; `avatars`, `business-licenses` |
+| 완료 조건 | 운영 bucket 존재, MIME·크기 정책, 업로드·조회·삭제 권한을 역할별로 검증하고 `business-licenses`가 비공개로 유지됨을 확인함 |
+| 관련 문서 | [REQUIREMENTS 5-1, 6-2](./REQUIREMENTS.md), [DATABASE 4-7, 7-4](./DATABASE.md) |
+
+### P2-4. 핵심 trigger 운영 적용 확인
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `schema.sql`, `reservation_functions.sql`, `add_platform_admin.sql`, `add_notifications.sql`, `add_notification_triggers.sql` |
+| 완료 조건 | 운영 `pg_trigger`에서 6개 trigger의 존재·활성 상태·대상 함수를 확인하고 센터 생성, 상태 변경, 주문·후기·예약 알림 시나리오를 검증함 |
+| 관련 문서 | [DATABASE 11절, 12-5](./DATABASE.md) |
+
+확인 대상:
+
+- `trg_create_default_center_roles`
+- `trg_guard_center_status`
+- `notify_new_order`
+- `notify_new_review`
+- `notify_reservation_insert`
+- `notify_reservation_update`
+
+### P2-5. `revenue_summary` view 사용 여부
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `schema.sql`, `lib/sales.ts`; `revenue_summary` |
+| 완료 조건 | 운영·외부 리포트에서 view를 사용하는지 확인하고, 사용할 경우 코드·문서의 기준 집계로 연결해 결과를 검증함. 사용하지 않을 경우 보존·폐기 결정을 기록함 |
+| 관련 문서 | [DATABASE 4-7](./DATABASE.md), [REQUIREMENTS 5-4](./REQUIREMENTS.md) |
+
+SQL 정의는 있으나 현재 `app/`·`lib/`의 직접 조회는 확인되지 않았습니다.
+
+### P2-6. `purchase_requests`의 현재 역할
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `lib/center.ts`, `app/center/[id]/page.tsx`, `add_center_shop.sql`; `requestPurchase()`, `purchase_requests` |
+| 완료 조건 | 장바구니·주문 이전 구매 신청 흐름을 계속 사용할지 결정하고 실제 호출자를 연결해 검증하거나, 대체 완료라면 운영 row·RPC·외부 접근을 확인한 뒤 보존·정리 방침을 기록함 |
+| 관련 문서 | [DATABASE 4-3](./DATABASE.md), [ROUTES `/center/[id]`](./ROUTES.md) |
+
+현재 insert helper는 존재하지만 센터 상세 화면은 `addToCart()`를 사용하며 `requestPurchase()` 호출은 확인되지 않았습니다.
+
+### P2-7. `.env.local.example` 부재
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **미완성** |
+| 근거 파일 | `README.md`, `.gitignore`, `lib/supabaseClient.ts`; 저장소 루트에 `.env.local.example` 없음 |
+| 완료 조건 | 실제 필요한 키 이름과 설명만 포함한 예제 또는 README 설치 절차를 마련하고, 새 환경에서 안내대로 실행해 앱이 시작됨. 비밀값은 포함하지 않음 |
+| 관련 문서 | [REQUIREMENTS 6-2](./REQUIREMENTS.md), [DEVELOPMENT_RULES 11절](./DEVELOPMENT_RULES.md) |
+
+## 6. P3 — 제품 결정이 필요한 향후 기능 후보
+
+아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
+
+### P3-1. 수업 구분과 복수 강사 배정
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `schema.sql`, `reservation_functions.sql`, `lib/classes.ts`; `class_types`, `class_trainers`, `classes.class_type_id` |
+| 완료 조건 | 두 기능의 제품 포함 여부를 결정함. 포함 시 수업 CRUD·권한·기존 수업 migration을 구현하고, 제외 시 FK·운영 데이터·외부 사용을 확인한 정리 계획을 승인받음 |
+| 관련 문서 | [REQUIREMENTS 6-3, 12절](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md) |
+
+### P3-2. 락커와 수강권 양도
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `schema.sql`, `app/manager/settings/page.tsx`; `lockers`, `locker_assignments`, `membership_transfers`, `center_settings.use_locker`, `payments.sale_type = transfer_fee` |
+| 완료 조건 | 락커 배정과 양도의 정책·과금·이력 요구를 결정함. 포함 시 UI·lib·RPC·RLS를 연결하고, 제외 시 설정·상태값·운영 데이터 정리 방침을 승인받음 |
+| 관련 문서 | [REQUIREMENTS 6-3, 12절](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md) |
+
+### P3-3. 회원 커스텀 필드
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `schema.sql`, `reservation_functions.sql`; `center_member_fields`, `profile_center_fields` |
+| 완료 조건 | 센터 정의 필드와 회원 입력값의 노출·수정 권한을 결정하고 실제 설정·입력 화면을 구현하거나 미사용 결정을 기록함 |
+| 관련 문서 | [DATABASE 5절](./DATABASE.md), [REQUIREMENTS 12절](./REQUIREMENTS.md) |
+
+### P3-4. 커뮤니티·대회정보·팝업공지
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `schema.sql`; `community_posts`, `community_comments`, `competitions`, `popup_notices` |
+| 완료 조건 | 각 기능의 로드맵 포함 여부, 사용자 유형, moderation·공개 범위를 결정함. 포함 시 실제 route·lib·RLS를 구현하고 제외 시 보존·정리 결정을 기록함 |
+| 관련 문서 | [REQUIREMENTS 6-3, 12절](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md) |
+
+### P3-5. 스태프 급여·근무일정과 전자계약
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `schema.sql`; `staff_salaries`, `staff_schedules`, `schedule_memos`, `contract_templates`, `terms`, `contracts`, 관련 `permissions` |
+| 완료 조건 | 급여·일정·계약의 법적·제품 범위와 접근 권한을 결정함. 포함 시 감사 이력·서명·개인정보 보호를 포함한 전체 흐름을 구현하고, 제외 시 스키마 처리 방침을 승인받음 |
+| 관련 문서 | [REQUIREMENTS 6-3, 12절](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md) |
+
+### P3-6. 알림 규칙·발송 로그, 상담 채널, 스케줄 템플릿
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `schema.sql`, `reservation_functions.sql`; `notification_rules`, `notification_logs`, `messages`, `center_contacts`, `schedule_templates` |
+| 완료 조건 | 현재 알림·센터 정보·`CopyCalendar`와 각 객체의 역할을 비교해 중복 여부를 결정함. 사용할 경우 화면·처리 흐름을 연결하고, 사용하지 않을 경우 운영 데이터 확인 후 정리 계획을 승인받음 |
+| 관련 문서 | [DATABASE 5절](./DATABASE.md), [REQUIREMENTS 12절](./REQUIREMENTS.md) |
+
+## 7. P3 — 용도·존속 여부가 불명확한 객체
+
+### P3-7. `product_passes`
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `schema.sql`, 현재 앱의 `products`·`memberships` 사용 코드 |
+| 완료 조건 | 운영 데이터·RPC·외부 도구 사용 여부를 확인하고 `memberships`와 다른 역할이 있는지 결정함. 보존 또는 제거 결정을 기록함 |
+| 관련 문서 | [DATABASE 6절](./DATABASE.md) |
+
+### P3-8. `change_logs`
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `schema.sql`; 앱 호출·핵심 trigger 미확인 |
+| 완료 조건 | 운영 감사 로그로 사용되는지 확인하고 기록 주체·보존 기간을 결정함. 미사용이면 운영 데이터 확인 후 정리 계획을 승인받음 |
+| 관련 문서 | [DATABASE 6절](./DATABASE.md) |
+
+### P3-9. 구버전 가능성이 있는 `chat_messages`와 `reviews`
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `schema.sql`, `fix_center_reviews.sql`, `lib/inquiries.ts`, `lib/reviews.ts`; 현재 앱은 `inquiry_messages`, `center_reviews` 사용 |
+| 완료 조건 | 운영 row, RPC·trigger·외부 접근을 확인해 대체 완료 여부를 확정함. 데이터 migration·보관·삭제 계획을 사용자 승인 후 수행함 |
+| 관련 문서 | [DATABASE 6절, 10-3](./DATABASE.md), [REQUIREMENTS 6-3](./REQUIREMENTS.md) |
+
+## 8. 상태 갱신 체크리스트
+
+항목을 완료로 바꾸기 전에 다음을 확인합니다.
+
+- [ ] 완료 조건의 모든 문장을 실제로 검증했다.
+- [ ] 코드 변경은 build와 관련 수동 테스트를 통과했다.
+- [ ] SQL 파일 생성과 운영 Supabase 적용을 구분했다.
+- [ ] 운영 객체는 `pg_get_functiondef`, `pg_policies`, `pg_trigger` 등 실제 상태를 확인했다.
+- [ ] OAuth·Realtime·Storage·scheduler는 운영 또는 staging 설정을 확인했다.
+- [ ] 회원·스태프·매니저·오너·플랫폼 운영자 권한을 필요한 범위에서 검증했다.
+- [ ] 데이터 migration과 기존 row 영향을 확인했다.
+- [ ] 사용자 결정이 필요한 항목은 결정 근거를 기록했다.
+- [ ] REQUIREMENTS·DATABASE·ROUTES의 상태를 함께 갱신했다.
+- [ ] CHANGELOG에 날짜, 변경, 검증 결과를 기록했다.
+- [ ] 완료되지 않은 하위 작업을 숨기지 않고 별도 TODO로 남겼다.
