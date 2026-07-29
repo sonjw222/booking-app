@@ -21,9 +21,13 @@ export type Order = {
 };
 
 // 회원: 주문 생성 (결제 화면에서 "결제하기" 시)
+// provider: Payment Adapter가 이 주문을 처리할 provider("mock"/"toss"/"portone"). 생략 시 null
+//   (레거시 경로 — 매니저가 /manager/orders에서 수동 확인). 기존 호출부(app/cart/page.tsx 등)는
+//   그대로 두어도 동작에 영향 없는 선택적 필드라 하위 호환됨.
 export async function createOrder(input: {
   centerId: string; productId: string; productName: string; amount: number; payMethod?: string;
   selectedSize?: string; couponCode?: string; discountAmount?: number; autoBook?: boolean;
+  provider?: "mock" | "toss" | "portone";
 }): Promise<string> {
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) throw new Error("로그인이 필요해요");
@@ -50,6 +54,7 @@ export async function createOrder(input: {
     coupon_code: input.couponCode ?? null,
     discount_amount: input.discountAmount ?? 0,
     auto_book: input.autoBook ?? false,
+    payment_provider: input.provider ?? null,
     status: "pending",
   }).select("id").single();
   if (error) throw new Error("주문 생성에 실패했어요: " + error.message);
