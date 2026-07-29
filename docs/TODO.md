@@ -319,6 +319,33 @@ checkout이 실제로 호출하는 코드와 동일한 경로를 검증한다는
 영향을 받으므로, 그 시점에 테스트 전용 헬퍼 계층 분리 여부를 검토해야 합니다. 이번 작업
 범위에서는 구조를 바꾸지 않습니다.
 
+### P2-9. `tests/unit`이 mock 없이 import하면 `lib/supabaseClient.ts` 초기화까지 실행됨 (기술 부채)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인됨 — Node 22로 우회 완료, 근본 원인은 미해결** |
+| 근거 파일 | `tests/unit/PaymentProviderFactory.test.ts`, `lib/payments/PaymentProviderFactory.ts`, `lib/payments/MockPaymentProvider.ts`, `lib/payments/mockPaymentApi.ts`, `lib/supabaseClient.ts` |
+| 완료 조건 | `lib/payments/PaymentProviderFactory`/`MockPaymentProvider`가 실제 Supabase 클라이언트 생성과 완전히 분리되도록(예: RPC 호출부를 지연 import하거나, `PaymentProviderFactory` 테스트에서도 `mockPaymentApi`를 mock) 구조를 조정해, "Supabase가 필요 없는 단위 테스트"라는 전제가 import 체인만으로도 실제로 보장됨 |
+| 관련 문서 | [tests/README.md](../tests/README.md), `.github/workflows/test.yml` |
+
+2026-07-30에 GitHub Actions에서 `PaymentProviderFactory.test.ts`가 실패했습니다. 원인:
+`@supabase/supabase-js`(하위 의존성 `realtime-js`)가 클라이언트 생성 시 native `WebSocket`
+전역 객체를 요구하는데 Node 20에는 이게 없어, `getPaymentProvider()` → `MockPaymentProvider` →
+`mockPaymentApi` → `lib/supabaseClient.ts`로 이어지는 import 체인이 테스트 시작 전에 그대로
+실패했습니다. 로컬(Node 24)에는 native WebSocket이 있어 재현되지 않았습니다.
+
+**임시 조치(완료)**: CI Node 버전을 20 → 22로 올려 우회했습니다(`.github/workflows/test.yml`,
+`package.json`의 `engines.node`, `.nvmrc`). Node 22+에는 native WebSocket이 있어 지금은 통과합니다.
+
+**근본 원인(미해결)**: `tests/unit/MockPaymentProvider.test.ts`는 `mockPaymentApi`를 `vi.mock()`으로
+대체해 실제 `lib/supabaseClient.ts`가 전혀 로드되지 않지만, `PaymentProviderFactory.test.ts`는
+mock 없이 실제 구현체를 그대로 import하기 때문에 "Supabase 접속이 필요 없는 단위 테스트"라는
+설계 의도가 import 그래프상으로는 지켜지지 않고 있습니다. Node 버전에 우연히 기대는 구조라,
+나중에 CI/로컬 Node 버전이 다시 낮아지거나 `realtime-js`가 WebSocket 요구사항을 더 엄격하게
+바꾸면 같은 문제가 재발할 수 있습니다. 이번 작업에서는 Node 22 우회만 적용하고, 구조 분리는
+하지 않았습니다.
+
 ## 6. P3 — 제품 결정이 필요한 향후 기능 후보
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
