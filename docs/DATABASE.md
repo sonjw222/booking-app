@@ -72,7 +72,7 @@
 | `classes` | 구현됨 | 그룹·프라이빗 수업과 반복그룹, 정원, 마감, 상태 |
 | `class_allowed_products` | 구현됨 | 수업별 예약 가능한 수강권 상품 |
 | `reservations` | 구현됨 | 예약·대기·취소·출석·노쇼 및 개인 메모. `reservation_type`(MEMBER/ADMIN_ASSIGNMENT/ADMIN_FREE), `reservation_source`(USER/ADMIN/SYSTEM), `admin_reason_code`/`admin_reason_detail`, `is_capacity_override`, `membership_consumed`, `cancelled_by`/`cancel_reason`/`cancelled_at`, `created_by_account_id`, `updated_at` 추가(`add_admin_assignment.sql`) |
-| `admin_action_logs` | 구현됨 | 관리자 직접배치/무료배치/취소 작업 로그 (append-only, 일반 매니저 UI에서 수정·삭제 불가). `add_admin_assignment.sql` |
+| `admin_action_logs` | 구현됨 | 관리자 직접배치/무료배치/취소 작업 로그 (append-only, 일반 매니저 UI에서 수정·삭제 불가). `add_admin_assignment.sql`. `add_admin_activity_log_ext.sql`이 `reservation_id`/`class_id`/`member_profile_id`/`reservation_type`/`reservation_source`를 nullable로 완화하고 `action_type`에 향후 감사로그용 값(NOTICE_CREATE 등 7종, 아직 미사용)을 예약해둠 |
 
 ### 4-3. 상품, 수강권, 주문과 매출
 
@@ -276,6 +276,7 @@ manager_centers * ── 1 center_roles
 | `admin_cancel_reservation` | `lib/adminAssignment.ts` | 관리자 배치(ADMIN_ASSIGNMENT/ADMIN_FREE) 취소, 타입별 정확한 복구 | `add_admin_assignment.sql`. MEMBER 타입 예약에는 사용 불가(기존 `cancel_reservation`/`manager_set_attendance` 유지) |
 | `can_manage_center_reservations` | `add_admin_assignment.sql` 내부 | 센터 관리자 권한 판정 헬퍼(`manager_book_member`와 동일 정책) | 세부 permission key 확장 지점, [TODO P1-9](./TODO.md) |
 | `is_profile_assignable` | `add_admin_assignment.sql` 내부 | 회원 자격 판정 헬퍼(현재는 프로필 존재 여부만 확인) | 이용정지/탈퇴 등 정책 확장 지점, [TODO P1-10](./TODO.md) |
+| `manager_dashboard_summary` | `lib/managerDashboard.ts` | 관리자 홈 대시보드 요약(기간 내 수업/예약/취소, 회원·활성회원·활성수강권, 직접배치·무료배치 건수)을 단일 호출로 집계 | `add_manager_dashboard_summary.sql`. 매출은 포함하지 않음(PG 미연동), 권한은 `can_manage_center_reservations()` 재사용 |
 
 `usable_memberships()`는 SQL에 존재하지만 현재 앱은 배치용 `usable_memberships_for_classes()`와 `reserve_with_membership()`을 직접 호출합니다. 두 함수 모두 `fix_usable_memberships_product_kind.sql`에서 `products.product_kind = 'pass'` 조건이 추가되어, 구매용 상품(goods)이 더 이상 반환되지 않습니다.
 

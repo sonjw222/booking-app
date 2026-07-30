@@ -263,6 +263,35 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 사유 입력 → `p_force_capacity`로 재호출) 2단계 흐름 자체의 자동화 테스트뿐 — 이번 범위에서는
 수동으로만 확인함.
 
+### P1-12. 앱 전체 버튼 스타일(UI Design System) 통일
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **확인 필요 (제품 결정 대기)** |
+| 근거 파일 | `app/globals.css`(`.pill-btn`, `.att-btn`, `.ghost-btn`, `.text-btn` 등), `app/manager/**/*.tsx` |
+| 완료 조건 | 앱 전체(회원·매니저 화면 전부)의 버튼 스타일을 하나의 디자인 시스템으로 통일할지 결정하고, 포함 시 `.att-btn`(출석/결석/노쇼 등)을 포함한 기존 컴포넌트들을 범위·우선순위와 함께 마이그레이션함 |
+| 관련 문서 | [DEVELOPMENT_RULES 3-3](./DEVELOPMENT_RULES.md) |
+
+2026-07-30 사용자 확인: "관리자 UX 개선" Epic에서는 새로 만들거나 손댄 관리자 버튼(배치 ▼/
+다시배치/직접배치/직접배치 종료/활동기록 필터·되돌리기)만 `.pill-btn`으로 통일했고, `.att-btn`
+등 기존 핵심 컴포넌트는 의도적으로 변경하지 않음 — 앱 전체 버튼 통일은 별도 "UI Design System
+리팩토링" 작업에서 진행하기로 결정.
+
+### P1-13. `admin_action_logs` 향후 action_type(NOTICE_*/CLASS_*/MEMBERSHIP_*) 실사용
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **미완성 (스키마만 준비됨)** |
+| 근거 파일 | `add_admin_activity_log_ext.sql` |
+| 완료 조건 | 공지/수업/수강권 CRUD를 실제로 `admin_action_logs`에 기록하는 코드(각 CRUD RPC/화면에서 insert)를 추가하고, `/manager/admin-assignments`(또는 후속 "관리자 활동기록" 화면)가 이 값들도 표시하도록 확장함 |
+| 관련 문서 | [DATABASE.md](./DATABASE.md) |
+
+`action_type` CHECK 제약에 7종의 값(NOTICE_CREATE/NOTICE_DELETE/CLASS_CREATE/CLASS_UPDATE/
+CLASS_CANCEL/MEMBERSHIP_CREATE/MEMBERSHIP_UPDATE)을 미리 예약해뒀지만, 이번 범위에서는 그 값을
+실제로 기록하는 코드를 추가하지 않았다(스키마 확장만).
+
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
 ### P2-1. 카카오·애플 OAuth 운영 설정

@@ -8,6 +8,36 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-07-30 (추가 2) — 관리자 UX 개선 Epic: 활동기록 상세/되돌리기 + 대시보드 + Pill Button
+
+`feature/admin-notifications-dashboard` 브랜치(`main`에서 분기 — `main`은 관리자 직접배치/무료배치
+기능이 이미 PR #4로 merge된 상태). Phase 0 조사 결과 `notifications`/`admin_action_logs`는 이미
+범용 구조로 존재했고 직접배치·무료배치·직접취소는 이미 서버 트랜잭션 안에서 중복 없이 영구
+기록되고 있었음 — 별도 알림 배관을 새로 만들 필요는 없었고, 활동기록 화면의 상세/되돌리기와
+관리자 홈의 통계가 없다는 실제 공백만 채움.
+
+- **UI**: 신규 `.pill-btn`(radius:999, 모바일 터치영역 36px, 아이콘+텍스트 정렬) 공용 스타일을
+  이번 Epic에서 새로 만들거나 손대는 관리자 버튼(배치 ▼/다시배치/직접배치/직접배치 종료/활동기록
+  필터·되돌리기)에만 적용. 기존 `.att-btn`(출석/결석/노쇼)은 의도적으로 유지 — 앱 전체 버튼 통일은
+  향후 별도 "UI Design System 리팩토링"에서 진행하기로 결정(사용자 확인). `.unplaced-retry`(이제
+  미사용)는 제거. `.assign-banner` 텍스트의 `overflow-wrap`을 `anywhere`로 보강.
+- **알림**: `admin_assigned`/`admin_cancelled` 알림 metadata에 `date`(KST) 추가, 전용 아이콘 지정.
+  route는 기존 `link` 컬럼이 담당하므로 중복 저장하지 않음.
+- **관리자 활동기록**: `admin_action_logs`의 `reservation_id`/`class_id`/`member_profile_id`/
+  `reservation_type`/`reservation_source`를 nullable로 완화하고 `action_type` CHECK를 향후
+  7종(NOTICE_CREATE/NOTICE_DELETE/CLASS_CREATE/CLASS_UPDATE/CLASS_CANCEL/MEMBERSHIP_CREATE/
+  MEMBERSHIP_UPDATE — 아직 미사용, 스키마만 예약)까지 확장해 향후 범용 감사로그로 쓸 수 있게 함.
+  `/manager/admin-assignments`에 기간 프리셋, 행위 필터 재편(직접배치/무료배치/직접취소),
+  카드 클릭 시 상세 시트(회원·수업 바로가기 링크 포함), "되돌리기" 버튼(이미 취소·지난 수업은
+  비활성화) 추가. 되돌리기는 새 취소 로직이 아니라 기존 `admin_cancel_reservation`을 그대로 재사용.
+- **대시보드**: `manager_dashboard_summary(center, from, to)` RPC 신설 — 기간 내 수업/확정예약/
+  취소, 전체·활성 회원, 활성 수강권, 직접배치·무료배치 건수를 단일 호출로 집계(N+1 없음, 권한은
+  `can_manage_center_reservations()` 재사용). 관리자 홈에 기간 필터·요약 카드 그리드·최근 활동
+  (`admin_action_logs` 재사용)·최근 알림(`notifications` 재사용) 추가. 매출 카드는 "준비중"
+  고정 표시(PG 미연동, 가짜 데이터 없음).
+- **테스트**: `isRevertEligible()` 단위 테스트 8개, `manager_dashboard_summary` 권한(비관리자/
+  타센터 관리자 차단, 정상 조회 응답 형태) 통합 테스트 3개(기존 fixture 재사용, 신규 fixture 없음).
+
 ## 2026-07-30 (추가) — 관리자 직접배치 통합 테스트 성공 경로 보강
 
 이전 커밋의 `admin-assignment-security.test.ts`는 매니저 fixture가 없어 권한 차단·입력 검증만
