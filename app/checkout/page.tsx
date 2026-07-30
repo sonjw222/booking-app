@@ -83,6 +83,7 @@ function CheckoutContent() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const [issuedMembershipId, setIssuedMembershipId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -151,6 +152,7 @@ function CheckoutContent() {
       const result = await paymentService.confirmPayment(created.paymentKey, orderId);
 
       if (result.status === "paid") {
+        setIssuedMembershipId(result.membershipId ?? null);
         setDone(true);
       } else if (result.status === "cancelled") {
         setError(result.message ?? "결제가 취소됐어요. 다시 시도해주세요.");
@@ -182,6 +184,9 @@ function CheckoutContent() {
   }
 
   if (done) {
+    // 실제 이용 가능한 수강권이 자동 발급됐는지: goods(대여상품)가 아니라 pass(수강권)이면서
+    // 발급 RPC가 실제로 membership_id를 돌려준 경우에만 "수강권 등록" 문구를 씀
+    const passIssued = product?.kind === "pass" && !!issuedMembershipId;
     return (
       <div className="app-shell">
         <div className="checkout-done">
@@ -191,7 +196,9 @@ function CheckoutContent() {
             {centerName}<br />
             {product?.name} · {won(product?.price ?? 0)}<br /><br />
             (Mock) 실제 PG 연동 전 테스트 결제예요.<br />
-            수강권이 바로 발급됐어요.
+            {passIssued
+              ? "상품 구매가 완료되었으며 이용 가능한 수강권이 등록되었습니다."
+              : "상품 구매가 완료되었습니다."}
           </div>
           {reservationBackUrl ? (
             <>

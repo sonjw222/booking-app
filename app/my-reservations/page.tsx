@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchMyPage, type HistoryItem } from "../../lib/mypage";
 import Loading from "../components/Loading";
 import BottomNav from "../components/BottomNav";
+import { memberFacingBadge, type ReservationType } from "../../lib/reservationTypes";
 
 const STATUS_LABEL: Record<string, string> = {
   confirmed: "예약확정",
@@ -70,6 +71,9 @@ export default function MyReservationsPage() {
                 <div className="hist-title">
                   {h.profileName && <span className="profile-tag sm">{h.profileName}</span>}
                   {h.title}
+                  {memberFacingBadge(h.reservationType as ReservationType) && (
+                    <span className="profile-tag sm">{memberFacingBadge(h.reservationType as ReservationType)}</span>
+                  )}
                 </div>
                 <div className="hist-sub">{h.centerName} · {h.when}</div>
               </div>
