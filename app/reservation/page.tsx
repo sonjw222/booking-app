@@ -22,6 +22,7 @@ import {
   fetchPurchasableProductsByClass, type PurchasableProduct,
   cancelReservation,
   fetchMyProfiles,
+  getMyAccountId,
   type ClassInfo,
   type MyGoods,
   type CenterInfo,
@@ -139,12 +140,17 @@ function ReservationCalendarContent() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchMonthData(year, month);
+      // 계정 조회는 한 번만: fetchMonthData/fetchMyProfiles가 각자 auth.getUser()+accounts를
+      // 중복 조회하지 않도록 미리 구한 accountId를 넘겨서 두 요청을 병렬로 처리
+      const accountId = await getMyAccountId();
+      const [data, profs] = await Promise.all([
+        fetchMonthData(year, month, accountId),
+        fetchMyProfiles(accountId),
+      ]);
       setClasses(data.classes);
       setCenters(data.centers);
       setHolidays(data.holidays);
       // 프로필 목록 (예약 주체 선택용). 대표 프로필을 기본 선택
-      const profs = await fetchMyProfiles();
       setProfiles(profs);
       setActiveProfileId((prev) => prev ?? profs.find((p) => p.isPrimary)?.id ?? profs[0]?.id ?? null);
     } catch (e: any) {
@@ -198,8 +204,8 @@ function ReservationCalendarContent() {
     const nowUsable = (usablePassesByClass[openClassId] ?? []).length > 0;
     showToast(
       nowUsable
-        ? "✅ 수강권 구매가 완료됐어요. 바로 예약을 진행할 수 있어요."
-        : "✅ 구매 요청이 완료됐어요. 수강권이 발급되면 예약을 진행할 수 있어요."
+        ? "✅ 상품 구매가 완료되었으며 이용 가능한 수강권이 등록되었습니다. 바로 예약을 진행할 수 있어요."
+        : "✅ 상품 구매가 완료되었습니다. 수강권이 발급되면 예약을 진행할 수 있어요."
     );
     const params = new URLSearchParams(searchParams.toString());
     params.delete("purchased");
@@ -303,10 +309,18 @@ function ReservationCalendarContent() {
   }
 
   // 이 프로필이 이 수업에 쓸 수 있는 수강권 이름 목록 (중복 제거)
+  // classId별로 매 렌더링마다 Set을 새로 만들지 않도록, usablePassesByClass가 바뀔 때만 한 번에 계산
+  const usableProductNamesByClass = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const [classId, list] of Object.entries(usablePassesByClass)) {
+      const seen = new Set<string>();
+      for (const m of list) seen.add(m.productName);
+      map.set(classId, Array.from(seen));
+    }
+    return map;
+  }, [usablePassesByClass]);
   function usableProductNames(classId: string): string[] {
-    const seen = new Set<string>();
-    for (const m of usablePassesByClass[classId] ?? []) seen.add(m.productName);
-    return Array.from(seen);
+    return usableProductNamesByClass.get(classId) ?? [];
   }
 
   function handleReserve(cls: ClassInfo) {
@@ -329,6 +343,7 @@ function ReservationCalendarContent() {
   async function doReserve() {
     const cls = confirmClass;
     if (!cls) return;
+    if (busyClassId) return; // 중복 클릭/중복 요청 방지 (disabled 렌더링 전에 두 번 눌리는 경우 대비)
     setBusyClassId(cls.id);
     try {
       const status = passPick
@@ -349,6 +364,7 @@ function ReservationCalendarContent() {
   async function handleCancel(cls: ClassInfo) {
     const mine = activeProfileId ? cls.myByProfile[activeProfileId] : undefined;
     if (!mine) return;
+    if (busyClassId) return; // 중복 클릭/중복 요청 방지
     if (!confirm("이 수업 예약을 취소할까요?")) return;
     setBusyClassId(cls.id);
     try {
@@ -380,19 +396,29 @@ function ReservationCalendarContent() {
   const centerFilter = searchParams.get("center");
   const categoryFilter = searchParams.get("category");
   const filteredCenterName = centerFilter ? centers.find((c) => c.id === centerFilter)?.name : null;
-  // 카테고리 필터 시 해당 종목 센터들의 id 집합
-  const categoryCenterIds = categoryFilter
-    ? new Set(centers.filter((c) => c.categories.includes(categoryFilter)).map((c) => c.id))
-    : null;
+  // 카테고리 필터 시 해당 종목 센터들의 id 집합 (centers/categoryFilter가 바뀔 때만 새로 계산 —
+  // 매 렌더링마다 새 Set을 만들면 아래 dayClasses useMemo의 deps가 매번 "새 객체"로 보여 무효화됨)
+  const categoryCenterIds = useMemo(
+    () =>
+      categoryFilter
+        ? new Set(centers.filter((c) => c.categories.includes(categoryFilter)).map((c) => c.id))
+        : null,
+    [centers, categoryFilter]
+  );
 
   const publicHoliday = PUBLIC_HOLIDAYS[selectedKey];
   const centerHolidays = holidays.filter((h) => h.date === selectedKey);
   const effectiveCenter = centerPick ?? centerFilter;
-  const dayClasses = classes
-    .filter((c) => c.date === selectedKey)
-    .filter((c) => !effectiveCenter || c.centerId === effectiveCenter)
-    .filter((c) => !categoryCenterIds || categoryCenterIds.has(c.centerId))
-    .sort((a, b) => a.start.localeCompare(b.start));
+  // 날짜/센터/카테고리 필터가 바뀔 때만 다시 계산 (매 렌더링마다 3중 filter+sort를 새로 만들지 않음)
+  const dayClasses = useMemo(
+    () =>
+      classes
+        .filter((c) => c.date === selectedKey)
+        .filter((c) => !effectiveCenter || c.centerId === effectiveCenter)
+        .filter((c) => !categoryCenterIds || categoryCenterIds.has(c.centerId))
+        .sort((a, b) => a.start.localeCompare(b.start)),
+    [classes, selectedKey, effectiveCenter, categoryCenterIds]
+  );
   // 예약 확인 모달에 표시할 수강권/상품 목록 (배치 조회 결과에서 파생 — 별도 조회 없음)
   const passList = confirmClass ? (usablePassesByClass[confirmClass.id] ?? []) : [];
   const confirmGoods = confirmClass ? (goodsByCenter[confirmClass.centerId] ?? []) : [];
@@ -579,7 +605,7 @@ function ReservationCalendarContent() {
                   <div className="class-row-place">{cls.place}</div>
                   <div className="center-class-passes">
                     {passesLoading ? (
-                      <span className="class-pass-chip all">수강권 확인 중...</span>
+                      <span className="class-pass-chip all skeleton-shimmer">수강권 확인 중...</span>
                     ) : passNames.length > 0 ? (
                       <>
                         <span className="class-pass-label">사용 가능:</span>
@@ -623,7 +649,7 @@ function ReservationCalendarContent() {
 
             {/* 사용할 수강권 선택 (계정 내 공유) */}
             {passesLoading ? (
-              <div className="perm-guide" style={{ margin: "0 0 10px" }}>수강권 확인 중...</div>
+              <div className="perm-guide skeleton-shimmer" style={{ margin: "0 0 10px" }}>수강권 확인 중...</div>
             ) : passList.length > 0 ? (
               <>
                 <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>사용할 수강권</div>
@@ -655,7 +681,7 @@ function ReservationCalendarContent() {
                   현재 사용할 수 있는 수강권이 없어요.
                 </div>
                 {purchasableLoading ? (
-                  <div className="perm-guide" style={{ margin: 0 }}>구매 가능한 수강권 확인 중...</div>
+                  <div className="perm-guide skeleton-shimmer" style={{ margin: 0 }}>구매 가능한 수강권 확인 중...</div>
                 ) : (purchasableByClass[confirmClass.id]?.length ?? 0) > 0 ? (
                   <div>
                     <div className="perm-guide" style={{ margin: "0 0 6px" }}>
@@ -695,7 +721,7 @@ function ReservationCalendarContent() {
               <>
                 <div className="menu-section-label" style={{ padding: "8px 0 6px" }}>보유 상품 사용 (선택)</div>
                 {goodsLoading ? (
-                  <div className="perm-guide" style={{ margin: 0 }}>상품 불러오는 중...</div>
+                  <div className="perm-guide skeleton-shimmer" style={{ margin: 0 }}>상품 불러오는 중...</div>
                 ) : confirmGoods.length === 0 ? (
                   <div className="perm-guide" style={{ margin: 0 }}>사용 가능한 상품이 없어요</div>
                 ) : (

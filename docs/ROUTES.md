@@ -77,7 +77,8 @@
 | 라우트 | 사용자 | 주요 기능 | 주요 데이터 의존성 | 권한 처리와 상태 |
 |---|---|---|---|---|
 | `/manager` | 센터 매니저 | 센터 전환, 오늘 수업·예약 현황, 출결, 회원 상세, 관리 메뉴 | `manager_centers`, `accounts`, `classes`, `class_reservation_counts` view, `reservations`, `center_members`, `profiles`, `memberships`; 출결 RPC | `fetchMyCenters()` 사용. 상세 권한 UI 제한 없음. 상단의 “일부는 다음 단계에서 실연동” 주석은 현재 여러 메뉴가 연결된 코드와 달라 **확인 필요** |
-| `/manager/classes` | 센터 매니저 | 수업 CRUD, 반복수업·복사, 예약자·출결, 보강 예약, 자동예약 재시도 | `classes`, `class_reservation_counts` view, `rooms`, `center_holidays`, `reservations`, `center_members`, `memberships`, `products`, `class_allowed_products`, `membership_schedule_rules`; 수업·출결·보강·자동예약 RPC | `fetchMyCenters()` 사용. 최종 쓰기는 RLS/RPC. “다시 배치” UI까지 **구현됨** |
+| `/manager/classes` | 센터 매니저 | 수업 CRUD, 반복수업·복사, 예약자·출결, 보강 예약, 자동예약 재시도, 관리자 직접배치·무료 추가 배치 | `classes`, `class_reservation_counts` view, `rooms`, `center_holidays`, `reservations`, `center_members`, `memberships`, `products`, `class_allowed_products`, `membership_schedule_rules`, `admin_action_logs`; 수업·출결·보강·자동예약·`admin_assign_reservation`/`admin_cancel_reservation` RPC | `fetchMyCenters()` 사용. 최종 쓰기는 RLS/RPC. “다시 배치” UI까지 **구현됨** |
+| `/manager/admin-assignments` | 센터 매니저 | 관리자 직접배치/무료 추가배치/취소 작업 로그 조회 + 필터(기간/회원·관리자·수업/타입/작업/사유/정원초과) | `admin_action_logs`, `accounts` | `fetchMyCenters()` 사용. 통계·엑셀 다운로드는 범위 제외. **구현됨** |
 | `/manager/rooms` | 센터 매니저 | 룸 추가·수정·삭제, 주소와 지도 | `rooms` | `fetchMyCenters()` 사용, RLS 최종 제한. **구현됨** |
 | `/manager/membership-rules` | 센터 매니저 | 수강권 상품 CRUD, 수업 허용 상품, 요일·시간·수업명 조건 | `products`, `classes`, `class_allowed_products`, `membership_schedule_rules` | `fetchMyCenters()` 사용. 주석의 `pass.update` 권한은 UI에서 선검사하지 않으며 RLS에 의존. **구현됨** |
 | `/manager/goods` | 센터 매니저 | 굿즈·대여 상품 CRUD, 무제한·횟수 옵션 | `products` | `fetchMyCenters()` 사용. `pass.update` UI 선검사 없음. **구현됨** |

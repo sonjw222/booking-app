@@ -42,7 +42,38 @@ provider 선택 로직만 검증합니다. 아무 설정 없이 바로 실행됩
 | `TEST_USER_B_EMAIL` / `TEST_USER_B_PASSWORD` | 계정 B. "본인 소유가 아닌 주문은 거부되는지"(RLS) 검증에만 사용 — A의 주문을 B가 확정/취소 시도했을 때 실제로 막히는지 확인합니다. |
 | `TEST_CENTER_ID` | 테스트 주문을 생성할 실제 센터 id. |
 | `TEST_PRODUCT_ID` | 테스트 주문을 생성할 실제 상품 id. 운영 데이터가 아닌 소액(또는 0원) 테스트 전용 상품을 하나 만들어 지정하는 것을 권장합니다. |
+| `TEST_MANAGER_A_EMAIL` / `TEST_MANAGER_A_PASSWORD` | `tests/integration/admin-assignment-security.test.ts` 전용. **get-or-create** 방식 — TEST_USER_A/B와 동일하게 최초 실행 시 자동 가입됩니다(Auth 계정 + `accounts`/`profiles`). 센터 오너로 연결하는 과정은 아래 "관리자 직접배치 fixture 전략" 참고. |
+| `TEST_MANAGER_B_EMAIL` / `TEST_MANAGER_B_PASSWORD` | 위와 동일하지만 **A와 반드시 다른 계정**이어야 합니다. "다른 센터의 관리자는 배치를 시도할 수 없다" 검증 전용으로, A와는 별개의 테스트 센터의 오너가 됩니다. |
+| `SUPABASE_SERVICE_ROLE_KEY` | `admin-assignment-security.test.ts`의 fixture 준비(테스트 센터 생성, `manager_centers` 오너 연결)에**만** 쓰는 서비스 역할 키. Supabase 대시보드 → Project Settings → API에서 확인. **절대 `NEXT_PUBLIC_` 접두사를 붙이지 마세요.** 실제 RPC 호출/권한 검증에는 쓰이지 않습니다(아래 참고). |
 | `PRODUCTION_SUPABASE_URL` *(선택)* | 운영 Supabase 프로젝트가 생기면 그 URL을 여기에 등록하세요. `NEXT_PUBLIC_SUPABASE_URL`이 이 값과 같으면 통합 테스트 실행 자체를 거부합니다(아래 참고). 지금은 운영 프로젝트가 따로 없어 설정하지 않아도 됩니다. |
+
+### 관리자 직접배치 fixture 전략 (서비스 역할 키를 fixture 준비에만 사용)
+
+`admin-assignment-security.test.ts`의 성공 경로 테스트는 실제 매니저 권한(센터 활성 오너)이 있어야
+`admin_assign_reservation`/`admin_cancel_reservation`이 통과합니다. "아직 그 센터의 매니저가 아닌
+계정이 스스로를 그 센터의 매니저로 만드는" 과정은 로그인 사용자 client만으로는 RLS를 안전하게
+통과한다고 보장할 수 없는 닭-달걀 문제입니다(실제로 `centers` insert에서 RLS 위반으로 막히는 것을
+확인함). **`centers` RLS 정책 자체를 테스트 통과를 위해 느슨하게 바꾸지 않고**, 이 fixture 준비
+단계만 서비스 역할 키를 쓰는 별도 관리자 client(`tests/integration/setup.ts`의
+`getFixtureAdminClient()`)로 RLS를 우회해서 처리합니다.
+
+서비스 역할 client가 하는 일은 정확히 이 두 가지뿐입니다(`getOrCreateOwnedTestCenter()`):
+1. 테스트 센터 조회 또는 생성 (`centers`)
+2. `manager_centers`에 오너 역할로 연결 (필요 시 `center_roles`에서 오너 역할 id 조회 포함)
+
+그 외 전부 — 수업/수강권 생성(`createFutureTestClass`/`createTestMembership`), 그리고 무엇보다
+**실제로 검증 대상인 `admin_assign_reservation`/`admin_cancel_reservation` RPC 호출과 권한
+테스트 자체**는 항상 `switchToTestUser()`로 로그인한 사용자별 일반 client(앱이 실제로 쓰는 것과
+같은 `lib/supabaseClient.ts` 싱글턴)로 실행됩니다. 그래야 "일반 회원은 차단된다", "다른 센터
+관리자는 차단된다" 같은 검증이 실제 RLS/권한 로직을 통과하는 것이지, 서비스 역할로 우회한 결과가
+아닙니다.
+
+`SUPABASE_SERVICE_ROLE_KEY`가 없는 파일(기존 결제 통합 테스트 2개)은 `getFixtureAdminClient()`를
+아예 호출하지 않으므로 이 값이 없어도 영향받지 않습니다(지연 생성 — 파일 상단에서 미리
+`requireEnv`하지 않음).
+
+생성된 센터/오너 연결은 계정과 마찬가지로 다음 실행에 재사용됩니다(매 실행마다 새 센터가 쌓이지
+않음).
 
 ### 계정 A/B 사전 조건
 
@@ -72,6 +103,14 @@ provider 선택 로직만 검증합니다. 아무 설정 없이 바로 실행됩
 `orders`/`memberships`/`payments`에는 회원 본인이 삭제할 수 있는 RLS 정책이 없어(관리자만 가능),
 통합 테스트가 만든 데이터를 스스로 지우지 못합니다. 개발 프로젝트에 테스트 데이터가 쌓이면
 저장소에 이미 있는 `reset_test_data.sql`로 주기적으로 초기화하세요.
+
+`admin-assignment-security.test.ts`는 자신이 만든 예약을 `admin_cancel_reservation`으로 취소한 뒤
+예약·수업 행을 삭제합니다(`afterAll`, best-effort — 실패해도 스위트를 실패시키지 않음). 다만:
+- `memberships`는 매니저가 delete할 수 있는 RLS 정책이 없어 위와 동일하게 남습니다.
+- `admin_action_logs`는 애초에 수정·삭제 정책이 없는 append-only 로그라 설계상 절대 지워지지
+  않습니다(의도된 동작).
+- 테스트 전용 센터(`manager_centers`/`center_roles` 포함)는 다음 실행에서 재사용하도록 일부러
+  지우지 않습니다.
 
 ## GitHub Actions
 

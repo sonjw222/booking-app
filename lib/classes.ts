@@ -5,6 +5,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import type { ReservationType } from "./reservationTypes";
 
 export type ManagedClass = {
   id: string;
@@ -18,6 +19,7 @@ export type ManagedClass = {
   allowGoods: boolean;
   roomId: string | null;
   cancelDeadlineMin: number;
+  status: string; // "open" | "cancelled" | "closed"
 };
 
 const KST_DATE = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -31,7 +33,7 @@ function toKstIso(date: string, time: string) {
 export async function fetchClasses(centerId: string, fromDate: string, toDate: string): Promise<ManagedClass[]> {
   const { data: rows, error } = await supabase
     .from("classes")
-    .select("id, title, start_time, end_time, capacity, recurring_group_id, allow_goods, room_id, cancel_deadline_min")
+    .select("id, title, start_time, end_time, capacity, recurring_group_id, allow_goods, room_id, cancel_deadline_min, status")
     .eq("center_id", centerId)
     .gte("start_time", toKstIso(fromDate, "00:00"))
     .lte("start_time", toKstIso(toDate, "23:59"))
@@ -60,6 +62,7 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
     allowGoods: c.allow_goods ?? false,
     roomId: c.room_id ?? null,
     cancelDeadlineMin: c.cancel_deadline_min ?? 0,
+    status: c.status ?? "open",
   }));
 }
 
@@ -218,12 +221,14 @@ export type ClassAttendee = {
   name: string;
   status: string;   // confirmed / waitlisted / attended / no_show
   waitlistOrder: number | null;
+  reservationType: ReservationType;
+  isCapacityOverride: boolean;
 };
 
 export async function fetchClassAttendees(classId: string): Promise<ClassAttendee[]> {
   const { data, error } = await supabase
     .from("reservations")
-    .select("id, profile_id, status, waitlist_order, profiles(name)")
+    .select("id, profile_id, status, waitlist_order, reservation_type, is_capacity_override, profiles(name)")
     .eq("class_id", classId)
     .in("status", ["confirmed", "waitlisted", "attended", "no_show", "cancelled"])
     .order("status")
@@ -235,6 +240,8 @@ export async function fetchClassAttendees(classId: string): Promise<ClassAttende
     name: r.profiles?.name ?? "(이름 없음)",
     status: r.status,
     waitlistOrder: r.waitlist_order,
+    reservationType: (r.reservation_type ?? "MEMBER") as ReservationType,
+    isCapacityOverride: r.is_capacity_override ?? false,
   }));
 }
 
@@ -507,14 +514,16 @@ export async function copySchedule(
 export type BookableMember = {
   profileId: string;
   name: string;
+  phone: string | null;      // 마스킹은 화면에서 처리 (원본 그대로 반환)
+  memberStatus: string;      // center_members.status: active/expired/dormant
   memberships: { id: string; name: string; remaining: number | null }[];
 };
 
-// 이 센터의 회원 + 보유 수강권 (보강 예약용)
+// 이 센터의 회원 + 보유 수강권 (보강 예약/관리자 직접배치용)
 export async function fetchBookableMembers(centerId: string): Promise<BookableMember[]> {
   const { data: cms } = await supabase
     .from("center_members")
-    .select("profile_id, profiles(name)")
+    .select("profile_id, status, profiles(name, accounts(phone))")
     .eq("center_id", centerId)
     .order("registered_at", { ascending: false })
     .limit(300);
@@ -541,8 +550,19 @@ export async function fetchBookableMembers(centerId: string): Promise<BookableMe
   return (cms ?? []).map((c: any) => ({
     profileId: c.profile_id,
     name: c.profiles?.name ?? "(이름 없음)",
+    phone: c.profiles?.accounts?.phone ?? null,
+    memberStatus: c.status ?? "active",
     memberships: byProfile[c.profile_id] ?? [],
   }));
+}
+
+// 전화번호 중간자리 마스킹 (010-1234-5678 -> 010-****-5678)
+export function maskPhone(phone: string | null): string {
+  if (!phone) return "연락처 없음";
+  const digits = phone.replace(/[^0-9]/g, "");
+  if (digits.length === 11) return `${digits.slice(0, 3)}-****-${digits.slice(7)}`;
+  if (digits.length === 10) return `${digits.slice(0, 3)}-***-${digits.slice(6)}`;
+  return phone;
 }
 
 // 보강 예약 실행

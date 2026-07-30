@@ -9,6 +9,7 @@
     테스트(본인 소유 검증)는 signOut → signIn으로 "순서대로 전환"하는 방식을 쓴다.
 */
 
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "../../lib/supabaseClient";
 
 export function requireEnv(name: string): string {
@@ -156,4 +157,212 @@ export async function fetchPaymentByMembership(membershipId: string): Promise<Pa
     .maybeSingle();
   if (error) throw new Error(`payments 조회 실패: ${error.message}`);
   return data as PaymentRow | null;
+}
+
+/* ============================================================
+   관리자 직접배치/무료 추가 배치 통합 테스트 전용 fixture 헬퍼
+   - 테스트 센터 생성 → 그 센터에 로그인 사용자를 오너로 연결하는 과정은 "아직 그 센터의
+     매니저가 아닌 계정"이 스스로를 매니저로 만드는 닭-달걀 문제라, 일반 로그인 사용자 client로는
+     (운영 RLS 정책이 실제로 무엇이든) 안전하게 보장할 수 없다. centers RLS를 테스트 통과를 위해
+     느슨하게 바꾸는 대신, 이 fixture 준비 단계만 서비스 역할 키를 쓰는 별도 관리자 client로
+     RLS를 우회해서 처리한다 — 운영 RLS 정책 자체는 전혀 건드리지 않는다.
+   - 서비스 역할 client는 아래 fixture 준비에만 쓴다: 테스트 센터 조회/생성,
+     manager_centers 오너 역할 조회/생성. 그 외 실제로 검증 대상인 admin_assign_reservation/
+     admin_cancel_reservation RPC 호출과 권한 테스트는 전부 로그인 사용자별 일반 client(위 supabase
+     싱글턴, switchToTestUser가 세션을 바꿔가며 사용)로 실행한다 — 그래야 실제 RLS/권한 검증이
+     의미가 있다.
+   ============================================================ */
+
+let adminClient: SupabaseClient | null = null;
+
+// SUPABASE_SERVICE_ROLE_KEY(JWT)의 role claim만 읽어본다(서명 검증 없음 — 여기서는 "anon 키를
+// 잘못 넣지 않았는지"를 가려내기 위한 진단 목적일 뿐, 실제 인증/보안 검증이 아니다. 실제 권한
+// 경계는 항상 Supabase 서버가 그 키로 검증한다).
+function decodeJwtRoleClaim(token: string): string | null {
+  try {
+    const payloadB64 = token.split(".")[1];
+    if (!payloadB64) return null;
+    const json = Buffer.from(payloadB64, "base64").toString("utf-8");
+    const payload = JSON.parse(json);
+    return typeof payload.role === "string" ? payload.role : null;
+  } catch {
+    return null;
+  }
+}
+
+// 서비스 역할 키를 쓰는 fixture 전용 관리자 client (지연 생성).
+// SUPABASE_SERVICE_ROLE_KEY가 없는 파일(예: 기존 결제 통합 테스트)은 이 함수를 아예 호출하지
+// 않으므로 영향받지 않는다 — setup.ts 최상단에서 미리 requireEnv하지 않는 이유.
+function getFixtureAdminClient(): SupabaseClient {
+  if (adminClient) return adminClient;
+  const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+
+  // "centers new row violates row-level security policy" 같은 에러가 서비스 역할 client에서도
+  // 계속 발생한다면, 코드가 일반 client로 새는 것이 아니라 이 값 자체가 진짜 service_role 키가
+  // 아닐 가능성이 가장 크다(anon 키를 잘못 넣었거나, 다른 프로젝트의 키이거나). 여기서 role claim을
+  // 먼저 확인해 그 경우 즉시 명확한 에러로 알려준다 — RLS 위반이라는 애매한 에러로 새지 않도록.
+  const roleClaim = decodeJwtRoleClaim(serviceRoleKey);
+  if (roleClaim !== "service_role") {
+    throw new Error(
+      `SUPABASE_SERVICE_ROLE_KEY 값이 service_role 키가 아닌 것 같습니다 ` +
+        `(JWT의 role claim: ${roleClaim ?? "확인 불가(JWT 형식이 아님)"}). ` +
+        `Supabase 대시보드 → Project Settings → API → "service_role secret"에서 정확한 값을 ` +
+        `다시 복사해 등록해주세요(anon key와 혼동하기 쉽습니다). ` +
+        `이 검사를 통과하지 못하면 fixture용 관리자 client를 만들지 않고 여기서 즉시 중단합니다.`
+    );
+  }
+
+  adminClient = createClient(url, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  return adminClient;
+}
+
+// service_role로 실행했는데도 실패하면 원인이 크게 둘로 갈린다:
+//   1) "permission denied for table X" (Postgres 42501) — RLS가 아니라 그 테이블에 대한 SQL
+//      GRANT 자체가 service_role에 없는 것. service_role은 RLS를 항상 우회하지만 GRANT는 별개다.
+//   2) 그 외(RLS 관련 메시지 등) — 실제 에러 메시지를 그대로 보여준다.
+// 여기서 바로 실행 가능한 GRANT 문을 안내해, "코드가 일반 client로 새는 건지" 다시 의심하지 않고
+// 바로 원인(운영 Supabase 쪽 권한 설정)을 확인할 수 있게 한다.
+function describeAdminQueryError(table: string, error: { message: string; code?: string } | null | undefined): string {
+  if (!error) return "원인 불명 (data 없음)";
+  const isPermissionDenied = error.code === "42501" || /permission denied/i.test(error.message);
+  if (isPermissionDenied) {
+    return (
+      `${error.message} — service_role이 "${table}" 테이블에 대한 SQL GRANT 자체가 없는 것으로 ` +
+      `보입니다(RLS 문제 아님 — RLS는 service_role이 항상 우회하지만 테이블 GRANT는 별개입니다). ` +
+      `Supabase SQL Editor에서 다음을 실행해 확인/복구해주세요: ` +
+      `GRANT ALL ON TABLE ${table} TO service_role;`
+    );
+  }
+  return error.message;
+}
+
+// 현재 로그인된 계정이 오너로 있는 센터를 재사용하거나, 없으면 새로 만들어 오너로 연결한다.
+// RLS를 우회하는 서비스 역할 client로만 동작 — 일반 client는 전혀 쓰지 않는다.
+export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<string> {
+  const admin = getFixtureAdminClient();
+
+  const { data: rows, error: mcErr } = await admin
+    .from("manager_centers")
+    .select("center_id, role_id")
+    .eq("account_id", manager.accountId)
+    .eq("status", "active");
+  if (mcErr) throw new Error(`manager_centers 조회 실패: ${describeAdminQueryError("manager_centers", mcErr)}`);
+
+  const roleIds = (rows ?? []).map((r: any) => r.role_id).filter(Boolean);
+  if (roleIds.length > 0) {
+    const { data: roles, error: roleErr } = await admin
+      .from("center_roles")
+      .select("id, is_owner")
+      .in("id", roleIds);
+    if (roleErr) throw new Error(`center_roles 조회 실패: ${describeAdminQueryError("center_roles", roleErr)}`);
+    const ownerRoleIds = new Set((roles ?? []).filter((r: any) => r.is_owner).map((r: any) => r.id));
+    const owned = (rows ?? []).find((r: any) => ownerRoleIds.has(r.role_id));
+    if (owned) return (owned as any).center_id as string;
+  }
+
+  const { data: center, error: centerErr } = await admin
+    .from("centers")
+    .insert({ name: `통합테스트센터-${manager.accountId.slice(0, 8)}`, status: "pending" })
+    .select("id")
+    .single();
+  if (centerErr || !center) throw new Error(`테스트 센터 생성 실패: ${describeAdminQueryError("centers", centerErr)}`);
+
+  const { data: role, error: roleErr2 } = await admin
+    .from("center_roles")
+    .select("id")
+    .eq("center_id", center.id)
+    .eq("is_owner", true)
+    .single();
+  if (roleErr2 || !role) throw new Error(`오너 역할을 찾지 못했습니다: ${describeAdminQueryError("center_roles", roleErr2)}`);
+
+  const { error: linkErr } = await admin
+    .from("manager_centers")
+    .insert({ account_id: manager.accountId, center_id: center.id, role_id: role.id, status: "active" });
+  if (linkErr) throw new Error(`manager_centers 생성 실패: ${describeAdminQueryError("manager_centers", linkErr)}`);
+
+  return center.id as string;
+}
+
+// 미래 시각에 시작하는 테스트 전용 수업 생성 (기본 48시간 뒤, 1시간짜리)
+export async function createFutureTestClass(
+  centerId: string,
+  opts?: { capacity?: number; hoursFromNow?: number; title?: string }
+): Promise<{ id: string; startTime: string }> {
+  const hours = opts?.hoursFromNow ?? 48;
+  const start = new Date(Date.now() + hours * 3600 * 1000);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const { data, error } = await supabase
+    .from("classes")
+    .insert({
+      center_id: centerId,
+      title: opts?.title ?? "통합테스트 수업",
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      capacity: opts?.capacity ?? 8,
+    })
+    .select("id, start_time")
+    .single();
+  if (error || !data) throw new Error(`테스트 수업 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id, startTime: data.start_time };
+}
+
+// 테스트용 수강권(횟수권) 생성. expired:true면 만료된 수강권(과거 만료일 + status='expired')을 만든다.
+export async function createTestMembership(
+  centerId: string,
+  profileId: string,
+  opts?: { remainingCount?: number; expired?: boolean }
+): Promise<{ id: string; remainingCount: number | null }> {
+  const expired = opts?.expired ?? false;
+  const remaining = opts?.remainingCount ?? 5;
+  const expiresAt = expired
+    ? new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10)
+    : new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from("memberships")
+    .insert({
+      profile_id: profileId,
+      center_id: centerId,
+      product_name: "통합테스트 수강권",
+      pass_type: "count",
+      total_count: remaining,
+      remaining_count: expired ? 0 : remaining,
+      expires_at: expiresAt,
+      status: expired ? "expired" : "active",
+    })
+    .select("id, remaining_count")
+    .single();
+  if (error || !data) throw new Error(`테스트 수강권 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id, remainingCount: data.remaining_count };
+}
+
+export async function fetchMembershipRemaining(membershipId: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from("memberships")
+    .select("remaining_count")
+    .eq("id", membershipId)
+    .single();
+  if (error) throw new Error(`수강권 조회 실패: ${error.message}`);
+  return (data as any).remaining_count;
+}
+
+// 정리(best-effort): admin_cancel_reservation으로 취소 → 취소된 예약만 삭제 가능한 RLS를 만족시킨 뒤
+// class_id로 남은 예약과 수업 자체를 지운다. memberships는 매니저 delete RLS 정책이 없어 지우지 못하고
+// 남는다(payments/orders와 동일한 기존 제약 — reset_test_data.sql로 주기적으로 정리).
+export async function cleanupTestClass(classId: string, reservationIds: string[]): Promise<void> {
+  for (const id of reservationIds) {
+    try {
+      await supabase.rpc("admin_cancel_reservation", { p_reservation_id: id, p_cancel_reason: "integration test cleanup" });
+    } catch {
+      // 이미 취소됐거나 대상이 아니면 무시 (best-effort 정리)
+    }
+  }
+  try {
+    await supabase.from("reservations").delete().eq("class_id", classId);
+  } catch { /* 무시 */ }
+  try {
+    await supabase.from("classes").delete().eq("id", classId);
+  } catch { /* 무시 */ }
 }

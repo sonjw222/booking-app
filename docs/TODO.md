@@ -218,6 +218,51 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 | 완료 조건 | 담당회원과 상담고객의 제품 정책·데이터 소유권·회원 전환 규칙을 확정하고 화면·lib·RLS를 연결해 CRUD를 검증함. 기능 제외 결정 시 준비 중 UI와 미사용 스키마 처리 방침을 기록함 |
 | 관련 문서 | [REQUIREMENTS 6-1, 12절](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/manager/members`](./ROUTES.md) |
 
+### P1-9. 관리자 직접배치 세부 permission key
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **확인 필요 (제품 결정 대기)** |
+| 근거 파일 | `add_admin_assignment.sql`(`can_manage_center_reservations()`), `lib/adminAssignment.ts`, `app/manager/classes/page.tsx` |
+| 완료 조건 | `schedule.admin_assign`/`schedule.admin_free` 같은 세부 permission key를 `permissions` 카탈로그에 추가할지 결정하고, 추가한다면 `can_manage_center_reservations()` 내부에서 `has_permission()`을 함께 확인하도록 확장함. 결정 전에는 기존 `manager_book_member`와 동일하게 "센터 활성 매니저 OR 플랫폼 운영자" 전원이 이 기능을 쓸 수 있음을 화면·문서에 명시함 |
+| 관련 문서 | [DATABASE 10절](./DATABASE.md), [REQUIREMENTS 10-1](./REQUIREMENTS.md) |
+
+2026-07-30 사용자 확인: 이번 `feature/p1-reservation-ux` 범위에서는 새 permission key를 추가하지
+않고, 권한 검사를 `can_manage_center_reservations()` 함수로 분리해 확장 지점만 마련하기로 결정함.
+
+### P1-10. 관리자 직접배치 대상 회원 상태(이용정지/탈퇴/휴면) 차단 정책
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **확인 필요 (제품 결정 대기)** |
+| 근거 파일 | `add_admin_assignment.sql`(`is_profile_assignable()`), `schema.sql`(`center_members.status`: `active`/`expired`/`dormant`뿐, "이용정지"/"탈퇴"/"삭제" 상태값 자체가 없음) |
+| 완료 조건 | 관리자 직접배치·무료 추가배치에서 차단해야 할 회원 상태 정책(이용정지/탈퇴/삭제/휴면 중 무엇을 막을지)을 결정하고, 필요한 상태값·컬럼을 새 migration으로 추가한 뒤 `is_profile_assignable()` 안에서 확인하도록 확장함 |
+| 관련 문서 | [DATABASE 6절](./DATABASE.md) |
+
+2026-07-30 사용자 확인: 이번 범위에서는 기존 `reserve_class`(회원 셀프예약)와 동일하게 이 개념을
+새로 만들지 않기로 결정함(기존 셀프예약도 `center_members.status`를 확인하지 않음). 회원 자격
+검사를 `is_profile_assignable()`로 분리해 향후 정책을 붙일 확장 지점만 마련함.
+
+### P1-11. 관리자 직접배치 통합 테스트 — 정원 초과 확인(needs_capacity_confirm) 2단계 흐름 미검증
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **미완성 (일부)** |
+| 근거 파일 | `tests/integration/admin-assignment-security.test.ts`, `tests/integration/setup.ts` |
+| 완료 조건 | `admin_assign_reservation`이 정원이 찬 수업에서 `needs_capacity_confirm: true`만 반환하고 예약을 만들지 않는지, 그 뒤 `p_force_capacity: true`로 재호출하면 `is_capacity_override: true`로 실제 생성되는지를 통합 테스트로 검증함(정원 1명짜리 테스트 수업을 만들어 확인 가능) |
+| 관련 문서 | [tests/README.md](../tests/README.md) |
+
+2026-07-30 갱신: 매니저 fixture 부재 문제는 `getOrCreateOwnedTestCenter()`(서비스 역할 키 없이
+`centers`/`manager_centers` insert RLS만으로 테스트 계정이 스스로 오너가 되는 방식)로 해결되어,
+사용자가 요청한 10개 성공 경로(ADMIN_ASSIGNMENT/ADMIN_FREE 정상 생성, 이용권 없음/만료 회원
+성공, 취소 시 수강권 복구/미변화, `admin_action_logs`·회원 알림 생성, 동시 요청 단일 생성,
+다른 센터 관리자 차단)는 모두 통합 테스트로 커버됨. 남은 것은 정원 초과 확인(1차 호출 저지 →
+사유 입력 → `p_force_capacity`로 재호출) 2단계 흐름 자체의 자동화 테스트뿐 — 이번 범위에서는
+수동으로만 확인함.
+
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
 ### P2-1. 카카오·애플 OAuth 운영 설정

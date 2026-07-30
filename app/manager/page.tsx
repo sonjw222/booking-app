@@ -212,6 +212,10 @@ export default function ManagerDashboard() {
         <div className="left"><span className="icon">🧾</span>주문 관리 (수강권·상품 구매)</div>
         <span className="chevron">›</span>
       </a>
+      <a className="list-row" href="/manager/admin-assignments">
+        <div className="left"><span className="icon">📋</span>관리자 배치 내역</div>
+        <span className="chevron">›</span>
+      </a>
       <a className="list-row" href="/manager/center-info">
         <div className="left"><span className="icon">🏢</span>센터 정보</div>
         <span className="chevron">›</span>
