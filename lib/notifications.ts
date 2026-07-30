@@ -19,6 +19,7 @@ export type NotiKind =
   | "reservation_confirmed" | "reservation_waitlisted" | "waitlist_promoted"
   | "new_order" | "new_review" | "new_reservation" | "reservation_canceled" | "no_show"
   | "new_inquiry" | "inquiry_reply"
+  | "admin_assigned" | "admin_cancelled"
   | string;
 
 export type Notification = {
@@ -67,6 +68,8 @@ export function notiEmoji(kind: NotiKind): string {
     case "no_show": return "🚫";
     case "new_inquiry": return "💬";
     case "inquiry_reply": return "💬";
+    case "admin_assigned": return "🗓️";
+    case "admin_cancelled": return "🚫";
     default: return "🔔";
   }
 }
