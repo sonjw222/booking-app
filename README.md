@@ -74,6 +74,31 @@ npm run dev
 
 http://localhost:3000
 
+## 테스트
+
+처음 이 프로젝트를 받았다면 아래 순서 그대로 실행하면 됩니다.
+
+```bash
+# 1. 의존성 설치 (위 "시작하기" 1번과 동일하면 생략)
+npm install
+
+# 2. 통합 테스트용 환경변수 템플릿 복사
+cp .env.test.local.example .env.test.local
+
+# 3. .env.test.local을 열어 값을 채우기
+#    (Supabase URL/키, 테스트 계정 A/B, 테스트 센터/상품 id — 각 변수 용도는 tests/README.md 참고)
+
+# 4. 단위 테스트 (Supabase 불필요, 설정 없이 바로 실행됨)
+npm run test
+
+# 5. 통합 테스트 (2~3번 설정이 끝난 뒤 실행)
+npm run test:integration
+```
+
+`npm run test:all`은 4~5번을 순서대로 한 번에 실행합니다. 통합 테스트에 필요한 환경변수
+전체 목록(용도별 설명)과 운영 DB 오발동 방지 방법은 [tests/README.md](./tests/README.md)를
+참고하세요.
+
 ## 주요 기능
 
 - **예약**: 달력 기반 수업 예약, 수강권/상품 사용, 대기자, 노쇼 처리

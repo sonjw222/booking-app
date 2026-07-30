@@ -1,0 +1,56 @@
+name: Test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    name: Unit tests (no Supabase needed)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Node 22+ 필수: @supabase/supabase-js(realtime-js)가 클라이언트 생성 시 native
+      # WebSocket 전역 객체를 요구함. Node 20에는 없어서 "PaymentProviderFactory.test.ts"처럼
+      # lib/supabaseClient.ts를 (mock 없이) 실제로 import하는 테스트가 import 단계에서
+      # 바로 실패한다 — 20으로 내리지 말 것.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test
+
+  integration:
+    name: Integration tests (live dev Supabase)
+    runs-on: ubuntu-latest
+    needs: unit
+    # push/workflow_dispatch에서는 항상 실행.
+    # pull_request에서는 "같은 저장소 브랜치 간" PR일 때만 실행 — fork에서 온 PR은
+    # GitHub이 Secrets를 주입하지 않아 애초에 통과할 수 없고, 주입되더라도 남의 fork에
+    # 우리 Secrets를 노출시키면 안 되므로 명시적으로 막는다.
+    # 이 조건 덕분에 "feature 브랜치 → PR" 단계에서도(merge 전) 통합 테스트가 돌아
+    # PR 자체가 검증 게이트 역할을 한다 — 이전 버전은 pull_request를 전부 건너뛰어
+    # merge 이후(push to main)에야 실행됐던 문제를 수정함.
+    if: >
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:integration
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
+          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
+          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
+          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
+          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
+          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}

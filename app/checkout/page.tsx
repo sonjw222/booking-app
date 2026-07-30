@@ -15,6 +15,7 @@ import { createOrder } from "../../lib/orders";
 import { fetchMyPoints, usePoints } from "../../lib/reviews";
 import Loading from "../components/Loading";
 import { reservationReturnUrl } from "../../lib/reservationNav";
+import { getPaymentService, type PaymentScenario } from "../../lib/payments";
 
 const PAY_METHODS = [
   { id: "card", label: "신용/체크카드", emoji: "💳" },
@@ -60,6 +61,13 @@ function CheckoutContent() {
   const reservationBackUrl = reserveClassId && reserveDate
     ? reservationReturnUrl({ classId: reserveClassId, date: reserveDate, center: reserveCenter, purchased: true })
     : null;
+  // Mock 결제 시나리오 QA용: ?mockScenario=failed|cancelled|success 로 재빌드 없이 즉시 테스트 가능
+  // (없으면 NEXT_PUBLIC_PAYMENT_SCENARIO 환경변수, 그것도 없으면 기본 success)
+  const mockScenarioParam = sp.get("mockScenario");
+  const mockScenarioOverride: PaymentScenario | undefined =
+    mockScenarioParam === "success" || mockScenarioParam === "failed" || mockScenarioParam === "cancelled"
+      ? mockScenarioParam
+      : undefined;
 
   const [centerName, setCenterName] = useState("");
   const [allowedPay, setAllowedPay] = useState<string[] | null>(null);
@@ -128,15 +136,27 @@ function CheckoutContent() {
       // 화면에 표시된 값과 동일하게 계산 (pointToUse/finalTotal은 상단에서 계산됨)
       if (pointToUse > 0) await usePoints(centerId, pointToUse);
       const finalAmount = finalTotal;
-      await createOrder({
+      const orderId = await createOrder({
         centerId, productId: product.id, productName: product.name,
         amount: finalAmount, payMethod,
         selectedSize: selectedSize ?? undefined,
         couponCode: discount > 0 ? couponInput.trim().toUpperCase() : undefined,
         discountAmount: discount,
         autoBook: !!(product.autoBookDays && product.autoBookDays.length > 0) && autoBook,
+        provider: "mock", // Payment Adapter Pattern: 지금은 테스트 결제(Mock)로만 처리
       });
-      setDone(true);
+
+      const paymentService = getPaymentService(mockScenarioOverride);
+      const created = await paymentService.createPayment({ orderId, amount: finalAmount });
+      const result = await paymentService.confirmPayment(created.paymentKey, orderId);
+
+      if (result.status === "paid") {
+        setDone(true);
+      } else if (result.status === "cancelled") {
+        setError(result.message ?? "결제가 취소됐어요. 다시 시도해주세요.");
+      } else {
+        setError(result.message ?? "결제에 실패했어요. 다시 시도해주세요.");
+      }
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
   }
@@ -166,18 +186,18 @@ function CheckoutContent() {
       <div className="app-shell">
         <div className="checkout-done">
           <div className="checkout-done-icon">✅</div>
-          <div className="checkout-done-title">주문이 접수됐어요</div>
+          <div className="checkout-done-title">테스트 결제가 완료됐어요</div>
           <div className="checkout-done-sub">
             {centerName}<br />
             {product?.name} · {won(product?.price ?? 0)}<br /><br />
-            결제 연동 전이라 실제 결제는 아직이에요.<br />
-            센터에서 확인 후 수강권을 발급해드려요.
+            (Mock) 실제 PG 연동 전 테스트 결제예요.<br />
+            수강권이 바로 발급됐어요.
           </div>
           {reservationBackUrl ? (
             <>
               <div className="checkout-done-sub" style={{ marginTop: 4 }}>
                 잠시 후 아까 그 수업 예약 화면으로 자동으로 돌아가요.<br />
-                수강권이 발급되면 예약을 이어서 진행할 수 있어요.
+                바로 예약을 진행할 수 있어요.
               </div>
               <a
                 className="primary-btn"
@@ -338,7 +358,7 @@ function CheckoutContent() {
         ))}
       </div>
       <div className="perm-guide" style={{ margin: "10px 20px" }}>
-        실제 결제 연동은 준비 중이에요. 지금은 주문서만 접수되고, 센터에서 확인 후 처리해요.
+        실제 PG(카드/카카오페이 등) 연동은 준비 중이라, 지금은 테스트 결제(Mock)로 처리돼요.
       </div>
 
       {/* 결제 금액 + 버튼 */}
