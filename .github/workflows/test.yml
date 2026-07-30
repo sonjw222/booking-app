@@ -54,3 +54,7 @@ jobs:
           TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
           TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
           TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
+          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
+          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
+          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
+          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}

@@ -929,10 +929,9 @@ begin
                 v_account, 'admin_assigned', '관리자가 예약을 등록했습니다',
                 v_title || ' · ' || to_char(v_start at time zone 'Asia/Seoul', 'MM/DD HH24:MI'),
                 v_center, '/my-reservations',
-                jsonb_build_object(
-                    'reservation_id', new.id, 'class_id', new.class_id,
-                    'reservation_type', new.reservation_type, 'action', 'assigned'
-                )
+                -- 회원 알림 metadata에는 reservation_type(무료/일반 구분)을 넣지 않음 —
+                -- 회원이 자기 알림을 직접 조회해도 무료 추가 배치 여부를 알 수 없어야 함
+                jsonb_build_object('reservation_id', new.id, 'class_id', new.class_id, 'action', 'assigned')
             );
         end if;
         -- 관리자가 만든 예약이므로 다른 매니저에게 별도 "새 예약" 알림은 생략(소음 방지)
@@ -1009,10 +1008,7 @@ begin
                 v_account, 'admin_cancelled', '관리자가 예약을 취소했습니다',
                 v_title || ' · ' || to_char(v_start at time zone 'Asia/Seoul', 'MM/DD HH24:MI'),
                 v_center, '/my-reservations',
-                jsonb_build_object(
-                    'reservation_id', new.id, 'class_id', new.class_id,
-                    'reservation_type', new.reservation_type, 'action', 'cancelled'
-                )
+                jsonb_build_object('reservation_id', new.id, 'class_id', new.class_id, 'action', 'cancelled')
             );
         end if;
         return new;

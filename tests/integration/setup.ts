@@ -157,3 +157,138 @@ export async function fetchPaymentByMembership(membershipId: string): Promise<Pa
   if (error) throw new Error(`payments 조회 실패: ${error.message}`);
   return data as PaymentRow | null;
 }
+
+/* ============================================================
+   관리자 직접배치/무료 추가 배치 통합 테스트 전용 fixture 헬퍼
+   - 서비스 역할 키 없이, 일반 회원가입과 동일한 RLS 정책만으로 매니저 fixture를 자체 생성한다:
+     · centers insert는 "센터 생성" 정책(auth_policies.sql)이 auth.role()='authenticated'면 누구나 허용
+     · trg_create_default_center_roles 트리거가 오너 역할을 자동 생성
+     · manager_centers insert는 "매니저센터 생성" 정책이 account_id = my_account_id()면 누구나 허용
+       (status를 바로 'active'로 넣어도 정책이 막지 않음 — 회원가입 플로우가 원래 그렇게 동작함)
+   - 계정과 마찬가지로 get-or-create: 이미 오너로 있는 센터가 있으면 재사용하고, 없을 때만 새로 만든다.
+   ============================================================ */
+
+// 현재 로그인된 계정이 오너로 있는 센터를 재사용하거나, 없으면 새로 만들어 오너로 연결한다.
+export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<string> {
+  const { data: rows, error: mcErr } = await supabase
+    .from("manager_centers")
+    .select("center_id, role_id")
+    .eq("account_id", manager.accountId)
+    .eq("status", "active");
+  if (mcErr) throw new Error(`manager_centers 조회 실패: ${mcErr.message}`);
+
+  const roleIds = (rows ?? []).map((r: any) => r.role_id).filter(Boolean);
+  if (roleIds.length > 0) {
+    const { data: roles, error: roleErr } = await supabase
+      .from("center_roles")
+      .select("id, is_owner")
+      .in("id", roleIds);
+    if (roleErr) throw new Error(`center_roles 조회 실패: ${roleErr.message}`);
+    const ownerRoleIds = new Set((roles ?? []).filter((r: any) => r.is_owner).map((r: any) => r.id));
+    const owned = (rows ?? []).find((r: any) => ownerRoleIds.has(r.role_id));
+    if (owned) return (owned as any).center_id as string;
+  }
+
+  const { data: center, error: centerErr } = await supabase
+    .from("centers")
+    .insert({ name: `통합테스트센터-${manager.accountId.slice(0, 8)}`, status: "pending" })
+    .select("id")
+    .single();
+  if (centerErr || !center) throw new Error(`테스트 센터 생성 실패: ${centerErr?.message ?? "no data"}`);
+
+  const { data: role, error: roleErr2 } = await supabase
+    .from("center_roles")
+    .select("id")
+    .eq("center_id", center.id)
+    .eq("is_owner", true)
+    .single();
+  if (roleErr2 || !role) throw new Error(`오너 역할을 찾지 못했습니다: ${roleErr2?.message ?? "no role"}`);
+
+  const { error: linkErr } = await supabase
+    .from("manager_centers")
+    .insert({ account_id: manager.accountId, center_id: center.id, role_id: role.id, status: "active" });
+  if (linkErr) throw new Error(`manager_centers 생성 실패: ${linkErr.message}`);
+
+  return center.id as string;
+}
+
+// 미래 시각에 시작하는 테스트 전용 수업 생성 (기본 48시간 뒤, 1시간짜리)
+export async function createFutureTestClass(
+  centerId: string,
+  opts?: { capacity?: number; hoursFromNow?: number; title?: string }
+): Promise<{ id: string; startTime: string }> {
+  const hours = opts?.hoursFromNow ?? 48;
+  const start = new Date(Date.now() + hours * 3600 * 1000);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const { data, error } = await supabase
+    .from("classes")
+    .insert({
+      center_id: centerId,
+      title: opts?.title ?? "통합테스트 수업",
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      capacity: opts?.capacity ?? 8,
+    })
+    .select("id, start_time")
+    .single();
+  if (error || !data) throw new Error(`테스트 수업 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id, startTime: data.start_time };
+}
+
+// 테스트용 수강권(횟수권) 생성. expired:true면 만료된 수강권(과거 만료일 + status='expired')을 만든다.
+export async function createTestMembership(
+  centerId: string,
+  profileId: string,
+  opts?: { remainingCount?: number; expired?: boolean }
+): Promise<{ id: string; remainingCount: number | null }> {
+  const expired = opts?.expired ?? false;
+  const remaining = opts?.remainingCount ?? 5;
+  const expiresAt = expired
+    ? new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10)
+    : new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from("memberships")
+    .insert({
+      profile_id: profileId,
+      center_id: centerId,
+      product_name: "통합테스트 수강권",
+      pass_type: "count",
+      total_count: remaining,
+      remaining_count: expired ? 0 : remaining,
+      expires_at: expiresAt,
+      status: expired ? "expired" : "active",
+    })
+    .select("id, remaining_count")
+    .single();
+  if (error || !data) throw new Error(`테스트 수강권 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id, remainingCount: data.remaining_count };
+}
+
+export async function fetchMembershipRemaining(membershipId: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from("memberships")
+    .select("remaining_count")
+    .eq("id", membershipId)
+    .single();
+  if (error) throw new Error(`수강권 조회 실패: ${error.message}`);
+  return (data as any).remaining_count;
+}
+
+// 정리(best-effort): admin_cancel_reservation으로 취소 → 취소된 예약만 삭제 가능한 RLS를 만족시킨 뒤
+// class_id로 남은 예약과 수업 자체를 지운다. memberships는 매니저 delete RLS 정책이 없어 지우지 못하고
+// 남는다(payments/orders와 동일한 기존 제약 — reset_test_data.sql로 주기적으로 정리).
+export async function cleanupTestClass(classId: string, reservationIds: string[]): Promise<void> {
+  for (const id of reservationIds) {
+    try {
+      await supabase.rpc("admin_cancel_reservation", { p_reservation_id: id, p_cancel_reason: "integration test cleanup" });
+    } catch {
+      // 이미 취소됐거나 대상이 아니면 무시 (best-effort 정리)
+    }
+  }
+  try {
+    await supabase.from("reservations").delete().eq("class_id", classId);
+  } catch { /* 무시 */ }
+  try {
+    await supabase.from("classes").delete().eq("id", classId);
+  } catch { /* 무시 */ }
+}

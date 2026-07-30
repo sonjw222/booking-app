@@ -245,18 +245,23 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 새로 만들지 않기로 결정함(기존 셀프예약도 `center_members.status`를 확인하지 않음). 회원 자격
 검사를 `is_profile_assignable()`로 분리해 향후 정책을 붙일 확장 지점만 마련함.
 
-### P1-11. 관리자 직접배치 통합 테스트 — 매니저 fixture 부재로 성공 경로 미검증
+### P1-11. 관리자 직접배치 통합 테스트 — 정원 초과 확인(needs_capacity_confirm) 2단계 흐름 미검증
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P1 |
-| 현재 상태 | **미완성** |
+| 우선순위 | P2 |
+| 현재 상태 | **미완성 (일부)** |
 | 근거 파일 | `tests/integration/admin-assignment-security.test.ts`, `tests/integration/setup.ts` |
-| 완료 조건 | `TEST_CENTER_ID`의 매니저/오너 권한을 가진 테스트 전용 계정(및 미래 시각의 테스트 전용 수업) fixture를 `tests/integration/setup.ts`에 추가하고, `admin_assign_reservation`/`admin_cancel_reservation`의 실제 성공 경로(배치 성공, 정원 초과 확인 흐름, 취소 시 수강권 복구, 중복 배치 차단)를 통합 테스트로 검증함 |
+| 완료 조건 | `admin_assign_reservation`이 정원이 찬 수업에서 `needs_capacity_confirm: true`만 반환하고 예약을 만들지 않는지, 그 뒤 `p_force_capacity: true`로 재호출하면 `is_capacity_override: true`로 실제 생성되는지를 통합 테스트로 검증함(정원 1명짜리 테스트 수업을 만들어 확인 가능) |
 | 관련 문서 | [tests/README.md](../tests/README.md) |
 
-현재는 매니저 계정 fixture가 없어 "일반 회원의 RPC 직접 호출 차단"과 입력 검증(잘못된 타입/사유,
-존재하지 않는 대상)만 통합 테스트로 확인했고, 실제 배치·취소 성공 경로는 수동 테스트로 확인함.
+2026-07-30 갱신: 매니저 fixture 부재 문제는 `getOrCreateOwnedTestCenter()`(서비스 역할 키 없이
+`centers`/`manager_centers` insert RLS만으로 테스트 계정이 스스로 오너가 되는 방식)로 해결되어,
+사용자가 요청한 10개 성공 경로(ADMIN_ASSIGNMENT/ADMIN_FREE 정상 생성, 이용권 없음/만료 회원
+성공, 취소 시 수강권 복구/미변화, `admin_action_logs`·회원 알림 생성, 동시 요청 단일 생성,
+다른 센터 관리자 차단)는 모두 통합 테스트로 커버됨. 남은 것은 정원 초과 확인(1차 호출 저지 →
+사유 입력 → `p_force_capacity`로 재호출) 2단계 흐름 자체의 자동화 테스트뿐 — 이번 범위에서는
+수동으로만 확인함.
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
