@@ -14,6 +14,15 @@ import ManagerNav from "../components/ManagerNav";
 import { fetchMyCenters, fetchTodayClasses, type ManagedCenter, type TodayClass } from "../../lib/manager";
 import { fetchClassAttendees, setAttendance, type ClassAttendee } from "../../lib/classes";
 import { fetchMemberDetail, type MemberDetailData } from "../../lib/members";
+import { fetchDashboardSummary, type DashboardSummary, type DashboardPeriod } from "../../lib/managerDashboard";
+import { fetchAdminActionLogs, type AdminActionLog } from "../../lib/adminAssignment";
+import { fetchNotifications, notiEmoji, type Notification } from "../../lib/notifications";
+
+const PERIOD_LABEL: Record<DashboardPeriod, string> = { today: "오늘", "7d": "7일", "30d": "30일" };
+const ACTIVITY_LABEL: Record<AdminActionLog["actionType"], string> = {
+  CREATE_ASSIGNMENT: "직접배치", CREATE_FREE: "무료배치",
+  CANCEL_ASSIGNMENT: "직접배치 취소", CANCEL_FREE: "무료배치 취소",
+};
 
 export default function ManagerDashboard() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -27,6 +36,12 @@ export default function ManagerDashboard() {
   const [rosterLoading, setRosterLoading] = useState(false);
   const [memberInfo, setMemberInfo] = useState<{ name: string; profileId: string; data: MemberDetailData | null } | null>(null);
   const [attBusy, setAttBusy] = useState(false);
+  // 대시보드 요약
+  const [period, setPeriod] = useState<DashboardPeriod>("today");
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [recentActivity, setRecentActivity] = useState<AdminActionLog[]>([]);
+  const [recentNotis, setRecentNotis] = useState<Notification[]>([]);
 
   // 출결 처리 (출석/결석/노쇼/예약취소) — 취소는 되돌릴 수 없음
   async function handleAttendance(a: ClassAttendee, status: "attended" | "no_show" | "confirmed" | "cancelled") {
@@ -101,6 +116,24 @@ export default function ManagerDashboard() {
       .catch((e) => setError(e.message));
   }, [activeCenterId]);
 
+  // 대시보드 요약 + 최근 활동 + 최근 알림 — 센터/기간 바뀔 때 한 번에 병렬 조회 (N+1 방지)
+  useEffect(() => {
+    if (!activeCenterId) return;
+    setSummaryLoading(true);
+    Promise.all([
+      fetchDashboardSummary(activeCenterId, period),
+      fetchAdminActionLogs(activeCenterId, {}),
+      fetchNotifications(5),
+    ])
+      .then(([s, logs, notis]) => {
+        setSummary(s);
+        setRecentActivity(logs.slice(0, 5));
+        setRecentNotis(notis);
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setSummaryLoading(false));
+  }, [activeCenterId, period]);
+
   const activeCenter = centers.find((c) => c.id === activeCenterId);
 
   if (loading) {
@@ -146,7 +179,92 @@ export default function ManagerDashboard() {
         ))}
       </div>
 
-      {/* 오늘 수업 요약 */}
+      {/* 대시보드 기간 필터 */}
+      <div className="mem-filters" style={{ padding: "10px 20px 0" }}>
+        {(Object.keys(PERIOD_LABEL) as DashboardPeriod[]).map((p) => (
+          <button key={p} className={`pill-btn ${period === p ? "on" : ""}`} onClick={() => setPeriod(p)}>
+            {PERIOD_LABEL[p]}
+          </button>
+        ))}
+      </div>
+
+      {/* 요약 카드 (확장 가능한 그리드 구조) */}
+      <div className="dash-grid" style={{ marginTop: 6 }}>
+        <div className="dash-card">
+          <div className="dash-card-label">{PERIOD_LABEL[period]} 수업</div>
+          <div className="dash-card-value">{summaryLoading ? "…" : summary?.classCount ?? 0}</div>
+        </div>
+        <div className="dash-card">
+          <div className="dash-card-label">{PERIOD_LABEL[period]} 확정 예약</div>
+          <div className="dash-card-value">{summaryLoading ? "…" : summary?.confirmedCount ?? 0}</div>
+        </div>
+        <div className="dash-card">
+          <div className="dash-card-label">{PERIOD_LABEL[period]} 취소</div>
+          <div className="dash-card-value">{summaryLoading ? "…" : summary?.cancelledCount ?? 0}</div>
+        </div>
+        <div className="dash-card">
+          <div className="dash-card-label">전체 회원</div>
+          <div className="dash-card-value">{summaryLoading ? "…" : summary?.memberCount ?? 0}</div>
+        </div>
+        <div className="dash-card">
+          <div className="dash-card-label">활성 회원</div>
+          <div className="dash-card-value">{summaryLoading ? "…" : summary?.activeMemberCount ?? 0}</div>
+        </div>
+        <div className="dash-card">
+          <div className="dash-card-label">활성 수강권</div>
+          <div className="dash-card-value">{summaryLoading ? "…" : summary?.activeMembershipCount ?? 0}</div>
+        </div>
+        <div className="dash-card">
+          <div className="dash-card-label">{PERIOD_LABEL[period]} 직접배치</div>
+          <div className="dash-card-value">{summaryLoading ? "…" : summary?.adminAssignmentCount ?? 0}</div>
+        </div>
+        <div className="dash-card">
+          <div className="dash-card-label">{PERIOD_LABEL[period]} 무료배치</div>
+          <div className="dash-card-value">{summaryLoading ? "…" : summary?.adminFreeCount ?? 0}</div>
+        </div>
+        <div className="dash-card wide">
+          <div className="dash-card-label">매출</div>
+          <div className="dash-card-value dim">준비중 · PG 연동 후 제공될 예정이에요</div>
+        </div>
+      </div>
+
+      {/* 최근 활동 (관리자 배치/취소) */}
+      <div className="section-title" style={{ paddingTop: 8 }}>최근 활동</div>
+      {recentActivity.length === 0 ? (
+        <div className="daylist-empty" style={{ padding: "16px 20px" }}>최근 활동이 없어요</div>
+      ) : (
+        <div style={{ paddingBottom: 4 }}>
+          {recentActivity.map((l) => (
+            <a key={l.id} className="dash-recent-row" href="/manager/admin-assignments">
+              <div className="dash-recent-main">
+                <div className="dash-recent-title">{ACTIVITY_LABEL[l.actionType]} · {l.memberName} 회원</div>
+                <div className="dash-recent-sub">{l.classTitle} · {l.adminName}</div>
+              </div>
+              <span className="chevron">›</span>
+            </a>
+          ))}
+        </div>
+      )}
+
+      {/* 최근 알림 */}
+      <div className="section-title" style={{ paddingTop: 8 }}>최근 알림</div>
+      {recentNotis.length === 0 ? (
+        <div className="daylist-empty" style={{ padding: "16px 20px" }}>최근 알림이 없어요</div>
+      ) : (
+        <div style={{ paddingBottom: 4 }}>
+          {recentNotis.map((n) => (
+            <a key={n.id} className="dash-recent-row" href={n.link ?? "/manager/notifications"}>
+              <span style={{ fontSize: 18 }}>{notiEmoji(n.kind)}</span>
+              <div className="dash-recent-main">
+                <div className="dash-recent-title">{n.title}</div>
+                <div className="dash-recent-sub">{n.body}</div>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+
+      {/* 오늘 수업 요약 (수업별 예약) */}
       <div className="section-title" style={{ paddingTop: 8 }}>
         오늘 수업 {todayClasses.length > 0 && <span className="info">({todayClasses.length}개)</span>}
       </div>
