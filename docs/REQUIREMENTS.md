@@ -82,6 +82,7 @@
 - 수강권 발급 시 요일반을 자동 예약하는 `auto_book_membership()`
 - 하루 한 번 자동예약 제한 (`fix_auto_book_oneperday.sql`)
 - 정원 등의 이유로 배치되지 않은 수강권을 매니저가 “다시 배치”하는 재시도 UI (`app/manager/classes/page.tsx`, `retryAutoBook()`)
+- 관리자 직접배치(수강권 종류·예약 가능 시간 제한 무시하고 기존 수강권/미배치건으로 배치)와 무료 추가 배치(수강권 차감 없이 무료 예약, 이용권 없는 회원·체험회원도 가능) — `reservations.reservation_type`(MEMBER/ADMIN_ASSIGNMENT/ADMIN_FREE)로 구조화, `admin_assign_reservation`/`admin_cancel_reservation` RPC와 `admin_action_logs` 작업 로그 연결 (`app/manager/classes/page.tsx`, `lib/adminAssignment.ts`, `add_admin_assignment.sql`). 세부 permission key와 회원 상태(이용정지/탈퇴) 차단 정책은 [TODO P1-9, P1-10](./TODO.md) 참고
 - 다중예약 허용 수강권 (`allow_multi_booking`)
 - 예약·취소 마감과 마감 후 취소 시 횟수 차감 옵션 (`center_settings.deduct_on_late_cancel`)
 - 사용 가능한 수강권이 없을 때 해당 수업에 맞는 구매 가능 상품 안내
@@ -214,6 +215,7 @@
 - 대시보드의 센터 선택, 오늘 수업과 예약 현황
 - 수업·반복수업·스케줄 복사·룸 관리
 - 출석·노쇼·보강 예약과 미배치 자동예약 재시도
+- 관리자 직접배치·무료 추가 배치와 배치/취소 작업 로그 조회 (`/manager/admin-assignments`)
 - 회원 검색, 등급, 상태, 메모, 주소, CSV 내보내기
 - 진도 카테고리와 회원별 진도 기록
 - 수강권 상품과 예약 조건 관리

@@ -71,7 +71,8 @@
 | `rooms` | 구현됨 | 수업 공간 |
 | `classes` | 구현됨 | 그룹·프라이빗 수업과 반복그룹, 정원, 마감, 상태 |
 | `class_allowed_products` | 구현됨 | 수업별 예약 가능한 수강권 상품 |
-| `reservations` | 구현됨 | 예약·대기·취소·출석·노쇼 및 개인 메모 |
+| `reservations` | 구현됨 | 예약·대기·취소·출석·노쇼 및 개인 메모. `reservation_type`(MEMBER/ADMIN_ASSIGNMENT/ADMIN_FREE), `reservation_source`(USER/ADMIN/SYSTEM), `admin_reason_code`/`admin_reason_detail`, `is_capacity_override`, `membership_consumed`, `cancelled_by`/`cancel_reason`/`cancelled_at`, `created_by_account_id`, `updated_at` 추가(`add_admin_assignment.sql`) |
+| `admin_action_logs` | 구현됨 | 관리자 직접배치/무료배치/취소 작업 로그 (append-only, 일반 매니저 UI에서 수정·삭제 불가). `add_admin_assignment.sql` |
 
 ### 4-3. 상품, 수강권, 주문과 매출
 
@@ -271,8 +272,12 @@ manager_centers * ── 1 center_roles
 | `delete_class_group_safe` | `lib/classes.ts` | 반복수업 그룹 안전 삭제 | 다수 수업·예약 변경 |
 | `auto_book_membership` | `lib/classes.ts` | 요일반 수강권 자동예약 및 재시도 | 하루 한 번 제한 보정본 확인 |
 | `unplaced_weekday_passes` | `lib/classes.ts` | 자동예약 미배치 잔여분 조회 | 매니저 재시도 UI에서 사용 |
+| `admin_assign_reservation` | `lib/adminAssignment.ts` | 관리자 직접배치(수강권/미배치건 사용)·무료 추가배치(차감 없음) | `add_admin_assignment.sql`. 정원 초과 시 1차 호출은 `needs_capacity_confirm`만 반환하고 미생성, `p_force_capacity`로 재호출해야 실제 생성됨 |
+| `admin_cancel_reservation` | `lib/adminAssignment.ts` | 관리자 배치(ADMIN_ASSIGNMENT/ADMIN_FREE) 취소, 타입별 정확한 복구 | `add_admin_assignment.sql`. MEMBER 타입 예약에는 사용 불가(기존 `cancel_reservation`/`manager_set_attendance` 유지) |
+| `can_manage_center_reservations` | `add_admin_assignment.sql` 내부 | 센터 관리자 권한 판정 헬퍼(`manager_book_member`와 동일 정책) | 세부 permission key 확장 지점, [TODO P1-9](./TODO.md) |
+| `is_profile_assignable` | `add_admin_assignment.sql` 내부 | 회원 자격 판정 헬퍼(현재는 프로필 존재 여부만 확인) | 이용정지/탈퇴 등 정책 확장 지점, [TODO P1-10](./TODO.md) |
 
-`usable_memberships()`는 SQL에 존재하지만 현재 앱은 배치용 `usable_memberships_for_classes()`와 `reserve_with_membership()`을 직접 호출합니다.
+`usable_memberships()`는 SQL에 존재하지만 현재 앱은 배치용 `usable_memberships_for_classes()`와 `reserve_with_membership()`을 직접 호출합니다. 두 함수 모두 `fix_usable_memberships_product_kind.sql`에서 `products.product_kind = 'pass'` 조건이 추가되어, 구매용 상품(goods)이 더 이상 반환되지 않습니다.
 
 ### 9-2. 주문·환불·포인트
 
@@ -341,8 +346,8 @@ manager_centers * ── 1 center_roles
 | `trg_guard_center_status` | `centers` | 일반 매니저의 센터 승인 상태 변경 방지 | 두 SQL 파일에 정의, 운영 최종 정의 확인 필요 |
 | `notify_new_order` | `orders` | 신규 주문 알림 생성 | SQL 정의 확인, 운영 적용 확인 필요 |
 | `notify_new_review` | `center_reviews` | 신규 후기 알림 생성 | SQL 정의 확인, 운영 적용 확인 필요 |
-| `notify_reservation_insert` | `reservations` | 신규 예약·대기 알림 생성 | SQL 정의 확인, 운영 적용 확인 필요 |
-| `notify_reservation_update` | `reservations` | 예약 취소·상태 변경 알림 생성 | SQL 정의 확인, 운영 적용 확인 필요 |
+| `notify_reservation_insert` | `reservations` | 신규 예약·대기 알림 생성 | SQL 정의 확인, 운영 적용 확인 필요. `add_admin_assignment.sql`이 함수 본문을 `reservation_type`에 따라 분기하도록 확장(트리거 자체는 재생성하지 않음) |
+| `notify_reservation_update` | `reservations` | 예약 취소·상태 변경 알림 생성 | 위와 동일 — 관리자 배치/취소는 회원에게만 내부 정보 없이 안내, 다른 매니저에게는 알리지 않음 |
 
 자동예약은 trigger가 아니라 `fulfill_order()` 내부에서 `auto_book_membership()`을 호출하는 함수 흐름입니다. 정기 리마인드도 DB trigger가 아니라 외부 스케줄러가 호출해야 하는 함수입니다.
 
@@ -362,7 +367,8 @@ manager_centers * ── 1 center_roles
 ### 12-2. 기능별 migration
 
 ```text
-add_account_address.sql        add_announcements.sql          add_attendance.sql
+add_account_address.sql        add_admin_assignment.sql       add_announcements.sql
+add_attendance.sql
 add_auto_booking.sql           add_center_category.sql        add_center_intro.sql
 add_center_location.sql        add_center_media.sql           add_center_settings.sql
 add_center_shop.sql            add_class_goods_option.sql     add_class_products.sql
@@ -380,15 +386,25 @@ add_sales.sql                  add_same_day_setting.sql       add_shared_passes.
 add_staff_permissions.sql      add_unplaced_passes.sql        wire_settings.sql
 ```
 
+`add_admin_assignment.sql`(2026-07-30, `feature/p1-reservation-ux`)은 예약 타입 구조화(§4-2 참고)와
+`admin_action_logs`, `admin_assign_reservation`/`admin_cancel_reservation` RPC를 추가하고
+`reserve_class`/`reserve_with_membership`/`manager_book_member`/`cancel_reservation`/
+`manager_set_attendance`/알림 트리거를 `create or replace`로 확장합니다(기존 로직·반환값은 유지).
+
 ### 12-3. 보정 migration
 
 ```text
 fix_auto_book_oneperday.sql    fix_center_reviews.sql          fix_class_delete.sql
 fix_member_status.sql          fix_membership_rls.sql         fix_missing_primary_profile.sql
 fix_profile_rls_restore.sql    fix_rls_policies.sql           fix_staff_search.sql
+fix_usable_memberships_product_kind.sql
 fix_usable_memberships_shared.sql
 fix_waitlist.sql
 ```
+
+`fix_usable_memberships_product_kind.sql`(2026-07-30)은 `usable_memberships()`/
+`usable_memberships_for_classes()`에 `products.product_kind = 'pass'` 조건을 추가해 구매용 상품(goods)이
+"사용 가능한 수강권" 목록에 섞여 보이던 버그를 고칩니다.
 
 ### 12-4. 운영·진단·테스트 파일
 
