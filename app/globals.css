@@ -2258,11 +2258,21 @@ a.membership-card { text-decoration: none; display: block; }
   margin: 10px 20px 0; padding: 12px 14px;
   background: #eef6f2; border: 1px solid #bfe0cf; border-radius: 12px;
 }
-.assign-banner-main { flex: 1; min-width: 0; }
-.assign-banner-title { font-size: 11px; font-weight: 700; color: #1f6f63; }
-.assign-banner-name { font-size: 14.5px; font-weight: 800; color: var(--text); margin-top: 2px; }
-.assign-banner-phone { font-size: 12px; font-weight: 600; color: var(--text-dim); }
-.assign-banner-sub { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+.assign-banner-main { flex: 1 1 0%; min-width: 0; }
+.assign-banner-title { font-size: 11px; font-weight: 700; color: #1f6f63; white-space: nowrap; }
+.assign-banner-name { font-size: 14.5px; font-weight: 800; color: var(--text); margin-top: 2px; overflow-wrap: break-word; }
+.assign-banner-phone { font-size: 12px; font-weight: 600; color: var(--text-dim); white-space: nowrap; }
+.assign-banner-sub { font-size: 12px; color: var(--text-dim); margin-top: 3px; overflow-wrap: break-word; }
+/* .ghost-btn은 원래 width:100%(display:block)짜리 전체너비 버튼 클래스라, .add-profile-actions처럼
+   같은 너비의 버튼 두 개가 나란히 있을 때는 균등하게 줄어들어 문제가 없다. 하지만 여기서는 텍스트
+   영역(flex:1 1 0%) 옆에 이 버튼 "하나만" 오기 때문에, width:100%가 만드는 큰 flex-basis가 행 전체
+   너비를 차지하려 들어 옆의 텍스트 영역을 거의 0으로 밀어내는 문제가 있었다(한글은 띄어쓰기 없이도
+   글자 단위로 줄바꿈이 되므로 "세로로 한 글자씩" 보이는 원인이었음). 버튼을 내용 크기로 고정해서
+   해결한다 — 버튼의 위치(맨 오른쪽)나 동작은 그대로 유지된다. */
+.assign-banner > .ghost-btn {
+  display: inline-block; width: auto; flex: 0 0 auto;
+  white-space: nowrap; padding: 8px 12px; font-size: 12.5px;
+}
 .assign-menu-wrap { position: relative; flex: 0 0 auto; }
 .assign-menu {
   position: absolute; right: 0; top: 100%; margin-top: 4px; z-index: 50;
