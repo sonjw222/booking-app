@@ -29,6 +29,9 @@ export type HistoryItem = {
   when: string; // "2026-07-14 20:00"
   status: "confirmed" | "waitlisted" | "cancelled" | "attended" | "no_show";
   profileName: string; // 어느 프로필 것인지 (대표면 "")
+  // "MEMBER" | "ADMIN_ASSIGNMENT" | "ADMIN_FREE" — 회원 화면에는 lib/reservationTypes.ts의
+  // memberFacingBadge()로만 노출 (무료배치 여부/사유/관리자명 등 내부 정보는 절대 포함하지 않음)
+  reservationType: string;
 };
 
 const KST_DT = new Intl.DateTimeFormat("ko-KR", {
@@ -141,7 +144,7 @@ export async function fetchMyPage() {
   // 예약내역 (모든 프로필, 최근순)
   const { data: resRows, error: resErr } = await supabase
     .from("reservations")
-    .select("id, profile_id, status, created_at, classes(title, start_time, centers(name))")
+    .select("id, profile_id, status, reservation_type, created_at, classes(title, start_time, centers(name))")
     .in("profile_id", profileIds)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -154,6 +157,7 @@ export async function fetchMyPage() {
     when: r.classes?.start_time ? fmtDateTime(r.classes.start_time) : "",
     status: r.status,
     profileName: profileLabel[r.profile_id] ?? "",
+    reservationType: r.reservation_type ?? "MEMBER",
   }));
 
   const profile: Profile = { name: me.name, phone: me.phone, isMember: me.isMember, isManager: me.isManager, isPlatformAdmin: me.isPlatformAdmin };

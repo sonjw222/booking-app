@@ -46,19 +46,27 @@ function toTimeStr(iso: string) {
   return KST_FMT_TIME.format(new Date(iso)); // "20:00"
 }
 
-// ---------------- 월 단위 데이터 한 번에 가져오기 ----------------
-// 반환: 이번 달의 수업 + 센터 + 휴무일 + 내 예약 정보
-export async function fetchMonthData(year: number, month: number) {
-  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
-  const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
-
-  // 현재 로그인 계정 → 대표 프로필
+// 현재 로그인 계정의 accounts.id. 화면에서 fetchMonthData/fetchMyProfiles를 함께 호출할 때
+// 이 함수로 한 번만 조회한 뒤 두 함수에 넘기면, 매번 중복으로 auth.getUser()+accounts 조회를
+// 반복하지 않아도 됨 (예약 화면 성능 개선 — app/reservation/page.tsx의 load() 참고).
+export async function getMyAccountId(): Promise<string> {
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) throw new Error("로그인이 필요해요");
-
   const { data: account, error: accErr } = await supabase
     .from("accounts").select("id").eq("auth_id", authData.user.id).single();
   if (accErr || !account) throw new Error("계정 정보를 찾을 수 없어요");
+  return account.id;
+}
+
+// ---------------- 월 단위 데이터 한 번에 가져오기 ----------------
+// 반환: 이번 달의 수업 + 센터 + 휴무일 + 내 예약 정보
+// accountId를 미리 조회해서 넘기면 내부에서 다시 조회하지 않음 (중복 쿼리 방지)
+export async function fetchMonthData(year: number, month: number, accountId?: string) {
+  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+  const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+
+  const accId = accountId ?? (await getMyAccountId());
+  const account = { id: accId };
 
   // 내 모든 프로필 (대표 + 추가 프로필). 프로필별로 예약 상태를 따로 봐야 함
   const { data: myProfiles, error: meErr } = await supabase
@@ -244,20 +252,24 @@ export async function fetchMyGoodsByCenter(
 // 내 프로필 목록 (예약 주체 선택용)
 export type BookingProfile = { id: string; name: string; label: string | null; isPrimary: boolean };
 
-export async function fetchMyProfiles(): Promise<BookingProfile[]> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) return [];
-  const { data: acc } = await supabase
-    .from("accounts")
-    .select("id")
-    .eq("auth_id", authData.user.id)
-    .single();
-  if (!acc) return [];
+export async function fetchMyProfiles(accountId?: string): Promise<BookingProfile[]> {
+  let accId = accountId;
+  if (!accId) {
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) return [];
+    const { data: acc } = await supabase
+      .from("accounts")
+      .select("id")
+      .eq("auth_id", authData.user.id)
+      .single();
+    if (!acc) return [];
+    accId = acc.id;
+  }
 
   const { data, error } = await supabase
     .from("profiles")
     .select("id, name, label, is_primary")
-    .eq("account_id", acc.id)
+    .eq("account_id", accId)
     .order("is_primary", { ascending: false });
   if (error) throw new Error("프로필을 불러오지 못했어요: " + error.message);
   return (data ?? []).map((p: any) => ({
