@@ -458,3 +458,42 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
     expect(count).toBe(1);
   });
 });
+
+describe("manager_dashboard_summary 권한 및 응답 형태", () => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  it("센터 관리자는 자신의 센터 대시보드 요약을 정상 조회한다", async () => {
+    const { data, error } = await supabase.rpc("manager_dashboard_summary", {
+      p_center_id: centerAId, p_from: today, p_to: today,
+    });
+    expect(error).toBeNull();
+    expect(typeof (data as any).class_count).toBe("number");
+    expect(typeof (data as any).confirmed_count).toBe("number");
+    expect(typeof (data as any).cancelled_count).toBe("number");
+    expect(typeof (data as any).member_count).toBe("number");
+    expect(typeof (data as any).active_member_count).toBe("number");
+    expect(typeof (data as any).active_membership_count).toBe("number");
+    expect(typeof (data as any).admin_assignment_count).toBe("number");
+    expect(typeof (data as any).admin_free_count).toBe("number");
+  });
+
+  it("일반 회원(비관리자)이 대시보드 요약을 조회하면 거부된다", async () => {
+    await asMember();
+    const { data, error } = await supabase.rpc("manager_dashboard_summary", {
+      p_center_id: centerAId, p_from: today, p_to: today,
+    });
+    expect(data).toBeNull();
+    expect(error).not.toBeNull();
+    expect(error!.message).toContain("관리자 권한이 없어요");
+  });
+
+  it("다른 센터의 관리자가 이 센터의 대시보드를 조회하면 거부된다", async () => {
+    await asManagerB();
+    const { data, error } = await supabase.rpc("manager_dashboard_summary", {
+      p_center_id: centerAId, p_from: today, p_to: today,
+    });
+    expect(data).toBeNull();
+    expect(error).not.toBeNull();
+    expect(error!.message).toContain("관리자 권한이 없어요");
+  });
+});
