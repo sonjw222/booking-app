@@ -9,6 +9,7 @@
     테스트(본인 소유 검증)는 signOut → signIn으로 "순서대로 전환"하는 방식을 쓴다.
 */
 
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "../../lib/supabaseClient";
 
 export function requireEnv(name: string): string {
@@ -160,17 +161,39 @@ export async function fetchPaymentByMembership(membershipId: string): Promise<Pa
 
 /* ============================================================
    관리자 직접배치/무료 추가 배치 통합 테스트 전용 fixture 헬퍼
-   - 서비스 역할 키 없이, 일반 회원가입과 동일한 RLS 정책만으로 매니저 fixture를 자체 생성한다:
-     · centers insert는 "센터 생성" 정책(auth_policies.sql)이 auth.role()='authenticated'면 누구나 허용
-     · trg_create_default_center_roles 트리거가 오너 역할을 자동 생성
-     · manager_centers insert는 "매니저센터 생성" 정책이 account_id = my_account_id()면 누구나 허용
-       (status를 바로 'active'로 넣어도 정책이 막지 않음 — 회원가입 플로우가 원래 그렇게 동작함)
-   - 계정과 마찬가지로 get-or-create: 이미 오너로 있는 센터가 있으면 재사용하고, 없을 때만 새로 만든다.
+   - 테스트 센터 생성 → 그 센터에 로그인 사용자를 오너로 연결하는 과정은 "아직 그 센터의
+     매니저가 아닌 계정"이 스스로를 매니저로 만드는 닭-달걀 문제라, 일반 로그인 사용자 client로는
+     (운영 RLS 정책이 실제로 무엇이든) 안전하게 보장할 수 없다. centers RLS를 테스트 통과를 위해
+     느슨하게 바꾸는 대신, 이 fixture 준비 단계만 서비스 역할 키를 쓰는 별도 관리자 client로
+     RLS를 우회해서 처리한다 — 운영 RLS 정책 자체는 전혀 건드리지 않는다.
+   - 서비스 역할 client는 아래 fixture 준비에만 쓴다: 테스트 센터 조회/생성,
+     manager_centers 오너 역할 조회/생성. 그 외 실제로 검증 대상인 admin_assign_reservation/
+     admin_cancel_reservation RPC 호출과 권한 테스트는 전부 로그인 사용자별 일반 client(위 supabase
+     싱글턴, switchToTestUser가 세션을 바꿔가며 사용)로 실행한다 — 그래야 실제 RLS/권한 검증이
+     의미가 있다.
    ============================================================ */
 
+let adminClient: SupabaseClient | null = null;
+
+// 서비스 역할 키를 쓰는 fixture 전용 관리자 client (지연 생성).
+// SUPABASE_SERVICE_ROLE_KEY가 없는 파일(예: 기존 결제 통합 테스트)은 이 함수를 아예 호출하지
+// 않으므로 영향받지 않는다 — setup.ts 최상단에서 미리 requireEnv하지 않는 이유.
+function getFixtureAdminClient(): SupabaseClient {
+  if (adminClient) return adminClient;
+  const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+  adminClient = createClient(url, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  return adminClient;
+}
+
 // 현재 로그인된 계정이 오너로 있는 센터를 재사용하거나, 없으면 새로 만들어 오너로 연결한다.
+// RLS를 우회하는 서비스 역할 client로만 동작 — 일반 client는 전혀 쓰지 않는다.
 export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<string> {
-  const { data: rows, error: mcErr } = await supabase
+  const admin = getFixtureAdminClient();
+
+  const { data: rows, error: mcErr } = await admin
     .from("manager_centers")
     .select("center_id, role_id")
     .eq("account_id", manager.accountId)
@@ -179,7 +202,7 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
 
   const roleIds = (rows ?? []).map((r: any) => r.role_id).filter(Boolean);
   if (roleIds.length > 0) {
-    const { data: roles, error: roleErr } = await supabase
+    const { data: roles, error: roleErr } = await admin
       .from("center_roles")
       .select("id, is_owner")
       .in("id", roleIds);
@@ -189,14 +212,14 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
     if (owned) return (owned as any).center_id as string;
   }
 
-  const { data: center, error: centerErr } = await supabase
+  const { data: center, error: centerErr } = await admin
     .from("centers")
     .insert({ name: `통합테스트센터-${manager.accountId.slice(0, 8)}`, status: "pending" })
     .select("id")
     .single();
   if (centerErr || !center) throw new Error(`테스트 센터 생성 실패: ${centerErr?.message ?? "no data"}`);
 
-  const { data: role, error: roleErr2 } = await supabase
+  const { data: role, error: roleErr2 } = await admin
     .from("center_roles")
     .select("id")
     .eq("center_id", center.id)
@@ -204,7 +227,7 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
     .single();
   if (roleErr2 || !role) throw new Error(`오너 역할을 찾지 못했습니다: ${roleErr2?.message ?? "no role"}`);
 
-  const { error: linkErr } = await supabase
+  const { error: linkErr } = await admin
     .from("manager_centers")
     .insert({ account_id: manager.accountId, center_id: center.id, role_id: role.id, status: "active" });
   if (linkErr) throw new Error(`manager_centers 생성 실패: ${linkErr.message}`);
