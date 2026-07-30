@@ -1938,6 +1938,26 @@ a.membership-card { text-decoration: none; display: block; }
   padding: 5px 12px; font-size: 12.5px; font-weight: 700; color: var(--accent);
   cursor: pointer; flex: 0 0 auto; white-space: nowrap;
 }
+/* ============================================================
+   Pill Button — 관리자 화면의 작은 액션버튼 공용 스타일.
+   .cal-export-btn(복사/휴무일)과 같은 시각 언어(radius:999, accent 텍스트, 얇은 테두리)를
+   따르되, 모바일 터치영역(min-height 36px)과 아이콘+텍스트 정렬(inline-flex + gap)을 갖춘
+   버전. 기존 .cal-export-btn 호출부는 그대로 두고(회귀 방지), 이번 Epic에서 새로 만들거나
+   손대는 관리자 버튼(배치 ▼, 다시배치/직접배치, 배치 종료, 활동기록 필터·되돌리기 등)에만 적용.
+   .att-btn(출석/결석/노쇼 등 기존 핵심 컴포넌트)은 이번 범위에서 의도적으로 변경하지 않음 —
+   앱 전체 버튼 통일은 별도 UI Design System 작업에서 진행 예정.
+   ============================================================ */
+.pill-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border-radius: 999px; border: 1px solid var(--line); background: none;
+  color: var(--accent); font: inherit; font-weight: 700; font-size: 12.5px;
+  padding: 8px 14px; min-height: 36px; box-sizing: border-box;
+  cursor: pointer; white-space: nowrap; flex: 0 0 auto; text-decoration: none;
+}
+.pill-btn.solid { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pill-btn.sm { padding: 6px 11px; font-size: 11.5px; min-height: 30px; }
+.pill-btn:disabled { opacity: 0.5; cursor: default; }
+.pill-btn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 .cal-add-one {
   width: 100%; margin: 8px 0 0; padding: 9px; border: 1px solid var(--line);
   background: var(--surface); border-radius: 10px; font-size: 12.5px; font-weight: 600;
@@ -2246,11 +2266,7 @@ a.membership-card { text-decoration: none; display: block; }
 .unplaced-name { font-size: 14.5px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
 .unplaced-remain { font-size: 11px; font-weight: 800; color: #c47f17; background: #fef4e6; padding: 2px 8px; border-radius: 999px; }
 .unplaced-sub { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
-.unplaced-retry {
-  flex: 0 0 auto; background: var(--accent); color: #fff; border: none;
-  border-radius: 8px; padding: 8px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer;
-}
-.unplaced-retry:disabled { opacity: 0.5; }
+/* "다시 배치"/"직접배치" 버튼은 .pill-btn(공용 작은 액션버튼)으로 통일 — 아래 참고 */
 
 /* 관리자 직접배치 */
 .assign-banner {
@@ -2258,21 +2274,19 @@ a.membership-card { text-decoration: none; display: block; }
   margin: 10px 20px 0; padding: 12px 14px;
   background: #eef6f2; border: 1px solid #bfe0cf; border-radius: 12px;
 }
-.assign-banner-main { flex: 1 1 0%; min-width: 0; }
+.assign-banner-main { flex: 1 1 0%; min-width: 0; max-width: 100%; }
 .assign-banner-title { font-size: 11px; font-weight: 700; color: #1f6f63; white-space: nowrap; }
-.assign-banner-name { font-size: 14.5px; font-weight: 800; color: var(--text); margin-top: 2px; overflow-wrap: break-word; }
+/* overflow-wrap:anywhere — break-word보다 더 안전한 값. 공백이 있는 텍스트는 단어 경계에서
+   줄바꿈하고, 공백 없는 아주 긴 토큰(숫자만 있는 회원번호, 언더스코어 없는 영문 등)일 때만
+   글자 단위로 넘어가 컨테이너 밖으로 흘러넘치지 않게 한다(한 줄 표시가 목표인 이름/번호에는
+   충분히 넓은 폭이 주어지므로 실제로 글자 단위 줄바꿈이 발생할 일은 없음 — 방어적 안전장치). */
+.assign-banner-name { font-size: 14.5px; font-weight: 800; color: var(--text); margin-top: 2px; overflow-wrap: anywhere; }
 .assign-banner-phone { font-size: 12px; font-weight: 600; color: var(--text-dim); white-space: nowrap; }
-.assign-banner-sub { font-size: 12px; color: var(--text-dim); margin-top: 3px; overflow-wrap: break-word; }
-/* .ghost-btn은 원래 width:100%(display:block)짜리 전체너비 버튼 클래스라, .add-profile-actions처럼
-   같은 너비의 버튼 두 개가 나란히 있을 때는 균등하게 줄어들어 문제가 없다. 하지만 여기서는 텍스트
-   영역(flex:1 1 0%) 옆에 이 버튼 "하나만" 오기 때문에, width:100%가 만드는 큰 flex-basis가 행 전체
-   너비를 차지하려 들어 옆의 텍스트 영역을 거의 0으로 밀어내는 문제가 있었다(한글은 띄어쓰기 없이도
-   글자 단위로 줄바꿈이 되므로 "세로로 한 글자씩" 보이는 원인이었음). 버튼을 내용 크기로 고정해서
-   해결한다 — 버튼의 위치(맨 오른쪽)나 동작은 그대로 유지된다. */
-.assign-banner > .ghost-btn {
-  display: inline-block; width: auto; flex: 0 0 auto;
-  white-space: nowrap; padding: 8px 12px; font-size: 12.5px;
-}
+.assign-banner-sub { font-size: 12px; color: var(--text-dim); margin-top: 3px; overflow-wrap: anywhere; }
+/* 관리자 직접배치 전용 작은 액션버튼: .pill-btn (radius:999, 모바일 터치영역, 아이콘+텍스트 정렬).
+   .ghost-btn/.primary-btn(전체너비 버튼)을 이런 자리에 재사용하면 flex-basis 충돌로 옆 텍스트가
+   찌그러지는 문제가 있었음(과거 커밋 참고) — 이번부터는 이 종류의 자리엔 항상 .pill-btn을 쓴다. */
+.assign-banner > .pill-btn { flex: 0 0 auto; }
 .assign-menu-wrap { position: relative; flex: 0 0 auto; }
 .assign-menu {
   position: absolute; right: 0; top: 100%; margin-top: 4px; z-index: 50;

@@ -745,7 +745,7 @@ export default function ClassManagePage() {
               )}
             </div>
           </div>
-          <button className="ghost-btn" onClick={exitAssignMode}>직접배치 종료</button>
+          <button className="pill-btn" onClick={exitAssignMode}>직접배치 종료</button>
         </div>
       )}
 
@@ -842,7 +842,7 @@ export default function ClassManagePage() {
                 </div>
                 {ok && (
                   <div className="assign-menu-wrap">
-                    <button className="ghost-btn" onClick={() => setAssignMenuFor(assignMenuFor === c.id ? null : c.id)}>
+                    <button className="pill-btn solid" onClick={() => setAssignMenuFor(assignMenuFor === c.id ? null : c.id)}>
                       배치 ▼
                     </button>
                     {assignMenuFor === c.id && (
@@ -1244,9 +1244,9 @@ export default function ClassManagePage() {
                     <div className="unplaced-sub">{u.purchasedAt} 구매</div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    <button className="unplaced-retry" disabled={unplacedBusy}
+                    <button className="pill-btn solid sm" disabled={unplacedBusy}
                       onClick={() => handleRetryAutoBook(u)}>다시 배치</button>
-                    <button className="unplaced-retry" style={{ background: "var(--surface-2, #eee)", color: "var(--text)" }}
+                    <button className="pill-btn sm"
                       onClick={() => startAssignFromUnplaced(u)}>직접배치</button>
                   </div>
                 </div>
