@@ -175,6 +175,21 @@ export async function fetchPaymentByMembership(membershipId: string): Promise<Pa
 
 let adminClient: SupabaseClient | null = null;
 
+// SUPABASE_SERVICE_ROLE_KEY(JWT)의 role claim만 읽어본다(서명 검증 없음 — 여기서는 "anon 키를
+// 잘못 넣지 않았는지"를 가려내기 위한 진단 목적일 뿐, 실제 인증/보안 검증이 아니다. 실제 권한
+// 경계는 항상 Supabase 서버가 그 키로 검증한다).
+function decodeJwtRoleClaim(token: string): string | null {
+  try {
+    const payloadB64 = token.split(".")[1];
+    if (!payloadB64) return null;
+    const json = Buffer.from(payloadB64, "base64").toString("utf-8");
+    const payload = JSON.parse(json);
+    return typeof payload.role === "string" ? payload.role : null;
+  } catch {
+    return null;
+  }
+}
+
 // 서비스 역할 키를 쓰는 fixture 전용 관리자 client (지연 생성).
 // SUPABASE_SERVICE_ROLE_KEY가 없는 파일(예: 기존 결제 통합 테스트)은 이 함수를 아예 호출하지
 // 않으므로 영향받지 않는다 — setup.ts 최상단에서 미리 requireEnv하지 않는 이유.
@@ -182,6 +197,22 @@ function getFixtureAdminClient(): SupabaseClient {
   if (adminClient) return adminClient;
   const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
   const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+
+  // "centers new row violates row-level security policy" 같은 에러가 서비스 역할 client에서도
+  // 계속 발생한다면, 코드가 일반 client로 새는 것이 아니라 이 값 자체가 진짜 service_role 키가
+  // 아닐 가능성이 가장 크다(anon 키를 잘못 넣었거나, 다른 프로젝트의 키이거나). 여기서 role claim을
+  // 먼저 확인해 그 경우 즉시 명확한 에러로 알려준다 — RLS 위반이라는 애매한 에러로 새지 않도록.
+  const roleClaim = decodeJwtRoleClaim(serviceRoleKey);
+  if (roleClaim !== "service_role") {
+    throw new Error(
+      `SUPABASE_SERVICE_ROLE_KEY 값이 service_role 키가 아닌 것 같습니다 ` +
+        `(JWT의 role claim: ${roleClaim ?? "확인 불가(JWT 형식이 아님)"}). ` +
+        `Supabase 대시보드 → Project Settings → API → "service_role secret"에서 정확한 값을 ` +
+        `다시 복사해 등록해주세요(anon key와 혼동하기 쉽습니다). ` +
+        `이 검사를 통과하지 못하면 fixture용 관리자 client를 만들지 않고 여기서 즉시 중단합니다.`
+    );
+  }
+
   adminClient = createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
