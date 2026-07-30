@@ -59,23 +59,49 @@ export async function cancelAdminReservation(reservationId: string, cancelReason
 
 export type AdminActionLog = {
   id: string;
-  reservationId: string;
+  reservationId: string | null;
   actionType: "CREATE_ASSIGNMENT" | "CREATE_FREE" | "CANCEL_ASSIGNMENT" | "CANCEL_FREE";
-  reservationType: ReservationType;
-  reservationSource: ReservationSource;
+  reservationType: ReservationType | null;
+  reservationSource: ReservationSource | null;
   adminId: string;
   adminName: string;
-  memberProfileId: string;
+  memberProfileId: string | null;
   memberName: string;
-  classId: string;
+  classId: string | null;
   classTitle: string;
-  classStart: string;
+  classStart: string | null;
   reasonCode: AdminReasonCode | null;
   reasonDetail: string | null;
   capacityOverride: boolean;
   membershipConsumed: boolean;
   createdAt: string;
+  // 목록 조회 시 함께 가져오는 "지금 시점" 예약 상태 — 스냅샷(reservationType 등)과 달리
+  // 되돌리기 가능 여부 판단에 필요한 살아있는 값. 예약 관련 액션이 아니면(향후 NOTICE_* 등) null.
+  currentReservationStatus: string | null;
 };
+
+// "되돌리기"(관리자 배치 취소) 버튼을 활성화해도 되는지 판단하는 순수 함수.
+// - 배치(CREATE_*) 로그만 되돌릴 수 있음(취소 로그 자체는 되돌릴 대상이 없음)
+// - 그 예약이 아직 취소되지 않았어야 함(중복 취소 방지 — admin_cancel_reservation도 서버에서
+//   막지만, 버튼 자체를 눌러도 소용없는 상태로 미리 비활성화해 사용자에게 명확히 안내)
+// - 수업이 아직 시작 전이어야 함(§9 "관리자는 수업 시작 전까지 직접배치할 수 있다"와 대칭되는 정책)
+export function isRevertEligible(log: Pick<AdminActionLog, "actionType" | "reservationId" | "currentReservationStatus" | "classStart">): boolean {
+  if (log.actionType !== "CREATE_ASSIGNMENT" && log.actionType !== "CREATE_FREE") return false;
+  if (!log.reservationId) return false;
+  if (log.currentReservationStatus === "cancelled") return false;
+  if (!log.classStart) return false;
+  return new Date(log.classStart).getTime() > Date.now();
+}
+
+// 활동기록 화면의 "되돌리기" 버튼이 호출하는 함수. 새 RPC가 아니라 기존
+// admin_cancel_reservation(=cancelAdminReservation)을 그대로 재사용한다 — 취소 로직과
+// 되돌리기 로직을 별도로 만들면 두 경로가 어긋날 위험이 있어 완전히 동일한 함수로 통일.
+export async function revertAdminActionLog(log: AdminActionLog, cancelReason?: string | null): Promise<{ restored: boolean }> {
+  if (!isRevertEligible(log)) {
+    throw new Error("되돌릴 수 없는 기록이에요");
+  }
+  return cancelAdminReservation(log.reservationId as string, cancelReason);
+}
 
 export type AdminActionLogFilters = {
   fromDate?: string;   // "2026-07-01"
@@ -97,7 +123,7 @@ export async function fetchAdminActionLogs(
   let query = supabase
     .from("admin_action_logs")
     .select(
-      "id, reservation_id, action_type, reservation_type, reservation_source, admin_id, member_profile_id, class_id, reason_code, reason_detail, capacity_override, membership_consumed, member_name_snapshot, class_title_snapshot, class_start_snapshot, created_at, accounts(name)"
+      "id, reservation_id, action_type, reservation_type, reservation_source, admin_id, member_profile_id, class_id, reason_code, reason_detail, capacity_override, membership_consumed, member_name_snapshot, class_title_snapshot, class_start_snapshot, created_at, accounts(name), reservations(status)"
     )
     .eq("center_id", centerId)
     .order("created_at", { ascending: false })
@@ -134,5 +160,6 @@ export async function fetchAdminActionLogs(
     capacityOverride: r.capacity_override,
     membershipConsumed: r.membership_consumed,
     createdAt: r.created_at,
+    currentReservationStatus: r.reservations?.status ?? null,
   }));
 }
