@@ -219,6 +219,26 @@ function getFixtureAdminClient(): SupabaseClient {
   return adminClient;
 }
 
+// service_role로 실행했는데도 실패하면 원인이 크게 둘로 갈린다:
+//   1) "permission denied for table X" (Postgres 42501) — RLS가 아니라 그 테이블에 대한 SQL
+//      GRANT 자체가 service_role에 없는 것. service_role은 RLS를 항상 우회하지만 GRANT는 별개다.
+//   2) 그 외(RLS 관련 메시지 등) — 실제 에러 메시지를 그대로 보여준다.
+// 여기서 바로 실행 가능한 GRANT 문을 안내해, "코드가 일반 client로 새는 건지" 다시 의심하지 않고
+// 바로 원인(운영 Supabase 쪽 권한 설정)을 확인할 수 있게 한다.
+function describeAdminQueryError(table: string, error: { message: string; code?: string } | null | undefined): string {
+  if (!error) return "원인 불명 (data 없음)";
+  const isPermissionDenied = error.code === "42501" || /permission denied/i.test(error.message);
+  if (isPermissionDenied) {
+    return (
+      `${error.message} — service_role이 "${table}" 테이블에 대한 SQL GRANT 자체가 없는 것으로 ` +
+      `보입니다(RLS 문제 아님 — RLS는 service_role이 항상 우회하지만 테이블 GRANT는 별개입니다). ` +
+      `Supabase SQL Editor에서 다음을 실행해 확인/복구해주세요: ` +
+      `GRANT ALL ON TABLE ${table} TO service_role;`
+    );
+  }
+  return error.message;
+}
+
 // 현재 로그인된 계정이 오너로 있는 센터를 재사용하거나, 없으면 새로 만들어 오너로 연결한다.
 // RLS를 우회하는 서비스 역할 client로만 동작 — 일반 client는 전혀 쓰지 않는다.
 export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<string> {
@@ -229,7 +249,7 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
     .select("center_id, role_id")
     .eq("account_id", manager.accountId)
     .eq("status", "active");
-  if (mcErr) throw new Error(`manager_centers 조회 실패: ${mcErr.message}`);
+  if (mcErr) throw new Error(`manager_centers 조회 실패: ${describeAdminQueryError("manager_centers", mcErr)}`);
 
   const roleIds = (rows ?? []).map((r: any) => r.role_id).filter(Boolean);
   if (roleIds.length > 0) {
@@ -237,7 +257,7 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
       .from("center_roles")
       .select("id, is_owner")
       .in("id", roleIds);
-    if (roleErr) throw new Error(`center_roles 조회 실패: ${roleErr.message}`);
+    if (roleErr) throw new Error(`center_roles 조회 실패: ${describeAdminQueryError("center_roles", roleErr)}`);
     const ownerRoleIds = new Set((roles ?? []).filter((r: any) => r.is_owner).map((r: any) => r.id));
     const owned = (rows ?? []).find((r: any) => ownerRoleIds.has(r.role_id));
     if (owned) return (owned as any).center_id as string;
@@ -248,7 +268,7 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
     .insert({ name: `통합테스트센터-${manager.accountId.slice(0, 8)}`, status: "pending" })
     .select("id")
     .single();
-  if (centerErr || !center) throw new Error(`테스트 센터 생성 실패: ${centerErr?.message ?? "no data"}`);
+  if (centerErr || !center) throw new Error(`테스트 센터 생성 실패: ${describeAdminQueryError("centers", centerErr)}`);
 
   const { data: role, error: roleErr2 } = await admin
     .from("center_roles")
@@ -256,12 +276,12 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
     .eq("center_id", center.id)
     .eq("is_owner", true)
     .single();
-  if (roleErr2 || !role) throw new Error(`오너 역할을 찾지 못했습니다: ${roleErr2?.message ?? "no role"}`);
+  if (roleErr2 || !role) throw new Error(`오너 역할을 찾지 못했습니다: ${describeAdminQueryError("center_roles", roleErr2)}`);
 
   const { error: linkErr } = await admin
     .from("manager_centers")
     .insert({ account_id: manager.accountId, center_id: center.id, role_id: role.id, status: "active" });
-  if (linkErr) throw new Error(`manager_centers 생성 실패: ${linkErr.message}`);
+  if (linkErr) throw new Error(`manager_centers 생성 실패: ${describeAdminQueryError("manager_centers", linkErr)}`);
 
   return center.id as string;
 }
