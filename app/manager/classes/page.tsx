@@ -23,12 +23,17 @@ import {
   fetchCopyGroups, fetchCopyDateItems, planCopyByWeekday, planCopyByDate,
   copyByWeekday, copyByDate,
   type CopyGroup, type CopyDateItem, type CopyPlanItem,
-  fetchBookableMembers, managerBookMember, type BookableMember,
+  fetchBookableMembers, managerBookMember, type BookableMember, maskPhone,
   fetchUnplacedPasses, retryAutoBook, type UnplacedPass,
   type ManagedClass, type ClassInput, type ClassAttendee,
 } from "../../../lib/classes";
 import { fetchMemberDetail, type MemberDetailData } from "../../../lib/members";
 import { fetchProducts, type Product } from "../../../lib/passes";
+import { assignReservation, cancelAdminReservation, type AssignmentType } from "../../../lib/adminAssignment";
+import {
+  ADMIN_REASON_CODES, ADMIN_REASON_LABELS, type AdminReasonCode,
+  normalizeReasonDetail, adminBadges,
+} from "../../../lib/reservationTypes";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -104,6 +109,28 @@ export default function ClassManagePage() {
   const [unplaced, setUnplaced] = useState<UnplacedPass[]>([]);
   const [unplacedSheet, setUnplacedSheet] = useState(false);
   const [unplacedBusy, setUnplacedBusy] = useState(false);
+  // 관리자 직접배치 / 무료 추가 배치
+  const [assignMode, setAssignMode] = useState(false);
+  const [assignMember, setAssignMember] = useState<BookableMember | null>(null);
+  const [assignPrefillMembershipId, setAssignPrefillMembershipId] = useState<string | null>(null);
+  const [assignMemberSheet, setAssignMemberSheet] = useState(false);
+  const [assignMembersList, setAssignMembersList] = useState<BookableMember[]>([]);
+  const [assignKw, setAssignKw] = useState("");
+  const [assignMenuFor, setAssignMenuFor] = useState<string | null>(null);
+  type AssignConfirmState = {
+    classItem: ManagedClass;
+    type: AssignmentType;
+    membershipId: string | null;
+    reasonCode: AdminReasonCode | null;
+    reasonDetail: string;
+    capacityBlocked: boolean;
+  };
+  const [assignConfirm, setAssignConfirm] = useState<AssignConfirmState | null>(null);
+  const [assignBusy, setAssignBusy] = useState(false);
+  // 관리자 배치 취소 (예약자 명단에서)
+  const [adminCancelTarget, setAdminCancelTarget] = useState<ClassAttendee | null>(null);
+  const [adminCancelReason, setAdminCancelReason] = useState("");
+  const [adminCancelBusy, setAdminCancelBusy] = useState(false);
   // 회원 정보 팝업 (명단에서 이름 클릭)
   const [memberInfo, setMemberInfo] = useState<{ name: string; profileId: string; data: MemberDetailData | null } | null>(null);
   // 수강권 목록 + 폼에서 선택된 수강권
@@ -159,6 +186,12 @@ export default function ClassManagePage() {
     setSelectedDay(1);
     if (month === 12) { setYear((y) => y + 1); setMonth(1); }
     else setMonth((m) => m + 1);
+  }
+  function goToday() {
+    const t = new Date();
+    setYear(t.getFullYear());
+    setMonth(t.getMonth() + 1);
+    setSelectedDay(t.getDate());
   }
 
   // 일/시간/분 → 분 (모두 비면 null = 센터 설정 사용)
@@ -216,6 +249,122 @@ export default function ClassManagePage() {
       }
     } catch (e: any) { setError(e.message); }
     finally { setUnplacedBusy(false); }
+  }
+
+  // --- 관리자 직접배치 / 무료 추가 배치 ---
+  function openAssignMemberPicker() {
+    if (!activeCenterId) return;
+    setAssignKw("");
+    setAssignMemberSheet(true);
+    fetchBookableMembers(activeCenterId).then(setAssignMembersList).catch((e: any) => setError(e.message));
+  }
+
+  function pickAssignMember(m: BookableMember, prefillMembershipId: string | null = null) {
+    setAssignMember(m);
+    setAssignPrefillMembershipId(prefillMembershipId);
+    setAssignMemberSheet(false);
+    setAssignMode(true);
+  }
+
+  function exitAssignMode() {
+    setAssignMode(false);
+    setAssignMember(null);
+    setAssignPrefillMembershipId(null);
+    setAssignMenuFor(null);
+  }
+
+  // 미배치 수강권 목록에서 바로 직접배치로 진입 (회원+수강권 미리 채움)
+  function startAssignFromUnplaced(u: UnplacedPass) {
+    setUnplacedSheet(false);
+    pickAssignMember(
+      {
+        profileId: u.profileId,
+        name: u.memberName,
+        phone: null,
+        memberStatus: "active",
+        memberships: [{ id: u.membershipId, name: u.productName, remaining: u.remainingCount }],
+      },
+      u.membershipId
+    );
+  }
+
+  // 수업이 배치 가능한 상태인지 (취소/마감/시작됨 여부)
+  function classAssignability(c: ManagedClass): { ok: boolean; reason: string | null } {
+    if (c.status === "cancelled") return { ok: false, reason: "취소된 수업" };
+    if (c.status === "closed") return { ok: false, reason: "마감된 수업" };
+    const started = new Date(`${c.date}T${c.start}:00+09:00`).getTime() <= Date.now();
+    if (started) return { ok: false, reason: "이미 시작됨" };
+    return { ok: true, reason: null };
+  }
+
+  function openAssignConfirm(c: ManagedClass, type: AssignmentType) {
+    setAssignMenuFor(null);
+    if (!assignMember) return;
+    const membershipId = type === "ADMIN_ASSIGNMENT"
+      ? (assignPrefillMembershipId ?? assignMember.memberships[0]?.id ?? null)
+      : null;
+    setAssignConfirm({
+      classItem: c, type, membershipId,
+      reasonCode: null, reasonDetail: "",
+      capacityBlocked: c.reserved >= c.capacity,
+    });
+  }
+
+  async function handleAssignSubmit(force: boolean) {
+    if (!assignConfirm || !assignMember) return;
+    const { classItem, type, membershipId, reasonCode, reasonDetail, capacityBlocked } = assignConfirm;
+
+    if (type === "ADMIN_ASSIGNMENT" && !membershipId) { setError("사용할 수강권을 선택해주세요"); return; }
+    if (type === "ADMIN_FREE" && !reasonCode) { setError("무료 추가 배치 사유를 선택해주세요"); return; }
+    if (capacityBlocked && !reasonCode) { setError("정원 초과 배치 사유를 입력해주세요"); return; }
+    if (reasonCode === "OTHER" && !normalizeReasonDetail(reasonDetail)) { setError("기타 사유를 입력해주세요"); return; }
+
+    setAssignBusy(true);
+    setError(null);
+    try {
+      const result = await assignReservation({
+        classId: classItem.id,
+        profileId: assignMember.profileId,
+        assignmentType: type,
+        membershipId,
+        reasonCode,
+        reasonDetail: normalizeReasonDetail(reasonDetail),
+        forceCapacity: force,
+      });
+      if (result.needsCapacityConfirm) {
+        setAssignConfirm({ ...assignConfirm, capacityBlocked: true });
+        return;
+      }
+      const dateLabel = classItem.date.slice(5).replace("-", "/");
+      showToast(`${assignMember.name} 회원이 ${dateLabel} ${classItem.start} ${classItem.title} 수업에 배치되었습니다.`);
+      setAssignConfirm(null);
+      if (activeCenterId) {
+        await loadClasses(activeCenterId, year, month);
+        await loadUnplaced(activeCenterId);
+        if (rosterClass?.id === classItem.id) setRoster(await fetchClassAttendees(classItem.id));
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setAssignBusy(false);
+    }
+  }
+
+  async function handleAdminCancel() {
+    if (!adminCancelTarget) return;
+    setAdminCancelBusy(true);
+    try {
+      await cancelAdminReservation(adminCancelTarget.reservationId, adminCancelReason);
+      showToast("관리자 배치 예약을 취소했어요");
+      setAdminCancelTarget(null);
+      setAdminCancelReason("");
+      if (rosterClass) setRoster(await fetchClassAttendees(rosterClass.id));
+      if (activeCenterId) await loadClasses(activeCenterId, year, month);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setAdminCancelBusy(false);
+    }
   }
 
   // --- 보강 예약 ---
@@ -573,6 +722,33 @@ export default function ClassManagePage() {
         </button>
       )}
 
+      {!assignMode ? (
+        <button className="unplaced-banner" style={{ background: "var(--surface-2, #f4f4f4)" }} onClick={openAssignMemberPicker}>
+          <span className="unplaced-icon">🗓️</span>
+          <span className="unplaced-text">회원 직접배치</span>
+          <span className="unplaced-go">시작 ›</span>
+        </button>
+      ) : (
+        <div className="assign-banner">
+          <div className="assign-banner-main">
+            <div className="assign-banner-title">직접배치 대상 회원</div>
+            <div className="assign-banner-name">
+              {assignMember?.name}
+              <span className="assign-banner-phone"> · {maskPhone(assignMember?.phone ?? null)}</span>
+            </div>
+            <div className="assign-banner-sub">
+              {assignMember && assignMember.memberships.length > 0
+                ? assignMember.memberships.map((m) => `${m.name}${m.remaining != null ? ` ${m.remaining}회` : ""}`).join(", ")
+                : "보유 수강권 없음"}
+              {assignMember?.memberStatus && assignMember.memberStatus !== "active" && (
+                <> · {assignMember.memberStatus === "expired" ? "만료회원" : "휴면회원"}</>
+              )}
+            </div>
+          </div>
+          <button className="ghost-btn" onClick={exitAssignMode}>직접배치 종료</button>
+        </div>
+      )}
+
       <div className="center-switcher">
         {centers.map((c) => (
           <button
@@ -592,6 +768,7 @@ export default function ClassManagePage() {
           <div className="cal-title">{year}.{pad2(month)}</div>
           <button className="cal-nav-btn" onClick={goNextMonth}>›</button>
         </div>
+        <button className="text-btn" onClick={goToday}>오늘</button>
       </div>
 
       {/* 요일 */}
@@ -639,12 +816,53 @@ export default function ClassManagePage() {
       {dayClasses.length === 0 ? (
         holidayDates.has(`${year}-${pad2(month)}-${pad2(selectedDay)}`) ? (
           <div className="daylist-empty" style={{ paddingTop: 20 }}>휴무일이에요</div>
+        ) : assignMode ? (
+          <div className="daylist-empty" style={{ paddingTop: 20 }}>이 날 등록된 수업이 없어요.</div>
         ) : (
           <div className="empty-action">
             <div className="empty-action-text">이 날 등록된 수업이 없어요.</div>
             <button className="empty-action-btn" onClick={openCreate}>+ 수업 등록하기</button>
           </div>
         )
+      ) : assignMode ? (
+        <div className="daylist" style={{ minHeight: 0, paddingTop: 4 }}>
+          {dayClasses.map((c) => {
+            const { ok, reason } = classAssignability(c);
+            const full = c.reserved >= c.capacity;
+            return (
+              <div key={c.id} className="class-row">
+                <div className="class-color" style={{ background: ok ? "var(--accent)" : "#999" }} />
+                <div className="class-info">
+                  <div className="class-row-title">{c.title}</div>
+                  <div className="class-row-meta">
+                    {c.start}~{c.end} · 예약 {c.reserved}/{c.capacity}
+                    {full && <span className="hist-status s-cancelled" style={{ marginLeft: 6 }}>정원 마감</span>}
+                    {!ok && <span className="hist-status s-cancelled" style={{ marginLeft: 6 }}>{reason}</span>}
+                  </div>
+                </div>
+                {ok && (
+                  <div className="assign-menu-wrap">
+                    <button className="ghost-btn" onClick={() => setAssignMenuFor(assignMenuFor === c.id ? null : c.id)}>
+                      배치 ▼
+                    </button>
+                    {assignMenuFor === c.id && (
+                      <div className="assign-menu">
+                        <button onClick={() => openAssignConfirm(c, "ADMIN_ASSIGNMENT")}>
+                          <b>일반 직접배치</b>
+                          <span>기존 미배치 건 또는 연결된 수강권을 사용해 배치합니다.</span>
+                        </button>
+                        <button onClick={() => openAssignConfirm(c, "ADMIN_FREE")}>
+                          <b>무료 추가 배치</b>
+                          <span>수강권 및 미배치 횟수를 사용하지 않고 무료로 추가 예약합니다.</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="daylist" style={{ minHeight: 0, paddingTop: 4 }}>
           {dayClasses.map((c) => (
@@ -667,7 +885,7 @@ export default function ClassManagePage() {
       )}
 
       {/* 하단 고정 등록 버튼 */}
-      <button className="fab-btn" onClick={openCreate}>+ 수업 등록</button>
+      {!assignMode && <button className="fab-btn" onClick={openCreate}>+ 수업 등록</button>}
 
       {/* 등록/수정 시트 */}
       {formOpen && (
@@ -1025,8 +1243,12 @@ export default function ClassManagePage() {
                     </div>
                     <div className="unplaced-sub">{u.purchasedAt} 구매</div>
                   </div>
-                  <button className="unplaced-retry" disabled={unplacedBusy}
-                    onClick={() => handleRetryAutoBook(u)}>다시 배치</button>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <button className="unplaced-retry" disabled={unplacedBusy}
+                      onClick={() => handleRetryAutoBook(u)}>다시 배치</button>
+                    <button className="unplaced-retry" style={{ background: "var(--surface-2, #eee)", color: "var(--text)" }}
+                      onClick={() => startAssignFromUnplaced(u)}>직접배치</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1182,6 +1404,13 @@ export default function ClassManagePage() {
                           : a.status === "attended" ? "출석" : a.status === "no_show" ? "노쇼" : "취소"}
                       </span>
                     </div>
+                    {a.reservationType !== "MEMBER" && (
+                      <div className="roster-badges">
+                        {adminBadges({ type: a.reservationType, isCapacityOverride: a.isCapacityOverride, status: a.status }).map((b) => (
+                          <span key={b} className="hist-status s-waitlisted">{b}</span>
+                        ))}
+                      </div>
+                    )}
                     <div className="roster-actions">
                       {a.status === "cancelled" ? (
                         <span className="att-locked">취소된 예약 · 변경 불가</span>
@@ -1193,8 +1422,13 @@ export default function ClassManagePage() {
                             onClick={() => handleAttendance(a, "confirmed")}>결석</button>
                           <button className={`att-btn ${a.status === "no_show" ? "on" : ""}`} disabled={attBusy}
                             onClick={() => handleAttendance(a, "no_show")}>노쇼</button>
-                          <button className="att-btn cancel" disabled={attBusy}
-                            onClick={() => handleAttendance(a, "cancelled")}>예약취소</button>
+                          {a.reservationType === "MEMBER" ? (
+                            <button className="att-btn cancel" disabled={attBusy}
+                              onClick={() => handleAttendance(a, "cancelled")}>예약취소</button>
+                          ) : (
+                            <button className="att-btn cancel" disabled={attBusy}
+                              onClick={() => { setAdminCancelTarget(a); setAdminCancelReason(""); }}>관리자 배치 취소</button>
+                          )}
                         </>
                       )}
                       <a className="att-btn prog" href={`/manager/progress/record?profile=${a.profileId}`}>진도</a>
@@ -1250,6 +1484,144 @@ export default function ClassManagePage() {
           </div>
         </div>
       )}
+      {/* 직접배치 - 대상 회원 선택 */}
+      {assignMemberSheet && (
+        <div className="sheet-overlay on-top" onClick={() => setAssignMemberSheet(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-title">직접배치 대상 회원 선택</div>
+            <input className="input-field" placeholder="회원 이름 검색"
+              value={assignKw} onChange={(e) => setAssignKw(e.target.value)} />
+            <div className="book-member-list">
+              {assignMembersList
+                .filter((m) => !assignKw.trim() || m.name.includes(assignKw.trim()))
+                .slice(0, 50)
+                .map((m) => (
+                  <button key={m.profileId} className="book-member-row" onClick={() => pickAssignMember(m)}>
+                    <span className="book-member-name">{m.name}</span>
+                    <span className="book-member-pass">
+                      {m.memberships.length > 0
+                        ? `${m.memberships[0].name}${m.memberships[0].remaining != null ? ` ${m.memberships[0].remaining}회` : ""}`
+                        : "수강권 없음"}
+                    </span>
+                  </button>
+                ))}
+              {assignMembersList.length === 0 && (
+                <div className="daylist-empty" style={{ padding: 16 }}>회원이 없어요</div>
+              )}
+            </div>
+            <div className="add-profile-actions" style={{ marginTop: 14 }}>
+              <button className="ghost-btn" onClick={() => setAssignMemberSheet(false)}>취소</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 직접배치 - 확인 팝업 (일반 직접배치 / 무료 추가 배치 / 정원 초과) */}
+      {assignConfirm && assignMember && (
+        <div className="sheet-overlay on-top" onClick={() => !assignBusy && setAssignConfirm(null)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            {assignConfirm.capacityBlocked ? (
+              <>
+                <div className="sheet-title">정원이 모두 찼습니다.</div>
+                <div className="perm-guide" style={{ margin: "0 0 12px" }}>그래도 이 회원을 추가로 배치하시겠어요?</div>
+              </>
+            ) : (
+              <>
+                <div className="sheet-title">
+                  {assignConfirm.type === "ADMIN_ASSIGNMENT" ? "회원을 이 수업에 배치하시겠습니까?" : "무료 추가 예약을 등록하시겠습니까?"}
+                </div>
+                <div className="perm-guide" style={{ margin: "0 0 12px" }}>
+                  {assignConfirm.type === "ADMIN_ASSIGNMENT"
+                    ? "관리자가 직접 배치한 예약은 수강권 종류 및 회원 예약 가능 시간 제한과 관계없이 등록됩니다."
+                    : "이 예약은 이용권이나 미배치 횟수를 차감하지 않으며, 회원은 무료로 수업에 참여할 수 있습니다."}
+                </div>
+              </>
+            )}
+
+            <div className="hist-summary" style={{ padding: "0 0 8px" }}>
+              {assignMember.name} 회원 · {assignConfirm.classItem.date} {assignConfirm.classItem.start} · {assignConfirm.classItem.title}
+            </div>
+
+            {assignConfirm.type === "ADMIN_ASSIGNMENT" && (
+              <>
+                <div className="menu-section-label" style={{ padding: "8px 0 6px" }}>사용할 미배치건/수강권</div>
+                {assignMember.memberships.length === 0 ? (
+                  <div className="perm-guide" style={{ margin: 0 }}>
+                    이 회원은 보유한 수강권이 없어요. 무료 추가 배치를 이용해주세요.
+                  </div>
+                ) : (
+                  <div className="mem-filters" style={{ padding: 0 }}>
+                    {assignMember.memberships.map((mm) => (
+                      <button key={mm.id} className={`filter-chip ${assignConfirm.membershipId === mm.id ? "on" : ""}`}
+                        onClick={() => setAssignConfirm({ ...assignConfirm, membershipId: mm.id })}>
+                        {mm.name}{mm.remaining != null ? ` ${mm.remaining}회` : ""}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="perm-guide" style={{ margin: "6px 0 0" }}>취소 시 이 수강권/미배치 상태가 그대로 복구돼요.</div>
+              </>
+            )}
+            {assignConfirm.type === "ADMIN_FREE" && (
+              <div className="perm-guide" style={{ margin: "0 0 8px" }}>수강권과 미배치 횟수는 차감되지 않아요.</div>
+            )}
+
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>
+              배치 사유 {(assignConfirm.type === "ADMIN_FREE" || assignConfirm.capacityBlocked) && (
+                <span style={{ color: "#c0392b", fontWeight: 700 }}>(필수)</span>
+              )}
+            </div>
+            <div className="mem-filters" style={{ padding: 0 }}>
+              {ADMIN_REASON_CODES.map((code) => (
+                <button key={code} className={`filter-chip ${assignConfirm.reasonCode === code ? "on" : ""}`}
+                  onClick={() => setAssignConfirm({ ...assignConfirm, reasonCode: code })}>
+                  {ADMIN_REASON_LABELS[code]}
+                </button>
+              ))}
+            </div>
+            {assignConfirm.reasonCode === "OTHER" && (
+              <>
+                <textarea className="input-field" style={{ marginTop: 8, minHeight: 60, width: "100%" }}
+                  placeholder="상세 사유 (필수, 최대 200자)" maxLength={200}
+                  value={assignConfirm.reasonDetail}
+                  onChange={(e) => setAssignConfirm({ ...assignConfirm, reasonDetail: e.target.value })} />
+                <div className="perm-guide" style={{ margin: "2px 0 0", textAlign: "right" }}>
+                  {assignConfirm.reasonDetail.length}/200
+                </div>
+              </>
+            )}
+
+            <div className="add-profile-actions" style={{ marginTop: 14 }}>
+              <button className="ghost-btn" disabled={assignBusy} onClick={() => setAssignConfirm(null)}>취소</button>
+              <button className="primary-btn" disabled={assignBusy} onClick={() => handleAssignSubmit(assignConfirm.capacityBlocked)}>
+                {assignBusy ? "배치 중..." : assignConfirm.capacityBlocked ? "그래도 배치" : "확인"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 관리자 배치 취소 확인 */}
+      {adminCancelTarget && (
+        <div className="sheet-overlay on-top" onClick={() => !adminCancelBusy && setAdminCancelTarget(null)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-title">이 회원의 관리자 배치 예약을 취소하시겠습니까?</div>
+            <div className="perm-guide" style={{ margin: "0 0 12px" }}>
+              관리자 배치 취소 내역은 별도로 기록되며 회원에게 취소 알림이 전송됩니다.
+            </div>
+            <div className="hist-summary" style={{ padding: "0 0 8px" }}>{adminCancelTarget.name} 회원</div>
+            <input className="input-field" placeholder="취소 사유 (선택)"
+              value={adminCancelReason} onChange={(e) => setAdminCancelReason(e.target.value)} />
+            <div className="add-profile-actions" style={{ marginTop: 14 }}>
+              <button className="ghost-btn" disabled={adminCancelBusy} onClick={() => setAdminCancelTarget(null)}>취소</button>
+              <button className="primary-btn danger-btn" disabled={adminCancelBusy} onClick={handleAdminCancel}>
+                {adminCancelBusy ? "처리 중..." : "관리자 배치 취소"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ManagerNav />
     </div>
   );
