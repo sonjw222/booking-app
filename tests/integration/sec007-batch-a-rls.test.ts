@@ -133,82 +133,79 @@ beforeAll(async () => {
 
   // 아래 fixture 행들은 전부 RLS를 우회하는 admin(service-role) client로 생성한다 —
   // 대상 테이블이 정책 0건(=현재 오너 포함 아무도 접근 불가)이라 일반 로그인 client로는
-  // 지금 당장 만들 수 없다(위 파일 헤더의 2026-08-02 정정 참고).
+  // 지금 당장 만들 수 없다(위 파일 헤더의 2026-08-02 정정 참고). 5개 테이블 각각을
+  // 독립적으로 시도해 에러를 모으고, 하나라도 실패하면 전체를 한 번에 보고한다 —
+  // service_role의 GRANT 자체가 테이블마다 다를 수 있어(2026-08-02 발견, staff_salaries에서
+  // 실제로 GRANT 누락 확인) 첫 실패에서 즉시 멈추면 나머지 테이블 상태를 알 수 없다.
   const admin = getFixtureAdminClient();
+  const fixtureErrors: string[] = [];
+
+  async function insertFixture<T extends Record<string, unknown>>(
+    table: string,
+    row: T,
+    assign: (id: string) => void
+  ): Promise<void> {
+    const { data, error } = await admin.from(table).insert(row).select("id").single();
+    if (error) {
+      fixtureErrors.push(`${table} fixture 생성 실패: ${describeAdminQueryError(table, error)}`);
+      return;
+    }
+    assign((data as { id: string }).id);
+  }
 
   // staff_salaries — own/other 분리 검증용으로 managerA/managerB 두 행 모두 생성
-  {
-    const { data, error } = await admin
-      .from("staff_salaries")
-      .insert({ center_id: centerAId, account_id: managerA.accountId, employment_type: "fulltime", base_salary: 3000000 })
-      .select("id").single();
-    if (error) throw new Error("staff_salaries(own) fixture 생성 실패: " + describeAdminQueryError("staff_salaries", error));
-    staffSalaryOwnId = (data as { id: string }).id;
-  }
-  {
-    const { data, error } = await admin
-      .from("staff_salaries")
-      .insert({ center_id: centerAId, account_id: managerB.accountId, employment_type: "parttime", per_class_pay: 30000 })
-      .select("id").single();
-    if (error) throw new Error("staff_salaries(other) fixture 생성 실패: " + describeAdminQueryError("staff_salaries", error));
-    staffSalaryOtherId = (data as { id: string }).id;
-  }
+  await insertFixture(
+    "staff_salaries",
+    { center_id: centerAId, account_id: managerA.accountId, employment_type: "fulltime", base_salary: 3000000 },
+    (id) => { staffSalaryOwnId = id; }
+  );
+  await insertFixture(
+    "staff_salaries",
+    { center_id: centerAId, account_id: managerB.accountId, employment_type: "parttime", per_class_pay: 30000 },
+    (id) => { staffSalaryOtherId = id; }
+  );
 
   // contracts — managerA 본인 profile 것 1건 + 어느 센터에도 안 속한 userA(일반 회원) profile 것 1건
   // (userA 것은 "본인 것" OR-branch를 오너 특권과 분리해서 검증하기 위한 fixture)
-  {
-    const { data, error } = await admin
-      .from("contracts")
-      .insert({ center_id: centerAId, profile_id: managerA.profileId, content: "SEC-007 배치A 테스트 계약서(오너 본인)", status: "pending" })
-      .select("id").single();
-    if (error) throw new Error("contracts(owner) fixture 생성 실패: " + describeAdminQueryError("contracts", error));
-    contractOwnerRowId = (data as { id: string }).id;
-  }
-  {
-    const { data, error } = await admin
-      .from("contracts")
-      .insert({ center_id: centerAId, profile_id: userA.profileId, content: "SEC-007 배치A 테스트 계약서(일반 회원 본인)", status: "pending" })
-      .select("id").single();
-    if (error) throw new Error("contracts(member) fixture 생성 실패: " + describeAdminQueryError("contracts", error));
-    contractMemberRowId = (data as { id: string }).id;
-  }
+  await insertFixture(
+    "contracts",
+    { center_id: centerAId, profile_id: managerA.profileId, content: "SEC-007 배치A 테스트 계약서(오너 본인)", status: "pending" },
+    (id) => { contractOwnerRowId = id; }
+  );
+  await insertFixture(
+    "contracts",
+    { center_id: centerAId, profile_id: userA.profileId, content: "SEC-007 배치A 테스트 계약서(일반 회원 본인)", status: "pending" },
+    (id) => { contractMemberRowId = id; }
+  );
 
   // leads
-  {
-    const { data, error } = await admin
-      .from("leads")
-      .insert({ center_id: centerAId, name: "SEC-007 배치A 테스트 상담고객", phone: "010-0000-0000", channel: "test" })
-      .select("id").single();
-    if (error) throw new Error("leads fixture 생성 실패: " + describeAdminQueryError("leads", error));
-    leadId = (data as { id: string }).id;
-  }
+  await insertFixture(
+    "leads",
+    { center_id: centerAId, name: "SEC-007 배치A 테스트 상담고객", phone: "010-0000-0000", channel: "test" },
+    (id) => { leadId = id; }
+  );
 
   // messages — sms/push 채널별 분리 검증용으로 두 행
-  {
-    const { data, error } = await admin
-      .from("messages")
-      .insert({ center_id: centerAId, channel: "sms", content: "SEC-007 배치A 테스트 SMS", status: "sent" })
-      .select("id").single();
-    if (error) throw new Error("messages(sms) fixture 생성 실패: " + describeAdminQueryError("messages", error));
-    messageSmsId = (data as { id: string }).id;
-  }
-  {
-    const { data, error } = await admin
-      .from("messages")
-      .insert({ center_id: centerAId, channel: "push", title: "SEC-007 배치A", content: "SEC-007 배치A 테스트 푸시", status: "sent" })
-      .select("id").single();
-    if (error) throw new Error("messages(push) fixture 생성 실패: " + describeAdminQueryError("messages", error));
-    messagePushId = (data as { id: string }).id;
-  }
+  await insertFixture(
+    "messages",
+    { center_id: centerAId, channel: "sms", content: "SEC-007 배치A 테스트 SMS", status: "sent" },
+    (id) => { messageSmsId = id; }
+  );
+  await insertFixture(
+    "messages",
+    { center_id: centerAId, channel: "push", title: "SEC-007 배치A", content: "SEC-007 배치A 테스트 푸시", status: "sent" },
+    (id) => { messagePushId = id; }
+  );
 
   // notification_logs
-  {
-    const { data, error } = await admin
-      .from("notification_logs")
-      .insert({ center_id: centerAId, profile_id: managerA.profileId, channel: "sms", cost: 15, status: "sent" })
-      .select("id").single();
-    if (error) throw new Error("notification_logs fixture 생성 실패: " + describeAdminQueryError("notification_logs", error));
-    notificationLogId = (data as { id: string }).id;
+  await insertFixture(
+    "notification_logs",
+    { center_id: centerAId, profile_id: managerA.profileId, channel: "sms", cost: 15, status: "sent" },
+    (id) => { notificationLogId = id; }
+  );
+
+  if (fixtureErrors.length > 0) {
+    throw new Error(`SEC-007 Batch A fixture 생성 실패(${fixtureErrors.length}건):\n${fixtureErrors.join("\n")}`);
   }
 }, 30000);
 
