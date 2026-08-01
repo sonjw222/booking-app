@@ -1,10 +1,24 @@
 name: Test
 
 on:
+  # push는 main만 대상으로 한다(merge 이후 최종 확인용). 어떤 브랜치든 열려 있는 PR이 있으면
+  # pull_request 이벤트가 이미 그 브랜치를 검증하므로, push.branches를 "**"로 두면 같은 커밋에
+  # 대해 push + pull_request 두 워크플로가 동시에 실행된다 — 둘 다 같은 실제 개발용 Supabase에
+  # 같은 TEST_USER_A 등 공유 테스트 계정/데이터로 접근하므로, 두 실행이 겹치면 한쪽이 만든
+  # membership을 다른 쪽의 "생성 전/후 개수" assertion이 우연히 관측해 실패하는 식의 진짜
+  # 데이터 경합이 생길 수 있다(TEST-001 조사에서 실제로 재현됨). PR 없이 로컬에서 곧장 main에
+  # push하는 경우는 드물고, 그 경우엔 push 실행만 돈다.
   push:
-    branches: ["**"]
+    branches: ["main"]
   pull_request:
   workflow_dispatch:
+
+# 같은 PR/브랜치에 대해 이전 실행이 아직 돌고 있으면 취소하고 최신 커밋 것만 남긴다.
+# (예: 짧은 시간에 여러 번 push) — 통합 테스트가 공유 테스트 계정으로 실제 개발용 Supabase에
+# 접근하므로, 겹쳐 실행되면 서로의 데이터 변경을 관측해 flaky해질 수 있다.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   unit:
