@@ -34,6 +34,20 @@ SEC-009(Batch A 적용 준비) 작업 중 실제 개발(dev) Supabase에 대해 
 되돌리도록 작성돼 있었는데, 그렇게 하면 원래보다 더 위험한 상태(전체 공개)가 되므로 정책만
 제거하도록 수정했다(두 파일 모두 헤더에 정정 내용 기록).
 
+## ⚠️ 2026-08-02 정정 2 — service_role에 5개 테이블 SQL GRANT 자체가 없음
+
+위 발견과는 별개로, `staff_salaries`/`contracts`/`leads`/`messages`/`notification_logs` 5개
+테이블 전부 `service_role`에 SQL GRANT가 없다는 것도 확인했다(`permission denied for table X`
+— `account_center_permissions`에서 이미 겪은 것과 같은 종류의 문제, RLS와는 무관한 별개
+설정). `staff_salaries`/`leads`/`messages`는 오너에게 INSERT+DELETE 정책이 모두 있어 일반
+로그인 client(오너)로 fixture를 만들고 지울 수 있어 문제되지 않지만, `contracts`(DELETE
+정책이 의도적으로 없음 — 서명 후 불변 원칙)와 `notification_logs`(INSERT 정책이 의도적으로
+없음 — 서버 트리거 전용)는 일반 client·admin client 어느 쪽으로도 지금은 fixture를 만들거나
+지울 방법이 없다. 이 두 테이블은 `GRANT ALL ON TABLE ... TO service_role`이 별도 승인·실행된
+뒤에나 자동화된 통합 테스트를 안전하게 추가할 수 있어, `tests/integration/sec007-batch-a-rls.test.ts`는
+`staff_salaries`/`leads`/`messages` 3개만 다루고 `contracts`/`notification_logs`는 의도적으로
+제외했다 — 상세는 `docs/TODO.md` P2-13 참고.
+
 ## 단계 적용 계획 (2026-08-01 갱신 — ACL-003 재검증 이후)
 
 ACL-003 서버 측 재검증에서 "센터 소속이면 누구나(무권한 스태프 포함) 접근 가능"이라는 과다
@@ -453,15 +467,21 @@ Secrets가 필요하지 않습니다.**
 3. 권한 없는 역할의 INSERT/UPDATE/DELETE 시도 → 실패
 4. 권한 있는 역할의 INSERT/UPDATE/DELETE 시도 → 성공 + 타 센터 대상으로는 실패
 
-**Batch A — 작성 완료(2026-08-02)**: `tests/integration/sec007-batch-a-rls.test.ts`에 위 4종을
-5개 테이블 전부에 대해 작성함(`staff_salaries`는 own/other 권한 완전 분리라 own.view/other.view
-조합 2건을 추가로 포함, `messages`는 channel별 분리라 sms/push 조합 포함). Fixture는 위
-"Fixture 요구사항"에서 설계한 대로 TEST_MANAGER_A(centerA 오너)/TEST_MANAGER_B(centerA에
-권한 0개 스태프로 초대)/TEST_USER_A(무관 일반 회원, `contracts`의 "본인 것" 분기 검증용)만
-재사용 — 새 Secret 없음. **이 파일은 `proposed_rls_gap_batch_a.sql`이 실제로 적용되기 전에는
-의도적으로 RED입니다**(현재 이 5개 테이블은 RLS가 꺼져 있어 무권한 조회가 전부 성공해버림 —
-`tests/integration/acl-003-permission-read.test.ts`가 SQL 적용 전 red였던 것과 동일한 패턴).
-Batch B/C/D는 아직 테스트를 작성하지 않음(다음 배치에서 순서대로 진행).
+**Batch A — 작성 완료(2026-08-02, 범위 일부 조정)**: `tests/integration/sec007-batch-a-rls.test.ts`에
+위 4종을 `staff_salaries`/`leads`/`messages` 3개 테이블에 작성함(`staff_salaries`는 own/other
+권한 완전 분리라 own.view/other.view 조합 2건 추가, `messages`는 channel별 분리라 sms/push
+조합 포함). `contracts`/`notification_logs`는 fixture를 안전하게 만들고 지울 방법이 현재 없어
+(위 "정정 2" 참고 — service_role GRANT 누락 + 두 테이블 모두 의도적으로 일부 CRUD 정책이 없음)
+이 파일에서 의도적으로 제외함(`docs/TODO.md` P2-13). Fixture 계정은 TEST_MANAGER_A(centerA
+오너)/TEST_MANAGER_B(centerA에 권한 0개 스태프로 초대)/TEST_USER_A(무관 일반 회원)만 재사용 —
+새 Secret 없음. **이 파일은 `proposed_rls_gap_batch_a.sql`이 실제로 적용되기 전에는 의도적으로
+RED입니다**(현재 이 3개 테이블은 정책이 0건이라 오너를 포함해 아무도 접근 못 함 — 그래서
+fixture 생성 자체가 막힘) — `tests/integration/acl-003-permission-read.test.ts`가 SQL 적용
+전 red였던 것과 같은 취지지만, ACL-003과 달리 지금은 red 상태에서 assertion까지 도달하지 못하고
+beforeAll(fixture 준비) 단계에서 막힌다(정책이 아예 0건이라 오너도 예외 없이 차단되기 때문 —
+account_center_permissions는 이미 일부 정책이 있어 오너 fixture 준비 자체는 됐던 것과 다른 점).
+Batch B/C/D는 아직 테스트를 작성하지 않음(다음 배치에서 순서대로 진행, 적용 전 이번과 동일한
+방법으로 실제 RLS/GRANT 상태 재확인 필요).
 
 ## DB-001 (`chat_messages`) 결론
 

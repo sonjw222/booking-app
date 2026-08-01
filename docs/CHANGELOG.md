@@ -29,13 +29,22 @@
   admin(service-role) client 패턴으로 전환했다. **Batch B/C/D의 12개 테이블과 production
   Supabase의 실제 상태는 아직 확인하지 못함** — 각각 다음 배치 적용 전, 그리고 실행 승인
   전에 반드시 별도 확인 필요. 상세: `docs/21_RLS_Gap_Analysis.md` 상단 정정 섹션.
-- `tests/integration/sec007-batch-a-rls.test.ts` 신규 작성 — 5개 테이블 전부 "무권한 SELECT
-  차단/권한 보유자 SELECT 허용/무권한 쓰기 차단" 최소 3~4종(`staff_salaries`는 own/other
-  권한 완전 분리라 조합 추가, `messages`는 channel별 분리라 sms/push 조합 추가). Fixture 계정은
-  TEST_MANAGER_A(centerA 오너)/TEST_MANAGER_B(centerA에 권한 0개 스태프로 초대)/
-  TEST_USER_A(무관 일반 회원 — `contracts`의 "본인 것" 조회 분기 검증용)만 재사용, 새
-  Secret 없음. **이 테스트는 SQL이 실제 적용되기 전에는 의도적으로 RED**입니다 —
-  `tests/integration/acl-003-permission-read.test.ts`가 SQL 적용 전 red였던 것과 동일한 패턴.
+- **두 번째 정정**: 위 발견과 별개로, service_role 자체에도 5개 테이블 전부 SQL GRANT가
+  없다는 것도 확인했다(RLS와 무관한 별개 문제, `account_center_permissions`에서 이미 겪은
+  것과 같은 패턴). `staff_salaries`/`leads`/`messages`는 오너에게 INSERT+DELETE 정책이 모두
+  있어 일반 client(오너)로 fixture 관리가 가능하지만, `contracts`(DELETE 정책이 의도적으로
+  없음 — 서명 후 불변)와 `notification_logs`(INSERT 정책이 의도적으로 없음 — 서버 트리거
+  전용)는 일반 client·admin client 어느 쪽으로도 지금은 fixture를 만들거나 지울 방법이 없어,
+  이 두 테이블은 `docs/TODO.md` P2-13(service_role GRANT 승인·실행 후 진행)으로 미루고
+  이번 테스트 파일에서는 의도적으로 제외했다.
+- `tests/integration/sec007-batch-a-rls.test.ts` 신규 작성 — `staff_salaries`/`leads`/
+  `messages` 3개 테이블에 "무권한 SELECT 차단/권한 보유자 SELECT 허용/무권한 쓰기 차단"
+  최소 3~4종(`staff_salaries`는 own/other 권한 완전 분리라 조합 추가, `messages`는 channel별
+  분리라 sms/push 조합 추가). Fixture 계정은 TEST_MANAGER_A(centerA 오너)/TEST_MANAGER_B
+  (centerA에 권한 0개 스태프로 초대)/TEST_USER_A(무관 일반 회원)만 재사용, 새 Secret 없음.
+  **이 테스트는 SQL이 실제 적용되기 전에는 의도적으로 RED**입니다(정책 0건이라 fixture 준비
+  단계에서부터 막힘 — `tests/integration/acl-003-permission-read.test.ts`가 SQL 적용 전
+  red였던 것과 같은 취지지만, 그쪽은 일부 정책이 이미 있어 fixture 준비까지는 됐다는 차이가 있음).
 - SQL은 이번에도 **전혀 실행하지 않았습니다.** 실행은 사용자 승인 후 별도 단계에서 진행.
 - Issue: [SEC-009](https://github.com/sonjw222/booking-app/issues/28)(신규, SEC-007/008과
   Related). Batch B/C/D는 아직 손대지 않음(다음 배치에서 순서대로 진행).
