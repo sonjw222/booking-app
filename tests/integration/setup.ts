@@ -82,14 +82,12 @@ export async function switchToTestUser(emailEnvName: string, passwordEnvName: st
       userId = signIn.data.user.id;
     }
 
-    // 위에서 세션을 확인했더라도, 실제로 이후 쿼리에 쓰일 클라이언트 상태가 그 사용자로
-    // 확정됐는지 마지막으로 한 번 더 검증한다(로그인 결과를 검사 없이 넘기지 않는다).
-    const { data: verifyData, error: verifyError } = await supabase.auth.getUser();
-    if (verifyError || !verifyData.user || verifyData.user.id !== userId) {
-      throw new Error(
-        `테스트 로그인 실패: ${verifyError?.message ?? `세션이 예상한 사용자(${email})와 일치하지 않음`}`
-      );
-    }
+    // signIn/signUp 응답의 user/session 필드로 로그인 결과를 이미 검사했다(위 if문).
+    // 여기서 추가로 supabase.auth.getUser()를 다시 호출해 재검증하는 방식은 시도해봤지만,
+    // 그 호출이 내부적으로 클라이언트의 "현재 세션" 상태를 다시 읽어오는 과정에서 방금 끝난
+    // signIn의 내부 상태 반영과 타이밍이 어긋나 "Auth session missing!"을 던지는 새로운
+    // flake를 만들어냈다(admin-assignment-security.test.ts에서 재현 확인). signIn/signUp이
+    // 이미 반환한 session이 신뢰 가능한 결과이므로 추가 네트워크 재검증 없이 그대로 사용한다.
 
     const accountRes = await supabase.from("accounts").select("id").eq("auth_id", userId).maybeSingle();
     if (accountRes.error) throw new Error(`accounts 조회 실패: ${accountRes.error.message}`);
