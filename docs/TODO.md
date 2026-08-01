@@ -403,6 +403,26 @@ mock 없이 실제 구현체를 그대로 import하기 때문에 "Supabase 접�
 바꾸면 같은 문제가 재발할 수 있습니다. 이번 작업에서는 Node 22 우회만 적용하고, 구조 분리는
 하지 않았습니다.
 
+### P2-11. SEC-007/008 RLS 정책 초안의 세부 결정 필요 항목
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인 필요 (정책 초안은 존재, 실행 전 결정 필요)** |
+| 근거 파일 | `add_rls_gap_tables_draft_proposed.sql`, [21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md) |
+| 완료 조건 | 아래 세부 항목을 결정한 뒤 `add_rls_gap_tables_draft_proposed.sql`을 반영해 실행함 |
+| 관련 문서 | [21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md) |
+
+2026-08-01 SEC-007/008 조사 중 발견한, RLS 정책 자체보다 한 단계 더 결정이 필요한 항목들:
+
+- `staff_salaries`에 급여 전용 `delete` permission key가 카탈로그에 없어 초안에서는 `.other.update`로
+  대체함 — `facility.salary.setting`을 delete에 쓸지, 새 key를 추가할지 결정 필요.
+- `contracts`/`membership_transfers`는 서명·잔여횟수 갱신처럼 원자적 처리가 필요해 직접 클라이언트
+  INSERT/UPDATE보다 RPC(security definer) 경유가 안전함 — 초안은 임시로 권한 기반 INSERT만 열어뒀고
+  UPDATE/DELETE는 막아뒀음. 실제 기능 구현 시 RPC로 전환할지 결정 필요.
+- `community_comments`뿐 아니라 부모 `community_posts`도 조회 정책(`for select`) 1개만 있고
+  쓰기(INSERT) 정책이 아예 없음 — 커뮤니티 기능을 실제로 켤 때 함께 보강해야 함.
+
 ## 6. P3 — 제품 결정이 필요한 향후 기능 후보
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
@@ -445,7 +465,12 @@ mock 없이 실제 구현체를 그대로 import하기 때문에 "Supabase 접�
 | 현재 상태 | **확인 필요** |
 | 근거 파일 | `schema.sql`; `community_posts`, `community_comments`, `competitions`, `popup_notices` |
 | 완료 조건 | 각 기능의 로드맵 포함 여부, 사용자 유형, moderation·공개 범위를 결정함. 포함 시 실제 route·lib·RLS를 구현하고 제외 시 보존·정리 결정을 기록함 |
-| 관련 문서 | [REQUIREMENTS 6-3, 12절](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md) |
+| 관련 문서 | [REQUIREMENTS 6-3, 12절](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md) |
+
+2026-08-01 SEC-007/008 조사: 네 테이블 모두 app/lib 코드 참조 0건(미구현 확정), RLS도 없거나
+정책 0건(`community_posts`만 SELECT 정책 1개 존재, 자식 `community_comments`는 그마저 없음). RLS
+정책 초안은 `add_rls_gap_tables_draft_proposed.sql`에 작성해둠(미실행). 로드맵 포함 여부 결정은
+여전히 이 항목의 범위임 — 정책 초안은 "포함하기로 결정될 경우" 바로 쓸 수 있도록 준비한 것.
 
 ### P3-5. 스태프 급여·근무일정과 전자계약
 
@@ -455,7 +480,12 @@ mock 없이 실제 구현체를 그대로 import하기 때문에 "Supabase 접�
 | 현재 상태 | **확인 필요** |
 | 근거 파일 | `schema.sql`; `staff_salaries`, `staff_schedules`, `schedule_memos`, `contract_templates`, `terms`, `contracts`, 관련 `permissions` |
 | 완료 조건 | 급여·일정·계약의 법적·제품 범위와 접근 권한을 결정함. 포함 시 감사 이력·서명·개인정보 보호를 포함한 전체 흐름을 구현하고, 제외 시 스키마 처리 방침을 승인받음 |
-| 관련 문서 | [REQUIREMENTS 6-3, 12절](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md) |
+| 관련 문서 | [REQUIREMENTS 6-3, 12절](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md) |
+
+2026-08-01 SEC-007/008 조사: 여섯 테이블 모두 미구현(코드 참조 0건), RLS 없음. 그중
+`staff_salaries`(급여)와 `contracts`(서명 이미지 포함 계약서)는 이번 배치 우선순위 분류에서
+**Critical**로 표시함 — 로드맵에 포함하기로 결정되는 즉시(코드가 이 테이블을 건드리기 전에)
+RLS부터 적용해야 함. 정책 초안은 `add_rls_gap_tables_draft_proposed.sql`에 준비해둠(미실행).
 
 ### P3-6. 알림 규칙·발송 로그, 상담 채널, 스케줄 템플릿
 
@@ -465,7 +495,13 @@ mock 없이 실제 구현체를 그대로 import하기 때문에 "Supabase 접�
 | 현재 상태 | **확인 필요** |
 | 근거 파일 | `schema.sql`, `reservation_functions.sql`; `notification_rules`, `notification_logs`, `messages`, `center_contacts`, `schedule_templates` |
 | 완료 조건 | 현재 알림·센터 정보·`CopyCalendar`와 각 객체의 역할을 비교해 중복 여부를 결정함. 사용할 경우 화면·처리 흐름을 연결하고, 사용하지 않을 경우 운영 데이터 확인 후 정리 계획을 승인받음 |
-| 관련 문서 | [DATABASE 5절](./DATABASE.md), [REQUIREMENTS 12절](./REQUIREMENTS.md) |
+| 관련 문서 | [DATABASE 5절](./DATABASE.md), [REQUIREMENTS 12절](./REQUIREMENTS.md), [21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md) |
+
+2026-08-01 SEC-007/008 조사: `messages`(대량 SMS/푸시 발송, `target_profile_ids[]` 배열 포함)와
+`notification_logs`(발송 정산 기록)는 코드 참조 0건에 RLS 없음을 확인. `messages`는 회원과의
+1:1 채팅(`inquiry_messages`)이나 자동알림(`notification_rules`)과는 목적이 다른 "대량 발송"
+전용 테이블이라 중복이 아니라 미구현 기능임(`message.sms.*`/`message.push.*` 권한이 카탈로그에
+이미 있음). 정책 초안은 `add_rls_gap_tables_draft_proposed.sql`에 준비해둠(미실행).
 
 ## 7. P3 — 용도·존속 여부가 불명확한 객체
 
@@ -487,7 +523,12 @@ mock 없이 실제 구현체를 그대로 import하기 때문에 "Supabase 접�
 | 현재 상태 | **확인 필요** |
 | 근거 파일 | `schema.sql`; 앱 호출·핵심 trigger 미확인 |
 | 완료 조건 | 운영 감사 로그로 사용되는지 확인하고 기록 주체·보존 기간을 결정함. 미사용이면 운영 데이터 확인 후 정리 계획을 승인받음 |
-| 관련 문서 | [DATABASE 6절](./DATABASE.md) |
+| 관련 문서 | [DATABASE 6절](./DATABASE.md), [21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md) |
+
+2026-08-01 SEC-007/008 조사: app/lib 전체와 모든 SQL 함수/트리거/뷰에서 참조 0건 재확인. 기록하는
+주체(트리거 등)가 아직 아예 없어 완전히 빈 테이블로 추정됨. RLS도 없음 — 조회 전용 정책 초안을
+`add_rls_gap_tables_draft_proposed.sql`에 준비해둠(미실행). "미사용이면 정리"보다는, 원래 의도된
+변경이력 감사 기능을 실제로 만들지 여부가 먼저 결정돼야 함(만들기로 하면 트리거 작성 필요).
 
 ### P3-9. 구버전 가능성이 있는 `chat_messages`와 `reviews`
 
@@ -498,6 +539,13 @@ mock 없이 실제 구현체를 그대로 import하기 때문에 "Supabase 접�
 | 근거 파일 | `schema.sql`, `fix_center_reviews.sql`, `lib/inquiries.ts`, `lib/reviews.ts`; 현재 앱은 `inquiry_messages`, `center_reviews` 사용 |
 | 완료 조건 | 운영 row, RPC·trigger·외부 접근을 확인해 대체 완료 여부를 확정함. 데이터 migration·보관·삭제 계획을 사용자 승인 후 수행함 |
 | 관련 문서 | [DATABASE 6절, 10-3](./DATABASE.md), [REQUIREMENTS 6-3](./REQUIREMENTS.md) |
+
+2026-08-01 DB-001 조사 결론(`chat_messages`만 — `reviews` 쪽은 이번 조사 범위 아님): app/lib 전체와
+모든 SQL 함수/트리거/뷰에서 참조 0건. RLS는 활성화되어 있으나 정책이 0건이라 현재는 anon/authenticated
+누구도 접근할 수 없는 상태(안전하지만 기능도 불가). 1:1 채팅은 `inquiry_threads`/`inquiry_messages` +
+RPC(`open_inquiry_thread`/`send_inquiry_message`/`read_inquiry_thread`) + 실시간 구독으로 완전히
+대체되어 있음을 확인함. **결론: 정책 추가 후보가 아니라 삭제 후보.** 이번 배치는 실제 DROP을
+하지 않음 — 사용자 승인 후 별도 배치에서 `chat_messages` DROP 마이그레이션을 작성할 것.
 
 ## 8. 상태 갱신 체크리스트
 
