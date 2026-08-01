@@ -5,6 +5,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { sanitizeRichText } from "./security";
 
 export type Review = {
   id: string;
@@ -55,7 +56,14 @@ export async function fetchReviews(centerId: string): Promise<Review[]> {
     return {
       id: r.id, profileId: r.profile_id,
       writerName: masked,
-      rating: r.rating, content: r.content, photos: r.photos ?? null,
+      rating: r.rating,
+      // content는 UI-002 이전까지 dangerouslySetInnerHTML 대상이 아니었고(plain text
+      // 렌더) 저장 시 sanitize도 없었다. 렌더 방식을 HTML로 바꾸면서 과거에 저장된,
+      // 한 번도 정화된 적 없는 데이터를 안전하게 표시하기 위해 읽기 시점에도
+      // sanitizeRichText()를 적용한다(reply/공지/센터소개는 원래부터 HTML 렌더
+      // 대상이었어서 이 예외가 필요 없음 — content만의 특수 사정).
+      content: sanitizeRichText(r.content),
+      photos: r.photos ?? null,
       reply: r.reply ?? null,
       createdAt: KST_MD.format(new Date(r.created_at)),
     };
@@ -74,19 +82,23 @@ export async function myReviewFor(centerId: string): Promise<Review | null> {
     if (!data) return null;
     return {
       id: data.id, profileId: data.profile_id, writerName: "나",
-      rating: data.rating, content: data.content, photos: data.photos ?? null,
+      rating: data.rating,
+      content: sanitizeRichText(data.content), // 위 fetchReviews와 동일한 이유
+      photos: data.photos ?? null,
       reply: (data as any).reply ?? null,
       createdAt: KST_MD.format(new Date(data.created_at)),
     };
   } catch { return null; }
 }
 
-// 후기 작성 (포인트 자동 적립)
+// 후기 작성 (포인트 자동 적립). 수정도 이 함수를 다시 호출하는 방식이라
+// (센터 상세 화면에서 기존 리뷰 삭제 후 재작성) 신규/수정 경로가 하나로
+// 합쳐져 있고, sanitize도 이 한 곳에만 적용하면 된다.
 export async function writeReview(centerId: string, rating: number, content: string, photos?: string[]): Promise<number> {
   const profileId = await myProfileId();
   const { data, error } = await supabase.rpc("write_review", {
     p_center_id: centerId, p_profile_id: profileId,
-    p_rating: rating, p_content: content,
+    p_rating: rating, p_content: sanitizeRichText(content),
     p_photos: photos && photos.length > 0 ? photos : null,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
@@ -173,7 +185,9 @@ export async function fetchCenterReviewsForManager(centerId: string): Promise<Ma
   return (data ?? []).map((r: any) => ({
     id: r.id, profileId: r.profile_id,
     writerName: r.profiles?.nickname || r.profiles?.name || "회원",  // 관리자는 실명 확인
-    rating: r.rating, content: r.content, photos: r.photos ?? null,
+    rating: r.rating,
+    content: sanitizeRichText(r.content), // fetchReviews와 동일한 이유(위 주석 참고)
+    photos: r.photos ?? null,
     createdAt: KST_MD.format(new Date(r.created_at)),
     reply: r.reply ?? null,
     repliedAt: r.replied_at ? KST_MD.format(new Date(r.replied_at)) : null,
@@ -192,7 +206,10 @@ export async function fetchReviewStats(centerId: string): Promise<ReviewStats> {
 }
 
 export async function replyToReview(reviewId: string, reply: string): Promise<void> {
-  const { error } = await supabase.rpc("reply_review", { p_review_id: reviewId, p_reply: reply });
+  const { error } = await supabase.rpc("reply_review", {
+    p_review_id: reviewId,
+    p_reply: sanitizeRichText(reply),
+  });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
 }
 

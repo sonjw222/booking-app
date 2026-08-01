@@ -16,7 +16,7 @@ import {
 } from "../../../lib/announcements";
 import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
-import RichTextEditor from "../center-info/RichTextEditor";
+import RichTextEditor from "../../components/RichTextEditor";
 
 export default function ManagerAnnouncementsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);

@@ -13,7 +13,7 @@ import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchCenterDetail, updateCenterIntro, uploadCenterPhoto, centerPhotoUrl, type IntroBlock } from "../../../lib/center";
 import MapPicker from "./MapPicker";
 import MapPreview from "../../components/MapPreview";
-import RichTextEditor from "./RichTextEditor";
+import RichTextEditor from "../../components/RichTextEditor";
 import { fetchCategories, type ServiceCategory } from "../../../lib/operator";
 
 // 구버전 평문 블록을 HTML로 변환 (줄바꿈 유지 + 태그 이스케이프)
@@ -24,20 +24,6 @@ function escapeToHtml(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/\n/g, "<br>");
-}
-
-// 저장 전 위험한 태그/속성 제거 (서식 태그만 허용)
-function sanitizeHtml(html: string): string {
-  if (!html) return "";
-  return html
-    // script/style/iframe 등 통째로 제거
-    .replace(/<\s*(script|style|iframe|object|embed|link|meta)[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
-    .replace(/<\s*(script|style|iframe|object|embed|link|meta)[^>]*\/?>/gi, "")
-    // 이벤트 핸들러 속성 제거 (onclick 등)
-    .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
-    .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
-    // javascript: URL 제거
-    .replace(/javascript:/gi, "");
 }
 
 export default function CenterInfoPage() {
@@ -142,9 +128,7 @@ export default function CenterInfoPage() {
       await updateCenterIntro(centerId, {
         intro: intro.trim(), address: address.trim(), phone: phone.trim(),
         photoUrl, sns: sns.trim(), categories, latitude: lat, longitude: lng,
-        introBlocks: introBlocks.map((b) =>
-          b.type === "text" ? { ...b, html: sanitizeHtml(b.html ?? "") } : b
-        ),
+        introBlocks,
         payMethods,
         reviewPoint: parseInt(reviewPoint || "0", 10) || 0,
       });
