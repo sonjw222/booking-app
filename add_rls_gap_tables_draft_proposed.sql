@@ -1,6 +1,17 @@
 -- ============================================================
 -- ⚠️ 초안(DRAFT) / 제안(PROPOSED) — 실행 금지 ⚠️
 --
+-- [2026-08-01 갱신] 이 단일 파일은 더 이상 "실제 적용용"으로 쓰지 않습니다.
+-- 후속 배치에서는 아래 4개 독립 배치 파일(+짝 rollback 파일)을 대신 사용하세요.
+-- 각 배치는 단독으로 적용·검증·rollback 가능하며, ACL-003 재검증에서 발견한
+-- "센터 소속 = 전체 권한" 과다 권한 패턴을 일부 정책에서 수정해 반영했습니다
+-- (이 파일과 내용이 달라진 부분이 있다는 뜻 — 아래 배치 파일이 최신입니다).
+--   - proposed_rls_gap_batch_a.sql / rollback_rls_gap_batch_a.sql (민감정보 최우선)
+--   - proposed_rls_gap_batch_b.sql / rollback_rls_gap_batch_b.sql (직원 운영 데이터)
+--   - proposed_rls_gap_batch_c.sql / rollback_rls_gap_batch_c.sql (회원·시설 기능)
+--   - proposed_rls_gap_batch_d.sql / rollback_rls_gap_batch_d.sql (미구현·레거시 후보)
+-- 이 파일은 원래 조사·설계 시점의 기록으로 보존합니다.
+--
 -- 이 파일은 SEC-007/SEC-008 조사 결과로 작성된 "설계 산출물"입니다.
 -- Access Control + RLS Design Batch에서는 이 SQL을 운영 Supabase에
 -- 절대 실행하지 않습니다. 아래를 모두 만족한 뒤 별도 승인/배치에서만 실행하세요.

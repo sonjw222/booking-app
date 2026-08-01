@@ -1,8 +1,73 @@
 # RLS Gap Analysis (SEC-007 / SEC-008)
 
 > 이 문서는 **조사·설계 산출물**입니다. 여기 나오는 SQL은 전부 **초안(draft)**이며,
-> 별도 승인 없이는 운영 Supabase에 절대 실행하지 마세요. 실제 적용은 `add_rls_gap_tables_draft_proposed.sql`
-> 파일을 검토·승인받은 뒤 별도 Batch에서 진행합니다.
+> 별도 승인 없이는 운영 Supabase에 절대 실행하지 마세요. 실제 적용은
+> `proposed_rls_gap_batch_a.sql` ~ `proposed_rls_gap_batch_d.sql`(2026-08-01부터 이 4개
+> 파일이 실제 적용용 — 아래 "단계 적용 계획" 참고) 파일을 검토·승인받은 뒤 별도 Batch에서
+> 진행합니다. `add_rls_gap_tables_draft_proposed.sql`은 최초 조사 시점의 기록으로 보존됩니다.
+
+## 단계 적용 계획 (2026-08-01 갱신 — ACL-003 재검증 이후)
+
+ACL-003 서버 측 재검증에서 "센터 소속이면 누구나(무권한 스태프 포함) 접근 가능"이라는 과다
+권한 패턴이 실제 보안 결함으로 확인된 뒤, 이 문서의 17개 테이블 정책 초안 중
+`my_managed_center_ids()`만으로 **쓰기**를 허용하던 항목을 재검토해 더 구체적인
+`has_permission()` 권한 키로 좁혔습니다(아래 "정책 강화 내역" 참고). 단일 파일 대신
+4개 독립 배치로 나눠, 각 배치를 따로 적용·검증·rollback할 수 있게 했습니다.
+
+| Batch | 파일 | 대상 |
+|---|---|---|
+| A — 민감정보 최우선 | `proposed_rls_gap_batch_a.sql` | staff_salaries, contracts, leads, messages, notification_logs |
+| B — 직원 운영 데이터 | `proposed_rls_gap_batch_b.sql` | staff_schedules, schedule_memos, contract_templates, terms |
+| C — 회원·시설 기능 | `proposed_rls_gap_batch_c.sql` | lockers, locker_assignments, membership_transfers, class_types |
+| D — 미구현·레거시 후보 | `proposed_rls_gap_batch_d.sql` | popup_notices, competitions, community_comments, change_logs |
+
+각 배치는 짝 `rollback_rls_gap_batch_*.sql` 파일을 가지며, FK 의존성은 전부 같은 배치
+내부에서만 존재합니다(예: `locker_assignments`→`lockers`는 둘 다 Batch C). 배치 간 교차
+FK 의존은 없어 어떤 순서로 적용해도 안전합니다 — 다만 민감도상 A→B→C→D 순서를 권장합니다.
+
+### 정책 강화 내역 (원안 → 배치 파일에서 수정된 항목)
+
+| 테이블 | 원안(add_rls_gap_tables_draft_proposed.sql) | 배치 파일에서 강화됨 | 사유 |
+|---|---|---|---|
+| `class_types` (쓰기) | `center_id in (my_managed_center_ids())` | `has_permission(center_id,'facility.operation')` | ACL-003과 동일한 과다 권한 패턴 |
+| `lockers` (쓰기) | `center_id in (my_managed_center_ids())` | `has_permission(center_id,'facility.operation')` | 〃 |
+| `locker_assignments` (쓰기) | `center_id in (my_managed_center_ids())`(lockers 경유) | `has_permission(center_id,'customer.member.update')` | 〃, 회원정보 변경에 가까운 행위 |
+| `popup_notices` (센터 쓰기) | `center_id in (my_managed_center_ids())` | `has_permission(center_id,'facility.notification')` | 〃 |
+| `notification_logs` (조회) | `center_id in (my_managed_center_ids())` | `has_permission(center_id,'message.sms.view' or 'message.push.view')` | 정산 데이터 — 조회도 좁힘 |
+| `change_logs` (조회) | `center_id in (my_managed_center_ids())` | `has_permission(center_id,'facility.role_permission')` | 감사로그 — account_center_permissions와 동일한 "관리자급" 대리 키 사용 |
+
+**정당화된 예외로 유지**: `staff_schedules`(조회)와 `schedule_memos`(조회)는 여전히
+`my_managed_center_ids()`만 사용합니다 — ACL-003의 실제 피해(다른 사람의 권한 grant/deny
+같은 민감정보 유출)와 달리, 이 두 테이블의 조회 대상은 "휴가/외부미팅" 같은 낮은 민감도의
+캘린더 조율 정보이고 같은 센터 스태프끼리 서로의 일정을 볼 수 있어야 하는 것이 원래
+제품 의도이기 때문입니다. 수정/삭제(쓰기)는 두 테이블 모두 이미 본인 것 + 구체적 권한
+키를 요구하고 있어 문제가 없습니다.
+
+## 재분류 (2026-08-01, SEC-007/008 단계 적용 준비)
+
+| 테이블 | PII 민감도 | 코드 사용 | center_id | tenant scope | 정상 역할 | 공개 읽기 | 쓰기 주체 | 기존 데이터 | RLS 활성화 기능장애 위험 | 삭제후보 | 우선순위 | Batch |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| change_logs | 중 | 0건 | 있음 | 직접 | 권한보유staff | 불필요 | 서버(RPC/트리거) | 낮음 | 낮음 | 아니오(기능 존속 결정 대기) | Medium | D |
+| class_types | 없음 | 0건 | 있음 | 직접 | 로그인전체/권한보유staff | 필요(로그인) | facility.operation 보유자 | 낮음 | 낮음 | 아니오 | Low | C |
+| community_comments | 낮음 | 0건 | 없음 | 간접(community_posts) | 로그인전체/작성자본인 | 필요(로그인) | 작성자 | 낮음 | 낮음 | 아니오(로드맵 결정 대기) | Medium | D |
+| competitions | 없음 | 0건 | 없음(전역) | 없음 | 전체(anon포함)/platform admin | 필요 | platform admin | 낮음 | 낮음 | 아니오 | Low | D |
+| contract_templates | 없음 | 0건 | 있음 | 직접 | 권한보유staff | 불필요 | contract.template.write 보유자 | 낮음 | 낮음 | 아니오 | Medium | B |
+| contracts | 매우높음 | 0건 | 있음 | 직접 | 본인/권한보유staff | 불필요 | 권한보유staff(RPC전환 권장) | 낮음 | 낮음 | 아니오 | **Critical** | A |
+| leads | 높음 | 0건 | 있음 | 직접 | customer.lead.* 보유자 | 불필요 | 권한보유staff | 낮음 | 낮음 | 아니오 | High | A |
+| lockers | 없음 | 0건 | 있음 | 직접 | 로그인전체/권한보유staff | 필요(로그인) | facility.operation 보유자 | 낮음 | 낮음 | 아니오 | Low | C |
+| locker_assignments | 낮음~중 | 0건 | 없음 | 간접(lockers) | 본인/권한보유staff | 불필요 | customer.member.update 보유자 | 낮음 | 낮음 | 아니오 | Medium | C |
+| membership_transfers | 중 | 0건 | 없음 | 간접(memberships) | 당사자/권한보유staff | 불필요 | RPC 전용(정책 없음) | 낮음 | 낮음 | 아니오 | Medium | C |
+| messages | 높음 | 0건 | 있음 | 직접 | message.sms/push.* 보유자 | 불필요 | 권한보유staff | 낮음 | 낮음 | 아니오 | High | A |
+| notification_logs | 낮음~중 | 0건 | 있음 | 직접 | message.*.view 보유자 | 불필요 | 서버 트리거 | 낮음 | 낮음 | 아니오 | Medium | A |
+| popup_notices | 없음 | 0건 | 있음(nullable) | 직접/전역 | 전체(anon포함)/권한보유+platform admin | 필요 | 권한보유staff/platform admin | 낮음 | 낮음 | 아니오 | Low | D |
+| schedule_memos | 중 | 0건 | 없음 | 간접(classes/staff_schedules) | 센터소속전체(조회, 정당화된 예외)/작성자+권한보유(쓰기) | 불필요 | 작성자/권한보유staff | 낮음 | 낮음 | 아니오 | Medium | B |
+| staff_salaries | 매우높음 | 0건 | 있음 | 직접 | facility.salary.own/other.* 보유자 | 불필요 | 권한보유staff | 낮음 | 낮음 | 아니오 | **Critical** | A |
+| staff_schedules | 중 | 0건 | 있음 | 직접 | 센터소속전체(조회, 정당화된 예외)/본인+schedule.own.etc.*(쓰기) | 불필요 | 본인 | 낮음 | 낮음 | 아니오 | Medium | B |
+| terms | 없음 | 0건 | 있음 | 직접 | 전체(anon포함)/contract.terms.manage 보유자 | 필요 | 권한보유staff | 낮음 | 낮음 | 아니오 | Low | B |
+
+"RLS 활성화 기능장애 위험"이 전부 낮음인 이유: 17개 테이블 모두 app/lib 코드 참조 0건이라
+RLS를 켜도 지금 당장 깨질 기존 기능이 없습니다(반대로 이미 이 문서 서두에서 밝힌 대로,
+"미사용 = 안전"이 아니라 "지금 당장은 발동 안 함"이라는 뜻일 뿐입니다).
 
 ## 조사 방법
 
@@ -294,42 +359,63 @@ security` / `create policy ... on <table>`을 전수 매칭했습니다. 총 66�
 5. **owner** — 그 센터의 `center_roles.is_owner = true` 스태프(전권)
 6. **platform admin** — `accounts.is_platform_admin = true`
 
-### 테이블 × 역할 접근 매트릭스 (요약)
+### 테이블 × 역할 접근 매트릭스 (요약, 2026-08-01 배치 파일 기준으로 갱신)
 
-`R`=조회 가능, `RW`=조회+쓰기 가능, `own`=본인 관련 행만, `-`=차단. 정확한 조건은 위 "테이블별 상세"의 정책초안 참고.
+`R`=조회 가능, `RW`=조회+쓰기 가능, `own`=본인 관련 행만, `-`=차단. 정확한 조건은
+위 "테이블별 상세" 및 `proposed_rls_gap_batch_*.sql`의 정책 참고. **"타 센터 owner/staff"
+열은 17개 테이블 전부 `-`입니다** — 모든 정책이 `center_id`(또는 그 상위 FK)를 기준으로
+`has_permission()`/`my_managed_center_ids()`를 평가하므로, 다른 센터 소속이라는 사실만으로는
+어떤 테이블에도 접근할 수 없습니다(이 격리가 SEC-007/008의 핵심 요구사항).
 
-| 테이블 | anon | member | staff(무권한) | staff(권한) | owner | platform admin |
-|---|---|---|---|---|---|---|
-| change_logs | - | - | - | - | R | R |
-| class_types | R | R | R | RW | RW | RW |
-| community_comments | - | R(본인 CUD) | R(본인 CUD) | R(본인 CUD) | R(본인 CUD) | R |
-| competitions | R | R | R | R | R | RW |
-| contract_templates | - | - | - | RW | RW | - |
-| contracts | - | own(R) | - | RW(list.view) | RW | R |
-| leads | - | - | - | RW(개별 권한별) | RW | - |
-| lockers | R | R | R | RW | RW | RW |
-| locker_assignments | - | own(R) | R | RW | RW | - |
-| membership_transfers | - | own(R) | - | R(pass_detail) | R | - |
-| messages | - | - | - | RW(channel별) | RW | - |
-| notification_logs | - | - | - | - | R | R |
-| popup_notices | R | R | R(자기 센터 것만 RW) | RW | RW | RW(전체공지) |
-| schedule_memos | - | - | R / own(CUD) | RW | RW | - |
-| staff_salaries | - | - | own(권한시) | RW(own/other 분리) | RW | - |
-| staff_schedules | - | - | R / own(CUD, 권한시) | RW | RW | - |
-| terms | R | R | R | R | RW | RW |
+| 테이블 | anon | member | staff(무권한) | staff(권한) | owner | platform admin | 타 센터 owner/staff |
+|---|---|---|---|---|---|---|---|
+| change_logs | - | - | - | R | R | R | - |
+| class_types | R | R | R | RW | RW | RW | - |
+| community_comments | - | R(본인 CUD) | R(본인 CUD) | R(본인 CUD) | R(본인 CUD) | R | - |
+| competitions | R | R | R | R | R | RW | - |
+| contract_templates | - | - | - | RW | RW | - | - |
+| contracts | - | own(R) | - | RW(list.view) | RW | R | - |
+| leads | - | - | - | RW(개별 권한별) | RW | - | - |
+| lockers | R | R | R | RW | RW | RW | - |
+| locker_assignments | - | own(R) | - | RW | RW | - | - |
+| membership_transfers | - | own(R) | - | R(pass_detail) | R | - | - |
+| messages | - | - | - | RW(channel별) | RW | - | - |
+| notification_logs | - | - | - | R | R | R | - |
+| popup_notices | R | R | R | RW(자기 센터만) | RW(자기 센터만) | RW(+전체공지) | - |
+| schedule_memos | - | - | R / own(CUD) | RW | RW | - | - |
+| staff_salaries | - | - | own(권한시) | RW(own/other 분리) | RW | - | - |
+| staff_schedules | - | - | R / own(CUD, 권한시) | RW | RW | - | - |
+| terms | R | R | R | R | RW | RW | - |
 
-### Fixture 요구사항
+### Fixture 요구사항 (2026-08-01 갱신 — 새 Secret 불필요)
 
-후속 배치의 통합 테스트(`tests/integration/`)가 필요로 할 최소 fixture 세트:
+TEST-002에서 검증된 패턴(TEST_MANAGER_A/B 두 계정만으로 "오너"와 "비오너·무권한 스태프"
+페르소나를 모두 만들어낸 것)을 그대로 확장합니다 — **17개 테이블 RLS 테스트에도 새 GitHub
+Secrets가 필요하지 않습니다.**
 
-- 센터 2개(A, B) — 교차 테스트용(센터 A 스태프가 센터 B 데이터 접근 시도 → 차단 확인)
-- 센터 A: 오너 계정 1, `facility.salary.other.view`만 가진 스태프 1, 아무 권한도 없는 스태프 1
-- 센터 B: 오너 계정 1(센터 A 데이터 접근 시도용)
-- 일반 회원 계정 1(어느 센터의 스태프도 아님, `profiles` 1개 이상 보유)
-- 플랫폼 운영자 계정 1(`is_platform_admin = true`)
+- 센터 A(`TEST_MANAGER_A` 소유, 기존 fixture 재사용) / 센터 B(`TEST_MANAGER_B` 소유, 기존
+  fixture 재사용) — 교차 센터 테스트에 그대로 사용(서로가 서로의 "타 센터 owner"가 됨).
+- **"staff 무권한" 페르소나**: `TEST_MANAGER_B`를 센터 A에 권한 0개 역할로 초대(TEST-002와
+  동일한 `getOrCreateNoPermRole`/`inviteIfNeeded` 헬퍼 재사용, 테스트 자신이 `afterAll`에서
+  정리).
+- **"staff 권한 있음" 페르소나**: 위와 같은 초대 상태에서, 검증하려는 테이블에 맞는
+  구체적 permission key 하나만 `setStaffOverride(mcId, key, 'allow')`로 부여(예:
+  `staff_salaries` 테스트 시 `facility.salary.other.view`) — 테이블마다 override를 새로
+  걸고 그 테스트의 `afterAll`에서 제거. 새 역할/계정을 추가로 만들 필요가 없습니다.
+- **member 페르소나**: 기존 `TEST_USER_A`(payment 통합 테스트가 이미 사용 중인 회원 계정)를
+  재사용 — 어느 센터의 스태프도 아니라는 조건을 이미 만족합니다.
+- **platform admin 페르소나**: 현재 이 역할의 재사용 가능한 test fixture 계정이 없습니다.
+  `is_platform_admin` 플래그가 있는 전용 테스트 계정이 필요할 수 있는데, 이는 **기존
+  TEST_MANAGER_A/B/USER_A로 대체할 수 없는 유일한 항목**입니다 — 새 Secret이 필요하다면
+  이 한 가지(`TEST_PLATFORM_ADMIN_EMAIL/PASSWORD`)뿐이며, 실제로 필요한지는 platform admin
+  분기가 있는 테이블(change_logs/contracts/notification_logs/popup_notices/terms 등)의
+  테스트를 실제로 작성하는 시점에 다시 판단합니다(지금 임의로 만들지 않음).
 - 각 17개 테이블에 최소 1행씩(센터 A 소속 1행 + 센터 B 소속 1행) — 특히 `contracts`/`staff_salaries`/`leads`는
-  PII 필드까지 채운 realistic한 값으로(테스트가 실제로 유출 여부를 검증할 수 있도록)
-- `account_center_permissions`에 allow/deny 오버라이드 각 1건 이상(역할 권한을 뒤집는 케이스 검증용)
+  PII 필드까지 채운 realistic한 값으로(테스트가 실제로 유출 여부를 검증할 수 있도록). 이 행들도
+  각 테스트 파일이 스스로 만들고 정리해야 합니다(TEST-002에서 배운 교훈 — fixture를 만들고
+  정리하지 않으면 공유 개발 DB가 오염됩니다).
+- `account_center_permissions`에 allow/deny 오버라이드 각 1건 이상(역할 권한을 뒤집는 케이스 검증용) — 위
+  "staff 권한 있음" 페르소나 설정과 동일한 메커니즘.
 
 ### 테스트 시나리오 형식 (후속 배치에서 작성)
 
