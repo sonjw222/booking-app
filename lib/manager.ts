@@ -12,6 +12,8 @@ export type ManagedCenter = {
   roleName: string;  // 예: "스튜디오 오너", "매니저", "강사"
   isOwner: boolean;
   status: string;    // pending / active / suspended
+  managerCenterId: string; // manager_centers.id (권한 조회용)
+  roleId: string | null;   // center_roles.id (권한 조회용)
 };
 
 export type TodayClass = {
@@ -41,7 +43,7 @@ export async function fetchMyCenters(): Promise<ManagedCenter[]> {
   const accountId = await getMyAccountId();
   const { data, error } = await supabase
     .from("manager_centers")
-    .select("status, centers(id, name), center_roles(name, is_owner)")
+    .select("id, role_id, status, centers(id, name), center_roles(name, is_owner)")
     .eq("account_id", accountId)
     .eq("status", "active"); // 승인된(활성) 센터만
   if (error) throw new Error("센터 목록을 불러오지 못했어요: " + error.message);
@@ -53,7 +55,17 @@ export async function fetchMyCenters(): Promise<ManagedCenter[]> {
       roleName: r.center_roles?.name ?? "매니저",
       isOwner: r.center_roles?.is_owner ?? false,
       status: r.status,
+      managerCenterId: r.id,
+      roleId: r.role_id ?? null,
     }));
+}
+
+// ACL-003: URL 파라미터로 넘어온 centerId에 대해 "내가 이 센터의 오너인지" 확인.
+//   목록에 그 센터가 아예 없으면(다른 센터 스태프가 URL을 조작한 경우 포함) false.
+export function isOwnerOfCenter(centers: ManagedCenter[], centerId: string | null): boolean {
+  if (!centerId) return false;
+  const c = centers.find((x) => x.id === centerId);
+  return c?.isOwner ?? false;
 }
 
 // 특정 센터의 오늘(KST) 수업 + 예약 인원

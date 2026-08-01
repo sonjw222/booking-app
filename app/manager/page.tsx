@@ -14,6 +14,7 @@ import ManagerNav from "../components/ManagerNav";
 import { fetchMyCenters, fetchTodayClasses, type ManagedCenter, type TodayClass } from "../../lib/manager";
 import { fetchClassAttendees, setAttendance, type ClassAttendee } from "../../lib/classes";
 import { fetchMemberDetail, type MemberDetailData } from "../../lib/members";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../lib/roles";
 
 export default function ManagerDashboard() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -21,6 +22,8 @@ export default function ManagerDashboard() {
   const [todayClasses, setTodayClasses] = useState<TodayClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // 메뉴 노출용 유효 권한 (오너는 전권이라 계산하지 않음 — null이면 "아직 로딩중")
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
   // 예약자 명단 / 회원 정보
   const [rosterClass, setRosterClass] = useState<TodayClass | null>(null);
   const [roster, setRoster] = useState<ClassAttendee[]>([]);
@@ -103,6 +106,23 @@ export default function ManagerDashboard() {
 
   const activeCenter = centers.find((c) => c.id === activeCenterId);
 
+  // 활성 센터의 메뉴 노출용 권한 계산 (오너는 전권이라 건너뜀)
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  // 메뉴 노출 가능 여부: 오너면 전권, 아니면 계산된 유효 권한에 포함될 때만.
+  function canSeeMenu(permissionKey: string): boolean {
+    return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, permissionKey);
+  }
+
   if (loading) {
     return (
       <div className="app-shell">
@@ -176,58 +196,80 @@ export default function ManagerDashboard() {
 
       {/* 관리 메뉴 */}
       <div className="menu-section-label">{activeCenter?.name ?? "센터"} 관리</div>
-      <a className="list-row" href="/manager/membership-rules">
-        <div className="left"><span className="icon">🎫</span>수강권 관리</div>
-        <span className="chevron">›</span>
-      </a>
+      {canSeeMenu("pass.create") && (
+        <a className="list-row" href="/manager/membership-rules">
+          <div className="left"><span className="icon">🎫</span>수강권 관리</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
+      {/* 상품 관리: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
       <a className="list-row" href="/manager/goods">
         <div className="left"><span className="icon">🎽</span>상품 관리</div>
         <span className="chevron">›</span>
       </a>
-      <a className="list-row" href="/manager/progress/record">
-        <div className="left"><span className="icon">📈</span>회원 진도 기록</div>
-        <span className="chevron">›</span>
-      </a>
-      <a className="list-row" href="/manager/staff">
-        <div className="left"><span className="icon">🔑</span>스태프 & 권한</div>
-        <span className="chevron">›</span>
-      </a>
-      <a className="list-row" href="/manager/sales">
-        <div className="left"><span className="icon">💰</span>매출 관리</div>
-        <span className="chevron">›</span>
-      </a>
-      <a className="list-row" href="/manager/announcements">
-        <div className="left"><span className="icon">📢</span>공지사항</div>
-        <span className="chevron">›</span>
-      </a>
-      <a className="list-row" href="/manager/inquiries">
-        <div className="left"><span className="icon">💬</span>1:1 문의</div>
-        <span className="chevron">›</span>
-      </a>
+      {canSeeMenu("customer.progress") && (
+        <a className="list-row" href="/manager/progress/record">
+          <div className="left"><span className="icon">📈</span>회원 진도 기록</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
+      {canSeeMenu("facility.staff.view") && (
+        <a className="list-row" href="/manager/staff">
+          <div className="left"><span className="icon">🔑</span>스태프 & 권한</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
+      {canSeeMenu("pass.sales.view") && (
+        <a className="list-row" href="/manager/sales">
+          <div className="left"><span className="icon">💰</span>매출 관리</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
+      {canSeeMenu("board.notice.view") && (
+        <a className="list-row" href="/manager/announcements">
+          <div className="left"><span className="icon">📢</span>공지사항</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
+      {canSeeMenu("board.inquiry.view") && (
+        <a className="list-row" href="/manager/inquiries">
+          <div className="left"><span className="icon">💬</span>1:1 문의</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
+      {/* 후기 관리: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
       <a className="list-row" href="/manager/reviews">
         <div className="left"><span className="icon">⭐</span>후기 관리</div>
         <span className="chevron">›</span>
       </a>
+      {/* 주문 관리: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
       <a className="list-row" href="/manager/orders">
         <div className="left"><span className="icon">🧾</span>주문 관리 (수강권·상품 구매)</div>
         <span className="chevron">›</span>
       </a>
+      {/* 관리자 배치 내역: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
       <a className="list-row" href="/manager/admin-assignments">
         <div className="left"><span className="icon">📋</span>관리자 배치 내역</div>
         <span className="chevron">›</span>
       </a>
-      <a className="list-row" href="/manager/center-info">
-        <div className="left"><span className="icon">🏢</span>센터 정보</div>
-        <span className="chevron">›</span>
-      </a>
-      <a className="list-row" href="/manager/rooms">
-        <div className="left"><span className="icon">🚪</span>룸(장소) 관리</div>
-        <span className="chevron">›</span>
-      </a>
-      <a className="list-row" href="/manager/settings">
-        <div className="left"><span className="icon">⚙️</span>운영 설정</div>
-        <span className="chevron">›</span>
-      </a>
+      {canSeeMenu("facility.info") && (
+        <a className="list-row" href="/manager/center-info">
+          <div className="left"><span className="icon">🏢</span>센터 정보</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
+      {canSeeMenu("facility.room") && (
+        <a className="list-row" href="/manager/rooms">
+          <div className="left"><span className="icon">🚪</span>룸(장소) 관리</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
+      {canSeeMenu("facility.operation") && (
+        <a className="list-row" href="/manager/settings">
+          <div className="left"><span className="icon">⚙️</span>운영 설정</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
 
       {/* 예약자 명단 시트 */}
       {rosterClass && (

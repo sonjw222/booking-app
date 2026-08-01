@@ -110,6 +110,17 @@ README의 큰 순서만으로 전체 migration을 재현할 수 있는지 검증
 
 API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL이 반복되어 재발 위험이 큽니다.
 
+**2026-08-01 ACL-003 서버 측 재검증에서 실제 FAIL 발견**: `account_center_permissions`의 SELECT
+정책이 "같은 센터 소속 스태프면 누구나"로 열려 있어, `facility.role_permission` 권한이 없는
+일반 스태프가 Supabase SDK 직접 호출로 다른 스태프의 개인 권한 예외를 읽을 수 있었음(쓰기는
+안전, 읽기만 취약). 수정 SQL 초안: `fix_account_center_permissions_select_draft_proposed.sql`
+(PR A `feature/access-control-guards`에 포함, **미실행**). 실행 승인 시 실행 순서:
+1) 스테이징에서 `tests/integration/acl-003-permission-read.test.ts` 통과 확인
+2) 통과하면 운영 Supabase SQL Editor에서 해당 파일 실행
+3) 실행 후 같은 통합 테스트를 운영 대상으로 재실행해 회귀 확인
+이 항목이 실행되기 전까지는 P0-4 전체를 "확인 필요" 상태로 유지합니다 — 이번 재검증으로
+"과거 긴급 보정 SQL이 반복된다"는 이 항목의 우려가 실제로 한 번 더 재현되었습니다.
+
 ### P0-5. 정기 알림 스케줄러
 
 | 필드 | 내용 |
@@ -184,6 +195,15 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 
 현재 `effectiveState()`는 권한 설정 화면에서만 사용되고 실제 기능 화면은 서버 거부 이후에야 권한 부족을 알 수 있습니다.
 
+2026-08-01 Access Control 구현 Batch에서 1차 해결: `app/manager/page.tsx`의 13개 메뉴 중
+권한 카탈로그에 대응 키가 있는 9개(수강권/진도표/스태프/매출/공지사항/문의/센터정보/룸/설정)를
+`fetchMyEffectivePermissionKeys()` + `canSeeManagerMenu()`로 노출 제어함(오너는 전권, 비활성 시
+서버 `has_permission()`과 동일한 우선순위로 판정). 나머지 4개(상품/후기/주문/관리자배치내역)는
+카탈로그에 대응 permission key가 없어 이번 1차 범위에서 제외 — 새 permission key 추가는 스키마
+변경이라 별도 승인 필요. `ManagerNav`의 4개 고정 탭(수업/회원/알림/더보기)도 아직 미검토. 개별
+화면 내부의 버튼 단위 권한 표시(각 screen의 개별 액션 버튼)는 여전히 서버 거부 이후에야 알 수
+있음 — 상세 내용은 [CHANGELOG.md](./CHANGELOG.md) 참고.
+
 ### P1-6. 관리자·운영자 클라이언트 가드 누락
 
 | 필드 | 내용 |
@@ -195,6 +215,19 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 | 관련 문서 | [REQUIREMENTS 7~8절](./REQUIREMENTS.md), [ROUTES 5~7절](./ROUTES.md), [DATABASE 10절](./DATABASE.md) |
 
 현재 데이터 쓰기는 RLS가 막지만 화면과 입력폼이 먼저 노출되는 페이지가 있습니다.
+
+2026-08-01 Access Control 구현 Batch에서 완료: `app/admin/categories/page.tsx`,
+`app/admin/banners/page.tsx`에 `/admin/centers`와 동일한 `checkPlatformAdmin()` 가드를 추가했고,
+`app/manager/inquiries/page.tsx`, `app/manager/notifications/page.tsx`에는 `fetchMyCenters()` +
+"운영 중인 센터가 없어요" 가드(기존 9개 화면과 동일한 패턴)를, `app/manager/staff/permissions/page.tsx`에는
+URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 확인하는 가드(`isOwnerOfCenter()`)를
+추가함. 상세 내용은 [CHANGELOG.md](./CHANGELOG.md) 참고. **클라이언트 가드는 완료했지만, 서버 측
+재검증에서 `account_center_permissions`의 SELECT RLS 정책 자체가 "같은 센터 소속이면 누구나
+조회 가능"하게 열려 있던 별도의 FAIL을 발견함** — 화면 가드와 무관하게 Supabase SDK 직접 호출로
+우회 가능했던 서버 쪽 구멍. 수정 SQL 초안은 `fix_account_center_permissions_select_draft_proposed.sql`에
+작성했으나 **아직 실행하지 않음**(이 PR에 포함 — ACL-003의 일부로 취급). 실행 전
+`tests/integration/acl-003-permission-read.test.ts`를 통과시켜야 함. 이 SQL이 실제 실행되고
+그 통합 테스트가 green이 될 때까지는 이 항목을 완전히 제거하지 말 것.
 
 ### P1-7. 국경일 자동 갱신
 
