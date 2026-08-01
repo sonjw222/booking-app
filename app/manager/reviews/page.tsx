@@ -15,7 +15,8 @@ import {
 } from "../../../lib/reviews";
 import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
-import RichTextEditor from "../center-info/RichTextEditor";
+import RichTextEditor from "../../components/RichTextEditor";
+import { extractPlainText } from "../../../lib/security";
 
 export default function ManagerReviewsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -84,10 +85,14 @@ export default function ManagerReviewsPage() {
   }
 
   async function handleDelete(r: ManagerReview) {
+    // 리뷰 내용이 HTML일 수 있어(굵게/색상 등), 확인창에는 태그를 뺀 실제
+    // 글자만 미리보기로 보여준다(브라우저 confirm()은 항상 순수 텍스트로만
+    // 표시되므로 이건 보안이 아니라 가독성 목적).
+    const plainPreview = extractPlainText(r.content);
     if (!confirm(
       `이 후기를 삭제할까요?\n\n` +
       `작성자: ${r.writerName}\n` +
-      `내용: ${r.content.slice(0, 40)}${r.content.length > 40 ? "…" : ""}\n\n` +
+      `내용: ${plainPreview.slice(0, 40)}${plainPreview.length > 40 ? "…" : ""}\n\n` +
       `되돌릴 수 없어요. 부적절한 내용일 때만 삭제해주세요.`
     )) return;
     setBusy(true);
@@ -161,7 +166,7 @@ export default function ManagerReviewsPage() {
                 <span className="review-date">{r.createdAt}</span>
               </div>
 
-              <div className="review-content">{r.content}</div>
+              <div className="review-content" dangerouslySetInnerHTML={{ __html: r.content }} />
 
               {r.photos && r.photos.length > 0 && (
                 <div className="review-photos">
@@ -201,7 +206,7 @@ export default function ManagerReviewsPage() {
               <span className="review-stars">
                 {"★".repeat(replyFor.rating)}<span className="review-stars-off">{"★".repeat(5 - replyFor.rating)}</span>
               </span>
-              <div className="review-content" style={{ marginTop: 6 }}>{replyFor.content}</div>
+              <div className="review-content" style={{ marginTop: 6 }} dangerouslySetInnerHTML={{ __html: replyFor.content }} />
             </div>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>답변 내용</div>

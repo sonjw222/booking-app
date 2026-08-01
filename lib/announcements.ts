@@ -6,6 +6,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { sanitizeRichText } from "./security";
 
 const KST = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul", year: "2-digit", month: "2-digit", day: "2-digit",
@@ -65,7 +66,7 @@ export async function createAnnouncement(
   const { error } = await supabase.rpc("create_announcement", {
     p_center_id: centerId,
     p_title: title,
-    p_body: body,
+    p_body: sanitizeRichText(body),
     p_photos: photos && photos.length > 0 ? photos : null,
     p_pinned: pinned,
   });
@@ -79,7 +80,7 @@ export async function updateAnnouncement(
   const { error } = await supabase
     .from("center_announcements")
     .update({
-      title, body,
+      title, body: sanitizeRichText(body),
       photos: photos && photos.length > 0 ? photos : null,
       pinned, updated_at: new Date().toISOString(),
     })

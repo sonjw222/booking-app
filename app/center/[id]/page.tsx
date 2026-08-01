@@ -19,6 +19,8 @@ import BottomNav from "../../components/BottomNav";
 import { addToCart } from "../../../lib/cart";
 import { fetchReviews, myReviewFor, writeReview, deleteReview, uploadReviewPhoto, reviewPhotoUrl, type Review } from "../../../lib/reviews";
 import { reservationReturnUrl } from "../../../lib/reservationNav";
+import { extractPlainText } from "../../../lib/security";
+import RichTextEditor from "../../components/RichTextEditor";
 
 export default function CenterDetailPage() {
   return (
@@ -63,6 +65,8 @@ function CenterDetailContent() {
   const [tab, setTab] = useState<"info" | "class" | "review">("info");
   const [rvRating, setRvRating] = useState(5);
   const [rvContent, setRvContent] = useState("");
+  const [rvAlign, setRvAlign] = useState<"left" | "center" | "right">("left");
+  const [rvFontSize, setRvFontSize] = useState(14);
   const [rvBusy, setRvBusy] = useState(false);
   const [rvPhotos, setRvPhotos] = useState<string[]>([]);
   const [rvUploading, setRvUploading] = useState(false);
@@ -130,14 +134,18 @@ function CenterDetailContent() {
   }
 
   async function handleWriteReview() {
-    if (!rvContent.trim()) { setError("후기 내용을 입력해주세요"); return; }
+    // rvContent는 RichTextEditor가 넘기는 HTML이라, 태그만 있고 실제 글자는
+    // 없는 경우(예: <br>만 남은 경우)를 빈 내용으로 정확히 판정하기 위해
+    // 실제 표시 텍스트 기준으로 검사한다(HTML 문자열 길이 기준 아님).
+    if (!extractPlainText(rvContent)) { setError("후기 내용을 입력해주세요"); return; }
     setRvBusy(true);
     try {
       if (rvEditing && myReview) await deleteReview(myReview.id);
-      const pt = await writeReview(centerId, rvRating, rvContent.trim(), rvPhotos);
+      const pt = await writeReview(centerId, rvRating, rvContent, rvPhotos);
       showToast(rvEditing ? "후기를 수정했어요" : (pt > 0 ? `후기 등록 완료! ${pt.toLocaleString("ko-KR")}P 적립됐어요` : "후기를 등록했어요"));
       setReviewSheet(false);
       setRvContent(""); setRvRating(5); setRvPhotos([]); setRvEditing(false);
+      setRvAlign("left"); setRvFontSize(14);
       setReviews(await fetchReviews(centerId));
       setMyReview(await myReviewFor(centerId));
     } catch (e: any) { setError(e.message); }
@@ -148,6 +156,7 @@ function CenterDetailContent() {
     if (!myReview) return;
     setRvRating(myReview.rating);
     setRvContent(myReview.content);
+    setRvAlign("left"); setRvFontSize(14);
     setRvPhotos(myReview.photos ?? []);
     setRvEditing(true);
     setReviewSheet(true);
@@ -343,9 +352,17 @@ function CenterDetailContent() {
             </div>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>내용</div>
-            <textarea className="input-field" style={{ minHeight: 100, resize: "vertical", lineHeight: 1.5 }}
-              placeholder="수업은 어땠나요? 다른 회원에게 도움이 되는 후기를 남겨주세요."
-              value={rvContent} onChange={(e) => setRvContent(e.target.value)} />
+            <RichTextEditor
+              html={rvContent}
+              align={rvAlign}
+              fontSize={rvFontSize}
+              onChangeHtml={setRvContent}
+              onChangeAlign={setRvAlign}
+              onChangeFontSize={setRvFontSize}
+            />
+            <div className="perm-guide" style={{ margin: "6px 0 0" }}>
+              수업은 어땠나요? 다른 회원에게 도움이 되는 후기를 남겨주세요.
+            </div>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>사진 (선택, 여러 장)</div>
             <div className="rv-photo-add">
@@ -513,7 +530,7 @@ function CenterDetailContent() {
       <div className="menu-section-label">
         후기 {reviews.length > 0 && `(${reviews.length})`}
         {!myReview && (
-          <button className="hist-more-btn" onClick={() => { setRvEditing(false); setRvRating(5); setRvContent(""); setRvPhotos([]); setReviewSheet(true); }}>후기 쓰기</button>
+          <button className="hist-more-btn" onClick={() => { setRvEditing(false); setRvRating(5); setRvContent(""); setRvAlign("left"); setRvFontSize(14); setRvPhotos([]); setReviewSheet(true); }}>후기 쓰기</button>
         )}
       </div>
       {reviews.length === 0 ? (
@@ -529,7 +546,7 @@ function CenterDetailContent() {
                 <span className="review-writer">{r.writerName}</span>
                 <span className="review-date">{r.createdAt}</span>
               </div>
-              <div className="review-content">{r.content}</div>
+              <div className="review-content" dangerouslySetInnerHTML={{ __html: r.content }} />
               {r.photos && r.photos.length > 0 && (
                 <div className="review-photos">
                   {r.photos.map((ph, i) => (

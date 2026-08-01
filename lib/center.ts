@@ -6,6 +6,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { sanitizeRichText } from "./security";
 
 export type CenterDetail = {
   id: string;
@@ -129,7 +130,9 @@ export async function updateCenterIntro(
       categories: fields.categories,
       latitude: fields.latitude,
       longitude: fields.longitude,
-      intro_blocks: fields.introBlocks,
+      intro_blocks: fields.introBlocks.map((b) =>
+        b.type === "text" ? { ...b, html: sanitizeRichText(b.html ?? "") } : b
+      ),
       pay_methods: fields.payMethods.length > 0 ? fields.payMethods : null,
       review_point: fields.reviewPoint,
     })
