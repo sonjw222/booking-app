@@ -193,7 +193,7 @@ function decodeJwtRoleClaim(token: string): string | null {
 // 서비스 역할 키를 쓰는 fixture 전용 관리자 client (지연 생성).
 // SUPABASE_SERVICE_ROLE_KEY가 없는 파일(예: 기존 결제 통합 테스트)은 이 함수를 아예 호출하지
 // 않으므로 영향받지 않는다 — setup.ts 최상단에서 미리 requireEnv하지 않는 이유.
-function getFixtureAdminClient(): SupabaseClient {
+export function getFixtureAdminClient(): SupabaseClient {
   if (adminClient) return adminClient;
   const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
   const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -225,7 +225,7 @@ function getFixtureAdminClient(): SupabaseClient {
 //   2) 그 외(RLS 관련 메시지 등) — 실제 에러 메시지를 그대로 보여준다.
 // 여기서 바로 실행 가능한 GRANT 문을 안내해, "코드가 일반 client로 새는 건지" 다시 의심하지 않고
 // 바로 원인(운영 Supabase 쪽 권한 설정)을 확인할 수 있게 한다.
-function describeAdminQueryError(table: string, error: { message: string; code?: string } | null | undefined): string {
+export function describeAdminQueryError(table: string, error: { message: string; code?: string } | null | undefined): string {
   if (!error) return "원인 불명 (data 없음)";
   const isPermissionDenied = error.code === "42501" || /permission denied/i.test(error.message);
   if (isPermissionDenied) {
