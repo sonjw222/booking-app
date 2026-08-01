@@ -19,14 +19,23 @@
       RLS가 올바를 때 0건이어야 하고(다른 사람 것 차단), 본인 행은 조회할 수 있어야 한다.
     - managerA(오너)는 둘 다 조회할 수 있어야 한다.
 
+  TEST-002 fixture 격리 (2026-08-01 추가):
+    이전 버전은 managerB를 centerA에 초대한 뒤 정리하지 않아, admin-assignment-security.test.ts의
+    "다른 센터의 관리자는 이 센터에 배치를 시도할 수 없다" 검증이 깨지는 실제 fixture 오염을
+    일으켰다(TEST-002). 이번 버전은 이 파일이 "이번 실행에서 새로 만든 것"만 정확히 추적해
+    afterAll에서 역순으로 정리한다 — 실행 전부터 이미 있던 데이터(예: 과거 오염이 아직
+    정리되지 않은 경우)는 건드리지 않는다(그 경우는 cleanup_acl003_test_fixture_proposed.sql로
+    별도 정리). 정리는 테스트 성공/실패와 무관하게 항상 시도되고, 실패하면 조용히 무시하지
+    않고 명확한 오류로 모아 던진다.
+
   필요한 환경변수(.env.test.local, 없으면 requireEnv가 안내):
     TEST_MANAGER_A_EMAIL/PASSWORD, TEST_MANAGER_B_EMAIL/PASSWORD
     (둘 다 admin-assignment-security.test.ts와 공유 — 이 파일 전용 계정 없음)
 */
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";
 import { switchToTestUser, getOrCreateOwnedTestCenter, type TestUser } from "./setup";
-import { createRole, fetchRoles, inviteStaff, setStaffOverride } from "../../lib/roles";
+import { createRole, fetchRoles, inviteStaff, removeStaff, deleteRole, setStaffOverride } from "../../lib/roles";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
@@ -40,24 +49,34 @@ let centerAId: string;
 let ownerManagerCenterId: string; // centerA에서 managerA(오너) 자신의 manager_centers.id
 let staffManagerCenterId: string; // centerA에서 managerB(비오너 스태프)의 manager_centers.id
 
-async function getOrCreateNoPermRole(centerId: string): Promise<string> {
+// 이번 테스트 실행이 실제로 "새로 만든" 것만 기록한다 — beforeAll 이전부터 이미 있던 행은
+// 여기 기록되지 않고, 따라서 afterAll에서도 지우지 않는다(요구사항: 사전 존재 데이터 보존).
+let createdRoleId: string | null = null;
+let createdStaffManagerCenterId: string | null = null;
+let createdOwnerOverride = false;
+let createdStaffOverride = false;
+
+async function getOrCreateNoPermRole(centerId: string): Promise<{ id: string; created: boolean }> {
   const roles = await fetchRoles(centerId);
   const existing = roles.find((r) => r.name === NO_PERM_ROLE_NAME);
-  if (existing) return existing.id;
+  if (existing) return { id: existing.id, created: false };
   await createRole(centerId, NO_PERM_ROLE_NAME);
   const refreshed = await fetchRoles(centerId);
   const created = refreshed.find((r) => r.name === NO_PERM_ROLE_NAME);
   if (!created) throw new Error("무권한 역할 생성에 실패했어요");
-  return created.id;
+  return { id: created.id, created: true };
   // createRole()은 role_permissions을 채우지 않으므로 이 역할은 permission이 0개 —
   // has_permission()이 항상 false를 반환하는 "권한 없는 일반 스태프" fixture로 쓰기에 적합.
 }
 
-async function inviteIfNeeded(centerId: string, accountId: string, roleId: string) {
+// true를 반환하면 이번 호출로 실제로 새 manager_centers 행이 생겼다는 뜻(정리 대상으로 기록해야 함).
+async function inviteIfNeeded(centerId: string, accountId: string, roleId: string): Promise<boolean> {
   try {
     await inviteStaff(centerId, accountId, roleId);
+    return true;
   } catch (e: any) {
-    if (!e.message.includes("이미 이 센터의 스태프")) throw e;
+    if (e.message.includes("이미 이 센터의 스태프")) return false;
+    throw e;
   }
 }
 
@@ -72,6 +91,17 @@ async function managerCenterIdFor(centerId: string, accountId: string): Promise<
   return (data as { id: string }).id;
 }
 
+async function overrideExists(managerCenterId: string, key: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("account_center_permissions")
+    .select("id")
+    .eq("manager_center_id", managerCenterId)
+    .eq("permission_key", key)
+    .maybeSingle();
+  if (error) throw new Error("개인 권한 예외 확인 실패: " + error.message);
+  return !!data;
+}
+
 beforeAll(async () => {
   managerA = await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
   centerAId = await getOrCreateOwnedTestCenter(managerA);
@@ -81,14 +111,66 @@ beforeAll(async () => {
   // managerA(오너)로 돌아와 managerB를 centerA에 무권한 스태프로 초대하고,
   // "다른 사람 것"(오너 본인 행)과 "본인 것"(managerB 행) 개인 권한 예외를 각각 설정한다.
   await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
-  const roleId = await getOrCreateNoPermRole(centerAId);
-  await inviteIfNeeded(centerAId, managerB.accountId, roleId);
+  const role = await getOrCreateNoPermRole(centerAId);
+  if (role.created) createdRoleId = role.id;
+
+  const invited = await inviteIfNeeded(centerAId, managerB.accountId, role.id);
 
   ownerManagerCenterId = await managerCenterIdFor(centerAId, managerA.accountId);
   staffManagerCenterId = await managerCenterIdFor(centerAId, managerB.accountId);
+  if (invited) createdStaffManagerCenterId = staffManagerCenterId;
 
+  const ownerOverrideAlready = await overrideExists(ownerManagerCenterId, OVERRIDE_KEY);
   await setStaffOverride(ownerManagerCenterId, OVERRIDE_KEY, "allow");
+  if (!ownerOverrideAlready) createdOwnerOverride = true;
+
+  const staffOverrideAlready = await overrideExists(staffManagerCenterId, OVERRIDE_KEY);
   await setStaffOverride(staffManagerCenterId, OVERRIDE_KEY, "allow");
+  if (!staffOverrideAlready) createdStaffOverride = true;
+}, 30000);
+
+// vitest는 이 안의 테스트가 실패해도 afterAll을 항상 실행한다 — 성공/실패와 무관하게 정리됨.
+afterAll(async () => {
+  // 정리는 항상 오너 권한으로 시도한다(직전 테스트가 managerB로 로그인된 채 끝났을 수 있음).
+  await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
+
+  const errors: string[] = [];
+
+  // 역순으로 정리: override(자식) → manager_centers → role(부모).
+  // manager_centers.role_id는 center_roles를 ON DELETE 절 없이 참조하므로(=RESTRICT),
+  // role을 먼저 지우면 FK 위반으로 실패한다 — 반드시 manager_centers보다 나중에 지운다.
+  if (createdStaffOverride && staffManagerCenterId) {
+    try {
+      await setStaffOverride(staffManagerCenterId, OVERRIDE_KEY, null);
+    } catch (e: any) {
+      errors.push(`staff override 정리 실패(manager_center=${staffManagerCenterId}): ${e.message}`);
+    }
+  }
+  if (createdOwnerOverride && ownerManagerCenterId) {
+    try {
+      await setStaffOverride(ownerManagerCenterId, OVERRIDE_KEY, null);
+    } catch (e: any) {
+      errors.push(`owner override 정리 실패(manager_center=${ownerManagerCenterId}): ${e.message}`);
+    }
+  }
+  if (createdStaffManagerCenterId) {
+    try {
+      await removeStaff(createdStaffManagerCenterId);
+    } catch (e: any) {
+      errors.push(`manager_centers 정리 실패(id=${createdStaffManagerCenterId}): ${e.message}`);
+    }
+  }
+  if (createdRoleId) {
+    try {
+      await deleteRole(createdRoleId);
+    } catch (e: any) {
+      errors.push(`역할 정리 실패(id=${createdRoleId}): ${e.message}`);
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`ACL-003 fixture cleanup 실패 — 공유 개발 DB에 잔여 데이터가 남았을 수 있습니다:\n${errors.join("\n")}`);
+  }
 }, 30000);
 
 describe("ACL-003: account_center_permissions SELECT는 본인 것 또는 facility.role_permission 권한 보유자만 (서버 재검증)", () => {
