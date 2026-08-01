@@ -4,7 +4,7 @@
   UI는 전혀 거치지 않지만, checkout이 실제로 호출하는 lib/orders.ts / lib/payments의
   진짜 함수를 그대로 사용한다(재구현하지 않음).
 */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";
 import { createOrder } from "../../lib/orders";
 import { getPaymentService } from "../../lib/payments";
@@ -15,6 +15,7 @@ import {
   fetchLatestMembership,
   fetchOrderRow,
   fetchPaymentByMembership,
+  signOutTestSession,
   switchToTestUser,
   type TestUser,
 } from "./setup";
@@ -40,8 +41,17 @@ beforeAll(async () => {
   product = data as ProductRow;
 });
 
+// 이 파일과 무관한 다른 통합 테스트 파일이 같은 실행 중 공유 supabase 싱글턴의 세션을
+// 바꿔놓을 수 있으므로(다른 파일이 switchToTestUser()로 계정을 전환하면 이 파일도 영향을
+// 받을 수 있음), beforeAll 로그인 한 번만 믿지 않고 매 테스트 직전에 본인 계정으로 다시
+// 로그인해 세션을 재확인한다. admin-assignment-security.test.ts가 이미 쓰고 있는,
+// 실전에서 검증된 패턴과 동일하다.
+beforeEach(async () => {
+  testUser = await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
+});
+
 afterAll(async () => {
-  await supabase.auth.signOut();
+  await signOutTestSession();
 });
 
 async function createMockOrder(): Promise<string> {
