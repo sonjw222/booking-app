@@ -16,15 +16,25 @@
 
 - 재검증: 5개 테이블의 `schema.sql` 컬럼 정의, 초안이 참조하는 permission key 17개 전부가
   실제 카탈로그에 존재하는지, `has_permission()`/`my_account_id()`/`is_platform_admin()`
-  헬퍼 시그니처, 5개 테이블의 현재 RLS 상태(전부 미적용 확인 — rollback SQL의 전제와 일치)를
-  전수 재확인 — SEC-007/008 작성 이후 drift 없음.
+  헬퍼 시그니처를 전수 재확인 — SEC-007/008 작성 이후 drift 없음.
+- **중요 정정**: SEC-007은 이 5개 테이블을 "RLS가 없거나 정책 0건"으로 분류했으나, 실제
+  개발(dev) Supabase에서 오너 권한 insert를 시도해본 결과 **RLS는 이미 활성화돼 있고
+  정책만 0건**이었다(`42501: new row violates row-level security policy` 확인 — 이 저장소
+  SQL 이력에 이걸 켠 기록 없음, 대시보드에서 직접 조작된 것으로 추정). "정책 0건"과 "RLS
+  비활성화"는 서로 다른 별개 상태 — 실제로는 오너를 포함해 아무도 접근 못 하는 완전 차단
+  상태였다(당초 우려했던 "누구나 접근 가능"보다 안전한 상태). `rollback_rls_gap_batch_a.sql`이
+  `disable row level security`로 되돌리게 되어 있었는데, 그러면 원래보다 더 위험한(전체
+  공개) 상태가 되므로 정책 제거만 하도록 수정했다. 테스트 fixture 생성도 일반 client로는
+  지금 당장 불가능해(0 정책 = 오너도 차단) `getOrCreateOwnedTestCenter`와 동일한
+  admin(service-role) client 패턴으로 전환했다. **Batch B/C/D의 12개 테이블과 production
+  Supabase의 실제 상태는 아직 확인하지 못함** — 각각 다음 배치 적용 전, 그리고 실행 승인
+  전에 반드시 별도 확인 필요. 상세: `docs/21_RLS_Gap_Analysis.md` 상단 정정 섹션.
 - `tests/integration/sec007-batch-a-rls.test.ts` 신규 작성 — 5개 테이블 전부 "무권한 SELECT
   차단/권한 보유자 SELECT 허용/무권한 쓰기 차단" 최소 3~4종(`staff_salaries`는 own/other
-  권한 완전 분리라 조합 추가, `messages`는 channel별 분리라 sms/push 조합 추가). Fixture는
+  권한 완전 분리라 조합 추가, `messages`는 channel별 분리라 sms/push 조합 추가). Fixture 계정은
   TEST_MANAGER_A(centerA 오너)/TEST_MANAGER_B(centerA에 권한 0개 스태프로 초대)/
   TEST_USER_A(무관 일반 회원 — `contracts`의 "본인 것" 조회 분기 검증용)만 재사용, 새
-  Secret 없음. **이 테스트는 SQL이 실제 적용되기 전에는 의도적으로 RED**입니다(현재 이
-  5개 테이블은 RLS가 꺼져 있어 무권한 조회가 전부 성공해버리는 결함을 그대로 증명) —
+  Secret 없음. **이 테스트는 SQL이 실제 적용되기 전에는 의도적으로 RED**입니다 —
   `tests/integration/acl-003-permission-read.test.ts`가 SQL 적용 전 red였던 것과 동일한 패턴.
 - SQL은 이번에도 **전혀 실행하지 않았습니다.** 실행은 사용자 승인 후 별도 단계에서 진행.
 - Issue: [SEC-009](https://github.com/sonjw222/booking-app/issues/28)(신규, SEC-007/008과

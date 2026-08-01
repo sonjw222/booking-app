@@ -2,10 +2,16 @@
   SEC-007/008 RLS Gap Batch A 회귀 테스트.
 
   ⚠️ 이 파일은 proposed_rls_gap_batch_a.sql이 실제로 Supabase에 적용되기 전에는
-  의도적으로 FAIL해야 합니다 — 현재 이 5개 테이블은 RLS가 전혀 켜져 있지 않아(정책 0건),
-  무권한 조회/쓰기가 전부 그대로 성공해버리는 결함을 이 테스트가 그대로 증명합니다.
-  proposed_rls_gap_batch_a.sql을 승인 후 실행하면(사용자 승인 필요, 아직 실행 안 함)
-  이 파일이 green이 되어야 정상입니다.
+  의도적으로 FAIL해야 합니다.
+
+  [2026-08-02 정정] SEC-007 문서는 이 5개 테이블을 "RLS가 없거나 정책 0건"으로 분류했지만,
+  실제 개발(dev) Supabase에서 재확인한 결과 5개 테이블 전부 RLS는 이미 활성화되어 있고
+  정책만 0건이었다(완전 차단 — 오너를 포함해 아무도 접근 불가. "정책 0건"과 "RLS 비활성"은
+  서로 다른 별개 상태다). 그래서 이 테스트의 fixture 생성/정리는 일반 로그인 client가 아니라
+  RLS를 우회하는 service-role admin client(getFixtureAdminClient(), getOrCreateOwnedTestCenter와
+  동일한 패턴)로 한다 — 그래야 정책이 아직 없는 지금도 fixture를 만들 수 있다. 실제 검증
+  assertion(각 it() 블록)만 일반 로그인 client로 실행해 진짜 RLS 동작을 확인한다.
+  proposed_rls_gap_batch_a.sql을 승인 후 실행하면 이 파일이 green이 되어야 정상입니다.
 
   대상 테이블: staff_salaries, contracts, leads, messages, notification_logs
   (docs/21_RLS_Gap_Analysis.md "단계 적용 계획" Batch A, "Critical/High 민감정보 최우선")
@@ -19,7 +25,13 @@
 */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";
-import { switchToTestUser, getOrCreateOwnedTestCenter, type TestUser } from "./setup";
+import {
+  switchToTestUser,
+  getOrCreateOwnedTestCenter,
+  getFixtureAdminClient,
+  describeAdminQueryError,
+  type TestUser,
+} from "./setup";
 import { createRole, fetchRoles, inviteStaff, removeStaff, deleteRole, setStaffOverride } from "../../lib/roles";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
@@ -119,78 +131,83 @@ beforeAll(async () => {
   staffManagerCenterId = await managerCenterIdFor(centerAId, managerB.accountId);
   if (invited) createdStaffManagerCenterId = staffManagerCenterId;
 
+  // 아래 fixture 행들은 전부 RLS를 우회하는 admin(service-role) client로 생성한다 —
+  // 대상 테이블이 정책 0건(=현재 오너 포함 아무도 접근 불가)이라 일반 로그인 client로는
+  // 지금 당장 만들 수 없다(위 파일 헤더의 2026-08-02 정정 참고).
+  const admin = getFixtureAdminClient();
+
   // staff_salaries — own/other 분리 검증용으로 managerA/managerB 두 행 모두 생성
   {
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("staff_salaries")
       .insert({ center_id: centerAId, account_id: managerA.accountId, employment_type: "fulltime", base_salary: 3000000 })
       .select("id").single();
-    if (error) throw new Error("staff_salaries(own) fixture 생성 실패: " + error.message);
+    if (error) throw new Error("staff_salaries(own) fixture 생성 실패: " + describeAdminQueryError("staff_salaries", error));
     staffSalaryOwnId = (data as { id: string }).id;
   }
   {
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("staff_salaries")
       .insert({ center_id: centerAId, account_id: managerB.accountId, employment_type: "parttime", per_class_pay: 30000 })
       .select("id").single();
-    if (error) throw new Error("staff_salaries(other) fixture 생성 실패: " + error.message);
+    if (error) throw new Error("staff_salaries(other) fixture 생성 실패: " + describeAdminQueryError("staff_salaries", error));
     staffSalaryOtherId = (data as { id: string }).id;
   }
 
   // contracts — managerA 본인 profile 것 1건 + 어느 센터에도 안 속한 userA(일반 회원) profile 것 1건
   // (userA 것은 "본인 것" OR-branch를 오너 특권과 분리해서 검증하기 위한 fixture)
   {
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("contracts")
       .insert({ center_id: centerAId, profile_id: managerA.profileId, content: "SEC-007 배치A 테스트 계약서(오너 본인)", status: "pending" })
       .select("id").single();
-    if (error) throw new Error("contracts(owner) fixture 생성 실패: " + error.message);
+    if (error) throw new Error("contracts(owner) fixture 생성 실패: " + describeAdminQueryError("contracts", error));
     contractOwnerRowId = (data as { id: string }).id;
   }
   {
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("contracts")
       .insert({ center_id: centerAId, profile_id: userA.profileId, content: "SEC-007 배치A 테스트 계약서(일반 회원 본인)", status: "pending" })
       .select("id").single();
-    if (error) throw new Error("contracts(member) fixture 생성 실패: " + error.message);
+    if (error) throw new Error("contracts(member) fixture 생성 실패: " + describeAdminQueryError("contracts", error));
     contractMemberRowId = (data as { id: string }).id;
   }
 
   // leads
   {
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("leads")
       .insert({ center_id: centerAId, name: "SEC-007 배치A 테스트 상담고객", phone: "010-0000-0000", channel: "test" })
       .select("id").single();
-    if (error) throw new Error("leads fixture 생성 실패: " + error.message);
+    if (error) throw new Error("leads fixture 생성 실패: " + describeAdminQueryError("leads", error));
     leadId = (data as { id: string }).id;
   }
 
   // messages — sms/push 채널별 분리 검증용으로 두 행
   {
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("messages")
       .insert({ center_id: centerAId, channel: "sms", content: "SEC-007 배치A 테스트 SMS", status: "sent" })
       .select("id").single();
-    if (error) throw new Error("messages(sms) fixture 생성 실패: " + error.message);
+    if (error) throw new Error("messages(sms) fixture 생성 실패: " + describeAdminQueryError("messages", error));
     messageSmsId = (data as { id: string }).id;
   }
   {
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("messages")
       .insert({ center_id: centerAId, channel: "push", title: "SEC-007 배치A", content: "SEC-007 배치A 테스트 푸시", status: "sent" })
       .select("id").single();
-    if (error) throw new Error("messages(push) fixture 생성 실패: " + error.message);
+    if (error) throw new Error("messages(push) fixture 생성 실패: " + describeAdminQueryError("messages", error));
     messagePushId = (data as { id: string }).id;
   }
 
   // notification_logs
   {
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("notification_logs")
       .insert({ center_id: centerAId, profile_id: managerA.profileId, channel: "sms", cost: 15, status: "sent" })
       .select("id").single();
-    if (error) throw new Error("notification_logs fixture 생성 실패: " + error.message);
+    if (error) throw new Error("notification_logs fixture 생성 실패: " + describeAdminQueryError("notification_logs", error));
     notificationLogId = (data as { id: string }).id;
   }
 }, 30000);
@@ -199,10 +216,12 @@ afterAll(async () => {
   await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
   const errors: string[] = [];
 
+  const admin = getFixtureAdminClient();
   const deleteRow = async (table: string, id: string | null, label: string) => {
     if (!id) return;
-    const { error } = await supabase.from(table).delete().eq("id", id);
-    if (error) errors.push(`${label} 정리 실패(id=${id}): ${error.message}`);
+    // 정책이 아직 없는 동안은 오너(managerA)도 delete가 막히므로 admin client로 정리한다.
+    const { error } = await admin.from(table).delete().eq("id", id);
+    if (error) errors.push(`${label} 정리 실패(id=${id}): ${describeAdminQueryError(table, error)}`);
   };
 
   await deleteRow("staff_salaries", staffSalaryOwnId, "staff_salaries(own)");
@@ -288,7 +307,7 @@ describe("staff_salaries — 본인/타인 권한 완전 분리", () => {
     } finally {
       // SQL 적용 전(RLS 없음)에는 이 insert가 실제로 성공해 행이 생길 수 있다 — 그 경우도 정리한다.
       const insertedId = (data as { id: string }[] | null)?.[0]?.id;
-      if (insertedId) await supabase.from("staff_salaries").delete().eq("id", insertedId);
+      if (insertedId) await getFixtureAdminClient().from("staff_salaries").delete().eq("id", insertedId);
     }
   });
 });
@@ -400,7 +419,7 @@ describe("notification_logs — 알림발송기록 (정산 데이터, ACL-003 �
     } finally {
       // SQL 적용 전(RLS 없음)에는 이 insert가 실제로 성공해 행이 생길 수 있다 — 그 경우도 정리한다.
       const insertedId = (data as { id: string }[] | null)?.[0]?.id;
-      if (insertedId) await supabase.from("notification_logs").delete().eq("id", insertedId);
+      if (insertedId) await getFixtureAdminClient().from("notification_logs").delete().eq("id", insertedId);
     }
   });
 });
