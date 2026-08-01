@@ -8,6 +8,116 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-02 — ACL-005 관리자 진입 SSOT 수정 + UI-003 센터 등록 흐름 개선 (PR #19)
+
+일반 회원을 스태프로 등록해도 마이페이지 "관리자 모드로 전환"이 안 뜨고 `/manager` 접속이
+차단되는 문제(1차 조사·수정은 커밋되지 않은 채 보류돼 있었고, 그 상태로 실브라우저 재현이
+보고돼 2차로 전수 조사·수정함).
+
+- **원인**: `accounts.is_manager`(스태프 초대와 별개로 저장되는 플래그)를 관리자 진입 판정
+  기준으로 쓰고 있었는데, `inviteStaff()`가 이 플래그를 갱신하려는 UPDATE가 `accounts` RLS
+  정책("본인 계정 수정", `auth_id = auth.uid()`)에 막혀 항상 조용히 실패했음(반환 `error`
+  미확인). 전수 조사 결과 `account_type`/`signup_type` 같은 별도의 영구 차단 필드는 존재하지
+  않았고, ID 연결(`auth_id`→`accounts.id`→`manager_centers.account_id`)에도 혼동이 없었음 —
+  원인은 이 플래그 하나였음.
+- **수정**: `lib/manager.ts`(`getMyAccountId()`)와 `lib/mypage.ts`(`getMyContext()`)가 이제
+  `accounts.is_manager`가 아니라 active `manager_centers` 소속 존재를 라이브 조회로 판단(SSOT
+  통일). `lib/roles.ts`의 `inviteStaff()`에서 항상 실패하던 `is_manager` 갱신 코드 제거. RLS/SQL
+  변경 없음 — 기존 "본인 매니저센터 조회" SELECT 정책만으로 충분.
+- **UI-003**: 회원가입 유형 문구 "회원"→"일반", "매니저"→"센터 운영자"로 변경(보조 설명 추가,
+  내부 상태값은 불변). 마이페이지 "센터 운영하기(매니저 등록)"→"내 센터 등록하기"로 변경하고
+  `/login`으로 되돌아가던 동작을 제거, 로그인된 사용자가 바로 센터 등록 폼(`/mypage/register-center`,
+  신규)으로 이동하도록 함. "관리자 모드로 전환"과 동시에 노출 가능(상호 배제 조건 제거).
+- **공용화**: `lib/centers.ts`(신규) — 센터 등록 검증(`validateCenterRegistrationInput`)·저장
+  (`registerCenterForAccount`) 로직, `app/components/CenterRegistrationForm.tsx`(신규) — 입력
+  UI. 회원가입("센터 운영자") 흐름과 마이페이지 "내 센터 등록하기" 흐름이 이 두 모듈만 공유하고
+  로직을 복제하지 않음. 기존에 각 supabase 호출의 반환 error를 확인하지 않던 지점(센터 오너
+  역할 연결)도 이번에 함께 고쳐 실패가 조용히 무시되지 않도록 함.
+- Issue: [ACL-005](https://github.com/sonjw222/booking-app/issues/26)(재사용, 제목/범위 확장),
+  [UI-003](https://github.com/sonjw222/booking-app/issues/27)(신규). `feature/access-control-guards`
+  (PR #19)에 포함 — main 미병합.
+
+## 2026-08-01 (추가) — ACL-001~004 서버 측 권한 재검증 + PR 2개 분리
+
+이전 Access Control + RLS Design Batch(바로 아래 항목)는 클라이언트 가드만 다뤘습니다. 이번
+추가 작업은 "화면 가드만으로는 충분하지 않다"는 지적에 따라 실제 RLS/RPC를 전수 재검증했습니다.
+
+- **ACL-001 (관리자 화면 쓰기 차단)**: **PASS**. `service_categories`/`home_banners`는 SELECT는
+  공개(`true`, 홈 화면 노출용)지만 INSERT/UPDATE/DELETE는 `is_platform_admin()`으로 이미 막혀
+  있어, 일반 회원이 쓰기 쿼리를 직접 호출해도 서버가 차단함을 확인.
+- **ACL-002 (센터 미소속 사용자의 직접 접근)**: **PASS**. `inquiry_threads`/`inquiry_messages`는
+  회원 본인(`member_account_id`) 또는 소속 센터(`my_managed_center_ids()`)로, `notifications`는
+  `recipient_account_id = my_account_id()`로 이미 스코프되어 있어, 화면 가드 없이 RPC/REST를
+  직접 호출해도 타인의 데이터는 보이지 않음을 확인. 매니저 화면 가드는 보조 방어선, RLS가 최종
+  방어선이라는 원칙이 실제로 지켜지고 있었음.
+- **ACL-003 (개인 권한 데이터 직접 접근)**: **FAIL**. `account_center_permissions`의 기존
+  "개인권한 조회" SELECT 정책이 `manager_center_id in (select id from manager_centers where
+  center_id in (select my_managed_center_ids()))`만 확인해, `facility.role_permission` 권한이
+  없는 일반 스태프도 "같은 센터 소속"이기만 하면 다른 스태프의 개인 권한 예외(allow/deny)를
+  Supabase SDK로 직접 조회할 수 있는 구조였음(화면 가드 `isOwnerOfCenter()`를 완전히 우회 가능).
+  테이블/정책 주석에는 "오너만 조회 가능"이라고 적혀 있었지만 실제 SELECT 정책 구현에 그 권한
+  체크가 빠져 있었던 것으로 확인됨. INSERT/UPDATE/DELETE 정책은 원래부터
+  `has_permission(center_id,'facility.role_permission')`을 정확히 요구하고 있어 **쓰기는
+  안전**했음(READ만 FAIL). 수정 SQL 초안을 `fix_account_center_permissions_select_draft_proposed.sql`에
+  작성(본인 것 + facility.role_permission 보유자만 허용 — ACL-004의 `fetchMyEffectivePermissionKeys()`가
+  본인 데이터를 읽어야 하므로 "본인 것" 허용은 반드시 유지). **이번에도 이 SQL은 실행하지
+  않았음** — 실행 전 `tests/integration/acl-003-permission-read.test.ts`(신규, 현재는 실패해야
+  정상 — 수정 SQL 적용 후에만 통과)를 통과시켜야 함. 정적 검토 테스트
+  `tests/unit/acl003SqlFix.staticCheck.test.ts`로 SQL 파일 내용 자체를 회귀 검증함(둘 다 통과).
+- **ACL-004 (메뉴 숨김이 실제 권한 제어의 전부가 아님)**: 메뉴에 대응하는 각 화면의 실제
+  쓰기는 여전히 서버 RLS/RPC가 강제하며, 클라이언트 메뉴 숨김은 UX 보조 수단일 뿐임을 재확인.
+  `effectiveState()`가 `has_permission()` SQL과 동일한 우선순위(개인 deny > 개인 allow > 역할)를
+  따름을 role×override 2×3 전체 조합으로 단위 테스트 보강(신규 3건). center 전환 시
+  `app/manager/page.tsx`의 `useEffect`가 새 fetch 시작 전에 `setMyPerms(null)`을 동기적으로
+  호출해 이전 센터의 권한 캐시가 새 센터에 노출되지 않음, 권한 로딩 중에는 `canSeeManagerMenu()`가
+  `myPerms === null`을 false로 처리해 메뉴가 순간적으로 전부 노출되지 않음을 코드 검토로 확인
+  (이 저장소에 `@testing-library/react`가 없어 React effect 순서 자체를 렌더 테스트로 검증할 수는
+  없음 — 로직은 순수 함수로 분리해 단위 테스트했고, effect 배선 자체는 코드 리뷰로 확인).
+
+**PR 분리**: 위 결과에 따라 앱 코드(ACL-001~004 + 이번 수정)와 RLS 조사/설계 문서(DB-001,
+SEC-007/008)를 별도 브랜치·PR로 분리함 — `feature/access-control-guards`(PR A),
+`docs/rls-gap-design`(PR B). 상세는 아래 두 PR의 실제 커밋/링크 참고.
+
+## 2026-08-01 — Access Control 구현 Batch (ACL-001~004)
+
+`feature/access-control-guards` 브랜치(PR A)에서 진행. `feature/access-control-rls-design`
+worktree(`booking-app-access-control`)에서 원래 함께 조사했던 6개 이슈(ACL-001~004,
+DB-001, SEC-007/008) 중 실제 코드 구현이 필요한 4건만 이 PR에 포함하고, DB 조사·RLS 설계
+2건은 별도 PR B(`docs/rls-gap-design`)로 분리했습니다 — 상세 사유는 바로 위 "ACL-001~004
+서버 측 권한 재검증 + PR 2개 분리" 항목 참고.
+
+**ACL-001 — 관리자 화면 가드 누락**: `app/admin/categories/page.tsx`, `app/admin/banners/page.tsx`에
+`/admin/centers`와 동일한 `checkPlatformAdmin()` 가드를 추가(`isAdmin` 3상태: null=확인중/false=차단/true=허용).
+
+**ACL-002 — 매니저 화면 센터 미보유 가드 누락**: `app/manager/inquiries/page.tsx`,
+`app/manager/notifications/page.tsx`에 `fetchMyCenters()` + "운영 중인 센터가 없어요" 가드를 추가
+(기존 9개 화면과 동일한 패턴). 두 화면 모두 기존에는 `fetchMyCenters()`를 아예 호출하지 않았음.
+
+**ACL-003 — 개인 권한 설정 화면 오너십 미검증**: `app/manager/staff/page.tsx`의 스태프 상세 링크에
+`&center=${centerId}`를 추가하고, `app/manager/staff/permissions/page.tsx`가 그 값을 읽어
+`fetchMyCenters()` 결과로 "요청자가 그 센터의 오너인지"를 확인(`lib/manager.ts`의 신규
+`isOwnerOfCenter()`)한 뒤에만 실제 권한 데이터를 불러오도록 수정. 기존에는 `mc`/`role` 파라미터만
+있으면(형식만 맞으면) 소속 센터·오너 여부와 무관하게 접근 가능했음.
+
+**ACL-004 — 매니저 홈 메뉴 권한 미반영**: `lib/manager.ts`의 `ManagedCenter`에 `managerCenterId`/
+`roleId`를 추가하고, `lib/roles.ts`에 서버 SQL 함수 `has_permission()`과 동일한 우선순위
+(오너 전권 → 개인 deny → 개인 allow → 역할)로 "내 유효 권한 키 집합"을 계산하는
+`fetchMyEffectivePermissionKeys()`와, 메뉴 한 항목의 노출 여부를 판정하는 순수 함수
+`canSeeManagerMenu()`를 추가. `app/manager/page.tsx`의 13개 메뉴 중 권한 카탈로그(`permissions`
+테이블)에 대응 키가 있는 9개(수강권관리→`pass.create`, 회원진도기록→`customer.progress`,
+스태프&권한→`facility.staff.view`, 매출관리→`pass.sales.view`, 공지사항→`board.notice.view`,
+1:1문의→`board.inquiry.view`, 센터정보→`facility.info`, 룸관리→`facility.room`,
+운영설정→`facility.operation`)를 이 함수들로 노출 제어. 나머지 4개(상품관리/후기관리/주문관리/
+관리자배치내역)는 카탈로그에 대응 permission key가 없어 1차 범위에서 제외(새 key 추가는 스키마
+변경이라 별도 승인 필요 — `docs/TODO.md` P2-11 참고). `ManagerNav`의 고정 탭 4개는 이번 범위 밖.
+
+**테스트**: 새 로직(`checkPlatformAdmin`/`isOwnerOfCenter`/`fetchMyCenters`/
+`fetchMyEffectivePermissionKeys`/`canSeeManagerMenu`/`effectiveState` 우선순위 일관성)을 검증하는
+단위 테스트 22건 + 서버 측 재검증에서 보강한 회귀 테스트 7건(role×override 2×3 전체 조합 3건,
+ACL-003 SQL 수정 초안 정적 검토 4건) = 총 29건. React 컴포넌트 렌더링 테스트는 이 저장소에
+`@testing-library/react`가 없어(기존 테스트 전부 로직 단위 테스트) 이번에도 페이지를 직접
+렌더링하지 않고, 가드가 의존하는 로직을 lib 함수로 분리해 단위 테스트했습니다.
+
 ## 2026-07-30 (추가) — 관리자 직접배치 통합 테스트 성공 경로 보강
 
 이전 커밋의 `admin-assignment-security.test.ts`는 매니저 fixture가 없어 권한 차단·입력 검증만

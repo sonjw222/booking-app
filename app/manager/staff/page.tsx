@@ -437,7 +437,7 @@ export default function StaffPage() {
             {!staffDetail.isOwner && staffDetail.roleId && (
               <a
                 className="list-row"
-                href={`/manager/staff/permissions?mc=${staffDetail.id}&role=${staffDetail.roleId}&name=${encodeURIComponent(staffDetail.name)}`}
+                href={`/manager/staff/permissions?mc=${staffDetail.id}&role=${staffDetail.roleId}&name=${encodeURIComponent(staffDetail.name)}&center=${centerId}`}
                 style={{ marginTop: 8 }}
               >
                 <div className="left"><span className="icon">⚙️</span>개인 권한 설정 (역할 예외)</div>

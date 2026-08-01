@@ -11,8 +11,10 @@ import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
 import InquiryChat from "../../components/InquiryChat";
 import { fetchCenterThreads, type InquiryThread } from "../../../lib/inquiries";
+import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 
 export default function ManagerInquiriesPage() {
+  const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [threads, setThreads] = useState<InquiryThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<{ id: string; title: string } | null>(null);
@@ -23,7 +25,9 @@ export default function ManagerInquiriesPage() {
 
   useEffect(() => {
     (async () => {
-      await loadThreads();
+      const list = await fetchMyCenters();
+      setCenters(list);
+      if (list.length > 0) await loadThreads();
       setLoading(false);
     })();
   }, []);
@@ -31,6 +35,18 @@ export default function ManagerInquiriesPage() {
   async function backToList() {
     setActive(null);
     await loadThreads();
+  }
+
+  if (centers.length === 0 && !loading) {
+    return (
+      <div className="app-shell">
+        <div className="header">
+          <div className="title" style={{ fontSize: 20, fontWeight: 800 }}>1:1 문의</div>
+        </div>
+        <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
+        <ManagerNav />
+      </div>
+    );
   }
 
   if (loading) return <Loading />;

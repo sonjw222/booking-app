@@ -2,21 +2,29 @@
 
 /*
   로그인 / 회원가입 화면 (Supabase Auth 연동)
-  - 회원가입 시 회원(member) / 매니저(manager) 역할 선택
-  - 매니저 선택 시 센터 정보 입력란 표시 (필드는 나중에 손장욱님이 업데이트 예정)
+  - 회원가입 시 일반(member) / 센터 운영자(manager) 가입 유형 선택 — 내부 role 값은
+    그대로지만 화면 표시는 UI-003 정책에 따라 "일반"/"센터 운영자"로 바꿨다.
+    (ACL-005: 이 선택은 최초 온보딩 분기일 뿐, 이후 관리자 모드 진입 자격과는 무관하다 —
+     진입 자격은 오직 active manager_centers 소속 여부로만 판단한다.)
+  - 센터 운영자 선택 시 센터 정보 입력란 표시(app/components/CenterRegistrationForm.tsx,
+    마이페이지 "내 센터 등록하기"와 공용)
   - 가입 성공 시:
       · 공통: accounts 행 생성
-      · 회원: 본인 profiles 행 생성 (is_primary=true)
-      · 매니저: is_manager=true + centers 행 + manager_centers 행 생성
+      · 일반: 본인 profiles 행 생성 (is_primary=true)
+      · 센터 운영자: centers 행 + manager_centers(owner) 행 생성(lib/centers.ts 공용 로직)
   - 소셜 로그인: 카카오 / 네이버 / 애플
 */
 
 import { useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import { uploadBusinessLicense } from "../../lib/storage";
+import CenterRegistrationForm, { type CenterFieldsValue } from "../components/CenterRegistrationForm";
+import { validateCenterRegistrationInput, registerCenterForAccount } from "../../lib/centers";
 
 type Mode = "login" | "signup";
+// 내부 키는 그대로 유지(회원=member/센터 운영자=manager) — UI-003은 화면 표시 문구만 바꾼다.
 type SignupRole = "member" | "manager";
+
+const EMPTY_CENTER_FIELDS: CenterFieldsValue = { name: "", address: "", phone: "", businessNumber: "", licenseFileName: "" };
 
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("login");
@@ -25,14 +33,11 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState(""); // 회원·매니저 공통 필수
+  const [phone, setPhone] = useState(""); // 일반·센터 운영자 공통 필수
 
-  // 매니저 가입용 센터 정보
-  const [centerName, setCenterName] = useState("");
-  const [centerAddress, setCenterAddress] = useState("");
-  const [centerPhone, setCenterPhone] = useState("");
-  const [businessNumber, setBusinessNumber] = useState(""); // 사업자등록번호 (필수)
-  const [licenseFileName, setLicenseFileName] = useState(""); // 사업자등록증 파일명 (필수)
+  // 센터 운영자 가입용 센터 정보 — app/mypage/register-center/page.tsx와 완전히 같은
+  // 필드 타입/입력 컴포넌트(CenterRegistrationForm)·저장 로직(lib/centers.ts)을 공유한다.
+  const [centerFields, setCenterFields] = useState<CenterFieldsValue>(EMPTY_CENTER_FIELDS);
   const [licenseFile, setLicenseFile] = useState<File | null>(null); // 실제 파일
 
   const [loading, setLoading] = useState(false);
@@ -65,24 +70,9 @@ export default function LoginPage() {
       return;
     }
     if (role === "manager") {
-      if (!centerName.trim()) {
-        setMessage({ type: "error", text: "센터 이름을 입력해주세요" });
-        return;
-      }
-      if (!centerAddress.trim()) {
-        setMessage({ type: "error", text: "센터 주소를 입력해주세요" });
-        return;
-      }
-      if (!centerPhone.trim()) {
-        setMessage({ type: "error", text: "센터 대표번호를 입력해주세요" });
-        return;
-      }
-      if (!businessNumber.trim()) {
-        setMessage({ type: "error", text: "사업자등록번호를 입력해주세요" });
-        return;
-      }
-      if (!licenseFileName.trim()) {
-        setMessage({ type: "error", text: "사업자등록증을 첨부해주세요" });
+      const centerValidationError = validateCenterRegistrationInput({ ...centerFields, licenseFile });
+      if (centerValidationError) {
+        setMessage({ type: "error", text: centerValidationError });
         return;
       }
     }
@@ -150,70 +140,15 @@ export default function LoginPage() {
         is_primary: true,
       });
 
-      // 3) 매니저면 센터 + manager_centers 생성
+      // 3) 센터 운영자면 센터 + manager_centers 생성 — app/mypage/register-center/page.tsx와
+      //    완전히 같은 저장 로직(lib/centers.ts)을 재사용한다(로직 복제 금지, UI-003/ACL-005).
       if (role === "manager") {
-        // TODO: 실제 파일 업로드는 Supabase Storage에 올린 뒤 그 경로를 저장해야 함.
-        //       지금은 파일명만 기록 (업로드 로직은 Storage 연동 시 추가)
-        //
-        // 중요: insert 뒤에 .select() 를 붙이면 "쓰기 후 읽기"라 SELECT 정책도 통과해야 합니다.
-        //   그런데 갓 만든 센터는 status='pending' 이고 manager_centers 연결도 아직 없어서
-        //   조회 정책에 걸려 막힙니다(= RLS 위반). 그래서 id를 미리 만들어 보내고
-        //   .select() 없이 insert만 합니다.
-        const newCenterId = crypto.randomUUID();
-
-        // 사업자등록증 파일을 Storage에 업로드 → 경로 확보
-        let licensePath = licenseFileName;
-        if (licenseFile) {
-          licensePath = await uploadBusinessLicense(licenseFile);
-        }
-
-        const { error: centerErr } = await supabase.from("centers").insert({
-          id: newCenterId,
-          name: centerName,
-          address: centerAddress,
-          phone: centerPhone,
-          business_number: businessNumber,
-          business_license_url: licensePath, // Storage 파일 경로
-          // status는 기본값 'pending' → 운영자 승인 후 'approved'가 되어야 회원에게 노출됨
-        });
-
-        if (centerErr) {
+        try {
+          await registerCenterForAccount(account.id, { ...centerFields, licenseFile });
+        } catch (e: any) {
           setLoading(false);
-          setMessage({ type: "error", text: "센터 생성 중 문제가 발생했어요: " + centerErr.message });
+          setMessage({ type: "error", text: e.message });
           return;
-        }
-
-        // 센터-매니저 연결을 먼저 만든다.
-        // (이 행이 있어야 위 조회 정책의 "내 센터" 조건이 충족되어 이후 조회가 가능해짐)
-        const { error: mcErr } = await supabase.from("manager_centers").insert({
-          account_id: account.id,
-          center_id: newCenterId,
-          // 센터를 직접 만든 사람이므로 바로 active
-          // (다른 스태프가 나중에 합류할 때는 pending → 오너가 승인)
-          status: "active",
-        });
-
-        if (mcErr) {
-          setLoading(false);
-          setMessage({ type: "error", text: "매니저 연결 중 문제가 발생했어요: " + mcErr.message });
-          return;
-        }
-
-        // 이제 내 센터로 인식되므로 조회 가능.
-        // 센터 생성 시 트리거가 만든 기본 역할 중 '스튜디오 오너'를 찾아 연결한다.
-        const { data: ownerRole } = await supabase
-          .from("center_roles")
-          .select("id")
-          .eq("center_id", newCenterId)
-          .eq("role_key", "owner")
-          .single();
-
-        if (ownerRole) {
-          await supabase
-            .from("manager_centers")
-            .update({ role_id: ownerRole.id })
-            .eq("account_id", account.id)
-            .eq("center_id", newCenterId);
         }
       }
     }
@@ -269,13 +204,13 @@ export default function LoginPage() {
           <div className="role-select">
             <button className={`role-btn ${role === "member" ? "on" : ""}`} onClick={() => setRole("member")}>
               <div className="role-emoji">🧘‍♀️</div>
-              <div className="role-name">회원</div>
-              <div className="role-desc">수업 예약·수강</div>
+              <div className="role-name">일반</div>
+              <div className="role-desc">센터 검색, 예약, 수강권 이용 등 일반 회원 기능을 사용합니다.</div>
             </button>
             <button className={`role-btn ${role === "manager" ? "on" : ""}`} onClick={() => setRole("manager")}>
               <div className="role-emoji">🏢</div>
-              <div className="role-name">매니저</div>
-              <div className="role-desc">센터 운영·관리</div>
+              <div className="role-name">센터 운영자</div>
+              <div className="role-desc">센터 정보를 등록하고 승인 후 운영 기능을 사용합니다.</div>
             </button>
           </div>
         )}
@@ -296,37 +231,20 @@ export default function LoginPage() {
           onKeyDown={(e) => e.key === "Enter" && submit()}
         />
 
-        {/* 매니저 가입 시 센터 정보 */}
+        {/* 센터 운영자 가입 시 센터 정보 — app/mypage/register-center/page.tsx와 같은 컴포넌트 재사용 */}
         {mode === "signup" && role === "manager" && (
-          <div className="center-fields">
-            <div className="center-fields-label">센터 정보</div>
-            <input className="input-field" placeholder="센터 이름" value={centerName} onChange={(e) => setCenterName(e.target.value)} />
-            <input className="input-field" placeholder="센터 주소" value={centerAddress} onChange={(e) => setCenterAddress(e.target.value)} />
-            <input className="input-field" placeholder="센터 대표번호" value={centerPhone} onChange={(e) => setCenterPhone(e.target.value)} />
-            <input className="input-field" placeholder="사업자등록번호" value={businessNumber} onChange={(e) => setBusinessNumber(e.target.value)} />
-            <label className="file-field">
-              <span className="file-label">
-                {licenseFileName ? `📎 ${licenseFileName}` : "사업자등록증 첨부"}
-              </span>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                style={{ display: "none" }}
-                onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  setLicenseFile(f);
-                  setLicenseFileName(f?.name ?? "");
-                }}
-              />
-            </label>
-            <div className="center-fields-note">※ 센터 정보는 모두 필수입니다. 등급 체계는 추후 안내 예정</div>
-          </div>
+          <CenterRegistrationForm
+            value={centerFields}
+            onChange={(patch) => setCenterFields((f) => ({ ...f, ...patch }))}
+            onFileSelect={setLicenseFile}
+            disabled={loading}
+          />
         )}
 
         {message && <div className={`auth-msg ${message.type}`}>{message.text}</div>}
 
         <button className="primary-btn login-submit" onClick={submit} disabled={loading}>
-          {loading ? "처리 중..." : mode === "login" ? "로그인" : role === "manager" ? "매니저로 가입하기" : "회원으로 가입하기"}
+          {loading ? "처리 중..." : mode === "login" ? "로그인" : role === "manager" ? "센터 운영자로 가입하기" : "일반으로 가입하기"}
         </button>
 
         <div className="divider-line">

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState, Suspense } from "react";
 import ManagerNav from "../../../components/ManagerNav";
 import Loading from "../../../components/Loading";
 import { useSearchParams } from "next/navigation";
+import { fetchMyCenters, isOwnerOfCenter } from "../../../../lib/manager";
 import {
   fetchPermissions, fetchRolePermissions,
   fetchStaffOverrides, setStaffOverride,
@@ -23,6 +24,7 @@ function PermInner() {
   const params = useSearchParams();
   const mcId = params.get("mc");
   const roleId = params.get("role");
+  const centerId = params.get("center");
   const staffName = params.get("name") ?? "스태프";
 
   const [perms, setPerms] = useState<Permission[]>([]);
@@ -33,13 +35,20 @@ function PermInner() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // null = 확인중, false = 오너 아님(또는 이 센터 소속 아님), true = 오너 확인됨
+  const [isOwner, setIsOwner] = useState<boolean | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2000); }
 
   const load = useCallback(async () => {
-    if (!mcId || !roleId) { setError("잘못된 접근이에요"); setLoading(false); return; }
+    if (!mcId || !roleId || !centerId) { setError("잘못된 접근이에요"); setLoading(false); setIsOwner(false); return; }
     setLoading(true);
     try {
+      const myCenters = await fetchMyCenters();
+      const owned = isOwnerOfCenter(myCenters, centerId);
+      setIsOwner(owned);
+      if (!owned) { setLoading(false); return; }
+
       const [ps, rk, ov] = await Promise.all([
         fetchPermissions(),
         fetchRolePermissions(roleId),
@@ -50,7 +59,7 @@ function PermInner() {
       setOverrides(ov);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
-  }, [mcId, roleId]);
+  }, [mcId, roleId, centerId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -86,7 +95,23 @@ function PermInner() {
     }
   }
 
-  if (loading) return <div className="app-shell"><Loading /></div>;
+  if (isOwner === false) {
+    return (
+      <div className="app-shell">
+        <div className="back-header">
+          <a className="side" href="/manager/staff">‹</a>
+          <div className="title">{staffName} 개인 권한</div>
+          <div className="side" />
+        </div>
+        <div className="daylist-empty" style={{ paddingTop: 80 }}>
+          {error === "잘못된 접근이에요" ? error : "이 센터의 오너만 접근할 수 있는 화면이에요"}
+        </div>
+        <ManagerNav />
+      </div>
+    );
+  }
+
+  if (loading || isOwner === null) return <div className="app-shell"><Loading /></div>;
 
   const tree = buildTree(perms, activeCat);
 

@@ -7,9 +7,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fetchBanners, addBanner, toggleBanner, deleteBanner, type HomeBanner } from "../../../lib/operator";
+import { checkPlatformAdmin } from "../../../lib/admin";
 import Loading from "../../components/Loading";
 
 export default function BannersPage() {
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [banners, setBanners] = useState<HomeBanner[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +31,14 @@ export default function BannersPage() {
     catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    (async () => {
+      const admin = await checkPlatformAdmin();
+      setIsAdmin(admin);
+      if (admin) await load();
+      else setLoading(false);
+    })();
+  }, [load]);
 
   async function handleAdd() {
     if (!title.trim()) { setError("배너 문구를 입력해주세요"); return; }
@@ -56,6 +65,29 @@ export default function BannersPage() {
     try { await deleteBanner(b.id); await load(); }
     catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
+  }
+
+  if (isAdmin === false) {
+    return (
+      <div className="app-shell">
+        <div className="back-header">
+          <a className="side" href="/admin">‹</a>
+          <div className="title">배너 관리</div>
+          <div className="side" />
+        </div>
+        <div className="daylist-empty" style={{ paddingTop: 80 }}>
+          플랫폼 운영자만 접근할 수 있는 화면이에요
+        </div>
+      </div>
+    );
+  }
+
+  if (isAdmin === null || loading) {
+    return (
+      <div className="app-shell">
+        <Loading />
+      </div>
+    );
   }
 
   return (

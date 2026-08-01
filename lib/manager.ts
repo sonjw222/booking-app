@@ -12,6 +12,8 @@ export type ManagedCenter = {
   roleName: string;  // 예: "스튜디오 오너", "매니저", "강사"
   isOwner: boolean;
   status: string;    // pending / active / suspended
+  managerCenterId: string; // manager_centers.id (권한 조회용)
+  roleId: string | null;   // center_roles.id (권한 조회용)
 };
 
 export type TodayClass = {
@@ -30,9 +32,19 @@ async function getMyAccountId(): Promise<string> {
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) throw new Error("로그인이 필요해요");
   const { data, error } = await supabase
-    .from("accounts").select("id, is_manager").eq("auth_id", authData.user.id).single();
+    .from("accounts").select("id").eq("auth_id", authData.user.id).single();
   if (error || !data) throw new Error("계정 정보를 찾을 수 없어요");
-  if (!data.is_manager) throw new Error("매니저 권한이 없는 계정이에요");
+  // ACL-005: 매니저 여부는 accounts.is_manager(스태프 초대 시 RLS로 인해 갱신되지
+  // 않을 수 있는 별도 플래그)가 아니라, 실제 active manager_centers 소속 존재
+  // 여부로 판단한다. 관리자 진입 조건 ≠ 메뉴별 권한 보유 여부 — 권한이 0개인
+  // 스태프도 소속만 active면 관리자 모드에는 들어올 수 있어야 한다.
+  const { count, error: mcError } = await supabase
+    .from("manager_centers")
+    .select("id", { count: "exact", head: true })
+    .eq("account_id", data.id)
+    .eq("status", "active");
+  if (mcError) throw new Error("매니저 권한을 확인하지 못했어요: " + mcError.message);
+  if (!count) throw new Error("매니저 권한이 없는 계정이에요");
   return data.id;
 }
 
@@ -41,7 +53,7 @@ export async function fetchMyCenters(): Promise<ManagedCenter[]> {
   const accountId = await getMyAccountId();
   const { data, error } = await supabase
     .from("manager_centers")
-    .select("status, centers(id, name), center_roles(name, is_owner)")
+    .select("id, role_id, status, centers(id, name), center_roles(name, is_owner)")
     .eq("account_id", accountId)
     .eq("status", "active"); // 승인된(활성) 센터만
   if (error) throw new Error("센터 목록을 불러오지 못했어요: " + error.message);
@@ -53,7 +65,17 @@ export async function fetchMyCenters(): Promise<ManagedCenter[]> {
       roleName: r.center_roles?.name ?? "매니저",
       isOwner: r.center_roles?.is_owner ?? false,
       status: r.status,
+      managerCenterId: r.id,
+      roleId: r.role_id ?? null,
     }));
+}
+
+// ACL-003: URL 파라미터로 넘어온 centerId에 대해 "내가 이 센터의 오너인지" 확인.
+//   목록에 그 센터가 아예 없으면(다른 센터 스태프가 URL을 조작한 경우 포함) false.
+export function isOwnerOfCenter(centers: ManagedCenter[], centerId: string | null): boolean {
+  if (!centerId) return false;
+  const c = centers.find((x) => x.id === centerId);
+  return c?.isOwner ?? false;
 }
 
 // 특정 센터의 오늘(KST) 수업 + 예약 인원
