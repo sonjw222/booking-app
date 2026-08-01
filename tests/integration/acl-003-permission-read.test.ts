@@ -36,6 +36,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";
 import { switchToTestUser, getOrCreateOwnedTestCenter, type TestUser } from "./setup";
 import { createRole, fetchRoles, inviteStaff, removeStaff, deleteRole, setStaffOverride } from "../../lib/roles";
+import { fetchMyCenters } from "../../lib/manager";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
@@ -209,5 +210,28 @@ describe("ACL-003: account_center_permissions SELECT는 본인 것 또는 facili
 
     expect(error).toBeNull();
     expect((data ?? []).length).toBeGreaterThan(0);
+  });
+});
+
+describe("ACL-005: 관리자 진입 조건(fetchMyCenters/getMyAccountId)은 accounts.is_manager가 아니라 active manager_centers 소속으로 판단한다", () => {
+  // 이 beforeAll에서 이미 managerB를 centerA에 "일반 스태프"(무권한 역할)로 초대해둔 상태를
+  // 재사용한다 — 실제 버그 재현(일반 회원을 스태프로 등록했더니 관리자 모드에 진입 못 함)과
+  // 동일한 초대 경로(lib/roles.ts의 inviteStaff())로 만들어진 fixture이므로, 이 테스트가
+  // 그 재현 시나리오를 실제 라이브 Supabase RLS로 검증한다.
+  it("스태프로 초대된 managerB는 fetchMyCenters()에서 centerA를 관리 대상으로 볼 수 있다(관리자 모드 진입 가능)", async () => {
+    await switchToTestUser(MANAGER_B.email, MANAGER_B.password);
+    const centers = await fetchMyCenters();
+    const centerA = centers.find((c) => c.id === centerAId);
+    expect(centerA).toBeDefined();
+    expect(centerA?.isOwner).toBe(false);
+    expect(centerA?.managerCenterId).toBe(staffManagerCenterId);
+  });
+
+  it("오너(managerA)도 여전히 fetchMyCenters()에서 자신의 센터를 오너로 본다(회귀 방지)", async () => {
+    await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
+    const centers = await fetchMyCenters();
+    const centerA = centers.find((c) => c.id === centerAId);
+    expect(centerA).toBeDefined();
+    expect(centerA?.isOwner).toBe(true);
   });
 });

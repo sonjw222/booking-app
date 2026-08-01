@@ -47,9 +47,18 @@ async function getMyContext(): Promise<{ accountId: string; profileId: string; n
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) throw new Error("로그인이 필요해요");
   const { data: acc, error: accErr } = await supabase
-    .from("accounts").select("id, name, phone, is_member, is_manager, is_platform_admin")
+    .from("accounts").select("id, name, phone, is_member, is_platform_admin")
     .eq("auth_id", authData.user.id).single();
   if (accErr || !acc) throw new Error("계정 정보를 찾을 수 없어요");
+  // ACL-005: "관리자 모드로 전환" 노출 조건은 /manager 진입 조건(lib/manager.ts의
+  // getMyAccountId())과 반드시 같은 기준을 써야 한다 — accounts.is_manager 플래그가
+  // 아니라 실제 active manager_centers 소속 존재 여부로 판단한다.
+  const { count: managerCenterCount } = await supabase
+    .from("manager_centers")
+    .select("id", { count: "exact", head: true })
+    .eq("account_id", acc.id)
+    .eq("status", "active");
+  const isManager = (managerCenterCount ?? 0) > 0;
   // 대표 프로필 우선, 없으면 가장 먼저 만든 프로필 사용
   // (대표 프로필이 없거나 2개 이상이면 single() 이 실패하므로 방어)
   const { data: profs, error: profErr } = await supabase
@@ -61,7 +70,7 @@ async function getMyContext(): Promise<{ accountId: string; profileId: string; n
   const prof = profs?.[0];
   if (profErr) throw new Error("프로필을 불러오지 못했어요: " + profErr.message);
   if (!prof) throw new Error("프로필이 없어요. 관리자에게 문의하거나 다시 가입해주세요.");
-  return { accountId: acc.id, profileId: prof.id, name: acc.name, phone: acc.phone, isMember: acc.is_member, isManager: acc.is_manager, isPlatformAdmin: acc.is_platform_admin ?? false };
+  return { accountId: acc.id, profileId: prof.id, name: acc.name, phone: acc.phone, isMember: acc.is_member, isManager, isPlatformAdmin: acc.is_platform_admin ?? false };
 }
 
 export async function fetchMyPage() {

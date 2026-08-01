@@ -32,9 +32,19 @@ async function getMyAccountId(): Promise<string> {
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) throw new Error("로그인이 필요해요");
   const { data, error } = await supabase
-    .from("accounts").select("id, is_manager").eq("auth_id", authData.user.id).single();
+    .from("accounts").select("id").eq("auth_id", authData.user.id).single();
   if (error || !data) throw new Error("계정 정보를 찾을 수 없어요");
-  if (!data.is_manager) throw new Error("매니저 권한이 없는 계정이에요");
+  // ACL-005: 매니저 여부는 accounts.is_manager(스태프 초대 시 RLS로 인해 갱신되지
+  // 않을 수 있는 별도 플래그)가 아니라, 실제 active manager_centers 소속 존재
+  // 여부로 판단한다. 관리자 진입 조건 ≠ 메뉴별 권한 보유 여부 — 권한이 0개인
+  // 스태프도 소속만 active면 관리자 모드에는 들어올 수 있어야 한다.
+  const { count, error: mcError } = await supabase
+    .from("manager_centers")
+    .select("id", { count: "exact", head: true })
+    .eq("account_id", data.id)
+    .eq("status", "active");
+  if (mcError) throw new Error("매니저 권한을 확인하지 못했어요: " + mcError.message);
+  if (!count) throw new Error("매니저 권한이 없는 계정이에요");
   return data.id;
 }
 

@@ -160,8 +160,11 @@ export async function inviteStaff(centerId: string, accountId: string, roleId: s
     if (error.message.includes("duplicate")) throw new Error("이미 이 센터의 스태프예요");
     throw new Error("스태프 추가에 실패했어요: " + error.message);
   }
-  // 매니저 역할 플래그 켜기
-  await supabase.from("accounts").update({ is_manager: true }).eq("id", accountId);
+  // ACL-005: accounts.is_manager를 여기서 true로 갱신하지 않는다 — accounts RLS의
+  // "본인 계정 수정" 정책(auth_id = auth.uid())상 오너가 남의 계정 행을 update할 수
+  // 없어 항상 조용히 실패했었다(반환 error 미확인이라 발견되지 않음). 매니저 여부는
+  // 이제 lib/manager.ts/lib/mypage.ts가 active manager_centers 소속 존재로 직접
+  // 판단하므로 이 플래그를 별도로 갱신할 필요가 없다.
 }
 
 export async function updateStaffRole(staffId: string, roleId: string): Promise<void> {
