@@ -6,6 +6,7 @@
   이메일/전체 UUID는 출력하지 않고 마스킹한다.
 */
 import { describe, it } from "vitest";
+import { supabase } from "../../lib/supabaseClient";
 import { switchToTestUser, getOrCreateOwnedTestCenter, getFixtureAdminClient } from "./setup";
 
 function mask(id: string | null | undefined): string {
@@ -51,9 +52,14 @@ describe("TEST-002 진단(읽기 전용, 임시)", () => {
       }
     }
 
+    // admin(service_role) client는 account_center_permissions에 대한 SQL GRANT 자체가 없어
+    // "permission denied"를 반환한다(RLS 우회와는 별개 — describeAdminQueryError 참고).
+    // 대신 오너(managerA)로 로그인된 일반 client로 조회한다 — 오너는 현재(수정 전) 정책에서도
+    // 같은 센터 소속이므로 조회 가능하다.
+    await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
     const mcIds = ((mcRows ?? []) as any[]).map((r) => r.id);
     if (mcIds.length > 0) {
-      const { data: overrides, error: ovErr } = await admin
+      const { data: overrides, error: ovErr } = await supabase
         .from("account_center_permissions")
         .select("id, manager_center_id, permission_key, grant_type")
         .in("manager_center_id", mcIds);
@@ -66,13 +72,17 @@ describe("TEST-002 진단(읽기 전용, 임시)", () => {
       }
     }
 
-    // 이 role이 다른 곳에서도 쓰이는지(다른 계정이 이 역할로 초대돼 있는지) 확인.
-    if (roleIds.length > 0) {
-      const { data: allWithRole } = await admin
+    // 무권한 역할(centerA 전용으로 생성됨)이 정확히 managerB의 행 하나에만 쓰이는지
+    // role_id별로 분리해서 확인한다(같은 이름의 역할이 다른 센터에도 있을 수 있으므로
+    // center_roles.id 기준으로만 판단 — center_roles는 애초에 센터별로 독립된 행이라
+    // 다른 센터에서 이 정확한 role_id를 참조할 수 없다).
+    const noPermRoleId = ((mcRows ?? []) as any[]).find((r) => r.account_id === managerB.accountId)?.role_id;
+    if (noPermRoleId) {
+      const { data: usage } = await admin
         .from("manager_centers")
-        .select("id, account_id, role_id, status")
-        .in("role_id", roleIds);
-      console.log(`[diag] 이 역할(들)을 가진 manager_centers 전체 행 수(centerA 한정 아님): ${(allWithRole ?? []).length}`);
+        .select("id, account_id, status")
+        .eq("role_id", noPermRoleId);
+      console.log(`[diag] 무권한 역할(${mask(noPermRoleId)})을 쓰는 manager_centers 행 수: ${(usage ?? []).length} (이 값이 1이어야 managerB 행만 삭제하면 role도 안전하게 삭제 가능)`);
     }
   }, 30000);
 });
