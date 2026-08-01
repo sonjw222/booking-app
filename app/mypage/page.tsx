@@ -186,18 +186,20 @@ export default function MyPage() {
           <span className="chevron">›</span>
         </a>
       )}
+      {/* ACL-005: 관리자 모드 진입은 active manager_centers 소속 여부로만 판단(profile.isManager) —
+          아래 "내 센터 등록하기"와 표시 조건이 서로 독립적이라 동시에 나타날 수 있다. */}
       {profile?.isManager && (
         <a className="list-row" href="/manager">
           <div className="left"><span className="icon">🏢</span>관리자 모드로 전환</div>
           <span className="chevron">›</span>
         </a>
       )}
-      {!profile?.isManager && (
-        <a className="list-row" href="/login">
-          <div className="left"><span className="icon">🏢</span>센터 운영하기 (매니저 등록)</div>
-          <span className="chevron">›</span>
-        </a>
-      )}
+      {/* UI-003: 가입 유형·기존 관리자 여부와 무관하게 모든 로그인 사용자가 새 센터를
+          등록할 수 있다(정책 B) — /login이 아니라 등록 폼으로 바로 이동한다. */}
+      <a className="list-row" href="/mypage/register-center">
+        <div className="left"><span className="icon">🏢</span>내 센터 등록하기</div>
+        <span className="chevron">›</span>
+      </a>
       <button className="list-row logout-row" onClick={logout}>
         <div className="left"><span className="icon">↩</span>로그아웃</div>
       </button>

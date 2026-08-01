@@ -7,9 +7,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fetchCategories, addCategory, deleteCategory, type ServiceCategory } from "../../../lib/operator";
+import { checkPlatformAdmin } from "../../../lib/admin";
 import Loading from "../../components/Loading";
 
 export default function CategoriesPage() {
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [cats, setCats] = useState<ServiceCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +28,14 @@ export default function CategoriesPage() {
     catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    (async () => {
+      const admin = await checkPlatformAdmin();
+      setIsAdmin(admin);
+      if (admin) await load();
+      else setLoading(false);
+    })();
+  }, [load]);
 
   async function handleAdd() {
     if (!label.trim()) { setError("종목 이름을 입력해주세요"); return; }
@@ -46,6 +55,29 @@ export default function CategoriesPage() {
     try { await deleteCategory(c.id); await load(); }
     catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
+  }
+
+  if (isAdmin === false) {
+    return (
+      <div className="app-shell">
+        <div className="back-header">
+          <a className="side" href="/admin">‹</a>
+          <div className="title">종목 관리</div>
+          <div className="side" />
+        </div>
+        <div className="daylist-empty" style={{ paddingTop: 80 }}>
+          플랫폼 운영자만 접근할 수 있는 화면이에요
+        </div>
+      </div>
+    );
+  }
+
+  if (isAdmin === null || loading) {
+    return (
+      <div className="app-shell">
+        <Loading />
+      </div>
+    );
   }
 
   return (

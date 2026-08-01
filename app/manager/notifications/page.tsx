@@ -14,17 +14,23 @@ import {
   fetchNotifications, markRead, deleteNotification, notiEmoji,
   type Notification,
 } from "../../../lib/notifications";
+import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 
 export default function ManagerNotificationsPage() {
+  const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [list, setList] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const ns = await fetchNotifications();
-      setList(ns);
+      const myCenters = await fetchMyCenters();
+      setCenters(myCenters);
+      if (myCenters.length > 0) {
+        const ns = await fetchNotifications();
+        setList(ns);
+        await markRead();
+      }
       setLoading(false);
-      await markRead();
     })();
   }, []);
 
@@ -36,6 +42,18 @@ export default function ManagerNotificationsPage() {
     e.stopPropagation();
     await deleteNotification(id);
     setList((prev) => prev.filter((n) => n.id !== id));
+  }
+
+  if (centers.length === 0 && !loading) {
+    return (
+      <div className="app-shell">
+        <div className="header">
+          <div className="title" style={{ fontSize: 20, fontWeight: 800 }}>알림</div>
+        </div>
+        <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
+        <ManagerNav />
+      </div>
+    );
   }
 
   if (loading) return <Loading />;

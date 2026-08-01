@@ -160,8 +160,11 @@ export async function inviteStaff(centerId: string, accountId: string, roleId: s
     if (error.message.includes("duplicate")) throw new Error("이미 이 센터의 스태프예요");
     throw new Error("스태프 추가에 실패했어요: " + error.message);
   }
-  // 매니저 역할 플래그 켜기
-  await supabase.from("accounts").update({ is_manager: true }).eq("id", accountId);
+  // ACL-005: accounts.is_manager를 여기서 true로 갱신하지 않는다 — accounts RLS의
+  // "본인 계정 수정" 정책(auth_id = auth.uid())상 오너가 남의 계정 행을 update할 수
+  // 없어 항상 조용히 실패했었다(반환 error 미확인이라 발견되지 않음). 매니저 여부는
+  // 이제 lib/manager.ts/lib/mypage.ts가 active manager_centers 소속 존재로 직접
+  // 판단하므로 이 플래그를 별도로 갱신할 필요가 없다.
 }
 
 export async function updateStaffRole(staffId: string, roleId: string): Promise<void> {
@@ -289,4 +292,38 @@ export function effectiveState(
 // 그 상태에서 실제로 권한이 있는지 (true/false)
 export function isEffectivelyAllowed(state: EffectiveState): boolean {
   return state === "allow" || state === "role-on";
+}
+
+// ACL-004: 메뉴 노출 여부 판정 (순수 함수 — page.tsx에서 재사용 + 단위 테스트용으로 분리).
+//   오너는 전권이므로 myPerms 계산 없이 즉시 true. myPerms가 아직 로딩 중(null)이면
+//   깜빡임 방지를 위해 false(숨김)로 처리한다.
+export function canSeeManagerMenu(
+  isOwner: boolean,
+  myPerms: Set<string> | null,
+  permissionKey: string
+): boolean {
+  if (isOwner) return true;
+  return myPerms?.has(permissionKey) ?? false;
+}
+
+/*
+  로그인한 스태프 본인의 유효 권한 키 목록 (메뉴 노출 등 UI 표시용).
+  오너는 전권이므로 이 함수를 호출하지 않고 호출측에서 isOwner로 별도 처리한다.
+  role_permissions에 있거나 개인 예외가 'allow'인 키만 포함(= isEffectivelyAllowed 기준).
+*/
+export async function fetchMyEffectivePermissionKeys(
+  managerCenterId: string,
+  roleId: string | null
+): Promise<Set<string>> {
+  const [rolePermKeys, overrides] = await Promise.all([
+    roleId ? fetchRolePermissions(roleId) : Promise.resolve([] as string[]),
+    fetchStaffOverrides(managerCenterId),
+  ]);
+  const roleSet = new Set(rolePermKeys);
+  const candidateKeys = new Set([...roleSet, ...Object.keys(overrides)]);
+  const result = new Set<string>();
+  for (const key of candidateKeys) {
+    if (isEffectivelyAllowed(effectiveState(key, roleSet, overrides))) result.add(key);
+  }
+  return result;
 }
