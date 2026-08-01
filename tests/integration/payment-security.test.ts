@@ -5,10 +5,10 @@
   - 존재하지 않는 주문 거부
   실제 RPC를 실제 권한 모델(security definer + 본인 검증)로 호출해 검증한다.
 */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";
 import { createOrder } from "../../lib/orders";
-import { TEST_CENTER_ID, TEST_PRODUCT_ID, switchToTestUser, type TestUser } from "./setup";
+import { TEST_CENTER_ID, TEST_PRODUCT_ID, signOutTestSession, switchToTestUser, type TestUser } from "./setup";
 
 type ProductRow = { id: string; name: string; price: number };
 
@@ -29,8 +29,15 @@ beforeAll(async () => {
   product = data as ProductRow;
 });
 
+// 다른 통합 테스트 파일이 같은 실행 중 공유 supabase 싱글턴의 세션을 바꿔놓을 수 있으므로,
+// 매 테스트 직전에 기본 계정(A)으로 다시 로그인해 세션을 재확인한다. B로 전환이 필요한
+// 테스트는 그 안에서 명시적으로 다시 전환한다(아래 그대로 유지 — 이미 그렇게 되어 있음).
+beforeEach(async () => {
+  userA = await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
+});
+
 afterAll(async () => {
-  await supabase.auth.signOut();
+  await signOutTestSession();
 });
 
 describe("본인 주문만 처리 가능 (RLS)", () => {
