@@ -417,13 +417,23 @@ Secrets가 필요하지 않습니다.**
 - `account_center_permissions`에 allow/deny 오버라이드 각 1건 이상(역할 권한을 뒤집는 케이스 검증용) — 위
   "staff 권한 있음" 페르소나 설정과 동일한 메커니즘.
 
-### 테스트 시나리오 형식 (후속 배치에서 작성)
+### 테스트 시나리오 형식
 
 각 테이블마다 최소 아래 4종을 통합 테스트로 작성한다:
 1. 권한 없는 역할의 SELECT 시도 → 0건 반환(또는 42501 에러)
 2. 권한 있는 역할의 SELECT 시도 → 자기 센터 행만 반환(타 센터 행 미포함)
 3. 권한 없는 역할의 INSERT/UPDATE/DELETE 시도 → 실패
 4. 권한 있는 역할의 INSERT/UPDATE/DELETE 시도 → 성공 + 타 센터 대상으로는 실패
+
+**Batch A — 작성 완료(2026-08-02)**: `tests/integration/sec007-batch-a-rls.test.ts`에 위 4종을
+5개 테이블 전부에 대해 작성함(`staff_salaries`는 own/other 권한 완전 분리라 own.view/other.view
+조합 2건을 추가로 포함, `messages`는 channel별 분리라 sms/push 조합 포함). Fixture는 위
+"Fixture 요구사항"에서 설계한 대로 TEST_MANAGER_A(centerA 오너)/TEST_MANAGER_B(centerA에
+권한 0개 스태프로 초대)/TEST_USER_A(무관 일반 회원, `contracts`의 "본인 것" 분기 검증용)만
+재사용 — 새 Secret 없음. **이 파일은 `proposed_rls_gap_batch_a.sql`이 실제로 적용되기 전에는
+의도적으로 RED입니다**(현재 이 5개 테이블은 RLS가 꺼져 있어 무권한 조회가 전부 성공해버림 —
+`tests/integration/acl-003-permission-read.test.ts`가 SQL 적용 전 red였던 것과 동일한 패턴).
+Batch B/C/D는 아직 테스트를 작성하지 않음(다음 배치에서 순서대로 진행).
 
 ## DB-001 (`chat_messages`) 결론
 

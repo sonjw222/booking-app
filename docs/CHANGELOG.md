@@ -8,6 +8,28 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-02 (추가) — SEC-009: RLS Gap Batch A 적용 준비 완료 (SQL 실행은 아직 안 함)
+
+`docs/rls-gap-design` 브랜치(PR #20)에서 진행. SEC-007/008에서 초안까지만 작성했던
+`proposed_rls_gap_batch_a.sql`(staff_salaries/contracts/leads/messages/notification_logs)을
+실제 적용 가능한 상태로 완성했습니다.
+
+- 재검증: 5개 테이블의 `schema.sql` 컬럼 정의, 초안이 참조하는 permission key 17개 전부가
+  실제 카탈로그에 존재하는지, `has_permission()`/`my_account_id()`/`is_platform_admin()`
+  헬퍼 시그니처, 5개 테이블의 현재 RLS 상태(전부 미적용 확인 — rollback SQL의 전제와 일치)를
+  전수 재확인 — SEC-007/008 작성 이후 drift 없음.
+- `tests/integration/sec007-batch-a-rls.test.ts` 신규 작성 — 5개 테이블 전부 "무권한 SELECT
+  차단/권한 보유자 SELECT 허용/무권한 쓰기 차단" 최소 3~4종(`staff_salaries`는 own/other
+  권한 완전 분리라 조합 추가, `messages`는 channel별 분리라 sms/push 조합 추가). Fixture는
+  TEST_MANAGER_A(centerA 오너)/TEST_MANAGER_B(centerA에 권한 0개 스태프로 초대)/
+  TEST_USER_A(무관 일반 회원 — `contracts`의 "본인 것" 조회 분기 검증용)만 재사용, 새
+  Secret 없음. **이 테스트는 SQL이 실제 적용되기 전에는 의도적으로 RED**입니다(현재 이
+  5개 테이블은 RLS가 꺼져 있어 무권한 조회가 전부 성공해버리는 결함을 그대로 증명) —
+  `tests/integration/acl-003-permission-read.test.ts`가 SQL 적용 전 red였던 것과 동일한 패턴.
+- SQL은 이번에도 **전혀 실행하지 않았습니다.** 실행은 사용자 승인 후 별도 단계에서 진행.
+- Issue: [SEC-009](https://github.com/sonjw222/booking-app/issues/28)(신규, SEC-007/008과
+  Related). Batch B/C/D는 아직 손대지 않음(다음 배치에서 순서대로 진행).
+
 ## 2026-08-02 — ACL-005 관리자 진입 SSOT 수정 + UI-003 센터 등록 흐름 개선 (PR #19)
 
 일반 회원을 스태프로 등록해도 마이페이지 "관리자 모드로 전환"이 안 뜨고 `/manager` 접속이
