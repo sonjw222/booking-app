@@ -22,6 +22,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";
 import {
   switchToTestUser,
+  signOutTestSession,
   type TestUser,
   getOrCreateOwnedTestCenter,
   createFutureTestClass,
@@ -73,7 +74,7 @@ afterAll(async () => {
   for (const target of cleanupTargets) {
     await cleanupTestClass(target.classId, target.reservationIds);
   }
-  await supabase.auth.signOut();
+  await signOutTestSession();
 }, 30000);
 
 // 기본 세션: 매니저 A. 다른 주체가 필요한 테스트는 내부에서 명시적으로 전환한다

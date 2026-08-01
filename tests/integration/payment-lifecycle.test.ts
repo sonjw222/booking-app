@@ -15,6 +15,7 @@ import {
   fetchLatestMembership,
   fetchOrderRow,
   fetchPaymentByMembership,
+  signOutTestSession,
   switchToTestUser,
   type TestUser,
 } from "./setup";
@@ -50,7 +51,7 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  await supabase.auth.signOut();
+  await signOutTestSession();
 });
 
 async function createMockOrder(): Promise<string> {

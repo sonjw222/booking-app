@@ -34,60 +34,99 @@ export type TestUser = {
 type AccountRow = { id: string };
 type ProfileRow = { id: string };
 
+/*
+  supabase-js의 GoTrueClient는 signOut()이 signInWithPassword()의 세션 저장(_saveSession)
+  중간에 끼어들면 "commit guard"로 그 저장을 되돌리는 로직이 내부에 있다(auth-js 소스의
+  _saveSession/_removeSession 주석 참고) — 즉 같은 client 인스턴스에서 signOut/signIn이
+  겹쳐 호출되면 "방금 로그인했는데 세션이 없다"는 상태가 실제로 발생할 수 있다. 이 저장소의
+  모든 통합 테스트 파일이 하나의 supabase 싱글턴(lib/supabaseClient.ts)을 공유하는 구조상
+  (그래야 lib/orders.ts 등 실제 앱 코드를 그대로 테스트할 수 있음 — 위 파일 상단 설명 참고),
+  파일 간 완전한 격리 대신 "auth를 바꾸는 모든 호출을 한 번에 하나씩만 실행되게" 직렬화해
+  이 race 자체를 원천 차단한다.
+*/
+let authMutex: Promise<unknown> = Promise.resolve();
+function withAuthLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = authMutex.then(fn, fn);
+  authMutex = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
 // 계정이 없으면 생성하고, 있으면 재사용(get-or-create).
 // 반환 후에는 supabase 싱글턴이 이 사용자로 로그인된 상태가 된다.
 export async function switchToTestUser(emailEnvName: string, passwordEnvName: string): Promise<TestUser> {
-  const email = requireEnv(emailEnvName);
-  const password = requireEnv(passwordEnvName);
+  return withAuthLock(async () => {
+    const email = requireEnv(emailEnvName);
+    const password = requireEnv(passwordEnvName);
 
-  await supabase.auth.signOut();
+    await supabase.auth.signOut();
 
-  const signIn = await supabase.auth.signInWithPassword({ email, password });
-  let userId: string;
-  if (signIn.error || !signIn.data.session) {
-    const signUp = await supabase.auth.signUp({ email, password });
-    if (signUp.error) {
-      throw new Error(`테스트 계정(${email}) 준비 실패(signUp): ${signUp.error.message}`);
+    const signIn = await supabase.auth.signInWithPassword({ email, password });
+    let userId: string;
+    if (signIn.error || !signIn.data.user || !signIn.data.session) {
+      const signUp = await supabase.auth.signUp({ email, password });
+      if (signUp.error) {
+        throw new Error(`테스트 계정(${email}) 준비 실패(signUp): ${signUp.error.message}`);
+      }
+      if (!signUp.data.user || !signUp.data.session) {
+        throw new Error(
+          `테스트 계정(${email})이 생성됐지만 로그인 세션이 없습니다. Supabase Auth의 ` +
+            `"Confirm email"이 켜져 있으면 가입 직후 바로 로그인할 수 없습니다. 개발 프로젝트에서 ` +
+            `이 옵션을 끄거나, 이미 이메일 인증이 끝난 계정 정보를 ${emailEnvName}/${passwordEnvName}에 지정해주세요.`
+        );
+      }
+      userId = signUp.data.user.id;
+    } else {
+      userId = signIn.data.user.id;
     }
-    if (!signUp.data.session) {
+
+    // 위에서 세션을 확인했더라도, 실제로 이후 쿼리에 쓰일 클라이언트 상태가 그 사용자로
+    // 확정됐는지 마지막으로 한 번 더 검증한다(로그인 결과를 검사 없이 넘기지 않는다).
+    const { data: verifyData, error: verifyError } = await supabase.auth.getUser();
+    if (verifyError || !verifyData.user || verifyData.user.id !== userId) {
       throw new Error(
-        `테스트 계정(${email})이 생성됐지만 로그인 세션이 없습니다. Supabase Auth의 ` +
-          `"Confirm email"이 켜져 있으면 가입 직후 바로 로그인할 수 없습니다. 개발 프로젝트에서 ` +
-          `이 옵션을 끄거나, 이미 이메일 인증이 끝난 계정 정보를 ${emailEnvName}/${passwordEnvName}에 지정해주세요.`
+        `테스트 로그인 실패: ${verifyError?.message ?? `세션이 예상한 사용자(${email})와 일치하지 않음`}`
       );
     }
-    userId = signUp.data.session.user.id;
-  } else {
-    userId = signIn.data.session.user.id;
-  }
 
-  const accountRes = await supabase.from("accounts").select("id").eq("auth_id", userId).maybeSingle();
-  if (accountRes.error) throw new Error(`accounts 조회 실패: ${accountRes.error.message}`);
-  let account = accountRes.data as AccountRow | null;
-  if (!account) {
-    const inserted = await supabase
-      .from("accounts")
-      .insert({ auth_id: userId, name: "통합테스트계정", is_member: true })
-      .select("id")
-      .single();
-    if (inserted.error) throw new Error(`accounts 생성 실패: ${inserted.error.message}`);
-    account = inserted.data as AccountRow;
-  }
+    const accountRes = await supabase.from("accounts").select("id").eq("auth_id", userId).maybeSingle();
+    if (accountRes.error) throw new Error(`accounts 조회 실패: ${accountRes.error.message}`);
+    let account = accountRes.data as AccountRow | null;
+    if (!account) {
+      const inserted = await supabase
+        .from("accounts")
+        .insert({ auth_id: userId, name: "통합테스트계정", is_member: true })
+        .select("id")
+        .single();
+      if (inserted.error) throw new Error(`accounts 생성 실패: ${inserted.error.message}`);
+      account = inserted.data as AccountRow;
+    }
 
-  const profileRes = await supabase.from("profiles").select("id").eq("account_id", account.id).maybeSingle();
-  if (profileRes.error) throw new Error(`profiles 조회 실패: ${profileRes.error.message}`);
-  let profile = profileRes.data as ProfileRow | null;
-  if (!profile) {
-    const inserted = await supabase
-      .from("profiles")
-      .insert({ account_id: account.id, name: "통합테스트", is_primary: true })
-      .select("id")
-      .single();
-    if (inserted.error) throw new Error(`profiles 생성 실패: ${inserted.error.message}`);
-    profile = inserted.data as ProfileRow;
-  }
+    const profileRes = await supabase.from("profiles").select("id").eq("account_id", account.id).maybeSingle();
+    if (profileRes.error) throw new Error(`profiles 조회 실패: ${profileRes.error.message}`);
+    let profile = profileRes.data as ProfileRow | null;
+    if (!profile) {
+      const inserted = await supabase
+        .from("profiles")
+        .insert({ account_id: account.id, name: "통합테스트", is_primary: true })
+        .select("id")
+        .single();
+      if (inserted.error) throw new Error(`profiles 생성 실패: ${inserted.error.message}`);
+      profile = inserted.data as ProfileRow;
+    }
 
-  return { accountId: account.id, profileId: profile.id };
+    return { accountId: account.id, profileId: profile.id };
+  });
+}
+
+// afterAll 등에서 세션을 정리할 때도 signOut()이 다른 곳에서 진행 중인 switchToTestUser()의
+// signIn과 겹치지 않도록 같은 잠금을 통해 실행한다(위 withAuthLock 설명 참고).
+export async function signOutTestSession(): Promise<void> {
+  await withAuthLock(async () => {
+    await supabase.auth.signOut();
+  });
 }
 
 export type OrderRow = {

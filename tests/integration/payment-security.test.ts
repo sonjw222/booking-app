@@ -8,7 +8,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";
 import { createOrder } from "../../lib/orders";
-import { TEST_CENTER_ID, TEST_PRODUCT_ID, switchToTestUser, type TestUser } from "./setup";
+import { TEST_CENTER_ID, TEST_PRODUCT_ID, signOutTestSession, switchToTestUser, type TestUser } from "./setup";
 
 type ProductRow = { id: string; name: string; price: number };
 
@@ -37,7 +37,7 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  await supabase.auth.signOut();
+  await signOutTestSession();
 });
 
 describe("본인 주문만 처리 가능 (RLS)", () => {
