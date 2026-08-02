@@ -26,6 +26,7 @@ export type ClassInfo = {
   reserved: number;
   capacity: number;
   allowGoods: boolean;
+  classFormat: "group" | "private"; // CLASS-001 D-2: 회원 앱에 프라이빗 배지 표시용
   // 프로필별 내 예약 상태. key = profileId
   myByProfile: Record<string, { reservationId: string; status: "confirmed" | "waitlisted" }>;
 };
@@ -90,7 +91,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   // 이번 달 수업 (확정 예약 수 포함)
   const { data: classRows, error: clsErr } = await supabase
     .from("classes")
-    .select("id, center_id, title, start_time, end_time, capacity, allow_goods, centers(id, name, categories)")
+    .select("id, center_id, title, start_time, end_time, capacity, allow_goods, class_format, centers(id, name, categories)")
     .gte("start_time", monthStart)
     .lt("start_time", nextMonth)
     .order("start_time");
@@ -182,6 +183,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
       reserved: reservedCount[c.id] ?? 0,
       capacity: c.capacity,
       allowGoods: c.allow_goods ?? false,
+      classFormat: (c.class_format ?? "group") as "group" | "private",
       myByProfile: myProfileIds.reduce((acc, pid) => {
         const r = myByClassProfile[`${c.id}:${pid}`];
         if (r) acc[pid] = { reservationId: r.id, status: r.status };

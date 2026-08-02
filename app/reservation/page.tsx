@@ -596,6 +596,7 @@ function ReservationCalendarContent() {
                 <div className="class-info">
                   <div className="class-row-title">
                     {cls.title}
+                    {cls.classFormat === "private" && <span className="booked-tag private-tag">프라이빗</span>}
                     {mineRec?.status === "confirmed" && <span className="booked-tag">내 예약</span>}
                     {mineRec?.status === "waitlisted" && <span className="booked-tag">대기중</span>}
                   </div>

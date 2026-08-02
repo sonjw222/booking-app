@@ -19,6 +19,8 @@ export type ManagedClass = {
   allowGoods: boolean;
   roomId: string | null;
   cancelDeadlineMin: number;
+  bookingDeadlineMin: number | null; // null이면 운영설정 기본값 사용(CLASS-001)
+  classFormat: "group" | "private";  // CLASS-001 D-2: 그룹/프라이빗(1:1) 구분
   status: string; // "open" | "cancelled" | "closed"
 };
 
@@ -33,7 +35,7 @@ function toKstIso(date: string, time: string) {
 export async function fetchClasses(centerId: string, fromDate: string, toDate: string): Promise<ManagedClass[]> {
   const { data: rows, error } = await supabase
     .from("classes")
-    .select("id, title, start_time, end_time, capacity, recurring_group_id, allow_goods, room_id, cancel_deadline_min, status")
+    .select("id, title, start_time, end_time, capacity, recurring_group_id, allow_goods, room_id, cancel_deadline_min, booking_deadline_min, class_format, status")
     .eq("center_id", centerId)
     .gte("start_time", toKstIso(fromDate, "00:00"))
     .lte("start_time", toKstIso(toDate, "23:59"))
@@ -62,6 +64,8 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
     allowGoods: c.allow_goods ?? false,
     roomId: c.room_id ?? null,
     cancelDeadlineMin: c.cancel_deadline_min ?? 0,
+    bookingDeadlineMin: c.booking_deadline_min ?? null,
+    classFormat: (c.class_format ?? "group") as "group" | "private",
     status: c.status ?? "open",
   }));
 }
@@ -75,6 +79,8 @@ export type ClassInput = {
   allowGoods: boolean;
   roomId?: string | null;
   cancelDeadlineMin?: number | null;   // 예약취소 마감 (분). null이면 센터 설정 사용
+  bookingDeadlineMin?: number | null;  // 예약마감 (분). null이면 센터 설정 사용(CLASS-001)
+  classFormat?: "group" | "private";   // CLASS-001 D-2, 기본값 group
 };
 
 export async function createClass(centerId: string, input: ClassInput): Promise<string> {
@@ -87,6 +93,8 @@ export async function createClass(centerId: string, input: ClassInput): Promise<
     allow_goods: input.allowGoods,
     room_id: input.roomId ?? null,
     cancel_deadline_min: input.cancelDeadlineMin ?? 0,
+    booking_deadline_min: input.bookingDeadlineMin ?? null,
+    class_format: input.classFormat ?? "group",
   }).select("id").single();
   if (error) throw new Error("수업 등록에 실패했어요: " + error.message);
   return data.id;
@@ -103,6 +111,8 @@ export async function updateClass(classId: string, input: ClassInput): Promise<v
       allow_goods: input.allowGoods,
       room_id: input.roomId ?? null,
       cancel_deadline_min: input.cancelDeadlineMin ?? 0,
+      booking_deadline_min: input.bookingDeadlineMin ?? null,
+      class_format: input.classFormat ?? "group",
     })
     .eq("id", classId);
   if (error) throw new Error("수업 수정에 실패했어요: " + error.message);
@@ -165,6 +175,7 @@ export type RecurringInput = {
   excludeDates?: Set<string>;   // 제외할 날짜 (휴무일 등)
   roomId?: string | null;
   cancelDeadlineMin?: number | null;
+  bookingDeadlineMin?: number | null;
 };
 
 // 기간 내 해당 요일의 날짜들을 모두 구함
@@ -203,6 +214,7 @@ export async function createRecurringClasses(centerId: string, input: RecurringI
     capacity: input.capacity,
     room_id: input.roomId ?? null,
     cancel_deadline_min: input.cancelDeadlineMin ?? 0,
+    booking_deadline_min: input.bookingDeadlineMin ?? null,
     recurring_group_id: groupId,
   }));
   const { data, error } = await supabase.from("classes").insert(rows).select("id");
