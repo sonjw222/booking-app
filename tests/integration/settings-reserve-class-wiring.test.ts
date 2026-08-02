@@ -26,6 +26,7 @@ import {
   getFixtureAdminClient,
   createFutureTestClass,
   createTestMembership,
+  cleanupTestClass,
   type TestUser,
 } from "./setup";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../lib/settings";
@@ -76,12 +77,16 @@ afterEach(async () => {
 
 afterAll(async () => {
   await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
-  const admin = getFixtureAdminClient();
   const errors: string[] = [];
 
+  // reservations/classes는 service_role GRANT가 없어(P2-13) admin client 대신 managerA 세션
+  // RLS로 정리하는 cleanupTestClass()를 재사용한다(admin-assignment-security.test.ts와 동일 관례).
   for (const classId of createdClassIds) {
-    try { await admin.from("reservations").delete().eq("class_id", classId); } catch { /* 무시 */ }
-    try { await admin.from("classes").delete().eq("id", classId); } catch { /* 무시 */ }
+    try {
+      await cleanupTestClass(classId, []);
+    } catch (e: any) {
+      errors.push(`class 정리 실패(id=${classId}): ${e.message}`);
+    }
   }
   // memberships는 매니저가 delete할 수 있는 RLS 정책이 없고 service_role GRANT도 없어(P2-13과
   // 같은 패턴) 삭제하지 않는다 — payments/orders와 동일하게 테스트 수강권 fixture는 공유 개발
