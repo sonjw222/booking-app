@@ -139,8 +139,8 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **확인됨 — SQL(RPC) 수정 필요, Track B 규칙상 이번 배치 미수정** |
-| 근거 파일 | `reservation_functions.sql`(`add_holiday_safe` 함수), `app/manager/holidays/page.tsx` |
+| 현재 상태 | **수정 SQL 준비 완료 — 실행 승인 대기** |
+| 근거 파일 | `reservation_functions.sql`(`add_holiday_safe` 함수), `app/manager/holidays/page.tsx`, `fix_holiday_membership_restore_draft_proposed.sql`(신규), `tests/integration/holiday-membership-restore.test.ts`(신규) |
 | 완료 조건 | `add_holiday_safe`가 확정/대기/출석 예약을 강제 취소할 때 `admin_cancel_reservation`/`manager_set_attendance`와 동일하게 `memberships.remaining_count`를 복구하도록 RPC를 수정하고, 예약자 있는 날짜를 휴무일로 지정하는 통합 테스트로 회귀 확인함 |
 | 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 8번 항목 |
 
@@ -149,10 +149,20 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 수강권의 `remaining_count`를 전혀 복구하지 않습니다. 같은 "취소" 성격의 다른 경로
 (`admin_cancel_reservation`, `manager_set_attendance`의 취소 처리)는 전부 정확히 +1 복구하는
 것과 대조적입니다 — 회원이 수강권 횟수를 영구히 잃는 실질적 금전/재화 손실 버그입니다.
-RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·DB 변경 금지") 범위 밖이라
-이번 배치에서는 고치지 않고 여기 기록만 합니다 — 별도 승인된 SQL 배치에서 처리해야 합니다.
 부수 발견: 같은 함수가 권한 체크에 `schedule.own.group.delete`(원래 "수업그룹 삭제" 용도)
-권한 키를 재사용하고 있어, 세분권한 도입 시 의미가 부정확할 수 있습니다(이것도 SQL 필요).
+권한 키를 재사용하고 있어, 세분권한 도입 시 의미가 부정확할 수 있습니다(이번 수정에서 함께
+바꾸지 않음 — 별도 판단 필요).
+
+**2026-08-02 후속 배치에서 수정 SQL 작성 완료**: `add_holiday_safe`가 삭제 직전 `status in
+('confirmed','attended') and membership_consumed and membership_id is not null`인 예약을
+`membership_id`별로 집계해 `remaining_count`를 복구하도록 수정(`remaining_count is not null`
+가드로 무제한권은 건드리지 않음). DELETE 기반 구조는 그대로 유지(FK에 `ON DELETE CASCADE`가
+없어 UPDATE-cancelled 방식으로 바꾸면 `delete from classes`가 FK 위반으로 실패함 — 기존
+`delete_class_safe`도 동일하게 예약을 먼저 지우는 패턴이라 이 아키텍처를 새로 만들지 않음).
+`fix_holiday_membership_restore_draft_proposed.sql`(+ 짝을 이루는 rollback 파일)로 준비했고
+**아직 Supabase에 실행하지 않았습니다** — 사용자 승인 후 실행 필요. 회귀 테스트
+`tests/integration/holiday-membership-restore.test.ts`는 SQL 적용 전에는 의도적으로 FAIL하고,
+적용 후 green이 되어야 정상입니다.
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
@@ -322,21 +332,37 @@ URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 �
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **부분 구현 — 화면은 완료, 서버 적용은 일부만** |
-| 근거 파일 | `app/manager/settings/page.tsx`, `lib/settings.ts`, `wire_settings.sql`, `add_center_settings.sql`, `reservation_functions.sql` |
+| 현재 상태 | **부분 구현 — 8개 필드 수정 SQL 준비 완료(실행 승인 대기), 17개는 여전히 Dead Code** |
+| 근거 파일 | `app/manager/settings/page.tsx`, `lib/settings.ts`, `wire_settings.sql`, `add_center_settings.sql`, `reservation_functions.sql`, `fix_settings_wire_reservation_logic_draft_proposed.sql`(신규), `docs/24_P1_12_Settings_Audit.md`(신규), `tests/integration/settings-reserve-class-wiring.test.ts`(신규) |
 | 완료 조건 | `center_settings`의 각 필드가 실제로 어떤 RPC/쿼리에서 읽히는지 전수 확인하고, 미적용 필드는 (a) 해당 로직에 반영하거나 (b) "준비 중" 표시로 화면에서 명확히 구분함 |
-| 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 운영설정 항목 |
+| 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 운영설정 항목, [24_P1_12_Settings_Audit.md](./24_P1_12_Settings_Audit.md)(전체 34개 필드 표) |
 
-2026-08-02 Track B 감사에서 발견: `center_settings`에 저장되는 약 26개 필드 중 예약 마감시각류
+2026-08-02 Track B 감사에서 발견: `center_settings`에 저장되는 34개 필드 중 예약 마감시각류
 8개(`private/group_{book,cancel}_{days_before,time}`, `calc_deadline()`에서 사용)와
 `deduct_on_late_cancel`(`cancel_reservation()`에서 사용) 9개만 실제로 어떤 서버 로직에서 읽힙니다.
-나머지(`allow_same_day_booking`, `daily_book_limit(_enabled)`, `waitlist_auto_hours/minutes`,
-`waitlist_weekly_limit`, `use_locker`, `use_lounge`, `private_max_concurrent(_enabled)`,
+나머지 25개는 `schema.sql`과 `lib/settings.ts` 외 코드 참조가 0건입니다 — 매니저가 화면에서
+토글/숫자를 바꿔도 저장은 되지만 실제 예약·조회 흐름에는 아무 영향이 없습니다.
+
+**2026-08-02 후속 배치에서 8개 필드 수정 SQL 작성 완료**: 전체 34개 필드를 개별 표로 다시
+전수 조사(근거: [24_P1_12_Settings_Audit.md](./24_P1_12_Settings_Audit.md)). 그중 `reserve_class()`의
+기존 동기 검증 흐름에 자연스럽게 추가 가능한 8개(`allow_same_day_booking`,
+`daily_book_limit_enabled`/`daily_book_limit`, `waitlist_weekly_limit`,
+`private_open_days_before`/`private_open_time`, `group_open_days_before`/`group_open_time`)를
+`calc_deadline()`(`'open'` kind 추가)과 `reserve_class()`에 배선하는 SQL을
+`fix_settings_wire_reservation_logic_draft_proposed.sql`(+ rollback 파일)로 준비했습니다 —
+**아직 Supabase에 실행하지 않았습니다.** `reserve_class()`는 앱에서 가장 많이 호출되는 핵심
+RPC라 P0-6보다 위험도가 높다고 판단해 파일 헤더에 별도 경고를 남겼습니다. 회귀 테스트
+`tests/integration/settings-reserve-class-wiring.test.ts`는 SQL 적용 전에는 의도적으로 FAIL하고,
+적용 후 green이 되어야 정상입니다.
+
+나머지 17개(`same_day_change_hours/minutes`, `autocancel_hours/minutes`,
+`waitlist_auto_hours/minutes`, `private_slot_unit`, `private_max_concurrent_enabled/_count`,
 `show_group_reserved_count`/`show_group_waitlist_count`, `use_inquiry_board`, `show_all_classes`,
-`auto_unpaid_input`, `show_point_history` 등)는 `schema.sql`과 `lib/settings.ts` 외 코드 참조가
-0건입니다 — 매니저가 화면에서 토글/숫자를 바꿔도 저장은 되지만 실제 예약·조회 흐름에는
-아무 영향이 없습니다. 신뢰를 해치는 문제라 P1로 분류합니다. 각 필드를 실제로 구현할지,
-아니면 "준비 중"으로 화면에서 구분할지는 제품 결정이 필요합니다.
+`use_locker`, `auto_unpaid_input`, `use_lounge`, `show_point_history`)는 이번 배치에서도 여전히
+Dead Code로 남습니다 — 스케줄러 인프라 부재, 대응 UI/로직 자체 부재, 또는 다른 설정과의 의미
+중복(제품 결정 필요) 때문입니다. 각 사유는 [24_P1_12_Settings_Audit.md](./24_P1_12_Settings_Audit.md)
+표에 필드별로 기록했습니다. 이 17개를 실제로 구현할지, "준비 중"으로 화면에서 구분할지는
+여전히 제품 결정이 필요합니다.
 
 ### P1-13. 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
 

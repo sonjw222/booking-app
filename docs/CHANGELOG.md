@@ -8,6 +8,36 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-02 — P0-6/P1-12: 휴무일 수강권 미복구 버그 + 운영설정 미배선 수정 SQL 준비
+
+Track B 감사(바로 아래 항목)에서 SQL 실행이 필요해 미루었던 두 항목을 이번 배치에서 조사·수정
+SQL 작성·테스트 작성까지 완료했습니다. **SQL은 아직 Supabase에 실행하지 않았습니다** — 두 초안
+모두 사용자 승인 후 실행 필요.
+
+- **P0-6 (휴무일 강제 지정 시 수강권 미복구)**: `add_holiday_safe`가 삭제할 예약 중
+  `status in ('confirmed','attended') and membership_consumed and membership_id is not null`인
+  것만 `membership_id`별로 집계해 `remaining_count`를 복구하도록 수정
+  (`fix_holiday_membership_restore_draft_proposed.sql` + rollback). 무제한권(`remaining_count`
+  null)·이미 취소된 예약·`membership_consumed=false`(예: 무료배치) 예약은 복구 대상에서 제외.
+  DELETE 기반 구조(예약/수업을 실제로 지움)는 그대로 유지 — FK에 `ON DELETE CASCADE`가 없어
+  UPDATE-cancelled 방식으로 바꾸면 `delete from classes`가 실패함. 회귀 테스트
+  `tests/integration/holiday-membership-restore.test.ts` 신규 작성(SQL 미적용 상태에서는
+  의도적으로 FAIL).
+- **P1-12 (운영설정 다수 필드 미배선)**: 34개 필드를 전수 재조사해
+  [24_P1_12_Settings_Audit.md](./24_P1_12_Settings_Audit.md)로 표 작성. 그중
+  `reserve_class()`의 기존 동기 흐름에 자연스럽게 추가 가능한 8개(당일예약 허용/일일예약
+  한도/주간 대기예약 한도/예약 오픈 시각 private·group)를 `calc_deadline()`(`'open'` kind 신설)과
+  `reserve_class()`에 배선(`fix_settings_wire_reservation_logic_draft_proposed.sql` + rollback).
+  나머지 17개는 스케줄러 인프라 부재·대응 UI 부재·정책 중복 등의 사유로 이번에도 Dead Code로
+  남김(사유는 감사 문서에 필드별로 기록). 회귀 테스트
+  `tests/integration/settings-reserve-class-wiring.test.ts` 신규 작성(SQL 미적용 상태에서는
+  의도적으로 FAIL). `reserve_class()`는 앱 최다 호출 RPC라 P0-6보다 위험도가 높다고 판단해
+  SQL 파일 헤더에 별도 경고를 남기고, 같은 PR에는 포함하되 반드시 함께 실행할 필요는 없다고
+  명시함.
+
+두 SQL 모두 기존 함수 시그니처·반환값·다른 호출부(`admin_assign_reservation` 등)는 변경하지
+않았고, 기존 로직은 그대로 재사용(순수 추가)했습니다.
+
 ## 2026-08-02 — Track B: 관리자(Admin) 기능 전수 감사 + 예외처리/사용성 버그 수정
 
 17개 관리자 기능 영역(대시보드/회원/스태프/권한/예약/출석/클래스/일정/수강권/상품/결제/매출/
