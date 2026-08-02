@@ -615,6 +615,27 @@ client로 fixture를 만들고 지울 수 있어 문제가 되지 않지만, `co
 - `rooms` SELECT가 `using (true)`로 로그인 없이도 전체 공개 — 의도된 것인지 확인 필요(PII 아님,
   낮은 위험이지만 미확인 상태).
 
+### P2-15. 통합 테스트 계정 중 플랫폼 운영자 자격이 있는 계정이 없어 `reserve_class()`를 직접 검증하는 CI 테스트가 항상 막힘
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인됨 — 사용자의 1회성 조치 필요(SQL 또는 테스트 계정 준비)** |
+| 근거 파일 | `tests/integration/settings-reserve-class-wiring.test.ts`, `reservation_functions.sql`(`guard_center_status_change()`), `tests/integration/setup.ts`(`getOrCreateOwnedTestCenter`) |
+| 완료 조건 | (a) `TEST_MANAGER_A`의 테스트 센터를 Supabase에서 1회 수동으로 `status='approved'`로 바꾸거나, (b) 플랫폼 운영자 권한을 가진 전용 테스트 계정을 추가해 그 계정으로 승인 처리하도록 fixture를 확장함 |
+| 관련 문서 | [TODO.md P1-12](#p1-12-운영설정manager-settings-화면의-다수-항목이-저장만-되고-실제로-적용되지-않음) |
+
+2026-08-02 P1-12 SQL 준비 중 CI에서 발견: `getOrCreateOwnedTestCenter()`가 새로 만드는 테스트
+센터는 기본 `status='pending'`인데, `guard_center_status_change()` 트리거가
+`is_platform_admin()`이 아니면 이 값을 바꾸는 UPDATE를 전부 막습니다(service_role/admin
+client의 UPDATE도 예외 없이 막힘 — RLS가 아니라 트리거 레벨 검증이라 우회 불가). 지금까지의
+모든 통합 테스트는 `admin_assign_reservation` 등 관리자 전용 RPC만 썼거나 미리 승인된
+`TEST_CENTER_ID`(레거시 checkout 흐름 전용, managerA 소유 아님)만 써서 이 gap이 드러나지
+않았습니다. `settings-reserve-class-wiring.test.ts`가 이 저장소에서 처음으로 회원 셀프예약
+RPC(`reserve_class`)를 직접 호출하는 통합 테스트라 이 gap이 드러났습니다. 이 항목이 해결되기
+전까지는 `settings-reserve-class-wiring.test.ts`가 P1-12 SQL 적용 여부와 무관하게 항상
+"테스트 센터를 승인 상태로 바꿀 수 없어요" 에러로 막힙니다 — SQL 자체의 결함이 아닙니다.
+
 ## 6. P3 — 제품 결정이 필요한 향후 기능 후보
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.

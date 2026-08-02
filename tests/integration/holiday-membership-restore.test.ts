@@ -75,14 +75,16 @@ beforeAll(async () => {
   const admin = getFixtureAdminClient();
 
   // 무제한권(remaining_count = null) — createTestMembership은 횟수권만 지원해 직접 생성.
-  // memberships는 service_role GRANT가 없어(admin client 사용 불가, P2-13과 같은 패턴) 로그인된
-  // managerA 세션(supabase, "매니저 수강권 발급" RLS 정책)으로 생성한다.
+  // schema.sql 주석 기준 pass_type은 'count'(횟수권) 또는 'period'(기간권=무제한)만 허용된다
+  // (memberships_pass_type_check). memberships는 service_role GRANT가 없어(admin client 사용
+  // 불가, P2-13과 같은 패턴) 로그인된 managerA 세션(supabase, "매니저 수강권 발급" RLS 정책)으로
+  // 생성한다.
   {
     const { data, error } = await supabase
       .from("memberships")
       .insert({
         profile_id: managerA.profileId, center_id: centerAId, product_name: "P0-6 테스트 무제한권",
-        pass_type: "unlimited", total_count: null, remaining_count: null,
+        pass_type: "period", total_count: null, remaining_count: null,
         expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10), status: "active",
       })
       .select("id").single();
