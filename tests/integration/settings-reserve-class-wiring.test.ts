@@ -49,6 +49,13 @@ beforeAll(async () => {
   managerA = await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
   centerAId = await getOrCreateOwnedTestCenter(managerA);
   defaultSettings = await fetchSettings(centerAId);
+
+  // reserve_class()는 centers.status='approved'를 요구한다. getOrCreateOwnedTestCenter가 새로
+  // 만드는 테스트 센터는 기본 'pending'이라 이 배치 전에는 어떤 통합 테스트도 회원 셀프예약
+  // RPC(reserve_class)를 직접 호출하지 않았다 — 이 파일이 처음이라 여기서 명시적으로 승인 처리한다.
+  const admin = getFixtureAdminClient();
+  const { error: approveErr } = await admin.from("centers").update({ status: "approved" }).eq("id", centerAId);
+  if (approveErr) throw new Error("테스트 센터 승인 처리 실패: " + describeAdminQueryError("centers", approveErr));
 }, 30000);
 
 afterEach(async () => {
@@ -64,10 +71,9 @@ afterAll(async () => {
     try { await admin.from("reservations").delete().eq("class_id", classId); } catch { /* 무시 */ }
     try { await admin.from("classes").delete().eq("id", classId); } catch { /* 무시 */ }
   }
-  for (const mId of createdMembershipIds) {
-    const { error } = await admin.from("memberships").delete().eq("id", mId);
-    if (error) errors.push(`membership 정리 실패(id=${mId}): ${describeAdminQueryError("memberships", error)}`);
-  }
+  // memberships는 매니저가 delete할 수 있는 RLS 정책이 없고 service_role GRANT도 없어(P2-13과
+  // 같은 패턴) 삭제하지 않는다 — payments/orders와 동일하게 테스트 수강권 fixture는 공유 개발
+  // DB에 잔존한다(의도된 기존 관례, holiday-membership-restore.test.ts와 동일).
   try {
     await resetSettings();
   } catch (e: any) {

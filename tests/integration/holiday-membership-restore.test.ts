@@ -74,9 +74,11 @@ beforeAll(async () => {
 
   const admin = getFixtureAdminClient();
 
-  // 무제한권(remaining_count = null) — admin client로 직접 생성(createTestMembership은 횟수권만 지원)
+  // 무제한권(remaining_count = null) — createTestMembership은 횟수권만 지원해 직접 생성.
+  // memberships는 service_role GRANT가 없어(admin client 사용 불가, P2-13과 같은 패턴) 로그인된
+  // managerA 세션(supabase, "매니저 수강권 발급" RLS 정책)으로 생성한다.
   {
-    const { data, error } = await admin
+    const { data, error } = await supabase
       .from("memberships")
       .insert({
         profile_id: managerA.profileId, center_id: centerAId, product_name: "P0-6 테스트 무제한권",
@@ -84,7 +86,7 @@ beforeAll(async () => {
         expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10), status: "active",
       })
       .select("id").single();
-    if (error) throw new Error("무제한권 fixture 생성 실패: " + describeAdminQueryError("memberships", error));
+    if (error) throw new Error("무제한권 fixture 생성 실패: " + error.message);
     membershipUnlimitedId = (data as { id: string }).id;
   }
   // ADMIN_FREE 시뮬레이션용 — 실제로 차감된 적 없는 상태를 만들기 위해 membership_consumed=false로
@@ -119,11 +121,9 @@ afterAll(async () => {
     try { await admin.from("reservations").delete().eq("class_id", classId); } catch { /* 이미 없음 */ }
     try { await admin.from("classes").delete().eq("id", classId); } catch { /* 이미 없음 */ }
   }
-  for (const mId of [membershipLimitedId, membershipMultiId, membershipUnlimitedId, membershipFreeId, membershipAlreadyCancelledId]) {
-    if (!mId) continue;
-    const { error } = await admin.from("memberships").delete().eq("id", mId);
-    if (error) errors.push(`membership 정리 실패(id=${mId}): ${describeAdminQueryError("memberships", error)}`);
-  }
+  // memberships는 매니저가 delete할 수 있는 RLS 정책이 없고 service_role GRANT도 없어(P2-13과
+  // 같은 패턴, admin-assignment-security.test.ts에도 동일하게 기록됨) 삭제하지 않는다 — payments/
+  // orders와 동일하게 테스트 수강권 fixture는 공유 개발 DB에 잔존한다(의도된 기존 관례).
   if (createdHoliday) {
     try {
       await supabase.from("center_holidays").delete().eq("center_id", centerAId).eq("holiday_date", holidayDate);
