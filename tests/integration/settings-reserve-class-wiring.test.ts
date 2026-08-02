@@ -45,6 +45,43 @@ function hoursUntilKstMidnight(): number {
 }
 const SAME_DAY_HOURS = Math.max(0.05, Math.min(2, hoursUntilKstMidnight() - 0.1));
 
+// daily_book_limit/waitlist_weekly_limit은 프로필의 그 날짜(또는 그 주) 전체 예약을 합산하는
+// 검증이라, 이 파일을 반복 실행(CI 재실행 등)하면 이전 실행이 만든 잔여 예약이 그대로 남아있을
+// 때 이후 실행의 판정을 오염시킬 수 있다(실제로 CI에서 재현됨 — 몇 분 간격 재실행이 같은
+// hoursFromNow 계산으로 거의 같은 날짜에 몰림).
+//
+// 삭제가 아니라 "취소"로 정리하는 이유: reservations의 DELETE RLS 정책
+// ("매니저 취소예약 정리", reservation_functions.sql)은 status가 'cancelled'/'no_show'인
+// 행만 삭제를 허용한다 — confirmed/waitlisted 상태인 채로 직접 delete를 시도하면 RLS가
+// 조용히 0건을 지우고 에러도 내지 않는다(바로 이것이 오염의 실제 원인이었다: 기존
+// cleanupTestClass()도 이 문제를 그대로 갖고 있었다). 그래서 이 헬퍼는 남아있는 확정/대기
+// 예약을 cancel_reservation()으로 먼저 취소한다 — 이러면 daily-limit/waitlist 카운트
+// 쿼리(status in ('confirmed','waitlisted')만 집계)에서 자동으로 제외되고, 수강권도
+// 정상적으로 복구된다(기존 예약 취소 경로 그대로 재사용).
+async function clearFutureReservationsForManagerA(centerId: string, profileId: string) {
+  const { data: classes, error: classErr } = await supabase
+    .from("classes")
+    .select("id")
+    .eq("center_id", centerId)
+    .gt("start_time", new Date().toISOString());
+  if (classErr) throw new Error("잔여 예약 정리용 수업 조회 실패: " + classErr.message);
+  const classIds = (classes ?? []).map((c: any) => c.id as string);
+  if (classIds.length === 0) return;
+
+  const { data: staleReservations, error: resErr } = await supabase
+    .from("reservations")
+    .select("id")
+    .eq("profile_id", profileId)
+    .in("class_id", classIds)
+    .in("status", ["confirmed", "waitlisted"]);
+  if (resErr) throw new Error("잔여 예약 조회 실패: " + resErr.message);
+
+  for (const r of staleReservations ?? []) {
+    const { error } = await supabase.rpc("cancel_reservation", { p_reservation_id: (r as any).id });
+    if (error) throw new Error(`잔여 예약 취소 실패(id=${(r as any).id}): ${error.message}`);
+  }
+}
+
 let managerA: TestUser;
 let centerAId: string;
 let defaultSettings: CenterSettings;
@@ -81,6 +118,8 @@ beforeAll(async () => {
         "fix_test_center_approval_draft_proposed.sql을 Supabase에서 실행해주세요."
     );
   }
+
+  await clearFutureReservationsForManagerA(centerAId, managerA.profileId);
 }, 30000);
 
 afterEach(async () => {
