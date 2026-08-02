@@ -171,13 +171,24 @@ describe("RES-001: 예약 후 10분 이내 무료 취소 예외", () => {
     });
     const cls = await createFutureTestClass(centerAId, { title: "RES-001 차감옵션충돌", hoursFromNow: 2 });
     createdClassIds.push(cls.id);
-    const mem = await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
+    await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
 
     const resId = await reserveAndGetId(cls.id);
+    // [수정] createTestMembership의 expires_at은 날짜(하루) 단위로만 저장되므로, 이 파일 안에서
+    // 누적 생성된 여러 수강권이 같은 만료일을 공유할 수 있다 — reserve_class()의
+    // "만료 임박순 1개 선택(order by expires_at asc limit 1)"이 동률을 어느 쪽으로 풀지는
+    // 보장되지 않아, 앞선 테스트들의 수강권이 대신 선택될 수 있다("mem" 변수가 실제로 쓰였다는
+    // 가정은 성립하지 않음). 실제로 이 예약이 소비한 membership_id를 직접 조회해 검증한다.
+    const { data: resRow, error: resErr } = await supabase
+      .from("reservations").select("membership_id").eq("id", resId).single();
+    if (resErr || !resRow) throw new Error("예약의 membership_id 조회 실패: " + resErr?.message);
+    const usedMembershipId = (resRow as any).membership_id as string;
+    const beforeCancel = await fetchMembershipRemaining(usedMembershipId);
+
     await backdateCreatedAt(resId, 11);
 
     const { error } = await supabase.rpc("cancel_reservation", { p_reservation_id: resId });
     expect(error).toBeNull(); // 차단되지 않고 취소는 됨
-    expect(await fetchMembershipRemaining(mem.id)).toBe(2); // 환급 없이 소모된 채로 유지(2 그대로)
+    expect(await fetchMembershipRemaining(usedMembershipId)).toBe(beforeCancel); // 환급 없이 소모된 채로 유지
   });
 });
