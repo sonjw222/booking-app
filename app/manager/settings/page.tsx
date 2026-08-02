@@ -252,13 +252,14 @@ export default function SettingsPage() {
 
           {/* 11~17. 기능 on/off */}
           <div className="set-section-title">기능 사용 여부</div>
+          {/* E-6: 문의 게시판/락커/라운지 사용 토글 제거 — 어디서도 이 값을 읽는 코드가 없어
+              (docs/TODO.md에 근거 기록) 관리자가 켜고 꺼도 실제 효과가 없는 항목이었다.
+              DB 컬럼(use_inquiry_board/use_locker/use_lounge)은 이번에 지우지 않는다(향후
+              기능 플래그로 재사용될 수 있어 별도 migration 이슈로 분리). */}
           {([
-            ["useInquiryBoard", "문의 게시판 사용"],
             ["showAllClasses", "수강권으로 볼 수 없는 수업도 표시"],
-            ["useLocker", "락커 기능 사용"],
             ["deductOnLateCancel", "취소 시간 이후 취소 시 횟수 차감"],
             ["autoUnpaidInput", "수강권 미수금 자동 입력"],
-            ["useLounge", "회원앱 라운지 사용"],
             ["showPointHistory", "회원앱 포인트 내역 조회"],
           ] as [keyof CenterSettings, string][]).map(([key, label]) => (
             <div className="set-row" key={key}>

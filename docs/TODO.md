@@ -580,6 +580,54 @@ client로 fixture를 만들고 지울 수 있어 문제가 되지 않지만, `co
 - `rooms` SELECT가 `using (true)`로 로그인 없이도 전체 공개 — 의도된 것인지 확인 필요(PII 아님,
   낮은 위험이지만 미확인 상태).
 
+### P2-16. (신규, 번호 충돌 주의) QA 통합 배치에서 발견한 항목 모음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인됨 — 이번 QA 배치(feature/qa-batch-nav-reservation-notifications)에서 발견, 일부는 같이 수정, 일부는 범위 밖으로 분리** |
+| 관련 문서 | 이 브랜치는 PR #32(P0-6/P1-12/P2-15, `fix/holiday-refund-and-settings-wiring`)가 merge되기 전 `origin/main` 기준으로 만들어져 이 문서에 아직 P0-6/P1-12/P2-15 항목이 없습니다 — **PR #32와 이 브랜치가 모두 merge된 뒤 번호가 겹치지 않는지 반드시 확인하세요.** |
+
+⚠️ **git/실제 라이브 DB 불일치**: PR #32는 아직 merge되지 않았지만 그 SQL(수강권 복구,
+`admin_action_logs` FK 2개, `reserve_class()`의 당일예약/일일한도/대기한도/오픈시각)은 이미
+실제 Supabase에 실행되어 라이브 상태입니다. `reservation_functions.sql`(git)은 여전히 옛
+버전입니다. 이번 QA 배치의 SQL(`fix_class_booking_deadline_override_draft_proposed.sql`,
+`fix_reservation_cancel_grace_period_draft_proposed.sql`)은 **라이브 DB 기준**(PR #32 적용
+후 버전)으로 작성했습니다 — git의 `reservation_functions.sql`만 보고 베이스라인을 판단하면
+안 됩니다. PR #32가 merge되면 `reservation_functions.sql` 자체도 최신화가 필요합니다(기존
+P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
+
+- **`cancel_deadline_min`이 `booking_deadline_min`과 동일한 이유로 사실상 무효**: `calc_deadline()`은
+  `center_settings`가 있으면(사실상 항상) 무조건 그 값을 쓰고, `classes.cancel_deadline_min`은
+  그 설정 행 자체가 없는 예외 상황에서만 폴백으로 쓰인다. `cancel_deadline_min`은 이미
+  관리자 UI(`app/manager/classes/page.tsx` "예약취소 가능 시간")에 연결돼 있어 실제로 값을
+  저장했을 수도 있어, `booking_deadline_min`과 달리 이번 배치에서 함께 고치지 않았다(0을
+  "미지정"으로 되돌리는 데이터 마이그레이션이 더 신중한 검토가 필요 — CLASS-001 SQL 헤더
+  주석 참고). **후속 조치 필요**: 실제 저장된 0이 아닌 값이 있는지 먼저 확인한 뒤 같은 패턴으로
+  수정.
+- **알림 카테고리가 8개가 아니라 4개뿐이고 서버가 이 설정을 전혀 읽지 않음**: `app/settings/notifications/page.tsx`의
+  알림 설정은 `localStorage`에만 저장되고(`reservation`/`waitlist`/`reminder`/`marketing` 4종),
+  모든 서버 트리거(`trg_notify_reservation_insert/_update`, `send_inquiry_message` 등)는 이
+  설정과 무관하게 항상 알림을 생성한다. 사용자가 요청한 "공지/결제/문의답변" 등 5개 카테고리
+  확장 및 실제 서버측 필터링(수신거부 반영)은 DB 테이블 신설 + 모든 알림 생성 지점 수정이
+  필요한 훨씬 큰 작업이라 이번 배치에서는 제외하고 여기 기록만 한다 — 제품 결정 필요.
+- **`notification_rules`/`messages`(SMS/LMS)/`notification_logs`는 스키마만 있고 완전 미구현**:
+  `app/settings/notifications/page.tsx`의 "실제 발송 연동은 준비 중이에요" 문구는 정확하다 —
+  In-app DB 알림 외에는 push(FCM/APNs)/SMS/카카오 알림톡/이메일 전부 백엔드 자체가 없다.
+  문구를 더 명확하게(채널별로) 다듬는 것을 이번 배치에서 진행함(E-3).
+- **문의 답변 알림이 스레드로 딥링크되지 않음**: `notifications.data.thread_id`가 저장되지만
+  `app/notifications/page.tsx`/`app/manager/notifications/page.tsx`의 클릭 핸들러가 `link`만
+  보고 이동해 목록 화면까지만 가고 특정 스레드는 자동 선택되지 않는다 — 이번 배치에서 함께 수정.
+- **`app/mypage/history/page.tsx`(전체 예약 내역)가 어디서도 링크되지 않는 고아 라우트**:
+  `fetchFullHistory()`(최대 500건, 상태별 필터)까지 구현돼 있지만 진입 경로가 없다 — 별도
+  판단 필요(내 예약 탭에 링크를 추가할지, 페이지 자체를 정리할지).
+- **(E-6) 운영설정의 "문의 게시판 사용"/"락커 기능 사용"/"회원앱 라운지 사용" 토글 제거**:
+  `use_inquiry_board`/`use_locker`/`use_lounge` 세 컬럼 모두 `schema.sql`/`lib/settings.ts`/
+  이 UI 외에는 어디서도 읽지 않는 죽은 설정임을 grep으로 확인(관리자가 켜고 꺼도 실제 효과
+  없음) — `app/manager/settings/page.tsx`의 토글 UI에서만 제거했다. DB 컬럼은 이번에 지우지
+  않았다(향후 락커/라운지/문의게시판 기능이 실제로 만들어지면 그때 이 컬럼을 다시 쓸 수도
+  있어 임의로 삭제하지 않음 — 실제 컬럼 삭제는 별도 migration 이슈로 분리해서 판단 필요).
+
 ## 6. P3 — 제품 결정이 필요한 향후 기능 후보
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.

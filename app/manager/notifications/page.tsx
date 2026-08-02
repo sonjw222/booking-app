@@ -37,6 +37,11 @@ export default function ManagerNotificationsPage() {
   }, []);
 
   function handleClick(n: Notification) {
+    // 신규 문의 알림은 목록이 아니라 해당 스레드로 바로 이동(NOTIF-001 E-2)
+    if (n.kind === "new_inquiry" && n.data?.thread_id && n.link) {
+      router.push(`${n.link}?thread=${n.data.thread_id}`);
+      return;
+    }
     if (n.link) router.push(n.link);
   }
 

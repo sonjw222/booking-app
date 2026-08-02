@@ -7,7 +7,8 @@
   - 채팅방: 사진/글 전송, 실시간
 */
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Loading from "../components/Loading";
 import BottomNav from "../components/BottomNav";
 import InquiryChat from "../components/InquiryChat";
@@ -17,6 +18,14 @@ import {
 } from "../../lib/inquiries";
 
 export default function InquiriesPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <InquiriesPageContent />
+    </Suspense>
+  );
+}
+
+function InquiriesPageContent() {
   const [threads, setThreads] = useState<InquiryThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<{ id: string; title: string } | null>(null);
@@ -27,15 +36,25 @@ export default function InquiriesPage() {
   const [searchKw, setSearchKw] = useState("");
   const [searchResults, setSearchResults] = useState<SelectableCenter[]>([]);
 
+  const searchParams = useSearchParams();
+
   async function loadThreads() {
     setThreads(await fetchMyThreads());
   }
 
   useEffect(() => {
     (async () => {
-      await loadThreads();
+      const list = await fetchMyThreads();
+      setThreads(list);
+      // 문의 답변 알림에서 ?thread=<id>로 들어왔으면 목록이 아니라 그 스레드를 바로 연다(NOTIF-001 E-2)
+      const threadParam = searchParams.get("thread");
+      if (threadParam) {
+        const found = list.find((t) => t.id === threadParam);
+        if (found) setActive({ id: found.id, title: found.centerName });
+      }
       setLoading(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function openPicker() {

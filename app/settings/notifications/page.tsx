@@ -54,7 +54,8 @@ export default function NotificationSettingsPage() {
       </div>
 
       <div className="perm-guide" style={{ margin: "8px 20px" }}>
-        받고 싶은 알림을 골라주세요. (실제 발송 연동은 준비 중이에요)
+        받고 싶은 알림을 골라주세요. 앱 내 알림은 즉시 제공되며, 문자·카카오 알림톡·푸시·이메일
+        발송 연동은 아직 준비 중이에요.
       </div>
 
       <div className="noti-list">

@@ -257,6 +257,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 .booked-tag { font-size: 10.5px; font-weight: 800; color: #fff; background: var(--accent); padding: 2px 7px; border-radius: 999px; margin-left: 6px; }
+.booked-tag.private-tag { background: #6B4C9A; } /* CLASS-001 D-2: 프라이빗 수업 배지 */
 
 .class-row {
   display: flex; gap: 12px; align-items: center;
@@ -523,6 +524,12 @@ a { color: inherit; text-decoration: none; }
 .time-row { display: flex; align-items: center; gap: 8px; }
 .time-row .input-field { flex: 1; }
 .time-sep { color: var(--ink-soft); font-weight: 800; }
+/* 오전/오후·시·분 선택 (UI-004 B-2) — 시작/종료를 각각 한 줄로 두어 모바일에서 select 3개가
+   잘리지 않게 한다(가로 한 줄에 6개 select를 몰아넣지 않음). */
+.ampm-time-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.ampm-time-label { width: 34px; flex: 0 0 auto; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.ampm-time-input { display: flex; gap: 6px; flex: 1; min-width: 0; }
+.ampm-time-input .ampm-select { flex: 1; min-width: 0; padding: 8px 6px; text-align: center; }
 .capacity-row { display: flex; align-items: center; gap: 12px; padding: 8px 2px 16px; }
 .capacity-label { font-size: 14px; font-weight: 700; flex: 1; }
 .cap-btn {
@@ -990,6 +997,7 @@ a { color: inherit; text-decoration: none; }
   font-size: 10.5px;
   padding: 1px 6px;
 }
+.profile-tag.sm.holiday-cancel-tag { background: #8a8a8a; } /* NOTIF-001 E-5: 휴무일 자동취소 배지 */
 
 /* ============================================================
    개인별 권한 설정 (/manager/staff/permissions)
@@ -1397,6 +1405,9 @@ a { color: inherit; text-decoration: none; }
   font-size: 12.5px;
   color: var(--text-dim);
 }
+/* 직접배치 확인 시트(UI-004 B-3) — 회원명/수업정보를 별도 줄로 분리해 중복처럼 안 보이게 함 */
+.assign-confirm-member { font-size: 14px; font-weight: 800; color: var(--text); }
+.assign-confirm-class { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
 
 .fullhist { padding: 0 20px 20px; }
 .fullhist-day { margin-bottom: 14px; }
