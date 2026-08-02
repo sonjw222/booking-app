@@ -51,6 +51,10 @@ const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PAS
 const USER_A = { email: "TEST_USER_A_EMAIL", password: "TEST_USER_A_PASSWORD" };
 
 const NO_PERM_ROLE_NAME = "SEC-009 Batch A1 테스트 무권한 역할";
+// leads/messages는 unique 제약이 없어 원래도 매 실행마다 새로 insert되지만, 실행 식별자를
+// 내용에 남겨두면 afterAll cleanup이 실패하고 남은 잔여 행이 있어도 어느 실행이 남긴 건지
+// LIKE 쿼리로 바로 특정할 수 있다(테스트 격리 원칙 #7 — 개별 삭제로 반복 대응하지 않기 위함).
+const RUN_TAG = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 let managerA: TestUser;
 let managerB: TestUser;
@@ -69,6 +73,35 @@ let leadId: string | null = null;
 let messageSmsId: string | null = null;
 let messageLmsId: string | null = null;
 let messagePushId: string | null = null;
+
+// staff_salaries에는 unique(center_id, account_id) 제약이 있어, 이전 실행이(비정상 종료 등으로)
+// afterAll을 못 돌리고 행을 남긴 상태에서 재실행하면 순수 insert는 duplicate key로 죽는다.
+// role/manager_centers와 같은 get-or-create 원칙을 적용: 있으면 재사용(이번 실행이 만든 게
+// 아니므로 정리 대상에도 넣지 않음), 없으면 새로 만들고 정리 대상으로 추적한다.
+let createdStaffSalaryOwn = false;
+let createdStaffSalaryOther = false;
+
+async function getOrCreateStaffSalary(
+  centerId: string,
+  accountId: string,
+  payload: Record<string, unknown>
+): Promise<{ id: string; created: boolean }> {
+  const { data: existing, error: selErr } = await supabase
+    .from("staff_salaries")
+    .select("id")
+    .eq("center_id", centerId)
+    .eq("account_id", accountId)
+    .maybeSingle();
+  if (selErr) throw new Error("staff_salaries 기존 행 확인 실패: " + selErr.message);
+  if (existing) return { id: (existing as { id: string }).id, created: false };
+
+  const { data, error } = await supabase
+    .from("staff_salaries")
+    .insert({ center_id: centerId, account_id: accountId, ...payload })
+    .select("id").single();
+  if (error) throw new Error("staff_salaries fixture 생성 실패: " + error.message);
+  return { id: (data as { id: string }).id, created: true };
+}
 
 async function getOrCreateNoPermRole(centerId: string): Promise<{ id: string; created: boolean }> {
   const roles = await fetchRoles(centerId);
@@ -143,25 +176,23 @@ beforeAll(async () => {
   // managerA(오너)의 일반 로그인 client로 fixture를 만든다 — 적용 전인 지금은 이 자체가
   // 막혀서 여기서 바로 실패하는 것이 정상(red)이다.
   {
-    const { data, error } = await supabase
-      .from("staff_salaries")
-      .insert({ center_id: centerAId, account_id: managerA.accountId, employment_type: "fulltime", base_salary: 3000000 })
-      .select("id").single();
-    if (error) throw new Error("staff_salaries(own) fixture 생성 실패: " + error.message);
-    staffSalaryOwnId = (data as { id: string }).id;
+    const own = await getOrCreateStaffSalary(centerAId, managerA.accountId, {
+      employment_type: "fulltime", base_salary: 3000000,
+    });
+    staffSalaryOwnId = own.id;
+    createdStaffSalaryOwn = own.created;
   }
   {
-    const { data, error } = await supabase
-      .from("staff_salaries")
-      .insert({ center_id: centerAId, account_id: managerB.accountId, employment_type: "parttime", per_class_pay: 30000 })
-      .select("id").single();
-    if (error) throw new Error("staff_salaries(other) fixture 생성 실패: " + error.message);
-    staffSalaryOtherId = (data as { id: string }).id;
+    const other = await getOrCreateStaffSalary(centerAId, managerB.accountId, {
+      employment_type: "parttime", per_class_pay: 30000,
+    });
+    staffSalaryOtherId = other.id;
+    createdStaffSalaryOther = other.created;
   }
   {
     const { data, error } = await supabase
       .from("leads")
-      .insert({ center_id: centerAId, name: "SEC-009 배치A1 테스트 상담고객", phone: "010-0000-0000", channel: "test" })
+      .insert({ center_id: centerAId, name: `SEC-009 배치A1 테스트 상담고객 [${RUN_TAG}]`, phone: "010-0000-0000", channel: "test" })
       .select("id").single();
     if (error) throw new Error("leads fixture 생성 실패: " + error.message);
     leadId = (data as { id: string }).id;
@@ -169,7 +200,7 @@ beforeAll(async () => {
   {
     const { data, error } = await supabase
       .from("messages")
-      .insert({ center_id: centerAId, channel: "sms", content: "SEC-009 배치A1 테스트 SMS", status: "sent" })
+      .insert({ center_id: centerAId, channel: "sms", content: `SEC-009 배치A1 테스트 SMS [${RUN_TAG}]`, status: "sent" })
       .select("id").single();
     if (error) throw new Error("messages(sms) fixture 생성 실패: " + error.message);
     messageSmsId = (data as { id: string }).id;
@@ -178,7 +209,7 @@ beforeAll(async () => {
     // lms도 message.sms.view로 묶여 있는지(sms 계열) 확인하기 위한 fixture
     const { data, error } = await supabase
       .from("messages")
-      .insert({ center_id: centerAId, channel: "lms", content: "SEC-009 배치A1 테스트 LMS", status: "sent" })
+      .insert({ center_id: centerAId, channel: "lms", content: `SEC-009 배치A1 테스트 LMS [${RUN_TAG}]`, status: "sent" })
       .select("id").single();
     if (error) throw new Error("messages(lms) fixture 생성 실패: " + error.message);
     messageLmsId = (data as { id: string }).id;
@@ -186,7 +217,7 @@ beforeAll(async () => {
   {
     const { data, error } = await supabase
       .from("messages")
-      .insert({ center_id: centerAId, channel: "push", title: "SEC-009 배치A1", content: "SEC-009 배치A1 테스트 푸시", status: "sent" })
+      .insert({ center_id: centerAId, channel: "push", title: "SEC-009 배치A1", content: `SEC-009 배치A1 테스트 푸시 [${RUN_TAG}]`, status: "sent" })
       .select("id").single();
     if (error) throw new Error("messages(push) fixture 생성 실패: " + error.message);
     messagePushId = (data as { id: string }).id;
@@ -203,8 +234,8 @@ afterAll(async () => {
     if (error) errors.push(`${label} 정리 실패(id=${id}): ${error.message}`);
   };
 
-  await deleteRow("staff_salaries", staffSalaryOwnId, "staff_salaries(own)");
-  await deleteRow("staff_salaries", staffSalaryOtherId, "staff_salaries(other)");
+  if (createdStaffSalaryOwn) await deleteRow("staff_salaries", staffSalaryOwnId, "staff_salaries(own)");
+  if (createdStaffSalaryOther) await deleteRow("staff_salaries", staffSalaryOtherId, "staff_salaries(other)");
   await deleteRow("leads", leadId, "leads");
   await deleteRow("messages", messageSmsId, "messages(sms)");
   await deleteRow("messages", messageLmsId, "messages(lms)");
