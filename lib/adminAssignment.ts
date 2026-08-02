@@ -59,7 +59,10 @@ export async function cancelAdminReservation(reservationId: string, cancelReason
 
 export type AdminActionLog = {
   id: string;
-  reservationId: string;
+  // 휴무일 강제 지정(add_holiday_safe) 등으로 원본 예약이 삭제되면 null이 될 수 있다
+  // (admin_action_logs.reservation_id는 ON DELETE SET NULL — fix_holiday_membership_restore
+  // 배치에서 변경, 로그 자체는 스냅샷 컬럼으로 계속 의미를 유지함).
+  reservationId: string | null;
   actionType: "CREATE_ASSIGNMENT" | "CREATE_FREE" | "CANCEL_ASSIGNMENT" | "CANCEL_FREE";
   reservationType: ReservationType;
   reservationSource: ReservationSource;
@@ -67,7 +70,8 @@ export type AdminActionLog = {
   adminName: string;
   memberProfileId: string;
   memberName: string;
-  classId: string;
+  // reservationId와 동일한 사유로 null 가능(fix_admin_action_logs_class_id_fk 배치에서 변경).
+  classId: string | null;
   classTitle: string;
   classStart: string;
   reasonCode: AdminReasonCode | null;
