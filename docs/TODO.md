@@ -633,8 +633,8 @@ client로 fixture를 만들고 지울 수 있어 문제가 되지 않지만, `co
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인됨 — 사용자의 1회성 조치 필요(SQL 또는 테스트 계정 준비)** |
-| 근거 파일 | `tests/integration/settings-reserve-class-wiring.test.ts`, `reservation_functions.sql`(`guard_center_status_change()`), `tests/integration/setup.ts`(`getOrCreateOwnedTestCenter`) |
+| 현재 상태 | **수정 준비 완료 — 실행 승인 대기** |
+| 근거 파일 | `tests/integration/settings-reserve-class-wiring.test.ts`, `reservation_functions.sql`(`guard_center_status_change()`), `tests/integration/setup.ts`(`getOrCreateOwnedTestCenter`), `fix_test_center_approval_draft_proposed.sql`(신규) |
 | 완료 조건 | (a) `TEST_MANAGER_A`의 테스트 센터를 Supabase에서 1회 수동으로 `status='approved'`로 바꾸거나, (b) 플랫폼 운영자 권한을 가진 전용 테스트 계정을 추가해 그 계정으로 승인 처리하도록 fixture를 확장함 |
 | 관련 문서 | [TODO.md P1-12](#p1-12-운영설정manager-settings-화면의-다수-항목이-저장만-되고-실제로-적용되지-않음) |
 
@@ -648,6 +648,16 @@ client의 UPDATE도 예외 없이 막힘 — RLS가 아니라 트리거 레벨 �
 RPC(`reserve_class`)를 직접 호출하는 통합 테스트라 이 gap이 드러났습니다. 이 항목이 해결되기
 전까지는 `settings-reserve-class-wiring.test.ts`가 P1-12 SQL 적용 여부와 무관하게 항상
 "테스트 센터를 승인 상태로 바꿀 수 없어요" 에러로 막힙니다 — SQL 자체의 결함이 아닙니다.
+
+**2026-08-02 수정 준비 완료**: `guard_center_status_change()` 트리거가 `before update`에만
+걸려 있고 `insert`는 막지 않는다는 점을 확인해, `tests/integration/setup.ts`의
+`getOrCreateOwnedTestCenter()`가 **새 센터를 처음부터 `status='approved'`로 insert**하도록
+수정했습니다(코드 변경, SQL 아님 — 이미 반영됨). 다만 `TEST_MANAGER_A`처럼 과거 배치에서 이미
+`status='pending'`으로 만들어진 기존 센터를 계속 재사용하는 계정은 이 코드 수정만으로는
+바뀌지 않습니다 — 그 기존 행들을 한 번 승인 처리하는 `fix_test_center_approval_draft_proposed.sql`(+
+rollback)을 준비했습니다. `통합테스트센터-` 이름 접두사로 좁혀 실제 운영 센터에는 영향이
+없고, `trg_guard_center_status` 트리거를 트랜잭션 안에서 잠깐 껐다 켜는 방식입니다.
+**아직 Supabase에 실행하지 않았습니다** — 실행되면 이 항목은 완전히 해결됩니다.
 
 ## 6. P3 — 제품 결정이 필요한 향후 기능 후보
 

@@ -300,9 +300,12 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
     if (owned) return (owned as any).center_id as string;
   }
 
+  // status를 처음부터 'approved'로 insert한다 — guard_center_status_change() 트리거는
+  // "before update"에만 걸려 있어 INSERT는 막지 않는다(P2-15). reserve_class() 등 승인된
+  // 센터를 요구하는 RPC를 호출하는 테스트가 있어 애초에 승인 상태로 만든다.
   const { data: center, error: centerErr } = await admin
     .from("centers")
-    .insert({ name: `통합테스트센터-${manager.accountId.slice(0, 8)}`, status: "pending" })
+    .insert({ name: `통합테스트센터-${manager.accountId.slice(0, 8)}`, status: "approved" })
     .select("id")
     .single();
   if (centerErr || !center) throw new Error(`테스트 센터 생성 실패: ${describeAdminQueryError("centers", centerErr)}`);

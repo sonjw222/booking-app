@@ -23,7 +23,6 @@ import { supabase } from "../../lib/supabaseClient";
 import {
   switchToTestUser,
   getOrCreateOwnedTestCenter,
-  getFixtureAdminClient,
   createFutureTestClass,
   createTestMembership,
   cleanupTestClass,
@@ -50,23 +49,23 @@ beforeAll(async () => {
   centerAId = await getOrCreateOwnedTestCenter(managerA);
   defaultSettings = await fetchSettings(centerAId);
 
-  // reserve_class()는 centers.status='approved'를 요구한다. getOrCreateOwnedTestCenter가 새로
-  // 만드는 테스트 센터는 기본 'pending'인데, trg_guard_center_status가 is_platform_admin()이
-  // 아니면 service_role(admin client)의 UPDATE도 막는다 — 이 저장소의 통합 테스트 계정
-  // (TEST_USER_A/B, TEST_MANAGER_A/B) 중 플랫폼 운영자 자격을 가진 계정이 없어 이 파일이
-  // 자체적으로 센터를 승인 처리할 방법이 없다. 이 배치 전에는 어떤 통합 테스트도 회원
-  // 셀프예약 RPC(reserve_class)를 직접 호출하지 않아 드러나지 않았던 테스트 인프라 gap이다
-  // (docs/TODO.md 참고). 아래 UPDATE는 의도적으로 시도하고 실패 시 원인을 명확히 남긴다 —
-  // Supabase에서 TEST_MANAGER_A의 테스트 센터를 수동으로 status='approved'로 바꾸거나, 플랫폼
-  // 운영자 테스트 계정을 추가하기 전까지 이 파일은 계속 이 지점에서 막힌다(회귀가 아님).
-  const admin = getFixtureAdminClient();
-  const { error: approveErr } = await admin.from("centers").update({ status: "approved" }).eq("id", centerAId);
-  if (approveErr) {
+  // reserve_class()는 centers.status='approved'를 요구한다. getOrCreateOwnedTestCenter()는
+  // 이제 새 센터를 'approved'로 insert하지만(P2-15 수정 — guard_center_status_change 트리거는
+  // UPDATE만 막고 INSERT는 막지 않음), TEST_MANAGER_A처럼 과거 배치에서 이미 'pending'으로
+  // 만들어진 기존 센터를 재사용하는 계정은 fix_test_center_approval_draft_proposed.sql이
+  // 실행되기 전까지 여전히 막힐 수 있다. 여기서는 현재 상태를 읽기만 하고, 아직 pending이면
+  // 그 SQL을 가리키는 명확한 에러로 실패한다(회귀가 아님).
+  const { data: centerRow, error: centerReadErr } = await supabase
+    .from("centers")
+    .select("status")
+    .eq("id", centerAId)
+    .single();
+  if (centerReadErr) throw new Error("테스트 센터 상태 조회 실패: " + centerReadErr.message);
+  if ((centerRow as { status: string }).status !== "approved") {
     throw new Error(
-      "[테스트 인프라 gap, docs/TODO.md 참고] 테스트 센터를 승인 상태로 바꿀 수 없어요: " +
-        approveErr.message +
-        " — TEST_MANAGER_A의 테스트 센터를 Supabase에서 수동으로 status='approved'로 변경하거나" +
-        " 플랫폼 운영자 테스트 계정을 준비해주세요."
+      "[테스트 인프라 gap, docs/TODO.md P2-15 참고] 테스트 센터가 아직 'approved'가 아니에요 " +
+        `(현재: ${(centerRow as { status: string }).status}). ` +
+        "fix_test_center_approval_draft_proposed.sql을 Supabase에서 실행해주세요."
     );
   }
 }, 30000);
