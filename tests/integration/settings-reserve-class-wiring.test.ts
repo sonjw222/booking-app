@@ -59,20 +59,16 @@ const SAME_DAY_HOURS = Math.max(0.05, Math.min(2, hoursUntilKstMidnight() - 0.1)
 // 쿼리(status in ('confirmed','waitlisted')만 집계)에서 자동으로 제외되고, 수강권도
 // 정상적으로 복구된다(기존 예약 취소 경로 그대로 재사용).
 async function clearFutureReservationsForManagerA(centerId: string, profileId: string) {
-  const { data: classes, error: classErr } = await supabase
-    .from("classes")
-    .select("id")
-    .eq("center_id", centerId)
-    .gt("start_time", new Date().toISOString());
-  if (classErr) throw new Error("잔여 예약 정리용 수업 조회 실패: " + classErr.message);
-  const classIds = (classes ?? []).map((c: any) => c.id as string);
-  if (classIds.length === 0) return;
-
+  // classes를 먼저 조회해 id 배열을 만들고 .in()으로 넘기면, 이 테스트 센터에 오늘까지 쌓인
+  // 수백 건의 클래스(반복 CI 재실행 산물)를 URL 쿼리 파라미터로 통째로 실어보내다가 PostgREST가
+  // "Bad Request"로 거부한다(실제로 CI에서 재현됨) — 대신 classes!inner 임베디드 조인으로
+  // 서버 쪽에서 필터링해 ID 목록을 왕복시키지 않는다.
   const { data: staleReservations, error: resErr } = await supabase
     .from("reservations")
-    .select("id")
+    .select("id, classes!inner(center_id, start_time)")
     .eq("profile_id", profileId)
-    .in("class_id", classIds)
+    .eq("classes.center_id", centerId)
+    .gt("classes.start_time", new Date().toISOString())
     .in("status", ["confirmed", "waitlisted"]);
   if (resErr) throw new Error("잔여 예약 조회 실패: " + resErr.message);
 
