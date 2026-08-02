@@ -26,6 +26,16 @@
   재확인해 수정). `lib/adminAssignment.ts`의 `AdminActionLog.classId`도 `string | null`로 조정
   (런타임 영향 없음, build 확인).
 
+**후속 수정 및 최종 검증(같은 날)**: 잔여 예약 정리 로직 자체의 버그 3건을 추가로 발견해
+고쳤습니다 — reservations DELETE RLS가 cancelled/no_show만 허용해 confirmed/waitlisted 상태를
+직접 delete하면 조용히 0건이 지워지던 문제(cancel_reservation로 선취소하도록 수정), class id
+배열을 `.in()`에 그대로 넘기다 누적된 클래스 수 때문에 PostgREST가 Bad Request를 반환하던
+문제(classes!inner 임베디드 조인으로 대체), 당일 테스트의 잔여 예약이 회원 셀프 취소 마감시간에
+막혀 영영 취소 못 하던 문제(manager_set_attendance로 대체). 이후 CI에서
+**`settings-reserve-class-wiring.test.ts` 8/8 green 확인** — P1-12 SQL의 4개 기능(당일예약
+허용/일일예약 한도/주간 대기예약 한도/예약 오픈 시각) 전부 정상 동작 확인. `holiday-membership-restore.test.ts`는
+`admin_action_logs.class_id` FK 수정(미실행)이 남아있어 계속 FAIL.
+
 상세 내역은 [TODO.md](./TODO.md) P0-6/P1-12/P2-15 참고. PR [#32](https://github.com/sonjw222/booking-app/pull/32)는
 아직 merge하지 않음 — `class_id` FK 수정 SQL 승인·실행 및 전체 재검증 후 판단 예정.
 

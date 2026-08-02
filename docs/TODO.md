@@ -357,7 +357,7 @@ URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 �
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **부분 구현 — 8개 필드 수정 SQL 실행 완료(2026-08-02), 회귀 테스트 fixture 재설계 중, 17개는 여전히 Dead Code** |
+| 현재 상태 | **8개 필드 SQL 실행 완료 + 회귀 테스트 8/8 green 확인(2026-08-02), 17개는 여전히 Dead Code** |
 | 근거 파일 | `app/manager/settings/page.tsx`, `lib/settings.ts`, `wire_settings.sql`, `add_center_settings.sql`, `reservation_functions.sql`, `fix_settings_wire_reservation_logic_draft_proposed.sql`(신규), `docs/24_P1_12_Settings_Audit.md`(신규), `tests/integration/settings-reserve-class-wiring.test.ts`(신규) |
 | 완료 조건 | `center_settings`의 각 필드가 실제로 어떤 RPC/쿼리에서 읽히는지 전수 확인하고, 미적용 필드는 (a) 해당 로직에 반영하거나 (b) "준비 중" 표시로 화면에서 명확히 구분함 |
 | 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 운영설정 항목, [24_P1_12_Settings_Audit.md](./24_P1_12_Settings_Audit.md)(전체 34개 필드 표) |
@@ -389,7 +389,20 @@ URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 �
 오픈 전" 케이스도 수업일이 오픈 기준일보다 더 멀리 있어야 함을 재확인해(수업 2일 뒤 + 10일 전
 오픈 설정 = 오픈 시점이 이미 8일 전에 지나 오히려 "이미 열림"이 되는 반대 결과였음) 수업을 25일
 뒤로 옮기고 오픈 기준을 15일 전으로 재조정. 회귀 테스트
-`tests/integration/settings-reserve-class-wiring.test.ts`는 이 fixture 수정 이후 재검증 중입니다.
+`tests/integration/settings-reserve-class-wiring.test.ts`는 이 fixture 수정 이후 재검증했습니다.
+
+**2026-08-02 CI에서 8/8 green 확인**: 위 fixture 수정들에 더해, 잔여 예약 정리 로직 자체의
+버그도 추가로 발견해 고쳤습니다 — (1) `reservations`의 DELETE RLS 정책은 `cancelled`/`no_show`
+상태만 삭제를 허용해 `confirmed`/`waitlisted` 상태로 직접 delete를 시도하면 조용히 0건이
+지워지는 문제(반복 CI 재실행마다 잔여 예약이 쌓여 daily-limit/waitlist 판정을 오염시킴) —
+`cancel_reservation()`으로 먼저 취소하도록 수정. (2) 잔여 정리 쿼리가 class id를 배열로 모아
+`.in()`에 넘기다 이 테스트 센터에 쌓인 수백 건의 클래스 때문에 PostgREST가 "Bad Request"를
+반환한 문제 — `classes!inner` 임베디드 조인으로 대체. (3) 당일(same-day) 테스트가 남긴 잔여
+예약은 회원 셀프 취소 마감시간(기본 1일 전)이 항상 "어제"로 계산돼 `cancel_reservation()`으로
+영영 취소할 수 없던 문제 — 매니저 권한으로 마감시간 검사 없이 처리하는
+`manager_set_attendance(id,'cancelled')`로 교체. 이 모든 수정 후 CI에서
+**8개 테스트 전부 green**을 확인했습니다 — P1-12 SQL(`fix_settings_wire_reservation_logic_draft_proposed.sql`)의
+4개 기능(당일예약 허용/일일예약 한도/주간 대기예약 한도/예약 오픈 시각) 모두 정상 동작 확인됨.
 
 나머지 17개(`same_day_change_hours/minutes`, `autocancel_hours/minutes`,
 `waitlist_auto_hours/minutes`, `private_slot_unit`, `private_max_concurrent_enabled/_count`,
