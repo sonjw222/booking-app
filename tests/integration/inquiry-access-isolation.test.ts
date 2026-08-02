@@ -3,6 +3,12 @@
   사용자가 요청한 "회원/관리자 문의 접근 격리" 통합테스트 — 기존에는 이 항목에 대한 자동
   테스트가 전혀 없었다(코드 리딩으로만 RLS 정책 존재를 확인했을 뿐). 실제 RLS가 다른
   회원/다른 센터 관리자의 열람을 막는지 직접 검증한다.
+
+  ⚠️ 기존 이슈 TEST-002(#24)의 알려진 오염과 무관하지 않음: acl-003-permission-read.test.ts가
+  정리하지 않는 "MANAGER_B가 centerA의 활성 스태프로 남는" 픽스처가 존재하는 동안에는, 아래
+  "이 센터를 관리하지 않는 매니저(MANAGER_B)는..." 케이스가 실행 순서에 따라 간헐적으로
+  실패할 수 있다(코드 버그 아님 — RLS는 "활성 소속 여부"를 설계대로 정확히 검사 중이고,
+  MANAGER_B가 실제로 그 상태가 돼 있는 것뿐). #24가 해결되면 항상 green이어야 한다.
 */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";

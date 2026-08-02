@@ -649,6 +649,21 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 - **AUTH-001(신규 이슈, #40)**: 회원가입 화면에 휴대폰 번호 입력란은 있지만 실제 인증(OTP)
   절차가 없음. SMS 발송 백엔드 자체가 없어(E-3 감사와 동일 결론) 제품 정책 확정 전에는
   구현하지 않음.
+- **`staff_salaries` 유니크 제약 충돌로 SEC-009 통합테스트가 간헐적으로 실패(신규 발견,
+  TEST-002/#24와 같은 계열의 "공유 dev DB에 정리 안 된 테스트 픽스처" 문제)**: PR #39 CI에서
+  `sec009-batch-a1-rls.test.ts`가 "duplicate key value violates unique constraint
+  staff_salaries_center_id_account_id_key"로 실패하는 것을 관측함 — 이전 실행이 남긴
+  (centerA, managerA 계정) 조합의 `staff_salaries` 행이 정리되지 않아 재실행 시 같은 키로
+  다시 insert하려다 충돌. 이번 배치의 어떤 코드/SQL과도 무관(다른 테이블, 다른 테스트 파일).
+  TEST-002(#24)와 같은 근본 원인 계열이므로 그 이슈 해결 시 함께 검토 권장 — 이번 배치에서는
+  별도 정리 SQL을 만들지 않음(범위 밖).
+- **TEST-002(#24)의 알려진 오염이 다른 파일에도 영향을 준다는 것을 재확인**: `acl-003-permission-read.test.ts`가
+  남기는 "MANAGER_B가 centerA의 활성 스태프가 됨" 오염 상태 때문에, 이번 배치가 새로 추가한
+  `tests/integration/inquiry-access-isolation.test.ts`의 "다른 센터 매니저는 못 본다" 케이스와
+  기존 `admin-assignment-security.test.ts`의 "다른 센터 관리자는 배치 못 함" 케이스가 같은 CI
+  실행에서 함께 실패하는 것을 관측함(둘 다 설계·코드 문제 아님, RLS/RPC는 "활성 소속 여부"를
+  정확히 설계대로 검사 중 — #24 해결 전까지는 테스트 실행 순서에 따라 이 두 케이스가 간헐적으로
+  RED일 수 있음).
 
 ## 6. P3 — 제품 결정이 필요한 향후 기능 후보
 
