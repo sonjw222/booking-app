@@ -32,6 +32,19 @@ import { fetchSettings, saveSettings, type CenterSettings } from "../../lib/sett
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 
+// "당일(오늘)" 테스트는 hoursFromNow를 고정값(예: 2)으로 쓰면 실행 시각이 KST 자정에 가까울 때
+// 자정을 넘겨 "내일"이 돼버려 same-day 체크 자체가 스킵되는 문제가 있었다(실제로 CI에서 재현됨).
+// KST 자정까지 남은 시간을 계산해 항상 "오늘 안"으로 들어가도록 안전 마진을 두고 클램프한다.
+function hoursUntilKstMidnight(): number {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  });
+  const parts = fmt.formatToParts(new Date());
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  return 24 - (get("hour") + get("minute") / 60 + get("second") / 3600);
+}
+const SAME_DAY_HOURS = Math.max(0.05, Math.min(2, hoursUntilKstMidnight() - 0.1));
+
 let managerA: TestUser;
 let centerAId: string;
 let defaultSettings: CenterSettings;
@@ -109,7 +122,7 @@ describe("P1-12: 당일 예약 허용 여부(allow_same_day_booking)", () => {
   const bookOverride = { groupBookDaysBefore: 0, groupBookTime: "23:59" };
 
   it("꺼져 있으면 오늘(KST) 수업 예약이 차단된다", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P1-12 당일예약 테스트", hoursFromNow: 2 });
+    const cls = await createFutureTestClass(centerAId, { title: "P1-12 당일예약 테스트", hoursFromNow: SAME_DAY_HOURS});
     createdClassIds.push(cls.id);
     const membership = await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
     createdMembershipIds.push(membership.id);
@@ -122,7 +135,7 @@ describe("P1-12: 당일 예약 허용 여부(allow_same_day_booking)", () => {
   });
 
   it("켜져 있으면(기본값) 오늘(KST) 수업도 정상 예약된다", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P1-12 당일예약 허용 테스트", hoursFromNow: 2 });
+    const cls = await createFutureTestClass(centerAId, { title: "P1-12 당일예약 허용 테스트", hoursFromNow: SAME_DAY_HOURS});
     createdClassIds.push(cls.id);
     const membership = await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
     createdMembershipIds.push(membership.id);
