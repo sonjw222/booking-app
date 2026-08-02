@@ -481,7 +481,7 @@ error를 무시하지 않고 사용자에게 표시하도록는 고쳤지만, �
 |---|---|
 | 우선순위 | P2 |
 | 현재 상태 | **확인됨 — SQL 실행 필요, 이번 배치에서 실행하지 않음** |
-| 근거 파일 | `tests/integration/sec007-batch-a-rls.test.ts`, `tests/integration/setup.ts`(`describeAdminQueryError`) |
+| 근거 파일 | `tests/integration/sec009-batch-a1-rls.test.ts`, `tests/integration/setup.ts`(`describeAdminQueryError`) |
 | 완료 조건 | `GRANT ALL ON TABLE contracts, notification_logs, ... TO service_role;`(대상 범위는 SEC-007 17개 테이블 전체로 할지 결정) 실행을 사용자 승인 후 진행하고, `contracts`/`notification_logs`의 자동화된 통합 테스트를 추가함 |
 | 관련 문서 | [21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md) |
 
@@ -493,7 +493,7 @@ client로 fixture를 만들고 지울 수 있어 문제가 되지 않지만, `co
 없음 — 서명 후 불변)와 `notification_logs`(INSERT 정책이 의도적으로 없음 — 서버 트리거 전용)는
 일반 client로도 admin client로도 fixture를 만들거나 지울 방법이 현재 없다. 이 두 테이블의
 자동화된 통합 테스트는 이 GRANT가 해결된 뒤에만 안전하게 추가할 수 있다 — 그때까지는
-`tests/integration/sec007-batch-a-rls.test.ts`에서 의도적으로 제외했다.
+`tests/integration/sec009-batch-a1-rls.test.ts`에서 의도적으로 제외했다.
 
 ## 6. P3 — 제품 결정이 필요한 향후 기능 후보
 

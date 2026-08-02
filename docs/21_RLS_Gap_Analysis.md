@@ -44,9 +44,57 @@ SEC-009(Batch A 적용 준비) 작업 중 실제 개발(dev) Supabase에 대해 
 정책이 의도적으로 없음 — 서명 후 불변 원칙)와 `notification_logs`(INSERT 정책이 의도적으로
 없음 — 서버 트리거 전용)는 일반 client·admin client 어느 쪽으로도 지금은 fixture를 만들거나
 지울 방법이 없다. 이 두 테이블은 `GRANT ALL ON TABLE ... TO service_role`이 별도 승인·실행된
-뒤에나 자동화된 통합 테스트를 안전하게 추가할 수 있어, `tests/integration/sec007-batch-a-rls.test.ts`는
-`staff_salaries`/`leads`/`messages` 3개만 다루고 `contracts`/`notification_logs`는 의도적으로
-제외했다 — 상세는 `docs/TODO.md` P2-13 참고.
+뒤에나 자동화된 통합 테스트를 안전하게 추가할 수 있어, `tests/integration/sec009-batch-a1-rls.test.ts`는
+`staff_salaries`/`leads`/`messages` 3개만 다루고 `contracts`/`notification_logs`는 A2로 분리해
+의도적으로 제외했다 — 상세는 `docs/TODO.md` P2-13, [22_RLS_Gap_A2_Investigation.md](./22_RLS_Gap_A2_Investigation.md) 참고.
+
+## 2026-08-02 확인 — Batch A1(3개 테이블) 역할별 기대 결과 매트릭스
+
+읽기 전용 진단(`anon`/`authenticated`/`service_role`로 SELECT 시도, mutation 없음)과
+`proposed_rls_gap_batch_a1.sql`의 정책 조건을 근거로 작성. `R`=조회 가능, `W`=쓰기 가능,
+`own`=본인 관련 행만, `-`=차단.
+
+### staff_salaries (own/other 권한 완전 분리 — 다른 두 테이블과 조건 형태가 다름)
+
+| 역할 | SELECT | INSERT | UPDATE | DELETE |
+|---|---|---|---|---|
+| anon | - | - | - | - |
+| member(그 센터 소속 아님) | - | - | - | - |
+| staff 무권한 | - | - | - | - |
+| staff — own.view/own.update만 보유 | own행만 R/W | own행만 | own행만 | - (delete는 other.update 전용 키라 own 권한으론 불가) |
+| staff — other.view/other.update만 보유 | 타인행만 R/W | 타인행만 | 타인행만 | 타인행만(other.update 있으면 가능) |
+| owner | 전체 R/W | 전체 | 전체 | 전체 |
+| platform admin | **-**(이 테이블 정책엔 `is_platform_admin()` 분기가 없음 — 그 센터의 manager_centers 관계가 없는 한 접근 불가) | - | - | - |
+| 타 센터 owner/staff | - | - | - | - |
+
+### leads / messages (permission key 그대로, own/other 분리 없음)
+
+| 역할 | SELECT | INSERT | UPDATE | DELETE |
+|---|---|---|---|---|
+| anon | - | - | - | - |
+| member(그 센터 소속 아님) | - | - | - | - |
+| staff 무권한 | - | - | - | - |
+| staff — 해당 permission key 보유(`customer.lead.*` 또는 `message.sms.*`/`message.push.*`, messages는 channel별로 독립) | R/W | W | W | W |
+| owner | 전체 R/W | 전체 | 전체 | 전체 |
+| platform admin | **-**(이 두 테이블도 `is_platform_admin()` 분기 없음) | - | - | - |
+| 타 센터 owner/staff | - | - | - | - |
+
+**참고**: `contracts`/`notification_logs`(A2)는 정책에 `is_platform_admin()` 분기가 **있어서**
+platform admin이 조회 가능하지만, A1의 3개 테이블(`staff_salaries`/`leads`/`messages`)은
+카탈로그의 permission key 체계만 사용하고 platform admin 특례가 없다 — 기존 카탈로그 설계
+그대로이며 이번에 새로 바꾸지 않았다.
+
+### 현재(정책 적용 전) 실제 상태 — 위 매트릭스는 SQL 적용 후 기대값이며, 지금은 아래처럼 다르다
+
+| 항목 | 실제 확인 결과 |
+|---|---|
+| RLS 활성화 | 3개 테이블 전부 이미 활성화됨(정책 0건) |
+| 현재 정책 | 3개 테이블 전부 0건(직접 조회 불가 — PostgREST가 pg_policies를 노출하지 않아, INSERT 시도가 전부 "new row violates row-level security policy"로 실패하는 것으로 간접 확인) |
+| anon GRANT | 있음(SELECT 시도 시 에러 없이 0건 반환) |
+| authenticated GRANT | 있음(SELECT 시도 시 에러 없이 0건 반환, RLS가 0건으로 필터링) |
+| service_role GRANT | **없음**(`permission denied for table X`) — 테스트 도구 전용 문제, 앱 기능과 무관 |
+| 실제 데이터 행 수 | **확인 불가** — anon/authenticated는 RLS가 막아 0건만 보이고 service_role은 GRANT가 없어 조회 자체가 안 됨. PostgREST로는 어느 role로도 진짜 행 수를 알 방법이 없다(슈퍼유저/대시보드 직접 접근이 아니면 확인 불가능) |
+| 즉, 현재(적용 전) 결과 | **모든 역할(owner 포함)이 SELECT/INSERT/UPDATE/DELETE 전부 차단** — 정책이 0건이라 owner 특례(`has_permission()`의 is_owner 분기)조차 평가되지 않음(RLS가 정책 자체를 못 찾아 기본 거부) |
 
 ## 단계 적용 계획 (2026-08-01 갱신 — ACL-003 재검증 이후)
 
@@ -58,14 +106,23 @@ ACL-003 서버 측 재검증에서 "센터 소속이면 누구나(무권한 스�
 
 | Batch | 파일 | 대상 |
 |---|---|---|
-| A — 민감정보 최우선 | `proposed_rls_gap_batch_a.sql` | staff_salaries, contracts, leads, messages, notification_logs |
+| A1 — 민감정보 최우선(통합 테스트 준비됨) | `proposed_rls_gap_batch_a1.sql` | staff_salaries, leads, messages |
+| A2 — 민감정보 최우선(추가 조사 중, SQL 미확정) | (초안만, [22_RLS_Gap_A2_Investigation.md](./22_RLS_Gap_A2_Investigation.md)) | contracts, notification_logs |
 | B — 직원 운영 데이터 | `proposed_rls_gap_batch_b.sql` | staff_schedules, schedule_memos, contract_templates, terms |
 | C — 회원·시설 기능 | `proposed_rls_gap_batch_c.sql` | lockers, locker_assignments, membership_transfers, class_types |
 | D — 미구현·레거시 후보 | `proposed_rls_gap_batch_d.sql` | popup_notices, competitions, community_comments, change_logs |
 
+**2026-08-02**: 원래 하나였던 Batch A(5개 테이블)를 A1/A2로 분리했습니다 — A1의 3개 테이블은
+`tests/integration/sec009-batch-a1-rls.test.ts`로 통합 테스트 커버리지가 준비됐지만, A2의
+2개 테이블(`contracts`/`notification_logs`)은 service_role GRANT 부재로 fixture 생성·정리를
+자동화할 방법이 없어 검증되지 않은 상태입니다. 검증되지 않은 테이블을 검증된 테이블과 함께
+적용하면 회귀 발생 시 원인 분리가 어렵다는 지적에 따라 분리했습니다. `proposed_rls_gap_batch_a.sql`/
+`rollback_rls_gap_batch_a.sql`(5개 테이블 통합본)은 역사적 기록으로 보존하고, 실제 적용은
+A1 파일만 사용합니다.
+
 각 배치는 짝 `rollback_rls_gap_batch_*.sql` 파일을 가지며, FK 의존성은 전부 같은 배치
 내부에서만 존재합니다(예: `locker_assignments`→`lockers`는 둘 다 Batch C). 배치 간 교차
-FK 의존은 없어 어떤 순서로 적용해도 안전합니다 — 다만 민감도상 A→B→C→D 순서를 권장합니다.
+FK 의존은 없어 어떤 순서로 적용해도 안전합니다 — 다만 민감도상 A1→A2→B→C→D 순서를 권장합니다.
 
 ### 정책 강화 내역 (원안 → 배치 파일에서 수정된 항목)
 
@@ -467,7 +524,7 @@ Secrets가 필요하지 않습니다.**
 3. 권한 없는 역할의 INSERT/UPDATE/DELETE 시도 → 실패
 4. 권한 있는 역할의 INSERT/UPDATE/DELETE 시도 → 성공 + 타 센터 대상으로는 실패
 
-**Batch A — 작성 완료(2026-08-02, 범위 일부 조정)**: `tests/integration/sec007-batch-a-rls.test.ts`에
+**Batch A — 작성 완료(2026-08-02, 범위 일부 조정)**: `tests/integration/sec009-batch-a1-rls.test.ts`에
 위 4종을 `staff_salaries`/`leads`/`messages` 3개 테이블에 작성함(`staff_salaries`는 own/other
 권한 완전 분리라 own.view/other.view 조합 2건 추가, `messages`는 channel별 분리라 sms/push
 조합 포함). `contracts`/`notification_logs`는 fixture를 안전하게 만들고 지울 방법이 현재 없어

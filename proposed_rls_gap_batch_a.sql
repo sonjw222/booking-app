@@ -1,5 +1,11 @@
 -- ============================================================
 -- ⚠️ DRAFT / PROPOSED — DO NOT RUN ⚠️
+-- [2026-08-02] 이 파일은 5개 테이블을 한 번에 묶은 최초 초안이며, 이후 다음 2개로 분리되어
+-- 대체됩니다(사용자 지적 — 검증되지 않은 테이블을 함께 적용하면 회귀 시 원인 분리가 어려움):
+--   - proposed_rls_gap_batch_a1.sql — staff_salaries/leads/messages(통합 테스트 준비됨, 승인 대기)
+--   - contracts/notification_logs — A2로 별도 조사 중(SQL 미작성, service_role GRANT 등 선결 필요)
+-- 아래 내용은 역사적 기록으로 보존하며, 실제 적용은 위 분리된 파일만 사용하세요.
+-- ------------------------------------------------------------
 -- RLS Gap Batch A — 민감정보 최우선
 -- 대상: staff_salaries, contracts, leads, messages, notification_logs
 --

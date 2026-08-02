@@ -1,4 +1,7 @@
 -- ============================================================
+-- [2026-08-02] proposed_rls_gap_batch_a.sql와 함께 batch_a1(+ 추후 A2)로 대체됩니다.
+-- 실제 적용은 rollback_rls_gap_batch_a1.sql만 사용하세요. 아래는 역사적 기록입니다.
+-- ------------------------------------------------------------
 -- ⚠️ DRAFT / PROPOSED — DO NOT RUN unless proposed_rls_gap_batch_a.sql was applied ⚠️
 -- Batch A rollback — 원래 상태로 되돌립니다.
 -- proposed_rls_gap_batch_a.sql 적용 후 검증에 실패했을 때만 실행하세요.

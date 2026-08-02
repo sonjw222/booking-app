@@ -1,32 +1,30 @@
 /*
-  SEC-007/008 RLS Gap Batch A 회귀 테스트.
+  SEC-009 RLS Gap Batch A1 회귀 테스트.
 
-  ⚠️ 이 파일은 proposed_rls_gap_batch_a.sql이 실제로 Supabase에 적용되기 전에는
-  의도적으로 FAIL해야 합니다(현재 5개 테이블 전부 정책 0건 → 오너를 포함해 아무도 접근
-  불가). 승인 후 실행하면 이 파일이 green이 되어야 정상입니다.
+  ⚠️ 이 파일은 proposed_rls_gap_batch_a1.sql이 실제로 Supabase에 적용되기 전에는
+  의도적으로 FAIL해야 합니다(현재 3개 테이블 전부 정책 0건 → 오너를 포함해 아무도 접근
+  불가, fixture 준비 단계에서부터 막힘). 승인 후 실행하면 이 파일이 green이 되어야 정상입니다.
 
-  [2026-08-02 정정 1] SEC-007 문서는 이 5개 테이블을 "RLS가 없거나 정책 0건"으로 분류했지만,
-  실제 개발(dev) Supabase에서 재확인한 결과 RLS는 이미 활성화되어 있고 정책만 0건이었다
-  ("정책 0건"과 "RLS 비활성"은 Postgres에서 서로 다른 별개 상태). 상세: docs/21_RLS_Gap_Analysis.md.
+  대상 테이블: staff_salaries, leads, messages (Batch A 5개 중 A1로 분리된 3개 —
+  contracts/notification_logs는 A2로 별도 조사 중, docs/22_RLS_Gap_A2_Investigation.md 참고).
+  Batch A를 A1/A2로 나눈 이유: 검증되지 않은 2개 테이블(contracts/notification_logs, fixture
+  lifecycle이 막혀 통합 테스트가 없음)을 검증된 3개와 함께 적용하면 회귀 발생 시 원인 분리가
+  어렵다는 지적(2026-08-02)에 따름.
 
-  [2026-08-02 정정 2] service_role(admin) client에도 이 5개 테이블 전부 SQL GRANT 자체가
-  없다(RLS와 무관한 별개 문제 — `permission denied for table X`, account_center_permissions에서
-  이미 한 번 겪은 것과 같은 패턴). 그 결과:
-    - `staff_salaries`/`leads`/`messages`는 오너에게 INSERT/DELETE 정책이 모두 있으므로,
-      **proposed_rls_gap_batch_a.sql이 적용되면** 일반 로그인 오너 client로 fixture를 만들고
-      정리할 수 있다 — 그래서 이 3개 테이블의 fixture는 일반 client를 그대로 쓴다(적용 전인
-      지금은 이 자체가 막혀서 red, 적용 후 green이 되는 정상 경로).
-    - `contracts`는 INSERT 정책은 있지만 DELETE 정책이 의도적으로 없다(서명 후 불변 원칙).
-      즉 **SQL 적용 여부와 무관하게** 일반 client로는 생성한 fixture 행을 절대 지울 수 없고,
-      service_role도 GRANT가 없어 지울 수 없다 — 지금 시점에는 안전하게 자동화된 fixture
-      lifecycle을 만들 수 없어 이 파일에서는 테스트하지 않는다.
-    - `notification_logs`는 INSERT 정책 자체가 의도적으로 없다(서버 트리거 전용). 같은 이유로
-      fixture를 만들 수 없어 이 파일에서는 테스트하지 않는다.
-    contracts/notification_logs는 `GRANT ALL ON TABLE ... TO service_role`이 별도로 승인·실행된
-    뒤에나 자동화된 통합 테스트를 안전하게 추가할 수 있다 — docs/TODO.md에 후속 항목으로 기록.
-
-  대상 테이블(이 파일에서 실제 검증): staff_salaries, leads, messages
-  (docs/21_RLS_Gap_Analysis.md "단계 적용 계획" Batch A 중 자동화 가능한 3개)
+  [2026-08-02 확인, 읽기 전용 진단] 개발(dev) Supabase에서 실제로 확인한 상태:
+    - RLS는 3개 테이블 전부 이미 활성화(정책 0건 — "정책 0건"과 "RLS 비활성"은 Postgres에서
+      서로 다른 별개 상태, SEC-007 문서의 최초 분류를 정정함). dev의 원래 상태는 "완전 차단"
+      이지 "전체 공개"가 아니었다 — 당초 우려보다 안전했음. 운영(production) Supabase는 별도
+      확인 안 됨(이 프로젝트는 현재 Supabase 프로젝트가 하나뿐이라 사실상 이것이 유일한
+      환경일 가능성이 높지만, 확정은 아님).
+    - GRANT는 anon/authenticated 둘 다 정상(SELECT 시도 시 에러 없이 0건 반환 — RLS가 막고
+      있을 뿐 테이블 GRANT 자체는 있음, 즉 proposed_rls_gap_batch_a1.sql만으로 충분하고
+      추가 GRANT는 필요 없음). service_role만 GRANT 없음(`permission denied for table X`,
+      account_center_permissions에서 이미 겪은 것과 같은 패턴) — 앱 코드가 service_role을
+      전혀 쓰지 않아(SEC-007 확인) 실제 보안과는 무관, 순수하게 테스트 도구(admin client)
+      제약일 뿐이다. `staff_salaries`/`leads`/`messages`는 오너에게 INSERT+DELETE 정책이
+      모두 있어 일반 로그인 오너 client로 fixture를 만들고 정리할 수 있으므로(적용 전인 지금은
+      이 자체가 막혀서 red, 적용 후 green이 되는 정상 경로) service_role 없이도 문제 없다.
 
   Fixture: TEST_MANAGER_A(centerA 오너)/TEST_MANAGER_B(centerB 오너, centerA에는 권한 0개
   스태프로 초대)/TEST_USER_A(어느 센터에도 속하지 않은 일반 회원) 세 계정만 재사용한다
@@ -42,7 +40,7 @@ const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PAS
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
 const USER_A = { email: "TEST_USER_A_EMAIL", password: "TEST_USER_A_PASSWORD" };
 
-const NO_PERM_ROLE_NAME = "SEC-007 Batch A 테스트 무권한 역할";
+const NO_PERM_ROLE_NAME = "SEC-009 Batch A1 테스트 무권한 역할";
 
 let managerA: TestUser;
 let managerB: TestUser;
@@ -130,7 +128,7 @@ beforeAll(async () => {
   staffManagerCenterId = await managerCenterIdFor(centerAId, managerB.accountId);
   if (invited) createdStaffManagerCenterId = staffManagerCenterId;
 
-  // 아래 3개 테이블은 오너에게 INSERT 정책이 있으므로(proposed_rls_gap_batch_a.sql 적용 후)
+  // 아래 3개 테이블은 오너에게 INSERT 정책이 있으므로(proposed_rls_gap_batch_a1.sql 적용 후)
   // managerA(오너)의 일반 로그인 client로 fixture를 만든다 — 적용 전인 지금은 이 자체가
   // 막혀서 여기서 바로 실패하는 것이 정상(red)이다.
   {
@@ -152,7 +150,7 @@ beforeAll(async () => {
   {
     const { data, error } = await supabase
       .from("leads")
-      .insert({ center_id: centerAId, name: "SEC-007 배치A 테스트 상담고객", phone: "010-0000-0000", channel: "test" })
+      .insert({ center_id: centerAId, name: "SEC-009 배치A1 테스트 상담고객", phone: "010-0000-0000", channel: "test" })
       .select("id").single();
     if (error) throw new Error("leads fixture 생성 실패: " + error.message);
     leadId = (data as { id: string }).id;
@@ -160,7 +158,7 @@ beforeAll(async () => {
   {
     const { data, error } = await supabase
       .from("messages")
-      .insert({ center_id: centerAId, channel: "sms", content: "SEC-007 배치A 테스트 SMS", status: "sent" })
+      .insert({ center_id: centerAId, channel: "sms", content: "SEC-009 배치A1 테스트 SMS", status: "sent" })
       .select("id").single();
     if (error) throw new Error("messages(sms) fixture 생성 실패: " + error.message);
     messageSmsId = (data as { id: string }).id;
@@ -168,7 +166,7 @@ beforeAll(async () => {
   {
     const { data, error } = await supabase
       .from("messages")
-      .insert({ center_id: centerAId, channel: "push", title: "SEC-007 배치A", content: "SEC-007 배치A 테스트 푸시", status: "sent" })
+      .insert({ center_id: centerAId, channel: "push", title: "SEC-009 배치A1", content: "SEC-009 배치A1 테스트 푸시", status: "sent" })
       .select("id").single();
     if (error) throw new Error("messages(push) fixture 생성 실패: " + error.message);
     messagePushId = (data as { id: string }).id;
@@ -213,7 +211,7 @@ afterAll(async () => {
   }
 
   if (errors.length > 0) {
-    throw new Error(`SEC-007 Batch A fixture cleanup 실패 — 공유 개발 DB에 잔여 데이터가 남았을 수 있습니다:\n${errors.join("\n")}`);
+    throw new Error(`SEC-009 Batch A1 fixture cleanup 실패 — 공유 개발 DB에 잔여 데이터가 남았을 수 있습니다:\n${errors.join("\n")}`);
   }
 }, 30000);
 
