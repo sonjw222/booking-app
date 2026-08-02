@@ -15,6 +15,12 @@ export function isUsableMembershipRow(m: { remaining_count: number | null }): bo
   return m.remaining_count == null || m.remaining_count > 0;
 }
 
+// 하단 Nav의 "예약"/"내 예약" 탭을 보여줄지 판단. null(판정 전/로딩 중)은 false와 동일하게
+// 취급한다 — "있다"고 가정한 뒤 나중에 틀렸을 때 탭이 사라지는 깜빡임을 막기 위함이다.
+export function shouldShowMembershipTabs(hasUsable: boolean | null): boolean {
+  return hasUsable === true;
+}
+
 export async function fetchHasUsableMembership(): Promise<boolean> {
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) return false;
