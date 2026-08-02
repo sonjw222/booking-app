@@ -17,10 +17,11 @@ import {
   fetchCenterMembersForPayment, fetchCenterStaffForPayment, fetchSaleProducts,
   SALE_TYPE_LABEL, METHOD_LABEL, won,
   registerExpense, fetchExpenses, deleteExpense, summarizeExpenses, EXPENSE_CATEGORIES,
-  registerPoint, fetchPoints,
+  registerPoint, fetchPoints, computeAutoUnpaid,
   type PaymentRow, type RevenueSummary,
   type ExpenseRow, type PointRow,
 } from "../../../lib/sales";
+import { fetchSettings } from "../../../lib/settings";
 
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -96,6 +97,9 @@ export default function SalesPage() {
   const [fTrainer, setFTrainer] = useState("");
   const [fPaidAt, setFPaidAt] = useState(todayStr());
   const [fMemo, setFMemo] = useState("");
+  // 운영설정 "미수금 자동입력" — 켜져 있으면 상품가 - 입력된 결제수단 합계를 미수금에 자동 반영
+  const [autoUnpaidInput, setAutoUnpaidInput] = useState(false);
+  const [fUnpaidTouched, setFUnpaidTouched] = useState(false); // 사용자가 미수금을 직접 고쳤으면 자동계산 중단
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -109,6 +113,23 @@ export default function SalesPage() {
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!centerId) return;
+    fetchSettings(centerId).then((s) => setAutoUnpaidInput(s.autoUnpaidInput)).catch(() => setAutoUnpaidInput(false));
+  }, [centerId]);
+
+  // 미수금 자동입력: 상품을 고르고 결제수단 금액을 입력하는 동안, 사용자가 미수금 칸을 직접
+  // 건드리지 않았다면 "상품가 - 입력된 결제수단 합계"(0 미만이면 0)를 자동으로 채운다.
+  useEffect(() => {
+    if (!autoUnpaidInput || fUnpaidTouched) return;
+    const product = saleProducts.find((p) => p.id === fProductId);
+    if (!product) return;
+    const paid = num(fCard) + num(fCash) + num(fTransfer) + num(fPoint);
+    const remaining = computeAutoUnpaid(product.price, paid);
+    setFUnpaid(remaining > 0 ? String(remaining) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoUnpaidInput, fUnpaidTouched, fProductId, fCard, fCash, fTransfer, fPoint, saleProducts]);
 
   const load = useCallback(async () => {
     if (!centerId) return;
@@ -140,6 +161,7 @@ export default function SalesPage() {
       setMembers(ms); setStaff(st); setSaleProducts(prods);
       setFProfile(ms[0]?.profileId ?? "");
       setFProductId("");
+      setFUnpaidTouched(false);
       setSheet(true);
     } catch (e: any) { setError(e.message); }
   }
@@ -186,7 +208,7 @@ export default function SalesPage() {
       setSheet(false);
       // 폼 초기화
       setFCard(""); setFCash(""); setFTransfer(""); setFPoint(""); setFUnpaid(""); setFMemo("");
-      setFSaleType("new"); setFProductId(""); setFGoodsId("");
+      setFSaleType("new"); setFProductId(""); setFGoodsId(""); setFUnpaidTouched(false);
       await load();
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
@@ -492,7 +514,14 @@ export default function SalesPage() {
             </div>
             <div className="pay-total">합계 <b>{won(formTotal)}</b></div>
 
-            <label className="pay-field" style={{ marginTop: 8 }}><span>미수금</span><input inputMode="numeric" className="input-field" value={fUnpaid} onChange={(e) => setFUnpaid(e.target.value)} placeholder="0" /></label>
+            <label className="pay-field" style={{ marginTop: 8 }}>
+              <span>미수금{autoUnpaidInput && !fUnpaidTouched && fUnpaid ? " (자동계산)" : ""}</span>
+              <input
+                inputMode="numeric" className="input-field" value={fUnpaid}
+                onChange={(e) => { setFUnpaidTouched(true); setFUnpaid(e.target.value); }}
+                placeholder="0"
+              />
+            </label>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>담당 강사 (선택)</div>
             <select className="input-field" value={fTrainer} onChange={(e) => setFTrainer(e.target.value)}>

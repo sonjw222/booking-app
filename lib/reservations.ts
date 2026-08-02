@@ -27,6 +27,7 @@ export type ClassInfo = {
   capacity: number;
   allowGoods: boolean;
   classFormat: "group" | "private"; // CLASS-001 D-2: 회원 앱에 프라이빗 배지 표시용
+  showReservedCount: boolean; // 운영설정 "회원에게 예약 인원 표시"(show_group_reserved_count)
   // 프로필별 내 예약 상태. key = profileId
   myByProfile: Record<string, { reservationId: string; status: "confirmed" | "waitlisted" }>;
 };
@@ -153,6 +154,18 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     color: colorByCenter[c.id] ?? DEFAULT_COLORS[i % DEFAULT_COLORS.length],
   }));
 
+  // 운영설정 "회원에게 예약 인원 표시" — 센터마다 다를 수 있어 등장한 센터들만 조회
+  const showReservedCountByCenter: Record<string, boolean> = {};
+  if (centerMap.size > 0) {
+    const { data: settingsRows } = await supabase
+      .from("center_settings")
+      .select("center_id, show_group_reserved_count")
+      .in("center_id", Array.from(centerMap.keys()));
+    for (const s of settingsRows ?? []) {
+      showReservedCountByCenter[(s as any).center_id] = (s as any).show_group_reserved_count ?? true;
+    }
+  }
+
   // 휴무일
   const { data: holRows } = await supabase
     .from("center_holidays")
@@ -184,6 +197,8 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
       capacity: c.capacity,
       allowGoods: c.allow_goods ?? false,
       classFormat: (c.class_format ?? "group") as "group" | "private",
+      // 설정 행이 없으면 DEFAULT_SETTINGS.showGroupReservedCount(true)와 동일하게 기본 표시
+      showReservedCount: showReservedCountByCenter[c.center_id] ?? true,
       myByProfile: myProfileIds.reduce((acc, pid) => {
         const r = myByClassProfile[`${c.id}:${pid}`];
         if (r) acc[pid] = { reservationId: r.id, status: r.status };

@@ -620,9 +620,14 @@ function ReservationCalendarContent() {
                   </div>
                 </div>
                 <div className="class-right">
-                  <div className={`class-count ${full ? "full" : ""}`}>
-                    예약 {cls.reserved}/{cls.capacity}
-                  </div>
+                  {cls.showReservedCount ? (
+                    <div className={`class-count ${full ? "full" : ""}`}>
+                      예약 {cls.reserved}/{cls.capacity}
+                    </div>
+                  ) : (
+                    // 운영설정에서 인원 표시를 껐으면 정원마감 여부만(정확한 인원수는 숨김)
+                    full && <div className="class-count full">마감</div>
+                  )}
                   {mine ? (
                     <button className="mini-btn done" disabled={busy} onClick={() => handleCancel(cls)}>
                       {busy ? "..." : "취소"}

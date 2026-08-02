@@ -383,6 +383,12 @@ export async function fetchPointBalances(centerId: string): Promise<{ profileId:
   return Object.entries(map).map(([profileId, v]) => ({ profileId, name: v.name, balance: v.balance }));
 }
 
+// 운영설정 "미수금 자동입력" 계산식(상품가 - 입력된 결제수단 합계, 0 미만이면 0) — 순수
+// 함수로 분리해 단위 테스트로 검증한다.
+export function computeAutoUnpaid(productPrice: number, paidAmount: number): number {
+  return Math.max(0, productPrice - paidAmount);
+}
+
 // 결제 등록 시 선택할 수강권 상품 목록
 export async function fetchSaleProducts(centerId: string): Promise<{ id: string; name: string; price: number; totalCount: number | null; kind: "pass" | "goods"; unlimited: boolean }[]> {
   const { data, error } = await supabase
