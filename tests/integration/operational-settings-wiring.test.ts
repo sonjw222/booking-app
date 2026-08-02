@@ -118,4 +118,62 @@ describe("운영설정 재검증: 예약 오픈 시점(그룹)이 취소 마감 
     expect(error).toBeNull();
     expect((data as any).status).toBe("confirmed");
   });
+
+  it("프라이빗 수업도 그룹과 별개의 오픈 설정(private_open_*)을 쓴다", async () => {
+    // group과 다른 값으로 설정해, private 분기가 실제로 group 설정을 잘못 읽어오지 않는지도
+    // 함께 검증한다.
+    await saveSettings(centerAId, {
+      ...defaultSettings,
+      privateBookDaysBefore: 90, privateBookTime: "00:00",
+      privateOpenDaysBefore: 60, privateOpenTime: "15:00",
+      privateCancelDaysBefore: 1, privateCancelTime: "22:00",
+      groupOpenDaysBefore: 10, groupOpenTime: "00:00", // group은 대조를 위해 훨씬 관대하게
+    });
+    const { data: cls, error: clsErr } = await supabase
+      .from("classes")
+      .insert({
+        center_id: centerAId, title: "SETTINGS-REAUDIT 프라이빗오픈시점",
+        start_time: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(),
+        end_time: new Date(Date.now() + 5 * 24 * 3600 * 1000 + 3600 * 1000).toISOString(),
+        capacity: 1, class_format: "private",
+      })
+      .select("id").single();
+    if (clsErr || !cls) throw new Error("프라이빗 수업 생성 실패: " + clsErr?.message);
+    createdClassIds.push((cls as any).id);
+    await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
+
+    const { error } = await supabase.rpc("reserve_class", { p_class_id: (cls as any).id, p_profile_id: managerA.profileId });
+    expect(error).not.toBeNull();
+    expect(error?.message).toContain("아직 예약이 열리지 않았어요");
+  });
+
+  it("KST 자정 경계: 수업 시작이 KST 00:30이어도 오픈 마감은 그 수업의 KST 달력 날짜 기준으로 계산된다", async () => {
+    // UTC 기준으로는 전날 15:30인 시각(KST 00:30)을 수업 시작으로 잡는다 — calc_deadline()이
+    // p_start_time을 'Asia/Seoul'로 변환한 날짜를 쓰는지, 서버 UTC 날짜를 그대로 쓰는지를
+    // 구분해서 검증한다. 그룹 오픈 마감을 "그 수업 날짜의 5일 전 00:00 KST"로 저장하면 지금
+    // 시점(며칠 뒤 새벽 수업이므로 아직 5일 전이 안 지남)에서는 아직 열리지 않았어야 한다.
+    await saveSettings(centerAId, {
+      ...defaultSettings,
+      groupBookDaysBefore: 90, groupBookTime: "00:00",
+      groupOpenDaysBefore: 5, groupOpenTime: "00:00",
+      groupCancelDaysBefore: 1, groupCancelTime: "22:00",
+    });
+
+    const target = new Date(Date.now() + 5 * 24 * 3600 * 1000);
+    const y = target.getUTCFullYear();
+    const m = String(target.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(target.getUTCDate()).padStart(2, "0");
+    // KST 00:30 == UTC 전날 15:30
+    const startTimeIso = new Date(`${y}-${m}-${d}T00:30:00+09:00`).toISOString();
+
+    const cls = await createFutureTestClass(centerAId, {
+      title: "SETTINGS-REAUDIT KST경계", hoursFromNow: (new Date(startTimeIso).getTime() - Date.now()) / 3600000,
+    });
+    createdClassIds.push(cls.id);
+    await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
+
+    const { error } = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: managerA.profileId });
+    expect(error).not.toBeNull();
+    expect(error?.message).toContain("아직 예약이 열리지 않았어요");
+  });
 });
