@@ -72,8 +72,15 @@ async function clearFutureReservationsForManagerA(centerId: string, profileId: s
     .in("status", ["confirmed", "waitlisted"]);
   if (resErr) throw new Error("잔여 예약 조회 실패: " + resErr.message);
 
+  // cancel_reservation()은 회원 셀프 취소 경로라 취소 마감시간(기본 group_cancel_days_before=1)을
+  // 검사한다 — 당일(same-day) 테스트가 남긴 잔여 예약은 마감시간이 항상 "어제"로 계산돼 영영
+  // 취소할 수 없다(실제로 CI에서 재현됨: "취소 마감시간이 지났어요"). 대신 매니저 권한으로
+  // 마감시간 검사 없이 바로 cancelled 처리하는 manager_set_attendance()를 쓴다(managerA는
+  // centerA 오너라 권한 충족, 수강권도 동일하게 복구됨).
   for (const r of staleReservations ?? []) {
-    const { error } = await supabase.rpc("cancel_reservation", { p_reservation_id: (r as any).id });
+    const { error } = await supabase.rpc("manager_set_attendance", {
+      p_reservation_id: (r as any).id, p_status: "cancelled",
+    });
     if (error) throw new Error(`잔여 예약 취소 실패(id=${(r as any).id}): ${error.message}`);
   }
 }
