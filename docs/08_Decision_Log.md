@@ -54,6 +54,71 @@ Superseded
 
 ---
 
+# 결정 기록
+
+## DEC-001. 프라이빗 수업 — 공개 예약형 vs 지정회원 전용형
+
+- **Date**: 2026-08-03
+- **Author**: Claude (QA 후속 배치, feature/qa-batch-nav-reservation-notifications)
+- **Status**: Proposed
+- **Category**: 예약 구조
+- **Decision**: 아직 결정 안 됨 — 현재 MVP는 "공개 예약형"으로 동작 중(누구나 회원 앱에서
+  볼 수 있고 선착순 1명이 예약, `capacity=1` CHECK로 서버 강제). 지정회원 전용형(관리자가
+  사전에 특정 회원만 예약 가능하도록 지정)은 구현 여부 미정.
+- **Reason**: 사용자가 이번 배치에서 "지정 회원 전용 정책"을 임의 구현 금지 항목으로 명시함
+  — 프라이빗 수업의 실제 운영 방식(트레이너 1:1 수업을 아무나 선착순으로 예약하게 둘지,
+  관리자가 회원과 사전 협의 후 배정하는 형태로만 쓸지)이 제품 정책에 달려 있음.
+- **Alternatives**:
+  - A) 현행 유지(공개 예약형만) — 추가 스키마 불필요, 이미 동작 중.
+  - B) 지정회원 전용형 추가 — `class_allowed_profiles`류 신규 테이블/컬럼 필요, `reserve_class()`에
+    "이 회원이 배정 대상인지" 체크 추가, 관리자 UI에 회원 지정 화면 신설.
+  - C) 관리자 직접배치(`admin_assign_reservation`)만으로 지정형을 대체(신규 스키마 없이 기존
+    기능 재사용) — 프라이빗 수업을 등록할 때 "일반 예약 비공개"(회원 앱 노출 안 함) 옵션만
+    추가하고, 실제 배정은 항상 관리자가 직접배치로 처리.
+- **Impact**: B는 스키마 변경 + RLS + UI 신설이 필요한 중간 규모 작업. C는 추가 스키마 없이
+  거의 바로 구현 가능(수업 목록 조회 쿼리에 "비공개" 필터만 추가).
+- **Related Documents**: `docs/TODO.md` P2-17, `add_admin_assignment.sql`
+
+## DEC-002. 프라이빗 수업 슬롯 단위(`private_slot_unit`)·동시예약 제한(`private_max_concurrent_*`)
+
+- **Date**: 2026-08-03
+- **Author**: Claude (QA 후속 배치)
+- **Status**: Proposed
+- **Category**: 예약 구조
+- **Decision**: 아직 결정 안 됨 — 이번 배치에서 구현하지 않음(사용자가 "동시 슬롯 예약",
+  "반복 슬롯 자동생성"을 임의 구현 금지 항목으로 명시).
+- **Reason**: 이 두 설정은 "프라이빗 수업을 30분 단위 슬롯으로 쪼개 여러 트레이너가 동시에
+  진행 가능한 슬롯 수를 제한"하는, 지금의 "수업 하나 = 프라이빗 예약 하나(capacity=1)" 모델과
+  전혀 다른 스케줄링 시스템을 전제로 함 — 클래스 등록 자체가 슬롯 그리드 UI로 바뀌어야 해
+  현재 구조를 확장하는 수준이 아니라 별도 설계가 필요.
+- **Alternatives**:
+  - A) 현재 모델 유지, 이 두 설정은 UI에서 숨김(운영설정 재감사 결과와 동일 처리).
+  - B) 슬롯 기반 프라이빗 예약 시스템 별도 설계·구현(중~대규모 작업, 별도 기획 필요).
+- **Impact**: A 선택 시 이번 배치에서 바로 적용 가능(설정 UI 숨김만). B는 별도 스프린트 규모.
+- **Related Documents**: `docs/TODO.md` P2-17
+
+## DEC-003. `class_allowed_products`(수업별 허용 수강권) 관리 UI 부재
+
+- **Date**: 2026-08-03
+- **Author**: Claude (QA 후속 배치)
+- **Status**: Proposed
+- **Category**: 예약 구조
+- **Decision**: 아직 결정 안 됨 — `reserve_class()`는 이미 `class_allowed_products`를 읽어
+  제한하지만(존재하면 그 상품만 허용, 없으면 무제한), 이 테이블에 값을 넣을 관리자 UI가
+  그룹/프라이빗 구분 없이 애초에 존재하지 않음(이번 배치에서 새로 발견 — 프라이빗 전용
+  문제가 아니라 기존부터 있던 전체 갭).
+- **Reason**: 이번 배치 범위(실브라우저 QA 후속 수정 + 6개 트랙)를 넘어서는 신규 관리자 UI
+  구축이 필요해 이번엔 조사만 하고 구현하지 않음.
+- **Alternatives**:
+  - A) 수업 등록 화면에 상품 다중 선택 UI 추가(기존 `class_allowed_products` 테이블 그대로 재사용,
+    신규 스키마 불필요).
+  - B) 현행 유지(모든 수업이 사실상 무제한 허용 상태 지속).
+- **Impact**: A는 프론트엔드 UI 추가 + `lib/classes.ts` 함수 확장 정도로 스키마 변경 없이 가능한
+  중간 크기 작업 — 후속 배치 후보로 적합.
+- **Related Documents**: `docs/TODO.md` P2-17, `reservation_functions.sql`(reserve_class 자격 조건)
+
+---
+
 # Category
 
 Architecture
