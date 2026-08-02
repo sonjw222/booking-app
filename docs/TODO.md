@@ -139,10 +139,22 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **수정 SQL 준비 완료 — 실행 승인 대기** |
-| 근거 파일 | `reservation_functions.sql`(`add_holiday_safe` 함수), `app/manager/holidays/page.tsx`, `fix_holiday_membership_restore_draft_proposed.sql`(신규), `tests/integration/holiday-membership-restore.test.ts`(신규) |
+| 현재 상태 | **수강권 복구 SQL 실행 완료(2026-08-02), 검증 중 후속 FK 버그 추가 발견 — 후속 SQL 승인 대기** |
+| 근거 파일 | `reservation_functions.sql`(`add_holiday_safe` 함수), `app/manager/holidays/page.tsx`, `fix_holiday_membership_restore_draft_proposed.sql`(실행됨), `fix_admin_action_logs_class_id_fk_draft_proposed.sql`(신규, 미실행), `tests/integration/holiday-membership-restore.test.ts` |
 | 완료 조건 | `add_holiday_safe`가 확정/대기/출석 예약을 강제 취소할 때 `admin_cancel_reservation`/`manager_set_attendance`와 동일하게 `memberships.remaining_count`를 복구하도록 RPC를 수정하고, 예약자 있는 날짜를 휴무일로 지정하는 통합 테스트로 회귀 확인함 |
 | 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 8번 항목 |
+
+**2026-08-02 SQL 실행 후 재검증에서 sibling 버그 추가 발견**: `fix_holiday_membership_restore_draft_proposed.sql` 실행으로
+`admin_action_logs.reservation_id` FK 문제는 해결됐으나, 재실행한 회귀 테스트에서 **다른 컬럼의 동일한
+문제**가 드러났다 — `admin_action_logs.class_id`도 `not null references classes(id)`인데 ON DELETE
+지정이 없어(기본 RESTRICT), `add_holiday_safe`의 `delete from classes` 단계에서 여전히 FK 위반이
+발생한다(`admin_action_logs_class_id_fkey`). `add_admin_assignment.sql`의 `admin_action_logs` 정의를
+전수 재확인해 이 두 컬럼(`reservation_id`, `class_id`) 외에 `add_holiday_safe`가 삭제하는 테이블을
+참조하는 not null FK는 더 없음을 확인함(`center_id`/`admin_id`/`member_profile_id`는 삭제 안 되는
+테이블 참조, `membership_id`/`source_unassigned_id`는 이미 nullable이고 memberships는 삭제 안 됨).
+`class_id`도 동일하게 nullable + `ON DELETE SET NULL`로 바꾸는 `fix_admin_action_logs_class_id_fk_draft_proposed.sql`(+rollback)을
+준비했다 — **아직 실행하지 않았고, 사용자 승인 필요**. `lib/adminAssignment.ts`의 `AdminActionLog.classId`도
+`string | null`로 맞춰 반영함(런타임 영향 없음, build 확인).
 
 2026-08-02 Track B 관리자 기능 감사에서 발견: 매니저가 예약자가 있는 날짜를 휴무일로 지정하면
 `add_holiday_safe`가 해당 예약들을 강제로 지우면서(`delete from reservations`) 그 예약에 쓰인
@@ -345,7 +357,7 @@ URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 �
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **부분 구현 — 8개 필드 수정 SQL 준비 완료(실행 승인 대기), 17개는 여전히 Dead Code** |
+| 현재 상태 | **부분 구현 — 8개 필드 수정 SQL 실행 완료(2026-08-02), 회귀 테스트 fixture 재설계 중, 17개는 여전히 Dead Code** |
 | 근거 파일 | `app/manager/settings/page.tsx`, `lib/settings.ts`, `wire_settings.sql`, `add_center_settings.sql`, `reservation_functions.sql`, `fix_settings_wire_reservation_logic_draft_proposed.sql`(신규), `docs/24_P1_12_Settings_Audit.md`(신규), `tests/integration/settings-reserve-class-wiring.test.ts`(신규) |
 | 완료 조건 | `center_settings`의 각 필드가 실제로 어떤 RPC/쿼리에서 읽히는지 전수 확인하고, 미적용 필드는 (a) 해당 로직에 반영하거나 (b) "준비 중" 표시로 화면에서 명확히 구분함 |
 | 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 운영설정 항목, [24_P1_12_Settings_Audit.md](./24_P1_12_Settings_Audit.md)(전체 34개 필드 표) |
@@ -363,10 +375,21 @@ URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 �
 `private_open_days_before`/`private_open_time`, `group_open_days_before`/`group_open_time`)를
 `calc_deadline()`(`'open'` kind 추가)과 `reserve_class()`에 배선하는 SQL을
 `fix_settings_wire_reservation_logic_draft_proposed.sql`(+ rollback 파일)로 준비했습니다 —
-**아직 Supabase에 실행하지 않았습니다.** `reserve_class()`는 앱에서 가장 많이 호출되는 핵심
-RPC라 P0-6보다 위험도가 높다고 판단해 파일 헤더에 별도 경고를 남겼습니다. 회귀 테스트
-`tests/integration/settings-reserve-class-wiring.test.ts`는 SQL 적용 전에는 의도적으로 FAIL하고,
-적용 후 green이 되어야 정상입니다.
+`reserve_class()`는 앱에서 가장 많이 호출되는 핵심 RPC라 P0-6보다 위험도가 높다고 판단해
+파일 헤더에 별도 경고를 남겼습니다. **2026-08-02 SQL 실행 완료**(사용자 확인).
+
+**2026-08-02 SQL 실행 후 재검증에서 테스트 fixture 자체의 설계 결함 2건 발견(SQL 문제 아님)**:
+(1) `당일 예약 허용 여부` 테스트가 수업을 2시간 뒤(오늘)로만 만들어, 새로 배선한 same-day 체크에
+도달하기도 전에 **기존** 예약 마감시간 체크(`group_book_days_before` 기본값 1일 → 마감이 항상
+어제로 계산됨)에서 먼저 막힘 — `groupBookDaysBefore:0, groupBookTime:'23:59'` 오버라이드를
+추가해 기존 체크를 통과시키고 same-day 체크만 단독으로 노출하도록 수정. (2) `daily_book_limit`은
+그 프로필의 그 날짜 전체 예약을 합산하는데, 원래 파일의 여러 describe 블록(일일한도/대기/오픈시각)이
+전부 비슷한 시간대(~50시간 뒤)를 재사용해 서로의 fixture 예약이 daily-limit 판정에 섞여 들어감 —
+각 블록의 날짜를 16일/19일/25일/28일 뒤로 충분히 떨어뜨려 분리. `group_open_days_before` "아직
+오픈 전" 케이스도 수업일이 오픈 기준일보다 더 멀리 있어야 함을 재확인해(수업 2일 뒤 + 10일 전
+오픈 설정 = 오픈 시점이 이미 8일 전에 지나 오히려 "이미 열림"이 되는 반대 결과였음) 수업을 25일
+뒤로 옮기고 오픈 기준을 15일 전으로 재조정. 회귀 테스트
+`tests/integration/settings-reserve-class-wiring.test.ts`는 이 fixture 수정 이후 재검증 중입니다.
 
 나머지 17개(`same_day_change_hours/minutes`, `autocancel_hours/minutes`,
 `waitlist_auto_hours/minutes`, `private_slot_unit`, `private_max_concurrent_enabled/_count`,
@@ -633,7 +656,7 @@ client로 fixture를 만들고 지울 수 있어 문제가 되지 않지만, `co
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **수정 준비 완료 — 실행 승인 대기** |
+| 현재 상태 | **해결됨 — 2026-08-02 SQL 실행 완료, CI에서 센터 승인 상태 확인됨** |
 | 근거 파일 | `tests/integration/settings-reserve-class-wiring.test.ts`, `reservation_functions.sql`(`guard_center_status_change()`), `tests/integration/setup.ts`(`getOrCreateOwnedTestCenter`), `fix_test_center_approval_draft_proposed.sql`(신규) |
 | 완료 조건 | (a) `TEST_MANAGER_A`의 테스트 센터를 Supabase에서 1회 수동으로 `status='approved'`로 바꾸거나, (b) 플랫폼 운영자 권한을 가진 전용 테스트 계정을 추가해 그 계정으로 승인 처리하도록 fixture를 확장함 |
 | 관련 문서 | [TODO.md P1-12](#p1-12-운영설정manager-settings-화면의-다수-항목이-저장만-되고-실제로-적용되지-않음) |
@@ -657,7 +680,11 @@ RPC(`reserve_class`)를 직접 호출하는 통합 테스트라 이 gap이 드�
 바뀌지 않습니다 — 그 기존 행들을 한 번 승인 처리하는 `fix_test_center_approval_draft_proposed.sql`(+
 rollback)을 준비했습니다. `통합테스트센터-` 이름 접두사로 좁혀 실제 운영 센터에는 영향이
 없고, `trg_guard_center_status` 트리거를 트랜잭션 안에서 잠깐 껐다 켜는 방식입니다.
-**아직 Supabase에 실행하지 않았습니다** — 실행되면 이 항목은 완전히 해결됩니다.
+
+**2026-08-02 SQL 실행 완료(사용자 확인) 및 CI로 검증**: 실행 후 CI를 재실행한 결과
+`settings-reserve-class-wiring.test.ts`의 beforeAll이 더 이상 "테스트 센터를 승인 상태로
+바꿀 수 없어요" 에러로 막히지 않고, 8개 개별 테스트가 실제로 전부 실행됨을 확인했습니다
+(이전에는 beforeAll에서 즉시 실패해 7개가 skip 처리됐음). **이 항목은 해결되었습니다.**
 
 ## 6. P3 — 제품 결정이 필요한 향후 기능 후보
 

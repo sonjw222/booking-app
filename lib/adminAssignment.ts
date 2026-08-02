@@ -70,7 +70,8 @@ export type AdminActionLog = {
   adminName: string;
   memberProfileId: string;
   memberName: string;
-  classId: string;
+  // reservationId와 동일한 사유로 null 가능(fix_admin_action_logs_class_id_fk 배치에서 변경).
+  classId: string | null;
   classTitle: string;
   classStart: string;
   reasonCode: AdminReasonCode | null;

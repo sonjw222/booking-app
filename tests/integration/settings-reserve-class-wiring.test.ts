@@ -102,13 +102,19 @@ afterAll(async () => {
 }, 30000);
 
 describe("P1-12: 당일 예약 허용 여부(allow_same_day_booking)", () => {
+  // 기본 group_book_days_before=1/group_book_time=22:00이면 "당일" 수업은 이 테스트가 검증하려는
+  // allow_same_day_booking 체크에 도달하기도 전에 기존 예약 마감시간 체크("어제 22:00까지")에서
+  // 항상 막힌다 — 그래서 두 테스트 모두 book_days_before=0/book_time=23:59로 겹침 없이 마감시간을
+  // 오늘 자정 직전까지로 넉넉히 열어, 실제로 테스트하려는 same-day 체크만 단독으로 노출시킨다.
+  const bookOverride = { groupBookDaysBefore: 0, groupBookTime: "23:59" };
+
   it("꺼져 있으면 오늘(KST) 수업 예약이 차단된다", async () => {
     const cls = await createFutureTestClass(centerAId, { title: "P1-12 당일예약 테스트", hoursFromNow: 2 });
     createdClassIds.push(cls.id);
     const membership = await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
     createdMembershipIds.push(membership.id);
 
-    await saveSettings(centerAId, { ...defaultSettings, allowSameDayBooking: false });
+    await saveSettings(centerAId, { ...defaultSettings, ...bookOverride, allowSameDayBooking: false });
 
     const { error } = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: managerA.profileId });
     expect(error).not.toBeNull();
@@ -121,6 +127,8 @@ describe("P1-12: 당일 예약 허용 여부(allow_same_day_booking)", () => {
     const membership = await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
     createdMembershipIds.push(membership.id);
 
+    await saveSettings(centerAId, { ...defaultSettings, ...bookOverride });
+
     const { data, error } = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: managerA.profileId });
     expect(error).toBeNull();
     expect((data as any).status).toBe("confirmed");
@@ -129,8 +137,11 @@ describe("P1-12: 당일 예약 허용 여부(allow_same_day_booking)", () => {
 
 describe("P1-12: 일일 예약 가능 횟수(daily_book_limit)", () => {
   it("한도를 켜고 1로 설정하면 같은 날 두 번째 예약은 차단된다", async () => {
-    const classA = await createFutureTestClass(centerAId, { title: "P1-12 일일한도 A", hoursFromNow: 50 });
-    const classB = await createFutureTestClass(centerAId, { title: "P1-12 일일한도 B", hoursFromNow: 52 });
+    // daily_book_limit은 같은 프로필의 그 날짜 전체 예약을 합산하므로, 다른 describe 블록(대기/
+    // 오픈시각) 및 다른 통합 테스트 파일이 흔히 쓰는 48~96시간대와 겹치지 않도록 날짜를 충분히
+    // 떨어뜨린다(약 16일 뒤) — 그렇지 않으면 이 블록의 판정이 다른 fixture 잔여 예약에 오염된다.
+    const classA = await createFutureTestClass(centerAId, { title: "P1-12 일일한도 A", hoursFromNow: 380 });
+    const classB = await createFutureTestClass(centerAId, { title: "P1-12 일일한도 B", hoursFromNow: 382 });
     createdClassIds.push(classA.id, classB.id);
     const kstDate = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(iso));
     if (kstDate(classA.startTime) !== kstDate(classB.startTime)) {
@@ -152,8 +163,9 @@ describe("P1-12: 일일 예약 가능 횟수(daily_book_limit)", () => {
 });
 
 describe("P1-12: 주간 대기예약 가능 횟수(waitlist_weekly_limit)", () => {
+  // daily_book_limit 블록(약 16일 뒤)과 겹치지 않도록 약 19일 뒤로 분리한다(사유는 위 블록 주석 참고).
   it("0(기본값)이면 정원이 찬 수업은 대기 없이 즉시 거부된다", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P1-12 대기0 테스트", hoursFromNow: 50, capacity: 0 });
+    const cls = await createFutureTestClass(centerAId, { title: "P1-12 대기0 테스트", hoursFromNow: 450, capacity: 0 });
     createdClassIds.push(cls.id);
     const membership = await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
     createdMembershipIds.push(membership.id);
@@ -164,7 +176,7 @@ describe("P1-12: 주간 대기예약 가능 횟수(waitlist_weekly_limit)", () =
   });
 
   it("1로 설정하면 정원 찬 수업에 대기예약이 성공한다", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P1-12 대기1 테스트", hoursFromNow: 50, capacity: 0 });
+    const cls = await createFutureTestClass(centerAId, { title: "P1-12 대기1 테스트", hoursFromNow: 452, capacity: 0 });
     createdClassIds.push(cls.id);
     const membership = await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
     createdMembershipIds.push(membership.id);
@@ -178,14 +190,18 @@ describe("P1-12: 주간 대기예약 가능 횟수(waitlist_weekly_limit)", () =
 });
 
 describe("P1-12: 예약 오픈 시각(group_open_days_before/time)", () => {
+  // waitlist 블록(약 19일 뒤)과 겹치지 않도록 약 25일/28일 뒤로 분리한다(사유는 daily_book_limit
+  // 블록 주석 참고). "아직 오픈 전" 케이스는 수업일이 groupOpenDaysBefore보다 더 멀리 있어야
+  // 실제로 "아직 오픈 안 됨" 상태가 된다 — 수업이 10일 전부터 오픈인데 수업 자체가 2일 뒤면
+  // 오픈 시점(10일 전)이 이미 지나 있어 오히려 "이미 열림"이 되므로, 25일 뒤 수업 + 15일 전
+  // 오픈으로 오픈 시점(수업 10일 전 = 지금부터 10일 뒤)이 아직 미래이도록 잡는다.
   it("아직 오픈 전이면(오픈 기준일이 수업일보다 뒤) 예약이 차단된다", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P1-12 오픈전 테스트", hoursFromNow: 50 });
+    const cls = await createFutureTestClass(centerAId, { title: "P1-12 오픈전 테스트", hoursFromNow: 600 });
     createdClassIds.push(cls.id);
     const membership = await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
     createdMembershipIds.push(membership.id);
 
-    // 수업은 ~2일 뒤인데 "10일 전부터 오픈"으로 설정 → 아직 오픈 안 됨
-    await saveSettings(centerAId, { ...defaultSettings, groupOpenDaysBefore: 10, groupOpenTime: "00:00" });
+    await saveSettings(centerAId, { ...defaultSettings, groupOpenDaysBefore: 15, groupOpenTime: "00:00" });
 
     const { error } = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: managerA.profileId });
     expect(error).not.toBeNull();
@@ -193,7 +209,7 @@ describe("P1-12: 예약 오픈 시각(group_open_days_before/time)", () => {
   });
 
   it("기본값(60일 전 오픈)에서는 며칠 뒤 수업도 이미 오픈된 상태라 정상 예약된다", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P1-12 오픈됨 테스트", hoursFromNow: 50 });
+    const cls = await createFutureTestClass(centerAId, { title: "P1-12 오픈됨 테스트", hoursFromNow: 670 });
     createdClassIds.push(cls.id);
     const membership = await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
     createdMembershipIds.push(membership.id);

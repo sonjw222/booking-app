@@ -8,6 +8,27 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-02 — P0-6/P1-12: SQL 실행 및 검증, sibling FK 버그 추가 발견
+
+사용자가 `fix_holiday_membership_restore_draft_proposed.sql`, `fix_settings_wire_reservation_logic_draft_proposed.sql`,
+`fix_test_center_approval_draft_proposed.sql`을 Supabase SQL Editor에서 실행 완료. CI 재검증 결과:
+
+- **P2-15(테스트 센터 승인 gap) 해결 확인**: `settings-reserve-class-wiring.test.ts`의 beforeAll이
+  더 이상 막히지 않고 8개 테스트가 전부 실행됨.
+- **`admin_action_logs.reservation_id` FK 수정 확인**: 이전에 발생하던 FK 위반이 사라짐.
+- **sibling 버그 추가 발견**: `admin_action_logs.class_id`도 동일하게 `not null`이고 ON DELETE
+  미지정이라, `add_holiday_safe`의 `delete from classes` 단계에서 여전히 FK 위반 발생. 같은 패턴의
+  수정(`fix_admin_action_logs_class_id_fk_draft_proposed.sql` + rollback, 신규)을 준비함 — **아직 미실행**.
+- **P1-12 테스트 fixture 설계 결함 2건 발견(SQL 문제 아님)**: 당일예약 테스트가 기존 book-deadline
+  체크에 먼저 막히던 문제(book 설정 오버라이드로 해결), daily_book_limit이 다른 describe 블록의
+  잔여 예약과 날짜가 겹쳐 오염되던 문제(날짜를 16~28일 뒤로 분리해 해결), open-days-before
+  "아직 오픈 전" 케이스의 날짜 산식이 반대로 계산되던 문제(수업일이 오픈 기준일보다 멀어야 함을
+  재확인해 수정). `lib/adminAssignment.ts`의 `AdminActionLog.classId`도 `string | null`로 조정
+  (런타임 영향 없음, build 확인).
+
+상세 내역은 [TODO.md](./TODO.md) P0-6/P1-12/P2-15 참고. PR [#32](https://github.com/sonjw222/booking-app/pull/32)는
+아직 merge하지 않음 — `class_id` FK 수정 SQL 승인·실행 및 전체 재검증 후 판단 예정.
+
 ## 2026-08-02 — P0-6/P1-12: 휴무일 수강권 미복구 버그 + 운영설정 미배선 수정 SQL 준비
 
 Track B 감사(바로 아래 항목)에서 SQL 실행이 필요해 미루었던 두 항목을 이번 배치에서 조사·수정
