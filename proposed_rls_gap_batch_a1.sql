@@ -15,21 +15,20 @@
 --
 -- 재사용 헬퍼(기존 함수, 신규 없음): my_account_id(), has_permission(center_id, permission_key)
 --
--- [2026-08-02 확인] 개발(dev) Supabase에서 읽기 전용으로 직접 확인한 실제 상태
--- (아래 "완료 보고"의 역할별 매트릭스 근거):
---   - RLS: 3개 테이블 전부 이미 활성화(정책 0건 — 아래 `enable row level security`는 dev에서는
---     no-op이지만 운영 Supabase 상태는 별도 확인 안 됨, 멱등하므로 그대로 둠).
---   - GRANT: anon/authenticated 둘 다 정상(SELECT 시도 시 에러 없이 0건 반환 — RLS가 막고
---     있을 뿐 GRANT 자체는 있음). service_role만 GRANT 없음(permission denied) — 이건 앱
---     코드가 service_role을 전혀 쓰지 않아(SEC-007 기존 확인) 실제 보안에는 영향 없고,
---     테스트 도구(admin client) 용도로만 아쉬운 상태.
---   - 정책: 3개 테이블 전부 CREATE POLICY 0건(직접 조회는 불가 — pg_policies는 PostgREST로
---     노출되지 않음; INSERT 시도가 전부 "new row violates row-level security policy"로
---     실패하는 것으로 간접 확인, 3개 테이블 동일).
---   - 실제 데이터 행 수: 확인 불가(anon/authenticated는 RLS가 막아 0건만 보이고, service_role은
---     GRANT가 없어 아예 조회 불가 — PostgREST로는 어느 role로도 진짜 행 수를 알 방법이 없음).
+-- [2026-08-02 최종 안전 점검 완료]
+--   - 16개 permission key(facility.salary.own/other.view/update ×4, customer.lead.* ×4,
+--     message.sms.* ×4, message.push.* ×4) 전부 실제 permissions 카탈로그에 존재 확인
+--     (16/16, 누락 0건 — 읽기 전용 조회로 확인, 임의 추가 없음).
+--   - 3개 테이블 전부 여전히 "RLS 활성 + 정책 0건" 상태 재확인(오너 권한 INSERT 시도 →
+--     42501 "new row violates row-level security policy"로 전부 차단 — 다른 정책이 새로
+--     생기지 않았음을 간접 확인. 정책 목록 자체는 PostgREST로 직접 조회 불가).
+--   - GRANT: anon/authenticated 둘 다 정상(이전 진단에서 확인) — 이 파일만으로 충분, 추가
+--     GRANT 불필요. service_role만 GRANT 없음(테스트 도구 전용 문제, 앱 기능과 무관).
+--   - DROP POLICY/CREATE POLICY를 하나의 트랜잭션(BEGIN/COMMIT)으로 묶어, 정책 부재 상태가
+--     중간에 노출되는 시간을 없앴습니다. RLS 자체는 비활성화하지 않습니다.
 -- ============================================================
 
+BEGIN;
 
 -- ------------------------------------------------------------
 -- staff_salaries — Critical. own/other 권한 완전 분리(카탈로그의
@@ -52,6 +51,7 @@ create policy "급여 등록 (본인/타인 권한 분리)"
         (account_id = my_account_id() and has_permission(center_id, 'facility.salary.own.update'))
         or (account_id != my_account_id() and has_permission(center_id, 'facility.salary.other.update'))
     );
+
 drop policy if exists "급여 수정 (본인/타인 권한 분리)" on staff_salaries;
 create policy "급여 수정 (본인/타인 권한 분리)"
     on staff_salaries for update
@@ -139,3 +139,5 @@ create policy "발송이력 삭제"
         (channel in ('sms', 'lms') and has_permission(center_id, 'message.sms.delete'))
         or (channel = 'push' and has_permission(center_id, 'message.push.delete'))
     );
+
+COMMIT;
