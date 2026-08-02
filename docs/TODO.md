@@ -110,16 +110,17 @@ README의 큰 순서만으로 전체 migration을 재현할 수 있는지 검증
 
 API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL이 반복되어 재발 위험이 큽니다.
 
-**2026-08-01 ACL-003 서버 측 재검증에서 실제 FAIL 발견**: `account_center_permissions`의 SELECT
-정책이 "같은 센터 소속 스태프면 누구나"로 열려 있어, `facility.role_permission` 권한이 없는
-일반 스태프가 Supabase SDK 직접 호출로 다른 스태프의 개인 권한 예외를 읽을 수 있었음(쓰기는
-안전, 읽기만 취약). 수정 SQL 초안: `fix_account_center_permissions_select_draft_proposed.sql`
-(PR A `feature/access-control-guards`에 포함, **미실행**). 실행 승인 시 실행 순서:
-1) 스테이징에서 `tests/integration/acl-003-permission-read.test.ts` 통과 확인
-2) 통과하면 운영 Supabase SQL Editor에서 해당 파일 실행
-3) 실행 후 같은 통합 테스트를 운영 대상으로 재실행해 회귀 확인
-이 항목이 실행되기 전까지는 P0-4 전체를 "확인 필요" 상태로 유지합니다 — 이번 재검증으로
-"과거 긴급 보정 SQL이 반복된다"는 이 항목의 우려가 실제로 한 번 더 재현되었습니다.
+**2026-08-01 ACL-003 서버 측 재검증에서 실제 FAIL 발견, 2026-08-02 수정 SQL 실행 완료**:
+`account_center_permissions`의 SELECT 정책이 "같은 센터 소속 스태프면 누구나"로 열려 있어,
+`facility.role_permission` 권한이 없는 일반 스태프가 Supabase SDK 직접 호출로 다른 스태프의
+개인 권한 예외를 읽을 수 있었음(쓰기는 안전, 읽기만 취약). 수정 SQL
+`fix_account_center_permissions_select_draft_proposed.sql`을 사용자가 Supabase SQL Editor에서
+직접 실행(Success 확인), 이후 `tests/integration/acl-003-permission-read.test.ts` 3/3 통과,
+전체 통합 테스트·PR #19 CI green 확인까지 마치고 `feature/access-control-guards`(PR #19)에
+포함되어 main에 병합됨(ACL-001~005 Batch). **이 개별 결함은 해결되었습니다** — 다만 P0-4
+자체(전체 RLS 회귀 테스트를 반복 가능한 체크리스트/자동화로 확립하는 것)의 완료 조건은 아직
+충족되지 않아 P0-4 전체는 계속 "확인 필요" 상태로 둡니다(이번엔 `account_center_permissions`
+한 테이블만 개별 대응했고, 전 테이블 반복 가능 체크리스트는 별도).
 
 ### P0-5. 정기 알림 스케줄러
 
@@ -132,6 +133,26 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 | 관련 문서 | [REQUIREMENTS 6-2](./REQUIREMENTS.md), [DATABASE 9-3, 12-5](./DATABASE.md) |
 
 함수 존재만으로 자동 알림이 실행되는 것은 아닙니다.
+
+### P0-6. 휴무일 강제 지정 시 취소된 예약의 수강권 횟수가 복구되지 않음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **확인됨 — SQL(RPC) 수정 필요, Track B 규칙상 이번 배치 미수정** |
+| 근거 파일 | `reservation_functions.sql`(`add_holiday_safe` 함수), `app/manager/holidays/page.tsx` |
+| 완료 조건 | `add_holiday_safe`가 확정/대기/출석 예약을 강제 취소할 때 `admin_cancel_reservation`/`manager_set_attendance`와 동일하게 `memberships.remaining_count`를 복구하도록 RPC를 수정하고, 예약자 있는 날짜를 휴무일로 지정하는 통합 테스트로 회귀 확인함 |
+| 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 8번 항목 |
+
+2026-08-02 Track B 관리자 기능 감사에서 발견: 매니저가 예약자가 있는 날짜를 휴무일로 지정하면
+`add_holiday_safe`가 해당 예약들을 강제로 지우면서(`delete from reservations`) 그 예약에 쓰인
+수강권의 `remaining_count`를 전혀 복구하지 않습니다. 같은 "취소" 성격의 다른 경로
+(`admin_cancel_reservation`, `manager_set_attendance`의 취소 처리)는 전부 정확히 +1 복구하는
+것과 대조적입니다 — 회원이 수강권 횟수를 영구히 잃는 실질적 금전/재화 손실 버그입니다.
+RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·DB 변경 금지") 범위 밖이라
+이번 배치에서는 고치지 않고 여기 기록만 합니다 — 별도 승인된 SQL 배치에서 처리해야 합니다.
+부수 발견: 같은 함수가 권한 체크에 `schedule.own.group.delete`(원래 "수업그룹 삭제" 용도)
+권한 키를 재사용하고 있어, 세분권한 도입 시 의미가 부정확할 수 있습니다(이것도 SQL 필요).
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
@@ -295,6 +316,43 @@ URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 �
 다른 센터 관리자 차단)는 모두 통합 테스트로 커버됨. 남은 것은 정원 초과 확인(1차 호출 저지 →
 사유 입력 → `p_force_capacity`로 재호출) 2단계 흐름 자체의 자동화 테스트뿐 — 이번 범위에서는
 수동으로만 확인함.
+
+### P1-12. 운영설정(`/manager/settings`) 화면의 다수 항목이 저장만 되고 실제로 적용되지 않음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **부분 구현 — 화면은 완료, 서버 적용은 일부만** |
+| 근거 파일 | `app/manager/settings/page.tsx`, `lib/settings.ts`, `wire_settings.sql`, `add_center_settings.sql`, `reservation_functions.sql` |
+| 완료 조건 | `center_settings`의 각 필드가 실제로 어떤 RPC/쿼리에서 읽히는지 전수 확인하고, 미적용 필드는 (a) 해당 로직에 반영하거나 (b) "준비 중" 표시로 화면에서 명확히 구분함 |
+| 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 운영설정 항목 |
+
+2026-08-02 Track B 감사에서 발견: `center_settings`에 저장되는 약 26개 필드 중 예약 마감시각류
+8개(`private/group_{book,cancel}_{days_before,time}`, `calc_deadline()`에서 사용)와
+`deduct_on_late_cancel`(`cancel_reservation()`에서 사용) 9개만 실제로 어떤 서버 로직에서 읽힙니다.
+나머지(`allow_same_day_booking`, `daily_book_limit(_enabled)`, `waitlist_auto_hours/minutes`,
+`waitlist_weekly_limit`, `use_locker`, `use_lounge`, `private_max_concurrent(_enabled)`,
+`show_group_reserved_count`/`show_group_waitlist_count`, `use_inquiry_board`, `show_all_classes`,
+`auto_unpaid_input`, `show_point_history` 등)는 `schema.sql`과 `lib/settings.ts` 외 코드 참조가
+0건입니다 — 매니저가 화면에서 토글/숫자를 바꿔도 저장은 되지만 실제 예약·조회 흐름에는
+아무 영향이 없습니다. 신뢰를 해치는 문제라 P1로 분류합니다. 각 필드를 실제로 구현할지,
+아니면 "준비 중"으로 화면에서 구분할지는 제품 결정이 필요합니다.
+
+### P1-13. 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **확인됨 — RLS 변경 필요, 이번 배치 미수정** |
+| 근거 파일 | `app/manager/center-info/page.tsx`, `reservation_functions.sql`("매니저 센터 수정" 정책) |
+| 완료 조건 | `facility.info` 권한 세분화를 실제로 적용할지(RLS를 `has_permission(center_id,'facility.info')`로 좁힘) 아니면 코드 주석을 실제 동작("센터 소속 active 스태프면 누구나 가능")에 맞게 고칠지 결정하고 반영함 |
+| 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 센터관리 항목 |
+
+2026-08-02 Track B 감사에서 발견: `center-info/page.tsx` 상단 주석은 "시설 정보 설정 권한
+(facility.info) 필요 — 오너는 항상 가능"이라고 적혀 있지만, 실제 RLS 정책(`"매니저 센터 수정"`,
+`reservation_functions.sql`)은 `center_id in (select my_managed_center_ids())`만 확인합니다 —
+오너가 아닌 일반 스태프도 센터 정보·결제수단·평판점수를 수정할 수 있어 주석과 실제 동작이
+다릅니다. RLS 변경이 필요한 사안이라 Track B(SQL/RLS 변경 금지) 범위 밖입니다.
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
@@ -494,6 +552,33 @@ client로 fixture를 만들고 지울 수 있어 문제가 되지 않지만, `co
 일반 client로도 admin client로도 fixture를 만들거나 지울 방법이 현재 없다. 이 두 테이블의
 자동화된 통합 테스트는 이 GRANT가 해결된 뒤에만 안전하게 추가할 수 있다 — 그때까지는
 `tests/integration/sec009-batch-a1-rls.test.ts`에서 의도적으로 제외했다.
+
+### P2-14. Track B 감사에서 발견한 그 외 소규모 항목 모음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인됨 — 대부분 SQL/RLS 변경 필요, 이번 배치 미수정** |
+| 근거 파일 | `lib/classes.ts`, `app/manager/staff/permissions/page.tsx`, `lib/progress.ts`, `add_membership_rules.sql`, `add_rooms_fix.sql` |
+| 완료 조건 | 항목별로 개별 판단(아래 참고) — 하나의 완료 조건으로 묶이지 않음, 필요시 개별 TODO로 승격 |
+| 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) |
+
+2026-08-02 Track B 감사에서 발견했지만 개별 P0-P1으로 승격하기엔 영향이 작거나 제품 판단이
+먼저 필요한 항목들:
+- `lib/classes.ts`의 구버전 `previewCopySchedule`/`copySchedule`(nth-weekday 방식)이 화면에서
+  더 이상 호출되지 않는 죽은 코드로 남아있음 — 제거 검토.
+- 반복수업 생성(`perDayMode`)과 `updateClassGroup`이 여러 행을 순차 처리해 원자성이 없음(중간
+  실패 시 일부만 반영) — RPC로 묶을지 판단 필요(SQL).
+- `app/manager/staff/permissions/page.tsx`의 클라이언트 가드(오너만 진입 가능)와 서버 쓰기
+  정책(`facility.role_permission` 보유자도 가능)이 불일치 — 오너가 그 권한을 다른 매니저에게
+  줘도 그 매니저는 화면에 못 들어감(RLS/화면 로직 중 하나를 맞출지 판단 필요).
+- `membership_schedule_rules`는 `pass.update` 권한을 요구하는데 메뉴 게이트는 `pass.create`만
+  확인 — 권한 카탈로그 정합성 재검토 필요(SQL 또는 메뉴 게이트 키 변경).
+- `progress_records`에 UPDATE RLS 정책 자체가 없음(SELECT/INSERT/DELETE만 존재) — 현재는
+  호출하는 코드가 없어 무해하지만(관련 죽은 import는 이번에 제거함), 나중에 수정 기능을 추가하면
+  RLS부터 필요(SQL).
+- `rooms` SELECT가 `using (true)`로 로그인 없이도 전체 공개 — 의도된 것인지 확인 필요(PII 아님,
+  낮은 위험이지만 미확인 상태).
 
 ## 6. P3 — 제품 결정이 필요한 향후 기능 후보
 

@@ -26,13 +26,16 @@ export default function InquiryChat({
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   async function reload() {
     try {
       const ms = await fetchMessages(threadId);
       setMessages(ms);
-    } catch { /* 무시 */ }
+    } catch (e: any) {
+      setError("메시지를 불러오지 못했어요: " + e.message);
+    }
   }
 
   useEffect(() => {
@@ -57,21 +60,25 @@ export default function InquiryChat({
     const body = text.trim();
     if (!body && photos.length === 0) return;
     setSending(true);
+    setError(null);
     try {
       await sendMessage(threadId, body, photos);
       setText(""); setPhotos([]);
       await reload();
-    } catch { /* 무시 */ }
-    finally { setSending(false); }
+    } catch (e: any) {
+      setError("전송에 실패했어요: " + e.message);
+    } finally { setSending(false); }
   }
 
   async function handlePhoto(file: File) {
     setUploading(true);
+    setError(null);
     try {
       const path = await uploadInquiryPhoto(file);
       setPhotos((prev) => [...prev, path]);
-    } catch { /* 무시 */ }
-    finally { setUploading(false); }
+    } catch (e: any) {
+      setError("사진 업로드에 실패했어요: " + e.message);
+    } finally { setUploading(false); }
   }
 
   return (
@@ -117,6 +124,8 @@ export default function InquiryChat({
           ))}
         </div>
       )}
+
+      {error && <div className="auth-msg error" style={{ margin: "0 12px 8px" }}>{error}</div>}
 
       <div className="chat-input-bar">
         <label className="chat-photo-btn">

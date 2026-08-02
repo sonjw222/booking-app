@@ -8,6 +8,7 @@
 */
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
 import {
@@ -17,6 +18,7 @@ import {
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 
 export default function ManagerNotificationsPage() {
+  const router = useRouter();
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [list, setList] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +37,7 @@ export default function ManagerNotificationsPage() {
   }, []);
 
   function handleClick(n: Notification) {
-    if (n.link) window.location.href = n.link;
+    if (n.link) router.push(n.link);
   }
 
   async function handleDelete(id: string, e: React.MouseEvent) {

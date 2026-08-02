@@ -55,16 +55,11 @@ export default function ManagerOrdersPage() {
     if (!confirm(`${o.memberName}님에게 '${o.productName}'을(를) 발급하고 매출에 반영할까요?`)) return;
     setBusy(true);
     try {
-      const r = await updateOrderStatus(o.id, "done");
-      if (r && r.autoBooked > 0) {
-        showToast(
-          r.remaining > 0
-            ? `발급 완료 · ${r.autoBooked}개 수업 자동예약 (${r.remaining}회는 자리가 없어 미배치)`
-            : `발급 완료 · ${r.autoBooked}개 수업에 자동예약했어요`
-        );
-      } else {
-        showToast("수강권을 발급하고 매출에 반영했어요");
-      }
+      await updateOrderStatus(o.id, "done");
+      // fulfill_order()는 자동예약 개수/미배치 여부를 반환하지 않아(위 lib/orders.ts 주석 참고)
+      // 여기서 그 결과를 안다고 가정하는 문구를 쓰지 않는다 — 요일반 자동예약은 서버에서
+      // 조용히 시도되며, 실제 배치 결과는 회원 예약내역/미배치 관리 화면에서 확인한다.
+      showToast("수강권을 발급하고 매출에 반영했어요");
       await load();
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
