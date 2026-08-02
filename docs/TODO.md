@@ -139,8 +139,8 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **수강권 복구 SQL 실행 완료(2026-08-02), 검증 중 후속 FK 버그 추가 발견 — 후속 SQL 승인 대기** |
-| 근거 파일 | `reservation_functions.sql`(`add_holiday_safe` 함수), `app/manager/holidays/page.tsx`, `fix_holiday_membership_restore_draft_proposed.sql`(실행됨), `fix_admin_action_logs_class_id_fk_draft_proposed.sql`(신규, 미실행), `tests/integration/holiday-membership-restore.test.ts` |
+| 현재 상태 | **해결됨 — 2026-08-02 SQL 2건(수강권 복구 + admin_action_logs FK 2개 컬럼) 실행 완료, CI 통합 테스트 green 확인** |
+| 근거 파일 | `reservation_functions.sql`(`add_holiday_safe` 함수), `app/manager/holidays/page.tsx`, `fix_holiday_membership_restore_draft_proposed.sql`(실행됨), `fix_admin_action_logs_class_id_fk_draft_proposed.sql`(실행됨), `tests/integration/holiday-membership-restore.test.ts` |
 | 완료 조건 | `add_holiday_safe`가 확정/대기/출석 예약을 강제 취소할 때 `admin_cancel_reservation`/`manager_set_attendance`와 동일하게 `memberships.remaining_count`를 복구하도록 RPC를 수정하고, 예약자 있는 날짜를 휴무일로 지정하는 통합 테스트로 회귀 확인함 |
 | 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 8번 항목 |
 
@@ -153,8 +153,15 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 참조하는 not null FK는 더 없음을 확인함(`center_id`/`admin_id`/`member_profile_id`는 삭제 안 되는
 테이블 참조, `membership_id`/`source_unassigned_id`는 이미 nullable이고 memberships는 삭제 안 됨).
 `class_id`도 동일하게 nullable + `ON DELETE SET NULL`로 바꾸는 `fix_admin_action_logs_class_id_fk_draft_proposed.sql`(+rollback)을
-준비했다 — **아직 실행하지 않았고, 사용자 승인 필요**. `lib/adminAssignment.ts`의 `AdminActionLog.classId`도
-`string | null`로 맞춰 반영함(런타임 영향 없음, build 확인).
+준비했다. `lib/adminAssignment.ts`의 `AdminActionLog.classId`도 `string | null`로 맞춰 반영함
+(런타임 영향 없음, build 확인).
+
+**2026-08-02 SQL 실행 완료 및 최종 검증**: 사용자가 이 SQL을 Supabase에서 실행 완료. 재검증 중
+회귀 테스트 자체의 마지막 버그(테스트 기대값 오류 — `admin_assign_reservation()` 호출 자체가
+`remaining_count`를 실제로 소모시키는 것을 fixture 재작성 시 반영하지 않아 "3→4"가 아니라
+정확히는 "3→2(소모)→3(복구)"여야 했음)를 발견해 수정. 이후 CI에서
+**`tests/integration/holiday-membership-restore.test.ts` 전체 green, 전체 통합 테스트
+7 test files / 49 tests 전부 통과**를 확인했습니다. **이 항목은 완전히 해결되었습니다.**
 
 2026-08-02 Track B 관리자 기능 감사에서 발견: 매니저가 예약자가 있는 날짜를 휴무일로 지정하면
 `add_holiday_safe`가 해당 예약들을 강제로 지우면서(`delete from reservations`) 그 예약에 쓰인

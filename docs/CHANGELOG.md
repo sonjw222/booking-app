@@ -36,8 +36,15 @@
 허용/일일예약 한도/주간 대기예약 한도/예약 오픈 시각) 전부 정상 동작 확인. `holiday-membership-restore.test.ts`는
 `admin_action_logs.class_id` FK 수정(미실행)이 남아있어 계속 FAIL.
 
+**최종 해결(같은 날)**: 사용자가 `fix_admin_action_logs_class_id_fk_draft_proposed.sql`을 실행.
+재검증 중 회귀 테스트 자체의 마지막 오류(기대값 계산 실수 — `admin_assign_reservation()` 호출이
+실제로 `remaining_count`를 소모시키는 것을 반영 안 함, "3→4"가 아니라 "3→2(소모)→3(복구)"가
+정답)를 발견해 수정. 이후 CI에서 **전체 통합 테스트 7 test files / 49 tests 전부 통과**
+(holiday-membership-restore.test.ts, settings-reserve-class-wiring.test.ts 포함), `npm run test`
+137/137, `npm run build` 성공을 확인했습니다. **P0-6, P1-12, P2-15 모두 완전히 해결됨.**
+
 상세 내역은 [TODO.md](./TODO.md) P0-6/P1-12/P2-15 참고. PR [#32](https://github.com/sonjw222/booking-app/pull/32)는
-아직 merge하지 않음 — `class_id` FK 수정 SQL 승인·실행 및 전체 재검증 후 판단 예정.
+CI green 상태이나, 사용자 지시에 따라 아직 merge하지 않았습니다.
 
 ## 2026-08-02 — P0-6/P1-12: 휴무일 수강권 미복구 버그 + 운영설정 미배선 수정 SQL 준비
 
