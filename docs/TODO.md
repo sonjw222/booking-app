@@ -559,15 +559,24 @@ error를 무시하지 않고 사용자에게 표시하도록는 고쳤지만, �
 - `community_comments`뿐 아니라 부모 `community_posts`도 조회 정책(`for select`) 1개만 있고
   쓰기(INSERT) 정책이 아예 없음 — 커뮤니티 기능을 실제로 켤 때 함께 보강해야 함.
 
-### P2-13. service_role이 RLS Gap 17개 테이블에 대한 SQL GRANT가 없음(`contracts`/`notification_logs` 통합 테스트 자동화 불가)
+### P2-13. service_role이 RLS Gap 17개 테이블(+`memberships`)에 대한 SQL GRANT가 없음(`contracts`/`notification_logs` 통합 테스트 자동화 불가)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
 | 현재 상태 | **확인됨 — SQL 실행 필요, 이번 배치에서 실행하지 않음** |
-| 근거 파일 | `tests/integration/sec009-batch-a1-rls.test.ts`, `tests/integration/setup.ts`(`describeAdminQueryError`) |
-| 완료 조건 | `GRANT ALL ON TABLE contracts, notification_logs, ... TO service_role;`(대상 범위는 SEC-007 17개 테이블 전체로 할지 결정) 실행을 사용자 승인 후 진행하고, `contracts`/`notification_logs`의 자동화된 통합 테스트를 추가함 |
+| 근거 파일 | `tests/integration/sec009-batch-a1-rls.test.ts`, `tests/integration/setup.ts`(`describeAdminQueryError`), `tests/integration/holiday-membership-restore.test.ts`, `tests/integration/settings-reserve-class-wiring.test.ts` |
+| 완료 조건 | `GRANT ALL ON TABLE contracts, notification_logs, memberships, ... TO service_role;`(대상 범위는 SEC-007 17개 테이블 + 이번에 새로 확인된 `memberships` 전체로 할지 결정) 실행을 사용자 승인 후 진행하고, `contracts`/`notification_logs`의 자동화된 통합 테스트를 추가함 |
 | 관련 문서 | [21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md) |
+
+**2026-08-02 P0-6/P1-12 배치 CI 첫 실행에서 추가 확인**: `memberships`도 같은 패턴(`permission
+denied for table memberships`)임을 새로 발견했습니다 — SEC-007 17개 테이블 목록에는 없던
+테이블입니다. `memberships`는 매니저 계정(로그인 세션, RLS "매니저 수강권 발급"/"매니저 수강권
+조회" 정책)으로 INSERT/SELECT는 가능해 fixture 생성 자체는 막히지 않지만, **DELETE 정책이
+아예 없어**(payments/orders와 동일 패턴) 매니저 세션으로도 service_role로도 지울 수 없습니다.
+`tests/integration/holiday-membership-restore.test.ts`/`settings-reserve-class-wiring.test.ts`는
+이 사실을 반영해 memberships fixture를 정리하지 않고 잔존시키도록 수정했습니다(기존
+`admin-assignment-security.test.ts`와 동일 관례).
 
 SEC-009(Batch A 적용 준비) 중 발견: RLS 정책 부재와는 별개로, `staff_salaries`/`contracts`/
 `leads`/`messages`/`notification_logs` 5개 테이블 전부 `service_role`에 SQL GRANT 자체가 없다
