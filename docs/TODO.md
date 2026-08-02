@@ -164,6 +164,19 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 `tests/integration/holiday-membership-restore.test.ts`는 SQL 적용 전에는 의도적으로 FAIL하고,
 적용 후 green이 되어야 정상입니다.
 
+**2026-08-02 회귀 테스트 작성 중 별도 버그를 추가로 발견해 같은 SQL 파일에 함께 수정**:
+`admin_action_logs.reservation_id`가 `not null references reservations(id)`인데 ON DELETE
+지정이 없어(기본 RESTRICT), 관리자 직접배치/무료배치로 만들어진 예약이 하루에 하나라도
+있으면 `add_holiday_safe`의 `delete from reservations`가 FK 위반으로 **통째로 실패**하고
+있었습니다(휴무일도 등록 안 되고 매니저에게는 원인불명의 SQL 에러만 노출 — 실제 운영에서
+"관리자 직접배치"를 한 번이라도 쓴 센터라면 재현 가능한 실질적 P0급 버그). `reservation_id`를
+nullable로 바꾸고 `ON DELETE SET NULL`로 교체해 감사 로그 행(스냅샷 컬럼으로 이미 의미 유지
+가능하도록 설계돼 있었음)은 보존하면서 참조만 끊도록 함께 수정했습니다(`AdminActionLog.reservationId`
+타입도 `lib/adminAssignment.ts`에서 `string | null`로 맞춤 — 현재 이 필드를 읽는 화면 코드가
+없어 런타임 영향 없음, `npm run build` 확인). `delete_class_safe`/`delete_class_group_safe`도
+취소·노쇼 예약을 삭제할 때 같은 FK 위반을 겪을 수 있는 잠재적 사안이지만, 이번 FK 완화로
+함께 해결되며 그 두 함수 자체는 이번 배치에서 손대지 않았습니다.
+
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
 ### P1-1. 포인트 원장 이원화 정합성

@@ -441,7 +441,10 @@ Cons
 Impact
 
 `add_holiday_safe`, `calc_deadline`, `reserve_class` 3개 RPC. 영향받는 테이블: `reservations`,
-`memberships`, `classes`, `center_holidays`, `center_settings`(읽기만).
+`memberships`, `classes`, `center_holidays`, `center_settings`(읽기만). 회귀 테스트 작성 중
+별도로 발견해 함께 수정: `admin_action_logs.reservation_id` FK를 nullable + `ON DELETE SET NULL`로
+변경(기존엔 관리자배치 예약이 하루라도 있으면 `add_holiday_safe`의 삭제가 FK 위반으로 전부
+실패했음) — `lib/adminAssignment.ts`의 `AdminActionLog.reservationId` 타입도 함께 조정.
 
 Related Documents
 

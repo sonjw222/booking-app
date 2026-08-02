@@ -8,10 +8,14 @@
 -- manager_set_attendance()가 전부 하는 "수강권 횟수 복구"를 하지 않았다. 회원이
 -- 실제로 사용한 적 없는 수강권 횟수를 영구히 잃는 실질적 금전/재화 손실 버그.
 --
--- 수정 범위: add_holiday_safe() 함수 본문만 CREATE OR REPLACE. 다른 함수/트리거/
--- 테이블 구조는 전혀 바꾸지 않는다. delete_class_safe()/delete_class_group_safe()는
--- 애초에 확정·대기·출석 예약이 있으면 삭제 자체를 막아서(raise exception) 이 버그가
--- 없다 — add_holiday_safe()만 유일하게 강제(force) 경로로 이 방어를 우회한다.
+-- 수정 범위: add_holiday_safe() 함수 본문 CREATE OR REPLACE + admin_action_logs.reservation_id
+-- FK를 nullable/ON DELETE SET NULL로 변경(아래 별도 발견 버그 참고). 다른 함수/트리거/테이블
+-- 구조는 전혀 바꾸지 않는다. delete_class_safe()/delete_class_group_safe()는 애초에 확정·대기·
+-- 출석 예약이 있으면 삭제 자체를 막아서(raise exception) 수강권 미복구 버그는 없다 —
+-- add_holiday_safe()만 유일하게 강제(force) 경로로 이 방어를 우회한다. 다만 이 두 함수도
+-- "취소/노쇼 예약은 함께 삭제"하므로 그 예약에 admin_action_logs 참조가 있으면 동일한 FK
+-- 위반을 겪을 수 있다 — 이번 FK 수정으로 함께 해결되지만, 그 두 함수 자체는 이번 PR에서
+-- 손대지 않는다(범위 밖, docs/TODO.md에 별도 기록).
 --
 -- 복구 조건(= 실제로 수강권을 차감했던 예약만 복구):
 --   - status in ('confirmed', 'attended') — waitlisted는 애초에 차감된 적이 없어 제외
@@ -35,9 +39,34 @@
 -- 조건(status/membership_consumed)은 이 시점에 "새로" 조회하므로, 회원이 동시에 자기
 -- 예약을 cancel_reservation()으로 먼저 취소했다면(그쪽에서 이미 복구함) 그 예약은 이미
 -- status='cancelled'라 이 복구 대상에서 자동으로 제외되어 이중 복구가 나지 않는다.
+--
+-- [이번 회귀 테스트 작성 중 추가로 발견한 별도 버그, 같은 함수라 함께 수정]
+-- admin_action_logs.reservation_id는 `not null references reservations(id)`인데 ON DELETE
+-- 지정이 없어(기본 RESTRICT) 지금까지 add_holiday_safe()는 "관리자 직접배치/무료배치"로
+-- 만들어진 예약이 하루라도 껴 있으면 `delete from reservations`에서 FK 위반으로 통째로
+-- 실패했다(트랜잭션 전체 롤백 — 휴무일도 등록 안 되고 아무 것도 안 바뀐 채 매니저에게는
+-- 원인불명의 SQL 에러만 노출됨). admin_action_logs는 이미 member_name_snapshot/
+-- class_title_snapshot/class_start_snapshot 같은 스냅샷 컬럼을 갖고 있어(add_admin_assignment.sql)
+-- 원본 reservations 행이 사라져도 로그 자체는 의미를 유지하도록 설계돼 있었다 — FK가 그
+-- 설계 의도와 어긋나 있던 것으로 보인다. reservation_id를 nullable로 바꾸고
+-- ON DELETE SET NULL로 교체해 감사 로그 행은 보존하면서 참조만 끊는다(로그 삭제 아님).
+-- 영향: `AdminActionLog.reservationId`(lib/adminAssignment.ts) 타입을 `string | null`로
+-- 맞췄다 — 현재 이 필드를 실제로 읽는 화면 코드가 없어(app/manager/admin-assignments/page.tsx
+-- 확인, "되돌리기" 기능 미구현) 런타임 영향은 없다.
 -- ============================================================
 
 BEGIN;
+
+-- [별도 발견 버그 수정] admin_action_logs.reservation_id를 nullable + ON DELETE SET NULL로.
+alter table admin_action_logs
+    alter column reservation_id drop not null;
+
+alter table admin_action_logs
+    drop constraint if exists admin_action_logs_reservation_id_fkey;
+
+alter table admin_action_logs
+    add constraint admin_action_logs_reservation_id_fkey
+    foreign key (reservation_id) references reservations(id) on delete set null;
 
 create or replace function add_holiday_safe(
     p_center_id uuid,

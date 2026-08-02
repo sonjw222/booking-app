@@ -22,7 +22,12 @@ SQL 작성·테스트 작성까지 완료했습니다. **SQL은 아직 Supabase�
   DELETE 기반 구조(예약/수업을 실제로 지움)는 그대로 유지 — FK에 `ON DELETE CASCADE`가 없어
   UPDATE-cancelled 방식으로 바꾸면 `delete from classes`가 실패함. 회귀 테스트
   `tests/integration/holiday-membership-restore.test.ts` 신규 작성(SQL 미적용 상태에서는
-  의도적으로 FAIL).
+  의도적으로 FAIL). **테스트 작성 중 별도 버그를 추가로 발견해 같은 SQL에 함께 수정**:
+  `admin_action_logs.reservation_id`가 ON DELETE 지정 없는 FK라(기본 RESTRICT), 관리자
+  직접배치/무료배치로 만들어진 예약이 하루라도 있으면 `add_holiday_safe`의 예약 삭제가 FK
+  위반으로 통째로 실패하던 실질적 P0급 버그 — `reservation_id`를 nullable + `ON DELETE SET NULL`로
+  바꿔 감사 로그는 보존하면서 참조만 끊도록 수정(`AdminActionLog.reservationId` 타입도
+  `string | null`로 맞춤, 현재 읽는 화면 없어 런타임 영향 없음).
 - **P1-12 (운영설정 다수 필드 미배선)**: 34개 필드를 전수 재조사해
   [24_P1_12_Settings_Audit.md](./24_P1_12_Settings_Audit.md)로 표 작성. 그중
   `reserve_class()`의 기존 동기 흐름에 자연스럽게 추가 가능한 8개(당일예약 허용/일일예약
