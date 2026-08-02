@@ -108,9 +108,9 @@ beforeAll(async () => {
     membershipUnlimitedId = (data as { id: string }).id;
   }
 
-  await assignAdmin(classLimited.id, managerA.profileId, membershipLimitedId, "ADMIN_ASSIGNMENT");   // 복구되어야 함(3→4)
-  await assignAdmin(classMultiA.id, managerA.profileId, membershipMultiId, "ADMIN_ASSIGNMENT");      // 복구되어야 함(같은 수강권 2건 중 1건)
-  await assignAdmin(classMultiB.id, managerA.profileId, membershipMultiId, "ADMIN_ASSIGNMENT");      // 복구되어야 함(합쳐서 2→4)
+  await assignAdmin(classLimited.id, managerA.profileId, membershipLimitedId, "ADMIN_ASSIGNMENT");   // 3→2(소모), 복구되어야 함(2→3)
+  await assignAdmin(classMultiA.id, managerA.profileId, membershipMultiId, "ADMIN_ASSIGNMENT");      // 2→1(소모), 같은 수강권 2건 중 1건
+  await assignAdmin(classMultiB.id, managerA.profileId, membershipMultiId, "ADMIN_ASSIGNMENT");      // 1→0(소모), 복구되어야 함(합쳐서 0→2)
   await assignAdmin(classUnlimited.id, managerA.profileId, membershipUnlimitedId, "ADMIN_ASSIGNMENT"); // 복구 대상 아님(무제한, null 유지, 크래시 없음)
   await assignAdmin(classFree.id, managerA.profileId, null, "ADMIN_FREE");                           // membership_id=null — 복구 대상 자체가 아님
 
@@ -177,8 +177,13 @@ describe("P0-6: add_holiday_safe() 강제 지정 시 수강권 복구", () => {
     if (memErr) throw new Error(memErr.message);
     const byId = new Map((mems ?? []).map((m: any) => [m.id, m.remaining_count]));
 
-    expect(byId.get(membershipLimitedId)).toBe(4); // 3 → 4, 확정 예약 1건 복구
-    expect(byId.get(membershipMultiId)).toBe(4);   // 2 → 4, 같은 수강권으로 확정 예약 2건(다른 클래스) 복구
+    // admin_assign_reservation() 호출 자체가 이미 remaining_count를 1씩 소모시키므로(실제 배치
+    // 로직 재사용 — 원본 raw-insert 설계 때와 달리 소모가 실제로 일어난다), 기대값은
+    // "복구 후 소모분만큼 회복된 값"이지 생성 시점 값보다 더 커지는 게 아니다: 3(생성) →
+    // 2(배치 소모) → 3(휴무일 복구, 원래 값으로 돌아옴). membershipMulti도 동일하게
+    // 2(생성) → 0(배치 2건 소모) → 2(휴무일 복구).
+    expect(byId.get(membershipLimitedId)).toBe(3); // 3 → 2(소모) → 3(복구)
+    expect(byId.get(membershipMultiId)).toBe(2);   // 2 → 0(소모 2건) → 2(복구)
     expect(byId.get(membershipUnlimitedId)).toBeNull(); // 무제한권은 그대로 null 유지(크래시 없음)
     expect(byId.get(membershipAlreadyCancelledId)).toBe(1); // 이미 취소된 예약 — 이중 복구되지 않고 1 그대로
 
