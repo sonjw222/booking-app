@@ -2274,6 +2274,16 @@ a.membership-card { text-decoration: none; display: block; }
 .assign-banner-name { font-size: 14.5px; font-weight: 800; color: var(--text); margin-top: 2px; }
 .assign-banner-phone { font-size: 12px; font-weight: 600; color: var(--text-dim); }
 .assign-banner-sub { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+/* .ghost-btn은 display:block; width:100% 짜리 "단독 전체너비" 버튼 스타일이라, 이 버튼처럼
+   flex row(.assign-banner) 안에 넣으면 width:100%가 flex-basis로 해석돼 형제 요소
+   (.assign-banner-main, flex:1)와 너비를 두고 경쟁하고, flex-shrink 방지/줄바꿈 방지 설정이
+   없어 좁은 화면에서 극단적으로 눌려 한글이 세로로(글자당 한 줄씩) 쌓이는 원인이었다.
+   이 버튼만 flex item 기본 레이아웃으로 되돌리고 자기 콘텐츠 너비를 유지하도록 고정한다. */
+.assign-banner-exit {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: auto; flex: 0 0 auto; white-space: nowrap;
+  padding: 10px 14px; min-width: 0;
+}
 .assign-menu-wrap { position: relative; flex: 0 0 auto; }
 .assign-menu {
   position: absolute; right: 0; top: 100%; margin-top: 4px; z-index: 50;
@@ -2488,7 +2498,10 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .thread-main { flex: 1; min-width: 0; }
 .thread-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.thread-name { font-size: 14.5px; font-weight: 700; color: var(--text); }
+.thread-name {
+  font-size: 14.5px; font-weight: 700; color: var(--text);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .thread-time { font-size: 11px; color: var(--text-dim); flex: 0 0 auto; }
 .thread-preview {
   font-size: 13px; color: var(--text-dim); margin-top: 3px;

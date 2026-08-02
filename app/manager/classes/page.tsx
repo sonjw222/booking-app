@@ -757,7 +757,7 @@ export default function ClassManagePage() {
               )}
             </div>
           </div>
-          <button className="ghost-btn" onClick={exitAssignMode}>직접배치 종료</button>
+          <button className="ghost-btn assign-banner-exit" onClick={exitAssignMode}>직접배치 종료</button>
         </div>
       )}
 
