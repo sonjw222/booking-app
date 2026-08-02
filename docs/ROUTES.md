@@ -70,7 +70,7 @@
 
 ## 5. 센터 매니저 라우트
 
-19개 매니저 페이지 중 16개가 `fetchMyCenters()`를 호출합니다. `/manager/inquiries`, `/manager/notifications`, `/manager/staff/permissions`는 이 클라이언트 소속 확인이 없고 RLS/RPC에만 의존합니다.
+19개 매니저 페이지 중 18개가 `fetchMyCenters()`를 호출합니다(`/manager/inquiries`, `/manager/notifications`는 ACL-002, 2026-08-01 적용으로 추가됨). `/manager/staff/permissions`만 `fetchMyCenters()` 대신 `isOwnerOfCenter()`(URL의 `center` 파라미터로 실제 오너인지 확인, ACL-003 적용)를 1차 가드로 사용합니다 — 더 엄격한 별도 가드이며 RLS/RPC에만 의존하는 것이 아닙니다.
 
 페이지 상단 주석에 특정 권한 키가 적혀 있어도 일반 기능 화면은 그 권한으로 UI를 숨기지 않습니다. `/manager/staff/permissions`는 권한을 설정·계산하는 화면이며, 다른 페이지에 권한 UI 제한을 적용하는 공통 가드는 아닙니다.
 
@@ -103,8 +103,8 @@
 |---|---|---|---|---|
 | `/admin` | 플랫폼 운영자 | 운영자 설정 허브 | `accounts` | `checkPlatformAdmin()`으로 콘텐츠를 차단. RLS 최종 제한. **구현됨** |
 | `/admin/centers` | 플랫폼 운영자 | 센터 대기·승인·반려·복원, 사업자 정보 확인 | `accounts`, `centers`, `business-licenses` Storage | `checkPlatformAdmin()` 사용. 상태 변경은 RLS/RPC 보호. **구현됨** |
-| `/admin/categories` | 플랫폼 운영자 의도 | 서비스 종목 추가·삭제 | `service_categories` | `checkPlatformAdmin()` 없음. 공개 목록과 입력폼이 비운영자에게도 보이며 쓰기는 RLS가 거부. 화면 사전 차단은 **미완성** |
-| `/admin/banners` | 플랫폼 운영자 의도 | 홈 배너 추가·삭제·노출 토글·순서 | `home_banners` | `checkPlatformAdmin()` 없음. 공개 목록과 입력폼이 비운영자에게도 보이며 쓰기는 RLS가 거부. 화면 사전 차단은 **미완성** |
+| `/admin/categories` | 플랫폼 운영자 | 서비스 종목 추가·삭제 | `service_categories` | `checkPlatformAdmin()`으로 콘텐츠를 차단(ACL-001, 2026-08-01 적용). RLS 최종 제한. **구현됨** |
+| `/admin/banners` | 플랫폼 운영자 | 홈 배너 추가·삭제·노출 토글·순서 | `home_banners` | `checkPlatformAdmin()`으로 콘텐츠를 차단(ACL-001, 2026-08-01 적용). RLS 최종 제한. **구현됨** |
 
 ## 7. 미완성·운영 설정 필요 상태 요약
 

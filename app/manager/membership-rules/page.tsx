@@ -82,20 +82,29 @@ export default function MembershipRulesPage() {
     setBusy(true);
     try {
       await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "pass", false, { autoBookDays: pAutoDays });
-      // 선택한 수업이 있으면 예약조건으로 자동 등록
+      // 선택한 수업이 있으면 예약조건으로 자동 등록 — 실패한 조건이 있으면 조용히 넘어가지 않고 안내한다.
+      let failedRuleCount = 0;
       if (pAutoClasses.length > 0) {
         const fresh = await fetchProducts(centerId, "pass");
         const made = fresh.find((x) => x.name === pName.trim());
         if (made) {
           for (const key of pAutoClasses) {
             const [dw, st2, ti] = key.split("|");
-            try { await addRule(made.id, Number(dw), st2 || null, ti || null); } catch { /* 무시 */ }
+            try {
+              await addRule(made.id, Number(dw), st2 || null, ti || null);
+            } catch {
+              failedRuleCount += 1;
+            }
           }
         }
       }
       setPName(""); setPPrice(""); setPCount(""); setPAutoDays([]); setPAutoClasses([]);
       setProdSheet(false);
-      showToast("상품을 추가했어요");
+      if (failedRuleCount > 0) {
+        setError(`상품은 추가됐지만 예약조건 ${failedRuleCount}건은 등록에 실패했어요. 조건 추가에서 다시 시도해주세요.`);
+      } else {
+        showToast("상품을 추가했어요");
+      }
       await load();
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }

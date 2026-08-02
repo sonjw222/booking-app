@@ -8,6 +8,52 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-02 — Track B: 관리자(Admin) 기능 전수 감사 + 예외처리/사용성 버그 수정
+
+17개 관리자 기능 영역(대시보드/회원/스태프/권한/예약/출석/클래스/일정/수강권/상품/결제/매출/
+문의/공지/알림/센터관리/운영설정 등)을 실제 코드 기준으로 전수 조사했습니다. 상세 결과는
+[23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 참고. SQL/RLS 변경이 필요한 발견
+사항(휴무일 강제취소 시 수강권 미복구 P0, 운영설정 다수 필드 미시행 P1, 센터정보 권한 불일치
+P1 등)은 이번 배치 규칙(SQL 실행 금지·새 RLS 수정 금지)에 따라 코드를 고치지 않고
+`docs/TODO.md`(P0-6, P1-12, P1-13, P2-14)에만 기록했습니다.
+
+**애플리케이션 코드만으로 고칠 수 있는 P0/P1 버그**를 수정했습니다(전부 예외처리·사용성 개선,
+새 RLS/ACL 없음):
+- `app/manager/page.tsx`: 예약자 명단/회원 상세 조회 실패 시 시트가 안 닫혀 "예약자 없음"으로
+  오인되거나 무한 로딩으로 보이던 문제 — 실패 시 시트를 닫고 상단 에러로만 알리도록 수정.
+- `app/manager/membership-rules/page.tsx`: 상품 생성 후 요일·시간 예약조건 등록이 실패해도
+  `catch {/* 무시 */}`로 조용히 넘어가던 문제 — 실패 건수를 안내하도록 수정.
+- `app/components/InquiryChat.tsx`(문의 채팅): 메시지 조회/전송/사진 업로드 실패가 전부 무언
+  처리되어 매니저가 답장이 실패한 걸 몰랐던 문제 — 화면에 에러 메시지를 표시하도록 수정.
+- `app/manager/notifications/page.tsx`: 알림 클릭 시 `window.location.href`로 전체 페이지를
+  새로고침하던 것을 Next.js 라우터(`router.push`)로 교체(SPA 상태 유지).
+- `lib/orders.ts`/`app/manager/orders/page.tsx`: `fulfill_order()` RPC가 실제로는
+  `{already_done, membership_id, amount}`만 반환하는데 존재하지 않는 `auto_booked`/`remaining`
+  필드를 기대해 항상 무시되던 죽은 분기를 제거 — 반환값을 안다고 가정하지 않는 정확한 안내로
+  정리(RPC 자체는 변경하지 않음).
+- `app/manager/progress/record/page.tsx`: 어디서도 호출되지 않는 `updateProgressNote` 죽은
+  import 제거.
+- `docs/ROUTES.md`: `/admin/categories`·`/admin/banners`의 `checkPlatformAdmin()` 가드 상태와
+  `/manager/inquiries`·`/manager/notifications`의 `fetchMyCenters()` 상태가 실제로는 이미
+  적용됐는데 문서만 stale하게 "미완성"으로 남아있던 것을 정정.
+
+Track B 진행 중 별도로 발견: `tests/integration/acl-003-permission-read.test.ts`와
+`docs/TODO.md` P0-4가 `fix_account_center_permissions_select_draft_proposed.sql`을 여전히
+"미실행"으로 기술하고 있었으나, 실제로는 이미 실행·검증·병합 완료된 상태였습니다(문서 갱신
+누락) — 위 CHANGELOG 첫 항목에서 별도로 정정했습니다.
+
+## 2026-08-02 (Track B 감사 중 발견) — 문서 정정: ACL-003 fix SQL 실행 완료 기록 누락
+
+Track B(관리자 기능 Audit) 진행 중 `tests/integration/acl-003-permission-read.test.ts`와
+`docs/TODO.md` P0-4가 여전히 "`fix_account_center_permissions_select_draft_proposed.sql`
+미실행"으로 기술돼 있는 것을 발견했습니다. 실제로는 이 SQL이 사용자에 의해 Supabase SQL
+Editor에서 이미 실행됐고(Success), 그 결과 ACL-003 통합 테스트 3/3 통과, 전체 통합
+테스트·PR #19 CI green까지 확인한 뒤 `feature/access-control-guards`(PR #19, ACL-001~005
+Batch)에 포함되어 main에 병합됐습니다 — 다만 그 실행 완료 사실 자체를 CHANGELOG에 별도
+기록하지 않아 두 문서가 "미실행"으로 정체돼 있었습니다. 코드/테스트/실제 라이브 정책은
+이미 올바른 상태였고(실제 보안 결함이 남아있던 것이 아님), 이번엔 그 사실을 반영하도록
+`docs/TODO.md`와 테스트 파일 헤더 주석만 갱신했습니다.
+
 ## 2026-08-02 (추가 3) — SEC-009: Batch A1 적용 후 messages SELECT 결함 발견 및 수정 SQL 준비
 
 `proposed_rls_gap_batch_a1.sql`을 사용자가 직접 Supabase SQL Editor에서 실행(Success). 검증

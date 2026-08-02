@@ -16,7 +16,7 @@ import { fetchMyCenters, type ManagedCenter } from "../../../../lib/manager";
 import {
   fetchCategories, buildCategoryTree, type CategoryNode,
   fetchProgressMembers, fetchMemberProgress, recordProgress, deleteProgressRecord,
-  deleteProgressByDate, updateProgressNote,
+  deleteProgressByDate,
   type ProgressRecord,
 } from "../../../../lib/progress";
 

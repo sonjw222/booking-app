@@ -1,11 +1,10 @@
 /*
   ACL-003 서버 측 재검증(2026-08-01) 회귀 테스트.
 
-  이 파일은 fix_account_center_permissions_select_draft_proposed.sql이
-  실제로 실행되기 전에는 의도적으로 실패해야 합니다(현재 정책의 결함을 증명하는
-  "red" 테스트) — 그 SQL을 스테이징/운영에 적용한 뒤에만 통과해야 "green"이 됩니다.
-  이번 배치는 그 SQL을 실행하지 않았으므로, 이 테스트도 아직 실행하지 않았습니다
-  (docs/CHANGELOG.md·완료 보고에 명시).
+  fix_account_center_permissions_select_draft_proposed.sql은 2026-08-02에 사용자가
+  Supabase SQL Editor에서 직접 실행해 이미 적용되었습니다(PR #19에 포함되어 main 병합
+  완료, docs/CHANGELOG.md·docs/TODO.md P0-4에 기록). 이 파일은 이제 항상 green이어야
+  정상입니다 — 과거(SQL 적용 전) 이 파일은 의도적으로 fail하는 "red" 테스트였습니다.
 
   전용 스태프 계정(TEST_STAFF_A/B) 없이 기존 TEST_MANAGER_A/B 두 계정만으로 검증한다:
     - centerA(TEST_MANAGER_A가 오너)에 TEST_MANAGER_B 계정을 facility.role_permission이

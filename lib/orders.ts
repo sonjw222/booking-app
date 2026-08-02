@@ -91,15 +91,16 @@ export async function fetchCenterOrders(centerId: string, status?: string): Prom
 // 매니저: 주문 처리 완료 (수강권 발급 + 매출 연동) 또는 취소
 export async function updateOrderStatus(
   orderId: string, status: "done" | "cancelled"
-): Promise<{ autoBooked: number; remaining: number } | void> {
+): Promise<void> {
   if (status === "done") {
-    // 수강권 자동 발급 + 매출 자동 기록 (+ 요일반이면 자동예약)
-    const { data, error } = await supabase.rpc("fulfill_order", { p_order_id: orderId });
+    // 수강권 자동 발급 + 매출 자동 기록 (+ 요일반이면 자동예약).
+    // fulfill_order()는 { already_done, membership_id, amount }만 반환하고 자동예약 결과(개수/
+    // 미배치 여부)는 반환하지 않는다 — 그 값을 기대하는 코드를 여기 두지 않는다(Track B에서
+    // 발견: 이전에는 존재하지 않는 auto_booked/remaining 필드를 읽어 항상 무시되는 죽은 분기가
+    // 있었다). RPC 반환값을 바꾸려면 SQL 변경이 필요해 이번 배치 범위 밖이다.
+    const { error } = await supabase.rpc("fulfill_order", { p_order_id: orderId });
     if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
-    return {
-      autoBooked: (data as any)?.auto_booked ?? 0,
-      remaining: (data as any)?.remaining ?? 0,
-    };
+    return;
   }
   const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
   if (error) throw new Error("주문 상태 변경에 실패했어요: " + error.message);
