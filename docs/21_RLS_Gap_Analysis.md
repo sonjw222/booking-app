@@ -6,6 +6,24 @@
 > 파일이 실제 적용용 — 아래 "단계 적용 계획" 참고) 파일을 검토·승인받은 뒤 별도 Batch에서
 > 진행합니다. `add_rls_gap_tables_draft_proposed.sql`은 최초 조사 시점의 기록으로 보존됩니다.
 
+## ⚠️ 2026-08-02 정정 3 — Batch A1 적용 후 messages SELECT 정책 결함 발견
+
+`proposed_rls_gap_batch_a1.sql`이 실제로 적용된 뒤 `tests/integration/sec009-batch-a1-rls.test.ts`를
+돌린 결과 **37/38 통과**, `messages`의 "message.sms.view 권한이 있으면 SMS만 보이고 푸시는
+여전히 안 보인다" 1건만 실패했다(push 채널 행이 함께 보임). `staff_salaries`/`leads`는
+정상 동작이 실제 확인됐다.
+
+**원인**: `messages` SELECT 정책만 channel로 나뉘지 않고 `message.sms.view`/`message.push.view`를
+단순 OR로 묶어놨다(INSERT/UPDATE/DELETE는 원래부터 channel로 정확히 분리돼 있었음 — SELECT만
+누락된 결함, 최초 SEC-008 초안 시점부터 있었고 여러 차례 검토에서도 놓쳤다).
+
+**수정**: `fix_messages_select_channel_scope_draft_proposed.sql`(짝 파일
+`rollback_fix_messages_select_channel_scope_draft_proposed.sql`)로 `messages`의 SELECT
+정책만 최소 범위로 수정 — `staff_salaries`/`leads`와 `messages`의 INSERT/UPDATE/DELETE는
+전혀 건드리지 않는다. **아직 실행하지 않음, 사용자 승인 대기 중.** 위험도는 낮음으로
+판단됨(SEC-007에서 이미 확인한 대로 `messages`는 app/lib 코드 참조 0건이라 실제 운영
+데이터가 있을 가능성이 낮음).
+
 ## ⚠️ 2026-08-02 정정 — "RLS 없음" 분류가 부정확했음 (SEC-009에서 발견)
 
 이 문서와 이슈(SEC-007)는 아래 17개 테이블을 전부 "RLS가 없거나 정책이 0건"으로 분류했다.

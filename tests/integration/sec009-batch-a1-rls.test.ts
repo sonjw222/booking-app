@@ -26,6 +26,16 @@
       모두 있어 일반 로그인 오너 client로 fixture를 만들고 정리할 수 있으므로(적용 전인 지금은
       이 자체가 막혀서 red, 적용 후 green이 되는 정상 경로) service_role 없이도 문제 없다.
 
+  [2026-08-02 결함 발견 및 수정] proposed_rls_gap_batch_a1.sql 실제 적용 후 이 파일을 돌려본
+  결과 37/38 통과, messages의 "message.sms.view 권한이 있으면 SMS만 보이고 푸시는 여전히
+  안 보인다" 1건만 실패(push 행이 함께 보임) — messages의 SELECT 정책만 channel로 분리되지
+  않고 두 permission을 단순 OR로 묶어놓은 결함이 실제로 있었음(INSERT/UPDATE/DELETE는
+  원래부터 channel로 정확히 분리돼 있었음, SELECT만 놓친 것). staff_salaries/leads는 정상
+  동작 확인됨. `fix_messages_select_channel_scope_draft_proposed.sql`(짝 파일
+  `rollback_fix_messages_select_channel_scope_draft_proposed.sql`)로 messages SELECT 정책만
+  최소 범위로 수정 — 적용되면 아래 messages describe 블록 전체(lms 채널 케이스 포함,
+  이번에 보강)가 green이 되어야 정상이다.
+
   Fixture: TEST_MANAGER_A(centerA 오너)/TEST_MANAGER_B(centerB 오너, centerA에는 권한 0개
   스태프로 초대)/TEST_USER_A(어느 센터에도 속하지 않은 일반 회원) 세 계정만 재사용한다
   (ACL-003/ACL-005와 동일 패턴 — 새 GitHub Secrets 없음). 이 파일이 생성한 모든 행/초대/
@@ -57,6 +67,7 @@ let staffSalaryOwnId: string | null = null; // managerA 본인 급여 행
 let staffSalaryOtherId: string | null = null; // managerB(스태프) 급여 행
 let leadId: string | null = null;
 let messageSmsId: string | null = null;
+let messageLmsId: string | null = null;
 let messagePushId: string | null = null;
 
 async function getOrCreateNoPermRole(centerId: string): Promise<{ id: string; created: boolean }> {
@@ -164,6 +175,15 @@ beforeAll(async () => {
     messageSmsId = (data as { id: string }).id;
   }
   {
+    // lms도 message.sms.view로 묶여 있는지(sms 계열) 확인하기 위한 fixture
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({ center_id: centerAId, channel: "lms", content: "SEC-009 배치A1 테스트 LMS", status: "sent" })
+      .select("id").single();
+    if (error) throw new Error("messages(lms) fixture 생성 실패: " + error.message);
+    messageLmsId = (data as { id: string }).id;
+  }
+  {
     const { data, error } = await supabase
       .from("messages")
       .insert({ center_id: centerAId, channel: "push", title: "SEC-009 배치A1", content: "SEC-009 배치A1 테스트 푸시", status: "sent" })
@@ -187,6 +207,7 @@ afterAll(async () => {
   await deleteRow("staff_salaries", staffSalaryOtherId, "staff_salaries(other)");
   await deleteRow("leads", leadId, "leads");
   await deleteRow("messages", messageSmsId, "messages(sms)");
+  await deleteRow("messages", messageLmsId, "messages(lms)");
   await deleteRow("messages", messagePushId, "messages(push)");
 
   try {
@@ -299,21 +320,37 @@ describe("leads — 상담고객 (permission key 그대로)", () => {
 });
 
 describe("messages — 발송이력 (채널별 permission key 분리)", () => {
-  it("무권한 스태프는 SMS/푸시 발송이력을 모두 볼 수 없다", async () => {
+  it("무권한 스태프는 SMS/LMS/푸시 발송이력을 모두 볼 수 없다", async () => {
     await switchToTestUser(MANAGER_B.email, MANAGER_B.password);
     const sms = await supabase.from("messages").select("id").eq("id", messageSmsId!);
+    const lms = await supabase.from("messages").select("id").eq("id", messageLmsId!);
     const push = await supabase.from("messages").select("id").eq("id", messagePushId!);
     expect(sms.data ?? []).toHaveLength(0);
+    expect(lms.data ?? []).toHaveLength(0);
     expect(push.data ?? []).toHaveLength(0);
   });
 
-  it("message.sms.view 권한이 있으면 SMS만 보이고 푸시는 여전히 안 보인다", async () => {
+  it("message.sms.view 권한이 있으면 SMS/LMS는 둘 다 보이고(같은 sms 계열) 푸시는 여전히 안 보인다", async () => {
     await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
     await setStaffOverride(staffManagerCenterId, "message.sms.view", "allow");
     await switchToTestUser(MANAGER_B.email, MANAGER_B.password);
     const sms = await supabase.from("messages").select("id").eq("id", messageSmsId!);
+    const lms = await supabase.from("messages").select("id").eq("id", messageLmsId!);
     const push = await supabase.from("messages").select("id").eq("id", messagePushId!);
     expect(sms.data ?? []).toHaveLength(1);
+    expect(lms.data ?? []).toHaveLength(1);
     expect(push.data ?? []).toHaveLength(0);
+  });
+
+  it("message.push.view 권한이 있으면 푸시만 보이고 SMS/LMS는 여전히 안 보인다", async () => {
+    await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
+    await setStaffOverride(staffManagerCenterId, "message.push.view", "allow");
+    await switchToTestUser(MANAGER_B.email, MANAGER_B.password);
+    const sms = await supabase.from("messages").select("id").eq("id", messageSmsId!);
+    const lms = await supabase.from("messages").select("id").eq("id", messageLmsId!);
+    const push = await supabase.from("messages").select("id").eq("id", messagePushId!);
+    expect(sms.data ?? []).toHaveLength(0);
+    expect(lms.data ?? []).toHaveLength(0);
+    expect(push.data ?? []).toHaveLength(1);
   });
 });
