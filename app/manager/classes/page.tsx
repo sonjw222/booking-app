@@ -10,6 +10,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
+import AmPmTimeInput from "../../components/AmPmTimeInput";
+import { dhmToMinutes, minutesToDhm } from "../../../lib/deadlineInput";
 import CopyCalendar from "./CopyCalendar";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchRooms, type Room } from "../../../lib/rooms";
@@ -37,7 +39,7 @@ import {
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
-const EMPTY: ClassInput = { title: "", date: "", start: "", end: "", capacity: 8, allowGoods: true, roomId: null, cancelDeadlineMin: null };
+const EMPTY: ClassInput = { title: "", date: "", start: "", end: "", capacity: 8, allowGoods: true, roomId: null, cancelDeadlineMin: null, bookingDeadlineMin: null, classFormat: "group" };
 
 export default function ClassManagePage() {
   const nowD = new Date();
@@ -79,6 +81,9 @@ export default function ClassManagePage() {
   const [cancelD, setCancelD] = useState("");
   const [cancelH, setCancelH] = useState("");
   const [cancelM, setCancelM] = useState("");
+  const [bookD, setBookD] = useState("");
+  const [bookH, setBookH] = useState("");
+  const [bookM, setBookM] = useState("");
   const [repFrom, setRepFrom] = useState("");
   const [repTo, setRepTo] = useState("");
   // 예약자 명단 시트
@@ -194,26 +199,27 @@ export default function ClassManagePage() {
     setSelectedDay(t.getDate());
   }
 
-  // 일/시간/분 → 분 (모두 비면 null = 센터 설정 사용)
+  // 일/시간/분 ↔ 분 변환은 lib/deadlineInput.ts의 공용 함수를 쓴다(취소마감/예약마감 동일 규칙,
+  // CLASS-001에서 예약마감 추가 시 취소마감과 로직 중복 대신 공용화 + 단위테스트 가능하도록 정리).
   function deadlineToMin(): number | null {
-    const d = parseInt(cancelD || "0", 10) || 0;
-    const h = parseInt(cancelH || "0", 10) || 0;
-    const m = parseInt(cancelM || "0", 10) || 0;
-    const total = d * 1440 + h * 60 + m;
-    if (!cancelD && !cancelH && !cancelM) return null;
-    return total;
+    return dhmToMinutes(cancelD, cancelH, cancelM);
   }
-  // 분 → 일/시간/분 입력칸 채우기
   function fillDeadline(min: number | null) {
-    if (min == null || min <= 0) { setCancelD(""); setCancelH(""); setCancelM(""); return; }
-    setCancelD(String(Math.floor(min / 1440) || ""));
-    setCancelH(String(Math.floor((min % 1440) / 60) || ""));
-    setCancelM(String(min % 60 || ""));
+    const { d, h, m } = minutesToDhm(min);
+    setCancelD(d); setCancelH(h); setCancelM(m);
+  }
+  function bookDeadlineToMin(): number | null {
+    return dhmToMinutes(bookD, bookH, bookM);
+  }
+  function fillBookDeadline(min: number | null) {
+    const { d, h, m } = minutesToDhm(min);
+    setBookD(d); setBookH(h); setBookM(m);
   }
 
   function openCreate() {
     setEditId(null);
     setCancelD(""); setCancelH(""); setCancelM("");
+    setBookD(""); setBookH(""); setBookM("");
     setEditGroupId(null);
     setApplyToGroup(false);
     const dayStr = `${year}-${String(month).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
@@ -510,8 +516,9 @@ export default function ClassManagePage() {
     setEditId(c.id);
     setEditGroupId(c.recurringGroupId);
     setApplyToGroup(false);
-    setForm({ title: c.title, date: c.date, start: c.start, end: c.end, capacity: c.capacity, allowGoods: c.allowGoods, roomId: c.roomId, cancelDeadlineMin: c.cancelDeadlineMin });
+    setForm({ title: c.title, date: c.date, start: c.start, end: c.end, capacity: c.capacity, allowGoods: c.allowGoods, roomId: c.roomId, cancelDeadlineMin: c.cancelDeadlineMin, bookingDeadlineMin: c.bookingDeadlineMin, classFormat: c.classFormat });
     fillDeadline(c.cancelDeadlineMin);
+    fillBookDeadline(c.bookingDeadlineMin);
     setSelectedProducts([]);
     setError(null);
     setFormOpen(true);
@@ -569,6 +576,10 @@ export default function ClassManagePage() {
               title: form.title, daysOfWeek: [dow],
               fromDate: repFrom, toDate: repTo,
               start: st, end: en, capacity: cap, roomId: rid, cancelDeadlineMin: ovMin,
+              // 예약마감(CLASS-001)은 요일별 개별 지정 UI가 없어 공통 설정값을 그대로 쓴다
+              // (취소마감의 요일별 오버라이드와 달리, 예약마감은 이번 배치 범위를 공통값으로
+              // 한정함 — 모바일 컴팩트 그리드에 3-select 오전/오후 UI를 넣기엔 공간이 부족).
+              bookingDeadlineMin: bookDeadlineToMin(),
               excludeDates: holidays,
             });
             ids = ids.concat(partIds);
@@ -578,6 +589,7 @@ export default function ClassManagePage() {
             title: form.title, daysOfWeek: repDays,
             fromDate: repFrom, toDate: repTo,
             start: form.start, end: form.end, capacity: form.capacity, roomId: form.roomId, cancelDeadlineMin: deadlineToMin(),
+            bookingDeadlineMin: bookDeadlineToMin(),
             excludeDates: holidays,
           });
         }
@@ -628,11 +640,11 @@ export default function ClassManagePage() {
         if (applyToGroup && editGroupId) {
           await updateClassGroup(editGroupId, form.title, form.start, form.end, form.capacity);
         } else {
-          await updateClass(editId, { ...form, cancelDeadlineMin: deadlineToMin() });
+          await updateClass(editId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin() });
         }
         await setClassProducts(editId, selectedProducts);
       } else {
-        const newId = await createClass(activeCenterId, { ...form, cancelDeadlineMin: deadlineToMin() });
+        const newId = await createClass(activeCenterId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin() });
         await setClassProducts(newId, selectedProducts);
       }
       // 이 수업 조건(요일/시간/수업명)을 대상 수강권들의 예약조건에 자동 추가
@@ -707,9 +719,9 @@ export default function ClassManagePage() {
   return (
     <div className="app-shell" style={{ paddingBottom: 170 }}>
       <div className="back-header">
-        <button className="side cal-export-btn" style={{ fontSize: 12 }} onClick={openCopy}>복사</button>
+        <button className="cal-export-btn" style={{ fontSize: 12 }} onClick={openCopy}>복사</button>
         <div className="title">내 일정</div>
-        <a className="side cal-export-btn" href="/manager/holidays" style={{ fontSize: 12 }}>휴무일</a>
+        <a className="cal-export-btn" href="/manager/holidays" style={{ fontSize: 12 }}>휴무일</a>
       </div>
 
       {unplaced.length > 0 && (
@@ -1000,20 +1012,35 @@ export default function ClassManagePage() {
             )}
             <div className={perDayMode && repeat && !editId ? "common-box" : ""}>
               <div className="menu-section-label" style={{ padding: "14px 0 6px" }}>시간</div>
-              <div className="time-row">
-                <input className="input-field" type="time" value={form.start} onChange={(e) => setForm({ ...form, start: e.target.value })} />
-                <span className="time-sep">~</span>
-                <input className="input-field" type="time" value={form.end} onChange={(e) => setForm({ ...form, end: e.target.value })} />
+              <div className="ampm-time-row">
+                <span className="ampm-time-label">시작</span>
+                <AmPmTimeInput value={form.start} onChange={(v) => setForm({ ...form, start: v })} />
               </div>
+              <div className="ampm-time-row">
+                <span className="ampm-time-label">종료</span>
+                <AmPmTimeInput value={form.end} onChange={(v) => setForm({ ...form, end: v })} />
+              </div>
+              <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>수업 형태</div>
+              <div className="mem-filters" style={{ padding: 0 }}>
+                <button className={`filter-chip ${form.classFormat !== "private" ? "on" : ""}`}
+                  onClick={() => setForm({ ...form, classFormat: "group" })}>그룹</button>
+                <button className={`filter-chip ${form.classFormat === "private" ? "on" : ""}`}
+                  onClick={() => setForm({ ...form, classFormat: "private", capacity: 1 })}>프라이빗(1:1)</button>
+              </div>
+
               <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>정원</div>
               <div className="deadline-row">
                 <input className="input-field" inputMode="numeric" style={{ maxWidth: 90 }}
                   value={form.capacity} placeholder="8"
+                  disabled={form.classFormat === "private"}
                   onChange={(e) => {
                     const n = parseInt(e.target.value.replace(/[^0-9]/g, "") || "0", 10);
                     setForm({ ...form, capacity: n });
                   }} />
                 <span className="deadline-unit">명</span>
+                {form.classFormat === "private" && (
+                  <span className="deadline-unit" style={{ color: "var(--text-dim)" }}>(프라이빗은 항상 1명)</span>
+                )}
               </div>
 
             {rooms.length > 0 && (
@@ -1027,6 +1054,24 @@ export default function ClassManagePage() {
                 </div>
               </>
             )}
+
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>예약 가능 시간(마감)</div>
+            <div className="deadline-row">
+              <span className="deadline-pre">수업 시작</span>
+              <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+                value={bookD} onChange={(e) => setBookD(e.target.value)} />
+              <span className="deadline-unit">일</span>
+              <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+                value={bookH} onChange={(e) => setBookH(e.target.value)} />
+              <span className="deadline-unit">시간</span>
+              <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+                value={bookM} onChange={(e) => setBookM(e.target.value)} />
+              <span className="deadline-unit">분 전까지</span>
+            </div>
+            <div className="perm-guide" style={{ margin: "4px 0 0" }}>
+              모두 비우면 운영설정의 기본 예약 마감 시간이 적용돼요. 지정하면 이 수업에는
+              운영설정보다 이 값이 우선 적용돼요(CLASS-001).
+            </div>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>예약취소 가능 시간</div>
             <div className="deadline-row">
@@ -1538,8 +1583,11 @@ export default function ClassManagePage() {
               </>
             )}
 
+            {/* UI-004 B-3: 회원 이름과 수업 정보를 한 줄에 "·"로 이어붙이면 모바일에서 줄바꿈될 때
+                두 정보가 뒤섞여 중복처럼 읽힌다는 피드백 — 이름/수업 정보를 별도 줄로 분리한다. */}
             <div className="hist-summary" style={{ padding: "0 0 8px" }}>
-              {assignMember.name} 회원 · {assignConfirm.classItem.date} {assignConfirm.classItem.start} · {assignConfirm.classItem.title}
+              <div className="assign-confirm-member">{assignMember.name} 회원</div>
+              <div className="assign-confirm-class">{assignConfirm.classItem.date} {assignConfirm.classItem.start} · {assignConfirm.classItem.title}</div>
             </div>
 
             {assignConfirm.type === "ADMIN_ASSIGNMENT" && (
