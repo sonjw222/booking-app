@@ -9,7 +9,7 @@
 */
 
 import { useEffect, useState } from "react";
-import { subscribeNotifications, notiEmoji, type Notification } from "../../lib/notifications";
+import { subscribeNotifications, notiEmoji, notificationHref, type Notification } from "../../lib/notifications";
 
 export default function NotificationToaster() {
   const [popups, setPopups] = useState<Notification[]>([]);
@@ -38,7 +38,7 @@ export default function NotificationToaster() {
         <a
           key={n.id}
           className="noti-popup"
-          href={n.link ?? "/notifications"}
+          href={notificationHref(n)}
           onClick={() => setPopups((prev) => prev.filter((p) => p.id !== n.id))}
         >
           <span className="noti-popup-emoji">{notiEmoji(n.kind)}</span>

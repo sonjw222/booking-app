@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
 import {
-  fetchNotifications, markRead, deleteNotification, notiEmoji,
+  fetchNotifications, markRead, deleteNotification, notiEmoji, notificationHref,
   type Notification,
 } from "../../../lib/notifications";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
@@ -37,12 +37,9 @@ export default function ManagerNotificationsPage() {
   }, []);
 
   function handleClick(n: Notification) {
-    // 신규 문의 알림은 목록이 아니라 해당 스레드로 바로 이동(NOTIF-001 E-2)
-    if (n.kind === "new_inquiry" && n.data?.thread_id && n.link) {
-      router.push(`${n.link}?thread=${n.data.thread_id}`);
-      return;
-    }
-    if (n.link) router.push(n.link);
+    // 신규 문의 알림은 목록이 아니라 해당 스레드로 바로 이동(NOTIF-001 E-2) — 토스트 팝업과
+    // 동일한 판단 로직을 공유한다(notificationHref).
+    router.push(notificationHref(n));
   }
 
   async function handleDelete(id: string, e: React.MouseEvent) {

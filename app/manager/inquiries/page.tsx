@@ -98,7 +98,7 @@ function ManagerInquiriesPageContent() {
               <div className="thread-avatar">💬</div>
               <div className="thread-main">
                 <div className="thread-top">
-                  <span className="thread-name">{t.centerName} 회원</span>
+                  <span className="thread-name">{t.memberName ?? "회원"} - {t.centerName}</span>
                   {t.lastMessageAt && <span className="thread-time">{t.lastMessageAt}</span>}
                 </div>
                 <div className="thread-preview">{t.lastMessage ?? "새 문의"}</div>

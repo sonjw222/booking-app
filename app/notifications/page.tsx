@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import BottomNav from "../components/BottomNav";
 import {
-  fetchNotifications, markRead, deleteNotification, notiEmoji,
+  fetchNotifications, markRead, deleteNotification, notiEmoji, notificationHref,
   type Notification,
 } from "../../lib/notifications";
 import {
@@ -42,13 +42,9 @@ export default function NotificationsPage() {
       const found = announcements.find((a) => a.id === n.data.announcement_id);
       if (found) { setOpenAnnounce(found); return; }
     }
-    // 문의 답변 알림은 목록이 아니라 해당 스레드로 바로 이동(NOTIF-001 E-2)
-    if (n.kind === "inquiry_reply" && n.data?.thread_id && n.link) {
-      window.location.href = `${n.link}?thread=${n.data.thread_id}`;
-      return;
-    }
-    // 그 외에는 링크로 이동
-    if (n.link) window.location.href = n.link;
+    // 문의 답변 알림은 목록이 아니라 해당 스레드로 바로 이동(NOTIF-001 E-2) — 토스트 팝업과
+    // 동일한 판단 로직을 공유한다(notificationHref).
+    window.location.href = notificationHref(n);
   }
 
   async function handleDelete(id: string, e: React.MouseEvent) {

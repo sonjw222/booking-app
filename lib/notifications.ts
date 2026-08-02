@@ -34,6 +34,19 @@ export type Notification = {
   createdAtRaw: string;
 };
 
+// 문의 관련 알림(new_inquiry/inquiry_reply)은 목록 화면이 아니라 해당 스레드로 바로 열려야
+// 한다(NOTIF-001 E-2) — 이 판단을 회원 알림 목록/매니저 알림 목록/실시간 토스트 팝업 3곳이
+// 각자 구현하다 보니 토스트 팝업(NotificationToaster)에서 이 분기가 통째로 빠져 있었던 게
+// 실브라우저 QA에서 드러난 실제 원인이었다 — 한 곳에서만 계산하도록 모아 재발을 막는다.
+const THREAD_LINK_KINDS = new Set(["new_inquiry", "inquiry_reply"]);
+
+export function notificationHref(n: Pick<Notification, "kind" | "link" | "data">): string {
+  if (THREAD_LINK_KINDS.has(n.kind) && n.link && n.data?.thread_id) {
+    return `${n.link}?thread=${n.data.thread_id}`;
+  }
+  return n.link ?? "/notifications";
+}
+
 function mapRow(r: any): Notification {
   return {
     id: r.id,
