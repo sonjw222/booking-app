@@ -8,6 +8,83 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-02 (추가 3) — SEC-009: Batch A1 적용 후 messages SELECT 결함 발견 및 수정 SQL 준비
+
+`proposed_rls_gap_batch_a1.sql`을 사용자가 직접 Supabase SQL Editor에서 실행(Success). 검증
+결과 `staff_salaries`/`leads`는 정상 동작(각각 5/5, 3/3 통과)했지만, `messages`의 SELECT
+정책이 channel로 분리되지 않아 `message.sms.view`만 가진 스태프도 push 채널 메시지를 볼 수
+있는 결함이 실제로 발견됨(37/38 통과, 1건 실패 — INSERT/UPDATE/DELETE는 원래부터 channel로
+정확히 분리돼 있어 영향 없음). 전체 rollback 대신 `messages` SELECT 정책만 최소 범위로
+수정하는 `fix_messages_select_channel_scope_draft_proposed.sql`(짝 파일
+`rollback_fix_messages_select_channel_scope_draft_proposed.sql`)을 준비 — **아직 실행하지
+않음, 승인 대기 중.** 회귀 테스트도 lms 채널 케이스와 push 전용 권한 케이스를 추가해 보강.
+SEC-009는 계속 Review 유지, PR #20은 merge하지 않음.
+
+## 2026-08-02 (추가 2) — SEC-009: Batch A를 A1/A2로 분리 (SQL 실행은 아직 안 함)
+
+바로 아래 항목(Batch A 5개 테이블 통합 준비)에 대한 사용자 검토 결과, "검증 안 된 2개 테이블을
+검증된 3개와 함께 적용하면 회귀 시 원인 분리가 어렵다"는 지적에 따라 분리했습니다.
+
+- **A1**(`proposed_rls_gap_batch_a1.sql`/`rollback_rls_gap_batch_a1.sql`, 신규) — `staff_salaries`/
+  `leads`/`messages`. 기존 5개 테이블 통합본에서 정책 내용 변경 없이 이 3개만 그대로 분리.
+  `tests/integration/sec007-batch-a-rls.test.ts` → `sec009-batch-a1-rls.test.ts`로 이름 변경(A1
+  전용임을 명확히 함).
+- **A2**(SQL 미확정, 조사만) — `contracts`/`notification_logs`. `docs/22_RLS_Gap_A2_Investigation.md`
+  신규 작성 — 요청받은 10개 질문(앱/RPC 실사용 여부, 정상 INSERT/DELETE 주체, GRANT 필요성과
+  노출면, fixture 전략 등)에 전부 답함. 결론: 두 테이블 다 앱/트리거 참조 0건(미구현 기능),
+  service_role GRANT를 추가하는 것을 권장(앱 보안과 무관 — service_role 키는 클라이언트에
+  노출되지 않음)하되, `contracts`의 INSERT 정책은 실제 계약 발급이 RPC로 설계되기 전까지
+  보류할 것을 제안(SELECT 정책만 초안 포함). **SQL 초안만 작성, 실행하지 않음.**
+- 읽기 전용 진단(anon/authenticated/service_role로 SELECT 시도, mutation 없음)으로 A1 3개
+  테이블의 실제 GRANT 상태를 추가 확인: **anon/authenticated 둘 다 GRANT 정상**(SELECT 시도 시
+  에러 없이 0건 반환 — RLS가 막고 있을 뿐 GRANT 자체는 있음). 즉 `proposed_rls_gap_batch_a1.sql`
+  만으로 충분하고 추가 GRANT는 필요 없음(service_role 부재는 테스트 도구 전용 문제, 이미
+  알려진 대로 A2에서만 필요). 이 결과를 `docs/21_RLS_Gap_Analysis.md`에 역할별 기대 결과
+  매트릭스(A1 3개 테이블 × 7개 역할 × 4개 연산)로 정리.
+- Issue #28(SEC-009)에 이 분리 내용을 코멘트로 기록, Status는 계속 Review 유지(A1도 아직
+  미승인·미실행).
+
+## 2026-08-02 (추가) — SEC-009: RLS Gap Batch A 적용 준비 완료 (SQL 실행은 아직 안 함)
+
+`docs/rls-gap-design` 브랜치(PR #20)에서 진행. SEC-007/008에서 초안까지만 작성했던
+`proposed_rls_gap_batch_a.sql`(staff_salaries/contracts/leads/messages/notification_logs)을
+실제 적용 가능한 상태로 완성했습니다.
+
+- 재검증: 5개 테이블의 `schema.sql` 컬럼 정의, 초안이 참조하는 permission key 17개 전부가
+  실제 카탈로그에 존재하는지, `has_permission()`/`my_account_id()`/`is_platform_admin()`
+  헬퍼 시그니처를 전수 재확인 — SEC-007/008 작성 이후 drift 없음.
+- **중요 정정**: SEC-007은 이 5개 테이블을 "RLS가 없거나 정책 0건"으로 분류했으나, 실제
+  개발(dev) Supabase에서 오너 권한 insert를 시도해본 결과 **RLS는 이미 활성화돼 있고
+  정책만 0건**이었다(`42501: new row violates row-level security policy` 확인 — 이 저장소
+  SQL 이력에 이걸 켠 기록 없음, 대시보드에서 직접 조작된 것으로 추정). "정책 0건"과 "RLS
+  비활성화"는 서로 다른 별개 상태 — 실제로는 오너를 포함해 아무도 접근 못 하는 완전 차단
+  상태였다(당초 우려했던 "누구나 접근 가능"보다 안전한 상태). `rollback_rls_gap_batch_a.sql`이
+  `disable row level security`로 되돌리게 되어 있었는데, 그러면 원래보다 더 위험한(전체
+  공개) 상태가 되므로 정책 제거만 하도록 수정했다. 테스트 fixture 생성도 일반 client로는
+  지금 당장 불가능해(0 정책 = 오너도 차단) `getOrCreateOwnedTestCenter`와 동일한
+  admin(service-role) client 패턴으로 전환했다. **Batch B/C/D의 12개 테이블과 production
+  Supabase의 실제 상태는 아직 확인하지 못함** — 각각 다음 배치 적용 전, 그리고 실행 승인
+  전에 반드시 별도 확인 필요. 상세: `docs/21_RLS_Gap_Analysis.md` 상단 정정 섹션.
+- **두 번째 정정**: 위 발견과 별개로, service_role 자체에도 5개 테이블 전부 SQL GRANT가
+  없다는 것도 확인했다(RLS와 무관한 별개 문제, `account_center_permissions`에서 이미 겪은
+  것과 같은 패턴). `staff_salaries`/`leads`/`messages`는 오너에게 INSERT+DELETE 정책이 모두
+  있어 일반 client(오너)로 fixture 관리가 가능하지만, `contracts`(DELETE 정책이 의도적으로
+  없음 — 서명 후 불변)와 `notification_logs`(INSERT 정책이 의도적으로 없음 — 서버 트리거
+  전용)는 일반 client·admin client 어느 쪽으로도 지금은 fixture를 만들거나 지울 방법이 없어,
+  이 두 테이블은 `docs/TODO.md` P2-13(service_role GRANT 승인·실행 후 진행)으로 미루고
+  이번 테스트 파일에서는 의도적으로 제외했다.
+- `tests/integration/sec009-batch-a1-rls.test.ts` 신규 작성 — `staff_salaries`/`leads`/
+  `messages` 3개 테이블에 "무권한 SELECT 차단/권한 보유자 SELECT 허용/무권한 쓰기 차단"
+  최소 3~4종(`staff_salaries`는 own/other 권한 완전 분리라 조합 추가, `messages`는 channel별
+  분리라 sms/push 조합 추가). Fixture 계정은 TEST_MANAGER_A(centerA 오너)/TEST_MANAGER_B
+  (centerA에 권한 0개 스태프로 초대)/TEST_USER_A(무관 일반 회원)만 재사용, 새 Secret 없음.
+  **이 테스트는 SQL이 실제 적용되기 전에는 의도적으로 RED**입니다(정책 0건이라 fixture 준비
+  단계에서부터 막힘 — `tests/integration/acl-003-permission-read.test.ts`가 SQL 적용 전
+  red였던 것과 같은 취지지만, 그쪽은 일부 정책이 이미 있어 fixture 준비까지는 됐다는 차이가 있음).
+- SQL은 이번에도 **전혀 실행하지 않았습니다.** 실행은 사용자 승인 후 별도 단계에서 진행.
+- Issue: [SEC-009](https://github.com/sonjw222/booking-app/issues/28)(신규, SEC-007/008과
+  Related). Batch B/C/D는 아직 손대지 않음(다음 배치에서 순서대로 진행).
+
 ## 2026-08-02 — ACL-005 관리자 진입 SSOT 수정 + UI-003 센터 등록 흐름 개선 (PR #19)
 
 일반 회원을 스태프로 등록해도 마이페이지 "관리자 모드로 전환"이 안 뜨고 `/manager` 접속이
@@ -36,6 +113,47 @@
 - Issue: [ACL-005](https://github.com/sonjw222/booking-app/issues/26)(재사용, 제목/범위 확장),
   [UI-003](https://github.com/sonjw222/booking-app/issues/27)(신규). `feature/access-control-guards`
   (PR #19)에 포함 — main 미병합.
+
+## 2026-08-01 (추가) — SEC-007/008 단계 적용 준비 (ACL-003 재검증 반영)
+
+ACL-003 서버 측 재검증에서 "센터 소속 = 무권한이라도 전체 접근 가능"이 실제 보안 결함으로
+확인된 뒤, `add_rls_gap_tables_draft_proposed.sql`의 17개 테이블 정책 중 `my_managed_center_ids()`만으로
+**쓰기**를 허용하던 6곳(class_types/lockers/locker_assignments/popup_notices의 쓰기,
+notification_logs/change_logs의 조회)을 더 구체적인 `has_permission()` 권한 키로 좁혔습니다.
+단일 파일을 4개 독립 배치(`proposed_rls_gap_batch_a/b/c/d.sql` + 짝 `rollback_rls_gap_batch_*.sql`)로
+나눠, 배치별로 독립 적용·검증·rollback할 수 있게 했습니다. `staff_schedules`/`schedule_memos`의
+조회는 낮은 민감도의 캘린더 조율 정보라는 이유로 센터 전체 조회를 의도적으로 유지했고, 이를
+"정당화된 예외"로 문서에 명시했습니다. 17개 테이블 재분류표와 역할×테이블 접근 매트릭스(7번째
+열 "타 센터 owner/staff" 추가 — 전부 차단됨을 명시)를 `docs/21_RLS_Gap_Analysis.md`에 반영했습니다.
+Fixture 계획도 갱신: TEST-002에서 검증된 "TEST_MANAGER_A/B 두 계정만으로 오너+무권한 스태프
+페르소나 생성" 패턴을 재사용해, platform admin 테스트 계정 1개를 제외하면 **새 GitHub Secrets가
+전혀 필요 없습니다.** 이번 배치도 실제 SQL은 실행하지 않았습니다.
+
+## 2026-08-01 — RLS 조사 및 설계 Batch (DB-001, SEC-007·008)
+
+`docs/rls-gap-design` 브랜치(PR B)에서 진행. 조사·설계만 진행했고 운영 DB에는 아무것도
+실행하지 않았습니다. 이 이슈들은 PR이 머지돼도 자동으로 닫히지 않습니다(Relates to만 연결) —
+실제 정책 적용과 QA가 끝나기 전에는 Done으로 바뀌지 않습니다.
+
+**DB-001 — `chat_messages` 조사**: app/lib 전체·모든 SQL 함수/트리거/뷰에서 참조 0건, RLS는
+활성화돼 있으나 정책 0건(현재 완전 차단 상태). 1:1 채팅은 `inquiry_threads`/`inquiry_messages` +
+RPC로 완전히 대체되어 있음을 확인. **결론: 정책 추가가 아니라 삭제 후보** — 이번 배치는 DROP을
+실행하지 않았고, 사용자 승인 후 별도 배치에서 처리하도록 `docs/TODO.md` P3-9에 기록.
+
+**SEC-007/SEC-008 — RLS 갭 분석 및 정책 설계**: `schema.sql` + 저장소의 모든 `*.sql`을 전수 매칭해
+RLS가 없거나 정책이 0건인 테이블 18개를 찾았고, `chat_messages`(DB-001에서 별도 처리)를 제외한
+17개(`change_logs`, `class_types`, `community_comments`, `competitions`, `contract_templates`,
+`contracts`, `leads`, `locker_assignments`, `lockers`, `membership_transfers`, `messages`,
+`notification_logs`, `popup_notices`, `schedule_memos`, `staff_salaries`, `staff_schedules`, `terms`)에
+대해 목적/개인정보/tenant scope/현재 사용여부/예상 접근 역할/SELECT·INSERT·UPDATE·DELETE 정책초안/
+기존 데이터 영향/회귀 가능성/테스트 시나리오/우선순위를 정리한 `docs/21_RLS_Gap_Analysis.md`를
+작성했습니다. 17개 전부 app/lib 코드 참조 0건(미구현 기능)이라 지금 당장의 활성 위험은 아니지만,
+Supabase는 anon key만으로 PostgREST를 통해 이 테이블에 직접 접근 가능하므로 "미사용 = 안전"이 아닌
+잠재 위험으로 분류했습니다. `staff_salaries`(급여)와 `contracts`(서명 계약서)는 Critical로 표시.
+정책 초안은 `add_rls_gap_tables_draft_proposed.sql`에 작성했으며 **이번 배치에서는 실행하지
+않았습니다** — 실행은 별도 승인 후 후속 배치에서 진행합니다. RLS 통합 테스트 계획(6개 역할 ×
+17개 테이블 CRUD 매트릭스 + fixture 요구사항)도 같은 문서에 설계만 해뒀고 실제 DB 테스트는
+실행하지 않았습니다.
 
 ## 2026-08-01 (추가) — ACL-001~004 서버 측 권한 재검증 + PR 2개 분리
 
