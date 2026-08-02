@@ -8,6 +8,30 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-03 (추가) — 6트랙 후속: open-kind 마무리/픽스처 격리/환경검증/설정2차/프라이빗2차/전화인증조사 (PR #39)
+
+- **Track 1**: `calc_deadline()` open-kind 수정 SQL을 그룹/프라이빗/KST 자정 경계까지
+  검증하도록 통합테스트 보강(`operational-settings-wiring.test.ts`). 회귀 위험 재확인(book/
+  cancel 분기는 건드리지 않음).
+- **Track 2**: `sec009-batch-a1-rls.test.ts`의 `staff_salaries` fixture를 get-or-create
+  패턴으로 전환해 중복키로 인한 실패를 근본 해결(재실행해도 안전). `acl-003-permission-read.test.ts`는
+  이미 자기 fixture를 추적·정리하도록 설계돼 있었음을 재확인 — 남은 것은 과거(그 수정 이전)
+  잔여 데이터 1건뿐이며 `cleanup_acl003_test_fixture_proposed.sql`(기존 준비된 파일)로 정리
+  가능, 실행은 승인 대기.
+- **Track 3**: 환경 비교 결과를 `docs/ENV_PARITY_CHECK.md`로 정리 — Vercel 환경변수는 도구로
+  직접 확인 불가해 사용자 확인 절차를 안내.
+- **Track 4**: 운영설정 전수 동작표를 `docs/OPERATIONAL_SETTINGS_AUDIT.md`로 정리.
+  `show_group_reserved_count`(회원 앱 예약인원 표시)와 `auto_unpaid_input`(매출 등록 미수금
+  자동계산)을 실제로 구현. 스케줄러가 필요한 항목(당일예약변경/자동폐강/대기자동확정)은
+  UI에 "준비 중" 배지 추가 + 입력 비활성화.
+- **Track 5**: 프라이빗 수업 그룹/프라이빗 선택·정원1 고정·회원앱 배지는 이미 정상 연결돼
+  있음을 재확인. 지정회원 전용 정책·슬롯 시스템·`class_allowed_products` 관리 UI 부재는
+  `docs/08_Decision_Log.md`(DEC-001~003)로 분리, 이번엔 구현하지 않음.
+- **Track 6**: 휴대폰 인증 조사 문서(`docs/PHONE_AUTH_RESEARCH.md`) 작성, AUTH-001(#40)은
+  P3 Deferred 유지, 구현/계약 없음.
+
+⚠️ 신규 SQL(`fix_calc_deadline_open_kind_draft_proposed.sql`)은 사용자 승인 전까지 미실행.
+
 ## 2026-08-03 — QA 통합 배치: Nav/관리자UI/예약제한·10분취소/개별마감·프라이빗/알림 (PR #39)
 
 회원의 실제 브라우저 QA에서 발견한 5개 트랙(NAV-001, UI-004, RES-001, CLASS-001, NOTIF-001,

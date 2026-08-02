@@ -636,12 +636,22 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   `private_open_days_before/time`이 무시되고 취소 마감 설정이 대신 쓰이고 있었다.
   `fix_calc_deadline_open_kind_draft_proposed.sql`로 수정 준비됨(승인 대기). 이전 배치 문서의
   "C-2 정상 배선" 결론은 이 항목에 한해 **틀렸음** — 함수 실제 정의를 재확인하지 않은 오판.
-- **`show_group_reserved_count`/`show_group_waitlist_count` 죽은 설정(P2, 표시 전용)**: 운영
-  설정 화면에 "회원에게 예약/대기 인원 표시" 토글이 저장되지만, 회원 앱 수업 목록
-  (`app/reservation/page.tsx`)은 이 값과 무관하게 항상 인원수를 표시한다. 예약 차단/금전과
-  무관한 표시 전용 설정이라 이번 배치에서는 수정하지 않고 기록만 함 — 고치려면
-  `app/reservation/page.tsx`가 방문 중인 센터의 `center_settings`를 함께 조회하도록 확장이
-  필요(현재는 classes만 조회).
+- **(해결됨, 2026-08-03 Track 4) `show_group_reserved_count`**: `lib/reservations.ts`가
+  `center_settings`를 함께 조회하도록 확장해 `app/reservation/page.tsx`에서 실제로 인원수
+  표시 여부를 제어하도록 구현 완료.
+- **(해결됨, 2026-08-03 Track 4) `auto_unpaid_input`**: `app/manager/sales/page.tsx` 결제 등록
+  시트에서 상품가 - 입력된 결제수단 합계를 자동으로 미수금에 채우도록 구현 완료
+  (`lib/sales.ts`의 `computeAutoUnpaid`).
+- **`show_group_waitlist_count` 여전히 미구현(P2, 표시 대상 자체가 없음)**: 회원 앱 어디에도
+  "대기 인원수"를 보여주는 UI가 없어(내 대기 순번 표시만 있음) 이 설정을 연결할 대상이 없다
+  — 대기 인원수 표시 UI 자체를 새로 만들어야 하는 별도 소규모 기능. 전체 동작표는
+  `docs/OPERATIONAL_SETTINGS_AUDIT.md` 참고.
+- **`private_slot_unit`/`private_max_concurrent_*`/`show_point_history`는 제품 결정 필요**:
+  `docs/08_Decision_Log.md` DEC-002(슬롯 시스템), DEC-003(class_allowed_products UI 부재)
+  참고. `show_point_history`는 포인트 내역 페이지 자체가 없어 페이지 신설이 선행돼야 함.
+- **`same_day_change_*`/`autocancel_*`/`waitlist_auto_*`는 스케줄러 인프라 부재로 UI에
+  "준비 중" 배지 추가 + 입력 비활성화 처리(2026-08-03)** — 정상 기능처럼 보이지 않도록 함,
+  값 자체는 보존(추후 스케줄러 도입 시 그대로 사용 가능).
 - **`NotificationToaster`처럼 알림 관련 UI가 여러 곳에 독립 구현되며 로직이 갈라지는 패턴**:
   이번에 회원/매니저 알림 목록과 실시간 토스트가 각자 딥링크 판단을 구현하다 토스트만 누락된
   사례가 발생했다. `lib/notifications.ts`의 `notificationHref()`로 통합했으나, 향후 새 알림
