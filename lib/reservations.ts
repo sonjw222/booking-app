@@ -101,16 +101,35 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   }
 
   // 이번 달 수업 (확정 예약 수 포함)
-  const { data: classRows, error: clsErr } = await supabase
-    .from("classes")
-    .select("id, center_id, title, start_time, end_time, capacity, allow_goods, class_format, centers(id, name, categories)")
-    .gte("start_time", startUtcIso)
-    .lt("start_time", endUtcIso)
-    .order("start_time");
-  if (clsErr) throw new Error("수업 목록을 불러오지 못했어요: " + clsErr.message);
+  // ⚠️ center_id 조건 없이 "이 달의 모든 센터" 수업을 한 번에 가져온 뒤 클라이언트에서
+  // myMembershipCenters로 걸러내던 예전 방식은, Supabase(PostgREST) 기본 응답 행 수 제한
+  // (실측: 1000행)에 걸리면 start_time 오름차순 정렬 특성상 "월 후반부 수업이 통째로
+  // 안 보이는" 증상을 냈다(회원 화면에만 발생 — 관리자용 fetchClasses는 center_id로 이미
+  // 좁혀서 조회해 이 제한에 걸리지 않았음, ROWLIMIT-DIAG 진단으로 실측 확인됨). DB 쿼리
+  // 자체를 이 회원이 활성 수강권을 보유한 센터로 좁혀서, 그 범위 안에서는 제한에 걸릴 일이
+  // 없게 하고, 혹시라도 한 회원이 아주 많은 센터의 수강권을 보유해 그마저 넘는 경우까지
+  // 대비해 .range()로 페이지 단위 반복 조회한다.
+  const membershipCenterIds = Array.from(myMembershipCenters);
+  const classRows: any[] = [];
+  if (membershipCenterIds.length > 0) {
+    const PAGE_SIZE = 1000;
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data: page, error: clsErr } = await supabase
+        .from("classes")
+        .select("id, center_id, title, start_time, end_time, capacity, allow_goods, class_format, centers(id, name, categories)")
+        .in("center_id", membershipCenterIds)
+        .gte("start_time", startUtcIso)
+        .lt("start_time", endUtcIso)
+        .order("start_time")
+        .range(from, from + PAGE_SIZE - 1);
+      if (clsErr) throw new Error("수업 목록을 불러오지 못했어요: " + clsErr.message);
+      classRows.push(...(page ?? []));
+      if (!page || page.length < PAGE_SIZE) break;
+    }
+  }
 
-  // 수강권 보유 센터의 수업만 남김 (수강권 없는 센터 수업은 숨김)
-  const filteredClassRows = (classRows ?? []).filter((c: any) => myMembershipCenters.has(c.center_id));
+  // DB 쿼리 자체가 이미 수강권 보유 센터로 좁혀져 있으므로 별도 필터가 필요 없다.
+  const filteredClassRows = classRows;
 
   const classIds = filteredClassRows.map((c) => c.id);
 
