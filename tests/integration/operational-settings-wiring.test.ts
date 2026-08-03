@@ -15,6 +15,7 @@ import {
   switchToTestUser,
   getOrCreateOwnedTestCenter,
   createFutureTestClass,
+  createKstSameDayFutureClass,
   createTestMembership,
   cleanupTestClass,
   type TestUser,
@@ -58,7 +59,10 @@ describe("운영설정 재검증: 관리자 설정 화면과 동일한 저장 �
       groupBookDaysBefore: 0, groupBookTime: "23:59",
       allowSameDayBooking: false,
     });
-    const cls = await createFutureTestClass(centerAId, { title: "SETTINGS-REAUDIT 당일예약OFF", hoursFromNow: 3 });
+    // [OPS-BOUNDARY] createFutureTestClass(hoursFromNow: 3)은 CI가 KST 21~24시에 실행되면
+    // KST 자정을 넘겨 "내일" 수업이 돼버려 이 테스트의 "당일" 전제가 깨진다(실제 재현 확인됨).
+    // createKstSameDayFutureClass는 항상 KST 기준 오늘 날짜 안의 미래 시각을 보장한다.
+    const cls = await createKstSameDayFutureClass(centerAId, { title: "SETTINGS-REAUDIT 당일예약OFF" });
     createdClassIds.push(cls.id);
     await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
 
@@ -73,7 +77,8 @@ describe("운영설정 재검증: 관리자 설정 화면과 동일한 저장 �
       groupBookDaysBefore: 0, groupBookTime: "23:59",
       allowSameDayBooking: true,
     });
-    const cls = await createFutureTestClass(centerAId, { title: "SETTINGS-REAUDIT 당일예약ON", hoursFromNow: 3 });
+    // 위 테스트와 "같은 조건"임을 보장하기 위해 여기도 당일 보장 헬퍼를 그대로 사용한다.
+    const cls = await createKstSameDayFutureClass(centerAId, { title: "SETTINGS-REAUDIT 당일예약ON" });
     createdClassIds.push(cls.id);
     await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
 
