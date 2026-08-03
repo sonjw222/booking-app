@@ -137,6 +137,14 @@ describe("[진단] 당일예약 허용: 저장 → DB 값 → RPC 결과를 전�
 
 describe("[진단] 일일 예약 횟수 제한: 저장 → DB 값 → RPC 결과를 전부 실측으로 로그", () => {
   it("2회 제한 저장 → DB 반영 확인 → 1·2회 성공, 3회 차단 확인", async () => {
+    // 위 describe(당일예약)에서 성공시킨 "DIAG 당일예약ON" 확정 예약이 오늘 날짜로
+    // 그대로 남아있다 — 이 describe의 afterAll에서만 정리되므로, 여기서 새로 만드는
+    // 카운트에 그 1건이 이미 포함된 채로 시작해 1회째부터 한도를 넘긴 것처럼 보이는
+    // 문제가 실제로 있었다(진단 테스트 자체의 픽스처 결함, reserve_class 로직 문제 아님).
+    // 이 describe만의 카운트로 검증하려면 그 leftover부터 지우고 시작해야 한다.
+    const admin = getFixtureAdminClient();
+    await admin.from("reservations").delete().in("class_id", createdClassIds);
+
     await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
     await saveSettings(centerAId, {
       ...originalSettings,
