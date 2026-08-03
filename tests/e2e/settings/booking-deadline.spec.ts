@@ -12,6 +12,7 @@ import {
 } from "../fixtures/testData";
 import type { CenterSettings } from "../../../lib/settings";
 import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { waitForToastText } from "../fixtures/pageHelpers";
 
 /*
   예약 가능 기한(마감) 검증 — "N시간 전" 정밀도는 운영설정의 요일 단위(N일 전 HH:MM)로는
@@ -66,7 +67,13 @@ test("예약마감 2시간 전 — 3시간 뒤 수업은 예약 성공 (실브�
 
   await page.goto(reservationDeepLink(cls.id, cls.startTime));
   await page.getByRole("button", { name: "예약하기" }).click();
-  await expect(page.locator(".toast")).toContainText("예약이 완료됐어요");
+  // toast(2.5초 자동소멸)를 기다리는 대신, 실제 상태 변화로 성공을 확인한다: 예약이
+  // 성공하면 모달이 닫히고(doReserve의 setConfirmClass(null)) 그 수업 행이 "취소"
+  // 버튼으로 바뀐다(다시 데이터를 불러온 뒤 mine=true가 됨).
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(
+    page.locator(".class-row", { hasText: "E2E 예약가능기한-성공" }).getByRole("button", { name: "취소" })
+  ).toBeVisible();
 });
 
 test("예약마감 2시간 전 — 1시간 뒤 수업은 예약 실패 (실브라우저)", async ({ page }) => {
@@ -77,5 +84,11 @@ test("예약마감 2시간 전 — 1시간 뒤 수업은 예약 실패 (실브�
 
   await page.goto(reservationDeepLink(cls.id, cls.startTime));
   await page.getByRole("button", { name: "예약하기" }).click();
-  await expect(page.locator(".toast")).toContainText("예약 마감시간이 지났어요");
+  // 실패 시 doReserve()의 catch 경로는 모달을 닫지 않으므로("실패했으니 다시 시도할 수
+  // 있게") 모달이 계속 떠 있는지로 먼저 확인하고, 정확히 "왜" 실패했는지는 toast 문구로
+  // 확정한다 — 2.5초 자동소멸을 피하기 위해 waitForToastText(locator.waitFor 기반)로
+  // "나타나는 순간" 텍스트를 읽는다(임의 sleep이나 뒤늦은 폴링 없음).
+  await expect(page.locator(".sheet-overlay")).toBeVisible();
+  const toastText = await waitForToastText(page);
+  expect(toastText).toContain("예약 마감시간이 지났어요");
 });

@@ -12,6 +12,7 @@ import {
 } from "../fixtures/testData";
 import type { CenterSettings } from "../../../lib/settings";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { waitForToastText } from "../fixtures/pageHelpers";
 
 /*
   운영설정 "당일 예약 허용"을 실제 관리자 화면에서 끄고/켜서, 실제 회원 화면에서 그 효과가
@@ -23,6 +24,11 @@ import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
   managerA/userA로 Node에서 다시 로그인하면 브라우저가 이미 로그인해둔 그 계정의 세션이
   무효화된다는 것이 실제 CI에서 확인됐다(tests/e2e/fixtures/testData.ts 파일 상단 설명
   참고). "당일 예약 허용" 토글/저장 자체는 반드시 브라우저로 수행한다.
+
+  toast(2.5초 자동소멸)를 기다리다 실패하던 문제(원인 C, 이전 리포트)는: 성공 케이스는
+  실제 화면 상태(저장 버튼 텍스트, 모달 닫힘, 예약 행의 버튼)로 확인하고, 실패 케이스처럼
+  "왜" 실패했는지 정확한 문구가 필요한 곳만 waitForToastText(locator.waitFor 기반)로
+  안정적으로 읽는다.
 */
 
 test.use({ storageState: MANAGER_AUTH_FILE });
@@ -62,7 +68,9 @@ async function toggleSameDayBooking(page: Page, turnOn: boolean) {
   if (isOn !== turnOn) {
     await toggle.click();
     await page.locator("button.header-action").click();
-    await expect(page.locator(".toast")).toHaveText("설정을 저장했어요");
+    // 저장 성공은 버튼 자체의 상태 전이(저장 중 → 저장됨)로 확인한다 — toast의 2.5초
+    // 자동소멸 창을 놓칠 위험이 없다(dirty가 false가 될 때까지 자동 재시도로 대기).
+    await expect(page.locator("button.header-action")).toHaveText("저장됨");
   }
 }
 
@@ -74,7 +82,7 @@ test("당일예약 OFF → 회원 예약 실패 → ON → 회원 예약 성공 
   const afterOff = await fetchSettingsAdmin(centerAId);
   expect(afterOff.allowSameDayBooking).toBe(false);
 
-  // ③④⑤ 회원 화면에서 오늘 수업을 예약 시도 → RPC가 거부 → 실패 토스트 확인
+  // ③④⑤ 회원 화면에서 오늘 수업을 예약 시도 → RPC가 거부 → 실패 확인
   const classOff = await createKstSameDayFutureClassAdmin(centerAId, { title: "E2E 당일예약OFF" });
   createdClassIds.push(classOff.id);
 
@@ -82,7 +90,10 @@ test("당일예약 OFF → 회원 예약 실패 → ON → 회원 예약 성공 
   const memberPage = await memberContext.newPage();
   await memberPage.goto(reservationDeepLink(classOff.id, classOff.startTime));
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".toast")).toContainText("당일 예약은 허용되지 않아요");
+  // 실패 시 모달이 안 닫히는 것으로 먼저 확인하고, 정확한 사유는 toast로 확정한다.
+  await expect(memberPage.locator(".sheet-overlay")).toBeVisible();
+  const offToastText = await waitForToastText(memberPage);
+  expect(offToastText).toContain("당일 예약은 허용되지 않아요");
   await memberContext.close();
 
   // ① 관리자: 당일 예약 허용 ON으로 되돌림
@@ -90,7 +101,8 @@ test("당일예약 OFF → 회원 예약 실패 → ON → 회원 예약 성공 
   const afterOn = await fetchSettingsAdmin(centerAId);
   expect(afterOn.allowSameDayBooking).toBe(true);
 
-  // ③④⑤ 같은 흐름으로, 이번엔 성공해야 한다
+  // ③④⑤ 같은 흐름으로, 이번엔 성공해야 한다 — 모달이 닫히고 그 수업 행이 "취소" 버튼으로
+  // 바뀌는 실제 상태 변화로 확인한다(toast 대신).
   const classOn = await createKstSameDayFutureClassAdmin(centerAId, { title: "E2E 당일예약ON" });
   createdClassIds.push(classOn.id);
 
@@ -98,6 +110,9 @@ test("당일예약 OFF → 회원 예약 실패 → ON → 회원 예약 성공 
   const memberPage2 = await memberContext2.newPage();
   await memberPage2.goto(reservationDeepLink(classOn.id, classOn.startTime));
   await memberPage2.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage2.locator(".toast")).toContainText("예약이 완료됐어요");
+  await expect(memberPage2.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(
+    memberPage2.locator(".class-row", { hasText: "E2E 당일예약ON" }).getByRole("button", { name: "취소" })
+  ).toBeVisible();
   await memberContext2.close();
 });

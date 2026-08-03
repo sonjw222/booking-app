@@ -9,10 +9,12 @@ import {
   saveSettingsAdmin,
   insertConfirmedReservationAdmin,
   kstTimeHHmm,
+  kstDateStr,
   type TestUser,
 } from "../fixtures/testData";
 import type { CenterSettings } from "../../../lib/settings";
 import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { selectKstCalendarDay, waitForToastText } from "../fixtures/pageHelpers";
 
 /*
   예약 취소 기한(마감) 검증 — 처음에는 개별 수업 override(cancel_deadline_min)로 시도했으나,
@@ -23,14 +25,16 @@ import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
   컬럼은 DB에서 NOT NULL DEFAULT 0이라 null을 넣으면 즉시 insert가 실패한다(첫 CI 실행에서
   실제로 발견됨). 그래서 이 스펙은 실제로 살아 있는 메커니즘인 운영설정
   (groupCancelDaysBefore=0 + groupCancelTime)으로 "지금부터 N분 뒤/전"이라는 절대 취소마감
-  시각을 만들어 검증한다 — day 오프셋 0은 "그 수업이 속한 날의 그 시각"이므로, 오늘 안의
-  수업이라면 어느 시각에 시작하든 이 절대 시각이 취소마감이 된다.
+  시각을 만들어 검증한다.
 
-  예약 자체는(취소 대상을 만들기 위한 선행 조건일 뿐 이 테스트의 검증 대상이 아니므로) Node
-  쪽에서 admin client로 직접 "확정 예약" 행을 만들고, created_at을 처음부터 과거로 지정해
-  cancel_reservation()의 "예약 후 10분 그레이스" 예외를 애초에 피한다. Node가
-  managerA/userA로 로그인하지 않는 이유는 tests/e2e/fixtures/testData.ts 파일 상단 설명
-  참고(브라우저 세션 무효화 방지). "취소" 버튼 클릭과 그 결과 확인만 브라우저로 수행한다.
+  예약 자체는 Node 쪽에서 admin client로 직접 "확정 예약" 행을 만들고, created_at을
+  처음부터 과거로 지정해 cancel_reservation()의 "예약 후 10분 그레이스" 예외를 애초에
+  피한다.
+
+  /reservation의 "오늘" 기본 선택은 브라우저 로컬(이 CI 러너는 UTC) 타임존을 쓰는데
+  실제로는 KST 자정~오전 9시 사이에 실행되면 하루 어긋난다(실측 확인, 원인 A — 운영
+  코드는 이번에 고치지 않음). 그래서 페이지 기본 선택에 기대지 않고, 캘린더를 실제
+  사용자처럼 클릭해 수업의 KST 날짜로 명시적으로 이동한다.
 */
 
 test.use({ storageState: MEMBER_AUTH_FILE });
@@ -80,9 +84,13 @@ test("취소마감이 5분 뒤(아직 안 지남) — 취소 성공 (실브라�
   });
 
   await page.goto("/reservation");
+  await selectKstCalendarDay(page, kstDateStr(cls.startTime));
   page.once("dialog", (d) => d.accept());
-  await page.locator(".class-row", { hasText: "E2E 취소기한-성공" }).getByRole("button", { name: "취소" }).click();
-  await expect(page.locator(".toast")).toContainText("예약이 취소됐어요");
+  const cancelButton = page.locator(".class-row", { hasText: "E2E 취소기한-성공" }).getByRole("button", { name: "취소" });
+  await cancelButton.click();
+  // toast 대신, 취소 성공 시 그 행의 "취소" 버튼이 사라지는(다시 예약 가능 상태로 바뀌는)
+  // 실제 상태 변화로 확인한다.
+  await expect(cancelButton).toHaveCount(0);
 });
 
 test("취소마감이 5분 전(이미 지남) — 취소 실패 (실브라우저)", async ({ page }) => {
@@ -100,7 +108,13 @@ test("취소마감이 5분 전(이미 지남) — 취소 실패 (실브라우저
   });
 
   await page.goto("/reservation");
+  await selectKstCalendarDay(page, kstDateStr(cls.startTime));
   page.once("dialog", (d) => d.accept());
-  await page.locator(".class-row", { hasText: "E2E 취소기한-실패" }).getByRole("button", { name: "취소" }).click();
-  await expect(page.locator(".toast")).toContainText("취소 마감시간이 지났어요");
+  const cancelButton = page.locator(".class-row", { hasText: "E2E 취소기한-실패" }).getByRole("button", { name: "취소" });
+  await cancelButton.click();
+  // 실패 시 cancel_reservation()이 예외를 던져 상태가 바뀌지 않으므로 "취소" 버튼이
+  // 그대로 남아있고, 정확한 사유는 waitForToastText(locator.waitFor 기반)로 확정한다.
+  const toastText = await waitForToastText(page);
+  expect(toastText).toContain("취소 마감시간이 지났어요");
+  await expect(cancelButton).toBeVisible();
 });
