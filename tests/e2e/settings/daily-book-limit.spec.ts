@@ -1,19 +1,23 @@
 import { test, expect } from "@playwright/test";
 import {
-  switchToTestUser,
+  loadTestAccountMeta,
   getOrCreateOwnedTestCenter,
-  createTestMembership,
-  createKstSameDayFutureClass,
-  cleanupTestClass,
+  createTestMembershipAdmin,
+  createKstSameDayFutureClassAdmin,
+  cleanupTestClassAdmin,
+  fetchSettingsAdmin,
+  saveSettingsAdmin,
   reservationDeepLink,
   type TestUser,
 } from "../fixtures/testData";
-import { fetchSettings, saveSettings, type CenterSettings } from "../../../lib/settings";
+import type { CenterSettings } from "../../../lib/settings";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 
 /*
   운영설정 "일일 예약 가능 횟수"를 관리자 화면에서 켜고 2회로 저장한 뒤, 회원이 같은 날
   3번째 수업을 예약하려 하면 실제로 막히는지(정확한 안내 문구까지) 브라우저로 검증한다.
+  Node 쪽 픽스처는 전부 admin client로만 만든다(이유: tests/e2e/fixtures/testData.ts
+  파일 상단 설명 — managerA/userA로 Node에서 재로그인하면 브라우저 세션이 무효화됨).
 */
 
 test.use({ storageState: MANAGER_AUTH_FILE });
@@ -25,26 +29,24 @@ let originalSettings: CenterSettings;
 const createdClassIds: string[] = [];
 
 test.beforeAll(async () => {
-  managerA = await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
+  managerA = loadTestAccountMeta("manager-a");
+  userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
-  userA = await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
 
-  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
-  originalSettings = await fetchSettings(centerAId);
-  await saveSettings(centerAId, {
+  originalSettings = await fetchSettingsAdmin(centerAId);
+  await saveSettingsAdmin(centerAId, {
     ...originalSettings,
     groupBookDaysBefore: 0,
     groupBookTime: "23:59",
     allowSameDayBooking: true,
     dailyBookLimitEnabled: false, // 이 값을 브라우저에서 켜는 것부터 테스트한다
   });
-  await createTestMembership(centerAId, userA.profileId, { remainingCount: 10 });
+  await createTestMembershipAdmin(centerAId, userA.profileId, { remainingCount: 10 });
 });
 
 test.afterAll(async () => {
-  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
-  for (const id of createdClassIds) await cleanupTestClass(id, []);
-  await saveSettings(centerAId, originalSettings);
+  for (const id of createdClassIds) await cleanupTestClassAdmin(id);
+  await saveSettingsAdmin(centerAId, originalSettings);
 });
 
 test("일일 예약 2회 제한 저장 → 회원 1·2회 성공, 3회째 실패 메시지 확인 (실브라우저 end-to-end)", async ({ page, browser }) => {
@@ -59,15 +61,15 @@ test("일일 예약 2회 제한 저장 → 회원 1·2회 성공, 3회째 실패
   await expect(page.locator(".toast")).toHaveText("설정을 저장했어요");
 
   // ② DB 값 변경 확인
-  const saved = await fetchSettings(centerAId);
+  const saved = await fetchSettingsAdmin(centerAId);
   expect(saved.dailyBookLimitEnabled).toBe(true);
   expect(saved.dailyBookLimit).toBe(2);
 
   // 같은 날 서로 다른 시간의 수업 3개 준비
   const classes = await Promise.all([
-    createKstSameDayFutureClass(centerAId, { title: "E2E 일일한도 1", preferredMinutesFromNow: 60 }),
-    createKstSameDayFutureClass(centerAId, { title: "E2E 일일한도 2", preferredMinutesFromNow: 90 }),
-    createKstSameDayFutureClass(centerAId, { title: "E2E 일일한도 3", preferredMinutesFromNow: 120 }),
+    createKstSameDayFutureClassAdmin(centerAId, { title: "E2E 일일한도 1", preferredMinutesFromNow: 60 }),
+    createKstSameDayFutureClassAdmin(centerAId, { title: "E2E 일일한도 2", preferredMinutesFromNow: 90 }),
+    createKstSameDayFutureClassAdmin(centerAId, { title: "E2E 일일한도 3", preferredMinutesFromNow: 120 }),
   ]);
   createdClassIds.push(...classes.map((c) => c.id));
 

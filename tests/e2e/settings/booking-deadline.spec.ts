@@ -1,14 +1,16 @@
 import { test, expect } from "@playwright/test";
 import {
-  switchToTestUser,
+  loadTestAccountMeta,
   getOrCreateOwnedTestCenter,
-  createTestMembership,
-  createFutureTestClassWithBookingDeadline,
-  cleanupTestClass,
+  createTestMembershipAdmin,
+  createFutureTestClassAdmin,
+  cleanupTestClassAdmin,
+  fetchSettingsAdmin,
+  saveSettingsAdmin,
   reservationDeepLink,
   type TestUser,
 } from "../fixtures/testData";
-import { fetchSettings, saveSettings, type CenterSettings } from "../../../lib/settings";
+import type { CenterSettings } from "../../../lib/settings";
 import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 
 /*
@@ -16,9 +18,10 @@ import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
   표현할 수 없고, 수업별 개별 예약마감 override(booking_deadline_min, 분 단위, CLASS-001)로만
   표현 가능하다는 것을 코드로 확인했다(lib/classes.ts/reserve_class()). 이 override 값
   자체는 수업 등록 폼(관리자 화면)에 이미 있는 필드이지만, 이 스펙에서는 fixture 생성을
-  Node 쪽에서 지정하고(같은 값을 관리자 화면에서 넣어도 결과는 동일 — DB 컬럼이 같다),
-  "그 값대로 회원 화면에서 실제로 예약 가능/불가가 갈리는지"를 브라우저로 검증하는 데
-  집중한다.
+  Node 쪽에서 admin client로 직접 지정하고(같은 값을 관리자 화면에서 넣어도 결과는 동일 —
+  DB 컬럼이 같다), "그 값대로 회원 화면에서 실제로 예약 가능/불가가 갈리는지"를 브라우저로
+  검증하는 데 집중한다. Node 쪽이 managerA/userA로 다시 로그인하지 않는 이유는
+  tests/e2e/fixtures/testData.ts 파일 상단 설명 참고(브라우저 세션 무효화 방지).
 
   시나리오: 예약마감 = 수업 시작 2시간 전(booking_deadline_min=120)
     - 수업이 3시간 뒤 시작 → 지금은 마감(1시간 뒤) 이전이므로 예약 성공
@@ -34,31 +37,29 @@ let originalSettings: CenterSettings;
 const createdClassIds: string[] = [];
 
 test.beforeAll(async () => {
-  managerA = await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
+  managerA = loadTestAccountMeta("manager-a");
+  userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
-  originalSettings = await fetchSettings(centerAId);
+
+  originalSettings = await fetchSettingsAdmin(centerAId);
   // 운영설정 자체는 넉넉하게 열어둬 개별 수업 override만 결과에 영향을 주게 한다.
-  await saveSettings(centerAId, {
+  await saveSettingsAdmin(centerAId, {
     ...originalSettings,
     groupBookDaysBefore: 0,
     groupBookTime: "23:59",
     allowSameDayBooking: true,
     dailyBookLimitEnabled: false,
   });
-
-  userA = await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
-  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
-  await createTestMembership(centerAId, userA.profileId, { remainingCount: 10 });
+  await createTestMembershipAdmin(centerAId, userA.profileId, { remainingCount: 10 });
 });
 
 test.afterAll(async () => {
-  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
-  for (const id of createdClassIds) await cleanupTestClass(id, []);
-  await saveSettings(centerAId, originalSettings);
+  for (const id of createdClassIds) await cleanupTestClassAdmin(id);
+  await saveSettingsAdmin(centerAId, originalSettings);
 });
 
 test("예약마감 2시간 전 — 3시간 뒤 수업은 예약 성공 (실브라우저)", async ({ page }) => {
-  const cls = await createFutureTestClassWithBookingDeadline(centerAId, {
+  const cls = await createFutureTestClassAdmin(centerAId, {
     title: "E2E 예약가능기한-성공", hoursFromNow: 3, bookingDeadlineMin: 120,
   });
   createdClassIds.push(cls.id);
@@ -69,7 +70,7 @@ test("예약마감 2시간 전 — 3시간 뒤 수업은 예약 성공 (실브�
 });
 
 test("예약마감 2시간 전 — 1시간 뒤 수업은 예약 실패 (실브라우저)", async ({ page }) => {
-  const cls = await createFutureTestClassWithBookingDeadline(centerAId, {
+  const cls = await createFutureTestClassAdmin(centerAId, {
     title: "E2E 예약가능기한-실패", hoursFromNow: 1, bookingDeadlineMin: 120,
   });
   createdClassIds.push(cls.id);

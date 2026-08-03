@@ -1,16 +1,17 @@
 import { test, expect } from "@playwright/test";
 import {
-  switchToTestUser,
+  loadTestAccountMeta,
   getOrCreateOwnedTestCenter,
-  createTestMembership,
-  createFutureTestClass,
-  cleanupTestClass,
-  backdateReservationCreatedAt,
+  createTestMembershipAdmin,
+  createFutureTestClassAdmin,
+  cleanupTestClassAdmin,
+  fetchSettingsAdmin,
+  saveSettingsAdmin,
+  insertConfirmedReservationAdmin,
   kstTimeHHmm,
   type TestUser,
 } from "../fixtures/testData";
-import { fetchSettings, saveSettings, type CenterSettings } from "../../../lib/settings";
-import { supabase } from "../../../lib/supabaseClient";
+import type { CenterSettings } from "../../../lib/settings";
 import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 
 /*
@@ -26,9 +27,10 @@ import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
   수업이라면 어느 시각에 시작하든 이 절대 시각이 취소마감이 된다.
 
   예약 자체는(취소 대상을 만들기 위한 선행 조건일 뿐 이 테스트의 검증 대상이 아니므로) Node
-  쪽에서 RPC로 직접 만들고, cancel_reservation()의 "예약 후 10분 그레이스" 예외에 걸리지
-  않도록 created_at을 충분히 과거로 되돌린다(tests/integration/reservation-cancel-grace-period.test.ts와
-  동일하게 검증된 기법). "취소" 버튼 클릭과 그 결과 확인만 브라우저로 수행한다.
+  쪽에서 admin client로 직접 "확정 예약" 행을 만들고, created_at을 처음부터 과거로 지정해
+  cancel_reservation()의 "예약 후 10분 그레이스" 예외를 애초에 피한다. Node가
+  managerA/userA로 로그인하지 않는 이유는 tests/e2e/fixtures/testData.ts 파일 상단 설명
+  참고(브라우저 세션 무효화 방지). "취소" 버튼 클릭과 그 결과 확인만 브라우저로 수행한다.
 */
 
 test.use({ storageState: MEMBER_AUTH_FILE });
@@ -36,21 +38,17 @@ test.use({ storageState: MEMBER_AUTH_FILE });
 let managerA: TestUser;
 let userA: TestUser;
 let centerAId: string;
+let membershipId: string;
 let originalSettings: CenterSettings;
 const createdClassIds: string[] = [];
 
-async function reserveAsUserAAndBackdate(classId: string): Promise<void> {
-  await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
-  const { data, error } = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: userA.profileId });
-  if (error) throw new Error("사전 예약 실패: " + error.message);
-  await backdateReservationCreatedAt((data as { reservation_id: string }).reservation_id, 11);
-}
-
 test.beforeAll(async () => {
-  managerA = await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
+  managerA = loadTestAccountMeta("manager-a");
+  userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
-  originalSettings = await fetchSettings(centerAId);
-  await saveSettings(centerAId, {
+
+  originalSettings = await fetchSettingsAdmin(centerAId);
+  await saveSettingsAdmin(centerAId, {
     ...originalSettings,
     groupBookDaysBefore: 0,
     groupBookTime: "23:59",
@@ -58,29 +56,28 @@ test.beforeAll(async () => {
     dailyBookLimitEnabled: false,
     deductOnLateCancel: false, // 꺼져 있어야 마감 후 취소가 "차감 후 허용"이 아니라 진짜 차단됨
   });
-
-  userA = await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
-  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
-  await createTestMembership(centerAId, userA.profileId, { remainingCount: 10 });
+  const membership = await createTestMembershipAdmin(centerAId, userA.profileId, { remainingCount: 10 });
+  membershipId = membership.id;
 });
 
 test.afterAll(async () => {
-  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
-  for (const id of createdClassIds) await cleanupTestClass(id, []);
-  await saveSettings(centerAId, originalSettings);
+  for (const id of createdClassIds) await cleanupTestClassAdmin(id);
+  await saveSettingsAdmin(centerAId, originalSettings);
 });
 
 test("취소마감이 5분 뒤(아직 안 지남) — 취소 성공 (실브라우저)", async ({ page }) => {
-  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
-  await saveSettings(centerAId, {
-    ...(await fetchSettings(centerAId)),
+  await saveSettingsAdmin(centerAId, {
+    ...(await fetchSettingsAdmin(centerAId)),
     groupCancelDaysBefore: 0,
     groupCancelTime: kstTimeHHmm(5), // 지금부터 5분 뒤 — 아직 마감 전
   });
 
-  const cls = await createFutureTestClass(centerAId, { title: "E2E 취소기한-성공", hoursFromNow: 3 });
+  const cls = await createFutureTestClassAdmin(centerAId, { title: "E2E 취소기한-성공", hoursFromNow: 3 });
   createdClassIds.push(cls.id);
-  await reserveAsUserAAndBackdate(cls.id);
+  await insertConfirmedReservationAdmin(cls.id, userA.profileId, {
+    membershipId,
+    createdAtIso: new Date(Date.now() - 11 * 60_000).toISOString(), // 10분 그레이스를 피하도록 11분 전으로 생성
+  });
 
   await page.goto("/reservation");
   page.once("dialog", (d) => d.accept());
@@ -89,16 +86,18 @@ test("취소마감이 5분 뒤(아직 안 지남) — 취소 성공 (실브라�
 });
 
 test("취소마감이 5분 전(이미 지남) — 취소 실패 (실브라우저)", async ({ page }) => {
-  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
-  await saveSettings(centerAId, {
-    ...(await fetchSettings(centerAId)),
+  await saveSettingsAdmin(centerAId, {
+    ...(await fetchSettingsAdmin(centerAId)),
     groupCancelDaysBefore: 0,
     groupCancelTime: kstTimeHHmm(-5), // 지금부터 5분 전 — 이미 마감 지남
   });
 
-  const cls = await createFutureTestClass(centerAId, { title: "E2E 취소기한-실패", hoursFromNow: 3 });
+  const cls = await createFutureTestClassAdmin(centerAId, { title: "E2E 취소기한-실패", hoursFromNow: 3 });
   createdClassIds.push(cls.id);
-  await reserveAsUserAAndBackdate(cls.id);
+  await insertConfirmedReservationAdmin(cls.id, userA.profileId, {
+    membershipId,
+    createdAtIso: new Date(Date.now() - 11 * 60_000).toISOString(),
+  });
 
   await page.goto("/reservation");
   page.once("dialog", (d) => d.accept());

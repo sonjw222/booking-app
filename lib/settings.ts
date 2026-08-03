@@ -76,7 +76,7 @@ export const DEFAULT_SETTINGS: CenterSettings = {
   useLounge: true, showPointHistory: true,
 };
 
-function rowToSettings(r: any): CenterSettings {
+export function rowToSettings(r: any): CenterSettings {
   return {
     privateBookDaysBefore: r.private_book_days_before,
     privateBookTime: (r.private_book_time ?? "22:00").slice(0, 5),
@@ -115,7 +115,7 @@ function rowToSettings(r: any): CenterSettings {
   };
 }
 
-function settingsToRow(centerId: string, s: CenterSettings) {
+export function settingsToRow(centerId: string, s: CenterSettings) {
   return {
     center_id: centerId,
     private_book_days_before: s.privateBookDaysBefore,

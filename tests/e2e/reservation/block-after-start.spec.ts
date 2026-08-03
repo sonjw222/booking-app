@@ -1,15 +1,17 @@
 import { test, expect } from "@playwright/test";
 import {
-  switchToTestUser,
+  loadTestAccountMeta,
   getOrCreateOwnedTestCenter,
-  createTestMembership,
-  createFutureTestClass,
-  cleanupTestClass,
+  createTestMembershipAdmin,
+  createFutureTestClassAdmin,
+  cleanupTestClassAdmin,
+  fetchSettingsAdmin,
+  saveSettingsAdmin,
+  insertConfirmedReservationAdmin,
   reservationDeepLink,
   type TestUser,
 } from "../fixtures/testData";
-import { fetchSettings, saveSettings, type CenterSettings } from "../../../lib/settings";
-import { supabase } from "../../../lib/supabaseClient";
+import type { CenterSettings } from "../../../lib/settings";
 import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 
 /*
@@ -18,7 +20,8 @@ import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
   수업 start_time을 과거로 "되돌릴" 방법이 없으므로(테스트 계정으로 실제 시간이 흐르길
   기다리는 것 외에는 조작 수단이 없음), 몇 초 뒤 시작하는 짧은 수업을 만들고 실제로 그
   시각이 지날 때까지 기다린 뒤 클릭한다(tests/integration/reserve-class-block-after-start.test.ts와
-  동일하게 이미 검증된 방식).
+  동일하게 이미 검증된 방식). Node 쪽 픽스처는 admin client로만 만든다(이유:
+  tests/e2e/fixtures/testData.ts 파일 상단 설명 — 브라우저 세션 무효화 방지).
 */
 
 test.use({ storageState: MEMBER_AUTH_FILE });
@@ -26,14 +29,17 @@ test.use({ storageState: MEMBER_AUTH_FILE });
 let managerA: TestUser;
 let userA: TestUser;
 let centerAId: string;
+let membershipId: string;
 let originalSettings: CenterSettings;
 const createdClassIds: string[] = [];
 
 test.beforeAll(async () => {
-  managerA = await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
+  managerA = loadTestAccountMeta("manager-a");
+  userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
-  originalSettings = await fetchSettings(centerAId);
-  await saveSettings(centerAId, {
+
+  originalSettings = await fetchSettingsAdmin(centerAId);
+  await saveSettingsAdmin(centerAId, {
     ...originalSettings,
     groupBookDaysBefore: 0,
     groupBookTime: "23:59",
@@ -42,20 +48,17 @@ test.beforeAll(async () => {
     allowSameDayBooking: true,
     dailyBookLimitEnabled: false,
   });
-
-  userA = await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
-  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
-  await createTestMembership(centerAId, userA.profileId, { remainingCount: 10 });
+  const membership = await createTestMembershipAdmin(centerAId, userA.profileId, { remainingCount: 10 });
+  membershipId = membership.id;
 });
 
 test.afterAll(async () => {
-  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
-  for (const id of createdClassIds) await cleanupTestClass(id, []);
-  await saveSettings(centerAId, originalSettings);
+  for (const id of createdClassIds) await cleanupTestClassAdmin(id);
+  await saveSettingsAdmin(centerAId, originalSettings);
 });
 
 test("수업 시작 후 예약 시도 → 실패 확인 (실브라우저)", async ({ page }) => {
-  const cls = await createFutureTestClass(centerAId, {
+  const cls = await createFutureTestClassAdmin(centerAId, {
     title: "E2E 시작후예약차단", hoursFromNow: 8 / 3600, // 약 8초 뒤 시작
   });
   createdClassIds.push(cls.id);
@@ -68,17 +71,13 @@ test("수업 시작 후 예약 시도 → 실패 확인 (실브라우저)", asyn
 });
 
 test("수업 시작 후 취소 시도 → 실패 확인 (실브라우저)", async ({ page }) => {
-  const cls = await createFutureTestClass(centerAId, {
+  const cls = await createFutureTestClassAdmin(centerAId, {
     title: "E2E 시작후취소차단", hoursFromNow: 8 / 3600,
   });
   createdClassIds.push(cls.id);
 
   // 시작 전에 먼저 예약을 만들어둔다(취소 대상 확보) — 이 예약 자체는 검증 대상이 아니다.
-  await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
-  const { error: reserveErr } = await supabase.rpc("reserve_class", {
-    p_class_id: cls.id, p_profile_id: userA.profileId,
-  });
-  if (reserveErr) throw new Error("사전 예약 실패: " + reserveErr.message);
+  await insertConfirmedReservationAdmin(cls.id, userA.profileId, { membershipId });
 
   await page.waitForTimeout(12_000); // 수업 시작 시각을 확실히 지나도록 대기
 
