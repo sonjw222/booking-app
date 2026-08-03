@@ -62,10 +62,6 @@ let userA: TestUser;
 let centerAId: string;
 let staffManagerCenterId: string; // centerA에서 managerB(비오너 스태프)의 manager_centers.id
 
-// 이번 실행이 실제로 "새로 만든" 것만 기록 — afterAll에서 이것만 정리한다.
-let createdRoleId: string | null = null;
-let createdStaffManagerCenterId: string | null = null;
-
 // 이 파일 전용으로 생성한 테스트 행 id들
 let staffSalaryOwnId: string | null = null; // managerA 본인 급여 행
 let staffSalaryOtherId: string | null = null; // managerB(스태프) 급여 행
@@ -103,24 +99,27 @@ async function getOrCreateStaffSalary(
   return { id: (data as { id: string }).id, created: true };
 }
 
-async function getOrCreateNoPermRole(centerId: string): Promise<{ id: string; created: boolean }> {
+// [재발 방지] 예전에는 get-or-create(있으면 재사용) 방식이라, CI가 이 테스트 도중
+// 강제 종료되면(예: GitHub Actions concurrency의 cancel-in-progress로 워크플로가 중간에
+// 취소됨) afterAll이 못 돌아 이 역할/초대가 그대로 남았고, 다음 실행은 그 잔여물을
+// "이미 있던 것"으로 보고 재사용만 할 뿐 정리 대상으로 다시 추적하지 않아 영구히
+// 복구되지 않았다(실제 재발 확인됨, 2026-08-03). 이제는 이 역할/초대를 이 테스트가
+// 전적으로 소유한다고 보고, beforeAll 시작과 afterAll 양쪽에서 "있으면 무조건 지운다"를
+// 실행한 뒤 매번 새로 만든다 — 중간에 몇 번을 강제 종료당해도 다음 beforeAll이 항상
+// 스스로 정리하고 시작하므로 orphan이 누적되지 않는다.
+async function cleanupNoPermRoleAndInvite(centerId: string): Promise<void> {
   const roles = await fetchRoles(centerId);
-  const existing = roles.find((r) => r.name === NO_PERM_ROLE_NAME);
-  if (existing) return { id: existing.id, created: false };
-  await createRole(centerId, NO_PERM_ROLE_NAME);
-  const refreshed = await fetchRoles(centerId);
-  const created = refreshed.find((r) => r.name === NO_PERM_ROLE_NAME);
-  if (!created) throw new Error("무권한 역할 생성에 실패했어요");
-  return { id: created.id, created: true };
-}
-
-async function inviteIfNeeded(centerId: string, accountId: string, roleId: string): Promise<boolean> {
-  try {
-    await inviteStaff(centerId, accountId, roleId);
-    return true;
-  } catch (e: any) {
-    if (e.message.includes("이미 이 센터의 스태프")) return false;
-    throw e;
+  const stale = roles.filter((r) => r.name === NO_PERM_ROLE_NAME);
+  for (const role of stale) {
+    const { data: staleInvites } = await supabase
+      .from("manager_centers")
+      .select("id")
+      .eq("center_id", centerId)
+      .eq("role_id", role.id);
+    for (const inv of staleInvites ?? []) {
+      try { await removeStaff((inv as { id: string }).id); } catch { /* best-effort, 아래 deleteRole에서도 걸림 */ }
+    }
+    try { await deleteRole(role.id); } catch { /* best-effort — 다음 실행이 다시 시도함 */ }
   }
 }
 
@@ -163,14 +162,18 @@ beforeAll(async () => {
 
   userA = await switchToTestUser(USER_A.email, USER_A.password);
 
-  // managerA(오너)로 돌아와 managerB를 centerA에 무권한 스태프로 초대하고, 테스트용 행을 만든다.
+  // managerA(오너)로 돌아와, 먼저 이전 실행이 남겼을 수 있는 잔여물을 정리한 뒤
+  // (①) 항상 새로 역할/초대를 만든다(②) — get-or-create로 재사용하지 않는다.
   await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
-  const role = await getOrCreateNoPermRole(centerAId);
-  if (role.created) createdRoleId = role.id;
+  await cleanupNoPermRoleAndInvite(centerAId);
 
-  const invited = await inviteIfNeeded(centerAId, managerB.accountId, role.id);
+  await createRole(centerAId, NO_PERM_ROLE_NAME);
+  const roles = await fetchRoles(centerAId);
+  const role = roles.find((r) => r.name === NO_PERM_ROLE_NAME);
+  if (!role) throw new Error("무권한 역할 생성에 실패했어요");
+
+  await inviteStaff(centerAId, managerB.accountId, role.id);
   staffManagerCenterId = await managerCenterIdFor(centerAId, managerB.accountId);
-  if (invited) createdStaffManagerCenterId = staffManagerCenterId;
 
   // 아래 3개 테이블은 오너에게 INSERT 정책이 있으므로(proposed_rls_gap_batch_a1.sql 적용 후)
   // managerA(오너)의 일반 로그인 client로 fixture를 만든다 — 적용 전인 지금은 이 자체가
@@ -247,19 +250,14 @@ afterAll(async () => {
     errors.push(`권한 오버라이드 정리 실패: ${e.message}`);
   }
 
-  if (createdStaffManagerCenterId) {
-    try {
-      await removeStaff(createdStaffManagerCenterId);
-    } catch (e: any) {
-      errors.push(`manager_centers 정리 실패(id=${createdStaffManagerCenterId}): ${e.message}`);
-    }
-  }
-  if (createdRoleId) {
-    try {
-      await deleteRole(createdRoleId);
-    } catch (e: any) {
-      errors.push(`역할 정리 실패(id=${createdRoleId}): ${e.message}`);
-    }
+  // ④ afterAll에서도 ①과 동일하게(무조건) 정리 — "이번 실행이 만든 것만" 추적하던
+  // 이전 방식과 달리, 이 테스트가 쓰는 역할명은 항상 이 테스트가 전적으로 소유하므로
+  // 조건 없이 지운다. 이렇게 해야 이 afterAll 자체가 도중에 실패하거나 다음 실행이
+  // beforeAll에서 다시 한번 정리를 시도하더라도 이중으로 안전하다.
+  try {
+    await cleanupNoPermRoleAndInvite(centerAId);
+  } catch (e: any) {
+    errors.push(`무권한 역할/초대 정리 실패: ${e.message}`);
   }
 
   if (errors.length > 0) {
