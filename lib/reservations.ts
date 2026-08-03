@@ -139,26 +139,38 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   let myByClassProfile: Record<string, { id: string; status: "confirmed" | "waitlisted" }> = {};
 
   if (classIds.length > 0) {
-    const [countRes, myRes] = await Promise.all([
-      supabase.from("class_reservation_counts").select("class_id, confirmed_count").in("class_id", classIds),
-      supabase
-        .from("reservations")
-        .select("id, class_id, profile_id, status")
-        .in("profile_id", myProfileIds)
-        .in("class_id", classIds)
-        .in("status", ["confirmed", "waitlisted"]),
+    // classIds가 많아지면(위 행 수 제한 수정으로 한 센터가 한 달에 수백~천 개 이상 수업을
+    // 가질 수 있게 됨) .in()에 그 UUID를 전부 나열한 요청 URL이 너무 길어져 PostgREST가
+    // "Bad Request"로 거부한다(실측 확인됨) — CHUNK_SIZE 단위로 나눠 여러 번 조회 후 합친다.
+    const CHUNK_SIZE = 150;
+    const classIdChunks: string[][] = [];
+    for (let i = 0; i < classIds.length; i += CHUNK_SIZE) classIdChunks.push(classIds.slice(i, i + CHUNK_SIZE));
+
+    const [countChunks, myChunks] = await Promise.all([
+      Promise.all(classIdChunks.map((ids) =>
+        supabase.from("class_reservation_counts").select("class_id, confirmed_count").in("class_id", ids)
+      )),
+      Promise.all(classIdChunks.map((ids) =>
+        supabase
+          .from("reservations")
+          .select("id, class_id, profile_id, status")
+          .in("profile_id", myProfileIds)
+          .in("class_id", ids)
+          .in("status", ["confirmed", "waitlisted"])
+      )),
     ]);
 
-    if (countRes.error) throw new Error("예약 인원을 불러오지 못했어요: " + countRes.error.message);
-    if (myRes.error) throw new Error("내 예약을 불러오지 못했어요: " + myRes.error.message);
-
-    for (const r of countRes.data ?? []) {
-      reservedCount[r.class_id] = r.confirmed_count;
+    for (const res of countChunks) {
+      if (res.error) throw new Error("예약 인원을 불러오지 못했어요: " + res.error.message);
+      for (const r of res.data ?? []) reservedCount[r.class_id] = r.confirmed_count;
     }
-    for (const r of myRes.data ?? []) {
-      myByClassProfile[`${r.class_id}:${(r as any).profile_id}`] = {
-        id: r.id, status: r.status as "confirmed" | "waitlisted",
-      };
+    for (const res of myChunks) {
+      if (res.error) throw new Error("내 예약을 불러오지 못했어요: " + res.error.message);
+      for (const r of res.data ?? []) {
+        myByClassProfile[`${r.class_id}:${(r as any).profile_id}`] = {
+          id: r.id, status: r.status as "confirmed" | "waitlisted",
+        };
+      }
     }
   }
 
