@@ -8,6 +8,26 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-03 (추가 2) — 회원 예약 캘린더 월 후반부 수업 누락 버그 수정 (PR #39)
+
+- **원인**: `fetchMonthData()`(`lib/reservations.ts`)의 원시 `classes` 쿼리가 `center_id`
+  조건도 `.range()`/`.limit()`도 없이 "이 달의 모든 센터" 수업을 한 번에 조회한 뒤
+  클라이언트에서 멤버십 보유 센터로 필터링했다. 전체 집계 행 수가 Supabase 프로젝트의
+  PostgREST 기본 응답 행 수 제한(실측 1000행)을 넘으면 `start_time` 오름차순 정렬
+  특성상 반환분이 그 지점에서 끊겨 월 후반부 수업이 통째로 누락됐다(진단 테스트로 실측:
+  1200개 중 1000개만 반환, 마지막 반환 행이 월말이 아니라 25일). 관리자용
+  `fetchClasses()`(`lib/classes.ts`)는 `center_id`로 이미 좁혀 조회해 이 문제에 걸리지
+  않아 "관리자 화면엔 정상, 회원 화면만 일부 누락"으로 나타났다.
+- **수정**: `classes` 쿼리를 `.in("center_id", 회원의 활성 수강권 보유 센터)`로 DB
+  단에서 직접 좁히고 `.range()`로 페이지 단위 반복 조회하도록 변경. 그 결과 한 센터가
+  한 달에 매우 많은 수업(1300개 테스트)을 가질 수 있게 되면서, 뒤이어 `class_reservation_counts`/
+  `reservations` 조회의 `.in("class_id", classIds)`가 UUID를 너무 많이 나열해 "Bad
+  Request"로 실패하는 2차 문제가 드러나 150개 단위 배치 조회로 함께 수정.
+- **테스트**: `classes-row-limit-regression.test.ts` 신규(내 센터 1300개 수업이 페이지
+  경계 999/1000/1001 포함 전부 반환되는지, 승인된 다른 센터 700개는 여전히 제외되는지
+  검증) — 진단 전용이던 `diagnose-classes-row-limit.test.ts`를 정식 회귀 테스트로 전환.
+  전체 integration 82/82, 2회 연속 실행 안정성 확인, 기존 month-boundary-kst 등 회귀 없음.
+
 ## 2026-08-03 (추가) — 6트랙 후속: open-kind 마무리/픽스처 격리/환경검증/설정2차/프라이빗2차/전화인증조사 (PR #39)
 
 - **Track 1**: `calc_deadline()` open-kind 수정 SQL을 그룹/프라이빗/KST 자정 경계까지
