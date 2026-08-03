@@ -84,17 +84,32 @@ describe("운영설정 재검증: 관리자 설정 화면과 동일한 저장 �
 });
 
 describe("운영설정 재검증: 예약 오픈 시점(그룹)이 취소 마감 설정이 아니라 진짜 오픈 설정을 쓴다", () => {
-  it("오픈 기한을 60일 전으로 저장하면, 5일 뒤 수업은 아직 예약이 열리지 않았다고 차단된다", async () => {
+  // ⚠️ 이 describe 전체의 테스트 값 설계 메모(재작성, 2026-08-03):
+  //   calc_deadline()의 "N일 전" 필드는 전부 "그 시점부터 조건이 성립"이 아니라
+  //   "수업일 - N일" = 하나의 절대 기준 시각을 만드는 것뿐이다. book/cancel은
+  //   "그 시각을 지나면 막힘", open은 정반대로 "그 시각에 도달하기 전까지 막힘"이라는
+  //   차이만 있다. 그래서:
+  //     - book_days_before를 크게 주면 마감 시각이 더 과거로 당겨져 오히려 더 쉽게 막힌다
+  //       (0으로 고정해야 "수업 당일까지 마감 없음"이 되어 book 체크를 통과시킬 수 있다).
+  //     - open_days_before가 수업까지 남은 일수보다 크면(오픈 시각이 이미 지난 과거가 됨)
+  //       허용되고, 남은 일수보다 작으면(오픈 시각이 아직 안 온 미래임) 차단된다 — "큰
+  //       숫자 = 더 관대함"이라는 직관과 반대다.
+  //   처음 작성 시 이 방향을 반대로 가정해 실제로는 항상 "허용"되는 값들로 "차단"을
+  //   기대하는 잘못된 테스트를 만들었던 적이 있다 — 아래는 그 수정본이다. 수업을 항상
+  //   30일 뒤로 잡고, 오픈 기준을 10일 전(아직 20일 남아 차단)과 60일 전(이미 30일 지나
+  //   허용) 두 값으로 명확히 대비시킨다.
+
+  it("오픈 기한을 10일 전으로 저장하면, 30일 뒤 수업은 아직 예약이 열리지 않았다고 차단된다", async () => {
     // ⚠️ calc_deadline()이 'open' kind를 처리하지 못하던 버그(fix_calc_deadline_open_kind_draft_proposed.sql
     // 적용 전)에서는 'open' 호출이 조용히 group_cancel_days_before(기본 1일 전)로 대체돼,
-    // 5일 뒤 수업이 "이미 열림"으로 잘못 판정되어 이 테스트가 의도적으로 FAIL한다.
+    // 30일 뒤 수업이 "이미 열림"으로 잘못 판정되어 이 테스트가 의도적으로 FAIL한다.
     await saveSettings(centerAId, {
       ...defaultSettings,
-      groupBookDaysBefore: 90, groupBookTime: "00:00", // 예약 마감에 안 걸리도록 넉넉히
-      groupOpenDaysBefore: 60, groupOpenTime: "15:00",
+      groupBookDaysBefore: 0, groupBookTime: "23:59", // 수업 당일까지 마감 없음 → book 체크 통과
+      groupOpenDaysBefore: 10, groupOpenTime: "15:00", // 오픈 시각 = 수업일-10일 = 지금부터 20일 뒤(미래) → 아직 안 열림
       groupCancelDaysBefore: 1, groupCancelTime: "22:00", // 오픈 설정과 값이 겹치지 않도록 확실히 다르게
     });
-    const cls = await createFutureTestClass(centerAId, { title: "SETTINGS-REAUDIT 오픈시점", hoursFromNow: 5 * 24 });
+    const cls = await createFutureTestClass(centerAId, { title: "SETTINGS-REAUDIT 오픈시점", hoursFromNow: 30 * 24 });
     createdClassIds.push(cls.id);
     await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
 
@@ -103,14 +118,14 @@ describe("운영설정 재검증: 예약 오픈 시점(그룹)이 취소 마감 
     expect(error?.message).toContain("아직 예약이 열리지 않았어요");
   });
 
-  it("(대조군) 오픈 기한을 10일 전으로 저장하면, 5일 뒤 수업은 정상 예약된다", async () => {
+  it("(대조군) 오픈 기한을 60일 전으로 저장하면, 30일 뒤 수업은 정상 예약된다", async () => {
     await saveSettings(centerAId, {
       ...defaultSettings,
-      groupBookDaysBefore: 90, groupBookTime: "00:00",
-      groupOpenDaysBefore: 10, groupOpenTime: "00:00",
+      groupBookDaysBefore: 0, groupBookTime: "23:59",
+      groupOpenDaysBefore: 60, groupOpenTime: "00:00", // 오픈 시각 = 수업일-60일 = 30일 전(이미 지남) → 이미 열림
       groupCancelDaysBefore: 1, groupCancelTime: "22:00",
     });
-    const cls = await createFutureTestClass(centerAId, { title: "SETTINGS-REAUDIT 오픈시점정상", hoursFromNow: 5 * 24 });
+    const cls = await createFutureTestClass(centerAId, { title: "SETTINGS-REAUDIT 오픈시점정상", hoursFromNow: 30 * 24 });
     createdClassIds.push(cls.id);
     await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
 
@@ -121,20 +136,21 @@ describe("운영설정 재검증: 예약 오픈 시점(그룹)이 취소 마감 
 
   it("프라이빗 수업도 그룹과 별개의 오픈 설정(private_open_*)을 쓴다", async () => {
     // group과 다른 값으로 설정해, private 분기가 실제로 group 설정을 잘못 읽어오지 않는지도
-    // 함께 검증한다.
+    // 함께 검증한다. group_open_days_before은 반대로(이미 열림) 설정해 두 값이 뒤섞이면
+    // 이 테스트가(차단을 기대하는데 허용돼) 바로 드러나게 한다.
     await saveSettings(centerAId, {
       ...defaultSettings,
-      privateBookDaysBefore: 90, privateBookTime: "00:00",
-      privateOpenDaysBefore: 60, privateOpenTime: "15:00",
+      privateBookDaysBefore: 0, privateBookTime: "23:59",
+      privateOpenDaysBefore: 10, privateOpenTime: "15:00", // 수업일-10일 = 아직 20일 남음 → 차단돼야 함
       privateCancelDaysBefore: 1, privateCancelTime: "22:00",
-      groupOpenDaysBefore: 10, groupOpenTime: "00:00", // group은 대조를 위해 훨씬 관대하게
+      groupOpenDaysBefore: 60, groupOpenTime: "00:00", // group 설정이 잘못 섞이면 이미 열림으로 통과해버림
     });
     const { data: cls, error: clsErr } = await supabase
       .from("classes")
       .insert({
         center_id: centerAId, title: "SETTINGS-REAUDIT 프라이빗오픈시점",
-        start_time: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(),
-        end_time: new Date(Date.now() + 5 * 24 * 3600 * 1000 + 3600 * 1000).toISOString(),
+        start_time: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
+        end_time: new Date(Date.now() + 30 * 24 * 3600 * 1000 + 3600 * 1000).toISOString(),
         capacity: 1, class_format: "private",
       })
       .select("id").single();
@@ -150,16 +166,16 @@ describe("운영설정 재검증: 예약 오픈 시점(그룹)이 취소 마감 
   it("KST 자정 경계: 수업 시작이 KST 00:30이어도 오픈 마감은 그 수업의 KST 달력 날짜 기준으로 계산된다", async () => {
     // UTC 기준으로는 전날 15:30인 시각(KST 00:30)을 수업 시작으로 잡는다 — calc_deadline()이
     // p_start_time을 'Asia/Seoul'로 변환한 날짜를 쓰는지, 서버 UTC 날짜를 그대로 쓰는지를
-    // 구분해서 검증한다. 그룹 오픈 마감을 "그 수업 날짜의 5일 전 00:00 KST"로 저장하면 지금
-    // 시점(며칠 뒤 새벽 수업이므로 아직 5일 전이 안 지남)에서는 아직 열리지 않았어야 한다.
+    // 구분해서 검증한다. 수업을 30일 뒤로, 오픈 기준을 10일 전(아직 20일 남음 → 차단)으로
+    // 잡아 시(분) 단위 오차와 무관하게 여유 있는 마진으로 차단이 재현되게 한다.
     await saveSettings(centerAId, {
       ...defaultSettings,
-      groupBookDaysBefore: 90, groupBookTime: "00:00",
-      groupOpenDaysBefore: 5, groupOpenTime: "00:00",
+      groupBookDaysBefore: 0, groupBookTime: "23:59",
+      groupOpenDaysBefore: 10, groupOpenTime: "00:00",
       groupCancelDaysBefore: 1, groupCancelTime: "22:00",
     });
 
-    const target = new Date(Date.now() + 5 * 24 * 3600 * 1000);
+    const target = new Date(Date.now() + 30 * 24 * 3600 * 1000);
     const y = target.getUTCFullYear();
     const m = String(target.getUTCMonth() + 1).padStart(2, "0");
     const d = String(target.getUTCDate()).padStart(2, "0");
