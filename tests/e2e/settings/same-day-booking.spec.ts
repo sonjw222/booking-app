@@ -31,12 +31,12 @@ let originalSettings: CenterSettings;
 const createdClassIds: string[] = [];
 
 test.beforeAll(async () => {
-  managerA = await switchToTestUser(process.env.TEST_MANAGER_A_EMAIL!, process.env.TEST_MANAGER_A_PASSWORD!);
+  managerA = await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
 
-  userA = await switchToTestUser(process.env.TEST_USER_A_EMAIL!, process.env.TEST_USER_A_PASSWORD!);
+  userA = await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
 
-  await switchToTestUser(process.env.TEST_MANAGER_A_EMAIL!, process.env.TEST_MANAGER_A_PASSWORD!);
+  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
   originalSettings = await fetchSettings(centerAId);
   await saveSettings(centerAId, {
     ...originalSettings,
@@ -49,7 +49,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  await switchToTestUser(process.env.TEST_MANAGER_A_EMAIL!, process.env.TEST_MANAGER_A_PASSWORD!);
+  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
   for (const id of createdClassIds) {
     await cleanupTestClass(id, []);
   }

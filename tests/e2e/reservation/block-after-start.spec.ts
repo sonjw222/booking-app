@@ -30,7 +30,7 @@ let originalSettings: CenterSettings;
 const createdClassIds: string[] = [];
 
 test.beforeAll(async () => {
-  managerA = await switchToTestUser(process.env.TEST_MANAGER_A_EMAIL!, process.env.TEST_MANAGER_A_PASSWORD!);
+  managerA = await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
   originalSettings = await fetchSettings(centerAId);
   await saveSettings(centerAId, {
@@ -43,13 +43,13 @@ test.beforeAll(async () => {
     dailyBookLimitEnabled: false,
   });
 
-  userA = await switchToTestUser(process.env.TEST_USER_A_EMAIL!, process.env.TEST_USER_A_PASSWORD!);
-  await switchToTestUser(process.env.TEST_MANAGER_A_EMAIL!, process.env.TEST_MANAGER_A_PASSWORD!);
+  userA = await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
+  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
   await createTestMembership(centerAId, userA.profileId, { remainingCount: 10 });
 });
 
 test.afterAll(async () => {
-  await switchToTestUser(process.env.TEST_MANAGER_A_EMAIL!, process.env.TEST_MANAGER_A_PASSWORD!);
+  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
   for (const id of createdClassIds) await cleanupTestClass(id, []);
   await saveSettings(centerAId, originalSettings);
 });
@@ -74,7 +74,7 @@ test("수업 시작 후 취소 시도 → 실패 확인 (실브라우저)", asyn
   createdClassIds.push(cls.id);
 
   // 시작 전에 먼저 예약을 만들어둔다(취소 대상 확보) — 이 예약 자체는 검증 대상이 아니다.
-  await switchToTestUser(process.env.TEST_USER_A_EMAIL!, process.env.TEST_USER_A_PASSWORD!);
+  await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
   const { error: reserveErr } = await supabase.rpc("reserve_class", {
     p_class_id: cls.id, p_profile_id: userA.profileId,
   });

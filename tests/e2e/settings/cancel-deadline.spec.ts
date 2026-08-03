@@ -31,14 +31,14 @@ let originalSettings: CenterSettings;
 const createdClassIds: string[] = [];
 
 async function reserveAsUserAAndBackdate(classId: string): Promise<void> {
-  await switchToTestUser(process.env.TEST_USER_A_EMAIL!, process.env.TEST_USER_A_PASSWORD!);
+  await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
   const { data, error } = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: userA.profileId });
   if (error) throw new Error("사전 예약 실패: " + error.message);
   await backdateReservationCreatedAt((data as { reservation_id: string }).reservation_id, 11);
 }
 
 test.beforeAll(async () => {
-  managerA = await switchToTestUser(process.env.TEST_MANAGER_A_EMAIL!, process.env.TEST_MANAGER_A_PASSWORD!);
+  managerA = await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
   originalSettings = await fetchSettings(centerAId);
   await saveSettings(centerAId, {
@@ -52,13 +52,13 @@ test.beforeAll(async () => {
     deductOnLateCancel: false, // 꺼져 있어야 마감 후 취소가 "차감 후 허용"이 아니라 진짜 차단됨
   });
 
-  userA = await switchToTestUser(process.env.TEST_USER_A_EMAIL!, process.env.TEST_USER_A_PASSWORD!);
-  await switchToTestUser(process.env.TEST_MANAGER_A_EMAIL!, process.env.TEST_MANAGER_A_PASSWORD!);
+  userA = await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
+  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
   await createTestMembership(centerAId, userA.profileId, { remainingCount: 10 });
 });
 
 test.afterAll(async () => {
-  await switchToTestUser(process.env.TEST_MANAGER_A_EMAIL!, process.env.TEST_MANAGER_A_PASSWORD!);
+  await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD");
   for (const id of createdClassIds) await cleanupTestClass(id, []);
   await saveSettings(centerAId, originalSettings);
 });
