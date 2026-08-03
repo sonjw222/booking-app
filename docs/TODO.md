@@ -98,6 +98,15 @@ README의 큰 순서만으로 전체 migration을 재현할 수 있는지 검증
 
 특히 `fix_usable_memberships_shared.sql`의 운영 적용 여부는 저장소만으로 알 수 없습니다. 적용 확인 전에는 “미적용”이나 “적용 완료”로 단정하지 않습니다.
 
+**2026-08-04 갱신**: `reserve_with_membership`은 실제로 운영설정 가드(당일예약/일일한도/
+오픈·마감/시작후차단/휴무일)가 전혀 없는 상태였음을 코드+실제 브라우저 재현으로 확인—
+`reserve_class`에만 있던 가드가 이식된 적이 없었다(실제 회원 화면은 수강권이 있으면
+`reserve_with_membership`을 호출하므로 실사용에 영향 있었음). `fix_reserve_with_membership_operational_settings.sql`로
+수정, 사용자가 운영 DB에 적용 완료. `fix_usable_memberships_product_kind.sql`도 이번에
+같이 적용 완료(적용 전엔 "사용 가능한 수강권" 목록에 goods 상품이 섞여 보이는 상태였음).
+남은 미확인 RPC: `fulfill_order`/`manager_set_attendance`/`auto_book_membership`/
+`has_permission`/`is_platform_admin` — 이번 세션에서 다루지 않음.
+
 ### P0-4. RLS 회귀 테스트와 운영 정책 확인
 
 | 필드 | 내용 |

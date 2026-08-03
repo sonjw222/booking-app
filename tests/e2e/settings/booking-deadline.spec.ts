@@ -8,11 +8,12 @@ import {
   fetchSettingsAdmin,
   saveSettingsAdmin,
   reservationDeepLink,
+  kstTimeHHmm,
   type TestUser,
 } from "../fixtures/testData";
 import type { CenterSettings } from "../../../lib/settings";
-import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
-import { waitForToastText } from "../fixtures/pageHelpers";
+import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { gotoManagerSettings, saveManagerSettings, setDaysBeforeTime, waitForToastText } from "../fixtures/pageHelpers";
 
 /*
   예약 가능 기한(마감) 검증 — "N시간 전" 정밀도는 운영설정의 요일 단위(N일 전 HH:MM)로는
@@ -91,4 +92,38 @@ test("예약마감 2시간 전 — 1시간 뒤 수업은 예약 실패 (실브�
   await expect(page.locator(".sheet-overlay")).toBeVisible();
   const toastText = await waitForToastText(page);
   expect(toastText).toContain("예약 마감시간이 지났어요");
+});
+
+test("운영설정 예약마감 30분(관리자 화면 저장) — 40분 전 성공, 20분 전 실패 (실브라우저 end-to-end)", async ({ page, browser }) => {
+  // 개별 수업 override(위 두 테스트)와 별개로, 운영설정 자체(그룹 수업 예약 - N일 전
+  // HH:MM)를 실제 관리자 화면에서 저장했을 때도 동일하게 동작하는지 확인한다.
+  const mgrContext = await browser.newContext({ storageState: MANAGER_AUTH_FILE });
+  const mgrPage = await mgrContext.newPage();
+  await gotoManagerSettings(mgrPage);
+  await setDaysBeforeTime(mgrPage, "그룹 수업 예약", 0, kstTimeHHmm(30));
+  await saveManagerSettings(mgrPage);
+  await mgrContext.close();
+  const saved = await fetchSettingsAdmin(centerAId);
+  expect(saved.groupBookDaysBefore).toBe(0);
+
+  const okCls = await createFutureTestClassAdmin(centerAId, {
+    title: "E2E 운영마감-40분전", hoursFromNow: 40 / 60,
+  });
+  createdClassIds.push(okCls.id);
+  await page.goto(reservationDeepLink(okCls.id, okCls.startTime));
+  await page.getByRole("button", { name: "예약하기" }).click();
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(
+    page.locator(".class-row", { hasText: "E2E 운영마감-40분전" }).getByRole("button", { name: "취소" })
+  ).toBeVisible();
+
+  const failCls = await createFutureTestClassAdmin(centerAId, {
+    title: "E2E 운영마감-20분전", hoursFromNow: 20 / 60,
+  });
+  createdClassIds.push(failCls.id);
+  await page.goto(reservationDeepLink(failCls.id, failCls.startTime));
+  await page.getByRole("button", { name: "예약하기" }).click();
+  await expect(page.locator(".sheet-overlay")).toBeVisible();
+  const toastText2 = await waitForToastText(page);
+  expect(toastText2).toContain("예약 마감시간이 지났어요");
 });

@@ -28,6 +28,44 @@ export type ManagedClass = {
 const KST_DATE = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
 const KST_TIME = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
 
+// 자정을 넘기는 것으로 인정하는 최대 길이(분). 23:00→01:00(2시간) 같은 심야 수업은
+// 허용하되, 10:00→09:00(23시간) 같은 입력 실수는 "종료시간이 시작시간 이전"으로 거부한다.
+const MAX_OVERNIGHT_MINUTES = 6 * 60;
+
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// 종료시간이 시작시간보다 늦으면 같은 날 안에서 끝나는 것이라 항상 유효.
+// 그 외(종료 <= 시작)엔 자정을 넘긴 것으로 보되, 그 길이가 MAX_OVERNIGHT_MINUTES를
+// 넘으면(=사실상 시작시간 이후가 아닌 것으로 봐야 할 만큼 뒤집힌 값) 무효 처리한다.
+export function isValidClassTimeRange(start: string, end: string): boolean {
+  const s = timeToMinutes(start);
+  const e = timeToMinutes(end);
+  if (e > s) return true;
+  const overnightMinutes = 24 * 60 - s + e;
+  return overnightMinutes > 0 && overnightMinutes <= MAX_OVERNIGHT_MINUTES;
+}
+
+function addOneDay(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// end_time을 계산할 때 쓸 날짜 — 자정을 넘기는 경우(위 isValidClassTimeRange가 허용하는
+// 범위 안)엔 다음날 날짜를 쓴다.
+export function classEndDate(date: string, start: string, end: string): string {
+  return timeToMinutes(end) <= timeToMinutes(start) ? addOneDay(date) : date;
+}
+
+function assertValidClassTimeRange(start: string, end: string): void {
+  if (!isValidClassTimeRange(start, end)) {
+    throw new Error("종료시간은 시작시간 이후여야 해요 (자정을 넘기는 경우는 6시간 이내만 허용)");
+  }
+}
+
 export async function fetchClasses(centerId: string, fromDate: string, toDate: string): Promise<ManagedClass[]> {
   const { data: rows, error } = await supabase
     .from("classes")
@@ -80,11 +118,12 @@ export type ClassInput = {
 };
 
 export async function createClass(centerId: string, input: ClassInput): Promise<string> {
+  assertValidClassTimeRange(input.start, input.end);
   const { data, error } = await supabase.from("classes").insert({
     center_id: centerId,
     title: input.title,
     start_time: toKstIso(input.date, input.start),
-    end_time: toKstIso(input.date, input.end),
+    end_time: toKstIso(classEndDate(input.date, input.start, input.end), input.end),
     capacity: input.capacity,
     allow_goods: input.allowGoods,
     room_id: input.roomId ?? null,
@@ -97,12 +136,13 @@ export async function createClass(centerId: string, input: ClassInput): Promise<
 }
 
 export async function updateClass(classId: string, input: ClassInput): Promise<void> {
+  assertValidClassTimeRange(input.start, input.end);
   const { error } = await supabase
     .from("classes")
     .update({
       title: input.title,
       start_time: toKstIso(input.date, input.start),
-      end_time: toKstIso(input.date, input.end),
+      end_time: toKstIso(classEndDate(input.date, input.start, input.end), input.end),
       capacity: input.capacity,
       allow_goods: input.allowGoods,
       room_id: input.roomId ?? null,
@@ -129,6 +169,7 @@ export async function deleteClass(classId: string): Promise<void> {
 export async function updateClassGroup(
   groupId: string, title: string, start: string, end: string, capacity: number
 ): Promise<void> {
+  assertValidClassTimeRange(start, end);
   // 그룹의 모든 수업을 가져와 각자의 날짜에 새 시간 적용
   const { data: rows, error: fErr } = await supabase
     .from("classes")
@@ -141,7 +182,7 @@ export async function updateClassGroup(
     const { error } = await supabase.from("classes").update({
       title,
       start_time: toKstIso(dateStr, start),
-      end_time: toKstIso(dateStr, end),
+      end_time: toKstIso(classEndDate(dateStr, start, end), end),
       capacity,
     }).eq("id", (r as any).id);
     if (error) throw new Error("반복 수업 수정에 실패했어요: " + error.message);
@@ -196,6 +237,7 @@ export function expandRecurringDates(fromDate: string, toDate: string, daysOfWee
 }
 
 export async function createRecurringClasses(centerId: string, input: RecurringInput): Promise<string[]> {
+  assertValidClassTimeRange(input.start, input.end);
   let dates = expandRecurringDates(input.fromDate, input.toDate, input.daysOfWeek);
   if (input.excludeDates) dates = dates.filter((d) => !input.excludeDates!.has(d));
   if (dates.length === 0) return [];
@@ -206,7 +248,7 @@ export async function createRecurringClasses(centerId: string, input: RecurringI
     center_id: centerId,
     title: input.title,
     start_time: toKstIso(d, input.start),
-    end_time: toKstIso(d, input.end),
+    end_time: toKstIso(classEndDate(d, input.start, input.end), input.end),
     capacity: input.capacity,
     room_id: input.roomId ?? null,
     cancel_deadline_min: input.cancelDeadlineMin ?? 0,
@@ -488,7 +530,7 @@ export async function copySchedule(
       center_id: centerId,
       title: c.title,
       start_time: toKstIso(target, c.start),
-      end_time: toKstIso(target, c.end),
+      end_time: toKstIso(classEndDate(target, c.start, c.end), c.end),
       capacity: c.capacity,
       allow_goods: c.allowGoods,
       room_id: c.roomId,
@@ -771,7 +813,7 @@ export async function copyByWeekday(
       linkPlan.push({ idx: rows.length, srcClassId: g.classIds[0] });
       rows.push({
         center_id: centerId, title: g.title,
-        start_time: toKstIso(date, g.start), end_time: toKstIso(date, g.end),
+        start_time: toKstIso(date, g.start), end_time: toKstIso(classEndDate(date, g.start, g.end), g.end),
         capacity: g.capacity, room_id: g.roomId,
         cancel_deadline_min: g.cancelDeadlineMin,
         recurring_group_id: groupId, status: "open", allow_goods: true,
@@ -799,7 +841,7 @@ export async function copyByDate(
     linkPlan.push({ idx: rows.length, srcClassId: it.classId });
     rows.push({
       center_id: centerId, title: it.title,
-      start_time: toKstIso(date, it.start), end_time: toKstIso(date, it.end),
+      start_time: toKstIso(date, it.start), end_time: toKstIso(classEndDate(date, it.start, it.end), it.end),
       capacity: it.capacity, room_id: it.roomId,
       cancel_deadline_min: it.cancelDeadlineMin,
       recurring_group_id: groupId, status: "open", allow_goods: true,

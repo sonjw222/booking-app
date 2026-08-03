@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 /*
   브라우저 페이지 상호작용 헬퍼(테스트 데이터가 아니라 화면 조작 전용) — Node 쪽 DB
@@ -44,4 +44,49 @@ export async function waitForToastText(page: Page, timeout = 15_000): Promise<st
   const toast = page.locator(".toast");
   await toast.waitFor({ state: "visible", timeout });
   return (await toast.textContent()) ?? "";
+}
+
+/*
+  app/manager/settings/page.tsx 운영설정 화면 조작 헬퍼 — "운영설정 전체를 실제 관리자
+  화면에서" 검증하라는 요구에 따라, admin(service-role) client로 center_settings를 직접
+  덮어쓰는 대신 실제 화면의 입력/토글을 클릭해 저장한다.
+*/
+
+export async function gotoManagerSettings(page: Page): Promise<void> {
+  await page.goto("/manager/settings");
+  await page.locator(".settings-wrap").waitFor({ state: "visible" });
+}
+
+// 저장 버튼 상태 전이(저장 중 → 저장됨)로 저장 성공을 확인한다 — toast의 2.5초
+// 자동소멸을 기다리지 않아도 된다(dirty가 false가 될 때까지 자동 재시도로 대기).
+export async function saveManagerSettings(page: Page): Promise<void> {
+  await page.locator("button.header-action").click();
+  await expect(page.locator("button.header-action")).toHaveText("저장됨");
+}
+
+// "그룹 수업 예약"/"그룹 수업 취소"/"그룹 수업"(오픈 시점)처럼 "N일 전 HH:MM" 쌍으로 된
+// 행을 조작한다. .set-label 텍스트 완전일치로 찾아 같은 이름을 가진 다른 섹션의 행과
+// 헷갈리지 않게 한다(예: "그룹 수업 예약" vs 오픈 시점 섹션의 "그룹 수업").
+export async function setDaysBeforeTime(page: Page, exactLabel: string, days: number, time: string): Promise<void> {
+  const row = page.locator(".set-row.col").filter({ has: page.locator(".set-label", { hasText: new RegExp(`^${exactLabel}$`) }) });
+  const daysInput = row.locator("input.set-num");
+  await daysInput.fill(String(days));
+  await daysInput.blur();
+  await row.locator('input[type="time"]').fill(time);
+}
+
+// "당일 예약 허용"/"일일 예약 횟수 제한"처럼 켜고 끄는 토글 행을 조작한다.
+export async function toggleSettingSwitch(page: Page, exactLabel: string, turnOn: boolean): Promise<void> {
+  const row = page.locator(".set-row").filter({ has: page.locator(".set-label", { hasText: new RegExp(`^${exactLabel}$`) }) });
+  const sw = row.locator("button.switch");
+  const isOn = (await sw.getAttribute("class"))?.includes(" on") ?? false;
+  if (isOn !== turnOn) await sw.click();
+}
+
+// "하루 최대"처럼 토글이 켜져야만 나타나는 숫자 입력 행을 조작한다.
+export async function setSettingNumber(page: Page, exactLabel: string, value: number): Promise<void> {
+  const row = page.locator(".set-row").filter({ has: page.locator(".set-label", { hasText: new RegExp(`^${exactLabel}$`) }) });
+  const input = row.locator("input.set-num");
+  await input.fill(String(value));
+  await input.blur();
 }

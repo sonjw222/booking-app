@@ -8,6 +8,31 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-04 — reserve_with_membership() 운영설정 가드 누락 수정 + 관리자 UX 정리 (PR #39)
+
+- **핵심 버그(실제 브라우저 재현)**: "당일예약 OFF/예약 가능 기한 등을 저장해도 회원
+  화면에서 계속 예약이 통과된다"는 수동 QA 보고가 있었고, RPC(`reserve_class`)를 직접
+  호출하는 테스트는 전부 정상이라 처음엔 "테스트 환경 문제"로 오판했다. 실제 원인은
+  회원 화면(`app/reservation/page.tsx` `doReserve()`)이 사용 가능한 수강권이 하나라도
+  있으면(거의 모든 실사용 케이스) `reserve_class()`가 아니라 `reserve_with_membership()`을
+  호출한다는 것이었고, 이 함수(`add_admin_assignment.sql`)에는 당일예약 허용/일일
+  예약 횟수 제한/예약 오픈·마감/수업 시작 후 차단/휴무일 가드가 전혀 없었다 —
+  `reserve_class()`에만 있던 가드가 `reserve_with_membership()`에는 이식된 적이 없었던
+  것. `fix_reserve_with_membership_operational_settings.sql`로 6개 가드를 전부 이식(사용자
+  적용 완료).
+- **함께 적용**: `add_tennis_category.sql`(종목에 "테니스" 추가), 이미 저장소에 있었지만
+  미적용 상태였던 `fix_usable_memberships_product_kind.sql`(수강권 선택 목록에 goods
+  상품이 섞여 보이던 버그) — 둘 다 사용자 확인 후 적용 완료.
+- **수업 등록 검증 추가**: 종료시간이 시작시간 이후가 아니면(예: 10:00→09:00) 거부,
+  단 자정을 넘기는 경우(예: 23:00→01:00, 6시간 이내)는 허용(`lib/classes.ts`
+  `isValidClassTimeRange`/`classEndDate`, 생성/수정/반복등록/복사 7개 경로 전부 적용).
+- **관리자 회원탭 정리**: "담당회원"/"상담고객" 탭 제거(둘 다 "준비 중" 플레이스홀더였고
+  실제 데이터/로직이 없었음) — `app/manager/members/page.tsx`.
+- **E2E**: 운영설정 스펙을 실제 관리자 화면 조작(admin client로 값만 덮어쓰는 방식이
+  아니라 진짜 토글/입력 클릭) 기준으로 재작성. 신규 `booking-open-deadline.spec.ts`
+  추가(예약 오픈 시점 검증) — 코드 추적 결과 "N일 전부터 예약이 열린다"가 실제 동작이라,
+  더 먼 미래 수업이 아직 닫혀있고 더 가까운 수업이 열려있는 것이 정상임을 확인.
+
 ## 2026-08-03 (추가 2) — 회원 예약 캘린더 월 후반부 수업 누락 버그 수정 (PR #39)
 
 - **원인**: `fetchMonthData()`(`lib/reservations.ts`)의 원시 `classes` 쿼리가 `center_id`

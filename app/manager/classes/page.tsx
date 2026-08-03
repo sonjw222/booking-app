@@ -28,6 +28,7 @@ import {
   fetchBookableMembers, managerBookMember, type BookableMember, maskPhone,
   fetchUnplacedPasses, retryAutoBook, type UnplacedPass,
   type ManagedClass, type ClassInput, type ClassAttendee,
+  isValidClassTimeRange,
 } from "../../../lib/classes";
 import { fetchMemberDetail, type MemberDetailData } from "../../../lib/members";
 import { fetchProducts, type Product } from "../../../lib/passes";
@@ -540,6 +541,10 @@ export default function ClassManagePage() {
         setError("시작·종료 시간을 입력해주세요");
         return;
       }
+      if (!perDayMode && !isValidClassTimeRange(form.start, form.end)) {
+        setError("종료시간은 시작시간 이후여야 해요 (자정을 넘기는 경우는 6시간 이내만 허용)");
+        return;
+      }
       if (repDays.length === 0) { setError("반복할 요일을 선택해주세요"); return; }
       if (!repFrom || !repTo || repFrom > repTo) { setError("기간을 올바르게 선택해주세요"); return; }
       setBusy(true); setError(null);
@@ -618,6 +623,10 @@ export default function ClassManagePage() {
 
     if (!form.title.trim() || !form.date || !form.start || !form.end) {
       setError("수업명·날짜·시작·종료 시간을 모두 입력해주세요");
+      return;
+    }
+    if (!isValidClassTimeRange(form.start, form.end)) {
+      setError("종료시간은 시작시간 이후여야 해요 (자정을 넘기는 경우는 6시간 이내만 허용)");
       return;
     }
     setBusy(true);
