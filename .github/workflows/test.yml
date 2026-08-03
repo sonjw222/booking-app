@@ -81,6 +81,12 @@ jobs:
     # 실패). unit 자체는 Supabase가 필요 없지만, 여기서 순서를 강제해 e2e → unit → integration →
     # build 전체가 항상 순차 실행되게 한다.
     needs: e2e
+    # [임시] if: always() — e2e가 실패해도 unit/integration은 계속 실행되게 한다.
+    # needs: e2e는 그대로 둬서 "e2e가 끝난 뒤에" 실행되는 순서(=동시 실행 경합 방지)는
+    # 유지하면서, 지금은 e2e의 남은 실패(관리자 세션 문제, 별도 조사 중)와 무관하게
+    # 운영설정 진단 테스트(diagnose-settings-live-values.test.ts)의 실제 통합테스트
+    # 결과를 봐야 해서 잠시 완화한다 — 진단이 끝나면 이 줄만 되돌린다.
+    if: always()
     steps:
       - uses: actions/checkout@v4
       # Node 22+ 필수: @supabase/supabase-js(realtime-js)가 클라이언트 생성 시 native
