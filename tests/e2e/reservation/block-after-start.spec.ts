@@ -3,7 +3,7 @@ import {
   switchToTestUser,
   getOrCreateOwnedTestCenter,
   createTestMembership,
-  createFutureTestClassWithDeadlines,
+  createFutureTestClass,
   cleanupTestClass,
   reservationDeepLink,
   type TestUser,
@@ -55,7 +55,7 @@ test.afterAll(async () => {
 });
 
 test("수업 시작 후 예약 시도 → 실패 확인 (실브라우저)", async ({ page }) => {
-  const cls = await createFutureTestClassWithDeadlines(centerAId, {
+  const cls = await createFutureTestClass(centerAId, {
     title: "E2E 시작후예약차단", hoursFromNow: 8 / 3600, // 약 8초 뒤 시작
   });
   createdClassIds.push(cls.id);
@@ -68,7 +68,7 @@ test("수업 시작 후 예약 시도 → 실패 확인 (실브라우저)", asyn
 });
 
 test("수업 시작 후 취소 시도 → 실패 확인 (실브라우저)", async ({ page }) => {
-  const cls = await createFutureTestClassWithDeadlines(centerAId, {
+  const cls = await createFutureTestClass(centerAId, {
     title: "E2E 시작후취소차단", hoursFromNow: 8 / 3600,
   });
   createdClassIds.push(cls.id);

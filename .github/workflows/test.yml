@@ -75,6 +75,12 @@ jobs:
   unit:
     name: Unit tests (no Supabase needed)
     runs-on: ubuntu-latest
+    # e2e 이후에 실행 — e2e와 integration이 동시에 돌면 둘 다 같은 공유 테스트 계정/센터의
+    # center_settings·classes를 동시에 바꿔 서로의 "저장 전/후 값" assertion을 깨뜨린다
+    # (실제로 재현됨: e2e가 병렬로 돌자 operational-settings-wiring/reservation-cancel-grace-period가
+    # 실패). unit 자체는 Supabase가 필요 없지만, 여기서 순서를 강제해 e2e → unit → integration →
+    # build 전체가 항상 순차 실행되게 한다.
+    needs: e2e
     steps:
       - uses: actions/checkout@v4
       # Node 22+ 필수: @supabase/supabase-js(realtime-js)가 클라이언트 생성 시 native

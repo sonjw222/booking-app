@@ -3,7 +3,7 @@ import {
   switchToTestUser,
   getOrCreateOwnedTestCenter,
   createTestMembership,
-  createFutureTestClassWithDeadlines,
+  createFutureTestClassWithBookingDeadline,
   cleanupTestClass,
   reservationDeepLink,
   type TestUser,
@@ -58,7 +58,7 @@ test.afterAll(async () => {
 });
 
 test("예약마감 2시간 전 — 3시간 뒤 수업은 예약 성공 (실브라우저)", async ({ page }) => {
-  const cls = await createFutureTestClassWithDeadlines(centerAId, {
+  const cls = await createFutureTestClassWithBookingDeadline(centerAId, {
     title: "E2E 예약가능기한-성공", hoursFromNow: 3, bookingDeadlineMin: 120,
   });
   createdClassIds.push(cls.id);
@@ -69,7 +69,7 @@ test("예약마감 2시간 전 — 3시간 뒤 수업은 예약 성공 (실브�
 });
 
 test("예약마감 2시간 전 — 1시간 뒤 수업은 예약 실패 (실브라우저)", async ({ page }) => {
-  const cls = await createFutureTestClassWithDeadlines(centerAId, {
+  const cls = await createFutureTestClassWithBookingDeadline(centerAId, {
     title: "E2E 예약가능기한-실패", hoursFromNow: 1, bookingDeadlineMin: 120,
   });
   createdClassIds.push(cls.id);
