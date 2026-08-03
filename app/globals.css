@@ -278,6 +278,8 @@ a { color: inherit; text-decoration: none; }
 }
 .mini-btn.wait { background: var(--ink-soft); }
 .mini-btn.done { background: var(--bg); color: var(--accent); border: 1.5px solid var(--accent); }
+/* Track 2: 수업 시작 후 예약 버튼 대신 표시하는 안내(버튼 아님, 클릭 동작 없음) */
+.mini-btn-note { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); padding: 7px 4px; text-align: right; white-space: nowrap; }
 
 /* ============================================================
    로그인 / 회원가입 화면
@@ -2592,3 +2594,40 @@ a.membership-card { text-decoration: none; display: block; }
   font-size: 14px; font-weight: 700; cursor: pointer;
 }
 .chat-send:disabled { opacity: 0.5; }
+
+/* ============================================================
+   Track 1/8: 앱 전체 공용 이미지 확대(Lightbox) — app/components/ImageViewer.tsx
+   ============================================================ */
+.image-viewer-overlay {
+  position: fixed; inset: 0; z-index: 2000;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex; align-items: center; justify-content: center;
+  overscroll-behavior: contain; touch-action: none;
+}
+.image-viewer-img {
+  max-width: 92vw; max-height: 88vh; object-fit: contain;
+  transition: transform 0.15s ease-out; touch-action: none; user-select: none;
+}
+.image-viewer-close {
+  position: absolute; top: 16px; right: 16px; z-index: 1;
+  width: 40px; height: 40px; border-radius: 50%; border: none;
+  background: rgba(255, 255, 255, 0.15); color: #fff; font-size: 22px; line-height: 1;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.image-viewer-nav {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 1;
+  width: 44px; height: 44px; border-radius: 50%; border: none;
+  background: rgba(255, 255, 255, 0.15); color: #fff; font-size: 26px; line-height: 1;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.image-viewer-nav.prev { left: 12px; }
+.image-viewer-nav.next { right: 12px; }
+.image-viewer-counter {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.85); font-size: 13px; font-weight: 600;
+  background: rgba(255, 255, 255, 0.12); padding: 4px 12px; border-radius: 999px;
+}
+@media (max-width: 480px) {
+  .image-viewer-nav { width: 36px; height: 36px; font-size: 22px; }
+  .image-viewer-close { width: 34px; height: 34px; font-size: 18px; }
+}

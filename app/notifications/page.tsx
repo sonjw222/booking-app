@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import BottomNav from "../components/BottomNav";
+import { ZoomableImage } from "../components/ImageViewer";
 import {
   fetchNotifications, markRead, deleteNotification, notiEmoji, notificationHref,
   type Notification,
@@ -97,7 +98,10 @@ export default function NotificationsPage() {
             {openAnnounce.photos && openAnnounce.photos.length > 0 && (
               <div className="review-photos" style={{ marginTop: 12 }}>
                 {openAnnounce.photos.map((ph, i) => (
-                  <img key={i} className="review-photo" src={announcementPhotoUrl(ph) ?? ""} alt="" />
+                  <ZoomableImage
+                    key={i} className="review-photo" src={announcementPhotoUrl(ph) ?? ""}
+                    group={openAnnounce.photos!.map((p) => announcementPhotoUrl(p) ?? "")} groupIndex={i}
+                  />
                 ))}
               </div>
             )}

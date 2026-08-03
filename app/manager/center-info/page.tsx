@@ -15,6 +15,7 @@ import MapPicker from "./MapPicker";
 import MapPreview from "../../components/MapPreview";
 import RichTextEditor from "../../components/RichTextEditor";
 import { fetchCategories, type ServiceCategory } from "../../../lib/operator";
+import { ZoomableImage } from "../../components/ImageViewer";
 
 // 구버전 평문 블록을 HTML로 변환 (줄바꿈 유지 + 태그 이스케이프)
 function escapeToHtml(text: string): string {
@@ -202,7 +203,7 @@ export default function CenterInfoPage() {
           <div className="menu-section-label" style={{ padding: "8px 0 6px" }}>프로필 사진 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>· 센터 이름 위에 뜨는 작은 사진</span></div>
           <div className="avatar-edit" style={{ alignItems: "flex-start" }}>
             {photoUrl
-              ? <img className="center-photo-preview" src={centerPhotoUrl(photoUrl) ?? ""} alt="" />
+              ? <ZoomableImage className="center-photo-preview" src={centerPhotoUrl(photoUrl) ?? ""} />
               : <div className="center-photo-placeholder">사진 없음</div>}
             <label className="avatar-edit-btn">
               {uploadingPhoto ? "업로드 중..." : "사진 변경"}
@@ -259,7 +260,7 @@ export default function CenterInfoPage() {
                     onChangeFontSize={(n) => updateBlockField(i, { fontSize: n })}
                   />
                 ) : (
-                  <img className="intro-block-img" src={centerPhotoUrl(blk.value) ?? ""} alt="" />
+                  <ZoomableImage className="intro-block-img" src={centerPhotoUrl(blk.value) ?? ""} />
                 )}
               </div>
             ))}

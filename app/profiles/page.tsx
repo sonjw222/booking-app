@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import Loading from "../components/Loading";
+import { ZoomableImage } from "../components/ImageViewer";
 import {
   fetchProfiles, addProfile, deleteProfile, updateProfile, uploadAvatar, avatarPublicUrl,
   type ProfileRow, type ProfileEdit,
@@ -186,7 +187,7 @@ export default function ProfilesPage() {
             {/* 프로필 사진 */}
             <div className="avatar-edit">
               {edit.avatarUrl
-                ? <img className="avatar-edit-img" src={avatarPublicUrl(edit.avatarUrl) ?? ""} alt="" />
+                ? <ZoomableImage className="avatar-edit-img" src={avatarPublicUrl(edit.avatarUrl) ?? ""} />
                 : <div className="avatar-edit-placeholder">{editing.name?.[0] ?? "?"}</div>}
               <label className="avatar-edit-btn">
                 {uploadingAvatar ? "업로드 중..." : "사진 변경"}

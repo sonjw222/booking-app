@@ -17,6 +17,7 @@ import {
 import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
 import RichTextEditor from "../../components/RichTextEditor";
+import { ZoomableImage } from "../../components/ImageViewer";
 
 export default function ManagerAnnouncementsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -156,7 +157,10 @@ export default function ManagerAnnouncementsPage() {
               {a.photos && a.photos.length > 0 && (
                 <div className="review-photos">
                   {a.photos.map((ph, i) => (
-                    <img key={i} className="review-photo" src={announcementPhotoUrl(ph) ?? ""} alt="" />
+                    <ZoomableImage
+                      key={i} className="review-photo" src={announcementPhotoUrl(ph) ?? ""}
+                      group={a.photos!.map((p) => announcementPhotoUrl(p) ?? "")} groupIndex={i}
+                    />
                   ))}
                 </div>
               )}
