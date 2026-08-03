@@ -29,6 +29,20 @@ import { rowToSettings, settingsToRow, DEFAULT_SETTINGS, type CenterSettings } f
 
 export { switchToTestUser, getOrCreateOwnedTestCenter, kstSafeSameDayFutureTime, type TestUser };
 
+// 같은 제목의 이전 실행 잔여 행(있다면 그 예약까지)을 지운다 — CI가 실행 도중
+// concurrency로 취소되면 afterAll이 못 돌아 이전 실행이 만든 같은 제목의 수업이
+// 그대로 남는데(실제로 재현됨: 회원 화면에서 같은 제목 행이 여러 개 나와 Playwright의
+// strict mode violation로 이어짐), "이 제목은 이 센터에 항상 하나만" 원칙으로 생성 전에
+// 매번 정리해 재실행/재시도에도 정확히 1건만 남긴다.
+async function deleteExistingClassesByTitle(centerId: string, title: string): Promise<void> {
+  const admin = getFixtureAdminClient();
+  const { data: existing } = await admin.from("classes").select("id").eq("center_id", centerId).eq("title", title);
+  const ids = (existing ?? []).map((r: any) => r.id as string);
+  if (ids.length === 0) return;
+  await admin.from("reservations").delete().in("class_id", ids);
+  await admin.from("classes").delete().in("id", ids);
+}
+
 // ---------------- managerA/userA accountId/profileId 저장·조회 ----------------
 // auth.setup.ts가 브라우저 로그인 "직전"에 Node에서 딱 한 번 switchToTestUser로 조회해
 // 여기 저장해둔다 — 그 이후 이 값을 읽기만 할 뿐, 이 두 계정으로 다시 로그인하지 않는다.
@@ -58,6 +72,7 @@ export async function createFutureTestClassAdmin(
   opts: { title: string; hoursFromNow: number; bookingDeadlineMin?: number | null; capacity?: number }
 ): Promise<{ id: string; startTime: string }> {
   const admin = getFixtureAdminClient();
+  await deleteExistingClassesByTitle(centerId, opts.title);
   const start = new Date(Date.now() + opts.hoursFromNow * 3600 * 1000);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
   const { data, error } = await admin
@@ -82,13 +97,15 @@ export async function createKstSameDayFutureClassAdmin(
   opts?: { capacity?: number; title?: string; preferredMinutesFromNow?: number }
 ): Promise<{ id: string; startTime: string }> {
   const admin = getFixtureAdminClient();
+  const title = opts?.title ?? "E2E 당일 테스트 수업";
+  await deleteExistingClassesByTitle(centerId, title);
   const start = kstSafeSameDayFutureTime(opts?.preferredMinutesFromNow ?? 180);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
   const { data, error } = await admin
     .from("classes")
     .insert({
       center_id: centerId,
-      title: opts?.title ?? "E2E 당일 테스트 수업",
+      title,
       start_time: start.toISOString(),
       end_time: end.toISOString(),
       capacity: opts?.capacity ?? 8,
