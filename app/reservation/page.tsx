@@ -29,6 +29,7 @@ import {
   type CenterHoliday,
   type BookingProfile,
 } from "../../lib/reservations";
+import { toKstIso } from "../../lib/kst";
 
 
 // 공휴일 (나중에 공휴일 API 또는 테이블로 교체 가능)
@@ -589,6 +590,9 @@ function ReservationCalendarContent() {
             const mineRec = activeProfileId ? cls.myByProfile[activeProfileId] : undefined;
             const mine = !!mineRec;
             const busy = busyClassId === cls.id;
+            // Track 2: 수업이 이미 시작됐으면 새 예약 버튼 자체를 숨긴다(서버 reserve_class()도
+            // 별도로 차단 — UI는 보조 수단일 뿐 서버가 최종 방어선).
+            const hasStarted = new Date(toKstIso(cls.date, cls.start)).getTime() <= Date.now();
             const passNames = usableProductNames(cls.id);
             return (
               <div key={cls.id} className={`class-row ${mine ? "mine" : ""}`}>
@@ -632,6 +636,8 @@ function ReservationCalendarContent() {
                     <button className="mini-btn done" disabled={busy} onClick={() => handleCancel(cls)}>
                       {busy ? "..." : "취소"}
                     </button>
+                  ) : hasStarted ? (
+                    <div className="mini-btn-note">수업이 시작되었습니다.</div>
                   ) : (
                     <button
                       className={`mini-btn ${full ? "wait" : ""}`}
