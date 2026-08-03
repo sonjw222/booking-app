@@ -4,7 +4,19 @@
   Supabase 접속 필요 없음 — 브라우저 렌더링 없이 12h↔24h 변환 규칙만 검증한다.
 */
 import { describe, expect, it } from "vitest";
-import { parse24h, to24h } from "../../app/components/AmPmTimeInput";
+import { parse24h, to24h, MINUTES } from "../../app/components/AmPmTimeInput";
+
+describe("MINUTES 선택지(Track 3: 5분 단위만 표시)", () => {
+  it("정확히 00,05,10,...,55 12개만 있다", () => {
+    expect(MINUTES).toEqual([0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]);
+  });
+  it("모든 값이 5의 배수다", () => {
+    expect(MINUTES.every((m) => m % 5 === 0)).toBe(true);
+  });
+  it("기본값 0(00분)이 목록의 첫 번째다", () => {
+    expect(MINUTES[0]).toBe(0);
+  });
+});
 
 describe("parse24h", () => {
   it("오전 시간을 정확히 파싱한다", () => {

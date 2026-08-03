@@ -11,7 +11,8 @@
 */
 
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 1); // 1~12
-const MINUTES = Array.from({ length: 60 }, (_, i) => i);   // 0~59
+// 분 선택지는 00,05,10,...,55 12개만 표시(Track 3) — export해 단위 테스트로 검증한다.
+export const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
 
 export function parse24h(value: string): { period: "AM" | "PM"; hour12: number; minute: number } {
   const m = /^(\d{1,2}):(\d{1,2})$/.exec(value ?? "");
