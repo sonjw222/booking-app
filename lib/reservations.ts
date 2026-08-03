@@ -5,6 +5,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { getKstMonthUtcRange } from "./kst";
 
 // ---------------- 타입 ----------------
 
@@ -64,8 +65,18 @@ export async function getMyAccountId(): Promise<string> {
 // 반환: 이번 달의 수업 + 센터 + 휴무일 + 내 예약 정보
 // accountId를 미리 조회해서 넘기면 내부에서 다시 조회하지 않음 (중복 쿼리 방지)
 export async function fetchMonthData(year: number, month: number, accountId?: string) {
-  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
-  const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+  // ⚠️ classes.start_time은 timestamptz라 타임존 표기 없는 날짜 문자열("2026-10-01")로
+  // .gte()/.lt() 비교하면 DB 세션 타임존(UTC) 기준으로 해석돼, 회원이 보는 KST 기준 "그 달"과
+  // 최대 9시간 어긋난다(달 1일 KST 00:00~08:59 수업 누락 등) — getKstMonthUtcRange()로
+  // KST 월 경계를 명시적 UTC ISO로 변환해 사용한다.
+  const { startUtcIso, endUtcIso } = getKstMonthUtcRange(year, month);
+  // memberships.expires_at / center_holidays.holiday_date는 둘 다 date 컬럼(시간대 없음)이라
+  // timestamptz 변환과 무관한 순수 날짜 문자열이 별도로 필요하다 — KST/UTC 오프셋 문제 자체가
+  // 없는 컬럼이므로 굳이 UTC로 변환하지 않는다.
+  const monthStartDateOnly = `${year}-${String(month).padStart(2, "0")}-01`;
+  const nextMonthDateOnly = month === 12
+    ? `${year + 1}-01-01`
+    : `${year}-${String(month + 1).padStart(2, "0")}-01`;
 
   const accId = accountId ?? (await getMyAccountId());
   const account = { id: accId };
@@ -85,7 +96,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   for (const m of myMems ?? []) {
     const active = (m as any).status === "active"
       && ((m as any).remaining_count == null || (m as any).remaining_count > 0)
-      && ((m as any).expires_at == null || (m as any).expires_at >= monthStart.slice(0, 10) || new Date((m as any).expires_at) >= new Date());
+      && ((m as any).expires_at == null || (m as any).expires_at >= monthStartDateOnly || new Date((m as any).expires_at) >= new Date());
     if (active) myMembershipCenters.add((m as any).center_id);
   }
 
@@ -93,8 +104,8 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   const { data: classRows, error: clsErr } = await supabase
     .from("classes")
     .select("id, center_id, title, start_time, end_time, capacity, allow_goods, class_format, centers(id, name, categories)")
-    .gte("start_time", monthStart)
-    .lt("start_time", nextMonth)
+    .gte("start_time", startUtcIso)
+    .lt("start_time", endUtcIso)
     .order("start_time");
   if (clsErr) throw new Error("수업 목록을 불러오지 못했어요: " + clsErr.message);
 
@@ -170,8 +181,8 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   const { data: holRows } = await supabase
     .from("center_holidays")
     .select("center_id, holiday_date, reason")
-    .gte("holiday_date", monthStart)
-    .lt("holiday_date", nextMonth);
+    .gte("holiday_date", monthStartDateOnly)
+    .lt("holiday_date", nextMonthDateOnly);
   const holidays: CenterHoliday[] = (holRows ?? []).map((h) => ({
     centerId: h.center_id,
     date: h.holiday_date,

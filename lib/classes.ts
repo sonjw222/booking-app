@@ -6,6 +6,7 @@
 
 import { supabase } from "./supabaseClient";
 import type { ReservationType } from "./reservationTypes";
+import { toKstIso } from "./kst";
 
 export type ManagedClass = {
   id: string;
@@ -26,11 +27,6 @@ export type ManagedClass = {
 
 const KST_DATE = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
 const KST_TIME = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
-
-// "2026-07-14" + "07:10" → ISO with +09:00 offset
-function toKstIso(date: string, time: string) {
-  return `${date}T${time}:00+09:00`;
-}
 
 export async function fetchClasses(centerId: string, fromDate: string, toDate: string): Promise<ManagedClass[]> {
   const { data: rows, error } = await supabase
