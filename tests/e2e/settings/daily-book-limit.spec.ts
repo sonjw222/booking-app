@@ -5,6 +5,7 @@ import {
   createTestMembershipAdmin,
   createKstSameDayFutureClassAdmin,
   cleanupTestClassAdmin,
+  cleanupTodaysReservationsForProfile,
   fetchSettingsAdmin,
   saveSettingsAdmin,
   kstDateStr,
@@ -47,6 +48,10 @@ test.beforeAll(async () => {
     dailyBookLimitEnabled: false, // 시작값 OFF — 사용자가 요청한 순서(OFF부터) 그대로
   });
   await createTestMembershipAdmin(centerAId, userA.profileId, { remainingCount: 10 });
+  // 이 센터를 공유하는 다른(과거) 테스트 실행이 남긴 leftover 확정 예약이 있으면 "오늘"
+  // 카운트가 이미 오염된 채로 시작한다(실측 확인: 새 예약 0건인데도 첫 시도부터 한도
+  // 초과) — 검증 전에 이 프로필의 오늘 예약을 전부 지워 항상 0에서 시작하게 한다.
+  await cleanupTodaysReservationsForProfile(centerAId, userA.profileId);
 });
 
 test.afterAll(async () => {

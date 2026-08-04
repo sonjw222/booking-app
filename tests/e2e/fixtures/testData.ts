@@ -122,6 +122,36 @@ export async function cleanupTestClassAdmin(classId: string): Promise<void> {
   await admin.from("classes").delete().eq("id", classId);
 }
 
+// 일일 예약 횟수 제한처럼 "오늘(KST) 확정+대기 예약 수"를 직접 세는 검증은, 이 센터를
+// 공유하는 다른(과거) 테스트 실행이 남긴 leftover 확정 예약까지 함께 세어버리면 기준선이
+// 이미 오염된 채로 시작한다(실제로 CI에서 재현: 새로 만든 예약 0건인데도 첫 시도부터
+// "하루 예약 가능 횟수(2회)를 초과했어요"). 검증 직전에 이 프로필의 "오늘" 예약을 전부
+// 지워 항상 0에서 시작하도록 보장한다.
+export async function cleanupTodaysReservationsForProfile(centerId: string, profileId: string): Promise<void> {
+  const admin = getFixtureAdminClient();
+  const todayKst = kstDateStr(new Date().toISOString());
+  const dayStartUtc = new Date(`${todayKst}T00:00:00+09:00`).toISOString();
+  const dayEndUtc = new Date(`${todayKst}T23:59:59.999+09:00`).toISOString();
+
+  const { data: classRows, error: clsErr } = await admin
+    .from("classes")
+    .select("id")
+    .eq("center_id", centerId)
+    .gte("start_time", dayStartUtc)
+    .lte("start_time", dayEndUtc);
+  if (clsErr) throw new Error(`오늘 수업 조회 실패: ${clsErr.message}`);
+  const classIds = (classRows ?? []).map((c: any) => c.id as string);
+  if (classIds.length === 0) return;
+
+  const { error: delErr } = await admin
+    .from("reservations")
+    .delete()
+    .eq("profile_id", profileId)
+    .in("class_id", classIds)
+    .in("status", ["confirmed", "waitlisted"]);
+  if (delErr) throw new Error(`오늘 예약 정리 실패: ${delErr.message}`);
+}
+
 // ---------------- 수강권(admin) ----------------
 // memberships.product_id는 nullable이지만, usable_memberships_for_classes()/
 // usable_memberships()는 products를 INNER JOIN한다(fix_usable_memberships_product_kind.sql) —
