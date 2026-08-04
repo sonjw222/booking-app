@@ -59,9 +59,18 @@ export async function gotoManagerSettings(page: Page): Promise<void> {
 
 // 저장 버튼 상태 전이(저장 중 → 저장됨)로 저장 성공을 확인한다 — toast의 2.5초
 // 자동소멸을 기다리지 않아도 된다(dirty가 false가 될 때까지 자동 재시도로 대기).
+//
+// ⚠ 직전에 fill()로 넣은 값이 화면에 이미 표시돼 있던 값과 문자열까지 완전히 같으면
+// (예: 같은 분까지 계산된 kstTimeHHmm()을 연속 호출), React의 컨트롤드 인풋 값 추적기가
+// "실제 변경 없음"으로 보고 onChange를 아예 안 띄워 dirty가 true로 안 바뀌는 경우가
+// 있다(실제 CI에서 재현됨 — 저장 버튼이 disabled "저장됨" 상태로 그대로 남아 클릭이
+// 계속 막힘). 이 경우는 애초에 저장할 변경사항이 없다는 뜻이므로 정상 성공으로 본다.
 export async function saveManagerSettings(page: Page): Promise<void> {
-  await page.locator("button.header-action").click();
-  await expect(page.locator("button.header-action")).toHaveText("저장됨");
+  const btn = page.locator("button.header-action");
+  const alreadySaved = (await btn.textContent())?.trim() === "저장됨" && (await btn.isDisabled());
+  if (alreadySaved) return;
+  await btn.click();
+  await expect(btn).toHaveText("저장됨");
 }
 
 // "그룹 수업 예약"/"그룹 수업 취소"/"그룹 수업"(오픈 시점)처럼 "N일 전 HH:MM" 쌍으로 된

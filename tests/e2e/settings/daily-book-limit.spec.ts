@@ -8,11 +8,12 @@ import {
   fetchSettingsAdmin,
   saveSettingsAdmin,
   reservationDeepLink,
+  kstDateStr,
   type TestUser,
 } from "../fixtures/testData";
 import type { CenterSettings } from "../../../lib/settings";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
-import { gotoManagerSettings, saveManagerSettings, setSettingNumber, toggleSettingSwitch, waitForToastText } from "../fixtures/pageHelpers";
+import { gotoManagerSettings, saveManagerSettings, selectKstCalendarDay, setSettingNumber, toggleSettingSwitch, waitForToastText } from "../fixtures/pageHelpers";
 
 /*
   운영설정 "일일 예약 가능 횟수"를 실제 관리자 화면에서 켜고 끄면서 검증한다 — 사용자가
@@ -78,13 +79,18 @@ test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회
   }
 
   // OFF 단계 예약은 ON 단계의 "2회 제한" 카운트에 섞이지 않도록 전부 취소해둔다.
+  // ⚠ deepLink(reservationDeepLink)로 다시 이동하면 handleReserve()가 기존 예약 여부를
+  // 확인하지 않고 예약 확인 모달을 다시 자동으로 여는데, 그 모달의 sheet-overlay가
+  // .class-row의 "취소" 버튼을 덮어버려 클릭이 막힌다 — 그래서 여기서는 deepLink 대신
+  // 일반 캘린더 탐색으로 이동한다(cancel-deadline.spec.ts와 동일한 방식).
   for (let i = 0; i < offClasses.length; i++) {
     const cls = offClasses[i];
-    await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
+    await memberPage.goto("/reservation");
+    await selectKstCalendarDay(memberPage, kstDateStr(cls.startTime));
     memberPage.once("dialog", (d) => d.accept());
     await memberPage.locator(".class-row", { hasText: offTitles[i] }).getByRole("button", { name: "취소" }).click();
     await expect(
-      memberPage.locator(".class-row", { hasText: offTitles[i] }).getByRole("button", { name: "예약하기" })
+      memberPage.locator(".class-row", { hasText: offTitles[i] }).getByRole("button", { name: "예약" })
     ).toBeVisible();
   }
 
