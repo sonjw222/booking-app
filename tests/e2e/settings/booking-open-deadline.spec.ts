@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../fixtures/managerAuth";
 import {
   loadTestAccountMeta,
   getOrCreateOwnedTestCenter,
@@ -11,7 +11,7 @@ import {
   type TestUser,
 } from "../fixtures/testData";
 import type { CenterSettings } from "../../../lib/settings";
-import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 import { gotoManagerSettings, saveManagerSettings, selectKstCalendarDay, setDaysBeforeTime, waitForToastText } from "../fixtures/pageHelpers";
 
 /*
@@ -36,7 +36,7 @@ let centerAId: string;
 let originalSettings: CenterSettings;
 const createdClassIds: string[] = [];
 
-test.beforeAll(async ({ browser }) => {
+test.beforeAll(async ({ managerPage }) => {
   managerA = loadTestAccountMeta("manager-a");
   userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
@@ -52,12 +52,10 @@ test.beforeAll(async ({ browser }) => {
   await createTestMembershipAdmin(centerAId, userA.profileId, { remainingCount: 10 });
 
   // 관리자 화면에서 실제로 "예약 가능 기한(오픈 시점) - 그룹 수업" = 7일 전 00:00으로 저장
-  const mgrContext = await browser.newContext({ storageState: MANAGER_AUTH_FILE });
-  const mgrPage = await mgrContext.newPage();
-  await gotoManagerSettings(mgrPage);
-  await setDaysBeforeTime(mgrPage, "그룹 수업", 7, "00:00");
-  await saveManagerSettings(mgrPage);
-  await mgrContext.close();
+  // (managerPage는 워커 스코프 fixture — 이 워커 전체에서 단 하나뿐인 관리자 context를 재사용)
+  await gotoManagerSettings(managerPage);
+  await setDaysBeforeTime(managerPage, "그룹 수업", 7, "00:00");
+  await saveManagerSettings(managerPage);
 
   const saved = await fetchSettingsAdmin(centerAId);
   expect(saved.groupOpenDaysBefore).toBe(7);

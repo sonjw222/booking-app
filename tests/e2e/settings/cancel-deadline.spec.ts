@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../fixtures/managerAuth";
 import {
   loadTestAccountMeta,
   getOrCreateOwnedTestCenter,
@@ -13,7 +13,7 @@ import {
   type TestUser,
 } from "../fixtures/testData";
 import type { CenterSettings } from "../../../lib/settings";
-import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 import { gotoManagerSettings, saveManagerSettings, selectKstCalendarDay, setDaysBeforeTime, waitForToastText } from "../fixtures/pageHelpers";
 
 /*
@@ -34,8 +34,6 @@ import { gotoManagerSettings, saveManagerSettings, selectKstCalendarDay, setDays
   코드는 이번에 고치지 않음). 그래서 deepLink로 직접 그 수업을 열어 화면 기본 선택에
   기대지 않는다.
 */
-
-test.use({ storageState: MANAGER_AUTH_FILE });
 
 let managerA: TestUser;
 let userA: TestUser;
@@ -67,7 +65,7 @@ test.afterAll(async () => {
   await saveSettingsAdmin(centerAId, originalSettings);
 });
 
-test("취소기한 2시간 — 3시간 뒤 수업은 1시간 전이라 취소 성공 (실브라우저 end-to-end)", async ({ page, browser }) => {
+test("취소기한 2시간 — 3시간 뒤 수업은 1시간 전이라 취소 성공 (실브라우저 end-to-end)", async ({ managerPage: page, browser }) => {
   // 관리자 화면에서 실제로 "그룹 수업 취소" = 0일 전, 지금부터 2시간 뒤 시각으로 저장
   await gotoManagerSettings(page);
   await setDaysBeforeTime(page, "그룹 수업 취소", 0, kstTimeHHmm(120));
@@ -95,7 +93,7 @@ test("취소기한 2시간 — 3시간 뒤 수업은 1시간 전이라 취소 �
   await memberContext.close();
 });
 
-test("취소기한 2시간 — 1시간 뒤 수업은 이미 지나서 취소 실패 (실브라우저 end-to-end)", async ({ page, browser }) => {
+test("취소기한 2시간 — 1시간 뒤 수업은 이미 지나서 취소 실패 (실브라우저 end-to-end)", async ({ managerPage: page, browser }) => {
   await gotoManagerSettings(page);
   await setDaysBeforeTime(page, "그룹 수업 취소", 0, kstTimeHHmm(120));
   await saveManagerSettings(page);
