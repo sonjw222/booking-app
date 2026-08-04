@@ -1,4 +1,4 @@
-import { test, expect } from "../fixtures/managerAuth";
+import { test, expect } from "@playwright/test";
 import {
   loadTestAccountMeta,
   getOrCreateOwnedTestCenter,
@@ -12,7 +12,7 @@ import {
   type TestUser,
 } from "../fixtures/testData";
 import type { CenterSettings } from "../../../lib/settings";
-import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 import { gotoManagerSettings, saveManagerSettings, setDaysBeforeTime, waitForToastText } from "../fixtures/pageHelpers";
 
 /*
@@ -94,13 +94,15 @@ test("예약마감 2시간 전 — 1시간 뒤 수업은 예약 실패 (실브�
   expect(toastText).toContain("예약 마감시간이 지났어요");
 });
 
-test("운영설정 예약마감 30분(관리자 화면 저장) — 40분 전 성공, 20분 전 실패 (실브라우저 end-to-end)", async ({ page, managerPage }) => {
+test("운영설정 예약마감 30분(관리자 화면 저장) — 40분 전 성공, 20분 전 실패 (실브라우저 end-to-end)", async ({ page, browser }) => {
   // 개별 수업 override(위 두 테스트)와 별개로, 운영설정 자체(그룹 수업 예약 - N일 전
   // HH:MM)를 실제 관리자 화면에서 저장했을 때도 동일하게 동작하는지 확인한다.
-  // managerPage는 워커 스코프 fixture — 이 워커 전체에서 단 하나뿐인 관리자 context를 재사용.
-  await gotoManagerSettings(managerPage);
-  await setDaysBeforeTime(managerPage, "그룹 수업 예약", 0, kstTimeHHmm(30));
-  await saveManagerSettings(managerPage);
+  const mgrContext = await browser.newContext({ storageState: MANAGER_AUTH_FILE });
+  const mgrPage = await mgrContext.newPage();
+  await gotoManagerSettings(mgrPage);
+  await setDaysBeforeTime(mgrPage, "그룹 수업 예약", 0, kstTimeHHmm(30));
+  await saveManagerSettings(mgrPage);
+  await mgrContext.close();
   const saved = await fetchSettingsAdmin(centerAId);
   expect(saved.groupBookDaysBefore).toBe(0);
 

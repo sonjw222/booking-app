@@ -1,4 +1,4 @@
-import { test, expect } from "../fixtures/managerAuth";
+import { test, expect } from "@playwright/test";
 import {
   loadTestAccountMeta,
   getOrCreateOwnedTestCenter,
@@ -11,7 +11,7 @@ import {
   type TestUser,
 } from "../fixtures/testData";
 import type { CenterSettings } from "../../../lib/settings";
-import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 import { gotoManagerSettings, saveManagerSettings, toggleSettingSwitch, waitForToastText } from "../fixtures/pageHelpers";
 
 /*
@@ -33,6 +33,8 @@ import { gotoManagerSettings, saveManagerSettings, toggleSettingSwitch, waitForT
   무효화된다는 것이 실제 CI에서 확인됐다(tests/e2e/fixtures/testData.ts 파일 상단 설명
   참고). "당일 예약 허용" 토글/저장 자체는 반드시 브라우저로 수행한다.
 */
+
+test.use({ storageState: MANAGER_AUTH_FILE });
 
 let managerA: TestUser;
 let userA: TestUser;
@@ -61,7 +63,7 @@ test.afterAll(async () => {
   await saveSettingsAdmin(centerAId, originalSettings);
 });
 
-test("당일예약 ON→예약성공→취소→OFF저장→새로고침→다시예약→예약실패 (실브라우저 end-to-end)", async ({ managerPage: page, browser }) => {
+test("당일예약 ON→예약성공→취소→OFF저장→새로고침→다시예약→예약실패 (실브라우저 end-to-end)", async ({ page, browser }) => {
   // ① ON 상태에서 당일 수업 생성
   const cls = await createKstSameDayFutureClassAdmin(centerAId, { title: "E2E 당일예약토글" });
   createdClassIds.push(cls.id);

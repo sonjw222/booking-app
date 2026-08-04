@@ -61,7 +61,14 @@ export async function switchToTestUser(emailEnvName: string, passwordEnvName: st
     const email = requireEnv(emailEnvName);
     const password = requireEnv(passwordEnvName);
 
-    await supabase.auth.signOut();
+    // ⚠ scope: 'local' 필수 — 기본값(scope 생략 시 'global')은 이 계정의 세션을
+    // "모든 곳에서" 강제 로그아웃시킨다. 이 Node 클라이언트 하나만 정리하면 되는데,
+    // global로 호출하면 서버가 그 계정의 auth.sessions 행을 전부 지워버려 예를 들어
+    // (E2E auth.setup.ts처럼) 이 함수를 계정 A → B 순서로 두 번 호출할 때, B 차례의
+    // signOut(global)이 "이미 실제 브라우저로 로그인해 storageState까지 저장해둔 A의
+    // 세션"까지 서버에서 무효화해버린다 — 실제로 이렇게 재현됨(Playwright에서
+    // 403 session_not_found, tests/e2e/auth.setup.ts 파일 상단 히스토리 참고).
+    await supabase.auth.signOut({ scope: "local" });
 
     const signIn = await supabase.auth.signInWithPassword({ email, password });
     let userId: string;
@@ -123,7 +130,8 @@ export async function switchToTestUser(emailEnvName: string, passwordEnvName: st
 // signIn과 겹치지 않도록 같은 잠금을 통해 실행한다(위 withAuthLock 설명 참고).
 export async function signOutTestSession(): Promise<void> {
   await withAuthLock(async () => {
-    await supabase.auth.signOut();
+    // scope: 'local' 필수 — 이유는 switchToTestUser() 위쪽 주석 참고.
+    await supabase.auth.signOut({ scope: "local" });
   });
 }
 

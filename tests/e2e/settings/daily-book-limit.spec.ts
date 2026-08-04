@@ -1,4 +1,4 @@
-import { test, expect } from "../fixtures/managerAuth";
+import { test, expect } from "@playwright/test";
 import {
   loadTestAccountMeta,
   getOrCreateOwnedTestCenter,
@@ -11,7 +11,7 @@ import {
   type TestUser,
 } from "../fixtures/testData";
 import type { CenterSettings } from "../../../lib/settings";
-import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 import { gotoManagerSettings, saveManagerSettings, setSettingNumber, toggleSettingSwitch, waitForToastText } from "../fixtures/pageHelpers";
 
 /*
@@ -24,6 +24,8 @@ import { gotoManagerSettings, saveManagerSettings, setSettingNumber, toggleSetti
   에서 발견됐던 "이전 describe 잔여 예약이 이월되는" 문제 없음), OFF 단계에서 만든
   예약들이 ON 단계 카운트에 섞이지 않도록 OFF 단계 예약은 검증 직후 전부 취소한다.
 */
+
+test.use({ storageState: MANAGER_AUTH_FILE });
 
 let managerA: TestUser;
 let userA: TestUser;
@@ -52,7 +54,7 @@ test.afterAll(async () => {
   await saveSettingsAdmin(centerAId, originalSettings);
 });
 
-test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회 실패 (실브라우저 end-to-end)", async ({ managerPage: page, browser }) => {
+test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회 실패 (실브라우저 end-to-end)", async ({ page, browser }) => {
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
 
