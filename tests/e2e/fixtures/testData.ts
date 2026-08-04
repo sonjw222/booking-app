@@ -123,6 +123,44 @@ export async function cleanupTestClassAdmin(classId: string): Promise<void> {
 }
 
 // ---------------- 수강권(admin) ----------------
+// memberships.product_id는 nullable이지만, usable_memberships_for_classes()/
+// usable_memberships()는 products를 INNER JOIN한다(fix_usable_memberships_product_kind.sql) —
+// product_id가 null이면 이 두 RPC의 결과에서 그 수강권이 통째로 빠져, 회원 화면의 "사용할
+// 수강권" 목록(passList)이 항상 비어 보인다. 그 상태에서 doReserve()는 passPick이 없으면
+// reserveWithMembership()이 아니라 reserveClass()(자동 수강권 선택)로 폴백하므로, 실제
+// 회원이 겪는 "수강권을 직접 골라 예약하는" 경로(reserveWithMembership)를 전혀 검증하지
+// 못하게 된다 — 실측 CI에서 이 상태로 재현됨. 그래서 테스트 수강권에는 반드시 실제
+// product_kind='pass' 상품을 만들어 연결한다.
+export async function getOrCreateTestPassProduct(centerId: string): Promise<{ id: string }> {
+  const admin = getFixtureAdminClient();
+  const name = "E2E 테스트 수강권 상품";
+  const { data: existing, error: findErr } = await admin
+    .from("products")
+    .select("id")
+    .eq("center_id", centerId)
+    .eq("name", name)
+    .eq("product_kind", "pass")
+    .maybeSingle();
+  if (findErr) throw new Error(`E2E 테스트 상품 조회 실패: ${findErr.message}`);
+  if (existing) return { id: existing.id };
+
+  const { data, error } = await admin
+    .from("products")
+    .insert({
+      center_id: centerId,
+      name,
+      product_kind: "pass",
+      pass_type: "count",
+      total_count: 999,
+      is_on_sale: true,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(`E2E 테스트 상품 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id };
+}
+
 export async function createTestMembershipAdmin(
   centerId: string,
   profileId: string,
@@ -130,11 +168,13 @@ export async function createTestMembershipAdmin(
 ): Promise<{ id: string }> {
   const admin = getFixtureAdminClient();
   const remaining = opts?.remainingCount ?? 5;
+  const product = await getOrCreateTestPassProduct(centerId);
   const { data, error } = await admin
     .from("memberships")
     .insert({
       profile_id: profileId,
       center_id: centerId,
+      product_id: product.id,
       product_name: "E2E 테스트 수강권",
       pass_type: "count",
       total_count: remaining,
