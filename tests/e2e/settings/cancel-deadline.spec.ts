@@ -96,8 +96,13 @@ test("취소기한 2시간 — 3시간 뒤 수업은 1시간 전이라 취소 �
 });
 
 test("취소기한 2시간 — 1시간 뒤 수업은 이미 지나서 취소 실패 (실브라우저 end-to-end)", async ({ page, browser }) => {
+  // ⚠ groupCancelDaysBefore=0일 때 마감은 "그 날짜 안에서 고정된 절대 시각"이지 각
+  // 수업 시작시각 기준 상대값이 아니다(calc_deadline() — v_deadline_date = 수업의
+  // KST 날짜 - days). 그래서 "이미 지남"을 표현하려면 지금보다 과거 시각을 써야 한다
+  // (위 성공 테스트처럼 미래 시각을 쓰면 수업이 몇 시간 뒤든 항상 마감 전이라 성공한다 —
+  // 실제로 이 버그로 테스트가 실패하는 게 CI에서 확인됨).
   await gotoManagerSettings(page);
-  await setDaysBeforeTime(page, "그룹 수업 취소", 0, kstTimeHHmm(120));
+  await setDaysBeforeTime(page, "그룹 수업 취소", 0, kstTimeHHmm(-30));
   await saveManagerSettings(page);
 
   const cls = await createFutureTestClassAdmin(centerAId, { title: "E2E 취소기한-실패", hoursFromNow: 1 });
