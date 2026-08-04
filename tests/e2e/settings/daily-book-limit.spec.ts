@@ -7,7 +7,6 @@ import {
   cleanupTestClassAdmin,
   fetchSettingsAdmin,
   saveSettingsAdmin,
-  reservationDeepLink,
   kstDateStr,
   type TestUser,
 } from "../fixtures/testData";
@@ -68,9 +67,15 @@ test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회
   ]);
   createdClassIds.push(...offClasses.map((c) => c.id));
 
+  // ⚠ 같은 날짜의 여러 수업을 매번 새로 goto()/reservationDeepLink로 이동하면(이전 버전)
+  // 전체 페이지를 6번 이상 새로 불러오게 되는데, 실제 CI에서 이 중 한 번이 "불러오는
+  // 중..."에서 멈춘 채 끝내 완료되지 않는 경우가 실측 확인됐다. 같은 날짜 안에서는 한
+  // 번만 이동한 뒤 각 수업 행을 직접 클릭하는 방식으로 바꿔 전체 페이지 새로고침 횟수를
+  // 최소화한다(행 클릭 성공 후의 데이터 갱신은 load()의 클라이언트 쪽 재조회로 충분).
+  await memberPage.goto("/reservation");
+  await selectKstCalendarDay(memberPage, kstDateStr(offClasses[0].startTime));
   for (let i = 0; i < offClasses.length; i++) {
-    const cls = offClasses[i];
-    await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
+    await memberPage.locator(".class-row", { hasText: offTitles[i] }).getByRole("button", { name: "예약" }).click();
     await memberPage.getByRole("button", { name: "예약하기" }).click();
     await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
     await expect(
@@ -79,14 +84,8 @@ test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회
   }
 
   // OFF 단계 예약은 ON 단계의 "2회 제한" 카운트에 섞이지 않도록 전부 취소해둔다.
-  // ⚠ deepLink(reservationDeepLink)로 다시 이동하면 handleReserve()가 기존 예약 여부를
-  // 확인하지 않고 예약 확인 모달을 다시 자동으로 여는데, 그 모달의 sheet-overlay가
-  // .class-row의 "취소" 버튼을 덮어버려 클릭이 막힌다 — 그래서 여기서는 deepLink 대신
-  // 일반 캘린더 탐색으로 이동한다(cancel-deadline.spec.ts와 동일한 방식).
+  // 위와 같은 이유로 이미 로드된 페이지를 그대로 재사용한다(새로 goto하지 않음).
   for (let i = 0; i < offClasses.length; i++) {
-    const cls = offClasses[i];
-    await memberPage.goto("/reservation");
-    await selectKstCalendarDay(memberPage, kstDateStr(cls.startTime));
     memberPage.once("dialog", (d) => d.accept());
     await memberPage.locator(".class-row", { hasText: offTitles[i] }).getByRole("button", { name: "취소" }).click();
     await expect(
@@ -111,21 +110,25 @@ test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회
   ]);
   createdClassIds.push(...limitClasses.map((c) => c.id));
 
-  await memberPage.goto(reservationDeepLink(limitClasses[0].id, limitClasses[0].startTime));
+  // 위 OFF 단계와 같은 이유로, 같은 날짜 안에서는 한 번만 이동한 뒤 행을 직접 클릭한다.
+  await memberPage.goto("/reservation");
+  await selectKstCalendarDay(memberPage, kstDateStr(limitClasses[0].startTime));
+
+  await memberPage.locator(".class-row", { hasText: "E2E 일일한도 1" }).getByRole("button", { name: "예약" }).click();
   await memberPage.getByRole("button", { name: "예약하기" }).click();
   await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
   await expect(
     memberPage.locator(".class-row", { hasText: "E2E 일일한도 1" }).getByRole("button", { name: "취소" })
   ).toBeVisible();
 
-  await memberPage.goto(reservationDeepLink(limitClasses[1].id, limitClasses[1].startTime));
+  await memberPage.locator(".class-row", { hasText: "E2E 일일한도 2" }).getByRole("button", { name: "예약" }).click();
   await memberPage.getByRole("button", { name: "예약하기" }).click();
   await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
   await expect(
     memberPage.locator(".class-row", { hasText: "E2E 일일한도 2" }).getByRole("button", { name: "취소" })
   ).toBeVisible();
 
-  await memberPage.goto(reservationDeepLink(limitClasses[2].id, limitClasses[2].startTime));
+  await memberPage.locator(".class-row", { hasText: "E2E 일일한도 3" }).getByRole("button", { name: "예약" }).click();
   await memberPage.getByRole("button", { name: "예약하기" }).click();
   await expect(memberPage.locator(".sheet-overlay")).toBeVisible();
   const limitToastText = await waitForToastText(memberPage);
