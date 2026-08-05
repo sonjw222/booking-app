@@ -218,6 +218,67 @@ export async function createTestMembershipAdmin(
   return { id: data.id };
 }
 
+// P0-3: "모든 수강권 사용 가능" 수업에서 goods(대여품 등, 예약용이 아님) 상품이 "사용할
+// 수강권" 목록에 섞여 보이는지 검증하려면, 회원이 pass와 goods 두 종류를 동시에 보유한
+// 상태를 실제로 만들어야 한다. product_kind='goods'인 상품+수강권을 get-or-create한다
+// (createTestMembershipAdmin과 동일 패턴, pass 대신 goods).
+export async function getOrCreateTestGoodsProduct(centerId: string): Promise<{ id: string }> {
+  const admin = getFixtureAdminClient();
+  const name = "E2E 테스트 대여품 상품";
+  const { data: existing, error: findErr } = await admin
+    .from("products")
+    .select("id")
+    .eq("center_id", centerId)
+    .eq("name", name)
+    .eq("product_kind", "goods")
+    .maybeSingle();
+  if (findErr) throw new Error(`E2E 테스트 goods 상품 조회 실패: ${findErr.message}`);
+  if (existing) return { id: existing.id };
+
+  const { data, error } = await admin
+    .from("products")
+    .insert({
+      center_id: centerId,
+      name,
+      product_kind: "goods",
+      pass_type: "count",
+      total_count: 999,
+      is_on_sale: true,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(`E2E 테스트 goods 상품 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id };
+}
+
+export async function createTestGoodsMembershipAdmin(
+  centerId: string,
+  profileId: string,
+  opts?: { remainingCount?: number }
+): Promise<{ id: string }> {
+  const admin = getFixtureAdminClient();
+  const remaining = opts?.remainingCount ?? 5;
+  const product = await getOrCreateTestGoodsProduct(centerId);
+  const { data, error } = await admin
+    .from("memberships")
+    .insert({
+      profile_id: profileId,
+      center_id: centerId,
+      product_id: product.id,
+      product_name: "E2E 테스트 대여품",
+      pass_type: "count",
+      total_count: remaining,
+      remaining_count: remaining,
+      expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+      status: "active",
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(`E2E 테스트 goods 수강권 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id };
+}
+
 // ---------------- 운영설정(admin) ----------------
 // rowToSettings/settingsToRow는 lib/settings.ts가 이미 쓰던 컬럼 매핑을 그대로 재사용한다
 // (매핑 중복 방지) — fetchSettings/saveSettings 자체(RLS 경유)만 admin으로 바꾼 것.
