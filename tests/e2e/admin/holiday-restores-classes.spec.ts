@@ -9,7 +9,7 @@ import {
   type TestUser,
 } from "../fixtures/testData";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
-import { selectKstCalendarDay, waitForToastText } from "../fixtures/pageHelpers";
+import { selectKstCalendarDay } from "../fixtures/pageHelpers";
 
 /*
   P0-1: 휴무일을 지정하면 add_holiday_safe()가 그날 수업들을 classes.status='cancelled'로
@@ -23,6 +23,17 @@ import { selectKstCalendarDay, waitForToastText } from "../fixtures/pageHelpers"
   이 흐름은 사용자가 요청한 그대로 검증한다:
     휴무일 생성 → 회원 화면 확인(예약 차단) → 휴무일 삭제 → 새로고침 →
     기존 수업 예약 가능 → 새 수업 예약 가능
+
+  ⚠️ ③단계 관련 — CI 1차 검증에서 코드 재확인 후 수정: 회원 화면은 fetchMonthData()
+  (lib/reservations.ts)에서 classes를 center_holidays와 대조해 "그 센터+그 날짜가 휴무일이면
+  아예 목록에서 제외"한다(.filter(c => !holidaySet.has(`${center_id}:${date}`)), classes.status
+  와는 무관한 별도 로직). 즉 휴무일이 "살아있는 동안"은 그 수업 자체가 회원 목록에 안 뜨므로
+  클릭해서 "폐강된 수업이에요" 토스트를 받는 상황 자체가 나올 수 없다(실제 CI 실행에서 확인:
+  .class-row가 없어 클릭 대기가 타임아웃). 사용자가 재현한 실제 버그는 "삭제 이후"에 발생한다 —
+  휴무일이 사라지면 holidaySet 필터는 더 이상 안 걸리지만, add_holiday_safe가 그때 같이 바꿔둔
+  classes.status='cancelled'는 (복구 로직이 없으면) 그대로 남아 예약 시도가 계속 막힌다. 그래서
+  ③단계는 "휴무일이 있는 동안은 목록에 아예 안 보인다"만 확인하고, 진짜 회귀 검증은 ⑥⑦단계
+  (삭제 후 실제로 다시 예약되는지)가 담당한다.
 */
 
 test.use({ storageState: MANAGER_AUTH_FILE });
@@ -80,13 +91,14 @@ test("휴무일 생성→회원화면 예약차단 확인→삭제→새로고�
   await page.getByRole("button", { name: "추가" }).click();
   await expect(holidayRow()).toBeVisible();
 
-  // ③ 회원 화면 확인 — 그 날짜 수업 예약 시도가 "폐강된 수업이에요"로 차단돼야 한다.
+  // ③ 회원 화면 확인 — 휴무일인 동안은 그 날짜 수업이 목록에서 아예 사라진다
+  // (fetchMonthData의 holidaySet 필터, classes.status와는 별개 로직).
   await memberPage.goto("/reservation");
   await selectKstCalendarDay(memberPage, holidayDate);
-  await memberPage.locator(".class-row", { hasText: "E2E 휴무일복구-기존" }).getByRole("button", { name: "예약" }).click();
-  await memberPage.getByRole("button", { name: "예약하기" }).click();
-  const blockedToast = await waitForToastText(memberPage);
-  expect(blockedToast).toContain("폐강된 수업이에요");
+  await expect(memberPage.locator(".holiday-notice")).toBeVisible();
+  await expect(
+    memberPage.locator(".class-row", { hasText: "E2E 휴무일복구-기존" })
+  ).toHaveCount(0);
 
   // ④ 관리자 화면에서 방금 만든 휴무일을 실제로 삭제
   await page.goto("/manager/holidays");
