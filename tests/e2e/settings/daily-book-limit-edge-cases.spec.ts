@@ -116,6 +116,11 @@ test("대기 등록도 하루 한도에 포함된다 (실브라우저)", async (
     groupBookTime: "23:59",
     dailyBookLimitEnabled: true,
     dailyBookLimit: 1,
+    // waitlist_weekly_limit=0이면 "이 센터는 대기예약을 사용하지 않아요"로 정원마감 시
+    // 그냥 실패한다(CI 1차 실행에서 실제로 이 에러를 받아 확인) — 대기 등록 자체가
+    // 되려면 0보다 커야 한다. 이 계정은 공유 테스트 계정이라 이번 주에 이미 쌓인
+    // waitlisted 건수가 있을 수 있으므로 넉넉히 크게 잡는다.
+    waitlistWeeklyLimit: 999,
   });
   await cleanupTodaysReservationsForProfile(centerAId, userA.profileId);
   await cleanupTodaysReservationsForProfile(centerAId, userB.profileId);
