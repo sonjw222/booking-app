@@ -8,6 +8,38 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-05 — Playwright 관리자 세션 session_not_found 근본 원인 수정 + 전체 파이프라인 2회 연속 Green (PR #39)
+
+- **session_not_found 정확한 원인**: `tests/integration/setup.ts`의 `switchToTestUser()`가
+  매번 `supabase.auth.signOut()`을 scope 없이(기본값 `'global'`) 호출했다
+  (`node_modules/@supabase/auth-js`에서 직접 확인: `signOut(options = {scope:'global'})`).
+  `tests/e2e/auth.setup.ts`가 매니저→회원 순서로 이 함수를 두 번 호출하는데, 회원 차례의
+  `signOut()`이 실행되는 시점에 Node의 공유 supabase 클라이언트는 아직 매니저 세션
+  상태였다 — global scope라 이 호출이 매니저 계정의 `auth.sessions`를 서버에서 전부
+  지워버려, 방금 브라우저로 로그인해 storageState까지 저장해둔 매니저 세션까지 함께
+  죽었다. `signOut({scope:'local'})`로 수정.
+  - "여러 BrowserContext가 storageState를 나눠 쓰는 것"(리프레시 토큰 회전 충돌) 가설은
+    실측(worker-scoped fixture로 context를 1개로 줄여도 동일하게 재현)으로 배제했다.
+- **함께 발견된, 훨씬 근본적인 문제**: E2E 테스트 수강권(`createTestMembershipAdmin`)이
+  `product_id`를 채우지 않아 `usable_memberships_for_classes()`(products를 INNER JOIN)가
+  그 수강권을 결과에서 통째로 제외했다 — 회원 화면의 "사용할 수강권" 목록이 항상 비어
+  `doReserve()`가 `reserveWithMembership()`이 아니라 `reserveClass()`로 계속 폴백했다.
+  즉 이번 세션 상당 부분의 "실제 회원 화면 검증"이 실제로는 `reserveClass()`만 반복
+  검증하고 있었다. `getOrCreateTestPassProduct()`로 실제 `product_kind='pass'` 상품을
+  만들어 연결하도록 수정 — 이제 `reserveWithMembership()`이 실제로 실행되며, 기존에
+  통과하던 테스트들도 이 변경 이후 전부 그대로 통과함을 확인(회귀 없음, 원래 수정이
+  올바르다는 증거).
+- **테스트 데이터 오염 2건 추가 발견/수정**: (1) 공유 테스트 센터에 여러 세션에 걸쳐
+  누적된 leftover 확정 예약이 일일예약 횟수 제한 검증의 기준선을 오염시켜
+  `cleanupTodaysReservationsForProfile()` 신규(검증 전 오늘자 예약 전부 정리). (2)
+  `reservation-cancel-grace-period.test.ts`(integration)가 "당일 수업 취소마감은 항상
+  어제"라는 가정으로 pre-existing 설정값에 암묵 의존하다, 그 값이 다른 테스트에 의해
+  0으로 바뀐 채 남아 실패 — 취소마감을 명시적 과거 절대시각으로 저장하도록 수정.
+- `products` 테이블 service_role GRANT 누락도 함께 발견/수정
+  (`fix_service_role_missing_grants_products.sql`, 사용자 적용 완료).
+- **결과**: E2E(13개 시나리오: 당일예약/일일한도/예약오픈/예약마감/취소기한/시작후차단),
+  Unit, Integration, Build 전체 파이프라인이 2회 연속 완전 Green.
+
 ## 2026-08-04 — reserve_with_membership() 운영설정 가드 누락 수정 + 관리자 UX 정리 (PR #39)
 
 - **핵심 버그(실제 브라우저 재현)**: "당일예약 OFF/예약 가능 기한 등을 저장해도 회원
