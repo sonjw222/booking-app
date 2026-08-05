@@ -43,6 +43,21 @@ async function backdateCreatedAt(reservationId: string, minutesAgo: number) {
   if (error) throw new Error(`created_at 백데이트 실패: ${error.message}`);
 }
 
+// group_cancel_days_before=0일 때 취소마감은 "오늘 날짜의 고정된 절대 시각"이라(calc_deadline()),
+// defaultSettings의 값이 우연히 0으로 남아있으면(다른 테스트/세션이 그 상태로 복원한 경우)
+// "당일 수업의 취소 마감은 항상 어제"라는 이 파일의 가정이 깨진다(실제로 CI에서 재현됨 —
+// "이미 지남"을 기대한 테스트가 통과해버림). 그래서 "이미 지남"이 필요한 테스트는 pre-existing
+// 기본값에 기대지 않고 명시적으로 과거 절대 시각을 저장한다.
+function kstTimeHHmm(offsetMinutesFromNow: number): string {
+  const t = new Date(Date.now() + offsetMinutesFromNow * 60_000);
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(t);
+  const hh = parts.find((p) => p.type === "hour")!.value;
+  const mm = parts.find((p) => p.type === "minute")!.value;
+  return `${hh === "24" ? "00" : hh}:${mm}`;
+}
+
 async function reserveAndGetId(classId: string): Promise<string> {
   const { data, error } = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: managerA.profileId });
   if (error) throw new Error(`예약 실패: ${error.message}`);
@@ -98,13 +113,15 @@ describe("RES-001: 예약 후 10분 이내 무료 취소 예외", () => {
   });
 
   it("10분을 초과하고 일반 취소마감도 지났으면 취소가 차단된다", async () => {
-    // group_cancel_days_before=1이 기본값이라, 지금부터 며칠 뒤인 수업이라도 "1일 전" 마감은
-    // 이미 지나있지 않다 — 일반 마감 자체를 확실히 지나게 하려면 당일(같은 KST 날짜) 수업으로
-    // 만든다(기본 설정에서 당일 수업의 취소 마감은 항상 "어제"라 이미 지난 상태가 된다).
-    // 예약 마감(group_book_days_before)도 기본값이면 당일 수업은 이미 지나 예약 자체가
-    // 막히므로, 예약은 통과시키되 취소 마감은 기본값(어제 22:00 — 이미 지남) 그대로 두도록
-    // book만 오버라이드한다.
-    await saveSettings(centerAId, { ...defaultSettings, groupBookDaysBefore: 0, groupBookTime: "23:59" });
+    // defaultSettings의 group_cancel_days_before가 우연히 0으로 남아있으면(다른 테스트/세션이
+    // 그 상태로 복원한 경우) "당일 수업의 취소 마감은 항상 어제"라는 가정이 깨진다 — pre-existing
+    // 값에 기대지 않고 취소 마감을 명시적으로 과거 절대 시각으로 저장한다(book은 예약 자체가
+    // 막히지 않도록 열어둠).
+    await saveSettings(centerAId, {
+      ...defaultSettings,
+      groupBookDaysBefore: 0, groupBookTime: "23:59",
+      groupCancelDaysBefore: 0, groupCancelTime: kstTimeHHmm(-30),
+    });
     const cls = await createFutureTestClass(centerAId, { title: "RES-001 10분초과", hoursFromNow: 2 });
     createdClassIds.push(cls.id);
     await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
@@ -165,9 +182,13 @@ describe("RES-001: 예약 후 10분 이내 무료 취소 예외", () => {
 
   it("10분도 일반 마감도 지났지만 deduct_on_late_cancel이 켜져 있으면 취소는 되고 환급만 안 된다", async () => {
     // book 오버라이드 + deductOnLateCancel을 예약 전에 함께 설정해야 한다(뒤에서 다시 저장하면
-    // book 오버라이드가 defaultSettings로 되돌아가 예약 자체가 막힘).
+    // book 오버라이드가 defaultSettings로 되돌아가 예약 자체가 막힘). 취소 마감도 pre-existing
+    // 값에 기대지 않고 명시적으로 과거로 저장한다(위 테스트와 같은 이유).
     await saveSettings(centerAId, {
-      ...defaultSettings, groupBookDaysBefore: 0, groupBookTime: "23:59", deductOnLateCancel: true,
+      ...defaultSettings,
+      groupBookDaysBefore: 0, groupBookTime: "23:59",
+      groupCancelDaysBefore: 0, groupCancelTime: kstTimeHHmm(-30),
+      deductOnLateCancel: true,
     });
     const cls = await createFutureTestClass(centerAId, { title: "RES-001 차감옵션충돌", hoursFromNow: 2 });
     createdClassIds.push(cls.id);
