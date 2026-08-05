@@ -48,12 +48,12 @@ async function deleteExistingClassesByTitle(centerId: string, title: string): Pr
 // 여기 저장해둔다 — 그 이후 이 값을 읽기만 할 뿐, 이 두 계정으로 다시 로그인하지 않는다.
 const META_DIR = path.resolve(process.cwd(), "playwright/.auth");
 
-export function saveTestAccountMeta(name: "manager-a" | "user-a", meta: TestUser): void {
+export function saveTestAccountMeta(name: "manager-a" | "user-a" | "user-b", meta: TestUser): void {
   fs.mkdirSync(META_DIR, { recursive: true });
   fs.writeFileSync(path.join(META_DIR, `${name}.json`), JSON.stringify(meta));
 }
 
-export function loadTestAccountMeta(name: "manager-a" | "user-a"): TestUser {
+export function loadTestAccountMeta(name: "manager-a" | "user-a" | "user-b"): TestUser {
   const raw = fs.readFileSync(path.join(META_DIR, `${name}.json`), "utf-8");
   return JSON.parse(raw) as TestUser;
 }

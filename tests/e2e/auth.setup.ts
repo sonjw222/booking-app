@@ -1,5 +1,5 @@
 import { test as setup, expect } from "@playwright/test";
-import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "./fixtures/authFiles";
+import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE, MEMBER_B_AUTH_FILE } from "./fixtures/authFiles";
 import { switchToTestUser, saveTestAccountMeta } from "./fixtures/testData";
 
 /*
@@ -47,4 +47,13 @@ setup("authenticate as member (TEST_USER_A)", async ({ page }) => {
   await loginAs(page, process.env.TEST_USER_A_EMAIL!, process.env.TEST_USER_A_PASSWORD!);
   await expect(page).toHaveURL("/");
   await page.context().storageState({ path: MEMBER_AUTH_FILE });
+});
+
+setup("authenticate as member (TEST_USER_B)", async ({ page }) => {
+  const userB = await switchToTestUser("TEST_USER_B_EMAIL", "TEST_USER_B_PASSWORD");
+  saveTestAccountMeta("user-b", userB);
+
+  await loginAs(page, process.env.TEST_USER_B_EMAIL!, process.env.TEST_USER_B_PASSWORD!);
+  await expect(page).toHaveURL("/");
+  await page.context().storageState({ path: MEMBER_B_AUTH_FILE });
 });
