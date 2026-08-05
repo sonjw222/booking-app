@@ -98,7 +98,7 @@ beforeEach(async () => {
 
 describe("프라이빗 수업 — 정원 마감 시 대기예약 없이 바로 거부", () => {
   it("reserve_with_membership: 이미 1명이 확정된 프라이빗 수업에 다른 회원이 예약하면 대기 없이 거부된다", async () => {
-    const cls = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 72, title: "P2 프라이빗 정원마감" });
+    const cls = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 72.3, title: "P2 프라이빗 정원마감" });
     const track = trackClass(cls.id);
     const memA = await createTestMembership(centerAId, memberA.profileId, { remainingCount: 5 });
     const memB = await createTestMembership(centerAId, memberB.profileId, { remainingCount: 5 });
@@ -124,7 +124,7 @@ describe("프라이빗 수업 — 정원 마감 시 대기예약 없이 바로 �
   });
 
   it("admin_assign_reservation: 정원 초과 강제 배치(force_capacity)가 프라이빗 수업에서는 거부된다", async () => {
-    const cls = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 73, title: "P2 프라이빗 강제배치거부" });
+    const cls = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 73.3, title: "P2 프라이빗 강제배치거부" });
     const track = trackClass(cls.id);
     const memA = await createTestMembership(centerAId, memberA.profileId, { remainingCount: 5 });
     const memB = await createTestMembership(centerAId, memberB.profileId, { remainingCount: 5 });
@@ -151,8 +151,8 @@ describe("프라이빗 수업 — 정원 마감 시 대기예약 없이 바로 �
 
 describe("프라이빗 수업 — 동시 진행 최대 개수(private_max_concurrent) 실제 적용", () => {
   it("설정 OFF면 겹치는 시간대 프라이빗 수업이 여러 개 있어도 모두 예약된다(대조군)", async () => {
-    const cls1 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 96, title: "P2 동시OFF-1" });
-    const cls2 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 96, title: "P2 동시OFF-2" });
+    const cls1 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 96.3, title: "P2 동시OFF-1" });
+    const cls2 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 96.3, title: "P2 동시OFF-2" });
     trackClass(cls1.id);
     trackClass(cls2.id);
     const memA = await createTestMembership(centerAId, memberA.profileId, { remainingCount: 5 });
@@ -168,8 +168,8 @@ describe("프라이빗 수업 — 동시 진행 최대 개수(private_max_concur
   });
 
   it("설정 ON(최대 1개)이면 같은 시간대 두 번째 프라이빗 수업 예약은 거부된다", async () => {
-    const cls1 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 120, title: "P2 동시ON-1" });
-    const cls2 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 120, title: "P2 동시ON-2" });
+    const cls1 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 120.3, title: "P2 동시ON-1" });
+    const cls2 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 120.3, title: "P2 동시ON-2" });
     trackClass(cls1.id);
     trackClass(cls2.id);
     const memA = await createTestMembership(centerAId, memberA.profileId, { remainingCount: 5 });
@@ -187,9 +187,9 @@ describe("프라이빗 수업 — 동시 진행 최대 개수(private_max_concur
   });
 
   it("설정 ON이어도 시간대가 겹치지 않으면(연속 시간) 막히지 않는다", async () => {
-    const cls1 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 144, durationMinutes: 60, title: "P2 동시비겹침-1" });
+    const cls1 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 144.3, durationMinutes: 60, title: "P2 동시비겹침-1" });
     // cls2를 cls1 종료 직후(연속, 겹치지 않음)로 만든다.
-    const cls2 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 145, durationMinutes: 60, title: "P2 동시비겹침-2" });
+    const cls2 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 145.3, durationMinutes: 60, title: "P2 동시비겹침-2" });
     trackClass(cls1.id);
     trackClass(cls2.id);
     const memA = await createTestMembership(centerAId, memberA.profileId, { remainingCount: 5 });
@@ -206,8 +206,8 @@ describe("프라이빗 수업 — 동시 진행 최대 개수(private_max_concur
   });
 
   it("admin_assign_reservation도 같은 동시진행 한도를 적용받는다", async () => {
-    const cls1 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 168, title: "P2 배치동시-1" });
-    const cls2 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 168, title: "P2 배치동시-2" });
+    const cls1 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 168.3, title: "P2 배치동시-1" });
+    const cls2 = await createFutureTestClass(centerAId, { classFormat: "private", hoursFromNow: 168.3, title: "P2 배치동시-2" });
     const track1 = trackClass(cls1.id);
     trackClass(cls2.id);
     const memA = await createTestMembership(centerAId, memberA.profileId, { remainingCount: 5 });

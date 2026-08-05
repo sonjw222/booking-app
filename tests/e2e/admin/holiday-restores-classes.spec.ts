@@ -84,11 +84,22 @@ test("휴무일 생성→회원화면 예약차단 확인→삭제→새로고�
   const memberPage = await memberContext.newPage();
 
   // ② 관리자 화면에서 실제로 그 날짜를 휴무일로 지정
+  // ⚠ 이 센터는 여러 스펙(E2E/통합 테스트)이 공유하는 테스트 센터라, 우연히 같은
+  // 날짜(예: hoursFromNow가 24의 배수로 겹침)에 다른 스펙이 예약 있는 수업을 만들어둔
+  // 상태일 수 있다(실제로 CI에서 재현: "수업 2개, 예약 1건" 확인창이 떠서 "추가"
+  // 클릭만으로는 안 끝나고 막힘). add_holiday_safe()가 의도한 정상 동작(예약자가
+  // 있으면 확인 필요)이므로, 그 확인창이 뜨면 "예약 취소하고 휴무일 지정"까지
+  // 마저 눌러 끝까지 진행한다 — 이 테스트의 관심사(휴무일 삭제 시 폐강 복구)와는
+  // 무관한 경합이라 강제 진행이 맞다.
   const holidayRow = () => page.locator(".hol-row", { hasText: fmtDate(holidayDate) });
   await page.goto("/manager/holidays");
   await waitHolidaysReady(page);
   await page.locator('input[type="date"]').fill(holidayDate);
   await page.getByRole("button", { name: "추가" }).click();
+  const forceConfirmBtn = page.getByRole("button", { name: "예약 취소하고 휴무일 지정" });
+  if (await forceConfirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await forceConfirmBtn.click();
+  }
   await expect(holidayRow()).toBeVisible();
 
   // ③ 회원 화면 확인 — 휴무일인 동안은 그 날짜 수업이 목록에서 아예 사라진다
