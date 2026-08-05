@@ -45,3 +45,10 @@ next-env.d.ts
 # generated artifacts (not source — regenerate locally, don't commit)
 /graphify-out/
 /Project_Manual.pdf
+
+# Playwright (E2E) — 로그인 상태 저장 파일 + 실행 결과물. 로그인 상태 파일은 실제 테스트
+# 계정 세션(토큰)을 담고 있어 절대 커밋하지 않는다.
+/playwright/.auth/
+/playwright-report/
+/test-results/
+/blob-report/

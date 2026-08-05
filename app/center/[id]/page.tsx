@@ -16,6 +16,7 @@ import {
   type CenterDetail, type CenterClass, type CenterProduct,
 } from "../../../lib/center";
 import BottomNav from "../../components/BottomNav";
+import { ZoomableImage } from "../../components/ImageViewer";
 import { addToCart } from "../../../lib/cart";
 import { fetchReviews, myReviewFor, writeReview, deleteReview, uploadReviewPhoto, reviewPhotoUrl, type Review } from "../../../lib/reviews";
 import { reservationReturnUrl } from "../../../lib/reservationNav";
@@ -423,7 +424,7 @@ function CenterDetailContent() {
       {/* 센터 헤더 */}
       <div className="center-hero">
         {center.photoUrl
-          ? <img className="center-hero-photo" src={centerPhotoUrl(center.photoUrl) ?? ""} alt="" />
+          ? <ZoomableImage className="center-hero-photo" src={centerPhotoUrl(center.photoUrl) ?? ""} />
           : <div className="center-hero-badge">{center.name.slice(0, 1)}</div>}
         <div className="center-hero-name">{center.name}</div>
         {center.address && <div className="center-hero-addr">📍 {center.address}</div>}
@@ -484,7 +485,7 @@ function CenterDetailContent() {
                               fontSize: blk.fontSize ?? undefined,
                             }}
                           >{blk.value}</p>)
-                    : <img key={i} className="center-intro-img" src={centerPhotoUrl(blk.value) ?? ""} alt="" />
+                    : <ZoomableImage key={i} className="center-intro-img" src={centerPhotoUrl(blk.value) ?? ""} />
                 ))
               : <p className="center-intro-text">{center.intro}</p>}
           </div>
@@ -550,7 +551,10 @@ function CenterDetailContent() {
               {r.photos && r.photos.length > 0 && (
                 <div className="review-photos">
                   {r.photos.map((ph, i) => (
-                    <img key={i} className="review-photo" src={reviewPhotoUrl(ph) ?? ""} alt="" />
+                    <ZoomableImage
+                      key={i} className="review-photo" src={reviewPhotoUrl(ph) ?? ""}
+                      group={r.photos!.map((p) => reviewPhotoUrl(p) ?? "")} groupIndex={i}
+                    />
                   ))}
                 </div>
               )}

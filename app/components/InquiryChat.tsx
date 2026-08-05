@@ -8,6 +8,7 @@
 */
 
 import { useEffect, useRef, useState } from "react";
+import { ZoomableImage } from "./ImageViewer";
 import {
   fetchMessages, sendMessage, readThread, subscribeMessages,
   uploadInquiryPhoto, inquiryPhotoUrl, type InquiryMessage,
@@ -101,7 +102,10 @@ export default function InquiryChat({
                 {m.photos && m.photos.length > 0 && (
                   <div className="chat-photos">
                     {m.photos.map((ph, i) => (
-                      <img key={i} src={inquiryPhotoUrl(ph) ?? ""} alt="" />
+                      <ZoomableImage
+                        key={i} src={inquiryPhotoUrl(ph) ?? ""}
+                        group={m.photos!.map((p) => inquiryPhotoUrl(p) ?? "")} groupIndex={i}
+                      />
                     ))}
                   </div>
                 )}

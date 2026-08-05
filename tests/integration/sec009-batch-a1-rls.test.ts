@@ -51,16 +51,16 @@ const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PAS
 const USER_A = { email: "TEST_USER_A_EMAIL", password: "TEST_USER_A_PASSWORD" };
 
 const NO_PERM_ROLE_NAME = "SEC-009 Batch A1 테스트 무권한 역할";
+// leads/messages는 unique 제약이 없어 원래도 매 실행마다 새로 insert되지만, 실행 식별자를
+// 내용에 남겨두면 afterAll cleanup이 실패하고 남은 잔여 행이 있어도 어느 실행이 남긴 건지
+// LIKE 쿼리로 바로 특정할 수 있다(테스트 격리 원칙 #7 — 개별 삭제로 반복 대응하지 않기 위함).
+const RUN_TAG = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 let managerA: TestUser;
 let managerB: TestUser;
 let userA: TestUser;
 let centerAId: string;
 let staffManagerCenterId: string; // centerA에서 managerB(비오너 스태프)의 manager_centers.id
-
-// 이번 실행이 실제로 "새로 만든" 것만 기록 — afterAll에서 이것만 정리한다.
-let createdRoleId: string | null = null;
-let createdStaffManagerCenterId: string | null = null;
 
 // 이 파일 전용으로 생성한 테스트 행 id들
 let staffSalaryOwnId: string | null = null; // managerA 본인 급여 행
@@ -70,24 +70,56 @@ let messageSmsId: string | null = null;
 let messageLmsId: string | null = null;
 let messagePushId: string | null = null;
 
-async function getOrCreateNoPermRole(centerId: string): Promise<{ id: string; created: boolean }> {
-  const roles = await fetchRoles(centerId);
-  const existing = roles.find((r) => r.name === NO_PERM_ROLE_NAME);
-  if (existing) return { id: existing.id, created: false };
-  await createRole(centerId, NO_PERM_ROLE_NAME);
-  const refreshed = await fetchRoles(centerId);
-  const created = refreshed.find((r) => r.name === NO_PERM_ROLE_NAME);
-  if (!created) throw new Error("무권한 역할 생성에 실패했어요");
-  return { id: created.id, created: true };
+// staff_salaries에는 unique(center_id, account_id) 제약이 있어, 이전 실행이(비정상 종료 등으로)
+// afterAll을 못 돌리고 행을 남긴 상태에서 재실행하면 순수 insert는 duplicate key로 죽는다.
+// role/manager_centers와 같은 get-or-create 원칙을 적용: 있으면 재사용(이번 실행이 만든 게
+// 아니므로 정리 대상에도 넣지 않음), 없으면 새로 만들고 정리 대상으로 추적한다.
+let createdStaffSalaryOwn = false;
+let createdStaffSalaryOther = false;
+
+async function getOrCreateStaffSalary(
+  centerId: string,
+  accountId: string,
+  payload: Record<string, unknown>
+): Promise<{ id: string; created: boolean }> {
+  const { data: existing, error: selErr } = await supabase
+    .from("staff_salaries")
+    .select("id")
+    .eq("center_id", centerId)
+    .eq("account_id", accountId)
+    .maybeSingle();
+  if (selErr) throw new Error("staff_salaries 기존 행 확인 실패: " + selErr.message);
+  if (existing) return { id: (existing as { id: string }).id, created: false };
+
+  const { data, error } = await supabase
+    .from("staff_salaries")
+    .insert({ center_id: centerId, account_id: accountId, ...payload })
+    .select("id").single();
+  if (error) throw new Error("staff_salaries fixture 생성 실패: " + error.message);
+  return { id: (data as { id: string }).id, created: true };
 }
 
-async function inviteIfNeeded(centerId: string, accountId: string, roleId: string): Promise<boolean> {
-  try {
-    await inviteStaff(centerId, accountId, roleId);
-    return true;
-  } catch (e: any) {
-    if (e.message.includes("이미 이 센터의 스태프")) return false;
-    throw e;
+// [재발 방지] 예전에는 get-or-create(있으면 재사용) 방식이라, CI가 이 테스트 도중
+// 강제 종료되면(예: GitHub Actions concurrency의 cancel-in-progress로 워크플로가 중간에
+// 취소됨) afterAll이 못 돌아 이 역할/초대가 그대로 남았고, 다음 실행은 그 잔여물을
+// "이미 있던 것"으로 보고 재사용만 할 뿐 정리 대상으로 다시 추적하지 않아 영구히
+// 복구되지 않았다(실제 재발 확인됨, 2026-08-03). 이제는 이 역할/초대를 이 테스트가
+// 전적으로 소유한다고 보고, beforeAll 시작과 afterAll 양쪽에서 "있으면 무조건 지운다"를
+// 실행한 뒤 매번 새로 만든다 — 중간에 몇 번을 강제 종료당해도 다음 beforeAll이 항상
+// 스스로 정리하고 시작하므로 orphan이 누적되지 않는다.
+async function cleanupNoPermRoleAndInvite(centerId: string): Promise<void> {
+  const roles = await fetchRoles(centerId);
+  const stale = roles.filter((r) => r.name === NO_PERM_ROLE_NAME);
+  for (const role of stale) {
+    const { data: staleInvites } = await supabase
+      .from("manager_centers")
+      .select("id")
+      .eq("center_id", centerId)
+      .eq("role_id", role.id);
+    for (const inv of staleInvites ?? []) {
+      try { await removeStaff((inv as { id: string }).id); } catch { /* best-effort, 아래 deleteRole에서도 걸림 */ }
+    }
+    try { await deleteRole(role.id); } catch { /* best-effort — 다음 실행이 다시 시도함 */ }
   }
 }
 
@@ -130,38 +162,40 @@ beforeAll(async () => {
 
   userA = await switchToTestUser(USER_A.email, USER_A.password);
 
-  // managerA(오너)로 돌아와 managerB를 centerA에 무권한 스태프로 초대하고, 테스트용 행을 만든다.
+  // managerA(오너)로 돌아와, 먼저 이전 실행이 남겼을 수 있는 잔여물을 정리한 뒤
+  // (①) 항상 새로 역할/초대를 만든다(②) — get-or-create로 재사용하지 않는다.
   await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
-  const role = await getOrCreateNoPermRole(centerAId);
-  if (role.created) createdRoleId = role.id;
+  await cleanupNoPermRoleAndInvite(centerAId);
 
-  const invited = await inviteIfNeeded(centerAId, managerB.accountId, role.id);
+  await createRole(centerAId, NO_PERM_ROLE_NAME);
+  const roles = await fetchRoles(centerAId);
+  const role = roles.find((r) => r.name === NO_PERM_ROLE_NAME);
+  if (!role) throw new Error("무권한 역할 생성에 실패했어요");
+
+  await inviteStaff(centerAId, managerB.accountId, role.id);
   staffManagerCenterId = await managerCenterIdFor(centerAId, managerB.accountId);
-  if (invited) createdStaffManagerCenterId = staffManagerCenterId;
 
   // 아래 3개 테이블은 오너에게 INSERT 정책이 있으므로(proposed_rls_gap_batch_a1.sql 적용 후)
   // managerA(오너)의 일반 로그인 client로 fixture를 만든다 — 적용 전인 지금은 이 자체가
   // 막혀서 여기서 바로 실패하는 것이 정상(red)이다.
   {
-    const { data, error } = await supabase
-      .from("staff_salaries")
-      .insert({ center_id: centerAId, account_id: managerA.accountId, employment_type: "fulltime", base_salary: 3000000 })
-      .select("id").single();
-    if (error) throw new Error("staff_salaries(own) fixture 생성 실패: " + error.message);
-    staffSalaryOwnId = (data as { id: string }).id;
+    const own = await getOrCreateStaffSalary(centerAId, managerA.accountId, {
+      employment_type: "fulltime", base_salary: 3000000,
+    });
+    staffSalaryOwnId = own.id;
+    createdStaffSalaryOwn = own.created;
   }
   {
-    const { data, error } = await supabase
-      .from("staff_salaries")
-      .insert({ center_id: centerAId, account_id: managerB.accountId, employment_type: "parttime", per_class_pay: 30000 })
-      .select("id").single();
-    if (error) throw new Error("staff_salaries(other) fixture 생성 실패: " + error.message);
-    staffSalaryOtherId = (data as { id: string }).id;
+    const other = await getOrCreateStaffSalary(centerAId, managerB.accountId, {
+      employment_type: "parttime", per_class_pay: 30000,
+    });
+    staffSalaryOtherId = other.id;
+    createdStaffSalaryOther = other.created;
   }
   {
     const { data, error } = await supabase
       .from("leads")
-      .insert({ center_id: centerAId, name: "SEC-009 배치A1 테스트 상담고객", phone: "010-0000-0000", channel: "test" })
+      .insert({ center_id: centerAId, name: `SEC-009 배치A1 테스트 상담고객 [${RUN_TAG}]`, phone: "010-0000-0000", channel: "test" })
       .select("id").single();
     if (error) throw new Error("leads fixture 생성 실패: " + error.message);
     leadId = (data as { id: string }).id;
@@ -169,7 +203,7 @@ beforeAll(async () => {
   {
     const { data, error } = await supabase
       .from("messages")
-      .insert({ center_id: centerAId, channel: "sms", content: "SEC-009 배치A1 테스트 SMS", status: "sent" })
+      .insert({ center_id: centerAId, channel: "sms", content: `SEC-009 배치A1 테스트 SMS [${RUN_TAG}]`, status: "sent" })
       .select("id").single();
     if (error) throw new Error("messages(sms) fixture 생성 실패: " + error.message);
     messageSmsId = (data as { id: string }).id;
@@ -178,7 +212,7 @@ beforeAll(async () => {
     // lms도 message.sms.view로 묶여 있는지(sms 계열) 확인하기 위한 fixture
     const { data, error } = await supabase
       .from("messages")
-      .insert({ center_id: centerAId, channel: "lms", content: "SEC-009 배치A1 테스트 LMS", status: "sent" })
+      .insert({ center_id: centerAId, channel: "lms", content: `SEC-009 배치A1 테스트 LMS [${RUN_TAG}]`, status: "sent" })
       .select("id").single();
     if (error) throw new Error("messages(lms) fixture 생성 실패: " + error.message);
     messageLmsId = (data as { id: string }).id;
@@ -186,7 +220,7 @@ beforeAll(async () => {
   {
     const { data, error } = await supabase
       .from("messages")
-      .insert({ center_id: centerAId, channel: "push", title: "SEC-009 배치A1", content: "SEC-009 배치A1 테스트 푸시", status: "sent" })
+      .insert({ center_id: centerAId, channel: "push", title: "SEC-009 배치A1", content: `SEC-009 배치A1 테스트 푸시 [${RUN_TAG}]`, status: "sent" })
       .select("id").single();
     if (error) throw new Error("messages(push) fixture 생성 실패: " + error.message);
     messagePushId = (data as { id: string }).id;
@@ -203,8 +237,8 @@ afterAll(async () => {
     if (error) errors.push(`${label} 정리 실패(id=${id}): ${error.message}`);
   };
 
-  await deleteRow("staff_salaries", staffSalaryOwnId, "staff_salaries(own)");
-  await deleteRow("staff_salaries", staffSalaryOtherId, "staff_salaries(other)");
+  if (createdStaffSalaryOwn) await deleteRow("staff_salaries", staffSalaryOwnId, "staff_salaries(own)");
+  if (createdStaffSalaryOther) await deleteRow("staff_salaries", staffSalaryOtherId, "staff_salaries(other)");
   await deleteRow("leads", leadId, "leads");
   await deleteRow("messages", messageSmsId, "messages(sms)");
   await deleteRow("messages", messageLmsId, "messages(lms)");
@@ -216,19 +250,14 @@ afterAll(async () => {
     errors.push(`권한 오버라이드 정리 실패: ${e.message}`);
   }
 
-  if (createdStaffManagerCenterId) {
-    try {
-      await removeStaff(createdStaffManagerCenterId);
-    } catch (e: any) {
-      errors.push(`manager_centers 정리 실패(id=${createdStaffManagerCenterId}): ${e.message}`);
-    }
-  }
-  if (createdRoleId) {
-    try {
-      await deleteRole(createdRoleId);
-    } catch (e: any) {
-      errors.push(`역할 정리 실패(id=${createdRoleId}): ${e.message}`);
-    }
+  // ④ afterAll에서도 ①과 동일하게(무조건) 정리 — "이번 실행이 만든 것만" 추적하던
+  // 이전 방식과 달리, 이 테스트가 쓰는 역할명은 항상 이 테스트가 전적으로 소유하므로
+  // 조건 없이 지운다. 이렇게 해야 이 afterAll 자체가 도중에 실패하거나 다음 실행이
+  // beforeAll에서 다시 한번 정리를 시도하더라도 이중으로 안전하다.
+  try {
+    await cleanupNoPermRoleAndInvite(centerAId);
+  } catch (e: any) {
+    errors.push(`무권한 역할/초대 정리 실패: ${e.message}`);
   }
 
   if (errors.length > 0) {

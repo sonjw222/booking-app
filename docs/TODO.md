@@ -98,6 +98,15 @@ README의 큰 순서만으로 전체 migration을 재현할 수 있는지 검증
 
 특히 `fix_usable_memberships_shared.sql`의 운영 적용 여부는 저장소만으로 알 수 없습니다. 적용 확인 전에는 “미적용”이나 “적용 완료”로 단정하지 않습니다.
 
+**2026-08-04 갱신**: `reserve_with_membership`은 실제로 운영설정 가드(당일예약/일일한도/
+오픈·마감/시작후차단/휴무일)가 전혀 없는 상태였음을 코드+실제 브라우저 재현으로 확인—
+`reserve_class`에만 있던 가드가 이식된 적이 없었다(실제 회원 화면은 수강권이 있으면
+`reserve_with_membership`을 호출하므로 실사용에 영향 있었음). `fix_reserve_with_membership_operational_settings.sql`로
+수정, 사용자가 운영 DB에 적용 완료. `fix_usable_memberships_product_kind.sql`도 이번에
+같이 적용 완료(적용 전엔 "사용 가능한 수강권" 목록에 goods 상품이 섞여 보이는 상태였음).
+남은 미확인 RPC: `fulfill_order`/`manager_set_attendance`/`auto_book_membership`/
+`has_permission`/`is_platform_admin` — 이번 세션에서 다루지 않음.
+
 ### P0-4. RLS 회귀 테스트와 운영 정책 확인
 
 | 필드 | 내용 |
@@ -579,6 +588,101 @@ client로 fixture를 만들고 지울 수 있어 문제가 되지 않지만, `co
   RLS부터 필요(SQL).
 - `rooms` SELECT가 `using (true)`로 로그인 없이도 전체 공개 — 의도된 것인지 확인 필요(PII 아님,
   낮은 위험이지만 미확인 상태).
+
+### P2-16. (신규, 번호 충돌 주의) QA 통합 배치에서 발견한 항목 모음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인됨 — 이번 QA 배치(feature/qa-batch-nav-reservation-notifications)에서 발견, 일부는 같이 수정, 일부는 범위 밖으로 분리** |
+| 관련 문서 | 이 브랜치는 PR #32(P0-6/P1-12/P2-15, `fix/holiday-refund-and-settings-wiring`)가 merge되기 전 `origin/main` 기준으로 만들어져 이 문서에 아직 P0-6/P1-12/P2-15 항목이 없습니다 — **PR #32와 이 브랜치가 모두 merge된 뒤 번호가 겹치지 않는지 반드시 확인하세요.** |
+
+⚠️ **git/실제 라이브 DB 불일치**: PR #32는 아직 merge되지 않았지만 그 SQL(수강권 복구,
+`admin_action_logs` FK 2개, `reserve_class()`의 당일예약/일일한도/대기한도/오픈시각)은 이미
+실제 Supabase에 실행되어 라이브 상태입니다. `reservation_functions.sql`(git)은 여전히 옛
+버전입니다. 이번 QA 배치의 SQL(`fix_class_booking_deadline_override_draft_proposed.sql`,
+`fix_reservation_cancel_grace_period_draft_proposed.sql`)은 **라이브 DB 기준**(PR #32 적용
+후 버전)으로 작성했습니다 — git의 `reservation_functions.sql`만 보고 베이스라인을 판단하면
+안 됩니다. PR #32가 merge되면 `reservation_functions.sql` 자체도 최신화가 필요합니다(기존
+P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
+
+- **`cancel_deadline_min`이 `booking_deadline_min`과 동일한 이유로 사실상 무효**: `calc_deadline()`은
+  `center_settings`가 있으면(사실상 항상) 무조건 그 값을 쓰고, `classes.cancel_deadline_min`은
+  그 설정 행 자체가 없는 예외 상황에서만 폴백으로 쓰인다. `cancel_deadline_min`은 이미
+  관리자 UI(`app/manager/classes/page.tsx` "예약취소 가능 시간")에 연결돼 있어 실제로 값을
+  저장했을 수도 있어, `booking_deadline_min`과 달리 이번 배치에서 함께 고치지 않았다(0을
+  "미지정"으로 되돌리는 데이터 마이그레이션이 더 신중한 검토가 필요 — CLASS-001 SQL 헤더
+  주석 참고). **후속 조치 필요**: 실제 저장된 0이 아닌 값이 있는지 먼저 확인한 뒤 같은 패턴으로
+  수정.
+- **알림 카테고리가 8개가 아니라 4개뿐이고 서버가 이 설정을 전혀 읽지 않음**: `app/settings/notifications/page.tsx`의
+  알림 설정은 `localStorage`에만 저장되고(`reservation`/`waitlist`/`reminder`/`marketing` 4종),
+  모든 서버 트리거(`trg_notify_reservation_insert/_update`, `send_inquiry_message` 등)는 이
+  설정과 무관하게 항상 알림을 생성한다. 사용자가 요청한 "공지/결제/문의답변" 등 5개 카테고리
+  확장 및 실제 서버측 필터링(수신거부 반영)은 DB 테이블 신설 + 모든 알림 생성 지점 수정이
+  필요한 훨씬 큰 작업이라 이번 배치에서는 제외하고 여기 기록만 한다 — 제품 결정 필요.
+- **`notification_rules`/`messages`(SMS/LMS)/`notification_logs`는 스키마만 있고 완전 미구현**:
+  `app/settings/notifications/page.tsx`의 "실제 발송 연동은 준비 중이에요" 문구는 정확하다 —
+  In-app DB 알림 외에는 push(FCM/APNs)/SMS/카카오 알림톡/이메일 전부 백엔드 자체가 없다.
+  문구를 더 명확하게(채널별로) 다듬는 것을 이번 배치에서 진행함(E-3).
+- **문의 답변 알림이 스레드로 딥링크되지 않음**: `notifications.data.thread_id`가 저장되지만
+  `app/notifications/page.tsx`/`app/manager/notifications/page.tsx`의 클릭 핸들러가 `link`만
+  보고 이동해 목록 화면까지만 가고 특정 스레드는 자동 선택되지 않는다 — 이번 배치에서 함께 수정.
+- **`app/mypage/history/page.tsx`(전체 예약 내역)가 어디서도 링크되지 않는 고아 라우트**:
+  `fetchFullHistory()`(최대 500건, 상태별 필터)까지 구현돼 있지만 진입 경로가 없다 — 별도
+  판단 필요(내 예약 탭에 링크를 추가할지, 페이지 자체를 정리할지).
+- **(E-6) 운영설정의 "문의 게시판 사용"/"락커 기능 사용"/"회원앱 라운지 사용" 토글 제거**:
+  `use_inquiry_board`/`use_locker`/`use_lounge` 세 컬럼 모두 `schema.sql`/`lib/settings.ts`/
+  이 UI 외에는 어디서도 읽지 않는 죽은 설정임을 grep으로 확인(관리자가 켜고 꺼도 실제 효과
+  없음) — `app/manager/settings/page.tsx`의 토글 UI에서만 제거했다. DB 컬럼은 이번에 지우지
+  않았다(향후 락커/라운지/문의게시판 기능이 실제로 만들어지면 그때 이 컬럼을 다시 쓸 수도
+  있어 임의로 삭제하지 않음 — 실제 컬럼 삭제는 별도 migration 이슈로 분리해서 판단 필요).
+
+### P2-17. (신규) 실브라우저 QA 재검증에서 발견한 항목
+
+- **`calc_deadline()`의 `'open'` kind 미처리(P1급, 수정 SQL 준비됨)**: `reserve_class()`가
+  "예약 오픈 시점" 체크를 `calc_deadline(...,'open')`로 호출하지만, 함수 본문은 `'book'`/그 외
+  (취소) 두 갈래로만 분기해 관리자가 저장한 `group_open_days_before/time`·
+  `private_open_days_before/time`이 무시되고 취소 마감 설정이 대신 쓰이고 있었다.
+  `fix_calc_deadline_open_kind_draft_proposed.sql`로 수정 준비됨(승인 대기). 이전 배치 문서의
+  "C-2 정상 배선" 결론은 이 항목에 한해 **틀렸음** — 함수 실제 정의를 재확인하지 않은 오판.
+- **(해결됨, 2026-08-03 Track 4) `show_group_reserved_count`**: `lib/reservations.ts`가
+  `center_settings`를 함께 조회하도록 확장해 `app/reservation/page.tsx`에서 실제로 인원수
+  표시 여부를 제어하도록 구현 완료.
+- **(해결됨, 2026-08-03 Track 4) `auto_unpaid_input`**: `app/manager/sales/page.tsx` 결제 등록
+  시트에서 상품가 - 입력된 결제수단 합계를 자동으로 미수금에 채우도록 구현 완료
+  (`lib/sales.ts`의 `computeAutoUnpaid`).
+- **`show_group_waitlist_count` 여전히 미구현(P2, 표시 대상 자체가 없음)**: 회원 앱 어디에도
+  "대기 인원수"를 보여주는 UI가 없어(내 대기 순번 표시만 있음) 이 설정을 연결할 대상이 없다
+  — 대기 인원수 표시 UI 자체를 새로 만들어야 하는 별도 소규모 기능. 전체 동작표는
+  `docs/OPERATIONAL_SETTINGS_AUDIT.md` 참고.
+- **`private_slot_unit`/`private_max_concurrent_*`/`show_point_history`는 제품 결정 필요**:
+  `docs/08_Decision_Log.md` DEC-002(슬롯 시스템), DEC-003(class_allowed_products UI 부재)
+  참고. `show_point_history`는 포인트 내역 페이지 자체가 없어 페이지 신설이 선행돼야 함.
+- **`same_day_change_*`/`autocancel_*`/`waitlist_auto_*`는 스케줄러 인프라 부재로 UI에
+  "준비 중" 배지 추가 + 입력 비활성화 처리(2026-08-03)** — 정상 기능처럼 보이지 않도록 함,
+  값 자체는 보존(추후 스케줄러 도입 시 그대로 사용 가능).
+- **`NotificationToaster`처럼 알림 관련 UI가 여러 곳에 독립 구현되며 로직이 갈라지는 패턴**:
+  이번에 회원/매니저 알림 목록과 실시간 토스트가 각자 딥링크 판단을 구현하다 토스트만 누락된
+  사례가 발생했다. `lib/notifications.ts`의 `notificationHref()`로 통합했으나, 향후 새 알림
+  표시 지점을 추가할 때도 이 함수를 재사용하도록 유의할 것.
+- **AUTH-001(신규 이슈, #40)**: 회원가입 화면에 휴대폰 번호 입력란은 있지만 실제 인증(OTP)
+  절차가 없음. SMS 발송 백엔드 자체가 없어(E-3 감사와 동일 결론) 제품 정책 확정 전에는
+  구현하지 않음.
+- **`staff_salaries` 유니크 제약 충돌로 SEC-009 통합테스트가 간헐적으로 실패(신규 발견,
+  TEST-002/#24와 같은 계열의 "공유 dev DB에 정리 안 된 테스트 픽스처" 문제)**: PR #39 CI에서
+  `sec009-batch-a1-rls.test.ts`가 "duplicate key value violates unique constraint
+  staff_salaries_center_id_account_id_key"로 실패하는 것을 관측함 — 이전 실행이 남긴
+  (centerA, managerA 계정) 조합의 `staff_salaries` 행이 정리되지 않아 재실행 시 같은 키로
+  다시 insert하려다 충돌. 이번 배치의 어떤 코드/SQL과도 무관(다른 테이블, 다른 테스트 파일).
+  TEST-002(#24)와 같은 근본 원인 계열이므로 그 이슈 해결 시 함께 검토 권장 — 이번 배치에서는
+  별도 정리 SQL을 만들지 않음(범위 밖).
+- **TEST-002(#24)의 알려진 오염이 다른 파일에도 영향을 준다는 것을 재확인**: `acl-003-permission-read.test.ts`가
+  남기는 "MANAGER_B가 centerA의 활성 스태프가 됨" 오염 상태 때문에, 이번 배치가 새로 추가한
+  `tests/integration/inquiry-access-isolation.test.ts`의 "다른 센터 매니저는 못 본다" 케이스와
+  기존 `admin-assignment-security.test.ts`의 "다른 센터 관리자는 배치 못 함" 케이스가 같은 CI
+  실행에서 함께 실패하는 것을 관측함(둘 다 설계·코드 문제 아님, RLS/RPC는 "활성 소속 여부"를
+  정확히 설계대로 검사 중 — #24 해결 전까지는 테스트 실행 순서에 따라 이 두 케이스가 간헐적으로
+  RED일 수 있음).
 
 ## 6. P3 — 제품 결정이 필요한 향후 기능 후보
 

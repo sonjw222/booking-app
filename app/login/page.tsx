@@ -26,6 +26,11 @@ type SignupRole = "member" | "manager";
 
 const EMPTY_CENTER_FIELDS: CenterFieldsValue = { name: "", address: "", phone: "", businessNumber: "", licenseFileName: "" };
 
+// 실제로는 이메일 인증(Confirm email)을 쓰지 않는데도 "확인 메일이 발송됐어요"라고 안내하던
+// 문제(섹션 1) — signUp 직후 세션이 바로 확보되는 것 자체가 이 프로젝트에서 이메일 인증이
+// 꺼져 있다는 증거이므로, 발송 여부를 거짓으로 안내하지 않는 문구로 고정한다.
+export const SIGNUP_SUCCESS_MESSAGE = "회원가입이 완료되었습니다. 로그인해주세요.";
+
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("login");
   const [role, setRole] = useState<SignupRole>("member");
@@ -151,13 +156,15 @@ export default function LoginPage() {
           return;
         }
       }
+
+      // 위 단계까지 오면 session이 이미 확보돼 있다(= 이메일 인증이 꺼져 있어 확인 메일 자체가
+      // 발송되지 않는 상태) — accounts/profiles/centers insert에만 필요했던 세션이므로, 로그인
+      // 화면으로 돌아가려면 로그아웃해서 실제로 "로그인이 필요한" 상태로 되돌려야 한다.
+      await supabase.auth.signOut();
     }
 
     setLoading(false);
-    setMessage({
-      type: "ok",
-      text: "가입 완료! 확인 메일이 발송됐어요. 메일 인증 후 로그인해주세요",
-    });
+    setMessage({ type: "ok", text: SIGNUP_SUCCESS_MESSAGE });
     setMode("login");
   }
 

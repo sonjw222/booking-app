@@ -74,6 +74,9 @@ export default function MyReservationsPage() {
                   {memberFacingBadge(h.reservationType as ReservationType) && (
                     <span className="profile-tag sm">{memberFacingBadge(h.reservationType as ReservationType)}</span>
                   )}
+                  {h.status === "cancelled" && h.cancelSource === "HOLIDAY" && (
+                    <span className="profile-tag sm holiday-cancel-tag">센터 휴무로 자동 취소</span>
+                  )}
                 </div>
                 <div className="hist-sub">{h.centerName} · {h.when}</div>
               </div>

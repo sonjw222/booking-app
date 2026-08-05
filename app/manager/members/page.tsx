@@ -69,7 +69,6 @@ function MembersContent() {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [keyword, setKeyword] = useState("");
   const [searchField, setSearchField] = useState<"all" | "name" | "phone" | "address">("all");
-  const [memberTab, setMemberTab] = useState<"all" | "assigned" | "consult">("all");
 
   // 시트
   const [detail, setDetail] = useState<CenterMember | null>(null);
@@ -288,12 +287,6 @@ function MembersContent() {
         </div>
       </div>
 
-      <div className="mem-tabs">
-        <button className={`mem-tab ${memberTab === "all" ? "on" : ""}`} onClick={() => setMemberTab("all")}>전체회원</button>
-        <button className={`mem-tab ${memberTab === "assigned" ? "on" : ""}`} onClick={() => setMemberTab("assigned")}>담당회원</button>
-        <button className={`mem-tab ${memberTab === "consult" ? "on" : ""}`} onClick={() => setMemberTab("consult")}>상담고객</button>
-      </div>
-
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
@@ -305,7 +298,7 @@ function MembersContent() {
       )}
 
       {/* 검색 + 필터 */}
-      {memberTab === "all" && (<>
+      <>
       <div className="mem-search" style={{ display: "flex", gap: 8 }}>
         <select className="input-field" style={{ flex: "0 0 96px" }} value={searchField} onChange={(e) => setSearchField(e.target.value as any)}>
           <option value="all">전체</option>
@@ -348,19 +341,11 @@ function MembersContent() {
           <button className="text-btn" onClick={() => setCsvSheet(true)}>엑셀 내보내기</button>
         </div>
       </div>
-      </>)}
+      </>
 
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
-      {memberTab !== "all" ? (
-        <div className="empty-action" style={{ paddingTop: 60 }}>
-          <div className="empty-action-text">
-            {memberTab === "assigned" ? "담당회원 기능은 준비 중이에요." : "상담고객 기능은 준비 중이에요."}<br />
-            지금은 전체회원 탭에서 관리할 수 있어요.
-          </div>
-          <button className="empty-action-btn" onClick={() => setMemberTab("all")}>전체회원 보기</button>
-        </div>
-      ) : loading ? (
+      {loading ? (
         <Loading />
       ) : members.length === 0 ? (
         statusFilter || keyword.trim() ? (

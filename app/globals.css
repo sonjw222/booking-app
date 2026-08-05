@@ -257,6 +257,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 .booked-tag { font-size: 10.5px; font-weight: 800; color: #fff; background: var(--accent); padding: 2px 7px; border-radius: 999px; margin-left: 6px; }
+.booked-tag.private-tag { background: #6B4C9A; } /* CLASS-001 D-2: 프라이빗 수업 배지 */
 
 .class-row {
   display: flex; gap: 12px; align-items: center;
@@ -277,6 +278,8 @@ a { color: inherit; text-decoration: none; }
 }
 .mini-btn.wait { background: var(--ink-soft); }
 .mini-btn.done { background: var(--bg); color: var(--accent); border: 1.5px solid var(--accent); }
+/* Track 2: 수업 시작 후 예약 버튼 대신 표시하는 안내(버튼 아님, 클릭 동작 없음) */
+.mini-btn-note { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); padding: 7px 4px; text-align: right; white-space: nowrap; }
 
 /* ============================================================
    로그인 / 회원가입 화면
@@ -523,6 +526,12 @@ a { color: inherit; text-decoration: none; }
 .time-row { display: flex; align-items: center; gap: 8px; }
 .time-row .input-field { flex: 1; }
 .time-sep { color: var(--ink-soft); font-weight: 800; }
+/* 오전/오후·시·분 선택 (UI-004 B-2) — 시작/종료를 각각 한 줄로 두어 모바일에서 select 3개가
+   잘리지 않게 한다(가로 한 줄에 6개 select를 몰아넣지 않음). */
+.ampm-time-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.ampm-time-label { width: 34px; flex: 0 0 auto; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.ampm-time-input { display: flex; gap: 6px; flex: 1; min-width: 0; }
+.ampm-time-input .ampm-select { flex: 1; min-width: 0; padding: 8px 6px; text-align: center; }
 .capacity-row { display: flex; align-items: center; gap: 12px; padding: 8px 2px 16px; }
 .capacity-label { font-size: 14px; font-weight: 700; flex: 1; }
 .cap-btn {
@@ -990,6 +999,7 @@ a { color: inherit; text-decoration: none; }
   font-size: 10.5px;
   padding: 1px 6px;
 }
+.profile-tag.sm.holiday-cancel-tag { background: #8a8a8a; } /* NOTIF-001 E-5: 휴무일 자동취소 배지 */
 
 /* ============================================================
    개인별 권한 설정 (/manager/staff/permissions)
@@ -1184,6 +1194,15 @@ a { color: inherit; text-decoration: none; }
   font-size: 13.5px;
   color: var(--text);
   line-height: 1.4;
+}
+/* Track 4: 스케줄러 인프라가 없어 저장만 되고 실제로는 작동하지 않는 설정 항목 표시 */
+.set-soon-badge {
+  display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--text-dim);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+  padding: 1px 8px; margin-left: 6px; vertical-align: middle;
+}
+.set-soon-note {
+  font-size: 11.5px; color: var(--text-dim); line-height: 1.4; margin-top: 2px;
 }
 
 .set-inline {
@@ -1397,6 +1416,9 @@ a { color: inherit; text-decoration: none; }
   font-size: 12.5px;
   color: var(--text-dim);
 }
+/* 직접배치 확인 시트(UI-004 B-3) — 회원명/수업정보를 별도 줄로 분리해 중복처럼 안 보이게 함 */
+.assign-confirm-member { font-size: 14px; font-weight: 800; color: var(--text); }
+.assign-confirm-class { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
 
 .fullhist { padding: 0 20px 20px; }
 .fullhist-day { margin-bottom: 14px; }
@@ -2263,6 +2285,16 @@ a.membership-card { text-decoration: none; display: block; }
 .assign-banner-name { font-size: 14.5px; font-weight: 800; color: var(--text); margin-top: 2px; }
 .assign-banner-phone { font-size: 12px; font-weight: 600; color: var(--text-dim); }
 .assign-banner-sub { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+/* .ghost-btn은 display:block; width:100% 짜리 "단독 전체너비" 버튼 스타일이라, 이 버튼처럼
+   flex row(.assign-banner) 안에 넣으면 width:100%가 flex-basis로 해석돼 형제 요소
+   (.assign-banner-main, flex:1)와 너비를 두고 경쟁하고, flex-shrink 방지/줄바꿈 방지 설정이
+   없어 좁은 화면에서 극단적으로 눌려 한글이 세로로(글자당 한 줄씩) 쌓이는 원인이었다.
+   이 버튼만 flex item 기본 레이아웃으로 되돌리고 자기 콘텐츠 너비를 유지하도록 고정한다. */
+.assign-banner-exit {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: auto; flex: 0 0 auto; white-space: nowrap;
+  padding: 10px 14px; min-width: 0;
+}
 .assign-menu-wrap { position: relative; flex: 0 0 auto; }
 .assign-menu {
   position: absolute; right: 0; top: 100%; margin-top: 4px; z-index: 50;
@@ -2477,7 +2509,10 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .thread-main { flex: 1; min-width: 0; }
 .thread-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.thread-name { font-size: 14.5px; font-weight: 700; color: var(--text); }
+.thread-name {
+  font-size: 14.5px; font-weight: 700; color: var(--text);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .thread-time { font-size: 11px; color: var(--text-dim); flex: 0 0 auto; }
 .thread-preview {
   font-size: 13px; color: var(--text-dim); margin-top: 3px;
@@ -2559,3 +2594,40 @@ a.membership-card { text-decoration: none; display: block; }
   font-size: 14px; font-weight: 700; cursor: pointer;
 }
 .chat-send:disabled { opacity: 0.5; }
+
+/* ============================================================
+   Track 1/8: 앱 전체 공용 이미지 확대(Lightbox) — app/components/ImageViewer.tsx
+   ============================================================ */
+.image-viewer-overlay {
+  position: fixed; inset: 0; z-index: 2000;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex; align-items: center; justify-content: center;
+  overscroll-behavior: contain; touch-action: none;
+}
+.image-viewer-img {
+  max-width: 92vw; max-height: 88vh; object-fit: contain;
+  transition: transform 0.15s ease-out; touch-action: none; user-select: none;
+}
+.image-viewer-close {
+  position: absolute; top: 16px; right: 16px; z-index: 1;
+  width: 40px; height: 40px; border-radius: 50%; border: none;
+  background: rgba(255, 255, 255, 0.15); color: #fff; font-size: 22px; line-height: 1;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.image-viewer-nav {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 1;
+  width: 44px; height: 44px; border-radius: 50%; border: none;
+  background: rgba(255, 255, 255, 0.15); color: #fff; font-size: 26px; line-height: 1;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.image-viewer-nav.prev { left: 12px; }
+.image-viewer-nav.next { right: 12px; }
+.image-viewer-counter {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.85); font-size: 13px; font-weight: 600;
+  background: rgba(255, 255, 255, 0.12); padding: 4px 12px; border-radius: 999px;
+}
+@media (max-width: 480px) {
+  .image-viewer-nav { width: 36px; height: 36px; font-size: 22px; }
+  .image-viewer-close { width: 34px; height: 34px; font-size: 18px; }
+}

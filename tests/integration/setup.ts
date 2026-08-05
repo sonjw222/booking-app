@@ -61,7 +61,14 @@ export async function switchToTestUser(emailEnvName: string, passwordEnvName: st
     const email = requireEnv(emailEnvName);
     const password = requireEnv(passwordEnvName);
 
-    await supabase.auth.signOut();
+    // ⚠ scope: 'local' 필수 — 기본값(scope 생략 시 'global')은 이 계정의 세션을
+    // "모든 곳에서" 강제 로그아웃시킨다. 이 Node 클라이언트 하나만 정리하면 되는데,
+    // global로 호출하면 서버가 그 계정의 auth.sessions 행을 전부 지워버려 예를 들어
+    // (E2E auth.setup.ts처럼) 이 함수를 계정 A → B 순서로 두 번 호출할 때, B 차례의
+    // signOut(global)이 "이미 실제 브라우저로 로그인해 storageState까지 저장해둔 A의
+    // 세션"까지 서버에서 무효화해버린다 — 실제로 이렇게 재현됨(Playwright에서
+    // 403 session_not_found, tests/e2e/auth.setup.ts 파일 상단 히스토리 참고).
+    await supabase.auth.signOut({ scope: "local" });
 
     const signIn = await supabase.auth.signInWithPassword({ email, password });
     let userId: string;
@@ -123,7 +130,8 @@ export async function switchToTestUser(emailEnvName: string, passwordEnvName: st
 // signIn과 겹치지 않도록 같은 잠금을 통해 실행한다(위 withAuthLock 설명 참고).
 export async function signOutTestSession(): Promise<void> {
   await withAuthLock(async () => {
-    await supabase.auth.signOut();
+    // scope: 'local' 필수 — 이유는 switchToTestUser() 위쪽 주석 참고.
+    await supabase.auth.signOut({ scope: "local" });
   });
 }
 
@@ -336,6 +344,72 @@ export async function createFutureTestClass(
     .insert({
       center_id: centerId,
       title: opts?.title ?? "통합테스트 수업",
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      capacity: opts?.capacity ?? 8,
+    })
+    .select("id, start_time")
+    .single();
+  if (error || !data) throw new Error(`테스트 수업 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id, startTime: data.start_time };
+}
+
+// [OPS-BOUNDARY] "당일예약" 검증 전용 시각 계산.
+// createFutureTestClass(hoursFromNow)는 Date.now() + N시간을 절대시간으로 더할 뿐이라,
+// CI가 KST 21:00~23:59 사이에 시작되면 "+3시간"이 KST 자정을 넘겨 버려 만들어진 수업이
+// "오늘"이 아닌 "내일" 수업이 된다 — reserve_class()의 당일예약 체크는
+// (수업의 KST 날짜 = 오늘의 KST 날짜)로 판정하므로, 이 경우 체크 자체가 발동하지 않아
+// 당일예약 OFF/ON 테스트의 전제가 CI 실행 시각에 따라 깨진다(실제로 재현 확인됨).
+// 이 함수는 항상 "지금(KST)과 같은 달력 날짜 안"에서, now보다 충분히 뒤인 시각을 반환한다 —
+// 선호 시간(preferredMinutesFromNow)이 KST 자정을 넘기면 자정 직전(minRunwayMinutes 여유)
+// 까지로 줄인다. 열림/마감 판정은 수업의 KST "날짜"만 보고 시각 자체는 보지 않으므로
+// (calc_deadline은 날짜 단위 오프셋), 이렇게 시간을 줄여도 다른 마감/오픈 조건에는
+// 영향이 없다.
+export function kstSafeSameDayFutureTime(preferredMinutesFromNow = 180, minRunwayMinutes = 2): Date {
+  const now = new Date();
+  const kstParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const y = Number(kstParts.find((p) => p.type === "year")!.value);
+  const m = Number(kstParts.find((p) => p.type === "month")!.value);
+  const d = Number(kstParts.find((p) => p.type === "day")!.value);
+
+  // 달력 날짜(년/월/일 숫자)만 계산하는 용도로만 UTC 산술을 쓴다 — 실제 시각(instant)을
+  // 만드는 게 아니라 "다음 날짜가 몇 년/몇 월/며칠인지"만 구하는 것이라 호스트 타임존과
+  // 무관하다. 실제 시각은 항상 아래에서 명시적 +09:00 오프셋 문자열로만 만든다.
+  const nextCalendarDayUtc = new Date(Date.UTC(y, m - 1, d + 1));
+  const nextY = nextCalendarDayUtc.getUTCFullYear();
+  const nextM = String(nextCalendarDayUtc.getUTCMonth() + 1).padStart(2, "0");
+  const nextD = String(nextCalendarDayUtc.getUTCDate()).padStart(2, "0");
+  const kstMidnightUtc = new Date(`${nextY}-${nextM}-${nextD}T00:00:00+09:00`);
+
+  const latestSafe = new Date(kstMidnightUtc.getTime() - minRunwayMinutes * 60 * 1000);
+  const preferred = new Date(now.getTime() + preferredMinutesFromNow * 60 * 1000);
+  const target = preferred.getTime() < latestSafe.getTime() ? preferred : latestSafe;
+
+  if (target.getTime() <= now.getTime()) {
+    throw new Error(
+      `kstSafeSameDayFutureTime: KST 자정까지 ${minRunwayMinutes}분의 여유도 없어 "오늘 안의 미래 시각"을 ` +
+      `만들 수 없습니다. 잠시 후(KST 자정 이후) 다시 실행해주세요.`
+    );
+  }
+  return target;
+}
+
+// 당일예약(same-day) 검증 전용 — 항상 KST 기준 "오늘" 안의 미래 시각으로 수업을 만든다.
+// createFutureTestClass와 달리 CI 실행 시각(특히 KST 21~24시)과 무관하게 항상 오늘 날짜의
+// 수업을 만들도록 보장한다. capacity/title 기본값 및 반환 형태는 createFutureTestClass와 동일.
+export async function createKstSameDayFutureClass(
+  centerId: string,
+  opts?: { capacity?: number; title?: string; preferredMinutesFromNow?: number }
+): Promise<{ id: string; startTime: string }> {
+  const start = kstSafeSameDayFutureTime(opts?.preferredMinutesFromNow ?? 180);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const { data, error } = await supabase
+    .from("classes")
+    .insert({
+      center_id: centerId,
+      title: opts?.title ?? "통합테스트 수업(당일 경계)",
       start_time: start.toISOString(),
       end_time: end.toISOString(),
       capacity: opts?.capacity ?? 8,

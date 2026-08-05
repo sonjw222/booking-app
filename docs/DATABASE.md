@@ -69,7 +69,7 @@
 | `center_settings` | 구현됨 | 예약·취소·폐강·대기·당일 예약 등 운영 규칙 |
 | `center_holidays` | 구현됨 | 센터 휴무일 |
 | `rooms` | 구현됨 | 수업 공간 |
-| `classes` | 구현됨 | 그룹·프라이빗 수업과 반복그룹, 정원, 마감, 상태 |
+| `classes` | 구현됨(그룹) / MVP(프라이빗) | 반복그룹, 정원, 마감, 상태. 프라이빗은 2026-08-03 QA 배치(CLASS-001)에서 관리자 UI 선택 + 정원 1명 강제(CHECK)까지만 구현 — 지정회원전용 접근 제한은 아직 미구현(제품 결정 필요) |
 | `class_allowed_products` | 구현됨 | 수업별 예약 가능한 수강권 상품 |
 | `reservations` | 구현됨 | 예약·대기·취소·출석·노쇼 및 개인 메모. `reservation_type`(MEMBER/ADMIN_ASSIGNMENT/ADMIN_FREE), `reservation_source`(USER/ADMIN/SYSTEM), `admin_reason_code`/`admin_reason_detail`, `is_capacity_override`, `membership_consumed`, `cancelled_by`/`cancel_reason`/`cancelled_at`, `created_by_account_id`, `updated_at` 추가(`add_admin_assignment.sql`) |
 | `admin_action_logs` | 구현됨 | 관리자 직접배치/무료배치/취소 작업 로그 (append-only, 일반 매니저 UI에서 수정·삭제 불가). `add_admin_assignment.sql` |

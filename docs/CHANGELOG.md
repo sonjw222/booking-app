@@ -8,6 +8,149 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-05 — Playwright 관리자 세션 session_not_found 근본 원인 수정 + 전체 파이프라인 2회 연속 Green (PR #39)
+
+- **session_not_found 정확한 원인**: `tests/integration/setup.ts`의 `switchToTestUser()`가
+  매번 `supabase.auth.signOut()`을 scope 없이(기본값 `'global'`) 호출했다
+  (`node_modules/@supabase/auth-js`에서 직접 확인: `signOut(options = {scope:'global'})`).
+  `tests/e2e/auth.setup.ts`가 매니저→회원 순서로 이 함수를 두 번 호출하는데, 회원 차례의
+  `signOut()`이 실행되는 시점에 Node의 공유 supabase 클라이언트는 아직 매니저 세션
+  상태였다 — global scope라 이 호출이 매니저 계정의 `auth.sessions`를 서버에서 전부
+  지워버려, 방금 브라우저로 로그인해 storageState까지 저장해둔 매니저 세션까지 함께
+  죽었다. `signOut({scope:'local'})`로 수정.
+  - "여러 BrowserContext가 storageState를 나눠 쓰는 것"(리프레시 토큰 회전 충돌) 가설은
+    실측(worker-scoped fixture로 context를 1개로 줄여도 동일하게 재현)으로 배제했다.
+- **함께 발견된, 훨씬 근본적인 문제**: E2E 테스트 수강권(`createTestMembershipAdmin`)이
+  `product_id`를 채우지 않아 `usable_memberships_for_classes()`(products를 INNER JOIN)가
+  그 수강권을 결과에서 통째로 제외했다 — 회원 화면의 "사용할 수강권" 목록이 항상 비어
+  `doReserve()`가 `reserveWithMembership()`이 아니라 `reserveClass()`로 계속 폴백했다.
+  즉 이번 세션 상당 부분의 "실제 회원 화면 검증"이 실제로는 `reserveClass()`만 반복
+  검증하고 있었다. `getOrCreateTestPassProduct()`로 실제 `product_kind='pass'` 상품을
+  만들어 연결하도록 수정 — 이제 `reserveWithMembership()`이 실제로 실행되며, 기존에
+  통과하던 테스트들도 이 변경 이후 전부 그대로 통과함을 확인(회귀 없음, 원래 수정이
+  올바르다는 증거).
+- **테스트 데이터 오염 2건 추가 발견/수정**: (1) 공유 테스트 센터에 여러 세션에 걸쳐
+  누적된 leftover 확정 예약이 일일예약 횟수 제한 검증의 기준선을 오염시켜
+  `cleanupTodaysReservationsForProfile()` 신규(검증 전 오늘자 예약 전부 정리). (2)
+  `reservation-cancel-grace-period.test.ts`(integration)가 "당일 수업 취소마감은 항상
+  어제"라는 가정으로 pre-existing 설정값에 암묵 의존하다, 그 값이 다른 테스트에 의해
+  0으로 바뀐 채 남아 실패 — 취소마감을 명시적 과거 절대시각으로 저장하도록 수정.
+- `products` 테이블 service_role GRANT 누락도 함께 발견/수정
+  (`fix_service_role_missing_grants_products.sql`, 사용자 적용 완료).
+- **결과**: E2E(13개 시나리오: 당일예약/일일한도/예약오픈/예약마감/취소기한/시작후차단),
+  Unit, Integration, Build 전체 파이프라인이 2회 연속 완전 Green.
+
+## 2026-08-04 — reserve_with_membership() 운영설정 가드 누락 수정 + 관리자 UX 정리 (PR #39)
+
+- **핵심 버그(실제 브라우저 재현)**: "당일예약 OFF/예약 가능 기한 등을 저장해도 회원
+  화면에서 계속 예약이 통과된다"는 수동 QA 보고가 있었고, RPC(`reserve_class`)를 직접
+  호출하는 테스트는 전부 정상이라 처음엔 "테스트 환경 문제"로 오판했다. 실제 원인은
+  회원 화면(`app/reservation/page.tsx` `doReserve()`)이 사용 가능한 수강권이 하나라도
+  있으면(거의 모든 실사용 케이스) `reserve_class()`가 아니라 `reserve_with_membership()`을
+  호출한다는 것이었고, 이 함수(`add_admin_assignment.sql`)에는 당일예약 허용/일일
+  예약 횟수 제한/예약 오픈·마감/수업 시작 후 차단/휴무일 가드가 전혀 없었다 —
+  `reserve_class()`에만 있던 가드가 `reserve_with_membership()`에는 이식된 적이 없었던
+  것. `fix_reserve_with_membership_operational_settings.sql`로 6개 가드를 전부 이식(사용자
+  적용 완료).
+- **함께 적용**: `add_tennis_category.sql`(종목에 "테니스" 추가), 이미 저장소에 있었지만
+  미적용 상태였던 `fix_usable_memberships_product_kind.sql`(수강권 선택 목록에 goods
+  상품이 섞여 보이던 버그) — 둘 다 사용자 확인 후 적용 완료.
+- **수업 등록 검증 추가**: 종료시간이 시작시간 이후가 아니면(예: 10:00→09:00) 거부,
+  단 자정을 넘기는 경우(예: 23:00→01:00, 6시간 이내)는 허용(`lib/classes.ts`
+  `isValidClassTimeRange`/`classEndDate`, 생성/수정/반복등록/복사 7개 경로 전부 적용).
+- **관리자 회원탭 정리**: "담당회원"/"상담고객" 탭 제거(둘 다 "준비 중" 플레이스홀더였고
+  실제 데이터/로직이 없었음) — `app/manager/members/page.tsx`.
+- **E2E**: 운영설정 스펙을 실제 관리자 화면 조작(admin client로 값만 덮어쓰는 방식이
+  아니라 진짜 토글/입력 클릭) 기준으로 재작성. 신규 `booking-open-deadline.spec.ts`
+  추가(예약 오픈 시점 검증) — 코드 추적 결과 "N일 전부터 예약이 열린다"가 실제 동작이라,
+  더 먼 미래 수업이 아직 닫혀있고 더 가까운 수업이 열려있는 것이 정상임을 확인.
+
+## 2026-08-03 (추가 2) — 회원 예약 캘린더 월 후반부 수업 누락 버그 수정 (PR #39)
+
+- **원인**: `fetchMonthData()`(`lib/reservations.ts`)의 원시 `classes` 쿼리가 `center_id`
+  조건도 `.range()`/`.limit()`도 없이 "이 달의 모든 센터" 수업을 한 번에 조회한 뒤
+  클라이언트에서 멤버십 보유 센터로 필터링했다. 전체 집계 행 수가 Supabase 프로젝트의
+  PostgREST 기본 응답 행 수 제한(실측 1000행)을 넘으면 `start_time` 오름차순 정렬
+  특성상 반환분이 그 지점에서 끊겨 월 후반부 수업이 통째로 누락됐다(진단 테스트로 실측:
+  1200개 중 1000개만 반환, 마지막 반환 행이 월말이 아니라 25일). 관리자용
+  `fetchClasses()`(`lib/classes.ts`)는 `center_id`로 이미 좁혀 조회해 이 문제에 걸리지
+  않아 "관리자 화면엔 정상, 회원 화면만 일부 누락"으로 나타났다.
+- **수정**: `classes` 쿼리를 `.in("center_id", 회원의 활성 수강권 보유 센터)`로 DB
+  단에서 직접 좁히고 `.range()`로 페이지 단위 반복 조회하도록 변경. 그 결과 한 센터가
+  한 달에 매우 많은 수업(1300개 테스트)을 가질 수 있게 되면서, 뒤이어 `class_reservation_counts`/
+  `reservations` 조회의 `.in("class_id", classIds)`가 UUID를 너무 많이 나열해 "Bad
+  Request"로 실패하는 2차 문제가 드러나 150개 단위 배치 조회로 함께 수정.
+- **테스트**: `classes-row-limit-regression.test.ts` 신규(내 센터 1300개 수업이 페이지
+  경계 999/1000/1001 포함 전부 반환되는지, 승인된 다른 센터 700개는 여전히 제외되는지
+  검증) — 진단 전용이던 `diagnose-classes-row-limit.test.ts`를 정식 회귀 테스트로 전환.
+  전체 integration 82/82, 2회 연속 실행 안정성 확인, 기존 month-boundary-kst 등 회귀 없음.
+
+## 2026-08-03 (추가) — 6트랙 후속: open-kind 마무리/픽스처 격리/환경검증/설정2차/프라이빗2차/전화인증조사 (PR #39)
+
+- **Track 1**: `calc_deadline()` open-kind 수정 SQL을 그룹/프라이빗/KST 자정 경계까지
+  검증하도록 통합테스트 보강(`operational-settings-wiring.test.ts`). 회귀 위험 재확인(book/
+  cancel 분기는 건드리지 않음).
+- **Track 2**: `sec009-batch-a1-rls.test.ts`의 `staff_salaries` fixture를 get-or-create
+  패턴으로 전환해 중복키로 인한 실패를 근본 해결(재실행해도 안전). `acl-003-permission-read.test.ts`는
+  이미 자기 fixture를 추적·정리하도록 설계돼 있었음을 재확인 — 남은 것은 과거(그 수정 이전)
+  잔여 데이터 1건뿐이며 `cleanup_acl003_test_fixture_proposed.sql`(기존 준비된 파일)로 정리
+  가능, 실행은 승인 대기.
+- **Track 3**: 환경 비교 결과를 `docs/ENV_PARITY_CHECK.md`로 정리 — Vercel 환경변수는 도구로
+  직접 확인 불가해 사용자 확인 절차를 안내.
+- **Track 4**: 운영설정 전수 동작표를 `docs/OPERATIONAL_SETTINGS_AUDIT.md`로 정리.
+  `show_group_reserved_count`(회원 앱 예약인원 표시)와 `auto_unpaid_input`(매출 등록 미수금
+  자동계산)을 실제로 구현. 스케줄러가 필요한 항목(당일예약변경/자동폐강/대기자동확정)은
+  UI에 "준비 중" 배지 추가 + 입력 비활성화.
+- **Track 5**: 프라이빗 수업 그룹/프라이빗 선택·정원1 고정·회원앱 배지는 이미 정상 연결돼
+  있음을 재확인. 지정회원 전용 정책·슬롯 시스템·`class_allowed_products` 관리 UI 부재는
+  `docs/08_Decision_Log.md`(DEC-001~003)로 분리, 이번엔 구현하지 않음.
+- **Track 6**: 휴대폰 인증 조사 문서(`docs/PHONE_AUTH_RESEARCH.md`) 작성, AUTH-001(#40)은
+  P3 Deferred 유지, 구현/계약 없음.
+
+⚠️ 신규 SQL(`fix_calc_deadline_open_kind_draft_proposed.sql`)은 사용자 승인 전까지 미실행.
+
+## 2026-08-03 — QA 통합 배치: Nav/관리자UI/예약제한·10분취소/개별마감·프라이빗/알림 (PR #39)
+
+회원의 실제 브라우저 QA에서 발견한 5개 트랙(NAV-001, UI-004, RES-001, CLASS-001, NOTIF-001,
+SYNC-001)을 하나의 배치/PR(#39)로 진행. 이슈 #33~#38로 추적.
+
+- **NAV-001/SYNC-001**: 사용 가능한 수강권이 없는 신규 회원의 하단 Nav "예약"/"내 예약" 탭
+  숨김(구매 시 즉시 5탭 복원), Mock 결제 확정 시 `ensure_center_member` 호출 누락 수정.
+- **UI-004**: 휴무일 버튼 캡슐형 통일, 수업 시작/종료 시간 오전오후·시·분(기본 00분)
+  선택형 교체, 관리자 직접배치 화면 중복 텍스트 정리.
+- **RES-001**: 예약 후 10분 이내 무료 취소 예외(`cancel_reservation` 재작성,
+  `reservations.cancel_source` 컬럼 신설).
+- **CLASS-001**: 개별 수업 예약마감이 운영설정 기본값보다 우선하도록 배선, 프라이빗 수업
+  (`class_format`) 정원 1명 서버(CHECK 제약) 강제.
+- **NOTIF-001**: 알림 채널 현황 문구 명확화, 1:1 문의 알림 딥링크, 휴무일 강제취소가
+  예약/수업 행을 삭제 대신 `cancelled` 상태로 보존(`add_holiday_safe` DELETE→UPDATE 전환)
+  + 회원 알림 문구 보강, 미사용 확인된 운영설정 메뉴(라운지/락커/문의게시판) UI 제거.
+
+### 실브라우저 QA 후속 수정 (같은 PR #39에 추가 커밋)
+
+1차 배치 완료 후 실제 브라우저 QA에서 7건의 추가 문제가 발견되어 같은 브랜치에서 수정:
+- 이메일 인증을 실제로 쓰지 않는데도 "확인 메일이 발송됐어요"라고 안내하던 거짓 문구 제거
+  (`app/login/page.tsx`).
+- BottomNav 로딩 중 탭이 잠깐 보였다가 사라지는 깜빡임 수정(초기 상태를 "있음"으로 가정하지
+  않음), "내 예약"을 항상 노출하던 자체 판단을 사용자 요구에 맞게 철회(수강권 없으면 둘 다
+  숨김).
+- 관리자 직접배치 "종료" 버튼의 세로 줄바꿈 실제 원인(`.ghost-btn`의 `width:100%`가 flex
+  컨테이너에서 flex-basis로 해석돼 발생) 확인 후 전용 클래스로 수정.
+- **실시간 알림 토스트(`NotificationToaster.tsx`)에 문의 딥링크 분기가 통째로 빠져 있던 것을
+  발견** — 회원/매니저 알림 "목록" 페이지는 이미 정상 동작했지만 토스트 팝업만 별도 구현이라
+  누락돼 있었음. 세 곳이 `notificationHref()` 하나를 공유하도록 통합.
+- 관리자 1:1 문의 목록이 "센터이름 회원"으로만 보이던 문제 — 회원 이름을 조회하지 않고
+  있었음을 확인, "회원이름 - 센터이름" 형식으로 수정.
+- **운영설정 재검증 중 `calc_deadline()`이 `'open'` kind(예약 오픈 시점)를 처리하지 않고
+  있었음을 발견** — 이전 배치의 "P1-12에서 정상 배선됨" 결론이 틀렸던 것으로, 관리자가 저장한
+  예약 오픈 설정이 조용히 무시되고 취소 마감 설정이 대신 쓰이고 있었음
+  (`fix_calc_deadline_open_kind_draft_proposed.sql`).
+- 당일 예약 허용 OFF는 UI가 실제로 저장하는 경로(`saveSettings`)를 쓰는 신규 통합테스트로
+  재검증(이전에는 이 항목에 자동 테스트 자체가 없었음).
+
+⚠️ 이 배치의 SQL 파일들은 사용자 승인 전까지 미실행 상태이며, 관련 통합테스트는 그동안
+의도적으로 RED입니다.
+
 ## 2026-08-02 — Track B: 관리자(Admin) 기능 전수 감사 + 예외처리/사용성 버그 수정
 
 17개 관리자 기능 영역(대시보드/회원/스태프/권한/예약/출석/클래스/일정/수강권/상품/결제/매출/

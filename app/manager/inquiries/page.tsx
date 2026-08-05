@@ -6,7 +6,8 @@
   - 채팅방에서 답변 (사진/글, 실시간)
 */
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
 import InquiryChat from "../../components/InquiryChat";
@@ -14,22 +15,43 @@ import { fetchCenterThreads, type InquiryThread } from "../../../lib/inquiries";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 
 export default function ManagerInquiriesPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <ManagerInquiriesPageContent />
+    </Suspense>
+  );
+}
+
+function ManagerInquiriesPageContent() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [threads, setThreads] = useState<InquiryThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<{ id: string; title: string } | null>(null);
 
+  const searchParams = useSearchParams();
+
   async function loadThreads() {
-    setThreads(await fetchCenterThreads());
+    const list = await fetchCenterThreads();
+    setThreads(list);
+    return list;
   }
 
   useEffect(() => {
     (async () => {
       const list = await fetchMyCenters();
       setCenters(list);
-      if (list.length > 0) await loadThreads();
+      if (list.length > 0) {
+        const threadList = await loadThreads();
+        // 신규 문의 알림에서 ?thread=<id>로 들어왔으면 목록이 아니라 그 스레드를 바로 연다(NOTIF-001 E-2)
+        const threadParam = searchParams.get("thread");
+        if (threadParam) {
+          const found = threadList.find((t) => t.id === threadParam);
+          if (found) setActive({ id: found.id, title: found.centerName + " · 회원 문의" });
+        }
+      }
       setLoading(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function backToList() {
@@ -76,7 +98,7 @@ export default function ManagerInquiriesPage() {
               <div className="thread-avatar">💬</div>
               <div className="thread-main">
                 <div className="thread-top">
-                  <span className="thread-name">{t.centerName} 회원</span>
+                  <span className="thread-name">{t.memberName ?? "회원"} - {t.centerName}</span>
                   {t.lastMessageAt && <span className="thread-time">{t.lastMessageAt}</span>}
                 </div>
                 <div className="thread-preview">{t.lastMessage ?? "새 문의"}</div>

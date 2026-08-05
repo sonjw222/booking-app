@@ -32,6 +32,9 @@ export type HistoryItem = {
   // "MEMBER" | "ADMIN_ASSIGNMENT" | "ADMIN_FREE" — 회원 화면에는 lib/reservationTypes.ts의
   // memberFacingBadge()로만 노출 (무료배치 여부/사유/관리자명 등 내부 정보는 절대 포함하지 않음)
   reservationType: string;
+  // NOTIF-001 E-5: 'HOLIDAY'면 "센터 휴무로 자동 취소" 배지 표시. cancel_source가 없는(구
+  // 데이터/다른 취소 경로) 예약은 null.
+  cancelSource: string | null;
 };
 
 const KST_DT = new Intl.DateTimeFormat("ko-KR", {
@@ -153,7 +156,7 @@ export async function fetchMyPage() {
   // 예약내역 (모든 프로필, 최근순)
   const { data: resRows, error: resErr } = await supabase
     .from("reservations")
-    .select("id, profile_id, status, reservation_type, created_at, classes(title, start_time, centers(name))")
+    .select("id, profile_id, status, reservation_type, cancel_source, created_at, classes(title, start_time, centers(name))")
     .in("profile_id", profileIds)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -167,6 +170,7 @@ export async function fetchMyPage() {
     status: r.status,
     profileName: profileLabel[r.profile_id] ?? "",
     reservationType: r.reservation_type ?? "MEMBER",
+    cancelSource: r.cancel_source ?? null,
   }));
 
   const profile: Profile = { name: me.name, phone: me.phone, isMember: me.isMember, isManager: me.isManager, isPlatformAdmin: me.isPlatformAdmin };

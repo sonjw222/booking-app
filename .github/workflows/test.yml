@@ -21,9 +21,66 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  e2e:
+    name: E2E tests (Playwright, live dev Supabase)
+    runs-on: ubuntu-latest
+    # unit/integration과 마찬가지로 fork PR은 Secrets가 없어 애초에 통과할 수 없고, 있어도
+    # 노출시키면 안 되므로 막는다.
+    if: >
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
+          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
+          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
+          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
+          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
+          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
+          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
+          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
+          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
+          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
+          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
+          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
+          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
+          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # 실패 시 스크린샷/Trace/Video(test-results/)와 HTML Report(playwright-report/)를
+      # 아티팩트로 남긴다 — 성공 시에도 HTML Report는 남겨 결과를 바로 열어볼 수 있게 한다.
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-test-results
+          path: test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
   unit:
     name: Unit tests (no Supabase needed)
     runs-on: ubuntu-latest
+    # e2e 이후에 실행 — e2e와 integration이 동시에 돌면 둘 다 같은 공유 테스트 계정/센터의
+    # center_settings·classes를 동시에 바꿔 서로의 "저장 전/후 값" assertion을 깨뜨린다
+    # (실제로 재현됨: e2e가 병렬로 돌자 operational-settings-wiring/reservation-cancel-grace-period가
+    # 실패). unit 자체는 Supabase가 필요 없지만, 여기서 순서를 강제해 e2e → unit → integration →
+    # build 전체가 항상 순차 실행되게 한다.
+    needs: e2e
     steps:
       - uses: actions/checkout@v4
       # Node 22+ 필수: @supabase/supabase-js(realtime-js)가 클라이언트 생성 시 native
@@ -77,3 +134,19 @@ jobs:
           TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
           TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+  build:
+    name: Build (production, typecheck 포함)
+    runs-on: ubuntu-latest
+    needs: integration
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}

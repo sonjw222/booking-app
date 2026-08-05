@@ -87,13 +87,17 @@ export default function SettingsPage() {
   }
 
   // 숫자 입력 (음수 방지)
-  const numInput = (val: number, onCh: (n: number) => void, w = 56) => (
+  const numInput = (val: number, onCh: (n: number) => void, w = 56, disabled = false) => (
     <input
       type="number" min={0} className="set-num" style={{ width: w }}
-      value={val}
+      value={val} disabled={disabled}
       onChange={(e) => onCh(Math.max(0, parseInt(e.target.value || "0", 10)))}
     />
   );
+
+  // Track 4 운영설정 재감사: 스케줄러 인프라가 없어 저장만 되고 실제로 작동하지 않는 항목 —
+  // 정상 기능처럼 보이지 않도록 "준비 중" 배지를 붙이고 입력을 비활성화한다(값 자체는 유지).
+  const soonBadge = <span className="set-soon-badge">준비 중</span>;
 
   // 토글 스위치
   const toggle = (on: boolean, onCh: (b: boolean) => void) => (
@@ -163,26 +167,32 @@ export default function SettingsPage() {
           </div>
           {s.allowSameDayBooking && (
             <div className="set-row col">
-              <div className="set-label">당일 예약 변경 가능 시간 (그룹 수업, 시작 전까지)</div>
-              <div className="set-inline">{numInput(s.sameDayChangeHours, (n) => up("sameDayChangeHours", n))}시간
-                {numInput(s.sameDayChangeMinutes, (n) => up("sameDayChangeMinutes", n))}분 전</div>
+              <div className="set-label">당일 예약 변경 가능 시간 (그룹 수업, 시작 전까지) {soonBadge}</div>
+              <div className="set-inline">{numInput(s.sameDayChangeHours, (n) => up("sameDayChangeHours", n), 56, true)}시간
+                {numInput(s.sameDayChangeMinutes, (n) => up("sameDayChangeMinutes", n), 56, true)}분 전</div>
+              <div className="set-soon-note">예약 마감/취소 규칙과는 별개로 "당일 한정 변경 유예시간"을
+                자동으로 적용하려면 정기 실행 스케줄러가 필요해 아직 실제로 반영되지 않아요.</div>
             </div>
           )}
 
           {/* 03. 폐강 */}
-          <div className="set-section-title">수업 폐강 시간</div>
+          <div className="set-section-title">수업 폐강 시간 {soonBadge}</div>
           <div className="set-row col">
             <div className="set-label">최소 인원 미달 시, 시작 전 자동 폐강</div>
-            <div className="set-inline">{numInput(s.autocancelHours, (n) => up("autocancelHours", n))}시간
-              {numInput(s.autocancelMinutes, (n) => up("autocancelMinutes", n))}분 전</div>
+            <div className="set-inline">{numInput(s.autocancelHours, (n) => up("autocancelHours", n), 56, true)}시간
+              {numInput(s.autocancelMinutes, (n) => up("autocancelMinutes", n), 56, true)}분 전</div>
+            <div className="set-soon-note">최소 인원 자동 판정에는 정기 실행 스케줄러가 필요해 아직
+              실제로 반영되지 않아요 — 폐강은 수업 관리 화면에서 수동으로 처리해주세요.</div>
           </div>
 
           {/* 04. 대기 자동 예약 */}
-          <div className="set-section-title">예약대기 자동 예약 시간</div>
+          <div className="set-section-title">예약대기 자동 예약 시간 {soonBadge}</div>
           <div className="set-row col">
             <div className="set-label">공석 발생 시, 시작 전까지 자동 예약 (0이면 취소시간 적용)</div>
-            <div className="set-inline">{numInput(s.waitlistAutoHours, (n) => up("waitlistAutoHours", n))}시간
-              {numInput(s.waitlistAutoMinutes, (n) => up("waitlistAutoMinutes", n))}분 전</div>
+            <div className="set-inline">{numInput(s.waitlistAutoHours, (n) => up("waitlistAutoHours", n), 56, true)}시간
+              {numInput(s.waitlistAutoMinutes, (n) => up("waitlistAutoMinutes", n), 56, true)}분 전</div>
+            <div className="set-soon-note">공석 발생 시 대기자 확정은 취소 시점에 즉시 처리되고
+              있어요(정상 동작) — 여기 설정된 "몇 시간 전까지만" 조건은 아직 적용되지 않아요.</div>
           </div>
 
           {/* 05. 대기 횟수 */}
@@ -252,13 +262,14 @@ export default function SettingsPage() {
 
           {/* 11~17. 기능 on/off */}
           <div className="set-section-title">기능 사용 여부</div>
+          {/* E-6: 문의 게시판/락커/라운지 사용 토글 제거 — 어디서도 이 값을 읽는 코드가 없어
+              (docs/TODO.md에 근거 기록) 관리자가 켜고 꺼도 실제 효과가 없는 항목이었다.
+              DB 컬럼(use_inquiry_board/use_locker/use_lounge)은 이번에 지우지 않는다(향후
+              기능 플래그로 재사용될 수 있어 별도 migration 이슈로 분리). */}
           {([
-            ["useInquiryBoard", "문의 게시판 사용"],
             ["showAllClasses", "수강권으로 볼 수 없는 수업도 표시"],
-            ["useLocker", "락커 기능 사용"],
             ["deductOnLateCancel", "취소 시간 이후 취소 시 횟수 차감"],
             ["autoUnpaidInput", "수강권 미수금 자동 입력"],
-            ["useLounge", "회원앱 라운지 사용"],
             ["showPointHistory", "회원앱 포인트 내역 조회"],
           ] as [keyof CenterSettings, string][]).map(([key, label]) => (
             <div className="set-row" key={key}>

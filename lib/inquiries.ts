@@ -100,7 +100,10 @@ export async function fetchMyThreads(): Promise<InquiryThread[]> {
 export async function fetchCenterThreads(): Promise<InquiryThread[]> {
   const { data, error } = await supabase
     .from("inquiry_threads")
-    .select("id, center_id, member_account_id, last_message, last_message_at, manager_unread, centers(name)")
+    .select(
+      "id, center_id, member_account_id, last_message, last_message_at, manager_unread, centers(name), " +
+      "accounts:member_account_id(name, profiles(nickname, name, is_primary))"
+    )
     .order("last_message_at", { ascending: false, nullsFirst: false });
   if (error) return [];
   return (data ?? []).map((r: any) => ({
@@ -108,10 +111,24 @@ export async function fetchCenterThreads(): Promise<InquiryThread[]> {
     centerId: r.center_id,
     centerName: r.centers?.name ?? "센터",
     memberAccountId: r.member_account_id,
+    memberName: resolveMemberName(r.accounts),
     lastMessage: r.last_message,
     lastMessageAt: r.last_message_at ? KST.format(new Date(r.last_message_at)) : null,
     unread: r.manager_unread ?? 0,
   }));
+}
+
+// 문의방의 회원 표시 이름: 대표 프로필의 nickname → name → 계정 이름 → "회원" 순으로 폴백한다
+// (기존 알림 트리거의 coalesce(nickname, name, '회원') 우선순위와 동일하게 맞춤). 회원 계정이
+// center_members로 등록돼 있지 않아 RLS상 accounts 조회가 막히는 경우 accounts 자체가
+// null로 온다 — 그 경우에도 "회원"으로 안전하게 표시한다(export해 단위 테스트).
+export function resolveMemberName(accounts: {
+  name?: string | null;
+  profiles?: { nickname?: string | null; name?: string | null; is_primary?: boolean }[] | null;
+} | null | undefined): string {
+  if (!accounts) return "회원";
+  const primary = accounts.profiles?.find((p) => p.is_primary) ?? accounts.profiles?.[0];
+  return primary?.nickname || primary?.name || accounts.name || "회원";
 }
 
 // ── 메시지 목록 ──

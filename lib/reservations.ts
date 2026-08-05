@@ -5,6 +5,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { getKstMonthUtcRange } from "./kst";
 
 // ---------------- 타입 ----------------
 
@@ -26,6 +27,8 @@ export type ClassInfo = {
   reserved: number;
   capacity: number;
   allowGoods: boolean;
+  classFormat: "group" | "private"; // CLASS-001 D-2: 회원 앱에 프라이빗 배지 표시용
+  showReservedCount: boolean; // 운영설정 "회원에게 예약 인원 표시"(show_group_reserved_count)
   // 프로필별 내 예약 상태. key = profileId
   myByProfile: Record<string, { reservationId: string; status: "confirmed" | "waitlisted" }>;
 };
@@ -62,8 +65,18 @@ export async function getMyAccountId(): Promise<string> {
 // 반환: 이번 달의 수업 + 센터 + 휴무일 + 내 예약 정보
 // accountId를 미리 조회해서 넘기면 내부에서 다시 조회하지 않음 (중복 쿼리 방지)
 export async function fetchMonthData(year: number, month: number, accountId?: string) {
-  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
-  const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+  // ⚠️ classes.start_time은 timestamptz라 타임존 표기 없는 날짜 문자열("2026-10-01")로
+  // .gte()/.lt() 비교하면 DB 세션 타임존(UTC) 기준으로 해석돼, 회원이 보는 KST 기준 "그 달"과
+  // 최대 9시간 어긋난다(달 1일 KST 00:00~08:59 수업 누락 등) — getKstMonthUtcRange()로
+  // KST 월 경계를 명시적 UTC ISO로 변환해 사용한다.
+  const { startUtcIso, endUtcIso } = getKstMonthUtcRange(year, month);
+  // memberships.expires_at / center_holidays.holiday_date는 둘 다 date 컬럼(시간대 없음)이라
+  // timestamptz 변환과 무관한 순수 날짜 문자열이 별도로 필요하다 — KST/UTC 오프셋 문제 자체가
+  // 없는 컬럼이므로 굳이 UTC로 변환하지 않는다.
+  const monthStartDateOnly = `${year}-${String(month).padStart(2, "0")}-01`;
+  const nextMonthDateOnly = month === 12
+    ? `${year + 1}-01-01`
+    : `${year}-${String(month + 1).padStart(2, "0")}-01`;
 
   const accId = accountId ?? (await getMyAccountId());
   const account = { id: accId };
@@ -83,21 +96,40 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   for (const m of myMems ?? []) {
     const active = (m as any).status === "active"
       && ((m as any).remaining_count == null || (m as any).remaining_count > 0)
-      && ((m as any).expires_at == null || (m as any).expires_at >= monthStart.slice(0, 10) || new Date((m as any).expires_at) >= new Date());
+      && ((m as any).expires_at == null || (m as any).expires_at >= monthStartDateOnly || new Date((m as any).expires_at) >= new Date());
     if (active) myMembershipCenters.add((m as any).center_id);
   }
 
   // 이번 달 수업 (확정 예약 수 포함)
-  const { data: classRows, error: clsErr } = await supabase
-    .from("classes")
-    .select("id, center_id, title, start_time, end_time, capacity, allow_goods, centers(id, name, categories)")
-    .gte("start_time", monthStart)
-    .lt("start_time", nextMonth)
-    .order("start_time");
-  if (clsErr) throw new Error("수업 목록을 불러오지 못했어요: " + clsErr.message);
+  // ⚠️ center_id 조건 없이 "이 달의 모든 센터" 수업을 한 번에 가져온 뒤 클라이언트에서
+  // myMembershipCenters로 걸러내던 예전 방식은, Supabase(PostgREST) 기본 응답 행 수 제한
+  // (실측: 1000행)에 걸리면 start_time 오름차순 정렬 특성상 "월 후반부 수업이 통째로
+  // 안 보이는" 증상을 냈다(회원 화면에만 발생 — 관리자용 fetchClasses는 center_id로 이미
+  // 좁혀서 조회해 이 제한에 걸리지 않았음, ROWLIMIT-DIAG 진단으로 실측 확인됨). DB 쿼리
+  // 자체를 이 회원이 활성 수강권을 보유한 센터로 좁혀서, 그 범위 안에서는 제한에 걸릴 일이
+  // 없게 하고, 혹시라도 한 회원이 아주 많은 센터의 수강권을 보유해 그마저 넘는 경우까지
+  // 대비해 .range()로 페이지 단위 반복 조회한다.
+  const membershipCenterIds = Array.from(myMembershipCenters);
+  const classRows: any[] = [];
+  if (membershipCenterIds.length > 0) {
+    const PAGE_SIZE = 1000;
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data: page, error: clsErr } = await supabase
+        .from("classes")
+        .select("id, center_id, title, start_time, end_time, capacity, allow_goods, class_format, centers(id, name, categories)")
+        .in("center_id", membershipCenterIds)
+        .gte("start_time", startUtcIso)
+        .lt("start_time", endUtcIso)
+        .order("start_time")
+        .range(from, from + PAGE_SIZE - 1);
+      if (clsErr) throw new Error("수업 목록을 불러오지 못했어요: " + clsErr.message);
+      classRows.push(...(page ?? []));
+      if (!page || page.length < PAGE_SIZE) break;
+    }
+  }
 
-  // 수강권 보유 센터의 수업만 남김 (수강권 없는 센터 수업은 숨김)
-  const filteredClassRows = (classRows ?? []).filter((c: any) => myMembershipCenters.has(c.center_id));
+  // DB 쿼리 자체가 이미 수강권 보유 센터로 좁혀져 있으므로 별도 필터가 필요 없다.
+  const filteredClassRows = classRows;
 
   const classIds = filteredClassRows.map((c) => c.id);
 
@@ -107,26 +139,38 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   let myByClassProfile: Record<string, { id: string; status: "confirmed" | "waitlisted" }> = {};
 
   if (classIds.length > 0) {
-    const [countRes, myRes] = await Promise.all([
-      supabase.from("class_reservation_counts").select("class_id, confirmed_count").in("class_id", classIds),
-      supabase
-        .from("reservations")
-        .select("id, class_id, profile_id, status")
-        .in("profile_id", myProfileIds)
-        .in("class_id", classIds)
-        .in("status", ["confirmed", "waitlisted"]),
+    // classIds가 많아지면(위 행 수 제한 수정으로 한 센터가 한 달에 수백~천 개 이상 수업을
+    // 가질 수 있게 됨) .in()에 그 UUID를 전부 나열한 요청 URL이 너무 길어져 PostgREST가
+    // "Bad Request"로 거부한다(실측 확인됨) — CHUNK_SIZE 단위로 나눠 여러 번 조회 후 합친다.
+    const CHUNK_SIZE = 150;
+    const classIdChunks: string[][] = [];
+    for (let i = 0; i < classIds.length; i += CHUNK_SIZE) classIdChunks.push(classIds.slice(i, i + CHUNK_SIZE));
+
+    const [countChunks, myChunks] = await Promise.all([
+      Promise.all(classIdChunks.map((ids) =>
+        supabase.from("class_reservation_counts").select("class_id, confirmed_count").in("class_id", ids)
+      )),
+      Promise.all(classIdChunks.map((ids) =>
+        supabase
+          .from("reservations")
+          .select("id, class_id, profile_id, status")
+          .in("profile_id", myProfileIds)
+          .in("class_id", ids)
+          .in("status", ["confirmed", "waitlisted"])
+      )),
     ]);
 
-    if (countRes.error) throw new Error("예약 인원을 불러오지 못했어요: " + countRes.error.message);
-    if (myRes.error) throw new Error("내 예약을 불러오지 못했어요: " + myRes.error.message);
-
-    for (const r of countRes.data ?? []) {
-      reservedCount[r.class_id] = r.confirmed_count;
+    for (const res of countChunks) {
+      if (res.error) throw new Error("예약 인원을 불러오지 못했어요: " + res.error.message);
+      for (const r of res.data ?? []) reservedCount[r.class_id] = r.confirmed_count;
     }
-    for (const r of myRes.data ?? []) {
-      myByClassProfile[`${r.class_id}:${(r as any).profile_id}`] = {
-        id: r.id, status: r.status as "confirmed" | "waitlisted",
-      };
+    for (const res of myChunks) {
+      if (res.error) throw new Error("내 예약을 불러오지 못했어요: " + res.error.message);
+      for (const r of res.data ?? []) {
+        myByClassProfile[`${r.class_id}:${(r as any).profile_id}`] = {
+          id: r.id, status: r.status as "confirmed" | "waitlisted",
+        };
+      }
     }
   }
 
@@ -152,12 +196,24 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     color: colorByCenter[c.id] ?? DEFAULT_COLORS[i % DEFAULT_COLORS.length],
   }));
 
+  // 운영설정 "회원에게 예약 인원 표시" — 센터마다 다를 수 있어 등장한 센터들만 조회
+  const showReservedCountByCenter: Record<string, boolean> = {};
+  if (centerMap.size > 0) {
+    const { data: settingsRows } = await supabase
+      .from("center_settings")
+      .select("center_id, show_group_reserved_count")
+      .in("center_id", Array.from(centerMap.keys()));
+    for (const s of settingsRows ?? []) {
+      showReservedCountByCenter[(s as any).center_id] = (s as any).show_group_reserved_count ?? true;
+    }
+  }
+
   // 휴무일
   const { data: holRows } = await supabase
     .from("center_holidays")
     .select("center_id, holiday_date, reason")
-    .gte("holiday_date", monthStart)
-    .lt("holiday_date", nextMonth);
+    .gte("holiday_date", monthStartDateOnly)
+    .lt("holiday_date", nextMonthDateOnly);
   const holidays: CenterHoliday[] = (holRows ?? []).map((h) => ({
     centerId: h.center_id,
     date: h.holiday_date,
@@ -182,6 +238,9 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
       reserved: reservedCount[c.id] ?? 0,
       capacity: c.capacity,
       allowGoods: c.allow_goods ?? false,
+      classFormat: (c.class_format ?? "group") as "group" | "private",
+      // 설정 행이 없으면 DEFAULT_SETTINGS.showGroupReservedCount(true)와 동일하게 기본 표시
+      showReservedCount: showReservedCountByCenter[c.center_id] ?? true,
       myByProfile: myProfileIds.reduce((acc, pid) => {
         const r = myByClassProfile[`${c.id}:${pid}`];
         if (r) acc[pid] = { reservationId: r.id, status: r.status };

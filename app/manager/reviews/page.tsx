@@ -17,6 +17,7 @@ import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
 import RichTextEditor from "../../components/RichTextEditor";
 import { extractPlainText } from "../../../lib/security";
+import { ZoomableImage } from "../../components/ImageViewer";
 
 export default function ManagerReviewsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -171,7 +172,10 @@ export default function ManagerReviewsPage() {
               {r.photos && r.photos.length > 0 && (
                 <div className="review-photos">
                   {r.photos.map((ph, i) => (
-                    <img key={i} className="review-photo" src={reviewPhotoUrl(ph) ?? ""} alt="" />
+                    <ZoomableImage
+                      key={i} className="review-photo" src={reviewPhotoUrl(ph) ?? ""}
+                      group={r.photos!.map((p) => reviewPhotoUrl(p) ?? "")} groupIndex={i}
+                    />
                   ))}
                 </div>
               )}

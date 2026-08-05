@@ -11,8 +11,9 @@
 import { useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import BottomNav from "../components/BottomNav";
+import { ZoomableImage } from "../components/ImageViewer";
 import {
-  fetchNotifications, markRead, deleteNotification, notiEmoji,
+  fetchNotifications, markRead, deleteNotification, notiEmoji, notificationHref,
   type Notification,
 } from "../../lib/notifications";
 import {
@@ -42,8 +43,9 @@ export default function NotificationsPage() {
       const found = announcements.find((a) => a.id === n.data.announcement_id);
       if (found) { setOpenAnnounce(found); return; }
     }
-    // 그 외에는 링크로 이동
-    if (n.link) window.location.href = n.link;
+    // 문의 답변 알림은 목록이 아니라 해당 스레드로 바로 이동(NOTIF-001 E-2) — 토스트 팝업과
+    // 동일한 판단 로직을 공유한다(notificationHref).
+    window.location.href = notificationHref(n);
   }
 
   async function handleDelete(id: string, e: React.MouseEvent) {
@@ -96,7 +98,10 @@ export default function NotificationsPage() {
             {openAnnounce.photos && openAnnounce.photos.length > 0 && (
               <div className="review-photos" style={{ marginTop: 12 }}>
                 {openAnnounce.photos.map((ph, i) => (
-                  <img key={i} className="review-photo" src={announcementPhotoUrl(ph) ?? ""} alt="" />
+                  <ZoomableImage
+                    key={i} className="review-photo" src={announcementPhotoUrl(ph) ?? ""}
+                    group={openAnnounce.photos!.map((p) => announcementPhotoUrl(p) ?? "")} groupIndex={i}
+                  />
                 ))}
               </div>
             )}
