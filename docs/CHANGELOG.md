@@ -36,6 +36,16 @@
   `/reset-password/confirm`), 로그인 상태에서 비밀번호 변경(`/settings/account`),
   "로그인 상태 유지" 체크박스(해제 시 세션을 localStorage 대신 sessionStorage에 저장),
   세션 만료 시 자동으로 로그인 화면으로 안내(`app/components/SessionWatcher.tsx`).
+- **P2 프라이빗(1:1) 수업**: 관리자 UI(그룹/프라이빗 토글, capacity=1 고정)와 DB
+  CHECK 제약, `calc_deadline()`의 프라이빗 전용 예약/취소/오픈 기한 등은 이전 배치에서
+  이미 구현돼 있었으나, 실제 예약 경로에 세 가지 실제 버그가 남아 있었다(코드 감사로
+  확인, `docs/TODO.md` P1-11/P1-12와 교차 확인): (1) 프라이빗 수업이 차 있으면 대기예약
+  경로로 빠져 1:1 수업에 대기 순번이 생길 수 있었음, (2) 관리자 직접배치의 "정원 초과
+  강제 배치" 옵션이 프라이빗 수업에도 그대로 적용돼 두 번째 확정 예약을 만들 수 있었음,
+  (3) 운영설정 화면의 "프라이빗 동시 수업 최대 개수"(`private_max_concurrent`)가
+  스키마·설정화면에만 있고 실제로 예약을 막는 코드가 전혀 없어 완전히 죽은 설정이었음.
+  `fix_private_class_capacity_and_concurrency_draft_proposed.sql`(SQL 미적용, 승인 대기)로
+  세 가지 모두 수정하고 `tests/integration/private-class-capacity.test.ts`로 검증 추가.
 
 ## 2026-08-05 — Playwright 관리자 세션 session_not_found 근본 원인 수정 + 전체 파이프라인 2회 연속 Green (PR #39)
 
