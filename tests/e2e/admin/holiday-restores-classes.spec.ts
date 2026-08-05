@@ -96,8 +96,16 @@ test("휴무일 생성→회원화면 예약차단 확인→삭제→새로고�
   await waitHolidaysReady(page);
   await page.locator('input[type="date"]').fill(holidayDate);
   await page.getByRole("button", { name: "추가" }).click();
+  // ⚠ isVisible()은 즉시 현재 DOM만 확인하고 기다려주지 않는다("추가" 클릭 직후엔 서버
+  // 응답이 아직 안 와 확인창이 렌더되기 전이라 항상 false로 새서 이 분기 자체가 절대
+  // 실행되지 않았다 — 실제 CI 트레이스로 add_holiday_safe가 force=false로 딱 한 번만
+  // 호출된 것을 확인). waitFor()로 실제로 폴링하며 기다린다.
   const forceConfirmBtn = page.getByRole("button", { name: "예약 취소하고 휴무일 지정" });
-  if (await forceConfirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+  const needsConfirm = await forceConfirmBtn
+    .waitFor({ state: "visible", timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  if (needsConfirm) {
     await forceConfirmBtn.click();
   }
   await expect(holidayRow()).toBeVisible();
