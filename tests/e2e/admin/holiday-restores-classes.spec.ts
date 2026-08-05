@@ -41,6 +41,15 @@ function fmtDate(d: string): string {
   return new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "short" }).format(dt);
 }
 
+// 관리자 화면의 "추가" 폼은 fetchMyCenters()가 끝나 centerId가 정해지기 전에도 이미 렌더링돼
+// 있다(목록 영역만 loading으로 감싸져 있음) — 그래서 goto 직후 바로 입력/클릭하면 centerId가
+// 아직 null인 순간을 때릴 수 있다(실제 CI 실패로 재현됨: "추가" 클릭에도 add_holiday_safe RPC
+// 자체가 전혀 발생하지 않음을 네트워크 트레이스로 확인). 목록이 최초로 로딩을 끝낸 뒤(빈 상태든
+// 항목이 있든)에만 입력을 시작해 centerId가 확정된 이후임을 보장한다.
+async function waitHolidaysReady(p: import("@playwright/test").Page): Promise<void> {
+  await p.locator(".daylist-empty, .hol-list").first().waitFor({ state: "visible" });
+}
+
 test.beforeAll(async () => {
   managerA = loadTestAccountMeta("manager-a");
   userA = loadTestAccountMeta("user-a");
@@ -66,6 +75,7 @@ test("휴무일 생성→회원화면 예약차단 확인→삭제→새로고�
   // ② 관리자 화면에서 실제로 그 날짜를 휴무일로 지정
   const holidayRow = () => page.locator(".hol-row", { hasText: fmtDate(holidayDate) });
   await page.goto("/manager/holidays");
+  await waitHolidaysReady(page);
   await page.locator('input[type="date"]').fill(holidayDate);
   await page.getByRole("button", { name: "추가" }).click();
   await expect(holidayRow()).toBeVisible();
@@ -80,6 +90,7 @@ test("휴무일 생성→회원화면 예약차단 확인→삭제→새로고�
 
   // ④ 관리자 화면에서 방금 만든 휴무일을 실제로 삭제
   await page.goto("/manager/holidays");
+  await waitHolidaysReady(page);
   page.once("dialog", (d) => d.accept());
   await holidayRow().getByRole("button", { name: "삭제" }).click();
   await expect(holidayRow()).toHaveCount(0);

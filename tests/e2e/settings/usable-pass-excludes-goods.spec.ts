@@ -55,12 +55,20 @@ test("모든 수강권 사용 가능 수업 — 사용할 수강권 목록에 go
   await page.goto(reservationDeepLink(cls.id, cls.startTime));
 
   // "사용할 수강권" 목록 자체가 렌더링될 때까지 기다린 뒤, 그 목록 전체 텍스트를 확인한다.
+  // TEST_USER_A는 다른 E2E 스펙들과 공유하는 계정이라 이전 실행들이 만들어둔 pass
+  // 수강권이 계속 누적된다(실제로 CI에서 28개까지 확인됨) — 그래서 행 개수를 특정
+  // 값으로 고정하지 않고, 목록 전체 텍스트에 pass 상품명은 있고 goods 상품명은 절대
+  // 없는지로만 검증한다(각 행 텍스트로도 한 번 더 확인 — goods가 pass-pick-row 자체로
+  // 렌더링되는 경우까지 잡아낸다).
   const passList = page.locator(".pass-pick-list");
   await expect(passList).toBeVisible();
   await expect(passList).toContainText("E2E 테스트 수강권");
   await expect(passList).not.toContainText("E2E 테스트 대여품");
-  // 혹시 goods가 pass-pick-row 자체로 렌더링되진 않았는지, 행 개수로도 확인(정확히 1개: pass만).
-  await expect(passList.locator(".pass-pick-row")).toHaveCount(1);
+  const rowCount = await passList.locator(".pass-pick-row").count();
+  expect(rowCount).toBeGreaterThan(0);
+  for (let i = 0; i < rowCount; i++) {
+    await expect(passList.locator(".pass-pick-row").nth(i)).not.toContainText("E2E 테스트 대여품");
+  }
 
   // 실제 예약도 진행해 reserveWithMembership()이 정말로 pass로만 예약되는지 끝까지 확인한다.
   await page.getByRole("button", { name: "예약하기" }).click();
