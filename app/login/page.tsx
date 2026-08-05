@@ -15,8 +15,8 @@
   - 소셜 로그인: 카카오 / 네이버 / 애플
 */
 
-import { useState } from "react";
-import { supabase } from "../../lib/supabaseClient";
+import { useEffect, useState } from "react";
+import { supabase, REMEMBER_ME_KEY } from "../../lib/supabaseClient";
 import CenterRegistrationForm, { type CenterFieldsValue } from "../components/CenterRegistrationForm";
 import { validateCenterRegistrationInput, registerCenterForAccount } from "../../lib/centers";
 
@@ -47,10 +47,24 @@ export default function LoginPage() {
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
+  // "로그인 상태 유지"(remember me, P1) — 기본 체크(기존과 동일하게 localStorage에 세션 저장).
+  // 해제하면 이 브라우저 탭/창을 닫을 때 세션도 같이 사라진다(sessionStorage로 저장, P1).
+  const [rememberMe, setRememberMe] = useState(true);
+
+  // 세션 만료로 SessionWatcher(app/components/SessionWatcher.tsx)가 이 화면으로 보낸
+  // 경우 안내 문구를 보여준다 — useSearchParams 대신 window.location으로 직접 읽어
+  // Suspense 경계 없이도(이 파일의 다른 navigation과 동일한 방식) 동작하게 한다.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("expired") === "1") {
+      setMessage({ type: "error", text: "세션이 만료됐어요. 다시 로그인해주세요." });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleLogin() {
     setLoading(true);
     setMessage(null);
+    localStorage.setItem(REMEMBER_ME_KEY, rememberMe ? "1" : "0");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
@@ -168,14 +182,17 @@ export default function LoginPage() {
     setMode("login");
   }
 
-  async function handleSocial(provider: "kakao" | "apple" | string) {
+  async function handleSocial(provider: "kakao" | "apple" | "google" | string) {
     setMessage(null);
+    // 소셜 로그인도 "로그인 상태 유지" 설정을 그대로 따른다 — 이 탭에서 리다이렉트로
+    // 나갔다가 돌아오므로, 세션이 실제로 만들어지기 전에 미리 저장해둬야 한다.
+    localStorage.setItem(REMEMBER_ME_KEY, rememberMe ? "1" : "0");
     const { error } = await supabase.auth.signInWithOAuth({
       provider: provider as any,
       options: { redirectTo: `${window.location.origin}/` },
     });
     if (error) {
-      const label = provider === "kakao" ? "카카오" : provider === "apple" ? "애플" : "네이버";
+      const label = provider === "kakao" ? "카카오" : provider === "apple" ? "애플" : provider === "google" ? "구글" : "네이버";
       setMessage({ type: "error", text: `${label} 로그인 설정이 아직 안 되어 있어요 (AUTH_SETUP.md 참고)` });
     }
   }
@@ -238,6 +255,16 @@ export default function LoginPage() {
           onKeyDown={(e) => e.key === "Enter" && submit()}
         />
 
+        {mode === "login" && (
+          <div className="login-row-options">
+            <label className="remember-me">
+              <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
+              로그인 상태 유지
+            </label>
+            <a className="forgot-pw-link" href="/reset-password">비밀번호를 잊으셨나요?</a>
+          </div>
+        )}
+
         {/* 센터 운영자 가입 시 센터 정보 — app/mypage/register-center/page.tsx와 같은 컴포넌트 재사용 */}
         {mode === "signup" && role === "manager" && (
           <CenterRegistrationForm
@@ -259,6 +286,10 @@ export default function LoginPage() {
         </div>
 
         <div className="social-list">
+          <button className="social-btn google" onClick={() => handleSocial("google")}>
+            <span className="social-ic" style={{ background: "#fff", color: "#4285F4", border: "1px solid var(--line)" }}>G</span>
+            Google로 계속하기
+          </button>
           <button className="social-btn kakao" onClick={() => handleSocial("kakao")}>
             <span className="social-ic" style={{ background: "#3C1E1E", color: "#FEE500" }}>K</span>
             카카오로 시작하기

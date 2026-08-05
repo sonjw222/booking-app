@@ -10,6 +10,7 @@ import { useEffect, useState, useRef } from "react";
 import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, type HomeCenter, type HomeClass } from "../lib/home";
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
 import { supabase } from "../lib/supabaseClient";
+import { ensureAccountForCurrentUser } from "../lib/authAccount";
 import BottomNav from "./components/BottomNav";
 
 const CATEGORIES = [
@@ -42,7 +43,11 @@ export default function Home() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setLoggedIn(!!data.user));
+    supabase.auth.getUser().then(async ({ data }) => {
+      setLoggedIn(!!data.user);
+      // 소셜 로그인 첫 방문이면 accounts/profiles 행을 여기서 한 번 만들어준다(P1, lib/authAccount.ts).
+      if (data.user) await ensureAccountForCurrentUser();
+    });
   }, []);
 
   useEffect(() => {

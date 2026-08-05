@@ -8,6 +8,35 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-05 — P0 실제 버그 4건 수정 + P1 로그인/계정 기능 보강 (feature/auth-private-class-membership)
+
+- **P0-1 (휴무일 삭제 후 폐강 상태가 안 풀림)**: `add_holiday_safe()`가 휴무일 등록 시
+  그날 수업들을 `classes.status='cancelled'`로 바꾸는데, 삭제 경로는 이를 되돌리는 코드가
+  전혀 없었다 — 그래서 휴무일을 지워도 수업이 계속 "폐강된 수업이에요"로 막혀 있었다.
+  신규 RPC `remove_holiday_safe()`(`fix_holiday_delete_restores_classes.sql`)로 휴무일 삭제와
+  해당 날짜 cancelled 수업의 open 복구를 한 트랜잭션으로 처리.
+- **P0-2 (수업별 예약마감이 당일예약 설정보다 낮은 우선순위였음)**: `reserve_class`/
+  `reserve_with_membership`의 "예약 마감시간" 검사는 `booking_deadline_min`(수업별 override)을
+  이미 최우선으로 썼지만, 바로 다음의 "당일 예약 허용 여부" 검사는 이 override를 무시하고
+  항상 센터 운영설정만 확인했다 — 그래서 수업에 명시적으로 예약마감을 지정해도 센터의
+  당일예약 토글이 꺼져 있으면 여전히 막혔다. `booking_deadline_min`이 있으면 당일예약
+  검사를 건너뛰도록 수정(`fix_class_deadline_overrides_same_day_toggle.sql`).
+- **P0-3 (goods 상품이 "사용 가능 수강권" 목록에 노출)**: 코드 감사 결과 현재 코드는 이미
+  이전 세션의 `fix_usable_memberships_product_kind.sql`로 고쳐진 상태 — RPC/관리자
+  선택기/reserveWithMembership 경로 모두 `product_kind='pass'`만 정확히 필터링함을
+  실브라우저 E2E로 재확인하고 회귀 방지 테스트만 추가.
+- **P0-4 (일일 예약 횟수 제한 재검증)**: 취소 시 한도가 다시 채워지는지, 대기 등록도
+  한도에 포함되는지, 회원 A/B의 한도가 서로 독립적인지 실브라우저로 새로 검증(기존
+  스펙은 "OFF→성공, ON+제한→3회째 실패"만 다뤘음). 로직 자체는 이미 정확했다(회귀 없음).
+- **P1 로그인/계정 기능**: 코드 감사 결과 소셜 로그인(카카오/네이버/애플)으로 처음
+  로그인하면 `accounts`/`profiles` 행이 아무도 만들어지지 않아 거의 모든 화면이
+  "계정 정보를 찾을 수 없어요"로 막히는 심각한 버그를 발견 — `lib/authAccount.ts`의
+  `ensureAccountForCurrentUser()`로 홈 화면 첫 로드 시 부트스트랩하도록 수정. 그 외
+  완전히 빠져 있던 기능 추가: Google 로그인 버튼, 비밀번호 재설정(`/reset-password`,
+  `/reset-password/confirm`), 로그인 상태에서 비밀번호 변경(`/settings/account`),
+  "로그인 상태 유지" 체크박스(해제 시 세션을 localStorage 대신 sessionStorage에 저장),
+  세션 만료 시 자동으로 로그인 화면으로 안내(`app/components/SessionWatcher.tsx`).
+
 ## 2026-08-05 — Playwright 관리자 세션 session_not_found 근본 원인 수정 + 전체 파이프라인 2회 연속 Green (PR #39)
 
 - **session_not_found 정확한 원인**: `tests/integration/setup.ts`의 `switchToTestUser()`가

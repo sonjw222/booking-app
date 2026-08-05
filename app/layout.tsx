@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ImageViewerProvider } from "./components/ImageViewer";
+import SessionWatcher from "./components/SessionWatcher";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,6 +30,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <SessionWatcher />
         <ImageViewerProvider>{children}</ImageViewerProvider>
       </body>
     </html>
