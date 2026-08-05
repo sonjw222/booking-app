@@ -60,6 +60,14 @@ test.afterAll(async () => {
 });
 
 test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회 실패 (실브라우저 end-to-end)", async ({ page, browser }) => {
+  // 이 스펙 하나가 예약/취소 왕복(RPC + 클라이언트 load() 재조회)을 최대 9번 반복한다 —
+  // 다른 스펙보다 훨씬 많다. CI dev 서버가 짧은 시간에 몰리는 요청 중 하나를 드물게
+  // "불러오는 중..."에서 멈춘 채 못 끝내는 경우가 실측 확인됐다(page navigation을
+  // 9번 → 2번으로 줄인 뒤에도 남아있음 — 새로고침 자체가 아니라 반복 요청 총량 문제로
+  // 보임). 기본 60초로는 한 번의 느린 응답을 흡수할 여유가 부족해 테스트 자체 타임아웃을
+  // 늘린다.
+  test.setTimeout(120_000);
+
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
 
