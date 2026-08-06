@@ -161,6 +161,19 @@ export async function cleanupTodaysReservationsForProfile(centerId: string, prof
 // 회원이 겪는 "수강권을 직접 골라 예약하는" 경로(reserveWithMembership)를 전혀 검증하지
 // 못하게 된다 — 실측 CI에서 이 상태로 재현됨. 그래서 테스트 수강권에는 반드시 실제
 // product_kind='pass' 상품을 만들어 연결한다.
+// P3 감사에서 발견한 실제 앱 버그(app/manager/classes/page.tsx의 save()가 "모든 수강권
+// 허용"으로 저장할 때도 센터의 전체 pass 상품에 membership_schedule_rules를 자동 추가해,
+// 그 순간부터 그 pass가 "무제한"에서 "그 수업 조건에만 매칭"으로 조용히 좁혀지던 문제 —
+// 코드는 고쳤지만, 그 버그가 살아있던 동안(이번 P3 배치 이전 포함, 실제 관리자 화면을
+// 수동으로 써본 이전 세션들에서도 발생했을 수 있음) 이미 쌓인 규칙이 여전히 남아있다.
+// "이 상품은 원래 무제한이어야 한다"고 테스트가 전제하는 공용 pass 상품(예: "E2E 테스트
+// 수강권 상품")은 매 실행 전에 이 함수로 규칙을 깨끗이 비워 그 전제를 실제로 보장한다.
+export async function clearScheduleRulesForProduct(productId: string): Promise<void> {
+  const admin = getFixtureAdminClient();
+  const { error } = await admin.from("membership_schedule_rules").delete().eq("product_id", productId);
+  if (error) throw new Error(`membership_schedule_rules 정리 실패: ${error.message}`);
+}
+
 export async function getOrCreateTestPassProduct(centerId: string): Promise<{ id: string }> {
   const admin = getFixtureAdminClient();
   const name = "E2E 테스트 수강권 상품";

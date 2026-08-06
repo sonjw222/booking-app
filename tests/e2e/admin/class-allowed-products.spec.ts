@@ -35,6 +35,13 @@ let centerAId: string;
 let passA: { id: string; name: string };
 let passB: { id: string; name: string };
 let passC: { id: string; name: string };
+// D/E/F는 "전체 허용" 테스트 전용 — A/B/C는 다른 테스트에서 이미 특정 수업에 명시적으로
+// 지정돼(class_allowed_products) membership_schedule_rules가 그 수업 조건으로 좁혀진
+// 상태라(의도된 동작 — 특정 수강권만 허용하면 그 수강권은 그 수업에서만 쓰이도록
+// 자동 기록됨), "전체 허용" 수업에서 여전히 보여야 하는지 검증하기엔 부적합하다.
+let passD: { id: string; name: string };
+let passE: { id: string; name: string };
+let passF: { id: string; name: string };
 let goods: { id: string };
 const createdClassIds: string[] = [];
 const foreignCenterCleanup: { centerId: string; productId: string } = { centerId: "", productId: "" };
@@ -60,11 +67,17 @@ test.beforeAll(async () => {
   passA = await getOrCreateTestPassProductNamed(centerAId, "P3 패스A");
   passB = await getOrCreateTestPassProductNamed(centerAId, "P3 패스B");
   passC = await getOrCreateTestPassProductNamed(centerAId, "P3 패스C");
+  passD = await getOrCreateTestPassProductNamed(centerAId, "P3 패스D");
+  passE = await getOrCreateTestPassProductNamed(centerAId, "P3 패스E");
+  passF = await getOrCreateTestPassProductNamed(centerAId, "P3 패스F");
   goods = await getOrCreateTestGoodsProduct(centerAId);
 
   await createTestMembershipForProduct(centerAId, userA.profileId, passA, { remainingCount: 10 });
   await createTestMembershipForProduct(centerAId, userA.profileId, passB, { remainingCount: 10 });
   await createTestMembershipForProduct(centerAId, userA.profileId, passC, { remainingCount: 10 });
+  await createTestMembershipForProduct(centerAId, userA.profileId, passD, { remainingCount: 10 });
+  await createTestMembershipForProduct(centerAId, userA.profileId, passE, { remainingCount: 10 });
+  await createTestMembershipForProduct(centerAId, userA.profileId, passF, { remainingCount: 10 });
 
   // 타 센터 혼입 검증용 — 어떤 매니저 로그인도 필요 없이 순수 admin insert로 격리된
   // "다른 센터 + 그 센터의 pass 상품"을 만든다(단순히 admin UI의 상품 목록이 절대
@@ -165,9 +178,13 @@ test("관리자: 선택 해제(전체 허용으로 전환) → 회원 화면에 
   const kstDate = kstDateStr(cls.startTime);
 
   // 먼저 특정 1개로 지정했다가("전체→특정" 전환 확인) 다시 해제("특정→전체" 전환 확인).
+  // ⚠ 여기서 쓰는 pass는 반드시 이 테스트 파일의 다른 테스트가 명시적으로 지정한 적
+  // 없는 것이어야 한다(패스A/B/C는 테스트1·2에서 이미 특정 수업에 지정돼
+  // membership_schedule_rules가 그 수업 조건으로 좁혀져 있음 — 의도된 동작이라 버그
+  // 아님). 그래서 패스D를 쓴다.
   await gotoManagerClassesDay(page, kstDate);
   await page.locator(".class-row", { hasText: "P3 그룹수업-전체허용" }).click();
-  await page.locator(".filter-chip", { hasText: "P3 패스A" }).click();
+  await page.locator(".filter-chip", { hasText: "P3 패스D" }).click();
   await page.getByRole("button", { name: "수정하기" }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
@@ -196,9 +213,9 @@ test("관리자: 선택 해제(전체 허용으로 전환) → 회원 화면에 
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
   const passList = memberPage.locator(".pass-pick-list");
   await expect(passList).toBeVisible();
-  await expect(passList).toContainText("P3 패스A");
-  await expect(passList).toContainText("P3 패스B");
-  await expect(passList).toContainText("P3 패스C");
+  await expect(passList).toContainText("P3 패스D");
+  await expect(passList).toContainText("P3 패스E");
+  await expect(passList).toContainText("P3 패스F");
   await expect(passList).not.toContainText("E2E 테스트 대여품"); // goods
   await memberContext.close();
 });

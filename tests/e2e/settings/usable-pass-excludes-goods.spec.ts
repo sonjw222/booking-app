@@ -7,6 +7,8 @@ import {
   createFutureTestClassAdmin,
   cleanupTestClassAdmin,
   reservationDeepLink,
+  getOrCreateTestPassProduct,
+  clearScheduleRulesForProduct,
   type TestUser,
 } from "../fixtures/testData";
 import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
@@ -35,6 +37,14 @@ test.beforeAll(async () => {
   managerA = loadTestAccountMeta("manager-a");
   userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
+
+  // "E2E 테스트 수강권 상품"은 이 테스트를 포함해 여러 스펙이 "항상 무제한으로 쓸 수 있는
+  // 공용 pass"로 전제한다 — 과거(이번 P3 배치 이전 포함) app/manager/classes/page.tsx의
+  // save()가 "모든 수강권 허용"으로 저장할 때도 센터의 전체 pass에 membership_schedule_rules를
+  // 자동 추가하던 실제 버그(P3에서 발견·수정)로 이 상품에도 원치 않는 규칙이 남아있을 수
+  // 있어, 그 전제를 실제로 보장하기 위해 매 실행 전에 규칙을 비운다.
+  const passProduct = await getOrCreateTestPassProduct(centerAId);
+  await clearScheduleRulesForProduct(passProduct.id);
 
   // 회원이 pass와 goods 두 종류를 동시에 보유한 상태를 실제로 만든다.
   await createTestMembershipAdmin(centerAId, userA.profileId, { remainingCount: 10 });
