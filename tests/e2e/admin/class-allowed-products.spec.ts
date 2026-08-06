@@ -244,6 +244,15 @@ test("프라이빗 수업에서도 예약 가능 수강권 선택이 동일하�
   await page.getByRole("button", { name: "수정하기" }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
+  // [진단용 임시 로그] 원인 파악 후 제거 예정 — 저장 직후 DB 실제 상태를 그대로 덤프한다.
+  {
+    const { data: capRows } = await admin.from("class_allowed_products").select("product_id").eq("class_id", privateCls.id);
+    console.log("[DIAG] class_allowed_products for private class:", JSON.stringify(capRows));
+    const { data: ruleRows } = await admin.from("membership_schedule_rules").select("*").eq("product_id", passA.id);
+    console.log("[DIAG] schedule_rules for passA:", JSON.stringify(ruleRows));
+    console.log("[DIAG] private class start_time (raw):", privateCls.start_time);
+  }
+
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
   await memberPage.goto(reservationDeepLink(privateCls.id, privateCls.start_time));
