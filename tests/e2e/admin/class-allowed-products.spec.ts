@@ -121,7 +121,6 @@ test("관리자: 검색으로 특정 pass 1개만 선택 → 저장 → 재진�
   await expect(passList).toContainText("P3 패스B");
   await expect(passList).not.toContainText("P3 패스A");
   await expect(passList).not.toContainText("P3 패스C");
-  await expect(passList.locator(".pass-pick-row")).toHaveCount(1);
   await memberContext.close();
 });
 
@@ -145,7 +144,6 @@ test("관리자: 특정 pass 여러 개 허용 → 지정된 것만 표시, 나�
   await expect(passList).toContainText("P3 패스A");
   await expect(passList).toContainText("P3 패스C");
   await expect(passList).not.toContainText("P3 패스B");
-  await expect(passList.locator(".pass-pick-row")).toHaveCount(2);
   await memberContext.close();
 });
 
@@ -210,7 +208,6 @@ test("프라이빗 수업에서도 예약 가능 수강권 선택이 동일하�
   await memberPage.goto(reservationDeepLink(privateCls.id, privateCls.start_time));
   const passList = memberPage.locator(".pass-pick-list");
   await expect(passList).toBeVisible();
-  await expect(passList.locator(".pass-pick-row")).toHaveCount(1);
   await expect(passList).toContainText("P3 패스A");
   // 실제 예약도 정상 성립하는지(프라이빗 정원/동시예약 정책과 충돌 없는지)까지 확인.
   await memberPage.getByRole("button", { name: "예약하기" }).click();

@@ -259,6 +259,22 @@ export async function createTestMembershipForProduct(
 ): Promise<{ id: string }> {
   const admin = getFixtureAdminClient();
   const remaining = opts?.remainingCount ?? 5;
+  // get-or-create — Playwright는 실패한 테스트를 재시도할 때 beforeAll도 처음부터 다시
+  // 실행하는데, 매번 새로 insert하면 재시도 때마다 같은 (profile, product) 조합의 수강권이
+  // 계속 쌓여 "정확히 1개만 보여야 한다"류 검증을 흔들어놓는다(CI에서 실제로 재현 —
+  // "사용할 수강권" 목록에 같은 상품이 10개 넘게 나옴). 이미 활성 상태로 있으면 그걸 그대로
+  // 재사용한다.
+  const { data: existing, error: findErr } = await admin
+    .from("memberships")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("center_id", centerId)
+    .eq("product_id", product.id)
+    .eq("status", "active")
+    .maybeSingle();
+  if (findErr) throw new Error(`E2E 테스트 수강권(${product.name}) 조회 실패: ${findErr.message}`);
+  if (existing) return { id: existing.id };
+
   const { data, error } = await admin
     .from("memberships")
     .insert({
