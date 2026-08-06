@@ -7,7 +7,7 @@
   - 매니저 RLS 정책 필요 (reservation_functions.sql)
 */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
 import AmPmTimeInput from "../../components/AmPmTimeInput";
@@ -20,7 +20,7 @@ import {
   createRecurringClasses, expandRecurringDates,
   updateClassGroup, deleteClassGroup,
   fetchClassAttendees, setAttendance, fetchClassProducts, setClassProducts, setClassProductsBulk,
-  autoAddRulesForClass, dowFromDate,
+  autoAddRulesForClass, removeRulesForClass, dowFromDate,
   fetchCenterHolidayDates,
   fetchCopyGroups, fetchCopyDateItems, planCopyByWeekday, planCopyByDate,
   copyByWeekday, copyByDate,
@@ -63,6 +63,9 @@ export default function ClassManagePage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editGroupId, setEditGroupId] = useState<string | null>(null);
+  // 수정 진입 시점의 원래 요일/시간/수업명 — 저장 시 이 값 기준으로 autoAddRulesForClass가
+  // 만들어 둔 membership_schedule_rules를 정리(removeRulesForClass)하기 위해 보관한다.
+  const editOrigRef = useRef<{ title: string; dow: number; start: string } | null>(null);
   const [applyToGroup, setApplyToGroup] = useState(false);
   // 삭제 확인 시트
   const [deleteTarget, setDeleteTarget] = useState<ManagedClass | null>(null);
@@ -517,6 +520,7 @@ export default function ClassManagePage() {
 
   async function openEdit(c: ManagedClass) {
     setEditId(c.id);
+    editOrigRef.current = { title: c.title, dow: dowFromDate(c.date), start: c.start };
     setEditGroupId(c.recurringGroupId);
     setApplyToGroup(false);
     setForm({ title: c.title, date: c.date, start: c.start, end: c.end, capacity: c.capacity, allowGoods: c.allowGoods, roomId: c.roomId, cancelDeadlineMin: c.cancelDeadlineMin, bookingDeadlineMin: c.bookingDeadlineMin, classFormat: c.classFormat });
@@ -654,7 +658,14 @@ export default function ClassManagePage() {
         } else {
           await updateClass(editId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin() });
         }
-        await setClassProducts(editId, selectedProducts);
+        const prevProductIds = await setClassProducts(editId, selectedProducts);
+        // 이번 저장에서 빠진 수강권은, 이전 저장이 만들어 둔 membership_schedule_rules도
+        // 함께 지운다 — 안 그러면 "특정 허용→전체 허용(선택 해제)"로 되돌려도 그 수강권이
+        // 계속 이 수업 조건에만 매칭되는 상태로 조용히 남는다(P3 감사 중 재현·확인).
+        const removedProductIds = prevProductIds.filter((id) => !selectedProducts.includes(id));
+        if (removedProductIds.length > 0 && editOrigRef.current) {
+          await removeRulesForClass(removedProductIds, editOrigRef.current.dow, editOrigRef.current.start, editOrigRef.current.title);
+        }
       } else {
         const newId = await createClass(activeCenterId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin() });
         await setClassProducts(newId, selectedProducts);

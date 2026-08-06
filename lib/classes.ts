@@ -338,8 +338,15 @@ export async function fetchClassProducts(classId: string): Promise<string[]> {
   return (data ?? []).map((r: any) => r.product_id);
 }
 
-// 수업의 예약가능 수강권을 통째로 교체 (선택된 id 배열로)
-export async function setClassProducts(classId: string, productIds: string[]): Promise<void> {
+// 수업의 예약가능 수강권을 통째로 교체 (선택된 id 배열로). 교체 전 기존에 지정돼 있던
+// 수강권 id 목록을 반환한다 — 호출자가 "이번에 빠진 수강권"을 계산해 autoAddRulesForClass가
+// 만들어 둔 membership_schedule_rules도 함께 정리(removeRulesForClass)할 수 있도록.
+export async function setClassProducts(classId: string, productIds: string[]): Promise<string[]> {
+  const { data: existing } = await supabase
+    .from("class_allowed_products")
+    .select("product_id")
+    .eq("class_id", classId);
+  const prevProductIds = (existing ?? []).map((r: any) => r.product_id);
   // 기존 것 모두 삭제 후 새로 삽입
   const { error: delErr } = await supabase
     .from("class_allowed_products")
@@ -347,10 +354,12 @@ export async function setClassProducts(classId: string, productIds: string[]): P
     .eq("class_id", classId);
   if (delErr) throw new Error("수강권 설정에 실패했어요: " + delErr.message);
 
-  if (productIds.length === 0) return;
-  const rows = productIds.map((pid) => ({ class_id: classId, product_id: pid }));
-  const { error } = await supabase.from("class_allowed_products").insert(rows);
-  if (error) throw new Error("수강권 설정에 실패했어요: " + error.message);
+  if (productIds.length > 0) {
+    const rows = productIds.map((pid) => ({ class_id: classId, product_id: pid }));
+    const { error } = await supabase.from("class_allowed_products").insert(rows);
+    if (error) throw new Error("수강권 설정에 실패했어요: " + error.message);
+  }
+  return prevProductIds;
 }
 
 // 여러 수업에 같은 수강권 목록 지정 (반복 수업 등록용)
@@ -395,6 +404,26 @@ export async function autoAddRulesForClass(
       class_title: classTitle,
     });
   }
+}
+
+// autoAddRulesForClass가 이 수업 조건으로 만들어 둔 규칙을, 이번 저장에서 더 이상 이
+// 수업에 지정되지 않은 수강권들에 대해서만 제거한다. 그렇지 않으면 "특정 허용 →(저장)→
+// 전체 허용(선택 해제)"으로 되돌려도 예전에 자동 추가된 규칙이 그대로 남아 그 수강권이
+// 계속 이 수업 조건에만 매칭되도록 조용히 좁혀진 상태가 풀리지 않는다.
+export async function removeRulesForClass(
+  productIds: string[],
+  dayOfWeek: number,
+  startTime: string,
+  classTitle: string
+): Promise<void> {
+  if (productIds.length === 0) return;
+  await supabase
+    .from("membership_schedule_rules")
+    .delete()
+    .in("product_id", productIds)
+    .eq("day_of_week", dayOfWeek)
+    .eq("start_time", startTime)
+    .eq("class_title", classTitle);
 }
 
 // 센터의 모든 수강권(pass) id 목록 (예약가능 수강권 미지정 시 사용)
