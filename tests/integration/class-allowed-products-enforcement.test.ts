@@ -53,7 +53,10 @@ async function createNamedPassProduct(centerId: string, name: string, kind: "pas
 }
 
 async function createMembershipForProduct(centerId: string, profileId: string, productId: string): Promise<{ id: string }> {
-  const { data, error } = await supabase
+  // 회원(memberA) 세션의 RLS로는 자기 자신의 memberships 행도 직접 insert할 수 없다(정상
+  // 결제 RPC를 거쳐야 함) — 테스트 fixture라 admin(service-role) 클라이언트로 직접 만든다.
+  const admin = getFixtureAdminClient();
+  const { data, error } = await admin
     .from("memberships")
     .insert({
       profile_id: profileId, center_id: centerId, product_id: productId,
