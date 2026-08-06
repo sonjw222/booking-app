@@ -70,6 +70,18 @@ test.beforeAll(async () => {
   // "다른 센터 + 그 센터의 pass 상품"을 만든다(단순히 admin UI의 상품 목록이 절대
   // 이걸 보여주면 안 된다는 것만 확인하면 되므로).
   const admin = getFixtureAdminClient();
+
+  // [중요] 이 파일의 "선택 해제" 테스트가 실제로 발견한 실제 앱 버그의 잔여 데이터 정리.
+  // app/manager/classes/page.tsx가 "모든 수강권 허용"(선택 안 함) 상태로 저장할 때
+  // autoAddRulesForClass()를 센터의 전체 pass 상품에 호출해, 그 순간 그 pass들이
+  // membership_schedule_rules 존재 여부만으로 "무제한"에서 "이 수업 조건에만 매칭"으로
+  // 조용히 좁혀지는 버그가 있었다(usable_memberships_for_classes 참고, P3 감사로 확인 —
+  // usable-pass-excludes-goods.spec.ts가 공유 pass로 예약을 못 하게 되는 회귀로 실제
+  // 재현됨). 코드는 이제 고쳤지만(선택 안 함일 때는 규칙을 추가하지 않음), 이 스펙을
+  // 여러 번 재실행하며 이미 만들어 둔 class_title='P3 그룹수업-전체허용' 규칙들이
+  // 남아 다른 스펙의 공유 pass를 계속 restrict하고 있어 먼저 지운다.
+  await admin.from("membership_schedule_rules").delete().eq("class_title", "P3 그룹수업-전체허용");
+
   const { data: foreignCenter, error: fcErr } = await admin
     .from("centers").insert({ name: "P3 타센터-격리테스트", status: "approved" }).select("id").single();
   if (fcErr || !foreignCenter) throw new Error(`타 센터 생성 실패: ${fcErr?.message ?? "no data"}`);
@@ -166,6 +178,18 @@ test("관리자: 선택 해제(전체 허용으로 전환) → 회원 화면에 
   await expect(page.locator(".class-allowed-products-list .filter-chip.on")).toHaveCount(0);
   await page.getByRole("button", { name: "수정하기" }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+
+  // 회귀 검증(P3 감사 중 실제로 발견한 버그): "모든 수강권 허용"으로 저장해도
+  // membership_schedule_rules에 이 수업 조건의 규칙이 하나도 생기면 안 된다 — 생기는
+  // 순간 센터의 다른 모든 pass가 "무제한"에서 "이 수업 조건에만 매칭"으로 조용히
+  // 좁혀지는 실제 버그가 있었다(app/manager/classes/page.tsx의 save()가 예전엔 선택
+  // 안 함일 때도 센터 전체 pass에 규칙을 자동 추가했음).
+  const admin = getFixtureAdminClient();
+  const { data: leakedRules } = await admin
+    .from("membership_schedule_rules")
+    .select("id")
+    .eq("class_title", "P3 그룹수업-전체허용");
+  expect(leakedRules ?? []).toHaveLength(0);
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();

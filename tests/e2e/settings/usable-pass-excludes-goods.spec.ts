@@ -10,7 +10,6 @@ import {
   type TestUser,
 } from "../fixtures/testData";
 import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
-import { getFixtureAdminClient } from "../../integration/setup";
 
 /*
   P0-3: "모든 수강권 사용 가능"(class_allowed_products 제한 없음) 수업에서 goods(대여품 등,
@@ -61,27 +60,6 @@ test("모든 수강권 사용 가능 수업 — 사용할 수강권 목록에 go
   // 값으로 고정하지 않고, 목록 전체 텍스트에 pass 상품명은 있고 goods 상품명은 절대
   // 없는지로만 검증한다(각 행 텍스트로도 한 번 더 확인 — goods가 pass-pick-row 자체로
   // 렌더링되는 경우까지 잡아낸다).
-  // TEMP DIAGNOSTIC (P3 CI 조사용, 원인 파악 후 제거 예정): 이 profile/center의 실제
-  // memberships 행을 admin 권한으로 직접 조회해 CI 로그에 남긴다 — usable_memberships_
-  // for_classes가 갑자기 빈 배열을 반환하기 시작한 원인을 찾기 위함.
-  {
-    const admin = getFixtureAdminClient();
-    const { data: diagRows, error: diagErr } = await admin
-      .from("memberships")
-      .select("id, product_id, product_name, status, remaining_count, expires_at, center_id, profile_id")
-      .eq("profile_id", userA.profileId)
-      .eq("center_id", centerAId)
-      .order("created_at", { ascending: false })
-      .limit(5);
-    console.log("[DIAG] latest memberships for userA/centerA:", JSON.stringify(diagRows), diagErr?.message);
-    const { data: diagProduct, error: diagProdErr } = await admin
-      .from("products")
-      .select("id, name, product_kind, is_active, center_id")
-      .eq("center_id", centerAId)
-      .eq("name", "E2E 테스트 수강권 상품");
-    console.log("[DIAG] matching products:", JSON.stringify(diagProduct), diagProdErr?.message);
-  }
-
   const passList = page.locator(".pass-pick-list");
   await expect(passList).toBeVisible();
   await expect(passList).toContainText("E2E 테스트 수강권");

@@ -20,7 +20,7 @@ import {
   createRecurringClasses, expandRecurringDates,
   updateClassGroup, deleteClassGroup,
   fetchClassAttendees, setAttendance, fetchClassProducts, setClassProducts, setClassProductsBulk,
-  autoAddRulesForClass, fetchAllPassProductIds, dowFromDate,
+  autoAddRulesForClass, dowFromDate,
   fetchCenterHolidayDates,
   fetchCopyGroups, fetchCopyDateItems, planCopyByWeekday, planCopyByDate,
   copyByWeekday, copyByDate,
@@ -603,14 +603,18 @@ export default function ClassManagePage() {
         }
         // 선택한 수강권을 모든 생성 수업에 연결
         if (selectedProducts.length > 0) await setClassProductsBulk(ids, selectedProducts);
-        // 대상 수강권들의 예약조건에 이 수업(요일들/시간/수업명) 자동 추가
-        const targetProducts = selectedProducts.length > 0
-          ? selectedProducts
-          : await fetchAllPassProductIds(activeCenterId);
-        for (const dow of repDays) {
-          const ov = dayOverrides[dow];
-          const st = perDayMode && ov?.start ? ov.start : form.start;
-          await autoAddRulesForClass(targetProducts, dow, st, form.title);
+        // 대상 수강권들의 예약조건에 이 수업(요일들/시간/수업명) 자동 추가 — "모든 수강권
+        // 허용"(선택 안 함)일 때는 절대 하지 않는다. membership_schedule_rules는 "행이 하나도
+        // 없으면 무제한, 하나라도 있으면 그 조건에만 매칭"으로 동작해서(usable_memberships_
+        // for_classes 참고), 예전에는 여기서 센터의 모든 pass에 규칙을 추가했는데 그 순간
+        // 그 pass가 "무제한"에서 "이 수업 조건에만 매칭"으로 조용히 좁혀지는 실제 버그가
+        // 있었다(P3 감사 중 실제 재현·확인 — 다른 스펙이 공유 pass로 예약 못 하게 됨).
+        if (selectedProducts.length > 0) {
+          for (const dow of repDays) {
+            const ov = dayOverrides[dow];
+            const st = perDayMode && ov?.start ? ov.start : form.start;
+            await autoAddRulesForClass(selectedProducts, dow, st, form.title);
+          }
         }
         setFormOpen(false);
         await loadClasses(activeCenterId, year, month);
@@ -642,10 +646,6 @@ export default function ClassManagePage() {
         setBusy(false);
         return;
       }
-      // 수강권 미지정이면 = 모든 수강권 대상, 지정이면 그 수강권들
-      const targetProducts = selectedProducts.length > 0
-        ? selectedProducts
-        : await fetchAllPassProductIds(activeCenterId);
       const dow = dowFromDate(form.date);
 
       if (editId) {
@@ -659,8 +659,13 @@ export default function ClassManagePage() {
         const newId = await createClass(activeCenterId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin() });
         await setClassProducts(newId, selectedProducts);
       }
-      // 이 수업 조건(요일/시간/수업명)을 대상 수강권들의 예약조건에 자동 추가
-      await autoAddRulesForClass(targetProducts, dow, form.start, form.title);
+      // 이 수업 조건(요일/시간/수업명)을 대상 수강권들의 예약조건에 자동 추가 — "모든 수강권
+      // 허용"(선택 안 함)일 때는 절대 하지 않는다(이유는 위 반복등록 경로의 주석과 동일 —
+      // membership_schedule_rules가 하나라도 생기는 순간 그 수강권이 "무제한"에서 "이
+      // 조건에만" 좁혀지는 실제 버그를 P3 감사 중 재현·확인했다).
+      if (selectedProducts.length > 0) {
+        await autoAddRulesForClass(selectedProducts, dow, form.start, form.title);
+      }
 
       setFormOpen(false);
       await loadClasses(activeCenterId, year, month);
