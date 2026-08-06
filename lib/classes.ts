@@ -67,23 +67,42 @@ function assertValidClassTimeRange(start: string, end: string): void {
 }
 
 export async function fetchClasses(centerId: string, fromDate: string, toDate: string): Promise<ManagedClass[]> {
-  const { data: rows, error } = await supabase
-    .from("classes")
-    .select("id, title, start_time, end_time, capacity, recurring_group_id, allow_goods, room_id, cancel_deadline_min, booking_deadline_min, class_format, status")
-    .eq("center_id", centerId)
-    .gte("start_time", toKstIso(fromDate, "00:00"))
-    .lte("start_time", toKstIso(toDate, "23:59"))
-    .order("start_time");
-  if (error) throw new Error("수업을 불러오지 못했어요: " + error.message);
+  // ⚠️ center_id로 이미 좁혀서 조회하니 PostgREST 기본 응답 행 수 제한(1000행)에 안 걸릴
+  // 거라고 가정했었는데(과거 fetchMonthData 수정 당시의 가정 — lib/reservations.ts 참고),
+  // 테스트 데이터가 많이 쌓인 센터 하나만으로도 실제로 걸리는 것을 확인했다(관리자 수업
+  // 화면에서 이번 달 앞부분 수업만 1000개까지 보이고 그 뒤 수업은 통째로 안 보임). 같은
+  // 이유로 fetchMonthData가 이미 쓰고 있는 .range() 페이지 단위 반복 조회를 여기도 적용한다.
+  const rows: any[] = [];
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page, error } = await supabase
+      .from("classes")
+      .select("id, title, start_time, end_time, capacity, recurring_group_id, allow_goods, room_id, cancel_deadline_min, booking_deadline_min, class_format, status")
+      .eq("center_id", centerId)
+      .gte("start_time", toKstIso(fromDate, "00:00"))
+      .lte("start_time", toKstIso(toDate, "23:59"))
+      .order("start_time")
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error("수업을 불러오지 못했어요: " + error.message);
+    rows.push(...(page ?? []));
+    if (!page || page.length < PAGE_SIZE) break;
+  }
 
   const ids = (rows ?? []).map((c) => c.id);
   const counts: Record<string, number> = {};
   if (ids.length > 0) {
-    const { data: countRows } = await supabase
-      .from("class_reservation_counts")
-      .select("class_id, confirmed_count")
-      .in("class_id", ids);
-    for (const r of countRows ?? []) counts[r.class_id] = r.confirmed_count;
+    // ids가 많아지면(위 1000행 제한 수정으로 한 센터가 한 달에 수백~수천 개 수업을 가질 수
+    // 있게 됨) .in()에 그 UUID를 전부 나열한 요청 URL이 너무 길어져 PostgREST가 "Bad
+    // Request"로 거부한다(fetchMonthData의 CHUNK_SIZE와 동일한 이유) — 청크로 나눠 조회한다.
+    const CHUNK_SIZE = 150;
+    const idChunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) idChunks.push(ids.slice(i, i + CHUNK_SIZE));
+    const chunkResults = await Promise.all(
+      idChunks.map((chunk) => supabase.from("class_reservation_counts").select("class_id, confirmed_count").in("class_id", chunk))
+    );
+    for (const { data: countRows } of chunkResults) {
+      for (const r of countRows ?? []) counts[r.class_id] = r.confirmed_count;
+    }
   }
 
   return (rows ?? []).map((c) => ({
