@@ -420,7 +420,11 @@ export async function fetchPurchasableProductsByClass(
       .select("id, name, price, product_kind, center_id, is_active, is_on_sale")
       .in("center_id", centerIds)
       .eq("is_active", true)
-      .eq("is_on_sale", true),
+      .eq("is_on_sale", true)
+      // goods(대여품 등)는 예약 시 수강권으로 쓸 수 없어 여기 섞이면 안 된다(P3 감사로
+      // 확인 — class_allowed_products 지정이 없는 수업에서 이 필터가 없어 goods까지
+      // "구매 가능한 수강권"으로 잘못 추천되고 있었다).
+      .eq("product_kind", "pass"),
     profileIds.length > 0
       ? supabase
           .from("memberships")
@@ -456,6 +460,7 @@ export async function fetchPurchasableProductsByClass(
     hasRestriction.add(l.class_id);
     const p = l.products;
     if (!p) continue;
+    if (p.product_kind === "goods") continue; // 방어적 처리 — class_allowed_products는 pass만 가리켜야 함
     if (!p.is_active || !p.is_on_sale) continue;
     if (p.center_id !== centerIdByClass[l.class_id]) continue;
     if (ownedProductIds.has(p.id)) continue;

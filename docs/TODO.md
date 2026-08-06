@@ -672,9 +672,12 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   "대기 인원수"를 보여주는 UI가 없어(내 대기 순번 표시만 있음) 이 설정을 연결할 대상이 없다
   — 대기 인원수 표시 UI 자체를 새로 만들어야 하는 별도 소규모 기능. 전체 동작표는
   `docs/OPERATIONAL_SETTINGS_AUDIT.md` 참고.
-- **`private_slot_unit`/`private_max_concurrent_*`/`show_point_history`는 제품 결정 필요**:
-  `docs/08_Decision_Log.md` DEC-002(슬롯 시스템), DEC-003(class_allowed_products UI 부재)
-  참고. `show_point_history`는 포인트 내역 페이지 자체가 없어 페이지 신설이 선행돼야 함.
+- **`private_slot_unit`/`show_point_history`는 제품 결정 필요**: `docs/08_Decision_Log.md`
+  DEC-002(슬롯 시스템) 참고. `show_point_history`는 포인트 내역 페이지 자체가 없어 페이지
+  신설이 선행돼야 함. `private_max_concurrent_*`는 2026-08-06 P3 배치에서 해결됨(아래 항목).
+  DEC-003(class_allowed_products UI 부재)도 같은 배치에서 Resolved로 닫힘 — UI는 이미
+  구현돼 있었고(이전 배치), 이번엔 검색 UI·서버 강제(`reserve_with_membership`)·RLS 강화만
+  추가함.
 - **`same_day_change_*`/`autocancel_*`/`waitlist_auto_*`는 스케줄러 인프라 부재로 UI에
   "준비 중" 배지 추가 + 입력 비활성화 처리(2026-08-03)** — 정상 기능처럼 보이지 않도록 함,
   값 자체는 보존(추후 스케줄러 도입 시 그대로 사용 가능).

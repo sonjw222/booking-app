@@ -191,6 +191,38 @@ export async function getOrCreateTestPassProduct(centerId: string): Promise<{ id
   return { id: data.id };
 }
 
+// P3: class_allowed_products 테스트는 "특정 수강권 1개만 허용"/"여러 개 허용"을 구분해서
+// 검증해야 해서, 이름이 고정된 getOrCreateTestPassProduct() 하나로는 부족하다 — 이름을
+// 받아 get-or-create하는 버전(같은 패턴, 이름만 파라미터화).
+export async function getOrCreateTestPassProductNamed(centerId: string, name: string): Promise<{ id: string; name: string }> {
+  const admin = getFixtureAdminClient();
+  const { data: existing, error: findErr } = await admin
+    .from("products")
+    .select("id")
+    .eq("center_id", centerId)
+    .eq("name", name)
+    .eq("product_kind", "pass")
+    .maybeSingle();
+  if (findErr) throw new Error(`E2E 테스트 상품(${name}) 조회 실패: ${findErr.message}`);
+  if (existing) return { id: existing.id, name };
+
+  const { data, error } = await admin
+    .from("products")
+    .insert({
+      center_id: centerId,
+      name,
+      product_kind: "pass",
+      pass_type: "count",
+      total_count: 999,
+      is_on_sale: true,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(`E2E 테스트 상품(${name}) 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id, name };
+}
+
 export async function createTestMembershipAdmin(
   centerId: string,
   profileId: string,
@@ -215,6 +247,34 @@ export async function createTestMembershipAdmin(
     .select("id")
     .single();
   if (error || !data) throw new Error(`E2E 테스트 수강권 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id };
+}
+
+// P3: class_allowed_products 검증은 회원이 서로 다른 이름의 pass 여러 개를 동시에 보유한
+// 상태가 필요하다(getOrCreateTestPassProductNamed와 짝) — 어느 product를 지급할지
+// 파라미터로 받는 버전.
+export async function createTestMembershipForProduct(
+  centerId: string, profileId: string, product: { id: string; name: string },
+  opts?: { remainingCount?: number }
+): Promise<{ id: string }> {
+  const admin = getFixtureAdminClient();
+  const remaining = opts?.remainingCount ?? 5;
+  const { data, error } = await admin
+    .from("memberships")
+    .insert({
+      profile_id: profileId,
+      center_id: centerId,
+      product_id: product.id,
+      product_name: product.name,
+      pass_type: "count",
+      total_count: remaining,
+      remaining_count: remaining,
+      expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+      status: "active",
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(`E2E 테스트 수강권(${product.name}) 생성 실패: ${error?.message ?? "no data"}`);
   return { id: data.id };
 }
 

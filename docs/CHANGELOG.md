@@ -8,6 +8,29 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-06 — P3 수업별 사용 가능 수강권(class_allowed_products) 관리 UI 감사 및 보강 (feature/auth-private-class-membership)
+
+- **기존 구조 감사 결과**: `docs/08_Decision_Log.md` DEC-003("관리 UI 부재")이 2026-08-03에
+  작성됐지만, 그 이후 프라이빗 수업 관리자 UI를 추가하던 배치에서 이미 Alternative A(수업
+  등록/수정 화면에 다중 선택 UI)가 구현돼 있었음을 확인 — 등록/수정/반복등록
+  (`setClassProductsBulk`)/스케줄 복사(`insertCopiedClasses`) 전부 `lib/classes.ts`의
+  `setClassProducts`로 정상 연결돼 있었고, 회원 화면(`usable_memberships_for_classes`)도
+  이미 정확히 반영하고 있었다. DEC-003을 Resolved로 갱신.
+- **이번에 새로 발견해 고친 것**:
+  1. `reserve_with_membership()`(회원이 수강권을 직접 선택해 예약하는 경로)만
+     `class_allowed_products`를 전혀 확인하지 않았다 — 화면 목록 자체는 걸러져 있어 정상
+     사용에선 안 드러나지만 RPC를 직접 호출하면 허용 안 된 수강권으로도 예약이 성립했다.
+     `fix_class_allowed_products_enforcement_draft_proposed.sql`(SQL 미적용, 승인 대기)로
+     `reserve_class()`/`usable_memberships_for_classes()`와 동일한 조건 추가.
+  2. `class_allowed_products` INSERT RLS가 class의 센터만 확인하고 연결하려는 product가
+     같은 센터의 pass인지는 확인하지 않아, 이론상 타 센터 상품·goods를 직접 API로 연결할
+     수 있었다 — 같은 SQL 파일에서 RLS도 강화.
+  3. `lib/reservations.ts`의 `fetchPurchasableProductsByClass()`("구매 가능한 수강권" 추천)가
+     class_allowed_products 미지정 수업에서 goods까지 추천 목록에 섞을 수 있었다 — pass만
+     조회하도록 쿼리 수정(순수 코드, SQL 무관).
+  4. 관리자 선택 화면에 검색 입력(`app/manager/classes/page.tsx`)과 "선택 해제(모든 수강권
+     허용으로 전환)" 버튼을 추가.
+
 ## 2026-08-05 — P0 실제 버그 4건 수정 + P1 로그인/계정 기능 보강 (feature/auth-private-class-membership)
 
 - **P0-1 (휴무일 삭제 후 폐강 상태가 안 풀림)**: `add_holiday_safe()`가 휴무일 등록 시
