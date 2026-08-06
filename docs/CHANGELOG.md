@@ -31,6 +31,35 @@
   4. 관리자 선택 화면에 검색 입력(`app/manager/classes/page.tsx`)과 "선택 해제(모든 수강권
      허용으로 전환)" 버튼을 추가.
 
+### 후속 — CI Green 확인 과정에서 추가로 발견·수정한 버그 (같은 날, 이어서)
+- **`autoAddRulesForClass` "모든 수강권 허용" 오염 버그(실제 앱 버그, 회귀 심각도 높음)**:
+  `app/manager/classes/page.tsx`의 `save()`가 "모든 수강권 허용"(선택 안 함)으로 저장할 때도
+  센터의 전체 pass 상품에 `autoAddRulesForClass`를 호출해, 그 순간부터 그 pass들이 "무제한"에서
+  "이 수업 조건에만 매칭"으로 조용히 좁혀지던 버그. 두 호출부 모두 `selectedProducts.length > 0`일
+  때만 호출하도록 수정.
+- **"특정 허용→전체 허용" 전환 시 규칙이 안 지워지는 버그(위 버그의 후속, 실제 앱 버그)**:
+  위 버그를 고친 뒤에도, 한번 "특정 허용"으로 저장했다가 다시 "전체 허용"으로 되돌리면 이전
+  저장이 자동 생성한 `membership_schedule_rules`가 그대로 남아 그 수강권이 계속 이전 수업
+  조건에만 매칭된 상태가 풀리지 않았다. `lib/classes.ts`의 `setClassProducts()`가 교체 전
+  기존 product_id 목록을 반환하도록 바꾸고, `removeRulesForClass()`를 신규 추가해 저장 시
+  빠진 수강권의 규칙을 함께 정리하도록 수정.
+- **`fetchClasses()` 1000행 페이지네이션 누락(실제 앱 버그)**: 관리자 수업 캘린더 조회
+  (`lib/classes.ts`)가 PostgREST 기본 1000행 캡에 걸려, 한 달에 수업이 1000개를 넘는 센터는
+  뒤쪽 수업이 캘린더에서 통째로 안 보였다. `lib/reservations.ts`의 `fetchMonthData` 페이지네이션
+  패턴을 그대로 이식(`.range()` 루프 + `class_reservation_counts` 청크 조회).
+- **`service_role` GRANT 누락 3건(권한/인프라 문제, 기존에 이미 있던 동일 부류 문제의 재발견)**:
+  `membership_schedule_rules`/`profiles` 테이블에 `service_role` GRANT가 없어 테스트
+  fixture(admin/service-role 클라이언트)가 "permission denied"로 실패했다 — `products`/
+  `classes`/`memberships`/`reservations`/`center_settings`에 이미 있었던 것과 동일한 패턴.
+  `fix_service_role_missing_grants_membership_schedule_rules_draft_proposed.sql`/
+  `fix_service_role_missing_grants_profiles_draft_proposed.sql`로 추가(사용자가 적용 완료).
+- **통합테스트 fixture 버그(테스트 버그, 앱 버그 아님)**: `class-allowed-products-enforcement.test.ts`의
+  `createMembershipForProduct`가 회원 세션(RLS 적용 대상)으로 `memberships`에 직접 insert를
+  시도해 RLS 위반으로 실패 — admin(service-role) 클라이언트로 수정.
+- 위 수정 후 `fix_class_allowed_products_enforcement_draft_proposed.sql` 적용까지 완료,
+  Playwright/Unit/Integration/Build 전 구간 **2회 연속 Green** 확인(CI run 31095072280,
+  31096363412). Vercel Preview 배포도 성공 확인.
+
 ## 2026-08-05 — P0 실제 버그 4건 수정 + P1 로그인/계정 기능 보강 (feature/auth-private-class-membership)
 
 - **P0-1 (휴무일 삭제 후 폐강 상태가 안 풀림)**: `add_holiday_safe()`가 휴무일 등록 시
