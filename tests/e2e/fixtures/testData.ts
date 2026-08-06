@@ -264,16 +264,19 @@ export async function createTestMembershipForProduct(
   // 계속 쌓여 "정확히 1개만 보여야 한다"류 검증을 흔들어놓는다(CI에서 실제로 재현 —
   // "사용할 수강권" 목록에 같은 상품이 10개 넘게 나옴). 이미 활성 상태로 있으면 그걸 그대로
   // 재사용한다.
-  const { data: existing, error: findErr } = await admin
+  // ⚠ .maybeSingle()은 행이 2개 이상이면 예외를 던진다 — 이 helper를 추가하기 전(P3
+  // 배치 이전) 실패한 CI 재시도들이 이미 중복 행을 만들어둔 상태에서 실제로 이 예외가
+  // 터지는 것을 확인했다. limit(1)로 "여러 개여도 아무거나 하나"를 재사용하도록 방어한다.
+  const { data: existingRows, error: findErr } = await admin
     .from("memberships")
     .select("id")
     .eq("profile_id", profileId)
     .eq("center_id", centerId)
     .eq("product_id", product.id)
     .eq("status", "active")
-    .maybeSingle();
+    .limit(1);
   if (findErr) throw new Error(`E2E 테스트 수강권(${product.name}) 조회 실패: ${findErr.message}`);
-  if (existing) return { id: existing.id };
+  if (existingRows && existingRows.length > 0) return { id: existingRows[0].id };
 
   const { data, error } = await admin
     .from("memberships")
