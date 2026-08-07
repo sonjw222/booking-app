@@ -378,11 +378,7 @@ export async function fetchUsableMembershipsByClass(
     const { data: page, error } = await supabase
       .rpc("usable_memberships_for_classes", { p_class_ids: classIds, p_profile_id: profileId })
       .range(from, from + PAGE_SIZE - 1);
-    if (error) {
-      // eslint-disable-next-line no-console
-      console.error("[DIAG3] usable_memberships_for_classes RPC error:", JSON.stringify(error));
-      throw new Error("수강권을 불러오지 못했어요: " + error.message);
-    }
+    if (error) throw new Error("수강권을 불러오지 못했어요: " + error.message);
     rows.push(...(page ?? []));
     if (!page || page.length < PAGE_SIZE) break;
   }
