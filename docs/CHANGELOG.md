@@ -8,6 +8,31 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-07 — P2 알림 시스템 감사 및 완성도 보강 (feature/social-auth-notifications-attendance-dashboard)
+
+- **감사 결과(기존 구조, 새로 만들지 않음)**: 예약 확정/취소/대기승격/노쇼/문의답변 알림은
+  전부 서버 SQL 트리거(`add_notification_triggers.sql`, `add_inquiries.sql`)로 원인 트랜잭션과
+  원자적으로 이미 생성되고 있었다. 휴무일 취소 알림도 이미 라이브 상태임을 확인
+  (`fix_holiday_history_and_notification_draft_proposed.sql`이라는 파일명과 달리 실제로는
+  이미 적용돼 있음 — 같은 동작을 전제하는 `fix_holiday_delete_restores_classes.sql`이 이미
+  merge된 P0 통합테스트로 검증됨). 딥링크 권한 안전성(없는/권한 없는 대상이면 조용히
+  fallback), 센터 간 알림 격리(트리거가 항상 해당 센터 매니저만 대상)도 이미 안전하게
+  설계돼 있음을 코드 감사로 확인.
+- **고친 것**: `admin_assigned`/`admin_cancelled` 알림 종류(관리자 직접배치/취소, P1 이전
+  배치에서 트리거에는 이미 추가됐지만)가 `lib/notifications.ts`의 `NotiKind` 타입/이모지
+  매핑에는 빠져 있던 것을 추가(기능은 이미 동작했지만 표시가 불완전했음).
+- **죽은 설정 연결**: 알림 설정(`app/settings/notifications`)의 예약/대기/리마인더 토글이
+  localStorage에만 저장되고 아무 데도 연결되지 않은 죽은 설정이었다(서버 트리거는 항상
+  알림을 만듦). 실시간 팝업(`NotificationToaster`)이 이 값을 읽어 팝업 표시 여부를 실제로
+  거르도록 연결(`notiPrefKeyForKind`) — 꺼도 알림함에는 그대로 기록되니 나중에 확인 가능,
+  서버 발송 자체를 막는 건 예약 트리거 SQL을 건드려야 해서 이번 범위 밖. "혜택·이벤트"
+  토글은 그 알림을 만드는 기능 자체가 없어 준비 중으로 명확히 표시(비활성화).
+- **회귀 가드 추가**: `tests/integration/notification-center-isolation.test.ts`(신규) —
+  centerA에서 발생한 `new_reservation` 알림을 centerB 매니저가 볼 수 없는지 실제 DB로 검증.
+  `tests/unit/notiPrefKeyForKind.test.ts`(신규) — 알림 설정 kind→카테고리 매핑 고정.
+- **범위 밖(명시적 제외)**: SMS/카카오톡 알림톡/푸시/이메일 발송 — 외부 서비스 계약 필요,
+  이번 배치는 앱 내 알림 완성도만 다룸(사용자 지시).
+
 ## 2026-08-07 — P1 소셜 로그인(Google/Kakao/Naver/Apple) 배관 보강 (feature/social-auth-notifications-attendance-dashboard)
 
 - **감사 결과**: 소셜 로그인 버튼(Google/Kakao/Naver/Apple)과 `signInWithOAuth()` 호출,

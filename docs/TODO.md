@@ -642,12 +642,16 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   "미지정"으로 되돌리는 데이터 마이그레이션이 더 신중한 검토가 필요 — CLASS-001 SQL 헤더
   주석 참고). **후속 조치 필요**: 실제 저장된 0이 아닌 값이 있는지 먼저 확인한 뒤 같은 패턴으로
   수정.
-- **알림 카테고리가 8개가 아니라 4개뿐이고 서버가 이 설정을 전혀 읽지 않음**: `app/settings/notifications/page.tsx`의
-  알림 설정은 `localStorage`에만 저장되고(`reservation`/`waitlist`/`reminder`/`marketing` 4종),
-  모든 서버 트리거(`trg_notify_reservation_insert/_update`, `send_inquiry_message` 등)는 이
-  설정과 무관하게 항상 알림을 생성한다. 사용자가 요청한 "공지/결제/문의답변" 등 5개 카테고리
-  확장 및 실제 서버측 필터링(수신거부 반영)은 DB 테이블 신설 + 모든 알림 생성 지점 수정이
-  필요한 훨씬 큰 작업이라 이번 배치에서는 제외하고 여기 기록만 한다 — 제품 결정 필요.
+- **알림 카테고리가 8개가 아니라 4개뿐이고 서버가 이 설정을 전혀 읽지 않음(2026-08-07 P2
+  배치에서 부분 해결)**: `app/settings/notifications/page.tsx`의 알림 설정은 `localStorage`에만
+  저장되고(`reservation`/`waitlist`/`reminder`/`marketing` 4종), 모든 서버 트리거
+  (`trg_notify_reservation_insert/_update`, `send_inquiry_message` 등)는 이 설정과 무관하게
+  항상 알림 행을 만든다 — 이건 그대로 유지한다(알림함은 항상 기록이 남아야 함, 감사 로그
+  성격). 다만 실시간 팝업(`NotificationToaster`)만큼은 `lib/notifications.ts`의
+  `notiPrefKeyForKind()`로 이 설정을 실제로 읽어 팝업 표시 여부를 거르도록 연결했다(SQL
+  변경 없음, 저위험). **여전히 남은 것**: 서버측 발송 자체를 막는 것(수신거부를 트리거
+  SQL에 반영), "공지/결제" 등 카테고리 확장, "혜택·이벤트"(마케팅) 알림을 실제로 만드는
+  기능 자체 — 전부 DB 변경 및 제품 결정이 필요한 별도 작업.
 - **`notification_rules`/`messages`(SMS/LMS)/`notification_logs`는 스키마만 있고 완전 미구현**:
   `app/settings/notifications/page.tsx`의 "실제 발송 연동은 준비 중이에요" 문구는 정확하다 —
   In-app DB 알림 외에는 push(FCM/APNs)/SMS/카카오 알림톡/이메일 전부 백엔드 자체가 없다.

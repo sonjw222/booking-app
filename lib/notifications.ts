@@ -19,6 +19,7 @@ export type NotiKind =
   | "reservation_confirmed" | "reservation_waitlisted" | "waitlist_promoted"
   | "new_order" | "new_review" | "new_reservation" | "reservation_canceled" | "no_show"
   | "new_inquiry" | "inquiry_reply"
+  | "admin_assigned" | "admin_cancelled"
   | string;
 
 export type Notification = {
@@ -33,6 +34,47 @@ export type Notification = {
   createdAt: string;
   createdAtRaw: string;
 };
+
+// 알림 설정(app/settings/notifications/page.tsx)의 on/off 토글 — 이전에는 localStorage에만
+// 저장되고 아무 데도 연결되지 않은 죽은 설정이었다(서버 트리거는 이 값과 무관하게 항상
+// 알림 행을 만듦, docs/TODO.md 알림 관련 항목 참고). 서버 발송 자체를 막는 건 예약 트리거
+// SQL을 건드려야 해서 이번 배치 범위 밖이지만(위험도 대비 이득이 낮음 — 알림함 기록은
+// 항상 남아야 함), 실시간 팝업(NotificationToaster)만큼은 이 값으로 실제로 걸러지도록
+// 연결한다 — "이 종류는 팝업으로 방해받고 싶지 않다"는 원래 의도에 부합하고 SQL 변경이 없다.
+export type NotiPrefKey = "reservation" | "waitlist" | "reminder" | "marketing";
+export const NOTI_PREF_STORAGE_KEY = "noti_prefs";
+export const NOTI_PREF_DEFAULTS: Record<NotiPrefKey, boolean> = {
+  reservation: true, waitlist: true, reminder: true, marketing: false,
+};
+
+export function getNotiPrefs(): Record<NotiPrefKey, boolean> {
+  try {
+    const saved = localStorage.getItem(NOTI_PREF_STORAGE_KEY);
+    if (saved) return { ...NOTI_PREF_DEFAULTS, ...JSON.parse(saved) };
+  } catch { /* 무시 */ }
+  return NOTI_PREF_DEFAULTS;
+}
+
+// kind → 설정 카테고리. null이면 이 4개 토글의 대상이 아니라 항상 팝업으로 보여준다
+// (공지/문의/매니저 전용 알림 등 — 회원이 끌 수 있는 대상으로 설계된 적이 없음).
+export function notiPrefKeyForKind(kind: NotiKind): NotiPrefKey | null {
+  switch (kind) {
+    case "reservation_confirmed":
+    case "reservation_canceled":
+    case "admin_assigned":
+    case "admin_cancelled":
+    case "no_show":
+      return "reservation";
+    case "reservation_waitlisted":
+    case "waitlist_promoted":
+      return "waitlist";
+    case "reservation_3days":
+    case "reservation_today":
+      return "reminder";
+    default:
+      return null;
+  }
+}
 
 // 문의 관련 알림(new_inquiry/inquiry_reply)은 목록 화면이 아니라 해당 스레드로 바로 열려야
 // 한다(NOTIF-001 E-2) — 이 판단을 회원 알림 목록/매니저 알림 목록/실시간 토스트 팝업 3곳이
@@ -80,6 +122,8 @@ export function notiEmoji(kind: NotiKind): string {
     case "no_show": return "🚫";
     case "new_inquiry": return "💬";
     case "inquiry_reply": return "💬";
+    case "admin_assigned": return "✅";
+    case "admin_cancelled": return "❌";
     default: return "🔔";
   }
 }
