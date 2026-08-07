@@ -90,7 +90,9 @@ test("관리자: 예약자 출석 → 결석(노쇼) → 되돌리기, 취소된
   await rosterItem.getByRole("button", { name: "되돌리기" }).click();
   await expect(rosterItem.locator(".hist-status")).toHaveText("확정");
 
-  // 예약취소 → 취소된 예약은 더 이상 출결 버튼이 없어야 한다.
+  // 예약취소 → handleAttendance()가 네이티브 confirm()을 띄운다(Playwright는 기본적으로
+  // 자동 취소하므로 명시적으로 accept해야 실제로 진행됨).
+  page.once("dialog", (d) => d.accept());
   await rosterItem.getByRole("button", { name: "예약취소" }).click();
   await expect(rosterItem.locator(".hist-status")).toHaveText("취소");
   await expect(rosterItem.locator(".att-locked")).toContainText("변경 불가");
