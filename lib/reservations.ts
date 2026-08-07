@@ -368,12 +368,22 @@ export async function fetchUsableMembershipsByClass(
   classIds: string[], profileId: string
 ): Promise<Record<string, UsableMembership[]>> {
   if (classIds.length === 0) return {};
-  const { data, error } = await supabase.rpc("usable_memberships_for_classes", {
-    p_class_ids: classIds, p_profile_id: profileId,
-  });
-  if (error) throw new Error("수강권을 불러오지 못했어요: " + error.message);
+  // ⚠ classIds가 여러 개(하루치 전체 수업)라 이 계정이 그 수업들 각각에 쓸 수 있는 수강권을
+  // 전부 합치면 PostgREST 기본 응답 행 수 제한(1000행)에 걸릴 수 있다(fetchClasses에서 실제로
+  // 재현된 것과 같은 종류의 문제 — 이번엔 공유 테스트 계정에 pass가 200개 넘게 누적돼 실제로
+  // 재현됨: 특정 pass 하나가 응답에서 통째로 잘려 목록에 안 보이는 버그로 나타났다).
+  const rows: any[] = [];
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page, error } = await supabase
+      .rpc("usable_memberships_for_classes", { p_class_ids: classIds, p_profile_id: profileId })
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error("수강권을 불러오지 못했어요: " + error.message);
+    rows.push(...(page ?? []));
+    if (!page || page.length < PAGE_SIZE) break;
+  }
   const out: Record<string, UsableMembership[]> = {};
-  for (const r of (data ?? []) as any[]) {
+  for (const r of rows as any[]) {
     (out[r.class_id] ??= []).push({
       membershipId: r.membership_id,
       productName: r.product_name,

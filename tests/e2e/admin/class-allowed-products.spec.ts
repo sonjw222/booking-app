@@ -212,17 +212,9 @@ test("관리자: 선택 해제(전체 허용으로 전환) → 회원 화면에 
     .eq("product_id", passD.id);
   expect(leakedRules ?? []).toHaveLength(0);
 
-  // [진단용 임시 로그] 원인 파악 후 제거 예정 — admin(service-role) 쿼리는 class_allowed_products에
-  // GRANT가 없을 수 있어(과거 다른 테이블들과 동일 패턴) error도 함께 찍어 확실히 구분한다.
-  {
-    const { data: capRows, error: capErr } = await admin.from("class_allowed_products").select("product_id").eq("class_id", cls.id);
-    console.log("[DIAG2] class_allowed_products for cls:", JSON.stringify(capRows), "error:", JSON.stringify(capErr));
-  }
-  // admin 쿼리가 GRANT 문제로 신뢰 불가할 수 있으니, 매니저 자신의 인증 세션(UI)으로
-  // 재진입해 실제로 "예약 가능 수강권"이 0개(=전체 허용)로 저장돼 있는지 직접 확인한다.
+  // 저장이 실제로 DB에 반영됐는지(낙관적 로컬 상태가 아니라) 재진입해서 다시 확인한다.
   await page.locator(".class-row", { hasText: "P3 그룹수업-전체허용" }).click();
   await expect(page.locator(".class-allowed-products-list .filter-chip.on")).toHaveCount(0);
-  console.log("[DIAG2] 재진입 후 선택된 칩 수(UI 기준): 0으로 확인됨");
   await page.locator(".sheet-overlay").click({ position: { x: 10, y: 10 } });
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });

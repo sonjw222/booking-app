@@ -31,6 +31,20 @@
   두 기능이다 — 전자는 "이 수업에 어떤 pass를 쓸 수 있는가"(수업 화면에서 관리), 후자는 "이
   pass는 어떤 요일/시간/수업명에서만 쓸 수 있는가"(membership-rules 화면에서 직접 관리). 어느
   쪽도 서로의 데이터를 자동으로 만들거나 지우지 않는다.
+- **후속 발견 1 — `fetchUsableMembershipsByClass()`의 1000행 응답 제한 누락(실제 앱 버그)**: 위
+  수정 후에도 CI에서 증상이 재현돼 추적한 결과, 근본 원인은 하나 더 있었다 — 이 함수는
+  `usable_memberships_for_classes()` RPC를 "선택된 날짜의 모든 수업 id"를 한 번에 넘겨
+  호출하는데, 회원이 보유한 pass가 많고(공유 테스트 계정은 200개 넘게 누적) 같은 날짜에
+  수업이 여러 개 있으면 합쳐진 응답 행 수가 PostgREST 기본 제한(1000행)을 넘을 수 있다 —
+  `fetchClasses()`에서 이미 한 번 확인·수정한 것과 같은 종류의 문제다. `lib/classes.ts`의
+  `.range()` 페이지 단위 반복 조회 패턴을 `lib/reservations.ts`의
+  `fetchUsableMembershipsByClass()`에도 동일하게 적용해 수정.
+- **후속 발견 2 — E2E 테스트 fixture의 "get-or-create가 소진된 수강권을 그대로 재사용"
+  버그(테스트 버그)**: `createTestMembershipForProduct()`가 기존 활성 행을 `status='active'`만
+  보고 재사용하면서 `remaining_count`/`expires_at`을 갱신하지 않았다. 이 계정은 전체 E2E
+  스위트가 공유해서, 다른 스펙의 무제한 수업 자동매칭 예약(`reserve_class`, 만료 임박순으로
+  아무 활성 수강권이나 선택)이 반복 실행되며 잔여횟수를 조용히 0까지 깎을 수 있었다 — 재사용
+  시마다 잔여횟수/만료일을 갱신하도록 self-healing 처리.
 
 ## 2026-08-06 — P3 수업별 사용 가능 수강권(class_allowed_products) 관리 UI 감사 및 보강 (feature/auth-private-class-membership)
 
