@@ -1490,12 +1490,22 @@ export default function ClassManagePage() {
                         <span className="att-locked">취소된 예약 · 변경 불가</span>
                       ) : (
                         <>
-                          <button className={`att-btn ${a.status === "attended" ? "on" : ""}`} disabled={attBusy}
-                            onClick={() => handleAttendance(a, "attended")}>출석</button>
-                          <button className={`att-btn ${a.status === "confirmed" ? "on" : ""}`} disabled={attBusy}
-                            onClick={() => handleAttendance(a, "confirmed")}>결석</button>
-                          <button className={`att-btn ${a.status === "no_show" ? "on" : ""}`} disabled={attBusy}
-                            onClick={() => handleAttendance(a, "no_show")}>노쇼</button>
+                          {/* 대기(waitlisted)는 아직 확정된 적이 없어(수강권도 차감 안 됨) "출석/결석"을
+                              매길 대상이 아니다 — manager_set_attendance()도 이 상태에선 attended/no_show를
+                              거부한다(fix_attendance_consolidate_and_guard). 대기 취소만 남겨둔다. */}
+                          {a.status !== "waitlisted" && (
+                            <>
+                              <button className={`att-btn ${a.status === "attended" ? "on" : ""}`} disabled={attBusy}
+                                onClick={() => handleAttendance(a, "attended")}>출석</button>
+                              {/* 결석(absence) 상태는 이 시스템에 없다 — 실제 결석 처리는 아래 "노쇼" 버튼이다.
+                                  이 버튼은 status를 confirmed로 되돌려 출석/노쇼 표시를 취소(미정 상태로)한다 —
+                                  예전엔 "결석"이라는 잘못된 라벨이 붙어 있어 실제 동작과 이름이 반대였다. */}
+                              <button className={`att-btn ${a.status === "confirmed" ? "on" : ""}`} disabled={attBusy}
+                                onClick={() => handleAttendance(a, "confirmed")}>되돌리기</button>
+                              <button className={`att-btn ${a.status === "no_show" ? "on" : ""}`} disabled={attBusy}
+                                onClick={() => handleAttendance(a, "no_show")}>결석(노쇼)</button>
+                            </>
+                          )}
                           {a.reservationType === "MEMBER" ? (
                             <button className="att-btn cancel" disabled={attBusy}
                               onClick={() => handleAttendance(a, "cancelled")}>예약취소</button>

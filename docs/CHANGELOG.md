@@ -8,6 +8,38 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-07 — P3 출석/체크인 감사 및 manager_set_attendance() 통합 (feature/social-auth-notifications-attendance-dashboard)
+
+- **감사 결과(기존 구조, 새로 만들지 않음)**: 출석 기능은 스키마(`reservations.status`에
+  이미 `attended`/`no_show` 포함)·RPC(`manager_set_attendance`)·관리자 UI(예약자 명단, 두
+  화면에 각각 구현돼 있음: `app/manager/classes/page.tsx`, `app/manager/page.tsx`)·회원
+  화면 상태 표시(`app/my-reservations/page.tsx`)까지 전부 이미 구현돼 있었다.
+- **실제로 고친 문제 1 — `manager_set_attendance()` 4중 정의 통합**: 이 함수가 서로 다른
+  버전으로 4곳(`add_attendance.sql`, `reservation_functions.sql` 안에 2개,
+  `add_admin_assignment.sql`)에 정의돼 있었고, 어느 버전이 실제 운영 DB에 살아있는지 git
+  파일만으로는 알 수 없었다(`docs/TODO.md` P0-3에 이미 알려진 migration ledger 갭과 동일
+  종류). `fix_attendance_consolidate_and_guard_draft_proposed.sql`(SQL 승인 대기)로 가장
+  최근 버전(v4, cancelled_by/cancelled_at audit 컬럼 포함)을 유일한 정의로 통합.
+- **실제로 고친 문제 2 — 대기(waitlisted) 예약도 출석 처리가 가능했던 버그**: 대기는 아직
+  확정된 적이 없어(수강권도 차감 안 됨) "출석했다/안 했다"를 매길 대상이 아닌데, RPC도
+  관리자 UI도 이를 막지 않았다. 같은 SQL 파일에서 서버 가드 추가, 두 관리자 UI 모두에서
+  대기 상태일 때 출석/결석 버튼을 숨김.
+- **실제로 고친 문제 3 — "결석" 버튼 라벨이 실제 동작과 반대였던 버그**: `status` 타입에는
+  애초에 "결석"이라는 값이 없다(`attended`/`no_show`만 존재) — "결석" 버튼은 실제로는
+  `manager_set_attendance(id, 'confirmed')`를 호출해 출결 표시를 취소(되돌리기)하는
+  동작이었다. 진짜 결석(no-show) 처리 버튼은 "노쇼"라는 별도 이름으로 존재했다. 두 관리자
+  UI 모두에서 라벨을 "되돌리기"/"결석(노쇼)"로 정정(로직 변경 없음, 표시만 정정).
+- **정책 확정(코드로 확인)**: 취소(cancelled)는 최종 상태 — 다시 출석/결석/노쇼로 못 바꿈.
+  대기는 출석 대상 아님(위 버그 수정으로 강제). 지각(late) 상태는 이 시스템에 없고 이번
+  MVP에도 추가하지 않음(스키마 확장이 필요한 별도 제품 결정, docs/TODO.md 기록).
+- **테스트**: `tests/integration/attendance-policy.test.ts`(신규) — 취소 최종상태 확인(어느
+  버전이 라이브였는지 실제 동작으로 확인), 대기 출석거부(SQL 가드, 미적용 시 예상된 실패),
+  타 센터 매니저 차단, 프라이빗 수업 동일동작. `tests/e2e/admin/attendance.spec.ts`(신규) —
+  출석→결석(노쇼)→되돌리기→예약취소 전체 흐름, 대기 예약 버튼 숨김, 프라이빗 수업 검증
+  (전부 실브라우저).
+- **범위 밖**: 노쇼 자동 처리, 일괄 출석 처리(`docs/23_Admin_Feature_Audit.md`에 이미
+  기록된 기존 갭) — 이번 배치 요청 범위(최소 상태 관리 MVP) 밖.
+
 ## 2026-08-07 — P2 알림 시스템 감사 및 완성도 보강 (feature/social-auth-notifications-attendance-dashboard)
 
 - **감사 결과(기존 구조, 새로 만들지 않음)**: 예약 확정/취소/대기승격/노쇼/문의답변 알림은
