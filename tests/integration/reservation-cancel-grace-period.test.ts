@@ -23,6 +23,7 @@ import {
   switchToTestUser,
   getOrCreateOwnedTestCenter,
   createFutureTestClass,
+  createKstSameDayFutureClass,
   createTestMembership,
   fetchMembershipRemaining,
   cleanupTestClass,
@@ -43,20 +44,19 @@ async function backdateCreatedAt(reservationId: string, minutesAgo: number) {
   if (error) throw new Error(`created_at 백데이트 실패: ${error.message}`);
 }
 
-// group_cancel_days_before=0일 때 취소마감은 "오늘 날짜의 고정된 절대 시각"이라(calc_deadline()),
-// defaultSettings의 값이 우연히 0으로 남아있으면(다른 테스트/세션이 그 상태로 복원한 경우)
-// "당일 수업의 취소 마감은 항상 어제"라는 이 파일의 가정이 깨진다(실제로 CI에서 재현됨 —
-// "이미 지남"을 기대한 테스트가 통과해버림). 그래서 "이미 지남"이 필요한 테스트는 pre-existing
-// 기본값에 기대지 않고 명시적으로 과거 절대 시각을 저장한다.
-function kstTimeHHmm(offsetMinutesFromNow: number): string {
-  const t = new Date(Date.now() + offsetMinutesFromNow * 60_000);
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false,
-  }).formatToParts(t);
-  const hh = parts.find((p) => p.type === "hour")!.value;
-  const mm = parts.find((p) => p.type === "minute")!.value;
-  return `${hh === "24" ? "00" : hh}:${mm}`;
-}
+// group_cancel_days_before=0일 때 취소마감은 "수업 날짜의 고정된 절대 시각"이다(calc_deadline()).
+// "이미 지남"이 필요한 테스트는 두 가지를 시간대와 무관하게 보장해야 한다:
+//   1) 수업 자체가 항상 "오늘"(KST) 날짜여야 한다 — createFutureTestClass(hoursFromNow: 2)처럼
+//      고정 오프셋을 쓰면 CI가 KST 21:00~23:59 사이에 실행될 때 자정을 넘겨 "내일" 수업이 되고
+//      마는 문제가 실제로 있었다(재현 확인) — createKstSameDayFutureClass로 항상 "오늘 안"으로
+//      고정한다(다른 당일예약 테스트들과 동일한 기존 헬퍼, setup.ts 참고).
+//   2) 마감 시각(HH:MM)도 "오늘 날짜 기준으로 이미 지났다"가 항상 성립해야 한다 — 이전에는
+//      "지금-30분"을 썼는데, 자정 직후(00:00~00:29 KST)에는 그 계산이 어제 시각으로 넘어가면서
+//      "수업 날짜(=오늘) + 그 시각"이 오히려 아직 안 지난 미래가 돼버리는 대칭적인 문제가 있었다.
+//      "00:01"(자정 1분 후) 같은 하루 중 가장 이른 고정 시각을 쓰면, 테스트가 자정 첫 1분
+//      안에 실행되는 경우만 빼고 항상 "이미 지났다"가 보장된다 — 상대 계산 자체를 없애 두
+//      경계 문제를 한 번에 제거한다.
+const ALWAYS_PAST_CANCEL_TIME = "00:01";
 
 async function reserveAndGetId(classId: string): Promise<string> {
   const { data, error } = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: managerA.profileId });
@@ -120,9 +120,9 @@ describe("RES-001: 예약 후 10분 이내 무료 취소 예외", () => {
     await saveSettings(centerAId, {
       ...defaultSettings,
       groupBookDaysBefore: 0, groupBookTime: "23:59",
-      groupCancelDaysBefore: 0, groupCancelTime: kstTimeHHmm(-30),
+      groupCancelDaysBefore: 0, groupCancelTime: ALWAYS_PAST_CANCEL_TIME,
     });
-    const cls = await createFutureTestClass(centerAId, { title: "RES-001 10분초과", hoursFromNow: 2 });
+    const cls = await createKstSameDayFutureClass(centerAId, { title: "RES-001 10분초과", preferredMinutesFromNow: 120 });
     createdClassIds.push(cls.id);
     await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
 
@@ -187,10 +187,10 @@ describe("RES-001: 예약 후 10분 이내 무료 취소 예외", () => {
     await saveSettings(centerAId, {
       ...defaultSettings,
       groupBookDaysBefore: 0, groupBookTime: "23:59",
-      groupCancelDaysBefore: 0, groupCancelTime: kstTimeHHmm(-30),
+      groupCancelDaysBefore: 0, groupCancelTime: ALWAYS_PAST_CANCEL_TIME,
       deductOnLateCancel: true,
     });
-    const cls = await createFutureTestClass(centerAId, { title: "RES-001 차감옵션충돌", hoursFromNow: 2 });
+    const cls = await createKstSameDayFutureClass(centerAId, { title: "RES-001 차감옵션충돌", preferredMinutesFromNow: 120 });
     createdClassIds.push(cls.id);
     await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
 
