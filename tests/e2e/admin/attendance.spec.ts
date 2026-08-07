@@ -42,6 +42,13 @@ let managerA: TestUser;
 let userA: TestUser;
 let centerAId: string;
 const createdClassIds: string[] = [];
+// 테스트 도중 만든 임시 프로필(대기 시나리오 등)은 여기 추적해 afterAll에서 반드시 지운다 —
+// 테스트 본문 끝에서만 지우면 그 전에 assertion이 실패해 던지는 순간 정리가 스킵되고, 공유
+// 계정(userA)에 남은 여분의 profiles 행이 switchToTestUser()(.eq("is_primary", true)로
+// 좁히기 전에는 .maybeSingle()에서 "multiple rows"로 다른 모든 테스트/E2E setup을 깨뜨렸다
+// (실제로 재현됨 — 이 파일의 대기 테스트가 원인). is_primary 필터로 근본 원인은 고쳤지만,
+// 이 스펙 자체도 afterAll로 확실히 정리하도록 함께 강화한다.
+const createdProfileIds: string[] = [];
 
 test.beforeAll(async () => {
   managerA = loadTestAccountMeta("manager-a");
@@ -55,6 +62,10 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   for (const id of createdClassIds) await cleanupTestClassAdmin(id);
+  if (createdProfileIds.length > 0) {
+    const admin = getFixtureAdminClient();
+    await admin.from("profiles").delete().in("id", createdProfileIds);
+  }
 });
 
 test("관리자: 예약자 출석 → 결석(노쇼) → 되돌리기, 취소된 예약은 변경 불가 (그룹 수업, 실브라우저)", async ({ page, browser }) => {
@@ -119,6 +130,7 @@ test("관리자: 대기(waitlisted) 예약은 출석/결석 버튼이 보이지 
   // 그래서 waitlisted 행을 직접 insert한다(모든 NOT NULL 컬럼에 기본값이 있어 안전, schema.sql 확인).
   const { data: waitProfile } = await admin
     .from("profiles").insert({ account_id: userA.accountId, name: "P3 출결-대기용", is_primary: false }).select("id").single();
+  createdProfileIds.push(waitProfile!.id); // afterAll에서 확실히 정리 — 아래 assertion이 실패해도 남지 않게
   const { data: waitMembership } = await admin
     .from("memberships").insert({
       profile_id: waitProfile!.id, center_id: centerAId, product_id: (await getOrCreateTestPassProduct(centerAId)).id,
@@ -139,8 +151,6 @@ test("관리자: 대기(waitlisted) 예약은 출석/결석 버튼이 보이지 
   await expect(waitItem.getByRole("button", { name: "출석" })).toHaveCount(0);
   await expect(waitItem.getByRole("button", { name: "결석(노쇼)" })).toHaveCount(0);
   await expect(waitItem.getByRole("button", { name: "예약취소" })).toBeVisible();
-
-  await admin.from("profiles").delete().eq("id", waitProfile!.id);
 });
 
 test("관리자: 프라이빗 수업에서도 출석/결석 처리가 동일하게 동작한다 (실브라우저)", async ({ page, browser }) => {

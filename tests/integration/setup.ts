@@ -109,7 +109,13 @@ export async function switchToTestUser(emailEnvName: string, passwordEnvName: st
       account = inserted.data as AccountRow;
     }
 
-    const profileRes = await supabase.from("profiles").select("id").eq("account_id", account.id).maybeSingle();
+    // is_primary=true로 좁혀서 조회한다 — 계정 하나에 여러 profiles가 있을 수 있는데(회원이
+    // 추가 프로필을 만들거나, 테스트가 "수강권 0건 상태"를 만들려고 추가 프로필을 임시로
+    // 만드는 경우 등), account_id만으로 조회하면 행이 2개 이상일 때 .maybeSingle()이 예외를
+    // 던져 이 계정으로 로그인하는 모든 테스트/E2E setup이 통째로 깨진다(실제로 재현됨 — 다른
+    // 테스트가 만든 추가 프로필이 정리되기 전에 남아있던 상태에서). is_primary가 대표 프로필을
+    // 가리키는 유일한 방법이라 이걸로 좁힌다.
+    const profileRes = await supabase.from("profiles").select("id").eq("account_id", account.id).eq("is_primary", true).maybeSingle();
     if (profileRes.error) throw new Error(`profiles 조회 실패: ${profileRes.error.message}`);
     let profile = profileRes.data as ProfileRow | null;
     if (!profile) {
