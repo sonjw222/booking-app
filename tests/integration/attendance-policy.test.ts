@@ -85,17 +85,20 @@ describe("manager_set_attendance(): 취소는 최종 상태", () => {
 
 describe("manager_set_attendance(): 대기 중인 예약은 출석/결석 대상이 아니다 (SQL 가드, 미적용 시 실패 — 예상된 실패)", () => {
   it("정원이 찬 그룹 수업에서 대기(waitlisted)로 등록된 예약은 attended로 바꿀 수 없다", async () => {
+    // createTestMembership()은 RLS상 그 센터 매니저 권한으로만 성공한다 — memberA/B의
+    // 수강권도 managerA 세션인 채로 먼저 만들어두고, 예약 자체만 각자 세션으로 전환해 호출한다
+    // (private-class-capacity.test.ts 등 기존 테스트와 동일한 순서).
     await asManagerA();
     const cls = await createFutureTestClass(centerAId, { title: "P3 출결-대기거부", hoursFromNow: 201, capacity: 1 });
     createdClassIds.push(cls.id);
     await createTestMembership(centerAId, managerA.profileId, { remainingCount: 2 });
+    await createTestMembership(centerAId, memberA.profileId, { remainingCount: 2 });
+    await createTestMembership(centerAId, memberB.profileId, { remainingCount: 2 });
 
     await asMemberA();
-    await createTestMembership(centerAId, memberA.profileId, { remainingCount: 2 });
     const confirmedId = await reserveAndGetId(cls.id, memberA.profileId); // 정원 1명 채움 → confirmed
 
     await asMemberB();
-    await createTestMembership(centerAId, memberB.profileId, { remainingCount: 2 });
     const waitlistedId = await reserveAndGetId(cls.id, memberB.profileId); // 정원 초과 → waitlisted
 
     await asManagerA();
@@ -115,13 +118,13 @@ describe("manager_set_attendance(): 대기 중인 예약은 출석/결석 대상
     await asManagerA();
     const cls = await createFutureTestClass(centerAId, { title: "P3 출결-대기취소", hoursFromNow: 202, capacity: 1 });
     createdClassIds.push(cls.id);
+    await createTestMembership(centerAId, memberA.profileId, { remainingCount: 2 });
+    await createTestMembership(centerAId, memberB.profileId, { remainingCount: 2 });
 
     await asMemberA();
-    await createTestMembership(centerAId, memberA.profileId, { remainingCount: 2 });
     await reserveAndGetId(cls.id, memberA.profileId);
 
     await asMemberB();
-    await createTestMembership(centerAId, memberB.profileId, { remainingCount: 2 });
     const waitlistedId = await reserveAndGetId(cls.id, memberB.profileId);
 
     await asManagerA();
