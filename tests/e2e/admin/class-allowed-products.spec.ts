@@ -212,6 +212,20 @@ test("관리자: 선택 해제(전체 허용으로 전환) → 회원 화면에 
     .eq("product_id", passD.id);
   expect(leakedRules ?? []).toHaveLength(0);
 
+  // [진단용 임시 로그] 원인 파악 후 제거 예정.
+  {
+    const { data: capRows } = await admin.from("class_allowed_products").select("product_id").eq("class_id", cls.id);
+    console.log("[DIAG2] class_allowed_products for cls:", JSON.stringify(capRows));
+    const { data: memRows } = await admin
+      .from("memberships")
+      .select("id, status, remaining_count, expires_at, product_id, profile_id, center_id")
+      .eq("product_id", passD.id);
+    console.log("[DIAG2] memberships for passD.id=", passD.id, JSON.stringify(memRows));
+    const { data: prodRow } = await admin.from("products").select("*").eq("id", passD.id).maybeSingle();
+    console.log("[DIAG2] product row for passD:", JSON.stringify(prodRow));
+    console.log("[DIAG2] userA.profileId:", userA.profileId, "centerAId:", centerAId);
+  }
+
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
