@@ -62,6 +62,12 @@ test("모든 수강권 사용 가능 수업 — 사용할 수강권 목록에 go
   });
   createdClassIds.push(cls.id);
 
+  // [진단용 임시 로그] 원인 파악 후 제거 예정 — .pass-pick-list가 간헐적으로 안 뜨는 원인이
+  // RPC 에러(브라우저 콘솔)인지 확인한다.
+  page.on("console", (msg) => {
+    if (msg.type() === "error") console.log("[BROWSER CONSOLE ERROR]", msg.text());
+  });
+
   await page.goto(reservationDeepLink(cls.id, cls.startTime));
 
   // "사용할 수강권" 목록 자체가 렌더링될 때까지 기다린 뒤, 그 목록 전체 텍스트를 확인한다.
