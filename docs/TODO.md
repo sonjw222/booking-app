@@ -110,9 +110,10 @@ README의 큰 순서만으로 전체 migration을 재현할 수 있는지 검증
 **2026-08-07 갱신(P3 출석 배치)**: `manager_set_attendance`는 저장소 안에 서로 다른 버전이
 4곳에 정의돼 있어(`add_attendance.sql` v1, `reservation_functions.sql` 안에 v1 중복 + v2,
 `add_admin_assignment.sql` v4) 어느 게 라이브인지 알 수 없던 상태였다.
-`fix_attendance_consolidate_and_guard_draft_proposed.sql`(SQL 승인 대기, `pg_get_functiondef`
-확인 쿼리 포함)로 v4를 base로 유일한 정의로 통합하고, 감사에서 발견한 실제 버그(대기
-예약도 출석 처리 가능)를 함께 고쳤다 — 적용 시 이 RPC는 "확인 필요" 목록에서 제외해도 됨.
+`fix_attendance_consolidate_and_guard_draft_proposed.sql`로 v4를 base로 유일한 정의로
+통합하고, 감사에서 발견한 실제 버그(대기 예약도 출석 처리 가능)를 함께 고쳤다 —
+**2026-08-07 사용자가 운영 DB에 적용 완료, `pg_get_functiondef`로 확인됨** — 이제 이 RPC는
+"확인 필요" 목록에서 제외한다.
 "지각(late)" 상태는 스키마(`reservations.status` check 제약)에 아예 없고, 이번 MVP 요청도
 "최소 상태 관리"였던 점을 감안해 추가하지 않았다 — 필요하면 CHECK 제약 확장 + RPC 분기 +
 양쪽 관리자 UI 수정이 필요한 별도 제품 결정.

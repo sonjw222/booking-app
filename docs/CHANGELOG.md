@@ -68,8 +68,9 @@
   버전으로 4곳(`add_attendance.sql`, `reservation_functions.sql` 안에 2개,
   `add_admin_assignment.sql`)에 정의돼 있었고, 어느 버전이 실제 운영 DB에 살아있는지 git
   파일만으로는 알 수 없었다(`docs/TODO.md` P0-3에 이미 알려진 migration ledger 갭과 동일
-  종류). `fix_attendance_consolidate_and_guard_draft_proposed.sql`(SQL 승인 대기)로 가장
-  최근 버전(v4, cancelled_by/cancelled_at audit 컬럼 포함)을 유일한 정의로 통합.
+  종류). `fix_attendance_consolidate_and_guard_draft_proposed.sql`로 가장 최근 버전(v4,
+  cancelled_by/cancelled_at audit 컬럼 포함)을 유일한 정의로 통합 — **사용자가 운영 DB에
+  적용 완료(2026-08-07)**.
 - **실제로 고친 문제 2 — 대기(waitlisted) 예약도 출석 처리가 가능했던 버그**: 대기는 아직
   확정된 적이 없어(수강권도 차감 안 됨) "출석했다/안 했다"를 매길 대상이 아닌데, RPC도
   관리자 UI도 이를 막지 않았다. 같은 SQL 파일에서 서버 가드 추가, 두 관리자 UI 모두에서
