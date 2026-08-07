@@ -37,6 +37,18 @@
 - 위 SQL 두 파일이 Supabase에 적용되기 전까지는 `dashboard-summary.test.ts`의 모든 테스트가
   실패한다(RPC 없음/컬럼 없음) — 예상된 실패, 적용 후 재실행 필요.
 
+## 2026-08-08 — P4 후속: manager_dashboard_summary() daily 필드 컬럼 별칭 버그 수정 (SQL 적용 대기) (feature/social-auth-notifications-attendance-dashboard)
+
+- **분류: SQL 버그**(앱 코드/테스트 코드/인프라 문제 아님) — CI의
+  `dashboard-summary.test.ts`가 SQL 적용 직후 재실행에서 6건 전부
+  `"column d.date does not exist"`로 실패해 발견.
+- 원인: `daily` 필드를 만드는 서브쿼리에서 날짜 목록 별칭은 `days`(컬럼 `date`), 결제
+  합계 별칭은 `d`(컬럼 `pdate`/`revenue`)로 분리해뒀는데, `json_build_object`와
+  `order by`에서 실수로 `d.date`를 참조했다(`days.date`였어야 함) —
+  `add_manager_dashboard_summary_draft_proposed.sql` 작성 시점의 복붙 실수.
+- `fix_manager_dashboard_summary_daily_bug_draft_proposed.sql`(신규, 적용 대기)로
+  `days.date`를 참조하도록 함수 재정의(다른 필드는 전혀 변경 없음).
+
 ## 2026-08-08 — E2E 스위트 전체의 KST 자정 경계 취약점 전수 조사 및 일괄 수정 (feature/social-auth-notifications-attendance-dashboard)
 
 - 직전 커밋에서 `reservation-cancel-grace-period.test.ts` 하나만 고치고 끝내지 않고,

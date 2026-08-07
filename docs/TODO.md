@@ -737,7 +737,13 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 | 우선순위 | P2 (SQL 적용 전까지 대시보드·통합테스트 모두 동작 불가) |
 | 현재 상태 | **운영 설정 필요 — SQL 적용 대기** |
 | 근거 파일 | `fix_payments_payment_provider_draft_proposed.sql`, `add_manager_dashboard_summary_draft_proposed.sql`, `lib/sales.ts`(`fetchDashboardSummary`), `app/manager/page.tsx`, `tests/integration/dashboard-summary.test.ts` |
-| 완료 조건 | 사용자가 Supabase SQL Editor에서 두 파일을 순서대로(payment_provider 먼저 → dashboard_summary) 실행하고, `dashboard-summary.test.ts`가 통과함을 CI로 확인 |
+| 완료 조건 | 사용자가 Supabase SQL Editor에서 세 파일을 순서대로(payment_provider → dashboard_summary → daily_bug fix) 실행하고, `dashboard-summary.test.ts`가 통과함을 CI로 확인 |
+
+- **2026-08-08 CI 1차 재실행에서 SQL 버그 발견**: `payment_provider`/`dashboard_summary`
+  두 SQL 적용 직후 CI를 재실행하니 `dashboard-summary.test.ts` 6건이 전부
+  `"column d.date does not exist"`로 실패 — `manager_dashboard_summary()`의 `daily`
+  필드 서브쿼리에서 별칭 실수(`d.date` → `days.date`여야 함). 세 번째 SQL
+  `fix_manager_dashboard_summary_daily_bug_draft_proposed.sql`을 추가로 적용해야 한다.
 
 - 매니저 홈(`/manager`)에 오늘/7일/30일 매출 요약 카드와 일별 막대그래프를 추가했다.
   `manager_dashboard_summary()` RPC가 DB에서 직접 SUM/COUNT로 집계해(1000행 응답 제한 위험
