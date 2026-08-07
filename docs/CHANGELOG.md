@@ -8,6 +8,30 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-07 — "모든 수강권 허용"인데 보유 pass가 안 보이는 버그 근본 수정 (feature/auth-private-class-membership, PR #41 머지 전 수정)
+
+- **증상(실제 재현)**: `class_allowed_products` 0건(=모든 pass 허용)인 수업에서, 회원이 보유한
+  특정 pass 하나가 "사용할 수강권" 목록에서 통째로 빠지고, 심하면 "현재 사용할 수 있는
+  수강권이 없어요"까지 뜸.
+- **근본 원인**: `app/manager/classes/page.tsx`의 class_allowed_products 저장 로직이
+  `autoAddRulesForClass`/`removeRulesForClass`(P3 배치에서 만든 코드)로 `membership_schedule_
+  rules`에도 부수효과를 쓰고 있었다. 이 테이블은 사실 `/manager/membership-rules`
+  (`lib/passes.ts`)에서 관리자가 **완전히 독립적으로** 관리하는 기존 기능이었는데, 두 기능을
+  자동 연동한 게 설계 실수였다 — 저장 타이밍/재시도/CI 취소 등으로 규칙이 완전히 지워지지
+  않으면, 그 pass는 해당 규칙이 가리키는 옛 수업 조건에만 영원히 매칭되는 상태로 굳어버려
+  이후 어떤 수업에서도 안 보이게 됐다(`usable_memberships_for_classes`의 "규칙이 하나라도
+  있으면 그 조건에만 매칭" 의미론과 충돌).
+- **수정**: `app/manager/classes/page.tsx`에서 `autoAddRulesForClass`/`removeRulesForClass`
+  호출을 완전히 제거 — class_allowed_products 저장은 이제 `class_allowed_products` 테이블만
+  건드린다. `lib/classes.ts`의 `autoAddRulesForClass`/`removeRulesForClass`/
+  `fetchAllPassProductIds`/`dowFromDate`는 호출자가 없어져 삭제. `lib/classes.ts`의
+  `setClassProducts`도 더 이상 이전 선택값을 반환할 필요가 없어 원래 시그니처(`Promise<void>`)로
+  되돌림.
+- **정책 확정**: `class_allowed_products`와 `membership_schedule_rules`는 이제부터 완전히 독립된
+  두 기능이다 — 전자는 "이 수업에 어떤 pass를 쓸 수 있는가"(수업 화면에서 관리), 후자는 "이
+  pass는 어떤 요일/시간/수업명에서만 쓸 수 있는가"(membership-rules 화면에서 직접 관리). 어느
+  쪽도 서로의 데이터를 자동으로 만들거나 지우지 않는다.
+
 ## 2026-08-06 — P3 수업별 사용 가능 수강권(class_allowed_products) 관리 UI 감사 및 보강 (feature/auth-private-class-membership)
 
 - **기존 구조 감사 결과**: `docs/08_Decision_Log.md` DEC-003("관리 UI 부재")이 2026-08-03에

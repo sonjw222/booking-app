@@ -8,6 +8,7 @@ import {
   getOrCreateTestPassProductNamed,
   getOrCreateTestGoodsProduct,
   createTestMembershipForProduct,
+  clearScheduleRulesForProduct,
   reservationDeepLink,
   type TestUser,
 } from "../fixtures/testData";
@@ -84,16 +85,19 @@ test.beforeAll(async () => {
   // 이걸 보여주면 안 된다는 것만 확인하면 되므로).
   const admin = getFixtureAdminClient();
 
-  // [중요] 이 파일의 "선택 해제" 테스트가 실제로 발견한 실제 앱 버그의 잔여 데이터 정리.
-  // app/manager/classes/page.tsx가 "모든 수강권 허용"(선택 안 함) 상태로 저장할 때
-  // autoAddRulesForClass()를 센터의 전체 pass 상품에 호출해, 그 순간 그 pass들이
-  // membership_schedule_rules 존재 여부만으로 "무제한"에서 "이 수업 조건에만 매칭"으로
-  // 조용히 좁혀지는 버그가 있었다(usable_memberships_for_classes 참고, P3 감사로 확인 —
-  // usable-pass-excludes-goods.spec.ts가 공유 pass로 예약을 못 하게 되는 회귀로 실제
-  // 재현됨). 코드는 이제 고쳤지만(선택 안 함일 때는 규칙을 추가하지 않음), 이 스펙을
-  // 여러 번 재실행하며 이미 만들어 둔 class_title='P3 그룹수업-전체허용' 규칙들이
-  // 남아 다른 스펙의 공유 pass를 계속 restrict하고 있어 먼저 지운다.
-  await admin.from("membership_schedule_rules").delete().eq("class_title", "P3 그룹수업-전체허용");
+  // [중요] app/manager/classes/page.tsx가 예전엔 class_allowed_products 저장 시 부수효과로
+  // membership_schedule_rules에도 자동으로 규칙을 추가/삭제했다(autoAddRulesForClass/
+  // removeRulesForClass) — membership_schedule_rules는 사실 완전히 독립된 관리자 화면
+  // (/manager/membership-rules, lib/passes.ts)에서 직접 관리하는 별도 기능인데, 이 부수효과가
+  // 두 기능의 의미를 섞으면서 "모든 수강권 허용으로 저장해도 예전에 자동 추가된 규칙이 안
+  // 지워져 그 수강권만 계속 안 보이는" 버그를 반복적으로 냈다(P3 감사 중 재현·확인). 이제
+  // class_allowed_products 저장은 membership_schedule_rules를 절대 건드리지 않도록 고쳤지만,
+  // 고치기 전 여러 번의 재실행으로 이미 만들어진 잔여 규칙이 이 파일의 pass 상품들에 남아
+  // 있을 수 있어 실행마다 한 번 정리한다(코드가 더 이상 이 테이블에 쓰지 않으므로 앞으로는
+  // 다시 쌓이지 않는다).
+  for (const p of [passA, passB, passC, passD, passE, passF]) {
+    if (p) await clearScheduleRulesForProduct(p.id);
+  }
 
   const { data: foreignCenter, error: fcErr } = await admin
     .from("centers").insert({ name: "P3 타센터-격리테스트", status: "approved" }).select("id").single();
@@ -178,10 +182,9 @@ test("관리자: 선택 해제(전체 허용으로 전환) → 회원 화면에 
   const kstDate = kstDateStr(cls.startTime);
 
   // 먼저 특정 1개로 지정했다가("전체→특정" 전환 확인) 다시 해제("특정→전체" 전환 확인).
-  // ⚠ 여기서 쓰는 pass는 반드시 이 테스트 파일의 다른 테스트가 명시적으로 지정한 적
-  // 없는 것이어야 한다(패스A/B/C는 테스트1·2에서 이미 특정 수업에 지정돼
-  // membership_schedule_rules가 그 수업 조건으로 좁혀져 있음 — 의도된 동작이라 버그
-  // 아님). 그래서 패스D를 쓴다.
+  // 패스D/E/F는 이 테스트 전용(다른 테스트의 class_allowed_products 지정과 섞이지 않도록
+  // 격리) — class_allowed_products 저장은 membership_schedule_rules를 전혀 건드리지 않으므로
+  // (아래 회귀 검증 참고) 어떤 pass를 쓰든 동작은 같지만, 테스트 간 독립성을 위해 유지한다.
   await gotoManagerClassesDay(page, kstDate);
   await page.locator(".class-row", { hasText: "P3 그룹수업-전체허용" }).click();
   await page.locator(".filter-chip", { hasText: "P3 패스D" }).click();
@@ -196,16 +199,17 @@ test("관리자: 선택 해제(전체 허용으로 전환) → 회원 화면에 
   await page.getByRole("button", { name: "수정하기" }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
-  // 회귀 검증(P3 감사 중 실제로 발견한 버그): "모든 수강권 허용"으로 저장해도
-  // membership_schedule_rules에 이 수업 조건의 규칙이 하나도 생기면 안 된다 — 생기는
-  // 순간 센터의 다른 모든 pass가 "무제한"에서 "이 수업 조건에만 매칭"으로 조용히
-  // 좁혀지는 실제 버그가 있었다(app/manager/classes/page.tsx의 save()가 예전엔 선택
-  // 안 함일 때도 센터 전체 pass에 규칙을 자동 추가했음).
+  // 회귀 검증(P3 감사 중 실제로 발견한 버그): class_allowed_products 저장(선택이든 해제든)은
+  // membership_schedule_rules를 절대 건드리면 안 된다 — 이 둘은 완전히 독립된 기능이다
+  // (membership_schedule_rules는 /manager/membership-rules에서만 직접 관리). 과거엔 여기서
+  // 부수효과로 규칙을 자동 추가/삭제해 "선택 해제해도 이전 규칙이 안 지워져 그 수강권만
+  // 계속 안 보이는" 버그를 냈다. 이 테스트가 방금 passD를 선택했다 해제했으니, passD에는
+  // 어떤 schedule_rules 행도 생기지 않았어야 한다.
   const admin = getFixtureAdminClient();
   const { data: leakedRules } = await admin
     .from("membership_schedule_rules")
     .select("id")
-    .eq("class_title", "P3 그룹수업-전체허용");
+    .eq("product_id", passD.id);
   expect(leakedRules ?? []).toHaveLength(0);
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });

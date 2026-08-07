@@ -125,6 +125,15 @@ Superseded
   (`fix_class_allowed_products_enforcement_draft_proposed.sql`, SQL 승인 대기), 타 센터/goods
   혼입을 막는 INSERT RLS 강화, "구매 가능한 수강권" 추천에 goods가 섞이던 버그 수정뿐이다.
   이 DEC 자체는 "UI가 없다"는 전제가 더 이상 사실이 아니므로 해결 완료로 닫는다.
+- **2026-08-07 추가 갱신**: 실브라우저 재검증(사용자 보고 + CI 재현)에서 "모든 수강권 허용"
+  수업인데도 회원이 보유한 특정 pass 하나가 목록에서 사라지는 버그를 발견 — 근본 원인은
+  `app/manager/classes/page.tsx`의 class_allowed_products 저장 로직이 부수효과로
+  `membership_schedule_rules`에도 자동으로 규칙을 추가/삭제하던 것(`autoAddRulesForClass`/
+  `removeRulesForClass`, 이번 P3 배치에서 만든 코드)이었다. `membership_schedule_rules`는
+  `/manager/membership-rules`(`lib/passes.ts`)에서 관리자가 직접 관리하는 **완전히 독립된
+  기존 기능**임을 확인 — 두 기능을 자동으로 연동한 것 자체가 설계 실수였다. 부수효과 코드를
+  완전히 제거해 class_allowed_products와 membership_schedule_rules를 다시 독립시켰다(관련
+  함수 `autoAddRulesForClass`/`removeRulesForClass`/`fetchAllPassProductIds` 삭제).
 
 ---
 
