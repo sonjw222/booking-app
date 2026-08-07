@@ -289,7 +289,22 @@ export async function createTestMembershipForProduct(
     .eq("status", "active")
     .limit(1);
   if (findErr) throw new Error(`E2E 테스트 수강권(${product.name}) 조회 실패: ${findErr.message}`);
-  if (existingRows && existingRows.length > 0) return { id: existingRows[0].id };
+  if (existingRows && existingRows.length > 0) {
+    // status='active'만 보고 재사용하면, 이 계정이 공유하는 다른 스펙들의 자동매칭 예약
+    // (reserve_class — 만료 임박순으로 아무 활성 수강권이나 골라 차감)이 이미 이 수강권의
+    // remaining_count를 0까지 깎아놨어도 그대로 재사용해버려, "보유 pass인데 목록에 안
+    // 보임" 회귀가 재현됐다(원인: WHERE remaining_count > 0 조건에서 조용히 탈락). 재사용
+    // 시마다 잔여횟수/만료일을 원하는 값으로 되돌려 self-healing하게 만든다.
+    const { error: refreshErr } = await admin
+      .from("memberships")
+      .update({
+        remaining_count: remaining,
+        expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+      })
+      .eq("id", existingRows[0].id);
+    if (refreshErr) throw new Error(`E2E 테스트 수강권(${product.name}) 갱신 실패: ${refreshErr.message}`);
+    return { id: existingRows[0].id };
+  }
 
   const { data, error } = await admin
     .from("memberships")
