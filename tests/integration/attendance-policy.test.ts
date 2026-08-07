@@ -24,6 +24,7 @@ import {
   createTestMembership,
   cleanupTestClass,
 } from "./setup";
+import { fetchSettings, saveSettings, type CenterSettings } from "../../lib/settings";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
@@ -36,6 +37,7 @@ let memberA: TestUser;
 let memberB: TestUser;
 let centerAId: string;
 let centerBId: string;
+let defaultSettings: CenterSettings;
 const createdClassIds: string[] = [];
 
 async function asManagerA() { await switchToTestUser(MANAGER_A.email, MANAGER_A.password); }
@@ -56,6 +58,14 @@ beforeAll(async () => {
   centerBId = await getOrCreateOwnedTestCenter(managerB);
   memberA = await switchToTestUser(MEMBER_A.email, MEMBER_A.password);
   memberB = await switchToTestUser(MEMBER_B.email, MEMBER_B.password);
+
+  // "대기 중인 예약은 출석 대상이 아니다" 테스트는 실제로 waitlisted 예약이 생겨야 하는데,
+  // 이 공유 센터의 현재 설정이 waitlist_weekly_limit=0(대기예약 미사용)이면 정원 초과 시
+  // reserve_class()가 대기 대신 즉시 거부한다(실제로 CI에서 재현됨) — 이 describe 블록이
+  // 끝나면 원래 값으로 되돌린다(reservation-cancel-grace-period.test.ts와 동일한 패턴).
+  await asManagerA();
+  defaultSettings = await fetchSettings(centerAId);
+  await saveSettings(centerAId, { ...defaultSettings, waitlistWeeklyLimit: 10 });
 }, 30000);
 
 afterAll(async () => {
@@ -63,6 +73,7 @@ afterAll(async () => {
   for (const id of createdClassIds) {
     try { await cleanupTestClass(id, []); } catch { /* 무시 */ }
   }
+  try { await saveSettings(centerAId, defaultSettings); } catch { /* 무시 */ }
   await signOutTestSession();
 }, 30000);
 
