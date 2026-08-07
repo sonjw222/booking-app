@@ -4,3 +4,4 @@
 // 별도의(테스트가 아닌) 파일로 분리했다.
 export const MANAGER_AUTH_FILE = "playwright/.auth/manager.json";
 export const MEMBER_AUTH_FILE = "playwright/.auth/member.json";
+export const MEMBER_B_AUTH_FILE = "playwright/.auth/member-b.json";

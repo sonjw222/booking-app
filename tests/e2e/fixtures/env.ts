@@ -1,6 +1,9 @@
 // E2E(Playwright) 전용 환경변수 로더.
 // tests/integration/loadEnv.ts와 동일한 규칙(.env.test.local 로컬 로드, CI는 Secrets 직접 주입)을
-// 따르되, E2E가 실제로 로그인에 쓰는 두 계정(TEST_MANAGER_A/TEST_USER_A)만 필수로 검증한다.
+// 따르되, E2E가 실제로 로그인에 쓰는 계정(TEST_MANAGER_A/TEST_USER_A/TEST_USER_B)만 필수로
+// 검증한다. TEST_USER_B는 P0-4(일일예약한도가 계정별로 독립적인지)처럼 두 번째 회원 계정이
+// 필요한 시나리오 전용 — TEST_MANAGER_B는 tests/integration 쪽에서만 쓰고 있어 여기 포함하지
+// 않는다(필요해지면 그때 추가).
 import { config } from "dotenv";
 import path from "node:path";
 
@@ -13,6 +16,8 @@ const REQUIRED = [
   "TEST_MANAGER_A_PASSWORD",
   "TEST_USER_A_EMAIL",
   "TEST_USER_A_PASSWORD",
+  "TEST_USER_B_EMAIL",
+  "TEST_USER_B_PASSWORD",
 ];
 
 export function requireE2eEnv(): void {

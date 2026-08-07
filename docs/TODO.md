@@ -326,6 +326,14 @@ URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 �
 사유 입력 → `p_force_capacity`로 재호출) 2단계 흐름 자체의 자동화 테스트뿐 — 이번 범위에서는
 수동으로만 확인함.
 
+2026-08-05 P2(프라이빗 수업) 감사 중 갱신: 프라이빗(1:1) 수업에 대해서는 이 2단계 흐름 자체가
+잘못돼 있었다 — `p_force_capacity=true`로 재호출하면 그룹 수업과 구분 없이 그대로 두 번째
+확정 예약을 만들어 "1:1"이 깨졌다. `fix_private_class_capacity_and_concurrency_draft_proposed.sql`
+(SQL 미적용, 승인 대기)로 프라이빗 수업은 이 override 자체를 거부하도록 수정하고
+`tests/integration/private-class-capacity.test.ts`로 검증 추가. 그룹 수업의 정상 2단계
+흐름(확인→재호출로 실제 생성) 자체를 검증하는 테스트는 여전히 없음 — 이 항목은 그 부분만
+남은 것으로 범위를 좁힘.
+
 ### P1-12. 운영설정(`/manager/settings`) 화면의 다수 항목이 저장만 되고 실제로 적용되지 않음
 
 | 필드 | 내용 |
@@ -346,6 +354,15 @@ URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 �
 0건입니다 — 매니저가 화면에서 토글/숫자를 바꿔도 저장은 되지만 실제 예약·조회 흐름에는
 아무 영향이 없습니다. 신뢰를 해치는 문제라 P1로 분류합니다. 각 필드를 실제로 구현할지,
 아니면 "준비 중"으로 화면에서 구분할지는 제품 결정이 필요합니다.
+
+2026-08-05 P2(프라이빗 수업) 감사에서 `private_max_concurrent(_enabled)`는 해결: reserve_class/
+reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시간대에 확정된 다른
+프라이빗 수업 수"를 세어 한도를 넘으면 거부하는 로직을 추가했다
+(`fix_private_class_capacity_and_concurrency_draft_proposed.sql`, SQL 미적용·승인 대기,
+`tests/integration/private-class-capacity.test.ts`로 검증). 목록에서 이 필드는 제거하되,
+`private_slot_unit`(schema.sql에만 있고 코드 참조 0건, 프라이빗 시간 단위 슬롯 선택 UI 자체가
+없어 죽은 설정으로 보임)은 여전히 미해결 — P2/P3 후속 범위(프라이빗 셀프 슬롯 예약 UI를
+만들지 여부와 함께 제품 결정 필요)로 남긴다.
 
 ### P1-13. 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
 
@@ -655,9 +672,12 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   "대기 인원수"를 보여주는 UI가 없어(내 대기 순번 표시만 있음) 이 설정을 연결할 대상이 없다
   — 대기 인원수 표시 UI 자체를 새로 만들어야 하는 별도 소규모 기능. 전체 동작표는
   `docs/OPERATIONAL_SETTINGS_AUDIT.md` 참고.
-- **`private_slot_unit`/`private_max_concurrent_*`/`show_point_history`는 제품 결정 필요**:
-  `docs/08_Decision_Log.md` DEC-002(슬롯 시스템), DEC-003(class_allowed_products UI 부재)
-  참고. `show_point_history`는 포인트 내역 페이지 자체가 없어 페이지 신설이 선행돼야 함.
+- **`private_slot_unit`/`show_point_history`는 제품 결정 필요**: `docs/08_Decision_Log.md`
+  DEC-002(슬롯 시스템) 참고. `show_point_history`는 포인트 내역 페이지 자체가 없어 페이지
+  신설이 선행돼야 함. `private_max_concurrent_*`는 2026-08-06 P3 배치에서 해결됨(아래 항목).
+  DEC-003(class_allowed_products UI 부재)도 같은 배치에서 Resolved로 닫힘 — UI는 이미
+  구현돼 있었고(이전 배치), 이번엔 검색 UI·서버 강제(`reserve_with_membership`)·RLS 강화만
+  추가함.
 - **`same_day_change_*`/`autocancel_*`/`waitlist_auto_*`는 스케줄러 인프라 부재로 UI에
   "준비 중" 배지 추가 + 입력 비활성화 처리(2026-08-03)** — 정상 기능처럼 보이지 않도록 함,
   값 자체는 보존(추후 스케줄러 도입 시 그대로 사용 가능).

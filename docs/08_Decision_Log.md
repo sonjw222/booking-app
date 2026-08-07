@@ -101,7 +101,7 @@ Superseded
 
 - **Date**: 2026-08-03
 - **Author**: Claude (QA 후속 배치)
-- **Status**: Proposed
+- **Status**: **Resolved (2026-08-06, P3 배치)** — Alternative A로 구현됨
 - **Category**: 예약 구조
 - **Decision**: 아직 결정 안 됨 — `reserve_class()`는 이미 `class_allowed_products`를 읽어
   제한하지만(존재하면 그 상품만 허용, 없으면 무제한), 이 테이블에 값을 넣을 관리자 UI가
@@ -116,6 +116,24 @@ Superseded
 - **Impact**: A는 프론트엔드 UI 추가 + `lib/classes.ts` 함수 확장 정도로 스키마 변경 없이 가능한
   중간 크기 작업 — 후속 배치 후보로 적합.
 - **Related Documents**: `docs/TODO.md` P2-17, `reservation_functions.sql`(reserve_class 자격 조건)
+- **2026-08-06 갱신(P3 배치, feature/auth-private-class-membership)**: DEC-003 작성 시점(2026-08-03)
+  이후, 프라이빗 수업 관리자 UI를 추가하던 배치에서 Alternative A가 이미 구현됐음을 이번 P3
+  감사로 확인했다 — `app/manager/classes/page.tsx`에 "예약 가능 수강권" 다중 선택 칩(등록/수정/
+  반복등록/스케줄 복사 전부 `lib/classes.ts`의 `setClassProducts`/`setClassProductsBulk`로
+  연결), 회원 화면(`usable_memberships_for_classes`)도 이미 정확히 반영. 이 배치가 새로 만든
+  건 검색 UI, `reserve_with_membership()`의 서버 강제 누락 수정
+  (`fix_class_allowed_products_enforcement_draft_proposed.sql`, SQL 승인 대기), 타 센터/goods
+  혼입을 막는 INSERT RLS 강화, "구매 가능한 수강권" 추천에 goods가 섞이던 버그 수정뿐이다.
+  이 DEC 자체는 "UI가 없다"는 전제가 더 이상 사실이 아니므로 해결 완료로 닫는다.
+- **2026-08-07 추가 갱신**: 실브라우저 재검증(사용자 보고 + CI 재현)에서 "모든 수강권 허용"
+  수업인데도 회원이 보유한 특정 pass 하나가 목록에서 사라지는 버그를 발견 — 근본 원인은
+  `app/manager/classes/page.tsx`의 class_allowed_products 저장 로직이 부수효과로
+  `membership_schedule_rules`에도 자동으로 규칙을 추가/삭제하던 것(`autoAddRulesForClass`/
+  `removeRulesForClass`, 이번 P3 배치에서 만든 코드)이었다. `membership_schedule_rules`는
+  `/manager/membership-rules`(`lib/passes.ts`)에서 관리자가 직접 관리하는 **완전히 독립된
+  기존 기능**임을 확인 — 두 기능을 자동으로 연동한 것 자체가 설계 실수였다. 부수효과 코드를
+  완전히 제거해 class_allowed_products와 membership_schedule_rules를 다시 독립시켰다(관련
+  함수 `autoAddRulesForClass`/`removeRulesForClass`/`fetchAllPassProductIds` 삭제).
 
 ---
 

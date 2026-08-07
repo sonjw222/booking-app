@@ -8,6 +8,135 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-07 — "모든 수강권 허용"인데 보유 pass가 안 보이는 버그 근본 수정 (feature/auth-private-class-membership, PR #41 머지 전 수정)
+
+- **증상(실제 재현)**: `class_allowed_products` 0건(=모든 pass 허용)인 수업에서, 회원이 보유한
+  특정 pass 하나가 "사용할 수강권" 목록에서 통째로 빠지고, 심하면 "현재 사용할 수 있는
+  수강권이 없어요"까지 뜸.
+- **근본 원인**: `app/manager/classes/page.tsx`의 class_allowed_products 저장 로직이
+  `autoAddRulesForClass`/`removeRulesForClass`(P3 배치에서 만든 코드)로 `membership_schedule_
+  rules`에도 부수효과를 쓰고 있었다. 이 테이블은 사실 `/manager/membership-rules`
+  (`lib/passes.ts`)에서 관리자가 **완전히 독립적으로** 관리하는 기존 기능이었는데, 두 기능을
+  자동 연동한 게 설계 실수였다 — 저장 타이밍/재시도/CI 취소 등으로 규칙이 완전히 지워지지
+  않으면, 그 pass는 해당 규칙이 가리키는 옛 수업 조건에만 영원히 매칭되는 상태로 굳어버려
+  이후 어떤 수업에서도 안 보이게 됐다(`usable_memberships_for_classes`의 "규칙이 하나라도
+  있으면 그 조건에만 매칭" 의미론과 충돌).
+- **수정**: `app/manager/classes/page.tsx`에서 `autoAddRulesForClass`/`removeRulesForClass`
+  호출을 완전히 제거 — class_allowed_products 저장은 이제 `class_allowed_products` 테이블만
+  건드린다. `lib/classes.ts`의 `autoAddRulesForClass`/`removeRulesForClass`/
+  `fetchAllPassProductIds`/`dowFromDate`는 호출자가 없어져 삭제. `lib/classes.ts`의
+  `setClassProducts`도 더 이상 이전 선택값을 반환할 필요가 없어 원래 시그니처(`Promise<void>`)로
+  되돌림.
+- **정책 확정**: `class_allowed_products`와 `membership_schedule_rules`는 이제부터 완전히 독립된
+  두 기능이다 — 전자는 "이 수업에 어떤 pass를 쓸 수 있는가"(수업 화면에서 관리), 후자는 "이
+  pass는 어떤 요일/시간/수업명에서만 쓸 수 있는가"(membership-rules 화면에서 직접 관리). 어느
+  쪽도 서로의 데이터를 자동으로 만들거나 지우지 않는다.
+- **후속 발견 1 — `fetchUsableMembershipsByClass()`의 1000행 응답 제한 누락(실제 앱 버그)**: 위
+  수정 후에도 CI에서 증상이 재현돼 추적한 결과, 근본 원인은 하나 더 있었다 — 이 함수는
+  `usable_memberships_for_classes()` RPC를 "선택된 날짜의 모든 수업 id"를 한 번에 넘겨
+  호출하는데, 회원이 보유한 pass가 많고(공유 테스트 계정은 200개 넘게 누적) 같은 날짜에
+  수업이 여러 개 있으면 합쳐진 응답 행 수가 PostgREST 기본 제한(1000행)을 넘을 수 있다 —
+  `fetchClasses()`에서 이미 한 번 확인·수정한 것과 같은 종류의 문제다. `lib/classes.ts`의
+  `.range()` 페이지 단위 반복 조회 패턴을 `lib/reservations.ts`의
+  `fetchUsableMembershipsByClass()`에도 동일하게 적용해 수정.
+- **후속 발견 2 — E2E 테스트 fixture의 "get-or-create가 소진된 수강권을 그대로 재사용"
+  버그(테스트 버그)**: `createTestMembershipForProduct()`가 기존 활성 행을 `status='active'`만
+  보고 재사용하면서 `remaining_count`/`expires_at`을 갱신하지 않았다. 이 계정은 전체 E2E
+  스위트가 공유해서, 다른 스펙의 무제한 수업 자동매칭 예약(`reserve_class`, 만료 임박순으로
+  아무 활성 수강권이나 선택)이 반복 실행되며 잔여횟수를 조용히 0까지 깎을 수 있었다 — 재사용
+  시마다 잔여횟수/만료일을 갱신하도록 self-healing 처리.
+
+## 2026-08-06 — P3 수업별 사용 가능 수강권(class_allowed_products) 관리 UI 감사 및 보강 (feature/auth-private-class-membership)
+
+- **기존 구조 감사 결과**: `docs/08_Decision_Log.md` DEC-003("관리 UI 부재")이 2026-08-03에
+  작성됐지만, 그 이후 프라이빗 수업 관리자 UI를 추가하던 배치에서 이미 Alternative A(수업
+  등록/수정 화면에 다중 선택 UI)가 구현돼 있었음을 확인 — 등록/수정/반복등록
+  (`setClassProductsBulk`)/스케줄 복사(`insertCopiedClasses`) 전부 `lib/classes.ts`의
+  `setClassProducts`로 정상 연결돼 있었고, 회원 화면(`usable_memberships_for_classes`)도
+  이미 정확히 반영하고 있었다. DEC-003을 Resolved로 갱신.
+- **이번에 새로 발견해 고친 것**:
+  1. `reserve_with_membership()`(회원이 수강권을 직접 선택해 예약하는 경로)만
+     `class_allowed_products`를 전혀 확인하지 않았다 — 화면 목록 자체는 걸러져 있어 정상
+     사용에선 안 드러나지만 RPC를 직접 호출하면 허용 안 된 수강권으로도 예약이 성립했다.
+     `fix_class_allowed_products_enforcement_draft_proposed.sql`(SQL 미적용, 승인 대기)로
+     `reserve_class()`/`usable_memberships_for_classes()`와 동일한 조건 추가.
+  2. `class_allowed_products` INSERT RLS가 class의 센터만 확인하고 연결하려는 product가
+     같은 센터의 pass인지는 확인하지 않아, 이론상 타 센터 상품·goods를 직접 API로 연결할
+     수 있었다 — 같은 SQL 파일에서 RLS도 강화.
+  3. `lib/reservations.ts`의 `fetchPurchasableProductsByClass()`("구매 가능한 수강권" 추천)가
+     class_allowed_products 미지정 수업에서 goods까지 추천 목록에 섞을 수 있었다 — pass만
+     조회하도록 쿼리 수정(순수 코드, SQL 무관).
+  4. 관리자 선택 화면에 검색 입력(`app/manager/classes/page.tsx`)과 "선택 해제(모든 수강권
+     허용으로 전환)" 버튼을 추가.
+
+### 후속 — CI Green 확인 과정에서 추가로 발견·수정한 버그 (같은 날, 이어서)
+- **`autoAddRulesForClass` "모든 수강권 허용" 오염 버그(실제 앱 버그, 회귀 심각도 높음)**:
+  `app/manager/classes/page.tsx`의 `save()`가 "모든 수강권 허용"(선택 안 함)으로 저장할 때도
+  센터의 전체 pass 상품에 `autoAddRulesForClass`를 호출해, 그 순간부터 그 pass들이 "무제한"에서
+  "이 수업 조건에만 매칭"으로 조용히 좁혀지던 버그. 두 호출부 모두 `selectedProducts.length > 0`일
+  때만 호출하도록 수정.
+- **"특정 허용→전체 허용" 전환 시 규칙이 안 지워지는 버그(위 버그의 후속, 실제 앱 버그)**:
+  위 버그를 고친 뒤에도, 한번 "특정 허용"으로 저장했다가 다시 "전체 허용"으로 되돌리면 이전
+  저장이 자동 생성한 `membership_schedule_rules`가 그대로 남아 그 수강권이 계속 이전 수업
+  조건에만 매칭된 상태가 풀리지 않았다. `lib/classes.ts`의 `setClassProducts()`가 교체 전
+  기존 product_id 목록을 반환하도록 바꾸고, `removeRulesForClass()`를 신규 추가해 저장 시
+  빠진 수강권의 규칙을 함께 정리하도록 수정.
+- **`fetchClasses()` 1000행 페이지네이션 누락(실제 앱 버그)**: 관리자 수업 캘린더 조회
+  (`lib/classes.ts`)가 PostgREST 기본 1000행 캡에 걸려, 한 달에 수업이 1000개를 넘는 센터는
+  뒤쪽 수업이 캘린더에서 통째로 안 보였다. `lib/reservations.ts`의 `fetchMonthData` 페이지네이션
+  패턴을 그대로 이식(`.range()` 루프 + `class_reservation_counts` 청크 조회).
+- **`service_role` GRANT 누락 3건(권한/인프라 문제, 기존에 이미 있던 동일 부류 문제의 재발견)**:
+  `membership_schedule_rules`/`profiles` 테이블에 `service_role` GRANT가 없어 테스트
+  fixture(admin/service-role 클라이언트)가 "permission denied"로 실패했다 — `products`/
+  `classes`/`memberships`/`reservations`/`center_settings`에 이미 있었던 것과 동일한 패턴.
+  `fix_service_role_missing_grants_membership_schedule_rules_draft_proposed.sql`/
+  `fix_service_role_missing_grants_profiles_draft_proposed.sql`로 추가(사용자가 적용 완료).
+- **통합테스트 fixture 버그(테스트 버그, 앱 버그 아님)**: `class-allowed-products-enforcement.test.ts`의
+  `createMembershipForProduct`가 회원 세션(RLS 적용 대상)으로 `memberships`에 직접 insert를
+  시도해 RLS 위반으로 실패 — admin(service-role) 클라이언트로 수정.
+- 위 수정 후 `fix_class_allowed_products_enforcement_draft_proposed.sql` 적용까지 완료,
+  Playwright/Unit/Integration/Build 전 구간 **2회 연속 Green** 확인(CI run 31095072280,
+  31096363412). Vercel Preview 배포도 성공 확인.
+
+## 2026-08-05 — P0 실제 버그 4건 수정 + P1 로그인/계정 기능 보강 (feature/auth-private-class-membership)
+
+- **P0-1 (휴무일 삭제 후 폐강 상태가 안 풀림)**: `add_holiday_safe()`가 휴무일 등록 시
+  그날 수업들을 `classes.status='cancelled'`로 바꾸는데, 삭제 경로는 이를 되돌리는 코드가
+  전혀 없었다 — 그래서 휴무일을 지워도 수업이 계속 "폐강된 수업이에요"로 막혀 있었다.
+  신규 RPC `remove_holiday_safe()`(`fix_holiday_delete_restores_classes.sql`)로 휴무일 삭제와
+  해당 날짜 cancelled 수업의 open 복구를 한 트랜잭션으로 처리.
+- **P0-2 (수업별 예약마감이 당일예약 설정보다 낮은 우선순위였음)**: `reserve_class`/
+  `reserve_with_membership`의 "예약 마감시간" 검사는 `booking_deadline_min`(수업별 override)을
+  이미 최우선으로 썼지만, 바로 다음의 "당일 예약 허용 여부" 검사는 이 override를 무시하고
+  항상 센터 운영설정만 확인했다 — 그래서 수업에 명시적으로 예약마감을 지정해도 센터의
+  당일예약 토글이 꺼져 있으면 여전히 막혔다. `booking_deadline_min`이 있으면 당일예약
+  검사를 건너뛰도록 수정(`fix_class_deadline_overrides_same_day_toggle.sql`).
+- **P0-3 (goods 상품이 "사용 가능 수강권" 목록에 노출)**: 코드 감사 결과 현재 코드는 이미
+  이전 세션의 `fix_usable_memberships_product_kind.sql`로 고쳐진 상태 — RPC/관리자
+  선택기/reserveWithMembership 경로 모두 `product_kind='pass'`만 정확히 필터링함을
+  실브라우저 E2E로 재확인하고 회귀 방지 테스트만 추가.
+- **P0-4 (일일 예약 횟수 제한 재검증)**: 취소 시 한도가 다시 채워지는지, 대기 등록도
+  한도에 포함되는지, 회원 A/B의 한도가 서로 독립적인지 실브라우저로 새로 검증(기존
+  스펙은 "OFF→성공, ON+제한→3회째 실패"만 다뤘음). 로직 자체는 이미 정확했다(회귀 없음).
+- **P1 로그인/계정 기능**: 코드 감사 결과 소셜 로그인(카카오/네이버/애플)으로 처음
+  로그인하면 `accounts`/`profiles` 행이 아무도 만들어지지 않아 거의 모든 화면이
+  "계정 정보를 찾을 수 없어요"로 막히는 심각한 버그를 발견 — `lib/authAccount.ts`의
+  `ensureAccountForCurrentUser()`로 홈 화면 첫 로드 시 부트스트랩하도록 수정. 그 외
+  완전히 빠져 있던 기능 추가: Google 로그인 버튼, 비밀번호 재설정(`/reset-password`,
+  `/reset-password/confirm`), 로그인 상태에서 비밀번호 변경(`/settings/account`),
+  "로그인 상태 유지" 체크박스(해제 시 세션을 localStorage 대신 sessionStorage에 저장),
+  세션 만료 시 자동으로 로그인 화면으로 안내(`app/components/SessionWatcher.tsx`).
+- **P2 프라이빗(1:1) 수업**: 관리자 UI(그룹/프라이빗 토글, capacity=1 고정)와 DB
+  CHECK 제약, `calc_deadline()`의 프라이빗 전용 예약/취소/오픈 기한 등은 이전 배치에서
+  이미 구현돼 있었으나, 실제 예약 경로에 세 가지 실제 버그가 남아 있었다(코드 감사로
+  확인, `docs/TODO.md` P1-11/P1-12와 교차 확인): (1) 프라이빗 수업이 차 있으면 대기예약
+  경로로 빠져 1:1 수업에 대기 순번이 생길 수 있었음, (2) 관리자 직접배치의 "정원 초과
+  강제 배치" 옵션이 프라이빗 수업에도 그대로 적용돼 두 번째 확정 예약을 만들 수 있었음,
+  (3) 운영설정 화면의 "프라이빗 동시 수업 최대 개수"(`private_max_concurrent`)가
+  스키마·설정화면에만 있고 실제로 예약을 막는 코드가 전혀 없어 완전히 죽은 설정이었음.
+  `fix_private_class_capacity_and_concurrency_draft_proposed.sql`(SQL 미적용, 승인 대기)로
+  세 가지 모두 수정하고 `tests/integration/private-class-capacity.test.ts`로 검증 추가.
+
 ## 2026-08-05 — Playwright 관리자 세션 session_not_found 근본 원인 수정 + 전체 파이프라인 2회 연속 Green (PR #39)
 
 - **session_not_found 정확한 원인**: `tests/integration/setup.ts`의 `switchToTestUser()`가

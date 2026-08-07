@@ -43,7 +43,12 @@ export async function addHoliday(centerId: string, date: string, reason: string,
   return { needsConfirm: false, deletedClasses: d.deleted_classes, cancelledReservations: d.cancelled_reservations };
 }
 
+// 휴무일 삭제 — 그날 휴무일 때문에 폐강(cancelled) 처리됐던 수업들을 다시 예약 가능(open)
+// 상태로 되돌리는 것까지 하나의 RPC(remove_holiday_safe)로 원자적으로 처리한다. 예전에는
+// center_holidays 행만 직접 지웠는데, 그 경우 add_holiday_safe()가 그때 함께 cancelled로
+// 바꿔둔 classes.status는 아무도 되돌리지 않아 "휴무일을 지워도 수업은 계속 폐강 상태"로
+// 남는 버그가 있었다.
 export async function deleteHoliday(id: string): Promise<void> {
-  const { error } = await supabase.from("center_holidays").delete().eq("id", id);
-  if (error) throw new Error("휴무일 삭제에 실패했어요: " + error.message);
+  const { error } = await supabase.rpc("remove_holiday_safe", { p_holiday_id: id });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
 }

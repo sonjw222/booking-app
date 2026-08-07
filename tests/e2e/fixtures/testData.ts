@@ -48,12 +48,12 @@ async function deleteExistingClassesByTitle(centerId: string, title: string): Pr
 // 여기 저장해둔다 — 그 이후 이 값을 읽기만 할 뿐, 이 두 계정으로 다시 로그인하지 않는다.
 const META_DIR = path.resolve(process.cwd(), "playwright/.auth");
 
-export function saveTestAccountMeta(name: "manager-a" | "user-a", meta: TestUser): void {
+export function saveTestAccountMeta(name: "manager-a" | "user-a" | "user-b", meta: TestUser): void {
   fs.mkdirSync(META_DIR, { recursive: true });
   fs.writeFileSync(path.join(META_DIR, `${name}.json`), JSON.stringify(meta));
 }
 
-export function loadTestAccountMeta(name: "manager-a" | "user-a"): TestUser {
+export function loadTestAccountMeta(name: "manager-a" | "user-a" | "user-b"): TestUser {
   const raw = fs.readFileSync(path.join(META_DIR, `${name}.json`), "utf-8");
   return JSON.parse(raw) as TestUser;
 }
@@ -161,6 +161,19 @@ export async function cleanupTodaysReservationsForProfile(centerId: string, prof
 // 회원이 겪는 "수강권을 직접 골라 예약하는" 경로(reserveWithMembership)를 전혀 검증하지
 // 못하게 된다 — 실측 CI에서 이 상태로 재현됨. 그래서 테스트 수강권에는 반드시 실제
 // product_kind='pass' 상품을 만들어 연결한다.
+// P3 감사에서 발견한 실제 앱 버그(app/manager/classes/page.tsx의 save()가 "모든 수강권
+// 허용"으로 저장할 때도 센터의 전체 pass 상품에 membership_schedule_rules를 자동 추가해,
+// 그 순간부터 그 pass가 "무제한"에서 "그 수업 조건에만 매칭"으로 조용히 좁혀지던 문제 —
+// 코드는 고쳤지만, 그 버그가 살아있던 동안(이번 P3 배치 이전 포함, 실제 관리자 화면을
+// 수동으로 써본 이전 세션들에서도 발생했을 수 있음) 이미 쌓인 규칙이 여전히 남아있다.
+// "이 상품은 원래 무제한이어야 한다"고 테스트가 전제하는 공용 pass 상품(예: "E2E 테스트
+// 수강권 상품")은 매 실행 전에 이 함수로 규칙을 깨끗이 비워 그 전제를 실제로 보장한다.
+export async function clearScheduleRulesForProduct(productId: string): Promise<void> {
+  const admin = getFixtureAdminClient();
+  const { error } = await admin.from("membership_schedule_rules").delete().eq("product_id", productId);
+  if (error) throw new Error(`membership_schedule_rules 정리 실패: ${error.message}`);
+}
+
 export async function getOrCreateTestPassProduct(centerId: string): Promise<{ id: string }> {
   const admin = getFixtureAdminClient();
   const name = "E2E 테스트 수강권 상품";
@@ -191,6 +204,38 @@ export async function getOrCreateTestPassProduct(centerId: string): Promise<{ id
   return { id: data.id };
 }
 
+// P3: class_allowed_products 테스트는 "특정 수강권 1개만 허용"/"여러 개 허용"을 구분해서
+// 검증해야 해서, 이름이 고정된 getOrCreateTestPassProduct() 하나로는 부족하다 — 이름을
+// 받아 get-or-create하는 버전(같은 패턴, 이름만 파라미터화).
+export async function getOrCreateTestPassProductNamed(centerId: string, name: string): Promise<{ id: string; name: string }> {
+  const admin = getFixtureAdminClient();
+  const { data: existing, error: findErr } = await admin
+    .from("products")
+    .select("id")
+    .eq("center_id", centerId)
+    .eq("name", name)
+    .eq("product_kind", "pass")
+    .maybeSingle();
+  if (findErr) throw new Error(`E2E 테스트 상품(${name}) 조회 실패: ${findErr.message}`);
+  if (existing) return { id: existing.id, name };
+
+  const { data, error } = await admin
+    .from("products")
+    .insert({
+      center_id: centerId,
+      name,
+      product_kind: "pass",
+      pass_type: "count",
+      total_count: 999,
+      is_on_sale: true,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(`E2E 테스트 상품(${name}) 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id, name };
+}
+
 export async function createTestMembershipAdmin(
   centerId: string,
   profileId: string,
@@ -215,6 +260,129 @@ export async function createTestMembershipAdmin(
     .select("id")
     .single();
   if (error || !data) throw new Error(`E2E 테스트 수강권 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id };
+}
+
+// P3: class_allowed_products 검증은 회원이 서로 다른 이름의 pass 여러 개를 동시에 보유한
+// 상태가 필요하다(getOrCreateTestPassProductNamed와 짝) — 어느 product를 지급할지
+// 파라미터로 받는 버전.
+export async function createTestMembershipForProduct(
+  centerId: string, profileId: string, product: { id: string; name: string },
+  opts?: { remainingCount?: number }
+): Promise<{ id: string }> {
+  const admin = getFixtureAdminClient();
+  const remaining = opts?.remainingCount ?? 5;
+  // get-or-create — Playwright는 실패한 테스트를 재시도할 때 beforeAll도 처음부터 다시
+  // 실행하는데, 매번 새로 insert하면 재시도 때마다 같은 (profile, product) 조합의 수강권이
+  // 계속 쌓여 "정확히 1개만 보여야 한다"류 검증을 흔들어놓는다(CI에서 실제로 재현 —
+  // "사용할 수강권" 목록에 같은 상품이 10개 넘게 나옴). 이미 활성 상태로 있으면 그걸 그대로
+  // 재사용한다.
+  // ⚠ .maybeSingle()은 행이 2개 이상이면 예외를 던진다 — 이 helper를 추가하기 전(P3
+  // 배치 이전) 실패한 CI 재시도들이 이미 중복 행을 만들어둔 상태에서 실제로 이 예외가
+  // 터지는 것을 확인했다. limit(1)로 "여러 개여도 아무거나 하나"를 재사용하도록 방어한다.
+  const { data: existingRows, error: findErr } = await admin
+    .from("memberships")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("center_id", centerId)
+    .eq("product_id", product.id)
+    .eq("status", "active")
+    .limit(1);
+  if (findErr) throw new Error(`E2E 테스트 수강권(${product.name}) 조회 실패: ${findErr.message}`);
+  if (existingRows && existingRows.length > 0) {
+    // status='active'만 보고 재사용하면, 이 계정이 공유하는 다른 스펙들의 자동매칭 예약
+    // (reserve_class — 만료 임박순으로 아무 활성 수강권이나 골라 차감)이 이미 이 수강권의
+    // remaining_count를 0까지 깎아놨어도 그대로 재사용해버려, "보유 pass인데 목록에 안
+    // 보임" 회귀가 재현됐다(원인: WHERE remaining_count > 0 조건에서 조용히 탈락). 재사용
+    // 시마다 잔여횟수/만료일을 원하는 값으로 되돌려 self-healing하게 만든다.
+    const { error: refreshErr } = await admin
+      .from("memberships")
+      .update({
+        remaining_count: remaining,
+        expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+      })
+      .eq("id", existingRows[0].id);
+    if (refreshErr) throw new Error(`E2E 테스트 수강권(${product.name}) 갱신 실패: ${refreshErr.message}`);
+    return { id: existingRows[0].id };
+  }
+
+  const { data, error } = await admin
+    .from("memberships")
+    .insert({
+      profile_id: profileId,
+      center_id: centerId,
+      product_id: product.id,
+      product_name: product.name,
+      pass_type: "count",
+      total_count: remaining,
+      remaining_count: remaining,
+      expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+      status: "active",
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(`E2E 테스트 수강권(${product.name}) 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id };
+}
+
+// P0-3: "모든 수강권 사용 가능" 수업에서 goods(대여품 등, 예약용이 아님) 상품이 "사용할
+// 수강권" 목록에 섞여 보이는지 검증하려면, 회원이 pass와 goods 두 종류를 동시에 보유한
+// 상태를 실제로 만들어야 한다. product_kind='goods'인 상품+수강권을 get-or-create한다
+// (createTestMembershipAdmin과 동일 패턴, pass 대신 goods).
+export async function getOrCreateTestGoodsProduct(centerId: string): Promise<{ id: string }> {
+  const admin = getFixtureAdminClient();
+  const name = "E2E 테스트 대여품 상품";
+  const { data: existing, error: findErr } = await admin
+    .from("products")
+    .select("id")
+    .eq("center_id", centerId)
+    .eq("name", name)
+    .eq("product_kind", "goods")
+    .maybeSingle();
+  if (findErr) throw new Error(`E2E 테스트 goods 상품 조회 실패: ${findErr.message}`);
+  if (existing) return { id: existing.id };
+
+  const { data, error } = await admin
+    .from("products")
+    .insert({
+      center_id: centerId,
+      name,
+      product_kind: "goods",
+      pass_type: "count",
+      total_count: 999,
+      is_on_sale: true,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(`E2E 테스트 goods 상품 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id };
+}
+
+export async function createTestGoodsMembershipAdmin(
+  centerId: string,
+  profileId: string,
+  opts?: { remainingCount?: number }
+): Promise<{ id: string }> {
+  const admin = getFixtureAdminClient();
+  const remaining = opts?.remainingCount ?? 5;
+  const product = await getOrCreateTestGoodsProduct(centerId);
+  const { data, error } = await admin
+    .from("memberships")
+    .insert({
+      profile_id: profileId,
+      center_id: centerId,
+      product_id: product.id,
+      product_name: "E2E 테스트 대여품",
+      pass_type: "count",
+      total_count: remaining,
+      remaining_count: remaining,
+      expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+      status: "active",
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(`E2E 테스트 goods 수강권 생성 실패: ${error?.message ?? "no data"}`);
   return { id: data.id };
 }
 

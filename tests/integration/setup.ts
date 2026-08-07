@@ -334,11 +334,11 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
 // 미래 시각에 시작하는 테스트 전용 수업 생성 (기본 48시간 뒤, 1시간짜리)
 export async function createFutureTestClass(
   centerId: string,
-  opts?: { capacity?: number; hoursFromNow?: number; title?: string }
-): Promise<{ id: string; startTime: string }> {
+  opts?: { capacity?: number; hoursFromNow?: number; title?: string; classFormat?: "group" | "private"; durationMinutes?: number }
+): Promise<{ id: string; startTime: string; endTime: string }> {
   const hours = opts?.hoursFromNow ?? 48;
   const start = new Date(Date.now() + hours * 3600 * 1000);
-  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const end = new Date(start.getTime() + (opts?.durationMinutes ?? 60) * 60 * 1000);
   const { data, error } = await supabase
     .from("classes")
     .insert({
@@ -346,12 +346,15 @@ export async function createFutureTestClass(
       title: opts?.title ?? "통합테스트 수업",
       start_time: start.toISOString(),
       end_time: end.toISOString(),
-      capacity: opts?.capacity ?? 8,
+      // classes_private_capacity_check(fix_private_class_capacity_constraint_draft_proposed.sql)가
+      // class_format='private'이면 capacity=1을 DB에서 강제한다 — private일 때 capacity 옵션은 무시.
+      capacity: opts?.classFormat === "private" ? 1 : opts?.capacity ?? 8,
+      class_format: opts?.classFormat ?? "group",
     })
-    .select("id, start_time")
+    .select("id, start_time, end_time")
     .single();
   if (error || !data) throw new Error(`테스트 수업 생성 실패: ${error?.message ?? "no data"}`);
-  return { id: data.id, startTime: data.start_time };
+  return { id: data.id, startTime: data.start_time, endTime: data.end_time };
 }
 
 // [OPS-BOUNDARY] "당일예약" 검증 전용 시각 계산.

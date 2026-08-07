@@ -67,23 +67,42 @@ function assertValidClassTimeRange(start: string, end: string): void {
 }
 
 export async function fetchClasses(centerId: string, fromDate: string, toDate: string): Promise<ManagedClass[]> {
-  const { data: rows, error } = await supabase
-    .from("classes")
-    .select("id, title, start_time, end_time, capacity, recurring_group_id, allow_goods, room_id, cancel_deadline_min, booking_deadline_min, class_format, status")
-    .eq("center_id", centerId)
-    .gte("start_time", toKstIso(fromDate, "00:00"))
-    .lte("start_time", toKstIso(toDate, "23:59"))
-    .order("start_time");
-  if (error) throw new Error("수업을 불러오지 못했어요: " + error.message);
+  // ⚠️ center_id로 이미 좁혀서 조회하니 PostgREST 기본 응답 행 수 제한(1000행)에 안 걸릴
+  // 거라고 가정했었는데(과거 fetchMonthData 수정 당시의 가정 — lib/reservations.ts 참고),
+  // 테스트 데이터가 많이 쌓인 센터 하나만으로도 실제로 걸리는 것을 확인했다(관리자 수업
+  // 화면에서 이번 달 앞부분 수업만 1000개까지 보이고 그 뒤 수업은 통째로 안 보임). 같은
+  // 이유로 fetchMonthData가 이미 쓰고 있는 .range() 페이지 단위 반복 조회를 여기도 적용한다.
+  const rows: any[] = [];
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page, error } = await supabase
+      .from("classes")
+      .select("id, title, start_time, end_time, capacity, recurring_group_id, allow_goods, room_id, cancel_deadline_min, booking_deadline_min, class_format, status")
+      .eq("center_id", centerId)
+      .gte("start_time", toKstIso(fromDate, "00:00"))
+      .lte("start_time", toKstIso(toDate, "23:59"))
+      .order("start_time")
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error("수업을 불러오지 못했어요: " + error.message);
+    rows.push(...(page ?? []));
+    if (!page || page.length < PAGE_SIZE) break;
+  }
 
   const ids = (rows ?? []).map((c) => c.id);
   const counts: Record<string, number> = {};
   if (ids.length > 0) {
-    const { data: countRows } = await supabase
-      .from("class_reservation_counts")
-      .select("class_id, confirmed_count")
-      .in("class_id", ids);
-    for (const r of countRows ?? []) counts[r.class_id] = r.confirmed_count;
+    // ids가 많아지면(위 1000행 제한 수정으로 한 센터가 한 달에 수백~수천 개 수업을 가질 수
+    // 있게 됨) .in()에 그 UUID를 전부 나열한 요청 URL이 너무 길어져 PostgREST가 "Bad
+    // Request"로 거부한다(fetchMonthData의 CHUNK_SIZE와 동일한 이유) — 청크로 나눠 조회한다.
+    const CHUNK_SIZE = 150;
+    const idChunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) idChunks.push(ids.slice(i, i + CHUNK_SIZE));
+    const chunkResults = await Promise.all(
+      idChunks.map((chunk) => supabase.from("class_reservation_counts").select("class_id, confirmed_count").in("class_id", chunk))
+    );
+    for (const { data: countRows } of chunkResults) {
+      for (const r of countRows ?? []) counts[r.class_id] = r.confirmed_count;
+    }
   }
 
   return (rows ?? []).map((c) => ({
@@ -328,10 +347,11 @@ export async function setClassProducts(classId: string, productIds: string[]): P
     .eq("class_id", classId);
   if (delErr) throw new Error("수강권 설정에 실패했어요: " + delErr.message);
 
-  if (productIds.length === 0) return;
-  const rows = productIds.map((pid) => ({ class_id: classId, product_id: pid }));
-  const { error } = await supabase.from("class_allowed_products").insert(rows);
-  if (error) throw new Error("수강권 설정에 실패했어요: " + error.message);
+  if (productIds.length > 0) {
+    const rows = productIds.map((pid) => ({ class_id: classId, product_id: pid }));
+    const { error } = await supabase.from("class_allowed_products").insert(rows);
+    if (error) throw new Error("수강권 설정에 실패했어요: " + error.message);
+  }
 }
 
 // 여러 수업에 같은 수강권 목록 지정 (반복 수업 등록용)
@@ -341,60 +361,6 @@ export async function setClassProductsBulk(classIds: string[], productIds: strin
   for (const cid of classIds) for (const pid of productIds) rows.push({ class_id: cid, product_id: pid });
   const { error } = await supabase.from("class_allowed_products").insert(rows);
   if (error) throw new Error("수강권 설정에 실패했어요: " + error.message);
-}
-
-/* ============================================================
-   수업↔수강권 연결 시, 그 수강권 예약조건에 이 수업을 자동 추가
-   - 수업의 요일/시간/수업명으로 조건을 만들어 각 수강권에 넣음
-   - 이미 같은 조건이 있으면 중복 추가 안 함
-   - "모든 수강권"이면 센터의 전체 수강권(pass)에 추가
-   ============================================================ */
-
-// 특정 상품들에 이 수업 조건(요일/시간/수업명) 자동 추가
-export async function autoAddRulesForClass(
-  productIds: string[],
-  dayOfWeek: number,
-  startTime: string,   // "19:00"
-  classTitle: string
-): Promise<void> {
-  if (productIds.length === 0) return;
-  for (const pid of productIds) {
-    // 이미 같은 조건이 있는지 확인 (요일+시간+수업명)
-    const { data: existing } = await supabase
-      .from("membership_schedule_rules")
-      .select("id")
-      .eq("product_id", pid)
-      .eq("day_of_week", dayOfWeek)
-      .eq("start_time", startTime)
-      .eq("class_title", classTitle)
-      .maybeSingle();
-    if (existing) continue;
-    await supabase.from("membership_schedule_rules").insert({
-      product_id: pid,
-      day_of_week: dayOfWeek,
-      start_time: startTime,
-      class_title: classTitle,
-    });
-  }
-}
-
-// 센터의 모든 수강권(pass) id 목록 (예약가능 수강권 미지정 시 사용)
-export async function fetchAllPassProductIds(centerId: string): Promise<string[]> {
-  const { data, error } = await supabase
-    .from("products")
-    .select("id")
-    .eq("center_id", centerId)
-    .eq("is_active", true)
-    .eq("product_kind", "pass");
-  if (error) throw new Error("수강권 목록을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => r.id);
-}
-
-// 날짜 문자열 + 시간 문자열 → 요일(0~6)
-export function dowFromDate(dateStr: string): number {
-  // "2026-07-23" → 요일(0=일~6=토). 시간대 영향 없이 UTC 정오 기준으로 계산.
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay();
 }
 
 /* ============================================================

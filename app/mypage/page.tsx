@@ -180,6 +180,7 @@ export default function MyPage() {
       <div className="menu-section-label">설정</div>
       <a className="list-row" href="/settings/theme"><div className="left"><span className="icon">🎨</span>테마 설정</div><span className="chevron">›</span></a>
       <a className="list-row" href="/settings/notifications"><div className="left"><span className="icon">🔔</span>알림 설정</div><span className="chevron">›</span></a>
+      <a className="list-row" href="/settings/account"><div className="left"><span className="icon">🔒</span>계정 설정</div><span className="chevron">›</span></a>
       {profile?.isPlatformAdmin && (
         <a className="list-row" href="/admin">
           <div className="left"><span className="icon">🛡️</span>운영자 설정</div>

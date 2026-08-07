@@ -20,7 +20,6 @@ import {
   createRecurringClasses, expandRecurringDates,
   updateClassGroup, deleteClassGroup,
   fetchClassAttendees, setAttendance, fetchClassProducts, setClassProducts, setClassProductsBulk,
-  autoAddRulesForClass, fetchAllPassProductIds, dowFromDate,
   fetchCenterHolidayDates,
   fetchCopyGroups, fetchCopyDateItems, planCopyByWeekday, planCopyByDate,
   copyByWeekday, copyByDate,
@@ -142,6 +141,7 @@ export default function ClassManagePage() {
   // 수강권 목록 + 폼에서 선택된 수강권
   const [passProducts, setPassProducts] = useState<Product[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [passSearch, setPassSearch] = useState(""); // P3: 예약 가능 수강권 선택 목록 검색
   const [busy, setBusy] = useState(false);
 
   const loadClasses = useCallback(async (centerId: string, y: number, m: number) => {
@@ -231,6 +231,7 @@ export default function ClassManagePage() {
     setRepFrom(dayStr);
     setRepTo(lastDay);
     setSelectedProducts([]);
+    setPassSearch("");
     setError(null);
     setFormOpen(true);
   }
@@ -521,6 +522,7 @@ export default function ClassManagePage() {
     fillDeadline(c.cancelDeadlineMin);
     fillBookDeadline(c.bookingDeadlineMin);
     setSelectedProducts([]);
+    setPassSearch("");
     setError(null);
     setFormOpen(true);
     try {
@@ -600,15 +602,6 @@ export default function ClassManagePage() {
         }
         // 선택한 수강권을 모든 생성 수업에 연결
         if (selectedProducts.length > 0) await setClassProductsBulk(ids, selectedProducts);
-        // 대상 수강권들의 예약조건에 이 수업(요일들/시간/수업명) 자동 추가
-        const targetProducts = selectedProducts.length > 0
-          ? selectedProducts
-          : await fetchAllPassProductIds(activeCenterId);
-        for (const dow of repDays) {
-          const ov = dayOverrides[dow];
-          const st = perDayMode && ov?.start ? ov.start : form.start;
-          await autoAddRulesForClass(targetProducts, dow, st, form.title);
-        }
         setFormOpen(false);
         await loadClasses(activeCenterId, year, month);
         setError(null);
@@ -639,12 +632,6 @@ export default function ClassManagePage() {
         setBusy(false);
         return;
       }
-      // 수강권 미지정이면 = 모든 수강권 대상, 지정이면 그 수강권들
-      const targetProducts = selectedProducts.length > 0
-        ? selectedProducts
-        : await fetchAllPassProductIds(activeCenterId);
-      const dow = dowFromDate(form.date);
-
       if (editId) {
         if (applyToGroup && editGroupId) {
           await updateClassGroup(editGroupId, form.title, form.start, form.end, form.capacity);
@@ -656,8 +643,6 @@ export default function ClassManagePage() {
         const newId = await createClass(activeCenterId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin() });
         await setClassProducts(newId, selectedProducts);
       }
-      // 이 수업 조건(요일/시간/수업명)을 대상 수강권들의 예약조건에 자동 추가
-      await autoAddRulesForClass(targetProducts, dow, form.start, form.title);
 
       setFormOpen(false);
       await loadClasses(activeCenterId, year, month);
@@ -1108,27 +1093,62 @@ export default function ClassManagePage() {
               </button>
             </div>
 
-            {/* 예약 가능 수강권 선택 */}
+            {/* 예약 가능 수강권 선택 (P3: class_allowed_products) */}
             <div className="menu-section-label" style={{ padding: "8px 0 6px" }}>예약 가능 수강권</div>
             <div className="perm-guide" style={{ margin: "0 0 8px" }}>
-              선택 안 하면 <b>모든 수강권</b>으로 예약 가능해요. 특정 수강권만 고르면 그 수강권 보유자만 예약할 수 있어요.
+              {selectedProducts.length === 0
+                ? <>선택 안 하면 <b>모든 수강권</b>으로 예약 가능해요. 특정 수강권만 고르면 그 수강권 보유자만 예약할 수 있어요.</>
+                : <><b>{selectedProducts.length}개</b> 수강권만 이 수업에 사용할 수 있어요.</>}
             </div>
             {passProducts.length === 0 ? (
               <div className="daylist-empty" style={{ padding: "8px 0" }}>
                 <span style={{ fontSize: 12 }}>등록된 수강권이 없어요 (수강권 관리에서 먼저 추가)</span>
               </div>
             ) : (
-              <div className="mem-filters" style={{ padding: "0 0 6px" }}>
-                {passProducts.map((p) => (
+              <>
+                {passProducts.length > 1 && (
+                  <input
+                    className="input-field"
+                    style={{ marginBottom: 8 }}
+                    placeholder="수강권 이름 검색"
+                    value={passSearch}
+                    onChange={(e) => setPassSearch(e.target.value)}
+                  />
+                )}
+                {selectedProducts.length > 0 && (
                   <button
-                    key={p.id}
-                    className={`filter-chip ${selectedProducts.includes(p.id) ? "on" : ""}`}
-                    onClick={() => setSelectedProducts((prev) => prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id])}
+                    className="text-btn"
+                    style={{ marginBottom: 6 }}
+                    onClick={() => setSelectedProducts([])}
                   >
-                    {p.name}
+                    선택 해제 (모든 수강권 허용으로 전환)
                   </button>
-                ))}
-              </div>
+                )}
+                {(() => {
+                  const q = passSearch.trim().toLowerCase();
+                  const filtered = q ? passProducts.filter((p) => p.name.toLowerCase().includes(q)) : passProducts;
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="daylist-empty" style={{ padding: "8px 0" }}>
+                        <span style={{ fontSize: 12 }}>"{passSearch}"와 일치하는 수강권이 없어요</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="mem-filters class-allowed-products-list" style={{ padding: "0 0 6px" }}>
+                      {filtered.map((p) => (
+                        <button
+                          key={p.id}
+                          className={`filter-chip ${selectedProducts.includes(p.id) ? "on" : ""}`}
+                          onClick={() => setSelectedProducts((prev) => prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id])}
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </>
             )}
 
             {/* 반복 수업 일괄 적용 (그룹 소속 수정일 때만) */}
