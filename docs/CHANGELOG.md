@@ -8,6 +8,31 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-07 — P1 소셜 로그인(Google/Kakao/Naver/Apple) 배관 보강 (feature/social-auth-notifications-attendance-dashboard)
+
+- **감사 결과**: 소셜 로그인 버튼(Google/Kakao/Naver/Apple)과 `signInWithOAuth()` 호출,
+  계정/프로필 부트스트랩 함수(`ensureAccountForCurrentUser()`, `lib/authAccount.ts`)는 이미
+  이전 P1 배치에서 구현돼 있었다 — 새로 만들지 않고 실제 신뢰성 gap만 감사로 찾아 보강했다.
+- **고친 것**: `ensureAccountForCurrentUser()` 호출이 `app/page.tsx`(홈 화면) `useEffect`에만
+  있어, 소셜 로그인의 `redirectTo`가 항상 `/`였기 때문에 지금까지는 우연히 항상 호출됐다 —
+  하지만 이건 로그인 방식과 무관하게 보장돼야 하는 로직이라 앱 전체에 한 번만 마운트되는
+  `SessionWatcher.tsx`로 옮겨 `SIGNED_IN`/`INITIAL_SESSION` 이벤트에서 호출하도록 변경(멱등이라
+  중복 호출 안전).
+- **추가한 것**: 소셜 버튼 클릭 시 로딩 상태(중복 클릭·중복 콜백 실행 방지, 로딩 중 다른
+  버튼도 비활성화), OAuth 콜백 실패(provider 거부/사용자 취소 시 URL 해시의
+  `#error=...&error_description=...`) 감지 후 `/login?oauth_error=...`로 안내 문구와 함께
+  되돌리는 처리(`app/page.tsx`, `app/login/page.tsx`).
+- **정책 명문화**: 계정 연동(같은 이메일, 다른 로그인 방식) — `docs/08_Decision_Log.md`
+  DEC-004로 "자동 병합하지 않는다"를 공식 결정으로 기록(스키마에 `accounts.email`이 없어
+  애초에 안전한 자동 매칭이 불가능함을 확인).
+- **검토했지만 적용 안 한 것**: "OAuth 후 원래 페이지로 복귀" — 현재 앱에는 email 로그인을
+  포함해 "보호된 페이지 → 강제로 /login으로 리다이렉트" 패턴 자체가 어디에도 없어(항상 사용자가
+  직접 `/login`으로 이동), 복귀할 "원래 페이지" 개념이 없다는 것을 코드 감사로 확인. 로그인 후
+  항상 홈(`/`)으로 이동하는 기존 동작(이메일 로그인과 동일)을 그대로 유지.
+- **미해결(외부 설정 필요)**: Google/Kakao/Apple은 Supabase 대시보드에서 아직 provider가
+  활성화돼 있지 않아(콘솔 설정은 Claude가 대신 할 수 없음) 실제 OAuth 왕복은 미검증 —
+  `docs/TODO.md` P2-1 참고. 네이버는 Supabase 기본 미지원이라 별도 Edge Function이 필요(P2-1b).
+
 ## 2026-08-07 — "모든 수강권 허용"인데 보유 pass가 안 보이는 버그 근본 수정 (feature/auth-private-class-membership, PR #41 머지 전 수정)
 
 - **증상(실제 재현)**: `class_allowed_products` 0건(=모든 pass 허용)인 수업에서, 회원이 보유한

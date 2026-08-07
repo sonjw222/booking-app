@@ -382,15 +382,26 @@ reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시�
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
-### P2-1. 카카오·애플 OAuth 운영 설정
+### P2-1. 구글·카카오·애플 OAuth 운영 설정 (네이버는 별도 Edge Function 필요)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **운영 설정 필요** |
-| 근거 파일 | `app/login/page.tsx`, `AUTH_SETUP.md` |
-| 완료 조건 | Supabase Provider, 각 제공자 설정, Redirect URL과 Vercel 환경을 구성하고 신규·기존 계정 로그인과 실패 callback을 검증함 |
-| 관련 문서 | [REQUIREMENTS 5-1, 6-2](./REQUIREMENTS.md), [ROUTES `/login`](./ROUTES.md) |
+| 현재 상태 | **운영 설정 필요(외부 콘솔) — 앱 코드는 2026-08-07 social-auth 배치에서 보강됨** |
+| 근거 파일 | `app/login/page.tsx`, `app/components/SessionWatcher.tsx`, `lib/authAccount.ts`, `AUTH_SETUP.md` |
+| 이번 배치에서 한 것 | `ensureAccountForCurrentUser()` 호출을 홈 화면 전용에서 앱 전체(SessionWatcher, SIGNED_IN/INITIAL_SESSION)로 옮겨 어느 페이지로 리다이렉트돼도 계정/프로필이 보장되도록 함. 소셜 버튼 로딩 상태(중복 클릭 방지)·OAuth 콜백 실패(`#error=...`) 감지 후 `/login?oauth_error=...`로 안내하는 처리 추가. 계정 연동(같은 이메일, 다른 provider) 정책은 `docs/08_Decision_Log.md` DEC-004로 명문화(자동 병합 안 함). |
+| 완료 조건 | Supabase Provider(Google/Kakao/Apple), 각 제공자 콘솔 설정, Redirect URL과 Vercel 환경을 구성하고 신규·기존 계정 로그인과 실패 callback을 실제 provider로 검증함(코드는 준비됐지만 이 콘솔 설정 자체는 Claude가 대신 할 수 없음) |
+| 관련 문서 | [REQUIREMENTS 5-1, 6-2](./REQUIREMENTS.md), [ROUTES `/login`](./ROUTES.md), `AUTH_SETUP.md` 3절 |
+
+### P2-1b. 네이버 로그인 — Supabase 기본 미지원, 커스텀 Edge Function 필요
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **미구현 — 별도 서버 코드 필요** |
+| 근거 파일 | `AUTH_SETUP.md` 3-3절 |
+| 내용 | 네이버는 Supabase가 기본 제공하는 OAuth provider 목록에 없다. `AUTH_SETUP.md`가 이미 권장하는 방식(네이버 access token을 Edge Function에서 받아 Supabase Admin API로 세션 발급)대로 Edge Function을 새로 작성해야 하는데, 네이버 개발자센터 Client ID/Secret 발급(외부 콘솔 작업)이 선행돼야 실제 왕복 검증이 가능하다. 지금은 버튼을 눌러도 "설정 안 됨" 안내만 뜨는 게 정상 동작. |
+| 완료 조건 | 네이버 Client ID/Secret 발급 + Edge Function 작성/배포 + Redirect URL 등록 + 신규·기존 계정 로그인 실제 검증 |
 
 ### P2-2. Realtime publication과 문의·알림 RLS
 

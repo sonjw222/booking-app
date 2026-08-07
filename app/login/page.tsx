@@ -46,6 +46,9 @@ export default function LoginPage() {
   const [licenseFile, setLicenseFile] = useState<File | null>(null); // 실제 파일
 
   const [loading, setLoading] = useState(false);
+  // 소셜 버튼 각각의 리다이렉트 진행 상태 — 성공하면 곧바로 provider 페이지로 페이지 전체가
+  // 이동하므로 별도로 false로 되돌릴 필요는 없다(에러일 때만 되돌림).
+  const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
   // "로그인 상태 유지"(remember me, P1) — 기본 체크(기존과 동일하게 localStorage에 세션 저장).
   // 해제하면 이 브라우저 탭/창을 닫을 때 세션도 같이 사라진다(sessionStorage로 저장, P1).
@@ -54,9 +57,14 @@ export default function LoginPage() {
   // 세션 만료로 SessionWatcher(app/components/SessionWatcher.tsx)가 이 화면으로 보낸
   // 경우 안내 문구를 보여준다 — useSearchParams 대신 window.location으로 직접 읽어
   // Suspense 경계 없이도(이 파일의 다른 navigation과 동일한 방식) 동작하게 한다.
+  // oauth_error는 app/page.tsx가 소셜 로그인 콜백 URL(#error=...)을 감지해 이 화면으로
+  // 되돌려보낼 때 실어 보내는 값 — provider 거부/사용자 취소 등 실제 콜백 실패를 안내한다.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("expired") === "1") {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("expired") === "1") {
       setMessage({ type: "error", text: "세션이 만료됐어요. 다시 로그인해주세요." });
+    } else if (params.get("oauth_error")) {
+      setMessage({ type: "error", text: `소셜 로그인에 실패했어요: ${params.get("oauth_error")}` });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -183,7 +191,9 @@ export default function LoginPage() {
   }
 
   async function handleSocial(provider: "kakao" | "apple" | "google" | string) {
+    if (socialLoading) return; // 중복 클릭/중복 콜백 실행 방지
     setMessage(null);
+    setSocialLoading(provider);
     // 소셜 로그인도 "로그인 상태 유지" 설정을 그대로 따른다 — 이 탭에서 리다이렉트로
     // 나갔다가 돌아오므로, 세션이 실제로 만들어지기 전에 미리 저장해둬야 한다.
     localStorage.setItem(REMEMBER_ME_KEY, rememberMe ? "1" : "0");
@@ -192,9 +202,11 @@ export default function LoginPage() {
       options: { redirectTo: `${window.location.origin}/` },
     });
     if (error) {
+      setSocialLoading(null);
       const label = provider === "kakao" ? "카카오" : provider === "apple" ? "애플" : provider === "google" ? "구글" : "네이버";
       setMessage({ type: "error", text: `${label} 로그인 설정이 아직 안 되어 있어요 (AUTH_SETUP.md 참고)` });
     }
+    // 에러가 없으면 이 시점부터 브라우저가 provider 페이지로 이동하므로 loading을 되돌리지 않는다.
   }
 
   function submit() {
@@ -286,21 +298,21 @@ export default function LoginPage() {
         </div>
 
         <div className="social-list">
-          <button className="social-btn google" onClick={() => handleSocial("google")}>
+          <button className="social-btn google" onClick={() => handleSocial("google")} disabled={!!socialLoading}>
             <span className="social-ic" style={{ background: "#fff", color: "#4285F4", border: "1px solid var(--line)" }}>G</span>
-            Google로 계속하기
+            {socialLoading === "google" ? "이동 중..." : "Google로 계속하기"}
           </button>
-          <button className="social-btn kakao" onClick={() => handleSocial("kakao")}>
+          <button className="social-btn kakao" onClick={() => handleSocial("kakao")} disabled={!!socialLoading}>
             <span className="social-ic" style={{ background: "#3C1E1E", color: "#FEE500" }}>K</span>
-            카카오로 시작하기
+            {socialLoading === "kakao" ? "이동 중..." : "카카오로 시작하기"}
           </button>
-          <button className="social-btn naver" onClick={() => handleSocial("naver")}>
+          <button className="social-btn naver" onClick={() => handleSocial("naver")} disabled={!!socialLoading}>
             <span className="social-ic">N</span>
-            네이버로 시작하기
+            {socialLoading === "naver" ? "이동 중..." : "네이버로 시작하기"}
           </button>
-          <button className="social-btn apple" onClick={() => handleSocial("apple")}>
+          <button className="social-btn apple" onClick={() => handleSocial("apple")} disabled={!!socialLoading}>
             <span className="social-ic"></span>
-            Apple로 계속하기
+            {socialLoading === "apple" ? "이동 중..." : "Apple로 계속하기"}
           </button>
         </div>
       </div>
