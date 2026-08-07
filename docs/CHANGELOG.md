@@ -8,6 +8,35 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-08 — P4: 매출/통계 대시보드 (manager_dashboard_summary RPC, SQL 적용 대기) (feature/social-auth-notifications-attendance-dashboard)
+
+- **감사 결과**: `lib/sales.ts`의 기존 `summarize()`는 이미 불러온 결제 행 배열을 클라이언트에서
+  reduce하는 방식뿐이라(DB 집계 아님), 이 세션에서 이미 두 번 실제로 겪은 PostgREST 기본 1000행
+  응답 제한(`fetchClasses`/`fetchUsableMembershipsByClass`)과 같은 종류의 위험이 있었다. 또한
+  **Mock(테스트) 결제와 실제 매출을 구조적으로 구분할 방법이 `payments` 테이블에 없었다** —
+  유일한 단서는 `pg_transaction_id`가 `"mock_"`로 시작한다는 미문서화 문자열 관례뿐.
+- `fix_payments_payment_provider_draft_proposed.sql`(신규, 적용 대기): `payments.payment_provider`
+  컬럼 추가(nullable, mock/toss/portone) + `confirm_test_payment()`(유일한 실제 mock 발급
+  경로, 8곳 중 나머지 7곳은 매니저 신뢰 경로라 손대지 않음)가 자기 결제 행에 `'mock'`을
+  명시적으로 채우도록 재정의 + 기존 mock 행 백필(WHERE로 좁힌 UPDATE).
+- `add_manager_dashboard_summary_draft_proposed.sql`(신규, 적용 대기): `manager_dashboard_summary
+  (p_center_id, p_from, p_to)` RPC 신규 — 오늘/이번달/기간 매출, 결제 건수, 결제수단별,
+  수강권/상품 매출(`payments.membership_id → memberships.product_id → products.product_kind`
+  조인으로 구분 — `revenue_category`는 `registerPayment()`가 항상 `'membership'`만 저장해
+  신뢰 불가능함을 코드 감사로 확인), 미수금, 일별 매출 배열을 SQL 집계(SUM/COUNT)로 DB
+  안에서 직접 계산 — `payment_provider='mock'` 행은 모든 집계에서 명시적으로 제외.
+- `lib/sales.ts`: `fetchDashboardSummary()` 추가(위 RPC 호출), `DashboardSummary` 타입 추가.
+- `app/manager/page.tsx`: 센터 선택 바로 아래에 기간 선택(오늘/7일/30일) + 요약 카드(오늘 매출/
+  이번달 매출/기간 매출·건수/미수금/수강권 매출/상품 매출) + 일별 매출 막대그래프 추가,
+  `pass.sales.view` 권한으로 게이트(기존 "매출 관리" 메뉴 링크와 동일 권한 재사용). 로딩/에러
+  상태 명시적으로 처리.
+- `tests/integration/dashboard-summary.test.ts`(신규): 권한 차단, 결제수단별 매출 합계, 환불
+  차감, 미수금, KST 자정 경계(오늘 00:05 vs 어제 23:55), Mock 결제 완전 제외(실제로 저장은 되지만
+  통계에서 빠짐을 직접 증명), 수강권/상품 매출 구분을 전부 삽입 전/후 델타 비교로 검증(공유
+  테스트 센터가 이전 실행 데이터를 계속 갖고 있어도 몇 번을 반복 실행해도 항상 성립).
+- 위 SQL 두 파일이 Supabase에 적용되기 전까지는 `dashboard-summary.test.ts`의 모든 테스트가
+  실패한다(RPC 없음/컬럼 없음) — 예상된 실패, 적용 후 재실행 필요.
+
 ## 2026-08-08 — E2E 스위트 전체의 KST 자정 경계 취약점 전수 조사 및 일괄 수정 (feature/social-auth-notifications-attendance-dashboard)
 
 - 직전 커밋에서 `reservation-cancel-grace-period.test.ts` 하나만 고치고 끝내지 않고,

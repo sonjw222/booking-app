@@ -730,6 +730,28 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   정확히 설계대로 검사 중 — #24 해결 전까지는 테스트 실행 순서에 따라 이 두 케이스가 간헐적으로
   RED일 수 있음).
 
+### P2-18. (신규, 2026-08-08) P4 매출/통계 대시보드 SQL 적용 대기
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 (SQL 적용 전까지 대시보드·통합테스트 모두 동작 불가) |
+| 현재 상태 | **운영 설정 필요 — SQL 적용 대기** |
+| 근거 파일 | `fix_payments_payment_provider_draft_proposed.sql`, `add_manager_dashboard_summary_draft_proposed.sql`, `lib/sales.ts`(`fetchDashboardSummary`), `app/manager/page.tsx`, `tests/integration/dashboard-summary.test.ts` |
+| 완료 조건 | 사용자가 Supabase SQL Editor에서 두 파일을 순서대로(payment_provider 먼저 → dashboard_summary) 실행하고, `dashboard-summary.test.ts`가 통과함을 CI로 확인 |
+
+- 매니저 홈(`/manager`)에 오늘/7일/30일 매출 요약 카드와 일별 막대그래프를 추가했다.
+  `manager_dashboard_summary()` RPC가 DB에서 직접 SUM/COUNT로 집계해(1000행 응답 제한 위험
+  없음) Mock 결제(`payment_provider='mock'`)를 항상 제외한다.
+- **알려진 한계**: 수강권/상품 매출 구분은 `payments.membership_id → memberships.product_id
+  → products.product_kind` 조인으로 계산한다(`revenue_category`는 `registerPayment()`가
+  항상 `'membership'`만 저장해 신뢰 불가 — 코드 감사로 확인). 한 결제에 "추가 상품"
+  (`extraProducts`)이 함께 발급된 경우 그 추가 상품 매출은 결제 건의 대표 `membership_id`
+  하나로만 잡혀 별도 집계되지 않는다 — 정확한 상품별 세부 분해가 필요해지면 스키마 변경
+  (결제-상품 다대다 연결 테이블 등)이 별도로 필요하다.
+- SQL 미적용 상태에서는 대시보드 카드가 에러 문구를 보여주고(RPC 없음), `payment_provider`
+  컬럼이 없어 `confirm_test_payment()`도 기존 정의 그대로 동작(회귀 없음 — `create or replace`
+  전이라 기존 mock 결제 발급 자체는 계속 정상 동작).
+
 ## 6. P3 — 제품 결정이 필요한 향후 기능 후보
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
