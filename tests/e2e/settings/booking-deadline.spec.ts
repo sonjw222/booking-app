@@ -4,11 +4,13 @@ import {
   getOrCreateOwnedTestCenter,
   createTestMembershipAdmin,
   createFutureTestClassAdmin,
+  createKstSameDayFutureClassAdmin,
   cleanupTestClassAdmin,
   fetchSettingsAdmin,
   saveSettingsAdmin,
   reservationDeepLink,
-  kstTimeHHmm,
+  ALWAYS_PAST_TODAY_TIME,
+  ALWAYS_FUTURE_TODAY_TIME,
   kstDateStr,
   type TestUser,
 } from "../fixtures/testData";
@@ -107,13 +109,13 @@ test("운영설정 예약마감 30분(관리자 화면 저장) — 40분 전 성
   const mgrPage = await mgrContext.newPage();
 
   await gotoManagerSettings(mgrPage);
-  await setDaysBeforeTime(mgrPage, "그룹 수업 예약", 0, kstTimeHHmm(30));
+  await setDaysBeforeTime(mgrPage, "그룹 수업 예약", 0, ALWAYS_FUTURE_TODAY_TIME);
   await saveManagerSettings(mgrPage);
   const savedOpen = await fetchSettingsAdmin(centerAId);
   expect(savedOpen.groupBookDaysBefore).toBe(0);
 
-  const okCls = await createFutureTestClassAdmin(centerAId, {
-    title: "E2E 운영마감-40분전", hoursFromNow: 40 / 60,
+  const okCls = await createKstSameDayFutureClassAdmin(centerAId, {
+    title: "E2E 운영마감-40분전", preferredMinutesFromNow: 40,
   });
   createdClassIds.push(okCls.id);
   await page.goto(reservationDeepLink(okCls.id, okCls.startTime));
@@ -124,14 +126,14 @@ test("운영설정 예약마감 30분(관리자 화면 저장) — 40분 전 성
   ).toBeVisible();
 
   // 이제 마감을 과거로 다시 저장 — 이 순간부터 이 센터의 모든 그룹 수업은 예약 마감이다.
-  await setDaysBeforeTime(mgrPage, "그룹 수업 예약", 0, kstTimeHHmm(-30));
+  await setDaysBeforeTime(mgrPage, "그룹 수업 예약", 0, ALWAYS_PAST_TODAY_TIME);
   await saveManagerSettings(mgrPage);
   const savedClosed = await fetchSettingsAdmin(centerAId);
   expect(savedClosed.groupBookDaysBefore).toBe(0);
   await mgrContext.close();
 
-  const failCls = await createFutureTestClassAdmin(centerAId, {
-    title: "E2E 운영마감-20분전", hoursFromNow: 20 / 60,
+  const failCls = await createKstSameDayFutureClassAdmin(centerAId, {
+    title: "E2E 운영마감-20분전", preferredMinutesFromNow: 20,
   });
   createdClassIds.push(failCls.id);
   // ⚠ 같은 테스트 안에서 두 번째로 reservationDeepLink를 쓰면(위 okCls에 이어) openClassId

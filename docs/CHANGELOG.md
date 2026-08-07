@@ -8,6 +8,31 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-08 — E2E 스위트 전체의 KST 자정 경계 취약점 전수 조사 및 일괄 수정 (feature/social-auth-notifications-attendance-dashboard)
+
+- 직전 커밋에서 `reservation-cancel-grace-period.test.ts` 하나만 고치고 끝내지 않고,
+  같은 부류의 버그(고정 `hoursFromNow` + 날짜상대 마감설정, 또는 "지금±N분"으로 계산한
+  시각 문자열)가 있는 파일을 저장소 전체(`tests/integration/**`, `tests/e2e/**`)에서
+  전수 조사했다. 그 결과 실제로 취약했던 파일 3개를 추가로 확인·수정:
+  - `tests/e2e/settings/booking-deadline.spec.ts`, `tests/e2e/settings/cancel-deadline.spec.ts`:
+    `kstTimeHHmm(±N)`(E2E fixture판, 이제 삭제)로 계산한 마감 시각과
+    `createFutureTestClassAdmin({hoursFromNow: 소수시간})`을 함께 쓰고 있어, KST
+    22:00~23:59(자정을 넘겨 수업이 내일 날짜가 됨) 또는 00:00~00:29(상대 시각 계산이
+    어제로 역행) 근처에 실행되면 "이미 지남"/"아직 안 지남" 전제가 뒤집혔다.
+    `createKstSameDayFutureClassAdmin`(기존 헬퍼, 항상 오늘 안으로 안전하게 클램프)과
+    새 고정 상수 `ALWAYS_PAST_TODAY_TIME`("00:01")/`ALWAYS_FUTURE_TODAY_TIME`("23:58")로
+    교체 — 상대 계산 자체를 없애 두 방향의 자정 경계 문제를 구조적으로 제거.
+  - `tests/e2e/admin/holiday-restores-classes.spec.ts`: "기존 수업"과 "신규 수업"을
+    각각 독립적으로 `hoursFromNow`(120시간, 121시간)로 계산했는데, 그 사이 여러 UI
+    라운드트립을 거치며 시간이 흘러 두 수업이 다른 KST 날짜에 생길 수 있었다("신규
+    수업"의 예약 가능 여부를 검증하는 마지막 단계가 그 행을 못 찾아 타임아웃). 새 헬퍼
+    `createClassOnKstDateAdmin(centerId, {kstDate, kstTime})`(신규, testData.ts)로
+    "기존 수업"에서 파생한 날짜(`holidayDate`)에 명시적으로 맞춰 생성하도록 변경 —
+    상대 계산에 의존하지 않아 시간이 얼마나 흐르든 항상 같은 날짜.
+- 전수 조사로 안전함이 이미 확인된 파일들(같은 헬퍼를 이미 쓰고 있거나, 고정 상수만
+  쓰거나, `hoursFromNow`가 24시간을 훨씬 넘어 경계와 무관한 경우 등)은 건드리지 않음 —
+  자세한 파일별 판단 근거는 이 커밋의 코드 리뷰 기록 참고.
+
 ## 2026-08-07 — reservation-cancel-grace-period.test.ts의 KST 자정 경계 취약점 수정 (feature/social-auth-notifications-attendance-dashboard)
 
 - **증상**: CI를 KST 밤 늦게(22시 이후) 돌리면 이 파일의 두 테스트("10분을 초과하고 일반
