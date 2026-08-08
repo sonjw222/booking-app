@@ -722,6 +722,13 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   다시 insert하려다 충돌. 이번 배치의 어떤 코드/SQL과도 무관(다른 테이블, 다른 테스트 파일).
   TEST-002(#24)와 같은 근본 원인 계열이므로 그 이슈 해결 시 함께 검토 권장 — 이번 배치에서는
   별도 정리 SQL을 만들지 않음(범위 밖).
+- **(2026-08-08 재확인) `tests/e2e/admin/class-allowed-products.spec.ts`도 TEST-002(#24)
+  오염의 영향을 받음**: P4(매출 대시보드) CI 2회차 연속 Green 확인 중, 이 파일과 전혀 무관한
+  커밋(P4는 sales.ts/manager 홈/SQL만 변경)에서 이 spec만 실패 — 실패 로그를 보면 검색 결과
+  목록에 "E2E 테스트 수강권"이 수십 건 중복으로 쌓여 있어(`toHaveCount`/`not toContainText`
+  단언이 그 개수·존재 여부를 검사) 정상적인 코드 동작과 무관하게 실패했다. 바로 다음(직전) CI
+  실행에서는 같은 코드로 이 spec이 정상 통과했었다 — 실행 시점마다 쌓인 오염량에 따라 간헐적으로
+  Red/Green이 갈리는 것으로 보인다. 범위 밖(TEST-002/#24 해결 시 함께 검토), 재실행으로 우회.
 - **TEST-002(#24)의 알려진 오염이 다른 파일에도 영향을 준다는 것을 재확인**: `acl-003-permission-read.test.ts`가
   남기는 "MANAGER_B가 centerA의 활성 스태프가 됨" 오염 상태 때문에, 이번 배치가 새로 추가한
   `tests/integration/inquiry-access-isolation.test.ts`의 "다른 센터 매니저는 못 본다" 케이스와
