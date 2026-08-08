@@ -303,6 +303,36 @@ describe("진단(읽기 전용)", () => {
     }
   });
 
+  // 2026-08-09 v4 실행 완료 후 검증 — cleanup 대상 6개가 실제로 0건인지 직접, 단순 조건으로
+  // (거대한 .in() 없이) 확인한다. admin_action_logs는 여기서도 실패하면 GRANT 문제인지
+  // 아니면 실제 남은 행이 있는 것인지 에러 메시지로 구분한다.
+  it("v4 cleanup 대상 6개 최종 확인(단순 count:exact, .in() 없음)", async () => {
+    const admin = getFixtureAdminClient();
+
+    const { count: c1, error: e1 } = await admin.from("admin_action_logs").select("id", { count: "exact", head: true }).eq("center_id", centerAId);
+    console.log(`=== [1] admin_action_logs remaining: ${e1 ? `ERROR: ${e1.message}` : c1} ===`);
+
+    const { count: c2, error: e2 } = await admin.from("profiles").select("id", { count: "exact", head: true })
+      .eq("account_id", userA.accountId).eq("is_primary", false).eq("name", "P3 출결-대기용");
+    console.log(`=== [2] orphan profiles remaining: ${e2 ? `ERROR: ${e2.message}` : c2} ===`);
+
+    const { count: c3, error: e3 } = await admin.from("memberships").select("id", { count: "exact", head: true })
+      .eq("center_id", centerAId).is("product_id", null).eq("product_name", "통합테스트 수강권");
+    console.log(`=== [3] "통합테스트 수강권" remaining: ${e3 ? `ERROR: ${e3.message}` : c3} ===`);
+
+    const { count: c4, error: e4 } = await admin.from("memberships").select("id", { count: "exact", head: true })
+      .eq("center_id", centerAId).eq("product_name", "통합테스트 수강권(P3)");
+    console.log(`=== [4] "통합테스트 수강권(P3)" remaining: ${e4 ? `ERROR: ${e4.message}` : c4} ===`);
+
+    const { count: c5, error: e5 } = await admin.from("memberships").select("id", { count: "exact", head: true })
+      .eq("center_id", centerAId).eq("product_name", "P0-6 테스트 무제한권");
+    console.log(`=== [5] "P0-6 테스트 무제한권" remaining: ${e5 ? `ERROR: ${e5.message}` : c5} ===`);
+
+    const { count: c6, error: e6 } = await admin.from("products").select("id", { count: "exact", head: true })
+      .eq("center_id", centerAId).eq("name", "USABLE-PASS-KIND 테스트 대여품").eq("product_kind", "goods");
+    console.log(`=== [6] "USABLE-PASS-KIND 테스트 대여품" products remaining: ${e6 ? `ERROR: ${e6.message}` : c6} ===`);
+  });
+
   it("검증: 지난번 실패한 cleanup 트랜잭션이 실제로 전부 롤백됐는지(원래 스냅샷과 비교)", async () => {
     const admin = getFixtureAdminClient();
     const { count: profCount } = await admin.from("profiles").select("id", { count: "exact", head: true })
