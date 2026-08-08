@@ -1,6 +1,43 @@
 -- ============================================================
--- 공유 통합/E2E 테스트 센터(managerA 소유)의 누적 오염 정리 — v3 (동시 쓰기 race 차단)
+-- 공유 통합/E2E 테스트 센터(managerA 소유)의 누적 오염 정리 — v4 (profile_id 제한 제거)
 --
+-- v3 실행 결과: FK 오류는 재발하지 않았지만(=[L] 락 + admin_action_logs 처리가 실제로
+-- 문제를 해결함), [3]의 새 guard에서 안전하게 중단됨 — "예상보다 훨씬 적음(0건, 진단
+-- 시점 2525건)". 재진단(read-only, CI diag_only 모드로 e2e/unit/integration/build는
+-- 건드리지 않고 확인)한 결과(코드로 직접 확인, 추측 아님):
+--   1) product_name 텍스트 자체는 문제가 아니었다 — utf8 바이트 단위로 비교해 DB에 저장된
+--      값과 이 SQL의 리터럴이 완전히 동일함을 확인함(hex: ed86b5ed95a9ed858cec8aa4ed8ab8
+--      20ec8898eab095eab68c, 양쪽 동일). 유니코드 정규화 문제 아님.
+--   2) 진단 시점(v2 실패 직후) "통합테스트 수강권"(product_id is null) 전체 모집단은
+--      2525건, 그중 userA=512/managerA=488건이었다. 그런데 v3를 실행한 시점에는 이
+--      모집단이 168건으로 줄어 있었고, 전부(168/168) userA도 managerA도 아닌 세 번째
+--      profile_id(f2c9749a-b282-433b-8b60-a982b81a53f3)에 속해 있었다 — v3의
+--      `profile_id in (userA, managerA)` 조건이 이 시점엔 실제로 0건과 일치했다(버그가
+--      아니라 guard가 정확히 설계대로 동작해 "예상과 다른 상태"를 잡아낸 것).
+--   3) 그 세 번째 profile_id를 profiles 테이블에서 직접 조회해 교차검증함:
+--      account_id=e241ce33-8419-4b3f-bba8-36a5a543de47, name="통합테스트"(userA/managerA의
+--      기본 프로필과 동일한 get-or-create 테스트 계정 명명 패턴), is_primary=true,
+--      created_at=2026-07-30(이 세션의 다른 테스트 계정들과 같은 시기) — userA/managerA와
+--      다른 계정이지만 성격은 동일한 전용 테스트 계정의 기본 프로필이다(실제 사용자 아님).
+--      accounts 테이블은 service_role SQL GRANT가 없어(payments/admin_action_logs와 같은
+--      계열의 별도 gap, docs/TODO.md에 기록 예정) 계정명까지는 확인 못 했지만, profiles의
+--      명명 패턴과 생성 시점만으로도 이 세션의 다른 TEST_* 계정과 동일한 성격임이 충분히
+--      확인됨.
+--   4) 결론: "통합테스트 수강권"(product_id is null) 모집단은 시점에 따라 여러 TEST_*
+--      계정의 profile_id 사이를 오간다(이 공유 dev DB를 여러 통합테스트 파일·때로는 이
+--      저장소의 다른 worktree/세션이 동시에 쓰기 때문 — 조사 도중에도 실제로 값이
+--      바뀌는 것을 두 번 관측함). 애초에 "userA/managerA 두 profile_id로만 좁힌다"는
+--      v1~v3의 조건 자체가 과도하게 좁았다 — 이 product_name 문자열은
+--      tests/integration/setup.ts의 createTestMembership() 하나만 쓰고(grep으로 재확인,
+--      다른 어떤 앱 코드도 이 정확한 문자열을 쓰지 않음), 그 헬퍼는 언제나 테스트 전용
+--      account/profile에만 호출된다 — 그래서 안전 근거는 애초부터 "이 정확한 문자열 +
+--      이 특정 center_id + product_id is null"이었고 profile_id 제한은 불필요했다(오히려
+--      이번처럼 실제 모집단과 어긋나면 정리를 막기만 함). v4는 [3]/[4]/[5]에서 profile_id
+--      제한을 제거하고, 그 대신 이제는 시점마다 달라질 수 있는 하한(< 500) guard도
+--      제거한다(상한 guard로 "터무니없이 큰 값"만 계속 방어) — 개수 자체가 아니라
+--      "정확한 문자열 + 정확한 center_id"라는 구조적 근거로 안전을 보장한다.
+--
+-- v3 이하 이력(v1/v2 실패 원인, [L] 락 설계):
 -- v1 실행 결과: "update or delete on table memberships violates foreign key constraint
 -- admin_action_logs_membership_id_fkey" — admin_action_logs(add_admin_assignment.sql)가
 -- memberships/reservations/profiles를 참조하는데 v1이 이를 놓쳤다. 트랜잭션이라 v1은 전부
@@ -73,11 +110,16 @@
 --     INSERT/UPDATE/DELETE를 차단한다 — v2가 실패한 "검증 시점과 삭제 시점 사이의 동시
 --     쓰기" 자체를 구조적으로 없앤다.
 --   - (v3 신규) admin_action_logs 삭제 직후 즉시 재확인(0건이 아니면 그 자리에서 중단).
+--   - (v4 변경) [3]/[4]/[5](memberships 정리)의 profile_id 제한을 제거했다 — 위 4)번
+--     설명대로 이 product_name 문자열은 애초에 profile_id와 무관하게 그 자체로
+--     테스트 전용임이 코드로 확인됐고(오직 createTestMembership() 하나만 이 문자열을
+--     씀), userA/managerA 두 계정으로만 좁히는 게 오히려 실제 모집단과 어긋나 정리를
+--     막았다. [2](고아 프로필)는 여전히 userA의 account_id로 좁힌다(그 헬퍼의 동작상
+--     항상 그 계정 산하에만 생기므로 유효).
 --   - center_id 하드코딩(아래 근거)로만 범위를 좁힌다.
---   - memberships/신규 profiles는 정확히 이 두 계정(TEST_MANAGER_A/TEST_USER_A)의
---     profile_id로만 좁힌다 — 진단으로 "그 외 profile_id 0건" 확인.
 --   - product_name/프로필 name이 정확히 일치하는 행만 대상(부분 일치 없음).
---   - 각 삭제 전 미리보기 SELECT + 예상 범위를 벗어나면 즉시 RAISE EXCEPTION(전체 롤백).
+--   - 각 삭제 전 미리보기 SELECT + (v4) 상한만 남긴 RAISE EXCEPTION(전체 롤백) — 하한은
+--     시점마다 달라지는 모집단 크기 자체를 안전 근거로 쓰지 않기 위해 제거함(위 4)번).
 --   - FK 안전 순서: admin_action_logs → (membership_transfers/product_passes/contracts/
 --     locker_assignments/point_transactions/progress_records, 대상에 한해) → payments →
 --     reservations → memberships → products → profiles.
@@ -88,9 +130,8 @@
 --
 -- 대상 center_id: 3937eb89-3803-43e9-9a29-e893f779df1a
 --   (getOrCreateOwnedTestCenter(managerA) 실행 결과로 CI에서 직접 확인, run 31268325509)
--- 대상 profile_id: userA=bf0939f6-d676-43bd-a164-c021ad623063,
---                   managerA=689fd564-40d2-4c39-a687-5b6a6b220fbd
--- 대상 account_id(고아 프로필용): userA=0058f5bc-9fe8-4b22-bd96-1ce011290e19
+-- 대상 account_id(고아 프로필용, [2]에서만 사용): userA=0058f5bc-9fe8-4b22-bd96-1ce011290e19
+-- ([3]/[4]/[5]는 v4부터 profile_id로 좁히지 않음 — 위 설명 참고)
 --
 -- ⚠ 실행 전 반드시: 아래 [0] 미리보기 결과에서 center 이름이 실제로 테스트센터처럼 보이는지
 -- 육안으로 확인한 뒤 진행하세요.
@@ -185,12 +226,11 @@ begin
   select count(*) into v_count from memberships
    where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
      and product_id is null
-     and product_name = '통합테스트 수강권'
-     and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd');
+     and product_name = '통합테스트 수강권';
   raise notice '[3] "통합테스트 수강권" 대상: %건', v_count;
-  if v_count < 500 then
-    raise exception '[3] 예상보다 훨씬 적음(%건, 진단 시점 2525건) — 조건이 잘못됐을 수 있습니다. 중단합니다.', v_count;
-  end if;
+  -- (v4) 하한 guard 제거 — 이 모집단은 시점마다 여러 TEST_* profile_id 사이를 오간다는 것을
+  -- 실측으로 확인했다(위 4)번). 0건이어도 안전하게 스킵되며(아래 delete들은 그냥 0행 처리),
+  -- 상한만 "터무니없이 큰 값"을 잡는 용도로 유지한다.
   if v_count > 50000 then
     raise exception '[3] 예상보다 훨씬 많음(%건) — 안전을 위해 중단합니다. 조건을 다시 확인하세요.', v_count;
   end if;
@@ -200,7 +240,6 @@ begin
       select id from memberships
        where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
          and product_id is null and product_name = '통합테스트 수강권'
-         and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
     );
   end if;
   if to_regclass('public.product_passes') is not null then
@@ -208,7 +247,6 @@ begin
       select id from memberships
        where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
          and product_id is null and product_name = '통합테스트 수강권'
-         and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
     );
   end if;
   if to_regclass('public.contracts') is not null then
@@ -216,7 +254,6 @@ begin
       select id from memberships
        where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
          and product_id is null and product_name = '통합테스트 수강권'
-         and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
     );
   end if;
 
@@ -226,7 +263,6 @@ begin
         select id from memberships
          where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
            and product_id is null and product_name = '통합테스트 수강권'
-           and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
       )
     );
   end if;
@@ -234,18 +270,15 @@ begin
     select id from memberships
      where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
        and product_id is null and product_name = '통합테스트 수강권'
-       and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
   );
   delete from reservations where membership_id in (
     select id from memberships
      where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
        and product_id is null and product_name = '통합테스트 수강권'
-       and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
   );
   delete from memberships
    where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
-     and product_id is null and product_name = '통합테스트 수강권'
-     and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd');
+     and product_id is null and product_name = '통합테스트 수강권';
 end $$;
 
 -- [4] product_name="통합테스트 수강권(P3)" — class-allowed-products-enforcement.test.ts 로컬 헬퍼
@@ -255,8 +288,7 @@ declare
 begin
   select count(*) into v_count from memberships
    where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
-     and product_name = '통합테스트 수강권(P3)'
-     and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd');
+     and product_name = '통합테스트 수강권(P3)';
   raise notice '[4] "통합테스트 수강권(P3)" 대상: %건', v_count;
   if v_count > 5000 then
     raise exception '[4] 예상보다 훨씬 많음(%건) — 안전을 위해 중단합니다. 조건을 다시 확인하세요.', v_count;
@@ -267,7 +299,6 @@ begin
         select id from memberships
          where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
            and product_name = '통합테스트 수강권(P3)'
-           and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
       );
     end if;
     if to_regclass('public.product_passes') is not null then
@@ -275,7 +306,6 @@ begin
         select id from memberships
          where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
            and product_name = '통합테스트 수강권(P3)'
-           and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
       );
     end if;
     if to_regclass('public.contracts') is not null then
@@ -283,7 +313,6 @@ begin
         select id from memberships
          where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
            and product_name = '통합테스트 수강권(P3)'
-           and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
       );
     end if;
     if to_regclass('public.point_transactions') is not null then
@@ -292,7 +321,6 @@ begin
           select id from memberships
            where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
              and product_name = '통합테스트 수강권(P3)'
-             and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
         )
       );
     end if;
@@ -300,18 +328,15 @@ begin
       select id from memberships
        where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
          and product_name = '통합테스트 수강권(P3)'
-         and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
     );
     delete from reservations where membership_id in (
       select id from memberships
        where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
          and product_name = '통합테스트 수강권(P3)'
-         and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
     );
     delete from memberships
      where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
-       and product_name = '통합테스트 수강권(P3)'
-       and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd');
+       and product_name = '통합테스트 수강권(P3)';
   end if;
 end $$;
 
@@ -323,8 +348,7 @@ declare
 begin
   select count(*) into v_count from memberships
    where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
-     and product_name = 'P0-6 테스트 무제한권'
-     and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd');
+     and product_name = 'P0-6 테스트 무제한권';
   raise notice '[5] "P0-6 테스트 무제한권" 대상: %건', v_count;
   if v_count > 500 then
     raise exception '[5] 예상보다 훨씬 많음(%건) — 안전을 위해 중단합니다. 조건을 다시 확인하세요.', v_count;
@@ -335,7 +359,6 @@ begin
         select id from memberships
          where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
            and product_name = 'P0-6 테스트 무제한권'
-           and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
       );
     end if;
     if to_regclass('public.product_passes') is not null then
@@ -343,7 +366,6 @@ begin
         select id from memberships
          where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
            and product_name = 'P0-6 테스트 무제한권'
-           and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
       );
     end if;
     if to_regclass('public.contracts') is not null then
@@ -351,7 +373,6 @@ begin
         select id from memberships
          where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
            and product_name = 'P0-6 테스트 무제한권'
-           and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
       );
     end if;
     if to_regclass('public.point_transactions') is not null then
@@ -360,7 +381,6 @@ begin
           select id from memberships
            where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
              and product_name = 'P0-6 테스트 무제한권'
-             and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
         )
       );
     end if;
@@ -368,18 +388,15 @@ begin
       select id from memberships
        where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
          and product_name = 'P0-6 테스트 무제한권'
-         and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
     );
     delete from reservations where membership_id in (
       select id from memberships
        where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
          and product_name = 'P0-6 테스트 무제한권'
-         and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd')
     );
     delete from memberships
      where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
-       and product_name = 'P0-6 테스트 무제한권'
-       and profile_id in ('bf0939f6-d676-43bd-a164-c021ad623063', '689fd564-40d2-4c39-a687-5b6a6b220fbd');
+       and product_name = 'P0-6 테스트 무제한권';
   end if;
 end $$;
 
