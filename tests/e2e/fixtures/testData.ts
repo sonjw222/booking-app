@@ -265,6 +265,12 @@ export async function getOrCreateTestPassProductNamed(centerId: string, name: st
   return { id: data.id, name };
 }
 
+// get-or-create + self-healing refresh(2026-08 공유 센터 오염 진단 후 도입, createTestMembershipForProduct와
+// 동일 패턴) — 예전엔 호출마다 무조건 insert해서, 이 헬퍼를 쓰는 11개 E2E spec이 CI를 돌릴
+// 때마다(또는 GitHub Actions concurrency.cancel-in-progress로 이전 실행이 중간에 죽을 때마다)
+// 같은 (profile, center) 조합에 "E2E 테스트 수강권" 행이 계속 쌓였다 — class-allowed-products.spec.ts
+// 처럼 "이 프로필의 사용 가능한 수강권 전체"를 나열하는 화면이 간헐적으로 타임아웃/오염되던
+// 진짜 원인 중 하나.
 export async function createTestMembershipAdmin(
   centerId: string,
   profileId: string,
@@ -273,6 +279,29 @@ export async function createTestMembershipAdmin(
   const admin = getFixtureAdminClient();
   const remaining = opts?.remainingCount ?? 5;
   const product = await getOrCreateTestPassProduct(centerId);
+
+  const { data: existing, error: findErr } = await admin
+    .from("memberships")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("center_id", centerId)
+    .eq("product_id", product.id)
+    .limit(1);
+  if (findErr) throw new Error(`E2E 테스트 수강권 조회 실패: ${findErr.message}`);
+  if (existing && existing.length > 0) {
+    const { error: refreshErr } = await admin
+      .from("memberships")
+      .update({
+        total_count: remaining,
+        remaining_count: remaining,
+        expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        status: "active",
+      })
+      .eq("id", existing[0].id);
+    if (refreshErr) throw new Error(`E2E 테스트 수강권 갱신 실패: ${refreshErr.message}`);
+    return { id: existing[0].id };
+  }
+
   const { data, error } = await admin
     .from("memberships")
     .insert({
@@ -388,6 +417,7 @@ export async function getOrCreateTestGoodsProduct(centerId: string): Promise<{ i
   return { id: data.id };
 }
 
+// get-or-create + self-healing refresh — createTestMembershipAdmin과 같은 이유(위 주석 참고).
 export async function createTestGoodsMembershipAdmin(
   centerId: string,
   profileId: string,
@@ -396,6 +426,29 @@ export async function createTestGoodsMembershipAdmin(
   const admin = getFixtureAdminClient();
   const remaining = opts?.remainingCount ?? 5;
   const product = await getOrCreateTestGoodsProduct(centerId);
+
+  const { data: existing, error: findErr } = await admin
+    .from("memberships")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("center_id", centerId)
+    .eq("product_id", product.id)
+    .limit(1);
+  if (findErr) throw new Error(`E2E 테스트 goods 수강권 조회 실패: ${findErr.message}`);
+  if (existing && existing.length > 0) {
+    const { error: refreshErr } = await admin
+      .from("memberships")
+      .update({
+        total_count: remaining,
+        remaining_count: remaining,
+        expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        status: "active",
+      })
+      .eq("id", existing[0].id);
+    if (refreshErr) throw new Error(`E2E 테스트 goods 수강권 갱신 실패: ${refreshErr.message}`);
+    return { id: existing[0].id };
+  }
+
   const { data, error } = await admin
     .from("memberships")
     .insert({

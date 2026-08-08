@@ -55,9 +55,25 @@ test.beforeAll(async () => {
   userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
 
-  // get-or-create 없는 always-insert 헬퍼(createTestMembershipAdmin)라 매 실행 새 행이 생기지만,
-  // 이 스펙은 "보유 pass가 있다"만 필요해 상관없다.
   await createTestMembershipAdmin(centerAId, userA.profileId, { remainingCount: 10 });
+
+  // self-healing 정리(2026-08 공유 센터 오염 진단 후 도입) — afterAll이 createdProfileIds를
+  // 지우긴 하지만, CI가 이 spec 도중 취소되면(GitHub Actions concurrency.cancel-in-progress,
+  // 또는 사람이 새 실행을 다시 트리거) afterAll 자체가 실행되지 않는다. 실측 진단에서
+  // "P3 출결-대기용"(is_primary=false) 프로필이 16건 넘게 고아 상태로 쌓여 있는 것을
+  // 확인했다 — 매 실행 시작 시점에 이전에 남은 것들을 먼저 정리한다(reservations →
+  // memberships → profiles 순, FK 안전 순서).
+  {
+    const admin = getFixtureAdminClient();
+    const { data: staleProfiles } = await admin
+      .from("profiles").select("id").eq("account_id", userA.accountId).eq("is_primary", false).eq("name", "P3 출결-대기용");
+    const staleIds = (staleProfiles ?? []).map((p) => p.id);
+    if (staleIds.length > 0) {
+      await admin.from("reservations").delete().in("profile_id", staleIds);
+      await admin.from("memberships").delete().in("profile_id", staleIds);
+      await admin.from("profiles").delete().in("id", staleIds);
+    }
+  }
 });
 
 test.afterAll(async () => {

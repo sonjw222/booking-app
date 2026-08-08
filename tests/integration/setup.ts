@@ -430,6 +430,18 @@ export async function createKstSameDayFutureClass(
 }
 
 // 테스트용 수강권(횟수권) 생성. expired:true면 만료된 수강권(과거 만료일 + status='expired')을 만든다.
+// get-or-create + self-healing refresh(2026-08 오염 진단 후 도입) — 예전엔 호출마다 무조건
+// insert해서, 이 헬퍼를 쓰는 15개 넘는 통합테스트 파일이 매 CI 실행마다 같은 (profile,
+// center) 조합에 새 "통합테스트 수강권" 행을 계속 쌓았다(afterAll 정리가 있는 파일도 CI가
+// 중간 취소되면 실행 자체가 안 됨 — GitHub Actions concurrency.cancel-in-progress나 사람이
+// 새 실행을 다시 트리거하면 이전 실행이 그대로 죽는다). 실측 진단에서 이 문자열 하나로
+// centerA에 979건 이상(PostgREST 1000행 응답 캡에 걸릴 정도) 쌓여 있는 것을 확인했고, 이게
+// class-allowed-products.spec.ts 등 "이 프로필의 사용 가능한 수강권 전체"를 나열하는 화면이
+// 간헐적으로 타임아웃/오염되던 진짜 원인이었다. createTestMembershipForProduct()가 이미
+// 증명한 것과 같은 패턴 — (profile, center, product_id is null) 조합을 재사용하고 매번
+// 요청받은 상태로 덮어쓴다. 상태(active/expired)가 달라도 같은 행을 재사용해 그 상태로
+// 되돌린다 — 이 헬퍼를 쓰는 테스트들은 "정확히 이 속성을 가진 나만의 수강권 1개"만 필요로
+// 하지, 과거 호출과 동시에 여러 개 공존해야 하는 케이스는 없다(파일별 감사로 확인).
 export async function createTestMembership(
   centerId: string,
   profileId: string,
@@ -440,6 +452,33 @@ export async function createTestMembership(
   const expiresAt = expired
     ? new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10)
     : new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+
+  const { data: existing, error: findErr } = await supabase
+    .from("memberships")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("center_id", centerId)
+    .is("product_id", null)
+    .eq("product_name", "통합테스트 수강권")
+    .limit(1);
+  if (findErr) throw new Error(`테스트 수강권 조회 실패: ${findErr.message}`);
+
+  if (existing && existing.length > 0) {
+    const { data, error } = await supabase
+      .from("memberships")
+      .update({
+        total_count: remaining,
+        remaining_count: expired ? 0 : remaining,
+        expires_at: expiresAt,
+        status: expired ? "expired" : "active",
+      })
+      .eq("id", existing[0].id)
+      .select("id, remaining_count")
+      .single();
+    if (error || !data) throw new Error(`테스트 수강권 갱신 실패: ${error?.message ?? "no data"}`);
+    return { id: data.id, remainingCount: data.remaining_count };
+  }
+
   const { data, error } = await supabase
     .from("memberships")
     .insert({

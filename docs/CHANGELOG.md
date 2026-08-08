@@ -49,6 +49,30 @@
 - `fix_manager_dashboard_summary_daily_bug_draft_proposed.sql`(신규, 적용 대기)로
   `days.date`를 참조하도록 함수 재정의(다른 필드는 전혀 변경 없음).
 
+## 2026-08-09 — class-allowed-products.spec.ts 간헐 실패 근본 원인 규명 및 fixture self-healing (SQL 적용 대기) (feature/social-auth-notifications-attendance-dashboard)
+
+- **분류: 테스트 인프라 문제**(class_allowed_products 기능 자체·P4와 무관) — 읽기 전용 진단
+  (`tests/integration/_diag_pollution.test.ts`, CI run 31268325509)으로 원인을 직접 확인.
+  거의 모든 integration/e2e 테스트가 재사용하는 단일 공유 테스트 센터의 `memberships`가
+  PostgREST 1000행 캡에 걸릴 만큼 누적돼 있었고, class-allowed-products.spec.ts는 그 프로필의
+  "사용 가능한 수강권" 전체를 나열하는 화면이라 목록이 비대해지며 타임아웃/개수 불일치로
+  간헐 실패했다.
+- 근본 원인: `createTestMembership()`(tests/integration/setup.ts),
+  `createTestMembershipAdmin()`/`createTestGoodsMembershipAdmin()`(tests/e2e/fixtures/testData.ts),
+  class-allowed-products-enforcement.test.ts의 로컬 `createMembershipForProduct()`,
+  usable-memberships-pass-kind.test.ts의 인라인 생성 — 전부 get-or-create 없이 호출마다 새
+  행을 만들었고, `afterAll` 정리가 있어도 CI가 도중 취소되면(GitHub Actions
+  concurrency.cancel-in-progress, 또는 재트리거) 실행되지 않아 계속 쌓였다.
+- 코드 수정: 위 다섯 곳 전부 `createTestMembershipForProduct()`가 이미 증명한 get-or-create +
+  self-healing refresh 패턴으로 교체. `tests/e2e/admin/attendance.spec.ts`는 `beforeAll`에
+  고아 프로필("P3 출결-대기용") 자체 정리 스윕을 추가.
+- `cleanup_shared_test_center_pollution_draft_proposed.sql`(신규, 적용 대기): 지금까지 이미
+  쌓인 데이터의 1회성 정리 — 미리보기 카운트 + 예상 범위 가드 + FK 안전 순서 포함, 실제
+  사용자/센터 데이터와 섞이지 않도록 정확한 문자열/계정으로만 범위를 좁힘.
+- 범위 밖(별도 기록): 같은 진단에서 `classes` 테이블도 유사하게 누적된 것을 발견
+  (`admin-assignment-security.test.ts` 등 다수 파일) — 이번 배치와 직접 관련 없어 `docs/TODO.md`
+  P2-19에 별도 기록만 하고 손대지 않음.
+
 ## 2026-08-08 — P4 후속: service_role의 payments 테이블 GRANT 누락 (SQL·DB 인프라 문제, 적용 대기) (feature/social-auth-notifications-attendance-dashboard)
 
 - **분류: SQL·DB 문제(인프라 설정)** — 앱 코드·테스트 로직·RPC 함수 자체와는 무관. daily 필드

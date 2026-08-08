@@ -770,6 +770,46 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   컬럼이 없어 `confirm_test_payment()`도 기존 정의 그대로 동작(회귀 없음 — `create or replace`
   전이라 기존 mock 결제 발급 자체는 계속 정상 동작).
 
+### P2-19. (신규, 2026-08-09) class-allowed-products.spec.ts 간헐 실패의 실제 원인 — 공유 테스트 센터 오염, 정리 SQL 적용 대기
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 (정리 SQL 적용 전까지 이 spec을 포함한 여러 E2E/통합 테스트가 간헐 실패할 수 있음) |
+| 현재 상태 | **운영 설정 필요 — SQL 적용 대기** |
+| 근거 파일 | `tests/integration/_diag_pollution.test.ts`(임시 진단, CI run 31268325509), `cleanup_shared_test_center_pollution_draft_proposed.sql`, `tests/integration/setup.ts`(`createTestMembership`), `tests/e2e/fixtures/testData.ts`(`createTestMembershipAdmin`/`createTestGoodsMembershipAdmin`), `tests/integration/class-allowed-products-enforcement.test.ts`, `tests/integration/usable-memberships-pass-kind.test.ts`, `tests/e2e/admin/attendance.spec.ts` |
+| 완료 조건 | 사용자가 `cleanup_shared_test_center_pollution_draft_proposed.sql`을 Supabase SQL Editor에서 실행하고, class-allowed-products.spec.ts를 최소 3회 반복 실행 + 전체 CI 최소 2회 연속 Green으로 확인 |
+
+- **실제 원인(읽기 전용 진단으로 직접 확인, 추측 아님)**: 거의 모든 integration/e2e 테스트가
+  `getOrCreateOwnedTestCenter(managerA)`로 **단 하나의 공유 센터**를 재사용하는데, 그 안의
+  `memberships`가 PostgREST 기본 1000행 응답 캡에 걸릴 만큼 누적돼 있었다(진단 시점 캡 안에서만도
+  "통합테스트 수강권" 979건 등). `class-allowed-products.spec.ts`는 이 프로필의 "사용 가능한
+  수강권" 전체를 화면에 나열하는데, 그 목록이 수백~수천 건이 되면서 검색/카운트 검증이
+  타임아웃·간헐 실패했다 — class_allowed_products 기능 자체의 버그가 아니었다.
+- **근본 원인 코드**: `createTestMembership()`(setup.ts), `createTestMembershipAdmin()`/
+  `createTestGoodsMembershipAdmin()`(e2e/fixtures/testData.ts, 11개 이상의 spec이 사용),
+  `class-allowed-products-enforcement.test.ts`의 로컬 `createMembershipForProduct()`,
+  `usable-memberships-pass-kind.test.ts`의 인라인 products/memberships insert — 전부
+  get-or-create 없이 호출마다 새 행을 만들었다. `afterAll` 정리가 있는 파일도 CI가 그 테스트
+  도중 취소되면(GitHub Actions `concurrency.cancel-in-progress`, 또는 사람이 새 실행을 다시
+  트리거) `afterAll` 자체가 실행되지 않아 그대로 남는다 — 이 세션에서만도 CI를 여러 번 연속
+  재트리거하며 실제로 이 경로로 쌓임을 확인함.
+- **코드 수정 완료(이번 배치)**: 위 다섯 곳 전부 `createTestMembershipForProduct()`가 이미
+  증명한 get-or-create + self-healing refresh 패턴으로 교체 — 앞으로는 같은 방식으로 다시
+  쌓이지 않는다. `attendance.spec.ts`는 추가로 `beforeAll`에 고아 프로필("P3 출결-대기용",
+  `afterAll` 미실행 시 남음) 자체 정리 스윕을 추가했다.
+- **SQL 정리(적용 대기)**: `cleanup_shared_test_center_pollution_draft_proposed.sql` — 지금까지
+  이미 쌓인 데이터(1회성)를 정리. 대상은 정확한 문자열/계정으로 식별되는 테스트 전용 데이터만
+  (진단 결과 "그 외 profile_id 0건" 확인, 실사용자/실센터 데이터 아님). BEGIN/COMMIT +
+  미리보기 카운트 + 예상 범위 벗어나면 RAISE EXCEPTION 가드 포함.
+- **범위 밖(별도 이슈로 기록, 이번엔 안 건드림)**: 같은 진단에서 `classes` 테이블도 1000행
+  캡에 걸릴 만큼 누적돼 있음을 발견(`admin-assignment-security.test.ts`의 "성공경로-*"
+  시나리오만 최소 914건, `P1-12`/`RES-001`/`CLASS-001`/`SETTINGS-REAUDIT` 등 추가). 이 파일들은
+  이미 `afterAll`로 정리하도록 설계돼 있어(get-or-create 부재 문제가 아님) — 근본 원인은
+  "CI 취소 시 afterAll 미실행"과 동일 계열이지만, 파일마다 시나리오별 고유 데이터라 get-or-create
+  전환이 부적절하고, `beforeAll` 자체 정리 스윕을 5개 이상 파일에 각각 설계해야 하는 더 큰
+  작업이다. class-allowed-products.spec.ts의 현재 실패와 직접 관련 없어 이번 배치 범위에서
+  제외하고 여기 기록만 함 — TEST-002(#24)와 같은 근본 원인 계열로 함께 검토 권장.
+
 ## 6. P3 — 제품 결정이 필요한 향후 기능 후보
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.

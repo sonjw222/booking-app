@@ -52,10 +52,37 @@ async function createNamedPassProduct(centerId: string, name: string, kind: "pas
   return { id: data.id };
 }
 
+// get-or-create + self-healing refresh(2026-08 공유 센터 오염 진단 후 도입) — 예전엔 호출마다
+// 무조건 insert해서 CI를 반복 실행할 때마다 같은 (profile, product) 조합에 "통합테스트
+// 수강권(P3)" 행이 계속 쌓였다(진단에서 실제 확인) — class-allowed-products.spec.ts처럼
+// "이 프로필의 사용 가능한 수강권 전체"를 나열하는 화면을 간헐적으로 타임아웃/오염시키던
+// 원인 중 하나. createTestMembershipForProduct(setup.ts)와 동일 패턴.
 async function createMembershipForProduct(centerId: string, profileId: string, productId: string): Promise<{ id: string }> {
   // 회원(memberA) 세션의 RLS로는 자기 자신의 memberships 행도 직접 insert할 수 없다(정상
   // 결제 RPC를 거쳐야 함) — 테스트 fixture라 admin(service-role) 클라이언트로 직접 만든다.
   const admin = getFixtureAdminClient();
+
+  const { data: existing, error: findErr } = await admin
+    .from("memberships")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("center_id", centerId)
+    .eq("product_id", productId)
+    .limit(1);
+  if (findErr) throw new Error(`수강권 조회 실패: ${findErr.message}`);
+  if (existing && existing.length > 0) {
+    const { error: refreshErr } = await admin
+      .from("memberships")
+      .update({
+        total_count: 5, remaining_count: 5,
+        expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        status: "active",
+      })
+      .eq("id", existing[0].id);
+    if (refreshErr) throw new Error(`수강권 갱신 실패: ${refreshErr.message}`);
+    return { id: existing[0].id };
+  }
+
   const { data, error } = await admin
     .from("memberships")
     .insert({
