@@ -272,6 +272,36 @@ describe("진단(읽기 전용)", () => {
     console.log(`=== created_at 범위: ${minCreated} ~ ${maxCreated} (응답 ${data!.length}행 기준) ===`);
   });
 
+  // 2026-08-09 재진단: "통합테스트 수강권" 전체 모집단이 2525건→168건으로, managerA
+  // 소유분이 488→0건으로 급감했고 미확인 profile_id가 새로 나타남 — 문자열/조건 버그가
+  // 아니라 이 공유 dev DB 자체가 조사 도중에도 계속 바뀌고 있다는 뜻(다른 동시 세션/CI일
+  // 가능성). "통합테스트 수강권"을 실제로 만드는 코드는 setup.ts의 createTestMembership()
+  // 하나뿐임을 grep으로 재확인했으므로(다른 어떤 앱 코드도 이 정확한 문자열을 쓰지 않음),
+  // 어느 profile_id에 속하든 이 조합(center_id + product_id is null + 이 정확한 product_name)
+  // 자체가 테스트 전용이라는 근거는 여전히 유효하다 — 단지 미리 정해둔 2개 profile_id로
+  // 좁힌 게 이 시점의 실제 분포와 안 맞았을 뿐. 새로 나타난 profile_id가 진짜 테스트
+  // 계정인지 계정/센터까지 교차검증한다.
+  it("미확인 profile_id 교차검증(계정/센터 소속 확인)", async () => {
+    const admin = getFixtureAdminClient();
+    const { data: mems, error: e1 } = await admin
+      .from("memberships").select("profile_id")
+      .eq("center_id", centerAId).is("product_id", null).eq("product_name", "통합테스트 수강권")
+      .limit(1000);
+    if (e1) throw new Error(e1.message);
+    const distinctProfileIds = [...new Set((mems ?? []).map((m) => m.profile_id))];
+    console.log(`=== 현재 시점 distinct profile_id 전체 목록(${distinctProfileIds.length}개) ===`);
+    for (const pid of distinctProfileIds) {
+      const { data: prof, error: e2 } = await admin.from("profiles").select("id, account_id, name, is_primary").eq("id", pid).maybeSingle();
+      if (e2) throw new Error(e2.message);
+      if (!prof) { console.log(`  ${pid} | profiles에 없음(이미 삭제된 profile?)`); continue; }
+      const { data: acct, error: e3 } = await admin.from("accounts").select("id, name, is_manager, is_member").eq("id", prof.account_id).maybeSingle();
+      if (e3) throw new Error(e3.message);
+      const { data: mc, error: e4 } = await admin.from("manager_centers").select("center_id, status").eq("account_id", prof.account_id);
+      if (e4) throw new Error(e4.message);
+      console.log(`  profile_id=${pid} | account_id=${prof.account_id} | account.name=${acct?.name} | is_manager=${acct?.is_manager} | is_member=${acct?.is_member} | manager_centers=${JSON.stringify(mc)}`);
+    }
+  });
+
   it("검증: 지난번 실패한 cleanup 트랜잭션이 실제로 전부 롤백됐는지(원래 스냅샷과 비교)", async () => {
     const admin = getFixtureAdminClient();
     const { count: profCount } = await admin.from("profiles").select("id", { count: "exact", head: true })
