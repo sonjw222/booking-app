@@ -777,7 +777,15 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 | 우선순위 | P2 (정리 SQL 적용 전까지 이 spec을 포함한 여러 E2E/통합 테스트가 간헐 실패할 수 있음) |
 | 현재 상태 | **운영 설정 필요 — SQL 적용 대기** |
 | 근거 파일 | `tests/integration/_diag_pollution.test.ts`(임시 진단, CI run 31268325509), `cleanup_shared_test_center_pollution_draft_proposed.sql`, `tests/integration/setup.ts`(`createTestMembership`), `tests/e2e/fixtures/testData.ts`(`createTestMembershipAdmin`/`createTestGoodsMembershipAdmin`), `tests/integration/class-allowed-products-enforcement.test.ts`, `tests/integration/usable-memberships-pass-kind.test.ts`, `tests/e2e/admin/attendance.spec.ts` |
-| 완료 조건 | 사용자가 `cleanup_shared_test_center_pollution_draft_proposed.sql`을 Supabase SQL Editor에서 실행하고, class-allowed-products.spec.ts를 최소 3회 반복 실행 + 전체 CI 최소 2회 연속 Green으로 확인 |
+| 완료 조건 | 사용자가 `cleanup_shared_test_center_pollution_draft_proposed.sql`(v2)을 Supabase SQL Editor에서 실행하고, class-allowed-products.spec.ts를 최소 3회 반복 실행 + 전체 CI 최소 2회 연속 Green으로 확인 |
+
+- **v1 실행 실패 후 v2로 재작성(2026-08-09)**: v1이 `admin_action_logs_membership_id_fkey`
+  위반으로 중단됨(admin_action_logs가 memberships/reservations/profiles를 참조하는 것을
+  놓침). 재진단(run 31270744749)으로 v1 트랜잭션이 완전히 롤백됐음을 확인(orphan profile/
+  "통합테스트 수강권" 건수 변화 없음) 후, schema.sql 전체를 다시 감사해 memberships/profiles/
+  payments를 참조하는 모든 테이블(admin_action_logs, membership_transfers, product_passes,
+  contracts, locker_assignments, point_transactions, progress_records)을 찾아 FK 안전
+  순서로 재작성함.
 
 - **실제 원인(읽기 전용 진단으로 직접 확인, 추측 아님)**: 거의 모든 integration/e2e 테스트가
   `getOrCreateOwnedTestCenter(managerA)`로 **단 하나의 공유 센터**를 재사용하는데, 그 안의
