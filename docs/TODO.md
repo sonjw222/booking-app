@@ -774,10 +774,10 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P2 (정리 SQL은 적용 완료 — 아래 반복 실행/CI 검증만 남음) |
-| 현재 상태 | **v4 SQL 적용 완료, 최종 검증 진행 중** |
+| 우선순위 | P2 (오염 정리 자체는 완료·검증됨 — 아래 P2-20의 별개 버그가 새 블로커) |
+| 현재 상태 | **오염 정리 완료(v4 적용+검증됨). class-allowed-products.spec.ts는 여전히 실패하지만 원인이 오염이 아님을 확인 — P2-20 참고** |
 | 근거 파일 | `cleanup_shared_test_center_pollution_draft_proposed.sql`(v4, 적용 완료), `tests/integration/setup.ts`(`createTestMembership`), `tests/e2e/fixtures/testData.ts`(`createTestMembershipAdmin`/`createTestGoodsMembershipAdmin`), `tests/integration/class-allowed-products-enforcement.test.ts`, `tests/integration/usable-memberships-pass-kind.test.ts`, `tests/e2e/admin/attendance.spec.ts` |
-| 완료 조건 | class-allowed-products.spec.ts를 최소 3회 반복 실행 + 전체 CI 최소 2회 연속 Green으로 확인 |
+| 완료 조건 | (오염 정리 자체는 완료) — class-allowed-products.spec.ts의 전체 Green은 P2-20 해결에 달려 있음 |
 
 - **v4 SQL 적용 완료 및 검증(2026-08-09)**: 사용자가 Supabase SQL Editor에서 v4를 에러 없이
   실행함. 적용 후 읽기 전용 진단(diag_only 모드)으로 6개 정리 대상을 직접 재확인 —
@@ -799,6 +799,51 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   profile_id에도 안 묶여도 구조적으로 테스트 전용인 값이었고, 시점마다 여러 TEST_* 계정
   사이를 오가는 모집단에 특정 2개 profile_id로만 좁히는 게 오히려 정리를 막았음). 상세
   경위는 SQL 파일 헤더 주석 참고.
+
+### P2-20. (신규, 2026-08-09) class_allowed_products 선택이 저장 직후 재진입 시 사라짐(재현 2/2, 원인 미확정)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 (class-allowed-products.spec.ts 전체 Green을 막는 현재 블로커) |
+| 현재 상태 | **확인 필요 — 재현은 확정, 근본 원인은 미확정(static 분석 한계)** |
+| 근거 파일 | `app/manager/classes/page.tsx`(`openEdit` 517-531행, `save` 533-654행, chip 렌더링 1096-1152행), `lib/classes.ts`(`fetchClassProducts`/`setClassProducts`), `tests/e2e/admin/class-allowed-products.spec.ts` |
+| 완료 조건 | 실제 원인(브라우저 콘솔 로그/임시 계측 또는 수동 QA로 확인) 특정 후 근본 수정, class-allowed-products.spec.ts 전체 통과 |
+
+- **증상**: v4 정리 SQL 적용 후 CI를 2회 재실행했더니 class-allowed-products.spec.ts의 4개
+  테스트(121/156/179/232행)가 **매번 동일하게** 실패함(run 31272826192, run 31273712036,
+  둘 다 재시도까지 포함해 100% 재현). 실패 지점은 전부 "칩 선택 → 저장 → 같은 수업 재진입"
+  직후: `locator('.class-allowed-products-list .filter-chip.on')`가 1이어야 하는데 0.
+  이전(정리 전) 실패는 타임아웃/거대 목록 증상이었지만 이번엔 명확히 다른 증상 — 오염과
+  무관하다고 판단한 근거는 v4 정리가 실측으로 완전히 확인됐고(P2-19), 같은 실행에서 다른
+  32개 테스트는 전부 통과했기 때문.
+- **Playwright trace로 직접 확인(추측 아님)**: 실패한 실행의 `trace.zip`을 내려받아
+  네트워크 로그를 까봤다. `class_allowed_products`에 대한 요청이 GET(빈 배열 `[]`) →
+  DELETE(204) → GET(빈 배열 `[]`) 세 번뿐이고, **INSERT(POST) 요청이 아예 없다** —
+  `setClassProducts()`가 `productIds.length > 0`일 때만 insert하므로, 저장 시점에 React
+  state `selectedProducts`가 이미 비어 있었다는 뜝. Playwright action 로그로 칩 클릭
+  (`strict:true`, 에러 없음 = 정확히 1개 요소를 실제로 클릭함)과 저장 버튼 클릭 사이
+  간격은 ~150ms — 정상적인 React 렌더 주기보다 훨씬 김.
+- **정적 분석으로 배제한 것들**(전부 코드로 직접 확인):
+  - `openEdit()`이 재진입마다 `fetchClassProducts()`로 새로 불러옴 — 캐시/재사용 아님.
+  - `save()`가 `await setClassProducts(...)`를 시트를 닫기(`setFormOpen(false)`) **전에**
+    기다림 — 낙관적 UI로 너무 일찍 닫히는 구조 아님.
+  - 칩 `onClick={() => setSelectedProducts((prev) => ...)}` — 매 렌더 새 클로저, stale
+    closure 아님. 저장 버튼도 `onClick={save}`로 매 렌더 최신 함수 참조.
+  - `.sheet` 안쪽에 `onClick={(e) => e.stopPropagation()}` 있음 — 칩 클릭이 오버레이의
+    "바깥 클릭시 닫기"로 새는 구조 아님.
+  - RLS(`add_class_products.sql`): `class_allowed_products` SELECT 정책은
+    `auth.uid() is not null`로 완전히 허용적 — 권한 문제 아님.
+  - `<form>` 태그 자체가 이 파일에 없음 — 칩 버튼이 의도치 않게 폼 submit을 유발하는
+    구조 아님.
+- **의심되지만 확정 못한 것**: `openEdit()`의 `fetchClassProducts` 호출과, `passProducts`를
+  채우는 별도 `useEffect`(`fetchProducts(...).then(setPassProducts).catch(() => {})`,
+  1개월 이동 시 재로드용)에 전부 **에러를 조용히 삼키는 `catch`** 가 있다 — 어느 쪽이든
+  일시적으로 던지면 화면엔 아무 에러도 안 보이고 그냥 "선택 없음"처럼 보인다. 다만 이걸로
+  100% 재현되는 이유까지는 설명 못 함(일시적 네트워크 문제라면 매번 재현되긴 어려움).
+- **다음 단계 제안**: 이 두 `catch { /* 무시 */ }` 를 임시로 `catch (e) { console.error(...); setError(...) }`
+  로 바꿔 브라우저 콘솔/에러 배너에 실제 원인을 노출시킨 뒤 CI를 한 번 더 돌리거나, 로컬
+  개발 서버로 수동 재현해서 정확한 원인을 확정해야 한다 — 이 이상은 코드 정적 분석과
+  trace 로그만으로는 특정할 수 없었다(추측성 수정 금지 원칙에 따라 여기서 멈춤).
 - **CI diag_only 모드 추가**: `.github/workflows/test.yml`에 `workflow_dispatch` input
   `diag_only`를 추가해, e2e/unit/integration/build(실제 쓰기 발생)를 건너뛰고 읽기 전용
   `diag` job만 실행할 수 있게 함 — 오염 조사 자체가 조사 대상 데이터를 더 바꾸지 않도록.
