@@ -49,6 +49,21 @@
 - `fix_manager_dashboard_summary_daily_bug_draft_proposed.sql`(신규, 적용 대기)로
   `days.date`를 참조하도록 함수 재정의(다른 필드는 전혀 변경 없음).
 
+## 2026-08-08 — P4 후속: service_role의 payments 테이블 GRANT 누락 (SQL·DB 인프라 문제, 적용 대기) (feature/social-auth-notifications-attendance-dashboard)
+
+- **분류: SQL·DB 문제(인프라 설정)** — 앱 코드·테스트 로직·RPC 함수 자체와는 무관. daily 필드
+  버그를 고친 뒤 CI를 재실행하니 `dashboard-summary.test.ts`의 결제 fixture 생성 단계에서
+  전부 `"permission denied for table payments"`로 실패.
+- 원인: 이 저장소의 기존 결제 생성 경로(`confirm_test_payment` 등)는 전부 `security definer`
+  RPC라 호출자의 GRANT와 무관하게 동작해왔다 — 그래서 `payments` 테이블 자체에 service_role
+  GRANT가 없다는 사실이 지금까지 드러나지 않았다. 이번 통합테스트가 정확한 집계 검증을 위해
+  admin(service_role) 클라이언트로 `payments`에 **직접** insert를 시도한 것이 처음이라 이
+  gap이 새로 드러남 — `fix_service_role_missing_grants_for_e2e_admin_draft_proposed.sql`/
+  `fix_service_role_missing_grants_products.sql`과 같은 부류(그때도 payments는 대상에
+  포함되지 않았음).
+- `fix_service_role_missing_grants_payments_draft_proposed.sql`(신규, 적용 대기):
+  `grant select, insert, update, delete on payments to service_role;` + 롤백 파일.
+
 ## 2026-08-08 — E2E 스위트 전체의 KST 자정 경계 취약점 전수 조사 및 일괄 수정 (feature/social-auth-notifications-attendance-dashboard)
 
 - 직전 커밋에서 `reservation-cancel-grace-period.test.ts` 하나만 고치고 끝내지 않고,
