@@ -180,6 +180,98 @@ describe("진단(읽기 전용)", () => {
     }
   });
 
+  // 2026-08-09 v3 실행 결과: [3] guard(product_id is null + product_name + profile_id in
+  // (userA, managerA))가 0건을 세었는데, 진단의 "롤백 검증"(profile_id 필터 없음)은 2525건을
+  // 셌다 — v3의 profile_id 필터가 실제 분포와 안 맞는지, 아니면 product_name 텍스트 자체가
+  // (한글 유니코드 정규화 등으로) 미묘하게 다른 값인지 실측으로 확인한다.
+  it("'통합테스트 수강권'(product_id is null) 전체 모집단의 profile_id 분포", async () => {
+    const admin = getFixtureAdminClient();
+    const { data, error } = await admin
+      .from("memberships")
+      .select("profile_id")
+      .eq("center_id", centerAId)
+      .is("product_id", null)
+      .eq("product_name", "통합테스트 수강권")
+      .limit(5000);
+    if (error) throw new Error(error.message);
+    const byProfile = new Map<string, number>();
+    for (const r of data ?? []) byProfile.set(r.profile_id, (byProfile.get(r.profile_id) ?? 0) + 1);
+    console.log(`=== profile_id 분포(응답 행 수 ${data!.length}, PostgREST 캡 가능성 있음) ===`);
+    for (const [pid, count] of byProfile) {
+      const isUserA = pid === userA.profileId;
+      const isManagerA = pid === managerA.profileId;
+      console.log(`  profile_id=${pid} | ${count}건 | userA와 일치=${isUserA} | managerA와 일치=${isManagerA}`);
+    }
+    console.log(`=== 비교 대상 값: userA.profileId=${userA.profileId}, managerA.profileId=${managerA.profileId} ===`);
+  });
+
+  it("'통합테스트 수강권' product_name의 바이트 수준 동일성 확인(유니코드 정규화 차이 의심)", async () => {
+    const admin = getFixtureAdminClient();
+    const { data, error } = await admin
+      .from("memberships")
+      .select("product_name")
+      .eq("center_id", centerAId)
+      .is("product_id", null)
+      .not("product_name", "is", null)
+      .limit(2000);
+    if (error) throw new Error(error.message);
+    const distinct = new Set((data ?? []).map((r) => r.product_name));
+    console.log(`=== product_id is null인 행들의 distinct product_name 값 목록 ===`);
+    for (const name of distinct) {
+      const bytes = Buffer.from(name, "utf8");
+      console.log(`  "${name}" | length=${name.length} | utf8bytes=${bytes.length} | hex=${bytes.toString("hex")} | ===target?: ${name === "통합테스트 수강권"}`);
+    }
+    const targetBytes = Buffer.from("통합테스트 수강권", "utf8");
+    console.log(`=== SQL/진단 스크립트가 사용하는 리터럴 "통합테스트 수강권" | length=${"통합테스트 수강권".length} | utf8bytes=${targetBytes.length} | hex=${targetBytes.toString("hex")} ===`);
+  });
+
+  it("product_id is null 조건 자체가 실제 분포와 맞는지(product_name만으로 필터링한 경우와 비교)", async () => {
+    const admin = getFixtureAdminClient();
+    const { count: withNullProduct, error: e1 } = await admin.from("memberships").select("id", { count: "exact", head: true })
+      .eq("center_id", centerAId).is("product_id", null).eq("product_name", "통합테스트 수강권");
+    if (e1) throw new Error(e1.message);
+    const { count: anyProduct, error: e2 } = await admin.from("memberships").select("id", { count: "exact", head: true })
+      .eq("center_id", centerAId).eq("product_name", "통합테스트 수강권");
+    if (e2) throw new Error(e2.message);
+    console.log(`=== product_id is null AND product_name 일치: ${withNullProduct} / product_name만 일치(product_id 무관): ${anyProduct} ===`);
+
+    const { count: userAOnly, error: e3 } = await admin.from("memberships").select("id", { count: "exact", head: true })
+      .eq("center_id", centerAId).is("product_id", null).eq("product_name", "통합테스트 수강권").eq("profile_id", userA.profileId);
+    if (e3) throw new Error(e3.message);
+    const { count: managerAOnly, error: e4 } = await admin.from("memberships").select("id", { count: "exact", head: true })
+      .eq("center_id", centerAId).is("product_id", null).eq("product_name", "통합테스트 수강권").eq("profile_id", managerA.profileId);
+    if (e4) throw new Error(e4.message);
+    const { count: bothIn, error: e5 } = await admin.from("memberships").select("id", { count: "exact", head: true })
+      .eq("center_id", centerAId).is("product_id", null).eq("product_name", "통합테스트 수강권").in("profile_id", [userA.profileId, managerA.profileId]);
+    if (e5) throw new Error(e5.message);
+    console.log(`=== profile_id=userA만: ${userAOnly} / profile_id=managerA만: ${managerAOnly} / .in([userA,managerA]): ${bothIn} (v3 guard와 동일 조건) ===`);
+  });
+
+  it("status/center_id/created_at 분포 및 다른 center_id 혼입 여부", async () => {
+    const admin = getFixtureAdminClient();
+    const { data, error } = await admin
+      .from("memberships")
+      .select("status, center_id, created_at")
+      .is("product_id", null)
+      .eq("product_name", "통합테스트 수강권")
+      .limit(5000);
+    if (error) throw new Error(error.message);
+    const byStatus = new Map<string, number>();
+    const byCenter = new Map<string, number>();
+    let minCreated = "", maxCreated = "";
+    for (const r of data ?? []) {
+      byStatus.set(r.status, (byStatus.get(r.status) ?? 0) + 1);
+      byCenter.set(r.center_id, (byCenter.get(r.center_id) ?? 0) + 1);
+      if (!minCreated || r.created_at < minCreated) minCreated = r.created_at;
+      if (!maxCreated || r.created_at > maxCreated) maxCreated = r.created_at;
+    }
+    console.log(`=== status 분포(center_id 무관, product_name 전체) ===`);
+    for (const [s, c] of byStatus) console.log(`  status=${s}: ${c}건`);
+    console.log(`=== center_id 분포(다른 센터 혼입 여부) ===`);
+    for (const [cid, c] of byCenter) console.log(`  center_id=${cid} | centerA와 일치=${cid === centerAId} | ${c}건`);
+    console.log(`=== created_at 범위: ${minCreated} ~ ${maxCreated} (응답 ${data!.length}행 기준) ===`);
+  });
+
   it("검증: 지난번 실패한 cleanup 트랜잭션이 실제로 전부 롤백됐는지(원래 스냅샷과 비교)", async () => {
     const admin = getFixtureAdminClient();
     const { count: profCount } = await admin.from("profiles").select("id", { count: "exact", head: true })
