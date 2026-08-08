@@ -281,7 +281,7 @@ describe("진단(읽기 전용)", () => {
   // 자체가 테스트 전용이라는 근거는 여전히 유효하다 — 단지 미리 정해둔 2개 profile_id로
   // 좁힌 게 이 시점의 실제 분포와 안 맞았을 뿐. 새로 나타난 profile_id가 진짜 테스트
   // 계정인지 계정/센터까지 교차검증한다.
-  it("미확인 profile_id 교차검증(계정/센터 소속 확인)", async () => {
+  it("미확인 profile_id 교차검증(profiles만 — accounts/manager_centers는 service_role GRANT 없음)", async () => {
     const admin = getFixtureAdminClient();
     const { data: mems, error: e1 } = await admin
       .from("memberships").select("profile_id")
@@ -291,14 +291,15 @@ describe("진단(읽기 전용)", () => {
     const distinctProfileIds = [...new Set((mems ?? []).map((m) => m.profile_id))];
     console.log(`=== 현재 시점 distinct profile_id 전체 목록(${distinctProfileIds.length}개) ===`);
     for (const pid of distinctProfileIds) {
-      const { data: prof, error: e2 } = await admin.from("profiles").select("id, account_id, name, is_primary").eq("id", pid).maybeSingle();
+      const { data: prof, error: e2 } = await admin.from("profiles").select("id, account_id, name, is_primary, created_at").eq("id", pid).maybeSingle();
       if (e2) throw new Error(e2.message);
       if (!prof) { console.log(`  ${pid} | profiles에 없음(이미 삭제된 profile?)`); continue; }
-      const { data: acct, error: e3 } = await admin.from("accounts").select("id, name, is_manager, is_member").eq("id", prof.account_id).maybeSingle();
-      if (e3) throw new Error(e3.message);
-      const { data: mc, error: e4 } = await admin.from("manager_centers").select("center_id, status").eq("account_id", prof.account_id);
-      if (e4) throw new Error(e4.message);
-      console.log(`  profile_id=${pid} | account_id=${prof.account_id} | account.name=${acct?.name} | is_manager=${acct?.is_manager} | is_member=${acct?.is_member} | manager_centers=${JSON.stringify(mc)}`);
+      console.log(`  profile_id=${pid} | account_id=${prof.account_id} | name=${prof.name} | is_primary=${prof.is_primary} | created_at=${prof.created_at}`);
+      // 이 profile이 이 센터의 매니저인지(=매니저 소유 profile) 확인 — center_members
+      // (회원으로 등록된 경우) 쪽도 함께 확인.
+      const { data: cm, error: e3 } = await admin.from("center_members").select("status, joined_at").eq("center_id", centerAId).eq("profile_id", pid).maybeSingle();
+      if (e3) { console.log(`    center_members 조회 실패(grant 없을 수 있음): ${e3.message}`); }
+      else console.log(`    center_members: ${JSON.stringify(cm)}`);
     }
   });
 
