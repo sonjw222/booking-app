@@ -125,19 +125,11 @@ describe("진단(읽기 전용)", () => {
   // memberships/profiles를 참조하는 테이블 전수를 재조사(schema.sql/add_admin_assignment.sql
   // 코드 감사로 확인한 목록: admin_action_logs, membership_transfers, product_passes,
   // contracts, locker_assignments, point_transactions, progress_records).
-  it("cleanup 대상 membership id 집합(정확한 4개 product_name)", async () => {
-    const admin = getFixtureAdminClient();
-    const { data, error } = await admin
-      .from("memberships")
-      .select("id, product_name")
-      .eq("center_id", centerAId)
-      .in("product_name", ["통합테스트 수강권", "통합테스트 수강권(P3)", "P0-6 테스트 무제한권", "USABLE-PASS-KIND 테스트 대여품"]);
-    if (error) throw new Error(error.message);
-    const ids = (data ?? []).map((m) => m.id);
-    console.log(`=== cleanup 대상 membership 수: ${ids.length} ===`);
-    (globalThis as any).__targetMembershipIds = ids;
-  });
-
+  // ⚠ 직전 시도에서 target membership id 1000개를 .in()에 통째로 넣었다가 URL이 너무 길어
+  // "Bad Request"가 났다 — 대신 (a) admin_action_logs는 center_id(단일 값)로, (b) 나머지는
+  // userA/managerA 두 profile_id(작은 목록)로 좁혀서 조회한다. cleanup 대상 memberships는
+  // 전부 이 두 profile_id에만 속한다는 것을 이미 별도로 확인했으므로(그 외 profile_id 0건)
+  // 이 두 profile_id 기준 조회만으로 충분하다.
   it("cleanup 대상 orphan profile id 집합(P3 출결-대기용)", async () => {
     const admin = getFixtureAdminClient();
     const { data, error } = await admin
@@ -149,60 +141,42 @@ describe("진단(읽기 전용)", () => {
     (globalThis as any).__targetProfileIds = ids;
   });
 
-  it("admin_action_logs가 cleanup 대상을 참조하는 건수(membership_id/source_unassigned_id/reservation_id/member_profile_id)", async () => {
+  const TARGET_PROFILE_IDS = ["689fd564-40d2-4c39-a687-5b6a6b220fbd", "bf0939f6-d676-43bd-a164-c021ad623063"]; // managerA, userA
+
+  it("admin_action_logs — centerA 전체 건수 및 membership_id/reservation_id/member_profile_id 참조 유무", async () => {
     const admin = getFixtureAdminClient();
-    const membershipIds: string[] = (globalThis as any).__targetMembershipIds ?? [];
-    const profileIds: string[] = (globalThis as any).__targetProfileIds ?? [];
+    const { count, error: countErr } = await admin.from("admin_action_logs").select("id", { count: "exact", head: true }).eq("center_id", centerAId);
+    if (countErr) throw new Error(countErr.message);
+    console.log(`=== admin_action_logs centerA 전체 건수: ${count} ===`);
 
-    if (membershipIds.length > 0) {
-      const { data: byMem, error: e1 } = await admin.from("admin_action_logs").select("id, action_type, reservation_id, membership_id, source_unassigned_id, member_profile_id, created_at").in("membership_id", membershipIds);
-      if (e1) throw new Error(e1.message);
-      console.log(`=== admin_action_logs.membership_id 참조: ${byMem!.length} ===`);
-      for (const r of (byMem ?? []).slice(0, 20)) console.log(`  ${r.id} | ${r.action_type} | reservation_id=${r.reservation_id} | member_profile_id=${r.member_profile_id} | ${r.created_at}`);
-
-      const { data: bySrc, error: e2 } = await admin.from("admin_action_logs").select("id, action_type, source_unassigned_id").in("source_unassigned_id", membershipIds);
-      if (e2) throw new Error(e2.message);
-      console.log(`=== admin_action_logs.source_unassigned_id 참조: ${bySrc!.length} ===`);
-    }
-    if (profileIds.length > 0) {
-      const { data: byProfile, error: e3 } = await admin.from("admin_action_logs").select("id").in("member_profile_id", profileIds);
-      if (e3) throw new Error(e3.message);
-      console.log(`=== admin_action_logs.member_profile_id(orphan profile) 참조: ${byProfile!.length} ===`);
-    }
-  });
-
-  it("admin_action_logs가 참조하는 reservation_id 중 cleanup 대상 membership의 reservations와 겹치는 것", async () => {
-    const admin = getFixtureAdminClient();
-    const membershipIds: string[] = (globalThis as any).__targetMembershipIds ?? [];
-    if (membershipIds.length === 0) return;
-    const { data: rsv, error: e1 } = await admin.from("reservations").select("id").in("membership_id", membershipIds);
+    const { count: withMem, error: e1 } = await admin.from("admin_action_logs").select("id", { count: "exact", head: true }).eq("center_id", centerAId).not("membership_id", "is", null);
     if (e1) throw new Error(e1.message);
-    const reservationIds = (rsv ?? []).map((r) => r.id);
-    console.log(`=== cleanup 대상 membership에 연결된 reservations 수: ${reservationIds.length} ===`);
-    if (reservationIds.length === 0) return;
-    const { data: logsByRes, error: e2 } = await admin.from("admin_action_logs").select("id, reservation_id, membership_id").in("reservation_id", reservationIds);
+    console.log(`=== admin_action_logs centerA 중 membership_id NOT NULL: ${withMem} ===`);
+
+    const { count: withSrc, error: e2 } = await admin.from("admin_action_logs").select("id", { count: "exact", head: true }).eq("center_id", centerAId).not("source_unassigned_id", "is", null);
     if (e2) throw new Error(e2.message);
-    console.log(`=== admin_action_logs.reservation_id 참조(대상 reservations 기준): ${logsByRes!.length} ===`);
+    console.log(`=== admin_action_logs centerA 중 source_unassigned_id NOT NULL: ${withSrc} ===`);
+
+    const { data: sample, error: e3 } = await admin.from("admin_action_logs").select("id, action_type, admin_id, member_profile_id, created_at").eq("center_id", centerAId).limit(5);
+    if (e3) throw new Error(e3.message);
+    console.log(`=== admin_action_logs 샘플(admin_id/member_profile_id가 테스트 계정인지 확인용) ===`);
+    for (const r of sample ?? []) console.log(`  ${r.id} | ${r.action_type} | admin_id=${r.admin_id} | member_profile_id=${r.member_profile_id} | ${r.created_at}`);
+    const nonTestAdmin = (sample ?? []).some((r) => r.admin_id !== managerA.accountId);
+    const nonTestMember = (sample ?? []).some((r) => !TARGET_PROFILE_IDS.includes(r.member_profile_id));
+    console.log(`=== 샘플 중 managerA 계정이 아닌 admin_id 존재: ${nonTestAdmin} / userA·managerA가 아닌 member_profile_id 존재: ${nonTestMember} ===`);
   });
 
-  it("나머지 memberships/profiles 참조 테이블 전수 조사", async () => {
+  it("나머지 memberships/profiles 참조 테이블 — userA/managerA profile_id 기준 조사", async () => {
     const admin = getFixtureAdminClient();
-    const membershipIds: string[] = (globalThis as any).__targetMembershipIds ?? [];
-    const profileIds: string[] = (globalThis as any).__targetProfileIds ?? [];
-
-    if (membershipIds.length > 0) {
-      for (const [table, col] of [["membership_transfers", "membership_id"], ["product_passes", "linked_membership_id"], ["contracts", "membership_id"]] as const) {
-        const { data, error } = await admin.from(table).select("id").in(col, membershipIds);
-        if (error) throw new Error(`${table}.${col} 조회 실패: ${error.message}`);
-        console.log(`=== ${table}.${col} 참조(대상 membership 기준): ${data!.length} ===`);
-      }
-    }
-    if (profileIds.length > 0) {
-      for (const [table, col] of [["membership_transfers", "from_profile_id"], ["membership_transfers", "to_profile_id"], ["product_passes", "profile_id"], ["contracts", "profile_id"], ["locker_assignments", "profile_id"], ["point_transactions", "profile_id"], ["progress_records", "profile_id"]] as const) {
-        const { data, error } = await admin.from(table).select("id").in(col, profileIds);
-        if (error) throw new Error(`${table}.${col} 조회 실패: ${error.message}`);
-        console.log(`=== ${table}.${col} 참조(대상 orphan profile 기준): ${data!.length} ===`);
-      }
+    for (const [table, col] of [
+      ["membership_transfers", "from_profile_id"], ["membership_transfers", "to_profile_id"],
+      ["product_passes", "profile_id"], ["contracts", "profile_id"],
+      ["locker_assignments", "profile_id"], ["point_transactions", "profile_id"],
+      ["progress_records", "profile_id"],
+    ] as const) {
+      const { count, error } = await admin.from(table).select("id", { count: "exact", head: true }).in(col, TARGET_PROFILE_IDS);
+      if (error) throw new Error(`${table}.${col} 조회 실패: ${error.message}`);
+      console.log(`=== ${table}.${col} 참조(userA/managerA 기준): ${count} ===`);
     }
   });
 
