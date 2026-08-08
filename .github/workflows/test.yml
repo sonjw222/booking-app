@@ -21,6 +21,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 임시 진단 job — class-allowed-products.spec.ts 오염 범위 파악용(_diag_pollution.test.ts).
+  # e2e를 기다리지 않도록 needs 없음. 진단 완료 후 이 job과 _diag_pollution.test.ts를 함께 삭제한다.
+  diag:
+    name: (임시) 공유 센터 오염 진단
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:integration -- _diag_pollution
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
+          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
+          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
+          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
+          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
+          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
+          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
+          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
+          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
+          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
+          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
+          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
+          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
+          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
   e2e:
     name: E2E tests (Playwright, live dev Supabase)
     runs-on: ubuntu-latest
