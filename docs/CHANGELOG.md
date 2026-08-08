@@ -49,6 +49,22 @@
 - `fix_manager_dashboard_summary_daily_bug_draft_proposed.sql`(신규, 적용 대기)로
   `days.date`를 참조하도록 함수 재정의(다른 필드는 전혀 변경 없음).
 
+## 2026-08-09 — 공유 테스트 센터 정리 SQL(v4) 적용 완료 및 검증 (feature/social-auth-notifications-attendance-dashboard)
+
+- `cleanup_shared_test_center_pollution_draft_proposed.sql`을 사용자가 v1→v4까지 반복 끝에
+  최종 적용 완료(에러 없음). v1/v2는 `admin_action_logs`(add_admin_assignment.sql) FK를
+  놓쳐 실패(둘 다 완전 롤백 확인), v3는 `LOCK TABLE`로 FK race는 해결했지만 지나치게 좁은
+  `profile_id in (userA, managerA)` 하한 guard가 실제 모집단(시점에 따라 다른 TEST_*
+  계정으로 옮겨다님, 실측 확인)과 어긋나 안전하게 중단됨 — v4에서 그 profile_id 제한과
+  하한 guard를 제거하고 "정확한 문자열 + 정확한 center_id"라는 구조적 근거만으로 재작성.
+- 적용 후 읽기 전용 진단(diag_only CI 모드)으로 정리 대상 6개(admin_action_logs, orphan
+  profiles, "통합테스트 수강권"/"통합테스트 수강권(P3)"/"P0-6 테스트 무제한권" memberships,
+  "USABLE-PASS-KIND 테스트 대여품" products) 전부 0건 확인.
+- 진단 과정에서 쓴 임시 스캐폴딩(`_diag_pollution.test.ts`, `test.yml`의 `diag`/`diag_only`)
+  은 검증 완료 후 전부 제거 — `test.yml`이 조사 시작 이전과 완전히 동일함을 `git diff`로 확인.
+- 부수 발견: `accounts` 테이블도 `payments`/`admin_action_logs` 등과 같은 계열로 service_role
+  SQL GRANT가 없음(P2-13 계열, `docs/TODO.md`에 기록만 하고 이번 배치에서는 안 고침).
+
 ## 2026-08-09 — class-allowed-products.spec.ts 간헐 실패 근본 원인 규명 및 fixture self-healing (SQL 적용 대기) (feature/social-auth-notifications-attendance-dashboard)
 
 - **분류: 테스트 인프라 문제**(class_allowed_products 기능 자체·P4와 무관) — 읽기 전용 진단

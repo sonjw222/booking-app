@@ -774,10 +774,19 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P2 (정리 SQL 적용 전까지 이 spec을 포함한 여러 E2E/통합 테스트가 간헐 실패할 수 있음) |
-| 현재 상태 | **운영 설정 필요 — SQL 적용 대기** |
-| 근거 파일 | `tests/integration/_diag_pollution.test.ts`(임시 진단, CI run 31268325509), `cleanup_shared_test_center_pollution_draft_proposed.sql`, `tests/integration/setup.ts`(`createTestMembership`), `tests/e2e/fixtures/testData.ts`(`createTestMembershipAdmin`/`createTestGoodsMembershipAdmin`), `tests/integration/class-allowed-products-enforcement.test.ts`, `tests/integration/usable-memberships-pass-kind.test.ts`, `tests/e2e/admin/attendance.spec.ts` |
-| 완료 조건 | 사용자가 `cleanup_shared_test_center_pollution_draft_proposed.sql`(v4)을 Supabase SQL Editor에서 실행하고, class-allowed-products.spec.ts를 최소 3회 반복 실행 + 전체 CI 최소 2회 연속 Green으로 확인 |
+| 우선순위 | P2 (정리 SQL은 적용 완료 — 아래 반복 실행/CI 검증만 남음) |
+| 현재 상태 | **v4 SQL 적용 완료, 최종 검증 진행 중** |
+| 근거 파일 | `cleanup_shared_test_center_pollution_draft_proposed.sql`(v4, 적용 완료), `tests/integration/setup.ts`(`createTestMembership`), `tests/e2e/fixtures/testData.ts`(`createTestMembershipAdmin`/`createTestGoodsMembershipAdmin`), `tests/integration/class-allowed-products-enforcement.test.ts`, `tests/integration/usable-memberships-pass-kind.test.ts`, `tests/e2e/admin/attendance.spec.ts` |
+| 완료 조건 | class-allowed-products.spec.ts를 최소 3회 반복 실행 + 전체 CI 최소 2회 연속 Green으로 확인 |
+
+- **v4 SQL 적용 완료 및 검증(2026-08-09)**: 사용자가 Supabase SQL Editor에서 v4를 에러 없이
+  실행함. 적용 후 읽기 전용 진단(diag_only 모드)으로 6개 정리 대상을 직접 재확인 —
+  admin_action_logs(v4 자체의 트랜잭션 내 재확인 가드로 확인, service_role의 PostgREST
+  GRANT가 없어 독립 재조회는 못 함)/orphan profiles/"통합테스트 수강권"/
+  "통합테스트 수강권(P3)"/"P0-6 테스트 무제한권"/"USABLE-PASS-KIND 테스트 대여품" 상품
+  전부 0건. 임시 진단 스캐폴딩(`tests/integration/_diag_pollution.test.ts`,
+  `.github/workflows/test.yml`의 `diag`/`diag_only`)은 진단 완료 후 삭제해
+  `test.yml`이 이 조사 이전 상태와 완전히 동일함을 `git diff`로 확인함.
 
 - **v1→v4 반복(2026-08-09)**: v1(admin_action_logs FK 위반, 놓친 FK 전수 재감사로 v2) →
   v2(같은 FK 오류 재발 — admin_action_logs DELETE 자체는 성공했지만, get-or-create로
