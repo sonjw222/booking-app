@@ -1,11 +1,40 @@
 -- ============================================================
--- 공유 통합/E2E 테스트 센터(managerA 소유)의 누적 오염 정리 — v2 (FK 의존성 전수 재감사)
+-- 공유 통합/E2E 테스트 센터(managerA 소유)의 누적 오염 정리 — v3 (동시 쓰기 race 차단)
 --
 -- v1 실행 결과: "update or delete on table memberships violates foreign key constraint
 -- admin_action_logs_membership_id_fkey" — admin_action_logs(add_admin_assignment.sql)가
 -- memberships/reservations/profiles를 참조하는데 v1이 이를 놓쳤다. 트랜잭션이라 v1은 전부
 -- 롤백됨(재진단으로 직접 확인 — 실행 후에도 orphan profile/"통합테스트 수강권" 건수가
 -- 변화 없음, run 31270744749).
+--
+-- v2 실행 결과: admin_action_logs를 먼저 지우는 로직을 추가했는데도 *같은* FK 오류가
+-- 재발함(membership 19cdd08e-e0af-43e7-8ea0-706616a671ec를 참조하는 admin_action_logs
+-- 2행). SQL 구조 자체를 재감사한 결과(코드로 직접 확인, 추측 아님):
+--   - v2의 5개 do 블록 전부 EXCEPTION 핸들러가 없어, 블록 하나가 실패하면 트랜잭션
+--     전체가 롤백된다 — v2가 v1과 "같은 FK 오류"로 실패했다는 것은 [1]의 admin_action_logs
+--     DELETE 자체는 에러 없이 끝까지 실행됐다는 뜻이다(내 커스텀 RAISE EXCEPTION도 아니었음).
+--   - 즉 [1]이 실행되던 시점엔 그 2행이 없었거나 지워졌지만, 그 뒤 [3]의 memberships
+--     DELETE가 실행되던 시점에는 다시 존재했다 — WHERE절 오타나 타입 문제가 아니라
+--     (v1과 동일 패턴의 리터럴이고 정확히 그 center_id로 확인됨), 두 DELETE 문 "사이"에
+--     새로 생긴 것이다.
+--   - 코드로 직접 확인한 원인: setup.ts의 createTestMembership()을 get-or-create로 고친
+--     이번 배치 이후, tests/integration/admin-assignment-security.test.ts의 "성공경로-*"
+--     테스트들이 매번 *같은* (userA, centerA) memberships 행을 재사용하게 됐다. 그 파일의
+--     각 테스트는 admin_assign_reservation(admin_action_logs 1행 insert,
+--     add_admin_assignment.sql:307-322)과 admin_cancel_reservation(admin_action_logs 1행
+--     insert, add_admin_assignment.sql:394-409)을 순서대로 호출해 그 재사용 membership에
+--     정확히 2행을 남긴다 — 발견된 "정확히 2행"과 일치. Postgres 기본 격리수준(READ
+--     COMMITTED)에서는 트랜잭션 안의 각 문장이 "그 문장이 실행되는 시점"까지 다른 세션이
+--     커밋한 내용을 본다 — 그래서 [1]과 [3] 사이에 다른 세션(동시에 돌던 CI, 이번 세션이
+--     반복 트리거한 것 포함)이 이 재사용 membership에 admin_action_logs를 새로 insert하면
+--     [3]에서 그 새 행이 FK 위반을 낸다. 단순 검증(SELECT 후 확인)만으로는 검증과 삭제
+--     "사이"에도 같은 틈이 남으므로, v3는 트랜잭션 시작 시 관련 테이블에 LOCK TABLE을 걸어
+--     그 틈 자체를 구조적으로 없앤다(아래 [L] 참고).
+--
+-- v1/v2 모두 완전히 롤백됐음을 재확인(2026-08-09, run 31271322462): "통합테스트 수강권"
+-- 건수가 v1 직후·v2 시도 전후 세 번의 진단에서 전부 동일하게 2525건, orphan profile은
+-- self-healing 코드가 배포된 뒤 실행된 CI 덕분에 16→1로 감소(정리 SQL과 무관, 코드 수정
+-- 효과) — 두 시도 모두 부분 반영 없이 전체 롤백된 것을 직접 확인.
 --
 -- FK 의존성 전수 재감사(schema.sql + add_admin_assignment.sql 코드 감사, 이번에 새로 확인):
 -- memberships(id)/profiles(id)를 references하면서 on delete cascade/set null이 *아닌*
@@ -38,7 +67,12 @@
 -- 부분적으로 어떤 행만 골라 지우는 것보다 이쪽이 더 간단하고 안전하다(막연히 "관련된 것만"
 -- 추측해서 놓치는 대신, 이 센터 소속이면 전부 테스트 로그라는 구조적 근거로 통째 처리).
 --
--- 안전장치(v1과 동일 + 추가):
+-- 안전장치(v1/v2와 동일 + v3 추가분):
+--   - (v3 신규) 트랜잭션 시작 시 admin_action_logs/memberships/reservations/payments/
+--     profiles에 SHARE ROW EXCLUSIVE 락을 걸어, 트랜잭션이 끝날 때까지 다른 세션의
+--     INSERT/UPDATE/DELETE를 차단한다 — v2가 실패한 "검증 시점과 삭제 시점 사이의 동시
+--     쓰기" 자체를 구조적으로 없앤다.
+--   - (v3 신규) admin_action_logs 삭제 직후 즉시 재확인(0건이 아니면 그 자리에서 중단).
 --   - center_id 하드코딩(아래 근거)로만 범위를 좁힌다.
 --   - memberships/신규 profiles는 정확히 이 두 계정(TEST_MANAGER_A/TEST_USER_A)의
 --     profile_id로만 좁힌다 — 진단으로 "그 외 profile_id 0건" 확인.
@@ -67,11 +101,26 @@ select id, name, status, created_at from centers where id = '3937eb89-3803-43e9-
 
 BEGIN;
 
+-- [L] 동시 쓰기 차단 — v2 실패의 실제 원인(위 설명 참고). 이 트랜잭션이 끝날 때까지 다른
+-- 세션이 이 테이블들에 INSERT/UPDATE/DELETE(admin_assign_reservation/admin_cancel_reservation
+-- 등 security definer RPC 호출 포함)를 하지 못하도록 막는다 — 그 세션들은 이 트랜잭션이
+-- COMMIT/ROLLBACK될 때까지 그냥 대기한다(에러 아님). 이러면 "검증 시점"과 "삭제 시점"
+-- 사이의 틈 자체가 사라진다. 이 락은 SQL Editor 세션이 실제로 이 트랜잭션의 소유자일
+-- 때만 유효하다(다른 연결이 같은 테이블에 접근하려는 순간부터 대기 상태가 됨).
+lock table admin_action_logs in share row exclusive mode;
+lock table memberships in share row exclusive mode;
+lock table reservations in share row exclusive mode;
+lock table payments in share row exclusive mode;
+lock table profiles in share row exclusive mode;
+
 -- [1] admin_action_logs — 이 센터 소속 전부(구조적으로 100% 테스트 로그, 위 설명 참고).
 -- 반드시 reservations/memberships/profiles 삭제보다 먼저 실행(그 세 테이블을 참조하므로).
+-- 삭제 직후 정말 0건이 됐는지 즉시 재확인 — 0이 아니면 이후 memberships 삭제로 절대
+-- 진행하지 않고 즉시 중단(요청받은 안전장치, [L]의 락과 함께 이중으로 방어).
 do $$
 declare
   v_count int;
+  v_after int;
 begin
   select count(*) into v_count from admin_action_logs where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a';
   raise notice '[1] admin_action_logs(centerA 소속) 대상: %건', v_count;
@@ -79,6 +128,11 @@ begin
     raise exception '[1] 예상보다 훨씬 많음(%건) — 안전을 위해 중단합니다. 조건을 다시 확인하세요.', v_count;
   end if;
   delete from admin_action_logs where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a';
+  select count(*) into v_after from admin_action_logs where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a';
+  raise notice '[1] 삭제 직후 재확인: %건 남음(0이어야 함)', v_after;
+  if v_after <> 0 then
+    raise exception '[1] admin_action_logs가 삭제 후에도 %건 남아 있습니다 — memberships 삭제를 진행하지 않고 중단합니다.', v_after;
+  end if;
 end $$;
 
 -- [2] "P3 출결-대기용" 고아 프로필 + 그 예약/수강권/보조 테이블 참조 (attendance.spec.ts 취소 시 afterAll 미실행)
