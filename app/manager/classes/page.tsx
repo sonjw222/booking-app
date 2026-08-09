@@ -548,14 +548,22 @@ export default function ClassManagePage() {
     setFormOpen(true);
     try {
       const ids = await fetchClassProducts(c.id);
-      diagEvent("APPLY_FETCH_RESULT", {
+      // race 수정(P2-20, 실측 confirm): 이 초기 hydrate fetch는 시트를 연 시점의 저장된
+      // 선택값을 "미리 채워 넣기" 위한 것뿐이다 — 그게 도착하기 전에 사용자가 이미 칩을
+      // 클릭했거나(userEditedRef) 그사이 다른 openEdit이 또 호출됐다면(토큰 불일치),
+      // 이 결과는 더 이상 "최신 진실"이 아니므로 적용하지 않는다. 실측(diagEvent 타임라인,
+      // run 31296479955)으로 이 경합이 "칩 클릭 → 저장" 실패의 정확한 원인임을 확인했다:
+      // fetch가 클릭보다 늦게 끝나면 setSelectedProducts(ids)가 사용자의 선택을 조용히 덮어썼다.
+      const isStale = myToken !== openTokenRef.current || userEditedRef.current;
+      diagEvent("APPLY_FETCH_RESULT", { // TEMP-DIAG(P2-20, 제거 예정)
         classId: c.id,
         token: myToken,
         ids,
-        isStaleToken: myToken !== openTokenRef.current, // Race D: 그사이 다른 openEdit이 또 호출됨
-        userEditedSinceOpen: userEditedRef.current, // Race A: 그사이 사용자가 칩을 이미 클릭함
+        isStaleToken: myToken !== openTokenRef.current,
+        userEditedSinceOpen: userEditedRef.current,
+        applied: !isStale,
       });
-      setSelectedProducts(ids);
+      if (!isStale) setSelectedProducts(ids);
     } catch (e: any) {
       diagEvent("FETCH_CLASS_PRODUCTS_CAUGHT_ERROR", { classId: c.id, token: myToken, errorMessage: e?.message, errorCode: e?.code });
     }
