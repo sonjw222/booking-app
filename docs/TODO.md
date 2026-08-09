@@ -800,6 +800,38 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   사이를 오가는 모집단에 특정 2개 profile_id로만 좁히는 게 오히려 정리를 막았음). 상세
   경위는 SQL 파일 헤더 주석 참고.
 
+### P2-21. (2026-08-10, 종결 — 재현 실패) PR #44 수동 QA "신규 수업은 사용 가능한 수강권이 없다고 뜸"
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | 종결(재현 안 됨) |
+| 현재 상태 | **TEST_MANAGER_A/TEST_USER_A/centerA 기존 fixture + 실제 관리자 UI 등록 경로로 재현 시도했으나 실패. 앱 버그를 찾지 못함 — 조사 중 발견한 테스트 커버리지 공백(관리자 UI로 실제 수업을 등록하는 경로를 검증하는 자동 테스트가 하나도 없었음)을 메우는 정식 회귀 테스트 3건을 대신 추가함** |
+| 근거 파일 | `tests/e2e/admin/new-class-creation.spec.ts`(신규) |
+| 완료 조건 | PR #44 리뷰 시 사용자가 원래 수동 QA에서 어떤 계정/센터/상품을 썼는지 추가 정보를 주면 재조사(아래 "남은 가능성" 참고), 아니면 종결 |
+
+- **재현 시도 절차(전부 CI 실측, 추측 없음)**: (1) read-only 진단으로
+  `membership_schedule_rules`가 centerA 전체 0건임을 확인(과거 이 정확한 증상을 냈던
+  "모든 수강권 허용으로 저장해도 자동으로 schedule_rules가 추가되던" 앱 버그의 잔여
+  데이터 가설을 반박 — 그 버그는 이미 고쳐졌고 남은 데이터도 없음), (2) admin client로
+  직접 insert한 새 class가 기존 class와 RPC 결과가 완전히 동일함을 확인, (3) 실제
+  Playwright 브라우저로 관리자 UI를 통해 새 class를 등록(모든 수강권 허용/특정 pass 1개
+  허용 둘 다) → class_allowed_products/RPC/회원 화면(`.pass-pick-list`)/실제 예약 성공까지
+  전부 정상 동작 확인.
+- **조사 중 실제로 찾은 것은 앱 버그가 아니라 테스트 자체의 결함 3건**(전부 코드 변경 없이
+  수정, 상세 경위는 `tests/e2e/admin/new-class-creation.spec.ts` 파일 상단 주석 참고):
+  Node 쪽에서 인증 안 된 세션으로 `class_allowed_products`를 조회해 RLS에 항상 막힌 것,
+  테스트가 임의로 고른 90/91일 뒤 날짜가 "예약 오픈 기한"(`groupOpenDaysBefore`, 기본
+  60일)을 초과해 `reserve_with_membership()`이 설계대로 정확히 거부한 것, `.class-row`
+  재진입 클릭 전에 달력 날짜 칸을 안 눌러 그 날짜 목록 자체가 안 보였던 것.
+- **부산물**: `fix_calc_deadline_open_kind_draft_proposed.sql`(open kind 분기)이 실제
+  적용돼 있음을 `operational-settings-wiring.test.ts` 통과로 재확인.
+  `class_allowed_products`에 대한 service_role GRANT가 여전히 없음을 재확인(기존
+  P2-13/RES-002 계열과 같은 gap, 이번엔 새 조치 안 함).
+- **남은 가능성(재현 실패했다고 "버그가 없다"고 100% 단정하지는 않음)**: 사용자의 원래
+  수동 QA가 이 fixture와 다른 계정/센터/상품을 썼을 수 있고, 그 경우 그 계정/상품에만
+  존재하는 stale `membership_schedule_rules`나 다른 데이터 특이사항이 원인일 수 있다 —
+  이번 조사로는 배제하지 못함. 추가 재현 정보가 오면 그때 계속 조사할 것.
+
 ### P2-20. (2026-08-09, 해결됨) class_allowed_products 선택이 저장 직후 재진입 시 사라짐 + `.pass-pick-list` 미표시
 
 | 필드 | 내용 |

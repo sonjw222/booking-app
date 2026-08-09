@@ -8,6 +8,24 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-10 — P2-21: PR #44 수동 QA 버그 재현 조사 종결(재현 실패), 신규 수업 UI 회귀 테스트 3건 추가 (feature/social-auth-notifications-attendance-dashboard)
+
+- PR #44 수동 QA로 보고된 "신규 수업은 회원이 유효한 수강권을 보유해도 사용 가능한
+  수강권이 없다고 뜬다"는 증상을 read-only 진단 → admin client 직접 insert 비교 →
+  실제 Playwright 브라우저로 관리자 UI 등록 재현(모든 수강권 허용/특정 pass 1개 허용
+  둘 다) → RPC 직접 호출 → 회원 실제 브라우저 재현까지 전부 실측했으나 재현 실패.
+  TEST_MANAGER_A/TEST_USER_A/centerA 기존 fixture로는 앱 버그를 찾지 못함.
+- 조사 중 발견한 것은 앱 버그가 아니라 테스트 자체의 결함 3건(전부 코드 변경 없이
+  테스트만 수정): Node 쪽 인증 안 된 세션으로 `class_allowed_products`를 조회해 RLS에
+  항상 막힌 것, 테스트가 고른 90/91일 뒤 날짜가 예약 오픈 기한(기본 60일)을 초과해
+  `reserve_with_membership()`이 설계대로 정확히 거부한 것, 재진입 클릭 전에 달력 날짜
+  칸을 안 눌러 `.class-row`가 안 보였던 것.
+- `tests/e2e/admin/new-class-creation.spec.ts`(신규): 관리자 UI로 실제 수업을 등록하는
+  경로를 exercise하는 최초의 자동 테스트(기존엔 전부 admin client 직접 insert로 setup) —
+  모든 수강권 허용/특정 pass 1개 허용/기존 방식 대조군 3건, 전부 실제 예약 성공까지
+  확인. 전체 CI 3연속 Green(E2E/Unit/Integration/Build), 재시도 없이 첫 시도 통과.
+- 상세: `docs/TODO.md` P2-21.
+
 ## 2026-08-09 — P2-20 최종 완료: cleanup SQL 적용, RPC 페이지네이션 개선 실측, 진단 계측 전체 제거 (feature/social-auth-notifications-attendance-dashboard)
 
 - **cleanup SQL 적용 완료**: `cleanup_p2_20_e2e_test_pass_duplicates_draft_proposed.sql`을
