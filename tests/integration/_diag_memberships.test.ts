@@ -158,4 +158,41 @@ describe("P2: usable_memberships_for_classes RPC 응답시간 측정(classId 개
       console.log(`=== n=${n} 요약: min=${Math.min(...timings)}ms max=${Math.max(...timings)}ms avg=${Math.round(timings.reduce((a, b) => a + b, 0) / timings.length)}ms ===`);
     }
   }, 120000);
+
+  // P2 추가: lib/reservations.ts의 fetchUsableMembershipsByClass()가 실제로 하는 것과
+  // 동일한 .range() 기반 클라이언트 페이지네이션 루프를 그대로 재현해, 단일 RPC 응답이
+  // 1000행 캡에 걸릴 때 총 왕복 횟수/총 소요시간이 실제로 얼마나 되는지 측정한다.
+  // (단일 미페이지네이션 RPC 호출은 항상 500ms대였지만, 그건 각 왕복이 1000행 캡에
+  // 걸려 실제 총 행 수를 반영 못했을 수 있음 — 이 테스트가 그 실제 총 왕복 비용을 잰다.)
+  it("classId 1/8/36개: fetchUsableMembershipsByClass와 동일한 .range() 페이지네이션 루프 재현", async () => {
+    const allIds: string[] = (globalThis as any).__diagClassIds ?? [];
+    if (allIds.length === 0) { console.log("=== class id 확보 실패로 페이지네이션 루프 측정 스킵 ==="); return; }
+    for (const n of [1, 8, 36]) {
+      const ids = allIds.slice(0, Math.min(n, allIds.length));
+      const rows: any[] = [];
+      const PAGE_SIZE = 1000;
+      let pageCount = 0;
+      const pageTimings: number[] = [];
+      const tStart = Date.now();
+      for (let from = 0; ; from += PAGE_SIZE) {
+        const tp0 = Date.now();
+        const { data: page, error } = await supabase
+          .rpc("usable_memberships_for_classes", { p_class_ids: ids, p_profile_id: userA.profileId })
+          .range(from, from + PAGE_SIZE - 1);
+        const pElapsed = Date.now() - tp0;
+        pageTimings.push(pElapsed);
+        pageCount++;
+        if (error) {
+          console.log(`=== n=${n} 페이지네이션 루프 page ${pageCount}(from=${from}): 에러 ${error.message} (${pElapsed}ms) ===`);
+          break;
+        }
+        rows.push(...(page ?? []));
+        console.log(`=== n=${n} 페이지네이션 루프 page ${pageCount}(from=${from}): ${pElapsed}ms, 이 페이지 행 수 ${(page ?? []).length} ===`);
+        if (!page || page.length < PAGE_SIZE) break;
+        if (pageCount > 100) { console.log("=== 안전장치: 100페이지 초과, 루프 중단 ==="); break; }
+      }
+      const totalElapsed = Date.now() - tStart;
+      console.log(`=== n=${n} 페이지네이션 루프 요약: 총 ${pageCount}페이지, 총 ${rows.length}행, 총 ${totalElapsed}ms (페이지별: [${pageTimings.join(", ")}]) ===`);
+    }
+  }, 180000);
 });
