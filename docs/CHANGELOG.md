@@ -8,6 +8,27 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-09 — P2-20 최종 완료: cleanup SQL 적용, RPC 페이지네이션 개선 실측, 진단 계측 전체 제거 (feature/social-auth-notifications-attendance-dashboard)
+
+- **cleanup SQL 적용 완료**: `cleanup_p2_20_e2e_test_pass_duplicates_draft_proposed.sql`을
+  사용자가 Supabase SQL Editor에서 직접 실행. 첫 시도는 BEGIN+DELETE와 COMMIT을 서로 다른
+  두 번의 Run으로 나눠 실행해 커넥션 풀링으로 세션이 갈리는 바람에 실제로는 아무것도
+  커밋되지 않은 것을 사용자가 재조회로 발견(891/1557 그대로) — SQL을 A(read-only
+  preview)/B(BEGIN~COMMIT을 한 번의 Run으로, 내부 4중 검증 후 자동 커밋/롤백)/C(post-commit
+  verification) 구조로 재작성 후 재실행해 성공. 결과: centerA `"E2E 테스트 수강권"`
+  891→5건(살아있는 예약이 참조하는 것만 보존), TEST_USER_A 전체 memberships 1557→730건.
+- **RPC 페이지네이션 개선 실측 확인**: `.pass-pick-list` 미표시를 일으켰던
+  `fetchUsableMembershipsByClass()`의 `.range()` 순차 왕복이 cleanup 후 36개 class
+  기준 27페이지/12.4~13.9초 → 2페이지/1.07초로 12배 이상 단축됨을 CI에서 실측.
+- **임시 진단 계측 전체 제거**: `lib/_diag220.ts`,
+  `tests/integration/_diag_memberships.test.ts` 삭제, 4개 파일의 `diagEvent`
+  호출/import 제거(goal1 수정 자체인 `openTokenRef`/`userEditedRef`는 유지),
+  `.github/workflows/test.yml`의 `diag` job/`diag_only` input 제거해 원래 구조로 복원.
+- **최종 검증**: class-allowed-products.spec.ts 3연속 Green(goal1/goal2 포함),
+  전체 CI(E2E/Unit/Integration/Build) 3연속 Green, Vercel Preview 배포 성공,
+  P4 sales dashboard 회귀 없음(`dashboard-summary.test.ts` 7/7 등).
+- 상세: `docs/TODO.md` P2-20(해결됨 처리).
+
 ## 2026-08-09 — P2-20: 관리자 class_allowed_products 선택 소실 수정 + `.pass-pick-list` 원인 규명(cleanup SQL 적용 대기) (feature/social-auth-notifications-attendance-dashboard)
 
 - **goal1 수정 완료**: `app/manager/classes/page.tsx`의 `openEdit()` — 초기

@@ -800,14 +800,14 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   사이를 오가는 모집단에 특정 2개 profile_id로만 좁히는 게 오히려 정리를 막았음). 상세
   경위는 SQL 파일 헤더 주석 참고.
 
-### P2-20. (2026-08-09) class_allowed_products 선택이 저장 직후 재진입 시 사라짐 — goal1 수정 완료, goal2 원인 확정·cleanup SQL 승인 대기
+### P2-20. (2026-08-09, 해결됨) class_allowed_products 선택이 저장 직후 재진입 시 사라짐 + `.pass-pick-list` 미표시
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P2 (class-allowed-products.spec.ts 전체 Green을 막는 현재 블로커) |
-| 현재 상태 | **goal1(관리자 화면 선택 사라짐) 원인 확정·프로덕션 수정 완료. goal2(`.pass-pick-list` 미표시)는 원인 확정, cleanup SQL 작성·정적 감사 완료 — 사용자 승인 대기(미실행)** |
-| 근거 파일 | `app/manager/classes/page.tsx`(`openEdit`, `openTokenRef`/`userEditedRef`), `lib/reservations.ts`(`fetchUsableMembershipsByClass`), `cleanup_p2_20_e2e_test_pass_duplicates_draft_proposed.sql`, `tests/integration/_diag_memberships.test.ts` |
-| 완료 조건 | cleanup SQL 적용 후 재검증(P5) → RPC 페이지네이션 루프 재측정 → class-allowed-products.spec.ts 3회 연속 Green |
+| 우선순위 | 해결됨(과거 P2) |
+| 현재 상태 | **완료 — goal1/goal2 모두 원인 확정·수정·검증 완료. cleanup SQL 사용자가 직접 적용(891→5건), 임시 진단 계측 전부 제거. class-allowed-products.spec.ts 3연속 Green, 전체 CI(E2E/Unit/Integration/Build) 3연속 Green, Vercel Preview 성공 확인** |
+| 근거 파일 | `app/manager/classes/page.tsx`(`openEdit`, `openTokenRef`/`userEditedRef`), `lib/reservations.ts`(`fetchUsableMembershipsByClass`), `cleanup_p2_20_e2e_test_pass_duplicates_draft_proposed.sql`(적용 완료) |
+| 완료 조건 | ~~cleanup SQL 적용 후 재검증~~ 전부 완료 |
 
 - **goal1 (관리자 화면 선택 사라짐) — 원인 확정, 수정 완료**: `openEdit()`의 초기
   `fetchClassProducts()` hydrate 응답(~340ms)이 사용자의 chip 클릭보다 늦게 도착하면
@@ -830,18 +830,36 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   'E2E 테스트 수강권'`인 memberships가 profile_id 무관 891건(userA 827 + 다른 테스트
   프로필 64) 쌓여 있었다 — `createTestMembershipAdmin()`이 get-or-create로 수정되기
   전에 CI 반복 실행(특히 취소된 실행이 `afterAll`을 건너뛴 경우)으로 누적된 것.
-- **cleanup SQL 작성 완료, 미실행**: `cleanup_p2_20_e2e_test_pass_duplicates_draft_proposed.sql`
+- **cleanup SQL 적용 완료(2026-08-09)**: `cleanup_p2_20_e2e_test_pass_duplicates_draft_proposed.sql`
   — 정확한 product_name+center_id로 식별, 6개 FK 테이블(reservations/payments/
   membership_transfers/product_passes/contracts/admin_action_logs) 전부 NOT EXISTS로
-  제외(참조 있는 membership은 절대 안 지움 — 특히 살아있는 waitlisted 예약 3건 발견,
-  v4처럼 예약까지 지우지 않고 그 예약이 참조하는 membership만 보존). LOCK TABLE +
-  미리보기/실삭제 건수 일치 검증 포함. **사용자가 Supabase SQL Editor에서 직접 실행해야
-  적용됨 — Claude가 실행하지 않음.**
-- **CI diag_only 모드**: `.github/workflows/test.yml`에 `workflow_dispatch` input
-  `diag_only`를 추가해, e2e/unit/integration/build(실제 쓰기 발생)를 건너뛰고 읽기 전용
-  `diag` job만 실행할 수 있게 함 — 조사 자체가 조사 대상 데이터를 더 바꾸지 않도록.
-  P2-20 전체 해결(P7) 시 이 input과 diag job, `lib/_diag220.ts`,
-  `tests/integration/_diag_memberships.test.ts`를 함께 제거 예정.
+  제외(참조 있는 membership은 절대 안 지움). 첫 시도는 사용자가 BEGIN+DELETE와 COMMIT을
+  Supabase SQL Editor의 서로 다른 두 번의 Run으로 나눠 실행해 커넥션 풀링으로 세션이
+  갈리는 바람에 COMMIT이 실제로는 아무것도 커밋 못 하고 DELETE가 자동 rollback되는 문제가
+  실측 발견됨(891/1557 그대로) — A(read-only preview)/B(BEGIN~COMMIT을 한 번의 Run으로,
+  내부 4중 검증 후 자동 커밋/롤백)/C(post-commit verification) 구조로 재작성 후 사용자가
+  한 번의 Run으로 재실행해 성공. 결과: centerA의 "E2E 테스트 수강권" 891→5건(FK로 보존된
+  것만), TEST_USER_A 전체 memberships 1557→730건. 전부 read-only 재검증으로 확인함(P5).
+- **RPC 페이지네이션 루프 재측정(P5, cleanup 후)**: n=1 1페이지/291ms(이전 744행/1페이지),
+  n=8 1페이지/251ms(이전 6페이지/5952행/1.6~1.9초), **n=36 2페이지/1908행/1068ms**(이전
+  27페이지/26784행/12.4~13.9초) — 12배 이상 개선, `.pass-pick-list` 미표시 증상이 실제로
+  해소됨을 CI에서 실측 확인.
+- **임시 진단 계측 전부 제거 완료(P7, 2026-08-09)**: `lib/_diag220.ts`,
+  `tests/integration/_diag_memberships.test.ts` 삭제, 4개 파일의 `diagEvent` 호출/import
+  전부 제거(프로덕션 로직은 그대로 유지), `.github/workflows/test.yml`의 `diag` job/
+  `diag_only` input 제거해 원래 구조로 복원. `npm run build` 통과 확인.
+- **최종 검증(P5~P9)**: class-allowed-products.spec.ts 3연속 Green(5/5 테스트, goal1/goal2
+  둘 다 포함), 전체 CI(E2E/Unit/Integration/Build) 3연속 Green, Vercel Preview 배포 성공
+  확인. P4 sales dashboard 회귀 없음(`dashboard-summary.test.ts` 7/7, Integration 112/112,
+  Unit 203/203 전부 통과).
+- **(발견, 별도 이슈로 기록) `daily-book-limit.spec.ts`의 기존에 이미 문서화된 인프라
+  플레이키니스 1회 재현**: 최종 3연속 CI 중 마지막 회차에서 이 파일의 테스트가 1회
+  실패(`.sheet-overlay` 모달이 예약 확정 클릭 후 10초 안에 안 닫힘) 후 재시도에서 성공.
+  P2-20이 건드린 파일(`app/reservation/page.tsx` 등)과 무관함을 `git diff`로 직접 확인함
+  (diagEvent 호출 제거 외 로직 변경 없음). 이 테스트 파일 자체의 기존 주석에 이미
+  "CI dev 서버가 짧은 시간에 몰리는 요청 중 하나를 드물게 못 끝내는 경우가 실측 확인됨"이라고
+  기록돼 있고 타임아웃을 120초로 이미 늘려둔 상태 — 새 회귀가 아니라 기존에 알려진 인프라
+  노이즈의 재발로 판단, 이번 배치에서 추가 조치 안 함.
 - **(신규) `membership_transfers`/`product_passes`/`contracts`도 service_role SQL
   GRANT 없음**: 이번 진단에서 이 세 테이블에 대한 count 조회가 전부 빈 에러 객체
   (`code/message/details/hint` 전부 undefined)로 실패 — `payments`/`admin_action_logs`/
@@ -864,6 +882,17 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   고치지 말라는 원칙) — 실제 서비스 규모의 회원 데이터로 별도 측정 후 필요성이 확인되면
   그때 (a) RPC 안에서 `profile_id`/`center_id`를 더 일찍 필터링하는지, (b) 클라이언트가
   전체를 한 번에 순차 페이지네이션하는 대신 필요한 만큼만 요청하도록 바꿀지 검토할 것.
+- **(신규, P6 조사 중 발견 — 별도 후속 작업) `lib/reservations.ts`의 `fetchMonthData()`가
+  회원 자신의 `memberships`를 조회하는 쿼리(`myMems`, 91-95행)가 페이지네이션 없이
+  `.in("profile_id", myProfileIds)` 한 번만 호출한다** — 바로 아래 `classRows` 쿼리는
+  같은 이유(PostgREST 1000행 응답 캡)로 이미 `.range()` 루프로 고쳐져 있는데, `myMems`는
+  아직 안 고쳐진 채로 남아 있다. 이번 cleanup 전 진단에서 TEST_USER_A가 정확히 1000건
+  (캡에 걸린 값)으로 관측된 것이 이 쿼리였다 — 실제 회원이 1000건 넘는 memberships를
+  보유하면(가능성은 낮지만 구조적으로는 가능) 일부 센터의 활성 수강권이 누락돼
+  `membershipCenterIds` 계산이 틀어지고, 그 회원이 그 센터 수업을 못 보게 될 수 있다.
+  이번 배치에서는 P2-20 범위 밖이라 수정하지 않음(cleanup 후 TEST_USER_A도 730건으로
+  캡 밑으로 내려가 현재는 증상 재현 안 됨) — `fetchClasses`/`fetchUsableMembershipsByClass`와
+  동일한 패턴으로 `.range()` 페이지네이션을 추가하는 것을 향후 별도 작업으로 검토할 것.
 
 - **실제 원인(읽기 전용 진단으로 직접 확인, 추측 아님)**: 거의 모든 integration/e2e 테스트가
   `getOrCreateOwnedTestCenter(managerA)`로 **단 하나의 공유 센터**를 재사용하는데, 그 안의
