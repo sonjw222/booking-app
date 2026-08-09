@@ -30,7 +30,6 @@ import {
   type BookingProfile,
 } from "../../lib/reservations";
 import { toKstIso } from "../../lib/kst";
-import { diagEvent } from "../../lib/_diag220"; // TEMP-DIAG(P2-20, 제거 예정)
 
 
 // 공휴일 (나중에 공휴일 API 또는 테이블로 교체 가능)
@@ -149,7 +148,6 @@ function ReservationCalendarContent() {
         fetchMonthData(year, month, accountId),
         fetchMyProfiles(accountId),
       ]);
-      diagEvent("LOAD_DONE", { year, month, classesCount: data.classes.length, profilesCount: profs.length }); // TEMP-DIAG(P2-20, 제거 예정)
       setClasses(data.classes);
       setCenters(data.centers);
       setHolidays(data.holidays);
@@ -157,7 +155,6 @@ function ReservationCalendarContent() {
       setProfiles(profs);
       setActiveProfileId((prev) => prev ?? profs.find((p) => p.isPrimary)?.id ?? profs[0]?.id ?? null);
     } catch (e: any) {
-      diagEvent("LOAD_ERROR", { year, month, errorMessage: e?.message, errorCode: e?.code }); // TEMP-DIAG(P2-20, 제거 예정)
       setError(e.message ?? "데이터를 불러오지 못했어요");
     } finally {
       setLoading(false);
@@ -185,9 +182,6 @@ function ReservationCalendarContent() {
       setSelectedDay(d);
     }
     const target = classes.find((c) => c.id === openClassId);
-    diagEvent("AUTO_OPEN_CHECK", { // TEMP-DIAG(P2-20, 제거 예정)
-      openClassId, openDate, year, month, selectedDay: d, classesLength: classes.length, found: !!target, activeProfileId,
-    });
     if (target) {
       autoOpenDone.current = true;
       handleReserve(target);
@@ -242,13 +236,8 @@ function ReservationCalendarContent() {
     }
     const reqId = ++passesReqRef.current;
     setPassesLoading(true);
-    diagEvent("FETCH_USABLE_PASSES_START", { classIdsForSelectedDay, activeProfileId, reqId }); // TEMP-DIAG(P2-20, 제거 예정)
     fetchUsableMembershipsByClass(classIdsForSelectedDay, activeProfileId)
       .then((map) => {
-        diagEvent("FETCH_USABLE_PASSES_DONE", { // TEMP-DIAG(P2-20, 제거 예정)
-          reqId, isStale: passesReqRef.current !== reqId,
-          mapCounts: Object.fromEntries(Object.entries(map).map(([k, v]) => [k, (v as any[]).length])),
-        });
         if (passesReqRef.current !== reqId) return; // 더 최신 요청이 이미 있으면 버림
         setUsablePassesByClass(map);
 
@@ -278,8 +267,7 @@ function ReservationCalendarContent() {
             setPurchasableLoading(false);
           });
       })
-      .catch((e: any) => {
-        diagEvent("FETCH_USABLE_PASSES_ERROR", { reqId, errorMessage: e?.message, errorCode: e?.code }); // TEMP-DIAG(P2-20, 제거 예정)
+      .catch(() => {
         if (passesReqRef.current !== reqId) return;
         setUsablePassesByClass({});
         setPurchasableLoading(false);
@@ -342,7 +330,6 @@ function ReservationCalendarContent() {
     setConfirmClass(cls);
     setSelectedGoodsId(null);
     const list = usablePassesByClass[cls.id] ?? [];
-    diagEvent("HANDLE_RESERVE", { classId: cls.id, usablePassesForClassCount: list.length, usablePassesByClassKeys: Object.keys(usablePassesByClass), passesLoading }); // TEMP-DIAG(P2-20, 제거 예정)
     setPassPick(pickDefaultMembership(list));
   }
 

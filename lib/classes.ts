@@ -7,7 +7,6 @@
 import { supabase } from "./supabaseClient";
 import type { ReservationType } from "./reservationTypes";
 import { toKstIso } from "./kst";
-import { diagEvent } from "./_diag220"; // TEMP-DIAG(P2-20, 제거 예정)
 
 export type ManagedClass = {
   id: string;
@@ -331,46 +330,33 @@ export async function setAttendance(reservationId: string, status: "attended" | 
 
 // 특정 수업에 지정된 수강권 id 목록
 export async function fetchClassProducts(classId: string): Promise<string[]> {
-  diagEvent("FETCH_CLASS_PRODUCTS_START", { classId }); // TEMP-DIAG(P2-20, 제거 예정)
   const { data, error } = await supabase
     .from("class_allowed_products")
     .select("product_id")
     .eq("class_id", classId);
   if (error) {
-    diagEvent("FETCH_CLASS_PRODUCTS_ERROR", { classId, errorMessage: error.message, errorCode: (error as any).code });
     throw new Error("수업 수강권을 불러오지 못했어요: " + error.message);
   }
-  const ids = (data ?? []).map((r: any) => r.product_id);
-  diagEvent("FETCH_CLASS_PRODUCTS_DONE", { classId, rowCount: ids.length, productIds: ids });
-  return ids;
+  return (data ?? []).map((r: any) => r.product_id);
 }
 
 // 수업의 예약가능 수강권을 통째로 교체 (선택된 id 배열로)
 export async function setClassProducts(classId: string, productIds: string[]): Promise<void> {
-  diagEvent("SET_CLASS_PRODUCTS_START", { classId, productIds }); // TEMP-DIAG(P2-20, 제거 예정)
-
   // 기존 것 모두 삭제 후 새로 삽입
   const { error: delErr } = await supabase
     .from("class_allowed_products")
     .delete()
     .eq("class_id", classId);
   if (delErr) {
-    diagEvent("SET_CLASS_PRODUCTS_DELETE_ERROR", { classId, errorMessage: delErr.message, errorCode: (delErr as any).code });
     throw new Error("수강권 설정에 실패했어요: " + delErr.message);
   }
-  diagEvent("SET_CLASS_PRODUCTS_DELETE_DONE", { classId });
 
   if (productIds.length > 0) {
     const rows = productIds.map((pid) => ({ class_id: classId, product_id: pid }));
-    diagEvent("SET_CLASS_PRODUCTS_INSERT_START", { classId, productIds });
     const { error } = await supabase.from("class_allowed_products").insert(rows);
     if (error) {
-      diagEvent("SET_CLASS_PRODUCTS_INSERT_ERROR", { classId, errorMessage: error.message, errorCode: (error as any).code });
       throw new Error("수강권 설정에 실패했어요: " + error.message);
     }
-    diagEvent("SET_CLASS_PRODUCTS_INSERT_DONE", { classId, insertedCount: rows.length });
-  } else {
-    diagEvent("SET_CLASS_PRODUCTS_INSERT_SKIPPED_EMPTY", { classId });
   }
 }
 

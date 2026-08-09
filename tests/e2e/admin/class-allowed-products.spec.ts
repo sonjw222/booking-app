@@ -30,34 +30,6 @@ import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 
 test.use({ storageState: MANAGER_AUTH_FILE });
 
-// TEMP-DIAG(P2-20, 제거 예정): lib/_diag220.ts가 window.__p220에 쌓아두는 초경량 이벤트
-// 버퍼({t: performance.now(), code, ...})를 테스트가 끝난 뒤(성공/실패 무관) 한 번에
-// 꺼내 출력한다 — 타이밍 임계 구간 안에서는 아무 것도 브라우저↔Node를 오가지 않는다
-// (console.log 방식은 CDP 왕복 비용 때문에 타이밍 자체를 바꿔버리는 것을 직전 시도에서 확인함).
-// 각 테스트가 만드는 memberPage(회원 브라우저 컨텍스트)도 함께 추적해 실패로 중간에
-// 끊겨도(정상적으로 close()에 도달 못해도) afterEach에서 그 버퍼까지 마저 꺼낸다.
-let currentMemberPage: Page | null = null;
-function trackMemberPage(p: Page) { currentMemberPage = p; }
-function untrackMemberPage() { currentMemberPage = null; }
-
-test.afterEach(async ({ page }, testInfo) => {
-  try {
-    const events = await page.evaluate(() => (window as any).__p220 ?? []);
-    console.log(`[P220-EVENTS admin] ${testInfo.title} :: ${JSON.stringify(events)}`);
-  } catch {
-    // 페이지가 이미 닫혔거나 네비게이션 중이면 조용히 무시(진단 전용 코드라 테스트 결과에 영향 없어야 함)
-  }
-  if (currentMemberPage) {
-    try {
-      const events = await currentMemberPage.evaluate(() => (window as any).__p220 ?? []);
-      console.log(`[P220-EVENTS member] ${testInfo.title} :: ${JSON.stringify(events)}`);
-    } catch {
-      // 위와 동일한 이유로 무시
-    }
-    currentMemberPage = null;
-  }
-});
-
 let managerA: TestUser;
 let userA: TestUser;
 let centerAId: string;
@@ -172,14 +144,12 @@ test("관리자: 검색으로 특정 pass 1개만 선택 → 저장 → 재진�
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
-  trackMemberPage(memberPage); // TEMP-DIAG(P2-20, 제거 예정)
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
   const passList = memberPage.locator(".pass-pick-list");
   await expect(passList).toBeVisible();
   await expect(passList).toContainText("P3 패스B");
   await expect(passList).not.toContainText("P3 패스A");
   await expect(passList).not.toContainText("P3 패스C");
-  untrackMemberPage(); // TEMP-DIAG(P2-20, 제거 예정)
   await memberContext.close();
 });
 
@@ -197,14 +167,12 @@ test("관리자: 특정 pass 여러 개 허용 → 지정된 것만 표시, 나�
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
-  trackMemberPage(memberPage); // TEMP-DIAG(P2-20, 제거 예정)
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
   const passList = memberPage.locator(".pass-pick-list");
   await expect(passList).toBeVisible();
   await expect(passList).toContainText("P3 패스A");
   await expect(passList).toContainText("P3 패스C");
   await expect(passList).not.toContainText("P3 패스B");
-  untrackMemberPage(); // TEMP-DIAG(P2-20, 제거 예정)
   await memberContext.close();
 });
 
@@ -251,7 +219,6 @@ test("관리자: 선택 해제(전체 허용으로 전환) → 회원 화면에 
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
-  trackMemberPage(memberPage); // TEMP-DIAG(P2-20, 제거 예정)
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
   const passList = memberPage.locator(".pass-pick-list");
   await expect(passList).toBeVisible();
@@ -259,7 +226,6 @@ test("관리자: 선택 해제(전체 허용으로 전환) → 회원 화면에 
   await expect(passList).toContainText("P3 패스E");
   await expect(passList).toContainText("P3 패스F");
   await expect(passList).not.toContainText("E2E 테스트 대여품"); // goods
-  untrackMemberPage(); // TEMP-DIAG(P2-20, 제거 예정)
   await memberContext.close();
 });
 
@@ -289,7 +255,6 @@ test("프라이빗 수업에서도 예약 가능 수강권 선택이 동일하�
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
-  trackMemberPage(memberPage); // TEMP-DIAG(P2-20, 제거 예정)
   await memberPage.goto(reservationDeepLink(privateCls.id, privateCls.start_time));
   const passList = memberPage.locator(".pass-pick-list");
   await expect(passList).toBeVisible();
@@ -300,7 +265,6 @@ test("프라이빗 수업에서도 예약 가능 수강권 선택이 동일하�
   await expect(
     memberPage.locator(".class-row", { hasText: "P3 프라이빗수업-특정1개" }).getByRole("button", { name: "취소" })
   ).toBeVisible();
-  untrackMemberPage(); // TEMP-DIAG(P2-20, 제거 예정)
   await memberContext.close();
 });
 

@@ -6,7 +6,6 @@
 
 import { supabase } from "./supabaseClient";
 import { getKstMonthUtcRange } from "./kst";
-import { diagEvent } from "./_diag220"; // TEMP-DIAG(P2-20, 제거 예정)
 
 // ---------------- 타입 ----------------
 
@@ -111,10 +110,6 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   // 없게 하고, 혹시라도 한 회원이 아주 많은 센터의 수강권을 보유해 그마저 넘는 경우까지
   // 대비해 .range()로 페이지 단위 반복 조회한다.
   const membershipCenterIds = Array.from(myMembershipCenters);
-  diagEvent("FETCH_MONTH_DATA_CENTERS", { // TEMP-DIAG(P2-20, 제거 예정)
-    year, month, myProfileIds, membershipCenterIds, myMemsCount: (myMems ?? []).length,
-    myMemsRaw: (myMems ?? []).map((m: any) => ({ center_id: m.center_id, status: m.status, remaining_count: m.remaining_count, expires_at: m.expires_at })),
-  });
   const classRows: any[] = [];
   if (membershipCenterIds.length > 0) {
     const PAGE_SIZE = 1000;
@@ -135,7 +130,6 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
 
   // DB 쿼리 자체가 이미 수강권 보유 센터로 좁혀져 있으므로 별도 필터가 필요 없다.
   const filteredClassRows = classRows;
-  diagEvent("FETCH_MONTH_DATA_CLASSES_DONE", { year, month, classRowsCount: classRows.length, classIds: classRows.map((c) => c.id) }); // TEMP-DIAG(P2-20, 제거 예정)
 
   const classIds = filteredClassRows.map((c) => c.id);
 
