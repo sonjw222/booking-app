@@ -800,60 +800,70 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   사이를 오가는 모집단에 특정 2개 profile_id로만 좁히는 게 오히려 정리를 막았음). 상세
   경위는 SQL 파일 헤더 주석 참고.
 
-### P2-20. (신규, 2026-08-09) class_allowed_products 선택이 저장 직후 재진입 시 사라짐(재현 2/2, 원인 미확정)
+### P2-20. (2026-08-09) class_allowed_products 선택이 저장 직후 재진입 시 사라짐 — goal1 수정 완료, goal2 원인 확정·cleanup SQL 승인 대기
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 (class-allowed-products.spec.ts 전체 Green을 막는 현재 블로커) |
-| 현재 상태 | **확인 필요 — 재현은 확정, 근본 원인은 미확정(static 분석 한계)** |
-| 근거 파일 | `app/manager/classes/page.tsx`(`openEdit` 517-531행, `save` 533-654행, chip 렌더링 1096-1152행), `lib/classes.ts`(`fetchClassProducts`/`setClassProducts`), `tests/e2e/admin/class-allowed-products.spec.ts` |
-| 완료 조건 | 실제 원인(브라우저 콘솔 로그/임시 계측 또는 수동 QA로 확인) 특정 후 근본 수정, class-allowed-products.spec.ts 전체 통과 |
+| 현재 상태 | **goal1(관리자 화면 선택 사라짐) 원인 확정·프로덕션 수정 완료. goal2(`.pass-pick-list` 미표시)는 원인 확정, cleanup SQL 작성·정적 감사 완료 — 사용자 승인 대기(미실행)** |
+| 근거 파일 | `app/manager/classes/page.tsx`(`openEdit`, `openTokenRef`/`userEditedRef`), `lib/reservations.ts`(`fetchUsableMembershipsByClass`), `cleanup_p2_20_e2e_test_pass_duplicates_draft_proposed.sql`, `tests/integration/_diag_memberships.test.ts` |
+| 완료 조건 | cleanup SQL 적용 후 재검증(P5) → RPC 페이지네이션 루프 재측정 → class-allowed-products.spec.ts 3회 연속 Green |
 
-- **증상**: v4 정리 SQL 적용 후 CI를 2회 재실행했더니 class-allowed-products.spec.ts의 4개
-  테스트(121/156/179/232행)가 **매번 동일하게** 실패함(run 31272826192, run 31273712036,
-  둘 다 재시도까지 포함해 100% 재현). 실패 지점은 전부 "칩 선택 → 저장 → 같은 수업 재진입"
-  직후: `locator('.class-allowed-products-list .filter-chip.on')`가 1이어야 하는데 0.
-  이전(정리 전) 실패는 타임아웃/거대 목록 증상이었지만 이번엔 명확히 다른 증상 — 오염과
-  무관하다고 판단한 근거는 v4 정리가 실측으로 완전히 확인됐고(P2-19), 같은 실행에서 다른
-  32개 테스트는 전부 통과했기 때문.
-- **Playwright trace로 직접 확인(추측 아님)**: 실패한 실행의 `trace.zip`을 내려받아
-  네트워크 로그를 까봤다. `class_allowed_products`에 대한 요청이 GET(빈 배열 `[]`) →
-  DELETE(204) → GET(빈 배열 `[]`) 세 번뿐이고, **INSERT(POST) 요청이 아예 없다** —
-  `setClassProducts()`가 `productIds.length > 0`일 때만 insert하므로, 저장 시점에 React
-  state `selectedProducts`가 이미 비어 있었다는 뜝. Playwright action 로그로 칩 클릭
-  (`strict:true`, 에러 없음 = 정확히 1개 요소를 실제로 클릭함)과 저장 버튼 클릭 사이
-  간격은 ~150ms — 정상적인 React 렌더 주기보다 훨씬 김.
-- **정적 분석으로 배제한 것들**(전부 코드로 직접 확인):
-  - `openEdit()`이 재진입마다 `fetchClassProducts()`로 새로 불러옴 — 캐시/재사용 아님.
-  - `save()`가 `await setClassProducts(...)`를 시트를 닫기(`setFormOpen(false)`) **전에**
-    기다림 — 낙관적 UI로 너무 일찍 닫히는 구조 아님.
-  - 칩 `onClick={() => setSelectedProducts((prev) => ...)}` — 매 렌더 새 클로저, stale
-    closure 아님. 저장 버튼도 `onClick={save}`로 매 렌더 최신 함수 참조.
-  - `.sheet` 안쪽에 `onClick={(e) => e.stopPropagation()}` 있음 — 칩 클릭이 오버레이의
-    "바깥 클릭시 닫기"로 새는 구조 아님.
-  - RLS(`add_class_products.sql`): `class_allowed_products` SELECT 정책은
-    `auth.uid() is not null`로 완전히 허용적 — 권한 문제 아님.
-  - `<form>` 태그 자체가 이 파일에 없음 — 칩 버튼이 의도치 않게 폼 submit을 유발하는
-    구조 아님.
-- **의심되지만 확정 못한 것**: `openEdit()`의 `fetchClassProducts` 호출과, `passProducts`를
-  채우는 별도 `useEffect`(`fetchProducts(...).then(setPassProducts).catch(() => {})`,
-  1개월 이동 시 재로드용)에 전부 **에러를 조용히 삼키는 `catch`** 가 있다 — 어느 쪽이든
-  일시적으로 던지면 화면엔 아무 에러도 안 보이고 그냥 "선택 없음"처럼 보인다. 다만 이걸로
-  100% 재현되는 이유까지는 설명 못 함(일시적 네트워크 문제라면 매번 재현되긴 어려움).
-- **다음 단계 제안**: 이 두 `catch { /* 무시 */ }` 를 임시로 `catch (e) { console.error(...); setError(...) }`
-  로 바꿔 브라우저 콘솔/에러 배너에 실제 원인을 노출시킨 뒤 CI를 한 번 더 돌리거나, 로컬
-  개발 서버로 수동 재현해서 정확한 원인을 확정해야 한다 — 이 이상은 코드 정적 분석과
-  trace 로그만으로는 특정할 수 없었다(추측성 수정 금지 원칙에 따라 여기서 멈춤).
-- **CI diag_only 모드 추가**: `.github/workflows/test.yml`에 `workflow_dispatch` input
+- **goal1 (관리자 화면 선택 사라짐) — 원인 확정, 수정 완료**: `openEdit()`의 초기
+  `fetchClassProducts()` hydrate 응답(~340ms)이 사용자의 chip 클릭보다 늦게 도착하면
+  `setSelectedProducts(ids)`가 무조건 실행돼 사용자의 선택을 덮어썼다(특히 새 class라
+  DB 스냅샷이 빈 배열일 때 조용히 초기화됨). `openTokenRef`(요청 세대 비교) +
+  `userEditedRef`(dirty flag) 가드를 추가해 `isStale = myToken !== openTokenRef.current
+  || userEditedRef.current`일 때만 적용을 건너뛰도록 구조적으로 수정 — CI로 재현/수정
+  둘 다 실측 확인함(`APPLY_FETCH_RESULT`가 `applied:false`로 정확히 스킵되는 것을 확인).
+- **goal2 (`.pass-pick-list` 미표시) — 원인 확정**: `lib/reservations.ts`의
+  `fetchUsableMembershipsByClass()`가 `usable_memberships_for_classes` RPC 응답을
+  `.range()`로 1000행씩 순차 페이지네이션한다. TEST_USER_A의 centerA 소속
+  membership 891건(아래 원인)이 class당 ~744행이라는 거의 상수 크기의 RPC 응답을
+  만들어내고, 실패 재현 조건(수업 36개)에서 클라이언트가 이를 **27번 순차 왕복**해서
+  받아온다 — 실측 총 12.4~13.9초(page당 ~300~1100ms). 관측된 ".pass-pick-list가
+  10초 넘게 안 뜸" 증상과 정확히 일치(수업 8개일 땐 6페이지·1.6~1.9초로 재현 안 됨,
+  그래서 작은 케이스에선 정상 동작). RPC 서버 실행 자체는 항상 빠름(단일 호출
+  0.3~0.9초) — "membership이 많으면 느리다"가 아니라 "많으면 응답이 커져서 클라이언트
+  왕복 횟수가 늘어난다"는 점을 CI 실측으로 검증함(추측 아님).
+- **원인(historical duplicate memberships)**: centerA(3937eb89-...)에 `product_name=
+  'E2E 테스트 수강권'`인 memberships가 profile_id 무관 891건(userA 827 + 다른 테스트
+  프로필 64) 쌓여 있었다 — `createTestMembershipAdmin()`이 get-or-create로 수정되기
+  전에 CI 반복 실행(특히 취소된 실행이 `afterAll`을 건너뛴 경우)으로 누적된 것.
+- **cleanup SQL 작성 완료, 미실행**: `cleanup_p2_20_e2e_test_pass_duplicates_draft_proposed.sql`
+  — 정확한 product_name+center_id로 식별, 6개 FK 테이블(reservations/payments/
+  membership_transfers/product_passes/contracts/admin_action_logs) 전부 NOT EXISTS로
+  제외(참조 있는 membership은 절대 안 지움 — 특히 살아있는 waitlisted 예약 3건 발견,
+  v4처럼 예약까지 지우지 않고 그 예약이 참조하는 membership만 보존). LOCK TABLE +
+  미리보기/실삭제 건수 일치 검증 포함. **사용자가 Supabase SQL Editor에서 직접 실행해야
+  적용됨 — Claude가 실행하지 않음.**
+- **CI diag_only 모드**: `.github/workflows/test.yml`에 `workflow_dispatch` input
   `diag_only`를 추가해, e2e/unit/integration/build(실제 쓰기 발생)를 건너뛰고 읽기 전용
-  `diag` job만 실행할 수 있게 함 — 오염 조사 자체가 조사 대상 데이터를 더 바꾸지 않도록.
-  진단 완료 후 이 input과 diag job을 함께 제거 예정.
+  `diag` job만 실행할 수 있게 함 — 조사 자체가 조사 대상 데이터를 더 바꾸지 않도록.
+  P2-20 전체 해결(P7) 시 이 input과 diag job, `lib/_diag220.ts`,
+  `tests/integration/_diag_memberships.test.ts`를 함께 제거 예정.
+- **(신규) `membership_transfers`/`product_passes`/`contracts`도 service_role SQL
+  GRANT 없음**: 이번 진단에서 이 세 테이블에 대한 count 조회가 전부 빈 에러 객체
+  (`code/message/details/hint` 전부 undefined)로 실패 — `payments`/`admin_action_logs`/
+  `accounts`(아래)와 같은 계열(P2-13). cleanup SQL은 이 GRANT gap과 무관하게 NOT EXISTS로
+  방어하도록 설계해 안전성에는 영향 없음 — GRANT 자체를 고치는 것은 이번 범위 밖.
 - **(신규) `accounts` 테이블도 service_role SQL GRANT 없음**: 교차검증 쿼리가
   `"permission denied for table accounts"`로 실패 — `payments`(P4에서 발견)/
   `admin_action_logs`/`membership_transfers`/`product_passes`/`contracts`/
   `locker_assignments`/`point_transactions`/`progress_records`와 같은 계열(P2-13).
   이번 배치에서 GRANT SQL을 만들지 않음(진단은 `profiles`만으로 충분히 확인됨) — 향후
   admin 클라이언트로 이 테이블에 직접 접근해야 하는 테스트가 생기면 그때 추가.
+- **(신규, P6 — 별도 후속 작업) `usable_memberships_for_classes` RPC/클라이언트 페이지네이션
+  구조 감사 필요**: 이번 진단으로 RPC 서버 실행 자체는 항상 빠름(0.3~0.9초)을 확인했지만,
+  `fetchUsableMembershipsByClass()`의 `.range()` 순차 페이지네이션은 회원이 보유한
+  "이 조건에 맞는 membership 행 수 × 조회하는 class 수"에 선형으로 왕복 횟수가 늘어나는
+  구조다 — 이번엔 테스트 계정의 historical duplicate가 원인이었지만, 실제 서비스에서
+  회원이 정상적으로 수백 건의 membership을 보유하고 한 번에 수십 개 class를 조회하는
+  경우(예: 한 달 캘린더 전체 로드) 같은 방식으로 여러 번 순차 왕복이 발생할 수 있다.
+  프로덕션 RPC/클라이언트를 지금 수정하지 않음(실제 문제가 증명되지 않았는데 추측성으로
+  고치지 말라는 원칙) — 실제 서비스 규모의 회원 데이터로 별도 측정 후 필요성이 확인되면
+  그때 (a) RPC 안에서 `profile_id`/`center_id`를 더 일찍 필터링하는지, (b) 클라이언트가
+  전체를 한 번에 순차 페이지네이션하는 대신 필요한 만큼만 요청하도록 바꿀지 검토할 것.
 
 - **실제 원인(읽기 전용 진단으로 직접 확인, 추측 아님)**: 거의 모든 integration/e2e 테스트가
   `getOrCreateOwnedTestCenter(managerA)`로 **단 하나의 공유 센터**를 재사용하는데, 그 안의

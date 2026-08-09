@@ -8,6 +8,30 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-09 — P2-20: 관리자 class_allowed_products 선택 소실 수정 + `.pass-pick-list` 원인 규명(cleanup SQL 적용 대기) (feature/social-auth-notifications-attendance-dashboard)
+
+- **goal1 수정 완료**: `app/manager/classes/page.tsx`의 `openEdit()` — 초기
+  `fetchClassProducts()` hydrate 응답이 사용자의 chip 선택보다 늦게 도착하면 무조건
+  `setSelectedProducts(ids)`가 실행돼 방금 한 선택을 덮어쓰는 race condition이었다.
+  `openTokenRef`(요청 세대)+`userEditedRef`(dirty flag) 가드를 추가해, 더 최신 요청이거나
+  사용자가 이미 편집했으면 초기 hydrate 결과를 적용하지 않도록 구조적으로 수정. `window.__p220`
+  in-memory 이벤트 버퍼(`lib/_diag220.ts`, `console.log` 대신 — CDP 라운드트립이 원래 race
+  타이밍 자체를 바꿔버리는 것을 실측으로 확인해 대체)로 재현/수정을 CI에서 실측 검증함.
+- **goal2 원인 규명**: `.pass-pick-list`가 회원 예약화면에서 안 뜨는 원인은
+  `lib/reservations.ts`의 `fetchUsableMembershipsByClass()`가 `usable_memberships_for_classes`
+  RPC 응답을 `.range()`로 1000행씩 순차 페이지네이션하는 구조 때문 — TEST_USER_A의 테스트
+  센터 소속 membership 891건(`createTestMembershipAdmin()`이 get-or-create로 고쳐지기 전
+  누적된 `"E2E 테스트 수강권"` historical duplicate)이 class당 ~744행의 RPC 응답을 만들어,
+  실패 재현 조건(수업 36개)에서 27번 순차 왕복(총 12.4~13.9초)이 발생함을 CI 실측으로
+  확인(단일 RPC 호출 자체는 항상 0.3~0.9초로 빠름 — "membership이 많으면 서버가 느리다"가
+  아니라 "응답이 커져서 클라이언트 왕복이 늘어난다"가 정확한 인과관계).
+- `cleanup_p2_20_e2e_test_pass_duplicates_draft_proposed.sql`(신규, 적용 대기): 정확한
+  product_name+center_id로 대상 식별, 참조하는 FK 6개 테이블(reservations 포함, 살아있는
+  waitlisted 예약 3건 발견돼 그 membership은 NOT EXISTS로 보존) 전부 방어, LOCK TABLE +
+  미리보기/실삭제 건수 일치 검증. Claude는 실행하지 않음 — 사용자가 Supabase SQL Editor에서
+  직접 실행 후 재검증 예정.
+- 상세: `docs/TODO.md` P2-20.
+
 ## 2026-08-08 — P4: 매출/통계 대시보드 (manager_dashboard_summary RPC, SQL 적용 대기) (feature/social-auth-notifications-attendance-dashboard)
 
 - **감사 결과**: `lib/sales.ts`의 기존 `summarize()`는 이미 불러온 결제 행 배열을 클라이언트에서
