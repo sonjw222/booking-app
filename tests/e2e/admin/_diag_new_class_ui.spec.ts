@@ -124,7 +124,10 @@ test("진단: 실제 관리자 UI로 신규 수업(모든 수강권 허용) 생�
   });
 
   await memberPage.goto(reservationDeepLink(newClassRow.id, newClassRow.start_time));
-  await memberPage.waitForTimeout(3000); // RPC 왕복 여유
+  // 신규 class가 90일 뒤라 회원 화면이 month를 여러 번 이동하며 다시 로드해야 auto-open
+  // 효과가 target을 찾는다 — 고정 대기 대신 예약확인 모달 자체가 뜨는 것을 기다린다.
+  await expect(memberPage.locator(".sheet-title", { hasText: "예약하시겠어요?" })).toBeVisible({ timeout: 20000 });
+  await memberPage.waitForTimeout(1500); // 모달이 뜬 뒤 pass 목록 RPC 응답까지 여유
   const passList = memberPage.locator(".pass-pick-list");
   const noPassMsg = memberPage.locator("text=현재 사용할 수 있는 수강권이 없어요");
   const passListVisible = await passList.isVisible().catch(() => false);
