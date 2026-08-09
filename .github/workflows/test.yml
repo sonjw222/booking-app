@@ -60,6 +60,33 @@ jobs:
           TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
           TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test tests/e2e/admin/_diag_new_class_ui.spec.ts
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
+          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
+          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
+          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
+          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
+          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
+          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
+          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
+          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
+          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
+          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
+          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
+          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
+          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: diag-playwright-report
+          path: playwright-report/
+          retention-days: 3
+          if-no-files-found: ignore
 
   e2e:
     name: E2E tests (Playwright, live dev Supabase)
