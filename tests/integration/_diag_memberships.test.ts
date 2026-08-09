@@ -156,12 +156,14 @@ describe("P1-4/P1-8 추가: center 전체(profile_id 제한 없이) 규모 + FK 
     (globalThis as any).__diagE2eMembershipIds = rows.map((r) => r.id);
   });
 
-  it("실제 삭제 대상 membership_id로 FK 참조 테이블 정확 스코프 확인(에러 상세 포함)", async () => {
+  it("실제 삭제 대상 membership_id로 FK 참조 테이블 정확 스코프 확인(청크 단위, 에러 상세 포함)", async () => {
     const admin = getFixtureAdminClient();
     const ids: string[] = (globalThis as any).__diagE2eMembershipIds ?? [];
     console.log(`=== FK 정확 스코프 확인 대상 membership_id 수: ${ids.length} ===`);
     if (ids.length === 0) return;
-    const sample = ids.slice(0, 500); // PostgREST in() 안전 상한
+    const CHUNK = 80; // 500개는 URL 16KB 헤더 한도 초과(HeadersOverflowError) 확인됨 — 축소
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK));
 
     for (const [table, col] of [
       ["membership_transfers", "membership_id"],
@@ -170,14 +172,20 @@ describe("P1-4/P1-8 추가: center 전체(profile_id 제한 없이) 규모 + FK 
       ["payments", "membership_id"],
       ["reservations", "membership_id"],
     ] as const) {
-      const { count, error } = await admin.from(table).select("id", { count: "exact", head: true }).in(col, sample);
-      if (error) {
-        console.log(`=== ${table}.${col} IN (sample ${sample.length}개): ERROR code=${(error as any).code} message=${error.message} details=${(error as any).details} hint=${(error as any).hint} ===`);
+      let total = 0;
+      let anyError: any = null;
+      for (const chunk of chunks) {
+        const { count, error } = await admin.from(table).select("id", { count: "exact", head: true }).in(col, chunk);
+        if (error) { anyError = error; break; }
+        total += count ?? 0;
+      }
+      if (anyError) {
+        console.log(`=== ${table}.${col} IN (전체 ${ids.length}개, 청크 ${CHUNK}개씩): ERROR code=${anyError.code} message=${anyError.message} details=${anyError.details} hint=${anyError.hint} ===`);
       } else {
-        console.log(`=== ${table}.${col} IN (sample ${sample.length}개): ${count}건 ===`);
+        console.log(`=== ${table}.${col} IN (전체 ${ids.length}개, 청크 ${CHUNK}개씩): ${total}건 ===`);
       }
     }
-  });
+  }, 60000);
 });
 
 describe("P2: usable_memberships_for_classes RPC 응답시간 측정(classId 개수별)", () => {
