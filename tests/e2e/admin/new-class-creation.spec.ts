@@ -141,18 +141,30 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
   await fillAmPmTime(page, 0, 19, 0);
   await fillAmPmTime(page, 1, 20, 0);
 
+  // TEMP-DIAG(재현성 확인용, 제거 예정): class_allowed_products에 실제로 어떤 요청이
+  // 나가는지 네트워크 레벨로 캡처 — 풀스위트 실행에서 1회 "0건 저장됨" 재현됐으나
+  // 단독 실행에서는 재현 안 됨(부하/타이밍 의존 여부 확인 중).
+  const capRequests: { method: string; postData: string | null }[] = [];
+  page.on("request", (req) => {
+    if (req.url().includes("class_allowed_products")) {
+      capRequests.push({ method: req.method(), postData: req.postData() });
+    }
+  });
+
   await page.locator('input[placeholder="수강권 이름 검색"]').fill("E2E 테스트 수강권 상품");
   await page.locator(".filter-chip", { hasText: "E2E 테스트 수강권 상품" }).click();
   await expect(page.locator(".perm-guide", { hasText: "1개" })).toBeVisible();
 
   await page.getByRole("button", { name: "등록하기", exact: true }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  console.log(`=== class_allowed_products 관련 네트워크 요청: ${JSON.stringify(capRequests)} ===`);
 
   const newClass = await findClassByTitle(uniqueTitle);
   createdClassIds.push(newClass.id);
 
   const { data: cap, error: capErr } = await supabase.from("class_allowed_products").select("product_id, products(name)").eq("class_id", newClass.id);
   if (capErr) throw new Error(capErr.message);
+  console.log(`=== 실제 저장된 class_allowed_products: ${JSON.stringify(cap ?? [])} ===`);
   expect(cap ?? []).toHaveLength(1); // 특정 1개만 허용 = class_allowed_products 정확히 1건
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
