@@ -71,25 +71,114 @@
 --     "검증 시점과 삭제 시점 사이 동시 쓰기" 문제를 구조적으로 차단.
 --   - 정확한 product_name 문자열 + 정확한 center_id만 대상(부분 일치 없음, LIKE 없음).
 --   - 6개 FK 테이블 전부를 NOT EXISTS로 제외 — 참조가 있는 membership은 절대 지우지 않음.
---   - 삭제 전 미리보기 COUNT + 상한(터무니없이 큰 값)만 가드 — 하한 없음(v4의 교훈: 시점마다
+--   - 삭제 전 대상 COUNT + 상한(터무니없이 큰 값)만 가드 — 하한 없음(v4의 교훈: 시점마다
 --     모집단이 달라질 수 있어 하한 가드는 오히려 정리를 막을 뿐).
---   - 삭제 직후 실제 삭제된 행 수(GET DIAGNOSTICS)가 미리보기 COUNT와 정확히 같은지 재확인,
---     다르면 그 자리에서 예외를 던져 전체 트랜잭션을 롤백.
---   - COMMIT 이후 최종 검증 SELECT로 남은 행(=FK로 제외된 5건 근처여야 함)을 직접 확인.
+--   - 삭제 직후 실제 삭제된 행 수(GET DIAGNOSTICS)가 대상 COUNT와 정확히 같은지, 그리고
+--     삭제 후 남은 행 수가 "삭제 전 전체 - 삭제 대상"과 정확히 같은지, 마지막으로 남은 행
+--     전부가 실제로 FK 참조를 갖고 있는지(=FK-free인데 안 지워진 행이 없는지) 3중으로
+--     재확인 — 하나라도 안 맞으면 RAISE EXCEPTION으로 전체 트랜잭션을 롤백한다.
 --
 -- 대상 center_id: 3937eb89-3803-43e9-9a29-e893f779df1a (managerA 소유 전용 테스트 센터)
 --
--- ⚠ 실행 전 반드시: 아래 [0] 미리보기 결과에서 center 이름이 실제로 테스트센터처럼 보이는지
--- 육안으로 확인한 뒤 진행하세요. [1]의 raise notice로 나오는 실제 대상 건수도 위 진단치
--- (891건 근처, 상한 3000 미만)와 크게 다르면 COMMIT 전에 멈추고 사용자에게 알리세요.
+-- ⚠ [사고 기록, 2026-08-09] 이전 버전은 "[0] 미리보기 → BEGIN+LOCK+DELETE+[2] 검증
+-- SELECT → (여기서 사용자가 육안 확인) → COMMIT"을 사용자가 Supabase SQL Editor에서
+-- 서로 다른 두 번의 Run으로 나눠 실행하도록 안내했다. 실제로 이렇게 실행한 결과: [2]
+-- 검증 SELECT는 트랜잭션 안에서 정확히 기대한 5건(전부 has_reservation=true)만 보여줬지만,
+-- 그 뒤 별도 Run으로 COMMIT;을 실행하자 실제로는 아무것도 반영되지 않았다(재조회 결과
+-- e2e_pass_remaining=891, 그대로). Supabase SQL Editor는 각 Run을 별도 커넥션/세션으로
+-- 실행할 수 있어(커넥션 풀링), BEGIN을 실행한 세션과 COMMIT을 실행한 세션이 서로 다르면
+-- BEGIN 세션의 트랜잭션은 커밋되지 못한 채 커넥션 반납 시 자동 ROLLBACK되고, COMMIT 세션은
+-- "진행 중인 트랜잭션 없음" 상태라 사실상 아무 일도 하지 않는다 — DB는 그대로였다(사용자
+-- 실측 확인). 그래서 이번 버전은 BEGIN부터 COMMIT까지 사람의 중간 개입 없이 **하나의 SQL
+-- 스크립트, 하나의 Run**으로 끝나도록 구조를 바꿨다(아래 B 섹션). 사람이 보는 미리보기는
+-- DB를 전혀 바꾸지 않는 A 섹션으로 완전히 분리했고, B 섹션 안의 안전성 검증은 전부 SQL
+-- 자체(RAISE EXCEPTION → 자동 ROLLBACK)가 수행한다.
+--
+-- ⚠ 실행 순서: A(선택, 언제 실행해도 안전) 확인 → B 전체를 한 번에 복사해 Supabase
+-- SQL Editor에 붙여넣고 **한 번만 Run** → C로 결과 확인.
 -- ============================================================
 
--- [0] 대상 센터 확인 — 반드시 먼저 실행해서 이름을 눈으로 확인
+
+-- ============================================================
+-- A. READ-ONLY PREVIEW — DB를 전혀 수정하지 않음. B 실행 전 몇 번이든 따로 실행해도 안전.
+-- ============================================================
+
+-- A-0. 대상 센터 확인 — 이름이 실제로 테스트센터처럼 보이는지 육안 확인
 select id, name, status, created_at from centers where id = '3937eb89-3803-43e9-9a29-e893f779df1a';
+
+-- A-1. centerA "E2E 테스트 수강권" 전체 건수(profile_id 무관, 진단 시점 891건)
+select count(*) as total_e2e_pass
+  from memberships
+ where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
+   and product_name = 'E2E 테스트 수강권';
+
+-- A-2. FK 참조가 전혀 없는(=B에서 실제로 삭제될) 건수
+select count(*) as deletable_count
+  from memberships m
+ where m.center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
+   and m.product_name = 'E2E 테스트 수강권'
+   and not exists (select 1 from reservations r where r.membership_id = m.id)
+   and not exists (select 1 from payments p where p.membership_id = m.id)
+   and not exists (select 1 from membership_transfers mt where mt.membership_id = m.id)
+   and not exists (select 1 from product_passes pp where pp.linked_membership_id = m.id)
+   and not exists (select 1 from contracts c where c.membership_id = m.id)
+   and not exists (
+     select 1 from admin_action_logs aal
+      where aal.membership_id = m.id or aal.source_unassigned_id = m.id
+   );
+
+-- A-3. FK 참조가 있어(=B에서 보존될) 건수 — A-1 - A-2와 같아야 함
+select count(*) as preserved_count
+  from memberships m
+ where m.center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
+   and m.product_name = 'E2E 테스트 수강권'
+   and (
+     exists (select 1 from reservations r where r.membership_id = m.id)
+     or exists (select 1 from payments p where p.membership_id = m.id)
+     or exists (select 1 from membership_transfers mt where mt.membership_id = m.id)
+     or exists (select 1 from product_passes pp where pp.linked_membership_id = m.id)
+     or exists (select 1 from contracts c where c.membership_id = m.id)
+     or exists (
+       select 1 from admin_action_logs aal
+        where aal.membership_id = m.id or aal.source_unassigned_id = m.id
+     )
+   );
+
+-- A-4. 보존될 membership 상세 — 어떤 FK 때문에 보존되는지까지 확인(진단 시점: 5건, 전부 has_reservation=true)
+select
+  m.id, m.profile_id, m.product_id, m.status, m.remaining_count, m.expires_at, m.created_at,
+  exists (select 1 from reservations r where r.membership_id = m.id) as has_reservation,
+  exists (select 1 from payments p where p.membership_id = m.id) as has_payment,
+  exists (select 1 from membership_transfers mt where mt.membership_id = m.id) as has_transfer,
+  exists (select 1 from product_passes pp where pp.linked_membership_id = m.id) as has_product_pass,
+  exists (select 1 from contracts c where c.membership_id = m.id) as has_contract,
+  exists (select 1 from admin_action_logs aal where aal.membership_id = m.id or aal.source_unassigned_id = m.id) as has_admin_log
+from memberships m
+where m.center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
+  and m.product_name = 'E2E 테스트 수강권'
+  and (
+    exists (select 1 from reservations r where r.membership_id = m.id)
+    or exists (select 1 from payments p where p.membership_id = m.id)
+    or exists (select 1 from membership_transfers mt where mt.membership_id = m.id)
+    or exists (select 1 from product_passes pp where pp.linked_membership_id = m.id)
+    or exists (select 1 from contracts c where c.membership_id = m.id)
+    or exists (
+      select 1 from admin_action_logs aal
+       where aal.membership_id = m.id or aal.source_unassigned_id = m.id
+    )
+  );
+
+
+-- ============================================================
+-- B. ATOMIC CLEANUP — 아래 BEGIN부터 COMMIT까지 전체를 그대로 복사해서
+--    Supabase SQL Editor에 붙여넣고 **한 번의 Run**으로 실행하세요.
+--    이 안에서 대상 계산 → 안전 가드 → 삭제 → 3중 검증을 전부 수행하고,
+--    하나라도 어긋나면 RAISE EXCEPTION으로 자동 ROLLBACK됩니다(사람이 중간에
+--    COMMIT/ROLLBACK을 따로 실행할 필요 없음, 그런 구조를 만들지 않음).
+-- ============================================================
 
 BEGIN;
 
--- [L] 동시 쓰기 차단
 lock table memberships in share row exclusive mode;
 lock table reservations in share row exclusive mode;
 lock table payments in share row exclusive mode;
@@ -98,14 +187,24 @@ lock table product_passes in share row exclusive mode;
 lock table contracts in share row exclusive mode;
 lock table admin_action_logs in share row exclusive mode;
 
--- [1] "E2E 테스트 수강권" 정리 — FK로 참조되는 membership은 NOT EXISTS로 전부 제외
 do $$
 declare
+  v_total_before int;
   v_target_ids uuid[];
-  v_preview_count int;
+  v_target_count int;
+  v_expected_preserved int;
   v_deleted int;
-  v_remaining int;
+  v_remaining_after int;
 begin
+  -- 락 확보 후(=동시 쓰기 차단된 상태에서) 다시 센 진짜 현재값. A 섹션의 값은 참고용일 뿐
+  -- 이 값이 최종 판단 기준이다 — A를 본 시점과 B를 실행하는 시점 사이에 다른 세션이
+  -- 값을 바꿨을 수 있기 때문(그래서 아래 판단은 전부 이 DO 블록 안에서 새로 계산한 값만 쓴다).
+  select count(*) into v_total_before
+    from memberships
+   where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
+     and product_name = 'E2E 테스트 수강권';
+  raise notice '[B] 삭제 전 전체 건수: %건', v_total_before;
+
   select array_agg(m.id) into v_target_ids
     from memberships m
    where m.center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
@@ -120,44 +219,68 @@ begin
         where aal.membership_id = m.id or aal.source_unassigned_id = m.id
      );
 
-  v_preview_count := coalesce(array_length(v_target_ids, 1), 0);
-  raise notice '[1] "E2E 테스트 수강권"(centerA, FK 참조 없는 것만) 삭제 대상: %건', v_preview_count;
+  v_target_count := coalesce(array_length(v_target_ids, 1), 0);
+  v_expected_preserved := v_total_before - v_target_count;
+  raise notice '[B] 삭제 대상(FK 참조 없음): %건, 삭제 후 남아야 할 건수(FK 참조 있음): %건',
+    v_target_count, v_expected_preserved;
 
-  if v_preview_count > 3000 then
-    raise exception '[1] 예상보다 훨씬 많음(%건, 진단 시점 891건) — 안전을 위해 중단합니다. 조건을 다시 확인하세요.', v_preview_count;
+  -- 가드 1: 상한(터무니없이 큰 값)만 방어 — 하한 없음(위 설명 참고)
+  if v_target_count > 3000 then
+    raise exception '[B] 예상보다 훨씬 많음(%건, 진단 시점 891건) — 안전을 위해 중단합니다. 조건을 다시 확인하세요.', v_target_count;
   end if;
 
-  if v_preview_count = 0 then
-    raise notice '[1] 삭제 대상이 0건입니다 — 스킵합니다(이미 정리되었거나 조건이 실제 데이터와 어긋남).';
+  if v_target_count = 0 then
+    raise notice '[B] 삭제 대상이 0건입니다 — 스킵합니다(이미 정리되었거나 조건이 실제 데이터와 어긋남).';
   else
     delete from memberships where id = any(v_target_ids);
     get diagnostics v_deleted = row_count;
-    raise notice '[1] 실제 삭제된 행 수: %건', v_deleted;
-    if v_deleted <> v_preview_count then
-      raise exception '[1] 삭제된 행 수(%건)가 미리보기 건수(%건)와 다릅니다 — 전체를 롤백합니다.', v_deleted, v_preview_count;
+    raise notice '[B] 실제 삭제된 행 수: %건', v_deleted;
+
+    -- 가드 2: 실제 삭제된 행 수가 계산한 대상 건수와 정확히 같아야 함
+    if v_deleted <> v_target_count then
+      raise exception '[B] 삭제된 행 수(%건)가 대상 건수(%건)와 다릅니다 — 롤백합니다.', v_deleted, v_target_count;
     end if;
   end if;
 
-  select count(*) into v_remaining
-    from memberships m
-   where m.center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
-     and m.product_name = 'E2E 테스트 수강권';
-  raise notice '[1] 삭제 후 centerA "E2E 테스트 수강권" 남은 행(=FK로 보존된 것, 대략 5건 근처 예상): %건', v_remaining;
+  select count(*) into v_remaining_after
+    from memberships
+   where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
+     and product_name = 'E2E 테스트 수강권';
+  raise notice '[B] 삭제 후 실제 남은 건수: %건 (기대값: %건)', v_remaining_after, v_expected_preserved;
+
+  -- 가드 3: 삭제 후 남은 행 수가 "삭제 전 전체 - 삭제 대상"과 정확히 같아야 함
+  if v_remaining_after <> v_expected_preserved then
+    raise exception '[B] 삭제 후 남은 건수(%건)가 기대값(%건)과 다릅니다 — 롤백합니다.', v_remaining_after, v_expected_preserved;
+  end if;
+
+  -- 가드 4: 남은 행 전부가 실제로 FK 참조를 갖고 있어야 함(=FK-free인데 안 지워진 행이
+  -- 하나라도 있으면 조건 불일치 — 롤백)
+  if exists (
+    select 1 from memberships m
+     where m.center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
+       and m.product_name = 'E2E 테스트 수강권'
+       and not exists (select 1 from reservations r where r.membership_id = m.id)
+       and not exists (select 1 from payments p where p.membership_id = m.id)
+       and not exists (select 1 from membership_transfers mt where mt.membership_id = m.id)
+       and not exists (select 1 from product_passes pp where pp.linked_membership_id = m.id)
+       and not exists (select 1 from contracts c where c.membership_id = m.id)
+       and not exists (
+         select 1 from admin_action_logs aal
+          where aal.membership_id = m.id or aal.source_unassigned_id = m.id
+       )
+  ) then
+    raise exception '[B] 삭제 후에도 FK 참조 없는 행이 남아 있습니다 — 조건 불일치, 롤백합니다.';
+  end if;
+
+  raise notice '[B] 4중 검증 전부 통과 — COMMIT 진행';
 end $$;
 
--- [2] 최종 검증 (COMMIT 전, 육안 확인용)
-select
-  m.id, m.profile_id, m.product_id, m.status, m.remaining_count, m.expires_at,
-  exists (select 1 from reservations r where r.membership_id = m.id) as has_reservation
-from memberships m
-where m.center_id = '3937eb89-3803-43e9-9a29-e893f779df1a'
-  and m.product_name = 'E2E 테스트 수강권';
-
--- ⚠ 위 [1]의 notice와 [2]의 결과를 직접 눈으로 확인한 뒤에만 아래 COMMIT을 실행하세요.
--- 이상하면 COMMIT 대신 ROLLBACK을 실행하세요.
 COMMIT;
 
--- [3] COMMIT 이후 최종 확인 (참고용, 트랜잭션 밖)
+
+-- ============================================================
+-- C. POST-COMMIT VERIFICATION — B가 COMMIT된 뒤 별도로 실행해서 확인
+-- ============================================================
 select count(*) as e2e_pass_remaining_centerA
   from memberships
  where center_id = '3937eb89-3803-43e9-9a29-e893f779df1a' and product_name = 'E2E 테스트 수강권';
