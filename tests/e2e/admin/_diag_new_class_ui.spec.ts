@@ -79,7 +79,7 @@ test("진단: 실제 관리자 UI로 신규 수업(모든 수강권 허용) 생�
   // "예약 가능 수강권"은 아무것도 선택하지 않음(Case A: 모든 수강권 허용)
   await expect(page.locator(".perm-guide", { hasText: "모든 수강권" })).toBeVisible();
 
-  await page.getByRole("button", { name: "등록하기" }).click();
+  await page.getByRole("button", { name: "등록하기", exact: true }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
   // 방금 만든 class를 DB에서 직접 찾는다(제목으로 식별 — 유니크 prefix라 충돌 없음)
