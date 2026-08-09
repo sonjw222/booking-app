@@ -11,7 +11,6 @@ import {
 } from "../fixtures/testData";
 import type { CenterSettings } from "../../../lib/settings";
 import { getFixtureAdminClient } from "../../integration/setup";
-import { supabase } from "../../../lib/supabaseClient";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 
 /*
@@ -34,12 +33,22 @@ import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
   이 파일은 "관리자 UI로 실제 수업을 등록하는 경로"를 exercise하는 최초의 자동 테스트라서
   (기존엔 전부 admin client 직접 insert로 setup, UI 등록 자체를 검증하는 테스트가 하나도
   없었음 — 이번 조사로 드러난 실제 커버리지 공백) 처음엔 "실제 예약 성공까지" 확인하는
-  마지막 단계를 넣었는데, 그 단계에서 별도의 실제 버그 두 개를 새로 발견해 전부 코드
-  변경 없이 테스트 자체를 고쳤다(둘 다 실측 근거 있음, 추측 아님):
-    1) class_allowed_products를 저장 직후 곧바로 조회하면(별도 Node 커넥션) 0건으로
-       보일 때가 있었다 — 네트워크 캡처로 브라우저의 INSERT 자체는 정확한 payload로
-       성공했음(모달이 정상 닫힘)을 확인해 read-after-write 타이밍 문제로 판명,
-       expect.poll로 재시도하도록 수정.
+  마지막 단계를 넣었는데, 그 단계에서 테스트 자체의 결함 두 개를 새로 발견해 전부 코드
+  변경 없이 테스트를 고쳤다(둘 다 실측 근거 있음, 추측 아님 — 앱 버그는 하나도 없었음):
+    1) class_allowed_products 저장 상태를 Node 쪽에서 직접 SELECT로 확인하려 했는데
+       계속 빈 배열만 나왔다 — 처음엔 "read-after-write 타이밍 문제"로 추정해
+       expect.poll로 재시도했지만 15초를 줘도 여전히 실패해 더 파봄. 네트워크 캡처로
+       브라우저의 INSERT 자체는 매번 정확한 payload로 성공했음(모달이 정상 닫힘)을
+       재확인한 뒤 진짜 원인을 찾음: 이 테스트가 쓰는 Node 쪽 supabase 싱글턴은 어느
+       계정으로도 로그인한 적이 없어(anon), class_allowed_products의 SELECT RLS
+       정책("auth.uid() is not null")에 항상 막혀 빈 배열만 보였다 — 타이밍과 무관한
+       영구적인 인증 문제였다. admin(service_role) client는 이 테이블에 대한 SQL GRANT가
+       없어 그마저도 안 되고, Node에서 managerA/userA로 로그인하면(switchToTestUser)
+       브라우저(storageState)의 같은 계정 세션이 즉시 무효화된다는 게 이미 문서화돼
+       있어(tests/e2e/fixtures/testData.ts 파일 상단 주석, 실측 확인된 내용) 그 방법도
+       못 쓴다. 그래서 class-allowed-products.spec.ts와 동일하게 UI 재진입(수정 시트를
+       다시 열어 어떤 chip이 .on 상태인지 확인)으로 검증하도록 바꿨다 — Node에서 이
+       값을 안전하게 직접 읽을 방법이 아예 없다.
     2) 예약 확정 클릭이 "아직 예약이 열리지 않았어요"로 실패했다 — RPC 응답을 캡처해
        확인. 원인은 테스트가 임의로 고른 90/91일 뒤 날짜가 "예약 오픈 기한"
        (groupOpenDaysBefore, 기본값 60일)을 초과했기 때문(booking-open-deadline.spec.ts가
@@ -140,9 +149,15 @@ test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → �
   const newClass = await findClassByTitle(uniqueTitle);
   createdClassIds.push(newClass.id);
 
-  const { data: cap, error: capErr } = await supabase.from("class_allowed_products").select("*").eq("class_id", newClass.id);
-  if (capErr) throw new Error(capErr.message);
-  expect(cap ?? []).toHaveLength(0); // "모든 수강권 허용" = class_allowed_products 0건
+  // class_allowed_products 저장 상태는 admin(service_role) client가 이 테이블 GRANT가
+  // 없어 못 읽고, 인증 안 된 Node supabase 싱글턴은 RLS로 항상 빈 배열만 보이며,
+  // Node에서 managerA/userA로 다시 로그인하면 브라우저(storageState)의 같은 계정 세션이
+  // 즉시 무효화된다(testData.ts 파일 상단 주석에 이미 문서화된 실측 결과) — 그래서
+  // class-allowed-products.spec.ts와 동일하게 UI 재진입으로 확인한다.
+  await page.locator(".class-row", { hasText: uniqueTitle }).click();
+  await expect(page.locator(".sheet-title", { hasText: "수업 수정" })).toBeVisible();
+  await expect(page.locator(".class-allowed-products-list .filter-chip.on")).toHaveCount(0);
+  await page.locator(".sheet-overlay").click({ position: { x: 10, y: 10 } });
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
@@ -175,15 +190,6 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
   await fillAmPmTime(page, 0, 19, 0);
   await fillAmPmTime(page, 1, 20, 0);
 
-  // TEMP-DIAG(재현성 확인용, 제거 예정): 10초 poll로도 여전히 0건 재현 — 실제 INSERT
-  // 요청 자체가 나갔는지, chip 클릭이 올바른 product를 토글했는지 직접 확인.
-  const capRequests: { method: string; postData: string | null }[] = [];
-  page.on("request", (req) => {
-    if (req.url().includes("class_allowed_products")) {
-      capRequests.push({ method: req.method(), postData: req.postData() });
-    }
-  });
-
   await page.locator('input[placeholder="수강권 이름 검색"]').fill("E2E 테스트 수강권 상품");
   const chip = page.locator(".filter-chip", { hasText: "E2E 테스트 수강권 상품" });
   await expect(chip).toHaveCount(1); // 검색 결과가 정확히 1개인지(모호한 매칭 배제)
@@ -193,16 +199,18 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
 
   await page.getByRole("button", { name: "등록하기", exact: true }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
-  console.log(`=== class_allowed_products 네트워크 요청: ${JSON.stringify(capRequests)} ===`);
 
   const newClass = await findClassByTitle(uniqueTitle);
   createdClassIds.push(newClass.id);
 
-  await expect.poll(async () => {
-    const { data, error } = await supabase.from("class_allowed_products").select("product_id, products(name)").eq("class_id", newClass.id);
-    if (error) throw new Error(error.message);
-    return JSON.stringify(data ?? []);
-  }, { timeout: 15000, message: "class_allowed_products가 저장 후에도 계속 0건으로 조회됨" }).not.toBe("[]");
+  // class_allowed_products 저장 상태는 UI 재진입으로 확인한다(TEST1과 동일한 이유 —
+  // Node에서 이 값을 직접 조회할 안전한 방법이 없음, 파일 상단 주석 참고).
+  await page.locator(".class-row", { hasText: uniqueTitle }).click();
+  await expect(page.locator(".sheet-title", { hasText: "수업 수정" })).toBeVisible();
+  const chipsOn = page.locator(".class-allowed-products-list .filter-chip.on");
+  await expect(chipsOn).toHaveCount(1);
+  await expect(chipsOn).toHaveText("E2E 테스트 수강권 상품");
+  await page.locator(".sheet-overlay").click({ position: { x: 10, y: 10 } });
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
