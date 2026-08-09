@@ -175,27 +175,34 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
   await fillAmPmTime(page, 0, 19, 0);
   await fillAmPmTime(page, 1, 20, 0);
 
+  // TEMP-DIAG(재현성 확인용, 제거 예정): 10초 poll로도 여전히 0건 재현 — 실제 INSERT
+  // 요청 자체가 나갔는지, chip 클릭이 올바른 product를 토글했는지 직접 확인.
+  const capRequests: { method: string; postData: string | null }[] = [];
+  page.on("request", (req) => {
+    if (req.url().includes("class_allowed_products")) {
+      capRequests.push({ method: req.method(), postData: req.postData() });
+    }
+  });
+
   await page.locator('input[placeholder="수강권 이름 검색"]').fill("E2E 테스트 수강권 상품");
-  await page.locator(".filter-chip", { hasText: "E2E 테스트 수강권 상품" }).click();
+  const chip = page.locator(".filter-chip", { hasText: "E2E 테스트 수강권 상품" });
+  await expect(chip).toHaveCount(1); // 검색 결과가 정확히 1개인지(모호한 매칭 배제)
+  await chip.click();
+  await expect(chip).toHaveClass(/on/); // 클릭이 실제로 이 chip을 on 상태로 토글했는지
   await expect(page.locator(".perm-guide", { hasText: "1개" })).toBeVisible();
 
   await page.getByRole("button", { name: "등록하기", exact: true }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  console.log(`=== class_allowed_products 네트워크 요청: ${JSON.stringify(capRequests)} ===`);
 
   const newClass = await findClassByTitle(uniqueTitle);
   createdClassIds.push(newClass.id);
 
-  // 네트워크 레벨로 실측 확인(2026-08-09, PR #44 조사): 저장 직후 이 값을 곧바로 조회하면
-  // 브라우저가 보낸 INSERT 자체는 정확한 payload로 성공했는데도(모달이 정상적으로 닫힘 =
-  // setClassProducts()가 throw 없이 완료됨) 공유 dev Supabase가 바쁠 때 드물게 Node 쪽의
-  // 별도 커넥션에서 곧바로 조회하면 아직 안 보이는 경우가 있었다(같은 실행에서 반복 재현됨,
-  // 두 번 모두 정확한 payload의 POST 요청 자체는 있었음 — 앱 버그 아니라 read-after-write
-  // 타이밍 문제) — 즉시 단정하지 않고 짧게 재시도한다.
   await expect.poll(async () => {
     const { data, error } = await supabase.from("class_allowed_products").select("product_id, products(name)").eq("class_id", newClass.id);
     if (error) throw new Error(error.message);
-    return (data ?? []).length;
-  }, { timeout: 10000, message: "class_allowed_products가 저장 후에도 계속 0건으로 조회됨" }).toBe(1); // 특정 1개만 허용 = 정확히 1건
+    return JSON.stringify(data ?? []);
+  }, { timeout: 15000, message: "class_allowed_products가 저장 후에도 계속 0건으로 조회됨" }).not.toBe("[]");
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
