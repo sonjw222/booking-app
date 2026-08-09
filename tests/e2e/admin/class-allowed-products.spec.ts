@@ -30,15 +30,17 @@ import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 
 test.use({ storageState: MANAGER_AUTH_FILE });
 
-// TEMP-DIAG(P2-20, 제거 예정): app/manager/classes/page.tsx / lib/classes.ts에 심어둔
-// "[TEMP-DIAG]" console.log/error를 브라우저 콘솔에서 Node stdout(=CI 로그)으로 그대로
-// 전달한다 — trace.zip을 다시 내려받지 않고 CI 로그에서 바로 읽기 위함.
-test.beforeEach(async ({ page }) => {
-  page.on("console", (msg) => {
-    if (msg.text().includes("[TEMP-DIAG]")) {
-      console.log(`[BROWSER ${msg.type()}] ${msg.text()}`);
-    }
-  });
+// TEMP-DIAG(P2-20, 제거 예정): lib/_diag220.ts가 window.__p220에 쌓아두는 초경량 이벤트
+// 버퍼({t: performance.now(), code, ...})를 테스트가 끝난 뒤(성공/실패 무관) 한 번에
+// 꺼내 출력한다 — 타이밍 임계 구간 안에서는 아무 것도 브라우저↔Node를 오가지 않는다
+// (console.log 방식은 CDP 왕복 비용 때문에 타이밍 자체를 바꿔버리는 것을 직전 시도에서 확인함).
+test.afterEach(async ({ page }, testInfo) => {
+  try {
+    const events = await page.evaluate(() => (window as any).__p220 ?? []);
+    console.log(`[P220-EVENTS] ${testInfo.title} :: ${JSON.stringify(events)}`);
+  } catch {
+    // 페이지가 이미 닫혔거나 네비게이션 중이면 조용히 무시(진단 전용 코드라 테스트 결과에 영향 없어야 함)
+  }
 });
 
 let managerA: TestUser;

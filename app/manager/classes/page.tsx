@@ -7,7 +7,8 @@
   - 매니저 RLS 정책 필요 (reservation_functions.sql)
 */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { diagEvent } from "../../../lib/_diag220"; // TEMP-DIAG(P2-20, 제거 예정)
 import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
 import AmPmTimeInput from "../../components/AmPmTimeInput";
@@ -142,6 +143,11 @@ export default function ClassManagePage() {
   const [passProducts, setPassProducts] = useState<Product[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [passSearch, setPassSearch] = useState(""); // P3: 예약 가능 수강권 선택 목록 검색
+  // TEMP-DIAG(P2-20, 제거 예정): openEdit()이 재진입/재클릭으로 여러 번 겹쳐 호출될 때
+  // "늦게 도착한 fetchClassProducts 결과가 최신 openEdit 호출을 덮어쓰는지"를 구분하기 위한 토큰,
+  // 그리고 이 open 세션 동안 사용자가 이미 칩을 클릭했는지("dirty") 여부.
+  const openTokenRef = useRef(0);
+  const userEditedRef = useRef(false);
   const [busy, setBusy] = useState(false);
 
   const loadClasses = useCallback(async (centerId: string, y: number, m: number) => {
@@ -180,14 +186,14 @@ export default function ClassManagePage() {
     if (activeCenterId) {
       loadClasses(activeCenterId, year, month);
       // TEMP-DIAG(P2-20, 제거 예정): passProducts 로딩 useEffect — 재실행 빈도/실패 여부 확인용.
-      console.log("[TEMP-DIAG] passProducts useEffect 트리거 " + JSON.stringify({ activeCenterId, year, month }));
+      diagEvent("EFFECT_PASSPRODUCTS_START", { activeCenterId, year, month });
       fetchProducts(activeCenterId, "pass")
         .then((list) => {
-          console.log("[TEMP-DIAG] passProducts fetch 성공 " + JSON.stringify({ activeCenterId, count: list.length }));
+          diagEvent("EFFECT_PASSPRODUCTS_DONE", { activeCenterId, count: list.length });
           setPassProducts(list);
         })
         .catch((e: any) => {
-          console.error("[TEMP-DIAG] passProducts fetch 실패(기존엔 조용히 삼켜짐) " + JSON.stringify({ activeCenterId, errorMessage: e?.message, errorCode: e?.code }));
+          diagEvent("EFFECT_PASSPRODUCTS_ERROR", { activeCenterId, errorMessage: e?.message, errorCode: e?.code });
         });
     }
   }, [year, month, activeCenterId, loadClasses]);
@@ -524,8 +530,12 @@ export default function ClassManagePage() {
   }
 
   async function openEdit(c: ManagedClass) {
-    // TEMP-DIAG(P2-20, 제거 예정)
-    console.log("[TEMP-DIAG] openEdit() 진입 " + JSON.stringify({ classId: c.id, activeCenterId, passProductsLength: passProducts.length }));
+    // TEMP-DIAG(P2-20, 제거 예정): 이 open 호출 고유 토큰 + "이 open 세션 동안 사용자가
+    // 직접 편집했는지" 플래그. 늦게 도착하는 초기 hydrate fetch가 그사이의 사용자 편집을
+    // 덮어쓰는지(Race A), 또는 그사이 다른 openEdit 호출이 있었는지(Race D)를 구분한다.
+    const myToken = ++openTokenRef.current;
+    userEditedRef.current = false;
+    diagEvent("OPEN_START", { classId: c.id, token: myToken });
     setEditId(c.id);
     setEditGroupId(c.recurringGroupId);
     setApplyToGroup(false);
@@ -538,16 +548,22 @@ export default function ClassManagePage() {
     setFormOpen(true);
     try {
       const ids = await fetchClassProducts(c.id);
-      console.log("[TEMP-DIAG] openEdit() fetchClassProducts 성공 → setSelectedProducts " + JSON.stringify({ classId: c.id, ids }));
+      diagEvent("APPLY_FETCH_RESULT", {
+        classId: c.id,
+        token: myToken,
+        ids,
+        isStaleToken: myToken !== openTokenRef.current, // Race D: 그사이 다른 openEdit이 또 호출됨
+        userEditedSinceOpen: userEditedRef.current, // Race A: 그사이 사용자가 칩을 이미 클릭함
+      });
       setSelectedProducts(ids);
     } catch (e: any) {
-      console.error("[TEMP-DIAG] openEdit() fetchClassProducts 실패(기존엔 조용히 삼켜짐) " + JSON.stringify({ classId: c.id, errorMessage: e?.message, errorCode: e?.code }));
+      diagEvent("FETCH_CLASS_PRODUCTS_CAUGHT_ERROR", { classId: c.id, token: myToken, errorMessage: e?.message, errorCode: e?.code });
     }
   }
 
   async function save() {
     // TEMP-DIAG(P2-20, 제거 예정): save() 진입 시점 state snapshot.
-    console.log("[TEMP-DIAG] save() 진입 " + JSON.stringify({ editId, activeCenterId, repeat, selectedProducts, passProductsLength: passProducts.length }));
+    diagEvent("SAVE_START", { editId, repeat, selectedProducts, openToken: openTokenRef.current }); // TEMP-DIAG(P2-20, 제거 예정)
     if (!activeCenterId) return;
 
     // 반복 등록 (신규일 때만)
@@ -656,11 +672,11 @@ export default function ClassManagePage() {
           await updateClass(editId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin() });
         }
         // TEMP-DIAG(P2-20, 제거 예정): setClassProducts 호출 직전 state snapshot(updateClass 이후).
-        console.log("[TEMP-DIAG] setClassProducts 호출 직전(edit) " + JSON.stringify({ editId, selectedProducts }));
+        diagEvent("SET_CLASS_PRODUCTS_CALL_EDIT", { editId, selectedProducts });
         await setClassProducts(editId, selectedProducts);
       } else {
         const newId = await createClass(activeCenterId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin() });
-        console.log("[TEMP-DIAG] setClassProducts 호출 직전(new) " + JSON.stringify({ newId, selectedProducts }));
+        diagEvent("SET_CLASS_PRODUCTS_CALL_NEW", { newId, selectedProducts });
         await setClassProducts(newId, selectedProducts);
       }
 
@@ -1139,7 +1155,11 @@ export default function ClassManagePage() {
                   <button
                     className="text-btn"
                     style={{ marginBottom: 6 }}
-                    onClick={() => setSelectedProducts([])}
+                    onClick={() => {
+                      userEditedRef.current = true; // TEMP-DIAG(P2-20, 제거 예정)
+                      diagEvent("SET_SELECTED_PRODUCTS", { source: "deselect-all-button", prev: selectedProducts, next: [] });
+                      setSelectedProducts([]);
+                    }}
                   >
                     선택 해제 (모든 수강권 허용으로 전환)
                   </button>
@@ -1160,12 +1180,17 @@ export default function ClassManagePage() {
                         <button
                           key={p.id}
                           className={`filter-chip ${selectedProducts.includes(p.id) ? "on" : ""}`}
-                          onClick={() => setSelectedProducts((prev) => {
-                            const next = prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id];
-                            // TEMP-DIAG(P2-20, 제거 예정): 칩 클릭 직후 state snapshot.
-                            console.log("[TEMP-DIAG] 칩 클릭 → selectedProducts 갱신 " + JSON.stringify({ productId: p.id, productName: p.name, prev, next }));
-                            return next;
-                          })}
+                          onClick={() => {
+                            // TEMP-DIAG(P2-20, 제거 예정): dirty 플래그 — 클릭 이벤트 핸들러 본문은
+                            // (setState 함수형 업데이터와 달리) StrictMode에서 두 번 호출되지 않는다.
+                            userEditedRef.current = true;
+                            diagEvent("CHIP_CLICK", { productId: p.id });
+                            setSelectedProducts((prev) => {
+                              const next = prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id];
+                              diagEvent("SET_SELECTED_PRODUCTS", { source: "chip", productId: p.id, prev, next });
+                              return next;
+                            });
+                          }}
                         >
                           {p.name}
                         </button>
