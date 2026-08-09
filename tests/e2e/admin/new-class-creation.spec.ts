@@ -119,10 +119,28 @@ test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → �
   await expect(memberPage.locator(".pass-pick-list")).toBeVisible();
   await expect(memberPage.locator("text=현재 사용할 수 있는 수강권이 없어요")).toHaveCount(0);
 
+  // TEMP-DIAG(재현성 확인용, 제거 예정): 30초로 늘려도 여전히 실패해 단순 인프라 지연이
+  // 아닐 가능성이 있음 — reserve_with_membership RPC의 실제 응답과 에러 toast를 캡처.
+  let reserveRpcInfo: any = null;
+  memberPage.on("response", async (res) => {
+    if (res.url().includes("reserve_with_membership")) {
+      try {
+        reserveRpcInfo = { status: res.status(), body: await res.text() };
+      } catch { /* 무시 */ }
+    }
+  });
+  let toastText = "(관측 안 됨)";
+  const toastWatcher = (async () => {
+    try {
+      await expect(memberPage.locator(".toast")).toBeVisible({ timeout: 4000 });
+      toastText = await memberPage.locator(".toast").innerText();
+    } catch { /* 토스트 자체가 안 뜨면 무시(정상 성공 경로일 수 있음) */ }
+  })();
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  // 예약 확정 RPC 왕복이 공유 dev Supabase가 바쁠 때 기본 10초보다 오래 걸릴 수 있음
-  // (daily-book-limit.spec.ts에서 이미 실측 확인된 것과 동일 계열의 인프라 지연 —
-  // 그 파일도 같은 이유로 타임아웃을 늘려둠) — 30초로 여유를 둔다.
+  await toastWatcher;
+  await memberPage.waitForTimeout(1500);
+  console.log(`=== reserve_with_membership RPC 응답: ${JSON.stringify(reserveRpcInfo)} ===`);
+  console.log(`=== toast 텍스트: ${toastText} ===`);
   await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30000 });
   await expect(
     memberPage.locator(".class-row", { hasText: uniqueTitle }).getByRole("button", { name: "취소" })
