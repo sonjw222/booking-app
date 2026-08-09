@@ -81,16 +81,35 @@ describe("진단: membership_schedule_rules 규모 및 centerA 상품별 분포"
     const withProduct = (mems ?? []).filter((m) => m.product_id);
     console.log(`=== 그 중 product_id 있는(schedule_rules 영향 가능) 것: ${withProduct.length}건 ===`);
 
-    for (const m of withProduct) {
-      const { data: prod } = await admin.from("products").select("id, name, product_kind").eq("id", m.product_id).maybeSingle();
-      const { data: rules, error: rErr } = await admin
-        .from("membership_schedule_rules")
-        .select("id, day_of_week, start_time, class_title")
-        .eq("product_id", m.product_id);
-      if (rErr) throw new Error(rErr.message);
-      console.log(`  membership=${m.id} product="${prod?.name}"(kind=${prod?.product_kind}) remaining=${m.remaining_count} expires=${m.expires_at} schedule_rules=${(rules ?? []).length}건 ${JSON.stringify(rules ?? [])}`);
+    // N+1 대신 distinct product_id만 모아 한 번에 배치 조회(이전 시도가 127건을 하나씩
+    // 조회하다 20초 타임아웃으로 실패함 — 진단 스크립트 자체의 버그였음, 앱 버그 아님).
+    const distinctProductIds = [...new Set(withProduct.map((m) => m.product_id))];
+    console.log(`=== distinct product_id 수: ${distinctProductIds.length} ===`);
+
+    const { data: prods, error: prodErr } = await admin
+      .from("products").select("id, name, product_kind").in("id", distinctProductIds);
+    if (prodErr) throw new Error(prodErr.message);
+    const prodById = new Map((prods ?? []).map((p) => [p.id, p]));
+
+    const { data: rules, error: rErr } = await admin
+      .from("membership_schedule_rules")
+      .select("id, product_id, day_of_week, start_time, class_title")
+      .in("product_id", distinctProductIds);
+    if (rErr) throw new Error(rErr.message);
+    const rulesByProduct = new Map<string, any[]>();
+    for (const r of rules ?? []) {
+      const arr = rulesByProduct.get(r.product_id) ?? [];
+      arr.push(r);
+      rulesByProduct.set(r.product_id, arr);
     }
-  });
+
+    for (const pid of distinctProductIds) {
+      const p = prodById.get(pid);
+      const rs = rulesByProduct.get(pid) ?? [];
+      const count = withProduct.filter((m) => m.product_id === pid).length;
+      console.log(`  product_id=${pid} name="${p?.name}"(kind=${p?.product_kind}) membership건수=${count} schedule_rules=${rs.length}건 ${JSON.stringify(rs)}`);
+    }
+  }, 30000);
 });
 
 describe("진단: 기존 class vs 신규 class RPC 비교", () => {
@@ -126,9 +145,18 @@ describe("진단: 기존 class vs 신규 class RPC 비교", () => {
     if (insErr || !newClass) throw new Error(`진단용 신규 class 생성 실패: ${insErr?.message}`);
     console.log(`=== 신규 진단용 class 생성: ${JSON.stringify(newClass)} ===`);
 
-    const { data: cap, error: capErr } = await admin.from("class_allowed_products").select("*").eq("class_id", newClass.id);
+    // class_allowed_products는 service_role SQL GRANT가 없어(이미 문서화된 별도 gap,
+    // docs/TODO.md 참고) admin client로는 permission denied가 남 — RLS는 "auth.uid() is
+    // not null"로 완전히 허용적이므로 로그인된 일반 세션(supabase, 현재 userA)으로 대신 조회.
+    const { data: cap, error: capErr } = await supabase.from("class_allowed_products").select("*").eq("class_id", newClass.id);
     if (capErr) throw new Error(capErr.message);
-    console.log(`=== 신규 class의 class_allowed_products: ${(cap ?? []).length}건(0건이어야 "모든 수강권 허용") ===`);
+    console.log(`=== 신규 class의 class_allowed_products: ${(cap ?? []).length}건(0건이어야 "모든 수강권 허용") ${JSON.stringify(cap ?? [])} ===`);
+
+    const existingIds = (existingClasses ?? []).map((c) => c.id);
+    const { data: existingCap, error: existingCapErr } = await supabase
+      .from("class_allowed_products").select("*").in("class_id", existingIds);
+    if (existingCapErr) throw new Error(existingCapErr.message);
+    console.log(`=== 기존 class 5개의 class_allowed_products: ${(existingCap ?? []).length}건 ${JSON.stringify(existingCap ?? [])} ===`);
 
     const classIds = [newClass.id, ...(existingClasses ?? []).map((c) => c.id)];
     const { data: rpcRows, error: rpcErr } = await supabase.rpc("usable_memberships_for_classes", {
