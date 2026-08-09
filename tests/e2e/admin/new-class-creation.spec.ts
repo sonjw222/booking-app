@@ -5,8 +5,11 @@ import {
   createFutureTestClassAdmin,
   cleanupTestClassAdmin,
   reservationDeepLink,
+  fetchSettingsAdmin,
+  saveSettingsAdmin,
   type TestUser,
 } from "../fixtures/testData";
+import type { CenterSettings } from "../../../lib/settings";
 import { getFixtureAdminClient } from "../../integration/setup";
 import { supabase } from "../../../lib/supabaseClient";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
@@ -23,13 +26,29 @@ import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
       추가 버그의 잔여 데이터 가설은 실제 데이터로 반박됨).
     - admin client로 직접 insert한 새 class와 기존 class는 RPC 결과가 완전히 동일.
     - 실제 관리자 UI로 새 class를 만들어도(모든 수강권 허용/특정 pass 1개 허용 둘 다)
-      class_allowed_products/RPC/회원 화면(.pass-pick-list) 전부 정상 동작 — 재현 실패.
-  즉 TEST_MANAGER_A/TEST_USER_A/centerA 기존 fixture와 정상 그룹수업 생성 경로로는
-  이 버그가 재현되지 않았다(상세 경위는 PR #44 코멘트 참고). 그럼에도 불구하고 이
-  파일은 "관리자 UI로 실제 수업을 등록하는 경로"를 exercise하는 최초의 자동 테스트다
-  (기존에는 전부 admin client 직접 insert로 setup했고, UI 등록 자체를 검증하는 테스트가
-  하나도 없었다 — 이번 조사로 드러난 실제 커버리지 공백) — 향후 같은 종류의 회귀를
-  놓치지 않기 위해 정식 회귀 테스트로 남긴다.
+      class_allowed_products/RPC/회원 화면(.pass-pick-list)까지는 전부 정상 동작 — 여기까지는
+      재현 실패.
+  즉 TEST_MANAGER_A/TEST_USER_A/centerA 기존 fixture와 정상 그룹수업 생성 경로로는 PR #44가
+  보고한 증상(.pass-pick-list 자체가 안 뜸)이 재현되지 않았다(상세 경위는 PR #44 코멘트 참고).
+
+  이 파일은 "관리자 UI로 실제 수업을 등록하는 경로"를 exercise하는 최초의 자동 테스트라서
+  (기존엔 전부 admin client 직접 insert로 setup, UI 등록 자체를 검증하는 테스트가 하나도
+  없었음 — 이번 조사로 드러난 실제 커버리지 공백) 처음엔 "실제 예약 성공까지" 확인하는
+  마지막 단계를 넣었는데, 그 단계에서 별도의 실제 버그 두 개를 새로 발견해 전부 코드
+  변경 없이 테스트 자체를 고쳤다(둘 다 실측 근거 있음, 추측 아님):
+    1) class_allowed_products를 저장 직후 곧바로 조회하면(별도 Node 커넥션) 0건으로
+       보일 때가 있었다 — 네트워크 캡처로 브라우저의 INSERT 자체는 정확한 payload로
+       성공했음(모달이 정상 닫힘)을 확인해 read-after-write 타이밍 문제로 판명,
+       expect.poll로 재시도하도록 수정.
+    2) 예약 확정 클릭이 "아직 예약이 열리지 않았어요"로 실패했다 — RPC 응답을 캡처해
+       확인. 원인은 테스트가 임의로 고른 90/91일 뒤 날짜가 "예약 오픈 기한"
+       (groupOpenDaysBefore, 기본값 60일)을 초과했기 때문(booking-open-deadline.spec.ts가
+       검증하는 바로 그 기능이 설계대로 정확히 동작한 것 — 앱 버그 아님. 처음엔
+       groupBookDaysBefore를 잘못 건드렸다가 — 이건 "오픈"이 아니라 다른 마감 설정 —
+       calc_deadline()의 실제 kind 분기(fix_calc_deadline_open_kind_draft_proposed.sql)를
+       다시 읽고 정정함). beforeAll에서 groupOpenDaysBefore를 이 파일의 최대 날짜보다
+       넉넉히 크게 저장하고 afterAll에서 원복하도록 수정(다른 테스트 파일들의 기존
+       관례와 동일한 패턴).
 */
 
 test.use({ storageState: MANAGER_AUTH_FILE });
@@ -37,16 +56,29 @@ test.use({ storageState: MANAGER_AUTH_FILE });
 let managerA: TestUser;
 let userA: TestUser;
 let centerAId: string;
+let originalSettings: CenterSettings;
 const createdClassIds: string[] = [];
 
 test.afterAll(async () => {
   for (const id of createdClassIds) await cleanupTestClassAdmin(id);
+  if (originalSettings) await saveSettingsAdmin(centerAId, originalSettings);
 });
 
 test.beforeAll(async () => {
   managerA = loadTestAccountMeta("manager-a");
   userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
+
+  // 이 파일의 수업들은 90일 이상 뒤 미래 날짜를 쓴다(다른 테스트가 남긴 근미래 데이터와
+  // 안 겹치도록) — 예약 오픈 기한 제한이 남아있으면 그 자체가 "아직 예약 불가"로
+  // 막히므로, 이 테스트 동안만 명시적으로 제한을 풀어둔다(다른 파일들과 동일한 관례).
+  originalSettings = await fetchSettingsAdmin(centerAId);
+  await saveSettingsAdmin(centerAId, {
+    ...originalSettings,
+    groupOpenDaysBefore: 120,
+    groupOpenTime: "00:00",
+    dailyBookLimitEnabled: false,
+  });
 });
 
 async function fillAmPmTime(page: Page, rowIndex: number, hour24: number, minute: number) {
@@ -119,29 +151,10 @@ test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → �
   await expect(memberPage.locator(".pass-pick-list")).toBeVisible();
   await expect(memberPage.locator("text=현재 사용할 수 있는 수강권이 없어요")).toHaveCount(0);
 
-  // TEMP-DIAG(재현성 확인용, 제거 예정): 30초로 늘려도 여전히 실패해 단순 인프라 지연이
-  // 아닐 가능성이 있음 — reserve_with_membership RPC의 실제 응답과 에러 toast를 캡처.
-  let reserveRpcInfo: any = null;
-  memberPage.on("response", async (res) => {
-    if (res.url().includes("reserve_with_membership")) {
-      try {
-        reserveRpcInfo = { status: res.status(), body: await res.text() };
-      } catch { /* 무시 */ }
-    }
-  });
-  let toastText = "(관측 안 됨)";
-  const toastWatcher = (async () => {
-    try {
-      await expect(memberPage.locator(".toast")).toBeVisible({ timeout: 4000 });
-      toastText = await memberPage.locator(".toast").innerText();
-    } catch { /* 토스트 자체가 안 뜨면 무시(정상 성공 경로일 수 있음) */ }
-  })();
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await toastWatcher;
-  await memberPage.waitForTimeout(1500);
-  console.log(`=== reserve_with_membership RPC 응답: ${JSON.stringify(reserveRpcInfo)} ===`);
-  console.log(`=== toast 텍스트: ${toastText} ===`);
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30000 });
+  // 예약 확정 RPC 왕복이 공유 dev Supabase가 바쁠 때 기본 10초보다 오래 걸릴 수 있음
+  // (daily-book-limit.spec.ts에서 이미 실측 확인된 것과 동일 계열의 인프라 지연) — 여유를 둔다.
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 20000 });
   await expect(
     memberPage.locator(".class-row", { hasText: uniqueTitle }).getByRole("button", { name: "취소" })
   ).toBeVisible();
@@ -195,7 +208,7 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
   await expect(passList).not.toContainText("통합테스트 수강권(P3)");
 
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30000 });
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 20000 });
   await expect(
     memberPage.locator(".class-row", { hasText: uniqueTitle }).getByRole("button", { name: "취소" })
   ).toBeVisible();
