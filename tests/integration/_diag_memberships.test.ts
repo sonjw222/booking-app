@@ -186,6 +186,33 @@ describe("P1-4/P1-8 추가: center 전체(profile_id 제한 없이) 규모 + FK 
       }
     }
   }, 60000);
+
+  // reservations.membership_id는 on delete 지정이 없어(=NO ACTION) 그냥 삭제하면 FK 위반이고,
+  // 무조건 NULL로 비우는 것도 위험하다 — 취소 유예시간 내 취소 시 환불 로직
+  // (fix_reservation_cancel_grace_period_draft_proposed.sql:108,122)이 reservations.membership_id로
+  // 어떤 수강권에 remaining_count를 되돌려줄지 찾기 때문에, 아직 취소 가능한(confirmed/waitlisted)
+  // 예약의 membership_id를 지우면 그 예약의 향후 취소 시 환불이 조용히 깨질 수 있다.
+  // 그래서 실제 5건의 status/class 정보를 확인해 "이미 종료 상태인지" 구조적으로 판단한다.
+  it("target membership을 참조하는 실제 reservations 5건 상세 확인", async () => {
+    const admin = getFixtureAdminClient();
+    const ids: string[] = (globalThis as any).__diagE2eMembershipIds ?? [];
+    if (ids.length === 0) return;
+    const CHUNK = 80;
+    const rows: any[] = [];
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const { data, error } = await admin
+        .from("reservations")
+        .select("id, class_id, profile_id, membership_id, status, created_at, classes(start_time)")
+        .in("membership_id", chunk);
+      if (error) throw new Error(error.message);
+      rows.push(...(data ?? []));
+    }
+    console.log(`=== target membership 참조 reservations 실제 확인: ${rows.length}건 ===`);
+    for (const r of rows) {
+      console.log(`  reservation id=${r.id} status=${r.status} membership_id=${r.membership_id} class_start=${r.classes?.start_time} created_at=${r.created_at}`);
+    }
+  });
 });
 
 describe("P2: usable_memberships_for_classes RPC 응답시간 측정(classId 개수별)", () => {
