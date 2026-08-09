@@ -58,6 +58,14 @@ import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
        다시 읽고 정정함). beforeAll에서 groupOpenDaysBefore를 이 파일의 최대 날짜보다
        넉넉히 크게 저장하고 afterAll에서 원복하도록 수정(다른 테스트 파일들의 기존
        관례와 동일한 패턴).
+    3) class_allowed_products를 UI 재진입으로 확인하도록 고친 뒤에도 그 재진입 클릭
+       자체가 60초 타임아웃으로 실패했다("waiting for locator('.class-row')..."). 원인은
+       form.date(수업 등록 폼의 날짜 입력, 직접 타이핑으로 채움)와 화면의 selectedDay
+       (달력에서 어떤 날짜의 .class-row 목록을 보여줄지 결정하는 별개의 state)가 서로
+       다른 값이라, 월만 이동하고 날짜 칸은 안 눌렀더니 저장한 class가 있는 날짜가
+       화면에 아예 안 보였던 것 — class-allowed-products.spec.ts의 gotoManagerClassesDay가
+       왜 날짜 칸까지 클릭하는지 이제야 정확히 이해함. gotoFutureDay로 이름을 바꾸고
+       날짜 칸 클릭을 추가.
 */
 
 test.use({ storageState: MANAGER_AUTH_FILE });
@@ -100,8 +108,13 @@ async function fillAmPmTime(page: Page, rowIndex: number, hour24: number, minute
   await row.locator("select").nth(2).selectOption(String(minute));
 }
 
-async function gotoFutureMonth(page: Page, dateStr: string) {
-  const [ty, tm] = dateStr.split("-").map(Number);
+// 월 이동 후 반드시 날짜 칸까지 클릭한다 — form.date(수업 등록 폼의 날짜 입력)와 화면의
+// selectedDay(달력에서 어떤 날짜의 .class-row 목록을 보여줄지)는 서로 다른 state라, 날짜
+// 칸을 직접 클릭해 selectedDay를 맞춰둬야 저장 후 그 날짜의 .class-row가 보인다(실측
+// 확인 — 처음엔 이 클릭을 빠뜨려서 저장한 class를 재진입 확인하려는 클릭이 60초
+// 타임아웃으로 실패했다: selectedDay가 다른 날짜를 가리켜 .class-row 자체가 없었음).
+async function gotoFutureDay(page: Page, dateStr: string) {
+  const [ty, tm, td] = dateStr.split("-").map(Number);
   await page.goto("/manager/classes");
   await expect(page.locator(".cal-title")).toBeVisible();
   for (let i = 0; i < 6; i++) {
@@ -110,6 +123,7 @@ async function gotoFutureMonth(page: Page, dateStr: string) {
     if (cy === ty && cm === tm) break;
     await page.locator(".cal-nav-btn").nth(1).click();
   }
+  await page.locator(".cal-cell", { hasText: new RegExp(`^${td}$`) }).click();
 }
 
 function futureKstDateStr(daysFromNow: number): string {
@@ -133,7 +147,7 @@ test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → �
   const uniqueTitle = `NEWCLASS-ALL-${Date.now()}`;
   const dateStr = futureKstDateStr(90);
 
-  await gotoFutureMonth(page, dateStr);
+  await gotoFutureDay(page, dateStr);
   await page.locator(".fab-btn", { hasText: "수업 등록" }).click();
   await expect(page.locator(".sheet-title", { hasText: "수업 등록" })).toBeVisible();
 
@@ -181,7 +195,7 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
   const uniqueTitle = `NEWCLASS-SPECIFIC-${Date.now()}`;
   const dateStr = futureKstDateStr(91);
 
-  await gotoFutureMonth(page, dateStr);
+  await gotoFutureDay(page, dateStr);
   await page.locator(".fab-btn", { hasText: "수업 등록" }).click();
   await expect(page.locator(".sheet-title", { hasText: "수업 등록" })).toBeVisible();
 
