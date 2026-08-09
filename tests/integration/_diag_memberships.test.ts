@@ -126,6 +126,60 @@ describe("P1: memberships 실제 규모 진단", () => {
   });
 });
 
+describe("P1-4/P1-8 추가: center 전체(profile_id 제한 없이) 규모 + FK 정확 스코프 확인", () => {
+  it("centerA 전체에서 product_name='E2E 테스트 수강권' 총 건수 + profile_id별 분포(캡 우회)", async () => {
+    const admin = getFixtureAdminClient();
+    const { count, error } = await admin
+      .from("memberships").select("id", { count: "exact", head: true })
+      .eq("center_id", centerAId).eq("product_name", "E2E 테스트 수강권");
+    if (error) throw new Error(error.message);
+    console.log(`=== centerA 전체(profile_id 무관) "E2E 테스트 수강권" 실제 count: ${count} ===`);
+
+    const rows: any[] = [];
+    const PAGE_SIZE = 1000;
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error: pErr } = await admin
+        .from("memberships").select("id, profile_id, product_id")
+        .eq("center_id", centerAId).eq("product_name", "E2E 테스트 수강권")
+        .range(from, from + PAGE_SIZE - 1);
+      if (pErr) throw new Error(pErr.message);
+      rows.push(...(data ?? []));
+      if (!data || data.length < PAGE_SIZE) break;
+      if (from > 20000) { console.log("=== 안전장치: 20000행 초과, 중단 ==="); break; }
+    }
+    const byProfile = new Map<string, number>();
+    for (const r of rows) byProfile.set(r.profile_id, (byProfile.get(r.profile_id) ?? 0) + 1);
+    console.log(`=== centerA "E2E 테스트 수강권" profile_id별 분포(${byProfile.size}개 profile) ===`);
+    for (const [pid, c] of [...byProfile.entries()].sort((a, b) => b[1] - a[1])) {
+      console.log(`  profile_id=${pid} | userA와 일치=${pid === userA.profileId}: ${c}건`);
+    }
+    (globalThis as any).__diagE2eMembershipIds = rows.map((r) => r.id);
+  });
+
+  it("실제 삭제 대상 membership_id로 FK 참조 테이블 정확 스코프 확인(에러 상세 포함)", async () => {
+    const admin = getFixtureAdminClient();
+    const ids: string[] = (globalThis as any).__diagE2eMembershipIds ?? [];
+    console.log(`=== FK 정확 스코프 확인 대상 membership_id 수: ${ids.length} ===`);
+    if (ids.length === 0) return;
+    const sample = ids.slice(0, 500); // PostgREST in() 안전 상한
+
+    for (const [table, col] of [
+      ["membership_transfers", "membership_id"],
+      ["product_passes", "linked_membership_id"],
+      ["contracts", "membership_id"],
+      ["payments", "membership_id"],
+      ["reservations", "membership_id"],
+    ] as const) {
+      const { count, error } = await admin.from(table).select("id", { count: "exact", head: true }).in(col, sample);
+      if (error) {
+        console.log(`=== ${table}.${col} IN (sample ${sample.length}개): ERROR code=${(error as any).code} message=${error.message} details=${(error as any).details} hint=${(error as any).hint} ===`);
+      } else {
+        console.log(`=== ${table}.${col} IN (sample ${sample.length}개): ${count}건 ===`);
+      }
+    }
+  });
+});
+
 describe("P2: usable_memberships_for_classes RPC 응답시간 측정(classId 개수별)", () => {
   it("centerA 실제 class id 확보(최근 것부터 최대 40개)", async () => {
     const admin = getFixtureAdminClient();
