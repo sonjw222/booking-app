@@ -120,7 +120,10 @@ test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → �
   await expect(memberPage.locator("text=현재 사용할 수 있는 수강권이 없어요")).toHaveCount(0);
 
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
+  // 예약 확정 RPC 왕복이 공유 dev Supabase가 바쁠 때 기본 10초보다 오래 걸릴 수 있음
+  // (daily-book-limit.spec.ts에서 이미 실측 확인된 것과 동일 계열의 인프라 지연 —
+  // 그 파일도 같은 이유로 타임아웃을 늘려둠) — 30초로 여유를 둔다.
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30000 });
   await expect(
     memberPage.locator(".class-row", { hasText: uniqueTitle }).getByRole("button", { name: "취소" })
   ).toBeVisible();
@@ -141,31 +144,27 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
   await fillAmPmTime(page, 0, 19, 0);
   await fillAmPmTime(page, 1, 20, 0);
 
-  // TEMP-DIAG(재현성 확인용, 제거 예정): class_allowed_products에 실제로 어떤 요청이
-  // 나가는지 네트워크 레벨로 캡처 — 풀스위트 실행에서 1회 "0건 저장됨" 재현됐으나
-  // 단독 실행에서는 재현 안 됨(부하/타이밍 의존 여부 확인 중).
-  const capRequests: { method: string; postData: string | null }[] = [];
-  page.on("request", (req) => {
-    if (req.url().includes("class_allowed_products")) {
-      capRequests.push({ method: req.method(), postData: req.postData() });
-    }
-  });
-
   await page.locator('input[placeholder="수강권 이름 검색"]').fill("E2E 테스트 수강권 상품");
   await page.locator(".filter-chip", { hasText: "E2E 테스트 수강권 상품" }).click();
   await expect(page.locator(".perm-guide", { hasText: "1개" })).toBeVisible();
 
   await page.getByRole("button", { name: "등록하기", exact: true }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
-  console.log(`=== class_allowed_products 관련 네트워크 요청: ${JSON.stringify(capRequests)} ===`);
 
   const newClass = await findClassByTitle(uniqueTitle);
   createdClassIds.push(newClass.id);
 
-  const { data: cap, error: capErr } = await supabase.from("class_allowed_products").select("product_id, products(name)").eq("class_id", newClass.id);
-  if (capErr) throw new Error(capErr.message);
-  console.log(`=== 실제 저장된 class_allowed_products: ${JSON.stringify(cap ?? [])} ===`);
-  expect(cap ?? []).toHaveLength(1); // 특정 1개만 허용 = class_allowed_products 정확히 1건
+  // 네트워크 레벨로 실측 확인(2026-08-09, PR #44 조사): 저장 직후 이 값을 곧바로 조회하면
+  // 브라우저가 보낸 INSERT 자체는 정확한 payload로 성공했는데도(모달이 정상적으로 닫힘 =
+  // setClassProducts()가 throw 없이 완료됨) 공유 dev Supabase가 바쁠 때 드물게 Node 쪽의
+  // 별도 커넥션에서 곧바로 조회하면 아직 안 보이는 경우가 있었다(같은 실행에서 반복 재현됨,
+  // 두 번 모두 정확한 payload의 POST 요청 자체는 있었음 — 앱 버그 아니라 read-after-write
+  // 타이밍 문제) — 즉시 단정하지 않고 짧게 재시도한다.
+  await expect.poll(async () => {
+    const { data, error } = await supabase.from("class_allowed_products").select("product_id, products(name)").eq("class_id", newClass.id);
+    if (error) throw new Error(error.message);
+    return (data ?? []).length;
+  }, { timeout: 10000, message: "class_allowed_products가 저장 후에도 계속 0건으로 조회됨" }).toBe(1); // 특정 1개만 허용 = 정확히 1건
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
@@ -178,7 +177,7 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
   await expect(passList).not.toContainText("통합테스트 수강권(P3)");
 
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30000 });
   await expect(
     memberPage.locator(".class-row", { hasText: uniqueTitle }).getByRole("button", { name: "취소" })
   ).toBeVisible();
