@@ -12,13 +12,6 @@ on:
     branches: ["main"]
   pull_request:
   workflow_dispatch:
-    inputs:
-      # 임시(진단 job과 함께 나중에 제거) — 읽기 전용 진단(diag job)만 돌리고 e2e/unit/
-      # integration/build(실제 쓰기 발생)는 건너뛰기 위한 스위치.
-      diag_only:
-        description: "읽기 전용 진단 job만 실행(e2e/unit/integration/build 건너뜀)"
-        type: boolean
-        default: false
 
 # 같은 PR/브랜치에 대해 이전 실행이 아직 돌고 있으면 취소하고 최신 커밋 것만 남긴다.
 # (예: 짧은 시간에 여러 번 push) — 통합 테스트가 공유 테스트 계정으로 실제 개발용 Supabase에
@@ -28,75 +21,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # 임시 진단 job — PR #44 수동 QA에서 발견된 "신규 수업 사용 가능 수강권 없음" 버그
-  # 조사용. e2e를 기다리지 않도록 needs 없음. 진단 완료 후 이 job과 diag_only input,
-  # _diag_new_class_bug.test.ts를 함께 제거한다.
-  diag:
-    name: (임시) 신규 수업 사용가능 수강권 없음 버그 진단
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run test:integration -- _diag_new_class_bug
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
-          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
-          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
-          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
-          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
-          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
-          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
-          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
-          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
-          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
-          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
-          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
-          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
-          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      - run: npx playwright install --with-deps chromium
-      - run: npx playwright test tests/e2e/admin/_diag_new_class_ui.spec.ts
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
-          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
-          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
-          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
-          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
-          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
-          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
-          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
-          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
-          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
-          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
-          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
-          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
-          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: diag-playwright-report
-          path: playwright-report/
-          retention-days: 3
-          if-no-files-found: ignore
-
   e2e:
     name: E2E tests (Playwright, live dev Supabase)
     runs-on: ubuntu-latest
     # unit/integration과 마찬가지로 fork PR은 Secrets가 없어 애초에 통과할 수 없고, 있어도
     # 노출시키면 안 되므로 막는다.
     if: >
-      !inputs.diag_only &&
-      (github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository)
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -149,7 +81,6 @@ jobs:
     # 실패). unit 자체는 Supabase가 필요 없지만, 여기서 순서를 강제해 e2e → unit → integration →
     # build 전체가 항상 순차 실행되게 한다.
     needs: e2e
-    if: ${{ !inputs.diag_only }}
     steps:
       - uses: actions/checkout@v4
       # Node 22+ 필수: @supabase/supabase-js(realtime-js)가 클라이언트 생성 시 native
@@ -175,9 +106,8 @@ jobs:
     # PR 자체가 검증 게이트 역할을 한다 — 이전 버전은 pull_request를 전부 건너뛰어
     # merge 이후(push to main)에야 실행됐던 문제를 수정함.
     if: >
-      !inputs.diag_only &&
-      (github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository)
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -209,7 +139,6 @@ jobs:
     name: Build (production, typecheck 포함)
     runs-on: ubuntu-latest
     needs: integration
-    if: ${{ !inputs.diag_only }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
