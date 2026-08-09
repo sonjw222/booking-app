@@ -179,7 +179,16 @@ export default function ClassManagePage() {
   useEffect(() => {
     if (activeCenterId) {
       loadClasses(activeCenterId, year, month);
-      fetchProducts(activeCenterId, "pass").then(setPassProducts).catch(() => {});
+      // TEMP-DIAG(P2-20, 제거 예정): passProducts 로딩 useEffect — 재실행 빈도/실패 여부 확인용.
+      console.log("[TEMP-DIAG] passProducts useEffect 트리거 " + JSON.stringify({ activeCenterId, year, month }));
+      fetchProducts(activeCenterId, "pass")
+        .then((list) => {
+          console.log("[TEMP-DIAG] passProducts fetch 성공 " + JSON.stringify({ activeCenterId, count: list.length }));
+          setPassProducts(list);
+        })
+        .catch((e: any) => {
+          console.error("[TEMP-DIAG] passProducts fetch 실패(기존엔 조용히 삼켜짐) " + JSON.stringify({ activeCenterId, errorMessage: e?.message, errorCode: e?.code }));
+        });
     }
   }, [year, month, activeCenterId, loadClasses]);
 
@@ -515,6 +524,8 @@ export default function ClassManagePage() {
   }
 
   async function openEdit(c: ManagedClass) {
+    // TEMP-DIAG(P2-20, 제거 예정)
+    console.log("[TEMP-DIAG] openEdit() 진입 " + JSON.stringify({ classId: c.id, activeCenterId, passProductsLength: passProducts.length }));
     setEditId(c.id);
     setEditGroupId(c.recurringGroupId);
     setApplyToGroup(false);
@@ -526,11 +537,17 @@ export default function ClassManagePage() {
     setError(null);
     setFormOpen(true);
     try {
-      setSelectedProducts(await fetchClassProducts(c.id));
-    } catch { /* 무시 */ }
+      const ids = await fetchClassProducts(c.id);
+      console.log("[TEMP-DIAG] openEdit() fetchClassProducts 성공 → setSelectedProducts " + JSON.stringify({ classId: c.id, ids }));
+      setSelectedProducts(ids);
+    } catch (e: any) {
+      console.error("[TEMP-DIAG] openEdit() fetchClassProducts 실패(기존엔 조용히 삼켜짐) " + JSON.stringify({ classId: c.id, errorMessage: e?.message, errorCode: e?.code }));
+    }
   }
 
   async function save() {
+    // TEMP-DIAG(P2-20, 제거 예정): save() 진입 시점 state snapshot.
+    console.log("[TEMP-DIAG] save() 진입 " + JSON.stringify({ editId, activeCenterId, repeat, selectedProducts, passProductsLength: passProducts.length }));
     if (!activeCenterId) return;
 
     // 반복 등록 (신규일 때만)
@@ -638,9 +655,12 @@ export default function ClassManagePage() {
         } else {
           await updateClass(editId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin() });
         }
+        // TEMP-DIAG(P2-20, 제거 예정): setClassProducts 호출 직전 state snapshot(updateClass 이후).
+        console.log("[TEMP-DIAG] setClassProducts 호출 직전(edit) " + JSON.stringify({ editId, selectedProducts }));
         await setClassProducts(editId, selectedProducts);
       } else {
         const newId = await createClass(activeCenterId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin() });
+        console.log("[TEMP-DIAG] setClassProducts 호출 직전(new) " + JSON.stringify({ newId, selectedProducts }));
         await setClassProducts(newId, selectedProducts);
       }
 
@@ -1140,7 +1160,12 @@ export default function ClassManagePage() {
                         <button
                           key={p.id}
                           className={`filter-chip ${selectedProducts.includes(p.id) ? "on" : ""}`}
-                          onClick={() => setSelectedProducts((prev) => prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id])}
+                          onClick={() => setSelectedProducts((prev) => {
+                            const next = prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id];
+                            // TEMP-DIAG(P2-20, 제거 예정): 칩 클릭 직후 state snapshot.
+                            console.log("[TEMP-DIAG] 칩 클릭 → selectedProducts 갱신 " + JSON.stringify({ productId: p.id, productName: p.name, prev, next }));
+                            return next;
+                          })}
                         >
                           {p.name}
                         </button>

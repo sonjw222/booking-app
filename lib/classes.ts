@@ -330,27 +330,49 @@ export async function setAttendance(reservationId: string, status: "attended" | 
 
 // 특정 수업에 지정된 수강권 id 목록
 export async function fetchClassProducts(classId: string): Promise<string[]> {
+  // TEMP-DIAG(P2-20, 제거 예정): 재진입 시 선택값이 사라지는 버그 조사용.
+  // msg.text()가 object 인자를 직렬화 안 해주므로 반드시 JSON.stringify로 문자열 하나에 담는다.
+  console.log("[TEMP-DIAG] fetchClassProducts() 호출 " + JSON.stringify({ classId }));
   const { data, error } = await supabase
     .from("class_allowed_products")
     .select("product_id")
     .eq("class_id", classId);
-  if (error) throw new Error("수업 수강권을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => r.product_id);
+  if (error) {
+    console.error("[TEMP-DIAG] fetchClassProducts() 실패 " + JSON.stringify({ classId, errorMessage: error.message, errorCode: (error as any).code }));
+    throw new Error("수업 수강권을 불러오지 못했어요: " + error.message);
+  }
+  const ids = (data ?? []).map((r: any) => r.product_id);
+  console.log("[TEMP-DIAG] fetchClassProducts() 결과 " + JSON.stringify({ classId, rowCount: ids.length, productIds: ids }));
+  return ids;
 }
 
 // 수업의 예약가능 수강권을 통째로 교체 (선택된 id 배열로)
 export async function setClassProducts(classId: string, productIds: string[]): Promise<void> {
+  // TEMP-DIAG(P2-20, 제거 예정)
+  console.log("[TEMP-DIAG] setClassProducts() 진입 " + JSON.stringify({ classId, productIds, productIdsLength: productIds.length }));
+
   // 기존 것 모두 삭제 후 새로 삽입
   const { error: delErr } = await supabase
     .from("class_allowed_products")
     .delete()
     .eq("class_id", classId);
-  if (delErr) throw new Error("수강권 설정에 실패했어요: " + delErr.message);
+  if (delErr) {
+    console.error("[TEMP-DIAG] setClassProducts() DELETE 실패 " + JSON.stringify({ classId, errorMessage: delErr.message, errorCode: (delErr as any).code }));
+    throw new Error("수강권 설정에 실패했어요: " + delErr.message);
+  }
+  console.log("[TEMP-DIAG] setClassProducts() DELETE 완료 " + JSON.stringify({ classId }));
 
   if (productIds.length > 0) {
     const rows = productIds.map((pid) => ({ class_id: classId, product_id: pid }));
+    console.log("[TEMP-DIAG] setClassProducts() INSERT 시도 직전 " + JSON.stringify({ classId, rows }));
     const { error } = await supabase.from("class_allowed_products").insert(rows);
-    if (error) throw new Error("수강권 설정에 실패했어요: " + error.message);
+    if (error) {
+      console.error("[TEMP-DIAG] setClassProducts() INSERT 실패 " + JSON.stringify({ classId, rows, errorMessage: error.message, errorCode: (error as any).code }));
+      throw new Error("수강권 설정에 실패했어요: " + error.message);
+    }
+    console.log("[TEMP-DIAG] setClassProducts() INSERT 완료 " + JSON.stringify({ classId, insertedCount: rows.length }));
+  } else {
+    console.log("[TEMP-DIAG] setClassProducts() productIds가 비어있어 INSERT 스킵 " + JSON.stringify({ classId }));
   }
 }
 

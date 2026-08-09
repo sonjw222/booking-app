@@ -30,6 +30,17 @@ import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 
 test.use({ storageState: MANAGER_AUTH_FILE });
 
+// TEMP-DIAG(P2-20, 제거 예정): app/manager/classes/page.tsx / lib/classes.ts에 심어둔
+// "[TEMP-DIAG]" console.log/error를 브라우저 콘솔에서 Node stdout(=CI 로그)으로 그대로
+// 전달한다 — trace.zip을 다시 내려받지 않고 CI 로그에서 바로 읽기 위함.
+test.beforeEach(async ({ page }) => {
+  page.on("console", (msg) => {
+    if (msg.text().includes("[TEMP-DIAG]")) {
+      console.log(`[BROWSER ${msg.type()}] ${msg.text()}`);
+    }
+  });
+});
+
 let managerA: TestUser;
 let userA: TestUser;
 let centerAId: string;
