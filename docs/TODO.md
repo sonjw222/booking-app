@@ -737,14 +737,14 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   정확히 설계대로 검사 중 — #24 해결 전까지는 테스트 실행 순서에 따라 이 두 케이스가 간헐적으로
   RED일 수 있음).
 
-### P2-18. (신규, 2026-08-08) P4 매출/통계 대시보드 SQL 적용 대기
+### P2-18. (신규, 2026-08-08, 2026-08-10 상태 정정) P4 매출/통계 대시보드 — SQL 적용 완료
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P2 (SQL 적용 전까지 대시보드·통합테스트 모두 동작 불가) |
-| 현재 상태 | **운영 설정 필요 — SQL 적용 대기** |
-| 근거 파일 | `fix_payments_payment_provider_draft_proposed.sql`, `add_manager_dashboard_summary_draft_proposed.sql`, `lib/sales.ts`(`fetchDashboardSummary`), `app/manager/page.tsx`, `tests/integration/dashboard-summary.test.ts` |
-| 완료 조건 | 사용자가 Supabase SQL Editor에서 네 파일을 순서대로(payment_provider → dashboard_summary → daily_bug fix → service_role payments grant) 실행하고, `dashboard-summary.test.ts`가 통과함을 CI로 확인 |
+| 우선순위 | 해결됨(과거 P2) |
+| 현재 상태 | **적용 완료.** 아래 네 SQL(payment_provider → dashboard_summary → daily_bug fix → service_role payments grant) 전부 적용됨 — `dashboard-summary.test.ts` 7/7이 P2-20 최종 검증(2026-08-09, 3연속 Integration Green)에도 포함돼 계속 통과 확인됨. 이 상태 필드가 "SQL 적용 대기"로 오래 남아 있던 것은 문서 갱신 누락이었고(PR #44 리뷰 중 발견), 실제 DB 상태와는 무관 — 2026-08-10 정정. |
+| 근거 파일 | `fix_payments_payment_provider_draft_proposed.sql`, `add_manager_dashboard_summary_draft_proposed.sql`, `fix_manager_dashboard_summary_daily_bug_draft_proposed.sql`, `fix_service_role_missing_grants_payments_draft_proposed.sql`, `lib/sales.ts`(`fetchDashboardSummary`), `app/manager/page.tsx`, `tests/integration/dashboard-summary.test.ts` |
+| 완료 조건 | ~~SQL 4개 순서대로 적용~~ 완료 |
 
 - **2026-08-08 CI 1차 재실행에서 SQL 버그 발견**: `payment_provider`/`dashboard_summary`
   두 SQL 적용 직후 CI를 재실행하니 `dashboard-summary.test.ts` 6건이 전부
@@ -916,16 +916,27 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   이미 쌓인 데이터(1회성)를 정리. 대상은 정확한 문자열/계정으로 식별되는 테스트 전용 데이터만
   (진단 결과 "그 외 profile_id 0건" 확인, 실사용자/실센터 데이터 아님). BEGIN/COMMIT +
   미리보기 카운트 + 예상 범위 벗어나면 RAISE EXCEPTION 가드 포함.
-- **범위 밖(별도 이슈로 기록, 이번엔 안 건드림)**: 같은 진단에서 `classes` 테이블도 1000행
-  캡에 걸릴 만큼 누적돼 있음을 발견(`admin-assignment-security.test.ts`의 "성공경로-*"
-  시나리오만 최소 914건, `P1-12`/`RES-001`/`CLASS-001`/`SETTINGS-REAUDIT` 등 추가). 이 파일들은
-  이미 `afterAll`로 정리하도록 설계돼 있어(get-or-create 부재 문제가 아님) — 근본 원인은
-  "CI 취소 시 afterAll 미실행"과 동일 계열이지만, 파일마다 시나리오별 고유 데이터라 get-or-create
-  전환이 부적절하고, `beforeAll` 자체 정리 스윕을 5개 이상 파일에 각각 설계해야 하는 더 큰
-  작업이다. class-allowed-products.spec.ts의 현재 실패와 직접 관련 없어 이번 배치 범위에서
-  제외하고 여기 기록만 함 — TEST-002(#24)와 같은 근본 원인 계열로 함께 검토 권장.
+- **범위 밖 → 이슈로 분리됨(2026-08-10, [TEST-004 #45](https://github.com/sonjw222/booking-app/issues/45))**:
+  같은 진단에서 `classes` 테이블도 1000행 캡에 걸릴 만큼 누적돼 있음을 발견
+  (`admin-assignment-security.test.ts`의 "성공경로-*" 시나리오만 최소 914건,
+  `P1-12`/`RES-001`/`CLASS-001`/`SETTINGS-REAUDIT` 등 추가). 이 파일들은 이미 `afterAll`로
+  정리하도록 설계돼 있어(get-or-create 부재 문제가 아님) — 근본 원인은 "CI 취소 시 afterAll
+  미실행"과 동일 계열이지만, 파일마다 시나리오별 고유 데이터라 get-or-create 전환이
+  부적절하고, `beforeAll` 자체 정리 스윕을 5개 이상 파일에 각각 설계해야 하는 더 큰 작업이다.
+  class-allowed-products.spec.ts의 현재 실패와 직접 관련 없어 P2-20 배치 범위에서는 제외했고,
+  **다음 안정화 배치의 확정 우선순위**로 TEST-004에 반영함(TEST-002 #24와 같은 근본 원인
+  계열로 함께 검토 권장).
 
-## 6. P3 — 제품 결정이 필요한 향후 기능 후보
+### 다음 안정화 배치 확정 우선순위 (2026-08-10, PR #44 리뷰 중 확정)
+
+P2-20 조사 과정에서 발견됐지만 이번 배치 범위 밖이라 코드 수정 없이 이슈로만 분리한
+3건 — 다음 안정화 배치에서 이 순서로 착수할 것을 확정한다.
+
+| 순위 | 이슈 | 요약 | 근거 |
+|---|---|---|---|
+| 1 | [RES-002 #42](https://github.com/sonjw222/booking-app/issues/42) | `fetchMonthData()`의 `myMems` 쿼리가 PostgREST 1000행 캡 미대응 | 실제 회원 데이터 정합성에 영향 가능(앱 버그), cleanup 전 TEST_USER_A로 실증됨 |
+| 2 | [TEST-004 #45](https://github.com/sonjw222/booking-app/issues/45) | `classes` 테이블 공유 테스트센터 오염(1000행 캡, 최소 914건) | `memberships`와 동일 계열이지만 아직 미정리 — 다른 파일이 같은 캡에 걸릴 위험 지속 |
+| 3 | [TEST-003 #43](https://github.com/sonjw222/booking-app/issues/43) | `daily-book-limit.spec.ts` 잔여 CI 인프라 플레이키니스 | 이미 완화됐지만 재발 관측됨(P2-20 최종 검증 중), 기능을 막지는 않아 최하 우선순위 |
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
 
