@@ -137,3 +137,74 @@ test("진단: 실제 관리자 UI로 신규 수업(모든 수강권 허용) 생�
 
   await memberContext.close();
 });
+
+test("진단 Case B: 실제 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 → 회원 실제 재현", async ({ page, browser }) => {
+  const uniqueTitle = `DIAG-UI-NEWCLASS-CASEB-${Date.now()}`;
+  const future = new Date(Date.now() + 91 * 24 * 3600 * 1000);
+  const dateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(future);
+
+  await page.goto("/manager/classes");
+  await expect(page.locator(".cal-title")).toBeVisible();
+  const [ty, tm] = dateStr.split("-").map(Number);
+  for (let i = 0; i < 4; i++) {
+    const title = (await page.locator(".cal-title").innerText()).trim();
+    const [cy, cm] = title.split(".").map(Number);
+    if (cy === ty && cm === tm) break;
+    await page.locator(".cal-nav-btn").nth(1).click();
+  }
+
+  await page.locator(".fab-btn", { hasText: "수업 등록" }).click();
+  await expect(page.locator(".sheet-title", { hasText: "수업 등록" })).toBeVisible();
+
+  await page.locator('input[placeholder="수업명"]').fill(uniqueTitle);
+  await page.locator('input[type="date"]').fill(dateStr);
+  await fillAmPmTime(page, 0, 19, 0);
+  await fillAmPmTime(page, 1, 20, 0);
+
+  // TEST_USER_A가 실제 보유한 "E2E 테스트 수강권 상품"(P2-20 cleanup 이후 남은 정상 fixture
+  // 상품) 하나만 허용하도록 선택 — 검색 후 chip 클릭.
+  await page.locator('input[placeholder="수강권 이름 검색"]').fill("E2E 테스트 수강권 상품");
+  await page.locator(".filter-chip", { hasText: "E2E 테스트 수강권 상품" }).click();
+  await expect(page.locator(".perm-guide", { hasText: "1개" })).toBeVisible();
+
+  await page.getByRole("button", { name: "등록하기", exact: true }).click();
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+
+  const admin = getFixtureAdminClient();
+  const { data: newClassRow, error: findErr } = await admin
+    .from("classes")
+    .select("id, title, start_time, end_time")
+    .eq("center_id", centerAId)
+    .eq("title", uniqueTitle)
+    .single();
+  if (findErr || !newClassRow) throw new Error(`방금 만든 class를 못 찾음: ${findErr?.message}`);
+  createdClassIds.push(newClassRow.id);
+  console.log(`=== Case B UI로 생성된 신규 class: ${JSON.stringify(newClassRow)} ===`);
+
+  const { data: cap, error: capErr } = await supabase
+    .from("class_allowed_products").select("*, products(name)").eq("class_id", newClassRow.id);
+  if (capErr) throw new Error(capErr.message);
+  console.log(`=== Case B 신규 class의 class_allowed_products: ${(cap ?? []).length}건 ${JSON.stringify(cap ?? [])} ===`);
+
+  const { switchToTestUser } = await import("../../integration/setup");
+  await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
+  const { data: rpcRows, error: rpcErr } = await supabase.rpc("usable_memberships_for_classes", {
+    p_class_ids: [newClassRow.id],
+    p_profile_id: userA.profileId,
+  });
+  if (rpcErr) throw new Error(`RPC 호출 실패: ${rpcErr.message}`);
+  console.log(`=== Case B RPC 직접 호출 결과: ${(rpcRows ?? []).length}건 ${JSON.stringify(rpcRows ?? [])} ===`);
+
+  const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
+  const memberPage = await memberContext.newPage();
+  await memberPage.goto(reservationDeepLink(newClassRow.id, newClassRow.start_time));
+  await expect(memberPage.locator(".sheet-title", { hasText: "예약하시겠어요?" })).toBeVisible({ timeout: 20000 });
+  await memberPage.waitForTimeout(1500);
+  const passList = memberPage.locator(".pass-pick-list");
+  const noPassMsg = memberPage.locator("text=현재 사용할 수 있는 수강권이 없어요");
+  console.log(`=== Case B 회원 화면 재현: .pass-pick-list visible=${await passList.isVisible().catch(() => false)}, "수강권 없음" visible=${await noPassMsg.isVisible().catch(() => false)} ===`);
+  if (await passList.isVisible().catch(() => false)) {
+    console.log(`=== Case B pass-pick-list 내용: ${await passList.innerText()} ===`);
+  }
+  await memberContext.close();
+});
