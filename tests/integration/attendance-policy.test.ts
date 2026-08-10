@@ -22,7 +22,8 @@ import {
   getOrCreateOwnedTestCenter,
   createFutureTestClass,
   createTestMembership,
-  cleanupTestClass,
+  cleanupTestClassAdmin,
+  getFixtureAdminClient,
 } from "./setup";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../lib/settings";
 
@@ -59,6 +60,31 @@ beforeAll(async () => {
   memberA = await switchToTestUser(MEMBER_A.email, MEMBER_A.password);
   memberB = await switchToTestUser(MEMBER_B.email, MEMBER_B.password);
 
+  // P1-14 self-healing: 이 파일이 만드는 "P3 출결-*" 수업은 테스트 성격상 waitlisted/
+  // confirmed 상태로 끝나는 경우가 있어(대기 거부 가드 테스트가 그 예) afterAll의 raw
+  // delete가 RLS("매니저 취소예약 정리" 정책, status in ('cancelled','no_show')만 허용)에
+  // 막혀 조용히 실패할 수 있었다(실측: memberB의 waitlisted 예약이 3일간 13건 누적 —
+  // docs/TODO.md P1-14). afterAll을 admin 기반(cleanupTestClassAdmin)으로 바꿔 근본적으로
+  // 막았지만, 과거에 이미 남은 잔여물과 혹시 모를 예외 상황(afterAll 자체가 실행되지 못한
+  // 경우 등)에 대비해 이번 실행 시작 전에도 이 파일 전용 제목의 잔여 수업/예약을 admin으로
+  // 한 번 더 정리한다(get-or-create/self-healing beforeAll cleanup 패턴).
+  {
+    const admin = getFixtureAdminClient();
+    const staleTitles = [
+      "P3 출결-취소최종", "P3 출결-대기거부", "P3 출결-대기취소",
+      "P3 출결-타센터차단", "P3 출결-프라이빗",
+    ];
+    const { data: staleClasses, error: staleErr } = await admin
+      .from("classes")
+      .select("id")
+      .eq("center_id", centerAId)
+      .in("title", staleTitles);
+    if (staleErr) throw new Error(`P1-14 self-healing 조회 실패: ${staleErr.message}`);
+    for (const c of staleClasses ?? []) {
+      await cleanupTestClassAdmin((c as any).id);
+    }
+  }
+
   // "대기 중인 예약은 출석 대상이 아니다" 테스트는 실제로 waitlisted 예약이 생겨야 하는데,
   // 이 공유 센터의 현재 설정이 waitlist_weekly_limit=0(대기예약 미사용)이면 정원 초과 시
   // reserve_class()가 대기 대신 즉시 거부한다(실제로 CI에서 재현됨) — 이 describe 블록이
@@ -69,11 +95,16 @@ beforeAll(async () => {
 }, 30000);
 
 afterAll(async () => {
-  await asManagerA();
+  // P1-14: 세션 기반(cleanupTestClass) 대신 admin(service_role) 기반으로 정리한다 — RLS의
+  // "매니저 취소예약 정리" 정책이 cancelled/no_show 상태만 삭제를 허용해, 이 파일의 waitlisted
+  // 상태로 끝나는 테스트에서는 세션 기반 delete가 매번 조용히 실패했다(위 beforeAll 주석 참고).
   for (const id of createdClassIds) {
-    try { await cleanupTestClass(id, []); } catch { /* 무시 */ }
+    try { await cleanupTestClassAdmin(id); } catch { /* 무시 — 다음 실행의 self-healing이 정리 */ }
   }
-  try { await saveSettings(centerAId, defaultSettings); } catch { /* 무시 */ }
+  try {
+    await asManagerA();
+    await saveSettings(centerAId, defaultSettings);
+  } catch { /* 무시 */ }
   await signOutTestSession();
 }, 30000);
 

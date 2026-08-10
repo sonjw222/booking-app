@@ -525,3 +525,17 @@ export async function cleanupTestClass(classId: string, reservationIds: string[]
     await supabase.from("classes").delete().eq("id", classId);
   } catch { /* 무시 */ }
 }
+
+// cleanupTestClass()의 raw delete는 매니저 세션(RLS) 기준이라 "매니저 취소예약 정리" 정책
+// (reservation_functions.sql, status in ('cancelled','no_show')만 허용)에 걸려 waitlisted/
+// confirmed/attended 상태로 남은 예약은 에러 없이 조용히 삭제되지 않는다(0건 삭제, 예외 아님)
+// — private-class-capacity.test.ts에서 이미 한 번 발견/우회된 것과 동일한 원인이며,
+// attendance-policy.test.ts가 이 패턴으로 매 실행 waitlisted 예약을 남겨 실제로 3일간 13건
+// 누적된 것을 실측 확인했다(docs/TODO.md P1-14). admin(service_role)은 RLS를 우회하므로
+// 예약 상태와 무관하게 확실히 지운다 — 테스트가 끝난 뒤 non-terminal 상태로 남을 수 있는
+// 예약을 만드는 파일은 cleanupTestClass 대신 이 함수를 쓴다.
+export async function cleanupTestClassAdmin(classId: string): Promise<void> {
+  const admin = getFixtureAdminClient();
+  await admin.from("reservations").delete().eq("class_id", classId);
+  await admin.from("classes").delete().eq("id", classId);
+}

@@ -8,6 +8,27 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-10 — P1-14: attendance-policy.test.ts 대기예약 누적 원인 확정 + 재발 방지 코드, cleanup SQL 작성(미실행) (feature/social-auth-notifications-attendance-dashboard)
+
+- P2-21 작업 중 발견한 `attendance-policy.test.ts`의 3~4연속 Integration 실패("이번 주
+  대기예약 가능 횟수 초과")를 read-only 진단(임시 CI 진단 파일, 실행 후 삭제)으로 실측
+  조사. memberB의 waitlisted 예약이 centerA에 13건 누적돼 있었고, 전부 정확히 같은 class
+  title("P3 출결-대기거부")·profile·center — 단발 사고가 아니라 이 테스트를 실행할 때마다
+  거의 매번 1건씩 쌓인 패턴.
+- 근본 원인을 코드로 확정: `reservations`의 RLS DELETE 정책이 `status in
+  ('cancelled','no_show')`만 허용하는데, 이 테스트가 검증 목적상 waitlisted 상태로 남기는
+  예약을 매니저 세션(RLS 적용) 기반 `cleanupTestClass()`로 지우려 해 매번 에러 없이 조용히
+  0건 삭제로 끝났다. 완전히 동일한 원인이 `private-class-capacity.test.ts`에서 이미 한 번
+  발견·우회된 적이 있었는데(그 파일 자체 주석) 그 교훈이 이 파일에는 전파되지 않았던 것.
+- 재발 방지: `tests/integration/setup.ts`에 admin(service_role) 기반 `cleanupTestClassAdmin()`
+  추가, `attendance-policy.test.ts`의 `afterAll`을 이걸로 전환하고 `beforeAll`에 이 파일
+  전용 잔여물 self-healing 정리를 추가.
+- 과거 누적분(13건) 정리는 `cleanup_p1_14_waitlisted_test_pollution_draft_proposed.sql` +
+  롤백 안내 파일로 작성(A. read-only preview / B. 단일 트랜잭션 atomic cleanup / C.
+  post-commit 검증 구조, admin_action_logs FK NOT EXISTS 가드 포함) — static audit까지만
+  진행하고 Supabase에는 실행하지 않음(사용자가 SQL Editor에서 직접 실행 예정).
+- 상세: `docs/TODO.md` P1-14.
+
 ## 2026-08-10 — P2-21: PR #44 수동 QA 버그 재현 조사(진행 중, 종결 아님), TEST4/TEST5(구매 직후 즉시 사용 가능/goods 배제) 추가, 무관한 Integration 블로커 발견 (feature/social-auth-notifications-attendance-dashboard)
 
 - PR #44 수동 QA로 보고된 "신규 수업은 회원이 유효한 수강권을 보유해도 사용 가능한

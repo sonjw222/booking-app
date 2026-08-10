@@ -1,0 +1,26 @@
+-- cleanup_p1_14_waitlisted_test_pollution_draft_proposed.sql 롤백 안내
+--
+-- 이 스크립트는 순수 데이터 삭제(DELETE)이므로 스키마 변경(컬럼/함수/제약조건)과 달리
+-- SQL로 되돌릴 방법이 없습니다 — 삭제된 행은 값 자체가 사라지므로 "이전 정의로 재정의"
+-- 같은 롤백이 성립하지 않습니다.
+--
+-- 되돌려야 하는 상황이 생기면:
+--   1) 원본 cleanup_p1_14_*.sql은 BEGIN/COMMIT 트랜잭션 안에서 실행됩니다 — 만약 그
+--      트랜잭션이 아직 COMMIT되지 않았다면(B 섹션의 RAISE NOTICE 출력을 보다가 이상함을
+--      발견해 COMMIT 직전에 중단한 경우) ROLLBACK으로 되돌릴 수 있습니다. RAISE EXCEPTION이
+--      발생한 경우는 이미 PostgreSQL이 자동으로 전체 트랜잭션을 롤백했으므로 별도 조치가
+--      필요 없습니다.
+--   2) 이미 COMMIT된 뒤라면, 삭제된 행은 실제 사용자 데이터가 아니라 전부
+--      attendance-policy.test.ts(reserve_class RPC를 통한 memberB의 셀프 예약)가 만든 테스트
+--      fixture입니다 — "복구"가 아니라 "다음 테스트 실행이 필요할 때 다시 만들어내는 것"이
+--      정답입니다. 이 파일이 손대는 코드(tests/integration/setup.ts의 cleanupTestClassAdmin,
+--      attendance-policy.test.ts의 beforeAll self-healing/afterAll)가 이미 admin(service_role)
+--      기반으로 확실히 정리하도록 고쳐졌으므로, 앞으로는 이 SQL이 정리한 것과 같은 종류의
+--      잔여물이 다시 쌓이지 않습니다.
+--   3) admin_action_logs가 참조하는 reservation/class는 이 정리 대상에서 애초에 NOT EXISTS로
+--      제외했으므로(A-3에서 사전 확인, 진단 시점 0건 예상) 영향받지 않습니다 — 되돌릴 필요
+--      자체가 없습니다.
+--   4) Supabase 프로젝트에 Point-in-Time Recovery(PITR)가 활성화돼 있다면, COMMIT 이후라도
+--      해당 시점 이전으로 데이터베이스 전체를 복원하는 것은 이론적으로 가능하지만, 이는 이
+--      스크립트가 건드리지 않은 다른 모든 변경사항까지 함께 되돌리므로 이 정리 하나만
+--      되돌리는 용도로는 적절하지 않습니다.

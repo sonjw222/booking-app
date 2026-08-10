@@ -844,35 +844,50 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   존재하는 stale `membership_schedule_rules`나 다른 데이터 특이사항이 원인일 수 있다 —
   이번 조사로는 배제하지 못함. 추가 재현 정보가 오면 그때 계속 조사할 것.
 
-### P1-14. (2026-08-10, 발견 — 확인 필요, 사용자 결정 대기) `attendance-policy.test.ts` 주간 대기예약 한도 초과로 Integration 3회 연속 실패
+### P1-14. (2026-08-10, 코드 수정 완료 · SQL 작성·static audit 완료 · 사용자 실행 대기) `attendance-policy.test.ts` 주간 대기예약 한도 초과로 Integration 3회 연속 실패
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1(다른 작업의 "전체 CI 2회 연속 Green" 요건을 반복적으로 막음) |
-| 현재 상태 | **P2-21(TEST4/TEST5) 작업 중 발견. `new-class-creation.spec.ts`와는 무관 — 완전히 다른 파일/도메인(E2E가 아니라 Integration, waitlist 정원 로직). 데이터 삭제는 사용자 승인 없이 하지 않음(규칙 3) — 여기서 멈추고 보고만 함** |
-| 근거 파일 | `tests/integration/attendance-policy.test.ts`(수정 안 함, 원인만 진단), `fix_reserve_with_membership_operational_settings.sql`(주간 대기예약 한도 가드) |
-| 완료 조건 | 사용자가 (a) TEST_USER_B의 누적 `waitlisted` reservations 정리를 승인하거나, (b) 자연 소멸(주 경계 도래)을 기다리거나, (c) 이 항목을 별도 이슈로 분리하고 현재 증거(TEST4/TEST5 E2E 3연속 Green)로 충분하다고 판단하기를 결정 |
+| 현재 상태 | **근본 원인을 코드로 확정하고 재발 방지 코드를 이미 커밋함(`tests/integration/setup.ts`의 `cleanupTestClassAdmin` 추가 + `attendance-policy.test.ts`의 beforeAll self-healing/afterAll admin 전환). 과거 누적분 정리 SQL(`cleanup_p1_14_waitlisted_test_pollution_draft_proposed.sql`)은 작성·static audit까지 완료 — Supabase에는 아직 실행하지 않음(사용자가 SQL Editor에서 직접 실행 예정)** |
+| 근거 파일 | `tests/integration/attendance-policy.test.ts`, `tests/integration/setup.ts`, `reservation_functions.sql`(RLS DELETE 정책), `cleanup_p1_14_waitlisted_test_pollution_draft_proposed.sql`, `rollback_cleanup_p1_14_waitlisted_test_pollution_draft_proposed.sql` |
+| 완료 조건 | 사용자가 cleanup SQL을 Supabase SQL Editor에서 실행 → read-only 재검증 → Integration/E2E/Unit/Build 전체 재실행 → 2회 연속 Green |
 
-- **증상**: run `31356042673`부터 `31359970888`까지 Integration job이 3회 연속으로 정확히
+- **증상**: run `31356042673`부터 `31362464170`까지 Integration job이 4회 연속으로 정확히
   같은 2개 테스트에서 동일 에러로 실패: `예약 실패: 이번 주 대기예약 가능 횟수(10회)를
   초과했어요`. 같은 run들에서 E2E(TEST1/TEST2/TEST4/TEST5/TEST6 포함)와 Unit은 매번 Green.
-- **원인 경로**: `reserve_with_membership()`/`reserve_class()`가 `center_settings.waitlist_weekly_limit`
-  기준으로 프로필별 이번 주 `status='waitlisted'` reservations 개수를 세고 한도(테스트가
-  `beforeAll`에서 10으로 세팅) 이상이면 즉시 거부한다. `attendance-policy.test.ts`가 만드는
-  memberB의 waitlisted reservations가 이미 10건 이상 누적돼 있어 이 파일 자신의 새 waitlist
-  시도가 첫 시도부터 실패.
-- **self-inflicted 여부 확인(실측)**: `tests/integration/setup.ts`의 `cleanupTestClass(classId,
-  reservationIds)`(라인 513-527)를 직접 읽음 — `reservationIds` 인자와 무관하게
-  `reservations.delete().eq("class_id", classId)`를 항상 실행하므로, 이 파일의 `afterAll`이
-  끝까지 실행되면 자기가 만든 waitlisted reservations는 매번 제대로 정리된다. 즉
-  **이 파일 자체의 cleanup 로직 결함이 아님** — 누적 원인은 외부(다른 waitlist 생성
-  테스트 파일, 또는 이번 세션 중 CI를 대량으로 재실행하면서 일부 run이
-  `concurrency.cancel-in-progress`로 중간 취소돼 `afterAll`이 못 돈 경우 — 이미 문서화된
-  기존 root-cause 계열과 동일, `pull_request`/`workflow_dispatch`가 서로 다른 concurrency
-  group을 써서 동시 실행될 수 있다는 사실이 이를 더 키웠을 가능성).
-- **범위 밖 판단**: 이 이슈는 P2-21(TEST4/TEST5) 작업과 파일/도메인이 완전히 분리되어 있고,
-  고치려면 공유 개발 DB의 기존 데이터를 삭제해야 하므로(규칙 3: 사용자 승인 없이 기존
-  데이터 삭제 금지) 이번 작업 범위에서 임의로 처리하지 않음.
+- **실측 진단(CI run 31362464170, 임시 read-only 진단 파일로 확인 후 삭제)**: memberB
+  (TEST_USER_B, profile `f2c9749a-b282-433b-8b60-a982b81a53f3`)의 waitlisted reservations가
+  centerA에 정확히 13건 존재. **13건 전부** class title이 정확히 `P3 출결-대기거부`(다른
+  title은 0건), created_at은 2026-08-07~2026-08-09에 걸쳐 분산(거의 매 실행마다 1건씩).
+  memberA의 waitlisted는 0건.
+- **근본 원인(코드로 확정, 추측 아님 — 이전 기록의 "self-inflicted 아님" 결론은 정정함)**:
+  `reservation_functions.sql`의 "매니저 취소예약 정리" RLS DELETE 정책(`reservations`,
+  `status in ('cancelled','no_show')`만 허용)과, "정원이 찬 그룹 수업에서 대기로 등록된
+  예약은 attended로 바꿀 수 없다" 테스트가 **의도적으로 waitlisted 상태로 남기는** 예약
+  (그 상태를 유지한 채 가드를 검증하는 게 테스트의 목적 자체) 사이의 범위 불일치. 옛
+  `afterAll`은 매니저 세션(RLS 적용) 기반 `cleanupTestClass()`로 지웠는데, 이 정책이
+  waitlisted를 허용하지 않아 `DELETE`가 **에러 없이 조용히 0건 삭제**로 끝났다(Postgrest가
+  RLS에 안 걸리는 행을 그냥 매칭 안 된 것으로 처리 — 예외 아님). **완전히 동일한 원인이
+  `private-class-capacity.test.ts`에서 이미 한 번 발견·우회된 적이 있었음**(그 파일 자체
+  주석, `admin_cancel_reservation`이 MEMBER 타입 예약을 거부해 세션 기반 delete가 조용히
+  막히는 사례) — 그 교훈이 `attendance-policy.test.ts`에는 전파되지 않았던 것.
+- **재발 방지(코드 수정 완료, 커밋됨)**: `tests/integration/setup.ts`에 `cleanupTestClassAdmin(classId)`
+  추가(admin/service_role 기반 — RLS를 우회하므로 예약 상태와 무관하게 확실히 삭제).
+  `attendance-policy.test.ts`의 `afterAll`을 이 함수로 전환하고, `beforeAll`에 이 파일 전용
+  5개 title("P3 출결-*")에 대한 self-healing 사전 정리를 추가(get-or-create/self-healing
+  패턴, TEST4의 `cleanupBuyProductMemberships`와 동일 스타일) — 이후로는 이 파일이 CI
+  취소/실패로 `afterAll`을 못 돌아도 다음 실행의 `beforeAll`이 스스로 정리한다.
+- **과거 누적분 정리 SQL**: `cleanup_p1_14_waitlisted_test_pollution_draft_proposed.sql` —
+  profile_id(memberB 정확한 UUID) + center_id(centerA 정확한 UUID) + class title 정확히
+  일치("P3 출결-대기거부", LIKE 없음) + status='waitlisted' 4중 조건, `admin_action_logs`
+  참조 NOT EXISTS 가드, A(read-only preview)/B(단일 트랜잭션 atomic cleanup)/C(post-commit
+  검증) 구조. **참고**: 이 13개 class는 각각 memberA의 아직 살아있는 confirmed 예약도 함께
+  갖고 있어(정원 1명을 memberA가 먼저 채우는 테스트 구조), class 자체는 이번 정리 후에도
+  남을 가능성이 높다(안전한 의도된 동작 — 오늘 실패의 원인인 waitlisted 건수와는 무관, 남은
+  class 누적은 별도의 기존 이슈 RES-002/TEST-004 계열).
+- **아직 실행 안 함**: 사용자가 Supabase SQL Editor에서 직접 실행할 예정(코드 수정과 별도
+  커밋, `docs/CHANGELOG.md` 참고).
 
 ### P2-20. (2026-08-09, 해결됨) class_allowed_products 선택이 저장 직후 재진입 시 사라짐 + `.pass-pick-list` 미표시
 
