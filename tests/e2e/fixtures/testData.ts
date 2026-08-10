@@ -203,6 +203,23 @@ export async function clearScheduleRulesForProduct(productId: string): Promise<v
   if (error) throw new Error(`membership_schedule_rules 정리 실패: ${error.message}`);
 }
 
+// P1-15: membership_schedule_rules 회귀 테스트용 — 특정 상품에 요일/시간/수업명 조건을
+// 하나 추가한다(/manager/membership-rules 화면의 addRule과 동일한 insert, UI를 거치지
+// 않고 직접 fixture로 만듦). null을 넘기면 그 축은 "모든 값 허용"(제한 없음)이 된다.
+export async function setScheduleRuleForProduct(
+  productId: string,
+  rule: { dayOfWeek: number | null; startTime: string | null; classTitle: string | null }
+): Promise<void> {
+  const admin = getFixtureAdminClient();
+  const { error } = await admin.from("membership_schedule_rules").insert({
+    product_id: productId,
+    day_of_week: rule.dayOfWeek,
+    start_time: rule.startTime,
+    class_title: rule.classTitle,
+  });
+  if (error) throw new Error(`membership_schedule_rules 추가 실패: ${error.message}`);
+}
+
 export async function getOrCreateTestPassProduct(centerId: string): Promise<{ id: string }> {
   const admin = getFixtureAdminClient();
   const name = "E2E 테스트 수강권 상품";

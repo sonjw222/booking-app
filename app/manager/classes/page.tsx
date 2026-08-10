@@ -30,7 +30,10 @@ import {
   isValidClassTimeRange,
 } from "../../../lib/classes";
 import { fetchMemberDetail, type MemberDetailData } from "../../../lib/members";
-import { fetchProducts, type Product } from "../../../lib/passes";
+import {
+  fetchProducts, fetchRulesForProducts, findScheduleExcludedProducts, ruleToText,
+  type Product, type ScheduleRule,
+} from "../../../lib/passes";
 import { assignReservation, cancelAdminReservation, type AssignmentType } from "../../../lib/adminAssignment";
 import {
   ADMIN_REASON_CODES, ADMIN_REASON_LABELS, type AdminReasonCode,
@@ -141,6 +144,11 @@ export default function ClassManagePage() {
   // 수강권 목록 + 폼에서 선택된 수강권
   const [passProducts, setPassProducts] = useState<Product[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  // 상품별 예약조건(membership_schedule_rules) — "모든 수강권 허용"을 골라도 상품 자체의
+  // 요일/시간 조건은 별개로 계속 적용된다는 걸 관리자에게 보여주기 위한 경고 계산용
+  // (P1-15: 실제 QA에서 이 상호작용 때문에 "모든 수강권 허용"인데도 예약 가능 수강권이
+  // 0개가 되는 게 재현됨 — RPC 로직은 그대로 두고 UI에서만 미리 알려준다).
+  const [rulesByProduct, setRulesByProduct] = useState<Record<string, ScheduleRule[]>>({});
   const [passSearch, setPassSearch] = useState(""); // P3: 예약 가능 수강권 선택 목록 검색
   // openEdit()이 재진입/재클릭으로 여러 번 겹쳐 호출될 때, 늦게 도착한 fetchClassProducts
   // 결과가 최신 openEdit 호출이나 사용자의 chip 선택을 덮어쓰지 않도록 하는 요청 토큰과
@@ -185,7 +193,11 @@ export default function ClassManagePage() {
     if (activeCenterId) {
       loadClasses(activeCenterId, year, month);
       fetchProducts(activeCenterId, "pass")
-        .then((list) => setPassProducts(list))
+        .then((list) => {
+          setPassProducts(list);
+          return fetchRulesForProducts(list.map((p) => p.id));
+        })
+        .then((rules) => setRulesByProduct(rules))
         .catch(() => { /* 무시 */ });
     }
   }, [year, month, activeCenterId, loadClasses]);
@@ -1110,11 +1122,41 @@ export default function ClassManagePage() {
 
             {/* 예약 가능 수강권 선택 (P3: class_allowed_products) */}
             <div className="menu-section-label" style={{ padding: "8px 0 6px" }}>예약 가능 수강권</div>
-            <div className="perm-guide" style={{ margin: "0 0 8px" }}>
+            <div className="perm-guide" style={{ margin: "0 0 4px" }}>
               {selectedProducts.length === 0
                 ? <>선택 안 하면 <b>모든 수강권</b>으로 예약 가능해요. 특정 수강권만 고르면 그 수강권 보유자만 예약할 수 있어요.</>
                 : <><b>{selectedProducts.length}개</b> 수강권만 이 수업에 사용할 수 있어요.</>}
+              {" "}단, 이 설정은 <b>어떤 상품</b>을 쓸 수 있는지만 정해요 — 각 수강권 자체에 걸린
+              요일/시간 예약조건(수강권 관리)은 이것과 별개로 계속 적용돼요.
             </div>
+            {(() => {
+              if (!form.date || !form.start || !form.title.trim() || passProducts.length === 0) return null;
+              const [y, m, d] = form.date.split("-").map(Number);
+              if (!y || !m || !d) return null;
+              const classDow = new Date(y, m - 1, d).getDay();
+              const candidates = selectedProducts.length === 0
+                ? passProducts
+                : passProducts.filter((p) => selectedProducts.includes(p.id));
+              const excluded = findScheduleExcludedProducts(
+                candidates.map((p) => ({ id: p.id, name: p.name })),
+                rulesByProduct,
+                { dayOfWeek: classDow, startTime: form.start, classTitle: form.title.trim() }
+              );
+              if (excluded.length === 0) return null;
+              return (
+                <div className="perm-guide schedule-rule-warning" style={{ margin: "0 0 8px", color: "var(--danger, #d33)" }}>
+                  ⚠️ 이 수업({WEEKDAYS[classDow]}요일 {form.start})에서는 <b>{excluded.length}개</b> 수강권을
+                  실제로 쓸 수 없어요(수강권 자체의 예약조건과 안 맞음):
+                  <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                    {excluded.map((ex) => (
+                      <li key={ex.productId} className="schedule-rule-warning-item" style={{ fontSize: 12 }}>
+                        {ex.productName} — 허용 조건: {ex.rules.map(ruleToText).join(" 또는 ")}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
             {passProducts.length === 0 ? (
               <div className="daylist-empty" style={{ padding: "8px 0" }}>
                 <span style={{ fontSize: 12 }}>등록된 수강권이 없어요 (수강권 관리에서 먼저 추가)</span>
