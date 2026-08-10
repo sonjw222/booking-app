@@ -61,6 +61,23 @@ function kstDateStrFromIso(iso: string): string {
   const kst = new Date(d.getTime() + 9 * 3600 * 1000);
   return `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, "0")}-${String(kst.getUTCDate()).padStart(2, "0")}`;
 }
+// ⚠ [사고 기록 2] 초까지 맞춰도(위 kstTimeStrFromIso 주석 참고) 여전히 안 맞았다 —
+// createFutureTestClassAdmin()의 start_time은 Date.now() 기반이라 밀리초도 0이 아닌데,
+// membership_schedule_rules.start_time(time 컬럼)은 기본 정밀도가 마이크로초까지라 "정확히
+// 같은 초"를 넣어도 소수점 이하 밀리초가 달라 여전히 안 맞았다(CI에서 재현 확인, retry도
+// 동일하게 실패해 결정적임을 재확인). class의 start_time 자체를 깨끗한 분 단위로 UPDATE해
+// 규칙이 비교할 값 자체를 밀리초 없는 값으로 만든다 — 이러면 규칙 쪽 정밀도와 무관하게
+// 항상 정확히 일치한다.
+async function normalizeClassStartTimeToCleanMinute(classId: string, startTimeIso: string): Promise<string> {
+  const d = new Date(startTimeIso);
+  d.setUTCSeconds(0, 0);
+  const cleanIso = d.toISOString();
+  const admin = getFixtureAdminClient();
+  const { error } = await admin.from("classes").update({ start_time: cleanIso }).eq("id", classId);
+  if (error) throw new Error(`class start_time 정규화 실패: ${error.message}`);
+  return cleanIso;
+}
+
 function kstDowFromIso(iso: string): number {
   const d = new Date(iso);
   const kst = new Date(d.getTime() + 9 * 3600 * 1000);
@@ -99,15 +116,16 @@ test("B: schedule rule과 일치하는 수업에서는 그 조건의 pass가 사
   const uniqueTitle = `P1-15-MATCH-${Date.now()}`;
   const cls = await createFutureTestClassAdmin(centerAId, { title: uniqueTitle, hoursFromNow: 150 });
   createdClassIds.push(cls.id);
-  const dow = kstDowFromIso(cls.startTime);
-  const timeStr = kstTimeStrFromIso(cls.startTime);
+  const cleanStart = await normalizeClassStartTimeToCleanMinute(cls.id, cls.startTime);
+  const dow = kstDowFromIso(cleanStart);
+  const timeStr = kstTimeStrFromIso(cleanStart);
 
   await clearScheduleRulesForProduct(restrictedPass.id);
   await setScheduleRuleForProduct(restrictedPass.id, { dayOfWeek: dow, startTime: timeStr, classTitle: uniqueTitle });
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
-  await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
+  await memberPage.goto(reservationDeepLink(cls.id, cleanStart));
   await expect(memberPage.locator(".sheet-title", { hasText: "예약하시겠어요?" })).toBeVisible({ timeout: 20000 });
   const passList = memberPage.locator(".pass-pick-list");
   await expect(passList).toBeVisible({ timeout: 15000 });
