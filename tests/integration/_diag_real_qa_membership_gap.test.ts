@@ -35,7 +35,10 @@ async function resolveAccountIdByEmail(admin: any, email: string): Promise<{ aut
   }
 }
 
-describe("실제 QA 계정 read-only 진단", () => {
+// DIAG_EMAIL_A가 없으면(=일반 integration job) 전체를 스킵한다 — 이 파일은 diag_real_qa
+// job(workflow_dispatch 입력이 있을 때만 실행)에서만 의미가 있고, 일반 integration job의
+// 매 실행마다 실패로 잡히면 안 된다.
+describe.skipIf(!process.env.DIAG_EMAIL_A)("실제 QA 계정 read-only 진단", () => {
   it("account/profile/membership/RPC predicate 비교", async () => {
     const admin = getFixtureAdminClient();
     const emailA = need("DIAG_EMAIL_A"); // 관리자(센터 오너)
