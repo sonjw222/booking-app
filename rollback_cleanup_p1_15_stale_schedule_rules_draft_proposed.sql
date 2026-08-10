@@ -1,0 +1,24 @@
+-- cleanup_p1_15_stale_schedule_rules_draft_proposed.sql 롤백 안내
+--
+-- 이 스크립트는 순수 데이터 삭제(DELETE)이므로 스키마 변경과 달리 SQL로 "되돌리는" 개념이
+-- 성립하지 않습니다 — 삭제된 행의 값 자체가 사라지기 때문입니다.
+--
+-- 되돌려야 하는 상황이 생기면:
+--   1) 원본 cleanup_p1_15_*.sql은 BEGIN/COMMIT 트랜잭션 안에서 실행됩니다 — 아직 COMMIT
+--      전이라면(B 섹션의 RAISE NOTICE를 보다가 이상함을 발견해 COMMIT 직전에 중단한 경우)
+--      ROLLBACK으로 되돌릴 수 있습니다. RAISE EXCEPTION이 발생했다면 이미 PostgreSQL이
+--      자동으로 롤백했으므로 별도 조치가 필요 없습니다.
+--   2) 이미 COMMIT된 뒤 "역시 이 스케줄 제한이 필요했다"고 판단되면, 삭제된 값을 그대로
+--      재입력하면 됩니다(정확히 같은 값):
+--
+--      insert into membership_schedule_rules (id, product_id, day_of_week, start_time, class_title, created_at)
+--      values
+--        ('1a5a520e-ac16-4092-9c90-4286c23ad955', 'f6010b96-f83a-4f23-8205-9897aa8b6621', 2, '16:00:00', '수업', '2026-08-03T15:16:03.634919+00:00'),
+--        ('dbd529d7-e20e-4cb2-b1ec-db4d82a42e8e', 'f6010b96-f83a-4f23-8205-9897aa8b6621', 3, '15:00:00', '수업', '2026-08-05T05:41:25.555622+00:00');
+--
+--      (id를 명시적으로 지정해 원래 값과 동일하게 복원합니다. 더 간단하게는
+--      /manager/membership-rules 관리자 화면에서 "수강권" 상품에 화요일 16:00/수요일
+--      15:00, 수업명 "수업" 조건을 다시 추가해도 동일한 효과입니다.)
+--   3) Supabase 프로젝트에 Point-in-Time Recovery(PITR)가 활성화돼 있다면 COMMIT 이후라도
+--      해당 시점 이전으로 복원 가능하지만, 다른 모든 변경사항까지 함께 되돌리므로 이 정리
+--      하나만 되돌리는 용도로는 적절하지 않습니다.

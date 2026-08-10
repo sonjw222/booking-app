@@ -8,6 +8,31 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-10 — P1-15/P1-16 최종 완료: 실제 QA 버그 root cause 확정·UX 수정, 무관한 GRANT 버그 발견·수정, 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
+
+- **P1-15**: PR #44 수동 QA로 100% 재현된 "모든 수강권 허용해도 사용 가능한 수강권 없음"
+  버그의 root cause를 실제 계정 데이터로 확정. `membership_schedule_rules`(수강권 자체의
+  요일/시간/수업명 조건)가 `class_allowed_products`("모든 수강권 허용")와 완전히 별개로
+  계속 적용되는 게 원인 — RPC는 설계대로 정확히 동작해 로직은 바꾸지 않고, 수업 등록/수정
+  화면에 이 상호작용을 미리 알려주는 경고(`.schedule-rule-warning`)를 추가했다
+  (`app/manager/classes/page.tsx`, `lib/passes.ts`). unit 1개 + E2E 3개(B/C+D+F/E)
+  regression test 작성.
+- 실제 QA 계정의 schedule_rules 2건이 무엇 때문에 생겼는지도 read-only로 추적 — 그 규칙이
+  가리키는 "수업" 제목의 class가 실제로 2건 존재했고, 각 규칙의 생성 시각이 대응 class의
+  생성 시각과 초 단위로 거의 동시라 이미 고쳐진 옛 자동생성 부수효과 버그의 흔적으로
+  판단됨. `cleanup_p1_15_stale_schedule_rules_draft_proposed.sql` 작성(미실행, 사용자 결정
+  대기).
+- **P1-16**(무관한 발견): 위 조사 중 `accounts` 테이블에 service_role GRANT가 없어(처음엔
+  SELECT만 추가) `auth-account-bootstrap.test.ts`가 반복 실패하는 걸 발견. 최초 가설
+  (`lib/authAccount.ts`의 profiles insert 에러 미확인)은 임시 진단 로그로 실측 검증한 결과
+  틀렸음을 확인하고 즉시 원복 — 진짜 원인은 그 테스트의 `beforeAll`이 admin으로 낡은
+  throwaway 계정을 정리하려다 GRANT 부족으로 "permission denied"가 나는 것이었다.
+  INSERT/UPDATE/DELETE GRANT 추가 SQL 적용 후 해당 테스트 2회 연속 통과 확인.
+- 전체 CI(E2E/Unit/Integration/Build) 2회 연속 Green — run `31411383724`(완전
+  first-attempt, 재시도 없음), `31413532650`(무관한 기존 flaky 테스트 1건만 1회 재시도,
+  P1-15/16 관련 테스트는 전부 first-attempt).
+- 상세: `docs/TODO.md` P1-15, P1-16.
+
 ## 2026-08-10 — P1-14 최종 완료: cleanup SQL 적용, 사후 검증 중 발견한 self-healing 성능 버그 수정, 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
 
 - 사용자가 `cleanup_p1_14_waitlisted_test_pollution_draft_proposed.sql`을 Supabase SQL
