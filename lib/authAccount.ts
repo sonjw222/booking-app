@@ -35,10 +35,5 @@ export async function ensureAccountForCurrentUser(): Promise<void> {
     return; // 그 외 실패도 조용히 넘어감 — 다음 실제 데이터 호출에서 명확한 에러로 다시 드러남
   }
 
-  // P1-16 임시 진단(재현 확정용, 동작 변경 없음) — 이 insert의 error를 원래 코드는
-  // 전혀 확인하지 않았다. 실패 원인을 확정하기 위해 잠깐 로그만 남긴다.
-  const profileInsertRes = await supabase.from("profiles").insert({ account_id: account.id, name, is_primary: true });
-  if (profileInsertRes.error) {
-    console.error(`[P1-16 진단] profiles insert 실패: code=${profileInsertRes.error.code} message=${profileInsertRes.error.message} details=${profileInsertRes.error.details} hint=${profileInsertRes.error.hint} account_id=${account.id}`);
-  }
+  await supabase.from("profiles").insert({ account_id: account.id, name, is_primary: true });
 }

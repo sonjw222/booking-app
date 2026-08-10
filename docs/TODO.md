@@ -858,27 +858,34 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 - **실제 계정 진단 중 발견한 무관한 문제들(이 버그 자체와는 무관, 인프라/타 이슈)**: groupOpenDaysBefore 값 복구(완료), `accounts` service_role GRANT 추가(사용자 적용 완료). 추가로 P1-16(무관한 사전 존재 버그 발견) 참고.
 - PR #44는 여전히 MERGE BLOCKED 상태 — CI 2연속 Green과 사용자의 schedule_rules 처리 결정(P1-17) 이후 재평가.
 
-### P1-16. (2026-08-10, 발견 — 이번 범위 밖, 수정 안 함) `ensureAccountForCurrentUser()`의 profiles insert 에러 미확인 — 간헐적 신규 계정 부트스트랩 실패 가능성
+### P1-16. (2026-08-10, root cause 확정 · SQL 작성 완료, 미실행) `accounts` 테이블 service_role INSERT/UPDATE/DELETE GRANT 누락 — 소셜 로그인 부트스트랩 테스트 반복 실패
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P1(소셜 로그인 신규 가입 흐름에 영향 가능, 그러나 재현 빈도 낮음 — 최근 CI에서 1회만 관측) |
-| 현재 상태 | **발견만 함, 수정 안 함(이번 P1-15 작업 범위 밖). CI run `31396830506`에서 `tests/integration/auth-account-bootstrap.test.ts` 2건이 처음으로 실패(직전 두 번의 CI에서는 동일 테스트 통과 확인, run `31392644359`/`31393468107` 계열) — profiles 행이 안 만들어짐.** |
-| 근거 파일 | `lib/authAccount.ts`(`ensureAccountForCurrentUser`), `tests/integration/auth-account-bootstrap.test.ts` |
-| 완료 조건 | (별도 작업으로) profiles insert의 error를 확인하도록 고치고, 실패 시 재시도 또는 명확한 에러 노출 — 이번 P1-15 작업에서는 다루지 않음 |
+| 우선순위 | P1(테스트 인프라 문제 — 앱 자체의 실제 소셜 로그인 흐름은 authenticated 세션으로 동작해 영향 없음. 단, `accounts` DELETE/UPDATE가 필요한 다른 admin 기반 test/cleanup 헬퍼에도 잠재적으로 동일 문제) |
+| 현재 상태 | **root cause 확정(추측 아님, 임시 진단 로그로 실측). `fix_service_role_missing_grants_accounts_write_draft_proposed.sql` 작성 완료 — Supabase에 아직 실행 안 함, 사용자 적용 필요.** |
+| 근거 파일 | `tests/integration/auth-account-bootstrap.test.ts`, `fix_service_role_missing_grants_accounts_write_draft_proposed.sql`(신규, 미실행), `rollback_fix_service_role_missing_grants_accounts_write_draft_proposed.sql` |
+| 완료 조건 | 사용자가 SQL 적용 → 해당 테스트 재검증 → 전체 CI 2연속 Green |
 
-- **코드로 확인한 원인 후보**: `ensureAccountForCurrentUser()`의 마지막 줄
-  `await supabase.from("profiles").insert({...})`가 **반환값(error)을 전혀 확인하지 않는다**
-  — 이 insert가 RLS/타이밍 등으로 실패해도 함수는 조용히 성공 리턴하고, 이후 `accounts`는
-  있는데 `profiles`는 없는 상태가 남을 수 있다. 실패한 테스트의 증상(계정은 생성됐는데
-  profiles가 0건)과 정확히 일치한다.
-- **이번 P1-15 작업과 무관하다고 판단한 근거**: 이 파일이 다루는 코드(`app/manager/classes/page.tsx`,
-  `lib/passes.ts`)는 `accounts`/`profiles`/소셜 로그인 부트스트랩과 전혀 접점이 없고, 같은
-  브랜치의 직전 두 CI 실행에서는 이 테스트가 정상 통과했다(간헐적 재현으로 보임 — CI를
-  대량으로 반복 실행하는 이번 세션의 부하/타이밍이 우연히 이 기존 race를 노출시켰을
-  가능성). 원인 후보 코드도 이번에 건드린 파일과 무관.
-- **후속 조치**: 이번 작업 범위에서는 수정하지 않고 기록만 남긴다. 재발하면 우선순위를
-  올려 별도로 처리.
+- **최초 가설(틀림, 정정함)**: 처음엔 `lib/authAccount.ts`의 `ensureAccountForCurrentUser()`가
+  마지막 `profiles` insert의 error를 확인하지 않는 게 원인이라고 추정했다. 이 가설을
+  **추측으로 남기지 않고 임시 진단 로그를 추가해 실측으로 검증**했는데(CI run `31408951718`),
+  그 로그가 **한 번도 찍히지 않았다** — 즉 그 코드 경로 자체에 진입하지 않았다는 뜻이라
+  가설이 틀렸음을 확인하고 진단 로그는 즉시 원복(`lib/authAccount.ts`는 최종적으로 변경 없음).
+- **진짜 원인(실측 확정)**: 같은 run의 로그에 `tests/integration/auth-account-bootstrap.test.ts`의
+  `beforeAll`이 남긴 경고가 그대로 찍혀 있었다 — `"throwaway 계정 accounts 정리 실패(무시하고
+  계속): permission denied for table accounts"`. 이 `beforeAll`은 이전 실행이 남긴 throwaway
+  테스트 계정을 admin(service_role)으로 정리하는데, `accounts` 테이블에 service_role
+  INSERT/UPDATE/DELETE GRANT가 없어(SELECT만 최근에 추가됨, P1-15 참고) 이 delete가 항상
+  실패한다(`payments`/`admin_action_logs`/`profiles`/`class_allowed_products`와 동일 계열의
+  이미 여러 번 나온 GRANT 누락 패턴). delete 실패로 낡은 accounts 행이 남고, 그 행은 이미
+  profiles가 지워진 상태라, 다음 `ensureAccountForCurrentUser()` 호출이 이 낡은 계정을
+  "이미 있음"으로 판정해 조기 반환 — profiles가 끝내 하나도 안 만들어져 테스트가 실패했다.
+  이 테스트 파일 자신의 주석에 남아있던 "원인 불명" 과거 실패도 같은 원인으로 설명된다.
+- **분류**: DB/RLS/GRANT 문제(앱 코드 버그 아님, `lib/authAccount.ts`는 정상). 실제 소셜
+  로그인 사용자는 authenticated 세션(RLS)으로 accounts를 직접 관리하므로 이 GRANT 누락의
+  영향을 받지 않는다 — 순수하게 테스트 cleanup(admin/service_role 경로) 전용 문제.
+- **후속 조치**: SQL 적용 후 해당 테스트 재검증 + 전체 CI 2연속 Green 확인.
 
 ### P1-14. (2026-08-10, 해결 완료) `attendance-policy.test.ts` 주간 대기예약 한도 초과로 Integration 반복 실패
 
