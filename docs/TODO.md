@@ -800,15 +800,26 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   사이를 오가는 모집단에 특정 2개 profile_id로만 좁히는 게 오히려 정리를 막았음). 상세
   경위는 SQL 파일 헤더 주석 참고.
 
-### P2-21. (2026-08-10, 종결 — 재현 실패) PR #44 수동 QA "신규 수업은 사용 가능한 수강권이 없다고 뜸"
+### P2-21. (2026-08-10, 진행 중 — 재현 실패했지만 종결 아님) PR #44 수동 QA "신규 수업은 사용 가능한 수강권이 없다고 뜸"
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | 종결(재현 안 됨) |
-| 현재 상태 | **TEST_MANAGER_A/TEST_USER_A/centerA 기존 fixture + 실제 관리자 UI 등록 경로로 재현 시도했으나 실패. 앱 버그를 찾지 못함 — 조사 중 발견한 테스트 커버리지 공백(관리자 UI로 실제 수업을 등록하는 경로를 검증하는 자동 테스트가 하나도 없었음)을 메우는 정식 회귀 테스트 3건을 대신 추가함** |
-| 근거 파일 | `tests/e2e/admin/new-class-creation.spec.ts`(신규) |
-| 완료 조건 | PR #44 리뷰 시 사용자가 원래 수동 QA에서 어떤 계정/센터/상품을 썼는지 추가 정보를 주면 재조사(아래 "남은 가능성" 참고), 아니면 종결 |
+| 우선순위 | P1 (사용자 지시로 재오픈 — 자동화 공백을 메우기 전엔 종결 금지) |
+| 현재 상태 | **TEST_MANAGER_A/TEST_USER_A/centerA 기존 fixture + 실제 관리자 UI 등록 경로로는 재현 실패(변동 없음). 사용자 지시에 따라 구매 직후 즉시 사용 가능 여부(TEST4)와 goods 배제(TEST5)까지 실제 브라우저로 구현/검증 완료 — 3회 연속 통과. 그러나 무관한 사전 존재 이슈(`attendance-policy.test.ts`의 주간 대기예약 한도 초과, 아래 참고) 때문에 "전체 CI 2회 연속 Green" 요건은 아직 미충족 — PR #44는 여전히 merge 안 됨** |
+| 근거 파일 | `tests/e2e/admin/new-class-creation.spec.ts`(TEST1/TEST2/TEST4/TEST5/TEST6) |
+| 완료 조건 | (a) `attendance-policy.test.ts` 블로커에 대한 사용자 결정(데이터 정리 승인 또는 현재 증거로 충분하다고 판단) + 전체 CI 2회 연속 Green, 또는 (b) 사용자가 원래 수동 QA에서 다른 계정/센터/상품을 썼다는 추가 정보를 주면 재조사 |
 
+- **TEST4/TEST5 결과(2026-08-10 추가, 실제 브라우저 3회 연속 통과)**: 신규 수업 생성(A: 모든
+  수강권 허용, B: 특정 pass만 허용) → 회원이 "사용 가능한 수강권 없음" 확인 → 실제
+  "수강권 구매하기" → 센터 구매 시트 → `/checkout` mock 결제 완료 → "지금 바로 예약
+  이어가기" 클릭(전체 페이지 재로드, `<a href>`) → 같은 예약창 재오픈 → 방금 구매한 pass가
+  즉시 `.pass-pick-list`에 표시 → 예약 성공까지 전부 실측 확인. goods(`E2E 테스트 대여품
+  상품`)는 구매 가능 목록/적용 가능 수강권 어디에도 노출되지 않음(`fetchPurchasableProductsByClass`가
+  `product_kind='pass'`로 구조적으로 필터링).
+- **구매 직후 상태 갱신 경로**: 별도의 client-side 캐시 갱신 로직이 전혀 없다 — "지금 바로
+  예약 이어가기" 링크와 1.8초 후 자동 fallback 둘 다 `window.location.href` 풀 페이지
+  이동이라, 예약창이 완전히 새로 마운트되며 `usable_memberships_for_classes`를 처음부터
+  다시 호출한다. 구조적으로 stale-cache가 발생할 여지가 없음(실측 3/3 확인, race 아님).
 - **재현 시도 절차(전부 CI 실측, 추측 없음)**: (1) read-only 진단으로
   `membership_schedule_rules`가 centerA 전체 0건임을 확인(과거 이 정확한 증상을 냈던
   "모든 수강권 허용으로 저장해도 자동으로 schedule_rules가 추가되던" 앱 버그의 잔여
@@ -816,7 +827,8 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   직접 insert한 새 class가 기존 class와 RPC 결과가 완전히 동일함을 확인, (3) 실제
   Playwright 브라우저로 관리자 UI를 통해 새 class를 등록(모든 수강권 허용/특정 pass 1개
   허용 둘 다) → class_allowed_products/RPC/회원 화면(`.pass-pick-list`)/실제 예약 성공까지
-  전부 정상 동작 확인.
+  전부 정상 동작 확인. (4) 이번에 TEST4/TEST5로 구매 → 즉시 사용까지 실제 결제 흐름
+  전체를 추가로 재현 시도했으나 역시 재현 실패.
 - **조사 중 실제로 찾은 것은 앱 버그가 아니라 테스트 자체의 결함 3건**(전부 코드 변경 없이
   수정, 상세 경위는 `tests/e2e/admin/new-class-creation.spec.ts` 파일 상단 주석 참고):
   Node 쪽에서 인증 안 된 세션으로 `class_allowed_products`를 조회해 RLS에 항상 막힌 것,
@@ -831,6 +843,36 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   수동 QA가 이 fixture와 다른 계정/센터/상품을 썼을 수 있고, 그 경우 그 계정/상품에만
   존재하는 stale `membership_schedule_rules`나 다른 데이터 특이사항이 원인일 수 있다 —
   이번 조사로는 배제하지 못함. 추가 재현 정보가 오면 그때 계속 조사할 것.
+
+### P1-14. (2026-08-10, 발견 — 확인 필요, 사용자 결정 대기) `attendance-policy.test.ts` 주간 대기예약 한도 초과로 Integration 3회 연속 실패
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1(다른 작업의 "전체 CI 2회 연속 Green" 요건을 반복적으로 막음) |
+| 현재 상태 | **P2-21(TEST4/TEST5) 작업 중 발견. `new-class-creation.spec.ts`와는 무관 — 완전히 다른 파일/도메인(E2E가 아니라 Integration, waitlist 정원 로직). 데이터 삭제는 사용자 승인 없이 하지 않음(규칙 3) — 여기서 멈추고 보고만 함** |
+| 근거 파일 | `tests/integration/attendance-policy.test.ts`(수정 안 함, 원인만 진단), `fix_reserve_with_membership_operational_settings.sql`(주간 대기예약 한도 가드) |
+| 완료 조건 | 사용자가 (a) TEST_USER_B의 누적 `waitlisted` reservations 정리를 승인하거나, (b) 자연 소멸(주 경계 도래)을 기다리거나, (c) 이 항목을 별도 이슈로 분리하고 현재 증거(TEST4/TEST5 E2E 3연속 Green)로 충분하다고 판단하기를 결정 |
+
+- **증상**: run `31356042673`부터 `31359970888`까지 Integration job이 3회 연속으로 정확히
+  같은 2개 테스트에서 동일 에러로 실패: `예약 실패: 이번 주 대기예약 가능 횟수(10회)를
+  초과했어요`. 같은 run들에서 E2E(TEST1/TEST2/TEST4/TEST5/TEST6 포함)와 Unit은 매번 Green.
+- **원인 경로**: `reserve_with_membership()`/`reserve_class()`가 `center_settings.waitlist_weekly_limit`
+  기준으로 프로필별 이번 주 `status='waitlisted'` reservations 개수를 세고 한도(테스트가
+  `beforeAll`에서 10으로 세팅) 이상이면 즉시 거부한다. `attendance-policy.test.ts`가 만드는
+  memberB의 waitlisted reservations가 이미 10건 이상 누적돼 있어 이 파일 자신의 새 waitlist
+  시도가 첫 시도부터 실패.
+- **self-inflicted 여부 확인(실측)**: `tests/integration/setup.ts`의 `cleanupTestClass(classId,
+  reservationIds)`(라인 513-527)를 직접 읽음 — `reservationIds` 인자와 무관하게
+  `reservations.delete().eq("class_id", classId)`를 항상 실행하므로, 이 파일의 `afterAll`이
+  끝까지 실행되면 자기가 만든 waitlisted reservations는 매번 제대로 정리된다. 즉
+  **이 파일 자체의 cleanup 로직 결함이 아님** — 누적 원인은 외부(다른 waitlist 생성
+  테스트 파일, 또는 이번 세션 중 CI를 대량으로 재실행하면서 일부 run이
+  `concurrency.cancel-in-progress`로 중간 취소돼 `afterAll`이 못 돈 경우 — 이미 문서화된
+  기존 root-cause 계열과 동일, `pull_request`/`workflow_dispatch`가 서로 다른 concurrency
+  group을 써서 동시 실행될 수 있다는 사실이 이를 더 키웠을 가능성).
+- **범위 밖 판단**: 이 이슈는 P2-21(TEST4/TEST5) 작업과 파일/도메인이 완전히 분리되어 있고,
+  고치려면 공유 개발 DB의 기존 데이터를 삭제해야 하므로(규칙 3: 사용자 승인 없이 기존
+  데이터 삭제 금지) 이번 작업 범위에서 임의로 처리하지 않음.
 
 ### P2-20. (2026-08-09, 해결됨) class_allowed_products 선택이 저장 직후 재진입 시 사라짐 + `.pass-pick-list` 미표시
 
