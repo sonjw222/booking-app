@@ -66,10 +66,17 @@ function kstDowFromIso(iso: string): number {
   const kst = new Date(d.getTime() + 9 * 3600 * 1000);
   return kst.getUTCDay();
 }
+// ⚠ [사고 기록] createFutureTestClassAdmin()의 start_time은 Date.now() + hoursFromNow에서
+// 그대로 나온 값이라 초 단위가 0이 아니다(테스트 실행 시각의 잔여 초를 그대로 물려받음).
+// RPC가 실제로 비교하는 (start_time at time zone 'Asia/Seoul')::time은 그 초까지 그대로
+// 포함하므로, 여기서 "HH:MM"만 만들어 membership_schedule_rules.start_time에 넣으면
+// Postgres가 초를 :00으로 채워 넣어 실제 class의 초와 어긋나 규칙이 절대 매치되지 않았다
+// (CI에서 3개 테스트 전부 결정적으로 실패해 실측 확인 — 실제 앱 코드의 AmPmTimeInput은
+// 항상 :00초라 이 문제가 없음, 순수히 이 테스트 fixture의 문제). 초까지 정확히 맞춘다.
 function kstTimeStrFromIso(iso: string): string {
   const d = new Date(iso);
   const kst = new Date(d.getTime() + 9 * 3600 * 1000);
-  return `${String(kst.getUTCHours()).padStart(2, "0")}:${String(kst.getUTCMinutes()).padStart(2, "0")}`;
+  return `${String(kst.getUTCHours()).padStart(2, "0")}:${String(kst.getUTCMinutes()).padStart(2, "0")}:${String(kst.getUTCSeconds()).padStart(2, "0")}`;
 }
 
 test.beforeAll(async () => {
@@ -111,8 +118,27 @@ test("B: schedule rule과 일치하는 수업에서는 그 조건의 pass가 사
   await memberContext.close();
 });
 
+// class_allowed_products는 service_role SQL GRANT가 없어(이미 문서화된 별도 gap,
+// class-allowed-products.spec.ts와 동일 계열) admin client로 직접 insert할 수 없다
+// (CI에서 실제 재현됨: "permission denied for table class_allowed_products"). 이 파일의
+// C+D+F/E 테스트는 class-allowed-products.spec.ts와 동일하게 관리자 실제 세션(RLS 통과)의
+// UI로 "특정 pass 지정"을 설정한다 — 이건 F(class_allowed_products+schedule_rules AND 조건)
+// 검증에도 필요하고, 동시에 userA가 이미 보유한 수많은(제한 없는) 다른 테스트 pass들이
+// "모든 수강권 허용" 수업에서 항상 usable로 섞여 "사용 가능한 수강권 없음" 자체를 검증할
+// 수 없게 만드는 문제도 함께 해결한다(class_allowed_products로 이 pass 하나로만 좁혀야
+// 다른 pass들이 전부 제외되어 이 케이스를 깨끗하게 isolate할 수 있음).
+async function restrictClassToRestrictedPassViaUi(page: Page, uniqueTitle: string): Promise<void> {
+  await page.locator(".class-row", { hasText: uniqueTitle }).click();
+  await expect(page.locator(".sheet-title", { hasText: "수업 수정" })).toBeVisible();
+  await page.locator('input[placeholder="수강권 이름 검색"]').fill(RESTRICTED_PASS_NAME);
+  const chip = page.locator(".filter-chip", { hasText: RESTRICTED_PASS_NAME });
+  await expect(chip).toHaveCount(1);
+  await chip.click();
+  await expect(chip).toHaveClass(/on/);
+}
+
 // C + D + F: 규칙과 안 맞는 수업 + class_allowed_products로 이 pass를 명시적으로 허용해도
-// (F: AND 조건) 여전히 사용 불가(C) + 관리자 UI가 재진입 시 경고를 보여줌(D).
+// (F: AND 조건) 여전히 사용 불가(C) + 관리자 UI가 저장 전에 경고를 보여줌(D).
 test("C+D+F: schedule rule과 안 맞으면 class_allowed_products로 허용해도 사용 불가 + 관리자 경고 표시 (실브라우저)", async ({ page, browser }) => {
   const matchTitle = `P1-15 수업 ${Date.now()}`; // 규칙이 가리키는 "진짜" 수업명(다른 것)
   const uniqueTitle = `P1-15-MISMATCH-${Date.now()}`; // 실제로 만들 수업명(다름 → 불일치)
@@ -125,20 +151,25 @@ test("C+D+F: schedule rule과 안 맞으면 class_allowed_products로 허용해�
   await clearScheduleRulesForProduct(restrictedPass.id);
   await setScheduleRuleForProduct(restrictedPass.id, { dayOfWeek: mismatchedDow, startTime: timeStr, classTitle: matchTitle });
 
-  // F: class_allowed_products로 이 pass를 명시적으로 "허용"해둔다(상품 제한은 통과하지만
-  // schedule_rules는 여전히 막아야 함 — AND 조건 검증).
-  const admin = getFixtureAdminClient();
-  const { error: capErr } = await admin.from("class_allowed_products").insert({ class_id: cls.id, product_id: restrictedPass.id });
-  if (capErr) throw new Error(`class_allowed_products 설정 실패: ${capErr.message}`);
-
-  // D: 관리자가 이 수업을 재진입하면 경고가 보여야 한다.
   const kstDate = kstDateStrFromIso(cls.startTime);
   await gotoManagerClassesDay(page, kstDate);
-  await page.locator(".class-row", { hasText: uniqueTitle }).click();
-  await expect(page.locator(".sheet-title", { hasText: "수업 수정" })).toBeVisible();
+
+  // F: "특정 pass 지정"으로 이 pass를 명시적으로 "허용"해둔다(상품 제한은 통과하지만
+  // schedule_rules는 여전히 막아야 함 — AND 조건 검증).
+  await restrictClassToRestrictedPassViaUi(page, uniqueTitle);
+
+  // D: 선택 직후, 저장 전에도 경고가 보여야 한다.
   const warning = page.locator(".schedule-rule-warning");
   await expect(warning).toBeVisible({ timeout: 10000 });
   await expect(warning).toContainText(RESTRICTED_PASS_NAME);
+
+  await page.getByRole("button", { name: "수정하기" }).click();
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+
+  // D(재확인): 재진입해도 경고가 그대로 보인다.
+  await page.locator(".class-row", { hasText: uniqueTitle }).click();
+  await expect(page.locator(".sheet-title", { hasText: "수업 수정" })).toBeVisible();
+  await expect(page.locator(".schedule-rule-warning")).toBeVisible({ timeout: 10000 });
   await page.locator(".sheet-overlay").click({ position: { x: 10, y: 10 } });
 
   // C: 회원 화면에서는 이 pass가 사용 불가로 뜬다(class_allowed_products가 허용해도).
@@ -153,7 +184,8 @@ test("C+D+F: schedule rule과 안 맞으면 class_allowed_products로 허용해�
 
 // E: 이 mismatch 상황에서 방금 새로 발급된(구매와 동일한 경로로 생성된) membership도
 // 기존 pass와 동일하게 schedule rule 제한을 그대로 적용받는다 — "새로 산 pass라서 예외"는
-// 없다는 것을 확인.
+// 없다는 것을 확인. class_allowed_products로 이 pass 하나만 허용해 다른(제한 없는) 보유
+// pass들이 "usable"에 섞여 이 검증을 무의미하게 만들지 않도록 isolate한다.
 test("E: 방금 새로 발급된 membership도 같은 상품이면 동일한 schedule rule 제한을 받는다 (실브라우저)", async ({ page, browser }) => {
   const matchTitle = `P1-15 수업 ${Date.now()}`;
   const uniqueTitle = `P1-15-NEWMEM-${Date.now()}`;
@@ -165,6 +197,12 @@ test("E: 방금 새로 발급된 membership도 같은 상품이면 동일한 sch
 
   await clearScheduleRulesForProduct(restrictedPass.id);
   await setScheduleRuleForProduct(restrictedPass.id, { dayOfWeek: mismatchedDow, startTime: timeStr, classTitle: matchTitle });
+
+  const kstDate = kstDateStrFromIso(cls.startTime);
+  await gotoManagerClassesDay(page, kstDate);
+  await restrictClassToRestrictedPassViaUi(page, uniqueTitle);
+  await page.getByRole("button", { name: "수정하기" }).click();
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
   // "방금 구매"를 흉내내기 위해 이 프로필의 기존 membership을 지우고 새로 하나 발급한다
   // (실제 checkout/confirmPayment 경로와 동일하게 memberships 행이 새로 생기는 것만
