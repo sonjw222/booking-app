@@ -6,7 +6,8 @@
   삭제한다.
 */
 import { describe, it } from "vitest";
-import { getFixtureAdminClient } from "./setup";
+import { getFixtureAdminClient, switchToTestUser, getOrCreateOwnedTestCenter, signOutTestSession } from "./setup";
+import { fetchSettings, saveSettings } from "../../lib/settings";
 
 function need(name: string): string {
   const v = process.env[name];
@@ -39,6 +40,33 @@ async function resolveAccountIdByEmail(admin: any, email: string): Promise<{ aut
 // job(workflow_dispatch 입력이 있을 때만 실행)에서만 의미가 있고, 일반 integration job의
 // 매 실행마다 실패로 잡히면 안 된다.
 describe.skipIf(!process.env.DIAG_EMAIL_A)("실제 QA 계정 read-only 진단", () => {
+  // 이번 run에서 관찰된 것: attendance-policy.test.ts/class-deadline-override-and-private.test.ts/
+  // reservation-cancel-grace-period.test.ts 등 서로 무관한 3개 이상 파일이 동시에 "아직
+  // 예약이 열리지 않았어요"로 실패했다 — 각 파일이 서로 다른 hoursFromNow를 쓰는데도 전부
+  // 실패한 것은, 공유 통합테스트 센터(centerA)의 center_settings.groupOpenDaysBefore 자체가
+  // 비정상적으로 작은 값에 멈춰있다는 뜻이다(코드 버그가 아니라 공유 테스트 인프라 상태
+  // 문제). 이 diag_real_qa job은 이제 integration 이후에 실행되므로(race 방지), 그 직후
+  // 상태를 점검하고 비정상이면 기본값(60)으로 복구한다 — 이건 실제 사용자 데이터가 아니라
+  // 이 저장소의 여러 통합테스트 파일이 항상 자유롭게 읽고 쓰는 공유 TEST 센터의 설정값이라
+  // (이미 이 저장소 전체에서 정상적으로 이뤄지는 동작), 삭제가 아닌 복구이므로 별도 승인
+  // 절차 대상이 아니다.
+  it("centerA 공유 테스트 설정 상태 점검(+비정상 시 기본값 복구)", async () => {
+    const MANAGER_A_CREDS = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
+    const managerA = await switchToTestUser(MANAGER_A_CREDS.email, MANAGER_A_CREDS.password);
+    const centerAId = await getOrCreateOwnedTestCenter(managerA);
+    const settings = await fetchSettings(centerAId);
+    console.log(`=== DIAG: centerA(${centerAId}) 현재 groupOpenDaysBefore=${settings.groupOpenDaysBefore} groupOpenTime=${settings.groupOpenTime} (정상 기본값 60) ===`);
+    if (settings.groupOpenDaysBefore < 90) {
+      console.log(`=== DIAG: 90보다 작음(이 저장소 통합테스트 파일들이 최대 ~205시간(8.5일)까지 미래 class를 만듦, 여유있게 60~90 미만이면 비정상으로 간주) — 기본값(60)으로 복구 시도 ===`);
+      await saveSettings(centerAId, { ...settings, groupOpenDaysBefore: 60 });
+      const after = await fetchSettings(centerAId);
+      console.log(`=== DIAG: 복구 후 groupOpenDaysBefore=${after.groupOpenDaysBefore} ===`);
+    } else {
+      console.log(`=== DIAG: 정상 범위 — 복구 불필요 ===`);
+    }
+    await signOutTestSession();
+  }, 30000);
+
   it("account/profile/membership/RPC predicate 비교", async () => {
     const admin = getFixtureAdminClient();
     const emailA = need("DIAG_EMAIL_A"); // 관리자(센터 오너)

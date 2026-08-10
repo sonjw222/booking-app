@@ -151,8 +151,13 @@ jobs:
   diag_real_qa:
     name: DIAG(임시) 실제 QA 계정 read-only 비교
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.diag_email_a != ''
-    needs: unit
+    # integration이 실패해도 이 진단은 실행돼야 한다(그 실패가 남긴 center_settings 상태를
+    # 점검/복구하는 것도 이 job의 목적) — 기본값(needs 성공 시에만 실행)을 always()로 덮는다.
+    if: always() && github.event_name == 'workflow_dispatch' && github.event.inputs.diag_email_a != ''
+    # integration 이후에 실행 — 둘 다 needs: unit이면 integration과 병렬로 돌아 같은 centerA
+    # center_settings를 동시에 건드릴 위험이 있다(이 진단이 groupOpenDaysBefore를 점검/복구
+    # 하므로 race를 피해야 함).
+    needs: integration
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -164,6 +169,10 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
+          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
+          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
+          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
           TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
           TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
