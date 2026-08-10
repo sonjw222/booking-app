@@ -844,20 +844,41 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   존재하는 stale `membership_schedule_rules`나 다른 데이터 특이사항이 원인일 수 있다 —
   이번 조사로는 배제하지 못함. 추가 재현 정보가 오면 그때 계속 조사할 것.
 
-### P1-15. (2026-08-10, 조사 중) PR #44 수동 QA 버그 — 실제 dev 계정에서는 100% 재현됨(TEST fixture는 정상)
+### P1-15. (2026-08-10, root cause 확정 · 수정 완료 · CI 검증 중) PR #44 수동 QA 버그 — 실제 dev 계정에서는 100% 재현됨(TEST fixture는 정상)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0(실제 결제/예약 핵심 흐름에 영향, 실제 계정에서 100% 재현) |
-| 현재 상태 | **조사 중. TEST_MANAGER_A/TEST_USER_A fixture로는 재현 안 됨(이미 확인됨, P2-21 참고) — 사용자가 실제 dev 센터("센터1")/회원 계정으로 수동 QA해 100% 재현 확인. read-only 진단 스크립트(임시, `_diag_real_qa_membership_gap.test.ts`) 작성해 실제 계정 데이터를 비교 조사 중.** |
-| 근거 파일 | `tests/integration/_diag_real_qa_membership_gap.test.ts`(임시), `fix_usable_memberships_product_kind.sql`(RPC 판정 로직 재확인), `fix_service_role_missing_grants_accounts_draft_proposed.sql`(신규, 미실행) |
-| 완료 조건 | 실제 계정 데이터로 6개 root cause 질문(왜 fixture는 정상/실제는 실패/기존 pass 인식 안 됨/신규 구매 pass 인식 안 됨/마이페이지엔 보임/정확히 어느 단계에서 사라짐)에 전부 답하고, 최소 범위 수정 + regression test + CI 2연속 Green |
+| 현재 상태 | **root cause 확정: `membership_schedule_rules`(수강권 자체의 요일/시간/수업명 조건)가 "모든 수강권 허용"과 별개로 계속 적용되는 것이 실제 원인 — RPC는 설계대로 정확히 동작해 코드 수정 안 함. 관리자 UI에 경고 추가(`app/manager/classes/page.tsx`, `lib/passes.ts`) + regression test(unit 1개, E2E 3개: B/C+D+F/E) 전부 작성·통과 확인. 전체 CI 2연속 Green 검증 진행 중.** |
+| 근거 파일 | `app/manager/classes/page.tsx`, `lib/passes.ts`(`fetchRulesForProducts`/`matchesAnyScheduleRule`/`findScheduleExcludedProducts`), `tests/unit/passes.scheduleRuleWarning.test.ts`, `tests/e2e/admin/membership-schedule-rules.spec.ts`, `fix_service_role_missing_grants_accounts_draft_proposed.sql`(적용 완료) |
+| 완료 조건 | 전체 CI 2연속 Green + 실제 QA 계정의 schedule_rules 2건이 불필요한지 확정(P1-17 참고) |
 
-- **코드 분석으로 찾은 유력 단서**: `usable_memberships_for_classes()`(`fix_usable_memberships_product_kind.sql`)는 파라미터로 받는 `p_profile_id`가 아니라 **호출 세션의 계정**(`my_account_id()`, `auth.uid()` 기반)으로 memberships를 필터링한다 — `p_profile_id`는 `is_mine` 표시용일 뿐이다. `lib/reservations.ts` 주석("계정 단위로 보유한 수강권을 어떤 프로필이든 사용")을 보면 이는 의도된 설계(가족 프로필 공유)이지 버그가 아닐 가능성이 높지만, 실제 계정 데이터로 검증이 필요하다(다중 프로필 여부, `accounts.auth_id` 중복 여부 등).
-- **실제 계정 진단 중 발견한 무관한 문제 2건(둘 다 이 P1-15 버그 자체와는 무관, 진단 인프라 문제)**:
-  1. 공유 통합테스트 센터(centerA)의 `center_settings.groupOpenDaysBefore`가 비정상적으로 작은 값에 멈춰있어 `attendance-policy.test.ts`/`class-deadline-override-and-private.test.ts`/`reservation-cancel-grace-period.test.ts` 등 서로 무관한 여러 Integration 파일이 동시에 "아직 예약이 열리지 않았어요"로 실패 중(실측: CI run `31376509918`/`31378194569`). 진단 스크립트에 점검+기본값(60) 복구 단계를 추가함 — 아직 재검증 전.
-  2. `accounts` 테이블에 service_role SQL GRANT가 없어(`payments`/`admin_action_logs`/`profiles`와 동일 계열의 이미 알려진 gap) 진단 스크립트가 이메일→account_id 조회 단계에서 "permission denied for table accounts"로 막힘(실측: CI run `31378194569`). `fix_service_role_missing_grants_accounts_draft_proposed.sql`(select만, 최소 범위) 작성 — **Supabase에 아직 실행 안 함, 사용자 적용 필요**.
-- PR #44는 이 버그 때문에 다시 MERGE BLOCKED 상태.
+- **코드 분석으로 찾은 유력 단서 → 실제 계정 데이터로 확정**: `usable_memberships_for_classes()`(`fix_usable_memberships_product_kind.sql`)는 파라미터로 받는 `p_profile_id`가 아니라 **호출 세션의 계정**(`my_account_id()`, `auth.uid()` 기반)으로 memberships를 필터링한다 — 이건 의도된 설계(가족 프로필 공유)이고 실제 계정도 문제없이 이 조건을 통과했다. 실제 탈락 원인은 `membership_schedule_rules` — 실제 "수강권" 상품에 화/수 특정 시간·"수업"이라는 제목으로 제한하는 규칙 2건이 걸려 있었고, 신규 "테스트" 수업(월요일)은 이 조건과 전혀 안 맞아 보유 pass·신규 구매 pass 전부 탈락했다. class_allowed_products("모든 수강권 허용")는 상품 제한만 해제할 뿐 이 조건은 별개로 계속 적용된다 — RPC는 정확히 설계대로 동작.
+- **UX 수정**: 수업 등록/수정 화면의 "예약 가능 수강권" 섹션에 (a) "모든 수강권 허용은 상품 제한만 해제, 수강권 자체의 요일/시간 조건은 별개로 계속 적용" 고정 설명 + (b) 현재 날짜/시간/제목 기준 실제 배제되는 수강권이 있으면 `.schedule-rule-warning` 경고 표시(어느 조건 때문인지까지 표시). "특정 수강권 지정" 모드도 동일 계산 로직으로 함께 커버.
+- **실제 계정 진단 중 발견한 무관한 문제들(이 버그 자체와는 무관, 인프라/타 이슈)**: groupOpenDaysBefore 값 복구(완료), `accounts` service_role GRANT 추가(사용자 적용 완료). 추가로 P1-16(무관한 사전 존재 버그 발견) 참고.
+- PR #44는 여전히 MERGE BLOCKED 상태 — CI 2연속 Green과 사용자의 schedule_rules 처리 결정(P1-17) 이후 재평가.
+
+### P1-16. (2026-08-10, 발견 — 이번 범위 밖, 수정 안 함) `ensureAccountForCurrentUser()`의 profiles insert 에러 미확인 — 간헐적 신규 계정 부트스트랩 실패 가능성
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1(소셜 로그인 신규 가입 흐름에 영향 가능, 그러나 재현 빈도 낮음 — 최근 CI에서 1회만 관측) |
+| 현재 상태 | **발견만 함, 수정 안 함(이번 P1-15 작업 범위 밖). CI run `31396830506`에서 `tests/integration/auth-account-bootstrap.test.ts` 2건이 처음으로 실패(직전 두 번의 CI에서는 동일 테스트 통과 확인, run `31392644359`/`31393468107` 계열) — profiles 행이 안 만들어짐.** |
+| 근거 파일 | `lib/authAccount.ts`(`ensureAccountForCurrentUser`), `tests/integration/auth-account-bootstrap.test.ts` |
+| 완료 조건 | (별도 작업으로) profiles insert의 error를 확인하도록 고치고, 실패 시 재시도 또는 명확한 에러 노출 — 이번 P1-15 작업에서는 다루지 않음 |
+
+- **코드로 확인한 원인 후보**: `ensureAccountForCurrentUser()`의 마지막 줄
+  `await supabase.from("profiles").insert({...})`가 **반환값(error)을 전혀 확인하지 않는다**
+  — 이 insert가 RLS/타이밍 등으로 실패해도 함수는 조용히 성공 리턴하고, 이후 `accounts`는
+  있는데 `profiles`는 없는 상태가 남을 수 있다. 실패한 테스트의 증상(계정은 생성됐는데
+  profiles가 0건)과 정확히 일치한다.
+- **이번 P1-15 작업과 무관하다고 판단한 근거**: 이 파일이 다루는 코드(`app/manager/classes/page.tsx`,
+  `lib/passes.ts`)는 `accounts`/`profiles`/소셜 로그인 부트스트랩과 전혀 접점이 없고, 같은
+  브랜치의 직전 두 CI 실행에서는 이 테스트가 정상 통과했다(간헐적 재현으로 보임 — CI를
+  대량으로 반복 실행하는 이번 세션의 부하/타이밍이 우연히 이 기존 race를 노출시켰을
+  가능성). 원인 후보 코드도 이번에 건드린 파일과 무관.
+- **후속 조치**: 이번 작업 범위에서는 수정하지 않고 기록만 남긴다. 재발하면 우선순위를
+  올려 별도로 처리.
 
 ### P1-14. (2026-08-10, 해결 완료) `attendance-policy.test.ts` 주간 대기예약 한도 초과로 Integration 반복 실패
 
