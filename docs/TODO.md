@@ -886,8 +886,23 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   갖고 있어(정원 1명을 memberA가 먼저 채우는 테스트 구조), class 자체는 이번 정리 후에도
   남을 가능성이 높다(안전한 의도된 동작 — 오늘 실패의 원인인 waitlisted 건수와는 무관, 남은
   class 누적은 별도의 기존 이슈 RES-002/TEST-004 계열).
-- **아직 실행 안 함**: 사용자가 Supabase SQL Editor에서 직접 실행할 예정(코드 수정과 별도
-  커밋, `docs/CHANGELOG.md` 참고).
+- **cleanup SQL 실행 완료(2026-08-10, 사용자)**: C-1 검증 `memberB_centerA_waitlisted_remaining=0`
+  확인. read-only 재검증(CI run `31365334512`)으로 독립적으로도 0건 재확인.
+- **사후 검증 중 발견한 2차 이슈(코드 수정 완료, 커밋됨)**: cleanup SQL 적용 직후 재실행한
+  CI(`31365334512`)의 Integration이 여전히 실패 — 그러나 증상이 달라짐: 원래의 "주간
+  대기예약 한도 초과"가 아니라 `Hook timed out in 30000ms`(attendance-policy.test.ts의
+  `beforeAll`). read-only로 확인한 결과 memberB의 waitlisted는 이미 0건이라 원래 버그의
+  재발이 **아니었음** — 원인은 beforeAll의 self-healing sweep이 class 하나당
+  `cleanupTestClassAdmin()`을 순차 await로 호출했는데, cleanup SQL이 손대지 않은 다른 3개
+  title("P3 출결-대기취소" 8건/"타센터차단" 9건/그 외)에 과거부터 쌓여있던 잔여 class가
+  총 24건이라 순차 round-trip(최대 48회)이 vitest `hookTimeout`(30000ms)을 실제로 초과한
+  것(성능 문제, 앱 버그도 재발도 아님 — test bug). **타임아웃 값을 올리는 우회는 쓰지
+  않고**, class id들을 모아 `reservations`/`classes` 각 1회씩 bulk delete로 바꿔
+  round-trip 수 자체를 없앴다(원인 제거, 증상 은폐 아님). 이 변경은 부수적으로 다른 4개
+  title에 쌓여있던 24건의 역사적 잔여 class도 이번 실행에서 함께 정리한다(전부 이 파일
+  전용 리터럴 title, 동일한 안전 근거).
+- **다음 확인**: 이 수정을 반영한 CI 재실행으로 beforeAll이 정상 시간 내 끝나고
+  attendance-policy.test.ts 전체가 통과하는지 재확인 예정(진행 중).
 
 ### P2-20. (2026-08-09, 해결됨) class_allowed_products 선택이 저장 직후 재진입 시 사라짐 + `.pass-pick-list` 미표시
 

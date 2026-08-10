@@ -68,6 +68,15 @@ beforeAll(async () => {
   // 막았지만, 과거에 이미 남은 잔여물과 혹시 모를 예외 상황(afterAll 자체가 실행되지 못한
   // 경우 등)에 대비해 이번 실행 시작 전에도 이 파일 전용 제목의 잔여 수업/예약을 admin으로
   // 한 번 더 정리한다(get-or-create/self-healing beforeAll cleanup 패턴).
+  //
+  // ⚠ [사고 기록] 처음엔 class 하나씩 cleanupTestClassAdmin()을 순차 await로 돌렸는데,
+  // cleanup SQL이 적용되기 전까지 이 파일이 만든 과거 잔여 class가 4개 title에 걸쳐 24건
+  // 쌓여 있어(reservations/classes 각 1회씩 순차 round-trip × 24 = 최대 48회 순차 왕복)
+  // vitest의 hookTimeout(30000ms)을 실제로 초과해 beforeAll 자체가 타임아웃으로 실패했다
+  // (CI run 31365334512에서 실측 확인 — memberB waitlisted는 이미 0건이라 원래 버그의 재발이
+  // 아니었음). 타임아웃 값을 올리는 대신, class를 한 번에 모아 bulk delete 2회(reservations
+  // 1회 + classes 1회)로 처리하도록 바꿔 라운드트립 횟수 자체를 줄였다 — 원인(순차 delete의
+  // round-trip 수)을 없앤 것이지 증상만 가린 게 아니다.
   {
     const admin = getFixtureAdminClient();
     const staleTitles = [
@@ -80,8 +89,12 @@ beforeAll(async () => {
       .eq("center_id", centerAId)
       .in("title", staleTitles);
     if (staleErr) throw new Error(`P1-14 self-healing 조회 실패: ${staleErr.message}`);
-    for (const c of staleClasses ?? []) {
-      await cleanupTestClassAdmin((c as any).id);
+    const staleClassIds = (staleClasses ?? []).map((c: any) => c.id);
+    if (staleClassIds.length > 0) {
+      const { error: resErr } = await admin.from("reservations").delete().in("class_id", staleClassIds);
+      if (resErr) throw new Error(`P1-14 self-healing reservations 정리 실패: ${resErr.message}`);
+      const { error: clsErr } = await admin.from("classes").delete().in("id", staleClassIds);
+      if (clsErr) throw new Error(`P1-14 self-healing classes 정리 실패: ${clsErr.message}`);
     }
   }
 
