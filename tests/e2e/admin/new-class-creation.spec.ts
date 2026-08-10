@@ -7,6 +7,8 @@ import {
   reservationDeepLink,
   fetchSettingsAdmin,
   saveSettingsAdmin,
+  getOrCreateTestPassProductNamed,
+  createTestGoodsMembershipAdmin,
   type TestUser,
 } from "../fixtures/testData";
 import type { CenterSettings } from "../../../lib/settings";
@@ -74,11 +76,21 @@ let managerA: TestUser;
 let userA: TestUser;
 let centerAId: string;
 let originalSettings: CenterSettings;
+let buyProductId: string;
+const BUY_PRODUCT_NAME = "TEST4 신규구매전용패스";
+const GOODS_PRODUCT_NAME = "E2E 테스트 대여품 상품"; // getOrCreateTestGoodsProduct의 고정 이름
 const createdClassIds: string[] = [];
 
 test.afterAll(async () => {
   for (const id of createdClassIds) await cleanupTestClassAdmin(id);
   if (originalSettings) await saveSettingsAdmin(centerAId, originalSettings);
+  // TEST4가 실제로 구매를 완료하면 memberships가 하나 생긴다 — 다음 실행에서도 "아직
+  // 안 가진 상품"이라는 전제가 성립하도록 매번 정리한다(P2-20에서 겪은 것과 같은 종류의
+  // 테스트 데이터 누적을 여기서 반복하지 않기 위함).
+  if (buyProductId) {
+    const admin = getFixtureAdminClient();
+    await admin.from("memberships").delete().eq("profile_id", userA.profileId).eq("product_id", buyProductId);
+  }
 });
 
 test.beforeAll(async () => {
@@ -96,6 +108,18 @@ test.beforeAll(async () => {
     groupOpenTime: "00:00",
     dailyBookLimitEnabled: false,
   });
+
+  // TEST4 전용 — userA가 아직 안 가진 상품이어야 "구매 전 사용 가능한 수강권 없음"이
+  // 성립한다. 이전 실행이 afterAll을 못 돌렸을 경우를 대비해 시작 시점에도 자기치유
+  // 정리를 한 번 더 한다(product 자체는 get-or-create라 재사용, membership만 정리).
+  const buyProduct = await getOrCreateTestPassProductNamed(centerAId, BUY_PRODUCT_NAME);
+  buyProductId = buyProduct.id;
+  const admin = getFixtureAdminClient();
+  await admin.from("memberships").delete().eq("profile_id", userA.profileId).eq("product_id", buyProductId);
+
+  // TEST5 전용 — goods가 pass 목록에 절대 안 보이는지 검증하려면 실제로 goods를 보유해야
+  // "안 보임"이 의미 있는 확인이 된다(get-or-create + self-healing, 기존 패턴 재사용).
+  await createTestGoodsMembershipAdmin(centerAId, userA.profileId, { remainingCount: 5 });
 });
 
 async function fillAmPmTime(page: Page, rowIndex: number, hour24: number, minute: number) {
@@ -241,6 +265,146 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
   await expect(
     memberPage.locator(".class-row", { hasText: uniqueTitle }).getByRole("button", { name: "취소" })
   ).toBeVisible();
+
+  await memberContext.close();
+});
+
+test("TEST4: 신규 수업 → 사용 가능 수강권 없음 → 그 자리에서 구매 → 새로고침 포함 즉시 사용 가능 → 예약 성공 (실브라우저)", async ({ page, browser }) => {
+  const uniqueTitle = `NEWCLASS-BUY-${Date.now()}`;
+  const dateStr = futureKstDateStr(92);
+
+  await gotoFutureDay(page, dateStr);
+  await page.locator(".fab-btn", { hasText: "수업 등록" }).click();
+  await expect(page.locator(".sheet-title", { hasText: "수업 등록" })).toBeVisible();
+
+  await page.locator('input[placeholder="수업명"]').fill(uniqueTitle);
+  await page.locator('input[type="date"]').fill(dateStr);
+  await fillAmPmTime(page, 0, 19, 0);
+  await fillAmPmTime(page, 1, 20, 0);
+
+  // userA가 아직 안 가진 전용 상품 하나만 허용 — "구매 전 사용 가능한 수강권 없음"이
+  // 우연이 아니라 구조적으로 보장되게 한다.
+  await page.locator('input[placeholder="수강권 이름 검색"]').fill(BUY_PRODUCT_NAME);
+  const chip = page.locator(".filter-chip", { hasText: BUY_PRODUCT_NAME });
+  await expect(chip).toHaveCount(1);
+  await chip.click();
+  await expect(chip).toHaveClass(/on/);
+
+  await page.getByRole("button", { name: "등록하기", exact: true }).click();
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+
+  const newClass = await findClassByTitle(uniqueTitle);
+  createdClassIds.push(newClass.id);
+
+  // class_allowed_products 확인(TEST1/TEST2와 동일한 UI 재진입 패턴 — 파일 상단 주석 참고)
+  await page.locator(".class-row", { hasText: uniqueTitle }).click();
+  await expect(page.locator(".sheet-title", { hasText: "수업 수정" })).toBeVisible();
+  const chipsOn = page.locator(".class-allowed-products-list .filter-chip.on");
+  await expect(chipsOn).toHaveCount(1);
+  await expect(chipsOn).toHaveText(BUY_PRODUCT_NAME);
+  await page.locator(".sheet-overlay").click({ position: { x: 10, y: 10 } });
+
+  const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
+  const memberPage = await memberContext.newPage();
+
+  // ① 구매 전: 사용 가능한 수강권 없음 + 구매 가능한 목록에 이 전용 상품만(goods는 절대 아님) 표시
+  await memberPage.goto(reservationDeepLink(newClass.id, newClass.start_time));
+  await expect(memberPage.locator(".sheet-title", { hasText: "예약하시겠어요?" })).toBeVisible({ timeout: 20000 });
+  await expect(memberPage.locator("text=현재 사용할 수 있는 수강권이 없어요")).toBeVisible();
+  const purchasableList = memberPage.locator(".purchasable-pass-list");
+  await expect(purchasableList).toBeVisible({ timeout: 10000 });
+  await expect(purchasableList).toContainText(BUY_PRODUCT_NAME);
+  await expect(purchasableList).not.toContainText(GOODS_PRODUCT_NAME); // TEST5의 "구매 추천도 pass만" 관점 겸용
+
+  // ② "수강권 구매하기" → 센터 상세의 구매 시트(자동 오픈) → 이 상품 "구매" 클릭
+  const buyBtn = memberPage.locator(".no-pass-buy-btn");
+  await expect(buyBtn).toBeVisible();
+  await buyBtn.click();
+  await expect(memberPage.locator(".sheet-title", { hasText: "수강권 · 상품 구매" })).toBeVisible({ timeout: 15000 });
+  const productRow = memberPage.locator(".center-product-row", { hasText: BUY_PRODUCT_NAME });
+  await expect(productRow).toBeVisible();
+  await productRow.locator(".center-product-buy").click();
+
+  // ③ 결제 화면 → 실제 테스트 결제(Mock, 이 앱의 유일한 결제 경로) 진행
+  await expect(memberPage.locator(".checkout-pay-btn")).toBeVisible({ timeout: 15000 });
+  await memberPage.locator(".checkout-pay-btn").click();
+  await expect(memberPage.locator("text=테스트 결제가 완료됐어요")).toBeVisible({ timeout: 20000 });
+  const backToReserveLink = memberPage.locator("a", { hasText: "지금 바로 예약 이어가기" });
+  await expect(backToReserveLink).toBeVisible();
+
+  // 실패할 경우에만 진단 정보를 남기기 위해 미리 응답을 캡처해둔다(성공 경로에서는 출력 안 함)
+  let lastUsableResponse: { status: number; body: string } | null = null;
+  memberPage.on("response", async (res) => {
+    if (res.url().includes("usable_memberships_for_classes")) {
+      try { lastUsableResponse = { status: res.status(), body: await res.text() }; } catch { /* 무시 */ }
+    }
+  });
+
+  // ④ <a href> — 풀 페이지 네비게이션이라 "새로고침 포함" 요구사항을 그대로 만족한다
+  //    (checkout/page.tsx도 1.8초 후 window.location.href로 동일하게 자동 이동하지만,
+  //    테스트 결정성을 위해 버튼을 직접 클릭해 즉시 진행한다).
+  await backToReserveLink.click();
+
+  // ⑤ 같은 신규 수업 예약창이 다시 열리고, 방금 산 pass가 즉시 사용 가능해야 함
+  try {
+    await expect(memberPage.locator(".sheet-title", { hasText: "예약하시겠어요?" })).toBeVisible({ timeout: 20000 });
+    const passListAfter = memberPage.locator(".pass-pick-list");
+    await expect(passListAfter).toBeVisible({ timeout: 15000 });
+    await expect(passListAfter).toContainText(BUY_PRODUCT_NAME);
+  } catch (e) {
+    // 요청받은 대로: 실패 순간의 membership row와 RPC 응답을 전부 남긴다
+    const admin = getFixtureAdminClient();
+    const { data: mem, error: memErr } = await admin
+      .from("memberships")
+      .select("id, product_id, center_id, profile_id, status, remaining_count, expires_at")
+      .eq("profile_id", userA.profileId).eq("product_id", buyProductId)
+      .order("created_at", { ascending: false }).limit(1);
+    console.log(`=== TEST4 실패 — 방금 구매한 membership row(admin client): ${JSON.stringify(mem)} error=${memErr?.message} ===`);
+    console.log(`=== TEST4 실패 — 재오픈 후 usable_memberships_for_classes 마지막 네트워크 응답: ${JSON.stringify(lastUsableResponse)} ===`);
+    throw e;
+  }
+
+  await memberPage.getByRole("button", { name: "예약하기" }).click();
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 20000 });
+  await expect(
+    memberPage.locator(".class-row", { hasText: uniqueTitle }).getByRole("button", { name: "취소" })
+  ).toBeVisible();
+
+  await memberContext.close();
+});
+
+test("TEST5: 신규 수업(모든 수강권 허용)에서도 goods는 사용 가능한 수강권 목록에 절대 안 보임 (실브라우저)", async ({ page, browser }) => {
+  const uniqueTitle = `NEWCLASS-GOODSCHK-${Date.now()}`;
+  const dateStr = futureKstDateStr(93);
+
+  await gotoFutureDay(page, dateStr);
+  await page.locator(".fab-btn", { hasText: "수업 등록" }).click();
+  await expect(page.locator(".sheet-title", { hasText: "수업 등록" })).toBeVisible();
+
+  await page.locator('input[placeholder="수업명"]').fill(uniqueTitle);
+  await page.locator('input[type="date"]').fill(dateStr);
+  await fillAmPmTime(page, 0, 19, 0);
+  await fillAmPmTime(page, 1, 20, 0);
+  // 예약 가능 수강권은 아무것도 선택하지 않음(모든 수강권 허용)
+  await expect(page.locator(".perm-guide", { hasText: "모든 수강권" })).toBeVisible();
+
+  await page.getByRole("button", { name: "등록하기", exact: true }).click();
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+
+  const newClass = await findClassByTitle(uniqueTitle);
+  createdClassIds.push(newClass.id);
+
+  const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
+  const memberPage = await memberContext.newPage();
+  await memberPage.goto(reservationDeepLink(newClass.id, newClass.start_time));
+  await expect(memberPage.locator(".sheet-title", { hasText: "예약하시겠어요?" })).toBeVisible({ timeout: 20000 });
+
+  // userA는 beforeAll에서 goods 1개(remainingCount:5)를 실제로 보유한 상태 — "안 보임"이
+  // 우연이 아니라 실제 필터링 결과임을 의미 있게 검증한다("모든 수강권 허용"이라 goods를
+  // 제외한 실제 pass들이 usable로 나와야 정상).
+  const passList = memberPage.locator(".pass-pick-list");
+  await expect(passList).toBeVisible();
+  await expect(passList).not.toContainText(GOODS_PRODUCT_NAME);
 
   await memberContext.close();
 });
