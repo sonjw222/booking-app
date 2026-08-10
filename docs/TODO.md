@@ -844,20 +844,21 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   존재하는 stale `membership_schedule_rules`나 다른 데이터 특이사항이 원인일 수 있다 —
   이번 조사로는 배제하지 못함. 추가 재현 정보가 오면 그때 계속 조사할 것.
 
-### P1-15. (2026-08-10, root cause 확정 · 수정 완료 · CI 2연속 Green 확인) PR #44 수동 QA 버그 — 실제 dev 계정에서는 100% 재현됨(TEST fixture는 정상)
+### P1-15. (2026-08-10, 최종 완료) PR #44 수동 QA 버그 — 실제 dev 계정에서는 100% 재현됨(TEST fixture는 정상)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0(실제 결제/예약 핵심 흐름에 영향, 실제 계정에서 100% 재현) |
-| 현재 상태 | **root cause 확정, 코드 수정 완료, regression test 전부 통과, 전체 CI 2연속 Green 확인(run `31411383724`/`31413532650`, `31411383724`은 완전 first-attempt). 실제 QA 계정의 schedule_rules 2건 삭제 여부만 사용자 결정 대기(cleanup SQL 작성 완료, 미실행).** |
-| 근거 파일 | `app/manager/classes/page.tsx`, `lib/passes.ts`(`fetchRulesForProducts`/`matchesAnyScheduleRule`/`findScheduleExcludedProducts`), `tests/unit/passes.scheduleRuleWarning.test.ts`, `tests/e2e/admin/membership-schedule-rules.spec.ts`, `fix_service_role_missing_grants_accounts_draft_proposed.sql`+`_write_draft_proposed.sql`(둘 다 적용 완료), `cleanup_p1_15_stale_schedule_rules_draft_proposed.sql`(신규, 미실행) |
-| 완료 조건 | ~~전체 CI 2연속 Green~~ 완료. 사용자가 schedule_rules cleanup SQL 적용 여부만 결정하면 종결 |
+| 현재 상태 | **완료. root cause 확정, 코드 수정 완료, regression test 전부 통과, 전체 CI 2연속 Green(run `31411383724`/`31413532650`). 사용자가 `cleanup_p1_15_stale_schedule_rules_draft_proposed.sql`을 Supabase SQL Editor에서 적용(`remaining_target_rules=0` 확인). 사후 read-only 재검증(run `31421494819`, `diag_p1_15_verify` job)에서 "수강권" 상품의 `membership_schedule_rules`가 0건임과, 실제 회원(memberB)의 "수강권" memberships 3건 전부가 "테스트" class에서 `usable예측=true`로 재계산됨을 실측 확인. 회귀 확인 CI도 재검증 시점에 2연속 Green(run `31419033306`/`31421494819`, 둘 다 first-attempt) 재확인.** |
+| 근거 파일 | `app/manager/classes/page.tsx`, `lib/passes.ts`(`fetchRulesForProducts`/`matchesAnyScheduleRule`/`findScheduleExcludedProducts`), `tests/unit/passes.scheduleRuleWarning.test.ts`, `tests/e2e/admin/membership-schedule-rules.spec.ts`, `fix_service_role_missing_grants_accounts_draft_proposed.sql`+`_write_draft_proposed.sql`(둘 다 적용 완료), `cleanup_p1_15_stale_schedule_rules_draft_proposed.sql`(적용 완료, `remaining_target_rules=0` 확인) |
+| 완료 조건 | ~~전체 CI 2연속 Green~~ 완료. ~~schedule_rules cleanup SQL 적용~~ 완료. ~~사후 read-only 재검증~~ 완료. |
 
 - **코드 분석으로 찾은 유력 단서 → 실제 계정 데이터로 확정**: `usable_memberships_for_classes()`(`fix_usable_memberships_product_kind.sql`)는 파라미터로 받는 `p_profile_id`가 아니라 **호출 세션의 계정**(`my_account_id()`, `auth.uid()` 기반)으로 memberships를 필터링한다 — 이건 의도된 설계(가족 프로필 공유)이고 실제 계정도 문제없이 이 조건을 통과했다. 실제 탈락 원인은 `membership_schedule_rules` — 실제 "수강권" 상품에 화/수 특정 시간·"수업"이라는 제목으로 제한하는 규칙 2건이 걸려 있었고, 신규 "테스트" 수업(월요일)은 이 조건과 전혀 안 맞아 보유 pass·신규 구매 pass 전부 탈락했다. class_allowed_products("모든 수강권 허용")는 상품 제한만 해제할 뿐 이 조건은 별개로 계속 적용된다 — RPC는 정확히 설계대로 동작.
 - **UX 수정**: 수업 등록/수정 화면의 "예약 가능 수강권" 섹션에 (a) "모든 수강권 허용은 상품 제한만 해제, 수강권 자체의 요일/시간 조건은 별개로 계속 적용" 고정 설명 + (b) 현재 날짜/시간/제목 기준 실제 배제되는 수강권이 있으면 `.schedule-rule-warning` 경고 표시(어느 조건 때문인지까지 표시). "특정 수강권 지정" 모드도 동일 계산 로직으로 함께 커버.
 - **schedule_rules 2건의 용도/생성 경로 확정(read-only 진단, CI run `31413532650`)**: 이 두 규칙이 가리키는 제목("수업")의 class가 실제로 2건 존재 — 화요일 16:00(class `00494e21...`)/수요일 15:00(class `93a6c842...`). 각 규칙의 `created_at`이 대응하는 class의 `created_at`과 **초 단위로 거의 동시**(0.5~0.6초 차이)에 생성됐다 — 이 저장소에 이미 문서화된, 지금은 고쳐진 옛 버그(class_allowed_products 저장 부수효과로 membership_schedule_rules 자동 생성, `class-allowed-products.spec.ts` beforeAll 주석 참고)와 정확히 같은 신호. 두 class 모두 진단 시점(2026-08-10) 기준 이미 지난 날짜이고 반복되는 일정이 아니다 — 관리자가 `/manager/membership-rules`에서 의도적으로 설정했다기보다 그때 class를 만든 부수효과로 자동 생성됐을 가능성이 매우 높다. `cleanup_p1_15_stale_schedule_rules_draft_proposed.sql` + rollback 작성 완료(id 2건 정확히 지정, FK 없음 확인) — **Supabase에는 실행하지 않음, 사용자 결정 필요**.
 - **실제 계정 진단 중 발견한 무관한 문제들(이 버그 자체와는 무관, 인프라/타 이슈)**: groupOpenDaysBefore 값 복구(완료), `accounts` service_role GRANT 추가(SELECT + INSERT/UPDATE/DELETE, 둘 다 사용자 적용 완료). P1-16(무관한 사전 존재 버그, 해결 완료) 참고.
-- PR #44는 여전히 MERGE BLOCKED 상태(사용자 지시로 계속 유지) — schedule_rules cleanup SQL 적용 여부는 사용자 결정 대기.
+- **cleanup SQL 적용 완료(2026-08-10) + 사후 read-only 재검증**: 사용자가 Supabase SQL Editor에서 A(preview)/B(BEGIN...COMMIT, guard 포함 delete)/C(post-verification) 순서로 실행, `remaining_target_rules=0` 확인 보고. 별도 임시 read-only 진단(`_diag_p1_15_postcleanup_verify.test.ts`, workflow_dispatch 전용, 검증 완료 후 삭제)으로 (1) `membership_schedule_rules` 독립 재조회 결과 0건, (2) 실제 회원 memberB의 "수강권" memberships 3건 전부 `usable예측=true`(status/remaining/expires/classAllowed/scheduleRule 전 조건 true), (3) "테스트" class의 `class_allowed_products`는 여전히 0건("모든 수강권 허용" 유지)임을 확인. "새로 구매한 수강권"·"특정 수강권 지정" 케이스는 실제 QA 계정에 새 데이터를 쓰는 대신, 격리된 E2E 회귀 테스트(`membership-schedule-rules.spec.ts`의 test E/C+D+F)로 그 일반 메커니즘이 여전히 정확히 동작함을 검증(같은 상품이면 새로 발급된 membership도 동일 제한 적용, class_allowed_products로 허용해도 schedule rule 불일치면 여전히 차단 + 관리자 경고 노출).
+- PR #44는 여전히 MERGE BLOCKED 상태(사용자 지시로 계속 유지, main merge는 별도 명시적 요청 전까지 하지 않음) — P1-15는 이 항목 자체로는 완료, 최종 merge 가능 여부는 사용자의 수동 QA 재확인 및 별도 merge 지시에 달려 있음.
 
 ### P1-16. (2026-08-10, 해결 완료) `accounts` 테이블 service_role INSERT/UPDATE/DELETE GRANT 누락 — 소셜 로그인 부트스트랩 테스트 반복 실패
 

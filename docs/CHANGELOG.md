@@ -8,6 +8,21 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-10 — P1-15 cleanup SQL 적용 + 사후 read-only 재검증 완료 (feature/social-auth-notifications-attendance-dashboard)
+
+사용자가 `cleanup_p1_15_stale_schedule_rules_draft_proposed.sql`을 Supabase SQL Editor에서
+A(preview)/B(BEGIN...COMMIT, guard 포함 delete)/C(post-verification) 순서로 직접 실행,
+`remaining_target_rules=0` 확인 보고. 이후 임시 read-only 진단(`_diag_p1_15_postcleanup_verify.test.ts`,
+workflow_dispatch 전용, 검증 완료 후 삭제)으로 실제 QA 계정/센터 데이터 기준 재확인:
+"수강권" 상품(`f6010b96-...`)의 `membership_schedule_rules`가 독립 재조회에서도 0건,
+실제 회원(memberB)의 "수강권" memberships 3건 전부가 "테스트" class에서 `usable예측=true`로
+재계산됨(status/remaining/expires/classAllowed/scheduleRule 전 조건 true), `class_allowed_products`는
+여전히 0건("모든 수강권 허용" 유지). "새로 구매한 수강권"과 "특정 수강권 지정" 케이스는 실제
+QA 계정에 새 데이터를 쓰지 않고 격리된 E2E 회귀 테스트(`membership-schedule-rules.spec.ts`
+test E/C+D+F)로 그 일반 메커니즘을 검증. 재검증 중 CI도 2연속 Green(run `31419033306`/
+`31421494819`, 둘 다 first-attempt) 재확인, 이후 임시 진단 job/워크플로 입력/테스트 파일 전부 제거.
+PR #44는 여전히 MERGE BLOCKED(main merge는 별도 명시적 요청 전까지 하지 않음).
+
 ## 2026-08-10 — P1-15/P1-16 최종 완료: 실제 QA 버그 root cause 확정·UX 수정, 무관한 GRANT 버그 발견·수정, 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
 
 - **P1-15**: PR #44 수동 QA로 100% 재현된 "모든 수강권 허용해도 사용 가능한 수강권 없음"
