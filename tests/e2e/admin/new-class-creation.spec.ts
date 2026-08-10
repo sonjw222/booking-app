@@ -81,16 +81,31 @@ const BUY_PRODUCT_NAME = "TEST4 신규구매전용패스";
 const GOODS_PRODUCT_NAME = "E2E 테스트 대여품 상품"; // getOrCreateTestGoodsProduct의 고정 이름
 const createdClassIds: string[] = [];
 
+// TEST4가 실제로 구매를 완료하면 membership뿐 아니라 그 구매의 payments 행도 함께
+// 생긴다(checkout → createOrder → confirmPayment) — payments.membership_id가 FK라
+// membership만 지우면 FK violation으로 조용히 실패한다(실측 확인: 첫 실행은 성공했지만
+// 그 memberships delete가 FK로 막혀 있었고, 다음 실행이 beforeAll에서 똑같이 실패해
+// "이미 보유한 상품"이 돼버려 TEST4의 전제 자체가 깨졌다 — 실제 앱 버그 아니라 이
+// cleanup 헬퍼 자체의 FK 순서 누락이었음). payments → memberships 순서로 지운다.
+async function cleanupBuyProductMemberships(profileId: string, productId: string): Promise<void> {
+  const admin = getFixtureAdminClient();
+  const { data: mems, error: findErr } = await admin
+    .from("memberships").select("id").eq("profile_id", profileId).eq("product_id", productId);
+  if (findErr) throw new Error(`TEST4 membership 조회 실패: ${findErr.message}`);
+  const memIds = (mems ?? []).map((m) => m.id);
+  if (memIds.length === 0) return;
+  const { error: payErr } = await admin.from("payments").delete().in("membership_id", memIds);
+  if (payErr) throw new Error(`TEST4 payments 정리 실패: ${payErr.message}`);
+  const { error: memErr } = await admin.from("memberships").delete().in("id", memIds);
+  if (memErr) throw new Error(`TEST4 memberships 정리 실패: ${memErr.message}`);
+}
+
 test.afterAll(async () => {
   for (const id of createdClassIds) await cleanupTestClassAdmin(id);
   if (originalSettings) await saveSettingsAdmin(centerAId, originalSettings);
-  // TEST4가 실제로 구매를 완료하면 memberships가 하나 생긴다 — 다음 실행에서도 "아직
-  // 안 가진 상품"이라는 전제가 성립하도록 매번 정리한다(P2-20에서 겪은 것과 같은 종류의
-  // 테스트 데이터 누적을 여기서 반복하지 않기 위함).
-  if (buyProductId) {
-    const admin = getFixtureAdminClient();
-    await admin.from("memberships").delete().eq("profile_id", userA.profileId).eq("product_id", buyProductId);
-  }
+  // 다음 실행에서도 "아직 안 가진 상품"이라는 전제가 성립하도록 매번 정리한다(P2-20에서
+  // 겪은 것과 같은 종류의 테스트 데이터 누적을 여기서 반복하지 않기 위함).
+  if (buyProductId) await cleanupBuyProductMemberships(userA.profileId, buyProductId);
 });
 
 test.beforeAll(async () => {
@@ -111,11 +126,10 @@ test.beforeAll(async () => {
 
   // TEST4 전용 — userA가 아직 안 가진 상품이어야 "구매 전 사용 가능한 수강권 없음"이
   // 성립한다. 이전 실행이 afterAll을 못 돌렸을 경우를 대비해 시작 시점에도 자기치유
-  // 정리를 한 번 더 한다(product 자체는 get-or-create라 재사용, membership만 정리).
+  // 정리를 한 번 더 한다(product 자체는 get-or-create라 재사용, membership+payments만 정리).
   const buyProduct = await getOrCreateTestPassProductNamed(centerAId, BUY_PRODUCT_NAME);
   buyProductId = buyProduct.id;
-  const admin = getFixtureAdminClient();
-  await admin.from("memberships").delete().eq("profile_id", userA.profileId).eq("product_id", buyProductId);
+  await cleanupBuyProductMemberships(userA.profileId, buyProductId);
 
   // TEST5 전용 — goods가 pass 목록에 절대 안 보이는지 검증하려면 실제로 goods를 보유해야
   // "안 보임"이 의미 있는 확인이 된다(get-or-create + self-healing, 기존 패턴 재사용).
