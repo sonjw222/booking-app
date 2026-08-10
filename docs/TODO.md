@@ -844,6 +844,21 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   존재하는 stale `membership_schedule_rules`나 다른 데이터 특이사항이 원인일 수 있다 —
   이번 조사로는 배제하지 못함. 추가 재현 정보가 오면 그때 계속 조사할 것.
 
+### P1-15. (2026-08-10, 조사 중) PR #44 수동 QA 버그 — 실제 dev 계정에서는 100% 재현됨(TEST fixture는 정상)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0(실제 결제/예약 핵심 흐름에 영향, 실제 계정에서 100% 재현) |
+| 현재 상태 | **조사 중. TEST_MANAGER_A/TEST_USER_A fixture로는 재현 안 됨(이미 확인됨, P2-21 참고) — 사용자가 실제 dev 센터("센터1")/회원 계정으로 수동 QA해 100% 재현 확인. read-only 진단 스크립트(임시, `_diag_real_qa_membership_gap.test.ts`) 작성해 실제 계정 데이터를 비교 조사 중.** |
+| 근거 파일 | `tests/integration/_diag_real_qa_membership_gap.test.ts`(임시), `fix_usable_memberships_product_kind.sql`(RPC 판정 로직 재확인), `fix_service_role_missing_grants_accounts_draft_proposed.sql`(신규, 미실행) |
+| 완료 조건 | 실제 계정 데이터로 6개 root cause 질문(왜 fixture는 정상/실제는 실패/기존 pass 인식 안 됨/신규 구매 pass 인식 안 됨/마이페이지엔 보임/정확히 어느 단계에서 사라짐)에 전부 답하고, 최소 범위 수정 + regression test + CI 2연속 Green |
+
+- **코드 분석으로 찾은 유력 단서**: `usable_memberships_for_classes()`(`fix_usable_memberships_product_kind.sql`)는 파라미터로 받는 `p_profile_id`가 아니라 **호출 세션의 계정**(`my_account_id()`, `auth.uid()` 기반)으로 memberships를 필터링한다 — `p_profile_id`는 `is_mine` 표시용일 뿐이다. `lib/reservations.ts` 주석("계정 단위로 보유한 수강권을 어떤 프로필이든 사용")을 보면 이는 의도된 설계(가족 프로필 공유)이지 버그가 아닐 가능성이 높지만, 실제 계정 데이터로 검증이 필요하다(다중 프로필 여부, `accounts.auth_id` 중복 여부 등).
+- **실제 계정 진단 중 발견한 무관한 문제 2건(둘 다 이 P1-15 버그 자체와는 무관, 진단 인프라 문제)**:
+  1. 공유 통합테스트 센터(centerA)의 `center_settings.groupOpenDaysBefore`가 비정상적으로 작은 값에 멈춰있어 `attendance-policy.test.ts`/`class-deadline-override-and-private.test.ts`/`reservation-cancel-grace-period.test.ts` 등 서로 무관한 여러 Integration 파일이 동시에 "아직 예약이 열리지 않았어요"로 실패 중(실측: CI run `31376509918`/`31378194569`). 진단 스크립트에 점검+기본값(60) 복구 단계를 추가함 — 아직 재검증 전.
+  2. `accounts` 테이블에 service_role SQL GRANT가 없어(`payments`/`admin_action_logs`/`profiles`와 동일 계열의 이미 알려진 gap) 진단 스크립트가 이메일→account_id 조회 단계에서 "permission denied for table accounts"로 막힘(실측: CI run `31378194569`). `fix_service_role_missing_grants_accounts_draft_proposed.sql`(select만, 최소 범위) 작성 — **Supabase에 아직 실행 안 함, 사용자 적용 필요**.
+- PR #44는 이 버그 때문에 다시 MERGE BLOCKED 상태.
+
 ### P1-14. (2026-08-10, 해결 완료) `attendance-policy.test.ts` 주간 대기예약 한도 초과로 Integration 반복 실패
 
 | 필드 | 내용 |
