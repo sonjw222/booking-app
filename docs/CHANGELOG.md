@@ -8,6 +8,31 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-10 — P1-14 최종 완료: cleanup SQL 적용, 사후 검증 중 발견한 self-healing 성능 버그 수정, 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
+
+- 사용자가 `cleanup_p1_14_waitlisted_test_pollution_draft_proposed.sql`을 Supabase SQL
+  Editor에서 적용(C-1: memberB_centerA_waitlisted_remaining=0). read-only 진단으로
+  독립적으로도 재확인.
+- 적용 직후 재실행한 Integration이 다른 증상(`Hook timed out in 30000ms`)으로 계속
+  실패 — read-only로 memberB waitlisted가 이미 0건임을 확인해 원래 버그의 재발이 아님을
+  먼저 배제한 뒤 조사. 원인은 새로 추가한 `beforeAll` self-healing sweep이 class 하나당
+  `cleanupTestClassAdmin()`을 순차 await로 호출했는데, cleanup SQL이 대상으로 삼지 않은
+  다른 3개 title에 과거부터 쌓여있던 잔여 class 24건 때문에 순차 round-trip(최대 48회)이
+  vitest hookTimeout(30초)을 초과한 것(test bug, 타임아웃 재발/앱 버그 아님). 타임아웃 값을
+  올리는 우회 대신 class id를 모아 bulk delete 2회로 바꿔 round-trip 수 자체를 없앴다 —
+  부수적으로 다른 4개 title의 역사적 잔여 class 24건도 함께 정리됨.
+- 이 수정을 반영한 전체 CI(E2E→Unit→Integration→Build)를 2회 연속 실행 — 둘 다
+  first-attempt Green(재시도 없음): run `31367089839`(pull_request), `31368870324`
+  (workflow_dispatch), 둘 다 headSha `80889d7`. `attendance-policy.test.ts` 5/5 통과,
+  두 run 모두 사후 read-only 진단으로 memberB waitlisted=0 재확인 — 두 번째 run은 이
+  테스트가 그 사이 새 waitlisted 예약을 만들었다가 afterAll이 정상적으로 지운 뒤의 상태라
+  cleanup 로직이 구조적으로 작동함을 실측으로 증명함(우연히 DB가 깨끗했던 게 아님).
+- `new-class-creation.spec.ts`(TEST1/2/4/5/6)와 `class-allowed-products.spec.ts`(5개
+  테스트) 전부 같은 CI run에서 회귀 없이 통과 확인 — 신규 테스트 추가 없이 기존 스펙 재사용.
+- Vercel Preview도 같은 headSha 기준 배포 성공 확인. PR #44는 OPEN·MERGEABLE·충돌 없음
+  (main에는 merge하지 않음).
+- 상세: `docs/TODO.md` P1-14(해결 완료로 갱신).
+
 ## 2026-08-10 — P1-14: attendance-policy.test.ts 대기예약 누적 원인 확정 + 재발 방지 코드, cleanup SQL 작성(미실행) (feature/social-auth-notifications-attendance-dashboard)
 
 - P2-21 작업 중 발견한 `attendance-policy.test.ts`의 3~4연속 Integration 실패("이번 주

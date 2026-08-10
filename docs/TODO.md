@@ -844,14 +844,14 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   존재하는 stale `membership_schedule_rules`나 다른 데이터 특이사항이 원인일 수 있다 —
   이번 조사로는 배제하지 못함. 추가 재현 정보가 오면 그때 계속 조사할 것.
 
-### P1-14. (2026-08-10, 코드 수정 완료 · SQL 작성·static audit 완료 · 사용자 실행 대기) `attendance-policy.test.ts` 주간 대기예약 한도 초과로 Integration 3회 연속 실패
+### P1-14. (2026-08-10, 해결 완료) `attendance-policy.test.ts` 주간 대기예약 한도 초과로 Integration 반복 실패
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P1(다른 작업의 "전체 CI 2회 연속 Green" 요건을 반복적으로 막음) |
-| 현재 상태 | **근본 원인을 코드로 확정하고 재발 방지 코드를 이미 커밋함(`tests/integration/setup.ts`의 `cleanupTestClassAdmin` 추가 + `attendance-policy.test.ts`의 beforeAll self-healing/afterAll admin 전환). 과거 누적분 정리 SQL(`cleanup_p1_14_waitlisted_test_pollution_draft_proposed.sql`)은 작성·static audit까지 완료 — Supabase에는 아직 실행하지 않음(사용자가 SQL Editor에서 직접 실행 예정)** |
-| 근거 파일 | `tests/integration/attendance-policy.test.ts`, `tests/integration/setup.ts`, `reservation_functions.sql`(RLS DELETE 정책), `cleanup_p1_14_waitlisted_test_pollution_draft_proposed.sql`, `rollback_cleanup_p1_14_waitlisted_test_pollution_draft_proposed.sql` |
-| 완료 조건 | 사용자가 cleanup SQL을 Supabase SQL Editor에서 실행 → read-only 재검증 → Integration/E2E/Unit/Build 전체 재실행 → 2회 연속 Green |
+| 우선순위 | 해결됨(과거 P1) |
+| 현재 상태 | **완료. cleanup SQL 사용자가 직접 적용(C-1: memberB_centerA_waitlisted_remaining=0) → read-only 독립 재검증 2회(0건) → 재발 방지 코드(admin 기반 cleanup + self-healing) 커밋 → 전체 CI(E2E/Unit/Integration/Build) 2회 연속 Green, 둘 다 first-attempt·재시도 없음(run `31367089839`, `31368870324`) → Vercel Preview 성공 확인** |
+| 근거 파일 | `tests/integration/attendance-policy.test.ts`, `tests/integration/setup.ts`(`cleanupTestClassAdmin`), `reservation_functions.sql`(RLS DELETE 정책 — 원인 파악용, 미수정), `cleanup_p1_14_waitlisted_test_pollution_draft_proposed.sql`(사용자가 Supabase SQL Editor에서 적용 완료) |
+| 완료 조건 | ~~cleanup SQL 적용 후 재검증~~ 전부 완료 |
 
 - **증상**: run `31356042673`부터 `31362464170`까지 Integration job이 4회 연속으로 정확히
   같은 2개 테스트에서 동일 에러로 실패: `예약 실패: 이번 주 대기예약 가능 횟수(10회)를
@@ -901,8 +901,16 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   round-trip 수 자체를 없앴다(원인 제거, 증상 은폐 아님). 이 변경은 부수적으로 다른 4개
   title에 쌓여있던 24건의 역사적 잔여 class도 이번 실행에서 함께 정리한다(전부 이 파일
   전용 리터럴 title, 동일한 안전 근거).
-- **다음 확인**: 이 수정을 반영한 CI 재실행으로 beforeAll이 정상 시간 내 끝나고
-  attendance-policy.test.ts 전체가 통과하는지 재확인 예정(진행 중).
+- **최종 재검증(2026-08-10)**: bulk delete 수정을 반영한 CI 2회 연속 실행 — 둘 다
+  전체(E2E/Unit/Integration/Build) Green, first-attempt(재시도 없음): run `31367089839`
+  (pull_request), `31368870324`(workflow_dispatch), 둘 다 headSha `80889d7`.
+  `attendance-policy.test.ts` 5/5 통과(각 ~37.5초, 재시도 없음). 두 run 모두 독립적인
+  read-only 진단으로 memberB centerA waitlisted=0, "P3 출결-*" 5개 title 전부 잔여 class/
+  reservation 0건 재확인 — 두 번째 run은 이 파일이 그 사이에 waitlisted 예약을 새로
+  만들었다가 afterAll이 정상적으로 지운 뒤의 상태라, "우연히 DB가 깨끗했다"가 아니라
+  "cleanup 로직 자체가 구조적으로 작동한다"는 것을 실제로 증명함. 진단용 임시 파일
+  (`tests/integration/zzz_diag_p1_14_postcleanup_verify.test.ts`)은 검증 완료 후 삭제.
+  Vercel Preview도 같은 headSha 기준 배포 성공 확인.
 
 ### P2-20. (2026-08-09, 해결됨) class_allowed_products 선택이 저장 직후 재진입 시 사라짐 + `.pass-pick-list` 미표시
 
