@@ -128,6 +128,19 @@ describe.skipIf(!process.env.DIAG_EMAIL_A)("실제 QA 계정 read-only 진단", 
         .order("created_at", { ascending: false });
       console.log(`=== DIAG: centerId=${centerId} "${classTitle}" 제목 class 후보=${JSON.stringify(targetClasses)} ===`);
 
+      // ---------- schedule_rules 용도 확인: class_title="수업"인 class가 이 센터에 실제로
+      // 있(었)는지(현재/과거 전부, 날짜 제한 없음) — 없으면 규칙이 가리키는 대상 자체가
+      // 없다는 뜻이라 orphan(불필요) 가능성이 높고, 있으면 실제 반복수업을 위한 의도된
+      // 제한일 가능성이 높다.
+      const { data: allCenterClasses } = await admin
+        .from("classes")
+        .select("id, title, start_time, class_format, created_at")
+        .eq("center_id", centerId)
+        .order("start_time", { ascending: true });
+      console.log(`=== DIAG: centerId=${centerId} 전체 class 목록(날짜 무관)=${JSON.stringify(allCenterClasses)} ===`);
+      const suEopClasses = (allCenterClasses ?? []).filter((c: any) => c.title === "수업");
+      console.log(`=== DIAG: title="수업" 정확히 일치하는 class 건수=${suEopClasses.length} 상세=${JSON.stringify(suEopClasses)} ===`);
+
       // ---------- 3. memberships 전수(이 센터, 이 회원의 모든 프로필) ----------
       const { data: memMemberships } = await admin
         .from("memberships")
