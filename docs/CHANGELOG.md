@@ -8,6 +8,22 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-11 — 담당 강사 복수 지정 + 수강권 허용 정책 변경 Batch 최종 완료: 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
+
+두 번째 SQL(`add_class_trainer_names_rpc_draft_proposed.sql`)까지 적용 완료되면서 이
+Batch가 최종 완료됐다. 사용자 리뷰로 RPC 권한을 강화(public/anon EXECUTE 명시적 차단,
+authenticated만 허용 + `auth.uid() is not null` 이중 방어)한 뒤 적용 — anon 호출이
+401 `permission denied for function class_trainer_names`로 정상 차단됨을 read-only로
+확인. `lib/reservations.ts`가 이 RPC(`class_trainer_names`)를 쓰도록 전환하는 코드도
+함께 push.
+
+전체 CI(E2E/Unit/Integration/Build) **2연속 Green**으로 최종 검증(run
+`31487777454`/`31489758487`, 둘 다 first-attempt·재시도 없음 — E2E 45/45, Unit
+213/213, Integration 133/133). `class-trainers-and-pass-selection-mode.test.ts`의
+"담당 강사가 지정된 수업은 instructorNames에 이름이 채워진다" 케이스(1차 SQL만 적용된
+상태에서 실패했던 바로 그 테스트)도 이제 통과. 기존 P0~P4/P1-15/P1-17 관련 테스트
+전부 회귀 없이 통과 확인.
+
 ## 2026-08-11 — SQL 적용 완료 + 관리자 UI를 SQL 원래 설계대로 수정 (feature/social-auth-notifications-attendance-dashboard)
 
 `add_class_trainers_pass_selection_mode_draft_proposed.sql`을 Supabase에 적용 완료(사용자

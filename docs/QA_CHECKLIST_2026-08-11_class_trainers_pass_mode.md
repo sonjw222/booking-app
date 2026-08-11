@@ -1,9 +1,14 @@
 # 수동 QA 체크리스트 — 담당 강사 복수 지정 + 수강권 허용 정책 변경
 
 대상 브랜치: `feature/social-auth-notifications-attendance-dashboard`
-관련 SQL: `add_class_trainers_pass_selection_mode_draft_proposed.sql`(적용 완료, 2026-08-11)
+관련 SQL(둘 다 적용 완료, 2026-08-11):
+1. `add_class_trainers_pass_selection_mode_draft_proposed.sql`
+2. `add_class_trainer_names_rpc_draft_proposed.sql`(회원 세션에서 담당 강사 이름을
+   읽지 못하던 RLS 갭을 CI로 발견해 추가한 후속 SQL — `class_trainer_names` RPC)
 관련 코드: `app/manager/classes/page.tsx`, `app/reservation/page.tsx`, `lib/classes.ts`, `lib/reservations.ts`
-자동 테스트로 이미 커버되는 항목도, 실제 브라우저·실제 데이터로 한 번은 눈으로 확인하는 것을 권장합니다.
+전체 CI(E2E/Unit/Integration/Build) 2연속 Green으로 자동 검증 완료(run
+`31487777454`/`31489758487`). 자동 테스트로 이미 커버되는 항목도, 실제 브라우저·실제
+데이터로 한 번은 눈으로 확인하는 것을 권장합니다.
 
 ## 준비
 
@@ -22,7 +27,7 @@
 - [ ] **타 센터 스태프 차단(RLS)**: (개발자 도구 없이 직접 재현은 어려움 — 아래 "자동 테스트로 대체" 참고) `class-trainers-and-pass-selection-mode.test.ts`의 RLS 케이스가 CI에서 통과하는지로 대체 확인
 - [ ] **반복 수업 생성**: "매주 반복 등록" 켜고 강사 2명 선택 후 등록 → 생성된 여러 수업을 각각 열어 강사가 전부 동일하게 반영됐는지
 - [ ] **수업 복사**: "스케줄 복사"로 강사가 지정된 수업을 다른 달에 복사 → 복사된 수업을 열어 원본과 동일한 강사가 지정돼 있는지
-- [ ] **회원 화면 노출**: 강사가 지정된 수업을 회원 예약 화면(`/reservation`)에서 확인 → 강사 이름이 표시되는지(1명이면 이름만, 2명 이상이면 "이름 외 N명" 형식인지)
+- [ ] **회원 화면 노출**: 강사가 지정된 수업을 회원 예약 화면(`/reservation`)에서 확인 → 강사 이름이 표시되는지(1명이면 이름만, 2명 이상이면 "이름 외 N명" 형식인지). CI 통합 테스트로 이미 자동 검증됨(`class_trainer_names` RPC 경로) — 눈으로 한 번 더 확인 권장
 - [ ] **강사 미지정 수업**: 강사가 없는 수업은 회원 화면에 강사 관련 표시가 아예 안 뜨는지(빈 줄/이상한 문구 없이 자연스럽게 생략)
 
 ## 2. 수강권 허용 정책 변경
@@ -48,3 +53,5 @@
 - `pass_selection_mode` 저장/조회 정확성 — 동일 파일 + `class-allowed-products-enforcement.test.ts`
 - schedule_rules override 정책(D~J 케이스) — `schedule-rule-override.test.ts`
 - 스케줄 복사 시 정책·강사 보존 — `class-trainers-and-pass-selection-mode.test.ts`의 `copyByDate()` 케이스
+- 회원 세션에서 담당 강사 이름 조회(`class_trainer_names` RPC, 강사 있음/없음 둘 다) — 동일 파일의 instructorNames 케이스
+- `class_trainer_names` RPC의 anon 실행 차단(401 permission denied) — read-only curl로 확인(보고서 참고)

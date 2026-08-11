@@ -1142,18 +1142,27 @@ P2-20 조사 과정에서 발견됐지만 이번 배치 범위 밖이라 코드 
 
 ### P3-1. 수업 구분과 복수 강사 배정
 
-**복수 강사 배정 — 2026-08-11 로드맵 포함 결정 + 구현 완료 + SQL 적용 완료**: `class_trainers`
-재사용, `classes.pass_selection_mode` 신규 컬럼(수강권 허용 정책 0건=전체허용 →
-명시적 선택제로 변경, 관련 결정)까지 한 배치로 처리함. 관리자 UI(`app/manager/classes/page.tsx`
-수업 등록/수정 시트에 담당 강사 다중 선택 + 전체 선택/전체 해제 버튼 + 0개 선택 시 저장
-차단), `lib/classes.ts`/`lib/reservations.ts`, 신규 통합 테스트
-(`tests/integration/class-trainers-and-pass-selection-mode.test.ts`)까지 완료.
-`add_class_trainers_pass_selection_mode_draft_proposed.sql`을 사용자가 Supabase에 실행
-완료(오류 없음, read-only로 migration 결과 확인됨 — `all`=389/`selected`=85/합계 474로
-헤더 주석의 예고치와 정확히 일치). Integration/E2E CI 검증은 브랜치 push 후 GitHub
-Actions에서 진행 중/진행 예정. 상세는 `docs/CHANGELOG.md` 2026-08-11 "담당 강사 복수
-지정 + 수강권 허용 정책 변경 Batch"와 "SQL 적용 완료 + 관리자 UI를 SQL 원래 설계대로
-수정" 두 항목 참고.
+**복수 강사 배정 — 2026-08-11 로드맵 포함 결정 + 구현 + SQL 2건 적용 + CI 2연속 Green
+으로 최종 완료**: `class_trainers` 재사용, `classes.pass_selection_mode` 신규 컬럼
+(수강권 허용 정책 0건=전체허용 → 명시적 선택제로 변경, 관련 결정)까지 한 배치로 처리함.
+관리자 UI(`app/manager/classes/page.tsx` 수업 등록/수정 시트에 담당 강사 다중 선택 +
+전체 선택/전체 해제 버튼 + 0개 선택 시 저장 차단), `lib/classes.ts`/`lib/reservations.ts`,
+신규 통합 테스트(`tests/integration/class-trainers-and-pass-selection-mode.test.ts`)까지
+완료. SQL 2건 모두 사용자가 Supabase에 실행 완료:
+1. `add_class_trainers_pass_selection_mode_draft_proposed.sql` — read-only로 migration
+   결과 확인(`all`=389/`selected`=85/합계 474, 헤더 주석 예고치와 정확히 일치).
+2. `add_class_trainer_names_rpc_draft_proposed.sql` — CI 통합 테스트로 회원 세션에서
+   `accounts` RLS 때문에 담당 강사 이름이 항상 빈 값으로 나오던 실제 버그를 발견해
+   추가한 좁은 security definer RPC(`class_trainer_names`, public/anon EXECUTE 명시적
+   차단 + `auth.uid() is not null` 이중 방어). anon 호출이 401 permission denied로
+   정상 차단됨을 read-only로 확인.
+
+전체 CI(E2E/Unit/Integration/Build) **2연속 Green**으로 최종 검증됨(run
+`31487777454`/`31489758487`, 둘 다 first-attempt·재시도 없음 — E2E 45/45, Unit
+213/213, Integration 133/133). 기존 P0~P4/P1-15/P1-17 관련 테스트 파일
+(`schedule-rule-override.test.ts`, `class-allowed-products-enforcement.test.ts`,
+`admin-assignment-security.test.ts`, `private-class-capacity.test.ts` 등) 전부 회귀
+없이 통과. 상세는 `docs/CHANGELOG.md` 2026-08-11 항목들 참고.
 
 **수업 구분(class_types, classes.class_type_id) — 여전히 미결정**: 이번 배치 범위 밖.
 
