@@ -179,8 +179,15 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
       // 담당 강사(class_trainers) — 같은 청크 방식으로 N+1 없이 한 번에 조회.
       // 대부분의 수업엔 강사가 0~2명 정도라 이 조회 자체가 1000행 cap에 걸릴 일은
       // 거의 없지만, classIds 자체가 이미 청크로 나뉘어 있어 안전하다.
+      // class_trainers.select("...accounts(name)")로 바로 임베드 조인하면 accounts
+      // 테이블 자신의 SELECT RLS("계정 조회" 정책)에 막혀 회원 세션에서는 name이 항상
+      // 비어 온다(그 정책은 "내가 관리하는 센터의 스태프/회원"만 허용 — 그냥 회원인
+      // 나에게 강사 계정은 해당 없음, CI 통합 테스트로 실측 확인됨). accounts RLS
+      // 자체를 넓히는 대신, 이 조회만을 위한 좁은 security definer RPC를 쓴다
+      // (add_class_trainer_names_rpc_draft_proposed.sql, 2026-08-11 적용 완료 —
+      // public/anon EXECUTE는 명시적으로 차단, authenticated만 허용).
       Promise.all(classIdChunks.map((ids) =>
-        supabase.from("class_trainers").select("class_id, accounts(name)").in("class_id", ids)
+        supabase.rpc("class_trainer_names", { p_class_ids: ids })
       )),
     ]);
 
@@ -199,7 +206,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     for (const res of trainerChunks) {
       if (res.error) throw new Error("담당 강사를 불러오지 못했어요: " + res.error.message);
       for (const r of res.data ?? []) {
-        const name = (r as any).accounts?.name;
+        const name = (r as any).name;
         if (!name) continue;
         (instructorNamesByClass[(r as any).class_id] ??= []).push(name);
       }
