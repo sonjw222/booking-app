@@ -732,6 +732,12 @@ function ReservationCalendarContent() {
             <div className="confirm-class" style={{ marginTop: 18 }}>
               <div className="confirm-class-title">{confirmClass.title}</div>
               <div className="confirm-class-sub">{confirmClass.place} · {confirmClass.date} {confirmClass.start}</div>
+              {confirmClass.instructorNames.length > 0 && (
+                // 목록 화면(class-row-place)은 "A, B 외 N명"으로 줄여 보여주지만, 강사가
+                // 많으면 회원이 전체 명단을 볼 방법이 없어진다는 피드백(2026-08-12) — 예약
+                // 확인 상세에서는 줄이지 않고 전원을 보여준다.
+                <div className="confirm-class-sub">담당 강사: {confirmClass.instructorNames.join(", ")}</div>
+              )}
             </div>
 
             {confirmClass.allowGoods && (

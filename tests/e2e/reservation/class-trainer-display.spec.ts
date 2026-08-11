@@ -138,6 +138,21 @@ test.describe("A, C: 회원 예약 화면의 담당 강사 표시", () => {
     await memberContext.close();
   });
 
+  test("예약 확인 상세에는 목록과 달리 담당 강사 명단이 줄임 없이 보인다(2026-08-12 피드백)", async ({ page, browser }) => {
+    const title = `강사표시-회원-상세-${Date.now()}`;
+    const cls = await createFutureTestClassAdmin(centerAId, { title, hoursFromNow: 207 });
+    createdClassIds.push(cls.id);
+    const kstDate = kstDateStr(cls.startTime);
+    await assignTrainerViaUi(page, kstDate, title, managerAName);
+
+    const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
+    const memberPage = await memberContext.newPage();
+    await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
+    await expect(memberPage.locator(".sheet-title", { hasText: "예약하시겠어요?" })).toBeVisible({ timeout: 20000 });
+    await expect(memberPage.locator(".confirm-class-sub", { hasText: "담당 강사" })).toContainText(managerAName);
+    await memberContext.close();
+  });
+
   test("C: 강사 없음 — 센터명만 표시되고 불필요한 구분자가 없다", async ({ browser }) => {
     const title = `강사표시-회원-없음-${Date.now()}`;
     const cls = await createFutureTestClassAdmin(centerAId, { title, hoursFromNow: 206 });
