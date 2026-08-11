@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import ManagerNav from "../components/ManagerNav";
+import UiIcon from "../components/UiIcon";
 import { fetchMyCenters, fetchTodayClasses, type ManagedCenter, type TodayClass } from "../../lib/manager";
 import { fetchClassAttendees, setAttendance, type ClassAttendee } from "../../lib/classes";
 import { fetchMemberDetail, type MemberDetailData } from "../../lib/members";
@@ -61,7 +62,7 @@ export default function ManagerDashboard() {
       return;
     }
     if (status === "cancelled") {
-      const ok = confirm(
+      const ok = await globalThis.appConfirm(
         `${a.name}님의 예약을 취소할까요?\n\n` +
         `· 사용한 수강권 횟수가 1회 복구돼요\n` +
         `· 취소 후에는 출석·결석·노쇼로 되돌릴 수 없어요\n\n` +
@@ -185,7 +186,7 @@ export default function ManagerDashboard() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell manager-home-v2">
       {/* 매니저 모드 헤더 */}
       <div className="mgr-mode-bar">
         <span className="mgr-mode-label">🏢 관리자 모드</span>
@@ -205,6 +206,23 @@ export default function ManagerDashboard() {
           </button>
         ))}
       </div>
+
+      <section className="manager-today-overview">
+        <div className="manager-today-head">
+          <div><span>오늘 할 일</span><b>{new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "short" }).format(new Date())}</b></div>
+          <a href="/manager/classes">수업 관리 ›</a>
+        </div>
+        <div className="manager-today-metrics">
+          <a href="/manager/classes"><span>오늘 수업</span><b>{todayClasses.length}</b></a>
+          <a href="/manager/classes"><span>예약 인원</span><b>{todayClasses.reduce((sum, item) => sum + item.reserved, 0)}</b></a>
+          <a href="/manager/classes"><span>마감 수업</span><b>{todayClasses.filter((item) => item.reserved >= item.capacity).length}</b></a>
+        </div>
+        <div className="manager-today-actions">
+          <a href="/manager/inquiries"><UiIcon name="message" size={17} />문의 확인</a>
+          <a href="/manager/orders"><UiIcon name="receipt" size={17} />주문 확인</a>
+          <a href="/manager/admin-assignments"><UiIcon name="users" size={17} />회원 배치</a>
+        </div>
+      </section>
 
       {/* 매출 요약 대시보드 */}
       {canSeeMenu("pass.sales.view") && (
@@ -300,24 +318,24 @@ export default function ManagerDashboard() {
       <div className="menu-section-label">{activeCenter?.name ?? "센터"} 관리</div>
       {canSeeMenu("pass.create") && (
         <a className="list-row" href="/manager/membership-rules">
-          <div className="left"><span className="icon">🎫</span>수강권 관리</div>
+          <div className="left"><span className="icon"><UiIcon name="ticket" /></span>수강권 관리</div>
           <span className="chevron">›</span>
         </a>
       )}
       {/* 상품 관리: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
       <a className="list-row" href="/manager/goods">
-        <div className="left"><span className="icon">🎽</span>상품 관리</div>
+        <div className="left"><span className="icon"><UiIcon name="receipt" /></span>상품 관리</div>
         <span className="chevron">›</span>
       </a>
       {canSeeMenu("customer.progress") && (
         <a className="list-row" href="/manager/progress/record">
-          <div className="left"><span className="icon">📈</span>회원 진도 기록</div>
+          <div className="left"><span className="icon"><UiIcon name="edit" /></span>회원 진도 기록</div>
           <span className="chevron">›</span>
         </a>
       )}
       {canSeeMenu("facility.staff.view") && (
         <a className="list-row" href="/manager/staff">
-          <div className="left"><span className="icon">🔑</span>스태프 & 권한</div>
+          <div className="left"><span className="icon"><UiIcon name="shield" /></span>스태프 & 권한</div>
           <span className="chevron">›</span>
         </a>
       )}

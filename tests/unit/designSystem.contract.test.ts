@@ -155,3 +155,32 @@ describe("Batch 6 communication and account design contract", () => {
     expect(css).toContain(".account-page-v2 .profile-list");
   });
 });
+
+describe("Batch 7A manager primary surface contract", () => {
+  it("adds the manager overview while retaining current sales and permission behavior", () => {
+    const manager = read("app/manager/page.tsx");
+    expect(manager).toContain("manager-home-v2");
+    expect(manager).toContain("manager-today-overview");
+    expect(manager).toContain("fetchDashboardSummary");
+    expect(manager).toContain("canSeeManagerMenu");
+    expect(manager).toContain("globalThis.appConfirm");
+  });
+
+  it("styles member and notification surfaces without replacing current detail and deep-link logic", () => {
+    const members = read("app/manager/members/page.tsx");
+    const notifications = read("app/manager/notifications/page.tsx");
+    expect(members).toContain("manager-members-v2");
+    expect(members).toContain("fetchMemberDetail");
+    expect(members).toContain('searchParams.get("profile")');
+    expect(notifications).toContain("manager-notifications-v2");
+    expect(notifications).toContain("notificationHref");
+  });
+
+  it("keeps manager classes isolated and provides the Batch 7A style layer", () => {
+    const css = read("app/globals.css");
+    expect(css).toContain("Batch 7A: manager home, members, notifications and more");
+    expect(css).toContain(".manager-today-overview");
+    expect(css).toContain(".manager-notifications-v2 .noti-row");
+    expect(read("app/manager/classes/page.tsx")).not.toContain("Batch 7A");
+  });
+});

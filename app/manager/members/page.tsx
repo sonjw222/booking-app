@@ -263,7 +263,7 @@ function MembersContent() {
 
   if (centers.length === 0 && !loading) {
     return (
-      <div className="app-shell">
+      <div className="app-shell manager-members-v2">
         <div className="back-header">
           <div className="side" />
           <div className="title">내 회원</div>
@@ -275,7 +275,7 @@ function MembersContent() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell manager-members-v2">
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">

@@ -11,8 +11,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
+import UiIcon from "../../components/UiIcon";
 import {
-  fetchNotifications, markRead, deleteNotification, notiEmoji, notificationHref,
+  fetchNotifications, markRead, deleteNotification, notificationHref,
   type Notification,
 } from "../../../lib/notifications";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
@@ -48,6 +49,19 @@ export default function ManagerNotificationsPage() {
     setList((prev) => prev.filter((n) => n.id !== id));
   }
 
+  function notificationIcon(kind: string) {
+    if (kind.includes("reservation") || kind.includes("waitlist") || kind === "no_show") return "calendar" as const;
+    if (kind.includes("order")) return "receipt" as const;
+    if (kind.includes("review")) return "star" as const;
+    if (kind.includes("inquiry")) return "message" as const;
+    if (kind.includes("announcement")) return "megaphone" as const;
+    return "bell" as const;
+  }
+
+  function priorityOf(kind: string) {
+    return ["reservation_canceled", "no_show", "reservation_today", "new_inquiry"].includes(kind) ? "important" : "normal";
+  }
+
   if (centers.length === 0 && !loading) {
     return (
       <div className="app-shell">
@@ -63,10 +77,7 @@ export default function ManagerNotificationsPage() {
   if (loading) return <Loading />;
 
   return (
-    <div className="app-shell">
-      <div className="header">
-        <div className="title" style={{ fontSize: 20, fontWeight: 800 }}>알림</div>
-      </div>
+    <div className="app-shell manager-notifications-v2">
 
       {list.length === 0 ? (
         <div className="empty-note" style={{ padding: "50px 20px", textAlign: "center", color: "var(--text-dim)" }}>
@@ -77,12 +88,16 @@ export default function ManagerNotificationsPage() {
           {list.map((n) => (
             <div
               key={n.id}
-              className={`noti-row ${n.read ? "" : "unread"}`}
+              className={`noti-row ${n.read ? "" : "unread"} priority-${priorityOf(n.kind)}`}
               onClick={() => handleClick(n)}
             >
-              <span className="noti-emoji">{notiEmoji(n.kind)}</span>
+              <span className={`noti-emoji kind-${n.kind}`}><UiIcon name={notificationIcon(n.kind)} size={21} /></span>
               <div className="noti-main">
-                <div className="noti-title">{n.title}</div>
+                <div className="noti-title-row">
+                  <div className="noti-title">{n.title}</div>
+                  {n.kind === "reservation_canceled" && <span className="noti-state danger">취소</span>}
+                  {n.kind === "no_show" && <span className="noti-state danger">노쇼</span>}
+                </div>
                 <div className="noti-body">{n.body}</div>
                 <div className="noti-time">{n.createdAt}</div>
               </div>
