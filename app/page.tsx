@@ -6,25 +6,28 @@
   - 카테고리·클래스·센터·하단 네비를 실제 라우트로 연결
 */
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, type HomeCenter, type HomeClass } from "../lib/home";
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
 import { supabase } from "../lib/supabaseClient";
 import BottomNav from "./components/BottomNav";
+import UiIcon, { type IconName } from "./components/UiIcon";
 
 const CATEGORIES = [
-  { emoji: "⛸️", label: "피겨스케이팅" },
-  { emoji: "🧘‍♀️", label: "필라테스" },
-  { emoji: "🩰", label: "발레" },
-  { emoji: "🤸‍♀️", label: "리듬체조" },
-  { emoji: "🧎‍♀️", label: "요가" },
-  { emoji: "🥊", label: "복싱" },
-  { emoji: "🏊‍♀️", label: "수영" },
-  { emoji: "⛳", label: "골프" },
+  { icon: "skate" as IconName, label: "피겨스케이팅" },
+  { icon: "pilates" as IconName, label: "필라테스" },
+  { icon: "ballet" as IconName, label: "발레" },
+  { icon: "rhythm" as IconName, label: "리듬체조" },
+  { icon: "yoga" as IconName, label: "요가" },
+  { icon: "boxing" as IconName, label: "복싱" },
+  { icon: "swim" as IconName, label: "수영" },
+  { icon: "golf" as IconName, label: "골프" },
 ];
 
-// 센터 뱃지에 쓸 대표 글자/색
-const BADGE_COLORS = ["var(--accent)", "#2B4C7E", "#4A4A52", "var(--gold)", "#1F6F63"];
+const CATEGORY_ICONS: Record<string, IconName> = {
+  피겨스케이팅: "skate", 필라테스: "pilates", 발레: "ballet", 리듬체조: "rhythm",
+  요가: "yoga", 복싱: "boxing", 수영: "swim", 골프: "golf",
+};
 
 export default function Home() {
   const [centers, setCenters] = useState<HomeCenter[]>([]);
@@ -35,11 +38,20 @@ export default function Home() {
   const [bannerIdx, setBannerIdx] = useState(0);
   const touchStartX = useRef(0);
   function goBanner(dir: number) {
-    if (banners.length <= 1) return;
-    setBannerIdx((i) => (i + dir + banners.length) % banners.length);
+    if (validBanners.length <= 1) return;
+    setBannerIdx((i) => (i + dir + validBanners.length) % validBanners.length);
   }
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
+  const validBanners = useMemo(
+    () => banners.filter((banner) => banner.title?.trim().length >= 2),
+    [banners]
+  );
+  const visibleCategories = useMemo(
+    () => (catList.length > 0 ? catList.map((category) => ({ icon: CATEGORY_ICONS[category.label] ?? "grid" as IconName, label: category.label })) : CATEGORIES).slice(0, 8),
+    [catList]
+  );
+  const visibleClasses = useMemo(() => myUpcoming.length > 0 ? myUpcoming : classes, [classes, myUpcoming]);
 
   useEffect(() => {
     // 소셜 로그인 콜백 실패(사용자가 provider 동의 화면에서 취소, provider가 접근 거부 등)는
@@ -90,32 +102,39 @@ export default function Home() {
 
   // 배너 자동 회전 (4초마다)
   useEffect(() => {
-    if (banners.length <= 1) return;
-    const t = setInterval(() => setBannerIdx((i) => (i + 1) % banners.length), 4000);
+    if (validBanners.length <= 1) return;
+    const t = setInterval(() => setBannerIdx((i) => (i + 1) % validBanners.length), 4000);
     return () => clearInterval(t);
-  }, [banners.length]);
+  }, [validBanners.length]);
 
   return (
     <div>
-      <div className="app-shell">
+      <div className="app-shell member-home">
         {/* 헤더 */}
         <div className="header">
-          <div className="header-row">
-            <div className="location">우리동네 클래스</div>
+          <div className="header-row home-heading-row">
+            <div className="location">오늘은 어떤 움직임을 찾나요?</div>
             <div className="header-icons">
               {loggedIn === false && (
-                <a className="login-link" href="/login">로그인/회원가입</a>
+                <a className="login-link" href="/login">로그인</a>
               )}
             </div>
           </div>
+          <a className="home-location-row" href="/search"><UiIcon name="location" size={15} /><span>내 주변 클래스</span><b>›</b></a>
           <a className="searchbar" href="/search">
-            <span>오늘은 어떤 클래스로 몸을 깨워볼까요?</span>
-            <span>🔍</span>
+            <span>클래스, 센터를 검색해보세요</span>
+            <UiIcon name="search" size={20} />
           </a>
         </div>
 
+        <div className="home-value-line" aria-label="서비스 주요 기능">
+          <span><UiIcon name="search" size={15} />내 주변 수업 찾기</span><i />
+          <span><UiIcon name="calendar" size={15} />한 번에 예약</span><i />
+          <span><UiIcon name="ticket" size={15} />수강권 관리</span>
+        </div>
+
         {/* 히어로 배너 (운영자 관리, 자동 회전) */}
-        {banners.length > 0 ? (
+        {validBanners.length > 0 ? (
           <div
             className="hero-wrap"
             onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
@@ -124,109 +143,56 @@ export default function Home() {
               if (Math.abs(dx) > 40) goBanner(dx < 0 ? 1 : -1);
             }}
           >
-            <a className="hero" href={banners[bannerIdx]?.linkUrl || "/reservation"} style={{ display: "block", textDecoration: "none" }}>
+            <a className="hero" href={validBanners[bannerIdx]?.linkUrl || "/reservation"} style={{ display: "flex", textDecoration: "none" }}>
               <div className="eyebrow">추천</div>
-              <h1>{banners[bannerIdx]?.title}</h1>
-              {banners[bannerIdx]?.subtitle && <div className="chip">{banners[bannerIdx]?.emoji} {banners[bannerIdx]?.subtitle}</div>}
-              <div className="deco">{banners[bannerIdx]?.emoji || "🩰"}</div>
-              {banners.length > 1 && (
+              <h1>{validBanners[bannerIdx]?.title}</h1>
+              {validBanners[bannerIdx]?.subtitle && <div className="chip">{validBanners[bannerIdx]?.subtitle}</div>}
+              <div className="deco" aria-hidden="true" />
+              {validBanners.length > 1 && (
                 <div className="banner-dots">
-                  {banners.map((_, i) => <span key={i} className={`banner-dot ${i === bannerIdx ? "on" : ""}`} />)}
+                  {validBanners.map((_, i) => <span key={i} className={`banner-dot ${i === bannerIdx ? "on" : ""}`} />)}
                 </div>
               )}
             </a>
           </div>
         ) : (
-          <a className="hero" href="/reservation" style={{ display: "block", textDecoration: "none" }}>
-            <div className="eyebrow">신규 회원 웰컴 혜택</div>
-            <h1>첫 등록이면<br />수강료 5,000원 쿠폰</h1>
-            <div className="chip">🎁 필라테스 · 발레 · 스케이팅 전체 사용</div>
-            <div className="deco">🩰</div>
+          <a className="hero" href="/reservation" style={{ display: "flex", textDecoration: "none" }}>
+            <div className="eyebrow">이번 주 추천</div>
+            <h1>내 주변에서 시작하는<br />새로운 움직임</h1>
+            <div className="chip">원하는 종목과 시간을 찾아보세요</div>
+            <div className="deco" aria-hidden="true" />
           </a>
         )}
 
         {/* 종목 카테고리 그리드 */}
+        <div className="home-category-head"><h2>종목 둘러보기</h2><a href="/search">전체 종목</a></div>
         <div className="cat-grid">
-          {(catList.length > 0 ? catList.map((c) => ({ emoji: c.emoji ?? "🏷️", label: c.label })) : CATEGORIES).map((cat) => (
+          {visibleCategories.map((cat) => (
             <a className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`}>
-              <div className="cat-icon">{cat.emoji}</div>
+              <div className="cat-icon"><UiIcon name={cat.icon} size={27} /></div>
               <div className="cat-label">{cat.label}</div>
             </a>
           ))}
-          <a className="cat-item" href="/reservation">
-            <div className="cat-icon tag">전체<span>보기</span></div>
-            <div className="cat-label">더보기</div>
-          </a>
         </div>
 
-        <div className="divider" />
-
-        {/* 제휴 센터 (실제 승인된 센터) */}
-        <div className="section-title">우리동네 센터</div>
-        {centers.length === 0 ? (
-          <div className="daylist-empty" style={{ padding: "12px 20px 20px" }}>
-            {loading ? "불러오는 중..." : "아직 등록된 센터가 없어요"}
-          </div>
-        ) : (
-          <div className="brand-scroll">
-            {centers.map((b, i) => (
-              <a className="brand-item" key={b.id} href={`/center/${b.id}`}>
-                <div className="brand-badge" style={{ background: BADGE_COLORS[i % BADGE_COLORS.length] }}>
-                  {b.name.slice(0, 1)}
-                </div>
-                <div className="brand-name">{b.name}</div>
-                {b.categories.length > 0 && <div className="brand-cat">{b.categories.join(" · ")}</div>}
-                {b.distanceKm != null && <div className="brand-dist">{b.distanceKm < 1 ? `${Math.round(b.distanceKm * 1000)}m` : `${b.distanceKm.toFixed(1)}km`}</div>}
-              </a>
-            ))}
-          </div>
-        )}
-
-        <div className="divider" />
-
-        {/* 내 수강권으로 예약 가능한 수업 (로그인 + 수강권 보유 시) */}
-        {myUpcoming.length > 0 && (
-          <>
-            <div className="section-title">내 수강권으로 예약 가능 <span style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 500 }}>· 일주일 이내</span></div>
-            <div className="card-scroll">
-              {myUpcoming.map((c) => {
-                const full = c.reserved >= c.capacity;
-                return (
-                  <a className="class-card" key={c.id} href={`/reservation?center=${c.centerId}`}>
-                    <div className="class-thumb" style={{ background: "linear-gradient(160deg,var(--grad1),var(--grad2))" }}>
-                      {c.title.slice(0, 1)}
-                    </div>
-                    <div className="class-name">{c.title}</div>
-                    <div className="class-meta">{c.centerName} · <b>{c.startText}</b></div>
-                    <div className="class-meta">예약 {c.reserved}/{c.capacity}{full ? " · 대기" : ""}</div>
-                  </a>
-                );
-              })}
-            </div>
-          </>
-        )}
-
-        {/* 지금 예약 가능한 클래스 (실제 수업) */}
-        <div className="section-title">지금 예약 가능한 클래스</div>
-        {classes.length === 0 ? (
+        <div className="home-class-head"><h2>{myUpcoming.length > 0 ? "내 수강권으로 예약 가능" : "곧 시작하는 클래스"}</h2><a href="/reservation">전체보기 ›</a></div>
+        {visibleClasses.length === 0 ? (
           <div className="daylist-empty" style={{ padding: "12px 20px 30px" }}>
             {loading ? "불러오는 중..." : "예약 가능한 수업이 없어요"}
           </div>
         ) : (
-          <div className="card-scroll">
-            {classes.map((c) => {
+          <div className="home-class-list">
+            {visibleClasses.slice(0, 3).map((c) => {
               const full = c.reserved >= c.capacity;
+              const center = centers.find((item) => item.id === c.centerId);
               return (
-                <a className="class-card" key={c.id} href={`/center/${c.centerId}`}>
-                  <div className="class-thumb" style={{ background: "linear-gradient(160deg,var(--grad2),var(--grad3))" }}>
-                    {c.title.slice(0, 1)}
-                  </div>
-                  <div className="class-name">{c.title}</div>
-                  <div className="class-meta">
-                    {c.centerName} · <b>{c.startText}</b>
-                  </div>
-                  <div className={`class-meta ${full ? "" : ""}`}>
-                    예약 {c.reserved}/{c.capacity}{full ? " · 대기" : ""}
+                <a className="home-class-row" key={c.id} href={`/center/${c.centerId}`}>
+                  <div className="home-class-photo photo-fallback" aria-label={`${center?.name ?? c.centerName} 클래스 이미지`}><UiIcon name={CATEGORY_ICONS[center?.categories[0] ?? ""] ?? "calendar"} size={26} /></div>
+                  <div className="home-class-copy">
+                    <span>{c.startText}</span>
+                    <strong>{c.title}</strong>
+                    <small>{c.centerName}</small>
+                    <small>정원 {c.capacity}명 중 <b>{Math.max(c.capacity - c.reserved, 0)}명 남음</b>{full ? " · 대기" : ""}</small>
                   </div>
                 </a>
               );

@@ -29,3 +29,18 @@ describe("Batch 1 design system contract", () => {
     expect(layout).toContain("AppConfirmProvider");
   });
 });
+
+describe("Batch 3 discovery design contract", () => {
+  it("uses the shared icon system across home, search and category discovery", () => {
+    expect(read("app/page.tsx")).toContain("<UiIcon");
+    expect(read("app/search/page.tsx")).toContain("<UiIcon");
+    expect(read("app/category/[label]/page.tsx")).toContain("<UiIcon");
+  });
+
+  it("preserves the latest OAuth error callback behavior on home", () => {
+    const home = read("app/page.tsx");
+    expect(home).toContain("error_description");
+    expect(home).toContain("window.location.replace(`/login?oauth_error=");
+    expect(home).toContain("fetchMyUpcomingClasses");
+  });
+});
