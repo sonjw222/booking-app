@@ -208,7 +208,12 @@ test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → �
   // class-allowed-products.spec.ts와 동일하게 UI 재진입으로 확인한다.
   await page.locator(".class-row", { hasText: uniqueTitle }).click();
   await expect(page.locator(".sheet-title", { hasText: "수업 수정" })).toBeVisible();
-  await expect(page.locator(".class-allowed-products-list .filter-chip.on")).toHaveCount(0);
+  // [수강권 허용 정책 변경] 'all'은 이제 "모든 chip이 체크된 상태"로 표현된다(0개 체크가
+  // 아님 — 0개는 저장 자체가 막히는 상태). 등록 시 어떤 chip도 건드리지 않았으므로 여전히
+  // 전체 체크 상태여야 한다.
+  const allChipsT1 = page.locator(".class-allowed-products-list .filter-chip");
+  const totalChipsT1 = await allChipsT1.count();
+  await expect(page.locator(".class-allowed-products-list .filter-chip.on")).toHaveCount(totalChipsT1);
   await page.locator(".sheet-overlay").click({ position: { x: 10, y: 10 } });
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
@@ -242,6 +247,8 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
   await fillAmPmTime(page, 0, 19, 0);
   await fillAmPmTime(page, 1, 20, 0);
 
+  // 기본값 'all'(전체 체크)에서 시작하므로 먼저 전체 해제한 뒤 특정 pass 하나만 고른다.
+  await page.getByRole("button", { name: "전체 해제" }).click();
   await page.locator('input[placeholder="수강권 이름 검색"]').fill("E2E 테스트 수강권 상품");
   const chip = page.locator(".filter-chip", { hasText: "E2E 테스트 수강권 상품" });
   await expect(chip).toHaveCount(1); // 검색 결과가 정확히 1개인지(모호한 매칭 배제)
@@ -297,7 +304,9 @@ test("TEST4: 신규 수업 → 사용 가능 수강권 없음 → 그 자리에�
   await fillAmPmTime(page, 1, 20, 0);
 
   // userA가 아직 안 가진 전용 상품 하나만 허용 — "구매 전 사용 가능한 수강권 없음"이
-  // 우연이 아니라 구조적으로 보장되게 한다.
+  // 우연이 아니라 구조적으로 보장되게 한다. 기본값 'all'(전체 체크)에서 시작하므로
+  // 먼저 전체 해제한다.
+  await page.getByRole("button", { name: "전체 해제" }).click();
   await page.locator('input[placeholder="수강권 이름 검색"]').fill(BUY_PRODUCT_NAME);
   const chip = page.locator(".filter-chip", { hasText: BUY_PRODUCT_NAME });
   await expect(chip).toHaveCount(1);

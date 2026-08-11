@@ -1142,12 +1142,27 @@ P2-20 조사 과정에서 발견됐지만 이번 배치 범위 밖이라 코드 
 
 ### P3-1. 수업 구분과 복수 강사 배정
 
+**복수 강사 배정 — 2026-08-11 로드맵 포함 결정 + 구현 완료 + SQL 적용 완료**: `class_trainers`
+재사용, `classes.pass_selection_mode` 신규 컬럼(수강권 허용 정책 0건=전체허용 →
+명시적 선택제로 변경, 관련 결정)까지 한 배치로 처리함. 관리자 UI(`app/manager/classes/page.tsx`
+수업 등록/수정 시트에 담당 강사 다중 선택 + 전체 선택/전체 해제 버튼 + 0개 선택 시 저장
+차단), `lib/classes.ts`/`lib/reservations.ts`, 신규 통합 테스트
+(`tests/integration/class-trainers-and-pass-selection-mode.test.ts`)까지 완료.
+`add_class_trainers_pass_selection_mode_draft_proposed.sql`을 사용자가 Supabase에 실행
+완료(오류 없음, read-only로 migration 결과 확인됨 — `all`=389/`selected`=85/합계 474로
+헤더 주석의 예고치와 정확히 일치). Integration/E2E CI 검증은 브랜치 push 후 GitHub
+Actions에서 진행 중/진행 예정. 상세는 `docs/CHANGELOG.md` 2026-08-11 "담당 강사 복수
+지정 + 수강권 허용 정책 변경 Batch"와 "SQL 적용 완료 + 관리자 UI를 SQL 원래 설계대로
+수정" 두 항목 참고.
+
+**수업 구분(class_types, classes.class_type_id) — 여전히 미결정**: 이번 배치 범위 밖.
+
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P3 |
-| 현재 상태 | **확인 필요** |
-| 근거 파일 | `schema.sql`, `reservation_functions.sql`, `lib/classes.ts`; `class_types`, `class_trainers`, `classes.class_type_id` |
-| 완료 조건 | 두 기능의 제품 포함 여부를 결정함. 포함 시 수업 CRUD·권한·기존 수업 migration을 구현하고, 제외 시 FK·운영 데이터·외부 사용을 확인한 정리 계획을 승인받음 |
+| 현재 상태 | **확인 필요(수업 구분만 남음 — 복수 강사 배정은 위에서 해결됨)** |
+| 근거 파일 | `schema.sql`, `reservation_functions.sql`; `class_types`, `classes.class_type_id` |
+| 완료 조건 | 수업 구분 기능의 제품 포함 여부를 결정함. 포함 시 수업 CRUD·권한·기존 수업 migration을 구현하고, 제외 시 FK·운영 데이터·외부 사용을 확인한 정리 계획을 승인받음 |
 | 관련 문서 | [REQUIREMENTS 6-3, 12절](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md) |
 
 ### P3-2. 락커와 수강권 양도

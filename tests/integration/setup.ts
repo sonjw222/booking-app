@@ -391,23 +391,31 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
 // 미래 시각에 시작하는 테스트 전용 수업 생성 (기본 48시간 뒤, 1시간짜리)
 export async function createFutureTestClass(
   centerId: string,
-  opts?: { capacity?: number; hoursFromNow?: number; title?: string; classFormat?: "group" | "private"; durationMinutes?: number }
+  opts?: {
+    capacity?: number; hoursFromNow?: number; title?: string; classFormat?: "group" | "private"; durationMinutes?: number;
+    // add_class_trainers_pass_selection_mode_draft_proposed.sql이 아직 적용되지 않은 환경에서도
+    // 이 함수를 쓰는 기존 테스트 전부가 깨지지 않도록, 값을 명시적으로 넘길 때만 insert payload에
+    // pass_selection_mode 키를 포함한다(컬럼이 없는 DB에서는 아예 이 키를 보내지 않음).
+    passSelectionMode?: "all" | "selected";
+  }
 ): Promise<{ id: string; startTime: string; endTime: string }> {
   const hours = opts?.hoursFromNow ?? 48;
   const start = new Date(Date.now() + hours * 3600 * 1000);
   const end = new Date(start.getTime() + (opts?.durationMinutes ?? 60) * 60 * 1000);
+  const row: Record<string, unknown> = {
+    center_id: centerId,
+    title: opts?.title ?? "통합테스트 수업",
+    start_time: start.toISOString(),
+    end_time: end.toISOString(),
+    // classes_private_capacity_check(fix_private_class_capacity_constraint_draft_proposed.sql)가
+    // class_format='private'이면 capacity=1을 DB에서 강제한다 — private일 때 capacity 옵션은 무시.
+    capacity: opts?.classFormat === "private" ? 1 : opts?.capacity ?? 8,
+    class_format: opts?.classFormat ?? "group",
+  };
+  if (opts?.passSelectionMode) row.pass_selection_mode = opts.passSelectionMode;
   const { data, error } = await supabase
     .from("classes")
-    .insert({
-      center_id: centerId,
-      title: opts?.title ?? "통합테스트 수업",
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      // classes_private_capacity_check(fix_private_class_capacity_constraint_draft_proposed.sql)가
-      // class_format='private'이면 capacity=1을 DB에서 강제한다 — private일 때 capacity 옵션은 무시.
-      capacity: opts?.classFormat === "private" ? 1 : opts?.capacity ?? 8,
-      class_format: opts?.classFormat ?? "group",
-    })
+    .insert(row)
     .select("id, start_time, end_time")
     .single();
   if (error || !data) throw new Error(`테스트 수업 생성 실패: ${error?.message ?? "no data"}`);

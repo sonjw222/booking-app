@@ -127,6 +127,10 @@ test("관리자: 검색으로 특정 pass 1개만 선택 → 저장 → 재진�
   await page.locator(".class-row", { hasText: "P3 그룹수업-특정1개" }).click();
   await expect(page.locator(".sheet-title", { hasText: "수업 수정" })).toBeVisible();
 
+  // [수강권 허용 정책 변경] 새/미지정 수업은 기본값 'all'이라 열자마자 모든 수강권이 이미
+  // 체크돼 있다 — "특정 1개만" 만들려면 먼저 전체 해제부터 해야 한다.
+  await page.getByRole("button", { name: "전체 해제" }).click();
+  await expect(page.locator(".class-allowed-products-list .filter-chip.on")).toHaveCount(0);
   await page.locator('input[placeholder="수강권 이름 검색"]').fill("패스B");
   await expect(page.locator(".filter-chip", { hasText: "P3 패스A" })).toHaveCount(0);
   await page.locator(".filter-chip", { hasText: "P3 패스B" }).click();
@@ -160,6 +164,8 @@ test("관리자: 특정 pass 여러 개 허용 → 지정된 것만 표시, 나�
 
   await gotoManagerClassesDay(page, kstDate);
   await page.locator(".class-row", { hasText: "P3 그룹수업-특정2개" }).click();
+  // 기본값 'all'(전체 체크)에서 시작하므로 먼저 전체 해제한 뒤 A/C만 고른다.
+  await page.getByRole("button", { name: "전체 해제" }).click();
   await page.locator(".filter-chip", { hasText: "P3 패스A" }).click();
   await page.locator(".filter-chip", { hasText: "P3 패스C" }).click();
   await page.getByRole("button", { name: "수정하기" }).click();
@@ -176,35 +182,40 @@ test("관리자: 특정 pass 여러 개 허용 → 지정된 것만 표시, 나�
   await memberContext.close();
 });
 
-test("관리자: 선택 해제(전체 허용으로 전환) → 회원 화면에 보유한 모든 pass 표시, goods는 절대 표시 안 됨 (실브라우저)", async ({ page, browser }) => {
+test("관리자: 전체 선택(전체 허용으로 전환) → 회원 화면에 보유한 모든 pass 표시, goods는 절대 표시 안 됨 (실브라우저)", async ({ page, browser }) => {
   const cls = await createFutureTestClassAdmin(centerAId, { title: "P3 그룹수업-전체허용", hoursFromNow: 32 });
   createdClassIds.push(cls.id);
   const kstDate = kstDateStr(cls.startTime);
 
-  // 먼저 특정 1개로 지정했다가("전체→특정" 전환 확인) 다시 해제("특정→전체" 전환 확인).
+  // 먼저 특정 1개로 지정했다가("전체→특정" 전환 확인) 다시 전체 선택으로 되돌린다
+  // ("특정→전체" 전환 확인, [수강권 허용 정책 변경] 이후에는 "전체 선택" 버튼으로만 표현됨).
   // 패스D/E/F는 이 테스트 전용(다른 테스트의 class_allowed_products 지정과 섞이지 않도록
   // 격리) — class_allowed_products 저장은 membership_schedule_rules를 전혀 건드리지 않으므로
   // (아래 회귀 검증 참고) 어떤 pass를 쓰든 동작은 같지만, 테스트 간 독립성을 위해 유지한다.
   await gotoManagerClassesDay(page, kstDate);
   await page.locator(".class-row", { hasText: "P3 그룹수업-전체허용" }).click();
+  // 기본값 'all'(전체 체크)에서 시작하므로, 먼저 전체 해제한 뒤 패스D만 고른다.
+  await page.getByRole("button", { name: "전체 해제" }).click();
   await page.locator(".filter-chip", { hasText: "P3 패스D" }).click();
   await page.getByRole("button", { name: "수정하기" }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
   await page.locator(".class-row", { hasText: "P3 그룹수업-전체허용" }).click();
+  const allChips = page.locator(".class-allowed-products-list .filter-chip");
   const passChipsOn2 = page.locator(".class-allowed-products-list .filter-chip.on");
   await expect(passChipsOn2).toHaveCount(1);
-  await page.getByRole("button", { name: "선택 해제 (모든 수강권 허용으로 전환)" }).click();
-  await expect(page.locator(".class-allowed-products-list .filter-chip.on")).toHaveCount(0);
+  const totalChips = await allChips.count();
+  await page.getByRole("button", { name: "전체 선택(모든 수강권 허용)" }).click();
+  await expect(passChipsOn2).toHaveCount(totalChips);
   await page.getByRole("button", { name: "수정하기" }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
-  // 회귀 검증(P3 감사 중 실제로 발견한 버그): class_allowed_products 저장(선택이든 해제든)은
-  // membership_schedule_rules를 절대 건드리면 안 된다 — 이 둘은 완전히 독립된 기능이다
-  // (membership_schedule_rules는 /manager/membership-rules에서만 직접 관리). 과거엔 여기서
-  // 부수효과로 규칙을 자동 추가/삭제해 "선택 해제해도 이전 규칙이 안 지워져 그 수강권만
-  // 계속 안 보이는" 버그를 냈다. 이 테스트가 방금 passD를 선택했다 해제했으니, passD에는
-  // 어떤 schedule_rules 행도 생기지 않았어야 한다.
+  // 회귀 검증(P3 감사 중 실제로 발견한 버그): class_allowed_products 저장(선택이든 전체
+  // 선택이든)은 membership_schedule_rules를 절대 건드리면 안 된다 — 이 둘은 완전히 독립된
+  // 기능이다(membership_schedule_rules는 /manager/membership-rules에서만 직접 관리). 과거엔
+  // 여기서 부수효과로 규칙을 자동 추가/삭제해 "전체 허용으로 바꿔도 이전 규칙이 안 지워져
+  // 그 수강권만 계속 안 보이는" 버그를 냈다. 이 테스트가 방금 passD를 선택했다 다시 전체
+  // 선택으로 되돌렸으니, passD에는 어떤 schedule_rules 행도 생기지 않았어야 한다.
   const admin = getFixtureAdminClient();
   const { data: leakedRules } = await admin
     .from("membership_schedule_rules")
@@ -213,8 +224,9 @@ test("관리자: 선택 해제(전체 허용으로 전환) → 회원 화면에 
   expect(leakedRules ?? []).toHaveLength(0);
 
   // 저장이 실제로 DB에 반영됐는지(낙관적 로컬 상태가 아니라) 재진입해서 다시 확인한다.
+  // ('all' 모드는 UI에서 모든 chip이 체크된 상태로 표현됨 — 0개 체크가 아님.)
   await page.locator(".class-row", { hasText: "P3 그룹수업-전체허용" }).click();
-  await expect(page.locator(".class-allowed-products-list .filter-chip.on")).toHaveCount(0);
+  await expect(page.locator(".class-allowed-products-list .filter-chip.on")).toHaveCount(totalChips);
   await page.locator(".sheet-overlay").click({ position: { x: 10, y: 10 } });
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
@@ -248,6 +260,8 @@ test("프라이빗 수업에서도 예약 가능 수강권 선택이 동일하�
   // 프라이빗 수업에서도 예약 가능 수강권 섹션이 그대로 있고 pass만 나온다(goods 없음).
   await expect(page.locator(".daylist-empty", { hasText: "등록된 수강권이 없어요" })).toHaveCount(0);
   await expect(page.getByText("예약 가능 수강권")).toBeVisible();
+  // 기본값 'all'(전체 체크)에서 시작하므로 먼저 전체 해제한 뒤 패스A만 고른다.
+  await page.getByRole("button", { name: "전체 해제" }).click();
   await page.locator('input[placeholder="수강권 이름 검색"]').fill("패스A");
   await page.locator(".filter-chip", { hasText: "P3 패스A" }).click();
   await page.getByRole("button", { name: "수정하기" }).click();

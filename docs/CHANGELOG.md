@@ -8,6 +8,84 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-11 — SQL 적용 완료 + 관리자 UI를 SQL 원래 설계대로 수정 (feature/social-auth-notifications-attendance-dashboard)
+
+`add_class_trainers_pass_selection_mode_draft_proposed.sql`을 Supabase에 적용 완료(사용자
+실행, 오류 없음). Read-only 확인: `classes.pass_selection_mode` 컬럼 존재,
+`all`=389건/`selected`=85건/합계 474건으로 migration 헤더 주석이 예고한 수치와 정확히
+일치. anon PATCH 시도는 RLS에 막혀 0행 no-op임을 별도 확인(쓰기 회귀 없음).
+
+SQL 적용 검증 중 발견한 설계 불일치를 사용자 확인 후 수정: SQL 헤더 주석은 "수강권
+0개 선택 시 저장 금지 + '전체 선택' 버튼으로 명시적 전체허용 표현"을 원래 설계로
+명시했는데, 이전 세션에서 만든 `app/manager/classes/page.tsx`는 예전 방식("0개 선택 =
+자동으로 전체허용")을 그대로 유지하고 있었다. 이번에 SQL 설계대로 수정:
+- `resolvePassSelection()` 헬퍼 추가 — 선택 0개면 저장 자체를 막고(신규/반복/수정 모든
+  경로), 선택 개수가 그 센터의 pass 전체 개수와 같으면 `mode='all'`(class_allowed_products는
+  비워서 저장, 스냅샷 아님), 그 사이면 `mode='selected'`(정확히 선택된 목록만 저장).
+- "전체 선택"/"전체 해제" 버튼 추가(기존 "선택 해제(모든 수강권 허용으로 전환)" 버튼
+  대체). 신규 등록 폼은 기본값 'all'을 "모든 chip 체크"로 시각화하기 위해 열 때부터
+  전체 체크 상태로 시작. 수정 폼은 `c.passSelectionMode`를 읽어 'all'이면 전체 체크,
+  'selected'면 실제 저장된 목록으로 정확히 재구성.
+- 이 변경으로 기존 E2E가 가정하던 "빈 선택=전체허용" 상호작용이 전부 깨져서(디폴트가
+  이제 전체 체크라 특정 pass 1개를 고르려면 먼저 전체 해제부터 해야 함) 영향받는 3개
+  스펙 파일(`class-allowed-products.spec.ts`, `new-class-creation.spec.ts`,
+  `membership-schedule-rules.spec.ts`)의 관련 테스트를 새 상호작용 순서(전체 해제 →
+  개별 선택)와 새 상태 표현("전체 체크 개수" 기준, 0개 기준 아님)에 맞춰 수정. 로직
+  검증(RPC가 실제로 무엇을 허용/거부하는지)은 그대로 유지 — 이번 수정은 순수하게
+  "UI가 그 상태에 도달하는 상호작용 순서"만 바꾼 것.
+- `npm run build` 타입체크 + 단위테스트 213/213 통과 확인(로컬). Integration/E2E는
+  로컬에 테스트 자격증명이 없어 브랜치 push 후 GitHub Actions CI로 검증(아래 별도 기록).
+
+## 2026-08-11 — 담당 강사 복수 지정 + 수강권 허용 정책 변경 Batch (feature/social-auth-notifications-attendance-dashboard)
+
+P3-1(수업 구분과 복수 강사 배정) 중 "복수 강사 배정"을 로드맵에 포함하기로 결정하고
+구현. SQL은 `add_class_trainers_pass_selection_mode_draft_proposed.sql`(+ rollback)에
+작성만 해뒀고 **아직 Supabase에 실행하지 않음**(STOP 규칙 유지, 사용자 승인 후 별도 실행
+필요).
+
+- **강사 복수 지정**: 기존에 있었지만 앱 코드가 전혀 쓰지 않던 `class_trainers` 테이블을
+  재사용. 강사 후보는 "스태프 & 권한"의 해당 센터 active 스태프 전체(역할 구분 없음).
+  `lib/classes.ts`에 `fetchClassTrainers`/`setClassTrainers`/`setClassTrainersBulk` 추가.
+  `app/manager/classes/page.tsx`(수업 등록/수정 시트)에 기존 "예약 가능 수강권" chip
+  선택 UI와 동일한 패턴으로 담당 강사 다중 선택 UI 추가(단건 등록·반복 등록·수정 전부
+  지원). 회원 예약 화면(`app/reservation/page.tsx`, `lib/reservations.ts`
+  `fetchMonthData()`)에는 지정된 강사 이름을 "이름 외 N명" 형식으로 노출.
+- **수강권 허용 정책 변경(0건=전체허용 → 명시적 선택제)**: `classes.pass_selection_mode`
+  (`'all'|'selected'`) 컬럼 신규 추가. 관리자 UI에서 "예약 가능 수강권"을 하나도 선택하지
+  않으면 `'all'`(기존 0건=전체허용과 100% 동일 동작), 하나 이상 선택하면 `'selected'`로
+  저장 — `selectedProducts.length`로부터 파생시켜 UI에 별도 토글을 추가하지 않았다.
+  `usable_memberships`/`usable_memberships_for_classes`/`reserve_class`/
+  `reserve_with_membership` 4개 RPC의 cap 체크·P1-17 override 체크 기준을
+  "class_allowed_products 행 존재 여부"에서 "pass_selection_mode 값"으로 변경(SQL,
+  미실행). 기존 474개 class는 migration으로 100% 동일 동작 보존(0건=`'all'`, 1건
+  이상=`'selected'`, class_allowed_products 자체는 한 행도 안 건드림).
+- **반복 그룹 일괄적용 시 정책 불일치 방지**: `updateClassGroup()`은 title/start/end/
+  capacity만 그룹 전체에 반영하고 개별 인스턴스의 다른 컬럼은 안 건드리는 기존 설계라,
+  그 경로에서도 수정 중인 인스턴스의 `pass_selection_mode`만 selectedProducts와 어긋나지
+  않도록 `lib/classes.ts`에 좁은 setter `updateClassPassSelectionMode()`를 추가해 별도로
+  맞춰줌(다른 필드 전체를 재작성하는 `updateClass()` 대신).
+- **스케줄 복사(`copySchedule`/`insertCopiedClasses`)**: 원본 수업의 `pass_selection_mode`
+  와 담당 강사도 함께 복사하도록 확장. `copySchedule()` 자체는 어떤 UI에서도 호출되지
+  않는 미사용 함수로 확인돼(grep) 갱신하지 않음(도달 불가능한 코드라 위험 없음) — 실제
+  사용되는 `copyByWeekday`/`copyByDate`만 수정.
+- **기존 회귀 테스트 2건, 새 RPC 기준에 맞춰 수정(중요)**: `pass_selection_mode` 도입으로
+  RPC의 override/cap 판정 기준이 바뀌면서, `class_allowed_products`에 직접 행만 넣고
+  `pass_selection_mode`는 신경 쓰지 않던 기존 통합 테스트들이 SQL 적용 후 조용히 의미를
+  잃거나(예: F가 실제로는 아무것도 증명하지 못한 채 우연히 통과) 뒤집힐 수 있었음(예: E가
+  기대하던 override 성공이 거부로 바뀜) — 실행 전에 코드 리뷰로 미리 발견해 수정:
+  `tests/integration/setup.ts`의 `createFutureTestClass()`에 `passSelectionMode` 옵션
+  추가(값을 명시적으로 안 넘기면 기존 동작과 완전히 동일, 기존 테스트 전부 무영향),
+  `class-allowed-products-enforcement.test.ts`의 거부 케이스 1곳과
+  `schedule-rule-override.test.ts`의 D~J 전부(7곳)에 `passSelectionMode: "selected"`를
+  명시.
+- **신규 통합 테스트**: `tests/integration/class-trainers-and-pass-selection-mode.test.ts`
+  추가 — class_trainers CRUD/신규 RLS(비스태프 계정 거부)/`instructorNames` 노출/
+  `pass_selection_mode` 저장·조회/`updateClassPassSelectionMode()` 단독 동작/
+  `copyByDate()`의 정책·강사 복사까지 커버. SQL 미실행 상태에서는 `pass_selection_mode`
+  관련 케이스와 복사 테스트, 신규 RLS 케이스가 실패하는 것이 정상(예상된 실패).
+- `npm run build` 타입체크 통과 확인(SQL은 미실행이라 실제 통합 테스트 실행/CI 검증은
+  SQL 적용 후 별도로 필요 — `docs/TODO.md` P3-1 참고).
+
 ## 2026-08-11 — PR #44 안정화 Batch(Phase 1~4) 최종 완료: 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
 
 P1-17(Phase 1, 신규 예약 override 정책)/RES-002(Phase 2)/TEST-004(Phase 3)/TEST-003

@@ -161,7 +161,11 @@ describe("reserve_with_membership()의 class_allowed_products 서버 강제", ()
   });
 
   it("class_allowed_products에 지정되지 않은 pass면 서버가 거부한다(회원 화면 우회 시도 가정)", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P3 통합-미허용패스", hoursFromNow: 62 });
+    // [수강권 허용 정책 변경, add_class_trainers_pass_selection_mode_draft_proposed.sql] RPC가
+    // "class_allowed_products 행 존재 여부" 대신 classes.pass_selection_mode를 신뢰하도록
+    // 바뀌었으므로, cap 행만 넣고 mode를 'selected'로 두지 않으면(기본값 'all') 이 테스트가
+    // 검증하려는 거부가 더 이상 일어나지 않는다 — 반드시 함께 지정해야 함.
+    const cls = await createFutureTestClass(centerAId, { title: "P3 통합-미허용패스", hoursFromNow: 62, passSelectionMode: "selected" });
     cleanupClassIds.push(cls.id);
     // passX만 허용 — passY는 허용 목록에 없음.
     const { error: linkErr } = await supabase.from("class_allowed_products").insert({ class_id: cls.id, product_id: passX.id });

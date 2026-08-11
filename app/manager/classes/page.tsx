@@ -16,10 +16,11 @@ import CopyCalendar from "./CopyCalendar";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchRooms, type Room } from "../../../lib/rooms";
 import {
-  fetchClasses, createClass, updateClass, deleteClass,
+  fetchClasses, createClass, updateClass, updateClassPassSelectionMode, deleteClass,
   createRecurringClasses, expandRecurringDates,
   updateClassGroup, deleteClassGroup,
   fetchClassAttendees, setAttendance, fetchClassProducts, setClassProducts, setClassProductsBulk,
+  fetchClassTrainers, setClassTrainers, setClassTrainersBulk,
   fetchCenterHolidayDates,
   fetchCopyGroups, fetchCopyDateItems, planCopyByWeekday, planCopyByDate,
   copyByWeekday, copyByDate,
@@ -29,6 +30,7 @@ import {
   type ManagedClass, type ClassInput, type ClassAttendee,
   isValidClassTimeRange,
 } from "../../../lib/classes";
+import { fetchStaff, type Staff } from "../../../lib/roles";
 import { fetchMemberDetail, type MemberDetailData } from "../../../lib/members";
 import {
   fetchProducts, fetchRulesForProducts, findScheduleExcludedProducts, ruleToText,
@@ -150,11 +152,19 @@ export default function ClassManagePage() {
   // 0개가 되는 게 재현됨 — RPC 로직은 그대로 두고 UI에서만 미리 알려준다).
   const [rulesByProduct, setRulesByProduct] = useState<Record<string, ScheduleRule[]>>({});
   const [passSearch, setPassSearch] = useState(""); // P3: 예약 가능 수강권 선택 목록 검색
+  // 담당 강사(class_trainers) 후보 = 이 센터의 active 스태프 전체(역할 구분 없음), 폼에서 선택된 account_id 목록
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [selectedTrainers, setSelectedTrainers] = useState<string[]>([]);
+  const [trainerSearch, setTrainerSearch] = useState("");
   // openEdit()이 재진입/재클릭으로 여러 번 겹쳐 호출될 때, 늦게 도착한 fetchClassProducts
   // 결과가 최신 openEdit 호출이나 사용자의 chip 선택을 덮어쓰지 않도록 하는 요청 토큰과
   // "이 open 세션 동안 사용자가 이미 선택을 편집했는지"(dirty) 플래그.
   const openTokenRef = useRef(0);
   const userEditedRef = useRef(false);
+  // 담당 강사 선택용 별도 dirty 플래그 — 수강권 chip 편집과 강사 chip 편집은 서로 다른
+  // fetch(fetchClassProducts/fetchClassTrainers)를 지연시킬 수 있어, 한쪽 편집이 다른 쪽의
+  // 정상 하이드레이트까지 막지 않도록 독립적으로 추적한다.
+  const trainerEditedRef = useRef(false);
   const [busy, setBusy] = useState(false);
 
   const loadClasses = useCallback(async (centerId: string, y: number, m: number) => {
@@ -198,6 +208,9 @@ export default function ClassManagePage() {
           return fetchRulesForProducts(list.map((p) => p.id));
         })
         .then((rules) => setRulesByProduct(rules))
+        .catch(() => { /* 무시 */ });
+      fetchStaff(activeCenterId)
+        .then((list) => setStaffList(list.filter((s) => s.status === "active")))
         .catch(() => { /* 무시 */ });
     }
   }, [year, month, activeCenterId, loadClasses]);
@@ -249,8 +262,13 @@ export default function ClassManagePage() {
     setRepDays([]);
     setRepFrom(dayStr);
     setRepTo(lastDay);
-    setSelectedProducts([]);
+    // 기본값 'all'(전체 허용)을 "모든 수강권이 체크된 상태"로 표현한다(아래 저장 로직 참고 —
+    // 선택 개수가 전체 개수와 같으면 mode='all'). 신규 등록 폼을 열 때 빈 목록으로 시작하면
+    // 저장이 막히므로(0개 선택 금지) 항상 전체 체크로 시작한다.
+    setSelectedProducts(passProducts.map((p) => p.id));
     setPassSearch("");
+    setSelectedTrainers([]);
+    setTrainerSearch("");
     setError(null);
     setFormOpen(true);
   }
@@ -540,21 +558,43 @@ export default function ClassManagePage() {
     // 늦게 끝나면 setSelectedProducts(ids)가 사용자의 선택을 조용히 덮어썼었다).
     const myToken = ++openTokenRef.current;
     userEditedRef.current = false;
+    trainerEditedRef.current = false;
     setEditId(c.id);
     setEditGroupId(c.recurringGroupId);
     setApplyToGroup(false);
     setForm({ title: c.title, date: c.date, start: c.start, end: c.end, capacity: c.capacity, allowGoods: c.allowGoods, roomId: c.roomId, cancelDeadlineMin: c.cancelDeadlineMin, bookingDeadlineMin: c.bookingDeadlineMin, classFormat: c.classFormat });
     fillDeadline(c.cancelDeadlineMin);
     fillBookDeadline(c.bookingDeadlineMin);
-    setSelectedProducts([]);
+    // 'all'이면(class_allowed_products는 원래 비어 있음) 전체 체크 상태로 즉시 보여준다 —
+    // fetchClassProducts가 끝나기 전까지 잠깐 "0개 선택"(저장 차단 상태)으로 보이는 걸 방지.
+    setSelectedProducts(c.passSelectionMode === "all" ? passProducts.map((p) => p.id) : []);
     setPassSearch("");
+    setSelectedTrainers([]);
+    setTrainerSearch("");
     setError(null);
     setFormOpen(true);
     try {
       const ids = await fetchClassProducts(c.id);
       const isStale = myToken !== openTokenRef.current || userEditedRef.current;
-      if (!isStale) setSelectedProducts(ids);
+      if (!isStale) setSelectedProducts(c.passSelectionMode === "all" ? passProducts.map((p) => p.id) : ids);
     } catch { /* 무시 */ }
+    try {
+      const tids = await fetchClassTrainers(c.id);
+      const isTrainerStale = myToken !== openTokenRef.current || trainerEditedRef.current;
+      if (!isTrainerStale) setSelectedTrainers(tids);
+    } catch { /* 무시 */ }
+  }
+
+  // 수강권 허용 정책 판정: 0개 선택이면 저장을 막는다(전체 허용은 반드시 "전체 선택"으로
+  // 표현해야 함 — 아무것도 안 고른 상태와 구분). 선택 개수가 그 센터의 pass 전체 개수와
+  // 같으면 mode='all'(class_allowed_products는 비워서 저장 — 스냅샷이 아니라 "그 순간의
+  // 모든 pass"를 항상 가리키게 해, 나중에 pass가 추가돼도 자동 포함됨). 그 사이면 'selected'.
+  function resolvePassSelection(): { mode: "all" | "selected"; productIds: string[] } | null {
+    if (passProducts.length > 0 && selectedProducts.length === 0) return null;
+    if (passProducts.length === 0 || selectedProducts.length === passProducts.length) {
+      return { mode: "all", productIds: [] };
+    }
+    return { mode: "selected", productIds: selectedProducts };
   }
 
   async function save() {
@@ -576,6 +616,11 @@ export default function ClassManagePage() {
       }
       if (repDays.length === 0) { setError("반복할 요일을 선택해주세요"); return; }
       if (!repFrom || !repTo || repFrom > repTo) { setError("기간을 올바르게 선택해주세요"); return; }
+      const resolved = resolvePassSelection();
+      if (!resolved) {
+        setError("예약 가능 수강권을 최소 1개 이상 선택해주세요 (전체 허용은 '전체 선택' 버튼을 사용하세요)");
+        return;
+      }
       setBusy(true); setError(null);
       try {
         // 휴무일과 겹치는 날짜는 제외하고 생성
@@ -590,6 +635,7 @@ export default function ClassManagePage() {
         }
         // 요일별 개별 지정이면 요일마다 따로 생성, 아니면 한번에
         // (요일별 칸이 비어 있으면 공통 설정값이 그대로 들어감)
+        const passMode = resolved.mode;
         let ids: string[] = [];
         if (perDayMode) {
           for (const dow of repDays) {
@@ -614,6 +660,7 @@ export default function ClassManagePage() {
               // (취소마감의 요일별 오버라이드와 달리, 예약마감은 이번 배치 범위를 공통값으로
               // 한정함 — 모바일 컴팩트 그리드에 3-select 오전/오후 UI를 넣기엔 공간이 부족).
               bookingDeadlineMin: bookDeadlineToMin(),
+              passSelectionMode: passMode,
               excludeDates: holidays,
             });
             ids = ids.concat(partIds);
@@ -624,11 +671,14 @@ export default function ClassManagePage() {
             fromDate: repFrom, toDate: repTo,
             start: form.start, end: form.end, capacity: form.capacity, roomId: form.roomId, cancelDeadlineMin: deadlineToMin(),
             bookingDeadlineMin: bookDeadlineToMin(),
+            passSelectionMode: passMode,
             excludeDates: holidays,
           });
         }
-        // 선택한 수강권을 모든 생성 수업에 연결
-        if (selectedProducts.length > 0) await setClassProductsBulk(ids, selectedProducts);
+        // 선택한 수강권을 모든 생성 수업에 연결('all'이면 productIds가 비어 있어 아무것도 안 씀)
+        if (resolved.productIds.length > 0) await setClassProductsBulk(ids, resolved.productIds);
+        // 선택한 담당 강사를 모든 생성 수업에 연결
+        if (selectedTrainers.length > 0) await setClassTrainersBulk(ids, selectedTrainers);
         setFormOpen(false);
         await loadClasses(activeCenterId, year, month);
         setError(null);
@@ -649,6 +699,11 @@ export default function ClassManagePage() {
       setError("종료시간은 시작시간 이후여야 해요 (자정을 넘기는 경우는 6시간 이내만 허용)");
       return;
     }
+    const resolved = resolvePassSelection();
+    if (!resolved) {
+      setError("예약 가능 수강권을 최소 1개 이상 선택해주세요 (전체 허용은 '전체 선택' 버튼을 사용하세요)");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -659,16 +714,22 @@ export default function ClassManagePage() {
         setBusy(false);
         return;
       }
+      const passMode = resolved.mode;
       if (editId) {
         if (applyToGroup && editGroupId) {
           await updateClassGroup(editGroupId, form.title, form.start, form.end, form.capacity);
+          // updateClassGroup은 title/start/end/capacity만 그룹 전체에 반영하고 이 인스턴스의
+          // 수강권 정책 컬럼은 건드리지 않으므로, 이 인스턴스만 따로 맞춰준다.
+          await updateClassPassSelectionMode(editId, passMode);
         } else {
-          await updateClass(editId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin() });
+          await updateClass(editId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin(), passSelectionMode: passMode });
         }
-        await setClassProducts(editId, selectedProducts);
+        await setClassProducts(editId, resolved.productIds);
+        await setClassTrainers(editId, selectedTrainers);
       } else {
-        const newId = await createClass(activeCenterId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin() });
-        await setClassProducts(newId, selectedProducts);
+        const newId = await createClass(activeCenterId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin(), passSelectionMode: passMode });
+        await setClassProducts(newId, resolved.productIds);
+        await setClassTrainers(newId, selectedTrainers);
       }
 
       setFormOpen(false);
@@ -1120,12 +1181,16 @@ export default function ClassManagePage() {
               </button>
             </div>
 
-            {/* 예약 가능 수강권 선택 (P3: class_allowed_products) */}
+            {/* 예약 가능 수강권 선택 (P3: class_allowed_products, 수강권 허용 정책 변경) */}
             <div className="menu-section-label" style={{ padding: "8px 0 6px" }}>예약 가능 수강권</div>
             <div className="perm-guide" style={{ margin: "0 0 4px" }}>
-              {selectedProducts.length === 0
-                ? <>선택 안 하면 <b>모든 수강권</b>으로 예약 가능해요. 이 경우 각 수강권 자체에 걸린
-                  요일/시간 예약조건(수강권 관리)은 이것과 별개로 계속 적용돼요.</>
+              {passProducts.length > 0 && selectedProducts.length === 0
+                ? <span style={{ color: "var(--danger, #d33)" }}>⚠️ 최소 1개 이상 선택해야 저장할 수 있어요.
+                  모든 수강권을 허용하려면 아래 <b>전체 선택</b> 버튼을 눌러주세요.</span>
+                : selectedProducts.length === passProducts.length
+                ? <><b>모든 수강권</b>으로 예약 가능해요(전체 선택). 이 경우 각 수강권 자체에 걸린
+                  요일/시간 예약조건(수강권 관리)은 이것과 별개로 계속 적용되고, 나중에 수강권이
+                  추가돼도 자동으로 포함돼요.</>
                 : <><b>{selectedProducts.length}개</b> 수강권만 이 수업에 사용할 수 있어요. 이렇게 특정
                   수강권을 이 수업에 직접 지정하면, 그 수강권 자체의 요일/시간 예약조건과 무관하게
                   이 수업에서 사용할 수 있어요(직접 지정이 예약조건보다 우선).</>}
@@ -1137,7 +1202,7 @@ export default function ClassManagePage() {
               const classDow = new Date(y, m - 1, d).getDay();
               const target = { dayOfWeek: classDow, startTime: form.start, classTitle: form.title.trim() };
 
-              if (selectedProducts.length === 0) {
+              if (selectedProducts.length === passProducts.length) {
                 // 모든 수강권 허용 — 수강권 자체의 예약조건이 그대로 적용되므로, 실제로 배제되는
                 // 수강권이 있으면 경고로 안내한다.
                 const excluded = findScheduleExcludedProducts(
@@ -1199,18 +1264,32 @@ export default function ClassManagePage() {
                     onChange={(e) => setPassSearch(e.target.value)}
                   />
                 )}
-                {selectedProducts.length > 0 && (
-                  <button
-                    className="text-btn"
-                    style={{ marginBottom: 6 }}
-                    onClick={() => {
-                      userEditedRef.current = true;
-                      setSelectedProducts([]);
-                    }}
-                  >
-                    선택 해제 (모든 수강권 허용으로 전환)
-                  </button>
-                )}
+                <div style={{ display: "flex", gap: 10, marginBottom: 6 }}>
+                  {selectedProducts.length < passProducts.length && (
+                    <button
+                      type="button"
+                      className="text-btn"
+                      onClick={() => {
+                        userEditedRef.current = true;
+                        setSelectedProducts(passProducts.map((p) => p.id));
+                      }}
+                    >
+                      전체 선택(모든 수강권 허용)
+                    </button>
+                  )}
+                  {selectedProducts.length > 0 && (
+                    <button
+                      type="button"
+                      className="text-btn"
+                      onClick={() => {
+                        userEditedRef.current = true;
+                        setSelectedProducts([]);
+                      }}
+                    >
+                      전체 해제
+                    </button>
+                  )}
+                </div>
                 {(() => {
                   const q = passSearch.trim().toLowerCase();
                   const filtered = q ? passProducts.filter((p) => p.name.toLowerCase().includes(q)) : passProducts;
@@ -1237,6 +1316,58 @@ export default function ClassManagePage() {
                           }}
                         >
                           {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </>
+            )}
+
+            {/* 담당 강사 선택 (복수 지정 가능, class_trainers) */}
+            <div className="menu-section-label" style={{ padding: "8px 0 6px" }}>담당 강사</div>
+            <div className="perm-guide" style={{ margin: "0 0 4px" }}>
+              선택하지 않아도 수업은 정상 등록돼요. 여러 명을 함께 지정할 수 있어요.
+            </div>
+            {staffList.length === 0 ? (
+              <div className="daylist-empty" style={{ padding: "8px 0" }}>
+                <span style={{ fontSize: 12 }}>등록된 스태프가 없어요 (스태프 & 권한에서 먼저 추가)</span>
+              </div>
+            ) : (
+              <>
+                {staffList.length > 1 && (
+                  <input
+                    className="input-field"
+                    style={{ marginBottom: 8 }}
+                    placeholder="강사 이름 검색"
+                    value={trainerSearch}
+                    onChange={(e) => setTrainerSearch(e.target.value)}
+                  />
+                )}
+                {(() => {
+                  const q = trainerSearch.trim().toLowerCase();
+                  const filtered = q ? staffList.filter((s) => s.name.toLowerCase().includes(q)) : staffList;
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="daylist-empty" style={{ padding: "8px 0" }}>
+                        <span style={{ fontSize: 12 }}>"{trainerSearch}"와 일치하는 스태프가 없어요</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="mem-filters class-trainers-list" style={{ padding: "0 0 6px" }}>
+                      {filtered.map((s) => (
+                        <button
+                          key={s.accountId}
+                          className={`filter-chip ${selectedTrainers.includes(s.accountId) ? "on" : ""}`}
+                          onClick={() => {
+                            trainerEditedRef.current = true;
+                            setSelectedTrainers((prev) =>
+                              prev.includes(s.accountId) ? prev.filter((x) => x !== s.accountId) : [...prev, s.accountId]
+                            );
+                          }}
+                        >
+                          {s.name}
                         </button>
                       ))}
                     </div>

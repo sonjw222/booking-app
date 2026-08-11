@@ -29,6 +29,7 @@ export type ClassInfo = {
   allowGoods: boolean;
   classFormat: "group" | "private"; // CLASS-001 D-2: 회원 앱에 프라이빗 배지 표시용
   showReservedCount: boolean; // 운영설정 "회원에게 예약 인원 표시"(show_group_reserved_count)
+  instructorNames: string[]; // 담당 강사 이름 목록(class_trainers). 미지정이면 빈 배열
   // 프로필별 내 예약 상태. key = profileId
   myByProfile: Record<string, { reservationId: string; status: "confirmed" | "waitlisted" }>;
 };
@@ -152,6 +153,8 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   let reservedCount: Record<string, number> = {};
   // 내 예약 (프로필별로 구분). key = `${classId}:${profileId}`
   let myByClassProfile: Record<string, { id: string; status: "confirmed" | "waitlisted" }> = {};
+  // 수업별 담당 강사 이름. key = classId
+  const instructorNamesByClass: Record<string, string[]> = {};
 
   if (classIds.length > 0) {
     // classIds가 많아지면(위 행 수 제한 수정으로 한 센터가 한 달에 수백~천 개 이상 수업을
@@ -161,7 +164,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     const classIdChunks: string[][] = [];
     for (let i = 0; i < classIds.length; i += CHUNK_SIZE) classIdChunks.push(classIds.slice(i, i + CHUNK_SIZE));
 
-    const [countChunks, myChunks] = await Promise.all([
+    const [countChunks, myChunks, trainerChunks] = await Promise.all([
       Promise.all(classIdChunks.map((ids) =>
         supabase.from("class_reservation_counts").select("class_id, confirmed_count").in("class_id", ids)
       )),
@@ -172,6 +175,12 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
           .in("profile_id", myProfileIds)
           .in("class_id", ids)
           .in("status", ["confirmed", "waitlisted"])
+      )),
+      // 담당 강사(class_trainers) — 같은 청크 방식으로 N+1 없이 한 번에 조회.
+      // 대부분의 수업엔 강사가 0~2명 정도라 이 조회 자체가 1000행 cap에 걸릴 일은
+      // 거의 없지만, classIds 자체가 이미 청크로 나뉘어 있어 안전하다.
+      Promise.all(classIdChunks.map((ids) =>
+        supabase.from("class_trainers").select("class_id, accounts(name)").in("class_id", ids)
       )),
     ]);
 
@@ -185,6 +194,14 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
         myByClassProfile[`${r.class_id}:${(r as any).profile_id}`] = {
           id: r.id, status: r.status as "confirmed" | "waitlisted",
         };
+      }
+    }
+    for (const res of trainerChunks) {
+      if (res.error) throw new Error("담당 강사를 불러오지 못했어요: " + res.error.message);
+      for (const r of res.data ?? []) {
+        const name = (r as any).accounts?.name;
+        if (!name) continue;
+        (instructorNamesByClass[(r as any).class_id] ??= []).push(name);
       }
     }
   }
@@ -256,6 +273,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
       classFormat: (c.class_format ?? "group") as "group" | "private",
       // 설정 행이 없으면 DEFAULT_SETTINGS.showGroupReservedCount(true)와 동일하게 기본 표시
       showReservedCount: showReservedCountByCenter[c.center_id] ?? true,
+      instructorNames: instructorNamesByClass[c.id] ?? [],
       myByProfile: myProfileIds.reduce((acc, pid) => {
         const r = myByClassProfile[`${c.id}:${pid}`];
         if (r) acc[pid] = { reservationId: r.id, status: r.status };

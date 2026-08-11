@@ -162,6 +162,9 @@ test("B: schedule rule과 일치하는 수업에서는 그 조건의 pass가 사
 async function restrictClassToRestrictedPassViaUi(page: Page, uniqueTitle: string): Promise<void> {
   await page.locator(".class-row", { hasText: uniqueTitle }).click();
   await expect(page.locator(".sheet-title", { hasText: "수업 수정" })).toBeVisible();
+  // [수강권 허용 정책 변경] 기본값 'all'(전체 체크)에서 시작하므로 먼저 전체 해제한 뒤
+  // 목표 pass 하나만 고른다 — 그러지 않으면 이미 체크된 chip을 클릭해 꺼버리게 된다.
+  await page.getByRole("button", { name: "전체 해제" }).click();
   await page.locator('input[placeholder="수강권 이름 검색"]').fill(RESTRICTED_PASS_NAME);
   const chip = page.locator(".filter-chip", { hasText: RESTRICTED_PASS_NAME });
   await expect(chip).toHaveCount(1);

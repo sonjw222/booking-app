@@ -7,6 +7,15 @@
   보고서 "SQL 필요 여부"에 기록). C/F/G/H(여전히 차단돼야 하는 케이스)는 SQL 적용 여부와
   무관하게 항상 통과해야 한다.
 
+  [2026-08-11 수강권 허용 정책 변경, add_class_trainers_pass_selection_mode_draft_proposed.sql]
+  위 override 로직(usable_memberships_for_classes/reserve_class/reserve_with_membership)이
+  "class_allowed_products 행 존재 여부" 대신 classes.pass_selection_mode('all'|'selected')를
+  신뢰하도록 다시 바뀌었다. D~J는 "특정 수강권 직접 지정" 시나리오이므로 class_allowed_products에
+  넣는 것과 별개로 반드시 passSelectionMode: "selected"를 함께 지정해야 한다 — 그러지 않으면
+  mode 기본값('all')이 cap 목록과 무관하게 전부 허용해버려, override/차단을 검증하려던 이
+  테스트들이 실제로는 아무것도 증명하지 못한 채 우연히 통과(또는 새로 실패)할 수 있다. 이
+  SQL도 아직 적용되지 않았다면 D/E/E-보조/J는 (pass_selection_mode 컬럼이 없어) 실패한다.
+
   실제 사용 경로 검증을 위해 순수 함수를 재구현하지 않고, 실제 RPC
   (reserve_class/reserve_with_membership/usable_memberships_for_classes)를 그대로 호출한다
   (class-allowed-products-enforcement.test.ts/private-class-capacity.test.ts와 동일 관례).
@@ -248,7 +257,7 @@ describe("A~C: '모든 수강권 허용' — schedule_rules는 override와 무�
 
 describe("D~F: '특정 수강권 직접 지정' — schedule_rules override(신규 정책)", () => {
   it("D: schedule rule 있음 + 특정 수강권 직접 지정 + rule 일치 → 사용 가능", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P1override-D", hoursFromNow: 503 });
+    const cls = await createFutureTestClass(centerAId, { title: "P1override-D", hoursFromNow: 503, passSelectionMode: "selected" });
     cleanupClassIds.push(cls.id);
     const cleanStart = await normalizeClassStartTime(cls.id, cls.startTime);
     const dow = kstDowFromIso(cleanStart);
@@ -265,7 +274,7 @@ describe("D~F: '특정 수강권 직접 지정' — schedule_rules override(신�
   });
 
   it("E(★핵심): schedule rule 있음 + 특정 수강권 직접 지정 + rule 불일치 → 사용 가능(override)", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P1override-E", hoursFromNow: 504 });
+    const cls = await createFutureTestClass(centerAId, { title: "P1override-E", hoursFromNow: 504, passSelectionMode: "selected" });
     cleanupClassIds.push(cls.id);
     const dow = kstDowFromIso(cls.startTime);
     const mismatchedDow = (dow + 1) % 7;
@@ -286,7 +295,7 @@ describe("D~F: '특정 수강권 직접 지정' — schedule_rules override(신�
   });
 
   it("E-보조: 같은 override 조건에서 reserve_class(자동 매칭)도 통과한다", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P1override-E2", hoursFromNow: 505 });
+    const cls = await createFutureTestClass(centerAId, { title: "P1override-E2", hoursFromNow: 505, passSelectionMode: "selected" });
     cleanupClassIds.push(cls.id);
     const dow = kstDowFromIso(cls.startTime);
     const mismatchedDow = (dow + 1) % 7;
@@ -302,7 +311,7 @@ describe("D~F: '특정 수강권 직접 지정' — schedule_rules override(신�
   });
 
   it("F: schedule rule 불일치 + 다른 product(B)만 class_allowed_products에 지정 → passA는 여전히 사용 불가(override가 새지 않음)", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P1override-F", hoursFromNow: 506 });
+    const cls = await createFutureTestClass(centerAId, { title: "P1override-F", hoursFromNow: 506, passSelectionMode: "selected" });
     cleanupClassIds.push(cls.id);
     // passA는 schedule_rules가 아예 없는 상태(clearScheduleRules는 beforeEach가 이미 처리) —
     // schedule_rules가 원인이 아니라 순수히 class_allowed_products(cap)만으로 차단되는지 확인.
@@ -322,7 +331,7 @@ describe("D~F: '특정 수강권 직접 지정' — schedule_rules override(신�
 
 describe("G~I: override는 schedule_rules만 우회함 — 다른 정상 조건은 그대로 차단", () => {
   it("G: 특정 수강권 직접 지정 + membership 만료 → 사용 불가", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P1override-G", hoursFromNow: 507 });
+    const cls = await createFutureTestClass(centerAId, { title: "P1override-G", hoursFromNow: 507, passSelectionMode: "selected" });
     cleanupClassIds.push(cls.id);
     const dow = kstDowFromIso(cls.startTime);
     const mismatchedDow = (dow + 1) % 7;
@@ -342,7 +351,7 @@ describe("G~I: override는 schedule_rules만 우회함 — 다른 정상 조건�
   });
 
   it("H: 특정 수강권 직접 지정 + remaining_count=0 → 사용 불가", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P1override-H", hoursFromNow: 508 });
+    const cls = await createFutureTestClass(centerAId, { title: "P1override-H", hoursFromNow: 508, passSelectionMode: "selected" });
     cleanupClassIds.push(cls.id);
     const dow = kstDowFromIso(cls.startTime);
     const mismatchedDow = (dow + 1) % 7;
@@ -373,7 +382,7 @@ describe("G~I: override는 schedule_rules만 우회함 — 다른 정상 조건�
 
 describe("J: 새로 구매(재발급)한 membership도 동일한 override를 받는다", () => {
   it("J: 기존 membership을 지우고 새로 발급해도, 같은 product면 override가 그대로 적용된다", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P1override-J", hoursFromNow: 510 });
+    const cls = await createFutureTestClass(centerAId, { title: "P1override-J", hoursFromNow: 510, passSelectionMode: "selected" });
     cleanupClassIds.push(cls.id);
     const dow = kstDowFromIso(cls.startTime);
     const mismatchedDow = (dow + 1) % 7;
