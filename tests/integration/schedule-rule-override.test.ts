@@ -190,7 +190,14 @@ describe("A~C: '모든 수강권 허용' — schedule_rules는 override와 무�
     expect(list.error).toBeNull();
     expect((list.data ?? []).some((r: any) => r.membership_id === mem.id)).toBe(true);
 
-    const res = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: memberA.profileId });
+    // ⚠ reserve_class(자동 매칭)는 어떤 membership을 쓸지 지정할 수 없다 — centerA는 공유
+    // 테스트센터라 memberA가 passA 말고 다른 유효한 membership을 이미 보유하고 있으면
+    // reserve_class가 그걸 대신 골라도 이 assert(성공)는 똑같이 통과해버려, 정작 passA가
+    // 실제로 사용됐는지는 증명하지 못한다(C에서 이 모호함이 실제 실패로 드러남).
+    // reserve_with_membership으로 mem.id를 직접 지정해 passA가 쓰였음을 결정적으로 확인한다.
+    const res = await supabase.rpc("reserve_with_membership", {
+      p_class_id: cls.id, p_profile_id: memberA.profileId, p_membership_id: mem.id,
+    });
     expect(res.error).toBeNull();
     expect(res.data.status).toBe("confirmed");
   });
@@ -205,10 +212,11 @@ describe("A~C: '모든 수강권 허용' — schedule_rules는 override와 무�
     const mem = await createMembershipForProduct(centerAId, memberA.profileId, passA.id);
 
     await asMemberA();
-    const res = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: memberA.profileId });
+    const res = await supabase.rpc("reserve_with_membership", {
+      p_class_id: cls.id, p_profile_id: memberA.profileId, p_membership_id: mem.id,
+    });
     expect(res.error).toBeNull();
     expect(res.data.status).toBe("confirmed");
-    void mem;
   });
 
   it("C: schedule rule 있음 + 모든 수강권 허용 + rule 불일치 → 사용 불가", async () => {
@@ -217,12 +225,21 @@ describe("A~C: '모든 수강권 허용' — schedule_rules는 override와 무�
     const dow = kstDowFromIso(cls.startTime);
     const mismatchedDow = (dow + 1) % 7;
     await setScheduleRule(passA.id, { dayOfWeek: mismatchedDow, startTime: null, classTitle: null });
-    await createMembershipForProduct(centerAId, memberA.profileId, passA.id);
+    const mem = await createMembershipForProduct(centerAId, memberA.profileId, passA.id);
 
     await asMemberA();
-    const res = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: memberA.profileId });
+    // ⚠ reserve_class(자동 매칭)는 어떤 membership을 쓸지 지정할 수 없다 — centerA는 이
+    // 스위트의 여러 파일이 공유하는 테스트센터라 memberA가 passA 말고도 다른(제한 없는)
+    // 유효한 membership을 이미 보유하고 있을 수 있고, 그러면 reserve_class가 그 다른
+    // membership으로 조용히 성공해버려 이 테스트가 실제로 검증하려는 것(passA의 schedule
+    // rule 불일치 차단)과 무관하게 통과해버린다(실측: CI에서 정확히 이렇게 재현됨,
+    // res.error가 null이었음 — 앱/SQL 버그 아니라 이 테스트의 RPC 선택이 잘못됐던 것).
+    // reserve_with_membership으로 passA의 membership_id를 직접 지정해 결정적으로 검증한다.
+    const res = await supabase.rpc("reserve_with_membership", {
+      p_class_id: cls.id, p_profile_id: memberA.profileId, p_membership_id: mem.id,
+    });
     expect(res.error).not.toBeNull();
-    expect(res.error!.message).toContain("사용할 수 있는 수강권이 없어요");
+    expect(res.error!.message).toContain("사용할 수 없는 수강권");
 
     const { data: rows } = await supabase.from("reservations").select("id").eq("class_id", cls.id);
     expect((rows ?? []).length).toBe(0);
