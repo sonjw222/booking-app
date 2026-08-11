@@ -8,6 +8,39 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-12 — SEC-114 P0 authorization 수정 SQL 작성(미적용) + 회귀 테스트 (security/sec114-auto-book-authorization)
+
+**SQL 미실행, main merge 없음. SQL/integration test/docs만 추가, app/CSS/UI 무변경.**
+
+- **SEC-114-A/C CONFIRMED, 수정 SQL 작성**: `auto_book_membership(uuid)`가 SECURITY DEFINER·
+  PUBLIC EXECUTE인데 caller authorization이 전혀 없어, anon/authenticated 누구나 타인의
+  membership_id UUID만 알면 memberships RLS를 우회해 예약을 생성하고 remaining_count를
+  소진시킬 수 있었다(2026-08-12 READ-ONLY 보안 감사에서 확정). `fix_auto_book_membership_
+  authorization_draft_proposed.sql`(+ rollback)로 membership 조회 직후
+  `has_permission(center_id, 'schedule.own.group.booking') or is_platform_admin()` 체크와
+  `SET search_path = public`을 추가하고 `REVOKE EXECUTE FROM PUBLIC/anon`,
+  `GRANT TO authenticated`만 적용 — 기존 business logic(하루 1개 제한,
+  class_allowed_products 체크 등)은 전혀 바꾸지 않았다. permission key는 기존 catalog에서
+  재사용(`delete_class_safe`가 `schedule.own.group.delete`를 센터 전체 게이트로 쓰는 기존
+  관례와 동일 패턴) — 새 key를 만들지 않았다.
+- **fulfill_order 내부 호출 회귀 없음(설계 근거)**: `fulfill_order`는 SECURITY DEFINER
+  (owner=postgres)로 실행되므로 그 안에서 `perform auto_book_membership(...)`를 호출할 때
+  PostgreSQL은 객체 소유자에게 자기 소유 객체에 대한 암묵적 전권을 부여한다 — REVOKE/GRANT
+  ACL과 무관하게 계속 정상 동작한다(적용 전 두 함수의 owner가 실제로 동일한지는 진단 SQL로
+  재확인 권장).
+- **회귀 테스트 신규**: `tests/integration/sec114-auto-book-authorization.test.ts`
+  (SEC114-A~J, TEST_MANAGER_A/B·TEST_USER_A/B 기존 계정만 재사용, 신규 계정 없음). SQL 미적용
+  상태에서는 A/B/C/E/F가 의도적으로 RED(이 저장소의 기존 관례와 동일).
+- **SEC-114-B(최신 예약정책 누락) 분석만 완료, 이번 배치에 미포함**: A(반드시 이식)/B(auto-book
+  특성상 의도적으로 다를 수 있음)/C(제품정책 결정 필요) 3분류로 `docs/TODO.md`에 기록.
+- **이번 배치와 섞지 않은 별도 발견**: BUG-115(reservation_source 오표기)/BUG-116(waitlisted
+  취소 시 remaining_count 오복구, P1)/BUG-117(waitlisted→confirmed 무차감 확정, P2)/
+  SEC-116(fulfill_order 세분권한 미사용, P2) 전부 `docs/TODO.md`에만 기록, 코드 미변경.
+- **SEC-101/112와의 관계**: `has_permission()`이 `manager_centers` 무결성을 전제로 하므로,
+  그 두 이슈가 아직 패치되지 않은 상태에서는 부정 취득한 manager_centers 행도 이번
+  authorization을 통과할 수 있다는 종속 위험을 `docs/TODO.md`에 명시(별도 SQL/브랜치,
+  이 파일에 합치지 않음).
+
 ## 2026-08-11 — 담당 강사 복수 지정 + 수강권 허용 정책 변경 Batch 최종 완료: 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
 
 두 번째 SQL(`add_class_trainer_names_rpc_draft_proposed.sql`)까지 적용 완료되면서 이

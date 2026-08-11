@@ -932,6 +932,92 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   뒤집힘).
 
 
+### SEC-114-A/C. (2026-08-12, 수정 SQL 작성 완료 — 미적용) `auto_book_membership()` SECURITY DEFINER authorization bypass
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0(보안) |
+| 현재 상태 | **CONFIRMED, 수정 SQL 작성 완료 — 아직 Supabase에 미적용.** READ-ONLY 보안 감사(2026-08-12)로 확정: `auto_book_membership(p_membership_id uuid)`가 `SECURITY DEFINER`(owner=postgres)·PUBLIC EXECUTE 상태인데 함수 내부에 caller authorization이 전혀 없었다. anon/authenticated 누구나 타인의 membership_id UUID만 알면 `memberships` RLS를 우회해 피해자 명의로 reservations를 생성하고 `remaining_count`를 소진시킬 수 있었다(1회 호출로 전량 소진 가능). |
+| 근거 파일 | `fix_auto_book_membership_authorization_draft_proposed.sql`(신규, 미적용) + rollback, `tests/integration/sec114-auto-book-authorization.test.ts`(신규, SQL 적용 전까지 A/B/C/E/F는 의도적으로 RED) |
+| 완료 조건 | 사용자가 Supabase SQL Editor에서 위 SQL 적용 → 회귀 테스트 전체 GREEN 확인 → 이 항목 완료 처리 |
+| 관련 문서 | `security/sec114-auto-book-authorization` 브랜치 |
+
+**수정 내용**: membership 조회 직후 `has_permission(v_mem.center_id, 'schedule.own.group.booking') or is_platform_admin()` 체크 추가(기존 permission catalog 재사용, 새 key 생성 안 함 — `delete_class_safe`가 `schedule.own.group.delete`를 센터 전체 게이트로 재사용하는 기존 관례와 동일 패턴). `REVOKE EXECUTE FROM PUBLIC/anon`, `GRANT TO authenticated`만. `SET search_path = public` 추가(이 함수만, 예약 RPC 패밀리 전체 하드닝은 아래 SEC-114-D 참고). 기존 business logic(하루 1개 제한, class_allowed_products 체크 등)은 한 줄도 바꾸지 않음.
+
+**⚠️ 종속 위험**: `has_permission()`은 `manager_centers` 테이블 무결성을 전제로 한다. 별도 진행 중인 SEC-101(임의 센터 self-join)/SEC-112(staff self-promote) 패치 전에는, 그 취약점으로 부정 취득한 `manager_centers` 행도 이 authorization을 통과할 수 있다 — SEC-101/112가 별도로 막아야 하는 문제이며 이 SQL은 그 두 이슈를 전혀 건드리지 않는다.
+
+### SEC-114-B. (2026-08-12, 분석 완료 — 이번 P0 배치 범위 밖) `auto_book_membership()`이 최신 예약정책을 독립적으로 우회
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **분석 완료, 이번 P0 authorization 수정에는 포함하지 않음(사용자 지시)** |
+| 근거 파일 | `fix_auto_book_oneperday.sql`(현재 함수 본문) vs `add_class_trainers_pass_selection_mode_draft_proposed.sql`(reserve_class/reserve_with_membership 최신 정의) |
+| 완료 조건 | 아래 A 분류 항목들을 별도 SQL 배치로 이식(제품 정책 결정 후 진행) |
+
+`reserve_class`/`reserve_with_membership` 대비 `auto_book_membership`에 없는 항목을 분류:
+
+| 항목 | 분류 | 근거 |
+|---|---|---|
+| center.status='approved' | **A** | 승인 안 된 센터에서 자동예약이 발생하면 안 됨 — 다른 모든 예약 경로와 동일해야 함 |
+| booking deadline / booking open deadline | **B** | 자동예약은 "발급 시점에 한 번에 여러 미래 수업을 순회 배정"하는 게 원래 기능 목적이라, 개별 수업의 임박 마감/오픈 시각 개념과는 성격이 다름 — 의도적으로 다른 게 맞을 수 있음(제품 결정 필요, C로 볼 여지도 있음) |
+| allow_same_day_booking | **A** | 당일예약을 막은 센터에서 자동예약이 당일 수업을 잡아버리면 정책 우회 |
+| daily_book_limit(센터설정) | **A** | 센터가 명시적으로 설정한 일일 한도를 자동예약이 무시하면 안 됨(단, 함수 자체의 "하루 1개" 규칙과 통합 방식은 설계 필요) |
+| center_holidays | **A** | 휴무일에 예약이 잡히는 것은 명백한 결함 |
+| private_max_concurrent | **C** | 요일반 자동예약 대상이 사실상 group 포맷 위주라 실무 영향은 낮음 — private 상품도 auto_book_days를 쓸 수 있는지 자체가 제품 결정 필요 |
+| 최신 duplicate 처리 | **B** | 현재도 "같은 날짜 이미 예약" 체크는 있음(자체 로직) — reserve_class와 동일한 형태로 통일할지는 리팩터링 범위, 기능적으로 이미 방어는 되고 있음 |
+| capacity locking/concurrency(`for update`) | **A** | 데이터 정합성 문제(보안 아님) — 동시 자동예약 실행 시 정원 초과 가능성, 반드시 고쳐야 함 |
+| waitlist 정책 | **C** | 자동예약이 대기열까지 만들지, 정원 차면 그냥 skip할지는 제품 결정(현재는 skip) |
+| pass_selection_mode 최신 semantic | **B** | 현재 구식 패턴(`class_allowed_products` 존재유무)이지만 현재 데이터 불변식상 결과는 동일 — 코드 중복 제거 차원의 리팩터링, 기능 버그는 아님 |
+| membership_schedule_rules(+P1-17 override) | **A** | 관리자가 설정한 예약조건(요일/시간/수업명 제한)을 자동예약이 무시하면 정책 우회 |
+| membership.status='active' | **A** | `remaining_count>0`만 보고 `status`(예: 정지/만료 처리)를 안 봄 — 정지된 수강권도 자동예약될 수 있음 |
+| 최신 reservation metadata(reservation_type/source/created_by_account_id) | **B** | BUG-115로 별도 분리(아래) — 기능 버그라기보다 감사 로그 정확성 문제 |
+
+**권장**: A로 분류된 항목(center 승인/당일예약/일일한도/휴무일/capacity 잠금/membership_schedule_rules/membership status)을 우선순위로 별도 SQL 배치를 계획할 것. B/C는 제품 결정 또는 리팩터링 우선순위로 후순위.
+
+### SEC-116. (2026-08-12, 신규) `fulfill_order()`가 세분 permission 대신 `my_managed_center_ids()`만 확인
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인됨, 수정하지 않음(SEC-114 조사 중 발견, 별도 배치 필요)** |
+| 근거 파일 | `reservation_functions.sql`/`add_direct_payment.sql`/`add_unplaced_passes.sql`(전부 동일한 `fulfill_order` 정의) |
+| 완료 조건 | `admin_assign_reservation` 등 다른 최신 RPC처럼 `has_permission(center_id, 'pass.payment.create')` 류의 세분권한 체크로 전환할지 제품 결정 필요 |
+
+현재 `fulfill_order`는 `v_order.center_id in (select my_managed_center_ids()) or is_platform_admin()`만 검사한다 — 그 센터의 매니저이기만 하면 결제/매출 관련 세분권한(`pass.payment.create` 등)이 없는 스태프도 주문을 발급 처리할 수 있다. **SEC-101/112(manager_centers self-join/self-promote)와 독립적인 문제**(소속이 정당하더라도 세분권한 모델을 우회한다는 점에서 별개) — 섞어서 수정하지 않았다.
+
+### BUG-115. (2026-08-12, 신규) 자동예약 `reservations.reservation_source`가 `'SYSTEM'`이 아니라 기본값 `'USER'`로 기록됨
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **확인됨, 수정하지 않음** |
+| 근거 파일 | `fix_auto_book_oneperday.sql`(INSERT문), `add_admin_assignment.sql`(컬럼 코멘트: "SYSTEM=자동예약 등 시스템") |
+| 완료 조건 | `auto_book_membership`의 INSERT에 `reservation_source='SYSTEM'` 명시 추가(SEC-114-B 배치와 함께 처리 권장) |
+
+`reservation_source` 컬럼의 공식 코멘트가 "SYSTEM=자동예약 등 시스템"이라고 명시하는데, 실제 자동예약 INSERT는 이 컬럼을 지정하지 않아 기본값 `'USER'`로 기록된다 — 감사/통계 화면에서 자동예약이 회원 본인 예약처럼 잘못 표시될 수 있다. 보안 문제 아님, 데이터 정확성 문제로 분류.
+
+### BUG-116. (2026-08-12, 신규) `manager_set_attendance()`: waitlisted→cancelled 시 `membership_consumed` 확인 없이 remaining_count +1
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **확인됨, 수정하지 않음(SEC-114 조사 중 발견, 별도 배치 필요)** |
+| 근거 파일 | `fix_attendance_consolidate_and_guard_draft_proposed.sql`(2026-08-07 Live 적용 확인됨), 대조군: `admin_cancel_reservation`(`add_admin_assignment.sql`) |
+
+`manager_set_attendance(id, 'cancelled')`는 `if v_res.membership_id is not null then remaining_count+1`만 확인한다. `reserve_class`/`reserve_with_membership`은 대기(waitlisted) 예약에도 `membership_id`를 채워 넣지만(정원 초과로 대기 상태일 뿐 차감 전) 실제 차감은 안 하므로, 매니저가 UI("예약취소" 버튼, `app/manager/classes/page.tsx`에서 waitlisted 행에도 노출됨)로 대기 예약을 취소할 때마다 실제로 쓴 적 없는 횟수가 매번 +1 복구된다 — **회원이 대기예약을 취소당할 때마다 공짜 횟수를 얻는, 현재 실사용 가능한 데이터/금전 무결성 버그.** 대조군인 `admin_cancel_reservation`은 `reservation_type='ADMIN_ASSIGNMENT' and membership_consumed`를 정확히 확인해 이 문제가 없다 — `manager_set_attendance`도 동일 패턴으로 맞춰야 함. 매니저 권한이 이미 필요해 외부 공격 벡터는 아니므로 SEC가 아닌 BUG로 분류.
+
+### BUG-117. (2026-08-12, 신규) `manager_set_attendance()`: waitlisted→confirmed 전환 시 차감 없이 확정 가능(RPC 레벨, 현재 UI엔 미노출)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인됨, 수정하지 않음** |
+| 근거 파일 | `fix_attendance_consolidate_and_guard_draft_proposed.sql`, `app/manager/classes/page.tsx`(현재 UI는 `a.status !== "waitlisted"`일 때만 되돌리기 버튼 노출해 이 경로를 막고 있음) |
+
+`manager_set_attendance(id, 'confirmed')`가 waitlisted 예약에 대해 구조적으로 허용되는데(RPC의 상태 검사는 `attended`/`no_show`만 waitlisted에서 차단), 그 분기는 `status`만 바꾸고 `remaining_count` 차감을 전혀 하지 않는다 — RPC를 직접 호출하면 무료로 확정 예약을 만들 수 있다. 매니저 권한이 필요하고 현재 UI에는 노출되지 않아 P1(BUG-116)보다 낮은 P2로 분류.
+
+
 ### P1-14. (2026-08-10, 해결 완료) `attendance-policy.test.ts` 주간 대기예약 한도 초과로 Integration 반복 실패
 
 | 필드 | 내용 |
