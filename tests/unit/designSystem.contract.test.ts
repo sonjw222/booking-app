@@ -52,5 +52,6 @@ describe("Batch 2 chrome layer contract", () => {
     expect(css).toMatch(/\.manager-chrome\s*\{[\s\S]*?z-index:\s*30;/);
     expect(css).toMatch(/\.admin-chrome\s*\{[\s\S]*?z-index:\s*30;/);
     expect(css).toMatch(/\.sheet-overlay\s*\{[\s\S]*?z-index:\s*60;/);
+    expect(css).toContain(".back-header:has(.header-action)");
   });
 });
