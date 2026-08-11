@@ -55,3 +55,34 @@ describe("Batch 2 chrome layer contract", () => {
     expect(css).toContain(".back-header:has(.header-action)");
   });
 });
+
+describe("Batch 4 reservation design contract", () => {
+  it("uses the shared booking controls without removing current reservation features", () => {
+    const reservation = read("app/reservation/page.tsx");
+    expect(reservation).toContain("member-reservation");
+    expect(reservation).toContain("<SegmentedTabs");
+    expect(reservation).toContain("availability-filter");
+    expect(reservation).toContain("formatInstructorNames");
+    expect(reservation).toContain("passList");
+    expect(reservation).toContain("confirmClass.allowGoods");
+    expect(reservation).toContain('cls.classFormat === "private"');
+    expect(reservation).toContain("hasStarted");
+  });
+
+  it("groups reservation history while retaining profile, type and holiday context", () => {
+    const history = read("app/my-reservations/page.tsx");
+    expect(history).toContain("member-my-reservations");
+    expect(history).toContain("reservation-date-group");
+    expect(history).toContain("memberFacingBadge");
+    expect(history).toContain("HOLIDAY");
+    expect(history).toContain('href="/mypage/calendar"');
+  });
+
+  it("keeps selection, controls and history layout in the tokenized style layer", () => {
+    const css = read("app/globals.css");
+    expect(css).toContain("Batch 4 — reservation and reservation history");
+    expect(css).toContain(".member-reservation .cal-cell.selected .daynum-wrap");
+    expect(css).toContain(".reservation-list-controls");
+    expect(css).toContain(".member-my-reservations .reservation-history .hist-item");
+  });
+});
