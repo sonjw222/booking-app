@@ -629,8 +629,8 @@ function ReservationCalendarContent() {
                     {mineRec?.status === "confirmed" && <span className="booked-tag">내 예약</span>}
                     {mineRec?.status === "waitlisted" && <span className="booked-tag">대기중</span>}
                   </div>
-                  <div className="class-row-meta">{center?.name}{cls.place ? ` · ${cls.place}` : ""}</div>
-                  {instructorText && <div className="class-row-place">담당 강사 · {instructorText}</div>}
+                  <div className="class-row-place">{center?.name}{instructorText ? ` · ${instructorText}` : ""}</div>
+                  {cls.place && <div className="class-row-meta">{cls.place}</div>}
                   <div className="center-class-passes">
                     {passesLoading ? (
                       <span className="class-pass-chip all skeleton-shimmer">수강권 확인 중...</span>
