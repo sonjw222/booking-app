@@ -8,6 +8,22 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-11 — TEST-003(#43, Phase 4) 근본 원인 확정 + 수정: daily-book-limit.spec.ts CI noise (feature/social-auth-notifications-attendance-dashboard)
+
+"그냥 flaky"로 단정하지 않고 실제 실패 로그(run `31393468107`)를 직접 조사 — 정확한 실패
+지점을 특정함: `expect(locator).toBeVisible()` (`.class-row`의 "취소" 버튼), timeout
+10000ms, 첫 시도 실패 → 재시도 즉시 통과. 코드 추적 결과 `app/reservation/page.tsx`의
+`doReserve()`/`handleCancel()`은 RPC 성공 → `setConfirmClass(null)`(시트 닫힘, 이 체크는
+바로 통과) → `await load()`(전체 재조회) 순서로 동작해, 시트가 닫히는 시점과
+`.class-row` 버튼이 갱신되는 시점 사이에 실제 간격이 존재한다. 이 스펙은 예약/취소
+왕복을 최대 9회 반복하는 유일한 파일이라(파일 자체 주석에 이미 문서화됨) CI 부하 시 그
+간격이 Playwright 기본 expect timeout(10초)을 넘기는 사례가 실측됨 — 예약 자체는 이미
+성공한 뒤였으므로 앱/RPC 버그도 아니고, assert 자체도 실제로 유효한 상태 전이를 기다리는
+것이라 test-logic 결함도 아니다. 분류: CI 인프라/타이밍 이슈. 수정:
+`tests/e2e/settings/daily-book-limit.spec.ts`에서 정확히 이 버튼 상태 assert 5곳만
+timeout을 20초로 확장(무조건적인 전체 timeout 증가나 retry 추가가 아니라, 진단된 병목
+지점에만 적용). CI 검증은 다음 단계에서 진행.
+
 ## 2026-08-11 — TEST-004(#45, Phase 3) 수정: 공유 테스트센터 classes 누적 self-healing sweep (feature/social-auth-notifications-attendance-dashboard)
 
 Read-only 재진단(사용자가 Supabase SQL Editor에서 직접 조회) 결과 공유 테스트센터
