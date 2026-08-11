@@ -52,7 +52,7 @@ export default function AccountSettingsPage() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell account-page-v2 settings-page-v2">
       <div className="back-header">
         <a className="side" href="/mypage">‹</a>
         <div className="title">계정 설정</div>

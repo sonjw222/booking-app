@@ -48,7 +48,7 @@ export default function RegisterCenterPage() {
 
   if (done) {
     return (
-      <div className="app-shell">
+      <div className="app-shell account-page-v2 register-center-page-v2">
         <div className="holiday-notice" style={{ marginTop: 60 }}>
           <div className="holiday-chip">
             <span className="hc-dot" />
@@ -63,7 +63,7 @@ export default function RegisterCenterPage() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell account-page-v2 register-center-page-v2">
       <div className="section-title" style={{ paddingTop: 20 }}>내 센터 등록하기</div>
       <div className="hist-sub" style={{ padding: "0 16px 12px" }}>
         새 센터 정보를 등록하고 운영 승인을 요청합니다.

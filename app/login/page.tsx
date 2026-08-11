@@ -17,6 +17,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase, REMEMBER_ME_KEY } from "../../lib/supabaseClient";
+import UiIcon from "../components/UiIcon";
 import CenterRegistrationForm, { type CenterFieldsValue } from "../components/CenterRegistrationForm";
 import { validateCenterRegistrationInput, registerCenterForAccount } from "../../lib/centers";
 
@@ -220,11 +221,23 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="app-shell">
-      <div className="login-wrap">
-        <div className="login-logo">🩰</div>
-        <div className="login-title">우리동네 클래스</div>
-        <div className="login-sub">발레·필라테스·피겨스케이팅까지, 한 앱으로 예약</div>
+    <div className="app-shell auth-page-v2">
+      <div className="auth-scene">
+        <a className="auth-home-link" href="/">우리동네 클래스</a>
+        <div className="auth-scene-copy">
+          <span>MOVE · BOOK · ENJOY</span>
+          <h1>오늘의 움직임을<br />가볍게 시작하세요.</h1>
+          <p>필라테스부터 피겨스케이팅까지<br />내 주변 수업을 한곳에서 만나보세요.</p>
+        </div>
+        <div className="auth-activities" aria-hidden="true">
+          <div><UiIcon name="pilates" size={25} /><span>필라테스</span></div>
+          <div><UiIcon name="skate" size={25} /><span>피겨</span></div>
+          <div><UiIcon name="swim" size={25} /><span>수영</span></div>
+          <div><UiIcon name="golf" size={25} /><span>골프</span></div>
+        </div>
+      </div>
+
+      <section className={`auth-panel ${mode}`}>
 
         <div className="mode-tabs">
           <button className={`mode-tab ${mode === "login" ? "on" : ""}`} onClick={() => { setMode("login"); setMessage(null); }}>
@@ -235,18 +248,23 @@ export default function LoginPage() {
           </button>
         </div>
 
+        <div className="auth-panel-heading">
+          <h2>{mode === "login" ? "다시 만나서 반가워요" : "계정을 만들어볼까요?"}</h2>
+          <p>{mode === "login" ? "가입한 이메일로 로그인하세요." : "예약에 필요한 기본 정보만 입력해주세요."}</p>
+        </div>
+
         {/* 회원가입일 때만 역할 선택 */}
         {mode === "signup" && (
           <div className="role-select">
             <button className={`role-btn ${role === "member" ? "on" : ""}`} onClick={() => setRole("member")}>
-              <div className="role-emoji">🧘‍♀️</div>
-              <div className="role-name">일반</div>
-              <div className="role-desc">센터 검색, 예약, 수강권 이용 등 일반 회원 기능을 사용합니다.</div>
+              <div className="role-emoji"><UiIcon name="user" size={25} /></div>
+              <div className="role-name">일반 회원</div>
+              <div className="role-desc">수업 검색과 예약</div>
             </button>
             <button className={`role-btn ${role === "manager" ? "on" : ""}`} onClick={() => setRole("manager")}>
-              <div className="role-emoji">🏢</div>
+              <div className="role-emoji"><UiIcon name="building" size={25} /></div>
               <div className="role-name">센터 운영자</div>
-              <div className="role-desc">센터 정보를 등록하고 승인 후 운영 기능을 사용합니다.</div>
+              <div className="role-desc">센터 등록과 운영</div>
             </button>
           </div>
         )}
@@ -297,7 +315,7 @@ export default function LoginPage() {
           <div className="line" /><span>또는</span><div className="line" />
         </div>
 
-        <div className="social-list">
+        <div className="social-list auth-social-grid">
           <button className="social-btn google" onClick={() => handleSocial("google")} disabled={!!socialLoading}>
             <span className="social-ic" style={{ background: "#fff", color: "#4285F4", border: "1px solid var(--line)" }}>G</span>
             {socialLoading === "google" ? "이동 중..." : "Google로 계속하기"}
@@ -315,7 +333,7 @@ export default function LoginPage() {
             {socialLoading === "apple" ? "이동 중..." : "Apple로 계속하기"}
           </button>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

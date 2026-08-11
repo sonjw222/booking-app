@@ -121,3 +121,37 @@ describe("Batch 5 center and commerce design contract", () => {
     expect(css).toContain(".commerce-page .checkout-pay-btn");
   });
 });
+
+describe("Batch 6 communication and account design contract", () => {
+  it("styles member communication screens without removing notification and inquiry deep links", () => {
+    const notifications = read("app/notifications/page.tsx");
+    const inquiries = read("app/inquiries/page.tsx");
+    expect(notifications).toContain("member-notifications");
+    expect(notifications).toContain("notificationHref");
+    expect(notifications).toContain("<ZoomableImage");
+    expect(inquiries).toContain("member-inquiries");
+    expect(inquiries).toContain('searchParams.get("thread")');
+    expect(inquiries).toContain("<InquiryChat");
+  });
+
+  it("keeps current account and authentication behavior inside the new shells", () => {
+    const login = read("app/login/page.tsx");
+    const mypage = read("app/mypage/page.tsx");
+    expect(login).toContain("auth-page-v2");
+    expect(login).toContain("REMEMBER_ME_KEY");
+    expect(login).toContain("SIGNUP_SUCCESS_MESSAGE");
+    expect(login).toContain('handleSocial("google")');
+    expect(mypage).toContain("mypage-shell");
+    expect(mypage).toContain('href="/settings/account"');
+    expect(mypage).toContain('href="/mypage/register-center"');
+    expect(mypage).toContain("globalThis.appConfirm");
+  });
+
+  it("provides tokenized Batch 6 styling for auth and settings surfaces", () => {
+    const css = read("app/globals.css");
+    expect(css).toContain("Batch 6: member communication, account and authentication surfaces");
+    expect(css).toContain(".auth-scene");
+    expect(css).toContain(".member-notifications .noti-row");
+    expect(css).toContain(".account-page-v2 .profile-list");
+  });
+});

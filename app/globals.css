@@ -3306,3 +3306,39 @@ a.membership-card { text-decoration: none; display: block; }
 .commerce-empty-mark { width: 34px; height: 34px; display: grid; place-items: center; border: 1.5px solid var(--brand); border-radius: 10px; color: var(--brand-ink); font-size: 12px; font-weight: 700; }
 .commerce-page .checkout-done-icon { width: 52px; height: 52px; margin: 0 auto 24px; display: grid; place-items: center; border-radius: 50%; background: var(--brand); box-shadow: 0 0 0 8px var(--brand-soft); }
 .commerce-page .checkout-done-icon::after { content: "✓"; color: #fff; font-size: 25px; font-weight: 700; }
+/* Batch 6: member communication, account and authentication surfaces */
+.member-notifications,.member-inquiries,.mypage-shell,.account-page-v2{background:var(--bg)}
+.noti-head,.inquiry-head,.mypage-titlebar{display:flex;align-items:flex-end;justify-content:space-between;min-height:96px;padding:34px var(--page-gutter) 20px;border-bottom:1px solid var(--line)}
+.noti-head h1,.inquiry-head h1,.mypage-titlebar h1{font-size:28px;line-height:1.1;font-weight:800;letter-spacing:-.7px}
+.noti-head a,.noti-head button{min-height:40px;padding:0 4px;color:var(--brand-ink);font-size:13px;font-weight:700}
+.inquiry-head p{margin-top:6px;color:var(--ink-soft);font-size:12px}
+.inquiry-head .primary-btn{min-height:40px;border-radius:999px;background:var(--ink);color:#fff}
+.member-notifications .noti-list,.member-inquiries .thread-list{padding:0 var(--page-gutter) 112px}
+.member-notifications .noti-row{position:relative;min-height:92px;padding:16px 0;gap:14px;background:transparent!important;margin:0!important;border-bottom:1px solid var(--line)}
+.member-notifications .noti-emoji{display:grid;place-items:center;flex:0 0 48px;width:48px;height:48px;border-radius:15px;background:var(--surface);color:var(--ink)}
+.member-notifications .noti-title{font-size:14px;font-weight:720}.member-notifications .noti-body{margin-top:4px;font-size:12.5px;line-height:1.5;color:var(--ink-soft)}
+.member-notifications .noti-time{margin-top:5px;font-size:11px;color:var(--ink-faint)}
+.member-notifications .noti-del{width:44px;height:44px;color:var(--ink-soft);font-size:20px}
+.member-inquiries .thread-row{min-height:84px;padding:14px 0;border-radius:0;background:transparent;border-bottom:1px solid var(--line);box-shadow:none}
+.member-inquiries .thread-avatar{display:grid;place-items:center;width:48px;height:48px;border-radius:16px;background:var(--surface);font-weight:750}
+.mypage-shell .profile-block{padding:28px var(--page-gutter) 24px;border-bottom:1px solid var(--line)}
+.mypage-shell .avatar{width:64px;height:64px;border-radius:22px;background:var(--ink);color:#fff;font-size:25px;font-weight:800}
+.mypage-shell .profile-name{font-size:22px;font-weight:800;letter-spacing:-.4px}.mypage-shell .profile-edit{margin-top:6px;font-size:13px;font-weight:650;color:var(--ink-soft)}
+.mypage-shell .membership-card{margin-inline:var(--page-gutter);border-radius:20px;box-shadow:none}.mypage-shell .membership-card .count{font-size:24px}.mypage-shell .membership-card .progress-track{height:7px}
+.mypage-shell .list-row{min-height:58px;margin:0 var(--page-gutter);padding-inline:2px;background:transparent;border-bottom:1px solid var(--line)}
+.mypage-shell .list-row .left{font-size:14.5px;font-weight:650}.mypage-shell .list-row .icon{display:grid;place-items:center;width:30px;color:var(--ink-soft)}
+.account-page-v2 .profiles-intro,.account-page-v2 .perm-guide{margin:12px var(--page-gutter);padding:15px;border-radius:16px;background:var(--surface);font-size:13px;line-height:1.6;color:var(--ink-soft)}
+.account-page-v2 .profile-list,.account-page-v2 .noti-list{padding:0 var(--page-gutter)}.account-page-v2 .profile-item{min-height:88px;border-bottom:1px solid var(--line)}
+.account-page-v2 .add-profile-btn{min-height:52px;margin:18px var(--page-gutter);border:1px solid var(--line);border-radius:16px;background:transparent;color:var(--ink)}
+.settings-page-v2 .noti-row{min-height:76px;padding:15px 2px;background:transparent;border-bottom:1px solid var(--line)}
+.auth-page-v2{display:block;min-height:100dvh;padding-bottom:0;background:var(--ink)}
+.auth-scene{position:relative;min-height:278px;padding:max(24px,env(safe-area-inset-top)) 22px 36px;overflow:hidden;color:#fff;background:var(--ink)}
+.auth-scene:before,.auth-scene:after{content:"";position:absolute;border:1px solid rgba(255,255,255,.14);border-radius:50%}.auth-scene:before{width:250px;height:250px;right:-88px;top:18px}.auth-scene:after{width:145px;height:145px;right:-32px;top:74px}
+.auth-home-link{position:relative;z-index:2;color:#fff;font-size:13px;font-weight:750}.auth-scene-copy{position:relative;z-index:2;margin-top:24px}.auth-scene-copy>span{color:rgba(255,255,255,.55);font-size:10px;font-weight:750;letter-spacing:1.4px}.auth-scene-copy h1{margin-top:10px;font-size:27px;line-height:1.25;letter-spacing:-.9px}.auth-scene-copy p{margin-top:9px;color:rgba(255,255,255,.68);font-size:13px;line-height:1.55}
+.auth-activities{position:absolute;z-index:2;right:18px;bottom:28px;display:flex;gap:6px}.auth-activities>div{display:grid;place-items:center;width:48px;height:48px;border:1px solid rgba(255,255,255,.13);border-radius:15px;background:rgba(255,255,255,.06)}.auth-activities span{display:none}
+.auth-panel{position:relative;z-index:3;min-height:calc(100dvh - 254px);margin-top:-24px;padding:18px 20px max(32px,env(safe-area-inset-bottom));border-radius:26px 26px 0 0;background:var(--bg)}
+.auth-panel .mode-tabs{display:flex;width:190px;margin:0 0 22px;gap:20px;background:transparent}.auth-panel .mode-tab{min-height:34px;padding:0;border-bottom:2px solid transparent;color:var(--ink-soft);font-size:13px;font-weight:650}.auth-panel .mode-tab.on{border-bottom-color:var(--ink);color:var(--ink);background:transparent}.auth-panel-heading{margin-bottom:20px}.auth-panel-heading h2{font-size:23px;letter-spacing:-.6px}.auth-panel-heading p{margin-top:6px;color:var(--ink-soft);font-size:12.5px}
+.auth-panel .role-select{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}.auth-panel .role-btn{min-height:92px;padding:13px 10px;display:grid;grid-template-columns:36px 1fr;grid-template-rows:auto auto;column-gap:9px;text-align:left;border:1px solid var(--line);border-radius:15px;background:#fff}.auth-panel .role-btn.on{border:2px solid var(--ink);background:var(--surface)}.auth-panel .role-emoji{grid-row:1/3;display:grid;place-items:center;width:36px;height:36px;margin:0;border-radius:12px;background:var(--surface)}
+.auth-panel .input-field{min-height:52px;margin-bottom:8px;padding-left:2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}.auth-panel .login-submit{margin-top:12px;border-radius:14px}.auth-panel .social-btn{min-height:50px;border-radius:14px;box-shadow:none}
+.auth-account-page{min-height:100dvh}.auth-account-page .back-header+*{margin-top:18px}.register-center-page-v2 .center-registration-form{margin-inline:var(--page-gutter)}
+@media(max-width:420px){.auth-panel{padding-inline:16px}.noti-head,.inquiry-head,.mypage-titlebar{min-height:90px}.auth-activities{opacity:.72}}

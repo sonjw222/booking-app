@@ -12,8 +12,10 @@ import { useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import BottomNav from "../components/BottomNav";
 import { ZoomableImage } from "../components/ImageViewer";
+import UiIcon from "../components/UiIcon";
+import EmptyState from "../components/EmptyState";
 import {
-  fetchNotifications, markRead, deleteNotification, notiEmoji, notificationHref,
+  fetchNotifications, markRead, deleteNotification, notificationHref,
   type Notification,
 } from "../../lib/notifications";
 import {
@@ -57,15 +59,16 @@ export default function NotificationsPage() {
   if (loading) return <Loading />;
 
   return (
-    <div className="app-shell">
-      <div className="header">
-        <div className="title" style={{ fontSize: 20, fontWeight: 800 }}>알림</div>
+    <div className="app-shell member-notifications">
+      <div className="noti-head">
+        <h1>알림</h1>
+        <a href="/settings/notifications">설정</a>
       </div>
 
       {list.length === 0 ? (
-        <div className="empty-note" style={{ padding: "50px 20px", textAlign: "center", color: "var(--text-dim)" }}>
-          아직 알림이 없어요.
-        </div>
+        <EmptyState icon="bell" title="아직 알림이 없어요"
+          description="예약과 수강권 소식을 이곳에서 알려드릴게요."
+          action={<a className="ghost-btn" href="/reservation">수업 둘러보기</a>} />
       ) : (
         <div className="noti-list">
           {list.map((n) => (
@@ -74,7 +77,7 @@ export default function NotificationsPage() {
               className={`noti-row ${n.read ? "" : "unread"}`}
               onClick={() => handleClick(n)}
             >
-              <span className="noti-emoji">{notiEmoji(n.kind)}</span>
+              <span className="noti-emoji"><UiIcon name={n.kind === "announcement" ? "megaphone" : n.kind.includes("reservation") ? "calendar" : n.kind.includes("class") ? "clock" : "ticket"} size={22} /></span>
               <div className="noti-main">
                 <div className="noti-title">{n.title}</div>
                 <div className="noti-body">{n.body}</div>

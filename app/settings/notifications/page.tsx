@@ -41,7 +41,7 @@ export default function NotificationSettingsPage() {
   }, []);
 
   return (
-    <div className="app-shell">
+    <div className="app-shell account-page-v2 settings-page-v2">
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">

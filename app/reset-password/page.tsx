@@ -35,7 +35,7 @@ export default function ResetPasswordRequestPage() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell auth-account-page account-page-v2">
       <div className="back-header">
         <a className="side" href="/login">‹</a>
         <div className="title">비밀번호 재설정</div>

@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import { fetchMyPage, logout, refundEligibility, requestRefund, type Profile, type Membership, type HistoryItem } from "../../lib/mypage";
 import BottomNav from "../components/BottomNav";
+import UiIcon from "../components/UiIcon";
 
 const STATUS_LABEL: Record<string, string> = {
   confirmed: "예약확정",
@@ -56,7 +57,7 @@ export default function MyPage() {
   async function handleRefund(m: Membership) {
     const elig = refundEligibility(m);
     if (!elig.ok) { alert(elig.reason); return; }
-    if (!confirm(`'${m.productName}'을(를) 환불할까요?\n(결제 24시간 이내·미사용만 가능)`)) return;
+    if (!(await globalThis.appConfirm(`'${m.productName}'을(를) 환불할까요?\n(결제 24시간 이내·미사용만 가능)`))) return;
     try {
       await requestRefund(m.id);
       await load();
@@ -85,7 +86,8 @@ export default function MyPage() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell mypage-shell">
+      <div className="mypage-titlebar"><h1>마이</h1></div>
       <div className="profile-block">
         <div className="avatar">{profile?.name?.[0] ?? "?"}</div>
         <div>
@@ -165,25 +167,25 @@ export default function MyPage() {
 
       <div className="menu-section-label">내 정보</div>
       <a className="list-row" href="/purchases">
-        <div className="left"><span className="icon">🧾</span>구매 내역</div>
+        <div className="left"><span className="icon"><UiIcon name="receipt" /></span>구매 내역</div>
         <span className="chevron">›</span>
       </a>
       <a className="list-row" href="/profiles">
-        <div className="left"><span className="icon">👥</span>프로필 관리</div>
+        <div className="left"><span className="icon"><UiIcon name="users" /></span>프로필 관리</div>
         <span className="chevron">›</span>
       </a>
       <a className="list-row" href="/inquiries">
-        <div className="left"><span className="icon">💬</span>1:1 문의</div>
+        <div className="left"><span className="icon"><UiIcon name="message" /></span>1:1 문의</div>
         <span className="chevron">›</span>
       </a>
 
       <div className="menu-section-label">설정</div>
-      <a className="list-row" href="/settings/theme"><div className="left"><span className="icon">🎨</span>테마 설정</div><span className="chevron">›</span></a>
-      <a className="list-row" href="/settings/notifications"><div className="left"><span className="icon">🔔</span>알림 설정</div><span className="chevron">›</span></a>
-      <a className="list-row" href="/settings/account"><div className="left"><span className="icon">🔒</span>계정 설정</div><span className="chevron">›</span></a>
+      <a className="list-row" href="/settings/theme"><div className="left"><span className="icon"><UiIcon name="palette" /></span>테마 설정</div><span className="chevron">›</span></a>
+      <a className="list-row" href="/settings/notifications"><div className="left"><span className="icon"><UiIcon name="bell" /></span>알림 설정</div><span className="chevron">›</span></a>
+      <a className="list-row" href="/settings/account"><div className="left"><span className="icon"><UiIcon name="shield" /></span>계정 설정</div><span className="chevron">›</span></a>
       {profile?.isPlatformAdmin && (
         <a className="list-row" href="/admin">
-          <div className="left"><span className="icon">🛡️</span>운영자 설정</div>
+          <div className="left"><span className="icon"><UiIcon name="shield" /></span>운영자 설정</div>
           <span className="chevron">›</span>
         </a>
       )}
@@ -191,18 +193,18 @@ export default function MyPage() {
           아래 "내 센터 등록하기"와 표시 조건이 서로 독립적이라 동시에 나타날 수 있다. */}
       {profile?.isManager && (
         <a className="list-row" href="/manager">
-          <div className="left"><span className="icon">🏢</span>관리자 모드로 전환</div>
+          <div className="left"><span className="icon"><UiIcon name="building" /></span>관리자 모드로 전환</div>
           <span className="chevron">›</span>
         </a>
       )}
       {/* UI-003: 가입 유형·기존 관리자 여부와 무관하게 모든 로그인 사용자가 새 센터를
           등록할 수 있다(정책 B) — /login이 아니라 등록 폼으로 바로 이동한다. */}
       <a className="list-row" href="/mypage/register-center">
-        <div className="left"><span className="icon">🏢</span>내 센터 등록하기</div>
+        <div className="left"><span className="icon"><UiIcon name="building" /></span>내 센터 등록하기</div>
         <span className="chevron">›</span>
       </a>
       <button className="list-row logout-row" onClick={logout}>
-        <div className="left"><span className="icon">↩</span>로그아웃</div>
+        <div className="left"><span className="icon"><UiIcon name="logout" /></span>로그아웃</div>
       </button>
       <BottomNav />
     </div>
