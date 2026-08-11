@@ -88,12 +88,27 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   const myProfileIds = myProfiles.map((p: any) => p.id);
 
   // 내가 수강권을 보유한 센터 목록 (활성 수강권 기준)
-  const { data: myMems } = await supabase
-    .from("memberships")
-    .select("center_id, remaining_count, expires_at, status")
-    .in("profile_id", myProfileIds);
+  // ⚠️ classRows/fetchUsableMembershipsByClass와 동일한 이유로 PostgREST 기본 응답 행 수
+  // 제한(1000)에 걸릴 수 있다 — 한 계정이 여러 프로필로 여러 센터의 수강권을 200개 넘게
+  // 보유하면(공유 테스트 계정에서 실제로 재현됨) 1000번째 이후 행이 잘려, 그 안에만 있던
+  // 센터가 myMembershipCenters에서 통째로 빠지고 그 센터의 수업이 전부 회원 화면에서
+  // 안 보이게 된다. .range()로 페이지 단위 반복 조회한다.
+  const myMems: any[] = [];
+  {
+    const PAGE_SIZE = 1000;
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data: page, error: memErr } = await supabase
+        .from("memberships")
+        .select("center_id, remaining_count, expires_at, status")
+        .in("profile_id", myProfileIds)
+        .range(from, from + PAGE_SIZE - 1);
+      if (memErr) throw new Error("수강권 정보를 불러오지 못했어요: " + memErr.message);
+      myMems.push(...(page ?? []));
+      if (!page || page.length < PAGE_SIZE) break;
+    }
+  }
   const myMembershipCenters = new Set<string>();
-  for (const m of myMems ?? []) {
+  for (const m of myMems) {
     const active = (m as any).status === "active"
       && ((m as any).remaining_count == null || (m as any).remaining_count > 0)
       && ((m as any).expires_at == null || (m as any).expires_at >= monthStartDateOnly || new Date((m as any).expires_at) >= new Date());

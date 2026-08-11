@@ -8,6 +8,19 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-11 — RES-002(#42, Phase 2) 수정: fetchMonthData()의 myMems 1000행 cap (feature/social-auth-notifications-attendance-dashboard)
+
+`lib/reservations.ts`의 `fetchMonthData()`가 "내가 수강권을 보유한 센터 집합"을 구하는
+`memberships` 쿼리(`myMems`)에 `.range()` 페이지네이션이 없어, 한 계정이 여러 프로필로
+1000개 넘는 memberships를 가지면 1000번째 이후 행이 잘려 그 안에만 있던 센터가 통째로
+회원 화면(달력)에서 안 보일 수 있었다 — 같은 함수의 `classRows`(이미 수정됨)와 동일한
+PostgREST 기본 응답 행 수 제한 문제. `classRows`/`fetchUsableMembershipsByClass`와 동일한
+`.range()` 반복 조회 패턴으로 수정(순수 코드 수정, SQL 변경 없음). 회귀 테스트
+`tests/integration/month-data-memberships-row-limit-regression.test.ts` 신규 추가 — 1005개
+필러 membership 뒤에 있는 target membership(자녀 프로필 소유)이 여전히 정확히 감지되는지,
+가족 profile 간 membership 공유 구조가 페이지네이션 추가로 깨지지 않는지 함께 검증. CI
+검증은 다음 단계에서 진행.
+
 ## 2026-08-11 — P1-17(Phase 1): 신규 정책 "관리자 직접 지정 수강권은 schedule_rules보다 우선" (feature/social-auth-notifications-attendance-dashboard)
 
 PR #44 안정화 Batch의 Phase 1. `usable_memberships`/`usable_memberships_for_classes`/

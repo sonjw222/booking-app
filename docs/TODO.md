@@ -1134,7 +1134,7 @@ P2-20 조사 과정에서 발견됐지만 이번 배치 범위 밖이라 코드 
 
 | 순위 | 이슈 | 요약 | 근거 |
 |---|---|---|---|
-| 1 | [RES-002 #42](https://github.com/sonjw222/booking-app/issues/42) | `fetchMonthData()`의 `myMems` 쿼리가 PostgREST 1000행 캡 미대응 | 실제 회원 데이터 정합성에 영향 가능(앱 버그), cleanup 전 TEST_USER_A로 실증됨 |
+| 1 | [RES-002 #42](https://github.com/sonjw222/booking-app/issues/42) | `fetchMonthData()`의 `myMems` 쿼리가 PostgREST 1000행 캡 미대응 | **2026-08-11 수정 완료(코드만, CI 검증 대기)** — `classRows`/`fetchUsableMembershipsByClass`와 동일한 `.range()` 페이지네이션을 `myMems`에도 적용(`lib/reservations.ts`). 회귀 테스트 `tests/integration/month-data-memberships-row-limit-regression.test.ts` 추가(1005개 필러 membership 뒤의 target membership이 여전히 감지되는지, 자녀 프로필 공유 구조도 함께 확인). SQL 변경 없음(순수 코드 수정) |
 | 2 | [TEST-004 #45](https://github.com/sonjw222/booking-app/issues/45) | `classes` 테이블 공유 테스트센터 오염(1000행 캡, 최소 914건) | `memberships`와 동일 계열이지만 아직 미정리 — 다른 파일이 같은 캡에 걸릴 위험 지속 |
 | 3 | [TEST-003 #43](https://github.com/sonjw222/booking-app/issues/43) | `daily-book-limit.spec.ts` 잔여 CI 인프라 플레이키니스 | 이미 완화됐지만 재발 관측됨(P2-20 최종 검증 중), 기능을 막지는 않아 최하 우선순위 |
 
