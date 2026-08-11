@@ -151,7 +151,12 @@ describe("RES-002 회귀: fetchMonthData()의 myMems가 1000행 cap과 무관하
     // myMembershipCenters에서 누락되지 않고, 그 센터의 수업이 실제로 반환된다.
     expect(report.hasCenterB, JSON.stringify(report)).toBe(true);
     expect(report.hasTargetClass, JSON.stringify(report)).toBe(true);
-    // 대조군: centerA(필러 1005건의 소유 센터)도 당연히 포함돼야 한다.
-    expect(report.hasCenterA, JSON.stringify(report)).toBe(true);
+    // ⚠ hasCenterA는 대조군으로 넣었지만 실제로는 항상 false다 — centers/classes는
+    // fetchMonthData()가 "그 달에 실제 class가 있는 센터"만 담아 반환하는데(centerMap이
+    // classRows를 순회해 채워짐), 이 테스트는 centerA에 membership만 1005건 만들었을 뿐
+    // class는 하나도 만들지 않았다(실측 확인: totalCentersReturned=1, hasCenterA=false —
+    // 앱 버그 아니라 이 테스트의 잘못된 가정이었음). centerA가 myMembershipCenters
+    // 집합에는 포함되는지는 이미 그 전제 위에서만 성립하는 centerB/target 검증이 통과한
+    // 것으로 충분히 증명되므로 별도 assert를 만들지 않는다.
   }, 30000);
 });
