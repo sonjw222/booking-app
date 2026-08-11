@@ -2951,6 +2951,18 @@ a.membership-card { text-decoration: none; display: block; }
 .admin-v3-content .mgr-mode-bar,
 .admin-v3-content > .app-shell > .back-header { display: none; }
 
+/* 페이지 고유 액션은 공통 Chrome으로 대체할 수 없으므로 제목만 숨기고 액션은 유지한다. */
+.manager-v3-content > .app-shell > .back-header:has(.header-action) {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 52px;
+  padding: 8px var(--page-gutter) 0;
+  border: 0;
+  background: var(--bg);
+}
+.manager-v3-content > .app-shell > .back-header:has(.header-action) > .side,
+.manager-v3-content > .app-shell > .back-header:has(.header-action) > .title { display: none; }
+
 .admin-chrome {
   position: sticky;
   top: 0;
