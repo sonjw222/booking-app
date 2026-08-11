@@ -8,16 +8,26 @@
   있다가 세션이 끊기면 "세션이 만료됐어요" 안내와 함께 로그인 화면으로 보낸다 —
   이전에는 이런 처리가 전혀 없어서 세션이 끊긴 뒤에도 화면은 그대로 있고 그 안의
   개별 데이터 요청들만 하나씩 알 수 없는 에러를 내는 식이었다.
-  INITIAL_SESSION(최초 마운트 시, 로그인 여부와 무관하게 항상 한 번 발생)은 무시한다 —
-  SIGNED_OUT만 "세션이 있다가 끊긴" 신호로 취급한다.
+
+  계정/프로필 부트스트랩(P1, social-auth 배치) — ensureAccountForCurrentUser()는 원래
+  app/page.tsx(홈 화면)에서만 호출됐다. 소셜 로그인의 redirectTo가 항상 "/"라 지금까지는
+  우연히 항상 호출됐지만, 로그인 방식과 무관하게 "어느 페이지에 있든" 안전하게 계정이
+  보장되도록 여기(앱 전체에 한 번만 마운트되는 컴포넌트)로 옮긴다. SIGNED_IN(로그인 직후)과
+  INITIAL_SESSION(이미 세션이 있는 상태로 새로고침/재방문) 둘 다에서 호출 — 함수 자체가
+  auth_id 존재 여부로 멱등하게 동작하므로 중복 호출은 안전하다(23505 unique_violation 무시).
 */
 
 import { useEffect } from "react";
 import { supabase } from "../../lib/supabaseClient";
+import { ensureAccountForCurrentUser } from "../../lib/authAccount";
 
 export default function SessionWatcher() {
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+        void ensureAccountForCurrentUser();
+        return;
+      }
       if (event !== "SIGNED_OUT") return;
       if (window.location.pathname.startsWith("/login")) return;
       if (window.location.pathname.startsWith("/reset-password")) return;

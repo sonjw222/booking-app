@@ -1,0 +1,23 @@
+-- cleanup_p2_20_e2e_test_pass_duplicates_draft_proposed.sql 롤백 안내
+--
+-- 이 스크립트는 순수 데이터 삭제(DELETE)이므로 스키마 변경(컬럼/함수/제약조건)과 달리
+-- SQL로 되돌릴 방법이 없습니다 — 삭제된 행은 값 자체가 사라지므로 "이전 정의로 재정의"
+-- 같은 롤백이 성립하지 않습니다.
+--
+-- 되돌려야 하는 상황이 생기면:
+--   1) 원본 cleanup_*.sql은 BEGIN/COMMIT 트랜잭션 안에서 실행됩니다 — 만약 그 트랜잭션이
+--      아직 COMMIT되지 않았다면([2]의 육안 확인 단계에서 이상함을 발견한 경우) ROLLBACK으로
+--      되돌릴 수 있습니다(Supabase SQL Editor에서 COMMIT 전에 중단한 경우에만 해당).
+--   2) 이미 COMMIT된 뒤라면, 삭제된 행은 실제 사용자 데이터가 아니라 전부
+--      createTestMembershipAdmin() 헬퍼(이미 get-or-create/self-healing으로 수정 완료)가
+--      만든 테스트 fixture이므로 "복구"가 아니라 "다음 테스트 실행이 필요할 때 다시
+--      만들어내는 것"이 정답입니다 — 이 헬퍼는 이제 자연 키(profile+product+center)로
+--      조회 후 없으면 INSERT하므로, 다음 테스트 실행의 beforeAll이 필요한 membership을
+--      스스로 다시 만듭니다.
+--   3) reservations.membership_id로 이 memberships를 참조하던 5건(2건 attended, 3건
+--      waitlisted)은 이 정리 대상에서 애초에 제외했으므로(NOT EXISTS 조건) 영향받지
+--      않습니다 — 되돌릴 필요 자체가 없습니다.
+--   4) Supabase 프로젝트에 Point-in-Time Recovery(PITR)가 활성화돼 있다면, COMMIT
+--      이후라도 해당 시점 이전으로 데이터베이스 전체를 복원하는 것은 이론적으로
+--      가능하지만, 이는 이 스크립트가 건드리지 않은 다른 모든 변경사항까지 함께
+--      되돌리므로 이 정리 하나만 되돌리는 용도로는 적절하지 않습니다.

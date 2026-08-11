@@ -156,6 +156,66 @@ export function ruleToText(r: ScheduleRule): string {
   return parts.join(" · ");
 }
 
+// 여러 상품의 예약조건을 한 번에 조회 (N+1 방지) — 수업 등록/수정 화면에서
+// "이 수업에서 실제로 못 쓰는 수강권" 경고를 계산할 때 사용.
+export async function fetchRulesForProducts(productIds: string[]): Promise<Record<string, ScheduleRule[]>> {
+  if (productIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from("membership_schedule_rules")
+    .select("id, product_id, day_of_week, start_time, class_title")
+    .in("product_id", productIds)
+    .order("created_at");
+  if (error) throw new Error("예약조건을 불러오지 못했어요: " + error.message);
+  const out: Record<string, ScheduleRule[]> = {};
+  for (const r of (data ?? []) as any[]) {
+    (out[r.product_id] ??= []).push({
+      id: r.id,
+      dayOfWeek: r.day_of_week,
+      startTime: r.start_time ? String(r.start_time).slice(0, 5) : null,
+      classTitle: r.class_title,
+    });
+  }
+  return out;
+}
+
+// usable_memberships_for_classes()/usable_memberships()의 membership_schedule_rules
+// 판정 조건과 정확히 동일한 로직(fix_usable_memberships_product_kind.sql 참고) —
+// 규칙이 하나도 없으면 항상 허용, 있으면 dayOfWeek/startTime/classTitle이 전부(null이 아닌
+// 항목만) 일치하는 규칙이 하나라도 있어야 허용.
+export function matchesAnyScheduleRule(
+  rules: ScheduleRule[],
+  target: { dayOfWeek: number; startTime: string; classTitle: string }
+): boolean {
+  if (rules.length === 0) return true;
+  return rules.some(
+    (r) =>
+      (r.dayOfWeek === null || r.dayOfWeek === target.dayOfWeek) &&
+      (r.startTime === null || r.startTime === target.startTime) &&
+      (r.classTitle === null || r.classTitle === target.classTitle)
+  );
+}
+
+// 수업 등록/수정 화면에서 "예약 가능 수강권"으로 candidateProducts가 주어졌을 때,
+// 그중 실제로는(membership_schedule_rules 때문에) 이 수업에서 못 쓰는 상품 목록을 계산.
+// class_allowed_products("모든 수강권 허용"/특정 지정) 제한과는 완전히 별개의 조건이라,
+// 관리자가 "모든 수강권 허용"을 골라도 이 목록에 뜨는 상품은 실제로는 예약에 쓸 수 없다.
+export type ScheduleExcludedProduct = { productId: string; productName: string; rules: ScheduleRule[] };
+export function findScheduleExcludedProducts(
+  candidateProducts: { id: string; name: string }[],
+  rulesByProduct: Record<string, ScheduleRule[]>,
+  target: { dayOfWeek: number; startTime: string; classTitle: string }
+): ScheduleExcludedProduct[] {
+  const out: ScheduleExcludedProduct[] = [];
+  for (const p of candidateProducts) {
+    const rules = rulesByProduct[p.id] ?? [];
+    if (rules.length === 0) continue;
+    if (!matchesAnyScheduleRule(rules, target)) {
+      out.push({ productId: p.id, productName: p.name, rules });
+    }
+  }
+  return out;
+}
+
 export function won(n: number): string {
   return n.toLocaleString("ko-KR") + "원";
 }

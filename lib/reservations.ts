@@ -29,6 +29,7 @@ export type ClassInfo = {
   allowGoods: boolean;
   classFormat: "group" | "private"; // CLASS-001 D-2: 회원 앱에 프라이빗 배지 표시용
   showReservedCount: boolean; // 운영설정 "회원에게 예약 인원 표시"(show_group_reserved_count)
+  instructorNames: string[]; // 담당 강사 이름 목록(class_trainers). 미지정이면 빈 배열
   // 프로필별 내 예약 상태. key = profileId
   myByProfile: Record<string, { reservationId: string; status: "confirmed" | "waitlisted" }>;
 };
@@ -88,12 +89,27 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   const myProfileIds = myProfiles.map((p: any) => p.id);
 
   // 내가 수강권을 보유한 센터 목록 (활성 수강권 기준)
-  const { data: myMems } = await supabase
-    .from("memberships")
-    .select("center_id, remaining_count, expires_at, status")
-    .in("profile_id", myProfileIds);
+  // ⚠️ classRows/fetchUsableMembershipsByClass와 동일한 이유로 PostgREST 기본 응답 행 수
+  // 제한(1000)에 걸릴 수 있다 — 한 계정이 여러 프로필로 여러 센터의 수강권을 200개 넘게
+  // 보유하면(공유 테스트 계정에서 실제로 재현됨) 1000번째 이후 행이 잘려, 그 안에만 있던
+  // 센터가 myMembershipCenters에서 통째로 빠지고 그 센터의 수업이 전부 회원 화면에서
+  // 안 보이게 된다. .range()로 페이지 단위 반복 조회한다.
+  const myMems: any[] = [];
+  {
+    const PAGE_SIZE = 1000;
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data: page, error: memErr } = await supabase
+        .from("memberships")
+        .select("center_id, remaining_count, expires_at, status")
+        .in("profile_id", myProfileIds)
+        .range(from, from + PAGE_SIZE - 1);
+      if (memErr) throw new Error("수강권 정보를 불러오지 못했어요: " + memErr.message);
+      myMems.push(...(page ?? []));
+      if (!page || page.length < PAGE_SIZE) break;
+    }
+  }
   const myMembershipCenters = new Set<string>();
-  for (const m of myMems ?? []) {
+  for (const m of myMems) {
     const active = (m as any).status === "active"
       && ((m as any).remaining_count == null || (m as any).remaining_count > 0)
       && ((m as any).expires_at == null || (m as any).expires_at >= monthStartDateOnly || new Date((m as any).expires_at) >= new Date());
@@ -137,6 +153,8 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   let reservedCount: Record<string, number> = {};
   // 내 예약 (프로필별로 구분). key = `${classId}:${profileId}`
   let myByClassProfile: Record<string, { id: string; status: "confirmed" | "waitlisted" }> = {};
+  // 수업별 담당 강사 이름. key = classId
+  const instructorNamesByClass: Record<string, string[]> = {};
 
   if (classIds.length > 0) {
     // classIds가 많아지면(위 행 수 제한 수정으로 한 센터가 한 달에 수백~천 개 이상 수업을
@@ -146,7 +164,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     const classIdChunks: string[][] = [];
     for (let i = 0; i < classIds.length; i += CHUNK_SIZE) classIdChunks.push(classIds.slice(i, i + CHUNK_SIZE));
 
-    const [countChunks, myChunks] = await Promise.all([
+    const [countChunks, myChunks, trainerChunks] = await Promise.all([
       Promise.all(classIdChunks.map((ids) =>
         supabase.from("class_reservation_counts").select("class_id, confirmed_count").in("class_id", ids)
       )),
@@ -157,6 +175,19 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
           .in("profile_id", myProfileIds)
           .in("class_id", ids)
           .in("status", ["confirmed", "waitlisted"])
+      )),
+      // 담당 강사(class_trainers) — 같은 청크 방식으로 N+1 없이 한 번에 조회.
+      // 대부분의 수업엔 강사가 0~2명 정도라 이 조회 자체가 1000행 cap에 걸릴 일은
+      // 거의 없지만, classIds 자체가 이미 청크로 나뉘어 있어 안전하다.
+      // class_trainers.select("...accounts(name)")로 바로 임베드 조인하면 accounts
+      // 테이블 자신의 SELECT RLS("계정 조회" 정책)에 막혀 회원 세션에서는 name이 항상
+      // 비어 온다(그 정책은 "내가 관리하는 센터의 스태프/회원"만 허용 — 그냥 회원인
+      // 나에게 강사 계정은 해당 없음, CI 통합 테스트로 실측 확인됨). accounts RLS
+      // 자체를 넓히는 대신, 이 조회만을 위한 좁은 security definer RPC를 쓴다
+      // (add_class_trainer_names_rpc_draft_proposed.sql, 2026-08-11 적용 완료 —
+      // public/anon EXECUTE는 명시적으로 차단, authenticated만 허용).
+      Promise.all(classIdChunks.map((ids) =>
+        supabase.rpc("class_trainer_names", { p_class_ids: ids })
       )),
     ]);
 
@@ -170,6 +201,14 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
         myByClassProfile[`${r.class_id}:${(r as any).profile_id}`] = {
           id: r.id, status: r.status as "confirmed" | "waitlisted",
         };
+      }
+    }
+    for (const res of trainerChunks) {
+      if (res.error) throw new Error("담당 강사를 불러오지 못했어요: " + res.error.message);
+      for (const r of res.data ?? []) {
+        const name = (r as any).name;
+        if (!name) continue;
+        (instructorNamesByClass[(r as any).class_id] ??= []).push(name);
       }
     }
   }
@@ -241,6 +280,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
       classFormat: (c.class_format ?? "group") as "group" | "private",
       // 설정 행이 없으면 DEFAULT_SETTINGS.showGroupReservedCount(true)와 동일하게 기본 표시
       showReservedCount: showReservedCountByCenter[c.center_id] ?? true,
+      instructorNames: instructorNamesByClass[c.id] ?? [],
       myByProfile: myProfileIds.reduce((acc, pid) => {
         const r = myByClassProfile[`${c.id}:${pid}`];
         if (r) acc[pid] = { reservationId: r.id, status: r.status };

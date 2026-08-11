@@ -429,3 +429,34 @@ export function paymentsToCsv(rows: PaymentRow[], columns: string[]): string {
   const body = rows.map((r) => cols.map((c) => esc(ALL[c].get(r))).join(",")).join("\n");
   return "\uFEFF" + header + "\n" + body;
 }
+
+/*
+  \uB9E4\uB2C8\uC800 \uB300\uC2DC\uBCF4\uB4DC \uC694\uC57D(P4) \u2014 manager_dashboard_summary() RPC \uD558\uB098\uB85C \uC11C\uBC84(SQL)\uC5D0\uC11C \uC9C1\uC811
+  \uD569\uC0B0\uD55C\uB2E4. summarize()(\uC704)\uCC98\uB7FC \uD074\uB77C\uC774\uC5B8\uD2B8\uC5D0\uC11C fetch\uD55C \uD589\uC744 reduce\uD558\uC9C0 \uC54A\uB294 \uC774\uC720: \uACB0\uC81C
+  \uAC74\uC218\uAC00 \uB9CE\uC740 \uC13C\uD130/\uAE30\uAC04\uC5D0\uC11C\uB294 PostgREST \uAE30\uBCF8 1000\uD589 \uC751\uB2F5 \uC81C\uD55C\uC5D0 \uAC78\uB9B4 \uC218 \uC788\uB2E4(\uC774 \uC800\uC7A5\uC18C\uAC00
+  fetchClasses/fetchUsableMembershipsByClass\uC5D0\uC11C \uC774\uBBF8 \uC2E4\uC81C\uB85C \uACAA\uC740 \uAC83\uACFC \uAC19\uC740 \uC885\uB958\uC758 \uBB38\uC81C,
+  \uC774\uBC88 \uC138\uC158\uC5D0\uC11C \uBC1C\uACAC\u00B7\uC218\uC815\uB428) \u2014 RPC \uC9D1\uACC4\uB294 \uC774 \uC704\uD5D8 \uC790\uCCB4\uAC00 \uC5C6\uB2E4.
+  Mock(\uD14C\uC2A4\uD2B8) \uACB0\uC81C\uB294 RPC \uC548\uC5D0\uC11C payment_provider='mock' \uC870\uAC74\uC73C\uB85C \uD56D\uC0C1 \uC81C\uC678\uB41C\uB2E4(\uC2E4\uC81C
+  \uB9E4\uCD9C\uACFC \uD63C\uB3D9 \uAE08\uC9C0 \uC694\uAD6C\uC0AC\uD56D).
+*/
+export type DashboardSummary = {
+  todayRevenue: number;
+  monthRevenue: number;
+  periodRevenue: number;
+  periodPaymentCount: number;
+  periodMembershipRevenue: number;
+  periodGoodsRevenue: number;
+  unpaidTotal: number;
+  byMethod: { card: number; cash: number; transfer: number; point: number };
+  daily: { date: string; revenue: number }[];
+};
+
+export async function fetchDashboardSummary(
+  centerId: string, fromDate: string, toDate: string
+): Promise<DashboardSummary> {
+  const { data, error } = await supabase.rpc("manager_dashboard_summary", {
+    p_center_id: centerId, p_from: fromDate, p_to: toDate,
+  });
+  if (error) throw new Error("\uB9E4\uCD9C \uD1B5\uACC4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC5B4\uC694: " + error.message);
+  return data as DashboardSummary;
+}

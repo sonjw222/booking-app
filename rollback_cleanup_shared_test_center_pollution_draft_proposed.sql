@@ -1,0 +1,22 @@
+-- cleanup_shared_test_center_pollution_draft_proposed.sql 롤백 안내
+--
+-- 이 스크립트는 순수 데이터 삭제(DELETE)이므로 스키마 변경(컬럼/함수/제약조건)과 달리
+-- SQL로 되돌릴 방법이 없습니다 — 삭제된 행은 값 자체가 사라지므로 "이전 정의로 재정의"
+-- 같은 롤백이 성립하지 않습니다.
+--
+-- 되돌려야 하는 상황이 생기면(예: 삭제 후 특정 테스트가 그 데이터의 존재를 실제로 전제하고
+-- 있었다는 것이 드러난 경우):
+--   1) 원본 cleanup_*.sql은 BEGIN/COMMIT 트랜잭션 안에서 실행됩니다 — 만약 그 트랜잭션이
+--      아직 COMMIT되지 않았다면 ROLLBACK으로 되돌릴 수 있습니다(Supabase SQL Editor에서
+--      COMMIT 전에 중단한 경우에만 해당).
+--   2) 이미 COMMIT된 뒤라면, 삭제된 행은 실제 데이터가 아니라 전부 테스트 fixture이므로
+--      "복구"가 아니라 "그 테스트가 다음 실행 시 다시 만들어내는 것"이 정답입니다 — 이번
+--      배치에서 관련 헬퍼(createTestMembership/createTestMembershipAdmin/
+--      createTestGoodsMembershipAdmin/createMembershipForProduct/
+--      usable-memberships-pass-kind.test.ts)를 전부 get-or-create + self-healing refresh로
+--      고쳐서, 다음 실행의 beforeAll이 필요한 데이터를 스스로 다시 만듭니다. 즉 삭제된
+--      fixture는 다음 테스트 실행에서 자동으로 재생성되며, 이것이 이 정리의 의도된 동작입니다.
+--   3) Supabase 프로젝트에 Point-in-Time Recovery(PITR)가 활성화돼 있다면, COMMIT 이후라도
+--      해당 시점 이전으로 데이터베이스 전체를 복원하는 것은 이론적으로 가능하지만, 이는
+--      cleanup_*.sql이 건드리지 않은 다른 모든 변경사항까지 함께 되돌리므로 이 정리 하나만
+--      되돌리는 용도로는 적절하지 않습니다.

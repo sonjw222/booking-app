@@ -15,6 +15,24 @@ import { fetchMyCenters, fetchTodayClasses, type ManagedCenter, type TodayClass 
 import { fetchClassAttendees, setAttendance, type ClassAttendee } from "../../lib/classes";
 import { fetchMemberDetail, type MemberDetailData } from "../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../lib/roles";
+import { fetchDashboardSummary, won, type DashboardSummary } from "../../lib/sales";
+
+type DashPeriod = "today" | "7d" | "30d";
+
+function kstToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+}
+function kstDaysAgo(days: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(d);
+}
+function dashRangeFor(period: DashPeriod): { from: string; to: string } {
+  const to = kstToday();
+  if (period === "today") return { from: to, to };
+  if (period === "7d") return { from: kstDaysAgo(6), to };
+  return { from: kstDaysAgo(29), to };
+}
 
 export default function ManagerDashboard() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -30,6 +48,11 @@ export default function ManagerDashboard() {
   const [rosterLoading, setRosterLoading] = useState(false);
   const [memberInfo, setMemberInfo] = useState<{ name: string; profileId: string; data: MemberDetailData | null } | null>(null);
   const [attBusy, setAttBusy] = useState(false);
+  // 매출 요약 대시보드 (P4)
+  const [dashPeriod, setDashPeriod] = useState<DashPeriod>("today");
+  const [dash, setDash] = useState<DashboardSummary | null>(null);
+  const [dashLoading, setDashLoading] = useState(false);
+  const [dashError, setDashError] = useState<string | null>(null);
 
   // 출결 처리 (출석/결석/노쇼/예약취소) — 취소는 되돌릴 수 없음
   async function handleAttendance(a: ClassAttendee, status: "attended" | "no_show" | "confirmed" | "cancelled") {
@@ -108,6 +131,19 @@ export default function ManagerDashboard() {
       .catch((e) => setError(e.message));
   }, [activeCenterId]);
 
+  useEffect(() => {
+    if (!activeCenterId) return;
+    let cancelled = false;
+    setDashLoading(true);
+    setDashError(null);
+    const { from, to } = dashRangeFor(dashPeriod);
+    fetchDashboardSummary(activeCenterId, from, to)
+      .then((d) => { if (!cancelled) setDash(d); })
+      .catch((e) => { if (!cancelled) setDashError(e.message); })
+      .finally(() => { if (!cancelled) setDashLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeCenterId, dashPeriod]);
+
   const activeCenter = centers.find((c) => c.id === activeCenterId);
 
   // 활성 센터의 메뉴 노출용 권한 계산 (오너는 전권이라 건너뜀)
@@ -169,6 +205,68 @@ export default function ManagerDashboard() {
           </button>
         ))}
       </div>
+
+      {/* 매출 요약 대시보드 */}
+      {canSeeMenu("pass.sales.view") && (
+        <>
+          <div className="period-tabs">
+            {([["today", "오늘"], ["7d", "7일"], ["30d", "30일"]] as [DashPeriod, string][]).map(([p, label]) => (
+              <button key={p} className={`period-chip ${dashPeriod === p ? "on" : ""}`} onClick={() => setDashPeriod(p)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {dashLoading ? (
+            <Loading />
+          ) : dashError ? (
+            <div className="daylist-empty" style={{ margin: "0 20px 14px" }}>매출 통계를 불러오지 못했어요: {dashError}</div>
+          ) : dash ? (
+            <>
+              <div className="dash-cards">
+                <div className="dash-card">
+                  <div className="dash-card-label">오늘 매출</div>
+                  <div className="dash-card-value">{won(dash.todayRevenue)}</div>
+                </div>
+                <div className="dash-card">
+                  <div className="dash-card-label">이번 달 매출</div>
+                  <div className="dash-card-value">{won(dash.monthRevenue)}</div>
+                </div>
+                <div className="dash-card">
+                  <div className="dash-card-label">기간 매출 · {dash.periodPaymentCount}건</div>
+                  <div className="dash-card-value">{won(dash.periodRevenue)}</div>
+                </div>
+                <div className="dash-card">
+                  <div className="dash-card-label">미수금</div>
+                  <div className="dash-card-value">{won(dash.unpaidTotal)}</div>
+                </div>
+                <div className="dash-card">
+                  <div className="dash-card-label">수강권 매출</div>
+                  <div className="dash-card-value">{won(dash.periodMembershipRevenue)}</div>
+                </div>
+                <div className="dash-card">
+                  <div className="dash-card-label">상품 매출</div>
+                  <div className="dash-card-value">{won(dash.periodGoodsRevenue)}</div>
+                </div>
+              </div>
+              {dash.daily.length > 1 && (
+                <div className="dash-daily">
+                  {(() => {
+                    const max = Math.max(1, ...dash.daily.map((d) => d.revenue));
+                    return dash.daily.map((d) => (
+                      <div
+                        key={d.date}
+                        className={`dash-daily-bar ${d.revenue > 0 ? "has-value" : ""}`}
+                        style={{ height: `${Math.max(2, Math.round((d.revenue / max) * 100))}%` }}
+                        title={`${d.date} · ${won(d.revenue)}`}
+                      />
+                    ));
+                  })()}
+                </div>
+              )}
+            </>
+          ) : null}
+        </>
+      )}
 
       {/* 오늘 수업 요약 */}
       <div className="section-title" style={{ paddingTop: 8 }}>
@@ -306,12 +404,21 @@ export default function ManagerDashboard() {
                         <span className="att-locked">취소된 예약 · 변경 불가</span>
                       ) : (
                         <>
-                          <button className={`att-btn ${a.status === "attended" ? "on" : ""}`} disabled={attBusy}
-                            onClick={() => handleAttendance(a, "attended")}>출석</button>
-                          <button className={`att-btn ${a.status === "confirmed" ? "on" : ""}`} disabled={attBusy}
-                            onClick={() => handleAttendance(a, "confirmed")}>결석</button>
-                          <button className={`att-btn ${a.status === "no_show" ? "on" : ""}`} disabled={attBusy}
-                            onClick={() => handleAttendance(a, "no_show")}>노쇼</button>
+                          {/* 대기(waitlisted)는 아직 확정된 적이 없어 출석/결석을 매길 대상이 아니다 —
+                              manager_set_attendance()도 이 상태에선 attended/no_show를 거부한다
+                              (fix_attendance_consolidate_and_guard). 대기 취소만 남겨둔다. */}
+                          {a.status !== "waitlisted" && (
+                            <>
+                              <button className={`att-btn ${a.status === "attended" ? "on" : ""}`} disabled={attBusy}
+                                onClick={() => handleAttendance(a, "attended")}>출석</button>
+                              {/* "결석" 버튼은 실제로는 status를 confirmed로 되돌려 표시를 취소하는
+                                  동작이다(결석이라는 별도 상태는 없음) — 실제 결석 처리는 "결석(노쇼)". */}
+                              <button className={`att-btn ${a.status === "confirmed" ? "on" : ""}`} disabled={attBusy}
+                                onClick={() => handleAttendance(a, "confirmed")}>되돌리기</button>
+                              <button className={`att-btn ${a.status === "no_show" ? "on" : ""}`} disabled={attBusy}
+                                onClick={() => handleAttendance(a, "no_show")}>결석(노쇼)</button>
+                            </>
+                          )}
                           <button className="att-btn cancel" disabled={attBusy}
                             onClick={() => handleAttendance(a, "cancelled")}>예약취소</button>
                         </>

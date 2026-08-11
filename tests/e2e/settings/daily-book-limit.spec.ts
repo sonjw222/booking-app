@@ -85,6 +85,19 @@ test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회
   // 중..."에서 멈춘 채 끝내 완료되지 않는 경우가 실측 확인됐다. 같은 날짜 안에서는 한
   // 번만 이동한 뒤 각 수업 행을 직접 클릭하는 방식으로 바꿔 전체 페이지 새로고침 횟수를
   // 최소화한다(행 클릭 성공 후의 데이터 갱신은 load()의 클라이언트 쪽 재조회로 충분).
+  // ⚠ [TEST-003] doReserve()/handleCancel()(app/reservation/page.tsx)는 RPC 성공 →
+  // setConfirmClass(null)(시트 닫힘, 위 sheet-overlay 체크가 여기서 바로 통과)로 끝나지
+  // 않고 그 뒤에 await load()로 전체 데이터를 다시 조회한 뒤에야 .class-row의 버튼이
+  // "예약"↔"취소"로 바뀐다 — 시트가 닫히는 시점과 버튼 상태가 갱신되는 시점 사이에 실제
+  // 간격이 있다. CI에서 이 시점의 버튼 상태 assert가 기본 expect timeout(10초, playwright.
+  // config.ts)을 넘겨 실패하고 곧바로 재시도에서 통과한 사례가 실측 확인됨(run 31393468107,
+  // "toBeVisible timeout 10000ms" 후 retry에서 통과) — CI 부하로 load()의 재조회가 느려지는
+  // 타이밍 문제이지 앱/RPC 버그가 아니다(예약 자체는 이미 성공한 뒤였음). 이 파일은 같은
+  // 종류의 예약/취소 왕복을 최대 9번 반복해(파일 상단 주석 참고) 이 race를 특히 자주 겪을
+  // 수 있어, 정확히 이 버튼 상태 assert들만 timeout을 넉넉히 늘린다(테스트 전체 timeout을
+  // 이미 120초로 늘린 것과 별개로, 개별 expect의 기본 10초가 더 좁은 병목이었음).
+  const POST_ACTION_TIMEOUT = 20_000;
+
   await memberPage.goto("/reservation");
   await selectKstCalendarDay(memberPage, kstDateStr(offClasses[0].startTime));
   for (let i = 0; i < offClasses.length; i++) {
@@ -93,7 +106,7 @@ test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회
     await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
     await expect(
       memberPage.locator(".class-row", { hasText: offTitles[i] }).getByRole("button", { name: "취소" })
-    ).toBeVisible();
+    ).toBeVisible({ timeout: POST_ACTION_TIMEOUT });
   }
 
   // OFF 단계 예약은 ON 단계의 "2회 제한" 카운트에 섞이지 않도록 전부 취소해둔다.
@@ -103,7 +116,7 @@ test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회
     await memberPage.locator(".class-row", { hasText: offTitles[i] }).getByRole("button", { name: "취소" }).click();
     await expect(
       memberPage.locator(".class-row", { hasText: offTitles[i] }).getByRole("button", { name: "예약" })
-    ).toBeVisible();
+    ).toBeVisible({ timeout: POST_ACTION_TIMEOUT });
   }
 
   // ② 관리자 화면에서 실제로 ON + 하루 최대 2회로 저장
@@ -132,14 +145,14 @@ test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회
   await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
   await expect(
     memberPage.locator(".class-row", { hasText: "E2E 일일한도 1" }).getByRole("button", { name: "취소" })
-  ).toBeVisible();
+  ).toBeVisible({ timeout: POST_ACTION_TIMEOUT });
 
   await memberPage.locator(".class-row", { hasText: "E2E 일일한도 2" }).getByRole("button", { name: "예약" }).click();
   await memberPage.getByRole("button", { name: "예약하기" }).click();
   await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
   await expect(
     memberPage.locator(".class-row", { hasText: "E2E 일일한도 2" }).getByRole("button", { name: "취소" })
-  ).toBeVisible();
+  ).toBeVisible({ timeout: POST_ACTION_TIMEOUT });
 
   await memberPage.locator(".class-row", { hasText: "E2E 일일한도 3" }).getByRole("button", { name: "예약" }).click();
   await memberPage.getByRole("button", { name: "예약하기" }).click();

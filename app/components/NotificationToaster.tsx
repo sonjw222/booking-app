@@ -9,7 +9,10 @@
 */
 
 import { useEffect, useState } from "react";
-import { subscribeNotifications, notiEmoji, notificationHref, type Notification } from "../../lib/notifications";
+import {
+  subscribeNotifications, notiEmoji, notificationHref, getNotiPrefs, notiPrefKeyForKind,
+  type Notification,
+} from "../../lib/notifications";
 
 export default function NotificationToaster() {
   const [popups, setPopups] = useState<Notification[]>([]);
@@ -20,6 +23,10 @@ export default function NotificationToaster() {
 
     subscribeNotifications((n) => {
       if (!mounted) return;
+      // 알림 설정(app/settings/notifications)에서 이 종류를 껐으면 팝업만 건너뛴다 —
+      // 알림 자체는 서버에 이미 기록됐으니 알림함(/notifications)에서는 그대로 보인다.
+      const prefKey = notiPrefKeyForKind(n.kind);
+      if (prefKey && !getNotiPrefs()[prefKey]) return;
       setPopups((prev) => [n, ...prev].slice(0, 3));
       // 5초 후 자동 제거
       setTimeout(() => {

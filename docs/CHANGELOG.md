@@ -8,6 +8,581 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-11 — 담당 강사 복수 지정 + 수강권 허용 정책 변경 Batch 최종 완료: 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
+
+두 번째 SQL(`add_class_trainer_names_rpc_draft_proposed.sql`)까지 적용 완료되면서 이
+Batch가 최종 완료됐다. 사용자 리뷰로 RPC 권한을 강화(public/anon EXECUTE 명시적 차단,
+authenticated만 허용 + `auth.uid() is not null` 이중 방어)한 뒤 적용 — anon 호출이
+401 `permission denied for function class_trainer_names`로 정상 차단됨을 read-only로
+확인. `lib/reservations.ts`가 이 RPC(`class_trainer_names`)를 쓰도록 전환하는 코드도
+함께 push.
+
+전체 CI(E2E/Unit/Integration/Build) **2연속 Green**으로 최종 검증(run
+`31487777454`/`31489758487`, 둘 다 first-attempt·재시도 없음 — E2E 45/45, Unit
+213/213, Integration 133/133). `class-trainers-and-pass-selection-mode.test.ts`의
+"담당 강사가 지정된 수업은 instructorNames에 이름이 채워진다" 케이스(1차 SQL만 적용된
+상태에서 실패했던 바로 그 테스트)도 이제 통과. 기존 P0~P4/P1-15/P1-17 관련 테스트
+전부 회귀 없이 통과 확인.
+
+## 2026-08-11 — SQL 적용 완료 + 관리자 UI를 SQL 원래 설계대로 수정 (feature/social-auth-notifications-attendance-dashboard)
+
+`add_class_trainers_pass_selection_mode_draft_proposed.sql`을 Supabase에 적용 완료(사용자
+실행, 오류 없음). Read-only 확인: `classes.pass_selection_mode` 컬럼 존재,
+`all`=389건/`selected`=85건/합계 474건으로 migration 헤더 주석이 예고한 수치와 정확히
+일치. anon PATCH 시도는 RLS에 막혀 0행 no-op임을 별도 확인(쓰기 회귀 없음).
+
+SQL 적용 검증 중 발견한 설계 불일치를 사용자 확인 후 수정: SQL 헤더 주석은 "수강권
+0개 선택 시 저장 금지 + '전체 선택' 버튼으로 명시적 전체허용 표현"을 원래 설계로
+명시했는데, 이전 세션에서 만든 `app/manager/classes/page.tsx`는 예전 방식("0개 선택 =
+자동으로 전체허용")을 그대로 유지하고 있었다. 이번에 SQL 설계대로 수정:
+- `resolvePassSelection()` 헬퍼 추가 — 선택 0개면 저장 자체를 막고(신규/반복/수정 모든
+  경로), 선택 개수가 그 센터의 pass 전체 개수와 같으면 `mode='all'`(class_allowed_products는
+  비워서 저장, 스냅샷 아님), 그 사이면 `mode='selected'`(정확히 선택된 목록만 저장).
+- "전체 선택"/"전체 해제" 버튼 추가(기존 "선택 해제(모든 수강권 허용으로 전환)" 버튼
+  대체). 신규 등록 폼은 기본값 'all'을 "모든 chip 체크"로 시각화하기 위해 열 때부터
+  전체 체크 상태로 시작. 수정 폼은 `c.passSelectionMode`를 읽어 'all'이면 전체 체크,
+  'selected'면 실제 저장된 목록으로 정확히 재구성.
+- 이 변경으로 기존 E2E가 가정하던 "빈 선택=전체허용" 상호작용이 전부 깨져서(디폴트가
+  이제 전체 체크라 특정 pass 1개를 고르려면 먼저 전체 해제부터 해야 함) 영향받는 3개
+  스펙 파일(`class-allowed-products.spec.ts`, `new-class-creation.spec.ts`,
+  `membership-schedule-rules.spec.ts`)의 관련 테스트를 새 상호작용 순서(전체 해제 →
+  개별 선택)와 새 상태 표현("전체 체크 개수" 기준, 0개 기준 아님)에 맞춰 수정. 로직
+  검증(RPC가 실제로 무엇을 허용/거부하는지)은 그대로 유지 — 이번 수정은 순수하게
+  "UI가 그 상태에 도달하는 상호작용 순서"만 바꾼 것.
+- `npm run build` 타입체크 + 단위테스트 213/213 통과 확인(로컬). Integration/E2E는
+  로컬에 테스트 자격증명이 없어 브랜치 push 후 GitHub Actions CI로 검증(아래 별도 기록).
+
+**CI 1차 실행에서 발견 + 수정(진짜 앱 버그, race condition)**: E2E 3건이 재진입 시
+"1개만 선택됨"을 기대했는데 "14개(그 센터 pass 전체) 선택됨"으로 실패(run
+`31484011506`). 원인: `save()`가 `setFormOpen(false)`(시트가 즉시 닫힘)를
+`await loadClasses(...)`(목록 재조회) 완료 **전에** 실행해, 저장 직후 곧바로 같은
+수업을 재클릭하면 `openEdit()`이 아직 갱신 전인 stale `ManagedClass.passSelectionMode`를
+읽고 있었다(실제로는 방금 'selected'로 저장됐는데 목록엔 여전히 옛 'all'이 남아 있어
+전체 체크로 잘못 표시). 수정: `lib/classes.ts`의 스케줄 복사 전용 내부 함수였던
+`fetchClassPassMode()`를 `fetchClassPassSelectionMode()`로 공개(export)하고,
+`openEdit()`이 목록 캐시 대신 이 함수로 그 class의 실제 현재 `pass_selection_mode`를
+다시 조회해 하이드레이트하도록 변경 — 목록이 아직 안 갱신됐어도 항상 정확한 값을 보여줌.
+
+## 2026-08-11 — 담당 강사 복수 지정 + 수강권 허용 정책 변경 Batch (feature/social-auth-notifications-attendance-dashboard)
+
+P3-1(수업 구분과 복수 강사 배정) 중 "복수 강사 배정"을 로드맵에 포함하기로 결정하고
+구현. SQL은 `add_class_trainers_pass_selection_mode_draft_proposed.sql`(+ rollback)에
+작성만 해뒀고 **아직 Supabase에 실행하지 않음**(STOP 규칙 유지, 사용자 승인 후 별도 실행
+필요).
+
+- **강사 복수 지정**: 기존에 있었지만 앱 코드가 전혀 쓰지 않던 `class_trainers` 테이블을
+  재사용. 강사 후보는 "스태프 & 권한"의 해당 센터 active 스태프 전체(역할 구분 없음).
+  `lib/classes.ts`에 `fetchClassTrainers`/`setClassTrainers`/`setClassTrainersBulk` 추가.
+  `app/manager/classes/page.tsx`(수업 등록/수정 시트)에 기존 "예약 가능 수강권" chip
+  선택 UI와 동일한 패턴으로 담당 강사 다중 선택 UI 추가(단건 등록·반복 등록·수정 전부
+  지원). 회원 예약 화면(`app/reservation/page.tsx`, `lib/reservations.ts`
+  `fetchMonthData()`)에는 지정된 강사 이름을 "이름 외 N명" 형식으로 노출.
+- **수강권 허용 정책 변경(0건=전체허용 → 명시적 선택제)**: `classes.pass_selection_mode`
+  (`'all'|'selected'`) 컬럼 신규 추가. 관리자 UI에서 "예약 가능 수강권"을 하나도 선택하지
+  않으면 `'all'`(기존 0건=전체허용과 100% 동일 동작), 하나 이상 선택하면 `'selected'`로
+  저장 — `selectedProducts.length`로부터 파생시켜 UI에 별도 토글을 추가하지 않았다.
+  `usable_memberships`/`usable_memberships_for_classes`/`reserve_class`/
+  `reserve_with_membership` 4개 RPC의 cap 체크·P1-17 override 체크 기준을
+  "class_allowed_products 행 존재 여부"에서 "pass_selection_mode 값"으로 변경(SQL,
+  미실행). 기존 474개 class는 migration으로 100% 동일 동작 보존(0건=`'all'`, 1건
+  이상=`'selected'`, class_allowed_products 자체는 한 행도 안 건드림).
+- **반복 그룹 일괄적용 시 정책 불일치 방지**: `updateClassGroup()`은 title/start/end/
+  capacity만 그룹 전체에 반영하고 개별 인스턴스의 다른 컬럼은 안 건드리는 기존 설계라,
+  그 경로에서도 수정 중인 인스턴스의 `pass_selection_mode`만 selectedProducts와 어긋나지
+  않도록 `lib/classes.ts`에 좁은 setter `updateClassPassSelectionMode()`를 추가해 별도로
+  맞춰줌(다른 필드 전체를 재작성하는 `updateClass()` 대신).
+- **스케줄 복사(`copySchedule`/`insertCopiedClasses`)**: 원본 수업의 `pass_selection_mode`
+  와 담당 강사도 함께 복사하도록 확장. `copySchedule()` 자체는 어떤 UI에서도 호출되지
+  않는 미사용 함수로 확인돼(grep) 갱신하지 않음(도달 불가능한 코드라 위험 없음) — 실제
+  사용되는 `copyByWeekday`/`copyByDate`만 수정.
+- **기존 회귀 테스트 2건, 새 RPC 기준에 맞춰 수정(중요)**: `pass_selection_mode` 도입으로
+  RPC의 override/cap 판정 기준이 바뀌면서, `class_allowed_products`에 직접 행만 넣고
+  `pass_selection_mode`는 신경 쓰지 않던 기존 통합 테스트들이 SQL 적용 후 조용히 의미를
+  잃거나(예: F가 실제로는 아무것도 증명하지 못한 채 우연히 통과) 뒤집힐 수 있었음(예: E가
+  기대하던 override 성공이 거부로 바뀜) — 실행 전에 코드 리뷰로 미리 발견해 수정:
+  `tests/integration/setup.ts`의 `createFutureTestClass()`에 `passSelectionMode` 옵션
+  추가(값을 명시적으로 안 넘기면 기존 동작과 완전히 동일, 기존 테스트 전부 무영향),
+  `class-allowed-products-enforcement.test.ts`의 거부 케이스 1곳과
+  `schedule-rule-override.test.ts`의 D~J 전부(7곳)에 `passSelectionMode: "selected"`를
+  명시.
+- **신규 통합 테스트**: `tests/integration/class-trainers-and-pass-selection-mode.test.ts`
+  추가 — class_trainers CRUD/신규 RLS(비스태프 계정 거부)/`instructorNames` 노출/
+  `pass_selection_mode` 저장·조회/`updateClassPassSelectionMode()` 단독 동작/
+  `copyByDate()`의 정책·강사 복사까지 커버. SQL 미실행 상태에서는 `pass_selection_mode`
+  관련 케이스와 복사 테스트, 신규 RLS 케이스가 실패하는 것이 정상(예상된 실패).
+- `npm run build` 타입체크 통과 확인(SQL은 미실행이라 실제 통합 테스트 실행/CI 검증은
+  SQL 적용 후 별도로 필요 — `docs/TODO.md` P3-1 참고).
+
+## 2026-08-11 — PR #44 안정화 Batch(Phase 1~4) 최종 완료: 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
+
+P1-17(Phase 1, 신규 예약 override 정책)/RES-002(Phase 2)/TEST-004(Phase 3)/TEST-003
+(Phase 4) 4개 Phase를 하나의 배치로 순서대로 진행 후, 전체 CI(E2E/Unit/Integration/Build)
+2연속 Green으로 최종 검증(run `31459078105`/`31460392240`, 둘 다 first-attempt·재시도
+없음 — E2E 45/45, Unit 213/213, Integration 123/123). 검증 과정에서 신규 통합 테스트
+자체의 결함 2건을 실측으로 발견해 수정(둘 다 test bug, 앱/SQL 무관):
+(1) `schedule-rule-override.test.ts`의 A/B/C가 `reserve_class`(자동 매칭)를 써서, 공유
+테스트센터에 있던 다른 membership으로 우연히 통과/실패할 수 있던 문제 →
+`reserve_with_membership`으로 membership_id를 직접 지정하도록 수정.
+(2) `month-data-memberships-row-limit-regression.test.ts`가 `beforeAll` 마지막에 남은
+managerB 세션인 채로 managerA 계정의 `fetchMonthData()`를 호출해 RLS에 막혀 전부 빈
+배열이 돌아오던 문제(세션 전환 누락) + 실제로 만들지 않은 centerA class를 기대하던
+잘못된 대조군 assert 제거. 각 Phase의 상세 내용은 아래 개별 항목 참고. PR #44는 여전히
+MERGE BLOCKED(main merge는 별도 명시적 요청 전까지 하지 않음).
+
+## 2026-08-11 — TEST-003(#43, Phase 4) 근본 원인 확정 + 수정: daily-book-limit.spec.ts CI noise (feature/social-auth-notifications-attendance-dashboard)
+
+"그냥 flaky"로 단정하지 않고 실제 실패 로그(run `31393468107`)를 직접 조사 — 정확한 실패
+지점을 특정함: `expect(locator).toBeVisible()` (`.class-row`의 "취소" 버튼), timeout
+10000ms, 첫 시도 실패 → 재시도 즉시 통과. 코드 추적 결과 `app/reservation/page.tsx`의
+`doReserve()`/`handleCancel()`은 RPC 성공 → `setConfirmClass(null)`(시트 닫힘, 이 체크는
+바로 통과) → `await load()`(전체 재조회) 순서로 동작해, 시트가 닫히는 시점과
+`.class-row` 버튼이 갱신되는 시점 사이에 실제 간격이 존재한다. 이 스펙은 예약/취소
+왕복을 최대 9회 반복하는 유일한 파일이라(파일 자체 주석에 이미 문서화됨) CI 부하 시 그
+간격이 Playwright 기본 expect timeout(10초)을 넘기는 사례가 실측됨 — 예약 자체는 이미
+성공한 뒤였으므로 앱/RPC 버그도 아니고, assert 자체도 실제로 유효한 상태 전이를 기다리는
+것이라 test-logic 결함도 아니다. 분류: CI 인프라/타이밍 이슈. 수정:
+`tests/e2e/settings/daily-book-limit.spec.ts`에서 정확히 이 버튼 상태 assert 5곳만
+timeout을 20초로 확장(무조건적인 전체 timeout 증가나 retry 추가가 아니라, 진단된 병목
+지점에만 적용). CI 검증은 다음 단계에서 진행.
+
+## 2026-08-11 — TEST-004(#45, Phase 3) 수정: 공유 테스트센터 classes 누적 self-healing sweep (feature/social-auth-notifications-attendance-dashboard)
+
+Read-only 재진단(사용자가 Supabase SQL Editor에서 직접 조회) 결과 공유 테스트센터
+(`통합테스트센터-da48c9`)에 classes가 1761건까지 누적돼 있음을 확인 — 이미 문서화된
+"CI 취소 시 afterAll 미실행"(예: `admin-assignment-security.test.ts`의 "성공경로-*" 8종
+~812건) 외에, `diagnose-settings-live-values.test.ts`가 **매 실행 결정적으로** leak하고
+있던 별도 원인을 새로 발견: `cleanupTestClass()`(매니저 세션 RLS 기준)가 confirmed 상태
+예약의 delete를 조용히 0건으로 실패시켜(private-class-capacity.test.ts에서 이미 확인된
+것과 동일한 RLS 정책 원인) reservations/classes가 성공적인 실행에서도 항상 남았다(141건,
+2026-08-03부터).
+
+수정: `tests/integration/setup.ts`의 `getOrCreateOwnedTestCenter()`에 self-healing sweep
+추가 — start_time이 1시간 이상 과거인 class를 이름이 "통합테스트센터-%"인 센터에서만
+자동 정리(파일마다 정리 로직을 따로 만들 필요 없이, 거의 모든 통합 테스트 파일이 이
+함수를 beforeAll에서 호출하므로 스위트 전체가 자동으로 self-healing됨).
+`diagnose-settings-live-values.test.ts`는 `daily-book-limit-wiring.test.ts`로 정리 —
+당일예약 describe는 `operational-settings-wiring.test.ts`와 완전 중복이라 제거, 일일한도
+describe(저장소에서 유일한 daily_book_limit 통합 커버리지)는 유지하되 admin(service_role)
+기반 `cleanupTestClassAdmin()`으로 교체해 leak을 근본적으로 막았다. 이미 쌓인 1761건은
+별도 cleanup SQL 없이 다음 CI 실행에서 sweep이 자동으로 정리한다(전부 start_time이 이미
+과거라 즉시 대상). CI 검증은 다음 단계에서 진행.
+
+## 2026-08-11 — RES-002(#42, Phase 2) 수정: fetchMonthData()의 myMems 1000행 cap (feature/social-auth-notifications-attendance-dashboard)
+
+`lib/reservations.ts`의 `fetchMonthData()`가 "내가 수강권을 보유한 센터 집합"을 구하는
+`memberships` 쿼리(`myMems`)에 `.range()` 페이지네이션이 없어, 한 계정이 여러 프로필로
+1000개 넘는 memberships를 가지면 1000번째 이후 행이 잘려 그 안에만 있던 센터가 통째로
+회원 화면(달력)에서 안 보일 수 있었다 — 같은 함수의 `classRows`(이미 수정됨)와 동일한
+PostgREST 기본 응답 행 수 제한 문제. `classRows`/`fetchUsableMembershipsByClass`와 동일한
+`.range()` 반복 조회 패턴으로 수정(순수 코드 수정, SQL 변경 없음). 회귀 테스트
+`tests/integration/month-data-memberships-row-limit-regression.test.ts` 신규 추가 — 1005개
+필러 membership 뒤에 있는 target membership(자녀 프로필 소유)이 여전히 정확히 감지되는지,
+가족 profile 간 membership 공유 구조가 페이지네이션 추가로 깨지지 않는지 함께 검증. CI
+검증은 다음 단계에서 진행.
+
+## 2026-08-11 — P1-17(Phase 1): 신규 정책 "관리자 직접 지정 수강권은 schedule_rules보다 우선" (feature/social-auth-notifications-attendance-dashboard)
+
+PR #44 안정화 Batch의 Phase 1. `usable_memberships`/`usable_memberships_for_classes`/
+`reserve_class`/`reserve_with_membership` 4개 함수에 "class_allowed_products에 이 product가
+명시적으로 지정돼 있으면 membership_schedule_rules를 무시한다"는 override 조건을 추가
+(`fix_membership_schedule_rule_override_draft_proposed.sql`, 사용자가 Supabase SQL Editor에서
+적용 완료). git의 `reservation_functions.sql`이 PR #32 이후 라이브와 어긋나 있어(P2-16 기존
+문서화) 사용자가 `pg_get_functiondef()`로 직접 추출한 라이브 본문을 기준으로 재작성. 그
+과정에서 `reserve_with_membership`(실제 회원 예약 확정 RPC)이 지금까지 membership_schedule_
+rules를 전혀 확인하지 않던 별도 갭도 함께 발견해 수정(목록 표시 정책과 실제 예약 정책이
+이제 일치). `admin_assign_reservation`은 이미 두 제한을 전부 우회하도록 설계돼 있어 변경
+없음. 관리자 UI(`app/manager/classes/page.tsx`)의 schedule-rule 경고를 "모든 수강권 허용"
+(danger)과 "특정 수강권 지정"(override 안내, info) 모드로 분리. Regression: 신규
+`tests/integration/schedule-rule-override.test.ts`(A~J), `membership-schedule-rules.spec.ts`
+갱신(D+F+K/J). CI 검증은 다음 단계에서 진행.
+
+## 2026-08-10 — P1-15 cleanup SQL 적용 + 사후 read-only 재검증 완료 (feature/social-auth-notifications-attendance-dashboard)
+
+사용자가 `cleanup_p1_15_stale_schedule_rules_draft_proposed.sql`을 Supabase SQL Editor에서
+A(preview)/B(BEGIN...COMMIT, guard 포함 delete)/C(post-verification) 순서로 직접 실행,
+`remaining_target_rules=0` 확인 보고. 이후 임시 read-only 진단(`_diag_p1_15_postcleanup_verify.test.ts`,
+workflow_dispatch 전용, 검증 완료 후 삭제)으로 실제 QA 계정/센터 데이터 기준 재확인:
+"수강권" 상품(`f6010b96-...`)의 `membership_schedule_rules`가 독립 재조회에서도 0건,
+실제 회원(memberB)의 "수강권" memberships 3건 전부가 "테스트" class에서 `usable예측=true`로
+재계산됨(status/remaining/expires/classAllowed/scheduleRule 전 조건 true), `class_allowed_products`는
+여전히 0건("모든 수강권 허용" 유지). "새로 구매한 수강권"과 "특정 수강권 지정" 케이스는 실제
+QA 계정에 새 데이터를 쓰지 않고 격리된 E2E 회귀 테스트(`membership-schedule-rules.spec.ts`
+test E/C+D+F)로 그 일반 메커니즘을 검증. 재검증 중 CI도 2연속 Green(run `31419033306`/
+`31421494819`, 둘 다 first-attempt) 재확인, 이후 임시 진단 job/워크플로 입력/테스트 파일 전부 제거.
+PR #44는 여전히 MERGE BLOCKED(main merge는 별도 명시적 요청 전까지 하지 않음).
+
+## 2026-08-10 — P1-15/P1-16 최종 완료: 실제 QA 버그 root cause 확정·UX 수정, 무관한 GRANT 버그 발견·수정, 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
+
+- **P1-15**: PR #44 수동 QA로 100% 재현된 "모든 수강권 허용해도 사용 가능한 수강권 없음"
+  버그의 root cause를 실제 계정 데이터로 확정. `membership_schedule_rules`(수강권 자체의
+  요일/시간/수업명 조건)가 `class_allowed_products`("모든 수강권 허용")와 완전히 별개로
+  계속 적용되는 게 원인 — RPC는 설계대로 정확히 동작해 로직은 바꾸지 않고, 수업 등록/수정
+  화면에 이 상호작용을 미리 알려주는 경고(`.schedule-rule-warning`)를 추가했다
+  (`app/manager/classes/page.tsx`, `lib/passes.ts`). unit 1개 + E2E 3개(B/C+D+F/E)
+  regression test 작성.
+- 실제 QA 계정의 schedule_rules 2건이 무엇 때문에 생겼는지도 read-only로 추적 — 그 규칙이
+  가리키는 "수업" 제목의 class가 실제로 2건 존재했고, 각 규칙의 생성 시각이 대응 class의
+  생성 시각과 초 단위로 거의 동시라 이미 고쳐진 옛 자동생성 부수효과 버그의 흔적으로
+  판단됨. `cleanup_p1_15_stale_schedule_rules_draft_proposed.sql` 작성(미실행, 사용자 결정
+  대기).
+- **P1-16**(무관한 발견): 위 조사 중 `accounts` 테이블에 service_role GRANT가 없어(처음엔
+  SELECT만 추가) `auth-account-bootstrap.test.ts`가 반복 실패하는 걸 발견. 최초 가설
+  (`lib/authAccount.ts`의 profiles insert 에러 미확인)은 임시 진단 로그로 실측 검증한 결과
+  틀렸음을 확인하고 즉시 원복 — 진짜 원인은 그 테스트의 `beforeAll`이 admin으로 낡은
+  throwaway 계정을 정리하려다 GRANT 부족으로 "permission denied"가 나는 것이었다.
+  INSERT/UPDATE/DELETE GRANT 추가 SQL 적용 후 해당 테스트 2회 연속 통과 확인.
+- 전체 CI(E2E/Unit/Integration/Build) 2회 연속 Green — run `31411383724`(완전
+  first-attempt, 재시도 없음), `31413532650`(무관한 기존 flaky 테스트 1건만 1회 재시도,
+  P1-15/16 관련 테스트는 전부 first-attempt).
+- 상세: `docs/TODO.md` P1-15, P1-16.
+
+## 2026-08-10 — P1-14 최종 완료: cleanup SQL 적용, 사후 검증 중 발견한 self-healing 성능 버그 수정, 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
+
+- 사용자가 `cleanup_p1_14_waitlisted_test_pollution_draft_proposed.sql`을 Supabase SQL
+  Editor에서 적용(C-1: memberB_centerA_waitlisted_remaining=0). read-only 진단으로
+  독립적으로도 재확인.
+- 적용 직후 재실행한 Integration이 다른 증상(`Hook timed out in 30000ms`)으로 계속
+  실패 — read-only로 memberB waitlisted가 이미 0건임을 확인해 원래 버그의 재발이 아님을
+  먼저 배제한 뒤 조사. 원인은 새로 추가한 `beforeAll` self-healing sweep이 class 하나당
+  `cleanupTestClassAdmin()`을 순차 await로 호출했는데, cleanup SQL이 대상으로 삼지 않은
+  다른 3개 title에 과거부터 쌓여있던 잔여 class 24건 때문에 순차 round-trip(최대 48회)이
+  vitest hookTimeout(30초)을 초과한 것(test bug, 타임아웃 재발/앱 버그 아님). 타임아웃 값을
+  올리는 우회 대신 class id를 모아 bulk delete 2회로 바꿔 round-trip 수 자체를 없앴다 —
+  부수적으로 다른 4개 title의 역사적 잔여 class 24건도 함께 정리됨.
+- 이 수정을 반영한 전체 CI(E2E→Unit→Integration→Build)를 2회 연속 실행 — 둘 다
+  first-attempt Green(재시도 없음): run `31367089839`(pull_request), `31368870324`
+  (workflow_dispatch), 둘 다 headSha `80889d7`. `attendance-policy.test.ts` 5/5 통과,
+  두 run 모두 사후 read-only 진단으로 memberB waitlisted=0 재확인 — 두 번째 run은 이
+  테스트가 그 사이 새 waitlisted 예약을 만들었다가 afterAll이 정상적으로 지운 뒤의 상태라
+  cleanup 로직이 구조적으로 작동함을 실측으로 증명함(우연히 DB가 깨끗했던 게 아님).
+- `new-class-creation.spec.ts`(TEST1/2/4/5/6)와 `class-allowed-products.spec.ts`(5개
+  테스트) 전부 같은 CI run에서 회귀 없이 통과 확인 — 신규 테스트 추가 없이 기존 스펙 재사용.
+- Vercel Preview도 같은 headSha 기준 배포 성공 확인. PR #44는 OPEN·MERGEABLE·충돌 없음
+  (main에는 merge하지 않음).
+- 상세: `docs/TODO.md` P1-14(해결 완료로 갱신).
+
+## 2026-08-10 — P1-14: attendance-policy.test.ts 대기예약 누적 원인 확정 + 재발 방지 코드, cleanup SQL 작성(미실행) (feature/social-auth-notifications-attendance-dashboard)
+
+- P2-21 작업 중 발견한 `attendance-policy.test.ts`의 3~4연속 Integration 실패("이번 주
+  대기예약 가능 횟수 초과")를 read-only 진단(임시 CI 진단 파일, 실행 후 삭제)으로 실측
+  조사. memberB의 waitlisted 예약이 centerA에 13건 누적돼 있었고, 전부 정확히 같은 class
+  title("P3 출결-대기거부")·profile·center — 단발 사고가 아니라 이 테스트를 실행할 때마다
+  거의 매번 1건씩 쌓인 패턴.
+- 근본 원인을 코드로 확정: `reservations`의 RLS DELETE 정책이 `status in
+  ('cancelled','no_show')`만 허용하는데, 이 테스트가 검증 목적상 waitlisted 상태로 남기는
+  예약을 매니저 세션(RLS 적용) 기반 `cleanupTestClass()`로 지우려 해 매번 에러 없이 조용히
+  0건 삭제로 끝났다. 완전히 동일한 원인이 `private-class-capacity.test.ts`에서 이미 한 번
+  발견·우회된 적이 있었는데(그 파일 자체 주석) 그 교훈이 이 파일에는 전파되지 않았던 것.
+- 재발 방지: `tests/integration/setup.ts`에 admin(service_role) 기반 `cleanupTestClassAdmin()`
+  추가, `attendance-policy.test.ts`의 `afterAll`을 이걸로 전환하고 `beforeAll`에 이 파일
+  전용 잔여물 self-healing 정리를 추가.
+- 과거 누적분(13건) 정리는 `cleanup_p1_14_waitlisted_test_pollution_draft_proposed.sql` +
+  롤백 안내 파일로 작성(A. read-only preview / B. 단일 트랜잭션 atomic cleanup / C.
+  post-commit 검증 구조, admin_action_logs FK NOT EXISTS 가드 포함) — static audit까지만
+  진행하고 Supabase에는 실행하지 않음(사용자가 SQL Editor에서 직접 실행 예정).
+- 상세: `docs/TODO.md` P1-14.
+
+## 2026-08-10 — P2-21: PR #44 수동 QA 버그 재현 조사(진행 중, 종결 아님), TEST4/TEST5(구매 직후 즉시 사용 가능/goods 배제) 추가, 무관한 Integration 블로커 발견 (feature/social-auth-notifications-attendance-dashboard)
+
+- PR #44 수동 QA로 보고된 "신규 수업은 회원이 유효한 수강권을 보유해도 사용 가능한
+  수강권이 없다고 뜬다"는 증상을 read-only 진단 → admin client 직접 insert 비교 →
+  실제 Playwright 브라우저로 관리자 UI 등록 재현(모든 수강권 허용/특정 pass 1개 허용
+  둘 다) → RPC 직접 호출 → 회원 실제 브라우저 재현까지 전부 실측했으나 재현 실패.
+  TEST_MANAGER_A/TEST_USER_A/centerA 기존 fixture로는 앱 버그를 찾지 못함.
+- 조사 중 발견한 것은 앱 버그가 아니라 테스트 자체의 결함 3건(전부 코드 변경 없이
+  테스트만 수정): Node 쪽 인증 안 된 세션으로 `class_allowed_products`를 조회해 RLS에
+  항상 막힌 것, 테스트가 고른 90/91일 뒤 날짜가 예약 오픈 기한(기본 60일)을 초과해
+  `reserve_with_membership()`이 설계대로 정확히 거부한 것, 재진입 클릭 전에 달력 날짜
+  칸을 안 눌러 `.class-row`가 안 보였던 것.
+- `tests/e2e/admin/new-class-creation.spec.ts`(신규): 관리자 UI로 실제 수업을 등록하는
+  경로를 exercise하는 최초의 자동 테스트(기존엔 전부 admin client 직접 insert로 setup) —
+  TEST1/TEST2(모든 수강권 허용/특정 pass 1개 허용)/TEST6(기존 방식 대조군)에 이어,
+  사용자 지시로 TEST4(구매 직후 즉시 사용 가능 — 실제 결제 흐름 전체: 구매 버튼 →
+  센터 구매 시트 → checkout mock 결제 → 예약창 복귀 → 새로고침 없이도 즉시
+  `.pass-pick-list`에 반영 → 실제 예약 성공)와 TEST5(goods는 적용 가능 수강권/구매
+  가능 목록 어디에도 노출 안 됨)까지 추가. 전부 실제 브라우저 3회 연속 통과.
+- 구매 직후 상태 갱신 경로는 client-side 캐시 갱신이 아니라 전체 페이지 재로드
+  (`window.location.href`)로 구현돼 있어 구조적으로 stale-cache 여지가 없음을 실측 확인.
+- **주의(이전 기록 정정)**: 이 항목을 처음 기록했을 때 "전체 CI 3연속 Green"이라고 썼으나
+  부정확했음 — 실제로는 E2E/Unit만 Green이고 Integration은 3회 연속 실패 중(무관한
+  `attendance-policy.test.ts` 주간 대기예약 한도 이슈, `docs/TODO.md` P1-14 참고). PR #44는
+  아직 merge하지 않음.
+- 상세: `docs/TODO.md` P2-21, P1-14.
+
+## 2026-08-09 — P2-20 최종 완료: cleanup SQL 적용, RPC 페이지네이션 개선 실측, 진단 계측 전체 제거 (feature/social-auth-notifications-attendance-dashboard)
+
+- **cleanup SQL 적용 완료**: `cleanup_p2_20_e2e_test_pass_duplicates_draft_proposed.sql`을
+  사용자가 Supabase SQL Editor에서 직접 실행. 첫 시도는 BEGIN+DELETE와 COMMIT을 서로 다른
+  두 번의 Run으로 나눠 실행해 커넥션 풀링으로 세션이 갈리는 바람에 실제로는 아무것도
+  커밋되지 않은 것을 사용자가 재조회로 발견(891/1557 그대로) — SQL을 A(read-only
+  preview)/B(BEGIN~COMMIT을 한 번의 Run으로, 내부 4중 검증 후 자동 커밋/롤백)/C(post-commit
+  verification) 구조로 재작성 후 재실행해 성공. 결과: centerA `"E2E 테스트 수강권"`
+  891→5건(살아있는 예약이 참조하는 것만 보존), TEST_USER_A 전체 memberships 1557→730건.
+- **RPC 페이지네이션 개선 실측 확인**: `.pass-pick-list` 미표시를 일으켰던
+  `fetchUsableMembershipsByClass()`의 `.range()` 순차 왕복이 cleanup 후 36개 class
+  기준 27페이지/12.4~13.9초 → 2페이지/1.07초로 12배 이상 단축됨을 CI에서 실측.
+- **임시 진단 계측 전체 제거**: `lib/_diag220.ts`,
+  `tests/integration/_diag_memberships.test.ts` 삭제, 4개 파일의 `diagEvent`
+  호출/import 제거(goal1 수정 자체인 `openTokenRef`/`userEditedRef`는 유지),
+  `.github/workflows/test.yml`의 `diag` job/`diag_only` input 제거해 원래 구조로 복원.
+- **최종 검증**: class-allowed-products.spec.ts 3연속 Green(goal1/goal2 포함),
+  전체 CI(E2E/Unit/Integration/Build) 3연속 Green, Vercel Preview 배포 성공,
+  P4 sales dashboard 회귀 없음(`dashboard-summary.test.ts` 7/7 등).
+- 상세: `docs/TODO.md` P2-20(해결됨 처리).
+
+## 2026-08-09 — P2-20: 관리자 class_allowed_products 선택 소실 수정 + `.pass-pick-list` 원인 규명(cleanup SQL 적용 대기) (feature/social-auth-notifications-attendance-dashboard)
+
+- **goal1 수정 완료**: `app/manager/classes/page.tsx`의 `openEdit()` — 초기
+  `fetchClassProducts()` hydrate 응답이 사용자의 chip 선택보다 늦게 도착하면 무조건
+  `setSelectedProducts(ids)`가 실행돼 방금 한 선택을 덮어쓰는 race condition이었다.
+  `openTokenRef`(요청 세대)+`userEditedRef`(dirty flag) 가드를 추가해, 더 최신 요청이거나
+  사용자가 이미 편집했으면 초기 hydrate 결과를 적용하지 않도록 구조적으로 수정. `window.__p220`
+  in-memory 이벤트 버퍼(`lib/_diag220.ts`, `console.log` 대신 — CDP 라운드트립이 원래 race
+  타이밍 자체를 바꿔버리는 것을 실측으로 확인해 대체)로 재현/수정을 CI에서 실측 검증함.
+- **goal2 원인 규명**: `.pass-pick-list`가 회원 예약화면에서 안 뜨는 원인은
+  `lib/reservations.ts`의 `fetchUsableMembershipsByClass()`가 `usable_memberships_for_classes`
+  RPC 응답을 `.range()`로 1000행씩 순차 페이지네이션하는 구조 때문 — TEST_USER_A의 테스트
+  센터 소속 membership 891건(`createTestMembershipAdmin()`이 get-or-create로 고쳐지기 전
+  누적된 `"E2E 테스트 수강권"` historical duplicate)이 class당 ~744행의 RPC 응답을 만들어,
+  실패 재현 조건(수업 36개)에서 27번 순차 왕복(총 12.4~13.9초)이 발생함을 CI 실측으로
+  확인(단일 RPC 호출 자체는 항상 0.3~0.9초로 빠름 — "membership이 많으면 서버가 느리다"가
+  아니라 "응답이 커져서 클라이언트 왕복이 늘어난다"가 정확한 인과관계).
+- `cleanup_p2_20_e2e_test_pass_duplicates_draft_proposed.sql`(신규, 적용 대기): 정확한
+  product_name+center_id로 대상 식별, 참조하는 FK 6개 테이블(reservations 포함, 살아있는
+  waitlisted 예약 3건 발견돼 그 membership은 NOT EXISTS로 보존) 전부 방어, LOCK TABLE +
+  미리보기/실삭제 건수 일치 검증. Claude는 실행하지 않음 — 사용자가 Supabase SQL Editor에서
+  직접 실행 후 재검증 예정.
+- 상세: `docs/TODO.md` P2-20.
+
+## 2026-08-08 — P4: 매출/통계 대시보드 (manager_dashboard_summary RPC, SQL 적용 대기) (feature/social-auth-notifications-attendance-dashboard)
+
+- **감사 결과**: `lib/sales.ts`의 기존 `summarize()`는 이미 불러온 결제 행 배열을 클라이언트에서
+  reduce하는 방식뿐이라(DB 집계 아님), 이 세션에서 이미 두 번 실제로 겪은 PostgREST 기본 1000행
+  응답 제한(`fetchClasses`/`fetchUsableMembershipsByClass`)과 같은 종류의 위험이 있었다. 또한
+  **Mock(테스트) 결제와 실제 매출을 구조적으로 구분할 방법이 `payments` 테이블에 없었다** —
+  유일한 단서는 `pg_transaction_id`가 `"mock_"`로 시작한다는 미문서화 문자열 관례뿐.
+- `fix_payments_payment_provider_draft_proposed.sql`(신규, 적용 대기): `payments.payment_provider`
+  컬럼 추가(nullable, mock/toss/portone) + `confirm_test_payment()`(유일한 실제 mock 발급
+  경로, 8곳 중 나머지 7곳은 매니저 신뢰 경로라 손대지 않음)가 자기 결제 행에 `'mock'`을
+  명시적으로 채우도록 재정의 + 기존 mock 행 백필(WHERE로 좁힌 UPDATE).
+- `add_manager_dashboard_summary_draft_proposed.sql`(신규, 적용 대기): `manager_dashboard_summary
+  (p_center_id, p_from, p_to)` RPC 신규 — 오늘/이번달/기간 매출, 결제 건수, 결제수단별,
+  수강권/상품 매출(`payments.membership_id → memberships.product_id → products.product_kind`
+  조인으로 구분 — `revenue_category`는 `registerPayment()`가 항상 `'membership'`만 저장해
+  신뢰 불가능함을 코드 감사로 확인), 미수금, 일별 매출 배열을 SQL 집계(SUM/COUNT)로 DB
+  안에서 직접 계산 — `payment_provider='mock'` 행은 모든 집계에서 명시적으로 제외.
+- `lib/sales.ts`: `fetchDashboardSummary()` 추가(위 RPC 호출), `DashboardSummary` 타입 추가.
+- `app/manager/page.tsx`: 센터 선택 바로 아래에 기간 선택(오늘/7일/30일) + 요약 카드(오늘 매출/
+  이번달 매출/기간 매출·건수/미수금/수강권 매출/상품 매출) + 일별 매출 막대그래프 추가,
+  `pass.sales.view` 권한으로 게이트(기존 "매출 관리" 메뉴 링크와 동일 권한 재사용). 로딩/에러
+  상태 명시적으로 처리.
+- `tests/integration/dashboard-summary.test.ts`(신규): 권한 차단, 결제수단별 매출 합계, 환불
+  차감, 미수금, KST 자정 경계(오늘 00:05 vs 어제 23:55), Mock 결제 완전 제외(실제로 저장은 되지만
+  통계에서 빠짐을 직접 증명), 수강권/상품 매출 구분을 전부 삽입 전/후 델타 비교로 검증(공유
+  테스트 센터가 이전 실행 데이터를 계속 갖고 있어도 몇 번을 반복 실행해도 항상 성립).
+- 위 SQL 두 파일이 Supabase에 적용되기 전까지는 `dashboard-summary.test.ts`의 모든 테스트가
+  실패한다(RPC 없음/컬럼 없음) — 예상된 실패, 적용 후 재실행 필요.
+
+## 2026-08-08 — P4 후속: manager_dashboard_summary() daily 필드 컬럼 별칭 버그 수정 (SQL 적용 대기) (feature/social-auth-notifications-attendance-dashboard)
+
+- **분류: SQL 버그**(앱 코드/테스트 코드/인프라 문제 아님) — CI의
+  `dashboard-summary.test.ts`가 SQL 적용 직후 재실행에서 6건 전부
+  `"column d.date does not exist"`로 실패해 발견.
+- 원인: `daily` 필드를 만드는 서브쿼리에서 날짜 목록 별칭은 `days`(컬럼 `date`), 결제
+  합계 별칭은 `d`(컬럼 `pdate`/`revenue`)로 분리해뒀는데, `json_build_object`와
+  `order by`에서 실수로 `d.date`를 참조했다(`days.date`였어야 함) —
+  `add_manager_dashboard_summary_draft_proposed.sql` 작성 시점의 복붙 실수.
+- `fix_manager_dashboard_summary_daily_bug_draft_proposed.sql`(신규, 적용 대기)로
+  `days.date`를 참조하도록 함수 재정의(다른 필드는 전혀 변경 없음).
+
+## 2026-08-09 — 공유 테스트 센터 정리 SQL(v4) 적용 완료 및 검증 (feature/social-auth-notifications-attendance-dashboard)
+
+- `cleanup_shared_test_center_pollution_draft_proposed.sql`을 사용자가 v1→v4까지 반복 끝에
+  최종 적용 완료(에러 없음). v1/v2는 `admin_action_logs`(add_admin_assignment.sql) FK를
+  놓쳐 실패(둘 다 완전 롤백 확인), v3는 `LOCK TABLE`로 FK race는 해결했지만 지나치게 좁은
+  `profile_id in (userA, managerA)` 하한 guard가 실제 모집단(시점에 따라 다른 TEST_*
+  계정으로 옮겨다님, 실측 확인)과 어긋나 안전하게 중단됨 — v4에서 그 profile_id 제한과
+  하한 guard를 제거하고 "정확한 문자열 + 정확한 center_id"라는 구조적 근거만으로 재작성.
+- 적용 후 읽기 전용 진단(diag_only CI 모드)으로 정리 대상 6개(admin_action_logs, orphan
+  profiles, "통합테스트 수강권"/"통합테스트 수강권(P3)"/"P0-6 테스트 무제한권" memberships,
+  "USABLE-PASS-KIND 테스트 대여품" products) 전부 0건 확인.
+- 진단 과정에서 쓴 임시 스캐폴딩(`_diag_pollution.test.ts`, `test.yml`의 `diag`/`diag_only`)
+  은 검증 완료 후 전부 제거 — `test.yml`이 조사 시작 이전과 완전히 동일함을 `git diff`로 확인.
+- 부수 발견: `accounts` 테이블도 `payments`/`admin_action_logs` 등과 같은 계열로 service_role
+  SQL GRANT가 없음(P2-13 계열, `docs/TODO.md`에 기록만 하고 이번 배치에서는 안 고침).
+
+## 2026-08-09 — class-allowed-products.spec.ts 간헐 실패 근본 원인 규명 및 fixture self-healing (SQL 적용 대기) (feature/social-auth-notifications-attendance-dashboard)
+
+- **분류: 테스트 인프라 문제**(class_allowed_products 기능 자체·P4와 무관) — 읽기 전용 진단
+  (`tests/integration/_diag_pollution.test.ts`, CI run 31268325509)으로 원인을 직접 확인.
+  거의 모든 integration/e2e 테스트가 재사용하는 단일 공유 테스트 센터의 `memberships`가
+  PostgREST 1000행 캡에 걸릴 만큼 누적돼 있었고, class-allowed-products.spec.ts는 그 프로필의
+  "사용 가능한 수강권" 전체를 나열하는 화면이라 목록이 비대해지며 타임아웃/개수 불일치로
+  간헐 실패했다.
+- 근본 원인: `createTestMembership()`(tests/integration/setup.ts),
+  `createTestMembershipAdmin()`/`createTestGoodsMembershipAdmin()`(tests/e2e/fixtures/testData.ts),
+  class-allowed-products-enforcement.test.ts의 로컬 `createMembershipForProduct()`,
+  usable-memberships-pass-kind.test.ts의 인라인 생성 — 전부 get-or-create 없이 호출마다 새
+  행을 만들었고, `afterAll` 정리가 있어도 CI가 도중 취소되면(GitHub Actions
+  concurrency.cancel-in-progress, 또는 재트리거) 실행되지 않아 계속 쌓였다.
+- 코드 수정: 위 다섯 곳 전부 `createTestMembershipForProduct()`가 이미 증명한 get-or-create +
+  self-healing refresh 패턴으로 교체. `tests/e2e/admin/attendance.spec.ts`는 `beforeAll`에
+  고아 프로필("P3 출결-대기용") 자체 정리 스윕을 추가.
+- `cleanup_shared_test_center_pollution_draft_proposed.sql`(신규, 적용 대기): 지금까지 이미
+  쌓인 데이터의 1회성 정리 — 미리보기 카운트 + 예상 범위 가드 + FK 안전 순서 포함, 실제
+  사용자/센터 데이터와 섞이지 않도록 정확한 문자열/계정으로만 범위를 좁힘.
+- 범위 밖(별도 기록): 같은 진단에서 `classes` 테이블도 유사하게 누적된 것을 발견
+  (`admin-assignment-security.test.ts` 등 다수 파일) — 이번 배치와 직접 관련 없어 `docs/TODO.md`
+  P2-19에 별도 기록만 하고 손대지 않음.
+
+## 2026-08-08 — P4 후속: service_role의 payments 테이블 GRANT 누락 (SQL·DB 인프라 문제, 적용 대기) (feature/social-auth-notifications-attendance-dashboard)
+
+- **분류: SQL·DB 문제(인프라 설정)** — 앱 코드·테스트 로직·RPC 함수 자체와는 무관. daily 필드
+  버그를 고친 뒤 CI를 재실행하니 `dashboard-summary.test.ts`의 결제 fixture 생성 단계에서
+  전부 `"permission denied for table payments"`로 실패.
+- 원인: 이 저장소의 기존 결제 생성 경로(`confirm_test_payment` 등)는 전부 `security definer`
+  RPC라 호출자의 GRANT와 무관하게 동작해왔다 — 그래서 `payments` 테이블 자체에 service_role
+  GRANT가 없다는 사실이 지금까지 드러나지 않았다. 이번 통합테스트가 정확한 집계 검증을 위해
+  admin(service_role) 클라이언트로 `payments`에 **직접** insert를 시도한 것이 처음이라 이
+  gap이 새로 드러남 — `fix_service_role_missing_grants_for_e2e_admin_draft_proposed.sql`/
+  `fix_service_role_missing_grants_products.sql`과 같은 부류(그때도 payments는 대상에
+  포함되지 않았음).
+- `fix_service_role_missing_grants_payments_draft_proposed.sql`(신규, 적용 대기):
+  `grant select, insert, update, delete on payments to service_role;` + 롤백 파일.
+
+## 2026-08-08 — E2E 스위트 전체의 KST 자정 경계 취약점 전수 조사 및 일괄 수정 (feature/social-auth-notifications-attendance-dashboard)
+
+- 직전 커밋에서 `reservation-cancel-grace-period.test.ts` 하나만 고치고 끝내지 않고,
+  같은 부류의 버그(고정 `hoursFromNow` + 날짜상대 마감설정, 또는 "지금±N분"으로 계산한
+  시각 문자열)가 있는 파일을 저장소 전체(`tests/integration/**`, `tests/e2e/**`)에서
+  전수 조사했다. 그 결과 실제로 취약했던 파일 3개를 추가로 확인·수정:
+  - `tests/e2e/settings/booking-deadline.spec.ts`, `tests/e2e/settings/cancel-deadline.spec.ts`:
+    `kstTimeHHmm(±N)`(E2E fixture판, 이제 삭제)로 계산한 마감 시각과
+    `createFutureTestClassAdmin({hoursFromNow: 소수시간})`을 함께 쓰고 있어, KST
+    22:00~23:59(자정을 넘겨 수업이 내일 날짜가 됨) 또는 00:00~00:29(상대 시각 계산이
+    어제로 역행) 근처에 실행되면 "이미 지남"/"아직 안 지남" 전제가 뒤집혔다.
+    `createKstSameDayFutureClassAdmin`(기존 헬퍼, 항상 오늘 안으로 안전하게 클램프)과
+    새 고정 상수 `ALWAYS_PAST_TODAY_TIME`("00:01")/`ALWAYS_FUTURE_TODAY_TIME`("23:58")로
+    교체 — 상대 계산 자체를 없애 두 방향의 자정 경계 문제를 구조적으로 제거.
+  - `tests/e2e/admin/holiday-restores-classes.spec.ts`: "기존 수업"과 "신규 수업"을
+    각각 독립적으로 `hoursFromNow`(120시간, 121시간)로 계산했는데, 그 사이 여러 UI
+    라운드트립을 거치며 시간이 흘러 두 수업이 다른 KST 날짜에 생길 수 있었다("신규
+    수업"의 예약 가능 여부를 검증하는 마지막 단계가 그 행을 못 찾아 타임아웃). 새 헬퍼
+    `createClassOnKstDateAdmin(centerId, {kstDate, kstTime})`(신규, testData.ts)로
+    "기존 수업"에서 파생한 날짜(`holidayDate`)에 명시적으로 맞춰 생성하도록 변경 —
+    상대 계산에 의존하지 않아 시간이 얼마나 흐르든 항상 같은 날짜.
+- 전수 조사로 안전함이 이미 확인된 파일들(같은 헬퍼를 이미 쓰고 있거나, 고정 상수만
+  쓰거나, `hoursFromNow`가 24시간을 훨씬 넘어 경계와 무관한 경우 등)은 건드리지 않음 —
+  자세한 파일별 판단 근거는 이 커밋의 코드 리뷰 기록 참고.
+
+## 2026-08-07 — reservation-cancel-grace-period.test.ts의 KST 자정 경계 취약점 수정 (feature/social-auth-notifications-attendance-dashboard)
+
+- **증상**: CI를 KST 밤 늦게(22시 이후) 돌리면 이 파일의 두 테스트("10분을 초과하고 일반
+  취소마감도 지났으면 취소가 차단된다", "deduct_on_late_cancel 켜져 있으면 환급만 안 된다")가
+  실패했다. 두 테스트 모두 다른 파일이나 코드 변경과 무관하게, 순전히 실행 시각에 따라
+  결과가 갈리는 pre-existing 취약점이었다(이번 배치 이전부터 있던 문제, 우연히 이 배치의
+  CI 반복 실행 중 시간대가 걸려서 처음 드러남).
+- **근본 원인(두 방향의 자정 경계 문제)**:
+  1. `createFutureTestClass(hoursFromNow: 2)`로 수업을 만들면, "지금+2시간"이 KST 자정을
+     넘길 때(22:00~23:59 실행) 수업이 "오늘"이 아니라 "내일" 날짜가 된다.
+  2. 취소 마감 시각을 `kstTimeHHmm(-30)`("지금-30분")으로 계산했는데, 자정 직후(00:00~00:29
+     실행)에는 이 계산이 어제 시각으로 넘어간다 — `group_cancel_days_before=0`(수업과 같은
+     날짜)과 결합하면 "수업 날짜(오늘) + 그 시각"이 오히려 아직 지나지 않은 미래가 된다.
+  두 경우 다 "취소 마감이 이미 지났다"는 이 테스트들의 전제가 깨져 취소가 차단돼야 할 게
+  성공해버렸다(관측된 정확한 증상과 일치).
+- **수정**: 단순히 자정 이후 재실행해서 우연히 통과시키는 대신, 시간대와 무관하게 항상
+  성립하도록 두 방향 모두 구조적으로 제거했다.
+  1. 수업 생성을 `createFutureTestClass(hoursFromNow: 2)`에서 이미 이 저장소에 있던
+     `createKstSameDayFutureClass`(같은 파일의 다른 당일예약 테스트들이 이미 쓰는 헬퍼,
+     자정 근처면 자동으로 여유를 줄여 항상 "오늘 안"을 보장함)로 교체.
+  2. `kstTimeHHmm(-30)`(상대 계산, 자정을 역방향으로 넘을 수 있음) 대신 `"00:01"`(자정 1분
+     후, 하루 중 가장 이른 고정 시각)을 상수로 사용 — 테스트가 자정 첫 1분 안에 실행되는
+     경우만 빼고 항상 "이미 지났다"가 보장된다. 상대 계산 자체를 없애 문제의 원인을 제거.
+  이제 더 이상 쓰지 않는 `kstTimeHHmm()` 헬퍼는 삭제.
+
+## 2026-08-07 — P3 출석/체크인 감사 및 manager_set_attendance() 통합 (feature/social-auth-notifications-attendance-dashboard)
+
+- **감사 결과(기존 구조, 새로 만들지 않음)**: 출석 기능은 스키마(`reservations.status`에
+  이미 `attended`/`no_show` 포함)·RPC(`manager_set_attendance`)·관리자 UI(예약자 명단, 두
+  화면에 각각 구현돼 있음: `app/manager/classes/page.tsx`, `app/manager/page.tsx`)·회원
+  화면 상태 표시(`app/my-reservations/page.tsx`)까지 전부 이미 구현돼 있었다.
+- **실제로 고친 문제 1 — `manager_set_attendance()` 4중 정의 통합**: 이 함수가 서로 다른
+  버전으로 4곳(`add_attendance.sql`, `reservation_functions.sql` 안에 2개,
+  `add_admin_assignment.sql`)에 정의돼 있었고, 어느 버전이 실제 운영 DB에 살아있는지 git
+  파일만으로는 알 수 없었다(`docs/TODO.md` P0-3에 이미 알려진 migration ledger 갭과 동일
+  종류). `fix_attendance_consolidate_and_guard_draft_proposed.sql`로 가장 최근 버전(v4,
+  cancelled_by/cancelled_at audit 컬럼 포함)을 유일한 정의로 통합 — **사용자가 운영 DB에
+  적용 완료(2026-08-07)**.
+- **실제로 고친 문제 2 — 대기(waitlisted) 예약도 출석 처리가 가능했던 버그**: 대기는 아직
+  확정된 적이 없어(수강권도 차감 안 됨) "출석했다/안 했다"를 매길 대상이 아닌데, RPC도
+  관리자 UI도 이를 막지 않았다. 같은 SQL 파일에서 서버 가드 추가, 두 관리자 UI 모두에서
+  대기 상태일 때 출석/결석 버튼을 숨김.
+- **실제로 고친 문제 3 — "결석" 버튼 라벨이 실제 동작과 반대였던 버그**: `status` 타입에는
+  애초에 "결석"이라는 값이 없다(`attended`/`no_show`만 존재) — "결석" 버튼은 실제로는
+  `manager_set_attendance(id, 'confirmed')`를 호출해 출결 표시를 취소(되돌리기)하는
+  동작이었다. 진짜 결석(no-show) 처리 버튼은 "노쇼"라는 별도 이름으로 존재했다. 두 관리자
+  UI 모두에서 라벨을 "되돌리기"/"결석(노쇼)"로 정정(로직 변경 없음, 표시만 정정).
+- **정책 확정(코드로 확인)**: 취소(cancelled)는 최종 상태 — 다시 출석/결석/노쇼로 못 바꿈.
+  대기는 출석 대상 아님(위 버그 수정으로 강제). 지각(late) 상태는 이 시스템에 없고 이번
+  MVP에도 추가하지 않음(스키마 확장이 필요한 별도 제품 결정, docs/TODO.md 기록).
+- **테스트**: `tests/integration/attendance-policy.test.ts`(신규) — 취소 최종상태 확인(어느
+  버전이 라이브였는지 실제 동작으로 확인), 대기 출석거부(SQL 가드, 미적용 시 예상된 실패),
+  타 센터 매니저 차단, 프라이빗 수업 동일동작. `tests/e2e/admin/attendance.spec.ts`(신규) —
+  출석→결석(노쇼)→되돌리기→예약취소 전체 흐름, 대기 예약 버튼 숨김, 프라이빗 수업 검증
+  (전부 실브라우저).
+- **범위 밖**: 노쇼 자동 처리, 일괄 출석 처리(`docs/23_Admin_Feature_Audit.md`에 이미
+  기록된 기존 갭) — 이번 배치 요청 범위(최소 상태 관리 MVP) 밖.
+
+## 2026-08-07 — P2 알림 시스템 감사 및 완성도 보강 (feature/social-auth-notifications-attendance-dashboard)
+
+- **감사 결과(기존 구조, 새로 만들지 않음)**: 예약 확정/취소/대기승격/노쇼/문의답변 알림은
+  전부 서버 SQL 트리거(`add_notification_triggers.sql`, `add_inquiries.sql`)로 원인 트랜잭션과
+  원자적으로 이미 생성되고 있었다. 휴무일 취소 알림도 이미 라이브 상태임을 확인
+  (`fix_holiday_history_and_notification_draft_proposed.sql`이라는 파일명과 달리 실제로는
+  이미 적용돼 있음 — 같은 동작을 전제하는 `fix_holiday_delete_restores_classes.sql`이 이미
+  merge된 P0 통합테스트로 검증됨). 딥링크 권한 안전성(없는/권한 없는 대상이면 조용히
+  fallback), 센터 간 알림 격리(트리거가 항상 해당 센터 매니저만 대상)도 이미 안전하게
+  설계돼 있음을 코드 감사로 확인.
+- **고친 것**: `admin_assigned`/`admin_cancelled` 알림 종류(관리자 직접배치/취소, P1 이전
+  배치에서 트리거에는 이미 추가됐지만)가 `lib/notifications.ts`의 `NotiKind` 타입/이모지
+  매핑에는 빠져 있던 것을 추가(기능은 이미 동작했지만 표시가 불완전했음).
+- **죽은 설정 연결**: 알림 설정(`app/settings/notifications`)의 예약/대기/리마인더 토글이
+  localStorage에만 저장되고 아무 데도 연결되지 않은 죽은 설정이었다(서버 트리거는 항상
+  알림을 만듦). 실시간 팝업(`NotificationToaster`)이 이 값을 읽어 팝업 표시 여부를 실제로
+  거르도록 연결(`notiPrefKeyForKind`) — 꺼도 알림함에는 그대로 기록되니 나중에 확인 가능,
+  서버 발송 자체를 막는 건 예약 트리거 SQL을 건드려야 해서 이번 범위 밖. "혜택·이벤트"
+  토글은 그 알림을 만드는 기능 자체가 없어 준비 중으로 명확히 표시(비활성화).
+- **회귀 가드 추가**: `tests/integration/notification-center-isolation.test.ts`(신규) —
+  centerA에서 발생한 `new_reservation` 알림을 centerB 매니저가 볼 수 없는지 실제 DB로 검증.
+  `tests/unit/notiPrefKeyForKind.test.ts`(신규) — 알림 설정 kind→카테고리 매핑 고정.
+- **범위 밖(명시적 제외)**: SMS/카카오톡 알림톡/푸시/이메일 발송 — 외부 서비스 계약 필요,
+  이번 배치는 앱 내 알림 완성도만 다룸(사용자 지시).
+
+## 2026-08-07 — P1 소셜 로그인(Google/Kakao/Naver/Apple) 배관 보강 (feature/social-auth-notifications-attendance-dashboard)
+
+- **감사 결과**: 소셜 로그인 버튼(Google/Kakao/Naver/Apple)과 `signInWithOAuth()` 호출,
+  계정/프로필 부트스트랩 함수(`ensureAccountForCurrentUser()`, `lib/authAccount.ts`)는 이미
+  이전 P1 배치에서 구현돼 있었다 — 새로 만들지 않고 실제 신뢰성 gap만 감사로 찾아 보강했다.
+- **고친 것**: `ensureAccountForCurrentUser()` 호출이 `app/page.tsx`(홈 화면) `useEffect`에만
+  있어, 소셜 로그인의 `redirectTo`가 항상 `/`였기 때문에 지금까지는 우연히 항상 호출됐다 —
+  하지만 이건 로그인 방식과 무관하게 보장돼야 하는 로직이라 앱 전체에 한 번만 마운트되는
+  `SessionWatcher.tsx`로 옮겨 `SIGNED_IN`/`INITIAL_SESSION` 이벤트에서 호출하도록 변경(멱등이라
+  중복 호출 안전).
+- **추가한 것**: 소셜 버튼 클릭 시 로딩 상태(중복 클릭·중복 콜백 실행 방지, 로딩 중 다른
+  버튼도 비활성화), OAuth 콜백 실패(provider 거부/사용자 취소 시 URL 해시의
+  `#error=...&error_description=...`) 감지 후 `/login?oauth_error=...`로 안내 문구와 함께
+  되돌리는 처리(`app/page.tsx`, `app/login/page.tsx`).
+- **정책 명문화**: 계정 연동(같은 이메일, 다른 로그인 방식) — `docs/08_Decision_Log.md`
+  DEC-004로 "자동 병합하지 않는다"를 공식 결정으로 기록(스키마에 `accounts.email`이 없어
+  애초에 안전한 자동 매칭이 불가능함을 확인).
+- **검토했지만 적용 안 한 것**: "OAuth 후 원래 페이지로 복귀" — 현재 앱에는 email 로그인을
+  포함해 "보호된 페이지 → 강제로 /login으로 리다이렉트" 패턴 자체가 어디에도 없어(항상 사용자가
+  직접 `/login`으로 이동), 복귀할 "원래 페이지" 개념이 없다는 것을 코드 감사로 확인. 로그인 후
+  항상 홈(`/`)으로 이동하는 기존 동작(이메일 로그인과 동일)을 그대로 유지.
+- **미해결(외부 설정 필요)**: Google/Kakao/Apple은 Supabase 대시보드에서 아직 provider가
+  활성화돼 있지 않아(콘솔 설정은 Claude가 대신 할 수 없음) 실제 OAuth 왕복은 미검증 —
+  `docs/TODO.md` P2-1 참고. 네이버는 Supabase 기본 미지원이라 별도 Edge Function이 필요(P2-1b).
+
 ## 2026-08-07 — "모든 수강권 허용"인데 보유 pass가 안 보이는 버그 근본 수정 (feature/auth-private-class-membership, PR #41 머지 전 수정)
 
 - **증상(실제 재현)**: `class_allowed_products` 0건(=모든 pass 허용)인 수업에서, 회원이 보유한

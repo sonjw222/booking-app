@@ -109,7 +109,13 @@ export async function switchToTestUser(emailEnvName: string, passwordEnvName: st
       account = inserted.data as AccountRow;
     }
 
-    const profileRes = await supabase.from("profiles").select("id").eq("account_id", account.id).maybeSingle();
+    // is_primary=true로 좁혀서 조회한다 — 계정 하나에 여러 profiles가 있을 수 있는데(회원이
+    // 추가 프로필을 만들거나, 테스트가 "수강권 0건 상태"를 만들려고 추가 프로필을 임시로
+    // 만드는 경우 등), account_id만으로 조회하면 행이 2개 이상일 때 .maybeSingle()이 예외를
+    // 던져 이 계정으로 로그인하는 모든 테스트/E2E setup이 통째로 깨진다(실제로 재현됨 — 다른
+    // 테스트가 만든 추가 프로필이 정리되기 전에 남아있던 상태에서). is_primary가 대표 프로필을
+    // 가리키는 유일한 방법이라 이걸로 좁힌다.
+    const profileRes = await supabase.from("profiles").select("id").eq("account_id", account.id).eq("is_primary", true).maybeSingle();
     if (profileRes.error) throw new Error(`profiles 조회 실패: ${profileRes.error.message}`);
     let profile = profileRes.data as ProfileRow | null;
     if (!profile) {
@@ -286,6 +292,52 @@ export function describeAdminQueryError(table: string, error: { message: string;
 
 // 현재 로그인된 계정이 오너로 있는 센터를 재사용하거나, 없으면 새로 만들어 오너로 연결한다.
 // RLS를 우회하는 서비스 역할 client로만 동작 — 일반 client는 전혀 쓰지 않는다.
+// TEST-004(#45) 자기치유 스윕 — 공유 통합/E2E 테스트센터에 지나간(start_time이 과거인)
+// classes가 계속 쌓이는 문제(근본 원인: CI가 테스트 도중 취소되면 그 파일의 afterAll이
+// 실행되지 않아 만들어둔 class/reservation이 영구히 남음 — docs/TODO.md TEST-004 참고)를
+// "한 곳"에서 방지한다. getOrCreateOwnedTestCenter()는 사실상 모든 통합 테스트 파일이
+// beforeAll에서 정확히 한 번씩 호출하므로, 여기 붙여두면 파일마다 따로 정리 로직을 짤
+// 필요 없이 스위트 전체가 자동으로 self-healing된다.
+//
+// 안전 근거:
+//   1) 이 함수가 반환하는 센터는 전부 이름이 "통합테스트센터-%"인, 이 헬퍼 자신이 관리하는
+//      전용 테스트 센터뿐이다(실제 운영 센터는 이 이름 패턴을 쓰지 않음) — 아래 sweep 함수
+//      자체도 이 패턴과 일치하는 센터만 대상으로 삼도록 다시 한번 방어적으로 확인한다.
+//   2) vitest.integration.config.ts가 fileParallelism:false라 테스트 파일이 항상 순차
+//      실행된다 — 어떤 파일의 beforeAll(sweep 포함)이 실행되는 시점엔, 그 이전 파일은
+//      이미 완전히 끝났거나(자기 정리 완료) CI 취소로 중간에 끊긴 상태(=지금 지워도 되는
+//      상태)뿐이다. 같은 실행 안에서 "아직 진행 중인 다른 파일의 미래 class"를 실수로
+//      지울 수 없는 구조.
+//   3) start_time이 "지금부터 1시간 이상 과거"인 class만 대상으로 한다 — 이 스위트의 모든
+//      테스트는 항상 가까운 미래 시각으로 class를 만들고 그 자리에서 바로 쓰므로, 정상
+//      진행 중인 테스트의 class가 이 조건에 걸릴 일은 없다.
+async function sweepStaleTestClasses(centerId: string, centerName: string): Promise<void> {
+  if (!centerName.startsWith("통합테스트센터-")) return; // 방어적 재확인
+  const admin = getFixtureAdminClient();
+  const staleBefore = new Date(Date.now() - 3600 * 1000).toISOString();
+
+  const { data: staleClasses, error: findErr } = await admin
+    .from("classes")
+    .select("id")
+    .eq("center_id", centerId)
+    .lt("start_time", staleBefore);
+  if (findErr) {
+    // 스윕 실패는 이 테스트 실행 자체를 막을 이유가 아니다 — 다음 실행에서 다시 시도된다.
+    return;
+  }
+  const ids = (staleClasses ?? []).map((c: any) => c.id as string);
+  if (ids.length === 0) return;
+
+  // PostgREST 요청 URL 길이 제한(실측 확인된 패턴, lib/reservations.ts와 동일 관례)을
+  // 피하기 위해 청크 단위로 나눠 지운다.
+  const CHUNK_SIZE = 150;
+  for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + CHUNK_SIZE);
+    await admin.from("reservations").delete().in("class_id", chunk);
+    await admin.from("classes").delete().in("id", chunk);
+  }
+}
+
 export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<string> {
   const admin = getFixtureAdminClient();
 
@@ -305,7 +357,12 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
     if (roleErr) throw new Error(`center_roles 조회 실패: ${describeAdminQueryError("center_roles", roleErr)}`);
     const ownerRoleIds = new Set((roles ?? []).filter((r: any) => r.is_owner).map((r: any) => r.id));
     const owned = (rows ?? []).find((r: any) => ownerRoleIds.has(r.role_id));
-    if (owned) return (owned as any).center_id as string;
+    if (owned) {
+      const centerId = (owned as any).center_id as string;
+      const { data: centerRow } = await admin.from("centers").select("name").eq("id", centerId).maybeSingle();
+      await sweepStaleTestClasses(centerId, (centerRow as any)?.name ?? "");
+      return centerId;
+    }
   }
 
   const { data: center, error: centerErr } = await admin
@@ -334,23 +391,31 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
 // 미래 시각에 시작하는 테스트 전용 수업 생성 (기본 48시간 뒤, 1시간짜리)
 export async function createFutureTestClass(
   centerId: string,
-  opts?: { capacity?: number; hoursFromNow?: number; title?: string; classFormat?: "group" | "private"; durationMinutes?: number }
+  opts?: {
+    capacity?: number; hoursFromNow?: number; title?: string; classFormat?: "group" | "private"; durationMinutes?: number;
+    // add_class_trainers_pass_selection_mode_draft_proposed.sql이 아직 적용되지 않은 환경에서도
+    // 이 함수를 쓰는 기존 테스트 전부가 깨지지 않도록, 값을 명시적으로 넘길 때만 insert payload에
+    // pass_selection_mode 키를 포함한다(컬럼이 없는 DB에서는 아예 이 키를 보내지 않음).
+    passSelectionMode?: "all" | "selected";
+  }
 ): Promise<{ id: string; startTime: string; endTime: string }> {
   const hours = opts?.hoursFromNow ?? 48;
   const start = new Date(Date.now() + hours * 3600 * 1000);
   const end = new Date(start.getTime() + (opts?.durationMinutes ?? 60) * 60 * 1000);
+  const row: Record<string, unknown> = {
+    center_id: centerId,
+    title: opts?.title ?? "통합테스트 수업",
+    start_time: start.toISOString(),
+    end_time: end.toISOString(),
+    // classes_private_capacity_check(fix_private_class_capacity_constraint_draft_proposed.sql)가
+    // class_format='private'이면 capacity=1을 DB에서 강제한다 — private일 때 capacity 옵션은 무시.
+    capacity: opts?.classFormat === "private" ? 1 : opts?.capacity ?? 8,
+    class_format: opts?.classFormat ?? "group",
+  };
+  if (opts?.passSelectionMode) row.pass_selection_mode = opts.passSelectionMode;
   const { data, error } = await supabase
     .from("classes")
-    .insert({
-      center_id: centerId,
-      title: opts?.title ?? "통합테스트 수업",
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      // classes_private_capacity_check(fix_private_class_capacity_constraint_draft_proposed.sql)가
-      // class_format='private'이면 capacity=1을 DB에서 강제한다 — private일 때 capacity 옵션은 무시.
-      capacity: opts?.classFormat === "private" ? 1 : opts?.capacity ?? 8,
-      class_format: opts?.classFormat ?? "group",
-    })
+    .insert(row)
     .select("id, start_time, end_time")
     .single();
   if (error || !data) throw new Error(`테스트 수업 생성 실패: ${error?.message ?? "no data"}`);
@@ -424,6 +489,18 @@ export async function createKstSameDayFutureClass(
 }
 
 // 테스트용 수강권(횟수권) 생성. expired:true면 만료된 수강권(과거 만료일 + status='expired')을 만든다.
+// get-or-create + self-healing refresh(2026-08 오염 진단 후 도입) — 예전엔 호출마다 무조건
+// insert해서, 이 헬퍼를 쓰는 15개 넘는 통합테스트 파일이 매 CI 실행마다 같은 (profile,
+// center) 조합에 새 "통합테스트 수강권" 행을 계속 쌓았다(afterAll 정리가 있는 파일도 CI가
+// 중간 취소되면 실행 자체가 안 됨 — GitHub Actions concurrency.cancel-in-progress나 사람이
+// 새 실행을 다시 트리거하면 이전 실행이 그대로 죽는다). 실측 진단에서 이 문자열 하나로
+// centerA에 979건 이상(PostgREST 1000행 응답 캡에 걸릴 정도) 쌓여 있는 것을 확인했고, 이게
+// class-allowed-products.spec.ts 등 "이 프로필의 사용 가능한 수강권 전체"를 나열하는 화면이
+// 간헐적으로 타임아웃/오염되던 진짜 원인이었다. createTestMembershipForProduct()가 이미
+// 증명한 것과 같은 패턴 — (profile, center, product_id is null) 조합을 재사용하고 매번
+// 요청받은 상태로 덮어쓴다. 상태(active/expired)가 달라도 같은 행을 재사용해 그 상태로
+// 되돌린다 — 이 헬퍼를 쓰는 테스트들은 "정확히 이 속성을 가진 나만의 수강권 1개"만 필요로
+// 하지, 과거 호출과 동시에 여러 개 공존해야 하는 케이스는 없다(파일별 감사로 확인).
 export async function createTestMembership(
   centerId: string,
   profileId: string,
@@ -434,6 +511,33 @@ export async function createTestMembership(
   const expiresAt = expired
     ? new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10)
     : new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+
+  const { data: existing, error: findErr } = await supabase
+    .from("memberships")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("center_id", centerId)
+    .is("product_id", null)
+    .eq("product_name", "통합테스트 수강권")
+    .limit(1);
+  if (findErr) throw new Error(`테스트 수강권 조회 실패: ${findErr.message}`);
+
+  if (existing && existing.length > 0) {
+    const { data, error } = await supabase
+      .from("memberships")
+      .update({
+        total_count: remaining,
+        remaining_count: expired ? 0 : remaining,
+        expires_at: expiresAt,
+        status: expired ? "expired" : "active",
+      })
+      .eq("id", existing[0].id)
+      .select("id, remaining_count")
+      .single();
+    if (error || !data) throw new Error(`테스트 수강권 갱신 실패: ${error?.message ?? "no data"}`);
+    return { id: data.id, remainingCount: data.remaining_count };
+  }
+
   const { data, error } = await supabase
     .from("memberships")
     .insert({
@@ -479,4 +583,18 @@ export async function cleanupTestClass(classId: string, reservationIds: string[]
   try {
     await supabase.from("classes").delete().eq("id", classId);
   } catch { /* 무시 */ }
+}
+
+// cleanupTestClass()의 raw delete는 매니저 세션(RLS) 기준이라 "매니저 취소예약 정리" 정책
+// (reservation_functions.sql, status in ('cancelled','no_show')만 허용)에 걸려 waitlisted/
+// confirmed/attended 상태로 남은 예약은 에러 없이 조용히 삭제되지 않는다(0건 삭제, 예외 아님)
+// — private-class-capacity.test.ts에서 이미 한 번 발견/우회된 것과 동일한 원인이며,
+// attendance-policy.test.ts가 이 패턴으로 매 실행 waitlisted 예약을 남겨 실제로 3일간 13건
+// 누적된 것을 실측 확인했다(docs/TODO.md P1-14). admin(service_role)은 RLS를 우회하므로
+// 예약 상태와 무관하게 확실히 지운다 — 테스트가 끝난 뒤 non-terminal 상태로 남을 수 있는
+// 예약을 만드는 파일은 cleanupTestClass 대신 이 함수를 쓴다.
+export async function cleanupTestClassAdmin(classId: string): Promise<void> {
+  const admin = getFixtureAdminClient();
+  await admin.from("reservations").delete().eq("class_id", classId);
+  await admin.from("classes").delete().eq("id", classId);
 }

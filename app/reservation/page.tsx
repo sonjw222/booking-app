@@ -30,6 +30,7 @@ import {
   type BookingProfile,
 } from "../../lib/reservations";
 import { toKstIso } from "../../lib/kst";
+import { formatInstructorNames } from "../../lib/instructorDisplay";
 
 
 // 공휴일 (나중에 공휴일 API 또는 테이블로 교체 가능)
@@ -594,6 +595,7 @@ function ReservationCalendarContent() {
             // 별도로 차단 — UI는 보조 수단일 뿐 서버가 최종 방어선).
             const hasStarted = new Date(toKstIso(cls.date, cls.start)).getTime() <= Date.now();
             const passNames = usableProductNames(cls.id);
+            const instructorText = formatInstructorNames(cls.instructorNames);
             return (
               <div key={cls.id} className={`class-row ${mine ? "mine" : ""}`}>
                 <div className="class-color" style={{ background: center?.color }} />
@@ -607,7 +609,10 @@ function ReservationCalendarContent() {
                   <div className="class-row-meta">
                     {cls.start}~{cls.end}
                   </div>
-                  <div className="class-row-place">{cls.place}</div>
+                  <div className="class-row-place">
+                    {cls.place}
+                    {instructorText && ` · ${instructorText}`}
+                  </div>
                   <div className="center-class-passes">
                     {passesLoading ? (
                       <span className="class-pass-chip all skeleton-shimmer">수강권 확인 중...</span>
@@ -727,6 +732,12 @@ function ReservationCalendarContent() {
             <div className="confirm-class" style={{ marginTop: 18 }}>
               <div className="confirm-class-title">{confirmClass.title}</div>
               <div className="confirm-class-sub">{confirmClass.place} · {confirmClass.date} {confirmClass.start}</div>
+              {confirmClass.instructorNames.length > 0 && (
+                // 목록 화면(class-row-place)은 "A, B 외 N명"으로 줄여 보여주지만, 강사가
+                // 많으면 회원이 전체 명단을 볼 방법이 없어진다는 피드백(2026-08-12) — 예약
+                // 확인 상세에서는 줄이지 않고 전원을 보여준다.
+                <div className="confirm-class-sub">담당 강사: {confirmClass.instructorNames.join(", ")}</div>
+              )}
             </div>
 
             {confirmClass.allowGoods && (

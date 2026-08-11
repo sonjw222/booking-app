@@ -34,7 +34,7 @@ export { switchToTestUser, getOrCreateOwnedTestCenter, kstSafeSameDayFutureTime,
 // 그대로 남는데(실제로 재현됨: 회원 화면에서 같은 제목 행이 여러 개 나와 Playwright의
 // strict mode violation로 이어짐), "이 제목은 이 센터에 항상 하나만" 원칙으로 생성 전에
 // 매번 정리해 재실행/재시도에도 정확히 1건만 남긴다.
-async function deleteExistingClassesByTitle(centerId: string, title: string): Promise<void> {
+export async function deleteExistingClassesByTitle(centerId: string, title: string): Promise<void> {
   const admin = getFixtureAdminClient();
   const { data: existing } = await admin.from("classes").select("id").eq("center_id", centerId).eq("title", title);
   const ids = (existing ?? []).map((r: any) => r.id as string);
@@ -116,6 +116,35 @@ export async function createKstSameDayFutureClassAdmin(
   return { id: data.id, startTime: data.start_time };
 }
 
+// 이미 계산해 둔 KST 날짜(예: 다른 수업에서 파생된 날짜)에 정확히 맞춰 수업을 만든다 —
+// hoursFromNow처럼 "지금부터 상대"로 계산하면, 테스트 중간에 여러 UI 라운드트립을 거치며
+// 시간이 흘러(같은 hoursFromNow 값이라도 최초 계산 시점과 달라짐) 자정을 넘길 경우 의도한
+// 날짜와 어긋날 수 있다(실제로 CI에서 재현 확인 — holiday-restores-classes.spec.ts가
+// hoursFromNow: 5*24와 hoursFromNow: 5*24+1을 서로 다른 시점에 계산해 두 수업이 다른
+// 날짜에 생기는 문제가 있었다). 절대 날짜를 명시하면 이 문제 자체가 사라진다.
+export async function createClassOnKstDateAdmin(
+  centerId: string,
+  opts: { title: string; kstDate: string; kstTime?: string; capacity?: number }
+): Promise<{ id: string; startTime: string }> {
+  const admin = getFixtureAdminClient();
+  await deleteExistingClassesByTitle(centerId, opts.title);
+  const start = new Date(`${opts.kstDate}T${opts.kstTime ?? "10:00"}:00+09:00`);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const { data, error } = await admin
+    .from("classes")
+    .insert({
+      center_id: centerId,
+      title: opts.title,
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      capacity: opts.capacity ?? 8,
+    })
+    .select("id, start_time")
+    .single();
+  if (error || !data) throw new Error(`E2E 테스트 수업 생성 실패: ${error?.message ?? "no data"}`);
+  return { id: data.id, startTime: data.start_time };
+}
+
 export async function cleanupTestClassAdmin(classId: string): Promise<void> {
   const admin = getFixtureAdminClient();
   await admin.from("reservations").delete().eq("class_id", classId);
@@ -172,6 +201,23 @@ export async function clearScheduleRulesForProduct(productId: string): Promise<v
   const admin = getFixtureAdminClient();
   const { error } = await admin.from("membership_schedule_rules").delete().eq("product_id", productId);
   if (error) throw new Error(`membership_schedule_rules 정리 실패: ${error.message}`);
+}
+
+// P1-15: membership_schedule_rules 회귀 테스트용 — 특정 상품에 요일/시간/수업명 조건을
+// 하나 추가한다(/manager/membership-rules 화면의 addRule과 동일한 insert, UI를 거치지
+// 않고 직접 fixture로 만듦). null을 넘기면 그 축은 "모든 값 허용"(제한 없음)이 된다.
+export async function setScheduleRuleForProduct(
+  productId: string,
+  rule: { dayOfWeek: number | null; startTime: string | null; classTitle: string | null }
+): Promise<void> {
+  const admin = getFixtureAdminClient();
+  const { error } = await admin.from("membership_schedule_rules").insert({
+    product_id: productId,
+    day_of_week: rule.dayOfWeek,
+    start_time: rule.startTime,
+    class_title: rule.classTitle,
+  });
+  if (error) throw new Error(`membership_schedule_rules 추가 실패: ${error.message}`);
 }
 
 export async function getOrCreateTestPassProduct(centerId: string): Promise<{ id: string }> {
@@ -236,6 +282,12 @@ export async function getOrCreateTestPassProductNamed(centerId: string, name: st
   return { id: data.id, name };
 }
 
+// get-or-create + self-healing refresh(2026-08 공유 센터 오염 진단 후 도입, createTestMembershipForProduct와
+// 동일 패턴) — 예전엔 호출마다 무조건 insert해서, 이 헬퍼를 쓰는 11개 E2E spec이 CI를 돌릴
+// 때마다(또는 GitHub Actions concurrency.cancel-in-progress로 이전 실행이 중간에 죽을 때마다)
+// 같은 (profile, center) 조합에 "E2E 테스트 수강권" 행이 계속 쌓였다 — class-allowed-products.spec.ts
+// 처럼 "이 프로필의 사용 가능한 수강권 전체"를 나열하는 화면이 간헐적으로 타임아웃/오염되던
+// 진짜 원인 중 하나.
 export async function createTestMembershipAdmin(
   centerId: string,
   profileId: string,
@@ -244,6 +296,29 @@ export async function createTestMembershipAdmin(
   const admin = getFixtureAdminClient();
   const remaining = opts?.remainingCount ?? 5;
   const product = await getOrCreateTestPassProduct(centerId);
+
+  const { data: existing, error: findErr } = await admin
+    .from("memberships")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("center_id", centerId)
+    .eq("product_id", product.id)
+    .limit(1);
+  if (findErr) throw new Error(`E2E 테스트 수강권 조회 실패: ${findErr.message}`);
+  if (existing && existing.length > 0) {
+    const { error: refreshErr } = await admin
+      .from("memberships")
+      .update({
+        total_count: remaining,
+        remaining_count: remaining,
+        expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        status: "active",
+      })
+      .eq("id", existing[0].id);
+    if (refreshErr) throw new Error(`E2E 테스트 수강권 갱신 실패: ${refreshErr.message}`);
+    return { id: existing[0].id };
+  }
+
   const { data, error } = await admin
     .from("memberships")
     .insert({
@@ -359,6 +434,7 @@ export async function getOrCreateTestGoodsProduct(centerId: string): Promise<{ i
   return { id: data.id };
 }
 
+// get-or-create + self-healing refresh — createTestMembershipAdmin과 같은 이유(위 주석 참고).
 export async function createTestGoodsMembershipAdmin(
   centerId: string,
   profileId: string,
@@ -367,6 +443,29 @@ export async function createTestGoodsMembershipAdmin(
   const admin = getFixtureAdminClient();
   const remaining = opts?.remainingCount ?? 5;
   const product = await getOrCreateTestGoodsProduct(centerId);
+
+  const { data: existing, error: findErr } = await admin
+    .from("memberships")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("center_id", centerId)
+    .eq("product_id", product.id)
+    .limit(1);
+  if (findErr) throw new Error(`E2E 테스트 goods 수강권 조회 실패: ${findErr.message}`);
+  if (existing && existing.length > 0) {
+    const { error: refreshErr } = await admin
+      .from("memberships")
+      .update({
+        total_count: remaining,
+        remaining_count: remaining,
+        expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        status: "active",
+      })
+      .eq("id", existing[0].id);
+    if (refreshErr) throw new Error(`E2E 테스트 goods 수강권 갱신 실패: ${refreshErr.message}`);
+    return { id: existing[0].id };
+  }
+
   const { data, error } = await admin
     .from("memberships")
     .insert({
@@ -403,18 +502,17 @@ export async function saveSettingsAdmin(centerId: string, s: CenterSettings): Pr
   if (error) throw new Error("설정 저장에 실패했어요(admin): " + error.message);
 }
 
-// 운영설정(groupCancelDaysBefore=0 + groupCancelTime)으로 "지금부터 N분 뒤/전"이라는
-// 절대 취소마감 시각을 만들 때 쓰는 HH:MM(KST) 문자열 — cancel_deadline_min이 죽은
-// 컬럼이라 취소마감 검증은 반드시 이 방식(오늘 날짜 + 시각)으로 해야 한다.
-export function kstTimeHHmm(offsetMinutesFromNow: number): string {
-  const t = new Date(Date.now() + offsetMinutesFromNow * 60_000);
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false,
-  }).formatToParts(t);
-  const hh = parts.find((p) => p.type === "hour")!.value;
-  const mm = parts.find((p) => p.type === "minute")!.value;
-  return `${hh === "24" ? "00" : hh}:${mm}`;
-}
+// 운영설정(groupCancelDaysBefore=0/groupBookDaysBefore=0 + 시각)으로 "오늘 날짜 안에서
+// 이미 지난/아직 안 지난 절대 시각"을 만들 때 쓰는 고정 HH:MM(KST) 상수 —
+// cancel_deadline_min이 죽은 컬럼이라 마감 검증은 반드시 이 방식(오늘 날짜 + 시각)으로
+// 해야 한다. 예전엔 "지금±N분"을 매번 계산했는데(kstTimeHHmm, 삭제됨), KST 자정
+// 근처(22:00~23:59 또는 00:00~00:29)에 실행되면 그 상대 계산 자체가 날짜 경계를 넘어
+// "오늘 날짜 + 그 시각"의 의미가 뒤집혀 버렸다(실제로 CI에서 재현·확인 —
+// tests/integration/reservation-cancel-grace-period.test.ts와 동일한 문제).
+// 상대 계산을 없애고 하루 중 가장 이르거나/늦은 고정 시각을 쓰면 이 문제가 구조적으로
+// 사라진다 — 테스트가 그 1분 안에 실행되는 극히 드문 경우만 예외.
+export const ALWAYS_PAST_TODAY_TIME = "00:01"; // 자정 1분 후 — "오늘 날짜 + 이 시각"은 거의 항상 이미 지남
+export const ALWAYS_FUTURE_TODAY_TIME = "23:58"; // 자정 2분 전 — "오늘 날짜 + 이 시각"은 거의 항상 아직 안 지남
 
 // ---------------- 예약(admin, 취소 시나리오 픽스처 전용) ----------------
 // reserve_class() RPC를 거치지 않고 admin으로 직접 "확정 예약" 행을 만든다 — 취소

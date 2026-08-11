@@ -4,6 +4,7 @@ import {
   getOrCreateOwnedTestCenter,
   createTestMembershipAdmin,
   createFutureTestClassAdmin,
+  createClassOnKstDateAdmin,
   cleanupTestClassAdmin,
   kstDateStr,
   type TestUser,
@@ -128,8 +129,12 @@ test("휴무일 생성→회원화면 예약차단 확인→삭제→새로고�
 
   // ⑤ 휴무일 지정 이후 만든 새 수업("신규 수업")도 같은 날짜에 추가 — 삭제 후 이것도
   // 예약 가능해야 한다(휴무일이 계속 있었다면 이 수업도 폐강 대상이었을 것이므로).
-  const newCls = await createFutureTestClassAdmin(centerAId, {
-    title: "E2E 휴무일복구-신규", hoursFromNow: 5 * 24 + 1,
+  // ⚠ hoursFromNow처럼 "지금부터 상대"로 다시 계산하면, 여기까지 오는 동안 여러 UI
+  // 라운드트립을 거쳐 시간이 흘렀을 수 있어 existingCls/holidayDate와 다른 날짜에 생길
+  // 위험이 있다(실제로 CI에서 재현 확인). holidayDate를 그대로 명시해 항상 같은 날짜에
+  // 생기도록 한다.
+  const newCls = await createClassOnKstDateAdmin(centerAId, {
+    title: "E2E 휴무일복구-신규", kstDate: holidayDate, kstTime: "11:00",
   });
   createdClassIds.push(newCls.id);
 

@@ -10,7 +10,6 @@ import { useEffect, useState, useRef } from "react";
 import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, type HomeCenter, type HomeClass } from "../lib/home";
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
 import { supabase } from "../lib/supabaseClient";
-import { ensureAccountForCurrentUser } from "../lib/authAccount";
 import BottomNav from "./components/BottomNav";
 
 const CATEGORIES = [
@@ -43,10 +42,20 @@ export default function Home() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
+    // 소셜 로그인 콜백 실패(사용자가 provider 동의 화면에서 취소, provider가 접근 거부 등)는
+    // Supabase가 성공 시 세션 토큰을 싣는 것과 같은 방식으로 이 페이지의 URL 해시에
+    // #error=...&error_description=...로 실어 보낸다. 홈 화면에 그대로 두면 아무 안내 없이
+    // 조용히 로그인 안 된 상태로만 보여서, 감지되면 로그인 화면으로 보내 이유를 안내한다.
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const oauthError = hashParams.get("error_description") || hashParams.get("error");
+    if (oauthError) {
+      window.location.replace(`/login?oauth_error=${encodeURIComponent(oauthError)}`);
+      return;
+    }
+    // 계정/프로필 부트스트랩(ensureAccountForCurrentUser)은 app/components/SessionWatcher.tsx로
+    // 옮겨 앱 전체에서 한 번만 처리한다(어느 페이지로 로그인/OAuth 리다이렉트가 와도 보장됨).
+    supabase.auth.getUser().then(({ data }) => {
       setLoggedIn(!!data.user);
-      // 소셜 로그인 첫 방문이면 accounts/profiles 행을 여기서 한 번 만들어준다(P1, lib/authAccount.ts).
-      if (data.user) await ensureAccountForCurrentUser();
     });
   }, []);
 

@@ -135,6 +135,35 @@ Superseded
   완전히 제거해 class_allowed_products와 membership_schedule_rules를 다시 독립시켰다(관련
   함수 `autoAddRulesForClass`/`removeRulesForClass`/`fetchAllPassProductIds` 삭제).
 
+## DEC-004. 소셜 로그인(Google/Kakao/Naver/Apple) 계정 연동(Account Linking) 정책
+
+- **Date**: 2026-08-07
+- **Author**: Claude (social-auth 배치)
+- **Status**: Accepted
+- **Category**: 인증/보안
+- **Decision**: 앱 코드에서 서로 다른 로그인 방식(이메일/구글/카카오/네이버/애플)으로 만들어진
+  계정을 **자동으로 병합하지 않는다.** `accounts.auth_id`는 Supabase Auth의 `auth.users.id`와
+  1:1이고, `accounts` 테이블 자체에 `email` 컬럼이 없어(스키마 확인, `schema.sql`) 앱이 "같은
+  이메일인지" 직접 판단할 방법이 없다 — 즉 안전하게 자동 연동할 수 있는 경우 자체가 현재
+  스키마상 존재하지 않는다.
+- **Reason**: 임의 병합은 다른 사람 계정에 잘못 접근하게 만들 수 있는 보안 리스크(예: 이메일
+  스푸핑, Apple Hide My Email 같은 relay 주소로 인한 오판)라 명시적 사용자 확인 없이는 절대
+  하지 않는다.
+- **Alternatives**:
+  - A) `accounts`에 `email` 컬럼을 추가해 앱이 직접 매칭 후 "이미 있는 계정이에요, 연결할까요?"
+    확인 UI 제공(사용자 확인 후 안전 연동) — 스키마 변경 필요, 이번 배치 범위 밖.
+  - B) Supabase 프로젝트 설정의 "Automatic Linking"에 위임 — 프로젝트 대시보드 설정이라 앱
+    코드가 관여하지 않음, 단 이 경우도 이메일 인증 여부에 따른 리스크는 Supabase 쪽 정책.
+  - C) (채택) 아무것도 자동으로 하지 않는다 — 같은 이메일로 다른 방식 로그인 시 별도
+    `auth.users`/`accounts` 행이 생기는 게 기본 동작이며, 이는 안전하지만 사용자 입장에서
+    "계정이 나뉘었다"는 불편이 남는다.
+- **Impact**: 사용자가 이메일로 가입한 뒤 나중에 구글로 로그인하면 별도 계정이 생길 수 있다
+  (알려진 제약, 최종 보고서의 "남은 수동 QA/제약"에 기록). `ensureAccountForCurrentUser()`
+  (`lib/authAccount.ts`)는 이 정책과 일관되게 `auth_id` 존재 여부만으로 계정을 만들고, 이메일
+  기반 매칭을 시도하지 않는다.
+- **Related Documents**: `AUTH_SETUP.md`(provider별 콘솔 설정), `lib/authAccount.ts`,
+  `docs/TODO.md`
+
 ---
 
 # Category

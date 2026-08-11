@@ -1,0 +1,16 @@
+-- service_role에 accounts 테이블 INSERT/UPDATE/DELETE GRANT 추가(SELECT는 이미 적용됨).
+--
+-- 배경(P1-16, 실측 확인 — 추측 아님): tests/integration/auth-account-bootstrap.test.ts의
+-- beforeAll이 이전 실행이 남긴 throwaway 테스트 계정을 admin(service_role)로 정리하려다
+-- "permission denied for table accounts"로 실패하는 것이 CI 로그에 그대로 찍혔다(run
+-- 31408951718, 31400630205, 31396830506에서 동일 재현). 이 delete가 실패하면서(그 앞의
+-- profiles delete만 성공하고 accounts 행 자체는 남음) 다음 테스트가 그 "profiles 없는
+-- 낡은 accounts 행"을 그대로 발견해(existing으로 판정) ensureAccountForCurrentUser()가
+-- 조기 반환하고, 그 결과 profiles가 끝내 하나도 안 만들어져 테스트가 실패했다 —
+-- lib/authAccount.ts 자체의 버그가 아니라(그 코드 경로 진입조차 못 함, 임시 진단 로그로
+-- 실측 확인) accounts 테이블의 GRANT 누락이 진짜 원인이었다.
+--
+-- 이 파일이 이미 적용된 fix_service_role_missing_grants_accounts_draft_proposed.sql
+-- (select만)을 대체하지 않고 보완한다 — select는 그대로 유지, 여기서는 나머지 3개
+-- verb만 추가.
+grant insert, update, delete on accounts to service_role;

@@ -3,12 +3,13 @@ import {
   loadTestAccountMeta,
   getOrCreateOwnedTestCenter,
   createTestMembershipAdmin,
-  createFutureTestClassAdmin,
+  createKstSameDayFutureClassAdmin,
   cleanupTestClassAdmin,
   fetchSettingsAdmin,
   saveSettingsAdmin,
   insertConfirmedReservationAdmin,
-  kstTimeHHmm,
+  ALWAYS_PAST_TODAY_TIME,
+  ALWAYS_FUTURE_TODAY_TIME,
   kstDateStr,
   type TestUser,
 } from "../fixtures/testData";
@@ -70,12 +71,12 @@ test.afterAll(async () => {
 test("취소기한 2시간 — 3시간 뒤 수업은 1시간 전이라 취소 성공 (실브라우저 end-to-end)", async ({ page, browser }) => {
   // 관리자 화면에서 실제로 "그룹 수업 취소" = 0일 전, 지금부터 2시간 뒤 시각으로 저장
   await gotoManagerSettings(page);
-  await setDaysBeforeTime(page, "그룹 수업 취소", 0, kstTimeHHmm(120));
+  await setDaysBeforeTime(page, "그룹 수업 취소", 0, ALWAYS_FUTURE_TODAY_TIME);
   await saveManagerSettings(page);
   const saved = await fetchSettingsAdmin(centerAId);
   expect(saved.groupCancelDaysBefore).toBe(0);
 
-  const cls = await createFutureTestClassAdmin(centerAId, { title: "E2E 취소기한-성공", hoursFromNow: 3 });
+  const cls = await createKstSameDayFutureClassAdmin(centerAId, { title: "E2E 취소기한-성공", preferredMinutesFromNow: 180 });
   createdClassIds.push(cls.id);
   await insertConfirmedReservationAdmin(cls.id, userA.profileId, {
     membershipId,
@@ -102,10 +103,10 @@ test("취소기한 2시간 — 1시간 뒤 수업은 이미 지나서 취소 실
   // (위 성공 테스트처럼 미래 시각을 쓰면 수업이 몇 시간 뒤든 항상 마감 전이라 성공한다 —
   // 실제로 이 버그로 테스트가 실패하는 게 CI에서 확인됨).
   await gotoManagerSettings(page);
-  await setDaysBeforeTime(page, "그룹 수업 취소", 0, kstTimeHHmm(-30));
+  await setDaysBeforeTime(page, "그룹 수업 취소", 0, ALWAYS_PAST_TODAY_TIME);
   await saveManagerSettings(page);
 
-  const cls = await createFutureTestClassAdmin(centerAId, { title: "E2E 취소기한-실패", hoursFromNow: 1 });
+  const cls = await createKstSameDayFutureClassAdmin(centerAId, { title: "E2E 취소기한-실패", preferredMinutesFromNow: 60 });
   createdClassIds.push(cls.id);
   await insertConfirmedReservationAdmin(cls.id, userA.profileId, {
     membershipId,

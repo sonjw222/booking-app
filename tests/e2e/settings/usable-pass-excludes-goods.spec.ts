@@ -71,7 +71,11 @@ test("모든 수강권 사용 가능 수업 — 사용할 수강권 목록에 go
   // 없는지로만 검증한다(각 행 텍스트로도 한 번 더 확인 — goods가 pass-pick-row 자체로
   // 렌더링되는 경우까지 잡아낸다).
   const passList = page.locator(".pass-pick-list");
-  await expect(passList).toBeVisible();
+  // TEST_USER_A는 다른 스펙들과 공유하는 계정이라 누적된 수강권/같은 날짜의 다른 수업들과
+  // 함께 usable_memberships_for_classes()가 한 번에 계산해야 할 행 수가 커질 수 있다 —
+  // 드물게 기본 10초 안에 응답이 안 와 타임아웃되는 걸 봐서(daily-book-limit.spec.ts의
+  // 120초 연장과 같은 이유) 이 첫 렌더링 대기만 넉넉하게 늘린다.
+  await expect(passList).toBeVisible({ timeout: 30_000 });
   await expect(passList).toContainText("E2E 테스트 수강권");
   await expect(passList).not.toContainText("E2E 테스트 대여품");
   const rowCount = await passList.locator(".pass-pick-row").count();

@@ -52,10 +52,37 @@ async function createNamedPassProduct(centerId: string, name: string, kind: "pas
   return { id: data.id };
 }
 
+// get-or-create + self-healing refresh(2026-08 공유 센터 오염 진단 후 도입) — 예전엔 호출마다
+// 무조건 insert해서 CI를 반복 실행할 때마다 같은 (profile, product) 조합에 "통합테스트
+// 수강권(P3)" 행이 계속 쌓였다(진단에서 실제 확인) — class-allowed-products.spec.ts처럼
+// "이 프로필의 사용 가능한 수강권 전체"를 나열하는 화면을 간헐적으로 타임아웃/오염시키던
+// 원인 중 하나. createTestMembershipForProduct(setup.ts)와 동일 패턴.
 async function createMembershipForProduct(centerId: string, profileId: string, productId: string): Promise<{ id: string }> {
   // 회원(memberA) 세션의 RLS로는 자기 자신의 memberships 행도 직접 insert할 수 없다(정상
   // 결제 RPC를 거쳐야 함) — 테스트 fixture라 admin(service-role) 클라이언트로 직접 만든다.
   const admin = getFixtureAdminClient();
+
+  const { data: existing, error: findErr } = await admin
+    .from("memberships")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("center_id", centerId)
+    .eq("product_id", productId)
+    .limit(1);
+  if (findErr) throw new Error(`수강권 조회 실패: ${findErr.message}`);
+  if (existing && existing.length > 0) {
+    const { error: refreshErr } = await admin
+      .from("memberships")
+      .update({
+        total_count: 5, remaining_count: 5,
+        expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        status: "active",
+      })
+      .eq("id", existing[0].id);
+    if (refreshErr) throw new Error(`수강권 갱신 실패: ${refreshErr.message}`);
+    return { id: existing[0].id };
+  }
+
   const { data, error } = await admin
     .from("memberships")
     .insert({
@@ -134,7 +161,11 @@ describe("reserve_with_membership()의 class_allowed_products 서버 강제", ()
   });
 
   it("class_allowed_products에 지정되지 않은 pass면 서버가 거부한다(회원 화면 우회 시도 가정)", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "P3 통합-미허용패스", hoursFromNow: 62 });
+    // [수강권 허용 정책 변경, add_class_trainers_pass_selection_mode_draft_proposed.sql] RPC가
+    // "class_allowed_products 행 존재 여부" 대신 classes.pass_selection_mode를 신뢰하도록
+    // 바뀌었으므로, cap 행만 넣고 mode를 'selected'로 두지 않으면(기본값 'all') 이 테스트가
+    // 검증하려는 거부가 더 이상 일어나지 않는다 — 반드시 함께 지정해야 함.
+    const cls = await createFutureTestClass(centerAId, { title: "P3 통합-미허용패스", hoursFromNow: 62, passSelectionMode: "selected" });
     cleanupClassIds.push(cls.id);
     // passX만 허용 — passY는 허용 목록에 없음.
     const { error: linkErr } = await supabase.from("class_allowed_products").insert({ class_id: cls.id, product_id: passX.id });

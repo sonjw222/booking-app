@@ -15,6 +15,7 @@ import {
   getOrCreateOwnedTestCenter,
   createFutureTestClass,
   cleanupTestClass,
+  getFixtureAdminClient,
   type TestUser,
 } from "./setup";
 
@@ -33,25 +34,60 @@ beforeAll(async () => {
   const cls = await createFutureTestClass(centerAId, { title: "USABLE-PASS-KIND 테스트 수업", hoursFromNow: 240 });
   classId = cls.id;
 
-  const { data: product, error: prodErr } = await supabase
+  // get-or-create(2026-08 공유 센터 오염 진단 후 도입) — afterAll이 매번 지우긴 하지만, CI가
+  // 중간 취소되면(GitHub Actions concurrency.cancel-in-progress, 또는 사람이 새 실행을 다시
+  // 트리거) afterAll 자체가 실행되지 않아 정리되지 않은 채 남는다. 실측 진단에서 이 상품/
+  // 수강권이 45건 넘게 고아 상태로 쌓여 있는 것을 확인했다 — beforeAll을 self-healing하게
+  // 만들어 남아있으면 재사용하고, afterAll이 정상 실행되는 한 여전히 매번 깨끗하게 지워진다.
+  const admin = getFixtureAdminClient();
+  const { data: existingProduct, error: findProdErr } = await admin
     .from("products")
-    .insert({ center_id: centerAId, name: "USABLE-PASS-KIND 테스트 대여품", price: 1000, product_kind: "goods" })
-    .select("id").single();
-  if (prodErr || !product) throw new Error("goods 상품 생성 실패: " + prodErr?.message);
-  goodsProductId = (product as any).id;
+    .select("id")
+    .eq("center_id", centerAId).eq("name", "USABLE-PASS-KIND 테스트 대여품").eq("product_kind", "goods")
+    .maybeSingle();
+  if (findProdErr) throw new Error("goods 상품 조회 실패: " + findProdErr.message);
+  if (existingProduct) {
+    goodsProductId = existingProduct.id;
+  } else {
+    const { data: product, error: prodErr } = await supabase
+      .from("products")
+      .insert({ center_id: centerAId, name: "USABLE-PASS-KIND 테스트 대여품", price: 1000, product_kind: "goods" })
+      .select("id").single();
+    if (prodErr || !product) throw new Error("goods 상품 생성 실패: " + prodErr?.message);
+    goodsProductId = (product as any).id;
+  }
 
-  const { data: mem, error: memErr } = await supabase
+  const { data: existingMem, error: findMemErr } = await admin
     .from("memberships")
-    .insert({
-      profile_id: managerA.profileId, center_id: centerAId, product_id: goodsProductId,
-      product_name: "USABLE-PASS-KIND 테스트 대여품", pass_type: "count",
-      total_count: 1, remaining_count: 1,
-      expires_at: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10),
-      status: "active",
-    })
-    .select("id").single();
-  if (memErr || !mem) throw new Error("goods membership 생성 실패: " + memErr?.message);
-  goodsMembershipId = (mem as any).id;
+    .select("id")
+    .eq("profile_id", managerA.profileId).eq("center_id", centerAId).eq("product_id", goodsProductId)
+    .limit(1);
+  if (findMemErr) throw new Error("goods membership 조회 실패: " + findMemErr.message);
+  if (existingMem && existingMem.length > 0) {
+    goodsMembershipId = existingMem[0].id;
+    const { error: refreshErr } = await supabase
+      .from("memberships")
+      .update({
+        remaining_count: 1,
+        expires_at: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        status: "active",
+      })
+      .eq("id", goodsMembershipId);
+    if (refreshErr) throw new Error("goods membership 갱신 실패: " + refreshErr.message);
+  } else {
+    const { data: mem, error: memErr } = await supabase
+      .from("memberships")
+      .insert({
+        profile_id: managerA.profileId, center_id: centerAId, product_id: goodsProductId,
+        product_name: "USABLE-PASS-KIND 테스트 대여품", pass_type: "count",
+        total_count: 1, remaining_count: 1,
+        expires_at: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        status: "active",
+      })
+      .select("id").single();
+    if (memErr || !mem) throw new Error("goods membership 생성 실패: " + memErr?.message);
+    goodsMembershipId = (mem as any).id;
+  }
 }, 30000);
 
 afterAll(async () => {

@@ -23,6 +23,10 @@ export type ManagedClass = {
   bookingDeadlineMin: number | null; // null이면 운영설정 기본값 사용(CLASS-001)
   classFormat: "group" | "private";  // CLASS-001 D-2: 그룹/프라이빗(1:1) 구분
   status: string; // "open" | "cancelled" | "closed"
+  // 수강권 허용 정책: all=이 센터의 모든 active pass 허용(class_allowed_products는 비워둠),
+  // selected=class_allowed_products에 명시적으로 저장된 product만 허용(1개 이상)
+  passSelectionMode: "all" | "selected";
+  instructorNames: string[]; // 담당 강사 이름 목록(class_trainers). 미지정이면 빈 배열
 };
 
 const KST_DATE = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -77,7 +81,7 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data: page, error } = await supabase
       .from("classes")
-      .select("id, title, start_time, end_time, capacity, recurring_group_id, allow_goods, room_id, cancel_deadline_min, booking_deadline_min, class_format, status")
+      .select("id, title, start_time, end_time, capacity, recurring_group_id, allow_goods, room_id, cancel_deadline_min, booking_deadline_min, class_format, status, pass_selection_mode")
       .eq("center_id", centerId)
       .gte("start_time", toKstIso(fromDate, "00:00"))
       .lte("start_time", toKstIso(toDate, "23:59"))
@@ -90,6 +94,11 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
 
   const ids = (rows ?? []).map((c) => c.id);
   const counts: Record<string, number> = {};
+  // 수업별 담당 강사 이름. key = classId (관리자 목록에 담당 강사를 표시하기 위함 — QA에서
+  // 발견: 회원 화면은 이미 fetchMonthData()가 class_trainer_names RPC로 채우고 있었지만
+  // 관리자 목록(fetchClasses)에는 이 데이터가 아예 없었다. 새 RPC/테이블 없이 회원 화면과
+  // 동일한 class_trainer_names RPC를 그대로 재사용).
+  const instructorNamesByClass: Record<string, string[]> = {};
   if (ids.length > 0) {
     // ids가 많아지면(위 1000행 제한 수정으로 한 센터가 한 달에 수백~수천 개 수업을 가질 수
     // 있게 됨) .in()에 그 UUID를 전부 나열한 요청 URL이 너무 길어져 PostgREST가 "Bad
@@ -97,11 +106,24 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
     const CHUNK_SIZE = 150;
     const idChunks: string[][] = [];
     for (let i = 0; i < ids.length; i += CHUNK_SIZE) idChunks.push(ids.slice(i, i + CHUNK_SIZE));
-    const chunkResults = await Promise.all(
-      idChunks.map((chunk) => supabase.from("class_reservation_counts").select("class_id, confirmed_count").in("class_id", chunk))
-    );
-    for (const { data: countRows } of chunkResults) {
+    const [countChunkResults, trainerChunkResults] = await Promise.all([
+      Promise.all(
+        idChunks.map((chunk) => supabase.from("class_reservation_counts").select("class_id, confirmed_count").in("class_id", chunk))
+      ),
+      Promise.all(
+        idChunks.map((chunk) => supabase.rpc("class_trainer_names", { p_class_ids: chunk }))
+      ),
+    ]);
+    for (const { data: countRows } of countChunkResults) {
       for (const r of countRows ?? []) counts[r.class_id] = r.confirmed_count;
+    }
+    for (const { data: trainerRows, error: trainerErr } of trainerChunkResults) {
+      if (trainerErr) throw new Error("담당 강사를 불러오지 못했어요: " + trainerErr.message);
+      for (const r of trainerRows ?? []) {
+        const name = (r as any).name;
+        if (!name) continue;
+        (instructorNamesByClass[(r as any).class_id] ??= []).push(name);
+      }
     }
   }
 
@@ -120,6 +142,8 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
     bookingDeadlineMin: c.booking_deadline_min ?? null,
     classFormat: (c.class_format ?? "group") as "group" | "private",
     status: c.status ?? "open",
+    passSelectionMode: (c.pass_selection_mode ?? "all") as "all" | "selected",
+    instructorNames: instructorNamesByClass[c.id] ?? [],
   }));
 }
 
@@ -134,6 +158,7 @@ export type ClassInput = {
   cancelDeadlineMin?: number | null;   // 예약취소 마감 (분). null이면 센터 설정 사용
   bookingDeadlineMin?: number | null;  // 예약마감 (분). null이면 센터 설정 사용(CLASS-001)
   classFormat?: "group" | "private";   // CLASS-001 D-2, 기본값 group
+  passSelectionMode?: "all" | "selected"; // 기본값 'all'(컬럼 기본값과 동일)
 };
 
 export async function createClass(centerId: string, input: ClassInput): Promise<string> {
@@ -149,6 +174,7 @@ export async function createClass(centerId: string, input: ClassInput): Promise<
     cancel_deadline_min: input.cancelDeadlineMin ?? 0,
     booking_deadline_min: input.bookingDeadlineMin ?? null,
     class_format: input.classFormat ?? "group",
+    pass_selection_mode: input.passSelectionMode ?? "all",
   }).select("id").single();
   if (error) throw new Error("수업 등록에 실패했어요: " + error.message);
   return data.id;
@@ -168,9 +194,18 @@ export async function updateClass(classId: string, input: ClassInput): Promise<v
       cancel_deadline_min: input.cancelDeadlineMin ?? 0,
       booking_deadline_min: input.bookingDeadlineMin ?? null,
       class_format: input.classFormat ?? "group",
+      pass_selection_mode: input.passSelectionMode ?? "all",
     })
     .eq("id", classId);
   if (error) throw new Error("수업 수정에 실패했어요: " + error.message);
+}
+
+// 반복 그룹 일괄 적용(updateClassGroup)은 title/start/end/capacity만 바꾸고 이 인스턴스의
+// 다른 필드는 건드리지 않는다 — 그 흐름에서도 이 인스턴스의 수강권 정책만 selectedProducts와
+// 어긋나지 않게 컬럼 하나만 좁게 갱신하기 위한 함수(updateClass 전체 재작성 대신).
+export async function updateClassPassSelectionMode(classId: string, mode: "all" | "selected"): Promise<void> {
+  const { error } = await supabase.from("classes").update({ pass_selection_mode: mode }).eq("id", classId);
+  if (error) throw new Error("수강권 정책 저장에 실패했어요: " + error.message);
 }
 
 export async function deleteClass(classId: string): Promise<void> {
@@ -185,9 +220,12 @@ export async function deleteClass(classId: string): Promise<void> {
    ============================================================ */
 
 // 그룹 전체 수정 (제목/시작·종료 시간/정원만. 날짜는 각 수업 유지)
+// 반환값: 이 그룹에 속한 class id 전체 — 담당 강사 일괄 적용(setClassTrainersForGroup) 등
+// 그룹 전체를 다시 대상으로 삼아야 하는 후속 작업에서 재사용한다(같은 조회를 두 번 하지
+// 않도록).
 export async function updateClassGroup(
   groupId: string, title: string, start: string, end: string, capacity: number
-): Promise<void> {
+): Promise<string[]> {
   assertValidClassTimeRange(start, end);
   // 그룹의 모든 수업을 가져와 각자의 날짜에 새 시간 적용
   const { data: rows, error: fErr } = await supabase
@@ -196,6 +234,7 @@ export async function updateClassGroup(
     .eq("recurring_group_id", groupId);
   if (fErr) throw new Error("반복 수업을 불러오지 못했어요: " + fErr.message);
 
+  const ids: string[] = [];
   for (const r of rows ?? []) {
     const dateStr = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date((r as any).start_time));
     const { error } = await supabase.from("classes").update({
@@ -205,7 +244,9 @@ export async function updateClassGroup(
       capacity,
     }).eq("id", (r as any).id);
     if (error) throw new Error("반복 수업 수정에 실패했어요: " + error.message);
+    ids.push((r as any).id);
   }
+  return ids;
 }
 
 // 그룹 전체 삭제
@@ -232,6 +273,7 @@ export type RecurringInput = {
   roomId?: string | null;
   cancelDeadlineMin?: number | null;
   bookingDeadlineMin?: number | null;
+  passSelectionMode?: "all" | "selected"; // 기본값 'all'
 };
 
 // 기간 내 해당 요일의 날짜들을 모두 구함
@@ -273,6 +315,7 @@ export async function createRecurringClasses(centerId: string, input: RecurringI
     cancel_deadline_min: input.cancelDeadlineMin ?? 0,
     booking_deadline_min: input.bookingDeadlineMin ?? null,
     recurring_group_id: groupId,
+    pass_selection_mode: input.passSelectionMode ?? "all",
   }));
   const { data, error } = await supabase.from("classes").insert(rows).select("id");
   if (error) throw new Error("반복 수업 등록에 실패했어요: " + error.message);
@@ -334,7 +377,9 @@ export async function fetchClassProducts(classId: string): Promise<string[]> {
     .from("class_allowed_products")
     .select("product_id")
     .eq("class_id", classId);
-  if (error) throw new Error("수업 수강권을 불러오지 못했어요: " + error.message);
+  if (error) {
+    throw new Error("수업 수강권을 불러오지 못했어요: " + error.message);
+  }
   return (data ?? []).map((r: any) => r.product_id);
 }
 
@@ -345,12 +390,16 @@ export async function setClassProducts(classId: string, productIds: string[]): P
     .from("class_allowed_products")
     .delete()
     .eq("class_id", classId);
-  if (delErr) throw new Error("수강권 설정에 실패했어요: " + delErr.message);
+  if (delErr) {
+    throw new Error("수강권 설정에 실패했어요: " + delErr.message);
+  }
 
   if (productIds.length > 0) {
     const rows = productIds.map((pid) => ({ class_id: classId, product_id: pid }));
     const { error } = await supabase.from("class_allowed_products").insert(rows);
-    if (error) throw new Error("수강권 설정에 실패했어요: " + error.message);
+    if (error) {
+      throw new Error("수강권 설정에 실패했어요: " + error.message);
+    }
   }
 }
 
@@ -361,6 +410,62 @@ export async function setClassProductsBulk(classIds: string[], productIds: strin
   for (const cid of classIds) for (const pid of productIds) rows.push({ class_id: cid, product_id: pid });
   const { error } = await supabase.from("class_allowed_products").insert(rows);
   if (error) throw new Error("수강권 설정에 실패했어요: " + error.message);
+}
+
+/* ============================================================
+   수업별 담당 강사 (class_trainers)
+   - 강사 후보는 "스태프 & 권한"(manager_centers)의 해당 센터 active 스태프 전체를
+     그대로 재사용한다(역할 구분 없음 — lib/roles.ts의 fetchStaff() 참고).
+   - 최소 0명도 허용(강사 미지정 기존 수업과 동일하게, 강사 지정 자체는 필수 아님).
+   ============================================================ */
+
+// 특정 수업에 지정된 담당 강사 account_id 목록
+export async function fetchClassTrainers(classId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("class_trainers")
+    .select("account_id")
+    .eq("class_id", classId);
+  if (error) throw new Error("담당 강사를 불러오지 못했어요: " + error.message);
+  return (data ?? []).map((r: any) => r.account_id);
+}
+
+// 수업의 담당 강사를 통째로 교체 (선택된 account_id 배열로)
+export async function setClassTrainers(classId: string, accountIds: string[]): Promise<void> {
+  const { error: delErr } = await supabase
+    .from("class_trainers")
+    .delete()
+    .eq("class_id", classId);
+  if (delErr) throw new Error("담당 강사 설정에 실패했어요: " + delErr.message);
+
+  if (accountIds.length > 0) {
+    const rows = accountIds.map((aid) => ({ class_id: classId, account_id: aid }));
+    const { error } = await supabase.from("class_trainers").insert(rows);
+    if (error) throw new Error("담당 강사 설정에 실패했어요: " + error.message);
+  }
+}
+
+// 여러 수업에 같은 담당 강사 목록 지정 (반복 수업 등록용 — 새로 만든 수업이라 기존 지정이
+// 없다는 전제라 삭제 없이 insert만 한다)
+export async function setClassTrainersBulk(classIds: string[], accountIds: string[]): Promise<void> {
+  if (classIds.length === 0 || accountIds.length === 0) return;
+  const rows: { class_id: string; account_id: string }[] = [];
+  for (const cid of classIds) for (const aid of accountIds) rows.push({ class_id: cid, account_id: aid });
+  const { error } = await supabase.from("class_trainers").insert(rows);
+  if (error) throw new Error("담당 강사 설정에 실패했어요: " + error.message);
+}
+
+// 반복 그룹 "모든 수업에 적용" 토글용 — 그룹에 속한 기존 수업들의 담당 강사를 전부 같은
+// 목록으로 교체한다(setClassTrainers의 그룹 버전, 기존 지정을 먼저 지우고 다시 넣음).
+export async function setClassTrainersForGroup(classIds: string[], accountIds: string[]): Promise<void> {
+  if (classIds.length === 0) return;
+  const { error: delErr } = await supabase.from("class_trainers").delete().in("class_id", classIds);
+  if (delErr) throw new Error("담당 강사 설정에 실패했어요: " + delErr.message);
+  if (accountIds.length > 0) {
+    const rows: { class_id: string; account_id: string }[] = [];
+    for (const cid of classIds) for (const aid of accountIds) rows.push({ class_id: cid, account_id: aid });
+    const { error } = await supabase.from("class_trainers").insert(rows);
+    if (error) throw new Error("담당 강사 설정에 실패했어요: " + error.message);
+  }
 }
 
 /* ============================================================
@@ -462,6 +567,9 @@ export async function previewCopySchedule(
 }
 
 // 실제 복사 실행 (룸·취소시간·수강권 연결도 함께 복사)
+// ⚠ 어떤 UI에서도 호출하지 않는 미사용 함수(grep으로 확인 — CopyCalendar는
+// copyByWeekday/copyByDate만 사용). 담당 강사 복수 지정/수강권 정책 변경(pass_selection_mode)
+// 배치에서 이 함수는 갱신하지 않았다 — 실제로 도달 불가능한 코드라 위험이 없음.
 export async function copySchedule(
   centerId: string, fromMonth: string, toMonth: string
 ): Promise<number> {
@@ -816,27 +924,61 @@ export async function copyByDate(
   return await insertCopiedClasses(rows, linkPlan);
 }
 
-// 공통: 삽입 + 수강권 연결 복사
+// 특정 class의 수강권 허용 모드만 단독 조회. class_allowed_products 행 존재 여부만으로는
+// 'all'/'selected'를 다시 판정할 수 없으므로(이 컬럼이 유일한 근거) 반드시 이 값을 직접
+// 읽어야 한다. 스케줄 복사(원본 모드 그대로 옮기기)와 관리자 UI의 수정 시트 재진입 하이드레이트
+// (목록의 캐시된 ManagedClass.passSelectionMode는 방금 저장 직후엔 아직 갱신 전일 수 있어
+// 신뢰할 수 없다 — 반드시 이 함수로 다시 조회) 양쪽에서 재사용한다.
+export async function fetchClassPassSelectionMode(classId: string): Promise<"all" | "selected"> {
+  const { data, error } = await supabase.from("classes").select("pass_selection_mode").eq("id", classId).maybeSingle();
+  if (error || !data) return "all";
+  return ((data as any).pass_selection_mode ?? "all") as "all" | "selected";
+}
+
+// 공통: 삽입 + 수강권/강사 연결 복사
 async function insertCopiedClasses(
   rows: any[], linkPlan: { idx: number; srcClassId: string }[]
 ): Promise<number> {
   if (rows.length === 0) return 0;
+
+  // 원본별 수강권 허용 모드를 먼저 조회해 각 row에 반영한다 — pass_selection_mode는
+  // classes 테이블의 컬럼이라 insert 시점에 함께 넣어야 한다(나중에 update하면 그 사이
+  // 잠깐 기본값 'all'로 노출되는 창이 생김).
+  const modeCache: Record<string, "all" | "selected"> = {};
+  for (const l of linkPlan) {
+    if (!(l.srcClassId in modeCache)) modeCache[l.srcClassId] = await fetchClassPassSelectionMode(l.srcClassId);
+  }
+  for (const l of linkPlan) {
+    rows[l.idx].pass_selection_mode = modeCache[l.srcClassId];
+  }
+
   const { data, error } = await supabase.from("classes").insert(rows).select("id");
   if (error) throw new Error("스케줄 복사에 실패했어요: " + error.message);
 
   const newIds = (data ?? []).map((r: any) => r.id);
-  // 원본별 수강권 연결 캐시
-  const cache: Record<string, string[]> = {};
+  // 원본별 수강권/강사 연결 캐시
+  const productCache: Record<string, string[]> = {};
+  const trainerCache: Record<string, string[]> = {};
   for (const l of linkPlan) {
     const newId = newIds[l.idx];
     if (!newId) continue;
-    if (!(l.srcClassId in cache)) {
-      try { cache[l.srcClassId] = await fetchClassProducts(l.srcClassId); }
-      catch { cache[l.srcClassId] = []; }
+    if (!(l.srcClassId in productCache)) {
+      try { productCache[l.srcClassId] = await fetchClassProducts(l.srcClassId); }
+      catch { productCache[l.srcClassId] = []; }
     }
-    const products = cache[l.srcClassId];
-    if (products.length > 0) {
+    if (!(l.srcClassId in trainerCache)) {
+      try { trainerCache[l.srcClassId] = await fetchClassTrainers(l.srcClassId); }
+      catch { trainerCache[l.srcClassId] = []; }
+    }
+    // 'selected' 모드일 때만 실제로 저장된 product가 있고, 그 경우에만 복사한다 —
+    // 'all' 모드는 class_allowed_products를 비워두는 게 정책이므로 여기서도 그대로 둔다.
+    const products = productCache[l.srcClassId];
+    if (modeCache[l.srcClassId] === "selected" && products.length > 0) {
       try { await setClassProducts(newId, products); } catch { /* 무시 */ }
+    }
+    const trainers = trainerCache[l.srcClassId];
+    if (trainers.length > 0) {
+      try { await setClassTrainers(newId, trainers); } catch { /* 무시 */ }
     }
   }
   return newIds.length;
