@@ -12,6 +12,7 @@ import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
 import AmPmTimeInput from "../../components/AmPmTimeInput";
 import { dhmToMinutes, minutesToDhm } from "../../../lib/deadlineInput";
+import { formatInstructorNames } from "../../../lib/instructorDisplay";
 import CopyCalendar from "./CopyCalendar";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchRooms, type Room } from "../../../lib/rooms";
@@ -963,18 +964,16 @@ export default function ClassManagePage() {
         </div>
       ) : (
         <div className="daylist" style={{ minHeight: 0, paddingTop: 4 }}>
-          {dayClasses.map((c) => (
+          {dayClasses.map((c) => {
+            const instructorText = formatInstructorNames(c.instructorNames);
+            return (
             <div key={c.id} className="class-row" onClick={() => openEdit(c)} style={{ cursor: "pointer" }}>
               <div className="class-color" style={{ background: "var(--accent)" }} />
               <div className="class-info">
                 <div className="class-row-title">{c.title}</div>
                 <div className="class-row-meta">
                   {c.start}~{c.end}
-                  {c.instructorNames.length > 0 && (
-                    <> · {c.instructorNames.length > 2
-                      ? `${c.instructorNames[0]} 외 ${c.instructorNames.length - 1}명`
-                      : c.instructorNames.join(" · ")}</>
-                  )}
+                  {instructorText && ` · ${instructorText}`}
                   {" · "}
                   <button type="button" className="res-count-link" onClick={(e) => { e.stopPropagation(); openRoster(c); }}>예약 {c.reserved}/{c.capacity} ›</button>
                 </div>
@@ -985,7 +984,8 @@ export default function ClassManagePage() {
                 </button>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

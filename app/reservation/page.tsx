@@ -30,6 +30,7 @@ import {
   type BookingProfile,
 } from "../../lib/reservations";
 import { toKstIso } from "../../lib/kst";
+import { formatInstructorNames } from "../../lib/instructorDisplay";
 
 
 // 공휴일 (나중에 공휴일 API 또는 테이블로 교체 가능)
@@ -594,6 +595,7 @@ function ReservationCalendarContent() {
             // 별도로 차단 — UI는 보조 수단일 뿐 서버가 최종 방어선).
             const hasStarted = new Date(toKstIso(cls.date, cls.start)).getTime() <= Date.now();
             const passNames = usableProductNames(cls.id);
+            const instructorText = formatInstructorNames(cls.instructorNames);
             return (
               <div key={cls.id} className={`class-row ${mine ? "mine" : ""}`}>
                 <div className="class-color" style={{ background: center?.color }} />
@@ -609,11 +611,7 @@ function ReservationCalendarContent() {
                   </div>
                   <div className="class-row-place">
                     {cls.place}
-                    {cls.instructorNames.length > 0 && (
-                      <> · {cls.instructorNames.length > 2
-                        ? `${cls.instructorNames[0]} 외 ${cls.instructorNames.length - 1}명`
-                        : cls.instructorNames.join(" · ")}</>
-                    )}
+                    {instructorText && ` · ${instructorText}`}
                   </div>
                   <div className="center-class-passes">
                     {passesLoading ? (
