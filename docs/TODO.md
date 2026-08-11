@@ -158,21 +158,19 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P0 |
-| 현재 상태 | **확인됨 — SQL(RPC) 수정 필요, Track B 규칙상 이번 배치 미수정** |
-| 근거 파일 | `reservation_functions.sql`(`add_holiday_safe` 함수), `app/manager/holidays/page.tsx` |
-| 완료 조건 | `add_holiday_safe`가 확정/대기/출석 예약을 강제 취소할 때 `admin_cancel_reservation`/`manager_set_attendance`와 동일하게 `memberships.remaining_count`를 복구하도록 RPC를 수정하고, 예약자 있는 날짜를 휴무일로 지정하는 통합 테스트로 회귀 확인함 |
-| 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 8번 항목 |
+| 우선순위 | 해결됨(과거 P0) |
+| 현재 상태 | **완료(2026-08-12 상태 정정).** `fix_holiday_history_and_notification_draft_proposed.sql`(2026-08-03)이 `add_holiday_safe`를 재정의하면서 `membership_consumed=true`였던 예약만 정확히 `remaining_count + 1`로 복구하도록 이미 해결했다 — Live 적용 완료(2026-08-07 감사에서 재확인). 예약도 더 이상 `delete`하지 않고 `status='cancelled'`로 이력 보존하는 방식으로 재설계됨. 아래 원래 기록은 히스토리로 남긴다. |
+| 근거 파일 | `fix_holiday_history_and_notification_draft_proposed.sql`(적용 완료), `app/manager/holidays/page.tsx` |
+| 완료 조건 | ~~`add_holiday_safe`가 확정/대기/출석 예약을 강제 취소할 때 `memberships.remaining_count`를 복구하도록 RPC를 수정~~ 완료 |
+| 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 8번 항목. PR #32(`fix/holiday-refund-and-settings-wiring`)가 이 문제를 별도로 고치려 했으나, 위 파일로 이미 해결된 뒤라 **superseded — close 처리**(사유는 P2-16 정정 참고). |
 
-2026-08-02 Track B 관리자 기능 감사에서 발견: 매니저가 예약자가 있는 날짜를 휴무일로 지정하면
+**(원래 기록, 2026-08-02 Track B 감사)**: 매니저가 예약자가 있는 날짜를 휴무일로 지정하면
 `add_holiday_safe`가 해당 예약들을 강제로 지우면서(`delete from reservations`) 그 예약에 쓰인
 수강권의 `remaining_count`를 전혀 복구하지 않습니다. 같은 "취소" 성격의 다른 경로
 (`admin_cancel_reservation`, `manager_set_attendance`의 취소 처리)는 전부 정확히 +1 복구하는
-것과 대조적입니다 — 회원이 수강권 횟수를 영구히 잃는 실질적 금전/재화 손실 버그입니다.
-RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·DB 변경 금지") 범위 밖이라
-이번 배치에서는 고치지 않고 여기 기록만 합니다 — 별도 승인된 SQL 배치에서 처리해야 합니다.
+것과 대조적입니다 — 회원이 수강권 횟수를 영구히 잃는 실질적 금전/재화 손실 버그였습니다.
 부수 발견: 같은 함수가 권한 체크에 `schedule.own.group.delete`(원래 "수업그룹 삭제" 용도)
-권한 키를 재사용하고 있어, 세분권한 도입 시 의미가 부정확할 수 있습니다(이것도 SQL 필요).
+권한 키를 재사용하고 있어, 세분권한 도입 시 의미가 부정확할 수 있습니다(별도 미해결).
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
@@ -349,31 +347,29 @@ URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 �
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P1 |
-| 현재 상태 | **부분 구현 — 화면은 완료, 서버 적용은 일부만** |
-| 근거 파일 | `app/manager/settings/page.tsx`, `lib/settings.ts`, `wire_settings.sql`, `add_center_settings.sql`, `reservation_functions.sql` |
-| 완료 조건 | `center_settings`의 각 필드가 실제로 어떤 RPC/쿼리에서 읽히는지 전수 확인하고, 미적용 필드는 (a) 해당 로직에 반영하거나 (b) "준비 중" 표시로 화면에서 명확히 구분함 |
-| 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 운영설정 항목 |
+| 우선순위 | 대부분 해결됨(과거 P1) |
+| 현재 상태 | **핵심 4개 필드 완료(2026-08-12 상태 정정).** `fix_reserve_with_membership_operational_settings.sql`(2026-08-04, PR #39)이 `reserve_class`와 `reserve_with_membership` 양쪽에 예약 오픈 시각/당일예약 허용/일일예약 한도/주간 대기예약 한도 4개 가드를 이식 — Live 적용 완료(사용자 적용 확인, E2E 13개 시나리오로 회귀 검증). `private_max_concurrent(_enabled)`도 완료(아래 2026-08-05 기록의 "SQL 미적용" 표기는 stale — 이후 `add_class_trainers_pass_selection_mode_draft_proposed.sql`이 이 로직을 포함한 채 2026-08-11 적용 완료됐음을 재확인). 나머지 필드(`use_locker`/`use_lounge`/`show_*`/`auto_unpaid_input` 등)는 여전히 미배선 — 아래 원래 기록대로 남겨둠. |
+| 근거 파일 | `fix_reserve_with_membership_operational_settings.sql`(적용 완료), `app/manager/settings/page.tsx`, `lib/settings.ts` |
+| 완료 조건 | 나머지 미배선 필드는 (a) 해당 로직에 반영하거나 (b) "준비 중" 표시로 화면에서 명확히 구분함 — 이 부분만 미완료 |
+| 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 운영설정 항목. PR #32(`fix/holiday-refund-and-settings-wiring`)가 이 4개 필드를 별도로 고치려 했으나, 위 파일이 더 넓은 범위(두 RPC 모두)로 이미 해결한 뒤라 **superseded — close 처리**(사유는 P2-16 정정 참고). |
 
-2026-08-02 Track B 감사에서 발견: `center_settings`에 저장되는 약 26개 필드 중 예약 마감시각류
+**(원래 기록, 2026-08-02 Track B 감사)**: `center_settings`에 저장되는 약 26개 필드 중 예약 마감시각류
 8개(`private/group_{book,cancel}_{days_before,time}`, `calc_deadline()`에서 사용)와
 `deduct_on_late_cancel`(`cancel_reservation()`에서 사용) 9개만 실제로 어떤 서버 로직에서 읽힙니다.
 나머지(`allow_same_day_booking`, `daily_book_limit(_enabled)`, `waitlist_auto_hours/minutes`,
 `waitlist_weekly_limit`, `use_locker`, `use_lounge`, `private_max_concurrent(_enabled)`,
 `show_group_reserved_count`/`show_group_waitlist_count`, `use_inquiry_board`, `show_all_classes`,
 `auto_unpaid_input`, `show_point_history` 등)는 `schema.sql`과 `lib/settings.ts` 외 코드 참조가
-0건입니다 — 매니저가 화면에서 토글/숫자를 바꿔도 저장은 되지만 실제 예약·조회 흐름에는
-아무 영향이 없습니다. 신뢰를 해치는 문제라 P1로 분류합니다. 각 필드를 실제로 구현할지,
-아니면 "준비 중"으로 화면에서 구분할지는 제품 결정이 필요합니다.
+0건이었습니다 — 위 표의 4개(+private_max_concurrent)는 이후 해결됨, 나머지는 여전히 미배선.
 
 2026-08-05 P2(프라이빗 수업) 감사에서 `private_max_concurrent(_enabled)`는 해결: reserve_class/
 reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시간대에 확정된 다른
 프라이빗 수업 수"를 세어 한도를 넘으면 거부하는 로직을 추가했다
-(`fix_private_class_capacity_and_concurrency_draft_proposed.sql`, SQL 미적용·승인 대기,
-`tests/integration/private-class-capacity.test.ts`로 검증). 목록에서 이 필드는 제거하되,
-`private_slot_unit`(schema.sql에만 있고 코드 참조 0건, 프라이빗 시간 단위 슬롯 선택 UI 자체가
-없어 죽은 설정으로 보임)은 여전히 미해결 — P2/P3 후속 범위(프라이빗 셀프 슬롯 예약 UI를
-만들지 여부와 함께 제품 결정 필요)로 남긴다.
+(`fix_private_class_capacity_and_concurrency_draft_proposed.sql`, 작성 당시 SQL 미적용·승인
+대기였음 — **2026-08-12 재확인: 이후 적용 완료**, `tests/integration/private-class-capacity.test.ts`로
+검증). 목록에서 이 필드는 제거하되, `private_slot_unit`(schema.sql에만 있고 코드 참조 0건,
+프라이빗 시간 단위 슬롯 선택 UI 자체가 없어 죽은 설정으로 보임)은 여전히 미해결 — P2/P3
+후속 범위(프라이빗 셀프 슬롯 예약 UI를 만들지 여부와 함께 제품 결정 필요)로 남긴다.
 
 ### P1-13. 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
 
@@ -644,6 +640,17 @@ client로 fixture를 만들고 지울 수 있어 문제가 되지 않지만, `co
 후 버전)으로 작성했습니다 — git의 `reservation_functions.sql`만 보고 베이스라인을 판단하면
 안 됩니다. PR #32가 merge되면 `reservation_functions.sql` 자체도 최신화가 필요합니다(기존
 P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
+
+> **⚠️ 2026-08-12 정정**: 위 "`admin_action_logs` FK 2개... 이미 라이브 상태" 부분은 **부정확했던
+> 것으로 보입니다.** 이후 `cleanup_shared_test_center_pollution_draft_proposed.sql` v1(2026-08-09)이
+> `admin_action_logs` FK 위반으로 실제로 실패했고(P2-19 기록 참고), v2는 이 FK를 우회하기 위해
+> `admin_action_logs`를 먼저 삭제하는 순서로 재작성해야 했습니다 — FK가 nullable/`ON DELETE`로
+> 완화됐다면 필요 없었을 조치입니다. `add_admin_assignment.sql`(git)의 원래 정의
+> (`reservation_id uuid not null references reservations(id)`, ON DELETE 미지정)가 여전히
+> 라이브와 일치하는 것으로 판단되며, 이 FK로 인한 위험은 P0-6/P1-12와는 별도로 **P1-18**에
+> 새로 기록했습니다. P0-6/P1-12 자체(수강권 복구·운영설정 4개 필드)는 이 정정과 무관하게
+> 다른 후속 구현으로 실제로 해결·적용됨을 별도 확인했습니다(P0-6/P1-12 섹션 참고). PR #32는
+> 이 문서의 P0-6/P1-18 근거로 close 처리합니다.
 
 - **`cancel_deadline_min`이 `booking_deadline_min`과 동일한 이유로 사실상 무효**: `calc_deadline()`은
   `center_settings`가 있으면(사실상 항상) 무조건 그 값을 쓰고, `classes.cancel_deadline_min`은
@@ -930,6 +937,80 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   매트릭스), `tests/e2e/admin/membership-schedule-rules.spec.ts`(B는 유지, D+F+K/J는 새
   정책에 맞게 갱신 — 옛 정책 하에서 "차단"을 기대하던 부분이 새 정책에서는 "사용 가능"으로
   뒤집힘).
+
+
+### P1-18. (신규, 2026-08-12) 수업 삭제 시 admin_action_logs.reservation_id FK로 delete_class_safe/delete_class_group_safe 실패 가능
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **확인됨 — 코드 감사로 재현 조건 확정, 아직 미수정(SQL 필요, 이번 배치 범위 밖)** |
+| 근거 파일 | `fix_class_delete.sql`(`delete_class_safe`/`delete_class_group_safe`), `add_admin_assignment.sql`(`admin_action_logs` 테이블 정의) |
+| 완료 조건 | 아래 "해결 후보" 중 하나를 선택해 SQL 작성 → 재현 통합 테스트(신규) → 사용자 승인 후 적용 → 회귀 확인 |
+| 관련 문서 | PR #32(`fix/holiday-refund-and-settings-wiring`)가 휴무일 경로에서 동일 근본 원인을 발견했으나 그 PR은 P0-6/P1-12가 이미 다른 방식으로 해결돼 close 처리됨 — 이 항목은 **PR #32와 별도의, 아직 유효한 문제**로 새로 추적 |
+
+**발생 조건**: 수업 A에 대해 매니저가 "관리자 직접배치"(또는 무료배치)를 한 번이라도 실행하면
+`admin_action_logs`에 `reservation_id`가 그 예약을 가리키는 로그 행이 append-only로 남는다.
+이후 그 예약이 (a) 회원 본인 취소, (b) 관리자 취소, (c) 휴무일 지정으로 취소되어
+`reservations.status`가 `cancelled`로 바뀌어도 — 이 코드베이스의 취소 경로는 전부 `UPDATE`이지
+`DELETE`가 아니므로(`cancel_reservation`/`add_holiday_safe` 확인함) — 그 `reservations` 행
+자체는 남아있고 `admin_action_logs.reservation_id`도 계속 그 행을 참조한다.
+
+**영향받는 RPC**: `delete_class_safe(p_class_id)`, `delete_class_group_safe(p_group_id)`
+(둘 다 `fix_class_delete.sql`). 두 함수 모두 확정/대기/출석(`confirmed`/`waitlisted`/`attended`)
+예약만 사전 차단하고, `cancelled`/`no_show` 상태인 예약은 그대로 통과시켜
+`delete from reservations where class_id = ...`를 실행한다.
+
+**관련 테이블/FK**: `admin_action_logs.reservation_id uuid not null references reservations(id)`
+(`add_admin_assignment.sql`, ON DELETE 절 미지정 → PostgreSQL 기본값 `NO ACTION`, 사실상
+RESTRICT와 동일하게 동작). 이 정의를 완화하는 후속 SQL은 git/CHANGELOG 어디에도 없음
+(자세한 재확인 경위는 P2-16 정정 노트 참고).
+
+**현재 삭제 흐름**: `delete_class_safe` → 활성 예약 0건 확인(통과) → `delete from reservations
+where class_id = p_class_id` → 그 클래스의 과거 취소된 예약 중 `admin_action_logs`가 참조하는
+행이 하나라도 있으면 Postgres가 FK violation을 던짐 → 트랜잭션 전체 롤백 → 함수가 원시
+Postgres 에러 메시지로 실패(사용자에게는 "수업을 삭제할 수 없어요" 같은 안내 문구 없이
+불친절한 에러만 노출).
+
+**사용자 영향**: 매니저가 "예전에 관리자가 직접 배치했다가 취소된 이력이 있는 수업"을
+삭제하려고 하면 원인을 알 수 없는 에러로 실패한다. 반복수업 그룹 삭제(`delete_class_group_safe`)는
+그룹 내 수업 중 단 하나라도 그런 이력이 있으면 그룹 전체 삭제가 막힌다.
+
+**재현 방법(코드 감사로 확정, 실제 DB 실행은 하지 않음)**:
+1. 수업 X 생성
+2. 관리자 직접배치로 회원 프로필에 예약 생성(`admin_action_logs`에 `CREATE_ASSIGNMENT` 로그 1건)
+3. 그 예약을 취소(회원 본인 취소 또는 관리자 취소 — 둘 다 `status`만 `cancelled`로 변경)
+4. `delete_class_safe(X)` 호출 → 활성 예약 0건이라 통과 → `delete from reservations` 단계에서
+   `admin_action_logs_reservation_id_fkey` 위반으로 실패 예상
+
+**해결 후보**:
+
+| 방법 | 설명 | 장점 | 단점/감사(audit trail) 위험 |
+|---|---|---|---|
+| A. reservations를 물리 DELETE하지 않고 상태 보존 | `delete_class_safe`도 `add_holiday_safe`처럼 `delete` 대신 `classes.status='cancelled'` + `reservations` 그대로 두는 방식으로 전환 | 이미 이 코드베이스의 확립된 패턴(휴무일 취소 경로와 일관성), 이력 100% 보존, FK 문제 자체가 원천적으로 발생 안 함 | 삭제된 수업이 목록 쿼리에서 계속 걸러져야 함(이미 `status<>'cancelled'` 필터가 여러 곳에 있어 위험 낮음), "완전 삭제"를 기대하는 관리자 기대와 다를 수 있어 UX 문구 조정 필요 |
+| B. `admin_action_logs.reservation_id` FK의 ON DELETE 정책 변경(`ON DELETE SET NULL`) | FK 자체를 완화 | 삭제 로직 자체는 안 바꿔도 됨 | **감사 로그가 "어떤 예약이었는지" 연결을 잃음** — `admin_action_logs`에는 `member_name_snapshot`/`class_title_snapshot`/`class_start_snapshot` 스냅샷 컬럼이 이미 있어 완전한 정보 손실은 아니지만, 다른 테이블과 조인해 원본 예약을 추적하는 경로가 끊김 |
+| C. `reservation_id` nullable + `ON DELETE SET NULL`(B와 유사) | B와 동일 접근의 다른 표현 | 상동 | 상동 — B/C는 사실상 같은 방향 |
+| D. `delete_class_safe`가 삭제 전에 그 클래스의 `admin_action_logs` 존재 여부를 확인해 있으면 친절한 에러로 차단 | 최소 변경, FK 위반을 "안내 문구"로만 바꿈 | 구현 가장 간단 | 근본 해결이 아님 — 매니저가 여전히 그런 수업을 영구히 삭제할 방법이 없어짐(단, 실제로 이런 요구가 드물면 임시 완화책으로는 유효) |
+
+**권장 방향**: **A(물리 DELETE 대신 상태 보존)**를 우선 검토 권장 — 이미 휴무일 경로에서 같은
+설계를 검증된 패턴으로 쓰고 있고, `admin_action_logs`처럼 "삭제 불가·감사용" 테이블과 상호작용하는
+곳에서 **이력을 잃는 방식(B/C)은 지양**해야 한다는 게 이 저장소의 기존 원칙과 일치한다. D는
+A를 구현하기 전까지의 임시 완화책으로만 고려.
+
+**필요한 regression test**: 위 "재현 방법" 4단계를 그대로 통합 테스트로 작성해 (a) 현재
+실패를 먼저 RED로 확인 → (b) 해결 SQL 적용 후 GREEN 전환. `delete_class_group_safe`도 동일한
+케이스로 별도 커버.
+
+**SQL 필요 예상 여부**: **YES** (A안이든 B/C안이든 `create or replace function delete_class_safe`
+/`delete_class_group_safe` 재정의가 필요, B/C안이면 `alter table admin_action_logs`도 추가
+필요). 이번 배치에서는 조사만 하고 SQL을 작성/실행하지 않음.
+
+**PR #32와의 관계**: PR #32(`fix_admin_action_logs_class_id_fk_draft_proposed.sql`)가 이것과
+매우 유사한(하지만 `class_id` FK 대상, 이 항목은 `reservation_id` FK 대상 — 둘 다 같은 테이블의
+다른 컬럼) 문제를 이미 발견했었다. 다만 PR #32의 해결 방식(FK를 nullable로 완화)을 그대로
+가져오면 위 표의 B/C안과 같은 감사 이력 손실 위험이 있어, 이 항목에서 A안을 포함해 다시
+비교 검토하는 것을 권장한다. PR #32 자체는 P0-6/P1-12가 해결된 뒤라 close하지만, 이 FK 문제는
+별도로 여기 추적한다.
 
 
 ### P1-14. (2026-08-10, 해결 완료) `attendance-policy.test.ts` 주간 대기예약 한도 초과로 Integration 반복 실패

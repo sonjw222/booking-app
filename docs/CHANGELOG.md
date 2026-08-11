@@ -8,7 +8,35 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
-## 2026-08-11 — 담당 강사 복수 지정 + 수강권 허용 정책 변경 Batch 최종 완료: 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
+## 2026-08-12 — PR #32 후속 정리: close 판정 + 신규 FK 이슈(P1-18) 분리 + docs stale 정정 (chore/close-pr32-and-track-class-delete-fk)
+
+**코드/SQL/UI 변경 없음. 문서 정리 + GitHub PR close만 수행.**
+
+- **PR #32(`fix/holiday-refund-and-settings-wiring`) 재검증 결과**: 이 PR이 다루던 P0-6(휴무일
+  지정 시 수강권 `remaining_count` 미복구)과 P1-12(운영설정 4개 필드가 `reserve_class()`에
+  미배선)는 PR #32와 무관한 **후속 구현으로 이미 해결되고 Live DB에도 적용된 상태**임을
+  현재 main 코드(`fix_holiday_history_and_notification_draft_proposed.sql`,
+  `fix_reserve_with_membership_operational_settings.sql`)를 직접 읽어 재확인했다. 게다가
+  PR #32의 `reserve_class()` 재정의(2026-08-02 스냅샷 기준)를 지금 그대로 적용하면
+  이후 추가된 수업 시작 후 예약 차단·프라이빗 동시 진행 제한·P1-17 관리자 지정 수강권
+  override·`pass_selection_mode`·개별 수업 예약마감 우선순위가 전부 조용히 회귀한다 —
+  **merge 시도 없이 close**했다(사유는 `docs/TODO.md` P0-6/P1-12/P2-16 참고).
+- **신규 발견(PR #32와 별도 문제)**: `delete_class_safe`/`delete_class_group_safe`
+  (`fix_class_delete.sql`)가 지금도 `delete from reservations`를 실행하는데, 그 수업에
+  과거 관리자 직접배치 이력이 있으면(`admin_action_logs.reservation_id`, FK `ON DELETE`
+  미지정) 그 예약이 이미 `cancelled` 상태라도 FK violation으로 수업 삭제 자체가 실패할 수
+  있다. PR #32가 휴무일 경로에서 발견한 것과 같은 근본 원인이 수업삭제 경로에는 그대로
+  남아있음을 코드 감사로 확정 — `docs/TODO.md` **P1-18**로 신규 등록(해결 SQL은 아직 작성/
+  실행하지 않음).
+- **docs stale 정정**: `docs/TODO.md`의 P0-6/P1-12를 완료 상태로 갱신(원래 기록은 삭제하지
+  않고 히스토리로 보존). P2-16의 "`admin_action_logs` FK 2개가 이미 라이브 상태"라는 2026-08-04
+  기록이 2026-08-09 `cleanup_shared_test_center_pollution_draft_proposed.sql` v1/v2가 실제로
+  그 FK 위반을 재현한 사실(P2-19)과 모순돼 부정확했던 것으로 판단, 정정 노트 추가.
+- **service_role GRANT 2건 Live 상태**: `fix_service_role_missing_grants_class_allowed_products_draft_proposed.sql`/
+  `fix_service_role_missing_grants_for_e2e_admin_draft_proposed.sql`은 CI 로그상 의존 테스트가
+  전부 통과해 적용된 것으로 강하게 추정되나, docs에 명시적 "적용 완료" 기록이 없어 Live DB
+  직접 조회는 못 하고(anon key만 보유) 사용자가 Supabase SQL Editor에서 실행할 read-only
+  진단 SQL만 제공함(코드/DB 변경 없음).
 
 두 번째 SQL(`add_class_trainer_names_rpc_draft_proposed.sql`)까지 적용 완료되면서 이
 Batch가 최종 완료됐다. 사용자 리뷰로 RPC 권한을 강화(public/anon EXECUTE 명시적 차단,
