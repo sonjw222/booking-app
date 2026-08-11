@@ -220,9 +220,12 @@ export async function deleteClass(classId: string): Promise<void> {
    ============================================================ */
 
 // 그룹 전체 수정 (제목/시작·종료 시간/정원만. 날짜는 각 수업 유지)
+// 반환값: 이 그룹에 속한 class id 전체 — 담당 강사 일괄 적용(setClassTrainersForGroup) 등
+// 그룹 전체를 다시 대상으로 삼아야 하는 후속 작업에서 재사용한다(같은 조회를 두 번 하지
+// 않도록).
 export async function updateClassGroup(
   groupId: string, title: string, start: string, end: string, capacity: number
-): Promise<void> {
+): Promise<string[]> {
   assertValidClassTimeRange(start, end);
   // 그룹의 모든 수업을 가져와 각자의 날짜에 새 시간 적용
   const { data: rows, error: fErr } = await supabase
@@ -231,6 +234,7 @@ export async function updateClassGroup(
     .eq("recurring_group_id", groupId);
   if (fErr) throw new Error("반복 수업을 불러오지 못했어요: " + fErr.message);
 
+  const ids: string[] = [];
   for (const r of rows ?? []) {
     const dateStr = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date((r as any).start_time));
     const { error } = await supabase.from("classes").update({
@@ -240,7 +244,9 @@ export async function updateClassGroup(
       capacity,
     }).eq("id", (r as any).id);
     if (error) throw new Error("반복 수업 수정에 실패했어요: " + error.message);
+    ids.push((r as any).id);
   }
+  return ids;
 }
 
 // 그룹 전체 삭제
@@ -438,13 +444,28 @@ export async function setClassTrainers(classId: string, accountIds: string[]): P
   }
 }
 
-// 여러 수업에 같은 담당 강사 목록 지정 (반복 수업 등록용)
+// 여러 수업에 같은 담당 강사 목록 지정 (반복 수업 등록용 — 새로 만든 수업이라 기존 지정이
+// 없다는 전제라 삭제 없이 insert만 한다)
 export async function setClassTrainersBulk(classIds: string[], accountIds: string[]): Promise<void> {
   if (classIds.length === 0 || accountIds.length === 0) return;
   const rows: { class_id: string; account_id: string }[] = [];
   for (const cid of classIds) for (const aid of accountIds) rows.push({ class_id: cid, account_id: aid });
   const { error } = await supabase.from("class_trainers").insert(rows);
   if (error) throw new Error("담당 강사 설정에 실패했어요: " + error.message);
+}
+
+// 반복 그룹 "모든 수업에 적용" 토글용 — 그룹에 속한 기존 수업들의 담당 강사를 전부 같은
+// 목록으로 교체한다(setClassTrainers의 그룹 버전, 기존 지정을 먼저 지우고 다시 넣음).
+export async function setClassTrainersForGroup(classIds: string[], accountIds: string[]): Promise<void> {
+  if (classIds.length === 0) return;
+  const { error: delErr } = await supabase.from("class_trainers").delete().in("class_id", classIds);
+  if (delErr) throw new Error("담당 강사 설정에 실패했어요: " + delErr.message);
+  if (accountIds.length > 0) {
+    const rows: { class_id: string; account_id: string }[] = [];
+    for (const cid of classIds) for (const aid of accountIds) rows.push({ class_id: cid, account_id: aid });
+    const { error } = await supabase.from("class_trainers").insert(rows);
+    if (error) throw new Error("담당 강사 설정에 실패했어요: " + error.message);
+  }
 }
 
 /* ============================================================

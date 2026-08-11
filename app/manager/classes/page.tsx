@@ -21,7 +21,7 @@ import {
   createRecurringClasses, expandRecurringDates,
   updateClassGroup, deleteClassGroup,
   fetchClassAttendees, setAttendance, fetchClassProducts, setClassProducts, setClassProductsBulk,
-  fetchClassTrainers, setClassTrainers, setClassTrainersBulk, fetchClassPassSelectionMode,
+  fetchClassTrainers, setClassTrainers, setClassTrainersBulk, setClassTrainersForGroup, fetchClassPassSelectionMode,
   fetchCenterHolidayDates,
   fetchCopyGroups, fetchCopyDateItems, planCopyByWeekday, planCopyByDate,
   copyByWeekday, copyByDate,
@@ -722,15 +722,18 @@ export default function ClassManagePage() {
       const passMode = resolved.mode;
       if (editId) {
         if (applyToGroup && editGroupId) {
-          await updateClassGroup(editGroupId, form.title, form.start, form.end, form.capacity);
+          const groupIds = await updateClassGroup(editGroupId, form.title, form.start, form.end, form.capacity);
           // updateClassGroup은 title/start/end/capacity만 그룹 전체에 반영하고 이 인스턴스의
-          // 수강권 정책 컬럼은 건드리지 않으므로, 이 인스턴스만 따로 맞춰준다.
+          // 수강권 정책 컬럼은 건드리지 않으므로, 이 인스턴스만 따로 맞춰준다(수강권 정책·
+          // 허용 상품은 여전히 인스턴스별 — 그룹 적용 대상이 아님).
           await updateClassPassSelectionMode(editId, passMode);
+          // 담당 강사는 title/시간/정원과 마찬가지로 그룹 전체에 동일하게 적용한다.
+          await setClassTrainersForGroup(groupIds, selectedTrainers);
         } else {
           await updateClass(editId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin(), passSelectionMode: passMode });
+          await setClassTrainers(editId, selectedTrainers);
         }
         await setClassProducts(editId, resolved.productIds);
-        await setClassTrainers(editId, selectedTrainers);
       } else {
         const newId = await createClass(activeCenterId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin(), passSelectionMode: passMode });
         await setClassProducts(newId, resolved.productIds);
@@ -1390,7 +1393,7 @@ export default function ClassManagePage() {
             {/* 반복 수업 일괄 적용 (그룹 소속 수정일 때만) */}
             {editId && editGroupId && (
               <div className="set-row" style={{ padding: "10px 0", borderBottom: "none" }}>
-                <div className="set-label">모든 반복 수업에 적용<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>수업명·시간·정원이 전체에 반영돼요 (날짜 제외)</span></div>
+                <div className="set-label">모든 반복 수업에 적용<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>수업명·시간·정원·담당 강사가 전체에 반영돼요 (날짜·수강권 정책 제외)</span></div>
                 <button className={`switch ${applyToGroup ? "on" : ""}`} onClick={() => setApplyToGroup(!applyToGroup)}>
                   <span className="knob" />
                 </button>

@@ -12,8 +12,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";
 import {
-  fetchClasses, createClass, updateClassPassSelectionMode,
-  fetchClassTrainers, setClassTrainers, setClassTrainersBulk,
+  fetchClasses, createClass, updateClassPassSelectionMode, updateClassGroup,
+  fetchClassTrainers, setClassTrainers, setClassTrainersBulk, setClassTrainersForGroup,
   fetchClassProducts, setClassProducts,
   copyByDate, type CopyDateItem,
 } from "../../lib/classes";
@@ -218,5 +218,57 @@ describe("copyByDate(): 스케줄 복사 시 수강권 정책·담당 강사도 
     expect(copied!.passSelectionMode).toBe("selected");
     expect(await fetchClassProducts(copied!.id)).toEqual([productId]);
     expect(await fetchClassTrainers(copied!.id)).toEqual([managerA.accountId]);
+  });
+});
+
+describe("updateClassGroup() + setClassTrainersForGroup(): 반복 그룹 '모든 수업에 적용' 시 담당 강사도 함께 반영된다 (2026-08-12 요청)", () => {
+  it("그룹 내 수업들이 서로 다른 강사 상태로 시작해도, 그룹 적용 후에는 전부 같은 목록으로 교체된다", async () => {
+    const groupId = crypto.randomUUID();
+    const { date: d1, start: s1, end: e1 } = futureYmdHm(24 * 55);
+    const { date: d2, start: s2, end: e2 } = futureYmdHm(24 * 56);
+    const id1 = await createClass(centerAId, { title: "그룹강사적용", date: d1, start: s1, end: e1, capacity: 8, allowGoods: true });
+    cleanupClassIds.push(id1);
+    const id2 = await createClass(centerAId, { title: "그룹강사적용", date: d2, start: s2, end: e2, capacity: 8, allowGoods: true });
+    cleanupClassIds.push(id2);
+    // 실제 반복 등록과 동일하게 recurring_group_id를 공유시킨다(그룹으로 묶기).
+    const { error: linkErr } = await supabase.from("classes").update({ recurring_group_id: groupId }).in("id", [id1, id2]);
+    if (linkErr) throw new Error(`그룹 연결 실패: ${linkErr.message}`);
+
+    // 사전 상태를 서로 다르게: id1은 managerA가 이미 지정돼 있고, id2는 강사 미지정.
+    await setClassTrainers(id1, [managerA.accountId]);
+    expect(await fetchClassTrainers(id2)).toEqual([]);
+
+    // 관리자 UI의 "모든 반복 수업에 적용" 토글이 실제로 호출하는 것과 동일한 두 함수를
+    // 그대로 순서대로 호출한다.
+    const groupIds = await updateClassGroup(groupId, "그룹강사적용-수정", s1, e1, 10);
+    expect(groupIds.sort()).toEqual([id1, id2].sort());
+    await setClassTrainersForGroup(groupIds, [managerA.accountId]);
+
+    expect(await fetchClassTrainers(id1)).toEqual([managerA.accountId]);
+    expect(await fetchClassTrainers(id2)).toEqual([managerA.accountId]);
+
+    const list = await fetchClasses(centerAId, d1, d2);
+    expect(list.find((c) => c.id === id1)?.title).toBe("그룹강사적용-수정");
+    expect(list.find((c) => c.id === id2)?.title).toBe("그룹강사적용-수정");
+  });
+
+  it("빈 배열로 그룹 적용하면 그룹 전체의 담당 강사가 전부 해제된다", async () => {
+    const groupId = crypto.randomUUID();
+    const { date: d1, start: s1, end: e1 } = futureYmdHm(24 * 57);
+    const { date: d2, start: s2, end: e2 } = futureYmdHm(24 * 58);
+    const id1 = await createClass(centerAId, { title: "그룹강사해제", date: d1, start: s1, end: e1, capacity: 8, allowGoods: true });
+    cleanupClassIds.push(id1);
+    const id2 = await createClass(centerAId, { title: "그룹강사해제", date: d2, start: s2, end: e2, capacity: 8, allowGoods: true });
+    cleanupClassIds.push(id2);
+    const { error: linkErr } = await supabase.from("classes").update({ recurring_group_id: groupId }).in("id", [id1, id2]);
+    if (linkErr) throw new Error(`그룹 연결 실패: ${linkErr.message}`);
+
+    await setClassTrainersForGroup([id1, id2], [managerA.accountId]);
+    expect(await fetchClassTrainers(id1)).toEqual([managerA.accountId]);
+    expect(await fetchClassTrainers(id2)).toEqual([managerA.accountId]);
+
+    await setClassTrainersForGroup([id1, id2], []);
+    expect(await fetchClassTrainers(id1)).toEqual([]);
+    expect(await fetchClassTrainers(id2)).toEqual([]);
   });
 });
