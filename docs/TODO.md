@@ -597,6 +597,37 @@ client로 fixture를 만들고 지울 수 있어 문제가 되지 않지만, `co
 자동화된 통합 테스트는 이 GRANT가 해결된 뒤에만 안전하게 추가할 수 있다 — 그때까지는
 `tests/integration/sec009-batch-a1-rls.test.ts`에서 의도적으로 제외했다.
 
+**2026-08-12 추가(Live DB 직접 조회로 CONFIRMED)**: 같은 부류의 gap이 `class_allowed_products`/
+`admin_action_logs` 2개 테이블에도 있음을 Live DB에서 직접 확인했다(`information_schema.role_table_grants`
+조회, 사용자 실행) — `service_role`에 이 두 테이블에 대한 privilege가 **0행**(전혀 없음). 같은 조회에서
+`accounts`/`profiles`/`payments`/`products`/`membership_schedule_rules`는 SELECT/INSERT/UPDATE/DELETE
+전부 있는 것과 대조적. 테스트 코드 자체도 이미 이 gap을 알고 우회하고 있었다 —
+`tests/e2e/admin/membership-schedule-rules.spec.ts:153-156` 주석: *"class_allowed_products는
+service_role SQL GRANT가 없어... admin client로 직접 insert할 수 없다(CI에서 실제 재현됨: permission
+denied for table class_allowed_products)"*.
+
+- **A(앱 런타임) vs B(테스트 전용) 판정 — 둘 다 B(테스트 전용), 앱 런타임 영향 없음**: `lib/`·`app/`
+  전체를 검색해도 `service_role`/`SERVICE_ROLE` 문자열이 한 곳도 없다 — 이 앱은 별도 백엔드가 없어
+  실제 런타임은 항상 RLS가 걸린 anon/authenticated 클라이언트나 `security definer` RPC(GRANT와
+  무관하게 함수 소유자 권한으로 실행)만 쓴다. `service_role`은 오직 `tests/integration/setup.ts`의
+  `getFixtureAdminClient()`(테스트 fixture 준비/정리용)에서만 쓰인다. 즉 이 GRANT가 없어도 실제
+  회원/매니저 화면은 전혀 영향받지 않는다 — CI의 테스트 fixture 구성 속도/신뢰성 문제일 뿐이다.
+- **class_allowed_products 최소 필요 privilege**: `getFixtureAdminClient()`로 `.insert()`(예:
+  `tests/e2e/admin/class-allowed-products.spec.ts`, `tests/integration/schedule-rule-override.test.ts`)와
+  `.delete()`(정리 단계)만 확인됨. `.update()` 직접 호출은 발견 안 됨 — **SELECT + INSERT + DELETE면
+  충분**해 보인다(기존에 이미 작성된 `fix_service_role_missing_grants_class_allowed_products_draft_proposed.sql`은
+  UPDATE까지 포함한 4종 전부를 부여하는데, 이번 조사로는 UPDATE가 실제로 필요하다는 증거를 못 찾음 —
+  최소 권한 원칙에 따라 별도 파일로 SELECT/INSERT/DELETE만 부여하는 대안을 아래에 추가했다).
+- **admin_action_logs 최소 필요 privilege**: `cleanup_shared_test_center_pollution_draft_proposed.sql`
+  주석에서 "진단 쿼리로 참조 건수를 셀 수 없었다"(SELECT 필요)와 "그 센터의 admin_action_logs를
+  통째로 먼저 지운다"(DELETE 필요)만 확인됨. 실제 로그 행은 항상 `admin_assign_reservation`/
+  `admin_cancel_reservation`(둘 다 security definer RPC) 내부에서만 INSERT되므로 **service_role의
+  직접 INSERT/UPDATE는 필요 없어 보인다 — SELECT + DELETE로 충분**.
+- **draft + rollback SQL 작성함(미실행)**: `fix_service_role_grants_class_allowed_products_minimal_draft_proposed.sql`,
+  `fix_service_role_grants_admin_action_logs_minimal_draft_proposed.sql`(+각 rollback). 기존
+  `fix_service_role_missing_grants_class_allowed_products_draft_proposed.sql`(ALL 4종)은 삭제하지
+  않고 그대로 둠 — 어느 쪽을 적용할지는 사용자 결정 필요.
+
 ### P2-14. Track B 감사에서 발견한 그 외 소규모 항목 모음
 
 | 필드 | 내용 |
@@ -641,16 +672,20 @@ client로 fixture를 만들고 지울 수 있어 문제가 되지 않지만, `co
 안 됩니다. PR #32가 merge되면 `reservation_functions.sql` 자체도 최신화가 필요합니다(기존
 P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 
-> **⚠️ 2026-08-12 정정**: 위 "`admin_action_logs` FK 2개... 이미 라이브 상태" 부분은 **부정확했던
-> 것으로 보입니다.** 이후 `cleanup_shared_test_center_pollution_draft_proposed.sql` v1(2026-08-09)이
-> `admin_action_logs` FK 위반으로 실제로 실패했고(P2-19 기록 참고), v2는 이 FK를 우회하기 위해
-> `admin_action_logs`를 먼저 삭제하는 순서로 재작성해야 했습니다 — FK가 nullable/`ON DELETE`로
-> 완화됐다면 필요 없었을 조치입니다. `add_admin_assignment.sql`(git)의 원래 정의
-> (`reservation_id uuid not null references reservations(id)`, ON DELETE 미지정)가 여전히
-> 라이브와 일치하는 것으로 판단되며, 이 FK로 인한 위험은 P0-6/P1-12와는 별도로 **P1-18**에
-> 새로 기록했습니다. P0-6/P1-12 자체(수강권 복구·운영설정 4개 필드)는 이 정정과 무관하게
-> 다른 후속 구현으로 실제로 해결·적용됨을 별도 확인했습니다(P0-6/P1-12 섹션 참고). PR #32는
-> 이 문서의 P0-6/P1-18 근거로 close 처리합니다.
+> **⚠️ 2026-08-12 정정의 정정(Live DB 직접 조회로 최종 확정)**: 바로 위 문단에서 한 번 "부정확했던
+> 것으로 보인다"고 정정했었는데, **그 정정 자체가 틀렸다.** 사용자가 Supabase에서
+> `pg_get_constraintdef`로 직접 조회한 결과 `admin_action_logs_reservation_id_fkey`/
+> `admin_action_logs_class_id_fkey` 둘 다 **실제로 `ON DELETE SET NULL`이 Live에 적용돼 있음**을
+> 확인했다 — 즉 **원래 P2-16 기록(2026-08-04, "이미 라이브 상태")이 맞았다.** 내가 잘못 정정한
+> 근거였던 2026-08-09 `cleanup_shared_test_center_pollution_draft_proposed.sql` v1의 FK 위반은
+> 다시 읽어보니 `admin_action_logs_reservation_id_fkey`/`_class_id_fkey`가 아니라
+> **`admin_action_logs_membership_id_fkey`**(memberships 삭제 단계에서 발생, 전혀 다른 컬럼)였다 —
+> 두 사건이 모순되는 게 아니라 내가 다른 FK를 같은 FK로 착각했다. 상세 재분석은 **P1-18** 참고 —
+> 그 항목에서 "delete_class_safe/delete_class_group_safe가 이 FK로 실패한다"는 가설을 세웠다가
+> 같은 날 Live 재조회로 기각했다. `add_admin_assignment.sql`(git)이 여전히 옛 정의를 보여주는 건
+> **PR #32가 merge되지 않았지만 그 SQL만 직접 실행됐기 때문**(git↔live drift, 출처는 P1-18에
+> 정리함). P0-6/P1-12 자체(수강권 복구·운영설정 4개 필드)는 이 FK 건과 무관하게 다른 후속
+> 구현으로 실제로 해결·적용됨을 별도 확인했습니다(P0-6/P1-12 섹션 참고). PR #32는 close 처리했다.
 
 - **`cancel_deadline_min`이 `booking_deadline_min`과 동일한 이유로 사실상 무효**: `calc_deadline()`은
   `center_settings`가 있으면(사실상 항상) 무조건 그 값을 쓰고, `classes.cancel_deadline_min`은
@@ -939,78 +974,60 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   뒤집힘).
 
 
-### P1-18. (신규, 2026-08-12) 수업 삭제 시 admin_action_logs.reservation_id FK로 delete_class_safe/delete_class_group_safe 실패 가능
+### P1-18. (2026-08-12 등록 → 같은 날 Live DB 재검증으로 종결) 수업 삭제 시 admin_action_logs FK 위반 가설 — 재현 안 됨, Git↔Live drift였음
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P1 |
-| 현재 상태 | **확인됨 — 코드 감사로 재현 조건 확정, 아직 미수정(SQL 필요, 이번 배치 범위 밖)** |
-| 근거 파일 | `fix_class_delete.sql`(`delete_class_safe`/`delete_class_group_safe`), `add_admin_assignment.sql`(`admin_action_logs` 테이블 정의) |
-| 완료 조건 | 아래 "해결 후보" 중 하나를 선택해 SQL 작성 → 재현 통합 테스트(신규) → 사용자 승인 후 적용 → 회귀 확인 |
-| 관련 문서 | PR #32(`fix/holiday-refund-and-settings-wiring`)가 휴무일 경로에서 동일 근본 원인을 발견했으나 그 PR은 P0-6/P1-12가 이미 다른 방식으로 해결돼 close 처리됨 — 이 항목은 **PR #32와 별도의, 아직 유효한 문제**로 새로 추적 |
+| 우선순위 | 없음(종결 — 라이브 버그 아님으로 확인) |
+| 현재 상태 | **⚠️ 2026-08-12 Live DB 재검증 결과 기각.** 사용자가 Supabase SQL Editor에서 `pg_get_constraintdef`로 직접 조회한 결과, `admin_action_logs_reservation_id_fkey`/`admin_action_logs_class_id_fkey` 둘 다 **`ON DELETE SET NULL`이 이미 적용돼 있음**을 확인했다. 이 항목을 처음 등록할 때는 git의 `add_admin_assignment.sql`(ON DELETE 미지정)만 근거로 삼았는데, **그게 틀렸다** — 아래 "Git↔Live drift 출처" 참고. `delete_class_safe`/`delete_class_group_safe`가 `delete from reservations`를 실행해도 `admin_action_logs`의 참조 행은 `reservation_id`/`class_id`만 NULL로 바뀌고 **로그 행 자체는 삭제되지 않는다** — FK violation이 원천적으로 발생하지 않는다. |
+| 근거 파일 | Live DB 직접 조회 결과(`pg_constraint`, 사용자 실행) + `fix_holiday_membership_restore_draft_proposed.sql`/`fix_admin_action_logs_class_id_fk_draft_proposed.sql`(PR #32, closed, 아래 참고) |
+| 완료 조건 | ~~SQL 작성 필요~~ 해당 없음 — 실제 버그가 아니므로 SQL 불필요 |
+| 관련 문서 | 아래 "Git↔Live drift 출처"·"2026-08-09 FK 위반과의 관계" 참고 |
 
-**발생 조건**: 수업 A에 대해 매니저가 "관리자 직접배치"(또는 무료배치)를 한 번이라도 실행하면
-`admin_action_logs`에 `reservation_id`가 그 예약을 가리키는 로그 행이 append-only로 남는다.
-이후 그 예약이 (a) 회원 본인 취소, (b) 관리자 취소, (c) 휴무일 지정으로 취소되어
-`reservations.status`가 `cancelled`로 바뀌어도 — 이 코드베이스의 취소 경로는 전부 `UPDATE`이지
-`DELETE`가 아니므로(`cancel_reservation`/`add_holiday_safe` 확인함) — 그 `reservations` 행
-자체는 남아있고 `admin_action_logs.reservation_id`도 계속 그 행을 참조한다.
+**⚠️ 아래는 이 항목을 처음 등록했을 때(2026-08-12 오전)의 원래 기록이다. 결론(FK violation 재현 가능)은
+Live DB 재검증으로 뒤집혔지만, 재현 조건 분석 자체(취소 경로가 전부 UPDATE라 예약 행이 남는다는 점,
+`delete_class_safe`가 `cancelled` 상태를 걸러내지 않는다는 점)는 여전히 정확하다 — 다만 FK가 SET NULL로
+완화돼 있어 "삭제 실패"로 이어지지 않을 뿐이다. 히스토리 보존을 위해 삭제하지 않고 남긴다.**
 
-**영향받는 RPC**: `delete_class_safe(p_class_id)`, `delete_class_group_safe(p_group_id)`
-(둘 다 `fix_class_delete.sql`). 두 함수 모두 확정/대기/출석(`confirmed`/`waitlisted`/`attended`)
-예약만 사전 차단하고, `cancelled`/`no_show` 상태인 예약은 그대로 통과시켜
-`delete from reservations where class_id = ...`를 실행한다.
+> **발생 조건(재현 안 됨으로 결론)**: 수업 A에 대해 매니저가 "관리자 직접배치"(또는 무료배치)를 한 번이라도
+> 실행하면 `admin_action_logs`에 `reservation_id`가 그 예약을 가리키는 로그 행이 append-only로 남는다.
+> 이후 그 예약이 취소되어 `status`가 `cancelled`로 바뀌어도(`cancel_reservation`/`add_holiday_safe` 둘
+> 다 `UPDATE`만 하고 `DELETE`하지 않음, 확인함) `reservations` 행 자체는 남아있고 `admin_action_logs`도
+> 계속 그 행을 참조한다 — **여기까지는 사실**. `delete_class_safe`가 그 후 이 클래스를 삭제하면
+> `delete from reservations`가 그 행도 지우려 시도한다 — **여기까지도 사실.** 다만 FK가
+> `ON DELETE SET NULL`이라 이 시점에 violation 없이 `admin_action_logs.reservation_id`가 조용히
+> NULL로 바뀌고 삭제가 정상 완료된다 — **여기서 원래 결론이 틀렸다.**
 
-**관련 테이블/FK**: `admin_action_logs.reservation_id uuid not null references reservations(id)`
-(`add_admin_assignment.sql`, ON DELETE 절 미지정 → PostgreSQL 기본값 `NO ACTION`, 사실상
-RESTRICT와 동일하게 동작). 이 정의를 완화하는 후속 SQL은 git/CHANGELOG 어디에도 없음
-(자세한 재확인 경위는 P2-16 정정 노트 참고).
+**Git↔Live drift 출처(왜 git과 live가 달랐는지)**: PR #32(closed, `fix/holiday-refund-and-settings-wiring`)
+브랜치의 두 파일이 정확히 이 ALTER를 담고 있다 —
+`fix_holiday_membership_restore_draft_proposed.sql`(`reservation_id`를 nullable + `ON DELETE SET NULL`로,
+P0-6 수강권 복구 SQL과 같은 파일)과 `fix_admin_action_logs_class_id_fk_draft_proposed.sql`(`class_id`를
+동일하게). 두 파일의 ALTER 문을 Live 제약조건 정의와 대조한 결과 **완전히 일치**했다. 그런데 PR #32는
+GitHub에서 한 번도 merge되지 않았고(이번에 close 처리함), 이 두 ALTER를 main에 반영한 다른 커밋도
+없다 — 즉 **사용자가 이 두 SQL 파일을 Supabase SQL Editor에서 PR 병합과 무관하게 직접 실행한 것**으로
+판단된다(이 저장소에서 반복적으로 확인된 패턴: "git에 merge됨"과 "Live DB에 적용됨"은 서로 다른 신호).
+`add_admin_assignment.sql`(git, main)은 원래의 `not null references ...`(ON DELETE 미지정) 정의를 그대로
+갖고 있어 git만 보면 여전히 구버전으로 보인다 — **전형적인 git↔live drift 사례**로 재분류한다.
 
-**현재 삭제 흐름**: `delete_class_safe` → 활성 예약 0건 확인(통과) → `delete from reservations
-where class_id = p_class_id` → 그 클래스의 과거 취소된 예약 중 `admin_action_logs`가 참조하는
-행이 하나라도 있으면 Postgres가 FK violation을 던짐 → 트랜잭션 전체 롤백 → 함수가 원시
-Postgres 에러 메시지로 실패(사용자에게는 "수업을 삭제할 수 없어요" 같은 안내 문구 없이
-불친절한 에러만 노출).
+**2026-08-09 FK 위반(P2-19)과의 관계 — 다른 FK였음, 모순 아니었음**: 이 항목을 처음 등록할 때
+`cleanup_shared_test_center_pollution_draft_proposed.sql` v1/v2가 2026-08-09에 겪은 FK 위반을
+`reservation_id`/`class_id` FK가 아직 안 풀렸다는 증거로 잘못 인용했다. **실제로 그 SQL 파일의 주석을
+다시 읽어보니 그 위반의 정확한 제약조건명은 `admin_action_logs_membership_id_fkey`**였다(memberships를
+지우는 단계에서, `admin_action_logs.membership_id`가 그 membership을 참조해서 발생 — `reservation_id`/
+`class_id`와는 전혀 다른 컬럼). 즉 **모순이 아니라 내 오독**이었다 — 두 사건은 시점도 다르고(2026-08-09
+vs 이번 2026-08-12 조회) 대상 FK도 다르다. `admin_action_logs.membership_id`(nullable, ON DELETE 정책은
+이번에 조회하지 않음)가 여전히 강한 제약인지는 이번 조사 범위 밖 — 필요하면 별도 확인.
 
-**사용자 영향**: 매니저가 "예전에 관리자가 직접 배치했다가 취소된 이력이 있는 수업"을
-삭제하려고 하면 원인을 알 수 없는 에러로 실패한다. 반복수업 그룹 삭제(`delete_class_group_safe`)는
-그룹 내 수업 중 단 하나라도 그런 이력이 있으면 그룹 전체 삭제가 막힌다.
+**감사 로그 구조 재확인**: `ON DELETE SET NULL` + 기존 스냅샷 컬럼(`member_name_snapshot`/
+`class_title_snapshot`/`class_start_snapshot`) 조합으로, 예약/수업이 삭제돼도 **로그 행 자체는
+보존되고 사람이 읽을 수 있는 의미도 스냅샷으로 남는다** — 이 프로젝트가 지향하는 "감사 이력 보존"
+원칙과 실제로 일치하는, 이미 잘 설계된 구조임을 확인했다.
 
-**재현 방법(코드 감사로 확정, 실제 DB 실행은 하지 않음)**:
-1. 수업 X 생성
-2. 관리자 직접배치로 회원 프로필에 예약 생성(`admin_action_logs`에 `CREATE_ASSIGNMENT` 로그 1건)
-3. 그 예약을 취소(회원 본인 취소 또는 관리자 취소 — 둘 다 `status`만 `cancelled`로 변경)
-4. `delete_class_safe(X)` 호출 → 활성 예약 0건이라 통과 → `delete from reservations` 단계에서
-   `admin_action_logs_reservation_id_fkey` 위반으로 실패 예상
-
-**해결 후보**:
-
-| 방법 | 설명 | 장점 | 단점/감사(audit trail) 위험 |
-|---|---|---|---|
-| A. reservations를 물리 DELETE하지 않고 상태 보존 | `delete_class_safe`도 `add_holiday_safe`처럼 `delete` 대신 `classes.status='cancelled'` + `reservations` 그대로 두는 방식으로 전환 | 이미 이 코드베이스의 확립된 패턴(휴무일 취소 경로와 일관성), 이력 100% 보존, FK 문제 자체가 원천적으로 발생 안 함 | 삭제된 수업이 목록 쿼리에서 계속 걸러져야 함(이미 `status<>'cancelled'` 필터가 여러 곳에 있어 위험 낮음), "완전 삭제"를 기대하는 관리자 기대와 다를 수 있어 UX 문구 조정 필요 |
-| B. `admin_action_logs.reservation_id` FK의 ON DELETE 정책 변경(`ON DELETE SET NULL`) | FK 자체를 완화 | 삭제 로직 자체는 안 바꿔도 됨 | **감사 로그가 "어떤 예약이었는지" 연결을 잃음** — `admin_action_logs`에는 `member_name_snapshot`/`class_title_snapshot`/`class_start_snapshot` 스냅샷 컬럼이 이미 있어 완전한 정보 손실은 아니지만, 다른 테이블과 조인해 원본 예약을 추적하는 경로가 끊김 |
-| C. `reservation_id` nullable + `ON DELETE SET NULL`(B와 유사) | B와 동일 접근의 다른 표현 | 상동 | 상동 — B/C는 사실상 같은 방향 |
-| D. `delete_class_safe`가 삭제 전에 그 클래스의 `admin_action_logs` 존재 여부를 확인해 있으면 친절한 에러로 차단 | 최소 변경, FK 위반을 "안내 문구"로만 바꿈 | 구현 가장 간단 | 근본 해결이 아님 — 매니저가 여전히 그런 수업을 영구히 삭제할 방법이 없어짐(단, 실제로 이런 요구가 드물면 임시 완화책으로는 유효) |
-
-**권장 방향**: **A(물리 DELETE 대신 상태 보존)**를 우선 검토 권장 — 이미 휴무일 경로에서 같은
-설계를 검증된 패턴으로 쓰고 있고, `admin_action_logs`처럼 "삭제 불가·감사용" 테이블과 상호작용하는
-곳에서 **이력을 잃는 방식(B/C)은 지양**해야 한다는 게 이 저장소의 기존 원칙과 일치한다. D는
-A를 구현하기 전까지의 임시 완화책으로만 고려.
-
-**필요한 regression test**: 위 "재현 방법" 4단계를 그대로 통합 테스트로 작성해 (a) 현재
-실패를 먼저 RED로 확인 → (b) 해결 SQL 적용 후 GREEN 전환. `delete_class_group_safe`도 동일한
-케이스로 별도 커버.
-
-**SQL 필요 예상 여부**: **YES** (A안이든 B/C안이든 `create or replace function delete_class_safe`
-/`delete_class_group_safe` 재정의가 필요, B/C안이면 `alter table admin_action_logs`도 추가
-필요). 이번 배치에서는 조사만 하고 SQL을 작성/실행하지 않음.
-
-**PR #32와의 관계**: PR #32(`fix_admin_action_logs_class_id_fk_draft_proposed.sql`)가 이것과
-매우 유사한(하지만 `class_id` FK 대상, 이 항목은 `reservation_id` FK 대상 — 둘 다 같은 테이블의
-다른 컬럼) 문제를 이미 발견했었다. 다만 PR #32의 해결 방식(FK를 nullable로 완화)을 그대로
-가져오면 위 표의 B/C안과 같은 감사 이력 손실 위험이 있어, 이 항목에서 A안을 포함해 다시
-비교 검토하는 것을 권장한다. PR #32 자체는 P0-6/P1-12가 해결된 뒤라 close하지만, 이 FK 문제는
-별도로 여기 추적한다.
+**미확인 잔여 항목**: `delete_class_safe`(단일 수업 삭제)의 Live 본문은 이번에 사용자가 직접 조회하지
+않았다(`delete_class_group_safe`만 조회함, git과 정확히 일치 확인됨). 같은 파일(`fix_class_delete.sql`)에
+같은 패턴으로 정의돼 있어 git과 일치할 가능성이 높지만, **독립적으로 Live 확인된 것은 아니다** — 아래
+진단 SQL 2번 쿼리(`pg_get_functiondef('delete_class_safe(uuid)'::regprocedure)`)로 확인 시 이 항목도
+완전히 종결 가능.
 
 
 ### P1-14. (2026-08-10, 해결 완료) `attendance-policy.test.ts` 주간 대기예약 한도 초과로 Integration 반복 실패

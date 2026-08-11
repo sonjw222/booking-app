@@ -8,6 +8,42 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-12 (같은 날 정정) — Live DB 직접 조회로 P1-18 기각 + GRANT 2건 CONFIRMED + 최소권한 draft SQL (chore/close-pr32-and-track-class-delete-fk)
+
+**코드/UI 변경 없음. SQL 파일 4개(draft+rollback 2쌍) 신규 작성, 실행하지 않음. docs 정정.**
+
+- **P1-18 기각(바로 아래 항목에서 등록한 지 몇 시간 만에)**: 사용자가 Supabase에서
+  `pg_get_constraintdef`로 직접 조회한 결과, `admin_action_logs_reservation_id_fkey`/
+  `admin_action_logs_class_id_fkey` 둘 다 이미 **`ON DELETE SET NULL`**임을 확인했다 —
+  git의 `add_admin_assignment.sql`(ON DELETE 미지정)만 보고 "FK violation으로 삭제 실패"라고
+  판단했던 P1-18의 결론은 틀렸다. `delete_class_safe`/`delete_class_group_safe`가 지금도
+  `delete from reservations`를 실행하지만, 참조하던 `admin_action_logs` 행은 삭제되지 않고
+  `reservation_id`/`class_id`만 NULL이 된다 — 로그(감사 이력)는 스냅샷 컬럼과 함께 보존된다.
+  `docs/TODO.md` P1-18을 "재현 안 됨 — Git↔Live drift"로 정정(원래 조사 내용은 삭제하지 않고
+  히스토리로 보존).
+- **Git↔Live drift의 정확한 출처 확인**: PR #32(closed)의 두 파일
+  `fix_holiday_membership_restore_draft_proposed.sql`(`reservation_id` ALTER)과
+  `fix_admin_action_logs_class_id_fk_draft_proposed.sql`(`class_id` ALTER)이 Live 제약조건
+  정의와 정확히 일치했다 — PR이 merge된 적은 없지만, 이 두 SQL 파일이 병합과 무관하게 직접
+  실행된 것으로 판단된다.
+- **2026-08-09 FK 위반 재분석**: 바로 아래 항목에서 "P2-19의 2026-08-09 FK 위반이
+  reservation_id/class_id가 아직 안 풀렸다는 증거"라고 잘못 인용했다. 원본 주석을 다시 읽어
+  정확한 제약조건명이 `admin_action_logs_membership_id_fkey`(전혀 다른 컬럼, memberships 삭제
+  단계에서 발생)임을 확인 — 모순이 아니라 인용 오류였다. `docs/TODO.md` P2-16의 정정 노트를
+  다시 정정(원래 P2-16 기록이 맞았음을 인정).
+- **service_role GRANT 2건 CONFIRMED(추정이 아니라 Live 직접 조회)**: `class_allowed_products`/
+  `admin_action_logs` 둘 다 `information_schema.role_table_grants`에 `service_role` 행이
+  **0건** — GRANT 자체가 없음을 사용자가 직접 확인했다. `accounts`/`profiles`/`payments`/
+  `products`/`membership_schedule_rules`는 4종 전부 있는 것과 대조. `lib/**`/`app/**` 전체에
+  `service_role` 사용이 없어(grep 확인) **테스트 fixture 전용 문제, 앱 런타임 영향 없음**을
+  구조적으로 재확인.
+- **최소 권한 draft SQL 신규 작성(미실행)**: 테스트 코드가 실제로 쓰는 오퍼레이션만 추적해
+  `fix_service_role_grants_class_allowed_products_minimal_draft_proposed.sql`(SELECT/INSERT/
+  DELETE, UPDATE 제외)와 `fix_service_role_grants_admin_action_logs_minimal_draft_proposed.sql`
+  (SELECT/DELETE만)을 각 rollback과 함께 작성. 기존에 이미 있던
+  `fix_service_role_missing_grants_class_allowed_products_draft_proposed.sql`(ALL 4종)은
+  그대로 두고 삭제하지 않았음 — 어느 쪽을 적용할지는 사용자 결정 필요, 이번엔 실행 안 함.
+
 ## 2026-08-12 — PR #32 후속 정리: close 판정 + 신규 FK 이슈(P1-18) 분리 + docs stale 정정 (chore/close-pr32-and-track-class-delete-fk)
 
 **코드/SQL/UI 변경 없음. 문서 정리 + GitHub PR close만 수행.**
