@@ -10,6 +10,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { fetchUnreadCount, subscribeNotifications } from "../../lib/notifications";
 import NotificationToaster from "./NotificationToaster";
+import UiIcon from "./UiIcon";
 
 export default function ManagerNav() {
   const pathname = usePathname();
@@ -17,6 +18,7 @@ export default function ManagerNav() {
   const isMore = pathname === "/manager";
 
   const [unread, setUnread] = useState(0);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -35,26 +37,39 @@ export default function ManagerNav() {
     if (pathname.startsWith("/manager/notifications")) setUnread(0);
   }, [pathname]);
 
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const check = () => setKeyboardOpen(window.innerHeight - viewport.height > 140);
+    viewport.addEventListener("resize", check);
+    viewport.addEventListener("scroll", check);
+    check();
+    return () => {
+      viewport.removeEventListener("resize", check);
+      viewport.removeEventListener("scroll", check);
+    };
+  }, []);
+
   return (
     <>
       <NotificationToaster />
-      <div className="bottom-nav">
+      <nav className={`bottom-nav ${keyboardOpen ? "keyboard-hidden" : ""}`} aria-label="관리자 주요 메뉴">
         <a className={`nav-item ${is("/manager/classes") ? "active" : ""}`} href="/manager/classes">
-          <div className="nav-icon">▤</div>수업
+          <div className="nav-icon"><UiIcon name="calendar" /></div>수업
         </a>
         <a className={`nav-item ${is("/manager/members") ? "active" : ""}`} href="/manager/members">
-          <div className="nav-icon">◍</div>회원
+          <div className="nav-icon"><UiIcon name="users" /></div>회원
         </a>
         <a className={`nav-item ${is("/manager/notifications") ? "active" : ""}`} href="/manager/notifications">
           <div className="nav-icon" style={{ position: "relative" }}>
-            🔔
-            {unread > 0 && <span className="nav-badge">{unread > 99 ? "99+" : unread}</span>}
+            <UiIcon name="bell" />
+            {unread > 0 && <span className="nav-badge">{unread > 9 ? "9+" : unread}</span>}
           </div>알림
         </a>
         <a className={`nav-item ${isMore ? "active" : ""}`} href="/manager">
-          <div className="nav-icon">≡</div>더보기
+          <div className="nav-icon"><UiIcon name="list" /></div>더보기
         </a>
-      </div>
+      </nav>
     </>
   );
 }

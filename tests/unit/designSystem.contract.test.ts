@@ -26,6 +26,6 @@ describe("Batch 1 design system contract", () => {
     const layout = read("app/layout.tsx");
     expect(layout).toContain("SessionWatcher");
     expect(layout).toContain("ImageViewerProvider");
-    expect(layout).not.toContain("AppConfirmProvider");
+    expect(layout).toContain("AppConfirmProvider");
   });
 });
