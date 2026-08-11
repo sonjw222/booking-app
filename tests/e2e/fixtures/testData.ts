@@ -34,7 +34,7 @@ export { switchToTestUser, getOrCreateOwnedTestCenter, kstSafeSameDayFutureTime,
 // 그대로 남는데(실제로 재현됨: 회원 화면에서 같은 제목 행이 여러 개 나와 Playwright의
 // strict mode violation로 이어짐), "이 제목은 이 센터에 항상 하나만" 원칙으로 생성 전에
 // 매번 정리해 재실행/재시도에도 정확히 1건만 남긴다.
-async function deleteExistingClassesByTitle(centerId: string, title: string): Promise<void> {
+export async function deleteExistingClassesByTitle(centerId: string, title: string): Promise<void> {
   const admin = getFixtureAdminClient();
   const { data: existing } = await admin.from("classes").select("id").eq("center_id", centerId).eq("title", title);
   const ids = (existing ?? []).map((r: any) => r.id as string);
