@@ -8,6 +8,28 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-11 — TEST-004(#45, Phase 3) 수정: 공유 테스트센터 classes 누적 self-healing sweep (feature/social-auth-notifications-attendance-dashboard)
+
+Read-only 재진단(사용자가 Supabase SQL Editor에서 직접 조회) 결과 공유 테스트센터
+(`통합테스트센터-da48c9`)에 classes가 1761건까지 누적돼 있음을 확인 — 이미 문서화된
+"CI 취소 시 afterAll 미실행"(예: `admin-assignment-security.test.ts`의 "성공경로-*" 8종
+~812건) 외에, `diagnose-settings-live-values.test.ts`가 **매 실행 결정적으로** leak하고
+있던 별도 원인을 새로 발견: `cleanupTestClass()`(매니저 세션 RLS 기준)가 confirmed 상태
+예약의 delete를 조용히 0건으로 실패시켜(private-class-capacity.test.ts에서 이미 확인된
+것과 동일한 RLS 정책 원인) reservations/classes가 성공적인 실행에서도 항상 남았다(141건,
+2026-08-03부터).
+
+수정: `tests/integration/setup.ts`의 `getOrCreateOwnedTestCenter()`에 self-healing sweep
+추가 — start_time이 1시간 이상 과거인 class를 이름이 "통합테스트센터-%"인 센터에서만
+자동 정리(파일마다 정리 로직을 따로 만들 필요 없이, 거의 모든 통합 테스트 파일이 이
+함수를 beforeAll에서 호출하므로 스위트 전체가 자동으로 self-healing됨).
+`diagnose-settings-live-values.test.ts`는 `daily-book-limit-wiring.test.ts`로 정리 —
+당일예약 describe는 `operational-settings-wiring.test.ts`와 완전 중복이라 제거, 일일한도
+describe(저장소에서 유일한 daily_book_limit 통합 커버리지)는 유지하되 admin(service_role)
+기반 `cleanupTestClassAdmin()`으로 교체해 leak을 근본적으로 막았다. 이미 쌓인 1761건은
+별도 cleanup SQL 없이 다음 CI 실행에서 sweep이 자동으로 정리한다(전부 start_time이 이미
+과거라 즉시 대상). CI 검증은 다음 단계에서 진행.
+
 ## 2026-08-11 — RES-002(#42, Phase 2) 수정: fetchMonthData()의 myMems 1000행 cap (feature/social-auth-notifications-attendance-dashboard)
 
 `lib/reservations.ts`의 `fetchMonthData()`가 "내가 수강권을 보유한 센터 집합"을 구하는

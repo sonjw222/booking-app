@@ -292,6 +292,52 @@ export function describeAdminQueryError(table: string, error: { message: string;
 
 // 현재 로그인된 계정이 오너로 있는 센터를 재사용하거나, 없으면 새로 만들어 오너로 연결한다.
 // RLS를 우회하는 서비스 역할 client로만 동작 — 일반 client는 전혀 쓰지 않는다.
+// TEST-004(#45) 자기치유 스윕 — 공유 통합/E2E 테스트센터에 지나간(start_time이 과거인)
+// classes가 계속 쌓이는 문제(근본 원인: CI가 테스트 도중 취소되면 그 파일의 afterAll이
+// 실행되지 않아 만들어둔 class/reservation이 영구히 남음 — docs/TODO.md TEST-004 참고)를
+// "한 곳"에서 방지한다. getOrCreateOwnedTestCenter()는 사실상 모든 통합 테스트 파일이
+// beforeAll에서 정확히 한 번씩 호출하므로, 여기 붙여두면 파일마다 따로 정리 로직을 짤
+// 필요 없이 스위트 전체가 자동으로 self-healing된다.
+//
+// 안전 근거:
+//   1) 이 함수가 반환하는 센터는 전부 이름이 "통합테스트센터-%"인, 이 헬퍼 자신이 관리하는
+//      전용 테스트 센터뿐이다(실제 운영 센터는 이 이름 패턴을 쓰지 않음) — 아래 sweep 함수
+//      자체도 이 패턴과 일치하는 센터만 대상으로 삼도록 다시 한번 방어적으로 확인한다.
+//   2) vitest.integration.config.ts가 fileParallelism:false라 테스트 파일이 항상 순차
+//      실행된다 — 어떤 파일의 beforeAll(sweep 포함)이 실행되는 시점엔, 그 이전 파일은
+//      이미 완전히 끝났거나(자기 정리 완료) CI 취소로 중간에 끊긴 상태(=지금 지워도 되는
+//      상태)뿐이다. 같은 실행 안에서 "아직 진행 중인 다른 파일의 미래 class"를 실수로
+//      지울 수 없는 구조.
+//   3) start_time이 "지금부터 1시간 이상 과거"인 class만 대상으로 한다 — 이 스위트의 모든
+//      테스트는 항상 가까운 미래 시각으로 class를 만들고 그 자리에서 바로 쓰므로, 정상
+//      진행 중인 테스트의 class가 이 조건에 걸릴 일은 없다.
+async function sweepStaleTestClasses(centerId: string, centerName: string): Promise<void> {
+  if (!centerName.startsWith("통합테스트센터-")) return; // 방어적 재확인
+  const admin = getFixtureAdminClient();
+  const staleBefore = new Date(Date.now() - 3600 * 1000).toISOString();
+
+  const { data: staleClasses, error: findErr } = await admin
+    .from("classes")
+    .select("id")
+    .eq("center_id", centerId)
+    .lt("start_time", staleBefore);
+  if (findErr) {
+    // 스윕 실패는 이 테스트 실행 자체를 막을 이유가 아니다 — 다음 실행에서 다시 시도된다.
+    return;
+  }
+  const ids = (staleClasses ?? []).map((c: any) => c.id as string);
+  if (ids.length === 0) return;
+
+  // PostgREST 요청 URL 길이 제한(실측 확인된 패턴, lib/reservations.ts와 동일 관례)을
+  // 피하기 위해 청크 단위로 나눠 지운다.
+  const CHUNK_SIZE = 150;
+  for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + CHUNK_SIZE);
+    await admin.from("reservations").delete().in("class_id", chunk);
+    await admin.from("classes").delete().in("id", chunk);
+  }
+}
+
 export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<string> {
   const admin = getFixtureAdminClient();
 
@@ -311,7 +357,12 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
     if (roleErr) throw new Error(`center_roles 조회 실패: ${describeAdminQueryError("center_roles", roleErr)}`);
     const ownerRoleIds = new Set((roles ?? []).filter((r: any) => r.is_owner).map((r: any) => r.id));
     const owned = (rows ?? []).find((r: any) => ownerRoleIds.has(r.role_id));
-    if (owned) return (owned as any).center_id as string;
+    if (owned) {
+      const centerId = (owned as any).center_id as string;
+      const { data: centerRow } = await admin.from("centers").select("name").eq("id", centerId).maybeSingle();
+      await sweepStaleTestClasses(centerId, (centerRow as any)?.name ?? "");
+      return centerId;
+    }
   }
 
   const { data: center, error: centerErr } = await admin
