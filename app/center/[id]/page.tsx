@@ -165,7 +165,7 @@ function CenterDetailContent() {
 
   async function handleDeleteReview() {
     if (!myReview) return;
-    if (!confirm("후기를 삭제할까요? (적립된 포인트는 회수되지 않아요)")) return;
+    if (!await globalThis.appConfirm("후기를 삭제할까요?\n적립된 포인트는 회수되지 않아요.")) return;
     setRvBusy(true);
     try {
       await deleteReview(myReview.id);
@@ -210,7 +210,7 @@ function CenterDetailContent() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell center-detail-v2">
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
       {toast && <div className="toast">{toast}</div>}
 
@@ -415,9 +415,9 @@ function CenterDetailContent() {
         </div>
       )}
 
-      <div className="back-header">
+      <div className="back-header center-detail-head">
         <a className="side" href={backHref}>‹</a>
-        <div className="title">센터 정보</div>
+        <div className="title">센터</div>
         <div className="side" />
       </div>
 
@@ -581,8 +581,8 @@ function CenterDetailContent() {
 
       {/* 하단 고정 바: 예약하기 + 구매하기 */}
       <div className="center-bottom-bar">
-        <button className="center-bar-btn buy" onClick={() => setBuySheet(true)}>구매하기</button>
-        <button className="center-bar-btn reserve" onClick={handleReserveClick}>예약하러 가기</button>
+        <button className="center-bar-btn buy" onClick={() => setBuySheet(true)}>수강권 구매</button>
+        <button className="center-bar-btn reserve" onClick={handleReserveClick}>예약하기</button>
       </div>
       <BottomNav />
     </div>

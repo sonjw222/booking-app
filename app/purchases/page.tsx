@@ -11,6 +11,8 @@ import { fetchMyPurchases, type PurchaseItem } from "../../lib/orders";
 import { requestRefund } from "../../lib/mypage";
 import Loading from "../components/Loading";
 import BottomNav from "../components/BottomNav";
+import ConfirmDialog from "../components/ConfirmDialog";
+import DatePicker from "../components/DatePicker";
 
 const STATUS_LABEL: Record<string, string> = {
   active: "이용중",
@@ -29,6 +31,7 @@ export default function PurchasesPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [refundTarget, setRefundTarget] = useState<PurchaseItem | null>(null);
   // 필터
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -49,11 +52,17 @@ export default function PurchasesPage() {
       setError("아직 발급되지 않은 주문이라 앱에서 환불할 수 없어요. 센터에 문의해주세요.");
       return;
     }
-    if (!confirm(`'${it.productName}'을(를) 환불할까요?\n\n· 수강권이 사라지고 센터 매출에도 반영돼요\n· 되돌릴 수 없어요`)) return;
+    setRefundTarget(it);
+  }
+
+  async function confirmRefund() {
+    const it = refundTarget;
+    if (!it?.membershipId) return;
     setBusy(true);
     try {
       await requestRefund(it.membershipId);
       showToast("환불 처리했어요");
+      setRefundTarget(null);
       await load();
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
@@ -70,9 +79,19 @@ export default function PurchasesPage() {
   });
 
   return (
-    <div className="app-shell">
+    <div className="app-shell purchase-page-v2">
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
       {toast && <div className="toast">{toast}</div>}
+      <ConfirmDialog
+        open={!!refundTarget}
+        title="이 수강권을 환불할까요?"
+        description={`${refundTarget?.productName ?? "선택한 상품"}이 사라지고 센터 매출에도 반영돼요. 이 작업은 되돌릴 수 없어요.`}
+        confirmLabel="환불하기"
+        danger
+        busy={busy}
+        onCancel={() => setRefundTarget(null)}
+        onConfirm={confirmRefund}
+      />
 
       <div className="back-header">
         <a className="side" href="/mypage">‹</a>
@@ -87,9 +106,9 @@ export default function PurchasesPage() {
         <button className={`filter-chip ${kindFilter === "goods" ? "on" : ""}`} onClick={() => setKindFilter("goods")}>상품</button>
       </div>
       <div className="purchase-daterange">
-        <input className="input-field" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+        <DatePicker value={fromDate} onChange={setFromDate} label="조회 시작일" />
         <span className="time-sep">~</span>
-        <input className="input-field" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+        <DatePicker value={toDate} onChange={setToDate} label="조회 종료일" />
         {(fromDate || toDate) && (
           <button className="text-btn" onClick={() => { setFromDate(""); setToDate(""); }}>초기화</button>
         )}
@@ -103,6 +122,8 @@ export default function PurchasesPage() {
         <div className="purchase-list">
           {shown.map((it) => (
             <div key={it.id} className="purchase-item">
+              <div className="purchase-kind-mark">{it.kind === "goods" ? "G" : "P"}</div>
+              <div className="purchase-content">
               <div className="purchase-head">
                 <span className="purchase-center">{it.centerName}</span>
                 <span className={`purchase-status s-${it.status}`}>{STATUS_LABEL[it.status] ?? it.status}</span>
@@ -127,6 +148,7 @@ export default function PurchasesPage() {
                   )}
                 </div>
               )}
+              </div>
             </div>
           ))}
         </div>

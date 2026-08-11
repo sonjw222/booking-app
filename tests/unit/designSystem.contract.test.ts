@@ -86,3 +86,38 @@ describe("Batch 4 reservation design contract", () => {
     expect(css).toContain(".member-my-reservations .reservation-history .hist-item");
   });
 });
+
+describe("Batch 5 center and commerce design contract", () => {
+  it("applies the new center shell without replacing current media and review behavior", () => {
+    const center = read("app/center/[id]/page.tsx");
+    expect(center).toContain("center-detail-v2");
+    expect(center).toContain("center-detail-head");
+    expect(center).toContain("<ZoomableImage");
+    expect(center).toContain("globalThis.appConfirm");
+    expect(center).toContain("reservationReturnUrl");
+  });
+
+  it("uses commerce layouts while retaining coupon, point and automatic booking logic", () => {
+    const cart = read("app/cart/page.tsx");
+    const checkout = read("app/checkout/page.tsx");
+    expect(cart).toContain("commerce-page cart-page-v2");
+    expect(cart).toContain("handleCheckoutAll");
+    expect(cart).toContain("applyCoupon");
+    expect(checkout).toContain("commerce-page checkout-page-v2");
+    expect(checkout).toContain("autoBook");
+    expect(checkout).toContain("usePoint");
+    expect(checkout).toContain("applyCoupon");
+  });
+
+  it("uses shared purchase controls and the tokenized Batch 5 style layer", () => {
+    const purchases = read("app/purchases/page.tsx");
+    const css = read("app/globals.css");
+    expect(purchases).toContain("purchase-page-v2");
+    expect(purchases).toContain("<DatePicker");
+    expect(purchases).toContain("<ConfirmDialog");
+    expect(purchases).toContain("requestRefund");
+    expect(css).toContain("Batch 5 — center detail and commerce");
+    expect(css).toContain(".center-detail-v2 .center-bottom-bar");
+    expect(css).toContain(".commerce-page .checkout-pay-btn");
+  });
+});
