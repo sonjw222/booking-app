@@ -1,24 +1,51 @@
-/* ============================================================
-   테마 변수 - 목업 때 만든 4가지 테마 그대로
-   ============================================================ */
+/* Design system v1 — light theme tokens. Brand colors are isolated so they
+   can be replaced without changing semantic or neutral UI colors. */
 :root, [data-theme="burgundy"] {
-  --bg: #ffffff;
-  --surface: #F6F6F8;
-  --ink: #1A1A1E;
-  --ink-soft: #8B8B94;
-  /* 코드 전반에서 쓰는 별칭 (ink 계열과 항상 동일하게 유지) */
-  --text: #1A1A1E;
-  --text-dim: #8B8B94;
-  --line: #EEEEF0;
-  --accent: #8B2F52;
-  --accent-soft: #FCEEF2;
+  --bg: #FBFBFA;
+  --surface: #F2F2F0;
+  --surface-strong: #E9E9E6;
+  --ink: #171719;
+  --ink-soft: #747479;
+  --text: #171719;
+  --text-dim: #747479;
+  --line: #DEDEDA;
+  --line-strong: #C9C9C5;
+  --accent: #202124;
+  --accent-soft: #EEEEEC;
+  --brand: #45BFE3;
+  --brand-ink: #087A9C;
+  --brand-soft: #E6F7FC;
+  --success: #287A5B;
+  --success-soft: #E8F3EE;
+  --warning: #9A6718;
+  --warning-soft: #F7F0E2;
+  --danger: #B64242;
+  --danger-soft: #F8EAEA;
   --mint: #0F9D77;
   --mint-soft: #E4F7F1;
   --gold: #B8842E;
   --gold-soft: #FBF1DE;
-  --grad1: #3B1330;
-  --grad2: #8B2F52;
-  --grad3: #B24F72;
+  --grad1: #151516;
+  --grad2: #2E2F32;
+  --grad3: #5B5C60;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 10px;
+  --radius-md: 13px;
+  --radius-lg: 22px;
+  --radius-sheet: 26px;
+  --page-gutter: 16px;
+  --shadow-float: 0 6px 22px rgba(20,20,20,.10);
+  --type-display: 28px;
+  --type-title: 22px;
+  --type-section: 18px;
+  --type-body: 14px;
+  --type-caption: 12px;
 }
 
 /* 다크 모드 */
@@ -2663,4 +2690,164 @@ a.membership-card { text-decoration: none; display: block; }
 @media (max-width: 480px) {
   .image-viewer-nav { width: 36px; height: 36px; font-size: 22px; }
   .image-viewer-close { width: 34px; height: 34px; font-size: 18px; }
+}
+
+/* ============================================================
+   Shared primitives — Batch 1
+   ============================================================ */
+.app-button {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--type-body);
+  font-weight: 680;
+  line-height: 1;
+  cursor: pointer;
+}
+.app-button-primary { background: var(--ink); color: #fff; }
+.app-button-secondary { background: transparent; border-color: var(--line); color: var(--ink); }
+.app-button-tertiary { min-height: 44px; background: var(--surface); color: var(--ink); }
+.app-button-danger { background: var(--danger); color: #fff; }
+.app-button:disabled { opacity: .46; cursor: default; }
+.app-button:focus-visible,
+.segmented-tabs button:focus-visible,
+.app-date-trigger:focus-visible,
+.app-date-popover button:focus-visible {
+  outline: 3px solid color-mix(in srgb,var(--brand) 35%,transparent);
+  outline-offset: 2px;
+}
+
+.segmented-tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0,1fr);
+  gap: 3px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.segmented-tabs button {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 620;
+}
+.segmented-tabs button.on {
+  background: var(--bg);
+  color: var(--ink);
+  font-weight: 720;
+  box-shadow: 0 1px 5px rgba(20,20,20,.08);
+}
+
+.app-empty-state {
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--space-5);
+  color: var(--ink-soft);
+  text-align: center;
+}
+.app-empty-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  margin-bottom: var(--space-4);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+}
+.app-empty-state b { color: var(--ink); font-size: 16px; }
+.app-empty-state p { max-width: 280px; margin-top: var(--space-2); font-size: 13px; line-height: 1.55; }
+.app-empty-action { margin-top: var(--space-5); }
+
+.app-date-picker { position: relative; min-width: 0; }
+.app-date-trigger {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+.app-date-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 1200;
+  width: min(310px,calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--bg);
+  box-shadow: var(--shadow-float);
+}
+.app-date-popover.open-up { top: auto; bottom: calc(100% + 8px); }
+.app-date-head { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; margin-bottom: 10px; text-align: center; }
+.app-date-head button,
+.app-date-grid button {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+.app-date-head button { width: 40px; height: 40px; border-radius: 50%; font-size: 23px; }
+.app-date-head strong { font-size: 15px; }
+.app-date-week,
+.app-date-grid { display: grid; grid-template-columns: repeat(7,1fr); }
+.app-date-week span { padding: 7px 0; color: var(--ink-soft); font-size: 11px; font-weight: 650; text-align: center; }
+.app-date-grid button,
+.app-date-grid i { aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; font-size: 12px; font-style: normal; }
+.app-date-grid button.on { background: var(--ink); color: #fff; font-weight: 720; }
+.app-date-grid button.today:not(.on) { box-shadow: inset 0 0 0 1px var(--brand); color: var(--brand-ink); font-weight: 720; }
+
+.confirm-overlay { z-index: 10000; }
+.confirm-sheet {
+  width: min(390px,calc(100% - 32px));
+  margin: auto;
+  padding: 24px 20px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  box-shadow: 0 20px 60px rgba(20,20,20,.2);
+  text-align: center;
+}
+.confirm-symbol {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+}
+.confirm-symbol.danger { background: var(--danger-soft); color: var(--danger); }
+.confirm-sheet h2 { font-size: 19px; line-height: 1.35; }
+.confirm-sheet p { margin-top: 8px; color: var(--ink-soft); font-size: 13px; line-height: 1.55; }
+.confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 22px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .app-button,
+  .app-date-popover { scroll-behavior: auto; transition: none !important; animation: none !important; }
 }
