@@ -128,6 +128,13 @@ afterAll(async () => {
 
 describe("RES-002 회귀: fetchMonthData()의 myMems가 1000행 cap과 무관하게 정확하다", () => {
   it("1005개 필러 membership(centerA) 뒤에 있는 target membership(centerB, 자녀 프로필)의 센터가 정확히 포함된다", async () => {
+    // ⚠ beforeAll의 마지막 세션은 managerB(centerB에 target class를 만들기 위해 전환한
+    // 것)로 남아있다 — fetchMonthData()는 accountId를 파라미터로 받지만 내부 쿼리는
+    // 전부 RLS가 적용된 supabase 싱글턴을 그대로 쓰므로, 실제 인증 세션이 managerB인 채로
+    // managerA.accountId를 조회하면 RLS가 막아 전부 빈 배열이 돌아온다(실측 확인:
+    // totalCentersReturned=0). classes-row-limit-regression.test.ts와 동일하게 호출 직전
+    // managerA로 명시 전환해야 한다.
+    await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
     const { classes, centers } = await fetchMonthData(YEAR, MONTH, managerA.accountId);
 
     const centerIds = new Set(centers.map((c) => c.id));
