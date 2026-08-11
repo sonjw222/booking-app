@@ -883,10 +883,12 @@ export async function copyByDate(
   return await insertCopiedClasses(rows, linkPlan);
 }
 
-// 원본 class의 수강권 허용 모드만 조회(복사 시 pass_selection_mode를 그대로 옮기기 위함).
-// class_allowed_products 행 존재 여부만으로는 'all'/'selected'를 다시 판정할 수 없으므로
-// (마이그레이션 이후엔 이 컬럼이 유일한 근거) 반드시 이 값을 직접 읽어야 한다.
-async function fetchClassPassMode(classId: string): Promise<"all" | "selected"> {
+// 특정 class의 수강권 허용 모드만 단독 조회. class_allowed_products 행 존재 여부만으로는
+// 'all'/'selected'를 다시 판정할 수 없으므로(이 컬럼이 유일한 근거) 반드시 이 값을 직접
+// 읽어야 한다. 스케줄 복사(원본 모드 그대로 옮기기)와 관리자 UI의 수정 시트 재진입 하이드레이트
+// (목록의 캐시된 ManagedClass.passSelectionMode는 방금 저장 직후엔 아직 갱신 전일 수 있어
+// 신뢰할 수 없다 — 반드시 이 함수로 다시 조회) 양쪽에서 재사용한다.
+export async function fetchClassPassSelectionMode(classId: string): Promise<"all" | "selected"> {
   const { data, error } = await supabase.from("classes").select("pass_selection_mode").eq("id", classId).maybeSingle();
   if (error || !data) return "all";
   return ((data as any).pass_selection_mode ?? "all") as "all" | "selected";
@@ -903,7 +905,7 @@ async function insertCopiedClasses(
   // 잠깐 기본값 'all'로 노출되는 창이 생김).
   const modeCache: Record<string, "all" | "selected"> = {};
   for (const l of linkPlan) {
-    if (!(l.srcClassId in modeCache)) modeCache[l.srcClassId] = await fetchClassPassMode(l.srcClassId);
+    if (!(l.srcClassId in modeCache)) modeCache[l.srcClassId] = await fetchClassPassSelectionMode(l.srcClassId);
   }
   for (const l of linkPlan) {
     rows[l.idx].pass_selection_mode = modeCache[l.srcClassId];

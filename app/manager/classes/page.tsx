@@ -20,7 +20,7 @@ import {
   createRecurringClasses, expandRecurringDates,
   updateClassGroup, deleteClassGroup,
   fetchClassAttendees, setAttendance, fetchClassProducts, setClassProducts, setClassProductsBulk,
-  fetchClassTrainers, setClassTrainers, setClassTrainersBulk,
+  fetchClassTrainers, setClassTrainers, setClassTrainersBulk, fetchClassPassSelectionMode,
   fetchCenterHolidayDates,
   fetchCopyGroups, fetchCopyDateItems, planCopyByWeekday, planCopyByDate,
   copyByWeekday, copyByDate,
@@ -567,6 +567,9 @@ export default function ClassManagePage() {
     fillBookDeadline(c.bookingDeadlineMin);
     // 'all'이면(class_allowed_products는 원래 비어 있음) 전체 체크 상태로 즉시 보여준다 —
     // fetchClassProducts가 끝나기 전까지 잠깐 "0개 선택"(저장 차단 상태)으로 보이는 걸 방지.
+    // 목록(ManagedClass.passSelectionMode)은 방금 저장 직후 재클릭한 경우 아직 갱신 전일 수
+    // 있어(save()가 loadClasses() 완료 전에 시트부터 닫음) 여기서는 최선의 추정치로만 쓴다 —
+    // 아래 fetchClassPassSelectionMode()의 실측값이 도착하면 그 값으로 다시 덮어쓴다.
     setSelectedProducts(c.passSelectionMode === "all" ? passProducts.map((p) => p.id) : []);
     setPassSearch("");
     setSelectedTrainers([]);
@@ -574,9 +577,10 @@ export default function ClassManagePage() {
     setError(null);
     setFormOpen(true);
     try {
-      const ids = await fetchClassProducts(c.id);
+      // c.passSelectionMode(목록 캐시)를 신뢰하지 않고 이 class의 실제 현재 값을 다시 조회한다.
+      const [ids, freshMode] = await Promise.all([fetchClassProducts(c.id), fetchClassPassSelectionMode(c.id)]);
       const isStale = myToken !== openTokenRef.current || userEditedRef.current;
-      if (!isStale) setSelectedProducts(c.passSelectionMode === "all" ? passProducts.map((p) => p.id) : ids);
+      if (!isStale) setSelectedProducts(freshMode === "all" ? passProducts.map((p) => p.id) : ids);
     } catch { /* 무시 */ }
     try {
       const tids = await fetchClassTrainers(c.id);

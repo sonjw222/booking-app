@@ -36,6 +36,17 @@ SQL 적용 검증 중 발견한 설계 불일치를 사용자 확인 후 수정:
 - `npm run build` 타입체크 + 단위테스트 213/213 통과 확인(로컬). Integration/E2E는
   로컬에 테스트 자격증명이 없어 브랜치 push 후 GitHub Actions CI로 검증(아래 별도 기록).
 
+**CI 1차 실행에서 발견 + 수정(진짜 앱 버그, race condition)**: E2E 3건이 재진입 시
+"1개만 선택됨"을 기대했는데 "14개(그 센터 pass 전체) 선택됨"으로 실패(run
+`31484011506`). 원인: `save()`가 `setFormOpen(false)`(시트가 즉시 닫힘)를
+`await loadClasses(...)`(목록 재조회) 완료 **전에** 실행해, 저장 직후 곧바로 같은
+수업을 재클릭하면 `openEdit()`이 아직 갱신 전인 stale `ManagedClass.passSelectionMode`를
+읽고 있었다(실제로는 방금 'selected'로 저장됐는데 목록엔 여전히 옛 'all'이 남아 있어
+전체 체크로 잘못 표시). 수정: `lib/classes.ts`의 스케줄 복사 전용 내부 함수였던
+`fetchClassPassMode()`를 `fetchClassPassSelectionMode()`로 공개(export)하고,
+`openEdit()`이 목록 캐시 대신 이 함수로 그 class의 실제 현재 `pass_selection_mode`를
+다시 조회해 하이드레이트하도록 변경 — 목록이 아직 안 갱신됐어도 항상 정확한 값을 보여줌.
+
 ## 2026-08-11 — 담당 강사 복수 지정 + 수강권 허용 정책 변경 Batch (feature/social-auth-notifications-attendance-dashboard)
 
 P3-1(수업 구분과 복수 강사 배정) 중 "복수 강사 배정"을 로드맵에 포함하기로 결정하고
