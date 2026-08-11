@@ -44,3 +44,13 @@ describe("Batch 3 discovery design contract", () => {
     expect(home).toContain("fetchMyUpcomingClasses");
   });
 });
+
+describe("Batch 2 chrome layer contract", () => {
+  it("keeps persistent chrome below modal and sheet overlays", () => {
+    const css = read("app/globals.css");
+    expect(css).toMatch(/\.bottom-nav\s*\{[\s\S]*?z-index:\s*45;/);
+    expect(css).toMatch(/\.manager-chrome\s*\{[\s\S]*?z-index:\s*30;/);
+    expect(css).toMatch(/\.admin-chrome\s*\{[\s\S]*?z-index:\s*30;/);
+    expect(css).toMatch(/\.sheet-overlay\s*\{[\s\S]*?z-index:\s*60;/);
+  });
+});
