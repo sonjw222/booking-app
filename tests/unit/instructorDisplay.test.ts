@@ -24,12 +24,12 @@ describe("formatInstructorNames()", () => {
     expect(formatInstructorNames(["김이이"])).toBe("김이이");
   });
 
-  it("강사가 2명이면 ' · '로 이어붙인다(기존 임계값 유지)", () => {
-    expect(formatInstructorNames(["김이이", "박이이"])).toBe("김이이 · 박이이");
+  it("강사가 2명이면 둘 다 쉼표로 나열한다(2026-08-12 QA 피드백 — 2명까지는 생략하지 않음)", () => {
+    expect(formatInstructorNames(["김이이", "박이이"])).toBe("김이이, 박이이");
   });
 
-  it("강사가 3명 이상이면 '첫 이름 외 N명' 형태로 줄인다(기존 임계값 유지)", () => {
-    expect(formatInstructorNames(["김이이", "박이이", "최이이"])).toBe("김이이 외 2명");
-    expect(formatInstructorNames(["김이이", "박이이", "최이이", "이이이"])).toBe("김이이 외 3명");
+  it("강사가 3명 이상이면 앞 2명 + '외 N명'으로 줄인다", () => {
+    expect(formatInstructorNames(["김이이", "박이이", "최이이"])).toBe("김이이, 박이이 외 1명");
+    expect(formatInstructorNames(["김이이", "박이이", "최이이", "이이이"])).toBe("김이이, 박이이 외 2명");
   });
 });
