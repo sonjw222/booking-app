@@ -889,14 +889,14 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   영향을 받지 않는다 — 순수하게 테스트 cleanup(admin/service_role 경로) 전용 문제.
 - **검증 완료**: SQL 적용 후 `auth-account-bootstrap.test.ts` 2회 연속 통과, throwaway 계정 cleanup이 정상적으로 성공함을 확인(더 이상 accounts/profiles 잔여 데이터가 누적되지 않음).
 
-### P1-17. (2026-08-11, 진행 중 — Phase 1 완료, CI 검증 대기) 신규 예약 정책: 관리자가 직접 지정한 수강권은 membership_schedule_rules보다 우선
+### P1-17. (2026-08-11, 완료) 신규 예약 정책: 관리자가 직접 지정한 수강권은 membership_schedule_rules보다 우선
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1(사용자 요청 정책 변경, PR #44 안정화 Batch의 Phase 1) |
-| 현재 상태 | **코드/SQL 변경 완료, 사용자가 SQL 적용 완료(확인함). CI(E2E/Unit/Integration) 검증은 아직 진행 전.** |
+| 현재 상태 | **완료. 코드/SQL 변경 완료, 사용자가 SQL 적용 완료. 전체 CI 2연속 Green 확인(run `31459078105`/`31460392240`, 둘 다 first-attempt·재시도 없음). 검증 과정에서 신규 통합 테스트 자체의 세션/RPC 선택 결함 2건을 발견해 수정(A/B/C가 공유 테스트센터의 다른 membership으로 우연히 통과/실패하던 문제, month-data 테스트의 세션 전환 누락 — 둘 다 test bug, 앱/SQL 무관).** |
 | 근거 파일 | `fix_membership_schedule_rule_override_draft_proposed.sql`(적용 완료)+rollback, `app/manager/classes/page.tsx`, `tests/integration/schedule-rule-override.test.ts`(신규, A~J), `tests/e2e/admin/membership-schedule-rules.spec.ts`(D+F+K/J 갱신) |
-| 완료 조건 | 전체 CI 2연속 Green(다음 단계에서 확인 예정) |
+| 완료 조건 | ~~전체 CI 2연속 Green~~ 완료. |
 
 - **정책**: P1-15가 확정한 "class_allowed_products 허용 AND membership_schedule_rules 충족"
   정책에서, 관리자가 그 class에 특정 product를 class_allowed_products로 **명시적으로** 지정한
@@ -1134,9 +1134,9 @@ P2-20 조사 과정에서 발견됐지만 이번 배치 범위 밖이라 코드 
 
 | 순위 | 이슈 | 요약 | 근거 |
 |---|---|---|---|
-| 1 | [RES-002 #42](https://github.com/sonjw222/booking-app/issues/42) | `fetchMonthData()`의 `myMems` 쿼리가 PostgREST 1000행 캡 미대응 | **2026-08-11 수정 완료(코드만, CI 검증 대기)** — `classRows`/`fetchUsableMembershipsByClass`와 동일한 `.range()` 페이지네이션을 `myMems`에도 적용(`lib/reservations.ts`). 회귀 테스트 `tests/integration/month-data-memberships-row-limit-regression.test.ts` 추가(1005개 필러 membership 뒤의 target membership이 여전히 감지되는지, 자녀 프로필 공유 구조도 함께 확인). SQL 변경 없음(순수 코드 수정) |
-| 2 | [TEST-004 #45](https://github.com/sonjw222/booking-app/issues/45) | `classes` 테이블 공유 테스트센터 오염(1000행 캡, 최소 914건) | **2026-08-11 수정 완료(코드만, CI 검증 대기)** — 재진단 결과 실제로는 1761건까지 누적(22개 title_prefix 그룹, 최대 기여자: `admin-assignment-security.test.ts`의 "성공경로-*" 8종 ~812건, `diagnose-settings-live-values.test.ts`의 "DIAG 일일한도" 141건 등). `tests/integration/setup.ts`의 `getOrCreateOwnedTestCenter()`에 self-healing sweep을 추가(start_time이 1시간 이상 과거인 class를 해당 테스트센터에서 자동 정리) — 사실상 모든 통합 테스트 파일이 이 함수를 beforeAll에서 호출하므로 파일마다 정리 로직을 따로 만들지 않고 스위트 전체가 자동으로 self-healing된다. 별도로 `diagnose-settings-live-values.test.ts`(RLS 기반 `cleanupTestClass` 사용 — confirmed 상태 예약의 delete가 조용히 실패해 **매 실행 결정적으로 leak**하던 실제 원인 발견)를 `daily-book-limit-wiring.test.ts`로 정리(당일예약 describe는 `operational-settings-wiring.test.ts`와 완전 중복이라 제거, 일일한도 describe는 admin 기반 cleanup으로 교체해 유지). 이미 쌓인 1761건은 별도 cleanup SQL 없이 다음 CI 실행에서 sweep이 자동으로 정리(모두 start_time이 이미 과거라 즉시 대상이 됨) — SQL 불필요 |
-| 3 | [TEST-003 #43](https://github.com/sonjw222/booking-app/issues/43) | `daily-book-limit.spec.ts` 잔여 CI 인프라 플레이키니스 | **2026-08-11 근본 원인 확정 + 수정 완료(CI 검증 대기)** — 실제 실패 로그(run `31393468107`)를 직접 조사해 "그냥 flaky"로 단정하지 않고 정확한 원인 추적: `app/reservation/page.tsx`의 `doReserve()`/`handleCancel()`이 RPC 성공 → 시트 닫힘 → `await load()`(전체 재조회) 순서로 동작해, 시트가 닫히는 시점과 `.class-row` 버튼이 "예약"↔"취소"로 갱신되는 시점 사이에 실제 간격이 있음을 확인. 이 파일은 예약/취소 왕복을 최대 9회 반복해 CI 부하 시 그 간격이 Playwright 기본 expect timeout(10초)을 넘기는 사례가 실측됨(첫 시도 실패 → 재시도 통과, 앱/RPC 버그 아님 — 예약 자체는 이미 성공한 뒤였음). 분류: CI 인프라/타이밍(app bug/test bug 아님). 수정: 정확히 이 버튼 상태 assert 5곳만 timeout을 20초로 늘림(무조건적인 전체 timeout 증가 아님, 진단된 병목에만 적용) |
+| 1 | [RES-002 #42](https://github.com/sonjw222/booking-app/issues/42) | `fetchMonthData()`의 `myMems` 쿼리가 PostgREST 1000행 캡 미대응 | **2026-08-11 완료** — `classRows`/`fetchUsableMembershipsByClass`와 동일한 `.range()` 페이지네이션을 `myMems`에도 적용(`lib/reservations.ts`). 회귀 테스트 `tests/integration/month-data-memberships-row-limit-regression.test.ts` 추가(1005개 필러 membership 뒤의 target membership이 여전히 감지되는지, 자녀 프로필 공유 구조도 함께 확인). SQL 변경 없음(순수 코드 수정). 전체 CI 2연속 Green으로 검증됨(run `31459078105`/`31460392240`) |
+| 2 | [TEST-004 #45](https://github.com/sonjw222/booking-app/issues/45) | `classes` 테이블 공유 테스트센터 오염(1000행 캡, 최소 914건) | **2026-08-11 완료** — 재진단 결과 실제로는 1761건까지 누적(22개 title_prefix 그룹, 최대 기여자: `admin-assignment-security.test.ts`의 "성공경로-*" 8종 ~812건, `diagnose-settings-live-values.test.ts`의 "DIAG 일일한도" 141건 등). `tests/integration/setup.ts`의 `getOrCreateOwnedTestCenter()`에 self-healing sweep을 추가(start_time이 1시간 이상 과거인 class를 해당 테스트센터에서 자동 정리) — 사실상 모든 통합 테스트 파일이 이 함수를 beforeAll에서 호출하므로 파일마다 정리 로직을 따로 만들지 않고 스위트 전체가 자동으로 self-healing된다. 별도로 `diagnose-settings-live-values.test.ts`(RLS 기반 `cleanupTestClass` 사용 — confirmed 상태 예약의 delete가 조용히 실패해 **매 실행 결정적으로 leak**하던 실제 원인 발견)를 `daily-book-limit-wiring.test.ts`로 정리(당일예약 describe는 `operational-settings-wiring.test.ts`와 완전 중복이라 제거, 일일한도 describe는 admin 기반 cleanup으로 교체해 유지). 이미 쌓인 1761건은 별도 cleanup SQL 없이 CI 실행에서 sweep이 자동으로 정리함(모두 start_time이 이미 과거라 즉시 대상) — SQL 불필요. 전체 CI 2연속 Green으로 검증됨(run `31459078105`/`31460392240`) |
+| 3 | [TEST-003 #43](https://github.com/sonjw222/booking-app/issues/43) | `daily-book-limit.spec.ts` 잔여 CI 인프라 플레이키니스 | **2026-08-11 완료** — 실제 실패 로그(run `31393468107`)를 직접 조사해 "그냥 flaky"로 단정하지 않고 정확한 원인 추적: `app/reservation/page.tsx`의 `doReserve()`/`handleCancel()`이 RPC 성공 → 시트 닫힘 → `await load()`(전체 재조회) 순서로 동작해, 시트가 닫히는 시점과 `.class-row` 버튼이 "예약"↔"취소"로 갱신되는 시점 사이에 실제 간격이 있음을 확인. 이 파일은 예약/취소 왕복을 최대 9회 반복해 CI 부하 시 그 간격이 Playwright 기본 expect timeout(10초)을 넘기는 사례가 실측됨(첫 시도 실패 → 재시도 통과, 앱/RPC 버그 아님 — 예약 자체는 이미 성공한 뒤였음). 분류: CI 인프라/타이밍(app bug/test bug 아님). 수정: 정확히 이 버튼 상태 assert 5곳만 timeout을 20초로 늘림(무조건적인 전체 timeout 증가 아님, 진단된 병목에만 적용). 전체 CI 2연속 Green으로 검증됨(run `31459078105`/`31460392240`) |
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
 

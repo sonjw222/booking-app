@@ -8,6 +8,22 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-11 — PR #44 안정화 Batch(Phase 1~4) 최종 완료: 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
+
+P1-17(Phase 1, 신규 예약 override 정책)/RES-002(Phase 2)/TEST-004(Phase 3)/TEST-003
+(Phase 4) 4개 Phase를 하나의 배치로 순서대로 진행 후, 전체 CI(E2E/Unit/Integration/Build)
+2연속 Green으로 최종 검증(run `31459078105`/`31460392240`, 둘 다 first-attempt·재시도
+없음 — E2E 45/45, Unit 213/213, Integration 123/123). 검증 과정에서 신규 통합 테스트
+자체의 결함 2건을 실측으로 발견해 수정(둘 다 test bug, 앱/SQL 무관):
+(1) `schedule-rule-override.test.ts`의 A/B/C가 `reserve_class`(자동 매칭)를 써서, 공유
+테스트센터에 있던 다른 membership으로 우연히 통과/실패할 수 있던 문제 →
+`reserve_with_membership`으로 membership_id를 직접 지정하도록 수정.
+(2) `month-data-memberships-row-limit-regression.test.ts`가 `beforeAll` 마지막에 남은
+managerB 세션인 채로 managerA 계정의 `fetchMonthData()`를 호출해 RLS에 막혀 전부 빈
+배열이 돌아오던 문제(세션 전환 누락) + 실제로 만들지 않은 centerA class를 기대하던
+잘못된 대조군 assert 제거. 각 Phase의 상세 내용은 아래 개별 항목 참고. PR #44는 여전히
+MERGE BLOCKED(main merge는 별도 명시적 요청 전까지 하지 않음).
+
 ## 2026-08-11 — TEST-003(#43, Phase 4) 근본 원인 확정 + 수정: daily-book-limit.spec.ts CI noise (feature/social-auth-notifications-attendance-dashboard)
 
 "그냥 flaky"로 단정하지 않고 실제 실패 로그(run `31393468107`)를 직접 조사 — 정확한 실패
