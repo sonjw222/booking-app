@@ -26,6 +26,7 @@ export type ManagedClass = {
   // 수강권 허용 정책: all=이 센터의 모든 active pass 허용(class_allowed_products는 비워둠),
   // selected=class_allowed_products에 명시적으로 저장된 product만 허용(1개 이상)
   passSelectionMode: "all" | "selected";
+  instructorNames: string[]; // 담당 강사 이름 목록(class_trainers). 미지정이면 빈 배열
 };
 
 const KST_DATE = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -93,6 +94,11 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
 
   const ids = (rows ?? []).map((c) => c.id);
   const counts: Record<string, number> = {};
+  // 수업별 담당 강사 이름. key = classId (관리자 목록에 담당 강사를 표시하기 위함 — QA에서
+  // 발견: 회원 화면은 이미 fetchMonthData()가 class_trainer_names RPC로 채우고 있었지만
+  // 관리자 목록(fetchClasses)에는 이 데이터가 아예 없었다. 새 RPC/테이블 없이 회원 화면과
+  // 동일한 class_trainer_names RPC를 그대로 재사용).
+  const instructorNamesByClass: Record<string, string[]> = {};
   if (ids.length > 0) {
     // ids가 많아지면(위 1000행 제한 수정으로 한 센터가 한 달에 수백~수천 개 수업을 가질 수
     // 있게 됨) .in()에 그 UUID를 전부 나열한 요청 URL이 너무 길어져 PostgREST가 "Bad
@@ -100,11 +106,24 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
     const CHUNK_SIZE = 150;
     const idChunks: string[][] = [];
     for (let i = 0; i < ids.length; i += CHUNK_SIZE) idChunks.push(ids.slice(i, i + CHUNK_SIZE));
-    const chunkResults = await Promise.all(
-      idChunks.map((chunk) => supabase.from("class_reservation_counts").select("class_id, confirmed_count").in("class_id", chunk))
-    );
-    for (const { data: countRows } of chunkResults) {
+    const [countChunkResults, trainerChunkResults] = await Promise.all([
+      Promise.all(
+        idChunks.map((chunk) => supabase.from("class_reservation_counts").select("class_id, confirmed_count").in("class_id", chunk))
+      ),
+      Promise.all(
+        idChunks.map((chunk) => supabase.rpc("class_trainer_names", { p_class_ids: chunk }))
+      ),
+    ]);
+    for (const { data: countRows } of countChunkResults) {
       for (const r of countRows ?? []) counts[r.class_id] = r.confirmed_count;
+    }
+    for (const { data: trainerRows, error: trainerErr } of trainerChunkResults) {
+      if (trainerErr) throw new Error("담당 강사를 불러오지 못했어요: " + trainerErr.message);
+      for (const r of trainerRows ?? []) {
+        const name = (r as any).name;
+        if (!name) continue;
+        (instructorNamesByClass[(r as any).class_id] ??= []).push(name);
+      }
     }
   }
 
@@ -124,6 +143,7 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
     classFormat: (c.class_format ?? "group") as "group" | "private",
     status: c.status ?? "open",
     passSelectionMode: (c.pass_selection_mode ?? "all") as "all" | "selected",
+    instructorNames: instructorNamesByClass[c.id] ?? [],
   }));
 }
 

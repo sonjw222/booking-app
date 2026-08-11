@@ -607,14 +607,14 @@ function ReservationCalendarContent() {
                   <div className="class-row-meta">
                     {cls.start}~{cls.end}
                   </div>
-                  <div className="class-row-place">{cls.place}</div>
-                  {cls.instructorNames.length > 0 && (
-                    <div className="class-row-instructors">
-                      {cls.instructorNames.length > 2
+                  <div className="class-row-place">
+                    {cls.place}
+                    {cls.instructorNames.length > 0 && (
+                      <> · {cls.instructorNames.length > 2
                         ? `${cls.instructorNames[0]} 외 ${cls.instructorNames.length - 1}명`
-                        : cls.instructorNames.join(" · ")}
-                    </div>
-                  )}
+                        : cls.instructorNames.join(" · ")}</>
+                    )}
+                  </div>
                   <div className="center-class-passes">
                     {passesLoading ? (
                       <span className="class-pass-chip all skeleton-shimmer">수강권 확인 중...</span>

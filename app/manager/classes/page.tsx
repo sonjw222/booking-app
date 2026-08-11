@@ -969,7 +969,14 @@ export default function ClassManagePage() {
               <div className="class-info">
                 <div className="class-row-title">{c.title}</div>
                 <div className="class-row-meta">
-                  {c.start}~{c.end} · <button type="button" className="res-count-link" onClick={(e) => { e.stopPropagation(); openRoster(c); }}>예약 {c.reserved}/{c.capacity} ›</button>
+                  {c.start}~{c.end}
+                  {c.instructorNames.length > 0 && (
+                    <> · {c.instructorNames.length > 2
+                      ? `${c.instructorNames[0]} 외 ${c.instructorNames.length - 1}명`
+                      : c.instructorNames.join(" · ")}</>
+                  )}
+                  {" · "}
+                  <button type="button" className="res-count-link" onClick={(e) => { e.stopPropagation(); openRoster(c); }}>예약 {c.reserved}/{c.capacity} ›</button>
                 </div>
               </div>
               {!isPastClass(c) && (
