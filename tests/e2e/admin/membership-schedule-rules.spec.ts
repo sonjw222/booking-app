@@ -32,6 +32,20 @@ import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
   TEST A(규칙 없는 pass + 모든 수강권 허용 → 사용 가능)는 이미 new-class-creation.spec.ts의
   TEST1이 커버하고 있어(그 스펙의 pass 상품엔 schedule_rules가 없음) 여기서 중복 생성하지
   않는다.
+
+  [P1 신규 정책, 2026-08-11 추가] 관리자가 수업에서 "특정 수강권"을 직접 지정하면, 그
+  product에 한해 membership_schedule_rules를 무시하고 사용할 수 있다(fix_membership_
+  schedule_rule_override_draft_proposed.sql). 이 override의 RPC/DB 레벨 매트릭스(A~J)는
+  tests/integration/schedule-rule-override.test.ts가 훨씬 격리된 환경에서 엄밀히 검증한다 —
+  이 E2E 파일은 실제 관리자 등록 → 실제 회원 예약이라는 end-to-end 경로와, 관리자 UI가 두
+  모드("모든 수강권 허용" vs "특정 수강권 지정")의 차이를 실제로 명확히 안내하는지(K)만
+  검증한다. 아래 "D+F(override)" 테스트는 원래 옛 정책(AND 조건, 특정 지정해도
+  schedule_rules 불일치면 차단)을 검증했으나, 새 정책에서는 정확히 반대(특정 지정 시
+  override로 사용 가능)가 기대 동작이라 이번에 맞춰 갱신했다 — "모든 수강권 허용 +
+  mismatch → 여전히 차단" 자체(옛 C의 진짜 취지)는 schedule-rule-override.test.ts의 통합
+  테스트 C가 격리된 환경에서 이미 엄밀히 검증하므로 이 파일에서 다시 만들지 않는다(다른
+  무제한 테스트 pass들이 실제 계정에 많아 "모든 수강권 허용" 모드에서 순수 격리가 어려움 —
+  아래 헬퍼 주석 참고).
 */
 
 test.use({ storageState: MANAGER_AUTH_FILE });
@@ -155,11 +169,13 @@ async function restrictClassToRestrictedPassViaUi(page: Page, uniqueTitle: strin
   await expect(chip).toHaveClass(/on/);
 }
 
-// C + D + F: 규칙과 안 맞는 수업 + class_allowed_products로 이 pass를 명시적으로 허용해도
-// (F: AND 조건) 여전히 사용 불가(C) + 관리자 UI가 저장 전에 경고를 보여줌(D).
-test("C+D+F: schedule rule과 안 맞으면 class_allowed_products로 허용해도 사용 불가 + 관리자 경고 표시 (실브라우저)", async ({ page, browser }) => {
+// D + F(override) + K: 규칙과 안 맞는 수업이라도 class_allowed_products로 이 pass를
+// 명시적으로 지정하면(F가 다른 product로 새지 않는지는 통합 테스트가 검증) 이제
+// override로 사용 가능(D/E) + 관리자 UI가 "모든 수강권 허용"일 때의 경고(danger)와
+// "특정 수강권 지정"일 때의 override 안내(info)를 서로 다르게 보여줌(K).
+test("D+F(override)+K: 특정 수강권 직접 지정 시 schedule rule 불일치해도 사용 가능 + 관리자 UI 안내가 모드별로 다름 (실브라우저)", async ({ page, browser }) => {
   const matchTitle = `P1-15 수업 ${Date.now()}`; // 규칙이 가리키는 "진짜" 수업명(다른 것)
-  const uniqueTitle = `P1-15-MISMATCH-${Date.now()}`; // 실제로 만들 수업명(다름 → 불일치)
+  const uniqueTitle = `P1-15-OVERRIDE-${Date.now()}`; // 실제로 만들 수업명(다름 → 불일치)
   const cls = await createFutureTestClassAdmin(centerAId, { title: uniqueTitle, hoursFromNow: 151 });
   createdClassIds.push(cls.id);
   const dow = kstDowFromIso(cls.startTime);
@@ -172,39 +188,53 @@ test("C+D+F: schedule rule과 안 맞으면 class_allowed_products로 허용해�
   const kstDate = kstDateStrFromIso(cls.startTime);
   await gotoManagerClassesDay(page, kstDate);
 
-  // F: "특정 pass 지정"으로 이 pass를 명시적으로 "허용"해둔다(상품 제한은 통과하지만
-  // schedule_rules는 여전히 막아야 함 — AND 조건 검증).
+  // K(1단계): 아직 "특정 지정"을 안 한 상태(=모든 수강권 허용)에서는 danger 경고가 보여야
+  // 한다 — schedule rule이 그대로 적용되는 모드이므로.
+  await page.locator(".class-row", { hasText: uniqueTitle }).click();
+  await expect(page.locator(".sheet-title", { hasText: "수업 수정" })).toBeVisible();
+  await expect(page.locator(".schedule-rule-warning")).toBeVisible({ timeout: 10000 });
+  await expect(page.locator(".schedule-rule-override-note")).toHaveCount(0);
+  await page.locator(".sheet-overlay").click({ position: { x: 10, y: 10 } });
+
+  // F: "특정 pass 지정"으로 이 pass를 명시적으로 지정한다.
   await restrictClassToRestrictedPassViaUi(page, uniqueTitle);
 
-  // D: 선택 직후, 저장 전에도 경고가 보여야 한다.
-  const warning = page.locator(".schedule-rule-warning");
-  await expect(warning).toBeVisible({ timeout: 10000 });
-  await expect(warning).toContainText(RESTRICTED_PASS_NAME);
+  // K(2단계): "특정 지정" 후에는 danger 경고 대신 override 안내(info)로 바뀌어야 한다 —
+  // 관리자가 두 모드의 차이를 헷갈리지 않도록.
+  await expect(page.locator(".schedule-rule-warning")).toHaveCount(0);
+  const overrideNote = page.locator(".schedule-rule-override-note");
+  await expect(overrideNote).toBeVisible({ timeout: 10000 });
+  await expect(overrideNote).toContainText(RESTRICTED_PASS_NAME);
 
   await page.getByRole("button", { name: "수정하기" }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
-  // D(재확인): 재진입해도 경고가 그대로 보인다.
+  // K(재확인): 재진입해도 override 안내가 그대로 보인다(danger 경고 아님).
   await page.locator(".class-row", { hasText: uniqueTitle }).click();
   await expect(page.locator(".sheet-title", { hasText: "수업 수정" })).toBeVisible();
-  await expect(page.locator(".schedule-rule-warning")).toBeVisible({ timeout: 10000 });
+  await expect(page.locator(".schedule-rule-override-note")).toBeVisible({ timeout: 10000 });
+  await expect(page.locator(".schedule-rule-warning")).toHaveCount(0);
   await page.locator(".sheet-overlay").click({ position: { x: 10, y: 10 } });
 
-  // C: 회원 화면에서는 이 pass가 사용 불가로 뜬다(class_allowed_products가 허용해도).
+  // D: 회원 화면에서는 이 pass가 이제 사용 가능하다(schedule rule 불일치와 무관, override).
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
   await expect(memberPage.locator(".sheet-title", { hasText: "예약하시겠어요?" })).toBeVisible({ timeout: 20000 });
-  await expect(memberPage.locator("text=현재 사용할 수 있는 수강권이 없어요")).toBeVisible();
-  await expect(memberPage.locator(".pass-pick-list")).toHaveCount(0);
+  const passList = memberPage.locator(".pass-pick-list");
+  await expect(passList).toBeVisible({ timeout: 15000 });
+  await expect(passList).toContainText(RESTRICTED_PASS_NAME);
+  await memberPage.getByRole("button", { name: "예약하기" }).click();
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 20000 });
   await memberContext.close();
 });
 
-// E: 이 mismatch 상황에서 방금 새로 발급된(구매와 동일한 경로로 생성된) membership도
-// 기존 pass와 동일하게 schedule rule 제한을 그대로 적용받는다 — "새로 산 pass라서 예외"는
-// 없다는 것을 확인. class_allowed_products로 이 pass 하나만 허용해 다른(제한 없는) 보유
-// pass들이 "usable"에 섞여 이 검증을 무의미하게 만들지 않도록 isolate한다.
-test("E: 방금 새로 발급된 membership도 같은 상품이면 동일한 schedule rule 제한을 받는다 (실브라우저)", async ({ page, browser }) => {
+// J: 이 mismatch 상황에서 방금 새로 발급된(구매와 동일한 경로로 생성된) membership도
+// class_allowed_products로 명시 지정된 상품이면 기존 pass와 동일하게 override를 받는다 —
+// "새로 산 pass라서 예외"는 없다는 것을 확인(새 정책에서는 사용 가능이 기대 동작).
+// class_allowed_products로 이 pass 하나만 허용해 다른(제한 없는) 보유 pass들이 "usable"에
+// 섞여 이 검증을 무의미하게 만들지 않도록 isolate한다.
+test("J: 방금 새로 발급된 membership도 같은 상품이 직접 지정돼 있으면 동일한 override를 받는다 (실브라우저)", async ({ page, browser }) => {
   const matchTitle = `P1-15 수업 ${Date.now()}`;
   const uniqueTitle = `P1-15-NEWMEM-${Date.now()}`;
   const cls = await createFutureTestClassAdmin(centerAId, { title: uniqueTitle, hoursFromNow: 152 });
@@ -225,10 +255,18 @@ test("E: 방금 새로 발급된 membership도 같은 상품이면 동일한 sch
   // "방금 구매"를 흉내내기 위해 이 프로필의 기존 membership을 지우고 새로 하나 발급한다
   // (실제 checkout/confirmPayment 경로와 동일하게 memberships 행이 새로 생기는 것만
   // 재현하면 충분 — 이 테스트의 초점은 결제 플로우가 아니라 신규 membership도 같은
-  // product_id면 같은 규칙을 받는지이며, 그 결제 플로우 자체는 new-class-creation.spec.ts의
-  // TEST4가 이미 전체 검증함).
+  // product_id면 같은 override를 받는지이며, 그 결제 플로우 자체는 new-class-creation.spec.ts의
+  // TEST4가 이미 전체 검증함). 이전 테스트(D+F+K)가 이 membership으로 예약을 만들었을 수
+  // 있어, membership을 지우기 전에 그 예약부터 먼저 지워야 FK 위반이 나지 않는다.
   const admin = getFixtureAdminClient();
-  await admin.from("memberships").delete().eq("profile_id", userA.profileId).eq("product_id", restrictedPass.id);
+  const { data: oldMems } = await admin
+    .from("memberships").select("id")
+    .eq("profile_id", userA.profileId).eq("product_id", restrictedPass.id);
+  const oldMemIds = (oldMems ?? []).map((m: any) => m.id as string);
+  if (oldMemIds.length > 0) {
+    await admin.from("reservations").delete().in("membership_id", oldMemIds);
+    await admin.from("memberships").delete().in("id", oldMemIds);
+  }
   const { error: newMemErr } = await admin.from("memberships").insert({
     profile_id: userA.profileId, center_id: centerAId, product_id: restrictedPass.id,
     product_name: restrictedPass.name, pass_type: "count", total_count: 5, remaining_count: 5,
@@ -240,9 +278,13 @@ test("E: 방금 새로 발급된 membership도 같은 상품이면 동일한 sch
   const memberPage = await memberContext.newPage();
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
   await expect(memberPage.locator(".sheet-title", { hasText: "예약하시겠어요?" })).toBeVisible({ timeout: 20000 });
-  await expect(memberPage.locator("text=현재 사용할 수 있는 수강권이 없어요")).toBeVisible();
+  const passList = memberPage.locator(".pass-pick-list");
+  await expect(passList).toBeVisible({ timeout: 15000 });
+  await expect(passList).toContainText(RESTRICTED_PASS_NAME);
+  await memberPage.getByRole("button", { name: "예약하기" }).click();
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 20000 });
   await memberContext.close();
 
-  // 원상복구: 이후 다른 테스트/재실행에 영향 없도록 정상 membership으로 되돌림
+  // 원상복구: 이후 다른 테스트/재실행에 영향 없도록 정상(제한 없는) membership으로 되돌림
   await createTestMembershipForProduct(centerAId, userA.profileId, restrictedPass, { remainingCount: 10 });
 });

@@ -889,6 +889,49 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   영향을 받지 않는다 — 순수하게 테스트 cleanup(admin/service_role 경로) 전용 문제.
 - **검증 완료**: SQL 적용 후 `auth-account-bootstrap.test.ts` 2회 연속 통과, throwaway 계정 cleanup이 정상적으로 성공함을 확인(더 이상 accounts/profiles 잔여 데이터가 누적되지 않음).
 
+### P1-17. (2026-08-11, 진행 중 — Phase 1 완료, CI 검증 대기) 신규 예약 정책: 관리자가 직접 지정한 수강권은 membership_schedule_rules보다 우선
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1(사용자 요청 정책 변경, PR #44 안정화 Batch의 Phase 1) |
+| 현재 상태 | **코드/SQL 변경 완료, 사용자가 SQL 적용 완료(확인함). CI(E2E/Unit/Integration) 검증은 아직 진행 전.** |
+| 근거 파일 | `fix_membership_schedule_rule_override_draft_proposed.sql`(적용 완료)+rollback, `app/manager/classes/page.tsx`, `tests/integration/schedule-rule-override.test.ts`(신규, A~J), `tests/e2e/admin/membership-schedule-rules.spec.ts`(D+F+K/J 갱신) |
+| 완료 조건 | 전체 CI 2연속 Green(다음 단계에서 확인 예정) |
+
+- **정책**: P1-15가 확정한 "class_allowed_products 허용 AND membership_schedule_rules 충족"
+  정책에서, 관리자가 그 class에 특정 product를 class_allowed_products로 **명시적으로** 지정한
+  경우에 한해 membership_schedule_rules를 무시하도록 확장했다. "모든 수강권 허용"(0건)이면
+  기존 정책 그대로 유지된다. override는 schedule_rules만 우회하며 status/remaining_count/
+  expires_at/product_kind='pass'/center 소속 등 다른 정상 조건은 그대로 적용된다.
+- **적용 함수**: `usable_memberships`/`usable_memberships_for_classes`(표시), `reserve_class`
+  (자동매칭), `reserve_with_membership`(회원이 직접 pass 선택 — 실제 예약 확정 경로).
+  `admin_assign_reservation`은 라이브 코드에 이미 "수강권 종류/예약조건 제한은 두 방식 모두
+  무시" 주석과 함께 class_allowed_products/membership_schedule_rules를 전혀 확인하지 않는
+  것으로 확인돼(2026-08-11 `pg_get_functiondef` 직접 조회) 변경하지 않았다.
+- **함께 발견/수정한 별도 갭**: `reserve_with_membership`(실제 회원 예약 확정 RPC)은 지금까지
+  `membership_schedule_rules`를 전혀 확인하지 않고 있었다(`class_allowed_products`만 나중에
+  추가되고 schedule_rules는 누락된 채로 남아 있었음 — 라이브 코드 자체 주석으로 확인). 화면
+  목록(`usable_memberships_for_classes`)에서는 걸러졌지만 실제 RPC는 막지 않아 "목록≠실제
+  예약 정책" 불일치가 있었다(`lib/reservations.ts:364-366` 기존 주석이 요구하는 불변식을
+  위반). 이번에 이 조건을 새로 추가하면서 처음부터 override까지 포함해 넣었다.
+- **소스 오브 트루스**: git의 `reservation_functions.sql`은 PR #32의 라이브 변경분(당일예약/
+  일일한도/오픈시각 등)이 반영되지 않은 옛 버전이라(P2-16에 이미 문서화) 기준으로 삼지
+  않고, 사용자가 Supabase SQL Editor에서 `pg_get_functiondef()`로 직접 추출한 2026-08-11
+  라이브 본문을 기준으로 함수 전체를 재작성했다. 원본 가드(예약마감/오픈시각/당일예약/
+  일일한도/휴무일/프라이빗 동시진행/대기예약 주간한도 등)는 전혀 손대지 않았다(정확한
+  문자열 카운트 스크립트로 대조 확인).
+- **별도 기존 문제(이번에 고치지 않음)**: `usable_memberships*`는 `class_title`을 정확히
+  일치(`=`)로, `reserve_class`/`reserve_with_membership`은 부분 일치(`LIKE '%...%'`)로 비교 —
+  서로 다른 매칭 규칙이 이미 라이브에 공존하고 있었다(이번 변경으로 만든 문제 아님, 범위 밖).
+- **UX**: 수업 등록/수정 화면의 schedule-rule 경고를 모드별로 분리 — "모든 수강권 허용"일
+  때는 기존 `.schedule-rule-warning`(danger) 그대로, "특정 수강권 지정" 모드에서 override
+  대상이 있으면 새 `.schedule-rule-override-note`(info)로 "직접 지정이 우선"임을 안내한다.
+- **Regression(A~K)**: `tests/integration/schedule-rule-override.test.ts`(A~J, RPC/DB 레벨
+  매트릭스), `tests/e2e/admin/membership-schedule-rules.spec.ts`(B는 유지, D+F+K/J는 새
+  정책에 맞게 갱신 — 옛 정책 하에서 "차단"을 기대하던 부분이 새 정책에서는 "사용 가능"으로
+  뒤집힘).
+
+
 ### P1-14. (2026-08-10, 해결 완료) `attendance-policy.test.ts` 주간 대기예약 한도 초과로 Integration 반복 실패
 
 | 필드 | 내용 |

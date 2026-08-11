@@ -8,6 +8,22 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-11 — P1-17(Phase 1): 신규 정책 "관리자 직접 지정 수강권은 schedule_rules보다 우선" (feature/social-auth-notifications-attendance-dashboard)
+
+PR #44 안정화 Batch의 Phase 1. `usable_memberships`/`usable_memberships_for_classes`/
+`reserve_class`/`reserve_with_membership` 4개 함수에 "class_allowed_products에 이 product가
+명시적으로 지정돼 있으면 membership_schedule_rules를 무시한다"는 override 조건을 추가
+(`fix_membership_schedule_rule_override_draft_proposed.sql`, 사용자가 Supabase SQL Editor에서
+적용 완료). git의 `reservation_functions.sql`이 PR #32 이후 라이브와 어긋나 있어(P2-16 기존
+문서화) 사용자가 `pg_get_functiondef()`로 직접 추출한 라이브 본문을 기준으로 재작성. 그
+과정에서 `reserve_with_membership`(실제 회원 예약 확정 RPC)이 지금까지 membership_schedule_
+rules를 전혀 확인하지 않던 별도 갭도 함께 발견해 수정(목록 표시 정책과 실제 예약 정책이
+이제 일치). `admin_assign_reservation`은 이미 두 제한을 전부 우회하도록 설계돼 있어 변경
+없음. 관리자 UI(`app/manager/classes/page.tsx`)의 schedule-rule 경고를 "모든 수강권 허용"
+(danger)과 "특정 수강권 지정"(override 안내, info) 모드로 분리. Regression: 신규
+`tests/integration/schedule-rule-override.test.ts`(A~J), `membership-schedule-rules.spec.ts`
+갱신(D+F+K/J). CI 검증은 다음 단계에서 진행.
+
 ## 2026-08-10 — P1-15 cleanup SQL 적용 + 사후 read-only 재검증 완료 (feature/social-auth-notifications-attendance-dashboard)
 
 사용자가 `cleanup_p1_15_stale_schedule_rules_draft_proposed.sql`을 Supabase SQL Editor에서

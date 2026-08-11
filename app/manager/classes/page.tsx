@@ -1124,33 +1124,60 @@ export default function ClassManagePage() {
             <div className="menu-section-label" style={{ padding: "8px 0 6px" }}>예약 가능 수강권</div>
             <div className="perm-guide" style={{ margin: "0 0 4px" }}>
               {selectedProducts.length === 0
-                ? <>선택 안 하면 <b>모든 수강권</b>으로 예약 가능해요. 특정 수강권만 고르면 그 수강권 보유자만 예약할 수 있어요.</>
-                : <><b>{selectedProducts.length}개</b> 수강권만 이 수업에 사용할 수 있어요.</>}
-              {" "}단, 이 설정은 <b>어떤 상품</b>을 쓸 수 있는지만 정해요 — 각 수강권 자체에 걸린
-              요일/시간 예약조건(수강권 관리)은 이것과 별개로 계속 적용돼요.
+                ? <>선택 안 하면 <b>모든 수강권</b>으로 예약 가능해요. 이 경우 각 수강권 자체에 걸린
+                  요일/시간 예약조건(수강권 관리)은 이것과 별개로 계속 적용돼요.</>
+                : <><b>{selectedProducts.length}개</b> 수강권만 이 수업에 사용할 수 있어요. 이렇게 특정
+                  수강권을 이 수업에 직접 지정하면, 그 수강권 자체의 요일/시간 예약조건과 무관하게
+                  이 수업에서 사용할 수 있어요(직접 지정이 예약조건보다 우선).</>}
             </div>
             {(() => {
               if (!form.date || !form.start || !form.title.trim() || passProducts.length === 0) return null;
               const [y, m, d] = form.date.split("-").map(Number);
               if (!y || !m || !d) return null;
               const classDow = new Date(y, m - 1, d).getDay();
-              const candidates = selectedProducts.length === 0
-                ? passProducts
-                : passProducts.filter((p) => selectedProducts.includes(p.id));
-              const excluded = findScheduleExcludedProducts(
-                candidates.map((p) => ({ id: p.id, name: p.name })),
+              const target = { dayOfWeek: classDow, startTime: form.start, classTitle: form.title.trim() };
+
+              if (selectedProducts.length === 0) {
+                // 모든 수강권 허용 — 수강권 자체의 예약조건이 그대로 적용되므로, 실제로 배제되는
+                // 수강권이 있으면 경고로 안내한다.
+                const excluded = findScheduleExcludedProducts(
+                  passProducts.map((p) => ({ id: p.id, name: p.name })),
+                  rulesByProduct,
+                  target
+                );
+                if (excluded.length === 0) return null;
+                return (
+                  <div className="perm-guide schedule-rule-warning" style={{ margin: "0 0 8px", color: "var(--danger, #d33)" }}>
+                    ⚠️ 이 수업({WEEKDAYS[classDow]}요일 {form.start})에서는 <b>{excluded.length}개</b> 수강권을
+                    실제로 쓸 수 없어요(수강권 자체의 예약조건과 안 맞음):
+                    <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                      {excluded.map((ex) => (
+                        <li key={ex.productId} className="schedule-rule-warning-item" style={{ fontSize: 12 }}>
+                          {ex.productName} — 허용 조건: {ex.rules.map(ruleToText).join(" 또는 ")}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              }
+
+              // 특정 수강권 직접 지정 — 선택된 수강권은 예약조건과 무관하게 이 수업에서 사용
+              // 가능하다(서버 override와 동일 조건). 원래 조건이 있던 것만 골라 안내한다.
+              const selectedPassProducts = passProducts.filter((p) => selectedProducts.includes(p.id));
+              const overridden = findScheduleExcludedProducts(
+                selectedPassProducts.map((p) => ({ id: p.id, name: p.name })),
                 rulesByProduct,
-                { dayOfWeek: classDow, startTime: form.start, classTitle: form.title.trim() }
+                target
               );
-              if (excluded.length === 0) return null;
+              if (overridden.length === 0) return null;
               return (
-                <div className="perm-guide schedule-rule-warning" style={{ margin: "0 0 8px", color: "var(--danger, #d33)" }}>
-                  ⚠️ 이 수업({WEEKDAYS[classDow]}요일 {form.start})에서는 <b>{excluded.length}개</b> 수강권을
-                  실제로 쓸 수 없어요(수강권 자체의 예약조건과 안 맞음):
+                <div className="perm-guide schedule-rule-override-note" style={{ margin: "0 0 8px", color: "var(--accent, #2a6)" }}>
+                  ℹ️ 아래 <b>{overridden.length}개</b> 수강권은 원래 예약조건이 있지만, 이 수업에 직접
+                  지정했으므로 그 조건과 무관하게 사용할 수 있어요(직접 지정이 우선):
                   <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
-                    {excluded.map((ex) => (
-                      <li key={ex.productId} className="schedule-rule-warning-item" style={{ fontSize: 12 }}>
-                        {ex.productName} — 허용 조건: {ex.rules.map(ruleToText).join(" 또는 ")}
+                    {overridden.map((ex) => (
+                      <li key={ex.productId} className="schedule-rule-override-item" style={{ fontSize: 12 }}>
+                        {ex.productName} — 원래 조건: {ex.rules.map(ruleToText).join(" 또는 ")}
                       </li>
                     ))}
                   </ul>
