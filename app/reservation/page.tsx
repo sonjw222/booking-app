@@ -498,9 +498,9 @@ function ReservationCalendarContent() {
 
       <div className="cal-header">
         <div className="cal-toolbar">
-          <div className="cal-month-control">
+          <div className="cal-month-control cal-month-nav">
             <button className="cal-nav-btn" onClick={goPrevMonth} aria-label="이전 달">‹</button>
-            <div className="cal-title">{year}년 {month}월</div>
+            <div className="cal-title">{year}.{pad(month)}</div>
             <button className="cal-nav-btn" onClick={goNextMonth} aria-label="다음 달">›</button>
           </div>
           <button className="cal-center-pick" onClick={() => setCenterSheet(true)} aria-label={`센터 선택, 현재 ${effectiveCenterName}`}>
