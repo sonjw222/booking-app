@@ -8,6 +8,42 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-13 — P0 보안 산출물 통합·정리(SEC-101/112/113/114/115/117/118) — SQL 미실행 (security/p0-batch-consolidation)
+
+**SQL 실행 없음, main merge 없음, app/CSS/디자인 브랜치 무변경. SQL draft/rollback/설계문서/
+회귀테스트만 정리.**
+
+- **병렬 세션 산출물 발견 및 통합**: 이 저장소 밖(다른 worktree)에서 최소 2개의 독립 세션이
+  같은 보안 이슈들을 동시에 조사·수정 중이었음을 발견 — 전부 read-only로 비교한 뒤 하나의
+  canonical 세트로 통합했다(사용자 확인 거쳐 auto_book_membership은 B안 `my_managed_center_ids()`
+  로 최종 확정).
+- **SEC-101+SEC-112+SEC-113 통합**: 기존 SEC-101/112 canonical SQL에 신규 SEC-113(마지막
+  manager_centers 행 self-delete → orphan → 제3자 self-claim, 2026-08-13 P1/P2에서 P0로
+  재평가) DELETE 정책 수정을 같은 트랜잭션으로 통합. 회귀 테스트에 P~T(5개 케이스) 추가.
+- **SEC-114 canonical 확정(B안) + pass_selection_mode 보정**: `my_managed_center_ids()` 기반
+  authorization을 채택하면서, 함수 내부 `class_allowed_products` 필터가 구식 "행 존재 여부"
+  패턴을 쓰던 것을 최신 `classes.pass_selection_mode` 컬럼을 reserve_class와 정확히 동일한
+  형태로 직접 참조하도록 수정. 회귀 테스트는 canonical(B안) 테스트에 다른 세션 A안의
+  고유 커버리지(AUTO-SEC-K platform admin, AUTO-SEC-L fulfill_order end-to-end)를 이식,
+  A안 전용이던 "저권한 스태프 거부" 기대값은 B안 설계와 양립하지 않아 폐기.
+- **SEC-115 canonical 채택**: 다른 세션이 작성한 `manager_set_attendance` membership 무결성
+  수정(waitlisted 취소 시 오복구 방지, waitlisted→confirmed 무차감 확정 차단)을 canonical로
+  채택 — 상태 기반(`status in (...)`) 체크가 `membership_consumed` 컬럼 직접 참조보다 더
+  견고함을 확인. 기존 BUG-116/BUG-117은 이 번호로 통합, 폐기 처리.
+- **SEC-117/119 분리**: 다른 세션이 "SEC-116"으로 등록했던 EXECUTE 최소화 하드닝 항목이
+  이 저장소의 기존 SEC-116(fulfill_order 세분권한 미사용)과 번호가 충돌 — SEC-119로
+  재배정하고 canonical 번호 매핑 표를 `docs/TODO.md`에 신규 작성.
+- **SEC-118 신규(설계만)**: `orders.amount`가 클라이언트 신뢰 값이고 `product.price` 서버
+  재계산이 없어 가격 조작이 가능함을 확정 — `docs/25_SEC118_Orders_Amount_Design.md`에 4개
+  설계안 비교 + 권장 아키텍처(D안: 신규 RPC + fulfill_order 방어적 재검증) 작성. 코드/SQL은
+  이번 배치에 포함하지 않음, 별도 P0 Batch로 분리.
+- **refund_membership 환불 후 예약 잔존 문제 신규(설계만)**: 환불된 membership이 여전히
+  살아있는 미래 예약을 가질 수 있고, 그 예약이 나중에 취소되면 이미 환불된 membership에
+  유령 잔여횟수가 생기는 경로를 확인 — `docs/TODO.md`에 4개 해결안 비교 기록, SQL 미작성.
+- **static audit**: `npx tsc --noEmit` 신규/수정 테스트 파일 3개 전부 에러 0건, `npm run test`
+  (unit) 217/217 통과, 신규 integration 테스트 3개 파일 전부 env 누락 단계까지 정상 도달
+  (import/구문 오류 없음, 실제 실행은 SQL 미적용이라 하지 않음).
+
 ## 2026-08-11 — 담당 강사 복수 지정 + 수강권 허용 정책 변경 Batch 최종 완료: 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
 
 두 번째 SQL(`add_class_trainer_names_rpc_draft_proposed.sql`)까지 적용 완료되면서 이

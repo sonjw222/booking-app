@@ -932,6 +932,168 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   뒤집힘).
 
 
+### SEC-101/112/113. (2026-08-12~13, 통합 SQL 작성 완료 — 미적용) manager_centers 권한 상승 3건(P0)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **CONFIRMED, canonical 통합 SQL 작성 완료 — 미적용.** SEC-101(임의 센터 self-join)/SEC-112(저권한 스태프 self-promote, 타센터 role_id 교차주입 포함)/**SEC-113(마지막 남은 행 self-delete → orphan → 제3자 self-claim, 2026-08-13 P1/P2에서 P0로 재평가)** 전부 같은 canonical 파일에 통합. |
+| 근거 파일 | `fix_manager_centers_privilege_escalation_draft_proposed.sql`(신규, 미적용, BEGIN/COMMIT 트랜잭션 포함) + rollback, `tests/integration/manager-centers-privilege-escalation.test.ts`(A~T) |
+| 완료 조건 | 사용자가 Supabase에서 적용 → 회귀 테스트 전체 GREEN 확인 |
+
+**SEC-113 상세**: `"오너 스태프 삭제"` DELETE 정책의 self 분기가 "마지막 남은 행인가"를 확인하지
+않아, 오너가 자기 행을 지우면 센터가 orphan(manager_centers 0건)이 되고 SEC-101의
+self-insert 재개 조건(`not exists`)을 다시 만족해 제3자가 실제 데이터가 있는 센터를 가로챌
+수 있었다. 수정: DELETE 정책에 `exists(그 center_id에 이 행 말고 다른 행)` 조건 추가(self/
+권한삭제 공통 적용) — SEC-101 재개 조건과 정확히 반대라 orphan 상태 자체가 원천 차단됨.
+**장기 과제(이번 배치 범위 밖, 별도 TODO)**: "owner transfer" 전용 워크플로우가 없음 — 현재는
+"오너를 하나 더 초대한 뒤 원래 오너가 self-delete"하는 수동 절차로만 핸드오프 가능함을
+회귀 테스트(T)로 확인함. 전용 RPC/UI는 별도 제품 결정 필요.
+
+### SEC-114-A/C. (2026-08-12~13, canonical 확정 — 미적용) `auto_book_membership()` authorization bypass(P0)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **CONFIRMED, canonical SQL 확정(B안: `my_managed_center_ids()`) — 미적용.** 같은 문제를 두 세션이 독립적으로 발견해 두 가지 authorization 설계(A: `has_permission('schedule.own.group.booking')`, B: `my_managed_center_ids()`)가 나왔고, **사용자가 B안을 최종 채택**(2026-08-13, fulfill_order/manager_set_attendance와 authorization 모델을 일관되게 유지하기 위함). |
+| 근거 파일 | `fix_auto_book_membership_idor_draft_proposed.sql`(canonical, `pass_selection_mode` 컬럼을 reserve_class와 동일하게 직접 참조하도록 2026-08-13 수정 완료) + rollback, `tests/integration/auto-book-membership-security.test.ts`(AUTO-SEC-A~L, 다른 세션 A안의 platform admin/fulfill_order e2e 커버리지 이식) |
+| 완료 조건 | 사용자가 Supabase에서 적용 → 회귀 테스트 전체 GREEN 확인 |
+
+같은 파일에서 **SEC-114-B(정책 회귀: pass_selection_mode, membership_schedule_rules+P1-17
+override, center_holidays, calc_deadline book/open, daily_book_limit, private_max_concurrent)
+도 함께 닫혔다** — B안 채택 시 A안이 미뤄뒀던 정책 회귀까지 한 배치에서 해결됨.
+
+### SEC-115. (2026-08-12~13, canonical 확정 — 미적용) `manager_set_attendance()` membership 무결성(P1)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1(금전/데이터 무결성, 권한 문제 아님) |
+| 현재 상태 | **CONFIRMED, canonical SQL 확정 — 미적용. 기존 BUG-116/BUG-117은 이 항목으로 통합·폐기.** |
+| 근거 파일 | `fix_manager_set_attendance_membership_integrity_draft_proposed.sql`(canonical) + rollback, `tests/integration/manager-set-attendance-membership-integrity.test.ts`(ATT-SEC-A~J) |
+| 완료 조건 | 사용자가 Supabase에서 적용 → 회귀 테스트 전체 GREEN 확인 |
+
+waitlisted→cancelled 시 `membership_id is not null`만 보고 무조건 `+1` 복구하던 것을
+`status in ('confirmed','attended','no_show')` 기준으로 교체(대기는 애초에 차감이 없었으므로
+복구도 없음) — `reserve_class`가 waitlisted INSERT 시 `membership_consumed`를 명시적으로
+세팅하지 않아 컬럼 기본값에 의존하면 오히려 또 틀릴 수 있는 함정을 상태 기반 체크로 회피함
+(더 견고한 설계, `admin_cancel_reservation`의 `membership_consumed` 직접 참조 패턴보다 안전).
+waitlisted→confirmed 직접 전환(무차감 확정 우회)도 명시적으로 차단.
+
+### SEC-116. (2026-08-12, 확인됨 — 미적용) `fulfill_order()`가 세분 permission 대신 `my_managed_center_ids()`만 사용
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인됨, 수정 SQL 미작성(제품 결정 필요)** |
+| 완료 조건 | `pass.payment.create` 류 세분권한 체크로 전환할지 제품 결정 필요 — 결정되면 SEC-114/SEC-115와 authorization 모델을 일관되게 맞추는 별도 배치로 진행(auto_book_membership이 지금 my_managed_center_ids()를 쓰는 이유가 바로 이 함수와의 일관성이므로, 여기를 바꾸면 그쪽도 함께 재검토 필요) |
+
+그 센터의 매니저이기만 하면 결제/매출 관련 세분권한이 없는 스태프도 주문을 발급 처리할 수
+있다. SEC-101/112/113(소속 자체의 정당성)과는 독립적인 문제(소속이 정당해도 세분권한 모델을
+우회).
+
+### SEC-117. (2026-08-12, canonical 확정 — 미적용) SECURITY DEFINER search_path 하드닝(P2/P3)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2/P3(하드닝, 활성 exploit 아님) |
+| 현재 상태 | **canonical SQL 확정 — 미적용.** `ALTER FUNCTION ... SET search_path`(함수 본문 재정의 없음, 요청된 안전한 방식)로 `reserve_class`/`reserve_with_membership`/`cancel_reservation`/`refund_membership`/`fulfill_order`/`usable_memberships`/`usable_memberships_for_classes`/`is_platform_admin`(search_path만) 처리. |
+| 근거 파일 | `fix_security_definer_hardening_search_path_execute_draft_proposed.sql`(canonical) + rollback |
+| 완료 조건 | 적용 전 `has_schema_privilege('anon'/'authenticated','public','create')` Live 확인 권장(파일 내 주석 SQL, 실행 안 함) — PostgreSQL 15부터 기본 회수라 LIKELY 안전, 100% 확정은 Live 조회 필요 |
+
+같은 파일의 EXECUTE 최소화(PUBLIC/anon revoke) 부분은 **SEC-119로 별도 번호 부여**(아래
+"canonical 번호 매핑" 참고 — SEC-116 번호가 이미 다른 문제에 쓰이고 있어 충돌 방지).
+
+### SEC-118. (2026-08-13, 신규, 설계만 완료) `orders.amount` 클라이언트 신뢰 — 가격 조작(P0)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0(금전 사기 벡터) |
+| 현재 상태 | **CONFIRMED(코드 확인). 설계 문서만 작성, SQL/코드 미작성 — 별도 P0 Batch로 분리** |
+| 근거 파일 | `lib/orders.ts`(`createOrder`), `add_orders.sql`(RLS), `reservation_functions.sql`(`fulfill_order`), [25_SEC118_Orders_Amount_Design.md](./25_SEC118_Orders_Amount_Design.md)(신규, 상세 설계) |
+| 완료 조건 | 설계 문서의 D안(신규 RPC로 서버측 가격 계산 + `fulfill_order` 방어적 재검증) 채택 여부 제품 결정 → 구현 |
+
+`createOrder()`가 클라이언트가 보낸 `input.amount`를 그대로 `orders.amount`에 저장하고,
+`product.price` 서버측 재계산이 전혀 없다. `fulfill_order()`는 이 값을 그대로 `payments`에
+매출로 확정한다 — 회원이 checkout을 우회해 임의 금액으로 주문 생성 후 매니저가 승인하면
+정상 상품이 조작된 매출 금액으로 발급된다. 아직 실제 PG 연동 전(Mock 결제 단계)이라 즉시
+피해 경로는 매니저 승인이 필요해 좁지만, 서버 검증 부재 자체는 실제 PG 연동 전에 반드시
+고쳐야 하는 구조적 결함. 상세 근거·4개 설계안 비교는 [25_SEC118_Orders_Amount_Design.md]
+(./25_SEC118_Orders_Amount_Design.md) 참고.
+
+### SEC-119. (2026-08-13, 신규 번호 — SEC-116 충돌 회피) SECURITY DEFINER EXECUTE 최소화(P3)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3(하드닝, 활성 exploit 아님 — 각 함수 내부에 이미 소유자 검사 있음) |
+| 현재 상태 | **canonical SQL 확정(SEC-117과 같은 파일) — 미적용** |
+| 근거 파일 | `fix_security_definer_hardening_search_path_execute_draft_proposed.sql`(SEC-117과 동일 파일) |
+
+`reserve_class`/`reserve_with_membership`/`cancel_reservation`/`refund_membership`/
+`fulfill_order`의 PUBLIC/anon EXECUTE를 revoke, authenticated만 grant. 전부 내부에
+`my_account_id()` 소유권 또는 `my_managed_center_ids()` 매니저 검사가 이미 있어 anon 호출은
+현재도 "로그인 필요"류 예외로 자연 차단됨 — 활성 취약점이 아니라 최소권한 원칙 하드닝.
+**⚠️ 이 번호(SEC-119)는 다른 세션이 원래 "SEC-116"으로 등록했던 항목이다 — 이 저장소의
+SEC-116은 이미 "fulfill_order 세분권한 미사용"을 가리키므로 번호 충돌을 피하기 위해
+재배정했다(아래 canonical 번호 매핑 참고).**
+
+### (설계만) refund_membership() 환불 후 예약 잔존 — 신규 P1
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1(데이터 무결성, 보안 아님) |
+| 현재 상태 | **CONFIRMED(코드 확인). 설계만, 수정 안 함** |
+| 근거 파일 | `reservation_functions.sql`(`refund_membership`, `cancel_reservation`) |
+
+**재현 시나리오(코드 확인)**: membership 구매 → 그 membership으로 미래 confirmed 예약 생성 →
+`refund_membership()`으로 self refund(`status='refunded'`, `remaining_count=0`) → 그 예약은
+전혀 정리되지 않고 그대로 살아있음 → 나중에 그 예약을 `cancel_reservation()`으로 취소하면
+`update memberships set remaining_count = remaining_count + 1 where id = v_res.membership_id`가
+**membership 상태(`refunded`인지)를 전혀 확인하지 않고** 무조건 실행돼, 이미 환불되어
+`remaining_count=0`이어야 할 membership에 유령 잔여횟수가 생긴다.
+
+**해결 후보**:
+
+| 안 | 설명 | 비고 |
+|---|---|---|
+| A. 환불 전 미래 active reservation 있으면 환불 거부 | `refund_membership()`에 사전 체크 추가, 있으면 예외 | 가장 단순, 회원이 "먼저 예약을 취소하고 환불"하도록 안내 필요(UX 문구 추가 필요, 코드 변경) |
+| B. 환불 시 관련 future reservation을 함께 cancel + waitlist promotion | `refund_membership()`이 그 membership의 미래 confirmed 예약들을 순회하며 `cancel_reservation()`과 동일한 취소+대기승격 로직 수행 | 회원 경험은 매끄럽지만 `refund_membership()`이 `cancel_reservation()`의 복잡한 로직(대기승격, 마감시간 계산)을 중복하게 됨 |
+| C. `cancel_reservation()`이 refunded membership을 복구하지 않도록 방어 | `update memberships ... where id = ... and status <> 'refunded'` 한 줄 추가 | 최소 변경, 근본 원인(예약이 살아있다는 것 자체)은 안 고침 — 예약은 여전히 유효한 것처럼 보임(회원 화면에 계속 노출) |
+| D. A + C(권장) | 환불 자체를 막아 애초에 이 상태 진입을 방지(A) + 혹시 다른 경로로 진입해도 복구만은 막는 안전망(C) | 예약/회원 이력 보존 관점에서 가장 안전 — "이미 산 걸 취소도 안 하고 환불부터" 하는 비정상 순서를 막으면서, 놓친 경로가 있어도 이중 방어 |
+
+**권장**: D(A+C). B는 refund가 예약까지 임의로 취소하는 건 "환불했더니 내 다른 예약이 조용히
+사라졌다"는 회원 경험상 더 위험할 수 있어 비권장 — 명시적으로 먼저 예약을 정리하게 유도하는
+A가 더 안전. 이번 배치에서는 설계만, SQL 작성 안 함.
+
+### (신규) canonical SEC/BUG 번호 매핑 (2026-08-12~13 통합 정리)
+
+| 번호 | 내용 | 상태 |
+|---|---|---|
+| SEC-101/112/113 | manager_centers 권한 상승(self-join/self-promote/orphan self-delete), P0 | canonical SQL 작성 완료, 미적용 |
+| SEC-114-A/C | auto_book_membership authorization bypass, P0 | canonical(B안) 확정, 미적용 |
+| SEC-114-B | auto_book_membership 정책 회귀(pass_selection_mode 등) | SEC-114-A/C와 같은 canonical 파일에서 함께 해결 |
+| SEC-115 | manager_set_attendance membership 무결성, P1 | canonical SQL 작성 완료, 미적용. **BUG-116/BUG-117은 이 번호로 통합, 폐기** |
+| SEC-116 | fulfill_order 세분권한 미사용, P2 | 확인됨, SQL 미작성(제품 결정 대기) — **번호 그대로 유지** |
+| SEC-117 | SECURITY DEFINER search_path 하드닝, P2/P3 | canonical SQL 작성 완료, 미적용 |
+| SEC-118 | orders.amount 클라이언트 신뢰(가격 조작), P0 | 신규, 설계 문서만 완료 |
+| SEC-119 | SECURITY DEFINER EXECUTE 최소화, P3 | 신규 번호(다른 세션이 "SEC-116"으로 잘못 붙였던 것을 재배정), canonical SQL은 SEC-117과 같은 파일 |
+| ~~BUG-115~~ | 자동예약 reservation_source 오표기 | 그대로 유지(P3, 이 정리와 무관) |
+| ~~BUG-116~~ | waitlisted 취소 시 remaining_count 오복구 | **SEC-115로 통합, 이 ID는 폐기** |
+| ~~BUG-117~~ | waitlisted→confirmed 무차감 확정 | **SEC-115로 통합, 이 ID는 폐기** |
+
+### BUG-115. (2026-08-12, 신규) 자동예약 `reservations.reservation_source`가 `'SYSTEM'`이 아니라 기본값 `'USER'`로 기록됨
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **확인됨, 수정하지 않음** |
+| 근거 파일 | `fix_auto_book_membership_idor_draft_proposed.sql`(INSERT문), `add_admin_assignment.sql`(컬럼 코멘트: "SYSTEM=자동예약 등 시스템") |
+| 완료 조건 | `auto_book_membership`의 INSERT에 `reservation_source='SYSTEM'` 명시 추가(SEC-114-B 후속 정리와 함께 처리 권장) |
+
+`reservation_source` 컬럼의 공식 코멘트가 "SYSTEM=자동예약 등 시스템"이라고 명시하는데, 실제
+자동예약 INSERT는 이 컬럼을 지정하지 않아 기본값 `'USER'`로 기록된다 — 감사/통계 화면에서
+자동예약이 회원 본인 예약처럼 잘못 표시될 수 있다. 보안 문제 아님, 데이터 정확성 문제.
+
+
 ### P1-14. (2026-08-10, 해결 완료) `attendance-policy.test.ts` 주간 대기예약 한도 초과로 Integration 반복 실패
 
 | 필드 | 내용 |
