@@ -1,0 +1,30 @@
+-- cleanup_p3_secmc_orphan_center_fixtures_draft_proposed.sql 롤백 안내
+--
+-- 이 스크립트는 순수 데이터 삭제(DELETE)이므로 스키마 변경(컬럼/함수/제약조건)과 달리
+-- SQL로 되돌릴 방법이 없습니다 — 삭제된 행은 값 자체가 사라지므로 "이전 정의로 재정의"
+-- 같은 롤백이 성립하지 않습니다.
+--
+-- 되돌려야 하는 상황이 생기면:
+--   1) 원본 cleanup SQL은 BEGIN/COMMIT 트랜잭션 안에서 실행됩니다 — 아직 COMMIT되지
+--      않았다면(B 섹션의 RAISE NOTICE 출력을 보다가 이상함을 발견해 COMMIT 직전에 중단한
+--      경우) ROLLBACK으로 되돌릴 수 있습니다. RAISE EXCEPTION이 발생한 경우는 이미
+--      PostgreSQL이 자동으로 전체 트랜잭션을 롤백했으므로 별도 조치가 필요 없습니다.
+--   2) 이미 COMMIT된 뒤라면, 삭제된 행은 실제 사용자 데이터가 아니라 전부 3개 테스트
+--      파일(class-allowed-products.spec.ts, class-allowed-products-enforcement.test.ts,
+--      manager-centers-privilege-escalation.test.ts)이 admin(service_role)으로 직접 만든
+--      테스트 fixture입니다:
+--        - P3 계열(P3 타센터-격리테스트/P3 통합-타센터, 이름당 중복분만 삭제)은 이제
+--          get-or-create로 바뀐 beforeAll이 다음 실행에서 "이미 있으면 재사용"으로
+--          동작합니다 — 정리 직후 다음 실행 때 자동으로 "1건만 있는 정상 상태"가 유지됩니다.
+--        - SEC-계열(SEC-D/K, SEC-J, SEC-Q, SEC-Q-2, 전부 삭제)은 매 실행 자체가 "생성부터
+--          검증"하는 부트스트랩 테스트라 다음 실행이 처음부터 다시 만들어냅니다.
+--      즉 "복구"가 아니라 "다음 테스트 실행이 필요할 때 다시 만들어내는 것"이 정답이고,
+--      코드 수정(get-or-create + beforeAll sweep)이 이미 반영돼 있어 앞으로는 이런 종류의
+--      잔여물이 다시 쌓이지 않습니다.
+--   3) A-3에서 products/manager_centers/center_roles 외의 테이블에 참조가 있는 게 미리
+--      확인됐다면(사전에 B를 실행하지 말았어야 하는 경우) 애초에 이 정리 대상이 아니므로
+--      영향받지 않습니다.
+--   4) Supabase 프로젝트에 Point-in-Time Recovery(PITR)가 활성화돼 있다면, COMMIT 이후라도
+--      해당 시점 이전으로 데이터베이스 전체를 복원하는 것은 이론적으로 가능하지만, 이는 이
+--      스크립트가 건드리지 않은 다른 모든 변경사항까지 함께 되돌리므로 이 정리 하나만
+--      되돌리는 용도로는 적절하지 않습니다.
