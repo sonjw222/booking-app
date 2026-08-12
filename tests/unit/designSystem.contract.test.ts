@@ -249,3 +249,22 @@ describe("Batch 7C manager detail surface contract", () => {
     expect(read("app/manager/settings/page.tsx")).toContain("fetchSettings");
   });
 });
+
+describe("Batch 8 responsive and accessibility contract", () => {
+  it("keeps keyboard focus visible and honors reduced motion preferences", () => {
+    const css = read("app/globals.css");
+    expect(css).toContain("Batch 8: responsive and accessibility finish");
+    expect(css).toContain("button:focus-visible");
+    expect(css).toContain('[role="button"]:focus-visible');
+    expect(css).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(css).toContain("animation-duration: .01ms !important");
+  });
+
+  it("protects compact mobile layouts and primary touch targets", () => {
+    const css = read("app/globals.css");
+    expect(css).toContain("@media (max-width: 340px)");
+    expect(css).toContain(".login-link,");
+    expect(css).toContain(".auth-panel .mode-tab { min-height: 44px; }");
+    expect(css).toContain(".search-suggestion-chips button { min-height: 44px; }");
+  });
+});
