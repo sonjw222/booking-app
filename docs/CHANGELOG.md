@@ -8,6 +8,18 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-13 — `center_roles`/`manager_centers` RLS 무한 재귀 긴급 hotfix 3종 적용(Live, 사용자 확인) — 스태프 초대 기능 복구
+
+**Live SQL 3건 사용자가 직접 실행·확인 완료.** SEC-101/112/113(`fix_manager_centers_privilege_escalation_draft_proposed.sql`, 2026-08-12 Live 적용)이 도입한 cross-center role_id 검사가 `manager_centers`/`center_roles` 상호 참조와 결합해 `infinite recursion detected in policy for relation "manager_centers"`로 스태프 초대(`/manager/staff`)가 완전히 깨져 있던 문제를 확정·수정.
+
+원인은 한 겹이 아니라 raw(비-`security definer`) 서브쿼리 3곳이 겹쳐 있었음(순서대로 적용해야 각각 다음 겹을 드러냄):
+
+1. `fix_center_roles_manager_centers_recursion_draft_proposed.sql` — `center_roles`의 "내 센터 역할 조회" SELECT 정책이 `manager_centers`를 raw 서브쿼리로 되짚던 것을 `my_managed_center_ids()`(security definer) 기반으로 교체.
+2. `fix_has_permission_manager_centers_recursion_draft_proposed.sql` — `has_permission()`이 security definer가 아니어서 `manager_centers`/`center_roles`를 caller 권한으로 raw JOIN하던 것을 security definer로 전환(로직/반환값 불변).
+3. `fix_manager_centers_self_reference_recursion_draft_proposed.sql` — `manager_centers` 자신의 INSERT("매니저센터 생성")/DELETE("오너 스태프 삭제") 정책에 함수 없이 직접 박혀 있던 자기참조 서브쿼리, 그리고 INSERT/UPDATE 정책의 `role_id`↔`center_roles` 교차참조를 신규 helper 함수(`manager_centers_has_any_row`/`role_id_belongs_to_center`/`role_id_is_owner_for_center`, 전부 security definer)로 치환. 조건식 자체는 전혀 바꾸지 않음 — 표현 방식만 rewriter에 opaque한 함수 호출로 변경.
+
+세 파일 모두 각자 독립 rollback 포함, BEGIN/COMMIT 트랜잭션. 정상 스태프 초대 재현 확인(사용자 실측)으로 완료 확인.
+
 ## 2026-08-13 — 🚨 CI에서 발견: center_roles RLS 무한 재귀 버그 수정(SQL 미실행, 이미 Live에 존재하는 버그로 추정)
 
 **SQL 실행 없음, main merge 없음.**

@@ -972,6 +972,18 @@ SELECT 정책("오너 스태프 조회")은 이미 `my_managed_center_ids()`(sec
 갱신함(단, 원복하면 이 recursion이 다시 재현될 수 있음을 rollback 파일 상단에 명시함).
 SQL 직접 실행은 하지 않았음 — 사용자 적용 대기.
 
+**✅ 2026-08-13 RESOLVED(Live 적용·사용자 확인 완료)**: 위 [7]번 섹션 하나만으로는 실제로는
+부족했음 — 사용자가 직접 재현·적용하며 확인한 결과, raw 자기/상호참조가 **3겹** 있었다
+(`center_roles` 정책, `has_permission()` 자체, `manager_centers` 자기 정책의 self-subquery).
+`fix_center_roles_manager_centers_recursion_draft_proposed.sql` +
+`fix_has_permission_manager_centers_recursion_draft_proposed.sql` +
+`fix_manager_centers_self_reference_recursion_draft_proposed.sql`(각각 독립 rollback 포함)를
+순서대로 전부 적용한 뒤에야 스태프 초대가 정상 동작함을 실측 확인함. 상세 원인/조건식은
+`docs/CHANGELOG.md`(2026-08-13 항목) 참고. `_privilege_model_` 파일의 [7]번 섹션은 이 3개
+독립 파일의 첫 번째와 내용이 같으나, 나머지 2개(has_permission/manager_centers 자기참조)는
+아직 그 파일에 반영되지 않았음 — 그 파일을 별도로 적용할 계획이면 이 3개 hotfix와 중복/누락
+없는지 먼저 대조할 것.
+
 **장기 과제(이번 배치 범위 밖, 별도 TODO)**: "owner transfer" 전용 워크플로우가 없음 — 현재는
 "오너를 하나 더 초대한 뒤 원래 오너가 self-delete"하는 수동 절차로만 핸드오프 가능함을
 확인했다(구 회귀 테스트 T 참고, 신규 SEC-MC 목록에는 미포함 — 명시적 제품 요구사항 아니라
