@@ -213,5 +213,6 @@ describe("Batch 7B manager classes design contract", () => {
     expect(css).toContain(".manager-classes-v2 .manager-cal-header");
     expect(css).toContain(".manager-classes-v2 .manager-holiday-notice");
     expect(css).toContain('.manager-classes-v2 .sheet input[type="date"]');
+    expect(css).toMatch(/\.manager-classes-v2>\.fab-btn\{[^}]*bottom:104px/);
   });
 });

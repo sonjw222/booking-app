@@ -3357,7 +3357,7 @@ a.membership-card { text-decoration: none; display: block; }
 @media(max-width:420px){.manager-today-metrics>a{padding-inline:9px}.manager-today-metrics b{font-size:21px}.manager-home-v2 .dash-card-value{font-size:18px}}
 
 /* Batch 7B: manager classes — keep current scheduling logic, align the surface. */
-.manager-classes-v2{background:var(--bg);padding-bottom:calc(var(--floating-nav-clearance) + 92px)!important}
+.manager-classes-v2{background:var(--bg);padding-bottom:196px!important}
 .manager-classes-v2>.back-header{min-height:88px;padding:28px var(--page-gutter) 18px;border-bottom:1px solid var(--line)}
 .manager-classes-v2>.back-header .title{font-size:27px;font-weight:800;letter-spacing:-.7px}
 .manager-classes-v2>.back-header .cal-export-btn{min-width:48px;min-height:40px;padding:0 8px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);font-weight:700}
@@ -3387,7 +3387,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-holiday-notice .hc-mark{position:relative;width:32px;height:32px;flex:0 0 32px;border:1.5px solid var(--danger);border-radius:50%}.manager-holiday-notice .hc-mark:after{content:"";position:absolute;left:5px;right:5px;top:14px;height:1.5px;background:var(--danger);transform:rotate(-45deg)}
 .manager-holiday-notice .holiday-chip>span:last-child{display:flex;flex-direction:column;gap:3px}.manager-holiday-notice .holiday-chip b{color:var(--ink);font-size:13.5px;font-weight:700}.manager-holiday-notice .holiday-chip small{color:var(--ink-soft);font-size:11.5px;line-height:1.4}
 .manager-classes-v2 .manager-class-empty{min-height:112px;margin:0 var(--page-gutter);padding:36px 2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}.manager-classes-v2 .manager-class-empty .empty-action-text{color:var(--ink-soft);font-size:13px}
-.manager-classes-v2>.daylist{padding:0 var(--page-gutter) calc(var(--floating-nav-clearance) + 40px)!important}.manager-classes-v2>.daylist .class-row{min-height:82px;padding:15px 2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none}.manager-classes-v2>.daylist .class-row-title{font-size:15px;font-weight:750}.manager-classes-v2>.daylist .class-row-meta{margin-top:5px;font-size:11.5px;line-height:1.5;color:var(--ink-soft)}
-.manager-classes-v2>.fab-btn{width:calc(100% - (var(--page-gutter) * 2));bottom:calc(var(--floating-nav-clearance) + 6px);border-radius:15px;background:var(--ink);box-shadow:0 8px 24px rgba(20,20,20,.16)}
+.manager-classes-v2>.daylist{padding:0 var(--page-gutter) 144px!important}.manager-classes-v2>.daylist .class-row{min-height:82px;padding:15px 2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none}.manager-classes-v2>.daylist .class-row-title{font-size:15px;font-weight:750}.manager-classes-v2>.daylist .class-row-meta{margin-top:5px;font-size:11.5px;line-height:1.5;color:var(--ink-soft)}
+.manager-classes-v2>.fab-btn{width:calc(100% - (var(--page-gutter) * 2));bottom:104px;border-radius:15px;background:var(--ink);box-shadow:0 8px 24px rgba(20,20,20,.16)}
 .manager-classes-v2 .sheet input[type="date"]{min-height:50px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface);color:var(--ink);font-size:14px}.manager-classes-v2 .sheet .time-row input[type="date"]{flex:1;min-width:0}.manager-classes-v2 .sheet .perm-guide.schedule-rule-warning{border-left-color:var(--danger);color:var(--danger)!important}
 @media(max-width:380px){.manager-classes-v2 .manager-cal-header .cal-title{min-width:102px;font-size:18px}.manager-classes-v2 .manager-cal-header .cal-nav-btn{width:34px;flex-basis:34px}.manager-center-select{max-width:116px}}
