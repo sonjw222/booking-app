@@ -1,0 +1,66 @@
+-- ============================================================
+-- READ-ONLY 진단 SQL — Supabase SQL Editor에 그대로 붙여넣고 실행
+-- SELECT만 사용. DB를 전혀 변경하지 않음.
+-- 목적: (1) Live에 이미 orphan center가 있는지 (2) role_id/center_id mismatch 기존
+--       데이터가 있는지 (3) 적용 전/후 정책·트리거·함수 상태 확인
+-- ============================================================
+
+-- [1] centers 전체 개수 및 status별 분포
+select status, count(*) from centers group by status order by status;
+
+-- [2] manager_centers가 0건인 centers (= 이미 orphan 상태) — 반드시 확인
+select c.id, c.name, c.status, c.created_at
+from centers c
+where not exists (select 1 from manager_centers mc where mc.center_id = c.id)
+order by c.created_at;
+
+-- [3] owner role을 가진 active manager가 0명인 center(= 관리는 있지만 오너가 없는 상태 —
+--     orphan은 아니지만 owner-less 상태, 향후 SEC-113 심화 검토 대상)
+select c.id, c.name
+from centers c
+where exists (select 1 from manager_centers mc where mc.center_id = c.id and mc.status = 'active')
+  and not exists (
+    select 1
+    from manager_centers mc
+    join center_roles cr on cr.id = mc.role_id
+    where mc.center_id = c.id and mc.status = 'active' and cr.is_owner = true
+  );
+
+-- [4] manager_centers.role_id와 center_roles.center_id가 불일치하는 기존 데이터 —
+--     0건이어야 정상(있으면 별도 cleanup plan 필요, 이 진단에서는 조회만)
+select mc.id as manager_center_id, mc.account_id, mc.center_id as mc_center_id,
+       cr.id as role_id, cr.center_id as role_center_id, cr.name as role_name
+from manager_centers mc
+join center_roles cr on cr.id = mc.role_id
+where mc.role_id is not null and cr.center_id <> mc.center_id;
+
+-- [5] manager_centers.role_id가 아예 존재하지 않는 center_roles를 가리키는 경우(고아 FK) —
+--     스키마상 FK가 있다면 불가능해야 함, 확인용
+select mc.id, mc.account_id, mc.center_id, mc.role_id
+from manager_centers mc
+where mc.role_id is not null
+  and not exists (select 1 from center_roles cr where cr.id = mc.role_id);
+
+-- ============================================================
+-- 적용 전/후 비교용
+-- ============================================================
+
+-- [6] 적용 전: 정책 현재 정의
+select policyname, cmd, qual, with_check
+from pg_policies
+where tablename = 'manager_centers'
+order by policyname;
+
+-- [7] 적용 후: 신규 trigger 존재 확인
+select tgname, tgenabled, tgtype
+from pg_trigger
+where tgrelid = 'manager_centers'::regclass and not tgisinternal;
+
+-- [8] 적용 후: has_permission() 최신 본문에 center_id join 조건이 반영됐는지
+select pg_get_functiondef('has_permission(uuid, text)'::regprocedure);
+
+-- [9] 적용 후: manager_centers 정책 재확인(4개 전부 최신 버전인지)
+select policyname, cmd, qual, with_check
+from pg_policies
+where tablename = 'manager_centers'
+order by policyname;

@@ -932,23 +932,33 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   뒤집힘).
 
 
-### SEC-101/112/113. (2026-08-12~13, 통합 SQL 작성 완료 — 미적용) manager_centers 권한 상승 3건(P0)
+### SEC-101/112/113. (2026-08-12~13, 최종 canonical SQL 완결 — RLS 3종 Live 적용됨, defense-in-depth 2종 미적용) manager_centers 권한 모델(P0)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **CONFIRMED, canonical 통합 SQL 작성 완료 — 미적용.** SEC-101(임의 센터 self-join)/SEC-112(저권한 스태프 self-promote, 타센터 role_id 교차주입 포함)/**SEC-113(마지막 남은 행 self-delete → orphan → 제3자 self-claim, 2026-08-13 P1/P2에서 P0로 재평가)** 전부 같은 canonical 파일에 통합. |
-| 근거 파일 | `fix_manager_centers_privilege_escalation_draft_proposed.sql`(신규, 미적용, BEGIN/COMMIT 트랜잭션 포함) + rollback, `tests/integration/manager-centers-privilege-escalation.test.ts`(A~T) |
-| 완료 조건 | 사용자가 Supabase에서 적용 → 회귀 테스트 전체 GREEN 확인 |
+| 현재 상태 | **부분 적용됨.** manager_centers INSERT×2/UPDATE/DELETE 정책 4종(SEC-101/112/113 핵심)은 2026-08-12에 사용자가 Live에 적용 완료(`fix_manager_centers_privilege_escalation_draft_proposed.sql`). **2026-08-13 후속 감사에서 이 정책만으로는 불충분함을 확인**(PART 4/5) — `has_permission()`이 `center_roles.center_id`를 검증하지 않아 cross-center role injection에 대한 2차 방어가 없었고, role_id/center_id 정합성이 RLS에만 의존해(service_role/미래 RPC 우회 가능) 테이블 레벨 trigger가 없었음. **`fix_manager_centers_privilege_model_draft_proposed.sql`(신규, 미적용)이 이 두 gap을 닫는 최종 canonical 파일** — 기존 RLS 정책 4종은 재선언(변경 없음)하고 trigger + `has_permission()` 수정만 새로 추가. |
+| 근거 파일 | `fix_manager_centers_privilege_model_draft_proposed.sql`(canonical, `fix_manager_centers_privilege_escalation_draft_proposed.sql`을 대체) + rollback, `tests/integration/manager-centers-privilege-model.test.ts`(SEC-MC-A~S, `manager-centers-privilege-escalation.test.ts`를 대체·흡수) |
+| 완료 조건 | 사용자가 신규 SQL 적용 → 회귀 테스트 전체 GREEN 확인 |
 
 **SEC-113 상세**: `"오너 스태프 삭제"` DELETE 정책의 self 분기가 "마지막 남은 행인가"를 확인하지
 않아, 오너가 자기 행을 지우면 센터가 orphan(manager_centers 0건)이 되고 SEC-101의
 self-insert 재개 조건(`not exists`)을 다시 만족해 제3자가 실제 데이터가 있는 센터를 가로챌
 수 있었다. 수정: DELETE 정책에 `exists(그 center_id에 이 행 말고 다른 행)` 조건 추가(self/
 권한삭제 공통 적용) — SEC-101 재개 조건과 정확히 반대라 orphan 상태 자체가 원천 차단됨.
+**이미 Live 적용 완료(2026-08-12).**
+
+**2026-08-13 신규 defense-in-depth(미적용)**:
+1. `manager_centers` BEFORE INSERT/UPDATE trigger — role_id/center_id 정합성을 RLS와
+   독립적으로 테이블 레벨에서 강제(service_role 포함 모든 쓰기 경로 방어).
+2. `has_permission()`의 `center_roles` join에 `r.center_id = mc.center_id` 조건 추가 —
+   혹시 mismatch 행이 존재해도 권한 판정 단계에서 무효화(정상 데이터엔 영향 없음).
+
 **장기 과제(이번 배치 범위 밖, 별도 TODO)**: "owner transfer" 전용 워크플로우가 없음 — 현재는
 "오너를 하나 더 초대한 뒤 원래 오너가 self-delete"하는 수동 절차로만 핸드오프 가능함을
-회귀 테스트(T)로 확인함. 전용 RPC/UI는 별도 제품 결정 필요.
+확인했다(구 회귀 테스트 T 참고, 신규 SEC-MC 목록에는 미포함 — 명시적 제품 요구사항 아니라
+참고용으로만 검증됨). 전용 RPC/UI는 별도 제품 결정 필요. 더 근본적으로는 PART 3의 C안(센터
+생성+오너 부트스트랩을 atomic RPC로 통합, self RLS 분기 자체 제거)을 장기 아키텍처로 권장.
 
 ### SEC-114-A/C. (2026-08-12~13, canonical 확정 — 미적용) `auto_book_membership()` authorization bypass(P0)
 
@@ -978,6 +988,36 @@ waitlisted→cancelled 시 `membership_id is not null`만 보고 무조건 `+1` 
 세팅하지 않아 컬럼 기본값에 의존하면 오히려 또 틀릴 수 있는 함정을 상태 기반 체크로 회피함
 (더 견고한 설계, `admin_cancel_reservation`의 `membership_consumed` 직접 참조 패턴보다 안전).
 waitlisted→confirmed 직접 전환(무차감 확정 우회)도 명시적으로 차단.
+
+### SEC-102/103. (2026-08-13, 재확인 — SQL 미작성, 후속 배치 필요) accounts/profiles "매니저 계정/대표프로필 검색" 시스템 전체 노출
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1(개인정보 과다 노출, 인증 우회는 아님 — 이미 매니저 권한이 있어야 도달 가능) |
+| 현재 상태 | **CONFIRMED(코드 재확인, 2026-08-13). manager_centers Batch와 섞지 않고 별도 후속으로 분리.** |
+| 근거 파일 | `fix_membership_rls.sql`("매니저 계정 검색"/"매니저 대표프로필 검색" 정책), `reservation_functions.sql`(동일 정책 재선언) |
+| 완료 조건 | 아래 재확인 결과 기준으로 별도 배치에서 센터 스코핑 추가 |
+
+**재확인 결과**: `"매니저 계정 검색"`(accounts SELECT)과 `"매니저 대표프로필 검색"`(profiles SELECT,
+`is_primary=true`)의 USING 절이 둘 다 `exists(select 1 from manager_centers mc where
+mc.account_id = my_account_id() and mc.status = 'active')`뿐이다 — **이 조건은 검색 대상
+행(피검색자)과 아무 관계가 없다.** 즉 "이 계정이 어딘가에서 active 매니저이기만 하면"
+`accounts`/`profiles`(is_primary) **테이블 전체**를 SELECT할 수 있다(어느 센터 소속인지,
+검색자의 센터와 무관).
+
+**SEC-101을 완전히 막아도 독립 취약점으로 남는지 확인**: **YES, 독립적으로 남는다.**
+SEC-101(임의 센터 self-join)이 완전히 막혀도, 정상적으로 **자기 소유의 센터 하나를
+합법적으로 부트스트랩한 오너**(신규 센터 생성은 언제나 정상 기능, 막을 수 없음)라면
+`manager_centers`에 `status='active'` 행이 생기고, 그 즉시 이 조건을 만족해 시스템 전체
+회원 검색 권한을 갖게 된다. 즉 SEC-101/112/113 수정과 **완전히 독립된 문제**다.
+
+**권장 후속 설계(SQL 미작성)**: 두 정책 모두 "검색자가 그 피검색자와 실제로 관계가 있는
+센터의 매니저인가"로 좁혀야 한다 — 예를 들어 `profiles`/`accounts` 검색은 실제로는 "그
+센터 회원 관리" 맥락에서만 필요하므로, `center_members`(센터별 회원 등록 테이블)를 경유해
+"검색자가 관리하는 센터에 그 계정/프로필이 실제로 등록돼 있는가"로 스코핑하는 방향을
+검토할 것. 정확한 설계는 별도 배치에서 사용처(스태프 검색 초대 플로우 등 `fix_staff_search.sql`
+경로와 충돌 여부)를 먼저 전수 조사한 뒤 진행 권장 — 이번 manager_centers Batch에는 포함하지
+않았다.
 
 ### SEC-116. (2026-08-12, 확인됨 — 미적용) `fulfill_order()`가 세분 permission 대신 `my_managed_center_ids()`만 사용
 

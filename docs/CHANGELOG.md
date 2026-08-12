@@ -8,6 +8,39 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-13 — manager_centers 권한 모델 완결: has_permission defense-in-depth + trigger (SQL 미실행)
+
+**SQL 실행 없음, main merge 없음, app/CSS/디자인 브랜치 무변경.**
+
+- **SEC-113 재확정 + 최종 아키텍처 설계**: 기존 Live 적용된 SEC-101/112/113 RLS 정책(4종)만으로는
+  cross-center role injection과 role_id/center_id mismatch에 대한 2차 방어가 없음을 확인 —
+  `has_permission()`이 `center_roles.center_id`를 검증하지 않고, role_id/center_id 정합성이
+  RLS에만 의존(service_role/미래 RPC 우회 가능)했다.
+- **`fix_manager_centers_privilege_model_draft_proposed.sql`(신규, 미적용)**: 기존 RLS 정책
+  4종은 재선언(변경 없음)하고, (1) `manager_centers` BEFORE INSERT/UPDATE trigger로 role_id/
+  center_id 정합성을 테이블 레벨에서 강제(RLS 우회 경로까지 방어) (2) `has_permission()`의
+  `center_roles` join에 `r.center_id = mc.center_id` 조건 추가(정상 데이터엔 영향 없는
+  defense-in-depth) — 두 가지를 새로 추가. `fix_manager_centers_privilege_escalation_draft_
+  proposed.sql`을 대체.
+- **설계안 4종(A/B/C/D) 비교**: 현재 RLS+trigger 방식(A, 즉시 적용)을 최소 수정안으로 채택,
+  센터 생성+오너 부트스트랩을 atomic RPC로 통합하는 방식(C)을 장기 권장 아키텍처로 `docs/TODO.md`에
+  기록(코드 변경 필요해 이번 배치 범위 밖).
+- **회귀 테스트 재구성**: `tests/integration/manager-centers-privilege-model.test.ts`(SEC-MC-A~S,
+  19개 케이스) — 기존 `manager-centers-privilege-escalation.test.ts`(A~T)를 흡수·확장, 신규로
+  role_id/center_id mismatch 직접 차단(N, service_role client로도 trigger가 막는지 확인) +
+  has_permission() defense-in-depth(O) 추가.
+- **SEC-102/103 재확인(설계만, 이번 배치에 미포함)**: `accounts`/`profiles` "매니저 계정/대표프로필
+  검색" RLS가 검색 대상과 무관하게 "어디서든 active 매니저이기만 하면" 테이블 전체를 노출하는
+  것을 코드로 재확인. SEC-101을 완전히 막아도 정상적으로 자기 센터를 부트스트랩한 오너라면
+  여전히 이 조건을 만족해 **독립적으로 남는 문제**임을 확정, `docs/TODO.md`에 후속 설계 방향만
+  기록.
+- **Live orphan 진단**: `diagnose_manager_centers_orphan_and_mismatch_readonly.sql`(신규,
+  READ-ONLY) — 이미 orphan된 center, role_id/center_id mismatch 기존 데이터, owner 없는 센터
+  여부를 사용자가 직접 확인할 수 있도록 작성. 이 세션에서는 Live DB에 직접 접근할 수 없어
+  실행하지 않음.
+- **static audit**: `npx tsc --noEmit` 신규 테스트 파일 0 에러, `npm run test`(unit) 217/217,
+  신규 integration 테스트 import/구문 검증 완료(env 누락까지 정상 도달).
+
 ## 2026-08-13 — P0 보안 산출물 통합·정리(SEC-101/112/113/114/115/117/118) — SQL 미실행 (security/p0-batch-consolidation)
 
 **SQL 실행 없음, main merge 없음, app/CSS/디자인 브랜치 무변경. SQL draft/rollback/설계문서/
