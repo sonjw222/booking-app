@@ -954,6 +954,24 @@ self-insert 재개 조건(`not exists`)을 다시 만족해 제3자가 실제 �
 2. `has_permission()`의 `center_roles` join에 `r.center_id = mc.center_id` 조건 추가 —
    혹시 mismatch 행이 존재해도 권한 판정 단계에서 무효화(정상 데이터엔 영향 없음).
 
+**🚨 2026-08-13 CI 중 긴급 발견 — `center_roles` RLS 무한 재귀 버그(현재 Live에 이미 존재,
+스태프 초대 기능이 깨져 있을 수 있음)**: `security/p0-batch-consolidation` 브랜치 4번째 CI
+Integration 실행에서 `Error: 스태프 추가에 실패했어요: infinite recursion detected in policy
+for relation "manager_centers"` 확인. 원인: `manager_centers`의 "오너 스태프 초대"/"오너 스태프
+수정" 정책(2026-08-12 이미 Live 적용)이 `role_id in (select id from center_roles cr where
+cr.center_id = manager_centers.center_id)`로 `center_roles`를 조회하는데, `center_roles`의
+기존 SELECT 정책("내 센터 역할 조회", `reservation_functions.sql`)이 `manager_centers`를
+security-definer 헬퍼 없이 raw 서브쿼리(`center_id in (select center_id from manager_centers
+where account_id = my_account_id())`)로 되짚어 순환이 발생함. `manager_centers`의 다른
+SELECT 정책("오너 스태프 조회")은 이미 `my_managed_center_ids()`(security definer)를 써서
+이 문제가 없음 — `center_roles` 쪽만 이 패턴을 안 따름. **수정을
+`fix_manager_centers_privilege_model_draft_proposed.sql`의 [7]번 섹션(신규 추가)에 포함시킴**:
+`"내 센터 역할 조회"`를 `center_id in (select my_managed_center_ids())`로 교체. 이 버그는 이
+파일의 나머지 변경([1]~[6])과 무관하게 이미 2026-08-12 적용분에서 발생 가능하므로, **[7]을
+반드시 함께 적용해야 스태프 초대가 정상 동작한다.** rollback 파일도 이 정책의 원복을 포함하도록
+갱신함(단, 원복하면 이 recursion이 다시 재현될 수 있음을 rollback 파일 상단에 명시함).
+SQL 직접 실행은 하지 않았음 — 사용자 적용 대기.
+
 **장기 과제(이번 배치 범위 밖, 별도 TODO)**: "owner transfer" 전용 워크플로우가 없음 — 현재는
 "오너를 하나 더 초대한 뒤 원래 오너가 self-delete"하는 수동 절차로만 핸드오프 가능함을
 확인했다(구 회귀 테스트 T 참고, 신규 SEC-MC 목록에는 미포함 — 명시적 제품 요구사항 아니라

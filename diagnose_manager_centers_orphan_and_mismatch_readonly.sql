@@ -64,3 +64,11 @@ select policyname, cmd, qual, with_check
 from pg_policies
 where tablename = 'manager_centers'
 order by policyname;
+
+-- [10] 🚨 center_roles "내 센터 역할 조회" 정책 현재 정의 — qual에
+--      "from manager_centers where account_id"(raw 서브쿼리, 버그 있는 버전)가 보이면
+--      2026-08-13 발견된 RLS 무한 재귀 버그가 아직 남아있는 상태(스태프 초대 실패 가능).
+--      "my_managed_center_ids"가 보이면 [7]번 수정이 이미 적용된 것.
+select policyname, cmd, qual
+from pg_policies
+where tablename = 'center_roles' and policyname = '내 센터 역할 조회';

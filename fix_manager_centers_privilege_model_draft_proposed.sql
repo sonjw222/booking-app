@@ -5,7 +5,40 @@
 -- SEC-101/112/113 RLS 정책 3종)을 **대체**한다 — RLS 정책 자체(INSERT ×2/UPDATE/DELETE)는
 -- 내용 변경 없이 그대로 재선언(멱등, 이미 적용돼 있어도 다시 실행해 안전)하고, 이번에
 -- **새로 추가하는 것은 has_permission() defense-in-depth 수정과 role_id/center_id 정합성
--- trigger 2가지뿐**이다.
+-- trigger 2가지뿐** — 이었으나, 아래 [긴급] 항목이 하나 더 추가됐다.
+--
+-- ============================================================
+-- [🚨 긴급, 2026-08-13 CI 실행 중 발견 — 이미 Live에 있는 버그, 이 파일과 무관하게 지금
+-- 운영 DB에서 스태프 초대 기능이 깨져 있을 수 있음]
+-- ============================================================
+--   fix_manager_centers_privilege_escalation_draft_proposed.sql(2026-08-12 Live 적용)이
+--   "오너 스태프 초대"/"오너 스태프 수정" 정책에 추가한
+--   `role_id in (select id from center_roles cr where cr.center_id = manager_centers.center_id)`
+--   검사가 `center_roles`를 조회하는데, `center_roles`의 기존 SELECT 정책("내 센터 역할 조회",
+--   reservation_functions.sql:574-575)이:
+--     using (center_id in (select center_id from manager_centers where account_id = my_account_id()))
+--   로 **`manager_centers`를 security definer 헬퍼 없이 직접(raw) 서브쿼리**한다. 그 결과
+--   manager_centers에 INSERT/UPDATE(스태프 초대/역할 변경) 시: manager_centers 정책 평가
+--   중 → center_roles 조회 → center_roles 정책 평가 중 → manager_centers 재조회 → **PostgreSQL이
+--   "infinite recursion detected in policy for relation manager_centers"로 즉시 차단**한다.
+--   CI 통합 테스트에서 실제로 "스태프 추가에 실패했어요: infinite recursion detected in policy
+--   for relation manager_centers" 에러로 실증 확인됨(2026-08-13, run 31572982400).
+--
+--   같은 파일의 "오너 스태프 조회"(manager_centers SELECT) 정책은 이미 올바른 패턴
+--   (`center_id in (select my_managed_center_ids())` — my_managed_center_ids()는 security
+--   definer라 내부 쿼리가 RLS를 다시 타지 않음, reservation_functions.sql 자체 주석에 이
+--   이유가 명시돼 있음)을 쓰고 있다 — `center_roles`의 "내 센터 역할 조회"만 이 패턴을
+--   따르지 않아 이번에 새로 추가된 cross-center role_id 검사(SEC-112 방어)와 결합하면서
+--   처음으로 순환이 드러났다(이 검사 자체는 fix_manager_centers_privilege_escalation_draft_
+--   proposed.sql에 이미 있었으므로, **이 순환은 그 파일이 Live 적용된 2026-08-12부터 이미
+--   존재했을 가능성이 높다** — 이 파일의 신규 trigger도 같은 이유로 동일 순환에 걸리므로
+--   이 파일만으로는 못 고치고 아래 [7]에서 근본적으로 고친다).
+--
+--   [수정] "내 센터 역할 조회"를 `my_managed_center_ids()` 기반으로 교체 — "오너 스태프
+--   조회"와 동일한, 이미 검증된 패턴. 유일한 의미 차이: 기존은 `status` 무관(pending 포함)
+--   이었는데 `my_managed_center_ids()`는 `status='active'`만 포함 — 이 저장소의 부트스트랩/
+--   초대 흐름이 항상 즉시 `status='active'`로 insert하므로(lib/centers.ts, lib/roles.ts
+--   확인) 실사용 영향 없음, 오히려 다른 모든 곳과 일관성이 맞춰짐.
 --
 -- ============================================================
 -- [보안 invariant — 이 파일이 보장해야 하는 것]
@@ -297,6 +330,21 @@ as $$
     ), false);
 $$;
 
+-- ------------------------------------------------------------
+-- [7] 🚨 긴급 수정 — center_roles "내 센터 역할 조회" RLS 무한 재귀 버그
+--     (파일 상단 [긴급] 섹션 참고). manager_centers에 대한 INSERT/UPDATE([2],[3])와
+--     이번 파일의 신규 trigger([5])가 모두 center_roles를 조회하므로, 이 정책이
+--     raw하게 manager_centers를 되짚는 한 반드시 순환한다 — my_managed_center_ids()
+--     (security definer)로 교체해 순환을 끊는다. "오너 스태프 조회" 정책이 이미 쓰는
+--     것과 동일한, 검증된 패턴.
+--     의미 차이: status 필터가 암묵적으로 'active'만 남음(부트스트랩/초대 흐름이 항상
+--     즉시 active로 insert하므로 실사용 영향 없음, 확인함).
+-- ------------------------------------------------------------
+drop policy if exists "내 센터 역할 조회" on center_roles;
+create policy "내 센터 역할 조회"
+    on center_roles for select
+    using (center_id in (select my_managed_center_ids()));
+
 COMMIT;
 
 -- ============================================================
@@ -306,4 +354,9 @@ COMMIT;
 --     차단.
 --   - 신규 has_permission(): center_roles 조인에 center_id 일치 조건 추가 — 혹시
 --     mismatch 행이 존재해도(과거 데이터 등) 권한 판정에서 무효화.
+--   - 🚨 center_roles "내 센터 역할 조회" 정책: raw manager_centers 서브쿼리를
+--     my_managed_center_ids()로 교체해 RLS 무한 재귀 버그 해소(스태프 초대 기능
+--     복구). 이 버그는 이 파일과 무관하게 이미 Live에 존재하므로 이 파일을 적용하지
+--     않더라도(또는 [1]~[6]만 적용하고 [7]을 빠뜨리면) 스태프 초대는 계속 깨진 채로
+--     남는다 — 반드시 [7]까지 함께 적용할 것.
 -- ============================================================

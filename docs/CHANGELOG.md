@@ -8,6 +8,26 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-13 — 🚨 CI에서 발견: center_roles RLS 무한 재귀 버그 수정(SQL 미실행, 이미 Live에 존재하는 버그로 추정)
+
+**SQL 실행 없음, main merge 없음.**
+
+- **root cause**: `security/p0-batch-consolidation` 브랜치 4번째 CI Integration 실행에서
+  `infinite recursion detected in policy for relation "manager_centers"` 실패를 실제로 확인.
+  2026-08-12에 이미 Live 적용된 `fix_manager_centers_privilege_escalation_draft_proposed.sql`의
+  "오너 스태프 초대"/"오너 스태프 수정" 정책이 `center_roles`를 조회하는데, `center_roles`의
+  기존 "내 센터 역할 조회" SELECT 정책(`reservation_functions.sql`)이 `manager_centers`를
+  security-definer 헬퍼 없이 raw 서브쿼리로 되짚어 순환이 발생함(`manager_centers`의 "오너
+  스태프 조회" 정책은 이미 `my_managed_center_ids()`를 써서 문제 없음 — `center_roles` 쪽만
+  이 패턴 미적용). **이 버그는 이번 배치의 신규 변경([1]~[6])과 무관하게 이미 2026-08-12
+  적용분에서부터 존재할 수 있어, 지금 Live에서 스태프 초대 기능이 깨져 있을 가능성이 있음.**
+- **수정**: `fix_manager_centers_privilege_model_draft_proposed.sql`에 [7]번 섹션 추가 —
+  "내 센터 역할 조회"를 `center_id in (select my_managed_center_ids())`로 교체(이미 검증된
+  안전 패턴과 동일). rollback 파일도 원복 시 이 recursion이 재현될 수 있음을 명시하며 함께
+  갱신.
+- `docs/TODO.md` SEC-101/112/113 항목에 이 발견을 기록. SQL은 draft 파일 수정만 하고 직접
+  실행하지 않음 — 사용자 적용 대기.
+
 ## 2026-08-13 — manager_centers 권한 모델 완결: has_permission defense-in-depth + trigger (SQL 미실행)
 
 **SQL 실행 없음, main merge 없음, app/CSS/디자인 브랜치 무변경.**
