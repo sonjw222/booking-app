@@ -184,3 +184,34 @@ describe("Batch 7A manager primary surface contract", () => {
     expect(read("app/manager/classes/page.tsx")).not.toContain("Batch 7A");
   });
 });
+
+describe("Batch 7B manager classes design contract", () => {
+  it("migrates only the manager class surface while retaining latest scheduling capabilities", () => {
+    const classes = read("app/manager/classes/page.tsx");
+    expect(classes).toContain("manager-classes-v2");
+    expect(classes).toContain("manager-cal-header");
+    expect(classes).toContain('aria-label="센터 선택"');
+    expect(classes).toContain('type="date"');
+    expect(classes).toContain("<AmPmTimeInput");
+    expect(classes).toContain("fetchClassTrainers");
+    expect(classes).toContain("setClassTrainersBulk");
+    expect(classes).toContain("setClassTrainersForGroup");
+    expect(classes).toContain("fetchClassPassSelectionMode");
+    expect(classes).toContain("updateClassPassSelectionMode");
+    expect(classes).toContain("schedule-rule-warning");
+    expect(classes).toContain("schedule-rule-override-note");
+    expect(classes).toContain("isValidClassTimeRange");
+  });
+
+  it("keeps calendar selector contracts and provides the isolated Batch 7B style layer", () => {
+    const classes = read("app/manager/classes/page.tsx");
+    const css = read("app/globals.css");
+    expect(classes).toContain('className="cal-month-nav"');
+    expect(classes).toContain('className="cal-nav-btn"');
+    expect(classes).toContain('className="cal-title"');
+    expect(css).toContain("Batch 7B: manager classes");
+    expect(css).toContain(".manager-classes-v2 .manager-cal-header");
+    expect(css).toContain(".manager-classes-v2 .manager-holiday-notice");
+    expect(css).toContain('.manager-classes-v2 .sheet input[type="date"]');
+  });
+});

@@ -807,28 +807,28 @@ export default function ClassManagePage() {
     .sort((a, b) => a.start.localeCompare(b.start));
 
   return (
-    <div className="app-shell" style={{ paddingBottom: 170 }}>
+    <div className="app-shell manager-classes-v2" style={{ paddingBottom: 170 }}>
       <div className="back-header">
-        <button className="cal-export-btn" style={{ fontSize: 12 }} onClick={openCopy}>복사</button>
+        <button className="side cal-export-btn" style={{ fontSize: 12 }} onClick={openCopy}>복사</button>
         <div className="title">내 일정</div>
-        <a className="cal-export-btn" href="/manager/holidays" style={{ fontSize: 12 }}>휴무일</a>
+        <a className="side cal-export-btn" href="/manager/holidays" style={{ fontSize: 12 }}>휴무일</a>
       </div>
 
       {unplaced.length > 0 && (
         <button className="unplaced-banner" onClick={() => setUnplacedSheet(true)}>
-          <span className="unplaced-icon">⚠️</span>
+          <span className="unplaced-icon" aria-hidden="true">!</span>
           <span className="unplaced-text">
             예약이 덜 배치된 요일반 수강권 <b>{unplaced.length}건</b>
           </span>
-          <span className="unplaced-go">보기 ›</span>
+          <span className="unplaced-go">보기 <b aria-hidden="true">›</b></span>
         </button>
       )}
 
       {!assignMode ? (
-        <button className="unplaced-banner" style={{ background: "var(--surface-2, #f4f4f4)" }} onClick={openAssignMemberPicker}>
-          <span className="unplaced-icon">🗓️</span>
+        <button className="unplaced-banner direct-assign-row" onClick={openAssignMemberPicker}>
+          <span className="unplaced-icon direct" aria-hidden="true">+</span>
           <span className="unplaced-text">회원 직접배치</span>
-          <span className="unplaced-go">시작 ›</span>
+          <span className="unplaced-go">시작 <b aria-hidden="true">›</b></span>
         </button>
       ) : (
         <div className="assign-banner">
@@ -851,26 +851,26 @@ export default function ClassManagePage() {
         </div>
       )}
 
-      <div className="center-switcher">
-        {centers.map((c) => (
-          <button
-            key={c.id}
-            className={`center-chip ${c.id === activeCenterId ? "on" : ""}`}
-            onClick={async () => { setActiveCenterId(c.id); await loadClasses(c.id, year, month); }}
-          >
-            {c.name}
-          </button>
-        ))}
-      </div>
-
       {/* 월 이동 */}
-      <div className="cal-header">
+      <div className="cal-header manager-cal-header">
         <div className="cal-month-nav">
           <button className="cal-nav-btn" onClick={goPrevMonth}>‹</button>
           <div className="cal-title">{year}.{pad2(month)}</div>
           <button className="cal-nav-btn" onClick={goNextMonth}>›</button>
         </div>
-        <button className="text-btn" onClick={goToday}>오늘</button>
+        <label className="manager-center-select">
+          <select
+            aria-label="센터 선택"
+            value={activeCenterId ?? ""}
+            onChange={async (event) => {
+              const centerId = event.target.value;
+              setActiveCenterId(centerId);
+              await loadClasses(centerId, year, month);
+            }}
+          >
+            {centers.map((center) => <option key={center.id} value={center.id}>{center.name}</option>)}
+          </select>
+        </label>
       </div>
 
       {/* 요일 */}
@@ -910,8 +910,11 @@ export default function ClassManagePage() {
       <div className="menu-section-label">{month}월 {selectedDay}일 수업 ({dayClasses.length})</div>
 
       {holidayDates.has(`${year}-${pad2(month)}-${pad2(selectedDay)}`) && (
-        <div className="holiday-notice" style={{ margin: "0 20px 10px" }}>
-          <div className="holiday-chip">🚫 이 날은 휴무일이에요 (수업 개설 불가)</div>
+        <div className="holiday-notice manager-holiday-notice">
+          <div className="holiday-chip">
+            <span className="hc-mark" aria-hidden="true" />
+            <span><b>센터 휴무일</b><small>이 날은 수업을 개설할 수 없어요.</small></span>
+          </div>
         </div>
       )}
 
@@ -921,9 +924,8 @@ export default function ClassManagePage() {
         ) : assignMode ? (
           <div className="daylist-empty" style={{ paddingTop: 20 }}>이 날 등록된 수업이 없어요.</div>
         ) : (
-          <div className="empty-action">
+          <div className="empty-action manager-class-empty">
             <div className="empty-action-text">이 날 등록된 수업이 없어요.</div>
-            <button className="empty-action-btn" onClick={openCreate}>+ 수업 등록하기</button>
           </div>
         )
       ) : assignMode ? (
@@ -1022,9 +1024,9 @@ export default function ClassManagePage() {
                 </div>
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>기간</div>
                 <div className="time-row">
-                  <input className="input-field" type="date" value={repFrom} onChange={(e) => setRepFrom(e.target.value)} />
+                  <input className="input-field" type="date" aria-label="반복 시작일" value={repFrom} onChange={(e) => setRepFrom(e.target.value)} />
                   <span className="time-sep">~</span>
-                  <input className="input-field" type="date" value={repTo} onChange={(e) => setRepTo(e.target.value)} />
+                  <input className="input-field" type="date" aria-label="반복 종료일" value={repTo} onChange={(e) => setRepTo(e.target.value)} />
                 </div>
                 {repDays.length > 0 && repFrom && repTo && repFrom <= repTo && (
                   <div className="rep-preview" style={{ marginBottom: 4 }}>
@@ -1101,7 +1103,7 @@ export default function ClassManagePage() {
                 )}
               </>
             ) : (
-              <input className="input-field" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+              <input className="input-field" type="date" aria-label="수업 날짜" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
             )}
             {perDayMode && repeat && !editId && (
               <div className="common-box-label">공통 설정 <span>· 위에서 비워둔 칸에 적용돼요</span></div>
