@@ -68,7 +68,21 @@ order by policyname;
 -- [10] 🚨 center_roles "내 센터 역할 조회" 정책 현재 정의 — qual에
 --      "from manager_centers where account_id"(raw 서브쿼리, 버그 있는 버전)가 보이면
 --      2026-08-13 발견된 RLS 무한 재귀 버그가 아직 남아있는 상태(스태프 초대 실패 가능).
---      "my_managed_center_ids"가 보이면 [7]번 수정이 이미 적용된 것.
+--      "my_managed_center_ids"가 보이면 hotfix v1/[7]번 수정이 이미 적용된 것.
 select policyname, cmd, qual
 from pg_policies
 where tablename = 'center_roles' and policyname = '내 센터 역할 조회';
+
+-- [11] 🚨 has_permission()이 security definer인지 — security_type이 'DEFINER'가
+--      아니면(=INVOKER) hotfix v2/[6]번 수정이 아직 적용되지 않은 것(재귀 버그 2번째
+--      경로가 여전히 열려 있음).
+select routine_name, security_type
+from information_schema.routines
+where routine_name = 'has_permission';
+
+-- [12] 🚨 manager_centers 자기참조 제거용 helper 함수 3종이 존재하는지(hotfix v3/[0]번) —
+--      0건이면 "매니저센터 생성"/"오너 스태프 삭제" 정책이 여전히 raw self-subquery를
+--      쓰고 있을 가능성이 높음(재귀 버그 3번째 경로).
+select proname, prosecdef
+from pg_proc
+where proname in ('manager_centers_has_any_row', 'role_id_belongs_to_center', 'role_id_is_owner_for_center');

@@ -8,6 +8,34 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-13 — `fix_manager_centers_privilege_model_draft_proposed.sql`을 Live 적용된 hotfix 3종에 맞춰 재조정(SQL 미실행)
+
+**SQL 실행 없음, main merge 없음.**
+
+병렬 세션이 아래 hotfix 3종을 Live에 적용·확인한 사실을 뒤늦게 발견(같은 브랜치
+`security/p0-batch-consolidation`에 커밋으로 남아 있었음, fast-forward로 로컬에 반영).
+`fix_manager_centers_privilege_model_draft_proposed.sql`(이 세션이 작성한 canonical 파일)이
+hotfix 3종 적용 이전의 구버전 정책/함수 본문을 그대로 담고 있어, **이 파일을 나중에 그대로
+적용하면 hotfix v2(has_permission security definer)와 v3(manager_centers 자기참조 helper
+함수화)를 되돌려 재귀 버그가 재현될 위험**이 있음을 확인 — 즉시 재조정함:
+
+- `[0]` 신규: helper 함수 3종(`manager_centers_has_any_row`/`role_id_belongs_to_center`/
+  `role_id_is_owner_for_center`, hotfix v3와 동일) 추가.
+- `[1]~[4]`: "매니저센터 생성"/"오너 스태프 초대"/"오너 스태프 수정"/"오너 스태프 삭제"
+  정책을 hotfix v3와 동일하게(helper 함수 사용) 재작성.
+- `[6]`: `has_permission()`을 hotfix v2(security definer 전환)와 이 파일의 원래 계획(PART 5,
+  `r.center_id = mc.center_id` cross-center join 조건)을 합친 최종본으로 작성 — hotfix v2
+  단독 적용 상태에는 이 join 조건이 없었으므로, 이 부분만 진짜 신규(아직 Live 미적용).
+- `[7]`: hotfix v1과 동일 재선언(멱등).
+- rollback 파일에 helper 함수 3종 DROP 추가 + "이 롤백을 실행하면 hotfix 3종이 전부
+  되돌아가 스태프 초대가 다시 깨진다"는 경고를 상단에 명시.
+- `diagnose_manager_centers_orphan_and_mismatch_readonly.sql`에 has_permission()
+  security_type 확인([11]), helper 함수 3종 존재 확인([12]) 추가.
+
+이 재조정 후 이 파일에서 hotfix 3종 대비 남는 진짜 신규 변경은 `[5]`번 trigger(role_id/
+center_id 정합성, RLS 우회 경로까지 방어)와 `[6]`번 has_permission()의 cross-center join
+조건 2가지뿐 — 둘 다 아직 Live 미적용.
+
 ## 2026-08-13 — `center_roles`/`manager_centers` RLS 무한 재귀 긴급 hotfix 3종 적용(Live, 사용자 확인) — 스태프 초대 기능 복구
 
 **Live SQL 3건 사용자가 직접 실행·확인 완료.** SEC-101/112/113(`fix_manager_centers_privilege_escalation_draft_proposed.sql`, 2026-08-12 Live 적용)이 도입한 cross-center role_id 검사가 `manager_centers`/`center_roles` 상호 참조와 결합해 `infinite recursion detected in policy for relation "manager_centers"`로 스태프 초대(`/manager/staff`)가 완전히 깨져 있던 문제를 확정·수정.

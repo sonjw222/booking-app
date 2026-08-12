@@ -984,6 +984,20 @@ SQL 직접 실행은 하지 않았음 — 사용자 적용 대기.
 아직 그 파일에 반영되지 않았음 — 그 파일을 별도로 적용할 계획이면 이 3개 hotfix와 중복/누락
 없는지 먼저 대조할 것.
 
+**✅ 2026-08-13 재조정 완료**: 위 대조 작업을 완료함. `fix_manager_centers_privilege_model_
+draft_proposed.sql`을 hotfix 3종(Live 적용·확인됨)과 정확히 같은 내용이 되도록 [0]~[4], [7]을
+다시 작성함(helper 함수 3종 `manager_centers_has_any_row`/`role_id_belongs_to_center`/
+`role_id_is_owner_for_center` 추가, "매니저센터 생성"/"오너 스태프 초대"/"오너 스태프 수정"/
+"오너 스태프 삭제" 정책을 hotfix v3와 동일하게 재작성, has_permission()에 security definer
+추가). 이 재조정 전 상태로 그 파일을 적용했다면 hotfix v2/v3를 되돌려 재귀 버그가 재현됐을
+것 — 지금은 안전(멱등, hotfix 3종과 동일 재선언 + trigger/join 조건만 진짜 신규). 이 파일에서
+hotfix 3종 대비 남은 진짜 신규 변경은 [5]번 trigger(role_id/center_id 정합성)와 [6]번
+has_permission()의 `r.center_id = mc.center_id` cross-center join 조건(hotfix v2에는 없던
+defense-in-depth) 2가지뿐 — 둘 다 아직 Live 미적용. rollback 파일도 helper 함수 3종 DROP을
+포함하도록 갱신하고, 실행 시 hotfix 3종이 전부 되돌아가 재귀 버그가 재현된다는 경고를
+상단에 명시함. `diagnose_manager_centers_orphan_and_mismatch_readonly.sql`에 has_permission()
+security_type 확인([11])과 helper 함수 3종 존재 확인([12]) 진단 쿼리를 추가함.
+
 **장기 과제(이번 배치 범위 밖, 별도 TODO)**: "owner transfer" 전용 워크플로우가 없음 — 현재는
 "오너를 하나 더 초대한 뒤 원래 오너가 self-delete"하는 수동 절차로만 핸드오프 가능함을
 확인했다(구 회귀 테스트 T 참고, 신규 SEC-MC 목록에는 미포함 — 명시적 제품 요구사항 아니라
