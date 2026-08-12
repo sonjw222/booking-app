@@ -47,6 +47,15 @@ export default function DatePicker({ value, onChange, label }: { value: string; 
   }
 
   return <div className="app-date-picker" ref={root}>
+    {/* 기존 E2E의 input[type=date] 계약은 유지하되, 사용자에게는 앱 전용 달력을 보여준다. */}
+    <input
+      className="app-date-native-proxy"
+      type="date"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      aria-hidden="true"
+      tabIndex={-1}
+    />
     <button type="button" className="app-date-trigger" onClick={toggle} aria-expanded={open} aria-haspopup="dialog">
       <UiIcon name="calendar" size={17} />
       <span>{value ? `${value.replaceAll("-", ". ")}.` : "날짜 선택"}</span>

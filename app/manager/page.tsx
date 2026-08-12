@@ -341,52 +341,52 @@ export default function ManagerDashboard() {
       )}
       {canSeeMenu("pass.sales.view") && (
         <a className="list-row" href="/manager/sales">
-          <div className="left"><span className="icon">💰</span>매출 관리</div>
+          <div className="left"><span className="icon"><UiIcon name="receipt" /></span>매출 관리</div>
           <span className="chevron">›</span>
         </a>
       )}
       {canSeeMenu("board.notice.view") && (
         <a className="list-row" href="/manager/announcements">
-          <div className="left"><span className="icon">📢</span>공지사항</div>
+          <div className="left"><span className="icon"><UiIcon name="megaphone" /></span>공지사항</div>
           <span className="chevron">›</span>
         </a>
       )}
       {canSeeMenu("board.inquiry.view") && (
         <a className="list-row" href="/manager/inquiries">
-          <div className="left"><span className="icon">💬</span>1:1 문의</div>
+          <div className="left"><span className="icon"><UiIcon name="message" /></span>1:1 문의</div>
           <span className="chevron">›</span>
         </a>
       )}
       {/* 후기 관리: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
       <a className="list-row" href="/manager/reviews">
-        <div className="left"><span className="icon">⭐</span>후기 관리</div>
+        <div className="left"><span className="icon"><UiIcon name="star" /></span>후기 관리</div>
         <span className="chevron">›</span>
       </a>
       {/* 주문 관리: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
       <a className="list-row" href="/manager/orders">
-        <div className="left"><span className="icon">🧾</span>주문 관리 (수강권·상품 구매)</div>
+        <div className="left"><span className="icon"><UiIcon name="receipt" /></span>주문 관리 (수강권·상품 구매)</div>
         <span className="chevron">›</span>
       </a>
       {/* 관리자 배치 내역: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
       <a className="list-row" href="/manager/admin-assignments">
-        <div className="left"><span className="icon">📋</span>관리자 배치 내역</div>
+        <div className="left"><span className="icon"><UiIcon name="users" /></span>관리자 배치 내역</div>
         <span className="chevron">›</span>
       </a>
       {canSeeMenu("facility.info") && (
         <a className="list-row" href="/manager/center-info">
-          <div className="left"><span className="icon">🏢</span>센터 정보</div>
+          <div className="left"><span className="icon"><UiIcon name="building" /></span>센터 정보</div>
           <span className="chevron">›</span>
         </a>
       )}
       {canSeeMenu("facility.room") && (
         <a className="list-row" href="/manager/rooms">
-          <div className="left"><span className="icon">🚪</span>룸(장소) 관리</div>
+          <div className="left"><span className="icon"><UiIcon name="grid" /></span>룸(장소) 관리</div>
           <span className="chevron">›</span>
         </a>
       )}
       {canSeeMenu("facility.operation") && (
         <a className="list-row" href="/manager/settings">
-          <div className="left"><span className="icon">⚙️</span>운영 설정</div>
+          <div className="left"><span className="icon"><UiIcon name="settings" /></span>운영 설정</div>
           <span className="chevron">›</span>
         </a>
       )}

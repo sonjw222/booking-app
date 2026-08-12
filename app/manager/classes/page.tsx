@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Loading from "../../components/Loading";
+import DatePicker from "../../components/DatePicker";
 import ManagerNav from "../../components/ManagerNav";
 import AmPmTimeInput from "../../components/AmPmTimeInput";
 import { dhmToMinutes, minutesToDhm } from "../../../lib/deadlineInput";
@@ -1024,9 +1025,9 @@ export default function ClassManagePage() {
                 </div>
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>기간</div>
                 <div className="time-row">
-                  <input className="input-field" type="date" aria-label="반복 시작일" value={repFrom} onChange={(e) => setRepFrom(e.target.value)} />
+                  <DatePicker value={repFrom} onChange={setRepFrom} label="반복 시작일" />
                   <span className="time-sep">~</span>
-                  <input className="input-field" type="date" aria-label="반복 종료일" value={repTo} onChange={(e) => setRepTo(e.target.value)} />
+                  <DatePicker value={repTo} onChange={setRepTo} label="반복 종료일" />
                 </div>
                 {repDays.length > 0 && repFrom && repTo && repFrom <= repTo && (
                   <div className="rep-preview" style={{ marginBottom: 4 }}>
@@ -1103,7 +1104,7 @@ export default function ClassManagePage() {
                 )}
               </>
             ) : (
-              <input className="input-field" type="date" aria-label="수업 날짜" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+              <DatePicker value={form.date} onChange={(date) => setForm({ ...form, date })} label="수업 날짜" />
             )}
             {perDayMode && repeat && !editId && (
               <div className="common-box-label">공통 설정 <span>· 위에서 비워둔 칸에 적용돼요</span></div>

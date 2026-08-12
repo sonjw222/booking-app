@@ -191,7 +191,8 @@ describe("Batch 7B manager classes design contract", () => {
     expect(classes).toContain("manager-classes-v2");
     expect(classes).toContain("manager-cal-header");
     expect(classes).toContain('aria-label="센터 선택"');
-    expect(classes).toContain('type="date"');
+    expect(classes).toContain("<DatePicker");
+    expect(read("app/components/DatePicker.tsx")).toContain('type="date"');
     expect(classes).toContain("<AmPmTimeInput");
     expect(classes).toContain("fetchClassTrainers");
     expect(classes).toContain("setClassTrainersBulk");

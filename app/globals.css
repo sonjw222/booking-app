@@ -2852,6 +2852,171 @@ a.membership-card { text-decoration: none; display: block; }
   .app-date-popover { scroll-behavior: auto; transition: none !important; animation: none !important; }
 }
 
+/* Post-migration visual QA fixes (2026-08-12). */
+.app-date-native-proxy {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.manager-classes-v2 .sheet .app-date-picker { flex: 1; min-width: 0; }
+.manager-classes-v2 .sheet .app-date-trigger {
+  min-height: 50px;
+  border-radius: 14px;
+  background: var(--surface);
+  font-size: 14px;
+}
+.manager-classes-v2 .sheet .app-date-popover {
+  width: min(326px, calc(100vw - 44px));
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--bg);
+  box-shadow: 0 18px 46px rgba(20,20,20,.15);
+}
+.manager-classes-v2 .sheet .app-date-head { margin-bottom: 6px; }
+.manager-classes-v2 .sheet .app-date-head strong { font-size: 16px; font-weight: 780; }
+.manager-classes-v2 .sheet .app-date-grid { gap: 3px; }
+.manager-classes-v2 .sheet .app-date-grid button { min-height: 38px; font-size: 13px; }
+.manager-classes-v2 .sheet .app-date-grid button.on { background: var(--ink); }
+.manager-classes-v2 .sheet .app-date-grid button.today:not(.on) {
+  color: var(--brand-ink);
+  background: var(--brand-soft);
+  box-shadow: none;
+}
+
+/* Old left-position animation and the migrated transform must never stack. */
+.manager-v3-content .switch .knob { left: 3px; }
+.manager-v3-content .switch.on .knob { left: 3px; transform: translateX(20px); }
+
+/* Class form selections use the same clear checked-pill language. */
+.manager-v3-content .class-allowed-products-list,
+.manager-v3-content .class-trainers-list {
+  gap: 8px;
+  padding-block: 4px 10px !important;
+  border-bottom: 0;
+}
+.manager-v3-content .class-allowed-products-list .filter-chip,
+.manager-v3-content .class-trainers-list .filter-chip {
+  min-height: 40px;
+  padding: 0 13px;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--ink-soft);
+}
+.manager-v3-content .class-allowed-products-list .filter-chip.on,
+.manager-v3-content .class-trainers-list .filter-chip.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.manager-v3-content .class-allowed-products-list .filter-chip.on::before,
+.manager-v3-content .class-trainers-list .filter-chip.on::before {
+  content: "✓";
+  font-size: 11px;
+  font-weight: 900;
+}
+
+/* Keep transient manager messages compact on every viewport. */
+.manager-v3-content .error-toast {
+  top: max(14px, env(safe-area-inset-top));
+  left: 50%;
+  right: auto;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.manager-v3-content .mem-detail-date {
+  flex-basis: 76px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.manager-members-v2 .sheet .hol-add > div {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) 88px;
+  align-items: stretch;
+}
+.manager-members-v2 .sheet .hol-add .input-field,
+.manager-members-v2 .sheet .hol-add .primary-btn { min-height: 52px; margin: 0; }
+.manager-members-v2 .sheet .hol-add .primary-btn { width: 100%; padding-inline: 10px; }
+
+/* Manager menu uses one icon family and leaves the final row reachable. */
+.manager-home-v2 { padding-bottom: calc(var(--floating-nav-clearance) + 92px); }
+.manager-home-v2 > .list-row .icon svg { width: 22px; height: 22px; stroke-width: 1.7; }
+.manager-home-v2 > .list-row:last-of-type { margin-bottom: 24px; }
+
+/* Center actions remain visible in every tab and float clear of navigation. */
+.center-detail-v2 { padding-bottom: calc(var(--floating-nav-clearance) + 104px) !important; }
+.center-detail-v2 .center-bottom-bar {
+  bottom: calc(var(--floating-nav-clearance) + 24px);
+  z-index: 80;
+}
+
+/* Compact account identity; membership and goods cards now belong to the light system. */
+.mypage-shell .profile-block {
+  min-height: 108px;
+  padding: max(30px, env(safe-area-inset-top)) var(--page-gutter) 22px;
+  gap: 12px;
+}
+.mypage-shell .avatar { width: 52px; height: 52px; border-radius: 17px; font-size: 20px; }
+.mypage-shell .profile-name { font-size: 19px; }
+.mypage-shell .membership-card,
+.mypage-shell .membership-card.goods {
+  padding: 18px;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--bg);
+}
+.mypage-shell .membership-card.goods {
+  border-color: color-mix(in srgb, var(--brand) 34%, var(--line));
+  background: linear-gradient(135deg, var(--brand-soft), var(--bg) 76%);
+}
+.mypage-shell .membership-card .name { opacity: 1; color: var(--ink-soft); }
+.mypage-shell .membership-card .count span,
+.mypage-shell .membership-card .expire { color: var(--ink-soft); opacity: 1; }
+.mypage-shell .membership-card .progress-track { background: var(--surface-strong); }
+.mypage-shell .membership-card .progress-fill { background: var(--ink); }
+.mypage-shell .membership-card.goods .progress-fill { background: var(--brand); }
+.mypage-shell .membership-cta {
+  margin-top: 14px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: #fff;
+}
+
+/* Authentication mode is a calm segmented control, without the floating-card artifact. */
+.auth-panel .mode-tabs {
+  width: 100%;
+  max-width: 310px;
+  min-height: 46px;
+  margin-bottom: 24px;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.auth-panel .mode-tab {
+  min-height: 38px;
+  border: 0;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.auth-panel .mode-tab.on {
+  border: 0;
+  background: var(--bg);
+  box-shadow: 0 1px 3px rgba(20,20,20,.08);
+}
+
 /* ============================================================
    App chrome, navigation and system states — Batch 2
    ============================================================ */

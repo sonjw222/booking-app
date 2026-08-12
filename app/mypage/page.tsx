@@ -87,7 +87,6 @@ export default function MyPage() {
 
   return (
     <div className="app-shell mypage-shell">
-      <div className="mypage-titlebar"><h1>마이</h1></div>
       <div className="profile-block">
         <div className="avatar">{profile?.name?.[0] ?? "?"}</div>
         <div>
