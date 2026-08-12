@@ -216,3 +216,36 @@ describe("Batch 7B manager classes design contract", () => {
     expect(css).toMatch(/\.manager-classes-v2>\.fab-btn\{[^}]*bottom:104px/);
   });
 });
+
+describe("Batch 7C manager detail surface contract", () => {
+  const detailPages = [
+    "admin-assignments", "announcements", "center-info", "goods", "holidays", "inquiries",
+    "membership-rules", "orders", "progress", "reviews", "rooms", "sales", "settings", "staff",
+  ];
+
+  it("keeps every current manager detail feature page in the shared manager shell", () => {
+    for (const page of detailPages) {
+      expect(read(`app/manager/${page}/page.tsx`), page).toContain("app-shell");
+    }
+    expect(read("app/manager/progress/record/page.tsx")).toContain("app-shell");
+    expect(read("app/manager/staff/permissions/page.tsx")).toContain("app-shell");
+  });
+
+  it("provides a shared hierarchy for manager lists, settings, sheets and reports", () => {
+    const css = read("app/globals.css");
+    expect(css).toContain("Batch 7C: manager detail surfaces");
+    expect(css).toContain(".manager-v3-content .center-switcher");
+    expect(css).toContain(".manager-v3-content .pass-list");
+    expect(css).toContain(".manager-v3-content .settings-wrap");
+    expect(css).toContain(".manager-v3-content .sheet:before");
+    expect(css).toContain(".manager-v3-content .sales-summary");
+  });
+
+  it("retains current manager data operations instead of restoring reference logic", () => {
+    expect(read("app/manager/membership-rules/page.tsx")).toContain("fetchProducts");
+    expect(read("app/manager/sales/page.tsx")).toContain("fetchPayments");
+    expect(read("app/manager/sales/page.tsx")).toContain("summarize");
+    expect(read("app/manager/staff/page.tsx")).toContain("fetchStaff");
+    expect(read("app/manager/settings/page.tsx")).toContain("fetchSettings");
+  });
+});
