@@ -31,10 +31,13 @@ import {
   getOrCreateOwnedTestCenter,
   getFixtureAdminClient,
   createFutureTestClass,
+  createKstSameDayFutureClass,
+  createTestMembership,
   cleanupTestClassAdmin,
   requireEnv,
   type TestUser,
 } from "./setup";
+import { fetchSettings, saveSettings } from "../../lib/settings";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
@@ -457,4 +460,121 @@ describe("SEC-114 AUTO-SEC-K~L: platform admin 허용 + fulfill_order 내부 호
     const res = await fetchReservationsFor(newMembershipId);
     expect(res.some((r) => r.class_id === cls.id && r.status === "confirmed")).toBe(true);
   }, 30000);
+});
+
+describe("SEC-114 AUTO-SEC-M~P: 나머지 정책 회귀 커버리지(이번 배치에서 추가 — reserve_class와 동일 조건 실측)", () => {
+  it("AUTO-SEC-M: selected 모드 + class_allowed_products에 지정된 product는 membership_schedule_rules 불일치와 무관하게 자동예약된다(P1-17 override)", async () => {
+    await asManagerA();
+    const product = await createAutoBookProduct(centerAId, "SEC-114-M", [0, 1, 2, 3, 4, 5, 6]);
+    cleanupScheduleRuleProductIds.push(product.id);
+    const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-SEC-M" });
+    cleanupClassIds.push(cls.id);
+    const mismatchedDow = (kstDow(cls.startTime) + 1) % 7;
+    const admin = getFixtureAdminClient();
+    const { error: ruleErr } = await admin.from("membership_schedule_rules").insert({
+      product_id: product.id, day_of_week: mismatchedDow, start_time: null, class_title: null,
+    });
+    if (ruleErr) throw new Error(`schedule_rule 추가 실패: ${ruleErr.message}`);
+    const { error: modeErr } = await admin.from("classes").update({ pass_selection_mode: "selected" }).eq("id", cls.id);
+    if (modeErr) throw new Error(`pass_selection_mode 지정 실패: ${modeErr.message}`);
+    // class_allowed_products INSERT RLS는 매니저 세션이 필요하다(그 센터를 관리하는지 확인).
+    const { error: capErr } = await supabase
+      .from("class_allowed_products").insert({ class_id: cls.id, product_id: product.id });
+    if (capErr) throw new Error(`class_allowed_products 지정 실패: ${capErr.message}`);
+    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+
+    // 대조: AUTO-SEC-F와 동일한 schedule_rule 불일치 상황이지만, 여기서는 'selected' +
+    // class_allowed_products 명시 지정이 있으므로 override로 예약이 성사돼야 한다
+    // (F는 'all' 모드라 override가 없어 booked=0이 되는 것과 대비된다).
+    const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
+    expect(error).toBeNull();
+    expect((data as any).booked).toBe(1);
+    expect((await fetchMembership(mem.id)).remaining_count).toBe(2);
+  });
+
+  it("AUTO-SEC-N: center_settings.daily_book_limit에 이미 도달한 날짜는 자동예약을 건너뛴다", async () => {
+    await asManagerA();
+    const originalSettings = await fetchSettings(centerAId);
+    try {
+      const existingCls = await createKstSameDayFutureClass(centerAId, { title: "AUTO-SEC-N-기존예약", preferredMinutesFromNow: 180 });
+      cleanupClassIds.push(existingCls.id);
+      const dow = kstDow(existingCls.startTime);
+
+      await asUserB();
+      await createTestMembership(centerAId, userB.profileId, { remainingCount: 3 });
+      const { error: bookErr } = await supabase.rpc("reserve_class", { p_class_id: existingCls.id, p_profile_id: userB.profileId });
+      if (bookErr) throw new Error(`기존 예약 실패: ${bookErr.message}`);
+
+      await asManagerA();
+      await saveSettings(centerAId, { ...originalSettings, dailyBookLimitEnabled: true, dailyBookLimit: 1 });
+
+      const product = await createAutoBookProduct(centerAId, "SEC-114-N", [dow]);
+      const autoCls = await createKstSameDayFutureClass(centerAId, { title: "AUTO-SEC-N-자동예약대상", preferredMinutesFromNow: 210 });
+      cleanupClassIds.push(autoCls.id);
+      const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+
+      const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
+      expect(error).toBeNull();
+      expect((data as any).booked).toBe(0);
+      expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
+    } finally {
+      await asManagerA();
+      await saveSettings(centerAId, originalSettings);
+    }
+  });
+
+  it("AUTO-SEC-O: center_settings.private_max_concurrent에 이미 도달한 시간대는 자동예약을 건너뛴다", async () => {
+    await asManagerA();
+    const originalSettings = await fetchSettings(centerAId);
+    try {
+      await asUserB();
+      await createTestMembership(centerAId, userB.profileId, { remainingCount: 3 });
+      const occupied = await createFutureTestClass(centerAId, { title: "AUTO-SEC-O-기존점유", classFormat: "private", hoursFromNow: 96 });
+      cleanupClassIds.push(occupied.id);
+      const { error: bookErr } = await supabase.rpc("reserve_class", { p_class_id: occupied.id, p_profile_id: userB.profileId });
+      if (bookErr) throw new Error(`기존 프라이빗 예약 실패: ${bookErr.message}`);
+
+      await asManagerA();
+      await saveSettings(centerAId, { ...originalSettings, privateMaxConcurrentEnabled: true, privateMaxConcurrent: 1 });
+
+      // occupied와 겹치는 시간대(같은 hoursFromNow=96 → start/end 거의 동일, 최소 60분 duration과
+      // 비교하면 밀리초 단위 오차는 무시 가능하게 겹친다)에 두 번째 프라이빗 수업을 만든다.
+      const target = await createFutureTestClass(centerAId, { title: "AUTO-SEC-O-자동예약대상", classFormat: "private", hoursFromNow: 96 });
+      cleanupClassIds.push(target.id);
+      const dow = kstDow(target.startTime);
+      const product = await createAutoBookProduct(centerAId, "SEC-114-O", [dow]);
+      const mem = await createAutoBookMembership(centerAId, managerA.profileId, product.id, { remainingCount: 3 });
+
+      const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
+      expect(error).toBeNull();
+      expect((data as any).booked).toBe(0);
+      expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
+    } finally {
+      await asManagerA();
+      await saveSettings(centerAId, originalSettings);
+    }
+  });
+
+  it("AUTO-SEC-P: 예약 오픈 시각(calc_deadline 'open')이 아직 안 됐으면 자동예약되지 않는다", async () => {
+    await asManagerA();
+    const originalSettings = await fetchSettings(centerAId);
+    try {
+      // 수업을 5일 뒤로 만들고 오픈은 "수업 1일 전"으로 좁힌다 → 지금부터 수업 4일 전까지는
+      // 아직 오픈 전이라 어떤 예약(자동예약 포함)도 불가능해야 한다.
+      await saveSettings(centerAId, { ...originalSettings, groupOpenDaysBefore: 1, groupOpenTime: "00:00" });
+      const cls = await createFutureTestClass(centerAId, { title: "AUTO-SEC-P", hoursFromNow: 120 });
+      cleanupClassIds.push(cls.id);
+      const dow = kstDow(cls.startTime);
+      const product = await createAutoBookProduct(centerAId, "SEC-114-P", [dow]);
+      const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+
+      const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
+      expect(error).toBeNull();
+      expect((data as any).booked).toBe(0);
+      expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
+    } finally {
+      await asManagerA();
+      await saveSettings(centerAId, originalSettings);
+    }
+  });
 });
