@@ -101,17 +101,13 @@ export default function CartPage() {
 
     setBusy(true);
     try {
-      // 할인은 첫 항목에 적용 (단순화)
-      let left = discount;
+      // [SEC-118] 금액은 create_order_secure() RPC가 products.price 기준으로 서버에서
+      // 계산한다 — 쿠폰 할인(discount)은 서버 검증이 없는 데모 기능이라 실제 청구
+      // 금액에는 반영되지 않는다(app/checkout/page.tsx와 동일).
       for (const it of items) {
-        const d = Math.min(left, it.price);
-        left -= d;
         await createOrder({
-          centerId: it.centerId, productId: it.productId, productName: it.productName,
-          amount: it.price - d, payMethod,
+          productId: it.productId, payMethod,
           selectedSize: it.selectedSize ?? undefined,
-          couponCode: discount > 0 ? couponInput.trim().toUpperCase() : undefined,
-          discountAmount: d,
         });
       }
       await clearCart();

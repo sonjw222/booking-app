@@ -21,44 +21,28 @@ export type Order = {
 };
 
 // 회원: 주문 생성 (결제 화면에서 "결제하기" 시)
+// [SEC-118] amount는 더 이상 클라이언트가 넘기지 않는다 — create_order_secure() RPC가
+// products.price를 서버에서 직접 조회해 계산한다(포인트 사용도 RPC 내부에서 use_points()로
+// 원자적으로 처리 — 호출부에서 미리 usePoints()를 호출해두지 않아도 됨, pointUsed만 전달).
+// 쿠폰(coupon_code/discount_amount)은 서버 검증이 없는 데모 기능이라 이 경로에서는 반영하지
+// 않는다(docs/25_SEC118_Orders_Amount_Design.md 참고) — 실제 쿠폰 시스템이 생기면 별도 확장.
 // provider: Payment Adapter가 이 주문을 처리할 provider("mock"/"toss"/"portone"). 생략 시 null
-//   (레거시 경로 — 매니저가 /manager/orders에서 수동 확인). 기존 호출부(app/cart/page.tsx 등)는
-//   그대로 두어도 동작에 영향 없는 선택적 필드라 하위 호환됨.
+//   (레거시 경로 — 매니저가 /manager/orders에서 수동 확인).
 export async function createOrder(input: {
-  centerId: string; productId: string; productName: string; amount: number; payMethod?: string;
-  selectedSize?: string; couponCode?: string; discountAmount?: number; autoBook?: boolean;
+  productId: string; payMethod?: string; selectedSize?: string;
+  pointUsed?: number; autoBook?: boolean;
   provider?: "mock" | "toss" | "portone";
 }): Promise<string> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) throw new Error("로그인이 필요해요");
-  const { data: acc } = await supabase.from("accounts").select("id").eq("auth_id", authData.user.id).single();
-  if (!acc) throw new Error("계정을 찾을 수 없어요");
-  // 대표 프로필 우선, 없으면 가장 먼저 만든 프로필 사용 (single() 실패 방지)
-  const { data: profs } = await supabase
-    .from("profiles").select("id, is_primary, created_at")
-    .eq("account_id", acc.id)
-    .order("is_primary", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1);
-  const prof = profs?.[0];
-  if (!prof) throw new Error("프로필을 찾을 수 없어요. 프로필 관리에서 프로필을 만들어주세요.");
-
-  const { data, error } = await supabase.from("orders").insert({
-    center_id: input.centerId,
-    profile_id: prof.id,
-    product_id: input.productId,
-    product_name: input.productName,
-    amount: input.amount,
-    pay_method: input.payMethod ?? null,
-    selected_size: input.selectedSize ?? null,
-    coupon_code: input.couponCode ?? null,
-    discount_amount: input.discountAmount ?? 0,
-    auto_book: input.autoBook ?? false,
-    payment_provider: input.provider ?? null,
-    status: "pending",
-  }).select("id").single();
-  if (error) throw new Error("주문 생성에 실패했어요: " + error.message);
-  return data.id;
+  const { data, error } = await supabase.rpc("create_order_secure", {
+    p_product_id: input.productId,
+    p_pay_method: input.payMethod ?? null,
+    p_selected_size: input.selectedSize ?? null,
+    p_point_used: input.pointUsed ?? 0,
+    p_auto_book: input.autoBook ?? false,
+    p_provider: input.provider ?? null,
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+  return data as string;
 }
 
 // 회원: 내 주문 내역

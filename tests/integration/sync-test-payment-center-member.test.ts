@@ -35,8 +35,7 @@ beforeEach(async () => {
 describe("SYNC-001: Mock 결제 확정 시 center_members 자동 등록", () => {
   it("Mock 결제로 수강권을 받으면 그 센터의 center_members에 active로 등록된다", async () => {
     const orderId = await createOrder({
-      centerId: TEST_CENTER_ID, productId: product.id, productName: product.name,
-      amount: product.price, payMethod: "card", provider: "mock",
+      productId: product.id, payMethod: "card", provider: "mock",
     });
     const paymentService = getPaymentService("success");
     const created = await paymentService.createPayment({ orderId, amount: product.price });

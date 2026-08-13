@@ -12,7 +12,7 @@ import BottomNav from "../components/BottomNav";
 import { useSearchParams } from "next/navigation";
 import { fetchCenterDetail, fetchCenterProducts, type CenterProduct } from "../../lib/center";
 import { createOrder } from "../../lib/orders";
-import { fetchMyPoints, usePoints } from "../../lib/reviews";
+import { fetchMyPoints } from "../../lib/reviews";
 import Loading from "../components/Loading";
 import { reservationReturnUrl } from "../../lib/reservationNav";
 import { getPaymentService, type PaymentScenario } from "../../lib/payments";
@@ -134,21 +134,20 @@ function CheckoutContent() {
     }
     setBusy(true);
     try {
-      // 화면에 표시된 값과 동일하게 계산 (pointToUse/finalTotal은 상단에서 계산됨)
-      if (pointToUse > 0) await usePoints(centerId, pointToUse);
-      const finalAmount = finalTotal;
+      // [SEC-118] 금액은 create_order_secure() RPC가 products.price 기준으로 서버에서
+      // 계산한다 — 포인트 사용도 그 RPC 안에서 원자적으로 처리(pointToUse만 전달, 사전
+      // usePoints() 호출 불필요). 쿠폰 할인(discount)은 서버 검증이 없는 데모 기능이라
+      // 실제 청구 금액에는 반영되지 않는다.
       const orderId = await createOrder({
-        centerId, productId: product.id, productName: product.name,
-        amount: finalAmount, payMethod,
+        productId: product.id, payMethod,
         selectedSize: selectedSize ?? undefined,
-        couponCode: discount > 0 ? couponInput.trim().toUpperCase() : undefined,
-        discountAmount: discount,
+        pointUsed: pointToUse,
         autoBook: !!(product.autoBookDays && product.autoBookDays.length > 0) && autoBook,
         provider: "mock", // Payment Adapter Pattern: 지금은 테스트 결제(Mock)로만 처리
       });
 
       const paymentService = getPaymentService(mockScenarioOverride);
-      const created = await paymentService.createPayment({ orderId, amount: finalAmount });
+      const created = await paymentService.createPayment({ orderId, amount: finalTotal });
       const result = await paymentService.confirmPayment(created.paymentKey, orderId);
 
       if (result.status === "paid") {

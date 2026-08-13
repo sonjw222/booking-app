@@ -8,7 +8,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";
 import { createOrder } from "../../lib/orders";
-import { TEST_CENTER_ID, TEST_PRODUCT_ID, signOutTestSession, switchToTestUser, type TestUser } from "./setup";
+import { TEST_PRODUCT_ID, signOutTestSession, switchToTestUser, type TestUser } from "./setup";
 
 type ProductRow = { id: string; name: string; price: number };
 
@@ -45,10 +45,7 @@ describe("본인 주문만 처리 가능 (RLS)", () => {
     // A로 전환해 A 소유 주문 생성 (확정하지 않고 pending으로 둠)
     await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
     const orderId = await createOrder({
-      centerId: TEST_CENTER_ID,
       productId: product.id,
-      productName: product.name,
-      amount: product.price,
       payMethod: "card",
       provider: "mock",
     });
@@ -73,10 +70,7 @@ describe("Mock 결제만 처리 가능", () => {
   it("payment_provider가 mock이 아닌 주문(cart 등 레거시 경로)은 거부된다", async () => {
     // provider를 지정하지 않음 = app/cart/page.tsx가 만드는 주문과 동일(payment_provider null)
     const orderId = await createOrder({
-      centerId: TEST_CENTER_ID,
       productId: product.id,
-      productName: product.name,
-      amount: product.price,
       payMethod: "card",
     });
 
@@ -105,10 +99,7 @@ describe("RPC 함수 동작 (엣지 케이스)", () => {
   it("cancel_test_payment도 동일한 본인 소유 가드를 적용한다", async () => {
     await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
     const orderId = await createOrder({
-      centerId: TEST_CENTER_ID,
       productId: product.id,
-      productName: product.name,
-      amount: product.price,
       payMethod: "card",
       provider: "mock",
     });

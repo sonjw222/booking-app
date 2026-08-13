@@ -25,3 +25,13 @@ where tgrelid = 'orders'::regclass and not tgisinternal;
 select policyname, cmd, qual, with_check
 from pg_policies
 where tablename = 'orders';
+
+-- [4] 실제 Live confirm_test_payment() 전문 확인 — Mock 결제(회원 self-checkout)의
+--     실제 발급 경로. fulfill_order와 별개로 orders.amount를 그대로 신뢰하는지 확인.
+select pg_get_functiondef('confirm_test_payment(uuid, text)'::regprocedure);
+
+-- [5] orders.verified 컬럼이 이미 존재하는지(적용 전이면 0건 아님, 컬럼 자체가 없어서
+--     에러가 날 수 있음 — 에러 나면 = 아직 미적용이라는 뜻).
+select column_name, data_type, column_default
+from information_schema.columns
+where table_name = 'orders' and column_name = 'verified';

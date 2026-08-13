@@ -85,13 +85,20 @@ async function createAutoBookProduct(
   const { data: existing } = await admin
     .from("products").select("id").eq("center_id", centerId).eq("name", name).maybeSingle();
   if (existing) {
-    await admin.from("products").update({ auto_book_days: autoBookDays }).eq("id", existing.id);
+    // price도 함께 맞춰준다 — 이전 실행(SEC-118 이전)에서 만들어진 행이면 price가 기본값
+    // 0으로 남아있을 수 있음.
+    await admin.from("products").update({ auto_book_days: autoBookDays, price: 10000 }).eq("id", existing.id);
     return { id: existing.id };
   }
   const { data, error } = await admin
     .from("products")
     .insert({
-      center_id: centerId, name, product_kind: "pass", pass_type: "count",
+      // [SEC-118] price=10000으로 명시 — AUTO-SEC-L이 admin client로 orders.amount=10000인
+      // 주문을 직접 insert하고 fulfill_order()를 호출하는데, SEC-118의 verified=false 재검증
+      // (orders.amount가 products.price와 같아야 함)을 통과하려면 이 상품의 price도 10000이어야
+      // 한다(과거엔 price 컬럼 기본값 0이라 이 테스트가 우연히 통과했음 — 실제 가격 검증이
+      // 없었기 때문).
+      center_id: centerId, name, product_kind: "pass", pass_type: "count", price: 10000,
       total_count: 999, is_on_sale: true, is_active: true, auto_book_days: autoBookDays,
     })
     .select("id").single();

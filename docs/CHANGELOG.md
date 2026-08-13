@@ -8,6 +8,25 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-13 — SEC-118 orders.amount 클라이언트 신뢰 문제 구현(코드+SQL, SQL 미실행)
+
+**SQL 실행 없음(코드는 커밋됨), main merge 없음.** 설계 문서(D안: RPC화 + 이중 방어)를 그대로
+구현. `create_order_secure()` 신규 RPC가 `products.price`를 서버에서 직접 계산해 주문을
+만들고(`orders.verified=true`), `fulfill_order()`/`confirm_test_payment()`는 `verified=false`
+(레거시/직접 insert) 주문만 현재 `products.price`와 대조하는 재검증을 거친다. 포인트 사용도
+RPC 내부에서 `use_points()`를 직접 호출해 원자적으로 처리해, "포인트를 이만큼 썼다"는
+클라이언트 주장을 그대로 믿던 잔여 취약점까지 닫았다.
+
+`lib/orders.ts`의 `createOrder()` 시그니처를 변경(centerId/amount/productName/couponCode/
+discountAmount 제거)하고 `app/checkout/page.tsx`/`app/cart/page.tsx` 호출부를 갱신 — 쿠폰
+할인(데모 기능, 서버 검증 없음)은 의도적으로 실제 청구 금액에 반영하지 않음(TODO.md SEC-118
+항목에 알려진 부작용으로 기록). 기존 `auto-book-membership-security.test.ts`의
+`AUTO-SEC-L`이 가정하던 임의 금액(10000)과 상품 가격(기본값 0) 불일치를 새 재검증이 잡아내는
+회귀를 발견해 함께 수정. 신규 회귀 테스트 `tests/integration/orders-amount-tampering.test.ts`
+(AMOUNT-SEC-A~F, 조작된 금액으로 직접 orders insert 시 거부되는 것을 실제로 재현·검증).
+
+`npm run build`(TypeScript 포함) 통과, `npm run test`(unit) 217/217 통과 확인.
+
 ## 2026-08-13 — ✅ SEC-101/112/113 manager_centers 권한 모델 Live 적용 완결(SQL 실행 완료)
 
 **사용자가 SQL 직접 실행, Live 적용 완료.** 마지막까지 미적용이던 defense-in-depth 2종을

@@ -1124,22 +1124,47 @@ SEC-101(임의 센터 self-join)이 완전히 막혀도, 정상적으로 **자�
 같은 파일의 EXECUTE 최소화(PUBLIC/anon revoke) 부분은 **SEC-119로 별도 번호 부여**(아래
 "canonical 번호 매핑" 참고 — SEC-116 번호가 이미 다른 문제에 쓰이고 있어 충돌 방지).
 
-### SEC-118. (2026-08-13, 신규, 설계만 완료) `orders.amount` 클라이언트 신뢰 — 가격 조작(P0)
+### SEC-118. (2026-08-13, D안 구현 완료 — SQL 미실행) `orders.amount` 클라이언트 신뢰 — 가격 조작(P0)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0(금전 사기 벡터) |
-| 현재 상태 | **CONFIRMED(코드 확인). 설계 문서만 작성, SQL/코드 미작성 — 별도 P0 Batch로 분리** |
-| 근거 파일 | `lib/orders.ts`(`createOrder`), `add_orders.sql`(RLS), `reservation_functions.sql`(`fulfill_order`), [25_SEC118_Orders_Amount_Design.md](./25_SEC118_Orders_Amount_Design.md)(신규, 상세 설계) |
-| 완료 조건 | 설계 문서의 D안(신규 RPC로 서버측 가격 계산 + `fulfill_order` 방어적 재검증) 채택 여부 제품 결정 → 구현 |
+| 현재 상태 | **구현 완료(코드+SQL), Live 미적용.** 설계 문서 D안(RPC화 + fulfill_order 방어적 재검증) 그대로 구현. |
+| 근거 파일 | `fix_orders_amount_server_verification_draft_proposed.sql`(canonical) + rollback, `lib/orders.ts`/`app/checkout/page.tsx`/`app/cart/page.tsx`(코드 변경, 커밋됨), `tests/integration/orders-amount-tampering.test.ts`(AMOUNT-SEC-A~F, 신규), [25_SEC118_Orders_Amount_Design.md](./25_SEC118_Orders_Amount_Design.md) |
+| 완료 조건 | 사용자가 SQL 적용 → `npm run test:integration`으로 AMOUNT-SEC-A~F GREEN 확인 |
 
-`createOrder()`가 클라이언트가 보낸 `input.amount`를 그대로 `orders.amount`에 저장하고,
-`product.price` 서버측 재계산이 전혀 없다. `fulfill_order()`는 이 값을 그대로 `payments`에
-매출로 확정한다 — 회원이 checkout을 우회해 임의 금액으로 주문 생성 후 매니저가 승인하면
-정상 상품이 조작된 매출 금액으로 발급된다. 아직 실제 PG 연동 전(Mock 결제 단계)이라 즉시
-피해 경로는 매니저 승인이 필요해 좁지만, 서버 검증 부재 자체는 실제 PG 연동 전에 반드시
-고쳐야 하는 구조적 결함. 상세 근거·4개 설계안 비교는 [25_SEC118_Orders_Amount_Design.md]
-(./25_SEC118_Orders_Amount_Design.md) 참고.
+**구현 내용**:
+- `orders.verified boolean default false` 신규 컬럼 — `create_order_secure()` RPC로 만들어진
+  주문인지 표시.
+- `create_order_secure(p_product_id, p_pay_method, p_selected_size, p_point_used, p_auto_book,
+  p_provider)` 신규 RPC — `products.price`를 서버가 직접 조회해 `amount`를 계산(클라이언트는
+  amount를 아예 못 보냄). 포인트 사용도 RPC 내부에서 `use_points()`를 직접 호출해 원자적으로
+  처리 — 클라이언트가 "포인트를 이만큼 썼다"고 주장하는 값을 그대로 믿지 않는다(호출부가
+  미리 `usePoints()`를 불러 실제 차감과 "얼마나 썼다"는 주장 사이에 괴리가 생길 수 있던
+  잔여 취약점까지 닫음).
+- `fulfill_order()`/`confirm_test_payment()`에 재검증 한 줄 추가 — `verified=false`(레거시/
+  직접 insert 경로) 주문은 현재 `products.price`와 직접 대조해 불일치하면 거부. `verified=true`
+  주문은 생성 시점에 이미 서버가 계산한 값이라 그대로 신뢰(가격이 그 사이 바뀌어도 정상
+  주문이 오탐되지 않음 — 설계 문서 4-3번 스냅샷 문제 해결).
+- `lib/orders.ts`의 `createOrder()`가 직접 insert 대신 새 RPC를 호출하도록 교체(시그니처에서
+  `centerId`/`amount`/`productName`/`couponCode`/`discountAmount` 제거 — 전부 서버가 상품 행
+  에서 직접 계산·조회). `app/checkout/page.tsx`/`app/cart/page.tsx` 호출부도 함께 갱신.
+- **쿠폰(coupon_code/discount_amount) 처리**: 이 코드베이스의 쿠폰은 checkout 화면의
+  `MY_COUPONS` 하드코딩 배열뿐이고 서버 검증이 전혀 없어(SQL 전체 검색 결과 discount_amount/
+  coupon_code를 읽는 함수 0건, 확인함) 새 RPC는 쿠폰 할인을 전혀 반영하지 않는다 — **알려진
+  부작용**: checkout 화면에서 쿠폰을 "적용"해도 실제 청구 금액에는 반영되지 않는다(화면
+  표시와 실제 금액이 달라짐). 이건 SEC-118을 제대로 고치기 위한 의도된 결과 — 검증 안 되는
+  할인을 서버 금액 계산에 반영하면 이번 수정의 의미가 없어짐. 실제 쿠폰 시스템은 별도
+  제품 결정 + SQL 확장 필요(설계 문서 4번 항목).
+- **기존 SEC-114 테스트 회귀 수정**: `auto-book-membership-security.test.ts`의
+  `createAutoBookProduct()`가 `price` 컬럼을 설정하지 않아(기본값 0) `AUTO-SEC-L`이 만드는
+  `amount: 10000` 주문과 불일치하게 됨 — `price: 10000`으로 명시해 SEC-118 재검증을 통과하도록
+  수정(로직 변경 아님, 기존 테스트가 우연히 가격 검증 없이 통과했던 것을 바로잡음).
+- **미커버**: 포인트 사용 한도 초과 시 거부(`use_points`가 이미 자체 검증하므로 SQL 로직상
+  안전하지만, 이 배치의 신규 통합 테스트에는 포함 안 함 — 포인트 fixture 패턴이 이 저장소에
+  아직 없어 범위를 좁힘, 후속 필요).
+
+`npm run build`(TypeScript 포함) 통과, `npm run test`(unit) 217/217 통과 확인함(2026-08-13).
 
 ### SEC-119. (2026-08-13, 신규 번호 — SEC-116 충돌 회피) SECURITY DEFINER EXECUTE 최소화(P3)
 

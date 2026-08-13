@@ -9,7 +9,6 @@ import { supabase } from "../../lib/supabaseClient";
 import { createOrder } from "../../lib/orders";
 import { getPaymentService } from "../../lib/payments";
 import {
-  TEST_CENTER_ID,
   TEST_PRODUCT_ID,
   countMembershipsFor,
   fetchLatestMembership,
@@ -55,11 +54,9 @@ afterAll(async () => {
 });
 
 async function createMockOrder(): Promise<string> {
+  // [SEC-118] amount는 create_order_secure()가 product.price 기준으로 서버에서 계산한다.
   return createOrder({
-    centerId: TEST_CENTER_ID,
     productId: product.id,
-    productName: product.name,
-    amount: product.price,
     payMethod: "card",
     provider: "mock",
   });
