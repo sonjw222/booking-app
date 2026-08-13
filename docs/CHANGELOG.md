@@ -8,6 +8,21 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-14 — refund_membership() 환불 후 예약 잔존 구현(P1, SQL 미실행)
+
+**SQL 실행 없음, main merge 없음.** D안(A+C) 구현: `refund_membership()`에 "미래
+confirmed/waitlisted 예약이 있으면 환불 거부" 체크 추가(A), `cancel_reservation()`의
+`remaining_count` 복구 UPDATE에 `and status <> 'refunded'` 조건 추가(C, 안전망). 사용자가
+read-only 진단을 실행해 이 문제가 가설이 아니라 **이미 Live에서 실제로 발생했음**을 확인함
+(membership `c582ef56...`가 refunded/remaining_count=0인데 미래 confirmed 예약 3건이
+그대로 남아있었음). `refund_membership()`은 `reservation_functions.sql` 버전과 실측이
+일치했지만, `cancel_reservation()`은 RES-001(수업 시작 후 취소 불가)/NOTIF-001
+(`cancel_source`) 로직이 이미 추가된 다른 버전이 Live였음을 `pg_get_functiondef`로 먼저
+확인한 뒤 그 본문 기준으로 작성.
+
+신규 회귀 테스트 `tests/integration/refund-membership-reservation-orphan.test.ts`
+(REFUND-SEC-A~C). `npm run test`(unit) 217/217 통과.
+
 ## 2026-08-14 — ✅ SEC-116 fulfill_order() 세분권한(pass.payment.create) Live 적용 완료
 
 **사용자가 SQL 직접 실행, Live 적용 완료.** 적용 후 `pg_get_functiondef('fulfill_order(uuid)')`로

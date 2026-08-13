@@ -1204,13 +1204,20 @@ center_id의 active 매니저이므로, `auto_book_membership()`의 더 느슨�
 SEC-116은 이미 "fulfill_order 세분권한 미사용"을 가리키므로 번호 충돌을 피하기 위해
 재배정했다(아래 canonical 번호 매핑 참고).**
 
-### (설계만) refund_membership() 환불 후 예약 잔존 — 신규 P1
+### refund_membership() 환불 후 예약 잔존 — P1 (2026-08-14, 구현 완료 — SQL 미실행)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1(데이터 무결성, 보안 아님) |
-| 현재 상태 | **CONFIRMED(코드 확인). 설계만, 수정 안 함** |
-| 근거 파일 | `reservation_functions.sql`(`refund_membership`, `cancel_reservation`) |
+| 현재 상태 | **구현 완료(D안: A+C), Live 미적용.** 2026-08-14 read-only 진단으로 이 문제가 이미 실제 발생했음을 확인함 — membership `c582ef56-3773-4b18-8861-198849d9f50a`가 `status=refunded/remaining_count=0/total_count=3`인데 미래 confirmed 예약 3건이 그대로 남아있었음(가설이 아니라 실측 사례). |
+| 근거 파일 | `fix_refund_membership_reservation_orphan_draft_proposed.sql`(canonical) + rollback, `diagnose_refund_membership_reservation_orphan_readonly.sql`(진단), `tests/integration/refund-membership-reservation-orphan.test.ts`(REFUND-SEC-A~C, 신규) |
+| 완료 조건 | 사용자가 SQL 적용 → `npm run test:integration`으로 REFUND-SEC-A~C GREEN 확인. **기존 orphan 데이터(위 membership) 자체는 이 SQL이 정리하지 않음 — 그 3건의 확정 예약을 어떻게 처리할지(그대로 둘지/수동 취소할지)는 별도 판단 필요.** |
+
+**함수 본문 출처**: `refund_membership()`/`cancel_reservation()` 둘 다 이 저장소에 여러 파일에
+흩어져 재정의돼 있어(각각 2곳/4곳) `pg_get_functiondef`로 실제 Live 본문을 먼저 확인함 —
+`cancel_reservation()`은 `reservation_functions.sql` 버전과 달리 RES-001(수업 시작 후 취소
+불가, 10분 유예)/NOTIF-001(`cancel_source='MEMBER'`) 로직이 이미 추가돼 있었다(fulfill_order
+때와 같은 이유로 실측 확인 후 작성).
 
 **재현 시나리오(코드 확인)**: membership 구매 → 그 membership으로 미래 confirmed 예약 생성 →
 `refund_membership()`으로 self refund(`status='refunded'`, `remaining_count=0`) → 그 예약은
