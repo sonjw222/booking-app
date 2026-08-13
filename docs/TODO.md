@@ -393,26 +393,49 @@ reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시�
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
-### P2-1. 구글·카카오·애플 OAuth 운영 설정 (네이버는 별도 Edge Function 필요)
+### P2-1. 애플 OAuth 운영 설정 (구글·카카오·네이버는 완료 — 아래 참고)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **운영 설정 필요(외부 콘솔) — 앱 코드는 2026-08-07 social-auth 배치에서 보강됨** |
+| 현재 상태 | **의도적으로 보류 — 앱 코드는 2026-08-07 social-auth 배치에서 이미 완료됨.** 2026-08-13 사용자 결정: Apple Developer Program 가입비($99/년)가 Sign in with Apple 사용 조건과 동일한 멤버십이라, 실제 서비스 출시가 가까워져 개발자 계정을 만드는 시점에 이 설정도 함께 진행하기로 함(구글/카카오/네이버처럼 미리 할 이유가 없음 — 미리 가입해도 별도 이득 없이 연 구독만 먼저 시작되는 구조). |
 | 근거 파일 | `app/login/page.tsx`, `app/components/SessionWatcher.tsx`, `lib/authAccount.ts`, `AUTH_SETUP.md` |
 | 이번 배치에서 한 것 | `ensureAccountForCurrentUser()` 호출을 홈 화면 전용에서 앱 전체(SessionWatcher, SIGNED_IN/INITIAL_SESSION)로 옮겨 어느 페이지로 리다이렉트돼도 계정/프로필이 보장되도록 함. 소셜 버튼 로딩 상태(중복 클릭 방지)·OAuth 콜백 실패(`#error=...`) 감지 후 `/login?oauth_error=...`로 안내하는 처리 추가. 계정 연동(같은 이메일, 다른 provider) 정책은 `docs/08_Decision_Log.md` DEC-004로 명문화(자동 병합 안 함). |
-| 완료 조건 | Supabase Provider(Google/Kakao/Apple), 각 제공자 콘솔 설정, Redirect URL과 Vercel 환경을 구성하고 신규·기존 계정 로그인과 실패 callback을 실제 provider로 검증함(코드는 준비됐지만 이 콘솔 설정 자체는 Claude가 대신 할 수 없음) |
+| 완료 조건 | Supabase Apple Provider, Apple Developer 콘솔 설정(유료, 연 $99), Redirect URL과 Vercel 환경을 구성하고 신규·기존 계정 로그인과 실패 callback을 실제 provider로 검증함(코드는 준비됐지만 이 콘솔 설정 자체는 Claude가 대신 할 수 없음) |
 | 관련 문서 | [REQUIREMENTS 5-1, 6-2](./REQUIREMENTS.md), [ROUTES `/login`](./ROUTES.md), `AUTH_SETUP.md` 3절 |
 
-### P2-1b. 네이버 로그인 — Supabase 기본 미지원, 커스텀 Edge Function 필요
+### P2-1d. (2026-08-13, 완료) 구글 로그인 — Supabase 기본 provider 그대로 사용, 운영 반영 완료
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **미구현 — 별도 서버 코드 필요** |
-| 근거 파일 | `AUTH_SETUP.md` 3-3절 |
-| 내용 | 네이버는 Supabase가 기본 제공하는 OAuth provider 목록에 없다. `AUTH_SETUP.md`가 이미 권장하는 방식(네이버 access token을 Edge Function에서 받아 Supabase Admin API로 세션 발급)대로 Edge Function을 새로 작성해야 하는데, 네이버 개발자센터 Client ID/Secret 발급(외부 콘솔 작업)이 선행돼야 실제 왕복 검증이 가능하다. 지금은 버튼을 눌러도 "설정 안 됨" 안내만 뜨는 게 정상 동작. |
-| 완료 조건 | 네이버 Client ID/Secret 발급 + Edge Function 작성/배포 + Redirect URL 등록 + 신규·기존 계정 로그인 실제 검증 |
+| 현재 상태 | **완료. 실제 구글 계정으로 로그인 왕복 성공 확인.** |
+| 근거 파일 | `AUTH_SETUP.md` 3-0절 |
+| 내용 | 구글은 이메일/프로필이 민감하지 않은 기본 스코프라 카카오와 달리 별도 우회 없이 Supabase 기본 제공 Google provider를 그대로 사용. Google Cloud Console에서 OAuth 동의 화면(외부, 테스트 상태) + OAuth 클라이언트(웹 애플리케이션, Supabase Callback URL 등록) 생성 후 Client ID/Secret을 Supabase Google Provider 설정에 등록. |
+| 알려진 제약(기능 영향 없음) | 구글 로그인 동의 화면에 앱 이름 대신 `xxxxx.supabase.co 서비스로 로그인`이 표시됨 — Supabase 공용 도메인을 거치는 구조상 발생, `supabase.co`는 소유하지 않은 도메인이라 구글 "승인된 도메인"에 등록 불가. Supabase 커스텀 도메인(유료) 또는 완전 커스텀 OAuth 흐름 전환 시 해결 가능, 실사용 서비스 오픈 시점에 재검토(`AUTH_SETUP.md` 3-0절 참고). |
+| 검증 | 실제 구글 계정으로 로그인 성공 확인(사용자 직접 테스트). |
+
+### P2-1c. (2026-08-13, 완료) 카카오 로그인 — Supabase 기본 provider 불가, 커스텀 Edge Function으로 구현
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **완료. 실제 카카오 계정으로 로그인 왕복 성공 확인.** |
+| 근거 파일 | `AUTH_SETUP.md` 3-1절, `lib/kakaoAuth.ts`, `app/login/kakao-callback/page.tsx`, `supabase/functions/kakao-login/index.ts` |
+| 내용 | Supabase 기본 제공 Kakao provider는 `account_email` 스코프를 서버에서 강제로 요청하는데, 이 프로젝트 카카오 앱은 이메일 항목이 "권한없음"(비즈니스 앱 미전환)이라 `"Invalid scope: account_email"`로 거부됨을 실사용 중 발견. 클라이언트에서 `scopes` 옵션으로 우회 시도했으나 Supabase가 서버 쪽에서 고정 요청하는 스코프라 소용없었음 — 결국 네이버와 동일한 커스텀 Edge Function(Authorization Code 흐름 직접 완결)으로 전환해 해결. 네이버와 동일하게 합성 이메일(`kakao-<id>@kakao.socialauth.invalid`)을 정체성 기준으로 써서 DEC-004와 일관되게 함. |
+| 실제 발견된 버그 2건(수정 완료) | (1) Supabase secrets 최초 등록 시 Client Secret의 대문자 `I`를 소문자 `l`로 잘못 옮겨적어 `invalid_client`(KOE010) 발생 — 콘솔에서 직접 복사-붙여넣기로 재등록해 해결(운영 실수, `AUTH_SETUP.md`에 주의사항 추가). (2) 카카오 콘솔의 Redirect URI 등록 위치가 "카카오 로그인 → 일반/고급"이 아니라 "플랫폼 키 → Default REST API Key 수정" 화면으로 이동돼 있어(카카오 UI 개편) 처음에 "로그아웃 리다이렉트 URI"에 잘못 등록할 뻔함 — 올바른 위치 찾아 등록. |
+| 검증 | 실제 카카오 계정으로 로그인 → 콜백 → 세션 확립까지 실브라우저에서 성공 확인(사용자 직접 테스트). |
+
+### P2-1b. (2026-08-13, 완료) 네이버 로그인 — Supabase 기본 미지원, 커스텀 Edge Function으로 구현
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **완료. 실제 네이버 계정으로 로그인 왕복 성공 확인.** |
+| 근거 파일 | `AUTH_SETUP.md` 3-3절, `lib/naverAuth.ts`, `app/login/naver-callback/page.tsx`, `supabase/functions/naver-login/index.ts` |
+| 이번 배치에서 한 것 | 네이버 authorize URL 리다이렉트(`handleSocial("naver")`) + 콜백 화면(state CSRF 검증) + Edge Function(코드→access token 교환, 프로필 조회, `admin.generateLink`로 매직링크 token_hash 발급) + 클라이언트 `verifyOtp` 세션 확립까지 앱 코드 전체 구현. 네이버 실제 이메일이 아니라 네이버 회원번호로 만든 합성 이메일을 정체성 기준으로 써서 DEC-004(자동 병합 금지)와 일관되게 함. 네이버 개발자센터 앱 등록(Client ID/Secret 발급, Callback URL 등록) + `supabase login`/`link` + `functions deploy naver-login` + secrets 설정까지 사용자와 함께 실제로 진행. |
+| 실제 발견된 버그 2건(수정 완료) | (1) 터미널에서 Secret 값을 따옴표 없이 넘겨 셸이 특수문자를 잘못 해석해 "wrong client id / client secret pair" 발생 — 작은따옴표로 감싸서 재등록해 해결(코드 문제 아님, 운영 실수). (2) `app/login/naver-callback/page.tsx`가 `verifyOtp()`에 `token_hash`와 `email`을 같이 넘겨 Supabase Auth API가 "Only the token_hash and type should be provided"로 거부 — `email` 필드를 제거해 해결(진짜 코드 버그, 수정 커밋 필요). |
+| 검증 | 실제 네이버 계정으로 로그인 → 콜백 → 세션 확립까지 실브라우저에서 성공 확인(사용자 직접 테스트). |
 
 ### P2-2. Realtime publication과 문의·알림 RLS
 
@@ -1137,6 +1160,17 @@ P2-20 조사 과정에서 발견됐지만 이번 배치 범위 밖이라 코드 
 | 1 | [RES-002 #42](https://github.com/sonjw222/booking-app/issues/42) | `fetchMonthData()`의 `myMems` 쿼리가 PostgREST 1000행 캡 미대응 | **2026-08-11 완료** — `classRows`/`fetchUsableMembershipsByClass`와 동일한 `.range()` 페이지네이션을 `myMems`에도 적용(`lib/reservations.ts`). 회귀 테스트 `tests/integration/month-data-memberships-row-limit-regression.test.ts` 추가(1005개 필러 membership 뒤의 target membership이 여전히 감지되는지, 자녀 프로필 공유 구조도 함께 확인). SQL 변경 없음(순수 코드 수정). 전체 CI 2연속 Green으로 검증됨(run `31459078105`/`31460392240`) |
 | 2 | [TEST-004 #45](https://github.com/sonjw222/booking-app/issues/45) | `classes` 테이블 공유 테스트센터 오염(1000행 캡, 최소 914건) | **2026-08-11 완료** — 재진단 결과 실제로는 1761건까지 누적(22개 title_prefix 그룹, 최대 기여자: `admin-assignment-security.test.ts`의 "성공경로-*" 8종 ~812건, `diagnose-settings-live-values.test.ts`의 "DIAG 일일한도" 141건 등). `tests/integration/setup.ts`의 `getOrCreateOwnedTestCenter()`에 self-healing sweep을 추가(start_time이 1시간 이상 과거인 class를 해당 테스트센터에서 자동 정리) — 사실상 모든 통합 테스트 파일이 이 함수를 beforeAll에서 호출하므로 파일마다 정리 로직을 따로 만들지 않고 스위트 전체가 자동으로 self-healing된다. 별도로 `diagnose-settings-live-values.test.ts`(RLS 기반 `cleanupTestClass` 사용 — confirmed 상태 예약의 delete가 조용히 실패해 **매 실행 결정적으로 leak**하던 실제 원인 발견)를 `daily-book-limit-wiring.test.ts`로 정리(당일예약 describe는 `operational-settings-wiring.test.ts`와 완전 중복이라 제거, 일일한도 describe는 admin 기반 cleanup으로 교체해 유지). 이미 쌓인 1761건은 별도 cleanup SQL 없이 CI 실행에서 sweep이 자동으로 정리함(모두 start_time이 이미 과거라 즉시 대상) — SQL 불필요. 전체 CI 2연속 Green으로 검증됨(run `31459078105`/`31460392240`) |
 | 3 | [TEST-003 #43](https://github.com/sonjw222/booking-app/issues/43) | `daily-book-limit.spec.ts` 잔여 CI 인프라 플레이키니스 | **2026-08-11 완료** — 실제 실패 로그(run `31393468107`)를 직접 조사해 "그냥 flaky"로 단정하지 않고 정확한 원인 추적: `app/reservation/page.tsx`의 `doReserve()`/`handleCancel()`이 RPC 성공 → 시트 닫힘 → `await load()`(전체 재조회) 순서로 동작해, 시트가 닫히는 시점과 `.class-row` 버튼이 "예약"↔"취소"로 갱신되는 시점 사이에 실제 간격이 있음을 확인. 이 파일은 예약/취소 왕복을 최대 9회 반복해 CI 부하 시 그 간격이 Playwright 기본 expect timeout(10초)을 넘기는 사례가 실측됨(첫 시도 실패 → 재시도 통과, 앱/RPC 버그 아님 — 예약 자체는 이미 성공한 뒤였음). 분류: CI 인프라/타이밍(app bug/test bug 아님). 수정: 정확히 이 버튼 상태 assert 5곳만 timeout을 20초로 늘림(무조건적인 전체 timeout 증가 아님, 진단된 병목에만 적용). 전체 CI 2연속 Green으로 검증됨(run `31459078105`/`31460392240`) |
+
+### P1-18. (2026-08-13, SQL 적용 + Edge Function 배포 완료 — 실제 탈퇴 왕복 수동 QA만 남음) 계정 탈퇴(소프트 삭제)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **운영 반영 완료.** `add_account_deactivation.sql` 사용자가 SQL Editor에서 적용(`accounts.deactivated_at` 컬럼 생성을 REST API로 직접 재검증함) + `supabase functions deploy delete-account` 배포 완료(필요한 시크릿 `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` 전부 프로젝트 기본 제공값으로 이미 충족) |
+| 근거 파일 | `app/settings/account/page.tsx`, `lib/accountDeletion.ts`, `supabase/functions/delete-account/index.ts`, `add_account_deactivation.sql`, `docs/platform-spec/epics/EPIC_03_Authentication.md` AUTH-08 |
+| 이번 배치에서 한 것 | 사용자와 방식 확정(소프트 삭제 — 예약/주문/결제 등 기존 데이터는 지우지 않음). `accounts.deactivated_at` 컬럼 추가(RLS는 기존 "본인 계정 수정" 정책이 그대로 커버해 별도 정책 불필요). `delete-account` Edge Function이 호출자 본인 확인 후 `deactivated_at`을 채우고 `auth.users`를 밴(`ban_duration`)해 재로그인을 막음. `app/settings/account`에 탈퇴 UI 추가 — 이메일 계정은 현재 비밀번호 재인증, 소셜 계정은 확인 문구 입력(AUTH-08 "최근 재인증" 요구를 소셜 provider 재로그인 왕복까지는 이번 범위에서 구현하지 않음 — 아래 남은 작업 참고). 처리 성공 시 `signOut()` + `/login?withdrawn=1`로 안내. `npm run build` 통과 확인. |
+| 남은 작업 | (1) 소셜 로그인 계정의 진짜 재인증(현재는 확인 문구로 낮은 문턱만 둠) (2) 탈퇴 회원이 매니저 쪽 회원 검색/명단에 계속 노출되는지 등 후속 화면 영향 검토 (3) 실제 탈퇴 왕복 수동 QA(화면에서 끝까지 눌러서 재로그인 차단까지 확인) |
+| 관련 문서 | `docs/platform-spec/epics/EPIC_03_Authentication.md` AUTH-08 |
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
 

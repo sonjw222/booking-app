@@ -163,6 +163,19 @@ Superseded
   기반 매칭을 시도하지 않는다.
 - **Related Documents**: `AUTH_SETUP.md`(provider별 콘솔 설정), `lib/authAccount.ts`,
   `docs/TODO.md`
+- **Addendum (2026-08-13, 네이버 로그인 구현)**: 네이버는 Supabase 기본 provider가 아니라
+  `supabase/functions/naver-login`이 직접 Supabase 사용자를 찾거나 만든다 — 이때도 이 정책을
+  그대로 지키기 위해 네이버가 주는 실제 이메일을 식별자로 쓰지 않고, 네이버 고유 회원번호로
+  합성한 이메일(`naver-<id>@naver.socialauth.invalid`)을 식별자로 쓴다. 실제 이메일을 그대로
+  썼다면 이미 다른 방식(이메일/구글 등)으로 가입된, 우연히 같은 이메일을 쓰는 계정에 자동으로
+  로그인돼버려 이 provider만 정책을 조용히 어겼을 것이다.
+- **Addendum (2026-08-13, 카카오 로그인 구현)**: 카카오도 같은 이유로 커스텀 Edge Function
+  (`supabase/functions/kakao-login`)을 쓴다 — 다만 이유는 네이버와 다르다. Supabase 기본
+  제공 Kakao provider는 `account_email` 스코프를 서버에서 강제로 요청하는데, 이 프로젝트의
+  카카오 앱은 이메일 항목이 "권한없음"(비즈니스 앱 미전환) 상태라 애초에 Supabase 기본
+  연동 자체가 동작하지 않았다(`AUTH_SETUP.md` 3-1절). 이메일을 요청하지 않으므로 네이버와
+  동일하게 카카오 고유 회원번호로 합성한 이메일(`kakao-<id>@kakao.socialauth.invalid`)을
+  식별자로 쓴다.
 
 ---
 

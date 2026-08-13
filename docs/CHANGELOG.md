@@ -8,6 +8,76 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-13 — 네이버 로그인 Edge Function 구현 + 회원가입/소셜 로그인 계정 부트스트랩 레이스 컨디션 수정
+
+- **회원가입 레이스 컨디션 수정**: `app/login/page.tsx`의 `handleSignup()`이 `signUp()` 직후
+  자기 손으로 `accounts`(전화번호/매니저 여부 포함) + `profiles`(+매니저면 `centers`)를
+  만드는데, 앱 전체에 마운트된 `SessionWatcher`가 같은 `SIGNED_IN` 이벤트를 듣고
+  `ensureAccountForCurrentUser()`를 동시에 호출해 `accounts.auth_id`(unique) 위반으로
+  가입이 종종 "계정 생성 중 문제가 발생했어요"로 실패했다(실제로는 SessionWatcher가 먼저
+  전화번호/매니저 정보 없는 반쪽짜리 계정을 만들어버린 것). `lib/authAccount.ts`에
+  `setBootstrapSuppressed()`를 추가해 `handleSignup()`이 전체 흐름(계정+프로필+센터 생성 →
+  로그아웃)을 끝낼 때까지 전역 부트스트랩을 끄도록 수정.
+- **네이버 로그인 구현**: Supabase가 기본 지원하지 않는 provider라 커스텀 OAuth
+  Authorization Code 흐름을 새로 구현. `supabase/functions/naver-login`(Edge Function —
+  코드→access token 교환, 프로필 조회, `admin.generateLink`로 매직링크 `token_hash` 발급),
+  `lib/naverAuth.ts`(authorize URL 리다이렉트 + state CSRF 토큰), `app/login/naver-callback`
+  (콜백 화면, `verifyOtp`로 실제 세션 확립). 네이버의 실제 이메일이 아니라 네이버
+  회원번호로 합성한 이메일을 계정 식별자로 써서 DEC-004(provider 간 이메일 자동 병합
+  금지, `docs/08_Decision_Log.md`)와 일관되게 함. 설정 절차는 `AUTH_SETUP.md` 3-3절.
+  운영에는 네이버 개발자센터 Client ID/Secret 발급, Edge Function 배포, secrets/환경변수
+  등록이 필요함(외부 콘솔 작업, `docs/TODO.md` P2-1b).
+- 회원가입 코드는 `npm run build` 통과 확인, 실제 네이버 계정 왕복 테스트는 위 외부 설정
+  완료 후 수동 QA 필요.
+- **계정 탈퇴(소프트 삭제) 신규 구현**: 로그아웃/비밀번호 변경만 있고 탈퇴 기능 자체가
+  없던 걸 발견해(`docs/TODO.md` P1-18) 사용자와 방식(소프트 삭제 — 예약/주문/결제 이력은
+  지우지 않음)을 확정하고 구현. `add_account_deactivation.sql`(`accounts.deactivated_at`
+  컬럼 추가, 적용 대기 — 사용자 승인 필요), `supabase/functions/delete-account`(본인 확인
+  후 `deactivated_at` 기록 + `auth.users` 밴으로 재로그인 차단), `app/settings/account`에
+  탈퇴 UI(이메일 계정은 비밀번호 재인증, 소셜 계정은 확인 문구 입력) 추가. 성공 시
+  `/login?withdrawn=1`로 안내. `npm run build` 통과 확인.
+- **(같은 날 후속) 계정 탈퇴 운영 반영 완료**: 사용자가 `add_account_deactivation.sql`을 SQL
+  Editor에서 적용(REST API로 `accounts.deactivated_at` 컬럼 생성 재검증함) + CLI
+  로그인/링크 후 `supabase functions deploy delete-account` 배포 완료. `naver-login`과
+  마찬가지로 `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`는 프로젝트
+  기본 제공 시크릿이라 추가 설정 없이 바로 동작함. 실제 화면에서 끝까지 눌러보는 수동
+  QA만 남음.
+- **(같은 날 후속) 네이버 로그인 운영 반영 + 실사용 버그 2건 수정**: 네이버 개발자센터
+  앱 등록(Client ID/Secret) + `supabase functions deploy naver-login` + secrets 설정까지
+  사용자와 함께 진행. 과정에서 실제 버그 2건 발견·수정 — (1) 터미널에서 Secret 값을
+  따옴표 없이 넘겨 셸이 특수문자를 잘못 해석해 "wrong client id / client secret pair"
+  발생(운영 실수, 작은따옴표로 재등록해 해결). (2)
+  `app/login/naver-callback/page.tsx`가 `supabase.auth.verifyOtp()`에 `token_hash`와
+  `email`을 동시에 넘겨 "Only the token_hash and type should be provided"로 거부됨(진짜
+  코드 버그) — `email` 필드 제거로 수정, `npm run build` 통과 확인. 실제 네이버 계정으로
+  로그인 → 콜백 → 세션 확립까지 실브라우저에서 최종 성공 확인(`docs/TODO.md` P2-1b).
+- **(같은 날 후속) 카카오 로그인 — Supabase 기본 provider 포기, 네이버와 동일한 커스텀
+  Edge Function으로 전환**: 원래 계획(Supabase 기본 제공 Kakao provider)대로 콘솔 설정을
+  마쳤는데도 실제 로그인 시도에서 `"Invalid scope: account_email"`로 계속 실패 — 이
+  프로젝트 카카오 앱이 이메일 항목 "권한없음"(비즈니스 앱 미전환) 상태인데 Supabase가
+  서버 쪽에서 `account_email` 스코프를 무조건 같이 요청하기 때문임을 확인. 클라이언트
+  `scopes` 옵션으로 우회를 먼저 시도했으나 서버 고정 스코프라 효과 없어, `naver-login`과
+  동일한 패턴으로 `supabase/functions/kakao-login`(Authorization Code 흐름 직접 완결,
+  `lib/kakaoAuth.ts`, `app/login/kakao-callback`)을 새로 구현해 완전히 우회함. 이 과정에서
+  실사용 버그 2건 추가 발견·수정 — (1) 카카오 콘솔 Client Secret 값의 대문자 `I`를 소문자
+  `l`로 잘못 옮겨적어 `invalid_client`(KOE010) 발생(콘솔 직접 복사로 해결, 운영 실수).
+  (2) 카카오 콘솔 개편으로 Redirect URI 등록 위치가 "플랫폼 키 → REST API 키 수정" 화면으로
+  이동돼 있어 처음엔 "로그아웃 리다이렉트 URI"에 잘못 등록할 뻔함(위치 찾아 수정). 실제
+  카카오 계정으로 로그인 → 콜백 → 세션 확립까지 실브라우저에서 최종 성공 확인
+  (`docs/TODO.md` P2-1c). `npm run build` 통과 확인.
+- **(같은 날 후속) 구글 로그인 운영 반영 완료**: 구글은 이메일/프로필이 민감하지 않은 기본
+  스코프라 카카오 같은 우회 없이 Supabase 기본 제공 Google provider 그대로 사용. Google
+  Cloud Console에서 OAuth 동의 화면 + OAuth 클라이언트(웹 애플리케이션) 생성 후
+  Client ID/Secret을 Supabase Google Provider에 등록, 실제 구글 계정으로 로그인 성공
+  확인(`docs/TODO.md` P2-1d). 알려진 제약 하나 발견 — 로그인 동의 화면에 앱 이름 대신
+  Supabase 프로젝트 도메인이 표시되는데, 소유하지 않은 도메인이라 구글 "승인된 도메인"에
+  등록해 고칠 수 없음(Supabase 커스텀 도메인/완전 커스텀 OAuth 흐름 필요 — 기능에는 영향
+  없어 실사용 서비스 오픈 시점으로 미룸, `AUTH_SETUP.md` 3-0절).
+- **(같은 날) 애플 로그인 콘솔 설정은 의도적으로 보류**: $99/년 Apple Developer 가입비가
+  Sign in with Apple 사용 조건과 동일한 멤버십이라, 서비스 출시가 가까워져 개발자 계정을
+  만드는 시점에 함께 진행하기로 사용자와 결정. 앱 코드는 이미 완성돼 있어 계정만 생기면
+  바로 이어서 설정 가능(`docs/TODO.md` P2-1, `AUTH_SETUP.md` 3-2절).
+
 ## 2026-08-11 — 담당 강사 복수 지정 + 수강권 허용 정책 변경 Batch 최종 완료: 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
 
 두 번째 SQL(`add_class_trainer_names_rpc_draft_proposed.sql`)까지 적용 완료되면서 이

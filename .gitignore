@@ -52,3 +52,6 @@ next-env.d.ts
 /playwright-report/
 /test-results/
 /blob-report/
+
+# Supabase CLI 로컬 상태/캐시(project-ref, linked-project.json 등) — 머신별로 생성됨
+supabase/.temp/
