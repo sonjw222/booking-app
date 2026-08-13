@@ -86,7 +86,7 @@ test("모든 수강권 사용 가능 수업 — 사용할 수강권 목록에 go
 
   // 실제 예약도 진행해 reserveWithMembership()이 정말로 pass로만 예약되는지 끝까지 확인한다.
   await page.getByRole("button", { name: "예약하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await expect(
     page.locator(".class-row", { hasText: "E2E 수강권목록-goods제외" }).getByRole("button", { name: "취소" })
   ).toBeVisible();

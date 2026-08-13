@@ -143,7 +143,7 @@ test("휴무일 생성→회원화면 예약차단 확인→삭제→새로고�
   await selectKstCalendarDay(memberPage, holidayDate);
   await memberPage.locator(".class-row", { hasText: "E2E 휴무일복구-기존" }).getByRole("button", { name: "예약" }).click();
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await expect(
     memberPage.locator(".class-row", { hasText: "E2E 휴무일복구-기존" }).getByRole("button", { name: "취소" })
   ).toBeVisible();
@@ -151,7 +151,7 @@ test("휴무일 생성→회원화면 예약차단 확인→삭제→새로고�
   // ⑦ 새 수업도 예약 가능한지 확인
   await memberPage.locator(".class-row", { hasText: "E2E 휴무일복구-신규" }).getByRole("button", { name: "예약" }).click();
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await expect(
     memberPage.locator(".class-row", { hasText: "E2E 휴무일복구-신규" }).getByRole("button", { name: "취소" })
   ).toBeVisible();

@@ -95,7 +95,7 @@ test("관리자: 예약자 출석 → 결석(노쇼) → 되돌리기, 취소된
   const memberPage = await memberContext.newPage();
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await memberContext.close();
 
   await gotoManagerClassesDay(page, kstDate);
@@ -138,7 +138,7 @@ test("관리자: 대기(waitlisted) 예약은 출석/결석 버튼이 보이지 
   const memberPage = await memberContext.newPage();
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await memberContext.close();
 
   // 대기로 등록될 두 번째 예약은 admin insert로 직접 만든다(별도 회원 브라우저 로그인 없이).
@@ -192,7 +192,7 @@ test("관리자: 프라이빗 수업에서도 출석/결석 처리가 동일하�
   const memberPage = await memberContext.newPage();
   await memberPage.goto(reservationDeepLink(privateCls.id, privateCls.start_time));
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await memberContext.close();
 
   await gotoManagerClassesDay(page, kstDate);

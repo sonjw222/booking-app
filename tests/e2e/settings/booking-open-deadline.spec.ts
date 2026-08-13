@@ -92,7 +92,7 @@ test("예약 오픈 7일 전 — 6일 뒤 수업은 오픈 기한 안쪽(예약 
   await selectKstCalendarDay(page, kstDateStr(cls.startTime));
   await page.locator(".class-row", { hasText: "E2E 예약오픈-가능" }).getByRole("button", { name: "예약" }).click();
   await page.getByRole("button", { name: "예약하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await expect(
     page.locator(".class-row", { hasText: "E2E 예약오픈-가능" }).getByRole("button", { name: "취소" })
   ).toBeVisible();

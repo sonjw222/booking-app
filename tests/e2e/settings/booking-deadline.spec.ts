@@ -74,7 +74,7 @@ test("예약마감 2시간 전 — 3시간 뒤 수업은 예약 성공 (실브�
   // toast(2.5초 자동소멸)를 기다리는 대신, 실제 상태 변화로 성공을 확인한다: 예약이
   // 성공하면 모달이 닫히고(doReserve의 setConfirmClass(null)) 그 수업 행이 "취소"
   // 버튼으로 바뀐다(다시 데이터를 불러온 뒤 mine=true가 됨).
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await expect(
     page.locator(".class-row", { hasText: "E2E 예약가능기한-성공" }).getByRole("button", { name: "취소" })
   ).toBeVisible();
@@ -120,7 +120,7 @@ test("운영설정 예약마감 30분(관리자 화면 저장) — 40분 전 성
   createdClassIds.push(okCls.id);
   await page.goto(reservationDeepLink(okCls.id, okCls.startTime));
   await page.getByRole("button", { name: "예약하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await expect(
     page.locator(".class-row", { hasText: "E2E 운영마감-40분전" }).getByRole("button", { name: "취소" })
   ).toBeVisible();

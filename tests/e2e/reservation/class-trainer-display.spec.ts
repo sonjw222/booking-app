@@ -68,7 +68,7 @@ async function assignTrainerViaUi(page: Page, kstDate: string, classTitle: strin
   if (await trainerSearch.count() > 0) await trainerSearch.fill(trainerName);
   await page.locator(".class-trainers-list .filter-chip", { hasText: trainerName }).click();
   await page.getByRole("button", { name: "수정하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
 }
 
 test.beforeAll(async () => {

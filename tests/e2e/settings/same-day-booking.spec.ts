@@ -74,7 +74,7 @@ test("당일예약 ON→예약성공→취소→OFF저장→새로고침→다�
   // ② 회원 예약 → 예약 성공 (모달이 닫히고 그 수업 행이 "취소" 버튼으로 바뀜)
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   const cancelButton = memberPage.locator(".class-row", { hasText: "E2E 당일예약토글" }).getByRole("button", { name: "취소" });
   await expect(cancelButton).toBeVisible();
 

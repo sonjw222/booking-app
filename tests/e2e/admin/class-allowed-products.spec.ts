@@ -135,7 +135,7 @@ test("관리자: 검색으로 특정 pass 1개만 선택 → 저장 → 재진�
   await expect(page.locator(".filter-chip", { hasText: "P3 패스A" })).toHaveCount(0);
   await page.locator(".filter-chip", { hasText: "P3 패스B" }).click();
   await page.getByRole("button", { name: "수정하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
 
   // 재진입 시 선택값이 그대로 로드되는지 확인
   // ⚠ .filter-chip.on은 이 폼 안에서 그룹/프라이빗 토글·룸 선택에도 재사용되는 클래스라
@@ -169,7 +169,7 @@ test("관리자: 특정 pass 여러 개 허용 → 지정된 것만 표시, 나�
   await page.locator(".filter-chip", { hasText: "P3 패스A" }).click();
   await page.locator(".filter-chip", { hasText: "P3 패스C" }).click();
   await page.getByRole("button", { name: "수정하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
@@ -198,7 +198,7 @@ test("관리자: 전체 선택(전체 허용으로 전환) → 회원 화면에 
   await page.getByRole("button", { name: "전체 해제" }).click();
   await page.locator(".filter-chip", { hasText: "P3 패스D" }).click();
   await page.getByRole("button", { name: "수정하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
 
   await page.locator(".class-row", { hasText: "P3 그룹수업-전체허용" }).click();
   const allChips = page.locator(".class-allowed-products-list .filter-chip");
@@ -208,7 +208,7 @@ test("관리자: 전체 선택(전체 허용으로 전환) → 회원 화면에 
   await page.getByRole("button", { name: "전체 선택(모든 수강권 허용)" }).click();
   await expect(passChipsOn2).toHaveCount(totalChips);
   await page.getByRole("button", { name: "수정하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
 
   // 회귀 검증(P3 감사 중 실제로 발견한 버그): class_allowed_products 저장(선택이든 전체
   // 선택이든)은 membership_schedule_rules를 절대 건드리면 안 된다 — 이 둘은 완전히 독립된
@@ -265,7 +265,7 @@ test("프라이빗 수업에서도 예약 가능 수강권 선택이 동일하�
   await page.locator('input[placeholder="수강권 이름 검색"]').fill("패스A");
   await page.locator(".filter-chip", { hasText: "P3 패스A" }).click();
   await page.getByRole("button", { name: "수정하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
@@ -275,7 +275,7 @@ test("프라이빗 수업에서도 예약 가능 수강권 선택이 동일하�
   await expect(passList).toContainText("P3 패스A");
   // 실제 예약도 정상 성립하는지(프라이빗 정원/동시예약 정책과 충돌 없는지)까지 확인.
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await expect(
     memberPage.locator(".class-row", { hasText: "P3 프라이빗수업-특정1개" }).getByRole("button", { name: "취소" })
   ).toBeVisible();

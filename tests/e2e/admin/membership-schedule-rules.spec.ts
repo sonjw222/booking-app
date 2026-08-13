@@ -210,7 +210,7 @@ test("D+F(override)+K: 특정 수강권 직접 지정 시 schedule rule 불일�
   await expect(overrideNote).toContainText(RESTRICTED_PASS_NAME);
 
   await page.getByRole("button", { name: "수정하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
 
   // K(재확인): 재진입해도 override 안내가 그대로 보인다(danger 경고 아님).
   await page.locator(".class-row", { hasText: uniqueTitle }).click();
@@ -253,7 +253,7 @@ test("J: 방금 새로 발급된 membership도 같은 상품이 직접 지정돼
   await gotoManagerClassesDay(page, kstDate);
   await restrictClassToRestrictedPassViaUi(page, uniqueTitle);
   await page.getByRole("button", { name: "수정하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
 
   // "방금 구매"를 흉내내기 위해 이 프로필의 기존 membership을 지우고 새로 하나 발급한다
   // (실제 checkout/confirmPayment 경로와 동일하게 memberships 행이 새로 생기는 것만

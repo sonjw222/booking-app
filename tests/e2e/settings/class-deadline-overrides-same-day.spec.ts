@@ -68,7 +68,7 @@ test("당일예약 허용 OFF여도, 수업에 명시된 예약마감 전이면 
 
   await page.goto(reservationDeepLink(cls.id, cls.startTime));
   await page.getByRole("button", { name: "예약하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await expect(
     page.locator(".class-row", { hasText: "E2E 마감우선-성공" }).getByRole("button", { name: "취소" })
   ).toBeVisible();

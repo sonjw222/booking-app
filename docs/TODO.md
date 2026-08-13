@@ -1018,7 +1018,21 @@ manager_centers with_check의 centers 참조 확인([14]) 진단 쿼리도 추�
 참고용으로만 검증됨). 전용 RPC/UI는 별도 제품 결정 필요. 더 근본적으로는 PART 3의 C안(센터
 생성+오너 부트스트랩을 atomic RPC로 통합, self RLS 분기 자체 제거)을 장기 아키텍처로 권장.
 
-### SEC-114-A/C. (2026-08-12~13, canonical 확정 — 미적용) `auto_book_membership()` authorization bypass(P0)
+**✅ 2026-08-13 별건 — E2E `.sheet-overlay` 타이밍 플레이키니스 근본 수정(테스트 파일만,
+SQL/app 무관)**: 이 PR의 CI를 여러 차례 재실행하는 과정에서 `.sheet-overlay` 관련 실패가
+매번 다른 파일/테스트에서 반복 발생함을 관찰 — `usable-pass-excludes-goods.spec.ts` 등 3연속
+동일 지점 실패까지 나와 단순 우연이 아닐 가능성을 사용자가 지적, 원인 조사함. 확인 결과:
+`await expect(page.locator(".sheet-overlay")).toHaveCount(0)` 패턴(예약 확정 클릭 후 확인
+시트가 닫히길 기다림)이 `tests/e2e/` 전역 13개 파일 33곳에서 playwright.config.ts의 기본
+`expect.timeout: 10_000`(10초)를 그대로 쓰고 있었다 — 반면 이미 알려진 동일 원인(공유
+테스트 계정에 누적된 데이터로 응답이 느려짐, `usable-pass-excludes-goods.spec.ts` 자체
+주석에 "CI에서 28개까지 확인됨" 기록)으로 인해 daily-book-limit.spec.ts는 이미 120초,
+usable-pass-excludes-goods.spec.ts의 첫 렌더링 대기는 이미 30초로 개별 연장돼 있었지만,
+이 특정 "예약 확정 후 시트 닫힘" 지점만 예외적으로 기본 10초로 남아있었다. **manager_centers/
+center_roles/centers/has_permission()(이번 배치가 수정한 전부) 중 어느 것도 회원의 일반
+예약 흐름(reserve_with_membership 등)에 관여하지 않아, 이번 SQL 변경이 원인이 아님을 코드
+경로로도 확인함.** 33곳 전부 `toHaveCount(0, { timeout: 30_000 })`로 통일(기존에 이미 다른
+이유로 20000ms가 지정돼 있던 곳 3곳은 건드리지 않음). 로직 변경 없음, 테스트 파일만 수정.
 
 | 필드 | 내용 |
 |---|---|

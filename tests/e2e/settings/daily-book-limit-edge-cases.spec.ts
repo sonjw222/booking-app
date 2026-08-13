@@ -82,7 +82,7 @@ test("취소하면 그만큼 하루 한도가 다시 채워져 재예약이 가�
   // 1/1 — 성공
   await page.locator(".class-row", { hasText: "E2E 한도재충전 1" }).getByRole("button", { name: "예약" }).click();
   await page.getByRole("button", { name: "예약하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await expect(page.locator(".class-row", { hasText: "E2E 한도재충전 1" }).getByRole("button", { name: "취소" })).toBeVisible();
 
   // 한도(1) 도달 — 2번째 수업은 실패해야 한다
@@ -104,7 +104,7 @@ test("취소하면 그만큼 하루 한도가 다시 채워져 재예약이 가�
   // 이제 2번 수업 예약이 성공해야 한다(취소로 한도가 다시 채워졌으므로)
   await page.locator(".class-row", { hasText: "E2E 한도재충전 2" }).getByRole("button", { name: "예약" }).click();
   await page.getByRole("button", { name: "예약하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await expect(page.locator(".class-row", { hasText: "E2E 한도재충전 2" }).getByRole("button", { name: "취소" })).toBeVisible();
 });
 
@@ -137,7 +137,7 @@ test("대기 등록도 하루 한도에 포함된다 (실브라우저)", async (
   // 정원이 찼으므로 목록 버튼은 "예약"이 아니라 "대기"로 표시된다.
   await page.locator(".class-row", { hasText: "E2E 한도대기 정원마감" }).getByRole("button", { name: "대기" }).click();
   await page.getByRole("button", { name: "예약하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   const waitlistedRow = page.locator(".class-row", { hasText: "E2E 한도대기 정원마감" });
   await expect(waitlistedRow.getByText("대기중")).toBeVisible();
   await expect(waitlistedRow.getByRole("button", { name: "취소" })).toBeVisible();
@@ -173,7 +173,7 @@ test("회원 A와 회원 B의 하루 한도는 서로 독립적이다 (실브라
   await selectKstCalendarDay(page, kstDateStr(cls.startTime));
   await page.locator(".class-row", { hasText: "E2E 계정독립 공용수업" }).getByRole("button", { name: "예약" }).click();
   await page.getByRole("button", { name: "예약하기" }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await expect(page.locator(".class-row", { hasText: "E2E 계정독립 공용수업" }).getByRole("button", { name: "취소" })).toBeVisible();
 
   // 같은 센터/같은 날짜라도 회원 B는 아직 0회이므로, 같은 수업(정원 여유 있음)을 예약해도
@@ -182,7 +182,7 @@ test("회원 A와 회원 B의 하루 한도는 서로 독립적이다 (실브라
   await selectKstCalendarDay(userBPage, kstDateStr(cls.startTime));
   await userBPage.locator(".class-row", { hasText: "E2E 계정독립 공용수업" }).getByRole("button", { name: "예약" }).click();
   await userBPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(userBPage.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(userBPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await expect(userBPage.locator(".class-row", { hasText: "E2E 계정독립 공용수업" }).getByRole("button", { name: "취소" })).toBeVisible();
 
   await userBContext.close();

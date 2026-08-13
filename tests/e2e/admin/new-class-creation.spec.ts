@@ -196,7 +196,7 @@ test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → �
   await expect(page.locator(".perm-guide", { hasText: "모든 수강권" })).toBeVisible();
 
   await page.getByRole("button", { name: "등록하기", exact: true }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
 
   const newClass = await findClassByTitle(uniqueTitle);
   createdClassIds.push(newClass.id);
@@ -257,7 +257,7 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
   await expect(page.locator(".perm-guide", { hasText: "1개" })).toBeVisible();
 
   await page.getByRole("button", { name: "등록하기", exact: true }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
 
   const newClass = await findClassByTitle(uniqueTitle);
   createdClassIds.push(newClass.id);
@@ -314,7 +314,7 @@ test("TEST4: 신규 수업 → 사용 가능 수강권 없음 → 그 자리에�
   await expect(chip).toHaveClass(/on/);
 
   await page.getByRole("button", { name: "등록하기", exact: true }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
 
   const newClass = await findClassByTitle(uniqueTitle);
   createdClassIds.push(newClass.id);
@@ -412,7 +412,7 @@ test("TEST5: 신규 수업(모든 수강권 허용)에서도 goods는 사용 가
   await expect(page.locator(".perm-guide", { hasText: "모든 수강권" })).toBeVisible();
 
   await page.getByRole("button", { name: "등록하기", exact: true }).click();
-  await expect(page.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(page.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
 
   const newClass = await findClassByTitle(uniqueTitle);
   createdClassIds.push(newClass.id);
@@ -442,6 +442,6 @@ test("TEST6(대조군): 기존 방식(admin client 직접 insert)으로 만든 �
   await expect(memberPage.locator(".sheet-title", { hasText: "예약하시겠어요?" })).toBeVisible({ timeout: 20000 });
   await expect(memberPage.locator(".pass-pick-list")).toBeVisible();
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await memberContext.close();
 });

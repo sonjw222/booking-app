@@ -103,7 +103,7 @@ test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회
   for (let i = 0; i < offClasses.length; i++) {
     await memberPage.locator(".class-row", { hasText: offTitles[i] }).getByRole("button", { name: "예약" }).click();
     await memberPage.getByRole("button", { name: "예약하기" }).click();
-    await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
+    await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
     await expect(
       memberPage.locator(".class-row", { hasText: offTitles[i] }).getByRole("button", { name: "취소" })
     ).toBeVisible({ timeout: POST_ACTION_TIMEOUT });
@@ -142,14 +142,14 @@ test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회
 
   await memberPage.locator(".class-row", { hasText: "E2E 일일한도 1" }).getByRole("button", { name: "예약" }).click();
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await expect(
     memberPage.locator(".class-row", { hasText: "E2E 일일한도 1" }).getByRole("button", { name: "취소" })
   ).toBeVisible({ timeout: POST_ACTION_TIMEOUT });
 
   await memberPage.locator(".class-row", { hasText: "E2E 일일한도 2" }).getByRole("button", { name: "예약" }).click();
   await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
+  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 30_000 });
   await expect(
     memberPage.locator(".class-row", { hasText: "E2E 일일한도 2" }).getByRole("button", { name: "취소" })
   ).toBeVisible({ timeout: POST_ACTION_TIMEOUT });
