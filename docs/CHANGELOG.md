@@ -8,6 +8,66 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-14 (같은 날 후속4) — P0-2 migration ledger 전수 검증 + service_role GRANT 2건 수정 SQL
+
+루트 SQL 108개(schema.sql/add_*/fix_*) 전체를 파싱해 선언하는 테이블/컬럼/함수/트리거가
+라이브에 실제로 존재하는지 자동 대조 — 진짜 누락 0건(오탐 2건은 조사 후 해소: 정규식이
+한글 주석을 잘못 매칭한 케이스 1건, `add_center_category.sql`이 `schema.sql`에 처음부터
+있던 더 나은 설계(`centers.categories` 배열 컬럼)로 대체돼 폐기된 케이스 1건). GRANT는 이
+방식으로 못 잡아서 `fix_service_role_missing_grants_*` 8개 계열을 `information_schema`로
+직접 대조 — `class_allowed_products` UPDATE grant 누락, `center_holidays` GRANT 전체 0건
+(다른 세션 SEC-114 배치의 "permission denied for table center_holidays" 실패 원인으로
+확인, 공유함) 2건 발견. 수정 SQL 2개(+rollback) 작성
+(`fix_service_role_missing_grants_class_allowed_products_update.sql`,
+`fix_service_role_missing_grants_center_holidays.sql`) → **사용자가 SQL Editor에서 적용
+완료, `information_schema.role_table_grants` 재조회로 4개 권한 전부 반영 확인**. P0-2 완료.
+
+## 2026-08-14 — P0-6 문서 정정: 휴무일 수강권 미복구 버그는 이미 해결돼 있었음
+
+출시 전 남은 작업(P0-1 결제 연동은 사업자 문제로 보류, 그 외 사업자 불필요한 항목부터 진행)
+점검 중 P0-6(휴무일 강제 지정 시 취소된 예약의 수강권 횟수 미복구)을 고치려고 준비하다가,
+라이브 DB의 `add_holiday_safe()` 함수 본문을 직접 확인(`pg_get_functiondef`)한 결과 **이미
+수강권 복구 로직이 들어있음**을 발견. 2026-08-02 최초 발견 당시엔 Track B 규칙상 기록만
+하고 미수정으로 남겼는데, 이후 알림/이력보존 리팩터링이 목적이었던 별개 배치(NOTIF-001,
+커밋 `4679706`, `fix_holiday_history_and_notification_draft_proposed.sql`)가
+`add_holiday_safe()`를 DELETE 기반에서 UPDATE(status='cancelled') 기반으로 재설계하면서
+PR #32(closed·미merge)가 준비했던 수강권 복구 로직을 그대로 유지한 채 적용됨 — 커밋
+메시지가 P0-6을 언급하지 않아 이 TODO 항목과 교차 연결이 안 됐던 것. 코드/SQL 변경 없이
+`docs/TODO.md` P0-6 상태만 정정.
+
+## 2026-08-14 (같은 날 후속) — P0-3 핵심 RPC 10개 라이브 본문 전수 검증 완료
+
+`supabase db query --linked`(Supabase Management API 경유, DB 비밀번호 없이 CLI 로그인
+토큰만으로 라이브에 read-only 쿼리 가능)로 `reserve_class`/`cancel_reservation`/
+`fulfill_order`/`manager_set_attendance`/`usable_memberships`/`usable_memberships_for_classes`/
+`reserve_with_membership`/`auto_book_membership`/`has_permission`/`is_platform_admin` 10개
+전부의 라이브 `pg_get_functiondef()` 본문을 저장소 SQL과 정규화 대조. 결과: 전부 저장소의
+"가장 최근 의도"와 논리적으로 일치하거나 그보다 앞서 있음(뒤처지거나 정체불명인 RPC 0개).
+과정에서 다른 세션(PR #47/#50)이 이미 라이브에 적용한 보안 수정 2건(`manager_set_attendance`
+대기예약 직접확정 차단, `auto_book_membership` IDOR)을 발견 — 그중 `auto_book_membership`은
+그 세션의 draft SQL이 최신 `pass_selection_mode` 로직 이전 base로 작성된 것으로 보여, 그대로
+재적용 시 회귀 위험이 있음을 해당 세션에 공유함(그쪽에서 확인 후 즉시 반영 완료). `docs/TODO.md` P0-3만 갱신, 코드/SQL 변경 없음.
+
+## 2026-08-14 (같은 날 후속2) — P0-4 RLS 전수 스냅샷 (`docs/24_P0_4_RLS_Snapshot.md` 신규)
+
+같은 방식(`supabase db query --linked`)으로 `public` 스키마 65개 테이블 전체의 RLS 활성화
+여부 + 152개 정책의 USING/WITH CHECK 표현식을 조회. RLS 비활성화 테이블 0개, 정책 0개(완전
+차단) 테이블 15개는 전부 app/lib 코드 참조 0건이라 실사용 영향 없음(`docs/21_RLS_Gap_Analysis.md`
+SEC-009 결과와 일치), `USING(true)` 정책은 공개 마케팅 콘텐츠(후기/배너/룸/종목) SELECT
+4건뿐이고 위험한 전면 쓰기 허용 정책은 0건.
+
+## 2026-08-14 (같은 날 후속3) — P0-4 완료: 통합 테스트 스위트 전체 재실행으로 역할별 검증
+
+사용자가 `TEST_CENTER_ID`를 승인 상태로 바꿔주면서, 이전엔 "아직 승인되지 않은 센터예요"
+에러로 못 돌리던 예약/권한 경계 통합 테스트 전체(27개 파일, 161개 테스트)를 재실행 —
+**140 통과 / 5 실패 / 16 스킵**. `acl-003-permission-read`/`admin-assignment-security` 등이
+비로그인/회원/스태프/매니저/오너/플랫폼 운영자 경계를 이미 검증하고 있어 P0-4 완료 조건의
+"역할별 read/write 테스트 자동화"를 새로 만들지 않고 충족. 남은 실패 5건 조사 결과: 1건은
+테스트 파일 자체가 "SQL 미적용 전엔 의도적 FAIL"이라 명시한 알려진 상태(Mock 결제 전용,
+실제 결제 경로는 이미 정상), 나머지 4건은 다른 세션이 진행 중인 별도 보안 배치 전용
+테스트 파일(이 저장소에 없음)이라 그 세션에 상세 공유 완료 — 전부 P0-4 범위 밖으로 확인됨.
+`docs/TODO.md` P0-4를 완료로 갱신. 코드 변경 없음.
+
 ## 2026-08-13 — 네이버 로그인 Edge Function 구현 + 회원가입/소셜 로그인 계정 부트스트랩 레이스 컨디션 수정
 
 - **회원가입 레이스 컨디션 수정**: `app/login/page.tsx`의 `handleSignup()`이 `signUp()` 직후
@@ -77,6 +137,12 @@
   Sign in with Apple 사용 조건과 동일한 멤버십이라, 서비스 출시가 가까워져 개발자 계정을
   만드는 시점에 함께 진행하기로 사용자와 결정. 앱 코드는 이미 완성돼 있어 계정만 생기면
   바로 이어서 설정 가능(`docs/TODO.md` P2-1, `AUTH_SETUP.md` 3-2절).
+- **(같은 날) P0-5 정기 알림 스케줄러 SQL 작성**: 결제 연동(P0-1, 사업자 필요로 보류)을
+  제외하고 사업자 등록 없이 진행 가능한 출시 전 작업부터 시작 — `notify_upcoming_reservations()`/
+  `notify_expiring_passes()`가 함수만 있고 자동 실행되지 않던 것을, `pg_cron`(Supabase 전
+  플랜 무료 지원)으로 매일 KST 오전 9시 자동 실행되게 `add_notification_scheduler.sql` 작성.
+  `README.md` 5절도 "선택"에서 실제 자동화 안내로 갱신. 사용자가 SQL Editor에서 적용 완료
+  (`cron.schedule()`이 job id `1` 반환 확인) — 익일 실제 발생 여부만 남음(`docs/TODO.md` P0-5).
 
 ## 2026-08-11 — 담당 강사 복수 지정 + 수강권 허용 정책 변경 Batch 최종 완료: 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
 

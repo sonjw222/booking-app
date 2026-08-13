@@ -1,0 +1,2 @@
+-- fix_service_role_missing_grants_class_allowed_products_update.sql 롤백
+revoke update on class_allowed_products from service_role;

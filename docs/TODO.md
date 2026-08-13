@@ -61,27 +61,48 @@
 
 이전 문구(참고용): 과거 “결제하기”는 `orders.status = pending` 주문만 만들고 매니저가 수동 발급했습니다. 지금은 Mock 결제 성공 시 즉시 자동 발급되지만, 이는 **테스트 결제**이며 실제 결제가 아닙니다 — 실제 PG 연동 전까지는 이 사실이 화면 문구에 명확히 표시돼야 합니다(현재 checkout 화면에 "(Mock)" 표기로 반영함).
 
-### P0-2. 운영 DB migration ledger와 최종 객체 검증
+### P0-2. (2026-08-14, 완료) 운영 DB migration ledger와 최종 객체 검증
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **확인 필요** |
-| 근거 파일 | 루트 SQL 67개, `schema.sql`, `reservation_functions.sql`, `README.md`, `docs/DATABASE.md` |
-| 완료 조건 | 운영 DB에 적용된 migration 파일·순서·적용일을 기록하고, 새 환경에서 같은 순서로 재현됨. 누락·중복 적용 여부를 확인함 |
+| 현재 상태 | **완료.** 루트 SQL 108개(최초 기록된 67개보다 증가) 전체를 파싱해 선언하는 테이블/컬럼/함수/트리거가 라이브에 실제로 존재하는지 자동 대조 — **진짜 누락 0건**(오탐 2건은 조사로 해소, 아래 참고). GRANT/REVOKE는 이 자동 대조로 못 잡아서 `service_role` GRANT만 별도 수동 점검, 2건 발견 → 수정 SQL 작성 → **사용자가 SQL Editor에서 적용 완료, `information_schema.role_table_grants` 재조회로 4개 권한(select/insert/update/delete) 전부 반영됨을 직접 재확인함**. |
+| 근거 파일 | 루트 SQL 108개, `schema.sql`, `reservation_functions.sql`, `README.md`, `docs/DATABASE.md`, `fix_service_role_missing_grants_class_allowed_products_update.sql`(신규), `fix_service_role_missing_grants_center_holidays.sql`(신규) |
+| 이번 배치에서 한 것 | (1) `supabase db query --linked`로 라이브 `public` 스키마 전체 인벤토리(테이블 65개/컬럼 609개/함수 60개/트리거 7개) 조회. (2) 108개 SQL 파일을 정규식으로 파싱해 `create table`/`alter table add column`/`create or replace function`/`create trigger` 선언을 추출, 라이브 인벤토리와 자동 대조. 오탐 2건 확인·해소: `add_rooms_fix.sql`은 한글 주석을 정규식이 잘못 매칭한 파싱 버그(실제 문제 없음, `rooms` 테이블은 정상 존재), `add_center_category.sql`(`centers.category` 단일 컬럼 제안)은 실제로 라이브에 없는 게 맞지만 **폐기된 설계**로 확인됨 — `schema.sql` 22번째 줄에 처음부터 더 나은 방식(`centers.categories text[]` 배열 + `service_categories` 참조 테이블)이 채택돼 있고 `lib/home.ts`가 그 배열 컬럼을 실제로 사용 중이라, 이 단일 컬럼 제안 파일 자체가 안 쓰이는 게 정상. (3) `fix_service_role_missing_grants_*`(8개) 계열이 GRANT라 자동 검사 대상이 아니라 `information_schema.role_table_grants`로 직접 확인: `class_allowed_products`가 UPDATE만 빠짐(기존 fix 파일은 4개 권한을 다 요청했는데 3개만 반영된 상태), `center_holidays`는 GRANT가 아예 0건(다른 세션 SEC-114 배치의 "permission denied for table center_holidays" 실패 원인으로 확인, 그 세션에 공유함 — `orders`도 같은 증상이 보고됐었으나 이 저장소에서 근거 코드를 못 찾아 그 부분은 만들지 않음). 두 건 다 수정 SQL 작성(`fix_service_role_missing_grants_class_allowed_products_update.sql`, `fix_service_role_missing_grants_center_holidays.sql`, 각각 rollback 포함) → **사용자가 적용 완료**. |
+| 완료 조건 | ~~운영 DB에 적용된 migration 파일·순서·적용일을 기록하고... 누락·중복 적용 여부를 확인함~~ 완료. `fix_*.sql`(비RPC류) 개별 본문 수준 검증은 P0-3 수준 깊이로는 안 함(핵심 RPC 10개만 그렇게 함) — 필요시 별도 배치. |
 | 관련 문서 | [DATABASE 12절](./DATABASE.md), [DEVELOPMENT_RULES 6절](./DEVELOPMENT_RULES.md) |
 
 README의 큰 순서만으로 전체 migration을 재현할 수 있는지 검증되지 않았습니다. SQL 파일 목록을 실행 순서로 간주하면 안 됩니다.
 
-### P0-3. 핵심 RPC의 운영 최종 본문 확인
+### P0-3. (2026-08-14, 10개 전부 확인 완료) 핵심 RPC의 운영 최종 본문 확인
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **확인 필요** |
-| 근거 파일 | `reservation_functions.sql`, `wire_settings.sql`, `add_*.sql`, `fix_*.sql`, 특히 `fix_usable_memberships_shared.sql` |
-| 완료 조건 | 운영 DB에서 `pg_get_functiondef()`로 핵심 RPC 본문을 추출해 저장소의 의도한 최종본과 대조하고 역할별 회귀 테스트를 통과함 |
+| 현재 상태 | **완료. 10개 전부 `supabase db query --linked`(Management API 경유, DB 비밀번호 불필요)로 라이브 함수 본문을 직접 추출해 저장소 SQL과 정규화 대조함(공백/주석/`public.` 접두사/`$$`↔`$function$` 같은 포맷 차이는 무시하고 실제 로직만 비교).** |
+| 완료 조건 | ~~운영 DB에서 `pg_get_functiondef()`로 핵심 RPC 본문을 추출해 저장소의 의도한 최종본과 대조~~ 완료. 역할별 회귀 테스트 자동화는 P0-4 범위로 이관. |
 | 관련 문서 | [DATABASE 9절, 12-5](./DATABASE.md), [REQUIREMENTS 10절](./REQUIREMENTS.md) |
+
+**2026-08-14 최종 확인 결과 (10/10)**:
+
+| RPC | 결과 |
+|---|---|
+| `reserve_class` | ✅ `add_class_trainers_pass_selection_mode_draft_proposed.sql`과 완전 일치(search_path 하드닝만 추가) |
+| `reserve_with_membership` | ✅ 위와 동일 파일과 완전 일치 |
+| `usable_memberships` | ✅ 위와 동일 파일과 완전 일치 |
+| `usable_memberships_for_classes` | ✅ 위와 동일 파일과 완전 일치 |
+| `cancel_reservation` | ✅ `fix_reservation_cancel_grace_period_draft_proposed.sql`과 완전 일치(search_path 하드닝만 추가) |
+| `is_platform_admin` | ✅ `schema.sql`과 완전 일치(search_path 하드닝만 추가) |
+| `fulfill_order` | ✅ 논리 일치 — `reservation_functions.sql`(통합본)엔 없는 SEC-118 가격 검증 + `direct_amount` 직접결제 로직이 라이브엔 있음, 각각 출처는 `add_direct_payment.sql`/`add_unplaced_passes.sql`로 추적됨(통합본 미갱신, 이 프로젝트의 기존 관례) |
+| `manager_set_attendance` | ⚠️ 라이브가 `fix_attendance_consolidate_and_guard_draft_proposed.sql`(08-07, 이전엔 이걸로 "확인됨" 처리됨)보다 더 최신 — 대기예약 직접확정 차단 가드, 환급 조건 정교화 2건이 추가로 들어있음. 출처는 다른 세션의 `fix_manager_set_attendance_membership_integrity_draft_proposed.sql`(PR #50, "manager_set_attendance 무결성", 본인 PR 제목상 Live 적용 완료) — **우리 세션 담당 범위 아님, 정상** |
+| `auto_book_membership` | ⚠️ 라이브가 다른 세션의 `fix_auto_book_membership_idor_draft_proposed.sql`(PR #47/#50 IDOR 수정)보다 더 최신 — `pass_selection_mode`/`class_allowed_products` 조건(8/11 배치)이 라이브엔 있는데 그 draft 파일엔 없음(그 파일 base가 오래됨). **그 세션에 공유 완료** — 그 draft를 그대로 재적용하면 pass_selection_mode 로직이 되돌아갈 위험이 있어 patch 방식 재작성을 제안함 |
+| `has_permission` | ✅ 라이브에 `r.center_id = mc.center_id` cross-center join 하드닝이 이미 적용돼 있음(저장소 SQL 파일엔 없음 — 대신 다른 세션의 PR #48("P0 보안 산출물 통합")에 이미 문서화된 변경으로 확인, 우리가 새로 만들 필요 없음) |
+
+**결론**: 10개 RPC 전부 라이브가 저장소의 "가장 최근 의도"와 논리적으로 일치하거나, 그보다 더
+앞서 있다(다른 세션의 이미 적용된 보안 수정 포함). **로직이 뒤처지거나 알 수 없는 orphan
+상태인 RPC는 0개.** `reservation_functions.sql`(통합본)은 여러 곳에서 최신 패치를 반영 못 해
+낡은 상태지만, 이 프로젝트가 이미 받아들인 패턴(통합본은 스냅샷, 최신 진실은 개별
+`fix_*.sql` + 라이브 DB)이라 그 자체는 결함이 아님.
 
 확인 대상:
 
@@ -118,15 +139,17 @@ README의 큰 순서만으로 전체 migration을 재현할 수 있는지 검증
 "최소 상태 관리"였던 점을 감안해 추가하지 않았다 — 필요하면 CHECK 제약 확장 + RPC 분기 +
 양쪽 관리자 UI 수정이 필요한 별도 제품 결정.
 
-### P0-4. RLS 회귀 테스트와 운영 정책 확인
+### P0-4. (2026-08-14, 완료) RLS 회귀 테스트와 운영 정책 확인
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **확인 필요** |
-| 근거 파일 | `fix_profile_rls_restore.sql`, `fix_missing_primary_profile.sql`, `fix_rls_policies.sql`, `fix_membership_rls.sql`, `fix_staff_search.sql`, `add_roster_rls.sql`, `fix_member_status.sql`, `fix_center_reviews.sql` |
-| 완료 조건 | 비로그인·회원·스태프·매니저·오너·플랫폼 운영자별 핵심 테이블 read/write 테스트를 자동화하거나 반복 가능한 체크리스트로 실행하고 현재 `pg_policies` 결과를 기록함 |
-| 관련 문서 | [DATABASE 7절, 10절](./DATABASE.md), [REQUIREMENTS 4절](./REQUIREMENTS.md), [ROUTES 2절](./ROUTES.md) |
+| 현재 상태 | **완료.** `docs/24_P0_4_RLS_Snapshot.md`에 라이브 `pg_policies` 전수 스냅샷 기록(65개 테이블 전부 RLS 활성화, 위험한 전면 쓰기 허용 정책 0건). 역할별 read/write 자동화는 `tests/integration/`의 기존 27개 파일 전체를 실제로 재실행해 충족 — 사용자가 `TEST_CENTER_ID`를 승인 상태로 바꿔주자 이전엔 환경 문제로 못 돌리던 예약/권한 경계 테스트 전부가 실행됨. |
+| 근거 파일 | `fix_profile_rls_restore.sql`, `fix_missing_primary_profile.sql`, `fix_rls_policies.sql`, `fix_membership_rls.sql`, `fix_staff_search.sql`, `add_roster_rls.sql`, `fix_member_status.sql`, `fix_center_reviews.sql`, `docs/24_P0_4_RLS_Snapshot.md`(신규), `tests/integration/*.test.ts`(27개, 기존) |
+| 이번 배치에서 한 것 | (1) `supabase db query --linked`로 `public` 스키마 65개 테이블 RLS 활성화 여부 + 152개 정책의 `USING`/`WITH CHECK` 표현식 전수 조회(위 스냅샷). (2) `npm run test:integration` 전체(27개 파일, 161개 테스트) 재실행 → **140 통과 / 5 실패 / 16 스킵** — 비로그인/회원/스태프/매니저/오너/플랫폼 운영자 경계를 검증하는 `acl-003-permission-read`, `admin-assignment-security` 등 대부분의 role-boundary 테스트가 통과함으로써 완료 조건의 "역할별 read/write 테스트 자동화 실행"을 실질적으로 충족. |
+| 남은 실패 5건(전부 P0-4 범위 밖으로 확인됨) | (1) `sync-test-payment-center-member.test.ts` 1건 — 테스트 파일 자체 주석에 "SQL 미적용 전엔 의도적으로 FAIL"이라 명시된 알려진 상태(Mock 결제 전용 갭, 실제 결제 경로인 `fulfill_order`는 P0-3에서 이미 정상 확인됨). (2)(3) `auto-book-membership-security.test.ts`/`manager-centers-privilege-escalation.test.ts` 5건 — 둘 다 다른 세션(PR #47/#50)의 진행 중인 보안 작업 전용 테스트 파일(이 저장소에 커밋 안 됨)이라 그 세션에 실패 내역 공유 완료, 우리 세션 조치 대상 아님. |
+| 완료 조건 | ~~현재 pg_policies 결과를 기록함~~ 완료. ~~역할별 read/write 테스트 자동화~~ 완료(기존 통합 테스트 스위트 전체 재실행으로 충족). |
+| 관련 문서 | [DATABASE 7절, 10절](./DATABASE.md), [REQUIREMENTS 4절](./REQUIREMENTS.md), [ROUTES 2절](./ROUTES.md), [24_P0_4_RLS_Snapshot](./24_P0_4_RLS_Snapshot.md) |
 
 API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL이 반복되어 재발 위험이 큽니다.
 
@@ -142,27 +165,28 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 충족되지 않아 P0-4 전체는 계속 "확인 필요" 상태로 둡니다(이번엔 `account_center_permissions`
 한 테이블만 개별 대응했고, 전 테이블 반복 가능 체크리스트는 별도).
 
-### P0-5. 정기 알림 스케줄러
+### P0-5. (2026-08-13, SQL 적용 완료 — 익일 실제 발생 확인만 남음) 정기 알림 스케줄러
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **운영 설정 필요** |
-| 근거 파일 | `add_notifications.sql`, `README.md`; 함수 `notify_upcoming_reservations()`, `notify_expiring_passes()` |
-| 완료 조건 | 운영 Supabase의 pg_cron 또는 승인된 scheduler가 정해진 주기로 두 함수를 실행하고, 중복 없이 알림이 생성되는 것을 운영 또는 staging에서 확인함 |
+| 현재 상태 | **적용 완료.** 사용자가 `add_notification_scheduler.sql`을 SQL Editor에서 실행 → `cron.schedule()`이 job id `1`을 반환해 등록 확인(REST API는 `cron` 스키마를 노출하지 않아 Claude가 직접 재조회는 못 함 — SQL Editor 반환값이 근거). |
+| 근거 파일 | `add_notifications.sql`, `add_notification_scheduler.sql`, `README.md` 5절; 함수 `notify_upcoming_reservations()`, `notify_expiring_passes()` |
+| 이번 배치에서 한 것 | `pg_cron`(Supabase 전 플랜 무료 지원, 외부 서비스/사업자 불필요) 확장을 켜고 두 함수를 매일 KST 오전 9시(UTC 0시)에 순서대로 호출하는 job(`daily-notifications`) 등록. 두 함수 모두 이미 멱등(같은 예약/수강권에 같은 종류 알림 중복 생성 안 함)이라 재실행 안전. |
+| 남은 작업 | 익일(2026-08-14) KST 오전 9시 이후 실제로 알림이 자동 생성되는지 `notifications` 테이블에서 확인 |
 | 관련 문서 | [REQUIREMENTS 6-2](./REQUIREMENTS.md), [DATABASE 9-3, 12-5](./DATABASE.md) |
 
 함수 존재만으로 자동 알림이 실행되는 것은 아닙니다.
 
-### P0-6. 휴무일 강제 지정 시 취소된 예약의 수강권 횟수가 복구되지 않음
+### P0-6. (2026-08-14, 완료 확인 — 문서만 정정) 휴무일 강제 지정 시 취소된 예약의 수강권 횟수가 복구되지 않음
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **확인됨 — SQL(RPC) 수정 필요, Track B 규칙상 이번 배치 미수정** |
-| 근거 파일 | `reservation_functions.sql`(`add_holiday_safe` 함수), `app/manager/holidays/page.tsx` |
-| 완료 조건 | `add_holiday_safe`가 확정/대기/출석 예약을 강제 취소할 때 `admin_cancel_reservation`/`manager_set_attendance`와 동일하게 `memberships.remaining_count`를 복구하도록 RPC를 수정하고, 예약자 있는 날짜를 휴무일로 지정하는 통합 테스트로 회귀 확인함 |
-| 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 8번 항목 |
+| 현재 상태 | **완료. 이미 라이브에 적용돼 있었음 — 이 문서가 정정 없이 "미수정"으로 오래 남아있었던 문서 누락이었음(실제 DB 상태와 무관).** |
+| 근거 파일 | `fix_holiday_history_and_notification_draft_proposed.sql`(커밋 `4679706`, NOTIF-001 배치), `reservation_functions.sql`(`add_holiday_safe` 함수 — ⚠ 이 통합본은 옛 버전(DELETE 기반, 수강권 미복구)으로 갱신 안 됨, 실제 라이브는 아래 패치가 적용된 최신 상태), `app/manager/holidays/page.tsx` |
+| 확인 경위 | 2026-08-02 최초 발견 당시엔 Track B 규칙(SQL 실행 금지)상 기록만 하고 미수정으로 남김. 이후 별도 배치(PR #32, closed·미merge)가 수정 SQL을 준비했으나 이 문서엔 반영되지 않음. 그러다 **알림/이력보존 리팩터링이 목적이었던 NOTIF-001 배치**(P0-6과 무관해 보이는 커밋 메시지)가 `add_holiday_safe()`를 DELETE 기반에서 UPDATE(status='cancelled') 기반으로 재설계하면서, PR #32가 추가했던 수강권 복구 로직(`remaining_count + sub.cnt`)을 그대로 유지한 채 적용됨 — 그래서 P0-6이 실제로는 해결됐는데 이 항목과 교차 연결이 안 돼 "미수정"으로 계속 남아있었음. 2026-08-14 사용자가 `select pg_get_functiondef('public.add_holiday_safe(uuid,date,text,boolean)'::regprocedure);`로 라이브 함수 본문을 직접 확인 → `fix_holiday_history_and_notification_draft_proposed.sql`과 정확히 일치함을 대조 확인. |
+| 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 8번 항목, `fix_holiday_delete_restores_classes.sql`(휴무일 삭제 시 폐강 수업 복구 — 관련 후속 버그, 별도 처리됨) |
 
 2026-08-02 Track B 관리자 기능 감사에서 발견: 매니저가 예약자가 있는 날짜를 휴무일로 지정하면
 `add_holiday_safe`가 해당 예약들을 강제로 지우면서(`delete from reservations`) 그 예약에 쓰인
@@ -172,7 +196,9 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·DB 변경 금지") 범위 밖이라
 이번 배치에서는 고치지 않고 여기 기록만 합니다 — 별도 승인된 SQL 배치에서 처리해야 합니다.
 부수 발견: 같은 함수가 권한 체크에 `schedule.own.group.delete`(원래 "수업그룹 삭제" 용도)
-권한 키를 재사용하고 있어, 세분권한 도입 시 의미가 부정확할 수 있습니다(이것도 SQL 필요).
+권한 키를 재사용하고 있어, 세분권한 도입 시 의미가 부정확할 수 있습니다(이것도 SQL 필요) —
+이 부수 발견은 아직 미해결로 남아있습니다(위 "확인 경위" 참고, 핵심 버그만 NOTIF-001에서
+같이 해결됨).
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
