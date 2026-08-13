@@ -1070,14 +1070,14 @@ waitlisted→cancelled 시 `membership_id is not null`만 보고 무조건 `+1` 
 (더 견고한 설계, `admin_cancel_reservation`의 `membership_consumed` 직접 참조 패턴보다 안전).
 waitlisted→confirmed 직접 전환(무차감 확정 우회)도 명시적으로 차단.
 
-### SEC-102/103. (2026-08-14, 구현 완료 — SQL 미실행) accounts/profiles "매니저 계정/대표프로필 검색" 시스템 전체 노출
+### SEC-102/103. (2026-08-14, ✅ Live 적용·확인 완료) accounts/profiles "매니저 계정/대표프로필 검색" 시스템 전체 노출
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1(개인정보 과다 노출, 인증 우회는 아님 — 이미 매니저 권한이 있어야 도달 가능) |
-| 현재 상태 | **구현 완료(코드+SQL), Live 미적용.** 아래 "권장 후속 설계"의 전수 조사 결과 유일한 소비처는 `lib/members.ts`의 `searchAccountsForMember()`(신규 회원 등록용)임을 확인 — `center_members` 스코핑 대신(신규 회원은 정의상 아직 미등록이라 그 방향은 애초에 불가능했음) `customer.member.create` 권한 확인 + 최소 필드 반환 RPC로 교체. |
-| 근거 파일 | `fix_account_search_scope_draft_proposed.sql`(canonical) + rollback, `lib/members.ts`(코드 변경, 커밋됨), `tests/integration/account-search-scope.test.ts`(SEARCH-SEC-A~D, 신규) |
-| 완료 조건 | 사용자가 SQL 적용 → `npm run test:integration`으로 SEARCH-SEC-A~D GREEN 확인 |
+| 현재 상태 | **✅ Live 적용 완료(2026-08-14).** 아래 "권장 후속 설계"의 전수 조사 결과 유일한 소비처는 `lib/members.ts`의 `searchAccountsForMember()`(신규 회원 등록용)임을 확인 — `center_members` 스코핑 대신(신규 회원은 정의상 아직 미등록이라 그 방향은 애초에 불가능했음) `customer.member.create` 권한 확인 + 최소 필드 반환 RPC로 교체. 적용 후 확인: `"매니저 계정 검색"`/`"매니저 대표프로필 검색"` 정책 0건(제거됨), `search_accounts_for_member`가 `security_type='DEFINER'`. |
+| 근거 파일 | `fix_account_search_scope_draft_proposed.sql`(canonical, Live 적용됨) + rollback, `lib/members.ts`(코드 변경, 커밋됨), `tests/integration/account-search-scope.test.ts`(SEARCH-SEC-A~D, 신규) |
+| 완료 조건 | ~~사용자가 SQL 적용~~ ✅ 완료. 남은 것은 `npm run test:integration`으로 SEARCH-SEC-A~D GREEN 확인뿐(오늘 CI 부하 상황에 따라 별도 확인). |
 
 **재확인 결과**: `"매니저 계정 검색"`(accounts SELECT)과 `"매니저 대표프로필 검색"`(profiles SELECT,
 `is_primary=true`)의 USING 절이 둘 다 `exists(select 1 from manager_centers mc where
