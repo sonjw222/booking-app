@@ -4,6 +4,7 @@ name: "[TEMP DEBUG] Supabase project ref 확인"
 # 앞 8자리만 출력한다(민감정보 아님). 다른 job 없이 단독 실행돼 e2e/unit/integration
 # 순차 체인이나 공유 dev DB 경합과 무관하게 즉시 끝난다. 진단 끝나면 이 파일 삭제 예정.
 on:
+  pull_request:
   workflow_dispatch:
 
 jobs:
