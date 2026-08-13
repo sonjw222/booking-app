@@ -115,6 +115,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: "[TEMP DEBUG] CI가 보는 Supabase project ref 앞 8자리만 출력(PR #49 진단용, merge 전 제거)"
+        run: |
+          REF=$(echo "$NEXT_PUBLIC_SUPABASE_URL" | sed -E 's#https://([^.]+)\.supabase\.co.*#\1#')
+          echo "project ref prefix: ${REF:0:8}"
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       - run: npm run test:integration
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
