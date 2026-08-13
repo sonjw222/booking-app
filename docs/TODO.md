@@ -1110,14 +1110,14 @@ page.tsx`, "회원 직접 추가"). `fix_staff_search.sql` 경로("계정 조회
 
 `npm run build`(TypeScript 포함) 통과, `npm run test`(unit) 217/217 통과 확인(2026-08-14).
 
-### SEC-116. (2026-08-14, 구현 완료 — SQL 미실행) `fulfill_order()`가 세분 permission 대신 `my_managed_center_ids()`만 사용
+### SEC-116. (2026-08-14, ✅ Live 적용·확인 완료) `fulfill_order()`가 세분 permission 대신 `my_managed_center_ids()`만 사용
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **구현 완료(SQL), Live 미적용.** 제품 결정 완료(2026-08-14): `pass.payment.create`(schema.sql에 이미 있는 permission key) 체크로 전환. `has_permission(center_id, 'pass.payment.create')`가 "그 center_id의 active 매니저인지"까지 이미 포함해서 확인하므로 `my_managed_center_ids()` 체크를 완전히 대체 — 두 조건을 AND로 겹칠 필요 없음. |
-| 근거 파일 | `fix_fulfill_order_payment_permission_draft_proposed.sql`(canonical) + rollback, `tests/integration/fulfill-order-permission.test.ts`(신규) |
-| 완료 조건 | 사용자가 SQL 적용 → `npm run test:integration`으로 신규 테스트 GREEN 확인 |
+| 현재 상태 | **✅ Live 적용 완료(2026-08-14).** 제품 결정: `pass.payment.create`(schema.sql에 이미 있는 permission key) 체크로 전환. `has_permission(center_id, 'pass.payment.create')`가 "그 center_id의 active 매니저인지"까지 이미 포함해서 확인하므로 `my_managed_center_ids()` 체크를 완전히 대체. 적용 후 `pg_get_functiondef`로 실제 Live 본문이 의도한 대로임을 사용자가 직접 확인함(문자 그대로 일치). |
+| 근거 파일 | `fix_fulfill_order_payment_permission_draft_proposed.sql`(canonical, Live 적용됨) + rollback, `tests/integration/fulfill-order-permission.test.ts`(신규) |
+| 완료 조건 | ~~사용자가 SQL 적용~~ ✅ 완료. |
 
 그 센터의 매니저이기만 하면 결제/매출 관련 세분권한이 없는 스태프도 주문을 발급 처리할 수
 있다. SEC-101/112/113(소속 자체의 정당성)과는 독립적인 문제(소속이 정당해도 세분권한 모델을
