@@ -8,6 +8,14 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-14 — ✅ refund_membership() 환불 후 예약 잔존 Live 적용 완료
+
+**사용자가 SQL 직접 실행, Live 적용 완료.** 적용 후 확인: `refund_membership`/
+`cancel_reservation` 둘 다 `security_type='DEFINER'` 유지. 기존 orphan 데이터
+(membership `c582ef56...`, 미래 confirmed 예약 3건)는 이 SQL이 새 진입만 막을 뿐
+기존 데이터는 정리하지 않으므로 그대로 남아있음을 재확인(의도된 동작) — 그 예약
+3건을 어떻게 처리할지는 회원/매출 이력에 영향을 주는 결정이라 별도 판단 필요.
+
 ## 2026-08-14 — refund_membership() 환불 후 예약 잔존 구현(P1, SQL 미실행)
 
 **SQL 실행 없음, main merge 없음.** D안(A+C) 구현: `refund_membership()`에 "미래

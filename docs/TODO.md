@@ -1204,14 +1204,14 @@ center_id의 active 매니저이므로, `auto_book_membership()`의 더 느슨�
 SEC-116은 이미 "fulfill_order 세분권한 미사용"을 가리키므로 번호 충돌을 피하기 위해
 재배정했다(아래 canonical 번호 매핑 참고).**
 
-### refund_membership() 환불 후 예약 잔존 — P1 (2026-08-14, 구현 완료 — SQL 미실행)
+### refund_membership() 환불 후 예약 잔존 — P1 (2026-08-14, ✅ Live 적용·확인 완료)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1(데이터 무결성, 보안 아님) |
-| 현재 상태 | **구현 완료(D안: A+C), Live 미적용.** 2026-08-14 read-only 진단으로 이 문제가 이미 실제 발생했음을 확인함 — membership `c582ef56-3773-4b18-8861-198849d9f50a`가 `status=refunded/remaining_count=0/total_count=3`인데 미래 confirmed 예약 3건이 그대로 남아있었음(가설이 아니라 실측 사례). |
-| 근거 파일 | `fix_refund_membership_reservation_orphan_draft_proposed.sql`(canonical) + rollback, `diagnose_refund_membership_reservation_orphan_readonly.sql`(진단), `tests/integration/refund-membership-reservation-orphan.test.ts`(REFUND-SEC-A~C, 신규) |
-| 완료 조건 | 사용자가 SQL 적용 → `npm run test:integration`으로 REFUND-SEC-A~C GREEN 확인. **기존 orphan 데이터(위 membership) 자체는 이 SQL이 정리하지 않음 — 그 3건의 확정 예약을 어떻게 처리할지(그대로 둘지/수동 취소할지)는 별도 판단 필요.** |
+| 현재 상태 | **✅ Live 적용 완료(2026-08-14, D안: A+C).** 적용 후 확인: `refund_membership`/`cancel_reservation` 둘 다 `security_type='DEFINER'` 유지. 기존 orphan 데이터(membership `c582ef56...`, 미래 confirmed 예약 3건)는 이 SQL이 건드리지 않으므로 그대로 남아있음을 재확인함(의도된 동작). |
+| 근거 파일 | `fix_refund_membership_reservation_orphan_draft_proposed.sql`(canonical, Live 적용됨) + rollback, `diagnose_refund_membership_reservation_orphan_readonly.sql`(진단), `tests/integration/refund-membership-reservation-orphan.test.ts`(REFUND-SEC-A~C, 신규) |
+| 완료 조건 | ~~사용자가 SQL 적용~~ ✅ 완료. **남은 것**: 기존 orphan 데이터(membership `c582ef56...`의 확정 예약 3건)를 그대로 둘지 수동 정리할지 — 회원/매출 이력에 영향을 주는 결정이라 별도 판단 필요(자동 처리 안 함). `npm run test:integration`으로 REFUND-SEC-A~C GREEN 확인도 남음(오늘 CI 부하 상황에 따라 별도 확인). |
 
 **함수 본문 출처**: `refund_membership()`/`cancel_reservation()` 둘 다 이 저장소에 여러 파일에
 흩어져 재정의돼 있어(각각 2곳/4곳) `pg_get_functiondef`로 실제 Live 본문을 먼저 확인함 —
