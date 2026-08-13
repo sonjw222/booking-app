@@ -8,6 +8,17 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-14 — ✅ SEC-117/SEC-119 SECURITY DEFINER 하드닝(search_path + EXECUTE 최소화) Live 적용 완료
+
+**사용자가 SQL 직접 실행, Live 적용 완료.** `reserve_class`/`reserve_with_membership`/
+`cancel_reservation`/`refund_membership`/`fulfill_order`/`usable_memberships`/
+`usable_memberships_for_classes`/`is_platform_admin` 8개 함수에 `ALTER FUNCTION ... SET
+search_path = public` 적용(함수 본문 무변경, `CREATE OR REPLACE` 아님이라 그 사이 다른
+배치가 바꾼 함수 본문과 충돌 없음). 앞 5개 함수는 추가로 PUBLIC/anon EXECUTE를 revoke하고
+authenticated만 grant — 전부 함수 내부에 이미 소유자/매니저 검사가 있어 활성 취약점은
+아니었으나 최소권한 원칙 하드닝. 적용 후 확인: 8개 함수 전부 `security_type='DEFINER'`
+유지, 5개 함수 전부 `authenticated`+`postgres`(owner)만 EXECUTE 보유.
+
 ## 2026-08-14 — ✅ SEC-102/103 accounts/profiles 시스템 전체 검색 노출 Live 적용 완료
 
 **사용자가 SQL 직접 실행, Live 적용 완료.** 적용 후 read-only 확인: `"매니저 계정 검색"`/

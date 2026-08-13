@@ -1122,14 +1122,14 @@ page.tsx`, "회원 직접 추가"). `fix_staff_search.sql` 경로("계정 조회
 있다. SEC-101/112/113(소속 자체의 정당성)과는 독립적인 문제(소속이 정당해도 세분권한 모델을
 우회).
 
-### SEC-117. (2026-08-12, canonical 확정 — 미적용) SECURITY DEFINER search_path 하드닝(P2/P3)
+### SEC-117. (2026-08-14, ✅ Live 적용·확인 완료) SECURITY DEFINER search_path 하드닝(P2/P3)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2/P3(하드닝, 활성 exploit 아님) |
-| 현재 상태 | **canonical SQL 확정 — 미적용.** `ALTER FUNCTION ... SET search_path`(함수 본문 재정의 없음, 요청된 안전한 방식)로 `reserve_class`/`reserve_with_membership`/`cancel_reservation`/`refund_membership`/`fulfill_order`/`usable_memberships`/`usable_memberships_for_classes`/`is_platform_admin`(search_path만) 처리. |
-| 근거 파일 | `fix_security_definer_hardening_search_path_execute_draft_proposed.sql`(canonical) + rollback |
-| 완료 조건 | 적용 전 `has_schema_privilege('anon'/'authenticated','public','create')` Live 확인 권장(파일 내 주석 SQL, 실행 안 함) — PostgreSQL 15부터 기본 회수라 LIKELY 안전, 100% 확정은 Live 조회 필요 |
+| 현재 상태 | **✅ Live 적용 완료(2026-08-14).** `ALTER FUNCTION ... SET search_path`(함수 본문 재정의 없음)로 `reserve_class`/`reserve_with_membership`/`cancel_reservation`/`refund_membership`/`fulfill_order`/`usable_memberships`/`usable_memberships_for_classes`/`is_platform_admin` 8개 함수 전부 적용, `security_type='DEFINER'` 유지 확인됨. |
+| 근거 파일 | `fix_security_definer_hardening_search_path_execute_draft_proposed.sql`(canonical, Live 적용됨) + rollback |
+| 완료 조건 | ~~적용~~ ✅ 완료. |
 
 같은 파일의 EXECUTE 최소화(PUBLIC/anon revoke) 부분은 **SEC-119로 별도 번호 부여**(아래
 "canonical 번호 매핑" 참고 — SEC-116 번호가 이미 다른 문제에 쓰이고 있어 충돌 방지).
@@ -1176,13 +1176,13 @@ page.tsx`, "회원 직접 추가"). `fix_staff_search.sql` 경로("계정 조회
 
 `npm run build`(TypeScript 포함) 통과, `npm run test`(unit) 217/217 통과 확인함(2026-08-13).
 
-### SEC-119. (2026-08-13, 신규 번호 — SEC-116 충돌 회피) SECURITY DEFINER EXECUTE 최소화(P3)
+### SEC-119. (2026-08-14, ✅ Live 적용·확인 완료 — 신규 번호, SEC-116 충돌 회피) SECURITY DEFINER EXECUTE 최소화(P3)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P3(하드닝, 활성 exploit 아님 — 각 함수 내부에 이미 소유자 검사 있음) |
-| 현재 상태 | **canonical SQL 확정(SEC-117과 같은 파일) — 미적용** |
-| 근거 파일 | `fix_security_definer_hardening_search_path_execute_draft_proposed.sql`(SEC-117과 동일 파일) |
+| 현재 상태 | **✅ Live 적용 완료(2026-08-14, SEC-117과 같은 파일로 함께 적용).** 적용 후 확인: `reserve_class`/`reserve_with_membership`/`cancel_reservation`/`refund_membership`/`fulfill_order` 5개 함수 전부 `authenticated`+`postgres`(owner)만 EXECUTE 보유, `anon`/`PUBLIC` 없음. |
+| 근거 파일 | `fix_security_definer_hardening_search_path_execute_draft_proposed.sql`(SEC-117과 동일 파일, Live 적용됨) |
 
 `reserve_class`/`reserve_with_membership`/`cancel_reservation`/`refund_membership`/
 `fulfill_order`의 PUBLIC/anon EXECUTE를 revoke, authenticated만 grant. 전부 내부에
