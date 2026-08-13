@@ -8,6 +8,15 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-13 — ✅ SEC-118 orders.amount 클라이언트 신뢰 문제 Live 적용 완료
+
+**사용자가 SQL 직접 실행, Live 적용 완료.** `pg_get_functiondef('fulfill_order(uuid)')`로
+실제 Live 본문을 먼저 확인해(6개 파일에 흩어진 정의 중 `direct_amount` 분기가 포함된
+버전이 Live였음) SQL을 정정한 뒤 적용. 적용 후 read-only 확인: `orders.verified` 컬럼
+존재, `create_order_secure`/`fulfill_order`/`confirm_test_payment` 3개 함수 전부
+`security_type='DEFINER'`. 기존 pending/paid 주문 790건 중 `products.price`와 금액이
+불일치하는 것은 0건 — 이번 재검증 도입으로 새로 막히는 기존 주문이 없음을 확인.
+
 ## 2026-08-13 — SEC-118 orders.amount 클라이언트 신뢰 문제 구현(코드+SQL, SQL 미실행)
 
 **SQL 실행 없음(코드는 커밋됨), main merge 없음.** 설계 문서(D안: RPC화 + 이중 방어)를 그대로

@@ -1124,14 +1124,14 @@ SEC-101(임의 센터 self-join)이 완전히 막혀도, 정상적으로 **자�
 같은 파일의 EXECUTE 최소화(PUBLIC/anon revoke) 부분은 **SEC-119로 별도 번호 부여**(아래
 "canonical 번호 매핑" 참고 — SEC-116 번호가 이미 다른 문제에 쓰이고 있어 충돌 방지).
 
-### SEC-118. (2026-08-13, D안 구현 완료 — SQL 미실행) `orders.amount` 클라이언트 신뢰 — 가격 조작(P0)
+### SEC-118. (2026-08-13, ✅ Live 적용·확인 완료) `orders.amount` 클라이언트 신뢰 — 가격 조작(P0)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0(금전 사기 벡터) |
-| 현재 상태 | **구현 완료(코드+SQL), Live 미적용.** 설계 문서 D안(RPC화 + fulfill_order 방어적 재검증) 그대로 구현. |
-| 근거 파일 | `fix_orders_amount_server_verification_draft_proposed.sql`(canonical) + rollback, `lib/orders.ts`/`app/checkout/page.tsx`/`app/cart/page.tsx`(코드 변경, 커밋됨), `tests/integration/orders-amount-tampering.test.ts`(AMOUNT-SEC-A~F, 신규), [25_SEC118_Orders_Amount_Design.md](./25_SEC118_Orders_Amount_Design.md) |
-| 완료 조건 | 사용자가 SQL 적용 → `npm run test:integration`으로 AMOUNT-SEC-A~F GREEN 확인 |
+| 현재 상태 | **✅ Live 적용 완료(2026-08-13).** 설계 문서 D안(RPC화 + fulfill_order 방어적 재검증) 그대로 구현·적용. 적용 후 확인: `orders.verified` 컬럼 존재(boolean, default false), `create_order_secure`/`fulfill_order`/`confirm_test_payment` 3개 함수 전부 `security_type='DEFINER'` 확인. 기존 pending/paid 주문 790건 중 `products.price`와 금액이 불일치하는 것은 **0건**(재검증에 새로 막히는 기존 주문 없음, read-only 쿼리로 확인). |
+| 근거 파일 | `fix_orders_amount_server_verification_draft_proposed.sql`(canonical, Live 적용됨) + rollback, `lib/orders.ts`/`app/checkout/page.tsx`/`app/cart/page.tsx`(코드 변경, 커밋됨), `tests/integration/orders-amount-tampering.test.ts`(AMOUNT-SEC-A~F, 신규), [25_SEC118_Orders_Amount_Design.md](./25_SEC118_Orders_Amount_Design.md) |
+| 완료 조건 | ~~사용자가 SQL 적용~~ ✅ 완료. 남은 것은 `npm run test:integration`으로 AMOUNT-SEC-A~F 등 회귀 테스트 GREEN 확인뿐(오늘 동시 CI 부하로 별도 CI 실행은 보류 중, SEC-101/112/113과 동일 사유). |
 
 **구현 내용**:
 - `orders.verified boolean default false` 신규 컬럼 — `create_order_secure()` RPC로 만들어진
