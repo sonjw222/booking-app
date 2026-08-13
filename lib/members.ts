@@ -432,49 +432,20 @@ export async function fetchMemberDetail(profileId: string): Promise<MemberDetail
    - 이래야 결제(수강권 발급) 대상에 뜸
    ============================================================ */
 
+// [SEC-102/103] 이전에는 accounts/profiles를 클라이언트에서 직접 조회했고, 그걸 허용하던
+// RLS 정책("매니저 계정 검색"/"매니저 대표프로필 검색")이 권한 체크 없이 "어디서든 active
+// 매니저이기만 하면" 테이블 전체를 대상으로 검색을 허용했다 — 자기 센터와 무관한 회원까지
+// 시스템 전체에서 검색 가능했던 개인정보 과다 노출 취약점. search_accounts_for_member()
+// RPC(customer.member.create 권한 확인 + 최소 필드만 반환)로 교체했다.
 export async function searchAccountsForMember(
   keyword: string
 ): Promise<{ profileId: string; name: string; phone: string | null }[]> {
   const kw = keyword.trim();
   if (kw.length < 2) return [];
 
-  // 1) 이름으로 대표 프로필 검색
-  const byName = supabase
-    .from("profiles")
-    .select("id, name, is_primary, accounts(phone)")
-    .ilike("name", `%${kw}%`)
-    .eq("is_primary", true)
-    .limit(20);
-
-  // 2) 전화번호로 계정 검색 → 그 계정의 대표 프로필
-  const digits = kw.replace(/[^0-9]/g, "");
-  const results: { profileId: string; name: string; phone: string | null }[] = [];
-  const seen = new Set<string>();
-
-  const { data: nameData, error: nameErr } = await byName;
-  if (nameErr) throw new Error("검색에 실패했어요: " + nameErr.message);
-  for (const r of nameData ?? []) {
-    if (seen.has((r as any).id)) continue;
-    seen.add((r as any).id);
-    results.push({ profileId: (r as any).id, name: (r as any).name, phone: (r as any).accounts?.phone ?? null });
-  }
-
-  // 전화번호가 2자리 이상 숫자면 전화 검색도 수행
-  if (digits.length >= 2) {
-    const { data: acc } = await supabase
-      .from("accounts")
-      .select("id, phone, profiles(id, name, is_primary)")
-      .ilike("phone", `%${digits}%`)
-      .limit(20);
-    for (const a of acc ?? []) {
-      const primary = ((a as any).profiles ?? []).find((p: any) => p.is_primary);
-      if (!primary || seen.has(primary.id)) continue;
-      seen.add(primary.id);
-      results.push({ profileId: primary.id, name: primary.name, phone: (a as any).phone ?? null });
-    }
-  }
-
-  return results;
+  const { data, error } = await supabase.rpc("search_accounts_for_member", { p_keyword: kw });
+  if (error) throw new Error("검색에 실패했어요: " + error.message.replace(/^.*?:\s*/, ""));
+  return (data ?? []).map((r: any) => ({ profileId: r.profile_id, name: r.name, phone: r.phone }));
 }
 
 // 센터에 회원으로 등록 (이미 있으면 무시)

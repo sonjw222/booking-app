@@ -1070,14 +1070,14 @@ waitlisted→cancelled 시 `membership_id is not null`만 보고 무조건 `+1` 
 (더 견고한 설계, `admin_cancel_reservation`의 `membership_consumed` 직접 참조 패턴보다 안전).
 waitlisted→confirmed 직접 전환(무차감 확정 우회)도 명시적으로 차단.
 
-### SEC-102/103. (2026-08-13, 재확인 — SQL 미작성, 후속 배치 필요) accounts/profiles "매니저 계정/대표프로필 검색" 시스템 전체 노출
+### SEC-102/103. (2026-08-14, 구현 완료 — SQL 미실행) accounts/profiles "매니저 계정/대표프로필 검색" 시스템 전체 노출
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1(개인정보 과다 노출, 인증 우회는 아님 — 이미 매니저 권한이 있어야 도달 가능) |
-| 현재 상태 | **CONFIRMED(코드 재확인, 2026-08-13). manager_centers Batch와 섞지 않고 별도 후속으로 분리.** |
-| 근거 파일 | `fix_membership_rls.sql`("매니저 계정 검색"/"매니저 대표프로필 검색" 정책), `reservation_functions.sql`(동일 정책 재선언) |
-| 완료 조건 | 아래 재확인 결과 기준으로 별도 배치에서 센터 스코핑 추가 |
+| 현재 상태 | **구현 완료(코드+SQL), Live 미적용.** 아래 "권장 후속 설계"의 전수 조사 결과 유일한 소비처는 `lib/members.ts`의 `searchAccountsForMember()`(신규 회원 등록용)임을 확인 — `center_members` 스코핑 대신(신규 회원은 정의상 아직 미등록이라 그 방향은 애초에 불가능했음) `customer.member.create` 권한 확인 + 최소 필드 반환 RPC로 교체. |
+| 근거 파일 | `fix_account_search_scope_draft_proposed.sql`(canonical) + rollback, `lib/members.ts`(코드 변경, 커밋됨), `tests/integration/account-search-scope.test.ts`(SEARCH-SEC-A~D, 신규) |
+| 완료 조건 | 사용자가 SQL 적용 → `npm run test:integration`으로 SEARCH-SEC-A~D GREEN 확인 |
 
 **재확인 결과**: `"매니저 계정 검색"`(accounts SELECT)과 `"매니저 대표프로필 검색"`(profiles SELECT,
 `is_primary=true`)의 USING 절이 둘 다 `exists(select 1 from manager_centers mc where
@@ -1092,13 +1092,23 @@ SEC-101(임의 센터 self-join)이 완전히 막혀도, 정상적으로 **자�
 `manager_centers`에 `status='active'` 행이 생기고, 그 즉시 이 조건을 만족해 시스템 전체
 회원 검색 권한을 갖게 된다. 즉 SEC-101/112/113 수정과 **완전히 독립된 문제**다.
 
-**권장 후속 설계(SQL 미작성)**: 두 정책 모두 "검색자가 그 피검색자와 실제로 관계가 있는
-센터의 매니저인가"로 좁혀야 한다 — 예를 들어 `profiles`/`accounts` 검색은 실제로는 "그
-센터 회원 관리" 맥락에서만 필요하므로, `center_members`(센터별 회원 등록 테이블)를 경유해
-"검색자가 관리하는 센터에 그 계정/프로필이 실제로 등록돼 있는가"로 스코핑하는 방향을
-검토할 것. 정확한 설계는 별도 배치에서 사용처(스태프 검색 초대 플로우 등 `fix_staff_search.sql`
-경로와 충돌 여부)를 먼저 전수 조사한 뒤 진행 권장 — 이번 manager_centers Batch에는 포함하지
-않았다.
+**2026-08-14 전수 조사 + 구현**: `"매니저 계정 검색"`/`"매니저 대표프로필 검색"`을 실제로
+소비하는 코드는 `lib/members.ts`의 `searchAccountsForMember()` 하나뿐(`app/manager/members/
+page.tsx`, "회원 직접 추가"). `fix_staff_search.sql` 경로("계정 조회" 정책, `lib/roles.ts`의
+`searchAccounts()` — 스태프 초대용)는 완전히 별개의 정책/함수라 충돌 없음(이미 owner/
+`facility.staff.create` 권한 체크가 있어 이번 수정 범위 밖으로 유지). `center_members`
+스코핑은 애초에 이 기능의 목적(아직 그 센터에 등록되지 않은 신규 회원을 찾는 것)과
+모순돼 적용 불가 — 대신:
+- `search_accounts_for_member(p_keyword)` 신규 RPC — 호출자가 `customer.member.create`
+  권한을 가진 센터가 하나라도 있어야 하고(기존에는 권한 체크 자체가 없었음), 대표 프로필의
+  `profile_id`/`name`/`phone` 3개 필드만 반환(원래 클라이언트 쿼리가 가져오던 필드와 동일,
+  더 넓히지 않음).
+- 원래의 `"매니저 계정 검색"`/`"매니저 대표프로필 검색"` RLS 정책은 제거(대체하는 RPC로
+  이전됐으므로 더 이상 필요 없음).
+- `lib/members.ts`의 `searchAccountsForMember()`가 이 RPC를 호출하도록 교체(공개
+  시그니처는 그대로라 `app/manager/members/page.tsx` 무변경).
+
+`npm run build`(TypeScript 포함) 통과, `npm run test`(unit) 217/217 통과 확인(2026-08-14).
 
 ### SEC-116. (2026-08-12, 확인됨 — 미적용) `fulfill_order()`가 세분 permission 대신 `my_managed_center_ids()`만 사용
 

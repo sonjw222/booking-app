@@ -8,6 +8,20 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-14 — SEC-102/103 accounts/profiles 시스템 전체 검색 노출 구현(코드+SQL, SQL 미실행)
+
+**SQL 실행 없음(코드는 커밋됨), main merge 없음.** `"매니저 계정 검색"`/`"매니저 대표프로필
+검색"` RLS 정책이 권한 체크 없이 "어디서든 active 매니저이기만 하면" accounts/profiles
+테이블 전체를 검색 대상으로 허용하던 문제(SEC-101과 독립적으로 존재) 수정. 유일한 소비처인
+`lib/members.ts`의 `searchAccountsForMember()`(신규 회원 등록 검색)를 전수 조사해
+`center_members` 스코핑이 이 기능 목적과 모순됨을 확인 — 대신 `customer.member.create`
+권한을 확인하고 최소 필드(profile_id/name/phone)만 반환하는 `search_accounts_for_member()`
+RPC로 교체, 원래의 무제한 RLS 정책 2개는 제거. `fix_staff_search.sql`의 "계정 조회"
+정책(스태프 초대 검색)은 이미 별도 권한 체크가 있어 이번 범위 밖으로 확인.
+
+신규 회귀 테스트 `tests/integration/account-search-scope.test.ts`(SEARCH-SEC-A~D).
+`npm run build`(TypeScript 포함) 통과, `npm run test`(unit) 217/217 통과 확인.
+
 ## 2026-08-13 — ✅ SEC-118 orders.amount 클라이언트 신뢰 문제 Live 적용 완료
 
 **사용자가 SQL 직접 실행, Live 적용 완료.** `pg_get_functiondef('fulfill_order(uuid)')`로
