@@ -1110,17 +1110,29 @@ page.tsx`, "회원 직접 추가"). `fix_staff_search.sql` 경로("계정 조회
 
 `npm run build`(TypeScript 포함) 통과, `npm run test`(unit) 217/217 통과 확인(2026-08-14).
 
-### SEC-116. (2026-08-12, 확인됨 — 미적용) `fulfill_order()`가 세분 permission 대신 `my_managed_center_ids()`만 사용
+### SEC-116. (2026-08-14, 구현 완료 — SQL 미실행) `fulfill_order()`가 세분 permission 대신 `my_managed_center_ids()`만 사용
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인됨, 수정 SQL 미작성(제품 결정 필요)** |
-| 완료 조건 | `pass.payment.create` 류 세분권한 체크로 전환할지 제품 결정 필요 — 결정되면 SEC-114/SEC-115와 authorization 모델을 일관되게 맞추는 별도 배치로 진행(auto_book_membership이 지금 my_managed_center_ids()를 쓰는 이유가 바로 이 함수와의 일관성이므로, 여기를 바꾸면 그쪽도 함께 재검토 필요) |
+| 현재 상태 | **구현 완료(SQL), Live 미적용.** 제품 결정 완료(2026-08-14): `pass.payment.create`(schema.sql에 이미 있는 permission key) 체크로 전환. `has_permission(center_id, 'pass.payment.create')`가 "그 center_id의 active 매니저인지"까지 이미 포함해서 확인하므로 `my_managed_center_ids()` 체크를 완전히 대체 — 두 조건을 AND로 겹칠 필요 없음. |
+| 근거 파일 | `fix_fulfill_order_payment_permission_draft_proposed.sql`(canonical) + rollback, `tests/integration/fulfill-order-permission.test.ts`(신규) |
+| 완료 조건 | 사용자가 SQL 적용 → `npm run test:integration`으로 신규 테스트 GREEN 확인 |
 
 그 센터의 매니저이기만 하면 결제/매출 관련 세분권한이 없는 스태프도 주문을 발급 처리할 수
 있다. SEC-101/112/113(소속 자체의 정당성)과는 독립적인 문제(소속이 정당해도 세분권한 모델을
 우회).
+
+**auto_book_membership()과의 일관성 재검토 — 필요 없음, 확인함**: `fulfill_order()`는
+내부에서 `auto_book_membership(v_membership_id)`를 호출하는데, 그 함수 자신의 권한 체크는
+`my_managed_center_ids()`를 그대로 쓴다(SEC-114 결정 유지, 이 배치에서 건드리지 않음).
+`has_permission(center_id, 'pass.payment.create')`를 통과한 caller는 정의상 이미 그
+center_id의 active 매니저이므로, `auto_book_membership()`의 더 느슨한
+`my_managed_center_ids()` 체크도 자동으로 통과한다 — 바깥쪽 체크를 좁혀도 안쪽 체크가
+막힐 일이 없다(안쪽이 바깥쪽보다 항상 느슨함). 그래서 `auto_book_membership()`은 이
+배치에서 변경할 필요가 없다.
+
+`npm run build`(TypeScript 포함) 통과, `npm run test`(unit) 217/217 통과 확인(2026-08-14).
 
 ### SEC-117. (2026-08-14, ✅ Live 적용·확인 완료) SECURITY DEFINER search_path 하드닝(P2/P3)
 

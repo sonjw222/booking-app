@@ -8,6 +8,21 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-14 — SEC-116 fulfill_order() 세분권한(pass.payment.create) 구현(SQL, SQL 미실행)
+
+**SQL 실행 없음, main merge 없음.** 제품 결정(2026-08-14): `fulfill_order()`의 권한 체크를
+`center_id in (select my_managed_center_ids())`(그 센터 매니저면 누구나)에서
+`has_permission(center_id, 'pass.payment.create')`(schema.sql에 이미 있는 permission key)로
+전환 — has_permission()이 center-membership 확인을 이미 포함하므로 기존 체크를 완전히
+대체. 오너는 is_owner로 항상 통과해 영향 없고, 결제 등록 권한이 없는 일반 스태프만 새로
+차단됨(의도된 동작 변경). `auto_book_membership()`은 자신의 더 느슨한
+`my_managed_center_ids()` 체크를 그대로 유지해도 안전함을 확인(바깥쪽이 좁아져도 안쪽은
+항상 통과) — 재검토 불필요.
+
+신규 회귀 테스트 `tests/integration/fulfill-order-permission.test.ts`(무권한 스태프는
+거부, 오너는 정상 처리). `npm run build`(TypeScript 포함) 통과, `npm run test`(unit)
+217/217 통과.
+
 ## 2026-08-14 — ✅ SEC-117/SEC-119 SECURITY DEFINER 하드닝(search_path + EXECUTE 최소화) Live 적용 완료
 
 **사용자가 SQL 직접 실행, Live 적용 완료.** `reserve_class`/`reserve_with_membership`/
