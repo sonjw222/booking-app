@@ -932,14 +932,14 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   뒤집힘).
 
 
-### SEC-101/112/113. (2026-08-12~13, 최종 canonical SQL 완결 — RLS 3종 Live 적용됨, defense-in-depth 2종 미적용) manager_centers 권한 모델(P0)
+### SEC-101/112/113. (2026-08-12~13, ✅ 전부 Live 적용·확인 완료) manager_centers 권한 모델(P0)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **부분 적용됨.** manager_centers INSERT×2/UPDATE/DELETE 정책 4종(SEC-101/112/113 핵심)은 2026-08-12에 사용자가 Live에 적용 완료(`fix_manager_centers_privilege_escalation_draft_proposed.sql`). **2026-08-13 후속 감사에서 이 정책만으로는 불충분함을 확인**(PART 4/5) — `has_permission()`이 `center_roles.center_id`를 검증하지 않아 cross-center role injection에 대한 2차 방어가 없었고, role_id/center_id 정합성이 RLS에만 의존해(service_role/미래 RPC 우회 가능) 테이블 레벨 trigger가 없었음. **`fix_manager_centers_privilege_model_draft_proposed.sql`(신규, 미적용)이 이 두 gap을 닫는 최종 canonical 파일** — 기존 RLS 정책 4종은 재선언(변경 없음)하고 trigger + `has_permission()` 수정만 새로 추가. |
+| 현재 상태 | **✅ 전부 적용 완료(2026-08-13).** manager_centers INSERT×2/UPDATE/DELETE 정책 4종(SEC-101/112/113 핵심)은 2026-08-12 Live 적용. RLS 무한 재귀 4겹 hotfix(center_roles/has_permission/manager_centers 자기참조/centers) + 사용자가 직접 추가한 강화 조건 2개(centers.status='pending' 체크, self-UPDATE has_any_row 체크) 전부 Live 적용·확인됨(스태프 초대 실사용 정상 동작). 마지막 남았던 defense-in-depth 2종도 2026-08-13 Live 적용 확인: **[5] `trg_manager_centers_role_center_match` 트리거 — `pg_trigger`에서 `tgenabled='O'`(활성) 확인됨. [6] `has_permission()` — `information_schema.routines`에서 `security_type='DEFINER'` 확인됨(cross-center join 조건 포함).** |
 | 근거 파일 | `fix_manager_centers_privilege_model_draft_proposed.sql`(canonical, `fix_manager_centers_privilege_escalation_draft_proposed.sql`을 대체) + rollback, `tests/integration/manager-centers-privilege-model.test.ts`(SEC-MC-A~S, `manager-centers-privilege-escalation.test.ts`를 대체·흡수) |
-| 완료 조건 | 사용자가 신규 SQL 적용 → 회귀 테스트 전체 GREEN 확인 |
+| 완료 조건 | ~~사용자가 신규 SQL 적용~~ ✅ 완료. 남은 것은 CI(E2E→Integration) GREEN 확인뿐 — 2026-08-13 당일 여러 세션이 동시에 같은 dev Supabase에 CI를 반복 실행하며 생긴 부하/누적 테스트 데이터로 E2E가 계속 막혀 Integration까지 도달 못함(SQL 문제 아님, 사용자 판단으로 보류) — 부하가 가라앉은 뒤 재확인 필요 |
 
 **SEC-113 상세**: `"오너 스태프 삭제"` DELETE 정책의 self 분기가 "마지막 남은 행인가"를 확인하지
 않아, 오너가 자기 행을 지우면 센터가 orphan(manager_centers 0건)이 되고 SEC-101의
@@ -1011,6 +1011,15 @@ self 분기에 `not manager_centers_has_any_row(center_id, id)`(self-INSERT~UPDA
 manager_centers with_check의 centers 참조 확인([14]) 진단 쿼리도 추가함. 이제 재귀 경로는
 총 4겹이 전부 Live 적용·확인됐고, 이 파일에서 Live 대비 남은 진짜 신규 변경은 여전히
 [5]번 trigger와 [6]번 has_permission()의 cross-center join 조건 2가지뿐.
+
+**✅ 2026-08-13 최종 완료 — [5]/[6]까지 Live 적용 확인**: 사용자가 [5]/[6]만 분리한 SQL을
+직접 실행 → read-only 확인 쿼리 결과로 `trg_manager_centers_role_center_match`가
+`pg_trigger.tgenabled='O'`(활성), `has_permission`이 `information_schema.routines.
+security_type='DEFINER'`임을 확인함. 이로써 SEC-101/112/113 + RLS 무한 재귀 4겹 hotfix +
+defense-in-depth 2종(trigger, has_permission cross-center join) **전부 Live 적용 완료**.
+CI(Integration)로 회귀 테스트까지 GREEN 확인하는 것만 남았으나, 2026-08-13 당일 여러
+세션이 동시에 CI를 반복 실행해 E2E가 계속 막혀(SQL과 무관한 인프라 부하) 사용자 판단으로
+보류함 — 부하가 가라앉은 뒤 재확인 필요.
 
 **장기 과제(이번 배치 범위 밖, 별도 TODO)**: "owner transfer" 전용 워크플로우가 없음 — 현재는
 "오너를 하나 더 초대한 뒤 원래 오너가 self-delete"하는 수동 절차로만 핸드오프 가능함을

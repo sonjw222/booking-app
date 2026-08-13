@@ -8,6 +8,24 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-13 — ✅ SEC-101/112/113 manager_centers 권한 모델 Live 적용 완결(SQL 실행 완료)
+
+**사용자가 SQL 직접 실행, Live 적용 완료.** 마지막까지 미적용이던 defense-in-depth 2종을
+사용자가 Live에 실행:
+- `trg_manager_centers_role_center_match` BEFORE INSERT/UPDATE 트리거(role_id/center_id
+  정합성을 RLS와 독립적으로 테이블 레벨에서 강제) — `pg_trigger.tgenabled='O'`로 활성 확인.
+- `has_permission()`의 `r.center_id = mc.center_id` cross-center join 하드닝(security
+  definer 전환은 이미 hotfix v2로 적용돼 있었음) — `information_schema.routines.
+  security_type='DEFINER'`로 확인.
+
+이로써 SEC-101(임의 센터 self-join)/SEC-112(self-promote)/SEC-113(마지막 행 self-delete →
+orphan → 재클레임) RLS 정책 4종 + RLS 무한 재귀 4겹 hotfix(center_roles/has_permission/
+manager_centers 자기참조/centers) + 사용자가 직접 추가한 강화 조건 2종(centers.status=
+'pending' 체크, self-UPDATE has_any_row 체크) + defense-in-depth 2종(trigger, cross-center
+join) **전부 Live 적용·확인 완료**. 회귀 테스트(Integration) GREEN 확인은 2026-08-13 당일
+여러 세션의 동시 CI 실행으로 인한 인프라 부하(SQL과 무관)로 보류 — 부하가 가라앉은 뒤
+재확인 필요.
+
 ## 2026-08-13 — E2E `.sheet-overlay` 타이밍 플레이키니스 근본 수정(테스트 파일만)
 
 CI 재실행을 반복하는 과정에서 `.sheet-overlay` 관련 실패가 매번 다른 파일에서 발생하는 걸
