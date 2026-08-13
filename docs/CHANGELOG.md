@@ -8,6 +8,21 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-13 — SEC-114/SEC-115 P0/P1 보안 수정 Live 적용(사용자 확인 완료)
+
+- **SEC-114(P0) `auto_book_membership()`**: caller authorization 없이 SECURITY DEFINER +
+  PUBLIC EXECUTE 상태였던 IDOR 취약점 수정. `v_mem.center_id in my_managed_center_ids()
+  or is_platform_admin()` 검사 추가, `EXECUTE`를 `authenticated`로 최소화, `pass_selection_mode`/
+  `membership_schedule_rules`/`booking·open deadline`/`center_holidays`/`daily_book_limit`/
+  `private_max_concurrent` 등 최신 예약 정책 누락분을 `reserve_class`와 동일하게 보강.
+  회귀 테스트 `tests/integration/auto-book-membership-security.test.ts`(AUTO-SEC-A~P, 16개).
+- **SEC-115(P1) `manager_set_attendance()`**: waitlisted 예약 취소 시 차감된 적 없는 수강권을
+  잘못 복구하던 문제, waitlisted→confirmed 직접 전환으로 무차감 확정하던 우회 경로 차단.
+  회귀 테스트 `tests/integration/manager-set-attendance-membership-integrity.test.ts`
+  (ATT-SEC-A~J, 10개).
+- 둘 다 `set search_path = public` 추가. 사용자가 Supabase SQL Editor에서 순서대로 직접
+  실행하고 EXECUTE 권한(`authenticated`+`postgres`만) 실측 확인 완료.
+
 ## 2026-08-13 — `manager_centers`/`center_roles`/`centers` RLS 무한 재귀 긴급 hotfix 4종(Live 적용·사용자 확인 완료) — 스태프 초대 기능 복구
 
 **배경**: `manager_centers`(센터별 스태프/역할 배정 테이블)에 대한 별도 보안 배치(SEC-101/112/113
