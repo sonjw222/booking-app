@@ -1,6 +1,8 @@
 -- ============================================================
--- SEC-116(P2) + SEC-117(P3): SECURITY DEFINER RPC 하드닝 배치
--- (EXECUTE 최소화 + search_path 고정) — 로직 변경과 완전히 분리된 파일
+-- SEC-117(P2/P3, search_path 고정) + SEC-119(P3, EXECUTE 최소화): SECURITY DEFINER
+-- RPC 하드닝 배치 — 로직 변경과 완전히 분리된 파일
+-- (파일명은 예전 번호 그대로 유지 — canonical 번호 매핑은 docs/TODO.md 참고.
+-- SEC-116은 이 파일과 무관한 별개 항목: fulfill_order 세분권한 미사용, 제품 결정 대기)
 --
 -- ⚠ 대상에서 제외(별도 파일에서 이미 처리):
 --   - auto_book_membership  → fix_auto_book_membership_idor_draft_proposed.sql (SEC-114, 로직도 변경)
