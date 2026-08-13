@@ -278,12 +278,19 @@ describe("SEC-114 AUTO-D~K [2026-08-14 보강]: 플랫폼 운영자 / membership
     const { error: flagErr } = await admin.from("accounts").update({ is_platform_admin: true }).eq("id", userA.accountId);
     if (flagErr) throw new Error(`platform admin 플래그 설정 실패: ${flagErr.message}`);
 
-    await asUserA();
-    const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
-    expect(error).toBeNull();
-    expect((data as any).booked).toBeGreaterThanOrEqual(1);
-
-    await admin.from("accounts").update({ is_platform_admin: false }).eq("id", userA.accountId);
+    // 이 assert가 실패해도(예: 공유 테스트센터에 쌓인 leftover 예약과 날짜가 겹쳐 booked=0이
+    // 나오는 경우 — SEC-114 인증 로직과 무관, docs/TODO.md P2-22와 같은 계열) userA의
+    // is_platform_admin 플래그는 반드시 원복해야 한다. 안 그러면 이후 다른 테스트(userA가
+    // platform admin이 아니라고 가정하는 인가 테스트들)가 이 leftover 플래그 때문에 연쇄로
+    // 잘못 통과/실패한다(실측 확인됨).
+    try {
+      await asUserA();
+      const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
+      expect(error).toBeNull();
+      expect((data as any).booked).toBeGreaterThanOrEqual(1);
+    } finally {
+      await admin.from("accounts").update({ is_platform_admin: false }).eq("id", userA.accountId);
+    }
   });
 
   it("AUTO-E: 환불된(refunded) 수강권은 자동예약되지 않는다(정상 매니저 호출이어도)", async () => {
