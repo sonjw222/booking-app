@@ -35,6 +35,19 @@ let centerAId: string;
 
 const cleanupClassIds: string[] = [];
 
+// 이 describe 스위트 전체가 makeConfirmedReservation()/makeWaitlistedReservation()을
+// 여러 번 호출하며 매번 userB로 새 수업을 예약한다. 공유 테스트센터에 daily_book_limit이
+// 켜져 있을 수 있고, ATT-SEC-G는 "attended → confirmed 되돌리기"가 테스트 목적이라
+// 일부러 그 예약을 confirmed 상태로 남겨둔다 — 그 상태가 daily_book_limit 카운트에
+// 그대로 잡혀 같은 날짜의 다음 호출을 막아버리는 게 실측 확인됨(SEC-115 로직과 무관한
+// 순수 테스트 격리 문제). 호출마다 서로 다른 날짜로 흩어 이 충돌 자체를 구조적으로 피한다.
+let daySpreadCounter = 0;
+function nextHoursFromNow(baseHours: number): number {
+  const hours = baseHours + daySpreadCounter * 24;
+  daySpreadCounter += 1;
+  return hours;
+}
+
 async function asManagerA() { return switchToTestUser(MANAGER_A.email, MANAGER_A.password); }
 async function asManagerB() { return switchToTestUser(MANAGER_B.email, MANAGER_B.password); }
 async function asUserB() { return switchToTestUser(USER_B.email, USER_B.password); }
@@ -54,20 +67,36 @@ async function fetchReservationStatus(reservationId: string): Promise<string> {
 
 // confirmed 예약 1건(잔여 -1 소모된 상태)을 만든다: capacity 넉넉한 수업 + USER_B 멤버십.
 async function makeConfirmedReservation(): Promise<{ reservationId: string; membershipId: string; remainingAfterBooking: number }> {
-  const cls = await createFutureTestClass(centerAId, { title: "ATT-SEC 확정", capacity: 8 });
+  // classes INSERT는 매니저 권한이 필요하다 — beforeAll이 마지막에 userB로 세션을
+  // 남겨두므로(또는 직전 테스트가 userB/managerB로 끝났을 수 있으므로), 수업 생성
+  // 전에 명시적으로 managerA 세션을 확정한다.
+  await asManagerA();
+  const cls = await createFutureTestClass(centerAId, { title: "ATT-SEC 확정", capacity: 8, hoursFromNow: nextHoursFromNow(48) });
   cleanupClassIds.push(cls.id);
   await asUserB();
-  const mem = await createTestMembership(centerAId, userB.profileId, { remainingCount: 3 });
+  await createTestMembership(centerAId, userB.profileId, { remainingCount: 3 });
   const res = await reserveAsCurrentUser(cls.id, userB.profileId);
   expect(res.status).toBe("confirmed");
-  const remaining = await fetchMembershipRemaining(mem.id);
-  return { reservationId: res.id, membershipId: mem.id, remainingAfterBooking: remaining ?? 0 };
+  // reserve_class()는 p_membership_id를 받지 않고 내부적으로 알아서 소진할 membership을
+  // 고른다. 공유 테스트 계정(userB)에는 다른 파일/세션이 남긴 멤버십이 더 있을 수 있어,
+  // 방금 만든 것이 아니라 실제로 그 예약에 소진될 membership을 admin으로 다시 확인한다
+  // (실측 확인됨 — 방금 만든 membership을 그대로 믿었더니 다른 leftover membership이
+  // 대신 소진돼 remaining_count가 안 바뀐 것처럼 보였다).
+  const admin = getFixtureAdminClient();
+  const { data: resRow, error: resErr } = await admin.from("reservations").select("membership_id").eq("id", res.id).single();
+  if (resErr || !(resRow as any)?.membership_id) throw new Error(`예약의 membership_id 조회 실패: ${resErr?.message ?? "membership_id가 null"}`);
+  const membershipId = (resRow as any).membership_id as string;
+  const remaining = await fetchMembershipRemaining(membershipId);
+  return { reservationId: res.id, membershipId, remainingAfterBooking: remaining ?? 0 };
 }
 
 // waitlisted 예약 1건(잔여 소모 없음)을 만든다: capacity=1 수업을 USER_B가 먼저 확정으로
 // 채운 뒤, MANAGER_A 본인 명의로 같은 수업에 다시 예약해 대기로 밀려나게 한다.
 async function makeWaitlistedReservation(): Promise<{ reservationId: string; membershipId: string; remainingBefore: number }> {
-  const cls = await createFutureTestClass(centerAId, { title: "ATT-SEC 대기", capacity: 1 });
+  // classes INSERT는 매니저 권한이 필요하다 — 위 makeConfirmedReservation과 동일한 이유로
+  // 수업 생성 전에 명시적으로 managerA 세션을 확정한다.
+  await asManagerA();
+  const cls = await createFutureTestClass(centerAId, { title: "ATT-SEC 대기", capacity: 1, hoursFromNow: nextHoursFromNow(48) });
   cleanupClassIds.push(cls.id);
 
   await asUserB();
@@ -194,12 +223,17 @@ describe("SEC-115 ATT-SEC-I~J: 권한 경계(매니저 소속 센터 확인)", (
 
 describe("SEC-115 ATT-SEC-K [2026-08-14 추가]: ADMIN_FREE 배치는 membership_id가 애초에 null이라 취소해도 영향 없다", () => {
   it("ATT-SEC-K: ADMIN_FREE로 배치된 confirmed 예약을 manager_set_attendance로 취소해도 어떤 membership도 변경되지 않는다", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "ATT-SEC-K ADMIN_FREE", capacity: 8 });
-    cleanupClassIds.push(cls.id);
     await asManagerA();
+    const cls = await createFutureTestClass(centerAId, { title: "ATT-SEC-K ADMIN_FREE", capacity: 8, hoursFromNow: nextHoursFromNow(48) });
+    cleanupClassIds.push(cls.id);
     const { data, error: assignErr } = await supabase.rpc("admin_assign_reservation", {
       p_class_id: cls.id, p_profile_id: userB.profileId, p_assignment_type: "ADMIN_FREE",
-      p_membership_id: null, p_reason_code: "PROMO", p_reason_detail: null, p_force_capacity: false,
+      // "PROMO"는 admin_assign_reservation()이 실제로 허용하는 reason_code 목록에 없다
+      // (add_admin_assignment.sql — MEMBER_REQUEST/MAKEUP_CLASS/TRIAL/EVENT/
+      // SERVICE_COMPENSATION/CENTER_OPERATION/VIP_INVITATION/ERROR_CORRECTION/OTHER만
+      // 허용). 이 테스트는 reason_code 자체를 검증하는 게 아니라 ADMIN_FREE 배치 이후의
+      // membership 무영향을 확인하는 게 목적이라 유효한 코드로 바꾼다.
+      p_membership_id: null, p_reason_code: "EVENT", p_reason_detail: null, p_force_capacity: false,
     });
     if (assignErr) throw new Error(`ADMIN_FREE 배치 실패: ${assignErr.message}`);
     const reservationId = (data as any).reservation_id;

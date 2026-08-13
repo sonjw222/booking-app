@@ -289,16 +289,29 @@ describe("G, H, J: SEC-112 — 이미 초대된 저권한 스태프의 self-prom
 
     // 이제 userB는 "다른 센터"의 진짜 오너 role_id를 하나 갖고 있다. 이걸 centerA의
     // 자기 행에 주입 시도 — role_id가 그 행의 center_id(centerA) 소속이 아니므로 거부돼야 함.
-    const { error } = await supabase
+    // RLS가 막은 UPDATE는 에러 없이 조용히 0건 처리될 수 있으므로(이 파일의 다른
+    // 테스트들과 동일한 패턴) 에러 유무가 아니라 실제로 안 바뀌었는지로 판정한다.
+    await supabase
       .from("manager_centers")
       .update({ role_id: (ownerRoleOfNewCenter as any).id })
       .eq("id", lowPrivStaffRowId);
-    expect(error).not.toBeNull();
+    const admin = getFixtureAdminClient();
+    const { data: check } = await admin.from("manager_centers").select("role_id").eq("id", lowPrivStaffRowId).maybeSingle();
+    expect((check as any)?.role_id).not.toBe((ownerRoleOfNewCenter as any).id);
   });
 
   it("L: 한 계정(userB)이 여러 센터에서 서로 다른 역할을 갖는 정상 케이스는 그대로 유지된다", async () => {
     // 위 테스트들의 결과로 userB는 이제 centerA(강사, 초대됨)와 새로 만든 센터(오너,
     // 스스로 부트스트랩)에 동시에 서로 다른 역할로 존재한다 — 그 자체가 이 케이스의 증거.
+    //
+    // ⚠ 이 describe 블록은 asManagerA()/asUserB()를 여러 번 오가며 세션을 전환한다.
+    // 파일 맨 앞 outer beforeAll에서 딱 한 번 로그인했던 userA 세션의 GoTrueClient
+    // 백그라운드 auto-refresh 타이머가, 한참 뒤(G~J를 거친 이 시점)에 뒤늦게 발동해
+    // 그사이 signIn으로 전환해둔 userB 세션 저장을 덮어써버리는 현상이 실측 확인됐다
+    // (RLS 정책 문제가 아니라 supabase-js 세션 전환 시 이미 문서화된 race — 이 파일
+    // switchToTestUser() 위쪽 주석의 "commit guard" 설명과 같은 계열의 문제). 그래서
+    // 이 assert 직전에 세션을 다시 명시적으로 userB로 확정한다.
+    await asUserB();
     const { data, error } = await supabase
       .from("manager_centers")
       .select("center_id, role_id, status")
@@ -318,6 +331,12 @@ describe("P~Q [v2, 2026-08-14 추가]: 사용자가 지적한 SEC-112/SEC-101 �
     // API를 직접 쳐서 "역할은 나중에 정하기로 하고 일단 초대"하는 것을 막지 않음).
     // v1의 self-UPDATE 분기는 "role_id가 null인 내 행"이면 무조건 후보였으므로, 이렇게
     // 초대된 행도 부트스트랩 행과 구분 없이 self-promote가 가능했다(v2에서 막힘).
+    // E 테스트가 이미 (userB, centerA) 조합으로 manager_centers 행을 만들어뒀을 수 있다
+    // (그 파일의 cleanup은 afterAll에서만 일괄 처리돼 테스트 사이에는 안 지워짐) —
+    // unique(account_id, center_id) 충돌을 피하려고 이 테스트 전용으로 먼저 정리한다.
+    const admin = getFixtureAdminClient();
+    await admin.from("manager_centers").delete().eq("account_id", userB.accountId).eq("center_id", centerAId);
+
     await asManagerA();
     const { data: invited, error: inviteErr } = await supabase
       .from("manager_centers")
