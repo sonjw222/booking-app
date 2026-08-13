@@ -8,9 +8,9 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
-## 2026-08-14 — P2-13 service_role GRANT(contracts/notification_logs만, 좁은 범위) 구현
+## 2026-08-14 — ✅ P2-13 service_role GRANT(contracts/notification_logs만, 좁은 범위) Live 적용 완료
 
-**SQL 실행 없음, main merge 없음.** `contracts`/`notification_logs`에 service_role
+**사용자가 SQL 직접 실행, Live 적용 완료.** `contracts`/`notification_logs`에 service_role
 GRANT(select/insert/update/delete) 추가 — 두 테이블 다 RLS는 이미 활성화, 정책은 0건이라
 이 GRANT만으로는 여전히 owner를 포함해 아무도 접근 못 하는 상태가 유지된다(정책 자체는
 안 건드림). 나머지 14개 테이블(Batch A2/B/C/D)의 RLS 정책 전체 롤아웃은 범위가 크고
