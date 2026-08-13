@@ -35,6 +35,12 @@
 -- [위험도] 낮음 — 새 컬럼/새 RPC 추가, 기존 함수는 조회 로직만 앞에 추가(발급 로직
 -- 자체는 변경 없음).
 --
+-- [fulfill_order() 본문 출처] 이 저장소에 fulfill_order 정의가 6개 파일에 흩어져 있어
+-- (P0-3 기존 확인 사항) 2026-08-13에 사용자가 `pg_get_functiondef('fulfill_order(uuid)')`로
+-- 실제 Live 본문을 직접 조회해 확인함 — direct_amount 컬럼/분기(add_direct_payment.sql
+-- 계열)가 포함된 버전이 Live였다. 아래 [3]은 그 실측 본문에 SEC-118 재검증 한 줄만 추가한
+-- 것이다(다른 로직 변경 없음, 문자 그대로 대조 확인).
+--
 -- 여러 번 실행해도 안전.
 -- ============================================================
 
@@ -188,11 +194,11 @@ begin
         'count', v_count, v_count, v_expires, 'active'
     ) returning id into v_membership_id;
 
-    -- 2) 매출 기록 (결제수단은 주문의 pay_method 기준으로 대략 분류)
+    -- 2) 매출 기록 (결제수단별 분류 — 직접결제 포함)
     insert into payments (
         center_id, profile_id, membership_id,
         sale_type, revenue_category,
-        card_amount, cash_amount, transfer_amount, point_amount,
+        card_amount, cash_amount, transfer_amount, point_amount, direct_amount,
         total_amount, unpaid_amount, paid_at, status, memo
     ) values (
         v_order.center_id, v_order.profile_id, v_membership_id,
@@ -201,11 +207,12 @@ begin
         0,
         case when v_order.pay_method = 'transfer' then v_order.amount else 0 end,
         0,
+        case when v_order.pay_method = 'direct' then v_order.amount else 0 end,
         v_order.amount, 0, now(), 'paid',
         '앱 주문 자동 발급'
     );
 
-    -- 3) 센터 회원목록에 자동 등록 (없으면 추가, 만료회원이면 복귀)
+    -- 3) 센터 회원목록에 자동 등록
     perform ensure_center_member(v_order.center_id, v_order.profile_id);
 
     -- 3-1) 회원이 자동예약을 선택했고 요일반 수강권이면 자동 예약

@@ -63,7 +63,7 @@ begin
     insert into payments (
         center_id, profile_id, membership_id,
         sale_type, revenue_category,
-        card_amount, cash_amount, transfer_amount, point_amount,
+        card_amount, cash_amount, transfer_amount, point_amount, direct_amount,
         total_amount, unpaid_amount, paid_at, status, memo
     ) values (
         v_order.center_id, v_order.profile_id, v_membership_id,
@@ -72,6 +72,7 @@ begin
         0,
         case when v_order.pay_method = 'transfer' then v_order.amount else 0 end,
         0,
+        case when v_order.pay_method = 'direct' then v_order.amount else 0 end,
         v_order.amount, 0, now(), 'paid',
         '앱 주문 자동 발급'
     );
