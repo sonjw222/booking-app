@@ -7,14 +7,14 @@
 -- manager_centers 서브쿼리로 되돌린다.
 --
 -- ⚠⚠⚠ 매우 중요 — 이 롤백을 실행하면 2026-08-13에 사용자가 Live에 적용·실측 확인한
--- RLS 무한 재귀 hotfix 3종(center_roles/has_permission/manager_centers 자기참조,
+-- RLS 무한 재귀 hotfix 4종(center_roles/has_permission/manager_centers 자기참조,
 -- fix_center_roles_manager_centers_recursion_draft_proposed.sql 등 3개 파일)이 전부
 -- 원상복구되어 **"스태프 추가에 실패했어요: infinite recursion detected in policy for
 -- relation manager_centers" 버그가 다시 재현된다.** 스태프 초대 기능이 다시 완전히
 -- 깨진다는 뜻이다.
 --
 -- 이 롤백은 SEC-101(임의 센터 self-join)/SEC-112(self-promote)/SEC-113(마지막 행
--- self-delete → orphan → 재클레임)/RLS 무한 재귀 hotfix 3종/has_permission()
+-- self-delete → orphan → 재클레임)/RLS 무한 재귀 hotfix 4종/has_permission()
 -- defense-in-depth를 전부 그대로 되돌린다. 회귀 테스트가 실제로 이 배치 때문에
 -- 실패하는 것으로 확인된 경우에만, 그리고 근본 원인을 먼저 규명한 뒤에만 사용할 것.
 -- 정말로 필요한 경우가 아니면 이 파일 전체 대신 개별 hotfix 파일의 개별 rollback
@@ -101,11 +101,28 @@ create policy "내 센터 역할 조회"
     on center_roles for select
     using (center_id in (select center_id from manager_centers where account_id = my_account_id()));
 
+-- centers "승인된 센터 조회"를 hotfix v4 이전 원래 정의(raw manager_centers 서브쿼리)로 복원
+drop policy if exists "승인된 센터 조회" on centers;
+create policy "승인된 센터 조회"
+    on centers for select using (
+        status = 'approved'
+        or id in (select my_managed_center_ids())
+        or id in (select center_id from manager_centers where account_id = my_account_id())
+        or is_platform_admin()
+    );
+drop function if exists my_center_ids_any_status();
+
 COMMIT;
 
 -- ============================================================
 -- 완료. add_staff_permissions.sql 원본 4개 정책 + 원래 has_permission() 정의 +
--- 원래 center_roles "내 센터 역할 조회" 정책(raw 서브쿼리)으로 정확히 복원됨.
--- 신규 trigger·helper 함수 3종은 제거됨.
--- ⚠ 이 상태는 RLS 무한 재귀 버그가 있는 상태다 — 스태프 초대가 다시 깨진다.
+-- 원래 center_roles "내 센터 역할 조회" 정책(raw 서브쿼리) + 원래 centers "승인된 센터
+-- 조회" 정책(raw 서브쿼리)으로 정확히 복원됨. 신규 trigger·helper 함수 3종 +
+-- my_center_ids_any_status()는 제거됨.
+--
+-- ⚠ 이 상태는 RLS 무한 재귀 버그가 있는 상태다 — 스태프 초대가 다시 깨진다. 또한
+-- 사용자가 Live에 직접 추가한 두 강화 조건(매니저센터 생성의 centers.status='pending'
+-- 체크, 오너 스태프 수정 self 분기의 has_any_row 체크)도 함께 사라진다 — 이 두 조건은
+-- 애초에 "매니저센터 생성"/"오너 스태프 수정" 정책 자체가 이 롤백에서 add_staff_
+-- permissions.sql 원본으로 완전히 대체되므로 자동으로 제거된다.
 -- ============================================================

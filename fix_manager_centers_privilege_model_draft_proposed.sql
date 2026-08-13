@@ -5,44 +5,57 @@
 -- 이 파일은 fix_manager_centers_privilege_escalation_draft_proposed.sql(이미 Live 적용됨,
 -- SEC-101/112/113 RLS 정책 3종)을 **대체**한다.
 --
--- ⚠⚠⚠ 2026-08-13 재조정(reconciliation) 안내 ⚠⚠⚠
+-- ⚠⚠⚠ 2026-08-13 재조정(reconciliation) 안내 (2차 갱신) ⚠⚠⚠
 -- 이 파일은 원래 has_permission() defense-in-depth + role_id/center_id trigger 2가지만
--- 새로 추가할 계획이었으나, CI/실사용 재현 과정에서 **3겹으로 겹친 RLS 무한 재귀 버그**가
--- 드러나 다른 세션이 별도의 독립 hotfix 3개 파일로 순서대로 진단·수정했고, **사용자가
--- 이미 Live에 그 3개를 전부 적용해 스태프 초대 정상 동작을 실측 확인했다**(2026-08-13):
+-- 새로 추가할 계획이었으나, CI/실사용 재현 과정에서 **4겹으로 겹친 RLS 무한 재귀 버그**가
+-- 드러나 다른 세션이 별도의 독립 hotfix 4개 파일로 순서대로 진단·수정했고, **사용자가
+-- 이미 Live에 그 4개를 전부 적용해 스태프 초대 정상 동작을 실측 확인했다**(2026-08-13):
 --   1. fix_center_roles_manager_centers_recursion_draft_proposed.sql (Live 적용됨)
 --   2. fix_has_permission_manager_centers_recursion_draft_proposed.sql (Live 적용됨)
 --   3. fix_manager_centers_self_reference_recursion_draft_proposed.sql (Live 적용됨)
--- 이 파일은 그 3개 hotfix가 만든 **현재 Live 상태와 일치하도록** [1]~[4], [6], [7]을
--- 다시 맞췄다 — 그래야 이 파일을 나중에 (재)적용해도 이미 Live에 있는 수정을 실수로
--- 되돌리지 않는다(전부 DROP POLICY/CREATE OR REPLACE라 멱등하지만, "멱등"은 "내용이
--- 최신"이라는 뜻이 아니므로 반드시 이 재조정이 필요했다). **이 파일에서 hotfix 3개 대비
+--   4. fix_centers_manager_centers_recursion_draft_proposed.sql (Live 적용됨, [8]번)
+-- 추가로 **사용자가 Live SQL Editor에서 직접 넣은 강화 조건 2개**도 확인·동의를 거쳐 이
+-- 파일에 반영했다(2026-08-13 대화에서 "ㅇㅇ맞는거같아"로 확인):
+--   - [1] "매니저센터 생성"에 `centers.status = 'pending'` 체크 추가 — approved된 센터가
+--     orphan이 되더라도 self-INSERT로 재클레임 못 하게 막는 추가 방어선(PART 3에서
+--     "새 컬럼 필요"로 봤던 provenance 문제를 기존 status 필드로 해결).
+--   - [3] "오너 스태프 수정" self 분기에 `not manager_centers_has_any_row(center_id, id)`
+--     추가 — self-INSERT~self-UPDATE 사이 out-of-band 경로로 다른 행이 끼어드는 경우까지
+--     방어.
+-- 이 파일은 그 4개 hotfix + 사용자의 2개 강화 조건이 만든 **현재 Live 상태와 일치하도록**
+-- [1]~[4], [6]~[8]을 다시 맞췄다 — 그래야 이 파일을 나중에 (재)적용해도 이미 Live에 있는
+-- 수정을 실수로 되돌리지 않는다(전부 DROP POLICY/CREATE OR REPLACE라 멱등하지만, "멱등"은
+-- "내용이 최신"이라는 뜻이 아니므로 반드시 이 재조정이 필요했다). **이 파일에서 Live 대비
 -- 유일하게 남는 진짜 신규 변경은 [5]번 trigger와 [6]번 has_permission()의 `r.center_id =
--- mc.center_id` cross-center join 조건 추가뿐**이다 — 나머지는 전부 hotfix 3개와 동일한
--- 내용의 재선언(멱등, 안전).
+-- mc.center_id` cross-center join 조건 추가뿐**이다 — 나머지는 전부 Live와 동일한 내용의
+-- 재선언(멱등, 안전).
 --
 -- ============================================================
--- [🚨 RLS 무한 재귀 3겹 — 근본 원인 전체 요약]
+-- [🚨 RLS 무한 재귀 4겹 — 근본 원인 전체 요약]
 -- ============================================================
 --   fix_manager_centers_privilege_escalation_draft_proposed.sql(2026-08-12 Live 적용)이
 --   도입한 cross-center role_id 검사(SEC-112(b))가 `manager_centers`/`center_roles`
 --   상호 참조와 결합해 "infinite recursion detected in policy for relation
 --   manager_centers"로 스태프 초대(/manager/staff)가 완전히 깨졌다. 원인은 raw
---   (non-security-definer) 서브쿼리 3곳이 겹쳐 있었다(사용자가 실제로 하나씩 적용하며
+--   (non-security-definer) 서브쿼리가 4겹 겹쳐 있었다(사용자가 실제로 하나씩 적용하며
 --   재현 확인, 2026-08-13):
 --
 --   1) `center_roles`의 "내 센터 역할 조회" SELECT 정책이 `manager_centers`를 raw
 --      서브쿼리로 되짚음 → [7]에서 my_managed_center_ids()로 교체.
 --   2) `has_permission()` 자체가 security definer가 아니어서 `manager_centers`/
 --      `center_roles`를 caller 권한(raw)으로 JOIN함 → [6]에서 security definer로 전환.
---   3) (가장 직접적인 원인) `manager_centers`의 "매니저센터 생성"/"오너 스태프 삭제"
---      정책 자체가 `manager_centers`를 함수 없이 raw self-subquery로 되짚음 — 같은
---      command에 대해 permissive 정책은 전부 OR로 평가되므로, "오너 스태프 초대"
---      경로로 들어온 INSERT라도 "매니저센터 생성"의 WITH CHECK가 함께 평가되며 걸림
---      → [1]~[4]에서 신규 helper 함수(전부 security definer)로 치환.
+--   3) `manager_centers`의 "매니저센터 생성"/"오너 스태프 삭제" 정책 자체가
+--      `manager_centers`를 함수 없이 raw self-subquery로 되짚음 — 같은 command에 대해
+--      permissive 정책은 전부 OR로 평가되므로, "오너 스태프 초대" 경로로 들어온
+--      INSERT라도 "매니저센터 생성"의 WITH CHECK가 함께 평가되며 걸림 → [1]~[4]에서
+--      신규 helper 함수(전부 security definer)로 치환.
+--   4) 사용자가 [1]에 `centers.status='pending'` 체크를 추가하면서 처음 드러난 경로:
+--      그 EXISTS가 `centers`를 raw 참조 → `centers`의 "승인된 센터 조회" SELECT 정책이
+--      다시 `manager_centers`를 raw 참조 → 순환 → [8]에서 my_center_ids_any_status()로
+--      교체.
 --
---   3개 전부 고쳐야만 순환이 완전히 끊긴다(1개나 2개만 고치면 남은 겹에서 계속 재현됨
---   — 실제로 사용자가 순서대로 적용하며 이를 실측했다).
+--   4개 전부 고쳐야만 순환이 완전히 끊긴다(일부만 고치면 남은 겹에서 계속 재현됨 —
+--   실제로 사용자가 순서대로 적용하며 이를 실측했다).
 --
 -- ============================================================
 -- [보안 invariant — 이 파일이 보장해야 하는 것]
@@ -164,7 +177,12 @@ as $$
 $$;
 
 -- ------------------------------------------------------------
--- [1] INSERT "매니저센터 생성" — SEC-101 (hotfix v3와 동일 재선언 — helper 함수 사용)
+-- [1] INSERT "매니저센터 생성" — SEC-101 (hotfix v3 + 사용자가 Live에 직접 추가한
+--     centers.status='pending' 체크, 2026-08-13 확인·동의됨). PART 1/3에서 지적한
+--     "0행 = 신규 센터" 판정의 간접성 문제(신규와 orphan을 구조적으로 구분 못 함)를
+--     새 컬럼 없이 기존 centers.status 생애주기(pending→approved, schema.sql:36-37)로
+--     해결한다 — approved된 센터는 orphan이 되더라도 더 이상 self-INSERT로 재클레임
+--     불가능해짐(SEC-113 DELETE 가드와 별개의 추가 방어선).
 -- ------------------------------------------------------------
 drop policy if exists "매니저센터 생성" on manager_centers;
 create policy "매니저센터 생성"
@@ -173,6 +191,10 @@ create policy "매니저센터 생성"
         account_id = my_account_id()
         and role_id is null
         and not manager_centers_has_any_row(center_id)
+        and exists (
+            select 1 from centers c
+            where c.id = manager_centers.center_id and c.status = 'pending'
+        )
     );
 
 -- ------------------------------------------------------------
@@ -190,13 +212,17 @@ create policy "오너 스태프 초대"
     );
 
 -- ------------------------------------------------------------
--- [3] UPDATE "오너 스태프 수정" — SEC-112(b) (hotfix v3와 동일 재선언 — helper 함수 사용)
+-- [3] UPDATE "오너 스태프 수정" — SEC-112(b) (hotfix v3 + 사용자가 Live에 직접 추가한
+--     self 분기 강화, 2026-08-13 확인·동의됨). self-UPDATE(bootstrap 2단계, role_id
+--     null→owner 전환)를 "이 센터에 나 말고 다른 manager_centers 행이 없을 때만"으로
+--     좁힘 — self-INSERT ~ self-UPDATE 사이 out-of-band(service_role 등) 경로로 다른
+--     행이 끼어드는 경우까지 방어하는 defense-in-depth, 정상 흐름에는 영향 없음.
 -- ------------------------------------------------------------
 drop policy if exists "오너 스태프 수정" on manager_centers;
 create policy "오너 스태프 수정"
     on manager_centers for update
     using (
-        (account_id = my_account_id() and role_id is null)
+        (account_id = my_account_id() and role_id is null and not manager_centers_has_any_row(center_id, id))
         or has_permission(center_id, 'facility.staff.update')
     )
     with check (
@@ -311,12 +337,39 @@ create policy "내 센터 역할 조회"
     on center_roles for select
     using (center_id in (select my_managed_center_ids()));
 
+-- ------------------------------------------------------------
+-- [8] centers "승인된 센터 조회" — hotfix v4와 동일 재선언(Live 적용됨, 멱등). [1]번의
+--     centers.status='pending' 체크가 추가되며 처음 드러난 4번째 재귀 경로: 그 EXISTS가
+--     centers를 raw 참조 → centers의 이 정책이 다시 manager_centers를 raw 참조하던
+--     것을 status 필터 없는 신규 헬퍼 my_center_ids_any_status()로 교체해 순환을 끊는다.
+--     조건 자체(내가 속한 센터면 승인 여부 무관하게 보임)는 전혀 바뀌지 않음.
+-- ------------------------------------------------------------
+create or replace function my_center_ids_any_status()
+returns setof uuid
+language sql stable
+security definer
+set search_path = public
+as $$
+    select center_id from manager_centers where account_id = my_account_id();
+$$;
+
+drop policy if exists "승인된 센터 조회" on centers;
+create policy "승인된 센터 조회"
+    on centers for select using (
+        status = 'approved'
+        or id in (select my_managed_center_ids())
+        or id in (select my_center_ids_any_status())
+        or is_platform_admin()
+    );
+
 COMMIT;
 
 -- ============================================================
 -- 완료.
---   - [0]~[4], [7]: hotfix 3종(2026-08-13 Live 적용·사용자 확인됨)과 동일한 내용의
---     재선언 — 이 파일을 (재)적용해도 이미 검증된 Live 상태를 되돌리지 않음.
+--   - [0]~[4], [7], [8]: hotfix 4종(2026-08-13 Live 적용·사용자 확인됨)과 동일한 내용의
+--     재선언 — 이 파일을 (재)적용해도 이미 검증된 Live 상태를 되돌리지 않음. [1]/[3]의
+--     추가 조건(centers.status='pending' 체크, self-UPDATE의 has_any_row 체크)은
+--     사용자가 Live에 직접 추가·확인한 것으로, 2026-08-13 대화에서 재확인됨.
 --   - [5] 신규 trigger: role_id/center_id mismatch를 어떤 쓰기 경로로도(RLS 우회 포함)
 --     차단. 아직 Live 미적용.
 --   - [6] has_permission(): hotfix v2의 security definer 전환에 cross-center join

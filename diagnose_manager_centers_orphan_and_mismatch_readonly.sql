@@ -86,3 +86,22 @@ where routine_name = 'has_permission';
 select proname, prosecdef
 from pg_proc
 where proname in ('manager_centers_has_any_row', 'role_id_belongs_to_center', 'role_id_is_owner_for_center');
+
+-- [13] 🚨 centers 테이블 "승인된 센터 조회" 정책 현재 정의 — 다른 세션이 raw subquery
+--      (manager_centers를 함수 없이 직접 참조하는 절)를 발견했다고 보고함. qual에
+--      "from manager_centers where account_id"가 보이면 그 raw 절이 아직 남아있는 것
+--      (4번째 순환 경로 후보). 이 정책은 이번 배치 파일들이 전혀 건드리지 않는 영역이라
+--      여기서 상태만 확인.
+select policyname, cmd, qual
+from pg_policies
+where tablename = 'centers' and policyname = '승인된 센터 조회';
+
+-- [14] 🚨 manager_centers INSERT 정책(특히 "매니저센터 생성")에 centers 테이블을
+--      참조하는 조건이 실제로 존재하는지 직접 확인 — 다른 세션이 발견했다는
+--      "EXISTS(select 1 from centers c where c.id = manager_centers.center_id and
+--      c.status = 'pending')" 조건의 실존 여부와 정확한 문구를 확인하기 위함(이 조건은
+--      이 세션이 작성한 어떤 draft 파일에도 없음 — 출처 미상, [6]/[9]로도 보이지만
+--      centers 키워드로 한 번 더 명시적으로 필터링).
+select policyname, cmd, with_check
+from pg_policies
+where tablename = 'manager_centers' and with_check ilike '%centers%';

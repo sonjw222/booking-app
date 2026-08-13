@@ -998,6 +998,20 @@ defense-in-depth) 2가지뿐 — 둘 다 아직 Live 미적용. rollback 파일�
 상단에 명시함. `diagnose_manager_centers_orphan_and_mismatch_readonly.sql`에 has_permission()
 security_type 확인([11])과 helper 함수 3종 존재 확인([12]) 진단 쿼리를 추가함.
 
+**✅ 2026-08-13 2차 재조정 — hotfix v4(4번째 재귀 경로) + 사용자 직접 추가 강화 조건 2개
+반영**: 다른 세션과의 실시간 조율(cross-session) 중, [1]의 `centers.status='pending'` 체크가
+추가되며 처음 드러난 4번째 재귀 경로(`centers` "승인된 센터 조회" 정책의 raw manager_centers
+서브쿼리)를 다른 세션이 hotfix v4(`fix_centers_manager_centers_recursion_draft_proposed.sql`,
+`my_center_ids_any_status()` 신규 헬퍼)로 진단·수정해 Live 적용·확인 완료함. 이 파일 [8]번으로
+동일 내용 재선언 추가. 또한 read-only 진단([6]) 결과, 사용자가 Live에 직접 추가한 강화 조건
+2개를 확인(2026-08-13 "ㅇㅇ맞는거같아"로 동의 확인) — [1] "매니저센터 생성"에
+`centers.status='pending'` 체크(approved 센터의 orphan 재클레임 차단), [3] "오너 스태프 수정"
+self 분기에 `not manager_centers_has_any_row(center_id, id)`(self-INSERT~UPDATE 사이 out-of-band
+방어) — 둘 다 이 파일에 반영함. `diagnose_...readonly.sql`에 centers 정책 확인([13]),
+manager_centers with_check의 centers 참조 확인([14]) 진단 쿼리도 추가함. 이제 재귀 경로는
+총 4겹이 전부 Live 적용·확인됐고, 이 파일에서 Live 대비 남은 진짜 신규 변경은 여전히
+[5]번 trigger와 [6]번 has_permission()의 cross-center join 조건 2가지뿐.
+
 **장기 과제(이번 배치 범위 밖, 별도 TODO)**: "owner transfer" 전용 워크플로우가 없음 — 현재는
 "오너를 하나 더 초대한 뒤 원래 오너가 self-delete"하는 수동 절차로만 핸드오프 가능함을
 확인했다(구 회귀 테스트 T 참고, 신규 SEC-MC 목록에는 미포함 — 명시적 제품 요구사항 아니라

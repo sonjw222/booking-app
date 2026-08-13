@@ -8,6 +8,29 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-13 — hotfix v4(4번째 재귀 경로) + 사용자 직접 강화 조건 2개를 canonical 파일에 반영(SQL 미실행)
+
+**SQL 실행 없음, main merge 없음.**
+
+다른 세션과 실시간 cross-session 조율 중, `[1]`(매니저센터 생성)에 추가된 `centers.status=
+'pending'` 체크가 `centers`→`manager_centers` raw 참조 순환을 새로 드러냈고, 다른 세션이
+hotfix v4(`fix_centers_manager_centers_recursion_draft_proposed.sql`, `my_center_ids_any_
+status()` 신규 헬퍼)로 Live 적용·확인 완료함. 이 파일 `[8]`번으로 동일 내용 재선언 추가.
+
+read-only 진단([6]) 결과, 사용자가 Live에 직접 추가한 강화 조건 2개도 확인·동의를 거쳐 반영:
+- `[1]` "매니저센터 생성"에 `centers.status='pending'` 체크 — approved된 센터가 orphan이
+  되더라도 self-INSERT로 재클레임 못 하게 막는 추가 방어선. PART 3에서 "새 컬럼 필요"로
+  봤던 provenance 문제를 기존 `status` 필드 생애주기로 해결(스키마 변경 없음).
+- `[3]` "오너 스태프 수정" self 분기에 `not manager_centers_has_any_row(center_id, id)` —
+  self-INSERT~self-UPDATE 사이 out-of-band 경로로 다른 행이 끼어드는 경우까지 방어.
+
+`diagnose_manager_centers_orphan_and_mismatch_readonly.sql`에 centers 정책 확인([13]),
+manager_centers with_check의 centers 참조 확인([14]) 추가. rollback 파일도 centers 정책 원복 +
+`my_center_ids_any_status()` DROP을 포함하도록 갱신.
+
+재귀 경로는 이제 총 4겹 전부 Live 적용·확인됨. 이 canonical 파일에서 Live 대비 남은 진짜
+신규 변경은 여전히 `[5]`번 trigger와 `[6]`번 has_permission()의 cross-center join 조건 2가지뿐.
+
 ## 2026-08-13 — `fix_manager_centers_privilege_model_draft_proposed.sql`을 Live 적용된 hotfix 3종에 맞춰 재조정(SQL 미실행)
 
 **SQL 실행 없음, main merge 없음.**
