@@ -586,10 +586,18 @@ error를 무시하지 않고 사용자에게 표시하도록는 고쳤지만, �
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인됨 — SQL 실행 필요, 이번 배치에서 실행하지 않음** |
-| 근거 파일 | `tests/integration/sec009-batch-a1-rls.test.ts`, `tests/integration/setup.ts`(`describeAdminQueryError`) |
-| 완료 조건 | `GRANT ALL ON TABLE contracts, notification_logs, ... TO service_role;`(대상 범위는 SEC-007 17개 테이블 전체로 할지 결정) 실행을 사용자 승인 후 진행하고, `contracts`/`notification_logs`의 자동화된 통합 테스트를 추가함 |
+| 현재 상태 | **좁은 범위(GRANT만) 구현 완료 — Live 미적용.** 2026-08-14 사용자 확인: 나머지 14개 테이블(Batch A2 나머지/B/C/D)의 RLS 정책 전체 롤아웃은 범위가 크고 대부분 현재 미사용 기능이라 이번에는 진행하지 않기로 결정 — `contracts`/`notification_logs` 2개 테이블의 service_role GRANT만 좁게 처리(정책 자체는 여전히 0건, Batch A2 정책 적용은 별도 승인 필요한 채로 남음). |
+| 근거 파일 | `fix_service_role_grants_contracts_notification_logs.sql`(canonical) + rollback |
+| 완료 조건 | 사용자가 SQL 적용. **주의**: 이 GRANT만으로는 `contracts`/`notification_logs`의 실제 RLS 정책이 여전히 0건이라(Batch A2 미적용) service_role(테스트 fixture) 외에는 owner를 포함해 아무도 접근 못 하는 상태가 계속된다 — 자동화된 통합 테스트는 Batch A2 정책이 별도로 적용된 뒤에나 의미 있게 작성 가능. |
 | 관련 문서 | [21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md) |
+
+**남은 범위(이번에 다루지 않음)**: Batch A2(`contracts`/`notification_logs` RLS 정책 자체),
+B(`staff_schedules`/`schedule_memos`/`contract_templates`/`terms`), C(`lockers`/
+`locker_assignments`/`membership_transfers`/`class_types`), D(`popup_notices`/
+`competitions`/`community_comments`/`change_logs`) — 총 14개 테이블의 RLS 정책 설계는
+[21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md)에 이미 완료돼 있으나 SQL 적용은 전부
+대기 중. 대부분 app/lib 코드 참조 0건인 미사용 기능이라 급하지 않음 — 해당 기능을 실제로
+켜기 시작하는 시점에 그 테이블부터 순서대로 적용 권장.
 
 SEC-009(Batch A 적용 준비) 중 발견: RLS 정책 부재와는 별개로, `staff_salaries`/`contracts`/
 `leads`/`messages`/`notification_logs` 5개 테이블 전부 `service_role`에 SQL GRANT 자체가 없다
