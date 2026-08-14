@@ -3071,6 +3071,57 @@ a.membership-card { text-decoration: none; display: block; }
   .cal-memo-row .input-field { min-width:0; }
 }
 
+/* Reservation confirmation is a compact review flow, not a flat form. */
+.member-reservation .sheet { padding-bottom: max(22px,env(safe-area-inset-bottom)); }
+.booking-confirm-section {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--bg);
+}
+.booking-confirm-kicker {
+  margin-bottom: 10px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+.booking-confirm-kicker span {
+  margin-left: 4px;
+  color: var(--brand-ink);
+  font-size: 11px;
+}
+.booking-confirm-class {
+  border-color: color-mix(in srgb,var(--brand) 34%,var(--line));
+  background: linear-gradient(135deg,var(--brand-soft),var(--bg) 72%);
+}
+.booking-confirm-class .confirm-class { margin:0; padding:0; border:0; background:transparent; }
+.booking-confirm-class .confirm-class-title { font-size:18px; font-weight:850; }
+.booking-confirm-class .confirm-class-sub { margin-top:5px; line-height:1.45; }
+.booking-confirm-pass .no-pass-row { display:grid; gap:12px; }
+.booking-confirm-pass .perm-guide {
+  padding:0; border:0; border-radius:0; background:transparent; line-height:1.55;
+}
+.purchasable-pass-list { display:flex; flex-wrap:wrap; gap:7px; margin:8px 0 0; padding:0; }
+.purchasable-pass-item {
+  display:inline-flex; align-items:center; min-height:34px; padding:7px 11px;
+  border:1px solid color-mix(in srgb,var(--brand) 32%,var(--line));
+  border-radius:999px; background:var(--brand-soft); color:var(--brand-ink);
+  font-size:13px; font-weight:750;
+}
+.booking-confirm-pass .no-pass-buy-btn {
+  justify-self:start; min-height:44px; padding:0 15px;
+  border:1px solid var(--ink); border-radius:13px; background:var(--bg); color:var(--ink);
+  font-weight:800;
+}
+.booking-confirm-goods .menu-section-label { display:none; }
+.booking-confirm-goods .perm-guide { padding:12px 0 0; border:0; background:transparent; }
+.member-reservation .sheet > .add-profile-actions {
+  position:sticky; bottom:0; z-index:2; margin:18px -2px 0 !important; padding-top:12px;
+  background:linear-gradient(to bottom,transparent,var(--bg) 18%);
+}
+
 /* Center actions remain visible in every tab and float clear of navigation. */
 .center-detail-v2 { padding-bottom: calc(var(--floating-nav-clearance) + 104px) !important; }
 .center-detail-v2 .center-bottom-bar {
