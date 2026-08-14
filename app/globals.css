@@ -3631,3 +3631,84 @@ textarea:focus-visible,
     transition-duration: .01ms !important;
   }
 }
+
+/* Final visual-QA cascade.
+   Keep these after every Batch rule so the post-migration polish cannot be
+   partially reverted by an older screen-specific declaration above. */
+.auth-panel .mode-tabs {
+  width: 100%;
+  max-width: 310px;
+  min-height: 52px;
+  margin: 0 0 24px;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--surface);
+}
+.auth-panel .mode-tab {
+  flex: 1;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--ink-soft);
+}
+.auth-panel .mode-tab.on {
+  border: 0;
+  background: var(--bg);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(20,20,20,.08);
+}
+
+.mypage-shell .profile-block {
+  min-height: 108px;
+  padding: max(30px,env(safe-area-inset-top)) var(--page-gutter) 22px;
+  gap: 12px;
+}
+.mypage-shell .avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 17px;
+  font-size: 20px;
+}
+.mypage-shell .profile-name { font-size: 19px; }
+.mypage-shell .membership-card,
+.mypage-shell .membership-card.goods {
+  padding: 18px;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--bg);
+}
+.mypage-shell .membership-card.goods {
+  border-color: color-mix(in srgb,var(--brand) 34%,var(--line));
+  background: linear-gradient(135deg,var(--brand-soft),var(--bg) 76%);
+}
+.mypage-shell .membership-card .name,
+.mypage-shell .membership-card .count span,
+.mypage-shell .membership-card .expire {
+  color: var(--ink-soft);
+  opacity: 1;
+}
+.mypage-shell .membership-card .progress-track { background: var(--surface-strong); }
+.mypage-shell .membership-card .progress-fill { background: var(--ink); }
+.mypage-shell .membership-card.goods .progress-fill { background: var(--brand); }
+.mypage-shell .membership-cta {
+  margin-top: 14px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: #fff;
+}
+
+.manager-home-v2 {
+  padding-bottom: calc(var(--floating-nav-clearance) + 92px);
+}
+.manager-home-v2 > .list-row .icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.7;
+}
+.manager-home-v2 > .list-row:last-of-type { margin-bottom: 24px; }
