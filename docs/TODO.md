@@ -375,21 +375,36 @@ reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시�
 없어 죽은 설정으로 보임)은 여전히 미해결 — P2/P3 후속 범위(프라이빗 셀프 슬롯 예약 UI를
 만들지 여부와 함께 제품 결정 필요)로 남긴다.
 
-### P1-13. 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
+### P1-13. (2026-08-14, 완료) 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **확인됨 — RLS 변경 필요, 이번 배치 미수정** |
-| 근거 파일 | `app/manager/center-info/page.tsx`, `reservation_functions.sql`("매니저 센터 수정" 정책) |
-| 완료 조건 | `facility.info` 권한 세분화를 실제로 적용할지(RLS를 `has_permission(center_id,'facility.info')`로 좁힘) 아니면 코드 주석을 실제 동작("센터 소속 active 스태프면 누구나 가능")에 맞게 고칠지 결정하고 반영함 |
+| 현재 상태 | **완료 — 두 세션이 같은 티켓을 서로 다른 레이어에서 손대 합쳐짐(겹치지 않고 서로 보완).** |
+| 근거 파일 | `app/manager/center-info/page.tsx`, `reservation_functions.sql`("매니저 센터 수정" 정책), `fix_centers_update_facility_info_permission.sql`(다른 세션, PR #54, 적용 완료), `fix_center_info_sensitive_fields_permission_draft_proposed.sql`(이 세션, 적용 완료) |
+| 완료 조건 | ~~`facility.info` 권한 세분화를 실제로 적용할지 결정하고 반영함~~ 완료. |
 | 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 센터관리 항목 |
 
 2026-08-02 Track B 감사에서 발견: `center-info/page.tsx` 상단 주석은 "시설 정보 설정 권한
 (facility.info) 필요 — 오너는 항상 가능"이라고 적혀 있지만, 실제 RLS 정책(`"매니저 센터 수정"`,
-`reservation_functions.sql`)은 `center_id in (select my_managed_center_ids())`만 확인합니다 —
-오너가 아닌 일반 스태프도 센터 정보·결제수단·평판점수를 수정할 수 있어 주석과 실제 동작이
-다릅니다. RLS 변경이 필요한 사안이라 Track B(SQL/RLS 변경 금지) 범위 밖입니다.
+`reservation_functions.sql`)은 `center_id in (select my_managed_center_ids())`만 확인했습니다 —
+오너가 아닌 일반 스태프도 센터 정보·결제수단·평판점수를 수정할 수 있었습니다.
+
+**2026-08-14 최종 확정(두 레이어)**: `facility.info` 권한 키는 이미 `schema.sql`에 정의돼
+있었고 `app/manager/page.tsx`의 메뉴 노출도 이미 `canSeeMenu("facility.info")`로 가려져
+있었지만(URL 직접 접근만 뚫려있었음), RLS 자체가 이를 확인 안 하고 있었습니다.
+- (다른 세션, PR #54) "매니저 센터 수정" RLS를 `has_permission(id,'facility.info') OR
+  is_platform_admin()`으로 좁힘 — facility.info 없으면 이 화면 전체(소개글/주소/전화 포함)
+  저장이 막힘. 사용자가 `fix_centers_update_facility_info_permission.sql` 적용, `pg_policies`
+  재조회로 확인.
+- (이 세션) 그 위에 결제수단(pay_methods)/후기 적립 포인트(review_point) 두 필드는 한 단계
+  더 좁혀 오너 또는 `facility.paymethod` 권한 보유자만(결제수단), 오너 전용(포인트, 대응
+  permission key 없음)으로 추가 제한 — `guard_center_sensitive_fields_change` BEFORE UPDATE
+  트리거(`fix_center_info_sensitive_fields_permission_draft_proposed.sql`)로 구현. "facility.info는
+  위임했지만 결제수단/포인트까지는 아직" 같은 세분화된 위임을 가능하게 하는 게 목적이라
+  facility.info 체크와 중복이 아님. 사용자가 SQL Editor에서 적용, `pg_trigger` 재조회로 확인.
+  `app/manager/center-info/page.tsx`도 `fetchMyEffectivePermissionKeys`로 미리 계산해 권한
+  없는 필드/전체 저장을 UI에서부터 비활성화·안내하도록 갱신(DB 레이어가 최종 방어선, UI는 편의).
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 

@@ -8,6 +8,19 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-15 — P1-13 센터정보 수정 권한 세분화, pay_methods/review_point 추가 보호 (review/todo-scan)
+
+다른 세션(PR #54)이 같은 P1-13 티켓을 "매니저 센터 수정" RLS를 `has_permission(id,
+'facility.info') OR is_platform_admin()`으로 좁히는 방식으로 이미 Live 적용한 것을 확인 —
+그 위에 이 세션에서 결제수단(pay_methods)/후기 적립 포인트(review_point) 두 필드를 한 단계
+더 좁히는 `guard_center_sensitive_fields_change` BEFORE UPDATE 트리거를 추가(오너 또는
+`facility.paymethod` 권한 보유자만 결제수단 변경, 오너만 포인트 변경 —
+`fix_center_info_sensitive_fields_permission_draft_proposed.sql`, 사용자 적용·`pg_trigger`
+재조회로 확인). 두 레이어가 서로 겹치지 않고 보완함을 확인(facility.info는 전체 폼 접근
+게이트, 이 트리거는 그 안에서 특히 민감한 두 필드만 더 좁힘). `app/manager/center-info/
+page.tsx`도 `fetchMyEffectivePermissionKeys`로 권한을 미리 계산해 저장 버튼/개별 필드를
+UI에서부터 비활성화하도록 갱신 — raw RLS 에러 대신 명확한 안내 문구 표시.
+
 ## 2026-08-14 — P2-22 공유 테스트센터 leftover class 정리 (chore/p2-22-shared-center-class-cleanup)
 
 `getOrCreateOwnedTestCenter()`로 재사용되는 공유 테스트센터(managerA 소유,
