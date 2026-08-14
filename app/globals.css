@@ -4036,7 +4036,13 @@ textarea:focus-visible,
 }
 .manager-v3-content .bottom-nav { bottom: max(18px,env(safe-area-inset-bottom)); }
 .manager-home-v2 > .list-row:last-of-type {
-  margin-bottom: calc(var(--floating-nav-clearance) + 112px);
+  margin-bottom: 0;
+}
+.manager-home-v2 .manager-menu-end-spacer {
+  width: 100%;
+  height: calc(var(--floating-nav-clearance) + 132px);
+  flex: 0 0 auto;
+  pointer-events: none;
 }
 
 /* A single select language across manager forms. Native platform arrows made
