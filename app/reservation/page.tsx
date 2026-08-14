@@ -83,6 +83,7 @@ function ReservationCalendarContent() {
   const [classes, setClasses] = useState<ClassInfo[]>([]);
   const [centers, setCenters] = useState<CenterInfo[]>([]);
   const [centerPick, setCenterPick] = useState<string | null>(null); // 로컬 센터 필터
+  const [centerSheet, setCenterSheet] = useState(false);
   // 수강권 선택 시트
   const [passSheet, setPassSheet] = useState<ClassInfo | null>(null);
   const [passPick, setPassPick] = useState<string | null>(null);
