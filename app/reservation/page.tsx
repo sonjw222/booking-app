@@ -411,6 +411,9 @@ function ReservationCalendarContent() {
   const publicHoliday = PUBLIC_HOLIDAYS[selectedKey];
   const centerHolidays = holidays.filter((h) => h.date === selectedKey);
   const effectiveCenter = centerPick ?? centerFilter;
+  const effectiveCenterName = effectiveCenter
+    ? (centers.find((center) => center.id === effectiveCenter)?.name ?? "센터")
+    : "전체 센터";
   // 날짜/센터/카테고리 필터가 바뀔 때만 다시 계산 (매 렌더링마다 3중 filter+sort를 새로 만들지 않음)
   const dayClasses = useMemo(
     () =>
