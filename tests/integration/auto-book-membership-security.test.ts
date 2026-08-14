@@ -139,6 +139,9 @@ async function createClassOnDow(
   centerId: string, targetDow: number,
   opts?: { title?: string; baseHoursFromNow?: number }
 ): Promise<{ id: string; startTime: string }> {
+  // classes INSERT는 매니저 권한이 필요하다 — 직전 테스트가 userB/managerB 세션으로
+  // 끝났을 수 있으므로, 수업 생성 전에 명시적으로 managerA 세션을 확정한다.
+  await asManagerA();
   const base = opts?.baseHoursFromNow ?? 72;
   for (let i = 0; i < 7; i++) {
     const hoursFromNow = base + i * 24;

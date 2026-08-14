@@ -523,7 +523,11 @@ export async function createTestMembership(
   if (findErr) throw new Error(`테스트 수강권 조회 실패: ${findErr.message}`);
 
   if (existing && existing.length > 0) {
-    const { data, error } = await supabase
+    // remaining_count 등 수강권 필드는 회원 본인이 직접 UPDATE할 수 없다(RLS로 막혀야
+    // 정상 — 그렇지 않으면 회원이 자기 잔여횟수를 마음대로 조작할 수 있는 진짜 보안
+    // 구멍이 된다). 여기는 순수 fixture 준비 목적이라 admin(service_role)으로 갱신한다.
+    const admin = getFixtureAdminClient();
+    const { data, error } = await admin
       .from("memberships")
       .update({
         total_count: remaining,
