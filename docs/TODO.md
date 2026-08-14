@@ -214,15 +214,14 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 
 `point_logs`의 실제 기록·조회 역할도 함께 확인해야 합니다.
 
-### P1-2. (2026-08-14, 미발급 주문 취소 구현 완료 — SQL 적용 대기) 미발급 주문 취소와 환불 정책 설정
+### P1-2. (2026-08-14, 완료) 미발급 주문 취소와 환불 정책 설정
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **미발급 주문 취소는 구현 완료, SQL 적용 대기. 발급 후 환불(24시간·미사용) 정책은 기존 그대로 유지(이미 RPC로 서버 검증됨, 이번엔 안 건드림).** |
-| 근거 파일 | `app/purchases/page.tsx`, `lib/orders.ts`, `add_order_self_cancel.sql`(신규), `app/mypage/page.tsx`, `lib/mypage.ts`, `add_refund_and_membership.sql` |
-| 이번 배치에서 한 것 | 정책 확정(매니저가 아직 처리 전인 주문은 회원이 시간 제한 없이 직접 취소 가능 — 실제 PG 연동 전이라 이 시점엔 결제가 캡처된 상태도 아님, P0-1 참고). `orders` UPDATE RLS에 "본인 소유 + 아직 미발급(pending/paid)만 cancelled로" 정책 추가(`add_order_self_cancel.sql`) — 매니저 화면(`app/manager/orders/page.tsx`)이 이미 쓰던 `updateOrderStatus()`를 회원 화면에서도 그대로 재사용해 "같은 RPC/규칙"을 만족시킴(완료 조건 요구사항). `updateOrderStatus()`에 `.select()` 확인을 추가해 RLS가 조용히 0행 매칭할 때(경합 상황 — 클릭 사이에 매니저가 먼저 처리한 경우) 거짓 성공 토스트가 뜨지 않고 정확한 에러가 나도록 방어. `app/purchases/page.tsx`에 "주문 취소하기" 버튼 + 확인 다이얼로그 추가. `npm run build` 통과. |
-| 완료 조건 | `add_order_self_cancel.sql`을 Supabase SQL Editor에서 적용 → 실제 취소 왕복(성공 케이스 + 이미 처리된 주문 취소 시도 실패 케이스) 검증 |
+| 현재 상태 | **완료.** 미발급 주문 취소를 실제 임시 계정으로 왕복 검증(성공 케이스 + 이미 발급된 주문 취소 차단 케이스 둘 다 확인). 발급 후 환불(24시간·미사용) 정책은 기존 그대로 유지(이미 RPC로 서버 검증됨, 이번엔 안 건드림). |
+| 근거 파일 | `app/purchases/page.tsx`, `lib/orders.ts`, `add_order_self_cancel.sql`, `fix_service_role_missing_grants_orders.sql`(신규, 검증 중 발견), `app/mypage/page.tsx`, `lib/mypage.ts`, `add_refund_and_membership.sql` |
+| 이번 배치에서 한 것 | 정책 확정(매니저가 아직 처리 전인 주문은 회원이 시간 제한 없이 직접 취소 가능 — 실제 PG 연동 전이라 이 시점엔 결제가 캡처된 상태도 아님, P0-1 참고). `orders` UPDATE RLS에 "본인 소유 + 아직 미발급(pending/paid)만 cancelled로" 정책 추가(`add_order_self_cancel.sql`, 사용자 적용 완료) — 매니저 화면(`app/manager/orders/page.tsx`)이 이미 쓰던 `updateOrderStatus()`를 회원 화면에서도 그대로 재사용해 "같은 RPC/규칙"을 만족시킴(완료 조건 요구사항). `updateOrderStatus()`에 `.select()` 확인을 추가해 RLS가 조용히 0행 매칭할 때(경합 상황 — 클릭 사이에 매니저가 먼저 처리한 경우) 거짓 성공 토스트가 뜨지 않고 정확한 에러가 나도록 방어. `app/purchases/page.tsx`에 "주문 취소하기" 버튼 + 확인 다이얼로그 추가. 검증 스크립트 실행 중 `orders` 테이블에 service_role GRANT가 전혀 없던 걸 직접 재현 발견(다른 세션이 앞서 같은 증상을 보고했었지만 그때는 이 저장소에서 근거를 못 찾았던 바로 그 문제) — `fix_service_role_missing_grants_orders.sql` 작성·적용 완료. 이후 임시 계정으로 실제 취소 성공 + done 상태 주문 취소 차단(0행 매칭으로 정확히 막힘) 둘 다 재확인. `npm run build` 통과. |
 | 관련 문서 | [REQUIREMENTS 6-1, 10-4](./REQUIREMENTS.md), [ROUTES `/purchases`](./ROUTES.md) |
 
 ### P1-3. 외부 푸시·알림톡 발송
