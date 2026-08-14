@@ -195,7 +195,7 @@ export default function CenterInfoPage() {
             {catOptions.map((cat) => (
               <button key={cat.id} className={`filter-chip ${categories.includes(cat.label) ? "on" : ""}`}
                 onClick={() => setCategories((prev) => prev.includes(cat.label) ? prev.filter((x) => x !== cat.label) : [...prev, cat.label])}>
-                {cat.label}
+                {cat.label.replace(/^[^\p{L}\p{N}]+/u, "")}
               </button>
             ))}
           </div>
