@@ -13,12 +13,18 @@ on:
   pull_request:
   workflow_dispatch:
 
-# 같은 PR/브랜치에 대해 이전 실행이 아직 돌고 있으면 취소하고 최신 커밋 것만 남긴다.
-# (예: 짧은 시간에 여러 번 push) — 통합 테스트가 공유 테스트 계정으로 실제 개발용 Supabase에
-# 접근하므로, 겹쳐 실행되면 서로의 데이터 변경을 관측해 flaky해질 수 있다.
+# 저장소 전체(브랜치/PR 무관)에서 이 워크플로우를 단 하나만 동시에 돌게 한다.
+# 통합 테스트가 여러 브랜치/세션에서 동시에 실행돼도 전부 같은 공유 개발용 Supabase의
+# 같은 테스트 계정/센터에 접근하므로, 서로 다른 브랜치 간 실행이 겹쳐도 서로의 데이터
+# 변경을 관측해 flaky해지는 문제가 실제로 반복 재현됐다(2026-08-14, 여러 세션이 동시에
+# CI를 트리거하며 관측). group을 고정 문자열로 둬서 브랜치/PR과 무관하게 전역 큐 하나로
+# 묶고, cancel-in-progress는 false로 둔다 — 다른 브랜치의 정상 진행 중인 실행을 내
+# push가 취소시키면 안 되므로(취소 대신 대기). 같은 브랜치/PR에 짧게 여러 번 push한
+# 경우의 "최신 것만 남기기"는 더 이상 이 그룹에서 자동으로 되지 않지만, 이건 전역
+# 순차 실행이라는 목표와 상충해 감수한다(필요하면 각자 gh run cancel로 직접 정리).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: shared-live-supabase-tests
+  cancel-in-progress: false
 
 jobs:
   e2e:
