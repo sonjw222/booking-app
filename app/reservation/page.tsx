@@ -84,7 +84,6 @@ function ReservationCalendarContent() {
   const [classes, setClasses] = useState<ClassInfo[]>([]);
   const [centers, setCenters] = useState<CenterInfo[]>([]);
   const [centerPick, setCenterPick] = useState<string | null>(null); // 로컬 센터 필터
-  const [centerSheet, setCenterSheet] = useState(false);
   // 수강권 선택 시트
   const [passSheet, setPassSheet] = useState<ClassInfo | null>(null);
   const [passPick, setPassPick] = useState<string | null>(null);
@@ -471,21 +470,6 @@ function ReservationCalendarContent() {
         <div className={`booking-step ${confirmClass ? "active" : ""}`} aria-current={confirmClass ? "step" : undefined}><span>3</span><b>예약 확인</b></div>
       </div>
 
-      {centerSheet && (
-        <div className="sheet-overlay" onClick={() => setCenterSheet(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-title">센터 선택</div>
-            <button className={`filter-chip ${!effectiveCenter ? "on" : ""}`} style={{ width: "100%", marginBottom: 6 }}
-              onClick={() => { setCenterPick(null); setCenterSheet(false); }}>전체 센터</button>
-            {centers.map((c) => (
-              <button key={c.id} className={`filter-chip ${effectiveCenter === c.id ? "on" : ""}`} style={{ width: "100%", marginBottom: 6 }}
-                onClick={() => { setCenterPick(c.id); setCenterSheet(false); }}>{c.name}</button>
-            ))}
-            <button className="ghost-btn" style={{ width: "100%", marginTop: 6 }} onClick={() => setCenterSheet(false)}>닫기</button>
-          </div>
-        </div>
-      )}
-
       {categoryFilter && (
         <div className="center-filter-banner">
           <span>{categoryFilter} 수업만 보는 중{categoryCenterIds && categoryCenterIds.size === 0 ? " (해당 종목 센터 없음)" : ""}</span>
@@ -500,9 +484,13 @@ function ReservationCalendarContent() {
             <div className="cal-title">{year}.{pad(month)}</div>
             <button className="cal-nav-btn" onClick={goNextMonth} aria-label="다음 달">›</button>
           </div>
-          <button className="cal-center-pick" onClick={() => setCenterSheet(true)} aria-label={`센터 선택, 현재 ${effectiveCenterName}`}>
-            <span>{effectiveCenterName}</span><b>⌄</b>
-          </button>
+          <label className="cal-center-pick" aria-label={`센터 선택, 현재 ${effectiveCenterName}`}>
+            <select value={effectiveCenter ?? ""} onChange={(e) => setCenterPick(e.target.value || null)}>
+              <option value="">전체 센터</option>
+              {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <b>⌄</b>
+          </label>
         </div>
       </div>
 

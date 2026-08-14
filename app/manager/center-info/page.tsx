@@ -289,9 +289,12 @@ export default function CenterInfoPage() {
                 {m.label}
               </button>
             ))}
+            <button className="text-btn pay-method-toggle" onClick={() => setPayMethods((prev) => prev.length === 5 ? [] : ["card", "kakao", "toss", "transfer", "direct"])}>
+              {payMethods.length === 5 ? "전체 해제" : "전체 선택"}
+            </button>
           </div>
           <div className="perm-guide" style={{ margin: "6px 0 0" }}>
-            아무것도 선택하지 않으면 전체 수단이 보여요.
+            선택한 결제 수단만 회원 화면에 보여요. 아무것도 선택하지 않으면 표시하지 않아요.
           </div>
 
           <div className="menu-section-label" style={{ padding: "18px 0 6px" }}>후기 작성 포인트 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>· 회원이 후기를 쓰면 지급</span></div>
