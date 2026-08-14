@@ -20,6 +20,10 @@
   accounts.phone이 null로 남는다(이메일 가입은 폼에서 이미 필수로 받음). ensureAccountForCurrentUser가
   돌려주는 phone이 null이면 이 모달을 띄워 채우기 전까지 계속 다시 뜨게 한다(새로고침으로
   우회 불가 — created 여부가 아니라 실제 phone 값으로 판단하기 때문).
+  ⚠️ isSocial(Supabase Auth provider가 email이 아님)인 계정에만 적용한다 — phone이 비었다고
+  전부 막으면, 이 기능 이전에 만들어진 기존 이메일 계정(테스트 계정 포함)까지 막혀버린다
+  (실제로 E2E 테스트 계정 전체가 로그인마다 이 모달에 막혀 전체 스위트가 무너진 사고,
+  2026-08-14 — provider 조건 없이 phone만 봤던 최초 구현의 버그).
 */
 
 import { useEffect, useState } from "react";
@@ -39,7 +43,7 @@ export default function SessionWatcher() {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
         void ensureAccountForCurrentUser().then((account) => {
-          setPhoneGateAccountId(account && !account.phone ? account.id : null);
+          setPhoneGateAccountId(account && account.isSocial && !account.phone ? account.id : null);
         });
         return;
       }

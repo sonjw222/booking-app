@@ -8,6 +8,21 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-15 — 소셜 휴대폰번호 모달 버그 수정: 이메일 계정까지 막던 문제(E2E 전체 붕괴 사고)
+
+전날(2026-08-14) 추가한 "소셜 가입 직후 휴대폰번호 필수 모달"(`app/components/SessionWatcher.tsx`)이
+`accounts.phone`이 비어있는 계정이면 provider와 무관하게 무조건 떴다 — 그 결과 이 기능이 생기기
+전부터 있던 기존 이메일 테스트 계정(TEST_MANAGER_A/TEST_USER_A/TEST_USER_B 등, phone이 원래
+비어있음)까지 로그인할 때마다 화면 전체를 덮는 모달에 막혀, PR #53의 E2E 스위트가 (auth.setup
+3개만 통과하고) 나머지 전부 타임아웃/실패로 무너졌다(1시간 넘게 걸린 두 번의 CI 재실행에서
+동일하게 재현 — 처음엔 다른 세션들과 겹친 CI 오염으로 오판했으나, PR #52/#54에는 이 코드가
+없어서 그쪽은 안 겪었다는 점에서 이 PR 자체의 버그로 특정함).
+
+`lib/authAccount.ts`의 `EnsuredAccount`에 `isSocial`(Supabase Auth의 `user.app_metadata.provider`가
+`"email"`이 아닌지) 필드를 추가하고, `SessionWatcher.tsx`가 `isSocial && !phone`일 때만 모달을
+띄우도록 좁혔다 — 원래 요구사항("이메일 가입은 이미 필수로 받으니 소셜만 문제")대로 정확히
+좁힌 것. `npm run build` 통과, 재실행으로 E2E 정상 확인 예정.
+
 ## 2026-08-14 (같은 날 후속10) — 수업 소개란, 회원가입 도로명주소+소셜 휴대폰번호 필수화, 로그인/가입 문구 차별화
 
 **수업 소개란**: 기존에 `schema.sql`에만 있고 미사용이던 `classes.description` 컬럼을

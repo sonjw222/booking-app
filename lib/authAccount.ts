@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 
-export type EnsuredAccount = { id: string; phone: string | null };
+export type EnsuredAccount = { id: string; phone: string | null; isSocial: boolean };
 
 // 소셜 로그인(카카오/네이버/애플/구글)으로 처음 로그인한 사용자는 auth.users 행만 생기고
 // 우리 앱의 accounts/profiles 행은 아무도 만들어주지 않는다 — 이메일 회원가입
@@ -22,15 +22,24 @@ export function setBootstrapSuppressed(v: boolean) {
   bootstrapSuppressed = v;
 }
 
-// 반환값(phone 포함)은 SessionWatcher가 "휴대폰 번호 입력 모달"을 띄울지 판단하는 데 쓴다 —
-// 이번에 새로 만든 계정인지 여부가 아니라 phone이 실제로 비어 있는지로 판단해야, 모달을
+// 반환값(phone/isSocial 포함)은 SessionWatcher가 "휴대폰 번호 입력 모달"을 띄울지 판단하는 데
+// 쓴다 — 이번에 새로 만든 계정인지 여부가 아니라 phone이 실제로 비어 있는지로 판단해야, 모달을
 // 안 채우고 새로고침하는 식으로 우회할 수 없다(계정이 이미 있어도 phone이 null이면 매번
-// 다시 뜸).
+// 다시 뜸). isSocial(= Supabase Auth의 provider가 email이 아님)로 대상을 소셜 계정만으로
+// 좁힌다 — 이메일 가입은 폼에서 이미 phone을 필수로 받으므로 원칙적으로 null일 일이 없지만,
+// 이 기능이 생기기 전에 만들어진 기존 이메일 계정(테스트 계정 포함)은 phone이 비어 있을 수
+// 있고, 그런 계정까지 이 모달로 막으면 안 된다(실제로 E2E 테스트 계정 전체가 이 문제로
+// 막혔던 사고 — 2026-08-14).
+function isSocialProvider(user: { app_metadata?: { provider?: string } }): boolean {
+  return user.app_metadata?.provider != null && user.app_metadata.provider !== "email";
+}
+
 export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | null> {
   if (bootstrapSuppressed) return null;
   const { data: authData } = await supabase.auth.getUser();
   const user = authData.user;
   if (!user) return null;
+  const isSocial = isSocialProvider(user);
 
   const { data: existing, error: findErr } = await supabase
     .from("accounts")
@@ -38,7 +47,7 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
     .eq("auth_id", user.id)
     .maybeSingle();
   if (findErr) return null; // 조회 실패 시 조용히 넘어감(RLS 등) — 이후 실제 데이터 호출에서 다시 드러남
-  if (existing) return { id: existing.id, phone: existing.phone };
+  if (existing) return { id: existing.id, phone: existing.phone, isSocial };
 
   const meta = user.user_metadata ?? {};
   const name: string =
@@ -56,7 +65,7 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
   }
 
   await supabase.from("profiles").insert({ account_id: account.id, name, is_primary: true });
-  return { id: account.id, phone: account.phone };
+  return { id: account.id, phone: account.phone, isSocial };
 }
 
 // 소셜 가입 직후 "휴대폰 번호 입력" 모달(SessionWatcher)에서 호출 — phone은 필수, address는
