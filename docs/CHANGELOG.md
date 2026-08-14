@@ -8,6 +8,19 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-14 — P2-22 공유 테스트센터 leftover class 정리 (chore/p2-22-shared-center-class-cleanup)
+
+`getOrCreateOwnedTestCenter()`로 재사용되는 공유 테스트센터(managerA 소유,
+3937eb89-3803-43e9-9a29-e893f779df1a)에 여러 테스트 파일/세션이 남긴 미래 시각 leftover
+class 318개(딸린 reservations 237개)를 정리했다. 제목 리터럴을 나열하는 대신 구조적 기준
+(이 센터 + status='open' + start_time > now() + created_at 1시간 이상 과거 — 지금 막 다른
+세션이 만든 class는 안 건드리는 안전 마진)으로
+`cleanup_p2_22_shared_center_class_fixtures_draft_proposed.sql` 작성. 사용자가 read-only
+진단으로 규모(안전 상한 3000건의 10분의 1 수준) 확인 후 적용, 검증 쿼리로 정리 대상 0건·
+정상 보존분 263건 확인 완료. `auto_book_membership()`이 leftover까지 같이 예약해버려
+`AUTO-SEC-I` 같은 "정확히 N개 예약" assert가 간헐 실패하던 문제(docs/TODO.md P2-22)의
+누적분을 해소 — sweep이 미래 시각까지 커버하도록 넓히는 근본 조치는 별도 후속 작업으로 남김.
+
 ## 2026-08-13 — SEC-101/112/113/114/115/116/117 통합 회귀 테스트 로컬 Green 확인 (security/sec114-117-final-crosscheck)
 
 `manager_centers` self-join/self-promote(SEC-101/112), `auto_book_membership` IDOR(SEC-114),
