@@ -251,7 +251,13 @@ export default function StaffPage() {
           </div>
 
           <div className="mem-list">
-            {staff.map((s) => (
+            {[...staff].sort((a, b) => {
+              const ownerOrder = Number(b.isOwner) - Number(a.isOwner);
+              if (ownerOrder) return ownerOrder;
+              const aRank = roles.findIndex((r) => r.id === a.roleId);
+              const bRank = roles.findIndex((r) => r.id === b.roleId);
+              return (aRank < 0 ? Number.MAX_SAFE_INTEGER : aRank) - (bRank < 0 ? Number.MAX_SAFE_INTEGER : bRank);
+            }).map((s) => (
               <button key={s.id} className="mem-row" onClick={() => setStaffDetail(s)}>
                 <div className="mem-main">
                   <div className="mem-name-line">

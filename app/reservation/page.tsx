@@ -83,7 +83,6 @@ function ReservationCalendarContent() {
   const [classes, setClasses] = useState<ClassInfo[]>([]);
   const [centers, setCenters] = useState<CenterInfo[]>([]);
   const [centerPick, setCenterPick] = useState<string | null>(null); // 로컬 센터 필터
-  const [centerSheet, setCenterSheet] = useState(false);
   // 수강권 선택 시트
   const [passSheet, setPassSheet] = useState<ClassInfo | null>(null);
   const [passPick, setPassPick] = useState<string | null>(null);
@@ -492,18 +491,19 @@ function ReservationCalendarContent() {
       )}
 
       <div className="cal-header">
-        <div className="cal-month-nav">
-          <button className="cal-nav-btn" onClick={goPrevMonth}>‹</button>
-          <div className="cal-title">{year}.{pad(month)}</div>
-          <button className="cal-nav-btn" onClick={goNextMonth}>›</button>
-        </div>
-        <div className="cal-legend">
-          {centers.map((c) => (
-            <span key={c.id} className="legend-item">
-              <span className="legend-dot" style={{ background: c.color }} />
-              {c.name}
-            </span>
-          ))}
+        <div className="cal-toolbar">
+          <div className="cal-month-control cal-month-nav">
+            <button className="cal-nav-btn" onClick={goPrevMonth} aria-label="이전 달">‹</button>
+            <div className="cal-title">{year}.{pad(month)}</div>
+            <button className="cal-nav-btn" onClick={goNextMonth} aria-label="다음 달">›</button>
+          </div>
+          <label className="cal-center-pick" aria-label={`센터 선택, 현재 ${effectiveCenterName}`}>
+            <select value={effectiveCenter ?? ""} onChange={(e) => setCenterPick(e.target.value || null)}>
+              <option value="">전체 센터</option>
+              {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <b>⌄</b>
+          </label>
         </div>
       </div>
 

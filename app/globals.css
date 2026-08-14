@@ -2925,6 +2925,125 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-home-v2 > .list-row .icon svg { width: 22px; height: 22px; stroke-width: 1.7; }
 .manager-home-v2 > .list-row:last-of-type { margin-bottom: 24px; }
 
+/* 2026-08-14 visual QA: quiet actions, clearer hierarchy and resilient overlays */
+.mypage-shell .avatar {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.mypage-shell .membership-cta,
+.member-reservation .class-select-btn,
+.member-reservation .reserve-btn {
+  min-height: 46px;
+  border: 1px solid var(--ink);
+  background: var(--bg);
+  color: var(--ink);
+  box-shadow: none;
+}
+.mypage-shell .membership-cta:hover,
+.member-reservation .class-select-btn:hover,
+.member-reservation .reserve-btn:hover { background: var(--surface); }
+
+.cal-center-pick {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 132px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.cal-center-pick select {
+  width: 100%; min-height: 44px; padding: 0 34px 0 13px;
+  border: 0; appearance: none; background: transparent;
+  color: var(--ink); font: inherit; font-weight: 700;
+}
+.cal-center-pick b { position:absolute; right:12px; pointer-events:none; color:var(--brand-ink); }
+.cal-memo-row { gap: 10px; margin: 14px 0 12px; }
+.cal-memo-row .primary-btn {
+  min-width: 72px; border: 1px solid var(--ink); background: var(--bg); color: var(--ink);
+}
+.cal-add-one {
+  min-height: 44px; margin-top: 12px; border: 1px solid var(--line-strong);
+  border-radius: 13px; background: var(--bg); color: var(--ink); font-weight: 700;
+}
+
+.manager-home-link {
+  border-color: color-mix(in srgb,var(--brand) 42%,var(--line));
+  background: var(--brand-soft); color: var(--brand-ink);
+}
+.manager-home-v2 { padding-bottom: calc(var(--floating-nav-clearance) + 170px); }
+.manager-home-v2 > .list-row:last-of-type { margin-bottom: 110px; }
+
+/* No notification/loading state may grow into a full-screen black slab. */
+.toast,
+.manager-v3-content .toast,
+.error-toast,
+.manager-v3-content .error-toast {
+  width: max-content !important;
+  max-width: calc(100vw - 32px) !important;
+  height: auto !important;
+  min-height: 42px !important;
+  max-height: 160px !important;
+  padding: 10px 14px !important;
+  border-radius: 13px !important;
+  overflow: auto !important;
+  white-space: normal;
+}
+.loading-wrap { min-height: 190px; background: transparent; }
+
+.manager-v3-content .pass-list { display:grid; gap:14px; padding:8px var(--page-gutter) 130px; }
+.manager-v3-content .pass-card {
+  margin:0; padding:18px; border:1px solid var(--line); border-radius:18px;
+  background:var(--bg); box-shadow:0 7px 22px rgba(20,20,20,.035);
+}
+.pass-head { gap:10px; align-items:flex-start; }
+.pass-rules-toggle {
+  width:100%; display:flex; justify-content:space-between; align-items:center;
+  min-height:46px; margin:14px 0 0; padding:0 13px; border:1px solid var(--line);
+  border-radius:13px; background:var(--surface); color:var(--ink); font-weight:750;
+}
+.pass-rules-toggle b { color:var(--brand-ink); font-size:12px; }
+.pass-rules { margin:8px 0 0; padding:6px 12px; border-left:2px solid var(--brand); background:var(--brand-soft); border-radius:10px; }
+.pass-rule { min-height:44px; }
+.goods-description { margin-top:10px; color:var(--ink-soft); font-size:13px; line-height:1.55; }
+.goods-sizes { display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
+.goods-sizes span { padding:5px 9px; border-radius:999px; background:var(--surface); color:var(--ink-soft); font-size:12px; }
+
+.sheet { border-radius:26px 26px 0 0; }
+.sheet .mem-row,
+.sheet .hist-item { min-height:58px; padding:14px 0; }
+.sheet .ghost-btn,
+.sheet .primary-btn { min-height:48px; border-radius:14px; }
+.sheet .primary-btn:not(.danger) { border:1px solid var(--ink); background:var(--bg); color:var(--ink); }
+
+.map-location-btn { width:100%; min-height:50px; border-style:solid; }
+.pay-method-toggle { margin-left:auto; color:var(--brand-ink); }
+
+.manager-v3-content .mem-list { display:grid; gap:0; }
+.manager-v3-content .mem-row { min-height:72px; padding:14px 2px; }
+.manager-v3-content .grade-badge { border:1px solid color-mix(in srgb,var(--brand) 30%,transparent); }
+.manager-v3-content .hist-item { padding:16px 4px; }
+.manager-v3-content .hist-title { display:flex; align-items:center; flex-wrap:wrap; gap:7px; line-height:1.45; }
+.manager-v3-content .hist-title .profile-tag { background:var(--brand-soft); color:var(--brand-ink); border:1px solid color-mix(in srgb,var(--brand) 32%,transparent); }
+.manager-v3-content .hist-sub { margin-top:5px; font-size:13px; line-height:1.5; }
+
+.manager-v3-content .sales-summary { background:linear-gradient(145deg,#1c1d20,#303238); }
+.manager-v3-content .sales-bd-item { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.manager-v3-content .sales-bd-item > :last-child { margin-left:auto; text-align:right; font-weight:800; color:var(--ink); }
+
+.manager-v3-content .review-stats > * { min-height:94px; padding:16px 10px; display:flex; flex-direction:column; justify-content:center; }
+.manager-v3-content .prog-add-sub-btn,
+.manager-v3-content .add-profile-btn { min-height:50px; border:1px solid var(--line-strong); border-radius:14px; background:var(--bg); color:var(--ink); }
+
+@media (max-width: 480px) {
+  .cal-center-pick { min-width:116px; max-width:42vw; }
+  .cal-center-pick select { font-size:13px; }
+  .cal-memo-row { align-items:stretch; }
+  .cal-memo-row .input-field { min-width:0; }
+}
+
 /* Center actions remain visible in every tab and float clear of navigation. */
 .center-detail-v2 { padding-bottom: calc(var(--floating-nav-clearance) + 104px) !important; }
 .center-detail-v2 .center-bottom-bar {

@@ -161,6 +161,8 @@ export default function GoodsPage() {
                   <div className="pass-sub">
                     {won(p.price)} · {p.unlimited ? "무제한" : `${p.totalCount ?? 0}회`}
                   </div>
+                  {p.description && <div className="goods-description">{p.description}</div>}
+                  {!!p.sizes?.length && <div className="goods-sizes">{p.sizes.map((size) => <span key={size}>{size}</span>)}</div>}
                 </div>
                 <button className="text-btn" onClick={() => openEdit(p)}>수정</button>
                 <button className="text-btn danger" disabled={busy} onClick={() => handleDelete(p)}>삭제</button>

@@ -146,7 +146,7 @@ export default function RoomsPage() {
                 <button className="ghost-btn" style={{ marginTop: 8 }} onClick={() => setMapPicker(true)}>위치 수정하기</button>
               </>
             ) : (
-              <button className="ghost-btn" style={{ marginTop: 8 }} onClick={() => setMapPicker(true)}>🗺️ 지도에서 위치 지정</button>
+              <button className="ghost-btn map-location-btn" style={{ marginTop: 8 }} onClick={() => setMapPicker(true)}>지도에서 위치 지정</button>
             )}
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={closeSheet}>취소</button>
