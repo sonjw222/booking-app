@@ -12,6 +12,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import ManagerNav from "../../../components/ManagerNav";
 import { useSearchParams } from "next/navigation";
 import Loading from "../../../components/Loading";
+import DatePicker from "../../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../../lib/manager";
 import {
   fetchCategories, buildCategoryTree, type CategoryNode,
@@ -256,7 +257,7 @@ function ProgressRecordContent() {
             <div className="sheet-title">진도 기록</div>
 
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>수업 날짜</div>
-            <input type="date" className="input-field" value={lessonDate} onChange={(e) => setLessonDate(e.target.value)} />
+            <DatePicker value={lessonDate} onChange={setLessonDate} label="수업일 선택" />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>가르친 기술 (여러 개 가능)</div>
             <div className="prog-rec-wrap" style={{ padding: 0, maxHeight: 240, overflowY: "auto" }}>

@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
+import DatePicker from "../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchAdminActionLogs, type AdminActionLog, type AdminActionLogFilters } from "../../../lib/adminAssignment";
 import { RESERVATION_TYPE_LABELS, ADMIN_REASON_CODES, ADMIN_REASON_LABELS, type ReservationType, type AdminReasonCode } from "../../../lib/reservationTypes";
@@ -102,9 +103,9 @@ export default function AdminAssignmentLogPage() {
 
       <div className="menu-section-label" style={{ padding: "10px 20px 6px" }}>기간</div>
       <div className="time-row" style={{ padding: "0 20px" }}>
-        <input className="input-field" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+        <DatePicker value={fromDate} onChange={setFromDate} label="조회 시작일" />
         <span className="time-sep">~</span>
-        <input className="input-field" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+        <DatePicker value={toDate} onChange={setToDate} label="조회 종료일" />
       </div>
 
       <div className="menu-section-label" style={{ padding: "10px 20px 6px" }}>배치 유형</div>
