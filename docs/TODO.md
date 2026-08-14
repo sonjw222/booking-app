@@ -271,42 +271,36 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 화면 내부의 버튼 단위 권한 표시(각 screen의 개별 액션 버튼)는 여전히 서버 거부 이후에야 알 수
 있음 — 상세 내용은 [CHANGELOG.md](./CHANGELOG.md) 참고.
 
-### P1-6. 관리자·운영자 클라이언트 가드 누락
+### P1-6. (2026-08-14, 완료 확인 — 문서만 정정) 관리자·운영자 클라이언트 가드 누락
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **미완성** |
-| 근거 파일 | `app/admin/categories/page.tsx`, `app/admin/banners/page.tsx`, `app/manager/inquiries/page.tsx`, `app/manager/notifications/page.tsx`, `app/manager/staff/permissions/page.tsx` |
-| 완료 조건 | 플랫폼 운영자 2개 화면과 매니저 3개 화면에 일관된 사전 가드를 적용하고 비권한 사용자의 콘텐츠 미노출·친절한 오류·RLS 차단을 검증함 |
+| 현재 상태 | **완료.** 클라이언트 가드 5개 화면 전부 코드에 있음을 재확인, `account_center_permissions` SELECT RLS도 라이브에서 "본인 것이거나 facility.role_permission 권한 보유자만"으로 정정돼 있음을 `pg_policies` 직접 조회로 재확인. 이 문서가 "아직 실행하지 않음"으로 오래 남아있던 것은 문서 누락(다른 배치 노트(P0-4 이력)엔 이미 "사용자가 적용, 통합 테스트 통과, PR #19로 main 병합"까지 기록돼 있었음, 서로 교차 연결이 안 됐던 것). |
+| 근거 파일 | `app/admin/categories/page.tsx`, `app/admin/banners/page.tsx`, `app/manager/inquiries/page.tsx`, `app/manager/notifications/page.tsx`, `app/manager/staff/permissions/page.tsx`, `fix_account_center_permissions_select_draft_proposed.sql`(적용 완료) |
+| 완료 조건 | ~~플랫폼 운영자 2개 화면과 매니저 3개 화면에 일관된 사전 가드를 적용하고... 검증함~~ 완료. |
 | 관련 문서 | [REQUIREMENTS 7~8절](./REQUIREMENTS.md), [ROUTES 5~7절](./ROUTES.md), [DATABASE 10절](./DATABASE.md) |
-
-현재 데이터 쓰기는 RLS가 막지만 화면과 입력폼이 먼저 노출되는 페이지가 있습니다.
 
 2026-08-01 Access Control 구현 Batch에서 완료: `app/admin/categories/page.tsx`,
 `app/admin/banners/page.tsx`에 `/admin/centers`와 동일한 `checkPlatformAdmin()` 가드를 추가했고,
 `app/manager/inquiries/page.tsx`, `app/manager/notifications/page.tsx`에는 `fetchMyCenters()` +
 "운영 중인 센터가 없어요" 가드(기존 9개 화면과 동일한 패턴)를, `app/manager/staff/permissions/page.tsx`에는
 URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 확인하는 가드(`isOwnerOfCenter()`)를
-추가함. 상세 내용은 [CHANGELOG.md](./CHANGELOG.md) 참고. **클라이언트 가드는 완료했지만, 서버 측
-재검증에서 `account_center_permissions`의 SELECT RLS 정책 자체가 "같은 센터 소속이면 누구나
-조회 가능"하게 열려 있던 별도의 FAIL을 발견함** — 화면 가드와 무관하게 Supabase SDK 직접 호출로
-우회 가능했던 서버 쪽 구멍. 수정 SQL 초안은 `fix_account_center_permissions_select_draft_proposed.sql`에
-작성했으나 **아직 실행하지 않음**(이 PR에 포함 — ACL-003의 일부로 취급). 실행 전
-`tests/integration/acl-003-permission-read.test.ts`를 통과시켜야 함. 이 SQL이 실제 실행되고
-그 통합 테스트가 green이 될 때까지는 이 항목을 완전히 제거하지 말 것.
+추가함. 서버 측 재검증에서 발견된 `account_center_permissions` SELECT RLS 구멍도
+`fix_account_center_permissions_select_draft_proposed.sql`로 수정 → 사용자가 실행 →
+`tests/integration/acl-003-permission-read.test.ts` 통과 → PR #19로 main 병합까지 완료됨
+(ACL-001~005 Batch, 2026-08-02).
 
-### P1-7. 국경일 자동 갱신
+### P1-7. (2026-08-14, 완료) 국경일 자동 갱신
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **미완성** |
-| 근거 파일 | `app/reservation/page.tsx`, `lib/holidays.ts`; `PUBLIC_HOLIDAYS` |
-| 완료 조건 | 승인된 공휴일 데이터 소스를 정하고 연도 변경에도 자동 조회·표시되며 센터 휴무일과 중복·충돌하지 않는지 검증함 |
+| 현재 상태 | **완료.** 사용자와 방식 결정(외부 공휴일 API 대신 정적 테이블 — 사업자 등록/API 키 없이 바로 처리 가능하고, 한국 공휴일은 정부가 1~2년 전 미리 확정 발표해서 매년 한 번 다음 해분만 추가하면 충분히 "자동"에 가까움). |
+| 근거 파일 | `lib/publicHolidays.ts`(신규), `app/reservation/page.tsx` |
+| 이번 배치에서 한 것 | 2026-07-17 제헌절 한 건만 하드코딩돼 있던 걸 `lib/publicHolidays.ts`로 분리해 2025~2027년 전체 공휴일+대체공휴일 테이블로 확장(웹 검색으로 실제 정부 발표 자료 대조, 3.1절/광복절/개천절/한글날/설날·추석 연휴의 대체공휴일 규칙까지 반영). `app/reservation/page.tsx`는 날짜 키로 조회하는 기존 로직 그대로 재사용해서 연도가 바뀌어도 별도 코드 변경 없이 표시됨. 센터 휴무일(`center_holidays`)과는 화면에서 완전히 별개 배지/영역으로 표시돼 원래부터 충돌 없음(확인됨). `npm run build` 통과. |
+| 남은 작업 | 매년 말~다음 해 초에 그 다음 해분 추가 필요(파일 상단 주석에 안내). 2027년 데이터는 관보 고시 전 잠정치라 연초 재확인 권장. |
 | 관련 문서 | [REQUIREMENTS 5-2, 12절](./REQUIREMENTS.md), [ROUTES `/reservation`](./ROUTES.md) |
-
-현재 국경일은 `2026-07-17` 제헌절 한 건만 하드코딩되어 있습니다.
 
 ### P1-8. 담당회원·상담고객 화면
 
@@ -401,21 +395,16 @@ reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시�
 없어 죽은 설정으로 보임)은 여전히 미해결 — P2/P3 후속 범위(프라이빗 셀프 슬롯 예약 UI를
 만들지 여부와 함께 제품 결정 필요)로 남긴다.
 
-### P1-13. 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
+### P1-13. (2026-08-14, 수정 SQL 작성 완료 — 적용 대기) 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **확인됨 — RLS 변경 필요, 이번 배치 미수정** |
-| 근거 파일 | `app/manager/center-info/page.tsx`, `reservation_functions.sql`("매니저 센터 수정" 정책) |
-| 완료 조건 | `facility.info` 권한 세분화를 실제로 적용할지(RLS를 `has_permission(center_id,'facility.info')`로 좁힘) 아니면 코드 주석을 실제 동작("센터 소속 active 스태프면 누구나 가능")에 맞게 고칠지 결정하고 반영함 |
+| 현재 상태 | **수정 SQL 작성 완료, 사용자 승인 후 적용 대기.** 사용자가 "실제로 세분화 적용" 방향으로 결정함(코드 주석을 느슨한 실제 동작에 맞추는 대신, RLS를 코드 주석이 원래 말하던 대로 좁힘). |
+| 근거 파일 | `app/manager/center-info/page.tsx`, `app/manager/page.tsx`(메뉴 노출), `reservation_functions.sql`("매니저 센터 수정" 정책), `schema.sql`(`facility.info` 권한 카탈로그), `fix_centers_update_facility_info_permission.sql`(신규) |
+| 이번 배치에서 한 것 | 조사 결과 `facility.info` 권한 키는 이미 `schema.sql`에 정의돼 있었고(sort_order 10, "시설 정보 설정") `app/manager/page.tsx`의 메뉴 노출도 이미 `canSeeMenu("facility.info")`로 정확히 가려져 있었다 — **RLS 정책만 이 권한을 확인 안 하고 있었다**(URL 직접 접근하면 권한 없는 스태프도 수정 가능한 상태). `centers` UPDATE 정책 "매니저 센터 수정"을 `id in (select my_managed_center_ids())`에서 `has_permission(id, 'facility.info')`로 좁히는 SQL 작성(`fix_centers_update_facility_info_permission.sql` + rollback) — `has_permission()`이 오너는 자동 통과시키므로 오너 동작은 그대로 유지됨. 기존 스태프에게 이 권한을 자동으로 부여하지 않음(오너가 필요하면 기존 스태프 권한 설정 화면에서 직접 켜면 됨, 새 UI 불필요 — 카탈로그에 이미 있어서 자동으로 체크박스로 나타남). |
+| 완료 조건 | `fix_centers_update_facility_info_permission.sql`을 Supabase SQL Editor에서 적용 |
 | 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 센터관리 항목 |
-
-2026-08-02 Track B 감사에서 발견: `center-info/page.tsx` 상단 주석은 "시설 정보 설정 권한
-(facility.info) 필요 — 오너는 항상 가능"이라고 적혀 있지만, 실제 RLS 정책(`"매니저 센터 수정"`,
-`reservation_functions.sql`)은 `center_id in (select my_managed_center_ids())`만 확인합니다 —
-오너가 아닌 일반 스태프도 센터 정보·결제수단·평판점수를 수정할 수 있어 주석과 실제 동작이
-다릅니다. RLS 변경이 필요한 사안이라 Track B(SQL/RLS 변경 금지) 범위 밖입니다.
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 

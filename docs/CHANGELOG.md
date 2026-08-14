@@ -8,6 +8,27 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-14 (같은 날 후속6) — P1-7 국경일 정적 테이블로 2025~2027년 확장 완료
+
+`app/reservation/page.tsx`에 `2026-07-17` 제헌절 한 건만 하드코딩돼 있던 `PUBLIC_HOLIDAYS`를
+`lib/publicHolidays.ts`로 분리하고 2025~2027년 전체 공휴일+대체공휴일로 확장. 외부 공휴일
+API 대신 정적 테이블로 관리하기로 사용자와 결정(사업자/API 키 불필요, 정부가 1~2년 전
+미리 확정 발표하므로 연 1회 갱신으로 충분). 웹 검색으로 실제 정부 발표 자료를 대조해 3.1절/
+광복절/개천절/한글날/설날·추석 연휴의 대체공휴일 규칙까지 반영, 2027년은 관보 고시 전
+잠정치임을 명시. 날짜 키 조회 방식은 그대로라 연도가 바뀌어도 코드 변경 불필요. `npm run
+build` 통과.
+
+## 2026-08-14 (같은 날 후속5) — P1-13 센터정보 수정 RLS를 facility.info 권한으로 좁힘 (SQL 작성)
+
+`/manager/center-info` 편집 권한이 코드 주석("facility.info 필요, 오너는 항상 가능")과
+실제 RLS(그 센터 active 스태프면 누구나)가 다르던 문제를 사용자와 함께 결정 — 느슨한 실제
+동작에 주석을 맞추는 대신 RLS를 주석 의도대로 좁히기로 함. 조사 중 `facility.info` 권한
+키가 이미 `schema.sql`에 정의돼 있고 `app/manager/page.tsx`의 메뉴 노출도 이미 이 권한으로
+가려져 있었음을 발견 — RLS 정책만 이 권한을 확인 안 해서 URL 직접 접근 시 뚫리는 상태였다.
+`centers` UPDATE 정책을 `has_permission(id, 'facility.info')`로 좁히는 SQL 작성
+(`fix_centers_update_facility_info_permission.sql` + rollback), 기존 스태프에게 자동 부여는
+안 함(오너가 필요시 기존 권한 설정 화면에서 직접 부여). 적용은 사용자 승인 대기.
+
 ## 2026-08-14 (같은 날 후속4) — P0-2 migration ledger 전수 검증 + service_role GRANT 2건 수정 SQL
 
 루트 SQL 108개(schema.sql/add_*/fix_*) 전체를 파싱해 선언하는 테이블/컬럼/함수/트리거가

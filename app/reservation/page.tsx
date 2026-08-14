@@ -33,10 +33,7 @@ import { toKstIso } from "../../lib/kst";
 import { formatInstructorNames } from "../../lib/instructorDisplay";
 import UiIcon from "../components/UiIcon";
 import SegmentedTabs from "../components/SegmentedTabs";
-
-
-// 공휴일 (나중에 공휴일 API 또는 테이블로 교체 가능)
-const PUBLIC_HOLIDAYS: Record<string, string> = { "2026-07-17": "제헌절" };
+import { PUBLIC_HOLIDAYS } from "../../lib/publicHolidays";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
