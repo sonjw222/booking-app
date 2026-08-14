@@ -4035,6 +4035,9 @@ textarea:focus-visible,
   padding-bottom: calc(var(--floating-nav-clearance) + 104px) !important;
 }
 .manager-v3-content .bottom-nav { bottom: max(18px,env(safe-area-inset-bottom)); }
+.manager-home-v2 > .list-row:last-of-type {
+  margin-bottom: calc(var(--floating-nav-clearance) + 112px);
+}
 
 /* Progress history: one quiet, readable row with actions anchored together. */
 .manager-v3-content .prog-hist { display: grid; gap: 10px; padding-top: 6px; }
