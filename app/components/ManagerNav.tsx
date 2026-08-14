@@ -9,6 +9,8 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { fetchUnreadCount, subscribeNotifications } from "../../lib/notifications";
+import { fetchMyCenters } from "../../lib/manager";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../lib/roles";
 import NotificationToaster from "./NotificationToaster";
 import UiIcon from "./UiIcon";
 
@@ -19,6 +21,28 @@ export default function ManagerNav() {
 
   const [unread, setUnread] = useState(0);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  // P1-5: "회원" 탭은 customer.member.view 권한으로 가린다("수업"/"알림"은 본인 일정·본인
+  // 알림함이라 권한 카탈로그에 애초에 대응 키가 없음 — schema.sql 참고, 의도적으로 그대로
+  // 둠). app/manager/page.tsx의 메뉴 노출 계산과 동일한 패턴(오너는 전권, 로딩 중엔 숨김).
+  const [isOwner, setIsOwner] = useState(false);
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchMyCenters()
+      .then((centers) => {
+        if (cancelled || centers.length === 0) return;
+        const active = centers[0];
+        setIsOwner(active.isOwner);
+        if (active.isOwner) return;
+        return fetchMyEffectivePermissionKeys(active.managerCenterId, active.roleId).then((keys) => {
+          if (!cancelled) setMyPerms(keys);
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const canSeeMembers = canSeeManagerMenu(isOwner, myPerms, "customer.member.view");
 
   useEffect(() => {
     let mounted = true;
@@ -57,9 +81,11 @@ export default function ManagerNav() {
         <a className={`nav-item ${is("/manager/classes") ? "active" : ""}`} href="/manager/classes">
           <div className="nav-icon"><UiIcon name="calendar" /></div>수업
         </a>
-        <a className={`nav-item ${is("/manager/members") ? "active" : ""}`} href="/manager/members">
-          <div className="nav-icon"><UiIcon name="users" /></div>회원
-        </a>
+        {canSeeMembers && (
+          <a className={`nav-item ${is("/manager/members") ? "active" : ""}`} href="/manager/members">
+            <div className="nav-icon"><UiIcon name="users" /></div>회원
+          </a>
+        )}
         <a className={`nav-item ${is("/manager/notifications") ? "active" : ""}`} href="/manager/notifications">
           <div className="nav-icon" style={{ position: "relative" }}>
             <UiIcon name="bell" />

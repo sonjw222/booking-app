@@ -250,26 +250,34 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 
 현재 버튼은 미설정 안내만 표시합니다.
 
-### P1-5. 매니저 세부 권한 기반 UI
+### P1-5. (2026-08-14, 2차 진행 — ManagerNav 탭까지 확대) 매니저 세부 권한 기반 UI
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **미완성** |
-| 근거 파일 | `lib/roles.ts`, `app/manager/staff/permissions/page.tsx`, 전체 `app/manager/**/page.tsx`, `add_personal_permissions.sql` |
-| 완료 조건 | 각 매니저 화면의 기능을 권한 키와 매핑하고 권한 없는 메뉴·버튼을 사전에 숨기거나 비활성화하며, RLS/RPC 거부도 그대로 유지해 역할별 검증을 통과함 |
+| 현재 상태 | **부분 완료 — 남은 항목은 아래 "완료 조건" 참고.** |
+| 근거 파일 | `lib/roles.ts`, `app/manager/staff/permissions/page.tsx`, 전체 `app/manager/**/page.tsx`, `app/components/ManagerNav.tsx`, `add_personal_permissions.sql` |
+| 완료 조건 | 각 매니저 화면의 기능을 권한 키와 매핑하고 권한 없는 메뉴·버튼을 사전에 숨기거나 비활성화하며, RLS/RPC 거부도 그대로 유지해 역할별 검증을 통과함. 남은 것: (1) 상품/후기/주문/관리자배치내역 4개 메뉴 — 대응 permission key가 카탈로그에 없어 새로 추가해야 함(스키마 변경, 별도 승인 필요) (2) 각 화면 내부의 개별 액션 버튼 단위 권한 표시(여전히 서버 거부 이후에야 알 수 있음) — 화면 수가 많아 범위가 큼, 별도 배치 권장 |
 | 관련 문서 | [REQUIREMENTS 5-7, 6-1](./REQUIREMENTS.md), [DATABASE 7-1, 10절](./DATABASE.md), [ROUTES 5절](./ROUTES.md) |
-
-현재 `effectiveState()`는 권한 설정 화면에서만 사용되고 실제 기능 화면은 서버 거부 이후에야 권한 부족을 알 수 있습니다.
 
 2026-08-01 Access Control 구현 Batch에서 1차 해결: `app/manager/page.tsx`의 13개 메뉴 중
 권한 카탈로그에 대응 키가 있는 9개(수강권/진도표/스태프/매출/공지사항/문의/센터정보/룸/설정)를
 `fetchMyEffectivePermissionKeys()` + `canSeeManagerMenu()`로 노출 제어함(오너는 전권, 비활성 시
 서버 `has_permission()`과 동일한 우선순위로 판정). 나머지 4개(상품/후기/주문/관리자배치내역)는
 카탈로그에 대응 permission key가 없어 이번 1차 범위에서 제외 — 새 permission key 추가는 스키마
-변경이라 별도 승인 필요. `ManagerNav`의 4개 고정 탭(수업/회원/알림/더보기)도 아직 미검토. 개별
-화면 내부의 버튼 단위 권한 표시(각 screen의 개별 액션 버튼)는 여전히 서버 거부 이후에야 알 수
-있음 — 상세 내용은 [CHANGELOG.md](./CHANGELOG.md) 참고.
+변경이라 별도 승인 필요.
+
+2026-08-14 2차 해결: `ManagerNav`의 4개 고정 탭 중 미검토였던 부분을 확인 — "수업"/"알림"은
+본인 일정·본인 알림함이라 권한 카탈로그에 애초에 대응하는 "view" 키 자체가 없음(`schedule.own.*`은
+전부 개별 액션 키뿐이고 기본 조회 키가 없음, `schema.sql` 확인 — 모든 스태프가 자기 일정/자기
+알림은 볼 수 있어야 하므로 의도적으로 게이트 없는 설계로 판단해 그대로 둠). "회원" 탭은
+`customer.member.view`라는 명확한 권한 키가 있고 실제로 RLS(`reservation_functions.sql`,
+`has_permission(center_id, 'customer.member.view')`)가 이미 이 권한으로 회원 목록 조회를
+막고 있는데도 탭 자체는 항상 노출돼 있었다 — `app/manager/page.tsx`와 동일한 패턴으로
+`ManagerNav.tsx`에 권한 계산을 추가해 탭도 가리도록 수정. "더보기" 탭은 그 자체가 메인
+메뉴(이미 항목별로 가려짐)라 탭 노출은 그대로 둠. `npm run build` 통과. 개별 화면 내부의
+버튼 단위 권한 표시(각 screen의 개별 액션 버튼)는 여전히 서버 거부 이후에야 알 수 있음 —
+상세 내용은 [CHANGELOG.md](./CHANGELOG.md) 참고.
 
 ### P1-6. (2026-08-14, 완료 확인 — 문서만 정정) 관리자·운영자 클라이언트 가드 누락
 

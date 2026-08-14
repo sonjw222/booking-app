@@ -8,6 +8,20 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-14 (같은 날 후속8) — P1-6 완료 재확인(문서 정정) + P1-5 ManagerNav "회원" 탭 게이팅
+
+P1-6: 클라이언트 가드 5개 화면과 `account_center_permissions` SELECT RLS 수정이 이미 PR #19로
+2026-08-02에 main에 병합돼 있었음을 재확인(`pg_policies` 직접 조회 + 코드 확인) — TODO 상태만
+"미완성"으로 오래 남아있던 문서 누락, 코드/SQL 변경 없음.
+
+P1-5: `ManagerNav`의 4개 고정 탭 중 미검토였던 부분 확인 — "수업"/"알림"은 본인 일정·본인
+알림함이라 권한 카탈로그에 대응 키 자체가 없어(의도적 설계로 판단) 그대로 두고, "회원" 탭만
+`customer.member.view` 권한으로 가리도록 `app/components/ManagerNav.tsx` 수정(RLS는 이미 이
+권한으로 막고 있었는데 탭 UI만 항상 노출돼 있던 상태) — `app/manager/page.tsx`와 동일한
+`fetchMyEffectivePermissionKeys`/`canSeeManagerMenu` 패턴 재사용. `npm run build` 통과.
+상품/후기/주문/관리자배치내역 4개 메뉴(새 permission key 필요, 스키마 변경)와 화면별 버튼
+단위 권한 표시는 범위가 커서 이번엔 다루지 않음(`docs/TODO.md` P1-5).
+
 ## 2026-08-14 (같은 날 후속6) — P1-7 국경일 정적 테이블로 2025~2027년 확장 완료
 
 `app/reservation/page.tsx`에 `2026-07-17` 제헌절 한 건만 하드코딩돼 있던 `PUBLIC_HOLIDAYS`를
