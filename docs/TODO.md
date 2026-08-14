@@ -1193,6 +1193,37 @@ P2-20 조사 과정에서 발견됐지만 이번 배치 범위 밖이라 코드 
 | 남은 작업 | (1) 소셜 로그인 계정의 진짜 재인증(현재는 확인 문구로 낮은 문턱만 둠) (2) 탈퇴 회원이 매니저 쪽 회원 검색/명단에 계속 노출되는지 등 후속 화면 영향 검토 (3) 실제 탈퇴 왕복 수동 QA(화면에서 끝까지 눌러서 재로그인 차단까지 확인) |
 | 관련 문서 | `docs/platform-spec/epics/EPIC_03_Authentication.md` AUTH-08 |
 
+### P2-22. (신규, 2026-08-13) `getOrCreateOwnedTestCenter()` self-healing sweep이 미래 시각 leftover class는 못 잡음 — AUTO-SEC-I 간헐 실패 원인
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 (테스트 인프라 한정 — 보안 로직과 무관, SEC-114 배치 범위 밖) |
+| 현재 상태 | **확인 필요 — 코드 수정 안 함, 사용자 결정 대기** |
+| 근거 파일 | `tests/integration/setup.ts`(`getOrCreateOwnedTestCenter()`의 sweep, TEST-004 #45), `tests/integration/auto-book-membership-security.test.ts`(`AUTO-SEC-I`) |
+| 완료 조건 | (a) sweep 조건을 "과거"뿐 아니라 "제목이 알려진 테스트 fixture 패턴이고 미래인 것"까지 넓히거나, (b) 이미 쌓인 leftover를 겨냥한 별도 `cleanup_*_draft_proposed.sql`을 작성해 사용자가 적용 |
+
+- TEST-004 #45가 추가한 sweep은 `start_time`이 1시간 이상 **과거**인 class만 정리한다. 그런데
+  SEC-101/112/113~117 회귀 테스트 중 `auto-book-membership-security.test.ts`를 로컬로 처음
+  실행하며 `AUTO-SEC-I`(정상 자동예약의 예약 수/잔여횟수 정합성, `expect(booked).toBe(2)`)가
+  `booked=3`으로 실패했다. 원인 진단(read-only) 결과, managerA 소유 공유 테스트센터
+  (`3937eb89-3803-43e9-9a29-e893f779df1a`)에 `status='open'`이고 `start_time`이 **미래**(짧게는
+  며칠, 길게는 2026-09-12/2026-11-11까지)인 leftover class가 300개 이상 남아있었다 —
+  `P3 통합-*`, `E2E 한도*`, `CLASS-001 기본값사용`, `SETTINGS-REAUDIT *`, `P1-12 *`, `P2
+  알림격리-*`, `DIAG-NEWCLASS-BUG *` 등 여러 파일/세션의 잔재. 이 중 다수가
+  `class_allowed_products` 제한이 전혀 없어서, `auto_book_membership()`(SEC-114 수정 대상)의
+  "센터+요일만 일치하면 예약 가능" 매칭 로직이 새로 만든 테스트 수업뿐 아니라 이 leftover들도
+  같은 요일이면 함께 집어 예약해버린다.
+- **SEC-114 보안 수정 자체와는 무관함을 확인**: `auto_book_membership()`의 business logic(요일
+  매칭, class_allowed_products 필터, 하루 1개 제한, 정원 체크)은 이번 세션에서 한 줄도 바꾸지
+  않았다(authorization 블록만 추가, `fix_auto_book_membership_idor_draft_proposed.sql` 헤더
+  참고) — leftover 오염이 없었다면 기존 코드로도 정확히 2개만 잡혔을 것. 같은 파일의
+  `AUTO-SEC-J`(멱등성 — 같은 membership으로 재호출해도 중복/초과 차감이 없는지)는 정확한
+  개수가 아니라 "두 번째 호출은 0개"만 확인하는 방식이라 이 오염에 영향받지 않고 통과했다.
+- 대량(300건+) 삭제이고 `reservations`/`attendance` 등 FK 연쇄 영향 범위를 파일별로 다시
+  조사해야 해서, 이번 보안 배치 범위에서 임의로 cleanup SQL을 작성·적용하지 않았다. sweep
+  조건을 미래까지 넓히는 것도 "다른 테스트가 지금 막 만든, 아직 안 끝난 미래 class"까지
+  지워버릴 위험이 있어 신중한 설계가 필요하다.
+
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
 
 ### P3-1. 수업 구분과 복수 강사 배정

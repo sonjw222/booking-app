@@ -198,6 +198,92 @@ SEC-009 결과와 일치), `USING(true)` 정책은 공개 마케팅 콘텐츠(�
   `README.md` 5절도 "선택"에서 실제 자동화 안내로 갱신. 사용자가 SQL Editor에서 적용 완료
   (`cron.schedule()`이 job id `1` 반환 확인) — 익일 실제 발생 여부만 남음(`docs/TODO.md` P0-5).
 
+## 2026-08-13 — SEC-101/112/113/114/115/116/117 통합 회귀 테스트 로컬 Green 확인 (security/sec114-117-final-crosscheck)
+
+`manager_centers` self-join/self-promote(SEC-101/112), `auto_book_membership` IDOR(SEC-114),
+`manager_set_attendance` membership 무결성(SEC-115), SECURITY DEFINER 함수 EXECUTE/search_path
+경화(SEC-116/117) SQL 4종을 Live에 적용 완료 후, 실제 Supabase에 대해 통합테스트 3개 파일을
+전부 로컬로 돌려 회귀를 확인했다(`.env.test.local` 사용, CI가 아닌 로컬 실행 — 동시에
+`manager_centers`/`center_roles` RLS 무한 재귀를 고치던 다른 세션의 hotfix(PR #49, v1~v4)와
+실시간으로 교차 확인하며 진행).
+
+- `manager-centers-privilege-escalation.test.ts`: **19/19 Green**. 과정에서 발견/수정한 것:
+  (1) 내가 추가한 "매니저센터 생성" 정책의 `centers.status='pending'` 체크가 caller 자신의
+  RLS로 평가되는 raw subquery였는데, 막 생성한 pending 센터는 어떤 기존 centers 정책으로도
+  caller에게 안 보여서 정상 부트스트랩까지 42501로 막고 있었다 —
+  `fix_manager_centers_pending_check_helper_draft_proposed.sql`(`center_is_pending()`
+  security definer 헬퍼)로 수정. (2) 테스트 자체의 결함 2건: 타 센터 role_id 주입 테스트가
+  "RLS가 막은 UPDATE는 에러 없이 0건으로 조용히 끝날 수 있다"는 이 파일의 다른 테스트들과
+  같은 패턴을 안 따라 assert가 잘못돼 있었음(수정). "여러 센터 다른 역할 유지" 테스트가
+  `beforeAll` 시점에 캡처해둔 계정 id에 의존했는데, 공유 테스트 계정을 다른 프로세스가
+  건드리며 세션이 실제로 userA로 되돌아가는 순간이 있어(supabase-js 세션 전환 auto-refresh
+  race, 이 파일에 이미 문서화된 것과 같은 계열) 실패 — 단언 직전에 세션을 다시 확정하도록
+  수정. (3) `service_role`이 `center_members`에 대한 기본 GRANT가 없어 K 테스트가 실패 —
+  `fix_service_role_missing_grants_center_members_draft_proposed.sql` 적용(사용자 확인)으로 해결.
+- `auto-book-membership-security.test.ts`: **15/17 Green** (2건은 SEC-114와 무관 — 하나는
+  describe 제목 자체가 "이번 배치 범위 밖"으로 명시된 정책 회귀(SEC-114-B), 하나는 공유
+  테스트센터에 쌓인 leftover open 수업 오염으로 인한 예약 개수 assert 실패 —
+  `docs/TODO.md` P2-22 참고, 코드 수정 없이 이슈로만 기록).
+- `manager-set-attendance-membership-integrity.test.ts`: **11/11 Green**. 이 파일은 이번
+  세션에서 처음 로컬 실행됐고, SEC-115 로직과 무관한 순수 테스트 결함 3건을 발견/수정:
+  (1) fixture 헬퍼가 수업 생성 전에 매니저 세션을 확정하지 않아 회원 세션으로 시도해
+  RLS에 막힘, (2) 공유 `createTestMembership()`(setup.ts, 14개 파일 공용)의 재사용
+  분기가 회원 자신의 세션으로 `remaining_count`를 직접 UPDATE하려다 RLS에 막힘 —
+  admin(service_role)로 전환(다른 fixture 헬퍼들과 동일한 관례), (3) `reserve_class()`가
+  membership을 자동 선택해서 fixture가 방금 만든 membership이 실제로 소진된다는 보장이
+  없었고(공유 계정에 leftover membership이 더 있을 수 있음), 여러 헬퍼 호출이 전부 같은
+  날짜에 예약을 시도해 실제 `daily_book_limit` 정책에 걸림 — 예약 레코드에서 실제
+  membership_id를 다시 확인하도록, 호출마다 날짜를 분산하도록 수정.
+
+`fix_manager_centers_privilege_escalation_draft_proposed.sql`/그 rollback 파일도 이 최종
+merged 버전(SEC-101/SEC-112 v2 + 다른 세션의 RLS 재귀 hotfix v3 helper 채택)으로 갱신됨.
+
+## 2026-08-13 — `manager_centers`/`center_roles`/`centers` RLS 무한 재귀 긴급 hotfix 4종(Live 적용·사용자 확인 완료) — 스태프 초대 기능 복구
+
+**배경**: `manager_centers`(센터별 스태프/역할 배정 테이블)에 대한 별도 보안 배치(SEC-101/112/113
+— 임의 센터 self-join 및 저권한 스태프 self-promote 차단, 아직 이 main 브랜치에는 별도로
+merge되지 않은 보안 전용 브랜치에서 관리 중)가 운영 DB(Live)에 먼저 적용됐다. 그 배치가
+`manager_centers`의 "오너 스태프 초대"/"오너 스태프 수정" 정책에 추가한 cross-center role_id
+검증(`role_id in (select id from center_roles cr where cr.center_id = manager_centers.center_id)`)이
+기존 `center_roles`/`manager_centers`의 다른 RLS 정책들과 얽히면서, 스태프 초대(`/manager/staff`)
+시도 시 `infinite recursion detected in policy for relation "manager_centers"` 에러로 기능이
+완전히 깨지는 문제가 실제로 발생함(사용자가 직접 재현 확인, 2026-08-13).
+
+**원인**: raw(비-`security definer`) 서브쿼리로 서로를 되짚는 지점이 총 4곳 겹쳐 있었다. 하나씩
+고칠 때마다 다음 겹이 드러나 순서대로 4번 재현·수정했다(이 중 4번째는 이번 대응 도중 별도
+세션이 `manager_centers`의 "매니저센터 생성" INSERT 정책에 orphan/이미 approved된 센터
+self-claim 잔여 경로를 막는 `centers` 참조를 추가로 얹으면서 처음 드러났다 — 여러 세션이
+같은 운영 DB를 동시에 다루고 있었음을 서로 확인하고 조율함, 아래 4번 항목 참고).
+
+1. `fix_center_roles_manager_centers_recursion_draft_proposed.sql` — `center_roles`의
+   "내 센터 역할 조회" SELECT 정책이 `manager_centers`를 raw 서브쿼리로 되짚던 것을
+   `my_managed_center_ids()`(이미 `reservation_functions.sql`에 있던 security definer 헬퍼,
+   `manager_centers` SELECT 정책에서 검증된 패턴) 기반으로 교체.
+2. `fix_has_permission_manager_centers_recursion_draft_proposed.sql` — `has_permission()`이
+   security definer가 아니어서(`reservation_functions.sql` 원본 정의) `manager_centers`/
+   `center_roles`를 caller 권한으로 raw JOIN하던 것을 security definer로 전환(시그니처·로직·
+   반환값 전혀 불변).
+3. `fix_manager_centers_self_reference_recursion_draft_proposed.sql` — `manager_centers`
+   자신의 INSERT/DELETE 정책에 함수 없이 직접 박혀 있던 자기참조 서브쿼리, 그리고 INSERT/UPDATE
+   정책의 `role_id`↔`center_roles` 교차참조를 신규 helper 함수(`manager_centers_has_any_row`/
+   `role_id_belongs_to_center`/`role_id_is_owner_for_center`, 전부 security definer)로 치환.
+   조건식(누가 되고 안 되고의 로직) 자체는 전혀 바꾸지 않았다 — 표현 방식만 RLS rewriter에게
+   opaque한 함수 호출로 바꿔 순환 자체를 구조적으로 제거했다.
+4. `fix_centers_manager_centers_recursion_draft_proposed.sql` — `centers`의 "승인된 센터
+   조회" SELECT 정책(`reservation_functions.sql`/`add_platform_admin.sql`에 동일 재선언,
+   이번 배치 이전부터 있던 기존 정책)이 "가입 직후 승인대기 상태인 내 센터도 보이게" 하려고
+   `id in (select center_id from manager_centers where account_id = my_account_id())`를 raw
+   서브쿼리로 쓰고 있었다. 1~3번 hotfix로는 이 지점을 건드리지 않았는데, 별도 세션이
+   `manager_centers`의 "매니저센터 생성" INSERT 정책에 `centers`를 참조하는 조건(orphan/이미
+   approved된 센터 self-claim 잔여 경로 차단)을 추가하면서 이 오래된 raw 서브쿼리가 처음으로
+   순환 경로에 들어왔다. `my_managed_center_ids()`는 `status='active'`만 걸러 이 정책의 의도
+   (pending 상태도 노출)와 안 맞아 그대로 쓸 수 없어서, 동일 패턴의 status 필터 없는 신규
+   헬퍼 `my_center_ids_any_status()`를 추가해 그 절만 교체했다.
+
+네 파일 모두 각자 독립적인 rollback 파일 포함, `BEGIN`/`COMMIT` 트랜잭션으로 감싸 부분 적용
+상태가 남지 않도록 함. 사용자가 Supabase SQL Editor에서 순서대로(1→2→3→4) 직접 실행하고,
+`/manager/staff`에서 스태프 초대가 정상 동작함을 실측 확인했다.
+
 ## 2026-08-11 — 담당 강사 복수 지정 + 수강권 허용 정책 변경 Batch 최종 완료: 전체 CI 2연속 Green (feature/social-auth-notifications-attendance-dashboard)
 
 두 번째 SQL(`add_class_trainer_names_rpc_draft_proposed.sql`)까지 적용 완료되면서 이
