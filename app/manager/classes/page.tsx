@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Loading from "../../components/Loading";
 import DatePicker from "../../components/DatePicker";
+import MonthPicker from "../../components/MonthPicker";
 import ManagerNav from "../../components/ManagerNav";
 import AmPmTimeInput from "../../components/AmPmTimeInput";
 import { dhmToMinutes, minutesToDhm } from "../../../lib/deadlineInput";
@@ -1598,12 +1599,10 @@ export default function ClassManagePage() {
             </div>
 
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>복사할 달 (원본)</div>
-            <input className="input-field" type="month" value={copyFrom}
-              onChange={(e) => { setCopyFrom(e.target.value); loadCopySource(e.target.value, copyMode); }} />
+            <MonthPicker value={copyFrom} label="복사할 달" onChange={(value) => { setCopyFrom(value); loadCopySource(value, copyMode); }} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>붙여넣을 달 (대상)</div>
-            <input className="input-field" type="month" value={copyTo}
-              onChange={(e) => { setCopyTo(e.target.value); setCopyPlan(null); }} />
+            <MonthPicker value={copyTo} label="붙여넣을 달" onChange={(value) => { setCopyTo(value); setCopyPlan(null); }} />
 
             {/* 수업 선택 */}
             {(copyMode === "weekday" ? copyGroups.length > 0 : copyDateItems.length > 0) && (

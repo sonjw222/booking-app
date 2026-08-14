@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
+import DatePicker from "../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
   registerPayment, fetchPayments, summarize, paymentsToCsv,
@@ -299,9 +300,9 @@ export default function SalesPage() {
       {/* 기간 선택 (포인트 탭 제외) */}
       {tab !== "point" && (
         <div className="date-range">
-          <input type="date" className="date-input" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <DatePicker value={from} onChange={setFrom} label="매출 조회 시작일" />
           <span className="date-tilde">~</span>
-          <input type="date" className="date-input" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DatePicker value={to} onChange={setTo} label="매출 조회 종료일" />
         </div>
       )}
 
@@ -530,7 +531,7 @@ export default function SalesPage() {
             </select>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>결제일</div>
-            <input type="date" className="input-field" value={fPaidAt} onChange={(e) => setFPaidAt(e.target.value)} />
+            <DatePicker value={fPaidAt} onChange={setFPaidAt} label="결제일 선택" />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>메모 (선택)</div>
             <input className="input-field" value={fMemo} onChange={(e) => setFMemo(e.target.value)} placeholder="예: 3개월 할인 적용" />
@@ -562,7 +563,7 @@ export default function SalesPage() {
             <input inputMode="numeric" className="input-field" value={eAmount} onChange={(e) => setEAmount(e.target.value)} placeholder="0" />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>지출일</div>
-            <input type="date" className="input-field" value={eDate} onChange={(e) => setEDate(e.target.value)} />
+            <DatePicker value={eDate} onChange={setEDate} label="지출일 선택" />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>메모 (선택)</div>
             <input className="input-field" value={eMemo} onChange={(e) => setEMemo(e.target.value)} placeholder="예: 7월 임대료" />
