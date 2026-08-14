@@ -46,7 +46,7 @@ import {
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
-const EMPTY: ClassInput = { title: "", date: "", start: "", end: "", capacity: 8, allowGoods: true, roomId: null, cancelDeadlineMin: null, bookingDeadlineMin: null, classFormat: "group" };
+const EMPTY: ClassInput = { title: "", description: "", date: "", start: "", end: "", capacity: 8, allowGoods: true, roomId: null, cancelDeadlineMin: null, bookingDeadlineMin: null, classFormat: "group" };
 
 export default function ClassManagePage() {
   const nowD = new Date();
@@ -564,7 +564,7 @@ export default function ClassManagePage() {
     setEditId(c.id);
     setEditGroupId(c.recurringGroupId);
     setApplyToGroup(false);
-    setForm({ title: c.title, date: c.date, start: c.start, end: c.end, capacity: c.capacity, allowGoods: c.allowGoods, roomId: c.roomId, cancelDeadlineMin: c.cancelDeadlineMin, bookingDeadlineMin: c.bookingDeadlineMin, classFormat: c.classFormat });
+    setForm({ title: c.title, description: c.description ?? "", date: c.date, start: c.start, end: c.end, capacity: c.capacity, allowGoods: c.allowGoods, roomId: c.roomId, cancelDeadlineMin: c.cancelDeadlineMin, bookingDeadlineMin: c.bookingDeadlineMin, classFormat: c.classFormat });
     fillDeadline(c.cancelDeadlineMin);
     fillBookDeadline(c.bookingDeadlineMin);
     // 'all'이면(class_allowed_products는 원래 비어 있음) 전체 체크 상태로 즉시 보여준다 —
@@ -1004,6 +1004,11 @@ export default function ClassManagePage() {
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{editId ? "수업 수정" : "수업 등록"}</div>
             <input className="input-field" placeholder="수업명" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>수업 소개 (선택)</div>
+            <textarea className="input-field" style={{ minHeight: 70, resize: "vertical", lineHeight: 1.5 }}
+              placeholder="회원이 예약할 때 수업명 아래에 보여요" value={form.description ?? ""}
+              onChange={(e) => setForm({ ...form, description: e.target.value })} />
 
             {/* 반복 등록 토글 (신규일 때만) */}
             {!editId && (

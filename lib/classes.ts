@@ -11,6 +11,7 @@ import { toKstIso } from "./kst";
 export type ManagedClass = {
   id: string;
   title: string;
+  description: string | null; // 수업 소개 (회원 화면 목록에는 안 보이고 예약 상세에서만 표시)
   date: string; // "2026-07-14"
   start: string; // "07:10"
   end: string;
@@ -81,7 +82,7 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data: page, error } = await supabase
       .from("classes")
-      .select("id, title, start_time, end_time, capacity, recurring_group_id, allow_goods, room_id, cancel_deadline_min, booking_deadline_min, class_format, status, pass_selection_mode")
+      .select("id, title, description, start_time, end_time, capacity, recurring_group_id, allow_goods, room_id, cancel_deadline_min, booking_deadline_min, class_format, status, pass_selection_mode")
       .eq("center_id", centerId)
       .gte("start_time", toKstIso(fromDate, "00:00"))
       .lte("start_time", toKstIso(toDate, "23:59"))
@@ -130,6 +131,7 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
   return (rows ?? []).map((c) => ({
     id: c.id,
     title: c.title,
+    description: c.description ?? null,
     date: KST_DATE.format(new Date(c.start_time)),
     start: KST_TIME.format(new Date(c.start_time)),
     end: KST_TIME.format(new Date(c.end_time)),
@@ -149,6 +151,7 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
 
 export type ClassInput = {
   title: string;
+  description?: string | null; // 수업 소개 (선택, 회원 예약 상세에만 표시)
   date: string;
   start: string;
   end: string;
@@ -166,6 +169,7 @@ export async function createClass(centerId: string, input: ClassInput): Promise<
   const { data, error } = await supabase.from("classes").insert({
     center_id: centerId,
     title: input.title,
+    description: input.description ?? null,
     start_time: toKstIso(input.date, input.start),
     end_time: toKstIso(classEndDate(input.date, input.start, input.end), input.end),
     capacity: input.capacity,
@@ -186,6 +190,7 @@ export async function updateClass(classId: string, input: ClassInput): Promise<v
     .from("classes")
     .update({
       title: input.title,
+      description: input.description ?? null,
       start_time: toKstIso(input.date, input.start),
       end_time: toKstIso(classEndDate(input.date, input.start, input.end), input.end),
       capacity: input.capacity,

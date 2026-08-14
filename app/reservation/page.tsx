@@ -747,6 +747,9 @@ function ReservationCalendarContent() {
             )}
             <div className="confirm-class" style={{ marginTop: 18 }}>
               <div className="confirm-class-title">{confirmClass.title}</div>
+              {confirmClass.description && (
+                <div className="confirm-class-sub" style={{ whiteSpace: "pre-wrap" }}>{confirmClass.description}</div>
+              )}
               <div className="confirm-class-sub">{confirmClass.place} · {confirmClass.date} {confirmClass.start}</div>
               {confirmClass.instructorNames.length > 0 && (
                 // 목록 화면(class-row-place)은 "A, B 외 N명"으로 줄여 보여주지만, 강사가

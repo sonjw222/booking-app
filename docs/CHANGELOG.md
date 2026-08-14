@@ -8,6 +8,39 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-14 (같은 날 후속10) — 수업 소개란, 회원가입 도로명주소+소셜 휴대폰번호 필수화, 로그인/가입 문구 차별화
+
+**수업 소개란**: 기존에 `schema.sql`에만 있고 미사용이던 `classes.description` 컬럼을
+매니저 등록/수정 폼(수업명 아래 textarea, 선택)부터 회원 예약 확인 상세(수업명 바로 아래
+표시, 목록에는 안 보임)까지 끝단까지 연결. `lib/classes.ts`(ManagedClass/ClassInput),
+`lib/reservations.ts`(ClassInfo, fetchMonthData) select/매핑에 description 추가.
+
+**회원가입 도로명주소(선택)**: 다음(카카오) 우편번호 서비스를 필요할 때만 동적 로드하는
+`lib/daumPostcode.ts` 신규, 검색 팝업+상세주소 입력을 담당하는 `app/components/AddressField.tsx`
+신규(이메일 가입 폼과 소셜 가입 완료 모달이 공용). 기존에 있던 `accounts.address` 컬럼에 저장
+(새 마이그레이션 불필요). 필수 아님.
+
+**소셜 가입 휴대폰번호 필수화**: 이메일 가입은 이미 휴대폰번호 필수였지만 소셜 가입(카카오/
+네이버/구글)은 provider가 안정적으로 안 줘서 `accounts.phone`이 null로 남아있었음(관리자 화면
+자체는 null을 있는 그대로 보여줄 뿐 버그는 아니었음 — 애초에 수집이 안 되는 게 문제).
+`lib/authAccount.ts`의 `ensureAccountForCurrentUser()`가 계정의 phone 값을 함께 반환하도록
+변경(새로 만든 계정인지가 아니라 phone이 실제로 비었는지로 판단 — 새로고침으로 우회 불가),
+`completeSocialProfile()` 신규. `app/components/SessionWatcher.tsx`가 phone이 없으면 앱
+전역에서 휴대폰번호(필수)+주소(선택) 입력 모달을 띄우고, 채우기 전까진 로그인할 때마다
+다시 뜸. `accounts.phone`은 기존 `unique` 제약 그대로 유지(전화번호 하나당 계정 하나, 기존
+설계 그대로 — 이번에 새로 추가한 제약 아님).
+
+**로그인/가입 문구 차별화**: `/login`에서 이메일 폼과 소셜 버튼 목록 위에 로그인/가입 모드별로
+다른 안내 문구 추가("이메일로 로그인"/"이메일로 가입하기", "소셜 계정으로 로그인"/"소셜 계정으로
+간편 가입" + 가입 모드에서는 "가입 후 휴대폰 번호 확인 화면이 한 번 더 나와요" 안내), 소셜 버튼
+라벨도 로그인/가입 모드에 따라 "계속하기"/"가입하기"로 구분.
+
+**작업 위치 주의**: `origin/main`에 아직 없는 디자인 시스템 마이그레이션(PR #52,
+`feature/design-system-migration`)이 `app/login/page.tsx`/`lib/authAccount.ts`를 이미
+카카오/네이버 커스텀 Edge Function OAuth 플로우로 재구현해둔 상태라, 이 배치는 PR #52
+브랜치(`feature/small-additions-v2`) 기준으로 작업함 — main이 아니라 PR #52 위에 얹힐 예정.
+`npm run build` 통과, 브라우저(개발서버)로 수동 확인 완료. SQL 변경 없음(기존 컬럼만 사용).
+
 ## 2026-08-14 (같은 날 후속9) — P1-2 미발급 주문 자가 취소 구현
 
 회원이 아직 매니저가 처리(발급)하지 않은 주문을 취소할 방법이 없어 "센터에 문의해주세요"

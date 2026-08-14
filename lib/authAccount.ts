@@ -1,5 +1,7 @@
 import { supabase } from "./supabaseClient";
 
+export type EnsuredAccount = { id: string; phone: string | null };
+
 // 소셜 로그인(카카오/네이버/애플/구글)으로 처음 로그인한 사용자는 auth.users 행만 생기고
 // 우리 앱의 accounts/profiles 행은 아무도 만들어주지 않는다 — 이메일 회원가입
 // (app/login/page.tsx의 handleSignup)만 그 두 행을 명시적으로 만들었기 때문이다. 그 결과
@@ -20,19 +22,23 @@ export function setBootstrapSuppressed(v: boolean) {
   bootstrapSuppressed = v;
 }
 
-export async function ensureAccountForCurrentUser(): Promise<void> {
-  if (bootstrapSuppressed) return;
+// 반환값(phone 포함)은 SessionWatcher가 "휴대폰 번호 입력 모달"을 띄울지 판단하는 데 쓴다 —
+// 이번에 새로 만든 계정인지 여부가 아니라 phone이 실제로 비어 있는지로 판단해야, 모달을
+// 안 채우고 새로고침하는 식으로 우회할 수 없다(계정이 이미 있어도 phone이 null이면 매번
+// 다시 뜸).
+export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | null> {
+  if (bootstrapSuppressed) return null;
   const { data: authData } = await supabase.auth.getUser();
   const user = authData.user;
-  if (!user) return;
+  if (!user) return null;
 
   const { data: existing, error: findErr } = await supabase
     .from("accounts")
-    .select("id")
+    .select("id, phone")
     .eq("auth_id", user.id)
     .maybeSingle();
-  if (findErr) return; // 조회 실패 시 조용히 넘어감(RLS 등) — 이후 실제 데이터 호출에서 다시 드러남
-  if (existing) return;
+  if (findErr) return null; // 조회 실패 시 조용히 넘어감(RLS 등) — 이후 실제 데이터 호출에서 다시 드러남
+  if (existing) return { id: existing.id, phone: existing.phone };
 
   const meta = user.user_metadata ?? {};
   const name: string =
@@ -41,13 +47,24 @@ export async function ensureAccountForCurrentUser(): Promise<void> {
   const { data: account, error: accErr } = await supabase
     .from("accounts")
     .insert({ auth_id: user.id, name, is_member: true })
-    .select("id")
+    .select("id, phone")
     .single();
   if (accErr || !account) {
     // 23505 = unique_violation: 동시에 열린 다른 탭/effect가 먼저 만든 경우 — 정상이므로 무시.
-    if (accErr?.code === "23505") return;
-    return; // 그 외 실패도 조용히 넘어감 — 다음 실제 데이터 호출에서 명확한 에러로 다시 드러남
+    // (다음 SIGNED_IN/INITIAL_SESSION 호출에서 existing 분기로 다시 조회됨)
+    return null;
   }
 
   await supabase.from("profiles").insert({ account_id: account.id, name, is_primary: true });
+  return { id: account.id, phone: account.phone };
+}
+
+// 소셜 가입 직후 "휴대폰 번호 입력" 모달(SessionWatcher)에서 호출 — phone은 필수, address는
+// 선택(도로명주소+상세주소를 합친 문자열 또는 null).
+export async function completeSocialProfile(accountId: string, phone: string, address: string | null): Promise<void> {
+  const { error } = await supabase.from("accounts").update({ phone, address }).eq("id", accountId);
+  if (error) {
+    if (error.code === "23505") throw new Error("이미 다른 계정에 등록된 번호예요");
+    throw new Error(error.message);
+  }
 }
