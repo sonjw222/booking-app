@@ -2929,7 +2929,60 @@ a.membership-card { text-decoration: none; display: block; }
 /* Manager menu uses one icon family and leaves the final row reachable. */
 .manager-home-v2 { padding-bottom: calc(var(--floating-nav-clearance) + 92px); }
 .manager-home-v2 > .list-row .icon svg { width: 22px; height: 22px; stroke-width: 1.7; }
-.manager-home-v2 > .list-row:last-of-type { margin-bottom: 24px; }
+.manager-home-v2 > .list-row:last-of-type { margin-bottom: 128px; }
+
+/* Final 26-point refinement: these rules intentionally close the cascade. */
+.mypage-shell .membership-cta {
+  border:1px solid var(--line-strong); background:#fff; color:var(--ink);
+  box-shadow:none;
+}
+.manager-v3-content .progress-member-panel { margin:8px var(--page-gutter) 18px; padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--surface); }
+.manager-v3-content .progress-member-panel .menu-section-label { padding:0 0 8px; }
+.manager-v3-content .progress-member-select { position:relative; }
+.manager-v3-content .progress-member-select select { appearance:none; min-height:52px; padding-right:44px; background:#fff; }
+.manager-v3-content .progress-member-select .select-chevron { position:absolute; right:16px; top:50%; translate:0 -52%; pointer-events:none; color:var(--ink-soft); font-size:20px; }
+.manager-v3-content .progress-add-record { width:100%; margin-top:10px; }
+.manager-v3-content .prog-wrap { display:grid; gap:12px; padding-bottom:130px; }
+.manager-v3-content .structured-add-row { display:grid; grid-template-columns:minmax(0,1fr) 76px; gap:10px; align-items:stretch; }
+.manager-v3-content .structured-add-row .outline-action { min-height:52px; }
+.manager-v3-content .prog-group { overflow:hidden; margin:0; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:0 8px 24px rgba(16,24,40,.035); }
+.manager-v3-content .prog-top-row { min-height:62px; padding:12px 14px; border:0; background:var(--surface); }
+.manager-v3-content .prog-top-name { font-size:17px; font-weight:760; }
+.manager-v3-content .prog-children { padding:0 14px 12px; }
+.manager-v3-content .prog-sub-row { min-height:58px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; padding:8px 0; border:0; border-bottom:1px solid var(--line); background:#fff; }
+.manager-v3-content .prog-sub-name { min-width:0; font-weight:620; }
+.manager-v3-content .prog-add-sub-btn { width:100%; min-height:48px; margin-top:10px; border:1px dashed var(--line-strong); border-radius:14px; background:#fff; color:var(--ink-soft); }
+.manager-v3-content .prog-hist { display:grid; gap:10px; padding-bottom:130px; }
+.manager-v3-content .prog-hist-day { padding:16px 14px; border:1px solid var(--line); border-radius:16px; background:#fff; }
+.manager-v3-content .prog-hist-actions { margin-top:12px; justify-content:flex-end; }
+.manager-v3-content .pass-list { display:grid; gap:14px; padding:8px var(--page-gutter) 130px; }
+.manager-v3-content .pass-card { position:relative; margin:0; padding:18px; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:0 7px 22px rgba(20,20,20,.035); }
+.manager-v3-content .pass-card::before { content:""; position:absolute; left:0; top:18px; bottom:18px; width:3px; border-radius:0 3px 3px 0; background:var(--brand); }
+.manager-v3-content .pass-rules { margin:8px 0 0; padding:8px 12px; border-left:2px solid var(--brand); border-radius:10px; background:var(--brand-soft); }
+.manager-v3-content .room-card-list { padding-bottom:130px; }
+.manager-v3-content .assignment-log-list { padding-bottom:130px; }
+.manager-v3-content .sales-breakdown { overflow:hidden; margin:0 var(--page-gutter); border:1px solid var(--line); border-radius:17px; background:#fff; }
+.manager-v3-content .sales-bd-item { min-height:60px; padding:13px 16px; border-bottom:1px solid var(--line); background:#fff; }
+.manager-v3-content .sales-bd-item:last-child { border-bottom:0; }
+.manager-v3-content .rv-stats { min-height:104px; padding-block:20px; }
+.manager-v3-content .rv-stat { display:flex; flex-direction:column; justify-content:center; gap:6px; }
+.manager-v3-content .rv-stat-label { margin:0; line-height:1.3; }
+.manager-v3-content .rv-stat-value { line-height:1.15; }
+.manager-v3-content .class-allowed-products-list,
+.manager-v3-content .class-trainers-list { gap:8px; padding-block:4px 10px!important; border-bottom:0; }
+.manager-v3-content .class-allowed-products-list .filter-chip,
+.manager-v3-content .class-trainers-list .filter-chip { min-height:40px; padding:0 13px; gap:7px; border:1px solid var(--line); border-radius:999px; background:#fff; color:var(--ink-soft); }
+.manager-v3-content .class-allowed-products-list .filter-chip.on,
+.manager-v3-content .class-trainers-list .filter-chip.on { border-color:var(--ink); background:var(--ink); color:#fff; }
+.manager-v3-content .class-allowed-products-list .filter-chip.on::before,
+.manager-v3-content .class-trainers-list .filter-chip.on::before { content:"✓"; font-size:11px; font-weight:900; }
+.manager-v3-content .sheet .primary-btn:not(.danger) { border:1px solid var(--line-strong); background:#fff; color:var(--ink); box-shadow:none; }
+.manager-v3-content .sheet .primary-btn:not(.danger):hover { background:var(--surface); }
+@media(max-width:380px){
+  .manager-v3-content .structured-add-row{grid-template-columns:minmax(0,1fr) 68px}
+  .manager-v3-content .row-actions{gap:3px}
+  .manager-v3-content .quiet-action{padding-inline:8px}
+}
 
 /* 2026-08-14 visual QA: quiet actions, clearer hierarchy and resilient overlays */
 .mypage-shell .avatar {
@@ -3100,6 +3153,116 @@ a.membership-card { text-decoration: none; display: block; }
   position:sticky; bottom:0; z-index:2; margin:18px -2px 0 !important; padding-top:12px;
   background:linear-gradient(to bottom,transparent,var(--bg) 18%);
 }
+
+/* Rebuilt member and sheet language: fewer filled blocks, clearer rows. */
+.outline-action,
+.quiet-action {
+  min-height:42px; padding:0 14px; border:1px solid var(--line-strong);
+  border-radius:12px; background:var(--bg); color:var(--ink); font:inherit; font-weight:750;
+}
+.outline-action.compact { min-height:36px; padding-inline:12px; font-size:12px; }
+.quiet-action { min-height:36px; border-color:var(--line); color:var(--ink-soft); font-size:12px; }
+.member-toolbar-actions { display:flex; gap:7px; }
+.member-add-search-row { display:grid; grid-template-columns:minmax(0,1fr) 78px; gap:10px; align-items:stretch; }
+.member-add-search-row .input-field { min-width:0; }
+.sheet-lead { margin:-2px 0 16px; color:var(--ink-soft); font-size:13px; line-height:1.55; }
+.csv-export-sheet .csv-cols { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.csv-export-sheet .csv-col {
+  display:flex; align-items:center; gap:9px; min-height:46px; padding:0 12px;
+  border:1px solid var(--line); border-radius:12px; background:var(--bg); font-weight:650;
+}
+.csv-export-sheet .csv-col:has(input:checked) { border-color:var(--brand); background:var(--brand-soft); color:var(--brand-ink); }
+.csv-export-sheet .csv-col input { width:17px; height:17px; accent-color:var(--brand-ink); }
+.member-detail-sheet .mem-pass-block { margin:12px 0; padding:14px; border:1px solid var(--line); border-radius:15px; background:var(--surface); }
+.member-detail-sheet .mem-pass-summary { display:grid; gap:7px; }
+.member-detail-sheet .mem-pass-chip { display:flex; justify-content:space-between; gap:12px; min-width:0; padding:10px 0; border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; }
+.member-detail-sheet .mem-pass-chip:last-child { border-bottom:0; }
+.member-detail-sheet .mem-pass-exp { flex:none; white-space:nowrap; }
+.member-detail-sheet .admin-row { min-height:54px; display:grid; grid-template-columns:88px minmax(0,1fr); align-items:center; border-bottom:1px solid var(--line); }
+.member-detail-sheet .admin-row .v { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.member-detail-sheet .mem-detail-row { display:grid; grid-template-columns:74px minmax(0,1fr) auto; gap:10px; align-items:center; }
+.member-detail-sheet .mem-detail-date { white-space:nowrap; line-height:1.2; }
+.direct-member-sheet .book-member-list { margin-top:12px; border-top:1px solid var(--line); }
+.direct-member-sheet .book-member-row { width:100%; min-height:66px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 2px; border:0; border-bottom:1px solid var(--line); background:transparent; text-align:left; }
+.book-member-identity { display:flex; align-items:center; gap:11px; min-width:0; }
+.book-member-avatar { width:36px; height:36px; display:grid; place-items:center; flex:none; border:1px solid var(--line); border-radius:12px; background:var(--surface); font-weight:800; }
+.direct-member-sheet .book-member-pass { max-width:48%; padding:6px 9px; border-radius:999px; background:var(--brand-soft); color:var(--brand-ink); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.direct-member-sheet .book-member-pass.empty { background:var(--surface); color:var(--ink-soft); }
+.progress-member-panel { margin:8px 20px 18px; padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--surface); }
+.progress-member-panel .menu-section-label { padding:0 0 8px; }
+.progress-member-select { position:relative; }
+.progress-member-select select { appearance:none; min-height:52px; padding-right:44px; background:#fff; }
+.progress-member-select .select-chevron { position:absolute; right:16px; top:50%; translate:0 -52%; pointer-events:none; color:var(--ink-soft); font-size:20px; }
+.progress-add-record { width:100%; margin-top:10px; }
+.row-actions { display:flex; align-items:center; gap:6px; }
+.quiet-action.danger { color:var(--danger); }
+.structured-add-row { display:grid; grid-template-columns:minmax(0,1fr) 76px; gap:10px; align-items:stretch; }
+.structured-add-row .outline-action { min-height:52px; }
+.prog-group { overflow:hidden; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:0 8px 24px rgba(16,24,40,.035); }
+.prog-top-row { min-height:62px; padding:12px 14px; background:var(--surface); }
+.prog-top-name { font-size:17px; font-weight:760; }
+.prog-children { padding:0 14px 12px; }
+.prog-sub-row { min-height:58px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
+.prog-sub-name { min-width:0; font-weight:620; }
+.prog-add-sub-btn { min-height:48px; margin-top:10px; border:1px dashed var(--line-strong); border-radius:14px; background:#fff; color:var(--ink-soft); }
+.prog-hist-day { position:relative; padding:16px 14px; border:1px solid var(--line); border-radius:16px; background:#fff; }
+.prog-hist + .prog-hist-day { margin-top:10px; }
+.prog-hist-actions { margin-top:12px; justify-content:flex-end; }
+@media (max-width:420px) { .structured-add-row { grid-template-columns:minmax(0,1fr) 68px; } }
+.staff-role { background:var(--brand-soft); color:var(--brand-ink); }
+.staff-role.owner { background:#eef0f3; color:var(--ink); }
+.staff-search-row { display:grid; grid-template-columns:minmax(0,1fr) 84px; gap:10px; }
+.staff-search-row .outline-action { min-height:52px; }
+.role-manage-sheet .grade-list { overflow:hidden; border:1px solid var(--line); border-radius:16px; background:#fff; }
+.role-manage-sheet .grade-item { min-height:56px; padding:10px 14px; }
+.payment-register-sheet .input-field,
+.payment-register-sheet .date-picker-trigger { background:#fff; }
+.payment-register-sheet .pay-grid { gap:12px; }
+.payment-register-sheet .pay-field { display:grid; gap:7px; }
+.payment-register-sheet .pay-field > span { font-size:13px; font-weight:700; color:var(--ink-soft); }
+.payment-register-sheet .pay-total { margin-top:12px; padding:14px 16px; border:1px solid var(--line); border-radius:14px; background:var(--surface); text-align:right; }
+.sales-summary { background:linear-gradient(145deg,#202226,#32363c); }
+.sales-big-label { letter-spacing:-.01em; }
+.sales-big-value { line-height:1.12; }
+.sales-breakdown { overflow:hidden; border:1px solid var(--line); border-radius:17px; background:#fff; }
+.sales-bd-item { min-height:60px; padding:13px 16px; border-bottom:1px solid var(--line); }
+.sales-bd-item:last-child { border-bottom:0; }
+.sales-bd-item .bd-label { color:var(--ink-soft); font-weight:650; }
+.sales-bd-item .bd-value { font-size:17px; font-weight:780; font-variant-numeric:tabular-nums; }
+.sales-export-sheet .csv-cols { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.sales-export-sheet .csv-col { min-height:48px; display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:13px; background:#fff; }
+.payment-detail-sheet .admin-row { min-height:54px; display:grid; grid-template-columns:92px minmax(0,1fr); align-items:center; border-bottom:1px solid var(--line); }
+.payment-detail-sheet .add-profile-actions { justify-content:flex-end; }
+.payment-detail-sheet .outline-action { min-width:120px; }
+.manager-v3-content .pass-card { position:relative; }
+.manager-v3-content .pass-card::before { content:""; position:absolute; left:0; top:18px; bottom:18px; width:3px; border-radius:0 3px 3px 0; background:var(--brand); }
+.goods-card-content { min-width:0; flex:1; }
+.goods-card-actions { flex:none; }
+.goods-card-actions .quiet-action { min-width:52px; }
+.room-card-list { display:grid; gap:12px; padding:14px 20px 120px; }
+.room-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:16px; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:0 8px 24px rgba(16,24,40,.035); }
+.room-card-main { min-width:0; display:grid; gap:5px; padding:0; border:0; background:transparent; text-align:left; }
+.room-card-name { font-size:17px; font-weight:780; }
+.room-card-memo,.room-card-address { color:var(--ink-soft); font-size:13px; line-height:1.45; }
+.room-card-actions { align-self:start; }
+.room-edit-sheet .map-location-btn { width:100%; margin-top:10px; }
+.assignment-log-list { display:grid; gap:10px; padding:0 20px 120px; }
+.assignment-log { position:relative; padding:15px 16px 15px 19px; border:1px solid var(--line); border-radius:16px; background:#fff; overflow:hidden; }
+.assignment-log::before { content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--brand); }
+.assignment-log.action-admin_cancel::before,.assignment-log.action-admin_free_cancel::before { background:var(--danger); }
+.assignment-log .hist-title { display:flex; flex-wrap:wrap; align-items:center; gap:7px; font-size:15px; }
+.assignment-action { padding:4px 8px; border-radius:999px; background:var(--brand-soft); color:var(--brand-ink); font-size:11px; font-weight:760; }
+.action-admin_cancel .assignment-action,.action-admin_free_cancel .assignment-action { background:#fff0f0; color:var(--danger); }
+.assignment-warning { color:#9a5b00; font-size:11px; font-weight:720; }
+.assignment-log .hist-sub { margin-top:4px; color:var(--ink-soft); font-size:13px; line-height:1.45; }
+
+.mypage-shell .profile-block { border-bottom:1px solid var(--line); }
+.mypage-shell .avatar { background:var(--bg); box-shadow:0 5px 16px rgba(20,20,20,.06); }
+.mypage-shell .membership-card,
+.mypage-shell .membership-card.goods { box-shadow:none; }
+.mypage-shell .membership-card + .membership-card { margin-top:12px; }
+.mypage-shell .membership-cta { display:flex; align-items:center; justify-content:center; background:var(--bg); }
+.mypage-shell .membership-card.goods { background:var(--bg); border-left:3px solid var(--brand); }
 
 /* Center actions remain visible in every tab and float clear of navigation. */
 .center-detail-v2 { padding-bottom: calc(var(--floating-nav-clearance) + 104px) !important; }

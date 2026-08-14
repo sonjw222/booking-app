@@ -470,7 +470,7 @@ export default function SalesPage() {
       {/* 결제 등록 시트 */}
       {sheet && (
         <div className="sheet-overlay" onClick={() => setSheet(false)}>
-          <div className="sheet tall" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet tall payment-register-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">결제 등록</div>
 
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>회원</div>
@@ -479,7 +479,7 @@ export default function SalesPage() {
               {members.map((m) => <option key={m.profileId} value={m.profileId}>{m.name}</option>)}
             </select>
 
-            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>🎫 수강권 (선택 시 발급)</div>
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>수강권 (선택 시 발급)</div>
             <select className="input-field" value={fProductId} onChange={(e) => setFProductId(e.target.value)}>
               <option value="">선택 안 함</option>
               {saleProducts.filter((p) => p.kind === "pass").map((p) => (
@@ -489,7 +489,7 @@ export default function SalesPage() {
               ))}
             </select>
 
-            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>🎽 상품 (선택 시 발급, 수강권과 함께 가능)</div>
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>상품 (선택 시 발급, 수강권과 함께 가능)</div>
             <select className="input-field" value={fGoodsId} onChange={(e) => setFGoodsId(e.target.value)}>
               <option value="">선택 안 함</option>
               {saleProducts.filter((p) => p.kind === "goods").map((p) => (
@@ -538,7 +538,7 @@ export default function SalesPage() {
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => setSheet(false)}>취소</button>
-              <button className="primary-btn" disabled={busy} onClick={handleRegister}>
+              <button className="outline-action" disabled={busy} onClick={handleRegister}>
                 {busy ? "등록 중..." : "등록"}
               </button>
             </div>
@@ -549,7 +549,7 @@ export default function SalesPage() {
       {/* 지출 등록 시트 */}
       {expSheet && (
         <div className="sheet-overlay" onClick={() => setExpSheet(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet sales-export-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">지출 등록</div>
 
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>항목</div>
@@ -593,7 +593,7 @@ export default function SalesPage() {
             </div>
             <div className="add-profile-actions">
               <button className="ghost-btn" onClick={() => setCsvSheet(false)}>취소</button>
-              <button className="primary-btn" onClick={handleSalesCsvDownload}>{rows.length}건 내보내기</button>
+              <button className="outline-action" onClick={handleSalesCsvDownload}>{rows.length}건 내보내기</button>
             </div>
           </div>
         </div>
@@ -602,7 +602,7 @@ export default function SalesPage() {
       {/* 결제 상세 시트 */}
       {payDetail && (
         <div className="sheet-overlay" onClick={() => setPayDetail(null)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet payment-detail-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">결제 상세</div>
             <div className="admin-row"><span className="k">회원</span><span className="v">{payDetail.profileName}</span></div>
             <div className="admin-row"><span className="k">구분</span><span className="v">{SALE_TYPE_LABEL[payDetail.saleType] ?? payDetail.saleType}</span></div>
@@ -618,7 +618,7 @@ export default function SalesPage() {
             {payDetail.unpaidAmount > 0 && <div className="admin-row"><span className="k">미수금</span><span className="v" style={{ color: "#c0392b" }}>{won(payDetail.unpaidAmount)}</span></div>}
             {payDetail.memo && <><div className="menu-section-label" style={{ padding: "12px 0 6px" }}>메모</div><div className="perm-guide" style={{ margin: 0 }}>{payDetail.memo}</div></>}
             <div className="add-profile-actions" style={{ marginTop: 12 }}>
-              <button className="ghost-btn" onClick={() => setPayDetail(null)}>닫기</button>
+                <button className="outline-action" onClick={() => setPayDetail(null)}>닫기</button>
             </div>
           </div>
         </div>

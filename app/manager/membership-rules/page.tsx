@@ -202,7 +202,7 @@ export default function MembershipRulesPage() {
                       {won(p.price)}{p.totalCount ? ` · ${p.totalCount}회` : ""}
                     </div>
                   </div>
-                  <button className="text-btn danger" disabled={busy} onClick={() => handleDeleteProduct(p)}>삭제</button>
+                  <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteProduct(p)}>삭제</button>
                 </div>
 
                 <button className="pass-rules-toggle" onClick={() => setExpandedProducts((prev) => {
@@ -224,7 +224,7 @@ export default function MembershipRulesPage() {
                 </div>}
 
                 <button className="prog-add-sub-btn" onClick={async () => { setRuleFor(p); setRPick(""); setRDays([]); setRTime(""); setRTitle(""); if (centerId) { try { setExistingClasses(await fetchExistingClassOptions(centerId)); } catch { setExistingClasses([]); } } }}>
-                  + 예약조건 추가
+                  예약조건 추가
                 </button>
               </div>
             );

@@ -89,7 +89,7 @@ export default function RoomsPage() {
       <div className="back-header">
         <a className="side" href="/manager">‹</a>
         <div className="title">룸(장소) 관리</div>
-        <div className="side" />
+        <button className="header-action" onClick={openAdd}>추가</button>
       </div>
 
       {centers.length > 1 && (
@@ -108,23 +108,21 @@ export default function RoomsPage() {
               <button className="empty-action-btn" onClick={openAdd}>+ 첫 룸 추가하기</button>
             </div>
           ) : (
-            <div className="profile-list">
+            <div className="room-card-list">
               {rooms.map((r) => (
-                <div key={r.id} className="profile-item">
-                  <button className="profile-item-info" style={{ textAlign: "left", background: "none", border: "none", flex: 1 }} onClick={() => openEdit(r)}>
-                    <div className="profile-item-name">🚪 {r.name}</div>
-                    {r.memo && <div className="profile-item-sub">{r.memo}</div>}
-                    {r.address && <div className="profile-item-sub">📍 {r.address}</div>}
+                <article key={r.id} className="room-card">
+                  <button className="room-card-main" onClick={() => openEdit(r)}>
+                    <div className="room-card-name">{r.name}</div>
+                    {r.memo && <div className="room-card-memo">{r.memo}</div>}
+                    {r.address && <div className="room-card-address">{r.address}</div>}
                   </button>
-                  <button className="room-edit" onClick={() => openEdit(r)}>수정</button>
-                  <button className="profile-del" disabled={busy} onClick={() => handleDelete(r)}>삭제</button>
-                </div>
+                  <div className="row-actions room-card-actions">
+                    <button className="quiet-action" onClick={() => openEdit(r)}>수정</button>
+                    <button className="quiet-action danger" disabled={busy} onClick={() => handleDelete(r)}>삭제</button>
+                  </div>
+                </article>
               ))}
             </div>
-          )}
-
-          {rooms.length > 0 && (
-            <button className="add-profile-btn" onClick={openAdd}>+ 룸 추가</button>
           )}
         </>
       )}
@@ -132,7 +130,7 @@ export default function RoomsPage() {
       {/* 추가/수정 시트 */}
       {(adding || editing) && (
         <div className="sheet-overlay" onClick={closeSheet}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet room-edit-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{editing ? "룸 수정" : "룸 추가"}</div>
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>룸 이름</div>
             <input className="input-field" placeholder="예: A룸, 1번 스튜디오" value={name} onChange={(e) => setName(e.target.value)} />
@@ -143,14 +141,14 @@ export default function RoomsPage() {
             {lat != null && lng != null ? (
               <>
                 <MapPreview lat={lat} lng={lng} />
-                <button className="ghost-btn" style={{ marginTop: 8 }} onClick={() => setMapPicker(true)}>위치 수정하기</button>
+                <button className="outline-action map-location-btn" onClick={() => setMapPicker(true)}>위치 수정하기</button>
               </>
             ) : (
-              <button className="ghost-btn map-location-btn" style={{ marginTop: 8 }} onClick={() => setMapPicker(true)}>지도에서 위치 지정</button>
+              <button className="outline-action map-location-btn" onClick={() => setMapPicker(true)}>지도에서 위치 지정</button>
             )}
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={closeSheet}>취소</button>
-              <button className="primary-btn" disabled={busy} onClick={handleSave}>{editing ? "수정하기" : "추가하기"}</button>
+              <button className="outline-action" disabled={busy} onClick={handleSave}>{editing ? "수정하기" : "추가하기"}</button>
             </div>
           </div>
         </div>

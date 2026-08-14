@@ -1000,7 +1000,7 @@ export default function ClassManagePage() {
       {/* 등록/수정 시트 */}
       {formOpen && (
         <div className="sheet-overlay" onClick={() => setFormOpen(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet direct-member-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{editId ? "수업 수정" : "수업 등록"}</div>
             <input className="input-field" placeholder="수업명" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
 
@@ -1820,8 +1820,8 @@ export default function ClassManagePage() {
                 .slice(0, 50)
                 .map((m) => (
                   <button key={m.profileId} className="book-member-row" onClick={() => pickAssignMember(m)}>
-                    <span className="book-member-name">{m.name}</span>
-                    <span className="book-member-pass">
+                    <span className="book-member-identity"><span className="book-member-avatar">{m.name.slice(0, 1)}</span><span className="book-member-name">{m.name}</span></span>
+                    <span className={`book-member-pass ${m.memberships.length === 0 ? "empty" : ""}`}>
                       {m.memberships.length > 0
                         ? `${m.memberships[0].name}${m.memberships[0].remaining != null ? ` ${m.memberships[0].remaining}회` : ""}`
                         : "수강권 없음"}

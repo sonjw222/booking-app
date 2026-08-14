@@ -156,14 +156,14 @@ export default function AdminAssignmentLogPage() {
       {shown.length === 0 ? (
         <div className="daylist-empty" style={{ padding: "40px 20px" }}>조건에 맞는 배치 내역이 없어요</div>
       ) : (
-        <div style={{ padding: "0 4px" }}>
+        <div className="assignment-log-list">
           {shown.map((l) => (
-            <div key={l.id} className="hist-item" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+            <article key={l.id} className={`assignment-log action-${l.actionType.toLowerCase()}`}>
               <div className="hist-main" style={{ width: "100%" }}>
                 <div className="hist-title">
-                  <span className="profile-tag sm">{ACTION_LABELS[l.actionType]}</span>
-                  {l.memberName} 회원
-                  {l.capacityOverride && <span className="profile-tag sm">정원 초과 배치</span>}
+                  <span className="assignment-action">{ACTION_LABELS[l.actionType]}</span>
+                  <strong>{l.memberName}</strong>
+                  {l.capacityOverride && <span className="assignment-warning">정원 초과</span>}
                 </div>
                 <div className="hist-sub">
                   {l.classTitle} · {l.classStart ? fmt(l.classStart) : ""}
@@ -175,7 +175,7 @@ export default function AdminAssignmentLogPage() {
                 </div>
                 <div className="hist-sub">{fmt(l.createdAt)}</div>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       )}
