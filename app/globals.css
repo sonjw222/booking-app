@@ -4024,3 +4024,106 @@ textarea:focus-visible,
   stroke-width: 1.7;
 }
 .manager-home-v2 > .list-row:last-of-type { margin-bottom: 24px; }
+
+/* 2026-08-15 visual alignment pass.
+   These rules intentionally live last: legacy screen rules must not restore
+   cramped controls, dark member actions, or content hidden by floating nav. */
+.manager-v3-content > .app-shell,
+.manager-home-v2,
+.manager-members-v2,
+.manager-classes-v2 {
+  padding-bottom: calc(var(--floating-nav-clearance) + 104px) !important;
+}
+.manager-v3-content .bottom-nav { bottom: max(18px,env(safe-area-inset-bottom)); }
+
+/* Progress history: one quiet, readable row with actions anchored together. */
+.manager-v3-content .prog-hist { display: grid; gap: 10px; padding-top: 6px; }
+.manager-v3-content .prog-hist-day {
+  position: relative;
+  min-height: 82px;
+  padding: 16px 160px 16px 4px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--bg);
+}
+.manager-v3-content .prog-hist-line { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.manager-v3-content .prog-hist-date { flex: none; min-width: 52px; font-size: 15px; font-weight: 780; }
+.manager-v3-content .prog-hist-skills-inline { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.manager-v3-content .prog-hist .skill-tag { margin: 0; padding: 7px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.manager-v3-content .prog-hist-actions { position: absolute; top: 50%; right: 12px; display: flex; gap: 7px; transform: translateY(-50%); }
+.manager-v3-content .prog-hist-actions .quiet-action { min-width: 58px; min-height: 42px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+
+/* Member detail: ownership summary reads as a section, not a loose list. */
+.member-detail-sheet .mem-pass-block { margin: 14px 0; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+.member-detail-sheet .mem-pass-head { min-height: 34px; margin-bottom: 4px; }
+.member-detail-sheet .mem-pass-head-title { color: var(--ink); font-size: 14px; font-weight: 760; }
+.member-detail-sheet .mem-pass-more { min-height: 36px; padding: 0 8px; color: var(--ink); }
+.member-detail-sheet .mem-pass-chip { min-height: 54px; padding: 13px 0; align-items: center; font-size: 13.5px; line-height: 1.45; }
+.member-detail-sheet .mem-pass-exp { margin-left: auto; color: var(--ink-soft); font-size: 12px; }
+
+/* Sales: consistent vertical rhythm and number alignment. */
+.manager-v3-content .sales-summary { padding: 24px; border-radius: 22px; }
+.manager-v3-content .sales-big { display: grid; gap: 8px; }
+.manager-v3-content .sales-big-label { font-size: 12px; color: rgba(255,255,255,.72) !important; }
+.manager-v3-content .sales-big-value { font-size: clamp(30px,8vw,38px); line-height: 1.08; letter-spacing: -.04em; }
+.manager-v3-content .profit-line { margin-top: 20px; padding-top: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid rgba(255,255,255,.24); }
+.manager-v3-content .profit-line > span { min-width: 0; font-size: 13px; }
+.manager-v3-content .profit-net { margin-left: auto; text-align: right; font-size: 15px !important; font-weight: 760; }
+.manager-v3-content .sales-breakdown { overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); }
+.manager-v3-content .sales-bd-item { min-height: 62px; padding: 16px; }
+.manager-v3-content .sales-bd-item:last-child { border-bottom: 0; }
+.manager-v3-content .bd-label { color: var(--ink-soft); font-size: 14px; font-weight: 650; }
+.manager-v3-content .bd-value { margin-left: auto; text-align: right; color: var(--ink); font-size: 16px; font-weight: 780; font-variant-numeric: tabular-nums; }
+
+/* Payment sheet: labels, controls, and tabs no longer crowd each other. */
+.payment-register-sheet > .menu-section-label { padding: 18px 2px 8px !important; }
+.payment-register-sheet > .input-field { min-height: 54px; }
+.payment-register-sheet .mem-filters { padding-bottom: 4px !important; gap: 14px; }
+.payment-register-sheet .pay-grid { margin-top: 2px; gap: 14px 12px; }
+.payment-register-sheet .pay-field .input-field { min-height: 54px; padding-inline: 15px; }
+
+/* Search/filter controls use the same optical baseline. */
+.manager-v3-content .admin-filters .input-field,
+.manager-v3-content input[placeholder="회원 / 관리자 / 수업명 검색"] {
+  min-height: 54px;
+  padding-inline: 18px;
+  line-height: 1.4;
+}
+
+/* Center categories are typography-only; decorative emoji are intentionally removed. */
+.manager-v3-content .filter-chip { letter-spacing: -.01em; }
+
+/* My page: calm white profile identity and outlined booking action. */
+.mypage-shell .avatar {
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: var(--ink);
+  box-shadow: none;
+}
+.mypage-shell .membership-cta,
+.mypage-shell .membership-card:hover .membership-cta,
+.mypage-shell .membership-card:focus-visible .membership-cta,
+.mypage-shell .membership-card:active .membership-cta {
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: var(--ink);
+  box-shadow: none;
+  filter: none;
+  transform: none;
+  transition: none;
+}
+.mypage-shell .membership-card:hover,
+.mypage-shell .membership-card:active {
+  background: var(--bg);
+  color: var(--ink);
+  filter: none;
+  transform: none;
+}
+
+@media (max-width: 520px) {
+  .manager-v3-content .prog-hist-day { padding: 14px 12px; }
+  .manager-v3-content .prog-hist-line { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .manager-v3-content .prog-hist-actions { position: static; margin-top: 12px; justify-content: flex-end; transform: none; }
+  .manager-v3-content .profit-line { align-items: flex-end; }
+  .member-detail-sheet .mem-pass-chip { display: grid; grid-template-columns: minmax(0,1fr) auto; }
+}
