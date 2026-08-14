@@ -107,16 +107,35 @@ beforeAll(async () => {
   passY = await createNamedPassProduct(centerAId, "P3 통합-패스Y");
   goodsZ = await createNamedPassProduct(centerAId, "P3 통합-굿즈Z", "goods");
 
+  // [2026-08-14 수정] CI가 중간에 죽으면(cancel-in-progress 등) afterAll이 실행되지
+  // 못해 이 "타센터" fixture(+products)가 매 실행마다 새로 쌓였다(get-or-create가
+  // 아니라 매번 무조건 insert였음 — 이미 이 이름으로 leaked된 행이 있어도 신경쓰지
+  // 않고 또 만듦). getOrCreateOwnedTestCenter()와 동일한 관례로 이름 기준
+  // get-or-create로 전환 — 이미 있으면 재사용, 없을 때만 새로 만든다. 앞으로는 절대
+  // 누적되지 않는다(기존에 이미 쌓인 것은 별도 cleanup SQL로 정리, 이 파일과 무관).
   const admin = getFixtureAdminClient();
-  const { data: fc, error: fcErr } = await admin.from("centers").insert({ name: "P3 통합-타센터", status: "approved" }).select("id").single();
-  if (fcErr || !fc) throw new Error(`타 센터 생성 실패: ${fcErr?.message ?? "no data"}`);
-  foreignCenterId = fc.id;
-  const { data: fp, error: fpErr } = await admin
-    .from("products")
-    .insert({ center_id: foreignCenterId, name: "P3 통합-타센터패스", product_kind: "pass", pass_type: "count", total_count: 999, is_on_sale: true, is_active: true })
-    .select("id").single();
-  if (fpErr || !fp) throw new Error(`타 센터 상품 생성 실패: ${fpErr?.message ?? "no data"}`);
-  foreignPassId = fp.id;
+  const { data: existingFc } = await admin
+    .from("centers").select("id").eq("name", "P3 통합-타센터").maybeSingle();
+  if (existingFc) {
+    foreignCenterId = (existingFc as any).id;
+  } else {
+    const { data: fc, error: fcErr } = await admin
+      .from("centers").insert({ name: "P3 통합-타센터", status: "approved" }).select("id").single();
+    if (fcErr || !fc) throw new Error(`타 센터 생성 실패: ${fcErr?.message ?? "no data"}`);
+    foreignCenterId = fc.id;
+  }
+  const { data: existingFp } = await admin
+    .from("products").select("id").eq("center_id", foreignCenterId).eq("name", "P3 통합-타센터패스").maybeSingle();
+  if (existingFp) {
+    foreignPassId = (existingFp as any).id;
+  } else {
+    const { data: fp, error: fpErr } = await admin
+      .from("products")
+      .insert({ center_id: foreignCenterId, name: "P3 통합-타센터패스", product_kind: "pass", pass_type: "count", total_count: 999, is_on_sale: true, is_active: true })
+      .select("id").single();
+    if (fpErr || !fp) throw new Error(`타 센터 상품 생성 실패: ${fpErr?.message ?? "no data"}`);
+    foreignPassId = fp.id;
+  }
 }, 30000);
 
 afterAll(async () => {
@@ -125,9 +144,10 @@ afterAll(async () => {
     await supabase.from("reservations").delete().eq("class_id", id);
     await supabase.from("classes").delete().eq("id", id);
   }
-  const admin = getFixtureAdminClient();
-  if (foreignPassId) await admin.from("products").delete().eq("id", foreignPassId);
-  if (foreignCenterId) await admin.from("centers").delete().eq("id", foreignCenterId);
+  // [2026-08-14 수정] foreignCenterId/foreignPassId는 이제 get-or-create로 재사용되는
+  // 공유 fixture다(getOrCreateOwnedTestCenter()와 동일 철학) — 매 실행 끝마다 지웠다가
+  // 다음 실행에서 또 만드는 건 get-or-create의 이점을 없애고 불필요한 DB write만
+  // 늘린다. 더 이상 여기서 삭제하지 않는다.
   await signOutTestSession();
 }, 30000);
 

@@ -8,6 +8,46 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-13 — SEC-101/112/113/114/115/116/117 통합 회귀 테스트 로컬 Green 확인 (security/sec114-117-final-crosscheck)
+
+`manager_centers` self-join/self-promote(SEC-101/112), `auto_book_membership` IDOR(SEC-114),
+`manager_set_attendance` membership 무결성(SEC-115), SECURITY DEFINER 함수 EXECUTE/search_path
+경화(SEC-116/117) SQL 4종을 Live에 적용 완료 후, 실제 Supabase에 대해 통합테스트 3개 파일을
+전부 로컬로 돌려 회귀를 확인했다(`.env.test.local` 사용, CI가 아닌 로컬 실행 — 동시에
+`manager_centers`/`center_roles` RLS 무한 재귀를 고치던 다른 세션의 hotfix(PR #49, v1~v4)와
+실시간으로 교차 확인하며 진행).
+
+- `manager-centers-privilege-escalation.test.ts`: **19/19 Green**. 과정에서 발견/수정한 것:
+  (1) 내가 추가한 "매니저센터 생성" 정책의 `centers.status='pending'` 체크가 caller 자신의
+  RLS로 평가되는 raw subquery였는데, 막 생성한 pending 센터는 어떤 기존 centers 정책으로도
+  caller에게 안 보여서 정상 부트스트랩까지 42501로 막고 있었다 —
+  `fix_manager_centers_pending_check_helper_draft_proposed.sql`(`center_is_pending()`
+  security definer 헬퍼)로 수정. (2) 테스트 자체의 결함 2건: 타 센터 role_id 주입 테스트가
+  "RLS가 막은 UPDATE는 에러 없이 0건으로 조용히 끝날 수 있다"는 이 파일의 다른 테스트들과
+  같은 패턴을 안 따라 assert가 잘못돼 있었음(수정). "여러 센터 다른 역할 유지" 테스트가
+  `beforeAll` 시점에 캡처해둔 계정 id에 의존했는데, 공유 테스트 계정을 다른 프로세스가
+  건드리며 세션이 실제로 userA로 되돌아가는 순간이 있어(supabase-js 세션 전환 auto-refresh
+  race, 이 파일에 이미 문서화된 것과 같은 계열) 실패 — 단언 직전에 세션을 다시 확정하도록
+  수정. (3) `service_role`이 `center_members`에 대한 기본 GRANT가 없어 K 테스트가 실패 —
+  `fix_service_role_missing_grants_center_members_draft_proposed.sql` 적용(사용자 확인)으로 해결.
+- `auto-book-membership-security.test.ts`: **15/17 Green** (2건은 SEC-114와 무관 — 하나는
+  describe 제목 자체가 "이번 배치 범위 밖"으로 명시된 정책 회귀(SEC-114-B), 하나는 공유
+  테스트센터에 쌓인 leftover open 수업 오염으로 인한 예약 개수 assert 실패 —
+  `docs/TODO.md` P2-22 참고, 코드 수정 없이 이슈로만 기록).
+- `manager-set-attendance-membership-integrity.test.ts`: **11/11 Green**. 이 파일은 이번
+  세션에서 처음 로컬 실행됐고, SEC-115 로직과 무관한 순수 테스트 결함 3건을 발견/수정:
+  (1) fixture 헬퍼가 수업 생성 전에 매니저 세션을 확정하지 않아 회원 세션으로 시도해
+  RLS에 막힘, (2) 공유 `createTestMembership()`(setup.ts, 14개 파일 공용)의 재사용
+  분기가 회원 자신의 세션으로 `remaining_count`를 직접 UPDATE하려다 RLS에 막힘 —
+  admin(service_role)로 전환(다른 fixture 헬퍼들과 동일한 관례), (3) `reserve_class()`가
+  membership을 자동 선택해서 fixture가 방금 만든 membership이 실제로 소진된다는 보장이
+  없었고(공유 계정에 leftover membership이 더 있을 수 있음), 여러 헬퍼 호출이 전부 같은
+  날짜에 예약을 시도해 실제 `daily_book_limit` 정책에 걸림 — 예약 레코드에서 실제
+  membership_id를 다시 확인하도록, 호출마다 날짜를 분산하도록 수정.
+
+`fix_manager_centers_privilege_escalation_draft_proposed.sql`/그 rollback 파일도 이 최종
+merged 버전(SEC-101/SEC-112 v2 + 다른 세션의 RLS 재귀 hotfix v3 helper 채택)으로 갱신됨.
+
 ## 2026-08-13 — `manager_centers`/`center_roles`/`centers` RLS 무한 재귀 긴급 hotfix 4종(Live 적용·사용자 확인 완료) — 스태프 초대 기능 복구
 
 **배경**: `manager_centers`(센터별 스태프/역할 배정 테이블)에 대한 별도 보안 배치(SEC-101/112/113
