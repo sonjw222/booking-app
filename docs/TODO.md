@@ -401,15 +401,15 @@ reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시�
 없어 죽은 설정으로 보임)은 여전히 미해결 — P2/P3 후속 범위(프라이빗 셀프 슬롯 예약 UI를
 만들지 여부와 함께 제품 결정 필요)로 남긴다.
 
-### P1-13. (2026-08-14, 수정 SQL 작성 완료 — 적용 대기) 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
+### P1-13. (2026-08-14, 완료 — SQL Live 적용 확인됨) 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **수정 SQL 작성 완료, 사용자 승인 후 적용 대기.** 사용자가 "실제로 세분화 적용" 방향으로 결정함(코드 주석을 느슨한 실제 동작에 맞추는 대신, RLS를 코드 주석이 원래 말하던 대로 좁힘). |
-| 근거 파일 | `app/manager/center-info/page.tsx`, `app/manager/page.tsx`(메뉴 노출), `reservation_functions.sql`("매니저 센터 수정" 정책), `schema.sql`(`facility.info` 권한 카탈로그), `fix_centers_update_facility_info_permission.sql`(신규) |
+| 현재 상태 | **완료.** `fix_centers_update_facility_info_permission.sql`을 사용자가 Supabase SQL Editor에서 실행(성공) → `pg_policies` 재조회로 "매니저 센터 수정" 정책의 `qual`/`with_check`가 `has_permission(id, 'facility.info') OR is_platform_admin()`로 반영됨을 확인(`my_managed_center_ids` 잔존 조건 없음). |
+| 근거 파일 | `app/manager/center-info/page.tsx`, `app/manager/page.tsx`(메뉴 노출), `reservation_functions.sql`("매니저 센터 수정" 정책), `schema.sql`(`facility.info` 권한 카탈로그), `fix_centers_update_facility_info_permission.sql`(적용 완료) |
 | 이번 배치에서 한 것 | 조사 결과 `facility.info` 권한 키는 이미 `schema.sql`에 정의돼 있었고(sort_order 10, "시설 정보 설정") `app/manager/page.tsx`의 메뉴 노출도 이미 `canSeeMenu("facility.info")`로 정확히 가려져 있었다 — **RLS 정책만 이 권한을 확인 안 하고 있었다**(URL 직접 접근하면 권한 없는 스태프도 수정 가능한 상태). `centers` UPDATE 정책 "매니저 센터 수정"을 `id in (select my_managed_center_ids())`에서 `has_permission(id, 'facility.info')`로 좁히는 SQL 작성(`fix_centers_update_facility_info_permission.sql` + rollback) — `has_permission()`이 오너는 자동 통과시키므로 오너 동작은 그대로 유지됨. 기존 스태프에게 이 권한을 자동으로 부여하지 않음(오너가 필요하면 기존 스태프 권한 설정 화면에서 직접 켜면 됨, 새 UI 불필요 — 카탈로그에 이미 있어서 자동으로 체크박스로 나타남). |
-| 완료 조건 | `fix_centers_update_facility_info_permission.sql`을 Supabase SQL Editor에서 적용 |
+| 완료 조건 | ~~`fix_centers_update_facility_info_permission.sql`을 Supabase SQL Editor에서 적용~~ 완료(2026-08-14, `pg_policies` 확인). |
 | 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 센터관리 항목 |
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
@@ -726,12 +726,14 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 
 ### P2-17. (신규) 실브라우저 QA 재검증에서 발견한 항목
 
-- **`calc_deadline()`의 `'open'` kind 미처리(P1급, 수정 SQL 준비됨)**: `reserve_class()`가
-  "예약 오픈 시점" 체크를 `calc_deadline(...,'open')`로 호출하지만, 함수 본문은 `'book'`/그 외
-  (취소) 두 갈래로만 분기해 관리자가 저장한 `group_open_days_before/time`·
-  `private_open_days_before/time`이 무시되고 취소 마감 설정이 대신 쓰이고 있었다.
-  `fix_calc_deadline_open_kind_draft_proposed.sql`로 수정 준비됨(승인 대기). 이전 배치 문서의
-  "C-2 정상 배선" 결론은 이 항목에 한해 **틀렸음** — 함수 실제 정의를 재확인하지 않은 오판.
+- **(2026-08-14, 완료 확인 — 문서만 정정) `calc_deadline()`의 `'open'` kind 미처리**: 이 문서는
+  `fix_calc_deadline_open_kind_draft_proposed.sql`이 "승인 대기"라고 기록하고 있었으나,
+  2026-08-14 사용자가 `select pg_get_functiondef('calc_deadline(uuid,text,timestamptz,text)'::regprocedure);`로
+  라이브 함수 본문을 직접 확인한 결과 **이미 `elsif p_kind = 'open' then ...` 분기가 정확히
+  그 draft 파일과 동일하게 적용돼 있었음** — P2-21 항목이 `operational-settings-wiring.test.ts`
+  통과로 간접 확인한 것과도 일치하는 결과, 이번엔 `pg_get_functiondef`로 직접 재확인. draft SQL은 실행 불필요(실행해도 내용이 같아
+  무해하지만 불필요). 이전 배치 문서의 "C-2 정상 배선" 결론이 이 항목에 한해 최초엔
+  틀렸었다는 점(함수 실제 정의를 재확인하지 않은 오판)은 기록으로 남긴다.
 - **(해결됨, 2026-08-03 Track 4) `show_group_reserved_count`**: `lib/reservations.ts`가
   `center_settings`를 함께 조회하도록 확장해 `app/reservation/page.tsx`에서 실제로 인원수
   표시 여부를 제어하도록 구현 완료.

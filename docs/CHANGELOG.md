@@ -8,6 +8,25 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-14 (같은 날 후속10) — P1-13 SQL Live 적용 확인, P2-17 calc_deadline 문서 정정
+
+`docs/TODO.md`를 SQL 실행 대기 항목 기준으로 정리하던 중 사용자가 우선 처리를 요청한 항목 확인:
+
+- **P1-13 (센터정보 수정 권한을 facility.info로 좁힘)**: `fix_centers_update_facility_info_permission.sql`을
+  사용자가 SQL Editor에서 실행(성공) → `pg_policies` 재조회로 "매니저 센터 수정" 정책이
+  `has_permission(id, 'facility.info') OR is_platform_admin()` 조건대로 반영되고 옛
+  `my_managed_center_ids()` 조건이 안 남아있음을 확인.
+- **P2-17 (`calc_deadline()`의 `'open'` kind 미처리, 문서만 정정)**: `fix_calc_deadline_open_kind_draft_proposed.sql`을
+  실행하기 전 이 저장소에서 반복됐던 "저장소 파일과 라이브 함수 본문이 다른" 드리프트 문제를
+  의식해, 실행 전 `pg_get_functiondef()`로 라이브 본문을 먼저 확인 — **이미 'open' 분기가
+  정확히 그 draft와 동일하게 라이브에 적용돼 있음**을 확인(P2-21 항목의 테스트 통과 기반
+  간접 확인과도 일치). "승인 대기"로 남아있던 건 실제 DB 상태와 무관한 문서 누락(P0-6과
+  같은 종류)이었음. draft SQL은 실행 불필요.
+- P1-2(미발급 주문 자가취소)는 다른 세션이 이미 실사용 계정으로 왕복 검증까지 완료해둔 상태를
+  확인(이 배치에서 추가 조치 없음).
+
+SQL/코드 변경 없음(이미 작성된 SQL을 사용자가 직접 실행/검증한 것 확인 + 문서 갱신).
+
 ## 2026-08-14 (같은 날 후속9) — P1-2 미발급 주문 자가 취소 구현
 
 회원이 아직 매니저가 처리(발급)하지 않은 주문을 취소할 방법이 없어 "센터에 문의해주세요"
