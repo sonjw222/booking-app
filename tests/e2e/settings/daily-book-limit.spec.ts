@@ -121,12 +121,17 @@ test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회
 
   // ② 관리자 화면에서 실제로 ON + 하루 최대 2회로 저장
   await gotoManagerSettings(page);
+  // 공유 센터의 다른 설정 스펙이 당일 예약을 OFF로 남겨두었더라도,
+  // 이 스펙이 검증하는 일일 횟수 제한만 결과에 영향을 주도록 UI에서
+  // 필요 설정을 명시적으로 다시 보장한다.
+  await toggleSettingSwitch(page, "당일 예약 허용", true);
   await toggleSettingSwitch(page, "일일 예약 횟수 제한", true);
   await setSettingNumber(page, "하루 최대", 2);
   await saveManagerSettings(page);
   const saved = await fetchSettingsAdmin(centerAId);
   expect(saved.dailyBookLimitEnabled).toBe(true);
   expect(saved.dailyBookLimit).toBe(2);
+  expect(saved.allowSameDayBooking).toBe(true);
 
   // ③ 같은 날 서로 다른 시간의 수업 3개로 1·2회 성공, 3회 실패 확인
   const limitClasses = await Promise.all([
