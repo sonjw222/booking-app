@@ -30,6 +30,10 @@ jobs:
   e2e:
     name: E2E tests (Playwright, live dev Supabase)
     runs-on: ubuntu-latest
+    # 멈춘(hung) job이 GitHub 기본 360분 제한까지 전역 concurrency 큐를 막는 사고가
+    # 실제로 반복됐다(2026-08-14/15, 12시간·25시간+ 멈춘 run이 뒤 대기열 전체를 정지시킴).
+    # 정상 실행은 보통 수 분~15분 내로 끝나므로 넉넉히 20분으로 제한한다.
+    timeout-minutes: 20
     # unit/integration과 마찬가지로 fork PR은 Secrets가 없어 애초에 통과할 수 없고, 있어도
     # 노출시키면 안 되므로 막는다.
     if: >
@@ -87,6 +91,7 @@ jobs:
     # 실패). unit 자체는 Supabase가 필요 없지만, 여기서 순서를 강제해 e2e → unit → integration →
     # build 전체가 항상 순차 실행되게 한다.
     needs: e2e
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       # Node 22+ 필수: @supabase/supabase-js(realtime-js)가 클라이언트 생성 시 native
@@ -104,6 +109,7 @@ jobs:
     name: Integration tests (live dev Supabase)
     runs-on: ubuntu-latest
     needs: unit
+    timeout-minutes: 20
     # push/workflow_dispatch에서는 항상 실행.
     # pull_request에서는 "같은 저장소 브랜치 간" PR일 때만 실행 — fork에서 온 PR은
     # GitHub이 Secrets를 주입하지 않아 애초에 통과할 수 없고, 주입되더라도 남의 fork에
@@ -145,6 +151,7 @@ jobs:
     name: Build (production, typecheck 포함)
     runs-on: ubuntu-latest
     needs: integration
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
