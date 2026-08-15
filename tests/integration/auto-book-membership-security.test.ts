@@ -15,7 +15,7 @@
   MANAGER_A가 자기 센터 회원(USER_B)의 membership_id로 호출하는 것이고, USER_B
   본인이 자기 걸 직접 호출하는 것조차 거부돼야 하는 게 올바른 동작이다(AUTO-SEC-B).
 */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "../../lib/supabaseClient";
 import {
@@ -41,6 +41,9 @@ let centerAId: string;
 let centerBId: string;
 
 const cleanupClassIds: string[] = [];
+const cleanupMembershipIds: string[] = [];
+const cleanupProductIds: string[] = [];
+const cleanupCenterIds: string[] = [];
 const cleanupScheduleRuleProductIds: string[] = [];
 const cleanupHolidays: Array<{ centerId: string; date: string }> = [];
 
@@ -74,20 +77,15 @@ async function createAutoBookProduct(
   centerId: string, name: string, autoBookDays: number[]
 ): Promise<{ id: string }> {
   const admin = getFixtureAdminClient();
-  const { data: existing } = await admin
-    .from("products").select("id").eq("center_id", centerId).eq("name", name).maybeSingle();
-  if (existing) {
-    await admin.from("products").update({ auto_book_days: autoBookDays }).eq("id", existing.id);
-    return { id: existing.id };
-  }
   const { data, error } = await admin
     .from("products")
     .insert({
-      center_id: centerId, name, product_kind: "pass", pass_type: "count",
+      center_id: centerId, name: `${name}-${crypto.randomUUID()}`, product_kind: "pass", pass_type: "count",
       total_count: 999, is_on_sale: true, is_active: true, auto_book_days: autoBookDays,
     })
     .select("id").single();
   if (error || !data) throw new Error(`자동예약용 상품 생성 실패: ${error?.message}`);
+  cleanupProductIds.push(data.id);
   return { id: data.id };
 }
 
@@ -107,7 +105,76 @@ async function createAutoBookMembership(
     })
     .select("id").single();
   if (error || !data) throw new Error(`자동예약용 수강권 생성 실패: ${error?.message}`);
+  cleanupMembershipIds.push(data.id);
   return { id: data.id };
+}
+
+async function createIsolatedOwnedCenter(manager: TestUser): Promise<string> {
+  const admin = getFixtureAdminClient();
+  // 중단된 이전 실행이 남긴 이 테스트 전용 센터를 먼저 정리한다. 일반/운영 센터와
+  // 겹치지 않는 고유 접두사만 대상으로 한다.
+  const { data: staleCenters, error: staleLookupError } = await admin
+    .from("centers")
+    .select("id")
+    .like("name", "SEC-114 격리센터-%");
+  if (staleLookupError) throw new Error(`이전 격리센터 조회 실패: ${staleLookupError.message}`);
+  const staleIds = (staleCenters ?? []).map((center: any) => center.id as string);
+  if (staleIds.length > 0) {
+    const { data: staleClasses, error: staleClassLookupError } = await admin
+      .from("classes").select("id").in("center_id", staleIds);
+    if (staleClassLookupError) throw new Error(`이전 격리센터 수업 조회 실패: ${staleClassLookupError.message}`);
+    const staleClassIds = (staleClasses ?? []).map((cls: any) => cls.id as string);
+    const { data: staleMemberships, error: staleMembershipLookupError } = await admin
+      .from("memberships").select("id").in("center_id", staleIds);
+    if (staleMembershipLookupError) throw new Error(`이전 격리센터 수강권 조회 실패: ${staleMembershipLookupError.message}`);
+    const staleMembershipIds = (staleMemberships ?? []).map((membership: any) => membership.id as string);
+    if (staleClassIds.length > 0) {
+      const { error } = await admin.from("reservations").delete().in("class_id", staleClassIds);
+      if (error) throw new Error(`이전 격리센터 예약 정리 실패: ${error.message}`);
+      const { error: classError } = await admin.from("classes").delete().in("id", staleClassIds);
+      if (classError) throw new Error(`이전 격리센터 수업 정리 실패: ${classError.message}`);
+    }
+    if (staleMembershipIds.length > 0) {
+      const { error } = await admin.from("reservations").delete().in("membership_id", staleMembershipIds);
+      if (error) throw new Error(`이전 격리센터 수강권 예약 정리 실패: ${error.message}`);
+      const { error: membershipError } = await admin.from("memberships").delete().in("id", staleMembershipIds);
+      if (membershipError) throw new Error(`이전 격리센터 수강권 정리 실패: ${membershipError.message}`);
+    }
+    const { error: staleProductDeleteError } = await admin.from("products").delete().in("center_id", staleIds);
+    if (staleProductDeleteError) throw new Error(`이전 격리센터 상품 정리 실패: ${staleProductDeleteError.message}`);
+    const { error: staleLinkDeleteError } = await admin.from("manager_centers").delete().in("center_id", staleIds);
+    if (staleLinkDeleteError) throw new Error(`이전 격리센터 관리자 연결 정리 실패: ${staleLinkDeleteError.message}`);
+    const { error: staleRoleDeleteError } = await admin.from("center_roles").delete().in("center_id", staleIds);
+    if (staleRoleDeleteError) throw new Error(`이전 격리센터 역할 정리 실패: ${staleRoleDeleteError.message}`);
+    const { error: staleSettingsDeleteError } = await admin.from("center_settings").delete().in("center_id", staleIds);
+    if (staleSettingsDeleteError) throw new Error(`이전 격리센터 설정 정리 실패: ${staleSettingsDeleteError.message}`);
+    const { error: staleDeleteError } = await admin.from("centers").delete().in("id", staleIds);
+    if (staleDeleteError) throw new Error(`이전 격리센터 정리 실패: ${staleDeleteError.message}`);
+  }
+  const { data: center, error: centerError } = await admin
+    .from("centers")
+    .insert({ name: `SEC-114 격리센터-${crypto.randomUUID()}`, status: "pending" })
+    .select("id")
+    .single();
+  if (centerError || !center) throw new Error(`격리센터 생성 실패: ${centerError?.message}`);
+
+  const { data: ownerRole, error: roleError } = await admin
+    .from("center_roles")
+    .select("id")
+    .eq("center_id", center.id)
+    .eq("is_owner", true)
+    .single();
+  if (roleError || !ownerRole) throw new Error(`격리센터 오너 역할 조회 실패: ${roleError?.message}`);
+
+  const { error: linkError } = await admin.from("manager_centers").insert({
+    account_id: manager.accountId,
+    center_id: center.id,
+    role_id: ownerRole.id,
+    status: "active",
+  });
+  if (linkError) throw new Error(`격리센터 관리자 연결 실패: ${linkError.message}`);
+  cleanupCenterIds.push(center.id);
+  return center.id;
 }
 
 async function fetchMembership(id: string) {
@@ -150,6 +217,25 @@ beforeAll(async () => {
   userB = await asUserB();
 }, 60000);
 
+// 이 파일의 여러 케이스가 같은 테스트 회원을 사용한다. 이전 케이스의 확정 예약이
+// 남아 있으면 auto_book_membership()의 하루 1회 제한이 다음 케이스까지 막으므로,
+// 각 케이스가 만든 예약과 수강권을 즉시 제거해 인증/정책 검증을 서로 격리한다.
+afterEach(async () => {
+  const ids = cleanupMembershipIds.splice(0);
+  if (ids.length === 0) return;
+  const admin = getFixtureAdminClient();
+  const { error: reservationError } = await admin
+    .from("reservations")
+    .delete()
+    .in("membership_id", ids);
+  if (reservationError) throw new Error(`자동예약 테스트 예약 정리 실패: ${reservationError.message}`);
+  const { error: membershipError } = await admin
+    .from("memberships")
+    .delete()
+    .in("id", ids);
+  if (membershipError) throw new Error(`자동예약 테스트 수강권 정리 실패: ${membershipError.message}`);
+});
+
 afterAll(async () => {
   await asManagerA();
   const errors: string[] = [];
@@ -163,6 +249,26 @@ afterAll(async () => {
   }
   for (const h of cleanupHolidays) {
     try { await admin.from("center_holidays").delete().eq("center_id", h.centerId).eq("holiday_date", h.date); }
+    catch (e: any) { errors.push(e.message); }
+  }
+  if (cleanupProductIds.length > 0) {
+    try {
+      const { error } = await admin.from("products").delete().in("id", cleanupProductIds);
+      if (error) throw error;
+    }
+    catch (e: any) { errors.push(e.message); }
+  }
+  if (cleanupCenterIds.length > 0) {
+    try {
+      const { error: linkError } = await admin.from("manager_centers").delete().in("center_id", cleanupCenterIds);
+      if (linkError) throw linkError;
+      const { error: roleError } = await admin.from("center_roles").delete().in("center_id", cleanupCenterIds);
+      if (roleError) throw roleError;
+      const { error: settingsError } = await admin.from("center_settings").delete().in("center_id", cleanupCenterIds);
+      if (settingsError) throw settingsError;
+      const { error } = await admin.from("centers").delete().in("id", cleanupCenterIds);
+      if (error) throw error;
+    }
     catch (e: any) { errors.push(e.message); }
   }
   // AUTO-D가 userA를 임시 platform admin으로 만들었다면 반드시 원복(영구 권한 상승 방지).
@@ -407,13 +513,17 @@ describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합)
   });
 
   it("AUTO-SEC-G: pass_selection_mode='selected'인 수업에 이 상품이 지정돼 있지 않으면 자동예약되지 않는다", async () => {
-    const product = await createAutoBookProduct(centerAId, "SEC-114-G", [0, 1, 2, 3, 4, 5, 6]);
-    const otherProduct = await createAutoBookProduct(centerAId, "SEC-114-G-다른상품", [0, 1, 2, 3, 4, 5, 6]);
+    await asManagerA();
+    // 공유 센터의 다른 '모든 수강권 허용' 수업이 자동예약 후보에 섞이지 않도록
+    // 이 정책 케이스만 빈 격리 센터에서 검증한다.
+    const isolatedCenterId = await createIsolatedOwnedCenter(managerA);
+    const product = await createAutoBookProduct(isolatedCenterId, "SEC-114-G", [0, 1, 2, 3, 4, 5, 6]);
+    const otherProduct = await createAutoBookProduct(isolatedCenterId, "SEC-114-G-다른상품", [0, 1, 2, 3, 4, 5, 6]);
     const dow = new Date().getDay();
-    const cls = await createClassOnDow(centerAId, dow, { title: "AUTO-SEC-G" });
+    const cls = await createClassOnDow(isolatedCenterId, dow, { title: "AUTO-SEC-G" });
     cleanupClassIds.push(cls.id);
     await getFixtureAdminClient().from("classes").update({ pass_selection_mode: "selected" }).eq("id", cls.id);
-    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+    const mem = await createAutoBookMembership(isolatedCenterId, userB.profileId, product.id, { remainingCount: 3 });
 
     // class_allowed_products INSERT RLS는 매니저 세션이 필요하다(그 센터를 관리하는지 확인).
     await asManagerA();

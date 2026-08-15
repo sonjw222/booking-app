@@ -356,7 +356,21 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
       .in("id", roleIds);
     if (roleErr) throw new Error(`center_roles 조회 실패: ${describeAdminQueryError("center_roles", roleErr)}`);
     const ownerRoleIds = new Set((roles ?? []).filter((r: any) => r.is_owner).map((r: any) => r.id));
-    const owned = (rows ?? []).find((r: any) => ownerRoleIds.has(r.role_id));
+    const centerIds = (rows ?? []).map((r: any) => r.center_id).filter(Boolean);
+    const { data: centers, error: centerLookupError } = centerIds.length > 0
+      ? await admin.from("centers").select("id, name").in("id", centerIds)
+      : { data: [], error: null };
+    if (centerLookupError) {
+      throw new Error(`centers 조회 실패: ${describeAdminQueryError("centers", centerLookupError)}`);
+    }
+    const integrationCenterIds = new Set(
+      (centers ?? [])
+        .filter((center: any) => String(center.name ?? "").startsWith("통합테스트센터-"))
+        .map((center: any) => center.id)
+    );
+    const owned = (rows ?? []).find(
+      (r: any) => ownerRoleIds.has(r.role_id) && integrationCenterIds.has(r.center_id)
+    );
     if (owned) {
       const centerId = (owned as any).center_id as string;
       const { data: centerRow } = await admin.from("centers").select("name").eq("id", centerId).maybeSingle();
