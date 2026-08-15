@@ -36,6 +36,30 @@ merge만 됐을 뿐 실제로 Live에 실행된 적은 없는 상태였다. 사�
 PR #50 버전을 최종으로 채택, PR #51의 해당 SQL 파일 내용은 이 병합에서 되돌렸다. has_permission()
 기반 세분권한 설계는 향후 별도 배치(SEC-116, 기존 계획대로)에서 재검토 대상으로 남긴다.
 
+## 2026-08-15 — P1-6 문서 오류 정정: account_center_permissions SELECT RLS는 이미 오래전에 적용 완료 (review/todo-scan2)
+
+`docs/TODO.md`의 다른 P1 항목을 검토하던 중 P1-6이 `fix_account_center_permissions_select_
+draft_proposed.sql`을 "아직 실행하지 않음"으로 계속 기록하고 있는 걸 발견 — 그런데 같은 SQL을
+언급하는 P0-4 항목과 그 SQL이 검증 대상으로 삼는 `tests/integration/acl-003-permission-read.
+test.ts` 파일 자기 자신의 주석은 둘 다 "2026-08-02에 이미 실행되고 PR #19로 main 병합 완료"라고
+명확히 적혀 있었다. `pg_policies`로 라이브 상태를 직접 재조회해 실제로 그 draft SQL과 정확히
+일치하는 정책이 이미 적용돼 있음을 확인 — P1-6이 P0-4 갱신 당시 함께 안 고쳐진 순수 문서
+드리프트였음(코드/SQL 변경 없음, 문서만 정정). 이 저장소에서 반복돼온 "저장소 문서와 라이브
+DB 상태가 어긋나는" 패턴(P2-17 calc_deadline과 동일 계열)의 또 다른 사례.
+
+## 2026-08-15 — P1-13 센터정보 수정 권한 세분화, pay_methods/review_point 추가 보호 (review/todo-scan)
+
+다른 세션(PR #54)이 같은 P1-13 티켓을 "매니저 센터 수정" RLS를 `has_permission(id,
+'facility.info') OR is_platform_admin()`으로 좁히는 방식으로 이미 Live 적용한 것을 확인 —
+그 위에 이 세션에서 결제수단(pay_methods)/후기 적립 포인트(review_point) 두 필드를 한 단계
+더 좁히는 `guard_center_sensitive_fields_change` BEFORE UPDATE 트리거를 추가(오너 또는
+`facility.paymethod` 권한 보유자만 결제수단 변경, 오너만 포인트 변경 —
+`fix_center_info_sensitive_fields_permission_draft_proposed.sql`, 사용자 적용·`pg_trigger`
+재조회로 확인). 두 레이어가 서로 겹치지 않고 보완함을 확인(facility.info는 전체 폼 접근
+게이트, 이 트리거는 그 안에서 특히 민감한 두 필드만 더 좁힘). `app/manager/center-info/
+page.tsx`도 `fetchMyEffectivePermissionKeys`로 권한을 미리 계산해 저장 버튼/개별 필드를
+UI에서부터 비활성화하도록 갱신 — raw RLS 에러 대신 명확한 안내 문구 표시.
+
 ## 2026-08-14 — P2-22 공유 테스트센터 leftover class 정리 (chore/p2-22-shared-center-class-cleanup)
 
 `getOrCreateOwnedTestCenter()`로 재사용되는 공유 테스트센터(managerA 소유,

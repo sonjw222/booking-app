@@ -9,6 +9,8 @@ import {
   getOrCreateTestGoodsProduct,
   createTestMembershipForProduct,
   clearScheduleRulesForProduct,
+  fetchSettingsAdmin,
+  saveSettingsAdmin,
   reservationDeepLink,
   type TestUser,
 } from "../fixtures/testData";
@@ -44,6 +46,7 @@ let passD: { id: string; name: string };
 let passE: { id: string; name: string };
 let passF: { id: string; name: string };
 let goods: { id: string };
+let originalSettings: Awaited<ReturnType<typeof fetchSettingsAdmin>>;
 const createdClassIds: string[] = [];
 const foreignCenterCleanup: { centerId: string; productId: string } = { centerId: "", productId: "" };
 
@@ -64,6 +67,15 @@ test.beforeAll(async () => {
   managerA = loadTestAccountMeta("manager-a");
   userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
+  originalSettings = await fetchSettingsAdmin(centerAId);
+  await saveSettingsAdmin(centerAId, {
+    ...originalSettings,
+    groupBookDaysBefore: 0,
+    groupBookTime: "23:59",
+    allowSameDayBooking: true,
+    dailyBookLimitEnabled: false,
+    dailyBookLimit: null,
+  });
 
   passA = await getOrCreateTestPassProductNamed(centerAId, "P3 패스A");
   passB = await getOrCreateTestPassProductNamed(centerAId, "P3 패스B");
@@ -129,6 +141,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   for (const id of createdClassIds) await cleanupTestClassAdmin(id);
+  if (originalSettings) await saveSettingsAdmin(centerAId, originalSettings);
   // foreignCenterCleanup(centerId/productId)은 이제 get-or-create로 재사용되는 공유
   // fixture다 — 더 이상 여기서 삭제하지 않는다(삭제→재생성 churn 제거).
 });

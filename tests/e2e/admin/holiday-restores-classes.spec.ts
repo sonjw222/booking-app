@@ -3,6 +3,8 @@ import {
   loadTestAccountMeta,
   getOrCreateOwnedTestCenter,
   createTestMembershipAdmin,
+  fetchSettingsAdmin,
+  saveSettingsAdmin,
   createFutureTestClassAdmin,
   createClassOnKstDateAdmin,
   cleanupTestClassAdmin,
@@ -42,6 +44,7 @@ test.use({ storageState: MANAGER_AUTH_FILE });
 let managerA: TestUser;
 let userA: TestUser;
 let centerAId: string;
+let originalSettings: Awaited<ReturnType<typeof fetchSettingsAdmin>>;
 const createdClassIds: string[] = [];
 let holidayDate: string;
 
@@ -66,11 +69,18 @@ test.beforeAll(async () => {
   managerA = loadTestAccountMeta("manager-a");
   userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
+  originalSettings = await fetchSettingsAdmin(centerAId);
+  await saveSettingsAdmin(centerAId, {
+    ...originalSettings,
+    dailyBookLimitEnabled: false,
+    dailyBookLimit: null,
+  });
   await createTestMembershipAdmin(centerAId, userA.profileId, { remainingCount: 10 });
 });
 
 test.afterAll(async () => {
   for (const id of createdClassIds) await cleanupTestClassAdmin(id);
+  if (originalSettings) await saveSettingsAdmin(centerAId, originalSettings);
 });
 
 test("휴무일 생성→회원화면 예약차단 확인→삭제→새로고침→기존/신규 수업 예약 가능 (실브라우저 end-to-end)", async ({ page, browser }) => {

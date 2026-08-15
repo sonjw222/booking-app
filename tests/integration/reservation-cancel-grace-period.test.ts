@@ -121,6 +121,7 @@ describe("RES-001: 예약 후 10분 이내 무료 취소 예외", () => {
       ...defaultSettings,
       groupBookDaysBefore: 0, groupBookTime: "23:59",
       groupCancelDaysBefore: 0, groupCancelTime: ALWAYS_PAST_CANCEL_TIME,
+      deductOnLateCancel: false,
     });
     const cls = await createKstSameDayFutureClass(centerAId, { title: "RES-001 10분초과", preferredMinutesFromNow: 120 });
     createdClassIds.push(cls.id);
