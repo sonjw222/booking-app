@@ -375,21 +375,36 @@ reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시�
 없어 죽은 설정으로 보임)은 여전히 미해결 — P2/P3 후속 범위(프라이빗 셀프 슬롯 예약 UI를
 만들지 여부와 함께 제품 결정 필요)로 남긴다.
 
-### P1-13. 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
+### P1-13. (2026-08-14, 완료) 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **확인됨 — RLS 변경 필요, 이번 배치 미수정** |
-| 근거 파일 | `app/manager/center-info/page.tsx`, `reservation_functions.sql`("매니저 센터 수정" 정책) |
-| 완료 조건 | `facility.info` 권한 세분화를 실제로 적용할지(RLS를 `has_permission(center_id,'facility.info')`로 좁힘) 아니면 코드 주석을 실제 동작("센터 소속 active 스태프면 누구나 가능")에 맞게 고칠지 결정하고 반영함 |
+| 현재 상태 | **완료 — 두 세션이 같은 티켓을 서로 다른 레이어에서 손대 합쳐짐(겹치지 않고 서로 보완).** |
+| 근거 파일 | `app/manager/center-info/page.tsx`, `reservation_functions.sql`("매니저 센터 수정" 정책), `fix_centers_update_facility_info_permission.sql`(다른 세션, PR #54, 적용 완료), `fix_center_info_sensitive_fields_permission_draft_proposed.sql`(이 세션, 적용 완료) |
+| 완료 조건 | ~~`facility.info` 권한 세분화를 실제로 적용할지 결정하고 반영함~~ 완료. |
 | 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 센터관리 항목 |
 
 2026-08-02 Track B 감사에서 발견: `center-info/page.tsx` 상단 주석은 "시설 정보 설정 권한
 (facility.info) 필요 — 오너는 항상 가능"이라고 적혀 있지만, 실제 RLS 정책(`"매니저 센터 수정"`,
-`reservation_functions.sql`)은 `center_id in (select my_managed_center_ids())`만 확인합니다 —
-오너가 아닌 일반 스태프도 센터 정보·결제수단·평판점수를 수정할 수 있어 주석과 실제 동작이
-다릅니다. RLS 변경이 필요한 사안이라 Track B(SQL/RLS 변경 금지) 범위 밖입니다.
+`reservation_functions.sql`)은 `center_id in (select my_managed_center_ids())`만 확인했습니다 —
+오너가 아닌 일반 스태프도 센터 정보·결제수단·평판점수를 수정할 수 있었습니다.
+
+**2026-08-14 최종 확정(두 레이어)**: `facility.info` 권한 키는 이미 `schema.sql`에 정의돼
+있었고 `app/manager/page.tsx`의 메뉴 노출도 이미 `canSeeMenu("facility.info")`로 가려져
+있었지만(URL 직접 접근만 뚫려있었음), RLS 자체가 이를 확인 안 하고 있었습니다.
+- (다른 세션, PR #54) "매니저 센터 수정" RLS를 `has_permission(id,'facility.info') OR
+  is_platform_admin()`으로 좁힘 — facility.info 없으면 이 화면 전체(소개글/주소/전화 포함)
+  저장이 막힘. 사용자가 `fix_centers_update_facility_info_permission.sql` 적용, `pg_policies`
+  재조회로 확인.
+- (이 세션) 그 위에 결제수단(pay_methods)/후기 적립 포인트(review_point) 두 필드는 한 단계
+  더 좁혀 오너 또는 `facility.paymethod` 권한 보유자만(결제수단), 오너 전용(포인트, 대응
+  permission key 없음)으로 추가 제한 — `guard_center_sensitive_fields_change` BEFORE UPDATE
+  트리거(`fix_center_info_sensitive_fields_permission_draft_proposed.sql`)로 구현. "facility.info는
+  위임했지만 결제수단/포인트까지는 아직" 같은 세분화된 위임을 가능하게 하는 게 목적이라
+  facility.info 체크와 중복이 아님. 사용자가 SQL Editor에서 적용, `pg_trigger` 재조회로 확인.
+  `app/manager/center-info/page.tsx`도 `fetchMyEffectivePermissionKeys`로 미리 계산해 권한
+  없는 필드/전체 저장을 UI에서부터 비활성화·안내하도록 갱신(DB 레이어가 최종 방어선, UI는 편의).
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
@@ -1178,6 +1193,26 @@ BEGIN/COMMIT 트랜잭션) 실행 → 검증(C)에서 `remaining_target_classes=
   조사해야 해서, 이번 보안 배치 범위에서 임의로 cleanup SQL을 작성·적용하지 않았다. sweep
   조건을 미래까지 넓히는 것도 "다른 테스트가 지금 막 만든, 아직 안 끝난 미래 class"까지
   지워버릴 위험이 있어 신중한 설계가 필요하다.
+
+### P2-23. (신규, 2026-08-15) 최근 merge된 PR들이 CI 완전 그린 없이 merge됨 — 나중에 한 번에 재검증 필요
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 (기능 결함 아님 — 검증 커버리지 확인용 후속 작업) |
+| 현재 상태 | **확인 필요 — 아래 PR들을 모아 한 번에 깨끗한 CI를 돌려 재확인할 것** |
+| 근거 파일 | 없음(작업 로그 성격) |
+| 완료 조건 | 아래 PR들이 반영된 시점의 `main`에서 전체 CI(E2E/Unit/Integration/Build)를 한 번 더 돌려 각 실패가 실제로 무관한 기존 플레이키니스였는지 최종 확인 |
+
+- **PR #51**(SEC-101/112/113/114/115/116/117): CI 재시도 여러 번 중 마지막엔 Integration에서
+  P2-22(leftover 오염)/범위 밖 항목 2건만 남고 merge — Integration 전체 그린은 아니었음.
+- **PR #55**(P2-22 leftover 정리): 앱 코드 변경 없음(SQL/문서만)이라 CI 자체가 무관.
+- **PR #56**(P1-13 pay_methods/review_point 추가 보호): E2E에서 `daily-book-limit.spec.ts`
+  실패 1건 + `attendance.spec.ts` flaky 1건(재시도로 복구) — 둘 다 이 PR과 무관한 파일로
+  확인했으나, E2E 게이팅 때문에 Unit/Integration/Build는 아예 안 돌고 스킵된 채로 merge됨.
+
+셋 다 "실패 내역이 변경된 코드와 무관함"은 개별적으로 확인하고 merge했지만, Unit/Integration/
+Build까지 실제로 통과하는지는 아직 한 번도 끝까지 확인 못 했다. `main`이 안정된 시점에 한
+번에 몰아서 깨끗한 CI를 돌려 재확인할 것.
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
 
