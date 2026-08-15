@@ -245,30 +245,30 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 화면 내부의 버튼 단위 권한 표시(각 screen의 개별 액션 버튼)는 여전히 서버 거부 이후에야 알 수
 있음 — 상세 내용은 [CHANGELOG.md](./CHANGELOG.md) 참고.
 
-### P1-6. 관리자·운영자 클라이언트 가드 누락
+### P1-6. (2026-08-15, 문서 오류 정정 — 실제로는 완료) 관리자·운영자 클라이언트 가드 누락
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **미완성** |
-| 근거 파일 | `app/admin/categories/page.tsx`, `app/admin/banners/page.tsx`, `app/manager/inquiries/page.tsx`, `app/manager/notifications/page.tsx`, `app/manager/staff/permissions/page.tsx` |
-| 완료 조건 | 플랫폼 운영자 2개 화면과 매니저 3개 화면에 일관된 사전 가드를 적용하고 비권한 사용자의 콘텐츠 미노출·친절한 오류·RLS 차단을 검증함 |
+| 현재 상태 | **완료.** 클라이언트 가드 5개 화면 + 서버측 RLS(account_center_permissions SELECT) 전부 적용·검증 완료. 이 항목이 "아직 실행하지 않음"으로 오래 남아있던 건 P0-4에 이미 기록된 완료 사실이 이쪽에 반영 안 된 문서 갱신 누락이었음(2026-08-15 발견, `pg_policies` 재조회로 실제 상태 확인) — 실제 DB 상태와는 무관. |
+| 근거 파일 | `app/admin/categories/page.tsx`, `app/admin/banners/page.tsx`, `app/manager/inquiries/page.tsx`, `app/manager/notifications/page.tsx`, `app/manager/staff/permissions/page.tsx`, `fix_account_center_permissions_select_draft_proposed.sql`(적용 완료, PR #19) |
+| 완료 조건 | ~~플랫폼 운영자 2개 화면과 매니저 3개 화면에 일관된 사전 가드를 적용하고 비권한 사용자의 콘텐츠 미노출·친절한 오류·RLS 차단을 검증함~~ 완료. |
 | 관련 문서 | [REQUIREMENTS 7~8절](./REQUIREMENTS.md), [ROUTES 5~7절](./ROUTES.md), [DATABASE 10절](./DATABASE.md) |
 
-현재 데이터 쓰기는 RLS가 막지만 화면과 입력폼이 먼저 노출되는 페이지가 있습니다.
+현재 데이터 쓰기는 RLS가 막지만 화면과 입력폼이 먼저 노출되는 페이지가 있었습니다.
 
 2026-08-01 Access Control 구현 Batch에서 완료: `app/admin/categories/page.tsx`,
 `app/admin/banners/page.tsx`에 `/admin/centers`와 동일한 `checkPlatformAdmin()` 가드를 추가했고,
 `app/manager/inquiries/page.tsx`, `app/manager/notifications/page.tsx`에는 `fetchMyCenters()` +
 "운영 중인 센터가 없어요" 가드(기존 9개 화면과 동일한 패턴)를, `app/manager/staff/permissions/page.tsx`에는
 URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 확인하는 가드(`isOwnerOfCenter()`)를
-추가함. 상세 내용은 [CHANGELOG.md](./CHANGELOG.md) 참고. **클라이언트 가드는 완료했지만, 서버 측
+추가함. 상세 내용은 [CHANGELOG.md](./CHANGELOG.md) 참고. 클라이언트 가드와 별도로, 서버측
 재검증에서 `account_center_permissions`의 SELECT RLS 정책 자체가 "같은 센터 소속이면 누구나
-조회 가능"하게 열려 있던 별도의 FAIL을 발견함** — 화면 가드와 무관하게 Supabase SDK 직접 호출로
-우회 가능했던 서버 쪽 구멍. 수정 SQL 초안은 `fix_account_center_permissions_select_draft_proposed.sql`에
-작성했으나 **아직 실행하지 않음**(이 PR에 포함 — ACL-003의 일부로 취급). 실행 전
-`tests/integration/acl-003-permission-read.test.ts`를 통과시켜야 함. 이 SQL이 실제 실행되고
-그 통합 테스트가 green이 될 때까지는 이 항목을 완전히 제거하지 말 것.
+조회 가능"하게 열려 있던 FAIL도 발견됐었음 — 화면 가드와 무관하게 Supabase SDK 직접 호출로
+우회 가능했던 서버 쪽 구멍. 수정 SQL(`fix_account_center_permissions_select_draft_proposed.sql`)은
+**2026-08-02에 이미 실행되고 `tests/integration/acl-003-permission-read.test.ts` 3/3 통과, PR #19로
+main 병합까지 완료됨**(P0-4에 정확히 기록돼 있었음). 2026-08-15 `pg_policies` 재조회로 라이브
+정책이 그 draft SQL과 정확히 일치함을 재확인.
 
 ### P1-7. 국경일 자동 갱신
 
