@@ -46,6 +46,7 @@ const cleanupProductIds: string[] = [];
 const cleanupCenterIds: string[] = [];
 const cleanupScheduleRuleProductIds: string[] = [];
 const cleanupHolidays: Array<{ centerId: string; date: string }> = [];
+let staleIsolatedCentersCleaned = false;
 
 async function asManagerA() { return switchToTestUser(MANAGER_A.email, MANAGER_A.password); }
 async function asManagerB() { return switchToTestUser(MANAGER_B.email, MANAGER_B.password); }
@@ -112,14 +113,17 @@ async function createAutoBookMembership(
 async function createIsolatedOwnedCenter(manager: TestUser): Promise<string> {
   const admin = getFixtureAdminClient();
   // 중단된 이전 실행이 남긴 이 테스트 전용 센터를 먼저 정리한다. 일반/운영 센터와
-  // 겹치지 않는 고유 접두사만 대상으로 한다.
-  const { data: staleCenters, error: staleLookupError } = await admin
-    .from("centers")
-    .select("id")
-    .like("name", "SEC-114 격리센터-%");
-  if (staleLookupError) throw new Error(`이전 격리센터 조회 실패: ${staleLookupError.message}`);
-  const staleIds = (staleCenters ?? []).map((center: any) => center.id as string);
-  if (staleIds.length > 0) {
+  // 겹치지 않는 고유 접두사만 대상으로 한다. 같은 실행에서 만든 격리 센터들은 각
+  // 테스트가 끝날 때까지 유지해야 하므로 이 정리는 파일 실행당 한 번만 수행한다.
+  if (!staleIsolatedCentersCleaned) {
+    staleIsolatedCentersCleaned = true;
+    const { data: staleCenters, error: staleLookupError } = await admin
+      .from("centers")
+      .select("id")
+      .like("name", "SEC-114 격리센터-%");
+    if (staleLookupError) throw new Error(`이전 격리센터 조회 실패: ${staleLookupError.message}`);
+    const staleIds = (staleCenters ?? []).map((center: any) => center.id as string);
+    if (staleIds.length > 0) {
     const { data: staleClasses, error: staleClassLookupError } = await admin
       .from("classes").select("id").in("center_id", staleIds);
     if (staleClassLookupError) throw new Error(`이전 격리센터 수업 조회 실패: ${staleClassLookupError.message}`);
@@ -148,8 +152,9 @@ async function createIsolatedOwnedCenter(manager: TestUser): Promise<string> {
     if (staleRoleDeleteError) throw new Error(`이전 격리센터 역할 정리 실패: ${staleRoleDeleteError.message}`);
     const { error: staleSettingsDeleteError } = await admin.from("center_settings").delete().in("center_id", staleIds);
     if (staleSettingsDeleteError) throw new Error(`이전 격리센터 설정 정리 실패: ${staleSettingsDeleteError.message}`);
-    const { error: staleDeleteError } = await admin.from("centers").delete().in("id", staleIds);
-    if (staleDeleteError) throw new Error(`이전 격리센터 정리 실패: ${staleDeleteError.message}`);
+      const { error: staleDeleteError } = await admin.from("centers").delete().in("id", staleIds);
+      if (staleDeleteError) throw new Error(`이전 격리센터 정리 실패: ${staleDeleteError.message}`);
+    }
   }
   const { data: center, error: centerError } = await admin
     .from("centers")
@@ -576,12 +581,13 @@ describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합)
 describe("SEC-114 AUTO-SEC-I~J: 정상 동작 정확성", () => {
   it("AUTO-SEC-I: 정상 자동예약은 예약 수와 잔여횟수 차감이 정확히 일치한다", async () => {
     await asManagerA();
+    const isolatedCenterId = await createIsolatedOwnedCenter(managerA);
     const dow = new Date().getDay();
-    const product = await createAutoBookProduct(centerAId, "SEC-114-I", [dow]);
-    const cls1 = await createClassOnDow(centerAId, dow, { title: "AUTO-SEC-I-1주차", baseHoursFromNow: 48 });
-    const cls2 = await createClassOnDow(centerAId, dow, { title: "AUTO-SEC-I-2주차", baseHoursFromNow: 48 + 7 * 24 });
+    const product = await createAutoBookProduct(isolatedCenterId, "SEC-114-I", [dow]);
+    const cls1 = await createClassOnDow(isolatedCenterId, dow, { title: "AUTO-SEC-I-1주차", baseHoursFromNow: 48 });
+    const cls2 = await createClassOnDow(isolatedCenterId, dow, { title: "AUTO-SEC-I-2주차", baseHoursFromNow: 48 + 7 * 24 });
     cleanupClassIds.push(cls1.id, cls2.id);
-    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+    const mem = await createAutoBookMembership(isolatedCenterId, userB.profileId, product.id, { remainingCount: 3 });
 
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).toBeNull();
@@ -596,11 +602,12 @@ describe("SEC-114 AUTO-SEC-I~J: 정상 동작 정확성", () => {
 
   it("AUTO-SEC-J: 같은 수강권으로 다시 호출해도 중복 예약이나 초과 차감이 없다", async () => {
     await asManagerA();
+    const isolatedCenterId = await createIsolatedOwnedCenter(managerA);
     const dow = new Date().getDay();
-    const product = await createAutoBookProduct(centerAId, "SEC-114-J", [dow]);
-    const cls = await createClassOnDow(centerAId, dow, { title: "AUTO-SEC-J", baseHoursFromNow: 96 });
+    const product = await createAutoBookProduct(isolatedCenterId, "SEC-114-J", [dow]);
+    const cls = await createClassOnDow(isolatedCenterId, dow, { title: "AUTO-SEC-J", baseHoursFromNow: 96 });
     cleanupClassIds.push(cls.id);
-    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+    const mem = await createAutoBookMembership(isolatedCenterId, userB.profileId, product.id, { remainingCount: 3 });
 
     const first = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(first.error).toBeNull();
