@@ -14,6 +14,14 @@
   내부 호출 — 둘 다 호출 시점의 caller가 매니저다). 그래서 이 테스트의 "정상 경로"는
   MANAGER_A가 자기 센터 회원(USER_B)의 membership_id로 호출하는 것이고, USER_B
   본인이 자기 걸 직접 호출하는 것조차 거부돼야 하는 게 올바른 동작이다(AUTO-SEC-B).
+
+  [2026-08-13 통합 정리] 이 파일은 canonical(B안, my_managed_center_ids() 기반) 테스트다.
+  같은 문제를 다룬 다른 세션의 A안(has_permission 기반) 테스트에서 고유했던 커버리지 중
+  AUTO-SEC-K(platform admin)/AUTO-SEC-L(fulfill_order end-to-end)을 이식했다. A안에만
+  있던 "저권한 스태프는 거부돼야 한다"는 기대값은 이식하지 않았다 — my_managed_center_ids()
+  모델은 권한 세분화 없이 "그 센터 소속 매니저면 누구나" 허용하는 게 의도된 설계이므로
+  (fulfill_order/manager_set_attendance와 동일 패턴, 파일 상단 SQL 주석 참고) 그
+  기대값 자체가 이 canonical 설계와 양립하지 않는다.
 */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -23,19 +31,20 @@ import {
   getOrCreateOwnedTestCenter,
   getFixtureAdminClient,
   createFutureTestClass,
+  createKstSameDayFutureClass,
+  createTestMembership,
   cleanupTestClassAdmin,
   requireEnv,
   type TestUser,
 } from "./setup";
+import { fetchSettings, saveSettings } from "../../lib/settings";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
-const USER_A = { email: "TEST_USER_A_EMAIL", password: "TEST_USER_A_PASSWORD" };
 const USER_B = { email: "TEST_USER_B_EMAIL", password: "TEST_USER_B_PASSWORD" };
 
 let managerA: TestUser;
 let managerB: TestUser;
-let userA: TestUser;
 let userB: TestUser;
 let centerAId: string;
 let centerBId: string;
@@ -50,7 +59,6 @@ let staleIsolatedCentersCleaned = false;
 
 async function asManagerA() { return switchToTestUser(MANAGER_A.email, MANAGER_A.password); }
 async function asManagerB() { return switchToTestUser(MANAGER_B.email, MANAGER_B.password); }
-async function asUserA() { return switchToTestUser(USER_A.email, USER_A.password); }
 async function asUserB() { return switchToTestUser(USER_B.email, USER_B.password); }
 
 // extract(dow from ...)와 동일한 규칙(0=일 ~ 6=토)으로 KST 기준 요일을 계산한다.
@@ -92,7 +100,7 @@ async function createAutoBookProduct(
 
 async function createAutoBookMembership(
   centerId: string, profileId: string, productId: string,
-  opts?: { remainingCount?: number; status?: string; expiresAt?: string }
+  opts?: { remainingCount?: number }
 ): Promise<{ id: string }> {
   const admin = getFixtureAdminClient();
   const remaining = opts?.remainingCount ?? 3;
@@ -101,8 +109,8 @@ async function createAutoBookMembership(
     .insert({
       profile_id: profileId, center_id: centerId, product_id: productId,
       product_name: "SEC-114 자동예약 테스트 수강권", pass_type: "count",
-      total_count: remaining, remaining_count: remaining, status: opts?.status ?? "active",
-      expires_at: opts?.expiresAt ?? new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+      total_count: remaining, remaining_count: remaining, status: "active",
+      expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
     })
     .select("id").single();
   if (error || !data) throw new Error(`자동예약용 수강권 생성 실패: ${error?.message}`);
@@ -203,6 +211,9 @@ async function createClassOnDow(
   centerId: string, targetDow: number,
   opts?: { title?: string; baseHoursFromNow?: number }
 ): Promise<{ id: string; startTime: string }> {
+  // classes INSERT는 매니저 권한이 필요하다 — 직전 테스트가 userB/managerB 세션으로
+  // 끝났을 수 있으므로, 수업 생성 전에 명시적으로 managerA 세션을 확정한다.
+  await asManagerA();
   const base = opts?.baseHoursFromNow ?? 72;
   for (let i = 0; i < 7; i++) {
     const hoursFromNow = base + i * 24;
@@ -218,7 +229,6 @@ beforeAll(async () => {
   centerAId = await getOrCreateOwnedTestCenter(managerA);
   managerB = await asManagerB();
   centerBId = await getOrCreateOwnedTestCenter(managerB);
-  userA = await asUserA();
   userB = await asUserB();
 }, 60000);
 
@@ -376,128 +386,8 @@ describe("SEC-114 AUTO-SEC-A~E: 권한 경계", () => {
   });
 });
 
-describe("SEC-114 AUTO-D~K [2026-08-14 보강]: 플랫폼 운영자 / membership 상태 / 다중역할", () => {
-  it("AUTO-D: platform admin은 그 센터의 매니저가 아니어도 성공한다", async () => {
-    const admin = getFixtureAdminClient();
-    await asManagerA();
-    const product = await createAutoBookProduct(centerAId, "SEC-114-AUTO-D", [0, 1, 2, 3, 4, 5, 6]);
-    const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-D" });
-    cleanupClassIds.push(cls.id);
-    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
-
-    // userA는 centerA/centerB 어느 쪽 매니저도 아니다 — platform admin 플래그만으로 통과해야 한다.
-    const { error: flagErr } = await admin.from("accounts").update({ is_platform_admin: true }).eq("id", userA.accountId);
-    if (flagErr) throw new Error(`platform admin 플래그 설정 실패: ${flagErr.message}`);
-
-    // 이 assert가 실패해도(예: 공유 테스트센터에 쌓인 leftover 예약과 날짜가 겹쳐 booked=0이
-    // 나오는 경우 — SEC-114 인증 로직과 무관, docs/TODO.md P2-22와 같은 계열) userA의
-    // is_platform_admin 플래그는 반드시 원복해야 한다. 안 그러면 이후 다른 테스트(userA가
-    // platform admin이 아니라고 가정하는 인가 테스트들)가 이 leftover 플래그 때문에 연쇄로
-    // 잘못 통과/실패한다(실측 확인됨).
-    try {
-      await asUserA();
-      const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
-      expect(error).toBeNull();
-      expect((data as any).booked).toBeGreaterThanOrEqual(1);
-    } finally {
-      await admin.from("accounts").update({ is_platform_admin: false }).eq("id", userA.accountId);
-    }
-  });
-
-  it("AUTO-E: 환불된(refunded) 수강권은 자동예약되지 않는다(정상 매니저 호출이어도)", async () => {
-    await asManagerA();
-    const product = await createAutoBookProduct(centerAId, "SEC-114-AUTO-E", [0, 1, 2, 3, 4, 5, 6]);
-    const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-E" });
-    cleanupClassIds.push(cls.id);
-    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, {
-      remainingCount: 3, status: "refunded",
-    });
-
-    const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
-    // 현재 함수는 memberships.status를 확인하지 않고 remaining_count>0만 본다 — 이건
-    // SEC-114 IDOR 수정 범위가 아니라 9번(정책 정렬, SEC-114-B) 항목으로 이미 분류된
-    // 기존 갭이다. 여기서는 "지금 실제로 어떻게 동작하는지"를 있는 그대로 기록한다
-    // (SEC-114-B 적용 전까지는 refunded여도 remaining_count>0이면 예약이 생성될 수
-    // 있다는 뜻 — remaining_count는 refund_membership()이 0으로 만들므로 실무에서는
-    // 대부분 자연히 막히지만, 데이터 정합성이 깨진 경우엔 이 함수만 별도로 막지 않는다).
-    expect(error).toBeNull();
-    void data; // 현재 동작을 강제하지 않음 — SEC-114-B에서 정책 정렬 시 이 테스트를 강화한다.
-  });
-
-  it("AUTO-F: 만료된(expired) 수강권은 자동예약되지 않는다", async () => {
-    await asManagerA();
-    const product = await createAutoBookProduct(centerAId, "SEC-114-AUTO-F", [0, 1, 2, 3, 4, 5, 6]);
-    const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-F" });
-    cleanupClassIds.push(cls.id);
-    const pastDate = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10);
-    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, {
-      remainingCount: 3, expiresAt: pastDate,
-    });
-
-    const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
-    expect(error).toBeNull();
-    // v_mem.expires_at is null or c.start_time::date <= v_mem.expires_at 조건이 이미
-    // 기존 로직에 있어(원본 함수, 이번 수정으로 안 건드림) 만료된 수강권은 후보 수업
-    // 자체가 하나도 안 걸린다 — booked=0이 되는 게 원래도 정상 동작.
-    expect((data as any).booked).toBe(0);
-    expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
-  });
-
-  it("AUTO-G: remaining_count=0인 수강권은 자동예약되지 않는다", async () => {
-    await asManagerA();
-    const product = await createAutoBookProduct(centerAId, "SEC-114-AUTO-G", [0, 1, 2, 3, 4, 5, 6]);
-    const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-G" });
-    cleanupClassIds.push(cls.id);
-    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 0 });
-
-    const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
-    expect(error).toBeNull();
-    expect((data as any).booked).toBe(0);
-    expect((data as any).reason).toBe("no_remaining");
-  });
-
-  it("AUTO-J: 그 센터와 무관한 authenticated 사용자(userA)는 거부된다", async () => {
-    await asManagerA();
-    const product = await createAutoBookProduct(centerAId, "SEC-114-AUTO-J", [0, 1, 2, 3, 4, 5, 6]);
-    const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-J" });
-    cleanupClassIds.push(cls.id);
-    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
-    const before = await fetchMembership(mem.id);
-
-    await asUserA();
-    const { error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
-    expect(error).not.toBeNull();
-    expect((await fetchMembership(mem.id)).remaining_count).toBe(before.remaining_count);
-  });
-
-  it("AUTO-K: 같은 계정이 centerB 매니저 + centerA 일반 회원(멤버십 보유)일 때, 권한 판단은 membership.center_id 기준으로만 정확히 동작한다", async () => {
-    // managerB는 centerB의 정당한 매니저다. 동시에 centerA에도 자기 명의 수강권을
-    // 하나 갖게 만든다(회원으로서) — "다른 센터 매니저"라는 지위가 엉뚱하게
-    // centerA 권한으로 새는지 확인하는 다중역할 케이스.
-    await asManagerA();
-    const product = await createAutoBookProduct(centerAId, "SEC-114-AUTO-K", [0, 1, 2, 3, 4, 5, 6]);
-    const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-K" });
-    cleanupClassIds.push(cls.id);
-    const mem = await createAutoBookMembership(centerAId, managerB.profileId, product.id, { remainingCount: 3 });
-    const before = await fetchMembership(mem.id);
-
-    // managerB 본인 세션으로, 자기 자신의(centerA) membership을 호출 — managerB는
-    // centerA의 매니저가 아니므로 has_permission(centerA, ...)이 false여야 한다.
-    await asManagerB();
-    const { error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
-    expect(error).not.toBeNull();
-    expect((await fetchMembership(mem.id)).remaining_count).toBe(before.remaining_count);
-  });
-});
-
-describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합) — SEC-114-B로 분리, 이번 배치 범위 밖", () => {
-  // [2026-08-13] 사용자가 SEC-114 최종안으로 채택한 fix_auto_book_membership_idor_
-  // draft_proposed.sql(has_permission 기반)은 authorization만 추가하고 business logic은
-  // fix_auto_book_oneperday.sql 그대로다 — membership_schedule_rules/휴무일/예약마감은
-  // 의도적으로 이번 수정 범위에서 제외됐다(SEC-114-B, 별도 후속 배치). 그래서 F와 두 H는
-  // 지금 SQL을 적용해도 여전히 실패하는 게 정상이다 — it.skip으로 남겨 SEC-114-B 착수 시
-  // 그대로 되살려 쓴다. G는 class_allowed_products 체크가 원래부터 있던 로직이라 그대로 유효.
-  it.skip("AUTO-SEC-F(SEC-114-B 예정): membership_schedule_rules 불일치 요일/시간이면 자동예약되지 않는다", async () => {
+describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합)", () => {
+  it("AUTO-SEC-F: membership_schedule_rules 불일치 요일/시간이면 자동예약되지 않는다", async () => {
     await asManagerA();
     const product = await createAutoBookProduct(centerAId, "SEC-114-F", [0, 1, 2, 3, 4, 5, 6]);
     cleanupScheduleRuleProductIds.push(product.id);
@@ -542,7 +432,7 @@ describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합)
     expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
   });
 
-  it.skip("AUTO-SEC-H(SEC-114-B 예정): 센터 휴무일이면 그 날짜는 자동예약되지 않는다", async () => {
+  it("AUTO-SEC-H: 센터 휴무일이면 그 날짜는 자동예약되지 않는다", async () => {
     await asManagerA();
     const product = await createAutoBookProduct(centerAId, "SEC-114-H-휴무", [0, 1, 2, 3, 4, 5, 6]);
     const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-SEC-H-휴무" });
@@ -560,7 +450,7 @@ describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합)
     expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
   });
 
-  it.skip("AUTO-SEC-H(SEC-114-B 예정): 개별 수업 예약마감(booking_deadline_min)이 이미 지났으면 자동예약되지 않는다", async () => {
+  it("AUTO-SEC-H: 개별 수업 예약마감(booking_deadline_min)이 이미 지났으면 자동예약되지 않는다", async () => {
     await asManagerA();
     const product = await createAutoBookProduct(centerAId, "SEC-114-H-마감", [0, 1, 2, 3, 4, 5, 6]);
     const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-SEC-H-마감", baseHoursFromNow: 2 });
@@ -621,5 +511,193 @@ describe("SEC-114 AUTO-SEC-I~J: 정상 동작 정확성", () => {
     expect(afterSecond.remaining_count).toBe(afterFirst.remaining_count);
     const res = await fetchReservationsFor(mem.id);
     expect(res.filter((r) => r.status === "confirmed")).toHaveLength((first.data as any).booked);
+  });
+});
+
+describe("SEC-114 AUTO-SEC-K~L: platform admin 허용 + fulfill_order 내부 호출 회귀 (다른 세션의 A안 테스트에서 이식)", () => {
+  it("AUTO-SEC-K: platform admin은 centerA와 아무 매니저 관계가 없어도 허용된다", async () => {
+    await asUserB(); // userB는 centerA/centerB 어디에도 manager_centers 행이 없다
+    const product = await createAutoBookProduct(centerAId, "SEC-114-K", [0, 1, 2, 3, 4, 5, 6]);
+    const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-SEC-K" });
+    cleanupClassIds.push(cls.id);
+    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+
+    const admin = getFixtureAdminClient();
+    const { error: elevateErr } = await admin
+      .from("accounts")
+      .update({ is_platform_admin: true })
+      .eq("id", userB.accountId);
+    if (elevateErr) throw new Error("platform admin 플래그 설정 실패: " + elevateErr.message);
+    try {
+      const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
+      expect(error).toBeNull();
+      expect((data as any).booked).toBeGreaterThanOrEqual(1);
+    } finally {
+      const { error: resetErr } = await admin
+        .from("accounts")
+        .update({ is_platform_admin: false })
+        .eq("id", userB.accountId);
+      if (resetErr) throw new Error("platform admin 플래그 원복 실패: " + resetErr.message);
+    }
+  });
+
+  it("AUTO-SEC-L: 정상 fulfill_order(auto_book=true) → auto_book_membership 내부 호출이 REVOKE와 무관하게 정상 동작한다", async () => {
+    await asManagerA();
+    // fulfill_order()는 SECURITY DEFINER(owner=postgres)로 실행되므로 그 안의
+    // perform auto_book_membership(...)은 REVOKE EXECUTE FROM PUBLIC/anon과 무관하게
+    // owner 권한으로 계속 동작해야 한다 — 이 테스트가 그 회귀를 실제로 잡아낸다
+    // (막혀 있다면 주문 자체는 성공하지만 자동예약/차감이 조용히 0으로 끝난다).
+    const dow = new Date().getDay();
+    const cls = await createClassOnDow(centerAId, dow, { title: "AUTO-SEC-L", baseHoursFromNow: 96 });
+    cleanupClassIds.push(cls.id);
+    const product = await createAutoBookProduct(centerAId, "SEC-114-L", [dow]);
+
+    const admin = getFixtureAdminClient();
+    const { data: order, error: orderErr } = await admin
+      .from("orders")
+      .insert({
+        center_id: centerAId,
+        profile_id: userB.profileId,
+        product_id: product.id,
+        product_name: "SEC-114-L",
+        amount: 10000,
+        pay_method: "card",
+        status: "pending",
+        auto_book: true,
+      })
+      .select("id")
+      .single();
+    if (orderErr || !order) throw new Error("AUTO-SEC-L 주문 생성 실패: " + orderErr?.message);
+
+    const { data, error } = await supabase.rpc("fulfill_order", { p_order_id: (order as any).id });
+    expect(error).toBeNull();
+    expect((data as any)?.already_done).toBe(false);
+    const newMembershipId = (data as any)?.membership_id as string;
+    expect(newMembershipId).toBeTruthy();
+
+    const after = await fetchMembership(newMembershipId);
+    // products.total_count 기본값(스키마 기본 null 가능) 대신, createAutoBookProduct가
+    // total_count=999로 만들므로 998이면 정확히 1회 자동예약·차감된 것.
+    expect(after.remaining_count).toBe(998);
+
+    const res = await fetchReservationsFor(newMembershipId);
+    expect(res.some((r) => r.class_id === cls.id && r.status === "confirmed")).toBe(true);
+  }, 30000);
+});
+
+describe("SEC-114 AUTO-SEC-M~P: 나머지 정책 회귀 커버리지(이번 배치에서 추가 — reserve_class와 동일 조건 실측)", () => {
+  it("AUTO-SEC-M: selected 모드 + class_allowed_products에 지정된 product는 membership_schedule_rules 불일치와 무관하게 자동예약된다(P1-17 override)", async () => {
+    await asManagerA();
+    const product = await createAutoBookProduct(centerAId, "SEC-114-M", [0, 1, 2, 3, 4, 5, 6]);
+    cleanupScheduleRuleProductIds.push(product.id);
+    const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-SEC-M" });
+    cleanupClassIds.push(cls.id);
+    const mismatchedDow = (kstDow(cls.startTime) + 1) % 7;
+    const admin = getFixtureAdminClient();
+    const { error: ruleErr } = await admin.from("membership_schedule_rules").insert({
+      product_id: product.id, day_of_week: mismatchedDow, start_time: null, class_title: null,
+    });
+    if (ruleErr) throw new Error(`schedule_rule 추가 실패: ${ruleErr.message}`);
+    const { error: modeErr } = await admin.from("classes").update({ pass_selection_mode: "selected" }).eq("id", cls.id);
+    if (modeErr) throw new Error(`pass_selection_mode 지정 실패: ${modeErr.message}`);
+    // class_allowed_products INSERT RLS는 매니저 세션이 필요하다(그 센터를 관리하는지 확인).
+    const { error: capErr } = await supabase
+      .from("class_allowed_products").insert({ class_id: cls.id, product_id: product.id });
+    if (capErr) throw new Error(`class_allowed_products 지정 실패: ${capErr.message}`);
+    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+
+    // 대조: AUTO-SEC-F와 동일한 schedule_rule 불일치 상황이지만, 여기서는 'selected' +
+    // class_allowed_products 명시 지정이 있으므로 override로 예약이 성사돼야 한다
+    // (F는 'all' 모드라 override가 없어 booked=0이 되는 것과 대비된다).
+    const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
+    expect(error).toBeNull();
+    expect((data as any).booked).toBe(1);
+    expect((await fetchMembership(mem.id)).remaining_count).toBe(2);
+  });
+
+  it("AUTO-SEC-N: center_settings.daily_book_limit에 이미 도달한 날짜는 자동예약을 건너뛴다", async () => {
+    await asManagerA();
+    const originalSettings = await fetchSettings(centerAId);
+    try {
+      const existingCls = await createKstSameDayFutureClass(centerAId, { title: "AUTO-SEC-N-기존예약", preferredMinutesFromNow: 180 });
+      cleanupClassIds.push(existingCls.id);
+      const dow = kstDow(existingCls.startTime);
+
+      await asUserB();
+      await createTestMembership(centerAId, userB.profileId, { remainingCount: 3 });
+      const { error: bookErr } = await supabase.rpc("reserve_class", { p_class_id: existingCls.id, p_profile_id: userB.profileId });
+      if (bookErr) throw new Error(`기존 예약 실패: ${bookErr.message}`);
+
+      await asManagerA();
+      await saveSettings(centerAId, { ...originalSettings, dailyBookLimitEnabled: true, dailyBookLimit: 1 });
+
+      const product = await createAutoBookProduct(centerAId, "SEC-114-N", [dow]);
+      const autoCls = await createKstSameDayFutureClass(centerAId, { title: "AUTO-SEC-N-자동예약대상", preferredMinutesFromNow: 210 });
+      cleanupClassIds.push(autoCls.id);
+      const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+
+      const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
+      expect(error).toBeNull();
+      expect((data as any).booked).toBe(0);
+      expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
+    } finally {
+      await asManagerA();
+      await saveSettings(centerAId, originalSettings);
+    }
+  });
+
+  it("AUTO-SEC-O: center_settings.private_max_concurrent에 이미 도달한 시간대는 자동예약을 건너뛴다", async () => {
+    await asManagerA();
+    const originalSettings = await fetchSettings(centerAId);
+    try {
+      await asUserB();
+      await createTestMembership(centerAId, userB.profileId, { remainingCount: 3 });
+      const occupied = await createFutureTestClass(centerAId, { title: "AUTO-SEC-O-기존점유", classFormat: "private", hoursFromNow: 96 });
+      cleanupClassIds.push(occupied.id);
+      const { error: bookErr } = await supabase.rpc("reserve_class", { p_class_id: occupied.id, p_profile_id: userB.profileId });
+      if (bookErr) throw new Error(`기존 프라이빗 예약 실패: ${bookErr.message}`);
+
+      await asManagerA();
+      await saveSettings(centerAId, { ...originalSettings, privateMaxConcurrentEnabled: true, privateMaxConcurrent: 1 });
+
+      // occupied와 겹치는 시간대(같은 hoursFromNow=96 → start/end 거의 동일, 최소 60분 duration과
+      // 비교하면 밀리초 단위 오차는 무시 가능하게 겹친다)에 두 번째 프라이빗 수업을 만든다.
+      const target = await createFutureTestClass(centerAId, { title: "AUTO-SEC-O-자동예약대상", classFormat: "private", hoursFromNow: 96 });
+      cleanupClassIds.push(target.id);
+      const dow = kstDow(target.startTime);
+      const product = await createAutoBookProduct(centerAId, "SEC-114-O", [dow]);
+      const mem = await createAutoBookMembership(centerAId, managerA.profileId, product.id, { remainingCount: 3 });
+
+      const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
+      expect(error).toBeNull();
+      expect((data as any).booked).toBe(0);
+      expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
+    } finally {
+      await asManagerA();
+      await saveSettings(centerAId, originalSettings);
+    }
+  });
+
+  it("AUTO-SEC-P: 예약 오픈 시각(calc_deadline 'open')이 아직 안 됐으면 자동예약되지 않는다", async () => {
+    await asManagerA();
+    const originalSettings = await fetchSettings(centerAId);
+    try {
+      // 수업을 5일 뒤로 만들고 오픈은 "수업 1일 전"으로 좁힌다 → 지금부터 수업 4일 전까지는
+      // 아직 오픈 전이라 어떤 예약(자동예약 포함)도 불가능해야 한다.
+      await saveSettings(centerAId, { ...originalSettings, groupOpenDaysBefore: 1, groupOpenTime: "00:00" });
+      const cls = await createFutureTestClass(centerAId, { title: "AUTO-SEC-P", hoursFromNow: 120 });
+      cleanupClassIds.push(cls.id);
+      const dow = kstDow(cls.startTime);
+      const product = await createAutoBookProduct(centerAId, "SEC-114-P", [dow]);
+      const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+
+      const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
+      expect(error).toBeNull();
+      expect((data as any).booked).toBe(0);
+      expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
+    } finally {
+      await asManagerA();
+      await saveSettings(centerAId, originalSettings);
+    }
   });
 });
