@@ -14,7 +14,6 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchMyPurchases, updateOrderStatus, type PurchaseItem } from "../../lib/orders";
 import { requestRefund } from "../../lib/mypage";
 import Loading from "../components/Loading";
-import BottomNav from "../components/BottomNav";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DatePicker from "../components/DatePicker";
 
@@ -183,7 +182,6 @@ export default function PurchasesPage() {
       )}
 
       <div style={{ height: 20 }} />
-      <BottomNav />
     </div>
   );
 }

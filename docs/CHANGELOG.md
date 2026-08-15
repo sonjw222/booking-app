@@ -8,6 +8,56 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-15 — P1-10 관리자 직접배치 회원 상태 게이트 + P1-11 정원초과 2단계 흐름 테스트 + UI 버그 3건
+
+**P1-10**: 관리자 직접배치가 탈퇴(`accounts.deactivated_at`)/휴면(`center_members.status=
+'dormant'`) 회원을 아무 제한 없이 배치할 수 있던 걸, 새 권한 `customer.member.assign_any_
+status`로 게이트했다(`add_admin_assignment_member_status_guard.sql`). 오너는 `has_permission()`이
+자동 통과시켜 그대로 가능, 일반 스태프는 이 권한을 받아야 가능 — 예를 들어 오너는 사정상
+탈퇴/휴면 회원도 직접배치할 수 있고 강사는 활성 회원만 가능하게 스태프 권한 화면에서 나눌 수
+있다. `tests/integration/admin-assignment-member-status-guard.test.ts` 4개 신규 테스트로 검증.
+
+**P1-11**: 관리자 직접배치의 정원초과 2단계 확인 흐름(그룹 수업) 자체를 검증하는 테스트가
+없었던 걸 `admin-assignment-security.test.ts`에 추가(1차 `needs_capacity_confirm` 저지 →
+`p_force_capacity` 재호출로 실제 생성). 조사 중 프라이빗 수업 쪽 SQL(`fix_private_class_
+capacity_and_concurrency_draft_proposed.sql`)이 문서엔 "미적용 대기"로 남아있었지만 실제로는
+이미 라이브에 적용돼 있었음을 발견(문서만 정정).
+
+**UI 버그 3건(수동 QA 중 발견)**:
+1. `/mypage/calendar`의 "‹" 뒤로가기가 `/mypage`로 하드코딩돼 있어 `/my-reservations`에서
+   들어가도 마이페이지로 돌아가던 문제 — `/my-reservations`로 수정.
+2. 하단 네비게이션 "마이" 탭이 `/mypage`로 시작하는 모든 경로(캘린더 포함)를 활성으로
+   잡아, 캘린더 화면에서 "내 예약" 대신 "마이"가 켜져 있던 문제 — 캘린더는 "내 예약" 탭이
+   활성화되도록 분리.
+3. 하단 네비게이션이 페이지마다 새로 마운트되는 구조라(공용 layout 아님) 수강권 보유
+   회원은 화면을 옮길 때마다 "탭 3개 → 5개"로 깜빡이던 문제 — `BottomNav`/`ManagerNav`를
+   각각 최상위 레이아웃(`app/layout.tsx`의 새 `GlobalBottomNav`, 기존 `app/manager/
+   layout.tsx`)으로 옮겨 페이지 이동 중엔 재마운트되지 않게 하고, 최초 진입 시의 짧은
+   로딩 구간도 직전 판정 결과를 `localStorage`에 캐싱해 초기값으로 써서 줄임.
+
+그 외: 사용자가 실사용 중 "수강권을 사도 인식 못함" 버그를 신고 — 조사 결과 코드 버그가
+아니라 "어텐션 피겨팀" 테스트 센터의 `membership_schedule_rules`에 2주간 테스트하며 쌓인
+쓰레기 데이터 159건("ㄹ", "ㅇㅇㅇㅇㅇ" 같은 제목, 자동화 테스트 흔적)이 원인 — 사용자 승인
+후 전부 삭제해 해결.
+
+## 2026-08-14 (같은 날 후속10) — P1-3 웹 푸시 구현(카카오 알림톡·SMS는 여전히 범위 밖)
+
+기존 `notifications` 테이블(예약 확정/취소, 대기 승격, 신규 구매 등)은 앱을 열고 있을 때만
+실시간 팝업으로 보였고, 알림 설정 화면의 토글도 기기 `localStorage`에만 저장돼 실제 발송과
+무관했다(P1-3). 앱을 닫아도(브라우저 백그라운드/미실행) 알림을 받을 수 있도록 Web Push를
+붙였다 — 카카오 알림톡/SMS(`notification_rules`/`messages` 기반, 건당 수수료)는 사업자 등록이
+필요해 이번 범위에서 제외.
+
+구조: `push_subscriptions` 테이블(브라우저별 구독 저장) + `notifications.pushed_at` 컬럼(중복
+발송 방지) + `pg_net` 확장으로 1분마다 `send-web-push` Edge Function을 호출하는 pg_cron 작업
+(`add_web_push.sql` + rollback). Edge Function은 미발송 알림을 찾아 수신자의 구독마다 VAPID로
+서명한 Web Push를 보내고(`npm:web-push`), 만료된 구독(404/410)은 지운다. 서비스 role 키는 파일에
+넣지 않고 Supabase Vault(`vault.create_secret`)에서 런타임에 읽어오게 해 CLAUDE.md 규칙 5(비밀키
+Git 금지)를 지켰다. 클라이언트: `public/sw.js`(서비스 워커) + `lib/webPush.ts`(권한 요청→구독→DB
+저장) + `app/settings/notifications/page.tsx`에 "앱을 닫아도 알림 받기" 토글 추가.
+Edge Function 배포·secrets 등록·마이그레이션 적용·실기기 수신 확인은 사용자 조치 필요(docs/TODO.md
+P1-3 참고, 이번 세션에서는 자동 검증 불가).
+
 ## 2026-08-14 (같은 날 후속9) — P1-2 미발급 주문 자가 취소 구현
 
 회원이 아직 매니저가 처리(발급)하지 않은 주문을 취소할 방법이 없어 "센터에 문의해주세요"

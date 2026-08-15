@@ -9,7 +9,6 @@
 
 import { Suspense, useCallback, useEffect, useState, useRef } from "react";
 import Loading from "../../components/Loading";
-import ManagerNav from "../../components/ManagerNav";
 import { useSearchParams } from "next/navigation";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
@@ -690,7 +689,6 @@ function MembersContent() {
           </div>
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

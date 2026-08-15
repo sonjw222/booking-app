@@ -8,7 +8,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
@@ -478,7 +477,6 @@ export default function StaffPage() {
           </div>
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

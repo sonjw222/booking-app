@@ -14,7 +14,6 @@
 import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Loading from "../components/Loading";
 import { useSearchParams, useRouter } from "next/navigation";
-import BottomNav from "../components/BottomNav";
 import {
   fetchMonthData,
   reserveClass, fetchUsableMembershipsByClass, reserveWithMembership, type UsableMembership,
@@ -789,7 +788,6 @@ function ReservationCalendarContent() {
         </div>
       )}
 
-      <BottomNav />
     </div>
   );
 }

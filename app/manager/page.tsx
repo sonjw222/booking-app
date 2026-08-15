@@ -10,7 +10,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../components/Loading";
-import ManagerNav from "../components/ManagerNav";
 import UiIcon from "../components/UiIcon";
 import { fetchMyCenters, fetchTodayClasses, type ManagedCenter, type TodayClass } from "../../lib/manager";
 import { fetchClassAttendees, setAttendance, type ClassAttendee } from "../../lib/classes";
@@ -494,7 +493,6 @@ export default function ManagerDashboard() {
           </div>
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

@@ -7,7 +7,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchHolidays, addHoliday, deleteHoliday, type Holiday } from "../../../lib/holidays";
@@ -178,7 +177,6 @@ export default function HolidaysPage() {
           </div>
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

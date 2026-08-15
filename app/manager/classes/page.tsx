@@ -10,7 +10,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Loading from "../../components/Loading";
 import DatePicker from "../../components/DatePicker";
-import ManagerNav from "../../components/ManagerNav";
 import AmPmTimeInput from "../../components/AmPmTimeInput";
 import { dhmToMinutes, minutesToDhm } from "../../../lib/deadlineInput";
 import { formatInstructorNames } from "../../../lib/instructorDisplay";
@@ -1951,7 +1950,6 @@ export default function ClassManagePage() {
         </div>
       )}
 
-      <ManagerNav />
     </div>
   );
 }

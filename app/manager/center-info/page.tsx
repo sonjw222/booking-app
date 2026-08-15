@@ -7,7 +7,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchCenterDetail, updateCenterIntro, uploadCenterPhoto, centerPhotoUrl, type IntroBlock } from "../../../lib/center";
@@ -314,7 +313,6 @@ export default function CenterInfoPage() {
           />
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

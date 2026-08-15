@@ -229,24 +229,36 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **미완성** |
-| 근거 파일 | `app/settings/notifications/page.tsx`, `add_notifications.sql`, `schema.sql`; `messages`, `notification_rules`, `notification_logs` |
+| 현재 상태 | **부분 완료(웹 푸시 코드 구현, 배포·실기기 검증 대기)** — 카카오 알림톡·SMS는 사업자 등록 필요해 미착수 |
+| 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`; `messages`, `notification_rules`, `notification_logs` |
 | 완료 조건 | 발송 채널과 opt-in 정책을 확정하고, 외부 발송기·재시도·실패 기록·수신 거부를 구현해 실제 기기 수신과 로그를 검증함 |
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/settings/notifications`](./ROUTES.md) |
 
-현재 설정은 기기 `localStorage`에만 저장되며 실제 발송으로 이어지지 않습니다.
+카카오 알림톡·SMS(`messages`/`notification_rules`/`notification_logs` 기반, 건당 수수료 발생)는
+사업자 등록이 있어야 발송 계약이 가능해 여전히 범위 밖입니다.
 
-### P1-4. 네이버 소셜 로그인
+**웹 푸시(브라우저/OS 알림)는 코드로 구현 완료**: `push_subscriptions` 테이블 + `add_web_push.sql`
+(pg_net 확장, `notifications.pushed_at` 컬럼, 1분마다 `send-web-push` Edge Function을 호출하는
+pg_cron 작업) / `public/sw.js`(서비스 워커) / `lib/webPush.ts`(구독 등록·해제) /
+`app/settings/notifications/page.tsx`의 "앱을 닫아도 알림 받기" 토글. 기존 `notifications` 테이블에
+쌓이는 모든 알림(예약 확정/취소, 대기 승격, 신규 구매 등)을 그대로 재사용해 실제 기기가 앱을
+안 보고 있을 때도 푸시로 전달한다.
+
+아직 안 된 것(사용자 조치 필요):
+1. `supabase functions deploy send-web-push`로 Edge Function 배포
+2. `supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:...`
+3. SQL Editor에서 `select vault.create_secret('<SERVICE_ROLE_KEY>', 'service_role_key', ...)` 직접 실행(파일에 비밀값 없음)
+4. `add_web_push.sql` 적용
+5. 실제 브라우저에서 알림 권한 허용 → 알림 발생 → 1분 내 실제 기기에 푸시가 뜨는지 눈으로 확인(자동 검증 불가 영역)
+
+### P1-4. (2026-08-13, 완료 — P2-1b 참고) 네이버 소셜 로그인
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **미완성** |
-| 근거 파일 | `app/login/page.tsx`, `AUTH_SETUP.md` |
-| 완료 조건 | 지원 여부와 인증 구조를 확정하고, callback·계정 생성·중복 이메일·실패 흐름을 staging에서 검증함. 미지원 결정 시 버튼과 문서를 일관되게 정리함 |
+| 현재 상태 | **완료.** 이 항목은 이 문서에 갱신되지 않은 채 남아있던 중복 항목 — 실제로는 커스텀 Edge Function으로 구현·배포되고 실제 네이버 계정으로 로그인 왕복까지 확인됐다. 자세한 내용은 [P2-1b](#p2-1b-2026-08-13-완료-네이버-로그인--supabase-기본-미지원-커스텀-edge-function으로-구현) 참고. |
+| 근거 파일 | `supabase/functions/naver-login/index.ts`, `lib/naverAuth.ts`, `app/login/naver-callback/page.tsx` |
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [ROUTES `/login`](./ROUTES.md) |
-
-현재 버튼은 미설정 안내만 표시합니다.
 
 ### P1-5. (2026-08-14, 2차 진행 — ManagerNav 탭까지 확대) 매니저 세부 권한 기반 UI
 
@@ -336,21 +348,31 @@ URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 �
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **확인 필요 (제품 결정 대기)** |
-| 근거 파일 | `add_admin_assignment.sql`(`is_profile_assignable()`), `schema.sql`(`center_members.status`: `active`/`expired`/`dormant`뿐, "이용정지"/"탈퇴"/"삭제" 상태값 자체가 없음) |
-| 완료 조건 | 관리자 직접배치·무료 추가배치에서 차단해야 할 회원 상태 정책(이용정지/탈퇴/삭제/휴면 중 무엇을 막을지)을 결정하고, 필요한 상태값·컬럼을 새 migration으로 추가한 뒤 `is_profile_assignable()` 안에서 확인하도록 확장함 |
+| 현재 상태 | **완료.** |
+| 근거 파일 | `add_admin_assignment_member_status_guard.sql`(신규), `admin_assign_reservation()`, `permissions`(`customer.member.assign_any_status`), `tests/integration/admin-assignment-member-status-guard.test.ts` |
 | 관련 문서 | [DATABASE 6절](./DATABASE.md) |
 
-2026-07-30 사용자 확인: 이번 범위에서는 기존 `reserve_class`(회원 셀프예약)와 동일하게 이 개념을
-새로 만들지 않기로 결정함(기존 셀프예약도 `center_members.status`를 확인하지 않음). 회원 자격
-검사를 `is_profile_assignable()`로 분리해 향후 정책을 붙일 확장 지점만 마련함.
+2026-07-30 사용자 확인: 당시 범위에서는 `reserve_class`(회원 셀프예약)와 동일하게 이 개념을
+새로 만들지 않기로 결정함(회원 셀프예약도 `center_members.status`를 확인하지 않음 — 이 결정은
+그대로 유지, 셀프예약은 안 건드림). 회원 자격 검사를 `is_profile_assignable()`로 분리해
+향후 정책을 붙일 확장 지점만 마련해뒀었음.
 
-### P1-11. 관리자 직접배치 통합 테스트 — 정원 초과 확인(needs_capacity_confirm) 2단계 흐름 미검증
+2026-08-15 사용자 결정으로 관리자 직접배치(`admin_assign_reservation`)에만 정책 추가: "탈퇴"
+(`accounts.deactivated_at is not null`, P1-18) 또는 "휴면"(`center_members.status='dormant'`)
+회원은 새 권한 `customer.member.assign_any_status`가 있어야 배치 가능(오너는 `has_permission()`이
+자동 통과 — 예: 오너는 탈퇴/휴면 회원도 직접배치 가능, 일반 스태프는 이 권한을 따로 받아야
+가능). 이 센터 회원이 아직 아니거나(체험 최초 배치) 수강권만 만료(expired)인 경우는 대상이
+아님 — 항상 배치 가능. 사용자가 SQL Editor에서 적용 완료(라이브 함수 본문 직접 재확인),
+`tests/integration/admin-assignment-member-status-guard.test.ts` 4개 신규 테스트로 검증
+(권한 없는 스태프 거부/권한 부여 시 허용/오너 자동 통과/활성 회원은 항상 허용, 4/4 통과,
+기존 admin-assignment-security.test.ts 16개·acl-003 5개 회귀 없음 확인).
+
+### P1-11. (2026-08-15, 완료) 관리자 직접배치 통합 테스트 — 정원 초과 확인(needs_capacity_confirm) 2단계 흐름 미검증
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **미완성 (일부)** |
+| 현재 상태 | **완료.** 그룹 수업 2단계 흐름 테스트를 `tests/integration/admin-assignment-security.test.ts`에 추가(1차 `needs_capacity_confirm: true` 저지·예약 미생성 → `p_force_capacity: true` 재호출로 실제 생성·`over_capacity`/`is_capacity_override` 확인), 16/16 통과. 프라이빗 수업 쪽 SQL(`fix_private_class_capacity_and_concurrency_draft_proposed.sql`)도 라이브 함수 본문에 직접 확인 결과 이미 적용돼 있었음(이 문서가 "미적용, 승인 대기"로 남아있던 건 문서 누락) — `private-class-capacity.test.ts` 6/6도 통과. |
 | 근거 파일 | `tests/integration/admin-assignment-security.test.ts`, `tests/integration/setup.ts` |
 | 완료 조건 | `admin_assign_reservation`이 정원이 찬 수업에서 `needs_capacity_confirm: true`만 반환하고 예약을 만들지 않는지, 그 뒤 `p_force_capacity: true`로 재호출하면 `is_capacity_override: true`로 실제 생성되는지를 통합 테스트로 검증함(정원 1명짜리 테스트 수업을 만들어 확인 가능) |
 | 관련 문서 | [tests/README.md](../tests/README.md) |
@@ -401,12 +423,12 @@ reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시�
 없어 죽은 설정으로 보임)은 여전히 미해결 — P2/P3 후속 범위(프라이빗 셀프 슬롯 예약 UI를
 만들지 여부와 함께 제품 결정 필요)로 남긴다.
 
-### P1-13. (2026-08-14, 수정 SQL 작성 완료 — 적용 대기) 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
+### P1-13. (2026-08-14, 완료 — 라이브 적용 확인됨) 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **수정 SQL 작성 완료, 사용자 승인 후 적용 대기.** 사용자가 "실제로 세분화 적용" 방향으로 결정함(코드 주석을 느슨한 실제 동작에 맞추는 대신, RLS를 코드 주석이 원래 말하던 대로 좁힘). |
+| 현재 상태 | **완료.** 사용자가 SQL Editor에서 적용 완료 — `pg_policies` 직접 재조회로 "매니저 센터 수정" 정책이 `has_permission(id, 'facility.info') or is_platform_admin()`으로 바뀌어 있음을 확인함(이 문서가 "적용 대기"로 갱신 안 된 채 남아있던 문서 누락, 실제 DB 상태와는 무관). |
 | 근거 파일 | `app/manager/center-info/page.tsx`, `app/manager/page.tsx`(메뉴 노출), `reservation_functions.sql`("매니저 센터 수정" 정책), `schema.sql`(`facility.info` 권한 카탈로그), `fix_centers_update_facility_info_permission.sql`(신규) |
 | 이번 배치에서 한 것 | 조사 결과 `facility.info` 권한 키는 이미 `schema.sql`에 정의돼 있었고(sort_order 10, "시설 정보 설정") `app/manager/page.tsx`의 메뉴 노출도 이미 `canSeeMenu("facility.info")`로 정확히 가려져 있었다 — **RLS 정책만 이 권한을 확인 안 하고 있었다**(URL 직접 접근하면 권한 없는 스태프도 수정 가능한 상태). `centers` UPDATE 정책 "매니저 센터 수정"을 `id in (select my_managed_center_ids())`에서 `has_permission(id, 'facility.info')`로 좁히는 SQL 작성(`fix_centers_update_facility_info_permission.sql` + rollback) — `has_permission()`이 오너는 자동 통과시키므로 오너 동작은 그대로 유지됨. 기존 스태프에게 이 권한을 자동으로 부여하지 않음(오너가 필요하면 기존 스태프 권한 설정 화면에서 직접 켜면 됨, 새 UI 불필요 — 카탈로그에 이미 있어서 자동으로 체크박스로 나타남). |
 | 완료 조건 | `fix_centers_update_facility_info_permission.sql`을 Supabase SQL Editor에서 적용 |

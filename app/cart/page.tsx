@@ -11,7 +11,6 @@ import { fetchCart, removeFromCart, clearCart, updateCartSize, type CartItem } f
 import { createOrder } from "../../lib/orders";
 import { fetchCenterDetail } from "../../lib/center";
 import Loading from "../components/Loading";
-import BottomNav from "../components/BottomNav";
 
 const PAY_METHODS = [
   { id: "card", label: "신용/체크카드", emoji: "💳" },
@@ -133,7 +132,6 @@ export default function CartPage() {
           <a className="primary-btn" href="/mypage" style={{ margin: "20px", display: "block", width: "calc(100% - 40px)", textAlign: "center" }}>마이페이지로</a>
           <a className="ghost-btn" href="/" style={{ margin: "0 20px", display: "block", width: "calc(100% - 40px)", textAlign: "center" }}>홈으로</a>
         </div>
-        <BottomNav />
       </div>
     );
   }
@@ -235,7 +233,6 @@ export default function CartPage() {
           <div style={{ height: 30 }} />
         </>
       )}
-      <BottomNav />
     </div>
   );
 }

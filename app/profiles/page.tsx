@@ -8,7 +8,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import BottomNav from "../components/BottomNav";
 import Loading from "../components/Loading";
 import { ZoomableImage } from "../components/ImageViewer";
 import {
@@ -237,7 +236,6 @@ export default function ProfilesPage() {
           </div>
         </div>
       )}
-      <BottomNav />
     </div>
   );
 }

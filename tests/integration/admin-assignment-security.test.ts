@@ -34,10 +34,12 @@ import {
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
 const MEMBER = { email: "TEST_USER_A_EMAIL", password: "TEST_USER_A_PASSWORD" };
+const MEMBER_B = { email: "TEST_USER_B_EMAIL", password: "TEST_USER_B_PASSWORD" };
 
 let managerA: TestUser;
 let managerB: TestUser;
 let member: TestUser;
+let memberB: TestUser;
 let centerAId: string;
 let centerBId: string;
 
@@ -67,6 +69,7 @@ beforeAll(async () => {
   centerBId = await getOrCreateOwnedTestCenter(managerB);
 
   member = await switchToTestUser(MEMBER.email, MEMBER.password);
+  memberB = await switchToTestUser(MEMBER_B.email, MEMBER_B.password);
 }, 30000);
 
 afterAll(async () => {
@@ -457,5 +460,62 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
       .in("status", ["confirmed", "waitlisted", "attended"]);
     if (countErr) throw new Error(countErr.message);
     expect(count).toBe(1);
+  });
+});
+
+// P1-11: 그룹 수업의 정원초과 2단계 확인 흐름(1차 저지 → 사유 입력 → p_force_capacity
+// 재호출로 실제 생성) 자체를 검증하는 테스트가 없었다(docs/TODO.md P1-11 참고) — 프라이빗
+// 수업 쪽은 tests/integration/private-class-capacity.test.ts가 이미 "이 override는 아예
+// 거부돼야 한다"를 검증하지만, 그룹 수업은 반대로 "1차는 막히고 재호출하면 실제로 생성돼야
+// 한다"는 정상 동작 자체가 미검증이었다.
+describe("관리자 직접배치 — 그룹 수업 정원초과 2단계 확인 흐름", () => {
+  it("정원이 차면 force_capacity 없이는 needs_capacity_confirm만 반환하고 예약을 만들지 않으며, force_capacity=true로 재호출하면 실제 생성된다", async () => {
+    const cls = await createFutureTestClass(centerAId, { capacity: 1, title: "정원초과2단계-그룹" });
+    const entry = trackClass(cls.id);
+    const memA = await createTestMembership(centerAId, member.profileId, { remainingCount: 5 });
+    const memB = await createTestMembership(centerAId, memberB.profileId, { remainingCount: 5 });
+
+    // 1) 정원(1명)을 채운다
+    const first = await supabase.rpc("admin_assign_reservation", {
+      p_class_id: cls.id, p_profile_id: member.profileId,
+      p_assignment_type: "ADMIN_ASSIGNMENT", p_membership_id: memA.id,
+      p_reason_code: "MAKEUP_CLASS", p_reason_detail: null, p_force_capacity: false,
+    });
+    expect(first.error).toBeNull();
+    expect((first.data as any).needs_capacity_confirm).toBeFalsy();
+    entry.reservationIds.push((first.data as any).reservation_id);
+
+    // 2) 정원 찬 상태에서 force_capacity 없이 두 번째 배치 시도 → 저지, 예약 미생성
+    const second = await supabase.rpc("admin_assign_reservation", {
+      p_class_id: cls.id, p_profile_id: memberB.profileId,
+      p_assignment_type: "ADMIN_ASSIGNMENT", p_membership_id: memB.id,
+      p_reason_code: "MEMBER_REQUEST", p_reason_detail: null, p_force_capacity: false,
+    });
+    expect(second.error).toBeNull();
+    expect((second.data as any).needs_capacity_confirm).toBe(true);
+    expect((second.data as any).reservation_id).toBeFalsy();
+
+    const { data: afterBlock, error: afterBlockErr } = await supabase
+      .from("reservations").select("id").eq("class_id", cls.id).neq("status", "cancelled");
+    if (afterBlockErr) throw new Error(afterBlockErr.message);
+    expect((afterBlock ?? []).length).toBe(1);
+
+    // 3) 사유 입력 후 force_capacity=true로 재호출 → 실제 생성, over_capacity=true
+    const third = await supabase.rpc("admin_assign_reservation", {
+      p_class_id: cls.id, p_profile_id: memberB.profileId,
+      p_assignment_type: "ADMIN_ASSIGNMENT", p_membership_id: memB.id,
+      p_reason_code: "MEMBER_REQUEST", p_reason_detail: "정원 초과 요청", p_force_capacity: true,
+    });
+    expect(third.error).toBeNull();
+    expect((third.data as any).reservation_id).toBeTruthy();
+    expect((third.data as any).over_capacity).toBe(true);
+    entry.reservationIds.push((third.data as any).reservation_id);
+
+    const { data: finalRows, error: finalErr } = await supabase
+      .from("reservations").select("id, is_capacity_override").eq("class_id", cls.id).neq("status", "cancelled");
+    if (finalErr) throw new Error(finalErr.message);
+    expect((finalRows ?? []).length).toBe(2);
+    const overrideRow = (finalRows ?? []).find((r: any) => r.id === (third.data as any).reservation_id);
+    expect(overrideRow?.is_capacity_override).toBe(true);
   });
 });

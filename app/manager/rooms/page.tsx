@@ -7,7 +7,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import ManagerNav from "../../components/ManagerNav";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchRooms, addRoom, updateRoom, deleteRoom, type Room } from "../../../lib/rooms";
 import Loading from "../../components/Loading";
@@ -164,7 +163,6 @@ export default function RoomsPage() {
           onClose={() => setMapPicker(false)}
         />
       )}
-      <ManagerNav />
     </div>
   );
 }

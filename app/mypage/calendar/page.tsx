@@ -7,7 +7,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import BottomNav from "../../components/BottomNav";
 import Loading from "../../components/Loading";
 import {
   fetchMyReservationsForCalendar, updateReservationMemo, downloadIcs,
@@ -71,7 +70,7 @@ export default function CalendarPage() {
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
       <div className="back-header">
-        <a className="side" href="/mypage">‹</a>
+        <a className="side" href="/my-reservations">‹</a>
         <div className="title">예약 캘린더</div>
         <button className="cal-export-btn" onClick={() => {
           const upcoming = resv.filter((r) => r.status === "confirmed" || r.status === "waitlisted");
@@ -162,7 +161,6 @@ export default function CalendarPage() {
           <div style={{ height: 40 }} />
         </>
       )}
-      <BottomNav />
     </div>
   );
 }

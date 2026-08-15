@@ -9,7 +9,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchMyPage, type HistoryItem } from "../../lib/mypage";
 import Loading from "../components/Loading";
-import BottomNav from "../components/BottomNav";
 import { memberFacingBadge, type ReservationType } from "../../lib/reservationTypes";
 import UiIcon from "../components/UiIcon";
 import SegmentedTabs from "../components/SegmentedTabs";
@@ -116,7 +115,6 @@ export default function MyReservationsPage() {
         </div>
       )}
 
-      <BottomNav />
     </div>
   );
 }
