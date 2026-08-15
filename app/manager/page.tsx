@@ -372,6 +372,7 @@ export default function ManagerDashboard() {
           <span className="chevron">›</span>
         </a>
       )}
+      <div className="manager-menu-end-spacer" aria-hidden="true" />
 
       {/* 예약자 명단 시트 */}
       {rosterClass && (

@@ -243,7 +243,7 @@ export default function CenterInfoPage() {
             {catOptions.map((cat) => (
               <button key={cat.id} className={`filter-chip ${categories.includes(cat.label) ? "on" : ""}`}
                 onClick={() => setCategories((prev) => prev.includes(cat.label) ? prev.filter((x) => x !== cat.label) : [...prev, cat.label])}>
-                {cat.emoji} {cat.label}
+                {cat.label.replace(/^[^\p{L}\p{N}]+/u, "")}
               </button>
             ))}
           </div>
@@ -338,10 +338,14 @@ export default function CenterInfoPage() {
                 {m.label}
               </button>
             ))}
+            <button className="text-btn pay-method-toggle" disabled={!canEditPayMethods}
+              onClick={() => setPayMethods((prev) => prev.length === 5 ? [] : ["card", "kakao", "toss", "transfer", "direct"])}>
+              {payMethods.length === 5 ? "전체 해제" : "전체 선택"}
+            </button>
           </div>
           <div className="perm-guide" style={{ margin: "6px 0 0" }}>
             {canEditPayMethods
-              ? "아무것도 선택하지 않으면 전체 수단이 보여요."
+              ? "선택한 결제 수단만 회원 화면에 보여요. 아무것도 선택하지 않으면 표시하지 않아요."
               : "결제수단 변경 권한이 없어요 — 오너에게 문의하세요."}
           </div>
 

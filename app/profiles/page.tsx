@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import Loading from "../components/Loading";
 import { ZoomableImage } from "../components/ImageViewer";
+import DatePicker from "../components/DatePicker";
 import {
   fetchProfiles, addProfile, deleteProfile, updateProfile, uploadAvatar, avatarPublicUrl,
   type ProfileRow, type ProfileEdit,
@@ -162,7 +163,7 @@ export default function ProfilesPage() {
             <div className="add-profile-form">
               <input className="input-field" placeholder="프로필 이름 (필수)" value={newName} onChange={(e) => setNewName(e.target.value)} />
               <input className="input-field" placeholder="라벨 (선택) — 예: 오전반, 개인용" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} />
-              <input className="input-field" type="date" placeholder="생년월일 (선택)" value={newBirth} onChange={(e) => setNewBirth(e.target.value)} />
+              <DatePicker value={newBirth} onChange={setNewBirth} label="생년월일 선택" />
               <div className="add-profile-actions">
                 <button className="ghost-btn" onClick={() => { setAdding(false); setError(null); }}>취소</button>
                 <button className="primary-btn" disabled={busy} onClick={handleAdd}>
@@ -206,7 +207,7 @@ export default function ProfilesPage() {
             <input className="input-field" placeholder="예: 오전반, 개인용" value={edit.label} onChange={(e) => setEdit({ ...edit, label: e.target.value })} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>생년월일 (선택)</div>
-            <input className="input-field" type="date" value={edit.birthDate} onChange={(e) => setEdit({ ...edit, birthDate: e.target.value })} />
+            <DatePicker value={edit.birthDate} onChange={(birthDate) => setEdit({ ...edit, birthDate })} label="생년월일 선택" />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>성별 (선택)</div>
             <div className="mem-filters" style={{ padding: 0 }}>

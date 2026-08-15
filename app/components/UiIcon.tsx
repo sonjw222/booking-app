@@ -1,0 +1,47 @@
+import type { ReactNode } from "react";
+
+export type IconName =
+  | "home" | "calendar" | "list" | "bell" | "user" | "search" | "ticket"
+  | "users" | "message" | "palette" | "building" | "logout" | "receipt"
+  | "shield" | "settings" | "sliders" | "location" | "clock" | "edit"
+  | "megaphone" | "info" | "alert" | "check" | "grid" | "star"
+  | "pilates" | "skate" | "ballet" | "rhythm" | "yoga" | "boxing" | "swim" | "golf";
+
+export default function UiIcon({ name, size = 22 }: { name: IconName; size?: number }) {
+  const paths: Record<IconName, ReactNode> = {
+    home: <><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V21h13V10.5M9.5 21v-6h5v6"/></>,
+    calendar: <><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></>,
+    list: <><path d="M9 6h12M9 12h12M9 18h12"/><circle cx="4.5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1" fill="currentColor" stroke="none"/></>,
+    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
+    user: <><circle cx="12" cy="8" r="4"/><path d="M4 21c.7-4.2 3.3-6 8-6s7.3 1.8 8 6"/></>,
+    search: <><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></>,
+    ticket: <><path d="M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4V6Z"/><path d="M12 8v8"/></>,
+    users: <><circle cx="9" cy="9" r="3"/><path d="M3.5 20c.5-3.5 2.4-5 5.5-5s5 1.5 5.5 5M16 6.5a3 3 0 0 1 0 5.8M16.5 15c2.5.2 3.8 1.7 4 4"/></>,
+    message: <path d="M4 5h16v11H9l-5 4V5Z"/>,
+    palette: <><path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 0-4H12a2 2 0 0 1 0-4h4a5 5 0 0 0 5-5c0-3-4-5-9-5Z"/><circle cx="7.5" cy="9" r=".8" fill="currentColor"/><circle cx="10" cy="6.5" r=".8" fill="currentColor"/></>,
+    building: <><path d="M4 21V5h11v16M15 10h5v11M8 9h3M8 13h3M8 17h3"/></>,
+    logout: <><path d="M10 4H5v16h5M14 8l4 4-4 4M8 12h10"/></>,
+    receipt: <><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6M9 12h6"/></>,
+    shield: <path d="M12 3 20 6v5c0 5-3.4 8.2-8 10-4.6-1.8-8-5-8-10V6l8-3Z"/>,
+    settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,
+    sliders: <><path d="M4 6h5M13 6h7M4 12h10M18 12h2M4 18h3M11 18h9"/><circle cx="11" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="9" cy="18" r="2"/></>,
+    location: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></>,
+    clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/></>,
+    edit: <><path d="M14 5 19 10 9 20H4v-5L14 5Z"/><path d="m12 7 5 5"/></>,
+    megaphone: <><path d="M4 11v4h4l8 4V7L8 11H4Z"/><path d="M8 15l1 5"/></>,
+    info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></>,
+    alert: <><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5M12 17h.01"/></>,
+    check: <><circle cx="12" cy="12" r="9"/><path d="m8 12 2.7 2.7L16.5 9"/></>,
+    grid: <><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></>,
+    star: <path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/>,
+    pilates: <><path d="M4 15h16M5 12v6M19 12v6M8 11h8"/></>,
+    skate: <><path d="M8 4v10h9l2 3H8c-3 0-4-2-4-4V8"/><path d="M8 8h5M9 20h8"/></>,
+    ballet: <><path d="M8 4c1 3 1 6 4 8 3-2 3-5 4-8M12 12v8M8 20h8"/></>,
+    rhythm: <><circle cx="12" cy="5" r="2"/><path d="m10 8-3 5 4 2-2 6M14 8l3 4 3-1M12 13l4 7"/></>,
+    yoga: <><circle cx="12" cy="5" r="2"/><path d="M7 10c3 2 7 2 10 0M12 7v7M5 19c3-4 5-5 7-5s4 1 7 5M7 19h10"/></>,
+    boxing: <path d="M7 12V7c0-2 2-3 3-1 1-3 4-2 4 0 2-2 4 0 3 2 3 0 3 4 1 6l-4 5H8c-4-2-5-5-1-7Z"/>,
+    swim: <><path d="M3 15c2 0 2-1 4-1s2 1 4 1 2-1 4-1 2 1 4 1 2-1 2-1M3 19c2 0 2-1 4-1s2 1 4 1 2-1 4-1 2 1 4 1 2-1 2-1"/><circle cx="15" cy="6" r="2"/><path d="m5 13 5-5 6 4"/></>,
+    golf: <><path d="M7 3v15M7 4l9 3-9 3M4 21c4-2 8-2 12 0"/></>,
+  };
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{paths[name]}</svg>;
+}
