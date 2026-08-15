@@ -22,6 +22,34 @@ true`만 반환, 예약 미생성 → 사유 입력 후 `p_force_capacity: true`
 함수 본문을 직접 재확인한 결과 프라이빗 수업 정원초과 방지 로직이 이미 적용돼 있었음 —
 P1-6/P2-17과 같은 계열의 문서 드리프트, 이번에 함께 정정(코드/SQL 변경 없음, 문서만).
 
+## 2026-08-13 — SEC-114/SEC-115 P0/P1 보안 수정 Live 적용(사용자 확인 완료)
+
+- **SEC-114(P0) `auto_book_membership()`**: caller authorization 없이 SECURITY DEFINER +
+  PUBLIC EXECUTE 상태였던 IDOR 취약점 수정. `v_mem.center_id in my_managed_center_ids()
+  or is_platform_admin()` 검사 추가, `EXECUTE`를 `authenticated`로 최소화, `pass_selection_mode`/
+  `membership_schedule_rules`/`booking·open deadline`/`center_holidays`/`daily_book_limit`/
+  `private_max_concurrent` 등 최신 예약 정책 누락분을 `reserve_class`와 동일하게 보강.
+  회귀 테스트 `tests/integration/auto-book-membership-security.test.ts`(AUTO-SEC-A~P, 16개).
+- **SEC-115(P1) `manager_set_attendance()`**: waitlisted 예약 취소 시 차감된 적 없는 수강권을
+  잘못 복구하던 문제, waitlisted→confirmed 직접 전환으로 무차감 확정하던 우회 경로 차단.
+  회귀 테스트 `tests/integration/manager-set-attendance-membership-integrity.test.ts`
+  (ATT-SEC-A~J, 10개).
+- 둘 다 `set search_path = public` 추가. 사용자가 Supabase SQL Editor에서 순서대로 직접
+  실행하고 EXECUTE 권한(`authenticated`+`postgres`만) 실측 확인 완료.
+
+## 2026-08-15 — PR #50/#51 병합 시 SEC-114 설계 충돌 정리(사용자 확인)
+
+PR #51(`security/sec114-117-final-crosscheck`)이 main에 먼저 병합되며 `auto_book_membership()`의
+authorization을 `has_permission(center_id, 'schedule.own.group.booking')` 기반으로 다시 작성한
+`fix_auto_book_membership_idor_draft_proposed.sql`을 들여왔다(다른 두 독립 세션이 교차검증해
+합의한 설계, 정책회귀 수정은 SEC-114-B로 분리). 그런데 병합 시점에 라이브에서
+`pg_get_functiondef('auto_book_membership')`로 직접 재확인한 결과, **실제로 라이브에 적용돼
+있는 건 여전히 PR #50의 `my_managed_center_ids()` 기반 + 정책회귀(pass_selection_mode/
+center_holidays/daily_book_limit/private_max_concurrent) 통합 버전**이었다 — PR #51의 파일은
+merge만 됐을 뿐 실제로 Live에 실행된 적은 없는 상태였다. 사용자 확인 후 라이브와 일치하는
+PR #50 버전을 최종으로 채택, PR #51의 해당 SQL 파일 내용은 이 병합에서 되돌렸다. has_permission()
+기반 세분권한 설계는 향후 별도 배치(SEC-116, 기존 계획대로)에서 재검토 대상으로 남긴다.
+
 ## 2026-08-15 — P1-6 문서 오류 정정: account_center_permissions SELECT RLS는 이미 오래전에 적용 완료 (review/todo-scan2)
 
 `docs/TODO.md`의 다른 P1 항목을 검토하던 중 P1-6이 `fix_account_center_permissions_select_
