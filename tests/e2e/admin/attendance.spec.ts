@@ -8,6 +8,8 @@ import {
   kstDateStr,
   getOrCreateTestPassProduct,
   createTestMembershipAdmin,
+  fetchSettingsAdmin,
+  saveSettingsAdmin,
   reservationDeepLink,
   type TestUser,
 } from "../fixtures/testData";
@@ -42,6 +44,7 @@ test.use({ storageState: MANAGER_AUTH_FILE });
 let managerA: TestUser;
 let userA: TestUser;
 let centerAId: string;
+let originalSettings: Awaited<ReturnType<typeof fetchSettingsAdmin>>;
 const createdClassIds: string[] = [];
 // 테스트 도중 만든 임시 프로필(대기 시나리오 등)은 여기 추적해 afterAll에서 반드시 지운다 —
 // 테스트 본문 끝에서만 지우면 그 전에 assertion이 실패해 던지는 순간 정리가 스킵되고, 공유
@@ -55,6 +58,16 @@ test.beforeAll(async () => {
   managerA = loadTestAccountMeta("manager-a");
   userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
+
+  // 이 스펙은 한 회원이 같은 날 여러 수업을 예약한다. 공유 테스트 센터에 다른
+  // 운영설정 테스트가 남긴 일일 예약 제한이 있어도 출석 기능 검증이 흔들리지 않게
+  // 시작 상태를 명시하고, 종료 시 원래 값으로 되돌린다.
+  originalSettings = await fetchSettingsAdmin(centerAId);
+  await saveSettingsAdmin(centerAId, {
+    ...originalSettings,
+    dailyBookLimitEnabled: false,
+    dailyBookLimit: null,
+  });
 
   await createTestMembershipAdmin(centerAId, userA.profileId, { remainingCount: 10 });
 
@@ -83,6 +96,7 @@ test.afterAll(async () => {
     const admin = getFixtureAdminClient();
     await admin.from("profiles").delete().in("id", createdProfileIds);
   }
+  if (originalSettings) await saveSettingsAdmin(centerAId, originalSettings);
 });
 
 test("관리자: 예약자 출석 → 결석(노쇼) → 되돌리기, 취소된 예약은 변경 불가 (그룹 수업, 실브라우저)", async ({ page, browser }) => {
