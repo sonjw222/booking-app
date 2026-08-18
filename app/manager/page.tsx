@@ -217,9 +217,15 @@ export default function ManagerDashboard() {
           <a href="/manager/classes"><span>마감 수업</span><b>{todayClasses.filter((item) => item.reserved >= item.capacity).length}</b></a>
         </div>
         <div className="manager-today-actions">
-          <a href="/manager/inquiries"><UiIcon name="message" size={17} />문의 확인</a>
-          <a href="/manager/orders"><UiIcon name="receipt" size={17} />주문 확인</a>
-          <a href="/manager/admin-assignments"><UiIcon name="users" size={17} />회원 배치</a>
+          {canSeeMenu("board.inquiry.view") && (
+            <a href="/manager/inquiries"><UiIcon name="message" size={17} />문의 확인</a>
+          )}
+          {canSeeMenu("pass.order.view") && (
+            <a href="/manager/orders"><UiIcon name="receipt" size={17} />주문 확인</a>
+          )}
+          {canSeeMenu("schedule.admin_assignment_log.view") && (
+            <a href="/manager/admin-assignments"><UiIcon name="users" size={17} />회원 배치</a>
+          )}
         </div>
       </section>
 
@@ -321,14 +327,21 @@ export default function ManagerDashboard() {
           <span className="chevron">›</span>
         </a>
       )}
-      {/* 상품 관리: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
-      <a className="list-row" href="/manager/goods">
-        <div className="left"><span className="icon"><UiIcon name="receipt" /></span>상품 관리</div>
-        <span className="chevron">›</span>
-      </a>
+      {canSeeMenu("pass.goods.view") && (
+        <a className="list-row" href="/manager/goods">
+          <div className="left"><span className="icon"><UiIcon name="receipt" /></span>상품 관리</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
       {canSeeMenu("customer.progress") && (
         <a className="list-row" href="/manager/progress/record">
           <div className="left"><span className="icon"><UiIcon name="edit" /></span>회원 진도 기록</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
+      {canSeeMenu("customer.lead.view") && (
+        <a className="list-row" href="/manager/leads">
+          <div className="left"><span className="icon"><UiIcon name="message" /></span>상담고객 관리</div>
           <span className="chevron">›</span>
         </a>
       )}
@@ -356,21 +369,24 @@ export default function ManagerDashboard() {
           <span className="chevron">›</span>
         </a>
       )}
-      {/* 후기 관리: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
-      <a className="list-row" href="/manager/reviews">
-        <div className="left"><span className="icon"><UiIcon name="star" /></span>후기 관리</div>
-        <span className="chevron">›</span>
-      </a>
-      {/* 주문 관리: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
-      <a className="list-row" href="/manager/orders">
-        <div className="left"><span className="icon"><UiIcon name="receipt" /></span>주문 관리 (수강권·상품 구매)</div>
-        <span className="chevron">›</span>
-      </a>
-      {/* 관리자 배치 내역: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
-      <a className="list-row" href="/manager/admin-assignments">
-        <div className="left"><span className="icon"><UiIcon name="users" /></span>관리자 배치 내역</div>
-        <span className="chevron">›</span>
-      </a>
+      {canSeeMenu("facility.review.view") && (
+        <a className="list-row" href="/manager/reviews">
+          <div className="left"><span className="icon"><UiIcon name="star" /></span>후기 관리</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
+      {canSeeMenu("pass.order.view") && (
+        <a className="list-row" href="/manager/orders">
+          <div className="left"><span className="icon"><UiIcon name="receipt" /></span>주문 관리 (수강권·상품 구매)</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
+      {canSeeMenu("schedule.admin_assignment_log.view") && (
+        <a className="list-row" href="/manager/admin-assignments">
+          <div className="left"><span className="icon"><UiIcon name="users" /></span>관리자 배치 내역</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
       {canSeeMenu("facility.info") && (
         <a className="list-row" href="/manager/center-info">
           <div className="left"><span className="icon"><UiIcon name="building" /></span>센터 정보</div>

@@ -207,12 +207,21 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **확인 필요** |
-| 근거 파일 | `lib/sales.ts`, `lib/reviews.ts`, `add_sales.sql`, `add_reviews_points.sql`; `point_transactions`, `point_accounts`, `point_logs` |
-| 완료 조건 | 적립·사용·후기 보상·결제 사용의 기준 원장을 제품 정책으로 확정하고, 두 체계의 동기화 또는 migration을 구현해 모든 화면에서 같은 잔액을 검증함 |
+| 현재 상태 | **완료 — point_transactions로 통합, 사용자 승인 후 적용 대기.** |
+| 근거 파일 | `lib/sales.ts`, `lib/reviews.ts`, `add_sales.sql`, `add_reviews_points.sql`, `add_point_ledger_unification.sql`(신규); `point_transactions`, `point_accounts`, `point_logs` |
 | 관련 문서 | [REQUIREMENTS 6-3, 10-4](./REQUIREMENTS.md), [DATABASE 4-3, 7-3](./DATABASE.md) |
 
-`point_logs`의 실제 기록·조회 역할도 함께 확인해야 합니다.
+2026-08-15 사용자 결정: `point_transactions`(매니저 매출 화면이 쓰던 원장, `sum(amount)`
+방식)로 통합. `write_review()`/`use_points()`를 `point_accounts`/`point_logs` 대신
+`point_transactions`에 기록하도록 재정의, 기존 `point_accounts` 잔액은 이관 insert로
+`point_transactions`에 합침(멱등, 재실행해도 중복 안 됨). `point_accounts`/`point_logs`
+테이블 자체는 DROP하지 않고 레거시로 남김(CLAUDE.md 규칙 3, 테이블 삭제는 별도 승인 필요).
+회원 화면에 잔액을 보여주는 새 RPC(`my_point_balance`/`my_point_balances`) 추가 —
+`point_accounts` 단일 행을 `for update`로 잠그던 동시성 보호가 순수 원장 구조에선 안 되므로
+`use_points()`에서 `profiles` 행을 `for update`로 잠가 같은 회원의 동시 사용 요청을 직렬화.
+`lib/reviews.ts`의 `fetchMyPoints`/`fetchAllMyPoints`가 새 RPC를 쓰도록 수정, `npm run build`
+통과. 회원 화면에 포인트 잔액을 실제로 노출하는 UI는 이번 범위 밖(원장 통합만, 새 화면 추가는
+별도 요청 시).
 
 ### P1-2. (2026-08-14, 완료) 미발급 주문 취소와 환불 정책 설정
 
@@ -265,9 +274,9 @@ pg_cron 작업) / `public/sw.js`(서비스 워커) / `lib/webPush.ts`(구독 등
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **부분 완료 — 남은 항목은 아래 "완료 조건" 참고.** |
-| 근거 파일 | `lib/roles.ts`, `app/manager/staff/permissions/page.tsx`, 전체 `app/manager/**/page.tsx`, `app/components/ManagerNav.tsx`, `add_personal_permissions.sql` |
-| 완료 조건 | 각 매니저 화면의 기능을 권한 키와 매핑하고 권한 없는 메뉴·버튼을 사전에 숨기거나 비활성화하며, RLS/RPC 거부도 그대로 유지해 역할별 검증을 통과함. 남은 것: (1) 상품/후기/주문/관리자배치내역 4개 메뉴 — 대응 permission key가 카탈로그에 없어 새로 추가해야 함(스키마 변경, 별도 승인 필요) (2) 각 화면 내부의 개별 액션 버튼 단위 권한 표시(여전히 서버 거부 이후에야 알 수 있음) — 화면 수가 많아 범위가 큼, 별도 배치 권장 |
+| 현재 상태 | **메뉴 노출 제어는 완료.** 남은 건 화면 내부 버튼 단위 권한 표시뿐(아래 참고). |
+| 근거 파일 | `lib/roles.ts`, `app/manager/staff/permissions/page.tsx`, 전체 `app/manager/**/page.tsx`, `app/components/ManagerNav.tsx`, `add_personal_permissions.sql`, `add_manager_menu_permissions.sql`(신규) |
+| 완료 조건 | 각 매니저 화면의 기능을 권한 키와 매핑하고 권한 없는 메뉴·버튼을 사전에 숨기거나 비활성화하며, RLS/RPC 거부도 그대로 유지해 역할별 검증을 통과함. 남은 것: 각 화면 내부의 개별 액션 버튼 단위 권한 표시(여전히 서버 거부 이후에야 알 수 있음) — 화면 수가 많아 범위가 큼, 별도 배치 권장 |
 | 관련 문서 | [REQUIREMENTS 5-7, 6-1](./REQUIREMENTS.md), [DATABASE 7-1, 10절](./DATABASE.md), [ROUTES 5절](./ROUTES.md) |
 
 2026-08-01 Access Control 구현 Batch에서 1차 해결: `app/manager/page.tsx`의 13개 메뉴 중
@@ -288,6 +297,13 @@ pg_cron 작업) / `public/sw.js`(서비스 워커) / `lib/webPush.ts`(구독 등
 메뉴(이미 항목별로 가려짐)라 탭 노출은 그대로 둠. `npm run build` 통과. 개별 화면 내부의
 버튼 단위 권한 표시(각 screen의 개별 액션 버튼)는 여전히 서버 거부 이후에야 알 수 있음 —
 상세 내용은 [CHANGELOG.md](./CHANGELOG.md) 참고.
+
+2026-08-15 3차 해결(사용자 결정으로 남은 4개 메뉴 진행): 조사 결과 2개는 이미 카탈로그에
+키가 있었는데(`facility.review.view`, `pass.order.view`, `add_new_permissions.sql`) 메뉴에
+연결이 안 돼 있었다. 나머지 2개(`pass.goods.view`, `schedule.admin_assignment_log.view`)는
+새로 추가(`add_manager_menu_permissions.sql`, 사용자 승인 후 적용 대기). `app/manager/page.tsx`의
+관리 메뉴 목록과 "오늘 할 일" 상단 바로가기(문의/주문/회원배치) 모두 `canSeeMenu()`로 연결.
+`npm run build` 통과.
 
 ### P1-6. (2026-08-14, 완료 확인 — 문서만 정정) 관리자·운영자 클라이언트 가드 누락
 
@@ -320,28 +336,48 @@ URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 �
 | 남은 작업 | 매년 말~다음 해 초에 그 다음 해분 추가 필요(파일 상단 주석에 안내). 2027년 데이터는 관보 고시 전 잠정치라 연초 재확인 권장. |
 | 관련 문서 | [REQUIREMENTS 5-2, 12절](./REQUIREMENTS.md), [ROUTES `/reservation`](./ROUTES.md) |
 
-### P1-8. 담당회원·상담고객 화면
+### P1-8. (2026-08-15, 완료) 담당회원·상담고객(leads) 화면
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **미완성 / 확인 필요** |
-| 근거 파일 | `app/manager/members/page.tsx`, `schema.sql`; `leads`, `customer.lead.*` 권한 |
-| 완료 조건 | 담당회원과 상담고객의 제품 정책·데이터 소유권·회원 전환 규칙을 확정하고 화면·lib·RLS를 연결해 CRUD를 검증함. 기능 제외 결정 시 준비 중 UI와 미사용 스키마 처리 방침을 기록함 |
+| 현재 상태 | **완료.** |
+| 근거 파일 | `app/manager/leads/page.tsx`(신규), `lib/leads.ts`(신규), `app/manager/page.tsx`(메뉴), `tests/integration/leads.test.ts`(신규) |
 | 관련 문서 | [REQUIREMENTS 6-1, 12절](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/manager/members`](./ROUTES.md) |
+
+2026-08-15 사용자 결정: "담당회원"은 별도 백엔드 개념이 없고(스키마에 회원-담당자 소유권
+컬럼 자체가 없음 — `담당`은 강사 배정 맥락에서만 존재), 실제로 비어있던 건 상담고객(leads)
+CRUD 화면 하나였다. `leads` 테이블과 `customer.lead.*` RLS는 다른 세션의 이전 배치
+(`proposed_rls_gap_batch_a1.sql`)에서 이미 라이브 적용돼 있어 이번엔 SQL 없이 화면(`app/
+manager/leads`)+lib만 새로 만들었다. 회원 전환 규칙: leads는 앱 계정과 연결돼 있지 않아
+자동으로 `center_members`를 만들 수 없음(회원 등록은 이름/전화번호로 앱 가입 계정을 찾아
+연결하는 기존 흐름, `app/manager/members`) — "회원전환" 버튼은 상태만 바꾸고 실제 등록은
+그 화면에서 진행하도록 안내. `customer.lead.view`로 메뉴 노출, `tests/integration/leads.test.ts`
+4개로 CRUD + RLS(권한 없는 스태프 차단/조회 필터링/권한 부여 후 허용) 검증, `npm run build`
+통과.
 
 ### P1-9. 관리자 직접배치 세부 permission key
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **확인 필요 (제품 결정 대기)** |
-| 근거 파일 | `add_admin_assignment.sql`(`can_manage_center_reservations()`), `lib/adminAssignment.ts`, `app/manager/classes/page.tsx` |
-| 완료 조건 | `schedule.admin_assign`/`schedule.admin_free` 같은 세부 permission key를 `permissions` 카탈로그에 추가할지 결정하고, 추가한다면 `can_manage_center_reservations()` 내부에서 `has_permission()`을 함께 확인하도록 확장함. 결정 전에는 기존 `manager_book_member`와 동일하게 "센터 활성 매니저 OR 플랫폼 운영자" 전원이 이 기능을 쓸 수 있음을 화면·문서에 명시함 |
+| 현재 상태 | **완료 — 사용자 승인 후 적용 대기.** |
+| 근거 파일 | `add_admin_assignment_permission_gate.sql`(신규, `can_manage_center_reservations()`), `lib/adminAssignment.ts`, `app/manager/classes/page.tsx` |
 | 관련 문서 | [DATABASE 10절](./DATABASE.md), [REQUIREMENTS 10-1](./REQUIREMENTS.md) |
 
-2026-07-30 사용자 확인: 이번 `feature/p1-reservation-ux` 범위에서는 새 permission key를 추가하지
-않고, 권한 검사를 `can_manage_center_reservations()` 함수로 분리해 확장 지점만 마련하기로 결정함.
+2026-07-30 사용자 확인: 당시 `feature/p1-reservation-ux` 범위에서는 새 permission key를
+추가하지 않고, 권한 검사를 `can_manage_center_reservations()` 함수로 분리해 확장 지점만
+마련하기로 결정함(그대로 유지).
+
+2026-08-15 사용자 결정으로 실제 제한 적용: 새 key를 만들지 않고 카탈로그에 이미 있던
+`schedule.makeup`("보강 예약" — "수강권 조건과 무관하게 회원을 수업에 예약할 수 있습니다")을
+재사용했다 — 설명이 admin_assign_reservation의 동작과 정확히 일치하는데 코드 어디서도
+참조되지 않는 죽은 항목이었다. `can_manage_center_reservations()`를
+`has_permission(p_center_id, 'schedule.makeup') or is_platform_admin()`으로 좁힘(오너는
+자동 통과) — `admin_assign_reservation`/`admin_cancel_reservation` 둘 다 이 함수로 권한을
+확인하므로 함께 적용됨. 화면 내부 버튼 단위 숨김(`app/manager/classes/page.tsx`의 여러
+직접배치 진입점)은 이번 범위 밖 — P1-5의 "버튼 단위 권한 표시" 잔여 작업과 같은 카테고리로
+남김. 서버는 이미 거부하므로 기능 안전성엔 영향 없음.
 
 ### P1-10. 관리자 직접배치 대상 회원 상태(이용정지/탈퇴/휴면) 차단 정책
 

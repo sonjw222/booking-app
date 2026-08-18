@@ -8,6 +8,30 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-15 (같은 날 후속) — P1-8/P1-9/P1-5/P1-1 제품 결정 배치
+
+사용자가 "만들지 말지" 결정 대기이던 5개 항목 중 4개를 진행하기로 결정(P1-12는 별도 후속):
+
+- **P1-8(완료)**: 상담고객(leads) CRUD 화면 신규 구현(`app/manager/leads`, `lib/leads.ts`).
+  테이블/RLS는 다른 세션이 이미 적용해뒀던 걸 발견해 SQL 없이 화면만 추가. "회원전환"은
+  상태만 바꾸고 실제 등록은 기존 회원 화면에서 진행하도록 안내(leads는 앱 계정과 연결 안
+  돼 있어 자동 연결 불가). `tests/integration/leads.test.ts` 4개로 CRUD+RLS 검증.
+- **P1-9(완료, SQL 승인 대기)**: 관리자 직접배치를 아무 스태프나 쓸 수 있던 걸 권한으로
+  제한. 새 키를 만들지 않고 카탈로그에 있던 죽은 키 `schedule.makeup`(설명이 정확히 이
+  기능과 일치)을 재사용해 `can_manage_center_reservations()`에 연결
+  (`add_admin_assignment_permission_gate.sql`).
+- **P1-5 나머지(완료, SQL 승인 대기)**: 상품/후기/주문/관리자배치내역 4개 메뉴 권한 가림.
+  2개는 카탈로그에 이미 있던 죽은 키(`facility.review.view`, `pass.order.view`) 재사용,
+  2개(`pass.goods.view`, `schedule.admin_assignment_log.view`)만 신규 추가
+  (`add_manager_menu_permissions.sql`).
+- **P1-1(완료, SQL 승인 대기)**: 완전히 분리돼 있던 포인트 두 원장(매니저 수동 적립/차감용
+  `point_transactions` vs 후기 보상 전용 `point_accounts`/`point_logs`, 회원 화면엔 둘 다
+  안 보였음)을 `point_transactions` 하나로 통합. `write_review()`/`use_points()` 재정의,
+  기존 `point_accounts` 잔액은 이관만 하고 테이블 자체는 DROP하지 않음(레거시로 보존).
+  `use_points()`의 동시성 보호는 기존 "잔액 행 lock" 대신 `profiles` 행 lock으로 대체.
+  잔액 조회용 `my_point_balance`/`my_point_balances` RPC 신규, `lib/reviews.ts` 연결
+  (`add_point_ledger_unification.sql`).
+
 ## 2026-08-15 — P1-10 관리자 직접배치 회원 상태 게이트 + P1-11 정원초과 2단계 흐름 테스트 + UI 버그 3건
 
 **P1-10**: 관리자 직접배치가 탈퇴(`accounts.deactivated_at`)/휴면(`center_members.status=
