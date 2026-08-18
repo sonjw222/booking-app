@@ -233,32 +233,41 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 이번 배치에서 한 것 | 정책 확정(매니저가 아직 처리 전인 주문은 회원이 시간 제한 없이 직접 취소 가능 — 실제 PG 연동 전이라 이 시점엔 결제가 캡처된 상태도 아님, P0-1 참고). `orders` UPDATE RLS에 "본인 소유 + 아직 미발급(pending/paid)만 cancelled로" 정책 추가(`add_order_self_cancel.sql`, 사용자 적용 완료) — 매니저 화면(`app/manager/orders/page.tsx`)이 이미 쓰던 `updateOrderStatus()`를 회원 화면에서도 그대로 재사용해 "같은 RPC/규칙"을 만족시킴(완료 조건 요구사항). `updateOrderStatus()`에 `.select()` 확인을 추가해 RLS가 조용히 0행 매칭할 때(경합 상황 — 클릭 사이에 매니저가 먼저 처리한 경우) 거짓 성공 토스트가 뜨지 않고 정확한 에러가 나도록 방어. `app/purchases/page.tsx`에 "주문 취소하기" 버튼 + 확인 다이얼로그 추가. 검증 스크립트 실행 중 `orders` 테이블에 service_role GRANT가 전혀 없던 걸 직접 재현 발견(다른 세션이 앞서 같은 증상을 보고했었지만 그때는 이 저장소에서 근거를 못 찾았던 바로 그 문제) — `fix_service_role_missing_grants_orders.sql` 작성·적용 완료. 이후 임시 계정으로 실제 취소 성공 + done 상태 주문 취소 차단(0행 매칭으로 정확히 막힘) 둘 다 재확인. `npm run build` 통과. |
 | 관련 문서 | [REQUIREMENTS 6-1, 10-4](./REQUIREMENTS.md), [ROUTES `/purchases`](./ROUTES.md) |
 
-### P1-3. 외부 푸시·알림톡 발송
+### P1-3. (2026-08-18, 웹 푸시 배포 확인) 외부 푸시·알림톡 발송
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **부분 완료(웹 푸시 코드 구현, 배포·실기기 검증 대기)** — 카카오 알림톡·SMS는 사업자 등록 필요해 미착수 |
+| 현재 상태 | **웹 푸시는 코드 구현 + 배포 완료, 실제 모바일 기기 수신 확인만 남음(자동 검증 불가 — 사용자가 나중에 직접 확인 예정).** 카카오 알림톡·SMS·이메일은 사업자 등록이 필요해 범위 밖(P0-1 PG결제와 동일한 종류의 블로커). |
 | 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`; `messages`, `notification_rules`, `notification_logs` |
-| 완료 조건 | 발송 채널과 opt-in 정책을 확정하고, 외부 발송기·재시도·실패 기록·수신 거부를 구현해 실제 기기 수신과 로그를 검증함 |
+| 완료 조건 | (웹 푸시) 실제 브라우저에서 알림 수신 확인. (카카오 알림톡/SMS/이메일) 사업자 등록 이후 발송기 연동 — 이번 범위 아님. |
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/settings/notifications`](./ROUTES.md) |
 
-카카오 알림톡·SMS(`messages`/`notification_rules`/`notification_logs` 기반, 건당 수수료 발생)는
-사업자 등록이 있어야 발송 계약이 가능해 여전히 범위 밖입니다.
+카카오 알림톡·SMS·이메일(`messages`/`notification_rules`/`notification_logs` 기반, 건당 수수료
+발생)는 사업자 등록이 있어야 발송 계약이 가능해 여전히 범위 밖입니다.
 
-**웹 푸시(브라우저/OS 알림)는 코드로 구현 완료**: `push_subscriptions` 테이블 + `add_web_push.sql`
-(pg_net 확장, `notifications.pushed_at` 컬럼, 1분마다 `send-web-push` Edge Function을 호출하는
-pg_cron 작업) / `public/sw.js`(서비스 워커) / `lib/webPush.ts`(구독 등록·해제) /
-`app/settings/notifications/page.tsx`의 "앱을 닫아도 알림 받기" 토글. 기존 `notifications` 테이블에
-쌓이는 모든 알림(예약 확정/취소, 대기 승격, 신규 구매 등)을 그대로 재사용해 실제 기기가 앱을
-안 보고 있을 때도 푸시로 전달한다.
+**웹 푸시(브라우저/OS 알림)는 코드 구현 + 실제 배포까지 완료**: `push_subscriptions` 테이블 +
+`add_web_push.sql`(pg_net 확장, `notifications.pushed_at` 컬럼, 1분마다 `send-web-push`
+Edge Function을 호출하는 pg_cron 작업) / `public/sw.js`(서비스 워커) / `lib/webPush.ts`(구독
+등록·해제) / `app/settings/notifications/page.tsx`의 "앱을 닫아도 알림 받기" 토글. 기존
+`notifications` 테이블에 쌓이는 모든 알림(예약 확정/취소, 대기 승격, 신규 구매 등)을 그대로
+재사용해 실제 기기가 앱을 안 보고 있을 때도 푸시로 전달한다.
 
-아직 안 된 것(사용자 조치 필요):
-1. `supabase functions deploy send-web-push`로 Edge Function 배포
-2. `supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:...`
-3. SQL Editor에서 `select vault.create_secret('<SERVICE_ROLE_KEY>', 'service_role_key', ...)` 직접 실행(파일에 비밀값 없음)
-4. `add_web_push.sql` 적용
-5. 실제 브라우저에서 알림 권한 허용 → 알림 발생 → 1분 내 실제 기기에 푸시가 뜨는지 눈으로 확인(자동 검증 불가 영역)
+**2026-08-18 배포 확인**: `select jobname, schedule, active from cron.job where jobname =
+'dispatch-web-push'`로 read-only 재확인 — cron job이 실제로 `* * * * *`(1분마다)로 등록돼
+`active=true` 상태임을 확인함(즉 `add_web_push.sql`이 실제 Live에 적용됐고, Edge Function
+배포·VAPID/service_role_key vault 시크릿 설정까지 커밋 메시지의 "배포 완료" 주장과 일치).
+같은 QA 중 무관한 버그 1건도 발견해 수정: `tests/integration/auto-book-membership-security.
+test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx tsc --noEmit`이 이 브랜치
+전체에서 실패하고 있었음 — 실제 로직(AUTO-SEC-K)은 이미 자체 try/finally로 올바르게 처리 중이라
+중복 코드였고, 삭제해 타입체크 통과 확인(커밋 `cb472cb`).
+
+남은 건 자동 검증이 불가능한 영역뿐이다(사용자가 나중에 직접 진행 예정):
+1. **실제 모바일 기기**에서 알림 권한 허용 → 알림 발생(예약/취소 등) → 1분 내 푸시가 실제로
+   뜨는지 눈으로 확인. iOS Safari는 iOS 16.4+에서도 "홈 화면에 추가"로 설치한 PWA에서만
+   웹 푸시가 동작한다는 제약이 있어(브라우저 탭 상태로는 수신 안 됨), iOS에서 확인할 때는
+   먼저 홈 화면에 추가한 뒤 테스트해야 한다. Android Chrome은 이런 제약 없이 일반 브라우저
+   탭에서도 동작한다.
 
 ### P1-4. (2026-08-13, 완료 — P2-1b 참고) 네이버 소셜 로그인
 

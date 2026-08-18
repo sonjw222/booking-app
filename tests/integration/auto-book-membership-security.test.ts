@@ -286,9 +286,10 @@ afterAll(async () => {
     }
     catch (e: any) { errors.push(e.message); }
   }
-  // AUTO-D가 userA를 임시 platform admin으로 만들었다면 반드시 원복(영구 권한 상승 방지).
-  try { await admin.from("accounts").update({ is_platform_admin: false }).eq("id", userA.accountId); }
-  catch (e: any) { errors.push(e.message); }
+  // 존재하지 않는 userA를 참조하던 중복 안전장치를 제거함(2026-08-18) — AUTO-SEC-K가
+  // 이미 자체 try/finally로 userB의 is_platform_admin을 확실히 원복한다(테스트 본문
+  // 참고). 이 줄은 그 리팩터 과정에서 변수명이 안 맞게 남아 tsc 컴파일 자체를 깨뜨리고
+  // 있었다 — 실제로는 중복이라 로직 손실 없이 삭제.
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 30000);
 
