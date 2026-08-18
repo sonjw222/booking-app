@@ -98,6 +98,12 @@ beforeAll(async () => {
   const { data: memRow } = await admin
     .from("center_members").select("status").eq("center_id", centerAId).eq("profile_id", member.profileId).maybeSingle();
   originalMemberStatus = memRow ? memRow.status : null;
+
+  // P1-9(관리자 직접배치 권한 제한, 이 파일 작성 이후 별도로 적용됨)가 이제
+  // can_manage_center_reservations()에서 schedule.makeup을 요구한다 — 이 파일은 P1-10
+  // 게이트(회원 상태)만 격리해서 검증하는 게 목적이므로, managerB에게 baseline으로
+  // schedule.makeup을 부여해 P1-9 게이트는 항상 통과하게 하고 P1-10 차이만 관찰한다.
+  await setStaffOverride(staffManagerCenterId!, "schedule.makeup", "allow");
 }, 30000);
 
 afterAll(async () => {
@@ -115,6 +121,7 @@ afterAll(async () => {
   }
 
   try { await setStaffOverride(staffManagerCenterId!, PERM_KEY, null); } catch { /* 이미 없으면 무시 */ }
+  try { await setStaffOverride(staffManagerCenterId!, "schedule.makeup", null); } catch { /* 이미 없으면 무시 */ }
   if (staffManagerCenterId) { try { await removeStaff(staffManagerCenterId); } catch { /* 무시 */ } }
   if (roleId) { try { await deleteRole(roleId); } catch { /* 무시 */ } }
 

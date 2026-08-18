@@ -8,6 +8,16 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-18 — P1-9/P1-5/P1-1 SQL 라이브 적용 확인 + P1-10 테스트 fixture 보정
+
+사용자가 3개 SQL(`add_admin_assignment_permission_gate.sql`, `add_manager_menu_permissions.sql`,
+`add_point_ledger_unification.sql`)을 SQL Editor에서 적용. 라이브 함수 본문/permissions
+테이블 재조회로 셋 다 정확히 반영됐음을 확인, `point_transactions`로 이관된 레거시 포인트
+2건도 실측 확인. P1-9 적용으로 `admin-assignment-member-status-guard.test.ts`(P1-10 검증)의
+무권한 스태프 fixture가 새로 생긴 `schedule.makeup` 게이트에 먼저 막혀 3/4 실패하는 걸
+발견 — `beforeAll`에서 baseline으로 `schedule.makeup`을 부여해 P1-10만 격리 검증하도록
+수정, 4/4 재통과. 관련 통합테스트 전체(26개) + unit(242개) + build 재확인.
+
 ## 2026-08-15 (같은 날 후속) — P1-8/P1-9/P1-5/P1-1 제품 결정 배치
 
 사용자가 "만들지 말지" 결정 대기이던 5개 항목 중 4개를 진행하기로 결정(P1-12는 별도 후속):

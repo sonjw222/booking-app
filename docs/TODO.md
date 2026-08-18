@@ -207,7 +207,7 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **완료 — point_transactions로 통합, 사용자 승인 후 적용 대기.** |
+| 현재 상태 | **완료.** point_transactions로 통합, 사용자가 SQL Editor에서 적용 완료(기존 point_accounts 잔액 2건이 point_transactions로 이관된 것을 직접 재조회로 확인). |
 | 근거 파일 | `lib/sales.ts`, `lib/reviews.ts`, `add_sales.sql`, `add_reviews_points.sql`, `add_point_ledger_unification.sql`(신규); `point_transactions`, `point_accounts`, `point_logs` |
 | 관련 문서 | [REQUIREMENTS 6-3, 10-4](./REQUIREMENTS.md), [DATABASE 4-3, 7-3](./DATABASE.md) |
 
@@ -301,9 +301,9 @@ pg_cron 작업) / `public/sw.js`(서비스 워커) / `lib/webPush.ts`(구독 등
 2026-08-15 3차 해결(사용자 결정으로 남은 4개 메뉴 진행): 조사 결과 2개는 이미 카탈로그에
 키가 있었는데(`facility.review.view`, `pass.order.view`, `add_new_permissions.sql`) 메뉴에
 연결이 안 돼 있었다. 나머지 2개(`pass.goods.view`, `schedule.admin_assignment_log.view`)는
-새로 추가(`add_manager_menu_permissions.sql`, 사용자 승인 후 적용 대기). `app/manager/page.tsx`의
-관리 메뉴 목록과 "오늘 할 일" 상단 바로가기(문의/주문/회원배치) 모두 `canSeeMenu()`로 연결.
-`npm run build` 통과.
+새로 추가(`add_manager_menu_permissions.sql`, 사용자가 SQL Editor에서 적용 완료·`permissions`
+테이블 재조회로 확인). `app/manager/page.tsx`의 관리 메뉴 목록과 "오늘 할 일" 상단 바로가기
+(문의/주문/회원배치) 모두 `canSeeMenu()`로 연결. `npm run build` 통과.
 
 ### P1-6. (2026-08-15, 문서 오류 정정 — 실제로는 완료) 관리자·운영자 클라이언트 가드 누락
 
@@ -366,7 +366,7 @@ manager/leads`)+lib만 새로 만들었다. 회원 전환 규칙: leads는 앱 �
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **완료 — 사용자 승인 후 적용 대기.** |
+| 현재 상태 | **완료.** 사용자가 SQL Editor에서 적용 완료, 라이브 함수 본문에 `schedule.makeup` 확인이 들어가 있음을 직접 재조회로 확인. |
 | 근거 파일 | `add_admin_assignment_permission_gate.sql`(신규, `can_manage_center_reservations()`), `lib/adminAssignment.ts`, `app/manager/classes/page.tsx` |
 | 관련 문서 | [DATABASE 10절](./DATABASE.md), [REQUIREMENTS 10-1](./REQUIREMENTS.md) |
 
@@ -407,6 +407,12 @@ manager/leads`)+lib만 새로 만들었다. 회원 전환 규칙: leads는 앱 �
 `tests/integration/admin-assignment-member-status-guard.test.ts` 4개 신규 테스트로 검증
 (권한 없는 스태프 거부/권한 부여 시 허용/오너 자동 통과/활성 회원은 항상 허용, 4/4 통과,
 기존 admin-assignment-security.test.ts 16개·acl-003 5개 회귀 없음 확인).
+
+2026-08-18 P1-9 적용 후 수정: P1-9가 `can_manage_center_reservations()`에 `schedule.makeup`
+게이트를 추가하면서, 이 파일의 무권한 스태프(managerB) fixture가 P1-10 검사에 도달하기도
+전에 P1-9 게이트에서 먼저 막혀 3/4 테스트가 실패했다(P1-10만 격리해서 보려던 의도와 어긋남).
+`beforeAll`에서 managerB에게 `schedule.makeup`을 baseline으로 부여해 P1-9는 항상 통과하고
+P1-10 차이만 관찰하도록 수정, 4/4 재통과 확인.
 
 ### P1-11. (2026-08-16, 완료) 관리자 직접배치 통합 테스트 — 정원 초과 확인(needs_capacity_confirm) 2단계 흐름 미검증
 
