@@ -8,6 +8,25 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-18 — P1-12 완료: 운영설정 미적용 필드 전수 재감사·정리 (chore/p1-12-settings-wiring-audit)
+
+2026-08-02 감사에서 "죽어있다"고 기록됐던 `center_settings` 필드들을 코드로 다시 확인한
+결과, 그 사이(SEC-114 정책회귀 배치 등) 대부분 이미 실제 RPC에 wiring돼 있었다
+(`allow_same_day_booking`/`daily_book_limit(_enabled)`/`waitlist_weekly_limit`) —
+문서만 갱신, 코드 변경 없음. `show_group_reserved_count`/`auto_unpaid_input`도 이미
+정상 동작 확인.
+
+진짜 죽어있던 필드는 2개: `show_group_waitlist_count`는 회원 화면에 대기 인원을 실제로
+표시하도록 구현(`fix_class_reservation_counts_add_waitlisted.sql` — `class_reservation_counts`
+뷰에 `waitlisted_count` 추가, `lib/reservations.ts`/`app/reservation/page.tsx`를
+`show_group_reserved_count`와 동일 패턴으로 연결, 사용자 SQL 적용 대기). `show_all_classes`는
+정확히 구현하려면 회원 화면이 `reserve_class()`의 수강권 자격 판정 로직 전체를 클라이언트에서
+재현해야 해서(정책 드리프트 위험) 이번 배치에서는 "준비 중" 배지로 명확히 표시만 함.
+`show_point_history`는 회원앱에 포인트 내역 화면 자체가 없어 P1-1(포인트 원장 이원화) 범위로
+이관.
+
+`npm run build` 통과 확인.
+
 ## 2026-08-16 — P1-11 완료: 그룹 수업 정원초과 2단계 흐름 통합 테스트 추가 (review/todo-scan3)
 
 `admin_assign_reservation`의 그룹 수업 정원초과 2단계 흐름(1차 호출 → `needs_capacity_confirm:

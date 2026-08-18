@@ -265,18 +265,31 @@ export default function SettingsPage() {
           {/* E-6: 문의 게시판/락커/라운지 사용 토글 제거 — 어디서도 이 값을 읽는 코드가 없어
               (docs/TODO.md에 근거 기록) 관리자가 켜고 꺼도 실제 효과가 없는 항목이었다.
               DB 컬럼(use_inquiry_board/use_locker/use_lounge)은 이번에 지우지 않는다(향후
-              기능 플래그로 재사용될 수 있어 별도 migration 이슈로 분리). */}
+              기능 플래그로 재사용될 수 있어 별도 migration 이슈로 분리).
+              show_point_history는 P1-1(포인트 원장 이원화 정리) 범위로 넘겨 여기서 뺐다. */}
           {([
-            ["showAllClasses", "수강권으로 볼 수 없는 수업도 표시"],
             ["deductOnLateCancel", "취소 시간 이후 취소 시 횟수 차감"],
             ["autoUnpaidInput", "수강권 미수금 자동 입력"],
-            ["showPointHistory", "회원앱 포인트 내역 조회"],
           ] as [keyof CenterSettings, string][]).map(([key, label]) => (
             <div className="set-row" key={key}>
               <div className="set-label">{label}</div>
               {toggle(s[key] as boolean, (b) => up(key, b as any))}
             </div>
           ))}
+          {/* P1-12 감사(2026-08-18): 이 토글은 저장은 되지만 서버 조회 로직 어디서도 읽지
+              않는다 — 회원 화면(fetchMonthData)이 "수강권 보유 센터의 모든 수업"만 보여줄 뿐,
+              그 수강권으로 실제 예약 가능한 수업인지(pass_selection_mode/class_allowed_products/
+              membership_schedule_rules)까지는 안 따진다. 이 판정을 클라이언트에서 정확히
+              재현하려면 reserve_class()의 자격 판단 로직 전체를 복제해야 해서(정책이 바뀔 때마다
+              같이 안 바뀌면 오늘 하루 겪은 auto_book_membership vs reserve_class 드리프트와
+              같은 위험이 생김) 이번 배치에서는 구현하지 않고 "준비 중"으로 명확히 표시만 한다. */}
+          <div className="set-row">
+            <div className="set-label">수강권으로 볼 수 없는 수업도 표시 {soonBadge}</div>
+            {toggle(s.showAllClasses, (b) => up("showAllClasses", b))}
+          </div>
+          <div className="set-soon-note">지금은 이 설정과 무관하게 항상 모든 수업이 표시돼요 —
+            수강권별로 예약 가능한 수업만 걸러 보여주려면 서버 쪽 자격 판정 로직을 그대로
+            재사용하는 별도 작업이 필요해요.</div>
 
           <div style={{ height: 40 }} />
         </div>

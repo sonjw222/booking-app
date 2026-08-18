@@ -345,12 +345,12 @@ main 병합까지 완료됨**(P0-4에 정확히 기록돼 있었음). 2026-08-15
 흐름(확인→재호출로 실제 생성) 자체를 검증하는 테스트는 여전히 없음 — 이 항목은 그 부분만
 남은 것으로 범위를 좁힘.
 
-### P1-12. 운영설정(`/manager/settings`) 화면의 다수 항목이 저장만 되고 실제로 적용되지 않음
+### P1-12. (2026-08-18, 완료) 운영설정(`/manager/settings`) 화면의 다수 항목이 저장만 되고 실제로 적용되지 않음
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **부분 구현 — 화면은 완료, 서버 적용은 일부만** |
+| 현재 상태 | **완료** — 전수 재감사 결과 대부분 이미 wiring됨, 실제로 죽어있던 2개 중 1개(`show_group_waitlist_count`)는 구현, 1개(`show_all_classes`)는 "준비 중" 명시 |
 | 근거 파일 | `app/manager/settings/page.tsx`, `lib/settings.ts`, `wire_settings.sql`, `add_center_settings.sql`, `reservation_functions.sql` |
 | 완료 조건 | `center_settings`의 각 필드가 실제로 어떤 RPC/쿼리에서 읽히는지 전수 확인하고, 미적용 필드는 (a) 해당 로직에 반영하거나 (b) "준비 중" 표시로 화면에서 명확히 구분함 |
 | 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 운영설정 항목 |
@@ -374,6 +374,31 @@ reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시�
 `private_slot_unit`(schema.sql에만 있고 코드 참조 0건, 프라이빗 시간 단위 슬롯 선택 UI 자체가
 없어 죽은 설정으로 보임)은 여전히 미해결 — P2/P3 후속 범위(프라이빗 셀프 슬롯 예약 UI를
 만들지 여부와 함께 제품 결정 필요)로 남긴다.
+
+2026-08-18 전수 재감사(2026-08-02 목록을 코드로 다시 확인): 그 사이(SEC-114 정책회귀 배치 등)
+`allow_same_day_booking`/`daily_book_limit(_enabled)`/`waitlist_weekly_limit`이 이미 실제
+RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wiring돼 있음을
+확인(목록에서 제거). `show_group_reserved_count`/`auto_unpaid_input`도 각각
+`lib/reservations.ts`(회원 화면 인원표시)/`app/manager/sales/page.tsx`(미수금 자동계산)에서
+실제로 읽고 있음을 확인(목록에서 제거). `use_inquiry_board`/`use_locker`/`use_lounge`는
+이미 E-6 결정으로 화면에서 토글 자체가 제거돼 있어 문제 없음(재확인만).
+`waitlist_auto_hours/minutes`/`autocancel_hours/minutes`/`same_day_change_hours/minutes`는
+이미 화면에 "준비 중" 배지로 명확히 표시돼 있어 문제 없음(재확인만).
+
+진짜 남아있던 죽은 필드는 2개뿐이었다:
+- `show_group_waitlist_count`("그룹 수업 대기 인원 표시"): 회원 화면에 대기 인원을 보여줄
+  방법 자체가 없었다(대기 인원수를 집계하는 곳이 아예 없음) — `class_reservation_counts`
+  뷰(`fix_class_reservation_counts_add_waitlisted.sql`)에 `waitlisted_count`를 추가하고
+  `lib/reservations.ts`/`app/reservation/page.tsx`에 `show_group_reserved_count`와 동일한
+  패턴으로 연결. 신규 SQL 1개, 사용자 적용 후 화면 확인 필요.
+- `show_all_classes`("수강권으로 볼 수 없는 수업도 표시"): 실제로 구현하려면 회원 화면이
+  각 수업마다 "이 회원의 어떤 수강권이든 이 수업 예약 자격이 되는지"(pass_selection_mode/
+  class_allowed_products/membership_schedule_rules)를 `reserve_class()`와 동일하게
+  클라이언트에서 재판정해야 하는데, 이건 오늘 겪은 `auto_book_membership` vs `reserve_class`
+  정책 드리프트와 같은 위험을 새로 만드는 것이라 이번 배치에서는 구현하지 않고 화면에
+  "준비 중" 배지 + 안내문구만 추가함(완료조건 (b) 선택). 별도 배치로 남김.
+- `show_point_history`(회원앱 포인트 내역 조회)는 회원앱에 포인트 내역 화면 자체가 없어서
+  P1-1(포인트 원장 이원화 정리)과 직접 겹쳐 그쪽 범위로 넘김(이 항목에서는 제외).
 
 ### P1-13. (2026-08-14, 완료) 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
 
