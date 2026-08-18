@@ -207,8 +207,8 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **완료 — point_transactions로 통합, 사용자 승인 후 적용 대기.** |
-| 근거 파일 | `lib/sales.ts`, `lib/reviews.ts`, `add_sales.sql`, `add_reviews_points.sql`, `add_point_ledger_unification.sql`(신규); `point_transactions`, `point_accounts`, `point_logs` |
+| 현재 상태 | **완료 — point_transactions로 통합 + 회원용 포인트 내역 화면 추가, 사용자 승인 후 SQL 적용 대기.** |
+| 근거 파일 | `lib/sales.ts`, `lib/reviews.ts`, `lib/mypage.ts`, `add_sales.sql`, `add_reviews_points.sql`, `add_point_ledger_unification.sql`, `app/mypage/points/page.tsx`(신규), `app/mypage/page.tsx`; `point_transactions`, `point_accounts`, `point_logs`, `center_settings.show_point_history` |
 | 관련 문서 | [REQUIREMENTS 6-3, 10-4](./REQUIREMENTS.md), [DATABASE 4-3, 7-3](./DATABASE.md) |
 
 2026-08-15 사용자 결정: `point_transactions`(매니저 매출 화면이 쓰던 원장, `sum(amount)`
@@ -219,9 +219,15 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 회원 화면에 잔액을 보여주는 새 RPC(`my_point_balance`/`my_point_balances`) 추가 —
 `point_accounts` 단일 행을 `for update`로 잠그던 동시성 보호가 순수 원장 구조에선 안 되므로
 `use_points()`에서 `profiles` 행을 `for update`로 잠가 같은 회원의 동시 사용 요청을 직렬화.
-`lib/reviews.ts`의 `fetchMyPoints`/`fetchAllMyPoints`가 새 RPC를 쓰도록 수정, `npm run build`
-통과. 회원 화면에 포인트 잔액을 실제로 노출하는 UI는 이번 범위 밖(원장 통합만, 새 화면 추가는
-별도 요청 시).
+`lib/reviews.ts`의 `fetchMyPoints`/`fetchAllMyPoints`가 새 RPC를 쓰도록 수정.
+
+**후속(같은 P1-1 범위로 통합, 신규)**: 그동안 죽어있던 운영설정 `show_point_history`("회원앱
+포인트 내역 조회")를 실제로 연결하는 회원용 "포인트 내역" 화면을 새로 추가함
+(`app/mypage/points/page.tsx`, `lib/mypage.ts`의 `fetchMyPointHistory()`). `point_transactions`는
+이미 회원 본인 행 SELECT가 RLS로 허용돼 있어(`add_sales.sql`의 "포인트 조회" 정책) 새 RPC 없이
+직접 조회. 계정의 모든 프로필(가족 구성원) 내역을 함께 보여주고 `profileName` 태그로 구분,
+`center_settings.show_point_history`가 꺼진 센터의 내역은 목록에서 제외. `app/mypage/page.tsx`
+"내 정보" 섹션에 진입 메뉴 추가. `npm run build` 통과. SQL 변경 없음(기존 RLS만 사용).
 
 ### P1-2. (2026-08-14, 완료) 미발급 주문 취소와 환불 정책 설정
 

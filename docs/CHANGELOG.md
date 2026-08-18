@@ -8,6 +8,17 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-18 — P1-1 후속: 회원용 포인트 내역 화면 추가
+
+`point_transactions` 통합 원장(직전 배치) 위에, 그동안 죽어있던 운영설정
+`show_point_history`("회원앱 포인트 내역 조회")를 실제로 연결하는 회원용 화면을 새로 추가.
+`app/mypage/points/page.tsx`(신규) + `lib/mypage.ts`의 `fetchMyPointHistory()`(신규) —
+계정의 모든 프로필(가족 구성원) 포인트 적립/사용 내역을 날짜별로 보여주고, `profileName`
+태그로 구분, `center_settings.show_point_history`가 꺼진 센터의 내역은 제외. `point_transactions`
+SELECT는 이미 본인 행 RLS가 허용돼 있어(`add_sales.sql`) 새 RPC 없이 직접 조회. `app/mypage/page.tsx`
+"내 정보" 섹션에 진입 메뉴("포인트 내역") 추가. `npm run build` 통과, 헤드리스 확인으로
+`/mypage/points` 정상 렌더링 확인. SQL/스키마 변경 없음.
+
 ## 2026-08-15 (같은 날 후속) — P1-8/P1-9/P1-5/P1-1 제품 결정 배치
 
 사용자가 "만들지 말지" 결정 대기이던 5개 항목 중 4개를 진행하기로 결정(P1-12는 별도 후속):
