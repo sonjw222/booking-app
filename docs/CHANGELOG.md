@@ -8,6 +8,24 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-18 — P1-3 웹 푸시 배포 확인 + 무관 빌드 버그 수정 (review/p1-3-webpush-qa)
+
+P1-3(외부 푸시·알림톡) 자동 QA 진행: `lib/webPush.ts`/`supabase/functions/send-web-push/
+index.ts`/`public/sw.js` 코드 리뷰(410/404 만료 구독 정리, best-effort 재시도 없음 설계,
+표준 서비스워커 패턴 — 명확한 버그 없음 확인). `select jobname, schedule, active from
+cron.job where jobname = 'dispatch-web-push'`로 read-only 재확인해 이전 세션(사용자 본인)의
+"배포 완료" 커밋 주장이 실제 Live 상태와 일치함을 확인 — cron job 활성, 1분마다 실행 중.
+`docs/TODO.md` P1-3을 이 확인 결과에 맞게 정정(단계별 "아직 안 됨" 목록을 "배포 완료,
+실기기 확인만 남음"으로). 카카오 알림톡/SMS/이메일은 P0-1(PG결제)과 같은 종류의 사업자
+등록 블로커라 이번 범위에서 제외.
+
+같은 QA 중 `tests/integration/auto-book-membership-security.test.ts`의 `afterAll`이 존재하지
+않는 변수(`userA`)를 참조해 `npx tsc --noEmit`이 `feature/design-system-migration` 브랜치
+전체에서 실패하고 있던 것을 발견 — 실제 로직(AUTO-SEC-K)은 이미 자체 try/finally로 올바르게
+처리 중이라 순수 중복 코드였음, 삭제해 타입체크 통과 확인. 이 브랜치를 기반으로 다른 세션들도
+작업 중이라(P1-1, P1-8) 사용자 확인 후 바로 `feature/design-system-migration`에 push함
+(커밋 `cb472cb`).
+
 ## 2026-08-15 (같은 날 후속) — P1-8/P1-9/P1-5/P1-1 제품 결정 배치
 
 사용자가 "만들지 말지" 결정 대기이던 5개 항목 중 4개를 진행하기로 결정(P1-12는 별도 후속):
