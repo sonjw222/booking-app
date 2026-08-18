@@ -151,7 +151,7 @@ export default function ProgressCategoryPage() {
       ) : (
         <div className="prog-wrap">
           {/* 대분류 추가 */}
-          <div className="prog-add-top">
+          <div className="prog-add-top structured-add-row">
             <input
               className="input-field"
               placeholder="대분류 추가 (예: 점프, 스핀, 스텝)"
@@ -159,7 +159,7 @@ export default function ProgressCategoryPage() {
               onChange={(e) => setNewTop(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAddTop()}
             />
-            <button className="primary-btn small" disabled={busy} onClick={handleAddTop}>추가</button>
+            <button className="outline-action" disabled={busy} onClick={handleAddTop}>추가</button>
           </div>
 
           {tree.length === 0 ? (
@@ -172,9 +172,9 @@ export default function ProgressCategoryPage() {
               <div key={top.id} className="prog-group">
                 <div className="prog-top-row">
                   <span className="prog-top-name">{top.name}</span>
-                  <div className="prog-top-actions">
-                    <button className="text-btn" onClick={() => handleRename(top.id, top.name)}>수정</button>
-                    <button className="text-btn danger" onClick={() => handleDelete(top.id, top.name, top.children.length > 0)}>삭제</button>
+                  <div className="prog-top-actions row-actions">
+                    <button className="quiet-action" onClick={() => handleRename(top.id, top.name)}>수정</button>
+                    <button className="quiet-action danger" onClick={() => handleDelete(top.id, top.name, top.children.length > 0)}>삭제</button>
                   </div>
                 </div>
 
@@ -183,9 +183,9 @@ export default function ProgressCategoryPage() {
                   {top.children.map((c) => (
                     <div key={c.id} className="prog-sub-row">
                       <span className="prog-sub-name">{c.name}</span>
-                      <div className="prog-top-actions">
-                        <button className="text-btn" onClick={() => handleRename(c.id, c.name)}>수정</button>
-                        <button className="text-btn danger" onClick={() => handleDelete(c.id, c.name, false)}>삭제</button>
+                      <div className="prog-top-actions row-actions">
+                        <button className="quiet-action" onClick={() => handleRename(c.id, c.name)}>수정</button>
+                        <button className="quiet-action danger" onClick={() => handleDelete(c.id, c.name, false)}>삭제</button>
                       </div>
                     </div>
                   ))}
@@ -200,7 +200,7 @@ export default function ProgressCategoryPage() {
                         onChange={(e) => setSubInput((p) => ({ ...p, [top.id]: e.target.value }))}
                         onKeyDown={(e) => e.key === "Enter" && handleAddSub(top.id, top.children.length)}
                       />
-                      <button className="primary-btn small" disabled={busy} onClick={() => handleAddSub(top.id, top.children.length)}>추가</button>
+                      <button className="outline-action" disabled={busy} onClick={() => handleAddSub(top.id, top.children.length)}>추가</button>
                     </div>
                   ) : (
                     <button className="prog-add-sub-btn" onClick={() => setOpenSub((p) => ({ ...p, [top.id]: true }))}>

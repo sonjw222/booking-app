@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Loading from "../../components/Loading";
 import DatePicker from "../../components/DatePicker";
+import MonthPicker from "../../components/MonthPicker";
 import AmPmTimeInput from "../../components/AmPmTimeInput";
 import { dhmToMinutes, minutesToDhm } from "../../../lib/deadlineInput";
 import { formatInstructorNames } from "../../../lib/instructorDisplay";
@@ -1000,7 +1001,7 @@ export default function ClassManagePage() {
       {/* 등록/수정 시트 */}
       {formOpen && (
         <div className="sheet-overlay" onClick={() => setFormOpen(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet direct-member-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{editId ? "수업 수정" : "수업 등록"}</div>
             <input className="input-field" placeholder="수업명" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
 
@@ -1597,12 +1598,10 @@ export default function ClassManagePage() {
             </div>
 
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>복사할 달 (원본)</div>
-            <input className="input-field" type="month" value={copyFrom}
-              onChange={(e) => { setCopyFrom(e.target.value); loadCopySource(e.target.value, copyMode); }} />
+            <MonthPicker value={copyFrom} label="복사할 달" onChange={(value) => { setCopyFrom(value); loadCopySource(value, copyMode); }} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>붙여넣을 달 (대상)</div>
-            <input className="input-field" type="month" value={copyTo}
-              onChange={(e) => { setCopyTo(e.target.value); setCopyPlan(null); }} />
+            <MonthPicker value={copyTo} label="붙여넣을 달" onChange={(value) => { setCopyTo(value); setCopyPlan(null); }} />
 
             {/* 수업 선택 */}
             {(copyMode === "weekday" ? copyGroups.length > 0 : copyDateItems.length > 0) && (
@@ -1822,8 +1821,8 @@ export default function ClassManagePage() {
                 .slice(0, 50)
                 .map((m) => (
                   <button key={m.profileId} className="book-member-row" onClick={() => pickAssignMember(m)}>
-                    <span className="book-member-name">{m.name}</span>
-                    <span className="book-member-pass">
+                    <span className="book-member-identity"><span className="book-member-avatar">{m.name.slice(0, 1)}</span><span className="book-member-name">{m.name}</span></span>
+                    <span className={`book-member-pass ${m.memberships.length === 0 ? "empty" : ""}`}>
                       {m.memberships.length > 0
                         ? `${m.memberships[0].name}${m.memberships[0].remaining != null ? ` ${m.memberships[0].remaining}회` : ""}`
                         : "수강권 없음"}

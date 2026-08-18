@@ -139,9 +139,6 @@ export default function CalendarPage() {
                       </div>
                       <span className={`hist-status s-${r.status}`}>{STATUS_LABEL[r.status] ?? r.status}</span>
                     </div>
-                    <button className="cal-add-one" onClick={() => downloadIcs([r], `${r.title}.ics`)}>
-                      캘린더에 추가
-                    </button>
                     <div className="cal-memo-row">
                       <input
                         className="input-field"
@@ -153,6 +150,9 @@ export default function CalendarPage() {
                         {savingId === r.id ? "저장" : "저장"}
                       </button>
                     </div>
+                    <button className="cal-add-one" onClick={() => downloadIcs([r], `${r.title}.ics`)}>
+                      캘린더에 추가
+                    </button>
                   </div>
                 ))
               )}

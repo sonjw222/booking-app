@@ -272,6 +272,71 @@ SEC-009 결과와 일치), `USING(true)` 정책은 공개 마케팅 콘텐츠(�
   `README.md` 5절도 "선택"에서 실제 자동화 안내로 갱신. 사용자가 SQL Editor에서 적용 완료
   (`cron.schedule()`이 job id `1` 반환 확인) — 익일 실제 발생 여부만 남음(`docs/TODO.md` P0-5).
 
+## 2026-08-13 — SEC-114/SEC-115 P0/P1 보안 수정 Live 적용(사용자 확인 완료)
+
+- **SEC-114(P0) `auto_book_membership()`**: caller authorization 없이 SECURITY DEFINER +
+  PUBLIC EXECUTE 상태였던 IDOR 취약점 수정. `v_mem.center_id in my_managed_center_ids()
+  or is_platform_admin()` 검사 추가, `EXECUTE`를 `authenticated`로 최소화, `pass_selection_mode`/
+  `membership_schedule_rules`/`booking·open deadline`/`center_holidays`/`daily_book_limit`/
+  `private_max_concurrent` 등 최신 예약 정책 누락분을 `reserve_class`와 동일하게 보강.
+  회귀 테스트 `tests/integration/auto-book-membership-security.test.ts`(AUTO-SEC-A~P, 16개).
+- **SEC-115(P1) `manager_set_attendance()`**: waitlisted 예약 취소 시 차감된 적 없는 수강권을
+  잘못 복구하던 문제, waitlisted→confirmed 직접 전환으로 무차감 확정하던 우회 경로 차단.
+  회귀 테스트 `tests/integration/manager-set-attendance-membership-integrity.test.ts`
+  (ATT-SEC-A~J, 10개).
+- 둘 다 `set search_path = public` 추가. 사용자가 Supabase SQL Editor에서 순서대로 직접
+  실행하고 EXECUTE 권한(`authenticated`+`postgres`만) 실측 확인 완료.
+
+## 2026-08-15 — PR #50/#51 병합 시 SEC-114 설계 충돌 정리(사용자 확인)
+
+PR #51(`security/sec114-117-final-crosscheck`)이 main에 먼저 병합되며 `auto_book_membership()`의
+authorization을 `has_permission(center_id, 'schedule.own.group.booking')` 기반으로 다시 작성한
+`fix_auto_book_membership_idor_draft_proposed.sql`을 들여왔다(다른 두 독립 세션이 교차검증해
+합의한 설계, 정책회귀 수정은 SEC-114-B로 분리). 그런데 병합 시점에 라이브에서
+`pg_get_functiondef('auto_book_membership')`로 직접 재확인한 결과, **실제로 라이브에 적용돼
+있는 건 여전히 PR #50의 `my_managed_center_ids()` 기반 + 정책회귀(pass_selection_mode/
+center_holidays/daily_book_limit/private_max_concurrent) 통합 버전**이었다 — PR #51의 파일은
+merge만 됐을 뿐 실제로 Live에 실행된 적은 없는 상태였다. 사용자 확인 후 라이브와 일치하는
+PR #50 버전을 최종으로 채택, PR #51의 해당 SQL 파일 내용은 이 병합에서 되돌렸다. has_permission()
+기반 세분권한 설계는 향후 별도 배치(SEC-116, 기존 계획대로)에서 재검토 대상으로 남긴다.
+
+## 2026-08-15 — P1-6 문서 오류 정정: account_center_permissions SELECT RLS는 이미 오래전에 적용 완료 (review/todo-scan2)
+
+`docs/TODO.md`의 다른 P1 항목을 검토하던 중 P1-6이 `fix_account_center_permissions_select_
+draft_proposed.sql`을 "아직 실행하지 않음"으로 계속 기록하고 있는 걸 발견 — 그런데 같은 SQL을
+언급하는 P0-4 항목과 그 SQL이 검증 대상으로 삼는 `tests/integration/acl-003-permission-read.
+test.ts` 파일 자기 자신의 주석은 둘 다 "2026-08-02에 이미 실행되고 PR #19로 main 병합 완료"라고
+명확히 적혀 있었다. `pg_policies`로 라이브 상태를 직접 재조회해 실제로 그 draft SQL과 정확히
+일치하는 정책이 이미 적용돼 있음을 확인 — P1-6이 P0-4 갱신 당시 함께 안 고쳐진 순수 문서
+드리프트였음(코드/SQL 변경 없음, 문서만 정정). 이 저장소에서 반복돼온 "저장소 문서와 라이브
+DB 상태가 어긋나는" 패턴(P2-17 calc_deadline과 동일 계열)의 또 다른 사례.
+
+## 2026-08-15 — P1-13 센터정보 수정 권한 세분화, pay_methods/review_point 추가 보호 (review/todo-scan)
+
+다른 세션(PR #54)이 같은 P1-13 티켓을 "매니저 센터 수정" RLS를 `has_permission(id,
+'facility.info') OR is_platform_admin()`으로 좁히는 방식으로 이미 Live 적용한 것을 확인 —
+그 위에 이 세션에서 결제수단(pay_methods)/후기 적립 포인트(review_point) 두 필드를 한 단계
+더 좁히는 `guard_center_sensitive_fields_change` BEFORE UPDATE 트리거를 추가(오너 또는
+`facility.paymethod` 권한 보유자만 결제수단 변경, 오너만 포인트 변경 —
+`fix_center_info_sensitive_fields_permission_draft_proposed.sql`, 사용자 적용·`pg_trigger`
+재조회로 확인). 두 레이어가 서로 겹치지 않고 보완함을 확인(facility.info는 전체 폼 접근
+게이트, 이 트리거는 그 안에서 특히 민감한 두 필드만 더 좁힘). `app/manager/center-info/
+page.tsx`도 `fetchMyEffectivePermissionKeys`로 권한을 미리 계산해 저장 버튼/개별 필드를
+UI에서부터 비활성화하도록 갱신 — raw RLS 에러 대신 명확한 안내 문구 표시.
+
+## 2026-08-14 — P2-22 공유 테스트센터 leftover class 정리 (chore/p2-22-shared-center-class-cleanup)
+
+`getOrCreateOwnedTestCenter()`로 재사용되는 공유 테스트센터(managerA 소유,
+3937eb89-3803-43e9-9a29-e893f779df1a)에 여러 테스트 파일/세션이 남긴 미래 시각 leftover
+class 318개(딸린 reservations 237개)를 정리했다. 제목 리터럴을 나열하는 대신 구조적 기준
+(이 센터 + status='open' + start_time > now() + created_at 1시간 이상 과거 — 지금 막 다른
+세션이 만든 class는 안 건드리는 안전 마진)으로
+`cleanup_p2_22_shared_center_class_fixtures_draft_proposed.sql` 작성. 사용자가 read-only
+진단으로 규모(안전 상한 3000건의 10분의 1 수준) 확인 후 적용, 검증 쿼리로 정리 대상 0건·
+정상 보존분 263건 확인 완료. `auto_book_membership()`이 leftover까지 같이 예약해버려
+`AUTO-SEC-I` 같은 "정확히 N개 예약" assert가 간헐 실패하던 문제(docs/TODO.md P2-22)의
+누적분을 해소 — sweep이 미래 시각까지 커버하도록 넓히는 근본 조치는 별도 후속 작업으로 남김.
+
 ## 2026-08-13 — SEC-101/112/113/114/115/116/117 통합 회귀 테스트 로컬 Green 확인 (security/sec114-117-final-crosscheck)
 
 `manager_centers` self-join/self-promote(SEC-101/112), `auto_book_membership` IDOR(SEC-114),
