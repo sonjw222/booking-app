@@ -272,6 +272,22 @@ SEC-009 결과와 일치), `USING(true)` 정책은 공개 마케팅 콘텐츠(�
   `README.md` 5절도 "선택"에서 실제 자동화 안내로 갱신. 사용자가 SQL Editor에서 적용 완료
   (`cron.schedule()`이 job id `1` 반환 확인) — 익일 실제 발생 여부만 남음(`docs/TODO.md` P0-5).
 
+## 2026-08-16 — P1-11 완료: 그룹 수업 정원초과 2단계 흐름 통합 테스트 추가 (review/todo-scan3, 이 세션과 독립적으로 동일 항목 착수)
+
+`admin_assign_reservation`의 그룹 수업 정원초과 2단계 흐름(1차 호출 → `needs_capacity_confirm:
+true`만 반환, 예약 미생성 → 사유 입력 후 `p_force_capacity: true`로 재호출 → 실제 생성,
+`is_capacity_override: true`)을 검증하는 통합 테스트 2건을 `admin-assignment-security.test.ts`에
+추가(정원 1명짜리 그룹 수업으로 재현). 로컬로 Live Supabase에 대해 실행해 17/17 통과(신규 2건
+포함, 첫 시도 green) 확인. 프라이빗 수업의 동일 흐름(override 자체 거부)은 이미
+`private-class-capacity.test.ts`가 커버하고 있어 중복 없이 그룹 수업만 보강.
+
+이 항목이 언급하던 `fix_private_class_capacity_and_concurrency_draft_proposed.sql`도 "미적용,
+승인 대기"로 오래 기록돼 있었으나, `pg_get_functiondef('admin_assign_reservation(...)')`로 라이브
+함수 본문을 직접 재확인한 결과 프라이빗 수업 정원초과 방지 로직이 이미 적용돼 있었음 —
+P1-6/P2-17과 같은 계열의 문서 드리프트, 이번에 함께 정정(코드/SQL 변경 없음, 문서만). (참고:
+이 세션도 병렬로 같은 P1-11 테스트를 독립적으로 작성했었고, main 병합 시 두 구현이 겹쳐
+`review/todo-scan3` 쪽의 2-테스트 버전을 최종으로 채택함 — 어설션이 더 촘촘함.)
+
 ## 2026-08-13 — SEC-114/SEC-115 P0/P1 보안 수정 Live 적용(사용자 확인 완료)
 
 - **SEC-114(P0) `auto_book_membership()`**: caller authorization 없이 SECURITY DEFINER +

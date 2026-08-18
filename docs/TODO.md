@@ -408,14 +408,14 @@ manager/leads`)+lib만 새로 만들었다. 회원 전환 규칙: leads는 앱 �
 (권한 없는 스태프 거부/권한 부여 시 허용/오너 자동 통과/활성 회원은 항상 허용, 4/4 통과,
 기존 admin-assignment-security.test.ts 16개·acl-003 5개 회귀 없음 확인).
 
-### P1-11. (2026-08-15, 완료) 관리자 직접배치 통합 테스트 — 정원 초과 확인(needs_capacity_confirm) 2단계 흐름 미검증
+### P1-11. (2026-08-16, 완료) 관리자 직접배치 통합 테스트 — 정원 초과 확인(needs_capacity_confirm) 2단계 흐름 미검증
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **완료.** 그룹 수업 2단계 흐름 테스트를 `tests/integration/admin-assignment-security.test.ts`에 추가(1차 `needs_capacity_confirm: true` 저지·예약 미생성 → `p_force_capacity: true` 재호출로 실제 생성·`over_capacity`/`is_capacity_override` 확인), 16/16 통과. 프라이빗 수업 쪽 SQL(`fix_private_class_capacity_and_concurrency_draft_proposed.sql`)도 라이브 함수 본문에 직접 확인 결과 이미 적용돼 있었음(이 문서가 "미적용, 승인 대기"로 남아있던 건 문서 누락) — `private-class-capacity.test.ts` 6/6도 통과. |
+| 현재 상태 | **완료.** 그룹 수업 2단계 흐름 테스트 2건 추가, 로컬 실행 17/17 통과(첫 시도 green). 참고로 이 항목이 언급하던 `fix_private_class_capacity_and_concurrency_draft_proposed.sql`은 "미적용, 승인 대기"로 오래 적혀 있었는데, `pg_get_functiondef`로 라이브 재확인 결과 프라이빗 수업 정원초과 방지 로직이 이미 적용돼 있었음(P1-6/P2-17과 같은 계열의 문서 드리프트, 이번에 함께 정정). 이 항목은 이 세션과 `review/todo-scan3` 세션이 병렬로 독립 작성했다가 main 병합 시 테스트 어설션이 더 촘촘한 `review/todo-scan3` 버전을 최종 채택함. |
 | 근거 파일 | `tests/integration/admin-assignment-security.test.ts`, `tests/integration/setup.ts` |
-| 완료 조건 | `admin_assign_reservation`이 정원이 찬 수업에서 `needs_capacity_confirm: true`만 반환하고 예약을 만들지 않는지, 그 뒤 `p_force_capacity: true`로 재호출하면 `is_capacity_override: true`로 실제 생성되는지를 통합 테스트로 검증함(정원 1명짜리 테스트 수업을 만들어 확인 가능) |
+| 완료 조건 | ~~`admin_assign_reservation`이 정원이 찬 수업에서 `needs_capacity_confirm: true`만 반환하고 예약을 만들지 않는지, 그 뒤 `p_force_capacity: true`로 재호출하면 실제 생성되는지를 통합 테스트로 검증함~~ 완료. |
 | 관련 문서 | [tests/README.md](../tests/README.md) |
 
 2026-07-30 갱신: 매니저 fixture 부재 문제는 `getOrCreateOwnedTestCenter()`(서비스 역할 키 없이
