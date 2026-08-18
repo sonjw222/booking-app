@@ -596,25 +596,38 @@ error를 무시하지 않고 사용자에게 표시하도록는 고쳤지만, �
 - `community_comments`뿐 아니라 부모 `community_posts`도 조회 정책(`for select`) 1개만 있고
   쓰기(INSERT) 정책이 아예 없음 — 커뮤니티 기능을 실제로 켤 때 함께 보강해야 함.
 
-### P2-13. service_role이 RLS Gap 17개 테이블에 대한 SQL GRANT가 없음(`contracts`/`notification_logs` 통합 테스트 자동화 불가)
+### P2-13. (2026-08-18, 완료) service_role이 RLS Gap 17개 테이블에 대한 SQL GRANT가 없음(`contracts`/`notification_logs` 통합 테스트 자동화 불가)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인됨 — SQL 실행 필요, 이번 배치에서 실행하지 않음** |
-| 근거 파일 | `tests/integration/sec009-batch-a1-rls.test.ts`, `tests/integration/setup.ts`(`describeAdminQueryError`) |
-| 완료 조건 | `GRANT ALL ON TABLE contracts, notification_logs, ... TO service_role;`(대상 범위는 SEC-007 17개 테이블 전체로 할지 결정) 실행을 사용자 승인 후 진행하고, `contracts`/`notification_logs`의 자동화된 통합 테스트를 추가함 |
-| 관련 문서 | [21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md) |
+| 현재 상태 | **완료.** `contracts`/`notification_logs`의 service_role GRANT는 이미 Live에 적용돼 있었음(2026-08-18 read-only 확인, 언제 적용됐는지는 불명 — 문서 갱신 누락). 두 테이블에 없던 RLS SELECT 정책(`docs/22_RLS_Gap_A2_Investigation.md` 설계)을 적용하고, `tests/integration/sec009-batch-a2-rls.test.ts`(신규)로 검증 — 로컬 Live Supabase 대상 12/12 통과. |
+| 근거 파일 | `tests/integration/sec009-batch-a1-rls.test.ts`, `tests/integration/sec009-batch-a2-rls.test.ts`(신규), `fix_rls_gap_batch_a2_contracts_notification_logs_draft_proposed.sql`(신규, 적용 완료), `docs/22_RLS_Gap_A2_Investigation.md` |
+| 완료 조건 | ~~GRANT 실행 승인 후 진행, contracts/notification_logs의 자동화된 통합 테스트를 추가함~~ 완료. |
+| 관련 문서 | [21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md), [22_RLS_Gap_A2_Investigation.md](./22_RLS_Gap_A2_Investigation.md) |
 
 SEC-009(Batch A 적용 준비) 중 발견: RLS 정책 부재와는 별개로, `staff_salaries`/`contracts`/
-`leads`/`messages`/`notification_logs` 5개 테이블 전부 `service_role`에 SQL GRANT 자체가 없다
+`leads`/`messages`/`notification_logs` 5개 테이블 전부 `service_role`에 SQL GRANT 자체가 없었다
 (`account_center_permissions`에서 이미 한 번 겪은 것과 같은 패턴, `permission denied for table X`).
 `staff_salaries`/`leads`/`messages`는 오너에게 INSERT+DELETE 정책이 모두 있어 일반 로그인
-client로 fixture를 만들고 지울 수 있어 문제가 되지 않지만, `contracts`(DELETE 정책이 의도적으로
-없음 — 서명 후 불변)와 `notification_logs`(INSERT 정책이 의도적으로 없음 — 서버 트리거 전용)는
-일반 client로도 admin client로도 fixture를 만들거나 지울 방법이 현재 없다. 이 두 테이블의
-자동화된 통합 테스트는 이 GRANT가 해결된 뒤에만 안전하게 추가할 수 있다 — 그때까지는
-`tests/integration/sec009-batch-a1-rls.test.ts`에서 의도적으로 제외했다.
+client로 fixture를 만들고 지울 수 있어 문제가 되지 않았지만, `contracts`(DELETE 정책이
+의도적으로 없음 — 서명 후 불변)와 `notification_logs`(INSERT 정책이 의도적으로 없음 — 서버
+트리거 전용)는 일반 client로도 admin client로도 fixture를 만들거나 지울 방법이 없어
+`tests/integration/sec009-batch-a1-rls.test.ts`에서 의도적으로 제외돼 있었다.
+
+**2026-08-18 완료**: read-only로 재확인한 결과 `contracts`/`notification_logs` 둘 다
+`service_role` GRANT(SELECT/INSERT/UPDATE/DELETE)가 이미 있었음 — 언제 누가 적용했는지는
+불명이나(GRANT 자체를 남긴 fix 파일이 저장소에 없음), 이 GRANT는 이미 그 전에 해결돼 있었고
+문서만 안 고쳐진 상태였다. 이번엔 GRANT가 아니라 `docs/22_RLS_Gap_A2_Investigation.md`가
+이미 설계해둔 SELECT 정책(`contracts`: 본인 또는 `contract.list.view` 권한 보유자 또는
+platform admin, `notification_logs`: `message.sms.view` 또는 `message.push.view` 권한
+보유자 또는 platform admin — 둘 다 INSERT/UPDATE/DELETE는 의도적으로 정책 없음, 기본 거부
+유지)를 그대로 적용(`fix_rls_gap_batch_a2_contracts_notification_logs_draft_proposed.sql`,
+사용자 실행·`pg_policies` 확인 완료). **주의**: `notification_logs`는 `messages` 테이블과
+달리 채널별로 권한이 안 나뉜다 — `message.sms.view`/`message.push.view` 둘 중 아무거나
+있으면 그 센터의 SMS/푸시 발송기록을 전부 볼 수 있다(설계 문서에 그렇게 정의돼 있고, 로컬
+테스트로 실제 동작이 이 의도와 일치함을 확인 — `messages`처럼 채널로 나누려면 별도 결정과
+정책 재작성이 필요, 이번 범위 밖).
 
 ### P2-14. Track B 감사에서 발견한 그 외 소규모 항목 모음
 

@@ -8,6 +8,22 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-18 — P2-13 완료: contracts/notification_logs RLS SELECT 정책 적용 + 통합 테스트 (review/todo-scan4)
+
+`contracts`/`notification_logs`는 RLS가 켜져 있지만 정책이 0건이라 오너 포함 아무도 조회할 수
+없는 상태였다(앱에서 실사용 0건이라 지금까지 문제 없었음). `docs/22_RLS_Gap_A2_Investigation.md`가
+이미 설계해둔 SELECT 전용 정책(INSERT/UPDATE/DELETE는 의도적으로 유지 — 계약 발급은 향후
+RPC로, 알림 로그는 서버 트리거 전용)을 `fix_rls_gap_batch_a2_contracts_notification_logs_
+draft_proposed.sql`로 적용, `tests/integration/sec009-batch-a2-rls.test.ts`(신규)로 검증 —
+로컬 Live Supabase 대상 12/12 통과.
+
+service_role GRANT(이 두 테이블의 fixture 자동화를 막던 원래 블로커)는 read-only로 재확인한
+결과 이미 Live에 적용돼 있었음 — 언제 적용됐는지는 불명이나 GRANT 자체는 더 이상 블로커가
+아니었다. 테스트 작성 중 `notification_logs`는 `messages` 테이블과 달리 채널별로 권한이 안
+나뉜다는 걸 실측으로 확인(`message.sms.view`/`message.push.view` 중 아무거나 있으면 그 센터
+발송기록 전부 조회 가능 — 설계 문서 그대로, 처음엔 messages 패턴을 잘못 가정해 테스트 2건이
+실패했다가 원인 파악 후 정정).
+
 ## 2026-08-16 — P1-11 완료: 그룹 수업 정원초과 2단계 흐름 통합 테스트 추가 (review/todo-scan3)
 
 `admin_assign_reservation`의 그룹 수업 정원초과 2단계 흐름(1차 호출 → `needs_capacity_confirm:
