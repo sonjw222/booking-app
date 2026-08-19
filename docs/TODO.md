@@ -1377,6 +1377,11 @@ BEGIN/COMMIT 트랜잭션) 실행 → 검증(C)에서 `remaining_target_classes=
 - **PR #56**(P1-13 pay_methods/review_point 추가 보호): E2E에서 `daily-book-limit.spec.ts`
   실패 1건 + `attendance.spec.ts` flaky 1건(재시도로 복구) — 둘 다 이 PR과 무관한 파일로
   확인했으나, E2E 게이팅 때문에 Unit/Integration/Build는 아예 안 돌고 스킵된 채로 merge됨.
+- **PR #63 merge 직후 main push run(2026-08-19, run 32267575685)**: `npx playwright install
+  --with-deps chromium` 단계가 멈춰(같은 날 다른 두 run은 이 단계가 22초~1분37초, 이번엔
+  20분+) 2026-08-14/15 사고 대응으로 넣어둔 `timeout-minutes: 20`(PR #59)이 정확히 의도대로
+  작동해 자동 cancel됨 — 워크플로 파일 변경 없음, 그 순간의 러너/네트워크 일시 문제로 추정.
+  이번에도 E2E 게이팅으로 Unit/Integration/Build가 스킵된 채 끝나 PR #56과 같은 패턴 반복.
 
 셋 다 "실패 내역이 변경된 코드와 무관함"은 개별적으로 확인하고 merge했지만, Unit/Integration/
 Build까지 실제로 통과하는지는 아직 한 번도 끝까지 확인 못 했다. `main`이 안정된 시점에 한

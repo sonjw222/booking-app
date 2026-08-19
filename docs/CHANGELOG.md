@@ -8,6 +8,16 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-19 — P2-23에 CI 멈춤 사례 1건 추가 기록(PR #63 merge 직후 main push run)
+
+PR #63 merge로 트리거된 main push CI(run `32267575685`)에서 `npx playwright install
+--with-deps chromium` 단계가 20분 넘게 멈췄다. 같은 날 다른 두 run에서는 이 단계가
+22초~1분37초에 끝났고 워크플로 파일 자체도 최근 변경이 없어, 그 순간의 GitHub 러너/네트워크
+일시 문제로 판단 — 2026-08-14/15 사고 대응으로 이미 넣어둔 `timeout-minutes: 20`(PR #59)이
+설계대로 작동해 자동 cancel되며 전역 CI 큐가 풀렸다. E2E 게이팅 때문에 이번에도
+Unit/Integration/Build가 스킵된 채 끝나 PR #56과 같은 패턴이라, `docs/TODO.md` P2-23(최근
+merge PR들 CI 완전 그린 재검증 필요) 목록에 함께 기록만 하고 별도 조치는 하지 않음.
+
 ## 2026-08-19 — P2-13 PR #63 CI 결과 확인: 신규 RLS 테스트 통과, 무관한 실패 17건은 공유 테스트센터 경합
 
 PR #63(review/todo-scan4) CI 실행(run 32225473488)에서 `Integration tests` 잡이 실패로
