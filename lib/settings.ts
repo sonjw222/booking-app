@@ -53,6 +53,8 @@ export type CenterSettings = {
   autoUnpaidInput: boolean;
   useLounge: boolean;
   showPointHistory: boolean;
+  // 18. 수업매출 캘린더: 정기권(기간제) 매출 배분 방식
+  unlimitedPassRevenueMode: "usage_split" | "purchase_date_full";
 };
 
 export const DEFAULT_SETTINGS: CenterSettings = {
@@ -74,6 +76,7 @@ export const DEFAULT_SETTINGS: CenterSettings = {
   useInquiryBoard: true, showAllClasses: true, useLocker: false,
   deductOnLateCancel: false, autoUnpaidInput: false,
   useLounge: true, showPointHistory: true,
+  unlimitedPassRevenueMode: "usage_split",
 };
 
 export function rowToSettings(r: any): CenterSettings {
@@ -112,6 +115,7 @@ export function rowToSettings(r: any): CenterSettings {
     autoUnpaidInput: r.auto_unpaid_input,
     useLounge: r.use_lounge,
     showPointHistory: r.show_point_history,
+    unlimitedPassRevenueMode: r.unlimited_pass_revenue_mode ?? "usage_split",
   };
 }
 
@@ -152,6 +156,7 @@ export function settingsToRow(centerId: string, s: CenterSettings) {
     auto_unpaid_input: s.autoUnpaidInput,
     use_lounge: s.useLounge,
     show_point_history: s.showPointHistory,
+    unlimited_pass_revenue_mode: s.unlimitedPassRevenueMode,
     updated_at: new Date().toISOString(),
   };
 }

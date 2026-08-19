@@ -207,7 +207,7 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **완료 — point_transactions로 통합 + 회원용 포인트 내역 화면 추가, 사용자 승인 후 SQL 적용 대기.** |
+| 현재 상태 | **완료.** point_transactions로 통합, 사용자가 SQL Editor에서 적용 완료(기존 point_accounts 잔액 2건이 point_transactions로 이관된 것을 직접 재조회로 확인) + 회원용 포인트 내역 화면 추가. |
 | 근거 파일 | `lib/sales.ts`, `lib/reviews.ts`, `lib/mypage.ts`, `add_sales.sql`, `add_reviews_points.sql`, `add_point_ledger_unification.sql`, `app/mypage/points/page.tsx`(신규), `app/mypage/page.tsx`; `point_transactions`, `point_accounts`, `point_logs`, `center_settings.show_point_history` |
 | 관련 문서 | [REQUIREMENTS 6-3, 10-4](./REQUIREMENTS.md), [DATABASE 4-3, 7-3](./DATABASE.md) |
 
@@ -219,7 +219,8 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 회원 화면에 잔액을 보여주는 새 RPC(`my_point_balance`/`my_point_balances`) 추가 —
 `point_accounts` 단일 행을 `for update`로 잠그던 동시성 보호가 순수 원장 구조에선 안 되므로
 `use_points()`에서 `profiles` 행을 `for update`로 잠가 같은 회원의 동시 사용 요청을 직렬화.
-`lib/reviews.ts`의 `fetchMyPoints`/`fetchAllMyPoints`가 새 RPC를 쓰도록 수정.
+`lib/reviews.ts`의 `fetchMyPoints`/`fetchAllMyPoints`가 새 RPC를 쓰도록 수정, `npm run build`
+통과.
 
 **후속(같은 P1-1 범위로 통합, 신규)**: 그동안 죽어있던 운영설정 `show_point_history`("회원앱
 포인트 내역 조회")를 실제로 연결하는 회원용 "포인트 내역" 화면을 새로 추가함
@@ -239,32 +240,41 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 이번 배치에서 한 것 | 정책 확정(매니저가 아직 처리 전인 주문은 회원이 시간 제한 없이 직접 취소 가능 — 실제 PG 연동 전이라 이 시점엔 결제가 캡처된 상태도 아님, P0-1 참고). `orders` UPDATE RLS에 "본인 소유 + 아직 미발급(pending/paid)만 cancelled로" 정책 추가(`add_order_self_cancel.sql`, 사용자 적용 완료) — 매니저 화면(`app/manager/orders/page.tsx`)이 이미 쓰던 `updateOrderStatus()`를 회원 화면에서도 그대로 재사용해 "같은 RPC/규칙"을 만족시킴(완료 조건 요구사항). `updateOrderStatus()`에 `.select()` 확인을 추가해 RLS가 조용히 0행 매칭할 때(경합 상황 — 클릭 사이에 매니저가 먼저 처리한 경우) 거짓 성공 토스트가 뜨지 않고 정확한 에러가 나도록 방어. `app/purchases/page.tsx`에 "주문 취소하기" 버튼 + 확인 다이얼로그 추가. 검증 스크립트 실행 중 `orders` 테이블에 service_role GRANT가 전혀 없던 걸 직접 재현 발견(다른 세션이 앞서 같은 증상을 보고했었지만 그때는 이 저장소에서 근거를 못 찾았던 바로 그 문제) — `fix_service_role_missing_grants_orders.sql` 작성·적용 완료. 이후 임시 계정으로 실제 취소 성공 + done 상태 주문 취소 차단(0행 매칭으로 정확히 막힘) 둘 다 재확인. `npm run build` 통과. |
 | 관련 문서 | [REQUIREMENTS 6-1, 10-4](./REQUIREMENTS.md), [ROUTES `/purchases`](./ROUTES.md) |
 
-### P1-3. 외부 푸시·알림톡 발송
+### P1-3. (2026-08-18, 웹 푸시 배포 확인) 외부 푸시·알림톡 발송
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **부분 완료(웹 푸시 코드 구현, 배포·실기기 검증 대기)** — 카카오 알림톡·SMS는 사업자 등록 필요해 미착수 |
+| 현재 상태 | **웹 푸시는 코드 구현 + 배포 완료, 실제 모바일 기기 수신 확인만 남음(자동 검증 불가 — 사용자가 나중에 직접 확인 예정).** 카카오 알림톡·SMS·이메일은 사업자 등록이 필요해 범위 밖(P0-1 PG결제와 동일한 종류의 블로커). |
 | 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`; `messages`, `notification_rules`, `notification_logs` |
-| 완료 조건 | 발송 채널과 opt-in 정책을 확정하고, 외부 발송기·재시도·실패 기록·수신 거부를 구현해 실제 기기 수신과 로그를 검증함 |
+| 완료 조건 | (웹 푸시) 실제 브라우저에서 알림 수신 확인. (카카오 알림톡/SMS/이메일) 사업자 등록 이후 발송기 연동 — 이번 범위 아님. |
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/settings/notifications`](./ROUTES.md) |
 
-카카오 알림톡·SMS(`messages`/`notification_rules`/`notification_logs` 기반, 건당 수수료 발생)는
-사업자 등록이 있어야 발송 계약이 가능해 여전히 범위 밖입니다.
+카카오 알림톡·SMS·이메일(`messages`/`notification_rules`/`notification_logs` 기반, 건당 수수료
+발생)는 사업자 등록이 있어야 발송 계약이 가능해 여전히 범위 밖입니다.
 
-**웹 푸시(브라우저/OS 알림)는 코드로 구현 완료**: `push_subscriptions` 테이블 + `add_web_push.sql`
-(pg_net 확장, `notifications.pushed_at` 컬럼, 1분마다 `send-web-push` Edge Function을 호출하는
-pg_cron 작업) / `public/sw.js`(서비스 워커) / `lib/webPush.ts`(구독 등록·해제) /
-`app/settings/notifications/page.tsx`의 "앱을 닫아도 알림 받기" 토글. 기존 `notifications` 테이블에
-쌓이는 모든 알림(예약 확정/취소, 대기 승격, 신규 구매 등)을 그대로 재사용해 실제 기기가 앱을
-안 보고 있을 때도 푸시로 전달한다.
+**웹 푸시(브라우저/OS 알림)는 코드 구현 + 실제 배포까지 완료**: `push_subscriptions` 테이블 +
+`add_web_push.sql`(pg_net 확장, `notifications.pushed_at` 컬럼, 1분마다 `send-web-push`
+Edge Function을 호출하는 pg_cron 작업) / `public/sw.js`(서비스 워커) / `lib/webPush.ts`(구독
+등록·해제) / `app/settings/notifications/page.tsx`의 "앱을 닫아도 알림 받기" 토글. 기존
+`notifications` 테이블에 쌓이는 모든 알림(예약 확정/취소, 대기 승격, 신규 구매 등)을 그대로
+재사용해 실제 기기가 앱을 안 보고 있을 때도 푸시로 전달한다.
 
-아직 안 된 것(사용자 조치 필요):
-1. `supabase functions deploy send-web-push`로 Edge Function 배포
-2. `supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:...`
-3. SQL Editor에서 `select vault.create_secret('<SERVICE_ROLE_KEY>', 'service_role_key', ...)` 직접 실행(파일에 비밀값 없음)
-4. `add_web_push.sql` 적용
-5. 실제 브라우저에서 알림 권한 허용 → 알림 발생 → 1분 내 실제 기기에 푸시가 뜨는지 눈으로 확인(자동 검증 불가 영역)
+**2026-08-18 배포 확인**: `select jobname, schedule, active from cron.job where jobname =
+'dispatch-web-push'`로 read-only 재확인 — cron job이 실제로 `* * * * *`(1분마다)로 등록돼
+`active=true` 상태임을 확인함(즉 `add_web_push.sql`이 실제 Live에 적용됐고, Edge Function
+배포·VAPID/service_role_key vault 시크릿 설정까지 커밋 메시지의 "배포 완료" 주장과 일치).
+같은 QA 중 무관한 버그 1건도 발견해 수정: `tests/integration/auto-book-membership-security.
+test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx tsc --noEmit`이 이 브랜치
+전체에서 실패하고 있었음 — 실제 로직(AUTO-SEC-K)은 이미 자체 try/finally로 올바르게 처리 중이라
+중복 코드였고, 삭제해 타입체크 통과 확인(커밋 `cb472cb`).
+
+남은 건 자동 검증이 불가능한 영역뿐이다(사용자가 나중에 직접 진행 예정):
+1. **실제 모바일 기기**에서 알림 권한 허용 → 알림 발생(예약/취소 등) → 1분 내 푸시가 실제로
+   뜨는지 눈으로 확인. iOS Safari는 iOS 16.4+에서도 "홈 화면에 추가"로 설치한 PWA에서만
+   웹 푸시가 동작한다는 제약이 있어(브라우저 탭 상태로는 수신 안 됨), iOS에서 확인할 때는
+   먼저 홈 화면에 추가한 뒤 테스트해야 한다. Android Chrome은 이런 제약 없이 일반 브라우저
+   탭에서도 동작한다.
 
 ### P1-4. (2026-08-13, 완료 — P2-1b 참고) 네이버 소셜 로그인
 
@@ -307,9 +317,9 @@ pg_cron 작업) / `public/sw.js`(서비스 워커) / `lib/webPush.ts`(구독 등
 2026-08-15 3차 해결(사용자 결정으로 남은 4개 메뉴 진행): 조사 결과 2개는 이미 카탈로그에
 키가 있었는데(`facility.review.view`, `pass.order.view`, `add_new_permissions.sql`) 메뉴에
 연결이 안 돼 있었다. 나머지 2개(`pass.goods.view`, `schedule.admin_assignment_log.view`)는
-새로 추가(`add_manager_menu_permissions.sql`, 사용자 승인 후 적용 대기). `app/manager/page.tsx`의
-관리 메뉴 목록과 "오늘 할 일" 상단 바로가기(문의/주문/회원배치) 모두 `canSeeMenu()`로 연결.
-`npm run build` 통과.
+새로 추가(`add_manager_menu_permissions.sql`, 사용자가 SQL Editor에서 적용 완료·`permissions`
+테이블 재조회로 확인). `app/manager/page.tsx`의 관리 메뉴 목록과 "오늘 할 일" 상단 바로가기
+(문의/주문/회원배치) 모두 `canSeeMenu()`로 연결. `npm run build` 통과.
 
 ### P1-6. (2026-08-15, 문서 오류 정정 — 실제로는 완료) 관리자·운영자 클라이언트 가드 누락
 
@@ -372,7 +382,7 @@ manager/leads`)+lib만 새로 만들었다. 회원 전환 규칙: leads는 앱 �
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **완료 — 사용자 승인 후 적용 대기.** |
+| 현재 상태 | **완료.** 사용자가 SQL Editor에서 적용 완료, 라이브 함수 본문에 `schedule.makeup` 확인이 들어가 있음을 직접 재조회로 확인. |
 | 근거 파일 | `add_admin_assignment_permission_gate.sql`(신규, `can_manage_center_reservations()`), `lib/adminAssignment.ts`, `app/manager/classes/page.tsx` |
 | 관련 문서 | [DATABASE 10절](./DATABASE.md), [REQUIREMENTS 10-1](./REQUIREMENTS.md) |
 
@@ -413,6 +423,12 @@ manager/leads`)+lib만 새로 만들었다. 회원 전환 규칙: leads는 앱 �
 `tests/integration/admin-assignment-member-status-guard.test.ts` 4개 신규 테스트로 검증
 (권한 없는 스태프 거부/권한 부여 시 허용/오너 자동 통과/활성 회원은 항상 허용, 4/4 통과,
 기존 admin-assignment-security.test.ts 16개·acl-003 5개 회귀 없음 확인).
+
+2026-08-18 P1-9 적용 후 수정: P1-9가 `can_manage_center_reservations()`에 `schedule.makeup`
+게이트를 추가하면서, 이 파일의 무권한 스태프(managerB) fixture가 P1-10 검사에 도달하기도
+전에 P1-9 게이트에서 먼저 막혀 3/4 테스트가 실패했다(P1-10만 격리해서 보려던 의도와 어긋남).
+`beforeAll`에서 managerB에게 `schedule.makeup`을 baseline으로 부여해 P1-9는 항상 통과하고
+P1-10 차이만 관찰하도록 수정, 4/4 재통과 확인.
 
 ### P1-11. (2026-08-16, 완료) 관리자 직접배치 통합 테스트 — 정원 초과 확인(needs_capacity_confirm) 2단계 흐름 미검증
 
@@ -500,6 +516,23 @@ reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시�
   facility.info 체크와 중복이 아님. 사용자가 SQL Editor에서 적용, `pg_trigger` 재조회로 확인.
   `app/manager/center-info/page.tsx`도 `fetchMyEffectivePermissionKeys`로 미리 계산해 권한
   없는 필드/전체 저장을 UI에서부터 비활성화·안내하도록 갱신(DB 레이어가 최종 방어선, UI는 편의).
+
+### P1-18. (2026-08-16, 완료) 수업매출 캘린더 신규 기능 — SQL Live 적용·통합테스트 확인
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **완료** — SQL 4종 Live 적용, 통합테스트 9/9 Green |
+| 근거 파일 | `add_class_revenue_schema.sql`, `add_set_membership_session_amounts_rpc.sql`, `add_class_revenue_daily_summary_rpc.sql`, `add_class_revenue_for_date_rpc.sql`, `app/manager/class-revenue/page.tsx`, `tests/integration/class-revenue.test.ts` |
+| 완료 조건 | 사용자가 Supabase SQL Editor에서 4개 파일 순서대로 실행, `pg_get_functiondef`/`pg_policies`로 확인 완료. 통합테스트 작성·Green 확인 완료. |
+| 관련 문서 | `docs/CHANGELOG.md`(2026-08-16 항목) |
+
+이 파일 전용 격리 센터를 쓰는 통합테스트(`class-revenue.test.ts`, 9개)를 작성해 돌리는
+과정에서 실제 버그 1건을 발견·수정함: `class_revenue_for_date`가 회차 번호(`row_number()`)
+계산 전에 조회 날짜로 먼저 필터링해, 어떤 날짜를 조회하든 그 예약 1건짜리 partition이 돼
+`session_index`가 매번 1로만 나오던 버그(균등분배 합계가 부풀고 회차별 커스텀 금액도
+전부 1회차 값으로 표시됨) — 날짜 필터를 `row_number()` 계산 이후로 옮겨 수정, Live
+재적용·재테스트로 확인(자세한 내용은 CHANGELOG 참고).
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 

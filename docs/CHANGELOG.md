@@ -19,6 +19,34 @@ SELECT는 이미 본인 행 RLS가 허용돼 있어(`add_sales.sql`) 새 RPC 없
 "내 정보" 섹션에 진입 메뉴("포인트 내역") 추가. `npm run build` 통과, 헤드리스 확인으로
 `/mypage/points` 정상 렌더링 확인. SQL/스키마 변경 없음.
 
+## 2026-08-18 — P1-9/P1-5/P1-1 SQL 라이브 적용 확인 + P1-10 테스트 fixture 보정
+
+사용자가 3개 SQL(`add_admin_assignment_permission_gate.sql`, `add_manager_menu_permissions.sql`,
+`add_point_ledger_unification.sql`)을 SQL Editor에서 적용. 라이브 함수 본문/permissions
+테이블 재조회로 셋 다 정확히 반영됐음을 확인, `point_transactions`로 이관된 레거시 포인트
+2건도 실측 확인. P1-9 적용으로 `admin-assignment-member-status-guard.test.ts`(P1-10 검증)의
+무권한 스태프 fixture가 새로 생긴 `schedule.makeup` 게이트에 먼저 막혀 3/4 실패하는 걸
+발견 — `beforeAll`에서 baseline으로 `schedule.makeup`을 부여해 P1-10만 격리 검증하도록
+수정, 4/4 재통과. 관련 통합테스트 전체(26개) + unit(242개) + build 재확인.
+
+## 2026-08-18 — P1-3 웹 푸시 배포 확인 + 무관 빌드 버그 수정 (review/p1-3-webpush-qa)
+
+P1-3(외부 푸시·알림톡) 자동 QA 진행: `lib/webPush.ts`/`supabase/functions/send-web-push/
+index.ts`/`public/sw.js` 코드 리뷰(410/404 만료 구독 정리, best-effort 재시도 없음 설계,
+표준 서비스워커 패턴 — 명확한 버그 없음 확인). `select jobname, schedule, active from
+cron.job where jobname = 'dispatch-web-push'`로 read-only 재확인해 이전 세션(사용자 본인)의
+"배포 완료" 커밋 주장이 실제 Live 상태와 일치함을 확인 — cron job 활성, 1분마다 실행 중.
+`docs/TODO.md` P1-3을 이 확인 결과에 맞게 정정(단계별 "아직 안 됨" 목록을 "배포 완료,
+실기기 확인만 남음"으로). 카카오 알림톡/SMS/이메일은 P0-1(PG결제)과 같은 종류의 사업자
+등록 블로커라 이번 범위에서 제외.
+
+같은 QA 중 `tests/integration/auto-book-membership-security.test.ts`의 `afterAll`이 존재하지
+않는 변수(`userA`)를 참조해 `npx tsc --noEmit`이 `feature/design-system-migration` 브랜치
+전체에서 실패하고 있던 것을 발견 — 실제 로직(AUTO-SEC-K)은 이미 자체 try/finally로 올바르게
+처리 중이라 순수 중복 코드였음, 삭제해 타입체크 통과 확인. 이 브랜치를 기반으로 다른 세션들도
+작업 중이라(P1-1, P1-8) 사용자 확인 후 바로 `feature/design-system-migration`에 push함
+(커밋 `cb472cb`).
+
 ## 2026-08-15 (같은 날 후속) — P1-8/P1-9/P1-5/P1-1 제품 결정 배치
 
 사용자가 "만들지 말지" 결정 대기이던 5개 항목 중 4개를 진행하기로 결정(P1-12는 별도 후속):
@@ -283,21 +311,45 @@ SEC-009 결과와 일치), `USING(true)` 정책은 공개 마케팅 콘텐츠(�
   `README.md` 5절도 "선택"에서 실제 자동화 안내로 갱신. 사용자가 SQL Editor에서 적용 완료
   (`cron.schedule()`이 job id `1` 반환 확인) — 익일 실제 발생 여부만 남음(`docs/TODO.md` P0-5).
 
-## 2026-08-16 — P1-11 완료: 그룹 수업 정원초과 2단계 흐름 통합 테스트 추가 (review/todo-scan3, 이 세션과 독립적으로 동일 항목 착수)
+## 2026-08-16 — 수업매출 캘린더 신규 기능 (feature/class-revenue-calendar)
 
-`admin_assign_reservation`의 그룹 수업 정원초과 2단계 흐름(1차 호출 → `needs_capacity_confirm:
-true`만 반환, 예약 미생성 → 사유 입력 후 `p_force_capacity: true`로 재호출 → 실제 생성,
-`is_capacity_override: true`)을 검증하는 통합 테스트 2건을 `admin-assignment-security.test.ts`에
-추가(정원 1명짜리 그룹 수업으로 재현). 로컬로 Live Supabase에 대해 실행해 17/17 통과(신규 2건
-포함, 첫 시도 green) 확인. 프라이빗 수업의 동일 흐름(override 자체 거부)은 이미
-`private-class-capacity.test.ts`가 커버하고 있어 중복 없이 그룹 수업만 보강.
+기존 "매출"(`app/manager/sales`)은 결제일 기준 집계만 제공했다. 이번에 "수업이 실제로
+열린 날짜" 기준으로 그날 어떤 수업/상품이 얼마의 매출을 만들었는지 보는 새 화면
+(`app/manager/class-revenue`)을 추가했다. `payments`에 `class_id`가 없어(결제↔수업은
+`membership_id`를 매개로만 연결) 수업 단위 매출 귀속 로직이 아예 없었던 걸 새로 설계함.
 
-이 항목이 언급하던 `fix_private_class_capacity_and_concurrency_draft_proposed.sql`도 "미적용,
-승인 대기"로 오래 기록돼 있었으나, `pg_get_functiondef('admin_assign_reservation(...)')`로 라이브
-함수 본문을 직접 재확인한 결과 프라이빗 수업 정원초과 방지 로직이 이미 적용돼 있었음 —
-P1-6/P2-17과 같은 계열의 문서 드리프트, 이번에 함께 정정(코드/SQL 변경 없음, 문서만). (참고:
-이 세션도 병렬로 같은 P1-11 테스트를 독립적으로 작성했었고, main 병합 시 두 구현이 겹쳐
-`review/todo-scan3` 쪽의 2-테스트 버전을 최종으로 채택함 — 어설션이 더 촘촘함.)
+- **횟수제 수강권**: 결제금액을 총횟수로 균등분배(나머지는 앞 회차부터 보정해 합계가
+  정확히 일치)하고, 실제 사용된 예약(confirmed/attended/no_show, 폐강 수업 제외)의
+  수업 날짜에 귀속. 매니저가 회차별(`membership_session_amounts`) 금액을 비대칭으로
+  커스텀 가능 — 키는 특정 예약이 아니라 "N회차"라는 추상 슬롯(취소/재예약으로 순서가
+  바뀌면 그 회차를 차지하는 실제 수업도 같이 바뀜, 의도된 설계).
+- **정기권(기간제)**: `center_settings.unlimited_pass_revenue_mode`로 두 방식 지원 —
+  `usage_split`(기본, 기간 중 실제 이용 횟수로 동적 배분) / `purchase_date_full`(구매일에
+  전액). 운영 설정 화면(`app/manager/settings`)에 토글 추가.
+- **상품(goods)**: 세션 개념 없이 구매일 그대로. **환불**: 원 세션으로 소급 배분하지
+  않고 환불 결제 자체의 날짜에 별도 표시(v1 범위, 문서화된 단순화).
+- 신규 SQL(사용자가 Supabase SQL Editor에서 순서대로 직접 실행, Live 적용·확인 완료):
+  `add_class_revenue_schema.sql`(`membership_session_amounts` 테이블 + `center_settings`
+  컬럼), `add_set_membership_session_amounts_rpc.sql`(회차별 금액 저장, 총액 일치 검증),
+  `add_class_revenue_daily_summary_rpc.sql`(캘린더 그리드), `add_class_revenue_for_date_rpc.sql`
+  (날짜별 breakdown). 전부 `add_manager_dashboard_summary_draft_proposed.sql` 패턴
+  (`my_managed_center_ids()` 권한체크, `payment_provider is distinct from 'mock'` 제외,
+  SECURITY DEFINER + `set search_path = public` 하드닝) 재사용. 롤백은
+  `rollback_class_revenue_calendar.sql`.
+- 프론트: `lib/classRevenue.ts`(신규), `app/manager/class-revenue/page.tsx`(신규, 기간선택
+  + 월 캘린더 + breakdown + 회차별 금액 편집 모달), `lib/settings.ts`/`app/manager/settings/
+  page.tsx` 수정, `app/manager/sales/page.tsx`에 진입 링크 추가.
+- 이 기능 전용 통합테스트 `tests/integration/class-revenue.test.ts`(9개, 이 파일 전용
+  격리 센터를 매번 새로 만들어 공유 fixture 오염과 무관하게 실행됨) 신규 작성, 전부 Green
+  확인. 작성 과정에서 실제 버그 1건 발견·수정: `class_revenue_for_date`의 `count_sessions`
+  CTE가 `row_number()`(회차 계산)를 계산하기 *전에* `p_date`로 먼저 필터링해, partition이
+  항상 그 날짜의 예약 1건짜리로 좁혀져 `session_index`가 매번 1로만 계산되던 문제(균등분배
+  합계가 부풀고, 회차별 커스텀 금액도 전부 1회차 값으로 잘못 표시됨) — 날짜 필터를
+  `row_number()` 계산 이후(바깥 JOIN 조건)로 옮겨 수정, Live 재적용·재테스트로 확인.
+  `class_revenue_daily_summary`는 애초에 날짜 필터를 별도 CTE(`count_amounts`)에서
+  적용하고 있어 같은 버그 없음.
+- `npm run build` 통과 확인. 새 테이블/RPC만 추가(기존 함수 변경 없음)라 기존 통합테스트
+  스위트에는 영향 없음.
 
 ## 2026-08-13 — SEC-114/SEC-115 P0/P1 보안 수정 Live 적용(사용자 확인 완료)
 

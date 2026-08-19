@@ -296,6 +296,14 @@ export default function SalesPage() {
         <button className={`perm-tab ${tab === "point" ? "on" : ""}`} onClick={() => setTab("point")}>포인트</button>
       </div>
 
+      {tab === "sales" && (
+        <div style={{ padding: "0 20px 8px", textAlign: "right" }}>
+          <a href="/manager/class-revenue" className="menu-section-label" style={{ display: "inline-block" }}>
+            수업매출 캘린더(날짜별) 보기 ›
+          </a>
+        </div>
+      )}
+
       {/* 기간 선택 (포인트 탭 제외) */}
       {tab !== "point" && (
         <div className="date-range">
