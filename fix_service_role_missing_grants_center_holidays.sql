@@ -1,0 +1,12 @@
+-- P0-2 운영 DB migration ledger 점검 중 발견: center_holidays에 service_role GRANT가
+-- 전혀 없다(information_schema.role_table_grants 직접 조회로 확인, 0건).
+--
+-- fix_service_role_missing_grants_accounts_*.sql / _products.sql / _profiles_*.sql /
+-- _membership_schedule_rules_*.sql / _payments_*.sql / _for_e2e_admin_*.sql와 동일한
+-- 패턴 — 새 테이블에 service_role GRANT를 추가하는 걸 빠뜨린 경우다.
+--
+-- 근거: tests/integration/auto-book-membership-security.test.ts(다른 세션, SEC-114 배치)가
+-- admin(service_role) 클라이언트로 center_holidays를 insert/delete하는데, 이 배치의
+-- CI에서 실제로 "permission denied for table center_holidays"가 재현됐다(다른 세션이
+-- 직접 보고, 이 파일 작성 전 원인 확인 완료).
+grant select, insert, update, delete on center_holidays to service_role;

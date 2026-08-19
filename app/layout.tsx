@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ImageViewerProvider } from "./components/ImageViewer";
 import SessionWatcher from "./components/SessionWatcher";
+import AppConfirmProvider from "./components/AppConfirmProvider";
+import GlobalBottomNav from "./components/GlobalBottomNav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,7 +33,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <SessionWatcher />
+        <AppConfirmProvider />
         <ImageViewerProvider>{children}</ImageViewerProvider>
+        <GlobalBottomNav />
       </body>
     </html>
   );

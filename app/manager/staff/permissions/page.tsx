@@ -9,7 +9,6 @@
 */
 
 import { useCallback, useEffect, useState, Suspense } from "react";
-import ManagerNav from "../../../components/ManagerNav";
 import Loading from "../../../components/Loading";
 import { useSearchParams } from "next/navigation";
 import { fetchMyCenters, isOwnerOfCenter } from "../../../../lib/manager";
@@ -106,7 +105,6 @@ function PermInner() {
         <div className="daylist-empty" style={{ paddingTop: 80 }}>
           {error === "잘못된 접근이에요" ? error : "이 센터의 오너만 접근할 수 있는 화면이에요"}
         </div>
-        <ManagerNav />
       </div>
     );
   }
@@ -171,7 +169,6 @@ function PermInner() {
           })
         )}
       </div>
-      <ManagerNav />
     </div>
   );
 }

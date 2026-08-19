@@ -11,7 +11,6 @@ import { fetchCart, removeFromCart, clearCart, updateCartSize, type CartItem } f
 import { createOrder } from "../../lib/orders";
 import { fetchCenterDetail } from "../../lib/center";
 import Loading from "../components/Loading";
-import BottomNav from "../components/BottomNav";
 
 const PAY_METHODS = [
   { id: "card", label: "신용/체크카드", emoji: "💳" },
@@ -124,7 +123,7 @@ export default function CartPage() {
     return (
       <div className="app-shell">
         <div className="checkout-done">
-          <div className="checkout-done-icon">✅</div>
+          <div className="checkout-done-icon" aria-hidden="true" />
           <div className="checkout-done-title">주문이 접수됐어요</div>
           <div className="checkout-done-sub">
             센터에서 확인 후 발급해드려요.<br />
@@ -133,13 +132,12 @@ export default function CartPage() {
           <a className="primary-btn" href="/mypage" style={{ margin: "20px", display: "block", width: "calc(100% - 40px)", textAlign: "center" }}>마이페이지로</a>
           <a className="ghost-btn" href="/" style={{ margin: "0 20px", display: "block", width: "calc(100% - 40px)", textAlign: "center" }}>홈으로</a>
         </div>
-        <BottomNav />
       </div>
     );
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell commerce-page cart-page-v2">
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
       <div className="back-header">
@@ -149,16 +147,21 @@ export default function CartPage() {
       </div>
 
       {loading ? <Loading /> : items.length === 0 ? (
-        <div className="daylist-empty" style={{ padding: "60px 20px" }}>장바구니가 비어 있어요</div>
+        <div className="commerce-empty">
+          <div className="commerce-empty-mark" aria-hidden="true">0</div>
+          <b>장바구니가 비어 있어요</b>
+          <span>센터에서 수강권이나 상품을 둘러보세요.</span>
+          <a className="primary-btn" href="/search">센터 찾아보기</a>
+        </div>
       ) : (
         <>
           {/* 주문 정보 */}
-          <div className="menu-section-label">주문 정보</div>
+          <div className="commerce-title"><strong>담은 상품</strong><span>{items.length}개</span></div>
           <div className="cart-list">
             {items.map((it) => (
               <div key={it.id} className="cart-row-wrap">
                 <div className="cart-row">
-                  <div className="cart-info">
+                  <div className="commerce-product-mark">P</div><div className="cart-info">
                     <div className="cart-name">{it.productName}</div>
                     <div className="cart-price">{won(it.price)}</div>
                   </div>
@@ -178,8 +181,8 @@ export default function CartPage() {
           </div>
 
           {/* 쿠폰 */}
-          <div className="menu-section-label">쿠폰</div>
-          <div style={{ display: "flex", gap: 8, padding: "0 20px" }}>
+          <div className="menu-section-label commerce-label">할인 쿠폰</div>
+          <div className="commerce-code-row">
             <input className="input-field" style={{ flex: 1 }} placeholder="쿠폰 코드 입력"
               value={couponInput}
               onChange={(e) => { setCouponInput(e.target.value); setCouponMsg(null); }}
@@ -200,7 +203,7 @@ export default function CartPage() {
           )}
 
           {/* 결제 수단 */}
-          <div className="menu-section-label">결제 수단</div>
+          <div className="menu-section-label commerce-label">결제 수단</div>
           <div className="pay-methods">
             {PAY_METHODS.filter((m) => !allowedPay || allowedPay.length === 0 || allowedPay.includes(m.id)).map((m) => (
               <button key={m.id} className={`pay-method ${payMethod === m.id ? "on" : ""}`} onClick={() => setPayMethod(m.id)}>
@@ -230,7 +233,6 @@ export default function CartPage() {
           <div style={{ height: 30 }} />
         </>
       )}
-      <BottomNav />
     </div>
   );
 }

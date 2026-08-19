@@ -1,24 +1,51 @@
-/* ============================================================
-   테마 변수 - 목업 때 만든 4가지 테마 그대로
-   ============================================================ */
+/* Design system v1 — light theme tokens. Brand colors are isolated so they
+   can be replaced without changing semantic or neutral UI colors. */
 :root, [data-theme="burgundy"] {
-  --bg: #ffffff;
-  --surface: #F6F6F8;
-  --ink: #1A1A1E;
-  --ink-soft: #8B8B94;
-  /* 코드 전반에서 쓰는 별칭 (ink 계열과 항상 동일하게 유지) */
-  --text: #1A1A1E;
-  --text-dim: #8B8B94;
-  --line: #EEEEF0;
-  --accent: #8B2F52;
-  --accent-soft: #FCEEF2;
+  --bg: #FBFBFA;
+  --surface: #F2F2F0;
+  --surface-strong: #E9E9E6;
+  --ink: #171719;
+  --ink-soft: #747479;
+  --text: #171719;
+  --text-dim: #747479;
+  --line: #DEDEDA;
+  --line-strong: #C9C9C5;
+  --accent: #202124;
+  --accent-soft: #EEEEEC;
+  --brand: #45BFE3;
+  --brand-ink: #087A9C;
+  --brand-soft: #E6F7FC;
+  --success: #287A5B;
+  --success-soft: #E8F3EE;
+  --warning: #9A6718;
+  --warning-soft: #F7F0E2;
+  --danger: #B64242;
+  --danger-soft: #F8EAEA;
   --mint: #0F9D77;
   --mint-soft: #E4F7F1;
   --gold: #B8842E;
   --gold-soft: #FBF1DE;
-  --grad1: #3B1330;
-  --grad2: #8B2F52;
-  --grad3: #B24F72;
+  --grad1: #151516;
+  --grad2: #2E2F32;
+  --grad3: #5B5C60;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 10px;
+  --radius-md: 13px;
+  --radius-lg: 22px;
+  --radius-sheet: 26px;
+  --page-gutter: 16px;
+  --shadow-float: 0 6px 22px rgba(20,20,20,.10);
+  --type-display: 28px;
+  --type-title: 22px;
+  --type-section: 18px;
+  --type-body: 14px;
+  --type-caption: 12px;
 }
 
 /* 다크 모드 */
@@ -425,6 +452,10 @@ a { color: inherit; text-decoration: none; }
 .s-attended { background: var(--mint-soft); color: var(--mint); }
 .s-waitlisted { background: var(--gold-soft); color: var(--gold); }
 .s-cancelled, .s-no_show { background: var(--surface); color: var(--ink-soft); }
+.s-new { background: var(--gold-soft); color: var(--gold); }
+.s-contacted { background: var(--accent-soft); color: var(--accent); }
+.s-converted { background: var(--mint-soft); color: var(--mint); }
+.s-dropped { background: var(--surface); color: var(--ink-soft); }
 
 .list-row {
   display: flex; align-items: center; justify-content: space-between;

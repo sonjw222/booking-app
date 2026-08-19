@@ -8,7 +8,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import BottomNav from "../components/BottomNav";
 import Loading from "../components/Loading";
 import { ZoomableImage } from "../components/ImageViewer";
 import DatePicker from "../components/DatePicker";
@@ -101,7 +100,7 @@ export default function ProfilesPage() {
   }
 
   async function handleDelete(p: ProfileRow) {
-    if (!confirm(`'${p.name}' 프로필을 삭제할까요? 예약·수강권 기록도 함께 사라져요.`)) return;
+    if (!(await globalThis.appConfirm(`'${p.name}' 프로필을 삭제할까요? 예약·수강권 기록도 함께 사라져요.`))) return;
     setBusy(true);
     try {
       await deleteProfile(p.id);
@@ -114,7 +113,7 @@ export default function ProfilesPage() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell account-page-v2">
       <div className="back-header">
         <a className="side" href="/mypage">‹</a>
         <div className="title">프로필 관리</div>
@@ -238,7 +237,6 @@ export default function ProfilesPage() {
           </div>
         </div>
       )}
-      <BottomNav />
     </div>
   );
 }

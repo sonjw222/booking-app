@@ -8,7 +8,6 @@
 */
 
 import { Suspense, useCallback, useEffect, useState } from "react";
-import BottomNav from "../components/BottomNav";
 import { useSearchParams } from "next/navigation";
 import { fetchCenterDetail, fetchCenterProducts, type CenterProduct } from "../../lib/center";
 import { createOrder } from "../../lib/orders";
@@ -190,7 +189,7 @@ function CheckoutContent() {
     return (
       <div className="app-shell">
         <div className="checkout-done">
-          <div className="checkout-done-icon">✅</div>
+          <div className="checkout-done-icon" aria-hidden="true" />
           <div className="checkout-done-title">테스트 결제가 완료됐어요</div>
           <div className="checkout-done-sub">
             {centerName}<br />
@@ -246,7 +245,7 @@ function CheckoutContent() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell commerce-page checkout-page-v2">
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
       <div className="back-header">
@@ -256,7 +255,7 @@ function CheckoutContent() {
       </div>
 
       {/* 주문서 */}
-      <div className="menu-section-label">주문 정보</div>
+      <div className="commerce-title"><strong>주문 상품</strong><span>1개</span></div>
       <div className="checkout-order">
         <div className="checkout-order-center">{centerName}</div>
         <div className="checkout-order-row">
@@ -313,8 +312,8 @@ function CheckoutContent() {
       )}
 
       {/* 쿠폰 */}
-      <div className="menu-section-label">쿠폰</div>
-      <div style={{ display: "flex", gap: 8, padding: "0 20px" }}>
+      <div className="menu-section-label commerce-label">할인 쿠폰</div>
+      <div className="commerce-code-row">
         <input className="input-field" style={{ flex: 1 }} placeholder="쿠폰 코드 입력" value={couponInput}
           onChange={(e) => { setCouponInput(e.target.value); setCouponMsg(null); }}
           onKeyDown={(e) => { if (e.key === "Enter") applyCoupon(); }} />
@@ -339,7 +338,7 @@ function CheckoutContent() {
           <div className="menu-section-label">
             포인트 <span style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 500 }}>· 보유 {myPoints.toLocaleString("ko-KR")}P</span>
           </div>
-          <div style={{ display: "flex", gap: 8, padding: "0 20px" }}>
+          <div className="commerce-code-row">
             <input className="input-field" style={{ flex: 1 }} inputMode="numeric" placeholder="사용할 포인트"
               value={usePoint} onChange={(e) => setUsePoint(e.target.value.replace(/[^0-9]/g, ""))} />
             <button className="ghost-btn" style={{ flex: "0 0 80px" }}
@@ -354,7 +353,7 @@ function CheckoutContent() {
       )}
 
       {/* 결제 수단 */}
-      <div className="menu-section-label">결제 수단</div>
+      <div className="menu-section-label commerce-label">결제 수단</div>
       <div className="pay-methods">
         {PAY_METHODS.filter((m) => !allowedPay || allowedPay.length === 0 || allowedPay.includes(m.id)).map((m) => (
           <button key={m.id} className={`pay-method ${payMethod === m.id ? "on" : ""}`} onClick={() => setPayMethod(m.id)}>
@@ -389,7 +388,6 @@ function CheckoutContent() {
         {busy ? "처리 중..." : `${won(finalTotal)} 결제하기`}
       </button>
       <div style={{ height: 30 }} />
-      <BottomNav />
     </div>
   );
 }
