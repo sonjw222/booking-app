@@ -10,7 +10,6 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, type HomeCenter, type HomeClass } from "../lib/home";
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
 import { supabase } from "../lib/supabaseClient";
-import BottomNav from "./components/BottomNav";
 import UiIcon, { type IconName } from "./components/UiIcon";
 
 const CATEGORIES = [
@@ -204,7 +203,6 @@ export default function Home() {
       </div>
 
       {/* 하단 네비게이션 */}
-      <BottomNav />
     </div>
   );
 }

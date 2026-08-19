@@ -1,13 +1,15 @@
 -- ============================================================
 -- fix_auto_book_membership_idor_draft_proposed.sql 롤백
 --
--- auto_book_membership()을 이번 수정 이전 Live 상태(fix_auto_book_oneperday.sql
--- 기준 — 하루 1개 제한 + class_allowed_products 체크 포함, authorization 없음,
--- search_path 미설정, PUBLIC EXECUTE)로 정확히 되돌린다.
+-- SEC-114 수정 이전(fix_auto_book_oneperday.sql 기준) 상태로 auto_book_membership()과
+-- 그 EXECUTE 권한을 되돌린다.
+-- ⚠ 이 롤백은 SEC-114 IDOR(임의 membership_id로 익명/타인 자동예약·차감)와
+-- 정책 회귀(pass_selection_mode/schedule rule/휴무일/예약마감/일일한도/프라이빗
+-- 동시진행 미검사)를 전부 그대로 복원한다 — 회귀 테스트가 실제로 이 수정 때문에
+-- 실패하는 것으로 확인된 경우에만, 그리고 그 실패의 근본 원인을 먼저 규명한
+-- 뒤에만 사용할 것.
 --
--- ⚠ 롤백하면 SEC-114-A/C(누구나 타인의 membership_id로 예약 생성/잔여횟수 소진 가능)가
--- 다시 열립니다. 회귀 테스트가 실제로 이 수정 때문에 실패하는 것으로 확인된 경우에만,
--- 그리고 그 실패의 근본 원인을 먼저 규명한 뒤에만 사용할 것.
+-- 여러 번 실행해도 안전.
 -- ============================================================
 
 BEGIN;
@@ -24,7 +26,7 @@ declare
     v_booked  int := 0;
     v_class   record;
     v_taken   int;
-    v_used_dates date[] := '{}';       -- 이미 예약 잡은 날짜들
+    v_used_dates date[] := '{}';
     v_cdate   date;
 begin
     select * into v_mem from memberships where id = p_membership_id for update;
@@ -61,13 +63,10 @@ begin
         order by c.start_time asc
     loop
         exit when v_left <= 0;
-
         v_cdate := v_class.class_date;
-
         if v_cdate = any(v_used_dates) then
             continue;
         end if;
-
         if exists (
             select 1 from reservations r
             join classes c2 on c2.id = r.class_id
@@ -78,17 +77,14 @@ begin
             v_used_dates := array_append(v_used_dates, v_cdate);
             continue;
         end if;
-
         select count(*) into v_taken
         from reservations
         where class_id = v_class.id and status in ('confirmed', 'attended');
         if v_taken >= v_class.capacity then
             continue;
         end if;
-
         insert into reservations (class_id, profile_id, membership_id, status)
         values (v_class.id, v_mem.profile_id, v_mem.id, 'confirmed');
-
         v_used_dates := array_append(v_used_dates, v_cdate);
         v_left := v_left - 1;
         v_booked := v_booked + 1;

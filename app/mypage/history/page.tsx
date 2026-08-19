@@ -7,7 +7,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import BottomNav from "../../components/BottomNav";
 import Loading from "../../components/Loading";
 import { fetchFullHistory, type FullHistoryItem } from "../../../lib/mypage";
 
@@ -111,7 +110,6 @@ export default function HistoryPage() {
           <div style={{ height: 40 }} />
         </div>
       )}
-      <BottomNav />
     </div>
   );
 }

@@ -7,6 +7,7 @@ function parseDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   return year && month && day ? new Date(year, month - 1, day) : new Date();
 }
+
 function dateKey(year: number, month: number, day: number) {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
@@ -38,6 +39,7 @@ export default function DatePicker({ value, onChange, label }: { value: string; 
     setYear(next.getFullYear());
     setMonth(next.getMonth());
   }
+
   function toggle() {
     if (!open && root.current) {
       const rect = root.current.getBoundingClientRect();
@@ -47,7 +49,7 @@ export default function DatePicker({ value, onChange, label }: { value: string; 
   }
 
   return <div className="app-date-picker" ref={root}>
-    {/* 기존 E2E의 input[type=date] 계약은 유지하되, 사용자에게는 앱 전용 달력을 보여준다. */}
+    {/* 기존 자동화와 브라우저 날짜 입력 계약은 유지하고, 화면에는 앱 전용 달력을 표시한다. */}
     <input
       className="app-date-native-proxy"
       type="date"

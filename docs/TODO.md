@@ -199,7 +199,6 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 권한 키를 재사용하고 있어, 세분권한 도입 시 의미가 부정확할 수 있습니다(이것도 SQL 필요) —
 이 부수 발견은 아직 미해결로 남아있습니다(위 "확인 경위" 참고, 핵심 버그만 NOTIF-001에서
 같이 해결됨).
-
 ### P0-7. (신규, 2026-08-14~15 관측) 공유 dev Supabase 통합/E2E fixture 데이터가 반복적으로 오염됨 — 원인 미확인
 
 | 필드 | 내용 |
@@ -220,12 +219,21 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **확인 필요** |
-| 근거 파일 | `lib/sales.ts`, `lib/reviews.ts`, `add_sales.sql`, `add_reviews_points.sql`; `point_transactions`, `point_accounts`, `point_logs` |
-| 완료 조건 | 적립·사용·후기 보상·결제 사용의 기준 원장을 제품 정책으로 확정하고, 두 체계의 동기화 또는 migration을 구현해 모든 화면에서 같은 잔액을 검증함 |
+| 현재 상태 | **완료.** point_transactions로 통합, 사용자가 SQL Editor에서 적용 완료(기존 point_accounts 잔액 2건이 point_transactions로 이관된 것을 직접 재조회로 확인). |
+| 근거 파일 | `lib/sales.ts`, `lib/reviews.ts`, `add_sales.sql`, `add_reviews_points.sql`, `add_point_ledger_unification.sql`(신규); `point_transactions`, `point_accounts`, `point_logs` |
 | 관련 문서 | [REQUIREMENTS 6-3, 10-4](./REQUIREMENTS.md), [DATABASE 4-3, 7-3](./DATABASE.md) |
 
-`point_logs`의 실제 기록·조회 역할도 함께 확인해야 합니다.
+2026-08-15 사용자 결정: `point_transactions`(매니저 매출 화면이 쓰던 원장, `sum(amount)`
+방식)로 통합. `write_review()`/`use_points()`를 `point_accounts`/`point_logs` 대신
+`point_transactions`에 기록하도록 재정의, 기존 `point_accounts` 잔액은 이관 insert로
+`point_transactions`에 합침(멱등, 재실행해도 중복 안 됨). `point_accounts`/`point_logs`
+테이블 자체는 DROP하지 않고 레거시로 남김(CLAUDE.md 규칙 3, 테이블 삭제는 별도 승인 필요).
+회원 화면에 잔액을 보여주는 새 RPC(`my_point_balance`/`my_point_balances`) 추가 —
+`point_accounts` 단일 행을 `for update`로 잠그던 동시성 보호가 순수 원장 구조에선 안 되므로
+`use_points()`에서 `profiles` 행을 `for update`로 잠가 같은 회원의 동시 사용 요청을 직렬화.
+`lib/reviews.ts`의 `fetchMyPoints`/`fetchAllMyPoints`가 새 RPC를 쓰도록 수정, `npm run build`
+통과. 회원 화면에 포인트 잔액을 실제로 노출하는 UI는 이번 범위 밖(원장 통합만, 새 화면 추가는
+별도 요청 시).
 
 ### P1-2. (2026-08-14, 완료) 미발급 주문 취소와 환불 정책 설정
 
@@ -237,38 +245,59 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 이번 배치에서 한 것 | 정책 확정(매니저가 아직 처리 전인 주문은 회원이 시간 제한 없이 직접 취소 가능 — 실제 PG 연동 전이라 이 시점엔 결제가 캡처된 상태도 아님, P0-1 참고). `orders` UPDATE RLS에 "본인 소유 + 아직 미발급(pending/paid)만 cancelled로" 정책 추가(`add_order_self_cancel.sql`, 사용자 적용 완료) — 매니저 화면(`app/manager/orders/page.tsx`)이 이미 쓰던 `updateOrderStatus()`를 회원 화면에서도 그대로 재사용해 "같은 RPC/규칙"을 만족시킴(완료 조건 요구사항). `updateOrderStatus()`에 `.select()` 확인을 추가해 RLS가 조용히 0행 매칭할 때(경합 상황 — 클릭 사이에 매니저가 먼저 처리한 경우) 거짓 성공 토스트가 뜨지 않고 정확한 에러가 나도록 방어. `app/purchases/page.tsx`에 "주문 취소하기" 버튼 + 확인 다이얼로그 추가. 검증 스크립트 실행 중 `orders` 테이블에 service_role GRANT가 전혀 없던 걸 직접 재현 발견(다른 세션이 앞서 같은 증상을 보고했었지만 그때는 이 저장소에서 근거를 못 찾았던 바로 그 문제) — `fix_service_role_missing_grants_orders.sql` 작성·적용 완료. 이후 임시 계정으로 실제 취소 성공 + done 상태 주문 취소 차단(0행 매칭으로 정확히 막힘) 둘 다 재확인. `npm run build` 통과. |
 | 관련 문서 | [REQUIREMENTS 6-1, 10-4](./REQUIREMENTS.md), [ROUTES `/purchases`](./ROUTES.md) |
 
-### P1-3. 외부 푸시·알림톡 발송
+### P1-3. (2026-08-18, 웹 푸시 배포 확인) 외부 푸시·알림톡 발송
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **미완성** |
-| 근거 파일 | `app/settings/notifications/page.tsx`, `add_notifications.sql`, `schema.sql`; `messages`, `notification_rules`, `notification_logs` |
-| 완료 조건 | 발송 채널과 opt-in 정책을 확정하고, 외부 발송기·재시도·실패 기록·수신 거부를 구현해 실제 기기 수신과 로그를 검증함 |
+| 현재 상태 | **웹 푸시는 코드 구현 + 배포 완료, 실제 모바일 기기 수신 확인만 남음(자동 검증 불가 — 사용자가 나중에 직접 확인 예정).** 카카오 알림톡·SMS·이메일은 사업자 등록이 필요해 범위 밖(P0-1 PG결제와 동일한 종류의 블로커). |
+| 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`; `messages`, `notification_rules`, `notification_logs` |
+| 완료 조건 | (웹 푸시) 실제 브라우저에서 알림 수신 확인. (카카오 알림톡/SMS/이메일) 사업자 등록 이후 발송기 연동 — 이번 범위 아님. |
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/settings/notifications`](./ROUTES.md) |
 
-현재 설정은 기기 `localStorage`에만 저장되며 실제 발송으로 이어지지 않습니다.
+카카오 알림톡·SMS·이메일(`messages`/`notification_rules`/`notification_logs` 기반, 건당 수수료
+발생)는 사업자 등록이 있어야 발송 계약이 가능해 여전히 범위 밖입니다.
 
-### P1-4. 네이버 소셜 로그인
+**웹 푸시(브라우저/OS 알림)는 코드 구현 + 실제 배포까지 완료**: `push_subscriptions` 테이블 +
+`add_web_push.sql`(pg_net 확장, `notifications.pushed_at` 컬럼, 1분마다 `send-web-push`
+Edge Function을 호출하는 pg_cron 작업) / `public/sw.js`(서비스 워커) / `lib/webPush.ts`(구독
+등록·해제) / `app/settings/notifications/page.tsx`의 "앱을 닫아도 알림 받기" 토글. 기존
+`notifications` 테이블에 쌓이는 모든 알림(예약 확정/취소, 대기 승격, 신규 구매 등)을 그대로
+재사용해 실제 기기가 앱을 안 보고 있을 때도 푸시로 전달한다.
+
+**2026-08-18 배포 확인**: `select jobname, schedule, active from cron.job where jobname =
+'dispatch-web-push'`로 read-only 재확인 — cron job이 실제로 `* * * * *`(1분마다)로 등록돼
+`active=true` 상태임을 확인함(즉 `add_web_push.sql`이 실제 Live에 적용됐고, Edge Function
+배포·VAPID/service_role_key vault 시크릿 설정까지 커밋 메시지의 "배포 완료" 주장과 일치).
+같은 QA 중 무관한 버그 1건도 발견해 수정: `tests/integration/auto-book-membership-security.
+test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx tsc --noEmit`이 이 브랜치
+전체에서 실패하고 있었음 — 실제 로직(AUTO-SEC-K)은 이미 자체 try/finally로 올바르게 처리 중이라
+중복 코드였고, 삭제해 타입체크 통과 확인(커밋 `cb472cb`).
+
+남은 건 자동 검증이 불가능한 영역뿐이다(사용자가 나중에 직접 진행 예정):
+1. **실제 모바일 기기**에서 알림 권한 허용 → 알림 발생(예약/취소 등) → 1분 내 푸시가 실제로
+   뜨는지 눈으로 확인. iOS Safari는 iOS 16.4+에서도 "홈 화면에 추가"로 설치한 PWA에서만
+   웹 푸시가 동작한다는 제약이 있어(브라우저 탭 상태로는 수신 안 됨), iOS에서 확인할 때는
+   먼저 홈 화면에 추가한 뒤 테스트해야 한다. Android Chrome은 이런 제약 없이 일반 브라우저
+   탭에서도 동작한다.
+
+### P1-4. (2026-08-13, 완료 — P2-1b 참고) 네이버 소셜 로그인
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **미완성** |
-| 근거 파일 | `app/login/page.tsx`, `AUTH_SETUP.md` |
-| 완료 조건 | 지원 여부와 인증 구조를 확정하고, callback·계정 생성·중복 이메일·실패 흐름을 staging에서 검증함. 미지원 결정 시 버튼과 문서를 일관되게 정리함 |
+| 현재 상태 | **완료.** 이 항목은 이 문서에 갱신되지 않은 채 남아있던 중복 항목 — 실제로는 커스텀 Edge Function으로 구현·배포되고 실제 네이버 계정으로 로그인 왕복까지 확인됐다. 자세한 내용은 [P2-1b](#p2-1b-2026-08-13-완료-네이버-로그인--supabase-기본-미지원-커스텀-edge-function으로-구현) 참고. |
+| 근거 파일 | `supabase/functions/naver-login/index.ts`, `lib/naverAuth.ts`, `app/login/naver-callback/page.tsx` |
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [ROUTES `/login`](./ROUTES.md) |
-
-현재 버튼은 미설정 안내만 표시합니다.
 
 ### P1-5. (2026-08-14, 2차 진행 — ManagerNav 탭까지 확대) 매니저 세부 권한 기반 UI
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **부분 완료 — 남은 항목은 아래 "완료 조건" 참고.** |
-| 근거 파일 | `lib/roles.ts`, `app/manager/staff/permissions/page.tsx`, 전체 `app/manager/**/page.tsx`, `app/components/ManagerNav.tsx`, `add_personal_permissions.sql` |
-| 완료 조건 | 각 매니저 화면의 기능을 권한 키와 매핑하고 권한 없는 메뉴·버튼을 사전에 숨기거나 비활성화하며, RLS/RPC 거부도 그대로 유지해 역할별 검증을 통과함. 남은 것: (1) 상품/후기/주문/관리자배치내역 4개 메뉴 — 대응 permission key가 카탈로그에 없어 새로 추가해야 함(스키마 변경, 별도 승인 필요) (2) 각 화면 내부의 개별 액션 버튼 단위 권한 표시(여전히 서버 거부 이후에야 알 수 있음) — 화면 수가 많아 범위가 큼, 별도 배치 권장 |
+| 현재 상태 | **메뉴 노출 제어는 완료.** 남은 건 화면 내부 버튼 단위 권한 표시뿐(아래 참고). |
+| 근거 파일 | `lib/roles.ts`, `app/manager/staff/permissions/page.tsx`, 전체 `app/manager/**/page.tsx`, `app/components/ManagerNav.tsx`, `add_personal_permissions.sql`, `add_manager_menu_permissions.sql`(신규) |
+| 완료 조건 | 각 매니저 화면의 기능을 권한 키와 매핑하고 권한 없는 메뉴·버튼을 사전에 숨기거나 비활성화하며, RLS/RPC 거부도 그대로 유지해 역할별 검증을 통과함. 남은 것: 각 화면 내부의 개별 액션 버튼 단위 권한 표시(여전히 서버 거부 이후에야 알 수 있음) — 화면 수가 많아 범위가 큼, 별도 배치 권장 |
 | 관련 문서 | [REQUIREMENTS 5-7, 6-1](./REQUIREMENTS.md), [DATABASE 7-1, 10절](./DATABASE.md), [ROUTES 5절](./ROUTES.md) |
 
 2026-08-01 Access Control 구현 Batch에서 1차 해결: `app/manager/page.tsx`의 13개 메뉴 중
@@ -290,25 +319,37 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 버튼 단위 권한 표시(각 screen의 개별 액션 버튼)는 여전히 서버 거부 이후에야 알 수 있음 —
 상세 내용은 [CHANGELOG.md](./CHANGELOG.md) 참고.
 
-### P1-6. (2026-08-14, 완료 확인 — 문서만 정정) 관리자·운영자 클라이언트 가드 누락
+2026-08-15 3차 해결(사용자 결정으로 남은 4개 메뉴 진행): 조사 결과 2개는 이미 카탈로그에
+키가 있었는데(`facility.review.view`, `pass.order.view`, `add_new_permissions.sql`) 메뉴에
+연결이 안 돼 있었다. 나머지 2개(`pass.goods.view`, `schedule.admin_assignment_log.view`)는
+새로 추가(`add_manager_menu_permissions.sql`, 사용자가 SQL Editor에서 적용 완료·`permissions`
+테이블 재조회로 확인). `app/manager/page.tsx`의 관리 메뉴 목록과 "오늘 할 일" 상단 바로가기
+(문의/주문/회원배치) 모두 `canSeeMenu()`로 연결. `npm run build` 통과.
+
+### P1-6. (2026-08-15, 문서 오류 정정 — 실제로는 완료) 관리자·운영자 클라이언트 가드 누락
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **완료.** 클라이언트 가드 5개 화면 전부 코드에 있음을 재확인, `account_center_permissions` SELECT RLS도 라이브에서 "본인 것이거나 facility.role_permission 권한 보유자만"으로 정정돼 있음을 `pg_policies` 직접 조회로 재확인. 이 문서가 "아직 실행하지 않음"으로 오래 남아있던 것은 문서 누락(다른 배치 노트(P0-4 이력)엔 이미 "사용자가 적용, 통합 테스트 통과, PR #19로 main 병합"까지 기록돼 있었음, 서로 교차 연결이 안 됐던 것). |
-| 근거 파일 | `app/admin/categories/page.tsx`, `app/admin/banners/page.tsx`, `app/manager/inquiries/page.tsx`, `app/manager/notifications/page.tsx`, `app/manager/staff/permissions/page.tsx`, `fix_account_center_permissions_select_draft_proposed.sql`(적용 완료) |
-| 완료 조건 | ~~플랫폼 운영자 2개 화면과 매니저 3개 화면에 일관된 사전 가드를 적용하고... 검증함~~ 완료. |
+| 현재 상태 | **완료.** 클라이언트 가드 5개 화면 + 서버측 RLS(account_center_permissions SELECT) 전부 적용·검증 완료. 이 항목이 "아직 실행하지 않음"으로 오래 남아있던 건 P0-4에 이미 기록된 완료 사실이 이쪽에 반영 안 된 문서 갱신 누락이었음(2026-08-15 발견, `pg_policies` 재조회로 실제 상태 확인) — 실제 DB 상태와는 무관. |
+| 근거 파일 | `app/admin/categories/page.tsx`, `app/admin/banners/page.tsx`, `app/manager/inquiries/page.tsx`, `app/manager/notifications/page.tsx`, `app/manager/staff/permissions/page.tsx`, `fix_account_center_permissions_select_draft_proposed.sql`(적용 완료, PR #19) |
+| 완료 조건 | ~~플랫폼 운영자 2개 화면과 매니저 3개 화면에 일관된 사전 가드를 적용하고 비권한 사용자의 콘텐츠 미노출·친절한 오류·RLS 차단을 검증함~~ 완료. |
 | 관련 문서 | [REQUIREMENTS 7~8절](./REQUIREMENTS.md), [ROUTES 5~7절](./ROUTES.md), [DATABASE 10절](./DATABASE.md) |
+
+현재 데이터 쓰기는 RLS가 막지만 화면과 입력폼이 먼저 노출되는 페이지가 있었습니다.
 
 2026-08-01 Access Control 구현 Batch에서 완료: `app/admin/categories/page.tsx`,
 `app/admin/banners/page.tsx`에 `/admin/centers`와 동일한 `checkPlatformAdmin()` 가드를 추가했고,
 `app/manager/inquiries/page.tsx`, `app/manager/notifications/page.tsx`에는 `fetchMyCenters()` +
 "운영 중인 센터가 없어요" 가드(기존 9개 화면과 동일한 패턴)를, `app/manager/staff/permissions/page.tsx`에는
 URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 확인하는 가드(`isOwnerOfCenter()`)를
-추가함. 서버 측 재검증에서 발견된 `account_center_permissions` SELECT RLS 구멍도
-`fix_account_center_permissions_select_draft_proposed.sql`로 수정 → 사용자가 실행 →
-`tests/integration/acl-003-permission-read.test.ts` 통과 → PR #19로 main 병합까지 완료됨
-(ACL-001~005 Batch, 2026-08-02).
+추가함. 상세 내용은 [CHANGELOG.md](./CHANGELOG.md) 참고. 클라이언트 가드와 별도로, 서버측
+재검증에서 `account_center_permissions`의 SELECT RLS 정책 자체가 "같은 센터 소속이면 누구나
+조회 가능"하게 열려 있던 FAIL도 발견됐었음 — 화면 가드와 무관하게 Supabase SDK 직접 호출로
+우회 가능했던 서버 쪽 구멍. 수정 SQL(`fix_account_center_permissions_select_draft_proposed.sql`)은
+**2026-08-02에 이미 실행되고 `tests/integration/acl-003-permission-read.test.ts` 3/3 통과, PR #19로
+main 병합까지 완료됨**(P0-4에 정확히 기록돼 있었음). 2026-08-15 `pg_policies` 재조회로 라이브
+정책이 그 draft SQL과 정확히 일치함을 재확인.
 
 ### P1-7. (2026-08-14, 완료) 국경일 자동 갱신
 
@@ -321,51 +362,87 @@ URL의 `center` 파라미터로 현재 사용자가 그 센터의 오너인지 �
 | 남은 작업 | 매년 말~다음 해 초에 그 다음 해분 추가 필요(파일 상단 주석에 안내). 2027년 데이터는 관보 고시 전 잠정치라 연초 재확인 권장. |
 | 관련 문서 | [REQUIREMENTS 5-2, 12절](./REQUIREMENTS.md), [ROUTES `/reservation`](./ROUTES.md) |
 
-### P1-8. 담당회원·상담고객 화면
+### P1-8. (2026-08-15, 완료) 담당회원·상담고객(leads) 화면
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **미완성 / 확인 필요** |
-| 근거 파일 | `app/manager/members/page.tsx`, `schema.sql`; `leads`, `customer.lead.*` 권한 |
-| 완료 조건 | 담당회원과 상담고객의 제품 정책·데이터 소유권·회원 전환 규칙을 확정하고 화면·lib·RLS를 연결해 CRUD를 검증함. 기능 제외 결정 시 준비 중 UI와 미사용 스키마 처리 방침을 기록함 |
+| 현재 상태 | **완료.** |
+| 근거 파일 | `app/manager/leads/page.tsx`(신규), `lib/leads.ts`(신규), `app/manager/page.tsx`(메뉴), `tests/integration/leads.test.ts`(신규) |
 | 관련 문서 | [REQUIREMENTS 6-1, 12절](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/manager/members`](./ROUTES.md) |
+
+2026-08-15 사용자 결정: "담당회원"은 별도 백엔드 개념이 없고(스키마에 회원-담당자 소유권
+컬럼 자체가 없음 — `담당`은 강사 배정 맥락에서만 존재), 실제로 비어있던 건 상담고객(leads)
+CRUD 화면 하나였다. `leads` 테이블과 `customer.lead.*` RLS는 다른 세션의 이전 배치
+(`proposed_rls_gap_batch_a1.sql`)에서 이미 라이브 적용돼 있어 이번엔 SQL 없이 화면(`app/
+manager/leads`)+lib만 새로 만들었다. 회원 전환 규칙: leads는 앱 계정과 연결돼 있지 않아
+자동으로 `center_members`를 만들 수 없음(회원 등록은 이름/전화번호로 앱 가입 계정을 찾아
+연결하는 기존 흐름, `app/manager/members`) — "회원전환" 버튼은 상태만 바꾸고 실제 등록은
+그 화면에서 진행하도록 안내. `customer.lead.view`로 메뉴 노출, `tests/integration/leads.test.ts`
+4개로 CRUD + RLS(권한 없는 스태프 차단/조회 필터링/권한 부여 후 허용) 검증, `npm run build`
+통과.
 
 ### P1-9. 관리자 직접배치 세부 permission key
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **확인 필요 (제품 결정 대기)** |
-| 근거 파일 | `add_admin_assignment.sql`(`can_manage_center_reservations()`), `lib/adminAssignment.ts`, `app/manager/classes/page.tsx` |
-| 완료 조건 | `schedule.admin_assign`/`schedule.admin_free` 같은 세부 permission key를 `permissions` 카탈로그에 추가할지 결정하고, 추가한다면 `can_manage_center_reservations()` 내부에서 `has_permission()`을 함께 확인하도록 확장함. 결정 전에는 기존 `manager_book_member`와 동일하게 "센터 활성 매니저 OR 플랫폼 운영자" 전원이 이 기능을 쓸 수 있음을 화면·문서에 명시함 |
+| 현재 상태 | **완료.** 사용자가 SQL Editor에서 적용 완료, 라이브 함수 본문에 `schedule.makeup` 확인이 들어가 있음을 직접 재조회로 확인. |
+| 근거 파일 | `add_admin_assignment_permission_gate.sql`(신규, `can_manage_center_reservations()`), `lib/adminAssignment.ts`, `app/manager/classes/page.tsx` |
 | 관련 문서 | [DATABASE 10절](./DATABASE.md), [REQUIREMENTS 10-1](./REQUIREMENTS.md) |
 
-2026-07-30 사용자 확인: 이번 `feature/p1-reservation-ux` 범위에서는 새 permission key를 추가하지
-않고, 권한 검사를 `can_manage_center_reservations()` 함수로 분리해 확장 지점만 마련하기로 결정함.
+2026-07-30 사용자 확인: 당시 `feature/p1-reservation-ux` 범위에서는 새 permission key를
+추가하지 않고, 권한 검사를 `can_manage_center_reservations()` 함수로 분리해 확장 지점만
+마련하기로 결정함(그대로 유지).
+
+2026-08-15 사용자 결정으로 실제 제한 적용: 새 key를 만들지 않고 카탈로그에 이미 있던
+`schedule.makeup`("보강 예약" — "수강권 조건과 무관하게 회원을 수업에 예약할 수 있습니다")을
+재사용했다 — 설명이 admin_assign_reservation의 동작과 정확히 일치하는데 코드 어디서도
+참조되지 않는 죽은 항목이었다. `can_manage_center_reservations()`를
+`has_permission(p_center_id, 'schedule.makeup') or is_platform_admin()`으로 좁힘(오너는
+자동 통과) — `admin_assign_reservation`/`admin_cancel_reservation` 둘 다 이 함수로 권한을
+확인하므로 함께 적용됨. 화면 내부 버튼 단위 숨김(`app/manager/classes/page.tsx`의 여러
+직접배치 진입점)은 이번 범위 밖 — P1-5의 "버튼 단위 권한 표시" 잔여 작업과 같은 카테고리로
+남김. 서버는 이미 거부하므로 기능 안전성엔 영향 없음.
 
 ### P1-10. 관리자 직접배치 대상 회원 상태(이용정지/탈퇴/휴면) 차단 정책
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **확인 필요 (제품 결정 대기)** |
-| 근거 파일 | `add_admin_assignment.sql`(`is_profile_assignable()`), `schema.sql`(`center_members.status`: `active`/`expired`/`dormant`뿐, "이용정지"/"탈퇴"/"삭제" 상태값 자체가 없음) |
-| 완료 조건 | 관리자 직접배치·무료 추가배치에서 차단해야 할 회원 상태 정책(이용정지/탈퇴/삭제/휴면 중 무엇을 막을지)을 결정하고, 필요한 상태값·컬럼을 새 migration으로 추가한 뒤 `is_profile_assignable()` 안에서 확인하도록 확장함 |
+| 현재 상태 | **완료.** |
+| 근거 파일 | `add_admin_assignment_member_status_guard.sql`(신규), `admin_assign_reservation()`, `permissions`(`customer.member.assign_any_status`), `tests/integration/admin-assignment-member-status-guard.test.ts` |
 | 관련 문서 | [DATABASE 6절](./DATABASE.md) |
 
-2026-07-30 사용자 확인: 이번 범위에서는 기존 `reserve_class`(회원 셀프예약)와 동일하게 이 개념을
-새로 만들지 않기로 결정함(기존 셀프예약도 `center_members.status`를 확인하지 않음). 회원 자격
-검사를 `is_profile_assignable()`로 분리해 향후 정책을 붙일 확장 지점만 마련함.
+2026-07-30 사용자 확인: 당시 범위에서는 `reserve_class`(회원 셀프예약)와 동일하게 이 개념을
+새로 만들지 않기로 결정함(회원 셀프예약도 `center_members.status`를 확인하지 않음 — 이 결정은
+그대로 유지, 셀프예약은 안 건드림). 회원 자격 검사를 `is_profile_assignable()`로 분리해
+향후 정책을 붙일 확장 지점만 마련해뒀었음.
 
-### P1-11. 관리자 직접배치 통합 테스트 — 정원 초과 확인(needs_capacity_confirm) 2단계 흐름 미검증
+2026-08-15 사용자 결정으로 관리자 직접배치(`admin_assign_reservation`)에만 정책 추가: "탈퇴"
+(`accounts.deactivated_at is not null`, P1-18) 또는 "휴면"(`center_members.status='dormant'`)
+회원은 새 권한 `customer.member.assign_any_status`가 있어야 배치 가능(오너는 `has_permission()`이
+자동 통과 — 예: 오너는 탈퇴/휴면 회원도 직접배치 가능, 일반 스태프는 이 권한을 따로 받아야
+가능). 이 센터 회원이 아직 아니거나(체험 최초 배치) 수강권만 만료(expired)인 경우는 대상이
+아님 — 항상 배치 가능. 사용자가 SQL Editor에서 적용 완료(라이브 함수 본문 직접 재확인),
+`tests/integration/admin-assignment-member-status-guard.test.ts` 4개 신규 테스트로 검증
+(권한 없는 스태프 거부/권한 부여 시 허용/오너 자동 통과/활성 회원은 항상 허용, 4/4 통과,
+기존 admin-assignment-security.test.ts 16개·acl-003 5개 회귀 없음 확인).
+
+2026-08-18 P1-9 적용 후 수정: P1-9가 `can_manage_center_reservations()`에 `schedule.makeup`
+게이트를 추가하면서, 이 파일의 무권한 스태프(managerB) fixture가 P1-10 검사에 도달하기도
+전에 P1-9 게이트에서 먼저 막혀 3/4 테스트가 실패했다(P1-10만 격리해서 보려던 의도와 어긋남).
+`beforeAll`에서 managerB에게 `schedule.makeup`을 baseline으로 부여해 P1-9는 항상 통과하고
+P1-10 차이만 관찰하도록 수정, 4/4 재통과 확인.
+
+### P1-11. (2026-08-16, 완료) 관리자 직접배치 통합 테스트 — 정원 초과 확인(needs_capacity_confirm) 2단계 흐름 미검증
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **미완성 (일부)** |
+| 현재 상태 | **완료.** 그룹 수업 2단계 흐름 테스트 2건 추가, 로컬 실행 17/17 통과(첫 시도 green). 참고로 이 항목이 언급하던 `fix_private_class_capacity_and_concurrency_draft_proposed.sql`은 "미적용, 승인 대기"로 오래 적혀 있었는데, `pg_get_functiondef`로 라이브 재확인 결과 프라이빗 수업 정원초과 방지 로직이 이미 적용돼 있었음(P1-6/P2-17과 같은 계열의 문서 드리프트, 이번에 함께 정정). 이 항목은 이 세션과 `review/todo-scan3` 세션이 병렬로 독립 작성했다가 main 병합 시 테스트 어설션이 더 촘촘한 `review/todo-scan3` 버전을 최종 채택함. |
 | 근거 파일 | `tests/integration/admin-assignment-security.test.ts`, `tests/integration/setup.ts` |
-| 완료 조건 | `admin_assign_reservation`이 정원이 찬 수업에서 `needs_capacity_confirm: true`만 반환하고 예약을 만들지 않는지, 그 뒤 `p_force_capacity: true`로 재호출하면 `is_capacity_override: true`로 실제 생성되는지를 통합 테스트로 검증함(정원 1명짜리 테스트 수업을 만들어 확인 가능) |
+| 완료 조건 | ~~`admin_assign_reservation`이 정원이 찬 수업에서 `needs_capacity_confirm: true`만 반환하고 예약을 만들지 않는지, 그 뒤 `p_force_capacity: true`로 재호출하면 실제 생성되는지를 통합 테스트로 검증함~~ 완료. |
 | 관련 문서 | [tests/README.md](../tests/README.md) |
 
 2026-07-30 갱신: 매니저 fixture 부재 문제는 `getOrCreateOwnedTestCenter()`(서비스 역할 키 없이
@@ -414,16 +491,53 @@ reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시�
 없어 죽은 설정으로 보임)은 여전히 미해결 — P2/P3 후속 범위(프라이빗 셀프 슬롯 예약 UI를
 만들지 여부와 함께 제품 결정 필요)로 남긴다.
 
-### P1-13. (2026-08-14, 완료 — SQL Live 적용 확인됨) 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
+### P1-13. (2026-08-14, 완료) 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **완료.** `fix_centers_update_facility_info_permission.sql`을 사용자가 Supabase SQL Editor에서 실행(성공) → `pg_policies` 재조회로 "매니저 센터 수정" 정책의 `qual`/`with_check`가 `has_permission(id, 'facility.info') OR is_platform_admin()`로 반영됨을 확인(`my_managed_center_ids` 잔존 조건 없음). |
-| 근거 파일 | `app/manager/center-info/page.tsx`, `app/manager/page.tsx`(메뉴 노출), `reservation_functions.sql`("매니저 센터 수정" 정책), `schema.sql`(`facility.info` 권한 카탈로그), `fix_centers_update_facility_info_permission.sql`(적용 완료) |
-| 이번 배치에서 한 것 | 조사 결과 `facility.info` 권한 키는 이미 `schema.sql`에 정의돼 있었고(sort_order 10, "시설 정보 설정") `app/manager/page.tsx`의 메뉴 노출도 이미 `canSeeMenu("facility.info")`로 정확히 가려져 있었다 — **RLS 정책만 이 권한을 확인 안 하고 있었다**(URL 직접 접근하면 권한 없는 스태프도 수정 가능한 상태). `centers` UPDATE 정책 "매니저 센터 수정"을 `id in (select my_managed_center_ids())`에서 `has_permission(id, 'facility.info')`로 좁히는 SQL 작성(`fix_centers_update_facility_info_permission.sql` + rollback) — `has_permission()`이 오너는 자동 통과시키므로 오너 동작은 그대로 유지됨. 기존 스태프에게 이 권한을 자동으로 부여하지 않음(오너가 필요하면 기존 스태프 권한 설정 화면에서 직접 켜면 됨, 새 UI 불필요 — 카탈로그에 이미 있어서 자동으로 체크박스로 나타남). |
-| 완료 조건 | ~~`fix_centers_update_facility_info_permission.sql`을 Supabase SQL Editor에서 적용~~ 완료(2026-08-14, `pg_policies` 확인). |
+| 현재 상태 | **완료 — 두 세션이 같은 티켓을 서로 다른 레이어에서 손대 합쳐짐(겹치지 않고 서로 보완).** |
+| 근거 파일 | `app/manager/center-info/page.tsx`, `reservation_functions.sql`("매니저 센터 수정" 정책), `fix_centers_update_facility_info_permission.sql`(다른 세션, PR #54, 적용 완료), `fix_center_info_sensitive_fields_permission_draft_proposed.sql`(이 세션, 적용 완료) |
+| 완료 조건 | ~~`facility.info` 권한 세분화를 실제로 적용할지 결정하고 반영함~~ 완료. |
 | 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 센터관리 항목 |
+
+2026-08-02 Track B 감사에서 발견: `center-info/page.tsx` 상단 주석은 "시설 정보 설정 권한
+(facility.info) 필요 — 오너는 항상 가능"이라고 적혀 있지만, 실제 RLS 정책(`"매니저 센터 수정"`,
+`reservation_functions.sql`)은 `center_id in (select my_managed_center_ids())`만 확인했습니다 —
+오너가 아닌 일반 스태프도 센터 정보·결제수단·평판점수를 수정할 수 있었습니다.
+
+**2026-08-14 최종 확정(두 레이어)**: `facility.info` 권한 키는 이미 `schema.sql`에 정의돼
+있었고 `app/manager/page.tsx`의 메뉴 노출도 이미 `canSeeMenu("facility.info")`로 가려져
+있었지만(URL 직접 접근만 뚫려있었음), RLS 자체가 이를 확인 안 하고 있었습니다.
+- (다른 세션, PR #54) "매니저 센터 수정" RLS를 `has_permission(id,'facility.info') OR
+  is_platform_admin()`으로 좁힘 — facility.info 없으면 이 화면 전체(소개글/주소/전화 포함)
+  저장이 막힘. 사용자가 `fix_centers_update_facility_info_permission.sql` 적용, `pg_policies`
+  재조회로 확인.
+- (이 세션) 그 위에 결제수단(pay_methods)/후기 적립 포인트(review_point) 두 필드는 한 단계
+  더 좁혀 오너 또는 `facility.paymethod` 권한 보유자만(결제수단), 오너 전용(포인트, 대응
+  permission key 없음)으로 추가 제한 — `guard_center_sensitive_fields_change` BEFORE UPDATE
+  트리거(`fix_center_info_sensitive_fields_permission_draft_proposed.sql`)로 구현. "facility.info는
+  위임했지만 결제수단/포인트까지는 아직" 같은 세분화된 위임을 가능하게 하는 게 목적이라
+  facility.info 체크와 중복이 아님. 사용자가 SQL Editor에서 적용, `pg_trigger` 재조회로 확인.
+  `app/manager/center-info/page.tsx`도 `fetchMyEffectivePermissionKeys`로 미리 계산해 권한
+  없는 필드/전체 저장을 UI에서부터 비활성화·안내하도록 갱신(DB 레이어가 최종 방어선, UI는 편의).
+
+### P1-18. (2026-08-16, 완료) 수업매출 캘린더 신규 기능 — SQL Live 적용·통합테스트 확인
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **완료** — SQL 4종 Live 적용, 통합테스트 9/9 Green |
+| 근거 파일 | `add_class_revenue_schema.sql`, `add_set_membership_session_amounts_rpc.sql`, `add_class_revenue_daily_summary_rpc.sql`, `add_class_revenue_for_date_rpc.sql`, `app/manager/class-revenue/page.tsx`, `tests/integration/class-revenue.test.ts` |
+| 완료 조건 | 사용자가 Supabase SQL Editor에서 4개 파일 순서대로 실행, `pg_get_functiondef`/`pg_policies`로 확인 완료. 통합테스트 작성·Green 확인 완료. |
+| 관련 문서 | `docs/CHANGELOG.md`(2026-08-16 항목) |
+
+이 파일 전용 격리 센터를 쓰는 통합테스트(`class-revenue.test.ts`, 9개)를 작성해 돌리는
+과정에서 실제 버그 1건을 발견·수정함: `class_revenue_for_date`가 회차 번호(`row_number()`)
+계산 전에 조회 날짜로 먼저 필터링해, 어떤 날짜를 조회하든 그 예약 1건짜리 partition이 돼
+`session_index`가 매번 1로만 나오던 버그(균등분배 합계가 부풀고 회차별 커스텀 금액도
+전부 1회차 값으로 표시됨) — 날짜 필터를 `row_number()` 계산 이후로 옮겨 수정, Live
+재적용·재테스트로 확인(자세한 내용은 CHANGELOG 참고).
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
@@ -1208,14 +1322,24 @@ P2-20 조사 과정에서 발견됐지만 이번 배치 범위 밖이라 코드 
 | 남은 작업 | (1) 소셜 로그인 계정의 진짜 재인증(현재는 확인 문구로 낮은 문턱만 둠) (2) 탈퇴 회원이 매니저 쪽 회원 검색/명단에 계속 노출되는지 등 후속 화면 영향 검토 (3) 실제 탈퇴 왕복 수동 QA(화면에서 끝까지 눌러서 재로그인 차단까지 확인) |
 | 관련 문서 | `docs/platform-spec/epics/EPIC_03_Authentication.md` AUTH-08 |
 
-### P2-22. (신규, 2026-08-13) `getOrCreateOwnedTestCenter()` self-healing sweep이 미래 시각 leftover class는 못 잡음 — AUTO-SEC-I 간헐 실패 원인
+### P2-22. (신규, 2026-08-13 / 2026-08-14 leftover 정리 완료) `getOrCreateOwnedTestCenter()` self-healing sweep이 미래 시각 leftover class는 못 잡음 — AUTO-SEC-I 간헐 실패 원인
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 (테스트 인프라 한정 — 보안 로직과 무관, SEC-114 배치 범위 밖) |
-| 현재 상태 | **확인 필요 — 코드 수정 안 함, 사용자 결정 대기** |
-| 근거 파일 | `tests/integration/setup.ts`(`getOrCreateOwnedTestCenter()`의 sweep, TEST-004 #45), `tests/integration/auto-book-membership-security.test.ts`(`AUTO-SEC-I`) |
-| 완료 조건 | (a) sweep 조건을 "과거"뿐 아니라 "제목이 알려진 테스트 fixture 패턴이고 미래인 것"까지 넓히거나, (b) 이미 쌓인 leftover를 겨냥한 별도 `cleanup_*_draft_proposed.sql`을 작성해 사용자가 적용 |
+| 현재 상태 | **이미 쌓인 leftover 318건 정리 완료(cleanup_p2_22_shared_center_class_fixtures_draft_proposed.sql, 사용자 실행·검증 완료). 근본 원인(sweep이 미래 시각은 안 잡음) 자체는 코드 수정 안 함 — 재발 가능성 있음, 아래 완료 조건 (a) 참고** |
+| 근거 파일 | `tests/integration/setup.ts`(`getOrCreateOwnedTestCenter()`의 sweep, TEST-004 #45), `tests/integration/auto-book-membership-security.test.ts`(`AUTO-SEC-I`), `cleanup_p2_22_shared_center_class_fixtures_draft_proposed.sql`(신규, 적용 완료) |
+| 완료 조건 | (a) sweep 조건을 "과거"뿐 아니라 "제목이 알려진 테스트 fixture 패턴이고 미래인 것"까지 넓혀서 재발 자체를 막을 것(아직 안 함 — 이번엔 이미 쌓인 것만 1회성으로 정리) |
+
+**2026-08-14 leftover 정리 완료**: 제목 리터럴을 나열하는 대신 구조적 기준(이 하나의 공유
+테스트센터 + `status='open'` + `start_time > now()` + `created_at`이 1시간 이상 과거 — 지금
+막 어떤 세션이 만든 class까지 실수로 지우지 않기 위한 안전 마진)으로 `cleanup_p2_22_shared_
+center_class_fixtures_draft_proposed.sql` 작성. 사용자가 read-only 진단(A)으로 318개 class/
+237개 딸린 reservation을 먼저 확인(예상 범위 내, 안전 상한 3000건의 10분의 1 수준) → 삭제(B,
+BEGIN/COMMIT 트랜잭션) 실행 → 검증(C)에서 `remaining_target_classes=0`, 이 센터에 정상적으로
+남아야 할 263건은 그대로 보존됨을 확인. rollback 파일은 순수 DELETE라 SQL로는 되돌릴 수 없다는
+설명 안내(P3 SEC-MC cleanup과 동일한 패턴) — 지워진 행은 전부 자동화 테스트 전용 leftover라
+"복구"가 아니라 "다음에 그 테스트가 필요할 때 다시 만들어내는 것"이 정답.
 
 - TEST-004 #45가 추가한 sweep은 `start_time`이 1시간 이상 **과거**인 class만 정리한다. 그런데
   SEC-101/112/113~117 회귀 테스트 중 `auto-book-membership-security.test.ts`를 로컬로 처음
@@ -1238,6 +1362,26 @@ P2-20 조사 과정에서 발견됐지만 이번 배치 범위 밖이라 코드 
   조사해야 해서, 이번 보안 배치 범위에서 임의로 cleanup SQL을 작성·적용하지 않았다. sweep
   조건을 미래까지 넓히는 것도 "다른 테스트가 지금 막 만든, 아직 안 끝난 미래 class"까지
   지워버릴 위험이 있어 신중한 설계가 필요하다.
+
+### P2-23. (신규, 2026-08-15) 최근 merge된 PR들이 CI 완전 그린 없이 merge됨 — 나중에 한 번에 재검증 필요
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 (기능 결함 아님 — 검증 커버리지 확인용 후속 작업) |
+| 현재 상태 | **확인 필요 — 아래 PR들을 모아 한 번에 깨끗한 CI를 돌려 재확인할 것** |
+| 근거 파일 | 없음(작업 로그 성격) |
+| 완료 조건 | 아래 PR들이 반영된 시점의 `main`에서 전체 CI(E2E/Unit/Integration/Build)를 한 번 더 돌려 각 실패가 실제로 무관한 기존 플레이키니스였는지 최종 확인 |
+
+- **PR #51**(SEC-101/112/113/114/115/116/117): CI 재시도 여러 번 중 마지막엔 Integration에서
+  P2-22(leftover 오염)/범위 밖 항목 2건만 남고 merge — Integration 전체 그린은 아니었음.
+- **PR #55**(P2-22 leftover 정리): 앱 코드 변경 없음(SQL/문서만)이라 CI 자체가 무관.
+- **PR #56**(P1-13 pay_methods/review_point 추가 보호): E2E에서 `daily-book-limit.spec.ts`
+  실패 1건 + `attendance.spec.ts` flaky 1건(재시도로 복구) — 둘 다 이 PR과 무관한 파일로
+  확인했으나, E2E 게이팅 때문에 Unit/Integration/Build는 아예 안 돌고 스킵된 채로 merge됨.
+
+셋 다 "실패 내역이 변경된 코드와 무관함"은 개별적으로 확인하고 merge했지만, Unit/Integration/
+Build까지 실제로 통과하는지는 아직 한 번도 끝까지 확인 못 했다. `main`이 안정된 시점에 한
+번에 몰아서 깨끗한 CI를 돌려 재확인할 것.
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
 

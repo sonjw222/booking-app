@@ -15,7 +15,6 @@ import {
   fetchCenterProducts, hasActivePassAtCenter, requestPurchase, fetchClassAllowedPasses,
   type CenterDetail, type CenterClass, type CenterProduct,
 } from "../../../lib/center";
-import BottomNav from "../../components/BottomNav";
 import { ZoomableImage } from "../../components/ImageViewer";
 import { addToCart } from "../../../lib/cart";
 import { fetchReviews, myReviewFor, writeReview, deleteReview, uploadReviewPhoto, reviewPhotoUrl, type Review } from "../../../lib/reviews";
@@ -584,7 +583,6 @@ function CenterDetailContent() {
         <button className="center-bar-btn buy" onClick={() => setBuySheet(true)}>수강권 구매</button>
         <button className="center-bar-btn reserve" onClick={handleReserveClick}>예약하기</button>
       </div>
-      <BottomNav />
     </div>
   );
 }

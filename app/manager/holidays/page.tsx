@@ -7,8 +7,8 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
+import DatePicker from "../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchHolidays, addHoliday, deleteHoliday, type Holiday } from "../../../lib/holidays";
 
@@ -130,7 +130,7 @@ export default function HolidaysPage() {
 
       {/* 추가 폼 */}
       <div className="hol-add">
-        <input type="date" className="input-field" value={date} onChange={(e) => setDate(e.target.value)} />
+        <DatePicker value={date} onChange={setDate} label="휴무일 선택" />
         <input className="input-field" placeholder="사유 (선택)" value={reason} onChange={(e) => setReason(e.target.value)} />
         <button className="primary-btn small" disabled={busy} onClick={() => handleAdd()}>추가</button>
       </div>
@@ -178,7 +178,6 @@ export default function HolidaysPage() {
           </div>
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

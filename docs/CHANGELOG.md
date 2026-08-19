@@ -37,6 +37,108 @@
 
 SQL/코드 변경 없음(이미 작성된 SQL을 사용자가 직접 실행/검증한 것 확인 + 문서 갱신).
 
+## 2026-08-18 — P1-9/P1-5/P1-1 SQL 라이브 적용 확인 + P1-10 테스트 fixture 보정
+
+사용자가 3개 SQL(`add_admin_assignment_permission_gate.sql`, `add_manager_menu_permissions.sql`,
+`add_point_ledger_unification.sql`)을 SQL Editor에서 적용. 라이브 함수 본문/permissions
+테이블 재조회로 셋 다 정확히 반영됐음을 확인, `point_transactions`로 이관된 레거시 포인트
+2건도 실측 확인. P1-9 적용으로 `admin-assignment-member-status-guard.test.ts`(P1-10 검증)의
+무권한 스태프 fixture가 새로 생긴 `schedule.makeup` 게이트에 먼저 막혀 3/4 실패하는 걸
+발견 — `beforeAll`에서 baseline으로 `schedule.makeup`을 부여해 P1-10만 격리 검증하도록
+수정, 4/4 재통과. 관련 통합테스트 전체(26개) + unit(242개) + build 재확인.
+
+## 2026-08-18 — P1-3 웹 푸시 배포 확인 + 무관 빌드 버그 수정 (review/p1-3-webpush-qa)
+
+P1-3(외부 푸시·알림톡) 자동 QA 진행: `lib/webPush.ts`/`supabase/functions/send-web-push/
+index.ts`/`public/sw.js` 코드 리뷰(410/404 만료 구독 정리, best-effort 재시도 없음 설계,
+표준 서비스워커 패턴 — 명확한 버그 없음 확인). `select jobname, schedule, active from
+cron.job where jobname = 'dispatch-web-push'`로 read-only 재확인해 이전 세션(사용자 본인)의
+"배포 완료" 커밋 주장이 실제 Live 상태와 일치함을 확인 — cron job 활성, 1분마다 실행 중.
+`docs/TODO.md` P1-3을 이 확인 결과에 맞게 정정(단계별 "아직 안 됨" 목록을 "배포 완료,
+실기기 확인만 남음"으로). 카카오 알림톡/SMS/이메일은 P0-1(PG결제)과 같은 종류의 사업자
+등록 블로커라 이번 범위에서 제외.
+
+같은 QA 중 `tests/integration/auto-book-membership-security.test.ts`의 `afterAll`이 존재하지
+않는 변수(`userA`)를 참조해 `npx tsc --noEmit`이 `feature/design-system-migration` 브랜치
+전체에서 실패하고 있던 것을 발견 — 실제 로직(AUTO-SEC-K)은 이미 자체 try/finally로 올바르게
+처리 중이라 순수 중복 코드였음, 삭제해 타입체크 통과 확인. 이 브랜치를 기반으로 다른 세션들도
+작업 중이라(P1-1, P1-8) 사용자 확인 후 바로 `feature/design-system-migration`에 push함
+(커밋 `cb472cb`).
+
+## 2026-08-15 (같은 날 후속) — P1-8/P1-9/P1-5/P1-1 제품 결정 배치
+
+사용자가 "만들지 말지" 결정 대기이던 5개 항목 중 4개를 진행하기로 결정(P1-12는 별도 후속):
+
+- **P1-8(완료)**: 상담고객(leads) CRUD 화면 신규 구현(`app/manager/leads`, `lib/leads.ts`).
+  테이블/RLS는 다른 세션이 이미 적용해뒀던 걸 발견해 SQL 없이 화면만 추가. "회원전환"은
+  상태만 바꾸고 실제 등록은 기존 회원 화면에서 진행하도록 안내(leads는 앱 계정과 연결 안
+  돼 있어 자동 연결 불가). `tests/integration/leads.test.ts` 4개로 CRUD+RLS 검증.
+- **P1-9(완료, SQL 승인 대기)**: 관리자 직접배치를 아무 스태프나 쓸 수 있던 걸 권한으로
+  제한. 새 키를 만들지 않고 카탈로그에 있던 죽은 키 `schedule.makeup`(설명이 정확히 이
+  기능과 일치)을 재사용해 `can_manage_center_reservations()`에 연결
+  (`add_admin_assignment_permission_gate.sql`).
+- **P1-5 나머지(완료, SQL 승인 대기)**: 상품/후기/주문/관리자배치내역 4개 메뉴 권한 가림.
+  2개는 카탈로그에 이미 있던 죽은 키(`facility.review.view`, `pass.order.view`) 재사용,
+  2개(`pass.goods.view`, `schedule.admin_assignment_log.view`)만 신규 추가
+  (`add_manager_menu_permissions.sql`).
+- **P1-1(완료, SQL 승인 대기)**: 완전히 분리돼 있던 포인트 두 원장(매니저 수동 적립/차감용
+  `point_transactions` vs 후기 보상 전용 `point_accounts`/`point_logs`, 회원 화면엔 둘 다
+  안 보였음)을 `point_transactions` 하나로 통합. `write_review()`/`use_points()` 재정의,
+  기존 `point_accounts` 잔액은 이관만 하고 테이블 자체는 DROP하지 않음(레거시로 보존).
+  `use_points()`의 동시성 보호는 기존 "잔액 행 lock" 대신 `profiles` 행 lock으로 대체.
+  잔액 조회용 `my_point_balance`/`my_point_balances` RPC 신규, `lib/reviews.ts` 연결
+  (`add_point_ledger_unification.sql`).
+
+## 2026-08-15 — P1-10 관리자 직접배치 회원 상태 게이트 + P1-11 정원초과 2단계 흐름 테스트 + UI 버그 3건
+
+**P1-10**: 관리자 직접배치가 탈퇴(`accounts.deactivated_at`)/휴면(`center_members.status=
+'dormant'`) 회원을 아무 제한 없이 배치할 수 있던 걸, 새 권한 `customer.member.assign_any_
+status`로 게이트했다(`add_admin_assignment_member_status_guard.sql`). 오너는 `has_permission()`이
+자동 통과시켜 그대로 가능, 일반 스태프는 이 권한을 받아야 가능 — 예를 들어 오너는 사정상
+탈퇴/휴면 회원도 직접배치할 수 있고 강사는 활성 회원만 가능하게 스태프 권한 화면에서 나눌 수
+있다. `tests/integration/admin-assignment-member-status-guard.test.ts` 4개 신규 테스트로 검증.
+
+**P1-11**: 관리자 직접배치의 정원초과 2단계 확인 흐름(그룹 수업) 자체를 검증하는 테스트가
+없었던 걸 `admin-assignment-security.test.ts`에 추가(1차 `needs_capacity_confirm` 저지 →
+`p_force_capacity` 재호출로 실제 생성). 조사 중 프라이빗 수업 쪽 SQL(`fix_private_class_
+capacity_and_concurrency_draft_proposed.sql`)이 문서엔 "미적용 대기"로 남아있었지만 실제로는
+이미 라이브에 적용돼 있었음을 발견(문서만 정정).
+
+**UI 버그 3건(수동 QA 중 발견)**:
+1. `/mypage/calendar`의 "‹" 뒤로가기가 `/mypage`로 하드코딩돼 있어 `/my-reservations`에서
+   들어가도 마이페이지로 돌아가던 문제 — `/my-reservations`로 수정.
+2. 하단 네비게이션 "마이" 탭이 `/mypage`로 시작하는 모든 경로(캘린더 포함)를 활성으로
+   잡아, 캘린더 화면에서 "내 예약" 대신 "마이"가 켜져 있던 문제 — 캘린더는 "내 예약" 탭이
+   활성화되도록 분리.
+3. 하단 네비게이션이 페이지마다 새로 마운트되는 구조라(공용 layout 아님) 수강권 보유
+   회원은 화면을 옮길 때마다 "탭 3개 → 5개"로 깜빡이던 문제 — `BottomNav`/`ManagerNav`를
+   각각 최상위 레이아웃(`app/layout.tsx`의 새 `GlobalBottomNav`, 기존 `app/manager/
+   layout.tsx`)으로 옮겨 페이지 이동 중엔 재마운트되지 않게 하고, 최초 진입 시의 짧은
+   로딩 구간도 직전 판정 결과를 `localStorage`에 캐싱해 초기값으로 써서 줄임.
+
+그 외: 사용자가 실사용 중 "수강권을 사도 인식 못함" 버그를 신고 — 조사 결과 코드 버그가
+아니라 "어텐션 피겨팀" 테스트 센터의 `membership_schedule_rules`에 2주간 테스트하며 쌓인
+쓰레기 데이터 159건("ㄹ", "ㅇㅇㅇㅇㅇ" 같은 제목, 자동화 테스트 흔적)이 원인 — 사용자 승인
+후 전부 삭제해 해결.
+
+## 2026-08-14 (같은 날 후속10) — P1-3 웹 푸시 구현(카카오 알림톡·SMS는 여전히 범위 밖)
+
+기존 `notifications` 테이블(예약 확정/취소, 대기 승격, 신규 구매 등)은 앱을 열고 있을 때만
+실시간 팝업으로 보였고, 알림 설정 화면의 토글도 기기 `localStorage`에만 저장돼 실제 발송과
+무관했다(P1-3). 앱을 닫아도(브라우저 백그라운드/미실행) 알림을 받을 수 있도록 Web Push를
+붙였다 — 카카오 알림톡/SMS(`notification_rules`/`messages` 기반, 건당 수수료)는 사업자 등록이
+필요해 이번 범위에서 제외.
+
+구조: `push_subscriptions` 테이블(브라우저별 구독 저장) + `notifications.pushed_at` 컬럼(중복
+발송 방지) + `pg_net` 확장으로 1분마다 `send-web-push` Edge Function을 호출하는 pg_cron 작업
+(`add_web_push.sql` + rollback). Edge Function은 미발송 알림을 찾아 수신자의 구독마다 VAPID로
+서명한 Web Push를 보내고(`npm:web-push`), 만료된 구독(404/410)은 지운다. 서비스 role 키는 파일에
+넣지 않고 Supabase Vault(`vault.create_secret`)에서 런타임에 읽어오게 해 CLAUDE.md 규칙 5(비밀키
+Git 금지)를 지켰다. 클라이언트: `public/sw.js`(서비스 워커) + `lib/webPush.ts`(권한 요청→구독→DB
+저장) + `app/settings/notifications/page.tsx`에 "앱을 닫아도 알림 받기" 토글 추가.
+Edge Function 배포·secrets 등록·마이그레이션 적용·실기기 수신 확인은 사용자 조치 필요(docs/TODO.md
+P1-3 참고, 이번 세션에서는 자동 검증 불가).
+
 ## 2026-08-14 (같은 날 후속9) — P1-2 미발급 주문 자가 취소 구현
 
 회원이 아직 매니저가 처리(발급)하지 않은 주문을 취소할 방법이 없어 "센터에 문의해주세요"
@@ -226,6 +328,111 @@ SEC-009 결과와 일치), `USING(true)` 정책은 공개 마케팅 콘텐츠(�
   플랜 무료 지원)으로 매일 KST 오전 9시 자동 실행되게 `add_notification_scheduler.sql` 작성.
   `README.md` 5절도 "선택"에서 실제 자동화 안내로 갱신. 사용자가 SQL Editor에서 적용 완료
   (`cron.schedule()`이 job id `1` 반환 확인) — 익일 실제 발생 여부만 남음(`docs/TODO.md` P0-5).
+
+## 2026-08-16 — 수업매출 캘린더 신규 기능 (feature/class-revenue-calendar)
+
+기존 "매출"(`app/manager/sales`)은 결제일 기준 집계만 제공했다. 이번에 "수업이 실제로
+열린 날짜" 기준으로 그날 어떤 수업/상품이 얼마의 매출을 만들었는지 보는 새 화면
+(`app/manager/class-revenue`)을 추가했다. `payments`에 `class_id`가 없어(결제↔수업은
+`membership_id`를 매개로만 연결) 수업 단위 매출 귀속 로직이 아예 없었던 걸 새로 설계함.
+
+- **횟수제 수강권**: 결제금액을 총횟수로 균등분배(나머지는 앞 회차부터 보정해 합계가
+  정확히 일치)하고, 실제 사용된 예약(confirmed/attended/no_show, 폐강 수업 제외)의
+  수업 날짜에 귀속. 매니저가 회차별(`membership_session_amounts`) 금액을 비대칭으로
+  커스텀 가능 — 키는 특정 예약이 아니라 "N회차"라는 추상 슬롯(취소/재예약으로 순서가
+  바뀌면 그 회차를 차지하는 실제 수업도 같이 바뀜, 의도된 설계).
+- **정기권(기간제)**: `center_settings.unlimited_pass_revenue_mode`로 두 방식 지원 —
+  `usage_split`(기본, 기간 중 실제 이용 횟수로 동적 배분) / `purchase_date_full`(구매일에
+  전액). 운영 설정 화면(`app/manager/settings`)에 토글 추가.
+- **상품(goods)**: 세션 개념 없이 구매일 그대로. **환불**: 원 세션으로 소급 배분하지
+  않고 환불 결제 자체의 날짜에 별도 표시(v1 범위, 문서화된 단순화).
+- 신규 SQL(사용자가 Supabase SQL Editor에서 순서대로 직접 실행, Live 적용·확인 완료):
+  `add_class_revenue_schema.sql`(`membership_session_amounts` 테이블 + `center_settings`
+  컬럼), `add_set_membership_session_amounts_rpc.sql`(회차별 금액 저장, 총액 일치 검증),
+  `add_class_revenue_daily_summary_rpc.sql`(캘린더 그리드), `add_class_revenue_for_date_rpc.sql`
+  (날짜별 breakdown). 전부 `add_manager_dashboard_summary_draft_proposed.sql` 패턴
+  (`my_managed_center_ids()` 권한체크, `payment_provider is distinct from 'mock'` 제외,
+  SECURITY DEFINER + `set search_path = public` 하드닝) 재사용. 롤백은
+  `rollback_class_revenue_calendar.sql`.
+- 프론트: `lib/classRevenue.ts`(신규), `app/manager/class-revenue/page.tsx`(신규, 기간선택
+  + 월 캘린더 + breakdown + 회차별 금액 편집 모달), `lib/settings.ts`/`app/manager/settings/
+  page.tsx` 수정, `app/manager/sales/page.tsx`에 진입 링크 추가.
+- 이 기능 전용 통합테스트 `tests/integration/class-revenue.test.ts`(9개, 이 파일 전용
+  격리 센터를 매번 새로 만들어 공유 fixture 오염과 무관하게 실행됨) 신규 작성, 전부 Green
+  확인. 작성 과정에서 실제 버그 1건 발견·수정: `class_revenue_for_date`의 `count_sessions`
+  CTE가 `row_number()`(회차 계산)를 계산하기 *전에* `p_date`로 먼저 필터링해, partition이
+  항상 그 날짜의 예약 1건짜리로 좁혀져 `session_index`가 매번 1로만 계산되던 문제(균등분배
+  합계가 부풀고, 회차별 커스텀 금액도 전부 1회차 값으로 잘못 표시됨) — 날짜 필터를
+  `row_number()` 계산 이후(바깥 JOIN 조건)로 옮겨 수정, Live 재적용·재테스트로 확인.
+  `class_revenue_daily_summary`는 애초에 날짜 필터를 별도 CTE(`count_amounts`)에서
+  적용하고 있어 같은 버그 없음.
+- `npm run build` 통과 확인. 새 테이블/RPC만 추가(기존 함수 변경 없음)라 기존 통합테스트
+  스위트에는 영향 없음.
+
+## 2026-08-13 — SEC-114/SEC-115 P0/P1 보안 수정 Live 적용(사용자 확인 완료)
+
+- **SEC-114(P0) `auto_book_membership()`**: caller authorization 없이 SECURITY DEFINER +
+  PUBLIC EXECUTE 상태였던 IDOR 취약점 수정. `v_mem.center_id in my_managed_center_ids()
+  or is_platform_admin()` 검사 추가, `EXECUTE`를 `authenticated`로 최소화, `pass_selection_mode`/
+  `membership_schedule_rules`/`booking·open deadline`/`center_holidays`/`daily_book_limit`/
+  `private_max_concurrent` 등 최신 예약 정책 누락분을 `reserve_class`와 동일하게 보강.
+  회귀 테스트 `tests/integration/auto-book-membership-security.test.ts`(AUTO-SEC-A~P, 16개).
+- **SEC-115(P1) `manager_set_attendance()`**: waitlisted 예약 취소 시 차감된 적 없는 수강권을
+  잘못 복구하던 문제, waitlisted→confirmed 직접 전환으로 무차감 확정하던 우회 경로 차단.
+  회귀 테스트 `tests/integration/manager-set-attendance-membership-integrity.test.ts`
+  (ATT-SEC-A~J, 10개).
+- 둘 다 `set search_path = public` 추가. 사용자가 Supabase SQL Editor에서 순서대로 직접
+  실행하고 EXECUTE 권한(`authenticated`+`postgres`만) 실측 확인 완료.
+
+## 2026-08-15 — PR #50/#51 병합 시 SEC-114 설계 충돌 정리(사용자 확인)
+
+PR #51(`security/sec114-117-final-crosscheck`)이 main에 먼저 병합되며 `auto_book_membership()`의
+authorization을 `has_permission(center_id, 'schedule.own.group.booking')` 기반으로 다시 작성한
+`fix_auto_book_membership_idor_draft_proposed.sql`을 들여왔다(다른 두 독립 세션이 교차검증해
+합의한 설계, 정책회귀 수정은 SEC-114-B로 분리). 그런데 병합 시점에 라이브에서
+`pg_get_functiondef('auto_book_membership')`로 직접 재확인한 결과, **실제로 라이브에 적용돼
+있는 건 여전히 PR #50의 `my_managed_center_ids()` 기반 + 정책회귀(pass_selection_mode/
+center_holidays/daily_book_limit/private_max_concurrent) 통합 버전**이었다 — PR #51의 파일은
+merge만 됐을 뿐 실제로 Live에 실행된 적은 없는 상태였다. 사용자 확인 후 라이브와 일치하는
+PR #50 버전을 최종으로 채택, PR #51의 해당 SQL 파일 내용은 이 병합에서 되돌렸다. has_permission()
+기반 세분권한 설계는 향후 별도 배치(SEC-116, 기존 계획대로)에서 재검토 대상으로 남긴다.
+
+## 2026-08-15 — P1-6 문서 오류 정정: account_center_permissions SELECT RLS는 이미 오래전에 적용 완료 (review/todo-scan2)
+
+`docs/TODO.md`의 다른 P1 항목을 검토하던 중 P1-6이 `fix_account_center_permissions_select_
+draft_proposed.sql`을 "아직 실행하지 않음"으로 계속 기록하고 있는 걸 발견 — 그런데 같은 SQL을
+언급하는 P0-4 항목과 그 SQL이 검증 대상으로 삼는 `tests/integration/acl-003-permission-read.
+test.ts` 파일 자기 자신의 주석은 둘 다 "2026-08-02에 이미 실행되고 PR #19로 main 병합 완료"라고
+명확히 적혀 있었다. `pg_policies`로 라이브 상태를 직접 재조회해 실제로 그 draft SQL과 정확히
+일치하는 정책이 이미 적용돼 있음을 확인 — P1-6이 P0-4 갱신 당시 함께 안 고쳐진 순수 문서
+드리프트였음(코드/SQL 변경 없음, 문서만 정정). 이 저장소에서 반복돼온 "저장소 문서와 라이브
+DB 상태가 어긋나는" 패턴(P2-17 calc_deadline과 동일 계열)의 또 다른 사례.
+
+## 2026-08-15 — P1-13 센터정보 수정 권한 세분화, pay_methods/review_point 추가 보호 (review/todo-scan)
+
+다른 세션(PR #54)이 같은 P1-13 티켓을 "매니저 센터 수정" RLS를 `has_permission(id,
+'facility.info') OR is_platform_admin()`으로 좁히는 방식으로 이미 Live 적용한 것을 확인 —
+그 위에 이 세션에서 결제수단(pay_methods)/후기 적립 포인트(review_point) 두 필드를 한 단계
+더 좁히는 `guard_center_sensitive_fields_change` BEFORE UPDATE 트리거를 추가(오너 또는
+`facility.paymethod` 권한 보유자만 결제수단 변경, 오너만 포인트 변경 —
+`fix_center_info_sensitive_fields_permission_draft_proposed.sql`, 사용자 적용·`pg_trigger`
+재조회로 확인). 두 레이어가 서로 겹치지 않고 보완함을 확인(facility.info는 전체 폼 접근
+게이트, 이 트리거는 그 안에서 특히 민감한 두 필드만 더 좁힘). `app/manager/center-info/
+page.tsx`도 `fetchMyEffectivePermissionKeys`로 권한을 미리 계산해 저장 버튼/개별 필드를
+UI에서부터 비활성화하도록 갱신 — raw RLS 에러 대신 명확한 안내 문구 표시.
+
+## 2026-08-14 — P2-22 공유 테스트센터 leftover class 정리 (chore/p2-22-shared-center-class-cleanup)
+
+`getOrCreateOwnedTestCenter()`로 재사용되는 공유 테스트센터(managerA 소유,
+3937eb89-3803-43e9-9a29-e893f779df1a)에 여러 테스트 파일/세션이 남긴 미래 시각 leftover
+class 318개(딸린 reservations 237개)를 정리했다. 제목 리터럴을 나열하는 대신 구조적 기준
+(이 센터 + status='open' + start_time > now() + created_at 1시간 이상 과거 — 지금 막 다른
+세션이 만든 class는 안 건드리는 안전 마진)으로
+`cleanup_p2_22_shared_center_class_fixtures_draft_proposed.sql` 작성. 사용자가 read-only
+진단으로 규모(안전 상한 3000건의 10분의 1 수준) 확인 후 적용, 검증 쿼리로 정리 대상 0건·
+정상 보존분 263건 확인 완료. `auto_book_membership()`이 leftover까지 같이 예약해버려
+`AUTO-SEC-I` 같은 "정확히 N개 예약" assert가 간헐 실패하던 문제(docs/TODO.md P2-22)의
+누적분을 해소 — sweep이 미래 시각까지 커버하도록 넓히는 근본 조치는 별도 후속 작업으로 남김.
 
 ## 2026-08-13 — SEC-101/112/113/114/115/116/117 통합 회귀 테스트 로컬 Green 확인 (security/sec114-117-final-crosscheck)
 

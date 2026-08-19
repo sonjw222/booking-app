@@ -7,7 +7,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import BottomNav from "../../components/BottomNav";
 import Loading from "../../components/Loading";
 import {
   fetchMyReservationsForCalendar, updateReservationMemo, downloadIcs,
@@ -71,7 +70,7 @@ export default function CalendarPage() {
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
       <div className="back-header">
-        <a className="side" href="/mypage">‹</a>
+        <a className="side" href="/my-reservations">‹</a>
         <div className="title">예약 캘린더</div>
         <button className="cal-export-btn" onClick={() => {
           const upcoming = resv.filter((r) => r.status === "confirmed" || r.status === "waitlisted");
@@ -140,9 +139,6 @@ export default function CalendarPage() {
                       </div>
                       <span className={`hist-status s-${r.status}`}>{STATUS_LABEL[r.status] ?? r.status}</span>
                     </div>
-                    <button className="cal-add-one" onClick={() => downloadIcs([r], `${r.title}.ics`)}>
-                      캘린더에 추가
-                    </button>
                     <div className="cal-memo-row">
                       <input
                         className="input-field"
@@ -154,6 +150,9 @@ export default function CalendarPage() {
                         {savingId === r.id ? "저장" : "저장"}
                       </button>
                     </div>
+                    <button className="cal-add-one" onClick={() => downloadIcs([r], `${r.title}.ics`)}>
+                      캘린더에 추가
+                    </button>
                   </div>
                 ))
               )}
@@ -162,7 +161,6 @@ export default function CalendarPage() {
           <div style={{ height: 40 }} />
         </>
       )}
-      <BottomNav />
     </div>
   );
 }

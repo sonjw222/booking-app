@@ -15,7 +15,6 @@ import {
   type Announcement,
 } from "../../../lib/announcements";
 import Loading from "../../components/Loading";
-import ManagerNav from "../../components/ManagerNav";
 import RichTextEditor from "../../components/RichTextEditor";
 import { ZoomableImage } from "../../components/ImageViewer";
 
@@ -224,7 +223,6 @@ export default function ManagerAnnouncementsPage() {
 
       {toast && <div className="toast">{toast}</div>}
       <div style={{ height: 20 }} />
-      <ManagerNav />
     </div>
   );
 }

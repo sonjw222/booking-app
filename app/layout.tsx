@@ -4,6 +4,7 @@ import "./globals.css";
 import { ImageViewerProvider } from "./components/ImageViewer";
 import SessionWatcher from "./components/SessionWatcher";
 import AppConfirmProvider from "./components/AppConfirmProvider";
+import GlobalBottomNav from "./components/GlobalBottomNav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,6 +35,7 @@ export default function RootLayout({
         <SessionWatcher />
         <AppConfirmProvider />
         <ImageViewerProvider>{children}</ImageViewerProvider>
+        <GlobalBottomNav />
       </body>
     </html>
   );

@@ -9,7 +9,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabaseClient";
 import { deactivateCurrentAccount } from "../../../lib/accountDeletion";
-import BottomNav from "../../components/BottomNav";
 
 const WITHDRAW_CONFIRM_PHRASE = "탈퇴합니다";
 
@@ -180,7 +179,6 @@ export default function AccountSettingsPage() {
         </>
       )}
 
-      <BottomNav />
     </div>
   );
 }

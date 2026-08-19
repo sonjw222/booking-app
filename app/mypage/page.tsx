@@ -8,7 +8,6 @@
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import { fetchMyPage, logout, refundEligibility, requestRefund, type Profile, type Membership, type HistoryItem } from "../../lib/mypage";
-import BottomNav from "../components/BottomNav";
 import UiIcon from "../components/UiIcon";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -205,7 +204,6 @@ export default function MyPage() {
       <button className="list-row logout-row" onClick={logout}>
         <div className="left"><span className="icon"><UiIcon name="logout" /></span>로그아웃</div>
       </button>
-      <BottomNav />
     </div>
   );
 }

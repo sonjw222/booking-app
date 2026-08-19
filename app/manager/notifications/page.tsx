@@ -10,7 +10,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Loading from "../../components/Loading";
-import ManagerNav from "../../components/ManagerNav";
 import UiIcon from "../../components/UiIcon";
 import {
   fetchNotifications, markRead, deleteNotification, notificationHref,
@@ -69,7 +68,6 @@ export default function ManagerNotificationsPage() {
           <div className="title" style={{ fontSize: 20, fontWeight: 800 }}>알림</div>
         </div>
         <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
-        <ManagerNav />
       </div>
     );
   }
@@ -108,7 +106,6 @@ export default function ManagerNotificationsPage() {
       )}
 
       <div style={{ height: 20 }} />
-      <ManagerNav />
     </div>
   );
 }

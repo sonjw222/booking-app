@@ -452,6 +452,10 @@ a { color: inherit; text-decoration: none; }
 .s-attended { background: var(--mint-soft); color: var(--mint); }
 .s-waitlisted { background: var(--gold-soft); color: var(--gold); }
 .s-cancelled, .s-no_show { background: var(--surface); color: var(--ink-soft); }
+.s-new { background: var(--gold-soft); color: var(--gold); }
+.s-contacted { background: var(--accent-soft); color: var(--accent); }
+.s-converted { background: var(--mint-soft); color: var(--mint); }
+.s-dropped { background: var(--surface); color: var(--ink-soft); }
 
 .list-row {
   display: flex; align-items: center; justify-content: space-between;
@@ -2821,6 +2825,12 @@ a.membership-card { text-decoration: none; display: block; }
 .app-date-grid i { aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; font-size: 12px; font-style: normal; }
 .app-date-grid button.on { background: var(--ink); color: #fff; font-weight: 720; }
 .app-date-grid button.today:not(.on) { box-shadow: inset 0 0 0 1px var(--brand); color: var(--brand-ink); font-weight: 720; }
+.app-month-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.app-month-grid button {
+  min-height:46px; border:1px solid var(--line); border-radius:12px;
+  background:var(--bg); color:var(--ink); font:inherit; font-size:13px; font-weight:700;
+}
+.app-month-grid button.on { border-color:var(--brand); background:var(--brand-soft); color:var(--brand-ink); }
 
 .confirm-overlay { z-index: 10000; }
 .confirm-sheet {
@@ -2950,7 +2960,340 @@ a.membership-card { text-decoration: none; display: block; }
 /* Manager menu uses one icon family and leaves the final row reachable. */
 .manager-home-v2 { padding-bottom: calc(var(--floating-nav-clearance) + 92px); }
 .manager-home-v2 > .list-row .icon svg { width: 22px; height: 22px; stroke-width: 1.7; }
-.manager-home-v2 > .list-row:last-of-type { margin-bottom: 24px; }
+.manager-home-v2 > .list-row:last-of-type { margin-bottom: 128px; }
+
+/* Final 26-point refinement: these rules intentionally close the cascade. */
+.mypage-shell .membership-cta {
+  border:1px solid var(--line-strong); background:#fff; color:var(--ink);
+  box-shadow:none;
+}
+.manager-v3-content .progress-member-panel { margin:8px var(--page-gutter) 18px; padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--surface); }
+.manager-v3-content .progress-member-panel .menu-section-label { padding:0 0 8px; }
+.manager-v3-content .progress-member-select { position:relative; }
+.manager-v3-content .progress-member-select select { appearance:none; min-height:52px; padding-right:44px; background:#fff; }
+.manager-v3-content .progress-member-select .select-chevron { position:absolute; right:16px; top:50%; translate:0 -52%; pointer-events:none; color:var(--ink-soft); font-size:20px; }
+.manager-v3-content .progress-add-record { width:100%; margin-top:10px; }
+.manager-v3-content .prog-wrap { display:grid; gap:12px; padding-bottom:130px; }
+.manager-v3-content .structured-add-row { display:grid; grid-template-columns:minmax(0,1fr) 76px; gap:10px; align-items:stretch; }
+.manager-v3-content .structured-add-row .outline-action { min-height:52px; }
+.manager-v3-content .prog-group { overflow:hidden; margin:0; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:0 8px 24px rgba(16,24,40,.035); }
+.manager-v3-content .prog-top-row { min-height:62px; padding:12px 14px; border:0; background:var(--surface); }
+.manager-v3-content .prog-top-name { font-size:17px; font-weight:760; }
+.manager-v3-content .prog-children { padding:0 14px 12px; }
+.manager-v3-content .prog-sub-row { min-height:58px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; padding:8px 0; border:0; border-bottom:1px solid var(--line); background:#fff; }
+.manager-v3-content .prog-sub-name { min-width:0; font-weight:620; }
+.manager-v3-content .prog-add-sub-btn { width:100%; min-height:48px; margin-top:10px; border:1px dashed var(--line-strong); border-radius:14px; background:#fff; color:var(--ink-soft); }
+.manager-v3-content .prog-hist { display:grid; gap:10px; padding-bottom:130px; }
+.manager-v3-content .prog-hist-day { padding:16px 14px; border:1px solid var(--line); border-radius:16px; background:#fff; }
+.manager-v3-content .prog-hist-actions { margin-top:12px; justify-content:flex-end; }
+.manager-v3-content .pass-list { display:grid; gap:14px; padding:8px var(--page-gutter) 130px; }
+.manager-v3-content .pass-card { position:relative; margin:0; padding:18px; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:0 7px 22px rgba(20,20,20,.035); }
+.manager-v3-content .pass-card::before { content:""; position:absolute; left:0; top:18px; bottom:18px; width:3px; border-radius:0 3px 3px 0; background:var(--brand); }
+.manager-v3-content .pass-rules { margin:8px 0 0; padding:8px 12px; border-left:2px solid var(--brand); border-radius:10px; background:var(--brand-soft); }
+.manager-v3-content .room-card-list { padding-bottom:130px; }
+.manager-v3-content .assignment-log-list { padding-bottom:130px; }
+.manager-v3-content .sales-breakdown { overflow:hidden; margin:0 var(--page-gutter); border:1px solid var(--line); border-radius:17px; background:#fff; }
+.manager-v3-content .sales-bd-item { min-height:60px; padding:13px 16px; border-bottom:1px solid var(--line); background:#fff; }
+.manager-v3-content .sales-bd-item:last-child { border-bottom:0; }
+.manager-v3-content .rv-stats { min-height:104px; padding-block:20px; }
+.manager-v3-content .rv-stat { display:flex; flex-direction:column; justify-content:center; gap:6px; }
+.manager-v3-content .rv-stat-label { margin:0; line-height:1.3; }
+.manager-v3-content .rv-stat-value { line-height:1.15; }
+.manager-v3-content .class-allowed-products-list,
+.manager-v3-content .class-trainers-list { gap:8px; padding-block:4px 10px!important; border-bottom:0; }
+.manager-v3-content .class-allowed-products-list .filter-chip,
+.manager-v3-content .class-trainers-list .filter-chip { min-height:40px; padding:0 13px; gap:7px; border:1px solid var(--line); border-radius:999px; background:#fff; color:var(--ink-soft); }
+.manager-v3-content .class-allowed-products-list .filter-chip.on,
+.manager-v3-content .class-trainers-list .filter-chip.on { border-color:var(--ink); background:var(--ink); color:#fff; }
+.manager-v3-content .class-allowed-products-list .filter-chip.on::before,
+.manager-v3-content .class-trainers-list .filter-chip.on::before { content:"✓"; font-size:11px; font-weight:900; }
+.manager-v3-content .sheet .primary-btn:not(.danger) { border:1px solid var(--line-strong); background:#fff; color:var(--ink); box-shadow:none; }
+.manager-v3-content .sheet .primary-btn:not(.danger):hover { background:var(--surface); }
+@media(max-width:380px){
+  .manager-v3-content .structured-add-row{grid-template-columns:minmax(0,1fr) 68px}
+  .manager-v3-content .row-actions{gap:3px}
+  .manager-v3-content .quiet-action{padding-inline:8px}
+}
+
+/* 2026-08-14 visual QA: quiet actions, clearer hierarchy and resilient overlays */
+.mypage-shell .avatar {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.mypage-shell .membership-cta,
+.member-reservation .class-select-btn,
+.member-reservation .reserve-btn {
+  min-height: 46px;
+  border: 1px solid var(--ink);
+  background: var(--bg);
+  color: var(--ink);
+  box-shadow: none;
+}
+.mypage-shell .membership-cta:hover,
+.member-reservation .class-select-btn:hover,
+.member-reservation .reserve-btn:hover { background: var(--surface); }
+
+.cal-center-pick {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 132px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.cal-center-pick select {
+  width: 100%; min-height: 44px; padding: 0 34px 0 13px;
+  border: 0; appearance: none; background: transparent;
+  color: var(--ink); font: inherit; font-weight: 700;
+}
+.cal-center-pick b { position:absolute; right:12px; pointer-events:none; color:var(--brand-ink); }
+.cal-memo-row { gap: 10px; margin: 14px 0 12px; }
+.cal-memo-row .primary-btn {
+  min-width: 72px; border: 1px solid var(--ink); background: var(--bg); color: var(--ink);
+}
+.cal-add-one {
+  min-height: 44px; margin-top: 12px; border: 1px solid var(--line-strong);
+  border-radius: 13px; background: var(--bg); color: var(--ink); font-weight: 700;
+}
+
+.manager-home-link {
+  border-color: color-mix(in srgb,var(--brand) 42%,var(--line));
+  background: var(--brand-soft); color: var(--brand-ink);
+}
+.manager-home-v2 { padding-bottom: calc(var(--floating-nav-clearance) + 170px); }
+.manager-home-v2 > .list-row:last-of-type { margin-bottom: 110px; }
+
+/* No notification/loading state may grow into a full-screen black slab. */
+.toast,
+.manager-v3-content .toast,
+.error-toast,
+.manager-v3-content .error-toast {
+  width: max-content !important;
+  max-width: calc(100vw - 32px) !important;
+  height: auto !important;
+  min-height: 42px !important;
+  max-height: 160px !important;
+  padding: 10px 14px !important;
+  border-radius: 13px !important;
+  overflow: auto !important;
+  white-space: normal;
+}
+.loading-wrap { min-height: 190px; background: transparent; }
+
+.manager-v3-content .pass-list { display:grid; gap:14px; padding:8px var(--page-gutter) 130px; }
+.manager-v3-content .pass-card {
+  margin:0; padding:18px; border:1px solid var(--line); border-radius:18px;
+  background:var(--bg); box-shadow:0 7px 22px rgba(20,20,20,.035);
+}
+.pass-head { gap:10px; align-items:flex-start; }
+.pass-rules-toggle {
+  width:100%; display:flex; justify-content:space-between; align-items:center;
+  min-height:46px; margin:14px 0 0; padding:0 13px; border:1px solid var(--line);
+  border-radius:13px; background:var(--surface); color:var(--ink); font-weight:750;
+}
+.pass-rules-toggle b { color:var(--brand-ink); font-size:12px; }
+.pass-rules { margin:8px 0 0; padding:6px 12px; border-left:2px solid var(--brand); background:var(--brand-soft); border-radius:10px; }
+.pass-rule { min-height:44px; }
+.goods-description { margin-top:10px; color:var(--ink-soft); font-size:13px; line-height:1.55; }
+.goods-sizes { display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
+.goods-sizes span { padding:5px 9px; border-radius:999px; background:var(--surface); color:var(--ink-soft); font-size:12px; }
+
+.sheet { border-radius:26px 26px 0 0; }
+.sheet .mem-row,
+.sheet .hist-item { min-height:58px; padding:14px 0; }
+.sheet .ghost-btn,
+.sheet .primary-btn { min-height:48px; border-radius:14px; }
+.sheet .primary-btn:not(.danger) { border:1px solid var(--ink); background:var(--bg); color:var(--ink); }
+
+.map-location-btn { width:100%; min-height:50px; border-style:solid; }
+.pay-method-toggle { margin-left:auto; color:var(--brand-ink); }
+
+.manager-v3-content .mem-list { display:grid; gap:0; }
+.manager-v3-content .mem-row { min-height:72px; padding:14px 2px; }
+.manager-v3-content .grade-badge { border:1px solid color-mix(in srgb,var(--brand) 30%,transparent); }
+.manager-v3-content .hist-item { padding:16px 4px; }
+.manager-v3-content .hist-title { display:flex; align-items:center; flex-wrap:wrap; gap:7px; line-height:1.45; }
+.manager-v3-content .hist-title .profile-tag { background:var(--brand-soft); color:var(--brand-ink); border:1px solid color-mix(in srgb,var(--brand) 32%,transparent); }
+.manager-v3-content .hist-sub { margin-top:5px; font-size:13px; line-height:1.5; }
+
+.manager-v3-content .sales-summary { background:linear-gradient(145deg,#1c1d20,#303238); }
+.manager-v3-content .sales-bd-item { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.manager-v3-content .sales-bd-item > :last-child { margin-left:auto; text-align:right; font-weight:800; color:var(--ink); }
+
+.manager-v3-content .review-stats > * { min-height:94px; padding:16px 10px; display:flex; flex-direction:column; justify-content:center; }
+.manager-v3-content .prog-add-sub-btn,
+.manager-v3-content .add-profile-btn { min-height:50px; border:1px solid var(--line-strong); border-radius:14px; background:var(--bg); color:var(--ink); }
+
+@media (max-width: 480px) {
+  .cal-center-pick { min-width:116px; max-width:42vw; }
+  .cal-center-pick select { font-size:13px; }
+  .cal-memo-row { align-items:stretch; }
+  .cal-memo-row .input-field { min-width:0; }
+}
+
+/* Reservation confirmation is a compact review flow, not a flat form. */
+.member-reservation .sheet { padding-bottom: max(22px,env(safe-area-inset-bottom)); }
+.booking-confirm-section {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--bg);
+}
+.booking-confirm-kicker {
+  margin-bottom: 10px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+.booking-confirm-kicker span {
+  margin-left: 4px;
+  color: var(--brand-ink);
+  font-size: 11px;
+}
+.booking-confirm-class {
+  border-color: color-mix(in srgb,var(--brand) 34%,var(--line));
+  background: linear-gradient(135deg,var(--brand-soft),var(--bg) 72%);
+}
+.booking-confirm-class .confirm-class { margin:0; padding:0; border:0; background:transparent; }
+.booking-confirm-class .confirm-class-title { font-size:18px; font-weight:850; }
+.booking-confirm-class .confirm-class-sub { margin-top:5px; line-height:1.45; }
+.booking-confirm-pass .no-pass-row { display:grid; gap:12px; }
+.booking-confirm-pass .perm-guide {
+  padding:0; border:0; border-radius:0; background:transparent; line-height:1.55;
+}
+.purchasable-pass-list { display:flex; flex-wrap:wrap; gap:7px; margin:8px 0 0; padding:0; }
+.purchasable-pass-item {
+  display:inline-flex; align-items:center; min-height:34px; padding:7px 11px;
+  border:1px solid color-mix(in srgb,var(--brand) 32%,var(--line));
+  border-radius:999px; background:var(--brand-soft); color:var(--brand-ink);
+  font-size:13px; font-weight:750;
+}
+.booking-confirm-pass .no-pass-buy-btn {
+  justify-self:start; min-height:44px; padding:0 15px;
+  border:1px solid var(--ink); border-radius:13px; background:var(--bg); color:var(--ink);
+  font-weight:800;
+}
+.booking-confirm-goods .menu-section-label { display:none; }
+.booking-confirm-goods .perm-guide { padding:12px 0 0; border:0; background:transparent; }
+.member-reservation .sheet > .add-profile-actions {
+  position:sticky; bottom:0; z-index:2; margin:18px -2px 0 !important; padding-top:12px;
+  background:linear-gradient(to bottom,transparent,var(--bg) 18%);
+}
+
+/* Rebuilt member and sheet language: fewer filled blocks, clearer rows. */
+.outline-action,
+.quiet-action {
+  min-height:42px; padding:0 14px; border:1px solid var(--line-strong);
+  border-radius:12px; background:var(--bg); color:var(--ink); font:inherit; font-weight:750;
+}
+.outline-action.compact { min-height:36px; padding-inline:12px; font-size:12px; }
+.quiet-action { min-height:36px; border-color:var(--line); color:var(--ink-soft); font-size:12px; }
+.member-toolbar-actions { display:flex; gap:7px; }
+.member-add-search-row { display:grid; grid-template-columns:minmax(0,1fr) 78px; gap:10px; align-items:stretch; }
+.member-add-search-row .input-field { min-width:0; }
+.sheet-lead { margin:-2px 0 16px; color:var(--ink-soft); font-size:13px; line-height:1.55; }
+.csv-export-sheet .csv-cols { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.csv-export-sheet .csv-col {
+  display:flex; align-items:center; gap:9px; min-height:46px; padding:0 12px;
+  border:1px solid var(--line); border-radius:12px; background:var(--bg); font-weight:650;
+}
+.csv-export-sheet .csv-col:has(input:checked) { border-color:var(--brand); background:var(--brand-soft); color:var(--brand-ink); }
+.csv-export-sheet .csv-col input { width:17px; height:17px; accent-color:var(--brand-ink); }
+.member-detail-sheet .mem-pass-block { margin:12px 0; padding:14px; border:1px solid var(--line); border-radius:15px; background:var(--surface); }
+.member-detail-sheet .mem-pass-summary { display:grid; gap:7px; }
+.member-detail-sheet .mem-pass-chip { display:flex; justify-content:space-between; gap:12px; min-width:0; padding:10px 0; border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; }
+.member-detail-sheet .mem-pass-chip:last-child { border-bottom:0; }
+.member-detail-sheet .mem-pass-exp { flex:none; white-space:nowrap; }
+.member-detail-sheet .admin-row { min-height:54px; display:grid; grid-template-columns:88px minmax(0,1fr); align-items:center; border-bottom:1px solid var(--line); }
+.member-detail-sheet .admin-row .v { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.member-detail-sheet .mem-detail-row { display:grid; grid-template-columns:74px minmax(0,1fr) auto; gap:10px; align-items:center; }
+.member-detail-sheet .mem-detail-date { white-space:nowrap; line-height:1.2; }
+.direct-member-sheet .book-member-list { margin-top:12px; border-top:1px solid var(--line); }
+.direct-member-sheet .book-member-row { width:100%; min-height:66px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 2px; border:0; border-bottom:1px solid var(--line); background:transparent; text-align:left; }
+.book-member-identity { display:flex; align-items:center; gap:11px; min-width:0; }
+.book-member-avatar { width:36px; height:36px; display:grid; place-items:center; flex:none; border:1px solid var(--line); border-radius:12px; background:var(--surface); font-weight:800; }
+.direct-member-sheet .book-member-pass { max-width:48%; padding:6px 9px; border-radius:999px; background:var(--brand-soft); color:var(--brand-ink); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.direct-member-sheet .book-member-pass.empty { background:var(--surface); color:var(--ink-soft); }
+.progress-member-panel { margin:8px 20px 18px; padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--surface); }
+.progress-member-panel .menu-section-label { padding:0 0 8px; }
+.progress-member-select { position:relative; }
+.progress-member-select select { appearance:none; min-height:52px; padding-right:44px; background:#fff; }
+.progress-member-select .select-chevron { position:absolute; right:16px; top:50%; translate:0 -52%; pointer-events:none; color:var(--ink-soft); font-size:20px; }
+.progress-add-record { width:100%; margin-top:10px; }
+.row-actions { display:flex; align-items:center; gap:6px; }
+.quiet-action.danger { color:var(--danger); }
+.structured-add-row { display:grid; grid-template-columns:minmax(0,1fr) 76px; gap:10px; align-items:stretch; }
+.structured-add-row .outline-action { min-height:52px; }
+.prog-group { overflow:hidden; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:0 8px 24px rgba(16,24,40,.035); }
+.prog-top-row { min-height:62px; padding:12px 14px; background:var(--surface); }
+.prog-top-name { font-size:17px; font-weight:760; }
+.prog-children { padding:0 14px 12px; }
+.prog-sub-row { min-height:58px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
+.prog-sub-name { min-width:0; font-weight:620; }
+.prog-add-sub-btn { min-height:48px; margin-top:10px; border:1px dashed var(--line-strong); border-radius:14px; background:#fff; color:var(--ink-soft); }
+.prog-hist-day { position:relative; padding:16px 14px; border:1px solid var(--line); border-radius:16px; background:#fff; }
+.prog-hist + .prog-hist-day { margin-top:10px; }
+.prog-hist-actions { margin-top:12px; justify-content:flex-end; }
+@media (max-width:420px) { .structured-add-row { grid-template-columns:minmax(0,1fr) 68px; } }
+.staff-role { background:var(--brand-soft); color:var(--brand-ink); }
+.staff-role.owner { background:#eef0f3; color:var(--ink); }
+.staff-search-row { display:grid; grid-template-columns:minmax(0,1fr) 84px; gap:10px; }
+.staff-search-row .outline-action { min-height:52px; }
+.role-manage-sheet .grade-list { overflow:hidden; border:1px solid var(--line); border-radius:16px; background:#fff; }
+.role-manage-sheet .grade-item { min-height:56px; padding:10px 14px; }
+.payment-register-sheet .input-field,
+.payment-register-sheet .date-picker-trigger { background:#fff; }
+.payment-register-sheet .pay-grid { gap:12px; }
+.payment-register-sheet .pay-field { display:grid; gap:7px; }
+.payment-register-sheet .pay-field > span { font-size:13px; font-weight:700; color:var(--ink-soft); }
+.payment-register-sheet .pay-total { margin-top:12px; padding:14px 16px; border:1px solid var(--line); border-radius:14px; background:var(--surface); text-align:right; }
+.sales-summary { background:linear-gradient(145deg,#202226,#32363c); }
+.sales-big-label { letter-spacing:-.01em; }
+.sales-big-value { line-height:1.12; }
+.sales-breakdown { overflow:hidden; border:1px solid var(--line); border-radius:17px; background:#fff; }
+.sales-bd-item { min-height:60px; padding:13px 16px; border-bottom:1px solid var(--line); }
+.sales-bd-item:last-child { border-bottom:0; }
+.sales-bd-item .bd-label { color:var(--ink-soft); font-weight:650; }
+.sales-bd-item .bd-value { font-size:17px; font-weight:780; font-variant-numeric:tabular-nums; }
+.sales-export-sheet .csv-cols { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.sales-export-sheet .csv-col { min-height:48px; display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:13px; background:#fff; }
+.payment-detail-sheet .admin-row { min-height:54px; display:grid; grid-template-columns:92px minmax(0,1fr); align-items:center; border-bottom:1px solid var(--line); }
+.payment-detail-sheet .add-profile-actions { justify-content:flex-end; }
+.payment-detail-sheet .outline-action { min-width:120px; }
+.manager-v3-content .pass-card { position:relative; }
+.manager-v3-content .pass-card::before { content:""; position:absolute; left:0; top:18px; bottom:18px; width:3px; border-radius:0 3px 3px 0; background:var(--brand); }
+.goods-card-content { min-width:0; flex:1; }
+.goods-card-actions { flex:none; }
+.goods-card-actions .quiet-action { min-width:52px; }
+.room-card-list { display:grid; gap:12px; padding:14px 20px 120px; }
+.room-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:16px; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:0 8px 24px rgba(16,24,40,.035); }
+.room-card-main { min-width:0; display:grid; gap:5px; padding:0; border:0; background:transparent; text-align:left; }
+.room-card-name { font-size:17px; font-weight:780; }
+.room-card-memo,.room-card-address { color:var(--ink-soft); font-size:13px; line-height:1.45; }
+.room-card-actions { align-self:start; }
+.room-edit-sheet .map-location-btn { width:100%; margin-top:10px; }
+.assignment-log-list { display:grid; gap:10px; padding:0 20px 120px; }
+.assignment-log { position:relative; padding:15px 16px 15px 19px; border:1px solid var(--line); border-radius:16px; background:#fff; overflow:hidden; }
+.assignment-log::before { content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--brand); }
+.assignment-log.action-admin_cancel::before,.assignment-log.action-admin_free_cancel::before { background:var(--danger); }
+.assignment-log .hist-title { display:flex; flex-wrap:wrap; align-items:center; gap:7px; font-size:15px; }
+.assignment-action { padding:4px 8px; border-radius:999px; background:var(--brand-soft); color:var(--brand-ink); font-size:11px; font-weight:760; }
+.action-admin_cancel .assignment-action,.action-admin_free_cancel .assignment-action { background:#fff0f0; color:var(--danger); }
+.assignment-warning { color:#9a5b00; font-size:11px; font-weight:720; }
+.assignment-log .hist-sub { margin-top:4px; color:var(--ink-soft); font-size:13px; line-height:1.45; }
+
+.mypage-shell .profile-block { border-bottom:1px solid var(--line); }
+.mypage-shell .avatar { background:var(--bg); box-shadow:0 5px 16px rgba(20,20,20,.06); }
+.mypage-shell .membership-card,
+.mypage-shell .membership-card.goods { box-shadow:none; }
+.mypage-shell .membership-card + .membership-card { margin-top:12px; }
+.mypage-shell .membership-cta { display:flex; align-items:center; justify-content:center; background:var(--bg); }
+.mypage-shell .membership-card.goods { background:var(--bg); border-left:3px solid var(--brand); }
 
 /* Center actions remain visible in every tab and float clear of navigation. */
 .center-detail-v2 { padding-bottom: calc(var(--floating-nav-clearance) + 104px) !important; }
@@ -3630,4 +3973,227 @@ textarea:focus-visible,
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
   }
+}
+
+/* Final visual-QA cascade.
+   Keep these after every Batch rule so the post-migration polish cannot be
+   partially reverted by an older screen-specific declaration above. */
+.auth-panel .mode-tabs {
+  width: 100%;
+  max-width: 310px;
+  min-height: 52px;
+  margin: 0 0 24px;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--surface);
+}
+.auth-panel .mode-tab {
+  flex: 1;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--ink-soft);
+}
+.auth-panel .mode-tab.on {
+  border: 0;
+  background: var(--bg);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(20,20,20,.08);
+}
+
+.mypage-shell .profile-block {
+  min-height: 108px;
+  padding: max(30px,env(safe-area-inset-top)) var(--page-gutter) 22px;
+  gap: 12px;
+}
+.mypage-shell .avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 17px;
+  font-size: 20px;
+}
+.mypage-shell .profile-name { font-size: 19px; }
+.mypage-shell .membership-card,
+.mypage-shell .membership-card.goods {
+  padding: 18px;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--bg);
+}
+.mypage-shell .membership-card.goods {
+  border-color: color-mix(in srgb,var(--brand) 34%,var(--line));
+  background: linear-gradient(135deg,var(--brand-soft),var(--bg) 76%);
+}
+.mypage-shell .membership-card .name,
+.mypage-shell .membership-card .count span,
+.mypage-shell .membership-card .expire {
+  color: var(--ink-soft);
+  opacity: 1;
+}
+.mypage-shell .membership-card .progress-track { background: var(--surface-strong); }
+.mypage-shell .membership-card .progress-fill { background: var(--ink); }
+.mypage-shell .membership-card.goods .progress-fill { background: var(--brand); }
+.mypage-shell .membership-cta {
+  margin-top: 14px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: #fff;
+}
+
+.manager-home-v2 {
+  padding-bottom: calc(var(--floating-nav-clearance) + 92px);
+}
+.manager-home-v2 > .list-row .icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.7;
+}
+.manager-home-v2 > .list-row:last-of-type { margin-bottom: 24px; }
+
+/* 2026-08-15 visual alignment pass.
+   These rules intentionally live last: legacy screen rules must not restore
+   cramped controls, dark member actions, or content hidden by floating nav. */
+.manager-v3-content > .app-shell,
+.manager-home-v2,
+.manager-members-v2,
+.manager-classes-v2 {
+  padding-bottom: calc(var(--floating-nav-clearance) + 104px) !important;
+}
+.manager-v3-content .bottom-nav { bottom: max(18px,env(safe-area-inset-bottom)); }
+.manager-home-v2 > .list-row:last-of-type {
+  margin-bottom: 0;
+}
+.manager-home-v2 .manager-menu-end-spacer {
+  width: 100%;
+  height: calc(var(--floating-nav-clearance) + 132px);
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
+/* A single select language across manager forms. Native platform arrows made
+   otherwise identical fields look unrelated, so all regular selects use one
+   quiet chevron and the same internal spacing. */
+.manager-v3-content select.input-field {
+  min-height: 54px;
+  padding: 0 46px 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2374767d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 15px center;
+  background-size: 18px 18px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 620;
+  line-height: 1.35;
+  appearance: none;
+  -webkit-appearance: none;
+  box-shadow: none;
+}
+.manager-v3-content select.input-field:hover { border-color: var(--line-strong); }
+.manager-v3-content select.input-field:focus-visible { border-color: var(--brand); }
+.manager-v3-content .ampm-time-input select.input-field {
+  min-height: 48px;
+  padding-left: 12px;
+  padding-right: 34px;
+  background-position: right 9px center;
+}
+
+/* Progress history: one quiet, readable row with actions anchored together. */
+.manager-v3-content .prog-hist { display: grid; gap: 10px; padding-top: 6px; }
+.manager-v3-content .prog-hist-day {
+  position: relative;
+  min-height: 82px;
+  padding: 16px 160px 16px 4px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--bg);
+}
+.manager-v3-content .prog-hist-line { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.manager-v3-content .prog-hist-date { flex: none; min-width: 52px; font-size: 15px; font-weight: 780; }
+.manager-v3-content .prog-hist-skills-inline { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.manager-v3-content .prog-hist .skill-tag { margin: 0; padding: 7px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.manager-v3-content .prog-hist-actions { position: absolute; top: 50%; right: 12px; display: flex; gap: 7px; transform: translateY(-50%); }
+.manager-v3-content .prog-hist-actions .quiet-action { min-width: 58px; min-height: 42px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+
+/* Member detail: ownership summary reads as a section, not a loose list. */
+.member-detail-sheet .mem-pass-block { margin: 14px 0; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+.member-detail-sheet .mem-pass-head { min-height: 34px; margin-bottom: 4px; }
+.member-detail-sheet .mem-pass-head-title { color: var(--ink); font-size: 14px; font-weight: 760; }
+.member-detail-sheet .mem-pass-more { min-height: 36px; padding: 0 8px; color: var(--ink); }
+.member-detail-sheet .mem-pass-chip { min-height: 54px; padding: 13px 0; align-items: center; font-size: 13.5px; line-height: 1.45; }
+.member-detail-sheet .mem-pass-exp { margin-left: auto; color: var(--ink-soft); font-size: 12px; }
+
+/* Sales: consistent vertical rhythm and number alignment. */
+.manager-v3-content .sales-summary { padding: 24px; border-radius: 22px; }
+.manager-v3-content .sales-big { display: grid; gap: 8px; }
+.manager-v3-content .sales-big-label { font-size: 12px; color: rgba(255,255,255,.72) !important; }
+.manager-v3-content .sales-big-value { font-size: clamp(30px,8vw,38px); line-height: 1.08; letter-spacing: -.04em; }
+.manager-v3-content .profit-line { margin-top: 20px; padding-top: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid rgba(255,255,255,.24); }
+.manager-v3-content .profit-line > span { min-width: 0; font-size: 13px; }
+.manager-v3-content .profit-net { margin-left: auto; text-align: right; font-size: 15px !important; font-weight: 760; }
+.manager-v3-content .sales-breakdown { overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); }
+.manager-v3-content .sales-bd-item { min-height: 62px; padding: 16px 22px; }
+.manager-v3-content .sales-bd-item:last-child { border-bottom: 0; }
+.manager-v3-content .bd-label { color: var(--ink-soft); font-size: 14px; font-weight: 650; }
+.manager-v3-content .bd-value { margin-left: auto; text-align: right; color: var(--ink); font-size: 16px; font-weight: 780; font-variant-numeric: tabular-nums; }
+
+/* Payment sheet: labels, controls, and tabs no longer crowd each other. */
+.payment-register-sheet > .menu-section-label { padding: 18px 2px 8px !important; }
+.payment-register-sheet > .input-field { min-height: 54px; }
+.payment-register-sheet .mem-filters { padding-bottom: 4px !important; gap: 14px; }
+.payment-register-sheet .pay-grid { margin-top: 2px; gap: 14px 12px; }
+.payment-register-sheet .pay-field .input-field { min-height: 54px; padding-inline: 15px; }
+
+/* Search/filter controls use the same optical baseline. */
+.manager-v3-content .admin-filters .input-field,
+.manager-v3-content input[placeholder="회원 / 관리자 / 수업명 검색"] {
+  min-height: 54px;
+  padding-inline: 18px;
+  line-height: 1.4;
+}
+
+/* Center categories are typography-only; decorative emoji are intentionally removed. */
+.manager-v3-content .filter-chip { letter-spacing: -.01em; }
+
+/* My page: calm white profile identity and outlined booking action. */
+.mypage-shell .avatar {
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: var(--ink);
+  box-shadow: none;
+}
+.mypage-shell .membership-cta,
+.mypage-shell .membership-card:hover .membership-cta,
+.mypage-shell .membership-card:focus-visible .membership-cta,
+.mypage-shell .membership-card:active .membership-cta {
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: var(--ink);
+  box-shadow: none;
+  filter: none;
+  transform: none;
+  transition: none;
+}
+.mypage-shell .membership-card:hover,
+.mypage-shell .membership-card:active {
+  background: var(--bg);
+  color: var(--ink);
+  filter: none;
+  transform: none;
+}
+
+@media (max-width: 520px) {
+  .manager-v3-content .prog-hist-day { padding: 14px 12px; }
+  .manager-v3-content .prog-hist-line { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .manager-v3-content .prog-hist-actions { position: static; margin-top: 12px; justify-content: flex-end; transform: none; }
+  .manager-v3-content .profit-line { align-items: flex-end; }
+  .member-detail-sheet .mem-pass-chip { display: grid; grid-template-columns: minmax(0,1fr) auto; }
 }

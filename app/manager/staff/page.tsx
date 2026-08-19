@@ -8,8 +8,8 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
+import UiIcon from "../../components/UiIcon";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
   fetchPermissions, fetchRoles, createRole, deleteRole,
@@ -245,18 +245,24 @@ export default function StaffPage() {
         <>
           <div className="mem-toolbar">
             <span className="mem-count">스태프 {staff.length}명</span>
-            <button className="text-btn" onClick={() => { setInviteSheet(true); setInviteRoleId(roles.find((r) => !r.isOwner)?.id ?? ""); }}>
-              + 스태프 추가
+            <button className="quiet-action" onClick={() => { setInviteSheet(true); setInviteRoleId(roles.find((r) => !r.isOwner)?.id ?? ""); }}>
+              스태프 추가
             </button>
           </div>
 
           <div className="mem-list">
-            {staff.map((s) => (
+            {[...staff].sort((a, b) => {
+              const ownerOrder = Number(b.isOwner) - Number(a.isOwner);
+              if (ownerOrder) return ownerOrder;
+              const aRank = roles.findIndex((r) => r.id === a.roleId);
+              const bRank = roles.findIndex((r) => r.id === b.roleId);
+              return (aRank < 0 ? Number.MAX_SAFE_INTEGER : aRank) - (bRank < 0 ? Number.MAX_SAFE_INTEGER : bRank);
+            }).map((s) => (
               <button key={s.id} className="mem-row" onClick={() => setStaffDetail(s)}>
                 <div className="mem-main">
                   <div className="mem-name-line">
                     <span className="mem-name">{s.name}</span>
-                    {s.roleName && <span className="grade-badge" style={{ background: s.isOwner ? "#7B2D4622" : "#5B8DEF22", color: s.isOwner ? "var(--accent)" : "#5B8DEF" }}>{s.roleName}</span>}
+                    {s.roleName && <span className={`grade-badge staff-role ${s.isOwner ? "owner" : ""}`}>{s.roleName}</span>}
                     {s.status === "pending" && <span className="mem-flag">승인대기</span>}
                   </div>
                   <div className="mem-sub">{s.phone ?? "번호 없음"}</div>
@@ -271,7 +277,7 @@ export default function StaffPage() {
         <>
           <div className="mem-toolbar">
             <span className="mem-count">역할을 선택하세요</span>
-            <button className="text-btn" onClick={() => setRoleSheet(true)}>역할 관리</button>
+            <button className="quiet-action" onClick={() => setRoleSheet(true)}>역할 관리</button>
           </div>
 
           <div className="mem-filters">
@@ -361,11 +367,11 @@ export default function StaffPage() {
       {/* 스태프 추가 시트 */}
       {inviteSheet && (
         <div className="sheet-overlay" onClick={() => setInviteSheet(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet staff-invite-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">스태프 추가</div>
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>이미 가입한 계정을 검색해서 추가해요</div>
 
-            <div style={{ display: "flex", gap: 8 }}>
+            <div className="staff-search-row">
               <input
                 className="input-field"
                 placeholder="이름 또는 전화번호"
@@ -373,7 +379,7 @@ export default function StaffPage() {
                 onChange={(e) => setSearchKw(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               />
-              <button className="ghost-btn" onClick={handleSearch}>검색</button>
+              <button className="outline-action" onClick={handleSearch}>검색</button>
             </div>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>역할</div>
@@ -440,7 +446,7 @@ export default function StaffPage() {
                 href={`/manager/staff/permissions?mc=${staffDetail.id}&role=${staffDetail.roleId}&name=${encodeURIComponent(staffDetail.name)}&center=${centerId}`}
                 style={{ marginTop: 8 }}
               >
-                <div className="left"><span className="icon">⚙️</span>개인 권한 설정 (역할 예외)</div>
+                <div className="left"><span className="icon"><UiIcon name="settings" /></span>개인 권한 설정 (역할 예외)</div>
                 <span className="chevron">›</span>
               </a>
             )}
@@ -451,7 +457,7 @@ export default function StaffPage() {
       {/* 역할 관리 시트 */}
       {roleSheet && (
         <div className="sheet-overlay" onClick={() => setRoleSheet(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet role-manage-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">역할 관리</div>
 
             <div className="grade-list">
@@ -473,12 +479,11 @@ export default function StaffPage() {
 
             <div className="add-profile-actions">
               <button className="ghost-btn" onClick={() => setRoleSheet(false)}>닫기</button>
-              <button className="primary-btn" disabled={busy} onClick={handleCreateRole}>추가</button>
+              <button className="outline-action" disabled={busy} onClick={handleCreateRole}>추가</button>
             </div>
           </div>
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

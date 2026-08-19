@@ -306,6 +306,24 @@ export function canSeeManagerMenu(
   return myPerms?.has(permissionKey) ?? false;
 }
 
+// ManagerNav의 "회원" 탭 판정을 기기에 캐싱해 다음 진입 때 초기값으로 쓴다 — 판정 전에는
+// 탭을 숨겨야 하는데(권한 없는 스태프에게 잠깐이라도 보이면 안 됨), 그 로딩 상태가 매번
+// "숨김 → (권한 있으면) 표시"로 깜빡이는 걸 줄이기 위함이다(ManagerNav.tsx 참고).
+const CAN_SEE_MEMBERS_CACHE_KEY = "manager_nav_can_see_members";
+
+export function getCachedCanSeeMembers(): boolean | null {
+  try {
+    const v = localStorage.getItem(CAN_SEE_MEMBERS_CACHE_KEY);
+    if (v === "1") return true;
+    if (v === "0") return false;
+  } catch { /* 무시 */ }
+  return null;
+}
+
+export function setCachedCanSeeMembers(v: boolean): void {
+  try { localStorage.setItem(CAN_SEE_MEMBERS_CACHE_KEY, v ? "1" : "0"); } catch { /* 무시 */ }
+}
+
 /*
   로그인한 스태프 본인의 유효 권한 키 목록 (메뉴 노출 등 UI 표시용).
   오너는 전권이므로 이 함수를 호출하지 않고 호출측에서 isOwner로 별도 처리한다.
