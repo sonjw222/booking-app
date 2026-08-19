@@ -9,6 +9,8 @@ import {
   getOrCreateTestGoodsProduct,
   createTestMembershipForProduct,
   clearScheduleRulesForProduct,
+  fetchSettingsAdmin,
+  saveSettingsAdmin,
   reservationDeepLink,
   type TestUser,
 } from "../fixtures/testData";
@@ -44,6 +46,7 @@ let passD: { id: string; name: string };
 let passE: { id: string; name: string };
 let passF: { id: string; name: string };
 let goods: { id: string };
+let originalSettings: Awaited<ReturnType<typeof fetchSettingsAdmin>>;
 const createdClassIds: string[] = [];
 const foreignCenterCleanup: { centerId: string; productId: string } = { centerId: "", productId: "" };
 
@@ -64,6 +67,15 @@ test.beforeAll(async () => {
   managerA = loadTestAccountMeta("manager-a");
   userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
+  originalSettings = await fetchSettingsAdmin(centerAId);
+  await saveSettingsAdmin(centerAId, {
+    ...originalSettings,
+    groupBookDaysBefore: 0,
+    groupBookTime: "23:59",
+    allowSameDayBooking: true,
+    dailyBookLimitEnabled: false,
+    dailyBookLimit: null,
+  });
 
   passA = await getOrCreateTestPassProductNamed(centerAId, "P3 패스A");
   passB = await getOrCreateTestPassProductNamed(centerAId, "P3 패스B");
@@ -99,23 +111,39 @@ test.beforeAll(async () => {
     if (p) await clearScheduleRulesForProduct(p.id);
   }
 
-  const { data: foreignCenter, error: fcErr } = await admin
-    .from("centers").insert({ name: "P3 타센터-격리테스트", status: "approved" }).select("id").single();
-  if (fcErr || !foreignCenter) throw new Error(`타 센터 생성 실패: ${fcErr?.message ?? "no data"}`);
-  foreignCenterCleanup.centerId = foreignCenter.id;
-  const { data: foreignProduct, error: fpErr } = await admin
-    .from("products")
-    .insert({ center_id: foreignCenter.id, name: "P3 타센터전용패스", product_kind: "pass", pass_type: "count", total_count: 999, is_on_sale: true, is_active: true })
-    .select("id").single();
-  if (fpErr || !foreignProduct) throw new Error(`타 센터 상품 생성 실패: ${fpErr?.message ?? "no data"}`);
-  foreignCenterCleanup.productId = foreignProduct.id;
+  // [2026-08-14 수정] 매번 무조건 insert하던 걸 이름 기준 get-or-create로 전환 —
+  // passA~F와 동일 관례(getOrCreateTestPassProductNamed). E2E가 중간에 죽으면
+  // afterAll이 못 돌아 이 fixture가 실행마다 새로 쌓였다(이미 이 이름으로 leaked된
+  // 행이 있어도 확인 없이 또 만듦). 이제 이미 있으면 재사용, 없을 때만 생성한다.
+  const { data: existingForeignCenter } = await admin
+    .from("centers").select("id").eq("name", "P3 타센터-격리테스트").maybeSingle();
+  if (existingForeignCenter) {
+    foreignCenterCleanup.centerId = (existingForeignCenter as any).id;
+  } else {
+    const { data: foreignCenter, error: fcErr } = await admin
+      .from("centers").insert({ name: "P3 타센터-격리테스트", status: "approved" }).select("id").single();
+    if (fcErr || !foreignCenter) throw new Error(`타 센터 생성 실패: ${fcErr?.message ?? "no data"}`);
+    foreignCenterCleanup.centerId = foreignCenter.id;
+  }
+  const { data: existingForeignProduct } = await admin
+    .from("products").select("id").eq("center_id", foreignCenterCleanup.centerId).eq("name", "P3 타센터전용패스").maybeSingle();
+  if (existingForeignProduct) {
+    foreignCenterCleanup.productId = (existingForeignProduct as any).id;
+  } else {
+    const { data: foreignProduct, error: fpErr } = await admin
+      .from("products")
+      .insert({ center_id: foreignCenterCleanup.centerId, name: "P3 타센터전용패스", product_kind: "pass", pass_type: "count", total_count: 999, is_on_sale: true, is_active: true })
+      .select("id").single();
+    if (fpErr || !foreignProduct) throw new Error(`타 센터 상품 생성 실패: ${fpErr?.message ?? "no data"}`);
+    foreignCenterCleanup.productId = foreignProduct.id;
+  }
 });
 
 test.afterAll(async () => {
   for (const id of createdClassIds) await cleanupTestClassAdmin(id);
-  const admin = getFixtureAdminClient();
-  if (foreignCenterCleanup.productId) await admin.from("products").delete().eq("id", foreignCenterCleanup.productId);
-  if (foreignCenterCleanup.centerId) await admin.from("centers").delete().eq("id", foreignCenterCleanup.centerId);
+  if (originalSettings) await saveSettingsAdmin(centerAId, originalSettings);
+  // foreignCenterCleanup(centerId/productId)은 이제 get-or-create로 재사용되는 공유
+  // fixture다 — 더 이상 여기서 삭제하지 않는다(삭제→재생성 churn 제거).
 });
 
 test("관리자: 검색으로 특정 pass 1개만 선택 → 저장 → 재진입 시 선택값 유지 → 회원 화면엔 그 pass만 표시 (실브라우저)", async ({ page, browser }) => {

@@ -9,7 +9,6 @@
 
 import { Suspense, useCallback, useEffect, useState, useRef } from "react";
 import Loading from "../../components/Loading";
-import ManagerNav from "../../components/ManagerNav";
 import { useSearchParams } from "next/navigation";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
@@ -336,9 +335,9 @@ function MembersContent() {
 
       <div className="mem-toolbar">
         <span className="mem-count">전체 {members.length}명</span>
-        <div className="mem-tools">
-          <button className="text-btn" disabled={busy} onClick={handleSync}>예약자 동기화</button>
-          <button className="text-btn" onClick={() => setCsvSheet(true)}>엑셀 내보내기</button>
+        <div className="mem-tools member-toolbar-actions">
+          <button className="quiet-action" disabled={busy} onClick={handleSync}>예약자 동기화</button>
+          <button className="quiet-action" onClick={() => setCsvSheet(true)}>엑셀 내보내기</button>
         </div>
       </div>
       </>
@@ -397,7 +396,7 @@ function MembersContent() {
       {/* 회원 상세 시트 */}
       {detail && (
         <div className="sheet-overlay" onClick={() => setDetail(null)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet member-detail-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{detail.name}</div>
             {detailLoading && <Loading />}
             {!detailLoading && (<>
@@ -616,9 +615,9 @@ function MembersContent() {
       {/* 엑셀 내보내기 시트 */}
       {csvSheet && (
         <div className="sheet-overlay" onClick={() => setCsvSheet(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet csv-export-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">엑셀 내보내기</div>
-            <div className="menu-section-label" style={{ padding: "4px 0 8px" }}>내보낼 항목을 선택하세요</div>
+            <div className="sheet-lead">필요한 회원 정보만 선택해서 내보낼 수 있어요.</div>
 
             <div className="csv-cols">
               {CSV_COLUMNS.map((c) => (
@@ -635,7 +634,7 @@ function MembersContent() {
               ))}
             </div>
 
-            <div className="add-profile-actions">
+            <div className="add-profile-actions csv-export-actions">
               <button className="ghost-btn" onClick={() => setCsvSheet(false)}>취소</button>
               <button className="primary-btn" onClick={handleCsvDownload}>{members.length}명 내보내기</button>
             </div>
@@ -646,14 +645,14 @@ function MembersContent() {
       {/* 회원 추가 시트 */}
       {addSheet && (
         <div className="sheet-overlay" onClick={() => setAddSheet(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet member-add-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">회원 추가</div>
             <div className="perm-guide" style={{ margin: "0 0 10px" }}>
               앱에 가입한 회원을 이름·전화번호로 검색해 센터에 등록해요.
               등록해야 수강권 발급·예약 대상이 됩니다.
             </div>
-            <div className="hol-add" style={{ padding: 0 }}>
-              <div style={{ display: "flex", gap: 8 }}>
+            <div className="hol-add member-add-search" style={{ padding: 0 }}>
+              <div className="member-add-search-row">
                 <input
                   className="input-field"
                   placeholder="이름 또는 전화번호 (2글자 이상)"
@@ -661,7 +660,7 @@ function MembersContent() {
                   onChange={(e) => setSearchKw(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                 />
-                <button className="primary-btn small" disabled={searching} onClick={handleSearch}>검색</button>
+                <button className="outline-action" disabled={searching} onClick={handleSearch}>검색</button>
               </div>
             </div>
 
@@ -678,7 +677,7 @@ function MembersContent() {
                     <span className="mem-detail-main">
                       {r.name}{r.phone ? ` · ${r.phone}` : ""}
                     </span>
-                    <button className="primary-btn small" disabled={busy} onClick={() => handleAddMember(r.profileId)}>등록</button>
+                    <button className="outline-action compact" disabled={busy} onClick={() => handleAddMember(r.profileId)}>등록</button>
                   </div>
                 ))
               )}
@@ -690,7 +689,6 @@ function MembersContent() {
           </div>
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

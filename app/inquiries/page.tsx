@@ -10,7 +10,6 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Loading from "../components/Loading";
-import BottomNav from "../components/BottomNav";
 import InquiryChat from "../components/InquiryChat";
 import EmptyState from "../components/EmptyState";
 import {
@@ -173,7 +172,6 @@ function InquiriesPageContent() {
       )}
 
       <div style={{ height: 20 }} />
-      <BottomNav />
     </div>
   );
 }

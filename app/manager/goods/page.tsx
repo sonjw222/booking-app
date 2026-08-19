@@ -9,7 +9,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchProducts, createProduct, updateProduct, deleteProduct, won, type Product } from "../../../lib/passes";
@@ -156,14 +155,18 @@ export default function GoodsPage() {
           {products.map((p) => (
             <div key={p.id} className="pass-card">
               <div className="pass-head">
-                <div>
+                <div className="goods-card-content">
                   <div className="pass-name">{p.name}</div>
                   <div className="pass-sub">
                     {won(p.price)} · {p.unlimited ? "무제한" : `${p.totalCount ?? 0}회`}
                   </div>
+                  {p.description && <div className="goods-description">{p.description}</div>}
+                  {!!p.sizes?.length && <div className="goods-sizes">{p.sizes.map((size) => <span key={size}>{size}</span>)}</div>}
                 </div>
-                <button className="text-btn" onClick={() => openEdit(p)}>수정</button>
-                <button className="text-btn danger" disabled={busy} onClick={() => handleDelete(p)}>삭제</button>
+                <div className="row-actions goods-card-actions">
+                  <button className="quiet-action" onClick={() => openEdit(p)}>수정</button>
+                  <button className="quiet-action danger" disabled={busy} onClick={() => handleDelete(p)}>삭제</button>
+                </div>
               </div>
             </div>
           ))}
@@ -209,12 +212,11 @@ export default function GoodsPage() {
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => { setSheet(false); setEditId(null); }}>취소</button>
-              <button className="primary-btn" disabled={busy} onClick={handleCreate}>{editId ? "수정" : "추가"}</button>
+              <button className="outline-action" disabled={busy} onClick={handleCreate}>{editId ? "수정" : "추가"}</button>
             </div>
           </div>
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

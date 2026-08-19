@@ -8,7 +8,6 @@
 */
 
 import { Suspense, useCallback, useEffect, useState } from "react";
-import BottomNav from "../components/BottomNav";
 import { useSearchParams } from "next/navigation";
 import { fetchCenterDetail, fetchCenterProducts, type CenterProduct } from "../../lib/center";
 import { createOrder } from "../../lib/orders";
@@ -389,7 +388,6 @@ function CheckoutContent() {
         {busy ? "처리 중..." : `${won(finalTotal)} 결제하기`}
       </button>
       <div style={{ height: 30 }} />
-      <BottomNav />
     </div>
   );
 }

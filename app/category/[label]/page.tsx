@@ -11,7 +11,6 @@ import { useParams } from "next/navigation";
 import { fetchCentersByCategory, type SearchCenter } from "../../../lib/home";
 import { centerPhotoUrl } from "../../../lib/center";
 import Loading from "../../components/Loading";
-import BottomNav from "../../components/BottomNav";
 import UiIcon from "../../components/UiIcon";
 
 export default function CategoryPage() {
@@ -66,7 +65,6 @@ export default function CategoryPage() {
           ))}
         </main>
       )}
-      <BottomNav />
     </div>
   );
 }

@@ -34,10 +34,12 @@ import {
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
 const MEMBER = { email: "TEST_USER_A_EMAIL", password: "TEST_USER_A_PASSWORD" };
+const MEMBER_B = { email: "TEST_USER_B_EMAIL", password: "TEST_USER_B_PASSWORD" }; // P1-11: 정원초과 2단계 흐름 검증에 두 번째 회원 필요
 
 let managerA: TestUser;
 let managerB: TestUser;
 let member: TestUser;
+let memberB: TestUser;
 let centerAId: string;
 let centerBId: string;
 
@@ -58,6 +60,9 @@ async function asManagerB() {
 async function asMember() {
   await switchToTestUser(MEMBER.email, MEMBER.password);
 }
+async function asMemberB() {
+  await switchToTestUser(MEMBER_B.email, MEMBER_B.password);
+}
 
 beforeAll(async () => {
   managerA = await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
@@ -67,6 +72,7 @@ beforeAll(async () => {
   centerBId = await getOrCreateOwnedTestCenter(managerB);
 
   member = await switchToTestUser(MEMBER.email, MEMBER.password);
+  memberB = await switchToTestUser(MEMBER_B.email, MEMBER_B.password);
 }, 30000);
 
 afterAll(async () => {
@@ -457,5 +463,105 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
       .in("status", ["confirmed", "waitlisted", "attended"]);
     if (countErr) throw new Error(countErr.message);
     expect(count).toBe(1);
+  });
+});
+
+// P1-11: 그룹 수업 정원초과 확인(needs_capacity_confirm) 2단계 흐름. 프라이빗 수업의 동일 흐름은
+// tests/integration/private-class-capacity.test.ts에서 이미 검증됨(그쪽은 override 자체를
+// 거부) — 그룹 수업은 반대로 1차 호출에서 저지된 뒤 p_force_capacity로 재호출하면 실제로
+// 생성돼야 한다는, 지금까지 자동화되지 않았던 "정상" 흐름을 검증한다.
+describe("관리자 직접배치 — 그룹 수업 정원초과 2단계 흐름(needs_capacity_confirm → force_capacity)", () => {
+  it("정원이 찬 그룹 수업에 1차 호출(force_capacity=false)은 needs_capacity_confirm만 반환하고 예약을 만들지 않는다", async () => {
+    const cls = await createFutureTestClass(centerAId, { title: "P1-11 그룹정원초과-1차저지", capacity: 1 });
+    const entry = trackClass(cls.id);
+    const membershipA = await createTestMembership(centerAId, member.profileId, { remainingCount: 5 });
+    const membershipB = await createTestMembership(centerAId, memberB.profileId, { remainingCount: 5 });
+
+    // 정원(1)을 채운다.
+    const fill = await supabase.rpc("admin_assign_reservation", {
+      p_class_id: cls.id, p_profile_id: member.profileId,
+      p_assignment_type: "ADMIN_ASSIGNMENT", p_membership_id: membershipA.id,
+      p_reason_code: "MAKEUP_CLASS", p_reason_detail: null, p_force_capacity: false,
+    });
+    expect(fill.error).toBeNull();
+    entry.reservationIds.push((fill.data as any).reservation_id);
+
+    // 이미 찬 수업에 두 번째 회원을 force_capacity 없이 배치 시도 — 막혀야 하고, 예약이
+    // 실제로 생기면 안 된다.
+    const attempt = await supabase.rpc("admin_assign_reservation", {
+      p_class_id: cls.id, p_profile_id: memberB.profileId,
+      p_assignment_type: "ADMIN_ASSIGNMENT", p_membership_id: membershipB.id,
+      p_reason_code: "MAKEUP_CLASS", p_reason_detail: null, p_force_capacity: false,
+    });
+    expect(attempt.error).toBeNull();
+    expect((attempt.data as any).needs_capacity_confirm).toBe(true);
+    expect((attempt.data as any).reservation_id).toBeUndefined();
+
+    const { count, error: countErr } = await supabase
+      .from("reservations")
+      .select("id", { count: "exact", head: true })
+      .eq("class_id", cls.id)
+      .in("status", ["confirmed", "waitlisted", "attended"]);
+    if (countErr) throw new Error(countErr.message);
+    expect(count).toBe(1); // 1차 채운 것 하나만, 2차 시도분은 안 생겨야 함
+
+    const remainingB = await fetchMembershipRemaining(membershipB.id);
+    expect(remainingB).toBe(5); // 시도만 됐고 실제 생성이 안 됐으니 차감도 없어야 함
+  });
+
+  it("1차 저지 후 사유와 함께 p_force_capacity=true로 재호출하면 실제로 정원초과 예약이 생긴다", async () => {
+    const cls = await createFutureTestClass(centerAId, { title: "P1-11 그룹정원초과-2차생성", capacity: 1 });
+    const entry = trackClass(cls.id);
+    const membershipA = await createTestMembership(centerAId, member.profileId, { remainingCount: 5 });
+    const membershipB = await createTestMembership(centerAId, memberB.profileId, { remainingCount: 5 });
+
+    const fill = await supabase.rpc("admin_assign_reservation", {
+      p_class_id: cls.id, p_profile_id: member.profileId,
+      p_assignment_type: "ADMIN_ASSIGNMENT", p_membership_id: membershipA.id,
+      p_reason_code: "MAKEUP_CLASS", p_reason_detail: null, p_force_capacity: false,
+    });
+    expect(fill.error).toBeNull();
+    entry.reservationIds.push((fill.data as any).reservation_id);
+
+    // 1차 저지(관리자 UI가 실제로 거치는 단계) — 확인만 하고 값은 안 씀.
+    const blocked = await supabase.rpc("admin_assign_reservation", {
+      p_class_id: cls.id, p_profile_id: memberB.profileId,
+      p_assignment_type: "ADMIN_ASSIGNMENT", p_membership_id: membershipB.id,
+      p_reason_code: "MAKEUP_CLASS", p_reason_detail: null, p_force_capacity: false,
+    });
+    expect((blocked.data as any).needs_capacity_confirm).toBe(true);
+
+    // 사유를 입력하고 force_capacity=true로 재호출 — 이제 실제로 생성돼야 한다.
+    const override = await supabase.rpc("admin_assign_reservation", {
+      p_class_id: cls.id, p_profile_id: memberB.profileId,
+      p_assignment_type: "ADMIN_ASSIGNMENT", p_membership_id: membershipB.id,
+      p_reason_code: "MAKEUP_CLASS", p_reason_detail: "정원 초과 배치 회귀 테스트", p_force_capacity: true,
+    });
+    expect(override.error).toBeNull();
+    expect((override.data as any).reservation_id).toBeTruthy();
+    expect((override.data as any).over_capacity).toBe(true);
+    entry.reservationIds.push((override.data as any).reservation_id);
+
+    const { data: resRow, error: resErr } = await supabase
+      .from("reservations")
+      .select("status, is_capacity_override, membership_id, membership_consumed")
+      .eq("id", (override.data as any).reservation_id)
+      .single();
+    if (resErr) throw new Error(resErr.message);
+    expect(resRow.status).toBe("confirmed");
+    expect(resRow.is_capacity_override).toBe(true);
+    expect(resRow.membership_id).toBe(membershipB.id);
+    expect(resRow.membership_consumed).toBe(true);
+
+    const { count, error: countErr } = await supabase
+      .from("reservations")
+      .select("id", { count: "exact", head: true })
+      .eq("class_id", cls.id)
+      .in("status", ["confirmed", "waitlisted", "attended"]);
+    if (countErr) throw new Error(countErr.message);
+    expect(count).toBe(2); // 정원(1)을 넘어 2명이 실제로 확정돼야 함(그게 override의 목적)
+
+    const remainingB = await fetchMembershipRemaining(membershipB.id);
+    expect(remainingB).toBe(4); // 5 → 1회 차감
   });
 });

@@ -8,6 +8,8 @@ import {
   createTestMembershipForProduct,
   clearScheduleRulesForProduct,
   setScheduleRuleForProduct,
+  fetchSettingsAdmin,
+  saveSettingsAdmin,
   reservationDeepLink,
   type TestUser,
 } from "../fixtures/testData";
@@ -53,6 +55,7 @@ test.use({ storageState: MANAGER_AUTH_FILE });
 let managerA: TestUser;
 let userA: TestUser;
 let centerAId: string;
+let originalSettings: Awaited<ReturnType<typeof fetchSettingsAdmin>>;
 let restrictedPass: { id: string; name: string };
 const RESTRICTED_PASS_NAME = "P1-15 스케줄제한 테스트 수강권";
 const createdClassIds: string[] = [];
@@ -114,6 +117,12 @@ test.beforeAll(async () => {
   managerA = loadTestAccountMeta("manager-a");
   userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
+  originalSettings = await fetchSettingsAdmin(centerAId);
+  await saveSettingsAdmin(centerAId, {
+    ...originalSettings,
+    dailyBookLimitEnabled: false,
+    dailyBookLimit: null,
+  });
 
   restrictedPass = await getOrCreateTestPassProductNamed(centerAId, RESTRICTED_PASS_NAME);
   await clearScheduleRulesForProduct(restrictedPass.id);
@@ -123,6 +132,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   for (const id of createdClassIds) await cleanupTestClassAdmin(id);
   await clearScheduleRulesForProduct(restrictedPass.id);
+  if (originalSettings) await saveSettingsAdmin(centerAId, originalSettings);
 });
 
 // B: 규칙과 수업(요일/시간/제목)이 정확히 일치 → 기존 pass가 사용 가능하고 예약 성공.

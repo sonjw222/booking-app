@@ -356,7 +356,21 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
       .in("id", roleIds);
     if (roleErr) throw new Error(`center_roles 조회 실패: ${describeAdminQueryError("center_roles", roleErr)}`);
     const ownerRoleIds = new Set((roles ?? []).filter((r: any) => r.is_owner).map((r: any) => r.id));
-    const owned = (rows ?? []).find((r: any) => ownerRoleIds.has(r.role_id));
+    const centerIds = (rows ?? []).map((r: any) => r.center_id).filter(Boolean);
+    const { data: centers, error: centerLookupError } = centerIds.length > 0
+      ? await admin.from("centers").select("id, name").in("id", centerIds)
+      : { data: [], error: null };
+    if (centerLookupError) {
+      throw new Error(`centers 조회 실패: ${describeAdminQueryError("centers", centerLookupError)}`);
+    }
+    const integrationCenterIds = new Set(
+      (centers ?? [])
+        .filter((center: any) => String(center.name ?? "").startsWith("통합테스트센터-"))
+        .map((center: any) => center.id)
+    );
+    const owned = (rows ?? []).find(
+      (r: any) => ownerRoleIds.has(r.role_id) && integrationCenterIds.has(r.center_id)
+    );
     if (owned) {
       const centerId = (owned as any).center_id as string;
       const { data: centerRow } = await admin.from("centers").select("name").eq("id", centerId).maybeSingle();
@@ -523,7 +537,11 @@ export async function createTestMembership(
   if (findErr) throw new Error(`테스트 수강권 조회 실패: ${findErr.message}`);
 
   if (existing && existing.length > 0) {
-    const { data, error } = await supabase
+    // remaining_count 등 수강권 필드는 회원 본인이 직접 UPDATE할 수 없다(RLS로 막혀야
+    // 정상 — 그렇지 않으면 회원이 자기 잔여횟수를 마음대로 조작할 수 있는 진짜 보안
+    // 구멍이 된다). 여기는 순수 fixture 준비 목적이라 admin(service_role)으로 갱신한다.
+    const admin = getFixtureAdminClient();
+    const { data, error } = await admin
       .from("memberships")
       .update({
         total_count: remaining,

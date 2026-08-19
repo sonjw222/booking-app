@@ -10,7 +10,6 @@
 
 import { useEffect, useState } from "react";
 import Loading from "../components/Loading";
-import BottomNav from "../components/BottomNav";
 import { ZoomableImage } from "../components/ImageViewer";
 import UiIcon from "../components/UiIcon";
 import EmptyState from "../components/EmptyState";
@@ -116,7 +115,6 @@ export default function NotificationsPage() {
       )}
 
       <div style={{ height: 20 }} />
-      <BottomNav />
     </div>
   );
 }

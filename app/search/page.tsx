@@ -9,7 +9,6 @@
 import { useState } from "react";
 import { searchHome, type SearchCenter } from "../../lib/home";
 import { centerPhotoUrl } from "../../lib/center";
-import BottomNav from "../components/BottomNav";
 import UiIcon from "../components/UiIcon";
 
 export default function SearchPage() {
@@ -94,7 +93,6 @@ export default function SearchPage() {
           )}
         </>
       )}
-      <BottomNav />
     </div>
   );
 }

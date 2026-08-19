@@ -10,7 +10,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
@@ -45,6 +44,7 @@ export default function MembershipRulesPage() {
   const [rTitle, setRTitle] = useState("");
   const [rPick, setRPick] = useState("");
   const [existingClasses, setExistingClasses] = useState<ExistingClassOption[]>([]);
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -201,10 +201,15 @@ export default function MembershipRulesPage() {
                       {won(p.price)}{p.totalCount ? ` · ${p.totalCount}회` : ""}
                     </div>
                   </div>
-                  <button className="text-btn danger" disabled={busy} onClick={() => handleDeleteProduct(p)}>삭제</button>
+                  <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteProduct(p)}>삭제</button>
                 </div>
 
-                <div className="pass-rules">
+                <button className="pass-rules-toggle" onClick={() => setExpandedProducts((prev) => {
+                  const next = new Set(prev); if (next.has(p.id)) next.delete(p.id); else next.add(p.id); return next;
+                })}>
+                  <span>예약 조건 {rules.length}개</span><b>{expandedProducts.has(p.id) ? "접기" : "보기"}⌄</b>
+                </button>
+                {expandedProducts.has(p.id) && <div className="pass-rules">
                   {rules.length === 0 ? (
                     <div className="pass-norule">모든 수업 예약 가능 (조건 없음)</div>
                   ) : (
@@ -215,10 +220,10 @@ export default function MembershipRulesPage() {
                       </div>
                     ))
                   )}
-                </div>
+                </div>}
 
                 <button className="prog-add-sub-btn" onClick={async () => { setRuleFor(p); setRPick(""); setRDays([]); setRTime(""); setRTitle(""); if (centerId) { try { setExistingClasses(await fetchExistingClassOptions(centerId)); } catch { setExistingClasses([]); } } }}>
-                  + 예약조건 추가
+                  예약조건 추가
                 </button>
               </div>
             );
@@ -373,7 +378,6 @@ export default function MembershipRulesPage() {
           </div>
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

@@ -7,7 +7,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../../lib/settings";
@@ -249,6 +248,28 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {/* 수업매출 캘린더: 정기권(기간제) 매출 배분 방식 */}
+          <div className="set-section-title">수업매출 캘린더 — 정기권 매출 배분 방식</div>
+          <div className="set-row col">
+            <div className="set-label">무제한/기간제 수강권의 매출을 어떻게 표시할지</div>
+            <div className="mem-filters" style={{ padding: "8px 0 0" }}>
+              <button
+                className={`filter-chip ${s.unlimitedPassRevenueMode === "usage_split" ? "on" : ""}`}
+                onClick={() => up("unlimitedPassRevenueMode", "usage_split")}
+              >기간 중 이용 횟수로 분배</button>
+              <button
+                className={`filter-chip ${s.unlimitedPassRevenueMode === "purchase_date_full" ? "on" : ""}`}
+                onClick={() => up("unlimitedPassRevenueMode", "purchase_date_full")}
+              >구매일에 전액 표시</button>
+            </div>
+            <div className="set-soon-note">
+              "기간 중 이용 횟수로 분배"는 결제금액을 그 수강권으로 실제 이용한 수업 횟수로
+              나눠 각 수업 날짜에 배분해요(기간이 끝나기 전에는 지금까지의 이용 횟수 기준
+              추정치로 표시되고, 더 이용할수록 자동으로 다시 계산돼요). "구매일에 전액 표시"는
+              수업별로 나누지 않고 결제한 날 하루에 전체 금액을 표시해요.
+            </div>
+          </div>
+
           {/* 10. 인원 표시 */}
           <div className="set-section-title">회원 앱 인원 표시</div>
           <div className="set-row">
@@ -281,7 +302,6 @@ export default function SettingsPage() {
           <div style={{ height: 40 }} />
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

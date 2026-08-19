@@ -1,0 +1,12 @@
+-- P1-2 검증 스크립트에서 직접 재현 확인: orders 테이블에 service_role GRANT가
+-- 전혀 없다("permission denied for table orders", Postgres 힌트가 GRANT SELECT ON
+-- public.orders TO service_role를 직접 제안함).
+--
+-- fix_service_role_missing_grants_accounts_*.sql / _products.sql / _profiles_*.sql /
+-- _membership_schedule_rules_*.sql / _payments_*.sql / _for_e2e_admin_*.sql /
+-- _center_holidays.sql와 동일한 패턴 — 새 테이블에 service_role GRANT를 추가하는 걸
+-- 빠뜨린 경우다. 다른 세션(PR #50, SEC-114/115)도 앞서 같은 증상("permission denied
+-- for table orders")을 보고했었다 — 그때는 이 저장소 코드에서 근거를 못 찾아 만들지
+-- 않았는데, 이번에 P1-2 통합 검증 스크립트가 admin(service_role) 클라이언트로 orders를
+-- 직접 조회하다 똑같이 막히는 걸 재현해 확실한 근거가 생겼다.
+grant select, insert, update, delete on orders to service_role;

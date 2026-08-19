@@ -1,16 +1,30 @@
 "use client";
 
 /*
-  매니저 - 센터 정보 편집
-  - 소개글 / 주소 / 연락처 (센터 상세 화면에 노출됨)
-  - 시설 정보 설정 권한(facility.info) 필요 — 오너는 항상 가능
+  매니저 - 센터 정보 편집 (P1-13, 2026-08-14 최종 확정 — 두 세션이 같은 티켓을 서로 다른
+  레이어에서 손대 아래처럼 합쳐졌다. 겹치지 않고 서로 보완함, 확인 완료)
+
+  - 전체 필드(소개글/주소/연락처/사진/SNS/카테고리/좌표 포함, pay_methods/review_point
+    까지 전부): "매니저 센터 수정" RLS가 has_permission(id,'facility.info') OR
+    is_platform_admin()으로 이미 좁혀져 있다(다른 세션이 fix_centers_update_facility_info_
+    permission.sql로 Live 적용, PR #54) — facility.info가 없으면 이 화면 어떤 필드를
+    고쳐도 저장 자체가 막힌다. 오너는 has_permission()이 항상 통과시켜 그대로 전권.
+  - 그 위에 추가로: 결제수단(pay_methods)은 오너 또는 facility.paymethod 권한 보유자만,
+    후기 적립 포인트(review_point)는 오너 전용(대응 permission key 없음) — guard_center_
+    sensitive_fields_change 트리거(fix_center_info_sensitive_fields_permission_draft_
+    proposed.sql)가 강제한다. facility.info는 있지만 facility.paymethod는 없는 스태프가
+    "시설 정보는 맡되 결제수단은 아직" 같은 세분화된 위임을 받을 수 있게 하는 게 목적이라
+    facility.info 체크와 중복이 아니다.
+  - 이 화면은 fetchMyEffectivePermissionKeys로 미리 계산해, facility.info 자체가 없으면
+    저장 버튼을 막고 안내 배너를 띄우며, facility.info는 있어도 pay_methods/review_point
+    권한이 없으면 그 두 필드만 추가로 비활성화한다(DB 레이어가 최종 방어선, UI는 편의).
 */
 
 import { useCallback, useEffect, useState } from "react";
-import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchCenterDetail, updateCenterIntro, uploadCenterPhoto, centerPhotoUrl, type IntroBlock } from "../../../lib/center";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 import MapPicker from "./MapPicker";
 import MapPreview from "../../components/MapPreview";
 import RichTextEditor from "../../components/RichTextEditor";
@@ -49,6 +63,7 @@ export default function CenterInfoPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -122,6 +137,34 @@ export default function CenterInfoPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  // 결제수단/후기포인트 편집 가능 여부 계산 (오너는 전권이라 건너뜀) — DB 트리거
+  // (guard_center_sensitive_fields_change)가 최종 방어선이고, 이건 그걸 미리 UI에
+  // 반영해 권한 없는 스태프가 애초에 값을 못 건드리게 하는 용도.
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  // 이 화면 전체(소개글/주소/전화 등 포함)에 대한 편집 권한 — "매니저 센터 수정" RLS가
+  // 이제 has_permission(id,'facility.info') OR is_platform_admin()으로 좁혀져 있어
+  // (다른 세션이 같은 P1-13 티켓을 이 방향으로 이미 Live 적용, 2026-08-14), facility.info가
+  // 없으면 이 화면의 어떤 필드를 고쳐도 저장 자체가 RLS에 막힌다. 그 raw 에러를 그대로
+  // 보여주는 대신 저장 버튼을 미리 막고 안내한다.
+  const canEditFacilityInfo = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "facility.info");
+  // 결제수단/후기포인트는 facility.info가 있어도 별도로 더 좁게 막는다(guard_center_
+  // sensitive_fields_change 트리거) — "시설 정보는 맡기지만 결제수단/포인트까지는 아직
+  // 못 믿는다" 같은 실제 시나리오를 위한 추가 방어층, facility.info와 독립적으로 필요.
+  const canEditPayMethods = canEditFacilityInfo && canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "facility.paymethod");
+  const canEditReviewPoint = canEditFacilityInfo && (activeCenter?.isOwner ?? false); // 대응 permission key 없음 — 오너 전용
+
   async function handleSave() {
     if (!centerId) return;
     setBusy(true);
@@ -158,8 +201,12 @@ export default function CenterInfoPage() {
       <div className="back-header">
         <a className="side" href="/manager">‹</a>
         <div className="title">센터 정보</div>
-        <button className="header-action" disabled={busy} onClick={handleSave}>{busy ? "저장 중" : "저장"}</button>
+        <button className="header-action" disabled={busy || !canEditFacilityInfo} onClick={handleSave}>{busy ? "저장 중" : "저장"}</button>
       </div>
+
+      {!loading && activeCenter && !canEditFacilityInfo && (
+        <div className="error-toast">이 센터 정보를 수정할 권한이 없어요 — 오너에게 문의하세요.</div>
+      )}
 
       {centers.length > 1 && (
         <div className="center-switcher">
@@ -195,7 +242,7 @@ export default function CenterInfoPage() {
             {catOptions.map((cat) => (
               <button key={cat.id} className={`filter-chip ${categories.includes(cat.label) ? "on" : ""}`}
                 onClick={() => setCategories((prev) => prev.includes(cat.label) ? prev.filter((x) => x !== cat.label) : [...prev, cat.label])}>
-                {cat.emoji} {cat.label}
+                {cat.label.replace(/^[^\p{L}\p{N}]+/u, "")}
               </button>
             ))}
           </div>
@@ -276,7 +323,7 @@ export default function CenterInfoPage() {
           </div>
 
           <div className="menu-section-label" style={{ padding: "18px 0 6px" }}>결제 수단 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>· 회원 결제화면에 보일 수단</span></div>
-          <div className="mem-filters" style={{ padding: 0 }}>
+          <div className="mem-filters" style={{ padding: 0, opacity: canEditPayMethods ? 1 : 0.5 }}>
             {[
               { id: "card", label: "카드" },
               { id: "kakao", label: "카카오페이" },
@@ -285,20 +332,29 @@ export default function CenterInfoPage() {
               { id: "direct", label: "직접결제" },
             ].map((m) => (
               <button key={m.id} className={`filter-chip ${payMethods.includes(m.id) ? "on" : ""}`}
+                disabled={!canEditPayMethods}
                 onClick={() => setPayMethods((prev) => prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id])}>
                 {m.label}
               </button>
             ))}
+            <button className="text-btn pay-method-toggle" disabled={!canEditPayMethods}
+              onClick={() => setPayMethods((prev) => prev.length === 5 ? [] : ["card", "kakao", "toss", "transfer", "direct"])}>
+              {payMethods.length === 5 ? "전체 해제" : "전체 선택"}
+            </button>
           </div>
           <div className="perm-guide" style={{ margin: "6px 0 0" }}>
-            아무것도 선택하지 않으면 전체 수단이 보여요.
+            {canEditPayMethods
+              ? "선택한 결제 수단만 회원 화면에 보여요. 아무것도 선택하지 않으면 표시하지 않아요."
+              : "결제수단 변경 권한이 없어요 — 오너에게 문의하세요."}
           </div>
 
           <div className="menu-section-label" style={{ padding: "18px 0 6px" }}>후기 작성 포인트 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>· 회원이 후기를 쓰면 지급</span></div>
-          <input className="input-field" inputMode="numeric" placeholder="예: 1000"
+          <input className="input-field" inputMode="numeric" placeholder="예: 1000" disabled={!canEditReviewPoint}
             value={reviewPoint} onChange={(e) => setReviewPoint(e.target.value.replace(/[^0-9]/g, ""))} />
           <div className="perm-guide" style={{ margin: "4px 0 0" }}>
-            0으로 두면 포인트를 지급하지 않아요. 적립된 포인트는 이 센터 결제에만 쓸 수 있어요.
+            {canEditReviewPoint
+              ? "0으로 두면 포인트를 지급하지 않아요. 적립된 포인트는 이 센터 결제에만 쓸 수 있어요."
+              : "후기 포인트 변경은 오너만 할 수 있어요."}
           </div>
 
           <div className="menu-section-label" style={{ padding: "18px 0 6px" }}>연락처</div>
@@ -314,7 +370,6 @@ export default function CenterInfoPage() {
           />
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

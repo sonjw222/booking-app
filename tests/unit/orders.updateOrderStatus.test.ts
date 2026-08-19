@@ -6,11 +6,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const rpcMock = vi.fn();
 const updateMock = vi.fn();
+const selectMock = vi.fn();
 
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
     rpc: (...args: unknown[]) => rpcMock(...args),
-    from: () => ({ update: () => ({ eq: (...args: unknown[]) => updateMock(...args) }) }),
+    from: () => ({
+      update: () => ({
+        eq: (...args: unknown[]) => {
+          updateMock(...args);
+          return { select: (...selectArgs: unknown[]) => selectMock(...selectArgs) };
+        },
+      }),
+    }),
   },
 }));
 
@@ -20,6 +28,7 @@ describe("updateOrderStatus()", () => {
   beforeEach(() => {
     rpcMock.mockReset();
     updateMock.mockReset();
+    selectMock.mockReset();
   });
 
   it("'done' 처리 시 fulfill_order RPC를 호출하고, 존재하지 않는 필드를 반환하지 않는다(void)", async () => {
@@ -38,9 +47,17 @@ describe("updateOrderStatus()", () => {
   });
 
   it("'cancelled' 처리 시 RPC를 호출하지 않고 orders 테이블만 update한다", async () => {
-    updateMock.mockResolvedValueOnce({ error: null });
+    selectMock.mockResolvedValueOnce({ data: [{ id: "order-3" }], error: null });
     await updateOrderStatus("order-3", "cancelled");
     expect(rpcMock).not.toHaveBeenCalled();
     expect(updateMock).toHaveBeenCalledWith("id", "order-3");
+    expect(selectMock).toHaveBeenCalledWith("id");
+  });
+
+  it("취소 update가 0행이면 이미 처리된 주문으로 안내한다", async () => {
+    selectMock.mockResolvedValueOnce({ data: [], error: null });
+    await expect(updateOrderStatus("order-4", "cancelled")).rejects.toThrow(
+      "이미 처리됐거나 취소할 수 없는 상태의 주문이에요",
+    );
   });
 });

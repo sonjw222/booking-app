@@ -9,8 +9,11 @@ import {
   reservationDeepLink,
   getOrCreateTestPassProduct,
   clearScheduleRulesForProduct,
+  fetchSettingsAdmin,
+  saveSettingsAdmin,
   type TestUser,
 } from "../fixtures/testData";
+import type { CenterSettings } from "../../../lib/settings";
 import { MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 
 /*
@@ -31,12 +34,26 @@ test.use({ storageState: MEMBER_AUTH_FILE });
 let managerA: TestUser;
 let userA: TestUser;
 let centerAId: string;
+let originalSettings: CenterSettings;
 const createdClassIds: string[] = [];
 
 test.beforeAll(async () => {
   managerA = loadTestAccountMeta("manager-a");
   userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
+
+  // 이 스펙은 goods 제외만 검증한다. 공유 센터에 다른 스펙이 남긴
+  // 당일 예약/일일 횟수 설정이 결과를 바꾸지 않게 필요 상태를 명시적으로
+  // 보장하고, 스펙 종료 후 원본 설정을 복원한다.
+  originalSettings = await fetchSettingsAdmin(centerAId);
+  await saveSettingsAdmin(centerAId, {
+    ...originalSettings,
+    groupBookDaysBefore: 0,
+    groupBookTime: "23:59",
+    allowSameDayBooking: true,
+    dailyBookLimitEnabled: false,
+    dailyBookLimit: null,
+  });
 
   // "E2E 테스트 수강권 상품"은 이 테스트를 포함해 여러 스펙이 "항상 무제한으로 쓸 수 있는
   // 공용 pass"로 전제한다 — 과거(이번 P3 배치 이전 포함) app/manager/classes/page.tsx의
@@ -53,6 +70,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   for (const id of createdClassIds) await cleanupTestClassAdmin(id);
+  await saveSettingsAdmin(centerAId, originalSettings);
 });
 
 test("모든 수강권 사용 가능 수업 — 사용할 수강권 목록에 goods가 절대 안 보이고, 예약도 pass로만 된다 (실브라우저)", async ({ page }) => {

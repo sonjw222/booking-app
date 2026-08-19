@@ -14,7 +14,6 @@
 import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Loading from "../components/Loading";
 import { useSearchParams, useRouter } from "next/navigation";
-import BottomNav from "../components/BottomNav";
 import {
   fetchMonthData,
   reserveClass, fetchUsableMembershipsByClass, reserveWithMembership, type UsableMembership,
@@ -680,7 +679,23 @@ function ReservationCalendarContent() {
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">예약하시겠어요?</div>
 
+            <section className="booking-confirm-section booking-confirm-class">
+              <div className="booking-confirm-kicker">선택한 수업</div>
+              <div className="confirm-class">
+                <div className="confirm-class-title">{confirmClass.title}</div>
+                {confirmClass.description && (
+                  <div className="confirm-class-sub" style={{ whiteSpace: "pre-wrap" }}>{confirmClass.description}</div>
+                )}
+                <div className="confirm-class-sub">{confirmClass.place} · {confirmClass.date} {confirmClass.start}</div>
+                {confirmClass.instructorNames.length > 0 && (
+                  <div className="confirm-class-sub">담당 강사: {confirmClass.instructorNames.join(", ")}</div>
+                )}
+              </div>
+            </section>
+
             {/* 사용할 수강권 선택 (계정 내 공유) */}
+            <section className="booking-confirm-section booking-confirm-pass">
+            <div className="booking-confirm-kicker">예약 수단</div>
             {passesLoading ? (
               <div className="perm-guide skeleton-shimmer" style={{ margin: "0 0 10px" }}>수강권 확인 중...</div>
             ) : passList.length > 0 ? (
@@ -720,11 +735,11 @@ function ReservationCalendarContent() {
                     <div className="perm-guide" style={{ margin: "0 0 6px" }}>
                       이 수업은 아래 수강권으로 예약할 수 있어요.
                     </div>
-                    <ul className="purchasable-pass-list">
+                    <div className="purchasable-pass-list">
                       {(purchasableByClass[confirmClass.id] ?? []).map((p) => (
-                        <li key={p.productId} className="purchasable-pass-item">{p.productName}</li>
+                        <span key={p.productId} className="purchasable-pass-item">{p.productName}</span>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 ) : null}
                 <button
@@ -745,23 +760,11 @@ function ReservationCalendarContent() {
                 </button>
               </div>
             )}
-            <div className="confirm-class" style={{ marginTop: 18 }}>
-              <div className="confirm-class-title">{confirmClass.title}</div>
-              {confirmClass.description && (
-                <div className="confirm-class-sub" style={{ whiteSpace: "pre-wrap" }}>{confirmClass.description}</div>
-              )}
-              <div className="confirm-class-sub">{confirmClass.place} · {confirmClass.date} {confirmClass.start}</div>
-              {confirmClass.instructorNames.length > 0 && (
-                // 목록 화면(class-row-place)은 "A, B 외 N명"으로 줄여 보여주지만, 강사가
-                // 많으면 회원이 전체 명단을 볼 방법이 없어진다는 피드백(2026-08-12) — 예약
-                // 확인 상세에서는 줄이지 않고 전원을 보여준다.
-                <div className="confirm-class-sub">담당 강사: {confirmClass.instructorNames.join(", ")}</div>
-              )}
-            </div>
+            </section>
 
             {confirmClass.allowGoods && (
-              <>
-                <div className="menu-section-label" style={{ padding: "8px 0 6px" }}>보유 상품 사용 (선택)</div>
+              <section className="booking-confirm-section booking-confirm-goods">
+                <div className="booking-confirm-kicker">보유 상품 <span>선택</span></div>
                 {goodsLoading ? (
                   <div className="perm-guide skeleton-shimmer" style={{ margin: 0 }}>상품 불러오는 중...</div>
                 ) : confirmGoods.length === 0 ? (
@@ -779,7 +782,7 @@ function ReservationCalendarContent() {
                     ))}
                   </div>
                 )}
-              </>
+              </section>
             )}
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
@@ -792,7 +795,6 @@ function ReservationCalendarContent() {
         </div>
       )}
 
-      <BottomNav />
     </div>
   );
 }

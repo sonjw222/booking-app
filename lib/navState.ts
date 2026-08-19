@@ -21,6 +21,25 @@ export function shouldShowMembershipTabs(hasUsable: boolean | null): boolean {
   return hasUsable === true;
 }
 
+// BottomNav는 페이지마다 새로 마운트되는 컴포넌트라(공용 layout이 아님) 판정 전 기본값을
+// null로 두면 수강권이 있는 사용자는 페이지를 옮길 때마다 "탭 3개 → 5개"로 깜빡인다.
+// 직전에 확인한 결과를 기기에 캐싱해두고 다음 마운트의 초기값으로 써서, 최초 1회(또는
+// 캐시가 없을 때)를 제외하면 깜빡임 없이 바로 맞는 탭 구성으로 그려지게 한다.
+const HAS_USABLE_CACHE_KEY = "nav_has_usable_membership";
+
+export function getCachedHasUsableMembership(): boolean | null {
+  try {
+    const v = localStorage.getItem(HAS_USABLE_CACHE_KEY);
+    if (v === "1") return true;
+    if (v === "0") return false;
+  } catch { /* 무시 */ }
+  return null;
+}
+
+export function setCachedHasUsableMembership(v: boolean): void {
+  try { localStorage.setItem(HAS_USABLE_CACHE_KEY, v ? "1" : "0"); } catch { /* 무시 */ }
+}
+
 export async function fetchHasUsableMembership(): Promise<boolean> {
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) return false;

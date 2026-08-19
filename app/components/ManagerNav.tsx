@@ -7,10 +7,13 @@
 */
 
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { fetchUnreadCount, subscribeNotifications } from "../../lib/notifications";
 import { fetchMyCenters } from "../../lib/manager";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../lib/roles";
+import {
+  fetchMyEffectivePermissionKeys, canSeeManagerMenu,
+  getCachedCanSeeMembers, setCachedCanSeeMembers,
+} from "../../lib/roles";
 import NotificationToaster from "./NotificationToaster";
 import UiIcon from "./UiIcon";
 
@@ -25,24 +28,38 @@ export default function ManagerNav() {
   // P1-5: "회원" 탭은 customer.member.view 권한으로 가린다("수업"/"알림"은 본인 일정·본인
   // 알림함이라 권한 카탈로그에 애초에 대응 키가 없음 — schema.sql 참고, 의도적으로 그대로
   // 둠). app/manager/page.tsx의 메뉴 노출 계산과 동일한 패턴(오너는 전권, 로딩 중엔 숨김).
+  // ManagerNav는 이제 manager/layout.tsx에서 한 번만 마운트되지만, 그 최초 진입 시 판정
+  // 전까지는 여전히 로딩 구간이 있다 — 직전 결과를 캐싱해 그 구간의 깜빡임을 줄인다.
   const [isOwner, setIsOwner] = useState(false);
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
+  const [resolved, setResolved] = useState(false);
+  const [cachedCanSeeMembers, setCachedCanSeeMembersState] = useState<boolean | null>(null);
+
+  useLayoutEffect(() => {
+    setCachedCanSeeMembersState(getCachedCanSeeMembers());
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     fetchMyCenters()
       .then((centers) => {
-        if (cancelled || centers.length === 0) return;
+        if (cancelled || centers.length === 0) { setResolved(true); return; }
         const active = centers[0];
         setIsOwner(active.isOwner);
-        if (active.isOwner) return;
+        if (active.isOwner) { setResolved(true); return; }
         return fetchMyEffectivePermissionKeys(active.managerCenterId, active.roleId).then((keys) => {
-          if (!cancelled) setMyPerms(keys);
+          if (!cancelled) { setMyPerms(keys); setResolved(true); }
         });
       })
-      .catch(() => {});
+      .catch(() => { if (!cancelled) setResolved(true); });
     return () => { cancelled = true; };
   }, []);
-  const canSeeMembers = canSeeManagerMenu(isOwner, myPerms, "customer.member.view");
+
+  const liveCanSeeMembers = canSeeManagerMenu(isOwner, myPerms, "customer.member.view");
+  useEffect(() => {
+    if (resolved) setCachedCanSeeMembers(liveCanSeeMembers);
+  }, [resolved, liveCanSeeMembers]);
+  const canSeeMembers = resolved ? liveCanSeeMembers : (cachedCanSeeMembers ?? false);
 
   useEffect(() => {
     let mounted = true;
