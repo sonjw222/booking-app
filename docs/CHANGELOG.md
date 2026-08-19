@@ -27,6 +27,46 @@
 
 `npm run build` 통과 확인.
 
+## 2026-08-16 — 수업매출 캘린더 신규 기능 (feature/class-revenue-calendar)
+
+기존 "매출"(`app/manager/sales`)은 결제일 기준 집계만 제공했다. 이번에 "수업이 실제로
+열린 날짜" 기준으로 그날 어떤 수업/상품이 얼마의 매출을 만들었는지 보는 새 화면
+(`app/manager/class-revenue`)을 추가했다. `payments`에 `class_id`가 없어(결제↔수업은
+`membership_id`를 매개로만 연결) 수업 단위 매출 귀속 로직이 아예 없었던 걸 새로 설계함.
+
+- **횟수제 수강권**: 결제금액을 총횟수로 균등분배(나머지는 앞 회차부터 보정해 합계가
+  정확히 일치)하고, 실제 사용된 예약(confirmed/attended/no_show, 폐강 수업 제외)의
+  수업 날짜에 귀속. 매니저가 회차별(`membership_session_amounts`) 금액을 비대칭으로
+  커스텀 가능 — 키는 특정 예약이 아니라 "N회차"라는 추상 슬롯(취소/재예약으로 순서가
+  바뀌면 그 회차를 차지하는 실제 수업도 같이 바뀜, 의도된 설계).
+- **정기권(기간제)**: `center_settings.unlimited_pass_revenue_mode`로 두 방식 지원 —
+  `usage_split`(기본, 기간 중 실제 이용 횟수로 동적 배분) / `purchase_date_full`(구매일에
+  전액). 운영 설정 화면(`app/manager/settings`)에 토글 추가.
+- **상품(goods)**: 세션 개념 없이 구매일 그대로. **환불**: 원 세션으로 소급 배분하지
+  않고 환불 결제 자체의 날짜에 별도 표시(v1 범위, 문서화된 단순화).
+- 신규 SQL(사용자가 Supabase SQL Editor에서 순서대로 직접 실행, Live 적용·확인 완료):
+  `add_class_revenue_schema.sql`(`membership_session_amounts` 테이블 + `center_settings`
+  컬럼), `add_set_membership_session_amounts_rpc.sql`(회차별 금액 저장, 총액 일치 검증),
+  `add_class_revenue_daily_summary_rpc.sql`(캘린더 그리드), `add_class_revenue_for_date_rpc.sql`
+  (날짜별 breakdown). 전부 `add_manager_dashboard_summary_draft_proposed.sql` 패턴
+  (`my_managed_center_ids()` 권한체크, `payment_provider is distinct from 'mock'` 제외,
+  SECURITY DEFINER + `set search_path = public` 하드닝) 재사용. 롤백은
+  `rollback_class_revenue_calendar.sql`.
+- 프론트: `lib/classRevenue.ts`(신규), `app/manager/class-revenue/page.tsx`(신규, 기간선택
+  + 월 캘린더 + breakdown + 회차별 금액 편집 모달), `lib/settings.ts`/`app/manager/settings/
+  page.tsx` 수정, `app/manager/sales/page.tsx`에 진입 링크 추가.
+- 이 기능 전용 통합테스트 `tests/integration/class-revenue.test.ts`(9개, 이 파일 전용
+  격리 센터를 매번 새로 만들어 공유 fixture 오염과 무관하게 실행됨) 신규 작성, 전부 Green
+  확인. 작성 과정에서 실제 버그 1건 발견·수정: `class_revenue_for_date`의 `count_sessions`
+  CTE가 `row_number()`(회차 계산)를 계산하기 *전에* `p_date`로 먼저 필터링해, partition이
+  항상 그 날짜의 예약 1건짜리로 좁혀져 `session_index`가 매번 1로만 계산되던 문제(균등분배
+  합계가 부풀고, 회차별 커스텀 금액도 전부 1회차 값으로 잘못 표시됨) — 날짜 필터를
+  `row_number()` 계산 이후(바깥 JOIN 조건)로 옮겨 수정, Live 재적용·재테스트로 확인.
+  `class_revenue_daily_summary`는 애초에 날짜 필터를 별도 CTE(`count_amounts`)에서
+  적용하고 있어 같은 버그 없음.
+- `npm run build` 통과 확인. 새 테이블/RPC만 추가(기존 함수 변경 없음)라 기존 통합테스트
+  스위트에는 영향 없음.
+
 ## 2026-08-16 — P1-11 완료: 그룹 수업 정원초과 2단계 흐름 통합 테스트 추가 (review/todo-scan3)
 
 `admin_assign_reservation`의 그룹 수업 정원초과 2단계 흐름(1차 호출 → `needs_capacity_confirm:

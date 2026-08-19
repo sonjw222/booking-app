@@ -431,6 +431,23 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
   `app/manager/center-info/page.tsx`도 `fetchMyEffectivePermissionKeys`로 미리 계산해 권한
   없는 필드/전체 저장을 UI에서부터 비활성화·안내하도록 갱신(DB 레이어가 최종 방어선, UI는 편의).
 
+### P1-18. (2026-08-16, 완료) 수업매출 캘린더 신규 기능 — SQL Live 적용·통합테스트 확인
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **완료** — SQL 4종 Live 적용, 통합테스트 9/9 Green |
+| 근거 파일 | `add_class_revenue_schema.sql`, `add_set_membership_session_amounts_rpc.sql`, `add_class_revenue_daily_summary_rpc.sql`, `add_class_revenue_for_date_rpc.sql`, `app/manager/class-revenue/page.tsx`, `tests/integration/class-revenue.test.ts` |
+| 완료 조건 | 사용자가 Supabase SQL Editor에서 4개 파일 순서대로 실행, `pg_get_functiondef`/`pg_policies`로 확인 완료. 통합테스트 작성·Green 확인 완료. |
+| 관련 문서 | `docs/CHANGELOG.md`(2026-08-16 항목) |
+
+이 파일 전용 격리 센터를 쓰는 통합테스트(`class-revenue.test.ts`, 9개)를 작성해 돌리는
+과정에서 실제 버그 1건을 발견·수정함: `class_revenue_for_date`가 회차 번호(`row_number()`)
+계산 전에 조회 날짜로 먼저 필터링해, 어떤 날짜를 조회하든 그 예약 1건짜리 partition이 돼
+`session_index`가 매번 1로만 나오던 버그(균등분배 합계가 부풀고 회차별 커스텀 금액도
+전부 1회차 값으로 표시됨) — 날짜 필터를 `row_number()` 계산 이후로 옮겨 수정, Live
+재적용·재테스트로 확인(자세한 내용은 CHANGELOG 참고).
+
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
 ### P2-1. 구글·카카오·애플 OAuth 운영 설정 (네이버는 별도 Edge Function 필요)
