@@ -8,6 +8,23 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-19 — P1-18 계정 탈퇴 정책 변경: 소프트 비활성화 → 실제 개인정보 익명화+삭제 (P0 재분류, SQL/배포 사용자 적용 대기)
+
+기존 탈퇴(`add_account_deactivation.sql`)는 `accounts.deactivated_at`을 채우고
+`auth.users`를 100년 밴하는 방식이라 로그인만 막힐 뿐 이름/전화번호/이메일 등 개인정보는
+DB에 그대로 남아있었음 — Apple/Google 계정 삭제 가이드라인 위반 소지로 P0 재분류.
+`supabase/functions/delete-account/index.ts` 재작성: 호출자 본인의 `accounts`/`profiles`
+(가족 프로필 포함) 개인정보를 익명값으로 덮어쓰고, `auth.users` 행을 밴이 아니라 실제
+삭제(`admin.auth.admin.deleteUser`)해 사용자 결정(재가입 허용)에 맞게 이메일/전화번호/
+소셜 계정을 즉시 풀어줌. `reservations`/`orders`/`payments`/`memberships`는 전자상거래법
+보관 의무 및 CLAUDE.md 규칙 3에 따라 그대로 유지(익명화된 accounts/profiles를 통해서만
+"탈퇴한 회원"으로 노출). 이미 탈퇴한 기존 1건에 새 정책을 소급 적용하는
+`fix_account_deletion_real_anonymization.sql`(+ rollback, 비가역 명시) 신규 작성 — FK
+안전성 사전 확인(`accounts.auth_id` FK 없음, `auth` 스키마 내부 테이블은 전부
+`ON DELETE CASCADE`). `app/settings/account/page.tsx` 탈퇴 안내 문구를 새 정책에 맞춰
+수정. `npm run build` 통과 확인. **아직 SQL 미적용·Edge Function 미배포** — 사용자가
+SQL Editor 실행 + `supabase functions deploy delete-account` 실행해야 반영됨.
+
 ## 2026-08-18 — P1-9/P1-5/P1-1 SQL 라이브 적용 확인 + P1-10 테스트 fixture 보정
 
 사용자가 3개 SQL(`add_admin_assignment_permission_gate.sql`, `add_manager_menu_permissions.sql`,
