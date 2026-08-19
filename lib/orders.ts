@@ -102,8 +102,16 @@ export async function updateOrderStatus(
     if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
     return;
   }
-  const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
+  // .select()로 실제 바뀐 행을 받아온다 — RLS의 using() 조건(예: 회원 자가 취소는
+  // status가 pending/paid일 때만 허용, add_order_self_cancel.sql)에 더 이상 안 맞는
+  // 주문(예: 그 사이 매니저가 먼저 처리함)이면 UPDATE 자체는 에러 없이 "0행 매칭"으로
+  // 조용히 끝나 버려서, 이 확인이 없으면 아무것도 안 바뀌었는데 성공 토스트가 뜬다.
+  const { data, error } = await supabase
+    .from("orders").update({ status }).eq("id", orderId).select("id");
   if (error) throw new Error("주문 상태 변경에 실패했어요: " + error.message);
+  if (!data || data.length === 0) {
+    throw new Error("이미 처리됐거나 취소할 수 없는 상태의 주문이에요. 새로고침 후 다시 확인해주세요.");
+  }
 }
 
 function mapOrder(o: any): Order & { centerName?: string } {
@@ -136,6 +144,7 @@ export type PurchaseItem = {
   remainingCount: number | null;
   refundable: boolean;
   refundReason: string;
+  cancellable: boolean;       // P1-2: 아직 미발급 주문을 회원이 직접 취소할 수 있는지
   kind: "pass" | "goods";
 };
 
@@ -194,6 +203,7 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
       createdAtIso: created,
       totalCount: total, remainingCount: remain,
       refundable, refundReason: reason,
+      cancellable: false, // 이미 발급됨 — 취소가 아니라 환불(refundable) 경로
       kind: ((m as any).products?.product_kind === "goods" ? "goods" : "pass"),
     });
   }
@@ -201,6 +211,11 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
   // 아직 발급 안 된 주문(대기중)도 표시
   for (const o of ords ?? []) {
     if ((o as any).status === "done") continue;   // 발급된 건 위에서 처리
+    // P1-2: pending/paid(= 아직 매니저가 처리 전)는 회원이 직접 취소할 수 있다
+    // (add_order_self_cancel.sql의 "주문 본인 취소" RLS 정책). cancelled는 이미 취소된
+    // 것이라 다시 취소 버튼을 보여줄 필요 없음.
+    const st = (o as any).status;
+    const cancellable = st === "pending" || st === "paid";
     out.push({
       id: (o as any).id,
       orderId: (o as any).id,
@@ -209,12 +224,13 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
       centerName: (o as any).centers?.name ?? "센터",
       productName: (o as any).product_name,
       amount: (o as any).amount,
-      status: (o as any).status,
+      status: st,
       purchasedAt: KST_DT_FULL.format(new Date((o as any).created_at)),
       createdAtIso: (o as any).created_at,
       totalCount: null, remainingCount: null,
       refundable: false,
-      refundReason: "센터 확인 대기 중이에요",
+      refundReason: cancellable ? "" : "취소된 주문이에요",
+      cancellable,
       kind: "pass",
     });
   }

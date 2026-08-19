@@ -45,7 +45,7 @@ export default function ResetPasswordConfirmPage() {
 
   if (done) {
     return (
-      <div className="app-shell">
+      <div className="app-shell auth-account-page account-page-v2">
         <div className="back-header">
           <div className="title">비밀번호 재설정</div>
         </div>
@@ -58,7 +58,7 @@ export default function ResetPasswordConfirmPage() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell auth-account-page account-page-v2">
       <div className="back-header">
         <div className="title">새 비밀번호 설정</div>
       </div>

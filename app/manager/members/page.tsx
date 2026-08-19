@@ -9,7 +9,6 @@
 
 import { Suspense, useCallback, useEffect, useState, useRef } from "react";
 import Loading from "../../components/Loading";
-import ManagerNav from "../../components/ManagerNav";
 import { useSearchParams } from "next/navigation";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
@@ -263,7 +262,7 @@ function MembersContent() {
 
   if (centers.length === 0 && !loading) {
     return (
-      <div className="app-shell">
+      <div className="app-shell manager-members-v2">
         <div className="back-header">
           <div className="side" />
           <div className="title">내 회원</div>
@@ -275,7 +274,7 @@ function MembersContent() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell manager-members-v2">
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
@@ -690,7 +689,6 @@ function MembersContent() {
           </div>
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

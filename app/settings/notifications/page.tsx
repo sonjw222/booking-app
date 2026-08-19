@@ -12,8 +12,8 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import BottomNav from "../../components/BottomNav";
 import { NOTI_PREF_STORAGE_KEY, NOTI_PREF_DEFAULTS, getNotiPrefs, type NotiPrefKey } from "../../../lib/notifications";
+import { isWebPushSupported, getWebPushStatus, enableWebPush, disableWebPush, type WebPushStatus } from "../../../lib/webPush";
 
 const ITEMS: { key: NotiPrefKey; label: string; desc: string; ready: boolean }[] = [
   { key: "reservation", label: "예약 확정·취소 알림", desc: "예약이 확정되거나 취소될 때 팝업으로 알려드려요", ready: true },
@@ -25,10 +25,40 @@ const ITEMS: { key: NotiPrefKey; label: string; desc: string; ready: boolean }[]
 export default function NotificationSettingsPage() {
   const [prefs, setPrefs] = useState<Record<NotiPrefKey, boolean>>(NOTI_PREF_DEFAULTS);
   const [toast, setToast] = useState<string | null>(null);
+  const [pushStatus, setPushStatus] = useState<WebPushStatus>("unsubscribed");
+  const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
     setPrefs(getNotiPrefs());
+    getWebPushStatus().then(setPushStatus);
   }, []);
+
+  const togglePush = useCallback(async () => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      if (pushStatus === "subscribed") {
+        const res = await disableWebPush();
+        if (res.ok) {
+          setPushStatus("unsubscribed");
+          setToast("앱을 닫아도 오는 알림을 껐어요");
+        } else {
+          setToast(res.error ?? "구독 해제에 실패했어요");
+        }
+      } else {
+        const res = await enableWebPush();
+        if (res.ok) {
+          setPushStatus("subscribed");
+          setToast("앱을 닫아도 알림을 받을 수 있어요");
+        } else {
+          setToast(res.error ?? "알림 구독에 실패했어요");
+        }
+      }
+    } finally {
+      setPushBusy(false);
+      setTimeout(() => setToast(null), 2000);
+    }
+  }, [pushStatus, pushBusy]);
 
   const toggle = useCallback((key: NotiPrefKey) => {
     setPrefs((prev) => {
@@ -41,7 +71,7 @@ export default function NotificationSettingsPage() {
   }, []);
 
   return (
-    <div className="app-shell">
+    <div className="app-shell account-page-v2 settings-page-v2">
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
@@ -52,10 +82,27 @@ export default function NotificationSettingsPage() {
 
       <div className="perm-guide" style={{ margin: "8px 20px" }}>
         꺼두면 이 종류는 실시간 팝업으로 방해하지 않아요(알림함에는 그대로 남아 나중에 확인할
-        수 있어요). 문자·카카오 알림톡·푸시·이메일 발송 연동은 아직 준비 중이에요.
+        수 있어요). 문자·카카오 알림톡·이메일 발송 연동은 아직 준비 중이에요.
       </div>
 
       <div className="noti-list">
+        <div className="noti-row">
+          <div className="noti-info">
+            <div className="noti-label">앱을 닫아도 알림 받기</div>
+            <div className="noti-desc">
+              {pushStatus === "unsupported"
+                ? "이 브라우저는 지원하지 않아요"
+                : "브라우저·OS 푸시로 새 알림을 바로 받아요"}
+            </div>
+          </div>
+          <button
+            className={`switch ${pushStatus === "subscribed" ? "on" : ""}`}
+            onClick={togglePush}
+            disabled={pushStatus === "unsupported" || pushBusy}
+          >
+            <span className="knob" />
+          </button>
+        </div>
         {ITEMS.map((it) => (
           <div key={it.key} className="noti-row">
             <div className="noti-info">
@@ -72,7 +119,6 @@ export default function NotificationSettingsPage() {
           </div>
         ))}
       </div>
-      <BottomNav />
     </div>
   );
 }

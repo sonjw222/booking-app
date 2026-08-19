@@ -9,7 +9,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
 import DatePicker from "../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
@@ -712,7 +711,6 @@ export default function SalesPage() {
           </div>
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

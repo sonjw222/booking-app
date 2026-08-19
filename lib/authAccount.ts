@@ -7,7 +7,21 @@ import { supabase } from "./supabaseClient";
 // 사실상 동작하지 않았다(코드 감사로 확인, P1). 로그인 직후 한 번 이 함수를 호출해 없으면
 // 만들어준다 — 휴대폰 번호는 소셜 제공자가 안정적으로 주지 않고 이번 범위(휴대폰 인증 제외)
 // 밖이라 null로 비워두고, 이름은 소셜 프로필 메타데이터에서 최대한 가져온다.
+let bootstrapSuppressed = false;
+
+// 회원가입 화면(app/login/page.tsx의 handleSignup)이 signUp() 직후 accounts/profiles(+매니저면
+// centers)를 자기 손으로 한 번에 만드는 동안에는 이 함수를 끈다. SessionWatcher가 앱 전체에서
+// SIGNED_IN 이벤트마다 이 함수를 호출하는데, signUp()도 SIGNED_IN을 발생시키므로 두 insert가
+// 동시에 accounts.auth_id(unique)를 놓고 경합해 handleSignup 쪽이 종종 "계정 생성 중 문제가
+// 발생했어요"로 실패했다(실제로는 SessionWatcher가 먼저 "빈" 계정을 만들어버린 것 — 전화번호/
+// 매니저 여부/센터가 전부 빠진 반쪽짜리 가입으로 남음). 신규 가입은 handleSignup이 전담하고,
+// 이미 세션이 있는 상태로 재방문/소셜 로그인일 때만 이 함수가 필요하므로 signUp 구간만 끄면 된다.
+export function setBootstrapSuppressed(v: boolean) {
+  bootstrapSuppressed = v;
+}
+
 export async function ensureAccountForCurrentUser(): Promise<void> {
+  if (bootstrapSuppressed) return;
   const { data: authData } = await supabase.auth.getUser();
   const user = authData.user;
   if (!user) return;
