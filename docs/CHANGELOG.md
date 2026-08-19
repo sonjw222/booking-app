@@ -8,6 +8,17 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-19 — P2-13 PR #63 CI 결과 확인: 신규 RLS 테스트 통과, 무관한 실패 17건은 공유 테스트센터 경합
+
+PR #63(review/todo-scan4) CI 실행(run 32225473488)에서 `Integration tests` 잡이 실패로
+끝났지만, 신규로 추가한 `tests/integration/sec009-batch-a2-rls.test.ts`는 12/12 전부
+통과했다. 실패한 17건은 전부 `schedule-rule-override`/`reservation-cancel-grace-period`/
+`manager-set-attendance-membership-integrity`/`notification-center-isolation`/
+`class-deadline-override-and-private` 등 `contracts`/`notification_logs`와 무관한
+테스트 파일에서 "아직 예약이 열리지 않았어요" 류 에러로 발생 — 같은 시간대(06:55~07:08)에
+겹쳐 실행된 `chore/p1-12-settings-wiring-audit` PR CI가 공유 테스트센터의
+`center_settings`(예약 오픈 시각)를 건드려 생긴 경합으로 판단, main으로 merge 진행.
+
 ## 2026-08-18 — P2-13 완료: contracts/notification_logs RLS SELECT 정책 적용 + 통합 테스트 (review/todo-scan4)
 
 `contracts`/`notification_logs`는 RLS가 켜져 있지만 정책이 0건이라 오너 포함 아무도 조회할 수
