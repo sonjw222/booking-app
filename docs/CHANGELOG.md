@@ -36,6 +36,33 @@ DB에 그대로 남아있었음 — Apple/Google 계정 삭제 가이드라인 �
 수정. `npm run build` 통과 확인. **아직 SQL 미적용·Edge Function 미배포** — 사용자가
 SQL Editor 실행 + `supabase functions deploy delete-account` 실행해야 반영됨.
 
+## 2026-08-19 — P2-13 PR #63 CI 결과 확인: 신규 RLS 테스트 통과, 무관한 실패 17건은 공유 테스트센터 경합
+
+PR #63(review/todo-scan4) CI 실행(run 32225473488)에서 `Integration tests` 잡이 실패로
+끝났지만, 신규로 추가한 `tests/integration/sec009-batch-a2-rls.test.ts`는 12/12 전부
+통과했다. 실패한 17건은 전부 `schedule-rule-override`/`reservation-cancel-grace-period`/
+`manager-set-attendance-membership-integrity`/`notification-center-isolation`/
+`class-deadline-override-and-private` 등 `contracts`/`notification_logs`와 무관한
+테스트 파일에서 "아직 예약이 열리지 않았어요" 류 에러로 발생 — 같은 시간대(06:55~07:08)에
+겹쳐 실행된 `chore/p1-12-settings-wiring-audit` PR CI가 공유 테스트센터의
+`center_settings`(예약 오픈 시각)를 건드려 생긴 경합으로 판단, main으로 merge 진행.
+
+## 2026-08-18 — P2-13 완료: contracts/notification_logs RLS SELECT 정책 적용 + 통합 테스트 (review/todo-scan4)
+
+`contracts`/`notification_logs`는 RLS가 켜져 있지만 정책이 0건이라 오너 포함 아무도 조회할 수
+없는 상태였다(앱에서 실사용 0건이라 지금까지 문제 없었음). `docs/22_RLS_Gap_A2_Investigation.md`가
+이미 설계해둔 SELECT 전용 정책(INSERT/UPDATE/DELETE는 의도적으로 유지 — 계약 발급은 향후
+RPC로, 알림 로그는 서버 트리거 전용)을 `fix_rls_gap_batch_a2_contracts_notification_logs_
+draft_proposed.sql`로 적용, `tests/integration/sec009-batch-a2-rls.test.ts`(신규)로 검증 —
+로컬 Live Supabase 대상 12/12 통과.
+
+service_role GRANT(이 두 테이블의 fixture 자동화를 막던 원래 블로커)는 read-only로 재확인한
+결과 이미 Live에 적용돼 있었음 — 언제 적용됐는지는 불명이나 GRANT 자체는 더 이상 블로커가
+아니었다. 테스트 작성 중 `notification_logs`는 `messages` 테이블과 달리 채널별로 권한이 안
+나뉜다는 걸 실측으로 확인(`message.sms.view`/`message.push.view` 중 아무거나 있으면 그 센터
+발송기록 전부 조회 가능 — 설계 문서 그대로, 처음엔 messages 패턴을 잘못 가정해 테스트 2건이
+실패했다가 원인 파악 후 정정).
+
 ## 2026-08-18 — P1-9/P1-5/P1-1 SQL 라이브 적용 확인 + P1-10 테스트 fixture 보정
 
 사용자가 3개 SQL(`add_admin_assignment_permission_gate.sql`, `add_manager_menu_permissions.sql`,

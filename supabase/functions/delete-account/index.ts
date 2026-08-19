@@ -53,6 +53,8 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
 
   const authHeader = req.headers.get("Authorization") ?? "";
+  // 호출자 본인 확인: anon key + 호출자의 JWT로 만든 client는 auth.getUser()가 그 JWT의
+  // 주인만 돌려준다(다른 사용자로 위장 불가) — service_role은 아래에서 실제 쓰기에만 쓴다.
   const callerClient = createClient(SUPABASE_URL, ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
     auth: { autoRefreshToken: false, persistSession: false },
