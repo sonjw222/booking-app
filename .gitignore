@@ -32,7 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
-# 값이 없는 템플릿이라 비밀정보가 없음 — 통합 테스트 설정 안내용으로 커밋 대상에 포함
+# 값이 없는 템플릿이라 비밀정보가 없음 — 설치/통합 테스트 설정 안내용으로 커밋 대상에 포함
+!.env.local.example
 !.env.test.local.example
 
 # vercel
