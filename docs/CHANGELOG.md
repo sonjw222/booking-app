@@ -8,6 +8,17 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-20 — P1-18 계정 탈퇴 정책 Live 적용 확인 + 자동 통합테스트 추가
+
+사용자가 `fix_account_deletion_real_anonymization.sql`을 SQL Editor에서 실행(소급 대상 1건
+익명화 + `auth.users` 삭제)하고 `supabase functions deploy delete-account`로 재배포(버전
+8→9). 라이브 재조회(`accounts`/`profiles`/`auth.users` 3개 테이블 직접 확인)로 반영 확인.
+이어서 `tests/integration/account-deletion-anonymization.test.ts` 신규 작성 — service_role로
+전용 임시 계정(본인+자녀 프로필)을 만들어 배포된 `delete-account`를 실제로 호출하고,
+accounts/profiles 8개 필드 익명화 + `auth.users` 실제 삭제(밴 아님) + 같은 이메일 즉시
+재가입까지 왕복 자동 검증. 1/1 통과, 테스트 데이터는 `afterAll`에서 정리하고 라이브
+재조회로 leftover 0건 확인. `npm run build`/`tsc --noEmit` 통과.
+
 ## 2026-08-19 — P1-18 계정 탈퇴 정책 변경: 소프트 비활성화 → 실제 개인정보 익명화+삭제 (P0 재분류, SQL/배포 사용자 적용 대기)
 
 기존 탈퇴(`add_account_deactivation.sql`)는 `accounts.deactivated_at`을 채우고
