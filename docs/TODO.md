@@ -655,14 +655,14 @@ SQL 정의는 있으나 현재 `app/`·`lib/`의 직접 조회는 확인되지 �
 
 현재 insert helper는 존재하지만 센터 상세 화면은 `addToCart()`를 사용하며 `requestPurchase()` 호출은 확인되지 않았습니다.
 
-### P2-7. `.env.local.example` 부재
+### P2-7. (2026-08-19, 완료) `.env.local.example` 부재
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **미완성** |
-| 근거 파일 | `README.md`, `.gitignore`, `lib/supabaseClient.ts`; 저장소 루트에 `.env.local.example` 없음 |
-| 완료 조건 | 실제 필요한 키 이름과 설명만 포함한 예제 또는 README 설치 절차를 마련하고, 새 환경에서 안내대로 실행해 앱이 시작됨. 비밀값은 포함하지 않음 |
+| 현재 상태 | **완료.** `process.env.NEXT_PUBLIC_*` 전수 grep으로 필수 2개(`NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY`) + 선택 5개(네이버/카카오 로그인, 결제 provider/scenario, VAPID)를 확인해 `.env.local.example` 신규 작성. `.gitignore`의 `.env*` 규칙이 `.env.test.local.example`만 예외 처리해 새 파일도 그대로 무시하고 있던 걸 발견해 `!.env.local.example` 예외 추가(안 했으면 커밋해도 파일이 조용히 빠짐). 예제 값 그대로 `.env.local`을 만들어 `npm run dev`로 `/login` 200 응답까지 실행 확인. |
+| 근거 파일 | `.env.local.example`(신규), `.gitignore`, `README.md`, `docs/DEVELOPMENT_RULES.md`(11절 최신화) |
+| 완료 조건 | ~~실제 필요한 키 이름과 설명만 포함한 예제 또는 README 설치 절차를 마련하고, 새 환경에서 안내대로 실행해 앱이 시작됨. 비밀값은 포함하지 않음~~ 완료. |
 | 관련 문서 | [REQUIREMENTS 6-2](./REQUIREMENTS.md), [DEVELOPMENT_RULES 11절](./DEVELOPMENT_RULES.md) |
 
 ### P2-8. Tailwind 설정과 실제 스타일 사용 불일치

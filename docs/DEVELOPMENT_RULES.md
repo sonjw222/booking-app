@@ -259,15 +259,19 @@ npm run build
 
 ## 11. 환경변수
 
-- 현재 클라이언트가 사용하는 키는 다음 두 개입니다.
-  - `NEXT_PUBLIC_SUPABASE_URL`
-  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- 현재 클라이언트가 사용하는 키는 다음과 같습니다(`.env.local.example` 참고, 2026-08-19 기준).
+  - 필수: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - 선택(비우면 해당 기능만 비활성/mock, 앱 자체는 정상 동작): `NEXT_PUBLIC_NAVER_CLIENT_ID`,
+    `NEXT_PUBLIC_KAKAO_CLIENT_ID`(AUTH_SETUP.md), `NEXT_PUBLIC_PAYMENT_PROVIDER`,
+    `NEXT_PUBLIC_PAYMENT_SCENARIO`(lib/payments/PaymentProviderFactory.ts),
+    `NEXT_PUBLIC_VAPID_PUBLIC_KEY`(lib/webPush.ts)
 - 값은 `.env.local`에 두며 `.gitignore`의 `.env*`로 제외됩니다.
 - `git status`와 staging 전에 `.env*`, key, token, credential 포함 여부를 확인합니다.
 - `NEXT_PUBLIC_` 값은 브라우저에 노출됩니다. 비밀값을 이 prefix로 추가하지 않습니다.
 - Supabase service role key를 `app/`, `lib/` 클라이언트 코드에 두지 않습니다.
 - 새 환경변수는 코드, 로컬, Vercel의 키 이름을 일치시키고 값이 아닌 키 이름·용도만 문서화합니다.
-- 현재 `.env.local.example`은 없습니다. 존재한다고 가정한 설치 안내를 추가하지 않습니다.
+- `.env.local.example`(앱용)과 `.env.test.local.example`(통합 테스트용) 둘 다 값이 아닌
+  키 이름·용도만 담습니다. 새 `process.env.NEXT_PUBLIC_*`를 추가하면 해당 파일에도 같이 반영합니다.
 - Vercel 환경변수와 로컬 환경변수가 같다고 추측하지 않고 배포 시 별도 확인합니다.
 
 ## 12. Git

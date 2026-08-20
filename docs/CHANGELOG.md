@@ -125,6 +125,17 @@ PR #53 CI 재트리거 중 `auto-book-membership-security.test.ts`의 AUTO-SEC-K
 (P1-8)의 중단된 실행이 남긴 leftover 스태프 등록(`cleanup_leftover_leads_test_staff_role.sql`
 로 정리). 상세는 `docs/TODO.md` P2-26 참고.
 
+## 2026-08-19 — P2-7 완료: `.env.local.example` 신규 작성
+
+`process.env.NEXT_PUBLIC_*` 전수 grep으로 실제 사용 중인 키를 확인해(필수 2개 + 선택 5개)
+`.env.local.example`을 새로 작성했다. 작성 중 `.gitignore`의 `.env*` 규칙이 기존
+`.env.test.local.example`만 예외 처리해뒀고 새로 만든 `.env.local.example`도 그대로
+무시하고 있는 걸 발견 — `!.env.local.example` 예외를 추가하지 않았으면 이 파일 자체가
+커밋에서 조용히 빠질 뻔했다. 예제 값 그대로 `.env.local`을 만들어 `npm run dev`로
+`/login` 200 응답까지 실행 확인 후 삭제. `docs/DEVELOPMENT_RULES.md` 11절이 "현재
+`.env.local.example`은 없다"고 적어둔 부분과 클라이언트 키를 2개로만 적어둔 부분(실제로는
+7개)도 함께 최신화했다.
+
 ## 2026-08-19 — P2-23에 CI 멈춤 사례 1건 추가 기록(PR #63 merge 직후 main push run)
 
 PR #63 merge로 트리거된 main push CI(run `32267575685`)에서 `npx playwright install
