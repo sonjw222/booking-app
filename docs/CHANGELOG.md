@@ -8,6 +8,15 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-20 — P2-27: CI Integration job timeout 20분 → 35분 상향
+
+PR #66/#67의 Integration job이 둘 다 19분대에 `cancelled`로 끝나는 걸 발견 — 실패가 아니라
+`timeout-minutes: 20`에 걸린 것. 통합 테스트 스위트가 계속 자라 정상 실행도 20분에
+빠듯해졌다(과거 timeout 없던 시절 기록은 30~34분). timeout 자체는 2026-08-14/15 사고
+(멈춘 job이 전역 CI 큐를 몇 시간씩 막음) 재발을 막는 안전장치라 없애지 않고, 정상 실행
+시간에 맞춰 35분으로 상향. P2-26에서 이 20분 컷오프가 `afterAll` 정리 실패로 이어져 실제
+leftover 버그를 만든 사례가 이미 있어 근거로 삼음.
+
 ## 2026-08-20 — P1-18 계정 탈퇴 정책 Live 적용 확인 + 자동 통합테스트 추가
 
 사용자가 `fix_account_deletion_real_anonymization.sql`을 SQL Editor에서 실행(소급 대상 1건
