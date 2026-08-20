@@ -1536,28 +1536,45 @@ PR #66, #67 모두 Integration이 19분대에 `conclusion: cancelled`로 끝났�
 `npx playwright install` 20분 멈춤도 이 안전장치 덕에 자동 정리됨 — P2-24). 없애면 그 사고가
 재발할 위험이 있어, 대신 정상 실행 시간에 여유를 더 두는 쪽으로 조정.
 
-### P2-28. (2026-08-20, 완료) PR #68 Integration 재현 실패 11건 — 공유 테스트센터 스캔 오염 + waitlist 설정 미보장
+### P2-28. (2026-08-20, 부분 완료 — H/M/N/O 근본 원인 미해결) PR #68 Integration 재현 실패 11건 — waitlist 설정 미보장은 해결, 공유 센터 스캔 오염 진단은 일부 틀림
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P2 (테스트 코드/fixture 문제 — 앱 로직 버그 아님) |
-| 현재 상태 | **완료.** `auto-book-membership-security.test.ts` F/H×2/L/M/N/O를 격리 센터로 전환, `manager-set-attendance-membership-integrity.test.ts`에 `waitlist_weekly_limit` 명시 설정 추가. |
+| 우선순위 | P2 (테스트 코드/fixture 문제로 추정 — 앱 로직 버그 가능성 배제 못 함) |
+| 현재 상태 | **부분 완료.** ATT-SEC-B/C/D/E(waitlist)와 AUTO-SEC-F/L(격리 센터 전환 자체가 원인이던 crash)는 해결. **AUTO-SEC-H(예약마감 케이스)/M/N/O는 격리 센터로 옮겨도 여전히 실패 — 원래 진단(공유 센터 스캔 오염)이 이 4건에는 틀렸다는 뜻이라 재조사 필요.** PR #68 자체는 문서 전용 변경이라 이 미해결 실패와 무관하다고 보고 merge 진행. |
 | 근거 파일 | `tests/integration/auto-book-membership-security.test.ts`, `tests/integration/manager-set-attendance-membership-integrity.test.ts`, `lib/settings.ts` |
 
 PR #68(문서 전용 변경) CI에서 Integration 11건 실패(`auto-book-membership-security.test.ts`
-F/H×2/L/M/N, O 7건 + `manager-set-attendance-membership-integrity.test.ts` ATT-SEC-B/C/D/E
-4건) — PR #68 diff와는 무관해 원인 규명함.
+F/H×2/L/M/N/O 7건 + `manager-set-attendance-membership-integrity.test.ts` ATT-SEC-B/C/D/E
+4건) — PR #68 diff와는 무관해 원인 규명 시도.
 
-**F/H/L/M/N/O(7건)**: P2-25가 K/M을 조사하며 이미 짚었던 것과 같은 메커니즘. 이 테스트들이
-공유 센터(`centerAId`)에서 `booked`를 정확히 0(또는 정확한 작은 수)으로 기대하는데,
-`auto_book_membership()`은 그 센터 안의 **다른 파일/세션이 동시에 남긴 클래스까지** 스캔
-대상에 넣는다 — AUTO-SEC-G가 이미 같은 이유로 `createIsolatedOwnedCenter()`(빈 격리 센터)를
-쓰고 있었다. A~E/K/P가 지금까지 안 깨졌던 건 이 테스트들이 `booked`를 느슨하게
-(`toBeGreaterThanOrEqual`) 검사하거나 권한 거부(에러 발생, RPC가 클래스 스캔까지 가지도
-않음)만 확인하기 때문 — 우연히 면역이었을 뿐 같은 위험을 안고 있었다. G와 동일한 패턴으로
-F/H×2/L/M/N/O를 격리 센터로 전환. N/O는 추가로 `center_settings`를 일시적으로 바꾸는데,
-격리 센터는 `afterAll`에서 통째로 삭제되므로 기존의 원복 `finally` 블록도 함께 제거함(다른
-세션의 동시 실행과 설정 변경이 충돌할 여지 자체가 없어짐).
+**ATT-SEC-B/C/D/E(4건, 해결 확인됨)**: `makeWaitlistedReservation()`이 두 번째
+`reserve_class()` 호출에서 `"이 센터는 대기예약을 사용하지 않아요"`로 거부됐다 —
+`reserve_class()`는 `coalesce(waitlist_weekly_limit, 0) = 0`이면 이 에러를 던지는데, 이
+파일은 그 값을 한 번도 명시적으로 설정한 적이 없었다. `beforeAll`/`afterAll`에 명시적
+설정/원복 추가 — 재실행에서 4/4 모두 통과 확인.
+
+**F/H/L/M/N/O(원래 진단·부분적으로 틀림)**: 처음엔 P2-25의 K/M 진단과 같은 메커니즘
+(공유 센터의 다른 클래스가 `auto_book_membership()` 스캔에 섞임)이라고 판단해 전부 격리
+센터로 전환했다. 하지만 `auto_book_membership()`의 실제 SQL(`fix_auto_book_membership_idor_
+draft_proposed.sql`, Live 적용 확인됨)을 직접 읽어보니 `where c.center_id = v_mem.center_id`로
+이미 명확히 센터 단위로 스코프돼 있어, 다른 센터의 클래스가 섞일 방법이 SQL 레벨에는 없다.
+격리 전환 후 재실행 결과:
+- **F/L: 해결.** 하지만 실패 원인은 스캔 오염이 아니라 격리 전환 자체가 새로 만든 버그였다
+  — `createIsolatedOwnedCenter()`의 leftover 정리 로직이 `payments` 테이블 FK를 몰라서,
+  L이 `fulfill_order()`로 실제 `payments` 행을 만들게 되자(격리 전환 전에는 없던 경로)
+  이전 실행이 남긴 leftover 격리 센터의 `memberships` 삭제가 `payments_membership_id_fkey`
+  위반으로 실패 → 그 예외가 (파일 순서상 먼저 오는) F를 깨뜨렸다. `createIsolatedOwnedCenter`의
+  stale-cleanup에 `payments` 삭제 단계 추가, L 자신도 만든 membership/payment를
+  자체 정리하도록 수정(다른 테스트와 달리 `cleanupMembershipIds`로 자동 정리되지 않았음).
+- **H(휴무일 케이스)/A~E/K/P: 격리 전환만으로 통과.** (단, 이 그룹은 원래도 느슨한 assertion
+  이라 면역이었을 가능성과 우연이 섞여있어 확정적 결론은 아님.)
+- **H(예약마감 케이스)/M/N/O: 격리해도 여전히 실패.** 완전히 새로 만든 격리 센터(다른
+  테스트와 클래스 공유 불가능)에서도 `booked` 기대치가 틀린다는 건, 스캔 오염이 아닌
+  **다른 원인**(예: `calc_deadline`/`booking_deadline_min` 타이밍 로직 자체의 문제, 또는
+  테스트 코드의 시간 계산 버그)이라는 뜻 — 원래 진단이 이 4건에는 맞지 않았다. 근본 원인
+  미상. 라이브 DB 직접 조사(서비스 롤 키 필요, 이 세션엔 없음)가 필요해 이번 배치에서는
+  더 파지 않고 기록만 남김.
 
 **ATT-SEC-B/C/D/E(4건)**: 원인이 달랐다. `makeWaitlistedReservation()`이 두 번째
 `reserve_class()` 호출(정원 찬 수업에 대기로 밀려나는 예약)에서 `"이 센터는 대기예약을

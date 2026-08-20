@@ -149,6 +149,12 @@ async function createIsolatedOwnedCenter(manager: TestUser): Promise<string> {
       const { error: classError } = await admin.from("classes").delete().in("id", staleClassIds);
       if (classError) throw new Error(`이전 격리센터 수업 정리 실패: ${classError.message}`);
     }
+    // [P2-28 수정] AUTO-SEC-L이 fulfill_order()를 통해 실제 payments 행을 만들게 되면서
+    // (격리 센터 전환 전에는 없던 경로) memberships 삭제가 payments_membership_id_fkey
+    // 위반으로 실패하기 시작했다 — payments는 memberships/centers 둘 다에 FK가 있고 둘 다
+    // ON DELETE CASCADE가 아니므로, memberships를 지우기 전에 먼저 지워야 한다.
+    const { error: stalePaymentsDeleteError } = await admin.from("payments").delete().in("center_id", staleIds);
+    if (stalePaymentsDeleteError) throw new Error(`이전 격리센터 결제 정리 실패: ${stalePaymentsDeleteError.message}`);
     if (staleMembershipIds.length > 0) {
       const { error } = await admin.from("reservations").delete().in("membership_id", staleMembershipIds);
       if (error) throw new Error(`이전 격리센터 수강권 예약 정리 실패: ${error.message}`);
@@ -597,6 +603,15 @@ describe("SEC-114 AUTO-SEC-K~L: platform admin 허용 + fulfill_order 내부 호
 
     const res = await fetchReservationsFor(newMembershipId);
     expect(res.some((r) => r.class_id === cls.id && r.status === "confirmed")).toBe(true);
+
+    // [P2-28 수정] fulfill_order()가 만드는 membership은 다른 테스트처럼
+    // cleanupMembershipIds로 자동 정리되지 않는다(직접 만든 게 아니라 RPC가 반환한
+    // id라서). 이 membership은 실제 payments 행도 동반하는데(이 파일에서 유일하게),
+    // payments FK 때문에 정리 안 하면 이 격리 센터를 afterAll이 지울 때도, 다음 실행이
+    // createIsolatedOwnedCenter()의 stale-cleanup에서 이 leftover를 만났을 때도 실패한다.
+    await admin.from("payments").delete().eq("membership_id", newMembershipId);
+    await admin.from("reservations").delete().eq("membership_id", newMembershipId);
+    await admin.from("memberships").delete().eq("id", newMembershipId);
   }, 30000);
 });
 

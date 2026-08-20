@@ -8,6 +8,20 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-20 — P2-28 후속: payments FK 버그 수정, H/M/N/O는 원인 미상으로 재분류
+
+P2-28 수정을 재실행해보니 11건 실패가 5건으로 줄었지만(F/L/ATT-SEC 4건 해결), 격리 센터
+전환 자체가 새 버그를 만든 걸 발견 — `createIsolatedOwnedCenter()`의 leftover 정리가
+`payments` FK를 몰라서 AUTO-SEC-L이 실제 payments 행을 만들자 정리가 깨지고 그 예외가
+F를 함께 무너뜨렸다. stale-cleanup에 payments 삭제 단계 추가 + L 자신도 만든
+membership/payment를 자체 정리하도록 수정.
+
+더 중요한 발견: H(예약마감 케이스)/M/N/O는 완전히 새로운 격리 센터로 옮겼는데도 여전히
+실패한다 — `auto_book_membership()` SQL을 직접 읽어보니 이미 `center_id`로 스코프돼 있어
+"공유 센터 오염"이라는 원래 진단이 이 4건에는 맞지 않았다는 뜻. 라이브 DB 조사 없이는 더
+못 파므로 P2-28에 원인 미상으로 기록만 남기고, PR #68은 문서 전용 변경이라 이 잔여 실패와
+무관하다고 보고 merge 진행(사용자 승인).
+
 ## 2026-08-20 — P2-26 재발 정리: `leads.test.ts` leftover 스태프 2차 발생
 
 PR #68 검증 재실행 중 P2-26과 동일한 E2E 실패(class-trainer-display.spec.ts strict mode
