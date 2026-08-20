@@ -1507,6 +1507,38 @@ CI job 20분 타임아웃으로 강제종료되며 `afterAll`이 못 돌아 그 
 방식으로 바꿔야 하는데, 둘 다 이 저장소의 여러 통합/E2E 테스트 파일에 걸친 광범위한
 변경이라 사용자 승인 없이 진행하지 않음.
 
+### P2-28. (2026-08-20, 완료) PR #68 Integration 재현 실패 11건 — 공유 테스트센터 스캔 오염 + waitlist 설정 미보장
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 (테스트 코드/fixture 문제 — 앱 로직 버그 아님) |
+| 현재 상태 | **완료.** `auto-book-membership-security.test.ts` F/H×2/L/M/N/O를 격리 센터로 전환, `manager-set-attendance-membership-integrity.test.ts`에 `waitlist_weekly_limit` 명시 설정 추가. |
+| 근거 파일 | `tests/integration/auto-book-membership-security.test.ts`, `tests/integration/manager-set-attendance-membership-integrity.test.ts`, `lib/settings.ts` |
+
+PR #68(문서 전용 변경) CI에서 Integration 11건 실패(`auto-book-membership-security.test.ts`
+F/H×2/L/M/N, O 7건 + `manager-set-attendance-membership-integrity.test.ts` ATT-SEC-B/C/D/E
+4건) — PR #68 diff와는 무관해 원인 규명함.
+
+**F/H/L/M/N/O(7건)**: P2-25가 K/M을 조사하며 이미 짚었던 것과 같은 메커니즘. 이 테스트들이
+공유 센터(`centerAId`)에서 `booked`를 정확히 0(또는 정확한 작은 수)으로 기대하는데,
+`auto_book_membership()`은 그 센터 안의 **다른 파일/세션이 동시에 남긴 클래스까지** 스캔
+대상에 넣는다 — AUTO-SEC-G가 이미 같은 이유로 `createIsolatedOwnedCenter()`(빈 격리 센터)를
+쓰고 있었다. A~E/K/P가 지금까지 안 깨졌던 건 이 테스트들이 `booked`를 느슨하게
+(`toBeGreaterThanOrEqual`) 검사하거나 권한 거부(에러 발생, RPC가 클래스 스캔까지 가지도
+않음)만 확인하기 때문 — 우연히 면역이었을 뿐 같은 위험을 안고 있었다. G와 동일한 패턴으로
+F/H×2/L/M/N/O를 격리 센터로 전환. N/O는 추가로 `center_settings`를 일시적으로 바꾸는데,
+격리 센터는 `afterAll`에서 통째로 삭제되므로 기존의 원복 `finally` 블록도 함께 제거함(다른
+세션의 동시 실행과 설정 변경이 충돌할 여지 자체가 없어짐).
+
+**ATT-SEC-B/C/D/E(4건)**: 원인이 달랐다. `makeWaitlistedReservation()`이 두 번째
+`reserve_class()` 호출(정원 찬 수업에 대기로 밀려나는 예약)에서 `"이 센터는 대기예약을
+사용하지 않아요"`로 거부됐다 — `fix_class_deadline_overrides_same_day_toggle.sql`의
+`reserve_class()`를 보면 `coalesce(waitlist_weekly_limit, 0) = 0`이면 이 에러를 던진다.
+이 테스트 파일은 처음부터 `waitlist_weekly_limit`을 **단 한 번도 명시적으로 설정한 적이
+없었다** — 공유 센터의 그 값이 우연히 0이 아닌 동안만 통과해온 것. `beforeAll`에서
+`fetchSettings`/`saveSettings`로 명시적으로 999를 설정하고 `afterAll`에서 원복하도록 추가
+(N/O가 이미 쓰던 것과 같은 패턴).
+
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
 
 ### P3-1. 수업 구분과 복수 강사 배정

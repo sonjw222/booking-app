@@ -8,6 +8,25 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-20 — P2-28: PR #68 Integration 실패 11건 근본 원인 수정(공유 센터 스캔 오염 + waitlist 설정 누락)
+
+문서 전용 PR #68의 Integration이 11건 실패해 조사 — PR diff와 무관함을 확인 후 두 가지
+근본 원인을 찾아 수정했다.
+
+`auto-book-membership-security.test.ts`의 AUTO-SEC-F/H×2/L/M/N/O(7건)는 P2-25가 K/M에서
+이미 짚은 것과 같은 메커니즘: 공유 테스트센터에서 `booked=0`(또는 정확한 소수)을 기대하는데
+`auto_book_membership()`이 다른 파일/세션이 그 센터에 동시에 남긴 클래스까지 스캔한다.
+AUTO-SEC-G가 이미 같은 이유로 격리 센터를 쓰고 있어 그 패턴을 F/H/L/M/N/O에도 적용 —
+N/O가 쓰던 `center_settings` 원복 `finally` 블록도 격리 센터는 통째로 삭제되므로 함께 제거.
+
+`manager-set-attendance-membership-integrity.test.ts`의 ATT-SEC-B/C/D/E(4건)는 다른
+원인: `waitlisted` 예약을 만드는 `makeWaitlistedReservation()`이 "이 센터는 대기예약을
+사용하지 않아요"로 거부됐다 — `reserve_class()`는 `waitlist_weekly_limit`이 0이면 이
+에러를 던지는데, 이 파일은 그 값을 한 번도 명시적으로 설정한 적이 없어 공유 센터의 값이
+우연히 0이 아닌 동안만 통과해온 것이었다. `beforeAll`/`afterAll`에 명시적 설정/원복 추가.
+
+상세는 `docs/TODO.md` P2-28 참고.
+
 ## 2026-08-20 — P2-25: AUTO-SEC-L/O 테스트 코드 버그 수정, K/M/N 원인 규명(앱 로직 정상)
 
 PR #53 CI 재트리거 중 `auto-book-membership-security.test.ts`의 AUTO-SEC-K/L/M/N/O 5개가
