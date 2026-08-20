@@ -1536,12 +1536,12 @@ PR #66, #67 모두 Integration이 19분대에 `conclusion: cancelled`로 끝났�
 `npx playwright install` 20분 멈춤도 이 안전장치 덕에 자동 정리됨 — P2-24). 없애면 그 사고가
 재발할 위험이 있어, 대신 정상 실행 시간에 여유를 더 두는 쪽으로 조정.
 
-### P2-28. (2026-08-20, 부분 완료 — H/M/N/O 근본 원인 미해결) PR #68 Integration 재현 실패 11건 — waitlist 설정 미보장은 해결, 공유 센터 스캔 오염 진단은 일부 틀림
+### P2-28. (2026-08-20, 부분 완료 — H/M/N/O 근본 원인 미해결, F는 간헐적) PR #68 Integration 재현 실패 11건 — waitlist 설정 미보장은 해결, 공유 센터 스캔 오염 진단은 일부 틀림
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 (테스트 코드/fixture 문제로 추정 — 앱 로직 버그 가능성 배제 못 함) |
-| 현재 상태 | **부분 완료.** ATT-SEC-B/C/D/E(waitlist)와 AUTO-SEC-F/L(격리 센터 전환 자체가 원인이던 crash)는 해결. **AUTO-SEC-H(예약마감 케이스)/M/N/O는 격리 센터로 옮겨도 여전히 실패 — 원래 진단(공유 센터 스캔 오염)이 이 4건에는 틀렸다는 뜻이라 재조사 필요.** PR #68 자체는 문서 전용 변경이라 이 미해결 실패와 무관하다고 보고 merge 진행. |
+| 현재 상태 | **부분 완료.** ATT-SEC-B/C/D/E(waitlist)는 완전히 해결(재실행 4/4 통과 확인). **AUTO-SEC-H(예약마감 케이스)/M/N/O는 격리 센터로 옮겨도 여전히 실패 — 원래 진단(공유 센터 스캔 오염)이 이 4건에는 틀렸다는 뜻이라 재조사 필요.** F/L은 `createIsolatedOwnedCenter()`의 stale-cleanup이 매번 다른 테이블 FK(`payments` → `center_members`, 두더지잡기)로 크래시해 간헐적 — `payments`는 이번에 고쳤지만 `center_members` 등 다른 테이블이 더 있을 수 있어 근본적으로는 stale-cleanup을 "이 센터를 참조하는 모든 테이블"을 일반화해서 도는 방식으로 다시 짜야 한다(이번 배치 범위 밖). PR #68 자체는 문서 전용 변경이라 이 미해결 실패와 무관하다고 보고 merge 진행. |
 | 근거 파일 | `tests/integration/auto-book-membership-security.test.ts`, `tests/integration/manager-set-attendance-membership-integrity.test.ts`, `lib/settings.ts` |
 
 PR #68(문서 전용 변경) CI에서 Integration 11건 실패(`auto-book-membership-security.test.ts`
@@ -1560,13 +1560,17 @@ F/H×2/L/M/N/O 7건 + `manager-set-attendance-membership-integrity.test.ts` ATT-
 draft_proposed.sql`, Live 적용 확인됨)을 직접 읽어보니 `where c.center_id = v_mem.center_id`로
 이미 명확히 센터 단위로 스코프돼 있어, 다른 센터의 클래스가 섞일 방법이 SQL 레벨에는 없다.
 격리 전환 후 재실행 결과:
-- **F/L: 해결.** 하지만 실패 원인은 스캔 오염이 아니라 격리 전환 자체가 새로 만든 버그였다
-  — `createIsolatedOwnedCenter()`의 leftover 정리 로직이 `payments` 테이블 FK를 몰라서,
-  L이 `fulfill_order()`로 실제 `payments` 행을 만들게 되자(격리 전환 전에는 없던 경로)
-  이전 실행이 남긴 leftover 격리 센터의 `memberships` 삭제가 `payments_membership_id_fkey`
-  위반으로 실패 → 그 예외가 (파일 순서상 먼저 오는) F를 깨뜨렸다. `createIsolatedOwnedCenter`의
-  stale-cleanup에 `payments` 삭제 단계 추가, L 자신도 만든 membership/payment를
-  자체 정리하도록 수정(다른 테스트와 달리 `cleanupMembershipIds`로 자동 정리되지 않았음).
+- **F/L: 간헐적 — 근본 해결 아님.** 실패 원인은 애초에 스캔 오염이 아니라 격리 전환 자체가
+  새로 만든 버그였다 — `createIsolatedOwnedCenter()`의 leftover 정리 로직이 `payments`
+  테이블 FK를 몰라서, L이 `fulfill_order()`로 실제 `payments` 행을 만들게 되자(격리 전환
+  전에는 없던 경로) 이전 실행이 남긴 leftover 격리 센터의 `memberships` 삭제가
+  `payments_membership_id_fkey` 위반으로 실패 → 그 예외가 (파일 순서상 먼저 오는) F를
+  깨뜨렸다. `payments` 삭제 단계를 추가하고 L 자신도 만든 membership/payment를 자체
+  정리하도록 고쳤더니, **재실행에서 F가 이번엔 `center_members_center_id_fkey`로 또
+  크래시했다** — 다른 이전 실행이 남긴 leftover 격리 센터가 이번엔 다른 테이블(`center_members`,
+  아마 memberships INSERT 시 트리거로 자동 생성되는 회원 행)에 걸린 것. 두더지잡기 패턴 —
+  `payments`만 고쳐서는 근본 해결이 아니고, "이 센터/멤버십을 참조하는 모든 테이블"을
+  일반화해서 도는 stale-cleanup으로 다시 짜야 한다(이번 배치 범위 밖, 아래 완료 조건 참고).
 - **H(휴무일 케이스)/A~E/K/P: 격리 전환만으로 통과.** (단, 이 그룹은 원래도 느슨한 assertion
   이라 면역이었을 가능성과 우연이 섞여있어 확정적 결론은 아님.)
 - **H(예약마감 케이스)/M/N/O: 격리해도 여전히 실패.** 완전히 새로 만든 격리 센터(다른
