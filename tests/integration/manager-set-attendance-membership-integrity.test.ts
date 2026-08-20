@@ -13,6 +13,7 @@
 */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";
+import { fetchSettings, saveSettings, type CenterSettings } from "../../lib/settings";
 import {
   switchToTestUser,
   getOrCreateOwnedTestCenter,
@@ -32,6 +33,7 @@ let managerA: TestUser;
 let managerB: TestUser;
 let userB: TestUser;
 let centerAId: string;
+let originalSettings: CenterSettings;
 
 const cleanupClassIds: string[] = [];
 
@@ -118,6 +120,17 @@ beforeAll(async () => {
   managerB = await asManagerB();
   await getOrCreateOwnedTestCenter(managerB);
   userB = await asUserB();
+
+  // [P2-28 수정] makeWaitlistedReservation()이 waitlisted 예약을 만들려면 이 공유
+  // 테스트센터의 waitlist_weekly_limit이 0보다 커야 한다(reserve_class RPC가
+  // coalesce(waitlist_weekly_limit, 0) = 0이면 "이 센터는 대기예약을 사용하지 않아요"로
+  // 거부함, fix_class_deadline_overrides_same_day_toggle.sql 참고). 이 파일은 지금까지
+  // 이 값을 한 번도 명시적으로 설정한 적이 없어 다른 세션이 공유 센터의 이 값을
+  // 0으로 바꿔두면(또는 애초에 0인 채로 시작하면) ATT-SEC-B~E가 전부 실패했다.
+  // 매 테스트가 만드는 waitlisted 예약이 한 자리씩 차지하므로 넉넉히 999로 설정.
+  await asManagerA();
+  originalSettings = await fetchSettings(centerAId);
+  await saveSettings(centerAId, { ...originalSettings, waitlistWeeklyLimit: 999 });
 }, 60000);
 
 afterAll(async () => {
@@ -126,6 +139,7 @@ afterAll(async () => {
   for (const classId of cleanupClassIds) {
     try { await cleanupTestClassAdmin(classId); } catch (e: any) { errors.push(e.message); }
   }
+  try { await saveSettings(centerAId, originalSettings); } catch (e: any) { errors.push(e.message); }
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 30000);
 

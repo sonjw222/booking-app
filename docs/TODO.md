@@ -1398,6 +1398,11 @@ BEGIN/COMMIT 트랜잭션) 실행 → 검증(C)에서 `remaining_target_classes=
 - **PR #56**(P1-13 pay_methods/review_point 추가 보호): E2E에서 `daily-book-limit.spec.ts`
   실패 1건 + `attendance.spec.ts` flaky 1건(재시도로 복구) — 둘 다 이 PR과 무관한 파일로
   확인했으나, E2E 게이팅 때문에 Unit/Integration/Build는 아예 안 돌고 스킵된 채로 merge됨.
+- **PR #63 merge 직후 main push run(2026-08-19, run 32267575685)**: `npx playwright install
+  --with-deps chromium` 단계가 멈춰(같은 날 다른 두 run은 이 단계가 22초~1분37초, 이번엔
+  20분+) 2026-08-14/15 사고 대응으로 넣어둔 `timeout-minutes: 20`(PR #59)이 정확히 의도대로
+  작동해 자동 cancel됨 — 워크플로 파일 변경 없음, 그 순간의 러너/네트워크 일시 문제로 추정.
+  이번에도 E2E 게이팅으로 Unit/Integration/Build가 스킵된 채 끝나 PR #56과 같은 패턴 반복.
 
 셋 다 "실패 내역이 변경된 코드와 무관함"은 개별적으로 확인하고 merge했지만, Unit/Integration/
 Build까지 실제로 통과하는지는 아직 한 번도 끝까지 확인 못 했다. `main`이 안정된 시점에 한
@@ -1475,13 +1480,21 @@ timeout까지 그대로 멈춰 있다가 `cancelled`로 종료됨(run `322666353
   중이라 이 배치에서 중복 수정하지 않음 — P1-12가 same_day_change를 실제로 wiring하면 그때
   AUTO-SEC-N도 같이 재검증할 것.
 
-### P2-26. (2026-08-20, 정리 완료) `class-trainer-display.spec.ts` E2E 3건 실패 — `leads.test.ts`(P1-8) leftover 스태프가 원인
+### P2-26. (2026-08-20, 정리 완료 — 같은 날 재발도 정리 완료) `class-trainer-display.spec.ts` E2E 실패 — `leads.test.ts`(P1-8) leftover 스태프가 원인
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 (테스트 fixture leftover — 앱 로직 버그 아님) |
-| 현재 상태 | **완료 — leftover 정리 SQL 적용** |
-| 근거 파일 | `tests/e2e/reservation/class-trainer-display.spec.ts`, `tests/integration/leads.test.ts`(P1-8), `cleanup_leftover_leads_test_staff_role.sql` |
+| 현재 상태 | **완료 — leftover 정리 SQL 적용(2회, 재발 방지책은 아직 없음)** |
+| 근거 파일 | `tests/e2e/reservation/class-trainer-display.spec.ts`, `tests/integration/leads.test.ts`(P1-8), `cleanup_leftover_leads_test_staff_role.sql`, `cleanup_leftover_leads_test_staff_role_2.sql`(2차) |
+
+**2026-08-20 재발**: PR #68 workflow_dispatch run `32405557536`에서 같은 증상(E2E 6건,
+strict mode violation)이 다시 발생 — 오늘 이 저장소 전체에서 Integration job 20분
+타임아웃/취소가 여러 번(PR #67 2회, P2-24 등) 반복되며 `leads.test.ts`의 `afterAll`이 또
+못 돌았기 때문. `cleanup_leftover_leads_test_staff_role_2.sql`로 정리(하드코딩 UUID 대신
+`center_id`+역할명으로 특정 — 어떤 실행이 남긴 leftover든 재사용 가능). 아래 "남은 근본
+위험"에 적어둔 근본 원인(모든 테스트 계정이 동일한 이름 사용)을 고치지 않는 한 CI가
+타임아웃/취소를 겪을 때마다 계속 재발할 수 있다.
 
 P2-25 조사 중 PR #66과 `main`(PR #53 병합 직후 push, run `32290229997`) 양쪽에서 E2E가
 `locator('.class-trainers-list .filter-chip').filter({ hasText: '통합테스트계정' })
@@ -1501,6 +1514,80 @@ CI job 20분 타임아웃으로 강제종료되며 `afterAll`이 못 돌아 그 
 포함시키거나 (b) `assignTrainerViaUi`가 이름 대신 account_id 등으로 특정 강사를 지목하는
 방식으로 바꿔야 하는데, 둘 다 이 저장소의 여러 통합/E2E 테스트 파일에 걸친 광범위한
 변경이라 사용자 승인 없이 진행하지 않음.
+
+### P2-27. (2026-08-20, 완료) Integration job `timeout-minutes: 20`이 정상 실행도 잘라 PR #66/#67 모두 cancelled
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **완료.** `timeout-minutes`를 20 → 35로 상향. |
+| 근거 파일 | `.github/workflows/test.yml`(integration job) |
+| 완료 조건 | ~~정상 Integration 실행이 잘리지 않을 만큼 여유를 두고, 진짜 멈춘 job이 전역 큐를 장시간 막는 위험(2026-08-14/15 사고, timeout 자체를 넣은 이유)은 유지~~ 완료. |
+
+PR #66, #67 모두 Integration이 19분대에 `conclusion: cancelled`로 끝났다 — 실패가 아니라
+`timeout-minutes: 20` 도달. 통합 테스트 스위트가 여러 세션이 계속 테스트를 추가하며 자라
+정상 실행도 20분 근처(과거 timeout 없던 시절 기록은 30~34분)에 걸리게 됐다. P2-26에서 이미
+같은 매커니즘(20분 타임아웃으로 `afterAll` 정리 로직이 못 돌아 leftover fixture가 남음)이
+실제 버그를 만든 사례가 있어 근거로 삼음.
+
+**timeout 자체를 없애지는 않음**: 이 값은 원래 2026-08-14/15에 진짜 멈춘 job이 GitHub 기본
+360분 제한까지 전역 concurrency 큐(`shared-live-supabase-tests`, 저장소 전체 고정 그룹) 전체를
+몇 시간~하루 넘게 막았던 사고 대응으로 추가된 것(E2E job 주석 참고, 오늘 관측한
+`npx playwright install` 20분 멈춤도 이 안전장치 덕에 자동 정리됨 — P2-24). 없애면 그 사고가
+재발할 위험이 있어, 대신 정상 실행 시간에 여유를 더 두는 쪽으로 조정.
+
+### P2-28. (2026-08-20, 부분 완료 — H/M/N/O 근본 원인 미해결, F는 간헐적) PR #68 Integration 재현 실패 11건 — waitlist 설정 미보장은 해결, 공유 센터 스캔 오염 진단은 일부 틀림
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 (테스트 코드/fixture 문제로 추정 — 앱 로직 버그 가능성 배제 못 함) |
+| 현재 상태 | **부분 완료.** ATT-SEC-B/C/D/E(waitlist)는 완전히 해결(재실행 4/4 통과 확인). **AUTO-SEC-H(예약마감 케이스)/M/N/O는 격리 센터로 옮겨도 여전히 실패 — 원래 진단(공유 센터 스캔 오염)이 이 4건에는 틀렸다는 뜻이라 재조사 필요.** F/L은 `createIsolatedOwnedCenter()`의 stale-cleanup이 매번 다른 테이블 FK(`payments` → `center_members`, 두더지잡기)로 크래시해 간헐적 — `payments`는 이번에 고쳤지만 `center_members` 등 다른 테이블이 더 있을 수 있어 근본적으로는 stale-cleanup을 "이 센터를 참조하는 모든 테이블"을 일반화해서 도는 방식으로 다시 짜야 한다(이번 배치 범위 밖). PR #68 자체는 문서 전용 변경이라 이 미해결 실패와 무관하다고 보고 merge 진행. |
+| 근거 파일 | `tests/integration/auto-book-membership-security.test.ts`, `tests/integration/manager-set-attendance-membership-integrity.test.ts`, `lib/settings.ts` |
+
+PR #68(문서 전용 변경) CI에서 Integration 11건 실패(`auto-book-membership-security.test.ts`
+F/H×2/L/M/N/O 7건 + `manager-set-attendance-membership-integrity.test.ts` ATT-SEC-B/C/D/E
+4건) — PR #68 diff와는 무관해 원인 규명 시도.
+
+**ATT-SEC-B/C/D/E(4건, 해결 확인됨)**: `makeWaitlistedReservation()`이 두 번째
+`reserve_class()` 호출에서 `"이 센터는 대기예약을 사용하지 않아요"`로 거부됐다 —
+`reserve_class()`는 `coalesce(waitlist_weekly_limit, 0) = 0`이면 이 에러를 던지는데, 이
+파일은 그 값을 한 번도 명시적으로 설정한 적이 없었다. `beforeAll`/`afterAll`에 명시적
+설정/원복 추가 — 재실행에서 4/4 모두 통과 확인.
+
+**F/H/L/M/N/O(원래 진단·부분적으로 틀림)**: 처음엔 P2-25의 K/M 진단과 같은 메커니즘
+(공유 센터의 다른 클래스가 `auto_book_membership()` 스캔에 섞임)이라고 판단해 전부 격리
+센터로 전환했다. 하지만 `auto_book_membership()`의 실제 SQL(`fix_auto_book_membership_idor_
+draft_proposed.sql`, Live 적용 확인됨)을 직접 읽어보니 `where c.center_id = v_mem.center_id`로
+이미 명확히 센터 단위로 스코프돼 있어, 다른 센터의 클래스가 섞일 방법이 SQL 레벨에는 없다.
+격리 전환 후 재실행 결과:
+- **F/L: 간헐적 — 근본 해결 아님.** 실패 원인은 애초에 스캔 오염이 아니라 격리 전환 자체가
+  새로 만든 버그였다 — `createIsolatedOwnedCenter()`의 leftover 정리 로직이 `payments`
+  테이블 FK를 몰라서, L이 `fulfill_order()`로 실제 `payments` 행을 만들게 되자(격리 전환
+  전에는 없던 경로) 이전 실행이 남긴 leftover 격리 센터의 `memberships` 삭제가
+  `payments_membership_id_fkey` 위반으로 실패 → 그 예외가 (파일 순서상 먼저 오는) F를
+  깨뜨렸다. `payments` 삭제 단계를 추가하고 L 자신도 만든 membership/payment를 자체
+  정리하도록 고쳤더니, **재실행에서 F가 이번엔 `center_members_center_id_fkey`로 또
+  크래시했다** — 다른 이전 실행이 남긴 leftover 격리 센터가 이번엔 다른 테이블(`center_members`,
+  아마 memberships INSERT 시 트리거로 자동 생성되는 회원 행)에 걸린 것. 두더지잡기 패턴 —
+  `payments`만 고쳐서는 근본 해결이 아니고, "이 센터/멤버십을 참조하는 모든 테이블"을
+  일반화해서 도는 stale-cleanup으로 다시 짜야 한다(이번 배치 범위 밖, 아래 완료 조건 참고).
+- **H(휴무일 케이스)/A~E/K/P: 격리 전환만으로 통과.** (단, 이 그룹은 원래도 느슨한 assertion
+  이라 면역이었을 가능성과 우연이 섞여있어 확정적 결론은 아님.)
+- **H(예약마감 케이스)/M/N/O: 격리해도 여전히 실패.** 완전히 새로 만든 격리 센터(다른
+  테스트와 클래스 공유 불가능)에서도 `booked` 기대치가 틀린다는 건, 스캔 오염이 아닌
+  **다른 원인**(예: `calc_deadline`/`booking_deadline_min` 타이밍 로직 자체의 문제, 또는
+  테스트 코드의 시간 계산 버그)이라는 뜻 — 원래 진단이 이 4건에는 맞지 않았다. 근본 원인
+  미상. 라이브 DB 직접 조사(서비스 롤 키 필요, 이 세션엔 없음)가 필요해 이번 배치에서는
+  더 파지 않고 기록만 남김.
+
+**ATT-SEC-B/C/D/E(4건)**: 원인이 달랐다. `makeWaitlistedReservation()`이 두 번째
+`reserve_class()` 호출(정원 찬 수업에 대기로 밀려나는 예약)에서 `"이 센터는 대기예약을
+사용하지 않아요"`로 거부됐다 — `fix_class_deadline_overrides_same_day_toggle.sql`의
+`reserve_class()`를 보면 `coalesce(waitlist_weekly_limit, 0) = 0`이면 이 에러를 던진다.
+이 테스트 파일은 처음부터 `waitlist_weekly_limit`을 **단 한 번도 명시적으로 설정한 적이
+없었다** — 공유 센터의 그 값이 우연히 0이 아닌 동안만 통과해온 것. `beforeAll`에서
+`fetchSettings`/`saveSettings`로 명시적으로 999를 설정하고 `afterAll`에서 원복하도록 추가
+(N/O가 이미 쓰던 것과 같은 패턴).
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
 

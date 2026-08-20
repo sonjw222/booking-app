@@ -8,6 +8,97 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-20 — P2-28 재검증: `payments` 고쳤더니 `center_members`에서 또 크래시(두더지잡기), ATT-SEC만 확정 해결
+
+`payments` FK 수정 후 재실행 결과 11→4건 실패로 줄었지만, AUTO-SEC-F가 이번엔
+`center_members_center_id_fkey`로 또 크래시했다 — 다른 이전 실행이 남긴 leftover 격리
+센터가 이번엔 `payments`가 아닌 다른 테이블에 걸린 것. `createIsolatedOwnedCenter()`의
+stale-cleanup을 테이블별로 하나씩 대응하는 지금 방식으로는 근본 해결이 안 된다는 뜻 —
+"이 센터/멤버십을 참조하는 모든 테이블"을 일반화해서 도는 방식으로 다시 짜야 하는데, 이건
+이번 배치 범위를 넘어서 P2-28에 남겨두고 중단. 확정적으로 해결됐다고 볼 수 있는 건
+ATT-SEC-B/C/D/E(waitlist 설정) 4건뿐이며, AUTO-SEC F/H/L/M/N/O 6건은 간헐적이거나
+원인 미상으로 남아있다. PR #68은 문서 전용 변경이라 이 잔여 실패와 무관하다고 보고 merge
+진행(사용자 승인, 반복 시행착오로 공유 CI/Supabase 자원을 더 쓰지 않기로 결정).
+
+## 2026-08-20 — P2-28 후속: payments FK 버그 수정, H/M/N/O는 원인 미상으로 재분류
+
+P2-28 수정을 재실행해보니 11건 실패가 5건으로 줄었지만(F/L/ATT-SEC 4건 해결), 격리 센터
+전환 자체가 새 버그를 만든 걸 발견 — `createIsolatedOwnedCenter()`의 leftover 정리가
+`payments` FK를 몰라서 AUTO-SEC-L이 실제 payments 행을 만들자 정리가 깨지고 그 예외가
+F를 함께 무너뜨렸다. stale-cleanup에 payments 삭제 단계 추가 + L 자신도 만든
+membership/payment를 자체 정리하도록 수정.
+
+더 중요한 발견: H(예약마감 케이스)/M/N/O는 완전히 새로운 격리 센터로 옮겼는데도 여전히
+실패한다 — `auto_book_membership()` SQL을 직접 읽어보니 이미 `center_id`로 스코프돼 있어
+"공유 센터 오염"이라는 원래 진단이 이 4건에는 맞지 않았다는 뜻. 라이브 DB 조사 없이는 더
+못 파므로 P2-28에 원인 미상으로 기록만 남기고, PR #68은 문서 전용 변경이라 이 잔여 실패와
+무관하다고 보고 merge 진행(사용자 승인).
+
+## 2026-08-20 — P2-26 재발 정리: `leads.test.ts` leftover 스태프 2차 발생
+
+PR #68 검증 재실행 중 P2-26과 동일한 E2E 실패(class-trainer-display.spec.ts strict mode
+violation)가 다시 발생 — 오늘 반복된 Integration job 타임아웃/취소로 `leads.test.ts`의
+`afterAll`이 또 못 돌아 leftover 스태프가 재생성됐다. `cleanup_leftover_leads_test_staff_role_2.sql`
+적용(사용자 실행 완료). 이번엔 하드코딩 UUID 대신 `center_id`+역할명으로 대상을 특정해
+앞으로 같은 패턴이 재발해도 재사용 가능하게 작성. 근본 재발 방지책(테스트 계정 이름 고유화
+등)은 P2-26에 남겨둔 대로 이번 배치 범위 밖.
+
+## 2026-08-20 — P2-28: PR #68 Integration 실패 11건 근본 원인 수정(공유 센터 스캔 오염 + waitlist 설정 누락)
+
+문서 전용 PR #68의 Integration이 11건 실패해 조사 — PR diff와 무관함을 확인 후 두 가지
+근본 원인을 찾아 수정했다.
+
+`auto-book-membership-security.test.ts`의 AUTO-SEC-F/H×2/L/M/N/O(7건)는 P2-25가 K/M에서
+이미 짚은 것과 같은 메커니즘: 공유 테스트센터에서 `booked=0`(또는 정확한 소수)을 기대하는데
+`auto_book_membership()`이 다른 파일/세션이 그 센터에 동시에 남긴 클래스까지 스캔한다.
+AUTO-SEC-G가 이미 같은 이유로 격리 센터를 쓰고 있어 그 패턴을 F/H/L/M/N/O에도 적용 —
+N/O가 쓰던 `center_settings` 원복 `finally` 블록도 격리 센터는 통째로 삭제되므로 함께 제거.
+
+`manager-set-attendance-membership-integrity.test.ts`의 ATT-SEC-B/C/D/E(4건)는 다른
+원인: `waitlisted` 예약을 만드는 `makeWaitlistedReservation()`이 "이 센터는 대기예약을
+사용하지 않아요"로 거부됐다 — `reserve_class()`는 `waitlist_weekly_limit`이 0이면 이
+에러를 던지는데, 이 파일은 그 값을 한 번도 명시적으로 설정한 적이 없어 공유 센터의 값이
+우연히 0이 아닌 동안만 통과해온 것이었다. `beforeAll`/`afterAll`에 명시적 설정/원복 추가.
+
+상세는 `docs/TODO.md` P2-28 참고.
+
+## 2026-08-20 — P2-27: CI Integration job timeout 20분 → 35분 상향
+
+PR #66/#67의 Integration job이 둘 다 19분대에 `cancelled`로 끝나는 걸 발견 — 실패가 아니라
+`timeout-minutes: 20`에 걸린 것. 통합 테스트 스위트가 계속 자라 정상 실행도 20분에
+빠듯해졌다(과거 timeout 없던 시절 기록은 30~34분). timeout 자체는 2026-08-14/15 사고
+(멈춘 job이 전역 CI 큐를 몇 시간씩 막음) 재발을 막는 안전장치라 없애지 않고, 정상 실행
+시간에 맞춰 35분으로 상향. P2-26에서 이 20분 컷오프가 `afterAll` 정리 실패로 이어져 실제
+leftover 버그를 만든 사례가 이미 있어 근거로 삼음.
+
+## 2026-08-20 — P1-18 계정 탈퇴 정책 Live 적용 확인 + 자동 통합테스트 추가
+
+사용자가 `fix_account_deletion_real_anonymization.sql`을 SQL Editor에서 실행(소급 대상 1건
+익명화 + `auth.users` 삭제)하고 `supabase functions deploy delete-account`로 재배포(버전
+8→9). 라이브 재조회(`accounts`/`profiles`/`auth.users` 3개 테이블 직접 확인)로 반영 확인.
+이어서 `tests/integration/account-deletion-anonymization.test.ts` 신규 작성 — service_role로
+전용 임시 계정(본인+자녀 프로필)을 만들어 배포된 `delete-account`를 실제로 호출하고,
+accounts/profiles 8개 필드 익명화 + `auth.users` 실제 삭제(밴 아님) + 같은 이메일 즉시
+재가입까지 왕복 자동 검증. 1/1 통과, 테스트 데이터는 `afterAll`에서 정리하고 라이브
+재조회로 leftover 0건 확인. `npm run build`/`tsc --noEmit` 통과.
+
+## 2026-08-19 — P1-18 계정 탈퇴 정책 변경: 소프트 비활성화 → 실제 개인정보 익명화+삭제 (P0 재분류, SQL/배포 사용자 적용 대기)
+
+기존 탈퇴(`add_account_deactivation.sql`)는 `accounts.deactivated_at`을 채우고
+`auth.users`를 100년 밴하는 방식이라 로그인만 막힐 뿐 이름/전화번호/이메일 등 개인정보는
+DB에 그대로 남아있었음 — Apple/Google 계정 삭제 가이드라인 위반 소지로 P0 재분류.
+`supabase/functions/delete-account/index.ts` 재작성: 호출자 본인의 `accounts`/`profiles`
+(가족 프로필 포함) 개인정보를 익명값으로 덮어쓰고, `auth.users` 행을 밴이 아니라 실제
+삭제(`admin.auth.admin.deleteUser`)해 사용자 결정(재가입 허용)에 맞게 이메일/전화번호/
+소셜 계정을 즉시 풀어줌. `reservations`/`orders`/`payments`/`memberships`는 전자상거래법
+보관 의무 및 CLAUDE.md 규칙 3에 따라 그대로 유지(익명화된 accounts/profiles를 통해서만
+"탈퇴한 회원"으로 노출). 이미 탈퇴한 기존 1건에 새 정책을 소급 적용하는
+`fix_account_deletion_real_anonymization.sql`(+ rollback, 비가역 명시) 신규 작성 — FK
+안전성 사전 확인(`accounts.auth_id` FK 없음, `auth` 스키마 내부 테이블은 전부
+`ON DELETE CASCADE`). `app/settings/account/page.tsx` 탈퇴 안내 문구를 새 정책에 맞춰
+수정. `npm run build` 통과 확인. **아직 SQL 미적용·Edge Function 미배포** — 사용자가
+SQL Editor 실행 + `supabase functions deploy delete-account` 실행해야 반영됨.
+
 ## 2026-08-20 — P2-25: AUTO-SEC-L/O 테스트 코드 버그 수정, K/M/N 원인 규명(앱 로직 정상)
 
 PR #53 CI 재트리거 중 `auto-book-membership-security.test.ts`의 AUTO-SEC-K/L/M/N/O 5개가
@@ -44,6 +135,16 @@ PR #53 CI 재트리거 중 `auto-book-membership-security.test.ts`의 AUTO-SEC-K
 `/login` 200 응답까지 실행 확인 후 삭제. `docs/DEVELOPMENT_RULES.md` 11절이 "현재
 `.env.local.example`은 없다"고 적어둔 부분과 클라이언트 키를 2개로만 적어둔 부분(실제로는
 7개)도 함께 최신화했다.
+
+## 2026-08-19 — P2-23에 CI 멈춤 사례 1건 추가 기록(PR #63 merge 직후 main push run)
+
+PR #63 merge로 트리거된 main push CI(run `32267575685`)에서 `npx playwright install
+--with-deps chromium` 단계가 20분 넘게 멈췄다. 같은 날 다른 두 run에서는 이 단계가
+22초~1분37초에 끝났고 워크플로 파일 자체도 최근 변경이 없어, 그 순간의 GitHub 러너/네트워크
+일시 문제로 판단 — 2026-08-14/15 사고 대응으로 이미 넣어둔 `timeout-minutes: 20`(PR #59)이
+설계대로 작동해 자동 cancel되며 전역 CI 큐가 풀렸다. E2E 게이팅 때문에 이번에도
+Unit/Integration/Build가 스킵된 채 끝나 PR #56과 같은 패턴이라, `docs/TODO.md` P2-23(최근
+merge PR들 CI 완전 그린 재검증 필요) 목록에 함께 기록만 하고 별도 조치는 하지 않음.
 
 ## 2026-08-19 — P2-13 PR #63 CI 결과 확인: 신규 RLS 테스트 통과, 무관한 실패 17건은 공유 테스트센터 경합
 
