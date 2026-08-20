@@ -20,6 +20,7 @@ export type ClassInfo = {
   id: string;
   centerId: string;
   title: string;
+  description: string | null; // 수업 소개 (목록에는 안 보이고 예약 상세에서만 표시)
   date: string; // "2026-07-14"
   start: string; // "07:10"
   end: string;
@@ -132,7 +133,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data: page, error: clsErr } = await supabase
         .from("classes")
-        .select("id, center_id, title, start_time, end_time, capacity, allow_goods, class_format, centers(id, name, categories)")
+        .select("id, center_id, title, description, start_time, end_time, capacity, allow_goods, class_format, centers(id, name, categories)")
         .in("center_id", membershipCenterIds)
         .gte("start_time", startUtcIso)
         .lt("start_time", endUtcIso)
@@ -270,6 +271,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
       id: c.id,
       centerId: c.center_id,
       title: c.title,
+      description: c.description ?? null,
       date: toDateStr(c.start_time),
       start: toTimeStr(c.start_time),
       end: toTimeStr(c.end_time),

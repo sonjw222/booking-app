@@ -248,6 +248,78 @@ export async function fetchFullHistory(): Promise<FullHistoryItem[]> {
 }
 
 /* ============================================================
+   포인트 내역 (P1-1) — point_transactions가 통합 원장(add_point_ledger_unification.sql)
+   ============================================================ */
+
+export type PointHistoryItem = {
+  id: string;
+  centerName: string;
+  amount: number;      // 적립 +, 사용 -
+  reason: string | null;
+  date: string;         // "2026-08-18"
+  timeText: string;      // "19:30"
+  profileName: string;
+};
+
+export async function fetchMyPointHistory(): Promise<PointHistoryItem[]> {
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData.user) return [];
+  const { data: acc } = await supabase
+    .from("accounts").select("id").eq("auth_id", authData.user.id).maybeSingle();
+  if (!acc) return [];
+
+  const { data: profRows } = await supabase
+    .from("profiles").select("id, name, label, is_primary").eq("account_id", acc.id);
+  const profiles = profRows ?? [];
+  const profileIds = profiles.map((p: any) => p.id);
+  const profileLabel: Record<string, string> = {};
+  for (const p of profiles) {
+    profileLabel[(p as any).id] = (p as any).is_primary
+      ? ""
+      : ((p as any).label ? `${(p as any).name} · ${(p as any).label}` : (p as any).name);
+  }
+  if (profileIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("point_transactions")
+    .select("id, profile_id, center_id, amount, reason, created_at, centers(name)")
+    .in("profile_id", profileIds)
+    .order("created_at", { ascending: false })
+    .limit(300);
+  if (error) throw new Error("포인트 내역을 불러오지 못했어요: " + error.message);
+  const rows = data ?? [];
+
+  // 운영설정 "회원앱 포인트 내역 조회" — 센터마다 다를 수 있어 등장한 센터들만 조회하고,
+  // false인 센터의 내역은 화면에서 제외한다(값이 없으면 기본 true와 동일하게 표시).
+  const centerIds = Array.from(new Set(rows.map((r: any) => r.center_id)));
+  const showHistoryByCenter: Record<string, boolean> = {};
+  if (centerIds.length > 0) {
+    const { data: settingsRows } = await supabase
+      .from("center_settings")
+      .select("center_id, show_point_history")
+      .in("center_id", centerIds);
+    for (const s of settingsRows ?? []) {
+      showHistoryByCenter[(s as any).center_id] = (s as any).show_point_history ?? true;
+    }
+  }
+
+  return rows
+    .filter((r: any) => showHistoryByCenter[r.center_id] ?? true)
+    .map((r: any) => {
+      const dt = new Date(r.created_at);
+      return {
+        id: r.id,
+        centerName: r.centers?.name ?? "",
+        amount: r.amount,
+        reason: r.reason,
+        date: KST_DATE_ONLY.format(dt),
+        timeText: KST_TIME.format(dt),
+        profileName: profileLabel[r.profile_id] ?? "",
+      };
+    });
+}
+
+/* ============================================================
    예약 캘린더용 데이터 + 개인 메모
    ============================================================ */
 

@@ -199,6 +199,18 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 권한 키를 재사용하고 있어, 세분권한 도입 시 의미가 부정확할 수 있습니다(이것도 SQL 필요) —
 이 부수 발견은 아직 미해결로 남아있습니다(위 "확인 경위" 참고, 핵심 버그만 NOTIF-001에서
 같이 해결됨).
+### P0-7. (신규, 2026-08-14~15 관측) 공유 dev Supabase 통합/E2E fixture 데이터가 반복적으로 오염됨 — 원인 미확인
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **확인 필요 — 재현은 반복 확인됐으나 근본 원인 미확정** |
+| 근거 파일 | `tests/integration/setup.ts`(`TEST_CENTER_ID`, `getOrCreateOwnedTestCenter()`), `tests/integration/operational-settings-wiring.test.ts`, `tests/integration/auto-book-membership-security.test.ts` |
+| 관측된 증상 | 공유 fixture 센터(`3937eb89-3803-43e9-9a29-e893f779df1a`, `TEST_CENTER_ID`)의 `center_settings.daily_book_limit_enabled`가 반복적으로 `true(1회)`로 남아, 이 설정과 전혀 무관한 다수 테스트 파일(`attendance-policy`, `auto-book-membership-security`, `class-deadline-override-and-private`, `notification-center-isolation`, `operational-settings-wiring`, `reservation-cancel-grace-period` 등)이 연쇄적으로 실패함. 2026-08-14 하루에만 사용자가 직접 `false/null`로 리셋했는데도 짧은 시간 내 다시 `true`로 재발(최소 2회 관측). |
+| 조사한 것과 배제한 가설 | (1) `manager_centers.role_id`/`center_id` 불일치 트리거(`manager_centers_enforce_role_center_match`)가 원인이라는 가설 — 다른 세션(PR #50 담당)이 두 시점에 직접 조회해 **role_id/center_id가 정상 매칭임을 확인, 배제됨**. (2) Integration 실패 로그에 반복되던 `P0001` 에러코드로 특정 트리거를 지목하려 했으나, 이 코드베이스에 커스텀 `RAISE EXCEPTION`이 광범위하게 쓰여 P0001만으로는 특정 원인을 지목할 수 없음(오판이었음, 기록으로 남김). |
+| 유력하지만 미확인 가설 | 어떤 통합 테스트가 `center_settings`(daily_book_limit 등)를 일시적으로 변경했다가 자기 테스트 안에서 assertion 실패 등으로 **cleanup(원상복구) 이전에 조기 종료**되면서 값이 켜진 채로 남는 패턴으로 추정됨. 2026-08-14/15 동안 여러 세션이 동시에 같은 `TEST_CENTER_ID`를 공유해서 테스트를 돌린 것도 재발 빈도에 영향을 줬을 가능성 있음(`feedback_ci_one_at_a_time`류 동시성 문제와 별개 축). |
+| 완료 조건 | (a) `center_settings`를 변경하는 통합 테스트 전체(`operational-settings-wiring.test.ts` 등)를 감사해 실패 시에도 반드시 원상복구가 실행되는지(`try/finally` 또는 `afterEach`) 확인·보강. (b) 근본적으로는 공유 고정 `TEST_CENTER_ID` 대신 테스트마다 격리된 센터를 쓰는 방향(`getOrCreateOwnedTestCenter()` 패턴 확대)도 검토. |
+| 참고 | 여러 세션이 동시에 CI를 돌려 생기는 오염(간헐적 flaky, 재실행하면 대부분 해소)과는 별개 축의 문제 — 이건 재실행해도 계속 재발하는 게 특징 |
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
@@ -207,8 +219,8 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **완료.** point_transactions로 통합, 사용자가 SQL Editor에서 적용 완료(기존 point_accounts 잔액 2건이 point_transactions로 이관된 것을 직접 재조회로 확인). |
-| 근거 파일 | `lib/sales.ts`, `lib/reviews.ts`, `add_sales.sql`, `add_reviews_points.sql`, `add_point_ledger_unification.sql`(신규); `point_transactions`, `point_accounts`, `point_logs` |
+| 현재 상태 | **완료.** point_transactions로 통합, 사용자가 SQL Editor에서 적용 완료(기존 point_accounts 잔액 2건이 point_transactions로 이관된 것을 직접 재조회로 확인) + 회원용 포인트 내역 화면 추가. |
+| 근거 파일 | `lib/sales.ts`, `lib/reviews.ts`, `lib/mypage.ts`, `add_sales.sql`, `add_reviews_points.sql`, `add_point_ledger_unification.sql`, `app/mypage/points/page.tsx`(신규), `app/mypage/page.tsx`; `point_transactions`, `point_accounts`, `point_logs`, `center_settings.show_point_history` |
 | 관련 문서 | [REQUIREMENTS 6-3, 10-4](./REQUIREMENTS.md), [DATABASE 4-3, 7-3](./DATABASE.md) |
 
 2026-08-15 사용자 결정: `point_transactions`(매니저 매출 화면이 쓰던 원장, `sum(amount)`
@@ -220,8 +232,15 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 `point_accounts` 단일 행을 `for update`로 잠그던 동시성 보호가 순수 원장 구조에선 안 되므로
 `use_points()`에서 `profiles` 행을 `for update`로 잠가 같은 회원의 동시 사용 요청을 직렬화.
 `lib/reviews.ts`의 `fetchMyPoints`/`fetchAllMyPoints`가 새 RPC를 쓰도록 수정, `npm run build`
-통과. 회원 화면에 포인트 잔액을 실제로 노출하는 UI는 이번 범위 밖(원장 통합만, 새 화면 추가는
-별도 요청 시).
+통과.
+
+**후속(같은 P1-1 범위로 통합, 신규)**: 그동안 죽어있던 운영설정 `show_point_history`("회원앱
+포인트 내역 조회")를 실제로 연결하는 회원용 "포인트 내역" 화면을 새로 추가함
+(`app/mypage/points/page.tsx`, `lib/mypage.ts`의 `fetchMyPointHistory()`). `point_transactions`는
+이미 회원 본인 행 SELECT가 RLS로 허용돼 있어(`add_sales.sql`의 "포인트 조회" 정책) 새 RPC 없이
+직접 조회. 계정의 모든 프로필(가족 구성원) 내역을 함께 보여주고 `profileName` 태그로 구분,
+`center_settings.show_point_history`가 꺼진 센터의 내역은 목록에서 제외. `app/mypage/page.tsx`
+"내 정보" 섹션에 진입 메뉴 추가. `npm run build` 통과. SQL 변경 없음(기존 RLS만 사용).
 
 ### P1-2. (2026-08-14, 완료) 미발급 주문 취소와 환불 정책 설정
 
@@ -854,12 +873,14 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 
 ### P2-17. (신규) 실브라우저 QA 재검증에서 발견한 항목
 
-- **`calc_deadline()`의 `'open'` kind 미처리(P1급, 수정 SQL 준비됨)**: `reserve_class()`가
-  "예약 오픈 시점" 체크를 `calc_deadline(...,'open')`로 호출하지만, 함수 본문은 `'book'`/그 외
-  (취소) 두 갈래로만 분기해 관리자가 저장한 `group_open_days_before/time`·
-  `private_open_days_before/time`이 무시되고 취소 마감 설정이 대신 쓰이고 있었다.
-  `fix_calc_deadline_open_kind_draft_proposed.sql`로 수정 준비됨(승인 대기). 이전 배치 문서의
-  "C-2 정상 배선" 결론은 이 항목에 한해 **틀렸음** — 함수 실제 정의를 재확인하지 않은 오판.
+- **(2026-08-14, 완료 확인 — 문서만 정정) `calc_deadline()`의 `'open'` kind 미처리**: 이 문서는
+  `fix_calc_deadline_open_kind_draft_proposed.sql`이 "승인 대기"라고 기록하고 있었으나,
+  2026-08-14 사용자가 `select pg_get_functiondef('calc_deadline(uuid,text,timestamptz,text)'::regprocedure);`로
+  라이브 함수 본문을 직접 확인한 결과 **이미 `elsif p_kind = 'open' then ...` 분기가 정확히
+  그 draft 파일과 동일하게 적용돼 있었음** — P2-21 항목이 `operational-settings-wiring.test.ts`
+  통과로 간접 확인한 것과도 일치하는 결과, 이번엔 `pg_get_functiondef`로 직접 재확인. draft SQL은 실행 불필요(실행해도 내용이 같아
+  무해하지만 불필요). 이전 배치 문서의 "C-2 정상 배선" 결론이 이 항목에 한해 최초엔
+  틀렸었다는 점(함수 실제 정의를 재확인하지 않은 오판)은 기록으로 남긴다.
 - **(해결됨, 2026-08-03 Track 4) `show_group_reserved_count`**: `lib/reservations.ts`가
   `center_settings`를 함께 조회하도록 확장해 `app/reservation/page.tsx`에서 실제로 인원수
   표시 여부를 제어하도록 구현 완료.
@@ -1310,15 +1331,15 @@ P2-20 조사 과정에서 발견됐지만 이번 배치 범위 밖이라 코드 
 | 2 | [TEST-004 #45](https://github.com/sonjw222/booking-app/issues/45) | `classes` 테이블 공유 테스트센터 오염(1000행 캡, 최소 914건) | **2026-08-11 완료** — 재진단 결과 실제로는 1761건까지 누적(22개 title_prefix 그룹, 최대 기여자: `admin-assignment-security.test.ts`의 "성공경로-*" 8종 ~812건, `diagnose-settings-live-values.test.ts`의 "DIAG 일일한도" 141건 등). `tests/integration/setup.ts`의 `getOrCreateOwnedTestCenter()`에 self-healing sweep을 추가(start_time이 1시간 이상 과거인 class를 해당 테스트센터에서 자동 정리) — 사실상 모든 통합 테스트 파일이 이 함수를 beforeAll에서 호출하므로 파일마다 정리 로직을 따로 만들지 않고 스위트 전체가 자동으로 self-healing된다. 별도로 `diagnose-settings-live-values.test.ts`(RLS 기반 `cleanupTestClass` 사용 — confirmed 상태 예약의 delete가 조용히 실패해 **매 실행 결정적으로 leak**하던 실제 원인 발견)를 `daily-book-limit-wiring.test.ts`로 정리(당일예약 describe는 `operational-settings-wiring.test.ts`와 완전 중복이라 제거, 일일한도 describe는 admin 기반 cleanup으로 교체해 유지). 이미 쌓인 1761건은 별도 cleanup SQL 없이 CI 실행에서 sweep이 자동으로 정리함(모두 start_time이 이미 과거라 즉시 대상) — SQL 불필요. 전체 CI 2연속 Green으로 검증됨(run `31459078105`/`31460392240`) |
 | 3 | [TEST-003 #43](https://github.com/sonjw222/booking-app/issues/43) | `daily-book-limit.spec.ts` 잔여 CI 인프라 플레이키니스 | **2026-08-11 완료** — 실제 실패 로그(run `31393468107`)를 직접 조사해 "그냥 flaky"로 단정하지 않고 정확한 원인 추적: `app/reservation/page.tsx`의 `doReserve()`/`handleCancel()`이 RPC 성공 → 시트 닫힘 → `await load()`(전체 재조회) 순서로 동작해, 시트가 닫히는 시점과 `.class-row` 버튼이 "예약"↔"취소"로 갱신되는 시점 사이에 실제 간격이 있음을 확인. 이 파일은 예약/취소 왕복을 최대 9회 반복해 CI 부하 시 그 간격이 Playwright 기본 expect timeout(10초)을 넘기는 사례가 실측됨(첫 시도 실패 → 재시도 통과, 앱/RPC 버그 아님 — 예약 자체는 이미 성공한 뒤였음). 분류: CI 인프라/타이밍(app bug/test bug 아님). 수정: 정확히 이 버튼 상태 assert 5곳만 timeout을 20초로 늘림(무조건적인 전체 timeout 증가 아님, 진단된 병목에만 적용). 전체 CI 2연속 Green으로 검증됨(run `31459078105`/`31460392240`) |
 
-### P1-18. (2026-08-13, SQL 적용 + Edge Function 배포 완료 — 실제 탈퇴 왕복 수동 QA만 남음) 계정 탈퇴(소프트 삭제)
+### P1-18. (2026-08-20, 정책 변경 Live 적용 + 자동 통합테스트 확인 완료) 계정 탈퇴
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P1 |
-| 현재 상태 | **운영 반영 완료.** `add_account_deactivation.sql` 사용자가 SQL Editor에서 적용(`accounts.deactivated_at` 컬럼 생성을 REST API로 직접 재검증함) + `supabase functions deploy delete-account` 배포 완료(필요한 시크릿 `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` 전부 프로젝트 기본 제공값으로 이미 충족) |
-| 근거 파일 | `app/settings/account/page.tsx`, `lib/accountDeletion.ts`, `supabase/functions/delete-account/index.ts`, `add_account_deactivation.sql`, `docs/platform-spec/epics/EPIC_03_Authentication.md` AUTH-08 |
-| 이번 배치에서 한 것 | 사용자와 방식 확정(소프트 삭제 — 예약/주문/결제 등 기존 데이터는 지우지 않음). `accounts.deactivated_at` 컬럼 추가(RLS는 기존 "본인 계정 수정" 정책이 그대로 커버해 별도 정책 불필요). `delete-account` Edge Function이 호출자 본인 확인 후 `deactivated_at`을 채우고 `auth.users`를 밴(`ban_duration`)해 재로그인을 막음. `app/settings/account`에 탈퇴 UI 추가 — 이메일 계정은 현재 비밀번호 재인증, 소셜 계정은 확인 문구 입력(AUTH-08 "최근 재인증" 요구를 소셜 provider 재로그인 왕복까지는 이번 범위에서 구현하지 않음 — 아래 남은 작업 참고). 처리 성공 시 `signOut()` + `/login?withdrawn=1`로 안내. `npm run build` 통과 확인. |
-| 남은 작업 | (1) 소셜 로그인 계정의 진짜 재인증(현재는 확인 문구로 낮은 문턱만 둠) (2) 탈퇴 회원이 매니저 쪽 회원 검색/명단에 계속 노출되는지 등 후속 화면 영향 검토 (3) 실제 탈퇴 왕복 수동 QA(화면에서 끝까지 눌러서 재로그인 차단까지 확인) |
+| 우선순위 | P0 (Apple/Google 앱스토어 계정 삭제 가이드라인 대응 — 단순 비활성화만으로는 심사 통과 어려움) |
+| 현재 상태 | **운영 반영 완료 + 자동 검증 완료.** `fix_account_deletion_real_anonymization.sql`을 사용자가 SQL Editor에서 실행(기존 소급 대상 1건 익명화 + auth.users 삭제, 라이브 재조회로 확인), `supabase functions deploy delete-account`로 재배포 완료(버전 8→9 확인). 새로 작성한 통합테스트(`tests/integration/account-deletion-anonymization.test.ts`)가 배포된 Edge Function을 실제로 호출해 왕복 전체를 자동 검증, 통과. |
+| 근거 파일 | `app/settings/account/page.tsx`, `lib/accountDeletion.ts`, `supabase/functions/delete-account/index.ts`, `add_account_deactivation.sql`(기존), `fix_account_deletion_real_anonymization.sql`, `rollback_fix_account_deletion_real_anonymization.sql`, `tests/integration/account-deletion-anonymization.test.ts`(신규), `docs/platform-spec/epics/EPIC_03_Authentication.md` AUTH-08 |
+| 이번 배치에서 한 것 | 기존 방식(2026-08-13, `deactivated_at` + `auth.users` ban)은 로그인만 막을 뿐 이름/전화번호/이메일 등 개인정보가 그대로 DB에 남는 **소프트 삭제**였음 — Apple/Google 계정 삭제 가이드라인은 실제 삭제 또는 식별 불가 처리를 요구해 정책 상 P0 갭으로 재분류. 사용자 결정(2026-08-19): (1) 탈퇴 후 같은 전화번호/이메일/소셜 계정으로 **재가입 허용**, (2) 이미 탈퇴한 기존 계정에도 **새 정책 소급 적용**. `delete-account` Edge Function을 재작성해 `accounts`/`profiles`(가족 프로필 포함)의 이름/닉네임/전화번호/주소/아바타/메모/생년월일/라벨을 익명값으로 덮어쓰고, `auth.users` 행을 밴이 아니라 **실제 삭제**(`admin.auth.admin.deleteUser`)하도록 변경(FK 안전성 확인: `accounts.auth_id`는 FK 제약 없음, `auth` 스키마 내부 테이블은 전부 `ON DELETE CASCADE`). `reservations`/`orders`/`payments`/`memberships`는 CLAUDE.md 규칙 3 및 전자상거래법 보관 의무에 따라 그대로 유지 — 익명화된 accounts/profiles를 통해서만 "탈퇴한 회원"으로 보임. `center_members.app_email` 등 센터 자체 CRM 데이터는 범위 밖(우리 플랫폼 개인정보 아님)이라 건드리지 않음. `app/settings/account/page.tsx` 탈퇴 안내 문구를 새 정책(개인정보 삭제/식별불가, 재가입 가능)에 맞게 수정. **사용자가 SQL 실행 + Edge Function 재배포 완료 — 라이브 재조회로 accounts/profiles 익명화, auth.users 삭제(count=0) 직접 확인.** 이어서 자동 통합테스트 신규 작성: service_role로 전용 임시 계정(본인+자녀 프로필)을 만들고, 실제 배포된 `delete-account`를 호출해 (1) accounts/profiles 8개 필드 전부 익명화 (2) `auth.users` 실제 삭제(`getUserById` 404) (3) 같은 이메일로 즉시 재가입 성공까지 왕복 검증 — 실행 결과 1/1 통과, `afterAll`에서 테스트 데이터 전부 정리(라이브 재조회로 leftover 0건 확인). `npm run build` 통과 확인. |
+| 남은 작업 | (1) 소셜 로그인 계정의 진짜 재인증(현재는 확인 문구로 낮은 문턱만 둠) (2) 탈퇴 회원이 매니저 쪽 회원 검색/명단에 계속 노출되는지 등 후속 화면 영향 검토 (3) 실제 화면에서 손으로 눌러보는 수동 왕복 QA(자동테스트는 Edge Function을 직접 호출 — UI 클릭 흐름 자체는 아직 미확인) |
 | 관련 문서 | `docs/platform-spec/epics/EPIC_03_Authentication.md` AUTH-08 |
 
 ### P2-22. (신규, 2026-08-13 / 2026-08-14 leftover 정리 완료) `getOrCreateOwnedTestCenter()` self-healing sweep이 미래 시각 leftover class는 못 잡음 — AUTO-SEC-I 간헐 실패 원인
@@ -1386,6 +1407,105 @@ BEGIN/COMMIT 트랜잭션) 실행 → 검증(C)에서 `remaining_target_classes=
 셋 다 "실패 내역이 변경된 코드와 무관함"은 개별적으로 확인하고 merge했지만, Unit/Integration/
 Build까지 실제로 통과하는지는 아직 한 번도 끝까지 확인 못 했다. `main`이 안정된 시점에 한
 번에 몰아서 깨끗한 CI를 돌려 재확인할 것.
+
+### P2-24. (신규, 2026-08-19) `npx playwright install --with-deps chromium`이 무출력 상태로 20분 타임아웃까지 멈춤 — 3연속 재현
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 (CI 인프라 — 앱 코드 버그 아님, 하지만 검증 자체를 막음) |
+| 현재 상태 | **미해결 — 원인 미확인** |
+| 근거 파일 | `.github/workflows/test.yml`(e2e job, `timeout-minutes: 20`, 관련 배경 주석 참고) |
+| 완료 조건 | 재현 원인 파악(캐시 미설정 때문에 매번 풀 다운로드하는 게 원인인지, 러너/미러 문제인지) 후 안정화 또는 timeout-minutes 조정 |
+
+PR #53/#54/#64의 CI 재트리거 과정에서 `npx playwright install --with-deps chromium` 단계가
+**3번 연속** 아무 출력도 없이(`Downloading Chromium...` 같은 로그 한 줄도 안 찍힘) 20분 job
+timeout까지 그대로 멈춰 있다가 `cancelled`로 종료됨(run `32266635345`, `32266654000`, 재시도분
+포함). GitHub Actions 자체 상태 페이지는 "All Systems Operational"이라 플랫폼 전역 장애는
+아님. 기존에 이미 알려진 "job이 통째로 멈춰서 전역 concurrency 큐를 막는" 패턴
+(2026-08-14/15, 12시간·25시간+ 사례 — `timeout-minutes: 20`을 넣은 배경)과 같은 계열의
+재발로 보이나, 이번엔 `npm run test:e2e` 자체가 아니라 그 앞 단계인 브라우저 설치에서
+멈췄다는 점이 다름.
+
+의심되는 원인(미검증):
+- `actions/setup-node@v4`에 `cache: npm`은 있지만 Playwright 브라우저 바이너리
+  (`~/.cache/ms-playwright`)는 별도 캐싱이 없어 매 실행마다 풀 다운로드 — 다운로드 소스가
+  느리거나 rate limit에 걸리면 그대로 멈출 수 있음.
+- 짧은 시간에 여러 세션이 동시에 CI를 트리거하면서 같은 GitHub-hosted 러너 풀/네트워크 경로에
+  부하가 몰렸을 가능성.
+
+다음에 이 문제를 다시 보는 사람은: (1) 같은 지점에서 계속 재현되는지 먼저 확인, (2) 재현되면
+`actions/cache`로 `~/.cache/ms-playwright` 캐싱 추가를 시도, (3) 그래도 안 되면 GitHub
+지원팀/커뮤니티에 문의하거나 다른 시간대에 재시도.
+
+### P2-25. (2026-08-20, L/O 수정 완료 — K/M/N은 앱 버그 아님으로 결론) `auto-book-membership-security.test.ts`의 AUTO-SEC-K/L/M/N/O 5개 실패 원인 규명
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 (테스트 코드/fixture 문제 — 앱 로직 버그 아님으로 확인됨) |
+| 현재 상태 | **완료 — L/O는 테스트 코드 버그로 수정, K/M은 공유 fixture 동시성 문제(코드 수정 대상 아님), N은 P1-12 의존으로 보류** |
+| 근거 파일 | `tests/integration/auto-book-membership-security.test.ts`(AUTO-SEC-K~O), `fix_auto_book_membership_idor_draft_proposed.sql`(RPC 실제 정의), `cleanup_p2_25_leftover_test_center_holiday.sql` |
+| 완료 조건(L/O) | 완료 — `fix/p2-25-auto-book-security-test-flakiness` 브랜치 참고 |
+
+처음엔 공유 fixture(`통합테스트센터-*`, `center_id=3937eb89-...`)의 `center_settings` 오염을
+의심했으나(리셋해도 재현, `origin/main` 단독 실행에서도 재현 확인) 각각 개별 원인이 달랐다:
+
+- **`AUTO-SEC-L` (수정 완료)**: `createAutoBookProduct()`가 `products.price`를 설정하지 않아
+  스키마 기본값 0으로 생성됐고, 테스트가 하드코딩한 `orders.amount=10000`과
+  `fulfill_order()`의 가격 검증이 항상 불일치해 `P0001` 에러가 났다. `createAutoBookProduct()`에
+  `price: 10000` 추가로 해결.
+- **`AUTO-SEC-O` (수정 완료)**: `asUserB()`(회원 세션)로 전환한 **직후**
+  `createFutureTestClass()`를 호출해서 수업을 만들었는데, `classes` INSERT RLS 정책
+  (`매니저 수업 생성`, `center_id in (select my_managed_center_ids())`)은 매니저 세션이
+  필요하다. 회원 세션 상태라 RLS 위반으로 실패. 수업 생성을 `asUserB()` 호출 **이전**
+  (managerA 세션 상태)으로 옮겨서 해결.
+- **`AUTO-SEC-K`/`AUTO-SEC-M` (코드 수정 대상 아님)**: `getFixtureAdminClient()`로 직접
+  조사한 결과, `booked=0`(reason 없음)의 실제 원인은 이 공유 fixture 센터
+  (`5aa6e0b6-7e4a-47a3-b705-afc9a0cae4d7`, "통합테스트센터-e920be7a")의 `center_holidays`에
+  `createClassOnDow()`가 항상 수렴하는 그 날짜(당시 2026-08-27)로 휴무일이 등록돼 있어
+  `auto_book_membership()`의 "센터 휴무일이면 건너뛴다" 조건에 걸렸기 때문. **단, 이 휴무일을
+  지워도 몇 분 안에 다른 id로 다시 생성되는 것을 실시간으로 확인** — `holiday-history-and-
+  notification.test.ts`/`month-boundary-kst.test.ts` 등 이 저장소의 다른 통합테스트 파일이
+  같은 fixture 센터에 동시에 접근하며 생기는 것으로 판단(이 세션이 실행한 파일에는 그
+  코드가 없음을 확인). 즉 **[[ci-concurrency-starvation]]/공유 fixture 오염 패턴 그 자체**이지
+  K/M 테스트 코드나 앱 RPC 로직의 결함이 아니다 — 여러 세션이 동시에 통합 테스트를 안 돌리는
+  조용한 시간대에 재실행하면 통과해야 정상. `cleanup_p2_25_leftover_test_center_holiday.sql`은
+  그 시점의 leftover 1건을 정리하는 일회성 스크립트로 남겨둠(재발 방지책은 아님).
+- **`AUTO-SEC-N` (보류)**: setup 단계의 `reserve_class` 호출이 "예약 마감시간이 지났어요"로
+  실패하는 진짜 이유는, 그룹 수업 예약 마감 계산(`calc_deadline`)이 기본값
+  (`group_book_days_before=1`)일 때 당일 수업 예약을 구조적으로 항상 막는다는 것 —
+  `center_settings.same_day_change_hours/minutes`/`allow_same_day_booking`이 스키마엔 있지만
+  `reserve_class`/`calc_deadline`(`wire_settings.sql`) 어디에도 실제로 연결돼 있지 않다.
+  **이건 `docs/TODO.md` P1-12("운영설정 화면의 다수 항목이 저장만 되고 실제로 적용되지
+  않음")와 동일 범위**이고, 다른 세션이 이미 `chore/p1-12-settings-wiring-audit`에서 작업
+  중이라 이 배치에서 중복 수정하지 않음 — P1-12가 same_day_change를 실제로 wiring하면 그때
+  AUTO-SEC-N도 같이 재검증할 것.
+
+### P2-26. (2026-08-20, 정리 완료) `class-trainer-display.spec.ts` E2E 3건 실패 — `leads.test.ts`(P1-8) leftover 스태프가 원인
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 (테스트 fixture leftover — 앱 로직 버그 아님) |
+| 현재 상태 | **완료 — leftover 정리 SQL 적용** |
+| 근거 파일 | `tests/e2e/reservation/class-trainer-display.spec.ts`, `tests/integration/leads.test.ts`(P1-8), `cleanup_leftover_leads_test_staff_role.sql` |
+
+P2-25 조사 중 PR #66과 `main`(PR #53 병합 직후 push, run `32290229997`) 양쪽에서 E2E가
+`locator('.class-trainers-list .filter-chip').filter({ hasText: '통합테스트계정' })
+resolved to 2 elements`로 3건 실패하는 것을 발견. `tests/integration/setup.ts`가 모든
+테스트 계정을 예외 없이 "통합테스트계정"이라는 동일한 이름으로 생성하기 때문에, 같은
+센터에 활성 스태프가 2명 이상 있으면 이름 기반 강사 검색 UI가 항상 여러 건과 매칭된다.
+
+원인은 `leads.test.ts`(P1-8)의 `beforeAll`이 공유 통합테스트센터
+(`3937eb89-3803-43e9-9a29-e893f779df1a`)에 managerB를 "P1-8 테스트 무권한 역할"로
+초대하고 `afterAll`이 정상적으로 정리하는데, 2026-08-19 18:42경 이 테스트를 포함한 실행이
+CI job 20분 타임아웃으로 강제종료되며 `afterAll`이 못 돌아 그 스태프 등록이 그대로
+남았던 것 — `cleanup_leftover_leads_test_staff_role.sql`로 정리.
+
+**남은 근본 위험(이번 배치에서 손대지 않음)**: 모든 테스트 계정이 동일한 이름을 쓰는
+설계 자체가, 앞으로도 같은 센터에 활성 스태프가 2명 이상 남을 때마다 이름 기반 검색을
+쓰는 E2E 테스트를 깨뜨릴 수 있다. 근본적으로는 (a) 테스트 계정 이름에 고유 식별자를
+포함시키거나 (b) `assignTrainerViaUi`가 이름 대신 account_id 등으로 특정 강사를 지목하는
+방식으로 바꿔야 하는데, 둘 다 이 저장소의 여러 통합/E2E 테스트 파일에 걸친 광범위한
+변경이라 사용자 승인 없이 진행하지 않음.
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
 
