@@ -147,8 +147,9 @@ export default function AccountSettingsPage() {
           <div className="login-wrap" style={{ padding: "10px 20px 40px", alignItems: "stretch" }}>
             <h3 style={{ margin: "12px 0 4px" }}>계정 탈퇴</h3>
             <div className="perm-guide" style={{ margin: "0 0 8px" }}>
-              탈퇴하면 이 계정으로 다시 로그인할 수 없어요. 예약·구매·결제 내역은 법적 보관
-              목적으로 남지만 더 이상 접근할 수 없어요.
+              탈퇴하면 이름·전화번호 등 개인정보는 삭제되어 더 이상 알아볼 수 없게 처리돼요.
+              예약·구매·결제 내역은 법적 보관 목적으로 남지만 더 이상 접근할 수 없고, 개인정보와도
+              연결되지 않아요. 같은 전화번호·이메일로 나중에 다시 가입할 수 있어요.
             </div>
 
             {isEmailProvider ? (
