@@ -1480,13 +1480,21 @@ timeout까지 그대로 멈춰 있다가 `cancelled`로 종료됨(run `322666353
   중이라 이 배치에서 중복 수정하지 않음 — P1-12가 same_day_change를 실제로 wiring하면 그때
   AUTO-SEC-N도 같이 재검증할 것.
 
-### P2-26. (2026-08-20, 정리 완료) `class-trainer-display.spec.ts` E2E 3건 실패 — `leads.test.ts`(P1-8) leftover 스태프가 원인
+### P2-26. (2026-08-20, 정리 완료 — 같은 날 재발도 정리 완료) `class-trainer-display.spec.ts` E2E 실패 — `leads.test.ts`(P1-8) leftover 스태프가 원인
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 (테스트 fixture leftover — 앱 로직 버그 아님) |
-| 현재 상태 | **완료 — leftover 정리 SQL 적용** |
-| 근거 파일 | `tests/e2e/reservation/class-trainer-display.spec.ts`, `tests/integration/leads.test.ts`(P1-8), `cleanup_leftover_leads_test_staff_role.sql` |
+| 현재 상태 | **완료 — leftover 정리 SQL 적용(2회, 재발 방지책은 아직 없음)** |
+| 근거 파일 | `tests/e2e/reservation/class-trainer-display.spec.ts`, `tests/integration/leads.test.ts`(P1-8), `cleanup_leftover_leads_test_staff_role.sql`, `cleanup_leftover_leads_test_staff_role_2.sql`(2차) |
+
+**2026-08-20 재발**: PR #68 workflow_dispatch run `32405557536`에서 같은 증상(E2E 6건,
+strict mode violation)이 다시 발생 — 오늘 이 저장소 전체에서 Integration job 20분
+타임아웃/취소가 여러 번(PR #67 2회, P2-24 등) 반복되며 `leads.test.ts`의 `afterAll`이 또
+못 돌았기 때문. `cleanup_leftover_leads_test_staff_role_2.sql`로 정리(하드코딩 UUID 대신
+`center_id`+역할명으로 특정 — 어떤 실행이 남긴 leftover든 재사용 가능). 아래 "남은 근본
+위험"에 적어둔 근본 원인(모든 테스트 계정이 동일한 이름 사용)을 고치지 않는 한 CI가
+타임아웃/취소를 겪을 때마다 계속 재발할 수 있다.
 
 P2-25 조사 중 PR #66과 `main`(PR #53 병합 직후 push, run `32290229997`) 양쪽에서 E2E가
 `locator('.class-trainers-list .filter-chip').filter({ hasText: '통합테스트계정' })

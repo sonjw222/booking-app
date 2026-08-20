@@ -8,6 +8,15 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-20 — P2-26 재발 정리: `leads.test.ts` leftover 스태프 2차 발생
+
+PR #68 검증 재실행 중 P2-26과 동일한 E2E 실패(class-trainer-display.spec.ts strict mode
+violation)가 다시 발생 — 오늘 반복된 Integration job 타임아웃/취소로 `leads.test.ts`의
+`afterAll`이 또 못 돌아 leftover 스태프가 재생성됐다. `cleanup_leftover_leads_test_staff_role_2.sql`
+적용(사용자 실행 완료). 이번엔 하드코딩 UUID 대신 `center_id`+역할명으로 대상을 특정해
+앞으로 같은 패턴이 재발해도 재사용 가능하게 작성. 근본 재발 방지책(테스트 계정 이름 고유화
+등)은 P2-26에 남겨둔 대로 이번 배치 범위 밖.
+
 ## 2026-08-20 — P2-28: PR #68 Integration 실패 11건 근본 원인 수정(공유 센터 스캔 오염 + waitlist 설정 누락)
 
 문서 전용 PR #68의 Integration이 11건 실패해 조사 — PR diff와 무관함을 확인 후 두 가지
