@@ -36,6 +36,32 @@ DB에 그대로 남아있었음 — Apple/Google 계정 삭제 가이드라인 �
 수정. `npm run build` 통과 확인. **아직 SQL 미적용·Edge Function 미배포** — 사용자가
 SQL Editor 실행 + `supabase functions deploy delete-account` 실행해야 반영됨.
 
+## 2026-08-20 — P2-25: AUTO-SEC-L/O 테스트 코드 버그 수정, K/M/N 원인 규명(앱 로직 정상)
+
+PR #53 CI 재트리거 중 `auto-book-membership-security.test.ts`의 AUTO-SEC-K/L/M/N/O 5개가
+반복 실패해 원인을 추적했다. `origin/main` 단독 실행에서도 동일 재현돼 PR #53의 회귀가
+아님을 먼저 확인한 뒤, 각각 다른 원인이었음을 규명:
+
+- `AUTO-SEC-L`: `createAutoBookProduct()`가 `products.price`를 설정 안 해 기본값 0으로
+  생성되고, 테스트가 하드코딩한 주문금액(10000)과 `fulfill_order()`의 가격 검증이 항상
+  불일치했다. `price: 10000` 추가로 수정.
+- `AUTO-SEC-O`: 회원 세션(`asUserB()`) 상태에서 `classes` INSERT(매니저 RLS 필요)를
+  시도해 항상 RLS 위반이었다. 수업 생성을 매니저 세션 상태로 옮겨서 수정.
+- `AUTO-SEC-K`/`AUTO-SEC-M`: 실제로는 앱 RPC 로직 문제가 아니라, 공유 통합테스트센터의
+  `center_holidays`에 다른 통합테스트 파일(들)이 실시간으로 만들어내는 휴무일과
+  `createClassOnDow()`가 매번 수렴하는 날짜가 겹치며 생기는 공유 fixture 동시성 문제였다
+  (삭제해도 몇 분 내 다른 세션에 의해 재생성되는 것을 직접 확인). 코드 수정 대상 아님.
+- `AUTO-SEC-N`: `center_settings.same_day_change_*`가 `reserve_class`/`calc_deadline`에
+  실제로 연결돼 있지 않아 당일 예약 setup 자체가 구조적으로 실패한다 — P1-12(설정 미적용
+  감사)와 동일 범위라 그 작업에 맡기고 이번 배치에선 손대지 않음.
+
+상세 근거는 `docs/TODO.md` P2-25 참고.
+
+추가로 PR #66/`main` 양쪽에서 E2E `class-trainer-display.spec.ts` 3건이 "통합테스트계정"
+이름이 2개 매칭돼 strict mode violation으로 실패하는 것을 발견 — 원인은 `leads.test.ts`
+(P1-8)의 중단된 실행이 남긴 leftover 스태프 등록(`cleanup_leftover_leads_test_staff_role.sql`
+로 정리). 상세는 `docs/TODO.md` P2-26 참고.
+
 ## 2026-08-19 — P2-13 PR #63 CI 결과 확인: 신규 RLS 테스트 통과, 무관한 실패 17건은 공유 테스트센터 경합
 
 PR #63(review/todo-scan4) CI 실행(run 32225473488)에서 `Integration tests` 잡이 실패로
@@ -62,6 +88,61 @@ service_role GRANT(이 두 테이블의 fixture 자동화를 막던 원래 블�
 나뉜다는 걸 실측으로 확인(`message.sms.view`/`message.push.view` 중 아무거나 있으면 그 센터
 발송기록 전부 조회 가능 — 설계 문서 그대로, 처음엔 messages 패턴을 잘못 가정해 테스트 2건이
 실패했다가 원인 파악 후 정정).
+
+## 2026-08-15 — 소셜 휴대폰번호 모달 버그 수정: 이메일 계정까지 막던 문제(E2E 전체 붕괴 사고)
+
+전날(2026-08-14) 추가한 "소셜 가입 직후 휴대폰번호 필수 모달"(`app/components/SessionWatcher.tsx`)이
+`accounts.phone`이 비어있는 계정이면 provider와 무관하게 무조건 떴다 — 그 결과 이 기능이 생기기
+전부터 있던 기존 이메일 테스트 계정(TEST_MANAGER_A/TEST_USER_A/TEST_USER_B 등, phone이 원래
+비어있음)까지 로그인할 때마다 화면 전체를 덮는 모달에 막혀, PR #53의 E2E 스위트가 (auth.setup
+3개만 통과하고) 나머지 전부 타임아웃/실패로 무너졌다(1시간 넘게 걸린 두 번의 CI 재실행에서
+동일하게 재현 — 처음엔 다른 세션들과 겹친 CI 오염으로 오판했으나, PR #52/#54에는 이 코드가
+없어서 그쪽은 안 겪었다는 점에서 이 PR 자체의 버그로 특정함).
+
+`lib/authAccount.ts`의 `EnsuredAccount`에 `isSocial`(Supabase Auth의 `user.app_metadata.provider`가
+`"email"`이 아닌지) 필드를 추가하고, `SessionWatcher.tsx`가 `isSocial && !phone`일 때만 모달을
+띄우도록 좁혔다 — 원래 요구사항("이메일 가입은 이미 필수로 받으니 소셜만 문제")대로 정확히
+좁힌 것. `npm run build` 통과, 재실행으로 E2E 정상 확인.
+
+## 2026-08-15 — P0-7 신규 기록: 공유 dev Supabase fixture 데이터 반복 오염(원인 미확정)
+
+2026-08-14~15에 걸쳐 PR #52/#53/#54 CI를 여러 차례 재실행하며 관찰: 공유 fixture 센터
+(`TEST_CENTER_ID`, `3937eb89...`)의 `center_settings.daily_book_limit_enabled`가 반복적으로
+`true`로 재발해, 이 설정과 무관한 다수 통합 테스트가 연쇄 실패했다. `manager_centers.role_id`/
+`center_id` 불일치 트리거를 원인으로 의심해 다른 세션(PR #50)에 확인 요청했으나 두 시점 모두
+정상 매칭으로 배제됨 — 근본 원인 미확정 상태로 `docs/TODO.md` P0-7에 기록. PR #53/#54는 이
+문제와 무관함을 개별 확인(PR #53은 실제 코드 버그였던 별건을 수정 완료, PR #54는 문서 전용
+변경이라 애초에 원인이 될 수 없음)하고 그대로 진행하기로 함.
+
+## 2026-08-14 (같은 날 후속10) — P1-13 SQL Live 적용 확인, P2-17 calc_deadline 문서 정정
+
+`docs/TODO.md`를 SQL 실행 대기 항목 기준으로 정리하던 중 사용자가 우선 처리를 요청한 항목 확인:
+
+- **P1-13 (센터정보 수정 권한을 facility.info로 좁힘)**: `fix_centers_update_facility_info_permission.sql`을
+  사용자가 SQL Editor에서 실행(성공) → `pg_policies` 재조회로 "매니저 센터 수정" 정책이
+  `has_permission(id, 'facility.info') OR is_platform_admin()` 조건대로 반영되고 옛
+  `my_managed_center_ids()` 조건이 안 남아있음을 확인.
+- **P2-17 (`calc_deadline()`의 `'open'` kind 미처리, 문서만 정정)**: `fix_calc_deadline_open_kind_draft_proposed.sql`을
+  실행하기 전 이 저장소에서 반복됐던 "저장소 파일과 라이브 함수 본문이 다른" 드리프트 문제를
+  의식해, 실행 전 `pg_get_functiondef()`로 라이브 본문을 먼저 확인 — **이미 'open' 분기가
+  정확히 그 draft와 동일하게 라이브에 적용돼 있음**을 확인(P2-21 항목의 테스트 통과 기반
+  간접 확인과도 일치). "승인 대기"로 남아있던 건 실제 DB 상태와 무관한 문서 누락(P0-6과
+  같은 종류)이었음. draft SQL은 실행 불필요.
+- P1-2(미발급 주문 자가취소)는 다른 세션이 이미 실사용 계정으로 왕복 검증까지 완료해둔 상태를
+  확인(이 배치에서 추가 조치 없음).
+
+SQL/코드 변경 없음(이미 작성된 SQL을 사용자가 직접 실행/검증한 것 확인 + 문서 갱신).
+
+## 2026-08-18 — P1-1 후속: 회원용 포인트 내역 화면 추가
+
+`point_transactions` 통합 원장(직전 배치) 위에, 그동안 죽어있던 운영설정
+`show_point_history`("회원앱 포인트 내역 조회")를 실제로 연결하는 회원용 화면을 새로 추가.
+`app/mypage/points/page.tsx`(신규) + `lib/mypage.ts`의 `fetchMyPointHistory()`(신규) —
+계정의 모든 프로필(가족 구성원) 포인트 적립/사용 내역을 날짜별로 보여주고, `profileName`
+태그로 구분, `center_settings.show_point_history`가 꺼진 센터의 내역은 제외. `point_transactions`
+SELECT는 이미 본인 행 RLS가 허용돼 있어(`add_sales.sql`) 새 RPC 없이 직접 조회. `app/mypage/page.tsx`
+"내 정보" 섹션에 진입 메뉴("포인트 내역") 추가. `npm run build` 통과, 헤드리스 확인으로
+`/mypage/points` 정상 렌더링 확인. SQL/스키마 변경 없음.
 
 ## 2026-08-18 — P1-9/P1-5/P1-1 SQL 라이브 적용 확인 + P1-10 테스트 fixture 보정
 
