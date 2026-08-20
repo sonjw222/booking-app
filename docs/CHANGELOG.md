@@ -27,6 +27,43 @@ N/O가 쓰던 `center_settings` 원복 `finally` 블록도 격리 센터는 통�
 
 상세는 `docs/TODO.md` P2-28 참고.
 
+## 2026-08-20 — P2-27: CI Integration job timeout 20분 → 35분 상향
+
+PR #66/#67의 Integration job이 둘 다 19분대에 `cancelled`로 끝나는 걸 발견 — 실패가 아니라
+`timeout-minutes: 20`에 걸린 것. 통합 테스트 스위트가 계속 자라 정상 실행도 20분에
+빠듯해졌다(과거 timeout 없던 시절 기록은 30~34분). timeout 자체는 2026-08-14/15 사고
+(멈춘 job이 전역 CI 큐를 몇 시간씩 막음) 재발을 막는 안전장치라 없애지 않고, 정상 실행
+시간에 맞춰 35분으로 상향. P2-26에서 이 20분 컷오프가 `afterAll` 정리 실패로 이어져 실제
+leftover 버그를 만든 사례가 이미 있어 근거로 삼음.
+
+## 2026-08-20 — P1-18 계정 탈퇴 정책 Live 적용 확인 + 자동 통합테스트 추가
+
+사용자가 `fix_account_deletion_real_anonymization.sql`을 SQL Editor에서 실행(소급 대상 1건
+익명화 + `auth.users` 삭제)하고 `supabase functions deploy delete-account`로 재배포(버전
+8→9). 라이브 재조회(`accounts`/`profiles`/`auth.users` 3개 테이블 직접 확인)로 반영 확인.
+이어서 `tests/integration/account-deletion-anonymization.test.ts` 신규 작성 — service_role로
+전용 임시 계정(본인+자녀 프로필)을 만들어 배포된 `delete-account`를 실제로 호출하고,
+accounts/profiles 8개 필드 익명화 + `auth.users` 실제 삭제(밴 아님) + 같은 이메일 즉시
+재가입까지 왕복 자동 검증. 1/1 통과, 테스트 데이터는 `afterAll`에서 정리하고 라이브
+재조회로 leftover 0건 확인. `npm run build`/`tsc --noEmit` 통과.
+
+## 2026-08-19 — P1-18 계정 탈퇴 정책 변경: 소프트 비활성화 → 실제 개인정보 익명화+삭제 (P0 재분류, SQL/배포 사용자 적용 대기)
+
+기존 탈퇴(`add_account_deactivation.sql`)는 `accounts.deactivated_at`을 채우고
+`auth.users`를 100년 밴하는 방식이라 로그인만 막힐 뿐 이름/전화번호/이메일 등 개인정보는
+DB에 그대로 남아있었음 — Apple/Google 계정 삭제 가이드라인 위반 소지로 P0 재분류.
+`supabase/functions/delete-account/index.ts` 재작성: 호출자 본인의 `accounts`/`profiles`
+(가족 프로필 포함) 개인정보를 익명값으로 덮어쓰고, `auth.users` 행을 밴이 아니라 실제
+삭제(`admin.auth.admin.deleteUser`)해 사용자 결정(재가입 허용)에 맞게 이메일/전화번호/
+소셜 계정을 즉시 풀어줌. `reservations`/`orders`/`payments`/`memberships`는 전자상거래법
+보관 의무 및 CLAUDE.md 규칙 3에 따라 그대로 유지(익명화된 accounts/profiles를 통해서만
+"탈퇴한 회원"으로 노출). 이미 탈퇴한 기존 1건에 새 정책을 소급 적용하는
+`fix_account_deletion_real_anonymization.sql`(+ rollback, 비가역 명시) 신규 작성 — FK
+안전성 사전 확인(`accounts.auth_id` FK 없음, `auth` 스키마 내부 테이블은 전부
+`ON DELETE CASCADE`). `app/settings/account/page.tsx` 탈퇴 안내 문구를 새 정책에 맞춰
+수정. `npm run build` 통과 확인. **아직 SQL 미적용·Edge Function 미배포** — 사용자가
+SQL Editor 실행 + `supabase functions deploy delete-account` 실행해야 반영됨.
+
 ## 2026-08-20 — P2-25: AUTO-SEC-L/O 테스트 코드 버그 수정, K/M/N 원인 규명(앱 로직 정상)
 
 PR #53 CI 재트리거 중 `auto-book-membership-security.test.ts`의 AUTO-SEC-K/L/M/N/O 5개가
