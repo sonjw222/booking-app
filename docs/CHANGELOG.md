@@ -8,6 +8,27 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-20 — P2-25: AUTO-SEC-L/O 테스트 코드 버그 수정, K/M/N 원인 규명(앱 로직 정상)
+
+PR #53 CI 재트리거 중 `auto-book-membership-security.test.ts`의 AUTO-SEC-K/L/M/N/O 5개가
+반복 실패해 원인을 추적했다. `origin/main` 단독 실행에서도 동일 재현돼 PR #53의 회귀가
+아님을 먼저 확인한 뒤, 각각 다른 원인이었음을 규명:
+
+- `AUTO-SEC-L`: `createAutoBookProduct()`가 `products.price`를 설정 안 해 기본값 0으로
+  생성되고, 테스트가 하드코딩한 주문금액(10000)과 `fulfill_order()`의 가격 검증이 항상
+  불일치했다. `price: 10000` 추가로 수정.
+- `AUTO-SEC-O`: 회원 세션(`asUserB()`) 상태에서 `classes` INSERT(매니저 RLS 필요)를
+  시도해 항상 RLS 위반이었다. 수업 생성을 매니저 세션 상태로 옮겨서 수정.
+- `AUTO-SEC-K`/`AUTO-SEC-M`: 실제로는 앱 RPC 로직 문제가 아니라, 공유 통합테스트센터의
+  `center_holidays`에 다른 통합테스트 파일(들)이 실시간으로 만들어내는 휴무일과
+  `createClassOnDow()`가 매번 수렴하는 날짜가 겹치며 생기는 공유 fixture 동시성 문제였다
+  (삭제해도 몇 분 내 다른 세션에 의해 재생성되는 것을 직접 확인). 코드 수정 대상 아님.
+- `AUTO-SEC-N`: `center_settings.same_day_change_*`가 `reserve_class`/`calc_deadline`에
+  실제로 연결돼 있지 않아 당일 예약 setup 자체가 구조적으로 실패한다 — P1-12(설정 미적용
+  감사)와 동일 범위라 그 작업에 맡기고 이번 배치에선 손대지 않음.
+
+상세 근거는 `docs/TODO.md` P2-25 참고.
+
 ## 2026-08-19 — P2-13 PR #63 CI 결과 확인: 신규 RLS 테스트 통과, 무관한 실패 17건은 공유 테스트센터 경합
 
 PR #63(review/todo-scan4) CI 실행(run 32225473488)에서 `Integration tests` 잡이 실패로
