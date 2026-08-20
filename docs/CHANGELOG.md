@@ -29,6 +29,11 @@ PR #53 CI 재트리거 중 `auto-book-membership-security.test.ts`의 AUTO-SEC-K
 
 상세 근거는 `docs/TODO.md` P2-25 참고.
 
+추가로 PR #66/`main` 양쪽에서 E2E `class-trainer-display.spec.ts` 3건이 "통합테스트계정"
+이름이 2개 매칭돼 strict mode violation으로 실패하는 것을 발견 — 원인은 `leads.test.ts`
+(P1-8)의 중단된 실행이 남긴 leftover 스태프 등록(`cleanup_leftover_leads_test_staff_role.sql`
+로 정리). 상세는 `docs/TODO.md` P2-26 참고.
+
 ## 2026-08-19 — P2-13 PR #63 CI 결과 확인: 신규 RLS 테스트 통과, 무관한 실패 17건은 공유 테스트센터 경합
 
 PR #63(review/todo-scan4) CI 실행(run 32225473488)에서 `Integration tests` 잡이 실패로

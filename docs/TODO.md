@@ -1454,6 +1454,33 @@ timeout까지 그대로 멈춰 있다가 `cancelled`로 종료됨(run `322666353
   중이라 이 배치에서 중복 수정하지 않음 — P1-12가 same_day_change를 실제로 wiring하면 그때
   AUTO-SEC-N도 같이 재검증할 것.
 
+### P2-26. (2026-08-20, 정리 완료) `class-trainer-display.spec.ts` E2E 3건 실패 — `leads.test.ts`(P1-8) leftover 스태프가 원인
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 (테스트 fixture leftover — 앱 로직 버그 아님) |
+| 현재 상태 | **완료 — leftover 정리 SQL 적용** |
+| 근거 파일 | `tests/e2e/reservation/class-trainer-display.spec.ts`, `tests/integration/leads.test.ts`(P1-8), `cleanup_leftover_leads_test_staff_role.sql` |
+
+P2-25 조사 중 PR #66과 `main`(PR #53 병합 직후 push, run `32290229997`) 양쪽에서 E2E가
+`locator('.class-trainers-list .filter-chip').filter({ hasText: '통합테스트계정' })
+resolved to 2 elements`로 3건 실패하는 것을 발견. `tests/integration/setup.ts`가 모든
+테스트 계정을 예외 없이 "통합테스트계정"이라는 동일한 이름으로 생성하기 때문에, 같은
+센터에 활성 스태프가 2명 이상 있으면 이름 기반 강사 검색 UI가 항상 여러 건과 매칭된다.
+
+원인은 `leads.test.ts`(P1-8)의 `beforeAll`이 공유 통합테스트센터
+(`3937eb89-3803-43e9-9a29-e893f779df1a`)에 managerB를 "P1-8 테스트 무권한 역할"로
+초대하고 `afterAll`이 정상적으로 정리하는데, 2026-08-19 18:42경 이 테스트를 포함한 실행이
+CI job 20분 타임아웃으로 강제종료되며 `afterAll`이 못 돌아 그 스태프 등록이 그대로
+남았던 것 — `cleanup_leftover_leads_test_staff_role.sql`로 정리.
+
+**남은 근본 위험(이번 배치에서 손대지 않음)**: 모든 테스트 계정이 동일한 이름을 쓰는
+설계 자체가, 앞으로도 같은 센터에 활성 스태프가 2명 이상 남을 때마다 이름 기반 검색을
+쓰는 E2E 테스트를 깨뜨릴 수 있다. 근본적으로는 (a) 테스트 계정 이름에 고유 식별자를
+포함시키거나 (b) `assignTrainerViaUi`가 이름 대신 account_id 등으로 특정 강사를 지목하는
+방식으로 바꿔야 하는데, 둘 다 이 저장소의 여러 통합/E2E 테스트 파일에 걸친 광범위한
+변경이라 사용자 승인 없이 진행하지 않음.
+
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
 
 ### P3-1. 수업 구분과 복수 강사 배정
