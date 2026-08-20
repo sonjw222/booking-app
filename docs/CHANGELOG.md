@@ -76,6 +76,35 @@ service_role GRANT(이 두 테이블의 fixture 자동화를 막던 원래 블�
 띄우도록 좁혔다 — 원래 요구사항("이메일 가입은 이미 필수로 받으니 소셜만 문제")대로 정확히
 좁힌 것. `npm run build` 통과, 재실행으로 E2E 정상 확인.
 
+## 2026-08-15 — P0-7 신규 기록: 공유 dev Supabase fixture 데이터 반복 오염(원인 미확정)
+
+2026-08-14~15에 걸쳐 PR #52/#53/#54 CI를 여러 차례 재실행하며 관찰: 공유 fixture 센터
+(`TEST_CENTER_ID`, `3937eb89...`)의 `center_settings.daily_book_limit_enabled`가 반복적으로
+`true`로 재발해, 이 설정과 무관한 다수 통합 테스트가 연쇄 실패했다. `manager_centers.role_id`/
+`center_id` 불일치 트리거를 원인으로 의심해 다른 세션(PR #50)에 확인 요청했으나 두 시점 모두
+정상 매칭으로 배제됨 — 근본 원인 미확정 상태로 `docs/TODO.md` P0-7에 기록. PR #53/#54는 이
+문제와 무관함을 개별 확인(PR #53은 실제 코드 버그였던 별건을 수정 완료, PR #54는 문서 전용
+변경이라 애초에 원인이 될 수 없음)하고 그대로 진행하기로 함.
+
+## 2026-08-14 (같은 날 후속10) — P1-13 SQL Live 적용 확인, P2-17 calc_deadline 문서 정정
+
+`docs/TODO.md`를 SQL 실행 대기 항목 기준으로 정리하던 중 사용자가 우선 처리를 요청한 항목 확인:
+
+- **P1-13 (센터정보 수정 권한을 facility.info로 좁힘)**: `fix_centers_update_facility_info_permission.sql`을
+  사용자가 SQL Editor에서 실행(성공) → `pg_policies` 재조회로 "매니저 센터 수정" 정책이
+  `has_permission(id, 'facility.info') OR is_platform_admin()` 조건대로 반영되고 옛
+  `my_managed_center_ids()` 조건이 안 남아있음을 확인.
+- **P2-17 (`calc_deadline()`의 `'open'` kind 미처리, 문서만 정정)**: `fix_calc_deadline_open_kind_draft_proposed.sql`을
+  실행하기 전 이 저장소에서 반복됐던 "저장소 파일과 라이브 함수 본문이 다른" 드리프트 문제를
+  의식해, 실행 전 `pg_get_functiondef()`로 라이브 본문을 먼저 확인 — **이미 'open' 분기가
+  정확히 그 draft와 동일하게 라이브에 적용돼 있음**을 확인(P2-21 항목의 테스트 통과 기반
+  간접 확인과도 일치). "승인 대기"로 남아있던 건 실제 DB 상태와 무관한 문서 누락(P0-6과
+  같은 종류)이었음. draft SQL은 실행 불필요.
+- P1-2(미발급 주문 자가취소)는 다른 세션이 이미 실사용 계정으로 왕복 검증까지 완료해둔 상태를
+  확인(이 배치에서 추가 조치 없음).
+
+SQL/코드 변경 없음(이미 작성된 SQL을 사용자가 직접 실행/검증한 것 확인 + 문서 갱신).
+
 ## 2026-08-18 — P1-9/P1-5/P1-1 SQL 라이브 적용 확인 + P1-10 테스트 fixture 보정
 
 사용자가 3개 SQL(`add_admin_assignment_permission_gate.sql`, `add_manager_menu_permissions.sql`,

@@ -199,6 +199,18 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 권한 키를 재사용하고 있어, 세분권한 도입 시 의미가 부정확할 수 있습니다(이것도 SQL 필요) —
 이 부수 발견은 아직 미해결로 남아있습니다(위 "확인 경위" 참고, 핵심 버그만 NOTIF-001에서
 같이 해결됨).
+### P0-7. (신규, 2026-08-14~15 관측) 공유 dev Supabase 통합/E2E fixture 데이터가 반복적으로 오염됨 — 원인 미확인
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **확인 필요 — 재현은 반복 확인됐으나 근본 원인 미확정** |
+| 근거 파일 | `tests/integration/setup.ts`(`TEST_CENTER_ID`, `getOrCreateOwnedTestCenter()`), `tests/integration/operational-settings-wiring.test.ts`, `tests/integration/auto-book-membership-security.test.ts` |
+| 관측된 증상 | 공유 fixture 센터(`3937eb89-3803-43e9-9a29-e893f779df1a`, `TEST_CENTER_ID`)의 `center_settings.daily_book_limit_enabled`가 반복적으로 `true(1회)`로 남아, 이 설정과 전혀 무관한 다수 테스트 파일(`attendance-policy`, `auto-book-membership-security`, `class-deadline-override-and-private`, `notification-center-isolation`, `operational-settings-wiring`, `reservation-cancel-grace-period` 등)이 연쇄적으로 실패함. 2026-08-14 하루에만 사용자가 직접 `false/null`로 리셋했는데도 짧은 시간 내 다시 `true`로 재발(최소 2회 관측). |
+| 조사한 것과 배제한 가설 | (1) `manager_centers.role_id`/`center_id` 불일치 트리거(`manager_centers_enforce_role_center_match`)가 원인이라는 가설 — 다른 세션(PR #50 담당)이 두 시점에 직접 조회해 **role_id/center_id가 정상 매칭임을 확인, 배제됨**. (2) Integration 실패 로그에 반복되던 `P0001` 에러코드로 특정 트리거를 지목하려 했으나, 이 코드베이스에 커스텀 `RAISE EXCEPTION`이 광범위하게 쓰여 P0001만으로는 특정 원인을 지목할 수 없음(오판이었음, 기록으로 남김). |
+| 유력하지만 미확인 가설 | 어떤 통합 테스트가 `center_settings`(daily_book_limit 등)를 일시적으로 변경했다가 자기 테스트 안에서 assertion 실패 등으로 **cleanup(원상복구) 이전에 조기 종료**되면서 값이 켜진 채로 남는 패턴으로 추정됨. 2026-08-14/15 동안 여러 세션이 동시에 같은 `TEST_CENTER_ID`를 공유해서 테스트를 돌린 것도 재발 빈도에 영향을 줬을 가능성 있음(`feedback_ci_one_at_a_time`류 동시성 문제와 별개 축). |
+| 완료 조건 | (a) `center_settings`를 변경하는 통합 테스트 전체(`operational-settings-wiring.test.ts` 등)를 감사해 실패 시에도 반드시 원상복구가 실행되는지(`try/finally` 또는 `afterEach`) 확인·보강. (b) 근본적으로는 공유 고정 `TEST_CENTER_ID` 대신 테스트마다 격리된 센터를 쓰는 방향(`getOrCreateOwnedTestCenter()` 패턴 확대)도 검토. |
+| 참고 | 여러 세션이 동시에 CI를 돌려 생기는 오염(간헐적 flaky, 재실행하면 대부분 해소)과는 별개 축의 문제 — 이건 재실행해도 계속 재발하는 게 특징 |
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
@@ -854,12 +866,14 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 
 ### P2-17. (신규) 실브라우저 QA 재검증에서 발견한 항목
 
-- **`calc_deadline()`의 `'open'` kind 미처리(P1급, 수정 SQL 준비됨)**: `reserve_class()`가
-  "예약 오픈 시점" 체크를 `calc_deadline(...,'open')`로 호출하지만, 함수 본문은 `'book'`/그 외
-  (취소) 두 갈래로만 분기해 관리자가 저장한 `group_open_days_before/time`·
-  `private_open_days_before/time`이 무시되고 취소 마감 설정이 대신 쓰이고 있었다.
-  `fix_calc_deadline_open_kind_draft_proposed.sql`로 수정 준비됨(승인 대기). 이전 배치 문서의
-  "C-2 정상 배선" 결론은 이 항목에 한해 **틀렸음** — 함수 실제 정의를 재확인하지 않은 오판.
+- **(2026-08-14, 완료 확인 — 문서만 정정) `calc_deadline()`의 `'open'` kind 미처리**: 이 문서는
+  `fix_calc_deadline_open_kind_draft_proposed.sql`이 "승인 대기"라고 기록하고 있었으나,
+  2026-08-14 사용자가 `select pg_get_functiondef('calc_deadline(uuid,text,timestamptz,text)'::regprocedure);`로
+  라이브 함수 본문을 직접 확인한 결과 **이미 `elsif p_kind = 'open' then ...` 분기가 정확히
+  그 draft 파일과 동일하게 적용돼 있었음** — P2-21 항목이 `operational-settings-wiring.test.ts`
+  통과로 간접 확인한 것과도 일치하는 결과, 이번엔 `pg_get_functiondef`로 직접 재확인. draft SQL은 실행 불필요(실행해도 내용이 같아
+  무해하지만 불필요). 이전 배치 문서의 "C-2 정상 배선" 결론이 이 항목에 한해 최초엔
+  틀렸었다는 점(함수 실제 정의를 재확인하지 않은 오판)은 기록으로 남긴다.
 - **(해결됨, 2026-08-03 Track 4) `show_group_reserved_count`**: `lib/reservations.ts`가
   `center_settings`를 함께 조회하도록 확장해 `app/reservation/page.tsx`에서 실제로 인원수
   표시 여부를 제어하도록 구현 완료.
