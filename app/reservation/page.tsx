@@ -683,6 +683,9 @@ function ReservationCalendarContent() {
               <div className="booking-confirm-kicker">선택한 수업</div>
               <div className="confirm-class">
                 <div className="confirm-class-title">{confirmClass.title}</div>
+                {confirmClass.description && (
+                  <div className="confirm-class-sub" style={{ whiteSpace: "pre-wrap" }}>{confirmClass.description}</div>
+                )}
                 <div className="confirm-class-sub">{confirmClass.place} · {confirmClass.date} {confirmClass.start}</div>
                 {confirmClass.instructorNames.length > 0 && (
                   <div className="confirm-class-sub">담당 강사: {confirmClass.instructorNames.join(", ")}</div>

@@ -19,6 +19,7 @@ import { useEffect, useState } from "react";
 import { supabase, REMEMBER_ME_KEY } from "../../lib/supabaseClient";
 import UiIcon from "../components/UiIcon";
 import CenterRegistrationForm, { type CenterFieldsValue } from "../components/CenterRegistrationForm";
+import AddressField from "../components/AddressField";
 import { validateCenterRegistrationInput, registerCenterForAccount } from "../../lib/centers";
 import { setBootstrapSuppressed } from "../../lib/authAccount";
 import { startNaverLogin } from "../../lib/naverAuth";
@@ -43,6 +44,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState(""); // 일반·센터 운영자 공통 필수
+  // 도로명주소(선택) — 다음 우편번호 팝업으로 채우는 base + 직접 입력하는 상세주소, 합쳐서 accounts.address에 저장
+  const [addressBase, setAddressBase] = useState("");
+  const [addressDetail, setAddressDetail] = useState("");
 
   // 센터 운영자 가입용 센터 정보 — app/mypage/register-center/page.tsx와 완전히 같은
   // 필드 타입/입력 컴포넌트(CenterRegistrationForm)·저장 로직(lib/centers.ts)을 공유한다.
@@ -152,12 +156,14 @@ export default function LoginPage() {
         }
 
         // 1) accounts 행 생성 (회원+매니저 여부 표시)
+        const address = addressDetail.trim() ? `${addressBase} ${addressDetail}`.trim() : addressBase.trim();
         const { data: account, error: accErr } = await supabase
           .from("accounts")
           .insert({
             auth_id: data.user.id,
             name,
             phone,
+            address: address || null,
             is_member: true, // 매니저도 기본적으로 회원 역할은 가짐
             is_manager: role === "manager",
           })
@@ -316,6 +322,18 @@ export default function LoginPage() {
         {mode === "signup" && (
           <input className="input-field" type="tel" placeholder={role === "manager" ? "대표자 휴대폰 번호" : "휴대폰 번호"} value={phone} onChange={(e) => setPhone(e.target.value)} />
         )}
+        {mode === "signup" && (
+          <AddressField
+            base={addressBase}
+            detail={addressDetail}
+            onChangeBase={setAddressBase}
+            onChangeDetail={setAddressDetail}
+            disabled={loading}
+          />
+        )}
+        <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>
+          {mode === "signup" ? "이메일로 가입하기" : "이메일로 로그인"}
+        </div>
         <input className="input-field" type="email" placeholder="이메일" value={email} onChange={(e) => setEmail(e.target.value)} />
         <input
           className="input-field"
@@ -356,22 +374,31 @@ export default function LoginPage() {
           <div className="line" /><span>또는</span><div className="line" />
         </div>
 
+        <div className="menu-section-label" style={{ padding: "0 0 6px" }}>
+          {mode === "signup" ? "소셜 계정으로 간편 가입" : "소셜 계정으로 로그인"}
+        </div>
+        {mode === "signup" && (
+          <div className="perm-guide" style={{ margin: "0 0 10px" }}>
+            가입 후 휴대폰 번호 확인 화면이 한 번 더 나와요.
+          </div>
+        )}
+
         <div className="social-list auth-social-grid">
           <button className="social-btn google" onClick={() => handleSocial("google")} disabled={!!socialLoading}>
             <span className="social-ic" style={{ background: "#fff", color: "#4285F4", border: "1px solid var(--line)" }}>G</span>
-            {socialLoading === "google" ? "이동 중..." : "Google로 계속하기"}
+            {socialLoading === "google" ? "이동 중..." : mode === "signup" ? "Google로 가입하기" : "Google로 계속하기"}
           </button>
           <button className="social-btn kakao" onClick={() => handleSocial("kakao")} disabled={!!socialLoading}>
             <span className="social-ic" style={{ background: "#3C1E1E", color: "#FEE500" }}>K</span>
-            {socialLoading === "kakao" ? "이동 중..." : "카카오로 시작하기"}
+            {socialLoading === "kakao" ? "이동 중..." : mode === "signup" ? "카카오로 가입하기" : "카카오로 시작하기"}
           </button>
           <button className="social-btn naver" onClick={() => handleSocial("naver")} disabled={!!socialLoading}>
             <span className="social-ic">N</span>
-            {socialLoading === "naver" ? "이동 중..." : "네이버로 시작하기"}
+            {socialLoading === "naver" ? "이동 중..." : mode === "signup" ? "네이버로 가입하기" : "네이버로 시작하기"}
           </button>
           <button className="social-btn apple" onClick={() => handleSocial("apple")} disabled={!!socialLoading}>
             <span className="social-ic"></span>
-            {socialLoading === "apple" ? "이동 중..." : "Apple로 계속하기"}
+            {socialLoading === "apple" ? "이동 중..." : mode === "signup" ? "Apple로 가입하기" : "Apple로 계속하기"}
           </button>
         </div>
       </section>

@@ -91,6 +91,9 @@ async function createAutoBookProduct(
     .insert({
       center_id: centerId, name: `${name}-${crypto.randomUUID()}`, product_kind: "pass", pass_type: "count",
       total_count: 999, is_on_sale: true, is_active: true, auto_book_days: autoBookDays,
+      // [P2-25 수정] price 미설정 시 스키마 기본값 0으로 생성돼, AUTO-SEC-L이 만드는
+      // orders.amount(10000)와 fulfill_order()의 가격 검증이 항상 불일치해 실패했다.
+      price: 10000,
     })
     .select("id").single();
   if (error || !data) throw new Error(`자동예약용 상품 생성 실패: ${error?.message}`);
@@ -651,10 +654,14 @@ describe("SEC-114 AUTO-SEC-M~P: 나머지 정책 회귀 커버리지(이번 배�
     await asManagerA();
     const originalSettings = await fetchSettings(centerAId);
     try {
-      await asUserB();
-      await createTestMembership(centerAId, userB.profileId, { remainingCount: 3 });
+      // [P2-25 수정] classes INSERT는 매니저 RLS가 필요하다 — asUserB() 이후로 미루면
+      // 회원 세션으로 수업을 생성하게 돼 RLS 위반으로 실패한다. managerA 세션인 채로
+      // 먼저 만든다.
       const occupied = await createFutureTestClass(centerAId, { title: "AUTO-SEC-O-기존점유", classFormat: "private", hoursFromNow: 96 });
       cleanupClassIds.push(occupied.id);
+
+      await asUserB();
+      await createTestMembership(centerAId, userB.profileId, { remainingCount: 3 });
       const { error: bookErr } = await supabase.rpc("reserve_class", { p_class_id: occupied.id, p_profile_id: userB.profileId });
       if (bookErr) throw new Error(`기존 프라이빗 예약 실패: ${bookErr.message}`);
 
