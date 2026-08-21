@@ -32,7 +32,6 @@ import {
   getFixtureAdminClient,
   createFutureTestClass,
   createKstSameDayFutureClass,
-  createTestMembership,
   cleanupTestClassAdmin,
   requireEnv,
   type TestUser,
@@ -658,16 +657,21 @@ describe("SEC-114 AUTO-SEC-M~P: 나머지 정책 회귀 커버리지(이번 배�
     const existingCls = await createKstSameDayFutureClass(isolatedCenterId, { title: "AUTO-SEC-N-기존예약", preferredMinutesFromNow: 180 });
     cleanupClassIds.push(existingCls.id);
     const dow = kstDow(existingCls.startTime);
+    const product = await createAutoBookProduct(isolatedCenterId, "SEC-114-N", [dow]);
 
+    // [P0-7 계열 수정] createTestMembership()은 RLS가 걸린 일반 클라이언트로 insert한다 —
+    // 공유 센터에서는 userB가 오랫동안 그 센터의 회원이라 통과했지만, 이 격리 센터는
+    // 방금 만들어져 userB와 아무 관계가 없어 memberships INSERT RLS를 위반한다(실측:
+    // "new row violates row-level security policy for table memberships"). 이 파일의
+    // 다른 모든 테스트처럼 admin 클라이언트를 쓰는 createAutoBookMembership()으로 대체.
     await asUserB();
-    await createTestMembership(isolatedCenterId, userB.profileId, { remainingCount: 3 });
+    await createAutoBookMembership(isolatedCenterId, userB.profileId, product.id, { remainingCount: 3 });
     const { error: bookErr } = await supabase.rpc("reserve_class", { p_class_id: existingCls.id, p_profile_id: userB.profileId });
     if (bookErr) throw new Error(`기존 예약 실패: ${bookErr.message}`);
 
     await asManagerA();
     await saveSettings(isolatedCenterId, { ...originalSettings, dailyBookLimitEnabled: true, dailyBookLimit: 1 });
 
-    const product = await createAutoBookProduct(isolatedCenterId, "SEC-114-N", [dow]);
     const autoCls = await createKstSameDayFutureClass(isolatedCenterId, { title: "AUTO-SEC-N-자동예약대상", preferredMinutesFromNow: 210 });
     cleanupClassIds.push(autoCls.id);
     const mem = await createAutoBookMembership(isolatedCenterId, userB.profileId, product.id, { remainingCount: 3 });
@@ -689,9 +693,14 @@ describe("SEC-114 AUTO-SEC-M~P: 나머지 정책 회귀 커버리지(이번 배�
     // 먼저 만든다.
     const occupied = await createFutureTestClass(isolatedCenterId, { title: "AUTO-SEC-O-기존점유", classFormat: "private", hoursFromNow: 96 });
     cleanupClassIds.push(occupied.id);
+    // [P0-7 계열 수정] AUTO-SEC-N과 같은 이유 — createTestMembership()은 RLS가 걸린 일반
+    // 클라이언트라 방금 만든 격리 센터에 아무 관계 없는 userB에게는 memberships INSERT가
+    // 막힌다. admin 클라이언트를 쓰는 createAutoBookMembership()으로 대체(요일 매칭은
+    // reserve_class()가 신경 쓰지 않으므로 auto_book_days 값 자체는 무의미).
+    const occupyingProduct = await createAutoBookProduct(isolatedCenterId, "SEC-114-O-기존", [0, 1, 2, 3, 4, 5, 6]);
 
     await asUserB();
-    await createTestMembership(isolatedCenterId, userB.profileId, { remainingCount: 3 });
+    await createAutoBookMembership(isolatedCenterId, userB.profileId, occupyingProduct.id, { remainingCount: 3 });
     const { error: bookErr } = await supabase.rpc("reserve_class", { p_class_id: occupied.id, p_profile_id: userB.profileId });
     if (bookErr) throw new Error(`기존 프라이빗 예약 실패: ${bookErr.message}`);
 
