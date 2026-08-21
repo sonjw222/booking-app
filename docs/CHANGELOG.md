@@ -8,6 +8,14 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-21 — P2-22 세 번째 재발: `daily-book-limit-wiring.test.ts`도 shared fixture 충돌로 방어 코드 추가
+
+PR #72 CI에서 `daily-book-limit-wiring.test.ts`가 `USER_A`의 `centerAId`(P2-22가 이미
+leftover 누적 이력을 지목한 공유 fixture 센터) 오늘자 leftover 확정 예약 때문에 실패 —
+AUTO-SEC-I(P2-28)와 완전히 같은 메커니즘의 세 번째 재발. `clearUserATodayReservations()`
+방어 헬퍼 추가로 이 파일은 안정화했지만, sweep 자체의 근본 수정(P2-22 완료 조건 (a))은
+여전히 미해결 — 상세는 `docs/TODO.md` P2-22 참고.
+
 ## 2026-08-21 — P2-28 근본 수정: stale-cleanup 두더지잡기 종결 + H/I 새 이슈 발견·방어
 
 PR #72(P1-5) Integration CI가 `auto-book-membership-security.test.ts`의 AUTO-SEC-F에서
