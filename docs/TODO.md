@@ -358,12 +358,12 @@ test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx 
 테이블 재조회로 확인). `app/manager/page.tsx`의 관리 메뉴 목록과 "오늘 할 일" 상단 바로가기
 (문의/주문/회원배치) 모두 `canSeeMenu()`로 연결. `npm run build` 통과.
 
-### P1-5b. (2026-08-21, 코드 작성 완료 — SQL 적용 대기) Bucket 2 화면 서버측 권한(RLS/RPC) 신규 연결
+### P1-5b. (2026-08-21, 완료 — Live 적용 확인) Bucket 2 화면 서버측 권한(RLS/RPC) 신규 연결
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **코드 작성 완료, 라이브 적용 대기.** SQL migration 7개 + 대응 UI 게이팅 + `lib/classes.ts` 리팩터링까지 브랜치 `feat/p1-5-button-permission-gating`에 커밋됨. `npm run build` 통과. 사용자가 SQL Editor에서 순서대로 실행해야 실제로 적용됨. |
+| 현재 상태 | **완료.** SQL migration 6개(products·rooms / reviews·announcements / inquiries·orders / center_members / manager_set_attendance / classes own-other) 전부 사용자가 SQL Editor에서 순서대로 실행, 확인 쿼리로 라이브 반영 검증 완료(center_members 정책 4개, `manager_set_attendance`의 `schedule.attendance` 체크 true, classes 관련 신규 함수 10개 전부 생성). 대응 UI 게이팅 + `lib/classes.ts` 리팩터링까지 브랜치 `feat/p1-5-button-permission-gating`에 커밋됨. `npm run build` 통과. |
 | 근거 파일 | [P1-5](#p1-5) 4차 해결 조사 결과 + `pg_get_functiondef`로 확인한 라이브 정의(`fulfill_order`, `manager_set_attendance`, `delete_class_safe`, `delete_class_group_safe`) |
 | 완료 조건 | 9개 화면(goods/rooms/reviews/announcements/inquiries/orders/members 부가기능/대시보드 출석/classes CRUD)의 실제 DB 정책에 `has_permission()` 체크를 추가하고, 대응하는 UI 버튼 게이팅도 함께 적용 |
 | 관련 문서 | [P1-5](#p1-5), [DATABASE.md](./DATABASE.md) |

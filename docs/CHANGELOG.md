@@ -8,20 +8,21 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
-## 2026-08-21 — P1-5b Bucket 2 서버측 권한(RLS/RPC) 연결 (코드 완료, SQL 적용 대기)
+## 2026-08-21 — P1-5b Bucket 2 서버측 권한(RLS/RPC) 연결, Live 적용 완료
 
 카탈로그 키만 있고 실제 DB 정책은 열려있던 9개 화면(goods/rooms/reviews/announcements/
 inquiries/orders/members 부가기능/대시보드 출석/classes CRUD)에 `has_permission()` 체크를
-실제로 연결하는 SQL migration 7개(products·rooms / reviews·announcements / inquiries·orders /
-center_members / manager_set_attendance / classes own-other) + 대응 UI 게이팅을 작성.
+실제로 연결하는 SQL migration 6개(products·rooms / reviews·announcements / inquiries·orders /
+center_members / manager_set_attendance / classes own-other) + 대응 UI 게이팅을 사용자가
+SQL Editor에서 순서대로 실행, 확인 쿼리로 라이브 반영까지 검증 완료.
 `fulfill_order()`는 조사와 달리 이미 `pass.payment.create`로 막혀 있었고(SEC-116/118 포함,
 라이브 정의 확인으로 발견) 정적 파일 추측 대신 실제 정의를 가져와 확인 후 그대로 두고 그
 키에 맞춰 UI만 게이팅. `class_trainers`(담당 강사 배정)도 own/other 판정 기준 자체가
 무방비였던 걸 발견해 `createClass`/`updateClass`/`createRecurringClasses`/`updateClassGroup`/
 `setClassTrainers*` 전부를 새 RPC로 옮기고(시그니처는 유지, 호출부 무변경)
 own(담당 강사 본인)/other × group/private 실제 판정을 서버에 구현. `npm run build` 통과.
-SQL은 사용자가 SQL Editor에서 직접 실행해야 적용됨(기존 스태프가 권한을 아직 안 받았으면
-갑자기 기능을 못 쓰게 되는 동작 변경 있음 — 상세는 `docs/TODO.md` P1-5b 참고).
+기존 스태프가 이 권한들을 아직 역할에 못 받았으면 갑자기 기능을 못 쓰게 되는 동작 변경이
+있으니 필요한 스태프에게 미리 권한을 부여해둘 것 — 상세는 `docs/TODO.md` P1-5b 참고.
 
 ## 2026-08-21 — P1-5 버튼 단위 권한 게이팅 (Bucket 1, 9개 화면)
 
