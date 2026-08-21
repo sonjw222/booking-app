@@ -1568,7 +1568,7 @@ PR #66, #67 모두 Integration이 19분대에 `conclusion: cancelled`로 끝났�
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 (테스트 코드/fixture 문제로 확인됨 — 앱 로직 버그 아님) |
-| 현재 상태 | **거의 완료.** ATT-SEC-B/C/D/E(waitlist)·AUTO-SEC-N/O까지 근본 원인 규명 및 수정 완료(N/O는 원인이 2단계로 겹쳐 있어 2차 수정까지 필요했음 — 아래 참고). H(양쪽 케이스)/L/M은 최근 재실행들에서 안정적으로 통과 중(격리 전환 자체가 문제는 아니었음). **F만 `createIsolatedOwnedCenter()`의 stale-cleanup 두더지잡기 잔존 이슈**로 간헐적으로 크래시함(아래 F/L 단락 참고, 별도 구조 개선 필요 — 이번 배치 범위 밖). |
+| 현재 상태 | **거의 완료 — CI로 검증됨(213/214 통과).** ATT-SEC-B/C/D/E(waitlist)·AUTO-SEC-N/O까지 근본 원인 규명 및 수정 완료(N/O는 원인이 2단계로 겹쳐 있어 2차 수정까지 필요했음 — 아래 참고, PR #71 CI에서 N/O 둘 다 통과 확인). H(양쪽 케이스)/L/M은 최근 재실행들에서 안정적으로 통과 중(격리 전환 자체가 문제는 아니었음). **F만 `createIsolatedOwnedCenter()`의 stale-cleanup 두더지잡기 잔존 이슈**로 간헐적으로 크래시함(아래 F/L 단락 참고, 별도 구조 개선 필요 — 이번 배치 범위 밖). |
 | 근거 파일 | `tests/integration/auto-book-membership-security.test.ts`, `tests/integration/manager-set-attendance-membership-integrity.test.ts`, `lib/settings.ts` |
 
 PR #68(문서 전용 변경) CI에서 Integration 11건 실패(`auto-book-membership-security.test.ts`
