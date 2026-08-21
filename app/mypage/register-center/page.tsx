@@ -33,11 +33,8 @@ export default function RegisterCenterPage() {
     try {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) throw new Error("로그인이 필요해요");
-      const { data: acc, error: accErr } = await supabase
-        .from("accounts").select("id").eq("auth_id", authData.user.id).single();
-      if (accErr || !acc) throw new Error("계정 정보를 찾을 수 없어요: " + (accErr?.message ?? ""));
 
-      await registerCenterForAccount(acc.id, { ...fields, licenseFile });
+      await registerCenterForAccount({ ...fields, licenseFile });
       setDone(true);
     } catch (e: any) {
       setError(e.message);

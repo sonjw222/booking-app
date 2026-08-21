@@ -186,7 +186,7 @@ export default function LoginPage() {
         //    완전히 같은 저장 로직(lib/centers.ts)을 재사용한다(로직 복제 금지, UI-003/ACL-005).
         if (role === "manager") {
           try {
-            await registerCenterForAccount(account.id, { ...centerFields, licenseFile });
+            await registerCenterForAccount({ ...centerFields, licenseFile });
           } catch (e: any) {
             setMessage({ type: "error", text: e.message });
             return;

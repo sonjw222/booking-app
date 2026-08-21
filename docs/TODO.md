@@ -720,24 +720,33 @@ mock 없이 실제 구현체를 그대로 import하기 때문에 "Supabase 접�
 바꾸면 같은 문제가 재발할 수 있습니다. 이번 작업에서는 Node 22 우회만 적용하고, 구조 분리는
 하지 않았습니다.
 
-### P2-11. 센터 등록(`registerCenterForAccount`)이 사업자등록번호 중복을 막지 않고 원자적이지 않음
+### P2-11. (2026-08-22, 완료) 센터 등록(`registerCenterForAccount`)이 사업자등록번호 중복을 막지 않고 원자적이지 않음
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인됨 — 기존부터 있던 상태를 그대로 유지, 이번 작업에서 새로 만들지 않음** |
-| 근거 파일 | `lib/centers.ts`(`registerCenterForAccount`), `schema.sql`(`centers.business_number`) |
-| 완료 조건 | 사업자등록번호 중복 등록을 막을지(막는다면 DB unique 제약 또는 사전 조회) 제품 결정을 받고, `centers`→`manager_centers`→역할 연결의 3단계 클라이언트 호출을 트랜잭션 RPC로 묶을지(SQL 변경 필요) 결정함 |
+| 현재 상태 | **완료.** DB unique 제약 + 트랜잭션 RPC 둘 다 적용(제품 결정 확인 후 진행) |
+| 근거 파일 | `lib/centers.ts`(`registerCenterForAccount`), `add_register_center_for_account_safe_rpc.sql` |
 | 관련 문서 | [ACL-005/UI-003 완료 보고, 2026-08-02](./CHANGELOG.md) |
 
 ACL-005/UI-003 작업 중 전수 조사하며 확인: `centers.business_number`에는 `unique` 제약이 없고,
-애플리케이션 코드 어디에도 중복 검사가 없다(회원가입 매니저 흐름부터 그랬음 — 이번에 새로
-만든 문제 아님). 또한 센터 등록은 `centers` insert → `manager_centers` insert → `center_roles`
-조회 → `manager_centers` update(오너 role_id 연결) 4단계를 별도 요청으로 순차 호출하며, 트랜잭션으로
-묶여 있지 않아 중간 단계 실패 시 부분적으로만 생성된 상태가 남을 수 있다(이번 작업에서 각 단계의
-error를 무시하지 않고 사용자에게 표시하도록는 고쳤지만, 이미 커밋된 이전 단계를 되돌리지는
-않는다). SQL 변경(unique 제약 또는 단일 RPC로 원자화)이 필요한 사안이라 이번 배치(SQL 실행 금지
-지시)에서는 수정하지 않고 여기 기록만 한다.
+애플리케이션 코드 어디에도 중복 검사가 없었다. 또한 센터 등록은 `centers` insert →
+`manager_centers` insert → `center_roles` 조회 → `manager_centers` update(오너 role_id 연결)
+4단계를 별도 요청으로 순차 호출하며, 트랜잭션으로 묶여 있지 않아 중간 단계 실패 시 부분적으로만
+생성된 상태가 남을 수 있었다.
+
+**2026-08-22 해결**: `centers.business_number`에 부분 unique 인덱스(빈 값/NULL 제외)를 추가하고,
+4단계 로직 전체를 `register_center_for_account_safe()` 하나의 security definer RPC로 묶었다
+(`add_register_center_for_account_safe_rpc.sql`, 라이브 적용 확인됨). RPC 적용 전 읽기 전용
+진단으로 (1) `business_number` 기존 중복 행 없음, (2) `centers`/`manager_centers`의 실제 라이브
+RLS 정책(`pg_policies`)을 먼저 확인한 뒤, 그 정책들이 원래 강제하던 조건(본인 계정으로만 등록,
+센터당 최초 1명만 오너로 연결)을 함수 본문 안에서 동일하게 재현했다 — SECURITY DEFINER로
+RLS를 우회하는 대신 원자성만 얻는 방향. `lib/centers.ts`는 `accountId` 파라미터를 없애고
+(RPC가 `my_account_id()`로 직접 확인) 단일 `supabase.rpc()` 호출로 축소, 호출부 2곳
+(`app/login/page.tsx`, `app/mypage/register-center/page.tsx`)과
+`tests/unit/centers.registerCenterForAccount.test.ts`를 함께 갱신. 단, `businessNumber` 입력값
+포맷 정규화(하이픈 유무 등)는 하지 않아 표기만 다른 사실상 동일 번호의 중복은 여전히 통과할 수
+있음 — 별도 이슈로 필요시 추가.
 
 ### P2-12. SEC-007/008 RLS 정책 초안의 세부 결정 필요 항목
 

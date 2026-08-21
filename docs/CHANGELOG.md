@@ -8,6 +8,14 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-22 — P2-11 센터 등록 원자화 + 사업자등록번호 중복 방지
+
+`centers.business_number`에 부분 unique 인덱스를 추가하고, `centers`→`manager_centers`→오너
+역할 연결 4단계 클라이언트 호출을 `register_center_for_account_safe()` 단일 트랜잭션 RPC로
+묶었다(`add_register_center_for_account_safe_rpc.sql`, 라이브 적용). `lib/centers.ts`의
+`registerCenterForAccount()`가 `accountId` 인자 없이 RPC 하나만 호출하도록 축소됐고, 회원가입/
+"내 센터 등록하기" 두 호출부와 단위 테스트를 함께 갱신했다.
+
 ## 2026-08-20 — P1-18 계정 탈퇴 정책 Live 적용 확인 + 자동 통합테스트 추가
 
 사용자가 `fix_account_deletion_real_anonymization.sql`을 SQL Editor에서 실행(소급 대상 1건
