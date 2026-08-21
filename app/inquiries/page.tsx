@@ -100,8 +100,14 @@ function InquiriesPageContent() {
 
   return (
     <div className="app-shell member-inquiries">
+      <div className="back-header">
+        <a className="side" href="/mypage">‹</a>
+        <div className="title">1:1 문의</div>
+        <div className="side" />
+      </div>
+
       <div className="inquiry-head">
-        <div><h1>1:1 문의</h1><p>센터와 나눈 대화를 확인하세요</p></div>
+        <p>센터와 나눈 대화를 확인하세요</p>
         <button className="primary-btn" style={{ width: "auto", padding: "8px 14px", fontSize: 13 }} onClick={openPicker}>
           새 문의
         </button>

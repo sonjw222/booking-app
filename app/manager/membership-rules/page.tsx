@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
+import UiIcon from "../../components/UiIcon";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
   fetchProducts, createProduct, deleteProduct,
@@ -243,7 +244,7 @@ export default function MembershipRulesPage() {
                       <div key={r.id} className="pass-rule">
                         <span className="pass-rule-text">{ruleToText(r)}</span>
                         {canEditRules && (
-                          <button className="pass-rule-del" disabled={busy} onClick={() => handleDeleteRule(r.id)}>✕</button>
+                          <button className="pass-rule-del" disabled={busy} onClick={() => handleDeleteRule(r.id)} aria-label="규칙 삭제"><UiIcon name="close" size={13} /></button>
                         )}
                       </div>
                     ))

@@ -182,7 +182,8 @@ export default function MyPage() {
       </a>
 
       <div className="menu-section-label">설정</div>
-      <a className="list-row" href="/settings/theme"><div className="left"><span className="icon"><UiIcon name="palette" /></span>테마 설정</div><span className="chevron">›</span></a>
+      {/* 다크 모드가 아직 완전히 정리되지 않아 진입 링크를 숨김 — /settings/theme 라우트
+          자체는 남겨둠(직접 URL로는 접근 가능), 다크 모드 정리되면 다시 노출 */}
       <a className="list-row" href="/settings/notifications"><div className="left"><span className="icon"><UiIcon name="bell" /></span>알림 설정</div><span className="chevron">›</span></a>
       <a className="list-row" href="/settings/account"><div className="left"><span className="icon"><UiIcon name="shield" /></span>계정 설정</div><span className="chevron">›</span></a>
       {profile?.isPlatformAdmin && (

@@ -186,7 +186,7 @@ export default function LoginPage() {
         //    완전히 같은 저장 로직(lib/centers.ts)을 재사용한다(로직 복제 금지, UI-003/ACL-005).
         if (role === "manager") {
           try {
-            await registerCenterForAccount(account.id, { ...centerFields, licenseFile });
+            await registerCenterForAccount({ ...centerFields, licenseFile });
           } catch (e: any) {
             setMessage({ type: "error", text: e.message });
             return;
@@ -385,11 +385,11 @@ export default function LoginPage() {
 
         <div className="social-list auth-social-grid">
           <button className="social-btn google" onClick={() => handleSocial("google")} disabled={!!socialLoading}>
-            <span className="social-ic" style={{ background: "#fff", color: "#4285F4", border: "1px solid var(--line)" }}>G</span>
+            <span className="social-ic">G</span>
             {socialLoading === "google" ? "이동 중..." : mode === "signup" ? "Google로 가입하기" : "Google로 계속하기"}
           </button>
           <button className="social-btn kakao" onClick={() => handleSocial("kakao")} disabled={!!socialLoading}>
-            <span className="social-ic" style={{ background: "#3C1E1E", color: "#FEE500" }}>K</span>
+            <span className="social-ic">K</span>
             {socialLoading === "kakao" ? "이동 중..." : mode === "signup" ? "카카오로 가입하기" : "카카오로 시작하기"}
           </button>
           <button className="social-btn naver" onClick={() => handleSocial("naver")} disabled={!!socialLoading}>
