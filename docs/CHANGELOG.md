@@ -8,6 +8,14 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-21 — P2-22 leftover 정리 헬퍼 공통화 (`clearProfileReservationsOnKstDates`)
+
+`auto-book-membership-security.test.ts`(AUTO-SEC-I)와 `daily-book-limit-wiring.test.ts`가
+각자 만든 거의 동일한 "profile+KST 날짜 기준 leftover 예약 정리" 코드를
+`tests/integration/setup.ts`의 공용 헬퍼 `clearProfileReservationsOnKstDates()`(+
+`kstDateStr()`)로 합쳤다. 완료 조건 (a)(자동 sweep)는 여전히 미해결이지만, 재발 시 새 파일에
+한 줄만 추가하면 되도록 관례를 굳혔다(`tests/README.md`, `docs/TODO.md` P2-22 참고).
+
 ## 2026-08-22 — UI 버그 4건: floating nav 여백 미정의, 센터상세 fixed 버튼, 프로필 아바타 색상, 문의 뒤로가기
 
 - `--floating-nav-clearance` 토큰이 앱 전체 15곳 이상에서 참조되는데 어디에도 정의돼 있지 않아

@@ -104,6 +104,14 @@ provider 선택 로직만 검증합니다. 아무 설정 없이 바로 실행됩
 통합 테스트가 만든 데이터를 스스로 지우지 못합니다. 개발 프로젝트에 테스트 데이터가 쌓이면
 저장소에 이미 있는 `reset_test_data.sql`로 주기적으로 초기화하세요.
 
+**공유 fixture 센터를 쓰는 날짜 기반 검증 테스트**(`daily_book_limit`처럼 "오늘 몇 건 예약했는지"를
+세는 RPC를 검증하는 경우)는 다른 세션/파일이 같은 센터·같은 계정에 남긴 leftover 예약과 충돌하기
+쉽습니다(P2-22, `docs/TODO.md` 참고). 새로 이런 테스트를 추가할 때는 예약을 만들기 전에
+`tests/integration/setup.ts`의 `clearProfileReservationsOnKstDates(profileId, kstDates, centerId?)`를
+호출해 해당 프로필이 그 KST 날짜(들)에 이미 가진 leftover 예약만 정확히 지우고 시작하세요(넓게
+훑어서 지우는 sweep이 아니라 "이 테스트가 실제로 쓸 날짜만" 겨냥하는 방식 — 다른 세션이 막 만든
+진짜 데이터를 건드리지 않기 위함).
+
 `admin-assignment-security.test.ts`는 자신이 만든 예약을 `admin_cancel_reservation`으로 취소한 뒤
 예약·수업 행을 삭제합니다(`afterAll`, best-effort — 실패해도 스위트를 실패시키지 않음). 다만:
 - `memberships`는 매니저가 delete할 수 있는 RLS 정책이 없어 위와 동일하게 남습니다.
