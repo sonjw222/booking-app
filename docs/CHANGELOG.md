@@ -8,6 +8,14 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-21 — P2-22 leftover 정리 헬퍼 공통화 (`clearProfileReservationsOnKstDates`)
+
+`auto-book-membership-security.test.ts`(AUTO-SEC-I)와 `daily-book-limit-wiring.test.ts`가
+각자 만든 거의 동일한 "profile+KST 날짜 기준 leftover 예약 정리" 코드를
+`tests/integration/setup.ts`의 공용 헬퍼 `clearProfileReservationsOnKstDates()`(+
+`kstDateStr()`)로 합쳤다. 완료 조건 (a)(자동 sweep)는 여전히 미해결이지만, 재발 시 새 파일에
+한 줄만 추가하면 되도록 관례를 굳혔다(`tests/README.md`, `docs/TODO.md` P2-22 참고).
+
 ## 2026-08-21 — P2-22 세 번째 재발: `daily-book-limit-wiring.test.ts`도 shared fixture 충돌로 방어 코드 추가
 
 PR #72 CI에서 `daily-book-limit-wiring.test.ts`가 `USER_A`의 `centerAId`(P2-22가 이미

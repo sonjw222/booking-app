@@ -34,6 +34,8 @@ import {
   createKstSameDayFutureClass,
   cleanupTestClassAdmin,
   requireEnv,
+  kstDateStr,
+  clearProfileReservationsOnKstDates,
   type TestUser,
 } from "./setup";
 import { fetchSettings, saveSettings } from "../../lib/settings";
@@ -71,10 +73,6 @@ function kstDow(iso: string): number {
   const d = Number(parts.find((p) => p.type === "day")!.value);
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
-function kstDateStr(iso: string): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(iso));
-}
-
 // [발견, 2026-08-21] auto_book_membership()의 "이미 그 날짜에 예약이 있으면 건너뛴다" 체크는
 // center_id로 스코프되지 않고 profile_id(회원)만 기준이다 — 이 파일이 쓰는 USER_B는 여러
 // 통합 테스트 파일이 공유하는 계정이라, 전혀 무관한 센터의 leftover 확정 예약이 날짜만
@@ -82,21 +80,12 @@ function kstDateStr(iso: string): string {
 // "P1override-B" 예약이 AUTO-SEC-I가 만든 두 번째 수업과 같은 KST 날짜라 예약 개수가
 // 2가 아닌 1로 나왔다). auto_book_membership() 자체를 센터 스코프로 고치는 건 매출에
 // 영향 있는 핵심 RPC라 이 배치 범위 밖(별도 설계 검토 필요, docs/TODO.md 참고) — 대신
-// 이 파일이 실제로 쓰는 날짜만 정확히 겨냥해 사전에 정리해서 테스트를 안정화한다(다른
-// 센터/날짜의 데이터는 건드리지 않음 — 공유 개발 DB에서 동시에 돌 수 있는 다른 세션의
-// 작업과 충돌하지 않도록 최대한 좁게 스코프).
+// 이 파일이 실제로 쓰는 날짜만 정확히 겨냥해 사전에 정리해서 테스트를 안정화한다.
+// [P2-22 근본 수정, 2026-08-21] 같은 문제가 daily-book-limit-wiring.test.ts에도 재발해
+// 공용 헬퍼(clearProfileReservationsOnKstDates, ./setup)로 통합했다 — 이 파일 전용 래퍼로
+// USER_B의 profileId만 미리 채워 넘긴다.
 async function clearUserBReservationsOnKstDates(dates: string[]): Promise<void> {
-  const admin = getFixtureAdminClient();
-  const { data, error } = await admin
-    .from("reservations")
-    .select("id, status, classes(start_time)")
-    .eq("profile_id", userB.profileId)
-    .in("status", ["confirmed", "waitlisted", "attended"]);
-  if (error) throw new Error(`USER_B 예약 조회 실패: ${error.message}`);
-  const target = (data ?? []).filter((r: any) => r.classes && dates.includes(kstDateStr(r.classes.start_time)));
-  if (target.length === 0) return;
-  const { error: delErr } = await admin.from("reservations").delete().in("id", target.map((r: any) => r.id));
-  if (delErr) throw new Error(`USER_B leftover 예약 정리 실패: ${delErr.message}`);
+  await clearProfileReservationsOnKstDates(userB.profileId, dates);
 }
 
 function getAnonClient(): SupabaseClient {
