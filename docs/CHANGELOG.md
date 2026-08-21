@@ -8,6 +8,17 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-22 — P2-14 소규모 항목 3건 정리 + P2-16 고아 라우트 진입 링크 추가
+
+- `lib/classes.ts`의 미사용 `previewCopySchedule`/`copySchedule`(구버전 nth-weekday 복사 로직)와
+  전용 헬퍼 `nthWeekdayOfMonth`/타입 `CopyPreviewItem` 제거(실제 사용 중인 `copyByWeekday`/
+  `copyByDate`는 유지).
+- `app/manager/staff/permissions/page.tsx`의 클라이언트 접근 가드를 서버 쓰기 정책
+  (`add_personal_permissions.sql`: 오너 또는 `facility.role_permission` 보유자)과 일치시킴 —
+  오너가 이 권한을 다른 매니저에게 부여해도 정작 그 매니저는 화면에 못 들어가던 불일치를 해소.
+  `app/manager/staff/page.tsx`의 진입 링크도 같은 기준(`canManageRolePermissions`)으로 가드.
+- `app/mypage/page.tsx`에 고아 라우트였던 `/mypage/history`(전체 예약 내역) 진입 링크 추가.
+
 ## 2026-08-21 — P2-22 세 번째 재발: `daily-book-limit-wiring.test.ts`도 shared fixture 충돌로 방어 코드 추가
 
 PR #72 CI에서 `daily-book-limit-wiring.test.ts`가 `USER_A`의 `centerAId`(P2-22가 이미

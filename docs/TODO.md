@@ -909,13 +909,19 @@ platform admin, `notification_logs`: `message.sms.view` 또는 `message.push.vie
 
 2026-08-02 Track B 감사에서 발견했지만 개별 P0-P1으로 승격하기엔 영향이 작거나 제품 판단이
 먼저 필요한 항목들:
-- `lib/classes.ts`의 구버전 `previewCopySchedule`/`copySchedule`(nth-weekday 방식)이 화면에서
-  더 이상 호출되지 않는 죽은 코드로 남아있음 — 제거 검토.
+- ~~`lib/classes.ts`의 구버전 `previewCopySchedule`/`copySchedule`(nth-weekday 방식)이 화면에서
+  더 이상 호출되지 않는 죽은 코드로 남아있음~~ **[2026-08-22 완료]** 어디서도 참조하지 않음을
+  grep으로 재확인 후 `nthWeekdayOfMonth`/`CopyPreviewItem`과 함께 완전히 제거(`copyByWeekday`/
+  `copyByDate`는 실제로 쓰이는 별개 함수라 유지). `npm run build` 통과 확인.
 - 반복수업 생성(`perDayMode`)과 `updateClassGroup`이 여러 행을 순차 처리해 원자성이 없음(중간
-  실패 시 일부만 반영) — RPC로 묶을지 판단 필요(SQL).
-- `app/manager/staff/permissions/page.tsx`의 클라이언트 가드(오너만 진입 가능)와 서버 쓰기
-  정책(`facility.role_permission` 보유자도 가능)이 불일치 — 오너가 그 권한을 다른 매니저에게
-  줘도 그 매니저는 화면에 못 들어감(RLS/화면 로직 중 하나를 맞출지 판단 필요).
+  실패 시 일부만 반영) — RPC로 묶을지 판단 필요(SQL). (미해결, 이번 배치 범위 밖)
+- ~~`app/manager/staff/permissions/page.tsx`의 클라이언트 가드(오너만 진입 가능)와 서버 쓰기
+  정책(`facility.role_permission` 보유자도 가능)이 불일치~~ **[2026-08-22 완료]** 클라이언트
+  가드를 서버 정책(`add_personal_permissions.sql`의 INSERT/UPDATE/DELETE 정책 기준: 오너 또는
+  `facility.role_permission` 보유자)에 맞춰 `hasAccess` 판정을 `isOwner || fetchMyEffectivePermissionKeys(...).has('facility.role_permission')`로 확장(SQL 변경 없음, 화면 로직만).
+  같은 이유로 `app/manager/staff/page.tsx`의 "개인 권한 설정" 진입 링크도 이 페이지의 다른
+  버튼들과 동일하게 `canManageRolePermissions`로 가드해, 권한 없는 스태프에게 클릭 후 막히는
+  링크가 보이지 않도록 함께 맞췄다.
 - `membership_schedule_rules`는 `pass.update` 권한을 요구하는데 메뉴 게이트는 `pass.create`만
   확인 — 권한 카탈로그 정합성 재검토 필요(SQL 또는 메뉴 게이트 키 변경).
 - `progress_records`에 UPDATE RLS 정책 자체가 없음(SELECT/INSERT/DELETE만 존재) — 현재는
@@ -966,9 +972,11 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 - **문의 답변 알림이 스레드로 딥링크되지 않음**: `notifications.data.thread_id`가 저장되지만
   `app/notifications/page.tsx`/`app/manager/notifications/page.tsx`의 클릭 핸들러가 `link`만
   보고 이동해 목록 화면까지만 가고 특정 스레드는 자동 선택되지 않는다 — 이번 배치에서 함께 수정.
-- **`app/mypage/history/page.tsx`(전체 예약 내역)가 어디서도 링크되지 않는 고아 라우트**:
-  `fetchFullHistory()`(최대 500건, 상태별 필터)까지 구현돼 있지만 진입 경로가 없다 — 별도
-  판단 필요(내 예약 탭에 링크를 추가할지, 페이지 자체를 정리할지).
+- ~~`app/mypage/history/page.tsx`(전체 예약 내역)가 어디서도 링크되지 않는 고아 라우트~~
+  **[2026-08-22 완료]** `app/mypage/page.tsx`의 "내 정보" 섹션(구매 내역 위)에 "예약 내역" 진입
+  링크를 추가했다. 참고: 같은 페이지의 `history`/`showAllHistory` state(`fetchMyPage()`가
+  이미 내려주는 값)는 여전히 어디서도 렌더링되지 않는 죽은 state로 남아있음(이번 수정과 별개
+  이슈 — 진입 링크는 신규 라우트로 보내는 방식을 택했고, 이 state 자체를 정리하는 건 범위 밖).
 - **(E-6) 운영설정의 "문의 게시판 사용"/"락커 기능 사용"/"회원앱 라운지 사용" 토글 제거**:
   `use_inquiry_board`/`use_locker`/`use_lounge` 세 컬럼 모두 `schema.sql`/`lib/settings.ts`/
   이 UI 외에는 어디서도 읽지 않는 죽은 설정임을 grep으로 확인(관리자가 켜고 꺼도 실제 효과

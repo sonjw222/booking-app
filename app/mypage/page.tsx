@@ -164,6 +164,10 @@ export default function MyPage() {
       })()}
 
       <div className="menu-section-label">내 정보</div>
+      <a className="list-row" href="/mypage/history">
+        <div className="left"><span className="icon"><UiIcon name="list" /></span>예약 내역</div>
+        <span className="chevron">›</span>
+      </a>
       <a className="list-row" href="/purchases">
         <div className="left"><span className="icon"><UiIcon name="receipt" /></span>구매 내역</div>
         <span className="chevron">›</span>
