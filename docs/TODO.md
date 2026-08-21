@@ -1589,14 +1589,14 @@ draft_proposed.sql`, Live 적용 확인됨)을 직접 읽어보니 `where c.cent
 `fetchSettings`/`saveSettings`로 명시적으로 999를 설정하고 `afterAll`에서 원복하도록 추가
 (N/O가 이미 쓰던 것과 같은 패턴).
 
-### P2-29. (신규, 2026-08-20) `admin_action_logs` service_role GRANT 없음 — draft SQL만 작성, 미실행
+### P2-29. (2026-08-21, 완료) `admin_action_logs` service_role GRANT 없음 — draft SQL 작성 후 사용자 적용 완료
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 (테스트 fixture 전용 gap — 앱 런타임 영향 없음, P2-13/P2-19와 같은 부류) |
-| 현재 상태 | **미적용 — 승인 대기.** `information_schema.role_table_grants` 직접 조회로 `admin_action_logs`에 `service_role` privilege가 0행임을 확인(PR #46 조사, 2026-08-12). `lib/`/`app/` 전체에 `service_role` 사용이 없어 실제 회원/매니저 화면은 영향받지 않음 — `admin_action_logs` 행은 항상 `admin_assign_reservation`/`admin_cancel_reservation`(둘 다 security definer RPC) 내부에서만 INSERT되므로 이 GRANT 없이도 정상 동작한다. 유일한 사용처는 테스트 fixture 정리 스크립트(`cleanup_shared_test_center_pollution_draft_proposed.sql`)로, GRANT가 없어 이 스크립트의 진단/정리가 제한적이었다(P2-19 조사에서도 "service_role의 PostgREST GRANT가 없어 독립 재조회는 못 함"으로 확인). |
-| 근거 파일 | `fix_service_role_grants_admin_action_logs_minimal_draft_proposed.sql`(신규, SELECT+DELETE만 — 코드 전수 검색 결과 실제 쓰이는 오퍼레이션만 최소 부여), `rollback_fix_service_role_grants_admin_action_logs_minimal_draft_proposed.sql`(신규) |
-| 완료 조건 | 사용자가 SQL Editor에서 GRANT 실행 |
+| 현재 상태 | **완료.** `information_schema.role_table_grants` 직접 조회로 `admin_action_logs`에 `service_role` privilege가 0행임을 확인(PR #46 조사, 2026-08-12). `lib/`/`app/` 전체에 `service_role` 사용이 없어 실제 회원/매니저 화면은 영향받지 않음 — `admin_action_logs` 행은 항상 `admin_assign_reservation`/`admin_cancel_reservation`(둘 다 security definer RPC) 내부에서만 INSERT되므로 이 GRANT 없이도 정상 동작한다. 유일한 사용처는 테스트 fixture 정리 스크립트(`cleanup_shared_test_center_pollution_draft_proposed.sql`)로, GRANT가 없어 이 스크립트의 진단/정리가 제한적이었다(P2-19 조사에서도 "service_role의 PostgREST GRANT가 없어 독립 재조회는 못 함"으로 확인). 사용자가 Supabase SQL Editor에서 GRANT SELECT, DELETE 실행 완료(2026-08-21). |
+| 근거 파일 | `fix_service_role_grants_admin_action_logs_minimal_draft_proposed.sql`(신규, SELECT+DELETE만 — 코드 전수 검색 결과 실제 쓰이는 오퍼레이션만 최소 부여, 적용 완료), `rollback_fix_service_role_grants_admin_action_logs_minimal_draft_proposed.sql`(신규) |
+| 완료 조건 | ~~사용자가 SQL Editor에서 GRANT 실행~~ 완료 |
 | 관련 문서 | PR #46(원래 이 조사가 나온 PR. P0-6/P1-12 상태 정정과 함께 묶여 있었는데, P1-12는 PR #62가 별도로 재감사 중이라 이 GRANT 부분만 분리해 먼저 반영함) |
 
 같은 조사에서 나온 `class_allowed_products` GRANT 건은 이미 main에 별도 세션이 적용한
