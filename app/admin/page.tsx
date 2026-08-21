@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { checkPlatformAdmin } from "../../lib/admin";
 import Loading from "../components/Loading";
+import UiIcon from "../components/UiIcon";
 
 export default function AdminHub() {
   const [ok, setOk] = useState<boolean | null>(null);
@@ -40,15 +41,15 @@ export default function AdminHub() {
 
       <div className="menu-section-label">관리</div>
       <a className="list-row" href="/admin/centers">
-        <div className="left"><span className="icon">🏢</span>센터 승인 관리</div>
+        <div className="left"><span className="icon"><UiIcon name="building" /></span>센터 승인 관리</div>
         <span className="chevron">›</span>
       </a>
       <a className="list-row" href="/admin/categories">
-        <div className="left"><span className="icon">🏷️</span>종목 관리</div>
+        <div className="left"><span className="icon"><UiIcon name="grid" /></span>종목 관리</div>
         <span className="chevron">›</span>
       </a>
       <a className="list-row" href="/admin/banners">
-        <div className="left"><span className="icon">📢</span>배너 관리</div>
+        <div className="left"><span className="icon"><UiIcon name="megaphone" /></span>배너 관리</div>
         <span className="chevron">›</span>
       </a>
     </div>

@@ -342,7 +342,7 @@ function MembersContent() {
         <button className={`filter-chip ${!gradeFilter ? "on" : ""}`} onClick={() => setGradeFilter(null)}>등급 전체</button>
         {grades.map((g) => (
           <button key={g.id} className={`filter-chip ${gradeFilter === g.id ? "on" : ""}`} onClick={() => setGradeFilter(g.id)}>
-            <span className="grade-dot" style={{ background: g.color ?? "#ccc" }} />{g.name}
+            <span className="grade-dot" style={{ background: g.color ?? "var(--line-strong)" }} />{g.name}
           </button>
         ))}
       </div>
@@ -399,7 +399,7 @@ function MembersContent() {
                 <div className="mem-name-line">
                   <span className="mem-name">{m.name}</span>
                   {m.gradeName && (
-                    <span className="grade-badge" style={{ background: (m.gradeColor ?? "#999") + "22", color: m.gradeColor ?? "#666" }}>
+                    <span className="grade-badge" style={{ background: m.gradeColor ? m.gradeColor + "22" : "var(--surface)", color: m.gradeColor ?? "var(--text-dim)" }}>
                       {m.gradeName}
                     </span>
                   )}
@@ -495,7 +495,7 @@ function MembersContent() {
                   <button className={`filter-chip ${!detail.gradeId ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetGrade(null)}>없음</button>
                   {grades.map((g) => (
                     <button key={g.id} className={`filter-chip ${detail.gradeId === g.id ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetGrade(g.id)}>
-                      <span className="grade-dot" style={{ background: g.color ?? "#ccc" }} />{g.name}
+                      <span className="grade-dot" style={{ background: g.color ?? "var(--line-strong)" }} />{g.name}
                     </button>
                   ))}
                 </div>
@@ -618,7 +618,7 @@ function MembersContent() {
               <div className="grade-list">
                 {grades.map((g) => (
                   <div key={g.id} className="grade-item">
-                    <span className="grade-dot" style={{ background: g.color ?? "#ccc" }} />
+                    <span className="grade-dot" style={{ background: g.color ?? "var(--line-strong)" }} />
                     <span className="grade-name">{g.name}</span>
                     <button className="text-btn danger" disabled={busy} onClick={() => handleDeleteGrade(g)}>삭제</button>
                   </div>

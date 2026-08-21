@@ -13,6 +13,7 @@ import {
   type Lead, type LeadStatus,
 } from "../../../lib/leads";
 import Loading from "../../components/Loading";
+import UiIcon from "../../components/UiIcon";
 
 const STATUS_LABEL: Record<LeadStatus, string> = {
   new: "신규", contacted: "상담중", converted: "회원전환", dropped: "이탈",
@@ -145,7 +146,7 @@ export default function LeadsPage() {
                     <div className="profile-item-name">
                       {l.name} <span className={`hist-status s-${l.status}`}>{STATUS_LABEL[l.status]}</span>
                     </div>
-                    {l.phone && <div className="profile-item-sub">📞 {l.phone}</div>}
+                    {l.phone && <div className="profile-item-sub"><UiIcon name="phone" size={13} /> {l.phone}</div>}
                     {l.channel && <div className="profile-item-sub">유입: {l.channel}</div>}
                     {l.memo && <div className="profile-item-sub">{l.memo}</div>}
                   </button>

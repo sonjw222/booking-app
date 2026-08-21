@@ -30,6 +30,7 @@ import MapPreview from "../../components/MapPreview";
 import RichTextEditor from "../../components/RichTextEditor";
 import { fetchCategories, type ServiceCategory } from "../../../lib/operator";
 import { ZoomableImage } from "../../components/ImageViewer";
+import UiIcon from "../../components/UiIcon";
 
 // 구버전 평문 블록을 HTML로 변환 (줄바꿈 유지 + 태그 이스케이프)
 function escapeToHtml(text: string): string {
@@ -295,7 +296,7 @@ export default function CenterInfoPage() {
                 <div className="intro-block-controls">
                   <button className="ib-btn" onClick={() => moveBlock(i, -1)} disabled={i === 0}>↑</button>
                   <button className="ib-btn" onClick={() => moveBlock(i, 1)} disabled={i === introBlocks.length - 1}>↓</button>
-                  <button className="ib-btn del" onClick={() => removeBlock(i)}>✕</button>
+                  <button className="ib-btn del" onClick={() => removeBlock(i)} aria-label="블록 삭제"><UiIcon name="close" size={13} /></button>
                 </div>
                 {blk.type === "text" ? (
                   <RichTextEditor

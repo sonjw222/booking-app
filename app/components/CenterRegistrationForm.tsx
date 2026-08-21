@@ -6,6 +6,8 @@
   회원가입("센터 운영자") 흐름과 마이페이지 "내 센터 등록하기" 흐름이 이 하나만 공유한다.
 */
 
+import UiIcon from "./UiIcon";
+
 export type CenterFieldsValue = {
   name: string;
   address: string;
@@ -55,7 +57,7 @@ export default function CenterRegistrationForm({ value, onChange, onFileSelect, 
       />
       <label className="file-field">
         <span className="file-label">
-          {value.licenseFileName ? `📎 ${value.licenseFileName}` : "사업자등록증 첨부"}
+          {value.licenseFileName ? <><UiIcon name="paperclip" size={14} /> {value.licenseFileName}</> : "사업자등록증 첨부"}
         </span>
         <input
           type="file"

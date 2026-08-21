@@ -1889,6 +1889,42 @@ RLS부터 적용해야 함. 정책 초안은 `add_rls_gap_tables_draft_proposed.
 전용 테이블이라 중복이 아니라 미구현 기능임(`message.sms.*`/`message.push.*` 권한이 카탈로그에
 이미 있음). 정책 초안은 `add_rls_gap_tables_draft_proposed.sql`에 준비해둠(미실행).
 
+### P2-DS-1. (신규, 2026-08-22) 디자인 시스템 정합성 — 이번 점검에서 남긴 후속 작업
+
+| 항목 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 상태 | 미착수 |
+| 근거 파일 | `app/globals.css`, `app/cart/page.tsx`, `app/checkout/page.tsx`, `app/center/[id]/page.tsx`, `docs/13_Design_System.md` |
+| 완료 조건 | 아래 4개 항목이 처리되고, 디자인 시스템 문서와 코드가 일치함 |
+
+2026-08-22 전체 UI 점검(회원·관리자·운영자)에서 수정하지 않고 남긴 것들:
+
+1. **결제수단·길찾기 이모지** — `cart/page.tsx`, `checkout/page.tsx`의 결제수단 목록
+   (`💳 🟡 🔵 🏦 🤝`)과 `center/[id]/page.tsx`의 길찾기 앱 목록(`🟡 🟢 🔵 🗺️`)이 아직 이모지다.
+   🟡/🟢/🔵는 벤더 로고 대신 쓰는 색 원이라 outline 아이콘 하나로 바꾸면 제공자 구분이 사라진다.
+   벤더 로고 애셋을 넣거나, `--vendor-*` 토큰 기반 색 점 + `UiIcon` 조합으로 재설계 필요.
+2. **캘린더 선택 상태가 4종** — 선택된 날짜 표현이 `.cal-cell.selected`(accent 배경),
+   `.mypage-cal-cell.sel`(surface + accent outline), `.copy-cal-cell.on`(accent 배경),
+   `.app-date-grid button.on`(원형 ink 배경)으로 제각각. 주말 색·월 이동 버튼은 이번에 통일했으나
+   선택 상태는 셀 내부 구성(점·금액 표시)이 달라 시각 확인 없이 통일하기 어려워 남김.
+3. **다크 모드 시각 확인** — `--card-bg` 신설과 semantic soft/line 계열 다크 재정의를 이번에 추가했는데
+   브라우저 확인을 못 했다. `[data-theme="charcoal"]`에서 카드·배지·시트를 실제로 볼 것.
+4. **디자인 토큰 계약 테스트 확장** — `tests/unit/designSystem.contract.test.ts`에
+   "`app/**/*.tsx`에 인라인 하드코딩 색상이 없어야 한다"와 "`globals.css` 규칙부에 승인된
+   리터럴(#fff, 테마 스와치) 외 hex가 없어야 한다"를 추가하면 이번 정리가 되돌아가는 것을 막을 수 있다.
+
+### P2-DS-2. (2026-08-22 기록, 즉시 반증됨 — 실제 이슈 아님) `npm run build`가 `@playwright/test` 미설치로 실패한다는 보고는 worktree 환경 문제였음
+
+이 항목을 작성한 background agent가 자신의 격리된 git worktree에서 `npm run build`를 돌렸는데,
+그 worktree는 `.gitignore`된 `node_modules`가 새로 만들어질 때 `npm install`을 한 번도 실행하지
+않은 상태였다("상위 저장소도 마찬가지"라는 판단은 틀렸음 — 실제로는 메인 작업 디렉터리에
+`@playwright/test`가 정상 설치돼 있음, `ls node_modules/@playwright` 확인). 같은 worktree에서
+`npm install --silent` 후 `npm run build`를 다시 돌리면 정상적으로 통과한다(2026-08-22 재확인).
+CLAUDE.md 6·7번 규칙은 막혀 있지 않다 — 신규 worktree를 만들 때는 `npm install`부터 하는 것이
+이번 세션 내내 반복된 관례([Multi-session coordination] 메모리 참고할 것이 아니라, 그냥
+worktree 생성 직후 습관으로 굳힐 것).
+
 ## 7. P3 — 용도·존속 여부가 불명확한 객체
 
 ### P3-7. `product_passes`
