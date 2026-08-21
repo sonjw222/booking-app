@@ -75,6 +75,30 @@ function kstDateStr(iso: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(iso));
 }
 
+// [발견, 2026-08-21] auto_book_membership()의 "이미 그 날짜에 예약이 있으면 건너뛴다" 체크는
+// center_id로 스코프되지 않고 profile_id(회원)만 기준이다 — 이 파일이 쓰는 USER_B는 여러
+// 통합 테스트 파일이 공유하는 계정이라, 전혀 무관한 센터의 leftover 확정 예약이 날짜만
+// 겹쳐도 이 파일의 자동예약 테스트를 방해할 수 있다(실제로 재현됨: 다른 파일이 남긴
+// "P1override-B" 예약이 AUTO-SEC-I가 만든 두 번째 수업과 같은 KST 날짜라 예약 개수가
+// 2가 아닌 1로 나왔다). auto_book_membership() 자체를 센터 스코프로 고치는 건 매출에
+// 영향 있는 핵심 RPC라 이 배치 범위 밖(별도 설계 검토 필요, docs/TODO.md 참고) — 대신
+// 이 파일이 실제로 쓰는 날짜만 정확히 겨냥해 사전에 정리해서 테스트를 안정화한다(다른
+// 센터/날짜의 데이터는 건드리지 않음 — 공유 개발 DB에서 동시에 돌 수 있는 다른 세션의
+// 작업과 충돌하지 않도록 최대한 좁게 스코프).
+async function clearUserBReservationsOnKstDates(dates: string[]): Promise<void> {
+  const admin = getFixtureAdminClient();
+  const { data, error } = await admin
+    .from("reservations")
+    .select("id, status, classes(start_time)")
+    .eq("profile_id", userB.profileId)
+    .in("status", ["confirmed", "waitlisted", "attended"]);
+  if (error) throw new Error(`USER_B 예약 조회 실패: ${error.message}`);
+  const target = (data ?? []).filter((r: any) => r.classes && dates.includes(kstDateStr(r.classes.start_time)));
+  if (target.length === 0) return;
+  const { error: delErr } = await admin.from("reservations").delete().in("id", target.map((r: any) => r.id));
+  if (delErr) throw new Error(`USER_B leftover 예약 정리 실패: ${delErr.message}`);
+}
+
 function getAnonClient(): SupabaseClient {
   const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
   const anonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
@@ -132,44 +156,16 @@ async function createIsolatedOwnedCenter(manager: TestUser): Promise<string> {
       .select("id")
       .like("name", "SEC-114 격리센터-%");
     if (staleLookupError) throw new Error(`이전 격리센터 조회 실패: ${staleLookupError.message}`);
-    const staleIds = (staleCenters ?? []).map((center: any) => center.id as string);
-    if (staleIds.length > 0) {
-    const { data: staleClasses, error: staleClassLookupError } = await admin
-      .from("classes").select("id").in("center_id", staleIds);
-    if (staleClassLookupError) throw new Error(`이전 격리센터 수업 조회 실패: ${staleClassLookupError.message}`);
-    const staleClassIds = (staleClasses ?? []).map((cls: any) => cls.id as string);
-    const { data: staleMemberships, error: staleMembershipLookupError } = await admin
-      .from("memberships").select("id").in("center_id", staleIds);
-    if (staleMembershipLookupError) throw new Error(`이전 격리센터 수강권 조회 실패: ${staleMembershipLookupError.message}`);
-    const staleMembershipIds = (staleMemberships ?? []).map((membership: any) => membership.id as string);
-    if (staleClassIds.length > 0) {
-      const { error } = await admin.from("reservations").delete().in("class_id", staleClassIds);
-      if (error) throw new Error(`이전 격리센터 예약 정리 실패: ${error.message}`);
-      const { error: classError } = await admin.from("classes").delete().in("id", staleClassIds);
-      if (classError) throw new Error(`이전 격리센터 수업 정리 실패: ${classError.message}`);
-    }
-    // [P2-28 수정] AUTO-SEC-L이 fulfill_order()를 통해 실제 payments 행을 만들게 되면서
-    // (격리 센터 전환 전에는 없던 경로) memberships 삭제가 payments_membership_id_fkey
-    // 위반으로 실패하기 시작했다 — payments는 memberships/centers 둘 다에 FK가 있고 둘 다
-    // ON DELETE CASCADE가 아니므로, memberships를 지우기 전에 먼저 지워야 한다.
-    const { error: stalePaymentsDeleteError } = await admin.from("payments").delete().in("center_id", staleIds);
-    if (stalePaymentsDeleteError) throw new Error(`이전 격리센터 결제 정리 실패: ${stalePaymentsDeleteError.message}`);
-    if (staleMembershipIds.length > 0) {
-      const { error } = await admin.from("reservations").delete().in("membership_id", staleMembershipIds);
-      if (error) throw new Error(`이전 격리센터 수강권 예약 정리 실패: ${error.message}`);
-      const { error: membershipError } = await admin.from("memberships").delete().in("id", staleMembershipIds);
-      if (membershipError) throw new Error(`이전 격리센터 수강권 정리 실패: ${membershipError.message}`);
-    }
-    const { error: staleProductDeleteError } = await admin.from("products").delete().in("center_id", staleIds);
-    if (staleProductDeleteError) throw new Error(`이전 격리센터 상품 정리 실패: ${staleProductDeleteError.message}`);
-    const { error: staleLinkDeleteError } = await admin.from("manager_centers").delete().in("center_id", staleIds);
-    if (staleLinkDeleteError) throw new Error(`이전 격리센터 관리자 연결 정리 실패: ${staleLinkDeleteError.message}`);
-    const { error: staleRoleDeleteError } = await admin.from("center_roles").delete().in("center_id", staleIds);
-    if (staleRoleDeleteError) throw new Error(`이전 격리센터 역할 정리 실패: ${staleRoleDeleteError.message}`);
-    const { error: staleSettingsDeleteError } = await admin.from("center_settings").delete().in("center_id", staleIds);
-    if (staleSettingsDeleteError) throw new Error(`이전 격리센터 설정 정리 실패: ${staleSettingsDeleteError.message}`);
-      const { error: staleDeleteError } = await admin.from("centers").delete().in("id", staleIds);
-      if (staleDeleteError) throw new Error(`이전 격리센터 정리 실패: ${staleDeleteError.message}`);
+    // [P2-28 근본 수정, 2026-08-21] 예전엔 여기서 reservations/classes/payments/memberships/
+    // products/manager_centers/center_roles/center_settings를 테이블별로 하나씩 지웠는데,
+    // FK 위반이 날 때마다("payments_membership_id_fkey" 다음엔 "center_members_center_id_fkey")
+    // 그 테이블을 하나씩 추가하는 식이라 계속 새 위반이 나왔다(whack-a-mole). centers를
+    // 직접/간접 참조하는 전체 FK 그래프(information_schema로 전수 조사, 2026-08-21)를 반영한
+    // delete_test_center_cascade() RPC 하나로 교체 — 앞으로 새 FK 위반이 나오면 이 RPC만
+    // 갱신하면 되고, 이 파일이나 다른 테스트 파일을 다시 뒤질 필요가 없다.
+    for (const c of staleCenters ?? []) {
+      const { error } = await admin.rpc("delete_test_center_cascade", { p_center_id: (c as any).id });
+      if (error) throw new Error(`이전 격리센터 정리 실패(id=${(c as any).id}): ${error.message}`);
     }
   }
   // [P0-7/N/O 수정] status가 'approved'가 아니면 reserve_class() 등 여러 RPC가
@@ -287,18 +283,16 @@ afterAll(async () => {
     }
     catch (e: any) { errors.push(e.message); }
   }
-  if (cleanupCenterIds.length > 0) {
+  // [P2-28 근본 수정] 이 파일이 이번 실행에서 만든 격리 센터도, 위 stale 정리와 같은
+  // 이유로 manager_centers/center_roles/center_settings 세 테이블만으로는 부족했다
+  // (AUTO-SEC-L의 fulfill_order() 호출로 payments/memberships가, 그 외 흐름으로
+  // center_members 등이 함께 생길 수 있음) — delete_test_center_cascade() RPC로 통일.
+  for (const centerId of cleanupCenterIds) {
     try {
-      const { error: linkError } = await admin.from("manager_centers").delete().in("center_id", cleanupCenterIds);
-      if (linkError) throw linkError;
-      const { error: roleError } = await admin.from("center_roles").delete().in("center_id", cleanupCenterIds);
-      if (roleError) throw roleError;
-      const { error: settingsError } = await admin.from("center_settings").delete().in("center_id", cleanupCenterIds);
-      if (settingsError) throw settingsError;
-      const { error } = await admin.from("centers").delete().in("id", cleanupCenterIds);
+      const { error } = await admin.rpc("delete_test_center_cascade", { p_center_id: centerId });
       if (error) throw error;
     }
-    catch (e: any) { errors.push(e.message); }
+    catch (e: any) { errors.push(`격리센터 정리 실패(id=${centerId}): ${e.message}`); }
   }
   // 존재하지 않는 userA를 참조하던 중복 안전장치를 제거함(2026-08-18) — AUTO-SEC-K가
   // 이미 자체 try/finally로 userB의 is_platform_admin을 확실히 원복한다(테스트 본문
@@ -476,8 +470,15 @@ describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합)
     // [P2-28 수정] AUTO-SEC-F와 같은 이유(공유 센터 스캔 오염) — 격리 센터 사용.
     const isolatedCenterId = await createIsolatedOwnedCenter(managerA);
     const product = await createAutoBookProduct(isolatedCenterId, "SEC-114-H-마감", [0, 1, 2, 3, 4, 5, 6]);
-    const cls = await createClassOnDow(isolatedCenterId, new Date().getDay(), { title: "AUTO-SEC-H-마감", baseHoursFromNow: 2 });
+    // [발견, 2026-08-21] 이 상품은 요일 전체([0..6])를 허용하므로 dow 매칭이 필요 없다 —
+    // createClassOnDow()는 targetDow에 맞는 후보를 찾을 때까지 최대 7일을 검색하는데, 자정
+    // 근처(KST)에 이 테스트가 돌면 "2시간 뒤"가 다음 날짜로 넘어가 new Date().getDay()와
+    // 어긋나서 훨씬 먼 미래(최대 +6일) 수업을 반환할 수 있다 — 그러면 "마감이 이미 지났는지"
+    // 검증하려던 전제(수업이 2시간 뒤)가 깨진다. dow 매칭이 필요 없으니 createFutureTestClass를
+    // 직접 써서 "정확히 2시간 뒤"를 보장한다.
+    const cls = await createFutureTestClass(isolatedCenterId, { title: "AUTO-SEC-H-마감", hoursFromNow: 2 });
     cleanupClassIds.push(cls.id);
+    await clearUserBReservationsOnKstDates([kstDateStr(cls.startTime)]);
     // 수업이 2시간 뒤인데 마감을 "시작 300분(5시간) 전"으로 지정 → 마감 시각은 이미 3시간 전.
     const admin = getFixtureAdminClient();
     const { error: updErr } = await admin.from("classes").update({ booking_deadline_min: 300 }).eq("id", cls.id);
@@ -500,6 +501,10 @@ describe("SEC-114 AUTO-SEC-I~J: 정상 동작 정확성", () => {
     const cls1 = await createClassOnDow(isolatedCenterId, dow, { title: "AUTO-SEC-I-1주차", baseHoursFromNow: 48 });
     const cls2 = await createClassOnDow(isolatedCenterId, dow, { title: "AUTO-SEC-I-2주차", baseHoursFromNow: 48 + 7 * 24 });
     cleanupClassIds.push(cls1.id, cls2.id);
+    // USER_B가 다른 파일/센터에서 남긴 leftover 확정 예약이 이 두 날짜 중 하나와 겹치면
+    // auto_book_membership()의 "하루 1건" 체크(센터 무관, profile_id 기준)에 걸려 이 테스트가
+    // 실패한다 — 위 clearUserBReservationsOnKstDates() 참고.
+    await clearUserBReservationsOnKstDates([kstDateStr(cls1.startTime), kstDateStr(cls2.startTime)]);
     const mem = await createAutoBookMembership(isolatedCenterId, userB.profileId, product.id, { remainingCount: 3 });
 
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });

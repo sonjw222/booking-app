@@ -1448,6 +1448,13 @@ P2-20 조사 과정에서 발견됐지만 이번 배치 범위 밖이라 코드 
 | 근거 파일 | `tests/integration/setup.ts`(`getOrCreateOwnedTestCenter()`의 sweep, TEST-004 #45), `tests/integration/auto-book-membership-security.test.ts`(`AUTO-SEC-I`), `cleanup_p2_22_shared_center_class_fixtures_draft_proposed.sql`(신규, 적용 완료) |
 | 완료 조건 | (a) sweep 조건을 "과거"뿐 아니라 "제목이 알려진 테스트 fixture 패턴이고 미래인 것"까지 넓혀서 재발 자체를 막을 것(아직 안 함 — 이번엔 이미 쌓인 것만 1회성으로 정리) |
 
+**2026-08-21 재발 확인**: [P2-28](#p2-28)의 AUTO-SEC-I가 같은 메커니즘으로 다시 실패했다 —
+이번엔 leftover class가 아니라 leftover **reservation**(`USER_B` 소유, 다른 파일이 남김)이
+원인이었다는 차이만 있음. `auto_book_membership()`의 "하루 1건" 체크가 `profile_id`만
+기준이고 `center_id` 스코프가 없다는 게 이 재발들의 공통 근본 원인 — 완료 조건 (a)의 sweep
+확장 대신, 이번엔 P2-28에서 해당 테스트 파일 하나에만 좁게 방어 코드를 추가했다(전체 해결
+아님, 계속 열어둠).
+
 **2026-08-14 leftover 정리 완료**: 제목 리터럴을 나열하는 대신 구조적 기준(이 하나의 공유
 테스트센터 + `status='open'` + `start_time > now()` + `created_at`이 1시간 이상 과거 — 지금
 막 어떤 세션이 만든 class까지 실수로 지우지 않기 위한 안전 마진)으로 `cleanup_p2_22_shared_
@@ -1633,12 +1640,12 @@ PR #66, #67 모두 Integration이 19분대에 `conclusion: cancelled`로 끝났�
 `npx playwright install` 20분 멈춤도 이 안전장치 덕에 자동 정리됨 — P2-24). 없애면 그 사고가
 재발할 위험이 있어, 대신 정상 실행 시간에 여유를 더 두는 쪽으로 조정.
 
-### P2-28. (2026-08-21, N/O 근본 원인 2건 모두 규명·수정 완료 — F만 잔존 이슈) PR #68 Integration 재현 실패 11건 — waitlist 설정 미보장·N/O RLS+센터 승인 상태 문제 해결
+### P2-28. (2026-08-21, 완료 — F 근본 수정 + H/I 새 이슈까지 해결) PR #68 Integration 재현 실패 11건 — waitlist 설정 미보장·N/O RLS+센터 승인 상태 문제 해결
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 (테스트 코드/fixture 문제로 확인됨 — 앱 로직 버그 아님) |
-| 현재 상태 | **거의 완료 — CI로 검증됨(213/214 통과).** ATT-SEC-B/C/D/E(waitlist)·AUTO-SEC-N/O까지 근본 원인 규명 및 수정 완료(N/O는 원인이 2단계로 겹쳐 있어 2차 수정까지 필요했음 — 아래 참고, PR #71 CI에서 N/O 둘 다 통과 확인). H(양쪽 케이스)/L/M은 최근 재실행들에서 안정적으로 통과 중(격리 전환 자체가 문제는 아니었음). **F만 `createIsolatedOwnedCenter()`의 stale-cleanup 두더지잡기 잔존 이슈**로 간헐적으로 크래시함(아래 F/L 단락 참고, 별도 구조 개선 필요 — 이번 배치 범위 밖). |
+| 현재 상태 | **완료.** ATT-SEC-B/C/D/E(waitlist)·AUTO-SEC-N/O 근본 원인 규명 및 수정 완료(PR #71 CI 검증). **F(stale-cleanup 두더지잡기)도 근본 수정 완료(2026-08-21, PR #72 작업 중 발견)** — `delete_test_center_cascade()` SQL 함수(information_schema로 `centers`를 직접/간접 참조하는 FK 그래프 전수 조사 후 작성)로 하드코딩 나열 방식을 교체, 로컬에서 연속 2회 안정적으로 통과 확인. 이 수정으로 파일이 끝까지 실행되자 **이전엔 F의 크래시에 가려 안 보이던 새 문제 2건(H, I)도 같이 드러나 함께 해결**했다(아래 참고). |
 | 근거 파일 | `tests/integration/auto-book-membership-security.test.ts`, `tests/integration/manager-set-attendance-membership-integrity.test.ts`, `lib/settings.ts` |
 
 PR #68(문서 전용 변경) CI에서 Integration 11건 실패(`auto-book-membership-security.test.ts`
@@ -1665,13 +1672,48 @@ draft_proposed.sql`, Live 적용 확인됨)을 직접 읽어보니 `where c.cent
   깨뜨렸다. `payments` 삭제 단계를 추가하고 L 자신도 만든 membership/payment를 자체
   정리하도록 고쳤더니, **재실행에서 F가 이번엔 `center_members_center_id_fkey`로 또
   크래시했다** — 다른 이전 실행이 남긴 leftover 격리 센터가 이번엔 다른 테이블(`center_members`,
-  아마 memberships INSERT 시 트리거로 자동 생성되는 회원 행)에 걸린 것. 두더지잡기 패턴 —
-  `payments`만 고쳐서는 근본 해결이 아니고, "이 센터/멤버십을 참조하는 모든 테이블"을
-  일반화해서 도는 stale-cleanup으로 다시 짜야 한다(이번 배치 범위 밖, 아래 완료 조건 참고).
+  아마 memberships INSERT 시 트리거로 자동 생성되는 회원 행)에 걸린 것. 두더지잡기 패턴이었다.
+
+  **2026-08-21 근본 수정(PR #72 작업 중, "P2-28 근본 수정 먼저" 사용자 지시)**: `payments`만
+  고쳐서는 계속 새 FK가 나올 수밖에 없었던 이유는 애초에 "센터를 참조하는 어떤 테이블이
+  있는지"를 하나씩 발견하며 하드코딩했기 때문 — `information_schema`로 `centers`를
+  직접/간접(2단계까지) 참조하는 FK 전체를 조사해(총 hop-1 43개 테이블 + hop-2 34개 관계)
+  실제 존재하는 모든 경로를 반영한 `delete_test_center_cascade(p_center_id)` SQL 함수로
+  교체했다(`add_delete_test_center_cascade_rpc.sql`, Live 적용 완료·확인 쿼리로 `service_role`
+  전용 EXECUTE 권한 확인). `createIsolatedOwnedCenter()`의 stale-cleanup과 파일 `afterAll`의
+  이번 실행분 정리 둘 다 이 RPC 하나로 통일 — 앞으로 새 FK 위반이 나오면 이 SQL 함수만
+  갱신하면 되고 테스트 파일을 다시 뒤질 필요가 없다. 로컬에서 연속 2회 안정 통과로 검증.
 - **H(양쪽 케이스)/A~E/K/L/M/P: 격리 전환만으로 통과, 이후 재실행들에서도 안정적.** F의
   stale-cleanup 크래시에 휘말려 같은 파일 실행에서 함께 실패한 적은 있었으나(공유
   `staleIsolatedCentersCleaned` 플래그 예외로 인한 collateral damage), F가 크래시하지
   않은 실행에서는 전부 통과 — 이 자체의 로직 문제는 아니었음.
+
+**2026-08-21 새로 발견(F 근본 수정 후 파일이 끝까지 도니 드러남) — H(마감)/I, P1-5/P2-28과
+무관한 별개 문제, 테스트 레벨에서 방어 완료**:
+- **AUTO-SEC-I(예약 2건 기대, 1건만 예약됨)**: [P2-22](#p2-22)가 이미 문서화한 것과 정확히
+  같은 패턴의 재발이다 — 그때는 leftover **class**(같은 공유 센터에 300개+, 제목도 "CLASS-001
+  기본값사용"/"SETTINGS-REAUDIT *" 등 이번과 겹침)가 원인이었는데, 이번엔 격리 센터 전환
+  이후라 leftover **reservation**(확정 예약, "P1override-B")이 원인이라는 점만 다르다.
+  근본 메커니즘은 같음: `auto_book_membership()`의 "이 회원이 그 날짜에 이미 예약이 있으면
+  건너뛴다" 체크가 `center_id`로 스코프되지 않고 `profile_id`(회원) 하나만 기준이라(라이브
+  정의로 확인), 이 파일이 공유하는 `USER_B` 계정이 전혀 무관한 다른 통합 테스트 파일/센터에
+  남긴 leftover와 날짜만 우연히 겹쳐도 차단된다. `auto_book_membership()`을 센터 스코프로
+  고치는 게 맞는지(의도적 정책일 수도 있음 — 매출 영향 있는 핵심 RPC)는 판단이 필요해 이번엔
+  건드리지 않고, 테스트가 실제로 쓰는 날짜에 한해 `USER_B`의 leftover 예약을 사전 정리하는
+  `clearUserBReservationsOnKstDates()` 헬퍼를 추가해 방어(다른 날짜/센터 데이터는 안 건드림
+  — 공유 개발 DB에서 동시에 도는 다른 세션과 충돌 안 하도록 최대한 좁게 스코프). **주의:
+  이건 이 파일 하나만 방어한 것 — P2-22 완료 조건 (a)(sweep을 미래 leftover까지 넓히는 근본
+  수정)는 여전히 안 됨. 다른 통합 테스트 파일이 USER_B로 비슷한 날짜 기반 자동예약 검증을
+  추가하면 똑같이 재발할 수 있다.**
+- **AUTO-SEC-H(마감 지난 수업, 예약 0건 기대인데 1건 예약됨)**: `createClassOnDow()`가
+  `targetDow`에 맞는 후보를 찾을 때까지 최대 7일을 검색하는데, 이 상품은 요일 전체
+  ([0..6])를 허용해 dow 매칭이 애초에 불필요했다. 자정 근처(KST)에 테스트가 돌면 "2시간
+  뒤"가 다음 날짜로 넘어가 `new Date().getDay()`와 어긋나면서 최대 +6일 떨어진 수업을
+  반환할 수 있어, "수업이 2시간 뒤"라는 테스트 전제 자체가 깨졌다(밤 11시반쯤 실행하다
+  재현·확인). dow 매칭이 필요 없는 케이스이므로 `createFutureTestClass()`를 직접 호출해
+  "정확히 2시간 뒤"를 보장하도록 수정.
+- 근거: `tests/integration/auto-book-membership-security.test.ts`. 로컬 재실행 2회
+  연속(17/17, 이어서 28/28 with manager-set-attendance-membership-integrity.test.ts) 통과.
 - **N/O: 근본 원인 2건, 모두 규명·수정 완료(2026-08-21).** 실제 CI 로그를 보면 `booked`
   assertion이 아니라 fixture 준비 단계에서 죽고 있었다 — booked count 문제라는 원래 가정
   자체가 틀렸다.

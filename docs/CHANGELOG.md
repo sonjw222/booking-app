@@ -8,6 +8,19 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-21 — P2-28 근본 수정: stale-cleanup 두더지잡기 종결 + H/I 새 이슈 발견·방어
+
+PR #72(P1-5) Integration CI가 `auto-book-membership-security.test.ts`의 AUTO-SEC-F에서
+계속 실패해(`center_members_center_id_fkey`), `createIsolatedOwnedCenter()`의 하드코딩
+테이블 나열 정리 로직을 `information_schema` 전수 조사 기반 `delete_test_center_cascade()`
+SQL 함수로 교체(Live 적용). F는 통과했지만 파일이 처음으로 끝까지 실행되면서 그동안 F의
+크래시에 가려 안 보이던 별개 문제 2건(AUTO-SEC-H/I)이 드러났다 — 둘 다 `auto_book_membership()`
+자체가 아니라 테스트 fixture의 암묵적 전제 문제로 확인(H: 자정 근처 실행 시 dow-매칭 헬퍼가
+"2시간 뒤"를 며칠 뒤로 잘못 찾는 버그, I: `auto_book_membership()`의 "하루 1건" 체크가
+`profile_id`만 기준이라 공유 `USER_B` 계정의 무관한 leftover 예약과 날짜가 겹쳐 차단 —
+P2-22가 이미 문서화한 것과 같은 재발 패턴). 둘 다 테스트 레벨에서 방어 코드 추가로 해결,
+로컬 연속 2회 안정 통과 확인. 상세는 `docs/TODO.md` P2-28/P2-22 참고.
+
 ## 2026-08-21 — P1-5b Bucket 2 서버측 권한(RLS/RPC) 연결, Live 적용 완료
 
 카탈로그 키만 있고 실제 DB 정책은 열려있던 9개 화면(goods/rooms/reviews/announcements/
