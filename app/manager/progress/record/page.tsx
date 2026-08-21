@@ -9,7 +9,6 @@
 */
 
 import { Suspense, useCallback, useEffect, useState } from "react";
-import ManagerNav from "../../../components/ManagerNav";
 import { useSearchParams } from "next/navigation";
 import Loading from "../../../components/Loading";
 import DatePicker from "../../../components/DatePicker";
@@ -290,7 +289,6 @@ function ProgressRecordContent() {
           </div>
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

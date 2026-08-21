@@ -7,7 +7,6 @@
 */
 
 import { useEffect, useState } from "react";
-import BottomNav from "../../components/BottomNav";
 
 type Theme = "burgundy" | "charcoal";
 
@@ -59,7 +58,6 @@ export default function ThemeSettingsPage() {
           </button>
         ))}
       </div>
-      <BottomNav />
     </div>
   );
 }

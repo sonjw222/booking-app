@@ -7,7 +7,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../../lib/settings";
@@ -316,7 +315,6 @@ export default function SettingsPage() {
           <div style={{ height: 40 }} />
         </div>
       )}
-      <ManagerNav />
     </div>
   );
 }

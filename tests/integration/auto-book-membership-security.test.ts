@@ -91,6 +91,9 @@ async function createAutoBookProduct(
     .insert({
       center_id: centerId, name: `${name}-${crypto.randomUUID()}`, product_kind: "pass", pass_type: "count",
       total_count: 999, is_on_sale: true, is_active: true, auto_book_days: autoBookDays,
+      // [P2-25 수정] price 미설정 시 스키마 기본값 0으로 생성돼, AUTO-SEC-L이 만드는
+      // orders.amount(10000)와 fulfill_order()의 가격 검증이 항상 불일치해 실패했다.
+      price: 10000,
     })
     .select("id").single();
   if (error || !data) throw new Error(`자동예약용 상품 생성 실패: ${error?.message}`);
@@ -146,6 +149,12 @@ async function createIsolatedOwnedCenter(manager: TestUser): Promise<string> {
       const { error: classError } = await admin.from("classes").delete().in("id", staleClassIds);
       if (classError) throw new Error(`이전 격리센터 수업 정리 실패: ${classError.message}`);
     }
+    // [P2-28 수정] AUTO-SEC-L이 fulfill_order()를 통해 실제 payments 행을 만들게 되면서
+    // (격리 센터 전환 전에는 없던 경로) memberships 삭제가 payments_membership_id_fkey
+    // 위반으로 실패하기 시작했다 — payments는 memberships/centers 둘 다에 FK가 있고 둘 다
+    // ON DELETE CASCADE가 아니므로, memberships를 지우기 전에 먼저 지워야 한다.
+    const { error: stalePaymentsDeleteError } = await admin.from("payments").delete().in("center_id", staleIds);
+    if (stalePaymentsDeleteError) throw new Error(`이전 격리센터 결제 정리 실패: ${stalePaymentsDeleteError.message}`);
     if (staleMembershipIds.length > 0) {
       const { error } = await admin.from("reservations").delete().in("membership_id", staleMembershipIds);
       if (error) throw new Error(`이전 격리센터 수강권 예약 정리 실패: ${error.message}`);
@@ -286,9 +295,10 @@ afterAll(async () => {
     }
     catch (e: any) { errors.push(e.message); }
   }
-  // AUTO-D가 userA를 임시 platform admin으로 만들었다면 반드시 원복(영구 권한 상승 방지).
-  try { await admin.from("accounts").update({ is_platform_admin: false }).eq("id", userA.accountId); }
-  catch (e: any) { errors.push(e.message); }
+  // 존재하지 않는 userA를 참조하던 중복 안전장치를 제거함(2026-08-18) — AUTO-SEC-K가
+  // 이미 자체 try/finally로 userB의 is_platform_admin을 확실히 원복한다(테스트 본문
+  // 참고). 이 줄은 그 리팩터 과정에서 변수명이 안 맞게 남아 tsc 컴파일 자체를 깨뜨리고
+  // 있었다 — 실제로는 중복이라 로직 손실 없이 삭제.
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 30000);
 
@@ -389,9 +399,13 @@ describe("SEC-114 AUTO-SEC-A~E: 권한 경계", () => {
 describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합)", () => {
   it("AUTO-SEC-F: membership_schedule_rules 불일치 요일/시간이면 자동예약되지 않는다", async () => {
     await asManagerA();
-    const product = await createAutoBookProduct(centerAId, "SEC-114-F", [0, 1, 2, 3, 4, 5, 6]);
+    // [P2-28 수정] 공유 센터(centerAId)를 쓰면 다른 파일/세션이 같은 센터에 동시에
+    // 만드는 다른 'all' 모드 수업들이 auto_book_membership()의 스캔 범위에 섞여
+    // booked=0 기대치가 깨진다(AUTO-SEC-G가 이미 이 이유로 격리 센터를 쓰는 것과 동일).
+    const isolatedCenterId = await createIsolatedOwnedCenter(managerA);
+    const product = await createAutoBookProduct(isolatedCenterId, "SEC-114-F", [0, 1, 2, 3, 4, 5, 6]);
     cleanupScheduleRuleProductIds.push(product.id);
-    const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-SEC-F" });
+    const cls = await createClassOnDow(isolatedCenterId, new Date().getDay(), { title: "AUTO-SEC-F" });
     cleanupClassIds.push(cls.id);
     const mismatchedDow = (kstDow(cls.startTime) + 1) % 7;
     const admin = getFixtureAdminClient();
@@ -399,7 +413,7 @@ describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합)
       product_id: product.id, day_of_week: mismatchedDow, start_time: null, class_title: null,
     });
     if (ruleErr) throw new Error(`schedule_rule 추가 실패: ${ruleErr.message}`);
-    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+    const mem = await createAutoBookMembership(isolatedCenterId, userB.profileId, product.id, { remainingCount: 3 });
 
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).toBeNull();
@@ -434,15 +448,17 @@ describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합)
 
   it("AUTO-SEC-H: 센터 휴무일이면 그 날짜는 자동예약되지 않는다", async () => {
     await asManagerA();
-    const product = await createAutoBookProduct(centerAId, "SEC-114-H-휴무", [0, 1, 2, 3, 4, 5, 6]);
-    const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-SEC-H-휴무" });
+    // [P2-28 수정] AUTO-SEC-F와 같은 이유(공유 센터 스캔 오염) — 격리 센터 사용.
+    const isolatedCenterId = await createIsolatedOwnedCenter(managerA);
+    const product = await createAutoBookProduct(isolatedCenterId, "SEC-114-H-휴무", [0, 1, 2, 3, 4, 5, 6]);
+    const cls = await createClassOnDow(isolatedCenterId, new Date().getDay(), { title: "AUTO-SEC-H-휴무" });
     cleanupClassIds.push(cls.id);
     const holidayDate = kstDateStr(cls.startTime);
     const admin = getFixtureAdminClient();
-    const { error: holErr } = await admin.from("center_holidays").insert({ center_id: centerAId, holiday_date: holidayDate });
+    const { error: holErr } = await admin.from("center_holidays").insert({ center_id: isolatedCenterId, holiday_date: holidayDate });
     if (holErr) throw new Error(`휴무일 등록 실패: ${holErr.message}`);
-    cleanupHolidays.push({ centerId: centerAId, date: holidayDate });
-    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+    cleanupHolidays.push({ centerId: isolatedCenterId, date: holidayDate });
+    const mem = await createAutoBookMembership(isolatedCenterId, userB.profileId, product.id, { remainingCount: 3 });
 
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).toBeNull();
@@ -452,14 +468,16 @@ describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합)
 
   it("AUTO-SEC-H: 개별 수업 예약마감(booking_deadline_min)이 이미 지났으면 자동예약되지 않는다", async () => {
     await asManagerA();
-    const product = await createAutoBookProduct(centerAId, "SEC-114-H-마감", [0, 1, 2, 3, 4, 5, 6]);
-    const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-SEC-H-마감", baseHoursFromNow: 2 });
+    // [P2-28 수정] AUTO-SEC-F와 같은 이유(공유 센터 스캔 오염) — 격리 센터 사용.
+    const isolatedCenterId = await createIsolatedOwnedCenter(managerA);
+    const product = await createAutoBookProduct(isolatedCenterId, "SEC-114-H-마감", [0, 1, 2, 3, 4, 5, 6]);
+    const cls = await createClassOnDow(isolatedCenterId, new Date().getDay(), { title: "AUTO-SEC-H-마감", baseHoursFromNow: 2 });
     cleanupClassIds.push(cls.id);
     // 수업이 2시간 뒤인데 마감을 "시작 300분(5시간) 전"으로 지정 → 마감 시각은 이미 3시간 전.
     const admin = getFixtureAdminClient();
     const { error: updErr } = await admin.from("classes").update({ booking_deadline_min: 300 }).eq("id", cls.id);
     if (updErr) throw new Error(`booking_deadline_min 설정 실패: ${updErr.message}`);
-    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+    const mem = await createAutoBookMembership(isolatedCenterId, userB.profileId, product.id, { remainingCount: 3 });
 
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).toBeNull();
@@ -547,16 +565,19 @@ describe("SEC-114 AUTO-SEC-K~L: platform admin 허용 + fulfill_order 내부 호
     // perform auto_book_membership(...)은 REVOKE EXECUTE FROM PUBLIC/anon과 무관하게
     // owner 권한으로 계속 동작해야 한다 — 이 테스트가 그 회귀를 실제로 잡아낸다
     // (막혀 있다면 주문 자체는 성공하지만 자동예약/차감이 조용히 0으로 끝난다).
+    // [P2-28 수정] 공유 센터를 쓰면 다른 leftover 수업이 섞여 total_count=999 기준
+    // remaining_count=998 단정이 깨진다 — 격리 센터 사용.
+    const isolatedCenterId = await createIsolatedOwnedCenter(managerA);
     const dow = new Date().getDay();
-    const cls = await createClassOnDow(centerAId, dow, { title: "AUTO-SEC-L", baseHoursFromNow: 96 });
+    const cls = await createClassOnDow(isolatedCenterId, dow, { title: "AUTO-SEC-L", baseHoursFromNow: 96 });
     cleanupClassIds.push(cls.id);
-    const product = await createAutoBookProduct(centerAId, "SEC-114-L", [dow]);
+    const product = await createAutoBookProduct(isolatedCenterId, "SEC-114-L", [dow]);
 
     const admin = getFixtureAdminClient();
     const { data: order, error: orderErr } = await admin
       .from("orders")
       .insert({
-        center_id: centerAId,
+        center_id: isolatedCenterId,
         profile_id: userB.profileId,
         product_id: product.id,
         product_name: "SEC-114-L",
@@ -582,15 +603,26 @@ describe("SEC-114 AUTO-SEC-K~L: platform admin 허용 + fulfill_order 내부 호
 
     const res = await fetchReservationsFor(newMembershipId);
     expect(res.some((r) => r.class_id === cls.id && r.status === "confirmed")).toBe(true);
+
+    // [P2-28 수정] fulfill_order()가 만드는 membership은 다른 테스트처럼
+    // cleanupMembershipIds로 자동 정리되지 않는다(직접 만든 게 아니라 RPC가 반환한
+    // id라서). 이 membership은 실제 payments 행도 동반하는데(이 파일에서 유일하게),
+    // payments FK 때문에 정리 안 하면 이 격리 센터를 afterAll이 지울 때도, 다음 실행이
+    // createIsolatedOwnedCenter()의 stale-cleanup에서 이 leftover를 만났을 때도 실패한다.
+    await admin.from("payments").delete().eq("membership_id", newMembershipId);
+    await admin.from("reservations").delete().eq("membership_id", newMembershipId);
+    await admin.from("memberships").delete().eq("id", newMembershipId);
   }, 30000);
 });
 
 describe("SEC-114 AUTO-SEC-M~P: 나머지 정책 회귀 커버리지(이번 배치에서 추가 — reserve_class와 동일 조건 실측)", () => {
   it("AUTO-SEC-M: selected 모드 + class_allowed_products에 지정된 product는 membership_schedule_rules 불일치와 무관하게 자동예약된다(P1-17 override)", async () => {
     await asManagerA();
-    const product = await createAutoBookProduct(centerAId, "SEC-114-M", [0, 1, 2, 3, 4, 5, 6]);
+    // [P2-28 수정] AUTO-SEC-F와 같은 이유(공유 센터 스캔 오염) — 격리 센터 사용.
+    const isolatedCenterId = await createIsolatedOwnedCenter(managerA);
+    const product = await createAutoBookProduct(isolatedCenterId, "SEC-114-M", [0, 1, 2, 3, 4, 5, 6]);
     cleanupScheduleRuleProductIds.push(product.id);
-    const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-SEC-M" });
+    const cls = await createClassOnDow(isolatedCenterId, new Date().getDay(), { title: "AUTO-SEC-M" });
     cleanupClassIds.push(cls.id);
     const mismatchedDow = (kstDow(cls.startTime) + 1) % 7;
     const admin = getFixtureAdminClient();
@@ -604,7 +636,7 @@ describe("SEC-114 AUTO-SEC-M~P: 나머지 정책 회귀 커버리지(이번 배�
     const { error: capErr } = await supabase
       .from("class_allowed_products").insert({ class_id: cls.id, product_id: product.id });
     if (capErr) throw new Error(`class_allowed_products 지정 실패: ${capErr.message}`);
-    const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+    const mem = await createAutoBookMembership(isolatedCenterId, userB.profileId, product.id, { remainingCount: 3 });
 
     // 대조: AUTO-SEC-F와 동일한 schedule_rule 불일치 상황이지만, 여기서는 'selected' +
     // class_allowed_products 명시 지정이 있으므로 override로 예약이 성사돼야 한다
@@ -617,65 +649,67 @@ describe("SEC-114 AUTO-SEC-M~P: 나머지 정책 회귀 커버리지(이번 배�
 
   it("AUTO-SEC-N: center_settings.daily_book_limit에 이미 도달한 날짜는 자동예약을 건너뛴다", async () => {
     await asManagerA();
-    const originalSettings = await fetchSettings(centerAId);
-    try {
-      const existingCls = await createKstSameDayFutureClass(centerAId, { title: "AUTO-SEC-N-기존예약", preferredMinutesFromNow: 180 });
-      cleanupClassIds.push(existingCls.id);
-      const dow = kstDow(existingCls.startTime);
+    // [P2-28 수정] 공유 센터(centerAId)를 쓰면 (a) 다른 leftover 수업이 스캔에 섞이고
+    // (b) 이 테스트가 center_settings를 잠깐 바꾸는 동안 다른 세션의 동시 실행과
+    // 충돌할 수 있다 — 격리 센터를 쓰면 둘 다 해결되고, 격리 센터는 afterAll에서
+    // 통째로 삭제되므로 설정 원복도 불필요하다.
+    const isolatedCenterId = await createIsolatedOwnedCenter(managerA);
+    const originalSettings = await fetchSettings(isolatedCenterId);
+    const existingCls = await createKstSameDayFutureClass(isolatedCenterId, { title: "AUTO-SEC-N-기존예약", preferredMinutesFromNow: 180 });
+    cleanupClassIds.push(existingCls.id);
+    const dow = kstDow(existingCls.startTime);
 
-      await asUserB();
-      await createTestMembership(centerAId, userB.profileId, { remainingCount: 3 });
-      const { error: bookErr } = await supabase.rpc("reserve_class", { p_class_id: existingCls.id, p_profile_id: userB.profileId });
-      if (bookErr) throw new Error(`기존 예약 실패: ${bookErr.message}`);
+    await asUserB();
+    await createTestMembership(isolatedCenterId, userB.profileId, { remainingCount: 3 });
+    const { error: bookErr } = await supabase.rpc("reserve_class", { p_class_id: existingCls.id, p_profile_id: userB.profileId });
+    if (bookErr) throw new Error(`기존 예약 실패: ${bookErr.message}`);
 
-      await asManagerA();
-      await saveSettings(centerAId, { ...originalSettings, dailyBookLimitEnabled: true, dailyBookLimit: 1 });
+    await asManagerA();
+    await saveSettings(isolatedCenterId, { ...originalSettings, dailyBookLimitEnabled: true, dailyBookLimit: 1 });
 
-      const product = await createAutoBookProduct(centerAId, "SEC-114-N", [dow]);
-      const autoCls = await createKstSameDayFutureClass(centerAId, { title: "AUTO-SEC-N-자동예약대상", preferredMinutesFromNow: 210 });
-      cleanupClassIds.push(autoCls.id);
-      const mem = await createAutoBookMembership(centerAId, userB.profileId, product.id, { remainingCount: 3 });
+    const product = await createAutoBookProduct(isolatedCenterId, "SEC-114-N", [dow]);
+    const autoCls = await createKstSameDayFutureClass(isolatedCenterId, { title: "AUTO-SEC-N-자동예약대상", preferredMinutesFromNow: 210 });
+    cleanupClassIds.push(autoCls.id);
+    const mem = await createAutoBookMembership(isolatedCenterId, userB.profileId, product.id, { remainingCount: 3 });
 
-      const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
-      expect(error).toBeNull();
-      expect((data as any).booked).toBe(0);
-      expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
-    } finally {
-      await asManagerA();
-      await saveSettings(centerAId, originalSettings);
-    }
+    const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
+    expect(error).toBeNull();
+    expect((data as any).booked).toBe(0);
+    expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
   });
 
   it("AUTO-SEC-O: center_settings.private_max_concurrent에 이미 도달한 시간대는 자동예약을 건너뛴다", async () => {
     await asManagerA();
-    const originalSettings = await fetchSettings(centerAId);
-    try {
-      await asUserB();
-      await createTestMembership(centerAId, userB.profileId, { remainingCount: 3 });
-      const occupied = await createFutureTestClass(centerAId, { title: "AUTO-SEC-O-기존점유", classFormat: "private", hoursFromNow: 96 });
-      cleanupClassIds.push(occupied.id);
-      const { error: bookErr } = await supabase.rpc("reserve_class", { p_class_id: occupied.id, p_profile_id: userB.profileId });
-      if (bookErr) throw new Error(`기존 프라이빗 예약 실패: ${bookErr.message}`);
+    // [P2-28 수정] AUTO-SEC-N과 같은 이유(공유 센터 스캔 오염 + 동시 settings 변경 충돌) —
+    // 격리 센터 사용, afterAll에서 통째로 삭제되므로 설정 원복 불필요.
+    const isolatedCenterId = await createIsolatedOwnedCenter(managerA);
+    const originalSettings = await fetchSettings(isolatedCenterId);
+    // [P2-25 수정] classes INSERT는 매니저 RLS가 필요하다 — asUserB() 이후로 미루면
+    // 회원 세션으로 수업을 생성하게 돼 RLS 위반으로 실패한다. managerA 세션인 채로
+    // 먼저 만든다.
+    const occupied = await createFutureTestClass(isolatedCenterId, { title: "AUTO-SEC-O-기존점유", classFormat: "private", hoursFromNow: 96 });
+    cleanupClassIds.push(occupied.id);
 
-      await asManagerA();
-      await saveSettings(centerAId, { ...originalSettings, privateMaxConcurrentEnabled: true, privateMaxConcurrent: 1 });
+    await asUserB();
+    await createTestMembership(isolatedCenterId, userB.profileId, { remainingCount: 3 });
+    const { error: bookErr } = await supabase.rpc("reserve_class", { p_class_id: occupied.id, p_profile_id: userB.profileId });
+    if (bookErr) throw new Error(`기존 프라이빗 예약 실패: ${bookErr.message}`);
 
-      // occupied와 겹치는 시간대(같은 hoursFromNow=96 → start/end 거의 동일, 최소 60분 duration과
-      // 비교하면 밀리초 단위 오차는 무시 가능하게 겹친다)에 두 번째 프라이빗 수업을 만든다.
-      const target = await createFutureTestClass(centerAId, { title: "AUTO-SEC-O-자동예약대상", classFormat: "private", hoursFromNow: 96 });
-      cleanupClassIds.push(target.id);
-      const dow = kstDow(target.startTime);
-      const product = await createAutoBookProduct(centerAId, "SEC-114-O", [dow]);
-      const mem = await createAutoBookMembership(centerAId, managerA.profileId, product.id, { remainingCount: 3 });
+    await asManagerA();
+    await saveSettings(isolatedCenterId, { ...originalSettings, privateMaxConcurrentEnabled: true, privateMaxConcurrent: 1 });
 
-      const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
-      expect(error).toBeNull();
-      expect((data as any).booked).toBe(0);
-      expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
-    } finally {
-      await asManagerA();
-      await saveSettings(centerAId, originalSettings);
-    }
+    // occupied와 겹치는 시간대(같은 hoursFromNow=96 → start/end 거의 동일, 최소 60분 duration과
+    // 비교하면 밀리초 단위 오차는 무시 가능하게 겹친다)에 두 번째 프라이빗 수업을 만든다.
+    const target = await createFutureTestClass(isolatedCenterId, { title: "AUTO-SEC-O-자동예약대상", classFormat: "private", hoursFromNow: 96 });
+    cleanupClassIds.push(target.id);
+    const dow = kstDow(target.startTime);
+    const product = await createAutoBookProduct(isolatedCenterId, "SEC-114-O", [dow]);
+    const mem = await createAutoBookMembership(isolatedCenterId, managerA.profileId, product.id, { remainingCount: 3 });
+
+    const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
+    expect(error).toBeNull();
+    expect((data as any).booked).toBe(0);
+    expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
   });
 
   it("AUTO-SEC-P: 예약 오픈 시각(calc_deadline 'open')이 아직 안 됐으면 자동예약되지 않는다", async () => {

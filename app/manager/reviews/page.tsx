@@ -14,7 +14,6 @@ import {
   reviewPhotoUrl, type ManagerReview, type ReviewStats,
 } from "../../../lib/reviews";
 import Loading from "../../components/Loading";
-import ManagerNav from "../../components/ManagerNav";
 import RichTextEditor from "../../components/RichTextEditor";
 import { extractPlainText } from "../../../lib/security";
 import { ZoomableImage } from "../../components/ImageViewer";
@@ -235,7 +234,6 @@ export default function ManagerReviewsPage() {
       )}
 
       <div style={{ height: 20 }} />
-      <ManagerNav />
     </div>
   );
 }

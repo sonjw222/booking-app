@@ -8,7 +8,9 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabaseClient";
-import BottomNav from "../../components/BottomNav";
+import { deactivateCurrentAccount } from "../../../lib/accountDeletion";
+
+const WITHDRAW_CONFIRM_PHRASE = "탈퇴합니다";
 
 export default function AccountSettingsPage() {
   const [email, setEmail] = useState<string | null>(null);
@@ -19,6 +21,16 @@ export default function AccountSettingsPage() {
   const [password2, setPassword2] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
+
+  // 탈퇴 재인증(AUTH-08) — 이메일 계정은 현재 비밀번호로 실제 재인증한다. 소셜 계정(카카오/
+  // 네이버/애플/구글)은 이 화면 범위에서 provider 재로그인 왕복까지 구현하지 않고(별도
+  // 과제, docs/TODO.md P1-18) 확인 문구 입력으로 낮은 문턱만 둔다 — 실수/충동 클릭 방지가
+  // 목적이며, 이미 이 앱의 비밀번호 변경(위 changePassword)도 재인증 없이 동작하므로 이
+  // 정도로도 기존 대비 더 신중한 확인 절차다.
+  const [withdrawPassword, setWithdrawPassword] = useState("");
+  const [withdrawConfirmText, setWithdrawConfirmText] = useState("");
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawMessage, setWithdrawMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -51,8 +63,46 @@ export default function AccountSettingsPage() {
     setMessage({ type: "ok", text: "비밀번호가 변경됐어요." });
   }
 
+  async function withdraw() {
+    if (withdrawing) return;
+    setWithdrawMessage(null);
+
+    if (isEmailProvider) {
+      if (!withdrawPassword) {
+        setWithdrawMessage({ type: "error", text: "본인 확인을 위해 현재 비밀번호를 입력해주세요" });
+        return;
+      }
+      if (!email) {
+        setWithdrawMessage({ type: "error", text: "계정 정보를 불러오지 못했어요. 새로고침 후 다시 시도해주세요" });
+        return;
+      }
+      setWithdrawing(true);
+      const { error: reauthErr } = await supabase.auth.signInWithPassword({ email, password: withdrawPassword });
+      if (reauthErr) {
+        setWithdrawing(false);
+        setWithdrawMessage({ type: "error", text: "비밀번호가 올바르지 않아요" });
+        return;
+      }
+    } else if (withdrawConfirmText !== WITHDRAW_CONFIRM_PHRASE) {
+      setWithdrawMessage({ type: "error", text: `확인을 위해 "${WITHDRAW_CONFIRM_PHRASE}"를 정확히 입력해주세요` });
+      return;
+    } else {
+      setWithdrawing(true);
+    }
+
+    try {
+      await deactivateCurrentAccount();
+    } catch (e: any) {
+      setWithdrawing(false);
+      setWithdrawMessage({ type: "error", text: e.message ?? "탈퇴 처리에 실패했어요" });
+      return;
+    }
+
+    window.location.href = "/login?withdrawn=1";
+  }
+
   return (
-    <div className="app-shell">
+    <div className="app-shell account-page-v2 settings-page-v2">
       <div className="back-header">
         <a className="side" href="/mypage">‹</a>
         <div className="title">계정 설정</div>
@@ -93,10 +143,43 @@ export default function AccountSettingsPage() {
               </button>
             </div>
           )}
+
+          <div className="login-wrap" style={{ padding: "10px 20px 40px", alignItems: "stretch" }}>
+            <h3 style={{ margin: "12px 0 4px" }}>계정 탈퇴</h3>
+            <div className="perm-guide" style={{ margin: "0 0 8px" }}>
+              탈퇴하면 이름·전화번호 등 개인정보는 삭제되어 더 이상 알아볼 수 없게 처리돼요.
+              예약·구매·결제 내역은 법적 보관 목적으로 남지만 더 이상 접근할 수 없고, 개인정보와도
+              연결되지 않아요. 같은 전화번호·이메일로 나중에 다시 가입할 수 있어요.
+            </div>
+
+            {isEmailProvider ? (
+              <input
+                className="input-field"
+                type="password"
+                placeholder="본인 확인을 위한 현재 비밀번호"
+                value={withdrawPassword}
+                onChange={(e) => setWithdrawPassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && withdraw()}
+              />
+            ) : (
+              <input
+                className="input-field"
+                type="text"
+                placeholder={`확인을 위해 "${WITHDRAW_CONFIRM_PHRASE}" 입력`}
+                value={withdrawConfirmText}
+                onChange={(e) => setWithdrawConfirmText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && withdraw()}
+              />
+            )}
+
+            {withdrawMessage && <div className={`auth-msg ${withdrawMessage.type}`}>{withdrawMessage.text}</div>}
+            <button className="danger-btn" onClick={withdraw} disabled={withdrawing}>
+              {withdrawing ? "탈퇴 처리 중..." : "탈퇴하기"}
+            </button>
+          </div>
         </>
       )}
 
-      <BottomNav />
     </div>
   );
 }

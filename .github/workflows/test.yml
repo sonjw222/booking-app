@@ -109,7 +109,11 @@ jobs:
     name: Integration tests (live dev Supabase)
     runs-on: ubuntu-latest
     needs: unit
-    timeout-minutes: 20
+    # 20분으로는 통합 테스트 스위트가 계속 늘어나며 정상 실행도 종종 잘렸다(PR #66, #67
+    # 모두 19분대에 timeout으로 cancelled — 실패가 아니라 시간 부족). timeout 자체를
+    # 없애면 2026-08-14/15처럼 진짜 멈춘 job이 전역 큐를 몇 시간씩 막는 사고가 재발하므로,
+    # 없애는 대신 정상 실행 기록(과거 30~34분)을 감안해 35분으로 늘린다.
+    timeout-minutes: 35
     # push/workflow_dispatch에서는 항상 실행.
     # pull_request에서는 "같은 저장소 브랜치 간" PR일 때만 실행 — fork에서 온 PR은
     # GitHub이 Secrets를 주입하지 않아 애초에 통과할 수 없고, 주입되더라도 남의 fork에

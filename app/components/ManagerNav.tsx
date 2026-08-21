@@ -7,9 +7,15 @@
 */
 
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { fetchUnreadCount, subscribeNotifications } from "../../lib/notifications";
+import { fetchMyCenters } from "../../lib/manager";
+import {
+  fetchMyEffectivePermissionKeys, canSeeManagerMenu,
+  getCachedCanSeeMembers, setCachedCanSeeMembers,
+} from "../../lib/roles";
 import NotificationToaster from "./NotificationToaster";
+import UiIcon from "./UiIcon";
 
 export default function ManagerNav() {
   const pathname = usePathname();
@@ -17,6 +23,43 @@ export default function ManagerNav() {
   const isMore = pathname === "/manager";
 
   const [unread, setUnread] = useState(0);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  // P1-5: "회원" 탭은 customer.member.view 권한으로 가린다("수업"/"알림"은 본인 일정·본인
+  // 알림함이라 권한 카탈로그에 애초에 대응 키가 없음 — schema.sql 참고, 의도적으로 그대로
+  // 둠). app/manager/page.tsx의 메뉴 노출 계산과 동일한 패턴(오너는 전권, 로딩 중엔 숨김).
+  // ManagerNav는 이제 manager/layout.tsx에서 한 번만 마운트되지만, 그 최초 진입 시 판정
+  // 전까지는 여전히 로딩 구간이 있다 — 직전 결과를 캐싱해 그 구간의 깜빡임을 줄인다.
+  const [isOwner, setIsOwner] = useState(false);
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
+  const [resolved, setResolved] = useState(false);
+  const [cachedCanSeeMembers, setCachedCanSeeMembersState] = useState<boolean | null>(null);
+
+  useLayoutEffect(() => {
+    setCachedCanSeeMembersState(getCachedCanSeeMembers());
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchMyCenters()
+      .then((centers) => {
+        if (cancelled || centers.length === 0) { setResolved(true); return; }
+        const active = centers[0];
+        setIsOwner(active.isOwner);
+        if (active.isOwner) { setResolved(true); return; }
+        return fetchMyEffectivePermissionKeys(active.managerCenterId, active.roleId).then((keys) => {
+          if (!cancelled) { setMyPerms(keys); setResolved(true); }
+        });
+      })
+      .catch(() => { if (!cancelled) setResolved(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const liveCanSeeMembers = canSeeManagerMenu(isOwner, myPerms, "customer.member.view");
+  useEffect(() => {
+    if (resolved) setCachedCanSeeMembers(liveCanSeeMembers);
+  }, [resolved, liveCanSeeMembers]);
+  const canSeeMembers = resolved ? liveCanSeeMembers : (cachedCanSeeMembers ?? false);
 
   useEffect(() => {
     let mounted = true;
@@ -35,26 +78,41 @@ export default function ManagerNav() {
     if (pathname.startsWith("/manager/notifications")) setUnread(0);
   }, [pathname]);
 
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const check = () => setKeyboardOpen(window.innerHeight - viewport.height > 140);
+    viewport.addEventListener("resize", check);
+    viewport.addEventListener("scroll", check);
+    check();
+    return () => {
+      viewport.removeEventListener("resize", check);
+      viewport.removeEventListener("scroll", check);
+    };
+  }, []);
+
   return (
     <>
       <NotificationToaster />
-      <div className="bottom-nav">
+      <nav className={`bottom-nav ${keyboardOpen ? "keyboard-hidden" : ""}`} aria-label="관리자 주요 메뉴">
         <a className={`nav-item ${is("/manager/classes") ? "active" : ""}`} href="/manager/classes">
-          <div className="nav-icon">▤</div>수업
+          <div className="nav-icon"><UiIcon name="calendar" /></div>수업
         </a>
-        <a className={`nav-item ${is("/manager/members") ? "active" : ""}`} href="/manager/members">
-          <div className="nav-icon">◍</div>회원
-        </a>
+        {canSeeMembers && (
+          <a className={`nav-item ${is("/manager/members") ? "active" : ""}`} href="/manager/members">
+            <div className="nav-icon"><UiIcon name="users" /></div>회원
+          </a>
+        )}
         <a className={`nav-item ${is("/manager/notifications") ? "active" : ""}`} href="/manager/notifications">
           <div className="nav-icon" style={{ position: "relative" }}>
-            🔔
-            {unread > 0 && <span className="nav-badge">{unread > 99 ? "99+" : unread}</span>}
+            <UiIcon name="bell" />
+            {unread > 0 && <span className="nav-badge">{unread > 9 ? "9+" : unread}</span>}
           </div>알림
         </a>
         <a className={`nav-item ${isMore ? "active" : ""}`} href="/manager">
-          <div className="nav-icon">≡</div>더보기
+          <div className="nav-icon"><UiIcon name="list" /></div>더보기
         </a>
-      </div>
+      </nav>
     </>
   );
 }

@@ -8,7 +8,6 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import ManagerNav from "../../components/ManagerNav";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchCenterOrders, updateOrderStatus, type Order } from "../../../lib/orders";
 import Loading from "../../components/Loading";
@@ -145,7 +144,6 @@ export default function ManagerOrdersPage() {
         </div>
       )}
       <div style={{ height: 40 }} />
-      <ManagerNav />
     </div>
   );
 }

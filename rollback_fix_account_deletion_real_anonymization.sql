@@ -1,0 +1,11 @@
+-- fix_account_deletion_real_anonymization.sql 롤백
+--
+-- ⚠️ 되돌릴 수 없습니다. 익명화로 덮어쓴 이름/전화번호/주소 등 원래 개인정보는 어디에도
+-- 백업돼 있지 않고(그게 이 기능의 목적입니다), 삭제된 auth.users 행도 SQL로 복구할 방법이
+-- 없습니다(P2-22 leftover cleanup과 동일한 성격 — 순수 삭제/익명화 작업). 되돌리려면 그
+-- 회원이 새 계정으로 다시 가입하는 것이 유일한 방법입니다.
+--
+-- 이 파일이 되돌릴 수 있는 건 "이후로 새로 탈퇴하는 계정에도 이 정책을 적용할지"뿐입니다
+-- (supabase/functions/delete-account를 예전 버전으로 다시 배포하는 것 — 별도 배포 필요,
+-- 이 SQL 파일만으로는 안 됨).
+select 'This migration cannot be reversed — see comments above.' as note;

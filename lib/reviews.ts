@@ -110,15 +110,12 @@ export async function deleteReview(reviewId: string): Promise<void> {
   if (error) throw new Error("후기 삭제에 실패했어요: " + error.message);
 }
 
-// 이 센터에서 내 포인트 잔액
+// 이 센터에서 내 포인트 잔액 (point_transactions 합계 — P1-1, lib/sales.ts와 같은 원장)
 export async function fetchMyPoints(centerId: string): Promise<number> {
   try {
     const profileId = await myProfileId();
-    const { data } = await supabase
-      .from("point_accounts").select("balance")
-      .eq("center_id", centerId).eq("profile_id", profileId)
-      .maybeSingle();
-    return data?.balance ?? 0;
+    const { data } = await supabase.rpc("my_point_balance", { p_center_id: centerId, p_profile_id: profileId });
+    return typeof data === "number" ? data : Number(data ?? 0);
   } catch { return 0; }
 }
 
@@ -136,17 +133,18 @@ export async function usePoints(centerId: string, amount: number): Promise<void>
 export type PointBalance = { centerId: string; centerName: string; balance: number };
 
 export async function fetchAllMyPoints(): Promise<PointBalance[]> {
-  const { data, error } = await supabase
-    .from("point_accounts")
-    .select("center_id, balance, centers(name)")
-    .gt("balance", 0)
-    .order("balance", { ascending: false });
-  if (error) return [];
-  return (data ?? []).map((p: any) => ({
-    centerId: p.center_id,
-    centerName: p.centers?.name ?? "센터",
-    balance: p.balance,
-  }));
+  try {
+    const profileId = await myProfileId();
+    const { data, error } = await supabase.rpc("my_point_balances", { p_profile_id: profileId });
+    if (error) return [];
+    return (data ?? [])
+      .filter((p: any) => p.balance > 0)
+      .map((p: any) => ({
+        centerId: p.center_id,
+        centerName: p.center_name ?? "센터",
+        balance: p.balance,
+      }));
+  } catch { return []; }
 }
 
 // 후기 사진 업로드 (avatars 버킷 재사용)

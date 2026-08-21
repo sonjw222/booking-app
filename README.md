@@ -56,10 +56,13 @@ Supabase 대시보드에서 Realtime을 켜고, 위 SQL이 `notifications` /
 `inquiry_messages` 테이블을 publication에 추가하는지 확인합니다.
 (실시간 알림 팝업과 1:1 채팅에 필요)
 
-### 5. 정기 알림 (선택)
+### 5. 정기 알림
 
 예약 3일 전/당일, 수강권 만료·소진 재등록 알림은 매일 1회 실행이 필요합니다.
-Supabase Cron(pg_cron) 또는 외부 스케줄러에서 아래를 매일 호출하세요.
+`add_notification_scheduler.sql`을 실행하면 Supabase의 `pg_cron`으로 매일 KST 오전 9시에
+자동 실행되도록 등록됩니다(무료 플랜 포함, 외부 서비스 불필요).
+
+수동으로 한 번 실행해보고 싶다면:
 
 ```sql
 select notify_upcoming_reservations();
