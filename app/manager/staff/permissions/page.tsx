@@ -16,6 +16,7 @@ import {
   fetchPermissions, fetchRolePermissions,
   fetchStaffOverrides, setStaffOverride,
   buildTree, effectiveState, CATEGORY_LABEL,
+  fetchMyEffectivePermissionKeys,
   type Permission, type GrantType, type EffectiveState,
 } from "../../../../lib/roles";
 
@@ -34,19 +35,30 @@ function PermInner() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  // null = 확인중, false = 오너 아님(또는 이 센터 소속 아님), true = 오너 확인됨
-  const [isOwner, setIsOwner] = useState<boolean | null>(null);
+  // null = 확인중, false = 접근 권한 없음(이 센터 소속 아님/오너도 아니고 facility.role_permission도 없음),
+  // true = 접근 허용(오너 또는 facility.role_permission 보유자 — 서버 쓰기 정책과 동일 기준)
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2000); }
 
   const load = useCallback(async () => {
-    if (!mcId || !roleId || !centerId) { setError("잘못된 접근이에요"); setLoading(false); setIsOwner(false); return; }
+    if (!mcId || !roleId || !centerId) { setError("잘못된 접근이에요"); setLoading(false); setHasAccess(false); return; }
     setLoading(true);
     try {
       const myCenters = await fetchMyCenters();
       const owned = isOwnerOfCenter(myCenters, centerId);
-      setIsOwner(owned);
-      if (!owned) { setLoading(false); return; }
+      // 서버 쓰기 정책(add_personal_permissions.sql)과 동일 기준: 오너 또는
+      // facility.role_permission 보유자만 이 화면에 들어올 수 있어야 한다.
+      // 클라이언트 가드가 오너로만 한정돼 있으면, 오너가 그 권한을 다른 매니저에게
+      // 줘도 정작 그 매니저는 화면에 못 들어가는 불일치가 생긴다(P2-14).
+      const myMc = myCenters.find((c) => c.id === centerId);
+      let allowed = owned;
+      if (!allowed && myMc) {
+        const myPerms = await fetchMyEffectivePermissionKeys(myMc.managerCenterId, myMc.roleId);
+        allowed = myPerms.has("facility.role_permission");
+      }
+      setHasAccess(allowed);
+      if (!allowed) { setLoading(false); return; }
 
       const [ps, rk, ov] = await Promise.all([
         fetchPermissions(),
@@ -94,7 +106,7 @@ function PermInner() {
     }
   }
 
-  if (isOwner === false) {
+  if (hasAccess === false) {
     return (
       <div className="app-shell">
         <div className="back-header">
@@ -103,13 +115,13 @@ function PermInner() {
           <div className="side" />
         </div>
         <div className="daylist-empty" style={{ paddingTop: 80 }}>
-          {error === "잘못된 접근이에요" ? error : "이 센터의 오너만 접근할 수 있는 화면이에요"}
+          {error === "잘못된 접근이에요" ? error : "이 화면은 오너 또는 권한 설정 권한을 가진 매니저만 접근할 수 있어요"}
         </div>
       </div>
     );
   }
 
-  if (loading || isOwner === null) return <div className="app-shell"><Loading /></div>;
+  if (loading || hasAccess === null) return <div className="app-shell"><Loading /></div>;
 
   const tree = buildTree(perms, activeCat);
 

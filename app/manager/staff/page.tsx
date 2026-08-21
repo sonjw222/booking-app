@@ -477,7 +477,7 @@ export default function StaffPage() {
               )}
             </div>
 
-            {!staffDetail.isOwner && staffDetail.roleId && (
+            {!staffDetail.isOwner && staffDetail.roleId && canManageRolePermissions && (
               <a
                 className="list-row"
                 href={`/manager/staff/permissions?mc=${staffDetail.id}&role=${staffDetail.roleId}&name=${encodeURIComponent(staffDetail.name)}&center=${centerId}`}
