@@ -11,6 +11,7 @@ import Loading from "../../components/Loading";
 import DatePicker from "../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchHolidays, addHoliday, deleteHoliday, type Holiday } from "../../../lib/holidays";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -32,6 +33,7 @@ export default function HolidaysPage() {
   const [date, setDate] = useState(todayStr());
   const [confirmHoliday, setConfirmHoliday] = useState<{ classCount: number; reservationCount: number } | null>(null);
   const [reason, setReason] = useState("");
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -45,6 +47,23 @@ export default function HolidaysPage() {
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
   }, []);
+
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  // add_holiday_safe/remove_holiday_safe RPC 둘 다 schedule.own.group.delete를 요구한다
+  // (수업/그룹 삭제와 같은 키 재사용 — P0-6에서 지적된 것과 동일한 사안, 의도적으로 그대로 둠).
+  const canManageHoliday = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "schedule.own.group.delete");
 
   const load = useCallback(async () => {
     if (!centerId) return;
@@ -129,11 +148,15 @@ export default function HolidaysPage() {
       </div>
 
       {/* 추가 폼 */}
-      <div className="hol-add">
-        <DatePicker value={date} onChange={setDate} label="휴무일 선택" />
-        <input className="input-field" placeholder="사유 (선택)" value={reason} onChange={(e) => setReason(e.target.value)} />
-        <button className="primary-btn small" disabled={busy} onClick={() => handleAdd()}>추가</button>
-      </div>
+      {canManageHoliday ? (
+        <div className="hol-add">
+          <DatePicker value={date} onChange={setDate} label="휴무일 선택" />
+          <input className="input-field" placeholder="사유 (선택)" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <button className="primary-btn small" disabled={busy} onClick={() => handleAdd()}>추가</button>
+        </div>
+      ) : (
+        <div className="perm-guide">휴무일 지정 권한이 없어요 — 오너에게 문의하세요.</div>
+      )}
 
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
@@ -151,7 +174,9 @@ export default function HolidaysPage() {
                   <div className="hol-date">{fmtDate(h.date)}</div>
                   {h.reason && <div className="hol-reason">{h.reason}</div>}
                 </div>
-                <button className="text-btn danger" disabled={busy} onClick={() => handleDelete(h)}>삭제</button>
+                {canManageHoliday && (
+                  <button className="text-btn danger" disabled={busy} onClick={() => handleDelete(h)}>삭제</button>
+                )}
               </div>
             );
           })}

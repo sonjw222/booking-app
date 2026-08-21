@@ -8,6 +8,17 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-21 — P1-5 버튼 단위 권한 게이팅 (Bucket 1, 9개 화면)
+
+서버(RLS/RPC)에 실제 `has_permission()` 체크가 있는 9개 매니저 화면
+(staff/members/sales/class-revenue/settings/membership-rules/classes/holidays/progress)의
+14~16개 버튼에 `fetchMyEffectivePermissionKeys()` + `canSeeManagerMenu()` 게이팅을 적용
+— 권한 없는 스태프에게 버튼이 안 보이거나 비활성화됨(서버 거부는 그대로 최종 방어선).
+카탈로그에 키만 있고 실제 RLS는 열려있는 나머지 9개 화면(goods/rooms/reviews/announcements/
+inquiries/orders 등)은 건드리지 않음 — 실제로 없는 서버 제약을 있는 것처럼 보여줄 위험이
+있어 SQL로 실제 권한을 먼저 연결해야 함(P1-5b로 별도 진행). `npm run build` 통과. 상세는
+`docs/TODO.md` P1-5 참고.
+
 ## 2026-08-21 — P2-28 2차 수정: N/O, RLS 고치니 센터 승인 상태 문제가 또 드러남
 
 1차 수정(RLS → `createAutoBookMembership()`으로 교체) 후 재실행하니 RLS 에러는 사라졌지만

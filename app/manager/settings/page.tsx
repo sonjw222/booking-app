@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../../lib/settings";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 const SLOT_UNITS: { value: string; label: string }[] = [
   { value: "hour", label: "정시" },
@@ -29,6 +30,7 @@ export default function SettingsPage() {
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -42,6 +44,21 @@ export default function SettingsPage() {
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
   }, []);
+
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  const canSave = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "facility.operation");
 
   const load = useCallback(async () => {
     if (!centerId) return;
@@ -112,10 +129,14 @@ export default function SettingsPage() {
       <div className="back-header">
         <a className="side" href="/manager">‹</a>
         <div className="title">운영 설정</div>
-        <button className="header-action" disabled={busy || !dirty} onClick={handleSave}>
+        <button className="header-action" disabled={busy || !dirty || !canSave} onClick={handleSave}>
           {busy ? "저장 중" : dirty ? "저장" : "저장됨"}
         </button>
       </div>
+
+      {!loading && activeCenter && !canSave && (
+        <div className="error-toast">운영 설정을 변경할 권한이 없어요 — 오너에게 문의하세요.</div>
+      )}
 
       {centers.length > 1 && (
         <div className="center-switcher">

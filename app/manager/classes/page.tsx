@@ -32,7 +32,7 @@ import {
   type ManagedClass, type ClassInput, type ClassAttendee,
   isValidClassTimeRange,
 } from "../../../lib/classes";
-import { fetchStaff, type Staff } from "../../../lib/roles";
+import { fetchStaff, fetchMyEffectivePermissionKeys, canSeeManagerMenu, type Staff } from "../../../lib/roles";
 import { fetchMemberDetail, type MemberDetailData } from "../../../lib/members";
 import {
   fetchProducts, fetchRulesForProducts, findScheduleExcludedProducts, ruleToText,
@@ -168,6 +168,7 @@ export default function ClassManagePage() {
   // 정상 하이드레이트까지 막지 않도록 독립적으로 추적한다.
   const trainerEditedRef = useRef(false);
   const [busy, setBusy] = useState(false);
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   const loadClasses = useCallback(async (centerId: string, y: number, m: number) => {
     setError(null);
@@ -216,6 +217,28 @@ export default function ClassManagePage() {
         .catch(() => { /* 무시 */ });
     }
   }, [year, month, activeCenterId, loadClasses]);
+
+  const activeCenter = centers.find((c) => c.id === activeCenterId);
+
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  function canDo(key: string): boolean {
+    return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);
+  }
+  // 수업/그룹 삭제와 휴무일 추가가 같은 키를 공유한다(P0-6에서 지적된 재사용, 의도적으로
+  // 그대로 둠 — 세분화하려면 새 permission key + SQL 변경이 필요해 이번 배치 범위 밖).
+  const canDeleteClass = canDo("schedule.own.group.delete");
+  const canAssignReservation = canDo("schedule.makeup");
+  const canAssignAnyStatus = canDo("customer.member.assign_any_status");
 
   function goPrevMonth() {
     setSelectedDay(1);
@@ -826,11 +849,13 @@ export default function ClassManagePage() {
       )}
 
       {!assignMode ? (
-        <button className="unplaced-banner direct-assign-row" onClick={openAssignMemberPicker}>
-          <span className="unplaced-icon direct" aria-hidden="true">+</span>
-          <span className="unplaced-text">회원 직접배치</span>
-          <span className="unplaced-go">시작 <b aria-hidden="true">›</b></span>
-        </button>
+        canAssignReservation && (
+          <button className="unplaced-banner direct-assign-row" onClick={openAssignMemberPicker}>
+            <span className="unplaced-icon direct" aria-hidden="true">+</span>
+            <span className="unplaced-text">회원 직접배치</span>
+            <span className="unplaced-go">시작 <b aria-hidden="true">›</b></span>
+          </button>
+        )
       ) : (
         <div className="assign-banner">
           <div className="assign-banner-main">
@@ -984,7 +1009,7 @@ export default function ClassManagePage() {
                   <button type="button" className="res-count-link" onClick={(e) => { e.stopPropagation(); openRoster(c); }}>예약 {c.reserved}/{c.capacity} ›</button>
                 </div>
               </div>
-              {!isPastClass(c) && (
+              {!isPastClass(c) && canDeleteClass && (
                 <button className="profile-del" disabled={busy} onClick={(e) => { e.stopPropagation(); remove(c); }}>
                   삭제
                 </button>
@@ -1567,8 +1592,10 @@ export default function ClassManagePage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     <button className="unplaced-retry" disabled={unplacedBusy}
                       onClick={() => handleRetryAutoBook(u)}>다시 배치</button>
-                    <button className="unplaced-retry" style={{ background: "var(--surface-2, #eee)", color: "var(--text)" }}
-                      onClick={() => startAssignFromUnplaced(u)}>직접배치</button>
+                    {canAssignReservation && (
+                      <button className="unplaced-retry" style={{ background: "var(--surface-2, #eee)", color: "var(--text)" }}
+                        onClick={() => startAssignFromUnplaced(u)}>직접배치</button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1754,10 +1781,10 @@ export default function ClassManagePage() {
                           {a.reservationType === "MEMBER" ? (
                             <button className="att-btn cancel" disabled={attBusy}
                               onClick={() => handleAttendance(a, "cancelled")}>예약취소</button>
-                          ) : (
+                          ) : canAssignReservation ? (
                             <button className="att-btn cancel" disabled={attBusy}
                               onClick={() => { setAdminCancelTarget(a); setAdminCancelReason(""); }}>관리자 배치 취소</button>
-                          )}
+                          ) : null}
                         </>
                       )}
                       <a className="att-btn prog" href={`/manager/progress/record?profile=${a.profileId}`}>진도</a>
@@ -1824,16 +1851,23 @@ export default function ClassManagePage() {
               {assignMembersList
                 .filter((m) => !assignKw.trim() || m.name.includes(assignKw.trim()))
                 .slice(0, 50)
-                .map((m) => (
-                  <button key={m.profileId} className="book-member-row" onClick={() => pickAssignMember(m)}>
-                    <span className="book-member-identity"><span className="book-member-avatar">{m.name.slice(0, 1)}</span><span className="book-member-name">{m.name}</span></span>
-                    <span className={`book-member-pass ${m.memberships.length === 0 ? "empty" : ""}`}>
-                      {m.memberships.length > 0
-                        ? `${m.memberships[0].name}${m.memberships[0].remaining != null ? ` ${m.memberships[0].remaining}회` : ""}`
-                        : "수강권 없음"}
-                    </span>
-                  </button>
-                ))}
+                .map((m) => {
+                  // 휴면·만료 회원은 customer.member.assign_any_status가 있어야 배치 가능(서버가
+                  // 최종 방어선) — 없는 스태프에겐 미리 비활성화해 눌러도 거부당할 걸 알려준다.
+                  const blocked = m.memberStatus && m.memberStatus !== "active" && !canAssignAnyStatus;
+                  return (
+                    <button key={m.profileId} className="book-member-row" disabled={!!blocked} onClick={() => pickAssignMember(m)}>
+                      <span className="book-member-identity"><span className="book-member-avatar">{m.name.slice(0, 1)}</span><span className="book-member-name">{m.name}</span></span>
+                      <span className={`book-member-pass ${m.memberships.length === 0 ? "empty" : ""}`}>
+                        {blocked
+                          ? (m.memberStatus === "expired" ? "만료회원 · 권한 없음" : "휴면회원 · 권한 없음")
+                          : m.memberships.length > 0
+                          ? `${m.memberships[0].name}${m.memberships[0].remaining != null ? ` ${m.memberships[0].remaining}회` : ""}`
+                          : "수강권 없음"}
+                      </span>
+                    </button>
+                  );
+                })}
               {assignMembersList.length === 0 && (
                 <div className="daylist-empty" style={{ padding: 16 }}>회원이 없어요</div>
               )}

@@ -15,6 +15,7 @@ import {
   addTopCategory, addSubCategory, renameCategory, deleteCategory,
   type CategoryNode,
 } from "../../../lib/progress";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 export default function ProgressCategoryPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -29,6 +30,7 @@ export default function ProgressCategoryPage() {
   const [newTop, setNewTop] = useState("");
   const [subInput, setSubInput] = useState<Record<string, string>>({});   // parentId → 입력값
   const [openSub, setOpenSub] = useState<Record<string, boolean>>({});     // 세부기술 입력창 열림
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -42,6 +44,22 @@ export default function ProgressCategoryPage() {
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
   }, []);
+
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  // 이 화면의 CRUD 전체가 customer.progress 단일 키로 묶여있다(세분화된 키 없음).
+  const canManageProgress = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "customer.progress");
 
   const load = useCallback(async () => {
     if (!centerId) return;
@@ -151,16 +169,20 @@ export default function ProgressCategoryPage() {
       ) : (
         <div className="prog-wrap">
           {/* 대분류 추가 */}
-          <div className="prog-add-top structured-add-row">
-            <input
-              className="input-field"
-              placeholder="대분류 추가 (예: 점프, 스핀, 스텝)"
-              value={newTop}
-              onChange={(e) => setNewTop(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAddTop()}
-            />
-            <button className="outline-action" disabled={busy} onClick={handleAddTop}>추가</button>
-          </div>
+          {canManageProgress ? (
+            <div className="prog-add-top structured-add-row">
+              <input
+                className="input-field"
+                placeholder="대분류 추가 (예: 점프, 스핀, 스텝)"
+                value={newTop}
+                onChange={(e) => setNewTop(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddTop()}
+              />
+              <button className="outline-action" disabled={busy} onClick={handleAddTop}>추가</button>
+            </div>
+          ) : (
+            <div className="perm-guide">진도표 관리 권한이 없어요 — 오너에게 문의하세요.</div>
+          )}
 
           {tree.length === 0 ? (
             <div className="daylist-empty" style={{ paddingTop: 30 }}>
@@ -172,10 +194,12 @@ export default function ProgressCategoryPage() {
               <div key={top.id} className="prog-group">
                 <div className="prog-top-row">
                   <span className="prog-top-name">{top.name}</span>
-                  <div className="prog-top-actions row-actions">
-                    <button className="quiet-action" onClick={() => handleRename(top.id, top.name)}>수정</button>
-                    <button className="quiet-action danger" onClick={() => handleDelete(top.id, top.name, top.children.length > 0)}>삭제</button>
-                  </div>
+                  {canManageProgress && (
+                    <div className="prog-top-actions row-actions">
+                      <button className="quiet-action" onClick={() => handleRename(top.id, top.name)}>수정</button>
+                      <button className="quiet-action danger" onClick={() => handleDelete(top.id, top.name, top.children.length > 0)}>삭제</button>
+                    </div>
+                  )}
                 </div>
 
                 {/* 세부기술 목록 */}
@@ -183,15 +207,17 @@ export default function ProgressCategoryPage() {
                   {top.children.map((c) => (
                     <div key={c.id} className="prog-sub-row">
                       <span className="prog-sub-name">{c.name}</span>
-                      <div className="prog-top-actions row-actions">
-                        <button className="quiet-action" onClick={() => handleRename(c.id, c.name)}>수정</button>
-                        <button className="quiet-action danger" onClick={() => handleDelete(c.id, c.name, false)}>삭제</button>
-                      </div>
+                      {canManageProgress && (
+                        <div className="prog-top-actions row-actions">
+                          <button className="quiet-action" onClick={() => handleRename(c.id, c.name)}>수정</button>
+                          <button className="quiet-action danger" onClick={() => handleDelete(c.id, c.name, false)}>삭제</button>
+                        </div>
+                      )}
                     </div>
                   ))}
 
                   {/* 세부기술 추가 */}
-                  {openSub[top.id] ? (
+                  {!canManageProgress ? null : openSub[top.id] ? (
                     <div className="prog-sub-add">
                       <input
                         className="input-field"

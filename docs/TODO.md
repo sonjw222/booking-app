@@ -299,15 +299,38 @@ test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx 
 | 근거 파일 | `supabase/functions/naver-login/index.ts`, `lib/naverAuth.ts`, `app/login/naver-callback/page.tsx` |
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [ROUTES `/login`](./ROUTES.md) |
 
-### P1-5. (2026-08-14, 2차 진행 — ManagerNav 탭까지 확대) 매니저 세부 권한 기반 UI
+### P1-5. (2026-08-21, 4차 진행 — 버튼 단위 권한 게이팅, Bucket 1 완료) 매니저 세부 권한 기반 UI
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **메뉴 노출 제어는 완료.** 남은 건 화면 내부 버튼 단위 권한 표시뿐(아래 참고). |
-| 근거 파일 | `lib/roles.ts`, `app/manager/staff/permissions/page.tsx`, 전체 `app/manager/**/page.tsx`, `app/components/ManagerNav.tsx`, `add_personal_permissions.sql`, `add_manager_menu_permissions.sql`(신규) |
-| 완료 조건 | 각 매니저 화면의 기능을 권한 키와 매핑하고 권한 없는 메뉴·버튼을 사전에 숨기거나 비활성화하며, RLS/RPC 거부도 그대로 유지해 역할별 검증을 통과함. 남은 것: 각 화면 내부의 개별 액션 버튼 단위 권한 표시(여전히 서버 거부 이후에야 알 수 있음) — 화면 수가 많아 범위가 큼, 별도 배치 권장 |
+| 현재 상태 | **메뉴 노출 제어 완료 + 서버에 실제 `has_permission()` 체크가 있는 화면(Bucket 1) 9개의 버튼 단위 게이팅 완료.** 카탈로그에 키만 있고 실제 RLS/RPC는 열려있는 화면(Bucket 2, 별도 9개)은 SQL로 서버측 권한을 새로 연결하는 작업이 진행 중 — 아래 및 P1-5b 참고. |
+| 근거 파일 | `lib/roles.ts`, `app/manager/staff/permissions/page.tsx`, 전체 `app/manager/**/page.tsx`, `app/components/ManagerNav.tsx`, `add_personal_permissions.sql`, `add_manager_menu_permissions.sql` |
+| 완료 조건 | 각 매니저 화면의 기능을 권한 키와 매핑하고 권한 없는 메뉴·버튼을 사전에 숨기거나 비활성화하며, RLS/RPC 거부도 그대로 유지해 역할별 검증을 통과함. |
 | 관련 문서 | [REQUIREMENTS 5-7, 6-1](./REQUIREMENTS.md), [DATABASE 7-1, 10절](./DATABASE.md), [ROUTES 5절](./ROUTES.md) |
+
+2026-08-21 4차 해결(버튼 단위 게이팅 배치): 조사 결과 21개 매니저 화면 중 서버(RLS/RPC)에
+실제로 `has_permission()` 체크가 걸려 있는 화면은 9개(`staff`, `members`, `sales`,
+`class-revenue`, `settings`, `membership-rules`, `classes`, `holidays`,
+`progress`/`progress/record`)뿐이었다 — 여기 14~16개 버튼/액션에
+`fetchMyEffectivePermissionKeys()` + `canSeeManagerMenu()`(`center-info/page.tsx`가 이미 쓰던
+패턴)를 적용해 권한 없는 스태프에게는 버튼 자체가 안 보이거나 비활성화되도록 했다.
+`classes/page.tsx`의 직접배치/무료배치/관리자 배치취소는 `schedule.makeup`, 삭제는
+`schedule.own.group.delete`(휴무일 추가와 키 공유, P0-6에서 이미 지적된 재사용 — 의도적으로
+그대로 둠), 휴면·만료 회원 배치는 `customer.member.assign_any_status`로 추가 게이팅.
+`sales/page.tsx`의 결제 등록은 수강권/상품을 함께 고르면 `pass.payment.create`뿐 아니라
+`customer.member.issue_pass`도 필요해(수강권 발급이 결제 등록과 한 트랜잭션) 그 조합을
+버튼에서 확인. `membership-rules/page.tsx`는 메뉴 게이트(`pass.create`)와 "조건 추가/삭제"의
+실제 필요 키(`pass.update`)가 다르다는 걸 확인해 그 서브기능만 별도로 게이팅. `npm run build`
+통과(TypeScript 오류 없음).
+
+나머지 9개 화면(`goods`, `rooms`, `reviews`, `announcements`, `inquiries`, `orders`,
+`members`의 부가 기능들, 대시보드 출석 처리, `classes`의 `schedule.own/other.*` CRUD 전체)은
+권한 카탈로그에 키는 있지만 실제 DB 정책은 `my_managed_center_ids()`(센터 소속 스태프면
+누구나)만 체크해 서버측 제약이 없다 — 여기 버튼을 잠그면 실제로 없는 제약을 있는 것처럼
+보여주는 오해의 소지가 있어 이번 배치에선 건드리지 않았다. SQL로 실제 RLS/RPC를 새로 연결하는
+작업을 P1-5b로 별도 진행 중(운영 중인 센터의 기존 스태프가 갑자기 기능을 못 쓰게 될 수 있는
+동작 변경 위험이 있어 신중하게 진행).
 
 2026-08-01 Access Control 구현 Batch에서 1차 해결: `app/manager/page.tsx`의 13개 메뉴 중
 권한 카탈로그에 대응 키가 있는 9개(수강권/진도표/스태프/매출/공지사항/문의/센터정보/룸/설정)를
@@ -335,7 +358,23 @@ test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx 
 테이블 재조회로 확인). `app/manager/page.tsx`의 관리 메뉴 목록과 "오늘 할 일" 상단 바로가기
 (문의/주문/회원배치) 모두 `canSeeMenu()`로 연결. `npm run build` 통과.
 
-### P1-6. (2026-08-15, 문서 오류 정정 — 실제로는 완료) 관리자·운영자 클라이언트 가드 누락
+### P1-5b. (2026-08-21, 진행 중) Bucket 2 화면 서버측 권한(RLS/RPC) 신규 연결
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | 진행 중 — SQL migration 파일들을 작성해 사용자에게 순차적으로 제시·적용 예정 |
+| 근거 파일 | [P1-5](#p1-5) 4차 해결 조사 결과, `products`/`rooms`/`center_reviews`/`center_announcements`/`inquiry_messages`/`orders`/`classes`/`manager_set_attendance` 관련 RLS·RPC 정의 파일 |
+| 완료 조건 | 9개 화면(goods/rooms/reviews/announcements/inquiries/orders/members 부가기능/대시보드 출석/classes CRUD)의 실제 DB 정책에 `has_permission()` 체크를 추가하고, 대응하는 UI 버튼 게이팅도 함께 적용 |
+| 관련 문서 | [P1-5](#p1-5), [DATABASE.md](./DATABASE.md) |
+
+**중요 — 동작 변경(breaking change) 위험**: 지금은 이 9개 화면이 "센터 소속 스태프면 누구나"
+동작하는데, RLS를 `has_permission()` 기반으로 좁히면 그 권한 키를 역할에 아직 안 준 기존
+센터의 스태프가 갑자기 해당 기능을 못 쓰게 된다. SQL은 항상 사용자에게 전체 출력 후 SQL
+Editor에서 직접 실행하도록 하고(Claude가 직접 실행하지 않음), 적용 전 각 센터 운영자가
+이 변화를 감안해야 한다는 점을 사용자에게 알린다. `classes` 테이블의 `schedule.own/other.*`
+~40개 키 트리는 기존 코드에 매핑 근거가 없어 설계 결정이 먼저 필요 — 구현 전 매핑안을
+제시하고 승인받는다.
 
 | 필드 | 내용 |
 |---|---|

@@ -17,6 +17,7 @@ import {
   membersToCsv, fetchMemberDetail, searchAccountsForMember, addMemberToCenter,
   type CenterMember, type Grade, type MemberDetailData,
 } from "../../../lib/members";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 const RES_STATUS: Record<string, string> = {
   confirmed: "확정", waitlisted: "대기", cancelled: "취소", attended: "출석", no_show: "노쇼",
@@ -88,6 +89,7 @@ function MembersContent() {
   const [newGradeColor, setNewGradeColor] = useState(GRADE_COLORS[0]);
   const [csvSheet, setCsvSheet] = useState(false);
   const [csvCols, setCsvCols] = useState<string[]>(["name", "grade", "phone", "passName", "remainingCount", "expiresAt"]);
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -159,6 +161,25 @@ function MembersContent() {
     const t = setTimeout(() => { load(); }, 300);
     return () => clearTimeout(t);
   }, [load]);
+
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  function canDo(key: string): boolean {
+    return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);
+  }
+  // 정보 탭(메모/주소/등급/상태 저장)은 모두 customer.member.update RLS 하나로 묶여있다.
+  const canUpdateMember = canDo("customer.member.update");
 
   // URL ?profile=<profileId> 로 들어오면 그 회원 상세를 자동으로 열기 (1회)
   const searchParams = useSearchParams();
@@ -466,9 +487,9 @@ function MembersContent() {
 
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>등급</div>
                 <div className="mem-filters" style={{ padding: 0 }}>
-                  <button className={`filter-chip ${!detail.gradeId ? "on" : ""}`} disabled={busy} onClick={() => handleSetGrade(null)}>없음</button>
+                  <button className={`filter-chip ${!detail.gradeId ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetGrade(null)}>없음</button>
                   {grades.map((g) => (
-                    <button key={g.id} className={`filter-chip ${detail.gradeId === g.id ? "on" : ""}`} disabled={busy} onClick={() => handleSetGrade(g.id)}>
+                    <button key={g.id} className={`filter-chip ${detail.gradeId === g.id ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetGrade(g.id)}>
                       <span className="grade-dot" style={{ background: g.color ?? "#ccc" }} />{g.name}
                     </button>
                   ))}
@@ -476,12 +497,14 @@ function MembersContent() {
 
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>회원 상태</div>
                 <div className="mem-filters" style={{ padding: 0 }}>
-                  <button className={`filter-chip ${detail.status === "active" ? "on" : ""}`} disabled={busy} onClick={() => handleSetStatus("active")}>활성</button>
-                  <button className={`filter-chip ${detail.status === "dormant" ? "on" : ""}`} disabled={busy} onClick={() => handleSetStatus("dormant")}>휴면</button>
-                  <button className={`filter-chip ${detail.status === "expired" ? "on" : ""}`} disabled={busy} onClick={() => handleSetStatus("expired")}>만료</button>
+                  <button className={`filter-chip ${detail.status === "active" ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetStatus("active")}>활성</button>
+                  <button className={`filter-chip ${detail.status === "dormant" ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetStatus("dormant")}>휴면</button>
+                  <button className={`filter-chip ${detail.status === "expired" ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetStatus("expired")}>만료</button>
                 </div>
                 <div className="perm-guide" style={{ margin: "6px 0 0" }}>
-                  휴면·만료 처리해도 기록은 남아요. 회원 목록 상단 상태 필터로 볼 수 있어요.
+                  {canUpdateMember
+                    ? "휴면·만료 처리해도 기록은 남아요. 회원 목록 상단 상태 필터로 볼 수 있어요."
+                    : "회원 정보 수정 권한이 없어요 — 오너에게 문의하세요."}
                 </div>
 
                 {detailData?.profileInfo && (() => {
@@ -514,13 +537,15 @@ function MembersContent() {
                 })()}
 
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>주소 (관리자 기록용)</div>
-                <input className="input-field" placeholder="예: 서울 강남구 ..." value={addressText} onChange={(e) => setAddressText(e.target.value)} />
+                <input className="input-field" disabled={!canUpdateMember} placeholder="예: 서울 강남구 ..." value={addressText} onChange={(e) => setAddressText(e.target.value)} />
 
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>관리자 메모 (회원에게 보이지 않음)</div>
-                <input className="input-field" placeholder="예: 무릎 부상 이력" value={memoText} onChange={(e) => setMemoText(e.target.value)} />
+                <input className="input-field" disabled={!canUpdateMember} placeholder="예: 무릎 부상 이력" value={memoText} onChange={(e) => setMemoText(e.target.value)} />
                 <div className="add-profile-actions">
                   <button className="ghost-btn" onClick={() => setDetail(null)}>닫기</button>
-                  <button className="primary-btn" disabled={busy} onClick={handleSaveMemo}>메모 저장</button>
+                  {canUpdateMember && (
+                    <button className="primary-btn" disabled={busy} onClick={handleSaveMemo}>메모 저장</button>
+                  )}
                 </div>
               </>
             )}
