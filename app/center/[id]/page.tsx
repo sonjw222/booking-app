@@ -21,6 +21,7 @@ import { fetchReviews, myReviewFor, writeReview, deleteReview, uploadReviewPhoto
 import { reservationReturnUrl } from "../../../lib/reservationNav";
 import { extractPlainText } from "../../../lib/security";
 import RichTextEditor from "../../components/RichTextEditor";
+import UiIcon from "../../components/UiIcon";
 
 export default function CenterDetailPage() {
   return (
@@ -220,7 +221,7 @@ function CenterDetailContent() {
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">길찾기 앱 선택</div>
             <div className="perm-guide" style={{ margin: "0 0 12px" }}>
-              📍 {center.address}<br />
+              <UiIcon name="location" size={14} /> {center.address}<br />
               {center.latitude != null ? "목적지가 이 센터로 자동 설정돼요" : "정확한 길찾기는 센터 위치 좌표가 필요해요"}
             </div>
             <div className="map-app-list">
@@ -270,7 +271,7 @@ function CenterDetailContent() {
         <div className="sheet-overlay" onClick={() => setBuySheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">수강권 · 상품 구매</div>
-            <a href="/cart" className="cart-link-btn">🛒 장바구니 보기</a>
+            <a href="/cart" className="cart-link-btn"><UiIcon name="cart" size={16} /> 장바구니 보기</a>
             {filterProductIds && (
               <div className="class-filter-notice">
                 <span>{applyFilter ? "이 수업에 사용할 수 있는 수강권만 표시 중" : "전체 상품 표시 중"}</span>
@@ -426,9 +427,9 @@ function CenterDetailContent() {
           ? <ZoomableImage className="center-hero-photo" src={centerPhotoUrl(center.photoUrl) ?? ""} />
           : <div className="center-hero-badge">{center.name.slice(0, 1)}</div>}
         <div className="center-hero-name">{center.name}</div>
-        {center.address && <div className="center-hero-addr">📍 {center.address}</div>}
+        {center.address && <div className="center-hero-addr"><UiIcon name="location" size={14} /> {center.address}</div>}
         {center.phone && (
-          <a className="center-hero-phone" href={`tel:${center.phone}`}>📞 {center.phone}</a>
+          <a className="center-hero-phone" href={`tel:${center.phone}`}><UiIcon name="phone" size={14} /> {center.phone}</a>
         )}
         {center.sns && (
           <div className="center-sns">
@@ -452,7 +453,7 @@ function CenterDetailContent() {
         <>
           <div className="menu-section-label">위치</div>
           <button className="center-map-link" onClick={() => setMapSheet(true)}>
-            <div className="center-map-addr">📍 {center.address}</div>
+            <div className="center-map-addr"><UiIcon name="location" size={14} /> {center.address}</div>
             <div className="center-map-open">지도 · 길찾기 ›</div>
           </button>
         </>

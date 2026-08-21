@@ -237,9 +237,9 @@ export default function ClassRevenuePage() {
           {/* 캘린더 */}
           <div className="mypage-cal" style={{ margin: "12px 20px" }}>
             <div className="mypage-cal-head">
-              <button onClick={prevMonth}>‹</button>
+              <button onClick={prevMonth} aria-label="이전 달">‹</button>
               <span>{cal.y}.{pad(cal.m)}</span>
-              <button onClick={nextMonth}>›</button>
+              <button onClick={nextMonth} aria-label="다음 달">›</button>
             </div>
             <div className="mypage-cal-grid">
               {["일", "월", "화", "수", "목", "금", "토"].map((d) => <div key={d} className="mypage-cal-dow">{d}</div>)}
@@ -252,7 +252,7 @@ export default function ClassRevenuePage() {
                   <button key={i} className={`mypage-cal-cell tappable ${isSel ? "sel" : ""}`} onClick={() => selectDate(key)}>
                     <span className="mypage-cal-day">{day}</span>
                     {!calLoading && info && info.total !== 0 && (
-                      <span style={{ fontSize: 10, color: info.total > 0 ? "var(--brand, #2c7a7b)" : "#c0392b", display: "block" }}>
+                      <span className={info.total > 0 ? "" : "is-error-text"} style={{ fontSize: 10, color: info.total > 0 ? "var(--brand-ink)" : undefined, display: "block" }}>
                         {(info.total / 10000).toFixed(info.total % 10000 === 0 ? 0 : 1)}만
                       </span>
                     )}
@@ -288,7 +288,7 @@ export default function ClassRevenuePage() {
                           )}
                         </div>
                       </div>
-                      <span style={{ fontWeight: 600, color: g.total >= 0 ? undefined : "#c0392b" }}>{won(g.total)}</span>
+                      <span className={g.total >= 0 ? "" : "is-error-text"} style={{ fontWeight: 600 }}>{won(g.total)}</span>
                     </div>
                     {expandedKey === g.key && (
                       <div style={{ padding: "8px 0 0" }}>
@@ -345,9 +345,9 @@ export default function ClassRevenuePage() {
                     />
                   </div>
                 ))}
-                <div className="set-row" style={{ borderTop: "1px solid var(--border, #eee)", marginTop: 8, paddingTop: 8 }}>
+                <div className="set-row" style={{ borderTop: "1px solid var(--line)", marginTop: 8, paddingTop: 8 }}>
                   <div className="set-label">합계</div>
-                  <div style={{ color: editValid ? undefined : "#c0392b", fontWeight: 600 }}>
+                  <div className={editValid ? "" : "is-error-text"} style={{ fontWeight: 600 }}>
                     {won(editSum)} {editValid ? "" : `(총 결제금액과 ${won(Math.abs(editSum - editPaidTotal))} 차이)`}
                   </div>
                 </div>

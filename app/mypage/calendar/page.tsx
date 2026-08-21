@@ -85,9 +85,9 @@ export default function CalendarPage() {
         <>
           <div className="mypage-cal" style={{ margin: "12px 20px" }}>
             <div className="mypage-cal-head">
-              <button onClick={prevMonth}>‹</button>
+              <button onClick={prevMonth} aria-label="이전 달">‹</button>
               <span>{cal.y}.{pad(cal.m)}</span>
-              <button onClick={nextMonth}>›</button>
+              <button onClick={nextMonth} aria-label="다음 달">›</button>
             </div>
             <div className="mypage-cal-grid">
               {["일","월","화","수","목","금","토"].map((d) => <div key={d} className="mypage-cal-dow">{d}</div>)}

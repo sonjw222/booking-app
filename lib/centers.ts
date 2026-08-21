@@ -27,64 +27,33 @@ export function validateCenterRegistrationInput(input: CenterRegistrationInput):
   return null;
 }
 
-// 이미 존재하는 account에 새 센터를 등록(오너로 연결)한다.
-//   - 회원가입 흐름: accounts/profiles 생성 직후 방금 만든 account.id로 호출
-//   - 마이페이지 흐름: 이미 로그인된 본인 account.id로 호출
-// 센터 status는 DB 기본값 'pending' 그대로 두어(schema.sql 주석: "가입 후 승인대기"),
-// 기존 플랫폼 관리자 승인 흐름(app/admin/centers)을 그대로 재사용한다.
+// 지금 로그인된 계정에 새 센터를 등록(오너로 연결)한다.
+//   - 회원가입 흐름: accounts/profiles 생성 직후, 같은 세션으로 호출
+//   - 마이페이지 흐름: 이미 로그인된 본인 세션으로 호출
+// centers insert → manager_centers insert → 오너 역할 조회/연결을 하나의 트랜잭션으로
+// 묶은 register_center_for_account_safe() RPC를 호출한다(P2-11) — 계정은 RPC 안에서
+// auth.uid() 기준으로 직접 확인하므로 accountId를 인자로 받지 않는다. 사업자등록번호
+// 중복은 centers.business_number의 unique 인덱스가 막고, RPC가 그 경우 "이미 등록된
+// 사업자등록번호예요" 메시지로 변환해 던진다(add_register_center_for_account_safe_rpc.sql).
 export async function registerCenterForAccount(
-  accountId: string,
   input: CenterRegistrationInput
 ): Promise<{ centerId: string }> {
   const validationError = validateCenterRegistrationInput(input);
   if (validationError) throw new Error(validationError);
-
-  const newCenterId = crypto.randomUUID();
 
   let licensePath = input.licenseFileName;
   if (input.licenseFile) {
     licensePath = await uploadBusinessLicense(input.licenseFile);
   }
 
-  const { error: centerErr } = await supabase.from("centers").insert({
-    id: newCenterId,
-    name: input.name,
-    address: input.address,
-    phone: input.phone,
-    business_number: input.businessNumber,
-    business_license_url: licensePath,
-    // status는 지정하지 않음 → DB 기본값 'pending' (플랫폼 관리자 승인 대기)
+  const { data, error } = await supabase.rpc("register_center_for_account_safe", {
+    p_name: input.name,
+    p_address: input.address,
+    p_phone: input.phone,
+    p_business_number: input.businessNumber,
+    p_business_license_url: licensePath,
   });
-  if (centerErr) throw new Error("센터 생성 중 문제가 발생했어요: " + centerErr.message);
+  if (error) throw new Error(error.message);
 
-  // 센터-매니저 연결을 먼저 만든다(이 행이 있어야 이후 조회 정책의 "내 센터" 조건이 충족됨).
-  // 센터를 직접 만든 사람이므로 manager_centers.status는 바로 active — 이건 centers.status(승인 대기)와는
-  // 별개 필드다. ACL-005: /manager 진입 판정은 이 manager_centers.status만 보므로, 승인 전 센터의
-  // 오너도 기존과 동일하게 관리자 모드에는 즉시 진입할 수 있다(기존 동작 유지, 임의 변경 없음).
-  const { error: mcErr } = await supabase.from("manager_centers").insert({
-    account_id: accountId,
-    center_id: newCenterId,
-    status: "active",
-  });
-  if (mcErr) throw new Error("매니저 연결 중 문제가 발생했어요: " + mcErr.message);
-
-  // 방금 만든 센터의 기본 역할 중 '스튜디오 오너'를 찾아 연결한다.
-  const { data: ownerRole, error: roleErr } = await supabase
-    .from("center_roles")
-    .select("id")
-    .eq("center_id", newCenterId)
-    .eq("role_key", "owner")
-    .single();
-  if (roleErr || !ownerRole) {
-    throw new Error("오너 역할 연결 중 문제가 발생했어요: " + (roleErr?.message ?? "역할을 찾을 수 없어요"));
-  }
-
-  const { error: updErr } = await supabase
-    .from("manager_centers")
-    .update({ role_id: ownerRole.id })
-    .eq("account_id", accountId)
-    .eq("center_id", newCenterId);
-  if (updErr) throw new Error("오너 역할 연결 중 문제가 발생했어요: " + updErr.message);
-
-  return { centerId: newCenterId };
+  return { centerId: data as string };
 }

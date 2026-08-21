@@ -8,6 +8,55 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-22 — UI 버그 4건: floating nav 여백 미정의, 센터상세 fixed 버튼, 프로필 아바타 색상, 문의 뒤로가기
+
+- `--floating-nav-clearance` 토큰이 앱 전체 15곳 이상에서 참조되는데 어디에도 정의돼 있지 않아
+  이를 쓰는 `padding-bottom`/`bottom` 계산이 전부 무효화되던 문제 수정 — 관리자 "더보기" 화면
+  하단 메뉴가 floating nav에 가려 잘리던 근본 원인.
+- `.app-shell { min-height: 100vh }` → `100dvh` — 콘텐츠가 짧은 탭(센터 상세 정보/수업 탭)에서
+  모바일 브라우저 주소창 때문에 `position:fixed` 하단 버튼(예약하기/수강권구매)이 화면 밖으로
+  밀려나던 문제.
+- 프로필 관리 화면의 기본 아바타를 마이페이지 아바타와 동일하게 흰 배경+검정 글씨로 통일.
+- 1:1 문의 목록 화면에 뒤로가기 버튼 추가(다른 마이페이지 하위 화면과 동일한 패턴으로 누락돼 있었음).
+- 다크 모드가 아직 완전히 정리되지 않아 "테마 설정" 진입 링크를 임시로 숨김(라우트는 유지).
+
+## 2026-08-22 — P2-11 센터 등록 원자화 + 사업자등록번호 중복 방지
+
+`centers.business_number`에 부분 unique 인덱스를 추가하고, `centers`→`manager_centers`→오너
+역할 연결 4단계 클라이언트 호출을 `register_center_for_account_safe()` 단일 트랜잭션 RPC로
+묶었다(`add_register_center_for_account_safe_rpc.sql`, 라이브 적용). `lib/centers.ts`의
+`registerCenterForAccount()`가 `accountId` 인자 없이 RPC 하나만 호출하도록 축소됐고, 회원가입/
+"내 센터 등록하기" 두 호출부와 단위 테스트를 함께 갱신했다.
+
+## 2026-08-22 — 디자인 시스템 정합성 점검: 색상 토큰화 / 아이콘 통일 / 캘린더 규칙 통일 / 운영자 화면 디자인 레이어
+
+`docs/13_Design_System.md` 기준으로 회원·관리자·운영자 화면 전체를 점검하고 불일치를 수정 (UI 전용, DB/로직 변경 없음).
+
+- **색상**: `globals.css`에 danger 계열이 5종(`#c0392b` `#C0392B` `#D9534F` `#b3261e` `#FF3B30`),
+  success 3종, warning 4종으로 흩어져 있어 화면마다 같은 의미의 색이 달랐다. 약 190개 리터럴을
+  의미 토큰(`--danger` `--success` `--warning` `--info` 등)으로 통일. `tsx` 인라인 하드코딩 색상은 0개가 됨.
+- **없는 토큰 참조 버그**: `var(--surface-2, #eee)` / `var(--border, #eee)`는 정의되지 않은 토큰이라
+  항상 fallback으로 떨어지고 있었다(다크 모드에서도 밝은 회색). 실제 토큰으로 교체.
+- **Card 토큰 신설**: 디자인 문서에 있는 Background>Card 토큰이 없어서 카드/입력/시트 표면이 `#fff`로
+  34곳 하드코딩돼 있었고, 그 탓에 다크 모드에서 흰 카드 위에 흰 글자가 찍혔다(`.mypage-shell .avatar` 등).
+  `--card-bg` 추가 + 다크 모드 재정의로 해결.
+- **아이콘**: 같은 `list-row` 컴포넌트인데 매니저 허브는 `UiIcon`(outline SVG), 운영자 허브는 이모지를
+  쓰고 있었다. 이모지 아이콘을 `UiIcon`으로 교체(`phone` `cart` `paperclip` `close` 4종 추가).
+  아이콘 슬롯 CSS(`.list-row .icon svg`)를 `.manager-home-v2` 스코프에서 전역으로 승격.
+- **캘린더**: 앱에 캘린더가 4벌(`.cal-*` / `.mypage-cal-*` / `.copy-cal-*` / `.app-date-*`) 있는데
+  주말(일=빨강, 토=파랑) 구분이 `.cal-*`에만 있었다. 네 캘린더 모두 그리드가 일요일에서 시작하므로
+  마크업 변경 없이 `nth-child`로 같은 규칙 적용. 월 이동 버튼 모양과 `aria-label`도 통일.
+- **운영자 화면**: `.manager-v3-content` 규칙은 139개인데 `.admin-v3-content`는 3개뿐이라 운영자 화면만
+  마이그레이션 이전 디자인으로 남아 있었다. 운영자 화면이 실제로 쓰는 공용 컴포넌트 31개 셀렉터에
+  `.admin-v3-content`를 함께 적용.
+- **안내문 상태 변형 신설**: `.perm-guide.is-error/.is-success/.is-warning/.is-info` + `.is-*-text` 유틸리티.
+  화면마다 `style={{color:"#c0392b"}}`로 직접 칠하던 에러 문구를 이 modifier로 통일.
+
+검증: 유닛 테스트 242개 전부 통과(`designSystem.contract.test.ts` 24개 포함), `app`/`lib` 타입체크 통과,
+`npm run build`(프로덕션 빌드) 통과(작업 agent가 처음 보고한 `@playwright/test` 미설치 빌드 실패는
+그 agent의 worktree에 `npm install`이 안 돼 있던 환경 문제였음 — 재확인 결과 통과, P2-DS-2 참고).
+**브라우저 시각 검증은 하지 않음**(해당 세션에 브라우저 도구 없음) — 실제 화면 확인 필요.
+
 ## 2026-08-21 — P2-22 세 번째 재발: `daily-book-limit-wiring.test.ts`도 shared fixture 충돌로 방어 코드 추가
 
 PR #72 CI에서 `daily-book-limit-wiring.test.ts`가 `USER_A`의 `centerAId`(P2-22가 이미

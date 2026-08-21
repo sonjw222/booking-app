@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
+import UiIcon from "../../components/UiIcon";
 import {
   checkPlatformAdmin, fetchCenters, approveCenter, rejectCenter, resetToPending,
   type PendingCenter,
@@ -144,7 +145,7 @@ export default function AdminCentersPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="mgr-mode-bar">
-        <span className="mgr-mode-label">🛡️ 플랫폼 운영자</span>
+        <span className="mgr-mode-label"><UiIcon name="shield" size={15} /> 플랫폼 운영자</span>
         <a className="mgr-mode-switch" href="/">회원 모드로 ↩</a>
       </div>
 
@@ -186,7 +187,7 @@ export default function AdminCentersPage() {
               <div className="admin-row"><span className="k">사업자번호</span><span className="v">{c.businessNumber ?? "-"}</span></div>
               <div className="admin-row"><span className="k">등록증</span><span className="v">
                 {c.businessLicenseUrl
-                  ? <button className="text-btn" onClick={() => openLicense(c.businessLicenseUrl!)}>📎 서류 보기</button>
+                  ? <button className="text-btn" onClick={() => openLicense(c.businessLicenseUrl!)}><UiIcon name="paperclip" size={15} /> 서류 보기</button>
                   : "미첨부"}
               </span></div>
               <div className="admin-row"><span className="k">신청일</span><span className="v">{c.createdAt}</span></div>

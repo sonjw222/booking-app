@@ -188,7 +188,7 @@ export default function ManagerDashboard() {
     <div className="app-shell manager-home-v2">
       {/* 매니저 모드 헤더 */}
       <div className="mgr-mode-bar">
-        <span className="mgr-mode-label">🏢 관리자 모드</span>
+        <span className="mgr-mode-label"><UiIcon name="building" size={15} /> 관리자 모드</span>
         <a className="mgr-mode-switch" href="/">회원 모드로 전환 ↩</a>
       </div>
 
