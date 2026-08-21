@@ -26,10 +26,12 @@ export type ClassInfo = {
   end: string;
   place: string;
   reserved: number;
+  waitlisted: number;
   capacity: number;
   allowGoods: boolean;
   classFormat: "group" | "private"; // CLASS-001 D-2: 회원 앱에 프라이빗 배지 표시용
   showReservedCount: boolean; // 운영설정 "회원에게 예약 인원 표시"(show_group_reserved_count)
+  showWaitlistCount: boolean; // 운영설정 "회원에게 대기 인원 표시"(show_group_waitlist_count)
   instructorNames: string[]; // 담당 강사 이름 목록(class_trainers). 미지정이면 빈 배열
   // 프로필별 내 예약 상태. key = profileId
   myByProfile: Record<string, { reservationId: string; status: "confirmed" | "waitlisted" }>;
@@ -150,8 +152,9 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
 
   const classIds = filteredClassRows.map((c) => c.id);
 
-  // 수업별 확정 인원수 (개인정보 없는 집계 뷰에서 조회)
+  // 수업별 확정/대기 인원수 (개인정보 없는 집계 뷰에서 조회)
   let reservedCount: Record<string, number> = {};
+  let waitlistedCount: Record<string, number> = {};
   // 내 예약 (프로필별로 구분). key = `${classId}:${profileId}`
   let myByClassProfile: Record<string, { id: string; status: "confirmed" | "waitlisted" }> = {};
   // 수업별 담당 강사 이름. key = classId
@@ -167,7 +170,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
 
     const [countChunks, myChunks, trainerChunks] = await Promise.all([
       Promise.all(classIdChunks.map((ids) =>
-        supabase.from("class_reservation_counts").select("class_id, confirmed_count").in("class_id", ids)
+        supabase.from("class_reservation_counts").select("class_id, confirmed_count, waitlisted_count").in("class_id", ids)
       )),
       Promise.all(classIdChunks.map((ids) =>
         supabase
@@ -194,7 +197,10 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
 
     for (const res of countChunks) {
       if (res.error) throw new Error("예약 인원을 불러오지 못했어요: " + res.error.message);
-      for (const r of res.data ?? []) reservedCount[r.class_id] = r.confirmed_count;
+      for (const r of res.data ?? []) {
+        reservedCount[r.class_id] = r.confirmed_count;
+        waitlistedCount[r.class_id] = (r as any).waitlisted_count ?? 0;
+      }
     }
     for (const res of myChunks) {
       if (res.error) throw new Error("내 예약을 불러오지 못했어요: " + res.error.message);
@@ -236,15 +242,17 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     color: colorByCenter[c.id] ?? DEFAULT_COLORS[i % DEFAULT_COLORS.length],
   }));
 
-  // 운영설정 "회원에게 예약 인원 표시" — 센터마다 다를 수 있어 등장한 센터들만 조회
+  // 운영설정 "회원에게 예약/대기 인원 표시" — 센터마다 다를 수 있어 등장한 센터들만 조회
   const showReservedCountByCenter: Record<string, boolean> = {};
+  const showWaitlistCountByCenter: Record<string, boolean> = {};
   if (centerMap.size > 0) {
     const { data: settingsRows } = await supabase
       .from("center_settings")
-      .select("center_id, show_group_reserved_count")
+      .select("center_id, show_group_reserved_count, show_group_waitlist_count")
       .in("center_id", Array.from(centerMap.keys()));
     for (const s of settingsRows ?? []) {
       showReservedCountByCenter[(s as any).center_id] = (s as any).show_group_reserved_count ?? true;
+      showWaitlistCountByCenter[(s as any).center_id] = (s as any).show_group_waitlist_count ?? true;
     }
   }
 
@@ -277,11 +285,13 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
       end: toTimeStr(c.end_time),
       place: centerMap.get(c.center_id)?.name ?? "",
       reserved: reservedCount[c.id] ?? 0,
+      waitlisted: waitlistedCount[c.id] ?? 0,
       capacity: c.capacity,
       allowGoods: c.allow_goods ?? false,
       classFormat: (c.class_format ?? "group") as "group" | "private",
       // 설정 행이 없으면 DEFAULT_SETTINGS.showGroupReservedCount(true)와 동일하게 기본 표시
       showReservedCount: showReservedCountByCenter[c.center_id] ?? true,
+      showWaitlistCount: showWaitlistCountByCenter[c.center_id] ?? true,
       instructorNames: instructorNamesByClass[c.id] ?? [],
       myByProfile: myProfileIds.reduce((acc, pid) => {
         const r = myByClassProfile[`${c.id}:${pid}`];

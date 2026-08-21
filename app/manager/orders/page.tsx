@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchCenterOrders, updateOrderStatus, type Order } from "../../../lib/orders";
 import Loading from "../../components/Loading";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 type OrderRow = Order & { memberName: string; memberPhone: string | null };
 
@@ -27,6 +28,7 @@ export default function ManagerOrdersPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2000); }
 
@@ -40,6 +42,23 @@ export default function ManagerOrdersPage() {
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
   }, []);
+
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  // fulfill_order() RPC가 실제로 요구하는 키는 카탈로그의 pass.order.fulfill이 아니라
+  // pass.payment.create다(라이브 정의로 확인, SEC-116) — 결제 등록 권한과 같은 계층으로 취급.
+  const canFulfillOrder = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "pass.payment.create");
 
   const load = useCallback(async () => {
     if (!centerId) return;
@@ -133,7 +152,7 @@ export default function ManagerOrdersPage() {
                 </div>
                 <div className="order-meta">{won(o.amount)} · {o.payMethod ?? "미지정"} · {fmt(o.createdAt)}</div>
               </div>
-              {(o.status === "pending" || o.status === "paid") && (
+              {(o.status === "pending" || o.status === "paid") && canFulfillOrder && (
                 <div className="order-actions">
                   <button className="order-done-btn" disabled={busy} onClick={() => handleDone(o)}>확정 · 발급</button>
                   <button className="order-cancel-btn" disabled={busy} onClick={() => handleCancel(o)}>취소</button>

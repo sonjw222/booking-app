@@ -436,6 +436,8 @@ export default function ManagerDashboard() {
                     <div className="roster-actions">
                       {a.status === "cancelled" ? (
                         <span className="att-locked">취소된 예약 · 변경 불가</span>
+                      ) : !canSeeMenu("schedule.attendance") ? (
+                        <span className="att-locked">출결 처리 권한 없음</span>
                       ) : (
                         <>
                           {/* 대기(waitlisted)는 아직 확정된 적이 없어 출석/결석을 매길 대상이 아니다 —

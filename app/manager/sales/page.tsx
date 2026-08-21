@@ -22,6 +22,7 @@ import {
   type ExpenseRow, type PointRow,
 } from "../../../lib/sales";
 import { fetchSettings } from "../../../lib/settings";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -100,6 +101,7 @@ export default function SalesPage() {
   // 운영설정 "미수금 자동입력" — 켜져 있으면 상품가 - 입력된 결제수단 합계를 미수금에 자동 반영
   const [autoUnpaidInput, setAutoUnpaidInput] = useState(false);
   const [fUnpaidTouched, setFUnpaidTouched] = useState(false); // 사용자가 미수금을 직접 고쳤으면 자동계산 중단
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -149,6 +151,28 @@ export default function SalesPage() {
   }, [centerId, from, to]);
 
   useEffect(() => { load(); }, [load]);
+
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  function canDo(key: string): boolean {
+    return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);
+  }
+  const canCreatePayment = canDo("pass.payment.create");
+  const canDeletePayment = canDo("pass.payment.delete");
+  // registerPayment는 수강권/상품을 고르면 memberships에도 insert하므로(발급),
+  // 그 경우엔 pass.payment.create뿐 아니라 customer.member.issue_pass도 필요하다.
+  const canIssuePass = canDo("customer.member.issue_pass");
 
   async function openSheet() {
     if (!centerId) return;
@@ -277,7 +301,9 @@ export default function SalesPage() {
       <div className="back-header">
         <a className="side" href="/manager">‹</a>
         <div className="title">매출 관리</div>
-        <button className="header-action" onClick={() => tab === "sales" ? openSheet() : tab === "expense" ? setExpSheet(true) : openPointSheet()}>+ 등록</button>
+        {(tab !== "sales" || canCreatePayment) && (
+          <button className="header-action" onClick={() => tab === "sales" ? openSheet() : tab === "expense" ? setExpSheet(true) : openPointSheet()}>+ 등록</button>
+        )}
       </div>
 
       {centers.length > 1 && (
@@ -543,9 +569,14 @@ export default function SalesPage() {
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>메모 (선택)</div>
             <input className="input-field" value={fMemo} onChange={(e) => setFMemo(e.target.value)} placeholder="예: 3개월 할인 적용" />
 
+            {(fProductId || fGoodsId) && !canIssuePass && (
+              <div className="perm-guide" style={{ margin: "10px 0 0", color: "#c0392b" }}>
+                수강권/상품 발급 권한이 없어요 — 발급 없이 매출만 등록하려면 선택을 해제하세요.
+              </div>
+            )}
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => setSheet(false)}>취소</button>
-              <button className="outline-action" disabled={busy} onClick={handleRegister}>
+              <button className="outline-action" disabled={busy || ((!!fProductId || !!fGoodsId) && !canIssuePass)} onClick={handleRegister}>
                 {busy ? "등록 중..." : "등록"}
               </button>
             </div>

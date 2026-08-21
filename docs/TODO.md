@@ -165,18 +165,26 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 충족되지 않아 P0-4 전체는 계속 "확인 필요" 상태로 둡니다(이번엔 `account_center_permissions`
 한 테이블만 개별 대응했고, 전 테이블 반복 가능 체크리스트는 별도).
 
-### P0-5. (2026-08-13, SQL 적용 완료 — 익일 실제 발생 확인만 남음) 정기 알림 스케줄러
+### P0-5. (2026-08-21, 완전히 완료 — 10일 연속 정상 작동 라이브 확인) 정기 알림 스케줄러
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **적용 완료.** 사용자가 `add_notification_scheduler.sql`을 SQL Editor에서 실행 → `cron.schedule()`이 job id `1`을 반환해 등록 확인(REST API는 `cron` 스키마를 노출하지 않아 Claude가 직접 재조회는 못 함 — SQL Editor 반환값이 근거). |
+| 현재 상태 | **완료.** `cron.job`/`cron.job_run_details`/`notifications` 라이브 직접 조회로 실제 자동 발송까지 확인됨(2026-08-21, 사용자 실행). |
 | 근거 파일 | `add_notifications.sql`, `add_notification_scheduler.sql`, `README.md` 5절; 함수 `notify_upcoming_reservations()`, `notify_expiring_passes()` |
 | 이번 배치에서 한 것 | `pg_cron`(Supabase 전 플랜 무료 지원, 외부 서비스/사업자 불필요) 확장을 켜고 두 함수를 매일 KST 오전 9시(UTC 0시)에 순서대로 호출하는 job(`daily-notifications`) 등록. 두 함수 모두 이미 멱등(같은 예약/수강권에 같은 종류 알림 중복 생성 안 함)이라 재실행 안전. |
-| 남은 작업 | 익일(2026-08-14) KST 오전 9시 이후 실제로 알림이 자동 생성되는지 `notifications` 테이블에서 확인 |
+| 완료 조건 | ~~익일(2026-08-14) KST 오전 9시 이후 실제로 알림이 자동 생성되는지 `notifications` 테이블에서 확인~~ 완료 |
 | 관련 문서 | [REQUIREMENTS 6-2](./REQUIREMENTS.md), [DATABASE 9-3, 12-5](./DATABASE.md) |
 
-함수 존재만으로 자동 알림이 실행되는 것은 아닙니다.
+**2026-08-21 최종 확인**: `cron.job` 조회로 `daily-notifications`가 `active=true`, 스케줄
+`0 0 * * *`로 등록돼 있음을 확인. `cron.job_run_details`로 2026-08-12~08-21 **10일 연속
+전부 `succeeded`**(각 실행 2~3초)임을 확인 — 실행 실패 없이 안정적으로 매일 돌고 있다.
+`notifications` 테이블에서 스케줄러가 만드는 4종 kind를 직접 집계: `pass_used_up` 211건·
+`reservation_3days` 10건·`reservation_today` 82건은 오늘(08-21)까지 계속 생성 중이고,
+`pass_expired`는 08-15~16에만 10건 있고 그 뒤로 없는데 이건 실패가 아니라 그 이후로
+"오늘 만료되는 수강권"이라는 조건에 맞는 대상 자체가 없었다는 뜻(멱등·조건부 함수라
+매일 생성되는 게 정상이 아님). 함수 존재·job 등록뿐 아니라 **실제 자동 발송이 라이브에서
+매일 벌어지고 있음**을 데이터로 확정 — 이제 P0로 남겨둘 이유 없음.
 
 ### P0-6. (2026-08-14, 완료 확인 — 문서만 정정) 휴무일 강제 지정 시 취소된 예약의 수강권 횟수가 복구되지 않음
 
@@ -211,6 +219,8 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 유력하지만 미확인 가설 | 어떤 통합 테스트가 `center_settings`(daily_book_limit 등)를 일시적으로 변경했다가 자기 테스트 안에서 assertion 실패 등으로 **cleanup(원상복구) 이전에 조기 종료**되면서 값이 켜진 채로 남는 패턴으로 추정됨. 2026-08-14/15 동안 여러 세션이 동시에 같은 `TEST_CENTER_ID`를 공유해서 테스트를 돌린 것도 재발 빈도에 영향을 줬을 가능성 있음(`feedback_ci_one_at_a_time`류 동시성 문제와 별개 축). |
 | 완료 조건 | (a) `center_settings`를 변경하는 통합 테스트 전체(`operational-settings-wiring.test.ts` 등)를 감사해 실패 시에도 반드시 원상복구가 실행되는지(`try/finally` 또는 `afterEach`) 확인·보강. (b) 근본적으로는 공유 고정 `TEST_CENTER_ID` 대신 테스트마다 격리된 센터를 쓰는 방향(`getOrCreateOwnedTestCenter()` 패턴 확대)도 검토. |
 | 참고 | 여러 세션이 동시에 CI를 돌려 생기는 오염(간헐적 flaky, 재실행하면 대부분 해소)과는 별개 축의 문제 — 이건 재실행해도 계속 재발하는 게 특징 |
+
+**2026-08-21 관련 조사(P0-7 자체는 미해결로 남김)**: P2-28에서 `auto-book-membership-security.test.ts`의 여러 케이스를 완료 조건 (b)와 정확히 같은 방향(공유 `TEST_CENTER_ID` 대신 `createIsolatedOwnedCenter()` 격리 센터)으로 이미 전환했다. 다만 그 전환 자체가 별개의 두 새 버그(F/L의 `payments`/`center_members` FK — stale-cleanup이 모든 참조 테이블을 못 따라감, N/O의 `memberships` RLS — 새 센터에 userB가 소속되지 않음)를 드러냈다 — P0-7이 지목한 "공유 고정 센터" 문제와는 다른 종류의 위험이지만, "격리 센터 방향이 만능은 아니고 그 자체로 별도 정리가 필요하다"는 교훈은 P0-7 완료 조건 (b)를 실행할 때 참고할 만하다. P0-7의 핵심 가설(어떤 테스트가 실패 시 `center_settings` 원상복구 없이 조기 종료)은 라이브 DB 직접 조사(서비스 롤 키 필요, 이 세션엔 없음) 없이는 확정할 수 없어 여전히 미확인 상태로 남긴다.
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
@@ -297,15 +307,38 @@ test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx 
 | 근거 파일 | `supabase/functions/naver-login/index.ts`, `lib/naverAuth.ts`, `app/login/naver-callback/page.tsx` |
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [ROUTES `/login`](./ROUTES.md) |
 
-### P1-5. (2026-08-14, 2차 진행 — ManagerNav 탭까지 확대) 매니저 세부 권한 기반 UI
+### P1-5. (2026-08-21, 4차 진행 — 버튼 단위 권한 게이팅, Bucket 1 완료) 매니저 세부 권한 기반 UI
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **메뉴 노출 제어는 완료.** 남은 건 화면 내부 버튼 단위 권한 표시뿐(아래 참고). |
-| 근거 파일 | `lib/roles.ts`, `app/manager/staff/permissions/page.tsx`, 전체 `app/manager/**/page.tsx`, `app/components/ManagerNav.tsx`, `add_personal_permissions.sql`, `add_manager_menu_permissions.sql`(신규) |
-| 완료 조건 | 각 매니저 화면의 기능을 권한 키와 매핑하고 권한 없는 메뉴·버튼을 사전에 숨기거나 비활성화하며, RLS/RPC 거부도 그대로 유지해 역할별 검증을 통과함. 남은 것: 각 화면 내부의 개별 액션 버튼 단위 권한 표시(여전히 서버 거부 이후에야 알 수 있음) — 화면 수가 많아 범위가 큼, 별도 배치 권장 |
+| 현재 상태 | **메뉴 노출 제어 완료 + 서버에 실제 `has_permission()` 체크가 있는 화면(Bucket 1) 9개의 버튼 단위 게이팅 완료.** 카탈로그에 키만 있고 실제 RLS/RPC는 열려있는 화면(Bucket 2, 별도 9개)은 SQL로 서버측 권한을 새로 연결하는 작업이 진행 중 — 아래 및 P1-5b 참고. |
+| 근거 파일 | `lib/roles.ts`, `app/manager/staff/permissions/page.tsx`, 전체 `app/manager/**/page.tsx`, `app/components/ManagerNav.tsx`, `add_personal_permissions.sql`, `add_manager_menu_permissions.sql` |
+| 완료 조건 | 각 매니저 화면의 기능을 권한 키와 매핑하고 권한 없는 메뉴·버튼을 사전에 숨기거나 비활성화하며, RLS/RPC 거부도 그대로 유지해 역할별 검증을 통과함. |
 | 관련 문서 | [REQUIREMENTS 5-7, 6-1](./REQUIREMENTS.md), [DATABASE 7-1, 10절](./DATABASE.md), [ROUTES 5절](./ROUTES.md) |
+
+2026-08-21 4차 해결(버튼 단위 게이팅 배치): 조사 결과 21개 매니저 화면 중 서버(RLS/RPC)에
+실제로 `has_permission()` 체크가 걸려 있는 화면은 9개(`staff`, `members`, `sales`,
+`class-revenue`, `settings`, `membership-rules`, `classes`, `holidays`,
+`progress`/`progress/record`)뿐이었다 — 여기 14~16개 버튼/액션에
+`fetchMyEffectivePermissionKeys()` + `canSeeManagerMenu()`(`center-info/page.tsx`가 이미 쓰던
+패턴)를 적용해 권한 없는 스태프에게는 버튼 자체가 안 보이거나 비활성화되도록 했다.
+`classes/page.tsx`의 직접배치/무료배치/관리자 배치취소는 `schedule.makeup`, 삭제는
+`schedule.own.group.delete`(휴무일 추가와 키 공유, P0-6에서 이미 지적된 재사용 — 의도적으로
+그대로 둠), 휴면·만료 회원 배치는 `customer.member.assign_any_status`로 추가 게이팅.
+`sales/page.tsx`의 결제 등록은 수강권/상품을 함께 고르면 `pass.payment.create`뿐 아니라
+`customer.member.issue_pass`도 필요해(수강권 발급이 결제 등록과 한 트랜잭션) 그 조합을
+버튼에서 확인. `membership-rules/page.tsx`는 메뉴 게이트(`pass.create`)와 "조건 추가/삭제"의
+실제 필요 키(`pass.update`)가 다르다는 걸 확인해 그 서브기능만 별도로 게이팅. `npm run build`
+통과(TypeScript 오류 없음).
+
+나머지 9개 화면(`goods`, `rooms`, `reviews`, `announcements`, `inquiries`, `orders`,
+`members`의 부가 기능들, 대시보드 출석 처리, `classes`의 `schedule.own/other.*` CRUD 전체)은
+권한 카탈로그에 키는 있지만 실제 DB 정책은 `my_managed_center_ids()`(센터 소속 스태프면
+누구나)만 체크해 서버측 제약이 없다 — 여기 버튼을 잠그면 실제로 없는 제약을 있는 것처럼
+보여주는 오해의 소지가 있어 이번 배치에선 건드리지 않았다. SQL로 실제 RLS/RPC를 새로 연결하는
+작업을 P1-5b로 별도 진행 중(운영 중인 센터의 기존 스태프가 갑자기 기능을 못 쓰게 될 수 있는
+동작 변경 위험이 있어 신중하게 진행).
 
 2026-08-01 Access Control 구현 Batch에서 1차 해결: `app/manager/page.tsx`의 13개 메뉴 중
 권한 카탈로그에 대응 키가 있는 9개(수강권/진도표/스태프/매출/공지사항/문의/센터정보/룸/설정)를
@@ -333,7 +366,54 @@ test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx 
 테이블 재조회로 확인). `app/manager/page.tsx`의 관리 메뉴 목록과 "오늘 할 일" 상단 바로가기
 (문의/주문/회원배치) 모두 `canSeeMenu()`로 연결. `npm run build` 통과.
 
-### P1-6. (2026-08-15, 문서 오류 정정 — 실제로는 완료) 관리자·운영자 클라이언트 가드 누락
+### P1-5b. (2026-08-21, 완료 — Live 적용 확인) Bucket 2 화면 서버측 권한(RLS/RPC) 신규 연결
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **완료.** SQL migration 6개(products·rooms / reviews·announcements / inquiries·orders / center_members / manager_set_attendance / classes own-other) 전부 사용자가 SQL Editor에서 순서대로 실행, 확인 쿼리로 라이브 반영 검증 완료(center_members 정책 4개, `manager_set_attendance`의 `schedule.attendance` 체크 true, classes 관련 신규 함수 10개 전부 생성). 대응 UI 게이팅 + `lib/classes.ts` 리팩터링까지 브랜치 `feat/p1-5-button-permission-gating`에 커밋됨. `npm run build` 통과. |
+| 근거 파일 | [P1-5](#p1-5) 4차 해결 조사 결과 + `pg_get_functiondef`로 확인한 라이브 정의(`fulfill_order`, `manager_set_attendance`, `delete_class_safe`, `delete_class_group_safe`) |
+| 완료 조건 | 9개 화면(goods/rooms/reviews/announcements/inquiries/orders/members 부가기능/대시보드 출석/classes CRUD)의 실제 DB 정책에 `has_permission()` 체크를 추가하고, 대응하는 UI 버튼 게이팅도 함께 적용 |
+| 관련 문서 | [P1-5](#p1-5), [DATABASE.md](./DATABASE.md) |
+
+**중요 — 동작 변경(breaking change) 위험**: 지금은 이 9개 화면이 "센터 소속 스태프면 누구나"
+동작하는데, RLS를 `has_permission()` 기반으로 좁히면 그 권한 키를 역할에 아직 안 준 기존
+센터의 스태프가 갑자기 해당 기능을 못 쓰게 된다. SQL은 사용자가 직접 SQL Editor에서
+실행해야 하며(Claude가 직접 실행하지 않음), 적용 전 각 센터 운영자가 필요한 스태프에게
+미리 권한을 부여해두는 게 좋다.
+
+**중간에 드러난 사실 두 가지(정적 파일만 보고 진행했으면 놓쳤을 것들)**:
+1. `fulfill_order()`(주문 확정·발급)는 조사 당시 "카탈로그 키만 있고 RLS는 열려있다"고
+   봤지만, 라이브 정의를 직접 확인하니 이미 `has_permission(center_id,'pass.payment.create')`로
+   막혀 있었고(SEC-116) 정적 파일에는 없던 가격 검증(SEC-118)·자동 회원등록·자동예약
+   로직까지 있었다 — 정적 파일이 최신이 아니었던 사례. 주문 "확정·발급" 버튼은 그래서
+   `pass.order.fulfill`이 아니라 실제로 쓰이는 `pass.payment.create`로 게이팅했다("취소"도
+   같은 키로 통일).
+2. `class_trainers`(수업 담당 강사 배정) 테이블 자체의 RLS도 `my_managed_center_ids()`만
+   체크해서, 수업 own/other 판정 기준(담당 강사가 본인인지)을 아무나 조작할 수 있는
+   상태였다 — 이것도 함께 서버 함수로 옮겨 잠갔다(아래 참고).
+
+**classes CRUD own/other 매핑(사용자 승인, 2026-08-21)**: 카탈로그의 `schedule.own/other.*`
+40여 개 키 중 create/update/delete 계열을 실제로 연결했다.
+- **own 판정**: 그 수업(또는 반복그룹)의 `class_trainers`에 내 계정이 있으면 own, 다른
+  사람만 있으면 other. 담당 강사가 아예 없으면 own으로 간주.
+- **생성**: 아직 배정된 강사가 없어 other 개념이 성립 안 함 → `schedule.own.{group|private}.create`만 요구.
+- **수정/삭제/강사 재배정**: own/other × group/private 실제 판정 적용.
+- **구조 변경**: `createClass`/`updateClass`/`createRecurringClasses`/`updateClassGroup`/
+  `updateClassPassSelectionMode`/`setClassTrainers`/`setClassTrainersBulk`/
+  `setClassTrainersForGroup`(전부 `lib/classes.ts`, 기존엔 클라이언트가 `classes`/
+  `class_trainers` 테이블에 직접 insert/update)를 전부 새 RPC(`*_safe`)로 옮겼다 —
+  RLS만으로는 "이 요청이 어떤 강사를 배정하려는지" 알 수 없어(별도 호출로 옴) 서버 함수
+  안에서 판정해야 한다. **함수 시그니처는 그대로 유지**해서 `app/manager/classes/page.tsx`
+  등 호출부는 손대지 않았다(`delete_class_safe`/`delete_class_group_safe`는 원래도 RPC라
+  하드코딩된 `schedule.own.group.delete` 체크만 own/other 판정으로 교체).
+- `classes`/`class_trainers` 테이블 자체의 RLS(직접 insert/update)는 이번에 강화하지
+  않았다 — 넓게 열려 있지만 실제 클라이언트는 이제 전부 RPC를 거쳐가므로(직접 테이블
+  호출 경로가 `lib/classes.ts`에서 모두 제거됨) 사실상의 방어선은 이 RPC들이다.
+  `fulfill_order`/`orders` 테이블과 같은 패턴.
+- 예약 배치/취소(`schedule.makeup`)는 범위 밖 — Bucket 1에서 이미 처리됨.
+- 범위 밖(도달 불가능한 죽은 코드로 확인됨, `copySchedule()`)은 갱신하지 않음 — 되살아나면
+  같이 고쳐야 한다는 주석만 남김.
 
 | 필드 | 내용 |
 |---|---|
@@ -468,12 +548,12 @@ P1-10 차이만 관찰하도록 수정, 4/4 재통과 확인.
 흐름(확인→재호출로 실제 생성) 자체를 검증하는 테스트는 여전히 없음 — 이 항목은 그 부분만
 남은 것으로 범위를 좁힘.
 
-### P1-12. 운영설정(`/manager/settings`) 화면의 다수 항목이 저장만 되고 실제로 적용되지 않음
+### P1-12. (2026-08-18, 완료) 운영설정(`/manager/settings`) 화면의 다수 항목이 저장만 되고 실제로 적용되지 않음
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **부분 구현 — 화면은 완료, 서버 적용은 일부만** |
+| 현재 상태 | **완료** — 전수 재감사 결과 대부분 이미 wiring됨, 실제로 죽어있던 2개 중 1개(`show_group_waitlist_count`)는 구현, 1개(`show_all_classes`)는 "준비 중" 명시 |
 | 근거 파일 | `app/manager/settings/page.tsx`, `lib/settings.ts`, `wire_settings.sql`, `add_center_settings.sql`, `reservation_functions.sql` |
 | 완료 조건 | `center_settings`의 각 필드가 실제로 어떤 RPC/쿼리에서 읽히는지 전수 확인하고, 미적용 필드는 (a) 해당 로직에 반영하거나 (b) "준비 중" 표시로 화면에서 명확히 구분함 |
 | 관련 문서 | [23_Admin_Feature_Audit.md](./23_Admin_Feature_Audit.md) 운영설정 항목 |
@@ -497,6 +577,31 @@ reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시�
 `private_slot_unit`(schema.sql에만 있고 코드 참조 0건, 프라이빗 시간 단위 슬롯 선택 UI 자체가
 없어 죽은 설정으로 보임)은 여전히 미해결 — P2/P3 후속 범위(프라이빗 셀프 슬롯 예약 UI를
 만들지 여부와 함께 제품 결정 필요)로 남긴다.
+
+2026-08-18 전수 재감사(2026-08-02 목록을 코드로 다시 확인): 그 사이(SEC-114 정책회귀 배치 등)
+`allow_same_day_booking`/`daily_book_limit(_enabled)`/`waitlist_weekly_limit`이 이미 실제
+RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wiring돼 있음을
+확인(목록에서 제거). `show_group_reserved_count`/`auto_unpaid_input`도 각각
+`lib/reservations.ts`(회원 화면 인원표시)/`app/manager/sales/page.tsx`(미수금 자동계산)에서
+실제로 읽고 있음을 확인(목록에서 제거). `use_inquiry_board`/`use_locker`/`use_lounge`는
+이미 E-6 결정으로 화면에서 토글 자체가 제거돼 있어 문제 없음(재확인만).
+`waitlist_auto_hours/minutes`/`autocancel_hours/minutes`/`same_day_change_hours/minutes`는
+이미 화면에 "준비 중" 배지로 명확히 표시돼 있어 문제 없음(재확인만).
+
+진짜 남아있던 죽은 필드는 2개뿐이었다:
+- `show_group_waitlist_count`("그룹 수업 대기 인원 표시"): 회원 화면에 대기 인원을 보여줄
+  방법 자체가 없었다(대기 인원수를 집계하는 곳이 아예 없음) — `class_reservation_counts`
+  뷰(`fix_class_reservation_counts_add_waitlisted.sql`)에 `waitlisted_count`를 추가하고
+  `lib/reservations.ts`/`app/reservation/page.tsx`에 `show_group_reserved_count`와 동일한
+  패턴으로 연결. 신규 SQL 1개, 사용자 적용 후 화면 확인 필요.
+- `show_all_classes`("수강권으로 볼 수 없는 수업도 표시"): 실제로 구현하려면 회원 화면이
+  각 수업마다 "이 회원의 어떤 수강권이든 이 수업 예약 자격이 되는지"(pass_selection_mode/
+  class_allowed_products/membership_schedule_rules)를 `reserve_class()`와 동일하게
+  클라이언트에서 재판정해야 하는데, 이건 오늘 겪은 `auto_book_membership` vs `reserve_class`
+  정책 드리프트와 같은 위험을 새로 만드는 것이라 이번 배치에서는 구현하지 않고 화면에
+  "준비 중" 배지 + 안내문구만 추가함(완료조건 (b) 선택). 별도 배치로 남김.
+- `show_point_history`(회원앱 포인트 내역 조회)는 회원앱에 포인트 내역 화면 자체가 없어서
+  P1-1(포인트 원장 이원화 정리)과 직접 겹쳐 그쪽 범위로 넘김(이 항목에서는 제외).
 
 ### P1-13. (2026-08-14, 완료) 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
 
@@ -655,14 +760,14 @@ SQL 정의는 있으나 현재 `app/`·`lib/`의 직접 조회는 확인되지 �
 
 현재 insert helper는 존재하지만 센터 상세 화면은 `addToCart()`를 사용하며 `requestPurchase()` 호출은 확인되지 않았습니다.
 
-### P2-7. `.env.local.example` 부재
+### P2-7. (2026-08-19, 완료) `.env.local.example` 부재
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **미완성** |
-| 근거 파일 | `README.md`, `.gitignore`, `lib/supabaseClient.ts`; 저장소 루트에 `.env.local.example` 없음 |
-| 완료 조건 | 실제 필요한 키 이름과 설명만 포함한 예제 또는 README 설치 절차를 마련하고, 새 환경에서 안내대로 실행해 앱이 시작됨. 비밀값은 포함하지 않음 |
+| 현재 상태 | **완료.** `process.env.NEXT_PUBLIC_*` 전수 grep으로 필수 2개(`NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY`) + 선택 5개(네이버/카카오 로그인, 결제 provider/scenario, VAPID)를 확인해 `.env.local.example` 신규 작성. `.gitignore`의 `.env*` 규칙이 `.env.test.local.example`만 예외 처리해 새 파일도 그대로 무시하고 있던 걸 발견해 `!.env.local.example` 예외 추가(안 했으면 커밋해도 파일이 조용히 빠짐). 예제 값 그대로 `.env.local`을 만들어 `npm run dev`로 `/login` 200 응답까지 실행 확인. |
+| 근거 파일 | `.env.local.example`(신규), `.gitignore`, `README.md`, `docs/DEVELOPMENT_RULES.md`(11절 최신화) |
+| 완료 조건 | ~~실제 필요한 키 이름과 설명만 포함한 예제 또는 README 설치 절차를 마련하고, 새 환경에서 안내대로 실행해 앱이 시작됨. 비밀값은 포함하지 않음~~ 완료. |
 | 관련 문서 | [REQUIREMENTS 6-2](./REQUIREMENTS.md), [DEVELOPMENT_RULES 11절](./DEVELOPMENT_RULES.md) |
 
 ### P2-8. Tailwind 설정과 실제 스타일 사용 불일치
@@ -1360,6 +1465,22 @@ P2-20 조사 과정에서 발견됐지만 이번 배치 범위 밖이라 코드 
 | 근거 파일 | `tests/integration/setup.ts`(`getOrCreateOwnedTestCenter()`의 sweep, TEST-004 #45), `tests/integration/auto-book-membership-security.test.ts`(`AUTO-SEC-I`), `cleanup_p2_22_shared_center_class_fixtures_draft_proposed.sql`(신규, 적용 완료) |
 | 완료 조건 | (a) sweep 조건을 "과거"뿐 아니라 "제목이 알려진 테스트 fixture 패턴이고 미래인 것"까지 넓혀서 재발 자체를 막을 것(아직 안 함 — 이번엔 이미 쌓인 것만 1회성으로 정리) |
 
+**2026-08-21 재발 확인**: [P2-28](#p2-28)의 AUTO-SEC-I가 같은 메커니즘으로 다시 실패했다 —
+이번엔 leftover class가 아니라 leftover **reservation**(`USER_B` 소유, 다른 파일이 남김)이
+원인이었다는 차이만 있음. `auto_book_membership()`의 "하루 1건" 체크가 `profile_id`만
+기준이고 `center_id` 스코프가 없다는 게 이 재발들의 공통 근본 원인 — 완료 조건 (a)의 sweep
+확장 대신, 이번엔 P2-28에서 해당 테스트 파일 하나에만 좁게 방어 코드를 추가했다(전체 해결
+아님, 계속 열어둠).
+
+**2026-08-21 재발 2건째**: `daily-book-limit-wiring.test.ts`도 PR #72 CI에서 같은 계열로
+실패(`USER_A`의 `centerAId` 오늘자 leftover 확정 예약 때문에 신규 1·2번째 예약까지 한도
+초과로 거부됨). 자정(KST) 경과로 저절로 해소될 거라 예상했지만 CI 재실행에서도 동일하게
+재현돼(로컬은 통과 — 동시에 도는 다른 세션/CI가 원인일 가능성), AUTO-SEC-I와 같은 패턴의
+방어 코드(`clearUserATodayReservations()`)를 이 파일에도 추가. **완료 조건 (a)(sweep
+자체를 근본적으로 고치는 것)는 세 번째 재발에도 불구하고 여전히 안 됨** — 개별 테스트
+파일마다 방어 코드를 추가하는 대신, `getOrCreateOwnedTestCenter()`/`switchToTestUser()`
+레벨에서 공통으로 처리하는 근본 수정을 진지하게 고려할 시점.
+
 **2026-08-14 leftover 정리 완료**: 제목 리터럴을 나열하는 대신 구조적 기준(이 하나의 공유
 테스트센터 + `status='open'` + `start_time > now()` + `created_at`이 1시간 이상 과거 — 지금
 막 어떤 세션이 만든 class까지 실수로 지우지 않기 위한 안전 마진)으로 `cleanup_p2_22_shared_
@@ -1407,6 +1528,11 @@ BEGIN/COMMIT 트랜잭션) 실행 → 검증(C)에서 `remaining_target_classes=
 - **PR #56**(P1-13 pay_methods/review_point 추가 보호): E2E에서 `daily-book-limit.spec.ts`
   실패 1건 + `attendance.spec.ts` flaky 1건(재시도로 복구) — 둘 다 이 PR과 무관한 파일로
   확인했으나, E2E 게이팅 때문에 Unit/Integration/Build는 아예 안 돌고 스킵된 채로 merge됨.
+- **PR #63 merge 직후 main push run(2026-08-19, run 32267575685)**: `npx playwright install
+  --with-deps chromium` 단계가 멈춰(같은 날 다른 두 run은 이 단계가 22초~1분37초, 이번엔
+  20분+) 2026-08-14/15 사고 대응으로 넣어둔 `timeout-minutes: 20`(PR #59)이 정확히 의도대로
+  작동해 자동 cancel됨 — 워크플로 파일 변경 없음, 그 순간의 러너/네트워크 일시 문제로 추정.
+  이번에도 E2E 게이팅으로 Unit/Integration/Build가 스킵된 채 끝나 PR #56과 같은 패턴 반복.
 
 셋 다 "실패 내역이 변경된 코드와 무관함"은 개별적으로 확인하고 merge했지만, Unit/Integration/
 Build까지 실제로 통과하는지는 아직 한 번도 끝까지 확인 못 했다. `main`이 안정된 시점에 한
@@ -1484,13 +1610,21 @@ timeout까지 그대로 멈춰 있다가 `cancelled`로 종료됨(run `322666353
   중이라 이 배치에서 중복 수정하지 않음 — P1-12가 same_day_change를 실제로 wiring하면 그때
   AUTO-SEC-N도 같이 재검증할 것.
 
-### P2-26. (2026-08-20, 정리 완료) `class-trainer-display.spec.ts` E2E 3건 실패 — `leads.test.ts`(P1-8) leftover 스태프가 원인
+### P2-26. (2026-08-20, 정리 완료 — 같은 날 재발도 정리 완료) `class-trainer-display.spec.ts` E2E 실패 — `leads.test.ts`(P1-8) leftover 스태프가 원인
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 (테스트 fixture leftover — 앱 로직 버그 아님) |
-| 현재 상태 | **완료 — leftover 정리 SQL 적용** |
-| 근거 파일 | `tests/e2e/reservation/class-trainer-display.spec.ts`, `tests/integration/leads.test.ts`(P1-8), `cleanup_leftover_leads_test_staff_role.sql` |
+| 현재 상태 | **완료 — leftover 정리 SQL 적용(2회, 재발 방지책은 아직 없음)** |
+| 근거 파일 | `tests/e2e/reservation/class-trainer-display.spec.ts`, `tests/integration/leads.test.ts`(P1-8), `cleanup_leftover_leads_test_staff_role.sql`, `cleanup_leftover_leads_test_staff_role_2.sql`(2차) |
+
+**2026-08-20 재발**: PR #68 workflow_dispatch run `32405557536`에서 같은 증상(E2E 6건,
+strict mode violation)이 다시 발생 — 오늘 이 저장소 전체에서 Integration job 20분
+타임아웃/취소가 여러 번(PR #67 2회, P2-24 등) 반복되며 `leads.test.ts`의 `afterAll`이 또
+못 돌았기 때문. `cleanup_leftover_leads_test_staff_role_2.sql`로 정리(하드코딩 UUID 대신
+`center_id`+역할명으로 특정 — 어떤 실행이 남긴 leftover든 재사용 가능). 아래 "남은 근본
+위험"에 적어둔 근본 원인(모든 테스트 계정이 동일한 이름 사용)을 고치지 않는 한 CI가
+타임아웃/취소를 겪을 때마다 계속 재발할 수 있다.
 
 P2-25 조사 중 PR #66과 `main`(PR #53 병합 직후 push, run `32290229997`) 양쪽에서 E2E가
 `locator('.class-trainers-list .filter-chip').filter({ hasText: '통합테스트계정' })
@@ -1510,6 +1644,148 @@ CI job 20분 타임아웃으로 강제종료되며 `afterAll`이 못 돌아 그 
 포함시키거나 (b) `assignTrainerViaUi`가 이름 대신 account_id 등으로 특정 강사를 지목하는
 방식으로 바꿔야 하는데, 둘 다 이 저장소의 여러 통합/E2E 테스트 파일에 걸친 광범위한
 변경이라 사용자 승인 없이 진행하지 않음.
+
+### P2-27. (2026-08-20, 완료) Integration job `timeout-minutes: 20`이 정상 실행도 잘라 PR #66/#67 모두 cancelled
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **완료.** `timeout-minutes`를 20 → 35로 상향. |
+| 근거 파일 | `.github/workflows/test.yml`(integration job) |
+| 완료 조건 | ~~정상 Integration 실행이 잘리지 않을 만큼 여유를 두고, 진짜 멈춘 job이 전역 큐를 장시간 막는 위험(2026-08-14/15 사고, timeout 자체를 넣은 이유)은 유지~~ 완료. |
+
+PR #66, #67 모두 Integration이 19분대에 `conclusion: cancelled`로 끝났다 — 실패가 아니라
+`timeout-minutes: 20` 도달. 통합 테스트 스위트가 여러 세션이 계속 테스트를 추가하며 자라
+정상 실행도 20분 근처(과거 timeout 없던 시절 기록은 30~34분)에 걸리게 됐다. P2-26에서 이미
+같은 매커니즘(20분 타임아웃으로 `afterAll` 정리 로직이 못 돌아 leftover fixture가 남음)이
+실제 버그를 만든 사례가 있어 근거로 삼음.
+
+**timeout 자체를 없애지는 않음**: 이 값은 원래 2026-08-14/15에 진짜 멈춘 job이 GitHub 기본
+360분 제한까지 전역 concurrency 큐(`shared-live-supabase-tests`, 저장소 전체 고정 그룹) 전체를
+몇 시간~하루 넘게 막았던 사고 대응으로 추가된 것(E2E job 주석 참고, 오늘 관측한
+`npx playwright install` 20분 멈춤도 이 안전장치 덕에 자동 정리됨 — P2-24). 없애면 그 사고가
+재발할 위험이 있어, 대신 정상 실행 시간에 여유를 더 두는 쪽으로 조정.
+
+### P2-28. (2026-08-21, 완료 — F 근본 수정 + H/I 새 이슈까지 해결) PR #68 Integration 재현 실패 11건 — waitlist 설정 미보장·N/O RLS+센터 승인 상태 문제 해결
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 (테스트 코드/fixture 문제로 확인됨 — 앱 로직 버그 아님) |
+| 현재 상태 | **완료.** ATT-SEC-B/C/D/E(waitlist)·AUTO-SEC-N/O 근본 원인 규명 및 수정 완료(PR #71 CI 검증). **F(stale-cleanup 두더지잡기)도 근본 수정 완료(2026-08-21, PR #72 작업 중 발견)** — `delete_test_center_cascade()` SQL 함수(information_schema로 `centers`를 직접/간접 참조하는 FK 그래프 전수 조사 후 작성)로 하드코딩 나열 방식을 교체, 로컬에서 연속 2회 안정적으로 통과 확인. 이 수정으로 파일이 끝까지 실행되자 **이전엔 F의 크래시에 가려 안 보이던 새 문제 2건(H, I)도 같이 드러나 함께 해결**했다(아래 참고). |
+| 근거 파일 | `tests/integration/auto-book-membership-security.test.ts`, `tests/integration/manager-set-attendance-membership-integrity.test.ts`, `lib/settings.ts` |
+
+PR #68(문서 전용 변경) CI에서 Integration 11건 실패(`auto-book-membership-security.test.ts`
+F/H×2/L/M/N/O 7건 + `manager-set-attendance-membership-integrity.test.ts` ATT-SEC-B/C/D/E
+4건) — PR #68 diff와는 무관해 원인 규명 시도.
+
+**ATT-SEC-B/C/D/E(4건, 해결 확인됨)**: `makeWaitlistedReservation()`이 두 번째
+`reserve_class()` 호출에서 `"이 센터는 대기예약을 사용하지 않아요"`로 거부됐다 —
+`reserve_class()`는 `coalesce(waitlist_weekly_limit, 0) = 0`이면 이 에러를 던지는데, 이
+파일은 그 값을 한 번도 명시적으로 설정한 적이 없었다. `beforeAll`/`afterAll`에 명시적
+설정/원복 추가 — 재실행에서 4/4 모두 통과 확인.
+
+**F/H/L/M/N/O(원래 진단·부분적으로 틀림)**: 처음엔 P2-25의 K/M 진단과 같은 메커니즘
+(공유 센터의 다른 클래스가 `auto_book_membership()` 스캔에 섞임)이라고 판단해 전부 격리
+센터로 전환했다. 하지만 `auto_book_membership()`의 실제 SQL(`fix_auto_book_membership_idor_
+draft_proposed.sql`, Live 적용 확인됨)을 직접 읽어보니 `where c.center_id = v_mem.center_id`로
+이미 명확히 센터 단위로 스코프돼 있어, 다른 센터의 클래스가 섞일 방법이 SQL 레벨에는 없다.
+격리 전환 후 재실행 결과:
+- **F/L: 간헐적 — 근본 해결 아님.** 실패 원인은 애초에 스캔 오염이 아니라 격리 전환 자체가
+  새로 만든 버그였다 — `createIsolatedOwnedCenter()`의 leftover 정리 로직이 `payments`
+  테이블 FK를 몰라서, L이 `fulfill_order()`로 실제 `payments` 행을 만들게 되자(격리 전환
+  전에는 없던 경로) 이전 실행이 남긴 leftover 격리 센터의 `memberships` 삭제가
+  `payments_membership_id_fkey` 위반으로 실패 → 그 예외가 (파일 순서상 먼저 오는) F를
+  깨뜨렸다. `payments` 삭제 단계를 추가하고 L 자신도 만든 membership/payment를 자체
+  정리하도록 고쳤더니, **재실행에서 F가 이번엔 `center_members_center_id_fkey`로 또
+  크래시했다** — 다른 이전 실행이 남긴 leftover 격리 센터가 이번엔 다른 테이블(`center_members`,
+  아마 memberships INSERT 시 트리거로 자동 생성되는 회원 행)에 걸린 것. 두더지잡기 패턴이었다.
+
+  **2026-08-21 근본 수정(PR #72 작업 중, "P2-28 근본 수정 먼저" 사용자 지시)**: `payments`만
+  고쳐서는 계속 새 FK가 나올 수밖에 없었던 이유는 애초에 "센터를 참조하는 어떤 테이블이
+  있는지"를 하나씩 발견하며 하드코딩했기 때문 — `information_schema`로 `centers`를
+  직접/간접(2단계까지) 참조하는 FK 전체를 조사해(총 hop-1 43개 테이블 + hop-2 34개 관계)
+  실제 존재하는 모든 경로를 반영한 `delete_test_center_cascade(p_center_id)` SQL 함수로
+  교체했다(`add_delete_test_center_cascade_rpc.sql`, Live 적용 완료·확인 쿼리로 `service_role`
+  전용 EXECUTE 권한 확인). `createIsolatedOwnedCenter()`의 stale-cleanup과 파일 `afterAll`의
+  이번 실행분 정리 둘 다 이 RPC 하나로 통일 — 앞으로 새 FK 위반이 나오면 이 SQL 함수만
+  갱신하면 되고 테스트 파일을 다시 뒤질 필요가 없다. 로컬에서 연속 2회 안정 통과로 검증.
+- **H(양쪽 케이스)/A~E/K/L/M/P: 격리 전환만으로 통과, 이후 재실행들에서도 안정적.** F의
+  stale-cleanup 크래시에 휘말려 같은 파일 실행에서 함께 실패한 적은 있었으나(공유
+  `staleIsolatedCentersCleaned` 플래그 예외로 인한 collateral damage), F가 크래시하지
+  않은 실행에서는 전부 통과 — 이 자체의 로직 문제는 아니었음.
+
+**2026-08-21 새로 발견(F 근본 수정 후 파일이 끝까지 도니 드러남) — H(마감)/I, P1-5/P2-28과
+무관한 별개 문제, 테스트 레벨에서 방어 완료**:
+- **AUTO-SEC-I(예약 2건 기대, 1건만 예약됨)**: [P2-22](#p2-22)가 이미 문서화한 것과 정확히
+  같은 패턴의 재발이다 — 그때는 leftover **class**(같은 공유 센터에 300개+, 제목도 "CLASS-001
+  기본값사용"/"SETTINGS-REAUDIT *" 등 이번과 겹침)가 원인이었는데, 이번엔 격리 센터 전환
+  이후라 leftover **reservation**(확정 예약, "P1override-B")이 원인이라는 점만 다르다.
+  근본 메커니즘은 같음: `auto_book_membership()`의 "이 회원이 그 날짜에 이미 예약이 있으면
+  건너뛴다" 체크가 `center_id`로 스코프되지 않고 `profile_id`(회원) 하나만 기준이라(라이브
+  정의로 확인), 이 파일이 공유하는 `USER_B` 계정이 전혀 무관한 다른 통합 테스트 파일/센터에
+  남긴 leftover와 날짜만 우연히 겹쳐도 차단된다. `auto_book_membership()`을 센터 스코프로
+  고치는 게 맞는지(의도적 정책일 수도 있음 — 매출 영향 있는 핵심 RPC)는 판단이 필요해 이번엔
+  건드리지 않고, 테스트가 실제로 쓰는 날짜에 한해 `USER_B`의 leftover 예약을 사전 정리하는
+  `clearUserBReservationsOnKstDates()` 헬퍼를 추가해 방어(다른 날짜/센터 데이터는 안 건드림
+  — 공유 개발 DB에서 동시에 도는 다른 세션과 충돌 안 하도록 최대한 좁게 스코프). **주의:
+  이건 이 파일 하나만 방어한 것 — P2-22 완료 조건 (a)(sweep을 미래 leftover까지 넓히는 근본
+  수정)는 여전히 안 됨. 다른 통합 테스트 파일이 USER_B로 비슷한 날짜 기반 자동예약 검증을
+  추가하면 똑같이 재발할 수 있다.**
+- **AUTO-SEC-H(마감 지난 수업, 예약 0건 기대인데 1건 예약됨)**: `createClassOnDow()`가
+  `targetDow`에 맞는 후보를 찾을 때까지 최대 7일을 검색하는데, 이 상품은 요일 전체
+  ([0..6])를 허용해 dow 매칭이 애초에 불필요했다. 자정 근처(KST)에 테스트가 돌면 "2시간
+  뒤"가 다음 날짜로 넘어가 `new Date().getDay()`와 어긋나면서 최대 +6일 떨어진 수업을
+  반환할 수 있어, "수업이 2시간 뒤"라는 테스트 전제 자체가 깨졌다(밤 11시반쯤 실행하다
+  재현·확인). dow 매칭이 필요 없는 케이스이므로 `createFutureTestClass()`를 직접 호출해
+  "정확히 2시간 뒤"를 보장하도록 수정.
+- 근거: `tests/integration/auto-book-membership-security.test.ts`. 로컬 재실행 2회
+  연속(17/17, 이어서 28/28 with manager-set-attendance-membership-integrity.test.ts) 통과.
+- **N/O: 근본 원인 2건, 모두 규명·수정 완료(2026-08-21).** 실제 CI 로그를 보면 `booked`
+  assertion이 아니라 fixture 준비 단계에서 죽고 있었다 — booked count 문제라는 원래 가정
+  자체가 틀렸다.
+  1. **1차: `memberships` RLS 위반.** `createTestMembership()`(`tests/integration/setup.ts`)은
+     **RLS가 걸린 일반 클라이언트**로 insert한다. 공유 센터(`centerAId`)에서는 userB가
+     오래전부터 그 센터 회원이라 통과했지만, 격리 전환으로 만든 새 센터에는 userB가 전혀
+     소속돼 있지 않아 이 RLS를 위반했다. 이 파일의 다른 모든 테스트가 이미 쓰던 admin
+     클라이언트 헬퍼 `createAutoBookMembership()`으로 두 테스트의 "기존 예약" 준비 단계를
+     교체 — `createTestMembership` import 자체를 제거함.
+  2. **1차 수정 후 재실행에서 새로 드러난 2차: 센터 미승인.** RLS 에러는 사라졌지만
+     `"아직 승인되지 않은 센터예요"`로 여전히 실패 — `createIsolatedOwnedCenter()`가 센터를
+     `status: "pending"`으로 만드는데, `reserve_class()`를 비롯한 여러 RPC가
+     `centers.status = 'approved'`를 요구한다(`fix_class_booking_deadline_override_
+     draft_proposed.sql` 등). `auto_book_membership()`은 이 체크가 없어 F/G/I/J/K/L/M처럼
+     `reserve_class`를 안 거치는 테스트는 문제없었지만, N/O는 "기존 예약" 준비 단계에서
+     실제 `reserve_class` RPC를 호출한다. **`createIsolatedOwnedCenter()`의 센터 생성
+     자체를 `status: "approved"`로 변경**(N/O 개별 수정이 아니라 헬퍼 자체를 실제 운영
+     센터와 동일한 상태로 맞춤 — 이 파일의 모든 테스트, 앞으로 이 헬퍼를 쓸 새 테스트에도
+     일관되게 적용됨). 이 두 버그 모두 F/L의 payments/center_members처럼 fixture cleanup이
+     아니라 테스트/fixture 헬퍼 자체의 준비 단계 문제였다 — 격리 센터가 실제 운영 센터의
+     여러 암묵적 전제(회원 소속, 승인 상태)를 그대로 만족해야 한다는 게 이번에 드러난
+     교훈.
+
+**ATT-SEC-B/C/D/E(4건)**: 원인이 달랐다. `makeWaitlistedReservation()`이 두 번째
+`reserve_class()` 호출(정원 찬 수업에 대기로 밀려나는 예약)에서 `"이 센터는 대기예약을
+사용하지 않아요"`로 거부됐다 — `fix_class_deadline_overrides_same_day_toggle.sql`의
+`reserve_class()`를 보면 `coalesce(waitlist_weekly_limit, 0) = 0`이면 이 에러를 던진다.
+이 테스트 파일은 처음부터 `waitlist_weekly_limit`을 **단 한 번도 명시적으로 설정한 적이
+없었다** — 공유 센터의 그 값이 우연히 0이 아닌 동안만 통과해온 것. `beforeAll`에서
+`fetchSettings`/`saveSettings`로 명시적으로 999를 설정하고 `afterAll`에서 원복하도록 추가
+(N/O가 이미 쓰던 것과 같은 패턴).
+
+### P2-29. (2026-08-21, 완료) `admin_action_logs` service_role GRANT 없음 — draft SQL 작성 후 사용자 적용 완료
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 (테스트 fixture 전용 gap — 앱 런타임 영향 없음, P2-13/P2-19와 같은 부류) |
+| 현재 상태 | **완료.** `information_schema.role_table_grants` 직접 조회로 `admin_action_logs`에 `service_role` privilege가 0행임을 확인(PR #46 조사, 2026-08-12). `lib/`/`app/` 전체에 `service_role` 사용이 없어 실제 회원/매니저 화면은 영향받지 않음 — `admin_action_logs` 행은 항상 `admin_assign_reservation`/`admin_cancel_reservation`(둘 다 security definer RPC) 내부에서만 INSERT되므로 이 GRANT 없이도 정상 동작한다. 유일한 사용처는 테스트 fixture 정리 스크립트(`cleanup_shared_test_center_pollution_draft_proposed.sql`)로, GRANT가 없어 이 스크립트의 진단/정리가 제한적이었다(P2-19 조사에서도 "service_role의 PostgREST GRANT가 없어 독립 재조회는 못 함"으로 확인). 사용자가 Supabase SQL Editor에서 GRANT SELECT, DELETE 실행 완료(2026-08-21). |
+| 근거 파일 | `fix_service_role_grants_admin_action_logs_minimal_draft_proposed.sql`(신규, SELECT+DELETE만 — 코드 전수 검색 결과 실제 쓰이는 오퍼레이션만 최소 부여, 적용 완료), `rollback_fix_service_role_grants_admin_action_logs_minimal_draft_proposed.sql`(신규) |
+| 완료 조건 | ~~사용자가 SQL Editor에서 GRANT 실행~~ 완료 |
+| 관련 문서 | PR #46(원래 이 조사가 나온 PR. P0-6/P1-12 상태 정정과 함께 묶여 있었는데, P1-12는 PR #62가 별도로 재감사 중이라 이 GRANT 부분만 분리해 먼저 반영함) |
+
+같은 조사에서 나온 `class_allowed_products` GRANT 건은 이미 main에 별도 세션이 적용한
+`fix_service_role_missing_grants_class_allowed_products_update.sql`(UPDATE 권한 추가)로
+4개 권한(SELECT/INSERT/UPDATE/DELETE) 전부 채워진 상태라, PR #46이 제안했던 그 테이블의
+대안 SQL은 이미 의미가 없어져 가져오지 않았다.
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
 

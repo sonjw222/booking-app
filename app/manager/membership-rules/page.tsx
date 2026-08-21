@@ -18,6 +18,7 @@ import {
   type Product, type ScheduleRule,
 } from "../../../lib/passes";
 import { fetchExistingClassOptions, type ExistingClassOption } from "../../../lib/classes";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 export default function MembershipRulesPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -45,6 +46,7 @@ export default function MembershipRulesPage() {
   const [rPick, setRPick] = useState("");
   const [existingClasses, setExistingClasses] = useState<ExistingClassOption[]>([]);
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -58,6 +60,26 @@ export default function MembershipRulesPage() {
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
   }, []);
+
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  // 이 화면 메뉴 게이트는 pass.create지만, "예약조건"(schedule_rules)은 별도로
+  // pass.update RLS를 요구한다 — 상품 CRUD와는 다른 키라 여기서 따로 체크한다.
+  const canEditRules = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "pass.update");
+  // 상품 CRUD(등록=pass.create, 수정/삭제=pass.update)는 P1-5b에서 RLS를 실제로 좁힘
+  // (fix_permission_products_rooms_rls.sql) — 그 전까지는 my_managed_center_ids()만 체크했다.
+  const canCreateProduct = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "pass.create");
 
   const load = useCallback(async () => {
     if (!centerId) return;
@@ -161,7 +183,9 @@ export default function MembershipRulesPage() {
       <div className="back-header">
         <a className="side" href="/manager">‹</a>
         <div className="title">수강권 관리</div>
-        <button className="header-action" onClick={() => setProdSheet(true)}>+ 수강권</button>
+        {canCreateProduct && (
+          <button className="header-action" onClick={() => setProdSheet(true)}>+ 수강권</button>
+        )}
       </div>
 
       {centers.length > 1 && (
@@ -201,7 +225,9 @@ export default function MembershipRulesPage() {
                       {won(p.price)}{p.totalCount ? ` · ${p.totalCount}회` : ""}
                     </div>
                   </div>
-                  <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteProduct(p)}>삭제</button>
+                  {canEditRules && (
+                    <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteProduct(p)}>삭제</button>
+                  )}
                 </div>
 
                 <button className="pass-rules-toggle" onClick={() => setExpandedProducts((prev) => {
@@ -216,15 +242,19 @@ export default function MembershipRulesPage() {
                     rules.map((r) => (
                       <div key={r.id} className="pass-rule">
                         <span className="pass-rule-text">{ruleToText(r)}</span>
-                        <button className="pass-rule-del" disabled={busy} onClick={() => handleDeleteRule(r.id)}>✕</button>
+                        {canEditRules && (
+                          <button className="pass-rule-del" disabled={busy} onClick={() => handleDeleteRule(r.id)}>✕</button>
+                        )}
                       </div>
                     ))
                   )}
                 </div>}
 
-                <button className="prog-add-sub-btn" onClick={async () => { setRuleFor(p); setRPick(""); setRDays([]); setRTime(""); setRTitle(""); if (centerId) { try { setExistingClasses(await fetchExistingClassOptions(centerId)); } catch { setExistingClasses([]); } } }}>
-                  예약조건 추가
-                </button>
+                {canEditRules && (
+                  <button className="prog-add-sub-btn" onClick={async () => { setRuleFor(p); setRPick(""); setRDays([]); setRTime(""); setRTitle(""); if (centerId) { try { setExistingClasses(await fetchExistingClassOptions(centerId)); } catch { setExistingClasses([]); } } }}>
+                    예약조건 추가
+                  </button>
+                )}
               </div>
             );
           })}

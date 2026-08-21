@@ -12,6 +12,7 @@ import { fetchRooms, addRoom, updateRoom, deleteRoom, type Room } from "../../..
 import Loading from "../../components/Loading";
 import MapPicker from "../center-info/MapPicker";
 import MapPreview from "../../components/MapPreview";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 export default function RoomsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -31,6 +32,7 @@ export default function RoomsPage() {
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [mapPicker, setMapPicker] = useState(false);
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2000); }
 
@@ -44,6 +46,21 @@ export default function RoomsPage() {
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
   }, []);
+
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  const canManageRooms = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "facility.room");
 
   const load = useCallback(async () => {
     if (!centerId) return;
@@ -88,7 +105,9 @@ export default function RoomsPage() {
       <div className="back-header">
         <a className="side" href="/manager">‹</a>
         <div className="title">룸(장소) 관리</div>
-        <button className="header-action" onClick={openAdd}>추가</button>
+        {canManageRooms && (
+          <button className="header-action" onClick={openAdd}>추가</button>
+        )}
       </div>
 
       {centers.length > 1 && (
@@ -104,7 +123,9 @@ export default function RoomsPage() {
           {rooms.length === 0 ? (
             <div className="empty-action">
               <div className="empty-action-text">아직 등록된 룸이 없어요.<br />수업을 진행하는 공간을 추가해보세요.</div>
-              <button className="empty-action-btn" onClick={openAdd}>+ 첫 룸 추가하기</button>
+              {canManageRooms && (
+                <button className="empty-action-btn" onClick={openAdd}>+ 첫 룸 추가하기</button>
+              )}
             </div>
           ) : (
             <div className="room-card-list">
@@ -115,10 +136,12 @@ export default function RoomsPage() {
                     {r.memo && <div className="room-card-memo">{r.memo}</div>}
                     {r.address && <div className="room-card-address">{r.address}</div>}
                   </button>
-                  <div className="row-actions room-card-actions">
-                    <button className="quiet-action" onClick={() => openEdit(r)}>수정</button>
-                    <button className="quiet-action danger" disabled={busy} onClick={() => handleDelete(r)}>삭제</button>
-                  </div>
+                  {canManageRooms && (
+                    <div className="row-actions room-card-actions">
+                      <button className="quiet-action" onClick={() => openEdit(r)}>수정</button>
+                      <button className="quiet-action danger" disabled={busy} onClick={() => handleDelete(r)}>삭제</button>
+                    </div>
+                  )}
                 </article>
               ))}
             </div>
@@ -147,7 +170,7 @@ export default function RoomsPage() {
             )}
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={closeSheet}>취소</button>
-              <button className="outline-action" disabled={busy} onClick={handleSave}>{editing ? "수정하기" : "추가하기"}</button>
+              <button className="outline-action" disabled={busy || !canManageRooms} onClick={handleSave}>{editing ? "수정하기" : "추가하기"}</button>
             </div>
           </div>
         </div>

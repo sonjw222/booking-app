@@ -20,6 +20,7 @@ import {
   fetchMembershipSessionEditData, setMembershipSessionAmounts,
   type ClassRevenueDaily, type ClassRevenueGroup,
 } from "../../../lib/classRevenue";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -62,6 +63,7 @@ export default function ClassRevenuePage() {
   const [editPaidTotal, setEditPaidTotal] = useState(0);
   const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -75,6 +77,21 @@ export default function ClassRevenuePage() {
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
   }, []);
+
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  const canEditSessionAmounts = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "pass.payment.update");
 
   const loadPeriod = useCallback(async () => {
     if (!centerId) return;
@@ -281,7 +298,7 @@ export default function ClassRevenuePage() {
                             <span>{won(r.amount)}</span>
                           </div>
                         ))}
-                        {g.type === "class" && g.rows[0]?.membershipId && (
+                        {g.type === "class" && g.rows[0]?.membershipId && canEditSessionAmounts && (
                           <button
                             className="primary-btn small"
                             style={{ marginTop: 6 }}
