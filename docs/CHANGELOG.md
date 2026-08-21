@@ -8,6 +8,15 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-20 — P2-29: PR #46에서 `admin_action_logs` GRANT SQL만 분리해 반영
+
+PR #46(2026-08-12, 108 커밋 뒤처짐)을 정리하려다, 그 PR이 P1-12를 "완료"로 정정하는
+내용을 포함하고 있는데 P1-12는 실제로 미완료(PR #62가 지금 재감사 중)임을 발견 — 전체
+merge는 보류하고, PR #62와 무관한 `admin_action_logs` service_role GRANT draft SQL(+
+rollback)만 분리해 새 브랜치로 가져왔다. 같은 PR이 제안했던 `class_allowed_products` GRANT는
+main에 이미 다른 방식(UPDATE 권한 추가)으로 완전히 해결돼 있어 가져오지 않음(더 이상 유효한
+제안이 아님). 상세는 `docs/TODO.md` P2-29 참고. PR #46 자체는 P1-12 부분과 함께 close.
+
 ## 2026-08-20 — P2-28 재검증: `payments` 고쳤더니 `center_members`에서 또 크래시(두더지잡기), ATT-SEC만 확정 해결
 
 `payments` FK 수정 후 재실행 결과 11→4건 실패로 줄었지만, AUTO-SEC-F가 이번엔
