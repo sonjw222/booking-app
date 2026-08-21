@@ -8,6 +8,17 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-21 — P2-28 2차 수정: N/O, RLS 고치니 센터 승인 상태 문제가 또 드러남
+
+1차 수정(RLS → `createAutoBookMembership()`으로 교체) 후 재실행하니 RLS 에러는 사라졌지만
+`"아직 승인되지 않은 센터예요"`로 여전히 실패 — `createIsolatedOwnedCenter()`가 센터를
+`status: "pending"`으로 만드는데, `reserve_class()`는 `centers.status = 'approved'`를
+요구한다(`auto_book_membership()`엔 이 체크가 없어 다른 테스트들은 문제없었음). N/O만
+고치는 대신 `createIsolatedOwnedCenter()` 자체를 `status: "approved"`로 변경 — 이 헬퍼를
+쓰는 모든 테스트, 앞으로 추가될 테스트에도 일관되게 적용됨. 격리 센터가 실제 운영 센터의
+암묵적 전제(회원 소속, 승인 상태)를 둘 다 만족해야 한다는 게 이번에 드러난 교훈. 상세는
+`docs/TODO.md` P2-28 참고.
+
 ## 2026-08-21 — P2-28 후속: AUTO-SEC-N/O 진짜 원인은 RLS(RPC 스캔 문제 아니었음)
 
 P0-7("공유 dev Supabase fixture 오염") 조사 중 조사 에이전트가 옛 버전 코드를 참조해 잘못된

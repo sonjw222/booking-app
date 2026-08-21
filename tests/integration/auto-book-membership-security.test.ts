@@ -172,9 +172,15 @@ async function createIsolatedOwnedCenter(manager: TestUser): Promise<string> {
       if (staleDeleteError) throw new Error(`이전 격리센터 정리 실패: ${staleDeleteError.message}`);
     }
   }
+  // [P0-7/N/O 수정] status가 'approved'가 아니면 reserve_class() 등 여러 RPC가
+  // "아직 승인되지 않은 센터예요"로 거부한다(예: fix_class_booking_deadline_override_
+  // draft_proposed.sql). auto_book_membership()은 이 체크가 없어 F/G/I/J/K/L/M처럼
+  // reserve_class를 거치지 않는 테스트는 문제없이 통과했지만, N/O는 "기존 예약" 준비
+  // 단계에서 실제 reserve_class RPC를 호출하므로 격리 센터도 실제 운영 센터처럼
+  // 승인된 상태여야 한다.
   const { data: center, error: centerError } = await admin
     .from("centers")
-    .insert({ name: `SEC-114 격리센터-${crypto.randomUUID()}`, status: "pending" })
+    .insert({ name: `SEC-114 격리센터-${crypto.randomUUID()}`, status: "approved" })
     .select("id")
     .single();
   if (centerError || !center) throw new Error(`격리센터 생성 실패: ${centerError?.message}`);
