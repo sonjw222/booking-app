@@ -56,6 +56,14 @@ inquiries/orders 등)은 건드리지 않음 — 실제로 없는 서버 제약�
 있어 SQL로 실제 권한을 먼저 연결해야 함(P1-5b로 별도 진행). `npm run build` 통과. 상세는
 `docs/TODO.md` P1-5 참고.
 
+## 2026-08-21 — P0-5 최종 확인: 알림 스케줄러 10일 연속 정상 작동 라이브 확인
+
+`cron.job`/`cron.job_run_details`/`notifications`를 SQL Editor로 직접 조회해 `daily-notifications`
+job이 `active=true`로 매일 `succeeded` 실행 중(2026-08-12~08-21, 10일 연속)이고, 4종 알림 중
+`reservation_today`/`reservation_3days`/`pass_used_up`은 오늘까지 계속 생성되고 있으며
+`pass_expired`는 대상이 없어 08-16 이후 생성이 없을 뿐(정상)임을 확인. P0로 남겨둘 이유가
+없어 완료로 종결. 상세는 `docs/TODO.md` P0-5 참고.
+
 ## 2026-08-21 — P2-28 2차 수정: N/O, RLS 고치니 센터 승인 상태 문제가 또 드러남
 
 1차 수정(RLS → `createAutoBookMembership()`으로 교체) 후 재실행하니 RLS 에러는 사라졌지만

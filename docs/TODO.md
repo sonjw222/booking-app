@@ -165,18 +165,26 @@ API 서버 없이 RLS/RPC가 최종 보안 경계이며 과거 긴급 보정 SQL
 충족되지 않아 P0-4 전체는 계속 "확인 필요" 상태로 둡니다(이번엔 `account_center_permissions`
 한 테이블만 개별 대응했고, 전 테이블 반복 가능 체크리스트는 별도).
 
-### P0-5. (2026-08-13, SQL 적용 완료 — 익일 실제 발생 확인만 남음) 정기 알림 스케줄러
+### P0-5. (2026-08-21, 완전히 완료 — 10일 연속 정상 작동 라이브 확인) 정기 알림 스케줄러
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **적용 완료.** 사용자가 `add_notification_scheduler.sql`을 SQL Editor에서 실행 → `cron.schedule()`이 job id `1`을 반환해 등록 확인(REST API는 `cron` 스키마를 노출하지 않아 Claude가 직접 재조회는 못 함 — SQL Editor 반환값이 근거). |
+| 현재 상태 | **완료.** `cron.job`/`cron.job_run_details`/`notifications` 라이브 직접 조회로 실제 자동 발송까지 확인됨(2026-08-21, 사용자 실행). |
 | 근거 파일 | `add_notifications.sql`, `add_notification_scheduler.sql`, `README.md` 5절; 함수 `notify_upcoming_reservations()`, `notify_expiring_passes()` |
 | 이번 배치에서 한 것 | `pg_cron`(Supabase 전 플랜 무료 지원, 외부 서비스/사업자 불필요) 확장을 켜고 두 함수를 매일 KST 오전 9시(UTC 0시)에 순서대로 호출하는 job(`daily-notifications`) 등록. 두 함수 모두 이미 멱등(같은 예약/수강권에 같은 종류 알림 중복 생성 안 함)이라 재실행 안전. |
-| 남은 작업 | 익일(2026-08-14) KST 오전 9시 이후 실제로 알림이 자동 생성되는지 `notifications` 테이블에서 확인 |
+| 완료 조건 | ~~익일(2026-08-14) KST 오전 9시 이후 실제로 알림이 자동 생성되는지 `notifications` 테이블에서 확인~~ 완료 |
 | 관련 문서 | [REQUIREMENTS 6-2](./REQUIREMENTS.md), [DATABASE 9-3, 12-5](./DATABASE.md) |
 
-함수 존재만으로 자동 알림이 실행되는 것은 아닙니다.
+**2026-08-21 최종 확인**: `cron.job` 조회로 `daily-notifications`가 `active=true`, 스케줄
+`0 0 * * *`로 등록돼 있음을 확인. `cron.job_run_details`로 2026-08-12~08-21 **10일 연속
+전부 `succeeded`**(각 실행 2~3초)임을 확인 — 실행 실패 없이 안정적으로 매일 돌고 있다.
+`notifications` 테이블에서 스케줄러가 만드는 4종 kind를 직접 집계: `pass_used_up` 211건·
+`reservation_3days` 10건·`reservation_today` 82건은 오늘(08-21)까지 계속 생성 중이고,
+`pass_expired`는 08-15~16에만 10건 있고 그 뒤로 없는데 이건 실패가 아니라 그 이후로
+"오늘 만료되는 수강권"이라는 조건에 맞는 대상 자체가 없었다는 뜻(멱등·조건부 함수라
+매일 생성되는 게 정상이 아님). 함수 존재·job 등록뿐 아니라 **실제 자동 발송이 라이브에서
+매일 벌어지고 있음**을 데이터로 확정 — 이제 P0로 남겨둘 이유 없음.
 
 ### P0-6. (2026-08-14, 완료 확인 — 문서만 정정) 휴무일 강제 지정 시 취소된 예약의 수강권 횟수가 복구되지 않음
 
