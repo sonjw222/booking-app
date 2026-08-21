@@ -825,24 +825,33 @@ mock 없이 실제 구현체를 그대로 import하기 때문에 "Supabase 접�
 바꾸면 같은 문제가 재발할 수 있습니다. 이번 작업에서는 Node 22 우회만 적용하고, 구조 분리는
 하지 않았습니다.
 
-### P2-11. 센터 등록(`registerCenterForAccount`)이 사업자등록번호 중복을 막지 않고 원자적이지 않음
+### P2-11. (2026-08-22, 완료) 센터 등록(`registerCenterForAccount`)이 사업자등록번호 중복을 막지 않고 원자적이지 않음
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인됨 — 기존부터 있던 상태를 그대로 유지, 이번 작업에서 새로 만들지 않음** |
-| 근거 파일 | `lib/centers.ts`(`registerCenterForAccount`), `schema.sql`(`centers.business_number`) |
-| 완료 조건 | 사업자등록번호 중복 등록을 막을지(막는다면 DB unique 제약 또는 사전 조회) 제품 결정을 받고, `centers`→`manager_centers`→역할 연결의 3단계 클라이언트 호출을 트랜잭션 RPC로 묶을지(SQL 변경 필요) 결정함 |
+| 현재 상태 | **완료.** DB unique 제약 + 트랜잭션 RPC 둘 다 적용(제품 결정 확인 후 진행) |
+| 근거 파일 | `lib/centers.ts`(`registerCenterForAccount`), `add_register_center_for_account_safe_rpc.sql` |
 | 관련 문서 | [ACL-005/UI-003 완료 보고, 2026-08-02](./CHANGELOG.md) |
 
 ACL-005/UI-003 작업 중 전수 조사하며 확인: `centers.business_number`에는 `unique` 제약이 없고,
-애플리케이션 코드 어디에도 중복 검사가 없다(회원가입 매니저 흐름부터 그랬음 — 이번에 새로
-만든 문제 아님). 또한 센터 등록은 `centers` insert → `manager_centers` insert → `center_roles`
-조회 → `manager_centers` update(오너 role_id 연결) 4단계를 별도 요청으로 순차 호출하며, 트랜잭션으로
-묶여 있지 않아 중간 단계 실패 시 부분적으로만 생성된 상태가 남을 수 있다(이번 작업에서 각 단계의
-error를 무시하지 않고 사용자에게 표시하도록는 고쳤지만, 이미 커밋된 이전 단계를 되돌리지는
-않는다). SQL 변경(unique 제약 또는 단일 RPC로 원자화)이 필요한 사안이라 이번 배치(SQL 실행 금지
-지시)에서는 수정하지 않고 여기 기록만 한다.
+애플리케이션 코드 어디에도 중복 검사가 없었다. 또한 센터 등록은 `centers` insert →
+`manager_centers` insert → `center_roles` 조회 → `manager_centers` update(오너 role_id 연결)
+4단계를 별도 요청으로 순차 호출하며, 트랜잭션으로 묶여 있지 않아 중간 단계 실패 시 부분적으로만
+생성된 상태가 남을 수 있었다.
+
+**2026-08-22 해결**: `centers.business_number`에 부분 unique 인덱스(빈 값/NULL 제외)를 추가하고,
+4단계 로직 전체를 `register_center_for_account_safe()` 하나의 security definer RPC로 묶었다
+(`add_register_center_for_account_safe_rpc.sql`, 라이브 적용 확인됨). RPC 적용 전 읽기 전용
+진단으로 (1) `business_number` 기존 중복 행 없음, (2) `centers`/`manager_centers`의 실제 라이브
+RLS 정책(`pg_policies`)을 먼저 확인한 뒤, 그 정책들이 원래 강제하던 조건(본인 계정으로만 등록,
+센터당 최초 1명만 오너로 연결)을 함수 본문 안에서 동일하게 재현했다 — SECURITY DEFINER로
+RLS를 우회하는 대신 원자성만 얻는 방향. `lib/centers.ts`는 `accountId` 파라미터를 없애고
+(RPC가 `my_account_id()`로 직접 확인) 단일 `supabase.rpc()` 호출로 축소, 호출부 2곳
+(`app/login/page.tsx`, `app/mypage/register-center/page.tsx`)과
+`tests/unit/centers.registerCenterForAccount.test.ts`를 함께 갱신. 단, `businessNumber` 입력값
+포맷 정규화(하이픈 유무 등)는 하지 않아 표기만 다른 사실상 동일 번호의 중복은 여전히 통과할 수
+있음 — 별도 이슈로 필요시 추가.
 
 ### P2-12. SEC-007/008 RLS 정책 초안의 세부 결정 필요 항목
 
@@ -1480,6 +1489,17 @@ P2-20 조사 과정에서 발견됐지만 이번 배치 범위 밖이라 코드 
 파일마다 방어 코드를 추가하는 대신, `getOrCreateOwnedTestCenter()`/`switchToTestUser()`
 레벨에서 공통으로 처리하는 근본 수정을 진지하게 고려할 시점.
 
+**2026-08-21 중복 제거(부분 개선, 완료 조건 (a) 자체는 여전히 미해결)**: 두 파일이 각자
+만든 거의 동일한 정리 코드를 `tests/integration/setup.ts`의 공용 헬퍼
+`clearProfileReservationsOnKstDates(profileId, kstDates, centerId?)`(+ `kstDateStr()`)로
+합쳤다 — 앞으로 날짜 기반 검증을 새로 추가하는 테스트는 이 함수를 import해서 예약 생성 전에
+호출하면 된다(관례로 문서화). 의도적으로 sweep(완료 조건 (a), 넓게 훑어서 자동으로 지우는
+방식)은 채택하지 않았다 — 다른 세션이 지금 막 만든 진짜 데이터를 지울 위험이 있어서다. 대신
+"이 테스트가 실제로 쓸 날짜만" 정확히 겨냥해 정리하는 방식을 표준 패턴으로 굳혔다. 즉
+**재발 자체를 막지는 못하지만(새 테스트 파일이 이 관례를 안 따르면 또 재발 가능), 재발했을
+때 고치는 비용은 "새 파일에 이 헬퍼 한 줄 추가"로 크게 줄었다.** 로컬에서 두 파일 모두
+(17+1=18개 테스트) 통과 확인.
+
 **2026-08-14 leftover 정리 완료**: 제목 리터럴을 나열하는 대신 구조적 기준(이 하나의 공유
 테스트센터 + `status='open'` + `start_time > now()` + `created_at`이 1시간 이상 과거 — 지금
 막 어떤 세션이 만든 class까지 실수로 지우지 않기 위한 안전 마진)으로 `cleanup_p2_22_shared_
@@ -1887,6 +1907,42 @@ RLS부터 적용해야 함. 정책 초안은 `add_rls_gap_tables_draft_proposed.
 1:1 채팅(`inquiry_messages`)이나 자동알림(`notification_rules`)과는 목적이 다른 "대량 발송"
 전용 테이블이라 중복이 아니라 미구현 기능임(`message.sms.*`/`message.push.*` 권한이 카탈로그에
 이미 있음). 정책 초안은 `add_rls_gap_tables_draft_proposed.sql`에 준비해둠(미실행).
+
+### P2-DS-1. (신규, 2026-08-22) 디자인 시스템 정합성 — 이번 점검에서 남긴 후속 작업
+
+| 항목 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 상태 | 미착수 |
+| 근거 파일 | `app/globals.css`, `app/cart/page.tsx`, `app/checkout/page.tsx`, `app/center/[id]/page.tsx`, `docs/13_Design_System.md` |
+| 완료 조건 | 아래 4개 항목이 처리되고, 디자인 시스템 문서와 코드가 일치함 |
+
+2026-08-22 전체 UI 점검(회원·관리자·운영자)에서 수정하지 않고 남긴 것들:
+
+1. **결제수단·길찾기 이모지** — `cart/page.tsx`, `checkout/page.tsx`의 결제수단 목록
+   (`💳 🟡 🔵 🏦 🤝`)과 `center/[id]/page.tsx`의 길찾기 앱 목록(`🟡 🟢 🔵 🗺️`)이 아직 이모지다.
+   🟡/🟢/🔵는 벤더 로고 대신 쓰는 색 원이라 outline 아이콘 하나로 바꾸면 제공자 구분이 사라진다.
+   벤더 로고 애셋을 넣거나, `--vendor-*` 토큰 기반 색 점 + `UiIcon` 조합으로 재설계 필요.
+2. **캘린더 선택 상태가 4종** — 선택된 날짜 표현이 `.cal-cell.selected`(accent 배경),
+   `.mypage-cal-cell.sel`(surface + accent outline), `.copy-cal-cell.on`(accent 배경),
+   `.app-date-grid button.on`(원형 ink 배경)으로 제각각. 주말 색·월 이동 버튼은 이번에 통일했으나
+   선택 상태는 셀 내부 구성(점·금액 표시)이 달라 시각 확인 없이 통일하기 어려워 남김.
+3. **다크 모드 시각 확인** — `--card-bg` 신설과 semantic soft/line 계열 다크 재정의를 이번에 추가했는데
+   브라우저 확인을 못 했다. `[data-theme="charcoal"]`에서 카드·배지·시트를 실제로 볼 것.
+4. **디자인 토큰 계약 테스트 확장** — `tests/unit/designSystem.contract.test.ts`에
+   "`app/**/*.tsx`에 인라인 하드코딩 색상이 없어야 한다"와 "`globals.css` 규칙부에 승인된
+   리터럴(#fff, 테마 스와치) 외 hex가 없어야 한다"를 추가하면 이번 정리가 되돌아가는 것을 막을 수 있다.
+
+### P2-DS-2. (2026-08-22 기록, 즉시 반증됨 — 실제 이슈 아님) `npm run build`가 `@playwright/test` 미설치로 실패한다는 보고는 worktree 환경 문제였음
+
+이 항목을 작성한 background agent가 자신의 격리된 git worktree에서 `npm run build`를 돌렸는데,
+그 worktree는 `.gitignore`된 `node_modules`가 새로 만들어질 때 `npm install`을 한 번도 실행하지
+않은 상태였다("상위 저장소도 마찬가지"라는 판단은 틀렸음 — 실제로는 메인 작업 디렉터리에
+`@playwright/test`가 정상 설치돼 있음, `ls node_modules/@playwright` 확인). 같은 worktree에서
+`npm install --silent` 후 `npm run build`를 다시 돌리면 정상적으로 통과한다(2026-08-22 재확인).
+CLAUDE.md 6·7번 규칙은 막혀 있지 않다 — 신규 worktree를 만들 때는 `npm install`부터 하는 것이
+이번 세션 내내 반복된 관례([Multi-session coordination] 메모리 참고할 것이 아니라, 그냥
+worktree 생성 직후 습관으로 굳힐 것).
 
 ## 7. P3 — 용도·존속 여부가 불명확한 객체
 

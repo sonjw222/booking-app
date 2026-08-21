@@ -329,7 +329,7 @@ function CheckoutContent() {
         ))}
       </div>
       {couponMsg && (
-        <div className="perm-guide" style={{ margin: "6px 20px 0", color: discount > 0 ? "#1f9d55" : "#c0392b" }}>{couponMsg}</div>
+        <div className={`perm-guide ${discount > 0 ? "is-success" : "is-error"}`} style={{ margin: "6px 20px 0" }}>{couponMsg}</div>
       )}
 
       {/* 포인트 */}

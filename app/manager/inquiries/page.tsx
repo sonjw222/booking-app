@@ -10,6 +10,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Loading from "../../components/Loading";
 import InquiryChat from "../../components/InquiryChat";
+import UiIcon from "../../components/UiIcon";
 import { fetchCenterThreads, type InquiryThread } from "../../../lib/inquiries";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
@@ -114,7 +115,7 @@ function ManagerInquiriesPageContent() {
         <div className="thread-list">
           {threads.map((t) => (
             <button key={t.id} className="thread-row" onClick={() => setActive({ id: t.id, title: t.centerName + " · 회원 문의", centerId: t.centerId })}>
-              <div className="thread-avatar">💬</div>
+              <div className="thread-avatar"><UiIcon name="message" size={18} /></div>
               <div className="thread-main">
                 <div className="thread-top">
                   <span className="thread-name">{t.memberName ?? "회원"} - {t.centerName}</span>

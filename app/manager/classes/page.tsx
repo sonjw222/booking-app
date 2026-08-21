@@ -12,6 +12,7 @@ import Loading from "../../components/Loading";
 import DatePicker from "../../components/DatePicker";
 import MonthPicker from "../../components/MonthPicker";
 import AmPmTimeInput from "../../components/AmPmTimeInput";
+import UiIcon from "../../components/UiIcon";
 import { dhmToMinutes, minutesToDhm } from "../../../lib/deadlineInput";
 import { formatInstructorNames } from "../../../lib/instructorDisplay";
 import CopyCalendar from "./CopyCalendar";
@@ -880,9 +881,9 @@ export default function ClassManagePage() {
       {/* 월 이동 */}
       <div className="cal-header manager-cal-header">
         <div className="cal-month-nav">
-          <button className="cal-nav-btn" onClick={goPrevMonth}>‹</button>
+          <button className="cal-nav-btn" onClick={goPrevMonth} aria-label="이전 달">‹</button>
           <div className="cal-title">{year}.{pad2(month)}</div>
-          <button className="cal-nav-btn" onClick={goNextMonth}>›</button>
+          <button className="cal-nav-btn" onClick={goNextMonth} aria-label="다음 달">›</button>
         </div>
         <label className="manager-center-select">
           <select
@@ -922,7 +923,7 @@ export default function ClassManagePage() {
             <button key={i} className={cn.join(" ")} onClick={() => setSelectedDay(day)}>
               <span className="daynum-wrap"><span className="cal-daynum">{day}</span></span>
               <span className="cal-dots">
-                {isHoliday ? <span className="cal-dot" style={{ background: "#c0392b" }} />
+                {isHoliday ? <span className="cal-dot" style={{ background: "var(--danger)" }} />
                   : hasClassByDay[day] ? <span className="cal-dot" style={{ background: "var(--accent)" }} /> : null}
               </span>
             </button>
@@ -961,7 +962,7 @@ export default function ClassManagePage() {
             const full = c.reserved >= c.capacity;
             return (
               <div key={c.id} className="class-row">
-                <div className="class-color" style={{ background: ok ? "var(--accent)" : "#999" }} />
+                <div className="class-color" style={{ background: ok ? "var(--accent)" : "var(--text-dim)" }} />
                 <div className="class-info">
                   <div className="class-row-title">{c.title}</div>
                   <div className="class-row-meta">
@@ -1232,7 +1233,7 @@ export default function ClassManagePage() {
             <div className="menu-section-label" style={{ padding: "8px 0 6px" }}>예약 가능 수강권</div>
             <div className="perm-guide" style={{ margin: "0 0 4px" }}>
               {passProducts.length > 0 && selectedProducts.length === 0
-                ? <span style={{ color: "var(--danger, #d33)" }}>⚠️ 최소 1개 이상 선택해야 저장할 수 있어요.
+                ? <span className="is-error-text"><UiIcon name="alert" size={13} /> 최소 1개 이상 선택해야 저장할 수 있어요.
                   모든 수강권을 허용하려면 아래 <b>전체 선택</b> 버튼을 눌러주세요.</span>
                 : selectedProducts.length === passProducts.length
                 ? <><b>모든 수강권</b>으로 예약 가능해요(전체 선택). 이 경우 각 수강권 자체에 걸린
@@ -1259,8 +1260,8 @@ export default function ClassManagePage() {
                 );
                 if (excluded.length === 0) return null;
                 return (
-                  <div className="perm-guide schedule-rule-warning" style={{ margin: "0 0 8px", color: "var(--danger, #d33)" }}>
-                    ⚠️ 이 수업({WEEKDAYS[classDow]}요일 {form.start})에서는 <b>{excluded.length}개</b> 수강권을
+                  <div className="perm-guide is-error schedule-rule-warning" style={{ margin: "0 0 8px" }}>
+                    <UiIcon name="alert" size={13} /> 이 수업({WEEKDAYS[classDow]}요일 {form.start})에서는 <b>{excluded.length}개</b> 수강권을
                     실제로 쓸 수 없어요(수강권 자체의 예약조건과 안 맞음):
                     <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
                       {excluded.map((ex) => (
@@ -1283,8 +1284,8 @@ export default function ClassManagePage() {
               );
               if (overridden.length === 0) return null;
               return (
-                <div className="perm-guide schedule-rule-override-note" style={{ margin: "0 0 8px", color: "var(--accent, #2a6)" }}>
-                  ℹ️ 아래 <b>{overridden.length}개</b> 수강권은 원래 예약조건이 있지만, 이 수업에 직접
+                <div className="perm-guide is-info schedule-rule-override-note" style={{ margin: "0 0 8px" }}>
+                  <UiIcon name="info" size={13} /> 아래 <b>{overridden.length}개</b> 수강권은 원래 예약조건이 있지만, 이 수업에 직접
                   지정했으므로 그 조건과 무관하게 사용할 수 있어요(직접 지정이 우선):
                   <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
                     {overridden.map((ex) => (
@@ -1593,7 +1594,7 @@ export default function ClassManagePage() {
                     <button className="unplaced-retry" disabled={unplacedBusy}
                       onClick={() => handleRetryAutoBook(u)}>다시 배치</button>
                     {canAssignReservation && (
-                      <button className="unplaced-retry" style={{ background: "var(--surface-2, #eee)", color: "var(--text)" }}
+                      <button className="unplaced-retry" style={{ background: "var(--surface)", color: "var(--text)" }}
                         onClick={() => startAssignFromUnplaced(u)}>직접배치</button>
                     )}
                   </div>
@@ -1687,7 +1688,7 @@ export default function ClassManagePage() {
                     복사될 수업 {copyPlan.length}개
                   </span>
                   <button className="copy-view-btn" onClick={() => setCopyView(copyView === "list" ? "calendar" : "list")}>
-                    {copyView === "list" ? "📅 달력" : "☰ 목록"}
+                    {copyView === "list" ? <><UiIcon name="calendar" size={14} /> 달력</> : <><UiIcon name="list" size={14} /> 목록</>}
                   </button>
                 </div>
 
@@ -1934,7 +1935,7 @@ export default function ClassManagePage() {
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>
               배치 사유 {(assignConfirm.type === "ADMIN_FREE" || assignConfirm.capacityBlocked) && (
-                <span style={{ color: "#c0392b", fontWeight: 700 }}>(필수)</span>
+                <span className="is-error-text" style={{ fontWeight: 700 }}>(필수)</span>
               )}
             </div>
             <div className="mem-filters" style={{ padding: 0 }}>

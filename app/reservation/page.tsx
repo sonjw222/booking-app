@@ -206,8 +206,8 @@ function ReservationCalendarContent() {
     const nowUsable = (usablePassesByClass[openClassId] ?? []).length > 0;
     showToast(
       nowUsable
-        ? "✅ 상품 구매가 완료되었으며 이용 가능한 수강권이 등록되었습니다. 바로 예약을 진행할 수 있어요."
-        : "✅ 상품 구매가 완료되었습니다. 수강권이 발급되면 예약을 진행할 수 있어요."
+        ? "상품 구매가 완료되었으며 이용 가능한 수강권이 등록되었습니다. 바로 예약을 진행할 수 있어요."
+        : "상품 구매가 완료되었습니다. 수강권이 발급되면 예약을 진행할 수 있어요."
     );
     const params = new URLSearchParams(searchParams.toString());
     params.delete("purchased");

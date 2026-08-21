@@ -616,3 +616,50 @@ export async function cleanupTestClassAdmin(classId: string): Promise<void> {
   await admin.from("reservations").delete().eq("class_id", classId);
   await admin.from("classes").delete().eq("id", classId);
 }
+
+// KST(Asia/Seoul) 기준 캘린더 날짜 문자열("YYYY-MM-DD")로 변환. 여러 통합 테스트 파일이
+// 각자 로컬로 재구현하던 걸 하나로 통합(P2-22, 2026-08-21) — extract(dow from ... at time
+// zone 'Asia/Seoul')과 같은 규칙으로 날짜를 계산해야 하는 모든 곳에서 이 함수를 쓴다.
+export function kstDateStr(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(iso));
+}
+
+/*
+  [P2-22 근본 수정, 2026-08-21] 공유 dev Supabase에서 여러 통합 테스트 파일/세션이 같은
+  테스트 계정(USER_A/USER_B/MANAGER_A/MANAGER_B)을 함께 쓰다 보니, 특정 날짜에 예약 개수를
+  정확히 세는 테스트(auto_book_membership()의 "하루 1건" 체크, reserve_class()의
+  daily_book_limit 등)가 전혀 무관한 다른 파일/세션이 남긴 leftover 확정/대기 예약과 날짜만
+  겹쳐도 실패한다 — 실제로 하루에 두 번(auto-book-membership-security.test.ts의 AUTO-SEC-I,
+  daily-book-limit-wiring.test.ts) 재현됨. 두 파일이 각자 거의 같은 정리 코드를 만들었던 걸
+  여기 하나로 합친다.
+
+  이 함수는 sweep이 아니라 "이 테스트가 실제로 쓸 날짜만" 정확히 겨냥해 정리한다 — 넓게
+  훑는 sweep(P2-22 완료 조건 (a))은 다른 세션이 지금 막 만든 진짜 데이터를 지울 위험이 있어
+  의도적으로 채택하지 않았다. 새로 날짜 기반 검증(하루 몇 건 예약되는지, 특정 날짜에 이미
+  예약이 있는지)을 테스트할 때는 예약을 만들기 직전에 이 함수로 대상 계정의 그 날짜(들)
+  예약을 먼저 정리하는 걸 관례로 삼는다.
+
+  p_centerId를 주면 그 센터의 클래스에 걸린 예약만, 안 주면 이 profile의 모든 센터를
+  통틀어 그 날짜의 예약을 정리한다(auto_book_membership()처럼 체크 자체가 센터 스코프가
+  아닌 경우 대비 — profile 전체로 정리해야 실제로 막힌다).
+*/
+export async function clearProfileReservationsOnKstDates(
+  profileId: string,
+  kstDates: string[],
+  centerId?: string
+): Promise<void> {
+  if (kstDates.length === 0) return;
+  const admin = getFixtureAdminClient();
+  let query = admin
+    .from("reservations")
+    .select(centerId ? "id, status, classes!inner(start_time, center_id)" : "id, status, classes(start_time)")
+    .eq("profile_id", profileId)
+    .in("status", ["confirmed", "waitlisted", "attended"]);
+  if (centerId) query = query.eq("classes.center_id", centerId);
+  const { data, error } = await query;
+  if (error) throw new Error(`leftover 예약 조회 실패(profile=${profileId}): ${error.message}`);
+  const target = (data ?? []).filter((r: any) => r.classes && kstDates.includes(kstDateStr(r.classes.start_time)));
+  if (target.length === 0) return;
+  const { error: delErr } = await admin.from("reservations").delete().in("id", target.map((r: any) => r.id));
+  if (delErr) throw new Error(`leftover 예약 정리 실패(profile=${profileId}): ${delErr.message}`);
+}

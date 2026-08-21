@@ -110,7 +110,7 @@ export default function MapPicker({ initialLat, initialLng, onPick, onClose }: P
           />
           <button className="primary-btn small" onClick={doSearch}>검색</button>
         </div>
-        {err && <div className="perm-guide" style={{ margin: "4px 0", color: "#c0392b" }}>{err}</div>}
+        {err && <div className="perm-guide is-error" style={{ margin: "4px 0" }}>{err}</div>}
         <div className="perm-guide" style={{ margin: "4px 0 8px" }}>지도를 눌러 센터 위치에 핀을 찍으세요.</div>
         <div ref={mapRef} className="map-picker-canvas" />
         {coord && (

@@ -12,19 +12,47 @@
   --line-strong: #C9C9C5;
   --accent: #202124;
   --accent-soft: #EEEEEC;
+  /* Background > Card (13_Design_System.md). 토큰이 없어서 카드/입력/시트 표면이
+     globals.css 전역에 #fff로 하드코딩돼 있었고, 그 탓에 다크 모드에서 흰 카드 위에
+     흰 글자가 찍히는 문제가 있었다. var(--card-bg, #fff) 참조가 이미 있어 그 이름을 쓴다. */
+  --card-bg: #FFFFFF;
   --brand: #45BFE3;
   --brand-ink: #087A9C;
   --brand-soft: #E6F7FC;
   --success: #287A5B;
   --success-soft: #E8F3EE;
+  --success-line: #CFE6DB;
   --warning: #9A6718;
   --warning-soft: #F7F0E2;
+  --warning-line: #E9D9B8;
   --danger: #B64242;
   --danger-soft: #F8EAEA;
+  --danger-line: #E9CBCB;
+  /* Info 계열은 디자인 시스템 팔레트(13_Design_System.md > Color Palette)에 정의돼
+     있지만 토큰이 없어 화면마다 파란색이 제각각이었다. 여기서 단일화한다. */
+  --info: #2C6FCB;
+  --info-soft: #E6F0FD;
+  --info-line: #C7DCF7;
+  /* 프라이빗 수업 배지 전용(팔레트상 유일한 보라). CLASS-001 D-2 */
+  --private: #6B4C9A;
+  /* --brand 배경 위에서 WCAG AA 대비를 확보하기 위한 진한 브랜드 잉크 */
+  --brand-ink-strong: #063D4D;
   --mint: #0F9D77;
   --mint-soft: #E4F7F1;
   --gold: #B8842E;
   --gold-soft: #FBF1DE;
+  /* 평점 별 전용 색(경고색과 의미가 다르므로 별도 토큰) */
+  --star: #E0A32B;
+  /* Text > Inverse: 컬러 버튼/배지 위에 올라가는 글자색 */
+  --text-inverse: #FFFFFF;
+  /* 외부 서비스 고정 브랜드색. 우리 팔레트가 아니라 벤더 규정을 따르는 값이므로
+     테마와 무관하게 고정하되, 화면에 흩어지지 않도록 여기서만 정의한다. */
+  --vendor-google: #4285F4;
+  --vendor-google-ink: #3C4043;
+  --vendor-kakao: #FEE500;
+  --vendor-kakao-ink: #3C1E1E;
+  --vendor-naver: #03C75A;
+  --vendor-apple: #000000;
   --grad1: #151516;
   --grad2: #2E2F32;
   --grad3: #5B5C60;
@@ -46,6 +74,13 @@
   --type-section: 18px;
   --type-body: 14px;
   --type-caption: 12px;
+  /* 하단 floating nav(.bottom-nav)가 콘텐츠를 가리지 않도록 스크롤 영역에 주는 기본
+     여백. nav 자체 높이(48px 아이템 + 8/9px 안쪽 여백 ≈ 65px) + 화면 하단 오프셋
+     (16px 또는 safe-area, 더 큰 쪽)을 더한 값 — 화면마다 이 값 위에 추가 여백을 더해
+     쓴다. 정의가 없으면 이 변수를 쓰는 calc()가 전부 무효화돼 padding-bottom 자체가
+     사라지는 버그가 있었다(관리자 "더보기" 화면 등에서 마지막 메뉴가 nav에 가려짐).
+  */
+  --floating-nav-clearance: calc(65px + max(16px, env(safe-area-inset-bottom)));
 }
 
 /* 다크 모드 */
@@ -64,11 +99,20 @@
   --gold: #E0A83C;
   --gold-soft: #3A2E14;
   --grad1: #1A1A1E; --grad2: #E8543A; --grad3: #F3805E;
+  /* 아래 토큰들은 그동안 다크 모드 재정의가 없어서 라이트 값이 그대로 쓰였다.
+     (카드가 순백으로 남아 밝은 글자와 겹치는 문제의 원인) */
+  --card-bg: #202127;
+  --surface-strong: #2C2D33;
+  --line-strong: #45464E;
+  --success-soft: #12301F; --success-line: #24503A;
+  --warning-soft: #322611; --warning-line: #55431C;
+  --danger-soft: #331A1A;  --danger-line: #573030;
+  --info-soft: #12233D;    --info-line: #24406B;
 }
 
 /* 다크 모드에서 흰 배경으로 고정된 요소 보정 */
 [data-theme="charcoal"] .center-bar-btn.buy { background: var(--surface); color: var(--text); }
-[data-theme="charcoal"] .danger-btn { color: #fff !important; }
+[data-theme="charcoal"] .danger-btn { color: var(--text-inverse) !important; }
 [data-theme="charcoal"] input,
 [data-theme="charcoal"] textarea,
 [data-theme="charcoal"] select { background: var(--surface); color: var(--text); }
@@ -113,7 +157,9 @@ a { color: inherit; text-decoration: none; }
 .app-shell {
   max-width: 480px;
   margin: 0 auto;
-  min-height: 100vh;
+  min-height: 100dvh; /* 100vh는 모바일 브라우저 주소창이 안 접힌 상태 기준이라, 콘텐츠가
+    짧아 스크롤이 필요 없는 화면에서는 실제 보이는 영역보다 크게 계산돼 position:fixed
+    하단 버튼(.center-bottom-bar 등)이 화면 밖으로 밀려날 수 있었다 */
   background: var(--bg);
   padding-bottom: 70px; /* 하단 네비 높이만큼 여백 */
 }
@@ -133,7 +179,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 .hero {
-  margin: 14px 20px 0; border-radius: 20px; color: #fff; padding: 22px 20px 20px;
+  margin: 14px 20px 0; border-radius: 20px; color: var(--text-inverse); padding: 22px 20px 20px;
   position: relative; overflow: hidden;
   background: linear-gradient(135deg, var(--grad1) 0%, var(--grad2) 68%, var(--grad3) 100%);
   /* ★ 배너 높이 통일 — 내용이 달라도 화면이 안 흔들리게 */
@@ -166,7 +212,7 @@ a { color: inherit; text-decoration: none; }
   width: 58px; height: 58px; border-radius: 18px; background: var(--surface);
   display: flex; align-items: center; justify-content: center; font-size: 27px;
 }
-.cat-icon.tag { background: var(--accent); color: #fff; font-weight: 800; font-size: 12px; line-height: 1.25; flex-direction: column; }
+.cat-icon.tag { background: var(--accent); color: var(--text-inverse); font-weight: 800; font-size: 12px; line-height: 1.25; flex-direction: column; }
 .cat-icon.tag span { font-size: 11px; }
 .cat-label { font-size: 12.5px; font-weight: 600; color: var(--ink); }
 .float-pill {
@@ -182,7 +228,7 @@ a { color: inherit; text-decoration: none; }
 .brand-item { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 0 0 auto; }
 .brand-badge {
   width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  font-size: 20px; font-weight: 800; color: #fff;
+  font-size: 20px; font-weight: 800; color: var(--text-inverse);
 }
 .brand-item .tagline { font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 999px; margin-bottom: -2px; }
 .brand-name { font-size: 12px; font-weight: 700; color: var(--ink); }
@@ -192,7 +238,7 @@ a { color: inherit; text-decoration: none; }
 
 .card-scroll { display: flex; gap: 12px; padding: 14px 20px 8px; overflow-x: auto; }
 .class-card { flex: 0 0 auto; width: 240px; cursor: pointer; }
-.class-thumb { height: 140px; border-radius: 16px; display: flex; align-items: flex-end; padding: 10px; font-size: 46px; justify-content: center; color: #fff; }
+.class-thumb { height: 140px; border-radius: 16px; display: flex; align-items: flex-end; padding: 10px; font-size: 46px; justify-content: center; color: var(--text-inverse); }
 .class-name { font-size: 14.5px; font-weight: 800; margin-top: 10px; }
 .class-meta { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; }
 .class-meta b { color: var(--accent); font-weight: 800; }
@@ -204,7 +250,7 @@ a { color: inherit; text-decoration: none; }
 .urgent-banner .msg { font-size: 13.5px; font-weight: 700; }
 .urgent-banner .msg b { color: var(--accent); font-weight: 800; }
 .timer { display: flex; gap: 3px; }
-.timer span { background: var(--accent); color: #fff; font-size: 11.5px; font-weight: 800; padding: 4px 6px; border-radius: 6px; min-width: 20px; text-align: center; }
+.timer span { background: var(--accent); color: var(--text-inverse); font-size: 11.5px; font-weight: 800; padding: 4px 6px; border-radius: 6px; min-width: 20px; text-align: center; }
 
 .bottom-nav {
   display: flex; border-top: 1px solid var(--line); padding: 10px 8px 14px; background: var(--bg);
@@ -236,8 +282,8 @@ a { color: inherit; text-decoration: none; }
 .cal-weekday {
   text-align: center; font-size: 12px; font-weight: 700; color: var(--ink-soft); padding: 6px 0;
 }
-.cal-weekday.sun { color: #D9534F; }
-.cal-weekday.sat { color: #4A7DD6; }
+.cal-weekday.sun { color: var(--danger); }
+.cal-weekday.sat { color: var(--info); }
 
 .cal-cell {
   background: none; border: none; cursor: pointer;
@@ -246,15 +292,15 @@ a { color: inherit; text-decoration: none; }
 }
 .cal-cell.empty { cursor: default; }
 .cal-cell.selected { background: var(--accent); }
-.cal-cell.selected .cal-daynum { color: #fff !important; }
+.cal-cell.selected .cal-daynum { color: var(--text-inverse) !important; }
 .cal-daynum { font-size: 14px; font-weight: 600; }
-.cal-cell.sun .cal-daynum { color: #D9534F; }   /* 일요일·공휴일 */
-.cal-cell.sat .cal-daynum { color: #4A7DD6; }   /* 토요일 */
+.cal-cell.sun .cal-daynum { color: var(--danger); }   /* 일요일·공휴일 */
+.cal-cell.sat .cal-daynum { color: var(--info); }   /* 토요일 */
 
 /* 내가 예약한 날: 날짜를 동그라미로 감싸기 */
 .daynum-wrap { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
 .cal-cell.booked .daynum-wrap { border: 2px solid var(--accent); }
-.cal-cell.selected.booked .daynum-wrap { border-color: #fff; }
+.cal-cell.selected.booked .daynum-wrap { border-color: var(--text-inverse); }
 
 .cal-dots { display: flex; gap: 3px; height: 6px; }
 .cal-dot { width: 6px; height: 6px; border-radius: 50%; }
@@ -265,26 +311,26 @@ a { color: inherit; text-decoration: none; }
   border-top: 8px solid var(--surface); margin-top: 14px;
 }
 .pub-badge {
-  font-size: 11px; font-weight: 800; color: #D9534F;
-  background: rgba(217, 83, 79, 0.12); padding: 3px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; color: var(--danger);
+  background: var(--danger-soft); padding: 3px 8px; border-radius: 999px;
 }
 
 /* 센터 휴무일 안내 (달력 색칠 대신 리스트 상단에) */
 .holiday-notice { margin: 6px 20px 0; display: flex; flex-direction: column; gap: 6px; }
 .holiday-chip {
   display: flex; align-items: center; gap: 8px;
-  background: rgba(217,83,79,0.10); border: 1px solid rgba(217,83,79,0.28);
-  border-radius: 12px; padding: 10px 12px; font-size: 13px; font-weight: 700; color: #C0392B;
+  background: var(--danger-soft); border: 1px solid var(--danger-line);
+  border-radius: 12px; padding: 10px 12px; font-size: 13px; font-weight: 700; color: var(--danger);
 }
-.holiday-chip .hc-dot { width: 8px; height: 8px; border-radius: 50%; background: #D9534F; flex: 0 0 auto; }
+.holiday-chip .hc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); flex: 0 0 auto; }
 
 .daylist { padding: 10px 20px 24px; display: flex; flex-direction: column; gap: 12px; }
 .daylist-empty {
   text-align: center; padding: 36px 0; font-size: 13.5px; color: var(--ink-soft); font-weight: 600;
 }
 
-.booked-tag { font-size: 10.5px; font-weight: 800; color: #fff; background: var(--accent); padding: 2px 7px; border-radius: 999px; margin-left: 6px; }
-.booked-tag.private-tag { background: #6B4C9A; } /* CLASS-001 D-2: 프라이빗 수업 배지 */
+.booked-tag { font-size: 10.5px; font-weight: 800; color: var(--text-inverse); background: var(--accent); padding: 2px 7px; border-radius: 999px; margin-left: 6px; }
+.booked-tag.private-tag { background: var(--private); } /* CLASS-001 D-2: 프라이빗 수업 배지 */
 
 .class-row {
   display: flex; gap: 12px; align-items: center;
@@ -300,7 +346,7 @@ a { color: inherit; text-decoration: none; }
 .class-count { font-size: 11.5px; font-weight: 800; color: var(--accent); }
 .class-count.full { color: var(--ink-soft); }
 .mini-btn {
-  background: var(--accent); color: #fff; border: none; cursor: pointer;
+  background: var(--accent); color: var(--text-inverse); border: none; cursor: pointer;
   font-size: 12.5px; font-weight: 800; padding: 7px 16px; border-radius: 999px;
 }
 .mini-btn.wait { background: var(--ink-soft); }
@@ -374,12 +420,12 @@ a { color: inherit; text-decoration: none; }
   width: 100%; font-size: 12.5px; font-weight: 700; padding: 10px 12px;
   border-radius: 10px; margin-bottom: 10px; line-height: 1.45;
 }
-.auth-msg.error { background: rgba(217,83,79,0.10); color: #C0392B; border: 1px solid rgba(217,83,79,0.28); }
+.auth-msg.error { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line); }
 .auth-msg.ok { background: var(--mint-soft); color: var(--mint); border: 1px solid var(--mint); }
 
 .primary-btn {
   display: block; width: 100%; text-align: center; border: none; cursor: pointer;
-  background: var(--accent); color: #fff; font: inherit; font-size: 15.5px; font-weight: 800;
+  background: var(--accent); color: var(--text-inverse); font: inherit; font-size: 15.5px; font-weight: 800;
   padding: 15px; border-radius: 14px;
 }
 .primary-btn:disabled { background: var(--ink-soft); cursor: default; }
@@ -406,15 +452,19 @@ a { color: inherit; text-decoration: none; }
   font: inherit; font-size: 14.5px; font-weight: 800; text-align: center;
   display: flex; align-items: center; justify-content: center; gap: 8px;
 }
-.social-btn.google { background: #fff; color: #3C4043; border: 1px solid var(--line); }
-.social-btn.kakao { background: #FEE500; color: #1A1A1E; }
-.social-btn.naver { background: #03C75A; color: #fff; }
-.social-btn.apple { background: #000; color: #fff; }
+.social-btn.google { background: var(--text-inverse); color: var(--vendor-google-ink); border: 1px solid var(--line); }
+.social-btn.kakao { background: var(--vendor-kakao); color: var(--vendor-kakao-ink); }
+.social-btn.naver { background: var(--vendor-naver); color: var(--text-inverse); }
+.social-btn.apple { background: var(--vendor-apple); color: var(--text-inverse); }
 .social-ic {
   width: 18px; height: 18px; border-radius: 4px; display: inline-flex;
   align-items: center; justify-content: center; font-size: 12px; font-weight: 900;
 }
-.social-btn.naver .social-ic { background: #fff; color: #03C75A; }
+/* 4개 제공자의 아이콘 배지를 모두 여기서 정의한다.
+   (google/kakao는 login/page.tsx 인라인 style로 흩어져 있던 것을 옮겨왔다) */
+.social-btn.google .social-ic { background: var(--text-inverse); color: var(--vendor-google); border: 1px solid var(--line); }
+.social-btn.kakao .social-ic { background: var(--vendor-kakao-ink); color: var(--vendor-kakao); }
+.social-btn.naver .social-ic { background: var(--text-inverse); color: var(--vendor-naver); }
 
 /* ============================================================
    마이페이지
@@ -422,20 +472,20 @@ a { color: inherit; text-decoration: none; }
 .profile-block { display: flex; align-items: center; gap: 14px; padding: 20px; }
 .avatar {
   width: 64px; height: 64px; border-radius: 50%; background: var(--accent);
-  display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--text-inverse); font-weight: 800;
 }
 .profile-name { font-size: 17px; font-weight: 800; margin-bottom: 3px; }
 .profile-edit { font-size: 12.5px; color: var(--ink-soft); font-weight: 700; }
 
 .membership-card {
-  margin: 4px 20px 14px; border-radius: 18px; padding: 18px; color: #fff;
+  margin: 4px 20px 14px; border-radius: 18px; padding: 18px; color: var(--text-inverse);
   background: linear-gradient(135deg, var(--grad1) 0%, var(--grad2) 68%, var(--grad3) 100%);
 }
 .membership-card .name { font-size: 14px; font-weight: 700; opacity: 0.9; margin-bottom: 4px; }
 .membership-card .count { font-size: 22px; font-weight: 800; margin-bottom: 10px; }
 .membership-card .count span { font-size: 13px; font-weight: 700; opacity: 0.85; }
 .membership-card .progress-track { background: rgba(255,255,255,0.28); height: 8px; border-radius: 999px; overflow: hidden; }
-.membership-card .progress-fill { background: #fff; height: 100%; border-radius: 999px; }
+.membership-card .progress-fill { background: var(--text-inverse); height: 100%; border-radius: 999px; }
 .membership-card .expire { font-size: 11.5px; margin-top: 8px; opacity: 0.85; font-weight: 600; }
 
 .menu-section-label { padding: 18px 20px 6px; font-size: 12px; font-weight: 800; color: var(--ink-soft); }
@@ -464,9 +514,13 @@ a { color: inherit; text-decoration: none; }
   font: inherit; color: var(--ink); cursor: pointer; text-align: left;
 }
 .list-row .left { display: flex; align-items: center; gap: 12px; font-size: 14.5px; font-weight: 700; }
-.list-row .icon { font-size: 18px; width: 22px; text-align: center; }
+/* 아이콘 슬롯은 어느 화면의 list-row에서도 같은 크기·정렬로 보여야 한다.
+   (이전에는 SVG 대응 규칙이 .manager-home-v2 안에만 있어서 운영자 화면의
+   list-row는 이모지를 쓸 수밖에 없었다) */
+.list-row .icon { font-size: 18px; width: 22px; display: grid; place-items: center; color: var(--ink-soft); }
+.list-row .icon svg { width: 22px; height: 22px; }
 .list-row .chevron { color: var(--ink-soft); font-size: 14px; }
-.logout-row .left { color: #C0392B; }
+.logout-row .left { color: var(--danger); }
 
 /* ============================================================
    공통: 뒤로가기 헤더 / ghost 버튼
@@ -492,7 +546,8 @@ a { color: inherit; text-decoration: none; }
   background: var(--surface); border-radius: 14px; padding: 14px;
 }
 .profile-avatar {
-  width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff;
+  width: 44px; height: 44px; border-radius: 50%; background: #fff; color: var(--ink);
+  border: 1px solid var(--line-strong);
   display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800; flex: 0 0 auto;
 }
 .profile-item-info { flex: 1; min-width: 0; }
@@ -522,7 +577,7 @@ a { color: inherit; text-decoration: none; }
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 20px; background: var(--ink); color: var(--bg);
 }
-.mgr-mode-label { font-size: 13.5px; font-weight: 800; }
+.mgr-mode-label { font-size: 13.5px; font-weight: 800; display: inline-flex; align-items: center; gap: 5px; }
 .mgr-mode-switch { font-size: 12px; font-weight: 700; opacity: 0.85; }
 
 .center-switcher { display: flex; gap: 8px; padding: 14px 20px 6px; overflow-x: auto; }
@@ -536,7 +591,7 @@ a { color: inherit; text-decoration: none; }
   font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 999px;
   background: var(--surface); color: var(--ink-soft);
 }
-.center-chip.on .center-role { background: var(--accent); color: #fff; }
+.center-chip.on .center-role { background: var(--accent); color: var(--text-inverse); }
 .list-row .right-note { font-size: 12px; color: var(--ink-soft); font-weight: 700; }
 
 /* 매니저 홈 — 매출 요약 대시보드 (P4) */
@@ -568,7 +623,7 @@ a { color: inherit; text-decoration: none; }
 .fab-btn {
   position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%);
   width: calc(100% - 40px); max-width: 440px;
-  background: var(--accent); color: #fff; border: none; cursor: pointer;
+  background: var(--accent); color: var(--text-inverse); border: none; cursor: pointer;
   font: inherit; font-size: 15.5px; font-weight: 800; padding: 15px; border-radius: 14px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 50;
 }
@@ -640,7 +695,7 @@ a { color: inherit; text-decoration: none; }
 }
 .rule-add-btn {
   padding: 9px 14px; border-radius: 10px; border: none; cursor: pointer;
-  background: var(--accent); color: #fff; font: inherit; font-size: 12.5px; font-weight: 800;
+  background: var(--accent); color: var(--text-inverse); font: inherit; font-size: 12.5px; font-weight: 800;
 }
 
 /* ============================================================
@@ -668,7 +723,7 @@ a { color: inherit; text-decoration: none; }
   padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
   background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
 }
-.skill-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.skill-chip.on { background: var(--accent); border-color: var(--accent); color: var(--text-inverse); }
 
 .note-input {
   width: 100%; margin-top: 12px; padding: 12px 14px; border-radius: 12px;
@@ -677,7 +732,7 @@ a { color: inherit; text-decoration: none; }
 }
 .save-btn {
   width: 100%; margin-top: 10px; padding: 14px; border-radius: 12px; border: none;
-  background: var(--accent); color: #fff; font: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer;
+  background: var(--accent); color: var(--text-inverse); font: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer;
 }
 .save-btn:disabled { background: var(--ink-soft); cursor: default; }
 
@@ -749,8 +804,8 @@ a { color: inherit; text-decoration: none; }
   margin-top: 10px;
   padding: 9px 11px;
   border-radius: 9px;
-  background: #fdecec;
-  color: #b3261e;
+  background: var(--danger-soft);
+  color: var(--danger);
   font-size: 12.5px;
   line-height: 1.5;
 }
@@ -797,7 +852,7 @@ a { color: inherit; text-decoration: none; }
 .filter-chip.on {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--text-inverse);
 }
 
 .grade-dot {
@@ -825,7 +880,7 @@ a { color: inherit; text-decoration: none; }
   padding: 0;
 }
 .text-btn:disabled { opacity: 0.5; }
-.text-btn.danger { color: #b3261e; }
+.text-btn.danger { color: var(--danger); }
 
 .mem-list { padding: 0 20px 40px; }
 
@@ -867,8 +922,8 @@ a { color: inherit; text-decoration: none; }
   font-size: 10.5px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: #f2f2f2;
-  color: #888;
+  background: var(--surface);
+  color: var(--text-dim);
 }
 
 .mem-sub {
@@ -939,7 +994,7 @@ a { color: inherit; text-decoration: none; }
 .perm-tab.on {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--text-inverse);
 }
 
 .perm-actions {
@@ -1012,9 +1067,9 @@ a { color: inherit; text-decoration: none; }
 
 .danger-btn {
   display: block; width: 100%; text-align: center; cursor: pointer;
-  border: 1px solid #e5b3b0;
-  background: #fdecec;
-  color: #b3261e;
+  border: 1px solid var(--danger-line);
+  background: var(--danger-soft);
+  color: var(--danger);
   font: inherit; font-size: 15.5px; font-weight: 800;
   padding: 15px; border-radius: 14px;
 }
@@ -1054,16 +1109,16 @@ a { color: inherit; text-decoration: none; }
   margin-right: 6px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.25);
-  color: #fff;
+  color: var(--text-inverse);
   vertical-align: middle;
 }
 .profile-tag.sm {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-inverse);
   font-size: 10.5px;
   padding: 1px 6px;
 }
-.profile-tag.sm.holiday-cancel-tag { background: #8a8a8a; } /* NOTIF-001 E-5: 휴무일 자동취소 배지 */
+.profile-tag.sm.holiday-cancel-tag { background: var(--text-dim); } /* NOTIF-001 E-5: 휴무일 자동취소 배지 */
 
 /* ============================================================
    개인별 권한 설정 (/manager/staff/permissions)
@@ -1080,6 +1135,23 @@ a { color: inherit; text-decoration: none; }
   color: var(--text-dim);
 }
 .perm-guide b { color: var(--text); }
+/* 안내문 상태 변형. 이전에는 화면마다 style={{color:"#c0392b"}} 식으로 직접 색을 넣어
+   에러 문구 색이 제각각이었다. 앞으로는 이 modifier만 사용한다. */
+.perm-guide.is-error { background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger); }
+.perm-guide.is-error b { color: var(--danger); }
+.perm-guide.is-success { background: var(--success-soft); border-color: var(--success-line); color: var(--success); }
+.perm-guide.is-success b { color: var(--success); }
+.perm-guide.is-warning { background: var(--warning-soft); border-color: var(--warning-line); color: var(--warning); }
+.perm-guide.is-warning b { color: var(--warning); }
+.perm-guide.is-info { background: var(--info-soft); border-color: var(--info-line); color: var(--info); }
+.perm-guide.is-info b { color: var(--info); }
+
+/* 인라인 색상 대신 쓰는 의미색 텍스트 유틸리티. 금액/필수표시/경고 문구 등
+   짧은 텍스트 한 조각에 의미색만 입히고 싶을 때 사용한다. */
+.is-error-text { color: var(--danger); }
+.is-success-text { color: var(--success); }
+.is-warning-text { color: var(--warning); }
+.is-muted-text { color: var(--text-dim); }
 
 .ov-item {
   width: 100%;
@@ -1105,14 +1177,14 @@ a { color: inherit; text-decoration: none; }
   border-radius: 999px;
   white-space: nowrap;
 }
-.ov-badge.allow   { background: #e4f4ec; color: #1f8a5b; }
-.ov-badge.deny    { background: #fdecec; color: #b3261e; }
-.ov-badge.role-on { background: #eef1f6; color: #5b6472; }
-.ov-badge.role-off{ background: #f5f5f5; color: #b0b0b0; }
+.ov-badge.allow   { background: var(--success-soft); color: var(--success); }
+.ov-badge.deny    { background: var(--danger-soft); color: var(--danger); }
+.ov-badge.role-on { background: var(--surface); color: var(--text-dim); }
+.ov-badge.role-off{ background: var(--surface); color: var(--text-dim); }
 
 /* 개인 예외가 걸린 항목은 왼쪽에 강조선 */
-.ov-item.st-allow { box-shadow: inset 3px 0 0 #1f8a5b; padding-left: 11px; }
-.ov-item.st-deny  { box-shadow: inset 3px 0 0 #b3261e; padding-left: 11px; }
+.ov-item.st-allow { box-shadow: inset 3px 0 0 var(--success); padding-left: 11px; }
+.ov-item.st-deny  { box-shadow: inset 3px 0 0 var(--danger); padding-left: 11px; }
 .ov-item.st-allow.child, .ov-item.st-deny.child { padding-left: 14px; }
 
 /* 권한 탭 - 모두 선택/해제 버튼 묶음 */
@@ -1144,7 +1216,7 @@ a { color: inherit; text-decoration: none; }
   padding: 18px;
   border-radius: 16px;
   background: var(--accent);
-  color: #fff;
+  color: var(--text-inverse);
 }
 .sales-big { display: block; }
 .sales-big-label { font-size: 12.5px; opacity: 0.85; }
@@ -1189,13 +1261,13 @@ a { color: inherit; text-decoration: none; }
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #eef1f6;
-  color: #5b6472;
+  background: var(--surface);
+  color: var(--text-dim);
 }
-.sale-type-badge.refund { background: #fdecec; color: #b3261e; }
+.sale-type-badge.refund { background: var(--danger-soft); color: var(--danger); }
 .sales-row-sub { font-size: 12.5px; color: var(--text-dim); margin-top: 3px; }
 .sales-amount { font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; }
-.sales-amount.minus { color: #b3261e; }
+.sales-amount.minus { color: var(--danger); }
 
 /* 결제 등록 시트 */
 .sheet.tall { max-height: 88vh; overflow-y: auto; }
@@ -1304,7 +1376,7 @@ a { color: inherit; text-decoration: none; }
   height: 26px;
   border-radius: 999px;
   border: none;
-  background: #d4d4d4;
+  background: var(--line-strong);
   cursor: pointer;
   padding: 0;
   position: relative;
@@ -1318,7 +1390,8 @@ a { color: inherit; text-decoration: none; }
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #fff;
+  /* 노브는 컬러 트랙 위에 올라가므로 카드 표면이 아니라 반전 색을 쓴다. */
+  background: var(--text-inverse);
   transition: left 0.15s;
 }
 .switch.on .knob { left: 23px; }
@@ -1428,7 +1501,7 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid var(--line); background: var(--surface);
   color: var(--text); font-size: 13px; cursor: pointer;
 }
-.skill-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.skill-chip.on { background: var(--accent); border-color: var(--accent); color: var(--text-inverse); font-weight: 600; }
 
 .prog-hist { padding: 0 20px 20px; }
 .prog-hist-day { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
@@ -1575,7 +1648,7 @@ a { color: inherit; text-decoration: none; }
 .mem-detail-date { flex: 0 0 42px; font-size: 12.5px; font-weight: 600; color: var(--accent); }
 .mem-detail-main { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text); }
 .mem-detail-amt { font-size: 13px; font-weight: 600; color: var(--text); }
-.mem-detail-amt.minus { color: #c0392b; }
+.mem-detail-amt.minus { color: var(--danger); }
 
 /* ============================================================
    센터 상세 화면 (/center/[id])
@@ -1586,7 +1659,7 @@ a { color: inherit; text-decoration: none; }
 }
 .center-hero-badge {
   width: 64px; height: 64px; border-radius: 20px;
-  background: var(--accent); color: #fff;
+  background: var(--accent); color: var(--text-inverse);
   display: flex; align-items: center; justify-content: center;
   font-size: 26px; font-weight: 800; margin-bottom: 12px;
 }
@@ -1629,7 +1702,7 @@ a { color: inherit; text-decoration: none; }
 }
 .sales-bd-item.clickable:active { opacity: 0.7; }
 .clickable-name { cursor: pointer; color: var(--accent); }
-.drill-unpaid { color: #c0392b; font-size: 12px; }
+.drill-unpaid { color: var(--danger); font-size: 12px; }
 
 /* 예약자 명단 */
 .res-count-link {
@@ -1671,11 +1744,11 @@ a { color: inherit; text-decoration: none; }
   text-align: left; padding: 14px 16px; border-radius: 12px;
   border: 1px solid var(--line); background: var(--surface); cursor: pointer;
 }
-.del-opt.danger { border-color: #e0b4b4; background: #fdf3f3; }
+.del-opt.danger { border-color: var(--danger-line); background: var(--danger-soft); }
 .del-opt-title { font-size: 14.5px; font-weight: 700; color: var(--text); }
-.del-opt.danger .del-opt-title { color: #c0392b; }
+.del-opt.danger .del-opt-title { color: var(--danger); }
 .del-opt-sub { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
-.danger-btn { background: #c0392b !important; color: #fff !important; border-color: #c0392b !important; }
+.danger-btn { background: var(--danger) !important; color: var(--text-inverse) !important; border-color: var(--danger) !important; }
 
 /* 예약 화면 - 센터 필터 배너 */
 .center-filter-banner {
@@ -1693,7 +1766,7 @@ a { color: inherit; text-decoration: none; }
   border-top: none;
   background: rgba(255, 255, 255, 0.22);
   border-radius: 10px;
-  color: #fff;
+  color: var(--text-inverse);
   font-size: 13.5px;
   font-weight: 800;
   text-align: center;
@@ -1704,26 +1777,29 @@ a.membership-card { text-decoration: none; display: block; }
 .mem-status-badge {
   font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
 }
-.mem-status-badge.dormant { background: #fff3e0; color: #e67e22; }
-.mem-status-badge.expired { background: #fdecea; color: #c0392b; }
+.mem-status-badge.dormant { background: var(--warning-soft); color: var(--warning); }
+.mem-status-badge.expired { background: var(--danger-soft); color: var(--danger); }
 
 /* 에러 토스트 - 시트 위에도 보이게 상단 고정 (z-index 시트보다 높음) */
 .error-toast {
   position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
-  background: #C0392B; color: #fff; font-size: 13px; font-weight: 700;
+  background: var(--danger); color: var(--text-inverse); font-size: 13px; font-weight: 700;
   padding: 11px 18px; border-radius: 12px; z-index: 120;
-  box-shadow: 0 8px 24px rgba(192,57,43,0.35); max-width: 90%;
+  box-shadow: 0 8px 24px rgba(182,66,66,0.35); max-width: 90%;
   display: flex; align-items: center; gap: 10px;
 }
 .error-toast button {
-  background: rgba(255,255,255,0.25); border: none; color: #fff;
+  background: rgba(255,255,255,0.25); border: none; color: var(--text-inverse);
   width: 20px; height: 20px; border-radius: 50%; cursor: pointer; font-size: 13px;
   display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
 }
 
 /* 마이페이지 상품 카드 - 수강권(붉은빛)과 구분되는 색 */
 .membership-card.goods {
-  background: linear-gradient(135deg, #2c7a7b 0%, #319795 60%, #38b2ac 100%);
+  /* 기본 수강권 카드(.membership-card)와 같은 0/68/100 스톱 구조를 유지하되 mint 토큰으로 파생한다. */
+  background: linear-gradient(135deg, var(--mint) 0%,
+    color-mix(in srgb, var(--mint) 82%, var(--text-inverse)) 68%,
+    color-mix(in srgb, var(--mint) 64%, var(--text-inverse)) 100%);
 }
 .membership-card.goods .membership-cta { display: none; }
 
@@ -1744,7 +1820,8 @@ a.membership-card { text-decoration: none; display: block; }
 .avatar-edit { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 14px; }
 .avatar-edit-img { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; }
 .avatar-edit-placeholder {
-  width: 88px; height: 88px; border-radius: 50%; background: var(--accent); color: #fff;
+  width: 88px; height: 88px; border-radius: 50%; background: #fff; color: var(--ink);
+  border: 1px solid var(--line-strong);
   display: flex; align-items: center; justify-content: center; font-size: 34px; font-weight: 800;
 }
 .avatar-edit-btn {
@@ -1784,7 +1861,7 @@ a.membership-card { text-decoration: none; display: block; }
   background: none; border: none; cursor: pointer; font: inherit;
   color: var(--accent); font-weight: 800;
 }
-.sales-amount.clickable.minus { color: #c0392b; }
+.sales-amount.clickable.minus { color: var(--danger); }
 
 /* 예약 확인 모달 */
 .confirm-class { padding: 14px; background: var(--surface); border-radius: 12px; margin-bottom: 6px; }
@@ -1816,7 +1893,7 @@ a.membership-card { text-decoration: none; display: block; }
 
 /* 관리자 달력 - 휴무일 표시 */
 .cal-cell.holiday .cal-daynum {
-  color: #fff; background: #c0392b; border-radius: 50%;
+  color: var(--text-inverse); background: var(--danger); border-radius: 50%;
   width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
 }
 
@@ -1844,7 +1921,7 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .empty-action-text { font-size: 14px; color: var(--text-dim); line-height: 1.5; }
 .empty-action-btn {
-  padding: 11px 22px; background: var(--accent); color: #fff; border: none;
+  padding: 11px 22px; background: var(--accent); color: var(--text-inverse); border: none;
   border-radius: 999px; font-size: 14px; font-weight: 700; cursor: pointer; text-decoration: none;
 }
 
@@ -1865,7 +1942,7 @@ a.membership-card { text-decoration: none; display: block; }
 /* 홈 배너 회전 점 */
 .banner-dots { display: flex; gap: 5px; margin-top: 12px; }
 .banner-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.4); }
-.banner-dot.on { background: #fff; width: 16px; border-radius: 3px; }
+.banner-dot.on { background: var(--text-inverse); width: 16px; border-radius: 3px; }
 
 /* 검색 화면 */
 .search-header {
@@ -1877,10 +1954,10 @@ a.membership-card { text-decoration: none; display: block; }
   flex: 1; border: 1px solid var(--line); border-radius: 999px; padding: 9px 16px;
   font-size: 14px; background: var(--surface); color: var(--text);
 }
-.search-go { flex: 0 0 auto; background: var(--accent); color: #fff; border: none; border-radius: 999px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.search-go { flex: 0 0 auto; background: var(--accent); color: var(--text-inverse); border: none; border-radius: 999px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .search-center-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); text-decoration: none; }
 .search-center-photo { width: 52px; height: 52px; border-radius: 12px; object-fit: cover; flex: 0 0 auto; }
-.search-center-badge { width: 52px; height: 52px; border-radius: 12px; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; flex: 0 0 auto; }
+.search-center-badge { width: 52px; height: 52px; border-radius: 12px; background: var(--accent); color: var(--text-inverse); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; flex: 0 0 auto; }
 .search-center-info { flex: 1; min-width: 0; }
 .search-center-name { font-size: 14.5px; font-weight: 700; color: var(--text); }
 .search-center-cat { font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px; }
@@ -1889,7 +1966,7 @@ a.membership-card { text-decoration: none; display: block; }
 /* 종목별 센터 목록 */
 .cat-center-card { display: block; margin: 12px 20px; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; text-decoration: none; }
 .cat-center-photo { width: 100%; height: 140px; object-fit: cover; display: block; }
-.cat-center-photo-empty { width: 100%; height: 140px; background: linear-gradient(160deg,var(--grad2),var(--grad3)); display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 800; color: #fff; }
+.cat-center-photo-empty { width: 100%; height: 140px; background: linear-gradient(160deg,var(--grad2),var(--grad3)); display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 800; color: var(--text-inverse); }
 .cat-center-body { padding: 14px 16px; }
 .cat-center-name { font-size: 16px; font-weight: 800; color: var(--text); }
 .cat-center-tags { font-size: 12.5px; color: var(--accent); font-weight: 600; margin-top: 3px; }
@@ -1905,9 +1982,9 @@ a.membership-card { text-decoration: none; display: block; }
 .center-product-name { font-size: 14px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px; }
 .center-product-detail { font-size: 12.5px; color: var(--text-dim); margin-top: 3px; }
 .product-kind-tag { font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 4px; }
-.product-kind-tag.pass { background: #fdecea; color: #c0392b; }
-.product-kind-tag.goods { background: #e6f4f1; color: #2c7a7b; }
-.center-product-buy { flex: 0 0 auto; background: var(--accent); color: #fff; border: none; border-radius: 999px; padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.product-kind-tag.pass { background: var(--danger-soft); color: var(--danger); }
+.product-kind-tag.goods { background: var(--mint-soft); color: var(--mint); }
+.center-product-buy { flex: 0 0 auto; background: var(--accent); color: var(--text-inverse); border: none; border-radius: 999px; padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer; }
 
 /* 홈 센터 거리 표시 / 위치 캡처 */
 .brand-dist { font-size: 10.5px; color: var(--text-dim); font-weight: 600; margin-top: 1px; text-align: center; }
@@ -1939,20 +2016,20 @@ a.membership-card { text-decoration: none; display: block; }
 .order-main { flex: 1; min-width: 0; }
 .order-name { font-size: 14.5px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
 .order-status { font-size: 10.5px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
-.order-status.pending { background: #fef4e6; color: #c47f17; }
-.order-status.paid { background: #e6f0fd; color: #1c6dd0; }
-.order-status.done { background: #e6f4ec; color: #1f9d55; }
-.order-status.cancelled { background: #f0f0f0; color: #888; }
+.order-status.pending { background: var(--warning-soft); color: var(--warning); }
+.order-status.paid { background: var(--info-soft); color: var(--info); }
+.order-status.done { background: var(--success-soft); color: var(--success); }
+.order-status.cancelled { background: var(--surface); color: var(--text-dim); }
 .order-product { font-size: 13.5px; color: var(--text); margin-top: 5px; display: flex; align-items: center; gap: 6px; }
 .order-meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
 .order-actions { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
-.order-done-btn { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 7px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.order-done-btn { background: var(--accent); color: var(--text-inverse); border: none; border-radius: 8px; padding: 7px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .order-cancel-btn { background: var(--bg); color: var(--text-dim); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; font-size: 12.5px; cursor: pointer; }
 
 /* 센터 상세 - 소개 사진 / 수업 수강권 / 하단 고정바 */
 .center-intro-photo { width: calc(100% - 40px); margin: 0 20px 10px; border-radius: 14px; object-fit: cover; max-height: 220px; }
 .center-class-passes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
-.class-pass-chip { font-size: 10.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft, #eef4ff); padding: 2px 7px; border-radius: 999px; }
+.class-pass-chip { font-size: 10.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 2px 7px; border-radius: 999px; }
 .class-pass-chip.all { color: var(--text-dim); background: var(--surface); }
 .class-pass-label { font-size: 10.5px; font-weight: 700; color: var(--ink-soft); }
 .center-bottom-bar {
@@ -1966,8 +2043,8 @@ a.membership-card { text-decoration: none; display: block; }
   cursor: pointer; border: none; pointer-events: auto;
   box-shadow: 0 6px 20px rgba(0,0,0,0.18);
 }
-.center-bar-btn.buy { background: #fff; color: var(--text); }
-.center-bar-btn.reserve { background: var(--accent); color: #fff; }
+.center-bar-btn.buy { background: var(--card-bg); color: var(--text); }
+.center-bar-btn.reserve { background: var(--accent); color: var(--text-inverse); }
 
 
 /* 테마 설정 */
@@ -1999,7 +2076,7 @@ a.membership-card { text-decoration: none; display: block; }
 .intro-block-controls { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 6px; }
 .ib-btn { width: 28px; height: 26px; border: 1px solid var(--line); background: var(--bg); border-radius: 7px; font-size: 12px; cursor: pointer; color: var(--text); }
 .ib-btn:disabled { opacity: 0.35; }
-.ib-btn.del { color: #c0392b; }
+.ib-btn.del { color: var(--danger); }
 .intro-block-img { width: 100%; border-radius: 8px; display: block; }
 .intro-add-row { display: flex; gap: 8px; margin-top: 4px; }
 
@@ -2055,7 +2132,7 @@ a.membership-card { text-decoration: none; display: block; }
 .prog-hist-actions .ph-edit, .prog-hist-actions .ph-del { flex: 0 0 auto; height: 26px; line-height: 1; white-space: nowrap; }
 .ph-edit, .ph-del { font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 7px; cursor: pointer; border: 1px solid var(--line); background: var(--bg); }
 .ph-edit { color: var(--accent); }
-.ph-del { color: #c0392b; }
+.ph-del { color: var(--danger); }
 
 /* 회원 상세 - 진도 메모 */
 .mem-prog-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
@@ -2067,7 +2144,7 @@ a.membership-card { text-decoration: none; display: block; }
 .mem-pass-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .mem-pass-head-title { font-size: 12.5px; font-weight: 700; color: var(--text-dim); }
 .mem-pass-more { font-size: 11.5px; font-weight: 700; color: var(--accent); background: none; border: none; cursor: pointer; padding: 2px 4px; }
-.mem-pass-chip.goods { border-color: #b48a3c; }
+.mem-pass-chip.goods { border-color: var(--gold); }
 
 /* 회원 관리 - 탭 (전체/담당/상담) */
 .mem-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--line); margin: 0 16px 8px; }
@@ -2084,7 +2161,7 @@ a.membership-card { text-decoration: none; display: block; }
 
 /* 결제 - 상품 설명 / 할인 */
 .checkout-order-desc { font-size: 13px; color: var(--text-dim); margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); line-height: 1.6; white-space: pre-wrap; }
-.checkout-discount-row { display: flex; justify-content: space-between; align-items: center; margin: 0 20px; padding: 4px 0; font-size: 13.5px; color: #1f9d55; }
+.checkout-discount-row { display: flex; justify-content: space-between; align-items: center; margin: 0 20px; padding: 4px 0; font-size: 13.5px; color: var(--success); }
 
 /* 장바구니 */
 .center-product-actions { display: flex; gap: 6px; flex: 0 0 auto; }
@@ -2098,7 +2175,7 @@ a.membership-card { text-decoration: none; display: block; }
 .cart-remove { background: var(--bg); color: var(--text-dim); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-size: 12.5px; cursor: pointer; }
 
 /* 수강권 환불 버튼 */
-.membership-refund { margin-top: 10px; width: 100%; background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.4); border-radius: 8px; padding: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.membership-refund { margin-top: 10px; width: 100%; background: rgba(255,255,255,0.15); color: var(--text-inverse); border: 1px solid rgba(255,255,255,0.4); border-radius: 8px; padding: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }
 .membership-card.goods .membership-refund { background: var(--surface); color: var(--accent); border-color: var(--line); }
 
 /* 예약자 명단 - 출결 처리 */
@@ -2111,9 +2188,9 @@ a.membership-card { text-decoration: none; display: block; }
   border: 1px solid var(--line); background: var(--bg); color: var(--text-dim);
   cursor: pointer; text-decoration: none; display: inline-block;
 }
-.att-btn.on { border-color: var(--accent); background: var(--accent-soft, #eef4ff); color: var(--accent); }
-.att-btn.cancel { color: #c0392b; }
-.att-btn.cancel.on { border-color: #c0392b; background: #fdecec; color: #c0392b; }
+.att-btn.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.att-btn.cancel { color: var(--danger); }
+.att-btn.cancel.on { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
 .att-btn.prog { color: var(--accent); border-color: var(--accent); margin-left: auto; }
 .att-btn:disabled { opacity: 0.5; }
 
@@ -2230,7 +2307,7 @@ a.membership-card { text-decoration: none; display: block; }
 .review-list { display: flex; flex-direction: column; padding: 0 20px; }
 .review-item { padding: 14px 0; border-bottom: 1px solid var(--line); }
 .review-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.review-stars { font-size: 13px; color: #f5a623; letter-spacing: 1px; }
+.review-stars { font-size: 13px; color: var(--star); letter-spacing: 1px; }
 .review-stars-off { color: var(--line); }
 .review-writer { font-size: 12.5px; font-weight: 700; color: var(--text); }
 .review-date { font-size: 11.5px; color: var(--text-dim); margin-left: auto; }
@@ -2239,7 +2316,7 @@ a.membership-card { text-decoration: none; display: block; }
 /* 별점 선택 */
 .star-picker { display: flex; gap: 4px; }
 .star-btn { font-size: 30px; line-height: 1; background: none; border: none; cursor: pointer; color: var(--line); padding: 0 2px; }
-.star-btn.on { color: #f5a623; }
+.star-btn.on { color: var(--star); }
 
 /* 출결 - 취소된 예약 잠금 표시 */
 .att-locked { font-size: 11.5px; color: var(--text-dim); padding: 5px 0; }
@@ -2250,9 +2327,9 @@ a.membership-card { text-decoration: none; display: block; }
 .purchase-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
 .purchase-center { font-size: 12px; color: var(--text-dim); }
 .purchase-status { font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: var(--surface); color: var(--text-dim); }
-.purchase-status.s-active { background: #e6f4ec; color: #1f9d55; }
-.purchase-status.s-refunded { background: #f0f0f0; color: #888; }
-.purchase-status.s-pending { background: #fef4e6; color: #c47f17; }
+.purchase-status.s-active { background: var(--success-soft); color: var(--success); }
+.purchase-status.s-refunded { background: var(--surface); color: var(--text-dim); }
+.purchase-status.s-pending { background: var(--warning-soft); color: var(--warning); }
 .purchase-name { font-size: 15px; font-weight: 700; color: var(--text); }
 .purchase-meta { font-size: 12.5px; color: var(--text-dim); margin-top: 4px; }
 .purchase-refund { margin-top: 10px; }
@@ -2306,7 +2383,7 @@ a.membership-card { text-decoration: none; display: block; }
 .rv-photo-thumb img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; display: block; }
 .rv-photo-del {
   position: absolute; top: -6px; right: -6px; width: 22px; height: 22px;
-  border-radius: 50%; background: #c0392b; color: #fff; border: none;
+  border-radius: 50%; background: var(--danger); color: var(--text-inverse); border: none;
   font-size: 13px; line-height: 1; cursor: pointer;
 }
 .rv-photo-btn {
@@ -2319,21 +2396,21 @@ a.membership-card { text-decoration: none; display: block; }
 .unplaced-banner {
   display: flex; align-items: center; gap: 8px; width: calc(100% - 40px);
   margin: 10px 20px 0; padding: 11px 14px;
-  background: #fef4e6; border: 1px solid #f0d5a8; border-radius: 12px;
+  background: var(--warning-soft); border: 1px solid var(--warning-line); border-radius: 12px;
   cursor: pointer; text-align: left;
 }
 .unplaced-icon { font-size: 15px; }
-.unplaced-text { flex: 1; font-size: 12.5px; color: #8a5a12; }
+.unplaced-text { flex: 1; font-size: 12.5px; color: var(--warning); }
 .unplaced-text b { font-weight: 800; }
-.unplaced-go { font-size: 12px; font-weight: 700; color: #8a5a12; }
+.unplaced-go { font-size: 12px; font-weight: 700; color: var(--warning); }
 .unplaced-list { display: flex; flex-direction: column; max-height: 340px; overflow-y: auto; }
 .unplaced-row { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .unplaced-main { flex: 1; min-width: 0; }
 .unplaced-name { font-size: 14.5px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
-.unplaced-remain { font-size: 11px; font-weight: 800; color: #c47f17; background: #fef4e6; padding: 2px 8px; border-radius: 999px; }
+.unplaced-remain { font-size: 11px; font-weight: 800; color: var(--warning); background: var(--warning-soft); padding: 2px 8px; border-radius: 999px; }
 .unplaced-sub { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
 .unplaced-retry {
-  flex: 0 0 auto; background: var(--accent); color: #fff; border: none;
+  flex: 0 0 auto; background: var(--accent); color: var(--text-inverse); border: none;
   border-radius: 8px; padding: 8px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer;
 }
 .unplaced-retry:disabled { opacity: 0.5; }
@@ -2342,10 +2419,10 @@ a.membership-card { text-decoration: none; display: block; }
 .assign-banner {
   display: flex; align-items: center; gap: 10px; width: calc(100% - 40px);
   margin: 10px 20px 0; padding: 12px 14px;
-  background: #eef6f2; border: 1px solid #bfe0cf; border-radius: 12px;
+  background: var(--success-soft); border: 1px solid var(--success-line); border-radius: 12px;
 }
 .assign-banner-main { flex: 1; min-width: 0; }
-.assign-banner-title { font-size: 11px; font-weight: 700; color: #1f6f63; }
+.assign-banner-title { font-size: 11px; font-weight: 700; color: var(--success); }
 .assign-banner-name { font-size: 14.5px; font-weight: 800; color: var(--text); margin-top: 2px; }
 .assign-banner-phone { font-size: 12px; font-weight: 600; color: var(--text-dim); }
 .assign-banner-sub { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
@@ -2362,7 +2439,7 @@ a.membership-card { text-decoration: none; display: block; }
 .assign-menu-wrap { position: relative; flex: 0 0 auto; }
 .assign-menu {
   position: absolute; right: 0; top: 100%; margin-top: 4px; z-index: 50;
-  background: var(--card-bg, #fff); border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card-bg); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 6px 18px rgba(0,0,0,0.12); overflow: hidden; width: 220px;
 }
 .assign-menu button {
@@ -2398,10 +2475,10 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .copy-cal-cell.empty { cursor: default; }
 .copy-cal-cell.has { background: var(--accent-soft); font-weight: 700; }
-.copy-cal-cell.on { background: var(--accent); color: #fff; }
+.copy-cal-cell.on { background: var(--accent); color: var(--text-inverse); }
 .copy-cal-day { line-height: 1; }
 .copy-cal-dot { font-size: 9.5px; font-weight: 800; color: var(--accent); }
-.copy-cal-cell.on .copy-cal-dot { color: #fff; }
+.copy-cal-cell.on .copy-cal-dot { color: var(--text-inverse); }
 .copy-cal-detail { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
 .copy-cal-detail-date { font-size: 12.5px; font-weight: 800; color: var(--accent); margin-bottom: 6px; }
 .copy-cal-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12.5px; }
@@ -2428,7 +2505,7 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .no-pass-buy-btn {
   flex: 0 0 auto;
-  background: var(--accent); color: #fff; border: none;
+  background: var(--accent); color: var(--text-inverse); border: none;
   border-radius: 10px; padding: 9px 14px;
   font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
 }
@@ -2474,7 +2551,7 @@ a.membership-card { text-decoration: none; display: block; }
 .rv-stat { flex: 1; background: var(--surface); border-radius: 12px; padding: 12px; text-align: center; }
 .rv-stat-label { display: block; font-size: 11.5px; color: var(--text-dim); }
 .rv-stat-value { display: block; font-size: 18px; font-weight: 800; color: var(--text); margin-top: 4px; }
-.rv-stat-value.warn { color: #c47f17; }
+.rv-stat-value.warn { color: var(--warning); }
 .mgr-review-list { display: flex; flex-direction: column; }
 .mgr-review { padding: 14px 20px; border-bottom: 1px solid var(--line); }
 .mgr-review-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
@@ -2491,7 +2568,7 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .announce-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .announce-pin {
-  font-size: 10.5px; font-weight: 800; color: #fff; background: var(--accent);
+  font-size: 10.5px; font-weight: 800; color: var(--text-inverse); background: var(--accent);
   padding: 2px 7px; border-radius: 999px; flex: 0 0 auto;
 }
 .announce-title { font-size: 15px; font-weight: 800; color: var(--text); flex: 1; min-width: 0; }
@@ -2522,7 +2599,7 @@ a.membership-card { text-decoration: none; display: block; }
 /* 네비게이션 안읽음 뱃지 */
 .nav-badge {
   position: absolute; top: -6px; right: -10px; min-width: 16px; height: 16px;
-  padding: 0 4px; border-radius: 999px; background: #FF3B30; color: #fff;
+  padding: 0 4px; border-radius: 999px; background: var(--danger); color: var(--text-inverse);
   font-size: 10px; font-weight: 800; line-height: 16px; text-align: center;
 }
 
@@ -2584,7 +2661,7 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .thread-unread {
   flex: 0 0 auto; min-width: 20px; height: 20px; padding: 0 6px;
-  border-radius: 999px; background: #FF3B30; color: #fff;
+  border-radius: 999px; background: var(--danger); color: var(--text-inverse);
   font-size: 11px; font-weight: 800; line-height: 20px; text-align: center;
 }
 
@@ -2617,7 +2694,7 @@ a.membership-card { text-decoration: none; display: block; }
   padding: 10px 13px; border-radius: 16px; font-size: 14px; line-height: 1.5;
   word-break: break-word; white-space: pre-wrap;
 }
-.chat-msg.mine .chat-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 5px; }
+.chat-msg.mine .chat-bubble { background: var(--accent); color: var(--text-inverse); border-bottom-right-radius: 5px; }
 .chat-msg.theirs .chat-bubble { background: var(--surface); color: var(--text); border-bottom-left-radius: 5px; }
 .chat-photos { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .chat-photos img { max-width: 200px; border-radius: 10px; display: block; }
@@ -2630,7 +2707,7 @@ a.membership-card { text-decoration: none; display: block; }
 .chat-photo-thumb img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; display: block; }
 .chat-photo-thumb button {
   position: absolute; top: -6px; right: -6px; width: 20px; height: 20px;
-  border-radius: 50%; background: #c0392b; color: #fff; border: none;
+  border-radius: 50%; background: var(--danger); color: var(--text-inverse); border: none;
   font-size: 12px; line-height: 1; cursor: pointer;
 }
 
@@ -2654,7 +2731,7 @@ a.membership-card { text-decoration: none; display: block; }
 .chat-input:focus { outline: none; border-color: var(--accent); }
 .chat-send {
   flex: 0 0 auto; height: 40px; padding: 0 16px; border-radius: 20px;
-  background: var(--accent); color: #fff; border: none;
+  background: var(--accent); color: var(--text-inverse); border: none;
   font-size: 14px; font-weight: 700; cursor: pointer;
 }
 .chat-send:disabled { opacity: 0.5; }
@@ -2675,13 +2752,13 @@ a.membership-card { text-decoration: none; display: block; }
 .image-viewer-close {
   position: absolute; top: 16px; right: 16px; z-index: 1;
   width: 40px; height: 40px; border-radius: 50%; border: none;
-  background: rgba(255, 255, 255, 0.15); color: #fff; font-size: 22px; line-height: 1;
+  background: rgba(255, 255, 255, 0.15); color: var(--text-inverse); font-size: 22px; line-height: 1;
   display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
 .image-viewer-nav {
   position: absolute; top: 50%; transform: translateY(-50%); z-index: 1;
   width: 44px; height: 44px; border-radius: 50%; border: none;
-  background: rgba(255, 255, 255, 0.15); color: #fff; font-size: 26px; line-height: 1;
+  background: rgba(255, 255, 255, 0.15); color: var(--text-inverse); font-size: 26px; line-height: 1;
   display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
 .image-viewer-nav.prev { left: 12px; }
@@ -2714,10 +2791,10 @@ a.membership-card { text-decoration: none; display: block; }
   line-height: 1;
   cursor: pointer;
 }
-.app-button-primary { background: var(--ink); color: #fff; }
+.app-button-primary { background: var(--ink); color: var(--text-inverse); }
 .app-button-secondary { background: transparent; border-color: var(--line); color: var(--ink); }
 .app-button-tertiary { min-height: 44px; background: var(--surface); color: var(--ink); }
-.app-button-danger { background: var(--danger); color: #fff; }
+.app-button-danger { background: var(--danger); color: var(--text-inverse); }
 .app-button:disabled { opacity: .46; cursor: default; }
 .app-button:focus-visible,
 .segmented-tabs button:focus-visible,
@@ -2823,7 +2900,7 @@ a.membership-card { text-decoration: none; display: block; }
 .app-date-week span { padding: 7px 0; color: var(--ink-soft); font-size: 11px; font-weight: 650; text-align: center; }
 .app-date-grid button,
 .app-date-grid i { aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; font-size: 12px; font-style: normal; }
-.app-date-grid button.on { background: var(--ink); color: #fff; font-weight: 720; }
+.app-date-grid button.on { background: var(--ink); color: var(--text-inverse); font-weight: 720; }
 .app-date-grid button.today:not(.on) { box-shadow: inset 0 0 0 1px var(--brand); color: var(--brand-ink); font-weight: 720; }
 .app-month-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
 .app-month-grid button {
@@ -2898,7 +2975,8 @@ a.membership-card { text-decoration: none; display: block; }
 
 /* Old left-position animation and the migrated transform must never stack. */
 .manager-v3-content .switch .knob { left: 3px; }
-.manager-v3-content .switch.on .knob { left: 3px; transform: translateX(20px); }
+.manager-v3-content .switch.on .knob,
+.admin-v3-content .switch.on .knob { left: 3px; transform: translateX(20px); }
 
 /* Class form selections use the same clear checked-pill language. */
 .manager-v3-content .class-allowed-products-list,
@@ -2921,7 +2999,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-v3-content .class-trainers-list .filter-chip.on {
   border-color: var(--ink);
   background: var(--ink);
-  color: #fff;
+  color: var(--text-inverse);
 }
 .manager-v3-content .class-allowed-products-list .filter-chip.on::before,
 .manager-v3-content .class-trainers-list .filter-chip.on::before {
@@ -2964,36 +3042,36 @@ a.membership-card { text-decoration: none; display: block; }
 
 /* Final 26-point refinement: these rules intentionally close the cascade. */
 .mypage-shell .membership-cta {
-  border:1px solid var(--line-strong); background:#fff; color:var(--ink);
+  border:1px solid var(--line-strong); background:var(--card-bg); color:var(--ink);
   box-shadow:none;
 }
 .manager-v3-content .progress-member-panel { margin:8px var(--page-gutter) 18px; padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--surface); }
 .manager-v3-content .progress-member-panel .menu-section-label { padding:0 0 8px; }
 .manager-v3-content .progress-member-select { position:relative; }
-.manager-v3-content .progress-member-select select { appearance:none; min-height:52px; padding-right:44px; background:#fff; }
+.manager-v3-content .progress-member-select select { appearance:none; min-height:52px; padding-right:44px; background:var(--card-bg); }
 .manager-v3-content .progress-member-select .select-chevron { position:absolute; right:16px; top:50%; translate:0 -52%; pointer-events:none; color:var(--ink-soft); font-size:20px; }
 .manager-v3-content .progress-add-record { width:100%; margin-top:10px; }
 .manager-v3-content .prog-wrap { display:grid; gap:12px; padding-bottom:130px; }
 .manager-v3-content .structured-add-row { display:grid; grid-template-columns:minmax(0,1fr) 76px; gap:10px; align-items:stretch; }
 .manager-v3-content .structured-add-row .outline-action { min-height:52px; }
-.manager-v3-content .prog-group { overflow:hidden; margin:0; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:0 8px 24px rgba(16,24,40,.035); }
+.manager-v3-content .prog-group { overflow:hidden; margin:0; border:1px solid var(--line); border-radius:18px; background:var(--card-bg); box-shadow:0 8px 24px rgba(16,24,40,.035); }
 .manager-v3-content .prog-top-row { min-height:62px; padding:12px 14px; border:0; background:var(--surface); }
 .manager-v3-content .prog-top-name { font-size:17px; font-weight:760; }
 .manager-v3-content .prog-children { padding:0 14px 12px; }
-.manager-v3-content .prog-sub-row { min-height:58px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; padding:8px 0; border:0; border-bottom:1px solid var(--line); background:#fff; }
+.manager-v3-content .prog-sub-row { min-height:58px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; padding:8px 0; border:0; border-bottom:1px solid var(--line); background:var(--card-bg); }
 .manager-v3-content .prog-sub-name { min-width:0; font-weight:620; }
-.manager-v3-content .prog-add-sub-btn { width:100%; min-height:48px; margin-top:10px; border:1px dashed var(--line-strong); border-radius:14px; background:#fff; color:var(--ink-soft); }
+.manager-v3-content .prog-add-sub-btn { width:100%; min-height:48px; margin-top:10px; border:1px dashed var(--line-strong); border-radius:14px; background:var(--card-bg); color:var(--ink-soft); }
 .manager-v3-content .prog-hist { display:grid; gap:10px; padding-bottom:130px; }
-.manager-v3-content .prog-hist-day { padding:16px 14px; border:1px solid var(--line); border-radius:16px; background:#fff; }
+.manager-v3-content .prog-hist-day { padding:16px 14px; border:1px solid var(--line); border-radius:16px; background:var(--card-bg); }
 .manager-v3-content .prog-hist-actions { margin-top:12px; justify-content:flex-end; }
 .manager-v3-content .pass-list { display:grid; gap:14px; padding:8px var(--page-gutter) 130px; }
-.manager-v3-content .pass-card { position:relative; margin:0; padding:18px; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:0 7px 22px rgba(20,20,20,.035); }
+.manager-v3-content .pass-card { position:relative; margin:0; padding:18px; border:1px solid var(--line); border-radius:18px; background:var(--card-bg); box-shadow:0 7px 22px rgba(20,20,20,.035); }
 .manager-v3-content .pass-card::before { content:""; position:absolute; left:0; top:18px; bottom:18px; width:3px; border-radius:0 3px 3px 0; background:var(--brand); }
 .manager-v3-content .pass-rules { margin:8px 0 0; padding:8px 12px; border-left:2px solid var(--brand); border-radius:10px; background:var(--brand-soft); }
 .manager-v3-content .room-card-list { padding-bottom:130px; }
 .manager-v3-content .assignment-log-list { padding-bottom:130px; }
-.manager-v3-content .sales-breakdown { overflow:hidden; margin:0 var(--page-gutter); border:1px solid var(--line); border-radius:17px; background:#fff; }
-.manager-v3-content .sales-bd-item { min-height:60px; padding:13px 16px; border-bottom:1px solid var(--line); background:#fff; }
+.manager-v3-content .sales-breakdown { overflow:hidden; margin:0 var(--page-gutter); border:1px solid var(--line); border-radius:17px; background:var(--card-bg); }
+.manager-v3-content .sales-bd-item { min-height:60px; padding:13px 16px; border-bottom:1px solid var(--line); background:var(--card-bg); }
 .manager-v3-content .sales-bd-item:last-child { border-bottom:0; }
 .manager-v3-content .rv-stats { min-height:104px; padding-block:20px; }
 .manager-v3-content .rv-stat { display:flex; flex-direction:column; justify-content:center; gap:6px; }
@@ -3002,13 +3080,15 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-v3-content .class-allowed-products-list,
 .manager-v3-content .class-trainers-list { gap:8px; padding-block:4px 10px!important; border-bottom:0; }
 .manager-v3-content .class-allowed-products-list .filter-chip,
-.manager-v3-content .class-trainers-list .filter-chip { min-height:40px; padding:0 13px; gap:7px; border:1px solid var(--line); border-radius:999px; background:#fff; color:var(--ink-soft); }
+.manager-v3-content .class-trainers-list .filter-chip { min-height:40px; padding:0 13px; gap:7px; border:1px solid var(--line); border-radius:999px; background:var(--card-bg); color:var(--ink-soft); }
 .manager-v3-content .class-allowed-products-list .filter-chip.on,
-.manager-v3-content .class-trainers-list .filter-chip.on { border-color:var(--ink); background:var(--ink); color:#fff; }
+.manager-v3-content .class-trainers-list .filter-chip.on { border-color:var(--ink); background:var(--ink); color:var(--text-inverse); }
 .manager-v3-content .class-allowed-products-list .filter-chip.on::before,
 .manager-v3-content .class-trainers-list .filter-chip.on::before { content:"✓"; font-size:11px; font-weight:900; }
-.manager-v3-content .sheet .primary-btn:not(.danger) { border:1px solid var(--line-strong); background:#fff; color:var(--ink); box-shadow:none; }
-.manager-v3-content .sheet .primary-btn:not(.danger):hover { background:var(--surface); }
+.manager-v3-content .sheet .primary-btn:not(.danger),
+.admin-v3-content .sheet .primary-btn:not(.danger) { border:1px solid var(--line-strong); background:var(--card-bg); color:var(--ink); box-shadow:none; }
+.manager-v3-content .sheet .primary-btn:not(.danger):hover,
+.admin-v3-content .sheet .primary-btn:not(.danger):hover { background:var(--surface); }
 @media(max-width:380px){
   .manager-v3-content .structured-add-row{grid-template-columns:minmax(0,1fr) 68px}
   .manager-v3-content .row-actions{gap:3px}
@@ -3069,8 +3149,10 @@ a.membership-card { text-decoration: none; display: block; }
 /* No notification/loading state may grow into a full-screen black slab. */
 .toast,
 .manager-v3-content .toast,
+.admin-v3-content .toast,
 .error-toast,
-.manager-v3-content .error-toast {
+.manager-v3-content .error-toast,
+.admin-v3-content .error-toast {
   width: max-content !important;
   max-width: calc(100vw - 32px) !important;
   height: auto !important;
@@ -3119,13 +3201,14 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-v3-content .hist-title .profile-tag { background:var(--brand-soft); color:var(--brand-ink); border:1px solid color-mix(in srgb,var(--brand) 32%,transparent); }
 .manager-v3-content .hist-sub { margin-top:5px; font-size:13px; line-height:1.5; }
 
-.manager-v3-content .sales-summary { background:linear-gradient(145deg,#1c1d20,#303238); }
+.manager-v3-content .sales-summary { background:linear-gradient(145deg,var(--grad1),var(--grad2)); }
 .manager-v3-content .sales-bd-item { display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .manager-v3-content .sales-bd-item > :last-child { margin-left:auto; text-align:right; font-weight:800; color:var(--ink); }
 
 .manager-v3-content .review-stats > * { min-height:94px; padding:16px 10px; display:flex; flex-direction:column; justify-content:center; }
 .manager-v3-content .prog-add-sub-btn,
-.manager-v3-content .add-profile-btn { min-height:50px; border:1px solid var(--line-strong); border-radius:14px; background:var(--bg); color:var(--ink); }
+.manager-v3-content .add-profile-btn,
+.admin-v3-content .add-profile-btn { min-height:50px; border:1px solid var(--line-strong); border-radius:14px; background:var(--bg); color:var(--ink); }
 
 @media (max-width: 480px) {
   .cal-center-pick { min-width:116px; max-width:42vw; }
@@ -3222,46 +3305,46 @@ a.membership-card { text-decoration: none; display: block; }
 .progress-member-panel { margin:8px 20px 18px; padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--surface); }
 .progress-member-panel .menu-section-label { padding:0 0 8px; }
 .progress-member-select { position:relative; }
-.progress-member-select select { appearance:none; min-height:52px; padding-right:44px; background:#fff; }
+.progress-member-select select { appearance:none; min-height:52px; padding-right:44px; background:var(--card-bg); }
 .progress-member-select .select-chevron { position:absolute; right:16px; top:50%; translate:0 -52%; pointer-events:none; color:var(--ink-soft); font-size:20px; }
 .progress-add-record { width:100%; margin-top:10px; }
 .row-actions { display:flex; align-items:center; gap:6px; }
 .quiet-action.danger { color:var(--danger); }
 .structured-add-row { display:grid; grid-template-columns:minmax(0,1fr) 76px; gap:10px; align-items:stretch; }
 .structured-add-row .outline-action { min-height:52px; }
-.prog-group { overflow:hidden; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:0 8px 24px rgba(16,24,40,.035); }
+.prog-group { overflow:hidden; border:1px solid var(--line); border-radius:18px; background:var(--card-bg); box-shadow:0 8px 24px rgba(16,24,40,.035); }
 .prog-top-row { min-height:62px; padding:12px 14px; background:var(--surface); }
 .prog-top-name { font-size:17px; font-weight:760; }
 .prog-children { padding:0 14px 12px; }
 .prog-sub-row { min-height:58px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
 .prog-sub-name { min-width:0; font-weight:620; }
-.prog-add-sub-btn { min-height:48px; margin-top:10px; border:1px dashed var(--line-strong); border-radius:14px; background:#fff; color:var(--ink-soft); }
-.prog-hist-day { position:relative; padding:16px 14px; border:1px solid var(--line); border-radius:16px; background:#fff; }
+.prog-add-sub-btn { min-height:48px; margin-top:10px; border:1px dashed var(--line-strong); border-radius:14px; background:var(--card-bg); color:var(--ink-soft); }
+.prog-hist-day { position:relative; padding:16px 14px; border:1px solid var(--line); border-radius:16px; background:var(--card-bg); }
 .prog-hist + .prog-hist-day { margin-top:10px; }
 .prog-hist-actions { margin-top:12px; justify-content:flex-end; }
 @media (max-width:420px) { .structured-add-row { grid-template-columns:minmax(0,1fr) 68px; } }
 .staff-role { background:var(--brand-soft); color:var(--brand-ink); }
-.staff-role.owner { background:#eef0f3; color:var(--ink); }
+.staff-role.owner { background:var(--surface); color:var(--ink); }
 .staff-search-row { display:grid; grid-template-columns:minmax(0,1fr) 84px; gap:10px; }
 .staff-search-row .outline-action { min-height:52px; }
-.role-manage-sheet .grade-list { overflow:hidden; border:1px solid var(--line); border-radius:16px; background:#fff; }
+.role-manage-sheet .grade-list { overflow:hidden; border:1px solid var(--line); border-radius:16px; background:var(--card-bg); }
 .role-manage-sheet .grade-item { min-height:56px; padding:10px 14px; }
 .payment-register-sheet .input-field,
-.payment-register-sheet .date-picker-trigger { background:#fff; }
+.payment-register-sheet .date-picker-trigger { background:var(--card-bg); }
 .payment-register-sheet .pay-grid { gap:12px; }
 .payment-register-sheet .pay-field { display:grid; gap:7px; }
 .payment-register-sheet .pay-field > span { font-size:13px; font-weight:700; color:var(--ink-soft); }
 .payment-register-sheet .pay-total { margin-top:12px; padding:14px 16px; border:1px solid var(--line); border-radius:14px; background:var(--surface); text-align:right; }
-.sales-summary { background:linear-gradient(145deg,#202226,#32363c); }
+.sales-summary { background:linear-gradient(145deg,var(--grad1),var(--grad2)); }
 .sales-big-label { letter-spacing:-.01em; }
 .sales-big-value { line-height:1.12; }
-.sales-breakdown { overflow:hidden; border:1px solid var(--line); border-radius:17px; background:#fff; }
+.sales-breakdown { overflow:hidden; border:1px solid var(--line); border-radius:17px; background:var(--card-bg); }
 .sales-bd-item { min-height:60px; padding:13px 16px; border-bottom:1px solid var(--line); }
 .sales-bd-item:last-child { border-bottom:0; }
 .sales-bd-item .bd-label { color:var(--ink-soft); font-weight:650; }
 .sales-bd-item .bd-value { font-size:17px; font-weight:780; font-variant-numeric:tabular-nums; }
 .sales-export-sheet .csv-cols { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-.sales-export-sheet .csv-col { min-height:48px; display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:13px; background:#fff; }
+.sales-export-sheet .csv-col { min-height:48px; display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:13px; background:var(--card-bg); }
 .payment-detail-sheet .admin-row { min-height:54px; display:grid; grid-template-columns:92px minmax(0,1fr); align-items:center; border-bottom:1px solid var(--line); }
 .payment-detail-sheet .add-profile-actions { justify-content:flex-end; }
 .payment-detail-sheet .outline-action { min-width:120px; }
@@ -3271,20 +3354,20 @@ a.membership-card { text-decoration: none; display: block; }
 .goods-card-actions { flex:none; }
 .goods-card-actions .quiet-action { min-width:52px; }
 .room-card-list { display:grid; gap:12px; padding:14px 20px 120px; }
-.room-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:16px; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:0 8px 24px rgba(16,24,40,.035); }
+.room-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--card-bg); box-shadow:0 8px 24px rgba(16,24,40,.035); }
 .room-card-main { min-width:0; display:grid; gap:5px; padding:0; border:0; background:transparent; text-align:left; }
 .room-card-name { font-size:17px; font-weight:780; }
 .room-card-memo,.room-card-address { color:var(--ink-soft); font-size:13px; line-height:1.45; }
 .room-card-actions { align-self:start; }
 .room-edit-sheet .map-location-btn { width:100%; margin-top:10px; }
 .assignment-log-list { display:grid; gap:10px; padding:0 20px 120px; }
-.assignment-log { position:relative; padding:15px 16px 15px 19px; border:1px solid var(--line); border-radius:16px; background:#fff; overflow:hidden; }
+.assignment-log { position:relative; padding:15px 16px 15px 19px; border:1px solid var(--line); border-radius:16px; background:var(--card-bg); overflow:hidden; }
 .assignment-log::before { content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--brand); }
 .assignment-log.action-admin_cancel::before,.assignment-log.action-admin_free_cancel::before { background:var(--danger); }
 .assignment-log .hist-title { display:flex; flex-wrap:wrap; align-items:center; gap:7px; font-size:15px; }
 .assignment-action { padding:4px 8px; border-radius:999px; background:var(--brand-soft); color:var(--brand-ink); font-size:11px; font-weight:760; }
-.action-admin_cancel .assignment-action,.action-admin_free_cancel .assignment-action { background:#fff0f0; color:var(--danger); }
-.assignment-warning { color:#9a5b00; font-size:11px; font-weight:720; }
+.action-admin_cancel .assignment-action,.action-admin_free_cancel .assignment-action { background:var(--danger-soft); color:var(--danger); }
+.assignment-warning { color:var(--warning); font-size:11px; font-weight:720; }
 .assignment-log .hist-sub { margin-top:4px; color:var(--ink-soft); font-size:13px; line-height:1.45; }
 
 .mypage-shell .profile-block { border-bottom:1px solid var(--line); }
@@ -3333,7 +3416,7 @@ a.membership-card { text-decoration: none; display: block; }
   padding: 11px 13px;
   border-radius: 12px;
   background: var(--ink);
-  color: #fff;
+  color: var(--text-inverse);
 }
 
 /* Authentication mode is a calm segmented control, without the floating-card artifact. */
@@ -3449,7 +3532,7 @@ a.membership-card { text-decoration: none; display: block; }
   place-items: center;
   border-radius: 50%;
 }
-.manager-chrome-main > a { background: var(--ink); color: #fff; }
+.manager-chrome-main > a { background: var(--ink); color: var(--text-inverse); }
 .manager-chrome-main > a span,
 .admin-chrome > a span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 .manager-v3-content > .app-shell,
@@ -3482,11 +3565,11 @@ a.membership-card { text-decoration: none; display: block; }
   justify-content: space-between;
   padding: max(18px,env(safe-area-inset-top)) var(--page-gutter) 16px;
   background: var(--ink);
-  color: #fff;
+  color: var(--text-inverse);
 }
-.admin-chrome .app-chrome-title h1 { color: #fff; font-size: 26px; }
-.admin-chrome .app-back-btn { color: #fff; }
-.admin-chrome > a { border: 1px solid rgba(255,255,255,.22); color: #fff; }
+.admin-chrome .app-chrome-title h1 { color: var(--text-inverse); font-size: 26px; }
+.admin-chrome .app-back-btn { color: var(--text-inverse); }
+.admin-chrome > a { border: 1px solid rgba(255,255,255,.22); color: var(--text-inverse); }
 
 .loading-wrap {
   min-height: 250px;
@@ -3526,7 +3609,7 @@ a.membership-card { text-decoration: none; display: block; }
   text-align: center;
 }
 .system-state-code { color: var(--line-strong); font-size: 54px; line-height: 1; font-weight: 800; letter-spacing: -3px; }
-.system-state-mark { width: 62px; height: 62px; display: grid; place-items: center; border-radius: 50%; background: var(--ink); color: #fff; font-size: 30px; font-weight: 800; }
+.system-state-mark { width: 62px; height: 62px; display: grid; place-items: center; border-radius: 50%; background: var(--ink); color: var(--text-inverse); font-size: 30px; font-weight: 800; }
 .system-state-v2 h1 { margin-top: 22px; font-size: 23px; letter-spacing: -.025em; }
 .system-state-v2 p { margin: 10px 0 24px; color: var(--ink-soft); font-size: 14px; line-height: 1.6; }
 .system-state-v2 .app-button { width: min(100%,320px); margin-top: 8px; }
@@ -3554,13 +3637,13 @@ a.membership-card { text-decoration: none; display: block; }
 
 .member-home .hero-wrap,.member-home > .hero { margin: 0 var(--page-gutter); }
 .member-home .hero-wrap .hero { margin: 0; }
-.member-home .hero { min-height: 168px; height: 168px; padding: 22px; position: relative; overflow: hidden; flex-direction: column; justify-content: flex-end; border-radius: var(--radius-lg); background: linear-gradient(145deg,#1b1d20,#3b4146); color: #fff; animation: heroFade 420ms ease; }
+.member-home .hero { min-height: 168px; height: 168px; padding: 22px; position: relative; overflow: hidden; flex-direction: column; justify-content: flex-end; border-radius: var(--radius-lg); background: linear-gradient(145deg,var(--grad1),var(--grad2)); color: var(--text-inverse); animation: heroFade 420ms ease; }
 .member-home .hero::before { content: ''; position: absolute; width: 220px; height: 220px; right: -92px; top: -112px; border: 1px solid rgba(69,191,227,.32); border-radius: 50%; }
 .member-home .hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg,rgba(0,0,0,.18),transparent 68%); pointer-events: none; }
 .member-home .hero > * { position: relative; z-index: 1; }
-.member-home .hero .eyebrow { margin-bottom: 5px; color: #fff; opacity: .78; font-size: 11px; font-weight: 560; }
+.member-home .hero .eyebrow { margin-bottom: 5px; color: var(--text-inverse); opacity: .78; font-size: 11px; font-weight: 560; }
 .member-home .hero h1 { max-width: 82%; margin: 0; font-size: 20px; line-height: 1.32; font-weight: 700; letter-spacing: -.025em; }
-.member-home .hero .chip { width: fit-content; max-width: 82%; margin-top: 10px; padding: 5px 9px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.14); color: #fff; font-size: 10.5px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.member-home .hero .chip { width: fit-content; max-width: 82%; margin-top: 10px; padding: 5px 9px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.14); color: var(--text-inverse); font-size: 10.5px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .member-home .hero .deco { display: none; }
 .member-home .banner-dots { right: 18px; bottom: 16px; }
 @keyframes heroFade { from { opacity: .45; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
@@ -3575,7 +3658,7 @@ a.membership-card { text-decoration: none; display: block; }
 
 .home-class-list { padding: 0 var(--page-gutter) calc(var(--floating-nav-clearance) + 24px); }
 .home-class-row { min-height: 116px; display: grid; grid-template-columns: 112px minmax(0,1fr); border-bottom: 1px solid var(--line); color: var(--ink); }
-.home-class-photo { width: 112px; min-height: 92px; margin: 12px 0; display: grid; place-items: center; overflow: hidden; border-radius: var(--radius-md); background: linear-gradient(145deg,#dfeff4,#b9dce7); color: var(--brand-ink); }
+.home-class-photo { width: 112px; min-height: 92px; margin: 12px 0; display: grid; place-items: center; overflow: hidden; border-radius: var(--radius-md); background: linear-gradient(145deg,var(--brand-soft),color-mix(in srgb, var(--brand) 42%, var(--brand-soft))); color: var(--brand-ink); }
 .photo-fallback { position: relative; }
 .photo-fallback::before { content: ''; position: absolute; width: 90%; aspect-ratio: 1; right: -42%; bottom: -48%; border: 1px solid rgba(8,122,156,.22); border-radius: 50%; }
 .photo-fallback > svg { position: relative; z-index: 1; }
@@ -3589,7 +3672,7 @@ a.membership-card { text-decoration: none; display: block; }
 .discovery-page-v2 .search-header .side,.category-page-v2 .back-header .side { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
 .discovery-page-v2 .search-input { min-width: 0; height: 50px; padding: 0 15px; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--surface); font-size: 14px; }
 .discovery-page-v2 .search-input:focus { border-color: var(--brand); outline: 0; }
-.discovery-page-v2 .search-go { min-width: 56px; height: 44px; padding: 0 12px; border: 0; border-radius: var(--radius-md); background: var(--ink); color: #fff; font-size: 12.5px; font-weight: 650; }
+.discovery-page-v2 .search-go { min-width: 56px; height: 44px; padding: 0 12px; border: 0; border-radius: var(--radius-md); background: var(--ink); color: var(--text-inverse); font-size: 12.5px; font-weight: 650; }
 .search-suggestions { padding: 34px var(--page-gutter) 130px; }
 .search-suggestion-title { font-size: 16px; font-weight: 680; }
 .search-suggestion-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
@@ -3618,7 +3701,7 @@ a.membership-card { text-decoration: none; display: block; }
 .category-page-v2 .cat-center-card { min-height: 132px; margin: 0; padding: 16px 0; display: grid; grid-template-columns: 112px minmax(0,1fr); gap: 15px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
 .category-page-v2 .cat-center-media { width: 112px; height: 100px; overflow: hidden; border-radius: var(--radius-md); }
 .category-page-v2 .cat-center-photo,.category-page-v2 .cat-center-photo-empty { width: 100%; height: 100%; object-fit: cover; border-radius: 0; }
-.category-page-v2 .cat-center-photo-empty { display: grid; place-items: center; position: relative; overflow: hidden; background: linear-gradient(145deg,#dfeff4,#b9dce7); color: var(--brand-ink); }
+.category-page-v2 .cat-center-photo-empty { display: grid; place-items: center; position: relative; overflow: hidden; background: linear-gradient(145deg,var(--brand-soft),color-mix(in srgb, var(--brand) 42%, var(--brand-soft))); color: var(--brand-ink); }
 .category-page-v2 .cat-center-body { min-width: 0; padding-top: 2px; }
 .cat-center-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .category-page-v2 .cat-center-name { min-width: 0; color: var(--ink); font-size: 17px; line-height: 1.35; font-weight: 680; }
@@ -3648,7 +3731,7 @@ a.membership-card { text-decoration: none; display: block; }
 .booking-step span { width: 27px; height: 27px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--bg); font-size: 11px; font-weight: 700; }
 .booking-step b { font-weight: 560; white-space: nowrap; }
 .booking-step.active,.booking-step.complete { color: var(--ink); }
-.booking-step.active span { border-color: var(--brand); background: var(--brand); color: #063d4d; }
+.booking-step.active span { border-color: var(--brand); background: var(--brand); color: var(--brand-ink-strong); }
 .booking-step.complete span { border-color: var(--brand); color: var(--brand-ink); }
 .booking-steps > i { flex: 1; height: 1px; margin: 13px 3px 0; background: var(--line); }
 
@@ -3671,7 +3754,7 @@ a.membership-card { text-decoration: none; display: block; }
 .member-reservation .cal-cell.selected .daynum-wrap { background: var(--brand-soft) !important; }
 .member-reservation .cal-cell.selected .cal-daynum { color: var(--brand-ink) !important; font-weight: 720; }
 .member-reservation .cal-dots { height: 6px; display: flex; justify-content: center; }
-.member-reservation .cal-dot { width: 4px; height: 4px; border-radius: 50%; background: #9a9da0 !important; }
+.member-reservation .cal-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--text-dim) !important; }
 .member-reservation .cal-dot.mine { width: 5px; height: 5px; background: var(--brand) !important; }
 .member-reservation .cal-cell.selected .cal-dot { opacity: 0; }
 
@@ -3695,7 +3778,7 @@ a.membership-card { text-decoration: none; display: block; }
 .member-reservation .class-right { min-width: 64px; }
 .member-reservation .class-count { color: var(--ink-soft); font-size: 11px; font-weight: 600; }
 .member-reservation .mini-btn { min-width: 48px; min-height: 40px; padding: 0 8px; border: 0; background: transparent; color: var(--ink); font-size: 12px; font-weight: 680; }
-.member-reservation .mini-btn:not(.done) { border-radius: 999px; background: var(--ink); color: #fff; }
+.member-reservation .mini-btn:not(.done) { border-radius: 999px; background: var(--ink); color: var(--text-inverse); }
 
 .member-my-reservations .back-header { padding: 32px var(--page-gutter) 18px; }
 .member-my-reservations .back-header .title { margin-right: auto; font-size: 30px; line-height: 1.08; font-weight: 720; letter-spacing: -.035em; }
@@ -3734,7 +3817,7 @@ a.membership-card { text-decoration: none; display: block; }
 .center-detail-v2 .center-detail-head {
   position: absolute; top: 0; left: 0; right: 0; z-index: 20;
   padding-top: max(18px,env(safe-area-inset-top));
-  color: #fff; background: linear-gradient(180deg,rgba(0,0,0,.44),transparent);
+  color: var(--text-inverse); background: linear-gradient(180deg,rgba(0,0,0,.44),transparent);
 }
 .center-detail-v2 .center-detail-head .title { opacity: 0; }
 .center-detail-v2 .center-hero { padding: 0 0 24px; display: block; }
@@ -3762,7 +3845,7 @@ a.membership-card { text-decoration: none; display: block; }
   border: 0; background: transparent; backdrop-filter: none; box-shadow: none;
 }
 .center-detail-v2 .center-bar-btn { min-height: 52px; padding: 0 12px; border-radius: var(--radius-md); box-shadow: 0 5px 18px rgba(20,20,20,.12); }
-.center-detail-v2 .center-bar-btn.buy { border: 1px solid var(--line); background: #fff; }
+.center-detail-v2 .center-bar-btn.buy { border: 1px solid var(--line); background: var(--card-bg); }
 
 .commerce-page .back-header,
 .purchase-page-v2 .back-header { justify-content: flex-start; }
@@ -3776,19 +3859,19 @@ a.membership-card { text-decoration: none; display: block; }
 .commerce-page .cart-list { margin: 0 var(--page-gutter); border-top: 1px solid var(--line); }
 .commerce-page .cart-row-wrap { border-bottom: 1px solid var(--line); }
 .commerce-page .cart-row { padding: 18px 2px 12px; border: 0; }
-.commerce-product-mark { width: 50px; height: 50px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 14px; background: var(--ink); color: #fff; font-size: 15px; font-weight: 800; }
+.commerce-product-mark { width: 50px; height: 50px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 14px; background: var(--ink); color: var(--text-inverse); font-size: 15px; font-weight: 800; }
 .commerce-page .cart-name { font-size: 16px; font-weight: 750; }
 .commerce-page .cart-price { margin-top: 6px; color: var(--ink); font-size: 14px; }
 .commerce-page .cart-sizes { padding: 0 0 16px 62px; }
 .commerce-label { margin-top: 10px; color: var(--ink); font-size: 17px; }
 .commerce-code-row { display: flex; gap: 8px; padding: 0 var(--page-gutter); }
 .commerce-page .coupon-list { margin: 10px var(--page-gutter) 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-.commerce-page .coupon-item { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: #fff; }
+.commerce-page .coupon-item { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: var(--card-bg); }
 .commerce-page .coupon-item:last-child { border-bottom: 0; }
 .commerce-page .pay-methods { margin: 0 var(--page-gutter); padding: 0; border-top: 1px solid var(--line); }
 .commerce-page .pay-method { min-height: 64px; font-size: 15px; }
 .commerce-page .pay-method-emoji { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--surface); }
-.commerce-page .checkout-order { margin: 0 var(--page-gutter); padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+.commerce-page .checkout-order { margin: 0 var(--page-gutter); padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--card-bg); }
 .commerce-page .checkout-order-center { margin-bottom: 12px; }
 .commerce-page .checkout-order-name,
 .commerce-page .checkout-order-price { font-size: 17px; }
@@ -3813,14 +3896,14 @@ a.membership-card { text-decoration: none; display: block; }
 .commerce-empty .primary-btn { width: auto; min-width: 154px; margin-top: 22px; }
 .commerce-empty-mark { width: 34px; height: 34px; display: grid; place-items: center; border: 1.5px solid var(--brand); border-radius: 10px; color: var(--brand-ink); font-size: 12px; font-weight: 700; }
 .commerce-page .checkout-done-icon { width: 52px; height: 52px; margin: 0 auto 24px; display: grid; place-items: center; border-radius: 50%; background: var(--brand); box-shadow: 0 0 0 8px var(--brand-soft); }
-.commerce-page .checkout-done-icon::after { content: "✓"; color: #fff; font-size: 25px; font-weight: 700; }
+.commerce-page .checkout-done-icon::after { content: "✓"; color: var(--text-inverse); font-size: 25px; font-weight: 700; }
 /* Batch 6: member communication, account and authentication surfaces */
 .member-notifications,.member-inquiries,.mypage-shell,.account-page-v2{background:var(--bg)}
 .noti-head,.inquiry-head,.mypage-titlebar{display:flex;align-items:flex-end;justify-content:space-between;min-height:96px;padding:34px var(--page-gutter) 20px;border-bottom:1px solid var(--line)}
 .noti-head h1,.inquiry-head h1,.mypage-titlebar h1{font-size:28px;line-height:1.1;font-weight:800;letter-spacing:-.7px}
 .noti-head a,.noti-head button{min-height:40px;padding:0 4px;color:var(--brand-ink);font-size:13px;font-weight:700}
 .inquiry-head p{margin-top:6px;color:var(--ink-soft);font-size:12px}
-.inquiry-head .primary-btn{min-height:40px;border-radius:999px;background:var(--ink);color:#fff}
+.inquiry-head .primary-btn{min-height:40px;border-radius:999px;background:var(--ink);color:var(--text-inverse)}
 .member-notifications .noti-list,.member-inquiries .thread-list{padding:0 var(--page-gutter) 112px}
 .member-notifications .noti-row{position:relative;min-height:92px;padding:16px 0;gap:14px;background:transparent!important;margin:0!important;border-bottom:1px solid var(--line)}
 .member-notifications .noti-emoji{display:grid;place-items:center;flex:0 0 48px;width:48px;height:48px;border-radius:15px;background:var(--surface);color:var(--ink)}
@@ -3830,7 +3913,7 @@ a.membership-card { text-decoration: none; display: block; }
 .member-inquiries .thread-row{min-height:84px;padding:14px 0;border-radius:0;background:transparent;border-bottom:1px solid var(--line);box-shadow:none}
 .member-inquiries .thread-avatar{display:grid;place-items:center;width:48px;height:48px;border-radius:16px;background:var(--surface);font-weight:750}
 .mypage-shell .profile-block{padding:28px var(--page-gutter) 24px;border-bottom:1px solid var(--line)}
-.mypage-shell .avatar{width:64px;height:64px;border-radius:22px;background:var(--ink);color:#fff;font-size:25px;font-weight:800}
+.mypage-shell .avatar{width:64px;height:64px;border-radius:22px;background:var(--ink);color:var(--text-inverse);font-size:25px;font-weight:800}
 .mypage-shell .profile-name{font-size:22px;font-weight:800;letter-spacing:-.4px}.mypage-shell .profile-edit{margin-top:6px;font-size:13px;font-weight:650;color:var(--ink-soft)}
 .mypage-shell .membership-card{margin-inline:var(--page-gutter);border-radius:20px;box-shadow:none}.mypage-shell .membership-card .count{font-size:24px}.mypage-shell .membership-card .progress-track{height:7px}
 .mypage-shell .list-row{min-height:58px;margin:0 var(--page-gutter);padding-inline:2px;background:transparent;border-bottom:1px solid var(--line)}
@@ -3840,13 +3923,13 @@ a.membership-card { text-decoration: none; display: block; }
 .account-page-v2 .add-profile-btn{min-height:52px;margin:18px var(--page-gutter);border:1px solid var(--line);border-radius:16px;background:transparent;color:var(--ink)}
 .settings-page-v2 .noti-row{min-height:76px;padding:15px 2px;background:transparent;border-bottom:1px solid var(--line)}
 .auth-page-v2{display:block;min-height:100dvh;padding-bottom:0;background:var(--ink)}
-.auth-scene{position:relative;min-height:278px;padding:max(24px,env(safe-area-inset-top)) 22px 36px;overflow:hidden;color:#fff;background:var(--ink)}
+.auth-scene{position:relative;min-height:278px;padding:max(24px,env(safe-area-inset-top)) 22px 36px;overflow:hidden;color:var(--text-inverse);background:var(--ink)}
 .auth-scene:before,.auth-scene:after{content:"";position:absolute;border:1px solid rgba(255,255,255,.14);border-radius:50%}.auth-scene:before{width:250px;height:250px;right:-88px;top:18px}.auth-scene:after{width:145px;height:145px;right:-32px;top:74px}
-.auth-home-link{position:relative;z-index:2;color:#fff;font-size:13px;font-weight:750}.auth-scene-copy{position:relative;z-index:2;margin-top:24px}.auth-scene-copy>span{color:rgba(255,255,255,.55);font-size:10px;font-weight:750;letter-spacing:1.4px}.auth-scene-copy h1{margin-top:10px;font-size:27px;line-height:1.25;letter-spacing:-.9px}.auth-scene-copy p{margin-top:9px;color:rgba(255,255,255,.68);font-size:13px;line-height:1.55}
+.auth-home-link{position:relative;z-index:2;color:var(--text-inverse);font-size:13px;font-weight:750}.auth-scene-copy{position:relative;z-index:2;margin-top:24px}.auth-scene-copy>span{color:rgba(255,255,255,.55);font-size:10px;font-weight:750;letter-spacing:1.4px}.auth-scene-copy h1{margin-top:10px;font-size:27px;line-height:1.25;letter-spacing:-.9px}.auth-scene-copy p{margin-top:9px;color:rgba(255,255,255,.68);font-size:13px;line-height:1.55}
 .auth-activities{position:absolute;z-index:2;right:18px;bottom:28px;display:flex;gap:6px}.auth-activities>div{display:grid;place-items:center;width:48px;height:48px;border:1px solid rgba(255,255,255,.13);border-radius:15px;background:rgba(255,255,255,.06)}.auth-activities span{display:none}
 .auth-panel{position:relative;z-index:3;min-height:calc(100dvh - 254px);margin-top:-24px;padding:18px 20px max(32px,env(safe-area-inset-bottom));border-radius:26px 26px 0 0;background:var(--bg)}
 .auth-panel .mode-tabs{display:flex;width:190px;margin:0 0 22px;gap:20px;background:transparent}.auth-panel .mode-tab{min-height:34px;padding:0;border-bottom:2px solid transparent;color:var(--ink-soft);font-size:13px;font-weight:650}.auth-panel .mode-tab.on{border-bottom-color:var(--ink);color:var(--ink);background:transparent}.auth-panel-heading{margin-bottom:20px}.auth-panel-heading h2{font-size:23px;letter-spacing:-.6px}.auth-panel-heading p{margin-top:6px;color:var(--ink-soft);font-size:12.5px}
-.auth-panel .role-select{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}.auth-panel .role-btn{min-height:92px;padding:13px 10px;display:grid;grid-template-columns:36px 1fr;grid-template-rows:auto auto;column-gap:9px;text-align:left;border:1px solid var(--line);border-radius:15px;background:#fff}.auth-panel .role-btn.on{border:2px solid var(--ink);background:var(--surface)}.auth-panel .role-emoji{grid-row:1/3;display:grid;place-items:center;width:36px;height:36px;margin:0;border-radius:12px;background:var(--surface)}
+.auth-panel .role-select{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}.auth-panel .role-btn{min-height:92px;padding:13px 10px;display:grid;grid-template-columns:36px 1fr;grid-template-rows:auto auto;column-gap:9px;text-align:left;border:1px solid var(--line);border-radius:15px;background:var(--card-bg)}.auth-panel .role-btn.on{border:2px solid var(--ink);background:var(--surface)}.auth-panel .role-emoji{grid-row:1/3;display:grid;place-items:center;width:36px;height:36px;margin:0;border-radius:12px;background:var(--surface)}
 .auth-panel .input-field{min-height:52px;margin-bottom:8px;padding-left:2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}.auth-panel .login-submit{margin-top:12px;border-radius:14px}.auth-panel .social-btn{min-height:50px;border-radius:14px;box-shadow:none}
 .auth-account-page{min-height:100dvh}.auth-account-page .back-header+*{margin-top:18px}.register-center-page-v2 .center-registration-form{margin-inline:var(--page-gutter)}
 @media(max-width:420px){.auth-panel{padding-inline:16px}.noti-head,.inquiry-head,.mypage-titlebar{min-height:90px}.auth-activities{opacity:.72}}
@@ -3854,7 +3937,7 @@ a.membership-card { text-decoration: none; display: block; }
 /* Batch 7A: manager home, members, notifications and more */
 .manager-home-v2{padding-bottom:calc(var(--floating-nav-clearance) + 28px);background:var(--bg)}
 .manager-home-v2 .mgr-mode-bar{padding:22px var(--page-gutter) 14px;border-bottom:0}.manager-home-v2 .mgr-mode-label{font-size:13px;font-weight:750}.manager-home-v2 .mgr-mode-switch{min-height:40px;display:inline-flex;align-items:center;padding:0 13px;border:1px solid var(--line);border-radius:999px;font-size:12px;font-weight:650}
-.manager-home-v2 .center-switcher{padding:0 var(--page-gutter) 18px;gap:8px}.manager-home-v2 .center-chip{min-height:44px;padding:0 15px;border:1px solid var(--line);border-radius:14px;background:transparent}.manager-home-v2 .center-chip.on{border-color:var(--ink);background:var(--ink);color:#fff}
+.manager-home-v2 .center-switcher{padding:0 var(--page-gutter) 18px;gap:8px}.manager-home-v2 .center-chip{min-height:44px;padding:0 15px;border:1px solid var(--line);border-radius:14px;background:transparent}.manager-home-v2 .center-chip.on{border-color:var(--ink);background:var(--ink);color:var(--text-inverse)}
 .manager-today-overview{margin:0 var(--page-gutter) 22px;padding:20px 0;border-block:1px solid var(--line)}
 .manager-today-head{display:flex;align-items:end;justify-content:space-between;margin-bottom:16px}.manager-today-head div{display:flex;align-items:baseline;gap:8px}.manager-today-head span{font-size:17px;font-weight:750}.manager-today-head b,.manager-today-head>a{color:var(--ink-soft);font-size:11px;font-weight:650}
 .manager-today-metrics{display:grid;grid-template-columns:repeat(3,1fr)}.manager-today-metrics>a{padding:0 14px;border-left:1px solid var(--line);color:var(--ink)}.manager-today-metrics>a:first-child{padding-left:0;border-left:0}.manager-today-metrics span{display:block;color:var(--ink-soft);font-size:11px}.manager-today-metrics b{display:block;margin-top:5px;font-size:24px;letter-spacing:-.7px}
@@ -3880,7 +3963,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-classes-v2 .manager-cal-header .cal-month-nav{width:auto;min-width:0;display:flex;align-items:center;gap:2px}
 .manager-classes-v2 .manager-cal-header .cal-title{min-width:112px;margin:0;text-align:center;font-size:19px;line-height:1;font-weight:750;letter-spacing:-.4px;white-space:nowrap}
 .manager-classes-v2 .manager-cal-header .cal-nav-btn{width:40px;height:40px;flex:0 0 40px;border:0;border-radius:50%;background:transparent;color:var(--ink);font-size:25px;font-weight:400}.manager-classes-v2 .manager-cal-header .cal-nav-btn:active{background:var(--surface)}
-.manager-center-select{position:relative;min-width:0;max-width:146px;height:40px;display:flex;align-items:center;padding:0 27px 0 11px;border:1px solid var(--line);border-radius:999px;background:#fff}
+.manager-center-select{position:relative;min-width:0;max-width:146px;height:40px;display:flex;align-items:center;padding:0 27px 0 11px;border:1px solid var(--line);border-radius:999px;background:var(--card-bg)}
 .manager-center-select:after{content:"";position:absolute;right:12px;top:50%;width:6px;height:6px;border-right:1.5px solid var(--ink-soft);border-bottom:1.5px solid var(--ink-soft);transform:translateY(-68%) rotate(45deg);pointer-events:none}
 .manager-center-select select{width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:12.5px;font-weight:680;text-overflow:ellipsis;appearance:none;cursor:pointer}
 .manager-classes-v2>.cal-weekdays{border-bottom:1px solid var(--line)}
@@ -3902,27 +3985,86 @@ a.membership-card { text-decoration: none; display: block; }
 
 /* Batch 7C: manager detail surfaces — shared hierarchy without replacing feature logic. */
 .manager-v3-content>.app-shell:not(.manager-home-v2):not(.manager-members-v2):not(.manager-notifications-v2):not(.manager-classes-v2){padding-bottom:124px;background:var(--bg)}
-.manager-v3-content .center-switcher{margin:0;padding:12px var(--page-gutter);gap:8px;border-bottom:1px solid var(--line);background:transparent;scrollbar-width:none}.manager-v3-content .center-switcher::-webkit-scrollbar{display:none}
-.manager-v3-content .center-chip{min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink-soft);font-size:12px;font-weight:680;box-shadow:none}.manager-v3-content .center-chip.on{border-color:var(--ink);background:var(--ink);color:#fff}
-.manager-v3-content .menu-section-label{margin:0;padding:24px var(--page-gutter) 9px;color:var(--ink-soft);font-size:11px;font-weight:700;letter-spacing:.02em}
+.manager-v3-content .center-switcher,
+.admin-v3-content .center-switcher {margin:0;padding:12px var(--page-gutter);gap:8px;border-bottom:1px solid var(--line);background:transparent;scrollbar-width:none}.manager-v3-content .center-switcher::-webkit-scrollbar,
+.admin-v3-content .center-switcher::-webkit-scrollbar {display:none}
+.manager-v3-content .center-chip{min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink-soft);font-size:12px;font-weight:680;box-shadow:none}.manager-v3-content .center-chip.on{border-color:var(--ink);background:var(--ink);color:var(--text-inverse)}
+.manager-v3-content .menu-section-label,
+.admin-v3-content .menu-section-label {margin:0;padding:24px var(--page-gutter) 9px;color:var(--ink-soft);font-size:11px;font-weight:700;letter-spacing:.02em}
 .manager-v3-content .mem-filters,.manager-v3-content .perm-tabs{min-height:52px;margin:0;padding:4px var(--page-gutter) 10px;display:flex;align-items:center;gap:16px;overflow-x:auto;border-bottom:1px solid var(--line);scrollbar-width:none}.manager-v3-content .mem-filters::-webkit-scrollbar,.manager-v3-content .perm-tabs::-webkit-scrollbar{display:none}
 .manager-v3-content .filter-chip,.manager-v3-content .perm-tab{min-height:40px;padding:0 2px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--ink-soft);font-size:13px;font-weight:650;white-space:nowrap}.manager-v3-content .filter-chip.on,.manager-v3-content .perm-tab.on{border-bottom-color:var(--ink);background:transparent;color:var(--ink)}
-.manager-v3-content .input-field,.manager-v3-content .date-input{min-height:50px;padding:0 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);font-size:14px;box-shadow:none}.manager-v3-content textarea.input-field{min-height:116px;padding-block:13px;line-height:1.6;resize:vertical}
-.manager-v3-content .perm-guide{margin:12px var(--page-gutter);padding:13px 0 13px 14px;border:0;border-left:2px solid var(--brand);border-radius:0;background:transparent;color:var(--ink-soft);font-size:12px;line-height:1.6}
-.manager-v3-content .daylist-empty,.manager-v3-content .empty-note{min-height:180px;padding:54px var(--page-gutter);display:grid;place-items:center;color:var(--ink-soft);font-size:13px;text-align:center}
-.manager-v3-content .pass-list,.manager-v3-content .order-list,.manager-v3-content .announce-list,.manager-v3-content .mgr-review-list,.manager-v3-content .profile-list,.manager-v3-content .sales-list,.manager-v3-content .thread-list{margin:0;padding:0 var(--page-gutter) 124px}
-.manager-v3-content .pass-card,.manager-v3-content .order-row,.manager-v3-content .announce-item,.manager-v3-content .mgr-review,.manager-v3-content .profile-item,.manager-v3-content .sales-row,.manager-v3-content .thread-row{margin:0;padding:16px 2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none}
-.manager-v3-content .pass-name,.manager-v3-content .order-name,.manager-v3-content .announce-title,.manager-v3-content .sales-name,.manager-v3-content .profile-item-name,.manager-v3-content .thread-name{color:var(--ink);font-size:15px;font-weight:730;line-height:1.4}.manager-v3-content .pass-sub,.manager-v3-content .order-meta,.manager-v3-content .announce-date,.manager-v3-content .sales-row-sub,.manager-v3-content .profile-item-sub,.manager-v3-content .thread-preview,.manager-v3-content .thread-time{margin-top:5px;color:var(--ink-soft);font-size:11.5px;line-height:1.5}
-.manager-v3-content .pass-rule,.manager-v3-content .copy-select-row,.manager-v3-content .admin-row{min-height:54px;padding:13px 2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}.manager-v3-content .pass-rule:last-child,.manager-v3-content .admin-row:last-child{border-bottom:0}
+.manager-v3-content .input-field,
+.admin-v3-content .input-field,
+.manager-v3-content .date-input {min-height:50px;padding:0 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);font-size:14px;box-shadow:none}.manager-v3-content textarea.input-field,
+.admin-v3-content textarea.input-field {min-height:116px;padding-block:13px;line-height:1.6;resize:vertical}
+.manager-v3-content .perm-guide,
+.admin-v3-content .perm-guide {margin:12px var(--page-gutter);padding:13px 0 13px 14px;border:0;border-left:2px solid var(--brand);border-radius:0;background:transparent;color:var(--ink-soft);font-size:12px;line-height:1.6}
+.manager-v3-content .daylist-empty,
+.admin-v3-content .daylist-empty,
+.manager-v3-content .empty-note {min-height:180px;padding:54px var(--page-gutter);display:grid;place-items:center;color:var(--ink-soft);font-size:13px;text-align:center}
+.manager-v3-content .pass-list,
+.manager-v3-content .order-list,
+.manager-v3-content .announce-list,
+.manager-v3-content .mgr-review-list,
+.manager-v3-content .profile-list,
+.admin-v3-content .profile-list,
+.manager-v3-content .sales-list,
+.manager-v3-content .thread-list {margin:0;padding:0 var(--page-gutter) 124px}
+.manager-v3-content .pass-card,
+.manager-v3-content .order-row,
+.manager-v3-content .announce-item,
+.manager-v3-content .mgr-review,
+.manager-v3-content .profile-item,
+.admin-v3-content .profile-item,
+.manager-v3-content .sales-row,
+.manager-v3-content .thread-row {margin:0;padding:16px 2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none}
+.manager-v3-content .pass-name,
+.manager-v3-content .order-name,
+.manager-v3-content .announce-title,
+.manager-v3-content .sales-name,
+.manager-v3-content .profile-item-name,
+.admin-v3-content .profile-item-name,
+.manager-v3-content .thread-name {color:var(--ink);font-size:15px;font-weight:730;line-height:1.4}.manager-v3-content .pass-sub,
+.manager-v3-content .order-meta,
+.manager-v3-content .announce-date,
+.manager-v3-content .sales-row-sub,
+.manager-v3-content .profile-item-sub,
+.admin-v3-content .profile-item-sub,
+.manager-v3-content .thread-preview,
+.manager-v3-content .thread-time {margin-top:5px;color:var(--ink-soft);font-size:11.5px;line-height:1.5}
+.manager-v3-content .pass-rule,
+.manager-v3-content .copy-select-row,
+.manager-v3-content .admin-row,
+.admin-v3-content .admin-row {min-height:54px;padding:13px 2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}.manager-v3-content .pass-rule:last-child,
+.manager-v3-content .admin-row:last-child,
+.admin-v3-content .admin-row:last-child {border-bottom:0}
 .manager-v3-content .set-section-title{padding:24px var(--page-gutter) 8px;color:var(--ink-soft);font-size:11px;font-weight:700}.manager-v3-content .settings-wrap{padding-bottom:124px}.manager-v3-content .set-row{min-height:68px;margin:0 var(--page-gutter);padding:15px 2px;border:0;border-bottom:1px solid var(--line);background:transparent}.manager-v3-content .set-label{color:var(--ink);font-size:14px;font-weight:600;line-height:1.5}.manager-v3-content .set-inline{min-height:42px;gap:8px}.manager-v3-content .set-num,.manager-v3-content .set-time{min-height:42px;border:1px solid var(--line);border-radius:11px;background:var(--surface)}
-.manager-v3-content .switch{width:50px;height:30px;flex:0 0 50px;padding:3px;border:0;border-radius:999px;background:var(--line-strong)}.manager-v3-content .switch .knob{width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.18)}.manager-v3-content .switch.on{background:var(--brand)}.manager-v3-content .switch.on .knob{transform:translateX(20px)}
-.manager-v3-content .sheet{max-width:480px;max-height:min(88dvh,760px);padding:12px var(--page-gutter) max(28px,env(safe-area-inset-bottom));border-radius:26px 26px 0 0;background:var(--bg)}.manager-v3-content .sheet:before{content:"";display:block;width:38px;height:4px;margin:0 auto 13px;border-radius:99px;background:var(--line-strong)}.manager-v3-content .sheet-title{position:sticky;top:-12px;z-index:3;margin:0 calc(var(--page-gutter) * -1) 14px;padding:12px var(--page-gutter) 14px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--bg) 94%,transparent);font-size:18px;text-align:left;backdrop-filter:blur(14px)}
-.manager-v3-content .add-profile-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:18px}.manager-v3-content .primary-btn,.manager-v3-content .ghost-btn,.manager-v3-content .danger-btn{min-height:48px;border-radius:14px;font-size:14px;font-weight:730}.manager-v3-content .primary-btn{background:var(--ink);color:#fff}.manager-v3-content .ghost-btn{border:1px solid var(--line);background:transparent;color:var(--ink)}
+.manager-v3-content .switch,
+.admin-v3-content .switch {width:50px;height:30px;flex:0 0 50px;padding:3px;border:0;border-radius:999px;background:var(--line-strong)}.manager-v3-content .switch .knob,
+.admin-v3-content .switch .knob {width:24px;height:24px;border-radius:50%;background:var(--card-bg);box-shadow:0 1px 4px rgba(0,0,0,.18)}.manager-v3-content .switch.on,
+.admin-v3-content .switch.on {background:var(--brand)}.manager-v3-content .switch.on .knob,
+.admin-v3-content .switch.on .knob {transform:translateX(20px)}
+.manager-v3-content .sheet,
+.admin-v3-content .sheet {max-width:480px;max-height:min(88dvh,760px);padding:12px var(--page-gutter) max(28px,env(safe-area-inset-bottom));border-radius:26px 26px 0 0;background:var(--bg)}.manager-v3-content .sheet:before,
+.admin-v3-content .sheet:before {content:"";display:block;width:38px;height:4px;margin:0 auto 13px;border-radius:99px;background:var(--line-strong)}.manager-v3-content .sheet-title,
+.admin-v3-content .sheet-title {position:sticky;top:-12px;z-index:3;margin:0 calc(var(--page-gutter) * -1) 14px;padding:12px var(--page-gutter) 14px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--bg) 94%,transparent);font-size:18px;text-align:left;backdrop-filter:blur(14px)}
+.manager-v3-content .add-profile-actions,
+.admin-v3-content .add-profile-actions {display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:18px}.manager-v3-content .primary-btn,
+.admin-v3-content .primary-btn,
+.manager-v3-content .ghost-btn,
+.admin-v3-content .ghost-btn,
+.manager-v3-content .danger-btn,
+.admin-v3-content .danger-btn {min-height:48px;border-radius:14px;font-size:14px;font-weight:730}.manager-v3-content .primary-btn,
+.admin-v3-content .primary-btn {background:var(--ink);color:var(--text-inverse)}.manager-v3-content .ghost-btn,
+.admin-v3-content .ghost-btn {border:1px solid var(--line);background:transparent;color:var(--ink)}
 .manager-v3-content .hol-list,.manager-v3-content .prog-wrap,.manager-v3-content .prog-rec-wrap,.manager-v3-content .prog-hist{padding-inline:var(--page-gutter)}.manager-v3-content .hol-main,.manager-v3-content .prog-top-row,.manager-v3-content .prog-sub-row,.manager-v3-content .prog-hist-day{padding:15px 2px;border-bottom:1px solid var(--line);background:transparent}
 .manager-v3-content .rv-stats{margin:12px var(--page-gutter) 8px;padding:18px 0;display:grid;grid-template-columns:repeat(3,1fr);border-block:1px solid var(--line);border-radius:0;background:transparent}.manager-v3-content .rv-stat{padding:0 12px;border-left:1px solid var(--line)}.manager-v3-content .rv-stat:first-child{border-left:0}.manager-v3-content .rv-stat-value{font-size:21px;font-weight:800}.manager-v3-content .rv-stat-label{margin-top:5px;font-size:10.5px;color:var(--ink-soft)}
-.manager-v3-content .date-range{padding:10px var(--page-gutter) 16px;gap:8px}.manager-v3-content .sales-summary{margin:0 var(--page-gutter) 20px;padding:20px;border:0;border-radius:20px;background:var(--ink);color:#fff;box-shadow:none}.manager-v3-content .sales-summary *{color:inherit}.manager-v3-content .sales-big-value{font-size:30px;font-weight:820}.manager-v3-content .sales-breakdown{margin:0 var(--page-gutter);border-top:1px solid var(--line)}.manager-v3-content .sales-bd-item{min-height:56px;padding:14px 2px;border-bottom:1px solid var(--line);background:transparent}
-.manager-v3-content .toast{bottom:112px}.manager-v3-content .error-toast{margin-inline:var(--page-gutter);border-radius:14px}
-@media(max-width:380px){.manager-v3-content .date-range{grid-template-columns:1fr}.manager-v3-content .add-profile-actions{grid-template-columns:1fr}.manager-v3-content .rv-stat{padding-inline:8px}.manager-v3-content .rv-stat-value{font-size:18px}}
+.manager-v3-content .date-range{padding:10px var(--page-gutter) 16px;gap:8px}.manager-v3-content .sales-summary{margin:0 var(--page-gutter) 20px;padding:20px;border:0;border-radius:20px;background:var(--ink);color:var(--text-inverse);box-shadow:none}.manager-v3-content .sales-summary *{color:inherit}.manager-v3-content .sales-big-value{font-size:30px;font-weight:820}.manager-v3-content .sales-breakdown{margin:0 var(--page-gutter);border-top:1px solid var(--line)}.manager-v3-content .sales-bd-item{min-height:56px;padding:14px 2px;border-bottom:1px solid var(--line);background:transparent}
+.manager-v3-content .toast,
+.admin-v3-content .toast {bottom:112px}.manager-v3-content .error-toast,
+.admin-v3-content .error-toast {margin-inline:var(--page-gutter);border-radius:14px}
+@media(max-width:380px){.manager-v3-content .date-range{grid-template-columns:1fr}.manager-v3-content .add-profile-actions,
+.admin-v3-content .add-profile-actions {grid-template-columns:1fr}.manager-v3-content .rv-stat{padding-inline:8px}.manager-v3-content .rv-stat-value{font-size:18px}}
 
 /* Batch 8: responsive and accessibility finish. */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
@@ -4043,7 +4185,7 @@ textarea:focus-visible,
   padding: 11px 13px;
   border-radius: 12px;
   background: var(--ink);
-  color: #fff;
+  color: var(--text-inverse);
 }
 
 .manager-home-v2 {
@@ -4084,7 +4226,7 @@ textarea:focus-visible,
   padding: 0 46px 0 16px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background-color: #fff;
+  background-color: var(--text-inverse);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2374767d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 15px center;
@@ -4097,8 +4239,10 @@ textarea:focus-visible,
   -webkit-appearance: none;
   box-shadow: none;
 }
-.manager-v3-content select.input-field:hover { border-color: var(--line-strong); }
-.manager-v3-content select.input-field:focus-visible { border-color: var(--brand); }
+.manager-v3-content select.input-field:hover,
+.admin-v3-content select.input-field:hover { border-color: var(--line-strong); }
+.manager-v3-content select.input-field:focus-visible,
+.admin-v3-content select.input-field:focus-visible { border-color: var(--brand); }
 .manager-v3-content .ampm-time-input select.input-field {
   min-height: 48px;
   padding-left: 12px;
@@ -4121,7 +4265,7 @@ textarea:focus-visible,
 .manager-v3-content .prog-hist-skills-inline { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .manager-v3-content .prog-hist .skill-tag { margin: 0; padding: 7px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
 .manager-v3-content .prog-hist-actions { position: absolute; top: 50%; right: 12px; display: flex; gap: 7px; transform: translateY(-50%); }
-.manager-v3-content .prog-hist-actions .quiet-action { min-width: 58px; min-height: 42px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.manager-v3-content .prog-hist-actions .quiet-action { min-width: 58px; min-height: 42px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-bg); }
 
 /* Member detail: ownership summary reads as a section, not a loose list. */
 .member-detail-sheet .mem-pass-block { margin: 14px 0; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
@@ -4166,7 +4310,7 @@ textarea:focus-visible,
 /* My page: calm white profile identity and outlined booking action. */
 .mypage-shell .avatar {
   border: 1px solid var(--line-strong);
-  background: #fff;
+  background: var(--card-bg);
   color: var(--ink);
   box-shadow: none;
 }
@@ -4175,7 +4319,7 @@ textarea:focus-visible,
 .mypage-shell .membership-card:focus-visible .membership-cta,
 .mypage-shell .membership-card:active .membership-cta {
   border: 1px solid var(--line-strong);
-  background: #fff;
+  background: var(--card-bg);
   color: var(--ink);
   box-shadow: none;
   filter: none;
@@ -4197,3 +4341,76 @@ textarea:focus-visible,
   .manager-v3-content .profit-line { align-items: flex-end; }
   .member-detail-sheet .mem-pass-chip { display: grid; grid-template-columns: minmax(0,1fr) auto; }
 }
+
+/* ============================================================
+   Icon system — 아이콘 + 텍스트 정렬
+   13_Design_System.md > Icon: "Outline 기본 / 한 가지 스타일만 유지".
+   이모지로 아이콘을 대신하던 자리를 UiIcon(outline SVG)으로 통일하면서,
+   아이콘과 텍스트가 한 줄에 오는 요소들의 정렬을 여기서 한 번에 맞춘다.
+   :has(svg)로 한정해 아이콘이 없는 기존 사용처에는 영향을 주지 않는다.
+   ============================================================ */
+.center-detail-v2 .center-hero-addr:has(svg),
+.center-detail-v2 .center-hero-phone:has(svg),
+.center-hero-addr:has(svg),
+.center-hero-phone:has(svg),
+.center-map-addr:has(svg),
+.profile-item-sub:has(svg),
+.manager-v3-content .profile-item-sub:has(svg),
+.file-label:has(svg),
+.copy-view-btn:has(svg),
+.text-btn:has(svg) {
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.cart-link-btn:has(svg) {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+/* 아이콘만 들어가는 정사각 버튼 */
+.ib-btn:has(svg),
+.pass-rule-del:has(svg) { display: grid; place-items: center; }
+/* 아이콘은 글자 크기를 따라가지 않으므로 축소되지 않도록 고정한다. */
+.center-hero-addr svg, .center-hero-phone svg, .center-map-addr svg,
+.profile-item-sub svg, .file-label svg, .cart-link-btn svg { flex: 0 0 auto; }
+/* 여러 줄 안내문 안에 아이콘이 섞이는 경우(.perm-guide)는 flex로 바꾸면 줄바꿈이
+   깨지므로, 인라인 상태로 두고 baseline 대신 가운데에 맞춘다. */
+.perm-guide svg,
+.is-error-text svg, .is-success-text svg, .is-warning-text svg {
+  vertical-align: -2px;
+}
+
+/* ============================================================
+   Calendar system — 4개 캘린더의 공통 규칙
+   13_Design_System.md > Calendar. 앱에는 캘린더가 네 벌 있다:
+     .cal-*        예약 화면 / 매니저 수업 관리 (기준이 되는 구현)
+     .mypage-cal-* 마이페이지 캘린더 / 매니저 수업매출 캘린더
+     .copy-cal-*   매니저 수업 복사 캘린더
+     .app-date-*   DatePicker / MonthPicker 팝오버
+   이 중 주말(일=빨강, 토=파랑) 색 구분이 .cal-* 에만 있어서 화면마다 캘린더가
+   다르게 보였다. 네 캘린더 모두 그리드가 '일요일'에서 시작하므로 마크업 변경 없이
+   열 위치(nth-child)만으로 같은 규칙을 적용한다.
+   ============================================================ */
+
+/* 마이페이지 / 수업매출 캘린더 */
+.mypage-cal-grid > .mypage-cal-dow:nth-child(7n+1) { color: var(--danger); }
+.mypage-cal-grid > .mypage-cal-dow:nth-child(7n)   { color: var(--info); }
+.mypage-cal-grid > :not(.sel):nth-child(7n+1) .mypage-cal-day { color: var(--danger); }
+.mypage-cal-grid > :not(.sel):nth-child(7n)   .mypage-cal-day { color: var(--info); }
+/* 월 이동 버튼을 기준 캘린더(.cal-nav-btn)와 같은 모양으로 맞춘다. */
+.mypage-cal-head button {
+  width: 32px; height: 32px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--surface);
+  color: var(--text); font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.mypage-cal-head button:active { background: var(--line); }
+
+/* 수업 복사 캘린더 */
+.copy-cal-wd:first-child { color: var(--danger); }
+.copy-cal-wd:last-child  { color: var(--info); }
+.copy-cal-grid > :not(.on):nth-child(7n+1) .copy-cal-day { color: var(--danger); }
+.copy-cal-grid > :not(.on):nth-child(7n)   .copy-cal-day { color: var(--info); }
+
+/* DatePicker / MonthPicker 팝오버 */
+.app-date-week span:first-child { color: var(--danger); }
+.app-date-week span:last-child  { color: var(--info); }
+.app-date-grid > button:not(.on):nth-child(7n+1) { color: var(--danger); }
+.app-date-grid > button:not(.on):nth-child(7n)   { color: var(--info); }

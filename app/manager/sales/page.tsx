@@ -570,7 +570,7 @@ export default function SalesPage() {
             <input className="input-field" value={fMemo} onChange={(e) => setFMemo(e.target.value)} placeholder="예: 3개월 할인 적용" />
 
             {(fProductId || fGoodsId) && !canIssuePass && (
-              <div className="perm-guide" style={{ margin: "10px 0 0", color: "#c0392b" }}>
+              <div className="perm-guide is-error" style={{ margin: "10px 0 0" }}>
                 수강권/상품 발급 권한이 없어요 — 발급 없이 매출만 등록하려면 선택을 해제하세요.
               </div>
             )}
@@ -653,7 +653,7 @@ export default function SalesPage() {
             {payDetail.transferAmount !== 0 && <div className="admin-row"><span className="k">계좌이체</span><span className="v">{won(payDetail.transferAmount)}</span></div>}
             {payDetail.pointAmount !== 0 && <div className="admin-row"><span className="k">포인트</span><span className="v">{won(payDetail.pointAmount)}</span></div>}
             <div className="admin-row"><span className="k">합계</span><span className="v" style={{ fontWeight: 800 }}>{won(payDetail.totalAmount)}</span></div>
-            {payDetail.unpaidAmount > 0 && <div className="admin-row"><span className="k">미수금</span><span className="v" style={{ color: "#c0392b" }}>{won(payDetail.unpaidAmount)}</span></div>}
+            {payDetail.unpaidAmount > 0 && <div className="admin-row"><span className="k">미수금</span><span className="v is-error-text">{won(payDetail.unpaidAmount)}</span></div>}
             {payDetail.memo && <><div className="menu-section-label" style={{ padding: "12px 0 6px" }}>메모</div><div className="perm-guide" style={{ margin: 0 }}>{payDetail.memo}</div></>}
             <div className="add-profile-actions" style={{ marginTop: 12 }}>
                 <button className="outline-action" onClick={() => setPayDetail(null)}>닫기</button>

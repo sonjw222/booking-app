@@ -28,6 +28,8 @@ import {
   createKstSameDayFutureClass,
   createTestMembership,
   cleanupTestClassAdmin,
+  kstDateStr,
+  clearProfileReservationsOnKstDates,
   type TestUser,
 } from "./setup";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../lib/settings";
@@ -48,31 +50,17 @@ async function readRawCenterSettings(centerId: string): Promise<Record<string, u
   return data;
 }
 
-function kstDateStr(iso: string): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(iso));
-}
-
 // [발견, 2026-08-21] 이 파일은 하루 예약 "2회"가 딱 맞아야 통과하는 테스트라 특히 취약하다 —
 // centerAId는 여러 통합 테스트 파일/세션이 공유하는 fixture 센터(P2-22 참고, leftover
 // 누적 이력이 이미 있는 센터)라, USER_A가 오늘 날짜로 이미 확정/대기 예약을 갖고 있으면
 // (다른 세션의 leftover, 또는 이 파일 자신의 이전 실행이 CI 취소 등으로 afterAll 전에
 // 죽어서 남긴 것) 새로 만드는 1·2번째 예약까지 한도 초과로 거부된다. 실제로 CI에서 재현됨
 // (auto-book-membership-security.test.ts의 AUTO-SEC-I와 같은 계열의 문제, P2-28 참고).
-// 테스트 시작 전 USER_A의 "오늘"(KST) 예약을 이 센터에서 정리해 방어한다.
+// [P2-22 근본 수정, 2026-08-21] 공용 헬퍼(clearProfileReservationsOnKstDates, ./setup)로
+// 통합했다 — 이 파일 전용 래퍼로 "오늘" 날짜 계산 + centerId 스코프만 채워 넘긴다.
 async function clearUserATodayReservations(centerId: string, profileId: string): Promise<void> {
-  const admin = getFixtureAdminClient();
   const today = kstDateStr(new Date().toISOString());
-  const { data, error } = await admin
-    .from("reservations")
-    .select("id, status, classes!inner(start_time, center_id)")
-    .eq("profile_id", profileId)
-    .eq("classes.center_id", centerId)
-    .in("status", ["confirmed", "waitlisted", "attended"]);
-  if (error) throw new Error(`USER_A 오늘 예약 조회 실패: ${error.message}`);
-  const target = (data ?? []).filter((r: any) => kstDateStr(r.classes.start_time) === today);
-  if (target.length === 0) return;
-  const { error: delErr } = await admin.from("reservations").delete().in("id", target.map((r: any) => r.id));
-  if (delErr) throw new Error(`USER_A leftover 예약 정리 실패: ${delErr.message}`);
+  await clearProfileReservationsOnKstDates(profileId, [today], centerId);
 }
 
 beforeAll(async () => {

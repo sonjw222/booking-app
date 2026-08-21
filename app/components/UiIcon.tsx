@@ -5,6 +5,7 @@ export type IconName =
   | "users" | "message" | "palette" | "building" | "logout" | "receipt"
   | "shield" | "settings" | "sliders" | "location" | "clock" | "edit"
   | "megaphone" | "info" | "alert" | "check" | "grid" | "star"
+  | "phone" | "cart" | "paperclip" | "close"
   | "pilates" | "skate" | "ballet" | "rhythm" | "yoga" | "boxing" | "swim" | "golf";
 
 export default function UiIcon({ name, size = 22 }: { name: IconName; size?: number }) {
@@ -34,6 +35,10 @@ export default function UiIcon({ name, size = 22 }: { name: IconName; size?: num
     check: <><circle cx="12" cy="12" r="9"/><path d="m8 12 2.7 2.7L16.5 9"/></>,
     grid: <><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></>,
     star: <path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/>,
+    phone: <path d="M7 3.5 9.2 8 7.4 9.8a12 12 0 0 0 5.6 5.6L15 13.6l4.5 2.2v3.1c0 1-.8 1.7-1.8 1.6C9.9 19.9 4.1 14.1 3.1 5.8 3 4.8 3.7 4 4.7 4h2.3Z"/>,
+    cart: <><path d="M3 4h2.2l2.4 10.4h9.6L20 7H6"/><circle cx="9.5" cy="19" r="1.6"/><circle cx="17" cy="19" r="1.6"/></>,
+    paperclip: <path d="M18.5 11 12 17.5a4 4 0 0 1-5.7-5.7l7-7a2.8 2.8 0 0 1 4 4l-7 7a1.6 1.6 0 0 1-2.2-2.2l6.3-6.3"/>,
+    close: <path d="M6 6l12 12M18 6 6 18"/>,
     pilates: <><path d="M4 15h16M5 12v6M19 12v6M8 11h8"/></>,
     skate: <><path d="M8 4v10h9l2 3H8c-3 0-4-2-4-4V8"/><path d="M8 8h5M9 20h8"/></>,
     ballet: <><path d="M8 4c1 3 1 6 4 8 3-2 3-5 4-8M12 12v8M8 20h8"/></>,
