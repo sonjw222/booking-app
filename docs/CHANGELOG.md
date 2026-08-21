@@ -529,6 +529,25 @@ SEC-009 결과와 일치), `USING(true)` 정책은 공개 마케팅 콘텐츠(�
   `README.md` 5절도 "선택"에서 실제 자동화 안내로 갱신. 사용자가 SQL Editor에서 적용 완료
   (`cron.schedule()`이 job id `1` 반환 확인) — 익일 실제 발생 여부만 남음(`docs/TODO.md` P0-5).
 
+## 2026-08-18 — P1-12 완료: 운영설정 미적용 필드 전수 재감사·정리 (chore/p1-12-settings-wiring-audit)
+
+2026-08-02 감사에서 "죽어있다"고 기록됐던 `center_settings` 필드들을 코드로 다시 확인한
+결과, 그 사이(SEC-114 정책회귀 배치 등) 대부분 이미 실제 RPC에 wiring돼 있었다
+(`allow_same_day_booking`/`daily_book_limit(_enabled)`/`waitlist_weekly_limit`) —
+문서만 갱신, 코드 변경 없음. `show_group_reserved_count`/`auto_unpaid_input`도 이미
+정상 동작 확인.
+
+진짜 죽어있던 필드는 2개: `show_group_waitlist_count`는 회원 화면에 대기 인원을 실제로
+표시하도록 구현(`fix_class_reservation_counts_add_waitlisted.sql` — `class_reservation_counts`
+뷰에 `waitlisted_count` 추가, `lib/reservations.ts`/`app/reservation/page.tsx`를
+`show_group_reserved_count`와 동일 패턴으로 연결, 사용자 SQL 적용 대기). `show_all_classes`는
+정확히 구현하려면 회원 화면이 `reserve_class()`의 수강권 자격 판정 로직 전체를 클라이언트에서
+재현해야 해서(정책 드리프트 위험) 이번 배치에서는 "준비 중" 배지로 명확히 표시만 함.
+`show_point_history`는 회원앱에 포인트 내역 화면 자체가 없어 P1-1(포인트 원장 이원화) 범위로
+이관.
+
+`npm run build` 통과 확인.
+
 ## 2026-08-16 — 수업매출 캘린더 신규 기능 (feature/class-revenue-calendar)
 
 기존 "매출"(`app/manager/sales`)은 결제일 기준 집계만 제공했다. 이번에 "수업이 실제로

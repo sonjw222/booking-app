@@ -651,6 +651,9 @@ function ReservationCalendarContent() {
                     // 운영설정에서 인원 표시를 껐으면 정원마감 여부만(정확한 인원수는 숨김)
                     full && <div className="class-count full">마감</div>
                   )}
+                  {cls.showWaitlistCount && cls.waitlisted > 0 && (
+                    <div className="class-count">대기 {cls.waitlisted}</div>
+                  )}
                   {mine ? (
                     <button className="mini-btn done" disabled={busy} onClick={() => handleCancel(cls)}>
                       {busy ? "..." : "취소"}
