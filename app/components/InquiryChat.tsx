@@ -15,11 +15,12 @@ import {
 } from "../../lib/inquiries";
 
 export default function InquiryChat({
-  threadId, title, onBack,
+  threadId, title, onBack, canSend = true,
 }: {
   threadId: string;
   title: string;
   onBack: () => void;
+  canSend?: boolean; // 매니저 쪽에서 board.inquiry.comment 권한이 없을 때만 false — 회원 쪽은 항상 true(생략 시 기본값)
 }) {
   const [messages, setMessages] = useState<InquiryMessage[]>([]);
   const [text, setText] = useState("");
@@ -131,26 +132,32 @@ export default function InquiryChat({
 
       {error && <div className="auth-msg error" style={{ margin: "0 12px 8px" }}>{error}</div>}
 
-      <div className="chat-input-bar">
-        <label className="chat-photo-btn">
-          {uploading ? "…" : "＋"}
-          <input type="file" accept="image/*" hidden onChange={async (e) => {
-            const f = e.target.files?.[0]; if (!f) return;
-            await handlePhoto(f); e.target.value = "";
-          }} />
-        </label>
-        <textarea
-          className="chat-input"
-          placeholder="메시지를 입력하세요"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
-          }}
-          rows={1}
-        />
-        <button className="chat-send" disabled={sending} onClick={handleSend}>전송</button>
-      </div>
+      {canSend ? (
+        <div className="chat-input-bar">
+          <label className="chat-photo-btn">
+            {uploading ? "…" : "＋"}
+            <input type="file" accept="image/*" hidden onChange={async (e) => {
+              const f = e.target.files?.[0]; if (!f) return;
+              await handlePhoto(f); e.target.value = "";
+            }} />
+          </label>
+          <textarea
+            className="chat-input"
+            placeholder="메시지를 입력하세요"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+            }}
+            rows={1}
+          />
+          <button className="chat-send" disabled={sending} onClick={handleSend}>전송</button>
+        </div>
+      ) : (
+        <div className="auth-msg" style={{ margin: "0 12px 12px", textAlign: "center" }}>
+          문의 답변 권한이 없어요 — 오너에게 문의하세요.
+        </div>
+      )}
     </div>
   );
 }

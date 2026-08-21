@@ -164,53 +164,53 @@ export type ClassInput = {
   passSelectionMode?: "all" | "selected"; // 기본값 'all'(컬럼 기본값과 동일)
 };
 
+// P1-5b: create_class_safe RPC를 거친다 — own/other 세분권한(schedule.own/other.
+// {group|private}.create/update)이 서버 함수 안에서 판정되므로 직접 insert하지 않는다.
 export async function createClass(centerId: string, input: ClassInput): Promise<string> {
   assertValidClassTimeRange(input.start, input.end);
-  const { data, error } = await supabase.from("classes").insert({
-    center_id: centerId,
-    title: input.title,
-    description: input.description ?? null,
-    start_time: toKstIso(input.date, input.start),
-    end_time: toKstIso(classEndDate(input.date, input.start, input.end), input.end),
-    capacity: input.capacity,
-    allow_goods: input.allowGoods,
-    room_id: input.roomId ?? null,
-    cancel_deadline_min: input.cancelDeadlineMin ?? 0,
-    booking_deadline_min: input.bookingDeadlineMin ?? null,
-    class_format: input.classFormat ?? "group",
-    pass_selection_mode: input.passSelectionMode ?? "all",
-  }).select("id").single();
-  if (error) throw new Error("수업 등록에 실패했어요: " + error.message);
-  return data.id;
+  const { data, error } = await supabase.rpc("create_class_safe", {
+    p_center_id: centerId,
+    p_title: input.title,
+    p_description: input.description ?? null,
+    p_start_time: toKstIso(input.date, input.start),
+    p_end_time: toKstIso(classEndDate(input.date, input.start, input.end), input.end),
+    p_capacity: input.capacity,
+    p_allow_goods: input.allowGoods,
+    p_room_id: input.roomId ?? null,
+    p_cancel_deadline_min: input.cancelDeadlineMin ?? 0,
+    p_booking_deadline_min: input.bookingDeadlineMin ?? null,
+    p_class_format: input.classFormat ?? "group",
+    p_pass_selection_mode: input.passSelectionMode ?? "all",
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+  return data as string;
 }
 
 export async function updateClass(classId: string, input: ClassInput): Promise<void> {
   assertValidClassTimeRange(input.start, input.end);
-  const { error } = await supabase
-    .from("classes")
-    .update({
-      title: input.title,
-      description: input.description ?? null,
-      start_time: toKstIso(input.date, input.start),
-      end_time: toKstIso(classEndDate(input.date, input.start, input.end), input.end),
-      capacity: input.capacity,
-      allow_goods: input.allowGoods,
-      room_id: input.roomId ?? null,
-      cancel_deadline_min: input.cancelDeadlineMin ?? 0,
-      booking_deadline_min: input.bookingDeadlineMin ?? null,
-      class_format: input.classFormat ?? "group",
-      pass_selection_mode: input.passSelectionMode ?? "all",
-    })
-    .eq("id", classId);
-  if (error) throw new Error("수업 수정에 실패했어요: " + error.message);
+  const { error } = await supabase.rpc("update_class_safe", {
+    p_class_id: classId,
+    p_title: input.title,
+    p_description: input.description ?? null,
+    p_start_time: toKstIso(input.date, input.start),
+    p_end_time: toKstIso(classEndDate(input.date, input.start, input.end), input.end),
+    p_capacity: input.capacity,
+    p_allow_goods: input.allowGoods,
+    p_room_id: input.roomId ?? null,
+    p_cancel_deadline_min: input.cancelDeadlineMin ?? 0,
+    p_booking_deadline_min: input.bookingDeadlineMin ?? null,
+    p_class_format: input.classFormat ?? "group",
+    p_pass_selection_mode: input.passSelectionMode ?? "all",
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
 }
 
 // 반복 그룹 일괄 적용(updateClassGroup)은 title/start/end/capacity만 바꾸고 이 인스턴스의
 // 다른 필드는 건드리지 않는다 — 그 흐름에서도 이 인스턴스의 수강권 정책만 selectedProducts와
 // 어긋나지 않게 컬럼 하나만 좁게 갱신하기 위한 함수(updateClass 전체 재작성 대신).
 export async function updateClassPassSelectionMode(classId: string, mode: "all" | "selected"): Promise<void> {
-  const { error } = await supabase.from("classes").update({ pass_selection_mode: mode }).eq("id", classId);
-  if (error) throw new Error("수강권 정책 저장에 실패했어요: " + error.message);
+  const { error } = await supabase.rpc("update_class_pass_selection_mode_safe", { p_class_id: classId, p_mode: mode });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
 }
 
 export async function deleteClass(classId: string): Promise<void> {
@@ -232,26 +232,29 @@ export async function updateClassGroup(
   groupId: string, title: string, start: string, end: string, capacity: number
 ): Promise<string[]> {
   assertValidClassTimeRange(start, end);
-  // 그룹의 모든 수업을 가져와 각자의 날짜에 새 시간 적용
+  // 그룹의 모든 수업을 가져와 각자의 날짜에 새 시간 적용(날짜별 새 시각 계산은 클라이언트가
+  // 하고, 실제 쓰기는 update_class_group_safe RPC 한 번으로 — own/other 판정을 서버에서
+  // 한 번만 하면 되도록).
   const { data: rows, error: fErr } = await supabase
     .from("classes")
     .select("id, start_time")
     .eq("recurring_group_id", groupId);
   if (fErr) throw new Error("반복 수업을 불러오지 못했어요: " + fErr.message);
 
-  const ids: string[] = [];
-  for (const r of rows ?? []) {
-    const dateStr = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date((r as any).start_time));
-    const { error } = await supabase.from("classes").update({
-      title,
+  const updates = (rows ?? []).map((r: any) => {
+    const dateStr = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(r.start_time));
+    return {
+      id: r.id,
       start_time: toKstIso(dateStr, start),
       end_time: toKstIso(classEndDate(dateStr, start, end), end),
-      capacity,
-    }).eq("id", (r as any).id);
-    if (error) throw new Error("반복 수업 수정에 실패했어요: " + error.message);
-    ids.push((r as any).id);
-  }
-  return ids;
+    };
+  });
+
+  const { data, error } = await supabase.rpc("update_class_group_safe", {
+    p_group_id: groupId, p_title: title, p_capacity: capacity, p_updates: updates,
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+  return (data as string[]) ?? [];
 }
 
 // 그룹 전체 삭제
@@ -311,7 +314,6 @@ export async function createRecurringClasses(centerId: string, input: RecurringI
   // 이 반복 등록을 하나로 묶는 그룹 id
   const groupId = crypto.randomUUID();
   const rows = dates.map((d) => ({
-    center_id: centerId,
     title: input.title,
     start_time: toKstIso(d, input.start),
     end_time: toKstIso(classEndDate(d, input.start, input.end), input.end),
@@ -322,9 +324,11 @@ export async function createRecurringClasses(centerId: string, input: RecurringI
     recurring_group_id: groupId,
     pass_selection_mode: input.passSelectionMode ?? "all",
   }));
-  const { data, error } = await supabase.from("classes").insert(rows).select("id");
-  if (error) throw new Error("반복 수업 등록에 실패했어요: " + error.message);
-  return (data ?? []).map((r: any) => r.id);
+  const { data, error } = await supabase.rpc("create_recurring_classes_safe", {
+    p_center_id: centerId, p_rows: rows,
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+  return (data as string[]) ?? [];
 }
 
 /* ============================================================
@@ -435,42 +439,33 @@ export async function fetchClassTrainers(classId: string): Promise<string[]> {
 }
 
 // 수업의 담당 강사를 통째로 교체 (선택된 account_id 배열로)
+// P1-5b: set_class_trainers_safe RPC를 거친다 — 기존 배정 기준 own/other 판정이
+// 서버에서 이뤄지므로 직접 class_trainers를 건드리지 않는다.
 export async function setClassTrainers(classId: string, accountIds: string[]): Promise<void> {
-  const { error: delErr } = await supabase
-    .from("class_trainers")
-    .delete()
-    .eq("class_id", classId);
-  if (delErr) throw new Error("담당 강사 설정에 실패했어요: " + delErr.message);
-
-  if (accountIds.length > 0) {
-    const rows = accountIds.map((aid) => ({ class_id: classId, account_id: aid }));
-    const { error } = await supabase.from("class_trainers").insert(rows);
-    if (error) throw new Error("담당 강사 설정에 실패했어요: " + error.message);
-  }
+  const { error } = await supabase.rpc("set_class_trainers_safe", {
+    p_class_id: classId, p_account_ids: accountIds,
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
 }
 
 // 여러 수업에 같은 담당 강사 목록 지정 (반복 수업 등록용 — 새로 만든 수업이라 기존 지정이
 // 없다는 전제라 삭제 없이 insert만 한다)
 export async function setClassTrainersBulk(classIds: string[], accountIds: string[]): Promise<void> {
   if (classIds.length === 0 || accountIds.length === 0) return;
-  const rows: { class_id: string; account_id: string }[] = [];
-  for (const cid of classIds) for (const aid of accountIds) rows.push({ class_id: cid, account_id: aid });
-  const { error } = await supabase.from("class_trainers").insert(rows);
-  if (error) throw new Error("담당 강사 설정에 실패했어요: " + error.message);
+  const { error } = await supabase.rpc("set_class_trainers_bulk_safe", {
+    p_class_ids: classIds, p_account_ids: accountIds,
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
 }
 
 // 반복 그룹 "모든 수업에 적용" 토글용 — 그룹에 속한 기존 수업들의 담당 강사를 전부 같은
 // 목록으로 교체한다(setClassTrainers의 그룹 버전, 기존 지정을 먼저 지우고 다시 넣음).
 export async function setClassTrainersForGroup(classIds: string[], accountIds: string[]): Promise<void> {
   if (classIds.length === 0) return;
-  const { error: delErr } = await supabase.from("class_trainers").delete().in("class_id", classIds);
-  if (delErr) throw new Error("담당 강사 설정에 실패했어요: " + delErr.message);
-  if (accountIds.length > 0) {
-    const rows: { class_id: string; account_id: string }[] = [];
-    for (const cid of classIds) for (const aid of accountIds) rows.push({ class_id: cid, account_id: aid });
-    const { error } = await supabase.from("class_trainers").insert(rows);
-    if (error) throw new Error("담당 강사 설정에 실패했어요: " + error.message);
-  }
+  const { error } = await supabase.rpc("set_class_trainers_for_group_safe", {
+    p_class_ids: classIds, p_account_ids: accountIds,
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
 }
 
 /* ============================================================
@@ -575,6 +570,8 @@ export async function previewCopySchedule(
 // ⚠ 어떤 UI에서도 호출하지 않는 미사용 함수(grep으로 확인 — CopyCalendar는
 // copyByWeekday/copyByDate만 사용). 담당 강사 복수 지정/수강권 정책 변경(pass_selection_mode)
 // 배치에서 이 함수는 갱신하지 않았다 — 실제로 도달 불가능한 코드라 위험이 없음.
+// P1-5b(own/other 세분권한)에서도 마찬가지로 갱신 안 함 — 아래 classes.insert 직접 호출은
+// 다시 쓰이게 되면 create_recurring_classes_safe RPC로 바꿔야 한다.
 export async function copySchedule(
   centerId: string, fromMonth: string, toMonth: string
 ): Promise<number> {
@@ -899,7 +896,7 @@ export async function copyByWeekday(
       });
     }
   }
-  return await insertCopiedClasses(rows, linkPlan);
+  return await insertCopiedClasses(centerId, rows, linkPlan);
 }
 
 // 실제 복사 실행 (날짜 기준)
@@ -926,7 +923,7 @@ export async function copyByDate(
       recurring_group_id: groupId, status: "open", allow_goods: true,
     });
   }
-  return await insertCopiedClasses(rows, linkPlan);
+  return await insertCopiedClasses(centerId, rows, linkPlan);
 }
 
 // 특정 class의 수강권 허용 모드만 단독 조회. class_allowed_products 행 존재 여부만으로는
@@ -941,8 +938,10 @@ export async function fetchClassPassSelectionMode(classId: string): Promise<"all
 }
 
 // 공통: 삽입 + 수강권/강사 연결 복사
+// P1-5b: create_recurring_classes_safe RPC를 거친다(rows에서 center_id는 빼고 별도
+// 인자로 넘김) — own 권한(schedule.own.group.create) 판정이 서버에서 이뤄진다.
 async function insertCopiedClasses(
-  rows: any[], linkPlan: { idx: number; srcClassId: string }[]
+  centerId: string, rows: any[], linkPlan: { idx: number; srcClassId: string }[]
 ): Promise<number> {
   if (rows.length === 0) return 0;
 
@@ -955,12 +954,15 @@ async function insertCopiedClasses(
   }
   for (const l of linkPlan) {
     rows[l.idx].pass_selection_mode = modeCache[l.srcClassId];
+    delete rows[l.idx].center_id;
   }
 
-  const { data, error } = await supabase.from("classes").insert(rows).select("id");
-  if (error) throw new Error("스케줄 복사에 실패했어요: " + error.message);
+  const { data, error } = await supabase.rpc("create_recurring_classes_safe", {
+    p_center_id: centerId, p_rows: rows,
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
 
-  const newIds = (data ?? []).map((r: any) => r.id);
+  const newIds = (data as string[]) ?? [];
   // 원본별 수강권/강사 연결 캐시
   const productCache: Record<string, string[]> = {};
   const trainerCache: Record<string, string[]> = {};

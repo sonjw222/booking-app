@@ -358,23 +358,54 @@ test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx 
 테이블 재조회로 확인). `app/manager/page.tsx`의 관리 메뉴 목록과 "오늘 할 일" 상단 바로가기
 (문의/주문/회원배치) 모두 `canSeeMenu()`로 연결. `npm run build` 통과.
 
-### P1-5b. (2026-08-21, 진행 중) Bucket 2 화면 서버측 권한(RLS/RPC) 신규 연결
+### P1-5b. (2026-08-21, 코드 작성 완료 — SQL 적용 대기) Bucket 2 화면 서버측 권한(RLS/RPC) 신규 연결
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | 진행 중 — SQL migration 파일들을 작성해 사용자에게 순차적으로 제시·적용 예정 |
-| 근거 파일 | [P1-5](#p1-5) 4차 해결 조사 결과, `products`/`rooms`/`center_reviews`/`center_announcements`/`inquiry_messages`/`orders`/`classes`/`manager_set_attendance` 관련 RLS·RPC 정의 파일 |
+| 현재 상태 | **코드 작성 완료, 라이브 적용 대기.** SQL migration 7개 + 대응 UI 게이팅 + `lib/classes.ts` 리팩터링까지 브랜치 `feat/p1-5-button-permission-gating`에 커밋됨. `npm run build` 통과. 사용자가 SQL Editor에서 순서대로 실행해야 실제로 적용됨. |
+| 근거 파일 | [P1-5](#p1-5) 4차 해결 조사 결과 + `pg_get_functiondef`로 확인한 라이브 정의(`fulfill_order`, `manager_set_attendance`, `delete_class_safe`, `delete_class_group_safe`) |
 | 완료 조건 | 9개 화면(goods/rooms/reviews/announcements/inquiries/orders/members 부가기능/대시보드 출석/classes CRUD)의 실제 DB 정책에 `has_permission()` 체크를 추가하고, 대응하는 UI 버튼 게이팅도 함께 적용 |
 | 관련 문서 | [P1-5](#p1-5), [DATABASE.md](./DATABASE.md) |
 
 **중요 — 동작 변경(breaking change) 위험**: 지금은 이 9개 화면이 "센터 소속 스태프면 누구나"
 동작하는데, RLS를 `has_permission()` 기반으로 좁히면 그 권한 키를 역할에 아직 안 준 기존
-센터의 스태프가 갑자기 해당 기능을 못 쓰게 된다. SQL은 항상 사용자에게 전체 출력 후 SQL
-Editor에서 직접 실행하도록 하고(Claude가 직접 실행하지 않음), 적용 전 각 센터 운영자가
-이 변화를 감안해야 한다는 점을 사용자에게 알린다. `classes` 테이블의 `schedule.own/other.*`
-~40개 키 트리는 기존 코드에 매핑 근거가 없어 설계 결정이 먼저 필요 — 구현 전 매핑안을
-제시하고 승인받는다.
+센터의 스태프가 갑자기 해당 기능을 못 쓰게 된다. SQL은 사용자가 직접 SQL Editor에서
+실행해야 하며(Claude가 직접 실행하지 않음), 적용 전 각 센터 운영자가 필요한 스태프에게
+미리 권한을 부여해두는 게 좋다.
+
+**중간에 드러난 사실 두 가지(정적 파일만 보고 진행했으면 놓쳤을 것들)**:
+1. `fulfill_order()`(주문 확정·발급)는 조사 당시 "카탈로그 키만 있고 RLS는 열려있다"고
+   봤지만, 라이브 정의를 직접 확인하니 이미 `has_permission(center_id,'pass.payment.create')`로
+   막혀 있었고(SEC-116) 정적 파일에는 없던 가격 검증(SEC-118)·자동 회원등록·자동예약
+   로직까지 있었다 — 정적 파일이 최신이 아니었던 사례. 주문 "확정·발급" 버튼은 그래서
+   `pass.order.fulfill`이 아니라 실제로 쓰이는 `pass.payment.create`로 게이팅했다("취소"도
+   같은 키로 통일).
+2. `class_trainers`(수업 담당 강사 배정) 테이블 자체의 RLS도 `my_managed_center_ids()`만
+   체크해서, 수업 own/other 판정 기준(담당 강사가 본인인지)을 아무나 조작할 수 있는
+   상태였다 — 이것도 함께 서버 함수로 옮겨 잠갔다(아래 참고).
+
+**classes CRUD own/other 매핑(사용자 승인, 2026-08-21)**: 카탈로그의 `schedule.own/other.*`
+40여 개 키 중 create/update/delete 계열을 실제로 연결했다.
+- **own 판정**: 그 수업(또는 반복그룹)의 `class_trainers`에 내 계정이 있으면 own, 다른
+  사람만 있으면 other. 담당 강사가 아예 없으면 own으로 간주.
+- **생성**: 아직 배정된 강사가 없어 other 개념이 성립 안 함 → `schedule.own.{group|private}.create`만 요구.
+- **수정/삭제/강사 재배정**: own/other × group/private 실제 판정 적용.
+- **구조 변경**: `createClass`/`updateClass`/`createRecurringClasses`/`updateClassGroup`/
+  `updateClassPassSelectionMode`/`setClassTrainers`/`setClassTrainersBulk`/
+  `setClassTrainersForGroup`(전부 `lib/classes.ts`, 기존엔 클라이언트가 `classes`/
+  `class_trainers` 테이블에 직접 insert/update)를 전부 새 RPC(`*_safe`)로 옮겼다 —
+  RLS만으로는 "이 요청이 어떤 강사를 배정하려는지" 알 수 없어(별도 호출로 옴) 서버 함수
+  안에서 판정해야 한다. **함수 시그니처는 그대로 유지**해서 `app/manager/classes/page.tsx`
+  등 호출부는 손대지 않았다(`delete_class_safe`/`delete_class_group_safe`는 원래도 RPC라
+  하드코딩된 `schedule.own.group.delete` 체크만 own/other 판정으로 교체).
+- `classes`/`class_trainers` 테이블 자체의 RLS(직접 insert/update)는 이번에 강화하지
+  않았다 — 넓게 열려 있지만 실제 클라이언트는 이제 전부 RPC를 거쳐가므로(직접 테이블
+  호출 경로가 `lib/classes.ts`에서 모두 제거됨) 사실상의 방어선은 이 RPC들이다.
+  `fulfill_order`/`orders` 테이블과 같은 패턴.
+- 예약 배치/취소(`schedule.makeup`)는 범위 밖 — Bucket 1에서 이미 처리됨.
+- 범위 밖(도달 불가능한 죽은 코드로 확인됨, `copySchedule()`)은 갱신하지 않음 — 되살아나면
+  같이 고쳐야 한다는 주석만 남김.
 
 | 필드 | 내용 |
 |---|---|

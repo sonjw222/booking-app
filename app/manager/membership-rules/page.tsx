@@ -77,6 +77,9 @@ export default function MembershipRulesPage() {
   // 이 화면 메뉴 게이트는 pass.create지만, "예약조건"(schedule_rules)은 별도로
   // pass.update RLS를 요구한다 — 상품 CRUD와는 다른 키라 여기서 따로 체크한다.
   const canEditRules = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "pass.update");
+  // 상품 CRUD(등록=pass.create, 수정/삭제=pass.update)는 P1-5b에서 RLS를 실제로 좁힘
+  // (fix_permission_products_rooms_rls.sql) — 그 전까지는 my_managed_center_ids()만 체크했다.
+  const canCreateProduct = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "pass.create");
 
   const load = useCallback(async () => {
     if (!centerId) return;
@@ -180,7 +183,9 @@ export default function MembershipRulesPage() {
       <div className="back-header">
         <a className="side" href="/manager">‹</a>
         <div className="title">수강권 관리</div>
-        <button className="header-action" onClick={() => setProdSheet(true)}>+ 수강권</button>
+        {canCreateProduct && (
+          <button className="header-action" onClick={() => setProdSheet(true)}>+ 수강권</button>
+        )}
       </div>
 
       {centers.length > 1 && (
@@ -220,7 +225,9 @@ export default function MembershipRulesPage() {
                       {won(p.price)}{p.totalCount ? ` · ${p.totalCount}회` : ""}
                     </div>
                   </div>
-                  <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteProduct(p)}>삭제</button>
+                  {canEditRules && (
+                    <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteProduct(p)}>삭제</button>
+                  )}
                 </div>
 
                 <button className="pass-rules-toggle" onClick={() => setExpandedProducts((prev) => {

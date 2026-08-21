@@ -180,6 +180,7 @@ function MembersContent() {
   }
   // 정보 탭(메모/주소/등급/상태 저장)은 모두 customer.member.update RLS 하나로 묶여있다.
   const canUpdateMember = canDo("customer.member.update");
+  const canCreateMember = canDo("customer.member.create");
 
   // URL ?profile=<profileId> 로 들어오면 그 회원 상세를 자동으로 열기 (1회)
   const searchParams = useSearchParams();
@@ -302,7 +303,9 @@ function MembersContent() {
         <div className="side" />
         <div className="title">내 회원</div>
         <div style={{ display: "flex", gap: 6 }}>
-          <button className="header-action" onClick={() => { setAddSheet(true); setSearchKw(""); setSearchResults([]); }}>+회원</button>
+          {canCreateMember && (
+            <button className="header-action" onClick={() => { setAddSheet(true); setSearchKw(""); setSearchResults([]); }}>+회원</button>
+          )}
           <button className="header-action" onClick={() => setGradeSheet(true)}>등급</button>
         </div>
       </div>
@@ -383,7 +386,9 @@ function MembersContent() {
               아직 등록된 회원이 없어요.<br />
               회원을 추가하거나, 예약 이력이 있으면 동기화해보세요.
             </div>
-            <button className="empty-action-btn" onClick={() => setAddSheet(true)}>+ 첫 회원 등록하기</button>
+            {canCreateMember && (
+              <button className="empty-action-btn" onClick={() => setAddSheet(true)}>+ 첫 회원 등록하기</button>
+            )}
           </div>
         )
       ) : (

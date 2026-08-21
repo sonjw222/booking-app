@@ -12,6 +12,7 @@ import Loading from "../../components/Loading";
 import InquiryChat from "../../components/InquiryChat";
 import { fetchCenterThreads, type InquiryThread } from "../../../lib/inquiries";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 export default function ManagerInquiriesPage() {
   return (
@@ -25,9 +26,29 @@ function ManagerInquiriesPageContent() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [threads, setThreads] = useState<InquiryThread[]>([]);
   const [loading, setLoading] = useState(true);
-  const [active, setActive] = useState<{ id: string; title: string } | null>(null);
+  const [active, setActive] = useState<{ id: string; title: string; centerId: string } | null>(null);
+  const [permsByCenter, setPermsByCenter] = useState<Record<string, Set<string>>>({});
 
   const searchParams = useSearchParams();
+
+  // 센터마다 소속 역할이 다를 수 있어 관리 중인 센터별로 개인 유효 권한을 미리 계산해둔다
+  // (오너인 센터는 계산 생략 — canSendForCenter에서 항상 true).
+  useEffect(() => {
+    const nonOwner = centers.filter((c) => !c.isOwner);
+    if (nonOwner.length === 0) return;
+    Promise.all(nonOwner.map((c) =>
+      fetchMyEffectivePermissionKeys(c.managerCenterId, c.roleId).then((keys) => [c.id, keys] as const)
+    )).then((pairs) => {
+      setPermsByCenter(Object.fromEntries(pairs));
+    }).catch(() => { /* 무시 — 실패 시 기본값(false)로 안전하게 처리됨 */ });
+  }, [centers]);
+
+  function canSendForCenter(centerId: string): boolean {
+    const c = centers.find((x) => x.id === centerId);
+    if (!c) return false;
+    if (c.isOwner) return true;
+    return permsByCenter[centerId]?.has("board.inquiry.comment") ?? false;
+  }
 
   async function loadThreads() {
     const list = await fetchCenterThreads();
@@ -45,7 +66,7 @@ function ManagerInquiriesPageContent() {
         const threadParam = searchParams.get("thread");
         if (threadParam) {
           const found = threadList.find((t) => t.id === threadParam);
-          if (found) setActive({ id: found.id, title: found.centerName + " · 회원 문의" });
+          if (found) setActive({ id: found.id, title: found.centerName + " · 회원 문의", centerId: found.centerId });
         }
       }
       setLoading(false);
@@ -74,7 +95,7 @@ function ManagerInquiriesPageContent() {
   if (active) {
     return (
       <div className="app-shell">
-        <InquiryChat threadId={active.id} title={active.title} onBack={backToList} />
+        <InquiryChat threadId={active.id} title={active.title} onBack={backToList} canSend={canSendForCenter(active.centerId)} />
       </div>
     );
   }
@@ -92,7 +113,7 @@ function ManagerInquiriesPageContent() {
       ) : (
         <div className="thread-list">
           {threads.map((t) => (
-            <button key={t.id} className="thread-row" onClick={() => setActive({ id: t.id, title: t.centerName + " · 회원 문의" })}>
+            <button key={t.id} className="thread-row" onClick={() => setActive({ id: t.id, title: t.centerName + " · 회원 문의", centerId: t.centerId })}>
               <div className="thread-avatar">💬</div>
               <div className="thread-main">
                 <div className="thread-top">

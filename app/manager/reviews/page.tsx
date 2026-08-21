@@ -17,6 +17,7 @@ import Loading from "../../components/Loading";
 import RichTextEditor from "../../components/RichTextEditor";
 import { extractPlainText } from "../../../lib/security";
 import { ZoomableImage } from "../../components/ImageViewer";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 export default function ManagerReviewsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -34,6 +35,7 @@ export default function ManagerReviewsPage() {
   const [replyText, setReplyText] = useState("");
   const [replyAlign, setReplyAlign] = useState<"left" | "center" | "right">("left");
   const [replyFontSize, setReplyFontSize] = useState(15);
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -47,6 +49,25 @@ export default function ManagerReviewsPage() {
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
   }, []);
+
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  function canDo(key: string): boolean {
+    return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);
+  }
+  const canReplyReview = canDo("facility.review.reply");
+  const canDeleteReview = canDo("facility.review.delete");
 
   const load = useCallback(async () => {
     if (!centerId) return;
@@ -188,12 +209,18 @@ export default function ManagerReviewsPage() {
                 </div>
               )}
 
-              <div className="review-actions">
-                <button className="review-edit" disabled={busy} onClick={() => openReply(r)}>
-                  {r.reply ? "답변 수정" : "답변 달기"}
-                </button>
-                <button className="review-del" disabled={busy} onClick={() => handleDelete(r)}>삭제</button>
-              </div>
+              {(canReplyReview || canDeleteReview) && (
+                <div className="review-actions">
+                  {canReplyReview && (
+                    <button className="review-edit" disabled={busy} onClick={() => openReply(r)}>
+                      {r.reply ? "답변 수정" : "답변 달기"}
+                    </button>
+                  )}
+                  {canDeleteReview && (
+                    <button className="review-del" disabled={busy} onClick={() => handleDelete(r)}>삭제</button>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -227,7 +254,7 @@ export default function ManagerReviewsPage() {
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => setReplyFor(null)}>취소</button>
-              <button className="primary-btn" disabled={busy} onClick={handleReply}>저장</button>
+              <button className="primary-btn" disabled={busy || !canReplyReview} onClick={handleReply}>저장</button>
             </div>
           </div>
         </div>
