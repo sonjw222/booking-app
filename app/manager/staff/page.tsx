@@ -16,6 +16,7 @@ import {
   fetchRolePermissions, saveRolePermissions,
   fetchStaff, searchAccounts, inviteStaff, updateStaffRole, removeStaff,
   buildTree, togglePermission, CATEGORY_LABEL,
+  fetchMyEffectivePermissionKeys, canSeeManagerMenu,
   type Permission, type Role, type Staff,
 } from "../../../lib/roles";
 
@@ -49,6 +50,7 @@ export default function StaffPage() {
   const [roleSheet, setRoleSheet] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
   const [staffDetail, setStaffDetail] = useState<Staff | null>(null);
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -79,6 +81,30 @@ export default function StaffPage() {
   }, [centerId, activeRoleId]);
 
   useEffect(() => { load(); }, [load]);
+
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  // 이 화면 자체는 오너/매니저 누구나 열 수 있지만(메뉴 노출은 별도), 버튼별로
+  // 실제 서버 권한(facility.staff.*, facility.role_permission)이 있는지 미리 계산해
+  // 없는 버튼은 눌러도 RLS에 막힐 걸 미리 숨긴다 — 오너는 항상 전권.
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  function canDo(key: string): boolean {
+    return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);
+  }
+  const canAddStaff = canDo("facility.staff.create");
+  const canUpdateStaffRole = canDo("facility.staff.update");
+  const canRemoveStaff = canDo("facility.staff.delete");
+  const canManageRolePermissions = canDo("facility.role_permission");
 
   // 역할 바뀌면 그 역할의 권한 불러오기
   useEffect(() => {
@@ -245,9 +271,11 @@ export default function StaffPage() {
         <>
           <div className="mem-toolbar">
             <span className="mem-count">스태프 {staff.length}명</span>
-            <button className="quiet-action" onClick={() => { setInviteSheet(true); setInviteRoleId(roles.find((r) => !r.isOwner)?.id ?? ""); }}>
-              스태프 추가
-            </button>
+            {canAddStaff && (
+              <button className="quiet-action" onClick={() => { setInviteSheet(true); setInviteRoleId(roles.find((r) => !r.isOwner)?.id ?? ""); }}>
+                스태프 추가
+              </button>
+            )}
           </div>
 
           <div className="mem-list">
@@ -277,7 +305,9 @@ export default function StaffPage() {
         <>
           <div className="mem-toolbar">
             <span className="mem-count">역할을 선택하세요</span>
-            <button className="quiet-action" onClick={() => setRoleSheet(true)}>역할 관리</button>
+            {canManageRolePermissions && (
+              <button className="quiet-action" onClick={() => setRoleSheet(true)}>역할 관리</button>
+            )}
           </div>
 
           <div className="mem-filters">
@@ -310,12 +340,17 @@ export default function StaffPage() {
                 ))}
               </div>
 
+              {!canManageRolePermissions && (
+                <div className="perm-guide" style={{ margin: "0 0 6px" }}>
+                  권한 편집 권한이 없어요 — 오너에게 문의하세요.
+                </div>
+              )}
               <div className="perm-actions">
                 <div className="perm-bulk">
-                  <button className="text-btn" onClick={handleSelectAllInCat}>이 탭 모두 선택</button>
-                  <button className="text-btn" onClick={handleDeselectAllInCat}>모두 해제</button>
+                  <button className="text-btn" disabled={!canManageRolePermissions} onClick={handleSelectAllInCat}>이 탭 모두 선택</button>
+                  <button className="text-btn" disabled={!canManageRolePermissions} onClick={handleDeselectAllInCat}>모두 해제</button>
                 </div>
-                <button className="primary-btn small" disabled={busy || !dirty} onClick={handleSavePerms}>
+                <button className="primary-btn small" disabled={busy || !dirty || !canManageRolePermissions} onClick={handleSavePerms}>
                   {busy ? "저장 중..." : dirty ? "저장" : "저장됨"}
                 </button>
               </div>
@@ -329,6 +364,7 @@ export default function StaffPage() {
                       <label className="perm-item">
                         <input
                           type="checkbox"
+                          disabled={!canManageRolePermissions}
                           checked={selected.has(p.key)}
                           onChange={(e) => handleToggle(p.key, e.target.checked)}
                         />
@@ -344,6 +380,7 @@ export default function StaffPage() {
                             <label key={c.key} className="perm-item child">
                               <input
                                 type="checkbox"
+                                disabled={!canManageRolePermissions}
                                 checked={selected.has(c.key)}
                                 onChange={(e) => handleToggle(c.key, e.target.checked)}
                               />
@@ -420,7 +457,7 @@ export default function StaffPage() {
             <div className="admin-row"><span className="k">전화</span><span className="v">{staffDetail.phone ?? "-"}</span></div>
             <div className="admin-row"><span className="k">현재 역할</span><span className="v">{staffDetail.roleName ?? "없음"}</span></div>
 
-            {!staffDetail.isOwner && (
+            {!staffDetail.isOwner && canUpdateStaffRole && (
               <>
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>역할 변경</div>
                 <div className="mem-filters" style={{ padding: 0 }}>
@@ -435,7 +472,7 @@ export default function StaffPage() {
 
             <div className="add-profile-actions">
               <button className="ghost-btn" onClick={() => setStaffDetail(null)}>닫기</button>
-              {!staffDetail.isOwner && (
+              {!staffDetail.isOwner && canRemoveStaff && (
                 <button className="danger-btn" disabled={busy} onClick={() => handleRemoveStaff(staffDetail)}>스태프 제외</button>
               )}
             </div>
@@ -467,19 +504,25 @@ export default function StaffPage() {
                     {r.name}
                     {r.isSystem && <span style={{ color: "var(--text-dim)", fontSize: 11, marginLeft: 6 }}>기본</span>}
                   </span>
-                  {!r.isSystem && (
+                  {!r.isSystem && canManageRolePermissions && (
                     <button className="text-btn danger" disabled={busy} onClick={() => handleDeleteRole(r)}>삭제</button>
                   )}
                 </div>
               ))}
             </div>
 
-            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>새 역할 추가</div>
-            <input className="input-field" placeholder="역할 이름 (예: 데스크)" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} />
+            {canManageRolePermissions && (
+              <>
+                <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>새 역할 추가</div>
+                <input className="input-field" placeholder="역할 이름 (예: 데스크)" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} />
+              </>
+            )}
 
             <div className="add-profile-actions">
               <button className="ghost-btn" onClick={() => setRoleSheet(false)}>닫기</button>
-              <button className="outline-action" disabled={busy} onClick={handleCreateRole}>추가</button>
+              {canManageRolePermissions && (
+                <button className="outline-action" disabled={busy} onClick={handleCreateRole}>추가</button>
+              )}
             </div>
           </div>
         </div>

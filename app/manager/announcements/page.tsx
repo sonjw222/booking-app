@@ -17,6 +17,7 @@ import {
 import Loading from "../../components/Loading";
 import RichTextEditor from "../../components/RichTextEditor";
 import { ZoomableImage } from "../../components/ImageViewer";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 export default function ManagerAnnouncementsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -37,6 +38,7 @@ export default function ManagerAnnouncementsPage() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [pinned, setPinned] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -55,6 +57,25 @@ export default function ManagerAnnouncementsPage() {
     }
   }, [centerId]);
   useEffect(() => { load(); }, [load]);
+
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  function canDo(key: string): boolean {
+    return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);
+  }
+  const canWriteAnnouncement = canDo("board.notice.write");
+  const canDeleteAnnouncement = canDo("board.notice.delete");
 
   async function reloadList(cid: string) {
     try { setList(await fetchCenterAnnouncements(cid)); } catch { /* 무시 */ }
@@ -120,9 +141,11 @@ export default function ManagerAnnouncementsPage() {
     <div className="app-shell">
       <div className="header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div className="title" style={{ fontSize: 20, fontWeight: 800 }}>공지사항</div>
-        <button className="primary-btn" style={{ width: "auto", padding: "8px 14px", fontSize: 13 }} onClick={openNew}>
-          + 새 공지
-        </button>
+        {canWriteAnnouncement && (
+          <button className="primary-btn" style={{ width: "auto", padding: "8px 14px", fontSize: 13 }} onClick={openNew}>
+            + 새 공지
+          </button>
+        )}
       </div>
 
       {centers.length > 1 && (
@@ -163,10 +186,16 @@ export default function ManagerAnnouncementsPage() {
                   ))}
                 </div>
               )}
-              <div className="review-actions">
-                <button className="review-edit" disabled={busy} onClick={() => openEdit(a)}>수정</button>
-                <button className="review-del" disabled={busy} onClick={() => handleDelete(a.id)}>삭제</button>
-              </div>
+              {(canWriteAnnouncement || canDeleteAnnouncement) && (
+                <div className="review-actions">
+                  {canWriteAnnouncement && (
+                    <button className="review-edit" disabled={busy} onClick={() => openEdit(a)}>수정</button>
+                  )}
+                  {canDeleteAnnouncement && (
+                    <button className="review-del" disabled={busy} onClick={() => handleDelete(a.id)}>삭제</button>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -213,7 +242,7 @@ export default function ManagerAnnouncementsPage() {
 
             <div className="add-profile-actions" style={{ marginTop: 16 }}>
               <button className="ghost-btn" onClick={() => setSheet(false)}>취소</button>
-              <button className="primary-btn" disabled={busy} onClick={handleSave}>
+              <button className="primary-btn" disabled={busy || !canWriteAnnouncement} onClick={handleSave}>
                 {busy ? "저장 중..." : (editingId ? "수정" : "등록하고 알림 보내기")}
               </button>
             </div>

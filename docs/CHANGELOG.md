@@ -8,6 +8,54 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-21 — P2-22 세 번째 재발: `daily-book-limit-wiring.test.ts`도 shared fixture 충돌로 방어 코드 추가
+
+PR #72 CI에서 `daily-book-limit-wiring.test.ts`가 `USER_A`의 `centerAId`(P2-22가 이미
+leftover 누적 이력을 지목한 공유 fixture 센터) 오늘자 leftover 확정 예약 때문에 실패 —
+AUTO-SEC-I(P2-28)와 완전히 같은 메커니즘의 세 번째 재발. `clearUserATodayReservations()`
+방어 헬퍼 추가로 이 파일은 안정화했지만, sweep 자체의 근본 수정(P2-22 완료 조건 (a))은
+여전히 미해결 — 상세는 `docs/TODO.md` P2-22 참고.
+
+## 2026-08-21 — P2-28 근본 수정: stale-cleanup 두더지잡기 종결 + H/I 새 이슈 발견·방어
+
+PR #72(P1-5) Integration CI가 `auto-book-membership-security.test.ts`의 AUTO-SEC-F에서
+계속 실패해(`center_members_center_id_fkey`), `createIsolatedOwnedCenter()`의 하드코딩
+테이블 나열 정리 로직을 `information_schema` 전수 조사 기반 `delete_test_center_cascade()`
+SQL 함수로 교체(Live 적용). F는 통과했지만 파일이 처음으로 끝까지 실행되면서 그동안 F의
+크래시에 가려 안 보이던 별개 문제 2건(AUTO-SEC-H/I)이 드러났다 — 둘 다 `auto_book_membership()`
+자체가 아니라 테스트 fixture의 암묵적 전제 문제로 확인(H: 자정 근처 실행 시 dow-매칭 헬퍼가
+"2시간 뒤"를 며칠 뒤로 잘못 찾는 버그, I: `auto_book_membership()`의 "하루 1건" 체크가
+`profile_id`만 기준이라 공유 `USER_B` 계정의 무관한 leftover 예약과 날짜가 겹쳐 차단 —
+P2-22가 이미 문서화한 것과 같은 재발 패턴). 둘 다 테스트 레벨에서 방어 코드 추가로 해결,
+로컬 연속 2회 안정 통과 확인. 상세는 `docs/TODO.md` P2-28/P2-22 참고.
+
+## 2026-08-21 — P1-5b Bucket 2 서버측 권한(RLS/RPC) 연결, Live 적용 완료
+
+카탈로그 키만 있고 실제 DB 정책은 열려있던 9개 화면(goods/rooms/reviews/announcements/
+inquiries/orders/members 부가기능/대시보드 출석/classes CRUD)에 `has_permission()` 체크를
+실제로 연결하는 SQL migration 6개(products·rooms / reviews·announcements / inquiries·orders /
+center_members / manager_set_attendance / classes own-other) + 대응 UI 게이팅을 사용자가
+SQL Editor에서 순서대로 실행, 확인 쿼리로 라이브 반영까지 검증 완료.
+`fulfill_order()`는 조사와 달리 이미 `pass.payment.create`로 막혀 있었고(SEC-116/118 포함,
+라이브 정의 확인으로 발견) 정적 파일 추측 대신 실제 정의를 가져와 확인 후 그대로 두고 그
+키에 맞춰 UI만 게이팅. `class_trainers`(담당 강사 배정)도 own/other 판정 기준 자체가
+무방비였던 걸 발견해 `createClass`/`updateClass`/`createRecurringClasses`/`updateClassGroup`/
+`setClassTrainers*` 전부를 새 RPC로 옮기고(시그니처는 유지, 호출부 무변경)
+own(담당 강사 본인)/other × group/private 실제 판정을 서버에 구현. `npm run build` 통과.
+기존 스태프가 이 권한들을 아직 역할에 못 받았으면 갑자기 기능을 못 쓰게 되는 동작 변경이
+있으니 필요한 스태프에게 미리 권한을 부여해둘 것 — 상세는 `docs/TODO.md` P1-5b 참고.
+
+## 2026-08-21 — P1-5 버튼 단위 권한 게이팅 (Bucket 1, 9개 화면)
+
+서버(RLS/RPC)에 실제 `has_permission()` 체크가 있는 9개 매니저 화면
+(staff/members/sales/class-revenue/settings/membership-rules/classes/holidays/progress)의
+14~16개 버튼에 `fetchMyEffectivePermissionKeys()` + `canSeeManagerMenu()` 게이팅을 적용
+— 권한 없는 스태프에게 버튼이 안 보이거나 비활성화됨(서버 거부는 그대로 최종 방어선).
+카탈로그에 키만 있고 실제 RLS는 열려있는 나머지 9개 화면(goods/rooms/reviews/announcements/
+inquiries/orders 등)은 건드리지 않음 — 실제로 없는 서버 제약을 있는 것처럼 보여줄 위험이
+있어 SQL로 실제 권한을 먼저 연결해야 함(P1-5b로 별도 진행). `npm run build` 통과. 상세는
+`docs/TODO.md` P1-5 참고.
+
 ## 2026-08-21 — P2-28 2차 수정: N/O, RLS 고치니 센터 승인 상태 문제가 또 드러남
 
 1차 수정(RLS → `createAutoBookMembership()`으로 교체) 후 재실행하니 RLS 에러는 사라졌지만

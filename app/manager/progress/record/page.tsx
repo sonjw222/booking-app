@@ -19,6 +19,7 @@ import {
   deleteProgressByDate,
   type ProgressRecord,
 } from "../../../../lib/progress";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../../lib/roles";
 
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -54,6 +55,7 @@ function ProgressRecordContent() {
   const [lessonDate, setLessonDate] = useState(todayStr());
   const [note, setNote] = useState("");
   const [addSheet, setAddSheet] = useState(false);
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -67,6 +69,21 @@ function ProgressRecordContent() {
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
   }, []);
+
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  const canManageProgress = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "customer.progress");
 
   const loadBase = useCallback(async () => {
     if (!centerId) return;
@@ -212,7 +229,9 @@ function ProgressRecordContent() {
             </select>
             <span className="select-chevron">⌄</span>
           </div>
-          <button className="outline-action progress-add-record" disabled={!profileId} onClick={openAddSheet}>진도 기록 추가</button>
+          {canManageProgress && (
+            <button className="outline-action progress-add-record" disabled={!profileId} onClick={openAddSheet}>진도 기록 추가</button>
+          )}
           </section>
 
           <div className="divider" />
@@ -236,10 +255,12 @@ function ProgressRecordContent() {
                   {[...new Set(recs.filter((r) => r.note).map((r) => r.note))].map((note, ni) => (
                     <div key={ni} className="prog-hist-note">{note}</div>
                   ))}
-                  <div className="prog-hist-actions row-actions">
-                    <button className="quiet-action" onClick={() => handleEditDate(date, recs)}>수정</button>
-                    <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteDate(date)}>삭제</button>
-                  </div>
+                  {canManageProgress && (
+                    <div className="prog-hist-actions row-actions">
+                      <button className="quiet-action" onClick={() => handleEditDate(date, recs)}>수정</button>
+                      <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteDate(date)}>삭제</button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

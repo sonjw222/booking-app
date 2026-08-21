@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchProducts, createProduct, updateProduct, deleteProduct, won, type Product } from "../../../lib/passes";
+import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 export default function GoodsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -30,6 +31,7 @@ export default function GoodsPage() {
   const [pCount, setPCount] = useState("");
   const [pDesc, setPDesc] = useState("");
   const [pSizes, setPSizes] = useState("");
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -43,6 +45,25 @@ export default function GoodsPage() {
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
   }, []);
+
+  const activeCenter = centers.find((c) => c.id === centerId);
+
+  useEffect(() => {
+    if (!activeCenter) return;
+    if (activeCenter.isOwner) { setMyPerms(null); return; }
+    let cancelled = false;
+    setMyPerms(null);
+    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
+      .then((keys) => { if (!cancelled) setMyPerms(keys); })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [activeCenter]);
+
+  function canDo(key: string): boolean {
+    return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);
+  }
+  const canCreateProduct = canDo("pass.create");
+  const canEditProduct = canDo("pass.update");
 
   const load = useCallback(async () => {
     if (!centerId) return;
@@ -122,7 +143,9 @@ export default function GoodsPage() {
       <div className="back-header">
         <a className="side" href="/manager">‹</a>
         <div className="title">상품 관리</div>
-        <button className="header-action" onClick={openCreate}>+ 상품</button>
+        {canCreateProduct && (
+          <button className="header-action" onClick={openCreate}>+ 상품</button>
+        )}
       </div>
 
       {centers.length > 1 && (
@@ -163,10 +186,12 @@ export default function GoodsPage() {
                   {p.description && <div className="goods-description">{p.description}</div>}
                   {!!p.sizes?.length && <div className="goods-sizes">{p.sizes.map((size) => <span key={size}>{size}</span>)}</div>}
                 </div>
-                <div className="row-actions goods-card-actions">
-                  <button className="quiet-action" onClick={() => openEdit(p)}>수정</button>
-                  <button className="quiet-action danger" disabled={busy} onClick={() => handleDelete(p)}>삭제</button>
-                </div>
+                {canEditProduct && (
+                  <div className="row-actions goods-card-actions">
+                    <button className="quiet-action" onClick={() => openEdit(p)}>수정</button>
+                    <button className="quiet-action danger" disabled={busy} onClick={() => handleDelete(p)}>삭제</button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
