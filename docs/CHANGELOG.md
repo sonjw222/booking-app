@@ -8,6 +8,33 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-21 — P2-28 2차 수정: N/O, RLS 고치니 센터 승인 상태 문제가 또 드러남
+
+1차 수정(RLS → `createAutoBookMembership()`으로 교체) 후 재실행하니 RLS 에러는 사라졌지만
+`"아직 승인되지 않은 센터예요"`로 여전히 실패 — `createIsolatedOwnedCenter()`가 센터를
+`status: "pending"`으로 만드는데, `reserve_class()`는 `centers.status = 'approved'`를
+요구한다(`auto_book_membership()`엔 이 체크가 없어 다른 테스트들은 문제없었음). N/O만
+고치는 대신 `createIsolatedOwnedCenter()` 자체를 `status: "approved"`로 변경 — 이 헬퍼를
+쓰는 모든 테스트, 앞으로 추가될 테스트에도 일관되게 적용됨. 격리 센터가 실제 운영 센터의
+암묵적 전제(회원 소속, 승인 상태)를 둘 다 만족해야 한다는 게 이번에 드러난 교훈. 상세는
+`docs/TODO.md` P2-28 참고.
+
+## 2026-08-21 — P2-28 후속: AUTO-SEC-N/O 진짜 원인은 RLS(RPC 스캔 문제 아니었음)
+
+P0-7("공유 dev Supabase fixture 오염") 조사 중 조사 에이전트가 옛 버전 코드를 참조해 잘못된
+결론(H/M/N/O가 아직 공유 센터를 쓴다)을 내놓아, 실제 CI 로그를 직접 재확인했다. N/O의 진짜
+실패 원인은 `booked` 값 불일치가 아니라 `createTestMembership()`(RLS 걸린 일반 클라이언트)이
+막 만든 격리 센터에 소속되지 않은 userB의 `memberships` INSERT를 RLS로 거부하는 것이었다 —
+애초에 이 파일의 다른 테스트들처럼 admin 클라이언트 헬퍼(`createAutoBookMembership()`)를
+썼어야 했다. 두 테스트의 "기존 예약" 준비 단계를 교체, 이제 `createTestMembership` import
+자체가 불필요해져 제거. H(양쪽 케이스)/L/M은 최근 재실행들에서 F의 stale-cleanup 크래시에
+휘말리지만 않으면 이미 안정적으로 통과하고 있었음도 함께 확인 — 별도 조치 불필요.
+
+F만 여전히 잔존(`createIsolatedOwnedCenter()`의 stale-cleanup이 참조 테이블을 하나씩
+나열하는 방식이라 근본 해결은 아님, P2-28 참고). P0-7 자체(공유 `TEST_CENTER_ID`의
+`daily_book_limit_enabled`가 재발하는 문제)는 라이브 DB 접근 없이는 확정 못 해 미확인으로
+남김 — 상세는 `docs/TODO.md` P0-7/P2-28 참고.
+
 ## 2026-08-20 — P2-29: PR #46에서 `admin_action_logs` GRANT SQL만 분리해 반영
 
 PR #46(2026-08-12, 108 커밋 뒤처짐)을 정리하려다, 그 PR이 P1-12를 "완료"로 정정하는

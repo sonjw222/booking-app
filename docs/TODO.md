@@ -212,6 +212,8 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 완료 조건 | (a) `center_settings`를 변경하는 통합 테스트 전체(`operational-settings-wiring.test.ts` 등)를 감사해 실패 시에도 반드시 원상복구가 실행되는지(`try/finally` 또는 `afterEach`) 확인·보강. (b) 근본적으로는 공유 고정 `TEST_CENTER_ID` 대신 테스트마다 격리된 센터를 쓰는 방향(`getOrCreateOwnedTestCenter()` 패턴 확대)도 검토. |
 | 참고 | 여러 세션이 동시에 CI를 돌려 생기는 오염(간헐적 flaky, 재실행하면 대부분 해소)과는 별개 축의 문제 — 이건 재실행해도 계속 재발하는 게 특징 |
 
+**2026-08-21 관련 조사(P0-7 자체는 미해결로 남김)**: P2-28에서 `auto-book-membership-security.test.ts`의 여러 케이스를 완료 조건 (b)와 정확히 같은 방향(공유 `TEST_CENTER_ID` 대신 `createIsolatedOwnedCenter()` 격리 센터)으로 이미 전환했다. 다만 그 전환 자체가 별개의 두 새 버그(F/L의 `payments`/`center_members` FK — stale-cleanup이 모든 참조 테이블을 못 따라감, N/O의 `memberships` RLS — 새 센터에 userB가 소속되지 않음)를 드러냈다 — P0-7이 지목한 "공유 고정 센터" 문제와는 다른 종류의 위험이지만, "격리 센터 방향이 만능은 아니고 그 자체로 별도 정리가 필요하다"는 교훈은 P0-7 완료 조건 (b)를 실행할 때 참고할 만하다. P0-7의 핵심 가설(어떤 테스트가 실패 시 `center_settings` 원상복구 없이 조기 종료)은 라이브 DB 직접 조사(서비스 롤 키 필요, 이 세션엔 없음) 없이는 확정할 수 없어 여전히 미확인 상태로 남긴다.
+
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
 ### P1-1. 포인트 원장 이원화 정합성
@@ -1561,12 +1563,12 @@ PR #66, #67 모두 Integration이 19분대에 `conclusion: cancelled`로 끝났�
 `npx playwright install` 20분 멈춤도 이 안전장치 덕에 자동 정리됨 — P2-24). 없애면 그 사고가
 재발할 위험이 있어, 대신 정상 실행 시간에 여유를 더 두는 쪽으로 조정.
 
-### P2-28. (2026-08-20, 부분 완료 — H/M/N/O 근본 원인 미해결, F는 간헐적) PR #68 Integration 재현 실패 11건 — waitlist 설정 미보장은 해결, 공유 센터 스캔 오염 진단은 일부 틀림
+### P2-28. (2026-08-21, N/O 근본 원인 2건 모두 규명·수정 완료 — F만 잔존 이슈) PR #68 Integration 재현 실패 11건 — waitlist 설정 미보장·N/O RLS+센터 승인 상태 문제 해결
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P2 (테스트 코드/fixture 문제로 추정 — 앱 로직 버그 가능성 배제 못 함) |
-| 현재 상태 | **부분 완료.** ATT-SEC-B/C/D/E(waitlist)는 완전히 해결(재실행 4/4 통과 확인). **AUTO-SEC-H(예약마감 케이스)/M/N/O는 격리 센터로 옮겨도 여전히 실패 — 원래 진단(공유 센터 스캔 오염)이 이 4건에는 틀렸다는 뜻이라 재조사 필요.** F/L은 `createIsolatedOwnedCenter()`의 stale-cleanup이 매번 다른 테이블 FK(`payments` → `center_members`, 두더지잡기)로 크래시해 간헐적 — `payments`는 이번에 고쳤지만 `center_members` 등 다른 테이블이 더 있을 수 있어 근본적으로는 stale-cleanup을 "이 센터를 참조하는 모든 테이블"을 일반화해서 도는 방식으로 다시 짜야 한다(이번 배치 범위 밖). PR #68 자체는 문서 전용 변경이라 이 미해결 실패와 무관하다고 보고 merge 진행. |
+| 우선순위 | P2 (테스트 코드/fixture 문제로 확인됨 — 앱 로직 버그 아님) |
+| 현재 상태 | **거의 완료 — CI로 검증됨(213/214 통과).** ATT-SEC-B/C/D/E(waitlist)·AUTO-SEC-N/O까지 근본 원인 규명 및 수정 완료(N/O는 원인이 2단계로 겹쳐 있어 2차 수정까지 필요했음 — 아래 참고, PR #71 CI에서 N/O 둘 다 통과 확인). H(양쪽 케이스)/L/M은 최근 재실행들에서 안정적으로 통과 중(격리 전환 자체가 문제는 아니었음). **F만 `createIsolatedOwnedCenter()`의 stale-cleanup 두더지잡기 잔존 이슈**로 간헐적으로 크래시함(아래 F/L 단락 참고, 별도 구조 개선 필요 — 이번 배치 범위 밖). |
 | 근거 파일 | `tests/integration/auto-book-membership-security.test.ts`, `tests/integration/manager-set-attendance-membership-integrity.test.ts`, `lib/settings.ts` |
 
 PR #68(문서 전용 변경) CI에서 Integration 11건 실패(`auto-book-membership-security.test.ts`
@@ -1596,14 +1598,32 @@ draft_proposed.sql`, Live 적용 확인됨)을 직접 읽어보니 `where c.cent
   아마 memberships INSERT 시 트리거로 자동 생성되는 회원 행)에 걸린 것. 두더지잡기 패턴 —
   `payments`만 고쳐서는 근본 해결이 아니고, "이 센터/멤버십을 참조하는 모든 테이블"을
   일반화해서 도는 stale-cleanup으로 다시 짜야 한다(이번 배치 범위 밖, 아래 완료 조건 참고).
-- **H(휴무일 케이스)/A~E/K/P: 격리 전환만으로 통과.** (단, 이 그룹은 원래도 느슨한 assertion
-  이라 면역이었을 가능성과 우연이 섞여있어 확정적 결론은 아님.)
-- **H(예약마감 케이스)/M/N/O: 격리해도 여전히 실패.** 완전히 새로 만든 격리 센터(다른
-  테스트와 클래스 공유 불가능)에서도 `booked` 기대치가 틀린다는 건, 스캔 오염이 아닌
-  **다른 원인**(예: `calc_deadline`/`booking_deadline_min` 타이밍 로직 자체의 문제, 또는
-  테스트 코드의 시간 계산 버그)이라는 뜻 — 원래 진단이 이 4건에는 맞지 않았다. 근본 원인
-  미상. 라이브 DB 직접 조사(서비스 롤 키 필요, 이 세션엔 없음)가 필요해 이번 배치에서는
-  더 파지 않고 기록만 남김.
+- **H(양쪽 케이스)/A~E/K/L/M/P: 격리 전환만으로 통과, 이후 재실행들에서도 안정적.** F의
+  stale-cleanup 크래시에 휘말려 같은 파일 실행에서 함께 실패한 적은 있었으나(공유
+  `staleIsolatedCentersCleaned` 플래그 예외로 인한 collateral damage), F가 크래시하지
+  않은 실행에서는 전부 통과 — 이 자체의 로직 문제는 아니었음.
+- **N/O: 근본 원인 2건, 모두 규명·수정 완료(2026-08-21).** 실제 CI 로그를 보면 `booked`
+  assertion이 아니라 fixture 준비 단계에서 죽고 있었다 — booked count 문제라는 원래 가정
+  자체가 틀렸다.
+  1. **1차: `memberships` RLS 위반.** `createTestMembership()`(`tests/integration/setup.ts`)은
+     **RLS가 걸린 일반 클라이언트**로 insert한다. 공유 센터(`centerAId`)에서는 userB가
+     오래전부터 그 센터 회원이라 통과했지만, 격리 전환으로 만든 새 센터에는 userB가 전혀
+     소속돼 있지 않아 이 RLS를 위반했다. 이 파일의 다른 모든 테스트가 이미 쓰던 admin
+     클라이언트 헬퍼 `createAutoBookMembership()`으로 두 테스트의 "기존 예약" 준비 단계를
+     교체 — `createTestMembership` import 자체를 제거함.
+  2. **1차 수정 후 재실행에서 새로 드러난 2차: 센터 미승인.** RLS 에러는 사라졌지만
+     `"아직 승인되지 않은 센터예요"`로 여전히 실패 — `createIsolatedOwnedCenter()`가 센터를
+     `status: "pending"`으로 만드는데, `reserve_class()`를 비롯한 여러 RPC가
+     `centers.status = 'approved'`를 요구한다(`fix_class_booking_deadline_override_
+     draft_proposed.sql` 등). `auto_book_membership()`은 이 체크가 없어 F/G/I/J/K/L/M처럼
+     `reserve_class`를 안 거치는 테스트는 문제없었지만, N/O는 "기존 예약" 준비 단계에서
+     실제 `reserve_class` RPC를 호출한다. **`createIsolatedOwnedCenter()`의 센터 생성
+     자체를 `status: "approved"`로 변경**(N/O 개별 수정이 아니라 헬퍼 자체를 실제 운영
+     센터와 동일한 상태로 맞춤 — 이 파일의 모든 테스트, 앞으로 이 헬퍼를 쓸 새 테스트에도
+     일관되게 적용됨). 이 두 버그 모두 F/L의 payments/center_members처럼 fixture cleanup이
+     아니라 테스트/fixture 헬퍼 자체의 준비 단계 문제였다 — 격리 센터가 실제 운영 센터의
+     여러 암묵적 전제(회원 소속, 승인 상태)를 그대로 만족해야 한다는 게 이번에 드러난
+     교훈.
 
 **ATT-SEC-B/C/D/E(4건)**: 원인이 달랐다. `makeWaitlistedReservation()`이 두 번째
 `reserve_class()` 호출(정원 찬 수업에 대기로 밀려나는 예약)에서 `"이 센터는 대기예약을
