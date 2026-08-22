@@ -1865,6 +1865,25 @@ draft_proposed.sql`, Live 적용 확인됨)을 직접 읽어보니 `where c.cent
 `fetchSettings`/`saveSettings`로 명시적으로 999를 설정하고 `afterAll`에서 원복하도록 추가
 (N/O가 이미 쓰던 것과 같은 패턴).
 
+### P2-30. (신규, 2026-08-23) daily-book-limit 계열 E2E 4개 간헐 실패 — 공유 픽스처 오염 의심, 미확인
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **미확인 — 재현되면 P2-19/P2-22와 같은 계열로 조사 필요, 이번엔 재실행으로 우회** |
+| 근거 파일 | `tests/e2e/settings/daily-book-limit.spec.ts`, `daily-book-limit-edge-cases.spec.ts` |
+
+PR #86(UI/UX 감사 배치, 이 PR은 예약/한도 로직을 전혀 건드리지 않음) CI에서
+`daily-book-limit-edge-cases.spec.ts`의 3개 테스트(64/112/154행)와 `daily-book-limit.spec.ts`
+(62행)가 실패. 로컬에서 격리 재실행해도 동일하게 재현되지만, 실패 지점이 전부 "하루 예약
+한도" 관련 toast 텍스트 불일치(예: "하루 예약 가능 횟수" 기대, "정원이 차서 대기 등록됐어요"
+실제)라 **공유 `TEST_CENTER_ID`에 TEST_USER_A의 "오늘" 예약이 이미 쌓여있어 한도 계산의
+전제(빈 상태에서 시작)가 깨진 것으로 추정**(P2-19/P2-22와 같은 계열). 직전 PR #85는 E2E가
+깨끗하게 통과했었고, 이 PR의 diff는 UI/CSS/JSX와 테스트 셀렉터뿐이라 코드 원인일 가능성은
+낮음. 이번엔 root cause를 확정하지 않고 `gh run rerun --failed`로 재실행해 우회함(문서에
+이미 있는 "재실행하면 대부분 해소" 패턴). 다시 재현되면 P2-22 완료 조건 (a)(sweep을
+`center_settings`뿐 아니라 당일 예약 leftover까지 넓히는 근본 수정)를 진행할 것.
+
 ### P2-29. (2026-08-21, 완료) `admin_action_logs` service_role GRANT 없음 — draft SQL 작성 후 사용자 적용 완료
 
 | 필드 | 내용 |
