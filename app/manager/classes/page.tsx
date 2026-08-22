@@ -833,6 +833,12 @@ export default function ClassManagePage() {
 
   return (
     <div className="app-shell manager-classes-v2" style={{ paddingBottom: 170 }}>
+      {/* ManagerChrome(공용 헤더) 마이그레이션 이후 .back-header는 기본적으로 숨겨진다
+          (globals.css). 일반적인 "제목 숨기고 오른쪽 버튼 하나만" 패턴(.header-action)과
+          달리 이 화면은 좌우 버튼 2개 + 가운데 제목 구조라 그 패턴이 안 맞아서, 아래
+          .manager-classes-v2 > .back-header 전용 규칙으로 이 화면의 헤더만 원래 3분할
+          레이아웃 그대로 다시 보이게 한다(globals.css 참고) — 그 규칙이 없으면 "복사"/
+          "휴무일" 버튼이 완전히 사라지고 클릭도 안 되는 상태였다. */}
       <div className="back-header">
         <button className="side cal-export-btn" style={{ fontSize: 12 }} onClick={openCopy}>복사</button>
         <div className="title">내 일정</div>

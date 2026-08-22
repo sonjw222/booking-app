@@ -1846,7 +1846,11 @@ a.membership-card { text-decoration: none; display: block; }
 
 /* 예약 캘린더 - 선택 날짜 상세 + 메모 */
 .mypage-cal-cell.tappable { background: none; border: none; cursor: pointer; border-radius: 8px; }
-.mypage-cal-cell.tappable.sel { background: var(--surface); outline: 2px solid var(--accent); }
+/* 캘린더 선택 상태 통일 — 다른 캘린더들과 같은 brand-soft 패턴(globals.css의
+   .app-date-grid button.on 주석 참고). 이 셀은 숫자 아래 점(dots)이 함께 들어가는
+   구조라 원형 대신 기존 사각 셀 그대로 채움색만 맞춘다. */
+.mypage-cal-cell.tappable.sel { background: var(--brand-soft); outline: none; }
+.mypage-cal-cell.tappable.sel .mypage-cal-day { color: var(--brand-ink); font-weight: 700; }
 .cal-detail { padding: 0 20px; }
 .cal-detail-date { font-size: 15px; font-weight: 800; color: var(--text); margin: 8px 0 12px; }
 .cal-detail-card { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
@@ -2475,10 +2479,12 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .copy-cal-cell.empty { cursor: default; }
 .copy-cal-cell.has { background: var(--accent-soft); font-weight: 700; }
-.copy-cal-cell.on { background: var(--accent); color: var(--text-inverse); }
+/* 캘린더 선택 상태 통일 — 다른 캘린더들과 같은 brand-soft 패턴 (globals.css의
+   .app-date-grid button.on 주석 참고) */
+.copy-cal-cell.on { background: var(--brand-soft); color: var(--brand-ink); }
 .copy-cal-day { line-height: 1; }
 .copy-cal-dot { font-size: 9.5px; font-weight: 800; color: var(--accent); }
-.copy-cal-cell.on .copy-cal-dot { color: var(--text-inverse); }
+.copy-cal-cell.on .copy-cal-dot { color: var(--brand-ink); }
 .copy-cal-detail { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
 .copy-cal-detail-date { font-size: 12.5px; font-weight: 800; color: var(--accent); margin-bottom: 6px; }
 .copy-cal-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12.5px; }
@@ -2900,7 +2906,13 @@ a.membership-card { text-decoration: none; display: block; }
 .app-date-week span { padding: 7px 0; color: var(--ink-soft); font-size: 11px; font-weight: 650; text-align: center; }
 .app-date-grid button,
 .app-date-grid i { aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; font-size: 12px; font-style: normal; }
-.app-date-grid button.on { background: var(--ink); color: var(--text-inverse); font-weight: 720; }
+/* 캘린더 4벌(예약/마이페이지/스케줄복사/이 날짜 선택기)의 "선택됨" 표시를 하나의
+   시각 언어로 통일 — 예약 캘린더(.cal-cell.selected)와 매니저 수업 캘린더가 이미 쓰던
+   brand-soft 원형(연한 하늘색 배경 + 진한 하늘색 글자)을 기준으로 맞춘다. 이전에는
+   var(--ink)(테마의 "가장 진한 색" — 다크 모드에서 거의 흰색으로 뒤집힘)를 배경으로 쓰고
+   고정 흰 글자를 조합해서 다크 모드에서 대비가 깨질 수 있었는데, brand-soft/brand-ink는
+   테마와 무관하게 고정값이라 그 문제도 함께 없앤다. */
+.app-date-grid button.on { background: var(--brand-soft); color: var(--brand-ink); font-weight: 720; }
 .app-date-grid button.today:not(.on) { box-shadow: inset 0 0 0 1px var(--brand); color: var(--brand-ink); font-weight: 720; }
 .app-month-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
 .app-month-grid button {
@@ -2966,7 +2978,6 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-classes-v2 .sheet .app-date-head strong { font-size: 16px; font-weight: 780; }
 .manager-classes-v2 .sheet .app-date-grid { gap: 3px; }
 .manager-classes-v2 .sheet .app-date-grid button { min-height: 38px; font-size: 13px; }
-.manager-classes-v2 .sheet .app-date-grid button.on { background: var(--ink); }
 .manager-classes-v2 .sheet .app-date-grid button.today:not(.on) {
   color: var(--brand-ink);
   background: var(--brand-soft);
@@ -3949,6 +3960,11 @@ a.membership-card { text-decoration: none; display: block; }
 
 /* Batch 7B: manager classes — keep current scheduling logic, align the surface. */
 .manager-classes-v2{background:var(--bg);padding-bottom:196px!important}
+/* 이 화면의 헤더는 제목 + 좌우 액션 2개 구조라 ".header-action"(제목 숨기고 오른쪽 버튼
+   하나만) 패턴이 안 맞는다. 아래 없이는 .manager-v3-content > .app-shell > .back-header가
+   기본적으로 숨겨져 "복사"/"휴무일" 버튼이 완전히 사라진다 — 선택자 특이성을 그 규칙보다
+   높여(app-shell.manager-classes-v2 결합) 이 화면만 원래 3분할 레이아웃으로 되돌린다. */
+.manager-v3-content>.app-shell.manager-classes-v2>.back-header{display:flex}
 .manager-classes-v2>.back-header{min-height:88px;padding:28px var(--page-gutter) 18px;border-bottom:1px solid var(--line)}
 .manager-classes-v2>.back-header .title{font-size:27px;font-weight:800;letter-spacing:-.7px}
 .manager-classes-v2>.back-header .cal-export-btn{min-width:48px;min-height:40px;padding:0 8px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);font-weight:700}
