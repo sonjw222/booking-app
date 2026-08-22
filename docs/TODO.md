@@ -849,9 +849,16 @@ RLS 정책(`pg_policies`)을 먼저 확인한 뒤, 그 정책들이 원래 강�
 RLS를 우회하는 대신 원자성만 얻는 방향. `lib/centers.ts`는 `accountId` 파라미터를 없애고
 (RPC가 `my_account_id()`로 직접 확인) 단일 `supabase.rpc()` 호출로 축소, 호출부 2곳
 (`app/login/page.tsx`, `app/mypage/register-center/page.tsx`)과
-`tests/unit/centers.registerCenterForAccount.test.ts`를 함께 갱신. 단, `businessNumber` 입력값
-포맷 정규화(하이픈 유무 등)는 하지 않아 표기만 다른 사실상 동일 번호의 중복은 여전히 통과할 수
-있음 — 별도 이슈로 필요시 추가.
+`tests/unit/centers.registerCenterForAccount.test.ts`를 함께 갱신.
+
+**2026-08-22 후속 완료**: `businessNumber` 표기(하이픈/공백 유무 등) 정규화도 마무리했다.
+읽기 전용 진단 쿼리(`diagnose_business_number_format_dupes_readonly.sql`)로 정규화(숫자만
+비교) 기준 기존 중복이 없음을 먼저 확인한 뒤, 원문 그대로에 걸려 있던
+`centers_business_number_unique` 인덱스를 `regexp_replace(business_number, '\D', '', 'g')`
+기준 `centers_business_number_normalized_unique`로 교체(`fix_business_number_normalize_unique.sql`,
+라이브 적용 확인됨). `register_center_for_account_safe()`의 `exception when unique_violation`
+처리는 어떤 unique 인덱스가 위반됐는지와 무관한 범용 처리라 RPC/클라이언트 코드는 전혀
+변경하지 않았다.
 
 ### P2-12. SEC-007/008 RLS 정책 초안의 세부 결정 필요 항목
 
