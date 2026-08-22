@@ -338,6 +338,47 @@ async function sweepStaleTestClasses(centerId: string, centerName: string): Prom
   }
 }
 
+// P0-7 대응(docs/TODO.md) — 공유 통합테스트센터의 center_settings가 daily_book_limit_enabled
+// 같은 값이 켜진 채로 반복 오염되는 문제. classes와 달리 center_settings는 "언제 바뀌었는지"를
+// 알려주는 타임스탬프가 없어(단일 updated_at은 최근 정상 저장과 크래시로 인한 leftover를
+// 구분 못함) sweepStaleTestClasses처럼 "오래된 것만" 골라 지울 수 없다 — 대신 이 함수가
+// 호출되는 시점(각 통합 테스트 파일의 beforeAll)마다 매번 schema.sql 기본값으로 무조건
+// 되돌린다. sweepStaleTestClasses와 동일한 안전 근거(이름 패턴 방어 확인 + vitest.integration.
+// config.ts의 fileParallelism:false로 항상 순차 실행이라 이전 파일은 이미 끝났거나 CI 취소로
+// 죽은 상태뿐)가 그대로 적용된다. 각 파일은 이 함수가 끝난 뒤 자신의 beforeAll에서
+// fetchSettings()로 "원복할 기준값"을 다시 캡처하므로, 그 기준값 자체가 항상 기본값이 되어
+// 이전 실행의 leftover가 다음 실행의 기준값으로 섞여 들어갈 일이 없다.
+async function resetStaleTestCenterSettings(centerId: string, centerName: string): Promise<void> {
+  if (!centerName.startsWith("통합테스트센터-")) return; // 방어적 재확인
+  const admin = getFixtureAdminClient();
+  // 스윕 실패(에러 반환이든 예외든)는 이 테스트 실행 자체를 막을 이유가 아니다 — 다음
+  // 실행에서 다시 시도된다(sweepStaleTestClasses와 동일한 정책).
+  try {
+    await admin.from("center_settings").upsert({
+      center_id: centerId,
+      private_book_days_before: 1, private_book_time: "22:00",
+      group_book_days_before: 1, group_book_time: "22:00",
+      private_cancel_days_before: 1, private_cancel_time: "22:00",
+      group_cancel_days_before: 1, group_cancel_time: "22:00",
+      allow_same_day_booking: true, same_day_change_hours: 24, same_day_change_minutes: 0,
+      autocancel_hours: 0, autocancel_minutes: 0,
+      waitlist_auto_hours: 0, waitlist_auto_minutes: 0,
+      waitlist_weekly_limit: 0,
+      daily_book_limit_enabled: false, daily_book_limit: null,
+      private_open_days_before: 60, private_open_time: "15:00",
+      group_open_days_before: 60, group_open_time: "15:00",
+      private_slot_unit: "30min",
+      private_max_concurrent_enabled: false, private_max_concurrent: null,
+      show_group_reserved_count: true, show_group_waitlist_count: true,
+      use_inquiry_board: true, show_all_classes: true, use_locker: false,
+      deduct_on_late_cancel: false, auto_unpaid_input: false, use_lounge: true,
+      show_point_history: true,
+    }, { onConflict: "center_id" });
+  } catch {
+    /* 무시 — 위 주석 참고 */
+  }
+}
+
 export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<string> {
   const admin = getFixtureAdminClient();
 
@@ -375,6 +416,7 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
       const centerId = (owned as any).center_id as string;
       const { data: centerRow } = await admin.from("centers").select("name").eq("id", centerId).maybeSingle();
       await sweepStaleTestClasses(centerId, (centerRow as any)?.name ?? "");
+      await resetStaleTestCenterSettings(centerId, (centerRow as any)?.name ?? "");
       return centerId;
     }
   }
