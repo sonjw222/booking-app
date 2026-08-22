@@ -776,12 +776,12 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 - `notify_reservation_insert`
 - `notify_reservation_update`
 
-### P2-5. 🔴 (2026-08-23, P0로 격상 — 확정 보안 취약점 발견) `revenue_summary` view가 anon에게 전체 센터 매출 노출
+### P2-5. (2026-08-23, 완료 — 취약점 발견 즉시 SQL 적용으로 차단) `revenue_summary` view가 anon에게 전체 센터 매출 노출
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | ~~P2~~ → **P0** |
-| 현재 상태 | **확정된 보안 취약점 — 수정 SQL 작성 완료, 미적용(사용자 실행 필요)** |
+| 우선순위 | ~~P2~~ → P0 |
+| 현재 상태 | **완료.** 취약점 발견 당일 SQL 적용, `information_schema.role_table_grants` 재조회로 anon/authenticated 권한이 사라지고 `postgres`만 남은 것을 확인. |
 | 근거 파일 | `schema.sql`(`revenue_summary` 정의), `add_sales.sql`(`payments` RLS), `fix_revenue_summary_public_access_leak_draft_proposed.sql`(신규) |
 | 관련 문서 | [DATABASE 4-7](./DATABASE.md), [REQUIREMENTS 5-4](./REQUIREMENTS.md) |
 
@@ -798,7 +798,8 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 P2-6(아래) 조사에서 이미 확인했듯 `app/`·`lib/` 어디서도 이 view를 쓰지 않아, 정상 기능에
 영향 없이 가장 단순한 조치(anon/authenticated 권한 회수)로 닫을 수 있다.
 `fix_revenue_summary_public_access_leak_draft_proposed.sql` 작성(롤백 포함, view 자체는
-삭제하지 않고 GRANT만 회수) — **미적용, 사용자가 SQL Editor에서 실행 필요.**
+삭제하지 않고 GRANT만 회수) — **사용자가 SQL Editor에서 실행, 재조회로 anon/authenticated
+권한이 사라진 것 확인 완료.**
 
 ### P2-6. (2026-08-23 완료 — 죽은 경로 확정) `purchase_requests`의 현재 역할
 
