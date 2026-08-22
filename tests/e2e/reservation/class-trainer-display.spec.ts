@@ -86,20 +86,26 @@ test.afterAll(async () => {
 });
 
 test.describe("D, F: 관리자 수업 목록의 담당 강사 표시", () => {
-  test("D: 강사 1명 — '시간 · 강사명 · 예약 인원' 형태로 표시된다", async ({ page }) => {
+  // [2026-08-23] UX 감사(B-2) 대응으로 "예약 N/M"이 .class-row-meta의 인라인 텍스트에서
+  // 44px 독립 버튼(.class-row-roster-btn)으로 분리됐다 — 21px 텍스트 링크뿐이라 매니저가
+  // 매일 여는 예약자/출석 화면 진입이 오탭에 취약했던 문제 대응(docs/TODO.md P2-DS-3).
+  // 이 파일의 원래 검증 대상(담당 강사 표시 자체)은 그대로 유지하고, 예약 인원 검증만
+  // 새 위치(.class-row-roster-btn)로 옮긴다.
+  test("D: 강사 1명 — 메타 텍스트에 강사명이 표시되고, 별도 버튼에 예약 인원이 표시된다", async ({ page }) => {
     const title = `강사표시-관리자-단일-${Date.now()}`;
     const cls = await createFutureTestClassAdmin(centerAId, { title, hoursFromNow: 200 });
     createdClassIds.push(cls.id);
     const kstDate = kstDateStr(cls.startTime);
     await assignTrainerViaUi(page, kstDate, title, managerAName);
 
-    const meta = page.locator(".class-row", { hasText: title }).locator(".class-row-meta");
-    await expect(meta).toContainText(`· ${managerAName} · 예약`);
+    const row = page.locator(".class-row", { hasText: title });
+    await expect(row.locator(".class-row-meta")).toContainText(`· ${managerAName}`);
+    await expect(row.locator(".class-row-roster-btn")).toContainText(/예약 \d+\/\d+/);
     // 삭제 버튼/카드 클릭 동작이 그대로인지도 가볍게 확인(범위: 레이아웃만 바뀌었는지)
-    await expect(page.locator(".class-row", { hasText: title }).getByRole("button", { name: "삭제" })).toBeVisible();
+    await expect(row.getByRole("button", { name: "삭제" })).toBeVisible();
   });
 
-  test("F: 강사 없음 — 기존과 동일하게 '시간 · 예약 인원' 형태를 유지하고 불필요한 구분자가 없다", async ({ page }) => {
+  test("F: 강사 없음 — 시간 텍스트에 불필요한 구분자가 없다", async ({ page }) => {
     const title = `강사표시-관리자-없음-${Date.now()}`;
     const cls = await createFutureTestClassAdmin(centerAId, { title, hoursFromNow: 202 });
     createdClassIds.push(cls.id);
@@ -107,12 +113,12 @@ test.describe("D, F: 관리자 수업 목록의 담당 강사 표시", () => {
 
     const kstDate = kstDateStr(cls.startTime);
     await gotoManagerClassesDay(page, kstDate);
-    const meta = page.locator(".class-row", { hasText: title }).locator(".class-row-meta");
-    const text = (await meta.innerText()).replace(/\s+/g, " ").trim();
-    expect(text).toMatch(/^\d{2}:\d{2}~\d{2}:\d{2} · 예약 \d+\/\d+/);
-    // 강사가 없으면 시간과 "예약" 사이에 구분자가 정확히 하나만 있어야 한다(강사 자리에
-    // 빈 " · "가 추가로 끼어들면 " ·  · 예약"처럼 구분자가 중복된다).
-    expect((text.match(/·/g) ?? []).length).toBe(1);
+    const row = page.locator(".class-row", { hasText: title });
+    const text = (await row.locator(".class-row-meta").innerText()).replace(/\s+/g, " ").trim();
+    expect(text).toMatch(/^\d{2}:\d{2}~\d{2}:\d{2}$/);
+    // 강사가 없으면 구분자(·)가 전혀 없어야 한다(강사 자리에 빈 " · "가 남아있으면 안 됨).
+    expect((text.match(/·/g) ?? []).length).toBe(0);
+    await expect(row.locator(".class-row-roster-btn")).toContainText(/예약 \d+\/\d+/);
   });
 });
 
