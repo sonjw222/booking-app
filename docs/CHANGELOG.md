@@ -8,6 +8,25 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-22 — P2-14 잔여 항목: 수강권 관리 메뉴 게이트 누락 수정 + progress_records UPDATE RLS 추가
+
+`app/manager/page.tsx`의 "수강권 관리" 메뉴 링크가 `pass.create` 권한만 확인해서, "예약조건"
+편집 권한(`pass.update`, `membership_schedule_rules` RLS가 실제로 요구하는 키)만 있고
+`pass.create`는 없는 스태프는 메뉴 자체가 안 보여 그 화면에 진입할 방법이 없었다 — 조건을
+`pass.create || pass.update`로 확장(`app/manager/membership-rules/page.tsx`는 이미 두 키를
+따로 체크하고 있어 화면 내부 로직은 수정 불필요, 진입 메뉴만 문제였음).
+
+`progress_records`에 UPDATE RLS 정책이 없던 것(SELECT/INSERT/DELETE만 존재)도 확인 —
+`lib/progress.ts`의 `updateProgressNote()`가 이미 `.update()`를 호출하도록 작성돼 있지만
+현재 어느 화면에서도 호출하지 않는 죽은 함수라 지금까지는 무해했다. `progress_categories`의
+기존 UPDATE 정책과 동일한 패턴(`customer.progress` 권한)으로
+`fix_progress_records_missing_update_rls_draft_proposed.sql` 작성(롤백 포함, 미적용 — 사용자
+실행 필요).
+
+`rooms` SELECT가 `using (true)`로 전체 공개인 것은 `fix_permission_products_rooms_rls.sql`
+주석("별도 permissive select 정책이라 for all에서 select만 걷어내도 조회는 그대로 열려
+있다")으로 의도된 설계임을 재확인 — PII 없는 테이블(이름/수용인원만)이라 수정 없이 종결.
+
 ## 2026-08-22 — 로그인 화면 소셜 로그인 버튼을 원형 아이콘으로 재설계
 
 전체 너비 텍스트 버튼(세로 나열)에서 구글/카카오/네이버/애플 원형 아이콘 버튼(가로 나열)으로
