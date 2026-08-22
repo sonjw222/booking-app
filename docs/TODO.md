@@ -718,35 +718,54 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 | 실제 발견된 버그 2건(수정 완료) | (1) 터미널에서 Secret 값을 따옴표 없이 넘겨 셸이 특수문자를 잘못 해석해 "wrong client id / client secret pair" 발생 — 작은따옴표로 감싸서 재등록해 해결(코드 문제 아님, 운영 실수). (2) `app/login/naver-callback/page.tsx`가 `verifyOtp()`에 `token_hash`와 `email`을 같이 넘겨 Supabase Auth API가 "Only the token_hash and type should be provided"로 거부 — `email` 필드를 제거해 해결(진짜 코드 버그, 수정 커밋 필요). |
 | 검증 | 실제 네이버 계정으로 로그인 → 콜백 → 세션 확립까지 실브라우저에서 성공 확인(사용자 직접 테스트). |
 
-### P2-2. Realtime publication과 문의·알림 RLS
+### P2-2. (2026-08-23, 완료) Realtime publication과 문의·알림 RLS
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **운영 설정 필요 / 확인 필요** |
+| 현재 상태 | **완료 — 운영 확인 완료, 이상 없음** |
 | 근거 파일 | `lib/notifications.ts`, `lib/inquiries.ts`, `add_notifications.sql`, `add_inquiries.sql`; `notifications`, `inquiry_threads`, `inquiry_messages` |
-| 완료 조건 | 운영 Supabase publication과 RLS를 확인하고 회원·매니저 양쪽에서 실시간 수신, 재구독, 권한 격리와 channel cleanup을 검증함 |
 | 관련 문서 | [REQUIREMENTS 6-2](./REQUIREMENTS.md), [DATABASE 4-5, 12-5](./DATABASE.md), [ROUTES 알림·문의 항목](./ROUTES.md) |
 
-### P2-3. Storage bucket과 정책 운영 확인
+라이브 확인: `supabase_realtime` publication에 `notifications`/`inquiry_messages`는 포함,
+`inquiry_threads`는 빠져있음 — 처음엔 누락으로 의심했으나 `lib/inquiries.ts`의
+`subscribeMessages()`가 실제로 구독하는 건 `inquiry_messages`(스레드 안 새 메시지)뿐이고
+`inquiry_threads` 자체를 구독하는 코드는 없어 정상. RLS도 `inquiry_messages`(조회),
+`inquiry_threads`(매니저/회원 조회), `notifications`(본인 조회/수정/삭제)가 각각 있고,
+`inquiry_messages`/`inquiry_threads`에 INSERT 정책이 없는 건 RPC(SECURITY DEFINER)로
+쓰기 때문에 정상, `notifications`에 사용자 INSERT 정책이 없는 것도 서버 trigger 전용
+설계라 정상.
+
+### P2-3. (2026-08-23, 완료) Storage bucket과 정책 운영 확인
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **운영 설정 필요 / 확인 필요** |
+| 현재 상태 | **완료 — 운영 확인 완료, 핵심 리스크(business-licenses 비공개) 정상** |
 | 근거 파일 | `lib/storage.ts`, `lib/profiles.ts`, `lib/center.ts`, `lib/reviews.ts`, `setup_storage.sql`; `avatars`, `business-licenses` |
-| 완료 조건 | 운영 bucket 존재, MIME·크기 정책, 업로드·조회·삭제 권한을 역할별로 검증하고 `business-licenses`가 비공개로 유지됨을 확인함 |
 | 관련 문서 | [REQUIREMENTS 5-1, 6-2](./REQUIREMENTS.md), [DATABASE 4-7, 7-4](./DATABASE.md) |
 
-### P2-4. 핵심 trigger 운영 적용 확인
+라이브 확인: `business-licenses` bucket `public=false`(비공개 유지 확인, 조회 정책도
+본인 또는 platform admin으로 제한), `avatars`는 `public=true`(의도된 설계 — 프로필
+사진은 공개). 업로드 정책은 둘 다 `auth.role()='authenticated'`만 확인하고 파일 경로가
+본인 소유인지까지는 강제하지 않음(예: 로그인한 회원이면 이론상 다른 사람의 avatars 경로에
+덮어쓰기 시도 가능 — 다만 경로가 uuid 기반이라 실제 악용 난이도는 낮음). 삭제/수정 정책은
+둘 다 없음(업로드만 가능, 덮어쓰기는 storage API의 upsert 동작에 따라 별도 UPDATE 정책
+필요할 수 있음 — 현재 화면에서 재업로드/교체가 실제로 되는지는 이번 범위에서 따로
+검증하지 않음). 급한 문제는 아니라 별도 이슈로 승격하지 않음.
+
+### P2-4. (2026-08-23, 완료) 핵심 trigger 운영 적용 확인
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인 필요** |
+| 현재 상태 | **완료 — 6개 전부 존재·활성 확인** |
 | 근거 파일 | `schema.sql`, `reservation_functions.sql`, `add_platform_admin.sql`, `add_notifications.sql`, `add_notification_triggers.sql` |
-| 완료 조건 | 운영 `pg_trigger`에서 6개 trigger의 존재·활성 상태·대상 함수를 확인하고 센터 생성, 상태 변경, 주문·후기·예약 알림 시나리오를 검증함 |
 | 관련 문서 | [DATABASE 11절, 12-5](./DATABASE.md) |
+
+라이브 `pg_trigger` 조회 결과 `trg_create_default_center_roles`/`trg_guard_center_status`/
+`notify_new_order`/`notify_new_review`/`notify_reservation_insert`/`notify_reservation_update`
+6개 전부 존재하고 `tgenabled='O'`(활성)이며 대상 함수도 문서와 일치함을 확인.
 
 확인 대상:
 
@@ -757,29 +776,46 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 - `notify_reservation_insert`
 - `notify_reservation_update`
 
-### P2-5. `revenue_summary` view 사용 여부
+### P2-5. (2026-08-23, 완료 — 취약점 발견 즉시 SQL 적용으로 차단) `revenue_summary` view가 anon에게 전체 센터 매출 노출
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P2 |
-| 현재 상태 | **확인 필요** |
-| 근거 파일 | `schema.sql`, `lib/sales.ts`; `revenue_summary` |
-| 완료 조건 | 운영·외부 리포트에서 view를 사용하는지 확인하고, 사용할 경우 코드·문서의 기준 집계로 연결해 결과를 검증함. 사용하지 않을 경우 보존·폐기 결정을 기록함 |
+| 우선순위 | ~~P2~~ → P0 |
+| 현재 상태 | **완료.** 취약점 발견 당일 SQL 적용, `information_schema.role_table_grants` 재조회로 anon/authenticated 권한이 사라지고 `postgres`만 남은 것을 확인. |
+| 근거 파일 | `schema.sql`(`revenue_summary` 정의), `add_sales.sql`(`payments` RLS), `fix_revenue_summary_public_access_leak_draft_proposed.sql`(신규) |
 | 관련 문서 | [DATABASE 4-7](./DATABASE.md), [REQUIREMENTS 5-4](./REQUIREMENTS.md) |
 
-SQL 정의는 있으나 현재 `app/`·`lib/`의 직접 조회는 확인되지 않았습니다.
+원래 목적은 "이 view를 운영에서 쓰는지" 확인이었는데, read-only 진단 중 확정된 실제 보안
+구멍을 발견해 P0로 격상했다. `information_schema.role_table_grants` 조회 결과
+`anon`(비로그인)과 `authenticated` 둘 다 `revenue_summary`에 SELECT 권한이 있었고,
+`pg_class.reloptions`가 null이라 `security_invoker=true`가 꺼져 있음(Postgres 기본
+동작 — plain view는 view owner(`postgres`)의 권한으로 실행돼 하위 테이블 RLS를 건너뜀)을
+확인했다. 이 view가 select하는 `payments`의 실제 SELECT RLS(`add_sales.sql`의 "매니저
+매출 조회")는 그 센터 매니저로 좁혀져 있는데, view가 그 RLS를 우회하므로 **anon key(클라이언트
+번들에 박혀있는 공개 키)만으로 로그인 없이 REST API로 이 view를 직접 호출해 전체 센터의
+일자별 결제건수·총매출·카드/현금/계좌이체/포인트·미수금을 볼 수 있는 상태였다.**
 
-### P2-6. `purchase_requests`의 현재 역할
+P2-6(아래) 조사에서 이미 확인했듯 `app/`·`lib/` 어디서도 이 view를 쓰지 않아, 정상 기능에
+영향 없이 가장 단순한 조치(anon/authenticated 권한 회수)로 닫을 수 있다.
+`fix_revenue_summary_public_access_leak_draft_proposed.sql` 작성(롤백 포함, view 자체는
+삭제하지 않고 GRANT만 회수) — **사용자가 SQL Editor에서 실행, 재조회로 anon/authenticated
+권한이 사라진 것 확인 완료.**
+
+### P2-6. (2026-08-23 완료 — 죽은 경로 확정) `purchase_requests`의 현재 역할
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인 필요** |
+| 현재 상태 | **완료 — 죽은 경로로 확정, 정리는 보류(운영 데이터 삭제는 별도 승인 필요)** |
 | 근거 파일 | `lib/center.ts`, `app/center/[id]/page.tsx`, `add_center_shop.sql`; `requestPurchase()`, `purchase_requests` |
-| 완료 조건 | 장바구니·주문 이전 구매 신청 흐름을 계속 사용할지 결정하고 실제 호출자를 연결해 검증하거나, 대체 완료라면 운영 row·RPC·외부 접근을 확인한 뒤 보존·정리 방침을 기록함 |
 | 관련 문서 | [DATABASE 4-3](./DATABASE.md), [ROUTES `/center/[id]`](./ROUTES.md) |
 
-현재 insert helper는 존재하지만 센터 상세 화면은 `addToCart()`를 사용하며 `requestPurchase()` 호출은 확인되지 않았습니다.
+라이브 조회 결과 `purchase_requests`에 row가 5건뿐이고 전부 2026-07-22(초기 개발 중 수동
+QA로 추정 — 상품명이 "체크용 수강권" 등 테스트성 이름) 이후 신규 row가 전혀 없음, 5건 모두
+`pending` 상태로 한 달 넘게 방치됨을 확인 — `requestPurchase()`가 실제로 호출되는 경로가
+없다는 걸 데이터로 재확인했다. 센터 상세 화면은 이미 `addToCart()`를 쓰고 있어 대체가
+완료된 상태. 기존 5건 leftover row 삭제나 테이블 정리는 이번 범위 밖(CLAUDE.md 규칙 3,
+기존 데이터 삭제는 별도 승인 필요) — 필요하면 후속으로 결정.
 
 ### P2-7. (2026-08-19, 완료) `.env.local.example` 부재
 
