@@ -922,7 +922,7 @@ RLS를 우회하는 대신 원자성만 얻는 방향. `lib/centers.ts`는 `acco
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인 필요 (정책 초안은 존재, 실행 전 결정 필요)** |
+| 현재 상태 | **보류 — 출시 blocker 아님.** 2026-08-23 코드 재확인: `staff_salaries`/`contracts`/`membership_transfers`/`community_posts`/`community_comments` 전부 `app/`·`lib/` 어디서도 참조되지 않는 미구현 기능(화면 자체가 없음), `add_rls_gap_tables_draft_proposed.sql`도 라이브 미적용 초안이라 지금 열려있는 구멍이 아님. 사용자 결정: 각 기능을 실제로 만들 때 그 시점의 구체적인 구현 방식(RPC 여부 등)에 맞춰 재검토하기로 하고 지금은 보류. |
 | 근거 파일 | `add_rls_gap_tables_draft_proposed.sql`, [21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md) |
 | 완료 조건 | 아래 세부 항목을 결정한 뒤 `add_rls_gap_tables_draft_proposed.sql`을 반영해 실행함 |
 | 관련 문서 | [21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md) |
