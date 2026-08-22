@@ -109,7 +109,8 @@ export default function PurchasesPage() {
         open={!!cancelTarget}
         title="이 주문을 취소할까요?"
         description={`${cancelTarget?.productName ?? "선택한 상품"} 주문이 취소돼요. 아직 발급 전이라 결제는 없었던 것으로 처리돼요.`}
-        confirmLabel="취소하기"
+        cancelLabel="닫기"
+        confirmLabel="주문 취소"
         danger
         busy={busy}
         onCancel={() => setCancelTarget(null)}

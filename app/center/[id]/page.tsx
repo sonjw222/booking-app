@@ -276,7 +276,12 @@ function CenterDetailContent() {
         return (
         <div className="sheet-overlay" onClick={() => setBuySheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-title">수강권 · 상품 구매</div>
+            <div className="sheet-title">
+              수강권 · 상품 구매
+              <button type="button" className="sheet-close-btn" aria-label="닫기" onClick={() => setBuySheet(false)}>
+                <UiIcon name="close" size={20} />
+              </button>
+            </div>
             <a href="/cart" className="cart-link-btn"><UiIcon name="cart" size={16} /> 장바구니 보기</a>
             {filterProductIds && (
               <div className="class-filter-notice">

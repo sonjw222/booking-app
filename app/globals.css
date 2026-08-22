@@ -520,6 +520,10 @@ a { color: inherit; text-decoration: none; }
 .list-row .icon svg { width: 22px; height: 22px; }
 .list-row .chevron { color: var(--ink-soft); font-size: 14px; }
 .logout-row .left { color: var(--danger); }
+/* 마이페이지 상단 "관리자 모드로 전환" — 매일 써야 하는 진입점이라 일반 설정 항목과
+   같은 톤이면 눈에 안 띈다(UX 감사 B-1). 브랜드색으로 살짝 강조. */
+.manager-mode-switch { background: var(--brand-soft); border-radius: 14px; border-bottom: none; margin-bottom: 8px; }
+.manager-mode-switch .left, .manager-mode-switch .icon, .manager-mode-switch .chevron { color: var(--brand-ink); }
 
 /* ============================================================
    공통: 뒤로가기 헤더 / ghost 버튼
@@ -557,8 +561,9 @@ a { color: inherit; text-decoration: none; }
 }
 .profile-item-sub { font-size: 12px; color: var(--ink-soft); font-weight: 600; margin-top: 2px; }
 .profile-del {
+  min-height: 40px; display: inline-flex; align-items: center; justify-content: center;
   background: none; border: 1px solid var(--line); color: var(--ink-soft); cursor: pointer;
-  font: inherit; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px; flex: 0 0 auto;
+  font: inherit; font-size: 12px; font-weight: 700; padding: 8px 12px; border-radius: 999px; flex: 0 0 auto;
 }
 
 .add-profile-btn {
@@ -640,6 +645,13 @@ a { color: inherit; text-decoration: none; }
   font-size: 17px; font-weight: 800; margin-bottom: 16px; text-align: center;
   position: sticky; top: -22px; background: var(--bg); z-index: 2;
   padding: 8px 0 10px; margin-top: -8px;
+}
+/* 시트 헤더에 항상 보이는 닫기 버튼 — 상품 100개+처럼 목록이 길어 맨 아래 "닫기" 버튼까지
+   스크롤해야 하는 시트에서 닫는 방법을 못 찾고 갇히는 문제(UX 감사 A-3) 대응. */
+.sheet-close-btn {
+  position: absolute; right: 0; top: 0;
+  width: 44px; height: 44px; display: grid; place-items: center;
+  border: 0; border-radius: 50%; background: transparent; color: var(--ink-soft); cursor: pointer;
 }
 .time-row { display: flex; align-items: center; gap: 8px; }
 .time-row .input-field { flex: 1; }
@@ -1704,17 +1716,14 @@ a { color: inherit; text-decoration: none; }
 .drill-unpaid { color: var(--danger); font-size: 12px; }
 
 /* 예약자 명단 */
-.res-count-link {
-  color: var(--accent);
-  cursor: pointer;
-  font-weight: 600;
-  background: none;
-  border: none;
-  padding: 2px 4px;
-  font: inherit;
-  font-size: inherit;
+.class-row-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: 0 0 auto; }
+.class-row-roster-btn {
+  min-height: 40px; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--accent); cursor: pointer; font-weight: 650; font-size: 12.5px;
+  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px;
+  font-family: inherit; white-space: nowrap;
 }
-.res-count-link:active { opacity: 0.6; }
+.class-row-roster-btn:active { opacity: 0.6; }
 .roster-row {
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; padding: 11px 0; border: none; border-bottom: 1px solid var(--line);
@@ -2188,14 +2197,18 @@ a.membership-card { text-decoration: none; display: block; }
 .roster-item { padding: 12px 0; border-bottom: 1px solid var(--line); }
 .roster-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .roster-name-btn { font-size: 14.5px; font-weight: 700; color: var(--text); background: none; border: none; cursor: pointer; padding: 0; text-align: left; }
-.roster-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.roster-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+/* UX 감사(B-3) — 출석/되돌리기/결석/예약취소/진도 5개가 전부 26px 높이로 동일하게 보여
+   매일 반복되는 출석 체크에서 오탭이 잦았다. 최소 터치 영역(44px)으로 확대 + 파괴적 동작
+   (예약취소)은 테두리·배경으로 확실히 구분해 옆 버튼과 헷갈리지 않게 한다. */
 .att-btn {
-  font-size: 11.5px; font-weight: 700; padding: 5px 10px; border-radius: 8px;
+  min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12.5px; font-weight: 700; padding: 8px 12px; border-radius: 10px;
   border: 1px solid var(--line); background: var(--bg); color: var(--text-dim);
-  cursor: pointer; text-decoration: none; display: inline-block;
+  cursor: pointer; text-decoration: none;
 }
 .att-btn.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-.att-btn.cancel { color: var(--danger); }
+.att-btn.cancel { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
 .att-btn.cancel.on { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
 .att-btn.prog { color: var(--accent); border-color: var(--accent); margin-left: auto; }
 .att-btn:disabled { opacity: 0.5; }
@@ -3815,6 +3828,15 @@ a.membership-card { text-decoration: none; display: block; }
 .member-my-reservations .hist-sub { margin-top: 4px; color: var(--ink-soft); font-size: 12px; font-weight: 450; }
 .member-my-reservations .hist-status { position: static; padding: 5px 8px; border-radius: 999px; font-size: 10.5px; white-space: nowrap; }
 .member-my-reservations .profile-tag.sm { margin: 0; }
+/* UX 감사(A-4) — 카드가 읽기 전용 벽이라 취소하려면 다른 화면을 거쳐야 했던 문제 대응.
+   버튼 자체는 작아 보여도 padding으로 탭 영역을 44px에 가깝게 넓힌다(C-1). */
+.member-my-reservations .hist-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.member-my-reservations .hist-cancel-btn {
+  min-height: 30px; padding: 10px 8px; margin: -10px -8px -10px 0;
+  border: 1px solid var(--line-strong); border-radius: 8px; background: none;
+  color: var(--ink-soft); font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
+}
+.member-my-reservations .hist-cancel-btn:disabled { opacity: .5; cursor: default; }
 
 @media (max-width: 380px) {
   .member-reservation .cal-title { min-width: 104px; font-size: 18px; }
@@ -3823,7 +3845,7 @@ a.membership-card { text-decoration: none; display: block; }
   .reservation-list-controls { grid-template-columns: 1fr; }
   .availability-filter { justify-self: end; }
   .member-my-reservations .reservation-history .hist-item { grid-template-columns: 50px minmax(0,1fr); }
-  .member-my-reservations .hist-status { grid-column: 2; justify-self: start; margin-top: 7px; }
+  .member-my-reservations .hist-right { grid-column: 2; align-items: flex-start; margin-top: 7px; }
 }
 
 /* ── Batch 5 — center detail and commerce ───────────────────────────── */
