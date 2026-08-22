@@ -73,8 +73,8 @@ export default function PointHistoryPage() {
                   <span
                     className="hist-status"
                     style={{
-                      background: i.amount >= 0 ? "#e7f5ec" : "#fdecec",
-                      color: i.amount >= 0 ? "#1f8a4c" : "#c0392b",
+                      background: i.amount >= 0 ? "var(--success-soft)" : "var(--danger-soft)",
+                      color: i.amount >= 0 ? "var(--success)" : "var(--danger)",
                     }}
                   >
                     {i.amount >= 0 ? "+" : ""}{i.amount.toLocaleString()} P

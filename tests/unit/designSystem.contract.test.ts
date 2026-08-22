@@ -1,9 +1,20 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { resolve, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = process.cwd();
 const read = (path: string) => readFileSync(resolve(root, path), "utf8");
+
+// app/**/*.tsx 전체 나열 (2026-08-22 디자인 시스템 점검 P2-DS-1 항목 4용).
+function listTsxFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(resolve(root, dir), { withFileTypes: true })) {
+    const rel = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...listTsxFiles(rel));
+    else if (entry.name.endsWith(".tsx")) out.push(rel);
+  }
+  return out;
+}
 
 describe("Batch 1 design system contract", () => {
   it("keeps the approved neutral and sky-blue tokens centralized", () => {
@@ -267,5 +278,45 @@ describe("Batch 8 responsive and accessibility contract", () => {
     expect(css).toContain(".login-link,");
     expect(css).toContain(".auth-panel .mode-tab { min-height: 44px; }");
     expect(css).toContain(".search-suggestion-chips button { min-height: 44px; }");
+  });
+});
+
+describe("2026-08-22 design token regression guards (P2-DS-1)", () => {
+  it("keeps every app/**/*.tsx inline style free of hardcoded hex colors", () => {
+    const offenders: string[] = [];
+    for (const file of listTsxFiles("app")) {
+      const src = read(file);
+      for (const match of src.matchAll(/style=\{\{[^}]*\}\}/g)) {
+        if (/#[0-9a-fA-F]{3,8}\b/.test(match[0])) offenders.push(`${file}: ${match[0]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("does not reintroduce the pre-2026-08-22 duplicate danger-red literals", () => {
+    // globals.css had 5 different reds for the same "danger" meaning
+    // (#c0392b/#C0392B/#D9534F/#b3261e/#FF3B30) before this batch tokenized them
+    // into --danger. Comments referencing the old values (e.g. changelog-style
+    // notes) are fine; only strip comments before checking for real declarations.
+    const css = read("app/globals.css").replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const stale of ["#c0392b", "#C0392B", "#D9534F", "#b3261e", "#FF3B30"]) {
+      expect(css).not.toContain(stale);
+    }
+  });
+
+  it("keeps --floating-nav-clearance defined (undefined var silently breaks every consumer's padding/bottom)", () => {
+    const css = read("app/globals.css");
+    expect(css).toMatch(/--floating-nav-clearance:\s*calc\(/);
+  });
+
+  it("keeps .app-shell on a dynamic viewport unit so fixed bottom bars don't get pushed off-screen", () => {
+    const css = read("app/globals.css");
+    expect(css).toMatch(/\.app-shell\s*\{[^}]*min-height:\s*100dvh/);
+  });
+
+  it("keeps default profile avatars white-background/dark-text (not inverted) in both mypage and profiles", () => {
+    const css = read("app/globals.css");
+    expect(css).toMatch(/\.profile-avatar\s*\{[^}]*background:\s*#fff/);
+    expect(css).toMatch(/\.avatar-edit-placeholder\s*\{[^}]*background:\s*#fff/);
   });
 });
