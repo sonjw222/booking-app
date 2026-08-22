@@ -15,13 +15,16 @@ import { fetchMyPoints, usePoints } from "../../lib/reviews";
 import Loading from "../components/Loading";
 import { reservationReturnUrl } from "../../lib/reservationNav";
 import { getPaymentService, type PaymentScenario } from "../../lib/payments";
+import UiIcon, { type IconName } from "../components/UiIcon";
 
-const PAY_METHODS = [
-  { id: "card", label: "신용/체크카드", emoji: "💳" },
-  { id: "kakao", label: "카카오페이", emoji: "🟡" },
-  { id: "toss", label: "토스페이", emoji: "🔵" },
-  { id: "transfer", label: "계좌이체", emoji: "🏦" },
-  { id: "direct", label: "직접결제 (센터에서 결제)", emoji: "🤝" },
+// 카카오페이/토스페이는 로고 자산이 없어 outline 아이콘 하나로 뭉치면 구분이 안 되므로
+// --vendor-* 색 점(dot)으로, 나머지는 의미가 통하는 outline 아이콘으로 구분한다.
+const PAY_METHODS: { id: string; label: string; icon?: IconName; dot?: string }[] = [
+  { id: "card", label: "신용/체크카드", icon: "card" },
+  { id: "kakao", label: "카카오페이", dot: "var(--vendor-kakao)" },
+  { id: "toss", label: "토스페이", dot: "var(--vendor-toss)" },
+  { id: "transfer", label: "계좌이체", icon: "bank" },
+  { id: "direct", label: "직접결제 (센터에서 결제)", icon: "handshake" },
 ];
 
 // 보유 쿠폰 (데모)
@@ -357,7 +360,9 @@ function CheckoutContent() {
       <div className="pay-methods">
         {PAY_METHODS.filter((m) => !allowedPay || allowedPay.length === 0 || allowedPay.includes(m.id)).map((m) => (
           <button key={m.id} className={`pay-method ${payMethod === m.id ? "on" : ""}`} onClick={() => setPayMethod(m.id)}>
-            <span className="pay-method-emoji">{m.emoji}</span>
+            <span className="pay-method-emoji">
+              {m.dot ? <span className="vendor-dot" style={{ background: m.dot }} /> : <UiIcon name={m.icon!} size={20} />}
+            </span>
             <span>{m.label}</span>
             <span className="pay-method-check">{payMethod === m.id ? "●" : "○"}</span>
           </button>

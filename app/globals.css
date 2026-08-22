@@ -53,6 +53,10 @@
   --vendor-kakao-ink: #3C1E1E;
   --vendor-naver: #03C75A;
   --vendor-apple: #000000;
+  /* 결제/지도 벤더용 근사 브랜드색(정확한 로고 색상표는 없어 대략치) — 이모지 대신
+     색 점(.vendor-dot)으로 제공자를 구분하는 용도로만 쓴다. */
+  --vendor-toss: #1B64DA;
+  --vendor-tmap: #1CD6C1;
   --grad1: #151516;
   --grad2: #2E2F32;
   --grad3: #5B5C60;
@@ -2004,8 +2008,11 @@ a.membership-card { text-decoration: none; display: block; }
 .pay-methods { display: flex; flex-direction: column; gap: 8px; padding: 0 20px; }
 .pay-method { display: flex; align-items: center; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); cursor: pointer; font-size: 14px; color: var(--text); font-weight: 600; }
 .pay-method.on { border-color: var(--accent); background: var(--surface); }
-.pay-method-emoji { font-size: 18px; }
+.pay-method-emoji { display: grid; place-items: center; width: 22px; height: 22px; flex: 0 0 auto; color: var(--ink-soft); }
 .pay-method-check { margin-left: auto; color: var(--accent); }
+/* 결제/지도 벤더 색 점 — 카카오페이/토스페이처럼 로고 없이 outline 아이콘 하나로 뭉치면
+   구분이 안 되는 벤더를 색으로만 구분한다(실제 로고 자산 없이). */
+.vendor-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto; }
 .checkout-total { display: flex; justify-content: space-between; align-items: center; margin: 20px; padding-top: 16px; border-top: 2px solid var(--line); font-size: 15px; color: var(--text); }
 .checkout-total b { font-size: 20px; font-weight: 800; color: var(--accent); }
 .checkout-pay-btn { margin: 0 20px; display: block; width: calc(100% - 40px); }
@@ -2116,7 +2123,7 @@ a.membership-card { text-decoration: none; display: block; }
 /* 지도 앱 선택 (센터 상세) */
 .map-app-list { display: flex; flex-direction: column; gap: 8px; }
 .map-app-item { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); text-decoration: none; color: var(--text); font-size: 14px; font-weight: 600; }
-.map-app-emoji { font-size: 18px; }
+.map-app-emoji { display: grid; place-items: center; width: 22px; height: 22px; flex: 0 0 auto; color: var(--ink-soft); }
 .map-app-go { margin-left: auto; color: var(--text-dim); }
 
 /* 지도 위치 지정 (매니저) */

@@ -6,6 +6,7 @@ export type IconName =
   | "shield" | "settings" | "sliders" | "location" | "clock" | "edit"
   | "megaphone" | "info" | "alert" | "check" | "grid" | "star"
   | "phone" | "cart" | "paperclip" | "close"
+  | "card" | "bank" | "handshake"
   | "pilates" | "skate" | "ballet" | "rhythm" | "yoga" | "boxing" | "swim" | "golf";
 
 export default function UiIcon({ name, size = 22 }: { name: IconName; size?: number }) {
@@ -38,6 +39,9 @@ export default function UiIcon({ name, size = 22 }: { name: IconName; size?: num
     phone: <path d="M7 3.5 9.2 8 7.4 9.8a12 12 0 0 0 5.6 5.6L15 13.6l4.5 2.2v3.1c0 1-.8 1.7-1.8 1.6C9.9 19.9 4.1 14.1 3.1 5.8 3 4.8 3.7 4 4.7 4h2.3Z"/>,
     cart: <><path d="M3 4h2.2l2.4 10.4h9.6L20 7H6"/><circle cx="9.5" cy="19" r="1.6"/><circle cx="17" cy="19" r="1.6"/></>,
     paperclip: <path d="M18.5 11 12 17.5a4 4 0 0 1-5.7-5.7l7-7a2.8 2.8 0 0 1 4 4l-7 7a1.6 1.6 0 0 1-2.2-2.2l6.3-6.3"/>,
+    card: <><rect x="2.5" y="5.5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6 15h5"/></>,
+    bank: <><path d="M12 3 21 9H3l9-6Z"/><path d="M5 9v9M9 9v9M15 9v9M19 9v9"/><path d="M3 21h18"/></>,
+    handshake: <><path d="M2.5 12.5 6 10l3 2.2L12 10l3 2.2 3-2.2 3.5 2.5"/><path d="M8 12.5l3 3a1.8 1.8 0 0 0 2.6 0l3-3"/></>,
     close: <path d="M6 6l12 12M18 6 6 18"/>,
     pilates: <><path d="M4 15h16M5 12v6M19 12v6M8 11h8"/></>,
     skate: <><path d="M8 4v10h9l2 3H8c-3 0-4-2-4-4V8"/><path d="M8 8h5M9 20h8"/></>,
