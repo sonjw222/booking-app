@@ -32,8 +32,11 @@ jobs:
     runs-on: ubuntu-latest
     # 멈춘(hung) job이 GitHub 기본 360분 제한까지 전역 concurrency 큐를 막는 사고가
     # 실제로 반복됐다(2026-08-14/15, 12시간·25시간+ 멈춘 run이 뒤 대기열 전체를 정지시킴).
-    # 정상 실행은 보통 수 분~15분 내로 끝나므로 넉넉히 20분으로 제한한다.
-    timeout-minutes: 20
+    # [2026-08-23] E2E 스위트가 여러 세션이 계속 테스트를 추가하며 자라 정상 실행도 20분
+    # 근처에 걸리게 됐다 — PR #86에서 정상 실행 2회가 연속으로 `timeout-minutes: 20`에
+    # 걸려 cancelled됐음을 실측 확인(20분 15초, 20분 6초). integration job이 같은 이유로
+    # 20→35로 상향된 전례(P2-27, docs/TODO.md)와 동일하게 조정.
+    timeout-minutes: 30
     # unit/integration과 마찬가지로 fork PR은 Secrets가 없어 애초에 통과할 수 없고, 있어도
     # 노출시키면 안 되므로 막는다.
     if: >

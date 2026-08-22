@@ -1754,6 +1754,11 @@ PR #66, #67 모두 Integration이 19분대에 `conclusion: cancelled`로 끝났�
 `npx playwright install` 20분 멈춤도 이 안전장치 덕에 자동 정리됨 — P2-24). 없애면 그 사고가
 재발할 위험이 있어, 대신 정상 실행 시간에 여유를 더 두는 쪽으로 조정.
 
+**2026-08-23 후속(E2E job도 같은 증상)**: PR #86에서 E2E job이 정상 실행인데도 20분 15초,
+20분 6초로 연속 `timeout-minutes: 20`에 걸려 cancelled됨을 실측 확인 — Integration과 똑같은
+"스위트가 계속 자라 정상 실행도 타임아웃 근처" 패턴. 동일한 조치로 E2E job도 20→30으로 상향
+(`.github/workflows/test.yml`).
+
 ### P2-28. (2026-08-21, 완료 — F 근본 수정 + H/I 새 이슈까지 해결) PR #68 Integration 재현 실패 11건 — waitlist 설정 미보장·N/O RLS+센터 승인 상태 문제 해결
 
 | 필드 | 내용 |
