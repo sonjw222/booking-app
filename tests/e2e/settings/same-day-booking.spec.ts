@@ -79,8 +79,9 @@ test("당일예약 ON→예약성공→취소→OFF저장→새로고침→다�
   await expect(cancelButton).toBeVisible();
 
   // ③ 예약 취소 → 다시 "예약하기" 버튼으로 돌아옴
-  memberPage.once("dialog", (d) => d.accept());
+  // A-10 UX 수정으로 확인이 네이티브 confirm()이 아니라 인앱 모달(ConfirmDialog)로 바뀌었다.
   await cancelButton.click();
+  await memberPage.locator(".confirm-sheet").getByRole("button", { name: "확인" }).click();
   const reserveButton = memberPage.locator(".class-row", { hasText: "E2E 당일예약토글" }).getByRole("button", { name: "예약" });
   await expect(reserveButton).toBeVisible();
 
