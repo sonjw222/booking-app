@@ -222,6 +222,27 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 
 **2026-08-21 관련 조사(P0-7 자체는 미해결로 남김)**: P2-28에서 `auto-book-membership-security.test.ts`의 여러 케이스를 완료 조건 (b)와 정확히 같은 방향(공유 `TEST_CENTER_ID` 대신 `createIsolatedOwnedCenter()` 격리 센터)으로 이미 전환했다. 다만 그 전환 자체가 별개의 두 새 버그(F/L의 `payments`/`center_members` FK — stale-cleanup이 모든 참조 테이블을 못 따라감, N/O의 `memberships` RLS — 새 센터에 userB가 소속되지 않음)를 드러냈다 — P0-7이 지목한 "공유 고정 센터" 문제와는 다른 종류의 위험이지만, "격리 센터 방향이 만능은 아니고 그 자체로 별도 정리가 필요하다"는 교훈은 P0-7 완료 조건 (b)를 실행할 때 참고할 만하다. P0-7의 핵심 가설(어떤 테스트가 실패 시 `center_settings` 원상복구 없이 조기 종료)은 라이브 DB 직접 조사(서비스 롤 키 필요, 이 세션엔 없음) 없이는 확정할 수 없어 여전히 미확인 상태로 남긴다.
 
+**2026-08-22 완료 조건 (a) 이행**: 개별 파일마다 `try/finally`를 보강하는 대신, 더 강한 백스톱을
+`tests/integration/setup.ts`의 `getOrCreateOwnedTestCenter()`에 추가했다 — 이미 같은 함수에
+붙어 있던 `sweepStaleTestClasses()`(오래된 class/reservation 자동 정리) 옆에
+`resetStaleTestCenterSettings()`를 새로 만들어, 공유 통합테스트센터를 재사용할 때마다(=거의
+모든 통합 테스트 파일의 `beforeAll`마다) `center_settings`를 무조건 `schema.sql` 기본값으로
+되돌린다. `sweepStaleTestClasses()`와 다른 점: classes는 `start_time`으로 "오래된 것"을
+객관적으로 골라낼 수 있지만 `center_settings`는 단일 row라 그런 타임스탬프 기반 판별이
+불가능하다 — 그래서 "언제" 오염됐는지 가리는 대신 매번 무조건 기본값으로 리셋하는 방식을
+택했다(안전 근거는 `sweepStaleTestClasses()`와 동일: 이름이 "통합테스트센터-%"인 전용 테스트
+센터만 대상 + `fileParallelism:false`로 항상 순차 실행). 각 파일은 이 리셋 직후 자신의
+`beforeAll`에서 `fetchSettings()`로 "원복 기준값"을 다시 캡처하므로, 그 기준값 자체가 항상
+기본값이 되어 이전 실행의 leftover가 다음 실행 기준값에 섞여 들어가는 경로 자체가 사라진다.
+개별 파일의 `afterEach`/`afterAll`(예: `operational-settings-wiring.test.ts`의 `afterEach`는
+`switchToTestUser()`가 던지면 뒤이은 `saveSettings()` 복구가 건너뛰어지는 약점이 있음)는
+그대로 남아있지만, 이 스윕이 다음 파일 실행 시점에 무조건 기본값으로 되돌리므로 그 약점이
+다음 실행까지 전파되지 않는다. **P0-7의 근본 원인(어떤 테스트가 구체적으로 무엇 때문에
+죽는지)은 여전히 서비스 롤 키로 직접 라이브 DB를 조사해야 확정할 수 있어 미확인으로 남지만,
+관측된 증상(오염이 다음 실행까지 이어지는 것) 자체는 이 스윕으로 구조적으로 차단된다.**
+`npm run build` + 단위테스트(244개) 통과 확인, 통합 테스트는 라이브 Supabase 필요해 CI에서
+확인 필요.
+
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
 ### P1-1. 포인트 원장 이원화 정합성

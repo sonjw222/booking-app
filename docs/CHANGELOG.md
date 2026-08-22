@@ -8,6 +8,18 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-22 — P0-7 완료 조건 (a): 공유 통합테스트센터 center_settings 자동 리셋 스윕 추가
+
+공유 통합/E2E fixture 센터의 `center_settings`(`daily_book_limit_enabled` 등)가 반복적으로
+오염되는 문제(P0-7)에 대응해, `tests/integration/setup.ts`의 `getOrCreateOwnedTestCenter()`에
+`resetStaleTestCenterSettings()`를 추가했다 — 기존 `sweepStaleTestClasses()`(오래된
+class/reservation 정리) 바로 옆에서, 공유 테스트센터를 재사용할 때마다 `center_settings`를
+무조건 `schema.sql` 기본값으로 되돌린다. classes와 달리 단일 row인 `center_settings`는
+"언제 오염됐는지" 타임스탬프로 구분할 수 없어 무조건 리셋 방식을 택했다(안전 근거는 기존
+스윕과 동일 — 이름 패턴 방어 확인 + 통합테스트 순차 실행 보장). P0-7의 근본 원인(구체적으로
+어떤 테스트가 죽어서 남기는지)은 서비스 롤 키로 직접 조사해야 확정되지만, 관측된 증상(오염이
+다음 실행까지 이어짐) 자체는 이걸로 구조적으로 차단된다.
+
 ## 2026-08-22 — P2-14 잔여 항목: 수강권 관리 메뉴 게이트 누락 수정 + progress_records UPDATE RLS 추가
 
 `app/manager/page.tsx`의 "수강권 관리" 메뉴 링크가 `pass.create` 권한만 확인해서, "예약조건"
