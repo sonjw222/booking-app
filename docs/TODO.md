@@ -942,10 +942,11 @@ platform admin, `notification_logs`: `message.sms.view` 또는 `message.push.vie
   확인~~ **[2026-08-22 완료]** `app/manager/page.tsx`의 "수강권 관리" 메뉴 조건을
   `pass.create || pass.update`로 확장. 화면 내부(`app/manager/membership-rules/page.tsx`)는
   이미 두 키를 따로 체크하고 있어 진입 메뉴만 문제였음.
-- ~~`progress_records`에 UPDATE RLS 정책 자체가 없음~~ **[2026-08-22 완료]**
+- ~~`progress_records`에 UPDATE RLS 정책 자체가 없음~~ **[2026-08-22 완료, SQL 적용 완료]**
   `fix_progress_records_missing_update_rls_draft_proposed.sql` 작성(롤백 포함) —
-  `progress_categories` 기존 UPDATE 정책과 동일 패턴(`customer.progress` 권한). **미적용,
-  사용자가 SQL Editor에서 실행 필요.**
+  `progress_categories` 기존 UPDATE 정책과 동일 패턴(`customer.progress` 권한). 사용자가
+  Supabase SQL Editor에서 실행, `pg_policies` 확인 쿼리로 `진도 기록 수정`(UPDATE) 정책 생성
+  확인 완료.
 - ~~`rooms` SELECT가 `using (true)`로 전체 공개 — 의도된 것인지 확인 필요~~ **[2026-08-22 완료,
   수정 없음]** `fix_permission_products_rooms_rls.sql` 주석에서 이미 의도된 설계로 확인됨(PII
   없는 테이블, 룸 관리 권한 강화 시에도 조회는 의도적으로 열어둠).
