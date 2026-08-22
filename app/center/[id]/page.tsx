@@ -22,6 +22,7 @@ import { reservationReturnUrl } from "../../../lib/reservationNav";
 import { extractPlainText } from "../../../lib/security";
 import RichTextEditor from "../../components/RichTextEditor";
 import UiIcon from "../../components/UiIcon";
+import EmptyState from "../../components/EmptyState";
 
 export default function CenterDetailPage() {
   return (
@@ -459,6 +460,16 @@ function CenterDetailContent() {
       </div>
 
       {tab === "info" && (<>
+      {/* UI/UX 감사(P0-2/A-1) — 주소·소개가 둘 다 비어있으면 700px 넘는 완전한 백지라
+          "고장났나?" 로 보였다. 최소한 대체 동선(수업 탭)이라도 제공한다. */}
+      {!center.address && center.introBlocks.length === 0 && !center.intro && (
+        <EmptyState
+          icon="building"
+          title="아직 등록된 센터 정보가 없어요"
+          description="위치·소개는 준비 중이에요. 수업 탭에서 일정을 먼저 확인해보세요."
+          action={<button type="button" className="primary-btn" onClick={() => setTab("class")}>수업 보러가기 ›</button>}
+        />
+      )}
       {/* 위치 */}
       {center.address && (
         <>

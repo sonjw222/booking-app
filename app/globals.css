@@ -3858,14 +3858,20 @@ a.membership-card { text-decoration: none; display: block; }
   color: var(--text-inverse); background: linear-gradient(180deg,rgba(0,0,0,.44),transparent);
 }
 .center-detail-v2 .center-detail-head .title { opacity: 0; }
-.center-detail-v2 .center-hero { padding: 0 0 24px; display: block; }
+/* display:flow-root(대신 block)로 새 블록 서식 맥락을 만들어 첫 자식(.center-hero-badge)의
+   margin-top이 부모 밖으로 collapse되는 걸 막는다 — collapse되면 .center-hero-badge의
+   "90px 아래로" margin이 사실상 무시되고 badge가 .center-hero의 top(=0, absolute인
+   .center-detail-head와 같은 지점)에 그대로 붙어 뒤로가기 버튼과 겹쳤다(UI 감사 P0-2). */
+.center-detail-v2 .center-hero { padding: 0 0 24px; display: flow-root; text-align: left; }
 .center-detail-v2 .center-hero-photo { width: 100%; height: 310px; margin: 0 0 24px; border-radius: 0 0 24px 24px; object-fit: cover; }
 .center-detail-v2 .center-hero-badge { margin: 90px 16px 24px; }
 .center-detail-v2 .center-hero-name,
 .center-detail-v2 .center-hero-addr,
 .center-detail-v2 .center-hero-phone,
 .center-detail-v2 .center-sns { margin-left: var(--page-gutter); margin-right: var(--page-gutter); }
-.center-detail-v2 .center-hero-name { font-size: 27px; font-weight: 800; }
+/* word-break:keep-all — 기본값은 글자 단위로도 줄바꿈해 "…전용 센/터"처럼 단어 중간이
+   잘렸다(UI 감사 P0-2). 어절(공백) 단위로만 줄바꿈. */
+.center-detail-v2 .center-hero-name { font-size: 27px; font-weight: 800; word-break: keep-all; }
 .center-detail-v2 .center-hero-addr { margin-top: 10px; font-size: 14px; }
 .center-detail-v2 .center-hero-phone { display: inline-block; margin-top: 8px; color: var(--ink-soft); font-size: 13px; }
 .center-detail-v2 .center-tabs { position: sticky; top: 0; z-index: 15; margin: 0; padding: 0 var(--page-gutter); background: rgba(251,251,250,.94); backdrop-filter: blur(16px); }
