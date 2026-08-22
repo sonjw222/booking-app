@@ -320,3 +320,19 @@ describe("2026-08-22 design token regression guards (P2-DS-1)", () => {
     expect(css).toMatch(/\.avatar-edit-placeholder\s*\{[^}]*background:\s*#fff/);
   });
 });
+
+describe("2026-08-23 dark mode contrast regression guards", () => {
+  it("never pairs an --ink background with fixed --text-inverse text (dark mode: --ink flips near-white, --text-inverse stays #FFF forever = invisible text)", () => {
+    const css = read("app/globals.css").replace(/\/\*[\s\S]*?\*\//g, "");
+    const blocks = css.match(/\{[^{}]*\}/g) ?? [];
+    const offenders = blocks.filter(
+      (b) => /background:\s*var\(--ink\)/.test(b) && /color:\s*var\(--text-inverse\)/.test(b)
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps light-theme --text-dim at an AA-passing value (pre-2026-08-23 #747479 measured 4.49:1 on --bg, just under the 4.5:1 minimum)", () => {
+    const css = read("app/globals.css");
+    expect(css).not.toContain("--text-dim: #747479");
+  });
+});

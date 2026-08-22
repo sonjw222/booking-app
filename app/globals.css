@@ -7,7 +7,7 @@
   --ink: #171719;
   --ink-soft: #747479;
   --text: #171719;
-  --text-dim: #747479;
+  --text-dim: #6B6B70;
   --line: #DEDEDA;
   --line-strong: #C9C9C5;
   --accent: #202124;
@@ -2799,7 +2799,7 @@ a.membership-card { text-decoration: none; display: block; }
   line-height: 1;
   cursor: pointer;
 }
-.app-button-primary { background: var(--ink); color: var(--text-inverse); }
+.app-button-primary { background: var(--ink); color: var(--bg); }
 .app-button-secondary { background: transparent; border-color: var(--line); color: var(--ink); }
 .app-button-tertiary { min-height: 44px; background: var(--surface); color: var(--ink); }
 .app-button-danger { background: var(--danger); color: var(--text-inverse); }
@@ -3012,7 +3012,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-v3-content .class-trainers-list .filter-chip.on {
   border-color: var(--ink);
   background: var(--ink);
-  color: var(--text-inverse);
+  color: var(--bg);
 }
 .manager-v3-content .class-allowed-products-list .filter-chip.on::before,
 .manager-v3-content .class-trainers-list .filter-chip.on::before {
@@ -3095,7 +3095,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-v3-content .class-allowed-products-list .filter-chip,
 .manager-v3-content .class-trainers-list .filter-chip { min-height:40px; padding:0 13px; gap:7px; border:1px solid var(--line); border-radius:999px; background:var(--card-bg); color:var(--ink-soft); }
 .manager-v3-content .class-allowed-products-list .filter-chip.on,
-.manager-v3-content .class-trainers-list .filter-chip.on { border-color:var(--ink); background:var(--ink); color:var(--text-inverse); }
+.manager-v3-content .class-trainers-list .filter-chip.on { border-color:var(--ink); background:var(--ink); color:var(--bg); }
 .manager-v3-content .class-allowed-products-list .filter-chip.on::before,
 .manager-v3-content .class-trainers-list .filter-chip.on::before { content:"✓"; font-size:11px; font-weight:900; }
 .manager-v3-content .sheet .primary-btn:not(.danger),
@@ -3429,7 +3429,7 @@ a.membership-card { text-decoration: none; display: block; }
   padding: 11px 13px;
   border-radius: 12px;
   background: var(--ink);
-  color: var(--text-inverse);
+  color: var(--bg);
 }
 
 /* Authentication mode is a calm segmented control, without the floating-card artifact. */
@@ -3545,7 +3545,7 @@ a.membership-card { text-decoration: none; display: block; }
   place-items: center;
   border-radius: 50%;
 }
-.manager-chrome-main > a { background: var(--ink); color: var(--text-inverse); }
+.manager-chrome-main > a { background: var(--ink); color: var(--bg); }
 .manager-chrome-main > a span,
 .admin-chrome > a span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 .manager-v3-content > .app-shell,
@@ -3625,7 +3625,7 @@ a.membership-card { text-decoration: none; display: block; }
   text-align: center;
 }
 .system-state-code { color: var(--line-strong); font-size: 54px; line-height: 1; font-weight: 800; letter-spacing: -3px; }
-.system-state-mark { width: 62px; height: 62px; display: grid; place-items: center; border-radius: 50%; background: var(--ink); color: var(--text-inverse); font-size: 30px; font-weight: 800; }
+.system-state-mark { width: 62px; height: 62px; display: grid; place-items: center; border-radius: 50%; background: var(--ink); color: var(--bg); font-size: 30px; font-weight: 800; }
 .system-state-v2 h1 { margin-top: 22px; font-size: 23px; letter-spacing: -.025em; }
 .system-state-v2 p { margin: 10px 0 24px; color: var(--ink-soft); font-size: 14px; line-height: 1.6; }
 .system-state-v2 .app-button { width: min(100%,320px); margin-top: 8px; }
@@ -3688,7 +3688,7 @@ a.membership-card { text-decoration: none; display: block; }
 .discovery-page-v2 .search-header .side,.category-page-v2 .back-header .side { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
 .discovery-page-v2 .search-input { min-width: 0; height: 50px; padding: 0 15px; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--surface); font-size: 14px; }
 .discovery-page-v2 .search-input:focus { border-color: var(--brand); outline: 0; }
-.discovery-page-v2 .search-go { min-width: 56px; height: 44px; padding: 0 12px; border: 0; border-radius: var(--radius-md); background: var(--ink); color: var(--text-inverse); font-size: 12.5px; font-weight: 650; }
+.discovery-page-v2 .search-go { min-width: 56px; height: 44px; padding: 0 12px; border: 0; border-radius: var(--radius-md); background: var(--ink); color: var(--bg); font-size: 12.5px; font-weight: 650; }
 .search-suggestions { padding: 34px var(--page-gutter) 130px; }
 .search-suggestion-title { font-size: 16px; font-weight: 680; }
 .search-suggestion-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
@@ -3794,7 +3794,7 @@ a.membership-card { text-decoration: none; display: block; }
 .member-reservation .class-right { min-width: 64px; }
 .member-reservation .class-count { color: var(--ink-soft); font-size: 11px; font-weight: 600; }
 .member-reservation .mini-btn { min-width: 48px; min-height: 40px; padding: 0 8px; border: 0; background: transparent; color: var(--ink); font-size: 12px; font-weight: 680; }
-.member-reservation .mini-btn:not(.done) { border-radius: 999px; background: var(--ink); color: var(--text-inverse); }
+.member-reservation .mini-btn:not(.done) { border-radius: 999px; background: var(--ink); color: var(--bg); }
 
 .member-my-reservations .back-header { padding: 32px var(--page-gutter) 18px; }
 .member-my-reservations .back-header .title { margin-right: auto; font-size: 30px; line-height: 1.08; font-weight: 720; letter-spacing: -.035em; }
@@ -3875,7 +3875,7 @@ a.membership-card { text-decoration: none; display: block; }
 .commerce-page .cart-list { margin: 0 var(--page-gutter); border-top: 1px solid var(--line); }
 .commerce-page .cart-row-wrap { border-bottom: 1px solid var(--line); }
 .commerce-page .cart-row { padding: 18px 2px 12px; border: 0; }
-.commerce-product-mark { width: 50px; height: 50px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 14px; background: var(--ink); color: var(--text-inverse); font-size: 15px; font-weight: 800; }
+.commerce-product-mark { width: 50px; height: 50px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 14px; background: var(--ink); color: var(--bg); font-size: 15px; font-weight: 800; }
 .commerce-page .cart-name { font-size: 16px; font-weight: 750; }
 .commerce-page .cart-price { margin-top: 6px; color: var(--ink); font-size: 14px; }
 .commerce-page .cart-sizes { padding: 0 0 16px 62px; }
@@ -3919,7 +3919,7 @@ a.membership-card { text-decoration: none; display: block; }
 .noti-head h1,.inquiry-head h1,.mypage-titlebar h1{font-size:28px;line-height:1.1;font-weight:800;letter-spacing:-.7px}
 .noti-head a,.noti-head button{min-height:40px;padding:0 4px;color:var(--brand-ink);font-size:13px;font-weight:700}
 .inquiry-head p{margin-top:6px;color:var(--ink-soft);font-size:12px}
-.inquiry-head .primary-btn{min-height:40px;border-radius:999px;background:var(--ink);color:var(--text-inverse)}
+.inquiry-head .primary-btn{min-height:40px;border-radius:999px;background:var(--ink);color:var(--bg)}
 .member-notifications .noti-list,.member-inquiries .thread-list{padding:0 var(--page-gutter) 112px}
 .member-notifications .noti-row{position:relative;min-height:92px;padding:16px 0;gap:14px;background:transparent!important;margin:0!important;border-bottom:1px solid var(--line)}
 .member-notifications .noti-emoji{display:grid;place-items:center;flex:0 0 48px;width:48px;height:48px;border-radius:15px;background:var(--surface);color:var(--ink)}
@@ -3929,7 +3929,7 @@ a.membership-card { text-decoration: none; display: block; }
 .member-inquiries .thread-row{min-height:84px;padding:14px 0;border-radius:0;background:transparent;border-bottom:1px solid var(--line);box-shadow:none}
 .member-inquiries .thread-avatar{display:grid;place-items:center;width:48px;height:48px;border-radius:16px;background:var(--surface);font-weight:750}
 .mypage-shell .profile-block{padding:28px var(--page-gutter) 24px;border-bottom:1px solid var(--line)}
-.mypage-shell .avatar{width:64px;height:64px;border-radius:22px;background:var(--ink);color:var(--text-inverse);font-size:25px;font-weight:800}
+.mypage-shell .avatar{width:64px;height:64px;border-radius:22px;background:var(--ink);color:var(--bg);font-size:25px;font-weight:800}
 .mypage-shell .profile-name{font-size:22px;font-weight:800;letter-spacing:-.4px}.mypage-shell .profile-edit{margin-top:6px;font-size:13px;font-weight:650;color:var(--ink-soft)}
 .mypage-shell .membership-card{margin-inline:var(--page-gutter);border-radius:20px;box-shadow:none}.mypage-shell .membership-card .count{font-size:24px}.mypage-shell .membership-card .progress-track{height:7px}
 .mypage-shell .list-row{min-height:58px;margin:0 var(--page-gutter);padding-inline:2px;background:transparent;border-bottom:1px solid var(--line)}
@@ -3938,8 +3938,12 @@ a.membership-card { text-decoration: none; display: block; }
 .account-page-v2 .profile-list,.account-page-v2 .noti-list{padding:0 var(--page-gutter)}.account-page-v2 .profile-item{min-height:88px;border-bottom:1px solid var(--line)}
 .account-page-v2 .add-profile-btn{min-height:52px;margin:18px var(--page-gutter);border:1px solid var(--line);border-radius:16px;background:transparent;color:var(--ink)}
 .settings-page-v2 .noti-row{min-height:76px;padding:15px 2px;background:transparent;border-bottom:1px solid var(--line)}
-.auth-page-v2{display:block;min-height:100dvh;padding-bottom:0;background:var(--ink)}
-.auth-scene{position:relative;min-height:278px;padding:max(24px,env(safe-area-inset-top)) 22px 36px;overflow:hidden;color:var(--text-inverse);background:var(--ink)}
+/* 로그인 히어로는 항상 어두운 배경(--grad1, 라이트/다크 모두 거의 검정으로 고정) 위에
+   흰 텍스트/장식(rgba(255,255,255,..))을 쓰는 의도된 고정 다크 디자인이다 — --ink를 쓰면
+   다크 모드에서 --ink가 거의 흰색으로 뒤집혀 흰 배경 위 흰 텍스트가 된다(.admin-chrome과
+   동일한 이유로 --grad1 사용). */
+.auth-page-v2{display:block;min-height:100dvh;padding-bottom:0;background:var(--grad1)}
+.auth-scene{position:relative;min-height:278px;padding:max(24px,env(safe-area-inset-top)) 22px 36px;overflow:hidden;color:var(--text-inverse);background:var(--grad1)}
 .auth-scene:before,.auth-scene:after{content:"";position:absolute;border:1px solid rgba(255,255,255,.14);border-radius:50%}.auth-scene:before{width:250px;height:250px;right:-88px;top:18px}.auth-scene:after{width:145px;height:145px;right:-32px;top:74px}
 .auth-home-link{position:relative;z-index:2;color:var(--text-inverse);font-size:13px;font-weight:750}.auth-scene-copy{position:relative;z-index:2;margin-top:24px}.auth-scene-copy>span{color:rgba(255,255,255,.55);font-size:10px;font-weight:750;letter-spacing:1.4px}.auth-scene-copy h1{margin-top:10px;font-size:27px;line-height:1.25;letter-spacing:-.9px}.auth-scene-copy p{margin-top:9px;color:rgba(255,255,255,.68);font-size:13px;line-height:1.55}
 .auth-activities{position:absolute;z-index:2;right:18px;bottom:28px;display:flex;gap:6px}.auth-activities>div{display:grid;place-items:center;width:48px;height:48px;border:1px solid rgba(255,255,255,.13);border-radius:15px;background:rgba(255,255,255,.06)}.auth-activities span{display:none}
@@ -3953,7 +3957,7 @@ a.membership-card { text-decoration: none; display: block; }
 /* Batch 7A: manager home, members, notifications and more */
 .manager-home-v2{padding-bottom:calc(var(--floating-nav-clearance) + 28px);background:var(--bg)}
 .manager-home-v2 .mgr-mode-bar{padding:22px var(--page-gutter) 14px;border-bottom:0}.manager-home-v2 .mgr-mode-label{font-size:13px;font-weight:750}.manager-home-v2 .mgr-mode-switch{min-height:40px;display:inline-flex;align-items:center;padding:0 13px;border:1px solid var(--line);border-radius:999px;font-size:12px;font-weight:650}
-.manager-home-v2 .center-switcher{padding:0 var(--page-gutter) 18px;gap:8px}.manager-home-v2 .center-chip{min-height:44px;padding:0 15px;border:1px solid var(--line);border-radius:14px;background:transparent}.manager-home-v2 .center-chip.on{border-color:var(--ink);background:var(--ink);color:var(--text-inverse)}
+.manager-home-v2 .center-switcher{padding:0 var(--page-gutter) 18px;gap:8px}.manager-home-v2 .center-chip{min-height:44px;padding:0 15px;border:1px solid var(--line);border-radius:14px;background:transparent}.manager-home-v2 .center-chip.on{border-color:var(--ink);background:var(--ink);color:var(--bg)}
 .manager-today-overview{margin:0 var(--page-gutter) 22px;padding:20px 0;border-block:1px solid var(--line)}
 .manager-today-head{display:flex;align-items:end;justify-content:space-between;margin-bottom:16px}.manager-today-head div{display:flex;align-items:baseline;gap:8px}.manager-today-head span{font-size:17px;font-weight:750}.manager-today-head b,.manager-today-head>a{color:var(--ink-soft);font-size:11px;font-weight:650}
 .manager-today-metrics{display:grid;grid-template-columns:repeat(3,1fr)}.manager-today-metrics>a{padding:0 14px;border-left:1px solid var(--line);color:var(--ink)}.manager-today-metrics>a:first-child{padding-left:0;border-left:0}.manager-today-metrics span{display:block;color:var(--ink-soft);font-size:11px}.manager-today-metrics b{display:block;margin-top:5px;font-size:24px;letter-spacing:-.7px}
@@ -4013,7 +4017,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-v3-content .center-switcher,
 .admin-v3-content .center-switcher {margin:0;padding:12px var(--page-gutter);gap:8px;border-bottom:1px solid var(--line);background:transparent;scrollbar-width:none}.manager-v3-content .center-switcher::-webkit-scrollbar,
 .admin-v3-content .center-switcher::-webkit-scrollbar {display:none}
-.manager-v3-content .center-chip{min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink-soft);font-size:12px;font-weight:680;box-shadow:none}.manager-v3-content .center-chip.on{border-color:var(--ink);background:var(--ink);color:var(--text-inverse)}
+.manager-v3-content .center-chip{min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink-soft);font-size:12px;font-weight:680;box-shadow:none}.manager-v3-content .center-chip.on{border-color:var(--ink);background:var(--ink);color:var(--bg)}
 .manager-v3-content .menu-section-label,
 .admin-v3-content .menu-section-label {margin:0;padding:24px var(--page-gutter) 9px;color:var(--ink-soft);font-size:11px;font-weight:700;letter-spacing:.02em}
 .manager-v3-content .mem-filters,.manager-v3-content .perm-tabs{min-height:52px;margin:0;padding:4px var(--page-gutter) 10px;display:flex;align-items:center;gap:16px;overflow-x:auto;border-bottom:1px solid var(--line);scrollbar-width:none}.manager-v3-content .mem-filters::-webkit-scrollbar,.manager-v3-content .perm-tabs::-webkit-scrollbar{display:none}
@@ -4080,11 +4084,11 @@ a.membership-card { text-decoration: none; display: block; }
 .admin-v3-content .ghost-btn,
 .manager-v3-content .danger-btn,
 .admin-v3-content .danger-btn {min-height:48px;border-radius:14px;font-size:14px;font-weight:730}.manager-v3-content .primary-btn,
-.admin-v3-content .primary-btn {background:var(--ink);color:var(--text-inverse)}.manager-v3-content .ghost-btn,
+.admin-v3-content .primary-btn {background:var(--ink);color:var(--bg)}.manager-v3-content .ghost-btn,
 .admin-v3-content .ghost-btn {border:1px solid var(--line);background:transparent;color:var(--ink)}
 .manager-v3-content .hol-list,.manager-v3-content .prog-wrap,.manager-v3-content .prog-rec-wrap,.manager-v3-content .prog-hist{padding-inline:var(--page-gutter)}.manager-v3-content .hol-main,.manager-v3-content .prog-top-row,.manager-v3-content .prog-sub-row,.manager-v3-content .prog-hist-day{padding:15px 2px;border-bottom:1px solid var(--line);background:transparent}
 .manager-v3-content .rv-stats{margin:12px var(--page-gutter) 8px;padding:18px 0;display:grid;grid-template-columns:repeat(3,1fr);border-block:1px solid var(--line);border-radius:0;background:transparent}.manager-v3-content .rv-stat{padding:0 12px;border-left:1px solid var(--line)}.manager-v3-content .rv-stat:first-child{border-left:0}.manager-v3-content .rv-stat-value{font-size:21px;font-weight:800}.manager-v3-content .rv-stat-label{margin-top:5px;font-size:10.5px;color:var(--ink-soft)}
-.manager-v3-content .date-range{padding:10px var(--page-gutter) 16px;gap:8px}.manager-v3-content .sales-summary{margin:0 var(--page-gutter) 20px;padding:20px;border:0;border-radius:20px;background:var(--ink);color:var(--text-inverse);box-shadow:none}.manager-v3-content .sales-summary *{color:inherit}.manager-v3-content .sales-big-value{font-size:30px;font-weight:820}.manager-v3-content .sales-breakdown{margin:0 var(--page-gutter);border-top:1px solid var(--line)}.manager-v3-content .sales-bd-item{min-height:56px;padding:14px 2px;border-bottom:1px solid var(--line);background:transparent}
+.manager-v3-content .date-range{padding:10px var(--page-gutter) 16px;gap:8px}.manager-v3-content .sales-summary{margin:0 var(--page-gutter) 20px;padding:20px;border:0;border-radius:20px;background:var(--ink);color:var(--bg);box-shadow:none}.manager-v3-content .sales-summary *{color:inherit}.manager-v3-content .sales-big-value{font-size:30px;font-weight:820}.manager-v3-content .sales-breakdown{margin:0 var(--page-gutter);border-top:1px solid var(--line)}.manager-v3-content .sales-bd-item{min-height:56px;padding:14px 2px;border-bottom:1px solid var(--line);background:transparent}
 .manager-v3-content .toast,
 .admin-v3-content .toast {bottom:112px}.manager-v3-content .error-toast,
 .admin-v3-content .error-toast {margin-inline:var(--page-gutter);border-radius:14px}
@@ -4210,7 +4214,7 @@ textarea:focus-visible,
   padding: 11px 13px;
   border-radius: 12px;
   background: var(--ink);
-  color: var(--text-inverse);
+  color: var(--bg);
 }
 
 .manager-home-v2 {
