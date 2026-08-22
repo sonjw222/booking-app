@@ -8,6 +8,20 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-23 — P2-2/3/4/5/6 운영 확인 배치, P2-5에서 확정 보안 취약점 발견(P0로 격상)
+
+출시 관점 잔여 작업 정리 중 P2-2(realtime)/P2-3(storage)/P2-4(trigger)/P2-5(revenue_summary
+사용 여부)/P2-6(purchase_requests 역할) 5개 "확인 필요" 항목을 read-only SQL로 라이브 조사.
+P2-2/3/4는 이상 없음 확인, P2-6은 5건 전부 2026-07-22 이전 테스트 데이터 이후 신규 없음으로
+죽은 경로 확정.
+
+**P2-5 조사 중 확정 보안 취약점 발견**: `revenue_summary` view에 `anon`(비로그인) SELECT
+권한이 있고 `security_invoker`가 꺼져있어(Postgres 기본 동작), 하위 `payments` 테이블의
+센터 스코프 RLS를 건너뛰고 있었다 — anon key만으로 로그인 없이 전체 센터의 일자별
+매출/결제수단별 금액/미수금을 볼 수 있는 상태. `fix_revenue_summary_public_access_leak_draft_proposed.sql`
+작성(anon/authenticated GRANT 회수, view는 유지 — 롤백 포함). **미적용, 사용자가 SQL
+Editor에서 긴급 실행 필요.**
+
 ## 2026-08-22 — P0-7 완료 조건 (a): 공유 통합테스트센터 center_settings 자동 리셋 스윕 추가
 
 공유 통합/E2E fixture 센터의 `center_settings`(`daily_book_limit_enabled` 등)가 반복적으로
