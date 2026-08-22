@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
+import EmptyState from "../../components/EmptyState";
 import { fetchMyPointHistory, type PointHistoryItem } from "../../../lib/mypage";
 
 function fmtDateHeader(d: string) {
@@ -54,7 +55,7 @@ export default function PointHistoryPage() {
       {loading ? (
         <Loading />
       ) : dates.length === 0 ? (
-        <div className="daylist-empty" style={{ paddingTop: 40 }}>포인트 내역이 없어요</div>
+        <EmptyState icon="star" title="포인트 내역이 없어요" description="후기 작성이나 이벤트 참여로 포인트를 받을 수 있어요." />
       ) : (
         <div className="fullhist">
           {dates.map((date) => (

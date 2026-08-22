@@ -8,6 +8,17 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-23 — UI/UX 감사 2차 배치: 다크모드 시맨틱 토큰/accent 대비, 공용 ErrorState 도입
+
+다크모드 시맨틱 컬러 토큰(brand/success/warning/danger/info/star/private) 재정의 추가,
+`background:var(--accent)`+`color:var(--text-inverse)` 28곳 대비 미달을 `--ink` 때와 동일한
+패턴으로 수정(`--accent` 자체 색상 통일은 별도 디자인 결정이라 보류).
+
+`app/components/ErrorState.tsx` 신규 — 복구 수단 없는 회색 텍스트 한 줄이던 에러 화면
+(`/checkout` 파라미터 없이 진입, `/manager/staff/permissions` 권한 거부)을 아이콘+설명+
+액션 버튼으로 교체, `/checkout`의 뒤로가기 링크가 센터 ID 없을 때 `/center/`(빈 ID) 404로
+가던 것도 함께 수정. `/search`·`/mypage/points`의 빈 상태도 공용 EmptyState로 통일.
+
 ## 2026-08-23 — UI/UX 감사 1차 배치(흐름차단 6건 + 센터 상세) + E2E 관련 후속 수정
 
 Opus 5의 UI 디자인 평가 + 일반회원·관리자 입장 UX 평가 리포트 기반 1차 수정.

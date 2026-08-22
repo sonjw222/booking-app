@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useState, Suspense } from "react";
 import Loading from "../../../components/Loading";
+import ErrorState from "../../../components/ErrorState";
 import { useSearchParams } from "next/navigation";
 import { fetchMyCenters, isOwnerOfCenter } from "../../../../lib/manager";
 import {
@@ -114,9 +115,11 @@ function PermInner() {
           <div className="title">{staffName} 개인 권한</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>
-          {error === "잘못된 접근이에요" ? error : "이 화면은 오너 또는 권한 설정 권한을 가진 매니저만 접근할 수 있어요"}
-        </div>
+        <ErrorState
+          title={error === "잘못된 접근이에요" ? error : "권한이 없어요"}
+          description={error === "잘못된 접근이에요" ? undefined : "이 화면은 오너 또는 권한 설정 권한을 가진 매니저만 접근할 수 있어요."}
+          action={<a className="primary-btn" href="/manager/staff">스태프 화면으로 이동</a>}
+        />
       </div>
     );
   }
