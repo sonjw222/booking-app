@@ -112,6 +112,20 @@
   --warning-soft: #322611; --warning-line: #55431C;
   --danger-soft: #331A1A;  --danger-line: #573030;
   --info-soft: #12233D;    --info-line: #24406B;
+  /* [2026-08-23] UI 감사(P1-3) — 아래 시맨틱 컬러 "본체" 토큰들(-soft/-line 아닌 것)도
+     그동안 다크 재정의가 없어 라이트 값이 그대로 쓰였다. 다크 배경(#17181C)에서 4.5:1을
+     확보하려면 채도를 낮추고 명도를 올려야 해서 -soft/-line처럼 단순 반전이 아니라
+     각각 새로 조정한 값을 쓴다(실사용처 74~4곳, 예: 마이페이지 "상품" 카드의
+     --brand-soft 배경 위 흰 글자, 회원등급 배지의 --success 텍스트 등). */
+  --brand: #5FCDEE;
+  --brand-ink: #7FDBF5;
+  --brand-soft: #0E2C36;
+  --success: #4FCB93;
+  --warning: #E0A83C;
+  --danger: #F08A8A;
+  --info: #7EB3F5;
+  --star: #F0BE55;
+  --private: #B79BE0;
 }
 
 /* 다크 모드에서 흰 배경으로 고정된 요소 보정 */
@@ -216,7 +230,7 @@ a { color: inherit; text-decoration: none; }
   width: 58px; height: 58px; border-radius: 18px; background: var(--surface);
   display: flex; align-items: center; justify-content: center; font-size: 27px;
 }
-.cat-icon.tag { background: var(--accent); color: var(--text-inverse); font-weight: 800; font-size: 12px; line-height: 1.25; flex-direction: column; }
+.cat-icon.tag { background: var(--accent); color: var(--bg); font-weight: 800; font-size: 12px; line-height: 1.25; flex-direction: column; }
 .cat-icon.tag span { font-size: 11px; }
 .cat-label { font-size: 12.5px; font-weight: 600; color: var(--ink); }
 .float-pill {
@@ -254,7 +268,7 @@ a { color: inherit; text-decoration: none; }
 .urgent-banner .msg { font-size: 13.5px; font-weight: 700; }
 .urgent-banner .msg b { color: var(--accent); font-weight: 800; }
 .timer { display: flex; gap: 3px; }
-.timer span { background: var(--accent); color: var(--text-inverse); font-size: 11.5px; font-weight: 800; padding: 4px 6px; border-radius: 6px; min-width: 20px; text-align: center; }
+.timer span { background: var(--accent); color: var(--bg); font-size: 11.5px; font-weight: 800; padding: 4px 6px; border-radius: 6px; min-width: 20px; text-align: center; }
 
 .bottom-nav {
   display: flex; border-top: 1px solid var(--line); padding: 10px 8px 14px; background: var(--bg);
@@ -333,7 +347,7 @@ a { color: inherit; text-decoration: none; }
   text-align: center; padding: 36px 0; font-size: 13.5px; color: var(--ink-soft); font-weight: 600;
 }
 
-.booked-tag { font-size: 10.5px; font-weight: 800; color: var(--text-inverse); background: var(--accent); padding: 2px 7px; border-radius: 999px; margin-left: 6px; }
+.booked-tag { font-size: 10.5px; font-weight: 800; color: var(--bg); background: var(--accent); padding: 2px 7px; border-radius: 999px; margin-left: 6px; }
 .booked-tag.private-tag { background: var(--private); } /* CLASS-001 D-2: 프라이빗 수업 배지 */
 
 .class-row {
@@ -350,7 +364,7 @@ a { color: inherit; text-decoration: none; }
 .class-count { font-size: 11.5px; font-weight: 800; color: var(--accent); }
 .class-count.full { color: var(--ink-soft); }
 .mini-btn {
-  background: var(--accent); color: var(--text-inverse); border: none; cursor: pointer;
+  background: var(--accent); color: var(--bg); border: none; cursor: pointer;
   font-size: 12.5px; font-weight: 800; padding: 7px 16px; border-radius: 999px;
 }
 .mini-btn.wait { background: var(--ink-soft); }
@@ -429,7 +443,7 @@ a { color: inherit; text-decoration: none; }
 
 .primary-btn {
   display: block; width: 100%; text-align: center; border: none; cursor: pointer;
-  background: var(--accent); color: var(--text-inverse); font: inherit; font-size: 15.5px; font-weight: 800;
+  background: var(--accent); color: var(--bg); font: inherit; font-size: 15.5px; font-weight: 800;
   padding: 15px; border-radius: 14px;
 }
 .primary-btn:disabled { background: var(--ink-soft); cursor: default; }
@@ -471,7 +485,7 @@ a { color: inherit; text-decoration: none; }
 .profile-block { display: flex; align-items: center; gap: 14px; padding: 20px; }
 .avatar {
   width: 64px; height: 64px; border-radius: 50%; background: var(--accent);
-  display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--text-inverse); font-weight: 800;
+  display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--bg); font-weight: 800;
 }
 .profile-name { font-size: 17px; font-weight: 800; margin-bottom: 3px; }
 .profile-edit { font-size: 12.5px; color: var(--ink-soft); font-weight: 700; }
@@ -595,7 +609,7 @@ a { color: inherit; text-decoration: none; }
   font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 999px;
   background: var(--surface); color: var(--ink-soft);
 }
-.center-chip.on .center-role { background: var(--accent); color: var(--text-inverse); }
+.center-chip.on .center-role { background: var(--accent); color: var(--bg); }
 .list-row .right-note { font-size: 12px; color: var(--ink-soft); font-weight: 700; }
 
 /* 매니저 홈 — 매출 요약 대시보드 (P4) */
@@ -627,7 +641,7 @@ a { color: inherit; text-decoration: none; }
 .fab-btn {
   position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%);
   width: calc(100% - 40px); max-width: 440px;
-  background: var(--accent); color: var(--text-inverse); border: none; cursor: pointer;
+  background: var(--accent); color: var(--bg); border: none; cursor: pointer;
   font: inherit; font-size: 15.5px; font-weight: 800; padding: 15px; border-radius: 14px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 50;
 }
@@ -706,7 +720,7 @@ a { color: inherit; text-decoration: none; }
 }
 .rule-add-btn {
   padding: 9px 14px; border-radius: 10px; border: none; cursor: pointer;
-  background: var(--accent); color: var(--text-inverse); font: inherit; font-size: 12.5px; font-weight: 800;
+  background: var(--accent); color: var(--bg); font: inherit; font-size: 12.5px; font-weight: 800;
 }
 
 /* ============================================================
@@ -734,7 +748,7 @@ a { color: inherit; text-decoration: none; }
   padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
   background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
 }
-.skill-chip.on { background: var(--accent); border-color: var(--accent); color: var(--text-inverse); }
+.skill-chip.on { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 
 .note-input {
   width: 100%; margin-top: 12px; padding: 12px 14px; border-radius: 12px;
@@ -743,7 +757,7 @@ a { color: inherit; text-decoration: none; }
 }
 .save-btn {
   width: 100%; margin-top: 10px; padding: 14px; border-radius: 12px; border: none;
-  background: var(--accent); color: var(--text-inverse); font: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer;
+  background: var(--accent); color: var(--bg); font: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer;
 }
 .save-btn:disabled { background: var(--ink-soft); cursor: default; }
 
@@ -863,7 +877,7 @@ a { color: inherit; text-decoration: none; }
 .filter-chip.on {
   background: var(--accent);
   border-color: var(--accent);
-  color: var(--text-inverse);
+  color: var(--bg);
 }
 
 .grade-dot {
@@ -1005,7 +1019,7 @@ a { color: inherit; text-decoration: none; }
 .perm-tab.on {
   background: var(--accent);
   border-color: var(--accent);
-  color: var(--text-inverse);
+  color: var(--bg);
 }
 
 .perm-actions {
@@ -1125,7 +1139,7 @@ a { color: inherit; text-decoration: none; }
 }
 .profile-tag.sm {
   background: var(--accent);
-  color: var(--text-inverse);
+  color: var(--bg);
   font-size: 10.5px;
   padding: 1px 6px;
 }
@@ -1227,7 +1241,7 @@ a { color: inherit; text-decoration: none; }
   padding: 18px;
   border-radius: 16px;
   background: var(--accent);
-  color: var(--text-inverse);
+  color: var(--bg);
 }
 .sales-big { display: block; }
 .sales-big-label { font-size: 12.5px; opacity: 0.85; }
@@ -1512,7 +1526,7 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid var(--line); background: var(--surface);
   color: var(--text); font-size: 13px; cursor: pointer;
 }
-.skill-chip.on { background: var(--accent); border-color: var(--accent); color: var(--text-inverse); font-weight: 600; }
+.skill-chip.on { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
 
 .prog-hist { padding: 0 20px 20px; }
 .prog-hist-day { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
@@ -1670,7 +1684,7 @@ a { color: inherit; text-decoration: none; }
 }
 .center-hero-badge {
   width: 64px; height: 64px; border-radius: 20px;
-  background: var(--accent); color: var(--text-inverse);
+  background: var(--accent); color: var(--bg);
   display: flex; align-items: center; justify-content: center;
   font-size: 26px; font-weight: 800; margin-bottom: 12px;
 }
@@ -1933,7 +1947,7 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .empty-action-text { font-size: 14px; color: var(--text-dim); line-height: 1.5; }
 .empty-action-btn {
-  padding: 11px 22px; background: var(--accent); color: var(--text-inverse); border: none;
+  padding: 11px 22px; background: var(--accent); color: var(--bg); border: none;
   border-radius: 999px; font-size: 14px; font-weight: 700; cursor: pointer; text-decoration: none;
 }
 
@@ -1966,10 +1980,10 @@ a.membership-card { text-decoration: none; display: block; }
   flex: 1; border: 1px solid var(--line); border-radius: 999px; padding: 9px 16px;
   font-size: 14px; background: var(--surface); color: var(--text);
 }
-.search-go { flex: 0 0 auto; background: var(--accent); color: var(--text-inverse); border: none; border-radius: 999px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.search-go { flex: 0 0 auto; background: var(--accent); color: var(--bg); border: none; border-radius: 999px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .search-center-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); text-decoration: none; }
 .search-center-photo { width: 52px; height: 52px; border-radius: 12px; object-fit: cover; flex: 0 0 auto; }
-.search-center-badge { width: 52px; height: 52px; border-radius: 12px; background: var(--accent); color: var(--text-inverse); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; flex: 0 0 auto; }
+.search-center-badge { width: 52px; height: 52px; border-radius: 12px; background: var(--accent); color: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; flex: 0 0 auto; }
 .search-center-info { flex: 1; min-width: 0; }
 .search-center-name { font-size: 14.5px; font-weight: 700; color: var(--text); }
 .search-center-cat { font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px; }
@@ -1996,7 +2010,7 @@ a.membership-card { text-decoration: none; display: block; }
 .product-kind-tag { font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 4px; }
 .product-kind-tag.pass { background: var(--danger-soft); color: var(--danger); }
 .product-kind-tag.goods { background: var(--mint-soft); color: var(--mint); }
-.center-product-buy { flex: 0 0 auto; background: var(--accent); color: var(--text-inverse); border: none; border-radius: 999px; padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.center-product-buy { flex: 0 0 auto; background: var(--accent); color: var(--bg); border: none; border-radius: 999px; padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer; }
 
 /* 홈 센터 거리 표시 / 위치 캡처 */
 .brand-dist { font-size: 10.5px; color: var(--text-dim); font-weight: 600; margin-top: 1px; text-align: center; }
@@ -2038,7 +2052,7 @@ a.membership-card { text-decoration: none; display: block; }
 .order-product { font-size: 13.5px; color: var(--text); margin-top: 5px; display: flex; align-items: center; gap: 6px; }
 .order-meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
 .order-actions { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
-.order-done-btn { background: var(--accent); color: var(--text-inverse); border: none; border-radius: 8px; padding: 7px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.order-done-btn { background: var(--accent); color: var(--bg); border: none; border-radius: 8px; padding: 7px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .order-cancel-btn { background: var(--bg); color: var(--text-dim); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; font-size: 12.5px; cursor: pointer; }
 
 /* 센터 상세 - 소개 사진 / 수업 수강권 / 하단 고정바 */
@@ -2059,7 +2073,7 @@ a.membership-card { text-decoration: none; display: block; }
   box-shadow: 0 6px 20px rgba(0,0,0,0.18);
 }
 .center-bar-btn.buy { background: var(--card-bg); color: var(--text); }
-.center-bar-btn.reserve { background: var(--accent); color: var(--text-inverse); }
+.center-bar-btn.reserve { background: var(--accent); color: var(--bg); }
 
 
 /* 테마 설정 */
@@ -2429,7 +2443,7 @@ a.membership-card { text-decoration: none; display: block; }
 .unplaced-remain { font-size: 11px; font-weight: 800; color: var(--warning); background: var(--warning-soft); padding: 2px 8px; border-radius: 999px; }
 .unplaced-sub { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
 .unplaced-retry {
-  flex: 0 0 auto; background: var(--accent); color: var(--text-inverse); border: none;
+  flex: 0 0 auto; background: var(--accent); color: var(--bg); border: none;
   border-radius: 8px; padding: 8px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer;
 }
 .unplaced-retry:disabled { opacity: 0.5; }
@@ -2526,7 +2540,7 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .no-pass-buy-btn {
   flex: 0 0 auto;
-  background: var(--accent); color: var(--text-inverse); border: none;
+  background: var(--accent); color: var(--bg); border: none;
   border-radius: 10px; padding: 9px 14px;
   font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
 }
@@ -2589,7 +2603,7 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .announce-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .announce-pin {
-  font-size: 10.5px; font-weight: 800; color: var(--text-inverse); background: var(--accent);
+  font-size: 10.5px; font-weight: 800; color: var(--bg); background: var(--accent);
   padding: 2px 7px; border-radius: 999px; flex: 0 0 auto;
 }
 .announce-title { font-size: 15px; font-weight: 800; color: var(--text); flex: 1; min-width: 0; }
@@ -2715,7 +2729,7 @@ a.membership-card { text-decoration: none; display: block; }
   padding: 10px 13px; border-radius: 16px; font-size: 14px; line-height: 1.5;
   word-break: break-word; white-space: pre-wrap;
 }
-.chat-msg.mine .chat-bubble { background: var(--accent); color: var(--text-inverse); border-bottom-right-radius: 5px; }
+.chat-msg.mine .chat-bubble { background: var(--accent); color: var(--bg); border-bottom-right-radius: 5px; }
 .chat-msg.theirs .chat-bubble { background: var(--surface); color: var(--text); border-bottom-left-radius: 5px; }
 .chat-photos { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .chat-photos img { max-width: 200px; border-radius: 10px; display: block; }
@@ -2752,7 +2766,7 @@ a.membership-card { text-decoration: none; display: block; }
 .chat-input:focus { outline: none; border-color: var(--accent); }
 .chat-send {
   flex: 0 0 auto; height: 40px; padding: 0 16px; border-radius: 20px;
-  background: var(--accent); color: var(--text-inverse); border: none;
+  background: var(--accent); color: var(--bg); border: none;
   font-size: 14px; font-weight: 700; cursor: pointer;
 }
 .chat-send:disabled { opacity: 0.5; }
