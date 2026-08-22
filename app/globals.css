@@ -448,27 +448,22 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* ============================================================
-   소셜 로그인 버튼 (카카오/네이버/애플)
+   소셜 로그인 버튼 (구글/카카오/네이버/애플) — 원형 아이콘 버튼을 가로로 나열.
+   버튼 라벨("Google로 계속하기" 등)은 화면에는 안 보이고 .sr-only로 스크린리더용으로만 남긴다.
    ============================================================ */
-.social-list { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.social-list { width: 100%; display: flex; justify-content: center; gap: 18px; }
 .social-btn {
-  width: 100%; padding: 14px; border-radius: 12px; border: none; cursor: pointer;
-  font: inherit; font-size: 14.5px; font-weight: 800; text-align: center;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 66px; height: 66px; flex: 0 0 auto; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 27px; font-weight: 900;
+  box-shadow: 0 1px 4px rgba(0,0,0,.1);
 }
-.social-btn.google { background: var(--text-inverse); color: var(--vendor-google-ink); border: 1px solid var(--line); }
+.social-btn:disabled { opacity: .55; cursor: default; }
+.social-btn.google { background: var(--text-inverse); color: var(--vendor-google); border: 1px solid var(--line); }
 .social-btn.kakao { background: var(--vendor-kakao); color: var(--vendor-kakao-ink); }
 .social-btn.naver { background: var(--vendor-naver); color: var(--text-inverse); }
 .social-btn.apple { background: var(--vendor-apple); color: var(--text-inverse); }
-.social-ic {
-  width: 18px; height: 18px; border-radius: 4px; display: inline-flex;
-  align-items: center; justify-content: center; font-size: 12px; font-weight: 900;
-}
-/* 4개 제공자의 아이콘 배지를 모두 여기서 정의한다.
-   (google/kakao는 login/page.tsx 인라인 style로 흩어져 있던 것을 옮겨왔다) */
-.social-btn.google .social-ic { background: var(--text-inverse); color: var(--vendor-google); border: 1px solid var(--line); }
-.social-btn.kakao .social-ic { background: var(--vendor-kakao-ink); color: var(--vendor-kakao); }
-.social-btn.naver .social-ic { background: var(--text-inverse); color: var(--vendor-naver); }
+.social-ic { display: flex; align-items: center; justify-content: center; line-height: 1; }
 
 /* ============================================================
    마이페이지
@@ -3951,7 +3946,7 @@ a.membership-card { text-decoration: none; display: block; }
 .auth-panel{position:relative;z-index:3;min-height:calc(100dvh - 254px);margin-top:-24px;padding:18px 20px max(32px,env(safe-area-inset-bottom));border-radius:26px 26px 0 0;background:var(--bg)}
 .auth-panel .mode-tabs{display:flex;width:190px;margin:0 0 22px;gap:20px;background:transparent}.auth-panel .mode-tab{min-height:34px;padding:0;border-bottom:2px solid transparent;color:var(--ink-soft);font-size:13px;font-weight:650}.auth-panel .mode-tab.on{border-bottom-color:var(--ink);color:var(--ink);background:transparent}.auth-panel-heading{margin-bottom:20px}.auth-panel-heading h2{font-size:23px;letter-spacing:-.6px}.auth-panel-heading p{margin-top:6px;color:var(--ink-soft);font-size:12.5px}
 .auth-panel .role-select{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}.auth-panel .role-btn{min-height:92px;padding:13px 10px;display:grid;grid-template-columns:36px 1fr;grid-template-rows:auto auto;column-gap:9px;text-align:left;border:1px solid var(--line);border-radius:15px;background:var(--card-bg)}.auth-panel .role-btn.on{border:2px solid var(--ink);background:var(--surface)}.auth-panel .role-emoji{grid-row:1/3;display:grid;place-items:center;width:36px;height:36px;margin:0;border-radius:12px;background:var(--surface)}
-.auth-panel .input-field{min-height:52px;margin-bottom:8px;padding-left:2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}.auth-panel .login-submit{margin-top:12px;border-radius:14px}.auth-panel .social-btn{min-height:50px;border-radius:14px;box-shadow:none}
+.auth-panel .input-field{min-height:52px;margin-bottom:8px;padding-left:2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}.auth-panel .login-submit{margin-top:12px;border-radius:14px}
 .auth-account-page{min-height:100dvh}.auth-account-page .back-header+*{margin-top:18px}.register-center-page-v2 .center-registration-form{margin-inline:var(--page-gutter)}
 @media(max-width:420px){.auth-panel{padding-inline:16px}.noti-head,.inquiry-head,.mypage-titlebar{min-height:90px}.auth-activities{opacity:.72}}
 
