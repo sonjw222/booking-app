@@ -938,13 +938,17 @@ platform admin, `notification_logs`: `message.sms.view` 또는 `message.push.vie
   같은 이유로 `app/manager/staff/page.tsx`의 "개인 권한 설정" 진입 링크도 이 페이지의 다른
   버튼들과 동일하게 `canManageRolePermissions`로 가드해, 권한 없는 스태프에게 클릭 후 막히는
   링크가 보이지 않도록 함께 맞췄다.
-- `membership_schedule_rules`는 `pass.update` 권한을 요구하는데 메뉴 게이트는 `pass.create`만
-  확인 — 권한 카탈로그 정합성 재검토 필요(SQL 또는 메뉴 게이트 키 변경).
-- `progress_records`에 UPDATE RLS 정책 자체가 없음(SELECT/INSERT/DELETE만 존재) — 현재는
-  호출하는 코드가 없어 무해하지만(관련 죽은 import는 이번에 제거함), 나중에 수정 기능을 추가하면
-  RLS부터 필요(SQL).
-- `rooms` SELECT가 `using (true)`로 로그인 없이도 전체 공개 — 의도된 것인지 확인 필요(PII 아님,
-  낮은 위험이지만 미확인 상태).
+- ~~`membership_schedule_rules`는 `pass.update` 권한을 요구하는데 메뉴 게이트는 `pass.create`만
+  확인~~ **[2026-08-22 완료]** `app/manager/page.tsx`의 "수강권 관리" 메뉴 조건을
+  `pass.create || pass.update`로 확장. 화면 내부(`app/manager/membership-rules/page.tsx`)는
+  이미 두 키를 따로 체크하고 있어 진입 메뉴만 문제였음.
+- ~~`progress_records`에 UPDATE RLS 정책 자체가 없음~~ **[2026-08-22 완료]**
+  `fix_progress_records_missing_update_rls_draft_proposed.sql` 작성(롤백 포함) —
+  `progress_categories` 기존 UPDATE 정책과 동일 패턴(`customer.progress` 권한). **미적용,
+  사용자가 SQL Editor에서 실행 필요.**
+- ~~`rooms` SELECT가 `using (true)`로 전체 공개 — 의도된 것인지 확인 필요~~ **[2026-08-22 완료,
+  수정 없음]** `fix_permission_products_rooms_rls.sql` 주석에서 이미 의도된 설계로 확인됨(PII
+  없는 테이블, 룸 관리 권한 강화 시에도 조회는 의도적으로 열어둠).
 
 ### P2-16. (신규, 번호 충돌 주의) QA 통합 배치에서 발견한 항목 모음
 

@@ -321,7 +321,7 @@ export default function ManagerDashboard() {
 
       {/* 관리 메뉴 */}
       <div className="menu-section-label">{activeCenter?.name ?? "센터"} 관리</div>
-      {canSeeMenu("pass.create") && (
+      {(canSeeMenu("pass.create") || canSeeMenu("pass.update")) && (
         <a className="list-row" href="/manager/membership-rules">
           <div className="left"><span className="icon"><UiIcon name="ticket" /></span>수강권 관리</div>
           <span className="chevron">›</span>
