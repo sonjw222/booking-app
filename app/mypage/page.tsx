@@ -94,6 +94,16 @@ export default function MyPage() {
         </div>
       </div>
 
+      {/* ACL-005: 관리자 모드 진입은 active manager_centers 소속 여부로만 판단(profile.isManager).
+          UX 감사(B-1) 지적대로 예전엔 "설정" 섹션 맨 아래에 있어 센터 운영자가 매일 써야 할
+          진입점이 화면 최하단에 우연히 발견되는 구조였다 — 프로필 바로 아래로 끌어올림. */}
+      {profile?.isManager && (
+        <a className="list-row manager-mode-switch" href="/manager">
+          <div className="left"><span className="icon"><UiIcon name="building" /></span>관리자 모드로 전환</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
+
       {(() => {
         const passes = memberships.filter((m) => m.kind === "pass");
         const goods = memberships.filter((m) => m.kind === "goods");
@@ -192,14 +202,6 @@ export default function MyPage() {
       {profile?.isPlatformAdmin && (
         <a className="list-row" href="/admin">
           <div className="left"><span className="icon"><UiIcon name="shield" /></span>운영자 설정</div>
-          <span className="chevron">›</span>
-        </a>
-      )}
-      {/* ACL-005: 관리자 모드 진입은 active manager_centers 소속 여부로만 판단(profile.isManager) —
-          아래 "내 센터 등록하기"와 표시 조건이 서로 독립적이라 동시에 나타날 수 있다. */}
-      {profile?.isManager && (
-        <a className="list-row" href="/manager">
-          <div className="left"><span className="icon"><UiIcon name="building" /></span>관리자 모드로 전환</div>
           <span className="chevron">›</span>
         </a>
       )}

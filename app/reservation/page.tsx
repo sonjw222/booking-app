@@ -367,7 +367,9 @@ function ReservationCalendarContent() {
     const mine = activeProfileId ? cls.myByProfile[activeProfileId] : undefined;
     if (!mine) return;
     if (busyClassId) return; // 중복 클릭/중복 요청 방지
-    if (!confirm("이 수업 예약을 취소할까요?")) return;
+    // UX 감사(A-10) — 예약 취소만 브라우저 기본 confirm()을 써서 앱 밖으로 튕긴 느낌을 줬다.
+    // 다른 파괴적 동작(프로필 삭제·주문 취소)과 동일한 인앱 확인 모달로 통일.
+    if (!(await globalThis.appConfirm("이 수업 예약을 취소할까요?"))) return;
     setBusyClassId(cls.id);
     try {
       await cancelReservation(mine.reservationId);

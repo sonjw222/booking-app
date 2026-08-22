@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchMyPage, type HistoryItem } from "../../lib/mypage";
+import { cancelReservation } from "../../lib/reservations";
 import Loading from "../components/Loading";
 import { memberFacingBadge, type ReservationType } from "../../lib/reservationTypes";
 import UiIcon from "../components/UiIcon";
@@ -40,6 +41,13 @@ export default function MyReservationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"upcoming" | "past" | "all">("upcoming");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  }
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -50,6 +58,23 @@ export default function MyReservationsPage() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // UX 감사(A-4) 대응 — 예전엔 이 화면 카드가 읽기 전용이라 취소하려면 /reservation으로
+  // 가서 같은 날짜를 다시 찾아야 했다(app/reservation/page.tsx의 handleCancel과 동일 RPC 재사용).
+  async function handleCancel(h: HistoryItem) {
+    if (busyId) return;
+    if (!(await globalThis.appConfirm("이 수업 예약을 취소할까요?"))) return;
+    setBusyId(h.id);
+    try {
+      await cancelReservation(h.id);
+      showToast("예약이 취소됐어요");
+      await load();
+    } catch (e: any) {
+      showToast(e.message ?? "취소하지 못했어요");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   const shown = history.filter((h) => {
     if (filter === "upcoming") return h.status === "confirmed" || h.status === "waitlisted";
@@ -70,6 +95,7 @@ export default function MyReservationsPage() {
   return (
     <div className="app-shell member-my-reservations">
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
+      {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
         <div className="side" />
@@ -95,6 +121,7 @@ export default function MyReservationsPage() {
               <div className="reservation-date-list">
                 {items.map((h) => {
                   const { time } = splitWhen(h.when);
+                  const cancellable = h.status === "confirmed" || h.status === "waitlisted";
                   return <div key={h.id} className="hist-item">
                     <div className="hist-time">{time}</div>
                     <div className="hist-main">
@@ -106,7 +133,19 @@ export default function MyReservationsPage() {
                       </div>
                       <div className="hist-sub">{h.centerName}</div>
                     </div>
-                    <span className={`hist-status s-${h.status}`}>{STATUS_LABEL[h.status] ?? h.status}</span>
+                    <div className="hist-right">
+                      <span className={`hist-status s-${h.status}`}>{STATUS_LABEL[h.status] ?? h.status}</span>
+                      {cancellable && (
+                        <button
+                          type="button"
+                          className="hist-cancel-btn"
+                          disabled={busyId === h.id}
+                          onClick={() => handleCancel(h)}
+                        >
+                          취소
+                        </button>
+                      )}
+                    </div>
                   </div>;
                 })}
               </div>

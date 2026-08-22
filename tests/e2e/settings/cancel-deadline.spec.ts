@@ -87,9 +87,11 @@ test("취소기한 2시간 — 3시간 뒤 수업은 1시간 전이라 취소 �
   const memberPage = await memberContext.newPage();
   await memberPage.goto("/reservation");
   await selectKstCalendarDay(memberPage, kstDateStr(cls.startTime));
-  memberPage.once("dialog", (d) => d.accept());
+  // A-10 UX 수정으로 예약 취소 확인이 네이티브 confirm()이 아니라 인앱 모달(ConfirmDialog)로
+  // 바뀌었다 — "확인" 버튼을 직접 클릭한다(danger=true라도 confirmLabel은 기본값 "확인").
   const cancelButton = memberPage.locator(".class-row", { hasText: "E2E 취소기한-성공" }).getByRole("button", { name: "취소" });
   await cancelButton.click();
+  await memberPage.locator(".confirm-sheet").getByRole("button", { name: "확인" }).click();
   // toast 대신, 취소 성공 시 그 행의 "취소" 버튼이 사라지는(다시 예약 가능 상태로 바뀌는)
   // 실제 상태 변화로 확인한다.
   await expect(cancelButton).toHaveCount(0);
@@ -117,9 +119,11 @@ test("취소기한 2시간 — 1시간 뒤 수업은 이미 지나서 취소 실
   const memberPage = await memberContext.newPage();
   await memberPage.goto("/reservation");
   await selectKstCalendarDay(memberPage, kstDateStr(cls.startTime));
-  memberPage.once("dialog", (d) => d.accept());
+  // A-10 UX 수정으로 예약 취소 확인이 네이티브 confirm()이 아니라 인앱 모달(ConfirmDialog)로
+  // 바뀌었다 — "확인" 버튼을 직접 클릭한다(danger=true라도 confirmLabel은 기본값 "확인").
   const cancelButton = memberPage.locator(".class-row", { hasText: "E2E 취소기한-실패" }).getByRole("button", { name: "취소" });
   await cancelButton.click();
+  await memberPage.locator(".confirm-sheet").getByRole("button", { name: "확인" }).click();
   // 실패 시 cancel_reservation()이 예외를 던져 상태가 바뀌지 않으므로 "취소" 버튼이
   // 그대로 남아있고, 정확한 사유는 waitForToastText(locator.waitFor 기반)로 확정한다.
   const toastText = await waitForToastText(memberPage);

@@ -89,9 +89,10 @@ test("수업 시작 후 취소 시도 → 실패 확인 (실브라우저)", asyn
 
   await page.goto("/reservation");
   await selectKstCalendarDay(page, kstDateStr(cls.startTime));
-  page.once("dialog", (d) => d.accept());
+  // A-10 UX 수정으로 확인이 네이티브 confirm()이 아니라 인앱 모달(ConfirmDialog)로 바뀌었다.
   const cancelButton = page.locator(".class-row", { hasText: "E2E 시작후취소차단" }).getByRole("button", { name: "취소" });
   await cancelButton.click();
+  await page.locator(".confirm-sheet").getByRole("button", { name: "확인" }).click();
   const toastText = await waitForToastText(page);
   expect(toastText).toContain("이미 시작되어 취소할 수 없어요");
   // 실패했으니 "취소" 버튼도 그대로 남아있어야 한다(상태가 안 바뀜).

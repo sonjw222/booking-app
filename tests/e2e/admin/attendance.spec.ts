@@ -113,7 +113,7 @@ test("관리자: 예약자 출석 → 결석(노쇼) → 되돌리기, 취소된
   await memberContext.close();
 
   await gotoManagerClassesDay(page, kstDate);
-  await page.locator(".class-row", { hasText: "P3 출결-그룹" }).locator(".res-count-link").click();
+  await page.locator(".class-row", { hasText: "P3 출결-그룹" }).locator(".class-row-roster-btn").click();
   await expect(page.locator(".sheet-title", { hasText: "예약자" })).toBeVisible();
 
   const rosterItem = page.locator(".roster-item").first();
@@ -174,7 +174,7 @@ test("관리자: 대기(waitlisted) 예약은 출석/결석 버튼이 보이지 
   });
 
   await gotoManagerClassesDay(page, kstDate);
-  await page.locator(".class-row", { hasText: "P3 출결-대기" }).locator(".res-count-link").click();
+  await page.locator(".class-row", { hasText: "P3 출결-대기" }).locator(".class-row-roster-btn").click();
   await expect(page.locator(".sheet-title", { hasText: "예약자" })).toBeVisible();
 
   const waitItem = page.locator(".roster-item", { hasText: "대기" });
@@ -188,7 +188,7 @@ test("관리자: 프라이빗 수업에서도 출석/결석 처리가 동일하�
   const admin = getFixtureAdminClient();
   // CI가 실행 도중 concurrency로 취소되면(다음 push가 cancel-in-progress로 이전 실행을
   // 죽임) afterAll이 못 돌아 이 제목의 수업(+ 걸려 있던 예약)이 그대로 남는다(실제로
-  // 재현됨: 회원 화면에 같은 제목 행이 2개가 돼 .res-count-link가 Playwright strict mode
+  // 재현됨: 회원 화면에 같은 제목 행이 2개가 돼 .class-row-roster-btn이 Playwright strict mode
   // violation로 실패). createFutureTestClassAdmin과 동일한 관례로 생성 전 정리한다.
   await deleteExistingClassesByTitle(centerAId, "P3 출결-프라이빗");
   const start = new Date(Date.now() + 42 * 3600 * 1000);
@@ -210,7 +210,7 @@ test("관리자: 프라이빗 수업에서도 출석/결석 처리가 동일하�
   await memberContext.close();
 
   await gotoManagerClassesDay(page, kstDate);
-  await page.locator(".class-row", { hasText: "P3 출결-프라이빗" }).locator(".res-count-link").click();
+  await page.locator(".class-row", { hasText: "P3 출결-프라이빗" }).locator(".class-row-roster-btn").click();
   await expect(page.locator(".sheet-title", { hasText: "예약자" })).toBeVisible();
 
   const rosterItem = page.locator(".roster-item").first();

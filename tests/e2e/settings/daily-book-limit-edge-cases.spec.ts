@@ -97,8 +97,9 @@ test("취소하면 그만큼 하루 한도가 다시 채워져 재예약이 가�
   await page.locator(".sheet-overlay").click({ position: { x: 10, y: 10 } });
 
   // 1번 수업 취소 — 한도가 다시 비워진다
-  page.once("dialog", (d) => d.accept());
+  // A-10 UX 수정으로 확인이 네이티브 confirm()이 아니라 인앱 모달(ConfirmDialog)로 바뀌었다.
   await page.locator(".class-row", { hasText: "E2E 한도재충전 1" }).getByRole("button", { name: "취소" }).click();
+  await page.locator(".confirm-sheet").getByRole("button", { name: "확인" }).click();
   await expect(page.locator(".class-row", { hasText: "E2E 한도재충전 1" }).getByRole("button", { name: "예약" })).toBeVisible();
 
   // 이제 2번 수업 예약이 성공해야 한다(취소로 한도가 다시 채워졌으므로)

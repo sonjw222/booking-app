@@ -1012,15 +1012,21 @@ export default function ClassManagePage() {
                 <div className="class-row-meta">
                   {c.start}~{c.end}
                   {instructorText && ` · ${instructorText}`}
-                  {" · "}
-                  <button type="button" className="res-count-link" onClick={(e) => { e.stopPropagation(); openRoster(c); }}>예약 {c.reserved}/{c.capacity} ›</button>
                 </div>
               </div>
-              {!isPastClass(c) && canDeleteClass && (
-                <button className="profile-del" disabled={busy} onClick={(e) => { e.stopPropagation(); remove(c); }}>
-                  삭제
+              <div className="class-row-actions">
+                {/* UX 감사(B-2) — 예전엔 "예약 N/M ›"가 21px짜리 인라인 텍스트 링크뿐이라
+                    매니저가 매일 여는 예약자/출석 화면 진입이 오탭에 취약했다. 별도 버튼으로
+                    분리해 44px 터치 영역을 확보(수업 수정은 행 전체 탭으로 계속 가능). */}
+                <button type="button" className="class-row-roster-btn" onClick={(e) => { e.stopPropagation(); openRoster(c); }}>
+                  예약 {c.reserved}/{c.capacity} ›
                 </button>
-              )}
+                {!isPastClass(c) && canDeleteClass && (
+                  <button className="profile-del" disabled={busy} onClick={(e) => { e.stopPropagation(); remove(c); }}>
+                    삭제
+                  </button>
+                )}
+              </div>
             </div>
             );
           })}

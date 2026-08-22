@@ -123,8 +123,9 @@ test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회
   // OFF 단계 예약은 ON 단계의 "2회 제한" 카운트에 섞이지 않도록 전부 취소해둔다.
   // 위와 같은 이유로 이미 로드된 페이지를 그대로 재사용한다(새로 goto하지 않음).
   for (let i = 0; i < offClasses.length; i++) {
-    memberPage.once("dialog", (d) => d.accept());
+    // A-10 UX 수정으로 확인이 네이티브 confirm()이 아니라 인앱 모달(ConfirmDialog)로 바뀌었다.
     await memberPage.locator(".class-row", { hasText: offTitles[i] }).getByRole("button", { name: "취소" }).click();
+    await memberPage.locator(".confirm-sheet").getByRole("button", { name: "확인" }).click();
     await expect(
       memberPage.locator(".class-row", { hasText: offTitles[i] }).getByRole("button", { name: "예약" })
     ).toBeVisible({ timeout: POST_ACTION_TIMEOUT });
