@@ -230,29 +230,35 @@ function CenterDetailContent() {
                 const name = encodeURIComponent(center.name);
                 const hasCoord = center.latitude != null && center.longitude != null;
                 const lat = center.latitude, lng = center.longitude;
-                const apps = [
-                  { id: "kakao", label: "카카오맵으로 길찾기", emoji: "🟡",
+                // 카카오맵/네이버지도/티맵은 로고 자산이 없어 outline 아이콘 하나로 뭉치면
+                // 구분이 안 되므로 --vendor-* 색 점으로 구분한다. 구글 지도는 이모지("🗺️")
+                // 대신 일반 지도핀 아이콘을 써도 정체성이 흐려지지 않아(로고 자체가 지도
+                // 색상 팔레트) 그대로 UiIcon으로 바꾼다.
+                const apps: { id: string; label: string; dot?: string; url: string }[] = [
+                  { id: "kakao", label: "카카오맵으로 길찾기", dot: "var(--vendor-kakao)",
                     url: hasCoord
                       ? `https://map.kakao.com/link/to/${name},${lat},${lng}`
                       : `https://map.kakao.com/link/search/${addr}` },
-                  { id: "naver", label: "네이버 지도로 길찾기", emoji: "🟢",
+                  { id: "naver", label: "네이버 지도로 길찾기", dot: "var(--vendor-naver)",
                     // 앱: nmap 스킴(목적지 자동), 웹 대체: 검색
                     url: hasCoord
                       ? `nmap://route/car?dlat=${lat}&dlng=${lng}&dname=${name}&appname=woori.class`
                       : `https://map.naver.com/v5/search/${addr}` },
-                  { id: "tmap", label: "티맵으로 길찾기", emoji: "🔵",
+                  { id: "tmap", label: "티맵으로 길찾기", dot: "var(--vendor-tmap)",
                     // 앱: tmap 스킴(목적지 자동)
                     url: hasCoord
                       ? `tmap://route?goalname=${name}&goalx=${lng}&goaly=${lat}`
                       : `https://tmap.life/route?goalname=${name}` },
-                  { id: "google", label: "구글 지도로 길찾기", emoji: "🗺️",
+                  { id: "google", label: "구글 지도로 길찾기",
                     url: hasCoord
                       ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
                       : `https://www.google.com/maps/search/?api=1&query=${addr}` },
                 ];
                 return apps.map((a) => (
                   <a key={a.id} className="map-app-item" href={a.url} target="_blank" rel="noreferrer" onClick={() => setMapSheet(false)}>
-                    <span className="map-app-emoji">{a.emoji}</span>
+                    <span className="map-app-emoji">
+                      {a.dot ? <span className="vendor-dot" style={{ background: a.dot }} /> : <UiIcon name="location" size={20} />}
+                    </span>
                     <span>{a.label}</span>
                     <span className="map-app-go">›</span>
                   </a>
