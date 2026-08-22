@@ -1929,9 +1929,15 @@ RLS부터 적용해야 함. 정책 초안은 `add_rls_gap_tables_draft_proposed.
    선택 상태는 셀 내부 구성(점·금액 표시)이 달라 시각 확인 없이 통일하기 어려워 남김.
 3. **다크 모드 시각 확인** — `--card-bg` 신설과 semantic soft/line 계열 다크 재정의를 이번에 추가했는데
    브라우저 확인을 못 했다. `[data-theme="charcoal"]`에서 카드·배지·시트를 실제로 볼 것.
-4. **디자인 토큰 계약 테스트 확장** — `tests/unit/designSystem.contract.test.ts`에
-   "`app/**/*.tsx`에 인라인 하드코딩 색상이 없어야 한다"와 "`globals.css` 규칙부에 승인된
-   리터럴(#fff, 테마 스와치) 외 hex가 없어야 한다"를 추가하면 이번 정리가 되돌아가는 것을 막을 수 있다.
+4. ~~**디자인 토큰 계약 테스트 확장**~~ **[2026-08-22 완료]** `tests/unit/designSystem.contract.test.ts`에
+   회귀 방지 테스트 5개 추가: (a) `app/**/*.tsx` 전체를 재귀 스캔해 `style={{...}}` 안에
+   하드코딩 hex가 없는지 확인, (b) 예전에 흩어져 있던 danger-red 리터럴 5종이 다시 나타나지
+   않는지, (c) `--floating-nav-clearance` 정의 유지, (d) `.app-shell`이 `100dvh` 유지, (e) 프로필
+   기본 아바타가 흰 배경 유지. **(a)를 추가하는 과정에서 실제 회귀 1건을 새로 발견**:
+   `app/mypage/points/page.tsx`가 여러 줄에 걸친 `style={{...}}`(단일 줄 grep으로는 걸리지 않는
+   형태)에 `#e7f5ec`/`#fdecec`/`#1f8a4c`/`#c0392b`를 그대로 쓰고 있었다(포인트 증감 배지 색) —
+   `var(--success-soft)`/`var(--success)`/`var(--danger-soft)`/`var(--danger)`로 교체. 유닛
+   테스트 244개 전부 통과, `npm run build` 통과.
 
 ### P2-DS-2. (2026-08-22 기록, 즉시 반증됨 — 실제 이슈 아님) `npm run build`가 `@playwright/test` 미설치로 실패한다는 보고는 worktree 환경 문제였음
 

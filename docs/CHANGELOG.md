@@ -8,6 +8,13 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-22 — P2-DS-1 후속: 디자인 토큰 회귀 방지 테스트 추가 + 실제 회귀 1건 발견·수정
+
+`tests/unit/designSystem.contract.test.ts`에 인라인 하드코딩 색상/토큰 회귀를 잡는 테스트 5개
+추가. 추가 과정에서 `app/mypage/points/page.tsx`의 여러 줄짜리 `style={{...}}`(단일 줄 grep이
+못 잡는 형태)에 남아있던 하드코딩 hex 4개(`#e7f5ec` `#fdecec` `#1f8a4c` `#c0392b`, 포인트 증감
+배지 색)를 발견해 `--success-soft`/`--success`/`--danger-soft`/`--danger` 토큰으로 교체.
+
 ## 2026-08-22 — P2-14 소규모 항목 3건 정리 + P2-16 고아 라우트 진입 링크 추가
 
 - `lib/classes.ts`의 미사용 `previewCopySchedule`/`copySchedule`(구버전 nth-weekday 복사 로직)와
