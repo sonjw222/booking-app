@@ -1923,12 +1923,50 @@ RLS부터 적용해야 함. 정책 초안은 `add_rls_gap_tables_draft_proposed.
    (`💳 🟡 🔵 🏦 🤝`)과 `center/[id]/page.tsx`의 길찾기 앱 목록(`🟡 🟢 🔵 🗺️`)이 아직 이모지다.
    🟡/🟢/🔵는 벤더 로고 대신 쓰는 색 원이라 outline 아이콘 하나로 바꾸면 제공자 구분이 사라진다.
    벤더 로고 애셋을 넣거나, `--vendor-*` 토큰 기반 색 점 + `UiIcon` 조합으로 재설계 필요.
-2. **캘린더 선택 상태가 4종** — 선택된 날짜 표현이 `.cal-cell.selected`(accent 배경),
-   `.mypage-cal-cell.sel`(surface + accent outline), `.copy-cal-cell.on`(accent 배경),
-   `.app-date-grid button.on`(원형 ink 배경)으로 제각각. 주말 색·월 이동 버튼은 이번에 통일했으나
-   선택 상태는 셀 내부 구성(점·금액 표시)이 달라 시각 확인 없이 통일하기 어려워 남김.
-3. **다크 모드 시각 확인** — `--card-bg` 신설과 semantic soft/line 계열 다크 재정의를 이번에 추가했는데
-   브라우저 확인을 못 했다. `[data-theme="charcoal"]`에서 카드·배지·시트를 실제로 볼 것.
+2. **캘린더 선택 상태가 4종 — [2026-08-22 완료]** Playwright로 4곳(예약/`mypage/calendar`/
+   매니저 수업 화면의 "복사" 시트/`class-revenue`의 날짜 선택기) 모두 실제로 선택 상태를
+   만들어 스크린샷으로 비교한 뒤 통일. 예약 캘린더(`.cal-cell.selected`)와 매니저 수업
+   캘린더가 이미 쓰던 brand-soft 원형(연한 하늘색 배경 + 진한 하늘색 글자, `--brand-soft`/
+   `--brand-ink`)을 기준으로 나머지 둘을 맞췄다: `.mypage-cal-cell.sel`(기존: surface 배경 +
+   accent 2px 외곽선 → brand-soft 배경, 외곽선 제거), `.copy-cal-cell.on`/
+   `.app-date-grid button.on`(기존: `var(--accent)`/`var(--ink)` 배경 + 고정 흰 글자 → brand-soft/
+   brand-ink). `--brand-soft`/`--brand-ink`는 다크 모드에서도 값이 안 바뀌는 고정 토큰이라, 기존
+   `var(--ink)` 기반 조합이 다크 모드에서 배경이 뒤집혀 대비가 깨지던 문제(아래 다크 모드 항목
+   참고)도 함께 해소됨. 셀 내부 구성(점·금액 표시 등)은 그대로 두고 채움색만 맞췄다.
+   **부수 발견**: 이 작업 중 매니저 "수업" 화면의 "복사"/"휴무일" 헤더 버튼이 ManagerChrome
+   공용 헤더 마이그레이션 이후 완전히 안 보이고 클릭도 안 되는 상태였던 걸 발견해 별도로 고침
+   (`.manager-v3-content > .app-shell.manager-classes-v2 > .back-header { display: flex }`
+   추가 — 이 화면은 제목+좌우 버튼 2개 구조라 일반적인 `.header-action`(제목 숨기고 오른쪽
+   버튼 하나) 패턴이 안 맞아서 선택자 특이성을 높여 이 화면만 원래 레이아웃으로 되돌림).
+3. **다크 모드 시각 확인 — [2026-08-22 완료]** Playwright로 실제 브라우저를 띄워 로그인 →
+   `/settings/theme`에서 다크 모드 선택 → 회원(홈/마이페이지/프로필관리/포인트내역)·매니저(관리
+   홈/수업/회원/설정/스태프)·운영자(`/admin`, 권한 없는 계정으로 접근 거부 화면) 전 구간을
+   전체 페이지 이동(`<a href>` 방식, 이 앱은 `<Link>`를 안 씀)까지 포함해 순회하며 콘솔 에러
+   0건 확인. 이 과정에서 진짜 버그 2건을 발견해 함께 고쳤다:
+   - **테마가 페이지 이동 시 전혀 유지되지 않던 근본 버그**: `app/settings/theme/page.tsx`만
+     `data-theme`를 적용했고 다른 어떤 화면에도 재적용하는 로직이 없어, 설정 화면을 벗어나는
+     즉시(풀 페이지 이동이라) 라이트로 되돌아갔다. `app/layout.tsx`에 하이드레이션 이전에
+     동기 실행되는 인라인 스크립트로 `localStorage("app_theme")` → `data-theme` 적용을
+     추가(+ `suppressHydrationWarning`으로 의도된 서버/클라이언트 불일치 경고 억제).
+   - **`background: var(--ink)` + `color: var(--text-inverse)` 조합의 다크 모드 반전 버그**:
+     `--ink`는 "현재 테마의 가장 강한 색"이라 다크 모드에서 거의 흰색으로 뒤집히는데
+     `--text-inverse`는 항상 고정 흰색이라, 이 조합을 쓰는 곳은 다크 모드에서 흰 바탕에 흰
+     글자(또는 거의 안 보이는 대비)가 된다. 실제 확인된 2곳: `.admin-chrome`(운영자 화면
+     헤더 바 — 배경을 항상-어두운 토큰 `--grad1`로 교체, 이 컴포넌트는 테마 무관하게 항상
+     어두운 게 의도였음), `.manager-classes-v2>.fab-btn`("+ 수업 등록" 버튼 — 배경은 유지하고
+     글자색만 `--text-inverse`→`--bg`로 교체해 테마에 따라 자동으로 반대색이 되게 함, 이미
+     `.badge`/`.tag` 등 2곳에서 쓰던 올바른 패턴).
+   - **후속 필요**: 같은 `background: var(--ink)` + `color: var(--text-inverse)` 조합이
+     `.app-button-primary`/`.system-state-mark`/`.mypage-shell .avatar`/`.manager-chrome-main > a`
+     등 앱 전역 20곳 이상에 더 있다(grep: `background:\s*var(--ink)`). 실제로 버튼/텍스트
+     역할인 곳만 골라 `color`를 `var(--bg)`로 바꿔야 하고, `.admin-chrome`처럼 "항상 어두운
+     장식 표면"이 의도인 곳은 `--grad1` 계열로 바꿔야 한다 — 성격이 서로 달라 화면별 확인 없이
+     일괄 치환하면 위험하므로 이번엔 실제 화면에서 확인된 2건만 고쳤다.
+   - WCAG 대비 계산(sRGB relative luminance)으로 확인한 별도 사항: `--success`(#287A5B)/
+     `--warning`(#9A6718)/`--danger`(#B64242) **기본색**(= -soft/-line이 아닌 본체)은 다크 배경
+     (#17181C)에서 재정의가 없어 라이트 값 그대로 쓰이고, 대비비가 약 3.25~3.65:1로 일반 텍스트
+     WCAG AA 기준(4.5:1) 미달이다(큰 텍스트/UI 기준 3:1은 충족). 화면에서 이 색이 작은 텍스트로
+     직접 쓰이는 사례는 이번 순회에서는 못 봤지만, 새로 쓰는 곳이 생기면 주의 필요.
 4. ~~**디자인 토큰 계약 테스트 확장**~~ **[2026-08-22 완료]** `tests/unit/designSystem.contract.test.ts`에
    회귀 방지 테스트 5개 추가: (a) `app/**/*.tsx` 전체를 재귀 스캔해 `style={{...}}` 안에
    하드코딩 hex가 없는지 확인, (b) 예전에 흩어져 있던 danger-red 리터럴 5종이 다시 나타나지

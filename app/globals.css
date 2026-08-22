@@ -3575,7 +3575,10 @@ a.membership-card { text-decoration: none; display: block; }
   align-items: flex-end;
   justify-content: space-between;
   padding: max(18px,env(safe-area-inset-top)) var(--page-gutter) 16px;
-  background: var(--ink);
+  /* 항상 어두운 헤더 바(운영자 화면 전용 디자인) — --ink는 다크 모드에서 거의 흰색으로
+     뒤집히는 "현재 테마의 강조색" 토큰이라 여기 쓰면 다크 모드에서 흰 바탕이 된다.
+     --grad1은 라이트/다크 모두 거의 검정으로 고정돼 있어 항상 어두운 표면에 맞다. */
+  background: var(--grad1);
   color: var(--text-inverse);
 }
 .admin-chrome .app-chrome-title h1 { color: var(--text-inverse); font-size: 26px; }
@@ -3995,7 +3998,11 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-holiday-notice .holiday-chip>span:last-child{display:flex;flex-direction:column;gap:3px}.manager-holiday-notice .holiday-chip b{color:var(--ink);font-size:13.5px;font-weight:700}.manager-holiday-notice .holiday-chip small{color:var(--ink-soft);font-size:11.5px;line-height:1.4}
 .manager-classes-v2 .manager-class-empty{min-height:112px;margin:0 var(--page-gutter);padding:36px 2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}.manager-classes-v2 .manager-class-empty .empty-action-text{color:var(--ink-soft);font-size:13px}
 .manager-classes-v2>.daylist{padding:0 var(--page-gutter) 144px!important}.manager-classes-v2>.daylist .class-row{min-height:82px;padding:15px 2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none}.manager-classes-v2>.daylist .class-row-title{font-size:15px;font-weight:750}.manager-classes-v2>.daylist .class-row-meta{margin-top:5px;font-size:11.5px;line-height:1.5;color:var(--ink-soft)}
-.manager-classes-v2>.fab-btn{width:calc(100% - (var(--page-gutter) * 2));bottom:104px;border-radius:15px;background:var(--ink);box-shadow:0 8px 24px rgba(20,20,20,.16)}
+/* background:var(--ink) + 상속된 color:var(--text-inverse)(.fab-btn 기본값, 고정 흰색) 조합은
+   다크 모드에서 --ink가 거의 흰색으로 뒤집히면서 흰 바탕에 흰 글자가 되는 버그가 있었다.
+   --bg는 라이트/다크 모두 --ink의 반대쪽 극단이라(라이트: 거의 흰색, 다크: 거의 검정) 항상
+   대비가 유지된다. */
+.manager-classes-v2>.fab-btn{width:calc(100% - (var(--page-gutter) * 2));bottom:104px;border-radius:15px;background:var(--ink);color:var(--bg);box-shadow:0 8px 24px rgba(20,20,20,.16)}
 .manager-classes-v2 .sheet input[type="date"]{min-height:50px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface);color:var(--ink);font-size:14px}.manager-classes-v2 .sheet .time-row input[type="date"]{flex:1;min-width:0}.manager-classes-v2 .sheet .perm-guide.schedule-rule-warning{border-left-color:var(--danger);color:var(--danger)!important}
 @media(max-width:380px){.manager-classes-v2 .manager-cal-header .cal-title{min-width:102px;font-size:18px}.manager-classes-v2 .manager-cal-header .cal-nav-btn{width:34px;flex-basis:34px}.manager-center-select{max-width:116px}}
 
