@@ -2222,6 +2222,18 @@ a.membership-card { text-decoration: none; display: block; }
 .cart-price { font-size: 13px; color: var(--text-dim); margin-top: 3px; }
 .cart-remove { background: var(--bg); color: var(--text-dim); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-size: 12.5px; cursor: pointer; }
 
+/* UX 감사(A-18) — 장바구니 수량조절 */
+.cart-qty { display: flex; align-items: center; gap: 10px; padding: 0 20px 12px; }
+.cart-qty-btn {
+  width: 28px; height: 28px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--surface);
+  color: var(--text); font-size: 16px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.cart-qty-btn:active { background: var(--line); }
+.cart-qty-btn:disabled { opacity: 0.5; cursor: default; }
+.cart-qty-count { font-size: 13.5px; font-weight: 700; color: var(--text); min-width: 28px; text-align: center; }
+
 /* 수강권 환불 버튼 */
 .membership-refund { margin-top: 10px; width: 100%; background: rgba(255,255,255,0.15); color: var(--text-inverse); border: 1px solid rgba(255,255,255,0.4); border-radius: 8px; padding: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }
 .membership-card.goods .membership-refund { background: var(--surface); color: var(--accent); border-color: var(--line); }
@@ -3942,6 +3954,7 @@ a.membership-card { text-decoration: none; display: block; }
 .commerce-page .cart-name { font-size: 16px; font-weight: 750; }
 .commerce-page .cart-price { margin-top: 6px; color: var(--ink); font-size: 14px; }
 .commerce-page .cart-sizes { padding: 0 0 16px 62px; }
+.commerce-page .cart-qty { padding: 0 0 16px 62px; }
 .commerce-label { margin-top: 10px; color: var(--ink); font-size: 17px; }
 .commerce-code-row { display: flex; gap: 8px; padding: 0 var(--page-gutter); }
 .commerce-page .coupon-list { margin: 10px var(--page-gutter) 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
