@@ -193,8 +193,12 @@ test("관리자: 특정 pass 여러 개 허용 → 지정된 것만 표시, 나�
   await gotoManagerClassesDay(page, kstDate);
   await page.locator(".class-row", { hasText: "P3 그룹수업-특정2개" }).click();
   // 기본값 'all'(전체 체크)에서 시작하므로 먼저 전체 해제한 뒤 A/C만 고른다.
+  // [B-6: 수강권 목록 접기] 검색 안 하면 미선택 항목이 20개 넘을 때 접히므로(공유
+  // 테스트 센터에 그동안 쌓인 pass 상품이 이미 20개를 훌쩍 넘음), 검색으로 좁혀서 클릭한다.
   await page.getByRole("button", { name: "전체 해제" }).click();
+  await page.locator('input[placeholder="수강권 이름 검색"]').fill("패스A");
   await page.locator(".filter-chip", { hasText: "P3 패스A" }).click();
+  await page.locator('input[placeholder="수강권 이름 검색"]').fill("패스C");
   await page.locator(".filter-chip", { hasText: "P3 패스C" }).click();
   await page.getByRole("button", { name: "수정하기" }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
@@ -223,18 +227,21 @@ test("관리자: 전체 선택(전체 허용으로 전환) → 회원 화면에 
   await gotoManagerClassesDay(page, kstDate);
   await page.locator(".class-row", { hasText: "P3 그룹수업-전체허용" }).click();
   // 기본값 'all'(전체 체크)에서 시작하므로, 먼저 전체 해제한 뒤 패스D만 고른다.
+  // [B-6: 수강권 목록 접기] 검색으로 좁혀서 클릭 — 미선택 항목은 20개 넘으면 접힘.
   await page.getByRole("button", { name: "전체 해제" }).click();
+  await page.locator('input[placeholder="수강권 이름 검색"]').fill("패스D");
   await page.locator(".filter-chip", { hasText: "P3 패스D" }).click();
   await page.getByRole("button", { name: "수정하기" }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
   await page.locator(".class-row", { hasText: "P3 그룹수업-전체허용" }).click();
-  const allChips = page.locator(".class-allowed-products-list .filter-chip");
   const passChipsOn2 = page.locator(".class-allowed-products-list .filter-chip.on");
   await expect(passChipsOn2).toHaveCount(1);
-  const totalChips = await allChips.count();
   await page.getByRole("button", { name: "전체 선택(모든 수강권 허용)" }).click();
-  await expect(passChipsOn2).toHaveCount(totalChips);
+  // [B-6: 수강권 목록 접기] 전체선택 상태에서 나머지 목록은 접혀서 개별 chip 개수로
+  // "전체 체크됨"을 확인할 수 없다(그게 이 접기 기능의 목적) — 대신 UI가 실제로 보여주는
+  // "모든 수강권으로 예약 가능해요(전체 선택)" 안내 문구로 같은 상태를 확인한다.
+  await expect(page.locator(".perm-guide", { hasText: "모든 수강권으로 예약 가능해요" })).toBeVisible();
   await page.getByRole("button", { name: "수정하기" }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
@@ -252,9 +259,10 @@ test("관리자: 전체 선택(전체 허용으로 전환) → 회원 화면에 
   expect(leakedRules ?? []).toHaveLength(0);
 
   // 저장이 실제로 DB에 반영됐는지(낙관적 로컬 상태가 아니라) 재진입해서 다시 확인한다.
-  // ('all' 모드는 UI에서 모든 chip이 체크된 상태로 표현됨 — 0개 체크가 아님.)
+  // ('all' 모드는 UI에서 모든 chip이 체크된 상태로 표현됨 — 0개 체크가 아님. [B-6] 재진입 시
+  // 목록은 다시 접힌 상태로 열리므로 위와 동일하게 안내 문구로 확인한다.)
   await page.locator(".class-row", { hasText: "P3 그룹수업-전체허용" }).click();
-  await expect(page.locator(".class-allowed-products-list .filter-chip.on")).toHaveCount(totalChips);
+  await expect(page.locator(".perm-guide", { hasText: "모든 수강권으로 예약 가능해요" })).toBeVisible();
   await page.locator(".sheet-overlay").click({ position: { x: 10, y: 10 } });
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
@@ -317,8 +325,11 @@ test("타 센터 pass는 관리자 선택 목록/검색 결과에 절대 섞이�
 
   await gotoManagerClassesDay(page, kstDate);
   await page.locator(".class-row", { hasText: "P3 그룹수업-타센터검증" }).click();
+  // [B-6: 수강권 목록 접기] 새/미지정 수업은 기본값 'all'로 열려 검색 안 하면 목록이
+  // 접혀 있다 — 검색으로 좁혀서 "P3 패스A"가 실제로 존재/노출되는지 확인한다.
+  await page.locator('input[placeholder="수강권 이름 검색"]').fill("패스A");
   await expect(page.locator(".filter-chip", { hasText: "P3 패스A" })).toBeVisible();
-  await expect(page.locator(".filter-chip", { hasText: "P3 타센터전용패스" })).toHaveCount(0);
   await page.locator('input[placeholder="수강권 이름 검색"]').fill("타센터");
+  await expect(page.locator(".filter-chip", { hasText: "P3 타센터전용패스" })).toHaveCount(0);
   await expect(page.locator(".daylist-empty", { hasText: "일치하는 수강권이 없어요" })).toBeVisible();
 });
