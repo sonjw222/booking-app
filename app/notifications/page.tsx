@@ -21,11 +21,28 @@ import {
   fetchMyAnnouncements, announcementPhotoUrl, type Announcement,
 } from "../../lib/announcements";
 
+// UX 감사(A-17) — 알림이 쌓이면(실측 9,600px) 날짜 구분도 페이징도 없이 쭉 나열됐다. 카드
+// 탭 시 딥링크 이동, 읽음/안읽음 구분(진입 즉시 자동 읽음 처리)은 이미 구현돼 있었음
+// (리포트가 놓친 부분) — 날짜 그룹핑 + 20개씩 "더보기"만 추가한다.
+const KST_DATE = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" });
+function dateHeading(iso: string) {
+  const d = new Date(iso);
+  const today = KST_DATE.format(new Date());
+  const key = KST_DATE.format(d);
+  if (key === today) return "오늘";
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  const [y, m, day] = key.split("-").map(Number);
+  const local = new Date(y, m - 1, day);
+  return `${m}월 ${day}일 (${weekdays[local.getDay()]})`;
+}
+
 export default function NotificationsPage() {
   const [list, setList] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [announcements, setAnnouncements] = useState<(Announcement & { centerName: string })[]>([]);
   const [openAnnounce, setOpenAnnounce] = useState<(Announcement & { centerName: string }) | null>(null);
+  const PAGE_SIZE = 20;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
     (async () => {
@@ -68,25 +85,45 @@ export default function NotificationsPage() {
         <EmptyState icon="bell" title="아직 알림이 없어요"
           description="예약과 수강권 소식을 이곳에서 알려드릴게요."
           action={<a className="ghost-btn" href="/reservation">수업 둘러보기</a>} />
-      ) : (
+      ) : (() => {
+        const shown = list.slice(0, visibleCount);
+        const groups: { heading: string; items: Notification[] }[] = [];
+        for (const n of shown) {
+          const heading = dateHeading(n.createdAtRaw);
+          const last = groups[groups.length - 1];
+          if (last && last.heading === heading) last.items.push(n);
+          else groups.push({ heading, items: [n] });
+        }
+        return (
         <div className="noti-list">
-          {list.map((n) => (
-            <div
-              key={n.id}
-              className={`noti-row ${n.read ? "" : "unread"}`}
-              onClick={() => handleClick(n)}
-            >
-              <span className="noti-emoji"><UiIcon name={n.kind === "announcement" ? "megaphone" : n.kind.includes("reservation") ? "calendar" : n.kind.includes("class") ? "clock" : "ticket"} size={22} /></span>
-              <div className="noti-main">
-                <div className="noti-title">{n.title}</div>
-                <div className="noti-body">{n.body}</div>
-                <div className="noti-time">{n.createdAt}</div>
-              </div>
-              <button className="noti-del" onClick={(e) => handleDelete(n.id, e)}>×</button>
+          {groups.map((g) => (
+            <div key={g.heading}>
+              <div className="menu-section-label">{g.heading}</div>
+              {g.items.map((n) => (
+                <div
+                  key={n.id}
+                  className={`noti-row ${n.read ? "" : "unread"}`}
+                  onClick={() => handleClick(n)}
+                >
+                  <span className="noti-emoji"><UiIcon name={n.kind === "announcement" ? "megaphone" : n.kind.includes("reservation") ? "calendar" : n.kind.includes("class") ? "clock" : "ticket"} size={22} /></span>
+                  <div className="noti-main">
+                    <div className="noti-title">{n.title}</div>
+                    <div className="noti-body">{n.body}</div>
+                    <div className="noti-time">{n.createdAt}</div>
+                  </div>
+                  <button className="noti-del" onClick={(e) => handleDelete(n.id, e)}>×</button>
+                </div>
+              ))}
             </div>
           ))}
+          {list.length > visibleCount && (
+            <button className="ghost-btn" style={{ margin: "12px 20px" }} onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}>
+              더보기 ({list.length - visibleCount}건 더 있음)
+            </button>
+          )}
         </div>
-      )}
+        );
+      })()}
 
       {/* 공지 상세 시트 */}
       {openAnnounce && (
