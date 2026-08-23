@@ -154,7 +154,9 @@ export default function PurchasesPage() {
               </div>
               <div className="purchase-name">{it.productName}</div>
               <div className="purchase-meta">
-                {it.amount > 0 && <>{won(it.amount)} · </>}
+                {/* UX 감사(A-20) — 0원 상품은 금액 자체가 안 보여 "무료"인지 "누락"인지
+                    구분이 안 됐다. amount===0도 명시적으로 표시. */}
+                {it.amount > 0 ? <>{won(it.amount)} · </> : it.amount === 0 && <>무료 · </>}
                 {it.purchasedAt}
                 {it.totalCount != null && (
                   <> · {it.remainingCount ?? 0}/{it.totalCount}회 남음</>

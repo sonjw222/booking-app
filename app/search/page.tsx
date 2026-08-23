@@ -18,6 +18,11 @@ export default function SearchPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
+  // UX 감사(A-6) — 필터·정렬·페이징 없이 결과를 전부(실측 131건) 한 번에 렌더해 화면이
+  // 10,000px 넘게 늘어졌다. 전체 필터/정렬 UI는 범위가 커 이번엔 가장 급한 "무한 렌더"만
+  // 우선 끊는다 — 20개씩 보여주고 "더보기"로 점진 노출.
+  const PAGE_SIZE = 20;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   async function doSearch(suggested?: string) {
     const term = (suggested ?? kw).trim();
@@ -29,6 +34,7 @@ export default function SearchPage() {
       setCenters(r.centers);
       setCategories(r.categories);
       setSearched(true);
+      setVisibleCount(PAGE_SIZE);
     } catch { /* 무시 */ }
     finally { setBusy(false); }
   }
@@ -74,19 +80,26 @@ export default function SearchPage() {
           {centers.length === 0 && categories.length === 0 ? (
             <EmptyState icon="search" title="검색 결과가 없어요" description="센터 이름을 짧게 입력하거나 다른 종목으로 검색해보세요." />
           ) : (
-            centers.map((c) => (
-              <a key={c.id} className="search-center-row" href={`/center/${c.id}`}>
-                {c.photoUrl
-                  ? <img className="search-center-photo" src={centerPhotoUrl(c.photoUrl) ?? ""} alt={`${c.name} 센터`} />
-                  : <div className="search-center-badge">{c.name.slice(0, 1)}</div>}
-                <div className="search-center-info">
-                  <div className="search-center-name">{c.name}</div>
-                  {c.categories.length > 0 && <div className="search-center-cat">{c.categories.join(" · ")}</div>}
-                  {c.intro && <div className="search-center-intro">{c.intro}</div>}
-                </div>
-                <span className="chevron">›</span>
-              </a>
-            ))
+            <>
+              {centers.slice(0, visibleCount).map((c) => (
+                <a key={c.id} className="search-center-row" href={`/center/${c.id}`}>
+                  {c.photoUrl
+                    ? <img className="search-center-photo" src={centerPhotoUrl(c.photoUrl) ?? ""} alt={`${c.name} 센터`} />
+                    : <div className="search-center-badge">{c.name.slice(0, 1)}</div>}
+                  <div className="search-center-info">
+                    <div className="search-center-name">{c.name}</div>
+                    {c.categories.length > 0 && <div className="search-center-cat">{c.categories.join(" · ")}</div>}
+                    {c.intro && <div className="search-center-intro">{c.intro}</div>}
+                  </div>
+                  <span className="chevron">›</span>
+                </a>
+              ))}
+              {centers.length > visibleCount && (
+                <button className="ghost-btn" style={{ margin: "12px 20px" }} onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}>
+                  더보기 ({centers.length - visibleCount}건 더 있음)
+                </button>
+              )}
+            </>
           )}
         </>
       )}
