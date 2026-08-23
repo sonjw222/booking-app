@@ -1052,10 +1052,12 @@ a { color: inherit; text-decoration: none; }
 }
 
 .perm-item input[type="checkbox"] {
-  margin-top: 2px;
+  /* UX 감사(B-4) — 17px는 한 화면에 20~30개씩 나열되는 권한 목록에서 체크 여부를
+     한눈에 구분하기엔 너무 작았다(행 전체가 label이라 탭 영역 자체는 문제 없었음). */
+  margin-top: 1px;
   flex: 0 0 auto;
-  width: 17px;
-  height: 17px;
+  width: 22px;
+  height: 22px;
   accent-color: var(--accent);
 }
 
@@ -1206,6 +1208,7 @@ a { color: inherit; text-decoration: none; }
 .ov-badge.deny    { background: var(--danger-soft); color: var(--danger); }
 .ov-badge.role-on { background: var(--surface); color: var(--text-dim); }
 .ov-badge.role-off{ background: var(--surface); color: var(--text-dim); }
+.perm-saved-badge { display: inline-flex; align-items: center; gap: 4px; }
 
 /* 개인 예외가 걸린 항목은 왼쪽에 강조선 */
 .ov-item.st-allow { box-shadow: inset 3px 0 0 var(--success); padding-left: 11px; }
