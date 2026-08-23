@@ -360,7 +360,7 @@ function MembersContent() {
       <div className="mem-toolbar">
         <span className="mem-count">전체 {members.length}명</span>
         <div className="mem-tools member-toolbar-actions">
-          <button className="quiet-action" disabled={busy} onClick={handleSync}>예약자 동기화</button>
+          <button className="quiet-action" disabled={busy} onClick={handleSync} title="예약 이력은 있지만 아직 회원 목록에 없는 사람을 찾아 등록해요">예약자 동기화</button>
           <button className="quiet-action" onClick={() => setCsvSheet(true)}>엑셀 내보내기</button>
         </div>
       </div>

@@ -323,7 +323,7 @@ export default function ManagerDashboard() {
       <div className="menu-section-label">{activeCenter?.name ?? "센터"} 관리</div>
       {(canSeeMenu("pass.create") || canSeeMenu("pass.update")) && (
         <a className="list-row" href="/manager/membership-rules">
-          <div className="left"><span className="icon"><UiIcon name="ticket" /></span>수강권 관리</div>
+          <div className="left"><span className="icon"><UiIcon name="ticket" /></span>수강권·예약조건 설정</div>
           <span className="chevron">›</span>
         </a>
       )}
@@ -336,6 +336,15 @@ export default function ManagerDashboard() {
       {canSeeMenu("customer.progress") && (
         <a className="list-row" href="/manager/progress/record">
           <div className="left"><span className="icon"><UiIcon name="edit" /></span>회원 진도 기록</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
+      {/* UX 감사(B-10) — 회원 목록이 하단 탭(ManagerNav)에만 있고 이 목록형 메뉴에는
+          대응 항목이 없어, 메뉴를 훑는 사람은 못 찾는 문제 대응. ManagerNav의 "회원" 탭과
+          동일한 권한 키(customer.member.view)로 가림. */}
+      {canSeeMenu("customer.member.view") && (
+        <a className="list-row" href="/manager/members">
+          <div className="left"><span className="icon"><UiIcon name="users" /></span>회원 관리</div>
           <span className="chevron">›</span>
         </a>
       )}
