@@ -36,8 +36,10 @@ export default function CalendarPage() {
   useEffect(() => { load(); }, [load]);
 
   const pad = (n: number) => String(n).padStart(2, "0");
-  const profiles = Array.from(new Set(resv.map((r) => r.profileName)));
-  const colorOf = (name: string) => PALETTE[Math.max(0, profiles.indexOf(name)) % PALETTE.length];
+  // 점은 센터 기준으로 색을 구분한다(요청: 같은 날 예약이 여러 건이어도 같은 센터면 점 하나만,
+  // 다른 센터면 센터별로 다른 색 점을 각각 표시).
+  const centerNames = Array.from(new Set(resv.map((r) => r.centerName)));
+  const colorOf = (name: string) => PALETTE[Math.max(0, centerNames.indexOf(name)) % PALETTE.length];
 
   // 날짜별 예약
   const byDate: Record<string, CalReservation[]> = {};
@@ -95,25 +97,26 @@ export default function CalendarPage() {
                 if (day === null) return <div key={i} className="mypage-cal-cell empty" />;
                 const key = `${cal.y}-${pad(cal.m)}-${pad(day)}`;
                 const items = byDate[key] ?? [];
+                const dayCenters = Array.from(new Set(items.map((it) => it.centerName)));
                 const isSel = selected === key;
                 return (
                   <button key={i} className={`mypage-cal-cell tappable ${isSel ? "sel" : ""}`} onClick={() => setSelected(isSel ? null : key)}>
                     <span className="mypage-cal-day">{day}</span>
                     <div className="mypage-cal-dots">
-                      {items.slice(0, 4).map((it, j) => (
-                        <span key={j} className="mypage-cal-dot" style={{ background: colorOf(it.profileName) }} />
+                      {dayCenters.slice(0, 4).map((name) => (
+                        <span key={name} className="mypage-cal-dot" style={{ background: colorOf(name) }} />
                       ))}
                     </div>
                   </button>
                 );
               })}
             </div>
-            {profiles.length > 1 && (
+            {centerNames.length > 1 && (
               <div className="mypage-cal-legend">
-                {profiles.map((name) => (
+                {centerNames.map((name) => (
                   <span key={name} className="mypage-cal-legend-item">
                     <span className="mypage-cal-dot" style={{ background: colorOf(name) }} />
-                    {name || "대표"}
+                    {name}
                   </span>
                 ))}
               </div>
