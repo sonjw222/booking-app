@@ -23,6 +23,7 @@ import { extractPlainText } from "../../../lib/security";
 import RichTextEditor from "../../components/RichTextEditor";
 import UiIcon from "../../components/UiIcon";
 import EmptyState from "../../components/EmptyState";
+import BackButton from "../../components/BackButton";
 
 export default function CenterDetailPage() {
   return (
@@ -188,7 +189,7 @@ function CenterDetailContent() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href={backHref}>‹</a>
+          <BackButton fallbackHref={backHref} />
           <div className="title">센터 정보</div>
           <div className="side" />
         </div>
@@ -201,7 +202,7 @@ function CenterDetailContent() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href={backHref}>‹</a>
+          <BackButton fallbackHref={backHref} />
           <div className="title">센터 정보</div>
           <div className="side" />
         </div>

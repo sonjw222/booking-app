@@ -10,6 +10,7 @@ import { useState } from "react";
 import { searchHome, type SearchCenter } from "../../lib/home";
 import { centerPhotoUrl } from "../../lib/center";
 import EmptyState from "../components/EmptyState";
+import BackButton from "../components/BackButton";
 
 export default function SearchPage() {
   const [kw, setKw] = useState("");
@@ -35,7 +36,7 @@ export default function SearchPage() {
   return (
     <div className="app-shell discovery-page-v2">
       <div className="search-header">
-        <a className="side" href="/">‹</a>
+        <BackButton fallbackHref="/" />
         <input
           className="search-input"
           placeholder="센터 이름 또는 종목 검색"
