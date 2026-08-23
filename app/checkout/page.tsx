@@ -224,8 +224,10 @@ function CheckoutContent() {
             </>
           ) : (
             <>
-              <a className="primary-btn" href="/mypage" style={{ margin: "20px", display: "block", width: "calc(100% - 40px)", textAlign: "center" }}>
-                마이페이지로
+              {/* UX 감사(A-16) — 방금 만든 주문은 /purchases에 있는데 거기로 가는 링크가
+                  없어 마이페이지를 거쳐 한 단계 더 들어가야 했다. 1순위 버튼으로 승격. */}
+              <a className="primary-btn" href="/purchases" style={{ margin: "20px", display: "block", width: "calc(100% - 40px)", textAlign: "center" }}>
+                구매 내역 보기
               </a>
               <a className="ghost-btn" href={`/center/${centerId}`} style={{ margin: "0 20px", display: "block", width: "calc(100% - 40px)", textAlign: "center" }}>
                 센터로 돌아가기

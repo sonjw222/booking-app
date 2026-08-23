@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import EmptyState from "../../components/EmptyState";
 import { fetchMyPointHistory, type PointHistoryItem } from "../../../lib/mypage";
+import { fetchAllMyPoints, type PointBalance } from "../../../lib/reviews";
 
 function fmtDateHeader(d: string) {
   const dt = new Date(d + "T00:00:00+09:00");
@@ -21,12 +22,17 @@ function fmtDateHeader(d: string) {
 
 export default function PointHistoryPage() {
   const [items, setItems] = useState<PointHistoryItem[]>([]);
+  const [balances, setBalances] = useState<PointBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
-    try { setItems(await fetchMyPointHistory()); }
+    try {
+      const [history, myBalances] = await Promise.all([fetchMyPointHistory(), fetchAllMyPoints()]);
+      setItems(history);
+      setBalances(myBalances);
+    }
     catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   }, []);
@@ -45,6 +51,24 @@ export default function PointHistoryPage() {
         <div className="title">포인트 내역</div>
         <div className="side" />
       </div>
+
+      {/* UX 감사(A-12) — 내역만 있고 현재 보유 포인트 숫자가 앱 어디에도 없어 몇 점 있는지
+          확인할 방법이 없었다. 센터별 잔액 합계를 상단에 상시 노출. */}
+      {!loading && (
+        <div className="point-balance-summary">
+          <span className="point-balance-summary-label">보유 포인트</span>
+          <span className="point-balance-summary-value">
+            {balances.reduce((sum, b) => sum + b.balance, 0).toLocaleString("ko-KR")}P
+          </span>
+          {balances.length > 1 && (
+            <div className="point-balance-summary-breakdown">
+              {balances.map((b) => (
+                <span key={b.centerId}>{b.centerName} {b.balance.toLocaleString("ko-KR")}P</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {items.length > 0 && (
         <div className="hist-summary">총 {items.length}건</div>

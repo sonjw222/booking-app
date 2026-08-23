@@ -126,10 +126,12 @@ export default function Home() {
           </a>
         </div>
 
+        {/* UX 감사(A-11) — 아이콘+라벨이 이 앱의 다른 클릭 가능한 칩/버튼과 같은 모양이라
+            눌러보게 되는데 실제로는 장식용 <span>이라 반응이 없었다. 실제 링크로 연결. */}
         <div className="home-value-line" aria-label="서비스 주요 기능">
-          <span><UiIcon name="search" size={15} />내 주변 수업 찾기</span><i />
-          <span><UiIcon name="calendar" size={15} />한 번에 예약</span><i />
-          <span><UiIcon name="ticket" size={15} />수강권 관리</span>
+          <a href="/search"><UiIcon name="search" size={15} />내 주변 수업 찾기</a><i />
+          <a href="/reservation"><UiIcon name="calendar" size={15} />한 번에 예약</a><i />
+          <a href="/mypage"><UiIcon name="ticket" size={15} />수강권 관리</a>
         </div>
 
         {/* 히어로 배너 (운영자 관리, 자동 회전) */}
