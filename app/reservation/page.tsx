@@ -138,8 +138,13 @@ function ReservationCalendarContent() {
     setSelectedDay(1);
   }
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // UX 감사(A-9) — 예약/취소 직후 이 화면 전체(달력까지 포함)가 로딩 스피너로 바뀌었다가
+  // 다시 그려져 방금 보던 수업 목록과 스크롤 위치가 사라지는 것처럼 보였다. 원인은 loading이
+  // true가 되면 렌더 자체가 <Loading/> 하나로 완전히 대체되기 때문 — silent 모드에서는
+  // loading을 건드리지 않아 기존 화면을 유지한 채로 데이터만 새로고침한다(쿼리 로직 자체는
+  // 그대로, 새 데이터가 도착하면 그때 한 번에 교체).
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     setError(null);
     try {
       // 계정 조회는 한 번만: fetchMonthData/fetchMyProfiles가 각자 auth.getUser()+accounts를
@@ -355,7 +360,7 @@ function ReservationCalendarContent() {
       const prefix = who && !who.isPrimary ? `${who.name} · ` : "";
       showToast(prefix + (status === "confirmed" ? "예약이 완료됐어요!" : "정원이 차서 대기 등록됐어요"));
       setConfirmClass(null);
-      await load();
+      await load({ silent: true });
     } catch (e: any) {
       showToast(e.message);
     } finally {
@@ -374,7 +379,7 @@ function ReservationCalendarContent() {
     try {
       await cancelReservation(mine.reservationId);
       showToast("예약이 취소됐어요");
-      await load();
+      await load({ silent: true });
     } catch (e: any) {
       showToast(e.message);
     } finally {
@@ -454,7 +459,7 @@ function ReservationCalendarContent() {
         <h1>{needsLogin ? "로그인이 필요해요" : "예약 정보를 불러오지 못했어요"}</h1>
         <p>{needsLogin ? "로그인하면 수강권을 확인하고 바로 예약할 수 있어요." : error}</p>
         <div className="auth-required-actions">
-          {needsLogin ? <a className="primary-btn" href="/login?next=/reservation">로그인하고 계속하기</a> : <button className="primary-btn" onClick={load}>다시 불러오기</button>}
+          {needsLogin ? <a className="primary-btn" href="/login?next=/reservation">로그인하고 계속하기</a> : <button className="primary-btn" onClick={() => load()}>다시 불러오기</button>}
           <a className="ghost-btn" href="/">홈으로 돌아가기</a>
         </div>
       </div>
