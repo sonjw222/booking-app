@@ -211,7 +211,9 @@ export default function MyPage() {
         <div className="left"><span className="icon"><UiIcon name="building" /></span>내 센터 등록하기</div>
         <span className="chevron">›</span>
       </a>
-      <button className="list-row logout-row" onClick={logout}>
+      {/* UX 감사(A-19) — 바로 위 "내 센터 등록하기"와 같은 행 스타일로 붙어있어 오탭 위험이
+          있는데, 확인 없이 즉시 로그아웃+리다이렉트됐다. */}
+      <button className="list-row logout-row" onClick={async () => { if (await globalThis.appConfirm("로그아웃할까요?")) logout(); }}>
         <div className="left"><span className="icon"><UiIcon name="logout" /></span>로그아웃</div>
       </button>
     </div>
