@@ -410,6 +410,10 @@ export default function SalesPage() {
                         {SALE_TYPE_LABEL[r.saleType] ?? r.saleType}
                       </span>
                     </div>
+                    {/* UX 감사(B-12) — 회원 이름만 있고 무엇이 팔렸는지가 없어 한 건씩
+                        들어가야 알 수 있었다. 이미 조회돼 CSV/상세에만 쓰이던 productName을
+                        목록 행에도 노출. */}
+                    {r.productName && <div className="sales-row-product">{r.productName}</div>}
                     <div className="sales-row-sub">
                       {r.paidAt}
                       {r.trainerName && ` · ${r.trainerName}`}
