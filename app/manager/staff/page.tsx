@@ -304,7 +304,14 @@ export default function StaffPage() {
         /* ---------- 권한 탭 ---------- */
         <>
           <div className="mem-toolbar">
-            <span className="mem-count">역할을 선택하세요</span>
+            {/* UX 감사(B-4) — activeRoleId가 로드 시 자동으로 첫 편집가능 역할로 채워지는데도
+                이 라벨이 항상 "역할을 선택하세요"로 고정돼 있어 지금 어느 역할을 편집 중인지
+                알 수 없었다. 실제 활성 역할 이름을 보여주도록 수정. */}
+            <span className="mem-count">
+              {!activeRole ? "역할을 선택하세요"
+                : activeRole.isOwner ? `${activeRole.name} (모든 권한 보유)`
+                : `${activeRole.name} 권한 편집 중`}
+            </span>
             {canManageRolePermissions && (
               <button className="quiet-action" onClick={() => setRoleSheet(true)}>역할 관리</button>
             )}
@@ -350,9 +357,18 @@ export default function StaffPage() {
                   <button className="text-btn" disabled={!canManageRolePermissions} onClick={handleSelectAllInCat}>이 탭 모두 선택</button>
                   <button className="text-btn" disabled={!canManageRolePermissions} onClick={handleDeselectAllInCat}>모두 해제</button>
                 </div>
-                <button className="primary-btn small" disabled={busy || !dirty || !canManageRolePermissions} onClick={handleSavePerms}>
-                  {busy ? "저장 중..." : dirty ? "저장" : "저장됨"}
-                </button>
+                {dirty ? (
+                  <button className="primary-btn small" disabled={busy || !canManageRolePermissions} onClick={handleSavePerms}>
+                    {busy ? "저장 중..." : "저장"}
+                  </button>
+                ) : (
+                  // UX 감사(B-4) — "저장됨"을 계속 클릭 가능해 보이는 disabled 버튼으로 두면
+                  // 실제로는 아무 동작도 안 하는데 눌러야 할 것 같은 버튼처럼 보였다. 편집할
+                  // 게 없을 때는 버튼이 아니라 상태 배지로 보여줘 혼동을 없앤다.
+                  <span className="ov-badge role-on perm-saved-badge">
+                    <UiIcon name="check" size={12} /> 저장됨
+                  </span>
+                )}
               </div>
 
               <div className="perm-list">

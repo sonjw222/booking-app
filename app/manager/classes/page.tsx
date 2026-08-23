@@ -155,6 +155,10 @@ export default function ClassManagePage() {
   // 0개가 되는 게 재현됨 — RPC 로직은 그대로 두고 UI에서만 미리 알려준다).
   const [rulesByProduct, setRulesByProduct] = useState<Record<string, ScheduleRule[]>>({});
   const [passSearch, setPassSearch] = useState(""); // P3: 예약 가능 수강권 선택 목록 검색
+  // UX 감사(B-6) — 수강권이 많은 센터에서는 검색만으로는 "선택 안 한 나머지"가 여전히
+  // 100개+ 그대로 인라인 노출됐다. 검색 중이 아닐 때는 미선택 항목을 접어두고 필요하면
+  // 펼쳐보게 한다(이미 선택된 항목은 접히지 않고 항상 보임).
+  const [productsExpanded, setProductsExpanded] = useState(false);
   // 담당 강사(class_trainers) 후보 = 이 센터의 active 스태프 전체(역할 구분 없음), 폼에서 선택된 account_id 목록
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [selectedTrainers, setSelectedTrainers] = useState<string[]>([]);
@@ -293,6 +297,7 @@ export default function ClassManagePage() {
     // 저장이 막히므로(0개 선택 금지) 항상 전체 체크로 시작한다.
     setSelectedProducts(passProducts.map((p) => p.id));
     setPassSearch("");
+    setProductsExpanded(false);
     setSelectedTrainers([]);
     setTrainerSearch("");
     setError(null);
@@ -598,6 +603,7 @@ export default function ClassManagePage() {
     // 아래 fetchClassPassSelectionMode()의 실측값이 도착하면 그 값으로 다시 덮어쓴다.
     setSelectedProducts(c.passSelectionMode === "all" ? passProducts.map((p) => p.id) : []);
     setPassSearch("");
+    setProductsExpanded(false);
     setSelectedTrainers([]);
     setTrainerSearch("");
     setError(null);
@@ -1351,6 +1357,7 @@ export default function ClassManagePage() {
                   )}
                 </div>
                 {(() => {
+                  const COLLAPSE_THRESHOLD = 20;
                   const q = passSearch.trim().toLowerCase();
                   const filtered = q ? passProducts.filter((p) => p.name.toLowerCase().includes(q)) : passProducts;
                   if (filtered.length === 0) {
@@ -1360,25 +1367,57 @@ export default function ClassManagePage() {
                       </div>
                     );
                   }
+                  const chip = (p: Product) => (
+                    <button
+                      key={p.id}
+                      className={`filter-chip ${selectedProducts.includes(p.id) ? "on" : ""}`}
+                      onClick={() => {
+                        // dirty 플래그 — 클릭 이벤트 핸들러 본문은(setState 함수형
+                        // 업데이터와 달리) StrictMode에서 두 번 호출되지 않는다.
+                        userEditedRef.current = true;
+                        setSelectedProducts((prev) =>
+                          prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id]
+                        );
+                      }}
+                    >
+                      {p.name}
+                    </button>
+                  );
+                  // 검색 중이면 필터링 자체가 이미 목록을 좁혀주므로 접지 않고 전부 보여준다.
+                  if (q) {
+                    return <div className="mem-filters class-allowed-products-list" style={{ padding: "0 0 6px" }}>{filtered.map(chip)}</div>;
+                  }
+                  // "전체 선택"(기본값, 신규 등록 폼이 항상 시작하는 상태)일 때는 위 안내
+                  // 문구가 이미 "모든 수강권으로 예약 가능"이라고 설명해주므로, 접힌 채로
+                  // 시작해 개별 취소가 필요할 때만 펼치게 한다 — 이게 실제로 100개+ 인라인
+                  // 노출이 나타나던 지점이었다(신규 등록은 항상 전체선택으로 시작해서
+                  // "선택 안 한 나머지" 기준 접기만으로는 커버가 안 됐음).
+                  const isAllMode = selectedProducts.length === passProducts.length;
+                  if (isAllMode && !productsExpanded && filtered.length > COLLAPSE_THRESHOLD) {
+                    return (
+                      <button type="button" className="text-btn" onClick={() => setProductsExpanded(true)}>
+                        전체 {filtered.length}개 목록 보기 (특정 수강권만 제외하려면)
+                      </button>
+                    );
+                  }
+                  const chosen = filtered.filter((p) => selectedProducts.includes(p.id));
+                  const rest = filtered.filter((p) => !selectedProducts.includes(p.id));
+                  const showAllRest = productsExpanded || rest.length <= COLLAPSE_THRESHOLD;
+                  const restShown = showAllRest ? rest : rest.slice(0, COLLAPSE_THRESHOLD);
                   return (
-                    <div className="mem-filters class-allowed-products-list" style={{ padding: "0 0 6px" }}>
-                      {filtered.map((p) => (
-                        <button
-                          key={p.id}
-                          className={`filter-chip ${selectedProducts.includes(p.id) ? "on" : ""}`}
-                          onClick={() => {
-                            // dirty 플래그 — 클릭 이벤트 핸들러 본문은(setState 함수형
-                            // 업데이터와 달리) StrictMode에서 두 번 호출되지 않는다.
-                            userEditedRef.current = true;
-                            setSelectedProducts((prev) =>
-                              prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id]
-                            );
-                          }}
-                        >
-                          {p.name}
+                    <>
+                      {chosen.length > 0 && (
+                        <div className="mem-filters class-allowed-products-list" style={{ padding: "0 0 6px" }}>{chosen.map(chip)}</div>
+                      )}
+                      {restShown.length > 0 && (
+                        <div className="mem-filters class-allowed-products-list" style={{ padding: "0 0 6px" }}>{restShown.map(chip)}</div>
+                      )}
+                      {!showAllRest && (
+                        <button type="button" className="text-btn" onClick={() => setProductsExpanded(true)}>
+                          나머지 {rest.length - COLLAPSE_THRESHOLD}개 더 보기
                         </button>
-                      ))}
-                    </div>
+                      )}
+                    </>
                   );
                 })()}
               </>
