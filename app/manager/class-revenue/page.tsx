@@ -250,9 +250,11 @@ export default function ClassRevenuePage() {
                 return (
                   <button key={i} className={`mypage-cal-cell tappable ${isSel ? "sel" : ""}`} onClick={() => selectDate(key)}>
                     <span className="mypage-cal-day">{day}</span>
+                    {/* UX 감사(B-13) — 500원 미만 금액은 "0.0만"으로 반올림돼 0원인지
+                        소액인지 구분이 안 됐다. 그 구간만 정확한 원 단위로 표시. */}
                     {!calLoading && info && info.total !== 0 && (
                       <span className={info.total > 0 ? "" : "is-error-text"} style={{ fontSize: 10, color: info.total > 0 ? "var(--brand-ink)" : undefined, display: "block" }}>
-                        {(info.total / 10000).toFixed(info.total % 10000 === 0 ? 0 : 1)}만
+                        {Math.abs(info.total) < 500 ? won(info.total) : `${(info.total / 10000).toFixed(info.total % 10000 === 0 ? 0 : 1)}만`}
                       </span>
                     )}
                   </button>
