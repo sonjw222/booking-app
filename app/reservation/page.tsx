@@ -629,16 +629,17 @@ function ReservationCalendarContent() {
                   </div>
                   <div className="class-row-place">{center?.name}{instructorText ? ` · ${instructorText}` : ""}</div>
                   {cls.place && <div className="class-row-meta">{cls.place}</div>}
+                  {/* UX 감사(A-7) — 수강권 이름을 최대 11개까지 칩으로 전부 나열해 정작
+                      중요한 수업명·시간·잔여석이 밀렸다. 어떤 수강권을 쓸지는 예약 확인
+                      시트에서 다시 고르므로(pickDefaultMembership), 카드에서는 "예약
+                      가능/불가"만 한 줄로 보여준다. */}
                   <div className="center-class-passes">
                     {passesLoading ? (
                       <span className="class-pass-chip all skeleton-shimmer">수강권 확인 중...</span>
                     ) : passNames.length > 0 ? (
-                      <>
-                        <span className="class-pass-label">사용 가능:</span>
-                        {passNames.map((n) => (
-                          <span key={n} className="class-pass-chip">{n}</span>
-                        ))}
-                      </>
+                      <span className="class-pass-chip">
+                        내 수강권으로 예약 가능{passNames.length > 1 ? ` · ${passNames.length}개` : ""}
+                      </span>
                     ) : (
                       <span className="class-pass-chip all">사용 가능한 수강권 없음</span>
                     )}

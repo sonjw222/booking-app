@@ -193,7 +193,10 @@ export default function Home() {
                     <span>{c.startText}</span>
                     <strong>{c.title}</strong>
                     <small>{c.centerName}</small>
-                    <small>정원 {c.capacity}명 중 <b>{Math.max(c.capacity - c.reserved, 0)}명 남음</b>{full ? " · 대기" : ""}</small>
+                    {/* UX 감사(C-3) — 이 화면만 "정원 8명 중 6명 남음"(잔여 기준)이라
+                        센터 상세/예약 화면의 "예약 2/8"(예약자 기준)과 형식이 달라 같은
+                        숫자를 매번 다시 해석해야 했다. 두 화면이 이미 쓰는 형식으로 통일. */}
+                    <small>예약 {c.reserved}/{c.capacity}{full ? " · 대기" : ""}</small>
                   </div>
                 </a>
               );

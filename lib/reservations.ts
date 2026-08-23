@@ -135,7 +135,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data: page, error: clsErr } = await supabase
         .from("classes")
-        .select("id, center_id, title, description, start_time, end_time, capacity, allow_goods, class_format, centers(id, name, categories)")
+        .select("id, center_id, title, description, start_time, end_time, capacity, allow_goods, class_format, room_id, centers(id, name, categories), rooms(name)")
         .in("center_id", membershipCenterIds)
         .gte("start_time", startUtcIso)
         .lt("start_time", endUtcIso)
@@ -283,7 +283,10 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
       date: toDateStr(c.start_time),
       start: toTimeStr(c.start_time),
       end: toTimeStr(c.end_time),
-      place: centerMap.get(c.center_id)?.name ?? "",
+      // UX 감사(A-7) — 원래는 센터명을 그대로 다시 넣어서 바로 위 .class-row-place에 이미
+      // 나온 센터명이 카드에 두 번 출력됐다. classes.room_id가 있으니 실제 룸 이름을 쓴다
+      // (룸 미지정이면 빈 문자열 — .class-row-meta가 조건부 렌더라 그냥 그 줄이 안 보임).
+      place: (c as any).rooms?.name ?? "",
       reserved: reservedCount[c.id] ?? 0,
       waitlisted: waitlistedCount[c.id] ?? 0,
       capacity: c.capacity,
