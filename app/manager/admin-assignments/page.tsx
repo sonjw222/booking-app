@@ -42,6 +42,10 @@ export default function AdminAssignmentLogPage() {
   const [capacityOnly, setCapacityOnly] = useState(false);
   const [reasonFilter, setReasonFilter] = useState<AdminReasonCode | "all">("all");
   const [keyword, setKeyword] = useState("");
+  // UX 감사(B-8) — 필터는 이미 충분히 있는데 최종 결과(실측 200건)는 페이징 없이 전부
+  // 렌더됐다. 20개씩 "더보기"로 완화.
+  const PAGE_SIZE = 20;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
     (async () => {
@@ -75,6 +79,7 @@ export default function AdminAssignmentLogPage() {
   const shown = kw
     ? logs.filter((l) => l.memberName.includes(kw) || l.adminName.includes(kw) || l.classTitle.includes(kw))
     : logs;
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [logs, kw]);
 
   if (loading && logs.length === 0) {
     return <div className="app-shell"><Loading /></div>;
@@ -156,7 +161,7 @@ export default function AdminAssignmentLogPage() {
         <div className="daylist-empty" style={{ padding: "40px 20px" }}>조건에 맞는 배치 내역이 없어요</div>
       ) : (
         <div className="assignment-log-list">
-          {shown.map((l) => (
+          {shown.slice(0, visibleCount).map((l) => (
             <article key={l.id} className={`assignment-log action-${l.actionType.toLowerCase()}`}>
               <div className="hist-main" style={{ width: "100%" }}>
                 <div className="hist-title">
@@ -176,6 +181,11 @@ export default function AdminAssignmentLogPage() {
               </div>
             </article>
           ))}
+          {shown.length > visibleCount && (
+            <button className="ghost-btn" style={{ margin: "12px 20px" }} onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}>
+              더보기 ({shown.length - visibleCount}건 더 있음)
+            </button>
+          )}
         </div>
       )}
 

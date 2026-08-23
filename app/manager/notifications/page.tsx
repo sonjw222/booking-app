@@ -22,6 +22,9 @@ export default function ManagerNotificationsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [list, setList] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  // UX 감사(B-8) — 알림이 쌓이면(실측 10,000px+) 페이징 없이 전부 렌더됐다. 20개씩 "더보기".
+  const PAGE_SIZE = 20;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
     (async () => {
@@ -83,7 +86,7 @@ export default function ManagerNotificationsPage() {
         </div>
       ) : (
         <div className="noti-list">
-          {list.map((n) => (
+          {list.slice(0, visibleCount).map((n) => (
             <div
               key={n.id}
               className={`noti-row ${n.read ? "" : "unread"} priority-${priorityOf(n.kind)}`}
@@ -102,6 +105,11 @@ export default function ManagerNotificationsPage() {
               <button className="noti-del" onClick={(e) => handleDelete(n.id, e)}>×</button>
             </div>
           ))}
+          {list.length > visibleCount && (
+            <button className="ghost-btn" style={{ margin: "12px 20px" }} onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}>
+              더보기 ({list.length - visibleCount}건 더 있음)
+            </button>
+          )}
         </div>
       )}
 

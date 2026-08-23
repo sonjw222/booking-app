@@ -48,6 +48,11 @@ export default function MembershipRulesPage() {
   const [existingClasses, setExistingClasses] = useState<ExistingClassOption[]>([]);
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
+  // UX 감사(B-8) — 수강권 상품이 100개+(이름이 UUID로 끝나 구분도 안 됨)면 검색/페이징 없이
+  // 전부 렌더돼 원하는 걸 찾기 어려웠다. 이름 검색 + 20개씩 "더보기"로 완화.
+  const [search, setSearch] = useState("");
+  const PAGE_SIZE = 20;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -206,6 +211,16 @@ export default function MembershipRulesPage() {
 
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
+      {!loading && products.length > 10 && (
+        <input
+          className="input-field"
+          style={{ margin: "0 20px 10px", width: "calc(100% - 40px)" }}
+          placeholder="상품 이름 검색"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE); }}
+        />
+      )}
+
       {loading ? (
         <Loading />
       ) : products.length === 0 ? (
@@ -213,9 +228,16 @@ export default function MembershipRulesPage() {
           등록된 수강권이 없어요<br />
           <span style={{ fontSize: 12 }}>우측 상단 '+ 수강권'으로 추가하세요</span>
         </div>
-      ) : (
+      ) : (() => {
+        const filtered = search.trim()
+          ? products.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
+          : products;
+        if (filtered.length === 0) {
+          return <div className="daylist-empty" style={{ paddingTop: 30 }}>"{search}"와(과) 일치하는 상품이 없어요</div>;
+        }
+        return (
         <div className="pass-list">
-          {products.map((p) => {
+          {filtered.slice(0, visibleCount).map((p) => {
             const rules = rulesByProduct[p.id] ?? [];
             return (
               <div key={p.id} className="pass-card">
@@ -259,9 +281,15 @@ export default function MembershipRulesPage() {
               </div>
             );
           })}
+          {filtered.length > visibleCount && (
+            <button className="ghost-btn" style={{ margin: "12px 20px" }} onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}>
+              더보기 ({filtered.length - visibleCount}건 더 있음)
+            </button>
+          )}
           <div style={{ height: 40 }} />
         </div>
-      )}
+        );
+      })()}
 
       {/* 상품 추가 시트 */}
       {prodSheet && (
