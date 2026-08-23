@@ -1411,6 +1411,7 @@ a { color: inherit; text-decoration: none; }
   transition: background 0.15s;
 }
 .switch.on { background: var(--accent); }
+.switch:disabled { opacity: .5; cursor: default; }
 .switch .knob {
   position: absolute;
   top: 3px;

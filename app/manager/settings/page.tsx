@@ -116,8 +116,12 @@ export default function SettingsPage() {
   const soonBadge = <span className="set-soon-badge">준비 중</span>;
 
   // 토글 스위치
-  const toggle = (on: boolean, onCh: (b: boolean) => void) => (
-    <button className={`switch ${on ? "on" : ""}`} onClick={() => onCh(!on)}>
+  // UX 감사(B-9) — numInput은 "준비 중" 필드에 disabled를 넘기는데 toggle은 그런 파라미터
+  // 자체가 없어서, "수강권으로 볼 수 없는 수업도 표시"(showAllClasses, 준비 중 배지 붙어있음)
+  // 토글만 계속 켜고 끌 수 있고 값도 실제로 저장됐다 — 매니저가 "껐는데 왜 계속 다 보이지"로
+  // 혼란스러울 수 있었다.
+  const toggle = (on: boolean, onCh: (b: boolean) => void, disabled = false) => (
+    <button className={`switch ${on ? "on" : ""}`} disabled={disabled} onClick={() => onCh(!on)}>
       <span className="knob" />
     </button>
   );
@@ -327,7 +331,7 @@ export default function SettingsPage() {
               같은 위험이 생김) 이번 배치에서는 구현하지 않고 "준비 중"으로 명확히 표시만 한다. */}
           <div className="set-row">
             <div className="set-label">수강권으로 볼 수 없는 수업도 표시 {soonBadge}</div>
-            {toggle(s.showAllClasses, (b) => up("showAllClasses", b))}
+            {toggle(s.showAllClasses, (b) => up("showAllClasses", b), true)}
           </div>
           <div className="set-soon-note">지금은 이 설정과 무관하게 항상 모든 수업이 표시돼요 —
             수강권별로 예약 가능한 수업만 걸러 보여주려면 서버 쪽 자격 판정 로직을 그대로
