@@ -44,7 +44,9 @@ describe("Batch 1 design system contract", () => {
 describe("Batch 3 discovery design contract", () => {
   it("uses the shared icon system across home, search and category discovery", () => {
     expect(read("app/page.tsx")).toContain("<UiIcon");
-    expect(read("app/search/page.tsx")).toContain("<UiIcon");
+    // 2026-08-23: 검색 결과 없음 상태를 공용 EmptyState로 옮기면서 <UiIcon>을 직접 쓰지
+    // 않게 됐다(EmptyState 내부에서 UiIcon을 쓰므로 아이콘 시스템 사용 자체는 유지됨).
+    expect(read("app/search/page.tsx")).toMatch(/<UiIcon|<EmptyState/);
     expect(read("app/category/[label]/page.tsx")).toContain("<UiIcon");
   });
 

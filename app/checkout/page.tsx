@@ -16,6 +16,7 @@ import Loading from "../components/Loading";
 import { reservationReturnUrl } from "../../lib/reservationNav";
 import { getPaymentService, type PaymentScenario } from "../../lib/payments";
 import UiIcon, { type IconName } from "../components/UiIcon";
+import ErrorState from "../components/ErrorState";
 
 // 카카오페이/토스페이는 로고 자산이 없어 outline 아이콘 하나로 뭉치면 구분이 안 되므로
 // --vendor-* 색 점(dot)으로, 나머지는 의미가 통하는 outline 아이콘으로 구분한다.
@@ -53,7 +54,9 @@ function CheckoutContent() {
   const productIds = sp.get("productIds");
   const showAll = sp.get("showAll");
   // 뒤로가기: 예약 흐름으로 들어온 경우 센터 상세의 구매 시트를 그 상태 그대로 다시 열어줌
-  const centerBackHref = reserveClassId && reserveDate
+  // UX 감사(A-15) — centerId가 없을 때(예: 파라미터 없이 직접 진입) `/center/`(빈 ID)로
+  // 가면 404였다. 그럴 땐 홈으로 폴백.
+  const centerBackHref = !centerId ? "/" : reserveClassId && reserveDate
     ? `/center/${centerId}?buy=1&reserveClassId=${reserveClassId}&reserveDate=${encodeURIComponent(reserveDate)}`
       + (reserveCenter ? `&reserveCenter=${reserveCenter}` : "")
       + (productIds ? `&productIds=${productIds}` : "")
@@ -242,7 +245,14 @@ function CheckoutContent() {
           <div className="title">결제</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 60 }}>상품 정보를 찾을 수 없어요</div>
+        <ErrorState
+          title="상품 정보를 찾을 수 없어요"
+          description="링크가 만료됐거나 상품이 삭제됐을 수 있어요."
+          action={<>
+            <a className="primary-btn" href="/cart">장바구니로 가기</a>
+            <a className="ghost-btn" style={{ marginTop: 8 }} href="/">홈으로</a>
+          </>}
+        />
       </div>
     );
   }

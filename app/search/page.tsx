@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { searchHome, type SearchCenter } from "../../lib/home";
 import { centerPhotoUrl } from "../../lib/center";
-import UiIcon from "../components/UiIcon";
+import EmptyState from "../components/EmptyState";
 
 export default function SearchPage() {
   const [kw, setKw] = useState("");
@@ -71,11 +71,7 @@ export default function SearchPage() {
 
           <div className="menu-section-label">센터 {centers.length > 0 ? `(${centers.length})` : ""}</div>
           {centers.length === 0 && categories.length === 0 ? (
-            <div className="search-empty">
-              <UiIcon name="search" size={28} />
-              <b>검색 결과가 없어요</b>
-              <span>센터 이름을 짧게 입력하거나 다른 종목으로 검색해보세요.</span>
-            </div>
+            <EmptyState icon="search" title="검색 결과가 없어요" description="센터 이름을 짧게 입력하거나 다른 종목으로 검색해보세요." />
           ) : (
             centers.map((c) => (
               <a key={c.id} className="search-center-row" href={`/center/${c.id}`}>
