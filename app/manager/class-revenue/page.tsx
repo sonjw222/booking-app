@@ -10,7 +10,6 @@
 */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
 import DatePicker from "../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
@@ -364,8 +363,6 @@ export default function ClassRevenuePage() {
           </div>
         </div>
       )}
-
-      <ManagerNav />
     </div>
   );
 }

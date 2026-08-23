@@ -12,6 +12,7 @@ const TITLES: Record<string, string> = {
   "/manager/inquiries": "문의", "/manager/reviews": "후기", "/manager/orders": "주문",
   "/manager/admin-assignments": "회원 직접 배치 기록", "/manager/center-info": "센터 정보",
   "/manager/rooms": "룸 관리", "/manager/holidays": "휴무일", "/manager/settings": "예약 운영 설정",
+  "/manager/class-revenue": "수업매출", "/manager/leads": "상담고객 관리",
 };
 
 export default function ManagerChrome() {
