@@ -7,7 +7,7 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import { fetchCart, removeFromCart, clearCart, updateCartSize, type CartItem } from "../../lib/cart";
+import { fetchCart, addToCart, removeFromCart, clearCart, updateCartSize, type CartItem } from "../../lib/cart";
 import { createOrder } from "../../lib/orders";
 import { fetchCenterDetail } from "../../lib/center";
 import Loading from "../components/Loading";
@@ -40,8 +40,12 @@ export default function CartPage() {
   const [payMethod, setPayMethod] = useState("card");
   const [allowedPay, setAllowedPay] = useState<string[] | null>(null);
   const [couponInput, setCouponInput] = useState("");
-  const [discount, setDiscount] = useState(0);
+  // UX 감사(A-18) — "쿠폰 적용상태 표시 없음": 예전엔 discount 숫자와 couponInput 텍스트
+  // 일치 여부로만 적용 상태를 간접 추론했고, 취소할 방법도 없었다. 적용된 쿠폰 자체를
+  // 객체로 들고 있어 상태가 명확하고, 취소 버튼도 추가한다.
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; label: string; discount: number } | null>(null);
   const [couponMsg, setCouponMsg] = useState<string | null>(null);
+  const discount = appliedCoupon?.discount ?? 0;
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -66,23 +70,69 @@ export default function CartPage() {
   const total = Math.max(0, subtotal - discount);
   function won(n: number) { return n.toLocaleString("ko-KR") + "원"; }
 
+  // 사이즈 없는 상품만 productId 기준으로 묶어 "행 개수 = 수량"으로 표현(위 handleIncrement
+  // 주석 참고). 사이즈 있는 상품은 행별로 그대로 유지.
+  const sizedItems = items.filter((it) => it.sizes && it.sizes.length > 0);
+  const noSizeGroups: { productId: string; centerId: string; productName: string; price: number; ids: string[] }[] = [];
+  for (const it of items) {
+    if (it.sizes && it.sizes.length > 0) continue;
+    const g = noSizeGroups.find((x) => x.productId === it.productId);
+    if (g) g.ids.push(it.id);
+    else noSizeGroups.push({ productId: it.productId, centerId: it.centerId, productName: it.productName, price: it.price, ids: [it.id] });
+  }
+
   function applyCoupon(code?: string) {
     const c = (code ?? couponInput).trim().toUpperCase();
     if (!c) return;
     const found = MY_COUPONS.find((x) => x.code === c);
     if (found) {
-      setDiscount(found.discount);
+      setAppliedCoupon(found);
       setCouponInput(found.code);
       setCouponMsg(`쿠폰 적용됨: -${found.discount.toLocaleString("ko-KR")}원`);
     } else {
-      setDiscount(0);
+      setAppliedCoupon(null);
       setCouponMsg("유효하지 않은 쿠폰이에요");
     }
+  }
+
+  function removeCoupon() {
+    setAppliedCoupon(null);
+    setCouponInput("");
+    setCouponMsg(null);
   }
 
   async function handleRemove(id: string) {
     setBusy(true);
     try { await removeFromCart(id); await load(); }
+    catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  // UX 감사(A-18) — "장바구니 수량조절 UI 없음": cart_items에는 quantity 컬럼이 없어(스키마
+  // 변경 없이) 같은 상품을 여러 행으로 담아 "행 개수 = 수량"으로 표현한다. 단, 사이즈가 있는
+  // 상품은 "몇 개를 어떤 사이즈로" 조합이 섞일 수 있어(예: M 2개 + L 1개) 행을 합치면 오히려
+  // 헷갈리므로 그룹핑/스테퍼 대상에서 제외하고 기존처럼 행별로 그대로 둔다.
+  async function handleIncrement(g: { centerId: string; productId: string; productName: string; price: number }) {
+    setBusy(true);
+    try {
+      await addToCart({ centerId: g.centerId, productId: g.productId, productName: g.productName, price: g.price });
+      await load();
+    } catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function handleDecrement(ids: string[]) {
+    const last = ids[ids.length - 1];
+    if (!last) return;
+    setBusy(true);
+    try { await removeFromCart(last); await load(); }
+    catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function handleRemoveGroup(ids: string[]) {
+    setBusy(true);
+    try { await Promise.all(ids.map((id) => removeFromCart(id))); await load(); }
     catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
   }
@@ -113,7 +163,7 @@ export default function CartPage() {
           centerId: it.centerId, productId: it.productId, productName: it.productName,
           amount: it.price - d, payMethod,
           selectedSize: it.selectedSize ?? undefined,
-          couponCode: discount > 0 ? couponInput.trim().toUpperCase() : undefined,
+          couponCode: appliedCoupon?.code,
           discountAmount: d,
         });
       }
@@ -162,7 +212,7 @@ export default function CartPage() {
           {/* 주문 정보 */}
           <div className="commerce-title"><strong>담은 상품</strong><span>{items.length}개</span></div>
           <div className="cart-list">
-            {items.map((it) => (
+            {sizedItems.map((it) => (
               <div key={it.id} className="cart-row-wrap">
                 <div className="cart-row">
                   <div className="commerce-product-mark">P</div><div className="cart-info">
@@ -171,15 +221,30 @@ export default function CartPage() {
                   </div>
                   <button className="cart-remove" disabled={busy} onClick={() => handleRemove(it.id)}>삭제</button>
                 </div>
-                {it.sizes && it.sizes.length > 0 && (
-                  <div className="cart-sizes">
-                    <span className="cart-size-label">사이즈</span>
-                    {it.sizes.map((sz) => (
-                      <button key={sz} className={`filter-chip ${it.selectedSize === sz ? "on" : ""}`}
-                        disabled={busy} onClick={() => handleSize(it, sz)}>{sz}</button>
-                    ))}
+                <div className="cart-sizes">
+                  <span className="cart-size-label">사이즈</span>
+                  {it.sizes!.map((sz) => (
+                    <button key={sz} className={`filter-chip ${it.selectedSize === sz ? "on" : ""}`}
+                      disabled={busy} onClick={() => handleSize(it, sz)}>{sz}</button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {noSizeGroups.map((g) => (
+              <div key={g.productId} className="cart-row-wrap">
+                <div className="cart-row">
+                  <div className="commerce-product-mark">P</div><div className="cart-info">
+                    <div className="cart-name">{g.productName}</div>
+                    <div className="cart-price">{won(g.price)}{g.ids.length > 1 ? ` × ${g.ids.length} = ${won(g.price * g.ids.length)}` : ""}</div>
                   </div>
-                )}
+                  <button className="cart-remove" disabled={busy} onClick={() => handleRemoveGroup(g.ids)}>삭제</button>
+                </div>
+                {/* UX 감사(A-18) — 수량조절 UI */}
+                <div className="cart-qty">
+                  <button type="button" className="cart-qty-btn" disabled={busy} onClick={() => handleDecrement(g.ids)} aria-label="수량 줄이기">−</button>
+                  <span className="cart-qty-count">{g.ids.length}개</span>
+                  <button type="button" className="cart-qty-btn" disabled={busy} onClick={() => handleIncrement(g)} aria-label="수량 늘리기">+</button>
+                </div>
               </div>
             ))}
           </div>
@@ -195,19 +260,28 @@ export default function CartPage() {
           </div>
           <div className="coupon-list">
             {MY_COUPONS.map((c) => (
-              <button key={c.code} className={`coupon-item ${couponInput.toUpperCase() === c.code ? "on" : ""}`}
+              <button key={c.code} className={`coupon-item ${appliedCoupon?.code === c.code ? "on" : ""}`}
                 onClick={() => applyCoupon(c.code)}>
-                <span className="coupon-label">{c.label}</span>
+                <span className="coupon-label">{appliedCoupon?.code === c.code && <UiIcon name="check" size={13} />} {c.label}</span>
                 <span className="coupon-amount">-{won(c.discount)}</span>
               </button>
             ))}
           </div>
           {couponMsg && (
-            <div className={`perm-guide ${discount > 0 ? "is-success" : "is-error"}`} style={{ margin: "6px 20px 0" }}>{couponMsg}</div>
+            <div className={`perm-guide ${discount > 0 ? "is-success" : "is-error"}`} style={{ margin: "6px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span>{couponMsg}</span>
+              {appliedCoupon && (
+                <button type="button" className="text-btn" onClick={removeCoupon}>취소</button>
+              )}
+            </div>
           )}
 
           {/* 결제 수단 */}
           <div className="menu-section-label commerce-label">결제 수단</div>
+          <div className="perm-guide" style={{ margin: "0 0 8px" }}>
+            결제 연동 전이라 실제 결제는 진행되지 않아요 — 아래 선택은 센터에 전달할 희망 결제수단
+            참고용이에요.
+          </div>
           <div className="pay-methods">
             {PAY_METHODS.filter((m) => !allowedPay || allowedPay.length === 0 || allowedPay.includes(m.id)).map((m) => (
               <button key={m.id} className={`pay-method ${payMethod === m.id ? "on" : ""}`} onClick={() => setPayMethod(m.id)}>
@@ -220,9 +294,9 @@ export default function CartPage() {
             ))}
           </div>
 
-          {discount > 0 && (
+          {discount > 0 && appliedCoupon && (
             <div className="checkout-discount-row">
-              <span>할인</span>
+              <span>할인 ({appliedCoupon.code})</span>
               <span>-{won(discount)}</span>
             </div>
           )}

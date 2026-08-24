@@ -243,6 +243,37 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 `npm run build` + 단위테스트(244개) 통과 확인, 통합 테스트는 라이브 Supabase 필요해 CI에서
 확인 필요.
 
+**2026-08-24 새 증상 + 서비스 롤 키로 직접 조사(P0-7 자체는 여전히 미해결)**: PR #99
+(`fix/cart-improvements`, `app/cart/page.tsx`만 건드림 — memberships/classes/fetchMonthData와
+전혀 무관)의 CI에서 `class-trainers-and-pass-selection-mode.test.ts`의 "회원 화면에 담당 강사
+이름 노출" 2개 테스트가 **6번 연속(원본 + 재시도 5번) 똑같이** `fetchMonthData()`가 방금 만든
+미래 수업(`hoursFromNow: 905/906`)을 못 찾는 patrern으로 실패(P0-7 표에 이미 적혀 있듯 "재실행해도
+계속 재발하는" 축과 정확히 일치, 단순 flaky와 다름). 로컬 단독 실행/전체 suite 실행은 둘 다
+깨끗이 통과(단, 전체 suite 로컬 실행에서는 `payment-test-a/b@example.com` signUp
+"User already registered"라는 **다른** 충돌이 발생 — 다른 세션이 동시에 같은 계정으로 통합
+테스트를 돌리고 있었다는 직접 증거).
+
+이번엔 서비스 롤 키가 있어(`.env.test.local`) 이전 조사가 못 했던 라이브 DB 직접 조회를
+했다 — 결과: **막혔던 유력 가설(멤버십/센터 정체성 문제)은 배제됨**.
+- `managerA`(`admin-assign-test-manager-a@example.com`)의 `manager_centers`는 2026-08-13
+  생성된 단 1개 행만 존재(활성, `center_id=5aa6e0b6-7e4a-47a3-b705-afc9a0cae4d7`,
+  `통합테스트센터-e920be7a`) — 중복/churn 없음, `getOrCreateOwnedTestCenter()`가 매번 다른
+  센터를 반환할 가능성 배제.
+- `userA`(`payment-test-a@example.com`)는 이 센터에 **17개**의 `status=active`,
+  `remaining_count>0`, `expires_at`이 전부 2026-10월(테스트가 요구하는 미래 시점보다 훨씬 뒤)인
+  멤버십을 보유 — `fetchMonthData()`의 멤버십 필터(`lib/reservations.ts:114-120`)가 이 센터를
+  걸러낼 이유가 없음. 즉 "언젠가 이 계정 멤버십이 자연 만료됐다"는 시간 경과 가설도 배제됨.
+- 실패 시점에 그 제목("강사노출-확인"/"강사노출-미지정")의 leftover 수업도 없었음(단,
+  `afterAll`이 성공/실패 무관하게 항상 정리하므로 이건 결정적 증거는 아님).
+
+결론: 근본 원인은 여전히 미확정이지만, 이번 조사로 "공유 고정 센터의 멤버십/정체성이
+불안정하다"는 가설은 확실히 배제됐다 — 남은 유력 후보는 여러 세션이 동시에 같은
+`managerA`/`userA` 계정으로 `createFutureTestClass` → `fetchMonthData` 사이의 아주 짧은
+타이밍에 뭔가(다른 파일의 `sweepStaleTestClasses`가 아닌, 아직 못 찾은 다른 경로)가 끼어드는
+것으로 추정되나 이번 조사로도 그 경로 자체는 특정하지 못했다. **PR #99와는 무관함이 위 DB
+조회로 확인됐다** — `app/cart/page.tsx`는 memberships/classes/fetchMonthData 어느 것도
+건드리지 않음.
+
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
 ### P1-1. 포인트 원장 이원화 정합성
@@ -2254,9 +2285,17 @@ label이라 탭 영역 자체는 문제 없었지만 시각적으로 체크 여�
 특정 수강권만 선택된 상태(수정 화면 등)에서는 선택된 항목은 항상 보여주되 미선택 나머지만
 20개 넘으면 접는다. Playwright로 라이브 확인: 기본 상태 칩 0개+버튼, 클릭 시 97개 전개.
 
+**완료(2026-08-24, A-18)**: `/cart` 3가지 수정 — (1) `cart_items`에 quantity 컬럼이 없어
+스키마 변경 없이 "같은 상품을 여러 행으로 담아 행 개수 = 수량"으로 표현하고 +/− 스테퍼
+UI를 추가(사이즈 있는 상품은 조합이 섞일 수 있어 대상에서 제외, 기존처럼 행별 유지),
+(2) 쿠폰 적용 상태를 `discount` 숫자 대신 `appliedCoupon` 객체로 명시적으로 들고 다니게
+바꾸고 체크 아이콘 + "취소" 버튼 추가, 최종 결제 화면의 할인 행에도 적용된 쿠폰 코드 표시,
+(3) 결제 연동 전 안내 문구를 결제하기 버튼 아래(눈에 잘 안 띔)에만 두던 것을 결제수단
+선택 섹션 바로 위로 옮겨 선택 전에 먼저 보이게 함(전 결제수단이 똑같이 미연동 상태라
+특정 수단만 비활성화하는 대신 안내 위치로 해결).
+
 **미착수 (다음 후보)**:
 - A-13 예약 이력이 `/my-reservations`·`/mypage/history`·`/mypage/calendar` 3곳에 분산
-- A-18 장바구니 수량조절 UI 없음, 쿠폰 적용상태 표시 없음, 미연동 결제수단 선택 가능
 
 **권장 순서**(감사 리포트 원안): 1주차 토큰 수정(P0, 완료) → 2주차 센터 상세 재작업 +
 Empty/Error/Skeleton 공용 컴포넌트 3종 → 3주차 액센트 단일화 + 헤더/탭 통일 + 버튼 위계 →
