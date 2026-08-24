@@ -187,65 +187,10 @@ export async function logout() {
    전체 예약 내역 (수강권 구매 이후 과거 수업까지 날짜별)
    ============================================================ */
 
-export type FullHistoryItem = {
-  id: string;
-  title: string;
-  centerName: string;
-  lessonDate: string;   // "2026-07-14"
-  timeText: string;     // "19:30"
-  status: "confirmed" | "waitlisted" | "cancelled" | "attended" | "no_show";
-  profileName: string;
-};
-
 const KST_DATE_ONLY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" });
 const KST_TIME = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false,
 });
-
-export async function fetchFullHistory(): Promise<FullHistoryItem[]> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) return [];
-  const { data: acc } = await supabase
-    .from("accounts").select("id").eq("auth_id", authData.user.id).maybeSingle();
-  if (!acc) return [];
-
-  const { data: profRows } = await supabase
-    .from("profiles").select("id, name, label, is_primary").eq("account_id", acc.id);
-  const profiles = profRows ?? [];
-  const profileIds = profiles.map((p: any) => p.id);
-  const profileLabel: Record<string, string> = {};
-  for (const p of profiles) {
-    profileLabel[(p as any).id] = (p as any).is_primary
-      ? ""
-      : ((p as any).label ? `${(p as any).name} · ${(p as any).label}` : (p as any).name);
-  }
-  if (profileIds.length === 0) return [];
-
-  const { data, error } = await supabase
-    .from("reservations")
-    .select("id, profile_id, status, classes(title, start_time, centers(name))")
-    .in("profile_id", profileIds)
-    .order("created_at", { ascending: false })
-    .limit(500);
-  if (error) throw new Error("예약 내역을 불러오지 못했어요: " + error.message);
-
-  return (data ?? [])
-    .filter((r: any) => r.classes?.start_time)
-    .map((r: any) => {
-      const dt = new Date(r.classes.start_time);
-      return {
-        id: r.id,
-        title: r.classes?.title ?? "",
-        centerName: r.classes?.centers?.name ?? "",
-        lessonDate: KST_DATE_ONLY.format(dt),
-        timeText: KST_TIME.format(dt),
-        status: r.status,
-        profileName: profileLabel[r.profile_id] ?? "",
-      };
-    })
-    // 수업 날짜 최신순
-    .sort((a, b) => b.lessonDate.localeCompare(a.lessonDate) || b.timeText.localeCompare(a.timeText));
-}
 
 /* ============================================================
    포인트 내역 (P1-1) — point_transactions가 통합 원장(add_point_ledger_unification.sql)

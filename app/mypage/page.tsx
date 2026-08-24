@@ -174,7 +174,9 @@ export default function MyPage() {
       })()}
 
       <div className="menu-section-label">내 정보</div>
-      <a className="list-row" href="/mypage/history">
+      {/* UX 감사(A-13) — /mypage/history는 /my-reservations로 기능이 이전된 뒤에도(주석 참고,
+          app/my-reservations/page.tsx) 이 링크만 안 고쳐진 채 남아 있었다. */}
+      <a className="list-row" href="/my-reservations">
         <div className="left"><span className="icon"><UiIcon name="list" /></span>예약 내역</div>
         <span className="chevron">›</span>
       </a>

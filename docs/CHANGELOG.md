@@ -8,6 +8,14 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-24 — 죽은 `/mypage/history` 라우트 정리(A-13)
+
+UX 감사가 예약 이력이 `/my-reservations`·`/mypage/history`·`/mypage/calendar` 3곳에 분산돼
+있다고 지적했으나, 조사 결과 `/my-reservations`(목록)와 `/mypage/calendar`(달력)는 이미
+정상적으로 짝을 이루는 같은 기능의 두 뷰였고, `/mypage/history`만 마이그레이션 후 정리되지
+않은 죽은 화면이었다(`/mypage`의 "예약 내역" 링크만 옛 경로를 계속 가리키고 있었음). 링크를
+`/my-reservations`로 수정하고 `/mypage/history` 라우트 + 전용 함수(`fetchFullHistory`)를 삭제.
+
 ## 2026-08-24 — 장바구니 수량조절/쿠폰 상태/결제수단 안내 개선(A-18)
 
 `/cart` 3가지 수정: (1) `cart_items`에 quantity 컬럼이 없어 스키마 변경 없이 같은 상품을
