@@ -846,7 +846,7 @@ export default function ClassManagePage() {
           레이아웃 그대로 다시 보이게 한다(globals.css 참고) — 그 규칙이 없으면 "복사"/
           "휴무일" 버튼이 완전히 사라지고 클릭도 안 되는 상태였다. */}
       <div className="back-header">
-        <button className="side cal-export-btn" style={{ fontSize: 12 }} onClick={openCopy}>일정 복사</button>
+        <button className="side cal-export-btn cal-copy-btn" style={{ fontSize: 12 }} onClick={openCopy}>일정 복사</button>
         <div className="title">내 일정</div>
         <a className="side cal-export-btn" href="/manager/holidays" style={{ fontSize: 12 }}>휴무일</a>
       </div>

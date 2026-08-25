@@ -2223,6 +2223,23 @@ ManagerNav "회원" 탭과 동일 키). B-11 일부 — "복사"→"일정 복�
   마이그레이션이 필요해 이번 배치 범위 밖(라이브 예약 자격 판정 RPC라 변경 시 각별한
   회귀 검증 필요) — 다음 세션에서 SQL 작업으로 진행 권장.
 
+**진행 중(2026-08-25, A-8 SQL 작성 완료 — 운영 적용은 사용자 확인 대기)**:
+`add_usable_memberships_issued_at_draft_proposed.sql` 작성 — `usable_memberships_for_classes()`의
+RETURNS TABLE에 `issued_at`(이미 존재하는 `memberships.issued_at` 컬럼, 새 컬럼 신설 아님)만
+추가하고 WHERE절(예약 자격 판정 로직)은 한 글자도 안 바꿈. 현재 라이브 정의는 git 이력 +
+Aug 13 보안 하드닝 파일의 `revoke`/`grant` 목록과 실제 `permission denied for function`
+에러 실측이 일치함을 근거로 재구성(서비스 롤 키로 직접 `pg_get_functiondef` 조회는
+PostgREST가 임의 SQL 실행을 지원하지 않아 불가능했고, `authenticated` 세션으로 직접 호출도
+공유 테스트 계정 재로그인이 다른 세션의 브라우저 세션을 무효화할 위험이 있어 시도하지 않음
+— `auth.setup.ts`의 기존 경고 참고). 롤백 파일도 함께 작성
+(`rollback_add_usable_memberships_issued_at_draft_proposed.sql`).
+
+코드 쪽(`lib/reservations.ts`의 `UsableMembership.issuedAt`(옵셔널), `app/reservation/page.tsx`의
+`.pass-pick-list` — 이름+만료일이 겹치는 항목에만 구매일 표시)은 SQL 미적용 상태에서도
+안전하게 동작(RPC가 `issued_at`을 안 줘도 `undefined`로 graceful, 화면엔 그냥 안 보임)하므로
+먼저 커밋. **SQL은 라이브 예약 자격 판정 RPC라 사용자 승인 후 적용 필요** — 파일 안의
+"적용 후 확인" 쿼리 결과를 확인하면 됨.
+
 **확인 결과 버그 아님**: A-14 — 실제 라이브 확인 결과 점 표시·날짜별 예약 목록·메모·ICS
 내보내기 전부 정상 작동. 리포트가 이전(더 오래된) 상태를 봤거나 오독한 것으로 결론.
 (2026-08-23 사용자 요청으로 점 색상 기준을 프로필→센터로 변경: 같은 날 같은 센터 예약이
@@ -2245,10 +2262,35 @@ ManagerNav "회원" 탭과 동일 키). B-11 일부 — "복사"→"일정 복�
 없고 각 카드가 `refundReason`으로 실제로 다른 사유를 보여줄 수 있어(항목별 상태) 손대지
 않음. "잔여>총" 표시는 여전히 실데이터 확인 필요로 보류.
 
+**완료(2026-08-25, "잔여>총" 실데이터 조사)**: 서비스 롤 키로 라이브 `memberships` 테이블
+전체를 스캔(`remaining_count > total_count`인 행 검색) — **16건 전부** 이름이
+"P1 override 통합-패스A"·"P1-15 스케줄제한 테스트 수강권"류인 QA 픽스처 상품이었고, 전부
+공유 통합테스트센터(`3937eb89-...`/`5aa6e0b6-...`, P0-7이 지목한 것과 같은 계열)에 속함.
+실제 앱 코드(`fetchMyPurchases`, `lib/orders.ts`)는 `total_count`/`remaining_count`를 그대로
+읽어 보여줄 뿐 계산하지 않으므로 표시 로직 버그가 아니라 데이터 자체의 문제 — 그리고 그
+데이터는 전부 동시 통합테스트 실행이 같은 공유 센터의 멤버십을 경합적으로
+수정(`createMembershipForProduct` 류의 find-or-create 패턴이 여러 테스트 파일에 중복 존재,
+동시 실행 시 레이스로 중복 행 생성 추정)해서 생긴 픽스처 오염으로 확인됨. **실제 앱 버그
+아님 — SQL/코드 수정 불필요.** P0-7과 근본 원인이 같은 계열일 가능성이 높음(별도 완전
+해결은 P0-7 완료 시 함께 정리 권장).
+
 **확인 후 보류**: A-2 — 정확한 종목별 센터 수를 보여주려면 새 집계 쿼리(현재 홈 화면은
 최근 30개 센터 샘플만 들고 있어 그걸로 판단하면 틀린 결과가 나올 수 있음)가 필요해 이번
 배치 범위 밖. 다음에 하려면: `centers.categories` 배열을 종목별로 집계하는 새 RPC 또는
 `count(*) ... group by unnest(categories)` 형태의 SQL이 필요.
+
+**완료(2026-08-25, A-2 재조사 — 버그 아님으로 결론)**: 코드를 다시 읽어보니 홈 화면
+종목 그리드(`.cat-item`)는 애초에 숫자 카운트를 전혀 표시하지 않는다(아이콘+라벨만) —
+위에서 우려했던 "30개 샘플로 계산한 부정확한 카운트"가 실제로 존재하지 않음. 종목을
+누르면 `/category/[label]`이 그때그때 정확한 쿼리(`fetchCentersByCategory`, 샘플 제한
+없음)로 그 종목의 진짜 현재 센터 목록을 보여주고, 결과가 0곳이면 "아직 OO 센터가
+없어요" + 다른 종목 찾기 CTA로 이미 우아하게 처리돼 있음(코드 문제 아님). 서비스 롤
+키로 라이브 데이터 확인: `service_categories`에 9개 종목이 등록돼 있지만 `status='approved'`
+센터 중 실제로 하나라도 매칭되는 건 "피겨스케이팅" 1개뿐 — 나머지 8개는 전부 정당하게
+빈 상태로 뜬다. **QA 데이터가 아직 종목별로 충분히 안 채워진 것뿐, 앱 버그도 SQL 작업도
+필요 없음.** (부산물: `service_role`이 `service_categories`에 SELECT 권한이 없음을
+발견 — `class_allowed_products` 계열과 같은 GRANT 누락 패턴이나, anon 키로는 정상 동작해
+사용자에게 영향 없어 이번엔 별도 조치 안 함.)
 
 **완료(2026-08-23, B-8)**: `membership-rules`(97개 상품, 이름 검색 입력도 신규 추가)·
 `admin-assignments`(기존 필터는 이미 충실했음, 페이징만 추가)·`notifications` 3개 화면 모두
