@@ -415,9 +415,10 @@ export default function ManagerDashboard() {
         </a>
       )}
       {/* 원래 운영 설정 안의 한 섹션이었으나, 회원/예약 운영 설정과 성격이 다른 축(우리
-          쪽 매출·계약)이라 사용자 요청으로 별도 메뉴로 분리(2026-08-26). 같은 권한 키
-          유지(원래 그 페이지의 일부였으므로 접근 범위를 그대로 유지). */}
-      {canSeeMenu("facility.operation") && (
+          쪽 매출·계약)이라 별도 메뉴로 분리(2026-08-26). 권한 키가 아니라 오너 여부로
+          직접 고정(사용자 결정, 2026-08-26) — 스태프에게 위임 가능한 facility.operation과
+          달리, 플랫폼과의 결제 계약 상태는 오너만 볼 수 있어야 한다는 판단. */}
+      {activeCenter?.isOwner && (
         <a className="list-row" href="/manager/subscription">
           <div className="left"><span className="icon"><UiIcon name="card" /></span>플랫폼 구독</div>
           <span className="chevron">›</span>

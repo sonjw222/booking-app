@@ -3,15 +3,16 @@
 /*
   매니저 - 플랫폼 구독 (센터 → 우리에게 내는 월 구독료)
   - 원래 app/manager/settings(운영 설정) 안의 한 섹션이었는데, 회원/예약 운영 설정과
-    성격이 완전히 다른 축(우리 쪽 매출/계약)이라 사용자 요청으로 별도 메뉴로 분리함.
-  - 오너 또는 운영정보 설정 권한(facility.operation) 필요 — 기존 운영 설정과 동일한
-    권한 키를 재사용(원래 그 페이지의 일부였으므로 접근 범위를 그대로 유지).
+    성격이 완전히 다른 축(우리 쪽 매출/계약)이라 별도 메뉴로 분리함.
+  - 스튜디오 오너 전용(사용자 결정, 2026-08-26) — facility.operation 같은 위임 가능한
+    권한 키가 아니라 center_roles.is_owner로 직접 고정. 스태프에게 위임할 성격의 화면이
+    아니라고 판단(플랫폼과의 결제 계약 상태). 오너가 아니면 화면 자체를 막는다(메뉴에서
+    숨기는 것과 별개로, 직접 URL 접근도 차단).
 */
 
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 import {
   fetchCenterSubscription, requestCenterBillingAuth, BILLING_ENABLED, STATUS_LABEL,
   type CenterSubscription,
@@ -22,7 +23,6 @@ export default function ManagerSubscriptionPage() {
   const [centerId, setCenterId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   const [subscription, setSubscription] = useState<CenterSubscription | null>(null);
   const [subLoading, setSubLoading] = useState(true);
@@ -33,27 +33,15 @@ export default function ManagerSubscriptionPage() {
     (async () => {
       try {
         const list = await fetchMyCenters();
-        setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        // 오너인 센터만 이 화면의 대상 — 스태프로만 소속된 센터는 전환 목록에서도 뺀다.
+        setCenters(list.filter((c) => c.isOwner));
+        if (list.some((c) => c.isOwner)) setCenterId(list.find((c) => c.isOwner)!.id);
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
   }, []);
 
   const activeCenter = centers.find((c) => c.id === centerId);
-
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
-
-  const canManage = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "facility.operation");
 
   const loadSubscription = useCallback(async () => {
     if (!centerId) return;
@@ -88,7 +76,9 @@ export default function ManagerSubscriptionPage() {
           <div className="title">플랫폼 구독</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
+        <div className="daylist-empty" style={{ paddingTop: 80 }}>
+          스튜디오 오너만 접근할 수 있는 화면이에요
+        </div>
       </div>
     );
   }
@@ -100,10 +90,6 @@ export default function ManagerSubscriptionPage() {
         <div className="title">플랫폼 구독</div>
         <div className="side" />
       </div>
-
-      {!loading && activeCenter && !canManage && (
-        <div className="error-toast">구독 정보를 변경할 권한이 없어요 — 오너에게 문의하세요.</div>
-      )}
 
       {centers.length > 1 && (
         <div className="center-switcher">
@@ -157,7 +143,7 @@ export default function ManagerSubscriptionPage() {
                 <div className="set-row col">
                   <div className="set-label">카드 등록</div>
                   {BILLING_ENABLED ? (
-                    <button className="primary-btn" disabled={subBusy || !canManage} onClick={handleCardRegister}>
+                    <button className="primary-btn" disabled={subBusy} onClick={handleCardRegister}>
                       {subBusy ? "처리 중..." : "카드 등록"}
                     </button>
                   ) : (

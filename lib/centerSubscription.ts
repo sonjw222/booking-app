@@ -23,6 +23,7 @@ export type SubscriptionStatus = "pending_billing_setup" | "active" | "past_due"
 export type CenterSubscription = {
   id: string;
   centerId: string;
+  planId: string;
   planName: string;
   monthlyPrice: number;
   status: SubscriptionStatus;
@@ -51,6 +52,7 @@ type SubscriptionPlanEmbed = { name: string; monthly_price: number } | null;
 type CenterSubscriptionRow = {
   id: string;
   center_id: string;
+  plan_id: string;
   status: SubscriptionStatus;
   card_last4: string | null;
   card_company: string | null;
@@ -67,6 +69,7 @@ function rowToSubscription(r: CenterSubscriptionRow): CenterSubscription {
   return {
     id: r.id,
     centerId: r.center_id,
+    planId: r.plan_id,
     planName: r.subscription_plans?.name ?? "-",
     monthlyPrice: r.subscription_plans?.monthly_price ?? 0,
     status: r.status,
@@ -78,7 +81,7 @@ function rowToSubscription(r: CenterSubscriptionRow): CenterSubscription {
 }
 
 const SELECT_COLUMNS =
-  "id, center_id, status, card_last4, card_company, next_billing_date, updated_at, subscription_plans(name, monthly_price)";
+  "id, center_id, plan_id, status, card_last4, card_company, next_billing_date, updated_at, subscription_plans(name, monthly_price)";
 
 // 매니저 - 내 센터의 구독 상태 조회.
 // 신규 센터는 트리거가 행을 자동으로 만들지만, 트리거 적용 전에 만들어진 데이터
@@ -106,6 +109,21 @@ export async function fetchAllCenterSubscriptions(): Promise<AdminCenterSubscrip
     ...rowToSubscription(r),
     centerName: r.centers?.name ?? "-",
   }));
+}
+
+// 운영자 - 센터의 구독 플랜 변경 (add_admin_center_subscription_actions.sql의 RPC,
+// center_subscriptions는 일반 사용자에게 쓰기 정책이 없어 RPC를 거쳐야 함)
+export async function adminSetCenterSubscriptionPlan(centerId: string, planId: string): Promise<void> {
+  const { error } = await supabase.rpc("admin_set_center_subscription_plan", {
+    p_center_id: centerId, p_plan_id: planId,
+  });
+  if (error) throw new Error("플랜 변경에 실패했어요: " + error.message);
+}
+
+// 운영자 - 센터 구독 취소(status='canceled')
+export async function adminCancelCenterSubscription(centerId: string): Promise<void> {
+  const { error } = await supabase.rpc("admin_cancel_center_subscription", { p_center_id: centerId });
+  if (error) throw new Error("구독 취소에 실패했어요: " + error.message);
 }
 
 // ------------------------------------------------------------
