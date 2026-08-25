@@ -14,7 +14,8 @@ import { createOrder } from "../../lib/orders";
 import { fetchMyPoints, usePoints } from "../../lib/reviews";
 import Loading from "../components/Loading";
 import { reservationReturnUrl } from "../../lib/reservationNav";
-import { getPaymentService, type PaymentScenario } from "../../lib/payments";
+import { getPaymentService, resolveProviderName, type PaymentScenario } from "../../lib/payments";
+import { supabase } from "../../lib/supabaseClient";
 import UiIcon, { type IconName } from "../components/UiIcon";
 import ErrorState from "../components/ErrorState";
 
@@ -106,6 +107,20 @@ function CheckoutContent() {
   }, [centerId, productId]);
   useEffect(() => { load(); }, [load]);
 
+  // 실제 PG(토스) 결제창은 app/checkout/success로 리다이렉트된 뒤 이 페이지로 다시
+  // 돌아온다(같은 조회 쿼리 + paymentDone/paymentError 추가) — 그때 기존 "결제 완료"
+  // 화면을 그대로 재사용한다(Mock의 즉시-확정 흐름과 화면을 공유). 최초 마운트 시
+  // 한 번만 확인하면 되는 값이라 의존성 배열을 비워둔다.
+  useEffect(() => {
+    if (sp.get("paymentDone") === "1") {
+      setIssuedMembershipId(sp.get("membershipId"));
+      setDone(true);
+    } else if (sp.get("paymentError")) {
+      setError(sp.get("paymentError"));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 예약창에서 들어온 구매를 완료하면, 잠깐 완료 안내를 보여준 뒤 자동으로 그 예약 화면으로 돌아감
   // (기존 예약/결제 로직은 그대로 두고, 화면 전환만 자동화 — 즉시 클릭할 수 있는 버튼도 함께 남겨둠)
   useEffect(() => {
@@ -137,11 +152,18 @@ function CheckoutContent() {
       setError("사이즈를 선택해주세요");
       return;
     }
+    // 실제 PG(토스) 연동은 카드만 지원(MVP 범위) — 다른 결제수단을 고른 채 결제하면
+    // 화면 안내와 다르게 카드 결제창이 뜨는 혼란을 막는다.
+    if (resolveProviderName() === "toss" && payMethod !== "card") {
+      setError("지금은 카드 결제만 가능해요");
+      return;
+    }
     setBusy(true);
     try {
       // 화면에 표시된 값과 동일하게 계산 (pointToUse/finalTotal은 상단에서 계산됨)
       if (pointToUse > 0) await usePoints(centerId, pointToUse);
       const finalAmount = finalTotal;
+      const providerName = resolveProviderName();
       const orderId = await createOrder({
         centerId, productId: product.id, productName: product.name,
         amount: finalAmount, payMethod,
@@ -149,11 +171,32 @@ function CheckoutContent() {
         couponCode: discount > 0 ? couponInput.trim().toUpperCase() : undefined,
         discountAmount: discount,
         autoBook: !!(product.autoBookDays && product.autoBookDays.length > 0) && autoBook,
-        provider: "mock", // Payment Adapter Pattern: 지금은 테스트 결제(Mock)로만 처리
+        provider: providerName, // Payment Adapter Pattern: env(NEXT_PUBLIC_PAYMENT_PROVIDER)로 전환
       });
 
       const paymentService = getPaymentService(mockScenarioOverride);
-      const created = await paymentService.createPayment({ orderId, amount: finalAmount });
+
+      // 실제 PG 결제창(토스 등)은 successUrl/failUrl로 돌아오는 리다이렉트 기반이라, 지금
+      // 조회 중인 쿼리(센터/상품/예약 복귀 정보)를 그대로 유지해 돌아온 뒤 이 화면이 같은
+      // 컨텍스트로 "결제 완료"를 보여줄 수 있게 한다. Mock은 이 값들을 그냥 무시한다.
+      const returnQuery = new URLSearchParams(window.location.search);
+      const successUrl = `${window.location.origin}/checkout/success?${returnQuery.toString()}`;
+      const failUrl = `${window.location.origin}/checkout/fail?${returnQuery.toString()}`;
+      const { data: userData } = await supabase.auth.getUser();
+
+      const created = await paymentService.createPayment({
+        orderId, amount: finalAmount, orderName: product.name,
+        customerEmail: userData.user?.email ?? undefined,
+        successUrl, failUrl,
+      });
+
+      if (created.redirected) {
+        // 브라우저가 이미 결제창으로 이동 중 — 여기서 더 할 일 없음(성공 시 이 컴포넌트는
+        // 언마운트된다). requestPayment가 reject되면(예: 사용자가 결제창을 즉시 닫음)
+        // catch 블록으로 넘어가 busy가 풀린다.
+        return;
+      }
+
       const result = await paymentService.confirmPayment(created.paymentKey, orderId);
 
       if (result.status === "paid") {
@@ -196,11 +239,13 @@ function CheckoutContent() {
       <div className="app-shell">
         <div className="checkout-done">
           <div className="checkout-done-icon" aria-hidden="true" />
-          <div className="checkout-done-title">테스트 결제가 완료됐어요</div>
+          <div className="checkout-done-title">
+            {resolveProviderName() === "mock" ? "테스트 결제가 완료됐어요" : "결제가 완료됐어요"}
+          </div>
           <div className="checkout-done-sub">
             {centerName}<br />
             {product?.name} · {won(product?.price ?? 0)}<br /><br />
-            (Mock) 실제 PG 연동 전 테스트 결제예요.<br />
+            {resolveProviderName() === "mock" && <>(Mock) 실제 PG 연동 전 테스트 결제예요.<br /></>}
             {passIssued
               ? "상품 구매가 완료되었으며 이용 가능한 수강권이 등록되었습니다."
               : "상품 구매가 완료되었습니다."}
@@ -380,9 +425,16 @@ function CheckoutContent() {
           </button>
         ))}
       </div>
-      <div className="perm-guide" style={{ margin: "10px 20px" }}>
-        실제 PG(카드/카카오페이 등) 연동은 준비 중이라, 지금은 테스트 결제(Mock)로 처리돼요.
-      </div>
+      {resolveProviderName() === "mock" && (
+        <div className="perm-guide" style={{ margin: "10px 20px" }}>
+          실제 PG(카드/카카오페이 등) 연동은 준비 중이라, 지금은 테스트 결제(Mock)로 처리돼요.
+        </div>
+      )}
+      {resolveProviderName() === "toss" && (
+        <div className="perm-guide" style={{ margin: "10px 20px" }}>
+          카드 결제만 지원돼요. 카카오페이/토스페이/계좌이체는 준비 중이에요.
+        </div>
+      )}
 
       {/* 결제 금액 + 버튼 */}
       {discount > 0 && (

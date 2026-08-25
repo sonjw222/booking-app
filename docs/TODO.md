@@ -44,10 +44,45 @@
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **미완성 (테스트 결제 환경만 완료)** |
-| 근거 파일 | `app/checkout/page.tsx`, `lib/orders.ts`, `lib/payments/*`(신규), `add_payment_test_provider.sql`(신규), `add_orders.sql`, `schema.sql` |
-| 완료 조건 | Toss/PortOne 실제 운영 키로 결제 생성·성공·실패·취소·중복 callback을 검증하고, 성공 주문만 발급되며 `orders`·`payments` 상태가 일치함. 사업자 등록 후 진행 가능 |
+| 현재 상태 | **토스페이먼츠 결제창(카드) 연동 코드 완료 — 개발자센터 공용 테스트 키로 구현·자동검증. SQL 미적용(사용자 적용 대기), 사업자 명의 실 운영 키 전환은 별도(전자결제 신청 심사 필요)** |
+| 근거 파일 | `app/checkout/page.tsx`, `app/checkout/success/page.tsx`(신규), `app/checkout/fail/page.tsx`(신규), `app/api/payments/confirm/route.ts`(신규, 이 프로젝트 최초의 app/api 라우트), `app/api/payments/cancel/route.ts`(신규), `app/layout.tsx`(토스 SDK script 태그), `lib/orders.ts`, `lib/payments/*`, `lib/payments/tossPaymentApi.ts`(신규), `add_payment_test_provider.sql`, `add_confirm_real_payment.sql`(신규), `rollback_add_confirm_real_payment.sql`(신규), `tests/integration/confirm-real-payment.test.ts`(신규), `add_orders.sql`, `schema.sql` |
+| 완료 조건 | ~~Toss/PortOne 실제 운영 키로~~ 개발자센터 테스트 키(문서 공용키, 사업자 심사 불필요)로 카드 결제 생성·성공·취소 흐름 코드 완료. 남은 것: (1) 사용자가 `add_confirm_real_payment.sql` SQL Editor 적용 (2) 실제 브라우저에서 결제창 열어 테스트카드로 왕복 확인(자동화 어려움 — 아래 참고) (3) 나중에 사업자 명의 "전자결제 신청" 심사 통과 후 `.env.local`의 `NEXT_PUBLIC_TOSS_CLIENT_KEY`/`TOSS_SECRET_KEY`를 실 운영 키로 교체 |
 | 관련 문서 | [REQUIREMENTS 6-1, 10-4](./REQUIREMENTS.md), [DATABASE 4-3, 7-3](./DATABASE.md), [ROUTES `/checkout`](./ROUTES.md) |
+
+**2026-08-25 진행 상황**: 사업자 등록 완료로 재개. 토스페이먼츠 개발자센터에 가입해 "주문서형·
+결제창형 연동 키"(문서 예제와 동일한 공용 테스트 키, `test_gck_docs_...`/`test_gsk_docs_...` —
+사업자 심사 없이 누구나 사용 가능)를 확인, `.env.local`에 추가.
+
+구조:
+- `app/layout.tsx`에 토스 SDK를 `<Script src="https://js.tosspayments.com/v1">`로 전역 로드
+  (npm 패키지 설치 없이 공식 가이드 방식).
+- `TossPaymentProvider.createPayment()`가 `window.TossPayments(clientKey).requestPayment("카드", ...)`를
+  호출해 브라우저를 토스 결제창으로 이동시킨다(MVP는 카드만 지원 — 카카오페이/토스페이/계좌이체는
+  후속 작업). 이 호출은 성공 시 페이지 자체가 떠나버려 기존 "생성→확정" 동기 흐름
+  (Mock 방식)과 근본적으로 다르다 — `types.ts`의 `CreatePaymentResult.redirected` 플래그로
+  이를 표현하고, checkout이 이 값을 보고 흐름을 분기한다.
+- 결제창은 `app/checkout/success`(성공)/`app/checkout/fail`(실패)로 리다이렉트되는데, 두 화면
+  다 확정/실패 처리만 하고 원래 `/checkout` 쿼리(센터/상품/예약 복귀 정보)를 그대로 유지한 채
+  `/checkout`으로 다시 돌려보내 **기존 "결제 완료"/에러 화면을 그대로 재사용**한다(화면 중복
+  없음) — `paymentDone`/`membershipId`/`paymentError` 쿼리로 상태를 전달.
+- 시크릿 키가 필요한 결제 승인은 이 프로젝트 최초의 서버 라우트(`app/api/payments/confirm`,
+  `/cancel`)에서만 수행 — `TOSS_SECRET_KEY`는 `NEXT_PUBLIC_` 접두사 없이 서버 전용으로 분리.
+- SQL: `add_payment_test_provider.sql`이 미리 계획해둔 대로("향후 실제 PG 웹훅을 붙일 때
+  공통화") `confirm_test_payment`에서 권한 체크 없는 순수 로직(수강권 발급+매출 기록+주문
+  완료)을 `_issue_membership_and_record_payment` 내부 헬퍼로 뽑아내고, 신규
+  `confirm_real_payment`/`cancel_real_payment`가 이를 재사용(`fulfill_order`는 이번에도 전혀
+  건드리지 않음). 두 신규 RPC는 `service_role`에만 EXECUTE 권한을 줘서(`revoke ... from
+  public, authenticated, anon`) 일반 로그인 사용자가 직접 호출해 임의 주문을 결제완료
+  처리할 수 없게 막음 — API 라우트가 토스 승인 API로 실제 결제를 이미 검증한 뒤에만 호출.
+- 신규 통합테스트(`confirm-real-payment.test.ts`)로 (1) service_role만 성공 (2) authenticated
+  세션은 permission denied로 거부 (3) 금액 불일치 거부 (4) idempotency (5) 취소 흐름을 자동
+  검증하도록 작성(아직 SQL 미적용이라 실행은 SQL 적용 후).
+- `npm run build`/유닛테스트 246개 전부 통과. 기존 Mock 결제 흐름(`payment-lifecycle`/
+  `payment-security` 통합테스트 8개)도 리팩터 전 상태로 재확인 통과.
+
+**실 브라우저 테스트가 필요한 이유**: 토스 결제창은 iframe/팝업 기반 UI라 자동화 테스트로
+왕복시키기 까다롭다(카드번호 입력 등 실제 폼 상호작용 필요). `npm run dev`로 띄운 뒤 결제
+화면에서 실제로 눌러서 토스 테스트카드 번호(토스 문서 안내)로 확인하는 수동 QA가 필요하다.
 
 **2026-07-30 진행 상황**: 사업자 미등록으로 Toss/PortOne 운영 키를 아직 쓸 수 없어, **Payment Adapter Pattern으로 테스트 결제 환경만 우선 구축**했습니다.
 - `Checkout → PaymentService → PaymentProviderFactory → PaymentProvider(interface) → {Mock|Toss|PortOne}` 구조. `NEXT_PUBLIC_PAYMENT_PROVIDER` 값만 바꾸면(mock→toss/portone) Checkout/Reservation/Order 코드 수정 없이 전환 가능하도록 설계.

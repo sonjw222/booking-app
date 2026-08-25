@@ -40,7 +40,7 @@ export class MockPaymentProvider implements PaymentProvider {
     };
   }
 
-  async confirmPayment(paymentKey: string, orderId: string): Promise<ConfirmPaymentResult> {
+  async confirmPayment(paymentKey: string, orderId: string, _amount?: number): Promise<ConfirmPaymentResult> {
     switch (this.scenario) {
       case "failed":
         // 결제 자체가 실패한 경우 — 아무 것도 확정하지 않음(주문은 pending 그대로 남아 재시도 가능)

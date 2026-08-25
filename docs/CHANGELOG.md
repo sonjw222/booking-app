@@ -8,6 +8,22 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-25 — P0-1 토스페이먼츠 결제창(카드) 연동 — 이 프로젝트 최초의 app/api 서버 라우트 추가
+
+사업자 등록 완료로 재개. 토스 개발자센터 공용 테스트 키(사업자 심사 불필요)로
+`TossPaymentProvider`를 실제 구현: `window.TossPayments().requestPayment("카드", ...)`로
+결제창을 열고, `app/checkout/success`/`fail`이 리다이렉트를 받아 기존 `/checkout` 화면으로
+되돌려보내는 방식(화면 중복 없이 재사용). 결제 승인은 시크릿 키가 필요해 신규
+`app/api/payments/confirm`·`/cancel` 서버 라우트에서만 수행. SQL은
+`add_payment_test_provider.sql`이 미리 계획해둔 대로 `confirm_test_payment`의 순수 로직을
+`_issue_membership_and_record_payment` 헬퍼로 분리하고, 신규 `confirm_real_payment`/
+`cancel_real_payment`(둘 다 `service_role` 전용 EXECUTE 권한)가 이를 재사용 —
+`fulfill_order`는 이번에도 건드리지 않음. 신규 통합테스트(`confirm-real-payment.test.ts`)로
+service_role만 성공/일반 세션 거부/금액검증/idempotency/취소를 자동 검증(SQL 적용 후 실행
+예정). `npm run build` + 유닛테스트 246개 + 기존 결제 통합테스트 8개 전부 통과 재확인.
+**SQL 미적용 — 사용자가 `add_confirm_real_payment.sql` 적용 필요.** 자세한 내용은
+`docs/TODO.md` P0-1 참고.
+
 ## 2026-08-25 — 네이티브 confirm()/alert() 전면 마이그레이션 + 토스트 높이 버그 수정
 
 사용자 스크린샷 피드백: `/manager/leads`(상담고객 등록)에서 알림창이 브라우저 기본 스타일로
