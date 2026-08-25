@@ -11,10 +11,6 @@ import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../../lib/settings";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
-import {
-  fetchCenterSubscription, requestCenterBillingAuth, BILLING_ENABLED, STATUS_LABEL,
-  type CenterSubscription,
-} from "../../../lib/centerSubscription";
 
 const SLOT_UNITS: { value: string; label: string }[] = [
   { value: "hour", label: "정시" },
@@ -35,12 +31,6 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
-
-  // 플랫폼 구독 (센터 → 우리) — 운영 설정과는 별개 로딩 상태로 관리
-  const [subscription, setSubscription] = useState<CenterSubscription | null>(null);
-  const [subLoading, setSubLoading] = useState(true);
-  const [subError, setSubError] = useState<string | null>(null);
-  const [subBusy, setSubBusy] = useState(false);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -81,31 +71,6 @@ export default function SettingsPage() {
   }, [centerId]);
 
   useEffect(() => { load(); }, [load]);
-
-  const loadSubscription = useCallback(async () => {
-    if (!centerId) return;
-    setSubLoading(true); setSubError(null);
-    try {
-      setSubscription(await fetchCenterSubscription(centerId));
-    } catch (e: any) { setSubError(e.message); }
-    finally { setSubLoading(false); }
-  }, [centerId]);
-
-  useEffect(() => { loadSubscription(); }, [loadSubscription]);
-
-  async function handleCardRegister() {
-    if (!centerId) return;
-    setSubBusy(true); setSubError(null);
-    try {
-      await requestCenterBillingAuth(centerId);
-      // 성공 시 토스 결제창이 successUrl/failUrl로 브라우저를 이동시키므로
-      // 여기서는 별도 후처리가 필요 없음(플래그가 꺼진 지금은 이 경로 자체가 실행되지 않음).
-    } catch (e: any) {
-      setSubError(e.message);
-    } finally {
-      setSubBusy(false);
-    }
-  }
 
   // 설정값 갱신 헬퍼
   function up<K extends keyof CenterSettings>(key: K, val: CenterSettings[K]) {
@@ -193,58 +158,6 @@ export default function SettingsPage() {
         <Loading />
       ) : (
         <div className="settings-wrap">
-          {/* 00. 플랫폼 구독 (센터 → 우리에게 내는 월 구독료. 회원 결제와는 다른 축) */}
-          <div className="set-section-title">플랫폼 구독</div>
-          {subError && <div className="error-toast">{subError}<button onClick={() => setSubError(null)}>×</button></div>}
-          {subLoading ? (
-            <div className="set-row"><div className="set-label">불러오는 중...</div></div>
-          ) : !subscription ? (
-            <div className="set-row"><div className="set-label">구독 정보가 아직 없어요</div></div>
-          ) : (
-            <>
-              <div className="set-row">
-                <div className="set-label">플랜</div>
-                <div className="set-inline">{subscription.planName}
-                  {subscription.monthlyPrice > 0 ? ` (월 ${subscription.monthlyPrice.toLocaleString()}원)` : " (가격 미정)"}</div>
-              </div>
-              <div className="set-row">
-                <div className="set-label">상태</div>
-                <span className={`hist-status s-${
-                  subscription.status === "active" ? "attended"
-                  : subscription.status === "pending_billing_setup" ? "waitlisted"
-                  : "cancelled"
-                }`}>{STATUS_LABEL[subscription.status]}</span>
-              </div>
-              {subscription.status === "active" && subscription.nextBillingDate && (
-                <div className="set-row">
-                  <div className="set-label">다음 결제일</div>
-                  <div className="set-inline">{subscription.nextBillingDate}</div>
-                </div>
-              )}
-              {subscription.cardLast4 && (
-                <div className="set-row">
-                  <div className="set-label">등록된 카드</div>
-                  <div className="set-inline">{subscription.cardCompany ?? ""} {subscription.cardLast4}****</div>
-                </div>
-              )}
-              {subscription.status === "pending_billing_setup" && (
-                <div className="set-row col">
-                  <div className="set-label">카드 등록</div>
-                  {BILLING_ENABLED ? (
-                    <button className="primary-btn" disabled={subBusy || !canSave} onClick={handleCardRegister}>
-                      {subBusy ? "처리 중..." : "카드 등록"}
-                    </button>
-                  ) : (
-                    <>
-                      <button className="ghost-btn" disabled>카드 등록</button>
-                      <div className="set-soon-note">구독 결제 연동 준비 중이에요 — 자동결제 계약 심사가 끝나면 이용할 수 있어요.</div>
-                    </>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-
           {/* 01. 예약·취소 가능 시간 */}
           <div className="set-section-title">예약·취소 가능 시간</div>
           <div className="set-row col">

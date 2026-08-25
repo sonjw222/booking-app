@@ -93,7 +93,8 @@
 | `/manager/notifications` | 센터 매니저 | 신규 주문·후기·예약·취소 알림, 전체 읽음 | `accounts`, `notifications`; `mark_notifications_read` | `fetchMyCenters()` 없음. 수신 계정 RLS에 의존. 화면 사전 차단은 **미완성**, Realtime은 **운영 설정 필요** |
 | `/manager/holidays` | 센터 매니저 | 휴무일 추가·삭제, 관련 수업·예약 정리 | `center_holidays`; `add_holiday_safe` | `fetchMyCenters()` 사용, RPC/RLS 최종 제한. **구현됨** |
 | `/manager/center-info` | 센터 매니저 | 소개·사진·블록·주소·좌표·연락처·SNS·종목 편집 | `centers`, `service_categories`, `avatars` Storage | `fetchMyCenters()` 사용. `facility.info` UI 선검사 없음. **구현됨** |
-| `/manager/settings` | 센터 매니저 | 예약·취소·폐강·대기 등 센터 운영 설정 + 플랫폼 구독(센터→플랫폼 결제) 상태 조회 | `center_settings`, `center_subscriptions`, `subscription_plans` | `fetchMyCenters()` 사용. `facility.operation` UI 선검사 없음. 운영 설정은 **구현됨**. 구독 섹션은 조회는 **구현됨**이나 카드 등록은 `NEXT_PUBLIC_BILLING_ENABLED` 꺼짐(기본값)이라 **미완성**([TODO.md P0-8](./TODO.md)) |
+| `/manager/settings` | 센터 매니저 | 예약·취소·폐강·대기 등 센터 운영 설정 | `center_settings` | `fetchMyCenters()` 사용. `facility.operation` UI 선검사 없음. **구현됨** |
+| `/manager/subscription` | 센터 매니저 | 플랫폼 구독(센터→플랫폼 결제) 상태 조회 — 원래 `/manager/settings`의 한 섹션이었으나 성격이 달라 별도 메뉴로 분리(2026-08-26) | `center_subscriptions`, `subscription_plans` | `fetchMyCenters()` 사용. `facility.operation` UI 선검사 없음. 조회는 **구현됨**이나 카드 등록은 `NEXT_PUBLIC_BILLING_ENABLED` 꺼짐(기본값)이라 **미완성**([TODO.md P0-8](./TODO.md)) |
 | `/manager/staff` | 센터 매니저·오너 | 스태프 초대·역할 변경·삭제, 역할별 권한 편집 | `accounts`, `manager_centers`, `center_roles`, `permissions`, `role_permissions` | `fetchMyCenters()` 사용. 최종 권한은 RLS와 `has_permission()`에 의존. **구현됨** |
 | `/manager/staff/permissions` | 센터 매니저·오너 | 특정 스태프 개인별 권한 allow/deny 오버라이드 | `accounts`, `manager_centers`, `center_roles`, `permissions`, `role_permissions`, `account_center_permissions` | `fetchMyCenters()` 없음. URL query의 대상과 RLS에 의존. 오너 전용 사전 가드는 없어 화면 접근 처리는 **미완성** |
 
@@ -115,7 +116,7 @@
 | `/login` 카카오·애플 로그인 | **운영 설정 필요** |
 | `/reservation` 국경일 | 한 건 하드코딩으로 **미완성** |
 | `/checkout` 실제 결제 | 주문 접수만 구현되어 **미완성** |
-| `/manager/settings` 플랫폼 구독 카드 등록, `/admin/subscriptions` | 토스 자동결제 계약 심사 대기로 조회만 되고 실제 카드 등록/청구는 **미완성**([TODO.md P0-8](./TODO.md)) |
+| `/manager/subscription` 카드 등록, `/admin/subscriptions` | 토스 자동결제 계약 심사 대기로 조회만 되고 실제 카드 등록/청구는 **미완성**([TODO.md P0-8](./TODO.md)) |
 | `/purchases` 미발급 주문 취소 | **미완성** |
 | `/settings/notifications` | 로컬 설정만 있고 실제 발송은 **미완성** |
 | 알림·문의 Realtime | 운영 Supabase 설정 **확인 필요 / 운영 설정 필요** |

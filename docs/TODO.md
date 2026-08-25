@@ -280,7 +280,7 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 |---|---|
 | 우선순위 | P0 |
 | 현재 상태 | **DB 구조·RLS·조회 화면 완료 + SQL 적용 완료 + 실 화면 QA 확인. 실제 카드 등록/청구만 외부 승인(토스 자동결제 계약 심사) 대기** |
-| 근거 파일 | `add_center_platform_subscription.sql`(적용 완료), `rollback_add_center_platform_subscription.sql`, `lib/centerSubscription.ts`(신규), `app/manager/settings/page.tsx`("플랫폼 구독" 섹션 추가), `app/admin/subscriptions/page.tsx`(신규), `app/admin/page.tsx`(메뉴 추가) |
+| 근거 파일 | `add_center_platform_subscription.sql`(적용 완료), `rollback_add_center_platform_subscription.sql`, `lib/centerSubscription.ts`(신규), `app/manager/subscription/page.tsx`(신규, 원래 `/manager/settings`의 한 섹션이었으나 별도 메뉴로 분리), `app/manager/page.tsx`(메뉴 추가), `app/admin/subscriptions/page.tsx`(신규), `app/admin/page.tsx`(메뉴 추가) |
 | 완료 조건 | 토스페이먼츠 자동결제 계약 심사 통과 후: (1) `NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY`/`NEXT_PUBLIC_BILLING_ENABLED=true` 운영 환경변수 설정, (2) 카드 등록 성공 시 토스가 반환하는 authKey를 billing_key로 교환해 `center_subscriptions`에 저장하는 서버 전용 처리 구현(토스 시크릿 키 필요 — 이 앱은 API 서버가 없어 별도 구축 필요, 예: Supabase Edge Function), (3) 매월 자동 청구 실행(pg_cron 또는 외부 스케줄러가 토스 API 호출 → `center_subscription_charges`에 성공/실패 기록 → `center_subscriptions.status`/`next_billing_date` 갱신), (4) 결제 실패(연체)·구독 해지 시 정책(유예기간, 기능 제한 여부 등)을 사업 결정 후 반영 |
 | P0-1과의 관계 | P0-1(회원 → 센터 결제)과 결제 주체·대상이 다른 별개 축. 둘 다 "사업자/계약 승인 대기"라는 같은 종류의 외부 차단 요인을 공유함 |
 | 완료된 것 | 3개 테이블(`subscription_plans`/`center_subscriptions`/`center_subscription_charges`) + RLS(소속 매니저 SELECT만, INSERT/UPDATE는 service_role 전용 — 일반 사용자는 RLS로 차단), 센터 생성 시 기본 구독 행 자동 생성 트리거, 매니저 설정 화면의 상태 조회 섹션, 운영자 전용 전체 현황 조회 화면(`/admin/subscriptions`). 카드 등록 버튼은 `NEXT_PUBLIC_BILLING_ENABLED`가 꺼져 있으면(기본값) 비활성화되고 "구독 결제 연동 준비 중이에요" 안내만 표시 — 실제 토스 SDK 호출 경로는 이 플래그로 완전히 막혀 있음 |
@@ -294,6 +294,12 @@ SQL Editor에서 적용, 라이브 재조회로 3개 테이블 생성/센터 454
 즉시 원복, `sec009-batch-a2-rls.test.ts`와 동일한 패턴) `/admin/subscriptions`가 전체 454개
 센터 현황을 에러 없이 목록으로 보여주는 것까지 확인. `npm run build`/유닛테스트 246개
 재확인 통과(이 워크트리에 `.env.local`이 없어 최초 빌드가 실패했던 것도 함께 정리).
+
+**2026-08-26 메뉴 분리**: 사용자 QA 피드백 — "플랫폼 구독"이 회원/예약 운영 설정과 성격이
+다른 축이라 `/manager/settings`에 묻혀 있으면 안 됨. `app/manager/subscription/page.tsx`
+(신규)로 완전히 분리하고 `/manager/settings`에서는 제거, 관리홈 메뉴 목록 맨 아래에 별도
+항목 추가(같은 `facility.operation` 권한 키 유지). Playwright로 메뉴 노출/설정 화면에서
+섹션 제거/새 페이지 정상 렌더링까지 재확인.
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 

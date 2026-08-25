@@ -414,6 +414,15 @@ export default function ManagerDashboard() {
           <span className="chevron">›</span>
         </a>
       )}
+      {/* 원래 운영 설정 안의 한 섹션이었으나, 회원/예약 운영 설정과 성격이 다른 축(우리
+          쪽 매출·계약)이라 사용자 요청으로 별도 메뉴로 분리(2026-08-26). 같은 권한 키
+          유지(원래 그 페이지의 일부였으므로 접근 범위를 그대로 유지). */}
+      {canSeeMenu("facility.operation") && (
+        <a className="list-row" href="/manager/subscription">
+          <div className="left"><span className="icon"><UiIcon name="card" /></span>플랫폼 구독</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
       <div className="manager-menu-end-spacer" aria-hidden="true" />
 
       {/* 예약자 명단 시트 */}

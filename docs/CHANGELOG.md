@@ -8,6 +8,17 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-26 — P0-8 후속: "플랫폼 구독"을 운영 설정 안 섹션에서 별도 메뉴로 분리
+
+사용자 QA 피드백 — 회원/예약 운영 설정과 성격이 다른 축(우리 쪽 매출·계약)이라 운영
+설정 화면에 묻혀 있으면 안 됨. `app/manager/settings/page.tsx`에서 구독 섹션을 완전히
+제거하고, 신규 `app/manager/subscription/page.tsx`로 분리. 관리홈(`app/manager/page.tsx`)
+"OO 관리" 메뉴 목록 맨 아래에 "플랫폼 구독" 항목 추가(운영 설정과 동일한
+`facility.operation` 권한 키로 노출 — 원래 그 페이지의 일부였으므로 접근 범위 유지).
+`docs/ROUTES.md`도 라우트 분리에 맞춰 갱신. Playwright로 (1) 관리홈에 새 메뉴 항목 노출
+(2) 운영 설정 화면에서 구독 섹션 완전히 사라짐 (3) 새 페이지가 실 데이터로 정상
+렌더링되는 것까지 확인. `npm run build`/유닛테스트 246개 재확인 통과.
+
 ## 2026-08-26 — P0-8 SQL 적용 + 실 화면 QA 완료
 
 `add_center_platform_subscription.sql`을 SQL Editor에서 적용, 라이브 재조회로 3개 테이블
