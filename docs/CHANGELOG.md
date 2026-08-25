@@ -8,6 +8,34 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-25 — 센터 → 플랫폼 구독료(자동결제/빌링) DB 구조 + 조회 화면(P0-8, SQL 미적용)
+
+센터가 플랫폼에 내는 월 구독료 기능의 뼈대를 추가. 토스페이먼츠 자동결제는 계약 심사가
+끝나야 카드 등록(빌링키 발급)이 가능해(심사 전 테스트 키로 시도하면 에러 발생, 토스 공식
+문서로 확인됨) 아직 실제 결제를 테스트할 수 없는 상태 — 그래서 이번 배치는 지금 할 수 있는
+것(DB 구조·RLS·조회 화면)까지만 다루고, 실제 카드 등록 버튼은 `NEXT_PUBLIC_BILLING_ENABLED`
+플래그로 꺼둔 채 코드만 준비했다.
+
+- `add_center_platform_subscription.sql`(신규, **SQL 미적용 — 사용자 승인 후 적용 필요**) +
+  `rollback_add_center_platform_subscription.sql`: `subscription_plans`(구독 플랜 카탈로그,
+  공개 조회 + 운영자만 관리), `center_subscriptions`(센터당 1행, status로 생애주기 관리,
+  일반 사용자 INSERT/UPDATE 정책 없음 — service_role 전용), `center_subscription_charges`(청구
+  이력, append 전용) 3개 테이블 + RLS. 센터 생성 시 기본 플랜으로 `pending_billing_setup` 행을
+  자동 생성하는 트리거(`create_default_center_roles`와 동일 패턴) + 기존 센터 backfill.
+- `lib/centerSubscription.ts`(신규): 구독 조회 함수 + 토스 자동결제 SDK 연동 함수(스크립트
+  동적 로드 + `requestBillingAuth` 호출) — `NEXT_PUBLIC_BILLING_ENABLED`가 정확히 `"true"`가
+  아니면 항상 예외를 던져 실행 경로를 이중으로 차단.
+- `app/manager/settings/page.tsx`: "플랫폼 구독" 섹션 추가(플랜/상태/다음 결제일/등록 카드
+  표시, 카드 등록 버튼은 플래그 꺼짐 시 비활성 + 안내 문구).
+- `app/admin/subscriptions/page.tsx`(신규) + `app/admin/page.tsx`: 운영자용 전체 센터 구독
+  현황 조회 화면(조회 전용, 상태 변경 액션 없음), 운영자 허브 메뉴에 "구독 현황" 추가.
+- `.env.local.example`: `NEXT_PUBLIC_BILLING_ENABLED`, `NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY`
+  추가.
+- 의도적으로 이번 배치에 없는 것: 가입/센터 등록 시점에 결제를 강제하는 흐름(매니저가 설정
+  화면에 스스로 들어가야 보이는 방식으로만 구현), 실제 authKey→billing_key 저장 처리(서버
+  필요), 매월 자동 청구 실행(pg_cron/외부 스케줄러 필요), 구독 해지 화면. 근거와 완료 조건은
+  `docs/TODO.md` P0-8 참고.
+
 ## 2026-08-25 — 동명 수강권 구분 표시 준비(A-8, SQL 미적용)
 
 이름·만료일이 완전히 같은 수강권이 여러 개면 예약 확인 화면에서 구분할 방법이 없던 문제

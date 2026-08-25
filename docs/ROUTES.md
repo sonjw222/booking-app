@@ -7,7 +7,7 @@
 | 문서 목적 | 실제 App Router 화면, 사용자 유형, 주요 기능, 데이터 의존성과 접근 통제의 기준선 |
 | 최종 검증일 | 2026-07-28 |
 | 검증 대상 | `app/**/page.tsx`와 각 페이지가 호출하는 `lib/*.ts` |
-| 실제 페이지 수 | 41개 |
+| 실제 페이지 수 | 42개 |
 | 한계 | 운영 Supabase의 RLS·Realtime·migration 적용 상태는 저장소만으로 확인할 수 없음 |
 | 관련 문서 | [요구사항과 상태](./REQUIREMENTS.md) · [DB/RLS/RPC](./DATABASE.md) · [후속 작업](./TODO.md) |
 
@@ -93,7 +93,7 @@
 | `/manager/notifications` | 센터 매니저 | 신규 주문·후기·예약·취소 알림, 전체 읽음 | `accounts`, `notifications`; `mark_notifications_read` | `fetchMyCenters()` 없음. 수신 계정 RLS에 의존. 화면 사전 차단은 **미완성**, Realtime은 **운영 설정 필요** |
 | `/manager/holidays` | 센터 매니저 | 휴무일 추가·삭제, 관련 수업·예약 정리 | `center_holidays`; `add_holiday_safe` | `fetchMyCenters()` 사용, RPC/RLS 최종 제한. **구현됨** |
 | `/manager/center-info` | 센터 매니저 | 소개·사진·블록·주소·좌표·연락처·SNS·종목 편집 | `centers`, `service_categories`, `avatars` Storage | `fetchMyCenters()` 사용. `facility.info` UI 선검사 없음. **구현됨** |
-| `/manager/settings` | 센터 매니저 | 예약·취소·폐강·대기 등 센터 운영 설정 | `center_settings` | `fetchMyCenters()` 사용. `facility.operation` UI 선검사 없음. **구현됨** |
+| `/manager/settings` | 센터 매니저 | 예약·취소·폐강·대기 등 센터 운영 설정 + 플랫폼 구독(센터→플랫폼 결제) 상태 조회 | `center_settings`, `center_subscriptions`, `subscription_plans` | `fetchMyCenters()` 사용. `facility.operation` UI 선검사 없음. 운영 설정은 **구현됨**. 구독 섹션은 조회는 **구현됨**이나 카드 등록은 `NEXT_PUBLIC_BILLING_ENABLED` 꺼짐(기본값)이라 **미완성**([TODO.md P0-8](./TODO.md)) |
 | `/manager/staff` | 센터 매니저·오너 | 스태프 초대·역할 변경·삭제, 역할별 권한 편집 | `accounts`, `manager_centers`, `center_roles`, `permissions`, `role_permissions` | `fetchMyCenters()` 사용. 최종 권한은 RLS와 `has_permission()`에 의존. **구현됨** |
 | `/manager/staff/permissions` | 센터 매니저·오너 | 특정 스태프 개인별 권한 allow/deny 오버라이드 | `accounts`, `manager_centers`, `center_roles`, `permissions`, `role_permissions`, `account_center_permissions` | `fetchMyCenters()` 없음. URL query의 대상과 RLS에 의존. 오너 전용 사전 가드는 없어 화면 접근 처리는 **미완성** |
 
@@ -105,6 +105,7 @@
 | `/admin/centers` | 플랫폼 운영자 | 센터 대기·승인·반려·복원, 사업자 정보 확인 | `accounts`, `centers`, `business-licenses` Storage | `checkPlatformAdmin()` 사용. 상태 변경은 RLS/RPC 보호. **구현됨** |
 | `/admin/categories` | 플랫폼 운영자 | 서비스 종목 추가·삭제 | `service_categories` | `checkPlatformAdmin()`으로 콘텐츠를 차단(ACL-001, 2026-08-01 적용). RLS 최종 제한. **구현됨** |
 | `/admin/banners` | 플랫폼 운영자 | 홈 배너 추가·삭제·노출 토글·순서 | `home_banners` | `checkPlatformAdmin()`으로 콘텐츠를 차단(ACL-001, 2026-08-01 적용). RLS 최종 제한. **구현됨** |
+| `/admin/subscriptions` | 플랫폼 운영자 | 전체 센터의 플랫폼 구독 현황 조회(플랜/상태/다음 결제일/등록 카드) | `center_subscriptions`, `subscription_plans`, `centers` | `checkPlatformAdmin()`으로 콘텐츠를 차단. RLS 최종 제한. 조회 전용(상태 변경 액션 없음). **구현됨**(신규, 2026-08-25) |
 
 ## 7. 미완성·운영 설정 필요 상태 요약
 
@@ -114,6 +115,7 @@
 | `/login` 카카오·애플 로그인 | **운영 설정 필요** |
 | `/reservation` 국경일 | 한 건 하드코딩으로 **미완성** |
 | `/checkout` 실제 결제 | 주문 접수만 구현되어 **미완성** |
+| `/manager/settings` 플랫폼 구독 카드 등록, `/admin/subscriptions` | 토스 자동결제 계약 심사 대기로 조회만 되고 실제 카드 등록/청구는 **미완성**([TODO.md P0-8](./TODO.md)) |
 | `/purchases` 미발급 주문 취소 | **미완성** |
 | `/settings/notifications` | 로컬 설정만 있고 실제 발송은 **미완성** |
 | 알림·문의 Realtime | 운영 Supabase 설정 **확인 필요 / 운영 설정 필요** |
@@ -126,11 +128,11 @@
 
 ## 8. 실제 라우트 통계
 
-- 전체 `page.tsx`: 41개
+- 전체 `page.tsx`: 42개
 - 공개·공용: 5개
 - 회원·로컬 설정: 13개
 - 센터 매니저: 19개
-- 플랫폼 운영자: 4개
+- 플랫폼 운영자: 5개
 - 동적 세그먼트: `/category/[label]`, `/center/[id]`
 
 이 문서에는 실제 `app/**/page.tsx`가 있는 화면만 포함합니다. `class_types`, 락커, 수강권 양도, 전자계약, 커뮤니티, 대회정보, 스태프 급여·근무일정처럼 스키마에만 있거나 화면 연결이 확인되지 않은 기능은 라우트로 기록하지 않습니다. 해당 DB 객체의 상태는 [DATABASE.md](./DATABASE.md)를 참고합니다.
