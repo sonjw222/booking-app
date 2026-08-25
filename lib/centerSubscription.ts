@@ -126,6 +126,30 @@ export async function adminCancelCenterSubscription(centerId: string): Promise<v
   if (error) throw new Error("구독 취소에 실패했어요: " + error.message);
 }
 
+// 운영자 - 취소된 구독 재개(add_admin_reactivate_center_subscription.sql의 RPC).
+// 취소를 되돌릴 방법이 아예 없던 것을 QA 중 실제로 겪고 나서 추가함 — 카드가 등록돼
+// 있으면 'active', 없으면 신규 센터와 동일한 'pending_billing_setup'으로 복귀.
+export async function adminReactivateCenterSubscription(centerId: string): Promise<void> {
+  const { error } = await supabase.rpc("admin_reactivate_center_subscription", { p_center_id: centerId });
+  if (error) throw new Error("구독 재개에 실패했어요: " + error.message);
+}
+
+// 오너 셀프서비스 - 본인 센터의 구독 플랜 변경(add_owner_center_subscription_actions.sql).
+// 새 플랜의 제한을 현재 사용량이 이미 초과했으면 RPC가 거부한다(사용자 결정) — 에러
+// 메시지를 그대로 보여주면 "룸을 먼저 정리해주세요" 같은 구체적 안내가 된다.
+export async function centerChangeOwnSubscriptionPlan(centerId: string, planId: string): Promise<void> {
+  const { error } = await supabase.rpc("center_change_own_subscription_plan", {
+    p_center_id: centerId, p_plan_id: planId,
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+}
+
+// 오너 셀프서비스 - 본인 센터 구독 취소. 상태만 바뀌고 기능 제한은 없음(사용자 결정).
+export async function centerCancelOwnSubscription(centerId: string): Promise<void> {
+  const { error } = await supabase.rpc("center_cancel_own_subscription", { p_center_id: centerId });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+}
+
 // ------------------------------------------------------------
 // 토스 자동결제 카드 등록 (플래그 on일 때만 실제로 호출됨)
 // ------------------------------------------------------------

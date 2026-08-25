@@ -14,7 +14,7 @@ import UiIcon from "../../components/UiIcon";
 import { checkPlatformAdmin } from "../../../lib/admin";
 import {
   fetchAllCenterSubscriptions, adminSetCenterSubscriptionPlan, adminCancelCenterSubscription,
-  STATUS_LABEL, type AdminCenterSubscription, type SubscriptionStatus,
+  adminReactivateCenterSubscription, STATUS_LABEL, type AdminCenterSubscription, type SubscriptionStatus,
 } from "../../../lib/centerSubscription";
 import { fetchSubscriptionPlans, type SubscriptionPlan } from "../../../lib/operator";
 
@@ -74,6 +74,18 @@ export default function AdminSubscriptionsPage() {
     try {
       await adminCancelCenterSubscription(row.centerId);
       showToast("구독을 취소했어요");
+      await load();
+    } catch (e: any) { setError(e.message); }
+    finally { setBusyId(null); }
+  }
+
+  async function handleReactivate(row: AdminCenterSubscription) {
+    const ok = await globalThis.appConfirm(`'${row.centerName}'의 취소된 구독을 재개할까요?`);
+    if (!ok) return;
+    setBusyId(row.centerId); setError(null);
+    try {
+      await adminReactivateCenterSubscription(row.centerId);
+      showToast("구독을 재개했어요");
       await load();
     } catch (e: any) { setError(e.message); }
     finally { setBusyId(null); }
@@ -155,7 +167,11 @@ export default function AdminSubscriptionsPage() {
                 </select>
               </div>
 
-              {r.status !== "canceled" && (
+              {r.status === "canceled" ? (
+                <button className="primary-btn" style={{ marginTop: 6 }} disabled={busyId === r.centerId} onClick={() => handleReactivate(r)}>
+                  구독 재개
+                </button>
+              ) : (
                 <button className="profile-del" style={{ marginTop: 6 }} disabled={busyId === r.centerId} onClick={() => handleCancel(r)}>
                   구독 취소
                 </button>
