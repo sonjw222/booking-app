@@ -207,12 +207,12 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 권한 키를 재사용하고 있어, 세분권한 도입 시 의미가 부정확할 수 있습니다(이것도 SQL 필요) —
 이 부수 발견은 아직 미해결로 남아있습니다(위 "확인 경위" 참고, 핵심 버그만 NOTIF-001에서
 같이 해결됨).
-### P0-7. (신규, 2026-08-14~15 관측) 공유 dev Supabase 통합/E2E fixture 데이터가 반복적으로 오염됨 — 원인 미확인
+### P0-7. (신규, 2026-08-14~15 관측, 2026-08-26 P2로 하향) 공유 dev Supabase 통합/E2E fixture 데이터가 반복적으로 오염됨 — 원인 미확인
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P0 |
-| 현재 상태 | **확인 필요 — 재현은 반복 확인됐으나 근본 원인 미확정** |
+| 우선순위 | ~~P0~~ → **P2**(2026-08-26 하향 — 아래 2026-08-26 항목 참고: 전파 경로는 실측으로 막혀 있음 확인, 근본 원인만 미확정으로 남음) |
+| 현재 상태 | **오염의 다음 실행 전파는 구조적으로 차단됨(실측 확인) — 근본 원인(누가 왜 오염시키는지)은 여전히 미확정, 재발 시 기회적으로 조사** |
 | 근거 파일 | `tests/integration/setup.ts`(`TEST_CENTER_ID`, `getOrCreateOwnedTestCenter()`), `tests/integration/operational-settings-wiring.test.ts`, `tests/integration/auto-book-membership-security.test.ts` |
 | 관측된 증상 | 공유 fixture 센터(`3937eb89-3803-43e9-9a29-e893f779df1a`, `TEST_CENTER_ID`)의 `center_settings.daily_book_limit_enabled`가 반복적으로 `true(1회)`로 남아, 이 설정과 전혀 무관한 다수 테스트 파일(`attendance-policy`, `auto-book-membership-security`, `class-deadline-override-and-private`, `notification-center-isolation`, `operational-settings-wiring`, `reservation-cancel-grace-period` 등)이 연쇄적으로 실패함. 2026-08-14 하루에만 사용자가 직접 `false/null`로 리셋했는데도 짧은 시간 내 다시 `true`로 재발(최소 2회 관측). |
 | 조사한 것과 배제한 가설 | (1) `manager_centers.role_id`/`center_id` 불일치 트리거(`manager_centers_enforce_role_center_match`)가 원인이라는 가설 — 다른 세션(PR #50 담당)이 두 시점에 직접 조회해 **role_id/center_id가 정상 매칭임을 확인, 배제됨**. (2) Integration 실패 로그에 반복되던 `P0001` 에러코드로 특정 트리거를 지목하려 했으나, 이 코드베이스에 커스텀 `RAISE EXCEPTION`이 광범위하게 쓰여 P0001만으로는 특정 원인을 지목할 수 없음(오판이었음, 기록으로 남김). |
@@ -273,6 +273,36 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 것으로 추정되나 이번 조사로도 그 경로 자체는 특정하지 못했다. **PR #99와는 무관함이 위 DB
 조회로 확인됐다** — `app/cart/page.tsx`는 memberships/classes/fetchMonthData 어느 것도
 건드리지 않음.
+
+**2026-08-26 완료 조건 (a) 커버리지 실측 + 백스톱 실동작 검증**: 이번 세션에서 다시 이
+항목을 붙잡고, 두 가지를 실제로 확인했다.
+1. `grep`으로 `tests/integration/*.test.ts` 전체를 훑어 `center_settings`를 변경하는
+   파일 10개(`attendance-policy`, `auto-book-membership-security`, `class-revenue`,
+   `class-deadline-override-and-private`, `daily-book-limit-wiring`,
+   `manager-set-attendance-membership-integrity`, `operational-settings-wiring`,
+   `reserve-class-block-after-start`, `reservation-cancel-grace-period`,
+   `private-class-capacity`)를 전부 확인 — **10개 전부 `getOrCreateOwnedTestCenter()`
+   (또는 그 안에서 파생되는 `createIsolatedOwnedCenter()`)를 거친다.** 즉 이 백스톱을
+   우회해서 `center_settings`를 건드리는 파일은 하나도 없음을 실측으로 확인(과거엔
+   추정이었음). `TEST_CENTER_ID`(고정 공유 fixture)를 직접 쓰는 파일 3개
+   (`payment-lifecycle`/`payment-security`/`sync-test-payment-center-member`)는
+   `center_settings`를 아예 건드리지 않아 이 문제와 무관함도 함께 확인.
+2. 실제 코드(재구현이 아니라 `setup.ts`의 `getOrCreateOwnedTestCenter()` 그대로)를
+   임시 통합테스트로 호출해 라이브 검증: managerA의 공유 테스트센터
+   `center_settings.daily_book_limit_enabled`를 서비스 롤로 일부러 `true`로
+   오염시킨 뒤 `getOrCreateOwnedTestCenter(managerA)`를 다시 호출했더니 실제로
+   `false`/`null`로 되돌아감을 확인(`npx vitest run --config
+   vitest.integration.config.ts`로 실행, 검증 후 임시 파일은 삭제).
+
+**결론 및 우선순위 하향 제안**: 근본 원인(정확히 어떤 테스트가 무엇 때문에 오염시키는지)은
+여전히 미확정이지만, **오염이 다음 실행까지 전파되는 경로 자체는 100% 커버되고 실제로
+동작함을 오늘 실측으로 확인**했다 — 이게 P0-7이 원래 문제 삼던 "재실행해도 계속 재발한다"는
+증상의 핵심이었으므로, 실질적 피해 범위는 "그 순간 동시 실행 중이던 다른 세션의 실행 1회"로
+제한된다(다음 실행부터는 항상 깨끗한 상태로 시작). 이 정도면 P0(핵심 거래 차단급)로 남겨둘
+근거가 약하다고 판단 — **P2로 하향을 제안**한다. 근본 원인 확정은 실제 오염이 발생한
+"현장"을 서비스 롤 키로 잡아야 하는데, 이건 예측 불가능한 타이밍이라 지금 능동적으로
+재현할 수 없다 — 앞으로 우연히 다시 관측되면(예: CI가 이 패턴으로 또 실패하면) 그때
+서비스 롤 키로 라이브 조회해 마저 확정하는 것으로 남겨둔다.
 
 ### P0-8. (신규, 2026-08-25) 센터 → 플랫폼 구독료(자동결제/빌링) — 토스 자동결제 계약 심사 대기
 
