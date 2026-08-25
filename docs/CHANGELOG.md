@@ -8,6 +8,23 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-25 — P0-1 후속: 실 QA 중 발견한 토스 결제 실패 원인 2건 수정 (SDK v1→v2, 키 종류 착오)
+
+SQL 적용 후 사용자가 실제 결제 버튼을 눌러보니 매번 `COMMON_ERROR`(처리 중 오류가
+발생했습니다)로 실패. Playwright로 로그인→체크아웃→결제 클릭을 직접 재현하고 네트워크
+요청을 캡처해 근본 원인 규명: (1) `js.tosspayments.com/v1` SDK가 내부 "v1-adapter" 호환
+레이어에서 `customerKey`를 모든 요청에 고정 리터럴로 보내던 결함 — v2 SDK
+(`js.tosspayments.com/v2/standard`)로 전환, `TossPaymentProvider`를 v2 API
+(`payment({customerKey}).requestPayment(...)`, `amount:{value,currency}`)로 재작성하고
+로그인 사용자의 auth uid를 `customerKey`로 전달. (2) 이어서 뜬
+`NotSupportedWidgetKeyError` — 처음 쓴 키(`test_gck_docs_...`, "주문서형·결제창형 연동
+키")가 "결제위젯"(인라인 UI) 전용이었고, 이 프로젝트가 쓰는 `requestPayment()` 팝업 방식엔
+"API 개별 연동 키"(`test_ck_.../test_sk_...`, 마찬가지로 사업자 심사 불필요)가 필요했음 —
+사용자가 올바른 키로 교체 후 Playwright 재현에서 실제 결제 게이트웨이 카드 선택 화면까지
+정상 진입 확인(에러 없음). 부수적으로 `.env.local`의 개행 누락으로 손상돼 있던
+`NEXT_PUBLIC_VAPID_PUBLIC_KEY` 값도 함께 정리. `npm run build` + 유닛테스트 246개 재확인
+통과. 자세한 내용은 `docs/TODO.md` P0-1 참고.
+
 ## 2026-08-25 — P0-1 토스페이먼츠 결제창(카드) 연동 — 이 프로젝트 최초의 app/api 서버 라우트 추가
 
 사업자 등록 완료로 재개. 토스 개발자센터 공용 테스트 키(사업자 심사 불필요)로

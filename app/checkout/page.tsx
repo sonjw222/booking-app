@@ -187,6 +187,7 @@ function CheckoutContent() {
       const created = await paymentService.createPayment({
         orderId, amount: finalAmount, orderName: product.name,
         customerEmail: userData.user?.email ?? undefined,
+        customerKey: userData.user?.id,
         successUrl, failUrl,
       });
 

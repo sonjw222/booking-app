@@ -44,9 +44,9 @@
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **토스페이먼츠 결제창(카드) 연동 코드 완료 — 개발자센터 공용 테스트 키로 구현·자동검증. SQL 미적용(사용자 적용 대기), 사업자 명의 실 운영 키 전환은 별도(전자결제 신청 심사 필요)** |
-| 근거 파일 | `app/checkout/page.tsx`, `app/checkout/success/page.tsx`(신규), `app/checkout/fail/page.tsx`(신규), `app/api/payments/confirm/route.ts`(신규, 이 프로젝트 최초의 app/api 라우트), `app/api/payments/cancel/route.ts`(신규), `app/layout.tsx`(토스 SDK script 태그), `lib/orders.ts`, `lib/payments/*`, `lib/payments/tossPaymentApi.ts`(신규), `add_payment_test_provider.sql`, `add_confirm_real_payment.sql`(신규), `rollback_add_confirm_real_payment.sql`(신규), `tests/integration/confirm-real-payment.test.ts`(신규), `add_orders.sql`, `schema.sql` |
-| 완료 조건 | ~~Toss/PortOne 실제 운영 키로~~ 개발자센터 테스트 키(문서 공용키, 사업자 심사 불필요)로 카드 결제 생성·성공·취소 흐름 코드 완료. 남은 것: (1) 사용자가 `add_confirm_real_payment.sql` SQL Editor 적용 (2) 실제 브라우저에서 결제창 열어 테스트카드로 왕복 확인(자동화 어려움 — 아래 참고) (3) 나중에 사업자 명의 "전자결제 신청" 심사 통과 후 `.env.local`의 `NEXT_PUBLIC_TOSS_CLIENT_KEY`/`TOSS_SECRET_KEY`를 실 운영 키로 교체 |
+| 현재 상태 | **토스페이먼츠 결제창(카드) 연동 완료 — SQL 적용 완료, 실제 결제 게이트웨이 UI까지 로딩 확인(카드 선택 화면 진입, 에러 없음). 카드번호 직접 입력해 끝까지 승인시키는 마지막 수동 확인만 남음. 사업자 명의 실 운영 키 전환은 별도(전자결제 신청 심사 필요)** |
+| 근거 파일 | `app/checkout/page.tsx`, `app/checkout/success/page.tsx`(신규), `app/checkout/fail/page.tsx`(신규), `app/api/payments/confirm/route.ts`(신규, 이 프로젝트 최초의 app/api 라우트), `app/api/payments/cancel/route.ts`(신규), `app/layout.tsx`(토스 SDK v2 script 태그), `lib/orders.ts`, `lib/payments/*`, `lib/payments/tossPaymentApi.ts`(신규), `add_payment_test_provider.sql`, `add_confirm_real_payment.sql`(신규, 적용 완료), `rollback_add_confirm_real_payment.sql`(신규), `tests/integration/confirm-real-payment.test.ts`(신규), `add_orders.sql`, `schema.sql` |
+| 완료 조건 | ~~Toss/PortOne 실제 운영 키로~~ 개발자센터 테스트 키(API 개별 연동 키, 사업자 심사 불필요)로 카드 결제 생성·성공·취소 흐름 코드 완료 + Playwright로 결제 게이트웨이 UI 진입까지 자동 재현 확인. 남은 것: (1) 실제 카드번호 입력해 결제 완료까지 왕복 수동 확인 1회 (2) 나중에 사업자 명의 "전자결제 신청" 심사 통과 후 `.env.local`의 `NEXT_PUBLIC_TOSS_CLIENT_KEY`/`TOSS_SECRET_KEY`를 실 운영 키로 교체 |
 | 관련 문서 | [REQUIREMENTS 6-1, 10-4](./REQUIREMENTS.md), [DATABASE 4-3, 7-3](./DATABASE.md), [ROUTES `/checkout`](./ROUTES.md) |
 
 **2026-08-25 진행 상황**: 사업자 등록 완료로 재개. 토스페이먼츠 개발자센터에 가입해 "주문서형·
@@ -81,8 +81,38 @@
   `payment-security` 통합테스트 8개)도 리팩터 전 상태로 재확인 통과.
 
 **실 브라우저 테스트가 필요한 이유**: 토스 결제창은 iframe/팝업 기반 UI라 자동화 테스트로
-왕복시키기 까다롭다(카드번호 입력 등 실제 폼 상호작용 필요). `npm run dev`로 띄운 뒤 결제
-화면에서 실제로 눌러서 토스 테스트카드 번호(토스 문서 안내)로 확인하는 수동 QA가 필요하다.
+왕복시키기 까다롭다(카드번호 입력 등 실제 폼 상호작용 필요). 다만 결제창을 여는 시점까지는
+Playwright(headless)로 자동 재현해 검증했다 — 아래 2026-08-25 항목 참고. 카드 정보 입력 →
+승인까지의 마지막 구간만 `npm run dev`로 띄운 뒤 실제로 눌러서 확인하면 된다.
+
+**2026-08-25 실 브라우저 QA 중 발견한 버그 2건(둘 다 수정 완료)**:
+
+1. **v1 SDK(`js.tosspayments.com/v1`)의 내부 호환 어댑터 결함** — 사용자가 실제로 결제
+   버튼을 눌렀더니 매번 `"COMMON_ERROR": "처리 중 오류가 발생했습니다"`로 실패. 원인 불명
+   상태에서 Playwright로 브라우저를 직접 띄워 로그인→체크아웃→결제 클릭까지 재현하고
+   네트워크 요청 전체를 캡처해 근본 원인을 찾음: v1 SDK는 내부적으로 신규 v2 결제
+   게이트웨이로 요청을 넘기는 "v1-adapter" 레이어를 거치는데, 이 어댑터가 `customerKey`를
+   모든 요청에 `"v1-adapter-payment"`라는 고정 리터럴 값으로 보내고 있었다(실제 로그인
+   사용자와 무관하게 항상 동일값). 이게 `px-payment-parameters` 호출의 `COMMON_ERROR` 원인으로
+   추정됨. **조치**: `app/layout.tsx`의 SDK를 `js.tosspayments.com/v1` → `v2/standard`로
+   교체, `TossPaymentProvider`를 v2 API(`tossPayments.payment({customerKey}).requestPayment(...)`,
+   `amount`가 `{value, currency}` 객체, `customerKey`는 로그인 사용자의 auth uid)로 재작성.
+   `CreatePaymentInput`에 `customerKey` 필드 추가, `app/checkout/page.tsx`가
+   `supabase.auth.getUser().id`를 전달하도록 수정.
+2. **키 종류 착오** — v2로 바꾼 뒤 새 에러 `NotSupportedWidgetKeyError: "API 개별 연동 키의
+   클라이언트 키로 SDK를 연동해주세요. 결제위젯 연동 키는 지원하지 않습니다."` 발생. 처음에
+   쓴 `test_gck_docs_.../test_gsk_docs_...`(토스 개발자센터의 "주문서형·결제창형 연동 키"
+   섹션)는 **"결제위젯"(페이지에 UI를 직접 그려넣는 방식) 전용 키**였고, 이 프로젝트가 쓰는
+   `payment().requestPayment()` 팝업/리다이렉트 방식에는 **"API 개별 연동 키"** 섹션의 키
+   (`test_ck_.../test_sk_...`, 마찬가지로 사업자 심사 불필요)가 필요했다. **조치**: 사용자가
+   개발자센터에서 올바른 키 쌍을 다시 확인해 `.env.local` 교체 → Playwright 재현에서 실제
+   결제 게이트웨이(`payment-gateway-sandbox.tosspayments.com`)의 카드 선택 화면까지 정상
+   진입 확인(에러 없음).
+
+부수적으로 `.env.local`에 이전 배치에서 개행 누락으로 `NEXT_PUBLIC_VAPID_PUBLIC_KEY` 값
+뒤에 `SUPABASE_SERVICE_ROLE_KEY` 문자열이 그대로 붙어 손상돼 있던 것도 함께 발견해 정리함
+(줄 자체는 분리했지만 `SUPABASE_SERVICE_ROLE_KEY`는 바로 다음 줄에 정상값이 이미 있어 실제
+동작에는 영향 없었음 — VAPID 키만 깨져 있었음, 웹 푸시 구독 시 실패했을 가능성 있어 정정).
 
 **2026-07-30 진행 상황**: 사업자 미등록으로 Toss/PortOne 운영 키를 아직 쓸 수 없어, **Payment Adapter Pattern으로 테스트 결제 환경만 우선 구축**했습니다.
 - `Checkout → PaymentService → PaymentProviderFactory → PaymentProvider(interface) → {Mock|Toss|PortOne}` 구조. `NEXT_PUBLIC_PAYMENT_PROVIDER` 값만 바꾸면(mock→toss/portone) Checkout/Reservation/Order 코드 수정 없이 전환 가능하도록 설계.

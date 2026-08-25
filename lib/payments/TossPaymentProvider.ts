@@ -1,18 +1,25 @@
 /*
-  TossPaymentProvider - 토스페이먼츠 결제위젯(v1 SDK) 연동 실제 구현
+  TossPaymentProvider - 토스페이먼츠 결제창(v2 SDK) 연동 실제 구현
+
+  ⚠ v1(js.tosspayments.com/v1)이 아니라 v2(js.tosspayments.com/v2/standard)를 쓴다.
+  실측 확인(2026-08-25): v1 SDK는 내부적으로 신규 v2 게이트웨이로 넘기는 "v1-adapter"
+  호환 레이어를 거치는데, 이 어댑터가 customerKey를 모든 요청에 고정 리터럴 값으로 보내는
+  탓에 px-payment-parameters 호출이 매번 COMMON_ERROR(처리 중 오류가 발생했습니다)로
+  실패하는 걸 Playwright로 실제 네트워크 요청을 캡처해 확인했다. v2 SDK를 직접 쓰면 우리가
+  customerKey를 로그인 사용자별로 정확히 지정할 수 있어 이 문제가 없다.
 
   흐름 (Mock과 근본적으로 다름 — types.ts의 CreatePaymentResult.redirected 참고):
-    1) createPayment(): window.TossPayments(clientKey).requestPayment(...) 호출.
-       이 호출은 성공 시 브라우저를 토스 결제창으로 이동시킨다(Promise가 정상 resolve되지
-       않음 — 페이지 자체가 떠남). 결제창에서 사용자가 결제를 마치면 브라우저는
-       successUrl(app/checkout/success)로 리다이렉트된다.
+    1) createPayment(): window.TossPayments(clientKey).payment({customerKey})로 결제 세션을
+       만들고 .requestPayment(...)를 호출한다. 성공 시 브라우저를 토스 결제창으로 이동시켜
+       Promise가 정상 resolve되지 않는다(페이지 자체가 떠남). 결제창에서 사용자가 결제를
+       마치면 브라우저는 successUrl(app/checkout/success)로 리다이렉트된다.
     2) confirmPayment(): successUrl 페이지에서, 쿼리로 받은 paymentKey/orderId/amount로
        호출한다. 시크릿 키가 필요해 브라우저에서 토스 API를 직접 못 부르므로
        app/api/payments/confirm(서버 라우트)을 거친다(lib/payments/tossPaymentApi.ts).
     3) cancelPayment()/getPaymentStatus(): 결제창을 열기 전(주문만 만든) 단계에서
        취소하거나 상태를 조회할 때 사용.
 
-  window.TossPayments는 app/layout.tsx가 <Script src="https://js.tosspayments.com/v1">로
+  window.TossPayments는 app/layout.tsx가 <Script src="https://js.tosspayments.com/v2/standard">로
   전역 로드한다(npm 패키지 설치 없이 토스 공식 가이드 방식).
 */
 
@@ -27,20 +34,25 @@ import type {
 import { cancelRealPaymentApi, confirmRealPaymentApi } from "./tossPaymentApi";
 import { fetchOrderPaymentStatus } from "./mockPaymentApi";
 
+type TossRequestPaymentParams = {
+  method: "CARD";
+  amount: { value: number; currency: "KRW" };
+  orderId: string;
+  orderName: string;
+  customerEmail?: string;
+  successUrl: string;
+  failUrl: string;
+  // 카카오페이 등 간편결제를 열 때 card.flowMode:"DIRECT" + card.easyPay:"카카오페이" 사용
+  // (후속 작업 — docs/TODO.md 참고). 지금은 일반 카드결제만 지정.
+  card?: { flowMode?: "DEFAULT" | "DIRECT"; easyPay?: string };
+};
+
 declare global {
   interface Window {
     TossPayments?: (clientKey: string) => {
-      requestPayment: (
-        method: string,
-        params: {
-          amount: number;
-          orderId: string;
-          orderName: string;
-          customerEmail?: string;
-          successUrl: string;
-          failUrl: string;
-        }
-      ) => Promise<void>;
+      payment: (params: { customerKey: string }) => {
+        requestPayment: (params: TossRequestPaymentParams) => Promise<void>;
+      };
     };
   }
 }
@@ -59,12 +71,16 @@ export class TossPaymentProvider implements PaymentProvider {
     if (!input.successUrl || !input.failUrl) {
       throw new Error("결제 리다이렉트 URL이 없어요(successUrl/failUrl)");
     }
+    if (!input.customerKey) {
+      throw new Error("로그인 후 결제할 수 있어요");
+    }
 
-    const tossPayments = window.TossPayments(getClientKey());
-    // '카드'만 지원(MVP 범위) — 카카오페이/토스페이 같은 간편결제는 결제수단 UI 정비와
-    // 별도 확인이 필요해 후속 작업으로 남긴다(docs/TODO.md 참고).
-    await tossPayments.requestPayment("카드", {
-      amount: input.amount,
+    const payment = window.TossPayments(getClientKey()).payment({ customerKey: input.customerKey });
+    // '카드'만 지원(MVP 범위) — 카카오페이/토스페이 같은 간편결제(card.easyPay)는 결제수단
+    // UI 정비와 별도 확인이 필요해 후속 작업으로 남긴다(docs/TODO.md 참고).
+    await payment.requestPayment({
+      method: "CARD",
+      amount: { value: input.amount, currency: "KRW" },
       orderId: input.orderId,
       orderName: input.orderName ?? "수강권 결제",
       customerEmail: input.customerEmail,

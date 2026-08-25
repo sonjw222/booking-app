@@ -49,8 +49,10 @@ export default function RootLayout({
         />
         {/* 결제(app/checkout)의 TossPaymentProvider가 window.TossPayments를 씀 — npm 패키지
             설치 없이 토스 공식 가이드대로 script 태그로 전역 로드(afterInteractive: 페이지
-            렌더를 막지 않고 hydration 직후 로드). */}
-        <Script src="https://js.tosspayments.com/v1" strategy="afterInteractive" />
+            렌더를 막지 않고 hydration 직후 로드). v1이 아니라 v2 SDK를 쓴다 — v1은 내부
+            호환 어댑터를 거치며 customerKey 처리 버그로 결제 요청이 항상 실패했음(실측
+            확인, lib/payments/TossPaymentProvider.ts 상단 주석 참고). */}
+        <Script src="https://js.tosspayments.com/v2/standard" strategy="afterInteractive" />
         <SessionWatcher />
         <AppConfirmProvider />
         <ImageViewerProvider>{children}</ImageViewerProvider>

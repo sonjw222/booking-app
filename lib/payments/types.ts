@@ -21,6 +21,9 @@ export type CreatePaymentInput = {
   customerEmail?: string;
   successUrl?: string;
   failUrl?: string;
+  // 토스 v2 SDK 전용 — 결제 세션을 특정 고객에게 귀속시키는 값(2~50자). 로그인 사용자의
+  // auth uid를 그대로 쓴다. 없으면(비로그인 등) 토스 결제창 자체를 못 연다.
+  customerKey?: string;
 };
 
 export type CreatePaymentResult = {
