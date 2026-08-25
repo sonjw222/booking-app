@@ -4168,7 +4168,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-v3-content .rv-stats{margin:12px var(--page-gutter) 8px;padding:18px 0;display:grid;grid-template-columns:repeat(3,1fr);border-block:1px solid var(--line);border-radius:0;background:transparent}.manager-v3-content .rv-stat{padding:0 12px;border-left:1px solid var(--line)}.manager-v3-content .rv-stat:first-child{border-left:0}.manager-v3-content .rv-stat-value{font-size:21px;font-weight:800}.manager-v3-content .rv-stat-label{margin-top:5px;font-size:10.5px;color:var(--ink-soft)}
 .manager-v3-content .date-range{padding:10px var(--page-gutter) 16px;gap:8px}.manager-v3-content .sales-summary{margin:0 var(--page-gutter) 20px;padding:20px;border:0;border-radius:20px;background:var(--ink);color:var(--bg);box-shadow:none}.manager-v3-content .sales-summary *{color:inherit}.manager-v3-content .sales-big-value{font-size:30px;font-weight:820}.manager-v3-content .sales-breakdown{margin:0 var(--page-gutter);border-top:1px solid var(--line)}.manager-v3-content .sales-bd-item{min-height:56px;padding:14px 2px;border-bottom:1px solid var(--line);background:transparent}
 .manager-v3-content .toast,
-.admin-v3-content .toast {bottom:112px}.manager-v3-content .error-toast,
+.admin-v3-content .toast {bottom:112px;top:auto}.manager-v3-content .error-toast,
 .admin-v3-content .error-toast {margin-inline:var(--page-gutter);border-radius:14px}
 @media(max-width:380px){.manager-v3-content .date-range{grid-template-columns:1fr}.manager-v3-content .add-profile-actions,
 .admin-v3-content .add-profile-actions {grid-template-columns:1fr}.manager-v3-content .rv-stat{padding-inline:8px}.manager-v3-content .rv-stat-value{font-size:18px}}

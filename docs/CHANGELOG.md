@@ -8,6 +8,27 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-25 — 네이티브 confirm()/alert() 전면 마이그레이션 + 토스트 높이 버그 수정
+
+사용자 스크린샷 피드백: `/manager/leads`(상담고객 등록)에서 알림창이 브라우저 기본 스타일로
+검게 떠서 이질적으로 보임. 두 가지 서로 다른 원인을 찾아 각각 수정:
+
+1. **네이티브 `confirm()`/`alert()` 잔존 21곳**: 앱 전체를 이미 커스텀 `appConfirm()`/
+   `ConfirmDialog`로 마이그레이션했다고 생각했지만(PR #86), 실제로는 15개 파일(21개 호출)이
+   여전히 브라우저 기본 `confirm()`/`alert()`를 쓰고 있었다(전면 grep으로 확인). 전부
+   `await globalThis.appConfirm(...)`로 교체(모든 호출부가 이미 `async` 함수라 단순 치환).
+   `app/mypage/page.tsx`의 유일한 `alert()`는 이 화면의 `error` 상태가 전체 화면을 에러
+   뷰로 바꾸는 용도라 그대로 못 쓰고, 별도 `toast` 상태를 새로 추가해 대체. `handleAttendance`
+   (`app/manager/classes/page.tsx`)와 휴무일 삭제(`app/manager/holidays/page.tsx`)의 네이티브
+   `confirm()`에 의존하던 E2E 테스트 2개(`attendance.spec.ts`, `holiday-restores-classes.spec.ts`
+   — PR #86 때 의도적으로 안 건드렸던 것들)도 `.confirm-sheet` 클릭 방식으로 함께 갱신.
+2. **`.toast` 높이 버그(진짜 원인)**: `.manager-v3-content .toast, .admin-v3-content .toast`가
+   `bottom:112px`만 설정하고 `top`은 그대로 둬서, `position:fixed` 요소가 `top:18px`와
+   `bottom:112px`를 동시에 가져 자동으로 그 사이 전체(뷰포트 기준 최대 714px)로 늘어나려다
+   `max-height:160px !important` 세이프가드에 걸려 "텍스트는 위에, 그 아래로 큰 빈 검은
+   사각형"으로 보이던 버그. `top:auto` 추가로 수정 — 이제 42px 높이의 원래 의도된 작은
+   알약 모양으로 하단 네비 위에 뜬다.
+
 ## 2026-08-24 — 죽은 `/mypage/history` 라우트 정리(A-13)
 
 UX 감사가 예약 이력이 `/my-reservations`·`/mypage/history`·`/mypage/calendar` 3곳에 분산돼

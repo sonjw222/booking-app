@@ -257,7 +257,7 @@ function MembersContent() {
   }
 
   async function handleDeleteGrade(g: Grade) {
-    if (!confirm(`'${g.name}' 등급을 삭제할까요?\n이 등급을 쓰던 회원은 등급 없음이 됩니다.`)) return;
+    if (!(await globalThis.appConfirm(`'${g.name}' 등급을 삭제할까요?\n이 등급을 쓰던 회원은 등급 없음이 됩니다.`))) return;
     setBusy(true);
     try {
       await deleteGrade(g.id);
