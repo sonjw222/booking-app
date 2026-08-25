@@ -8,14 +8,22 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
-## 2026-08-25 — 동명 수강권 구분 표시 준비(A-8, SQL 미적용)
+## 2026-08-25 — 매니저 수업 화면 "일정 복사" 버튼 가로 여백 확대
+
+사용자 스크린샷 피드백: `/manager/classes` 헤더의 "일정 복사" 버튼이 "휴무일" 버튼과 같은
+padding(양쪽 8px)을 쓰다 보니 글자 수가 더 많아 텍스트가 꽉 차 보였음. 이 버튼에만 별도
+클래스(`.cal-copy-btn`)를 붙여 padding을 14px로 늘림(휴무일 버튼은 그대로 유지).
+
+## 2026-08-25 — 동명 수강권 구분 표시 준비(A-8, SQL 적용 완료)
 
 이름·만료일이 완전히 같은 수강권이 여러 개면 예약 확인 화면에서 구분할 방법이 없던 문제
 (실제 재현 확인). `add_usable_memberships_issued_at_draft_proposed.sql` 작성 —
 `usable_memberships_for_classes()` RPC의 RETURNS TABLE에 `issued_at`(기존 컬럼, 신규 아님)을
 추가, WHERE절(예약 자격 판정)은 무변경. 코드(`lib/reservations.ts`, `app/reservation/page.tsx`)는
 SQL 미적용 상태에서도 안전하게 동작하도록 옵셔널 처리해 먼저 커밋 — 이름+만료일이 겹치는
-항목에만 구매일을 보여줌. **SQL은 라이브 RPC라 사용자 승인 후 적용 필요.**
+항목에만 구매일을 보여줌. **2026-08-25 사용자가 Supabase SQL Editor에서 직접 적용 완료**
+(`CREATE OR REPLACE`가 반환 타입 변경을 거부해 `DROP FUNCTION` 후 재생성 + 권한 재부여로
+수정 적용, `pg_get_functiondef`로 최종 확인함).
 
 ## 2026-08-24 — 죽은 `/mypage/history` 라우트 정리(A-13)
 
