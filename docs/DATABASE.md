@@ -263,7 +263,7 @@ manager_centers * ── 1 center_roles
 | `reserve_class` | `lib/reservations.ts` | 일반 수업 예약 | 여러 SQL 파일에서 재정의됨 |
 | `reserve_class_with_goods` | `lib/reservations.ts` | 굿즈 차감을 포함한 예약 | 상품 잔여량과 예약을 함께 변경 |
 | `cancel_reservation` | `lib/reservations.ts` | 취소, 수강권 복구/차감, 대기 승격 | 여러 SQL 파일에서 재정의됨 |
-| `usable_memberships_for_classes` | `lib/reservations.ts` | 여러 수업의 사용 가능한 수강권 배치 조회 | `fix_usable_memberships_shared.sql` 정의 |
+| `usable_memberships_for_classes` | `lib/reservations.ts` | 여러 수업의 사용 가능한 수강권 배치 조회 | 최종 본문은 `add_class_trainers_pass_selection_mode_draft_proposed.sql`(2026-08-11, 적용 완료)이 재정의, `fix_security_definer_hardening_search_path_execute_draft_proposed.sql`(2026-08-13, 적용 완료)이 본문 변경 없이 search_path 고정 + EXECUTE를 authenticated로 제한. `add_usable_memberships_issued_at_draft_proposed.sql`(2026-08-25, **미적용 — 사용자 확인 대기**)이 RETURNS TABLE에 `issued_at` 추가 예정(A-8) |
 | `reserve_with_membership` | `lib/reservations.ts` | 지정 수강권으로 예약 | 공유 방식 최종 적용 여부 확인 필요 |
 | `manager_book_member` | `lib/classes.ts` | 매니저 보강 예약 | 권한과 수강권 차감 확인 |
 | `manager_set_attendance` | `lib/classes.ts` | 출석·노쇼·취소 상태 처리 | 정의가 중복되어 최종 본문 확인 필요 |
