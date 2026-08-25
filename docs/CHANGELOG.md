@@ -8,6 +8,24 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-26 — P0-8 후속: 플랜 실제 제한 강제 + 운영자용 "구독 플랜 관리" 화면
+
+룸/스태프/회원 수/판매 상품 종류 제한이 있는 플랜을 만들면 실제로 그 센터에 DB 레벨에서
+강제되도록 구현. `subscription_plans`에 `max_rooms`/`max_staff`(오너 제외)/`max_members`/
+`max_products`(판매중인 것만) + `is_default`(정확히 하나만, 부분 유니크 인덱스) 추가,
+`rooms`/`manager_centers`/`center_members`/`products` 4개 테이블에 `BEFORE INSERT`
+트리거로 실제 강제(화면 검증 아님 — API 직접 호출도 우회 불가). 운영자 전용
+`/admin/subscription-plans`(관리홈 메뉴 추가) 신규 — 플랜 CRUD + 각 제한을 숫자/"무제한"
+체크박스로 편집, `set_default_subscription_plan()` RPC로 기본 플랜 원자적 전환. 새 삭제
+확인창은 브라우저 기본 `confirm()` 대신 기존 앱의 커스텀 `appConfirm()`으로 통일.
+
+신규 통합테스트(`subscription-plan-limits.test.ts`, 15개 시나리오)로 4개 제한 차원 전부
+경계 검증 — 공유 fixture 센터 대신 파일 전용 격리 센터 사용. 테스트 작성 중 `rooms`
+테이블에 `service_role` GRANT가 아예 없던 실제 버그 발견·수정
+(`fix_service_role_missing_grants_rooms.sql`) — 이 저장소에서 반복돼온 유형의 이슈.
+`npm run build`/유닛테스트 246개/신규 통합테스트 15개 전부 통과. 자세한 내용은
+`docs/TODO.md` P0-8 참고.
+
 ## 2026-08-26 — P0-8 후속: "플랫폼 구독"을 운영 설정 안 섹션에서 별도 메뉴로 분리
 
 사용자 QA 피드백 — 회원/예약 운영 설정과 성격이 다른 축(우리 쪽 매출·계약)이라 운영

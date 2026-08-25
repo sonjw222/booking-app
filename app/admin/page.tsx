@@ -56,6 +56,10 @@ export default function AdminHub() {
         <div className="left"><span className="icon"><UiIcon name="card" /></span>구독 현황</div>
         <span className="chevron">›</span>
       </a>
+      <a className="list-row" href="/admin/subscription-plans">
+        <div className="left"><span className="icon"><UiIcon name="ticket" /></span>구독 플랜 관리</div>
+        <span className="chevron">›</span>
+      </a>
     </div>
   );
 }

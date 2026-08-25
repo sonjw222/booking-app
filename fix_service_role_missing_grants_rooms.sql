@@ -1,0 +1,13 @@
+-- rooms 테이블에 service_role GRANT가 아예 없던 것을 발견(2026-08-26, P0-8 배치의
+-- subscription-plan-limits.test.ts 작성 중 실측 확인 — `permission denied for table rooms`).
+-- 이 저장소에서 반복돼온 유형의 이슈(다른 테이블들도 이런 이유로 fix_service_role_missing_
+-- grants_*.sql이 이미 여러 개 있음, 예: orders/center_holidays/class_allowed_products 등).
+--
+-- service_role은 RLS를 우회하므로 이 GRANT가 있어야 fixture 정리(테스트 cleanup)나
+-- 향후 서버 전용 로직(예: app/api/* 라우트, Edge Function)이 rooms을 다룰 수 있다 —
+-- 지금 당장 앱 코드가 service_role로 rooms을 건드리는 곳은 없지만(모든 rooms 접근은
+-- 로그인 사용자 세션 + RLS), 이 GRANT 자체가 없으면 향후 그런 코드를 추가할 때도
+-- 똑같은 문제가 재발한다.
+--
+-- 파일 전체를 SQL Editor에 붙여넣고 Run 하세요. 여러 번 실행해도 안전.
+grant select, insert, update, delete on rooms to service_role;

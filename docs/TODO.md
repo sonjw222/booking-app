@@ -280,8 +280,8 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 |---|---|
 | 우선순위 | P0 |
 | 현재 상태 | **DB 구조·RLS·조회 화면 완료 + SQL 적용 완료 + 실 화면 QA 확인. 실제 카드 등록/청구만 외부 승인(토스 자동결제 계약 심사) 대기** |
-| 근거 파일 | `add_center_platform_subscription.sql`(적용 완료), `rollback_add_center_platform_subscription.sql`, `lib/centerSubscription.ts`(신규), `app/manager/subscription/page.tsx`(신규, 원래 `/manager/settings`의 한 섹션이었으나 별도 메뉴로 분리), `app/manager/page.tsx`(메뉴 추가), `app/admin/subscriptions/page.tsx`(신규), `app/admin/page.tsx`(메뉴 추가) |
-| 완료 조건 | 토스페이먼츠 자동결제 계약 심사 통과 후: (1) `NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY`/`NEXT_PUBLIC_BILLING_ENABLED=true` 운영 환경변수 설정, (2) 카드 등록 성공 시 토스가 반환하는 authKey를 billing_key로 교환해 `center_subscriptions`에 저장하는 서버 전용 처리 구현(토스 시크릿 키 필요 — 이 앱은 API 서버가 없어 별도 구축 필요, 예: Supabase Edge Function), (3) 매월 자동 청구 실행(pg_cron 또는 외부 스케줄러가 토스 API 호출 → `center_subscription_charges`에 성공/실패 기록 → `center_subscriptions.status`/`next_billing_date` 갱신), (4) 결제 실패(연체)·구독 해지 시 정책(유예기간, 기능 제한 여부 등)을 사업 결정 후 반영 |
+| 근거 파일 | `add_center_platform_subscription.sql`(적용 완료), `rollback_add_center_platform_subscription.sql`, `add_subscription_plan_limits.sql`(신규, 적용 완료 — 플랜 제한 컬럼 4종 + 강제 트리거 4종 + `is_default`/RPC), `rollback_add_subscription_plan_limits.sql`, `fix_service_role_missing_grants_rooms.sql`(신규, 적용 완료 — rooms 테이블 service_role GRANT 누락 발견·수정), `lib/centerSubscription.ts`, `lib/operator.ts`(구독 플랜 CRUD 추가), `app/manager/subscription/page.tsx`(원래 `/manager/settings`의 한 섹션이었으나 별도 메뉴로 분리), `app/manager/page.tsx`(메뉴 추가), `app/admin/subscriptions/page.tsx`, `app/admin/subscription-plans/page.tsx`(신규 — 운영자용 플랜 CRUD 화면), `app/admin/page.tsx`(메뉴 추가), `tests/integration/subscription-plan-limits.test.ts`(신규, 15개 시나리오) |
+| 완료 조건 | 토스페이먼츠 자동결제 계약 심사 통과 후: (1) `NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY`/`NEXT_PUBLIC_BILLING_ENABLED=true` 운영 환경변수 설정, (2) 카드 등록 성공 시 토스가 반환하는 authKey를 billing_key로 교환해 `center_subscriptions`에 저장하는 서버 전용 처리 구현(토스 시크릿 키 필요 — 이 앱은 API 서버가 없어 별도 구축 필요, 예: Supabase Edge Function), (3) 매월 자동 청구 실행(pg_cron 또는 외부 스케줄러가 토스 API 호출 → `center_subscription_charges`에 성공/실패 기록 → `center_subscriptions.status`/`next_billing_date` 갱신), (4) 결제 실패(연체)·구독 해지 시 정책(유예기간, 기능 제한 여부 등)을 사업 결정 후 반영. 플랜의 실제 사용량 제한(룸/스태프/회원/상품)은 이미 구현·검증 완료 — 남은 건 "센터의 플랜을 나중에 바꾸는 화면"(현재는 신규 가입 시 자동 배정만 있고 변경 화면 없음, 실 결제 붙을 때 업그레이드 흐름으로 같이 만들 예정) |
 | P0-1과의 관계 | P0-1(회원 → 센터 결제)과 결제 주체·대상이 다른 별개 축. 둘 다 "사업자/계약 승인 대기"라는 같은 종류의 외부 차단 요인을 공유함 |
 | 완료된 것 | 3개 테이블(`subscription_plans`/`center_subscriptions`/`center_subscription_charges`) + RLS(소속 매니저 SELECT만, INSERT/UPDATE는 service_role 전용 — 일반 사용자는 RLS로 차단), 센터 생성 시 기본 구독 행 자동 생성 트리거, 매니저 설정 화면의 상태 조회 섹션, 운영자 전용 전체 현황 조회 화면(`/admin/subscriptions`). 카드 등록 버튼은 `NEXT_PUBLIC_BILLING_ENABLED`가 꺼져 있으면(기본값) 비활성화되고 "구독 결제 연동 준비 중이에요" 안내만 표시 — 실제 토스 SDK 호출 경로는 이 플래그로 완전히 막혀 있음 |
 | 의도적으로 이번 배치에 없는 것 | 가입/센터 등록 시점에 결제를 강제하는 흐름 없음(사용자 확인: 센터 승인 절차와 결제 등록 시점을 분리하는 게 자연스럽다고 판단) — 매니저가 설정 화면에 스스로 들어가야 보이는 방식으로만 구현. "결제 안 하면 어떻게 되는지"(유예기간, 기능 제한 등) 정책은 사업 결정 필요 사항으로 남겨둠 |
@@ -300,6 +300,34 @@ SQL Editor에서 적용, 라이브 재조회로 3개 테이블 생성/센터 454
 (신규)로 완전히 분리하고 `/manager/settings`에서는 제거, 관리홈 메뉴 목록 맨 아래에 별도
 항목 추가(같은 `facility.operation` 권한 키 유지). Playwright로 메뉴 노출/설정 화면에서
 섹션 제거/새 페이지 정상 렌더링까지 재확인.
+
+**2026-08-26 플랜 실제 제한 강제 + 운영자용 플랜 CRUD 화면**: 사용자 요청 — 룸/스태프
+제한이 있는 플랜을 만들면 실제로 그 센터에 강제돼야 함(설명 문구뿐 아니라). 확인해보니
+현재 라이브 데이터 기준 센터당 최대 룸 1개/스태프 9명/회원 27명이라 무제한 기본값 유지로
+기존 454개 센터는 전혀 영향 없음. `subscription_plans`에 `max_rooms`/`max_staff`(오너
+제외)/`max_members`/`max_products`(판매중인 것만) 4개 컬럼 + `is_default`(정확히 하나만,
+부분 유니크 인덱스로 강제) 추가. `rooms`/`manager_centers`/`center_members`/`products`
+4개 테이블에 `BEFORE INSERT` 트리거를 달아 DB 레벨에서 실제로 막음(화면 검증이 아니라
+INSERT 자체를 거부 — API 직접 호출로도 우회 불가). `set_default_subscription_plan(uuid)`
+RPC(운영자 전용, 기존 기본 해제+신규 지정을 한 트랜잭션으로 원자적 처리) 신규.
+
+운영자 전용 "구독 플랜 관리"(`/admin/subscription-plans`, 관리홈 메뉴 추가) 신규 —
+플랜 이름/월 구독료/설명/활성 여부/4개 제한(각각 숫자 입력 + "무제한" 체크박스로 null
+왕복)을 CRUD. 이미 쓰이는 플랜 삭제는 FK 제약(23503)으로 막히는 걸 그대로 살려 "대신
+비활성화하세요" 안내로 변환. 새로 추가한 삭제 확인창은 브라우저 기본 `confirm()`이 아니라
+기존 앱이 쓰는 커스텀 `globalThis.appConfirm()`으로 통일.
+
+신규 통합테스트(`subscription-plan-limits.test.ts`, 15개 시나리오)로 4개 제한 차원 각각
+(제한 0/제한 1/무제한) 경계, 오너는 스태프 슬롯 미소비, 비활성 상품은 카운트 제외, RPC
+운영자 전용 검증, 사용 중인 플랜 삭제 방지(FK)까지 전부 자동 검증 — 공유 fixture 센터
+대신 이 파일 전용 격리 센터를 새로 등록해 다른 세션의 동시 통합테스트에 영향 없게 설계.
+
+**부수 발견·수정**: 테스트 작성 중 `rooms` 테이블에 `service_role` GRANT가 아예 없던
+버그 발견(`fix_service_role_missing_grants_rooms.sql`, 적용 완료) — 이 저장소에서
+반복돼온 유형의 이슈(다른 테이블들도 같은 이유로 여러 번 있었음). 이 GRANT 누락 때문에
+테스트 cleanup이 조용히 실패해 leftover 테스트 센터 2개가 남았던 것도 직접 확인·정리함.
+
+`npm run build`/유닛테스트 246개/신규 통합테스트 15개 전부 통과.
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
