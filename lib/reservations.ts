@@ -412,6 +412,10 @@ export type UsableMembership = {
   expiresAt: string;
   ownerProfile: string;   // 이 수강권이 지정된 프로필 이름
   isMine: boolean;        // 선택한 프로필 본인 것인지
+  // UX 감사(A-8) — 이름·만료일이 완전히 같은 수강권이 여러 개면 구분할 방법이 없었다.
+  // add_usable_memberships_issued_at_draft_proposed.sql 적용 전에는 RPC가 이 컬럼을
+  // 안 주므로 undefined일 수 있음(옵셔널로 두고 화면에서 있을 때만 표시).
+  issuedAt?: string | null;
 };
 
 // 여러 수업에 대해 이 프로필로 쓸 수 있는 수강권 목록을 한 번에 조회 (N+1 방지)
@@ -446,6 +450,7 @@ export async function fetchUsableMembershipsByClass(
       expiresAt: r.expires_at,
       ownerProfile: r.owner_profile ?? "",
       isMine: r.is_mine ?? false,
+      issuedAt: r.issued_at ?? null,
     });
   }
   return out;
