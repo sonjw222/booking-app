@@ -8,6 +8,16 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-26 — P0-1 후속: 토스 결제수단에 카카오페이/토스페이 추가
+
+`CreatePaymentInput.easyPay`(`"KAKAOPAY"|"TOSSPAY"`) 추가, `TossPaymentProvider`가
+`requestPayment()`에 `card:{flowMode:"DIRECT", easyPay}`를 넘겨 그 간편결제 창으로 바로
+이동시키도록 구현. `app/checkout/page.tsx`의 결제수단 차단 가드를 카드 전용에서
+카드/카카오페이/토스페이 3종 허용으로 확장(계좌이체/직접결제는 아직 미지원, 계속 차단).
+Playwright로 3종 전부 실제 결제사 게이트웨이 진입까지 자동 재현해 검증(카카오페이→
+online-payment.kakaopay.com, 토스페이→pay.toss.im, 카드→토스 카드 선택 화면). `npm run
+build` + 유닛테스트 246개 재확인 통과.
+
 ## 2026-08-25 — P0-1 후속: 실 QA 중 발견한 토스 결제 실패 원인 2건 수정 (SDK v1→v2, 키 종류 착오)
 
 SQL 적용 후 사용자가 실제 결제 버튼을 눌러보니 매번 `COMMON_ERROR`(처리 중 오류가

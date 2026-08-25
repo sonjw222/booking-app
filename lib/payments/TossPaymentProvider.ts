@@ -76,8 +76,9 @@ export class TossPaymentProvider implements PaymentProvider {
     }
 
     const payment = window.TossPayments(getClientKey()).payment({ customerKey: input.customerKey });
-    // '카드'만 지원(MVP 범위) — 카카오페이/토스페이 같은 간편결제(card.easyPay)는 결제수단
-    // UI 정비와 별도 확인이 필요해 후속 작업으로 남긴다(docs/TODO.md 참고).
+    // 간편결제(카카오페이/토스페이)는 method:"CARD" + card.flowMode:"DIRECT" +
+    // card.easyPay:"KAKAOPAY"|"TOSSPAY" 조합으로 연다(그 결제사 창으로 바로 이동, 토스
+    // 결제수단 선택 화면 생략) — 일반 카드는 card 자체를 생략.
     await payment.requestPayment({
       method: "CARD",
       amount: { value: input.amount, currency: "KRW" },
@@ -86,6 +87,7 @@ export class TossPaymentProvider implements PaymentProvider {
       customerEmail: input.customerEmail,
       successUrl: input.successUrl,
       failUrl: input.failUrl,
+      card: input.easyPay ? { flowMode: "DIRECT", easyPay: input.easyPay } : undefined,
     });
 
     // 위 호출이 성공하면 브라우저가 결제창으로 이동해 이 아래 코드는 실행되지 않는다.

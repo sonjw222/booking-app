@@ -44,9 +44,9 @@
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **토스페이먼츠 결제창(카드) 연동 완료 — SQL 적용 완료, 실제 결제 게이트웨이 UI까지 로딩 확인(카드 선택 화면 진입, 에러 없음). 카드번호 직접 입력해 끝까지 승인시키는 마지막 수동 확인만 남음. 사업자 명의 실 운영 키 전환은 별도(전자결제 신청 심사 필요)** |
+| 현재 상태 | **토스페이먼츠 결제창(카드/카카오페이/토스페이) 연동 완료 — SQL 적용 완료, 3개 결제수단 전부 Playwright로 실제 결제 게이트웨이(카카오페이는 online-payment.kakaopay.com, 토스페이는 pay.toss.im까지) 진입 확인, 에러 없음. 실제 카드번호 입력해 끝까지 승인시키는 마지막 수동 확인만 남음. 사업자 명의 실 운영 키 전환은 별도(전자결제 신청 심사 필요)** |
 | 근거 파일 | `app/checkout/page.tsx`, `app/checkout/success/page.tsx`(신규), `app/checkout/fail/page.tsx`(신규), `app/api/payments/confirm/route.ts`(신규, 이 프로젝트 최초의 app/api 라우트), `app/api/payments/cancel/route.ts`(신규), `app/layout.tsx`(토스 SDK v2 script 태그), `lib/orders.ts`, `lib/payments/*`, `lib/payments/tossPaymentApi.ts`(신규), `add_payment_test_provider.sql`, `add_confirm_real_payment.sql`(신규, 적용 완료), `rollback_add_confirm_real_payment.sql`(신규), `tests/integration/confirm-real-payment.test.ts`(신규), `add_orders.sql`, `schema.sql` |
-| 완료 조건 | ~~Toss/PortOne 실제 운영 키로~~ 개발자센터 테스트 키(API 개별 연동 키, 사업자 심사 불필요)로 카드 결제 생성·성공·취소 흐름 코드 완료 + Playwright로 결제 게이트웨이 UI 진입까지 자동 재현 확인. 남은 것: (1) 실제 카드번호 입력해 결제 완료까지 왕복 수동 확인 1회 (2) 나중에 사업자 명의 "전자결제 신청" 심사 통과 후 `.env.local`의 `NEXT_PUBLIC_TOSS_CLIENT_KEY`/`TOSS_SECRET_KEY`를 실 운영 키로 교체 |
+| 완료 조건 | ~~Toss/PortOne 실제 운영 키로~~ 개발자센터 테스트 키(API 개별 연동 키, 사업자 심사 불필요)로 카드·카카오페이·토스페이 생성·성공·취소 흐름 코드 완료 + Playwright로 3개 수단 전부 결제 게이트웨이 진입까지 자동 재현 확인. 남은 것: (1) 실제 카드번호 입력해 결제 완료까지 왕복 수동 확인 1회 (2) 계좌이체/직접결제 연동(후속) (3) 나중에 사업자 명의 "전자결제 신청" 심사 통과 후 `.env.local`의 `NEXT_PUBLIC_TOSS_CLIENT_KEY`/`TOSS_SECRET_KEY`를 실 운영 키로 교체 |
 | 관련 문서 | [REQUIREMENTS 6-1, 10-4](./REQUIREMENTS.md), [DATABASE 4-3, 7-3](./DATABASE.md), [ROUTES `/checkout`](./ROUTES.md) |
 
 **2026-08-25 진행 상황**: 사업자 등록 완료로 재개. 토스페이먼츠 개발자센터에 가입해 "주문서형·
@@ -113,6 +113,16 @@ Playwright(headless)로 자동 재현해 검증했다 — 아래 2026-08-25 항�
 뒤에 `SUPABASE_SERVICE_ROLE_KEY` 문자열이 그대로 붙어 손상돼 있던 것도 함께 발견해 정리함
 (줄 자체는 분리했지만 `SUPABASE_SERVICE_ROLE_KEY`는 바로 다음 줄에 정상값이 이미 있어 실제
 동작에는 영향 없었음 — VAPID 키만 깨져 있었음, 웹 푸시 구독 시 실패했을 가능성 있어 정정).
+
+**2026-08-26 카카오페이/토스페이 추가**: `CreatePaymentInput`에 `easyPay?: "KAKAOPAY"|"TOSSPAY"`
+필드 추가(값은 `docs.tosspayments.com/reference/enum-codes`의 ENUM 코드). `TossPaymentProvider`가
+`requestPayment()` 호출 시 `card: {flowMode:"DIRECT", easyPay}`로 넘겨 그 결제사 창으로 바로
+이동시킨다. `app/checkout/page.tsx`의 결제수단 차단 가드를 카드 전용에서
+card/kakao/toss 3종 허용으로 넓히고, `payMethod → easyPay` 매핑(`EASY_PAY_BY_METHOD`) 추가.
+계좌이체/직접결제는 아직 미지원이라 그대로 차단. Playwright로 3종 전부 실제 결제사 게이트웨이
+(카카오페이 → `online-payment.kakaopay.com`, 토스페이 → `pay.toss.im`, 카드 →
+`payment-gateway-sandbox.tosspayments.com` 카드 선택 화면) 진입까지 자동 재현, 에러 없음
+확인. `npm run build`/유닛테스트 246개 재확인 통과.
 
 **2026-07-30 진행 상황**: 사업자 미등록으로 Toss/PortOne 운영 키를 아직 쓸 수 없어, **Payment Adapter Pattern으로 테스트 결제 환경만 우선 구축**했습니다.
 - `Checkout → PaymentService → PaymentProviderFactory → PaymentProvider(interface) → {Mock|Toss|PortOne}` 구조. `NEXT_PUBLIC_PAYMENT_PROVIDER` 값만 바꾸면(mock→toss/portone) Checkout/Reservation/Order 코드 수정 없이 전환 가능하도록 설계.

@@ -29,6 +29,14 @@ const PAY_METHODS: { id: string; label: string; icon?: IconName; dot?: string }[
   { id: "direct", label: "직접결제 (센터에서 결제)", icon: "handshake" },
 ];
 
+// 토스 결제창이 지금 실제로 지원하는 결제수단(MVP 범위) — 계좌이체/직접결제는 아직 준비 안 됨.
+const TOSS_SUPPORTED_METHODS = ["card", "kakao", "toss"];
+// payMethod → 토스 간편결제 ENUM 코드. "card"는 일반 카드결제라 매핑 없음(undefined).
+const EASY_PAY_BY_METHOD: Record<string, "KAKAOPAY" | "TOSSPAY" | undefined> = {
+  kakao: "KAKAOPAY",
+  toss: "TOSSPAY",
+};
+
 // 보유 쿠폰 (데모)
 const MY_COUPONS = [
   { code: "WELCOME", label: "신규 가입 5,000원 할인", discount: 5000 },
@@ -152,10 +160,10 @@ function CheckoutContent() {
       setError("사이즈를 선택해주세요");
       return;
     }
-    // 실제 PG(토스) 연동은 카드만 지원(MVP 범위) — 다른 결제수단을 고른 채 결제하면
-    // 화면 안내와 다르게 카드 결제창이 뜨는 혼란을 막는다.
-    if (resolveProviderName() === "toss" && payMethod !== "card") {
-      setError("지금은 카드 결제만 가능해요");
+    // 실제 PG(토스) 연동은 카드/카카오페이/토스페이만 지원(MVP 범위) — 계좌이체/직접결제는
+    // 아직 준비 안 됐다. 화면 안내와 다르게 엉뚱한 결제창이 뜨는 혼란을 막는다.
+    if (resolveProviderName() === "toss" && !TOSS_SUPPORTED_METHODS.includes(payMethod)) {
+      setError("지금은 카드/카카오페이/토스페이만 가능해요");
       return;
     }
     setBusy(true);
@@ -189,6 +197,7 @@ function CheckoutContent() {
         customerEmail: userData.user?.email ?? undefined,
         customerKey: userData.user?.id,
         successUrl, failUrl,
+        easyPay: EASY_PAY_BY_METHOD[payMethod],
       });
 
       if (created.redirected) {
@@ -433,7 +442,7 @@ function CheckoutContent() {
       )}
       {resolveProviderName() === "toss" && (
         <div className="perm-guide" style={{ margin: "10px 20px" }}>
-          카드 결제만 지원돼요. 카카오페이/토스페이/계좌이체는 준비 중이에요.
+          카드/카카오페이/토스페이만 지원돼요. 계좌이체/직접결제는 준비 중이에요.
         </div>
       )}
 

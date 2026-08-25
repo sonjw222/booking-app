@@ -24,6 +24,9 @@ export type CreatePaymentInput = {
   // 토스 v2 SDK 전용 — 결제 세션을 특정 고객에게 귀속시키는 값(2~50자). 로그인 사용자의
   // auth uid를 그대로 쓴다. 없으면(비로그인 등) 토스 결제창 자체를 못 연다.
   customerKey?: string;
+  // 간편결제 지정(카카오페이/토스페이 등). 생략하면 일반 카드결제. 값은 토스 ENUM 코드
+  // (KAKAOPAY/TOSSPAY 등, docs.tosspayments.com/reference/enum-codes 참고) — Mock은 무시함.
+  easyPay?: "KAKAOPAY" | "TOSSPAY";
 };
 
 export type CreatePaymentResult = {
