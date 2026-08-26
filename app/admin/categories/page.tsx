@@ -50,7 +50,7 @@ export default function CategoriesPage() {
   }
 
   async function handleDelete(c: ServiceCategory) {
-    if (!confirm(`'${c.label}' 종목을 삭제할까요?`)) return;
+    if (!(await globalThis.appConfirm(`'${c.label}' 종목을 삭제할까요?`))) return;
     setBusy(true);
     try { await deleteCategory(c.id); await load(); }
     catch (e: any) { setError(e.message); }

@@ -136,7 +136,7 @@ function ProgressRecordContent() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("이 진도 기록을 삭제할까요?")) return;
+    if (!(await globalThis.appConfirm("이 진도 기록을 삭제할까요?"))) return;
     setBusy(true);
     try { await deleteProgressRecord(id); showToast("삭제했어요"); await loadHistory(); }
     catch (e: any) { setError(e.message); }
@@ -145,7 +145,7 @@ function ProgressRecordContent() {
 
   // 날짜별 카드: 삭제 (그 날 전체)
   async function handleDeleteDate(date: string) {
-    if (!confirm(`${fmtMD(date)} 진도 기록을 삭제할까요?`)) return;
+    if (!(await globalThis.appConfirm(`${fmtMD(date)} 진도 기록을 삭제할까요?`))) return;
     setBusy(true);
     try { await deleteProgressByDate(profileId, date); showToast("삭제했어요"); await loadHistory(); }
     catch (e: any) { setError(e.message); }

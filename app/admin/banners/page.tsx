@@ -60,7 +60,7 @@ export default function BannersPage() {
   }
 
   async function handleDelete(b: HomeBanner) {
-    if (!confirm("이 배너를 삭제할까요?")) return;
+    if (!(await globalThis.appConfirm("이 배너를 삭제할까요?"))) return;
     setBusy(true);
     try { await deleteBanner(b.id); await load(); }
     catch (e: any) { setError(e.message); }

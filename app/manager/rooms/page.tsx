@@ -90,7 +90,7 @@ export default function RoomsPage() {
   }
 
   async function handleDelete(r: Room) {
-    if (!confirm(`'${r.name}' 룸을 삭제할까요? (이 룸으로 지정된 수업은 장소가 비워져요)`)) return;
+    if (!(await globalThis.appConfirm(`'${r.name}' 룸을 삭제할까요? (이 룸으로 지정된 수업은 장소가 비워져요)`))) return;
     setBusy(true);
     try { await deleteRoom(r.id); await load(); }
     catch (e: any) { setError(e.message); }

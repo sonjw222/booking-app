@@ -70,7 +70,7 @@ export default function ManagerOrdersPage() {
   useEffect(() => { load(); }, [load]);
 
   async function handleDone(o: OrderRow) {
-    if (!confirm(`${o.memberName}님에게 '${o.productName}'을(를) 발급하고 매출에 반영할까요?`)) return;
+    if (!(await globalThis.appConfirm(`${o.memberName}님에게 '${o.productName}'을(를) 발급하고 매출에 반영할까요?`))) return;
     setBusy(true);
     try {
       await updateOrderStatus(o.id, "done");
@@ -84,7 +84,7 @@ export default function ManagerOrdersPage() {
   }
 
   async function handleCancel(o: OrderRow) {
-    if (!confirm(`${o.memberName}님의 '${o.productName}' 주문을 취소할까요?`)) return;
+    if (!(await globalThis.appConfirm(`${o.memberName}님의 '${o.productName}' 주문을 취소할까요?`))) return;
     setBusy(true);
     try {
       await updateOrderStatus(o.id, "cancelled");

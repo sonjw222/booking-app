@@ -33,6 +33,10 @@ export default function MyPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // 환불 불가 사유 안내용 — 이 화면의 error 상태는 전체 화면을 에러 뷰로 바꾸는 용도라
+  // (아래 `if (error) return ...`) 이런 짧은 알림에는 안 맞는다.
+  const [toast, setToast] = useState<string | null>(null);
+  function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,7 +59,7 @@ export default function MyPage() {
 
   async function handleRefund(m: Membership) {
     const elig = refundEligibility(m);
-    if (!elig.ok) { alert(elig.reason); return; }
+    if (!elig.ok) { showToast(elig.reason); return; }
     if (!(await globalThis.appConfirm(`'${m.productName}'을(를) 환불할까요?\n(결제 24시간 이내·미사용만 가능)`))) return;
     try {
       await requestRefund(m.id);
@@ -86,6 +90,7 @@ export default function MyPage() {
 
   return (
     <div className="app-shell mypage-shell">
+      {toast && <div className="toast">{toast}</div>}
       <div className="profile-block">
         <div className="avatar">{profile?.name?.[0] ?? "?"}</div>
         <div>

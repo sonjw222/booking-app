@@ -93,7 +93,7 @@ export default function LeadsPage() {
   }
 
   async function handleDelete(l: Lead) {
-    if (!confirm(`'${l.name}' 상담고객 기록을 삭제할까요?`)) return;
+    if (!(await globalThis.appConfirm(`'${l.name}' 상담고객 기록을 삭제할까요?`))) return;
     setBusy(true);
     try { await deleteLead(l.id); await load(); }
     catch (e: any) { setError(e.message); }
