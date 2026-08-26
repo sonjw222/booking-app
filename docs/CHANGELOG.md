@@ -8,6 +8,81 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-27 — 죽은 Tailwind 의존성 제거(P2-8)
+
+`app/globals.css`에 `@import "tailwindcss"` 지시문이 없어 `@tailwindcss/postcss` 플러그인이
+실제로는 아무 CSS도 생성하지 않고 있었음을 확인(전수 확인 — 진짜 Tailwind 유틸리티 클래스
+사용은 `app/layout.tsx`의 5개뿐, 나머지는 전부 `.cal-grid` 같은 커스텀 클래스명 우연 일치).
+그 5개도 이미 죽은 채였음(효과 없음). 사용자 확인 후 제거: `package.json`에서
+`tailwindcss`/`@tailwindcss/postcss` 제거, `postcss.config.mjs` 삭제, `layout.tsx`의 죽은
+유틸리티 클래스 5개 제거. `npm run build`/유닛테스트 254개 통과, dev 서버로 렌더 확인.
+
+## 2026-08-27 — 개별 수업 취소마감(cancel_deadline_min) 실질 무효 버그 수정 (SQL 미적용)
+
+`booking_deadline_min`과 같은 계열의 버그: 매니저가 "예약취소 가능 시간"에 저장한 개별 수업
+값이 `cancel_reservation()`에서 전혀 반영되지 않고 항상 운영설정만 쓰이고 있었음. 곧바로
+고치지 않고 먼저 라이브 DB에서 실사용 여부를 확인 — `classes` 1535행 중 3행만 0이 아니었고
+(실제 센터 "어텐션 피겨팀"의 진짜 수업 3개), 나머지 1532행은 전부 미지정으로 확정돼
+`booking_deadline_min`과 동일한 방식으로 안전하게 고칠 수 있음을 확인함.
+`fix_class_cancel_deadline_override.sql` 작성 — 컬럼 nullable화 + 0값 NULL 백필(0이 아닌
+3행은 보존), `cancel_reservation()`이 개별 지정을 운영설정보다 우선하도록 변경,
+`create_class_safe`/`create_recurring_classes_safe`/`update_class_safe`의
+`coalesce(cancel_deadline_min, 0)` 제거로 재발 방지. `lib/classes.ts`의 관련 타입·호출부
+전부 `?? 0` → `?? null`로 함께 수정. 신규 통합테스트 2건(운영설정보다 개별 지정이 더
+엄격/더 관대한 양방향) 추가 — SQL 미적용 상태에서 의도대로 둘 다 FAIL 확인, 버그가 실제
+존재함을 재확인함. `npm run build`/유닛테스트 254개 통과.
+**SQL 미적용 — 사용자가 Supabase SQL Editor에서 직접 적용 필요.**
+
+## 2026-08-27 — 대기 인원수 표시 회귀 테스트 추가(P2-17, 코드는 이미 구현돼 있었음)
+
+TODO.md P2-17에 "`show_group_waitlist_count` 설정을 연결할 UI 자체가 없어 미구현"이라고
+적혀 있었으나, 실제 코드(`app/reservation/page.tsx`의 `.class-count` "대기 {N}",
+`lib/reservations.ts`의 `showWaitlistCount`/`waitlisted` 배선)를 확인한 결과 이미 완전히
+구현·연결돼 있었음(문서 갱신 누락, 언제 구현됐는지는 이번 조사로 불명). 실제 코드 변경은
+없고, 회귀를 막을 자동 검증이 그동안 없었던 것만 실제 공백이라
+`tests/e2e/reservation/group-waitlist-count-display.spec.ts` 신규 추가 — 정원 1명짜리
+수업을 만들어 대기자 1명을 등록한 뒤, 운영설정 "회원에게 대기 인원 표시"를 켰을 때 목록에
+"대기 1"이 보이고 껐을 때 사라지는지(내 예약 상태 배지 "대기중"은 별개로 계속 보임) 실제
+dev Supabase·실브라우저로 확인, 통과.
+
+## 2026-08-27 — 테스트 인프라 기술부채 점검(P2-9/P2-10/P2-17)
+
+세 항목 재점검:
+1. **P2-9(통합테스트가 `lib/orders.ts`/`lib/payments`를 직접 import)**: 재확인 결과 여전히
+   `lib/orders.ts` 리팩터링 시점까지 의도적으로 보류하는 게 맞음 — 코드 변경 없음.
+2. **P2-10(`tests/unit`이 mock 없이 import하면 `lib/supabaseClient.ts` 초기화까지 실행됨)**:
+   근본 원인 수정. `lib/payments/mockPaymentApi.ts`가 `../supabaseClient`를 정적 import하고
+   있어 `MockPaymentProvider`/`PaymentProviderFactory`를 import하는 순간 `createClient()`가
+   즉시 실행되던 게 원인 — 함수 호출 시점에만 필요하므로 지연 `import()`로 교체(`getSupabase()`
+   헬퍼). `PaymentProviderFactory.test.ts`가 이제 모듈 로드만으로는 Supabase 클라이언트를
+   전혀 안 건드림(Node 22 우회에 더 이상 안 기댐). `MockPaymentProvider.test.ts`는 `mockPaymentApi`
+   전체를 `vi.mock`하므로 영향 없음.
+3. **P2-17의 `staff_salaries` 유니크 제약 충돌 항목**: 재확인 결과 이미 해결돼 있었음(문서
+   갱신 누락) — `sec009-batch-a1-rls.test.ts`에 get-or-create + beforeAll/afterAll 무조건
+   정리 패턴이 이미 적용돼 있어, 라이브 dev Supabase 재실행으로 11/11 통과·duplicate key
+   에러 없음 확인. (같은 P2-17에 함께 묶여 있던 TEST-002/#24 계열의 다른 간헐적 실패
+   — `class-allowed-products.spec.ts`, `acl-003-permission-read.test.ts` 등 — 는 이번
+   범위에서 다루지 않음: 근본 원인 자체는 바로 전날 P0-7 재조사로 이미 별도 깊게 다뤄졌고
+   구조적으로 전파는 차단된 상태로 확인돼 P2로 하향된 사안이라 중복 조사하지 않음.)
+
+`npm run build`/유닛테스트 254개 통과.
+
+## 2026-08-26 — 요일별 개별 지정(perDayMode) 반복수업 생성 원자성 확보
+
+Track B 감사(P2-14)에서 발견된 항목: 매니저가 반복수업을 "요일별 개별 지정" 모드로 등록할 때
+`app/manager/classes/page.tsx`가 선택한 요일마다 `createRecurringClasses`(→
+`create_recurring_classes_safe` RPC)를 따로따로 호출했다 — RPC 자체는 한 번의 insert로
+원자적이지만, 요일 수만큼 별도 RPC 호출(=별도 트랜잭션)이 생겨 중간 요일에서 실패하면
+이전 요일들만 반영된 채 남는 문제가 있었다. `create_recurring_classes_safe(p_rows jsonb)`가
+애초에 행마다 다른 title/시간/정원/룸/취소마감을 받을 수 있게 설계돼 있어(jsonb 배열) 새
+SQL 없이 클라이언트만 고치면 됐다 — `lib/classes.ts`에 `createRecurringClassesPerDay()` 신규
+추가(요일별 오버라이드를 전부 모아 행 배열을 만든 뒤 RPC를 단 한 번만 호출), 기존 페이지의
+요일별 for-loop를 이 함수 호출 한 번으로 교체. 유효성 검사(요일별 시간 누락 등)는 여전히
+RPC 호출 전에 전부 끝나므로 동작은 그대로이고, 실패 시 원자성만 개선됨. `npm run build`/
+유닛테스트 254개 통과. 회귀 검증용 신규 E2E `tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts`
+추가(요일별로 다른 시간/정원을 UI 등록 한 번으로 넣고, 두 요일 전부가 정확한 값·같은
+recurring_group_id로 저장됐는지 실브라우저로 확인) — 실제 dev Supabase 대상 통과 확인.
+
 ## 2026-08-26 — create_default_center_subscription() 트리거 security definer 누락 수정 (SQL 적용 완료)
 
 `add_center_platform_subscription.sql`(2026-08-26, 라이브 적용 완료)의 신규 트리거가 CI를

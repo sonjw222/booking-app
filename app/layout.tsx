@@ -29,13 +29,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable}`}
       // data-theme는 아래 인라인 스크립트가 하이드레이션 전에 클라이언트에서만 붙인다
       // (서버는 localStorage를 모름) — 이 경우의 불일치는 의도된 것이므로 React가
       // hydration mismatch 콘솔 에러를 내지 않도록 명시적으로 억제한다.
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">
+      <body>
         {/* 테마 즉시 적용(깜빡임 방지). app/settings/theme/page.tsx는 그 화면 안에서만
             data-theme를 적용했고, 다른 어떤 화면에도 이 값을 다시 적용하는 로직이 없어서
             테마 설정 화면을 벗어나는 순간(이 앱은 <Link> 대신 일반 <a href>를 써서 전체

@@ -20,7 +20,7 @@ export type ManagedClass = {
   recurringGroupId: string | null;
   allowGoods: boolean;
   roomId: string | null;
-  cancelDeadlineMin: number;
+  cancelDeadlineMin: number | null; // null이면 운영설정 기본값 사용
   bookingDeadlineMin: number | null; // null이면 운영설정 기본값 사용(CLASS-001)
   classFormat: "group" | "private";  // CLASS-001 D-2: 그룹/프라이빗(1:1) 구분
   status: string; // "open" | "cancelled" | "closed"
@@ -140,7 +140,7 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
     recurringGroupId: c.recurring_group_id ?? null,
     allowGoods: c.allow_goods ?? false,
     roomId: c.room_id ?? null,
-    cancelDeadlineMin: c.cancel_deadline_min ?? 0,
+    cancelDeadlineMin: c.cancel_deadline_min ?? null,
     bookingDeadlineMin: c.booking_deadline_min ?? null,
     classFormat: (c.class_format ?? "group") as "group" | "private",
     status: c.status ?? "open",
@@ -177,7 +177,7 @@ export async function createClass(centerId: string, input: ClassInput): Promise<
     p_capacity: input.capacity,
     p_allow_goods: input.allowGoods,
     p_room_id: input.roomId ?? null,
-    p_cancel_deadline_min: input.cancelDeadlineMin ?? 0,
+    p_cancel_deadline_min: input.cancelDeadlineMin ?? null,
     p_booking_deadline_min: input.bookingDeadlineMin ?? null,
     p_class_format: input.classFormat ?? "group",
     p_pass_selection_mode: input.passSelectionMode ?? "all",
@@ -197,7 +197,7 @@ export async function updateClass(classId: string, input: ClassInput): Promise<v
     p_capacity: input.capacity,
     p_allow_goods: input.allowGoods,
     p_room_id: input.roomId ?? null,
-    p_cancel_deadline_min: input.cancelDeadlineMin ?? 0,
+    p_cancel_deadline_min: input.cancelDeadlineMin ?? null,
     p_booking_deadline_min: input.bookingDeadlineMin ?? null,
     p_class_format: input.classFormat ?? "group",
     p_pass_selection_mode: input.passSelectionMode ?? "all",
@@ -319,11 +319,62 @@ export async function createRecurringClasses(centerId: string, input: RecurringI
     end_time: toKstIso(classEndDate(d, input.start, input.end), input.end),
     capacity: input.capacity,
     room_id: input.roomId ?? null,
-    cancel_deadline_min: input.cancelDeadlineMin ?? 0,
+    cancel_deadline_min: input.cancelDeadlineMin ?? null,
     booking_deadline_min: input.bookingDeadlineMin ?? null,
     recurring_group_id: groupId,
     pass_selection_mode: input.passSelectionMode ?? "all",
   }));
+  const { data, error } = await supabase.rpc("create_recurring_classes_safe", {
+    p_center_id: centerId, p_rows: rows,
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+  return (data as string[]) ?? [];
+}
+
+export type PerDayRecurringInput = {
+  title: string;
+  fromDate: string;
+  toDate: string;
+  // 요일마다 시간·정원·룸·취소마감이 다를 수 있는 "요일별 개별 지정" 모드용 입력
+  days: {
+    dow: number;
+    start: string;
+    end: string;
+    capacity: number;
+    roomId?: string | null;
+    cancelDeadlineMin?: number | null;
+  }[];
+  excludeDates?: Set<string>;
+  bookingDeadlineMin?: number | null;
+  passSelectionMode?: "all" | "selected";
+};
+
+// 요일별 개별 지정(perDayMode) 반복 등록. 요일마다 create_recurring_classes_safe를 따로
+// 호출하면 그 개수만큼 별도 트랜잭션이 생겨, 중간 요일에서 실패하면 이전 요일들만 반영된
+// 채 남는다(원자성 없음). 모든 요일의 행을 한 번에 모아 RPC를 단 한 번만 호출해 하나의
+// 트랜잭션으로 묶는다.
+export async function createRecurringClassesPerDay(centerId: string, input: PerDayRecurringInput): Promise<string[]> {
+  const groupId = crypto.randomUUID();
+  const rows: Record<string, unknown>[] = [];
+  for (const d of input.days) {
+    assertValidClassTimeRange(d.start, d.end);
+    let dates = expandRecurringDates(input.fromDate, input.toDate, [d.dow]);
+    if (input.excludeDates) dates = dates.filter((x) => !input.excludeDates!.has(x));
+    for (const date of dates) {
+      rows.push({
+        title: input.title,
+        start_time: toKstIso(date, d.start),
+        end_time: toKstIso(classEndDate(date, d.start, d.end), d.end),
+        capacity: d.capacity,
+        room_id: d.roomId ?? null,
+        cancel_deadline_min: d.cancelDeadlineMin ?? null,
+        booking_deadline_min: input.bookingDeadlineMin ?? null,
+        recurring_group_id: groupId,
+        pass_selection_mode: input.passSelectionMode ?? "all",
+      });
+    }
+  }
+  if (rows.length === 0) return [];
   const { data, error } = await supabase.rpc("create_recurring_classes_safe", {
     p_center_id: centerId, p_rows: rows,
   });
@@ -645,7 +696,7 @@ export type CopyGroup = {
   end: string;
   capacity: number;
   roomId: string | null;
-  cancelDeadlineMin: number;
+  cancelDeadlineMin: number | null;
   classIds: string[];       // 이 그룹에 속한 원본 수업들
   dates: string[];          // 원본 날짜들
 };
@@ -666,7 +717,7 @@ export async function fetchCopyGroups(centerId: string, fromMonth: string): Prom
       map[key] = {
         key, title: c.title, dow, start: c.start, end: c.end,
         capacity: c.capacity, roomId: c.roomId,
-        cancelDeadlineMin: c.cancelDeadlineMin ?? 0,
+        cancelDeadlineMin: c.cancelDeadlineMin ?? null,
         classIds: [], dates: [],
       };
     }
@@ -686,7 +737,7 @@ export type CopyDateItem = {
   end: string;
   capacity: number;
   roomId: string | null;
-  cancelDeadlineMin: number;
+  cancelDeadlineMin: number | null;
   classId: string;
 };
 
@@ -701,7 +752,7 @@ export async function fetchCopyDateItems(centerId: string, fromMonth: string): P
     date: c.date,
     day: parseInt(c.date.slice(8), 10),
     start: c.start, end: c.end, capacity: c.capacity,
-    roomId: c.roomId, cancelDeadlineMin: c.cancelDeadlineMin ?? 0,
+    roomId: c.roomId, cancelDeadlineMin: c.cancelDeadlineMin ?? null,
     classId: c.id,
   })).sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
 }
