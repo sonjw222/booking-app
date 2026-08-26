@@ -22,14 +22,43 @@
 2. `/cart` 헤더의 뒤로가기 버튼과 "장바구니" 제목 글자가 간격 없이 붙어 있던 것 —
    `.commerce-page .back-header`(구매내역 화면과 공유)에 `gap: 10px` 추가.
 
-## 2026-08-25 — 동명 수강권 구분 표시 준비(A-8, SQL 미적용)
+## 2026-08-25 — 네이티브 confirm()/alert() 전면 마이그레이션 + 토스트 높이 버그 수정
+
+사용자 스크린샷 피드백: `/manager/leads`(상담고객 등록)에서 알림창이 브라우저 기본 스타일로
+검게 떠서 이질적으로 보임. 두 가지 서로 다른 원인을 찾아 각각 수정:
+
+1. **네이티브 `confirm()`/`alert()` 잔존 21곳**: 앱 전체를 이미 커스텀 `appConfirm()`/
+   `ConfirmDialog`로 마이그레이션했다고 생각했지만(PR #86), 실제로는 15개 파일(21개 호출)이
+   여전히 브라우저 기본 `confirm()`/`alert()`를 쓰고 있었다(전면 grep으로 확인). 전부
+   `await globalThis.appConfirm(...)`로 교체(모든 호출부가 이미 `async` 함수라 단순 치환).
+   `app/mypage/page.tsx`의 유일한 `alert()`는 이 화면의 `error` 상태가 전체 화면을 에러
+   뷰로 바꾸는 용도라 그대로 못 쓰고, 별도 `toast` 상태를 새로 추가해 대체. `handleAttendance`
+   (`app/manager/classes/page.tsx`)와 휴무일 삭제(`app/manager/holidays/page.tsx`)의 네이티브
+   `confirm()`에 의존하던 E2E 테스트 2개(`attendance.spec.ts`, `holiday-restores-classes.spec.ts`
+   — PR #86 때 의도적으로 안 건드렸던 것들)도 `.confirm-sheet` 클릭 방식으로 함께 갱신.
+2. **`.toast` 높이 버그(진짜 원인)**: `.manager-v3-content .toast, .admin-v3-content .toast`가
+   `bottom:112px`만 설정하고 `top`은 그대로 둬서, `position:fixed` 요소가 `top:18px`와
+   `bottom:112px`를 동시에 가져 자동으로 그 사이 전체(뷰포트 기준 최대 714px)로 늘어나려다
+   `max-height:160px !important` 세이프가드에 걸려 "텍스트는 위에, 그 아래로 큰 빈 검은
+   사각형"으로 보이던 버그. `top:auto` 추가로 수정 — 이제 42px 높이의 원래 의도된 작은
+   알약 모양으로 하단 네비 위에 뜬다.
+
+## 2026-08-25 — 매니저 수업 화면 "일정 복사" 버튼 가로 여백 확대
+
+사용자 스크린샷 피드백: `/manager/classes` 헤더의 "일정 복사" 버튼이 "휴무일" 버튼과 같은
+padding(양쪽 8px)을 쓰다 보니 글자 수가 더 많아 텍스트가 꽉 차 보였음. 이 버튼에만 별도
+클래스(`.cal-copy-btn`)를 붙여 padding을 14px로 늘림(휴무일 버튼은 그대로 유지).
+
+## 2026-08-25 — 동명 수강권 구분 표시 준비(A-8, SQL 적용 완료)
 
 이름·만료일이 완전히 같은 수강권이 여러 개면 예약 확인 화면에서 구분할 방법이 없던 문제
 (실제 재현 확인). `add_usable_memberships_issued_at_draft_proposed.sql` 작성 —
 `usable_memberships_for_classes()` RPC의 RETURNS TABLE에 `issued_at`(기존 컬럼, 신규 아님)을
 추가, WHERE절(예약 자격 판정)은 무변경. 코드(`lib/reservations.ts`, `app/reservation/page.tsx`)는
 SQL 미적용 상태에서도 안전하게 동작하도록 옵셔널 처리해 먼저 커밋 — 이름+만료일이 겹치는
-항목에만 구매일을 보여줌. **SQL은 라이브 RPC라 사용자 승인 후 적용 필요.**
+항목에만 구매일을 보여줌. **2026-08-25 사용자가 Supabase SQL Editor에서 직접 적용 완료**
+(`CREATE OR REPLACE`가 반환 타입 변경을 거부해 `DROP FUNCTION` 후 재생성 + 권한 재부여로
+수정 적용, `pg_get_functiondef`로 최종 확인함).
 
 ## 2026-08-24 — 죽은 `/mypage/history` 라우트 정리(A-13)
 

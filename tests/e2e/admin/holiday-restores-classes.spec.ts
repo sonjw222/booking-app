@@ -133,8 +133,9 @@ test("휴무일 생성→회원화면 예약차단 확인→삭제→새로고�
   // ④ 관리자 화면에서 방금 만든 휴무일을 실제로 삭제
   await page.goto("/manager/holidays");
   await waitHolidaysReady(page);
-  page.once("dialog", (d) => d.accept());
+  // handleDelete()가 appConfirm() 커스텀 확인창을 띄운다(네이티브 confirm()에서 마이그레이션됨).
   await holidayRow().getByRole("button", { name: "삭제" }).click();
+  await page.locator(".confirm-sheet").getByRole("button", { name: "확인" }).click();
   await expect(holidayRow()).toHaveCount(0);
 
   // ⑤ 휴무일 지정 이후 만든 새 수업("신규 수업")도 같은 날짜에 추가 — 삭제 후 이것도

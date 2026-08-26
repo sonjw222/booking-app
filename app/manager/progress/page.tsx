@@ -114,7 +114,7 @@ export default function ProgressCategoryPage() {
     const msg = hasChildren
       ? `'${name}'과(와) 하위 세부기술이 모두 삭제됩니다. 계속할까요?`
       : `'${name}'을(를) 삭제할까요?`;
-    if (!confirm(msg)) return;
+    if (!(await globalThis.appConfirm(msg))) return;
     setBusy(true);
     try {
       await deleteCategory(id);

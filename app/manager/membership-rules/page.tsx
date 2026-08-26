@@ -139,7 +139,7 @@ export default function MembershipRulesPage() {
   }
 
   async function handleDeleteProduct(p: Product) {
-    if (!confirm(`'${p.name}' 상품을 삭제할까요?`)) return;
+    if (!(await globalThis.appConfirm(`'${p.name}' 상품을 삭제할까요?`))) return;
     setBusy(true);
     try { await deleteProduct(p.id); showToast("삭제했어요"); await load(); }
     catch (e: any) { setError(e.message); }

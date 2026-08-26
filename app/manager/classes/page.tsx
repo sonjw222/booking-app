@@ -524,7 +524,7 @@ export default function ClassManagePage() {
 
   async function handleCopy() {
     if (!activeCenterId) return;
-    if (!confirm(`${copyFrom} → ${copyTo}\n선택한 수업을 복사할까요?`)) return;
+    if (!(await globalThis.appConfirm(`${copyFrom} → ${copyTo}\n선택한 수업을 복사할까요?`))) return;
     setCopyBusy(true);
     try {
       const n = copyMode === "weekday"
@@ -557,7 +557,7 @@ export default function ClassManagePage() {
       return;
     }
     if (status === "cancelled") {
-      const ok = confirm(
+      const ok = await globalThis.appConfirm(
         `${a.name}님의 예약을 취소할까요?\n\n` +
         `· 사용한 수강권 횟수가 1회 복구돼요\n` +
         `· 취소 후에는 출석·결석·노쇼로 되돌릴 수 없어요\n\n` +
@@ -846,7 +846,7 @@ export default function ClassManagePage() {
           레이아웃 그대로 다시 보이게 한다(globals.css 참고) — 그 규칙이 없으면 "복사"/
           "휴무일" 버튼이 완전히 사라지고 클릭도 안 되는 상태였다. */}
       <div className="back-header">
-        <button className="side cal-export-btn" style={{ fontSize: 12 }} onClick={openCopy}>일정 복사</button>
+        <button className="side cal-export-btn cal-copy-btn" style={{ fontSize: 12 }} onClick={openCopy}>일정 복사</button>
         <div className="title">내 일정</div>
         <a className="side cal-export-btn" href="/manager/holidays" style={{ fontSize: 12 }}>휴무일</a>
       </div>

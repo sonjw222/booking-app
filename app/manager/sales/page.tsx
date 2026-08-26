@@ -261,7 +261,7 @@ export default function SalesPage() {
   }
 
   async function handleDeleteExpense(id: string) {
-    if (!confirm("이 지출을 삭제할까요?")) return;
+    if (!(await globalThis.appConfirm("이 지출을 삭제할까요?"))) return;
     setBusy(true);
     try { await deleteExpense(id); showToast("삭제했어요"); await load(); }
     catch (e: any) { setError(e.message); }
