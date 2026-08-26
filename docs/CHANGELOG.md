@@ -8,6 +8,152 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-26 — create_default_center_subscription() 트리거 security definer 누락 수정 (SQL 적용 완료)
+
+`add_center_platform_subscription.sql`(2026-08-26, 라이브 적용 완료)의 신규 트리거가 CI를
+계속 깨뜨리고 있음을 발견 — 완전히 무관한 PR 5개(#99, #102, #103, #104, main push 검증)
+전부에서 `tests/integration/manager-centers-privilege-escalation.test.ts`의 같은 3개
+케이스가 42501(permission denied)로 실패. 원인: 그 테스트는 `register_center_for_
+account_safe()` RPC를 거치지 않고 일반 클라이언트로 `centers`에 직접 insert하는 시나리오도
+검증하는데, `create_default_center_subscription()` 트리거가 `center_subscriptions`에
+insert를 시도하며 그 테이블엔 INSERT policy가 전혀 없어(의도적 설계) 막히고, 트리거 예외가
+원본 `centers` insert 전체를 롤백시킴 — "정상적인 최초 오너 bootstrap" 시나리오까지 연쇄로
+실패. 실제 앱 흐름(`lib/centers.ts`)은 항상 그 RPC만 써서 영향 없음을 확인.
+`fix_center_subscription_trigger_security_definer.sql` 작성 — 함수에 `security definer
+set search_path = public` 추가, 로직은 무변경. 원본 `add_center_platform_subscription.sql`은
+CLAUDE.md 규칙(적용된 SQL 직접 수정 금지)에 따라 원문 보존하고 정정 주석만 추가.
+사용자가 Supabase SQL Editor에서 적용 완료(`pg_get_functiondef`로 확인), 이후 PR #105
+재실행에서 Integration 테스트가 처음으로 정상 통과해 원인 확정.
+
+## 2026-08-26 — 메시지 발송(SMS/알림톡) Adapter Pattern 구조 준비, 벤더 미정
+
+카카오 알림톡/SMS 발송(`P1-3`)에 필요한 `notification_rules`/`messages`/`notification_logs`
+테이블은 이미 있지만 코드 어디서도 참조되지 않는 완전 미사용 상태였음(grep 확인). 벤더가
+아직 정해지지 않아(발신프로필 등록 + 카카오 템플릿 사전심사 필요) 실제 연동 대신, 결제
+(P0-1)의 Payment Adapter Pattern과 동일한 구조를 `lib/messaging/`에 새로 준비함:
+`types.ts`(`MessageProvider` 인터페이스), `MockMessageProvider.ts`(콘솔 로그 + 가짜 성공
+응답만 반환, DB에는 안 씀 — RLS/권한 설계 미완료라 범위 밖), `AlimtalkSmsProvider.ts`(벤더
+미확정 스텁, 전 메서드가 Error를 던짐), `MessageProviderFactory.ts`(`NEXT_PUBLIC_MESSAGE_
+PROVIDER` env로 선택), `MessageService.ts`, `index.ts`. `types.ts`의 `MessageChannel`을
+schema.sql 실측 확인 결과에 맞춰 정정 — `messages.channel` CHECK 제약은 실제로
+`sms`/`lms`/`push` 3개뿐이고 `alimtalk`은 없음(push는 이미 `lib/webPush.ts`가 완전히
+별개로 처리 중이라 이 어댑터에서 제외). `alimtalk`을 실제 저장할 때 `messages.channel`에
+어떤 값으로 매핑할지(새 CHECK 값 추가 vs `sms`로 대체발송 매핑)는 벤더 확정 후 결정할
+사안으로 주석에 남김. `tests/unit/MessageProviderFactory.test.ts`,
+`tests/unit/MockMessageProvider.test.ts` 신규 8개 테스트 추가, `npm run build` +
+`npm run test`(254개) 전부 통과 확인. 새 SQL/UI 화면은 이번 범위 밖 — 벤더 확정 후 별도
+작업.
+
+## 2026-08-26 — P0-7 재조사: 오염 전파 경로 실측 차단 확인 + 우선순위 P2로 하향
+
+공유 dev Supabase fixture 오염 문제(원인 미확정 상태로 P0에 남아있던 항목)를 다시 조사.
+`center_settings`를 변경하는 통합테스트 파일 10개 전부가 `getOrCreateOwnedTestCenter()`
+(2026-08-22 추가된 백스톱 포함)를 거친다는 걸 grep으로 실측 확인 — 우회 경로 없음.
+실제 코드(재구현 아님)를 임시 통합테스트로 호출해 라이브 Supabase에서 오염 상태를 인위로
+만든 뒤 백스톱이 실제로 되돌리는지도 검증 완료. 근본 원인(누가 왜 오염시키는지)은 여전히
+미확정이지만 "오염이 다음 실행까지 전파된다"는 핵심 증상 자체는 구조적으로 막혀 있음이
+확인돼 P0 → P2로 하향. 자세한 내용은 `docs/TODO.md` P0-7 참고.
+
+## 2026-08-26 — P0-8 후속: 운영자용 "구독 재개" 추가 + 실제 센터 데이터 복구
+
+QA 도중 운영자가 실제 센터("어텐션 피겨팀")에 구독 취소를 실제로 눌러봤다가 되돌릴
+방법이 없어 계속 취소 상태로 남아있던 것을 발견. `admin_reactivate_center_subscription`
+RPC 신규 — 카드 등록 여부에 따라 `active`/`pending_billing_setup`으로 복귀,
+`/admin/subscriptions`에서 취소된 센터는 "구독 취소" 대신 "구독 재개" 버튼으로 전환.
+새 RPC로 어텐션 피겨팀의 구독을 실제로 복구 완료. `npm run build`/유닛테스트 246개
+재확인 통과. 자세한 내용은 `docs/TODO.md` P0-8 참고.
+
+## 2026-08-26 — P0-8 후속: 오너 셀프서비스(플랜 변경/구독 취소) + 구독 취소 임시 비활성화
+
+`/manager/subscription`에 오너 본인이 직접 쓸 수 있는 플랜 변경 드롭다운 + 구독 취소
+버튼 추가(`center_change_own_subscription_plan`/`center_cancel_own_subscription` RPC
+신규, `_is_owner_of_center()` 내부 게이트). 새 플랜의 제한을 현재 사용량이 이미
+초과하면 변경 자체를 막음. Playwright 14개 시나리오로 실브라우저 검증(13/14 통과 —
+나머지 1개는 공유 fixture 계정이 다른 센터를 이미 소유해서 생긴 테스트 스크립트 오탐,
+앱 버그 아님). 검증 직후 사용자가 실제로 취소를 눌러보다 "취소해도 플랜 제한이 그대로라
+아무것도 안 멈추는 상태 전환이라 이상하다"는 걸 직접 발견 — 실제 결제 연동 전까지는
+구독 취소 버튼을 카드 등록 버튼과 동일한 패턴(`BILLING_ENABLED` 게이트, 회색 처리 +
+안내 문구)으로 비활성화. 플랜 변경은 계속 활성 상태(제한 강제는 실제 결제와 무관하게
+이미 의미 있음). `npm run build`/유닛테스트 246개 재확인 통과. 자세한 내용은
+`docs/TODO.md` P0-8 참고.
+
+## 2026-08-26 — P0-8 후속: 운영자 플랜변경/구독취소 + 오너 전용 게이트 + Playwright 21개 시나리오 검증
+
+`/admin/subscriptions`(조회 전용이었음)에 플랜 변경 드롭다운 + 구독 취소 버튼 추가
+(`admin_set_center_subscription_plan`/`admin_cancel_center_subscription` RPC 신규).
+"플랫폼 구독" 메뉴를 위임 가능한 권한 키가 아니라 스튜디오 오너로 하드코딩 —
+`/manager/subscription` 페이지 자체도 오너 아닌 센터는 제외해 직접 URL 접근도 차단.
+Playwright로 메뉴 노출/차단, 폼 입력(무제한 체크박스), 기본 플랜 원자성, 커스텀
+확인창, 실제 화면에서 제한 에러 노출, 삭제 보호/해제까지 21개 시나리오 전부 실제
+브라우저로 재검증(21/21 통과) — 검증 중 발견한 건 전부 테스트 스크립트 자체 버그였고
+실제 앱 버그는 없었음. `npm run build`/유닛테스트 246개 재확인 통과. 자세한 내용은
+`docs/TODO.md` P0-8 참고.
+
+## 2026-08-26 — P0-8 후속: 플랜 실제 제한 강제 + 운영자용 "구독 플랜 관리" 화면
+
+룸/스태프/회원 수/판매 상품 종류 제한이 있는 플랜을 만들면 실제로 그 센터에 DB 레벨에서
+강제되도록 구현. `subscription_plans`에 `max_rooms`/`max_staff`(오너 제외)/`max_members`/
+`max_products`(판매중인 것만) + `is_default`(정확히 하나만, 부분 유니크 인덱스) 추가,
+`rooms`/`manager_centers`/`center_members`/`products` 4개 테이블에 `BEFORE INSERT`
+트리거로 실제 강제(화면 검증 아님 — API 직접 호출도 우회 불가). 운영자 전용
+`/admin/subscription-plans`(관리홈 메뉴 추가) 신규 — 플랜 CRUD + 각 제한을 숫자/"무제한"
+체크박스로 편집, `set_default_subscription_plan()` RPC로 기본 플랜 원자적 전환. 새 삭제
+확인창은 브라우저 기본 `confirm()` 대신 기존 앱의 커스텀 `appConfirm()`으로 통일.
+
+신규 통합테스트(`subscription-plan-limits.test.ts`, 15개 시나리오)로 4개 제한 차원 전부
+경계 검증 — 공유 fixture 센터 대신 파일 전용 격리 센터 사용. 테스트 작성 중 `rooms`
+테이블에 `service_role` GRANT가 아예 없던 실제 버그 발견·수정
+(`fix_service_role_missing_grants_rooms.sql`) — 이 저장소에서 반복돼온 유형의 이슈.
+`npm run build`/유닛테스트 246개/신규 통합테스트 15개 전부 통과. 자세한 내용은
+`docs/TODO.md` P0-8 참고.
+
+## 2026-08-26 — P0-8 후속: "플랫폼 구독"을 운영 설정 안 섹션에서 별도 메뉴로 분리
+
+사용자 QA 피드백 — 회원/예약 운영 설정과 성격이 다른 축(우리 쪽 매출·계약)이라 운영
+설정 화면에 묻혀 있으면 안 됨. `app/manager/settings/page.tsx`에서 구독 섹션을 완전히
+제거하고, 신규 `app/manager/subscription/page.tsx`로 분리. 관리홈(`app/manager/page.tsx`)
+"OO 관리" 메뉴 목록 맨 아래에 "플랫폼 구독" 항목 추가(운영 설정과 동일한
+`facility.operation` 권한 키로 노출 — 원래 그 페이지의 일부였으므로 접근 범위 유지).
+`docs/ROUTES.md`도 라우트 분리에 맞춰 갱신. Playwright로 (1) 관리홈에 새 메뉴 항목 노출
+(2) 운영 설정 화면에서 구독 섹션 완전히 사라짐 (3) 새 페이지가 실 데이터로 정상
+렌더링되는 것까지 확인. `npm run build`/유닛테스트 246개 재확인 통과.
+
+## 2026-08-26 — P0-8 SQL 적용 + 실 화면 QA 완료
+
+`add_center_platform_subscription.sql`을 SQL Editor에서 적용, 라이브 재조회로 3개 테이블
+생성/센터 454개 전부 1:1 backfill/기본 플랜 seed/트리거 정상 확인. Playwright로 매니저
+설정 화면의 "플랫폼 구독" 섹션과 운영자 전용 `/admin/subscriptions`(전체 454개 센터 현황)
+둘 다 에러 없이 실 데이터로 정상 렌더링되는 것까지 확인. `npm run build`/유닛테스트 246개
+재확인 통과. 자세한 내용은 `docs/TODO.md` P0-8 참고.
+
+## 2026-08-25 — 센터 → 플랫폼 구독료(자동결제/빌링) DB 구조 + 조회 화면(P0-8, SQL 미적용)
+
+센터가 플랫폼에 내는 월 구독료 기능의 뼈대를 추가. 토스페이먼츠 자동결제는 계약 심사가
+끝나야 카드 등록(빌링키 발급)이 가능해(심사 전 테스트 키로 시도하면 에러 발생, 토스 공식
+문서로 확인됨) 아직 실제 결제를 테스트할 수 없는 상태 — 그래서 이번 배치는 지금 할 수 있는
+것(DB 구조·RLS·조회 화면)까지만 다루고, 실제 카드 등록 버튼은 `NEXT_PUBLIC_BILLING_ENABLED`
+플래그로 꺼둔 채 코드만 준비했다.
+
+- `add_center_platform_subscription.sql`(신규, **SQL 미적용 — 사용자 승인 후 적용 필요**) +
+  `rollback_add_center_platform_subscription.sql`: `subscription_plans`(구독 플랜 카탈로그,
+  공개 조회 + 운영자만 관리), `center_subscriptions`(센터당 1행, status로 생애주기 관리,
+  일반 사용자 INSERT/UPDATE 정책 없음 — service_role 전용), `center_subscription_charges`(청구
+  이력, append 전용) 3개 테이블 + RLS. 센터 생성 시 기본 플랜으로 `pending_billing_setup` 행을
+  자동 생성하는 트리거(`create_default_center_roles`와 동일 패턴) + 기존 센터 backfill.
+- `lib/centerSubscription.ts`(신규): 구독 조회 함수 + 토스 자동결제 SDK 연동 함수(스크립트
+  동적 로드 + `requestBillingAuth` 호출) — `NEXT_PUBLIC_BILLING_ENABLED`가 정확히 `"true"`가
+  아니면 항상 예외를 던져 실행 경로를 이중으로 차단.
+- `app/manager/settings/page.tsx`: "플랫폼 구독" 섹션 추가(플랜/상태/다음 결제일/등록 카드
+  표시, 카드 등록 버튼은 플래그 꺼짐 시 비활성 + 안내 문구).
+- `app/admin/subscriptions/page.tsx`(신규) + `app/admin/page.tsx`: 운영자용 전체 센터 구독
+  현황 조회 화면(조회 전용, 상태 변경 액션 없음), 운영자 허브 메뉴에 "구독 현황" 추가.
+- `.env.local.example`: `NEXT_PUBLIC_BILLING_ENABLED`, `NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY`
+  추가.
+- 의도적으로 이번 배치에 없는 것: 가입/센터 등록 시점에 결제를 강제하는 흐름(매니저가 설정
+  화면에 스스로 들어가야 보이는 방식으로만 구현), 실제 authKey→billing_key 저장 처리(서버
+  필요), 매월 자동 청구 실행(pg_cron/외부 스케줄러 필요), 구독 해지 화면. 근거와 완료 조건은
+  `docs/TODO.md` P0-8 참고.
+
 ## 2026-08-26 — REQUIREMENTS.md 갱신(2026-07-28 이후 완료된 기능 반영)
 
 최종 검증일이 2026-07-28로 오래 방치돼 있어, 그 사이 실제로 완료된 기능이 여전히 "미완성"으로
