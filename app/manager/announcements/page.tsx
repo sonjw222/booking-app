@@ -116,7 +116,7 @@ export default function ManagerAnnouncementsPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("이 공지를 삭제할까요?")) return;
+    if (!(await globalThis.appConfirm("이 공지를 삭제할까요?"))) return;
     setBusy(true);
     try {
       await deleteAnnouncement(id);

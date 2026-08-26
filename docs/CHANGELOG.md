@@ -8,7 +8,7 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
-## 2026-08-26 — create_default_center_subscription() 트리거 security definer 누락 수정 (SQL 미적용)
+## 2026-08-26 — create_default_center_subscription() 트리거 security definer 누락 수정 (SQL 적용 완료)
 
 `add_center_platform_subscription.sql`(2026-08-26, 라이브 적용 완료)의 신규 트리거가 CI를
 계속 깨뜨리고 있음을 발견 — 완전히 무관한 PR 5개(#99, #102, #103, #104, main push 검증)
@@ -22,7 +22,8 @@ insert를 시도하며 그 테이블엔 INSERT policy가 전혀 없어(의도적
 `fix_center_subscription_trigger_security_definer.sql` 작성 — 함수에 `security definer
 set search_path = public` 추가, 로직은 무변경. 원본 `add_center_platform_subscription.sql`은
 CLAUDE.md 규칙(적용된 SQL 직접 수정 금지)에 따라 원문 보존하고 정정 주석만 추가.
-**SQL 미적용 — 사용자가 Supabase SQL Editor에서 직접 적용 필요.**
+사용자가 Supabase SQL Editor에서 적용 완료(`pg_get_functiondef`로 확인), 이후 PR #105
+재실행에서 Integration 테스트가 처음으로 정상 통과해 원인 확정.
 
 ## 2026-08-26 — 메시지 발송(SMS/알림톡) Adapter Pattern 구조 준비, 벤더 미정
 
@@ -153,14 +154,68 @@ Playwright로 메뉴 노출/차단, 폼 입력(무제한 체크박스), 기본 �
   필요), 매월 자동 청구 실행(pg_cron/외부 스케줄러 필요), 구독 해지 화면. 근거와 완료 조건은
   `docs/TODO.md` P0-8 참고.
 
-## 2026-08-25 — 동명 수강권 구분 표시 준비(A-8, SQL 미적용)
+## 2026-08-26 — REQUIREMENTS.md 갱신(2026-07-28 이후 완료된 기능 반영)
+
+최종 검증일이 2026-07-28로 오래 방치돼 있어, 그 사이 실제로 완료된 기능이 여전히 "미완성"으로
+잘못 기재돼 있었다(코드로 재확인 후 수정): 네이버 소셜 로그인(커스텀 Edge Function 흐름으로
+구현 완료), 구글 로그인(누락돼 있었음, 추가), 담당회원·상담고객(leads) 화면(완성된 CRUD),
+미발급 주문 셀프 취소, 국경일 표시(정적 테이블로 매년 수기 갱신 체계 확정), 계정 탈퇴, 마이페이지
+포인트 내역 화면, 포인트 원장 통합(point_transactions), 세부 권한 버튼 단위 UI 게이팅(9개 화면).
+"실제 PG 결제"는 별도 미병합 브랜치에서 진행 중이라 이 문서(origin/main 기준)에서는 의도적으로
+계속 미완성으로 유지. 카카오 알림톡/SMS는 벤더 미정 — 결제와 동일한 Adapter Pattern 구조만
+`lib/messaging/`에 준비된 상태(2026-08-26, 별도 진행)로 반영. 코드 변경 없음, 문서만 갱신.
+
+## 2026-08-25 — 매니저 저장 화면 뒤로가기 버튼 복구 + 장바구니 헤더 간격 수정
+
+사용자 스크린샷 피드백 두 건:
+
+1. `/manager/settings`(운영 설정) 등 헤더에 "저장/저장됨" 같은 페이지 고유 액션 버튼이
+   있는 매니저 화면(`.back-header:has(.header-action)` 패턴 — settings, sales,
+   membership-rules, goods, rooms, center-info, progress/record 총 7곳)에서 뒤로가기
+   버튼이 아예 안 보였음. 원인: ManagerChrome 공통 헤더 도입 시 "제목만 숨기고 액션은
+   유지한다"는 주석과 달리 실제 CSS가 `.side`(뒤로가기)까지 같이 숨기고 있었다. `.title`만
+   숨기도록 고치고, 정렬도 오른쪽 끝 몰기(`flex-end`)에서 양끝 배치(`space-between`)로
+   바꿔 뒤로가기는 왼쪽·액션 버튼은 오른쪽에 오게 함.
+2. `/cart` 헤더의 뒤로가기 버튼과 "장바구니" 제목 글자가 간격 없이 붙어 있던 것 —
+   `.commerce-page .back-header`(구매내역 화면과 공유)에 `gap: 10px` 추가.
+
+## 2026-08-25 — 네이티브 confirm()/alert() 전면 마이그레이션 + 토스트 높이 버그 수정
+
+사용자 스크린샷 피드백: `/manager/leads`(상담고객 등록)에서 알림창이 브라우저 기본 스타일로
+검게 떠서 이질적으로 보임. 두 가지 서로 다른 원인을 찾아 각각 수정:
+
+1. **네이티브 `confirm()`/`alert()` 잔존 21곳**: 앱 전체를 이미 커스텀 `appConfirm()`/
+   `ConfirmDialog`로 마이그레이션했다고 생각했지만(PR #86), 실제로는 15개 파일(21개 호출)이
+   여전히 브라우저 기본 `confirm()`/`alert()`를 쓰고 있었다(전면 grep으로 확인). 전부
+   `await globalThis.appConfirm(...)`로 교체(모든 호출부가 이미 `async` 함수라 단순 치환).
+   `app/mypage/page.tsx`의 유일한 `alert()`는 이 화면의 `error` 상태가 전체 화면을 에러
+   뷰로 바꾸는 용도라 그대로 못 쓰고, 별도 `toast` 상태를 새로 추가해 대체. `handleAttendance`
+   (`app/manager/classes/page.tsx`)와 휴무일 삭제(`app/manager/holidays/page.tsx`)의 네이티브
+   `confirm()`에 의존하던 E2E 테스트 2개(`attendance.spec.ts`, `holiday-restores-classes.spec.ts`
+   — PR #86 때 의도적으로 안 건드렸던 것들)도 `.confirm-sheet` 클릭 방식으로 함께 갱신.
+2. **`.toast` 높이 버그(진짜 원인)**: `.manager-v3-content .toast, .admin-v3-content .toast`가
+   `bottom:112px`만 설정하고 `top`은 그대로 둬서, `position:fixed` 요소가 `top:18px`와
+   `bottom:112px`를 동시에 가져 자동으로 그 사이 전체(뷰포트 기준 최대 714px)로 늘어나려다
+   `max-height:160px !important` 세이프가드에 걸려 "텍스트는 위에, 그 아래로 큰 빈 검은
+   사각형"으로 보이던 버그. `top:auto` 추가로 수정 — 이제 42px 높이의 원래 의도된 작은
+   알약 모양으로 하단 네비 위에 뜬다.
+
+## 2026-08-25 — 매니저 수업 화면 "일정 복사" 버튼 가로 여백 확대
+
+사용자 스크린샷 피드백: `/manager/classes` 헤더의 "일정 복사" 버튼이 "휴무일" 버튼과 같은
+padding(양쪽 8px)을 쓰다 보니 글자 수가 더 많아 텍스트가 꽉 차 보였음. 이 버튼에만 별도
+클래스(`.cal-copy-btn`)를 붙여 padding을 14px로 늘림(휴무일 버튼은 그대로 유지).
+
+## 2026-08-25 — 동명 수강권 구분 표시 준비(A-8, SQL 적용 완료)
 
 이름·만료일이 완전히 같은 수강권이 여러 개면 예약 확인 화면에서 구분할 방법이 없던 문제
 (실제 재현 확인). `add_usable_memberships_issued_at_draft_proposed.sql` 작성 —
 `usable_memberships_for_classes()` RPC의 RETURNS TABLE에 `issued_at`(기존 컬럼, 신규 아님)을
 추가, WHERE절(예약 자격 판정)은 무변경. 코드(`lib/reservations.ts`, `app/reservation/page.tsx`)는
 SQL 미적용 상태에서도 안전하게 동작하도록 옵셔널 처리해 먼저 커밋 — 이름+만료일이 겹치는
-항목에만 구매일을 보여줌. **SQL은 라이브 RPC라 사용자 승인 후 적용 필요.**
+항목에만 구매일을 보여줌. **2026-08-25 사용자가 Supabase SQL Editor에서 직접 적용 완료**
+(`CREATE OR REPLACE`가 반환 타입 변경을 거부해 `DROP FUNCTION` 후 재생성 + 권한 재부여로
+수정 적용, `pg_get_functiondef`로 최종 확인함).
 
 ## 2026-08-24 — 죽은 `/mypage/history` 라우트 정리(A-13)
 

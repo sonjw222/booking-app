@@ -3615,16 +3615,19 @@ a.membership-card { text-decoration: none; display: block; }
 .admin-v3-content .mgr-mode-bar,
 .admin-v3-content > .app-shell > .back-header { display: none; }
 
-/* 페이지 고유 액션은 공통 Chrome으로 대체할 수 없으므로 제목만 숨기고 액션은 유지한다. */
+/* 페이지 고유 액션은 공통 Chrome으로 대체할 수 없으므로 제목만 숨기고 액션은 유지한다.
+   [사용자 리포트, 2026-08-25] 실제로는 아래에서 .side(뒤로가기 버튼)까지 같이 숨겨서
+   "운영 설정" 등 이 패턴을 쓰는 화면에 뒤로가기 버튼 자체가 안 보였다 — 주석의 원래 의도
+   ("제목만 숨기고")대로 .title만 숨기고 .side는 살리고, 정렬도 오른쪽 끝 몰기(flex-end)에서
+   양끝 배치(space-between)로 바꿔 뒤로가기는 왼쪽, 액션 버튼은 오른쪽에 오게 한다. */
 .manager-v3-content > .app-shell > .back-header:has(.header-action) {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   min-height: 52px;
   padding: 8px var(--page-gutter) 0;
   border: 0;
   background: var(--bg);
 }
-.manager-v3-content > .app-shell > .back-header:has(.header-action) > .side,
 .manager-v3-content > .app-shell > .back-header:has(.header-action) > .title { display: none; }
 
 .admin-chrome {
@@ -3939,7 +3942,7 @@ a.membership-card { text-decoration: none; display: block; }
 .center-detail-v2 .center-bar-btn.buy { border: 1px solid var(--line); background: var(--card-bg); }
 
 .commerce-page .back-header,
-.purchase-page-v2 .back-header { justify-content: flex-start; }
+.purchase-page-v2 .back-header { justify-content: flex-start; gap: 10px; }
 .commerce-page .back-header .title,
 .purchase-page-v2 .back-header .title { flex: 1; text-align: left; font-size: 28px; }
 .commerce-page .back-header .side:last-child,
@@ -4053,6 +4056,9 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-classes-v2>.back-header{min-height:88px;padding:28px var(--page-gutter) 18px;border-bottom:1px solid var(--line)}
 .manager-classes-v2>.back-header .title{font-size:27px;font-weight:800;letter-spacing:-.7px}
 .manager-classes-v2>.back-header .cal-export-btn{min-width:48px;min-height:40px;padding:0 8px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);font-weight:700}
+/* "일정 복사"는 "휴무일"보다 글자가 많아 같은 padding으로는 텍스트가 꽉 차 보였다 —
+   이 버튼만 가로 여유를 더 준다(휴무일 버튼 비율은 그대로 유지). */
+.manager-classes-v2>.back-header .cal-copy-btn{min-width:64px;padding:0 14px}
 .manager-classes-v2>.unplaced-banner{min-height:64px;margin:12px var(--page-gutter) 0;padding:12px 4px;display:flex;align-items:center;gap:12px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;text-align:left;box-shadow:none}
 .manager-classes-v2>.unplaced-banner.direct-assign-row{margin-top:0}
 .manager-classes-v2 .unplaced-icon{width:34px;height:34px;display:grid;place-items:center;flex:0 0 34px;border-radius:12px;background:var(--danger-soft);color:var(--danger);font-size:16px;font-weight:800}
@@ -4168,7 +4174,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-v3-content .rv-stats{margin:12px var(--page-gutter) 8px;padding:18px 0;display:grid;grid-template-columns:repeat(3,1fr);border-block:1px solid var(--line);border-radius:0;background:transparent}.manager-v3-content .rv-stat{padding:0 12px;border-left:1px solid var(--line)}.manager-v3-content .rv-stat:first-child{border-left:0}.manager-v3-content .rv-stat-value{font-size:21px;font-weight:800}.manager-v3-content .rv-stat-label{margin-top:5px;font-size:10.5px;color:var(--ink-soft)}
 .manager-v3-content .date-range{padding:10px var(--page-gutter) 16px;gap:8px}.manager-v3-content .sales-summary{margin:0 var(--page-gutter) 20px;padding:20px;border:0;border-radius:20px;background:var(--ink);color:var(--bg);box-shadow:none}.manager-v3-content .sales-summary *{color:inherit}.manager-v3-content .sales-big-value{font-size:30px;font-weight:820}.manager-v3-content .sales-breakdown{margin:0 var(--page-gutter);border-top:1px solid var(--line)}.manager-v3-content .sales-bd-item{min-height:56px;padding:14px 2px;border-bottom:1px solid var(--line);background:transparent}
 .manager-v3-content .toast,
-.admin-v3-content .toast {bottom:112px}.manager-v3-content .error-toast,
+.admin-v3-content .toast {bottom:112px;top:auto}.manager-v3-content .error-toast,
 .admin-v3-content .error-toast {margin-inline:var(--page-gutter);border-radius:14px}
 @media(max-width:380px){.manager-v3-content .date-range{grid-template-columns:1fr}.manager-v3-content .add-profile-actions,
 .admin-v3-content .add-profile-actions {grid-template-columns:1fr}.manager-v3-content .rv-stat{padding-inline:8px}.manager-v3-content .rv-stat-value{font-size:18px}}

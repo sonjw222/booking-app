@@ -185,7 +185,7 @@ export default function StaffPage() {
 
   async function handleRemoveStaff(s: Staff) {
     if (s.isOwner) { setError("오너는 삭제할 수 없어요"); return; }
-    if (!confirm(`${s.name} 님을 스태프에서 제외할까요?`)) return;
+    if (!(await globalThis.appConfirm(`${s.name} 님을 스태프에서 제외할까요?`))) return;
     setBusy(true);
     try {
       await removeStaff(s.id);
@@ -210,7 +210,7 @@ export default function StaffPage() {
 
   async function handleDeleteRole(r: Role) {
     if (r.isSystem) { setError("기본 역할은 삭제할 수 없어요"); return; }
-    if (!confirm(`'${r.name}' 역할을 삭제할까요?`)) return;
+    if (!(await globalThis.appConfirm(`'${r.name}' 역할을 삭제할까요?`))) return;
     setBusy(true);
     try {
       await deleteRole(r.id);

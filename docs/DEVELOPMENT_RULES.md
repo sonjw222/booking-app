@@ -46,6 +46,7 @@
 - 동적 route parameter는 현재 방식대로 `useParams()` 또는 페이지 구조에 맞는 Next.js API를 사용하고 문자열 존재 여부를 확인합니다.
 - 공용 화면 이동 규칙이 이미 있으면 재사용합니다. 예약 복귀 URL은 `lib/reservationNav.ts`가 기준입니다.
 - 같은 query parameter 이름을 여러 화면에서 조립할 때 한쪽만 변경하지 말고 송신·수신 화면을 함께 확인합니다.
+- 확인창은 네이티브 `confirm()`을 쓰지 않고 `await globalThis.appConfirm(message)`(`app/components/AppConfirmProvider.tsx`, 앱 루트 레이아웃에 이미 마운트됨)를 씁니다 — 네이티브 `confirm()`은 브라우저 기본 스타일로 떠서 검게 깨진 것처럼 보입니다(2026-08-25 사용자 리포트로 15개 파일·21곳에서 재발견, 전면 마이그레이션함). 단순 알림(선택지 없이 확인만)이 필요하면 `alert()` 대신 해당 화면의 기존 toast/error 상태를 재사용하거나 새로 추가합니다.
 
 ### 3-3. 스타일
 

@@ -98,7 +98,7 @@ export default function HolidaysPage() {
   }
 
   async function handleDelete(h: Holiday) {
-    if (!confirm(`${fmtDate(h.date)} 휴무일을 삭제할까요?`)) return;
+    if (!(await globalThis.appConfirm(`${fmtDate(h.date)} 휴무일을 삭제할까요?`))) return;
     setBusy(true);
     try {
       await deleteHoliday(h.id);
