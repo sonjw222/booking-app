@@ -309,7 +309,7 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **DB 구조·RLS·조회 화면 완료 + SQL 적용 완료 + 실 화면 QA 확인. 실제 카드 등록/청구만 외부 승인(토스 자동결제 계약 심사) 대기** |
+| 현재 상태 | **DB 구조·RLS·조회 화면 완료 + SQL 적용 완료 + 실 화면 QA 확인. 실제 카드 등록/청구만 외부 승인(토스 자동결제 계약 심사) 대기. ⚠ 트리거 security definer 누락으로 CI 연쇄 실패 발견 — `fix_center_subscription_trigger_security_definer.sql` 작성 완료, 사용자 적용 대기(아래 참고)** |
 | 근거 파일 | `add_center_platform_subscription.sql`(적용 완료), `rollback_add_center_platform_subscription.sql`, `add_subscription_plan_limits.sql`(적용 완료 — 플랜 제한 컬럼 4종 + 강제 트리거 4종 + `is_default`/RPC), `rollback_add_subscription_plan_limits.sql`, `add_admin_center_subscription_actions.sql`(신규, 적용 완료 — 운영자용 플랜 변경/구독 취소 RPC), `rollback_add_admin_center_subscription_actions.sql`, `add_owner_center_subscription_actions.sql`(신규, 적용 완료 — 오너 셀프서비스 플랜 변경/구독 취소 RPC), `rollback_add_owner_center_subscription_actions.sql`, `add_admin_reactivate_center_subscription.sql`(신규, 적용 완료 — 취소된 구독 재개 RPC), `rollback_add_admin_reactivate_center_subscription.sql`, `fix_service_role_missing_grants_rooms.sql`(적용 완료), `lib/centerSubscription.ts`(운영자·오너용 플랜변경/취소/재개 함수 + `planId` 필드 추가), `lib/operator.ts`(구독 플랜 CRUD), `app/manager/subscription/page.tsx`(스튜디오 오너 전용으로 고정, 권한 위임 불가 — 플랜 변경 드롭다운 포함, 구독 취소 버튼은 `BILLING_ENABLED`로 게이트), `app/manager/page.tsx`(메뉴를 오너 여부로 직접 게이트), `app/admin/subscriptions/page.tsx`(플랜 변경 드롭다운 + 구독 취소/재개 버튼 추가 — 원래 조회 전용이었음), `app/admin/subscription-plans/page.tsx`, `app/admin/page.tsx`, `tests/integration/subscription-plan-limits.test.ts`(15개 시나리오) |
 | 완료 조건 | 토스페이먼츠 자동결제 계약 심사 통과 후: (1) `NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY`/`NEXT_PUBLIC_BILLING_ENABLED=true` 운영 환경변수 설정, (2) 카드 등록 성공 시 토스가 반환하는 authKey를 billing_key로 교환해 `center_subscriptions`에 저장하는 서버 전용 처리 구현(토스 시크릿 키 필요 — 이 앱은 API 서버가 없어 별도 구축 필요, 예: Supabase Edge Function), (3) 매월 자동 청구 실행(pg_cron 또는 외부 스케줄러가 토스 API 호출 → `center_subscription_charges`에 성공/실패 기록 → `center_subscriptions.status`/`next_billing_date` 갱신), (4) 결제 실패(연체) 시 정책(유예기간, 기능 제한 여부 등)을 사업 결정 후 반영, (5) 오너의 "구독 취소" 버튼이 `BILLING_ENABLED`로 막혀 있는 것을 해제(실제로 청구가 시작돼야 "취소"라는 상태 전환이 의미가 생기기 때문에 임시로 막아둠 — 2026-08-26). 플랜의 실제 사용량 제한(룸/스태프/회원/상품), 운영자·오너의 플랜 변경, 운영자의 구독 취소는 이미 구현·Playwright 실브라우저 검증 완료 |
 | P0-1과의 관계 | P0-1(회원 → 센터 결제)과 결제 주체·대상이 다른 별개 축. 둘 다 "사업자/계약 승인 대기"라는 같은 종류의 외부 차단 요인을 공유함 |
@@ -420,6 +420,20 @@ Playwright 실브라우저 검증(14개 시나리오, 13/14 통과 — 나머지
 `/admin/subscriptions`에서 취소된 센터는 "구독 취소" 대신 "구독 재개" 버튼으로 전환.
 새 RPC를 통해 어텐션 피겨팀의 구독을 실제로 `pending_billing_setup`(카드 미등록
 상태의 기본값)으로 복구 완료. `npm run build`/유닛테스트 246개 재확인 통과.
+
+**2026-08-26 CI 연쇄 실패 발견·수정(SQL 미적용)**: 이 브랜치와 무관한 다른 세션의 PR
+5개(#99, #102, #103, #104, main push 검증)가 하루 동안 전부
+`tests/integration/manager-centers-privilege-escalation.test.ts`의 같은 3개 케이스로
+42501(permission denied) 실패 — 조사 결과 원인이 이 배치의 `create_default_center_
+subscription()` 트리거였음. 그 테스트는 `register_center_for_account_safe()` RPC를
+거치지 않고 일반 클라이언트로 `centers`에 직접 insert하는 시나리오도 검증하는데, 이
+트리거가 `center_subscriptions`에 insert를 시도하며 그 테이블엔 INSERT policy가 전혀
+없어(의도적 설계) 42501로 막히고, 트리거 예외가 원본 `centers` insert 전체를 롤백시켜
+"정상적인 최초 오너 bootstrap" 시나리오까지 연쇄로 실패시켰다. 실제 앱 흐름은
+`lib/centers.ts`가 항상 이 RPC만 써서 영향 없음을 확인. `fix_center_subscription_
+trigger_security_definer.sql` 작성 — 함수에 `security definer set search_path =
+public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, 코드 무변경).
+**SQL 미적용 — 사용자가 Supabase SQL Editor에서 직접 적용 필요.**
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 

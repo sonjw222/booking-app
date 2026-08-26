@@ -8,6 +8,22 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-26 — create_default_center_subscription() 트리거 security definer 누락 수정 (SQL 미적용)
+
+`add_center_platform_subscription.sql`(2026-08-26, 라이브 적용 완료)의 신규 트리거가 CI를
+계속 깨뜨리고 있음을 발견 — 완전히 무관한 PR 5개(#99, #102, #103, #104, main push 검증)
+전부에서 `tests/integration/manager-centers-privilege-escalation.test.ts`의 같은 3개
+케이스가 42501(permission denied)로 실패. 원인: 그 테스트는 `register_center_for_
+account_safe()` RPC를 거치지 않고 일반 클라이언트로 `centers`에 직접 insert하는 시나리오도
+검증하는데, `create_default_center_subscription()` 트리거가 `center_subscriptions`에
+insert를 시도하며 그 테이블엔 INSERT policy가 전혀 없어(의도적 설계) 막히고, 트리거 예외가
+원본 `centers` insert 전체를 롤백시킴 — "정상적인 최초 오너 bootstrap" 시나리오까지 연쇄로
+실패. 실제 앱 흐름(`lib/centers.ts`)은 항상 그 RPC만 써서 영향 없음을 확인.
+`fix_center_subscription_trigger_security_definer.sql` 작성 — 함수에 `security definer
+set search_path = public` 추가, 로직은 무변경. 원본 `add_center_platform_subscription.sql`은
+CLAUDE.md 규칙(적용된 SQL 직접 수정 금지)에 따라 원문 보존하고 정정 주석만 추가.
+**SQL 미적용 — 사용자가 Supabase SQL Editor에서 직접 적용 필요.**
+
 ## 2026-08-26 — 메시지 발송(SMS/알림톡) Adapter Pattern 구조 준비, 벤더 미정
 
 카카오 알림톡/SMS 발송(`P1-3`)에 필요한 `notification_rules`/`messages`/`notification_logs`

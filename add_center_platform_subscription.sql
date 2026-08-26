@@ -26,6 +26,12 @@
 --      register_center_for_account_safe() 안에서만 일어나므로(lib/centers.ts가
 --      centers에 직접 insert하지 않고 이 RPC만 호출하는 것을 확인함) 트리거 함수는
 --      create_default_center_roles()와 동일하게 security definer가 필요 없다.
+--      [2026-08-26 정정] 이 판단은 틀렸음이 CI에서 확인됨 — 통합테스트가 이 RPC를
+--      거치지 않고 일반 클라이언트로 centers에 직접 insert하는 시나리오도 검증하는데,
+--      그 경로에선 트리거가 42501로 막혀 원본 insert까지 롤백시켰다. 실제 앱 흐름은
+--      영향 없음(lib/centers.ts는 항상 이 RPC만 씀). 수정은
+--      fix_center_subscription_trigger_security_definer.sql 참고 — 이 파일은 최초
+--      적용 기록 보존을 위해 원문 그대로 둠(CLAUDE.md 규칙 4).
 --   5) 기본 플랜 1개 seed + 기존 센터 backfill(전부 pending_billing_setup으로 시작)
 --   6) service_role GRANT — 이 저장소에서 새 테이블에 service_role GRANT를
 --      빠뜨려 "permission denied for table X"가 반복 발생한 이력이 있어(예:
@@ -151,9 +157,9 @@ grant select, insert, update, delete on center_subscription_charges to service_r
 
 -- ------------------------------------------------------------
 -- [5] 센터 생성 시 기본 구독 행 자동 생성
---     (create_default_center_roles와 동일한 트리거 패턴, security definer 불필요 —
---      센터 생성이 이미 security definer RPC인 register_center_for_account_safe()
---      안에서만 일어나기 때문)
+--     [2026-08-26 정정] 여기 정의된 대로 security definer 없이 최초 적용됐으나 CI에서
+--     문제 확인 — fix_center_subscription_trigger_security_definer.sql로 security
+--     definer 추가 필요(위 [4] 절 주석 참고). 이 파일 자체는 원문 보존.
 -- ------------------------------------------------------------
 create or replace function create_default_center_subscription()
 returns trigger
