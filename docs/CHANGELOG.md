@@ -8,6 +8,25 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-26 — 메시지 발송(SMS/알림톡) Adapter Pattern 구조 준비, 벤더 미정
+
+카카오 알림톡/SMS 발송(`P1-3`)에 필요한 `notification_rules`/`messages`/`notification_logs`
+테이블은 이미 있지만 코드 어디서도 참조되지 않는 완전 미사용 상태였음(grep 확인). 벤더가
+아직 정해지지 않아(발신프로필 등록 + 카카오 템플릿 사전심사 필요) 실제 연동 대신, 결제
+(P0-1)의 Payment Adapter Pattern과 동일한 구조를 `lib/messaging/`에 새로 준비함:
+`types.ts`(`MessageProvider` 인터페이스), `MockMessageProvider.ts`(콘솔 로그 + 가짜 성공
+응답만 반환, DB에는 안 씀 — RLS/권한 설계 미완료라 범위 밖), `AlimtalkSmsProvider.ts`(벤더
+미확정 스텁, 전 메서드가 Error를 던짐), `MessageProviderFactory.ts`(`NEXT_PUBLIC_MESSAGE_
+PROVIDER` env로 선택), `MessageService.ts`, `index.ts`. `types.ts`의 `MessageChannel`을
+schema.sql 실측 확인 결과에 맞춰 정정 — `messages.channel` CHECK 제약은 실제로
+`sms`/`lms`/`push` 3개뿐이고 `alimtalk`은 없음(push는 이미 `lib/webPush.ts`가 완전히
+별개로 처리 중이라 이 어댑터에서 제외). `alimtalk`을 실제 저장할 때 `messages.channel`에
+어떤 값으로 매핑할지(새 CHECK 값 추가 vs `sms`로 대체발송 매핑)는 벤더 확정 후 결정할
+사안으로 주석에 남김. `tests/unit/MessageProviderFactory.test.ts`,
+`tests/unit/MockMessageProvider.test.ts` 신규 8개 테스트 추가, `npm run build` +
+`npm run test`(254개) 전부 통과 확인. 새 SQL/UI 화면은 이번 범위 밖 — 벤더 확정 후 별도
+작업.
+
 ## 2026-08-26 — P0-7 재조사: 오염 전파 경로 실측 차단 확인 + 우선순위 P2로 하향
 
 공유 dev Supabase fixture 오염 문제(원인 미확정 상태로 P0에 남아있던 항목)를 다시 조사.

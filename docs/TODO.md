@@ -466,13 +466,33 @@ Playwright 실브라우저 검증(14개 시나리오, 13/14 통과 — 나머지
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **웹 푸시는 코드 구현 + 배포 완료, 실제 모바일 기기 수신 확인만 남음(자동 검증 불가 — 사용자가 나중에 직접 확인 예정).** 카카오 알림톡·SMS·이메일은 사업자 등록이 필요해 범위 밖(P0-1 PG결제와 동일한 종류의 블로커). |
-| 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`; `messages`, `notification_rules`, `notification_logs` |
+| 현재 상태 | **웹 푸시는 코드 구현 + 배포 완료, 실제 모바일 기기 수신 확인만 남음(자동 검증 불가 — 사용자가 나중에 직접 확인 예정).** 카카오 알림톡·SMS는 발신프로필 등록 + 메시지 템플릿 카카오 사전심사가 필요해(사업자 등록만으로는 부족) 벤더 확정 전까지 실제 연동 불가 — 2026-08-26 사용자 결정으로 벤더 확정 전에 Adapter Pattern 구조만 먼저 준비함(`lib/messaging/`). 이메일은 이번 범위에서 제외(사용자 결정). |
+| 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`, `lib/messaging/*`(신규); `messages`, `notification_rules`, `notification_logs` |
 | 완료 조건 | (웹 푸시) 실제 브라우저에서 알림 수신 확인. (카카오 알림톡/SMS/이메일) 사업자 등록 이후 발송기 연동 — 이번 범위 아님. |
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/settings/notifications`](./ROUTES.md) |
 
-카카오 알림톡·SMS·이메일(`messages`/`notification_rules`/`notification_logs` 기반, 건당 수수료
-발생)는 사업자 등록이 있어야 발송 계약이 가능해 여전히 범위 밖입니다.
+카카오 알림톡·SMS(`messages`/`notification_rules`/`notification_logs` 기반, 건당 수수료
+발생)는 벤더(알리고/NHN Cloud/Solapi 등)를 확정하고 카카오 발신프로필·템플릿 사전심사가
+끝나야 실제 발송이 가능해 여전히 범위 밖입니다. 이메일은 이번 범위에서 완전히 제외합니다
+(사용자 결정, 2026-08-26).
+
+**2026-08-26 Adapter Pattern 구조 준비(벤더 미정)**: `messages`/`notification_rules`/
+`notification_logs` 테이블이 `lib/*.ts`·`app/**/*.tsx` 어디서도 전혀 참조되지 않는 완전
+미사용 상태임을 grep으로 재확인. 벤더가 정해지기 전이라도 나중에 벤더 교체가 쉽도록,
+결제(P0-1)의 Payment Adapter Pattern과 동일한 구조를 `lib/messaging/`에 새로 만들었다 —
+`types.ts`(`MessageProvider` 인터페이스, `MessageChannel`), `MockMessageProvider.ts`(콘솔
+로그 + 가짜 성공 응답만 반환, DB에는 안 씀), `AlimtalkSmsProvider.ts`(벤더 미확정 스텁 —
+전 메서드가 "아직 구현되지 않았어요" Error를 던짐, 파일 상단 주석에 실제 연동 시 채워야
+할 것 나열), `MessageProviderFactory.ts`(`NEXT_PUBLIC_MESSAGE_PROVIDER` env로 선택),
+`MessageService.ts`, `index.ts`. `messages.channel` CHECK 제약을 schema.sql에서 직접
+확인한 결과 실제로는 `sms`/`lms`/`push` 3개뿐이고 `alimtalk`은 없다는 걸 발견 —
+`MessageChannel` 타입 주석에 이 사실과, 알림톡을 나중에 실제 저장할 때 `messages.channel`에
+어떤 값으로 매핑할지(새 CHECK 값 추가 vs `sms`로 대체발송 매핑)는 벤더 확정 후 결정할
+사안이라고 명시해뒀다. `tests/unit/MessageProviderFactory.test.ts`,
+`tests/unit/MockMessageProvider.test.ts` 신규 8개 테스트로 Factory 선택 로직 + Mock의
+비용 추정(SMS 12P/90byte, LMS 37P/2000byte — messages 테이블 주석 근거) 검증,
+`npm run build` + `npm run test`(254개) 통과. 새 SQL·UI 화면·발송 스케줄러는 이번
+범위 밖 — 벤더 확정 + 카카오 사전심사 통과 후 별도 작업.
 
 **웹 푸시(브라우저/OS 알림)는 코드 구현 + 실제 배포까지 완료**: `push_subscriptions` 테이블 +
 `add_web_push.sql`(pg_net 확장, `notifications.pushed_at` 컬럼, 1분마다 `send-web-push`
