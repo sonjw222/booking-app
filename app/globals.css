@@ -3615,16 +3615,19 @@ a.membership-card { text-decoration: none; display: block; }
 .admin-v3-content .mgr-mode-bar,
 .admin-v3-content > .app-shell > .back-header { display: none; }
 
-/* 페이지 고유 액션은 공통 Chrome으로 대체할 수 없으므로 제목만 숨기고 액션은 유지한다. */
+/* 페이지 고유 액션은 공통 Chrome으로 대체할 수 없으므로 제목만 숨기고 액션은 유지한다.
+   [사용자 리포트, 2026-08-25] 실제로는 아래에서 .side(뒤로가기 버튼)까지 같이 숨겨서
+   "운영 설정" 등 이 패턴을 쓰는 화면에 뒤로가기 버튼 자체가 안 보였다 — 주석의 원래 의도
+   ("제목만 숨기고")대로 .title만 숨기고 .side는 살리고, 정렬도 오른쪽 끝 몰기(flex-end)에서
+   양끝 배치(space-between)로 바꿔 뒤로가기는 왼쪽, 액션 버튼은 오른쪽에 오게 한다. */
 .manager-v3-content > .app-shell > .back-header:has(.header-action) {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   min-height: 52px;
   padding: 8px var(--page-gutter) 0;
   border: 0;
   background: var(--bg);
 }
-.manager-v3-content > .app-shell > .back-header:has(.header-action) > .side,
 .manager-v3-content > .app-shell > .back-header:has(.header-action) > .title { display: none; }
 
 .admin-chrome {
@@ -3939,7 +3942,7 @@ a.membership-card { text-decoration: none; display: block; }
 .center-detail-v2 .center-bar-btn.buy { border: 1px solid var(--line); background: var(--card-bg); }
 
 .commerce-page .back-header,
-.purchase-page-v2 .back-header { justify-content: flex-start; }
+.purchase-page-v2 .back-header { justify-content: flex-start; gap: 10px; }
 .commerce-page .back-header .title,
 .purchase-page-v2 .back-header .title { flex: 1; text-align: left; font-size: 28px; }
 .commerce-page .back-header .side:last-child,

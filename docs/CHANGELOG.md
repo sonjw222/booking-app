@@ -19,6 +19,20 @@
 계속 미완성으로 유지. 카카오 알림톡/SMS는 벤더 미정 — 결제와 동일한 Adapter Pattern 구조만
 `lib/messaging/`에 준비된 상태(2026-08-26, 별도 진행)로 반영. 코드 변경 없음, 문서만 갱신.
 
+## 2026-08-25 — 매니저 저장 화면 뒤로가기 버튼 복구 + 장바구니 헤더 간격 수정
+
+사용자 스크린샷 피드백 두 건:
+
+1. `/manager/settings`(운영 설정) 등 헤더에 "저장/저장됨" 같은 페이지 고유 액션 버튼이
+   있는 매니저 화면(`.back-header:has(.header-action)` 패턴 — settings, sales,
+   membership-rules, goods, rooms, center-info, progress/record 총 7곳)에서 뒤로가기
+   버튼이 아예 안 보였음. 원인: ManagerChrome 공통 헤더 도입 시 "제목만 숨기고 액션은
+   유지한다"는 주석과 달리 실제 CSS가 `.side`(뒤로가기)까지 같이 숨기고 있었다. `.title`만
+   숨기도록 고치고, 정렬도 오른쪽 끝 몰기(`flex-end`)에서 양끝 배치(`space-between`)로
+   바꿔 뒤로가기는 왼쪽·액션 버튼은 오른쪽에 오게 함.
+2. `/cart` 헤더의 뒤로가기 버튼과 "장바구니" 제목 글자가 간격 없이 붙어 있던 것 —
+   `.commerce-page .back-header`(구매내역 화면과 공유)에 `gap: 10px` 추가.
+
 ## 2026-08-25 — 네이티브 confirm()/alert() 전면 마이그레이션 + 토스트 높이 버그 수정
 
 사용자 스크린샷 피드백: `/manager/leads`(상담고객 등록)에서 알림창이 브라우저 기본 스타일로
