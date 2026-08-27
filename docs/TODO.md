@@ -1039,24 +1039,33 @@ QA로 추정 — 상품명이 "체크용 수강권" 등 테스트성 이름) 이
 | 완료 조건 | ~~실제 필요한 키 이름과 설명만 포함한 예제 또는 README 설치 절차를 마련하고, 새 환경에서 안내대로 실행해 앱이 시작됨. 비밀값은 포함하지 않음~~ 완료. |
 | 관련 문서 | [REQUIREMENTS 6-2](./REQUIREMENTS.md), [DEVELOPMENT_RULES 11절](./DEVELOPMENT_RULES.md) |
 
-### P2-8. Tailwind 설정과 실제 스타일 사용 불일치
+### P2-8. (2026-08-27, 완료) Tailwind 설정과 실제 스타일 사용 불일치
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인 필요** |
-| 근거 파일 | `package.json`, `postcss.config.mjs`, `app/globals.css`, `app/layout.tsx`; Tailwind 패키지와 utility class는 있으나 CSS import 지시문 없음 |
-| 완료 조건 | 브라우저 빌드 결과에서 Tailwind utility 생성 여부와 `app/layout.tsx`의 class 적용 여부를 확인하고, 사용한다면 현재 Next.js 구성에 맞게 활성화하거나 사용하지 않는다면 의존성과 죽은 utility class를 정리함 |
+| 현재 상태 | **완료 — 죽은 의존성으로 확인, 제거함(사용자 결정)** |
+| 근거 파일 | `package.json`, `postcss.config.mjs`(삭제됨), `app/globals.css`, `app/layout.tsx` |
+| 완료 조건 | ~~브라우저 빌드 결과에서 Tailwind utility 생성 여부와 `app/layout.tsx`의 class 적용 여부를 확인하고, 사용한다면 현재 Next.js 구성에 맞게 활성화하거나 사용하지 않는다면 의존성과 죽은 utility class를 정리함~~ 완료 |
 | 관련 문서 | [PROJECT_OVERVIEW 4절](./PROJECT_OVERVIEW.md), [DEVELOPMENT_RULES 3-3](./DEVELOPMENT_RULES.md) |
 
-현재 저장소만 보면 Tailwind가 실제로 적용된 것으로 단정할 수 없습니다. 활성화 또는 제거 방향은 확인 없이 결정하지 않습니다.
+`app/globals.css`(4000줄 이상의 커스텀 CSS) 어디에도 `@import "tailwindcss"` 지시문이 없어
+`@tailwindcss/postcss` 플러그인이 실제로는 아무 유틸리티도 생성하지 않고 있었음(전수 확인).
+`app/` 전체에서 진짜 Tailwind 유틸리티 클래스 사용은 `app/layout.tsx`의
+`min-h-full`/`flex`/`flex-col`/`h-full`/`antialiased` 5개뿐이었고(나머지 매치는 전부
+`.cal-grid` 같은 커스텀 클래스명 우연 일치), 이마저도 CSS가 생성되지 않아 이미 아무 효과가
+없는 죽은 클래스였음(`html, body` 커스텀 규칙에도 해당 스타일 없음 확인) — `create-next-app`
+스캐폴딩 잔재로 결론. 사용자 확인 후 제거: `package.json`에서 `tailwindcss`/
+`@tailwindcss/postcss` 제거 + `npm install`, `postcss.config.mjs` 삭제(플러그인 하나뿐이라
+파일째 삭제), `app/layout.tsx`의 죽은 유틸리티 클래스 5개 제거(대체 없음 — 원래도 효과 없었음).
+`npm run build`/유닛테스트 254개 통과 + 로컬 dev 서버로 `/login` 렌더 확인.
 
-### P2-9. 통합 테스트가 `lib/orders.ts`/`lib/payments`를 직접 import (기술 부채)
+### P2-9. (2026-08-27 재확인, 여전히 대기) 통합 테스트가 `lib/orders.ts`/`lib/payments`를 직접 import (기술 부채)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인 필요 (당장 문제 없음, 리팩터링 시 함께 검토)** |
+| 현재 상태 | **재확인 완료 — 당장 문제 없음, `lib/orders.ts` 리팩터링 시점까지 의도적으로 보류** |
 | 근거 파일 | `tests/integration/payment-lifecycle.test.ts`, `tests/integration/payment-security.test.ts`, `lib/orders.ts`, `lib/payments/*` |
 | 완료 조건 | `lib/orders.ts`(`createOrder` 등)의 시그니처나 동작을 바꿀 때, 통합 테스트가 실제 checkout 흐름을 그대로 검증한다는 장점을 유지하면서도 테스트가 매번 실서비스 코드 변경에 발이 묶이지 않도록 `tests/helpers`(또는 테스트 전용 헬퍼 계층)로 분리할지 결정하고 반영함 |
 | 관련 문서 | [tests/README.md](../tests/README.md) |
@@ -1065,14 +1074,15 @@ QA로 추정 — 상품명이 "체크용 수강권" 등 테스트성 이름) 이
 checkout이 실제로 호출하는 코드와 동일한 경로를 검증한다는 장점이 있어 현재 구조에 문제는
 없습니다. 다만 앞으로 `lib/orders.ts`를 리팩터링(시그니처 변경 등)하면 통합 테스트도 함께
 영향을 받으므로, 그 시점에 테스트 전용 헬퍼 계층 분리 여부를 검토해야 합니다. 이번 작업
-범위에서는 구조를 바꾸지 않습니다.
+범위에서는 구조를 바꾸지 않습니다. (2026-08-27 재확인: 그 사이 `lib/orders.ts` 시그니처 변경
+없었음, 여전히 보류가 맞음.)
 
-### P2-10. `tests/unit`이 mock 없이 import하면 `lib/supabaseClient.ts` 초기화까지 실행됨 (기술 부채)
+### P2-10. (2026-08-27, 완료) `tests/unit`이 mock 없이 import하면 `lib/supabaseClient.ts` 초기화까지 실행됨 (기술 부채)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인됨 — Node 22로 우회 완료, 근본 원인은 미해결** |
+| 현재 상태 | **완료 — 근본 원인 수정.** `lib/payments/mockPaymentApi.ts`의 `import { supabase } from "../supabaseClient"` 정적 import를 함수 호출 시점에만 실행되는 지연 `import()`로 교체(`getSupabase()` 헬퍼). `PaymentProviderFactory.test.ts`(mock 없이 실제 구현체를 import)가 이제 모듈 로드만으로는 `supabaseClient.ts`의 `createClient()`를 전혀 실행하지 않음 — Node 버전에 우연히 기대던 구조가 실제로 분리됨. `MockPaymentProvider.test.ts`는 `mockPaymentApi` 전체를 `vi.mock`하므로 영향 없음. `npm run build`/유닛테스트 254개 통과. |
 | 근거 파일 | `tests/unit/PaymentProviderFactory.test.ts`, `lib/payments/PaymentProviderFactory.ts`, `lib/payments/MockPaymentProvider.ts`, `lib/payments/mockPaymentApi.ts`, `lib/supabaseClient.ts` |
 | 완료 조건 | `lib/payments/PaymentProviderFactory`/`MockPaymentProvider`가 실제 Supabase 클라이언트 생성과 완전히 분리되도록(예: RPC 호출부를 지연 import하거나, `PaymentProviderFactory` 테스트에서도 `mockPaymentApi`를 mock) 구조를 조정해, "Supabase가 필요 없는 단위 테스트"라는 전제가 import 체인만으로도 실제로 보장됨 |
 | 관련 문서 | [tests/README.md](../tests/README.md), `.github/workflows/test.yml` |
@@ -1093,6 +1103,16 @@ mock 없이 실제 구현체를 그대로 import하기 때문에 "Supabase 접�
 나중에 CI/로컬 Node 버전이 다시 낮아지거나 `realtime-js`가 WebSocket 요구사항을 더 엄격하게
 바꾸면 같은 문제가 재발할 수 있습니다. 이번 작업에서는 Node 22 우회만 적용하고, 구조 분리는
 하지 않았습니다.
+
+**2026-08-27 근본 원인 수정 완료**: `lib/payments/mockPaymentApi.ts`가 `../supabaseClient`를
+정적 import하고 있어 이 파일을 import하는 순간(=`MockPaymentProvider`/`PaymentProviderFactory`를
+import하는 순간) `supabaseClient.ts` 최상단의 `createClient()`가 즉시 실행되던 것이 진짜
+원인이었다. 이 함수가 실제로 호출될 때만 클라이언트가 필요하므로, 정적 import를 함수
+본문 안의 지연 `import()`로 바꿔 로드 시점과 사용 시점을 분리했다(`getSupabase()` 헬퍼
+추가, 3개 함수 전부 적용). 이제 `PaymentProviderFactory.test.ts`(mock 없이 실제 구현체를
+그대로 import)가 모듈 로드만으로는 `supabaseClient.ts`를 전혀 건드리지 않는다 — Node 버전에
+우연히 기대던 구조가 실제로 분리됐다. `MockPaymentProvider.test.ts`는 `mockPaymentApi` 전체를
+`vi.mock`하므로 이 변경과 무관하게 계속 동작. `npm run build`/유닛테스트 254개 통과 확인.
 
 ### P2-11. (2026-08-22, 완료) 센터 등록(`registerCenterForAccount`)이 사업자등록번호 중복을 막지 않고 원자적이지 않음
 
@@ -1198,8 +1218,14 @@ platform admin, `notification_logs`: `message.sms.view` 또는 `message.push.vie
   더 이상 호출되지 않는 죽은 코드로 남아있음~~ **[2026-08-22 완료]** 어디서도 참조하지 않음을
   grep으로 재확인 후 `nthWeekdayOfMonth`/`CopyPreviewItem`과 함께 완전히 제거(`copyByWeekday`/
   `copyByDate`는 실제로 쓰이는 별개 함수라 유지). `npm run build` 통과 확인.
-- 반복수업 생성(`perDayMode`)과 `updateClassGroup`이 여러 행을 순차 처리해 원자성이 없음(중간
-  실패 시 일부만 반영) — RPC로 묶을지 판단 필요(SQL). (미해결, 이번 배치 범위 밖)
+- ~~반복수업 생성(`perDayMode`)과 `updateClassGroup`이 여러 행을 순차 처리해 원자성이 없음(중간
+  실패 시 일부만 반영) — RPC로 묶을지 판단 필요(SQL)~~ **[2026-08-26 완료, SQL 변경 불필요]**
+  `updateClassGroup`은 이미 `update_class_group_safe` RPC 한 번으로 전체 그룹을 갱신하고
+  있어 재확인 결과 문제 없었음(문서 갱신 누락). `perDayMode`(반복수업 생성)는 실제로 요일마다
+  `createRecurringClasses`를 따로 호출해 원자성이 없었음 — `create_recurring_classes_safe`
+  RPC가 애초에 행마다 다른 값을 받을 수 있게 설계돼 있어 새 SQL 없이 `lib/classes.ts`에
+  `createRecurringClassesPerDay()`를 추가해 요일별 행을 전부 모아 RPC를 한 번만 호출하도록
+  수정. 자세한 내용은 `docs/CHANGELOG.md` 참고.
 - ~~`app/manager/staff/permissions/page.tsx`의 클라이언트 가드(오너만 진입 가능)와 서버 쓰기
   정책(`facility.role_permission` 보유자도 가능)이 불일치~~ **[2026-08-22 완료]** 클라이언트
   가드를 서버 정책(`add_personal_permissions.sql`의 INSERT/UPDATE/DELETE 정책 기준: 오너 또는
@@ -1237,14 +1263,19 @@ platform admin, `notification_logs`: `message.sms.view` 또는 `message.push.vie
 안 됩니다. PR #32가 merge되면 `reservation_functions.sql` 자체도 최신화가 필요합니다(기존
 P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 
-- **`cancel_deadline_min`이 `booking_deadline_min`과 동일한 이유로 사실상 무효**: `calc_deadline()`은
-  `center_settings`가 있으면(사실상 항상) 무조건 그 값을 쓰고, `classes.cancel_deadline_min`은
-  그 설정 행 자체가 없는 예외 상황에서만 폴백으로 쓰인다. `cancel_deadline_min`은 이미
-  관리자 UI(`app/manager/classes/page.tsx` "예약취소 가능 시간")에 연결돼 있어 실제로 값을
-  저장했을 수도 있어, `booking_deadline_min`과 달리 이번 배치에서 함께 고치지 않았다(0을
-  "미지정"으로 되돌리는 데이터 마이그레이션이 더 신중한 검토가 필요 — CLASS-001 SQL 헤더
-  주석 참고). **후속 조치 필요**: 실제 저장된 0이 아닌 값이 있는지 먼저 확인한 뒤 같은 패턴으로
-  수정.
+- ~~`cancel_deadline_min`이 `booking_deadline_min`과 동일한 이유로 사실상 무효~~ **[2026-08-27
+  SQL 작성 완료, 적용 대기]** 라이브 조회로 실사용 여부 먼저 확인 — `classes` 1535행 중
+  0이 아닌 값은 3행뿐(전부 실제 센터 "어텐션 피겨팀"의 진짜 수업, 60분/7200분/1분 전),
+  나머지 1532행은 전부 미지정 확정. `booking_deadline_min`과 완전히 동일한 패턴으로
+  `fix_class_cancel_deadline_override.sql` 작성(컬럼 nullable화 + 0값 NULL 백필,
+  `cancel_reservation()`의 우선순위를 `reserve_class()`의 `booking_deadline_min` 패턴과
+  동일하게 변경, `create_class_safe`/`create_recurring_classes_safe`/`update_class_safe`의
+  `coalesce(...,0)` 제거로 재발 방지) + `rollback_fix_class_cancel_deadline_override.sql`.
+  클라이언트(`lib/classes.ts`, `ManagedClass`/`CopyGroup`/`CopyDateItem` 타입과 관련 호출부
+  전부)도 `?? 0` → `?? null`로 함께 수정. 신규 통합테스트
+  `tests/integration/class-cancel-deadline-override.test.ts` 추가(운영설정보다 개별 지정이
+  더 엄격/더 관대한 두 방향 모두 검증) — SQL 미적용 상태에서 의도대로 2건 다 FAIL 확인함.
+  **SQL 미적용 — 사용자가 Supabase SQL Editor에서 직접 적용 필요.**
 - **알림 카테고리가 8개가 아니라 4개뿐이고 서버가 이 설정을 전혀 읽지 않음(2026-08-07 P2
   배치에서 부분 해결)**: `app/settings/notifications/page.tsx`의 알림 설정은 `localStorage`에만
   저장되고(`reservation`/`waitlist`/`reminder`/`marketing` 4종), 모든 서버 트리거
@@ -1290,10 +1321,13 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 - **(해결됨, 2026-08-03 Track 4) `auto_unpaid_input`**: `app/manager/sales/page.tsx` 결제 등록
   시트에서 상품가 - 입력된 결제수단 합계를 자동으로 미수금에 채우도록 구현 완료
   (`lib/sales.ts`의 `computeAutoUnpaid`).
-- **`show_group_waitlist_count` 여전히 미구현(P2, 표시 대상 자체가 없음)**: 회원 앱 어디에도
-  "대기 인원수"를 보여주는 UI가 없어(내 대기 순번 표시만 있음) 이 설정을 연결할 대상이 없다
-  — 대기 인원수 표시 UI 자체를 새로 만들어야 하는 별도 소규모 기능. 전체 동작표는
-  `docs/OPERATIONAL_SETTINGS_AUDIT.md` 참고.
+- ~~`show_group_waitlist_count` 여전히 미구현(P2, 표시 대상 자체가 없음)~~ **[2026-08-27
+  재확인 결과 이미 구현돼 있었음, 문서 갱신 누락]** `app/reservation/page.tsx`의
+  `.class-count`("대기 {N}")와 `lib/reservations.ts`의 `showWaitlistCount`/`waitlisted`
+  배선이 이미 완전히 연결돼 있었다(언제 구현됐는지는 이 조사만으로 불명). 회귀를 막을
+  자동 검증이 없었던 것만 실제 공백이라, `tests/e2e/reservation/group-waitlist-count-display.spec.ts`
+  신규 추가(설정 ON/OFF에 따라 대기 인원 표시가 나타나고 사라지는지 실브라우저로 확인) —
+  통과 확인. 전체 동작표는 `docs/OPERATIONAL_SETTINGS_AUDIT.md` 참고.
 - **`private_slot_unit`/`show_point_history`는 제품 결정 필요**: `docs/08_Decision_Log.md`
   DEC-002(슬롯 시스템) 참고. `show_point_history`는 포인트 내역 페이지 자체가 없어 페이지
   신설이 선행돼야 함. `private_max_concurrent_*`는 2026-08-06 P3 배치에서 해결됨(아래 항목).
@@ -1310,14 +1344,13 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 - **AUTH-001(신규 이슈, #40)**: 회원가입 화면에 휴대폰 번호 입력란은 있지만 실제 인증(OTP)
   절차가 없음. SMS 발송 백엔드 자체가 없어(E-3 감사와 동일 결론) 제품 정책 확정 전에는
   구현하지 않음.
-- **`staff_salaries` 유니크 제약 충돌로 SEC-009 통합테스트가 간헐적으로 실패(신규 발견,
-  TEST-002/#24와 같은 계열의 "공유 dev DB에 정리 안 된 테스트 픽스처" 문제)**: PR #39 CI에서
-  `sec009-batch-a1-rls.test.ts`가 "duplicate key value violates unique constraint
-  staff_salaries_center_id_account_id_key"로 실패하는 것을 관측함 — 이전 실행이 남긴
-  (centerA, managerA 계정) 조합의 `staff_salaries` 행이 정리되지 않아 재실행 시 같은 키로
-  다시 insert하려다 충돌. 이번 배치의 어떤 코드/SQL과도 무관(다른 테이블, 다른 테스트 파일).
-  TEST-002(#24)와 같은 근본 원인 계열이므로 그 이슈 해결 시 함께 검토 권장 — 이번 배치에서는
-  별도 정리 SQL을 만들지 않음(범위 밖).
+- ~~`staff_salaries` 유니크 제약 충돌로 SEC-009 통합테스트가 간헐적으로 실패(TEST-002/#24와
+  같은 계열의 "공유 dev DB에 정리 안 된 테스트 픽스처" 문제)~~ **[2026-08-27 재확인 결과 이미
+  해결돼 있었음, 문서 갱신 누락]** 현재 `tests/integration/sec009-batch-a1-rls.test.ts`를 열어보니
+  이미 get-or-create(있으면 재사용, 이번 실행이 만든 게 아니면 정리 대상에도 안 넣음) +
+  beforeAll/afterAll 양쪽 무조건 정리 패턴이 적용돼 있음(다른 파일들의 self-healing 정리 관례와
+  동일). 언제 고쳐졌는지는 이 조사만으로 불명(PR #39 이후 다른 배치에서 반영된 것으로 추정).
+  라이브 dev Supabase 대상으로 재실행해 11/11 통과, duplicate key 에러 없음을 재확인함.
 - **(2026-08-08 재확인) `tests/e2e/admin/class-allowed-products.spec.ts`도 TEST-002(#24)
   오염의 영향을 받음**: P4(매출 대시보드) CI 2회차 연속 Green 확인 중, 이 파일과 전혀 무관한
   커밋(P4는 sales.ts/manager 홈/SQL만 변경)에서 이 spec만 실패 — 실패 로그를 보면 검색 결과
