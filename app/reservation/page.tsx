@@ -441,6 +441,18 @@ function ReservationCalendarContent() {
   );
   // 예약 확인 모달에 표시할 수강권/상품 목록 (배치 조회 결과에서 파생 — 별도 조회 없음)
   const passList = confirmClass ? (usablePassesByClass[confirmClass.id] ?? []) : [];
+  // UX 감사(A-8) — 이름·만료일이 완전히 같은 수강권이 여러 개면(실제 재현됨) 구매일이 없으면
+  // 어느 걸 고르는지 구분이 안 됐다. 목록 전체에 항상 구매일을 붙이면 평소엔 불필요한 정보라,
+  // 실제로 이름+만료일이 겹치는 항목이 있을 때만 그 항목들에 구매일을 보여준다.
+  const passDupKeys = new Set(
+    Object.entries(
+      passList.reduce<Record<string, number>>((acc, m) => {
+        const key = `${m.productName}::${m.expiresAt}`;
+        acc[key] = (acc[key] ?? 0) + 1;
+        return acc;
+      }, {})
+    ).filter(([, count]) => count > 1).map(([key]) => key)
+  );
   const confirmGoods = confirmClass ? (goodsByCenter[confirmClass.centerId] ?? []) : [];
 
   if (loading) {
@@ -721,6 +733,9 @@ function ReservationCalendarContent() {
                         <b>{m.productName}</b>
                         <span className="pass-pick-sub">
                           {m.remainingCount}회 남음 · ~{m.expiresAt?.slice(5).replace("-", "/")}
+                          {passDupKeys.has(`${m.productName}::${m.expiresAt}`) && m.issuedAt && (
+                            <> · {m.issuedAt.slice(5).replace("-", "/")} 구매</>
+                          )}
                           {!m.isMine && m.ownerProfile && <> · {m.ownerProfile} 보유</>}
                         </span>
                       </span>

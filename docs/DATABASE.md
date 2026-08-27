@@ -131,6 +131,21 @@ Realtime publication과 운영 RLS 적용 상태는 저장소에서 확인할 �
 
 Storage 버킷의 운영 생성 여부와 정책 적용 상태는 Supabase에서 **확인 필요**입니다. `business-licenses` 설정 원본은 `setup_storage.sql`입니다.
 
+### 4-8. 플랫폼 구독 (센터 → 플랫폼 결제, 회원 결제와는 별개 축)
+
+| 테이블 | 상태 | 현재 역할 |
+|---|---|---|
+| `subscription_plans` | 미완성 | 플랫폼이 정의하는 센터 대상 월 구독 플랜 카탈로그. 공개 SELECT + 운영자만 관리(`is_platform_admin()`) |
+| `center_subscriptions` | 미완성 | 센터별 구독 상태(센터당 1행, `status` check: `pending_billing_setup`/`active`/`past_due`/`canceled`). 소속 매니저(`my_managed_center_ids()`) SELECT만 가능, 운영자는 전체 SELECT. INSERT/UPDATE 정책 없음 — service_role 전용 |
+| `center_subscription_charges` | 미완성 | 구독료 청구 이력(성공/실패). append 전용, `admin_action_logs`와 동일 패턴으로 insert/update 정책 없음 |
+
+`add_center_platform_subscription.sql`(2026-08-25, **SQL 미적용 — 사용자 승인 후 적용 필요**)로
+추가. 토스페이먼츠 자동결제(빌링) API는 계약 심사가 끝나야 카드 등록(빌링키 발급)이
+가능해서(심사 전 테스트 키로 시도하면 에러가 난다는 게 토스 공식 문서로 확인됨) DB 구조와
+RLS, 조회 화면(`app/manager/settings/page.tsx`의 "플랫폼 구독" 섹션, `app/admin/subscriptions/page.tsx`)까지만
+완성했고, 실제 카드 등록/청구는 **미완성**입니다. 근거와 완료 조건은
+[TODO.md P0-8](./TODO.md)을 참고하세요.
+
 ## 5. 향후 기능 후보 테이블
 
 아래 객체는 스키마 주석, 컬럼 또는 권한 카탈로그에서 용도를 확인했지만 앱의 완성된 CRUD 흐름은 찾지 못했습니다. 따라서 기능 상태는 모두 **확인 필요**입니다.
@@ -204,8 +219,10 @@ Storage 버킷의 운영 생성 여부와 정책 적용 상태는 Supabase에서
 | `memberships` | 주문 처리 결과로 발급되는 자산 | 주문과 수강권의 연결·중복 발급 |
 | `point_transactions` | 매니저 포인트 원장 | 적립·사용 부호와 잔액 계산 |
 | `point_accounts` | 후기·회원 구매 포인트 잔액 | `use_points`, 후기 보상, 이중화 정합성 |
+| `center_subscriptions` | 센터가 플랫폼에 내는 구독료 상태(회원 결제와 별개 축) | `status` 전이(`pending_billing_setup`→`active`→`past_due`/`canceled`), `billing_key`/카드 정보는 service_role만 기록 |
+| `center_subscription_charges` | 플랫폼 구독료 청구 이력 | append 전용(insert/update 정책 없음), `subscription_id` 연결 |
 
-실제 PG가 연결되지 않은 현재 상태는 [REQUIREMENTS.md](./REQUIREMENTS.md)의 **미완성** 판정을 따릅니다.
+실제 PG가 연결되지 않은 현재 상태는 [REQUIREMENTS.md](./REQUIREMENTS.md)의 **미완성** 판정을 따릅니다. 센터 → 플랫폼 구독료는 토스 자동결제 계약 심사 대기로 별도 **미완성**([TODO.md P0-8](./TODO.md)).
 
 ### 7-4. 개인정보와 커뮤니케이션
 
@@ -263,7 +280,7 @@ manager_centers * ── 1 center_roles
 | `reserve_class` | `lib/reservations.ts` | 일반 수업 예약 | 여러 SQL 파일에서 재정의됨 |
 | `reserve_class_with_goods` | `lib/reservations.ts` | 굿즈 차감을 포함한 예약 | 상품 잔여량과 예약을 함께 변경 |
 | `cancel_reservation` | `lib/reservations.ts` | 취소, 수강권 복구/차감, 대기 승격 | 여러 SQL 파일에서 재정의됨 |
-| `usable_memberships_for_classes` | `lib/reservations.ts` | 여러 수업의 사용 가능한 수강권 배치 조회 | `fix_usable_memberships_shared.sql` 정의 |
+| `usable_memberships_for_classes` | `lib/reservations.ts` | 여러 수업의 사용 가능한 수강권 배치 조회 | 최종 본문은 `add_class_trainers_pass_selection_mode_draft_proposed.sql`(2026-08-11, 적용 완료)이 재정의, `fix_security_definer_hardening_search_path_execute_draft_proposed.sql`(2026-08-13, 적용 완료)이 본문 변경 없이 search_path 고정 + EXECUTE를 authenticated로 제한. `add_usable_memberships_issued_at_draft_proposed.sql`(2026-08-25, **미적용 — 사용자 확인 대기**)이 RETURNS TABLE에 `issued_at` 추가 예정(A-8) |
 | `reserve_with_membership` | `lib/reservations.ts` | 지정 수강권으로 예약 | 공유 방식 최종 적용 여부 확인 필요 |
 | `manager_book_member` | `lib/classes.ts` | 매니저 보강 예약 | 권한과 수강권 차감 확인 |
 | `manager_set_attendance` | `lib/classes.ts` | 출석·노쇼·취소 상태 처리 | 정의가 중복되어 최종 본문 확인 필요 |
@@ -343,6 +360,7 @@ manager_centers * ── 1 center_roles
 | 트리거 | 대상 | 역할 | 상태 |
 |---|---|---|---|
 | `trg_create_default_center_roles` | `centers` | 센터 생성 시 기본 역할 생성 | SQL 정의 확인, 운영 적용 확인 필요 |
+| `trg_create_default_center_subscription` | `centers` | 센터 생성 시 기본 플랜으로 `pending_billing_setup` 구독 행 자동 생성 | `add_center_platform_subscription.sql`(신규, SQL 미적용). `trg_create_default_center_roles`와 동일 패턴 |
 | `trg_guard_center_status` | `centers` | 일반 매니저의 센터 승인 상태 변경 방지 | 두 SQL 파일에 정의, 운영 최종 정의 확인 필요 |
 | `notify_new_order` | `orders` | 신규 주문 알림 생성 | SQL 정의 확인, 운영 적용 확인 필요 |
 | `notify_new_review` | `center_reviews` | 신규 후기 알림 생성 | SQL 정의 확인, 운영 적용 확인 필요 |
@@ -353,7 +371,7 @@ manager_centers * ── 1 center_roles
 
 ## 12. SQL 파일과 적용 상태
 
-저장소에는 기본 스키마, 기능별 추가, 보정, 진단·초기화 파일을 합쳐 67개 SQL 파일이 있습니다.
+저장소에는 기본 스키마, 기능별 추가, 보정, 진단·초기화 파일을 합쳐 68개 SQL 파일이 있습니다.
 
 ### 12-1. 기준 파일
 
@@ -370,8 +388,9 @@ manager_centers * ── 1 center_roles
 add_account_address.sql        add_admin_assignment.sql       add_announcements.sql
 add_attendance.sql
 add_auto_booking.sql           add_center_category.sql        add_center_intro.sql
-add_center_location.sql        add_center_media.sql           add_center_settings.sql
-add_center_shop.sql            add_class_goods_option.sql     add_class_products.sql
+add_center_location.sql        add_center_media.sql           add_center_platform_subscription.sql
+add_center_settings.sql        add_center_shop.sql            add_class_goods_option.sql
+add_class_products.sql
 add_direct_payment.sql         add_holiday_sync.sql           add_inquiries.sql
 add_intro_blocks.sql           add_makeup_booking.sql         add_member_dormant.sql
 add_member_management.sql      add_membership_rules.sql       add_new_permissions.sql

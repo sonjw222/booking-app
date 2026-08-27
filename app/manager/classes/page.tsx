@@ -20,7 +20,7 @@ import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchRooms, type Room } from "../../../lib/rooms";
 import {
   fetchClasses, createClass, updateClass, updateClassPassSelectionMode, deleteClass,
-  createRecurringClasses, expandRecurringDates,
+  createRecurringClasses, createRecurringClassesPerDay, expandRecurringDates,
   updateClassGroup, deleteClassGroup,
   fetchClassAttendees, setAttendance, fetchClassProducts, setClassProducts, setClassProductsBulk,
   fetchClassTrainers, setClassTrainers, setClassTrainersBulk, setClassTrainersForGroup, fetchClassPassSelectionMode,
@@ -674,6 +674,10 @@ export default function ClassManagePage() {
         const passMode = resolved.mode;
         let ids: string[] = [];
         if (perDayMode) {
+          // 요일마다 다른 설정(시간/정원/룸/취소마감)을 먼저 전부 계산해두고, RPC는 아래에서
+          // 한 번만 호출한다(요일별로 따로 호출하면 그 개수만큼 별도 트랜잭션이 생겨 중간
+          // 요일에서 실패 시 이전 요일들만 반영된 채 남는 원자성 문제가 있었음).
+          const days: { dow: number; start: string; end: string; capacity: number; roomId?: string | null; cancelDeadlineMin?: number | null }[] = [];
           for (const dow of repDays) {
             const ov = dayOverrides[dow] ?? { start: "", end: "", capacity: "", roomId: undefined, cd: "", ch: "", cm: "" };
             const st = ov.start || form.start;
@@ -688,19 +692,19 @@ export default function ClassManagePage() {
               ? (parseInt(ov.cd || "0", 10) || 0) * 1440 + (parseInt(ov.ch || "0", 10) || 0) * 60 + (parseInt(ov.cm || "0", 10) || 0)
               : deadlineToMin();
             if (!st || !en) { setError(`${WEEKDAYS[dow]}요일 시간을 입력해주세요 (공통 설정도 비어 있어요)`); setBusy(false); return; }
-            const partIds = await createRecurringClasses(activeCenterId, {
-              title: form.title, daysOfWeek: [dow],
-              fromDate: repFrom, toDate: repTo,
-              start: st, end: en, capacity: cap, roomId: rid, cancelDeadlineMin: ovMin,
-              // 예약마감(CLASS-001)은 요일별 개별 지정 UI가 없어 공통 설정값을 그대로 쓴다
-              // (취소마감의 요일별 오버라이드와 달리, 예약마감은 이번 배치 범위를 공통값으로
-              // 한정함 — 모바일 컴팩트 그리드에 3-select 오전/오후 UI를 넣기엔 공간이 부족).
-              bookingDeadlineMin: bookDeadlineToMin(),
-              passSelectionMode: passMode,
-              excludeDates: holidays,
-            });
-            ids = ids.concat(partIds);
+            days.push({ dow, start: st, end: en, capacity: cap, roomId: rid, cancelDeadlineMin: ovMin });
           }
+          ids = await createRecurringClassesPerDay(activeCenterId, {
+            title: form.title,
+            fromDate: repFrom, toDate: repTo,
+            days,
+            // 예약마감(CLASS-001)은 요일별 개별 지정 UI가 없어 공통 설정값을 그대로 쓴다
+            // (취소마감의 요일별 오버라이드와 달리, 예약마감은 이번 배치 범위를 공통값으로
+            // 한정함 — 모바일 컴팩트 그리드에 3-select 오전/오후 UI를 넣기엔 공간이 부족).
+            bookingDeadlineMin: bookDeadlineToMin(),
+            passSelectionMode: passMode,
+            excludeDates: holidays,
+          });
         } else {
           ids = await createRecurringClasses(activeCenterId, {
             title: form.title, daysOfWeek: repDays,
@@ -846,7 +850,7 @@ export default function ClassManagePage() {
           레이아웃 그대로 다시 보이게 한다(globals.css 참고) — 그 규칙이 없으면 "복사"/
           "휴무일" 버튼이 완전히 사라지고 클릭도 안 되는 상태였다. */}
       <div className="back-header">
-        <button className="side cal-export-btn" style={{ fontSize: 12 }} onClick={openCopy}>일정 복사</button>
+        <button className="side cal-export-btn cal-copy-btn" style={{ fontSize: 12 }} onClick={openCopy}>일정 복사</button>
         <div className="title">내 일정</div>
         <a className="side cal-export-btn" href="/manager/holidays" style={{ fontSize: 12 }}>휴무일</a>
       </div>

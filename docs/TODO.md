@@ -282,12 +282,12 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 권한 키를 재사용하고 있어, 세분권한 도입 시 의미가 부정확할 수 있습니다(이것도 SQL 필요) —
 이 부수 발견은 아직 미해결로 남아있습니다(위 "확인 경위" 참고, 핵심 버그만 NOTIF-001에서
 같이 해결됨).
-### P0-7. (신규, 2026-08-14~15 관측) 공유 dev Supabase 통합/E2E fixture 데이터가 반복적으로 오염됨 — 원인 미확인
+### P0-7. (신규, 2026-08-14~15 관측, 2026-08-26 P2로 하향) 공유 dev Supabase 통합/E2E fixture 데이터가 반복적으로 오염됨 — 원인 미확인
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P0 |
-| 현재 상태 | **확인 필요 — 재현은 반복 확인됐으나 근본 원인 미확정** |
+| 우선순위 | ~~P0~~ → **P2**(2026-08-26 하향 — 아래 2026-08-26 항목 참고: 전파 경로는 실측으로 막혀 있음 확인, 근본 원인만 미확정으로 남음) |
+| 현재 상태 | **오염의 다음 실행 전파는 구조적으로 차단됨(실측 확인) — 근본 원인(누가 왜 오염시키는지)은 여전히 미확정, 재발 시 기회적으로 조사** |
 | 근거 파일 | `tests/integration/setup.ts`(`TEST_CENTER_ID`, `getOrCreateOwnedTestCenter()`), `tests/integration/operational-settings-wiring.test.ts`, `tests/integration/auto-book-membership-security.test.ts` |
 | 관측된 증상 | 공유 fixture 센터(`3937eb89-3803-43e9-9a29-e893f779df1a`, `TEST_CENTER_ID`)의 `center_settings.daily_book_limit_enabled`가 반복적으로 `true(1회)`로 남아, 이 설정과 전혀 무관한 다수 테스트 파일(`attendance-policy`, `auto-book-membership-security`, `class-deadline-override-and-private`, `notification-center-isolation`, `operational-settings-wiring`, `reservation-cancel-grace-period` 등)이 연쇄적으로 실패함. 2026-08-14 하루에만 사용자가 직접 `false/null`로 리셋했는데도 짧은 시간 내 다시 `true`로 재발(최소 2회 관측). |
 | 조사한 것과 배제한 가설 | (1) `manager_centers.role_id`/`center_id` 불일치 트리거(`manager_centers_enforce_role_center_match`)가 원인이라는 가설 — 다른 세션(PR #50 담당)이 두 시점에 직접 조회해 **role_id/center_id가 정상 매칭임을 확인, 배제됨**. (2) Integration 실패 로그에 반복되던 `P0001` 에러코드로 특정 트리거를 지목하려 했으나, 이 코드베이스에 커스텀 `RAISE EXCEPTION`이 광범위하게 쓰여 P0001만으로는 특정 원인을 지목할 수 없음(오판이었음, 기록으로 남김). |
@@ -349,6 +349,167 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 조회로 확인됐다** — `app/cart/page.tsx`는 memberships/classes/fetchMonthData 어느 것도
 건드리지 않음.
 
+**2026-08-26 완료 조건 (a) 커버리지 실측 + 백스톱 실동작 검증**: 이번 세션에서 다시 이
+항목을 붙잡고, 두 가지를 실제로 확인했다.
+1. `grep`으로 `tests/integration/*.test.ts` 전체를 훑어 `center_settings`를 변경하는
+   파일 10개(`attendance-policy`, `auto-book-membership-security`, `class-revenue`,
+   `class-deadline-override-and-private`, `daily-book-limit-wiring`,
+   `manager-set-attendance-membership-integrity`, `operational-settings-wiring`,
+   `reserve-class-block-after-start`, `reservation-cancel-grace-period`,
+   `private-class-capacity`)를 전부 확인 — **10개 전부 `getOrCreateOwnedTestCenter()`
+   (또는 그 안에서 파생되는 `createIsolatedOwnedCenter()`)를 거친다.** 즉 이 백스톱을
+   우회해서 `center_settings`를 건드리는 파일은 하나도 없음을 실측으로 확인(과거엔
+   추정이었음). `TEST_CENTER_ID`(고정 공유 fixture)를 직접 쓰는 파일 3개
+   (`payment-lifecycle`/`payment-security`/`sync-test-payment-center-member`)는
+   `center_settings`를 아예 건드리지 않아 이 문제와 무관함도 함께 확인.
+2. 실제 코드(재구현이 아니라 `setup.ts`의 `getOrCreateOwnedTestCenter()` 그대로)를
+   임시 통합테스트로 호출해 라이브 검증: managerA의 공유 테스트센터
+   `center_settings.daily_book_limit_enabled`를 서비스 롤로 일부러 `true`로
+   오염시킨 뒤 `getOrCreateOwnedTestCenter(managerA)`를 다시 호출했더니 실제로
+   `false`/`null`로 되돌아감을 확인(`npx vitest run --config
+   vitest.integration.config.ts`로 실행, 검증 후 임시 파일은 삭제).
+
+**결론 및 우선순위 하향 제안**: 근본 원인(정확히 어떤 테스트가 무엇 때문에 오염시키는지)은
+여전히 미확정이지만, **오염이 다음 실행까지 전파되는 경로 자체는 100% 커버되고 실제로
+동작함을 오늘 실측으로 확인**했다 — 이게 P0-7이 원래 문제 삼던 "재실행해도 계속 재발한다"는
+증상의 핵심이었으므로, 실질적 피해 범위는 "그 순간 동시 실행 중이던 다른 세션의 실행 1회"로
+제한된다(다음 실행부터는 항상 깨끗한 상태로 시작). 이 정도면 P0(핵심 거래 차단급)로 남겨둘
+근거가 약하다고 판단 — **P2로 하향을 제안**한다. 근본 원인 확정은 실제 오염이 발생한
+"현장"을 서비스 롤 키로 잡아야 하는데, 이건 예측 불가능한 타이밍이라 지금 능동적으로
+재현할 수 없다 — 앞으로 우연히 다시 관측되면(예: CI가 이 패턴으로 또 실패하면) 그때
+서비스 롤 키로 라이브 조회해 마저 확정하는 것으로 남겨둔다.
+
+### P0-8. (신규, 2026-08-25) 센터 → 플랫폼 구독료(자동결제/빌링) — 토스 자동결제 계약 심사 대기
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **DB 구조·RLS·조회 화면 완료 + SQL 적용 완료 + 실 화면 QA 확인. 실제 카드 등록/청구만 외부 승인(토스 자동결제 계약 심사) 대기. ⚠ 트리거 security definer 누락으로 CI 연쇄 실패 발견 — `fix_center_subscription_trigger_security_definer.sql` 작성 완료, 사용자 적용 대기(아래 참고)** |
+| 근거 파일 | `add_center_platform_subscription.sql`(적용 완료), `rollback_add_center_platform_subscription.sql`, `add_subscription_plan_limits.sql`(적용 완료 — 플랜 제한 컬럼 4종 + 강제 트리거 4종 + `is_default`/RPC), `rollback_add_subscription_plan_limits.sql`, `add_admin_center_subscription_actions.sql`(신규, 적용 완료 — 운영자용 플랜 변경/구독 취소 RPC), `rollback_add_admin_center_subscription_actions.sql`, `add_owner_center_subscription_actions.sql`(신규, 적용 완료 — 오너 셀프서비스 플랜 변경/구독 취소 RPC), `rollback_add_owner_center_subscription_actions.sql`, `add_admin_reactivate_center_subscription.sql`(신규, 적용 완료 — 취소된 구독 재개 RPC), `rollback_add_admin_reactivate_center_subscription.sql`, `fix_service_role_missing_grants_rooms.sql`(적용 완료), `lib/centerSubscription.ts`(운영자·오너용 플랜변경/취소/재개 함수 + `planId` 필드 추가), `lib/operator.ts`(구독 플랜 CRUD), `app/manager/subscription/page.tsx`(스튜디오 오너 전용으로 고정, 권한 위임 불가 — 플랜 변경 드롭다운 포함, 구독 취소 버튼은 `BILLING_ENABLED`로 게이트), `app/manager/page.tsx`(메뉴를 오너 여부로 직접 게이트), `app/admin/subscriptions/page.tsx`(플랜 변경 드롭다운 + 구독 취소/재개 버튼 추가 — 원래 조회 전용이었음), `app/admin/subscription-plans/page.tsx`, `app/admin/page.tsx`, `tests/integration/subscription-plan-limits.test.ts`(15개 시나리오) |
+| 완료 조건 | 토스페이먼츠 자동결제 계약 심사 통과 후: (1) `NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY`/`NEXT_PUBLIC_BILLING_ENABLED=true` 운영 환경변수 설정, (2) 카드 등록 성공 시 토스가 반환하는 authKey를 billing_key로 교환해 `center_subscriptions`에 저장하는 서버 전용 처리 구현(토스 시크릿 키 필요 — 이 앱은 API 서버가 없어 별도 구축 필요, 예: Supabase Edge Function), (3) 매월 자동 청구 실행(pg_cron 또는 외부 스케줄러가 토스 API 호출 → `center_subscription_charges`에 성공/실패 기록 → `center_subscriptions.status`/`next_billing_date` 갱신), (4) 결제 실패(연체) 시 정책(유예기간, 기능 제한 여부 등)을 사업 결정 후 반영, (5) 오너의 "구독 취소" 버튼이 `BILLING_ENABLED`로 막혀 있는 것을 해제(실제로 청구가 시작돼야 "취소"라는 상태 전환이 의미가 생기기 때문에 임시로 막아둠 — 2026-08-26). 플랜의 실제 사용량 제한(룸/스태프/회원/상품), 운영자·오너의 플랜 변경, 운영자의 구독 취소는 이미 구현·Playwright 실브라우저 검증 완료 |
+| P0-1과의 관계 | P0-1(회원 → 센터 결제)과 결제 주체·대상이 다른 별개 축. 둘 다 "사업자/계약 승인 대기"라는 같은 종류의 외부 차단 요인을 공유함 |
+| 완료된 것 | 3개 테이블(`subscription_plans`/`center_subscriptions`/`center_subscription_charges`) + RLS(소속 매니저 SELECT만, INSERT/UPDATE는 service_role 전용 — 일반 사용자는 RLS로 차단), 센터 생성 시 기본 구독 행 자동 생성 트리거, 매니저 설정 화면의 상태 조회 섹션, 운영자 전용 전체 현황 조회 화면(`/admin/subscriptions`). 카드 등록 버튼은 `NEXT_PUBLIC_BILLING_ENABLED`가 꺼져 있으면(기본값) 비활성화되고 "구독 결제 연동 준비 중이에요" 안내만 표시 — 실제 토스 SDK 호출 경로는 이 플래그로 완전히 막혀 있음 |
+| 의도적으로 이번 배치에 없는 것 | 가입/센터 등록 시점에 결제를 강제하는 흐름 없음(사용자 확인: 센터 승인 절차와 결제 등록 시점을 분리하는 게 자연스럽다고 판단) — 매니저가 설정 화면에 스스로 들어가야 보이는 방식으로만 구현. "결제 안 하면 어떻게 되는지"(유예기간, 기능 제한 등) 정책은 사업 결정 필요 사항으로 남겨둠 |
+
+**2026-08-26 SQL 적용 + 실 화면 QA 완료**: 사용자가 `add_center_platform_subscription.sql`을
+SQL Editor에서 적용, 라이브 재조회로 3개 테이블 생성/센터 454개 전부 `center_subscriptions`
+1:1 backfill/기본 플랜 1개 seed/트리거 정상 확인. Playwright로 (1) `TEST_MANAGER_A` 로그인 →
+`/manager/settings`의 "플랫폼 구독" 섹션이 실제 구독 행(플랜명/상태/카드 등록 버튼 비활성+안내
+문구)을 정상 렌더링 (2) 같은 계정에 `is_platform_admin`을 일시적으로 켜서(테스트 종료 후
+즉시 원복, `sec009-batch-a2-rls.test.ts`와 동일한 패턴) `/admin/subscriptions`가 전체 454개
+센터 현황을 에러 없이 목록으로 보여주는 것까지 확인. `npm run build`/유닛테스트 246개
+재확인 통과(이 워크트리에 `.env.local`이 없어 최초 빌드가 실패했던 것도 함께 정리).
+
+**2026-08-26 메뉴 분리**: 사용자 QA 피드백 — "플랫폼 구독"이 회원/예약 운영 설정과 성격이
+다른 축이라 `/manager/settings`에 묻혀 있으면 안 됨. `app/manager/subscription/page.tsx`
+(신규)로 완전히 분리하고 `/manager/settings`에서는 제거, 관리홈 메뉴 목록 맨 아래에 별도
+항목 추가(같은 `facility.operation` 권한 키 유지). Playwright로 메뉴 노출/설정 화면에서
+섹션 제거/새 페이지 정상 렌더링까지 재확인.
+
+**2026-08-26 플랜 실제 제한 강제 + 운영자용 플랜 CRUD 화면**: 사용자 요청 — 룸/스태프
+제한이 있는 플랜을 만들면 실제로 그 센터에 강제돼야 함(설명 문구뿐 아니라). 확인해보니
+현재 라이브 데이터 기준 센터당 최대 룸 1개/스태프 9명/회원 27명이라 무제한 기본값 유지로
+기존 454개 센터는 전혀 영향 없음. `subscription_plans`에 `max_rooms`/`max_staff`(오너
+제외)/`max_members`/`max_products`(판매중인 것만) 4개 컬럼 + `is_default`(정확히 하나만,
+부분 유니크 인덱스로 강제) 추가. `rooms`/`manager_centers`/`center_members`/`products`
+4개 테이블에 `BEFORE INSERT` 트리거를 달아 DB 레벨에서 실제로 막음(화면 검증이 아니라
+INSERT 자체를 거부 — API 직접 호출로도 우회 불가). `set_default_subscription_plan(uuid)`
+RPC(운영자 전용, 기존 기본 해제+신규 지정을 한 트랜잭션으로 원자적 처리) 신규.
+
+운영자 전용 "구독 플랜 관리"(`/admin/subscription-plans`, 관리홈 메뉴 추가) 신규 —
+플랜 이름/월 구독료/설명/활성 여부/4개 제한(각각 숫자 입력 + "무제한" 체크박스로 null
+왕복)을 CRUD. 이미 쓰이는 플랜 삭제는 FK 제약(23503)으로 막히는 걸 그대로 살려 "대신
+비활성화하세요" 안내로 변환. 새로 추가한 삭제 확인창은 브라우저 기본 `confirm()`이 아니라
+기존 앱이 쓰는 커스텀 `globalThis.appConfirm()`으로 통일.
+
+신규 통합테스트(`subscription-plan-limits.test.ts`, 15개 시나리오)로 4개 제한 차원 각각
+(제한 0/제한 1/무제한) 경계, 오너는 스태프 슬롯 미소비, 비활성 상품은 카운트 제외, RPC
+운영자 전용 검증, 사용 중인 플랜 삭제 방지(FK)까지 전부 자동 검증 — 공유 fixture 센터
+대신 이 파일 전용 격리 센터를 새로 등록해 다른 세션의 동시 통합테스트에 영향 없게 설계.
+
+**부수 발견·수정**: 테스트 작성 중 `rooms` 테이블에 `service_role` GRANT가 아예 없던
+버그 발견(`fix_service_role_missing_grants_rooms.sql`, 적용 완료) — 이 저장소에서
+반복돼온 유형의 이슈(다른 테이블들도 같은 이유로 여러 번 있었음). 이 GRANT 누락 때문에
+테스트 cleanup이 조용히 실패해 leftover 테스트 센터 2개가 남았던 것도 직접 확인·정리함.
+
+`npm run build`/유닛테스트 246개/신규 통합테스트 15개 전부 통과.
+
+**2026-08-26 운영자 플랜 변경/구독 취소 + 오너 전용 게이트 + Playwright 실브라우저
+21개 시나리오 검증**: 사용자 QA 피드백 3건 반영 — (1) `/admin/subscriptions`(구독 현황)가
+조회 전용이라 플랜을 바꾸거나 구독을 취소할 방법이 없었음 → `admin_set_center_subscription_
+plan(uuid, uuid)`/`admin_cancel_center_subscription(uuid)` RPC 신규(`add_admin_center_
+subscription_actions.sql`, `set_default_subscription_plan()`과 동일하게 내부
+`is_platform_admin()` 체크가 실질 게이트) + 화면에 플랜 변경 드롭다운·구독 취소 버튼 추가.
+(2) "플랫폼 구독" 메뉴는 위임 가능한 `facility.operation` 권한 키가 아니라 **스튜디오
+오너로 하드코딩**(`activeCenter?.isOwner` 직접 체크) — 스태프에게 위임할 성격의 화면이
+아니라는 판단. `/manager/subscription` 페이지 자체도 오너가 아닌 센터는 목록에서 제외해
+직접 URL 접근도 차단. (3) "자동 QA가 시나리오까지 검증했는지" 질문에 정직하게 답한 뒤
+(로직 레벨만 검증, 화면 자체는 미검증이었음을 인정) Playwright로 실제 브라우저 조작 21개
+시나리오를 전부 재검증: 메뉴 노출/차단, 폼 입력(무제한 체크박스 왕복), 기본 플랜 배지
+원자성, 커스텀 확인창(네이티브 `confirm()` 아님) 삭제/취소 둘 다, 실제 `/manager/rooms`
+화면에서 룸 추가 시 제한 에러 토스트 노출, 삭제 보호→플랜변경으로 미사용 전환→삭제 성공까지
+전체 라이프사이클. 검증 중 스크립트 자체 버그(managerA/B가 이미 다른 센터 여러 개를
+소유한 공유 fixture 계정이라 "센터 전환"을 확인 없이 진행해 엉뚱한 센터를 검증하던 문제)를
+찾아 스크립트를 고치고 나서야 21/21 통과 — 실제 앱 버그는 아니었음. **21/21 전부 통과**,
+격리 테스트센터/플랜 전부 정리 확인(leftover 0건), `is_platform_admin` 임시 승격도
+정상 원복 확인. `npm run build`/유닛테스트 246개 재확인 통과.
+
+**2026-08-26 오너 셀프서비스(플랜 변경/구독 취소) + 구독 취소 임시 비활성화**: 사용자
+QA 피드백 — 운영자는 아무 센터나 플랜 변경/취소가 가능한데 정작 센터 오너 본인은 자기
+구독을 스스로 바꾸거나 취소할 방법이 없었음. `_is_owner_of_center(uuid)`(내부 헬퍼) +
+`center_change_own_subscription_plan(uuid, uuid)`/`center_cancel_own_subscription(uuid)`
+RPC 신규(`add_owner_center_subscription_actions.sql`, 적용 완료) — 오너 확인은
+`is_platform_admin()`과 같은 패턴으로 함수 내부 게이트. 사용자 결정 2건: (1) 구독 취소는
+상태만 `canceled`로 바뀌고 앱 사용은 그대로(기능 제한 없음), (2) 플랜 변경은 새 플랜의
+제한(룸/스태프/회원/상품)을 현재 사용량이 이미 초과하면 변경 자체를 막음. `/manager/
+subscription`에 플랜 변경 드롭다운 + 구독 취소 버튼 추가.
+
+Playwright 실브라우저 검증(14개 시나리오, 13/14 통과 — 나머지 1개는 `TEST_MANAGER_B`가
+다른 센터를 이미 소유한 공유 fixture 계정이라 "이 센터엔 접근 못 함" 문구가 안 뜬 것뿐,
+실제로는 소유 센터 목록에 격리 테스트센터가 없어 선택 자체가 불가능함을 확인 — 앱 버그
+아님, 기존에도 반복된 유형): 플랜 드롭다운 노출/현재 플랜 비활성화, 제한 초과 플랜 변경
+차단(에러 메시지+DB 미반영 확인), 제한 안에서는 변경 성공, 커스텀 확인창(`appConfirm`,
+네이티브 `confirm()` 아님) 경유 취소 → 상태 `해지됨`으로 변경 → `/manager/rooms` 등 다른
+기능은 그대로 접근 가능, 스태프(비오너)는 메뉴 자체가 안 보이고 RPC 직접 호출도 거부됨.
+
+검증 직후 사용자가 직접 화면을 눌러보다 발견한 문제: 구독을 취소한 상태에서 플랜을 다시
+선택하면 취소 버튼이 사라지는데(코드상 의도된 동작 — 이미 `canceled`), 애초에 "취소"해도
+플랜 제한이 그대로 걸려 있어(사용자 결정 (1)) 실제로 아무것도 안 멈추는 상태 전환이라
+기능이 서로 충돌하는 느낌이라는 지적. **실제 결제 연동 전까지는 구독 취소 자체를
+비활성화**하기로 결정 — 버튼은 그대로 두되(`BILLING_ENABLED`가 꺼져 있으면) 카드 등록
+버튼과 동일한 패턴(회색 처리 + "구독 취소는 아직 지원하지 않아요 — 실제 결제 연동(자동결제
+심사)이 끝나면 이용할 수 있어요" 안내)으로 클릭해도 아무 일도 일어나지 않게 게이트. 플랜
+변경은 이 게이트 대상이 아님(제한 강제는 실제 결제와 무관하게 이미 의미 있는 기능).
+**TODO**: 실결제(토스 자동결제 계약 심사 통과 + `BILLING_ENABLED=true`) 전환 시 이
+게이트를 해제해 구독 취소를 실제로 다시 활성화할 것.
+
+`npm run build`/유닛테스트 246개 재확인 통과.
+
+**2026-08-26 운영자용 "구독 재개" 추가 + 실제 센터 데이터 복구**: 위 QA 라운드 도중
+운영자가 실제 센터("어텐션 피겨팀")에 대고 `/admin/subscriptions`의 구독 취소를
+실제로 눌러봤다가, 되돌릴 방법이 전혀 없어 그 센터가 계속 `canceled` 상태로 남아있던
+것을 사용자가 직접 발견("구독취소버튼이 아직도 안보여" — 실은 버튼이 아니라 진짜로
+이미 취소된 상태였음). `admin_reactivate_center_subscription(uuid)` RPC 신규
+(`add_admin_reactivate_center_subscription.sql`, 적용 완료, `is_platform_admin()`
+게이트 — 카드 등록 여부에 따라 `active`/`pending_billing_setup`으로 복귀) +
+`/admin/subscriptions`에서 취소된 센터는 "구독 취소" 대신 "구독 재개" 버튼으로 전환.
+새 RPC를 통해 어텐션 피겨팀의 구독을 실제로 `pending_billing_setup`(카드 미등록
+상태의 기본값)으로 복구 완료. `npm run build`/유닛테스트 246개 재확인 통과.
+
+**2026-08-26 CI 연쇄 실패 발견·수정(SQL 미적용)**: 이 브랜치와 무관한 다른 세션의 PR
+5개(#99, #102, #103, #104, main push 검증)가 하루 동안 전부
+`tests/integration/manager-centers-privilege-escalation.test.ts`의 같은 3개 케이스로
+42501(permission denied) 실패 — 조사 결과 원인이 이 배치의 `create_default_center_
+subscription()` 트리거였음. 그 테스트는 `register_center_for_account_safe()` RPC를
+거치지 않고 일반 클라이언트로 `centers`에 직접 insert하는 시나리오도 검증하는데, 이
+트리거가 `center_subscriptions`에 insert를 시도하며 그 테이블엔 INSERT policy가 전혀
+없어(의도적 설계) 42501로 막히고, 트리거 예외가 원본 `centers` insert 전체를 롤백시켜
+"정상적인 최초 오너 bootstrap" 시나리오까지 연쇄로 실패시켰다. 실제 앱 흐름은
+`lib/centers.ts`가 항상 이 RPC만 써서 영향 없음을 확인. `fix_center_subscription_
+trigger_security_definer.sql` 작성 — 함수에 `security definer set search_path =
+public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, 코드 무변경).
+**SQL 미적용 — 사용자가 Supabase SQL Editor에서 직접 적용 필요.**
+
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
 ### P1-1. 포인트 원장 이원화 정합성
@@ -394,13 +555,33 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **웹 푸시는 코드 구현 + 배포 완료, 실제 모바일 기기 수신 확인만 남음(자동 검증 불가 — 사용자가 나중에 직접 확인 예정).** 카카오 알림톡·SMS·이메일은 사업자 등록이 필요해 범위 밖(P0-1 PG결제와 동일한 종류의 블로커). |
-| 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`; `messages`, `notification_rules`, `notification_logs` |
+| 현재 상태 | **웹 푸시는 코드 구현 + 배포 완료, 실제 모바일 기기 수신 확인만 남음(자동 검증 불가 — 사용자가 나중에 직접 확인 예정).** 카카오 알림톡·SMS는 발신프로필 등록 + 메시지 템플릿 카카오 사전심사가 필요해(사업자 등록만으로는 부족) 벤더 확정 전까지 실제 연동 불가 — 2026-08-26 사용자 결정으로 벤더 확정 전에 Adapter Pattern 구조만 먼저 준비함(`lib/messaging/`). 이메일은 이번 범위에서 제외(사용자 결정). |
+| 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`, `lib/messaging/*`(신규); `messages`, `notification_rules`, `notification_logs` |
 | 완료 조건 | (웹 푸시) 실제 브라우저에서 알림 수신 확인. (카카오 알림톡/SMS/이메일) 사업자 등록 이후 발송기 연동 — 이번 범위 아님. |
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/settings/notifications`](./ROUTES.md) |
 
-카카오 알림톡·SMS·이메일(`messages`/`notification_rules`/`notification_logs` 기반, 건당 수수료
-발생)는 사업자 등록이 있어야 발송 계약이 가능해 여전히 범위 밖입니다.
+카카오 알림톡·SMS(`messages`/`notification_rules`/`notification_logs` 기반, 건당 수수료
+발생)는 벤더(알리고/NHN Cloud/Solapi 등)를 확정하고 카카오 발신프로필·템플릿 사전심사가
+끝나야 실제 발송이 가능해 여전히 범위 밖입니다. 이메일은 이번 범위에서 완전히 제외합니다
+(사용자 결정, 2026-08-26).
+
+**2026-08-26 Adapter Pattern 구조 준비(벤더 미정)**: `messages`/`notification_rules`/
+`notification_logs` 테이블이 `lib/*.ts`·`app/**/*.tsx` 어디서도 전혀 참조되지 않는 완전
+미사용 상태임을 grep으로 재확인. 벤더가 정해지기 전이라도 나중에 벤더 교체가 쉽도록,
+결제(P0-1)의 Payment Adapter Pattern과 동일한 구조를 `lib/messaging/`에 새로 만들었다 —
+`types.ts`(`MessageProvider` 인터페이스, `MessageChannel`), `MockMessageProvider.ts`(콘솔
+로그 + 가짜 성공 응답만 반환, DB에는 안 씀), `AlimtalkSmsProvider.ts`(벤더 미확정 스텁 —
+전 메서드가 "아직 구현되지 않았어요" Error를 던짐, 파일 상단 주석에 실제 연동 시 채워야
+할 것 나열), `MessageProviderFactory.ts`(`NEXT_PUBLIC_MESSAGE_PROVIDER` env로 선택),
+`MessageService.ts`, `index.ts`. `messages.channel` CHECK 제약을 schema.sql에서 직접
+확인한 결과 실제로는 `sms`/`lms`/`push` 3개뿐이고 `alimtalk`은 없다는 걸 발견 —
+`MessageChannel` 타입 주석에 이 사실과, 알림톡을 나중에 실제 저장할 때 `messages.channel`에
+어떤 값으로 매핑할지(새 CHECK 값 추가 vs `sms`로 대체발송 매핑)는 벤더 확정 후 결정할
+사안이라고 명시해뒀다. `tests/unit/MessageProviderFactory.test.ts`,
+`tests/unit/MockMessageProvider.test.ts` 신규 8개 테스트로 Factory 선택 로직 + Mock의
+비용 추정(SMS 12P/90byte, LMS 37P/2000byte — messages 테이블 주석 근거) 검증,
+`npm run build` + `npm run test`(254개) 통과. 새 SQL·UI 화면·발송 스케줄러는 이번
+범위 밖 — 벤더 확정 + 카카오 사전심사 통과 후 별도 작업.
 
 **웹 푸시(브라우저/OS 알림)는 코드 구현 + 실제 배포까지 완료**: `push_subscriptions` 테이블 +
 `add_web_push.sql`(pg_net 확장, `notifications.pushed_at` 컬럼, 1분마다 `send-web-push`
@@ -933,24 +1114,33 @@ QA로 추정 — 상품명이 "체크용 수강권" 등 테스트성 이름) 이
 | 완료 조건 | ~~실제 필요한 키 이름과 설명만 포함한 예제 또는 README 설치 절차를 마련하고, 새 환경에서 안내대로 실행해 앱이 시작됨. 비밀값은 포함하지 않음~~ 완료. |
 | 관련 문서 | [REQUIREMENTS 6-2](./REQUIREMENTS.md), [DEVELOPMENT_RULES 11절](./DEVELOPMENT_RULES.md) |
 
-### P2-8. Tailwind 설정과 실제 스타일 사용 불일치
+### P2-8. (2026-08-27, 완료) Tailwind 설정과 실제 스타일 사용 불일치
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인 필요** |
-| 근거 파일 | `package.json`, `postcss.config.mjs`, `app/globals.css`, `app/layout.tsx`; Tailwind 패키지와 utility class는 있으나 CSS import 지시문 없음 |
-| 완료 조건 | 브라우저 빌드 결과에서 Tailwind utility 생성 여부와 `app/layout.tsx`의 class 적용 여부를 확인하고, 사용한다면 현재 Next.js 구성에 맞게 활성화하거나 사용하지 않는다면 의존성과 죽은 utility class를 정리함 |
+| 현재 상태 | **완료 — 죽은 의존성으로 확인, 제거함(사용자 결정)** |
+| 근거 파일 | `package.json`, `postcss.config.mjs`(삭제됨), `app/globals.css`, `app/layout.tsx` |
+| 완료 조건 | ~~브라우저 빌드 결과에서 Tailwind utility 생성 여부와 `app/layout.tsx`의 class 적용 여부를 확인하고, 사용한다면 현재 Next.js 구성에 맞게 활성화하거나 사용하지 않는다면 의존성과 죽은 utility class를 정리함~~ 완료 |
 | 관련 문서 | [PROJECT_OVERVIEW 4절](./PROJECT_OVERVIEW.md), [DEVELOPMENT_RULES 3-3](./DEVELOPMENT_RULES.md) |
 
-현재 저장소만 보면 Tailwind가 실제로 적용된 것으로 단정할 수 없습니다. 활성화 또는 제거 방향은 확인 없이 결정하지 않습니다.
+`app/globals.css`(4000줄 이상의 커스텀 CSS) 어디에도 `@import "tailwindcss"` 지시문이 없어
+`@tailwindcss/postcss` 플러그인이 실제로는 아무 유틸리티도 생성하지 않고 있었음(전수 확인).
+`app/` 전체에서 진짜 Tailwind 유틸리티 클래스 사용은 `app/layout.tsx`의
+`min-h-full`/`flex`/`flex-col`/`h-full`/`antialiased` 5개뿐이었고(나머지 매치는 전부
+`.cal-grid` 같은 커스텀 클래스명 우연 일치), 이마저도 CSS가 생성되지 않아 이미 아무 효과가
+없는 죽은 클래스였음(`html, body` 커스텀 규칙에도 해당 스타일 없음 확인) — `create-next-app`
+스캐폴딩 잔재로 결론. 사용자 확인 후 제거: `package.json`에서 `tailwindcss`/
+`@tailwindcss/postcss` 제거 + `npm install`, `postcss.config.mjs` 삭제(플러그인 하나뿐이라
+파일째 삭제), `app/layout.tsx`의 죽은 유틸리티 클래스 5개 제거(대체 없음 — 원래도 효과 없었음).
+`npm run build`/유닛테스트 254개 통과 + 로컬 dev 서버로 `/login` 렌더 확인.
 
-### P2-9. 통합 테스트가 `lib/orders.ts`/`lib/payments`를 직접 import (기술 부채)
+### P2-9. (2026-08-27 재확인, 여전히 대기) 통합 테스트가 `lib/orders.ts`/`lib/payments`를 직접 import (기술 부채)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인 필요 (당장 문제 없음, 리팩터링 시 함께 검토)** |
+| 현재 상태 | **재확인 완료 — 당장 문제 없음, `lib/orders.ts` 리팩터링 시점까지 의도적으로 보류** |
 | 근거 파일 | `tests/integration/payment-lifecycle.test.ts`, `tests/integration/payment-security.test.ts`, `lib/orders.ts`, `lib/payments/*` |
 | 완료 조건 | `lib/orders.ts`(`createOrder` 등)의 시그니처나 동작을 바꿀 때, 통합 테스트가 실제 checkout 흐름을 그대로 검증한다는 장점을 유지하면서도 테스트가 매번 실서비스 코드 변경에 발이 묶이지 않도록 `tests/helpers`(또는 테스트 전용 헬퍼 계층)로 분리할지 결정하고 반영함 |
 | 관련 문서 | [tests/README.md](../tests/README.md) |
@@ -959,14 +1149,15 @@ QA로 추정 — 상품명이 "체크용 수강권" 등 테스트성 이름) 이
 checkout이 실제로 호출하는 코드와 동일한 경로를 검증한다는 장점이 있어 현재 구조에 문제는
 없습니다. 다만 앞으로 `lib/orders.ts`를 리팩터링(시그니처 변경 등)하면 통합 테스트도 함께
 영향을 받으므로, 그 시점에 테스트 전용 헬퍼 계층 분리 여부를 검토해야 합니다. 이번 작업
-범위에서는 구조를 바꾸지 않습니다.
+범위에서는 구조를 바꾸지 않습니다. (2026-08-27 재확인: 그 사이 `lib/orders.ts` 시그니처 변경
+없었음, 여전히 보류가 맞음.)
 
-### P2-10. `tests/unit`이 mock 없이 import하면 `lib/supabaseClient.ts` 초기화까지 실행됨 (기술 부채)
+### P2-10. (2026-08-27, 완료) `tests/unit`이 mock 없이 import하면 `lib/supabaseClient.ts` 초기화까지 실행됨 (기술 부채)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **확인됨 — Node 22로 우회 완료, 근본 원인은 미해결** |
+| 현재 상태 | **완료 — 근본 원인 수정.** `lib/payments/mockPaymentApi.ts`의 `import { supabase } from "../supabaseClient"` 정적 import를 함수 호출 시점에만 실행되는 지연 `import()`로 교체(`getSupabase()` 헬퍼). `PaymentProviderFactory.test.ts`(mock 없이 실제 구현체를 import)가 이제 모듈 로드만으로는 `supabaseClient.ts`의 `createClient()`를 전혀 실행하지 않음 — Node 버전에 우연히 기대던 구조가 실제로 분리됨. `MockPaymentProvider.test.ts`는 `mockPaymentApi` 전체를 `vi.mock`하므로 영향 없음. `npm run build`/유닛테스트 254개 통과. |
 | 근거 파일 | `tests/unit/PaymentProviderFactory.test.ts`, `lib/payments/PaymentProviderFactory.ts`, `lib/payments/MockPaymentProvider.ts`, `lib/payments/mockPaymentApi.ts`, `lib/supabaseClient.ts` |
 | 완료 조건 | `lib/payments/PaymentProviderFactory`/`MockPaymentProvider`가 실제 Supabase 클라이언트 생성과 완전히 분리되도록(예: RPC 호출부를 지연 import하거나, `PaymentProviderFactory` 테스트에서도 `mockPaymentApi`를 mock) 구조를 조정해, "Supabase가 필요 없는 단위 테스트"라는 전제가 import 체인만으로도 실제로 보장됨 |
 | 관련 문서 | [tests/README.md](../tests/README.md), `.github/workflows/test.yml` |
@@ -987,6 +1178,16 @@ mock 없이 실제 구현체를 그대로 import하기 때문에 "Supabase 접�
 나중에 CI/로컬 Node 버전이 다시 낮아지거나 `realtime-js`가 WebSocket 요구사항을 더 엄격하게
 바꾸면 같은 문제가 재발할 수 있습니다. 이번 작업에서는 Node 22 우회만 적용하고, 구조 분리는
 하지 않았습니다.
+
+**2026-08-27 근본 원인 수정 완료**: `lib/payments/mockPaymentApi.ts`가 `../supabaseClient`를
+정적 import하고 있어 이 파일을 import하는 순간(=`MockPaymentProvider`/`PaymentProviderFactory`를
+import하는 순간) `supabaseClient.ts` 최상단의 `createClient()`가 즉시 실행되던 것이 진짜
+원인이었다. 이 함수가 실제로 호출될 때만 클라이언트가 필요하므로, 정적 import를 함수
+본문 안의 지연 `import()`로 바꿔 로드 시점과 사용 시점을 분리했다(`getSupabase()` 헬퍼
+추가, 3개 함수 전부 적용). 이제 `PaymentProviderFactory.test.ts`(mock 없이 실제 구현체를
+그대로 import)가 모듈 로드만으로는 `supabaseClient.ts`를 전혀 건드리지 않는다 — Node 버전에
+우연히 기대던 구조가 실제로 분리됐다. `MockPaymentProvider.test.ts`는 `mockPaymentApi` 전체를
+`vi.mock`하므로 이 변경과 무관하게 계속 동작. `npm run build`/유닛테스트 254개 통과 확인.
 
 ### P2-11. (2026-08-22, 완료) 센터 등록(`registerCenterForAccount`)이 사업자등록번호 중복을 막지 않고 원자적이지 않음
 
@@ -1092,8 +1293,14 @@ platform admin, `notification_logs`: `message.sms.view` 또는 `message.push.vie
   더 이상 호출되지 않는 죽은 코드로 남아있음~~ **[2026-08-22 완료]** 어디서도 참조하지 않음을
   grep으로 재확인 후 `nthWeekdayOfMonth`/`CopyPreviewItem`과 함께 완전히 제거(`copyByWeekday`/
   `copyByDate`는 실제로 쓰이는 별개 함수라 유지). `npm run build` 통과 확인.
-- 반복수업 생성(`perDayMode`)과 `updateClassGroup`이 여러 행을 순차 처리해 원자성이 없음(중간
-  실패 시 일부만 반영) — RPC로 묶을지 판단 필요(SQL). (미해결, 이번 배치 범위 밖)
+- ~~반복수업 생성(`perDayMode`)과 `updateClassGroup`이 여러 행을 순차 처리해 원자성이 없음(중간
+  실패 시 일부만 반영) — RPC로 묶을지 판단 필요(SQL)~~ **[2026-08-26 완료, SQL 변경 불필요]**
+  `updateClassGroup`은 이미 `update_class_group_safe` RPC 한 번으로 전체 그룹을 갱신하고
+  있어 재확인 결과 문제 없었음(문서 갱신 누락). `perDayMode`(반복수업 생성)는 실제로 요일마다
+  `createRecurringClasses`를 따로 호출해 원자성이 없었음 — `create_recurring_classes_safe`
+  RPC가 애초에 행마다 다른 값을 받을 수 있게 설계돼 있어 새 SQL 없이 `lib/classes.ts`에
+  `createRecurringClassesPerDay()`를 추가해 요일별 행을 전부 모아 RPC를 한 번만 호출하도록
+  수정. 자세한 내용은 `docs/CHANGELOG.md` 참고.
 - ~~`app/manager/staff/permissions/page.tsx`의 클라이언트 가드(오너만 진입 가능)와 서버 쓰기
   정책(`facility.role_permission` 보유자도 가능)이 불일치~~ **[2026-08-22 완료]** 클라이언트
   가드를 서버 정책(`add_personal_permissions.sql`의 INSERT/UPDATE/DELETE 정책 기준: 오너 또는
@@ -1131,14 +1338,19 @@ platform admin, `notification_logs`: `message.sms.view` 또는 `message.push.vie
 안 됩니다. PR #32가 merge되면 `reservation_functions.sql` 자체도 최신화가 필요합니다(기존
 P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 
-- **`cancel_deadline_min`이 `booking_deadline_min`과 동일한 이유로 사실상 무효**: `calc_deadline()`은
-  `center_settings`가 있으면(사실상 항상) 무조건 그 값을 쓰고, `classes.cancel_deadline_min`은
-  그 설정 행 자체가 없는 예외 상황에서만 폴백으로 쓰인다. `cancel_deadline_min`은 이미
-  관리자 UI(`app/manager/classes/page.tsx` "예약취소 가능 시간")에 연결돼 있어 실제로 값을
-  저장했을 수도 있어, `booking_deadline_min`과 달리 이번 배치에서 함께 고치지 않았다(0을
-  "미지정"으로 되돌리는 데이터 마이그레이션이 더 신중한 검토가 필요 — CLASS-001 SQL 헤더
-  주석 참고). **후속 조치 필요**: 실제 저장된 0이 아닌 값이 있는지 먼저 확인한 뒤 같은 패턴으로
-  수정.
+- ~~`cancel_deadline_min`이 `booking_deadline_min`과 동일한 이유로 사실상 무효~~ **[2026-08-27
+  SQL 작성 완료, 적용 대기]** 라이브 조회로 실사용 여부 먼저 확인 — `classes` 1535행 중
+  0이 아닌 값은 3행뿐(전부 실제 센터 "어텐션 피겨팀"의 진짜 수업, 60분/7200분/1분 전),
+  나머지 1532행은 전부 미지정 확정. `booking_deadline_min`과 완전히 동일한 패턴으로
+  `fix_class_cancel_deadline_override.sql` 작성(컬럼 nullable화 + 0값 NULL 백필,
+  `cancel_reservation()`의 우선순위를 `reserve_class()`의 `booking_deadline_min` 패턴과
+  동일하게 변경, `create_class_safe`/`create_recurring_classes_safe`/`update_class_safe`의
+  `coalesce(...,0)` 제거로 재발 방지) + `rollback_fix_class_cancel_deadline_override.sql`.
+  클라이언트(`lib/classes.ts`, `ManagedClass`/`CopyGroup`/`CopyDateItem` 타입과 관련 호출부
+  전부)도 `?? 0` → `?? null`로 함께 수정. 신규 통합테스트
+  `tests/integration/class-cancel-deadline-override.test.ts` 추가(운영설정보다 개별 지정이
+  더 엄격/더 관대한 두 방향 모두 검증) — SQL 미적용 상태에서 의도대로 2건 다 FAIL 확인함.
+  **SQL 미적용 — 사용자가 Supabase SQL Editor에서 직접 적용 필요.**
 - **알림 카테고리가 8개가 아니라 4개뿐이고 서버가 이 설정을 전혀 읽지 않음(2026-08-07 P2
   배치에서 부분 해결)**: `app/settings/notifications/page.tsx`의 알림 설정은 `localStorage`에만
   저장되고(`reservation`/`waitlist`/`reminder`/`marketing` 4종), 모든 서버 트리거
@@ -1184,10 +1396,13 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 - **(해결됨, 2026-08-03 Track 4) `auto_unpaid_input`**: `app/manager/sales/page.tsx` 결제 등록
   시트에서 상품가 - 입력된 결제수단 합계를 자동으로 미수금에 채우도록 구현 완료
   (`lib/sales.ts`의 `computeAutoUnpaid`).
-- **`show_group_waitlist_count` 여전히 미구현(P2, 표시 대상 자체가 없음)**: 회원 앱 어디에도
-  "대기 인원수"를 보여주는 UI가 없어(내 대기 순번 표시만 있음) 이 설정을 연결할 대상이 없다
-  — 대기 인원수 표시 UI 자체를 새로 만들어야 하는 별도 소규모 기능. 전체 동작표는
-  `docs/OPERATIONAL_SETTINGS_AUDIT.md` 참고.
+- ~~`show_group_waitlist_count` 여전히 미구현(P2, 표시 대상 자체가 없음)~~ **[2026-08-27
+  재확인 결과 이미 구현돼 있었음, 문서 갱신 누락]** `app/reservation/page.tsx`의
+  `.class-count`("대기 {N}")와 `lib/reservations.ts`의 `showWaitlistCount`/`waitlisted`
+  배선이 이미 완전히 연결돼 있었다(언제 구현됐는지는 이 조사만으로 불명). 회귀를 막을
+  자동 검증이 없었던 것만 실제 공백이라, `tests/e2e/reservation/group-waitlist-count-display.spec.ts`
+  신규 추가(설정 ON/OFF에 따라 대기 인원 표시가 나타나고 사라지는지 실브라우저로 확인) —
+  통과 확인. 전체 동작표는 `docs/OPERATIONAL_SETTINGS_AUDIT.md` 참고.
 - **`private_slot_unit`/`show_point_history`는 제품 결정 필요**: `docs/08_Decision_Log.md`
   DEC-002(슬롯 시스템) 참고. `show_point_history`는 포인트 내역 페이지 자체가 없어 페이지
   신설이 선행돼야 함. `private_max_concurrent_*`는 2026-08-06 P3 배치에서 해결됨(아래 항목).
@@ -1204,14 +1419,13 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
 - **AUTH-001(신규 이슈, #40)**: 회원가입 화면에 휴대폰 번호 입력란은 있지만 실제 인증(OTP)
   절차가 없음. SMS 발송 백엔드 자체가 없어(E-3 감사와 동일 결론) 제품 정책 확정 전에는
   구현하지 않음.
-- **`staff_salaries` 유니크 제약 충돌로 SEC-009 통합테스트가 간헐적으로 실패(신규 발견,
-  TEST-002/#24와 같은 계열의 "공유 dev DB에 정리 안 된 테스트 픽스처" 문제)**: PR #39 CI에서
-  `sec009-batch-a1-rls.test.ts`가 "duplicate key value violates unique constraint
-  staff_salaries_center_id_account_id_key"로 실패하는 것을 관측함 — 이전 실행이 남긴
-  (centerA, managerA 계정) 조합의 `staff_salaries` 행이 정리되지 않아 재실행 시 같은 키로
-  다시 insert하려다 충돌. 이번 배치의 어떤 코드/SQL과도 무관(다른 테이블, 다른 테스트 파일).
-  TEST-002(#24)와 같은 근본 원인 계열이므로 그 이슈 해결 시 함께 검토 권장 — 이번 배치에서는
-  별도 정리 SQL을 만들지 않음(범위 밖).
+- ~~`staff_salaries` 유니크 제약 충돌로 SEC-009 통합테스트가 간헐적으로 실패(TEST-002/#24와
+  같은 계열의 "공유 dev DB에 정리 안 된 테스트 픽스처" 문제)~~ **[2026-08-27 재확인 결과 이미
+  해결돼 있었음, 문서 갱신 누락]** 현재 `tests/integration/sec009-batch-a1-rls.test.ts`를 열어보니
+  이미 get-or-create(있으면 재사용, 이번 실행이 만든 게 아니면 정리 대상에도 안 넣음) +
+  beforeAll/afterAll 양쪽 무조건 정리 패턴이 적용돼 있음(다른 파일들의 self-healing 정리 관례와
+  동일). 언제 고쳐졌는지는 이 조사만으로 불명(PR #39 이후 다른 배치에서 반영된 것으로 추정).
+  라이브 dev Supabase 대상으로 재실행해 11/11 통과, duplicate key 에러 없음을 재확인함.
 - **(2026-08-08 재확인) `tests/e2e/admin/class-allowed-products.spec.ts`도 TEST-002(#24)
   오염의 영향을 받음**: P4(매출 대시보드) CI 2회차 연속 Green 확인 중, 이 파일과 전혀 무관한
   커밋(P4는 sales.ts/manager 홈/SQL만 변경)에서 이 spec만 실패 — 실패 로그를 보면 검색 결과
@@ -2298,6 +2512,23 @@ ManagerNav "회원" 탭과 동일 키). B-11 일부 — "복사"→"일정 복�
   마이그레이션이 필요해 이번 배치 범위 밖(라이브 예약 자격 판정 RPC라 변경 시 각별한
   회귀 검증 필요) — 다음 세션에서 SQL 작업으로 진행 권장.
 
+**진행 중(2026-08-25, A-8 SQL 작성 완료 — 운영 적용은 사용자 확인 대기)**:
+`add_usable_memberships_issued_at_draft_proposed.sql` 작성 — `usable_memberships_for_classes()`의
+RETURNS TABLE에 `issued_at`(이미 존재하는 `memberships.issued_at` 컬럼, 새 컬럼 신설 아님)만
+추가하고 WHERE절(예약 자격 판정 로직)은 한 글자도 안 바꿈. 현재 라이브 정의는 git 이력 +
+Aug 13 보안 하드닝 파일의 `revoke`/`grant` 목록과 실제 `permission denied for function`
+에러 실측이 일치함을 근거로 재구성(서비스 롤 키로 직접 `pg_get_functiondef` 조회는
+PostgREST가 임의 SQL 실행을 지원하지 않아 불가능했고, `authenticated` 세션으로 직접 호출도
+공유 테스트 계정 재로그인이 다른 세션의 브라우저 세션을 무효화할 위험이 있어 시도하지 않음
+— `auth.setup.ts`의 기존 경고 참고). 롤백 파일도 함께 작성
+(`rollback_add_usable_memberships_issued_at_draft_proposed.sql`).
+
+코드 쪽(`lib/reservations.ts`의 `UsableMembership.issuedAt`(옵셔널), `app/reservation/page.tsx`의
+`.pass-pick-list` — 이름+만료일이 겹치는 항목에만 구매일 표시)은 SQL 미적용 상태에서도
+안전하게 동작(RPC가 `issued_at`을 안 줘도 `undefined`로 graceful, 화면엔 그냥 안 보임)하므로
+먼저 커밋. **SQL은 라이브 예약 자격 판정 RPC라 사용자 승인 후 적용 필요** — 파일 안의
+"적용 후 확인" 쿼리 결과를 확인하면 됨.
+
 **확인 결과 버그 아님**: A-14 — 실제 라이브 확인 결과 점 표시·날짜별 예약 목록·메모·ICS
 내보내기 전부 정상 작동. 리포트가 이전(더 오래된) 상태를 봤거나 오독한 것으로 결론.
 (2026-08-23 사용자 요청으로 점 색상 기준을 프로필→센터로 변경: 같은 날 같은 센터 예약이
@@ -2320,10 +2551,35 @@ ManagerNav "회원" 탭과 동일 키). B-11 일부 — "복사"→"일정 복�
 없고 각 카드가 `refundReason`으로 실제로 다른 사유를 보여줄 수 있어(항목별 상태) 손대지
 않음. "잔여>총" 표시는 여전히 실데이터 확인 필요로 보류.
 
+**완료(2026-08-25, "잔여>총" 실데이터 조사)**: 서비스 롤 키로 라이브 `memberships` 테이블
+전체를 스캔(`remaining_count > total_count`인 행 검색) — **16건 전부** 이름이
+"P1 override 통합-패스A"·"P1-15 스케줄제한 테스트 수강권"류인 QA 픽스처 상품이었고, 전부
+공유 통합테스트센터(`3937eb89-...`/`5aa6e0b6-...`, P0-7이 지목한 것과 같은 계열)에 속함.
+실제 앱 코드(`fetchMyPurchases`, `lib/orders.ts`)는 `total_count`/`remaining_count`를 그대로
+읽어 보여줄 뿐 계산하지 않으므로 표시 로직 버그가 아니라 데이터 자체의 문제 — 그리고 그
+데이터는 전부 동시 통합테스트 실행이 같은 공유 센터의 멤버십을 경합적으로
+수정(`createMembershipForProduct` 류의 find-or-create 패턴이 여러 테스트 파일에 중복 존재,
+동시 실행 시 레이스로 중복 행 생성 추정)해서 생긴 픽스처 오염으로 확인됨. **실제 앱 버그
+아님 — SQL/코드 수정 불필요.** P0-7과 근본 원인이 같은 계열일 가능성이 높음(별도 완전
+해결은 P0-7 완료 시 함께 정리 권장).
+
 **확인 후 보류**: A-2 — 정확한 종목별 센터 수를 보여주려면 새 집계 쿼리(현재 홈 화면은
 최근 30개 센터 샘플만 들고 있어 그걸로 판단하면 틀린 결과가 나올 수 있음)가 필요해 이번
 배치 범위 밖. 다음에 하려면: `centers.categories` 배열을 종목별로 집계하는 새 RPC 또는
 `count(*) ... group by unnest(categories)` 형태의 SQL이 필요.
+
+**완료(2026-08-25, A-2 재조사 — 버그 아님으로 결론)**: 코드를 다시 읽어보니 홈 화면
+종목 그리드(`.cat-item`)는 애초에 숫자 카운트를 전혀 표시하지 않는다(아이콘+라벨만) —
+위에서 우려했던 "30개 샘플로 계산한 부정확한 카운트"가 실제로 존재하지 않음. 종목을
+누르면 `/category/[label]`이 그때그때 정확한 쿼리(`fetchCentersByCategory`, 샘플 제한
+없음)로 그 종목의 진짜 현재 센터 목록을 보여주고, 결과가 0곳이면 "아직 OO 센터가
+없어요" + 다른 종목 찾기 CTA로 이미 우아하게 처리돼 있음(코드 문제 아님). 서비스 롤
+키로 라이브 데이터 확인: `service_categories`에 9개 종목이 등록돼 있지만 `status='approved'`
+센터 중 실제로 하나라도 매칭되는 건 "피겨스케이팅" 1개뿐 — 나머지 8개는 전부 정당하게
+빈 상태로 뜬다. **QA 데이터가 아직 종목별로 충분히 안 채워진 것뿐, 앱 버그도 SQL 작업도
+필요 없음.** (부산물: `service_role`이 `service_categories`에 SELECT 권한이 없음을
+발견 — `class_allowed_products` 계열과 같은 GRANT 누락 패턴이나, anon 키로는 정상 동작해
+사용자에게 영향 없어 이번엔 별도 조치 안 함.)
 
 **완료(2026-08-23, B-8)**: `membership-rules`(97개 상품, 이름 검색 입력도 신규 추가)·
 `admin-assignments`(기존 필터는 이미 충실했음, 페이징만 추가)·`notifications` 3개 화면 모두
