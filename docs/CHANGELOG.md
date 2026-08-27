@@ -8,6 +8,49 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-26 — P0-1 후속: 토스 결제수단에 카카오페이/토스페이 추가
+
+`CreatePaymentInput.easyPay`(`"KAKAOPAY"|"TOSSPAY"`) 추가, `TossPaymentProvider`가
+`requestPayment()`에 `card:{flowMode:"DIRECT", easyPay}`를 넘겨 그 간편결제 창으로 바로
+이동시키도록 구현. `app/checkout/page.tsx`의 결제수단 차단 가드를 카드 전용에서
+카드/카카오페이/토스페이 3종 허용으로 확장(계좌이체/직접결제는 아직 미지원, 계속 차단).
+Playwright로 3종 전부 실제 결제사 게이트웨이 진입까지 자동 재현해 검증(카카오페이→
+online-payment.kakaopay.com, 토스페이→pay.toss.im, 카드→토스 카드 선택 화면). `npm run
+build` + 유닛테스트 246개 재확인 통과.
+
+## 2026-08-25 — P0-1 후속: 실 QA 중 발견한 토스 결제 실패 원인 2건 수정 (SDK v1→v2, 키 종류 착오)
+
+SQL 적용 후 사용자가 실제 결제 버튼을 눌러보니 매번 `COMMON_ERROR`(처리 중 오류가
+발생했습니다)로 실패. Playwright로 로그인→체크아웃→결제 클릭을 직접 재현하고 네트워크
+요청을 캡처해 근본 원인 규명: (1) `js.tosspayments.com/v1` SDK가 내부 "v1-adapter" 호환
+레이어에서 `customerKey`를 모든 요청에 고정 리터럴로 보내던 결함 — v2 SDK
+(`js.tosspayments.com/v2/standard`)로 전환, `TossPaymentProvider`를 v2 API
+(`payment({customerKey}).requestPayment(...)`, `amount:{value,currency}`)로 재작성하고
+로그인 사용자의 auth uid를 `customerKey`로 전달. (2) 이어서 뜬
+`NotSupportedWidgetKeyError` — 처음 쓴 키(`test_gck_docs_...`, "주문서형·결제창형 연동
+키")가 "결제위젯"(인라인 UI) 전용이었고, 이 프로젝트가 쓰는 `requestPayment()` 팝업 방식엔
+"API 개별 연동 키"(`test_ck_.../test_sk_...`, 마찬가지로 사업자 심사 불필요)가 필요했음 —
+사용자가 올바른 키로 교체 후 Playwright 재현에서 실제 결제 게이트웨이 카드 선택 화면까지
+정상 진입 확인(에러 없음). 부수적으로 `.env.local`의 개행 누락으로 손상돼 있던
+`NEXT_PUBLIC_VAPID_PUBLIC_KEY` 값도 함께 정리. `npm run build` + 유닛테스트 246개 재확인
+통과. 자세한 내용은 `docs/TODO.md` P0-1 참고.
+
+## 2026-08-25 — P0-1 토스페이먼츠 결제창(카드) 연동 — 이 프로젝트 최초의 app/api 서버 라우트 추가
+
+사업자 등록 완료로 재개. 토스 개발자센터 공용 테스트 키(사업자 심사 불필요)로
+`TossPaymentProvider`를 실제 구현: `window.TossPayments().requestPayment("카드", ...)`로
+결제창을 열고, `app/checkout/success`/`fail`이 리다이렉트를 받아 기존 `/checkout` 화면으로
+되돌려보내는 방식(화면 중복 없이 재사용). 결제 승인은 시크릿 키가 필요해 신규
+`app/api/payments/confirm`·`/cancel` 서버 라우트에서만 수행. SQL은
+`add_payment_test_provider.sql`이 미리 계획해둔 대로 `confirm_test_payment`의 순수 로직을
+`_issue_membership_and_record_payment` 헬퍼로 분리하고, 신규 `confirm_real_payment`/
+`cancel_real_payment`(둘 다 `service_role` 전용 EXECUTE 권한)가 이를 재사용 —
+`fulfill_order`는 이번에도 건드리지 않음. 신규 통합테스트(`confirm-real-payment.test.ts`)로
+service_role만 성공/일반 세션 거부/금액검증/idempotency/취소를 자동 검증(SQL 적용 후 실행
+예정). `npm run build` + 유닛테스트 246개 + 기존 결제 통합테스트 8개 전부 통과 재확인.
+**SQL 미적용 — 사용자가 `add_confirm_real_payment.sql` 적용 필요.** 자세한 내용은
+`docs/TODO.md` P0-1 참고.
+
 ## 2026-08-27 — 죽은 Tailwind 의존성 제거(P2-8)
 
 `app/globals.css`에 `@import "tailwindcss"` 지시문이 없어 `@tailwindcss/postcss` 플러그인이

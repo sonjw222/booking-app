@@ -17,6 +17,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import "./tossSdk"; // window.TossPayments 전역 타입 선언(공용, lib/payments/TossPaymentProvider.ts와 공유)
 
 export type SubscriptionStatus = "pending_billing_setup" | "active" | "past_due" | "canceled";
 
@@ -153,24 +154,6 @@ export async function centerCancelOwnSubscription(centerId: string): Promise<voi
 // ------------------------------------------------------------
 // 토스 자동결제 카드 등록 (플래그 on일 때만 실제로 호출됨)
 // ------------------------------------------------------------
-
-type TossPaymentInstance = {
-  requestBillingAuth: (opts: {
-    method: "CARD";
-    successUrl: string;
-    failUrl: string;
-  }) => Promise<void>;
-};
-
-type TossPaymentsSdk = {
-  payment: (opts: { customerKey: string }) => TossPaymentInstance;
-};
-
-declare global {
-  interface Window {
-    TossPayments?: (clientKey: string) => TossPaymentsSdk;
-  }
-}
 
 const TOSS_SDK_SRC = "https://js.tosspayments.com/v2/standard";
 

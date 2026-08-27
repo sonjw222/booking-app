@@ -20,8 +20,8 @@ export class PaymentService {
     return this.provider.createPayment(input);
   }
 
-  confirmPayment(paymentKey: string, orderId: string): Promise<ConfirmPaymentResult> {
-    return this.provider.confirmPayment(paymentKey, orderId);
+  confirmPayment(paymentKey: string, orderId: string, amount?: number): Promise<ConfirmPaymentResult> {
+    return this.provider.confirmPayment(paymentKey, orderId, amount);
   }
 
   cancelPayment(orderId: string): Promise<CancelPaymentResult> {
