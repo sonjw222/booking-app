@@ -33,29 +33,7 @@ import type {
 } from "./types";
 import { cancelRealPaymentApi, confirmRealPaymentApi } from "./tossPaymentApi";
 import { fetchOrderPaymentStatus } from "./mockPaymentApi";
-
-type TossRequestPaymentParams = {
-  method: "CARD";
-  amount: { value: number; currency: "KRW" };
-  orderId: string;
-  orderName: string;
-  customerEmail?: string;
-  successUrl: string;
-  failUrl: string;
-  // 카카오페이 등 간편결제를 열 때 card.flowMode:"DIRECT" + card.easyPay:"카카오페이" 사용
-  // (후속 작업 — docs/TODO.md 참고). 지금은 일반 카드결제만 지정.
-  card?: { flowMode?: "DEFAULT" | "DIRECT"; easyPay?: string };
-};
-
-declare global {
-  interface Window {
-    TossPayments?: (clientKey: string) => {
-      payment: (params: { customerKey: string }) => {
-        requestPayment: (params: TossRequestPaymentParams) => Promise<void>;
-      };
-    };
-  }
-}
+import "../tossSdk"; // window.TossPayments 전역 타입 선언(공용, lib/tossSdk.ts 참고)
 
 function getClientKey(): string {
   const key = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY;
