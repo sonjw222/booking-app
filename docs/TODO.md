@@ -406,7 +406,7 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **DB 구조·RLS·조회 화면 완료 + SQL 적용 완료 + 실 화면 QA 확인. 실제 카드 등록/청구만 외부 승인(토스 자동결제 계약 심사) 대기. ⚠ 트리거 security definer 누락으로 CI 연쇄 실패 발견 — `fix_center_subscription_trigger_security_definer.sql` 작성 완료, 사용자 적용 대기(아래 참고)** |
+| 현재 상태 | **DB 구조·RLS·조회 화면 완료 + SQL 적용 완료 + 실 화면 QA 확인. 실제 카드 등록/청구만 외부 승인(토스 자동결제 계약 심사) 대기. 트리거 security definer 누락으로 CI 연쇄 실패했던 건 `fix_center_subscription_trigger_security_definer.sql` 적용 완료(2026-08-31, `pg_get_functiondef` 재조회로 `SECURITY DEFINER`/`search_path='public'` 반영 확인)** |
 | 근거 파일 | `add_center_platform_subscription.sql`(적용 완료), `rollback_add_center_platform_subscription.sql`, `add_subscription_plan_limits.sql`(적용 완료 — 플랜 제한 컬럼 4종 + 강제 트리거 4종 + `is_default`/RPC), `rollback_add_subscription_plan_limits.sql`, `add_admin_center_subscription_actions.sql`(신규, 적용 완료 — 운영자용 플랜 변경/구독 취소 RPC), `rollback_add_admin_center_subscription_actions.sql`, `add_owner_center_subscription_actions.sql`(신규, 적용 완료 — 오너 셀프서비스 플랜 변경/구독 취소 RPC), `rollback_add_owner_center_subscription_actions.sql`, `add_admin_reactivate_center_subscription.sql`(신규, 적용 완료 — 취소된 구독 재개 RPC), `rollback_add_admin_reactivate_center_subscription.sql`, `fix_service_role_missing_grants_rooms.sql`(적용 완료), `lib/centerSubscription.ts`(운영자·오너용 플랜변경/취소/재개 함수 + `planId` 필드 추가), `lib/operator.ts`(구독 플랜 CRUD), `app/manager/subscription/page.tsx`(스튜디오 오너 전용으로 고정, 권한 위임 불가 — 플랜 변경 드롭다운 포함, 구독 취소 버튼은 `BILLING_ENABLED`로 게이트), `app/manager/page.tsx`(메뉴를 오너 여부로 직접 게이트), `app/admin/subscriptions/page.tsx`(플랜 변경 드롭다운 + 구독 취소/재개 버튼 추가 — 원래 조회 전용이었음), `app/admin/subscription-plans/page.tsx`, `app/admin/page.tsx`, `tests/integration/subscription-plan-limits.test.ts`(15개 시나리오) |
 | 완료 조건 | 토스페이먼츠 자동결제 계약 심사 통과 후: (1) `NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY`/`NEXT_PUBLIC_BILLING_ENABLED=true` 운영 환경변수 설정, (2) 카드 등록 성공 시 토스가 반환하는 authKey를 billing_key로 교환해 `center_subscriptions`에 저장하는 서버 전용 처리 구현(토스 시크릿 키 필요 — 이 앱은 API 서버가 없어 별도 구축 필요, 예: Supabase Edge Function), (3) 매월 자동 청구 실행(pg_cron 또는 외부 스케줄러가 토스 API 호출 → `center_subscription_charges`에 성공/실패 기록 → `center_subscriptions.status`/`next_billing_date` 갱신), (4) 결제 실패(연체) 시 정책(유예기간, 기능 제한 여부 등)을 사업 결정 후 반영, (5) 오너의 "구독 취소" 버튼이 `BILLING_ENABLED`로 막혀 있는 것을 해제(실제로 청구가 시작돼야 "취소"라는 상태 전환이 의미가 생기기 때문에 임시로 막아둠 — 2026-08-26). 플랜의 실제 사용량 제한(룸/스태프/회원/상품), 운영자·오너의 플랜 변경, 운영자의 구독 취소는 이미 구현·Playwright 실브라우저 검증 완료 |
 | P0-1과의 관계 | P0-1(회원 → 센터 결제)과 결제 주체·대상이 다른 별개 축. 둘 다 "사업자/계약 승인 대기"라는 같은 종류의 외부 차단 요인을 공유함 |
@@ -530,14 +530,15 @@ subscription()` 트리거였음. 그 테스트는 `register_center_for_account_s
 `lib/centers.ts`가 항상 이 RPC만 써서 영향 없음을 확인. `fix_center_subscription_
 trigger_security_definer.sql` 작성 — 함수에 `security definer set search_path =
 public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, 코드 무변경).
-**SQL 미적용 — 사용자가 Supabase SQL Editor에서 직접 적용 필요.**
+**2026-08-31 사용자가 Supabase SQL Editor에서 적용 완료 — `pg_get_functiondef` 재조회로
+`SECURITY DEFINER`/`search_path='public'` 반영, 로직 원문과 동일함을 확인.**
 
-### P0-9. (신규, 2026-08-31) SEC-118 확정 경로 잔여 취약점 + 환불/양도 수강권 유령 잔여횟수 — SQL 작성 완료, 적용 대기
+### P0-9. (2026-08-31, 완료) SEC-118 확정 경로 잔여 취약점 + 환불/양도 수강권 유령 잔여횟수
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **코드/SQL 작성 완료, `npm run build`/유닛테스트 262개 통과, 신규 통합테스트 2개 작성(SQL 적용 전이라 의도적으로 FAIL 상태). 사용자가 Supabase SQL Editor에서 SQL 2건 적용 대기.** |
+| 현재 상태 | **완료.** 사용자가 Supabase SQL Editor에서 SQL 3건(주문금액 검증, 유령잔여횟수 방지, 검증 중 발견한 `point_transactions` service_role GRANT 누락) 전부 적용. 신규 통합테스트 10개(order-amount-verification 7개 + cancel-reservation-refunded-membership 3개) 라이브에서 통과 확인, 회귀 통합테스트 31개/e2e 8개도 통과. `fix/sec-118-order-amount-and-ghost-refund` 브랜치 → PR [#111](https://github.com/sonjw222/booking-app/pull/111) CI 전체 Green → main에 머지 완료. |
 | 근거 파일 | `fix_orders_amount_server_verification.sql`(신규), `rollback_fix_orders_amount_server_verification.sql`, `fix_cancel_reservation_refunded_membership_ghost_count.sql`(신규), `rollback_fix_cancel_reservation_refunded_membership_ghost_count.sql`, `lib/orders.ts`, `lib/reviews.ts`(`usePoints`에 `orderId` 인자 추가), `app/checkout/page.tsx`(주문 생성 → 포인트 사용 순서로 변경), `tests/integration/order-amount-verification.test.ts`(신규), `tests/integration/cancel-reservation-refunded-membership.test.ts`(신규) |
 | 완료 조건 | 사용자가 두 SQL을 순서 무관하게(서로 독립적) Supabase SQL Editor에서 적용 → 신규 통합테스트 2개가 green으로 전환되는지 확인 |
 | 발견 경위 | 오래된 미병합 브랜치(`security/p0-batch-consolidation`) 정리 조사 중 실제 라이브 코드(`lib/orders.ts`, `add_confirm_real_payment.sql`)를 직접 읽다가 발견 — 브랜치 자체를 재적용하지 않고, 지금 실제로 켜진 포인트 결제 기능까지 반영해 처음부터 다시 설계함 |
@@ -1404,7 +1405,9 @@ P0-2/P0-3와 동일한 종류의 "migration ledger" 문제).
   전부)도 `?? 0` → `?? null`로 함께 수정. 신규 통합테스트
   `tests/integration/class-cancel-deadline-override.test.ts` 추가(운영설정보다 개별 지정이
   더 엄격/더 관대한 두 방향 모두 검증) — SQL 미적용 상태에서 의도대로 2건 다 FAIL 확인함.
-  **SQL 미적용 — 사용자가 Supabase SQL Editor에서 직접 적용 필요.**
+  **사용자가 Supabase SQL Editor에서 적용 완료 — 이후 SEC-118 배치(P0-9)의
+  `fix_cancel_reservation_refunded_membership_ghost_count.sql`이 이 함수의 라이브(적용된)
+  본문을 그대로 이어받아 작성됐고, 관련 통합테스트가 라이브 CI에서 통과함을 재확인.**
 - **알림 카테고리가 8개가 아니라 4개뿐이고 서버가 이 설정을 전혀 읽지 않음(2026-08-07 P2
   배치에서 부분 해결)**: `app/settings/notifications/page.tsx`의 알림 설정은 `localStorage`에만
   저장되고(`reservation`/`waitlist`/`reminder`/`marketing` 4종), 모든 서버 트리거
