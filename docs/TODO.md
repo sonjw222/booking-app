@@ -532,6 +532,38 @@ trigger_security_definer.sql` 작성 — 함수에 `security definer set search_
 public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, 코드 무변경).
 **SQL 미적용 — 사용자가 Supabase SQL Editor에서 직접 적용 필요.**
 
+### P0-9. (신규, 2026-08-31) SEC-118 확정 경로 잔여 취약점 + 환불/양도 수강권 유령 잔여횟수 — SQL 작성 완료, 적용 대기
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **코드/SQL 작성 완료, `npm run build`/유닛테스트 262개 통과, 신규 통합테스트 2개 작성(SQL 적용 전이라 의도적으로 FAIL 상태). 사용자가 Supabase SQL Editor에서 SQL 2건 적용 대기.** |
+| 근거 파일 | `fix_orders_amount_server_verification.sql`(신규), `rollback_fix_orders_amount_server_verification.sql`, `fix_cancel_reservation_refunded_membership_ghost_count.sql`(신규), `rollback_fix_cancel_reservation_refunded_membership_ghost_count.sql`, `lib/orders.ts`, `lib/reviews.ts`(`usePoints`에 `orderId` 인자 추가), `app/checkout/page.tsx`(주문 생성 → 포인트 사용 순서로 변경), `tests/integration/order-amount-verification.test.ts`(신규), `tests/integration/cancel-reservation-refunded-membership.test.ts`(신규) |
+| 완료 조건 | 사용자가 두 SQL을 순서 무관하게(서로 독립적) Supabase SQL Editor에서 적용 → 신규 통합테스트 2개가 green으로 전환되는지 확인 |
+| 발견 경위 | 오래된 미병합 브랜치(`security/p0-batch-consolidation`) 정리 조사 중 실제 라이브 코드(`lib/orders.ts`, `add_confirm_real_payment.sql`)를 직접 읽다가 발견 — 브랜치 자체를 재적용하지 않고, 지금 실제로 켜진 포인트 결제 기능까지 반영해 처음부터 다시 설계함 |
+
+**SEC-118 확정 경로 잔여 취약점**: `fulfill_order()`(매니저 수동 승인 경로)는 라이브에
+이미 자체 가격 검증이 있는 게 P1-5 조사(위 참고)로 확인됐지만, `confirm_test_payment`/
+`confirm_real_payment`가 공유하는 `_issue_membership_and_record_payment()`(사람 검토 없이
+자동 확정되는 경로)는 그 대상이 아니었다 — `orders.amount`를 클라이언트가 그대로 정해도
+검증 없이 즉시 수강권이 발급됐다. `_issue_membership_and_record_payment()`에
+"`주문금액 = 상품가 - 검증된 쿠폰할인 - 사용포인트`" 검증을 추가.
+
+**설계 중 직접 찾은 2차 구멍**: 처음엔 `orders.points_used`를 클라이언트 주장 그대로 믿고
+검증하려 했는데, 그러면 `use_points()`를 한 번도 실제로 호출하지 않고도 `points_used`만
+큰 값으로 주장해 금액을 임의로 낮출 수 있었다(쿠폰은 하드코딩된 목록이라 서버가 직접
+검증 가능하지만, 포인트는 회원마다 다른 실제 잔액이라 같은 방식이 안 통함). `point_transactions`에
+`order_id` 연결 고리를 추가하고 `use_points()`가 그 주문번호로 실제 차감 행을 남기도록
+바꿔서, "이 주문번호로 실제 차감됐는지"를 직접 확인하는 방식으로 재설계했다(다른 주문에서
+쓴 포인트를 재사용 주장해도 order_id가 달라 통과 못 함 — 신규 테스트로 검증).
+
+**환불/양도 수강권 유령 잔여횟수**: `cancel_reservation()`이 확정 예약 취소 시 그 수강권의
+`remaining_count`를 상태 확인 없이 무조건 +1 했다 — 이미 환불(`refunded`)되거나 양도
+(`transferred`)된 수강권도 그대로 복구돼, 실제 프로덕션에서 이렇게 되살아난 사례가 확인됐다
+(조사 중 특정 membership id로 재현 확인). 환급 UPDATE에
+`status not in ('refunded', 'transferred')` 조건을 추가(`active`/`paused`/`expired`는
+기존과 동일하게 그대로 환급 — 정당한 케이스라 범위에서 제외).
+
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
 ### P1-1. 포인트 원장 이원화 정합성

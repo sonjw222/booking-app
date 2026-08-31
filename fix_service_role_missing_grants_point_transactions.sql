@@ -1,0 +1,16 @@
+-- point_transactions 테이블에 service_role GRANT가 아예 없던 것을 발견(2026-08-31,
+-- SEC-118 포인트 검증 배치의 order-amount-verification.test.ts 작성 중 실측 확인 —
+-- `permission denied for table point_transactions`, service_role 키로도 재현).
+-- 이 저장소에서 반복돼온 유형의 이슈(rooms/orders/center_holidays/class_allowed_products 등
+-- 다른 테이블들도 같은 이유로 fix_service_role_missing_grants_*.sql이 이미 여러 개 있음,
+-- fix_service_role_missing_grants_rooms.sql 참고).
+--
+-- service_role은 RLS를 우회하므로 이 GRANT가 있어야 fixture 정리(테스트 cleanup)나
+-- 향후 서버 전용 로직(예: app/api/* 라우트, Edge Function)이 point_transactions을 다룰 수
+-- 있다 — 지금 당장 앱 코드가 service_role로 point_transactions을 직접 건드리는 곳은 없지만
+-- (모든 접근은 로그인 사용자 세션 + RLS, 또는 SECURITY DEFINER RPC인 use_points()/
+-- write_review()를 통함), 통합 테스트 fixture 정리에 필요하고 이 GRANT 자체가 없으면
+-- 향후 서버 전용 코드를 추가할 때도 똑같은 문제가 재발한다.
+--
+-- 파일 전체를 SQL Editor에 붙여넣고 Run 하세요. 여러 번 실행해도 안전.
+grant select, insert, update, delete on point_transactions to service_role;
