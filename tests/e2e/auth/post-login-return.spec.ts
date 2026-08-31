@@ -26,9 +26,6 @@ import { getFixtureAdminClient } from "../../integration/setup";
   매번 새로 연다(다른 e2e 파일과 세션 격리).
 */
 
-const USER_A_EMAIL = "payment-test-a@example.com";
-const USER_A_PASSWORD_ENV = "TEST_USER_A_PASSWORD";
-
 let managerA: TestUser;
 let userA: TestUser;
 let centerAId: string;
@@ -50,8 +47,8 @@ test.afterAll(async () => {
 });
 
 async function loginWithEmail(page: import("@playwright/test").Page) {
-  await page.locator('input[type="email"]').fill(USER_A_EMAIL);
-  await page.locator('input[type="password"]').fill(process.env[USER_A_PASSWORD_ENV]!);
+  await page.locator('input[type="email"]').fill(process.env.TEST_USER_A_EMAIL!);
+  await page.locator('input[type="password"]').fill(process.env.TEST_USER_A_PASSWORD!);
   await page.locator(".login-submit").click();
 }
 
