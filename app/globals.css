@@ -1834,6 +1834,21 @@ a.membership-card { text-decoration: none; display: block; }
   width: 20px; height: 20px; border-radius: 50%; cursor: pointer; font-size: 13px;
   display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
 }
+/* 로그인이 필요한 에러처럼 바로 갈 곳이 있는 경우, 메시지 줄 아래에 버튼을 하나 더
+   붙인다(2026-08-31 스크린샷 리포트 — 결제 화면에서 로그인 필요 에러만 뜨고 이동 수단이
+   없었음). 기존 .error-toast는 다른 화면 여러 곳에서 그대로 재사용 중이라 레이아웃을
+   바꾸지 않고, 이 조합 클래스에서만 줄바꿈을 허용한다. */
+.error-toast-with-action { flex-wrap: wrap; }
+/* .primary-btn과 같은 시각 언어(14px 라운드, 800 굵기)를 이 토스트 위에서도 그대로
+   따르되, 배경/글자색만 이 토스트의 danger 톤 안에서 대비가 나오도록 반전(흰 배경 +
+   danger 텍스트)했다 — 기존 반투명 칩은 앱의 다른 버튼과 스타일이 겉돌아 보였다
+   (2026-08-31 사용자 피드백). */
+.error-toast-action {
+  flex: 0 0 100%; margin-top: 4px; display: block; text-align: center;
+  background: var(--bg); color: var(--danger); text-decoration: none;
+  padding: 11px; border-radius: 14px; font-size: 14px; font-weight: 800;
+}
+.error-toast-action:active { background: var(--surface); }
 
 /* 마이페이지 상품 카드 - 수강권(붉은빛)과 구분되는 색 */
 .membership-card.goods {
@@ -3823,7 +3838,11 @@ a.membership-card { text-decoration: none; display: block; }
 .member-reservation .cal-nav-btn:active { background: var(--surface); }
 .cal-center-pick { min-width: 0; max-width: 132px; height: 44px; padding: 0 2px 0 10px; display: flex; align-items: center; justify-content: flex-end; gap: 5px; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
 .cal-center-pick span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 640; }
-.cal-center-pick b { flex: 0 0 auto; color: var(--ink-soft); font-size: 14px; font-weight: 500; }
+/* position: static — 예전 <select> 기반 버전(위 3190번째 줄 근처, 지금은 이 파일 전체에서
+   더는 쓰이지 않음)의 ".cal-center-pick b { position:absolute; right:12px; }"가 셀렉터가
+   같아 그대로 적용되고 있었다. 지금은 button > span + b 구조라 flex 흐름을 따라야 하는데
+   absolute라 텍스트 위에 화살표가 그대로 겹쳐 보이던 버그(2026-08-31 스크린샷 리포트). */
+.cal-center-pick b { position: static; flex: 0 0 auto; color: var(--ink-soft); font-size: 14px; font-weight: 500; }
 .member-reservation .cal-grid { padding-inline: var(--page-gutter); }
 .member-reservation .cal-weekdays { border-bottom: 1px solid var(--line); }
 .member-reservation .cal-weekday { padding: 12px 0; font-size: 12px; font-weight: 580; }
@@ -3882,7 +3901,10 @@ a.membership-card { text-decoration: none; display: block; }
    버튼 자체는 작아 보여도 padding으로 탭 영역을 44px에 가깝게 넓힌다(C-1). */
 .member-my-reservations .hist-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .member-my-reservations .hist-cancel-btn {
-  min-height: 30px; padding: 10px 8px; margin: -10px -8px -10px 0;
+  /* margin-top을 음수로 두면 위 .hist-status 배지와의 실제 간격이
+     (.hist-right의 gap:6px) + (이 음수 margin-top)이 되어 6px보다 크게 당겨져
+     겹쳐 보이는 버그가 있었다(2026-08-31 스크린샷 리포트) — top만 0으로 되돌림. */
+  min-height: 30px; padding: 10px 8px; margin: 0 -8px -10px 0;
   border: 1px solid var(--line-strong); border-radius: 8px; background: none;
   color: var(--ink-soft); font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
 }

@@ -13,6 +13,7 @@ import { fetchCenterDetail } from "../../lib/center";
 import Loading from "../components/Loading";
 import UiIcon, { type IconName } from "../components/UiIcon";
 import BackButton from "../components/BackButton";
+import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 
 // 카카오페이/토스페이는 로고 자산이 없어 outline 아이콘 하나로 뭉치면 구분이 안 되므로
 // --vendor-* 색 점(dot)으로, 나머지는 의미가 통하는 outline 아이콘으로 구분한다.
@@ -192,7 +193,14 @@ export default function CartPage() {
 
   return (
     <div className="app-shell commerce-page cart-page-v2">
-      {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
+      {error && (
+        <div className={`error-toast${error === "로그인이 필요해요" ? " error-toast-with-action" : ""}`}>
+          {error}<button onClick={() => setError(null)}>×</button>
+          {error === "로그인이 필요해요" && (
+            <a className="error-toast-action" href={loginHrefWithReturnToHere()}>로그인 하러 가기</a>
+          )}
+        </div>
+      )}
 
       <div className="back-header">
         <BackButton fallbackHref="/" />

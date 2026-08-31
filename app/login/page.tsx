@@ -24,6 +24,7 @@ import { validateCenterRegistrationInput, registerCenterForAccount } from "../..
 import { setBootstrapSuppressed } from "../../lib/authAccount";
 import { startNaverLogin } from "../../lib/naverAuth";
 import { startKakaoLogin } from "../../lib/kakaoAuth";
+import { stashPostLoginNext } from "../../lib/postLoginReturn";
 
 type Mode = "login" | "signup";
 // 내부 키는 그대로 유지(회원=member/센터 운영자=manager) — UI-003은 화면 표시 문구만 바꾼다.
@@ -76,6 +77,10 @@ export default function LoginPage() {
     } else if (params.get("oauth_error")) {
       setMessage({ type: "error", text: `소셜 로그인에 실패했어요: ${params.get("oauth_error")}` });
     }
+    // 로그인이 필요해 여기로 온 경우("?next=/checkout?..." 등) — 로그인 성공 후 어느
+    // 경로(이메일/구글/애플/카카오/네이버)로 완료되든 전부 홈에 도착하므로, 그 값을
+    // 세션스토리지에 담아두고 실제 이동은 app/page.tsx가 한 곳에서 처리한다.
+    stashPostLoginNext(params.get("next"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, type HomeCenter, type HomeClass } from "../lib/home";
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
 import { supabase } from "../lib/supabaseClient";
+import { consumePostLoginNext } from "../lib/postLoginReturn";
 import UiIcon, { type IconName } from "./components/UiIcon";
 
 const CATEGORIES = [
@@ -67,6 +68,14 @@ export default function Home() {
     // 옮겨 앱 전체에서 한 번만 처리한다(어느 페이지로 로그인/OAuth 리다이렉트가 와도 보장됨).
     supabase.auth.getUser().then(({ data }) => {
       setLoggedIn(!!data.user);
+      // 로그인이 필요해 /login?next=...로 갔다가 돌아온 경우, 이메일/구글/애플/카카오/네이버
+      // 다섯 갈래 전부 결국 이 홈으로 도착하도록 이미 통일돼 있어(lib/postLoginReturn.ts
+      // 주석 참고) 여기 한 곳에서만 원래 화면으로 이어서 보낸다. 실제로 로그인된 경우에만
+      // (data.user 존재) 이동한다 — 세션 없이 next만 남아있는 경우는 그대로 홈에 둔다.
+      if (data.user) {
+        const next = consumePostLoginNext();
+        if (next) { window.location.replace(next); return; }
+      }
     });
   }, []);
 

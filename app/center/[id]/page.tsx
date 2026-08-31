@@ -24,6 +24,7 @@ import RichTextEditor from "../../components/RichTextEditor";
 import UiIcon from "../../components/UiIcon";
 import EmptyState from "../../components/EmptyState";
 import BackButton from "../../components/BackButton";
+import { loginHrefWithReturnToHere } from "../../../lib/postLoginReturn";
 
 export default function CenterDetailPage() {
   return (
@@ -213,7 +214,14 @@ function CenterDetailContent() {
 
   return (
     <div className="app-shell center-detail-v2">
-      {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
+      {error && (
+        <div className={`error-toast${error === "로그인이 필요해요" ? " error-toast-with-action" : ""}`}>
+          {error}<button onClick={() => setError(null)}>×</button>
+          {error === "로그인이 필요해요" && (
+            <a className="error-toast-action" href={loginHrefWithReturnToHere()}>로그인 하러 가기</a>
+          )}
+        </div>
+      )}
       {toast && <div className="toast">{toast}</div>}
 
       {/* 수강권 구매 안내 시트 */}
