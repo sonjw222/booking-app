@@ -3135,9 +3135,6 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .manager-v3-content .progress-member-panel { margin:8px var(--page-gutter) 18px; padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--surface); }
 .manager-v3-content .progress-member-panel .menu-section-label { padding:0 0 8px; }
-.manager-v3-content .progress-member-select { position:relative; }
-.manager-v3-content .progress-member-select select { appearance:none; min-height:52px; padding-right:44px; background:var(--card-bg); }
-.manager-v3-content .progress-member-select .select-chevron { position:absolute; right:16px; top:50%; translate:0 -52%; pointer-events:none; color:var(--ink-soft); font-size:20px; }
 .manager-v3-content .progress-add-record { width:100%; margin-top:10px; }
 .manager-v3-content .prog-wrap { display:grid; gap:12px; padding-bottom:130px; }
 .manager-v3-content .structured-add-row { display:grid; grid-template-columns:minmax(0,1fr) 76px; gap:10px; align-items:stretch; }
@@ -3392,9 +3389,6 @@ a.membership-card { text-decoration: none; display: block; }
 .direct-member-sheet .book-member-pass.empty { background:var(--surface); color:var(--ink-soft); }
 .progress-member-panel { margin:8px 20px 18px; padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--surface); }
 .progress-member-panel .menu-section-label { padding:0 0 8px; }
-.progress-member-select { position:relative; }
-.progress-member-select select { appearance:none; min-height:52px; padding-right:44px; background:var(--card-bg); }
-.progress-member-select .select-chevron { position:absolute; right:16px; top:50%; translate:0 -52%; pointer-events:none; color:var(--ink-soft); font-size:20px; }
 .progress-add-record { width:100%; margin-top:10px; }
 .row-actions { display:flex; align-items:center; gap:6px; }
 .quiet-action.danger { color:var(--danger); }

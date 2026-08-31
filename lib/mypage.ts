@@ -67,6 +67,7 @@ async function getMyContext(): Promise<{ accountId: string; profileId: string; n
   const { data: profs, error: profErr } = await supabase
     .from("profiles").select("id, is_primary, created_at")
     .eq("account_id", acc.id)
+    .is("deleted_at", null)
     .order("is_primary", { ascending: false })
     .order("created_at", { ascending: true })
     .limit(1);
@@ -84,6 +85,7 @@ export async function fetchMyPage() {
     .from("profiles")
     .select("id, name, nickname, label, is_primary")
     .eq("account_id", me.accountId)
+    .is("deleted_at", null)
     .order("is_primary", { ascending: false });
   const profiles = profRows ?? [];
   const profileIds = profiles.map((p: any) => p.id);

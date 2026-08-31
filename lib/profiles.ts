@@ -41,6 +41,7 @@ export async function fetchProfiles(): Promise<ProfileRow[]> {
     .from("profiles")
     .select("id, name, nickname, label, birth_date, gender, shoe_size, cloth_size, address, phone, avatar_url, memo, is_primary")
     .eq("account_id", accountId)
+    .is("deleted_at", null)
     .order("is_primary", { ascending: false })
     .order("created_at", { ascending: true });
   if (error) throw new Error("프로필을 불러오지 못했어요: " + error.message);
@@ -122,6 +123,9 @@ export async function addProfile(name: string, label: string, birthDate: string)
   if (error) throw new Error("프로필 추가에 실패했어요: " + error.message);
 }
 
+// 실제 행을 지우지 않고 개인정보만 익명화 + deleted_at을 채운다(계정 탈퇴와 동일한 이유 —
+// reservations.profile_id가 cascade 없는 FK라 예약 이력이 하나라도 있으면 진짜 DELETE는
+// 항상 실패했다. supabase/functions/delete-account의 익명화 패턴을 프로필 단위로 재사용).
 export async function deleteProfile(profileId: string): Promise<void> {
   // 대표 프로필은 삭제 못하게 프론트에서도 막지만, 서버에서도 확인
   const { data, error: getErr } = await supabase
@@ -132,6 +136,13 @@ export async function deleteProfile(profileId: string): Promise<void> {
   if (getErr || !data) throw new Error("프로필을 찾을 수 없어요");
   if (data.is_primary) throw new Error("대표 프로필은 삭제할 수 없어요");
 
-  const { error } = await supabase.from("profiles").delete().eq("id", profileId);
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      name: "삭제된 프로필", nickname: null, label: null, birth_date: null, gender: null,
+      shoe_size: null, cloth_size: null, address: null, phone: null, avatar_url: null, memo: null,
+      deleted_at: new Date().toISOString(),
+    })
+    .eq("id", profileId);
   if (error) throw new Error("삭제에 실패했어요: " + error.message);
 }

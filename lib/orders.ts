@@ -37,6 +37,7 @@ export async function createOrder(input: {
   const { data: profs } = await supabase
     .from("profiles").select("id, is_primary, created_at")
     .eq("account_id", acc.id)
+    .is("deleted_at", null)
     .order("is_primary", { ascending: false })
     .order("created_at", { ascending: true })
     .limit(1);

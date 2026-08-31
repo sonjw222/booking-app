@@ -87,7 +87,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
 
   // 내 모든 프로필 (대표 + 추가 프로필). 프로필별로 예약 상태를 따로 봐야 함
   const { data: myProfiles, error: meErr } = await supabase
-    .from("profiles").select("id, is_primary").eq("account_id", account.id);
+    .from("profiles").select("id, is_primary").eq("account_id", account.id).is("deleted_at", null);
   if (meErr || !myProfiles || myProfiles.length === 0) throw new Error("프로필 정보를 찾을 수 없어요");
   const myProfileIds = myProfiles.map((p: any) => p.id);
 
@@ -384,6 +384,7 @@ export async function fetchMyProfiles(accountId?: string): Promise<BookingProfil
     .from("profiles")
     .select("id, name, label, is_primary")
     .eq("account_id", accId)
+    .is("deleted_at", null)
     .order("is_primary", { ascending: false });
   if (error) throw new Error("프로필을 불러오지 못했어요: " + error.message);
   return (data ?? []).map((p: any) => ({

@@ -8,6 +8,48 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-09-01 — 프로덕션 최종 QA(신규 계정 전체 생애주기) 중 발견: 가족 프로필 삭제가 예약 이력이 있으면 항상 실패 + 진도기록 화면 드롭다운 화살표 중복
+
+"새 계정으로 처음부터 끝까지" Playwright 자동 QA(`tests/e2e/production-readiness/
+member-full-lifecycle.spec.ts`, 회원가입→로그인→다중 프로필→구매→예약(계정 내 프로필
+공유 수강권 확인)→취소→대기승격→환불→프로필 삭제→계정 탈퇴)를 새로 작성해 돌리다가
+실제 버그 2건을 발견해 함께 고쳤다.
+
+- **가족(비대표) 프로필 삭제 버그(P0급 UX)**: `lib/profiles.ts`의 `deleteProfile()`이
+  `delete from profiles`를 그대로 날렸는데, `reservations.profile_id`가 cascade 없는
+  일반 FK라서 그 프로필로 예약한 이력이 하나라도 있으면(취소된 것 포함) 무조건
+  FK violation으로 실패했다 — 화면에는 "삭제에 실패했어요: update or delete on table
+  \"profiles\" violates foreign key constraint ..." 원본 Postgres 에러가 그대로 노출됐다.
+  즉 수업을 한 번이라도 예약해본 가족 프로필은 사실상 영구히 삭제할 수 없었다.
+  사용자 결정(2026-09-01): 계정 탈퇴(`supabase/functions/delete-account`)와 동일한
+  패턴으로 재설계 — 실제 행은 지우지 않고 개인정보만 익명화("삭제된 프로필") +
+  `deleted_at` 기록. `reservations`/`memberships`/`orders` 등 이력은 그대로 남아
+  매니저 쪽 매출·출석 통계, 전자상거래법상 보관 의무를 계속 만족한다. 신규
+  `fix_profile_delete_soft_delete.sql`(`profiles.deleted_at` 컬럼 추가). 파급 범위:
+  "내 프로필 중 어떤 걸로 행동할지" 조회하는 10개 지점(`lib/profiles.ts`/`center.ts`/
+  `cart.ts`/`home.ts`/`inquiries.ts`/`navState.ts`/`mypage.ts`/`orders.ts`/`reviews.ts`/
+  `reservations.ts`)에 `deleted_at is null` 필터 추가 — 반대로 "내 포인트 내역"/"내 예약
+  캘린더"처럼 **과거 이력을 보여주는** 조회(`mypage.ts`의 `fetchMyPointHistory`/
+  `fetchMyReservationsForCalendar`)와 매니저의 회원 조회(`lib/members.ts`)는 의도적으로
+  그대로 둠(삭제된 프로필도 "삭제된 프로필"이라는 이름으로 과거 기록에는 계속 보여야
+  하므로 — 계정 탈퇴 배치가 세운 것과 같은 원칙).
+- **회원 진도기록(`/manager/progress/record`) "기록할 회원" 드롭다운 화살표 2개 표시**:
+  `.progress-member-select`가 수동으로 `<span className="select-chevron">⌄</span>`을
+  추가로 그렸는데, 이 select가 이미 `.input-field` 클래스로 배경이미지 화살표를 자체
+  내장하고 있어("A single select language across manager forms" 공용 스타일) 화살표가
+  겹쳐 보였다. 중복 span과 완전히 죽어있던(카스케이드에서 항상 밀리는) CSS 규칙 2벌
+  제거.
+- 신규 회귀: `tests/e2e/production-readiness/member-full-lifecycle.spec.ts`(신규 계정
+  전체 생애주기, 프로필 공유 수강권 포함), `tests/e2e/checkout/real-toss-gateway-open.spec.ts`
+  (카드 결제 시 실제 토스 결제 게이트웨이가 열리는지 — 이 dev 환경은 `NEXT_PUBLIC_
+  PAYMENT_PROVIDER=toss`가 실제로 켜져 있어 Mock이 아님을 확인, 카드입력 자동화는
+  범위 밖으로 명시).
+- 이 과정에서 재확인한 기존 설계: `fix_usable_memberships_shared.sql`(라이브 확정)에
+  따라 수강권은 "산 프로필 전용"이 아니라 계정 내 모든 프로필이 공유하고, 실제 사용
+  시점에만 그 프로필로 묶인다 — 처음엔 "가족 프로필은 수강권이 없어 예약이 막힐 것"으로
+  잘못 가정했다가 QA 실행 중 실제 동작(공유돼서 예약 성공)을 보고 테스트를 바로잡음.
+- `npm run build`/유닛테스트 262개, e2e 회귀(auth/reservation/checkout 24개) 통과.
+
 ## 2026-08-31 — SEC-118: 주문 금액 서버 검증 + 환불/양도 수강권 유령 잔여횟수 방지
 
 브랜치 정리 작업 중 `security/p0-batch-consolidation`(이전 세션이 남긴 미병합 브랜치)을

@@ -9,7 +9,7 @@ const state = vi.hoisted(() => ({ activeManagerCenterCount: 0 }));
 
 function makeChain(resolved: unknown): any {
   const chain: any = {};
-  for (const m of ["select", "eq", "neq", "in", "order", "limit"]) chain[m] = () => chain;
+  for (const m of ["select", "eq", "neq", "in", "is", "order", "limit"]) chain[m] = () => chain;
   chain.single = () => Promise.resolve(resolved);
   chain.maybeSingle = () => Promise.resolve(resolved);
   chain.then = (resolve: any, reject?: any) => Promise.resolve(resolved).then(resolve, reject);
