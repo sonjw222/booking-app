@@ -44,10 +44,32 @@
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **토스페이먼츠 결제창(카드/카카오페이/토스페이) 연동 완료 — SQL 적용 완료, 3개 결제수단 전부 Playwright로 실제 결제 게이트웨이(카카오페이는 online-payment.kakaopay.com, 토스페이는 pay.toss.im까지) 진입 확인, 에러 없음. 실제 카드번호 입력해 끝까지 승인시키는 마지막 수동 확인만 남음. 사업자 명의 실 운영 키 전환은 별도(전자결제 신청 심사 필요)** |
-| 근거 파일 | `app/checkout/page.tsx`, `app/checkout/success/page.tsx`(신규), `app/checkout/fail/page.tsx`(신규), `app/api/payments/confirm/route.ts`(신규, 이 프로젝트 최초의 app/api 라우트), `app/api/payments/cancel/route.ts`(신규), `app/layout.tsx`(토스 SDK v2 script 태그), `lib/orders.ts`, `lib/payments/*`, `lib/payments/tossPaymentApi.ts`(신규), `add_payment_test_provider.sql`, `add_confirm_real_payment.sql`(신규, 적용 완료), `rollback_add_confirm_real_payment.sql`(신규), `tests/integration/confirm-real-payment.test.ts`(신규), `add_orders.sql`, `schema.sql` |
-| 완료 조건 | ~~Toss/PortOne 실제 운영 키로~~ 개발자센터 테스트 키(API 개별 연동 키, 사업자 심사 불필요)로 카드·카카오페이·토스페이 생성·성공·취소 흐름 코드 완료 + Playwright로 3개 수단 전부 결제 게이트웨이 진입까지 자동 재현 확인. 남은 것: (1) 실제 카드번호 입력해 결제 완료까지 왕복 수동 확인 1회 (2) 계좌이체/직접결제 연동(후속) (3) 나중에 사업자 명의 "전자결제 신청" 심사 통과 후 `.env.local`의 `NEXT_PUBLIC_TOSS_CLIENT_KEY`/`TOSS_SECRET_KEY`를 실 운영 키로 교체 |
+| 현재 상태 | **토스페이먼츠 결제창(카드/카카오페이/토스페이/계좌이체) + 직접결제(센터에서 결제, PG 미경유) 연동 완료 — SQL 적용 완료, 5개 결제수단 전부 실제 게이트웨이 진입까지 확인. 실제 카드번호 입력해 끝까지 승인시키는 마지막 수동 확인만 남음. 사업자 명의 실 운영 키 전환은 별도(전자결제 신청 심사 필요)** |
+| 근거 파일 | `app/checkout/page.tsx`, `app/checkout/success/page.tsx`(신규), `app/checkout/fail/page.tsx`(신규), `app/api/payments/confirm/route.ts`(신규, 이 프로젝트 최초의 app/api 라우트), `app/api/payments/cancel/route.ts`(신규), `app/layout.tsx`(토스 SDK v2 script 태그), `lib/orders.ts`, `lib/payments/*`, `lib/payments/tossPaymentApi.ts`(신규), `lib/tossSdk.ts`(신규, window.TossPayments 전역 타입 공용화), `add_payment_test_provider.sql`, `add_confirm_real_payment.sql`(신규, 적용 완료), `rollback_add_confirm_real_payment.sql`(신규), `tests/integration/confirm-real-payment.test.ts`(신규), `tests/unit/TossPaymentProvider.test.ts`(신규), `tests/e2e/checkout/direct-payment.spec.ts`(신규), `add_orders.sql`, `schema.sql` |
+| 완료 조건 | ~~Toss/PortOne 실제 운영 키로~~ 개발자센터 테스트 키(API 개별 연동 키, 사업자 심사 불필요)로 카드·카카오페이·토스페이·계좌이체 생성·성공·취소 흐름 코드 완료 + 실브라우저로 실제 게이트웨이 진입까지 재현 확인 + 직접결제(PG 미경유, 매니저 수동 발급) 흐름 완료. 남은 것: (1) 실제 카드번호 입력해 결제 완료까지 왕복 수동 확인 1회 (2) 나중에 사업자 명의 "전자결제 신청" 심사 통과 후 `.env.local`의 `NEXT_PUBLIC_TOSS_CLIENT_KEY`/`TOSS_SECRET_KEY`를 실 운영 키로 교체 |
 | 관련 문서 | [REQUIREMENTS 6-1, 10-4](./REQUIREMENTS.md), [DATABASE 4-3, 7-3](./DATABASE.md), [ROUTES `/checkout`](./ROUTES.md) |
+
+**2026-08-31 계좌이체/직접결제 추가**: 남아있던 두 결제수단을 마무리했다.
+- **계좌이체(TRANSFER)**: `CreatePaymentInput`에 `method?: "CARD"|"TRANSFER"` 추가,
+  `TossPaymentProvider`가 `requestPayment({method:"TRANSFER", ...})`로 호출(은행 선택은
+  토스 결제창 자체 UI가 처리). 실브라우저로 실제 게이트웨이까지 재현해 두 가지 버그를
+  잡음: (1) `main`이 27커밋 앞서 있어 병합하며 `window.TossPayments` 전역 타입이 이 결제
+  기능(P0-1)과 센터 플랫폼 구독 빌링(P0-8, `lib/centerSubscription.ts`)에서 각자 독립적으로
+  선언돼 타입 충돌(빌드 실패) — `lib/tossSdk.ts` 공용 선언으로 통합해 해결. (2) 실제 결제
+  버튼을 눌러보니 `"card는 정의되지 않은 파라미터입니다"` 에러 — 토스 v2 SDK는 `card: undefined`
+  처럼 값만 비워도 키 자체가 있으면 거부한다는 걸 실측 확인, 스프레드로 키 자체를 조건부로
+  넣도록 수정. 이후 실제로 `payment-gateway-sandbox.tosspayments.com`의 "퀵계좌이체" 화면
+  (휴대폰번호 입력)까지 정상 진입 확인(스크린샷 확보). 회귀 방지로
+  `tests/unit/TossPaymentProvider.test.ts` 신규(4개, `card` 키의 유무 자체를 검증).
+- **직접결제(센터에서 결제)**: PG를 아예 거치지 않는 별도 흐름 — 실제 PG 연동 이전의 원래
+  방식과 동일하게 `createOrder()`로 주문만 `status='pending'`으로 접수하고(payment_provider는
+  붙이지 않음), 매니저가 기존 "미발급 주문" 화면(`fulfill_order`, 무변경)에서 결제 확인 후
+  수동 발급한다. `app/checkout/page.tsx`의 `handlePay()`에 이 결제수단 전용 분기를 추가해
+  PaymentService(Mock/Toss) 호출 자체를 건너뛰고, 완료 화면 문구도 "결제 완료"가 아니라
+  "주문이 접수됐어요"로 구분(실제 결제된 게 아니므로 예약 자동복귀 로직도 건너뜀). 신규 E2E
+  `tests/e2e/checkout/direct-payment.spec.ts`로 주문이 정확히 pending/무provider로 생기고
+  수강권이 발급되지 않는지 확인.
+- `npm run build`/유닛테스트 258개(+4) 통과.
 
 **2026-08-25 진행 상황**: 사업자 등록 완료로 재개. 토스페이먼츠 개발자센터에 가입해 "주문서형·
 결제창형 연동 키"(문서 예제와 동일한 공용 테스트 키, `test_gck_docs_...`/`test_gsk_docs_...` —
