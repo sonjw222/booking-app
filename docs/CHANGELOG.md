@@ -8,6 +8,24 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-31 — 모바일 화면 겹침 버그 2건 수정
+
+사용자 스크린샷 피드백:
+
+1. `/my-reservations`(내 예약)에서 "예약 확정" 배지와 "취소" 버튼 텍스트가 살짝 겹쳐 보임.
+   원인: `.hist-cancel-btn`이 탭 영역을 넓히려고 `margin-top: -10px`를 쓰는데, 부모
+   `.hist-right`가 `gap: 6px`인 flex column이라 실제 간격이 `6px - 10px = -4px`(겹침)가
+   됐다. `margin-top`만 `0`으로 되돌려 수정(좌/하단 음수 마진은 유지 — 탭 영역 확장 의도는
+   그대로 살림).
+2. `/reservation`(예약, 수업 선택 화면) 상단의 "전체 센터" 텍스트와 그 옆 드롭다운 화살표가
+   겹쳐 보임. 원인: 예전에 `<select>` 기반이었던 센터 선택 UI의 CSS(`.cal-center-pick b {
+   position:absolute; right:12px; }`)가 지금의 `button > span + b` flex 구조로 리팩터된
+   뒤에도 같은 셀렉터라 그대로 적용되고 있었음(실제로 `<select>`를 쓰는 곳은 이제 이 파일
+   어디에도 없음, 죽은 스타일). 새 flex 규칙에 `position: static`을 추가해 화살표가 다시
+   flex 흐름을 따르도록 수정.
+
+두 건 다 실브라우저(모바일 뷰포트)로 스크린샷 재확인. `npm run build`/유닛테스트 254개 통과.
+
 ## 2026-08-26 — P0-1 후속: 토스 결제수단에 카카오페이/토스페이 추가
 
 `CreatePaymentInput.easyPay`(`"KAKAOPAY"|"TOSSPAY"`) 추가, `TossPaymentProvider`가

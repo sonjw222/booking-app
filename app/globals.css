@@ -3823,7 +3823,11 @@ a.membership-card { text-decoration: none; display: block; }
 .member-reservation .cal-nav-btn:active { background: var(--surface); }
 .cal-center-pick { min-width: 0; max-width: 132px; height: 44px; padding: 0 2px 0 10px; display: flex; align-items: center; justify-content: flex-end; gap: 5px; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
 .cal-center-pick span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 640; }
-.cal-center-pick b { flex: 0 0 auto; color: var(--ink-soft); font-size: 14px; font-weight: 500; }
+/* position: static — 예전 <select> 기반 버전(위 3190번째 줄 근처, 지금은 이 파일 전체에서
+   더는 쓰이지 않음)의 ".cal-center-pick b { position:absolute; right:12px; }"가 셀렉터가
+   같아 그대로 적용되고 있었다. 지금은 button > span + b 구조라 flex 흐름을 따라야 하는데
+   absolute라 텍스트 위에 화살표가 그대로 겹쳐 보이던 버그(2026-08-31 스크린샷 리포트). */
+.cal-center-pick b { position: static; flex: 0 0 auto; color: var(--ink-soft); font-size: 14px; font-weight: 500; }
 .member-reservation .cal-grid { padding-inline: var(--page-gutter); }
 .member-reservation .cal-weekdays { border-bottom: 1px solid var(--line); }
 .member-reservation .cal-weekday { padding: 12px 0; font-size: 12px; font-weight: 580; }
@@ -3882,7 +3886,10 @@ a.membership-card { text-decoration: none; display: block; }
    버튼 자체는 작아 보여도 padding으로 탭 영역을 44px에 가깝게 넓힌다(C-1). */
 .member-my-reservations .hist-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .member-my-reservations .hist-cancel-btn {
-  min-height: 30px; padding: 10px 8px; margin: -10px -8px -10px 0;
+  /* margin-top을 음수로 두면 위 .hist-status 배지와의 실제 간격이
+     (.hist-right의 gap:6px) + (이 음수 margin-top)이 되어 6px보다 크게 당겨져
+     겹쳐 보이는 버그가 있었다(2026-08-31 스크린샷 리포트) — top만 0으로 되돌림. */
+  min-height: 30px; padding: 10px 8px; margin: 0 -8px -10px 0;
   border: 1px solid var(--line-strong); border-radius: 8px; background: none;
   color: var(--ink-soft); font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
 }
