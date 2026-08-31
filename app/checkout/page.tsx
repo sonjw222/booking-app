@@ -16,6 +16,7 @@ import Loading from "../components/Loading";
 import { reservationReturnUrl } from "../../lib/reservationNav";
 import { getPaymentService, resolveProviderName, type PaymentScenario } from "../../lib/payments";
 import { supabase } from "../../lib/supabaseClient";
+import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import UiIcon, { type IconName } from "../components/UiIcon";
 import ErrorState from "../components/ErrorState";
 
@@ -320,7 +321,7 @@ function CheckoutContent() {
         <div className={`error-toast${error === "로그인이 필요해요" ? " error-toast-with-action" : ""}`}>
           {error}<button onClick={() => setError(null)}>×</button>
           {error === "로그인이 필요해요" && (
-            <a className="error-toast-action" href="/login">로그인 하러 가기</a>
+            <a className="error-toast-action" href={loginHrefWithReturnToHere()}>로그인 하러 가기</a>
           )}
         </div>
       )}
