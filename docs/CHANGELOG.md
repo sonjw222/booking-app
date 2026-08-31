@@ -52,6 +52,24 @@
 
 두 건 다 실브라우저(모바일 뷰포트)로 스크린샷 재확인. `npm run build`/유닛테스트 254개 통과.
 
+## 2026-08-31 — P0-1 마무리: 계좌이체 + 직접결제(센터에서 결제) 추가
+
+토스 결제수단에 마지막 두 개(계좌이체/직접결제)를 추가해 checkout의 5개 결제수단이 전부
+동작한다.
+
+- **계좌이체**: `TossPaymentProvider`가 `method:"TRANSFER"`로 요청하도록 확장. 실브라우저
+  검증 중 버그 2건 발견·수정: (1) `main` 병합 과정에서 `window.TossPayments` 전역 타입이
+  이 기능과 센터 플랫폼 구독 빌링(P0-8) 양쪽에서 독립 선언돼 충돌하던 것을 `lib/tossSdk.ts`
+  공용 선언으로 해결, (2) 토스 v2 SDK가 `card: undefined`처럼 값만 비운 키도 거부한다는 걸
+  실측 확인(`"card는 정의되지 않은 파라미터입니다"`) — 키 자체를 조건부 스프레드로 넣도록
+  수정. 이후 실제 게이트웨이의 "퀵계좌이체"(휴대폰번호 입력) 화면까지 정상 진입 확인.
+  회귀 방지용 `tests/unit/TossPaymentProvider.test.ts` 신규(4개).
+- **직접결제(센터에서 결제)**: PG를 거치지 않는 별도 흐름 — 주문만 pending으로 접수하고
+  매니저가 기존 "미발급 주문" 화면에서 결제 확인 후 수동 발급(`fulfill_order` 무변경).
+  완료 화면 문구도 "결제 완료"와 구분해 "주문이 접수됐어요"로 표시. 신규 E2E
+  `tests/e2e/checkout/direct-payment.spec.ts`로 주문 상태/무provider/미발급을 확인.
+- `npm run build`/유닛테스트 258개 통과. 자세한 내용은 `docs/TODO.md` P0-1 참고.
+
 ## 2026-08-26 — P0-1 후속: 토스 결제수단에 카카오페이/토스페이 추가
 
 `CreatePaymentInput.easyPay`(`"KAKAOPAY"|"TOSSPAY"`) 추가, `TossPaymentProvider`가

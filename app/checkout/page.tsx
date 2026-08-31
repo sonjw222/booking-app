@@ -30,8 +30,9 @@ const PAY_METHODS: { id: string; label: string; icon?: IconName; dot?: string }[
   { id: "direct", label: "직접결제 (센터에서 결제)", icon: "handshake" },
 ];
 
-// 토스 결제창이 지금 실제로 지원하는 결제수단(MVP 범위) — 계좌이체/직접결제는 아직 준비 안 됨.
-const TOSS_SUPPORTED_METHODS = ["card", "kakao", "toss"];
+// 토스 결제창을 거치는 결제수단(카드/카카오페이/토스페이/계좌이체). "direct"(직접결제)는
+// PG를 아예 거치지 않는 별도 흐름이라 이 목록과 무관하게 handlePay()에서 먼저 분기한다.
+const TOSS_SUPPORTED_METHODS = ["card", "kakao", "toss", "transfer"];
 // payMethod → 토스 간편결제 ENUM 코드. "card"는 일반 카드결제라 매핑 없음(undefined).
 const EASY_PAY_BY_METHOD: Record<string, "KAKAOPAY" | "TOSSPAY" | undefined> = {
   kakao: "KAKAOPAY",
@@ -98,6 +99,9 @@ function CheckoutContent() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  // "direct"(직접결제, 센터에서 결제)는 PG를 거치지 않고 주문만 pending으로 접수한다 —
+  // 실제 결제 완료가 아니므로 done 화면 문구를 구분해서 보여줘야 한다.
+  const [pendingManualPayment, setPendingManualPayment] = useState(false);
   const [issuedMembershipId, setIssuedMembershipId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -133,12 +137,13 @@ function CheckoutContent() {
   // 예약창에서 들어온 구매를 완료하면, 잠깐 완료 안내를 보여준 뒤 자동으로 그 예약 화면으로 돌아감
   // (기존 예약/결제 로직은 그대로 두고, 화면 전환만 자동화 — 즉시 클릭할 수 있는 버튼도 함께 남겨둠)
   useEffect(() => {
-    if (!done || !reservationBackUrl) return;
+    // 직접결제(direct)는 아직 실제로 결제되지 않아 예약에 쓸 수강권이 없다 — 자동 복귀시키지 않는다.
+    if (!done || !reservationBackUrl || pendingManualPayment) return;
     const t = setTimeout(() => {
       window.location.href = reservationBackUrl;
     }, 1800);
     return () => clearTimeout(t);
-  }, [done, reservationBackUrl]);
+  }, [done, reservationBackUrl, pendingManualPayment]);
 
   function applyCoupon(code?: string) {
     const c = (code ?? couponInput).trim().toUpperCase();
@@ -161,10 +166,32 @@ function CheckoutContent() {
       setError("사이즈를 선택해주세요");
       return;
     }
-    // 실제 PG(토스) 연동은 카드/카카오페이/토스페이만 지원(MVP 범위) — 계좌이체/직접결제는
-    // 아직 준비 안 됐다. 화면 안내와 다르게 엉뚱한 결제창이 뜨는 혼란을 막는다.
+    // "direct"(직접결제, 센터에서 결제)는 PG 자체를 거치지 않는다 — 실제 PG 연동 전
+    // 이 앱의 원래 흐름과 동일하게 주문만 pending으로 만들고, 매니저가 결제를 확인한 뒤
+    // 기존 "미발급 주문" 화면(fulfill_order)에서 수동으로 발급한다.
+    if (payMethod === "direct") {
+      setBusy(true);
+      try {
+        if (pointToUse > 0) await usePoints(centerId, pointToUse);
+        await createOrder({
+          centerId, productId: product.id, productName: product.name,
+          amount: finalTotal, payMethod,
+          selectedSize: selectedSize ?? undefined,
+          couponCode: discount > 0 ? couponInput.trim().toUpperCase() : undefined,
+          discountAmount: discount,
+          autoBook: !!(product.autoBookDays && product.autoBookDays.length > 0) && autoBook,
+          // 실제 결제가 없으므로 PG provider를 붙이지 않는다(mock/toss 어느 쪽 확정
+          // 로직도 이 주문을 건드리지 않아야 함 — 매니저 수동 발급 전용 경로).
+        });
+        setPendingManualPayment(true);
+        setDone(true);
+      } catch (e: any) { setError(e.message); }
+      finally { setBusy(false); }
+      return;
+    }
+    // 나머지(카드/카카오페이/토스페이/계좌이체)는 실제 PG 결제창을 거친다.
     if (resolveProviderName() === "toss" && !TOSS_SUPPORTED_METHODS.includes(payMethod)) {
-      setError("지금은 카드/카카오페이/토스페이만 가능해요");
+      setError("지금은 카드/카카오페이/토스페이/계좌이체만 가능해요");
       return;
     }
     setBusy(true);
@@ -198,6 +225,7 @@ function CheckoutContent() {
         customerEmail: userData.user?.email ?? undefined,
         customerKey: userData.user?.id,
         successUrl, failUrl,
+        method: payMethod === "transfer" ? "TRANSFER" : "CARD",
         easyPay: EASY_PAY_BY_METHOD[payMethod],
       });
 
@@ -251,17 +279,25 @@ function CheckoutContent() {
         <div className="checkout-done">
           <div className="checkout-done-icon" aria-hidden="true" />
           <div className="checkout-done-title">
-            {resolveProviderName() === "mock" ? "테스트 결제가 완료됐어요" : "결제가 완료됐어요"}
+            {pendingManualPayment
+              ? "주문이 접수됐어요"
+              : resolveProviderName() === "mock" ? "테스트 결제가 완료됐어요" : "결제가 완료됐어요"}
           </div>
           <div className="checkout-done-sub">
             {centerName}<br />
             {product?.name} · {won(product?.price ?? 0)}<br /><br />
-            {resolveProviderName() === "mock" && <>(Mock) 실제 PG 연동 전 테스트 결제예요.<br /></>}
-            {passIssued
-              ? "상품 구매가 완료되었으며 이용 가능한 수강권이 등록되었습니다."
-              : "상품 구매가 완료되었습니다."}
+            {pendingManualPayment ? (
+              "센터에 방문하거나 연락해 결제를 완료해주세요. 결제 확인 후 이용권이 발급돼요."
+            ) : (
+              <>
+                {resolveProviderName() === "mock" && <>(Mock) 실제 PG 연동 전 테스트 결제예요.<br /></>}
+                {passIssued
+                  ? "상품 구매가 완료되었으며 이용 가능한 수강권이 등록되었습니다."
+                  : "상품 구매가 완료되었습니다."}
+              </>
+            )}
           </div>
-          {reservationBackUrl ? (
+          {!pendingManualPayment && reservationBackUrl ? (
             <>
               <div className="checkout-done-sub" style={{ marginTop: 4 }}>
                 잠시 후 아까 그 수업 예약 화면으로 자동으로 돌아가요.<br />
@@ -448,9 +484,9 @@ function CheckoutContent() {
           실제 PG(카드/카카오페이 등) 연동은 준비 중이라, 지금은 테스트 결제(Mock)로 처리돼요.
         </div>
       )}
-      {resolveProviderName() === "toss" && (
+      {payMethod === "direct" && (
         <div className="perm-guide" style={{ margin: "10px 20px" }}>
-          카드/카카오페이/토스페이만 지원돼요. 계좌이체/직접결제는 준비 중이에요.
+          결제 없이 주문만 접수돼요. 센터에서 결제를 확인하면 이용권이 발급돼요.
         </div>
       )}
 
