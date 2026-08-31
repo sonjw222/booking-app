@@ -27,6 +27,9 @@ export type CreatePaymentInput = {
   // 간편결제 지정(카카오페이/토스페이 등). 생략하면 일반 카드결제. 값은 토스 ENUM 코드
   // (KAKAOPAY/TOSSPAY 등, docs.tosspayments.com/reference/enum-codes 참고) — Mock은 무시함.
   easyPay?: "KAKAOPAY" | "TOSSPAY";
+  // 결제수단 대분류. 생략하면 카드결제(easyPay가 있으면 그 간편결제). "TRANSFER"는
+  // 실시간 계좌이체 — Mock은 무시함.
+  method?: "CARD" | "TRANSFER";
 };
 
 export type CreatePaymentResult = {

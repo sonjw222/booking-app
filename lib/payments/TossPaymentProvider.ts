@@ -56,16 +56,22 @@ export class TossPaymentProvider implements PaymentProvider {
     const payment = window.TossPayments(getClientKey()).payment({ customerKey: input.customerKey });
     // 간편결제(카카오페이/토스페이)는 method:"CARD" + card.flowMode:"DIRECT" +
     // card.easyPay:"KAKAOPAY"|"TOSSPAY" 조합으로 연다(그 결제사 창으로 바로 이동, 토스
-    // 결제수단 선택 화면 생략) — 일반 카드는 card 자체를 생략.
+    // 결제수단 선택 화면 생략) — 일반 카드는 card 자체를 생략. method:"TRANSFER"(실시간
+    // 계좌이체)는 은행 선택을 토스 결제창 UI가 처리하며, card 파라미터가 아예 없어야 한다
+    // — 실측 확인(2026-08-31): `card: undefined`처럼 값만 비워도 키 자체가 남아있으면
+    // 토스 v2 SDK가 "card는 정의되지 않은 파라미터입니다"로 즉시 거부한다. 그래서 값이
+    // 아니라 키 자체를 조건부로 넣어야 한다(스프레드로 분리).
     await payment.requestPayment({
-      method: "CARD",
+      method: input.method === "TRANSFER" ? "TRANSFER" : "CARD",
       amount: { value: input.amount, currency: "KRW" },
       orderId: input.orderId,
       orderName: input.orderName ?? "수강권 결제",
       customerEmail: input.customerEmail,
       successUrl: input.successUrl,
       failUrl: input.failUrl,
-      card: input.easyPay ? { flowMode: "DIRECT", easyPay: input.easyPay } : undefined,
+      ...(input.method !== "TRANSFER" && input.easyPay
+        ? { card: { flowMode: "DIRECT", easyPay: input.easyPay } }
+        : {}),
     });
 
     // 위 호출이 성공하면 브라우저가 결제창으로 이동해 이 아래 코드는 실행되지 않는다.

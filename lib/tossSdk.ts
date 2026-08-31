@@ -9,7 +9,9 @@
 */
 
 export type TossRequestPaymentParams = {
-  method: "CARD";
+  // "CARD"(카드/카카오페이/토스페이 — 후자 둘은 card.flowMode:"DIRECT"+card.easyPay로 구분)
+  // "TRANSFER"(실시간 계좌이체 — 은행 선택은 토스 결제창 자체 UI가 처리, 추가 파라미터 불필요)
+  method: "CARD" | "TRANSFER";
   amount: { value: number; currency: "KRW" };
   orderId: string;
   orderName: string;
