@@ -3392,6 +3392,19 @@ a.membership-card { text-decoration: none; display: block; }
 .progress-add-record { width:100%; margin-top:10px; }
 .row-actions { display:flex; align-items:center; gap:6px; }
 .quiet-action.danger { color:var(--danger); }
+.quiet-action.on { border-color:var(--brand); background:var(--brand-soft); color:var(--brand-ink); }
+.mem-detail-title { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.mem-row-check { flex:none; width:19px; height:19px; margin-right:2px; accent-color:var(--brand-ink); }
+.mem-row.selected { border-color:var(--brand); background:var(--brand-soft); }
+.mem-select-bar {
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:calc(var(--floating-nav-clearance) + 16px); width:calc(100% - 32px); max-width:448px;
+  z-index:80; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:14px 18px; border-radius:16px; background:var(--card-bg); font-weight:700;
+  box-shadow:0 6px 20px rgba(0,0,0,0.18);
+}
+.mem-select-bar span { white-space:nowrap; }
+.mem-select-bar .primary-btn.compact { flex:none; width:auto; padding:0 18px; min-height:40px; }
 .structured-add-row { display:grid; grid-template-columns:minmax(0,1fr) 76px; gap:10px; align-items:stretch; }
 .structured-add-row .outline-action { min-height:52px; }
 .prog-group { overflow:hidden; border:1px solid var(--line); border-radius:18px; background:var(--card-bg); box-shadow:0 8px 24px rgba(16,24,40,.035); }

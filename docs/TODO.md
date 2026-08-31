@@ -620,9 +620,9 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **웹 푸시는 코드 구현 + 배포 완료, 실제 모바일 기기 수신 확인만 남음(자동 검증 불가 — 사용자가 나중에 직접 확인 예정).** 카카오 알림톡·SMS는 발신프로필 등록 + 메시지 템플릿 카카오 사전심사가 필요해(사업자 등록만으로는 부족) 벤더 확정 전까지 실제 연동 불가 — 2026-08-26 사용자 결정으로 벤더 확정 전에 Adapter Pattern 구조만 먼저 준비함(`lib/messaging/`). 이메일은 이번 범위에서 제외(사용자 결정). |
-| 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`, `lib/messaging/*`(신규); `messages`, `notification_rules`, `notification_logs` |
-| 완료 조건 | (웹 푸시) 실제 브라우저에서 알림 수신 확인. (카카오 알림톡/SMS/이메일) 사업자 등록 이후 발송기 연동 — 이번 범위 아님. |
+| 현재 상태 | **웹 푸시는 코드 구현 + 배포 완료, 실제 모바일 기기 수신 확인만 남음(자동 검증 불가 — 사용자가 나중에 직접 확인 예정).** 카카오 알림톡·SMS는 발신프로필 등록 + 메시지 템플릿 카카오 사전심사가 필요해(사업자 등록만으로는 부족) 벤더 확정 전까지 실제 연동 불가 — 2026-08-26 사용자 결정으로 벤더 확정 전에 Adapter Pattern 구조만 먼저 준비함(`lib/messaging/`). **2026-09-01 벤더 확정 전에 발송 UI도 미리 준비하기로 함(사용자 결정)** — `/manager/members`에 개별/다중 선택 발송 화면 완료, 지금은 Mock으로 시뮬레이션만 됨(벤더 확정 후 `AlimtalkSmsProvider` 구현만 채우면 그대로 실제 발송에 씀). 이메일은 이번 범위에서 제외(사용자 결정). |
+| 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`, `lib/messaging/*`(신규), `app/manager/members/page.tsx`(신규 발송 UI), `lib/members.ts`(`sendAlimtalkToMembers()`, 신규); `messages`, `notification_rules`, `notification_logs` |
+| 완료 조건 | (웹 푸시) 실제 브라우저에서 알림 수신 확인. (카카오 알림톡/SMS/이메일) 사업자 등록 이후 벤더 확정 → `AlimtalkSmsProvider` 실제 API 구현 → 발송 UI는 이미 완료. |
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/settings/notifications`](./ROUTES.md) |
 
 카카오 알림톡·SMS(`messages`/`notification_rules`/`notification_logs` 기반, 건당 수수료

@@ -8,6 +8,43 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-09-01 — 회원탭 알림톡 발송 UI (필터/다중 선택 + 개별 발송)
+
+카카오 알림톡/SMS 벤더 확정 전이라도 미리 UI를 준비해두기로 함(사용자 결정) — `/manager/members`
+화면에 발송 UI를 추가했다. 실제 발송은 아직 안 됨(`lib/messaging/AlimtalkSmsProvider`가
+벤더 미확정 스텁이라 호출 시 에러) — 지금은 `NEXT_PUBLIC_MESSAGE_PROVIDER`가 기본값
+`mock`이라 `MockMessageProvider`가 콘솔 로그 + 가짜 성공 응답으로 화면 동작을 시뮬레이션한다.
+벤더 확정 후 `AlimtalkSmsProvider`의 실제 API 호출 코드만 채우면 이 UI와 `lib/members.ts`의
+`sendAlimtalkToMembers()`는 그대로 실제 발송에 쓸 수 있다.
+
+- **개별 발송**: 회원 상세 시트 제목 줄에 "알림톡 보내기" 버튼 추가.
+- **다중 선택 발송**: 툴바에 "알림톡 발송" 토글 → 목록에 체크박스가 나타나고(기존 등급/상태
+  필터·검색과 함께 사용 가능), 하단에 고정 액션바("N명 선택됨" + 발송 버튼)가 뜬다. 전화번호가
+  없는 회원은 발송 시 자동으로 건너뛰고 결과 토스트에 건수로 알려준다("N명 발송 · N명 번호
+  없음 · N명 실패"). "전체 선택"/"전체 해제" 버튼도 별도로 추가 — 목록이 이미 등급/상태/검색
+  필터가 적용된 결과라 "전체 선택"이 곧 "지금 필터링된 회원 전체 선택"이라, 필터로 좁혀둔
+  대상에게 바로 일괄 발송할 수 있다(사용자 요청, 2026-09-01).
+- 신규 `lib/members.ts`의 `sendAlimtalkToMembers()` — `lib/messaging`의 기존 Adapter
+  Pattern(`getMessageService()`)을 그대로 재사용, 벤더/발송 로직과 무관하게 UI는 이미 완성.
+- 실브라우저로 개별/다중 선택 발송 흐름 전부 육안 확인(선택 모드 하단 고정 바가 앱 하단
+  네비게이션과 겹치던 것, 발송 시트가 그 바에 가려지던 것 등 두 가지 레이아웃 버그를
+  확인 과정에서 바로 잡음). 사용자가 실제 화면 스크린샷으로 지적해 하나 더 발견: 하단
+  고정 바의 "알림톡 발송" 버튼이 가로로 과하게 길었다 — `.primary-btn` 기본 스타일의
+  `width:100%`를 `flex:none`만으로는 못 지워서(flex-basis가 width값을 그대로 가져감)
+  버튼이 계속 늘어나 있었다, `width:auto` 명시로 수정.
+- `npm run build`/유닛테스트 262개 통과.
+
+**PR #112 CI에서 발견해 함께 고침**: 어제 배치의 `tests/e2e/checkout/real-toss-gateway-open.spec.ts`가
+CI에서 실패했다 — `.github/workflows/*.yml`은 `NEXT_PUBLIC_TOSS_CLIENT_KEY`/
+`NEXT_PUBLIC_PAYMENT_PROVIDER`를 secrets로 안 주기 때문에(의도적 — CI가 실제 결제
+게이트웨이에 반복 접속하는 건 바람직하지 않음) CI 빌드는 항상 mock provider로 동작해
+토스 iframe이 절대 안 뜬다. 처음엔 `process.env.NEXT_PUBLIC_PAYMENT_PROVIDER`를 미리 읽어
+건너뛰려 했는데, 이 값은 Playwright가 띄우는 Next.js dev 서버(별도 프로세스, `.env.local`을
+직접 읽음) 안에서만 유효하고 테스트 러너 자신의 프로세스에는 없어(로컬에서도 `undefined`
+확인) 그 방식은 항상 건너뛰어버렸다 — 환경변수를 미리 판단하지 않고, 결제 버튼을 실제로
+눌러본 뒤 "실제 게이트웨이 iframe"과 "mock 완료 화면" 중 무엇이 뜨는지로 사후 판단해서
+mock이면 조용히 skip하도록 재작성.
+
 ## 2026-09-01 — 프로덕션 최종 QA(신규 계정 전체 생애주기) 중 발견: 가족 프로필 삭제가 예약 이력이 있으면 항상 실패 + 진도기록 화면 드롭다운 화살표 중복
 
 "새 계정으로 처음부터 끝까지" Playwright 자동 QA(`tests/e2e/production-readiness/
