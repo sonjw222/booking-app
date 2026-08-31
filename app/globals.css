@@ -1839,11 +1839,16 @@ a.membership-card { text-decoration: none; display: block; }
    없었음). 기존 .error-toast는 다른 화면 여러 곳에서 그대로 재사용 중이라 레이아웃을
    바꾸지 않고, 이 조합 클래스에서만 줄바꿈을 허용한다. */
 .error-toast-with-action { flex-wrap: wrap; }
+/* .primary-btn과 같은 시각 언어(14px 라운드, 800 굵기)를 이 토스트 위에서도 그대로
+   따르되, 배경/글자색만 이 토스트의 danger 톤 안에서 대비가 나오도록 반전(흰 배경 +
+   danger 텍스트)했다 — 기존 반투명 칩은 앱의 다른 버튼과 스타일이 겉돌아 보였다
+   (2026-08-31 사용자 피드백). */
 .error-toast-action {
-  flex: 0 0 100%; margin-top: 2px; text-align: center;
-  background: rgba(255,255,255,0.25); color: var(--text-inverse); text-decoration: none;
-  padding: 8px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 700;
+  flex: 0 0 100%; margin-top: 4px; display: block; text-align: center;
+  background: var(--bg); color: var(--danger); text-decoration: none;
+  padding: 11px; border-radius: 14px; font-size: 14px; font-weight: 800;
 }
+.error-toast-action:active { background: var(--surface); }
 
 /* 마이페이지 상품 카드 - 수강권(붉은빛)과 구분되는 색 */
 .membership-card.goods {
