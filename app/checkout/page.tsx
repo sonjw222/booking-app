@@ -316,7 +316,14 @@ function CheckoutContent() {
 
   return (
     <div className="app-shell commerce-page checkout-page-v2">
-      {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
+      {error && (
+        <div className={`error-toast${error === "로그인이 필요해요" ? " error-toast-with-action" : ""}`}>
+          {error}<button onClick={() => setError(null)}>×</button>
+          {error === "로그인이 필요해요" && (
+            <a className="error-toast-action" href="/login">로그인 하러 가기</a>
+          )}
+        </div>
+      )}
 
       <div className="back-header">
         <a className="side" href={centerBackHref}>‹</a>

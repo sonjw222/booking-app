@@ -1834,6 +1834,16 @@ a.membership-card { text-decoration: none; display: block; }
   width: 20px; height: 20px; border-radius: 50%; cursor: pointer; font-size: 13px;
   display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
 }
+/* 로그인이 필요한 에러처럼 바로 갈 곳이 있는 경우, 메시지 줄 아래에 버튼을 하나 더
+   붙인다(2026-08-31 스크린샷 리포트 — 결제 화면에서 로그인 필요 에러만 뜨고 이동 수단이
+   없었음). 기존 .error-toast는 다른 화면 여러 곳에서 그대로 재사용 중이라 레이아웃을
+   바꾸지 않고, 이 조합 클래스에서만 줄바꿈을 허용한다. */
+.error-toast-with-action { flex-wrap: wrap; }
+.error-toast-action {
+  flex: 0 0 100%; margin-top: 2px; text-align: center;
+  background: rgba(255,255,255,0.25); color: var(--text-inverse); text-decoration: none;
+  padding: 8px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 700;
+}
 
 /* 마이페이지 상품 카드 - 수강권(붉은빛)과 구분되는 색 */
 .membership-card.goods {
