@@ -172,17 +172,21 @@ function CheckoutContent() {
     if (payMethod === "direct") {
       setBusy(true);
       try {
-        if (pointToUse > 0) await usePoints(centerId, pointToUse);
-        await createOrder({
+        // [SEC-118] 포인트는 주문번호와 묶여야 서버가 나중에 "실제로 이 주문에서 차감됐는지"
+        // 확인할 수 있다(orders.points_used를 그냥 믿지 않음) — 주문을 먼저 만들고 그 id로
+        // usePoints를 호출한다(예전엔 반대 순서였음).
+        const directOrderId = await createOrder({
           centerId, productId: product.id, productName: product.name,
           amount: finalTotal, payMethod,
           selectedSize: selectedSize ?? undefined,
           couponCode: discount > 0 ? couponInput.trim().toUpperCase() : undefined,
           discountAmount: discount,
           autoBook: !!(product.autoBookDays && product.autoBookDays.length > 0) && autoBook,
+          pointsUsed: pointToUse,
           // 실제 결제가 없으므로 PG provider를 붙이지 않는다(mock/toss 어느 쪽 확정
           // 로직도 이 주문을 건드리지 않아야 함 — 매니저 수동 발급 전용 경로).
         });
+        if (pointToUse > 0) await usePoints(centerId, pointToUse, directOrderId);
         setPendingManualPayment(true);
         setDone(true);
       } catch (e: any) { setError(e.message); }
@@ -197,7 +201,6 @@ function CheckoutContent() {
     setBusy(true);
     try {
       // 화면에 표시된 값과 동일하게 계산 (pointToUse/finalTotal은 상단에서 계산됨)
-      if (pointToUse > 0) await usePoints(centerId, pointToUse);
       const finalAmount = finalTotal;
       const providerName = resolveProviderName();
       const orderId = await createOrder({
@@ -207,8 +210,12 @@ function CheckoutContent() {
         couponCode: discount > 0 ? couponInput.trim().toUpperCase() : undefined,
         discountAmount: discount,
         autoBook: !!(product.autoBookDays && product.autoBookDays.length > 0) && autoBook,
+        pointsUsed: pointToUse,
         provider: providerName, // Payment Adapter Pattern: env(NEXT_PUBLIC_PAYMENT_PROVIDER)로 전환
       });
+      // [SEC-118] 주문을 먼저 만들고 그 id로 포인트를 사용한다 — 서버가 나중에 확정 시점에
+      // "이 주문번호로 실제 차감된 point_transactions 행이 있는지"로 points_used를 검증한다.
+      if (pointToUse > 0) await usePoints(centerId, pointToUse, orderId);
 
       const paymentService = getPaymentService(mockScenarioOverride);
 

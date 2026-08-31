@@ -8,6 +8,44 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-08-31 — SEC-118: 주문 금액 서버 검증 + 환불/양도 수강권 유령 잔여횟수 방지
+
+브랜치 정리 작업 중 `security/p0-batch-consolidation`(이전 세션이 남긴 미병합 브랜치)을
+조사하다가, 아직 패치되지 않은 채 라이브에 남아 있던 두 가지 진짜 보안/정합성 버그를 발견해
+새로 설계·구현했다(그 브랜치를 그대로 재적용하지 않고, 이번에 실제로 활성화된 포인트 결제
+기능까지 반영해 처음부터 다시 설계함).
+
+- **SEC-118(P0) — 주문 금액 위변조**: `lib/orders.ts`의 `createOrder()`가 클라이언트가
+  계산한 `amount`를 그대로 저장하고, `confirm_test_payment`/`confirm_real_payment`가
+  공유하는 `_issue_membership_and_record_payment()`는 그 금액을 검증 없이 그대로 믿고
+  즉시 수강권을 발급했다(사람 검토 단계 없음) — 로그인한 회원이 임의 금액으로 주문을 만들고
+  자기 주문에 `confirm_test_payment`를 호출하면 그 금액 그대로 수강권이 나갔다.
+  `fulfill_order()`(매니저 수동 승인 경로)는 TODO.md P1-5 조사에서 이미 라이브에 자체
+  가격 검증이 들어가 있는 게 확인됐지만(이 취약점 계열에 "SEC-118"이라는 이름이 처음
+  쓰인 곳), 사람 검토 없이 자동 승인되는 이 경로는 그 조치 대상이 아니었고 실측 확인해도
+  여전히 뚫려 있었다. 신규
+  `fix_orders_amount_server_verification.sql`: `_issue_membership_and_record_payment()`가
+  `주문금액 = 상품가 - 검증된 쿠폰할인 - 사용포인트`를 확인하도록 수정. 쿠폰은
+  `app/checkout/page.tsx`의 하드코딩된 데모 쿠폰(WELCOME=5000/FIGURE10=10000)만 서버가
+  신뢰. **설계 중 직접 발견한 2차 구멍**: 처음에는 `orders.points_used`를 클라이언트 주장
+  그대로 믿으려 했는데, 그러면 `use_points()`를 한 번도 호출하지 않고 `points_used`만
+  큰 값으로 주장해 금액을 임의로 낮출 수 있었다 — `point_transactions`에 `order_id`
+  연결 고리를 추가하고 `use_points()`가 그 주문번호로 실제 차감 행을 남기도록 바꿔서,
+  "이 주문번호로 실제 차감됐는지"를 직접 확인하는 방식으로 다시 설계했다(`lib/reviews.ts`
+  `usePoints()`에 `orderId` 인자 추가, `app/checkout/page.tsx`는 주문을 먼저 만들고 그
+  id로 포인트를 쓰도록 순서 변경). `fulfill_order()`(매니저 수동 승인 경로)는 사람 검토가
+  이미 있어 이번 배치 범위 밖. 회귀/신규 테스트: `tests/integration/order-amount-verification.test.ts`.
+- **환불/양도 수강권 유령 잔여횟수**: `cancel_reservation()`이 확정 예약을 취소할 때
+  그 수강권의 `remaining_count`를 상태 확인 없이 무조건 +1 했다 — 그 사이 수강권이
+  환불(`refunded`, 돈 이미 정산됨)되거나 양도(`transferred`, 소유권 이전됨)됐어도 그대로
+  복구돼 프로덕션에서 실제로 "유령 잔여횟수"가 발생한 사례가 있었다. 신규
+  `fix_cancel_reservation_refunded_membership_ghost_count.sql`: 환급 UPDATE에
+  `status not in ('refunded', 'transferred')` 조건 추가(`active`/`paused`/`expired`는
+  기존과 동일하게 그대로 환급 — 정당한 케이스라 범위에서 제외). 회귀/신규 테스트:
+  `tests/integration/cancel-reservation-refunded-membership.test.ts`.
+- 두 SQL 모두 CLAUDE.md 규칙대로 기존 파일을 고치지 않고 새 `fix_*.sql`(+ 짝
+  `rollback_*.sql`)로 작성. 적용은 사용자가 Supabase SQL Editor에서 직접 실행.
+
 ## 2026-08-31 — 로그인 복귀 기능 QA 강화 + 버튼 디자인 통일 + 장바구니 담기 화면 누락 수정
 
 바로 앞 배치("로그인 후 하던 작업 이어가기")에 대한 사용자 요청으로 시나리오별 Playwright

@@ -120,11 +120,14 @@ export async function fetchMyPoints(centerId: string): Promise<number> {
 }
 
 // 포인트 사용 (결제 시)
-export async function usePoints(centerId: string, amount: number): Promise<void> {
+// orderId: 이 포인트 사용이 어느 주문에 쓰이는지(SEC-118 — 서버가 주문 확정 시 실제로
+//   이 주문번호로 차감된 point_transactions 행이 있는지 확인해 points_used 조작을 막는다).
+//   결제와 무관한 용도로 쓸 경우에는 생략 가능.
+export async function usePoints(centerId: string, amount: number, orderId?: string): Promise<void> {
   if (amount <= 0) return;
   const profileId = await myProfileId();
   const { error } = await supabase.rpc("use_points", {
-    p_center_id: centerId, p_profile_id: profileId, p_amount: amount,
+    p_center_id: centerId, p_profile_id: profileId, p_amount: amount, p_order_id: orderId ?? null,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
 }

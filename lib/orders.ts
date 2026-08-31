@@ -27,7 +27,7 @@ export type Order = {
 export async function createOrder(input: {
   centerId: string; productId: string; productName: string; amount: number; payMethod?: string;
   selectedSize?: string; couponCode?: string; discountAmount?: number; autoBook?: boolean;
-  provider?: "mock" | "toss" | "portone";
+  provider?: "mock" | "toss" | "portone"; pointsUsed?: number;
 }): Promise<string> {
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) throw new Error("로그인이 필요해요");
@@ -55,6 +55,7 @@ export async function createOrder(input: {
     discount_amount: input.discountAmount ?? 0,
     auto_book: input.autoBook ?? false,
     payment_provider: input.provider ?? null,
+    points_used: input.pointsUsed ?? 0,
     status: "pending",
   }).select("id").single();
   if (error) throw new Error("주문 생성에 실패했어요: " + error.message);
