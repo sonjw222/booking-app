@@ -59,7 +59,7 @@ async function myProfileIds(): Promise<string[]> {
   if (!authData.user) return [];
   const { data: acc } = await supabase.from("accounts").select("id").eq("auth_id", authData.user.id).single();
   if (!acc) return [];
-  const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", acc.id);
+  const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", acc.id).is("deleted_at", null);
   return (profs ?? []).map((p: any) => p.id);
 }
 

@@ -173,7 +173,7 @@ export async function fetchMyUpcomingClasses(): Promise<HomeClass[]> {
 
   const { data: acc } = await supabase.from("accounts").select("id").eq("auth_id", authData.user.id).single();
   if (!acc) return [];
-  const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", acc.id);
+  const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", acc.id).is("deleted_at", null);
   const profileIds = (profs ?? []).map((p: any) => p.id);
   if (profileIds.length === 0) return [];
 

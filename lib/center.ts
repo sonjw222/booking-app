@@ -200,7 +200,7 @@ export async function hasActivePassAtCenter(centerId: string): Promise<boolean> 
   if (!authData.user) return false;
   const { data: acc } = await supabase.from("accounts").select("id").eq("auth_id", authData.user.id).single();
   if (!acc) return false;
-  const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", acc.id);
+  const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", acc.id).is("deleted_at", null);
   const ids = (profs ?? []).map((p: any) => p.id);
   if (ids.length === 0) return false;
 
@@ -227,6 +227,7 @@ export async function requestPurchase(centerId: string, productId: string, produ
   const { data: profs } = await supabase
     .from("profiles").select("id, is_primary, created_at")
     .eq("account_id", acc.id)
+    .is("deleted_at", null)
     .order("is_primary", { ascending: false })
     .order("created_at", { ascending: true })
     .limit(1);

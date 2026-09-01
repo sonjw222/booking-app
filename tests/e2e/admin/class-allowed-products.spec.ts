@@ -178,7 +178,16 @@ test("관리자: 검색으로 특정 pass 1개만 선택 → 저장 → 재진�
   const memberPage = await memberContext.newPage();
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
   const passList = memberPage.locator(".pass-pick-list");
-  await expect(passList).toBeVisible();
+  // [CI 반복 실패 조사, 2026-09-01] 이 스펙(특히 뒤쪽 두 테스트, 관리자 쪽에서 클릭·저장을
+  // 더 많이 거친 뒤에 여기 도달)이 GitHub Actions에서만 간헐적으로 ".pass-pick-list"가
+  // 기본 10초 타임아웃 안에 안 뜬다는 걸 여러 PR에 걸쳐 반복 확인함 — 이 센터(managerA
+  // 소유 공유 fixture)에 그동안 쌓인 products(100+)/memberships(70+) 자체가 로컬보다 느린
+  // CI 환경에서 usable_memberships_for_classes 배치 조회를 눈에 띄게 늦출 만큼 크다고
+  // 판단(실제 raw 데이터 오염·중복은 admin으로 직접 조회해 확인했지만 없었음 — 순수하게
+  // 데이터 볼륨발 지연). 근본적으로 fixture를 정리하는 대신(다른 병렬 스펙들이 이미 이
+  // 데이터에 의존하고 있어 위험도가 더 큼) 타임아웃만 넉넉하게 늘려 실제로 늦게라도
+  // 뜨는 경우를 실패로 잘못 처리하지 않게 한다.
+  await expect(passList).toBeVisible({ timeout: 25_000 });
   await expect(passList).toContainText("P3 패스B");
   await expect(passList).not.toContainText("P3 패스A");
   await expect(passList).not.toContainText("P3 패스C");
@@ -207,7 +216,7 @@ test("관리자: 특정 pass 여러 개 허용 → 지정된 것만 표시, 나�
   const memberPage = await memberContext.newPage();
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
   const passList = memberPage.locator(".pass-pick-list");
-  await expect(passList).toBeVisible();
+  await expect(passList).toBeVisible({ timeout: 25_000 });
   await expect(passList).toContainText("P3 패스A");
   await expect(passList).toContainText("P3 패스C");
   await expect(passList).not.toContainText("P3 패스B");
@@ -269,7 +278,7 @@ test("관리자: 전체 선택(전체 허용으로 전환) → 회원 화면에 
   const memberPage = await memberContext.newPage();
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
   const passList = memberPage.locator(".pass-pick-list");
-  await expect(passList).toBeVisible();
+  await expect(passList).toBeVisible({ timeout: 25_000 });
   await expect(passList).toContainText("P3 패스D");
   await expect(passList).toContainText("P3 패스E");
   await expect(passList).toContainText("P3 패스F");
@@ -307,7 +316,7 @@ test("프라이빗 수업에서도 예약 가능 수강권 선택이 동일하�
   const memberPage = await memberContext.newPage();
   await memberPage.goto(reservationDeepLink(privateCls.id, privateCls.start_time));
   const passList = memberPage.locator(".pass-pick-list");
-  await expect(passList).toBeVisible();
+  await expect(passList).toBeVisible({ timeout: 25_000 });
   await expect(passList).toContainText("P3 패스A");
   // 실제 예약도 정상 성립하는지(프라이빗 정원/동시예약 정책과 충돌 없는지)까지 확인.
   await memberPage.getByRole("button", { name: "예약하기" }).click();

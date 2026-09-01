@@ -543,6 +543,16 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 | 완료 조건 | 사용자가 두 SQL을 순서 무관하게(서로 독립적) Supabase SQL Editor에서 적용 → 신규 통합테스트 2개가 green으로 전환되는지 확인 |
 | 발견 경위 | 오래된 미병합 브랜치(`security/p0-batch-consolidation`) 정리 조사 중 실제 라이브 코드(`lib/orders.ts`, `add_confirm_real_payment.sql`)를 직접 읽다가 발견 — 브랜치 자체를 재적용하지 않고, 지금 실제로 켜진 포인트 결제 기능까지 반영해 처음부터 다시 설계함 |
 
+### P0-10. (2026-09-01, 완료) 가족(비대표) 프로필 삭제가 예약 이력이 있으면 항상 실패
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **완료.** 사용자가 `fix_profile_delete_soft_delete.sql` 적용, `member-full-lifecycle.spec.ts`에서 가족 프로필 삭제 단계 포함 전체 시나리오 2연속 통과 확인. |
+| 근거 파일 | `fix_profile_delete_soft_delete.sql`(신규, `rollback_fix_profile_delete_soft_delete.sql`), `lib/profiles.ts`(`deleteProfile()` 익명화 UPDATE로 변경), `lib/center.ts`/`cart.ts`/`home.ts`/`inquiries.ts`/`navState.ts`/`mypage.ts`/`orders.ts`/`reviews.ts`/`reservations.ts`(`deleted_at is null` 필터 추가), `tests/e2e/production-readiness/member-full-lifecycle.spec.ts`(신규) |
+| 발견 경위 | "새 계정으로 처음부터 끝까지" 프로덕션 최종 QA용 Playwright 시나리오를 새로 작성해 돌리다가 실제로 재현됨 — 예약 이력이 있는 가족 프로필을 삭제하면 원본 Postgres FK violation 에러가 화면에 그대로 노출되고 삭제가 매번 실패했다. |
+| 완료 조건 | 계정 탈퇴와 동일한 익명화 패턴으로 재설계(실제 행 유지 + 개인정보만 익명화) → 완료 |
+
 **SEC-118 확정 경로 잔여 취약점**: `fulfill_order()`(매니저 수동 승인 경로)는 라이브에
 이미 자체 가격 검증이 있는 게 P1-5 조사(위 참고)로 확인됐지만, `confirm_test_payment`/
 `confirm_real_payment`가 공유하는 `_issue_membership_and_record_payment()`(사람 검토 없이
@@ -610,9 +620,9 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **웹 푸시는 코드 구현 + 배포 완료, 실제 모바일 기기 수신 확인만 남음(자동 검증 불가 — 사용자가 나중에 직접 확인 예정).** 카카오 알림톡·SMS는 발신프로필 등록 + 메시지 템플릿 카카오 사전심사가 필요해(사업자 등록만으로는 부족) 벤더 확정 전까지 실제 연동 불가 — 2026-08-26 사용자 결정으로 벤더 확정 전에 Adapter Pattern 구조만 먼저 준비함(`lib/messaging/`). 이메일은 이번 범위에서 제외(사용자 결정). |
-| 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`, `lib/messaging/*`(신규); `messages`, `notification_rules`, `notification_logs` |
-| 완료 조건 | (웹 푸시) 실제 브라우저에서 알림 수신 확인. (카카오 알림톡/SMS/이메일) 사업자 등록 이후 발송기 연동 — 이번 범위 아님. |
+| 현재 상태 | **웹 푸시는 코드 구현 + 배포 완료, 실제 모바일 기기 수신 확인만 남음(자동 검증 불가 — 사용자가 나중에 직접 확인 예정).** 카카오 알림톡·SMS는 발신프로필 등록 + 메시지 템플릿 카카오 사전심사가 필요해(사업자 등록만으로는 부족) 벤더 확정 전까지 실제 연동 불가 — 2026-08-26 사용자 결정으로 벤더 확정 전에 Adapter Pattern 구조만 먼저 준비함(`lib/messaging/`). **2026-09-01 벤더 확정 전에 발송 UI도 미리 준비하기로 함(사용자 결정)** — `/manager/members`에 개별/다중 선택 발송 화면 완료, 지금은 Mock으로 시뮬레이션만 됨(벤더 확정 후 `AlimtalkSmsProvider` 구현만 채우면 그대로 실제 발송에 씀). 이메일은 이번 범위에서 제외(사용자 결정). |
+| 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`, `lib/messaging/*`(신규), `app/manager/members/page.tsx`(신규 발송 UI), `lib/members.ts`(`sendAlimtalkToMembers()`, 신규); `messages`, `notification_rules`, `notification_logs` |
+| 완료 조건 | (웹 푸시) 실제 브라우저에서 알림 수신 확인. (카카오 알림톡/SMS/이메일) 사업자 등록 이후 벤더 확정 → `AlimtalkSmsProvider` 실제 API 구현 → 발송 UI는 이미 완료. |
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/settings/notifications`](./ROUTES.md) |
 
 카카오 알림톡·SMS(`messages`/`notification_rules`/`notification_logs` 기반, 건당 수수료

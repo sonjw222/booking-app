@@ -47,8 +47,10 @@ describe("writeReview() sanitizes before calling write_review RPC (UI-002)", () 
         return {
           select: () => ({
             eq: () => ({
-              order: () => ({
-                order: () => ({ limit: () => Promise.resolve({ data: [{ id: "profile-1" }] }) }),
+              is: () => ({
+                order: () => ({
+                  order: () => ({ limit: () => Promise.resolve({ data: [{ id: "profile-1" }] }) }),
+                }),
               }),
             }),
           }),

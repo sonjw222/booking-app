@@ -49,7 +49,7 @@ export async function fetchHasUsableMembership(): Promise<boolean> {
   if (accErr || !acc) return false;
 
   const { data: profiles, error: profErr } = await supabase
-    .from("profiles").select("id").eq("account_id", (acc as any).id);
+    .from("profiles").select("id").eq("account_id", (acc as any).id).is("deleted_at", null);
   if (profErr) throw new Error("프로필을 확인하지 못했어요: " + profErr.message);
   const profileIds = (profiles ?? []).map((p: any) => p.id);
   if (profileIds.length === 0) return false;

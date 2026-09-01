@@ -227,7 +227,6 @@ function ProgressRecordContent() {
               {members.length === 0 && <option value="">회원이 없어요</option>}
               {members.map((m) => <option key={m.profileId} value={m.profileId}>{m.name}</option>)}
             </select>
-            <span className="select-chevron">⌄</span>
           </div>
           {canManageProgress && (
             <button className="outline-action progress-add-record" disabled={!profileId} onClick={openAddSheet}>진도 기록 추가</button>

@@ -14,7 +14,7 @@ import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
   fetchMembers, fetchGrades, createGrade, deleteGrade,
   updateMemberGrade, updateMemberMemo, updateMemberAddress, updateMemberStatus, syncMembersFromReservations,
-  membersToCsv, fetchMemberDetail, searchAccountsForMember, addMemberToCenter,
+  membersToCsv, fetchMemberDetail, searchAccountsForMember, addMemberToCenter, sendAlimtalkToMembers,
   type CenterMember, type Grade, type MemberDetailData,
 } from "../../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
@@ -90,6 +90,12 @@ function MembersContent() {
   const [csvSheet, setCsvSheet] = useState(false);
   const [csvCols, setCsvCols] = useState<string[]>(["name", "grade", "phone", "passName", "remainingCount", "expiresAt"]);
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
+  // 알림톡 발송 — 목록에서 여러 명 선택하거나(선택 모드), 상세 시트에서 한 명만
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [alimtalkTargets, setAlimtalkTargets] = useState<CenterMember[] | null>(null);
+  const [alimtalkContent, setAlimtalkContent] = useState("");
+  const [sendingAlimtalk, setSendingAlimtalk] = useState(false);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -282,6 +288,58 @@ function MembersContent() {
     showToast(`${members.length}명을 내보냈어요`);
   }
 
+  function toggleSelectMode() {
+    setSelectMode((v) => !v);
+    setSelectedIds(new Set());
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  // members는 이미 등급/상태/검색 필터가 적용된 결과라, "전체 선택"이 곧 "필터링된
+  // 회원 전체 선택"이다 — 별도의 "필터 결과에 발송" 경로를 안 만들어도 된다.
+  function selectAllFiltered() {
+    setSelectedIds(new Set(members.map((m) => m.id)));
+  }
+
+  function deselectAll() {
+    setSelectedIds(new Set());
+  }
+
+  function openAlimtalkForSelected() {
+    const targets = members.filter((m) => selectedIds.has(m.id));
+    if (targets.length === 0) return;
+    setAlimtalkContent("");
+    setAlimtalkTargets(targets);
+  }
+
+  function openAlimtalkForOne(m: CenterMember) {
+    setAlimtalkContent("");
+    setAlimtalkTargets([m]);
+  }
+
+  async function handleSendAlimtalk() {
+    if (!alimtalkTargets || !alimtalkContent.trim()) return;
+    setSendingAlimtalk(true);
+    try {
+      const result = await sendAlimtalkToMembers(alimtalkTargets, alimtalkContent.trim());
+      const parts: string[] = [];
+      if (result.sent > 0) parts.push(`${result.sent}명 발송`);
+      if (result.skipped > 0) parts.push(`${result.skipped}명 번호 없음`);
+      if (result.failed > 0) parts.push(`${result.failed}명 실패`);
+      showToast(parts.join(" · "));
+      setAlimtalkTargets(null);
+      setSelectMode(false);
+      setSelectedIds(new Set());
+    } catch (e: any) { setError(e.message); }
+    finally { setSendingAlimtalk(false); }
+  }
+
   if (centers.length === 0 && !loading) {
     return (
       <div className="app-shell manager-members-v2">
@@ -361,9 +419,25 @@ function MembersContent() {
         <span className="mem-count">전체 {members.length}명</span>
         <div className="mem-tools member-toolbar-actions">
           <button className="quiet-action" disabled={busy} onClick={handleSync} title="예약 이력은 있지만 아직 회원 목록에 없는 사람을 찾아 등록해요">예약자 동기화</button>
+          <button className={`quiet-action ${selectMode ? "on" : ""}`} onClick={toggleSelectMode}>
+            {selectMode ? "선택 취소" : "알림톡 발송"}
+          </button>
           <button className="quiet-action" onClick={() => setCsvSheet(true)}>엑셀 내보내기</button>
         </div>
       </div>
+
+      {selectMode && (
+        <div className="mem-toolbar">
+          <span className="mem-count">{selectedIds.size}/{members.length}명 선택됨 (현재 필터 기준)</span>
+          <div className="mem-tools member-toolbar-actions">
+            {selectedIds.size === members.length && members.length > 0 ? (
+              <button className="quiet-action" onClick={deselectAll}>전체 해제</button>
+            ) : (
+              <button className="quiet-action" disabled={members.length === 0} onClick={selectAllFiltered}>전체 선택</button>
+            )}
+          </div>
+        </div>
+      )}
       </>
 
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
@@ -392,9 +466,22 @@ function MembersContent() {
           </div>
         )
       ) : (
-        <div className="mem-list">
+        <div className="mem-list" style={selectMode && selectedIds.size > 0 ? { paddingBottom: 90 } : undefined}>
           {members.map((m) => (
-            <button key={m.id} className="mem-row" onClick={() => openDetail(m)}>
+            <button
+              key={m.id}
+              className={`mem-row ${selectMode && selectedIds.has(m.id) ? "selected" : ""}`}
+              onClick={() => (selectMode ? toggleSelected(m.id) : openDetail(m))}
+            >
+              {selectMode && (
+                <input
+                  type="checkbox"
+                  className="mem-row-check"
+                  checked={selectedIds.has(m.id)}
+                  onChange={() => toggleSelected(m.id)}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              )}
               <div className="mem-main">
                 <div className="mem-name-line">
                   <span className="mem-name">{m.name}</span>
@@ -413,9 +500,16 @@ function MembersContent() {
                   {m.remainingCount != null && ` (${m.remainingCount}회)`}
                 </div>
               </div>
-              <span className="chevron">›</span>
+              {!selectMode && <span className="chevron">›</span>}
             </button>
           ))}
+        </div>
+      )}
+
+      {selectMode && selectedIds.size > 0 && !alimtalkTargets && (
+        <div className="mem-select-bar">
+          <span>{selectedIds.size}명 선택됨</span>
+          <button className="primary-btn compact" onClick={openAlimtalkForSelected}>알림톡 발송</button>
         </div>
       )}
 
@@ -423,7 +517,10 @@ function MembersContent() {
       {detail && (
         <div className="sheet-overlay" onClick={() => setDetail(null)}>
           <div className="sheet member-detail-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-title">{detail.name}</div>
+            <div className="sheet-title mem-detail-title">
+              <span>{detail.name}</span>
+              <button className="outline-action compact" onClick={() => openAlimtalkForOne(detail)}>알림톡 보내기</button>
+            </div>
             {detailLoading && <Loading />}
             {!detailLoading && (<>
 
@@ -715,6 +812,35 @@ function MembersContent() {
 
             <div className="add-profile-actions" style={{ marginTop: 6 }}>
               <button className="ghost-btn" onClick={() => setAddSheet(false)}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 알림톡 발송 시트 — 회원 목록 다중 선택 또는 상세에서 1명 */}
+      {alimtalkTargets && (
+        <div className="sheet-overlay" onClick={() => !sendingAlimtalk && setAlimtalkTargets(null)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-title">알림톡 보내기</div>
+            <div className="perm-guide" style={{ margin: "0 0 10px" }}>
+              {alimtalkTargets.length === 1
+                ? `${alimtalkTargets[0].name}님에게 보내요.`
+                : `선택한 ${alimtalkTargets.length}명에게 보내요.`}
+              {" "}전화번호가 없는 회원은 자동으로 건너뜁니다.
+            </div>
+            <textarea
+              className="input-field"
+              style={{ minHeight: 120, resize: "vertical", paddingTop: 12 }}
+              placeholder="보낼 내용을 입력하세요"
+              value={alimtalkContent}
+              onChange={(e) => setAlimtalkContent(e.target.value)}
+              disabled={sendingAlimtalk}
+            />
+            <div className="add-profile-actions">
+              <button className="ghost-btn" disabled={sendingAlimtalk} onClick={() => setAlimtalkTargets(null)}>취소</button>
+              <button className="primary-btn" disabled={sendingAlimtalk || !alimtalkContent.trim()} onClick={handleSendAlimtalk}>
+                {sendingAlimtalk ? "발송 중..." : "발송"}
+              </button>
             </div>
           </div>
         </div>

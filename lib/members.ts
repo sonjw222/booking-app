@@ -7,6 +7,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { getMessageService } from "./messaging";
 
 export type Grade = {
   id: string;
@@ -492,4 +493,35 @@ export async function addMemberToCenter(centerId: string, profileId: string): Pr
     .from("center_members")
     .insert({ center_id: centerId, profile_id: profileId, app_linked: true });
   if (error) throw new Error("회원 등록에 실패했어요: " + error.message);
+}
+
+export type AlimtalkSendResult = {
+  sent: number;
+  skipped: number;      // 전화번호가 없어 건너뜀
+  failed: number;       // 벤더가 실패로 응답
+  failedNames: string[];
+};
+
+// 선택한 회원들에게 알림톡(실패 시 SMS 대체발송은 벤더 쪽에서 처리)을 보낸다.
+// lib/messaging의 Adapter Pattern을 그대로 쓰므로, 벤더 미확정 상태에서는 Mock으로
+// 발송을 시뮬레이션하고(실제로 전송 안 됨), NEXT_PUBLIC_MESSAGE_PROVIDER=alimtalk로
+// 바꾸고 AlimtalkSmsProvider 구현을 채우면 이 함수·화면은 그대로 실제 발송에 쓸 수 있다.
+export async function sendAlimtalkToMembers(
+  targets: { name: string; phone: string | null }[],
+  content: string
+): Promise<AlimtalkSendResult> {
+  const service = getMessageService();
+  const result: AlimtalkSendResult = { sent: 0, skipped: 0, failed: 0, failedNames: [] };
+  for (const t of targets) {
+    if (!t.phone) { result.skipped++; continue; }
+    try {
+      const res = await service.send({ to: t.phone, content, channel: "alimtalk" });
+      if (res.status === "sent") result.sent++;
+      else { result.failed++; result.failedNames.push(t.name); }
+    } catch {
+      result.failed++;
+      result.failedNames.push(t.name);
+    }
+  }
+  return result;
 }
