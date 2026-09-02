@@ -15,19 +15,31 @@ import { consumePostLoginNext } from "../lib/postLoginReturn";
 import UiIcon, { type IconName } from "./components/UiIcon";
 
 const CATEGORIES = [
-  { icon: "skate" as IconName, label: "피겨스케이팅" },
-  { icon: "pilates" as IconName, label: "필라테스" },
-  { icon: "ballet" as IconName, label: "발레" },
-  { icon: "rhythm" as IconName, label: "리듬체조" },
-  { icon: "yoga" as IconName, label: "요가" },
-  { icon: "boxing" as IconName, label: "복싱" },
-  { icon: "swim" as IconName, label: "수영" },
-  { icon: "golf" as IconName, label: "골프" },
+  { icon: "skate" as IconName, image: "/icons/categories/skate.png", label: "피겨스케이팅" },
+  { icon: "pilates" as IconName, image: "/icons/categories/pilates.png", label: "필라테스" },
+  { icon: "ballet" as IconName, image: "/icons/categories/ballet.png", label: "발레" },
+  { icon: "rhythm" as IconName, image: "/icons/categories/rhythm.png", label: "리듬체조" },
+  { icon: "yoga" as IconName, image: "/icons/categories/yoga.png", label: "요가" },
+  { icon: "boxing" as IconName, image: "/icons/categories/boxing.png", label: "복싱" },
+  { icon: "swim" as IconName, image: "/icons/categories/swim.png", label: "수영" },
+  { icon: "golf" as IconName, image: "/icons/categories/golf.png", label: "골프" },
 ];
 
 const CATEGORY_ICONS: Record<string, IconName> = {
   피겨스케이팅: "skate", 필라테스: "pilates", 발레: "ballet", 리듬체조: "rhythm",
   요가: "yoga", 복싱: "boxing", 수영: "swim", 골프: "golf",
+};
+
+// 종목 둘러보기 그리드용 아이콘 이미지(2026-09-02, 사용자 제공 디자인으로 교체) —
+// UiIcon 단색 라인 아이콘 대신 이 이미지를 쓴다. "곧 시작하는 클래스" 목록의 사진
+// 없는 클래스 썸네일(home-class-photo, 브랜드 그라데이션 배경 + 단색 아이콘)은 디자인
+// 맥락이 달라 그대로 UiIcon(CATEGORY_ICONS)을 유지한다.
+const CATEGORY_IMAGES: Record<string, string> = {
+  피겨스케이팅: "/icons/categories/skate.png", 필라테스: "/icons/categories/pilates.png",
+  발레: "/icons/categories/ballet.png", 리듬체조: "/icons/categories/rhythm.png",
+  요가: "/icons/categories/yoga.png", 복싱: "/icons/categories/boxing.png",
+  수영: "/icons/categories/swim.png", 골프: "/icons/categories/golf.png",
+  테니스: "/icons/categories/tennis.png",
 };
 
 export default function Home() {
@@ -51,7 +63,13 @@ export default function Home() {
   );
   const [showAllCategories, setShowAllCategories] = useState(false);
   const allCategories = useMemo(
-    () => (catList.length > 0 ? catList.map((category) => ({ icon: CATEGORY_ICONS[category.label] ?? "grid" as IconName, label: category.label })) : CATEGORIES),
+    () => (catList.length > 0
+      ? catList.map((category) => ({
+          icon: CATEGORY_ICONS[category.label] ?? "grid" as IconName,
+          image: CATEGORY_IMAGES[category.label] ?? null,
+          label: category.label,
+        }))
+      : CATEGORIES),
     [catList]
   );
   const visibleCategories = useMemo(() => allCategories.slice(0, 8), [allCategories]);
@@ -199,7 +217,9 @@ export default function Home() {
         <div className="cat-grid">
           {visibleCategories.map((cat) => (
             <a className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`}>
-              <div className="cat-icon"><UiIcon name={cat.icon} size={27} /></div>
+              <div className="cat-icon">
+                {cat.image ? <img src={cat.image} alt="" /> : <UiIcon name={cat.icon} size={27} />}
+              </div>
               <div className="cat-label">{cat.label}</div>
             </a>
           ))}
@@ -208,7 +228,9 @@ export default function Home() {
           <div className="cat-grid">
             {remainingCategories.map((cat) => (
               <a className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`}>
-                <div className="cat-icon"><UiIcon name={cat.icon} size={27} /></div>
+                <div className="cat-icon">
+                  {cat.image ? <img src={cat.image} alt="" /> : <UiIcon name={cat.icon} size={27} />}
+                </div>
                 <div className="cat-label">{cat.label}</div>
               </a>
             ))}

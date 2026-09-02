@@ -296,10 +296,10 @@ export default function LoginPage() {
           <p>필라테스부터 피겨스케이팅까지<br />내 주변 수업을 한곳에서 만나보세요.</p>
         </div>
         <div className="auth-activities" aria-hidden="true">
-          <div><UiIcon name="pilates" size={25} /><span>필라테스</span></div>
-          <div><UiIcon name="skate" size={25} /><span>피겨</span></div>
-          <div><UiIcon name="swim" size={25} /><span>수영</span></div>
-          <div><UiIcon name="golf" size={25} /><span>골프</span></div>
+          <div><img src="/icons/categories/pilates.png" alt="" /><span>필라테스</span></div>
+          <div><img src="/icons/categories/skate.png" alt="" /><span>피겨</span></div>
+          <div><img src="/icons/categories/swim.png" alt="" /><span>수영</span></div>
+          <div><img src="/icons/categories/golf.png" alt="" /><span>골프</span></div>
         </div>
       </div>
 
