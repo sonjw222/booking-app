@@ -8,6 +8,26 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-09-02 — 센터 정산계좌(Toss 지급대행) 1단계: DB/화면만 (Toss 계약 확정 전)
+
+Toss 지급대행 계약 문의 답변을 기다리는 동안, 계약과 무관하게 미리 할 수 있는 부분만
+진행(`add_center_platform_subscription.sql`의 "계약 심사 대기 중엔 DB/RLS/화면만 완성해
+플래그로 잠근다" 패턴 재사용). `center_payout_accounts`(센터별 정산계좌 상태, 계좌
+전체번호는 저장 안 함) 테이블 신규, `payments.settlement_status` 컬럼 추가(전부
+`not_applicable`로 백필, 실제 전이 로직은 계약 확정 후 별도 구현 — 결제 확정 함수는
+전혀 안 건드림), 신규 센터 생성 시 기본 행 트리거(`security definer`로 처음부터 작성,
+`center_subscriptions` 트리거가 이걸 빠뜨렸다가 나중에 고친 전례 재사용). 매니저 화면
+`/manager/settlement`(오너 전용, "계좌 등록" 버튼은 `NEXT_PUBLIC_PAYOUTS_ENABLED` 꺼진
+동안 비활성화) + 관리 홈 메뉴 추가.
+
+작업 중 결제수단 구조를 코드로 다시 확인해 정정: 신용카드·카카오페이·토스페이·**계좌이체**
+4개 전부 Toss 결제창을 거쳐 플랫폼 가맹점으로 수납되고(`app/checkout/page.tsx`의
+`TOSS_SUPPORTED_METHODS`), **직접결제(센터 현장 결제) 1개만** 회사를 거치지 않는다 —
+계좌이체를 직접결제와 같은 그룹으로 잘못 적어뒀던 `/legal/terms`, `/legal/refund` 문구를
+바로잡음. `/manager/settlement` 진입 시 `ManagerChrome`의 전역 타이틀이 "관리자"로 뜨던
+버그(신규 라우트를 `TITLES` 맵에 안 넣어서 생김, 다른 신규 라우트에서도 반복된 패턴)도
+같이 수정.
+
 ## 2026-09-02 — 홈 화면 "전체 종목" 클릭 시 검색창 대신 나머지 종목 인라인 펼치기
 
 기본 8개 밖에 있는 종목(예: 테니스)을 보려면 "전체 종목"을 눌러 `/search`로 이동해야

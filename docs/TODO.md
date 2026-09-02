@@ -593,10 +593,17 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 - Toss 지급대행(Payouts) 계약 문의 결과에 따라 사업자정보/환불정책 문구 갱신 필요할 수 있음
   (별도 프로젝트, 아래 참고)
 
-**별도로 설계만 끝낸 프로젝트(구현 안 함, 계약 확정 대기)**: 센터별 자동 정산(Toss 지급대행)
-— 신규 테이블 `center_payout_accounts`/`center_payout_batches`, `payments.settlement_status`,
-`/manager/settlement` 화면, `/api/payouts/*` 라우트 설계까지 리서치 완료. 대표님이 Toss와
-지급대행 계약(개인사업자 가능 여부 등)을 확정한 뒤 별도 세션에서 구현 착수.
+**센터별 자동 정산(Toss 지급대행) — 1단계 완료, 계약 확정 대기**: `center_payout_accounts`
+테이블(계좌 상태만, 전체번호는 미저장) + `payments.settlement_status` 컬럼(전부
+`not_applicable`, 실제 전이 로직 없음) + `/manager/settlement` 화면(오너 전용, 계좌 등록
+버튼은 `NEXT_PUBLIC_PAYOUTS_ENABLED` 꺼진 동안 비활성화)까지 적용 완료
+(`add_center_payout_accounts.sql`, 2026-09-02 사용자 적용 확인). 결제수단 중
+신용카드·카카오페이·토스페이·계좌이체 4개가 전부 정산 대상이고 센터 현장 결제만 예외임을
+코드로 재확인(`app/checkout/page.tsx`의 `TOSS_SUPPORTED_METHODS`).
+**남은 것(계약 확정 후 별도 세션)**: `center_payout_batches`(지급 이력) 테이블,
+`/api/payouts/register-seller`·`run-batch`·`webhook` 라우트, `_issue_membership_and_record_payment()`의
+`settlement_status` 갱신 로직 — 대표님이 Toss와 지급대행 계약(개인사업자 가능 여부 등)을
+확정한 뒤 착수.
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 

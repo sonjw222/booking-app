@@ -430,6 +430,14 @@ export default function ManagerDashboard() {
           <span className="chevron">›</span>
         </a>
       )}
+      {/* 정산계좌(플랫폼 구독과 같은 이유로 오너 전용 고정) — 회원 결제는 플랫폼 명의로
+          수납되고 센터에는 별도 정산하는 구조라, 정산계좌도 플랫폼과의 금전 관계다. */}
+      {activeCenter?.isOwner && (
+        <a className="list-row" href="/manager/settlement">
+          <div className="left"><span className="icon"><UiIcon name="bank" /></span>정산계좌</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
       <div className="manager-menu-end-spacer" aria-hidden="true" />
 
       {/* 예약자 명단 시트 */}
