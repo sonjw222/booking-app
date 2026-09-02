@@ -30,7 +30,18 @@ export function setBootstrapSuppressed(v: boolean) {
 // 이 기능이 생기기 전에 만들어진 기존 이메일 계정(테스트 계정 포함)은 phone이 비어 있을 수
 // 있고, 그런 계정까지 이 모달로 막으면 안 된다(실제로 E2E 테스트 계정 전체가 이 문제로
 // 막혔던 사고 — 2026-08-14).
-function isSocialProvider(user: { app_metadata?: { provider?: string } }): boolean {
+// ⚠️ 카카오/네이버 로그인(supabase/functions/kakao-login, naver-login)은 실제 OAuth를 마친 뒤
+// Supabase 매직링크(이메일 OTP)로 세션을 발급한다 — 그 결과 Supabase가 기록하는
+// app_metadata.provider는 실제 인증 수단인 "email"이 되고, options.data로 넘긴
+// provider:"kakao"/"naver"는 user_metadata에만 들어간다(app_metadata와 무관). app_metadata만
+// 보면 카카오/네이버 가입자가 전부 isSocial=false로 판정돼 휴대폰 번호 모달이 영영 안 뜨는
+// 버그가 있었다(실사용자 계정에서 확인, 2026-09-01) — user_metadata.provider도 같이 본다.
+// user_metadata.provider는 두 로그인 함수가 계정 최초 생성 시점에만 세팅하고 이후 안 바뀐다.
+function isSocialProvider(user: {
+  app_metadata?: { provider?: string };
+  user_metadata?: { provider?: string };
+}): boolean {
+  if (user.user_metadata?.provider === "kakao" || user.user_metadata?.provider === "naver") return true;
   return user.app_metadata?.provider != null && user.app_metadata.provider !== "email";
 }
 

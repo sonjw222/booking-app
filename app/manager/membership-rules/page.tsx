@@ -20,6 +20,7 @@ import {
 } from "../../../lib/passes";
 import { fetchExistingClassOptions, type ExistingClassOption } from "../../../lib/classes";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import ExpiryOptionField, { type ExpiryOptionValue } from "../../components/ExpiryOptionField";
 
 export default function MembershipRulesPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -38,6 +39,8 @@ export default function MembershipRulesPage() {
   const [pAutoClasses, setPAutoClasses] = useState<string[]>([]);
   const [pPrice, setPPrice] = useState("");
   const [pCount, setPCount] = useState("");
+  const [pUnlimited, setPUnlimited] = useState(false);
+  const [pExpiry, setPExpiry] = useState<ExpiryOptionValue>({ mode: "none", days: "", date: "" });
 
   // 조건 추가 시트 (어느 상품에)
   const [ruleFor, setRuleFor] = useState<Product | null>(null);
@@ -107,9 +110,15 @@ export default function MembershipRulesPage() {
 
   async function handleCreateProduct() {
     if (!centerId || !pName.trim()) { setError("상품 이름을 입력해주세요"); return; }
+    if (pExpiry.mode === "days" && !pExpiry.days.trim()) { setError("만료까지 며칠인지 입력해주세요"); return; }
+    if (pExpiry.mode === "date" && !pExpiry.date) { setError("만료일을 선택해주세요"); return; }
     setBusy(true);
     try {
-      await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "pass", false, { autoBookDays: pAutoDays });
+      await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "pass", false, {
+        autoBookDays: pAutoDays,
+        unlimitedPass: pUnlimited,
+        expiry: { mode: pExpiry.mode, days: pExpiry.mode === "days" ? num(pExpiry.days) : null, date: pExpiry.mode === "date" ? pExpiry.date : null },
+      });
       // 선택한 수업이 있으면 예약조건으로 자동 등록 — 실패한 조건이 있으면 조용히 넘어가지 않고 안내한다.
       let failedRuleCount = 0;
       if (pAutoClasses.length > 0) {
@@ -127,6 +136,7 @@ export default function MembershipRulesPage() {
         }
       }
       setPName(""); setPPrice(""); setPCount(""); setPAutoDays([]); setPAutoClasses([]);
+      setPUnlimited(false); setPExpiry({ mode: "none", days: "", date: "" });
       setProdSheet(false);
       if (failedRuleCount > 0) {
         setError(`상품은 추가됐지만 예약조건 ${failedRuleCount}건은 등록에 실패했어요. 조건 추가에서 다시 시도해주세요.`);
@@ -300,8 +310,22 @@ export default function MembershipRulesPage() {
             <input className="input-field" placeholder="예: 안무반 수강권" value={pName} onChange={(e) => setPName(e.target.value)} />
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>가격</div>
             <input inputMode="numeric" className="input-field" placeholder="0" value={pPrice} onChange={(e) => setPPrice(e.target.value)} />
-            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>총 횟수</div>
-            <input inputMode="numeric" className="input-field" placeholder="예: 8" value={pCount} onChange={(e) => setPCount(e.target.value)} />
+            <div className="set-row" style={{ padding: "12px 0 6px", borderBottom: "none" }}>
+              <div className="set-label">횟수 제한 없음 (무제한)</div>
+              <button className={`switch ${pUnlimited ? "on" : ""}`} onClick={() => setPUnlimited(!pUnlimited)}>
+                <span className="knob" />
+              </button>
+            </div>
+            {!pUnlimited && (
+              <>
+                <div className="menu-section-label" style={{ padding: "6px 0 6px" }}>총 횟수</div>
+                <input inputMode="numeric" className="input-field" placeholder="예: 8" value={pCount} onChange={(e) => setPCount(e.target.value)} />
+              </>
+            )}
+
+            {/* 횟수와 별개로 기간을 걸 수 있음 — 예: 무제한+한 달 기간 = 기간권 효과,
+                5회권+한 달 기간 = 5회 다 안 써도 한 달 뒤 자동 만료(사용자 요청, 2026-09-01) */}
+            <ExpiryOptionField value={pExpiry} onChange={setPExpiry} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>
               요일반 수강권 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>· 선택 시 회원이 자동예약을 고를 수 있어요</span>

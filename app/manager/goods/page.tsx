@@ -13,6 +13,7 @@ import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchProducts, createProduct, updateProduct, deleteProduct, won, type Product } from "../../../lib/passes";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import ExpiryOptionField, { type ExpiryOptionValue } from "../../components/ExpiryOptionField";
 
 export default function GoodsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -28,6 +29,7 @@ export default function GoodsPage() {
   const [pName, setPName] = useState("");
   const [pPrice, setPPrice] = useState("");
   const [unlimited, setUnlimited] = useState(false);
+  const [pExpiry, setPExpiry] = useState<ExpiryOptionValue>({ mode: "none", days: "", date: "" });
   const [pCount, setPCount] = useState("");
   const [pDesc, setPDesc] = useState("");
   const [pSizes, setPSizes] = useState("");
@@ -81,15 +83,18 @@ export default function GoodsPage() {
   async function handleCreate() {
     if (!centerId || !pName.trim()) { setError("상품 이름을 입력해주세요"); return; }
     if (!unlimited && num(pCount) === 0) { setError("횟수를 입력해주세요"); return; }
+    if (pExpiry.mode === "days" && !pExpiry.days.trim()) { setError("만료까지 며칠인지 입력해주세요"); return; }
+    if (pExpiry.mode === "date" && !pExpiry.date) { setError("만료일을 선택해주세요"); return; }
     setBusy(true);
     try {
       const sizeArr = pSizes.split(",").map((s) => s.trim()).filter(Boolean);
+      const expiry = { mode: pExpiry.mode, days: pExpiry.mode === "days" ? num(pExpiry.days) : null, date: pExpiry.mode === "date" ? pExpiry.date : null };
       if (editId) {
-        await updateProduct(editId, pName.trim(), num(pPrice), num(pCount), unlimited, { description: pDesc.trim(), sizes: sizeArr });
+        await updateProduct(editId, pName.trim(), num(pPrice), num(pCount), unlimited, { description: pDesc.trim(), sizes: sizeArr, expiry });
       } else {
-        await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "goods", unlimited, { description: pDesc.trim(), sizes: sizeArr });
+        await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "goods", unlimited, { description: pDesc.trim(), sizes: sizeArr, expiry });
       }
-      setPName(""); setPPrice(""); setPCount(""); setUnlimited(false); setPDesc(""); setPSizes("");
+      setPName(""); setPPrice(""); setPCount(""); setUnlimited(false); setPDesc(""); setPSizes(""); setPExpiry({ mode: "none", days: "", date: "" });
       setSheet(false);
       showToast(editId ? "상품을 수정했어요" : "상품을 추가했어요");
       setEditId(null);
@@ -106,12 +111,17 @@ export default function GoodsPage() {
     setUnlimited(p.unlimited);
     setPDesc(p.description ?? "");
     setPSizes((p.sizes ?? []).join(", "));
+    setPExpiry({
+      mode: p.expiryMode ?? "none",
+      days: p.expiryDays != null ? String(p.expiryDays) : "",
+      date: p.expiryDate ?? "",
+    });
     setSheet(true);
   }
 
   function openCreate() {
     setEditId(null);
-    setPName(""); setPPrice(""); setPCount(""); setUnlimited(false); setPDesc(""); setPSizes("");
+    setPName(""); setPPrice(""); setPCount(""); setUnlimited(false); setPDesc(""); setPSizes(""); setPExpiry({ mode: "none", days: "", date: "" });
     setSheet(true);
   }
 
@@ -224,6 +234,8 @@ export default function GoodsPage() {
                 <input inputMode="numeric" className="input-field" placeholder="예: 5" value={pCount} onChange={(e) => setPCount(e.target.value)} />
               </>
             )}
+
+            <ExpiryOptionField value={pExpiry} onChange={setPExpiry} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>상세 설명 (선택)</div>
             <textarea className="input-field" style={{ minHeight: 70, resize: "vertical", lineHeight: 1.5 }}

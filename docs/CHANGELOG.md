@@ -8,6 +8,165 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-09-02 — manager_set_attendance() 예약취소 시 대기자 자동승격 누락 수정
+
+무제한 횟수/기간 옵션 도입 후 대기예약 승격을 실측 검증하던 중 발견: 회원이
+`/my-reservations`에서 직접 취소하면 `cancel_reservation()`이 불려 대기자가 정상
+승격되지만(무제한 수강권 대기자 포함), **매니저가 대시보드 로스터(`/manager/classes`)에서
+"예약취소" 버튼을 누르면 `manager_set_attendance()`가 불리는데 이 함수엔 취소된 예약의
+수강권 횟수 복구만 있고 같은 수업의 대기자를 승격시키는 로직이 아예 없었다** — 실측으로
+확인(확정자를 매니저가 취소해도 대기자가 "대기1"로 그대로 남고 새로고침해도 동일).
+바로 위 2026-09-02 감사 항목에서 `manager_set_attendance()`를 "수강권 자체가 아니라
+상품/출결 로직이라 무관"으로 판단했는데, 그건 remaining_count null-safety만 봤을 때
+얘기고 **대기자 승격 로직 자체가 없다는 건 놓쳤다** — 이 정정 포함.
+
+무제한 수강권에 국한된 문제가 아니라 매니저가 취소 버튼을 누르는 모든 경우에 해당하는
+기존 결함(`fix_permission_manager_set_attendance.sql`, 2026-08-21부터 존재 — 이번
+기간권/무제한권 배치와 무관한 별도 버그, QA 중 우연히 발견). `fix_manager_cancel_waitlist_promotion.sql`
+(신규)로 `cancel_reservation()`과 동일한 승격 루프를 추가, 나머지 로직(권한 체크·상태
+전환 제약·횟수 복구)은 그대로 둠. 매니저 대시보드에서 확정자 취소 → 무제한 수강권
+대기자 즉시 확정 승격을 실측으로 재확인.
+
+## 2026-09-02 — RLS 회귀 수정: messages/notification_logs 채널별 권한 분리 무력화 버그
+
+`add_alimtalk_integration.sql`(2026-09-01)이 `messages`/`notification_logs`에 "센터 매니저면
+전체 허용" 정책을 추가로 얹었는데, 이 두 테이블은 이미 2026-08-02/08-18에 채널별·권한별로
+세분화된 RLS 정책이 적용돼 있었다(`message.sms.view`/`message.push.view` 권한 보유 여부로
+채널마다 갈라서 봄). 새 정책이 그 위에 OR로 얹혀서 **권한 없는 스태프도 다른 채널의 발송
+이력을 볼 수 있게 되는 보안 회귀**가 생겼다 — PR #113 CI의
+`tests/integration/sec009-batch-a1-rls.test.ts`/`sec009-batch-a2-rls.test.ts`가 이걸 잡아냄
+(2026-09-02). 애초에 이 두 테이블에 대한 실제 쓰기는 `evaluate_notification_rules()`
+(security definer)와 `send-alimtalk` Edge Function(service_role)만 하므로 RLS를 우회해서,
+이 정책 자체가 알림톡 기능에 필요하지도 않았다 — 원본 마이그레이션 파일에서 해당 정책
+정의를 제거하고, 라이브 DB에는 별도 DROP POLICY로 되돌림.
+
+## 2026-09-02 — 무제한 횟수/기간 옵션 도입에 따른 예약 핵심 로직 감사 + 버그 수정
+
+전체 코드베이스에서 "무제한 횟수"(remaining_count null)/"기간 무제한"(expires_at null)과
+충돌하는 곳을 감사했다(사용자 요청). 재정의 이력이 많은 핵심 함수(`reserve_class` 17번,
+`reserve_with_membership` 3번, `cancel_reservation` 2번)는 실제 운영 DB에서
+`pg_get_functiondef()`로 현재 정의를 확인한 뒤 그 위에만 고쳤다.
+
+**발견한 버그(심각도 순)**:
+1. **`reserve_class()`/`reserve_with_membership()`가 `m.remaining_count > 0`을 null 가드 없이
+   써서, "무제한 횟수" 옵션 상품은 수강권 선택 화면엔 "사용 가능"으로 뜨지만 실제 예약
+   시도는 거부됨** — 이번에 추가한 무제한 횟수 기능이 핵심 예약 흐름에서 아예 동작 안
+   하던 셈. `add_reserve_functions_unlimited_pass_fix.sql`(신규)로 두 함수 + `cancel_reservation()`
+   (대기자 재승격 시 같은 문제)까지 세 곳 다 null-safe하게 수정.
+2. **수업매출 캘린더 매출 0원 버그**: `class_revenue_daily_summary()`/`class_revenue_for_date()`가
+   "정기권 매출"을 `pass_type='period'`로만 판별하는데 새 방식 무제한 수강권은 `pass_type`을
+   계속 `'count'`로 저장해서(하위호환 설계) 횟수제 버킷으로 잘못 분류되고 `total_count`가
+   NULL이라 나누기 결과가 NULL → 매출 0원 집계. `add_class_revenue_unlimited_pass_fix.sql`
+   (신규)로 `unlimited_pass=true`도 정기권 버킷으로 잡히게 수정.
+3. **휴면(dormant) 복귀 시 만료일 연장 로직**이 `pass_type==='period'` 조건이라 새 방식
+   수강권은 절대 연장 안 되던 버그(`lib/members.ts`) — `expires_at` 존재 여부로 조건 변경.
+
+**문제 없음으로 확인(감사만, 수정 없음)**: `auto_book_membership()`(이미 null-safe),
+`reserve_class_with_goods()`/`manager_set_attendance()`(수강권 자체가 아니라 상품/출결
+로직이라 무관), `refundEligibility()`(expires_at 자체를 안 씀).
+
+## 2026-09-01 — 상품(수강권/상품) 횟수·기간 옵션 확장 + 기존 발급 로직 버그 수정
+
+**버그 수정**: `fulfill_order()`/`_issue_membership_and_record_payment()`(결제 완료 시 수강권을
+실제로 발급하는 두 함수)가 전부 `pass_type: 'count'`, `expires_at: 60일 후`를 하드코딩하고
+있어서 `products`의 실제 설정을 전혀 반영하지 않고 있었다(예: 상품을 기간권으로 만들어도
+발급되는 수강권은 무조건 60일짜리 횟수권이었음). 이번에 두 함수를 실제 상품 설정을 읽도록
+고쳤다 — 조사 시점에 `pg_get_functiondef()`로 운영 DB의 현재 정의를 직접 확인해 기존 권한
+검증(SEC-116)·금액 검증(SEC-118)·자동예약 호출 로직은 그대로 보존했다.
+
+**횟수+기간 동시 적용**: pass_type(count/period) 양자택일 대신 "횟수 무제한 여부
+(`unlimited_pass`)" + "기간(`expiry_mode`: none/days/date)" 두 축의 조합으로 바꿨다(사용자
+결정) — 예: 무제한+기간 설정=기간권 효과, 5회권+기간 설정=5회 다 안 써도 기간 지나면 자동
+만료. 기간을 "특정 날짜"로 걸면 구매 시점과 무관하게 그 상품을 산 회원 전원이 같은 날짜에
+만료(시즌권 효과). 기간 옵션을 꺼두면(기본값) 이제 **무제한**(기존 60일 하드코딩 대체) —
+`memberships.expires_at`을 nullable로 바꿔 NULL=무제한을 표현. `add_product_expiry_options.sql`
+(신규)에 스키마 변경 + 두 발급 함수 + `usable_memberships_for_classes()`(null-safe 가드 추가)
+전부 포함. `notify_expiring_passes()`는 이미 `expires_at is not null`을 전제로 하고 있어 수정
+불필요.
+
+**UI**: 신규 공용 `app/components/ExpiryOptionField.tsx`(기간 옵션 토글 + N일/특정 날짜 선택,
+기존 공용 `DatePicker` 재사용)를 `app/manager/membership-rules`(수강권 상품, 무제한 횟수
+체크박스도 신규 추가)·`app/manager/goods`(상품, 기존 무제한 토글은 유지) 양쪽에 추가.
+
+**표시 쪽 null 처리**: `expiresAt`을 보여주는 화면 전부(`app/mypage`, `app/manager/members`,
+`app/manager/classes`, `app/manager/page.tsx`, `app/reservation`) "무제한" 라벨 또는 null-safe
+정렬로 수정.
+
+## 2026-09-01 — 자동 발송 규칙 트리거당 다중 생성 지원 + 목록 디자인 개선
+
+**버그 수정**: product_id 필터를 추가했는데 `unique(center_id, trigger_type)` 제약이 그대로
+남아있어서 트리거 타입 하나에 상품별로 여러 규칙을 못 만들었다(예: "10회권 잔여 2회 이하"를
+만들면 "20회권 잔여 3회 이하"를 절대 추가할 수 없었음 — "새로 만들기" 드롭다운에서 이미 만든
+트리거 타입이 통째로 빠지는 것으로 나타남). `add_notification_rule_multi_per_type.sql`(신규)로
+`unique(center_id, trigger_type, product_id)` + "전체 수강권" 대상은 부분 유니크 인덱스로 하나만
+허용하도록 변경. `lib/alimtalk.ts`의 저장 로직도 단일 upsert에서 존재 여부 확인 후 insert/update로
+교체(부분 유니크 인덱스는 supabase-js의 onConflict 컬럼 목록만으로 못 맞춤).
+
+**목록 디자인 개선**: 자동 발송 규칙·템플릿 관리 목록이 글자만 나열되던 것을, 이 앱 다른
+화면(예약 이력, 상담고객 관리)에서 이미 쓰는 `.hist-item`(제목+부제+상태 배지) 패턴으로 통일.
+템플릿은 승인 상태별 색상 배지(초안/대기/승인/반려) 추가.
+
+## 2026-09-01 — 자동 발송 규칙에 특정 수강권(상품) 지정 기능 추가
+
+한 센터가 "10회권"/"20회권"/"무제한 정기권"처럼 여러 상품을 팔면 "잔여 2회 이하" 같은 조건이
+상품마다 의미가 다르다(무제한권엔 잔여횟수 개념 자체가 없음) — `add_notification_rule_product_filter.sql`
+(신규)로 `notification_rules.product_id`를 추가해 규칙마다 특정 수강권 하나로 좁힐 수 있게 함
+(NULL이면 기존처럼 전체 수강권 대상, 하위호환). `lib/passes.ts`의 기존 `fetchProducts()` 재사용,
+birthday 트리거는 상품과 무관해 대상에서 제외.
+
+## 2026-09-01 — 자동 발송 규칙 UX 재설계 + 횟수/기간 조합 조건 + 관리자모드 전환 버튼
+
+**자동 발송 규칙 화면 재설계**: 5종을 항상 나열하던 방식이 "뭐가 실제로 켜져 있는지 한눈에
+안 보인다"는 피드백을 받아 "만든 규칙만 목록에 표시 + 상단 '+ 새로 만들기'" 방식으로 변경.
+
+**횟수/기간 조합 조건(절충안)**: 완전 자유 조건 빌더는 별도 큰 작업이라 보류하고, 기존
+`threshold_count`/`days_before` 두 컬럼(신규 컬럼 아님)을 트리거 타입 상관없이 "필수+선택"
+조합으로 같이 쓰게 함 — `add_notification_rule_count_filter.sql`(신규). count_low는 잔여횟수가
+필수·기간이 선택, 나머지 기간형 3종은 기간이 필수·잔여횟수가 선택. 겸사겸사 count_low를
+"정확히 N회"(=)에서 "N회 이하"(<=)로 바꾸고, 멱등 체크를 "오늘 하루"에서 "이 수강권 건당
+한 번"(`messages.rule_membership_id` 신규 컬럼)으로 바꿔 매일 재평가해도 안전하게 함.
+
+**UI 버그 수정**: `/manager/alimtalk/*` 신규 화면들이 "관리자"로만 뜨던 상단 타이틀 —
+`ManagerChrome.tsx`의 경로별 제목표에 항목이 없어서 기본값으로 떨어진 것, 5개 경로 추가.
+템플릿 관리·자동 발송 규칙 화면에 뒤로가기 버튼이 두 개(ManagerChrome 공통 버튼 + 페이지 자체
+버튼) 보이던 것 — 페이지 자체 버튼 제거. 더보기 메뉴에서 "상담고객 관리"와 "알림톡" 아이콘이
+겹쳐 보이던 것 — 알림톡 아이콘을 `bell`로 교체.
+
+**관리자모드 전환 버튼**: 회원모드 홈 화면 오른쪽 위에 관리자모드로 바로 전환하는 버튼 추가
+(`app/page.tsx`) — 관리자모드의 기존 "회원 화면으로" 버튼과 대칭. `manager_centers` 소속
+여부(ACL-005 기준)로만 노출.
+
+## 2026-09-01 — 소셜 가입 전화번호 버그 수정 + 알림톡 실연동·자동 발송·사진 첨부
+
+**버그 수정**: `lib/authAccount.ts`의 `isSocialProvider()`가 `app_metadata.provider`만 봤는데,
+카카오/네이버 로그인(`supabase/functions/kakao-login`·`naver-login`)은 실제 OAuth 후 Supabase
+매직링크(이메일 OTP)로 세션을 만들어서 `app_metadata.provider`가 항상 `"email"`로 기록된다 —
+그 결과 카카오/네이버 가입자 전원이 `isSocial=false`로 판정되어 휴대폰 번호 입력 모달
+(`SessionWatcher.tsx`)이 한 번도 안 뜨는 버그가 있었다(실사용자 계정에서 확인). 두 로그인
+함수가 계정 생성 시점에 세팅해두는 `user_metadata.provider`("kakao"/"naver")도 함께 보도록
+수정. 기존 가입 계정은 그대로 두기로 함(사용자 결정) — 다음 로그인부터 자동으로 모달이 뜬다.
+
+**알림톡(카카오 알림톡) 실연동 + 관리자 메뉴**: 플랫폼(sonjw) 단일 알리고 계정으로 전 센터를
+대행 발송하는 구조로 진행(사용자 결정 — 센터별 수수료 정산 목적).
+- `add_alimtalk_integration.sql`(신규) — schema.sql 13-8절에 정의만 되고 방치돼 있던
+  `notification_rules`/`messages`/`notification_logs`를 살려서 RLS 추가, `messages.channel`에
+  `'alimtalk'` 추가, `alimtalk_templates`(승인 템플릿) 테이블 신설, `message.alimtalk.view`
+  권한 키 추가.
+- `add_notification_rule_evaluators.sql`(신규) — `notify_expiring_passes()` 패턴을 확장한
+  `evaluate_notification_rules()`로 잔여횟수 임박(count_low)/만료 임박/만료 후 재등록
+  유도/정지 종료/생일 5가지 자동 발송을 매일 평가해 `messages`에 큐잉, `dispatch-alimtalk`
+  pg_cron(1분마다, `add_web_push.sql`의 `dispatch-web-push`와 동일 패턴)이 Edge Function을
+  호출해 실제 발송.
+- `supabase/functions/send-alimtalk`(신규) — 알리고 API 실호출(코드는 완성, 실제 계정·템플릿
+  승인은 아직 — `NEXT_PUBLIC_MESSAGE_PROVIDER=alimtalk`로 전환하기 전까지는 기존처럼 Mock).
+  `lib/messaging/AlimtalkSmsProvider.ts` 스텁을 걷어내고 이 함수를 호출하도록 교체.
+- 더보기 → 알림톡 메뉴(`app/manager/alimtalk/*`): 알림톡 보내기 / 자동 발송 규칙 / 템플릿
+  관리 / 발신 설정 4개 화면 신규.
+- 사진 첨부(UI/데이터 구조만, 사용자 결정 — 실제 이미지형 템플릿 심사는 다음 단계):
+  `app/components/AlimtalkComposer.tsx` 신규 — 텍스트/사진 블록을 순서대로 쌓아 "텍스트→사진
+  →텍스트" 구성 지원. 회원탭 발송 시트도 이 컴포넌트로 교체(로직 재사용). `alimtalk-images`
+  Storage 버킷(`add_alimtalk_storage.sql`) 신규.
+
 ## 2026-09-01 — 회원탭 알림톡 발송 UI (필터/다중 선택 + 개별 발송)
 
 카카오 알림톡/SMS 벤더 확정 전이라도 미리 UI를 준비해두기로 함(사용자 결정) — `/manager/members`

@@ -18,7 +18,8 @@ const STATUS_LABEL: Record<string, string> = {
   no_show: "노쇼",
 };
 
-function daysLeft(dateStr: string) {
+function daysLeft(dateStr: string | null): number | null {
+  if (!dateStr) return null; // 기간 무제한
   const today = new Date();
   const exp = new Date(dateStr + "T23:59:59+09:00");
   return Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
@@ -131,7 +132,7 @@ export default function MyPage() {
                 </div>
               )}
               <div className="expire">
-                {m.expiresAt}까지 · {left > 0 ? `${left}일 남음` : "만료됨"}
+                {left == null ? "기간 무제한" : `${m.expiresAt}까지 · ${left > 0 ? `${left}일 남음` : "만료됨"}`}
               </div>
               {!isGoods && <div className="membership-cta">이 수강권으로 예약하기 ›</div>}
               {refundEligibility(m).ok && (

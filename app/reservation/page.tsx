@@ -55,11 +55,35 @@ function buildCalendarGrid(year: number, month: number) {
 // 사용 가능한 수강권이 여러 개일 때 기본으로 선택해줄 것을 고르는 우선순위
 // 1) 만료일이 가장 가까운 것 → 2) 만료일이 같으면 잔여횟수가 가장 적은 것 → 3) 그 외엔 조회된 순서 그대로(안정 정렬)
 // 어디까지나 "기본 선택"일 뿐이며, 사용자는 pass-pick-list에서 언제든 다른 수강권을 직접 고를 수 있음
+// 횟수 무제한 수강권은 "회 남음" 대신 유효기간을 보여준다(사용자 요청, 2026-09-02) —
+// app/mypage/page.tsx의 daysLeft()와 동일한 계산 방식.
+function daysLeftUntil(dateStr: string): number {
+  const exp = new Date(dateStr + "T23:59:59+09:00");
+  return Math.ceil((exp.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function passPickSubLabel(m: UsableMembership): string {
+  if (m.remainingCount != null) {
+    return `${m.remainingCount}회 남음 · ${m.expiresAt ? `~${m.expiresAt.slice(5).replace("-", "/")}` : "기간 무제한"}`;
+  }
+  if (!m.expiresAt) return "기간 무제한";
+  const left = daysLeftUntil(m.expiresAt);
+  return `${left > 0 ? `${left}일 남음` : "만료됨"} · ~${m.expiresAt.slice(5).replace("-", "/")}`;
+}
+
 function pickDefaultMembership(list: UsableMembership[]): string | null {
   if (list.length === 0) return null;
+  // 기간 무제한(expiresAt null)은 "만료가 안 되는" 쪽이라 우선순위상 가장 뒤로(먼 미래 취급) —
+  // 만료 임박한 유한 기간권부터 먼저 쓰게 유도.
   const sorted = [...list].sort((a, b) => {
-    if (a.expiresAt !== b.expiresAt) return a.expiresAt < b.expiresAt ? -1 : 1;
-    return a.remainingCount - b.remainingCount;
+    const ae = a.expiresAt ?? "9999-12-31";
+    const be = b.expiresAt ?? "9999-12-31";
+    if (ae !== be) return ae < be ? -1 : 1;
+    // 횟수 무제한(remainingCount null)도 마찬가지로 가장 뒤로 — 줄어들 일 없는 수강권보다
+    // 잔여횟수 유한한 쪽부터 먼저 소진하게 유도.
+    const ac = a.remainingCount ?? Infinity;
+    const bc = b.remainingCount ?? Infinity;
+    return ac - bc;
   });
   return sorted[0].membershipId;
 }
@@ -733,7 +757,7 @@ function ReservationCalendarContent() {
                       <span className="pass-pick-main">
                         <b>{m.productName}</b>
                         <span className="pass-pick-sub">
-                          {m.remainingCount}회 남음 · ~{m.expiresAt?.slice(5).replace("-", "/")}
+                          {passPickSubLabel(m)}
                           {passDupKeys.has(`${m.productName}::${m.expiresAt}`) && m.issuedAt && (
                             <> · {m.issuedAt.slice(5).replace("-", "/")} 구매</>
                           )}

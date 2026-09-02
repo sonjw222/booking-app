@@ -354,6 +354,12 @@ export default function ManagerDashboard() {
           <span className="chevron">›</span>
         </a>
       )}
+      {canSeeMenu("message.alimtalk.view") && (
+        <a className="list-row" href="/manager/alimtalk">
+          <div className="left"><span className="icon"><UiIcon name="bell" /></span>알림톡</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
       {canSeeMenu("facility.staff.view") && (
         <a className="list-row" href="/manager/staff">
           <div className="left"><span className="icon"><UiIcon name="shield" /></span>스태프 & 권한</div>
@@ -504,7 +510,7 @@ export default function ManagerDashboard() {
                   <div className="mem-pass-summary">
                     {memberInfo.data.activePasses.map((p) => (
                       <div key={p.id} className="mem-pass-chip">
-                        {p.name}{p.remaining != null ? ` · ${p.remaining}회` : ""} <span className="mem-pass-exp">~{p.expiresAt}</span>
+                        {p.name}{p.remaining != null ? ` · ${p.remaining}회` : ""} <span className="mem-pass-exp">~{p.expiresAt ?? "무제한"}</span>
                       </div>
                     ))}
                   </div>

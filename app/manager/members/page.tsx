@@ -18,6 +18,9 @@ import {
   type CenterMember, type Grade, type MemberDetailData,
 } from "../../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import AlimtalkComposer, {
+  emptyAlimtalkBlocks, flattenAlimtalkBlocks, hasAlimtalkContent, type AlimtalkBlock,
+} from "../../components/AlimtalkComposer";
 
 const RES_STATUS: Record<string, string> = {
   confirmed: "확정", waitlisted: "대기", cancelled: "취소", attended: "출석", no_show: "노쇼",
@@ -94,7 +97,7 @@ function MembersContent() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [alimtalkTargets, setAlimtalkTargets] = useState<CenterMember[] | null>(null);
-  const [alimtalkContent, setAlimtalkContent] = useState("");
+  const [alimtalkBlocks, setAlimtalkBlocks] = useState<AlimtalkBlock[]>(emptyAlimtalkBlocks());
   const [sendingAlimtalk, setSendingAlimtalk] = useState(false);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
@@ -314,20 +317,21 @@ function MembersContent() {
   function openAlimtalkForSelected() {
     const targets = members.filter((m) => selectedIds.has(m.id));
     if (targets.length === 0) return;
-    setAlimtalkContent("");
+    setAlimtalkBlocks(emptyAlimtalkBlocks());
     setAlimtalkTargets(targets);
   }
 
   function openAlimtalkForOne(m: CenterMember) {
-    setAlimtalkContent("");
+    setAlimtalkBlocks(emptyAlimtalkBlocks());
     setAlimtalkTargets([m]);
   }
 
   async function handleSendAlimtalk() {
-    if (!alimtalkTargets || !alimtalkContent.trim()) return;
+    if (!alimtalkTargets || !hasAlimtalkContent(alimtalkBlocks) || !centerId) return;
     setSendingAlimtalk(true);
     try {
-      const result = await sendAlimtalkToMembers(alimtalkTargets, alimtalkContent.trim());
+      const content = flattenAlimtalkBlocks(alimtalkBlocks);
+      const result = await sendAlimtalkToMembers(alimtalkTargets, content, centerId);
       const parts: string[] = [];
       if (result.sent > 0) parts.push(`${result.sent}명 발송`);
       if (result.skipped > 0) parts.push(`${result.skipped}명 번호 없음`);
@@ -543,7 +547,7 @@ function MembersContent() {
                       <div className="mem-pass-summary">
                         {(showAllPasses ? passes : passes.slice(0, 3)).map((p) => (
                           <div key={p.id} className="mem-pass-chip">
-                            {p.name}{p.remaining != null ? ` · ${p.remaining}회` : ""} <span className="mem-pass-exp">~{p.expiresAt}</span>
+                            {p.name}{p.remaining != null ? ` · ${p.remaining}회` : ""} <span className="mem-pass-exp">~{p.expiresAt ?? "무제한"}</span>
                           </div>
                         ))}
                       </div>
@@ -562,7 +566,7 @@ function MembersContent() {
                       <div className="mem-pass-summary">
                         {(showAllGoods ? goods : goods.slice(0, 3)).map((p) => (
                           <div key={p.id} className="mem-pass-chip goods">
-                            {p.name}{p.remaining != null ? ` · ${p.remaining}회` : ""} <span className="mem-pass-exp">~{p.expiresAt}</span>
+                            {p.name}{p.remaining != null ? ` · ${p.remaining}회` : ""} <span className="mem-pass-exp">~{p.expiresAt ?? "무제한"}</span>
                           </div>
                         ))}
                       </div>
@@ -828,17 +832,10 @@ function MembersContent() {
                 : `선택한 ${alimtalkTargets.length}명에게 보내요.`}
               {" "}전화번호가 없는 회원은 자동으로 건너뜁니다.
             </div>
-            <textarea
-              className="input-field"
-              style={{ minHeight: 120, resize: "vertical", paddingTop: 12 }}
-              placeholder="보낼 내용을 입력하세요"
-              value={alimtalkContent}
-              onChange={(e) => setAlimtalkContent(e.target.value)}
-              disabled={sendingAlimtalk}
-            />
+            <AlimtalkComposer blocks={alimtalkBlocks} onChange={setAlimtalkBlocks} disabled={sendingAlimtalk} />
             <div className="add-profile-actions">
               <button className="ghost-btn" disabled={sendingAlimtalk} onClick={() => setAlimtalkTargets(null)}>취소</button>
-              <button className="primary-btn" disabled={sendingAlimtalk || !alimtalkContent.trim()} onClick={handleSendAlimtalk}>
+              <button className="primary-btn" disabled={sendingAlimtalk || !hasAlimtalkContent(alimtalkBlocks)} onClick={handleSendAlimtalk}>
                 {sendingAlimtalk ? "발송 중..." : "발송"}
               </button>
             </div>

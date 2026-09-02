@@ -247,8 +247,12 @@ export async function updateMemberStatus(
         .eq("center_id", cm.center_id)
         .eq("status", "active");
       for (const p of periodPasses ?? []) {
-        // 기간권만 연장 (횟수권은 시간 개념 없음)
-        if ((p as any).pass_type === "period" && (p as any).expires_at) {
+        // 만료일이 있는 수강권만 연장(기간 무제한이면 애초에 연장할 게 없음) — pass_type이
+        // 'period'인지가 아니라 expires_at 존재 여부로 판단해야 새 방식(unlimited_pass+
+        // expiry_mode, add_product_expiry_options.sql)으로 만든 수강권도 정상 연장된다 —
+        // 신규 상품은 pass_type을 항상 'count'로 저장해서 pass_type==='period' 조건으로는
+        // 절대 안 걸림(2026-09-01 감사에서 발견).
+        if ((p as any).expires_at) {
           const newExp = new Date(new Date((p as any).expires_at).getTime() + dormantDays * 86400000);
           await supabase.from("memberships")
             .update({ expires_at: newExp.toISOString().slice(0, 10) })
@@ -305,7 +309,7 @@ export function membersToCsv(members: CenterMember[], columns: string[]): string
     status: { label: "상태", get: (m) => ({ active: "이용중", expired: "만료", dormant: "휴면" }[m.status] ?? m.status) },
     passName: { label: "수강권명", get: (m) => m.passName ?? "" },
     remainingCount: { label: "잔여횟수", get: (m) => (m.remainingCount == null ? "" : String(m.remainingCount)) },
-    expiresAt: { label: "만료일", get: (m) => m.expiresAt ?? "" },
+    expiresAt: { label: "만료일", get: (m) => m.expiresAt ?? "무제한" },
     memo: { label: "메모", get: (m) => m.memo ?? "" },
   };
 
@@ -327,7 +331,7 @@ export type MemberDetailData = {
   reservations: { id: string; title: string; date: string; status: string }[];
   progress: { id: string; skill: string; date: string; note: string | null }[];
   payments: { id: string; amount: number; unpaid: number; saleType: string; date: string }[];
-  activePasses: { id: string; name: string; remaining: number | null; expiresAt: string; kind: string }[];
+  activePasses: { id: string; name: string; remaining: number | null; expiresAt: string | null; kind: string }[];
   // 회원이 마이페이지에서 입력한 정보
   profileInfo: {
     birthDate: string | null; gender: string | null;
@@ -508,14 +512,15 @@ export type AlimtalkSendResult = {
 // 바꾸고 AlimtalkSmsProvider 구현을 채우면 이 함수·화면은 그대로 실제 발송에 쓸 수 있다.
 export async function sendAlimtalkToMembers(
   targets: { name: string; phone: string | null }[],
-  content: string
+  content: string,
+  centerId: string
 ): Promise<AlimtalkSendResult> {
   const service = getMessageService();
   const result: AlimtalkSendResult = { sent: 0, skipped: 0, failed: 0, failedNames: [] };
   for (const t of targets) {
     if (!t.phone) { result.skipped++; continue; }
     try {
-      const res = await service.send({ to: t.phone, content, channel: "alimtalk" });
+      const res = await service.send({ to: t.phone, content, channel: "alimtalk", centerId });
       if (res.status === "sent") result.sent++;
       else { result.failed++; result.failedNames.push(t.name); }
     } catch {
