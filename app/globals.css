@@ -3793,7 +3793,7 @@ a.membership-card { text-decoration: none; display: block; }
 
 .home-category-head,.home-class-head { min-height: 58px; padding: 22px var(--page-gutter) 10px; display: flex; align-items: center; justify-content: space-between; }
 .home-category-head h2,.home-class-head h2 { margin: 0; font-size: 18px; font-weight: 680; letter-spacing: -.025em; }
-.home-category-head a,.home-class-head a { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: flex-end; color: var(--brand-ink); font-size: 12.5px; font-weight: 600; }
+.home-category-head a,.home-category-head button,.home-class-head a { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: flex-end; color: var(--brand-ink); font-size: 12.5px; font-weight: 600; background: none; border: none; font-family: inherit; cursor: pointer; }
 .member-home .cat-grid { padding: 8px var(--page-gutter) 4px; grid-template-columns: repeat(4,1fr); row-gap: 19px; }
 .member-home .cat-item { gap: 8px; }
 .member-home .cat-icon { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 50%; background: var(--surface); color: var(--brand-ink); }

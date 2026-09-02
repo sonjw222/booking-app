@@ -49,10 +49,15 @@ export default function Home() {
     () => banners.filter((banner) => banner.title?.trim().length >= 2),
     [banners]
   );
-  const visibleCategories = useMemo(
-    () => (catList.length > 0 ? catList.map((category) => ({ icon: CATEGORY_ICONS[category.label] ?? "grid" as IconName, label: category.label })) : CATEGORIES).slice(0, 8),
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const allCategories = useMemo(
+    () => (catList.length > 0 ? catList.map((category) => ({ icon: CATEGORY_ICONS[category.label] ?? "grid" as IconName, label: category.label })) : CATEGORIES),
     [catList]
   );
+  const visibleCategories = useMemo(() => allCategories.slice(0, 8), [allCategories]);
+  // 기본 8개 밖의 나머지 종목 — "전체 종목"을 누르면 검색창으로 보내는 대신 이 목록을
+  // 같은 화면 아래에 펼쳐 보여준다(사용자 요청, 2026-09-02).
+  const remainingCategories = useMemo(() => allCategories.slice(8), [allCategories]);
   const visibleClasses = useMemo(() => myUpcoming.length > 0 ? myUpcoming : classes, [classes, myUpcoming]);
 
   useEffect(() => {
@@ -183,7 +188,14 @@ export default function Home() {
         )}
 
         {/* 종목 카테고리 그리드 */}
-        <div className="home-category-head"><h2>종목 둘러보기</h2><a href="/search">전체 종목</a></div>
+        <div className="home-category-head">
+          <h2>종목 둘러보기</h2>
+          {remainingCategories.length > 0 && (
+            <button type="button" onClick={() => setShowAllCategories((v) => !v)}>
+              {showAllCategories ? "접기" : "전체 종목"}
+            </button>
+          )}
+        </div>
         <div className="cat-grid">
           {visibleCategories.map((cat) => (
             <a className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`}>
@@ -192,6 +204,16 @@ export default function Home() {
             </a>
           ))}
         </div>
+        {showAllCategories && remainingCategories.length > 0 && (
+          <div className="cat-grid">
+            {remainingCategories.map((cat) => (
+              <a className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`}>
+                <div className="cat-icon"><UiIcon name={cat.icon} size={27} /></div>
+                <div className="cat-label">{cat.label}</div>
+              </a>
+            ))}
+          </div>
+        )}
 
         <div className="home-class-head"><h2>{myUpcoming.length > 0 ? "내 수강권으로 예약 가능" : "곧 시작하는 클래스"}</h2><a href="/reservation">전체보기 ›</a></div>
         {visibleClasses.length === 0 ? (
