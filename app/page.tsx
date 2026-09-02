@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, type HomeCenter, type HomeClass } from "../lib/home";
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
+import { fetchMyCenters } from "../lib/manager";
 import { supabase } from "../lib/supabaseClient";
 import { consumePostLoginNext } from "../lib/postLoginReturn";
 import UiIcon, { type IconName } from "./components/UiIcon";
@@ -43,6 +44,7 @@ export default function Home() {
   }
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
+  const [isManager, setIsManager] = useState(false);
   const validBanners = useMemo(
     () => banners.filter((banner) => banner.title?.trim().length >= 2),
     [banners]
@@ -75,6 +77,9 @@ export default function Home() {
       if (data.user) {
         const next = consumePostLoginNext();
         if (next) { window.location.replace(next); return; }
+        // 관리자 모드 진입 버튼(오른쪽 위) 노출 여부 — ACL-005와 동일하게 active
+        // manager_centers 소속 여부로만 판단(mypage의 "관리자 모드로 전환"과 같은 기준).
+        fetchMyCenters().then((centers) => setIsManager(centers.length > 0)).catch(() => {});
       }
     });
   }, []);
@@ -125,6 +130,9 @@ export default function Home() {
             <div className="header-icons">
               {loggedIn === false && (
                 <a className="login-link" href="/login">로그인</a>
+              )}
+              {isManager && (
+                <a className="login-link" href="/manager">관리자 모드</a>
               )}
             </div>
           </div>

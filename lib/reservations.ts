@@ -409,8 +409,8 @@ export async function cancelReservation(reservationId: string): Promise<void> {
 export type UsableMembership = {
   membershipId: string;
   productName: string;
-  remainingCount: number;
-  expiresAt: string;
+  remainingCount: number | null; // null = 횟수 무제한(add_product_expiry_options.sql)
+  expiresAt: string | null; // null = 기간 무제한(add_product_expiry_options.sql)
   ownerProfile: string;   // 이 수강권이 지정된 프로필 이름
   isMine: boolean;        // 선택한 프로필 본인 것인지
   // UX 감사(A-8) — 이름·만료일이 완전히 같은 수강권이 여러 개면 구분할 방법이 없었다.

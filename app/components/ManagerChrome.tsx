@@ -13,6 +13,9 @@ const TITLES: Record<string, string> = {
   "/manager/admin-assignments": "회원 직접 배치 기록", "/manager/center-info": "센터 정보",
   "/manager/rooms": "룸 관리", "/manager/holidays": "휴무일", "/manager/settings": "예약 운영 설정",
   "/manager/class-revenue": "수업매출", "/manager/leads": "상담고객 관리",
+  "/manager/alimtalk": "알림톡", "/manager/alimtalk/send": "알림톡 보내기",
+  "/manager/alimtalk/templates": "템플릿 관리", "/manager/alimtalk/rules": "자동 발송 규칙",
+  "/manager/alimtalk/settings": "발신 설정",
 };
 
 export default function ManagerChrome() {

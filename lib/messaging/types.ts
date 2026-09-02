@@ -29,6 +29,9 @@ export type SendMessageInput = {
   // 알림톡 전용 — 카카오에 사전 등록·승인된 템플릿 코드와 치환 변수
   templateCode?: string;
   templateVariables?: Record<string, string>;
+  // AlimtalkSmsProvider가 supabase/functions/send-alimtalk를 호출할 때 발송 권한(호출자가
+  // 이 센터의 활성 매니저인지)을 확인하는 데 씀. Mock 등 다른 Provider는 무시해도 됨.
+  centerId?: string;
 };
 
 export type SendMessageResult = {

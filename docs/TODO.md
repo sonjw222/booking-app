@@ -1026,6 +1026,16 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
+### P2-0. 이메일 계정 ↔ 소셜 계정 명시적 연결(Account Linking)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **미착수 — 알림톡 배치(2026-09-01) 완료 직후 진행 예정(사용자 결정)** |
+| 배경 | `docs/08_Decision_Log.md` DEC-004가 **자동** 병합은 명시적으로 거부했지만("Alternatives A"), 사용자 확인을 거치는 **명시적** 연결(예: 이메일로 이미 가입된 사람이 소셜 로그인 시도 → "이미 계정이 있어요, 연결할까요?")은 대안으로만 남겨두고 미구현 상태. 사용자가 이 흐름을 원한다고 확인(2026-09-01). |
+| 필요한 작업 | `accounts.auth_id`가 1:1 unique라 지금 스키마로는 "이메일 로그인과 카카오 로그인이 같은 회원"을 표현할 수 없음 — `account_auth_identities`(account_id, auth_id, provider) 매핑 테이블 신설 + `lib/authAccount.ts`의 `getMyAccountId()`류 조회 로직(`.eq("auth_id", user.id)` 패턴이 lib 전반에 흩어져 있음) 전체 리팩터링 필요. 연결 시점 본인 확인 UX(전화번호/이름 일치만으로 충분한지, 추가 인증이 필요한지)도 설계 필요 — DEC-004의 보안 우려(이메일 스푸핑, Apple Hide My Email 오판)와 동일한 리스크가 있어 신중하게 설계해야 함. |
+| 관련 문서 | `docs/08_Decision_Log.md` DEC-004, [REQUIREMENTS 5-1, 6-2](./REQUIREMENTS.md), `lib/authAccount.ts` |
+
 ### P2-1. 애플 OAuth 운영 설정 (구글·카카오·네이버는 완료 — 아래 참고)
 
 | 필드 | 내용 |
@@ -2710,6 +2720,16 @@ Empty/Error/Skeleton 공용 컴포넌트 3종 → 3주차 액센트 단일화 + 
 
 ## 7. P3 — 용도·존속 여부가 불명확한 객체
 
+### P3-10. `usable_memberships(p_class_id, p_profile_id)` (단수 class_id) — 죽은 코드 추정
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **확인 필요(죽은 코드 추정)** — `add_pass_binding.sql`/`add_shared_passes.sql`이 재정의하는 함수인데, 클라이언트 코드 어디서도 호출하지 않음(`grep .rpc("usable_memberships"` 결과 없음, `usable_memberships_for_classes`(복수 class_ids)만 실제로 쓰임, 2026-09-02 감사에서 확인) |
+| 근거 파일 | `add_pass_binding.sql`, `add_shared_passes.sql`, `lib/reservations.ts` |
+| 완료 조건 | 정말 아무 데서도 안 쓰는지 한 번 더 확인 후 함수 삭제 또는 문서화 |
+| 관련 문서 | [DATABASE.md](./DATABASE.md) |
+
 ### P3-7. `product_passes`
 
 | 필드 | 내용 |
@@ -2719,6 +2739,16 @@ Empty/Error/Skeleton 공용 컴포넌트 3종 → 3주차 액센트 단일화 + 
 | 근거 파일 | `schema.sql`, 현재 앱의 `products`·`memberships` 사용 코드 |
 | 완료 조건 | 운영 데이터·RPC·외부 도구 사용 여부를 확인하고 `memberships`와 다른 역할이 있는지 결정함. 보존 또는 제거 결정을 기록함 |
 | 관련 문서 | [DATABASE 6절](./DATABASE.md) |
+
+### P3-9. `products.pass_type` / `memberships.pass_type` 정리
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **의도적 보류(하위호환)** — `add_product_expiry_options.sql`(2026-09-01)로 상품의 실질적인 횟수/기간 표현이 `unlimited_pass`+`expiry_mode` 조합으로 대체됐지만, `pass_type`(count/period) 컬럼과 CHECK 제약은 기존 데이터 보존을 위해 그대로 남겨두고 신규 상품도 계속 `'count'`로 저장함 |
+| 근거 파일 | `schema.sql`, `add_product_expiry_options.sql` |
+| 완료 조건 | `pass_type='period'`로 저장된 기존 데이터가 실제로 있는지 확인하고, 있다면 새 컬럼 조합으로 마이그레이션할지 결정. 없으면 `pass_type` 컬럼 자체를 정리(제거 또는 문서화)할지 결정 |
+| 관련 문서 | [DATABASE.md](./DATABASE.md) |
 
 ### P3-8. `change_logs`
 

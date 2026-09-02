@@ -519,6 +519,14 @@ a { color: inherit; text-decoration: none; }
 .s-contacted { background: var(--accent-soft); color: var(--accent); }
 .s-converted { background: var(--mint-soft); color: var(--mint); }
 .s-dropped { background: var(--surface); color: var(--ink-soft); }
+/* 알림톡 자동 발송 규칙 / 템플릿 목록용 상태 배지(2026-09-01) */
+.s-rule_on { background: var(--mint-soft); color: var(--mint); }
+.s-rule_off { background: var(--surface); color: var(--ink-soft); }
+.s-tpl_draft { background: var(--surface); color: var(--ink-soft); }
+.s-tpl_pending { background: var(--gold-soft); color: var(--gold); }
+.s-tpl_approved { background: var(--mint-soft); color: var(--mint); }
+.s-tpl_rejected { background: var(--danger-soft); color: var(--danger); }
+.hist-item.clickable { cursor: pointer; }
 
 .list-row {
   display: flex; align-items: center; justify-content: space-between;

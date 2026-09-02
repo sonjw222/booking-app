@@ -17,7 +17,7 @@ export type Membership = {
   productName: string;
   totalCount: number;
   remainingCount: number;
-  expiresAt: string; // "2026-10-31"
+  expiresAt: string | null; // "2026-10-31", null = 기간 무제한
   createdAt: string; // 구매 시각 (환불 24시간 판단용)
   profileName: string; // 어느 프로필 것인지 (대표면 "")
 };

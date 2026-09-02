@@ -1869,7 +1869,7 @@ export default function ClassManagePage() {
                   <div className="mem-pass-summary">
                     {memberInfo.data.activePasses.map((p) => (
                       <div key={p.id} className="mem-pass-chip">
-                        {p.name}{p.remaining != null ? ` · ${p.remaining}회` : ""} <span className="mem-pass-exp">~{p.expiresAt}</span>
+                        {p.name}{p.remaining != null ? ` · ${p.remaining}회` : ""} <span className="mem-pass-exp">~{p.expiresAt ?? "무제한"}</span>
                       </div>
                     ))}
                   </div>
