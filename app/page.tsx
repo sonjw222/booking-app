@@ -221,6 +221,22 @@ export default function Home() {
           </div>
         )}
 
+        {/* 전자상거래법상 사업자정보는 로그인 없이도 항상 볼 수 있어야 해서 홈 화면 맨
+            아래에 상시 노출한다(약관/정책은 /legal, 상세 사업자정보는 /legal/business). */}
+        <div className="home-footer">
+          <div className="home-footer-links">
+            <a href="/legal/terms">이용약관</a>
+            <a href="/legal/privacy">개인정보처리방침</a>
+            <a href="/legal/business">사업자 정보</a>
+            <a href="/legal/refund">환불·취소 정책</a>
+          </div>
+          <div className="home-footer-info">
+            우리동네 클래스 · 상호 손장욱 · 대표 손장욱 · 사업자등록번호 589-77-00451
+            <br />
+            경기도 성남시 분당구 중앙공원로 20, 420동 702호 · 고객센터 010-6505-8700
+          </div>
+        </div>
+
         <div style={{ height: 80 }} />
       </div>
 

@@ -63,6 +63,12 @@ export default function LoginPage() {
   // 해제하면 이 브라우저 탭/창을 닫을 때 세션도 같이 사라진다(sessionStorage로 저장, P1).
   const [rememberMe, setRememberMe] = useState(true);
 
+  // 필수 동의(이용약관/개인정보처리방침) — 개인정보보호법상 회원가입 시 필수 동의 절차가
+  // 이 화면에 아예 없었다(2026-09-02 발견). 마케팅 수신은 선택 동의라 별도로 분리한다.
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
+  const [agreeMarketing, setAgreeMarketing] = useState(false);
+
   // 세션 만료로 SessionWatcher(app/components/SessionWatcher.tsx)가 이 화면으로 보낸
   // 경우 안내 문구를 보여준다 — useSearchParams 대신 window.location으로 직접 읽어
   // Suspense 경계 없이도(이 파일의 다른 navigation과 동일한 방식) 동작하게 한다.
@@ -214,6 +220,10 @@ export default function LoginPage() {
 
   async function handleSocial(provider: "kakao" | "apple" | "google" | "naver" | string) {
     if (socialLoading) return; // 중복 클릭/중복 콜백 실행 방지
+    if (mode === "signup" && (!agreeTerms || !agreePrivacy)) {
+      setMessage({ type: "error", text: "이용약관과 개인정보처리방침에 동의해주세요" });
+      return;
+    }
     setMessage(null);
     setSocialLoading(provider);
     // 소셜 로그인도 "로그인 상태 유지" 설정을 그대로 따른다 — 이 탭에서 리다이렉트로
@@ -266,6 +276,10 @@ export default function LoginPage() {
     if (loading) return;
     if (!email.trim() || !password.trim()) {
       setMessage({ type: "error", text: "이메일과 비밀번호를 입력해주세요" });
+      return;
+    }
+    if (mode === "signup" && (!agreeTerms || !agreePrivacy)) {
+      setMessage({ type: "error", text: "이용약관과 개인정보처리방침에 동의해주세요" });
       return;
     }
     if (mode === "login") handleLogin();
@@ -367,6 +381,23 @@ export default function LoginPage() {
             onFileSelect={setLicenseFile}
             disabled={loading}
           />
+        )}
+
+        {mode === "signup" && (
+          <div className="signup-agree">
+            <label className="signup-agree-row">
+              <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} />
+              <span>(필수) <a href="/legal/terms" target="_blank" rel="noopener noreferrer">이용약관</a> 동의</span>
+            </label>
+            <label className="signup-agree-row">
+              <input type="checkbox" checked={agreePrivacy} onChange={(e) => setAgreePrivacy(e.target.checked)} />
+              <span>(필수) <a href="/legal/privacy" target="_blank" rel="noopener noreferrer">개인정보처리방침</a> 동의</span>
+            </label>
+            <label className="signup-agree-row">
+              <input type="checkbox" checked={agreeMarketing} onChange={(e) => setAgreeMarketing(e.target.checked)} />
+              <span>(선택) 이벤트·혜택 알림 수신 동의</span>
+            </label>
+          </div>
         )}
 
         {message && <div className={`auth-msg ${message.type}`}>{message.text}</div>}

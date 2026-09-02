@@ -575,6 +575,29 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 `status not in ('refunded', 'transferred')` 조건을 추가(`active`/`paused`/`expired`는
 기존과 동일하게 그대로 환급 — 정당한 케이스라 범위에서 제외).
 
+### P0-11. (2026-09-02, 코드 완료 — 사업자 실사항목은 사용자 진행 필요) 법적/사업자 페이지 신설 + 회원가입 필수 동의 추가
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **코드 완료.** `/legal/*` 4개 페이지 + 홈 푸터 + 마이페이지 메뉴 + 회원가입 필수 동의 체크박스, `npm run build`/유닛테스트(262개)/브라우저 실측 전부 통과. 사업자 정보 실사 항목(아래)은 대표님이 별도로 진행해야 완전히 마무리됨. |
+| 근거 파일 | `app/legal/page.tsx`(신규), `app/legal/{terms,privacy,business,refund}/page.tsx`(신규), `app/page.tsx`(홈 푸터), `app/mypage/page.tsx`(설정 메뉴), `app/login/page.tsx`(필수 동의 체크박스), `app/globals.css` |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-02 항목 |
+
+**대표님이 진행해야 하는 것(코드로 대체 불가)**:
+- 통신판매업 신고(관할 성남시 분당구청 또는 정부24) — 신고 전에는 실제 유상 거래 시작 금지.
+  신고 완료 시 `app/legal/business/page.tsx`의 신고번호를 실제 값으로 교체
+- 고객센터 이메일 주소 확보 후 같은 파일의 "이메일: 준비 중"을 실제 값으로 교체
+- 환불정책(24시간 자체 기준이 법정 청약철회 7일보다 짧을 수 있음)과 통신판매중개자·결제대행
+  겸업 문구 전체에 대해 법무사·세무사 검토 1회 권장
+- Toss 지급대행(Payouts) 계약 문의 결과에 따라 사업자정보/환불정책 문구 갱신 필요할 수 있음
+  (별도 프로젝트, 아래 참고)
+
+**별도로 설계만 끝낸 프로젝트(구현 안 함, 계약 확정 대기)**: 센터별 자동 정산(Toss 지급대행)
+— 신규 테이블 `center_payout_accounts`/`center_payout_batches`, `payments.settlement_status`,
+`/manager/settlement` 화면, `/api/payouts/*` 라우트 설계까지 리서치 완료. 대표님이 Toss와
+지급대행 계약(개인사업자 가능 여부 등)을 확정한 뒤 별도 세션에서 구현 착수.
+
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
 ### P1-1. 포인트 원장 이원화 정합성

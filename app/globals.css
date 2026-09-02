@@ -431,6 +431,14 @@ a { color: inherit; text-decoration: none; }
 }
 .remember-me { display: flex; align-items: center; gap: 6px; color: var(--ink-soft); font-weight: 700; cursor: pointer; }
 .remember-me input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+
+.signup-agree { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; }
+.signup-agree-row {
+  display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600;
+  color: var(--ink-soft); cursor: pointer;
+}
+.signup-agree-row input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.signup-agree-row a { color: var(--ink); font-weight: 700; text-decoration: underline; }
 .forgot-pw-link { color: var(--ink-soft); font-weight: 700; text-decoration: none; }
 .forgot-pw-link:hover { color: var(--accent); }
 
@@ -546,6 +554,32 @@ a { color: inherit; text-decoration: none; }
    같은 톤이면 눈에 안 띈다(UX 감사 B-1). 브랜드색으로 살짝 강조. */
 .manager-mode-switch { background: var(--brand-soft); border-radius: 14px; border-bottom: none; margin-bottom: 8px; }
 .manager-mode-switch .left, .manager-mode-switch .icon, .manager-mode-switch .chevron { color: var(--brand-ink); }
+
+/* ============================================================
+   홈 화면 하단 사업자정보 푸터 (전자상거래법 표시 의무 — 로그인 없이도 상시 노출)
+   ============================================================ */
+.home-footer { padding: 20px 20px 4px; border-top: 1px solid var(--line); margin-top: 8px; }
+.home-footer-links { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 10px; }
+.home-footer-links a { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); text-decoration: none; }
+.home-footer-info { font-size: 11.5px; line-height: 1.6; color: var(--ink-soft); }
+
+/* ============================================================
+   약관/정책 본문 (이용약관·개인정보처리방침·사업자정보·환불정책)
+   ============================================================ */
+.legal-page { padding: 4px 20px 60px; font-size: 13.5px; line-height: 1.7; color: var(--ink); }
+.legal-page .legal-updated { color: var(--ink-soft); font-size: 12.5px; margin-bottom: 16px; }
+.legal-page h2 { font-size: 15px; font-weight: 800; margin: 22px 0 8px; }
+.legal-page h2:first-of-type { margin-top: 4px; }
+.legal-page p { margin: 0 0 10px; }
+.legal-page ul { margin: 0 0 10px; padding-left: 18px; }
+.legal-page li { margin-bottom: 4px; }
+.legal-page table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 13px; }
+.legal-page th, .legal-page td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+.legal-page th { background: var(--surface); width: 34%; font-weight: 700; }
+.legal-page .legal-note {
+  background: var(--warning-soft); border: 1px solid var(--warning-line); color: var(--warning);
+  border-radius: 12px; padding: 12px 14px; font-size: 12.5px; margin: 4px 0 20px;
+}
 
 /* ============================================================
    공통: 뒤로가기 헤더 / ghost 버튼
