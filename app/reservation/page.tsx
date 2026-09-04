@@ -31,6 +31,8 @@ import {
 import { toKstIso } from "../../lib/kst";
 import { formatInstructorNames } from "../../lib/instructorDisplay";
 import UiIcon from "../components/UiIcon";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
 import SegmentedTabs from "../components/SegmentedTabs";
 import { PUBLIC_HOLIDAYS } from "../../lib/publicHolidays";
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
@@ -491,14 +493,27 @@ function ReservationCalendarContent() {
   if (error) {
     const needsLogin = error.includes("로그인");
     return (
-      <div className="app-shell auth-required-state">
-        <UiIcon name={needsLogin ? "user" : "info"} size={31} />
-        <h1>{needsLogin ? "로그인이 필요해요" : "예약 정보를 불러오지 못했어요"}</h1>
-        <p>{needsLogin ? "로그인하면 수강권을 확인하고 바로 예약할 수 있어요." : error}</p>
-        <div className="auth-required-actions">
-          {needsLogin ? <a className="primary-btn" href={loginHrefWithReturnToHere()}>로그인하고 계속하기</a> : <button className="primary-btn" onClick={() => load()}>다시 불러오기</button>}
-          <a className="ghost-btn" href="/">홈으로 돌아가기</a>
-        </div>
+      <div className="app-shell">
+        {needsLogin ? (
+          <EmptyState
+            icon="user"
+            title="로그인이 필요해요"
+            description="로그인하면 수강권을 확인하고 바로 예약할 수 있어요."
+            action={<>
+              <a className="primary-btn" href={loginHrefWithReturnToHere()}>로그인하고 계속하기</a>
+              <a className="ghost-btn" style={{ marginTop: 8 }} href="/">홈으로 돌아가기</a>
+            </>}
+          />
+        ) : (
+          <ErrorState
+            title="예약 정보를 불러오지 못했어요"
+            description={error}
+            action={<>
+              <button className="primary-btn" onClick={() => load()}>다시 불러오기</button>
+              <a className="ghost-btn" style={{ marginTop: 8 }} href="/">홈으로 돌아가기</a>
+            </>}
+          />
+        )}
       </div>
     );
   }
