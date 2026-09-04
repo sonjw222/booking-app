@@ -29,6 +29,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { ensureAccountForCurrentUser, completeSocialProfile } from "../../lib/authAccount";
+import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
 import AddressField from "./AddressField";
 
 export default function SessionWatcher() {
@@ -38,6 +39,72 @@ export default function SessionWatcher() {
   const [addressDetail, setAddressDetail] = useState("");
   const [saving, setSaving] = useState(false);
   const [gateError, setGateError] = useState<string | null>(null);
+
+  // 휴대폰 인증(OTP) — app/login/page.tsx 이메일 가입과 동일한 절차/제약(2026-09-05).
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [otpMessage, setOtpMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
+  const [otpDevCode, setOtpDevCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const t = setTimeout(() => setOtpCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [otpCooldown]);
+
+  function handlePhoneChange(value: string) {
+    setPhone(value);
+    if (otpSent || otpVerified) {
+      setOtpSent(false);
+      setOtpVerified(false);
+      setOtpCode("");
+      setOtpMessage(null);
+      setOtpDevCode(null);
+    }
+  }
+
+  async function handleSendOtp() {
+    if (otpSending || otpCooldown > 0) return;
+    if (!phone.trim()) {
+      setOtpMessage({ type: "error", text: "휴대폰 번호를 먼저 입력해주세요" });
+      return;
+    }
+    setOtpSending(true);
+    setOtpMessage(null);
+    const res = await sendPhoneOtp(phone.trim());
+    setOtpSending(false);
+    if (!res.ok) {
+      setOtpMessage({ type: "error", text: res.error ?? "인증번호 발송에 실패했어요" });
+      setOtpCooldown(res.retryAfterSeconds ?? 0);
+      return;
+    }
+    setOtpSent(true);
+    setOtpCooldown(60);
+    setOtpDevCode(res.devCode ?? null);
+    setOtpMessage({ type: "ok", text: "인증번호를 보냈어요. 카카오톡 또는 문자를 확인해주세요." });
+  }
+
+  async function handleVerifyOtp() {
+    if (otpVerifying) return;
+    if (!otpCode.trim()) {
+      setOtpMessage({ type: "error", text: "인증번호를 입력해주세요" });
+      return;
+    }
+    setOtpVerifying(true);
+    setOtpMessage(null);
+    const res = await verifyPhoneOtp(phone.trim(), otpCode.trim());
+    setOtpVerifying(false);
+    if (!res.ok) {
+      setOtpMessage({ type: "error", text: res.error ?? "인증번호가 일치하지 않아요" });
+      return;
+    }
+    setOtpVerified(true);
+    setOtpMessage({ type: "ok", text: "휴대폰 인증이 완료됐어요." });
+  }
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
@@ -62,6 +129,10 @@ export default function SessionWatcher() {
       setGateError("휴대폰 번호를 입력해주세요");
       return;
     }
+    if (!otpVerified) {
+      setGateError("휴대폰 인증을 완료해주세요");
+      return;
+    }
     setSaving(true);
     setGateError(null);
     try {
@@ -84,13 +155,47 @@ export default function SessionWatcher() {
             소셜 계정 가입은 휴대폰 번호가 자동으로 전달되지 않아요.
             센터 운영자가 예약자 확인 시 볼 수 있도록 입력해주세요.
           </div>
-          <input
-            className="input-field"
-            type="tel"
-            placeholder="휴대폰 번호"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              className="input-field"
+              type="tel"
+              placeholder="휴대폰 번호"
+              value={phone}
+              onChange={(e) => handlePhoneChange(e.target.value)}
+              disabled={otpVerified}
+              style={{ flex: 1 }}
+            />
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={handleSendOtp}
+              disabled={otpSending || otpCooldown > 0 || otpVerified}
+              style={{ flex: "0 0 auto", width: "auto", whiteSpace: "nowrap" }}
+            >
+              {otpVerified ? "인증완료" : otpCooldown > 0 ? `재전송(${otpCooldown}초)` : otpSending ? "전송 중..." : otpSent ? "재전송" : "인증번호 받기"}
+            </button>
+          </div>
+          {otpSent && !otpVerified && (
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <input
+                className="input-field"
+                type="text"
+                inputMode="numeric"
+                placeholder="인증번호 6자리"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleVerifyOtp()}
+                style={{ flex: 1 }}
+              />
+              <button type="button" className="ghost-btn" onClick={handleVerifyOtp} disabled={otpVerifying} style={{ flex: "0 0 auto", width: "auto", whiteSpace: "nowrap" }}>
+                {otpVerifying ? "확인 중..." : "인증하기"}
+              </button>
+            </div>
+          )}
+          {otpDevCode && (
+            <div className="perm-guide" data-testid="otp-dev-code" style={{ marginTop: 8 }}>테스트 인증번호: {otpDevCode}</div>
+          )}
+          {otpMessage && <div className={`auth-msg ${otpMessage.type}`} style={{ marginTop: 8 }}>{otpMessage.text}</div>}
           <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>주소 (선택)</div>
           <AddressField
             base={addressBase}
@@ -100,7 +205,7 @@ export default function SessionWatcher() {
             disabled={saving}
           />
           {gateError && <div className="auth-msg error" style={{ marginTop: 10 }}>{gateError}</div>}
-          <button className="primary-btn" style={{ marginTop: 14 }} onClick={handleCompletePhone} disabled={saving}>
+          <button className="primary-btn" style={{ marginTop: 14 }} onClick={handleCompletePhone} disabled={saving || !otpVerified}>
             {saving ? "저장 중..." : "완료"}
           </button>
         </div>

@@ -1,5 +1,75 @@
 # CHANGELOG
 
+## 2026-09-05 — 회원가입 휴대폰 인증(OTP) — SQL/배포/시크릿 적용 + 실브라우저 왕복 확인 완료
+
+바로 아래 항목(코드 완료 시점 기록)에 이어, 대표님이 SQL 2개 적용 + Edge Function 2개
+배포 + 시크릿 등록까지 마친 뒤 실제로 curl과 브라우저로 전 구간을 확인했다.
+
+**적용 중 실제로 발견해 고친 버그 2건(코드 리뷰만으로는 못 잡았던 것들)**:
+1. **`gen_salt`/`crypt` 함수를 못 찾는 에러** — 이 Supabase 프로젝트는 `pgcrypto`가
+   `public`이 아니라 `extensions` 스키마에 설치돼 있는데, `create_phone_verification()`/
+   `verify_phone_otp()`를 `set search_path = public`로만 고정해뒀던 게 원인. curl로
+   `send-phone-otp`를 직접 호출해보다 발견(`function gen_salt(unknown) does not exist`).
+   `fix_phone_verification_pgcrypto_search_path.sql`로 `search_path`에 `extensions`만
+   추가해 수정(로직 변경 없음).
+2. **회원가입 화면에서 휴대폰 번호 입력칸이 안 보이던 문제** — `.ghost-btn`(카카오/네이버
+   로그인 버튼 등에 두루 쓰는 공용 클래스)가 `width: 100%`라, `<input style={{flex:1}}>`와
+   같은 flex row에 나란히 두면 버튼의 `width:100%`가 flex-basis로 해석돼 입력칸이 밀려나
+   폭이 18px로 찌그러짐(`app/checkout/page.tsx`의 기존 쿠폰 입력 UI가 이미 같은 문제를
+   `style={{flex:"0 0 80px"}}`로 우회하고 있던 걸 뒤늦게 발견) — "인증번호 받기"/"인증하기"
+   버튼에 `flex:"0 0 auto", width:"auto"`를 추가해 수정. 인증번호 미입력 시 에러 메시지가
+   버튼에 바짝 붙던 간격 문제도 같이 정리(`marginTop:8`).
+
+**실제 왕복 확인**: curl로 발송(테스트 우회 접두사) → 검증(`verify_phone_otp` RPC, 틀린
+코드/맞는 코드 둘 다) → 재전송 쿨다운(429 응답) 전부 확인. 브라우저로 실제 회원가입 폼을
+끝까지 채워 제출 → "회원가입이 완료되었습니다" 성공까지 확인(= 오늘 고친
+`_is_phone_recently_verified()` RLS 헬퍼가 실제 운영 환경에서 정상 동작함을 최종 검증).
+
+## 2026-09-05 — 회원가입 휴대폰 인증(OTP) — 코드 완료, SQL/시크릿 적용 대기
+
+다른 사람 전화번호로도 그대로 가입되던 문제를 막기 위해, 카카오 알림톡(승인 전엔
+`sendViaAligo()`가 자동으로 SMS 대체발송)으로 인증번호를 보내 본인 소유만 확인하는
+절차를 추가(실명 확인 아님, 설계는 어제 docs/TODO.md P1-2c에 미리 기록해둠).
+
+신규 `phone_verifications` 테이블(`add_phone_verification.sql`) — RLS에 anon/
+authenticated 정책을 하나도 안 둬서 REST로 직접 조회 불가, `create_phone_verification()`
+(service_role 전용, Edge Function이 발송 직전 코드 해시 기록)과 `verify_phone_otp()`
+(anon 허용 — 이 프로젝트 최초의 anon 대상 grant, 로그인 전에 호출해야 해서 auth.uid()에
+기댈 수 없음) 두 함수로만 접근. 시도 5회, 만료 5분으로 제한.
+
+실제 강제는 `fix_accounts_require_phone_verification.sql` — `accounts` INSERT 정책(
+"본인 계정 생성")에 "전화번호가 15분 내 인증됐거나 애초에 null"이라는 조건 추가(소셜
+로그인의 phone=null 최초 부트스트랩은 그대로 통과). **구현 중 발견한 버그**: RLS 정책의
+`with check` 안에서 다른 테이블을 직접 서브쿼리하면 그 서브쿼리가 정책 소유자가 아니라
+"호출자 권한"으로 실행돼, `phone_verifications`에 authenticated용 정책이 없는 이 설계에서는
+검증에 항상 실패해 가입이 전부 막히는 상태였음 — 기존 `my_account_id()`와 같은 패턴으로
+`_is_phone_recently_verified()` security definer 헬퍼를 추가해 정책은 그 함수만 호출하도록
+수정. 휴대폰번호 변경(UPDATE)은 RLS로는 "OLD 값"을 볼 수 없어 정책이 아니라 트리거로
+처리(번호가 실제로 바뀔 때만 검사, 주소만 바꾸는 등 다른 UPDATE는 영향 없음). 두 SQL
+모두 기존 정책을 "넓히는" 게 아니라 "좁히는" 방향이라, 이 프로젝트가 과거 겪은 RLS
+회귀(잘못 넓혀 접근 범위가 늘어난 사고)와는 반대 방향.
+
+신규 Edge Function `send-phone-otp`(로그인 전 호출이라 send-alimtalk의 매니저 권한
+체크와 다른 모델 — 속도 제한 자체가 보안 경계: 재전송 60초 쿨다운, 시간당 5회 상한).
+`sendViaAligo()`를 `supabase/functions/_shared/aligo.ts`로 뽑아 send-alimtalk와 공유.
+CI/QA용 우회(`PHONE_OTP_TEST_BYPASS_PREFIX` 시크릿 — 이 접두사로 시작하는 번호만 실제
+발송 없이 코드를 응답에 실어줌, 전역 플래그가 아니라 접두사 한정이라 운영/개발이 같은
+Supabase 프로젝트를 쓰는 이 환경에서도 안전) — `tests/e2e/production-readiness/
+member-full-lifecycle.spec.ts`가 이 우회로 실제 회원가입 UI를 그대로 통과하도록 갱신.
+
+`app/login/page.tsx`(이메일 가입), `app/components/SessionWatcher.tsx`(소셜 가입 후
+전화번호 입력 모달) 양쪽에 인증번호 받기/확인 UI + 재전송 쿨다운 추가, 신규
+`lib/phoneVerification.ts`(`sendPhoneOtp`/`verifyPhoneOtp`). `npm run build`/
+`npm run test`(262개) 통과.
+
+**대표님이 해야 하는 것(코드로 대체 불가)**: SQL 2개(`add_phone_verification.sql` →
+`fix_accounts_require_phone_verification.sql` 순서로) SQL Editor 적용, `supabase
+functions deploy send-alimtalk`(공용 모듈 반영)/`send-phone-otp`(신규) 배포,
+`supabase secrets set PHONE_OTP_TEST_BYPASS_PREFIX=0100000`로 CI 우회 활성화(운영에는
+영향 없음, 이 접두사로 시작하는 실제 번호는 없다고 가정). 카카오 "인증번호 안내" 템플릿
+승인 전까지는 SMS로 나가고, 승인되면 `ALIGO_OTP_TEMPLATE_CODE` 시크릿만 추가하면 코드
+변경 없이 알림톡으로 전환됨.
+
 ## 2026-09-05 — 마이페이지 "내 정보 관리" 신설, "계정 설정" 흡수·제거
 
 `/settings/account`("계정 설정")를 없애고 `/mypage/info`("내 정보 관리")로 통합. 기존

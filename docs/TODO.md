@@ -751,15 +751,15 @@ test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx 
    먼저 홈 화면에 추가한 뒤 테스트해야 한다. Android Chrome은 이런 제약 없이 일반 브라우저
    탭에서도 동작한다.
 
-### P1-2c. (신규, 2026-09-05 설계 완료 — 구현 착수 전, 별도 세션에서 진행 예정) 회원가입 휴대폰 인증(OTP)
+### P1-2c. (2026-09-05, 완료 — 실브라우저 왕복 확인까지 끝남) 회원가입 휴대폰 인증(OTP)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **설계만 완료(2026-09-05), 코드 없음.** 소셜/이메일 회원가입 시 전화번호를 검증 없이 그대로 받아 다른 사람 번호로도 가입 가능한 문제 — 카카오 알림톡(실패 시 자동 SMS 대체발송, 알리고 `failover:"Y"`)으로 인증번호 발송하는 방식으로 설계 확정. 구현은 이 문서 갱신 세션과 별도로 진행하기로 함(2026-09-05 사용자 결정). |
+| 현재 상태 | **완료.** 소셜/이메일 회원가입 시 전화번호를 검증 없이 그대로 받아 다른 사람 번호로도 가입 가능하던 문제 — 카카오 알림톡(실패 시 자동 SMS 대체발송, 알리고 `failover:"Y"`)으로 인증번호 발송. SQL 2개 적용 + Edge Function 2개 배포 + 시크릿 등록 전부 완료, curl로 발송/검증/속도제한 확인 + 브라우저로 실제 회원가입 폼을 끝까지 채워 계정 생성 성공까지 확인함(테스트 계정 `otp-test-20260905@example.com`, dev DB에 남아있음 — 무해한 테스트 데이터, 필요 시 삭제). 적용 과정에서 실제로 버그 2건을 더 발견해 수정함(`fix_phone_verification_pgcrypto_search_path.sql` — pgcrypto가 `extensions` 스키마에 있어 `search_path`에 빠져있던 문제, 및 `.ghost-btn`의 `width:100%`가 flex 안에서 입력칸 폭을 찌그러뜨리던 UI 버그) — 자세한 내용은 CHANGELOG 2026-09-05 항목 참고. 카카오 "인증번호 안내" 템플릿은 아직 승인 전이라 지금은 SMS로 발송됨(승인되면 `ALIGO_OTP_TEMPLATE_CODE` 시크릿만 추가하면 코드 변경 없이 전환). |
 | 설계 요약 | (1) 신규 `phone_verifications` 테이블(전화번호/코드 해시/시도횟수/만료/인증시각, RLS는 anon/authenticated 정책 없음 — service_role 전용 + `verify_phone_otp` RPC만 예외적으로 `anon`에 grant, 이 프로젝트 최초의 anon-callable RPC). (2) 발송은 새 Edge Function `send-phone-otp`(로그인 전 호출이라 `send-alimtalk`의 매니저 권한 체크와 다른 신뢰모델 — `sendViaAligo()`를 `supabase/functions/_shared/aligo.ts`로 뽑아 공유). (3) rate limit: 재전송 60초 쿨다운, 시간당 5회, 코드당 시도 5회, 코드 유효 5분, 인증 후 15분 내 가입 유효. (4) 계정 생성 시점 강제는 **RLS 정책을 새로 만들지 않고 기존 정책을 좁히는 방향**으로: `accounts` INSERT 정책("본인 계정 생성")에 `phone is null or (해당 전화번호로 15분 내 인증 완료)` 조건 추가(소셜 로그인의 phone=null 부트스트랩 insert는 그대로 통과). UPDATE(휴대폰번호 변경)는 RLS `with check`로는 "변경 여부"를 못 봐서(OLD 값 접근 불가) **트리거**로 구현(`phone`이 실제로 바뀔 때만 인증 여부 체크, 주소만 바꾸는 등 다른 UPDATE는 영향 없음). (5) 카카오 알림톡 템플릿("인증번호 안내") 승인 전에도 `sendViaAligo()`가 `templateCode` 없으면 자동으로 SMS로 보내는 기존 로직 덕분에 **템플릿 승인 없이 SMS로 먼저 배포 가능**, 승인되면 시크릿 하나만 추가하면 전환됨(코드 변경 불필요). (6) CI 대응: 실제 SMS를 받을 수 없는 E2E 테스트를 위해 `PHONE_OTP_TEST_BYPASS_PREFIX` 같은 전화번호 접두사 allowlist를 Supabase 시크릿으로 설정 — 이 접두사로 시작하는 번호만 Aligo 호출을 건너뛰고 응답에 인증코드를 그대로 실어줌(전역 test-mode 플래그가 아니라 접두사 한정이라, 이 프로젝트는 운영 프로젝트가 별도로 없어 개발/운영이 같은 Supabase 프로젝트를 쓰는데도 안전). `tests/e2e/production-readiness/member-full-lifecycle.spec.ts`만 실제 가입 UI를 타므로 이 파일만 갱신하면 됨(다른 auth e2e는 전부 사전 로그인 픽스처 사용, 회원가입 자체를 안 함). |
-| 영향 파일(예정) | 신규: `add_phone_verification.sql`, `fix_accounts_require_phone_verification.sql`, `supabase/functions/send-phone-otp/index.ts`, `supabase/functions/_shared/aligo.ts`(신규, `send-alimtalk`에서 로직 이동), `lib/phoneVerification.ts`. 수정: `supabase/functions/send-alimtalk/index.ts`(공용 모듈 import로 교체), `app/login/page.tsx`(이메일 가입 UI), `app/components/SessionWatcher.tsx`(소셜 가입 후 전화번호 입력 모달), `tests/e2e/production-readiness/member-full-lifecycle.spec.ts` |
-| 완료 조건 | 위 파일들 구현 + SQL 2개 사용자 적용 + Edge Function 배포 + 시크릿 등록 + 실기기/CI 왕복 확인 |
+| 영향 파일 | 신규: `add_phone_verification.sql`, `fix_accounts_require_phone_verification.sql`, `supabase/functions/send-phone-otp/index.ts`, `supabase/functions/_shared/aligo.ts`(`send-alimtalk`에서 로직 이동), `lib/phoneVerification.ts`. 수정: `supabase/functions/send-alimtalk/index.ts`(공용 모듈 import로 교체), `app/login/page.tsx`(이메일 가입 UI), `app/components/SessionWatcher.tsx`(소셜 가입 후 전화번호 입력 모달), `tests/e2e/production-readiness/member-full-lifecycle.spec.ts` |
+| 완료 조건 | 전부 충족됨 — SQL 3개(`add_phone_verification.sql` → `fix_accounts_require_phone_verification.sql` → `fix_phone_verification_pgcrypto_search_path.sql`) 적용, Edge Function 2개 배포, 시크릿 등록, 이메일 가입 실브라우저 왕복(발송→검증→가입 성공) 확인 완료. **남은 건 PR CI에서 `member-full-lifecycle.spec.ts` 통과 확인뿐**(머지 전 확인 필요) — 소셜 가입(SessionWatcher 모달) 쪽 실브라우저 확인은 아직 안 함(이메일 가입과 동일한 컴포넌트/로직 재사용이라 위험도 낮다고 판단, 필요하면 추가로 확인). |
 
 ### P1-3c. (신규, 2026-09-04 착수) iOS/Android 네이티브 앱(Capacitor) — 엔지니어링 기반만 완료
 

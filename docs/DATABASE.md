@@ -60,6 +60,7 @@
 | `permissions` | 구현됨 | 권한 카탈로그 |
 | `role_permissions` | 구현됨 | 역할별 권한 |
 | `account_center_permissions` | 구현됨 | 개인별 권한 allow/deny 예외 |
+| `phone_verifications` | 구현됨 | 회원가입 휴대폰 인증(OTP) 코드(해시)·시도횟수·만료·인증시각 — `add_phone_verification.sql`. RLS에 anon/authenticated 정책이 없어 REST로 직접 조회 불가, `verify_phone_otp()`(anon 허용, 이 프로젝트 최초의 anon 대상 grant)로만 검증 |
 
 ### 4-2. 센터, 수업과 예약
 
