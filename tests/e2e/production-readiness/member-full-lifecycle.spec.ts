@@ -122,6 +122,9 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
       await page.locator('input[type="tel"]').fill(phone);
       await page.locator('input[type="email"]').fill(email);
       await page.locator('input[type="password"]').fill(password);
+      // 이용약관/개인정보처리방침 동의는 필수라 체크 안 하면 제출이 막힌다(app/login/page.tsx)
+      await page.locator('.signup-agree-row input[type="checkbox"]').nth(0).check();
+      await page.locator('.signup-agree-row input[type="checkbox"]').nth(1).check();
       await page.locator(".login-submit").click();
       await expect(page.locator(".auth-msg.ok")).toContainText("회원가입이 완료되었습니다", { timeout: 15_000 });
       // 가입 성공 후 자동으로 로그인 탭으로 전환된다(로그아웃된 상태) — 아직 홈으로 이동하지 않았어야 함

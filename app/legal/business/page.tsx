@@ -22,7 +22,7 @@ export default function BusinessInfoPage() {
             <tr><th>통신판매업 신고번호</th><td>신고 진행 중</td></tr>
             <tr><th>사업장 소재지</th><td>경기도 성남시 분당구 중앙공원로 20, 420동 702호</td></tr>
             <tr><th>고객센터</th><td>010-6505-8700</td></tr>
-            <tr><th>이메일</th><td>준비 중</td></tr>
+            <tr><th>이메일</th><td>sonjw222@naver.com</td></tr>
             <tr><th>호스팅 서비스</th><td>Vercel Inc. / Supabase Inc.</td></tr>
           </tbody>
         </table>

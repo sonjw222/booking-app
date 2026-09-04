@@ -52,6 +52,13 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
         env:
+          # PG_CHECKOUT_ENABLED는 "실제 서비스 출시 전 결제 기능 잠금"용 게이트라(2026-09-04,
+          # lib/payments/PaymentProviderFactory.ts) 프로덕션(Vercel)에서만 꺼둬야 하고, CI는
+          # 이 게이트와 무관하게 카드/카카오페이/토스페이/계좌이체(mock provider) 전체 흐름을
+          # 계속 검증해야 한다 — 꺼두면 결제수단이 직접결제로 강제 고정되며 즉시 발급되는
+          # 수강권이 없어져(직접결제는 pending) new-class-creation.spec.ts 등 "구매 직후
+          # 즉시 사용" 전제의 기존 테스트가 깨진다(실제로 이 커밋 추가 직후 CI에서 재현됨).
+          NEXT_PUBLIC_PG_CHECKOUT_ENABLED: "true"
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
