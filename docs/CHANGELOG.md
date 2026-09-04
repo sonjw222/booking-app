@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-09-04 — Capacitor 커스텀 도메인 반영 + 앱 아이콘
+
+커스텀 도메인 `https://mwhabit.com` 연결 완료로 `capacitor.config.ts`의 `server.url`을
+임시 Vercel 도메인에서 교체(실제 배포 응답 확인함). 대표님이 ChatGPT로 만든 앱 아이콘
+(`assets/icon.png`, 1024x1024, 알파채널 없음)을 `npx @capacitor/assets generate`로
+iOS/Android 전체 사이즈 생성(별도 커밋, PR #116) — 이 항목은 도메인 교체만 별도 기록.
+
 ## 2026-09-04 — 홈 화면 비회원 UX 정리 + 로그인 필요 화면 디자인 통일
 
 홈 화면 하단에 상시 노출되던 사업자정보 텍스트 블록(주소·전화번호 포함)을 링크 4개만

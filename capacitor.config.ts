@@ -15,9 +15,8 @@ const config: CapacitorConfig = {
   appName: "우리동네 클래스",
   webDir: "public", // server.url 모드에선 실제로 안 쓰이지만 Capacitor 스키마상 필수 필드
   server: {
-    // TODO: 커스텀 도메인이 확정되면(대표님, 상호 변경과 함께 진행 중) 이 값만 교체하고
-    // npx cap sync 다시 실행 — 임시값(2026-09-04 확인, 실제 배포 응답 확인함)
-    url: "https://booking-app-nu-lemon.vercel.app",
+    // 커스텀 도메인 연결 완료(2026-09-04, 실제 배포 응답 확인함)
+    url: "https://mwhabit.com",
     cleartext: false,
     // 소셜 로그인이 전부 풀페이지 리다이렉트 방식이라(app/login/page.tsx, lib/kakaoAuth.ts,
     // lib/naverAuth.ts) 이 목록에 없는 도메인으로는 WebView가 이동 자체를 막는다.

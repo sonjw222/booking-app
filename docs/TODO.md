@@ -758,9 +758,10 @@ test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx 
 
 **결정 사항(재질문 불필요)**: iOS/Android 동시 진행. 네이티브 푸시(FCM)를 이번 단계에
 바로 구축(나중으로 미루지 않음). 번들 ID `com.mwhabit.app` 확정(스토어 최초 제출 전까지는
-자유롭게 변경 가능 — 제출 후엔 불가). `server.url`은 현재 임시값(`https://booking-app-nu-lemon.vercel.app`)
-— 커스텀 도메인이 확정되면(대표님, 상호 변경과 함께 진행 중) `capacitor.config.ts` 한 줄만
-바꾸고 `npx cap sync` 재실행하면 됨(스토어 재제출 불필요, 번들 ID와 달리 이 값은 언제든
+자유롭게 변경 가능 — 제출 후엔 불가). `server.url`은 **커스텀 도메인 `https://mwhabit.com`
+연결 완료로 반영함(2026-09-04)** — 원래는 임시 Vercel 도메인이었는데, 도메인이 또 바뀌면
+`capacitor.config.ts` 한 줄만 바꾸고 `npx cap sync` 재실행하면 됨(스토어 재제출 불필요,
+번들 ID와 달리 이 값은 언제든
 바꿔도 안전).
 
 **대표님이 진행해야 하는 것(코드로 대체 불가)**:
