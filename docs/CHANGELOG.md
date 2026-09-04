@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 2026-09-04 — 서비스명 "우리동네 클래스" → "모하빗" 전면 교체
+
+앱 이름을 "모하빗"으로 확정(대표님 결정) — Capacitor 앱 이름(`capacitor.config.ts`,
+iOS `Info.plist`의 `CFBundleDisplayName`, Android `strings.xml`의 `app_name`),
+브라우저 탭 타이틀(`app/layout.tsx` metadata — 그동안 Next.js 기본값 "Create Next App"
+그대로 방치돼 있던 것도 이 김에 정정), 로그인 화면 로고 텍스트, 마이페이지 캘린더(.ics)
+내보내기 PRODID, 법적 페이지(`/legal/privacy`, `/legal/business`, `/legal/refund`)의
+"서비스명"을 전부 교체. **단, `/legal/business`의 "상호"(사업자등록증상 등록명)는 그대로
+"손장욱" 유지** — 상호 변경을 "모하빗"으로 신청했으나 2026-09-04 기준 세무서 처리 아직
+진행 중이라, 실제 사업자등록증에 반영 확인되기 전까지는 법적 정확성을 위해 안 바꿈(완료
+확인되면 그때 이 필드만 마저 교체).
+
+## 2026-09-04 — Capacitor 커스텀 도메인 반영 + 앱 아이콘
+
+커스텀 도메인 `https://mwhabit.com` 연결 완료로 `capacitor.config.ts`의 `server.url`을
+임시 Vercel 도메인에서 교체(실제 배포 응답 확인함). 대표님이 ChatGPT로 만든 앱 아이콘
+(`assets/icon.png`, 1024x1024, 알파채널 없음)을 `npx @capacitor/assets generate`로
+iOS/Android 전체 사이즈 생성(별도 커밋, PR #116) — 이 항목은 도메인 교체만 별도 기록.
+
 ## 2026-09-04 — 홈 화면 비회원 UX 정리 + 로그인 필요 화면 디자인 통일
 
 홈 화면 하단에 상시 노출되던 사업자정보 텍스트 블록(주소·전화번호 포함)을 링크 4개만

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">우리동네 클래스</string>
-    <string name="title_activity_main">우리동네 클래스</string>
+    <string name="app_name">모하빗</string>
+    <string name="title_activity_main">모하빗</string>
     <string name="package_name">com.mwhabit.app</string>
     <string name="custom_url_scheme">com.mwhabit.app</string>
 </resources>
