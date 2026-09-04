@@ -8,6 +8,35 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-09-04 — Capacitor로 iOS/Android 네이티브 앱 래핑 1단계(엔지니어링 기반 완료)
+
+로드맵 9단계(App Store/Google Play 출시) 착수. 앱 전체가 서버 렌더링/API 라우트를 쓰는
+동적 구조라 정적 export가 불가능해, 실제 배포된 프로덕션 사이트(`https://booking-app-nu-lemon.vercel.app`,
+임시값 — 커스텀 도메인 확정되면 `capacitor.config.ts` 한 줄만 교체)를 그대로 WebView에
+띄우는 `server.url` 모드로 Capacitor를 붙임. 번들 ID `com.mwhabit.app` 확정(스토어 최초
+제출 전까지는 자유롭게 변경 가능).
+
+기존 웹푸시(VAPID, `add_web_push.sql`)는 iOS 네이티브 WebView(WKWebView)에서 아예 동작
+안 해 `native_push_tokens` 테이블(`add_native_push_tokens.sql`, `push_subscriptions`와
+동일한 RLS 패턴)을 신설하고, `supabase/functions/send-web-push`를 확장해 같은
+`notifications.pushed_at` 큐를 웹푸시와 FCM(iOS/Android 통합) 양쪽으로 함께 발송하도록
+함(새 Edge Function을 안 만들고 기존 파이프라인 재사용 — 알림톡/SMS용 별도 파이프라인
+`notification_rules`는 성격이 달라(센터별 과금 트리거) 이쪽을 확장하지 않기로 함). 신규
+`lib/nativePush.ts`(`lib/webPush.ts`의 네이티브 버전)와 `app/components/CapacitorBootstrap.tsx`
+(상태바/스플래시 초기화 + 푸시 탭 딥링크, 웹 배포에서는 완전 no-op) 추가,
+`app/settings/notifications/page.tsx`가 `Capacitor.isNativePlatform()`으로 웹/네이티브
+푸시를 자동 분기.
+
+Kakao/Naver(커스텀 Edge Function)와 Google/Apple(Supabase `signInWithOAuth`) 소셜
+로그인이 전부 풀페이지 리다이렉트 방식이라, Capacitor의 `server.allowNavigation`에 해당
+외부 도메인과 Supabase 프로젝트 도메인(`bxntqggkfwnhcczsbqtj.supabase.co`)을 전부
+allowlist로 추가(코드 변경 없이 설정만).
+
+`npx cap add ios`/`npx cap add android`/`npx cap sync` 전부 Xcode.app·Android Studio
+설치 없이 CLI만으로 성공(로컬엔 Xcode Command Line Tools만 있고 전체 Xcode.app·Android
+SDK는 없음, 확인됨) — 실제 빌드/서명/시뮬레이터·실기기 테스트는 대표님이 두 도구를
+설치해 직접 진행해야 함. `npm run build`/`npm run test`(262개) 전부 통과 확인.
+
 ## 2026-09-04 — `/legal/refund` AI 법률 검토 후 문구 정정 (계산 로직은 미변경)
 
 24시간 자체 환불 기준을 "법정 기준을 대체하는 것"처럼 읽히던 문구를 "법정 기준에 더해

@@ -17,6 +17,11 @@
     "test:all": "npm run test && npm run test:integration"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/push-notifications": "^8.1.2",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@supabase/supabase-js": "^2.110.5",
     "dompurify": "^3.4.12",
     "next": "16.2.10",
@@ -24,6 +29,10 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.1",
+    "@capacitor/ios": "^8.5.1",
     "@playwright/test": "^1.62.1",
     "@types/node": "^20",
     "@types/react": "^19",

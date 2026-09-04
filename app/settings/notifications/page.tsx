@@ -12,8 +12,18 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { NOTI_PREF_STORAGE_KEY, NOTI_PREF_DEFAULTS, getNotiPrefs, type NotiPrefKey } from "../../../lib/notifications";
-import { isWebPushSupported, getWebPushStatus, enableWebPush, disableWebPush, type WebPushStatus } from "../../../lib/webPush";
+import { getWebPushStatus, enableWebPush, disableWebPush, type WebPushStatus } from "../../../lib/webPush";
+import { getNativePushStatus, enableNativePush, disableNativePush } from "../../../lib/nativePush";
+
+// 네이티브 앱(Capacitor)에서는 웹푸시(VAPID) 대신 FCM 기반 네이티브 푸시를 쓴다
+// (iOS WKWebView가 웹푸시 구독 자체를 지원하지 않음 — lib/nativePush.ts 상단 주석 참고).
+// 함수 시그니처가 동일해(둘 다 "unsupported"|"subscribed"|"unsubscribed") 이 화면
+// 코드는 어느 쪽을 쓰는지만 한 번 분기하면 나머지는 그대로 재사용된다.
+const getPushStatus = Capacitor.isNativePlatform() ? getNativePushStatus : getWebPushStatus;
+const enablePush = Capacitor.isNativePlatform() ? enableNativePush : enableWebPush;
+const disablePush = Capacitor.isNativePlatform() ? disableNativePush : disableWebPush;
 
 const ITEMS: { key: NotiPrefKey; label: string; desc: string; ready: boolean }[] = [
   { key: "reservation", label: "예약 확정·취소 알림", desc: "예약이 확정되거나 취소될 때 팝업으로 알려드려요", ready: true },
@@ -30,7 +40,7 @@ export default function NotificationSettingsPage() {
 
   useEffect(() => {
     setPrefs(getNotiPrefs());
-    getWebPushStatus().then(setPushStatus);
+    getPushStatus().then(setPushStatus);
   }, []);
 
   const togglePush = useCallback(async () => {
@@ -38,7 +48,7 @@ export default function NotificationSettingsPage() {
     setPushBusy(true);
     try {
       if (pushStatus === "subscribed") {
-        const res = await disableWebPush();
+        const res = await disablePush();
         if (res.ok) {
           setPushStatus("unsubscribed");
           setToast("앱을 닫아도 오는 알림을 껐어요");
@@ -46,7 +56,7 @@ export default function NotificationSettingsPage() {
           setToast(res.error ?? "구독 해제에 실패했어요");
         }
       } else {
-        const res = await enableWebPush();
+        const res = await enablePush();
         if (res.ok) {
           setPushStatus("subscribed");
           setToast("앱을 닫아도 알림을 받을 수 있어요");
@@ -91,8 +101,8 @@ export default function NotificationSettingsPage() {
             <div className="noti-label">앱을 닫아도 알림 받기</div>
             <div className="noti-desc">
               {pushStatus === "unsupported"
-                ? "이 브라우저는 지원하지 않아요"
-                : "브라우저·OS 푸시로 새 알림을 바로 받아요"}
+                ? "이 환경은 지원하지 않아요"
+                : "OS 푸시로 새 알림을 바로 받아요"}
             </div>
           </div>
           <button

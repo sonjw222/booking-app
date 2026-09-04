@@ -1,0 +1,16 @@
+App/build
+App/Pods
+App/output
+App/App/public
+DerivedData
+xcuserdata
+
+# Cordova plugins for Capacitor
+capacitor-cordova-ios-plugins
+
+# 로컬 머신별 NODE_BINARY 경로 등(Xcode가 npx cap sync 실행 시 참조) — 사람마다 다름
+App/.xcode.env.local
+
+# Generated Config files
+App/App/capacitor.config.json
+App/App/config.xml
