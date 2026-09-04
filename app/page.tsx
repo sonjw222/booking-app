@@ -237,47 +237,53 @@ export default function Home() {
           </div>
         )}
 
-        <div className="home-class-head"><h2>{myUpcoming.length > 0 ? "내 수강권으로 예약 가능" : "곧 시작하는 클래스"}</h2><a href="/reservation">전체보기 ›</a></div>
-        {visibleClasses.length === 0 ? (
-          <div className="daylist-empty" style={{ padding: "12px 20px 30px" }}>
-            {loading ? "불러오는 중..." : "예약 가능한 수업이 없어요"}
-          </div>
-        ) : (
-          <div className="home-class-list">
-            {visibleClasses.slice(0, 3).map((c) => {
-              const full = c.reserved >= c.capacity;
-              const center = centers.find((item) => item.id === c.centerId);
-              return (
-                <a className="home-class-row" key={c.id} href={`/center/${c.centerId}`}>
-                  <div className="home-class-photo photo-fallback" aria-label={`${center?.name ?? c.centerName} 클래스 이미지`}><UiIcon name={CATEGORY_ICONS[center?.categories[0] ?? ""] ?? "calendar"} size={26} /></div>
-                  <div className="home-class-copy">
-                    <span>{c.startText}</span>
-                    <strong>{c.title}</strong>
-                    <small>{c.centerName}</small>
-                    {/* UX 감사(C-3) — 이 화면만 "정원 8명 중 6명 남음"(잔여 기준)이라
-                        센터 상세/예약 화면의 "예약 2/8"(예약자 기준)과 형식이 달라 같은
-                        숫자를 매번 다시 해석해야 했다. 두 화면이 이미 쓰는 형식으로 통일. */}
-                    <small>예약 {c.reserved}/{c.capacity}{full ? " · 대기" : ""}</small>
-                  </div>
-                </a>
-              );
-            })}
-          </div>
+        {/* 비회원(로그인 안 한 상태)에게는 "곧 시작하는 클래스"/"내 수강권으로 예약
+            가능"을 아예 숨긴다(2026-09-04, 사용자 결정) — 종목 둘러보기·센터 정보·내 주변
+            센터 검색은 비회원도 그대로 이용 가능, 예약 관련 개인화 목록만 가입 유도. 로딩
+            중(loggedIn === null)엔 깜빡임 방지를 위해 계속 보여주다가, 확실히 비로그인으로
+            확인되면(loggedIn === false) 숨긴다. */}
+        {loggedIn !== false && (
+          <>
+            <div className="home-class-head"><h2>{myUpcoming.length > 0 ? "내 수강권으로 예약 가능" : "곧 시작하는 클래스"}</h2><a href="/reservation">전체보기 ›</a></div>
+            {visibleClasses.length === 0 ? (
+              <div className="daylist-empty" style={{ padding: "12px 20px 30px" }}>
+                {loading ? "불러오는 중..." : "예약 가능한 수업이 없어요"}
+              </div>
+            ) : (
+              <div className="home-class-list">
+                {visibleClasses.slice(0, 3).map((c) => {
+                  const full = c.reserved >= c.capacity;
+                  const center = centers.find((item) => item.id === c.centerId);
+                  return (
+                    <a className="home-class-row" key={c.id} href={`/center/${c.centerId}`}>
+                      <div className="home-class-photo photo-fallback" aria-label={`${center?.name ?? c.centerName} 클래스 이미지`}><UiIcon name={CATEGORY_ICONS[center?.categories[0] ?? ""] ?? "calendar"} size={26} /></div>
+                      <div className="home-class-copy">
+                        <span>{c.startText}</span>
+                        <strong>{c.title}</strong>
+                        <small>{c.centerName}</small>
+                        {/* UX 감사(C-3) — 이 화면만 "정원 8명 중 6명 남음"(잔여 기준)이라
+                            센터 상세/예약 화면의 "예약 2/8"(예약자 기준)과 형식이 달라 같은
+                            숫자를 매번 다시 해석해야 했다. 두 화면이 이미 쓰는 형식으로 통일. */}
+                        <small>예약 {c.reserved}/{c.capacity}{full ? " · 대기" : ""}</small>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
 
-        {/* 전자상거래법상 사업자정보는 로그인 없이도 항상 볼 수 있어야 해서 홈 화면 맨
-            아래에 상시 노출한다(약관/정책은 /legal, 상세 사업자정보는 /legal/business). */}
+        {/* 전자상거래법상 사업자정보는 로그인 없이도 항상 볼 수 있어야 해서 홈 화면에
+            링크는 남겨두되(비회원도 접근 가능), 주소·연락처까지 통째로 펼쳐 보여주던
+            블록은 없앤다 — 상세 내용은 /legal/business에서 확인(2026-09-04, 사용자 결정:
+            사업자 주소가 자택이라 홈 화면에 상시 노출하는 걸 원치 않음). */}
         <div className="home-footer">
           <div className="home-footer-links">
             <a href="/legal/terms">이용약관</a>
             <a href="/legal/privacy">개인정보처리방침</a>
             <a href="/legal/business">사업자 정보</a>
             <a href="/legal/refund">환불·취소 정책</a>
-          </div>
-          <div className="home-footer-info">
-            우리동네 클래스 · 상호 손장욱 · 대표 손장욱 · 사업자등록번호 589-77-00451
-            <br />
-            경기도 성남시 분당구 중앙공원로 20, 420동 702호 · 고객센터 010-6505-8700
           </div>
         </div>
 
