@@ -155,7 +155,7 @@ describe("Batch 6 communication and account design contract", () => {
     expect(login).toContain("SIGNUP_SUCCESS_MESSAGE");
     expect(login).toContain('handleSocial("google")');
     expect(mypage).toContain("mypage-shell");
-    expect(mypage).toContain('href="/settings/account"');
+    expect(mypage).toContain('href="/mypage/info"');
     expect(mypage).toContain('href="/mypage/register-center"');
     expect(mypage).toContain("globalThis.appConfirm");
   });

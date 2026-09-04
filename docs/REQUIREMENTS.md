@@ -71,7 +71,7 @@
   - 실제 사용에는 Provider 설정이 필요합니다. 설정 방법은 [AUTH_SETUP.md](../AUTH_SETUP.md)를 참고합니다.
 - 네이버 소셜 로그인 (`lib/naverAuth.ts`, `app/login/naver-callback/page.tsx`)
   - 네이버는 Supabase가 기본 제공하는 OAuth Provider가 아니라서 커스텀 authorize URL + Edge Function 흐름으로 별도 구현되어 있습니다(`signInWithOAuth`를 쓰지 않음). 설정 미완료 시 안내 메시지만 표시됩니다 — [AUTH_SETUP.md](../AUTH_SETUP.md) 3-3절 참고.
-- 계정 탈퇴(개인정보 익명화 + Auth 삭제) — 재가입 시 같은 이메일 사용 가능 (`app/settings/account/page.tsx`)
+- 계정 탈퇴(개인정보 익명화 + Auth 삭제) — 재가입 시 같은 이메일 사용 가능 (`app/mypage/info/page.tsx`)
 
 ### 5-2. 예약
 
