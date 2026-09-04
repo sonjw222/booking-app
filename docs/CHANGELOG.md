@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## 2026-09-05 — 마이페이지 "내 정보 관리" 신설, "계정 설정" 흡수·제거
+
+`/settings/account`("계정 설정")를 없애고 `/mypage/info`("내 정보 관리")로 통합. 기존
+비밀번호 변경·회원 탈퇴 로직은 그대로 이식(변경 없음), 그 위에 회원정보 조회 섹션(이름/
+이메일/휴대폰번호, 읽기 전용)을 신설(`lib/mypage.ts`의 새 `fetchMyAccountInfo()` — 기존
+`getMyContext()`는 manager_centers/profiles까지 같이 조회해 무거워 이 화면 전용으로 가벼운
+조회 함수를 새로 뽑음). `app/mypage/page.tsx`의 "설정" 섹션에서 "계정 설정" 메뉴 제거, "내
+정보" 섹션에 "내 정보 관리" 메뉴 추가. `/settings/account`를 참조하던 테스트 3개
+(`tests/unit/designSystem.contract.test.ts`, `tests/e2e/auth/account-settings.spec.ts`,
+`tests/e2e/production-readiness/member-full-lifecycle.spec.ts`)도 새 경로로 갱신. 이름/
+휴대폰번호 수정 기능은 이번 범위에 없음(휴대폰번호 변경은 별도 진행 중인 휴대폰 인증
+기능과 엮이는 게 자연스러워 그쪽 작업으로 미룸, docs/TODO.md 참고).
+
+**같은 날 후속 수정 2건**: (1) 회원정보 조회 섹션을 `<br>` 구분 텍스트 대신 앱 전역에서
+이미 쓰는 `.admin-card`/`.admin-row` 라벨-값 카드 패턴으로 교체, 나머지 섹션 제목도
+`.menu-section-label`로 통일해 화면 전체 톤을 맞춤(사용자 피드백). (2) 네이버/카카오
+로그인 사용자는 이메일 자리에 `*.socialauth.invalid` 합성 식별자가 그대로 노출되던 것을
+수정 — Auth 이메일/로그인 구조(DEC-004, 합성 이메일 자체)는 전혀 안 건드리고, 이 화면이
+"보여주는 값"만 `user_metadata.naver_email`(카카오는 `kakao_email`이 있는 경우에 한해)로
+바꿔치기하도록 `displayEmail()` 헬퍼 추가. 실제 이메일이 없으면(현재 카카오는 이메일
+scope 자체를 안 받아와 항상 없음) 합성 이메일 대신 "-"로 표시.
+
 ## 2026-09-04 — 서비스명 "우리동네 클래스" → "모하빗" 전면 교체
 
 앱 이름을 "모하빗"으로 확정(대표님 결정) — Capacitor 앱 이름(`capacitor.config.ts`,

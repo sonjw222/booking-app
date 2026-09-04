@@ -77,6 +77,18 @@ async function getMyContext(): Promise<{ accountId: string; profileId: string; n
   return { accountId: acc.id, profileId: prof.id, name: acc.name, phone: acc.phone, isMember: acc.is_member, isManager, isPlatformAdmin: acc.is_platform_admin ?? false };
 }
 
+// "내 정보 관리"(app/mypage/info) 조회 전용 — getMyContext()는 manager_centers/profiles까지
+// 같이 조회해 무겁다. 이름/휴대폰번호만 필요한 화면이라 계정 행 하나만 가볍게 가져온다.
+export async function fetchMyAccountInfo(): Promise<{ name: string; phone: string | null }> {
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData.user) throw new Error("로그인이 필요해요");
+  const { data: acc, error } = await supabase
+    .from("accounts").select("name, phone")
+    .eq("auth_id", authData.user.id).single();
+  if (error || !acc) throw new Error("계정 정보를 찾을 수 없어요");
+  return { name: acc.name, phone: acc.phone };
+}
+
 export async function fetchMyPage() {
   const me = await getMyContext();
 

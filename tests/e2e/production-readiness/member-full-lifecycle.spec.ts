@@ -41,7 +41,7 @@ import { selectKstCalendarDay } from "../fixtures/pageHelpers";
   탈퇴가 delete-account Edge Function으로 accounts/profiles를 포함해 정리한다. 이 파일이
   별도로 admin으로 지우는 건 시나리오 진행을 위해 만든 수업(class)뿐이다. 중간에 실패해
   탈퇴까지 못 가면 이 throwaway 계정이 남을 수 있다 — 그 경우 이메일로 다시 로그인해
-  /settings/account에서 수동으로 탈퇴 처리하면 된다.
+  /mypage/info에서 수동으로 탈퇴 처리하면 된다.
 */
 
 function throwawayCreds(suffix: string): { email: string; password: string } {
@@ -309,7 +309,7 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
     });
 
     await test.step("계정 탈퇴: 탈퇴 후 로그인 화면으로 돌아가고, 같은 비밀번호로 다시 로그인할 수 없다", async () => {
-      await page.goto("/settings/account");
+      await page.goto("/mypage/info");
       await page.locator('input[placeholder="본인 확인을 위한 현재 비밀번호"]').fill(password);
       await page.locator(".danger-btn", { hasText: "탈퇴하기" }).click();
       await page.waitForURL(/\/login\?withdrawn=1/, { timeout: 20_000 });
