@@ -14,7 +14,7 @@ import { createOrder } from "../../lib/orders";
 import { fetchMyPoints, usePoints } from "../../lib/reviews";
 import Loading from "../components/Loading";
 import { reservationReturnUrl } from "../../lib/reservationNav";
-import { getPaymentService, resolveProviderName, type PaymentScenario } from "../../lib/payments";
+import { getPaymentService, resolveProviderName, PG_CHECKOUT_ENABLED, type PaymentScenario } from "../../lib/payments";
 import { supabase } from "../../lib/supabaseClient";
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import UiIcon, { type IconName } from "../components/UiIcon";
@@ -88,7 +88,9 @@ function CheckoutContent() {
   const [centerName, setCenterName] = useState("");
   const [allowedPay, setAllowedPay] = useState<string[] | null>(null);
   const [product, setProduct] = useState<CenterProduct | null>(null);
-  const [payMethod, setPayMethod] = useState("card");
+  // PG_CHECKOUT_ENABLED가 꺼져 있으면(Toss 실운영 심사 전 임시 출시) "card"는 애초에
+  // 고를 수 없는 선택지라 기본값도 항상 선택 가능한 "direct"로 시작해야 한다.
+  const [payMethod, setPayMethod] = useState(PG_CHECKOUT_ENABLED ? "card" : "direct");
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [couponInput, setCouponInput] = useState("");
   const [discount, setDiscount] = useState(0);
@@ -476,7 +478,10 @@ function CheckoutContent() {
       {/* 결제 수단 */}
       <div className="menu-section-label commerce-label">결제 수단</div>
       <div className="pay-methods">
-        {PAY_METHODS.filter((m) => !allowedPay || allowedPay.length === 0 || allowedPay.includes(m.id)).map((m) => (
+        {PAY_METHODS
+          .filter((m) => PG_CHECKOUT_ENABLED || m.id === "direct")
+          .filter((m) => !allowedPay || allowedPay.length === 0 || allowedPay.includes(m.id))
+          .map((m) => (
           <button key={m.id} className={`pay-method ${payMethod === m.id ? "on" : ""}`} onClick={() => setPayMethod(m.id)}>
             <span className="pay-method-emoji">
               {m.dot ? <span className="vendor-dot" style={{ background: m.dot }} /> : <UiIcon name={m.icon!} size={20} />}
@@ -486,7 +491,12 @@ function CheckoutContent() {
           </button>
         ))}
       </div>
-      {resolveProviderName() === "mock" && (
+      {!PG_CHECKOUT_ENABLED ? (
+        <div className="perm-guide" style={{ margin: "10px 20px" }}>
+          온라인 결제(카드·카카오페이·토스페이·계좌이체)는 준비 중이라, 지금은 센터에서
+          직접 결제만 가능해요.
+        </div>
+      ) : resolveProviderName() === "mock" && (
         <div className="perm-guide" style={{ margin: "10px 20px" }}>
           실제 PG(카드/카카오페이 등) 연동은 준비 중이라, 지금은 테스트 결제(Mock)로 처리돼요.
         </div>

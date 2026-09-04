@@ -8,6 +8,29 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-09-04 — 수동 정산 도구(센터 정산계좌 + 운영자 CSV 내보내기) + 결제 기능 출시 전 게이트
+
+Toss 지급대행(Payouts) 문의 결과 월 고정 30만원+VAT(1,000건 초과 시 건당 100원)로 확인되어,
+계약 전까지 은행 대량이체 기능으로 대체할 수동 정산 도구를 구축. `center_settlement_accounts`
+테이블 신규(센터별 정산계좌, 오너 본인+운영자만 RLS로 조회 가능 — `centers`가 승인된 센터를
+비로그인 상태에서도 공개 조회하도록 RLS가 걸려 있어 계좌 정보를 거기 두지 않고 분리),
+`/manager/settlement`에 계좌 입력/수정 섹션 추가(오너 자가 등록), `/admin/settlement` 신규
+(운영자 전용, 기간별 센터별 실결제 합계 집계 후 계좌 미등록 센터 경고 + CSV 내보내기).
+집계는 `admin_center_settlement_summary`(security definer) RPC로 처리 — `payments` 테이블의
+원본 SELECT 권한은 그대로 두고(운영자도 직접 조회 불가한 기존 RLS를 넓히지 않음) 집계 결과만
+반환. 최초 버전은 아직 쓰이지 않는 `settlement_status` 컬럼으로 필터링해 항상 빈 결과만
+나오는 버그가 있었고, 이미 채워지고 있는 `payment_provider` 컬럼(toss/portone만 정산 대상,
+mock/수기는 제외) 기준으로 수정(`fix_admin_settlement_summary_use_payment_provider.sql`).
+날짜 범위 기본값이 `toISOString()`의 UTC 변환 때문에 KST 자정 부근에 하루 밀리던 버그도
+로컬 날짜 포맷 함수로 수정.
+
+동시에, Toss 실운영 심사 기간(통상 2~3주 이상) 동안 결제 기능 없이 먼저 출시할 수 있도록
+`PG_CHECKOUT_ENABLED` 플래그 추가(`NEXT_PUBLIC_PG_CHECKOUT_ENABLED`, 기본 꺼짐). 꺼진 상태에서는
+체크아웃 화면에 직접결제(센터 현장 결제)만 노출되고 자동 선택되며, 온라인 결제 준비 중 안내
+배너가 표시됨. 심사 통과 후 이 환경변수만 켜면 카드/카카오페이/토스페이/계좌이체가 다시
+열리고 코드 변경은 필요 없음(`NEXT_PUBLIC_BILLING_ENABLED`/`NEXT_PUBLIC_PAYOUTS_ENABLED`와
+동일한 패턴).
+
 ## 2026-09-02 — 종목 아이콘을 사용자 제공 일러스트로 전면 교체
 
 기존 UiIcon 단색 라인 아이콘 대신, 사용자가 준 그리드 이미지에서 8개 종목 아이콘을
