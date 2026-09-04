@@ -25,6 +25,7 @@ import { setBootstrapSuppressed } from "../../lib/authAccount";
 import { startNaverLogin } from "../../lib/naverAuth";
 import { startKakaoLogin } from "../../lib/kakaoAuth";
 import { stashPostLoginNext } from "../../lib/postLoginReturn";
+import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
 
 type Mode = "login" | "signup";
 // 내부 키는 그대로 유지(회원=member/센터 운영자=manager) — UI-003은 화면 표시 문구만 바꾼다.
@@ -45,6 +46,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState(""); // 일반·센터 운영자 공통 필수
+
+  // 휴대폰 인증(OTP, 2026-09-05) — 다른 사람 번호로 가입하는 걸 막기 위해 전화번호
+  // 소유만 확인한다(실명 확인 아님). 실제 강제는 서버(accounts INSERT 정책)가 하므로
+  // 여기서는 UX일 뿐이고, 이 절차를 건너뛰어도 서버가 가입 자체를 막는다.
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [otpMessage, setOtpMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
+  const [otpDevCode, setOtpDevCode] = useState<string | null>(null); // 테스트 우회 응답에만 들어옴(운영에서는 항상 null)
   // 도로명주소(선택) — 다음 우편번호 팝업으로 채우는 base + 직접 입력하는 상세주소, 합쳐서 accounts.address에 저장
   const [addressBase, setAddressBase] = useState("");
   const [addressDetail, setAddressDetail] = useState("");
@@ -90,6 +103,65 @@ export default function LoginPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 재전송 쿨다운 카운트다운(서버의 60초 제한과 별개로 화면에서도 버튼을 잠가 중복 클릭 방지)
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const t = setTimeout(() => setOtpCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [otpCooldown]);
+
+  function handlePhoneChange(value: string) {
+    setPhone(value);
+    // 번호를 바꾸면 이전 인증은 무효 — verify_phone_otp()는 정확히 이 문자열로 인증된
+    // 기록만 인정하므로, 화면 상태도 같은 기준으로 맞춰야 한다.
+    if (otpSent || otpVerified) {
+      setOtpSent(false);
+      setOtpVerified(false);
+      setOtpCode("");
+      setOtpMessage(null);
+      setOtpDevCode(null);
+    }
+  }
+
+  async function handleSendOtp() {
+    if (otpSending || otpCooldown > 0) return;
+    if (!phone.trim()) {
+      setOtpMessage({ type: "error", text: "휴대폰 번호를 먼저 입력해주세요" });
+      return;
+    }
+    setOtpSending(true);
+    setOtpMessage(null);
+    const res = await sendPhoneOtp(phone.trim());
+    setOtpSending(false);
+    if (!res.ok) {
+      setOtpMessage({ type: "error", text: res.error ?? "인증번호 발송에 실패했어요" });
+      setOtpCooldown(res.retryAfterSeconds ?? 0);
+      return;
+    }
+    setOtpSent(true);
+    setOtpCooldown(60);
+    setOtpDevCode(res.devCode ?? null);
+    setOtpMessage({ type: "ok", text: "인증번호를 보냈어요. 카카오톡 또는 문자를 확인해주세요." });
+  }
+
+  async function handleVerifyOtp() {
+    if (otpVerifying) return;
+    if (!otpCode.trim()) {
+      setOtpMessage({ type: "error", text: "인증번호를 입력해주세요" });
+      return;
+    }
+    setOtpVerifying(true);
+    setOtpMessage(null);
+    const res = await verifyPhoneOtp(phone.trim(), otpCode.trim());
+    setOtpVerifying(false);
+    if (!res.ok) {
+      setOtpMessage({ type: "error", text: res.error ?? "인증번호가 일치하지 않아요" });
+      return;
+    }
+    setOtpVerified(true);
+    setOtpMessage({ type: "ok", text: "휴대폰 인증이 완료됐어요." });
+  }
+
   async function handleLogin() {
     setLoading(true);
     setMessage(null);
@@ -115,6 +187,10 @@ export default function LoginPage() {
     }
     if (!phone.trim()) {
       setMessage({ type: "error", text: "휴대폰 번호를 입력해주세요" });
+      return;
+    }
+    if (!otpVerified) {
+      setMessage({ type: "error", text: "휴대폰 인증을 완료해주세요" });
       return;
     }
     if (role === "manager") {
@@ -339,7 +415,49 @@ export default function LoginPage() {
           <input className="input-field" placeholder={role === "manager" ? "대표자 이름" : "이름"} value={name} onChange={(e) => setName(e.target.value)} />
         )}
         {mode === "signup" && (
-          <input className="input-field" type="tel" placeholder={role === "manager" ? "대표자 휴대폰 번호" : "휴대폰 번호"} value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                className="input-field"
+                type="tel"
+                placeholder={role === "manager" ? "대표자 휴대폰 번호" : "휴대폰 번호"}
+                value={phone}
+                onChange={(e) => handlePhoneChange(e.target.value)}
+                disabled={otpVerified}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={handleSendOtp}
+                disabled={otpSending || otpCooldown > 0 || otpVerified}
+                style={{ flex: "0 0 auto", width: "auto", whiteSpace: "nowrap" }}
+              >
+                {otpVerified ? "인증완료" : otpCooldown > 0 ? `재전송(${otpCooldown}초)` : otpSending ? "전송 중..." : otpSent ? "재전송" : "인증번호 받기"}
+              </button>
+            </div>
+            {otpSent && !otpVerified && (
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <input
+                  className="input-field"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="인증번호 6자리"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleVerifyOtp()}
+                  style={{ flex: 1 }}
+                />
+                <button type="button" className="ghost-btn" onClick={handleVerifyOtp} disabled={otpVerifying} style={{ flex: "0 0 auto", width: "auto", whiteSpace: "nowrap" }}>
+                  {otpVerifying ? "확인 중..." : "인증하기"}
+                </button>
+              </div>
+            )}
+            {otpDevCode && (
+              <div className="perm-guide" data-testid="otp-dev-code" style={{ marginTop: 8 }}>테스트 인증번호: {otpDevCode}</div>
+            )}
+            {otpMessage && <div className={`auth-msg ${otpMessage.type}`} style={{ marginTop: 8 }}>{otpMessage.text}</div>}
+          </>
         )}
         {mode === "signup" && (
           <AddressField
@@ -402,7 +520,7 @@ export default function LoginPage() {
 
         {message && <div className={`auth-msg ${message.type}`}>{message.text}</div>}
 
-        <button className="primary-btn login-submit" onClick={submit} disabled={loading}>
+        <button className="primary-btn login-submit" onClick={submit} disabled={loading || (mode === "signup" && !otpVerified)}>
           {loading ? "처리 중..." : mode === "login" ? "로그인" : role === "manager" ? "센터 운영자로 가입하기" : "일반으로 가입하기"}
         </button>
 

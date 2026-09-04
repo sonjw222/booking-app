@@ -86,7 +86,10 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
   test.setTimeout(180_000);
 
   const { email, password } = throwawayCreds("e2elifecycle");
-  const phone = "010" + Date.now().toString().slice(-8); // accounts.phone으로 내 계정을 다시 찾기 위한 이번 실행 전용 고유값
+  // "0100000" 접두사는 supabase secrets의 PHONE_OTP_TEST_BYPASS_PREFIX와 일치해야 한다 —
+  // send-phone-otp가 이 접두사로 시작하는 번호는 실제 Aligo 호출 없이 인증코드를 응답에
+  // 그대로 실어준다(devCode, .signup-agree-row 아래 회원가입 스텝 참고).
+  const phone = "0100000" + Date.now().toString().slice(-4); // accounts.phone으로 내 계정을 다시 찾기 위한 이번 실행 전용 고유값
   const managerA = loadTestAccountMeta("manager-a");
   const userB = loadTestAccountMeta("user-b");
   const centerId = await getOrCreateOwnedTestCenter(managerA as TestUser);
@@ -120,6 +123,13 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
       await page.locator(".mode-tab", { hasText: "회원가입" }).click();
       await page.locator('input[placeholder="이름"]').fill("E2E 생애주기 회원");
       await page.locator('input[type="tel"]').fill(phone);
+      // 휴대폰 인증(OTP, 2026-09-05) — 예약된 테스트 접두사라 실제 Aligo 호출 없이
+      // devCode가 응답에 그대로 실려 온다(supabase secrets의 PHONE_OTP_TEST_BYPASS_PREFIX).
+      await page.getByRole("button", { name: "인증번호 받기" }).click();
+      const devCode = await page.getByTestId("otp-dev-code").innerText({ timeout: 15_000 });
+      await page.locator('input[placeholder="인증번호 6자리"]').fill(devCode.replace(/[^0-9]/g, ""));
+      await page.getByRole("button", { name: "인증하기" }).click();
+      await expect(page.getByRole("button", { name: "인증완료" })).toBeVisible({ timeout: 10_000 });
       await page.locator('input[type="email"]').fill(email);
       await page.locator('input[type="password"]').fill(password);
       // 이용약관/개인정보처리방침 동의는 필수라 체크 안 하면 제출이 막힌다(app/login/page.tsx)
