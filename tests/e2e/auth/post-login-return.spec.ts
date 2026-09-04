@@ -119,8 +119,11 @@ test.describe("로그인 필요 → 로그인 → 원래 화면 복귀", () => {
     const page = await context.newPage();
 
     await page.goto("/reservation");
-    await expect(page.locator(".auth-required-state h1")).toHaveText("로그인이 필요해요", { timeout: 15000 });
-    const loginBtn = page.locator(".auth-required-actions .primary-btn");
+    // 2026-09-04: 전용 CSS 없이 방치돼 있던 auth-required-state를 앱 전역 공용
+    // EmptyState 컴포넌트(app/components/EmptyState.tsx)로 교체 — 타이틀은 <b>,
+    // 액션 버튼은 .app-empty-action 안에 렌더링됨.
+    await expect(page.locator(".app-empty-state b")).toHaveText("로그인이 필요해요", { timeout: 15000 });
+    const loginBtn = page.locator(".app-empty-action .primary-btn");
     await expect(loginBtn).toHaveText("로그인하고 계속하기");
 
     const href = await loginBtn.getAttribute("href");
@@ -132,7 +135,7 @@ test.describe("로그인 필요 → 로그인 → 원래 화면 복귀", () => {
 
     await page.waitForURL((u) => u.pathname === "/reservation", { timeout: 15000 });
     // 로그인된 상태로 돌아왔으니 "로그인이 필요해요" 상태가 더는 아니어야 한다(캘린더가 보임)
-    await expect(page.locator(".auth-required-state")).toHaveCount(0, { timeout: 15000 });
+    await expect(page.locator(".app-empty-state")).toHaveCount(0, { timeout: 15000 });
     await expect(page.locator(".booking-steps")).toBeVisible();
 
     await context.close();
