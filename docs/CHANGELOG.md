@@ -8,6 +8,133 @@
 1. **Git 커밋 로그** (2026-07-26 이후, 실제 날짜 있음)
 2. **SQL 마이그레이션 파일 + `TEST_CHECKLIST*.md` 문서**에 남아 있는 롤아웃 순서 (날짜 없음, 상대적 순서만 확인 가능)
 
+## 2026-09-04 — Capacitor로 iOS/Android 네이티브 앱 래핑 1단계(엔지니어링 기반 완료)
+
+로드맵 9단계(App Store/Google Play 출시) 착수. 앱 전체가 서버 렌더링/API 라우트를 쓰는
+동적 구조라 정적 export가 불가능해, 실제 배포된 프로덕션 사이트(`https://booking-app-nu-lemon.vercel.app`,
+임시값 — 커스텀 도메인 확정되면 `capacitor.config.ts` 한 줄만 교체)를 그대로 WebView에
+띄우는 `server.url` 모드로 Capacitor를 붙임. 번들 ID `com.mwhabit.app` 확정(스토어 최초
+제출 전까지는 자유롭게 변경 가능).
+
+기존 웹푸시(VAPID, `add_web_push.sql`)는 iOS 네이티브 WebView(WKWebView)에서 아예 동작
+안 해 `native_push_tokens` 테이블(`add_native_push_tokens.sql`, `push_subscriptions`와
+동일한 RLS 패턴)을 신설하고, `supabase/functions/send-web-push`를 확장해 같은
+`notifications.pushed_at` 큐를 웹푸시와 FCM(iOS/Android 통합) 양쪽으로 함께 발송하도록
+함(새 Edge Function을 안 만들고 기존 파이프라인 재사용 — 알림톡/SMS용 별도 파이프라인
+`notification_rules`는 성격이 달라(센터별 과금 트리거) 이쪽을 확장하지 않기로 함). 신규
+`lib/nativePush.ts`(`lib/webPush.ts`의 네이티브 버전)와 `app/components/CapacitorBootstrap.tsx`
+(상태바/스플래시 초기화 + 푸시 탭 딥링크, 웹 배포에서는 완전 no-op) 추가,
+`app/settings/notifications/page.tsx`가 `Capacitor.isNativePlatform()`으로 웹/네이티브
+푸시를 자동 분기.
+
+Kakao/Naver(커스텀 Edge Function)와 Google/Apple(Supabase `signInWithOAuth`) 소셜
+로그인이 전부 풀페이지 리다이렉트 방식이라, Capacitor의 `server.allowNavigation`에 해당
+외부 도메인과 Supabase 프로젝트 도메인(`bxntqggkfwnhcczsbqtj.supabase.co`)을 전부
+allowlist로 추가(코드 변경 없이 설정만).
+
+`npx cap add ios`/`npx cap add android`/`npx cap sync` 전부 Xcode.app·Android Studio
+설치 없이 CLI만으로 성공(로컬엔 Xcode Command Line Tools만 있고 전체 Xcode.app·Android
+SDK는 없음, 확인됨) — 실제 빌드/서명/시뮬레이터·실기기 테스트는 대표님이 두 도구를
+설치해 직접 진행해야 함. `npm run build`/`npm run test`(262개) 전부 통과 확인.
+
+## 2026-09-04 — `/legal/refund` AI 법률 검토 후 문구 정정 (계산 로직은 미변경)
+
+24시간 자체 환불 기준을 "법정 기준을 대체하는 것"처럼 읽히던 문구를 "법정 기준에 더해
+추가로 제공하는 혜택"으로 명확히 정정. 체육시설업 등록 센터는 공정거래위원회 소비자분쟁
+해결기준이 우선 적용될 수 있다는 안내 추가. 계좌이체 환불을 "승인취소"로 잘못 표현한
+부분도 "재입금"으로 정정. 정확한 산정 퍼센트는 법무사 확인 전까지 하드코딩하지 않음 —
+`docs/TODO.md`에 확인 필요 사항 기록.
+
+## 2026-09-04 — `/legal/business` 고객센터 이메일 반영
+
+`이메일: 준비 중`을 대표님 실제 이메일(`sonjw222@naver.com`, 개인 이메일)로 교체. 법적으로
+사업자 전용 도메인 이메일이어야 한다는 요건은 없어 문제없음 — 추후 여유 생기면 전용
+이메일로 교체 권장(스팸 유입/CS 위임 편의).
+
+## 2026-09-04 — 수동 정산 도구(센터 정산계좌 + 운영자 CSV 내보내기) + 결제 기능 출시 전 게이트
+
+Toss 지급대행(Payouts) 문의 결과 월 고정 30만원+VAT(1,000건 초과 시 건당 100원)로 확인되어,
+계약 전까지 은행 대량이체 기능으로 대체할 수동 정산 도구를 구축. `center_settlement_accounts`
+테이블 신규(센터별 정산계좌, 오너 본인+운영자만 RLS로 조회 가능 — `centers`가 승인된 센터를
+비로그인 상태에서도 공개 조회하도록 RLS가 걸려 있어 계좌 정보를 거기 두지 않고 분리),
+`/manager/settlement`에 계좌 입력/수정 섹션 추가(오너 자가 등록), `/admin/settlement` 신규
+(운영자 전용, 기간별 센터별 실결제 합계 집계 후 계좌 미등록 센터 경고 + CSV 내보내기).
+집계는 `admin_center_settlement_summary`(security definer) RPC로 처리 — `payments` 테이블의
+원본 SELECT 권한은 그대로 두고(운영자도 직접 조회 불가한 기존 RLS를 넓히지 않음) 집계 결과만
+반환. 최초 버전은 아직 쓰이지 않는 `settlement_status` 컬럼으로 필터링해 항상 빈 결과만
+나오는 버그가 있었고, 이미 채워지고 있는 `payment_provider` 컬럼(toss/portone만 정산 대상,
+mock/수기는 제외) 기준으로 수정(`fix_admin_settlement_summary_use_payment_provider.sql`).
+날짜 범위 기본값이 `toISOString()`의 UTC 변환 때문에 KST 자정 부근에 하루 밀리던 버그도
+로컬 날짜 포맷 함수로 수정.
+
+동시에, Toss 실운영 심사 기간(통상 2~3주 이상) 동안 결제 기능 없이 먼저 출시할 수 있도록
+`PG_CHECKOUT_ENABLED` 플래그 추가(`NEXT_PUBLIC_PG_CHECKOUT_ENABLED`, 기본 꺼짐). 꺼진 상태에서는
+체크아웃 화면에 직접결제(센터 현장 결제)만 노출되고 자동 선택되며, 온라인 결제 준비 중 안내
+배너가 표시됨. 심사 통과 후 이 환경변수만 켜면 카드/카카오페이/토스페이/계좌이체가 다시
+열리고 코드 변경은 필요 없음(`NEXT_PUBLIC_BILLING_ENABLED`/`NEXT_PUBLIC_PAYOUTS_ENABLED`와
+동일한 패턴).
+
+## 2026-09-02 — 종목 아이콘을 사용자 제공 일러스트로 전면 교체
+
+기존 UiIcon 단색 라인 아이콘 대신, 사용자가 준 그리드 이미지에서 8개 종목 아이콘을
+자동으로 크롭(원형 배경 포함, 라벨 텍스트는 제거)하고 테니스 아이콘 1개를 추가로
+잘라 `public/icons/categories/*.png`(9개)로 저장. 홈 화면 "종목 둘러보기" 그리드(기본
+8개 + "전체 종목" 펼침의 테니스)와 로그인 화면 히어로의 미니 아이콘 4개(필라테스/
+피겨/수영/골프)를 이 이미지로 교체. 아직 이미지가 없는 새 카테고리는 기존 UiIcon
+폴백으로 자동 전환(`app/page.tsx`의 `CATEGORY_IMAGES` 매핑에 없으면 `cat.icon`으로
+폴백). "곧 시작하는 클래스" 목록의 사진 없는 썸네일(`home-class-photo`, 브랜드
+그라데이션 배경)은 디자인 맥락이 달라 기존 단색 아이콘 그대로 유지.
+
+## 2026-09-02 — 센터 정산계좌(Toss 지급대행) 1단계: DB/화면만 (Toss 계약 확정 전)
+
+Toss 지급대행 계약 문의 답변을 기다리는 동안, 계약과 무관하게 미리 할 수 있는 부분만
+진행(`add_center_platform_subscription.sql`의 "계약 심사 대기 중엔 DB/RLS/화면만 완성해
+플래그로 잠근다" 패턴 재사용). `center_payout_accounts`(센터별 정산계좌 상태, 계좌
+전체번호는 저장 안 함) 테이블 신규, `payments.settlement_status` 컬럼 추가(전부
+`not_applicable`로 백필, 실제 전이 로직은 계약 확정 후 별도 구현 — 결제 확정 함수는
+전혀 안 건드림), 신규 센터 생성 시 기본 행 트리거(`security definer`로 처음부터 작성,
+`center_subscriptions` 트리거가 이걸 빠뜨렸다가 나중에 고친 전례 재사용). 매니저 화면
+`/manager/settlement`(오너 전용, "계좌 등록" 버튼은 `NEXT_PUBLIC_PAYOUTS_ENABLED` 꺼진
+동안 비활성화) + 관리 홈 메뉴 추가.
+
+작업 중 결제수단 구조를 코드로 다시 확인해 정정: 신용카드·카카오페이·토스페이·**계좌이체**
+4개 전부 Toss 결제창을 거쳐 플랫폼 가맹점으로 수납되고(`app/checkout/page.tsx`의
+`TOSS_SUPPORTED_METHODS`), **직접결제(센터 현장 결제) 1개만** 회사를 거치지 않는다 —
+계좌이체를 직접결제와 같은 그룹으로 잘못 적어뒀던 `/legal/terms`, `/legal/refund` 문구를
+바로잡음. `/manager/settlement` 진입 시 `ManagerChrome`의 전역 타이틀이 "관리자"로 뜨던
+버그(신규 라우트를 `TITLES` 맵에 안 넣어서 생김, 다른 신규 라우트에서도 반복된 패턴)도
+같이 수정.
+
+## 2026-09-02 — 홈 화면 "전체 종목" 클릭 시 검색창 대신 나머지 종목 인라인 펼치기
+
+기본 8개 밖에 있는 종목(예: 테니스)을 보려면 "전체 종목"을 눌러 `/search`로 이동해야
+했는데, 사용자 요청으로 같은 화면에서 나머지 종목만 그 자리에 펼쳐 보여주도록 변경
+(`app/page.tsx`, `showAllCategories` 토글 상태 추가, 나머지가 없으면 버튼 자체를 숨김).
+
+## 2026-09-02 — 법적/사업자 페이지 신설 + 회원가입 필수 동의 추가 (Toss 실운영 신청 준비)
+
+사업자등록 완료 + Toss Payments 실운영 신청 진행에 맞춰, 서비스에 전혀 없던 이용약관/
+개인정보처리방침/사업자정보/환불·취소 정책을 실제 접근 가능한 페이지로 신설했다
+(`/legal`, `/legal/terms`, `/legal/privacy`, `/legal/business`, `/legal/refund`).
+전자상거래법상 사업자정보는 로그인 없이도 상시 노출돼야 해서 홈 화면(`app/page.tsx`)
+하단에 푸터로도 추가했다. 마이페이지 "설정"에 "약관 및 정책" 진입 메뉴 추가.
+
+작업 중 회원가입 화면(`app/login/page.tsx`)에 이용약관/개인정보처리방침 동의 절차가
+이메일 가입·소셜 가입 어느 경로에도 전혀 없었다는 걸 발견해서(개인정보보호법상 필수
+동의 절차 누락) 같이 추가했다 — 필수 동의 2개(이용약관/개인정보처리방침) + 선택 동의
+1개(마케팅 수신), `submit()`/`handleSocial()` 양쪽에서 미동의 시 제출 차단.
+
+내용상 결정 사항(사용자 확인, 2026-09-02):
+- 회원 결제(카드/카카오페이/토스페이)는 각 센터가 아니라 플랫폼(대표 손장욱 개인사업자)
+  명의 Toss 가맹점으로 직접 수납되고, 센터에는 별도 정산하는 구조를 그대로 유지하기로
+  결정(센터별 개별 PG 계약은 온보딩 부담이 커서 배제) — 이 사실에 맞춰 통신판매중개자
+  겸 결제대행자 지위로 문구를 작성했다. 정산 자동화(Toss 지급대행/Payouts)는 별도
+  프로젝트로 설계만 먼저 진행(아래 TODO 참고), 그 전까지는 기존처럼 수기 정산 유지.
+- 통신판매업 신고는 아직 안 되어 있어(사용자 확인) 사업자정보 페이지에 "신고 진행 중"으로
+  표기 — 신고 완료 전에는 실제 유상 거래를 시작하면 안 된다는 점을 사용자에게 별도 고지함.
+- 환불정책의 24시간 자체 기준이 법정 청약철회 기간(7일)보다 짧을 수 있다는 리스크를
+  페이지 내 안내 문구로 명시(법무 검토 전까지 잠정).
+
 ## 2026-09-02 — manager_set_attendance() 예약취소 시 대기자 자동승격 누락 수정
 
 무제한 횟수/기간 옵션 도입 후 대기예약 승격을 실측 검증하던 중 발견: 회원이

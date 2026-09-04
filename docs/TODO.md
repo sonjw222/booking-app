@@ -158,6 +158,14 @@ card/kakao/toss 3종 허용으로 넓히고, `payMethod → easyPay` 매핑(`EAS
 
 이전 문구(참고용): 과거 “결제하기”는 `orders.status = pending` 주문만 만들고 매니저가 수동 발급했습니다. 지금은 Mock 결제 성공 시 즉시 자동 발급되지만, 이는 **테스트 결제**이며 실제 결제가 아닙니다 — 실제 PG 연동 전까지는 이 사실이 화면 문구에 명확히 표시돼야 합니다(현재 checkout 화면에 "(Mock)" 표기로 반영함).
 
+**2026-09-04 재확인 — 웹훅 부재의 실제 리스크**: 출시 로드맵 정리 중 재확인. 지금은 클라이언트가
+결제 후 우리 서버의 `confirm` API를 호출하는 방식뿐이라(`app/api/payments/confirm/route.ts`),
+"결제는 실제로 승인됐는데 그 직후 서버가 죽거나 사용자가 브라우저를 닫아버려 confirm 호출이
+누락되고, 그 결과 결제는 됐지만 수강권/예약이 안 만들어지는 경우"에 그대로 노출됨. 위에서
+이미 "P0-1 후속 작업"으로 예정돼 있던 항목이지만, 실제 Toss 실운영 키로 전환하는 시점
+(사업자 명의 심사 통과 후) 전에는 반드시 끝내야 함 — Toss 웹훅을 붙여 서버가 능동적으로
+결제 상태를 재확인하는 안전망 없이 실 운영 키를 켜지 않는다.
+
 ### P0-2. (2026-08-14, 완료) 운영 DB migration ledger와 최종 객체 검증
 
 | 필드 | 내용 |
@@ -575,6 +583,78 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 `status not in ('refunded', 'transferred')` 조건을 추가(`active`/`paused`/`expired`는
 기존과 동일하게 그대로 환급 — 정당한 케이스라 범위에서 제외).
 
+### P0-11. (2026-09-02, 코드 완료 — 사업자 실사항목은 사용자 진행 필요) 법적/사업자 페이지 신설 + 회원가입 필수 동의 추가
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 |
+| 현재 상태 | **코드 완료.** `/legal/*` 4개 페이지 + 홈 푸터 + 마이페이지 메뉴 + 회원가입 필수 동의 체크박스, `npm run build`/유닛테스트(262개)/브라우저 실측 전부 통과. 사업자 정보 실사 항목(아래)은 대표님이 별도로 진행해야 완전히 마무리됨. |
+| 근거 파일 | `app/legal/page.tsx`(신규), `app/legal/{terms,privacy,business,refund}/page.tsx`(신규), `app/page.tsx`(홈 푸터), `app/mypage/page.tsx`(설정 메뉴), `app/login/page.tsx`(필수 동의 체크박스), `app/globals.css` |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-02 항목 |
+
+**대표님이 진행해야 하는 것(코드로 대체 불가)**:
+- 통신판매업 신고(관할 성남시 분당구청 또는 정부24) — 신고 전에는 실제 유상 거래 시작 금지.
+  **현재 상태(2026-09-04): 신고서 제출 완료, 심사 진행 중(완료 아님).** 신고 완료 시
+  `app/legal/business/page.tsx`의 신고번호를 실제 값으로 교체
+- ~~고객센터 이메일 주소 확보 후 같은 파일의 "이메일: 준비 중"을 실제 값으로 교체~~ —
+  완료(2026-09-04, `sonjw222@naver.com` 반영). 개인 이메일이라 나중에 여유 되면 전용
+  이메일로 교체 권장(법적 문제는 없음)
+- 환불정책과 통신판매중개자·결제대행 겸업 문구 전체에 대해 법무사·세무사 검토 1회 권장.
+  **2026-09-04 AI 검토로 발견한 확인 필요 사항**: (1) 센터 대다수(짐/필라테스/요가 등)가
+  「체육시설의 설치·이용에 관한 법률」상 체육시설업으로 등록돼 있는지 — 등록돼 있다면
+  공정거래위원회 소비자분쟁해결기준상 별도 환불(위약금 포함) 산정 기준이 전자상거래법
+  7일 청약철회보다 우선 적용될 수 있음. (2) 일부 사용한 수강권의 미사용 잔여분 비례환불이
+  법적 의무인지, 아니면 순수 센터 재량인지. `/legal/refund`는 일단 24시간 자체 기준을
+  "법정 기준을 대체하지 않는 추가 혜택"으로 명시하고, 그 밖의 경우는 "법령상 권리가 있을
+  수 있다"는 문구로 텍스트만 정정해둠(환불 계산 로직 자체는 미변경) — 정확한 산정식(퍼센트)은
+  법무사 확인 전까지 문서에 하드코딩하지 않음
+- Toss 지급대행(Payouts) 계약 문의 결과에 따라 사업자정보/환불정책 문구 갱신 필요할 수 있음
+  (별도 프로젝트, 아래 참고)
+
+**센터별 자동 정산(Toss 지급대행) — 1단계 완료, 계약 확정 대기**: `center_payout_accounts`
+테이블(계좌 상태만, 전체번호는 미저장) + `payments.settlement_status` 컬럼(전부
+`not_applicable`, 실제 전이 로직 없음) + `/manager/settlement` 화면(오너 전용, 계좌 등록
+버튼은 `NEXT_PUBLIC_PAYOUTS_ENABLED` 꺼진 동안 비활성화)까지 적용 완료
+(`add_center_payout_accounts.sql`, 2026-09-02 사용자 적용 확인). 결제수단 중
+신용카드·카카오페이·토스페이·계좌이체 4개가 전부 정산 대상이고 센터 현장 결제만 예외임을
+코드로 재확인(`app/checkout/page.tsx`의 `TOSS_SUPPORTED_METHODS`).
+**남은 것(계약 확정 후 별도 세션)**: `center_payout_batches`(지급 이력) 테이블,
+`/api/payouts/register-seller`·`run-batch`·`webhook` 라우트, `_issue_membership_and_record_payment()`의
+`settlement_status` 갱신 로직 — 대표님이 Toss와 지급대행 계약(개인사업자 가능 여부 등)을
+확정한 뒤 착수.
+
+**Toss 고객센터 회신 확인(2026-09-04)**:
+- 개인사업자도 지급대행 계약 가능(플랫폼 사업자 자격이면 됨, 법인 전환 불필요) — 가장 중요한
+  불확실성 해소됨
+- 별도 심사·계약 필요, 소요기간은 불명확하나 통상 2~3주 이상
+- 이용 조건 자체는 특별히 없으나 업종 제한이 있음 — **예약 중개 플랫폼은 제한 업종에
+  해당하지 않음을 확인(대표님, 2026-09-04)**
+- 이용료: 월 고정 30만원(+VAT, 월 지급 건수 1,000건까지 포함) + 1,000건 초과 시 초과 건당
+  100원. **"지급 건수"는 회원 결제 건수가 아니라 센터 계좌로 실제 송금하는 지급 요청
+  횟수**이므로, 실시간 정산이 아니라 배치(예: 주 1회·월 1~2회)로 묶어 보내면 센터 수가
+  많아도 월 30만원 선에서 유지 가능 — 이후 정산 배치 주기 설계 시 반영할 것
+
+**결정(2026-09-04): 월 30만원 고정비 부담으로 Toss 지급대행 계약은 보류하고, 은행
+인터넷뱅킹의 대량이체 기능으로 대체하는 수동 정산 도구를 먼저 구축**. `center_settlement_accounts`
+테이블(센터별 정산계좌, RLS로 오너 본인+운영자만 조회 가능 — `centers`는 승인된 센터가
+비로그인 상태에서도 공개 조회되는 RLS라 계좌번호 컬럼을 거기 두면 안 됨, 별도 테이블로
+분리) + `/manager/settlement`에 계좌 입력 UI(오너 자가 등록/수정) + `/admin/settlement`
+운영자 전용 화면(기간별 센터별 실결제 합계 집계, `admin_center_settlement_summary` RPC —
+`payments` 원본 SELECT 권한을 넓히지 않고 집계 결과만 반환하는 security definer 함수,
+계좌 미등록 센터 경고, CSV 내보내기로 은행 대량이체 업로드에 사용) 적용 완료
+(`add_center_settlement_accounts.sql`, `fix_admin_settlement_summary_use_payment_provider.sql`,
+2026-09-04 사용자 적용 확인). Toss 지급대행 계약이 나중에 성사되면 이 도구는 과도기용으로
+역할이 줄어들고 자동화로 전환.
+
+**동시 결정: 결제 기능 완성 전 앱 우선 출시 가능하도록 게이트 추가**. Toss 실운영 심사가
+길어질 수 있어(통상 2~3주 이상), 심사 완료 전에는 온라인 결제(카드/카카오페이/토스페이/
+계좌이체)를 막고 직접결제(센터 현장 결제)만 노출한 채 먼저 출시하고, 심사 통과 후 환경변수
+하나만 켜서 나머지 결제수단을 여는 방식 적용(`NEXT_PUBLIC_BILLING_ENABLED`/
+`NEXT_PUBLIC_PAYOUTS_ENABLED`와 동일한 패턴). `lib/payments/PaymentProviderFactory.ts`의
+`PG_CHECKOUT_ENABLED`(기본 꺼짐 = 직접결제만) + `app/checkout/page.tsx`에서 이 값이 꺼져
+있으면 결제수단 목록을 직접결제 하나로 필터링하고 안내 배너 표시. 실브라우저로 확인 완료
+(기본 상태에서 직접결제만 노출, 자동 선택됨).
+
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
 ### P1-1. 포인트 원장 이원화 정합성
@@ -620,15 +700,10 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 |
-| 현재 상태 | **웹 푸시는 코드 구현 + 배포 완료, 실제 모바일 기기 수신 확인만 남음(자동 검증 불가 — 사용자가 나중에 직접 확인 예정).** 카카오 알림톡·SMS는 발신프로필 등록 + 메시지 템플릿 카카오 사전심사가 필요해(사업자 등록만으로는 부족) 벤더 확정 전까지 실제 연동 불가 — 2026-08-26 사용자 결정으로 벤더 확정 전에 Adapter Pattern 구조만 먼저 준비함(`lib/messaging/`). **2026-09-01 벤더 확정 전에 발송 UI도 미리 준비하기로 함(사용자 결정)** — `/manager/members`에 개별/다중 선택 발송 화면 완료, 지금은 Mock으로 시뮬레이션만 됨(벤더 확정 후 `AlimtalkSmsProvider` 구현만 채우면 그대로 실제 발송에 씀). 이메일은 이번 범위에서 제외(사용자 결정). |
-| 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`, `lib/messaging/*`(신규), `app/manager/members/page.tsx`(신규 발송 UI), `lib/members.ts`(`sendAlimtalkToMembers()`, 신규); `messages`, `notification_rules`, `notification_logs` |
-| 완료 조건 | (웹 푸시) 실제 브라우저에서 알림 수신 확인. (카카오 알림톡/SMS/이메일) 사업자 등록 이후 벤더 확정 → `AlimtalkSmsProvider` 실제 API 구현 → 발송 UI는 이미 완료. |
+| 현재 상태 | **웹 푸시는 코드 구현 + 배포 완료, 실제 모바일 기기 수신 확인만 남음(자동 검증 불가 — 사용자가 나중에 직접 확인 예정).** 카카오 알림톡·SMS는 **벤더 확정(알리고) + 실제 API 연동 코드까지 완료**(2026-09-02, `f60c53f`) — 문서가 그동안 "Mock 시뮬레이션만"으로 갱신 안 돼 있던 드리프트를 2026-09-04에 정정함(실제로는 `supabase/functions/send-alimtalk`가 알리고 실 API(`kakaoapi.aligo.in`, `apis.aligo.in`)를 직접 호출하는 코드까지 존재, 코드상 미완료는 없음). 아직 안 된 건 순수 외부 계정/승인 절차뿐: (1) 알리고 가입(사업자등록 완료로 가능), (2) 카카오톡 채널 개설 + 카카오 비즈니스 발신프로필 등록, (3) 알림톡 메시지 템플릿 카카오 사전심사(승인까지 통상 며칠), (4) 승인 후 `ALIGO_USER_ID`/`ALIGO_API_KEY`/`ALIGO_SENDER_KEY`/`ALIGO_SENDER_PHONE`을 `supabase secrets set`으로 등록만 하면 끝(코드 변경 불필요). 이메일은 이번 범위에서 제외(사용자 결정). |
+| 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`, `lib/messaging/*`, `supabase/functions/send-alimtalk/index.ts`(알리고 실 API 연동), `app/manager/alimtalk/*`(발송/템플릿/설정 화면), `app/manager/members/page.tsx`(`sendAlimtalkToMembers()`); `messages`, `notification_rules`, `notification_logs` |
+| 완료 조건 | (웹 푸시) 실제 브라우저에서 알림 수신 확인. (카카오 알림톡/SMS) 알리고 가입 + 카카오 발신프로필·템플릿 승인 + 시크릿 등록(전부 대표님 진행, 코드 작업 없음) → `send-alimtalk`의 `sendViaAligo()` 필드명을 알리고 최신 API 문서와 1회 대조(계정 없어 사전 대조 불가했음, 코드 주석에 명시). |
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/settings/notifications`](./ROUTES.md) |
-
-카카오 알림톡·SMS(`messages`/`notification_rules`/`notification_logs` 기반, 건당 수수료
-발생)는 벤더(알리고/NHN Cloud/Solapi 등)를 확정하고 카카오 발신프로필·템플릿 사전심사가
-끝나야 실제 발송이 가능해 여전히 범위 밖입니다. 이메일은 이번 범위에서 완전히 제외합니다
-(사용자 결정, 2026-08-26).
 
 **2026-08-26 Adapter Pattern 구조 준비(벤더 미정)**: `messages`/`notification_rules`/
 `notification_logs` 테이블이 `lib/*.ts`·`app/**/*.tsx` 어디서도 전혀 참조되지 않는 완전
@@ -670,6 +745,54 @@ test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx 
    웹 푸시가 동작한다는 제약이 있어(브라우저 탭 상태로는 수신 안 됨), iOS에서 확인할 때는
    먼저 홈 화면에 추가한 뒤 테스트해야 한다. Android Chrome은 이런 제약 없이 일반 브라우저
    탭에서도 동작한다.
+
+### P1-3c. (신규, 2026-09-04 착수) iOS/Android 네이티브 앱(Capacitor) — 엔지니어링 기반만 완료
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 (출시 로드맵 9단계 — App Store/Google Play 유통을 위한 필수 작업, 다만 지금 진행 중인 "직접결제만 여는 베타"는 웹으로 먼저 출시하고 이건 병행 트랙) |
+| 현재 상태 | **Claude Code가 로컬에서 할 수 있는 부분은 전부 완료 — 실제 빌드·서명·실기기 테스트는 전혀 안 됨(대표님의 로컬 환경 필요).** `server.url` 모드(정적 export 불가한 구조라 실제 배포 사이트를 WebView로 그대로 로드)로 `capacitor.config.ts` 작성, `npx cap add ios`/`add android`/`sync` 전부 Xcode.app·Android Studio 설치 없이 CLI만으로 성공(로컬엔 Xcode Command Line Tools만 있고 둘 다 실제 설치 안 돼 있음, 확인됨). `npm run build`/`npm run test`(262개) 통과. |
+| 근거 파일 | `capacitor.config.ts`(신규), `ios/`·`android/`(신규, `npx cap add`로 생성), `add_native_push_tokens.sql`(신규), `supabase/functions/send-web-push/index.ts`(FCM 발송 추가), `lib/nativePush.ts`(신규), `app/components/CapacitorBootstrap.tsx`(신규), `app/settings/notifications/page.tsx`(웹/네이티브 자동 분기) |
+| 완료 조건 | 아래 "대표님이 진행해야 하는 것" 전부 + OAuth 4종·푸시 수신·safe-area 렌더링 실기기 확인 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-04 항목, `/Users/sonjw/.claude/plans/cryptic-coalescing-moth.md`(설계 계획 원본) |
+
+**결정 사항(재질문 불필요)**: iOS/Android 동시 진행. 네이티브 푸시(FCM)를 이번 단계에
+바로 구축(나중으로 미루지 않음). 번들 ID `com.mwhabit.app` 확정(스토어 최초 제출 전까지는
+자유롭게 변경 가능 — 제출 후엔 불가). `server.url`은 현재 임시값(`https://booking-app-nu-lemon.vercel.app`)
+— 커스텀 도메인이 확정되면(대표님, 상호 변경과 함께 진행 중) `capacitor.config.ts` 한 줄만
+바꾸고 `npx cap sync` 재실행하면 됨(스토어 재제출 불필요, 번들 ID와 달리 이 값은 언제든
+바꿔도 안전).
+
+**대표님이 진행해야 하는 것(코드로 대체 불가)**:
+1. Xcode.app 설치(App Store, 무료, ~15GB) — iOS 시뮬레이터/실기기 빌드·서명에 필수. 지금은
+   Command Line Tools만 있어서 `npx cap add ios`까지는 됐지만 실제로 열고 빌드하는 건 안 됨
+2. Android Studio 설치 — Android SDK가 전혀 없어서 마찬가지로 실제 빌드 불가
+3. `ios/App/App.xcworkspace`를 Xcode로 열어 서명(Team) 설정 + Push Notifications
+   entitlement 추가
+4. `android/`를 Android Studio로 열어 release keystore 생성
+5. Firebase 프로젝트 생성 → Android는 `google-services.json` 배치, iOS는 APNs 인증 키
+   발급 후 Firebase 콘솔에 업로드(**이 APNs 키 발급 자체가 유료 Apple Developer 계정
+   필요 — Organization 가입 전까지 이 부분만 대기, 나머지 iOS 작업은 무료 Apple ID로 병행
+   가능**)
+6. 앱 아이콘(1024×1024)·스플래시 소스 이미지 준비(디자인 산출물, 현재 저장소에 전혀
+   없음) → `npx @capacitor/assets generate`로 전체 사이즈 자동 생성
+7. 서비스 계정 키 발급 후 `supabase secrets set FCM_PROJECT_ID=... FCM_CLIENT_EMAIL=...
+   FCM_PRIVATE_KEY=...` 등록 + `supabase functions deploy send-web-push` 재배포
+8. `add_native_push_tokens.sql`을 SQL Editor에서 실행
+9. 시뮬레이터/실기기로 Kakao/Naver/Google/Apple 로그인 4종이 WebView 안에서 실제로
+   왕복되는지 확인(외부 도메인 이동을 `capacitor.config.ts`의 `allowNavigation`으로
+   허용해뒀지만 실기기 검증 전) + `app/components/BackButton.tsx`의
+   `document.referrer` 기반 판정이 OAuth 왕복 후에도 정상인지 확인(코드는 안 건드림,
+   문제 생기면 그때 대응)
+10. Google Play Console 가입($25, 일회성, Apple 같은 계정 검증 지연 없음) — Android는
+    독립적으로 먼저 내부테스트까지 끝낼 수 있음
+11. Apple Developer Program 가입 — **사업자 상호 변경(현재 진행 예정) + D-U-N-S 번호
+    확보 후 Organization으로 가입**하기로 결정(개인 계정이 아닌 이유: 상호가 바뀔
+    예정이라 나중에 앱스토어 게시자명을 새 상호로 표시하기 위함)
+
+**참고**: `npx cap doctor` 실행 시 Android에서 `index.html file is missing` 경고가
+뜨는데, `server.url` 모드라 로컬 정적 번들 자체가 없어서 나는 예상된 경고이고 실제 동작에
+영향 없음(iOS는 이 검사 자체를 안 함).
 
 ### P1-4. (2026-08-13, 완료 — P2-1b 참고) 네이버 소셜 로그인
 

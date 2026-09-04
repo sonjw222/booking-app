@@ -108,6 +108,8 @@
 | `center_reviews` | 구현됨 | 현재 앱이 사용하는 센터 후기 |
 | `center_announcements` | 구현됨 | 센터 공지사항 |
 | `notifications` | 구현됨 / 운영 설정 필요 | 회원·매니저 알림함과 Realtime 팝업 |
+| `push_subscriptions` | 구현됨 | 웹 브라우저 푸시(VAPID) 구독 정보 — `add_web_push.sql`(이전까지 이 문서에 누락돼 있던 항목, 2026-09-04 정정) |
+| `native_push_tokens` | 구현됨 | iOS/Android 네이티브 앱(Capacitor) 푸시(FCM) 디바이스 토큰 — `add_native_push_tokens.sql`, `send-web-push` Edge Function이 두 테이블을 함께 조회해 발송 |
 | `inquiry_threads` | 구현됨 / 운영 설정 필요 | 회원-센터 문의방 |
 | `inquiry_messages` | 구현됨 / 운영 설정 필요 | 문의 메시지와 Realtime 채팅 |
 

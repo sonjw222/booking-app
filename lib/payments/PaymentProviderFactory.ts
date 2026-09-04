@@ -20,6 +20,13 @@ export function resolveProviderName(): PaymentProviderName {
   return "mock";
 }
 
+// PG 결제수단(카드/카카오페이/토스페이/계좌이체) 노출 여부. Toss 실운영 심사가 승인되기
+// 전까지 앱을 먼저 출시하되 회원 결제는 "직접결제(센터에서 결제)"만 열어두고 싶을 때
+// 이 값을 false로 둔다(사용자 결정, 2026-09-04) — BILLING_ENABLED/PAYOUTS_ENABLED와
+// 동일한 패턴. 값이 정확히 "true"가 아니면(비워둔 경우 포함) 항상 꺼짐 = 직접결제만 노출.
+// 심사가 끝나면 이 환경변수 하나만 켜면 되고, 코드 변경은 필요 없다.
+export const PG_CHECKOUT_ENABLED = process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED === "true";
+
 // mockScenarioOverride: Mock일 때만 의미 있음(예: checkout의 ?mockScenario= 쿼리로
 // 재빌드 없이 success/failed/cancelled를 즉시 바꿔 QA하기 위함)
 export function getPaymentProvider(mockScenarioOverride?: PaymentScenario): PaymentProvider {

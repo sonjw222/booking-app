@@ -207,6 +207,7 @@ export default function MyPage() {
       <a className="list-row" href="/settings/theme"><div className="left"><span className="icon"><UiIcon name="palette" /></span>테마 설정</div><span className="chevron">›</span></a>
       <a className="list-row" href="/settings/notifications"><div className="left"><span className="icon"><UiIcon name="bell" /></span>알림 설정</div><span className="chevron">›</span></a>
       <a className="list-row" href="/settings/account"><div className="left"><span className="icon"><UiIcon name="shield" /></span>계정 설정</div><span className="chevron">›</span></a>
+      <a className="list-row" href="/legal"><div className="left"><span className="icon"><UiIcon name="info" /></span>약관 및 정책</div><span className="chevron">›</span></a>
       {profile?.isPlatformAdmin && (
         <a className="list-row" href="/admin">
           <div className="left"><span className="icon"><UiIcon name="shield" /></span>운영자 설정</div>

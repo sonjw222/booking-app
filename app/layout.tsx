@@ -6,6 +6,7 @@ import { ImageViewerProvider } from "./components/ImageViewer";
 import SessionWatcher from "./components/SessionWatcher";
 import AppConfirmProvider from "./components/AppConfirmProvider";
 import GlobalBottomNav from "./components/GlobalBottomNav";
+import CapacitorBootstrap from "./components/CapacitorBootstrap";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,6 +54,7 @@ export default function RootLayout({
             호환 어댑터를 거치며 customerKey 처리 버그로 결제 요청이 항상 실패했음(실측
             확인, lib/payments/TossPaymentProvider.ts 상단 주석 참고). */}
         <Script src="https://js.tosspayments.com/v2/standard" strategy="afterInteractive" />
+        <CapacitorBootstrap />
         <SessionWatcher />
         <AppConfirmProvider />
         <ImageViewerProvider>{children}</ImageViewerProvider>

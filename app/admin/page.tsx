@@ -60,6 +60,10 @@ export default function AdminHub() {
         <div className="left"><span className="icon"><UiIcon name="ticket" /></span>구독 플랜 관리</div>
         <span className="chevron">›</span>
       </a>
+      <a className="list-row" href="/admin/settlement">
+        <div className="left"><span className="icon"><UiIcon name="bank" /></span>센터 정산</div>
+        <span className="chevron">›</span>
+      </a>
     </div>
   );
 }

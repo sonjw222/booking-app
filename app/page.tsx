@@ -15,19 +15,31 @@ import { consumePostLoginNext } from "../lib/postLoginReturn";
 import UiIcon, { type IconName } from "./components/UiIcon";
 
 const CATEGORIES = [
-  { icon: "skate" as IconName, label: "피겨스케이팅" },
-  { icon: "pilates" as IconName, label: "필라테스" },
-  { icon: "ballet" as IconName, label: "발레" },
-  { icon: "rhythm" as IconName, label: "리듬체조" },
-  { icon: "yoga" as IconName, label: "요가" },
-  { icon: "boxing" as IconName, label: "복싱" },
-  { icon: "swim" as IconName, label: "수영" },
-  { icon: "golf" as IconName, label: "골프" },
+  { icon: "skate" as IconName, image: "/icons/categories/skate.png", label: "피겨스케이팅" },
+  { icon: "pilates" as IconName, image: "/icons/categories/pilates.png", label: "필라테스" },
+  { icon: "ballet" as IconName, image: "/icons/categories/ballet.png", label: "발레" },
+  { icon: "rhythm" as IconName, image: "/icons/categories/rhythm.png", label: "리듬체조" },
+  { icon: "yoga" as IconName, image: "/icons/categories/yoga.png", label: "요가" },
+  { icon: "boxing" as IconName, image: "/icons/categories/boxing.png", label: "복싱" },
+  { icon: "swim" as IconName, image: "/icons/categories/swim.png", label: "수영" },
+  { icon: "golf" as IconName, image: "/icons/categories/golf.png", label: "골프" },
 ];
 
 const CATEGORY_ICONS: Record<string, IconName> = {
   피겨스케이팅: "skate", 필라테스: "pilates", 발레: "ballet", 리듬체조: "rhythm",
   요가: "yoga", 복싱: "boxing", 수영: "swim", 골프: "golf",
+};
+
+// 종목 둘러보기 그리드용 아이콘 이미지(2026-09-02, 사용자 제공 디자인으로 교체) —
+// UiIcon 단색 라인 아이콘 대신 이 이미지를 쓴다. "곧 시작하는 클래스" 목록의 사진
+// 없는 클래스 썸네일(home-class-photo, 브랜드 그라데이션 배경 + 단색 아이콘)은 디자인
+// 맥락이 달라 그대로 UiIcon(CATEGORY_ICONS)을 유지한다.
+const CATEGORY_IMAGES: Record<string, string> = {
+  피겨스케이팅: "/icons/categories/skate.png", 필라테스: "/icons/categories/pilates.png",
+  발레: "/icons/categories/ballet.png", 리듬체조: "/icons/categories/rhythm.png",
+  요가: "/icons/categories/yoga.png", 복싱: "/icons/categories/boxing.png",
+  수영: "/icons/categories/swim.png", 골프: "/icons/categories/golf.png",
+  테니스: "/icons/categories/tennis.png",
 };
 
 export default function Home() {
@@ -49,10 +61,21 @@ export default function Home() {
     () => banners.filter((banner) => banner.title?.trim().length >= 2),
     [banners]
   );
-  const visibleCategories = useMemo(
-    () => (catList.length > 0 ? catList.map((category) => ({ icon: CATEGORY_ICONS[category.label] ?? "grid" as IconName, label: category.label })) : CATEGORIES).slice(0, 8),
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const allCategories = useMemo(
+    () => (catList.length > 0
+      ? catList.map((category) => ({
+          icon: CATEGORY_ICONS[category.label] ?? "grid" as IconName,
+          image: CATEGORY_IMAGES[category.label] ?? null,
+          label: category.label,
+        }))
+      : CATEGORIES),
     [catList]
   );
+  const visibleCategories = useMemo(() => allCategories.slice(0, 8), [allCategories]);
+  // 기본 8개 밖의 나머지 종목 — "전체 종목"을 누르면 검색창으로 보내는 대신 이 목록을
+  // 같은 화면 아래에 펼쳐 보여준다(사용자 요청, 2026-09-02).
+  const remainingCategories = useMemo(() => allCategories.slice(8), [allCategories]);
   const visibleClasses = useMemo(() => myUpcoming.length > 0 ? myUpcoming : classes, [classes, myUpcoming]);
 
   useEffect(() => {
@@ -183,15 +206,36 @@ export default function Home() {
         )}
 
         {/* 종목 카테고리 그리드 */}
-        <div className="home-category-head"><h2>종목 둘러보기</h2><a href="/search">전체 종목</a></div>
+        <div className="home-category-head">
+          <h2>종목 둘러보기</h2>
+          {remainingCategories.length > 0 && (
+            <button type="button" onClick={() => setShowAllCategories((v) => !v)}>
+              {showAllCategories ? "접기" : "전체 종목"}
+            </button>
+          )}
+        </div>
         <div className="cat-grid">
           {visibleCategories.map((cat) => (
             <a className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`}>
-              <div className="cat-icon"><UiIcon name={cat.icon} size={27} /></div>
+              <div className="cat-icon">
+                {cat.image ? <img src={cat.image} alt="" /> : <UiIcon name={cat.icon} size={27} />}
+              </div>
               <div className="cat-label">{cat.label}</div>
             </a>
           ))}
         </div>
+        {showAllCategories && remainingCategories.length > 0 && (
+          <div className="cat-grid">
+            {remainingCategories.map((cat) => (
+              <a className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`}>
+                <div className="cat-icon">
+                  {cat.image ? <img src={cat.image} alt="" /> : <UiIcon name={cat.icon} size={27} />}
+                </div>
+                <div className="cat-label">{cat.label}</div>
+              </a>
+            ))}
+          </div>
+        )}
 
         <div className="home-class-head"><h2>{myUpcoming.length > 0 ? "내 수강권으로 예약 가능" : "곧 시작하는 클래스"}</h2><a href="/reservation">전체보기 ›</a></div>
         {visibleClasses.length === 0 ? (
@@ -220,6 +264,22 @@ export default function Home() {
             })}
           </div>
         )}
+
+        {/* 전자상거래법상 사업자정보는 로그인 없이도 항상 볼 수 있어야 해서 홈 화면 맨
+            아래에 상시 노출한다(약관/정책은 /legal, 상세 사업자정보는 /legal/business). */}
+        <div className="home-footer">
+          <div className="home-footer-links">
+            <a href="/legal/terms">이용약관</a>
+            <a href="/legal/privacy">개인정보처리방침</a>
+            <a href="/legal/business">사업자 정보</a>
+            <a href="/legal/refund">환불·취소 정책</a>
+          </div>
+          <div className="home-footer-info">
+            우리동네 클래스 · 상호 손장욱 · 대표 손장욱 · 사업자등록번호 589-77-00451
+            <br />
+            경기도 성남시 분당구 중앙공원로 20, 420동 702호 · 고객센터 010-6505-8700
+          </div>
+        </div>
 
         <div style={{ height: 80 }} />
       </div>

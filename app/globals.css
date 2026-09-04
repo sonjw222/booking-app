@@ -230,6 +230,7 @@ a { color: inherit; text-decoration: none; }
   width: 58px; height: 58px; border-radius: 18px; background: var(--surface);
   display: flex; align-items: center; justify-content: center; font-size: 27px;
 }
+.cat-icon img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .cat-icon.tag { background: var(--accent); color: var(--bg); font-weight: 800; font-size: 12px; line-height: 1.25; flex-direction: column; }
 .cat-icon.tag span { font-size: 11px; }
 .cat-label { font-size: 12.5px; font-weight: 600; color: var(--ink); }
@@ -431,6 +432,14 @@ a { color: inherit; text-decoration: none; }
 }
 .remember-me { display: flex; align-items: center; gap: 6px; color: var(--ink-soft); font-weight: 700; cursor: pointer; }
 .remember-me input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+
+.signup-agree { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; }
+.signup-agree-row {
+  display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600;
+  color: var(--ink-soft); cursor: pointer;
+}
+.signup-agree-row input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.signup-agree-row a { color: var(--ink); font-weight: 700; text-decoration: underline; }
 .forgot-pw-link { color: var(--ink-soft); font-weight: 700; text-decoration: none; }
 .forgot-pw-link:hover { color: var(--accent); }
 
@@ -546,6 +555,32 @@ a { color: inherit; text-decoration: none; }
    같은 톤이면 눈에 안 띈다(UX 감사 B-1). 브랜드색으로 살짝 강조. */
 .manager-mode-switch { background: var(--brand-soft); border-radius: 14px; border-bottom: none; margin-bottom: 8px; }
 .manager-mode-switch .left, .manager-mode-switch .icon, .manager-mode-switch .chevron { color: var(--brand-ink); }
+
+/* ============================================================
+   홈 화면 하단 사업자정보 푸터 (전자상거래법 표시 의무 — 로그인 없이도 상시 노출)
+   ============================================================ */
+.home-footer { padding: 20px 20px 4px; border-top: 1px solid var(--line); margin-top: 8px; }
+.home-footer-links { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 10px; }
+.home-footer-links a { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); text-decoration: none; }
+.home-footer-info { font-size: 11.5px; line-height: 1.6; color: var(--ink-soft); }
+
+/* ============================================================
+   약관/정책 본문 (이용약관·개인정보처리방침·사업자정보·환불정책)
+   ============================================================ */
+.legal-page { padding: 4px 20px 60px; font-size: 13.5px; line-height: 1.7; color: var(--ink); }
+.legal-page .legal-updated { color: var(--ink-soft); font-size: 12.5px; margin-bottom: 16px; }
+.legal-page h2 { font-size: 15px; font-weight: 800; margin: 22px 0 8px; }
+.legal-page h2:first-of-type { margin-top: 4px; }
+.legal-page p { margin: 0 0 10px; }
+.legal-page ul { margin: 0 0 10px; padding-left: 18px; }
+.legal-page li { margin-bottom: 4px; }
+.legal-page table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 13px; }
+.legal-page th, .legal-page td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+.legal-page th { background: var(--surface); width: 34%; font-weight: 700; }
+.legal-note {
+  background: var(--warning-soft); border: 1px solid var(--warning-line); color: var(--warning);
+  border-radius: 12px; padding: 12px 14px; font-size: 12.5px; margin: 4px 0 20px;
+}
 
 /* ============================================================
    공통: 뒤로가기 헤더 / ghost 버튼
@@ -3759,7 +3794,7 @@ a.membership-card { text-decoration: none; display: block; }
 
 .home-category-head,.home-class-head { min-height: 58px; padding: 22px var(--page-gutter) 10px; display: flex; align-items: center; justify-content: space-between; }
 .home-category-head h2,.home-class-head h2 { margin: 0; font-size: 18px; font-weight: 680; letter-spacing: -.025em; }
-.home-category-head a,.home-class-head a { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: flex-end; color: var(--brand-ink); font-size: 12.5px; font-weight: 600; }
+.home-category-head a,.home-category-head button,.home-class-head a { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: flex-end; color: var(--brand-ink); font-size: 12.5px; font-weight: 600; background: none; border: none; font-family: inherit; cursor: pointer; }
 .member-home .cat-grid { padding: 8px var(--page-gutter) 4px; grid-template-columns: repeat(4,1fr); row-gap: 19px; }
 .member-home .cat-item { gap: 8px; }
 .member-home .cat-icon { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 50%; background: var(--surface); color: var(--brand-ink); }
@@ -4062,7 +4097,7 @@ a.membership-card { text-decoration: none; display: block; }
 .auth-scene{position:relative;min-height:278px;padding:max(24px,env(safe-area-inset-top)) 22px 36px;overflow:hidden;color:var(--text-inverse);background:var(--grad1)}
 .auth-scene:before,.auth-scene:after{content:"";position:absolute;border:1px solid rgba(255,255,255,.14);border-radius:50%}.auth-scene:before{width:250px;height:250px;right:-88px;top:18px}.auth-scene:after{width:145px;height:145px;right:-32px;top:74px}
 .auth-home-link{position:relative;z-index:2;color:var(--text-inverse);font-size:13px;font-weight:750}.auth-scene-copy{position:relative;z-index:2;margin-top:24px}.auth-scene-copy>span{color:rgba(255,255,255,.55);font-size:10px;font-weight:750;letter-spacing:1.4px}.auth-scene-copy h1{margin-top:10px;font-size:27px;line-height:1.25;letter-spacing:-.9px}.auth-scene-copy p{margin-top:9px;color:rgba(255,255,255,.68);font-size:13px;line-height:1.55}
-.auth-activities{position:absolute;z-index:2;right:18px;bottom:28px;display:flex;gap:6px}.auth-activities>div{display:grid;place-items:center;width:48px;height:48px;border:1px solid rgba(255,255,255,.13);border-radius:15px;background:rgba(255,255,255,.06)}.auth-activities span{display:none}
+.auth-activities{position:absolute;z-index:2;right:18px;bottom:28px;display:flex;gap:6px}.auth-activities>div{display:grid;place-items:center;width:48px;height:48px;border:1px solid rgba(255,255,255,.13);border-radius:15px;background:rgba(255,255,255,.06)}.auth-activities span{display:none}.auth-activities img{width:30px;height:30px;object-fit:contain;border-radius:50%}
 .auth-panel{position:relative;z-index:3;min-height:calc(100dvh - 254px);margin-top:-24px;padding:18px 20px max(32px,env(safe-area-inset-bottom));border-radius:26px 26px 0 0;background:var(--bg)}
 .auth-panel .mode-tabs{display:flex;width:190px;margin:0 0 22px;gap:20px;background:transparent}.auth-panel .mode-tab{min-height:34px;padding:0;border-bottom:2px solid transparent;color:var(--ink-soft);font-size:13px;font-weight:650}.auth-panel .mode-tab.on{border-bottom-color:var(--ink);color:var(--ink);background:transparent}.auth-panel-heading{margin-bottom:20px}.auth-panel-heading h2{font-size:23px;letter-spacing:-.6px}.auth-panel-heading p{margin-top:6px;color:var(--ink-soft);font-size:12.5px}
 .auth-panel .role-select{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}.auth-panel .role-btn{min-height:92px;padding:13px 10px;display:grid;grid-template-columns:36px 1fr;grid-template-rows:auto auto;column-gap:9px;text-align:left;border:1px solid var(--line);border-radius:15px;background:var(--card-bg)}.auth-panel .role-btn.on{border:2px solid var(--ink);background:var(--surface)}.auth-panel .role-emoji{grid-row:1/3;display:grid;place-items:center;width:36px;height:36px;margin:0;border-radius:12px;background:var(--surface)}
