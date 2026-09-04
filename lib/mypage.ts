@@ -352,7 +352,7 @@ export function reservationsToIcs(items: CalReservation[]): string {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//우리동네 클래스//예약//KR",
+    "PRODID:-//모하빗//예약//KR",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
   ];

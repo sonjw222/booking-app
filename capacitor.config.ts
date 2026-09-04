@@ -12,7 +12,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 */
 const config: CapacitorConfig = {
   appId: "com.mwhabit.app",
-  appName: "우리동네 클래스",
+  appName: "모하빗",
   webDir: "public", // server.url 모드에선 실제로 안 쓰이지만 Capacitor 스키마상 필수 필드
   server: {
     // 커스텀 도메인 연결 완료(2026-09-04, 실제 배포 응답 확인함)

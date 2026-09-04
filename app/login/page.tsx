@@ -289,7 +289,7 @@ export default function LoginPage() {
   return (
     <div className="app-shell auth-page-v2">
       <div className="auth-scene">
-        <a className="auth-home-link" href="/">우리동네 클래스</a>
+        <a className="auth-home-link" href="/">모하빗</a>
         <div className="auth-scene-copy">
           <span>MOVE · BOOK · ENJOY</span>
           <h1>오늘의 움직임을<br />가볍게 시작하세요.</h1>
