@@ -7,6 +7,12 @@
 -- RPC 반환값(json)에는 이 사실이 전혀 담기지 않아 회원 화면(app/reservation/page.tsx)은
 -- 항상 "예약이 취소됐어요"로만 안내했다 — 회원은 나중에 잔여횟수가 줄어든 걸 보고서야
 -- 이상함을 느끼게 됨. 반환값에 deducted 필드만 추가하고 로직은 전혀 바꾸지 않는다.
+--
+-- ⚠ 2026-09-06 수정: 최초 작성 시 fix_class_cancel_deadline_override.sql(8/27)을 베이스로
+-- 삼는 바람에, 그 이후 fix_cancel_reservation_refunded_membership_ghost_count.sql(8/31)이
+-- 추가한 "환불(refunded)/양도(transferred)된 수강권은 remaining_count를 되돌리지 않는다"
+-- 보호 로직을 실수로 되돌릴 뻔했다 — CI 통합테스트(cancel-reservation-refunded-membership.test.ts)
+-- 가 바로 이 회귀를 잡아냈다. 8/31 수정을 다시 포함해 작성한다.
 create or replace function cancel_reservation(p_reservation_id uuid)
 returns json
 language plpgsql
@@ -89,9 +95,13 @@ begin
 
     if v_res.status = 'confirmed' then
         -- 수강권 환급 (단, 마감 후 취소 + 차감옵션이면 환급하지 않음 = 횟수 차감)
+        -- [유령 잔여횟수 방지, fix_cancel_reservation_refunded_membership_ghost_count.sql]
+        -- 이미 환불(refunded)됐거나 양도(transferred)된 수강권은 더 이상 이 회원이
+        -- 되돌려받을 대상이 아니므로 조용히 건너뛴다.
         if not v_skip_refund then
             update memberships set remaining_count = remaining_count + 1
-            where id = v_res.membership_id;
+            where id = v_res.membership_id
+              and status not in ('refunded', 'transferred');
         end if;
 
         -- 대기자를 순번대로 확인하면서 '확정 가능한 첫 사람'을 승격시킨다.
