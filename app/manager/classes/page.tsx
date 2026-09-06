@@ -31,7 +31,7 @@ import {
   fetchBookableMembers, managerBookMember, type BookableMember, maskPhone,
   fetchUnplacedPasses, retryAutoBook, type UnplacedPass,
   type ManagedClass, type ClassInput, type ClassAttendee,
-  isValidClassTimeRange,
+  isValidClassTimeRange, checkScheduleConflicts, type ScheduleConflict,
 } from "../../../lib/classes";
 import { fetchStaff, fetchMyEffectivePermissionKeys, canSeeManagerMenu, type Staff } from "../../../lib/roles";
 import { fetchMemberDetail, type MemberDetailData } from "../../../lib/members";
@@ -47,7 +47,12 @@ import {
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
-const EMPTY: ClassInput = { title: "", description: "", date: "", start: "", end: "", capacity: 8, allowGoods: true, roomId: null, cancelDeadlineMin: null, bookingDeadlineMin: null, classFormat: "group" };
+// start/end 기본값이 빈 문자열이면 AmPmTimeInput이 "오전 12시 00분"을 화면엔 보여주면서도
+// 관리자가 드롭다운을 하나도 안 건드리면 form.start/end는 계속 ""로 남아, "모두
+// 입력해주세요" 검증에 걸린다(2026-09-06 UX 감사 — 정각 시간을 만들려던 게 아니라 화면에
+// 보이는 값과 실제 저장되는 값이 달라서 생긴 문제였다). 애초에 유효한 시각으로 채워두면
+// 이 불일치 자체가 없어지고, 매번 시간을 직접 다 고를 필요도 없어진다.
+const EMPTY: ClassInput = { title: "", description: "", date: "", start: "10:00", end: "11:00", capacity: 8, allowGoods: true, roomId: null, cancelDeadlineMin: null, bookingDeadlineMin: null, classFormat: "group" };
 
 export default function ClassManagePage() {
   const nowD = new Date();
@@ -163,6 +168,9 @@ export default function ClassManagePage() {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [selectedTrainers, setSelectedTrainers] = useState<string[]>([]);
   const [trainerSearch, setTrainerSearch] = useState("");
+  // 룸/강사 겹침 경고(2026-09-06 UX 감사) — 서버가 막지 않으므로 화면에서만 알려주고
+  // 저장은 그대로 허용한다(일부 센터는 의도적으로 겹치게 운영하기도 함).
+  const [scheduleConflicts, setScheduleConflicts] = useState<ScheduleConflict[]>([]);
   // openEdit()이 재진입/재클릭으로 여러 번 겹쳐 호출될 때, 늦게 도착한 fetchClassProducts
   // 결과가 최신 openEdit 호출이나 사용자의 chip 선택을 덮어쓰지 않도록 하는 요청 토큰과
   // "이 open 세션 동안 사용자가 이미 선택을 편집했는지"(dirty) 플래그.
@@ -174,6 +182,16 @@ export default function ClassManagePage() {
   const trainerEditedRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
+
+  useEffect(() => {
+    if (!formOpen || !activeCenterId || !form.date || !form.start || !form.end) { setScheduleConflicts([]); return; }
+    let cancelled = false;
+    checkScheduleConflicts(activeCenterId, form.date, form.start, form.end, {
+      roomId: form.roomId, trainerAccountIds: selectedTrainers, excludeClassId: editId ?? undefined,
+    }).then((cs) => { if (!cancelled) setScheduleConflicts(cs); })
+      .catch(() => { if (!cancelled) setScheduleConflicts([]); });
+    return () => { cancelled = true; };
+  }, [formOpen, activeCenterId, form.date, form.start, form.end, form.roomId, selectedTrainers, editId]);
 
   const loadClasses = useCallback(async (centerId: string, y: number, m: number) => {
     setError(null);
@@ -527,10 +545,13 @@ export default function ClassManagePage() {
     if (!(await globalThis.appConfirm(`${copyFrom} → ${copyTo}\n선택한 수업을 복사할까요?`))) return;
     setCopyBusy(true);
     try {
-      const n = copyMode === "weekday"
+      const result = copyMode === "weekday"
         ? await copyByWeekday(activeCenterId, copyTo, copyGroups.filter((g) => copySelected.has(g.key)))
         : await copyByDate(activeCenterId, copyTo, copyDateItems.filter((i) => copySelected.has(i.key)));
-      showToast(`${n}개 수업을 복사했어요`);
+      showToast(
+        `${result.count}개 수업을 복사했어요` +
+        (result.failedCount > 0 ? ` (수강권 제한·담당 강사 ${result.failedCount}건은 못 옮겼어요 — 수업별로 직접 확인해주세요)` : "")
+      );
       setCopySheet(false);
       if (activeCenterId) await loadClasses(activeCenterId, year, month);
     } catch (e: any) { setError(e.message); }
@@ -1477,6 +1498,15 @@ export default function ClassManagePage() {
                   );
                 })()}
               </>
+            )}
+
+            {scheduleConflicts.length > 0 && (
+              <div className="perm-guide is-warning" style={{ margin: "8px 0" }}>
+                <UiIcon name="alert" size={13} /> 같은 시간대에 이미 다른 수업이 있어요(저장은 그대로 진행돼요):
+                {scheduleConflicts.map((c, i) => (
+                  <div key={i}>{c.kind === "room" ? "룸" : "강사"} 겹침 · {c.title}({c.start}~{c.end})</div>
+                ))}
+              </div>
             )}
 
             {/* 반복 수업 일괄 적용 (그룹 소속 수정일 때만) */}

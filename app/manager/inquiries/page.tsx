@@ -29,6 +29,7 @@ function ManagerInquiriesPageContent() {
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<{ id: string; title: string; centerId: string } | null>(null);
   const [permsByCenter, setPermsByCenter] = useState<Record<string, Set<string>>>({});
+  const [error, setError] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
 
@@ -59,25 +60,32 @@ function ManagerInquiriesPageContent() {
 
   useEffect(() => {
     (async () => {
-      const list = await fetchMyCenters();
-      setCenters(list);
-      if (list.length > 0) {
-        const threadList = await loadThreads();
-        // 신규 문의 알림에서 ?thread=<id>로 들어왔으면 목록이 아니라 그 스레드를 바로 연다(NOTIF-001 E-2)
-        const threadParam = searchParams.get("thread");
-        if (threadParam) {
-          const found = threadList.find((t) => t.id === threadParam);
-          if (found) setActive({ id: found.id, title: found.centerName + " · 회원 문의", centerId: found.centerId });
+      try {
+        const list = await fetchMyCenters();
+        setCenters(list);
+        if (list.length > 0) {
+          const threadList = await loadThreads();
+          // 신규 문의 알림에서 ?thread=<id>로 들어왔으면 목록이 아니라 그 스레드를 바로 연다(NOTIF-001 E-2)
+          const threadParam = searchParams.get("thread");
+          if (threadParam) {
+            const found = threadList.find((t) => t.id === threadParam);
+            if (found) setActive({ id: found.id, title: found.centerName + " · 회원 문의", centerId: found.centerId });
+          }
         }
+      } catch (e: any) {
+        // UX 감사(2026-09-06) — 예전엔 fetchCenterThreads()가 에러를 빈 배열로 삼켜서
+        // 진짜 오류와 "문의 없음"을 구분할 수 없었다. 이제 여기서 에러를 그대로 보여준다.
+        setError(e.message);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function backToList() {
     setActive(null);
-    await loadThreads();
+    try { await loadThreads(); } catch (e: any) { setError(e.message); }
   }
 
   if (centers.length === 0 && !loading) {
@@ -107,7 +115,9 @@ function ManagerInquiriesPageContent() {
         <div className="title" style={{ fontSize: 20, fontWeight: 800 }}>1:1 문의</div>
       </div>
 
-      {threads.length === 0 ? (
+      {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
+
+      {error ? null : threads.length === 0 ? (
         <div className="empty-note" style={{ padding: "50px 20px", textAlign: "center", color: "var(--text-dim)" }}>
           아직 들어온 문의가 없어요.
         </div>

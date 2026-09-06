@@ -11,11 +11,13 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { fetchCenterDetail, fetchCenterProducts, type CenterProduct } from "../../lib/center";
 import { createOrder } from "../../lib/orders";
+import { fetchProfiles, type ProfileRow } from "../../lib/profiles";
 import { fetchMyPoints, usePoints } from "../../lib/reviews";
 import Loading from "../components/Loading";
 import { reservationReturnUrl } from "../../lib/reservationNav";
 import { getPaymentService, resolveProviderName, PG_CHECKOUT_ENABLED, type PaymentScenario } from "../../lib/payments";
 import { supabase } from "../../lib/supabaseClient";
+import { fetchMyPgCheckoutOverride } from "../../lib/authAccount";
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import UiIcon, { type IconName } from "../components/UiIcon";
 import ErrorState from "../components/ErrorState";
@@ -89,7 +91,11 @@ function CheckoutContent() {
   const [allowedPay, setAllowedPay] = useState<string[] | null>(null);
   const [product, setProduct] = useState<CenterProduct | null>(null);
   // PG_CHECKOUT_ENABLED가 꺼져 있으면(Toss 실운영 심사 전 임시 출시) "card"는 애초에
-  // 고를 수 없는 선택지라 기본값도 항상 선택 가능한 "direct"로 시작해야 한다.
+  // 고를 수 없는 선택지라 기본값도 항상 선택 가능한 "direct"로 시작해야 한다. 다만 이 계정이
+  // 토스 카드사 심사관 전용 테스트 계정이면(accounts.pg_checkout_override, load()에서
+  // 비동기로 확인) 전역 게이트와 무관하게 온라인 결제를 열어준다 — 일반 고객 노출은
+  // 전역 플래그 그대로다.
+  const [pgCheckoutEnabled, setPgCheckoutEnabled] = useState(PG_CHECKOUT_ENABLED);
   const [payMethod, setPayMethod] = useState(PG_CHECKOUT_ENABLED ? "card" : "direct");
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [couponInput, setCouponInput] = useState("");
@@ -106,15 +112,35 @@ function CheckoutContent() {
   const [pendingManualPayment, setPendingManualPayment] = useState(false);
   const [issuedMembershipId, setIssuedMembershipId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 가족(다중 프로필) 계정에서 "이 수강권은 누구 앞으로"를 고를 수 있게 함 — 프로필이
+  // 1개뿐이면 고를 게 없으니 UI 자체를 숨기고 기존처럼 자동 배정한다.
+  const [profiles, setProfiles] = useState<ProfileRow[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string>("");
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      if (!PG_CHECKOUT_ENABLED) {
+        // 전역 게이트가 꺼져 있을 때만 굳이 계정을 조회한다 — 이미 켜져 있으면(정식 오픈
+        // 이후) 매 결제마다 불필요한 조회를 늘릴 이유가 없다.
+        try {
+          const override = await fetchMyPgCheckoutOverride();
+          if (override) {
+            setPgCheckoutEnabled(true);
+            setPayMethod("card");
+          }
+        } catch { /* 심사관 계정이 아니면(비로그인 포함) 조용히 무시 — 기본값(직접결제)만 보임 */ }
+      }
       const c = await fetchCenterDetail(centerId);
       setCenterName(c?.name ?? "");
       setAllowedPay(c?.payMethods ?? null);
       if (c?.payMethods && c.payMethods.length > 0) setPayMethod(c.payMethods[0]);
       try { setMyPoints(await fetchMyPoints(centerId)); } catch { /* 무시 */ }
+      try {
+        const profs = await fetchProfiles();
+        setProfiles(profs);
+        if (profs.length > 0) setSelectedProfileId(profs[0].id);
+      } catch { /* 비로그인 — 무시, 결제 시점에 로그인 유도 */ }
       const products = await fetchCenterProducts(centerId);
       setProduct(products.find((p) => p.id === productId) ?? null);
     } catch (e: any) { setError(e.message); }
@@ -185,6 +211,7 @@ function CheckoutContent() {
           discountAmount: discount,
           autoBook: !!(product.autoBookDays && product.autoBookDays.length > 0) && autoBook,
           pointsUsed: pointToUse,
+          profileId: selectedProfileId || undefined,
           // 실제 결제가 없으므로 PG provider를 붙이지 않는다(mock/toss 어느 쪽 확정
           // 로직도 이 주문을 건드리지 않아야 함 — 매니저 수동 발급 전용 경로).
         });
@@ -213,6 +240,7 @@ function CheckoutContent() {
         discountAmount: discount,
         autoBook: !!(product.autoBookDays && product.autoBookDays.length > 0) && autoBook,
         pointsUsed: pointToUse,
+        profileId: selectedProfileId || undefined,
         provider: providerName, // Payment Adapter Pattern: env(NEXT_PUBLIC_PAYMENT_PROVIDER)로 전환
       });
       // [SEC-118] 주문을 먼저 만들고 그 id로 포인트를 사용한다 — 서버가 나중에 확정 시점에
@@ -396,6 +424,21 @@ function CheckoutContent() {
         )}
       </div>
 
+      {/* 구매 대상 프로필 (가족 등 프로필이 여러 개일 때만 표시) */}
+      {profiles.length > 1 && (
+        <>
+          <div className="menu-section-label">누구 앞으로 구매할까요?</div>
+          <div className="mem-filters">
+            {profiles.map((p) => (
+              <button key={p.id} className={`filter-chip ${selectedProfileId === p.id ? "on" : ""}`}
+                onClick={() => setSelectedProfileId(p.id)}>
+                {p.name}{p.isPrimary ? " (본인)" : ""}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       {/* 사이즈 선택 (대여상품 등) */}
       {product.sizes && product.sizes.length > 0 && (
         <>
@@ -479,7 +522,7 @@ function CheckoutContent() {
       <div className="menu-section-label commerce-label">결제 수단</div>
       <div className="pay-methods">
         {PAY_METHODS
-          .filter((m) => PG_CHECKOUT_ENABLED || m.id === "direct")
+          .filter((m) => pgCheckoutEnabled || m.id === "direct")
           .filter((m) => !allowedPay || allowedPay.length === 0 || allowedPay.includes(m.id))
           .map((m) => (
           <button key={m.id} className={`pay-method ${payMethod === m.id ? "on" : ""}`} onClick={() => setPayMethod(m.id)}>
@@ -491,7 +534,7 @@ function CheckoutContent() {
           </button>
         ))}
       </div>
-      {!PG_CHECKOUT_ENABLED ? (
+      {!pgCheckoutEnabled ? (
         <div className="perm-guide" style={{ margin: "10px 20px" }}>
           온라인 결제(카드·카카오페이·토스페이·계좌이체)는 준비 중이라, 지금은 센터에서
           직접 결제만 가능해요.
@@ -527,6 +570,10 @@ function CheckoutContent() {
       <button className="primary-btn checkout-pay-btn" disabled={busy} onClick={handlePay}>
         {busy ? "처리 중..." : `${won(finalTotal)} 결제하기`}
       </button>
+      <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "var(--text-dim)" }}>
+        결제 시 <a href="/legal/refund" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>환불 정책</a>과{" "}
+        <a href="/legal/terms" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>이용약관</a>에 동의하는 것으로 간주돼요.
+      </div>
       <div style={{ height: 30 }} />
     </div>
   );

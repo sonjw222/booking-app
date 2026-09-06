@@ -11,6 +11,7 @@ const center = (over: Partial<ManagedCenter>): ManagedCenter => ({
   roleName: "매니저",
   isOwner: false,
   status: "active",
+  approvalStatus: "approved",
   managerCenterId: "mc-1",
   roleId: "role-1",
   ...over,

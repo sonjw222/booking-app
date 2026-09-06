@@ -105,7 +105,9 @@ export async function fetchCenterThreads(): Promise<InquiryThread[]> {
       "accounts:member_account_id(name, profiles(nickname, name, is_primary))"
     )
     .order("last_message_at", { ascending: false, nullsFirst: false });
-  if (error) return [];
+  // UX 감사(2026-09-06) — 예전엔 에러를 빈 배열로 삼켜서 진짜 오류(RLS, 네트워크)와
+  // "문의가 없어요"를 매니저 화면에서 구분할 수 없었다.
+  if (error) throw new Error("문의 목록을 불러오지 못했어요: " + error.message);
   return (data ?? []).map((r: any) => ({
     id: r.id,
     centerId: r.center_id,

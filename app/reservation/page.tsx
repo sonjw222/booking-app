@@ -404,8 +404,8 @@ function ReservationCalendarContent() {
     if (!(await globalThis.appConfirm("이 수업 예약을 취소할까요?"))) return;
     setBusyClassId(cls.id);
     try {
-      await cancelReservation(mine.reservationId);
-      showToast("예약이 취소됐어요");
+      const { deducted } = await cancelReservation(mine.reservationId);
+      showToast(deducted ? "취소됐지만 마감 이후라 수강권 1회가 차감됐어요" : "예약이 취소됐어요");
       await load({ silent: true });
     } catch (e: any) {
       showToast(e.message);

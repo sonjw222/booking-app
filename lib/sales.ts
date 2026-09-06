@@ -152,6 +152,27 @@ export async function registerPayment(p: PaymentInput): Promise<void> {
   if (error) throw new Error("결제 등록에 실패했어요: " + error.message);
 }
 
+// 미수금 회수 — 원래 결제 행의 unpaid_amount를 차감하고, 회수 내역은 그 행과 연결된
+// 새 결제(sale_type="unpaid_pay")로 남긴다(add_payments_unpaid_link.sql). 예전엔 이
+// 연결이 없어 나중에 돈을 받아도 "이번 달 미수금 합계"가 줄지 않는 문제가 있었다
+// (2026-09-06 UX 감사).
+export async function collectUnpaidPayment(input: {
+  originalPaymentId: string;
+  cardAmount: number; cashAmount: number; transferAmount: number; pointAmount: number;
+  paidAt: string; memo?: string;
+}): Promise<void> {
+  const { error } = await supabase.rpc("collect_unpaid_payment", {
+    p_original_payment_id: input.originalPaymentId,
+    p_card_amount: input.cardAmount,
+    p_cash_amount: input.cashAmount,
+    p_transfer_amount: input.transferAmount,
+    p_point_amount: input.pointAmount,
+    p_paid_at: input.paidAt,
+    p_memo: input.memo ?? null,
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+}
+
 // 기간별 결제 목록
 export async function fetchPayments(
   centerId: string,

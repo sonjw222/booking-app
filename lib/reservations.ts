@@ -393,11 +393,15 @@ export async function fetchMyProfiles(accountId?: string): Promise<BookingProfil
 }
 
 // ---------------- 예약 취소 ----------------
-export async function cancelReservation(reservationId: string): Promise<void> {
-  const { error } = await supabase.rpc("cancel_reservation", {
+// 반환값 deducted: 마감 후 취소인데 센터가 "차감 옵션"을 켜둔 경우 true — 이땐 환급 없이
+// 수강권 1회가 그대로 소진된다(fix_cancel_reservation_deduct_notice.sql). 화면에서 이 값에
+// 따라 안내 문구를 다르게 보여줘야 회원이 "취소했는데 왜 횟수가 줄었지"를 안 겪는다.
+export async function cancelReservation(reservationId: string): Promise<{ deducted: boolean }> {
+  const { data, error } = await supabase.rpc("cancel_reservation", {
     p_reservation_id: reservationId,
   });
   if (error) throw new Error(error.message);
+  return { deducted: !!(data as any)?.deducted };
 }
 
 /* ============================================================

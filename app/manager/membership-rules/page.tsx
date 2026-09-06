@@ -14,7 +14,7 @@ import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
-  fetchProducts, createProduct, deleteProduct,
+  fetchProducts, createProduct, updateProduct, deleteProduct,
   fetchRules, addRule, deleteRule, ruleToText, won, DAYS,
   type Product, type ScheduleRule,
 } from "../../../lib/passes";
@@ -32,9 +32,12 @@ export default function MembershipRulesPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  // 상품 추가 시트
+  // 상품 추가/수정 시트 — editingId가 있으면 수정 모드(같은 시트 재사용)
   const [prodSheet, setProdSheet] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [pName, setPName] = useState("");
+  const [pGroupLabel, setPGroupLabel] = useState("");
+  const [pDesc, setPDesc] = useState("");
   const [pAutoDays, setPAutoDays] = useState<number[]>([]);
   const [pAutoClasses, setPAutoClasses] = useState<string[]>([]);
   const [pPrice, setPPrice] = useState("");
@@ -108,17 +111,59 @@ export default function MembershipRulesPage() {
 
   const num = (s: string) => parseInt(s.replace(/[^0-9]/g, "") || "0", 10);
 
+  function resetProdSheet() {
+    setProdSheet(false); setEditingId(null);
+    setPName(""); setPGroupLabel(""); setPDesc(""); setPPrice(""); setPCount("");
+    setPAutoDays([]); setPAutoClasses([]);
+    setPUnlimited(false); setPExpiry({ mode: "none", days: "", date: "" });
+  }
+
+  function openCreateSheet() {
+    resetProdSheet();
+    setProdSheet(true);
+  }
+
+  function openEditSheet(p: Product) {
+    setEditingId(p.id);
+    setPName(p.name);
+    setPGroupLabel(p.groupLabel ?? "");
+    setPDesc(p.description ?? "");
+    setPPrice(String(p.price));
+    setPCount(p.totalCount ? String(p.totalCount) : "");
+    setPUnlimited(p.unlimitedPass);
+    setPAutoDays(p.autoBookDays ?? []);
+    setPAutoClasses([]);
+    setPExpiry({
+      mode: p.expiryMode,
+      days: p.expiryDays ? String(p.expiryDays) : "",
+      date: p.expiryDate ?? "",
+    });
+    setProdSheet(true);
+  }
+
   async function handleCreateProduct() {
     if (!centerId || !pName.trim()) { setError("상품 이름을 입력해주세요"); return; }
+    if (num(pPrice) <= 0) { setError("가격을 입력해주세요"); return; }
+    if (!pUnlimited && num(pCount) <= 0) { setError("총 횟수를 입력해주세요 (또는 '횟수 제한 없음'을 켜주세요)"); return; }
     if (pExpiry.mode === "days" && !pExpiry.days.trim()) { setError("만료까지 며칠인지 입력해주세요"); return; }
     if (pExpiry.mode === "date" && !pExpiry.date) { setError("만료일을 선택해주세요"); return; }
     setBusy(true);
     try {
-      await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "pass", false, {
+      const extra = {
         autoBookDays: pAutoDays,
         unlimitedPass: pUnlimited,
+        description: pDesc.trim(),
         expiry: { mode: pExpiry.mode, days: pExpiry.mode === "days" ? num(pExpiry.days) : null, date: pExpiry.mode === "date" ? pExpiry.date : null },
-      });
+        groupLabel: pGroupLabel.trim() || undefined,
+      };
+      if (editingId) {
+        await updateProduct(editingId, pName.trim(), num(pPrice), num(pCount), false, extra);
+        resetProdSheet();
+        showToast("수강권을 수정했어요");
+        await load();
+        return;
+      }
+      await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "pass", false, extra);
       // 선택한 수업이 있으면 예약조건으로 자동 등록 — 실패한 조건이 있으면 조용히 넘어가지 않고 안내한다.
       let failedRuleCount = 0;
       if (pAutoClasses.length > 0) {
@@ -135,9 +180,7 @@ export default function MembershipRulesPage() {
           }
         }
       }
-      setPName(""); setPPrice(""); setPCount(""); setPAutoDays([]); setPAutoClasses([]);
-      setPUnlimited(false); setPExpiry({ mode: "none", days: "", date: "" });
-      setProdSheet(false);
+      resetProdSheet();
       if (failedRuleCount > 0) {
         setError(`상품은 추가됐지만 예약조건 ${failedRuleCount}건은 등록에 실패했어요. 조건 추가에서 다시 시도해주세요.`);
       } else {
@@ -200,18 +243,21 @@ export default function MembershipRulesPage() {
         <a className="side" href="/manager">‹</a>
         <div className="title">수강권 관리</div>
         {canCreateProduct && (
-          <button className="header-action" onClick={() => setProdSheet(true)}>+ 수강권</button>
+          <button className="header-action" onClick={openCreateSheet}>+ 수강권</button>
         )}
       </div>
 
       {centers.length > 1 && (
-        <div className="center-switcher">
-          {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
-              {c.name}
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="menu-section-label" style={{ padding: "0 20px 4px" }}>지금 보는 센터</div>
+          <div className="center-switcher">
+            {centers.map((c) => (
+              <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+                {c.name}
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       <div className="perm-guide">
@@ -253,13 +299,19 @@ export default function MembershipRulesPage() {
               <div key={p.id} className="pass-card">
                 <div className="pass-head">
                   <div>
-                    <div className="pass-name">{p.name}</div>
+                    <div className="pass-name">
+                      {p.name}
+                      {p.groupLabel && <span className="pass-group-tag">{p.groupLabel}</span>}
+                    </div>
                     <div className="pass-sub">
                       {won(p.price)}{p.totalCount ? ` · ${p.totalCount}회` : ""}
                     </div>
                   </div>
                   {canEditRules && (
-                    <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteProduct(p)}>삭제</button>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button className="quiet-action" disabled={busy} onClick={() => openEditSheet(p)}>수정</button>
+                      <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteProduct(p)}>삭제</button>
+                    </div>
                   )}
                 </div>
 
@@ -301,13 +353,27 @@ export default function MembershipRulesPage() {
         );
       })()}
 
-      {/* 상품 추가 시트 */}
+      {/* 상품 추가/수정 시트 */}
       {prodSheet && (
-        <div className="sheet-overlay" onClick={() => setProdSheet(false)}>
+        <div className="sheet-overlay" onClick={resetProdSheet}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-title">수강권 추가</div>
+            <div className="sheet-title">{editingId ? "수강권 수정" : "수강권 추가"}</div>
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>상품 이름</div>
             <input className="input-field" placeholder="예: 안무반 수강권" value={pName} onChange={(e) => setPName(e.target.value)} />
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>
+              그룹명 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>· 선택, 회원 화면에서 이 이름으로 묶여 보여요</span>
+            </div>
+            <input className="input-field" list="pass-group-label-options" placeholder="예: 요일고정, 자유이용" value={pGroupLabel} onChange={(e) => setPGroupLabel(e.target.value)} />
+            <datalist id="pass-group-label-options">
+              {Array.from(new Set(products.map((p) => p.groupLabel).filter((g): g is string => !!g))).map((g) => (
+                <option key={g} value={g} />
+              ))}
+            </datalist>
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>
+              설명 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>· 선택, 회원이 이름을 누르면 보여요</span>
+            </div>
+            <textarea className="input-field" style={{ minHeight: 60, resize: "vertical", lineHeight: 1.5 }}
+              placeholder="예: 화 19:00 안무반 전용 수강권이에요" value={pDesc} onChange={(e) => setPDesc(e.target.value)} />
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>가격</div>
             <input inputMode="numeric" className="input-field" placeholder="0" value={pPrice} onChange={(e) => setPPrice(e.target.value)} />
             <div className="set-row" style={{ padding: "12px 0 6px", borderBottom: "none" }}>
@@ -340,9 +406,10 @@ export default function MembershipRulesPage() {
             </div>
             <div className="perm-guide" style={{ margin: "4px 0 0" }}>
               예) 화요일 4회권이면 <b>화</b>만 선택. 아무것도 안 고르면 일반 수강권이에요.
+              {!editingId && " 여기서는 이미 등록된 수업 중에서만 골라요 — 더 자유롭게 조건을 걸고 싶으면(예: 특정 시간대만, 아직 안 만든 수업) 만든 뒤 카드의 \"예약조건 추가\"를 따로 이용하세요."}
             </div>
 
-            {pAutoDays.length > 0 && (() => {
+            {!editingId && pAutoDays.length > 0 && (() => {
               const dayClasses = existingClasses.filter((c) => pAutoDays.includes(c.dayOfWeek));
               return (
                 <>
@@ -376,8 +443,8 @@ export default function MembershipRulesPage() {
             })()}
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
-              <button className="ghost-btn" onClick={() => { setProdSheet(false); setPAutoDays([]); setPAutoClasses([]); }}>취소</button>
-              <button className="primary-btn" disabled={busy} onClick={handleCreateProduct}>추가</button>
+              <button className="ghost-btn" onClick={resetProdSheet}>취소</button>
+              <button className="primary-btn" disabled={busy} onClick={handleCreateProduct}>{editingId ? "저장" : "추가"}</button>
             </div>
           </div>
         </div>

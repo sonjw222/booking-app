@@ -28,25 +28,33 @@ export async function createOrder(input: {
   centerId: string; productId: string; productName: string; amount: number; payMethod?: string;
   selectedSize?: string; couponCode?: string; discountAmount?: number; autoBook?: boolean;
   provider?: "mock" | "toss" | "portone"; pointsUsed?: number;
+  // 가족(다중 프로필) 계정에서 "이 구매는 누구 앞으로"를 고를 수 있게 함(2026-09-06,
+  // 스튜디오 오너/회원 UX 감사) — 생략하면 기존처럼 대표 프로필로 자동 배정(하위 호환).
+  profileId?: string;
 }): Promise<string> {
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) throw new Error("로그인이 필요해요");
   const { data: acc } = await supabase.from("accounts").select("id").eq("auth_id", authData.user.id).single();
   if (!acc) throw new Error("계정을 찾을 수 없어요");
-  // 대표 프로필 우선, 없으면 가장 먼저 만든 프로필 사용 (single() 실패 방지)
-  const { data: profs } = await supabase
-    .from("profiles").select("id, is_primary, created_at")
-    .eq("account_id", acc.id)
-    .is("deleted_at", null)
-    .order("is_primary", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1);
-  const prof = profs?.[0];
-  if (!prof) throw new Error("프로필을 찾을 수 없어요. 프로필 관리에서 프로필을 만들어주세요.");
+
+  let profileId = input.profileId;
+  if (!profileId) {
+    // 대표 프로필 우선, 없으면 가장 먼저 만든 프로필 사용 (single() 실패 방지)
+    const { data: profs } = await supabase
+      .from("profiles").select("id, is_primary, created_at")
+      .eq("account_id", acc.id)
+      .is("deleted_at", null)
+      .order("is_primary", { ascending: false })
+      .order("created_at", { ascending: true })
+      .limit(1);
+    const prof = profs?.[0];
+    if (!prof) throw new Error("프로필을 찾을 수 없어요. 프로필 관리에서 프로필을 만들어주세요.");
+    profileId = prof.id;
+  }
 
   const { data, error } = await supabase.from("orders").insert({
     center_id: input.centerId,
-    profile_id: prof.id,
+    profile_id: profileId,
     product_id: input.productId,
     product_name: input.productName,
     amount: input.amount,
