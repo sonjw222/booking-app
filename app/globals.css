@@ -16,9 +16,9 @@
      globals.css 전역에 #fff로 하드코딩돼 있었고, 그 탓에 다크 모드에서 흰 카드 위에
      흰 글자가 찍히는 문제가 있었다. var(--card-bg, #fff) 참조가 이미 있어 그 이름을 쓴다. */
   --card-bg: #FFFFFF;
-  --brand: #45BFE3;
-  --brand-ink: #087A9C;
-  --brand-soft: #E6F7FC;
+  --brand: #0A2545;
+  --brand-ink: #0A2545;
+  --brand-soft: #E8EEF4;
   --success: #287A5B;
   --success-soft: #E8F3EE;
   --success-line: #CFE6DB;
@@ -35,8 +35,8 @@
   --info-line: #C7DCF7;
   /* 프라이빗 수업 배지 전용(팔레트상 유일한 보라). CLASS-001 D-2 */
   --private: #6B4C9A;
-  /* --brand 배경 위에서 WCAG AA 대비를 확보하기 위한 진한 브랜드 잉크 */
-  --brand-ink-strong: #063D4D;
+  /* 진한 --brand 배경 위에서 WCAG AA 대비를 확보하는 반전 텍스트 */
+  --brand-ink-strong: #FFFFFF;
   --mint: #0F9D77;
   --mint-soft: #E4F7F1;
   --gold: #B8842E;
@@ -117,9 +117,9 @@
      확보하려면 채도를 낮추고 명도를 올려야 해서 -soft/-line처럼 단순 반전이 아니라
      각각 새로 조정한 값을 쓴다(실사용처 74~4곳, 예: 마이페이지 "상품" 카드의
      --brand-soft 배경 위 흰 글자, 회원등급 배지의 --success 텍스트 등). */
-  --brand: #5FCDEE;
-  --brand-ink: #7FDBF5;
-  --brand-soft: #0E2C36;
+  --brand: #6F98BE;
+  --brand-ink: #B8D0E5;
+  --brand-soft: #152C42;
   --success: #4FCB93;
   --warning: #E0A83C;
   --danger: #F08A8A;

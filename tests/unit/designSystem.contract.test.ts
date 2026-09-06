@@ -17,13 +17,13 @@ function listTsxFiles(dir: string): string[] {
 }
 
 describe("Batch 1 design system contract", () => {
-  it("keeps the approved neutral and sky-blue tokens centralized", () => {
+  it("keeps the approved neutral and navy brand tokens centralized", () => {
     const css = read("app/globals.css");
     expect(css).toContain("--bg: #FBFBFA");
     expect(css).toContain("--ink: #171719");
-    expect(css).toContain("--brand: #45BFE3");
-    expect(css).toContain("--brand-ink: #087A9C");
-    expect(css).toContain("--brand-soft: #E6F7FC");
+    expect(css).toContain("--brand: #0A2545");
+    expect(css).toContain("--brand-ink: #0A2545");
+    expect(css).toContain("--brand-soft: #E8EEF4");
     expect(css).toContain("--page-gutter: 16px");
   });
 
