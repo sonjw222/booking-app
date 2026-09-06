@@ -14,6 +14,7 @@ import AlimtalkComposer, {
 } from "../../../components/AlimtalkComposer";
 import { fetchMyCenters, type ManagedCenter } from "../../../../lib/manager";
 import { fetchMembers, sendAlimtalkToMembers, type CenterMember } from "../../../../lib/members";
+import { fetchAlimtalkTemplates, type AlimtalkTemplate } from "../../../../lib/alimtalk";
 
 export default function AlimtalkSendPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -22,6 +23,8 @@ export default function AlimtalkSendPage() {
   const [keyword, setKeyword] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [blocks, setBlocks] = useState<AlimtalkBlock[]>(emptyAlimtalkBlocks());
+  const [templates, setTemplates] = useState<AlimtalkTemplate[]>([]);
+  const [templateId, setTemplateId] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +48,9 @@ export default function AlimtalkSendPage() {
     setLoading(true); setError(null);
     try {
       setMembers(await fetchMembers(centerId));
+      // 템플릿 관리 화면(app/manager/alimtalk/templates)에서 만든 템플릿을 여기서 바로
+      // 불러올 방법이 없어 보낼 때마다 처음부터 다시 타이핑해야 했다(2026-09-06 UX 감사).
+      try { setTemplates(await fetchAlimtalkTemplates(centerId)); } catch { setTemplates([]); }
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   }, [centerId]);
@@ -83,6 +89,7 @@ export default function AlimtalkSendPage() {
       showToast(parts.join(" · "));
       setSelectedIds(new Set());
       setBlocks(emptyAlimtalkBlocks());
+      setTemplateId("");
     } catch (e: any) { setError(e.message); }
     finally { setSending(false); }
   }
@@ -111,7 +118,7 @@ export default function AlimtalkSendPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); setSelectedIds(new Set()); }}>
+            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); setSelectedIds(new Set()); setBlocks(emptyAlimtalkBlocks()); setTemplateId(""); }}>
               {c.name}
             </button>
           ))}
@@ -154,15 +161,34 @@ export default function AlimtalkSendPage() {
       )}
 
       {selectedIds.size > 0 && (
-        <div className="sheet-overlay" onClick={() => !sending && setSelectedIds(new Set())}>
+        <div className="sheet-overlay" onClick={() => { if (sending) return; setSelectedIds(new Set()); setBlocks(emptyAlimtalkBlocks()); setTemplateId(""); }}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">알림톡 보내기</div>
             <div className="perm-guide" style={{ margin: "0 0 10px" }}>
               선택한 {selectedIds.size}명에게 보내요. 전화번호가 없는 회원은 자동으로 건너뜁니다.
             </div>
+            {templates.length > 0 && (
+              <select
+                className="input-field"
+                style={{ marginBottom: 10 }}
+                value={templateId}
+                disabled={sending}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setTemplateId(id);
+                  const t = templates.find((x) => x.id === id);
+                  if (t) setBlocks([{ type: "text", value: t.content }]);
+                }}
+              >
+                <option value="">템플릿 불러오기 (선택)</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>{t.title}{t.status !== "approved" ? ` · ${t.status === "pending" ? "승인대기" : t.status === "rejected" ? "반려됨" : "임시"}` : ""}</option>
+                ))}
+              </select>
+            )}
             <AlimtalkComposer blocks={blocks} onChange={setBlocks} disabled={sending} />
             <div className="add-profile-actions">
-              <button className="ghost-btn" disabled={sending} onClick={() => setSelectedIds(new Set())}>취소</button>
+              <button className="ghost-btn" disabled={sending} onClick={() => { setSelectedIds(new Set()); setBlocks(emptyAlimtalkBlocks()); setTemplateId(""); }}>취소</button>
               <button className="primary-btn" disabled={sending || !hasAlimtalkContent(blocks)} onClick={handleSend}>
                 {sending ? "발송 중..." : "발송"}
               </button>

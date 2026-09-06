@@ -88,3 +88,18 @@ export async function completeSocialProfile(accountId: string, phone: string, ad
     throw new Error(error.message);
   }
 }
+
+// 토스페이먼츠 카드사 심사용 "심사관 전용 계정" 판별(2026-09-06,
+// add_pg_checkout_reviewer_override.sql). 이 값은 운영자만 바꿀 수 있고(트리거로 보호,
+// 본인이 스스로 켤 수 없음) — 로그인 안 했거나 계정 조회 실패 시 안전하게 false로
+// 취급한다(전역 게이트가 꺼져 있으면 기본은 항상 직접결제만).
+export async function fetchMyPgCheckoutOverride(): Promise<boolean> {
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData.user) return false;
+  const { data } = await supabase
+    .from("accounts")
+    .select("pg_checkout_override")
+    .eq("auth_id", authData.user.id)
+    .maybeSingle();
+  return !!data?.pg_checkout_override;
+}

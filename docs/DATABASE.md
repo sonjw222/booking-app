@@ -53,7 +53,7 @@
 
 | 테이블 | 상태 | 현재 역할 |
 |---|---|---|
-| `accounts` | 구현됨 | Supabase Auth와 연결되는 로그인 계정, 회원·매니저·플랫폼 운영자 플래그 |
+| `accounts` | 구현됨 | Supabase Auth와 연결되는 로그인 계정, 회원·매니저·플랫폼 운영자 플래그. `pg_checkout_override`(2026-09-06, `add_pg_checkout_reviewer_override.sql`) — 토스페이먼츠 카드사 심사관 전용 테스트 계정에만 `true`, 전역 `PG_CHECKOUT_ENABLED` 게이트와 무관하게 온라인 결제 노출. 트리거로 운영자만 변경 가능(본인 셀프 토글 불가) |
 | `profiles` | 구현됨 | 예약·수강권·진도·포인트의 회원 주체 |
 | `manager_centers` | 구현됨 | 계정의 센터 소속, 역할, 활성 상태 |
 | `center_roles` | 구현됨 | 오너·매니저·강사·커스텀 역할 |
@@ -79,7 +79,7 @@
 
 | 테이블 | 상태 | 현재 역할 |
 |---|---|---|
-| `products` | 구현됨 | 수강권·굿즈 상품 정의 |
+| `products` | 구현됨 | 수강권·굿즈 상품 정의. `group_label`(2026-09-06, `add_product_group_label.sql`) — 수강권 표시용 대분류(자유 텍스트, nullable), 회원용 상품선택 화면에서 그룹 헤더로 묶어 보여줄 때만 사용. 생성 시에만 입력 가능(수정 UI 없음, [TODO P2-0a](./TODO.md)) |
 | `membership_schedule_rules` | 구현됨 | 수강권 상품의 요일·시간·수업명 사용 조건 |
 | `memberships` | 구현됨 | 프로필이 보유한 횟수권·기간권, 잔여횟수와 상태 |
 | `cart_items` | 구현됨 | 회원 장바구니 |

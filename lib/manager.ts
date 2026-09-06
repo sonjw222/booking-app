@@ -11,7 +11,12 @@ export type ManagedCenter = {
   name: string;
   roleName: string;  // 예: "스튜디오 오너", "매니저", "강사"
   isOwner: boolean;
-  status: string;    // pending / active / suspended
+  status: string;    // manager_centers.status: pending / active / suspended (이 소속 자체의 상태)
+  // centers.status: pending / approved / rejected — 플랫폼 운영자가 센터를 승인했는지.
+  // pending이면 회원 화면(lib/center.ts fetchCenterDetail 등)엔 전혀 안 보이는데, 매니저는
+  // 소속만 active면 수업/수강권/스태프를 다 세팅할 수 있어 이 사실을 모르고 지나치기 쉬움
+  // (2026-09-06 UX 감사) — 매니저 화면에 승인 대기 배너를 띄우는 데 사용.
+  approvalStatus: string;
   managerCenterId: string; // manager_centers.id (권한 조회용)
   roleId: string | null;   // center_roles.id (권한 조회용)
 };
@@ -53,9 +58,9 @@ export async function fetchMyCenters(): Promise<ManagedCenter[]> {
   const accountId = await getMyAccountId();
   const { data, error } = await supabase
     .from("manager_centers")
-    .select("id, role_id, status, centers(id, name), center_roles(name, is_owner)")
+    .select("id, role_id, status, centers(id, name, status), center_roles(name, is_owner)")
     .eq("account_id", accountId)
-    .eq("status", "active"); // 승인된(활성) 센터만
+    .eq("status", "active"); // 소속 자체는 활성인 것만 (센터 승인 여부와는 별개)
   if (error) throw new Error("센터 목록을 불러오지 못했어요: " + error.message);
   return (data ?? [])
     .filter((r: any) => r.centers)
@@ -65,6 +70,7 @@ export async function fetchMyCenters(): Promise<ManagedCenter[]> {
       roleName: r.center_roles?.name ?? "매니저",
       isOwner: r.center_roles?.is_owner ?? false,
       status: r.status,
+      approvalStatus: r.centers.status ?? "approved",
       managerCenterId: r.id,
       roleId: r.role_id ?? null,
     }));

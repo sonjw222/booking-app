@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchCart, addToCart, removeFromCart, clearCart, updateCartSize, type CartItem } from "../../lib/cart";
 import { createOrder } from "../../lib/orders";
 import { fetchCenterDetail } from "../../lib/center";
+import { fetchProfiles, type ProfileRow } from "../../lib/profiles";
 import Loading from "../components/Loading";
 import UiIcon, { type IconName } from "../components/UiIcon";
 import BackButton from "../components/BackButton";
@@ -47,12 +48,21 @@ export default function CartPage() {
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; label: string; discount: number } | null>(null);
   const [couponMsg, setCouponMsg] = useState<string | null>(null);
   const discount = appliedCoupon?.discount ?? 0;
+  // 가족(다중 프로필) 계정에서 "장바구니 전체는 누구 앞으로"를 고를 수 있게 함 —
+  // 프로필이 1개뿐이면 UI를 숨기고 기존처럼 자동 배정한다.
+  const [profiles, setProfiles] = useState<ProfileRow[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string>("");
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
       const list = await fetchCart();
       setItems(list);
+      try {
+        const profs = await fetchProfiles();
+        setProfiles(profs);
+        if (profs.length > 0) setSelectedProfileId(profs[0].id);
+      } catch { /* 비로그인 — 무시 */ }
       // 장바구니가 한 센터 기준이면 그 센터의 허용 결제수단 적용
       const centerIds = Array.from(new Set(list.map((i) => i.centerId)));
       if (centerIds.length === 1) {
@@ -166,6 +176,7 @@ export default function CartPage() {
           selectedSize: it.selectedSize ?? undefined,
           couponCode: appliedCoupon?.code,
           discountAmount: d,
+          profileId: selectedProfileId || undefined,
         });
       }
       await clearCart();
@@ -256,6 +267,21 @@ export default function CartPage() {
               </div>
             ))}
           </div>
+
+          {/* 구매 대상 프로필 (가족 등 프로필이 여러 개일 때만 표시) */}
+          {profiles.length > 1 && (
+            <>
+              <div className="menu-section-label commerce-label">누구 앞으로 구매할까요?</div>
+              <div className="mem-filters">
+                {profiles.map((p) => (
+                  <button key={p.id} className={`filter-chip ${selectedProfileId === p.id ? "on" : ""}`}
+                    onClick={() => setSelectedProfileId(p.id)}>
+                    {p.name}{p.isPrimary ? " (본인)" : ""}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           {/* 쿠폰 */}
           <div className="menu-section-label commerce-label">할인 쿠폰</div>

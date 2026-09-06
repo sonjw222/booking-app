@@ -28,6 +28,7 @@ export type Product = {
   description: string | null;
   sizes: string[] | null;
   autoBookDays: number[] | null;   // 요일반 수강권: 자동예약 요일 (0=일~6=토)
+  groupLabel: string | null;       // 수강권 표시용 대분류(자유 텍스트, add_product_group_label.sql)
 };
 
 export type ScheduleRule = {
@@ -41,7 +42,7 @@ export type ScheduleRule = {
 export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "pass"): Promise<Product[]> {
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, price, pass_type, total_count, is_on_sale, product_kind, unlimited, unlimited_pass, expiry_mode, expiry_days, expiry_date, description, sizes, auto_book_days")
+    .select("id, name, price, pass_type, total_count, is_on_sale, product_kind, unlimited, unlimited_pass, expiry_mode, expiry_days, expiry_date, description, sizes, auto_book_days, group_label")
     .eq("center_id", centerId)
     .eq("is_active", true)
     .eq("product_kind", kind)
@@ -54,6 +55,7 @@ export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "
     unlimitedPass: p.unlimited_pass, expiryMode: p.expiry_mode, expiryDays: p.expiry_days, expiryDate: p.expiry_date,
     description: p.description ?? null, sizes: p.sizes ?? null,
     autoBookDays: p.auto_book_days ?? null,
+    groupLabel: p.group_label ?? null,
   }));
 }
 
@@ -62,7 +64,7 @@ export type ExpiryOption = { mode: ExpiryMode; days: number | null; date: string
 export async function createProduct(
   centerId: string, name: string, price: number, totalCount: number,
   kind: "pass" | "goods" = "pass", unlimited = false,
-  extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption }
+  extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string }
 ): Promise<void> {
   const { error } = await supabase.from("products").insert({
     center_id: centerId, name, price,
@@ -77,6 +79,7 @@ export async function createProduct(
     description: extra?.description || null,
     sizes: extra?.sizes && extra.sizes.length > 0 ? extra.sizes : null,
     auto_book_days: extra?.autoBookDays && extra.autoBookDays.length > 0 ? extra.autoBookDays : null,
+    group_label: extra?.groupLabel?.trim() || null,
   });
   if (error) throw new Error("상품 생성에 실패했어요: " + error.message);
 }
@@ -84,7 +87,7 @@ export async function createProduct(
 // 상품 수정 (이름·가격·횟수·설명·사이즈)
 export async function updateProduct(
   id: string, name: string, price: number, totalCount: number,
-  unlimited: boolean, extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption }
+  unlimited: boolean, extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string }
 ): Promise<void> {
   const { error } = await supabase.from("products").update({
     name, price,
@@ -97,6 +100,7 @@ export async function updateProduct(
     description: extra?.description || null,
     sizes: extra?.sizes && extra.sizes.length > 0 ? extra.sizes : null,
     auto_book_days: extra?.autoBookDays && extra.autoBookDays.length > 0 ? extra.autoBookDays : null,
+    group_label: extra?.groupLabel?.trim() || null,
   }).eq("id", id);
   if (error) throw new Error("상품 수정에 실패했어요: " + error.message);
 }

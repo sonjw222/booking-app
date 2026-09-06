@@ -207,7 +207,8 @@ describe("copyByDate(): 스케줄 복사 시 수강권 정책·담당 강사도 
       roomId: null, cancelDeadlineMin: 0, classId: srcId,
     };
     const created = await copyByDate(centerAId, toMonth, [item]);
-    expect(created).toBe(1);
+    expect(created.count).toBe(1);
+    expect(created.failedCount).toBe(0);
 
     const toDate = `${toMonth}-${String(td).padStart(2, "0")}`;
     const list = await fetchClasses(centerAId, toDate, toDate);

@@ -71,6 +71,50 @@ function assertValidClassTimeRange(start: string, end: string): void {
   }
 }
 
+export type ScheduleConflict = { classId: string; title: string; start: string; end: string; kind: "room" | "trainer" };
+
+// 룸/강사가 같은 시간대에 겹치는 다른 수업이 있는지 확인 — create_class_safe/
+// create_recurring_classes_safe/set_class_trainers_safe 등 서버 쪽엔 이 검증이 전혀 없다
+// (2026-09-06 UX 감사). 일부 센터는 한 룸을 여러 수업이 동시에 쓰거나 강사가 겹치게
+// 배정되는 걸 의도적으로 허용하므로, 여기서는 "막지 않고 경고만" 한다 — 호출부가 이
+// 결과를 저장을 막는 데 쓰지 않도록 주의.
+export async function checkScheduleConflicts(
+  centerId: string, date: string, start: string, end: string,
+  opts: { roomId?: string | null; trainerAccountIds?: string[]; excludeClassId?: string }
+): Promise<ScheduleConflict[]> {
+  const roomId = opts.roomId ?? null;
+  const trainerIds = opts.trainerAccountIds ?? [];
+  if (!date || !start || !end || (!roomId && trainerIds.length === 0)) return [];
+
+  const dayClasses = await fetchClasses(centerId, date, date);
+  const newStart = timeToMinutes(start);
+  const newEnd = timeToMinutes(end) <= newStart ? timeToMinutes(end) + 24 * 60 : timeToMinutes(end);
+
+  const overlapping = dayClasses.filter((c) => {
+    if (c.id === opts.excludeClassId || c.status === "cancelled") return false;
+    const cStart = timeToMinutes(c.start);
+    const cEnd = timeToMinutes(c.end) <= cStart ? timeToMinutes(c.end) + 24 * 60 : timeToMinutes(c.end);
+    return newStart < cEnd && cStart < newEnd;
+  });
+  if (overlapping.length === 0) return [];
+
+  const out: ScheduleConflict[] = [];
+  for (const c of overlapping) {
+    if (roomId && c.roomId === roomId) {
+      out.push({ classId: c.id, title: c.title, start: c.start, end: c.end, kind: "room" });
+    }
+    if (trainerIds.length > 0) {
+      try {
+        const ids = await fetchClassTrainers(c.id);
+        if (ids.some((id) => trainerIds.includes(id))) {
+          out.push({ classId: c.id, title: c.title, start: c.start, end: c.end, kind: "trainer" });
+        }
+      } catch { /* 경고 용도라 실패해도 무시 — 저장 자체를 막지 않음 */ }
+    }
+  }
+  return out;
+}
+
 export async function fetchClasses(centerId: string, fromDate: string, toDate: string): Promise<ManagedClass[]> {
   // ⚠️ center_id로 이미 좁혀서 조회하니 PostgREST 기본 응답 행 수 제한(1000행)에 안 걸릴
   // 거라고 가정했었는데(과거 fetchMonthData 수정 당시의 가정 — lib/reservations.ts 참고),
@@ -805,7 +849,7 @@ export async function planCopyByDate(
 // 실제 복사 실행 (요일 기준)
 export async function copyByWeekday(
   centerId: string, toMonth: string, groups: CopyGroup[]
-): Promise<number> {
+): Promise<CopyResult> {
   const [ty, tm] = toMonth.split("-").map(Number);
   const holidays = await fetchCenterHolidayDates(centerId);
   const groupId = crypto.randomUUID();
@@ -831,7 +875,7 @@ export async function copyByWeekday(
 // 실제 복사 실행 (날짜 기준)
 export async function copyByDate(
   centerId: string, toMonth: string, items: CopyDateItem[]
-): Promise<number> {
+): Promise<CopyResult> {
   const [ty, tm] = toMonth.split("-").map(Number);
   const holidays = await fetchCenterHolidayDates(centerId);
   const lastDay = new Date(Date.UTC(ty, tm, 0, 12, 0, 0)).getUTCDate();
@@ -869,10 +913,12 @@ export async function fetchClassPassSelectionMode(classId: string): Promise<"all
 // 공통: 삽입 + 수강권/강사 연결 복사
 // P1-5b: create_recurring_classes_safe RPC를 거친다(rows에서 center_id는 빼고 별도
 // 인자로 넘김) — own 권한(schedule.own.group.create) 판정이 서버에서 이뤄진다.
+export type CopyResult = { count: number; failedCount: number };
+
 async function insertCopiedClasses(
   centerId: string, rows: any[], linkPlan: { idx: number; srcClassId: string }[]
-): Promise<number> {
-  if (rows.length === 0) return 0;
+): Promise<CopyResult> {
+  if (rows.length === 0) return { count: 0, failedCount: 0 };
 
   // 원본별 수강권 허용 모드를 먼저 조회해 각 row에 반영한다 — pass_selection_mode는
   // classes 테이블의 컬럼이라 insert 시점에 함께 넣어야 한다(나중에 update하면 그 사이
@@ -895,6 +941,10 @@ async function insertCopiedClasses(
   // 원본별 수강권/강사 연결 캐시
   const productCache: Record<string, string[]> = {};
   const trainerCache: Record<string, string[]> = {};
+  // UX 감사(2026-09-06) — 여기 실패는 예전엔 조용히 무시돼, 복사된 수업이 원본의 수강권
+  // 제한·담당 강사를 못 받아도 매니저가 알 방법이 없었다. 몇 건이 실패했는지 세어서
+  // 반환한다(수업 생성 자동 예약조건 등록의 failedRuleCount와 같은 패턴).
+  let failedCount = 0;
   for (const l of linkPlan) {
     const newId = newIds[l.idx];
     if (!newId) continue;
@@ -910,12 +960,12 @@ async function insertCopiedClasses(
     // 'all' 모드는 class_allowed_products를 비워두는 게 정책이므로 여기서도 그대로 둔다.
     const products = productCache[l.srcClassId];
     if (modeCache[l.srcClassId] === "selected" && products.length > 0) {
-      try { await setClassProducts(newId, products); } catch { /* 무시 */ }
+      try { await setClassProducts(newId, products); } catch { failedCount += 1; }
     }
     const trainers = trainerCache[l.srcClassId];
     if (trainers.length > 0) {
-      try { await setClassTrainers(newId, trainers); } catch { /* 무시 */ }
+      try { await setClassTrainers(newId, trainers); } catch { failedCount += 1; }
     }
   }
-  return newIds.length;
+  return { count: newIds.length, failedCount };
 }

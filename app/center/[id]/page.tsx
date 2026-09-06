@@ -16,15 +16,36 @@ import {
   type CenterDetail, type CenterClass, type CenterProduct,
 } from "../../../lib/center";
 import { ZoomableImage } from "../../components/ImageViewer";
-import { addToCart } from "../../../lib/cart";
+import { addToCart, cartCount } from "../../../lib/cart";
 import { fetchReviews, myReviewFor, writeReview, deleteReview, uploadReviewPhoto, reviewPhotoUrl, type Review } from "../../../lib/reviews";
 import { reservationReturnUrl } from "../../../lib/reservationNav";
 import { extractPlainText } from "../../../lib/security";
+import { fetchRulesForProducts, ruleToText, type ScheduleRule } from "../../../lib/passes";
 import RichTextEditor from "../../components/RichTextEditor";
 import UiIcon from "../../components/UiIcon";
 import EmptyState from "../../components/EmptyState";
 import BackButton from "../../components/BackButton";
 import { loginHrefWithReturnToHere } from "../../../lib/postLoginReturn";
+
+// 수강권 대분류(group_label) 기준으로 묶는다 — 라벨 없는 상품은 맨 위에 헤더 없이,
+// 라벨 있는 상품은 처음 등장한 순서대로 그룹 헤더를 붙여 보여준다(add_product_group_label.sql).
+function groupByLabel<T extends { groupLabel: string | null; price: number }>(items: T[]): { label: string | null; items: T[] }[] {
+  // 종류가 많아지면 뭘 골라야 할지 판단하기 어렵다는 피드백(2026-09-06 UX 감사) —
+  // 그룹 안에서 최소한 가격 오름차순으로라도 정렬해 저렴한 옵션이 먼저 보이게 한다.
+  const byPrice = (a: T, b: T) => a.price - b.price;
+  const ungrouped = items.filter((i) => !i.groupLabel).sort(byPrice);
+  const order: string[] = [];
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    if (!item.groupLabel) continue;
+    if (!map.has(item.groupLabel)) { map.set(item.groupLabel, []); order.push(item.groupLabel); }
+    map.get(item.groupLabel)!.push(item);
+  }
+  const result: { label: string | null; items: T[] }[] = [];
+  if (ungrouped.length > 0) result.push({ label: null, items: ungrouped });
+  for (const key of order) result.push({ label: key, items: map.get(key)!.sort(byPrice) });
+  return result;
+}
 
 export default function CenterDetailPage() {
   return (
@@ -61,6 +82,8 @@ function CenterDetailContent() {
   const [allowedPasses, setAllowedPasses] = useState<Record<string, string[]>>({});
   const [hasPass, setHasPass] = useState(false);
   const [buySheet, setBuySheet] = useState(false);
+  const [cartItemCount, setCartItemCount] = useState(0);
+  const [passRules, setPassRules] = useState<Record<string, ScheduleRule[]>>({});
   const [descProduct, setDescProduct] = useState<CenterProduct | null>(null);
   // 후기
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -91,7 +114,14 @@ function CenterDetailContent() {
       if (!c) { setNotFound(true); setLoading(false); return; }
       setCenter(c);
       setClasses(await fetchCenterClasses(centerId));
-      setProducts(await fetchCenterProducts(centerId));
+      const fetchedProducts = await fetchCenterProducts(centerId);
+      setProducts(fetchedProducts);
+      // 회원이 정확히 무슨 요일·시간에 쓸 수 있는 수강권인지 구매 전에 알 수 있도록
+      // 표시(비로그인이면 RLS로 빈 결과만 옴 — 조용히 무시).
+      try {
+        const passIds = fetchedProducts.filter((p) => p.kind === "pass").map((p) => p.id);
+        setPassRules(await fetchRulesForProducts(passIds));
+      } catch { /* 비로그인 등 — 무시 */ }
       try { setAllowedPasses(await fetchClassAllowedPasses(centerId)); } catch { /* 무시 */ }
       try { setReviews(await fetchReviews(centerId)); } catch { /* 무시 */ }
       try { setMyReview(await myReviewFor(centerId)); } catch { /* 무시 */ }
@@ -183,8 +213,13 @@ function CenterDetailContent() {
     try {
       await addToCart({ centerId, productId: p.id, productName: p.name, price: p.price });
       showToast(`'${p.name}' 장바구니에 담았어요`);
+      cartCount().then(setCartItemCount);
     } catch (e: any) { setError(e.message); }
   }
+
+  useEffect(() => {
+    if (buySheet) cartCount().then(setCartItemCount);
+  }, [buySheet]);
 
   if (loading) {
     return (
@@ -292,7 +327,12 @@ function CenterDetailContent() {
                 <UiIcon name="close" size={20} />
               </button>
             </div>
-            <a href="/cart" className="cart-link-btn"><UiIcon name="cart" size={16} /> 장바구니 보기</a>
+            <a href="/cart" className="cart-link-btn">
+              <UiIcon name="cart" size={16} /> 장바구니 보기{cartItemCount > 0 ? ` (${cartItemCount})` : ""}
+            </a>
+            <div className="perm-guide" style={{ margin: "8px 0 4px" }}>
+              <b>담기</b>는 장바구니에 모아뒀다가 한번에 결제, <b>구매</b>는 이것만 바로 결제해요.
+            </div>
             {filterProductIds && (
               <div className="class-filter-notice">
                 <span>{applyFilter ? "이 수업에 사용할 수 있는 수강권만 표시 중" : "전체 상품 표시 중"}</span>
@@ -310,22 +350,34 @@ function CenterDetailContent() {
                 {visibleProducts.filter((p) => p.kind === "pass").length > 0 && (
                   <>
                     <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>수강권</div>
-                    <div className="center-products">
-                      {visibleProducts.filter((p) => p.kind === "pass").map((p) => (
-                        <div key={p.id} className="center-product-row">
-                          <button className="center-product-info" style={{ background: "none", border: "none", textAlign: "left", flex: 1, cursor: p.description ? "pointer" : "default" }} onClick={() => p.description && setDescProduct(p)}>
-                            <div className="center-product-name">{p.name}{p.description ? " ⓘ" : ""}</div>
-                            <div className="center-product-detail">
-                              {p.unlimited ? "무제한" : p.totalCount ? `${p.totalCount}회` : ""} · {won(p.price)}
+                    {groupByLabel(visibleProducts.filter((p) => p.kind === "pass")).map((group) => (
+                      <div key={group.label ?? "__ungrouped"}>
+                        {group.label && (
+                          <div className="menu-section-label" style={{ padding: "10px 0 4px", fontSize: 11 }}>{group.label}</div>
+                        )}
+                        <div className="center-products">
+                          {group.items.map((p) => (
+                            <div key={p.id} className="center-product-row">
+                              <button className="center-product-info" style={{ background: "none", border: "none", textAlign: "left", flex: 1, cursor: p.description ? "pointer" : "default" }} onClick={() => p.description && setDescProduct(p)}>
+                                <div className="center-product-name">{p.name}{p.description ? " ⓘ" : ""}</div>
+                                <div className="center-product-detail">
+                                  {p.unlimited ? "무제한" : p.totalCount ? `${p.totalCount}회` : ""} · {won(p.price)}
+                                </div>
+                                {(passRules[p.id] ?? []).length > 0 && (
+                                  <div className="center-product-detail" style={{ color: "var(--brand)" }}>
+                                    {(passRules[p.id] ?? []).map(ruleToText).join(" / ")}
+                                  </div>
+                                )}
+                              </button>
+                              <div className="center-product-actions">
+                                <button className="center-product-cart" onClick={() => handleAddCart(p)}>담기</button>
+                                <button className="center-product-buy" onClick={() => handlePurchase(p)}>구매</button>
+                              </div>
                             </div>
-                          </button>
-                          <div className="center-product-actions">
-                            <button className="center-product-cart" onClick={() => handleAddCart(p)}>담기</button>
-                            <button className="center-product-buy" onClick={() => handlePurchase(p)}>구매</button>
-                          </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </>
                 )}
                 {visibleProducts.filter((p) => p.kind === "goods").length > 0 && (

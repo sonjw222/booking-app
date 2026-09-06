@@ -66,8 +66,8 @@ export default function MyReservationsPage() {
     if (!(await globalThis.appConfirm("이 수업 예약을 취소할까요?"))) return;
     setBusyId(h.id);
     try {
-      await cancelReservation(h.id);
-      showToast("예약이 취소됐어요");
+      const { deducted } = await cancelReservation(h.id);
+      showToast(deducted ? "취소됐지만 마감 이후라 수강권 1회가 차감됐어요" : "예약이 취소됐어요");
       await load();
     } catch (e: any) {
       showToast(e.message ?? "취소하지 못했어요");

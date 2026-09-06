@@ -171,12 +171,13 @@ export type CenterProduct = {
   description: string | null;
   sizes: string[] | null;
   autoBookDays: number[] | null;
+  groupLabel: string | null;
 };
 
 export async function fetchCenterProducts(centerId: string): Promise<CenterProduct[]> {
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, price, product_kind, total_count, unlimited, description, sizes, auto_book_days")
+    .select("id, name, price, product_kind, total_count, unlimited, description, sizes, auto_book_days, group_label")
     .eq("center_id", centerId)
     .eq("is_active", true)
     .eq("is_on_sale", true)
@@ -191,6 +192,7 @@ export async function fetchCenterProducts(centerId: string): Promise<CenterProdu
     description: p.description ?? null,
     sizes: p.sizes ?? null,
     autoBookDays: p.auto_book_days ?? null,
+    groupLabel: p.group_label ?? null,
   }));
 }
 

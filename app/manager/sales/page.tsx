@@ -17,7 +17,7 @@ import {
   fetchCenterMembersForPayment, fetchCenterStaffForPayment, fetchSaleProducts,
   SALE_TYPE_LABEL, METHOD_LABEL, won,
   registerExpense, fetchExpenses, deleteExpense, summarizeExpenses, EXPENSE_CATEGORIES,
-  registerPoint, fetchPoints, computeAutoUnpaid,
+  registerPoint, fetchPoints, computeAutoUnpaid, collectUnpaidPayment,
   type PaymentRow, type RevenueSummary,
   type ExpenseRow, type PointRow,
 } from "../../../lib/sales";
@@ -77,6 +77,15 @@ export default function SalesPage() {
   // 매출 드릴다운 (결제수단·매출구분·회원별 내역)
   const [drill, setDrill] = useState<{ kind: "method" | "saleType" | "member"; key: string; label: string } | null>(null);
   const [payDetail, setPayDetail] = useState<PaymentRow | null>(null);
+  // 미수금 받기 — 원래 결제(unpaidAmount > 0)와 연결해 회수 처리한다(add_payments_unpaid_link.sql).
+  const [collectFor, setCollectFor] = useState<PaymentRow | null>(null);
+  const [cCard, setCCard] = useState("");
+  const [cCash, setCCash] = useState("");
+  const [cTransfer, setCTransfer] = useState("");
+  const [cPoint, setCPoint] = useState("");
+  const [cPaidAt, setCPaidAt] = useState(todayStr());
+  const [cMemo, setCMemo] = useState("");
+  const [collecting, setCollecting] = useState(false);
   const [csvSheet, setCsvSheet] = useState(false);
   const [csvCols, setCsvCols] = useState<string[]>(["profileName", "saleType", "productName", "paidAt", "totalAmount", "unpaidAmount"]);
   const [eCategory, setECategory] = useState(EXPENSE_CATEGORIES[0]);
@@ -236,6 +245,32 @@ export default function SalesPage() {
       await load();
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
+  }
+
+  function openCollect(r: PaymentRow) {
+    setCollectFor(r);
+    setCCard(""); setCCash(""); setCTransfer(""); setCPoint("");
+    setCPaidAt(todayStr()); setCMemo("");
+  }
+
+  async function handleCollect() {
+    if (!collectFor) return;
+    const collected = num(cCard) + num(cCash) + num(cTransfer) + num(cPoint);
+    if (collected === 0) { setError("받은 금액을 입력해주세요"); return; }
+    setCollecting(true);
+    try {
+      await collectUnpaidPayment({
+        originalPaymentId: collectFor.id,
+        cardAmount: num(cCard), cashAmount: num(cCash),
+        transferAmount: num(cTransfer), pointAmount: num(cPoint),
+        paidAt: cPaidAt, memo: cMemo || undefined,
+      });
+      showToast("미수금을 회수 처리했어요");
+      setCollectFor(null);
+      setPayDetail(null);
+      await load();
+    } catch (e: any) { setError(e.message); }
+    finally { setCollecting(false); }
   }
 
   async function openPointSheet() {
@@ -661,6 +696,36 @@ export default function SalesPage() {
             {payDetail.memo && <><div className="menu-section-label" style={{ padding: "12px 0 6px" }}>메모</div><div className="perm-guide" style={{ margin: 0 }}>{payDetail.memo}</div></>}
             <div className="add-profile-actions" style={{ marginTop: 12 }}>
                 <button className="outline-action" onClick={() => setPayDetail(null)}>닫기</button>
+                {payDetail.unpaidAmount > 0 && canCreatePayment && (
+                  <button className="primary-btn" onClick={() => openCollect(payDetail)}>미수금 받기</button>
+                )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 미수금 받기 시트 */}
+      {collectFor && (
+        <div className="sheet-overlay" onClick={() => !collecting && setCollectFor(null)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-title">미수금 받기</div>
+            <div className="perm-guide" style={{ margin: "0 0 12px" }}>
+              {collectFor.profileName}님의 미수금 {won(collectFor.unpaidAmount)} 중 받은 금액을 입력하세요.
+              새 결제 내역으로 남고, 이 결제의 미수금이 그만큼 줄어들어요.
+            </div>
+            <div className="pay-grid">
+              <label className="pay-field"><span>카드</span><input inputMode="numeric" className="input-field" value={cCard} onChange={(e) => setCCard(e.target.value)} placeholder="0" /></label>
+              <label className="pay-field"><span>현금</span><input inputMode="numeric" className="input-field" value={cCash} onChange={(e) => setCCash(e.target.value)} placeholder="0" /></label>
+              <label className="pay-field"><span>계좌이체</span><input inputMode="numeric" className="input-field" value={cTransfer} onChange={(e) => setCTransfer(e.target.value)} placeholder="0" /></label>
+              <label className="pay-field"><span>포인트</span><input inputMode="numeric" className="input-field" value={cPoint} onChange={(e) => setCPoint(e.target.value)} placeholder="0" /></label>
+            </div>
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>받은 날짜</div>
+            <DatePicker value={cPaidAt} onChange={setCPaidAt} label="받은 날짜 선택" />
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>메모 (선택)</div>
+            <input className="input-field" value={cMemo} onChange={(e) => setCMemo(e.target.value)} placeholder="예: 현장에서 카드로 받음" />
+            <div className="add-profile-actions" style={{ marginTop: 14 }}>
+              <button className="ghost-btn" disabled={collecting} onClick={() => setCollectFor(null)}>취소</button>
+              <button className="primary-btn" disabled={collecting} onClick={handleCollect}>{collecting ? "처리 중..." : "받기"}</button>
             </div>
           </div>
         </div>
