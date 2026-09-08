@@ -174,20 +174,26 @@ export async function fetchMembers(centerId: string, filter: MemberFilter = {}):
     list = list.filter((m) => m.status === filter.status);
   }
 
-  // 이름/전화/주소 검색은 조인 결과라서 클라이언트에서 필터
+  // 이름/전화/주소 검색은 조인 결과라서 클라이언트에서 필터.
+  // 콤마로 여러 명을 한 번에 검색할 수 있게(예: "회원1,회원2" / "회원1, 회원2" /
+  // "회원1 , 회원2") — 콤마 앞뒤 공백은 있어도 없어도 되게 정규식으로 나눠서 어느 한
+  // 조건이라도 맞으면 포함(OR 매칭). 여러 명에게 동시에 알림톡을 보내려는 화면
+  // (app/manager/alimtalk/send)에서 체크박스를 일일이 찾지 않아도 되게 하기 위함
+  // (2026-09-08 요청).
   const kw = filter.keyword?.trim();
   if (kw) {
-    const kwNoDash = kw.replace(/-/g, "");
+    const terms = kw.split(/\s*[,，]\s*/).map((t) => t.trim()).filter(Boolean);
     const field = filter.searchField ?? "all";
-    list = list.filter((m) => {
-      const byName = m.name.includes(kw);
-      const byPhone = (m.phone ?? "").replace(/-/g, "").includes(kwNoDash);
-      const byAddr = (m.address ?? "").includes(kw);
+    list = list.filter((m) => terms.some((term) => {
+      const termNoDash = term.replace(/-/g, "");
+      const byName = m.name.includes(term);
+      const byPhone = (m.phone ?? "").replace(/-/g, "").includes(termNoDash);
+      const byAddr = (m.address ?? "").includes(term);
       if (field === "name") return byName;
       if (field === "phone") return byPhone;
       if (field === "address") return byAddr;
       return byName || byPhone || byAddr;
-    });
+    }));
   }
   return list;
 }
@@ -513,14 +519,15 @@ export type AlimtalkSendResult = {
 export async function sendAlimtalkToMembers(
   targets: { name: string; phone: string | null }[],
   content: string,
-  centerId: string
+  centerId: string,
+  templateCode?: string
 ): Promise<AlimtalkSendResult> {
   const service = getMessageService();
   const result: AlimtalkSendResult = { sent: 0, skipped: 0, failed: 0, failedNames: [] };
   for (const t of targets) {
     if (!t.phone) { result.skipped++; continue; }
     try {
-      const res = await service.send({ to: t.phone, content, channel: "alimtalk", centerId });
+      const res = await service.send({ to: t.phone, content, channel: "alimtalk", centerId, templateCode });
       if (res.status === "sent") result.sent++;
       else { result.failed++; result.failedNames.push(t.name); }
     } catch {

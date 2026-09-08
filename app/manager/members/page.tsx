@@ -18,6 +18,7 @@ import {
   type CenterMember, type Grade, type MemberDetailData,
 } from "../../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { fetchCenterSubscription } from "../../../lib/centerSubscription";
 import AlimtalkComposer, {
   emptyAlimtalkBlocks, flattenAlimtalkBlocks, hasAlimtalkContent, type AlimtalkBlock,
 } from "../../components/AlimtalkComposer";
@@ -99,6 +100,7 @@ function MembersContent() {
   const [alimtalkTargets, setAlimtalkTargets] = useState<CenterMember[] | null>(null);
   const [alimtalkBlocks, setAlimtalkBlocks] = useState<AlimtalkBlock[]>(emptyAlimtalkBlocks());
   const [sendingAlimtalk, setSendingAlimtalk] = useState(false);
+  const [alimtalkAddonEnabled, setAlimtalkAddonEnabled] = useState(true); // 확인 전까지는 막지 않음
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -164,6 +166,15 @@ function MembersContent() {
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   }, [centerId, gradeFilter, statusFilter, keyword, searchField]);
+
+  // 알림톡 애드온 미신청 센터는 서버(send-alimtalk)가 발송을 거부하므로, 필터 갱신마다
+  // 다시 부르지 않게 centerId가 바뀔 때만 따로 확인한다(위 load()와 분리).
+  useEffect(() => {
+    if (!centerId) return;
+    fetchCenterSubscription(centerId)
+      .then((sub) => setAlimtalkAddonEnabled(sub?.alimtalkAddon ?? false))
+      .catch(() => setAlimtalkAddonEnabled(true));
+  }, [centerId]);
 
   // 검색어 입력 중엔 300ms 기다렸다 조회 (결과 깜빡임 방지)
   useEffect(() => {
@@ -328,6 +339,17 @@ function MembersContent() {
 
   async function handleSendAlimtalk() {
     if (!alimtalkTargets || !hasAlimtalkContent(alimtalkBlocks) || !centerId) return;
+    if (!alimtalkAddonEnabled) {
+      setError("이 센터는 카카오 알림톡/SMS 발송 애드온을 신청하지 않아 발송할 수 없어요");
+      return;
+    }
+    // 이 화면은 템플릿 선택 없이 자유 문장만 쓰므로 항상 SMS로 나간다(카카오 알림톡 아님) —
+    // 요금이 알림톡과 달라서 매번 확인받는다(app/manager/alimtalk/send와 같은 패턴).
+    const recipientCount = alimtalkTargets.filter((m) => m.phone).length;
+    const ok = await globalThis.appConfirm(
+      `카카오 알림톡이 아니라 SMS로 나가요.\n번호가 있는 ${recipientCount}명에게 SMS 요금이 발생해요 — 계속할까요?`
+    );
+    if (!ok) return;
     setSendingAlimtalk(true);
     try {
       const content = flattenAlimtalkBlocks(alimtalkBlocks);
