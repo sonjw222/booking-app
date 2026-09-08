@@ -28,6 +28,10 @@ comment on column alimtalk_templates.center_id is
     '이 템플릿을 쓸 수 있는 센터. null이면 "공통" — 플랫폼 전체 센터가 다 쓸 수 있음(운영자만 생성/수정 가능)';
 
 drop policy if exists "알림톡템플릿 매니저 관리" on alimtalk_templates;
+drop policy if exists "알림톡템플릿 조회" on alimtalk_templates;
+drop policy if exists "알림톡템플릿 매니저 생성" on alimtalk_templates;
+drop policy if exists "알림톡템플릿 매니저 수정" on alimtalk_templates;
+drop policy if exists "알림톡템플릿 매니저 삭제" on alimtalk_templates;
 
 create policy "알림톡템플릿 조회"
     on alimtalk_templates for select

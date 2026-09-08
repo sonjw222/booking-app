@@ -19,6 +19,7 @@ import {
 } from "../../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 import { fetchCenterSubscription } from "../../../lib/centerSubscription";
+import { fetchSaleProducts, grantProductToMember, won, type GrantInput } from "../../../lib/sales";
 import AlimtalkComposer, {
   emptyAlimtalkBlocks, flattenAlimtalkBlocks, hasAlimtalkContent, type AlimtalkBlock,
 } from "../../components/AlimtalkComposer";
@@ -28,6 +29,7 @@ const RES_STATUS: Record<string, string> = {
 };
 const SALE_LABEL: Record<string, string> = {
   new: "신규", renew: "재결제", trial: "체험", upgrade: "업그레이드", refund: "환불", unpaid_pay: "미수금", transfer_fee: "양도",
+  service: "서비스",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -101,6 +103,15 @@ function MembersContent() {
   const [alimtalkBlocks, setAlimtalkBlocks] = useState<AlimtalkBlock[]>(emptyAlimtalkBlocks());
   const [sendingAlimtalk, setSendingAlimtalk] = useState(false);
   const [alimtalkAddonEnabled, setAlimtalkAddonEnabled] = useState(true); // 확인 전까지는 막지 않음
+
+  // 수강권/상품 지급 — 주문 없이 매니저가 바로 발급(서비스로 무상 지급하는 경우 포함)
+  const [grantTarget, setGrantTarget] = useState<CenterMember | null>(null);
+  const [grantProducts, setGrantProducts] = useState<{ id: string; name: string; price: number }[]>([]);
+  const [grantProductId, setGrantProductId] = useState("");
+  const [grantPrice, setGrantPrice] = useState("");
+  const [grantMethod, setGrantMethod] = useState<GrantInput["payMethod"]>("card");
+  const [grantMemo, setGrantMemo] = useState("");
+  const [granting, setGranting] = useState(false);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -201,6 +212,10 @@ function MembersContent() {
   // 정보 탭(메모/주소/등급/상태 저장)은 모두 customer.member.update RLS 하나로 묶여있다.
   const canUpdateMember = canDo("customer.member.update");
   const canCreateMember = canDo("customer.member.create");
+  // 수강권 발급(customer.member.issue_pass)과 결제 등록(pass.payment.create) 둘 다 필요 —
+  // memberships/payments insert RLS가 각각 이 두 키를 요구한다(fix_membership_rls.sql,
+  // app/manager/sales/page.tsx의 registerPayment 주석과 동일한 조합).
+  const canGrantPass = canDo("customer.member.issue_pass") && canDo("pass.payment.create");
 
   // URL ?profile=<profileId> 로 들어오면 그 회원 상세를 자동으로 열기 (1회)
   const searchParams = useSearchParams();
@@ -335,6 +350,46 @@ function MembersContent() {
   function openAlimtalkForOne(m: CenterMember) {
     setAlimtalkBlocks(emptyAlimtalkBlocks());
     setAlimtalkTargets([m]);
+  }
+
+  async function openGrant(m: CenterMember) {
+    if (!centerId) return;
+    setGrantProductId(""); setGrantPrice(""); setGrantMethod("card"); setGrantMemo("");
+    setGrantTarget(m);
+    try {
+      setGrantProducts(await fetchSaleProducts(centerId));
+    } catch (e: any) { setError(e.message); }
+  }
+
+  function pickGrantProduct(id: string) {
+    setGrantProductId(id);
+    const p = grantProducts.find((x) => x.id === id);
+    setGrantPrice(p ? String(p.price) : "");
+    // 가격이 있는 상품을 새로 고르면 "서비스"로 남아있던 결제방법을 실수로 유지하지 않게 초기화
+    if (p && p.price > 0 && grantMethod === "service") setGrantMethod("card");
+  }
+
+  async function handleGrant() {
+    if (!centerId || !grantTarget || !grantProductId) return;
+    const price = Number(grantPrice);
+    if (!Number.isFinite(price) || price < 0) { setError("가격을 숫자로 입력해주세요"); return; }
+    if (price === 0 && grantMethod !== "service") { setError("가격이 0원이면 결제방법은 '서비스'여야 해요"); return; }
+    if (price > 0 && grantMethod === "service") { setError("가격이 있으면 '서비스'로는 지급할 수 없어요 — 결제방법을 골라주세요"); return; }
+    const product = grantProducts.find((p) => p.id === grantProductId);
+    if (!product) return;
+    setGranting(true); setError(null);
+    try {
+      await grantProductToMember({
+        centerId, profileId: grantTarget.profileId, productId: product.id, productName: product.name,
+        price, payMethod: grantMethod, memo: grantMemo.trim() || undefined,
+        paidAt: new Date().toISOString(),
+      });
+      showToast(price === 0 ? "서비스로 지급했어요" : "지급하고 매출에 반영했어요");
+      setGrantTarget(null);
+      if (detail?.id === grantTarget.id) await openDetail(grantTarget); // 상세 시트가 열려 있으면 보유 수강권 갱신
+      await load();
+    } catch (e: any) { setError(e.message); }
+    finally { setGranting(false); }
   }
 
   async function handleSendAlimtalk() {
@@ -545,7 +600,12 @@ function MembersContent() {
           <div className="sheet member-detail-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title mem-detail-title">
               <span>{detail.name}</span>
-              <button className="outline-action compact" onClick={() => openAlimtalkForOne(detail)}>알림톡 보내기</button>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {canGrantPass && (
+                  <button className="outline-action compact" onClick={() => openGrant(detail)}>수강권/상품 지급</button>
+                )}
+                <button className="outline-action compact" onClick={() => openAlimtalkForOne(detail)}>알림톡 보내기</button>
+              </div>
             </div>
             {detailLoading && <Loading />}
             {!detailLoading && (<>
@@ -838,6 +898,75 @@ function MembersContent() {
 
             <div className="add-profile-actions" style={{ marginTop: 6 }}>
               <button className="ghost-btn" onClick={() => setAddSheet(false)}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 수강권/상품 지급 시트 — 주문 없이 매니저가 바로 발급(서비스 무상 지급 포함) */}
+      {grantTarget && (
+        <div className="sheet-overlay" onClick={() => !granting && setGrantTarget(null)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-title">{grantTarget.name}님에게 지급</div>
+
+            <div className="menu-section-label" style={{ padding: "0 0 6px" }}>상품/수강권</div>
+            <select
+              className="input-field" style={{ marginBottom: 10 }}
+              value={grantProductId} disabled={granting}
+              onChange={(e) => pickGrantProduct(e.target.value)}
+            >
+              <option value="">상품 선택...</option>
+              {grantProducts.map((p) => (
+                <option key={p.id} value={p.id}>{p.name} · {won(p.price)}</option>
+              ))}
+            </select>
+
+            <div className="menu-section-label" style={{ padding: "0 0 6px" }}>가격</div>
+            <input
+              className="input-field" type="number" min={0} style={{ marginBottom: 10 }}
+              placeholder="0원이면 서비스로 지급" value={grantPrice} disabled={granting}
+              onChange={(e) => {
+                setGrantPrice(e.target.value);
+                const n = Number(e.target.value);
+                if (n === 0) setGrantMethod("service");
+                else if (grantMethod === "service") setGrantMethod("card");
+              }}
+            />
+
+            <div className="menu-section-label" style={{ padding: "0 0 6px" }}>결제방법</div>
+            <div className="mem-filters" style={{ padding: 0, marginBottom: 10 }}>
+              {Number(grantPrice) === 0 ? (
+                <span className="filter-chip on">서비스(무상 지급)</span>
+              ) : (
+                (["card", "cash", "transfer"] as const).map((m) => (
+                  <button
+                    key={m} className={`filter-chip ${grantMethod === m ? "on" : ""}`} disabled={granting}
+                    onClick={() => setGrantMethod(m)}
+                  >
+                    {m === "card" ? "카드" : m === "cash" ? "현금" : "계좌이체"}
+                  </button>
+                ))
+              )}
+            </div>
+
+            <div className="menu-section-label" style={{ padding: "0 0 6px" }}>관리자 메모 (회원에게 보이지 않음)</div>
+            <input
+              className="input-field" style={{ marginBottom: 10 }}
+              placeholder="예: 이벤트 당첨 증정" value={grantMemo} disabled={granting}
+              onChange={(e) => setGrantMemo(e.target.value)}
+            />
+
+            {Number(grantPrice) === 0 && (
+              <div className="perm-guide" style={{ margin: "0 0 10px" }}>
+                서비스로 지급하면 매출액에는 0원으로 잡히고, 결제 내역에 "서비스"로 구분되어 남아요.
+              </div>
+            )}
+
+            <div className="add-profile-actions">
+              <button className="ghost-btn" disabled={granting} onClick={() => setGrantTarget(null)}>취소</button>
+              <button className="primary-btn" disabled={granting || !grantProductId || grantPrice.trim() === ""} onClick={handleGrant}>
+                {granting ? "지급 중..." : "지급하기"}
+              </button>
             </div>
           </div>
         </div>

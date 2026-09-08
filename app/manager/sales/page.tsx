@@ -418,7 +418,9 @@ export default function SalesPage() {
                     {Object.entries(summary.bySaleType).map(([k, v]) => (
                       <button key={k} className="sales-bd-item clickable" onClick={() => setDrill({ kind: "saleType", key: k, label: SALE_TYPE_LABEL[k] ?? k })}>
                         <span className="bd-label">{SALE_TYPE_LABEL[k] ?? k} ›</span>
-                        <span className="bd-value">{won(v)}</span>
+                        <span className="bd-value">
+                          {k === "service" ? `${summary.bySaleTypeCount[k] ?? 0}건` : won(v)}
+                        </span>
                       </button>
                     ))}
                   </div>
