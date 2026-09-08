@@ -32,6 +32,11 @@ export type CenterSubscription = {
   cardCompany: string | null;
   nextBillingDate: string | null; // "YYYY-MM-DD"
   updatedAt: string;
+  // 카카오 알림톡/SMS 발송 애드온(add_center_alimtalk_addon_billing.sql) — 신청한 센터만
+  // supabase/functions/send-alimtalk가 실제 발송을 허용한다. 가격은 건당(발송 1건마다,
+  // fix_alimtalk_addon_per_message_pricing.sql) — 알리고 실제 과금 방식과 일치시킴.
+  alimtalkAddon: boolean;
+  alimtalkAddonUnitPrice: number | null;
 };
 
 export type AdminCenterSubscription = CenterSubscription & {
@@ -59,6 +64,8 @@ type CenterSubscriptionRow = {
   card_company: string | null;
   next_billing_date: string | null;
   updated_at: string;
+  alimtalk_addon: boolean;
+  alimtalk_addon_unit_price: number | null;
   subscription_plans: SubscriptionPlanEmbed;
 };
 
@@ -78,11 +85,14 @@ function rowToSubscription(r: CenterSubscriptionRow): CenterSubscription {
     cardCompany: r.card_company,
     nextBillingDate: r.next_billing_date,
     updatedAt: r.updated_at,
+    alimtalkAddon: r.alimtalk_addon,
+    alimtalkAddonUnitPrice: r.alimtalk_addon_unit_price,
   };
 }
 
 const SELECT_COLUMNS =
-  "id, center_id, plan_id, status, card_last4, card_company, next_billing_date, updated_at, subscription_plans(name, monthly_price)";
+  "id, center_id, plan_id, status, card_last4, card_company, next_billing_date, updated_at, " +
+  "alimtalk_addon, alimtalk_addon_unit_price, subscription_plans(name, monthly_price)";
 
 // 매니저 - 내 센터의 구독 상태 조회.
 // 신규 센터는 트리거가 행을 자동으로 만들지만, 트리거 적용 전에 만들어진 데이터
@@ -125,6 +135,18 @@ export async function adminSetCenterSubscriptionPlan(centerId: string, planId: s
 export async function adminCancelCenterSubscription(centerId: string): Promise<void> {
   const { error } = await supabase.rpc("admin_cancel_center_subscription", { p_center_id: centerId });
   if (error) throw new Error("구독 취소에 실패했어요: " + error.message);
+}
+
+// 운영자 - 센터의 카카오 알림톡/SMS 발송 애드온 켜기/끄기 + 건당 요금 설정
+// (add_center_alimtalk_addon_billing.sql + fix_alimtalk_addon_per_message_pricing.sql의 RPC).
+// price는 최초로 켤 때만 필수 — 이미 가격이 설정돼 있으면 생략(undefined) 시 기존 가격을 그대로 유지한다.
+export async function adminSetCenterAlimtalkAddon(
+  centerId: string, enabled: boolean, price?: number
+): Promise<void> {
+  const { error } = await supabase.rpc("admin_set_center_alimtalk_addon", {
+    p_center_id: centerId, p_enabled: enabled, p_price: price ?? null,
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
 }
 
 // 운영자 - 취소된 구독 재개(add_admin_reactivate_center_subscription.sql의 RPC).

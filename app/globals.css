@@ -867,6 +867,11 @@ a { color: inherit; text-decoration: none; }
   word-break: break-all;
 }
 
+/* 관리자 카드 하단 액션 버튼들(구독 취소/재개, 알림톡 애드온 켜기/끄기)이 primary-btn(큰
+   블록형)과 profile-del(작은 필형)을 섞어 써서 크기가 제각각이었다(QA 피드백, 2026-09-08) —
+   전부 .profile-del 위에 이 클래스를 얹어 같은 필 모양을 카드 폭 전체로 통일한다. */
+.admin-action-btn { width: 100%; margin-top: 6px; }
+
 .admin-reject-reason {
   margin-top: 10px;
   padding: 9px 11px;
