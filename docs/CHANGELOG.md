@@ -1,5 +1,134 @@
 # CHANGELOG
 
+## 2026-09-08 — 앱 대표색을 새 앱 아이콘 네이비로 통일
+
+새 앱 아이콘(`app/icon.png`, 남색 배경 + 흰색 mw 워드마크)을 적용한 뒤에도(`1d7c167`)
+앱 전역 강조색(`--accent`)은 예전 값 그대로였다(라이트 `#202124` 거의 검정, 다크
+`#FF7A5C` 코랄) — 사장님이 "대표색을 바꿨는데 여러 곳에 안 반영됐다"고 지적. 확인해보니
+실제로는 아이콘 색 자체를 앱 CSS 변수에 반영하는 작업이 아직 없었던 것(아이콘 교체
+커밋은 아이콘 파일만 바꿨을 뿐 `--accent`는 안 건드림).
+
+`app/icon.png`에서 배경색을 직접 추출(#0A2446, 짙은 네이비) → 아티팩트로 실제 버튼/탭/
+뱃지에 입힌 미리보기를 만들어 라이트·다크 모드 후보 색을 비교 후 확정(사용자 승인):
+- 라이트: `--accent` `#202124` → `#0A2446`, `--accent-soft` `#EEEEEC` → `#E7ECF3`
+- 다크: `--accent` `#FF7A5C` → `#3E7BC4`(네이비를 그대로 쓰면 어두운 배경과 대비가 거의
+  없어서 밝힌 톤 사용), `--accent-soft` `#3A2420` → `#1C2E42`
+
+`--accent`가 이미 앱 전역(버튼/뱃지/선택 표시 등 128곳)에서 변수로 참조되고 있어 값만
+바꿔서 대부분 자동 반영됨(하드코딩된 곳 없음 확인). 크롬으로 라이트/다크 양쪽 모두
+실제 화면(하단 네비 활성 탭, 테마 선택 라디오)에서 새 색 적용 확인. `npm run build` 통과.
+
+## 2026-09-08 — 알림톡 승인 신청 자동화 + 공통/센터전용 템플릿 구분 + 회원 선택 UX 개선
+
+한 배치에 세 가지를 같이 진행함(사용자 요청).
+
+**1) 카카오 승인 신청 자동화** — 지금까지는 문구를 여기서 쓰고 알리고 콘솔에 따로 들어가
+복사해서 신청해야 했다. 알리고 공식 문서(raw HTML로 직접 확인, `template/add`·
+`template/request` 엔드포인트)를 대조해 `/manager/alimtalk/templates` 편집창에
+**"카카오 승인 신청하기"** 버튼 하나로 (1) 알리고에 템플릿 생성 + (2) 카카오 심사 제출까지
+한 번에 처리하도록 만듦. `[[변수]]` → 알리고 표기 `#{변수}` 자동 변환(`toAligoVariableSyntax`).
+
+**2) 여러 센터가 같은 알리고 계정을 쓸 때의 안전장치** — "센터 A 템플릿을 센터 B가 실수로
+쓸 수 있는지" 질문에서 시작. `fix_alimtalk_template_code_unique.sql`로 `aligo_template_code`
+중복 등록을 DB 유니크 인덱스로 원천 차단. 알리고 쪽 템플릿 이름에도 서버가 자동으로
+`[센터명]` 접두사를 붙여 목록에서 구분되게 함.
+
+**3) "공통"(플랫폼 전체) vs "센터 전용" 템플릿 구분** — 사장님이 알리고에 미리 등록해둔
+템플릿은 모든 센터가 같이 쓰고, 각 센터가 템플릿 관리에서 개별 등록한 건 그 센터만
+쓰게 해달라는 요청. `add_alimtalk_template_common.sql`로 `alimtalk_templates.center_id`를
+nullable로 바꾸고(null = 공통), RLS를 조회(공통 포함 전체 열람)/쓰기(자기 센터만, 공통은
+운영자만)로 분리. 화면에 "공통" 배지 + 운영자 전용 "모든 센터 공통으로 등록" 체크박스 추가,
+비운영자가 공통 템플릿을 열면 읽기 전용으로 잠김.
+
+**4) 매니저 즉시발송(`/manager/alimtalk/send`) UX 개선** — 체크박스 하나만 눌러도 그 회원
+한 명한테만 바로 발송 시트가 열려서 여러 명 선택이 안 됐던 문제(체크 → 시트가 목록을
+덮어서 다음 체크박스를 못 눌렀던 것) 발견·수정 — 선택과 발송창 열기를 분리해서, 원하는
+회원을 전부 체크한 뒤 우측 상단에 나타나는 "알림톡 보내기 (N)" 버튼을 눌러야 시트가 열림.
+등급/상태(이용중/만료/휴면) 필터 추가. 검색에 콤마로 여러 명 동시 검색 지원(예:
+"회원1,회원2", 콤마 앞뒤 공백 허용) — `lib/members.ts`의 `fetchMembers()` 키워드 매칭을
+OR 방식 다중 매칭으로 변경(`/manager/members`도 같이 혜택).
+
+- `npm run build` 통과, 크롬으로 실제 클릭까지 확인(승인 신청 버튼 → 알리고 미연동 에러
+  정상 노출, 공통 체크박스 → SQL 미적용 상태에서 예상된 not-null 에러 확인).
+- **적용 필요**: `fix_alimtalk_template_code_unique.sql`, `add_alimtalk_template_common.sql`
+  Supabase SQL Editor 실행 + `send-alimtalk` Edge Function 재배포(신규 액션 2개 추가).
+
+## 2026-09-08 — 알리고에서 템플릿 목록 자동 조회 + 발송 API 필드명 실제 문서 대조 완료
+
+`/manager/alimtalk/templates`에서 템플릿을 승인받은 뒤 코드/상태를 알리고 콘솔에서 보고
+수동으로 옮겨 적어야 했던 걸(사용자 질문으로 발견), 알리고의 템플릿 리스트 조회 API
+(`POST kakaoapi.aligo.in/akv10/template/list`)를 그대로 호출해 화면에서 골라 채우도록
+자동화함. 필드명(`apikey`/`userid`/`senderkey`, 응답의 `templtCode`/`templtName`/
+`templtContent`/`inspStatus`)은 알리고 공식 문서(smartsms.aligo.in/alimapi.html)와 실제
+구현체(github.com/esinx/aligo-kakao-api)를 웹에서 대조해 확인함 — 계정이 없어 대조를
+미뤄뒀던 기존 TODO(P1-3)도 이 과정에서 같이 해소됨: `sendViaAligo()`의 `failover`/
+`fsubject_1`/`fmessage_1` 등 발송 파라미터가 공식 문서와 일치함을 확인(코드 변경 없음).
+
+- **`supabase/functions/_shared/aligo.ts`**: `fetchAligoTemplateList()` 추가.
+- **`supabase/functions/send-alimtalk`**: 신규 `action:"list_templates"` 경로 추가(호출자가
+  해당 센터의 활성 매니저인지 확인). **재배포 필요.**
+- **`lib/alimtalk.ts`**: `fetchAligoRemoteTemplates()` + `inspStatusToLocalStatus()`(REG/REQ/
+  APR/REJ → draft/pending/approved/rejected) 추가.
+- **`app/manager/alimtalk/templates/page.tsx`**: 편집 시트에 "알리고에서 불러오기" 버튼 →
+  알리고 계정에 등록된 템플릿 목록(이름·상태·코드)을 드롭다운으로 보여주고 고르면 코드/상태
+  자동 입력. 플랫폼 단일 알리고 계정이라 전 센터 템플릿이 한 목록에 섞여 나올 수 있어
+  이름으로 구분해서 골라야 함(알리고 API 자체에 center 구분이 없음, 문서에 근거 있음).
+- `npm run build` 통과.
+
+## 2026-09-08 — 알림톡 애드온 + 추가요금 구조, 자동 발송 규칙도 항상 SMS로만 나가던 버그 수정
+
+사장님 결정: 카카오 알림톡/SMS는 신청하고 추가요금을 내는 센터만 쓸 수 있게 한다(기본은
+앱내 알림함+웹 푸시, 알림톡은 센터별 유료 애드온). 지금까지는 플랫폼 단일 알리고 계정을
+전 센터가 신청 여부와 무관하게 공용으로 쓸 수 있어서, 안 신청한 센터가 써도 알리고 비용만
+플랫폼에 쌓이는 구조였다.
+
+- **`add_center_alimtalk_addon_billing.sql`(신규)** — `center_subscriptions`에
+  `alimtalk_addon`(bool)/`alimtalk_addon_price`(원) 추가 + `admin_set_center_alimtalk_addon()`
+  RPC. 토스 자동결제가 아직 심사 전이라(기존 구독료도 동일) 실제 매월 청구는 안 되고,
+  지금은 운영자가 센터와 협의 후 이 화면에서 수동으로 켜주는 구조 — 센터 오너가 스스로
+  즉시 켤 수 있게 하면 결제 확인 없이 알리고 비용이 바로 발생해서 셀프서비스는 주지 않음.
+- **실제 게이팅은 `supabase/functions/send-alimtalk`** — 매니저 즉시발송(경로1)과 자동
+  규칙 큐 디스패치(경로2) 둘 다, 발송 전에 해당 센터의 `alimtalk_addon`을 확인해서 꺼져
+  있으면 거부(SMS 대체발송도 같이 막음 — 둘 다 같은 알리고 계정으로 나가 플랫폼에 비용이
+  발생하기 때문). **이 파일은 `supabase functions deploy send-alimtalk`로 재배포 필요.**
+- **관리자 화면(`/admin/subscriptions`)**: 센터별로 "알림톡 애드온 켜기"(월 요금 입력)/
+  "끄기" 버튼 추가. **매니저 화면(`/manager/subscription`)**: 오너에게 신청 상태를 읽기
+  전용으로 표시(신청은 운영자에게 문의 안내). 매니저 알림톡 화면(`/manager/alimtalk/send`,
+  회원탭)에도 애드온 꺼진 센터는 발송 UI 대신 안내 문구가 뜨도록 미리 체크 추가.
+- **버그 발견 + 수정**: 애드온 구조를 설계하다가, 자동 발송 규칙 5종(잔여횟수부족/
+  만료임박/재구매유도/정지종료/생일)도 승인된 템플릿을 골라도 항상 SMS로만 나가고 있던
+  걸 발견함 — `evaluate_notification_rules()`가 템플릿 "내용"만 읽어 `messages.content`에
+  넣고 템플릿의 알리고 코드는 어디에도 저장하지 않아서, `dispatch-alimtalk` cron이
+  `sendViaAligo()`를 templateCode 없이 불렀던 것(즉시발송에서 고친 것과 같은 종류의 버그,
+  더 먼저 있었던 쪽). `fix_notification_rule_alimtalk_template_code.sql`(신규)로
+  `messages.aligo_template_code` 컬럼 추가 + 함수가 그 값을 같이 저장하도록 수정,
+  `send-alimtalk`도 그 컬럼을 읽어 `sendViaAligo()`에 넘기도록 수정.
+- `npm run build` 통과. **적용 필요(대표님)**: 두 SQL 파일을 Supabase SQL Editor에서
+  실행 + `send-alimtalk` Edge Function 재배포 + 알리고 시크릿 등록(`ALIGO_USER_ID`,
+  `ALIGO_API_KEY`는 발급받음 — `ALIGO_SENDER_KEY`/`ALIGO_SENDER_PHONE`은 카카오 채널을
+  알리고에 연동해야 발급됨) + 원하는 센터에 애드온 켜주기.
+
+## 2026-09-08 — 알림톡 "즉시 발송"이 승인된 템플릿을 골라도 항상 SMS로만 나가던 문제 수정
+
+`app/manager/alimtalk/send`(회원 선택 후 즉시 발송)에서 승인된 템플릿을 드롭다운으로
+골라도 문구만 미리 채워질 뿐, 실제 발송 시 `templateCode`가 서버로 전달되지 않아 항상
+SMS 대체발송으로만 나가고 있었다(진짜 카카오 알림톡이 아님) — `lib/messaging/types.ts`의
+`SendMessageInput.templateCode`는 이미 있었지만 `sendAlimtalkToMembers()`가 이 값을
+받지도 넘기지도 않던 게 원인. `sendAlimtalkToMembers()`에 `templateCode?` 파라미터를
+추가하고, 발송 화면에서 "선택한 템플릿 + 문구를 고치지 않았을 때"만 그 템플릿의
+`aligoTemplateCode`를 실어 보내도록 수정. 템플릿 선택 후 문구를 고치면(더 이상 승인된
+문구와 다르므로) 자동으로 선택이 풀려 SMS로만 나가게 안전장치를 뒀고, 화면에 지금
+발송이 알림톡으로 나가는지 SMS로 나가는지 안내 문구를 추가함.
+회원탭(`app/manager/members`)의 즉시 발송은 애초에 템플릿 선택 UI가 없어(자유 문장
+전용) 첫 수정 대상이 아니었음 — 그대로 SMS로만 나가는 게 의도된 동작.
+
+후속(같은 날): 알림톡과 SMS는 건당 요금이 다른데, 문구를 고쳐서 선택이 자동으로 풀리거나
+애초에 템플릿이 없어 SMS로 나갈 때 매니저가 눈치 못 채고 다수에게 보낼 수 있었다 — 두
+발송 화면(`app/manager/alimtalk/send`, `app/manager/members`) 모두 실제 발송 직전에
+"카카오 알림톡이 아니라 SMS로 나가요, 번호 있는 N명에게 SMS 요금이 발생해요"로
+`globalThis.appConfirm()`(기존 삭제/취소 확인과 같은 패턴)을 띄우고 취소하면 발송하지
+않도록 수정. `npm run build` 통과.
+
 ## 2026-09-06 — 수업/스케줄·매출/정산 심화 감사 후속 수정 (3건)
 
 2차 UX 감사에서 "얕게만 훑었다"고 남겨둔 두 영역(수업/스케줄의 반복·복사·룸/강사 배정,

@@ -734,8 +734,17 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 | 우선순위 | P1 |
 | 현재 상태 | **웹 푸시는 코드 구현 + 배포 완료, 실제 모바일 기기 수신 확인만 남음(자동 검증 불가 — 사용자가 나중에 직접 확인 예정).** 카카오 알림톡·SMS는 **벤더 확정(알리고) + 실제 API 연동 코드까지 완료**(2026-09-02, `f60c53f`) — 문서가 그동안 "Mock 시뮬레이션만"으로 갱신 안 돼 있던 드리프트를 2026-09-04에 정정함(실제로는 `supabase/functions/send-alimtalk`가 알리고 실 API(`kakaoapi.aligo.in`, `apis.aligo.in`)를 직접 호출하는 코드까지 존재, 코드상 미완료는 없음). 아직 안 된 건 순수 외부 계정/승인 절차뿐: (1) 알리고 가입(사업자등록 완료로 가능), (2) 카카오톡 채널 개설 + 카카오 비즈니스 발신프로필 등록, (3) 알림톡 메시지 템플릿 카카오 사전심사(승인까지 통상 며칠), (4) 승인 후 `ALIGO_USER_ID`/`ALIGO_API_KEY`/`ALIGO_SENDER_KEY`/`ALIGO_SENDER_PHONE`을 `supabase secrets set`으로 등록만 하면 끝(코드 변경 불필요). 이메일은 이번 범위에서 제외(사용자 결정). |
 | 근거 파일 | `app/settings/notifications/page.tsx`, `lib/webPush.ts`, `public/sw.js`, `supabase/functions/send-web-push/index.ts`, `add_web_push.sql`, `lib/messaging/*`, `supabase/functions/send-alimtalk/index.ts`(알리고 실 API 연동), `app/manager/alimtalk/*`(발송/템플릿/설정 화면), `app/manager/members/page.tsx`(`sendAlimtalkToMembers()`); `messages`, `notification_rules`, `notification_logs` |
-| 완료 조건 | (웹 푸시) 실제 브라우저에서 알림 수신 확인. (카카오 알림톡/SMS) 알리고 가입 + 카카오 발신프로필·템플릿 승인 + 시크릿 등록(전부 대표님 진행, 코드 작업 없음) → `send-alimtalk`의 `sendViaAligo()` 필드명을 알리고 최신 API 문서와 1회 대조(계정 없어 사전 대조 불가했음, 코드 주석에 명시). |
+| 완료 조건 | (웹 푸시) 실제 브라우저에서 알림 수신 확인. (카카오 알림톡/SMS) 알리고 가입 + 카카오 발신프로필·템플릿 승인 + 시크릿 등록(전부 대표님 진행, 코드 작업 없음). ~~`sendViaAligo()` 필드명을 알리고 최신 API 문서와 1회 대조~~ → **2026-09-08 완료**(공식 문서+실제 구현체 대조, `failover`/`fsubject_1`/`fmessage_1` 등 기존 필드명 일치 확인, CHANGELOG 참고). |
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/settings/notifications`](./ROUTES.md) |
+
+**후속(2026-09-08, 알림톡 애드온+추가요금 구조)**: `ALIGO_USER_ID`/`ALIGO_API_KEY` 발급 완료.
+남은 것 — (1) `add_center_alimtalk_addon_billing.sql` + `fix_notification_rule_alimtalk_template_code.sql`
+Supabase SQL Editor 적용, (2) `supabase functions deploy send-alimtalk`(애드온 게이트 +
+자동규칙 templateCode 버그 수정 반영), (3) 카카오 채널을 알리고 콘솔에 연동해
+`ALIGO_SENDER_KEY` 발급 + `ALIGO_SENDER_PHONE` 등록 + 시크릿 4개 전부 `supabase secrets set`,
+(4) `/admin/subscriptions`에서 알림톡 애드온을 신청한 센터마다 켜기(월 요금 입력),
+(5) 자동 규칙 5종을 실제로 쓰려면 각 트리거별 템플릿을 `/manager/alimtalk/templates`에서
+만들고 카카오 승인까지 받은 뒤 `/manager/alimtalk/rules`에서 그 템플릿을 연결.
 
 **2026-08-26 Adapter Pattern 구조 준비(벤더 미정)**: `messages`/`notification_rules`/
 `notification_logs` 테이블이 `lib/*.ts`·`app/**/*.tsx` 어디서도 전혀 참조되지 않는 완전
