@@ -10,8 +10,8 @@
   --text-dim: #6B6B70;
   --line: #DEDEDA;
   --line-strong: #C9C9C5;
-  --accent: #202124;
-  --accent-soft: #EEEEEC;
+  --accent: #0A2446;
+  --accent-soft: #E7ECF3;
   /* Background > Card (13_Design_System.md). 토큰이 없어서 카드/입력/시트 표면이
      globals.css 전역에 #fff로 하드코딩돼 있었고, 그 탓에 다크 모드에서 흰 카드 위에
      흰 글자가 찍히는 문제가 있었다. var(--card-bg, #fff) 참조가 이미 있어 그 이름을 쓴다. */
@@ -96,8 +96,8 @@
   --text: #F5F5F7;        /* ★ 밝은 글자 (대비 확보) */
   --text-dim: #A8A8B2;
   --line: #34353C;
-  --accent: #FF7A5C;
-  --accent-soft: #3A2420;
+  --accent: #3E7BC4;
+  --accent-soft: #1C2E42;
   --mint: #3FD39A;
   --mint-soft: #163A30;
   --gold: #E0A83C;
