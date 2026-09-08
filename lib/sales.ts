@@ -14,6 +14,7 @@ export const SALE_TYPE_LABEL: Record<string, string> = {
   refund: "환불",
   unpaid_pay: "미수금 결제",
   transfer_fee: "양도수수료",
+  service: "서비스(무상 지급)",
 };
 
 export const METHOD_LABEL: Record<string, string> = {
@@ -69,6 +70,7 @@ export type RevenueSummary = {
   totalUnpaid: number;       // 미수금 합계
   byMethod: Record<string, number>;   // 결제수단별
   bySaleType: Record<string, number>; // 매출구분별
+  bySaleTypeCount: Record<string, number>; // 매출구분별 건수 (서비스처럼 항상 0원인 구분은 금액 대신 건수로 표시)
   count: number;
 };
 
@@ -152,6 +154,86 @@ export async function registerPayment(p: PaymentInput): Promise<void> {
   if (error) throw new Error("결제 등록에 실패했어요: " + error.message);
 }
 
+// 회원 상세 화면(app/manager/members)에서 매니저가 주문 없이 바로 수강권/상품을
+// 지급한다 — "서비스로 준다" 같은 상황을 위한 것(2026-09-08 요청). 결제 등록
+// (registerPayment)과 달리 상품의 실제 만료 설정(무제한권/시즌권/기간)을 반영한다
+// (fulfill_order() SQL의 계산 로직을 그대로 옮김, add_product_expiry_options.sql 참고) —
+// registerPayment는 이 컬럼들이 생기기 전에 만들어져서 항상 validDays(기본 60일)만 썼다.
+export type GrantInput = {
+  centerId: string;
+  profileId: string;
+  productId: string;
+  productName: string;
+  price: number;                                        // 0원 = 서비스
+  payMethod: "card" | "cash" | "transfer" | "service";  // 0원일 때만 "service"
+  memo?: string;
+  trainerAccountId?: string | null;
+  paidAt: string;
+};
+
+export async function grantProductToMember(input: GrantInput): Promise<void> {
+  const { data: product, error: prodErr } = await supabase
+    .from("products")
+    .select("product_kind, unlimited, unlimited_pass, total_count, expiry_mode, expiry_days, expiry_date")
+    .eq("id", input.productId)
+    .single();
+  if (prodErr || !product) throw new Error("상품 정보를 불러오지 못했어요: " + (prodErr?.message ?? ""));
+
+  const isUnlimited = product.product_kind === "goods" ? !!product.unlimited : !!product.unlimited_pass;
+  const totalCount = isUnlimited ? null : product.total_count;
+  let expiresAt: string | null = null;
+  if (product.expiry_mode === "date" && product.expiry_date) {
+    expiresAt = product.expiry_date;
+  } else if (product.expiry_mode === "days") {
+    const d = new Date();
+    d.setDate(d.getDate() + (product.expiry_days ?? 0));
+    expiresAt = d.toISOString().slice(0, 10);
+  } // expiry_mode === "none" → null(무제한)
+
+  const { data: mem, error: memErr } = await supabase
+    .from("memberships")
+    .insert({
+      profile_id: input.profileId,
+      center_id: input.centerId,
+      product_id: input.productId,
+      product_name: input.productName,
+      pass_type: "count",
+      total_count: totalCount,
+      remaining_count: totalCount,
+      expires_at: expiresAt,
+      status: "active",
+    })
+    .select("id")
+    .single();
+  if (memErr) throw new Error("수강권 발급에 실패했어요: " + memErr.message);
+
+  const { error: payErr } = await supabase.from("payments").insert({
+    center_id: input.centerId,
+    profile_id: input.profileId,
+    membership_id: mem.id,
+    sale_type: input.payMethod === "service" ? "service" : "new",
+    revenue_category: "membership",
+    card_amount: input.payMethod === "card" ? input.price : 0,
+    cash_amount: input.payMethod === "cash" ? input.price : 0,
+    transfer_amount: input.payMethod === "transfer" ? input.price : 0,
+    point_amount: 0,
+    total_amount: input.price,
+    unpaid_amount: 0,
+    trainer_account_id: input.trainerAccountId ?? null,
+    paid_at: input.paidAt,
+    memo: input.memo ?? null,
+    status: "paid",
+  });
+  if (payErr) {
+    // 결제 기록이 실패하면 방금 만든 수강권도 되돌린다 — 이 함수는 RPC가 아니라
+    // 클라이언트에서 두 테이블에 순서대로 insert하는 구조라 DB 트랜잭션으로 묶이지
+    // 않는다. 롤백 안 하면 결제 기록 없이 수강권만 무상으로 남는 사고가 남(실제로
+    // sale_type='service'가 아직 DB에 없어서 이 경로로 QA 중 재현됨, 2026-09-08).
+    await supabase.from("memberships").delete().eq("id", mem.id);
+    throw new Error("결제/지급 기록에 실패해서 발급도 취소했어요: " + payErr.message);
+  }
+}
+
 // 미수금 회수 — 원래 결제 행의 unpaid_amount를 차감하고, 회수 내역은 그 행과 연결된
 // 새 결제(sale_type="unpaid_pay")로 남긴다(add_payments_unpaid_link.sql). 예전엔 이
 // 연결이 없어 나중에 돈을 받아도 "이번 달 미수금 합계"가 줄지 않는 문제가 있었다
@@ -216,7 +298,7 @@ export async function fetchPayments(
 // 집계 (목록에서 계산 — 별도 쿼리 없이)
 export function summarize(rows: PaymentRow[]): RevenueSummary {
   const s: RevenueSummary = {
-    totalSales: 0, totalUnpaid: 0, byMethod: {}, bySaleType: {}, count: rows.length,
+    totalSales: 0, totalUnpaid: 0, byMethod: {}, bySaleType: {}, bySaleTypeCount: {}, count: rows.length,
   };
   for (const r of rows) {
     s.totalSales += r.totalAmount;
@@ -227,6 +309,7 @@ export function summarize(rows: PaymentRow[]): RevenueSummary {
     s.byMethod.point = (s.byMethod.point ?? 0) + r.pointAmount;
     s.byMethod.direct = (s.byMethod.direct ?? 0) + (r.directAmount ?? 0);
     s.bySaleType[r.saleType] = (s.bySaleType[r.saleType] ?? 0) + r.totalAmount;
+    s.bySaleTypeCount[r.saleType] = (s.bySaleTypeCount[r.saleType] ?? 0) + 1;
   }
   return s;
 }
