@@ -185,6 +185,14 @@ export default function ManagerSubscriptionPage() {
                   )}
                 </div>
               )}
+              <div className="set-row">
+                <div className="set-label">카카오 알림톡</div>
+                <div className="set-inline">
+                  {subscription.alimtalkAddon
+                    ? `사용 중 · 건당 ${(subscription.alimtalkAddonUnitPrice ?? 0).toLocaleString()}원`
+                    : "미신청 — 신청은 플랫폼 운영자에게 문의해주세요"}
+                </div>
+              </div>
               {plans.length > 0 && (
                 <div className="set-row">
                   <div className="set-label">플랜 변경</div>

@@ -6,7 +6,7 @@
 // 노출하지 않는다(CLAUDE.md 5번 규칙) — lib/messaging/AlimtalkSmsProvider.ts가 클라이언트에서
 // 이 함수를 supabase.functions.invoke()로 호출하는 구조.
 //
-// 두 가지 호출 경로:
+// 세 가지 호출 경로:
 //   1) 매니저 화면(즉시 발송) — { to, content, channel:"alimtalk", templateCode?, templateVariables? }
 //      본인 세션 JWT로 호출. 발송 결과만 바로 응답, DB에 기록 안 함(즉시 발송은 이력 없음 —
 //      사용자 결정. 발송 여부는 카카오톡/문자함에서 직접 확인).
@@ -14,6 +14,9 @@
 //      { messageId } 로 호출 — service_role 키로 인증(비대화형, 큐 디스패치). messages 테이블에서
 //      해당 행을 읽어 대상 전원에게 발송하고 status/sent_at 갱신 + notification_logs에 건당
 //      비용 기록(정산 근거).
+//   3) 템플릿 관리 화면(app/manager/alimtalk/templates)의 "알리고에서 불러오기" —
+//      { action:"list_templates", centerId } 로 호출. 알리고 계정에 등록된 템플릿 목록을
+//      그대로 반환(승인상태/코드를 수동으로 옮겨 적지 않게, 2026-09-08).
 //
 // 인증: Authorization 헤더의 JWT가 실제 로그인 사용자(경로 1)면 그 계정이 대상 센터의 활성
 //   매니저인지 확인(add_alimtalk_integration.sql의 RLS와 동일하게 센터소속 여부만 확인 —
@@ -33,7 +36,10 @@
 // 배포: `supabase functions deploy send-alimtalk`
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { sendViaAligo, isAligoConfigured } from "../_shared/aligo.ts";
+import {
+  sendViaAligo, isAligoConfigured, fetchAligoTemplateList,
+  createAligoTemplate, requestAligoTemplateApproval,
+} from "../_shared/aligo.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -83,6 +89,24 @@ async function isAuthorizedCaller(authHeader: string | null, centerId: string): 
   return !!mc;
 }
 
+// "공통"(플랫폼 전체) 템플릿 생성/신청은 센터가 없어 위 isAuthorizedCaller로 판정할 수
+// 없다 — 플랫폼 운영자만 허용.
+async function isPlatformAdminCaller(authHeader: string | null): Promise<boolean> {
+  if (!authHeader) return false;
+  const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: authData } = await userClient.auth.getUser();
+  if (!authData?.user) return false;
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  const { data: account } = await admin
+    .from("accounts")
+    .select("is_platform_admin")
+    .eq("auth_id", authData.user.id)
+    .maybeSingle();
+  return !!account?.is_platform_admin;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
@@ -95,6 +119,8 @@ Deno.serve(async (req: Request) => {
     templateCode?: string;
     templateVariables?: Record<string, string>;
     centerId?: string;
+    title?: string;      // action:"create_template"
+    tplCode?: string;    // action:"request_template_approval"
   };
   try {
     body = await req.json();
@@ -110,6 +136,66 @@ Deno.serve(async (req: Request) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+  // 템플릿 관리 화면(app/manager/alimtalk/templates)의 "알리고에서 불러오기" — 승인/반려
+  // 상태와 코드를 수동으로 옮겨 적지 않게, 알리고 계정에 등록된 템플릿 목록을 그대로 조회.
+  // 알리고는 senderkey 하나로 계정 전체를 조회해 center_id 구분이 없으므로, 호출자가
+  // "이 센터"에 대한 매니저 권한이 있는지만 확인하고 목록 자체는 필터링하지 않는다
+  // (여러 센터 템플릿이 섞여 나와도 매니저가 이름으로 알아보고 고르는 방식).
+  if (body.action === "list_templates") {
+    if (!body.centerId) return json({ error: "centerId가 필요해요" }, 400);
+    if (!(await isAuthorizedCaller(req.headers.get("Authorization"), body.centerId))) {
+      return json({ error: "이 센터에 대한 권한이 없어요" }, 403);
+    }
+    try {
+      const list = await fetchAligoTemplateList();
+      return json({ templates: list });
+    } catch (e) {
+      return json({ error: e instanceof Error ? e.message : "템플릿 목록 조회에 실패했어요" }, 502);
+    }
+  }
+
+  // 템플릿 관리 화면의 "카카오 승인 신청하기" 1단계 — 알리고에 신규 템플릿 생성.
+  // centerId가 있으면 그 센터 소속 매니저(또는 운영자)만, 없으면("공통" 템플릿) 플랫폼
+  // 운영자만 허용. 여러 센터가 같은 알리고 계정을 공유해서, 알리고 쪽 목록에서 서로
+  // 구분되게 tpl_name에 센터명(또는 "공통")을 접두사로 붙인다.
+  if (body.action === "create_template") {
+    if (!body.title || !body.content) return json({ error: "title, content가 필요해요" }, 400);
+    let prefix = "[공통]";
+    if (body.centerId) {
+      if (!(await isAuthorizedCaller(req.headers.get("Authorization"), body.centerId))) {
+        return json({ error: "이 센터에 대한 권한이 없어요" }, 403);
+      }
+      const { data: center } = await admin.from("centers").select("name").eq("id", body.centerId).maybeSingle();
+      prefix = `[${center?.name ?? "센터"}]`;
+    } else if (!(await isPlatformAdminCaller(req.headers.get("Authorization")))) {
+      return json({ error: "공통 템플릿은 플랫폼 운영자만 만들 수 있어요" }, 403);
+    }
+    try {
+      const created = await createAligoTemplate(`${prefix} ${body.title}`, body.content);
+      return json({ template: created });
+    } catch (e) {
+      return json({ error: e instanceof Error ? e.message : "템플릿 생성에 실패했어요" }, 502);
+    }
+  }
+
+  // 템플릿 관리 화면의 "카카오 승인 신청하기" 2단계 — 생성된 템플릿을 실제 카카오 심사에 제출.
+  if (body.action === "request_template_approval") {
+    if (!body.tplCode) return json({ error: "tplCode가 필요해요" }, 400);
+    if (body.centerId) {
+      if (!(await isAuthorizedCaller(req.headers.get("Authorization"), body.centerId))) {
+        return json({ error: "이 센터에 대한 권한이 없어요" }, 403);
+      }
+    } else if (!(await isPlatformAdminCaller(req.headers.get("Authorization")))) {
+      return json({ error: "공통 템플릿은 플랫폼 운영자만 신청할 수 있어요" }, 403);
+    }
+    try {
+      await requestAligoTemplateApproval(body.tplCode);
+      return json({ ok: true });
+    } catch (e) {
+      return json({ error: e instanceof Error ? e.message : "승인 신청에 실패했어요" }, 502);
+    }
+  }
+
   // 경로 2: 큐 디스패치(dispatch-alimtalk cron) — messages 행을 읽어 대상 전원 발송
   if (body.messageId) {
     if (!(await isAuthorizedCaller(req.headers.get("Authorization"), ""))) {
@@ -119,11 +205,25 @@ Deno.serve(async (req: Request) => {
 
     const { data: msg, error: msgErr } = await admin
       .from("messages")
-      .select("id, center_id, content, target_profile_ids, status")
+      .select("id, center_id, content, target_profile_ids, status, aligo_template_code")
       .eq("id", body.messageId)
       .maybeSingle();
     if (msgErr || !msg) return json({ error: "메시지를 찾을 수 없어요" }, 404);
     if (msg.status !== "scheduled") return json({ processed: 0, skipped: "already-handled" });
+
+    // 알림톡 애드온을 신청하지 않은 센터는 자동 발송도 막는다(SMS 대체발송 포함 — 둘 다 같은
+    // 알리고 계정으로 나가 플랫폼에 비용이 발생함, add_center_alimtalk_addon_billing.sql).
+    // status를 'scheduled'로 남겨두면 매분 도는 dispatch-alimtalk cron이 계속 이 행을 다시
+    // 집어서 무한 재시도하므로 반드시 'failed'로 바꿔야 한다.
+    const { data: sub } = await admin
+      .from("center_subscriptions")
+      .select("alimtalk_addon")
+      .eq("center_id", msg.center_id)
+      .maybeSingle();
+    if (!sub?.alimtalk_addon) {
+      await admin.from("messages").update({ status: "failed", sent_at: new Date().toISOString() }).eq("id", msg.id);
+      return json({ processed: 0, skipped: "addon-disabled" });
+    }
 
     const { data: profiles } = await admin
       .from("profiles")
@@ -135,7 +235,7 @@ Deno.serve(async (req: Request) => {
     for (const p of profiles ?? []) {
       const phone = (p as unknown as { accounts?: { phone?: string | null } }).accounts?.phone;
       if (!phone) { failed++; continue; }
-      const result = await sendViaAligo({ to: phone, content: msg.content });
+      const result = await sendViaAligo({ to: phone, content: msg.content, templateCode: msg.aligo_template_code ?? undefined });
       await admin.from("notification_logs").insert({
         center_id: msg.center_id,
         profile_id: p.id,
@@ -160,6 +260,16 @@ Deno.serve(async (req: Request) => {
   }
   if (!(await isAuthorizedCaller(req.headers.get("Authorization"), body.centerId))) {
     return json({ error: "이 센터에 대한 발송 권한이 없어요" }, 403);
+  }
+
+  // 알림톡 애드온 미신청 센터는 SMS 대체발송도 막는다(경로 2와 동일한 이유).
+  const { data: sub } = await admin
+    .from("center_subscriptions")
+    .select("alimtalk_addon")
+    .eq("center_id", body.centerId)
+    .maybeSingle();
+  if (!sub?.alimtalk_addon) {
+    return json({ status: "failed", message: "이 센터는 카카오 알림톡/SMS 발송 애드온을 신청하지 않았어요" }, 402);
   }
 
   const result = await sendViaAligo({

@@ -15,6 +15,7 @@ export type AlimtalkTemplateStatus = "draft" | "pending" | "approved" | "rejecte
 
 export type AlimtalkTemplate = {
   id: string;
+  centerId: string | null; // null = 공통(플랫폼 전체) 템플릿, add_alimtalk_template_common.sql
   aligoTemplateCode: string | null;
   title: string;
   content: string;
@@ -26,6 +27,7 @@ export type AlimtalkTemplate = {
 function fromTemplateRow(r: any): AlimtalkTemplate {
   return {
     id: r.id,
+    centerId: r.center_id,
     aligoTemplateCode: r.aligo_template_code,
     title: r.title,
     content: r.content,
@@ -35,18 +37,22 @@ function fromTemplateRow(r: any): AlimtalkTemplate {
   };
 }
 
+// 이 센터 전용 템플릿 + 공통(center_id null) 템플릿을 같이 불러온다 — 공통 템플릿은 사장님이
+// 알리고에 미리 등록해둔 것으로, 모든 센터가 같이 쓸 수 있다(add_alimtalk_template_common.sql).
 export async function fetchAlimtalkTemplates(centerId: string): Promise<AlimtalkTemplate[]> {
   const { data, error } = await supabase
     .from("alimtalk_templates")
-    .select("id, aligo_template_code, title, content, variables, status, is_active")
-    .eq("center_id", centerId)
+    .select("id, center_id, aligo_template_code, title, content, variables, status, is_active")
+    .or(`center_id.eq.${centerId},center_id.is.null`)
     .order("created_at", { ascending: false });
   if (error) throw new Error("템플릿 목록을 불러오지 못했어요: " + error.message);
   return (data ?? []).map(fromTemplateRow);
 }
 
+// centerId를 null로 넘기면 "공통" 템플릿 생성 — RLS가 플랫폼 운영자만 허용하므로 일반
+// 매니저가 호출하면 그냥 DB 에러로 막힌다(화면에서도 운영자에게만 그 옵션을 보여줌).
 export async function createAlimtalkTemplate(
-  centerId: string,
+  centerId: string | null,
   input: { title: string; content: string; variables: string[] }
 ): Promise<void> {
   const { error } = await supabase.from("alimtalk_templates").insert({
@@ -73,6 +79,72 @@ export async function updateAlimtalkTemplate(
 export async function deleteAlimtalkTemplate(id: string): Promise<void> {
   const { error } = await supabase.from("alimtalk_templates").delete().eq("id", id);
   if (error) throw new Error("템플릿 삭제에 실패했어요: " + error.message);
+}
+
+// 알리고 계정에 등록된 템플릿 목록 조회(send-alimtalk Edge Function의 action:"list_templates").
+// 플랫폼 단일 알리고 계정 전체를 조회하는 거라 center_id 구분이 없다 — 여러 센터 템플릿이
+// 한 목록에 섞여 나올 수 있어 이름(templtName)으로 매니저가 직접 구분해서 골라야 한다.
+export type AligoRemoteTemplate = {
+  templtCode: string;
+  templtName: string;
+  templtContent: string;
+  inspStatus: string; // REG(등록) / REQ(심사요청) / APR(승인) / REJ(반려)
+};
+
+// supabase-js는 Edge Function이 non-2xx를 반환하면 몸통(body)에 실은 실제 에러 메시지를
+// error.message에 담지 않고 "Edge Function returned a non-2xx status code"로 뭉개버린다
+// (실제로 이 함수를 실제 브라우저로 테스트하다가 확인함, 2026-09-08) — error.context가
+// 원본 Response라 여기서 다시 파싱해야 진짜 이유("알리고 계정/발신프로필이 아직 연동되지
+// 않았어요" 등)가 보인다.
+async function functionsErrorMessage(error: unknown, fallback: string): Promise<string> {
+  try {
+    const body = await (error as { context?: Response }).context?.clone().json();
+    if (typeof body?.error === "string") return body.error;
+    if (typeof body?.message === "string") return body.message;
+  } catch { /* 본문이 JSON이 아니면 fallback으로 */ }
+  return (error as { message?: string })?.message ?? fallback;
+}
+
+export async function fetchAligoRemoteTemplates(centerId: string): Promise<AligoRemoteTemplate[]> {
+  const { data, error } = await supabase.functions.invoke<{ templates?: AligoRemoteTemplate[]; error?: string }>(
+    "send-alimtalk",
+    { body: { action: "list_templates", centerId } }
+  );
+  if (error || !data) throw new Error(await functionsErrorMessage(error, "알리고 템플릿 목록을 불러오지 못했어요"));
+  return data.templates ?? [];
+}
+
+// 알리고에 신규 템플릿 생성(action:"create_template") — 응답으로 코드/상태(REG)를 즉시 받음.
+// centerId를 넘기지 않으면(undefined) "공통" 템플릿로 취급되고, 서버가 플랫폼 운영자인지
+// 다시 확인한다(RLS와 별개로 Edge Function 쪽에서도 체크, 2026-09-08).
+export async function createAligoRemoteTemplate(
+  centerId: string | undefined, title: string, content: string
+): Promise<AligoRemoteTemplate> {
+  const { data, error } = await supabase.functions.invoke<{ template?: AligoRemoteTemplate; error?: string }>(
+    "send-alimtalk",
+    { body: { action: "create_template", centerId, title, content } }
+  );
+  if (error || !data?.template) throw new Error(await functionsErrorMessage(error, "템플릿 생성에 실패했어요"));
+  return data.template;
+}
+
+// 생성된 템플릿을 실제 카카오 심사에 제출(action:"request_template_approval").
+export async function submitAligoTemplateForApproval(centerId: string | undefined, tplCode: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>(
+    "send-alimtalk",
+    { body: { action: "request_template_approval", centerId, tplCode } }
+  );
+  if (error || !data?.ok) throw new Error(await functionsErrorMessage(error, "승인 신청에 실패했어요"));
+}
+
+// 알리고 inspStatus → 이 앱의 AlimtalkTemplateStatus 매핑.
+export function inspStatusToLocalStatus(inspStatus: string): AlimtalkTemplateStatus {
+  switch (inspStatus) {
+    case "APR": return "approved";
+    case "REQ": return "pending";
+    case "REJ": return "rejected";
+    default: return "draft"; // REG(카카오 심사 요청 전) 등
+  }
 }
 
 // evaluate_notification_rules()(SQL)가 실제로 처리하는 트리거만 화면에 노출한다 —

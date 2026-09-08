@@ -14,7 +14,8 @@ import UiIcon from "../../components/UiIcon";
 import { checkPlatformAdmin } from "../../../lib/admin";
 import {
   fetchAllCenterSubscriptions, adminSetCenterSubscriptionPlan, adminCancelCenterSubscription,
-  adminReactivateCenterSubscription, STATUS_LABEL, type AdminCenterSubscription, type SubscriptionStatus,
+  adminReactivateCenterSubscription, adminSetCenterAlimtalkAddon, STATUS_LABEL,
+  type AdminCenterSubscription, type SubscriptionStatus,
 } from "../../../lib/centerSubscription";
 import { fetchSubscriptionPlans, type SubscriptionPlan } from "../../../lib/operator";
 
@@ -33,6 +34,8 @@ export default function AdminSubscriptionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [addonPriceInput, setAddonPriceInput] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2000); }
 
@@ -74,6 +77,36 @@ export default function AdminSubscriptionsPage() {
     try {
       await adminCancelCenterSubscription(row.centerId);
       showToast("구독을 취소했어요");
+      await load();
+    } catch (e: any) { setError(e.message); }
+    finally { setBusyId(null); }
+  }
+
+  async function handleEnableAlimtalkAddon(row: AdminCenterSubscription) {
+    const raw = addonPriceInput[row.centerId] ?? String(row.alimtalkAddonUnitPrice ?? "");
+    const price = Number(raw);
+    if (!raw.trim() || !Number.isFinite(price) || price < 0) {
+      setError("건당 요금을 숫자로 입력해주세요");
+      return;
+    }
+    const ok = await globalThis.appConfirm(`'${row.centerName}'에 알림톡 애드온을 건당 ${price.toLocaleString()}원으로 켤까요?`);
+    if (!ok) return;
+    setBusyId(row.centerId); setError(null);
+    try {
+      await adminSetCenterAlimtalkAddon(row.centerId, true, price);
+      showToast("알림톡 애드온을 켰어요");
+      await load();
+    } catch (e: any) { setError(e.message); }
+    finally { setBusyId(null); }
+  }
+
+  async function handleDisableAlimtalkAddon(row: AdminCenterSubscription) {
+    const ok = await globalThis.appConfirm(`'${row.centerName}'의 알림톡 애드온을 끌까요? 이후 이 센터의 알림톡/SMS 발송이 전부 막혀요.`);
+    if (!ok) return;
+    setBusyId(row.centerId); setError(null);
+    try {
+      await adminSetCenterAlimtalkAddon(row.centerId, false);
+      showToast("알림톡 애드온을 껐어요");
       await load();
     } catch (e: any) { setError(e.message); }
     finally { setBusyId(null); }
@@ -130,11 +163,22 @@ export default function AdminSubscriptionsPage() {
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
       {toast && <div className="toast">{toast}</div>}
 
+      <div style={{ padding: "12px 20px" }}>
+        <input
+          className="input-field"
+          placeholder="센터 이름으로 검색"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
       {rows.length === 0 ? (
         <div className="daylist-empty" style={{ paddingTop: 40 }}>구독 정보가 있는 센터가 없어요</div>
       ) : (
         <div className="admin-list">
-          {rows.map((r) => (
+          {rows
+            .filter((r) => r.centerName.toLowerCase().includes(search.trim().toLowerCase()))
+            .map((r) => (
             <div key={r.id} className="admin-card">
               <div className="admin-card-head">
                 <div className="admin-center-name">{r.centerName}</div>
@@ -150,6 +194,27 @@ export default function AdminSubscriptionsPage() {
               <div className="admin-row"><span className="k">등록된 카드</span><span className="v">
                 {r.cardLast4 ? `${r.cardCompany ?? ""} ${r.cardLast4}****` : "미등록"}
               </span></div>
+
+              <div className="admin-row"><span className="k" style={{ flex: "0 0 92px" }}>알림톡 애드온</span><span className="v">
+                {r.alimtalkAddon ? `사용 중 · 건당 ${(r.alimtalkAddonUnitPrice ?? 0).toLocaleString()}원` : "미신청"}
+              </span></div>
+              {r.alimtalkAddon ? (
+                <button className="profile-del admin-action-btn" disabled={busyId === r.centerId} onClick={() => handleDisableAlimtalkAddon(r)}>
+                  알림톡 애드온 끄기
+                </button>
+              ) : (
+                <div className="admin-row">
+                  <input
+                    className="input-field" type="number" min={0} style={{ flex: 1, minWidth: 0, minHeight: 40 }}
+                    placeholder="건당 요금(원)" disabled={busyId === r.centerId}
+                    value={addonPriceInput[r.centerId] ?? ""}
+                    onChange={(e) => setAddonPriceInput((prev) => ({ ...prev, [r.centerId]: e.target.value }))}
+                  />
+                  <button className="profile-del" style={{ flex: "0 0 auto" }} disabled={busyId === r.centerId} onClick={() => handleEnableAlimtalkAddon(r)}>
+                    알림톡 애드온 켜기
+                  </button>
+                </div>
+              )}
 
               <div className="admin-row">
                 <span className="k">플랜 변경</span>
@@ -168,11 +233,11 @@ export default function AdminSubscriptionsPage() {
               </div>
 
               {r.status === "canceled" ? (
-                <button className="primary-btn" style={{ marginTop: 6 }} disabled={busyId === r.centerId} onClick={() => handleReactivate(r)}>
+                <button className="profile-del admin-action-btn" disabled={busyId === r.centerId} onClick={() => handleReactivate(r)}>
                   구독 재개
                 </button>
               ) : (
-                <button className="profile-del" style={{ marginTop: 6 }} disabled={busyId === r.centerId} onClick={() => handleCancel(r)}>
+                <button className="profile-del admin-action-btn" disabled={busyId === r.centerId} onClick={() => handleCancel(r)}>
                   구독 취소
                 </button>
               )}

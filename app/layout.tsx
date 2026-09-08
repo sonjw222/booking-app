@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
@@ -21,6 +21,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "모하빗",
   description: "센터(스튜디오·체육관) 수업 예약과 회원 관리를 위한 모하빗",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0A2545",
 };
 
 export default function RootLayout({
