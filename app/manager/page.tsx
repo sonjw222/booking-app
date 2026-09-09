@@ -261,7 +261,7 @@ export default function ManagerDashboard() {
                 </div>
                 <div className="dash-card">
                   <div className="dash-card-label">미수금</div>
-                  <div className="dash-card-value">{won(dash.unpaidTotal)}</div>
+                  <div className={`dash-card-value${dash.unpaidTotal > 0 ? " is-error-text" : ""}`}>{won(dash.unpaidTotal)}</div>
                 </div>
                 <div className="dash-card">
                   <div className="dash-card-label">수강권 매출</div>

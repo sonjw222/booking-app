@@ -392,7 +392,7 @@ export default function SalesPage() {
                 <span className="profit-net">순이익 {won(summary.totalSales - summarizeExpenses(expenses).total)}</span>
               </div>
               {summary.totalUnpaid > 0 && (
-                <div className="sales-unpaid">미수금 {won(summary.totalUnpaid)}</div>
+                <div className="sales-unpaid is-error-text">미수금 {won(summary.totalUnpaid)}</div>
               )}
             </div>
           )}
