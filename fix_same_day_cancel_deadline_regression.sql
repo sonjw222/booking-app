@@ -84,12 +84,22 @@ begin
 
             select * into v_settings from center_settings where center_id = v_class.center_id;
 
-            -- [1] 당일예약 안전장치 — "정상 계산된 마감의 날짜(KST)가 오늘보다 이전"일
-            -- 때만(= days_before 계산이 진짜로 "어제 이전"을 만든 문제 상황일 때만)
-            -- "시작 - N시간M분"을 마감 후보로 추가한다. 오늘 날짜로 정상 계산된 마감
-            -- (예: groupCancelDaysBefore=0 + 특정 시각)은 이미 지났어도 손대지 않는다
-            -- — 그건 회귀가 아니라 센터가 의도한 정상 마감이다.
+            -- [1] 당일예약 안전장치 — 예약이 수업과 같은 KST 날짜에 만들어졌고(원래 조건,
+            -- 유지) *동시에* 정상 계산된 마감의 날짜(KST)가 오늘보다 이전인 경우(=
+            -- days_before 계산이 진짜로 "어제 이전"을 만든 문제 상황)에만 "시작 -
+            -- N시간M분"을 마감 후보로 추가한다.
+            --
+            -- ⚠ 2026-09-10 재발 방지: 처음 이 조건을 "마감 날짜 < 오늘"만으로 좁혔다가
+            -- (fix_same_day_cancel_deadline_regression.sql 최초 버전), classes.cancel_
+            -- deadline_min(개별 수업 취소마감 재지정, fix_class_cancel_deadline_override.sql)
+            -- 처럼 당일예약과 무관하게 "의도적으로 과거로 계산된 마감"까지 이 안전장치를
+            -- 잘못 발동시켜 정상 마감 판정을 덮어써버리는 회귀를 새로 만들었다(통합테스트
+            -- class-cancel-deadline-override.test.ts가 검출). "같은 날 예약" 조건을 다시
+            -- 추가해 두 조건을 모두 만족할 때만 발동하도록 좁힌다 — 오늘 날짜로 정상
+            -- 계산된 마감(예: groupCancelDaysBefore=0 + 특정 시각)이나, 당일예약이 아닌
+            -- 개별 마감 재지정은 그대로 손대지 않는다.
             if v_settings.center_id is not null
+               and (v_res.created_at at time zone 'Asia/Seoul')::date = (v_class.start_time at time zone 'Asia/Seoul')::date
                and (v_cancel_deadline at time zone 'Asia/Seoul')::date < (now() at time zone 'Asia/Seoul')::date
             then
                 v_same_day_deadline := v_class.start_time
