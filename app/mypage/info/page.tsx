@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabaseClient";
 import { deactivateCurrentAccount } from "../../../lib/accountDeletion";
 import { fetchMyAccountInfo } from "../../../lib/mypage";
+import { createAccountLinkCode, linkAccountsByCode } from "../../../lib/accountLinking";
 
 const WITHDRAW_CONFIRM_PHRASE = "탈퇴합니다";
 const SYNTHETIC_EMAIL_SUFFIX = ".socialauth.invalid";
@@ -50,6 +51,15 @@ export default function MyInfoPage() {
   const [withdrawConfirmText, setWithdrawConfirmText] = useState("");
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawMessage, setWithdrawMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
+
+  // 계정 연동(Account Linking) — 코드를 만든 계정이 남고, 입력한 계정이 합쳐진다.
+  const [linkCode, setLinkCode] = useState<string | null>(null);
+  const [creatingCode, setCreatingCode] = useState(false);
+  const [linkCodeMessage, setLinkCodeMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
+  const [linkInput, setLinkInput] = useState("");
+  const [linking, setLinking] = useState(false);
+  const [linkMessage, setLinkMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
+  const [linked, setLinked] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -123,6 +133,39 @@ export default function MyInfoPage() {
     window.location.href = "/login?withdrawn=1";
   }
 
+  async function handleCreateLinkCode() {
+    if (creatingCode) return;
+    setCreatingCode(true);
+    setLinkCodeMessage(null);
+    try {
+      const code = await createAccountLinkCode();
+      setLinkCode(code);
+    } catch (e: any) {
+      setLinkCodeMessage({ type: "error", text: e.message ?? "코드 발급에 실패했어요" });
+    } finally {
+      setCreatingCode(false);
+    }
+  }
+
+  async function handleLinkAccounts() {
+    if (linking) return;
+    if (!linkInput.trim()) {
+      setLinkMessage({ type: "error", text: "코드를 입력해주세요" });
+      return;
+    }
+    setLinking(true);
+    setLinkMessage(null);
+    try {
+      const result = await linkAccountsByCode(linkInput.trim());
+      setLinked(true);
+      setLinkMessage({ type: "ok", text: `"${result.mergedAccountName}" 계정으로 합쳐졌어요. 다시 로그인해주세요.` });
+    } catch (e: any) {
+      setLinkMessage({ type: "error", text: e.message ?? "연동에 실패했어요" });
+    } finally {
+      setLinking(false);
+    }
+  }
+
   return (
     <div className="app-shell account-page-v2 settings-page-v2">
       <div className="back-header">
@@ -175,6 +218,62 @@ export default function MyInfoPage() {
               </button>
             </div>
           )}
+
+          <div className="menu-section-label">다른 계정과 연결</div>
+          <div className="login-wrap" style={{ padding: "0 20px 40px", alignItems: "stretch" }}>
+            <div className="perm-guide" style={{ margin: "0 0 8px" }}>
+              이메일로 가입했는데 나중에 카카오/구글 등으로 로그인해서 계정이 따로 생겼다면
+              여기서 하나로 합칠 수 있어요. <b>코드를 만든 이 계정이 남고, 코드를 입력한 계정이
+              이 계정에 합쳐져요.</b> 합쳐진 뒤에도 그 계정으로 다시 로그인하면 지금 이 계정으로
+              들어와요.
+            </div>
+
+            <div className="admin-card" style={{ marginBottom: 12 }}>
+              <div className="admin-row">
+                <span className="k">이 계정을 남기고 연동</span>
+                <span className="v">
+                  <button className="ghost-btn" onClick={handleCreateLinkCode} disabled={creatingCode}>
+                    {creatingCode ? "발급 중..." : "연동 코드 만들기"}
+                  </button>
+                </span>
+              </div>
+              {linkCode && (
+                <div className="admin-row">
+                  <span className="k">코드 (10분 유효)</span>
+                  <span className="v" style={{ fontWeight: 700, letterSpacing: 1 }}>{linkCode}</span>
+                </div>
+              )}
+            </div>
+            {linkCodeMessage && <div className={`auth-msg ${linkCodeMessage.type}`}>{linkCodeMessage.text}</div>}
+            {linkCode && (
+              <div className="perm-guide" style={{ margin: "0 0 8px" }}>
+                이 화면에서 로그아웃한 뒤, 합치고 싶은 다른 계정으로 로그인해서 "내 정보 관리"에서
+                아래에 이 코드를 입력해주세요.
+              </div>
+            )}
+
+            <div style={{ height: 1, background: "var(--line)", margin: "8px 0 16px" }} />
+
+            <input
+              className="input-field"
+              type="text"
+              placeholder="다른 계정에서 만든 연동 코드 입력"
+              value={linkInput}
+              onChange={(e) => setLinkInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleLinkAccounts()}
+              disabled={linked}
+            />
+            {linkMessage && <div className={`auth-msg ${linkMessage.type}`}>{linkMessage.text}</div>}
+            {linked ? (
+              <button className="primary-btn" onClick={async () => { await supabase.auth.signOut(); window.location.href = "/login"; }}>
+                로그아웃하고 다시 로그인하기
+              </button>
+            ) : (
+              <button className="primary-btn" onClick={handleLinkAccounts} disabled={linking}>
+                {linking ? "연동 중..." : "이 코드로 연동하기"}
+              </button>
+            )}
+          </div>
 
           <div className="menu-section-label">계정 탈퇴</div>
           <div className="login-wrap" style={{ padding: "0 20px 40px", alignItems: "stretch" }}>

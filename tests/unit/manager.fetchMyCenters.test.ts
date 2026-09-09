@@ -4,23 +4,20 @@
 //
 // ACL-005: 매니저 진입 조건은 accounts.is_manager(스태프 초대 시 RLS로 인해 갱신되지
 // 않을 수 있는 별도 플래그)가 아니라 active manager_centers 소속 존재 여부로 판단한다
-// (lib/manager.ts의 getMyAccountId()). accounts select는 더 이상 is_manager를 읽지
-// 않으므로, 이 파일의 목(mock)도 accounts 조회 1회 + manager_centers 조회 2회(진입
-// 조건 count 체크 → 실제 목록 조회)를 반영한다.
+// (lib/manager.ts의 getMyAccountId()). "내 accounts.id" 조회는 2026-09-09부터
+// getMyAccountId()(lib/authAccount.ts, my_account_id() RPC 경유 — 계정 연동 지원)를
+// 쓰므로 이 파일의 목(mock)도 rpc() 기준으로 갱신함. manager_centers 조회는 여전히
+// 2회(진입 조건 count 체크 → 실제 목록 조회).
 import { describe, it, expect, vi } from "vitest";
 
-const getUserMock = vi.fn().mockResolvedValue({ data: { user: { id: "auth-1" } } });
-const accountSingleMock = vi.fn().mockResolvedValue({ data: { id: "acc-1" }, error: null });
+const rpcMock = vi.fn().mockResolvedValue({ data: "acc-1" });
 const managerCenterCountMock = vi.fn();
 const centersListMock = vi.fn();
 
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
-    auth: { getUser: (...args: unknown[]) => getUserMock(...args) },
-    from: (table: string) => {
-      if (table === "accounts") {
-        return { select: () => ({ eq: () => ({ single: (...args: unknown[]) => accountSingleMock(...args) }) }) };
-      }
+    rpc: (...args: unknown[]) => rpcMock(...args),
+    from: (_table: string) => {
       // manager_centers: getMyAccountId()의 active 소속 count 체크(select(..., {head:true}))와
       // fetchMyCenters()의 실제 목록 조회를 select() 호출 인자로 구분한다.
       return {

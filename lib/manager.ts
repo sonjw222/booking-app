@@ -5,6 +5,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { getMyAccountId as getMyAccountIdBase } from "./authAccount";
 
 export type ManagedCenter = {
   id: string;
@@ -34,11 +35,8 @@ const KST_TIME = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour
 const KST_DATE = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
 
 async function getMyAccountId(): Promise<string> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) throw new Error("로그인이 필요해요");
-  const { data, error } = await supabase
-    .from("accounts").select("id").eq("auth_id", authData.user.id).single();
-  if (error || !data) throw new Error("계정 정보를 찾을 수 없어요");
+  const accountId = await getMyAccountIdBase();
+  if (!accountId) throw new Error("계정 정보를 찾을 수 없어요");
   // ACL-005: 매니저 여부는 accounts.is_manager(스태프 초대 시 RLS로 인해 갱신되지
   // 않을 수 있는 별도 플래그)가 아니라, 실제 active manager_centers 소속 존재
   // 여부로 판단한다. 관리자 진입 조건 ≠ 메뉴별 권한 보유 여부 — 권한이 0개인
@@ -46,11 +44,11 @@ async function getMyAccountId(): Promise<string> {
   const { count, error: mcError } = await supabase
     .from("manager_centers")
     .select("id", { count: "exact", head: true })
-    .eq("account_id", data.id)
+    .eq("account_id", accountId)
     .eq("status", "active");
   if (mcError) throw new Error("매니저 권한을 확인하지 못했어요: " + mcError.message);
   if (!count) throw new Error("매니저 권한이 없는 계정이에요");
-  return data.id;
+  return accountId;
 }
 
 // 내가 운영/근무하는 센터 목록

@@ -6,6 +6,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { getMyAccountId } from "./authAccount";
 
 const KST = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit",
@@ -55,11 +56,9 @@ export async function fetchInquiryCenters(): Promise<SelectableCenter[]> {
 }
 
 async function myProfileIds(): Promise<string[]> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) return [];
-  const { data: acc } = await supabase.from("accounts").select("id").eq("auth_id", authData.user.id).single();
-  if (!acc) return [];
-  const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", acc.id).is("deleted_at", null);
+  const accountId = await getMyAccountId();
+  if (!accountId) return [];
+  const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", accountId).is("deleted_at", null);
   return (profs ?? []).map((p: any) => p.id);
 }
 
@@ -135,12 +134,7 @@ export function resolveMemberName(accounts: {
 
 // ── 메시지 목록 ──
 export async function fetchMessages(threadId: string): Promise<InquiryMessage[]> {
-  const { data: authData } = await supabase.auth.getUser();
-  let myAccountId: string | null = null;
-  if (authData.user) {
-    const { data: acc } = await supabase.from("accounts").select("id").eq("auth_id", authData.user.id).single();
-    myAccountId = acc?.id ?? null;
-  }
+  const myAccountId = await getMyAccountId();
   const { data, error } = await supabase
     .from("inquiry_messages")
     .select("id, thread_id, sender_account_id, sender_role, body, photos, created_at")

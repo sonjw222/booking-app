@@ -19,6 +19,9 @@ function makeChain(resolved: unknown): any {
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
     auth: { getUser: () => Promise.resolve({ data: { user: { id: "auth-1" } } }) },
+    // getMyAccountId()(lib/authAccount.ts)가 accounts.auth_id 직접 조회 대신
+    // my_account_id() RPC를 쓰므로(2026-09-09, 계정 연동 지원) 이 목도 갱신함.
+    rpc: () => Promise.resolve({ data: "acc-1", error: null }),
     from: (table: string) => {
       if (table === "accounts") {
         return makeChain({ data: { id: "acc-1", name: "홍길동", phone: null, is_member: true, is_platform_admin: false }, error: null });

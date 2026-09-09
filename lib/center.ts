@@ -7,6 +7,7 @@
 
 import { supabase } from "./supabaseClient";
 import { sanitizeRichText } from "./security";
+import { getMyAccountId } from "./authAccount";
 
 export type CenterDetail = {
   id: string;
@@ -198,11 +199,9 @@ export async function fetchCenterProducts(centerId: string): Promise<CenterProdu
 
 // 회원이 특정 센터에 유효한 수강권을 갖고 있는지 (예약 가능 여부 판단)
 export async function hasActivePassAtCenter(centerId: string): Promise<boolean> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) return false;
-  const { data: acc } = await supabase.from("accounts").select("id").eq("auth_id", authData.user.id).single();
-  if (!acc) return false;
-  const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", acc.id).is("deleted_at", null);
+  const accountId = await getMyAccountId();
+  if (!accountId) return false;
+  const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", accountId).is("deleted_at", null);
   const ids = (profs ?? []).map((p: any) => p.id);
   if (ids.length === 0) return false;
 
@@ -222,13 +221,11 @@ export async function hasActivePassAtCenter(centerId: string): Promise<boolean> 
 
 // 구매 신청 (온라인 결제 전이므로, 매니저가 확인할 신청으로 기록)
 export async function requestPurchase(centerId: string, productId: string, productName: string): Promise<void> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) throw new Error("로그인이 필요해요");
-  const { data: acc } = await supabase.from("accounts").select("id").eq("auth_id", authData.user.id).single();
-  if (!acc) throw new Error("계정을 찾을 수 없어요");
+  const accountId = await getMyAccountId();
+  if (!accountId) throw new Error("로그인이 필요해요");
   const { data: profs } = await supabase
     .from("profiles").select("id, is_primary, created_at")
-    .eq("account_id", acc.id)
+    .eq("account_id", accountId)
     .is("deleted_at", null)
     .order("is_primary", { ascending: false })
     .order("created_at", { ascending: true })

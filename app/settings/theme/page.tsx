@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 type Theme = "burgundy" | "charcoal";
 
 const OPTIONS: { id: Theme; label: string; desc: string; swatch: string }[] = [
-  { id: "burgundy", label: "기본 (라이트)", desc: "밝은 화면", swatch: "#8B2F52" },
+  { id: "burgundy", label: "기본 (라이트)", desc: "밝은 화면", swatch: "#0A2446" },
   { id: "charcoal", label: "다크 모드", desc: "어두운 화면", swatch: "#17181C" },
 ];
 

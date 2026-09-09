@@ -58,6 +58,31 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// "현재 로그인 유저 → accounts.id"를 계정 연동(account_auth_identities) 인지하고 조회한다.
+// admin(service_role) 클라이언트는 auth.uid()가 없어 RPC my_account_id()를 못 쓰므로,
+// 같은 fallback 로직을 여기서 직접 반복한다(2026-09-09, 계정 연동 기능).
+async function resolveAccountId(admin: ReturnType<typeof createClient>, authUserId: string): Promise<{ id: string; is_platform_admin: boolean } | null> {
+  const { data: account } = await admin
+    .from("accounts")
+    .select("id, is_platform_admin")
+    .eq("auth_id", authUserId)
+    .maybeSingle();
+  if (account) return account;
+
+  const { data: linked } = await admin
+    .from("account_auth_identities")
+    .select("account_id")
+    .eq("auth_id", authUserId)
+    .maybeSingle();
+  if (!linked) return null;
+  const { data: mergedAccount } = await admin
+    .from("accounts")
+    .select("id, is_platform_admin")
+    .eq("id", linked.account_id)
+    .maybeSingle();
+  return mergedAccount ?? null;
+}
+
 // 호출자가 실제 로그인 사용자면 대상 센터의 활성 매니저인지 확인. service_role 호출(cron)이면 통과.
 async function isAuthorizedCaller(authHeader: string | null, centerId: string): Promise<boolean> {
   if (!authHeader) return false;
@@ -71,11 +96,7 @@ async function isAuthorizedCaller(authHeader: string | null, centerId: string): 
   if (!authData?.user) return false;
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-  const { data: account } = await admin
-    .from("accounts")
-    .select("id, is_platform_admin")
-    .eq("auth_id", authData.user.id)
-    .maybeSingle();
+  const account = await resolveAccountId(admin, authData.user.id);
   if (!account) return false;
   if (account.is_platform_admin) return true;
 
@@ -99,11 +120,7 @@ async function isPlatformAdminCaller(authHeader: string | null): Promise<boolean
   const { data: authData } = await userClient.auth.getUser();
   if (!authData?.user) return false;
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-  const { data: account } = await admin
-    .from("accounts")
-    .select("is_platform_admin")
-    .eq("auth_id", authData.user.id)
-    .maybeSingle();
+  const account = await resolveAccountId(admin, authData.user.id);
   return !!account?.is_platform_admin;
 }
 

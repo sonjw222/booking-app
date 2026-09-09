@@ -1,5 +1,57 @@
 # CHANGELOG
 
+## 2026-09-09 — 이메일 ↔ 소셜 계정 명시적 연동(Account Linking)
+
+`docs/TODO.md` P2-0(2026-09-01 착수 결정 후 방치됐다가 문서 감사로 재발견) 구현. 이메일로
+가입한 뒤 나중에 카카오/구글 등으로 로그인해서 계정이 따로 생긴 경우, 로그인 상태에서
+"내 정보 관리 → 다른 계정과 연결"로 일회성 코드를 발급하고(A, 남을 계정), 다른 계정(B)으로
+로그인해 그 코드를 입력하면 B의 데이터가 A로 재배정되고 이후 B로 로그인해도 A로 동작한다.
+
+- `add_account_linking.sql`(신규, 적용 대기): `account_auth_identities`/`account_link_requests`
+  테이블, `accounts.merged_into` 컬럼, `my_account_id()`/`is_platform_admin()`/
+  `_is_owner_of_center()` 재정의, `accounts` RLS 3개 정책 수정, `create_account_link_code()`/
+  `link_accounts_by_code()` RPC.
+- `lib/authAccount.ts`에 `getMyAccountId()` 공유 헬퍼 추가, `lib/*.ts` 17개 파일 + Edge
+  Function 2개에 중복돼 있던 `.eq("auth_id", ...)` 인라인 조회를 이 헬퍼 호출로 통일(계정
+  연동 없이도 코드 중복 제거 효과).
+- `lib/roles.ts`의 `searchAccounts()`에 `merged_into is null` 필터 추가(병합된 계정이 스태프
+  초대 대상으로 다시 노출되는 것 방지).
+- `app/mypage/info/page.tsx`에 "다른 계정과 연결" 섹션 추가.
+- `npm run build`/`npm run test`(262개) 통과. 테스트 4개 파일의 mock을 `getMyAccountId()`가
+  이제 `my_account_id()` RPC를 호출하는 구조에 맞게 갱신.
+- **실제 브라우저 왕복 테스트로 버그 2건 발견·수정**(이메일 테스트 계정 2개로 실제 병합 왕복):
+  1. `fix_link_accounts_by_code_native_push_tokens_optional.sql` — `native_push_tokens` 테이블이
+     아직 라이브에 없어서(Firebase 설정 전, TODO P1-3c) RPC가 실패하던 문제. `to_regclass()`로
+     존재 확인 후 있을 때만 실행하도록 수정.
+  2. `fix_my_account_id_merged_into_priority.sql` — 병합된(B) 계정으로 재로그인하면
+     `my_account_id()`가 B 자신의 (이제는 비어있는) accountId를 계속 반환해 "프로필이
+     없어요" 오류가 나던 심각한 버그. B의 accounts 행을 auth_id로 직접 찾은 뒤 `merged_into`가
+     있으면 그 대상으로 넘겨주도록 수정. 수정 후 B(이메일)로 재로그인 → A(손장욱)의 이름/
+     수강권/관리자 모드까지 정확히 뜨는 것을 실제로 확인, 테스트 계정 삭제 완료.
+
+## 2026-09-09 — 전체 기능 상호작용 QA + 발견된 버그 수정
+
+앱 전체(매니저/운영자/회원 화면 70여개)를 크롬으로 직접 클릭해가며 상호작용 QA 진행.
+
+- **`/purchases`(구매 내역) 프라이버시 버그 수정**: `fetchMyPurchases()`(`lib/orders.ts`)가
+  `memberships`/`orders` 조회에 `profile_id` 필터 없이 RLS에만 의존해서, 매니저 겸 회원인
+  계정으로 접속하면 다른 회원의 수강권이 "내 구매내역"에 섞여 보이고 금액은 항상 "무료"로
+  잘못 표시됐다(매니저용 RLS가 이 조회에도 걸려서). 명시적 `profile_id in (내 프로필들)` 필터
+  추가로 수정, 실제 화면에서 재확인함.
+- **스태프 권한 카탈로그 상당수가 RLS에 연결 안 된 문제 발견**: `facility.room.manage`(룸
+  추가·수정·삭제) 권한을 실제로 켜봤더니 `rooms` RLS는 전혀 다른 키(`facility.room`)만 확인해서
+  아무 효과가 없었음. `fix_facility_room_manage_permission_wiring.sql`로 이 건은 수정(적용
+  대기). 전수 대조 결과 이 외에도 73개 권한 키가 RLS·RPC·앱 코드 어디에도 안 쓰이는 걸
+  발견 — 자세한 내용과 완료 조건은 [TODO.md P2-31](./TODO.md) 참고.
+- 그 외 매니저/운영자/회원 화면 전체 정상 동작 확인, 운영설정(`center_settings`) 34개 컬럼
+  라이브 대조 결과 새로 발견된 죽은 토글 없음.
+- **`/settings/theme` 견본색 수정**: "기본(라이트)" 스와치가 리브랜딩 이전 버건디(`#8B2F52`)로
+  하드코딩돼 있어 실제 라이트 테마 색(`#0A2446`)과 다르게 보이던 것 수정.
+- **문서 드리프트 2건 정정**: `REQUIREMENTS.md`의 "수업별 담당 강사 배정"이 실제로는 이미
+  완전히 구현돼 있는데(`class_trainers`, `set_class_trainers_safe` 등) "확인 필요"로 잘못
+  남아있던 것 정정. `TODO.md` P3-6의 `messages`/`notification_logs`가 이후 알림톡 cron
+  배치에서 실제로 쓰이게 됐는데 문서가 "코드 참조 0건"으로 안 갱신된 것 정정.
+
 ## 2026-09-08 — 회원에게 수강권/상품 임의 지급(서비스 증정) 기능 추가
 
 기존 "직접결제"와 별개로, 매니저가 회원에게 수강권/상품을 무상 또는 임의 가격으로

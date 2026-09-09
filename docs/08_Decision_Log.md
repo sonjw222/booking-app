@@ -176,6 +176,16 @@ Superseded
   연동 자체가 동작하지 않았다(`AUTH_SETUP.md` 3-1절). 이메일을 요청하지 않으므로 네이버와
   동일하게 카카오 고유 회원번호로 합성한 이메일(`kakao-<id>@kakao.socialauth.invalid`)을
   식별자로 쓴다.
+- **Addendum (2026-09-09, Alternative A 실제 구현)**: 사용자가 "이미 따로 생긴 두 계정을
+  실제로 합치는" 전체 범위로 진행하기로 결정 — Alternative A(명시적 확인 후 연동)를 실제
+  구현함. `accounts`에 email 컬럼을 추가하는 대신(email은 여전히 `auth.users`에만 있음),
+  로그인 상태를 유지한 채 다른 계정임을 증명할 방법이 없어(OAuth 왕복은 세션을 덮어씀)
+  **일회성 코드 교환** 방식을 썼다: A(남을 계정)가 코드를 발급하고, B(합쳐질 계정)가 그
+  코드를 입력하면 B의 데이터가 A로 재배정되고 B의 `auth.users.id`가 새 매핑 테이블
+  (`account_auth_identities`)에 A로 연결된다. Supabase의 `linkIdentity()`는 이미 다른
+  `auth.users`가 점유한 identity에는 못 써서 이 시나리오에 안 맞아 직접 구현했다. B의
+  `auth.users` 행 자체는 삭제하지 않는다(삭제하면 재로그인마다 새 계정이 또 생기는 악순환).
+  자세한 내용은 `docs/TODO.md` P2-0 참고.
 
 ---
 

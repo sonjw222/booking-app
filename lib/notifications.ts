@@ -6,6 +6,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { getMyAccountId } from "./authAccount";
 
 const KST = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit",
@@ -170,14 +171,7 @@ export async function deleteNotification(id: string): Promise<void> {
 export async function subscribeNotifications(
   onNew: (n: Notification) => void
 ): Promise<() => void> {
-  const { data: authData } = await supabase.auth.getUser();
-  const authUser = authData.user;
-  if (!authUser) return () => {};
-
-  // 내 account_id 조회 (필터에 사용)
-  const { data: acc } = await supabase
-    .from("accounts").select("id").eq("auth_id", authUser.id).single();
-  const accountId = acc?.id;
+  const accountId = await getMyAccountId();
   if (!accountId) return () => {};
 
   // 채널 이름을 매번 고유하게 (여러 컴포넌트에서 동시에 구독해도 충돌 안 나게)

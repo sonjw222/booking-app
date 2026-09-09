@@ -61,6 +61,8 @@
 | `role_permissions` | 구현됨 | 역할별 권한 |
 | `account_center_permissions` | 구현됨 | 개인별 권한 allow/deny 예외 |
 | `phone_verifications` | 구현됨 | 회원가입 휴대폰 인증(OTP) 코드(해시)·시도횟수·만료·인증시각 — `add_phone_verification.sql`. RLS에 anon/authenticated 정책이 없어 REST로 직접 조회 불가, `verify_phone_otp()`(anon 허용, 이 프로젝트 최초의 anon 대상 grant)로만 검증 |
+| `account_auth_identities` | 구현됨(2026-09-09, `add_account_linking.sql`) | 계정 연동으로 흡수된 `auth.users.id` → 남은 `accounts.id` 매핑. `my_account_id()`가 1차 조회 실패 시 2차로 확인. `phone_verifications`처럼 REST 정책 없이 RPC로만 접근 |
+| `account_link_requests` | 구현됨(2026-09-09, `add_account_linking.sql`) | 계정 연동 일회성 코드(10분 유효, 계정당 대기 코드 1개). `accounts.merged_into`(신규 컬럼) — 이 계정이 다른 계정에 합쳐졌으면 그 accounts.id |
 
 ### 4-2. 센터, 수업과 예약
 
@@ -328,11 +330,12 @@ manager_centers * ── 1 center_roles
 
 | 함수 | 역할 | 주의 |
 |---|---|---|
-| `my_account_id()` | 현재 Auth 사용자의 `accounts.id` | `security definer` 패턴 유지 |
+| `my_account_id()` | 현재 Auth 사용자의 `accounts.id` | `security definer` 패턴 유지. 2026-09-09부터 `accounts.auth_id` 1차 조회가 실패하면 `account_auth_identities`(계정 연동)를 2차로 확인 |
 | `my_profile_ids()` | 현재 계정이 소유한 프로필 집합 | 프로필 RLS 회귀 이력 있음 |
 | `my_managed_center_ids()` | 현재 계정이 관리하는 센터 집합 | 계정 조회 재귀 방지본 확인 |
-| `is_platform_admin()` | 플랫폼 운영자 여부 | self-service 승격 경로 금지 |
+| `is_platform_admin()` | 플랫폼 운영자 여부 | self-service 승격 경로 금지. 2026-09-09부터 `my_account_id()` 경유로 재작성(계정 연동된 계정도 원 계정의 운영자 권한 유지) |
 | `has_permission(center_id, key)` | 센터 역할·개인 예외를 반영한 권한 판정 | 예약·매출·회원 RPC에서 폭넓게 사용 |
+| `create_account_link_code()` / `link_accounts_by_code(code)` | 계정 연동 코드 발급/소비 | 2026-09-09 신규. 후자는 `manager_centers`/`class_trainers`/`member_center_colors`/`inquiry_threads` unique 충돌을 규칙대로 처리하고, `staff_salaries` 충돌 시 명시적 에러(자동 병합 안 함) |
 
 ### 10-2. RLS 보호 원칙
 

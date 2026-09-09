@@ -7,6 +7,7 @@
   이미 허용하므로 새 RPC/RLS 없이 클라이언트에서 직접 조회 가능).
 */
 import { supabase } from "./supabaseClient";
+import { getMyAccountId } from "./authAccount";
 
 // query가 이미 status='active' && expires_at>=today로 필터링한 뒤 남는 판단은
 // remaining_count뿐이다 — null(무제한권)이거나 1 이상이면 예약에 쓸 수 있다.
@@ -41,15 +42,11 @@ export function setCachedHasUsableMembership(v: boolean): void {
 }
 
 export async function fetchHasUsableMembership(): Promise<boolean> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) return false;
-
-  const { data: acc, error: accErr } = await supabase
-    .from("accounts").select("id").eq("auth_id", authData.user.id).single();
-  if (accErr || !acc) return false;
+  const accountId = await getMyAccountId();
+  if (!accountId) return false;
 
   const { data: profiles, error: profErr } = await supabase
-    .from("profiles").select("id").eq("account_id", (acc as any).id).is("deleted_at", null);
+    .from("profiles").select("id").eq("account_id", accountId).is("deleted_at", null);
   if (profErr) throw new Error("프로필을 확인하지 못했어요: " + profErr.message);
   const profileIds = (profiles ?? []).map((p: any) => p.id);
   if (profileIds.length === 0) return false;

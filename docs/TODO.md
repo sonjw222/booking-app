@@ -1211,14 +1211,16 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 | 한 것 | 수강권 카드에 "수정" 버튼 추가(`openEditSheet()`), 기존 생성 시트를 `editingId` 유무로 생성/수정 겸용으로 만들어 `updateProduct()`를 재사용 — 이름/가격/횟수/그룹명/설명/만료옵션/요일반 태그를 모두 수정 가능. `deleteProduct()`가 소프트 삭제(`is_active=false`)인 것과 달리 수정은 행을 직접 업데이트하지만, `orders`/`memberships` 등은 구매 시점 값을 스냅샷으로 별도 저장하므로 과거 구매 기록에는 영향 없음(스키마 확인함). |
 | 관련 문서 | [DATABASE.md `products`](./DATABASE.md), `app/manager/membership-rules/page.tsx`, `lib/passes.ts` |
 
-### P2-0. 이메일 계정 ↔ 소셜 계정 명시적 연결(Account Linking)
+### P2-0. (2026-09-09, 완료) 이메일 계정 ↔ 소셜 계정 명시적 연결(Account Linking)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **미착수 — 알림톡 배치(2026-09-01) 완료 직후 진행 예정(사용자 결정)** |
-| 배경 | `docs/08_Decision_Log.md` DEC-004가 **자동** 병합은 명시적으로 거부했지만("Alternatives A"), 사용자 확인을 거치는 **명시적** 연결(예: 이메일로 이미 가입된 사람이 소셜 로그인 시도 → "이미 계정이 있어요, 연결할까요?")은 대안으로만 남겨두고 미구현 상태. 사용자가 이 흐름을 원한다고 확인(2026-09-01). |
-| 필요한 작업 | `accounts.auth_id`가 1:1 unique라 지금 스키마로는 "이메일 로그인과 카카오 로그인이 같은 회원"을 표현할 수 없음 — `account_auth_identities`(account_id, auth_id, provider) 매핑 테이블 신설 + `lib/authAccount.ts`의 `getMyAccountId()`류 조회 로직(`.eq("auth_id", user.id)` 패턴이 lib 전반에 흩어져 있음) 전체 리팩터링 필요. 연결 시점 본인 확인 UX(전화번호/이름 일치만으로 충분한지, 추가 인증이 필요한지)도 설계 필요 — DEC-004의 보안 우려(이메일 스푸핑, Apple Hide My Email 오판)와 동일한 리스크가 있어 신중하게 설계해야 함. |
+| 현재 상태 | **완료.** 2026-09-01 결정 이후 문서 감사에서 방치된 채 재발견(2026-09-09) → 같은 배치에서 구현. |
+| 배경 | `docs/08_Decision_Log.md` DEC-004가 **자동** 병합은 명시적으로 거부했지만("Alternatives A"), 사용자 확인을 거치는 **명시적** 연결(예: 이메일로 이미 가입된 사람이 소셜 로그인 시도 → "이미 계정이 있어요, 연결할까요?")은 대안으로만 남겨두고 미구현 상태였음. |
+| 설계·구현 | Supabase `linkIdentity()`는 "이미 다른 auth.users가 점유한 identity"에는 못 써서(이미 따로 생긴 두 계정을 합치는 이번 시나리오와 안 맞음) 직접 구현: **일회성 코드 교환** 방식으로 A(로그인 상태에서 코드 발급)와 B(코드 입력)를 연결 → B의 데이터를 A로 재배정 + B의 `auth.users.id`를 `account_auth_identities`에 A로 매핑(B의 auth.users 행 자체는 삭제 안 함 — 삭제하면 재로그인마다 새 계정이 또 생김). `my_account_id()`/`is_platform_admin()`/`_is_owner_of_center()`가 이 매핑을 인지하도록 재정의, `accounts` 테이블 RLS 3개 정책에도 OR 분기 추가(이 셋은 `my_account_id()`를 안 거치는 예외였음). `manager_centers`/`class_trainers`/`staff_salaries`/`member_center_colors`/`inquiry_threads`의 unique 제약 충돌은 각각 규칙으로 처리(급여만 자동 병합 대신 명시적 에러). `lib/*.ts` 17개 파일 + Edge Function 2개의 중복된 `.eq("auth_id", ...)` 인라인 조회를 `getMyAccountId()`(신규, `lib/authAccount.ts`) 공유 호출로 통일. |
+| 근거 파일 | `add_account_linking.sql`(적용 완료), `fix_link_accounts_by_code_native_push_tokens_optional.sql`(적용 완료), `fix_my_account_id_merged_into_priority.sql`(적용 완료), `lib/authAccount.ts`(`getMyAccountId()`), `lib/accountLinking.ts`(신규), `app/mypage/info/page.tsx`("다른 계정과 연결" 섹션), `lib/roles.ts`(`searchAccounts()`에 `merged_into is null` 필터), `supabase/functions/send-alimtalk/index.ts`(`resolveAccountId()`) |
+| 완료 조건 | 전부 충족 — `npm run build`/`npm run test`(262개) 통과 + **실제 이메일 테스트 계정 2개로 브라우저 왕복 완료 확인**(A가 코드 발급 → B가 입력 → 병합 → B로 재로그인해도 A로 정확히 resolve됨). 왕복 중 실제 버그 2건 발견해 즉시 수정(위 fix_* 파일, 자세한 내용은 CHANGELOG 2026-09-09 참고). |
 | 관련 문서 | `docs/08_Decision_Log.md` DEC-004, [REQUIREMENTS 5-1, 6-2](./REQUIREMENTS.md), `lib/authAccount.ts` |
 
 ### P2-1. 애플 OAuth 운영 설정 (구글·카카오·네이버는 완료 — 아래 참고)
@@ -2572,16 +2574,22 @@ RLS부터 적용해야 함. 정책 초안은 `add_rls_gap_tables_draft_proposed.
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P3 |
-| 현재 상태 | **확인 필요** |
+| 현재 상태 | **부분 진행(문서만 안 갱신돼 있었음, 2026-09-09 정정) — `center_contacts`/`schedule_templates`는 여전히 확인 필요** |
 | 근거 파일 | `schema.sql`, `reservation_functions.sql`; `notification_rules`, `notification_logs`, `messages`, `center_contacts`, `schedule_templates` |
-| 완료 조건 | 현재 알림·센터 정보·`CopyCalendar`와 각 객체의 역할을 비교해 중복 여부를 결정함. 사용할 경우 화면·처리 흐름을 연결하고, 사용하지 않을 경우 운영 데이터 확인 후 정리 계획을 승인받음 |
+| 완료 조건 | `center_contacts`/`schedule_templates`는 현재 알림·센터 정보·`CopyCalendar`와 역할을 비교해 중복 여부를 결정함(여전히 코드 참조 0건). 매니저가 직접 대량 SMS/푸시 캠페인을 작성하는 UI는 아직 없음 — 필요하면 새로 설계 |
 | 관련 문서 | [DATABASE 5절](./DATABASE.md), [REQUIREMENTS 12절](./REQUIREMENTS.md), [21_RLS_Gap_Analysis.md](./21_RLS_Gap_Analysis.md) |
 
-2026-08-01 SEC-007/008 조사: `messages`(대량 SMS/푸시 발송, `target_profile_ids[]` 배열 포함)와
+2026-08-01 SEC-007/008 조사 당시: `messages`(대량 SMS/푸시 발송, `target_profile_ids[]` 배열 포함)와
 `notification_logs`(발송 정산 기록)는 코드 참조 0건에 RLS 없음을 확인. `messages`는 회원과의
 1:1 채팅(`inquiry_messages`)이나 자동알림(`notification_rules`)과는 목적이 다른 "대량 발송"
 전용 테이블이라 중복이 아니라 미구현 기능임(`message.sms.*`/`message.push.*` 권한이 카탈로그에
 이미 있음). 정책 초안은 `add_rls_gap_tables_draft_proposed.sql`에 준비해둠(미실행).
+
+**2026-09-09 정정**: 그 이후 진행된 알림톡 자동발송 cron 배치 작업(`supabase/functions/send-alimtalk/index.ts`
+경로 2, 큐 디스패치)에서 `messages`/`notification_logs`가 실제로 쓰이게 됐다 — 예약된 알림톡을
+`messages` 행으로 큐잉하고, 발송 결과를 `notification_logs`에 건당 기록한다. 이 문서가 갱신 안 돼
+"코드 참조 0건"으로 남아있던 걸 발견해 정정함(문서 드리프트, 코드 자체엔 문제 없음). `center_contacts`/
+`schedule_templates`, 그리고 매니저가 직접 캠페인 문구를 작성해 대량 발송하는 UI는 여전히 미구현.
 
 ### P2-DS-1. (신규, 2026-08-22) 디자인 시스템 정합성 — 이번 점검에서 남긴 후속 작업
 
@@ -2966,6 +2974,16 @@ Empty/Error/Skeleton 공용 컴포넌트 3종 → 3주차 액센트 단일화 + 
 RPC(`open_inquiry_thread`/`send_inquiry_message`/`read_inquiry_thread`) + 실시간 구독으로 완전히
 대체되어 있음을 확인함. **결론: 정책 추가 후보가 아니라 삭제 후보.** 이번 배치는 실제 DROP을
 하지 않음 — 사용자 승인 후 별도 배치에서 `chat_messages` DROP 마이그레이션을 작성할 것.
+
+### P2-31. (신규, 2026-09-09) 스태프 권한 카탈로그 중 상당수가 RLS/RPC에 연결 안 됨 — 무늬만 있는 체크박스
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **부분 수정 + 나머지는 결정 필요.** `/manager/staff` → 역할별 권한 화면에서 실제 권한을 켜보고 라이브 RLS/RPC 정의와 전수 대조해 발견함. `facility.room.manage`(룸 추가·수정·삭제)가 `rooms` RLS와 연결 안 되던 건은 `fix_facility_room_manage_permission_wiring.sql`로 수정함(사용자 적용 필요). 그 외 **73개 권한 키가 RLS·RPC·앱 코드 어디에도 전혀 연결 안 됨**(`schedule.own.*`/`schedule.other.*` 계열이 대부분 — 본인/다른 스태프의 그룹·프라이빗 수업 예약·취소·등록·삭제·과거수업 포함 세분화된 스케줄 권한 체계, 그 외 `contract.*`, `customer.memo.*`, `customer.progress.*`, `pass.product.*`, `message.push.send`/`message.sms.send`, `facility.salary.setting` 등). 이미 여러 센터의 `role_permissions`에 이 죽은 키들이 실제로 부여돼 있어(룸 건만 20건 확인, 전체는 미조사) 관리자들이 "권한을 켰다"고 믿고 있을 가능성이 있음. 추가로 **12개 키**는 RLS는 없지만 `/manager` 홈 메뉴 노출(`canSeeMenu()`) 용도로만 쓰여서, 꺼도 메뉴만 숨겨질 뿐 URL 직접 접근은 막지 못함(진짜 접근 통제 아님). |
+| 근거 파일 | `fix_facility_room_manage_permission_wiring.sql`(신규, 적용 대기), `permissions`/`role_permissions` 테이블, `app/manager/page.tsx`(`canSeeMenu` 12건), `app/manager/staff/page.tsx`, `app/manager/staff/permissions/page.tsx` |
+| 완료 조건 | 73개 죽은 키에 대해 (a) 실제로 RLS/RPC를 만들어 기능을 완성할지, (b) 카탈로그에서 완전히 제거할지 방향을 정함(스케줄 세분화 권한 체계는 원래 설계 의도가 커 보여 삭제보다는 완성 쪽이 더 맞을 수 있음 — 사용자 확인 필요). 12개 메뉴-only 키는 실제 RLS로 승격할지, 메뉴 숨김용임을 UI에 명시할지 결정. 결정 후 `docs/DATABASE.md`의 권한 카탈로그 설명도 갱신 |
+| 관련 문서 | [DATABASE.md](./DATABASE.md) |
 
 ## 8. 상태 갱신 체크리스트
 

@@ -6,6 +6,7 @@
 
 import { supabase } from "./supabaseClient";
 import { sanitizeRichText } from "./security";
+import { getMyAccountId } from "./authAccount";
 
 export type Review = {
   id: string;
@@ -23,13 +24,11 @@ const KST_MD = new Intl.DateTimeFormat("ko-KR", {
 });
 
 async function myProfileId(): Promise<string> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) throw new Error("로그인이 필요해요");
-  const { data: acc } = await supabase.from("accounts").select("id").eq("auth_id", authData.user.id).single();
-  if (!acc) throw new Error("계정을 찾을 수 없어요");
+  const accountId = await getMyAccountId();
+  if (!accountId) throw new Error("로그인이 필요해요");
   const { data: profs } = await supabase
     .from("profiles").select("id, is_primary, created_at")
-    .eq("account_id", acc.id)
+    .eq("account_id", accountId)
     .is("deleted_at", null)
     .order("is_primary", { ascending: false })
     .order("created_at", { ascending: true })

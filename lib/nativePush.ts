@@ -11,22 +11,12 @@
 import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { supabase } from "./supabaseClient";
+import { getMyAccountId } from "./authAccount";
 
 export type NativePushStatus = "unsupported" | "subscribed" | "unsubscribed";
 
 export function isNativePushSupported(): boolean {
   return Capacitor.isNativePlatform();
-}
-
-async function getMyAccountId(): Promise<string | null> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData?.user) return null;
-  const { data: acc } = await supabase
-    .from("accounts")
-    .select("id")
-    .eq("auth_id", authData.user.id)
-    .single();
-  return acc?.id ?? null;
 }
 
 export async function getNativePushStatus(): Promise<NativePushStatus> {

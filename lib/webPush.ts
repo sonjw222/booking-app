@@ -6,6 +6,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { getMyAccountId } from "./authAccount";
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
@@ -39,17 +40,6 @@ export async function getWebPushStatus(): Promise<WebPushStatus> {
   } catch {
     return "unsubscribed";
   }
-}
-
-async function getMyAccountId(): Promise<string | null> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData?.user) return null;
-  const { data: acc } = await supabase
-    .from("accounts")
-    .select("id")
-    .eq("auth_id", authData.user.id)
-    .single();
-  return acc?.id ?? null;
 }
 
 export async function enableWebPush(): Promise<{ ok: boolean; error?: string }> {

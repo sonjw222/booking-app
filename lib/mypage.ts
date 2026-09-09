@@ -4,6 +4,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { getMyAccountId } from "./authAccount";
 
 export type Profile = { name: string; phone: string | null; isMember: boolean; isManager: boolean; isPlatformAdmin: boolean };
 
@@ -47,11 +48,11 @@ function fmtDateTime(iso: string) {
 }
 
 async function getMyContext(): Promise<{ accountId: string; profileId: string; name: string; phone: string | null; isMember: boolean; isManager: boolean; isPlatformAdmin: boolean }> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) throw new Error("로그인이 필요해요");
+  const accountId = await getMyAccountId();
+  if (!accountId) throw new Error("로그인이 필요해요");
   const { data: acc, error: accErr } = await supabase
     .from("accounts").select("id, name, phone, is_member, is_platform_admin")
-    .eq("auth_id", authData.user.id).single();
+    .eq("id", accountId).single();
   if (accErr || !acc) throw new Error("계정 정보를 찾을 수 없어요");
   // ACL-005: "관리자 모드로 전환" 노출 조건은 /manager 진입 조건(lib/manager.ts의
   // getMyAccountId())과 반드시 같은 기준을 써야 한다 — accounts.is_manager 플래그가
@@ -80,11 +81,11 @@ async function getMyContext(): Promise<{ accountId: string; profileId: string; n
 // "내 정보 관리"(app/mypage/info) 조회 전용 — getMyContext()는 manager_centers/profiles까지
 // 같이 조회해 무겁다. 이름/휴대폰번호만 필요한 화면이라 계정 행 하나만 가볍게 가져온다.
 export async function fetchMyAccountInfo(): Promise<{ name: string; phone: string | null }> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) throw new Error("로그인이 필요해요");
+  const accountId = await getMyAccountId();
+  if (!accountId) throw new Error("로그인이 필요해요");
   const { data: acc, error } = await supabase
     .from("accounts").select("name, phone")
-    .eq("auth_id", authData.user.id).single();
+    .eq("id", accountId).single();
   if (error || !acc) throw new Error("계정 정보를 찾을 수 없어요");
   return { name: acc.name, phone: acc.phone };
 }
@@ -221,14 +222,11 @@ export type PointHistoryItem = {
 };
 
 export async function fetchMyPointHistory(): Promise<PointHistoryItem[]> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) return [];
-  const { data: acc } = await supabase
-    .from("accounts").select("id").eq("auth_id", authData.user.id).maybeSingle();
-  if (!acc) return [];
+  const accountId = await getMyAccountId();
+  if (!accountId) return [];
 
   const { data: profRows } = await supabase
-    .from("profiles").select("id, name, label, is_primary").eq("account_id", acc.id);
+    .from("profiles").select("id, name, label, is_primary").eq("account_id", accountId);
   const profiles = profRows ?? [];
   const profileIds = profiles.map((p: any) => p.id);
   const profileLabel: Record<string, string> = {};
@@ -299,13 +297,11 @@ const KST_DATE_C = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", ye
 const KST_TIME_C = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
 
 export async function fetchMyReservationsForCalendar(): Promise<CalReservation[]> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) throw new Error("로그인이 필요해요");
-  const { data: acc } = await supabase.from("accounts").select("id").eq("auth_id", authData.user.id).single();
-  if (!acc) throw new Error("계정을 찾을 수 없어요");
+  const accountId = await getMyAccountId();
+  if (!accountId) throw new Error("로그인이 필요해요");
 
   const { data: profiles } = await supabase
-    .from("profiles").select("id, name, nickname, label, is_primary").eq("account_id", acc.id);
+    .from("profiles").select("id, name, nickname, label, is_primary").eq("account_id", accountId);
   const profs = profiles ?? [];
   const ids = profs.map((p: any) => p.id);
   const hasMultiple = profs.length > 1;

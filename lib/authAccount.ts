@@ -45,6 +45,17 @@ function isSocialProvider(user: {
   return user.app_metadata?.provider != null && user.app_metadata.provider !== "email";
 }
 
+// "현재 로그인 유저 → 내 accounts.id"를 구하는 단일 진실 소스. accounts.auth_id 직접 조회
+// 대신 SQL의 my_account_id() RPC를 그대로 호출한다 — 계정 연동(account_auth_identities)으로
+// 다른 계정에 합쳐진 경우에도 이 함수 하나만 고치면 전체 앱이 병합된 계정으로 정확히
+// resolve된다(2026-09-09, 계정 연동 기능). 새로 코드를 짤 때는 이 함수를 쓰고, accounts를
+// `.eq("auth_id", ...)`로 직접 조회하는 패턴은 추가하지 않는다.
+export async function getMyAccountId(): Promise<string | null> {
+  const { data, error } = await supabase.rpc("my_account_id");
+  if (error) return null;
+  return (data as string | null) ?? null;
+}
+
 export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | null> {
   if (bootstrapSuppressed) return null;
   const { data: authData } = await supabase.auth.getUser();
@@ -52,13 +63,16 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
   if (!user) return null;
   const isSocial = isSocialProvider(user);
 
-  const { data: existing, error: findErr } = await supabase
-    .from("accounts")
-    .select("id, phone")
-    .eq("auth_id", user.id)
-    .maybeSingle();
-  if (findErr) return null; // 조회 실패 시 조용히 넘어감(RLS 등) — 이후 실제 데이터 호출에서 다시 드러남
-  if (existing) return { id: existing.id, phone: existing.phone, isSocial };
+  const existingId = await getMyAccountId();
+  if (existingId) {
+    const { data: existing, error: findErr } = await supabase
+      .from("accounts")
+      .select("id, phone")
+      .eq("id", existingId)
+      .maybeSingle();
+    if (findErr) return null; // 조회 실패 시 조용히 넘어감(RLS 등) — 이후 실제 데이터 호출에서 다시 드러남
+    if (existing) return { id: existing.id, phone: existing.phone, isSocial };
+  }
 
   const meta = user.user_metadata ?? {};
   const name: string =
@@ -94,12 +108,12 @@ export async function completeSocialProfile(accountId: string, phone: string, ad
 // 본인이 스스로 켤 수 없음) — 로그인 안 했거나 계정 조회 실패 시 안전하게 false로
 // 취급한다(전역 게이트가 꺼져 있으면 기본은 항상 직접결제만).
 export async function fetchMyPgCheckoutOverride(): Promise<boolean> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) return false;
+  const accountId = await getMyAccountId();
+  if (!accountId) return false;
   const { data } = await supabase
     .from("accounts")
     .select("pg_checkout_override")
-    .eq("auth_id", authData.user.id)
+    .eq("id", accountId)
     .maybeSingle();
   return !!data?.pg_checkout_override;
 }

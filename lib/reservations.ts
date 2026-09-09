@@ -6,6 +6,7 @@
 
 import { supabase } from "./supabaseClient";
 import { getKstMonthUtcRange } from "./kst";
+import { getMyAccountId as getMyAccountIdBase } from "./authAccount";
 
 // ---------------- 타입 ----------------
 
@@ -57,12 +58,9 @@ function toTimeStr(iso: string) {
 // 이 함수로 한 번만 조회한 뒤 두 함수에 넘기면, 매번 중복으로 auth.getUser()+accounts 조회를
 // 반복하지 않아도 됨 (예약 화면 성능 개선 — app/reservation/page.tsx의 load() 참고).
 export async function getMyAccountId(): Promise<string> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) throw new Error("로그인이 필요해요");
-  const { data: account, error: accErr } = await supabase
-    .from("accounts").select("id").eq("auth_id", authData.user.id).single();
-  if (accErr || !account) throw new Error("계정 정보를 찾을 수 없어요");
-  return account.id;
+  const accountId = await getMyAccountIdBase();
+  if (!accountId) throw new Error("계정 정보를 찾을 수 없어요");
+  return accountId;
 }
 
 // ---------------- 월 단위 데이터 한 번에 가져오기 ----------------
@@ -369,15 +367,9 @@ export type BookingProfile = { id: string; name: string; label: string | null; i
 export async function fetchMyProfiles(accountId?: string): Promise<BookingProfile[]> {
   let accId = accountId;
   if (!accId) {
-    const { data: authData } = await supabase.auth.getUser();
-    if (!authData.user) return [];
-    const { data: acc } = await supabase
-      .from("accounts")
-      .select("id")
-      .eq("auth_id", authData.user.id)
-      .single();
-    if (!acc) return [];
-    accId = acc.id;
+    const found = await getMyAccountIdBase();
+    if (!found) return [];
+    accId = found;
   }
 
   const { data, error } = await supabase
