@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 2026-09-09 — PR #129 CI가 잡은 당일예약 취소마감 회귀 수정
+
+PR #129 CI(`tests/e2e/settings/cancel-deadline.spec.ts`)에서 발견: 당일예약 취소마감
+안전장치(`fix_same_day_cancel_and_waitlist_auto_deadline.sql`)의 조건이 너무 넓어서,
+`groupCancelDaysBefore=0` + 특정 시각처럼 정상적으로 유효한 "오늘 마감" 설정까지도
+덮어써 취소마감 정책이 당일예약 건에서 전부 무력화되는 회귀가 있었음(수업 시작 직전까지
+항상 취소 성공). 조건을 "정상 계산된 마감의 날짜(KST)가 오늘보다 이전인 경우"로 좁혀
+원래 의도한 버그(days_before≥1 기본값으로 마감이 어제 이전으로 계산되는 경우)만 타게팅
+하도록 수정(`fix_same_day_cancel_deadline_regression.sql`, 적용 완료). 머지 전 CI로
+잡혀 프로덕션에는 영향 없음.
+
 ## 2026-09-09 — 마케팅 알림 토글 비활성 버그 수정 + 운영설정 자동 QA 완료·롤백
 
 전날 신설한 "혜택·이벤트 알림" 기능의 회원측 토글(`app/settings/notifications/page.tsx`)이

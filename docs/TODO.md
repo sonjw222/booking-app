@@ -1134,6 +1134,13 @@ reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시�
   판단이 틀렸음을 확인. `calc_deadline()`이 당일 예약 건엔 항상 "어제"로 마감을 계산해
   사실상 취소 불가능했던 버그 — `cancel_reservation()`에 당일 예약 전용 마감 후보를 추가해
   해결(`fix_same_day_cancel_and_waitlist_auto_deadline.sql`, 적용 완료).
+  **2026-09-09 회귀 발견·수정**: 최초 조건("예약이 당일에 만들어졌는가")이 너무 넓어서,
+  `groupCancelDaysBefore=0` + 특정 시각처럼 정상적으로 유효한 "오늘 마감" 설정까지도
+  당일예약 안전장치가 덮어써 취소마감 정책 자체가 무력화되는 회귀가 발생함
+  (`tests/e2e/settings/cancel-deadline.spec.ts`가 PR #129 CI에서 검출). 조건을 "정상
+  계산된 마감의 날짜(KST)가 오늘보다 이전인 경우"로 좁혀 수정
+  (`fix_same_day_cancel_deadline_regression.sql`, 적용 완료) — 원래 버그(days_before≥1
+  기본값으로 마감이 어제 이전 날짜로 계산되는 경우)만 정확히 타게팅.
 - **예약대기 자동 예약 시간**(`waitlist_auto_hours/minutes`) — 마찬가지로 스케줄러 불필요,
   같은 파일에서 `cancel_reservation()`의 즉시승격 로직에 시작 전 시간 조건을 추가. 기본
   0/0이면 기존 동작(항상 즉시승격) 그대로 유지.
