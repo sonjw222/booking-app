@@ -914,7 +914,7 @@ function MembersContent() {
                   <div key={g.id} className="grade-item">
                     <span className="grade-dot" style={{ background: g.color ?? "var(--line-strong)" }} />
                     <span className="grade-name">{g.name}</span>
-                    <button className="text-btn danger" disabled={busy} onClick={() => handleDeleteGrade(g)}>삭제</button>
+                    <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteGrade(g)}>삭제</button>
                   </div>
                 ))}
               </div>

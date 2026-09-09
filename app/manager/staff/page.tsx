@@ -521,7 +521,7 @@ export default function StaffPage() {
                     {r.isSystem && <span style={{ color: "var(--text-dim)", fontSize: 11, marginLeft: 6 }}>기본</span>}
                   </span>
                   {!r.isSystem && canManageRolePermissions && (
-                    <button className="text-btn danger" disabled={busy} onClick={() => handleDeleteRole(r)}>삭제</button>
+                    <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteRole(r)}>삭제</button>
                   )}
                 </div>
               ))}

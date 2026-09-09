@@ -503,7 +503,7 @@ export default function SalesPage() {
                     <div className="sales-row-sub">{e.spentAt}{e.memo && ` · ${e.memo}`}</div>
                   </div>
                   <div className="sales-amount minus">-{won(e.amount)}</div>
-                  <button className="text-btn danger" style={{ marginLeft: 8 }} disabled={busy} onClick={() => handleDeleteExpense(e.id)}>삭제</button>
+                  <button className="quiet-action danger" style={{ marginLeft: 8 }} disabled={busy} onClick={() => handleDeleteExpense(e.id)}>삭제</button>
                 </div>
               ))}
             </div>
