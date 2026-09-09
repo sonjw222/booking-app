@@ -34,6 +34,8 @@ import {
   isValidClassTimeRange, checkScheduleConflicts, type ScheduleConflict,
 } from "../../../lib/classes";
 import { fetchStaff, fetchMyEffectivePermissionKeys, canSeeManagerMenu, type Staff } from "../../../lib/roles";
+import { fetchClassMemos, createClassMemo, updateClassMemo, deleteClassMemo, type ScheduleMemo } from "../../../lib/scheduleMemos";
+import { getMyAccountId } from "../../../lib/authAccount";
 import { fetchMemberDetail, type MemberDetailData } from "../../../lib/members";
 import {
   fetchProducts, fetchRulesForProducts, findScheduleExcludedProducts, ruleToText,
@@ -78,6 +80,14 @@ export default function ClassManagePage() {
   const [applyToGroup, setApplyToGroup] = useState(false);
   // 삭제 확인 시트
   const [deleteTarget, setDeleteTarget] = useState<ManagedClass | null>(null);
+  // 수업 메모 (schedule_memos, class_id 경로) — 수정 시트를 열 때만 로드
+  const [memos, setMemos] = useState<ScheduleMemo[]>([]);
+  const [memoInput, setMemoInput] = useState("");
+  const [memoBusy, setMemoBusy] = useState(false);
+  const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
+  const [editingMemoContent, setEditingMemoContent] = useState("");
+  const [myAccountId, setMyAccountId] = useState<string | null>(null);
+  useEffect(() => { getMyAccountId().then(setMyAccountId).catch(() => {}); }, []);
   const [form, setForm] = useState<ClassInput>(EMPTY);
   // 반복 등록 상태
   const [repeat, setRepeat] = useState(false);
@@ -262,6 +272,9 @@ export default function ClassManagePage() {
   const canDeleteClass = canDo("schedule.own.group.delete");
   const canAssignReservation = canDo("schedule.makeup");
   const canAssignAnyStatus = canDo("customer.member.assign_any_status");
+  const canAddMemo = canDo("schedule.memo.create");
+  const canEditOwnMemo = canDo("schedule.memo.update"); // 본인 메모 수정에도 이 키가 필요
+  const canManageAnyMemo = activeCenter?.isOwner ?? false; // 다른 사람 메모는 오너만 — 위임 불가(서버 RLS와 동일 규칙)
 
   function goPrevMonth() {
     setSelectedDay(1);
@@ -595,8 +608,9 @@ export default function ClassManagePage() {
   }
 
   async function openMemberInfo(a: ClassAttendee) {    setMemberInfo({ name: a.name, profileId: a.profileId, data: null });
+    if (!activeCenterId) return;
     try {
-      const data = await fetchMemberDetail(a.profileId);
+      const data = await fetchMemberDetail(a.profileId, activeCenterId);
       setMemberInfo({ name: a.name, profileId: a.profileId, data });
     } catch (e: any) {
       setError(e.message);
@@ -640,6 +654,46 @@ export default function ClassManagePage() {
       const isTrainerStale = myToken !== openTokenRef.current || trainerEditedRef.current;
       if (!isTrainerStale) setSelectedTrainers(tids);
     } catch { /* 무시 */ }
+    setMemos([]);
+    setMemoInput("");
+    setEditingMemoId(null);
+    try {
+      const list = await fetchClassMemos(c.id);
+      if (myToken === openTokenRef.current) setMemos(list);
+    } catch { /* 무시 */ }
+  }
+
+  async function handleAddMemo() {
+    if (!editId || !memoInput.trim()) return;
+    setMemoBusy(true);
+    try {
+      await createClassMemo(editId, memoInput.trim());
+      setMemoInput("");
+      setMemos(await fetchClassMemos(editId));
+    } catch (e: any) { setError(e.message); }
+    finally { setMemoBusy(false); }
+  }
+
+  async function handleSaveMemoEdit() {
+    if (!editId || !editingMemoId || !editingMemoContent.trim()) return;
+    setMemoBusy(true);
+    try {
+      await updateClassMemo(editingMemoId, editingMemoContent.trim());
+      setEditingMemoId(null);
+      setMemos(await fetchClassMemos(editId));
+    } catch (e: any) { setError(e.message); }
+    finally { setMemoBusy(false); }
+  }
+
+  async function handleDeleteMemo(memoId: string) {
+    if (!editId) return;
+    if (!(await globalThis.appConfirm("이 메모를 삭제할까요?"))) return;
+    setMemoBusy(true);
+    try {
+      await deleteClassMemo(memoId);
+      setMemos(await fetchClassMemos(editId));
+    } catch (e: any) { setError(e.message); }
+    finally { setMemoBusy(false); }
   }
 
   // 수강권 허용 정책 판정: 0개 선택이면 저장을 막는다(전체 허용은 반드시 "전체 선택"으로
@@ -1516,6 +1570,53 @@ export default function ClassManagePage() {
                 <button className={`switch ${applyToGroup ? "on" : ""}`} onClick={() => setApplyToGroup(!applyToGroup)}>
                   <span className="knob" />
                 </button>
+              </div>
+            )}
+
+            {editId && (
+              <div className="set-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10, padding: "14px 0" }}>
+                <div className="set-label">메모</div>
+                {memos.map((m) => {
+                  const canEditThis = (m.authorAccountId === myAccountId && canEditOwnMemo) || canManageAnyMemo;
+                  return (
+                    <div key={m.id} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
+                      {editingMemoId === m.id ? (
+                        <>
+                          <textarea
+                            className="input-field" style={{ width: "100%", minHeight: 60 }}
+                            value={editingMemoContent} onChange={(e) => setEditingMemoContent(e.target.value)}
+                          />
+                          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                            <button className="quiet-action" disabled={memoBusy} onClick={handleSaveMemoEdit}>저장</button>
+                            <button className="quiet-action" disabled={memoBusy} onClick={() => setEditingMemoId(null)}>취소</button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{m.content}</div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
+                            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{m.authorName} · {new Date(m.createdAt).toLocaleString("ko-KR")}</span>
+                            {canEditThis && (
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <button className="quiet-action" disabled={memoBusy} onClick={() => { setEditingMemoId(m.id); setEditingMemoContent(m.content); }}>수정</button>
+                                <button className="quiet-action danger" disabled={memoBusy} onClick={() => handleDeleteMemo(m.id)}>삭제</button>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+                {canAddMemo && (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <textarea
+                      className="input-field" style={{ flex: 1, minHeight: 40 }}
+                      placeholder="메모를 남겨보세요" value={memoInput} onChange={(e) => setMemoInput(e.target.value)}
+                    />
+                    <button className="quiet-action" disabled={memoBusy || !memoInput.trim()} onClick={handleAddMemo}>등록</button>
+                  </div>
+                )}
               </div>
             )}
 

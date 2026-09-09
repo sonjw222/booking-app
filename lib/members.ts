@@ -89,17 +89,24 @@ export async function fetchMembers(centerId: string, filter: MemberFilter = {}):
   const rows = data ?? [];
   const profileIds = rows.map((r: any) => r.profile_id);
 
-  // 회원 연락처·주소는 accounts 에 있음 (profiles → accounts)
+  // 주소는 accounts에 있음 (profiles → accounts). 전화번호는 여기서 같이 select하지
+  // 않고 customer.member.phone 권한을 서버에서 확인하는 별도 RPC로만 받아온다 —
+  // 권한 없는 스태프에게는 응답 자체에 전화번호가 담기지 않는다.
   const phoneByProfile: Record<string, string | null> = {};
   const addressByProfile: Record<string, string | null> = {};
   if (profileIds.length > 0) {
     const { data: profs } = await supabase
       .from("profiles")
-      .select("id, accounts(phone, address)")
+      .select("id, accounts(address)")
       .in("id", profileIds);
     for (const p of profs ?? []) {
-      phoneByProfile[(p as any).id] = (p as any).accounts?.phone ?? null;
       addressByProfile[(p as any).id] = (p as any).accounts?.address ?? null;
+    }
+    const { data: phones } = await supabase.rpc("fetch_member_phones_safe", {
+      p_profile_ids: profileIds, p_center_id: centerId,
+    });
+    for (const row of phones ?? []) {
+      phoneByProfile[(row as any).profile_id] = (row as any).account_phone ?? null;
     }
   }
 
@@ -207,7 +214,9 @@ export async function updateMemberGrade(memberId: string, gradeId: string | null
   if (error) throw new Error("등급 변경에 실패했어요: " + error.message);
 }
 
-// 회원 메모 저장 (회원에겐 보이지 않음)
+// 특이사항 저장 (center_members.memo, 회원에겐 보이지 않음, 단일 필드).
+// 여러 스태프가 각자 남기는 정식 "회원 메모"는 별개 기능(member_memos, memberMemos.ts) —
+// 이 필드는 그와 무관한 기존 자유 텍스트 항목이라 customer.memo.* 권한 체계를 쓰지 않는다.
 export async function updateMemberMemo(memberId: string, memo: string): Promise<void> {
   const { error } = await supabase
     .from("center_members")
@@ -346,7 +355,7 @@ export type MemberDetailData = {
   } | null;
 };
 
-export async function fetchMemberDetail(profileId: string): Promise<MemberDetailData> {
+export async function fetchMemberDetail(profileId: string, centerId: string): Promise<MemberDetailData> {
   // 예약 이력
   const { data: resv } = await supabase
     .from("reservations")
@@ -372,12 +381,18 @@ export async function fetchMemberDetail(profileId: string): Promise<MemberDetail
     .limit(20);
 
   // 보유 수강권
-  // 회원이 입력한 프로필 정보
+  // 회원이 입력한 프로필 정보. phone은 customer.member.phone 권한이 있어야 담기는
+  // 별도 RPC로만 받아온다(fetchMembers와 동일한 이유) — 여기 select에는 안 넣는다.
   const { data: prof } = await supabase
     .from("profiles")
-    .select("birth_date, gender, shoe_size, cloth_size, address, phone, memo")
+    .select("birth_date, gender, shoe_size, cloth_size, address, memo")
     .eq("id", profileId)
     .single();
+
+  const { data: phoneRows } = await supabase.rpc("fetch_member_phones_safe", {
+    p_profile_ids: [profileId], p_center_id: centerId,
+  });
+  const phone = (phoneRows ?? [])[0]?.profile_phone ?? null;
 
   const { data: mem } = await supabase
     .from("memberships")
@@ -430,7 +445,7 @@ export async function fetchMemberDetail(profileId: string): Promise<MemberDetail
       shoeSize: (prof as any).shoe_size ?? null,
       clothSize: (prof as any).cloth_size ?? null,
       address: (prof as any).address ?? null,
-      phone: (prof as any).phone ?? null,
+      phone,
       memo: (prof as any).memo ?? null,
     } : null,
   };

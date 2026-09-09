@@ -1,5 +1,49 @@
 # CHANGELOG
 
+## 2026-09-09 — P2-31 죽은 권한 카탈로그 전수 정리 (A~F 카테고리 전체 완료)
+
+`docs/TODO.md` P2-31에서 발견한 죽은/미완성 권한 키를 카테고리별로 사용자와 하나씩
+방향을 정해 전부 처리. SQL 15개 신규 작성, 전부 라이브 DB에 적용·확인 완료.
+
+- **일정(schedule) 세분권한 완성**: 예약변경/취소 8개 + 과거수업 20개 키를
+  `manager_set_attendance`/`create_class_safe`/`update_class_safe`/`delete_class_safe` 등에
+  `class_trainers` 기반 own/other × group/private 판정으로 연결. 성립 불가능한
+  `schedule.other.{group,private}.create` 2개는 카탈로그에서 삭제. `create_recurring_classes_safe`에
+  `p_is_copy` 플래그를 추가해 "일정 복사"만 `schedule.copy`로 별도 게이팅.
+- **수강권/상품**: `pass.product.view/manage`(중복키) 삭제. `pass.autobook`은 새 wrapper RPC
+  `retry_auto_book_membership_safe()`로 연결(수동 재시도 버튼만, 주문확정 시 자동배치 경로는
+  안 건드림). `pass.sale_toggle`은 기존에 있던 `products.is_on_sale` 컬럼을 실제로 켜고 끄는
+  기능(`toggle_product_sale_safe()`)을 신규로 만들어 연결.
+- **고객/회원**: `customer.progress.view/manage`·`customer.detail`(중복키) 삭제.
+  `customer.member.pass_detail`을 `membership_transfers`/`memberships`/`payments`에 widening
+  방식으로 연결(기존 접근 유지). `customer.member.export`는 버튼 노출만 게이팅.
+  `customer.member.phone`은 새 RPC `fetch_member_phones_safe()`로 서버측에서 실제 마스킹
+  (`accounts.phone`/`profiles.phone` 둘 다). `customer.memo.*`(회원 메모)는 신규 다중작성자
+  테이블 `member_memos`로 완성 — 회원 본인은 절대 조회 불가하도록 SELECT를 매니저 전용으로 좁힘.
+- **게시판**: 문의 게시판 댓글 삭제 기능이 아예 없던 걸 새로 만듦(`delete_inquiry_message_safe()`,
+  `board.inquiry.comment`=본인 댓글, `board.inquiry.comment_other`=다른 스태프 댓글, 회원 메시지는
+  삭제 대상 제외).
+- **보류 결정 + 카탈로그 숨김**: `contract.*`(전자계약서, 6개 키) / `facility.salary.*`(스태프
+  급여, 5개 키) 모두 기능이 0% 구현 상태라 카탈로그에서만 숨김(draft RLS는 보존, 로드맵 포함
+  여부는 P3-5로 별도 결정 사안).
+- **메뉴 전용 키(8~12개)는 결정 불필요로 결론**: 조사 결과 P1-5/P1-5b가 이미 "조회는 메뉴게이트만,
+  위험 액션만 세밀 RLS"로 의도적으로 설계했음을 코드 주석에서 확인(`fix_permission_reviews_
+  announcements_rls.sql`) — 현행 유지.
+- **진행 중 발견해 즉시 수정한 버그 2건**: (1) `schedule_memos`/`member_memos`의 "다른 작성자
+  메모 수정·삭제" 조건이 `has_permission()`(위임 가능)을 써서, 오너가 이 키를 일반 스태프에게
+  실수로 부여하면 그 스태프도 남의 메모를 지울 수 있었음 — `_is_owner_of_center()`로 교체해
+  오너 전용으로 고정. (2) `fetch_member_phones_safe()`가 대상 프로필의 센터 소속 검증이 빠져,
+  특정 센터에서 정당하게 전화번호 열람 권한을 가진 스태프가 profile_id만 바꿔 넘기면 전혀
+  무관한 다른 센터 회원의 전화번호까지 조회할 수 있었음 — `center_members` 소속 검증 추가로 수정.
+- **미해결로 남긴 것**: 매니저가 특정 회원의 "포인트"를 보는 화면/RPC 자체가 코드에 없음
+  (`customer.member.pass_detail` 라벨이 가리키는 기능 중 유일하게 미구현 — 신규 기능 필요,
+  이번 배치에는 포함 안 함).
+- Postgres 오버로드 함정 발견: `create_recurring_classes_safe`에 새 파라미터(`p_is_copy`)를
+  추가하며 `create or replace`를 썼는데, 시그니처가 달라 옛 2-파라미터 버전이 삭제되지 않고
+  남아있었음(Postgres는 시그니처가 다르면 replace가 아니라 overload 추가) — `drop function`으로
+  옛 버전 제거해 "함수가 모호하다" 에러 위험을 없앰.
+- 상세 내용은 [TODO.md P2-31](./TODO.md) 참고.
+
 ## 2026-09-09 — facility.room.manage 권한 RLS 연결 SQL 적용 완료
 
 `fix_facility_room_manage_permission_wiring.sql`을 사용자가 라이브 DB에 적용, `pg_policies`

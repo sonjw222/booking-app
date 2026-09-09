@@ -52,6 +52,13 @@ function ManagerInquiriesPageContent() {
     return permsByCenter[centerId]?.has("board.inquiry.comment") ?? false;
   }
 
+  function canDeleteOthersForCenter(centerId: string): boolean {
+    const c = centers.find((x) => x.id === centerId);
+    if (!c) return false;
+    if (c.isOwner) return true;
+    return permsByCenter[centerId]?.has("board.inquiry.comment_other") ?? false;
+  }
+
   async function loadThreads() {
     const list = await fetchCenterThreads();
     setThreads(list);
@@ -104,7 +111,11 @@ function ManagerInquiriesPageContent() {
   if (active) {
     return (
       <div className="app-shell">
-        <InquiryChat threadId={active.id} title={active.title} onBack={backToList} canSend={canSendForCenter(active.centerId)} />
+        <InquiryChat
+          threadId={active.id} title={active.title} onBack={backToList}
+          canSend={canSendForCenter(active.centerId)}
+          canDeleteOthers={canDeleteOthersForCenter(active.centerId)}
+        />
       </div>
     );
   }

@@ -111,6 +111,13 @@ export async function deleteProduct(id: string): Promise<void> {
   if (error) throw new Error("상품 삭제에 실패했어요: " + error.message);
 }
 
+// 판매정지/재개 — deleteProduct(영구 비활성화)와 달리 일시적으로 신규 판매만 막고
+// 언제든 재개할 수 있다. 기존 보유자의 예약/사용에는 영향 없음.
+export async function toggleProductSale(id: string, onSale: boolean): Promise<void> {
+  const { error } = await supabase.rpc("toggle_product_sale_safe", { p_product_id: id, p_on_sale: onSale });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+}
+
 // 상품의 예약조건 목록
 export async function fetchRules(productId: string): Promise<ScheduleRule[]> {
   const { data, error } = await supabase

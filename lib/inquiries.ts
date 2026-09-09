@@ -163,6 +163,12 @@ export async function sendMessage(threadId: string, body: string, photos?: strin
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
 }
 
+// ── 댓글 삭제 (매니저 전용 — 회원 메시지는 삭제 대상이 아님, RPC에서 강제) ──
+export async function deleteMessage(messageId: string): Promise<void> {
+  const { error } = await supabase.rpc("delete_inquiry_message_safe", { p_message_id: messageId });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+}
+
 // ── 읽음 처리 ──
 export async function readThread(threadId: string): Promise<void> {
   await supabase.rpc("read_inquiry_thread", { p_thread_id: threadId });
