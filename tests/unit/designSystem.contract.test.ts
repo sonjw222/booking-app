@@ -24,7 +24,7 @@ describe("Batch 1 design system contract", () => {
     expect(css).toContain("--brand: #0A2545");
     expect(css).toContain("--brand-ink: #0A2545");
     expect(css).toContain("--brand-soft: #E8EEF4");
-    expect(css).toContain("--page-gutter: 16px");
+    expect(css).toContain("--page-gutter: 20px");
   });
 
   it("provides every shared primitive without wiring it into feature pages", () => {

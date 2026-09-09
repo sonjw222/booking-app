@@ -22,6 +22,11 @@
   테스트" 프로필에 정리 안 되고 누적**돼 있어 `daily-book-limit.spec.ts`가 수강권 다중
   선택 UI로 빠져 실패 — 전부 삭제(실 회원 데이터 아님, 참조 예약 0건 확인 후 진행).
   근본적인 테스트 정리 로직 부재는 여전히 미해결(사전에 알려진 이슈, 별도 후속 필요).
+- **`tests/unit/designSystem.contract.test.ts`가 `--page-gutter: 16px`를 그대로 assert**하고
+  있어서 Unit tests가 실패함 — `--page-gutter`를 16px→20px로 바꾼 건 이전 디자인 정합성
+  배치에서 이미 승인된 의도적 변경인데, 이 "frozen contract" 테스트가 갱신 안 됐던 것.
+  20px로 수정. E2E가 그동안 30분 타임아웃으로 먼저 막혀서 Unit tests 잡 자체가 계속
+  skip돼 있었던 탓에 이 실패가 이번에 처음 드러남.
 
 ## 2026-09-09 — PR #129 CI가 잡은 당일예약 취소마감 회귀 수정
 
