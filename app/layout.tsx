@@ -34,10 +34,13 @@ export default function RootLayout({
             data-theme를 적용했고, 다른 어떤 화면에도 이 값을 다시 적용하는 로직이 없어서
             테마 설정 화면을 벗어나는 순간(이 앱은 <Link> 대신 일반 <a href>를 써서 전체
             페이지가 다시 로드됨) 곧바로 라이트 모드로 돌아가던 버그를 고친다. React
-            하이드레이션보다 먼저 동기 실행돼야 해서 인라인 스크립트로 넣는다. */}
+            하이드레이션보다 먼저 동기 실행돼야 해서 인라인 스크립트로 넣는다.
+            "system"(또는 저장된 값이 없음)이면 OS 다크모드 설정을 따른다 — 이 해석
+            로직은 app/settings/theme/page.tsx의 resolveEffectiveTheme()과 동일해야
+            한다(하이드레이션 전/후 결과가 달라지면 화면이 깜빡임). */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("app_theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}`,
+            __html: `try{var t=localStorage.getItem("app_theme");var dark=t==="charcoal"||((!t||t==="system")&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(dark)document.documentElement.setAttribute("data-theme","charcoal");else if(t==="burgundy")document.documentElement.setAttribute("data-theme","burgundy");}catch(e){}`,
           }}
         />
         {/* 결제(app/checkout)의 TossPaymentProvider가 window.TossPayments를 씀 — npm 패키지

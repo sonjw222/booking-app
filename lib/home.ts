@@ -6,6 +6,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { getMyAccountId } from "./authAccount";
 
 export type HomeCenter = {
   id: string;
@@ -168,12 +169,10 @@ export async function fetchCentersByCategory(category: string): Promise<SearchCe
    ============================================================ */
 
 export async function fetchMyUpcomingClasses(): Promise<HomeClass[]> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) return [];   // 비로그인 → 빈 목록 (일반 추천으로 대체)
+  const accountId = await getMyAccountId();
+  if (!accountId) return [];   // 비로그인 → 빈 목록 (일반 추천으로 대체)
 
-  const { data: acc } = await supabase.from("accounts").select("id").eq("auth_id", authData.user.id).single();
-  if (!acc) return [];
-  const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", acc.id).is("deleted_at", null);
+  const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", accountId).is("deleted_at", null);
   const profileIds = (profs ?? []).map((p: any) => p.id);
   if (profileIds.length === 0) return [];
 

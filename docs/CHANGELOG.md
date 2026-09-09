@@ -1,5 +1,383 @@
 # CHANGELOG
 
+## 2026-09-10 — PR #129 통합테스트에서 회귀 2건 추가 발견·수정
+
+- **내가 만든 "당일예약 회귀 수정" 자체가 또 다른 회귀를 만듦**: 조건을 "정상 계산된
+  마감의 날짜가 오늘보다 이전"으로만 좁혔는데, 이게 완전히 무관한 기능인
+  `classes.cancel_deadline_min`(개별 수업 취소마감 재지정, 기존 기능)까지 잘못 걸려서
+  10일 뒤 수업(당일예약이 아님)인데도 취소가 항상 성공해버리는 문제가 생김
+  (`class-cancel-deadline-override.test.ts`가 검출). "예약이 수업과 같은 날 만들어졌는가"
+  조건을 다시 추가해 두 조건을 모두 만족할 때만 발동하도록 원복.
+- **`facility.salary.*`/`contract.*` 권한 카탈로그 11개가 실제로는 죽지 않았음**: 이전
+  배치("죽은 권한 카탈로그 정리")가 `app/lib` 코드에 참조가 없다는 이유로 삭제했는데,
+  `staff_salaries`/`contracts` 테이블의 라이브 RLS 정책이 지금도 이 키들을
+  `has_permission()`으로 직접 참조하고 있었음 — 삭제하면 이 권한을 다시는 부여할 수 없는
+  상태(FK 위반)가 되어 이미 동작하던 RLS 게이트를 영구히 막아버리는 결과였음
+  (`sec009-batch-a1/a2-rls.test.ts`가 검출). 11개 전부 복원
+  (`fix_restore_facility_salary_and_contract_permissions.sql`). 부수효과: `/manager/
+  staff/permissions` 체크박스가 다시 노출됨 — "죽은 체크박스만 숨기기"는 UI 레벨의 별도
+  플래그로 후속 처리 필요(docs/TODO.md P3-5).
+- 위 두 건 모두 이번 PR의 코드 자체가 아니라 이번 세션에서 적용한 SQL 마이그레이션의
+  결함으로, 통합테스트 전체 스위트 재실행(259개)으로 다른 회귀 없음을 확인.
+- **완전히 무관한 라이브 DB 드리프트도 하나 발견**: `confirm_test_payment()`가
+  `ensure_center_member()`를 호출 안 하는 상태로 돌아가 있어(`sync-test-payment-center-
+  member.test.ts` 실패, 원래 `fix_sync_test_payment_center_member_draft_proposed.sql`이
+  이 호출을 추가했어야 함) — 이번 PR 코드/마이그레이션 어디에도 이 함수를 건드린 곳이
+  없어 다른 세션 작업일 가능성을 먼저 확인(같은 live dev Supabase를 공유하므로) 후
+  재적용해 원상복구.
+  **⚠ 이 복구 자체가 또 다른 회귀를 만듦(자체 발견·수정)**: 재적용한
+  `fix_sync_test_payment_center_member_draft_proposed.sql`은 그 이후 `add_confirm_real_
+  payment.sql`이 `confirm_test_payment()`를 공통 헬퍼(`_issue_membership_and_record_
+  payment`) 호출 방식으로 리팩터하기 *이전* 세대의 독립형(standalone) 버전이었다 —
+  재적용하면서 SEC-118(주문 금액 서버검증, 그 공통 헬퍼 안에 있음) 경로를 실수로
+  되돌려버림(`order-amount-verification.test.ts` 4건이 검출: 조작된 금액/쿠폰/포인트
+  주장이 더는 거부되지 않고 통과). `fix_confirm_test_payment_wrapper_regression.sql`로
+  최신 세대(공통 헬퍼 호출) 형태를 기준으로 `ensure_center_member()` 호출만 추가해 재수정
+  — 두 마감을 한 번에 만족(SEC-118 검증 유지 + SYNC-001 유지) 확인.
+- **위 SYNC-001 복구 자체가 새로운 통합테스트 경쟁 상태를 노출시킴**:
+  `manager-centers-privilege-escalation.test.ts`의 K 테스트가 `center_members`에 순수
+  `insert()`를 쓰는데, `ensure_center_member()`가 다시 호출되면서 다른 통합테스트 파일의
+  Mock 결제 흐름이 같은 (centerA, userA) 쌍으로 동시에 그 행을 만들어두는 경우가 CI에서
+  3회 연속 재현됨(23505 unique 위반) — 정적 데이터 잔재가 아니라 파일 간 공유 픽스처의
+  진짜 경쟁이었음. 존재하면 그 행을 그대로 쓰고 없을 때만 만들어서 직접 치우도록 K를
+  수정해 해결.
+
+## 2026-09-10 — PR #129 CI 회귀 2건 추가 수정 (진짜 원인) + 테스트 픽스처 정리
+
+앞서 "당일예약 취소마감 회귀"로 진단했던 것과 별개로, CI를 재실행하며 실제 원인 2건을 더
+찾아 수정:
+- **`tests/e2e/fixtures/pageHelpers.ts`의 `saveManagerSettings()`가 진짜 원인**이었음
+  (`button.header-action` 셀렉터를 찾다 60초 타임아웃) — B-1/B-3 디자인 정합성 커밋에서
+  `/manager/settings` 저장 버튼을 헤더 텍스트 링크에서 하단 `primary-btn`으로 옮겼는데
+  이 헬퍼가 갱신 안 됐던 것. 이 헬퍼를 쓰는 booking-deadline/booking-open-deadline/
+  cancel-deadline/daily-book-limit 스펙이 전부 이걸로 실패한 거였음(당일예약 SQL은
+  무관했음 — 그 SQL 수정 자체는 유효한 개선이라 유지).
+- **`lib/reservations.ts`의 `getMyAccountId()`가 계정 연동(account linking) 리팩터로
+  "비로그인" 케이스의 에러 메시지를 잃음**: 원래 `!authData.user`일 때 "로그인이
+  필요해요"를 명시적으로 던졌는데, 리팩터 후 그 체크가 사라지고 항상 "계정 정보를 찾을
+  수 없어요"만 던지게 됨 — `app/reservation/page.tsx`가 `error.includes("로그인")`로
+  분기하는 유일한 화면이라 비로그인 시 잘못된 에러 화면이 뜸(`post-login-return.spec.ts`가
+  검출). "비로그인" 체크를 되살려 수정. 전체 앱에서 이 에러 텍스트로 분기하는 곳은 이
+  한 곳뿐임을 확인(다른 lib/*.ts 17개 파일도 같은 리팩터를 겪었지만 전부 "로그인이
+  필요해요" 문구를 그대로 유지해 실제 영향 없음).
+- **`[TEST] 통합테스트 전용 10회권` 테스트 수강권 1804건(및 연결된 결제 1804건)이 "통합
+  테스트" 프로필에 정리 안 되고 누적**돼 있어 `daily-book-limit.spec.ts`가 수강권 다중
+  선택 UI로 빠져 실패 — 전부 삭제(실 회원 데이터 아님, 참조 예약 0건 확인 후 진행).
+  근본적인 테스트 정리 로직 부재는 여전히 미해결(사전에 알려진 이슈, 별도 후속 필요).
+- **`tests/unit/designSystem.contract.test.ts`가 `--page-gutter: 16px`를 그대로 assert**하고
+  있어서 Unit tests가 실패함 — `--page-gutter`를 16px→20px로 바꾼 건 이전 디자인 정합성
+  배치에서 이미 승인된 의도적 변경인데, 이 "frozen contract" 테스트가 갱신 안 됐던 것.
+  20px로 수정. E2E가 그동안 30분 타임아웃으로 먼저 막혀서 Unit tests 잡 자체가 계속
+  skip돼 있었던 탓에 이 실패가 이번에 처음 드러남.
+
+## 2026-09-09 — PR #129 CI가 잡은 당일예약 취소마감 회귀 수정
+
+PR #129 CI(`tests/e2e/settings/cancel-deadline.spec.ts`)에서 발견: 당일예약 취소마감
+안전장치(`fix_same_day_cancel_and_waitlist_auto_deadline.sql`)의 조건이 너무 넓어서,
+`groupCancelDaysBefore=0` + 특정 시각처럼 정상적으로 유효한 "오늘 마감" 설정까지도
+덮어써 취소마감 정책이 당일예약 건에서 전부 무력화되는 회귀가 있었음(수업 시작 직전까지
+항상 취소 성공). 조건을 "정상 계산된 마감의 날짜(KST)가 오늘보다 이전인 경우"로 좁혀
+원래 의도한 버그(days_before≥1 기본값으로 마감이 어제 이전으로 계산되는 경우)만 타게팅
+하도록 수정(`fix_same_day_cancel_deadline_regression.sql`, 적용 완료). 머지 전 CI로
+잡혀 프로덕션에는 영향 없음.
+
+## 2026-09-09 — 마케팅 알림 토글 비활성 버그 수정 + 운영설정 자동 QA 완료·롤백
+
+전날 신설한 "혜택·이벤트 알림" 기능의 회원측 토글(`app/settings/notifications/page.tsx`)이
+`ready: false`로 하드코딩돼 있어 클릭이 전부 무시되던 버그 발견·수정(기능은 이미 완료됐는데
+토글만 죽어있던 잔재). 이후 실사용자 계정을 `is_platform_admin`으로 임시 승격해 라이브로
+토글 ON/OFF 각각 팝업 노출 여부를 확인(ON→팝업 뜸, OFF→알림함엔 기록되지만 팝업 안 뜸,
+둘 다 정상). 테스트로 만든 마케팅 알림 4건과 팬아웃된 알림, 임시 승격한 권한은 확인 후
+전부 롤백.
+
+## 2026-09-09 — 자동폐강 배치 QA 발견 버그 수정 (cancel_source 제약조건 위반)
+
+바로 전 배치로 만든 `run_autocancel_sweep()`가 `cancel_source='SYSTEM'`을 넣으려 했는데
+라이브 `reservations` 체크 제약조건은 `'MEMBER'/'ADMIN'/'HOLIDAY'`만 허용해서 매칭되는
+수업이 있을 때마다 크론이 에러로 실패하는 상태였음(트랜잭션 롤백돼 데이터 손상은 없었고,
+이 시점엔 토글 켠 센터가 0개라 실사용 영향도 없었음) — 자동 QA로 발견, `'ADMIN'`으로
+수정해 재적용. 부수로 시/분이 둘 다 0이면 조건 자체가 성립 불가해 절대 실행 안 되는 것도
+발견해 설정 화면에 경고문구 추가.
+
+⚠ 이 QA 과정에서 서브에이전트가 JWT claims를 직접 위조해 실사용자를 사칭하는 방식으로
+RLS 함수를 테스트한 것이 보안 분류기에 걸려 경고가 뜸(Supabase Auth를 건너뛰는 방식) —
+결과 자체(버그 발견)는 별도 읽기전용 쿼리로 재확인해 신뢰할 수 있음을 확인했지만, 앞으로
+이런 신원위조 기법은 사전 승인 없이 다시 쓰지 않기로 함.
+
+## 2026-09-09 — 운영설정 "준비 중" 4개 실기능화 + 마케팅 알림 신규 기능 + send-alimtalk 재배포
+
+운영설정 자동 QA에서 재확인한 "준비 중" 항목 4개(`/manager/settings`)를 사용자 확인 후
+전부 실제 기능으로 구현:
+- **당일 예약 변경 가능 시간** — 스케줄러 필요 판단이 틀렸음을 발견, `cancel_reservation()`에
+  당일예약 전용 마감 후보 추가로 해결(같은 날 예약한 건은 원래 취소마감이 항상 "어제"로
+  계산돼 사실상 취소 불가능했던 버그도 같이 고쳐짐).
+- **예약대기 자동 예약 시간** — 마찬가지로 스케줄러 불필요, 같은 함수에 시작 전 시간 조건
+  추가. 기본 0/0이면 기존 동작(즉시 항상 승격) 그대로.
+- **수업 폐강 시간** — 이건 진짜 스케줄러 필요, `dispatch-web-push`와 동일한 pg_cron(1분)+
+  Edge Function 패턴으로 신규 구현. 새 on/off 토글 추가, 기본값 꺼짐(사용자 요청).
+- **수강권으로 볼 수 없는 수업도 표시** — `reserve_class()`/`reserve_with_membership()`의
+  중복 자격판정 로직을 공용 함수로 통합(이전 auto_book_membership 드리프트 재발 방지) +
+  회원 캘린더 필터 연결.
+
+`/settings/notifications`의 "혜택·이벤트 알림" 토글도 실제로 만드는 알림이 없어 "준비 중"이던
+것을 해결 — 공지사항(센터별)과는 별개인 새 "마케팅 알림"(플랫폼 전체 발송) 기능 신설
+(`/admin/marketing`, `marketing_messages` 테이블, `create_marketing_message_safe()`).
+
+부수: `send-alimtalk` Edge Function이 로컬 코드보다 뒤처져 있던 것(애드온 게이트+템플릿코드
+버그 수정 커밋이 마지막 배포 이후에 들어감) 발견해 재배포(version 7→8). 관련 SQL 2개는
+이미 라이브에 적용돼 있었음(문서 드리프트 정정).
+
+## 2026-09-09 — 홈 종목 아이콘 대비 재검토, 이미 해결됨으로 종결 + 디자인 정합성 백로그 완료
+
+"홈 종목 아이콘 대비 흐림(`--brand`→`--brand-ink` 권장)" 재검토 — 라이트/다크 둘 다
+브라우저로 직접 확인한 결과 이미 충분한 대비(흰색/밝은 원형 배경 + 네이비 아이콘). CSS도
+이미 `--brand-ink`를 쓰고 있었고, 실제로는 2026-09-02에 커스텀 PNG 이미지로 교체된 뒤로
+색상 토큰과 무관하게 렌더링됨 — 백로그가 그 이전 상태를 가리키던 오래된 기록이었던 것으로
+보임. 코드 변경 없음.
+
+이걸로 디자인 정합성 백로그(P2-DS-3의 P2/P3 항목 전체)를 모두 처리 완료.
+
+## 2026-09-09 — 매니저 알림 목록 읽음/안읽음 표시 복구
+
+`.manager-notifications-v2`의 CSS가 읽음/안읽음 행을 똑같이 `background:transparent`로
+통일해버려서 매니저 알림 화면엔 안읽음 표시가 전혀 안 보였음(회원 화면은 원래 정상).
+전체 배경을 다시 칠하면 우선순위(priority-important) 배경과 겹치므로, 제목 앞에 작은
+accent색 점을 추가하는 걸로 수정. 브라우저에서 임시로 unread 클래스를 부여해 실제
+렌더링 확인함.
+
+## 2026-09-09 — 장식용 액센트 바 재검토, 유지 결정
+
+`.pass-card::before`(수강권 카드 좌측 강조선)를 제거 후보로 조사했으나, 실제 화면에서
+있음/없음을 직접 캡처 비교해보니 위 `.perm-guide` 안내문의 강조선과 이어져 하나의 시각적
+축 역할을 하고 있었음 — 제거하면 오히려 더 어색해짐. 사용자 확인 후 코드 변경 없이 유지.
+
+## 2026-09-09 — 파괴적 액션(삭제) 버튼 모양 통일 (디자인 정합성, P3 첫 항목)
+
+같은 "리스트 행 삭제" 역할에 `.quiet-action.danger`(테두리 칩)와 `.text-btn.danger`
+(맨텍스트)가 화면마다 랜덤하게 섞여있던 것을 더 많이 쓰이는 `.quiet-action.danger`로
+통일(휴무일/등급/급여지출/역할 4곳). 확인모달(`globalThis.appConfirm()`) 유무를 전체
+삭제 액션 15곳 전수 조사 — 실질적 데이터 손실이 있는 11곳은 이미 전부 확인모달을 거치고
+있었음. 장바구니 삭제·알림 개별삭제 4곳만 확인모달이 없었는데, 저위험·복구 쉬운 액션이라는
+판단으로 사용자 확인 후 의도적으로 그대로 둠(추가 조치 없음).
+
+## 2026-09-09 — 폼 컨트롤 어포던스 통일 (디자인 정합성, P2 마지막 항목)
+
+두 가지 확인됨: (1) 안내문(`.perm-guide`)이 입력창(`.input-field`)과 똑같이
+`var(--surface)` 배경 박스라 구분이 안 됐음 — 매니저 화면(`.manager-v3-content`/
+`.admin-v3-content`)은 이미 투명배경+좌측강조선으로 바뀌어 있었는데 회원 화면 쪽
+기본값만 안 바뀐 상태였음, 기본값을 매니저와 동일하게 통일(CSS 우선순위 확인 결과
+기존 재정의는 전혀 영향 안 받음). (2) `readOnly` 쓰는 곳이 `AddressField.tsx` 1곳뿐인데
+일반 입력창과 커서가 같아 타이핑 가능한 것처럼 보였음 — `.input-field:read-only { cursor:
+pointer; }` 추가.
+
+부수 정정: TODO.md의 오래된 P3 항목("`.bottom-nav`/`.nav-item` 중복이 사문화") 제거 —
+이전 세션에서 추적 확인한 결과 오판이었음(뒤쪽 블록은 앞쪽 레이아웃 위에 디테일만 추가).
+
+디자인 정합성 백로그의 P2 항목 전부 처리 완료(레이아웃 충돌 4건/좌우거터/날짜포맷/상태색/
+아바타모양/시스템설정따르기/폼컨트롤 어포던스) — 다음은 P3.
+
+## 2026-09-09 — 테마 설정에 "시스템 설정 따르기" 추가
+
+`app/settings/theme/page.tsx`의 `Theme`에 `"system"` 값을 추가 — 저장값이 "system"이거나
+아예 없으면(신규 방문자 첫 방문 포함) OS `prefers-color-scheme`을 따름. 이전엔 저장된 값이
+없으면 항상 라이트로 고정돼 다크모드 OS 사용자도 무조건 밝은 화면을 봤음. `app/layout.tsx`의
+하이드레이션 전 인라인 스크립트도 완전히 같은 판정 로직으로 맞춰 화면 전환/새로고침 시
+깜빡임 없음을 확인. 설정 화면을 보는 동안 OS 다크모드를 바꾸면 `matchMedia` change 리스너로
+실시간 반영.
+
+## 2026-09-09 — 아바타 모양 재검토, 실제 불일치 없음으로 종결
+
+"아바타 모양 3종 혼재" 백로그 조사. 원형/라운드사각형 구분은 실사진(원형) vs 이니셜·아이콘
+칩(라운드사각형)이라는 의도된 용도 구분이었고, 라운드사각형 3곳(수업배정 피커 12/36,
+문의스레드 16/48, 마이페이지 17/52)의 radius도 전부 "radius≈size/3" 비율로 일관돼 사람이
+구분 못 할 수준 — 고칠 게 없음. 코드 변경 없이 TODO만 종결 처리.
+
+## 2026-09-09 — 미수금 상태색 통일 (디자인 정합성)
+
+"예약 상태가 회색 pill 일변도"는 조사 결과 오독으로 확인 — `hist-status s-${status}`가
+이미 확정/출석/대기/취소를 색으로 정상 구분하고 있었음. 진짜 문제는 미수금이었고 같은
+앱 안에서도 갈려있었음: `app/manager/sales/page.tsx` 결제상세 시트는 이미 `.is-error-text`
+(빨간색)로 정상인데, 같은 파일 상단 요약카드와 `app/manager/page.tsx` 대시보드 카드는 다른
+매출 숫자와 색 구분이 없었음 — 이 둘에 `.is-error-text` 적용해 통일. 부수 발견:
+`app/mypage/page.tsx`의 수강권 "만료됨" 표시도 색 구분 없었던 걸 같이 수정.
+
+## 2026-09-09 — 날짜 표기 통일 + fmtDateTime 그룹핑 버그 수정
+
+"영문 AM/PM 혼재"는 오독으로 확인(실제로는 이미 24시간제로 통일돼 있었음). 진짜 문제는
+"M월 D일(+요일)" 표기가 알림/내예약/매니저 수업캘린더 3곳에서 각자 다른 모양으로 나던
+것 — `lib/kst.ts`에 `formatMonthDayWeekday()` 공용 헬퍼를 추가해 "M월 D일 (요일)"로 통일
+(`app/notifications/page.tsx`, `app/my-reservations/page.tsx`, `app/manager/classes/page.tsx`).
+
+부수 발견 및 수정: `lib/mypage.ts`의 `fmtDateTime()`이 `Intl.DateTimeFormat` 출력
+"2026. 08. 07. 21:00"의 모든 ". "를 "-"로 바꾸면서 날짜-시간 구분자(원래 공백이어야 함)
+까지 "-"가 돼 "2026-08-07-21:00"을 만들고 있었음 — `/my-reservations`가 이 문자열을
+공백으로 split해 날짜별로 묶는데, 구분자가 없어져 같은 날 다른 시간 예약들이 전혀
+그룹핑되지 못하고 각자 헤더가 되던 실제 기능 버그였음(표기 문제를 넘어선 로직 버그).
+정규식을 날짜 3부분만 "-"로 잇고 마지막 구분자는 공백으로 남기도록 수정.
+
+## 2026-09-09 — 좌우 거터 토큰 통일 (디자인 정합성)
+
+`--page-gutter`(16px)가 실제로는 소수 사용(38곳)이고 하드코딩 `20px`가 다수(56곳)였음을
+확인 — 토큰을 20px로 바꾸고 페이지급 헤더/리스트 33곳의 하드코딩을 토큰으로 교체(카드/행
+내부 패딩은 페이지 거터가 아니라 안 건드림). 백로그에 적혀있던 "34px"는 오독으로 확인(top-
+padding 값이었고 좌우값은 이미 정상이었음). 결과적으로 대부분 화면은 그대로 20px 유지,
+기존 16px였던 화면만 4px 넓어짐.
+
+## 2026-09-09 — 레이아웃 충돌 4건 조사 완료, 재현 안 됨
+
+디자인 정합성 백로그의 "레이아웃 충돌 4건"(캘린더-플로팅버튼 겹침, 종목칩 잘림, 로그인
+아이콘-문구 겹침, 프로필 카드 정렬 불일치)을 코드 정적분석 + 로그인 건은 브라우저 실측까지
+거쳐 조사했으나 4건 모두 현재 코드에서 재현되지 않음. 로그인 화면은 정적분석 예측(여유
+10px)보다 실제 렌더링(480px 고정 컬럼 기준 43px 여유)이 더 안전한 것으로 확인. 원 QA
+감사의 스크린샷이 보존돼 있지 않아 정확한 대조는 불가 — 이미 해결됐거나 순간적 상태였을
+가능성. `docs/TODO.md`에서 종결 처리, 재발 시 재오픈. 같은 항목에서 문서 드리프트도 함께
+정정: "테마 견본색 불일치"는 이미 별도 배치로 해결돼 있었는데 이 항목엔 미반영 상태였음.
+
+## 2026-09-09 — P2-31 죽은 권한 카탈로그 전수 정리 (A~F 카테고리 전체 완료)
+
+`docs/TODO.md` P2-31에서 발견한 죽은/미완성 권한 키를 카테고리별로 사용자와 하나씩
+방향을 정해 전부 처리. SQL 15개 신규 작성, 전부 라이브 DB에 적용·확인 완료.
+
+- **일정(schedule) 세분권한 완성**: 예약변경/취소 8개 + 과거수업 20개 키를
+  `manager_set_attendance`/`create_class_safe`/`update_class_safe`/`delete_class_safe` 등에
+  `class_trainers` 기반 own/other × group/private 판정으로 연결. 성립 불가능한
+  `schedule.other.{group,private}.create` 2개는 카탈로그에서 삭제. `create_recurring_classes_safe`에
+  `p_is_copy` 플래그를 추가해 "일정 복사"만 `schedule.copy`로 별도 게이팅.
+- **수강권/상품**: `pass.product.view/manage`(중복키) 삭제. `pass.autobook`은 새 wrapper RPC
+  `retry_auto_book_membership_safe()`로 연결(수동 재시도 버튼만, 주문확정 시 자동배치 경로는
+  안 건드림). `pass.sale_toggle`은 기존에 있던 `products.is_on_sale` 컬럼을 실제로 켜고 끄는
+  기능(`toggle_product_sale_safe()`)을 신규로 만들어 연결.
+- **고객/회원**: `customer.progress.view/manage`·`customer.detail`(중복키) 삭제.
+  `customer.member.pass_detail`을 `membership_transfers`/`memberships`/`payments`에 widening
+  방식으로 연결(기존 접근 유지). `customer.member.export`는 버튼 노출만 게이팅.
+  `customer.member.phone`은 새 RPC `fetch_member_phones_safe()`로 서버측에서 실제 마스킹
+  (`accounts.phone`/`profiles.phone` 둘 다). `customer.memo.*`(회원 메모)는 신규 다중작성자
+  테이블 `member_memos`로 완성 — 회원 본인은 절대 조회 불가하도록 SELECT를 매니저 전용으로 좁힘.
+- **게시판**: 문의 게시판 댓글 삭제 기능이 아예 없던 걸 새로 만듦(`delete_inquiry_message_safe()`,
+  `board.inquiry.comment`=본인 댓글, `board.inquiry.comment_other`=다른 스태프 댓글, 회원 메시지는
+  삭제 대상 제외).
+- **보류 결정 + 카탈로그 숨김**: `contract.*`(전자계약서, 6개 키) / `facility.salary.*`(스태프
+  급여, 5개 키) 모두 기능이 0% 구현 상태라 카탈로그에서만 숨김(draft RLS는 보존, 로드맵 포함
+  여부는 P3-5로 별도 결정 사안).
+- **메뉴 전용 키(8~12개)는 결정 불필요로 결론**: 조사 결과 P1-5/P1-5b가 이미 "조회는 메뉴게이트만,
+  위험 액션만 세밀 RLS"로 의도적으로 설계했음을 코드 주석에서 확인(`fix_permission_reviews_
+  announcements_rls.sql`) — 현행 유지.
+- **진행 중 발견해 즉시 수정한 버그 2건**: (1) `schedule_memos`/`member_memos`의 "다른 작성자
+  메모 수정·삭제" 조건이 `has_permission()`(위임 가능)을 써서, 오너가 이 키를 일반 스태프에게
+  실수로 부여하면 그 스태프도 남의 메모를 지울 수 있었음 — `_is_owner_of_center()`로 교체해
+  오너 전용으로 고정. (2) `fetch_member_phones_safe()`가 대상 프로필의 센터 소속 검증이 빠져,
+  특정 센터에서 정당하게 전화번호 열람 권한을 가진 스태프가 profile_id만 바꿔 넘기면 전혀
+  무관한 다른 센터 회원의 전화번호까지 조회할 수 있었음 — `center_members` 소속 검증 추가로 수정.
+- **미해결로 남긴 것**: 매니저가 특정 회원의 "포인트"를 보는 화면/RPC 자체가 코드에 없음
+  (`customer.member.pass_detail` 라벨이 가리키는 기능 중 유일하게 미구현 — 신규 기능 필요,
+  이번 배치에는 포함 안 함).
+- Postgres 오버로드 함정 발견: `create_recurring_classes_safe`에 새 파라미터(`p_is_copy`)를
+  추가하며 `create or replace`를 썼는데, 시그니처가 달라 옛 2-파라미터 버전이 삭제되지 않고
+  남아있었음(Postgres는 시그니처가 다르면 replace가 아니라 overload 추가) — `drop function`으로
+  옛 버전 제거해 "함수가 모호하다" 에러 위험을 없앰.
+- 상세 내용은 [TODO.md P2-31](./TODO.md) 참고.
+
+## 2026-09-09 — facility.room.manage 권한 RLS 연결 SQL 적용 완료
+
+`fix_facility_room_manage_permission_wiring.sql`을 사용자가 라이브 DB에 적용, `pg_policies`
+대조로 "룸 매니저 삭제/생성/수정" 3개 정책이 `facility.room`/`facility.room.manage`/
+`is_platform_admin()` OR 조건으로 정상 재생성됐음을 확인. 자세한 내용은 [TODO.md P2-31](./TODO.md) 참고.
+
+## 2026-09-09 — 저장 버튼 위계 수정 (디자인 정합성 B-3)
+
+`.header-action`(작은 텍스트 링크, 원래 용도는 시트/모달 열기)로 실제 폼 저장 액션을 구현한
+화면 2곳(`/manager/center-info`, `/manager/settings`)을 찾아 폼 하단 전체 너비 `.primary-btn`으로
+교체. 전체 13개 `.header-action` 사용처를 조사해 이 2곳만 진짜 버그였고 나머지 11곳은 정상
+(시트 열기용)임을 확인 후 범위를 좁혀서 수정.
+
+## 2026-09-09 — 탭·필터 색 토큰 통일 + 죽은 CSS 정리 (디자인 정합성 B-2)
+
+전체 탭/필터 컴포넌트를 조사한 결과 형태(밑줄/풀채움/테두리/세그먼트) 다양성은 용도별로
+정상이었고, 실제 색 불일치는 `/reservation`의 "잔여석만" 필터(`.availability-filter`)만
+`--brand`를 쓰고 나머지 전부 `--accent`를 쓰던 것 하나뿐이었다 — `--accent`로 통일(리브랜딩
+이후 두 토큰 값이 거의 같아 화면상 차이는 없었지만, 토큰 자체는 통일해둠). 코드 어디서도
+안 쓰이는 죽은 CSS 2개(`.tabs`/`.tab`, `.mem-tabs`/`.mem-tab`)도 함께 제거.
+
+## 2026-09-09 — 헤더 스타일 통일 (디자인 정합성 B-1)
+
+`/cart`·`/checkout`·`/purchases`가 뒤로가기 버튼이 있는 서브 화면인데도 대형 좌측 타이틀(28px)을
+쓰고 있어서, "뒤로가기 없는 최상위 탭 화면만 대형, 나머지는 소형"이라는 이 앱의 암묵적 규칙을
+어기고 있었다. `.commerce-page`/`.purchase-page-v2`의 대형 타이틀 CSS 오버라이드를 제거해 기본
+헤더로 통일(`/my-reservations`·매니저 "수업"은 진짜 최상위 화면이라 대형 유지, 그대로 둠).
+
+## 2026-09-09 — 계정 연동 반응형 흐름 추가 + 내 정보 관리 UI 통일
+
+- **반응형 즉시 병합**: 구글/애플처럼 실제 이메일을 쓰는 provider로 신규 가입할 때, 그
+  이메일로 이미 계정이 있으면 로그아웃/코드 왕복 없이 그 자리에서 비밀번호 확인만으로
+  바로 합쳐준다(`find_mergeable_account_by_my_email()` RPC + `SessionWatcher` 모달).
+  내부적으로는 격리된 Supabase 클라이언트로 기존 계정 비밀번호를 검증한 뒤 기존
+  코드교환 RPC 2개를 자동으로 순서대로 호출 — 새 병합 로직 추가 없음. 카카오/네이버는
+  합성 이메일이라 항상 매치 없음(DEC-004). **미확인**: 이 프로젝트는 `auth.users.email`이
+  unique라(admin API로 확인) 구글/애플이 실제로 이 상황에서 자동 연결해버릴 수도 있어
+  실제 트리거 빈도는 실기기 테스트 필요(TODO P2-0 참고).
+- `app/mypage/info/page.tsx`의 "다른 계정과 연결" 섹션이 운영자 화면용 `.admin-card`/
+  `.admin-row` 스타일을 써서 이 페이지의 다른 섹션(비밀번호 변경/탈퇴)과 안 어울리던 것을
+  전체폭 버튼 패턴으로 통일(사용자 피드백).
+
+## 2026-09-09 — `--accent` 라이트/다크 이원화 문제 재확인(문서 정정, 코드 변경 없음)
+
+`docs/TODO.md` P2-DS-3에 "라이트=검정/다크=코랄로 두 액센트가 공존"이라고 미착수로 남아있던
+항목을 재검토. HSL로 계산해보니 현재 값(라이트 `#0A2446`/다크 `#3E7BC4`)은 색조(hue)가
+212~214°로 완전히 같은 네이비 계열이라, 8/23 작성 이후 진행된 9/8 네이비 리브랜딩 배치에서
+이미 실질적으로 해결돼 있었다. 문서만 정정.
+
+## 2026-09-09 — 이메일 ↔ 소셜 계정 명시적 연동(Account Linking)
+
+`docs/TODO.md` P2-0(2026-09-01 착수 결정 후 방치됐다가 문서 감사로 재발견) 구현. 이메일로
+가입한 뒤 나중에 카카오/구글 등으로 로그인해서 계정이 따로 생긴 경우, 로그인 상태에서
+"내 정보 관리 → 다른 계정과 연결"로 일회성 코드를 발급하고(A, 남을 계정), 다른 계정(B)으로
+로그인해 그 코드를 입력하면 B의 데이터가 A로 재배정되고 이후 B로 로그인해도 A로 동작한다.
+
+- `add_account_linking.sql`(신규, 적용 대기): `account_auth_identities`/`account_link_requests`
+  테이블, `accounts.merged_into` 컬럼, `my_account_id()`/`is_platform_admin()`/
+  `_is_owner_of_center()` 재정의, `accounts` RLS 3개 정책 수정, `create_account_link_code()`/
+  `link_accounts_by_code()` RPC.
+- `lib/authAccount.ts`에 `getMyAccountId()` 공유 헬퍼 추가, `lib/*.ts` 17개 파일 + Edge
+  Function 2개에 중복돼 있던 `.eq("auth_id", ...)` 인라인 조회를 이 헬퍼 호출로 통일(계정
+  연동 없이도 코드 중복 제거 효과).
+- `lib/roles.ts`의 `searchAccounts()`에 `merged_into is null` 필터 추가(병합된 계정이 스태프
+  초대 대상으로 다시 노출되는 것 방지).
+- `app/mypage/info/page.tsx`에 "다른 계정과 연결" 섹션 추가.
+- `npm run build`/`npm run test`(262개) 통과. 테스트 4개 파일의 mock을 `getMyAccountId()`가
+  이제 `my_account_id()` RPC를 호출하는 구조에 맞게 갱신.
+- **실제 브라우저 왕복 테스트로 버그 2건 발견·수정**(이메일 테스트 계정 2개로 실제 병합 왕복):
+  1. `fix_link_accounts_by_code_native_push_tokens_optional.sql` — `native_push_tokens` 테이블이
+     아직 라이브에 없어서(Firebase 설정 전, TODO P1-3c) RPC가 실패하던 문제. `to_regclass()`로
+     존재 확인 후 있을 때만 실행하도록 수정.
+  2. `fix_my_account_id_merged_into_priority.sql` — 병합된(B) 계정으로 재로그인하면
+     `my_account_id()`가 B 자신의 (이제는 비어있는) accountId를 계속 반환해 "프로필이
+     없어요" 오류가 나던 심각한 버그. B의 accounts 행을 auth_id로 직접 찾은 뒤 `merged_into`가
+     있으면 그 대상으로 넘겨주도록 수정. 수정 후 B(이메일)로 재로그인 → A(손장욱)의 이름/
+     수강권/관리자 모드까지 정확히 뜨는 것을 실제로 확인, 테스트 계정 삭제 완료.
+
+## 2026-09-09 — 전체 기능 상호작용 QA + 발견된 버그 수정
+
+앱 전체(매니저/운영자/회원 화면 70여개)를 크롬으로 직접 클릭해가며 상호작용 QA 진행.
+
+- **`/purchases`(구매 내역) 프라이버시 버그 수정**: `fetchMyPurchases()`(`lib/orders.ts`)가
+  `memberships`/`orders` 조회에 `profile_id` 필터 없이 RLS에만 의존해서, 매니저 겸 회원인
+  계정으로 접속하면 다른 회원의 수강권이 "내 구매내역"에 섞여 보이고 금액은 항상 "무료"로
+  잘못 표시됐다(매니저용 RLS가 이 조회에도 걸려서). 명시적 `profile_id in (내 프로필들)` 필터
+  추가로 수정, 실제 화면에서 재확인함.
+- **스태프 권한 카탈로그 상당수가 RLS에 연결 안 된 문제 발견**: `facility.room.manage`(룸
+  추가·수정·삭제) 권한을 실제로 켜봤더니 `rooms` RLS는 전혀 다른 키(`facility.room`)만 확인해서
+  아무 효과가 없었음. `fix_facility_room_manage_permission_wiring.sql`로 이 건은 수정(적용
+  대기). 전수 대조 결과 이 외에도 73개 권한 키가 RLS·RPC·앱 코드 어디에도 안 쓰이는 걸
+  발견 — 자세한 내용과 완료 조건은 [TODO.md P2-31](./TODO.md) 참고.
+- 그 외 매니저/운영자/회원 화면 전체 정상 동작 확인, 운영설정(`center_settings`) 34개 컬럼
+  라이브 대조 결과 새로 발견된 죽은 토글 없음.
+- **`/settings/theme` 견본색 수정**: "기본(라이트)" 스와치가 리브랜딩 이전 버건디(`#8B2F52`)로
+  하드코딩돼 있어 실제 라이트 테마 색(`#0A2446`)과 다르게 보이던 것 수정.
+- **문서 드리프트 2건 정정**: `REQUIREMENTS.md`의 "수업별 담당 강사 배정"이 실제로는 이미
+  완전히 구현돼 있는데(`class_trainers`, `set_class_trainers_safe` 등) "확인 필요"로 잘못
+  남아있던 것 정정. `TODO.md` P3-6의 `messages`/`notification_logs`가 이후 알림톡 cron
+  배치에서 실제로 쓰이게 됐는데 문서가 "코드 참조 0건"으로 안 갱신된 것 정정.
+
 ## 2026-09-08 — 회원에게 수강권/상품 임의 지급(서비스 증정) 기능 추가
 
 기존 "직접결제"와 별개로, 매니저가 회원에게 수강권/상품을 무상 또는 임의 가격으로

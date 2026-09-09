@@ -133,9 +133,7 @@ export default function SettingsPage() {
       <div className="back-header">
         <a className="side" href="/manager">‹</a>
         <div className="title">운영 설정</div>
-        <button className="header-action" disabled={busy || !dirty || !canSave} onClick={handleSave}>
-          {busy ? "저장 중" : dirty ? "저장" : "저장됨"}
-        </button>
+        <div className="side" />
       </div>
 
       {!loading && activeCenter && !canSave && (
@@ -191,32 +189,41 @@ export default function SettingsPage() {
           </div>
           {s.allowSameDayBooking && (
             <div className="set-row col">
-              <div className="set-label">당일 예약 변경 가능 시간 (그룹 수업, 시작 전까지) {soonBadge}</div>
+              <div className="set-label">당일 예약 변경 가능 시간 (그룹 수업, 시작 전까지)</div>
               <div className="set-inline">{numInput(s.sameDayChangeHours, (n) => up("sameDayChangeHours", n), 56, true)}시간
                 {numInput(s.sameDayChangeMinutes, (n) => up("sameDayChangeMinutes", n), 56, true)}분 전</div>
-              <div className="set-soon-note">예약 마감/취소 규칙과는 별개로 "당일 한정 변경 유예시간"을
-                자동으로 적용하려면 정기 실행 스케줄러가 필요해 아직 실제로 반영되지 않아요.</div>
             </div>
           )}
 
           {/* 03. 폐강 */}
-          <div className="set-section-title">수업 폐강 시간 {soonBadge}</div>
-          <div className="set-row col">
-            <div className="set-label">최소 인원 미달 시, 시작 전 자동 폐강</div>
-            <div className="set-inline">{numInput(s.autocancelHours, (n) => up("autocancelHours", n), 56, true)}시간
-              {numInput(s.autocancelMinutes, (n) => up("autocancelMinutes", n), 56, true)}분 전</div>
-            <div className="set-soon-note">최소 인원 자동 판정에는 정기 실행 스케줄러가 필요해 아직
-              실제로 반영되지 않아요 — 폐강은 수업 관리 화면에서 수동으로 처리해주세요.</div>
+          <div className="set-section-title">수업 폐강 시간</div>
+          <div className="set-row">
+            <div className="set-label">자동 폐강 사용</div>
+            {toggle(s.autocancelEnabled, (b) => up("autocancelEnabled", b))}
           </div>
+          {s.autocancelEnabled && (
+            <div className="set-row col">
+              <div className="set-label">최소 인원 미달 시, 시작 전 자동 폐강</div>
+              <div className="set-inline">{numInput(s.autocancelHours, (n) => up("autocancelHours", n), 56)}시간
+                {numInput(s.autocancelMinutes, (n) => up("autocancelMinutes", n), 56)}분 전</div>
+              <div className="set-soon-note">폐강되면 확정·대기 예약이 모두 취소되고 수강권 횟수가
+                복구돼요. 회원에게는 알림이 가요 — 기본값은 꺼짐이라, 켜기 전엔 지금처럼 수업 관리
+                화면에서 수동으로 처리해주세요.</div>
+              {(s.autocancelHours ?? 0) === 0 && (s.autocancelMinutes ?? 0) === 0 && (
+                <div className="set-soon-note" style={{ color: "var(--warning)" }}>
+                  시간·분이 모두 0이면 "시작 전"이라는 조건 자체가 성립하지 않아 자동 폐강이 실행되지
+                  않아요 — 최소 몇 분 이상으로 설정해주세요.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 04. 대기 자동 예약 */}
-          <div className="set-section-title">예약대기 자동 예약 시간 {soonBadge}</div>
+          <div className="set-section-title">예약대기 자동 예약 시간</div>
           <div className="set-row col">
             <div className="set-label">공석 발생 시, 시작 전까지 자동 예약 (0이면 취소시간 적용)</div>
             <div className="set-inline">{numInput(s.waitlistAutoHours, (n) => up("waitlistAutoHours", n), 56, true)}시간
               {numInput(s.waitlistAutoMinutes, (n) => up("waitlistAutoMinutes", n), 56, true)}분 전</div>
-            <div className="set-soon-note">공석 발생 시 대기자 확정은 취소 시점에 즉시 처리되고
-              있어요(정상 동작) — 여기 설정된 "몇 시간 전까지만" 조건은 아직 적용되지 않아요.</div>
           </div>
 
           {/* 05. 대기 횟수 */}
@@ -322,22 +329,24 @@ export default function SettingsPage() {
               {toggle(s[key] as boolean, (b) => up(key, b as any))}
             </div>
           ))}
-          {/* P1-12 감사(2026-08-18): 이 토글은 저장은 되지만 서버 조회 로직 어디서도 읽지
-              않는다 — 회원 화면(fetchMonthData)이 "수강권 보유 센터의 모든 수업"만 보여줄 뿐,
-              그 수강권으로 실제 예약 가능한 수업인지(pass_selection_mode/class_allowed_products/
-              membership_schedule_rules)까지는 안 따진다. 이 판정을 클라이언트에서 정확히
-              재현하려면 reserve_class()의 자격 판단 로직 전체를 복제해야 해서(정책이 바뀔 때마다
-              같이 안 바뀌면 오늘 하루 겪은 auto_book_membership vs reserve_class 드리프트와
-              같은 위험이 생김) 이번 배치에서는 구현하지 않고 "준비 중"으로 명확히 표시만 한다. */}
+          {/* P1-9 완료(2026-09-09): is_membership_eligible_for_class() 공용 SQL 함수를
+              reserve_class()/reserve_with_membership()와 fetchMonthData()가 그대로
+              같이 써서 자격 판정 로직이 한 곳에만 있다(드리프트 방지, add_shared_class_
+              eligibility_and_show_all_classes_filter.sql 참고). */}
           <div className="set-row">
-            <div className="set-label">수강권으로 볼 수 없는 수업도 표시 {soonBadge}</div>
+            <div className="set-label">수강권으로 볼 수 없는 수업도 표시</div>
             {toggle(s.showAllClasses, (b) => up("showAllClasses", b), true)}
           </div>
-          <div className="set-soon-note">지금은 이 설정과 무관하게 항상 모든 수업이 표시돼요 —
-            수강권별로 예약 가능한 수업만 걸러 보여주려면 서버 쪽 자격 판정 로직을 그대로
-            재사용하는 별도 작업이 필요해요.</div>
 
-          <div style={{ height: 40 }} />
+          <div style={{ padding: "20px 20px 40px" }}>
+            <button
+              className="primary-btn"
+              disabled={busy || !dirty || !canSave}
+              onClick={handleSave}
+            >
+              {busy ? "저장 중" : dirty ? "저장" : "저장됨"}
+            </button>
+          </div>
         </div>
       )}
     </div>

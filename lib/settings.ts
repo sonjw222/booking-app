@@ -22,6 +22,7 @@ export type CenterSettings = {
   sameDayChangeHours: number;
   sameDayChangeMinutes: number;
   // 03. 수업 폐강 시간
+  autocancelEnabled: boolean;
   autocancelHours: number;
   autocancelMinutes: number;
   // 04. 예약대기 자동 예약 시간
@@ -64,7 +65,7 @@ export const DEFAULT_SETTINGS: CenterSettings = {
   groupCancelDaysBefore: 1, groupCancelTime: "22:00",
   allowSameDayBooking: true,
   sameDayChangeHours: 24, sameDayChangeMinutes: 0,
-  autocancelHours: 0, autocancelMinutes: 0,
+  autocancelEnabled: false, autocancelHours: 0, autocancelMinutes: 0,
   waitlistAutoHours: 0, waitlistAutoMinutes: 0,
   waitlistWeeklyLimit: 0,
   dailyBookLimitEnabled: false, dailyBookLimit: null,
@@ -92,6 +93,7 @@ export function rowToSettings(r: any): CenterSettings {
     allowSameDayBooking: r.allow_same_day_booking ?? true,
     sameDayChangeHours: r.same_day_change_hours,
     sameDayChangeMinutes: r.same_day_change_minutes,
+    autocancelEnabled: r.autocancel_enabled ?? false,
     autocancelHours: r.autocancel_hours,
     autocancelMinutes: r.autocancel_minutes,
     waitlistAutoHours: r.waitlist_auto_hours,
@@ -133,6 +135,7 @@ export function settingsToRow(centerId: string, s: CenterSettings) {
     allow_same_day_booking: s.allowSameDayBooking,
     same_day_change_hours: s.sameDayChangeHours,
     same_day_change_minutes: s.sameDayChangeMinutes,
+    autocancel_enabled: s.autocancelEnabled,
     autocancel_hours: s.autocancelHours,
     autocancel_minutes: s.autocancelMinutes,
     waitlist_auto_hours: s.waitlistAutoHours,

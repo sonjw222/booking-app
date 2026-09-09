@@ -6,6 +6,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { getMyAccountId as getMyAccountIdBase } from "./authAccount";
 
 export type ProfileRow = {
   id: string;
@@ -24,15 +25,9 @@ export type ProfileRow = {
 };
 
 async function getMyAccountId(): Promise<string> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) throw new Error("로그인이 필요해요");
-  const { data, error } = await supabase
-    .from("accounts")
-    .select("id")
-    .eq("auth_id", authData.user.id)
-    .single();
-  if (error || !data) throw new Error("계정 정보를 찾을 수 없어요");
-  return data.id;
+  const accountId = await getMyAccountIdBase();
+  if (!accountId) throw new Error("계정 정보를 찾을 수 없어요");
+  return accountId;
 }
 
 export async function fetchProfiles(): Promise<ProfileRow[]> {

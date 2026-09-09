@@ -6,6 +6,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { getMyAccountId } from "./authAccount";
 
 export type PendingCenter = {
   id: string;
@@ -29,12 +30,12 @@ const KST = new Intl.DateTimeFormat("ko-KR", {
 
 // 지금 로그인한 계정이 플랫폼 운영자인지 확인
 export async function checkPlatformAdmin(): Promise<boolean> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) return false;
+  const accountId = await getMyAccountId();
+  if (!accountId) return false;
   const { data } = await supabase
     .from("accounts")
     .select("is_platform_admin")
-    .eq("auth_id", authData.user.id)
+    .eq("id", accountId)
     .single();
   return data?.is_platform_admin ?? false;
 }

@@ -66,7 +66,7 @@ export async function gotoManagerSettings(page: Page): Promise<void> {
 // 있다(실제 CI에서 재현됨 — 저장 버튼이 disabled "저장됨" 상태로 그대로 남아 클릭이
 // 계속 막힘). 이 경우는 애초에 저장할 변경사항이 없다는 뜻이므로 정상 성공으로 본다.
 export async function saveManagerSettings(page: Page): Promise<void> {
-  const btn = page.locator("button.header-action");
+  const btn = page.locator("button.primary-btn");
   const alreadySaved = (await btn.textContent())?.trim() === "저장됨" && (await btn.isDisabled());
   if (alreadySaved) return;
   await btn.click();

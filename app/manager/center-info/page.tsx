@@ -202,7 +202,7 @@ export default function CenterInfoPage() {
       <div className="back-header">
         <a className="side" href="/manager">‹</a>
         <div className="title">센터 정보</div>
-        <button className="header-action" disabled={busy || !canEditFacilityInfo} onClick={handleSave}>{busy ? "저장 중" : "저장"}</button>
+        <div className="side" />
       </div>
 
       {!loading && activeCenter && !canEditFacilityInfo && (
@@ -369,6 +369,15 @@ export default function CenterInfoPage() {
             value={sns}
             onChange={(e) => setSns(e.target.value)}
           />
+
+          <button
+            className="primary-btn"
+            style={{ margin: "20px 0 8px" }}
+            disabled={busy || !canEditFacilityInfo}
+            onClick={handleSave}
+          >
+            {busy ? "저장 중" : "저장"}
+          </button>
         </div>
       )}
     </div>

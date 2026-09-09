@@ -175,7 +175,7 @@ export default function HolidaysPage() {
                   {h.reason && <div className="hol-reason">{h.reason}</div>}
                 </div>
                 {canManageHoliday && (
-                  <button className="text-btn danger" disabled={busy} onClick={() => handleDelete(h)}>삭제</button>
+                  <button className="quiet-action danger" disabled={busy} onClick={() => handleDelete(h)}>삭제</button>
                 )}
               </div>
             );

@@ -96,8 +96,9 @@ export default function ManagerDashboard() {
 
   async function openMemberInfo(a: ClassAttendee) {
     setMemberInfo({ name: a.name, profileId: a.profileId, data: null });
+    if (!activeCenterId) return;
     try {
-      const data = await fetchMemberDetail(a.profileId);
+      const data = await fetchMemberDetail(a.profileId, activeCenterId);
       setMemberInfo({ name: a.name, profileId: a.profileId, data });
     } catch (e: any) {
       // 실패 시 로딩 스피너가 무한히 남지 않도록 시트를 닫고 상단 에러로만 알린다.
@@ -260,7 +261,7 @@ export default function ManagerDashboard() {
                 </div>
                 <div className="dash-card">
                   <div className="dash-card-label">미수금</div>
-                  <div className="dash-card-value">{won(dash.unpaidTotal)}</div>
+                  <div className={`dash-card-value${dash.unpaidTotal > 0 ? " is-error-text" : ""}`}>{won(dash.unpaidTotal)}</div>
                 </div>
                 <div className="dash-card">
                   <div className="dash-card-label">수강권 매출</div>

@@ -18,6 +18,10 @@ import {
   type CenterMember, type Grade, type MemberDetailData,
 } from "../../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { getMyAccountId } from "../../../lib/authAccount";
+import {
+  fetchMemberMemos, createMemberMemo, updateMemberMemoEntry, deleteMemberMemoEntry, type MemberMemo,
+} from "../../../lib/memberMemos";
 import { fetchCenterSubscription } from "../../../lib/centerSubscription";
 import { fetchSaleProducts, grantProductToMember, won, type GrantInput } from "../../../lib/sales";
 import AlimtalkComposer, {
@@ -85,6 +89,14 @@ function MembersContent() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [memoText, setMemoText] = useState("");
   const [addressText, setAddressText] = useState("");
+  // 회원 메모 (member_memos, 다중 작성자) — 특이사항(memoText)과는 별개 기능
+  const [memberMemos, setMemberMemos] = useState<MemberMemo[]>([]);
+  const [memberMemoInput, setMemberMemoInput] = useState("");
+  const [editingMemberMemoId, setEditingMemberMemoId] = useState<string | null>(null);
+  const [editingMemberMemoContent, setEditingMemberMemoContent] = useState("");
+  const [memberMemoBusy, setMemberMemoBusy] = useState(false);
+  const [myAccountId, setMyAccountId] = useState<string | null>(null);
+  useEffect(() => { getMyAccountId().then(setMyAccountId).catch(() => {}); }, []);
   // 회원 추가 시트
   const [addSheet, setAddSheet] = useState(false);
   const [searchKw, setSearchKw] = useState("");
@@ -138,6 +150,7 @@ function MembersContent() {
   }
 
   async function openDetail(m: CenterMember) {
+    if (!centerId) return;
     setMemoText(m.memo ?? "");
     setAddressText(m.address ?? "");
     setDetailTab("info");
@@ -145,13 +158,50 @@ function MembersContent() {
     setDetailData(null);
     setDetailLoading(true);
     setDetail(m);   // 시트를 열되, 내용은 로딩 후 한 번에 표시
+    setMemberMemos([]);
+    setMemberMemoInput("");
+    setEditingMemberMemoId(null);
     try {
-      setDetailData(await fetchMemberDetail(m.profileId));
+      setDetailData(await fetchMemberDetail(m.profileId, centerId));
+      if (canViewMemo) setMemberMemos(await fetchMemberMemos(m.profileId));
     } catch (e: any) {
       setError(e.message);
     } finally {
       setDetailLoading(false);
     }
+  }
+
+  async function handleAddMemberMemo() {
+    if (!detail || !centerId || !memberMemoInput.trim()) return;
+    setMemberMemoBusy(true);
+    try {
+      await createMemberMemo(detail.profileId, centerId, memberMemoInput.trim());
+      setMemberMemoInput("");
+      setMemberMemos(await fetchMemberMemos(detail.profileId));
+    } catch (e: any) { setError(e.message); }
+    finally { setMemberMemoBusy(false); }
+  }
+
+  async function handleSaveMemberMemoEdit() {
+    if (!detail || !editingMemberMemoId || !editingMemberMemoContent.trim()) return;
+    setMemberMemoBusy(true);
+    try {
+      await updateMemberMemoEntry(editingMemberMemoId, editingMemberMemoContent.trim());
+      setEditingMemberMemoId(null);
+      setMemberMemos(await fetchMemberMemos(detail.profileId));
+    } catch (e: any) { setError(e.message); }
+    finally { setMemberMemoBusy(false); }
+  }
+
+  async function handleDeleteMemberMemo(memoId: string) {
+    if (!detail) return;
+    if (!(await globalThis.appConfirm("이 메모를 삭제할까요?"))) return;
+    setMemberMemoBusy(true);
+    try {
+      await deleteMemberMemoEntry(memoId);
+      setMemberMemos(await fetchMemberMemos(detail.profileId));
+    } catch (e: any) { setError(e.message); }
+    finally { setMemberMemoBusy(false); }
   }
 
   useEffect(() => {
@@ -216,6 +266,12 @@ function MembersContent() {
   // memberships/payments insert RLS가 각각 이 두 키를 요구한다(fix_membership_rls.sql,
   // app/manager/sales/page.tsx의 registerPayment 주석과 동일한 조합).
   const canGrantPass = canDo("customer.member.issue_pass") && canDo("pass.payment.create");
+  const canExportMembers = canDo("customer.member.export");
+  const canViewPhone = canDo("customer.member.phone");
+  const canViewMemo = canDo("customer.memo.view");
+  const canAddMemo = canDo("customer.memo.create");
+  const canEditOwnMemo = canDo("customer.memo.update"); // 본인 메모 수정에도 이 키가 필요
+  const canManageAnyMemo = activeCenter?.isOwner ?? false; // 다른 사람 메모는 오너만 — 위임 불가(서버 RLS와 동일 규칙)
 
   // URL ?profile=<profileId> 로 들어오면 그 회원 상세를 자동으로 열기 (1회)
   const searchParams = useSearchParams();
@@ -304,7 +360,9 @@ function MembersContent() {
 
   function handleCsvDownload() {
     if (csvCols.length === 0) { setError("내보낼 항목을 1개 이상 선택해주세요"); return; }
-    const csv = membersToCsv(members, csvCols);
+    // customer.member.phone 권한이 없으면 체크박스로 골랐어도 전화번호 컬럼은 제외 (방어적 이중 확인)
+    const safeCols = canViewPhone ? csvCols : csvCols.filter((c) => c !== "phone");
+    const csv = membersToCsv(members, safeCols);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -465,7 +523,7 @@ function MembersContent() {
         <select className="input-field" style={{ flex: "0 0 96px" }} value={searchField} onChange={(e) => setSearchField(e.target.value as any)}>
           <option value="all">전체</option>
           <option value="name">이름</option>
-          <option value="phone">휴대폰</option>
+          {canViewPhone && <option value="phone">휴대폰</option>}
           <option value="address">주소</option>
         </select>
         <input
@@ -503,7 +561,9 @@ function MembersContent() {
           <button className={`quiet-action ${selectMode ? "on" : ""}`} onClick={toggleSelectMode}>
             {selectMode ? "선택 취소" : "알림톡 발송"}
           </button>
-          <button className="quiet-action" onClick={() => setCsvSheet(true)}>엑셀 내보내기</button>
+          {canExportMembers && (
+            <button className="quiet-action" onClick={() => setCsvSheet(true)}>엑셀 내보내기</button>
+          )}
         </div>
       </div>
 
@@ -729,6 +789,57 @@ function MembersContent() {
 
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>관리자 메모 (회원에게 보이지 않음)</div>
                 <input className="input-field" disabled={!canUpdateMember} placeholder="예: 무릎 부상 이력" value={memoText} onChange={(e) => setMemoText(e.target.value)} />
+
+                {canViewMemo && (
+                  <>
+                    <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>회원 메모 (스태프 전용, 여러 명이 각자 남길 수 있음)</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {memberMemos.map((m) => {
+                        const canEditThis = (m.authorAccountId === myAccountId && canEditOwnMemo) || canManageAnyMemo;
+                        return (
+                          <div key={m.id} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
+                            {editingMemberMemoId === m.id ? (
+                              <>
+                                <textarea
+                                  className="input-field" style={{ width: "100%", minHeight: 60 }}
+                                  value={editingMemberMemoContent} onChange={(e) => setEditingMemberMemoContent(e.target.value)}
+                                />
+                                <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                                  <button className="quiet-action" disabled={memberMemoBusy} onClick={handleSaveMemberMemoEdit}>저장</button>
+                                  <button className="quiet-action" disabled={memberMemoBusy} onClick={() => setEditingMemberMemoId(null)}>취소</button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{m.content}</div>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
+                                  <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{m.authorName} · {new Date(m.createdAt).toLocaleString("ko-KR")}</span>
+                                  {canEditThis && (
+                                    <div style={{ display: "flex", gap: 6 }}>
+                                      <button className="quiet-action" disabled={memberMemoBusy} onClick={() => { setEditingMemberMemoId(m.id); setEditingMemberMemoContent(m.content); }}>수정</button>
+                                      <button className="quiet-action danger" disabled={memberMemoBusy} onClick={() => handleDeleteMemberMemo(m.id)}>삭제</button>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {memberMemos.length === 0 && <div className="daylist-empty" style={{ padding: 12 }}>등록된 메모가 없어요</div>}
+                      {canAddMemo && (
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <textarea
+                            className="input-field" style={{ width: "100%", minHeight: 50 }}
+                            placeholder="메모를 남겨보세요" value={memberMemoInput} onChange={(e) => setMemberMemoInput(e.target.value)}
+                          />
+                          <button className="quiet-action" disabled={memberMemoBusy || !memberMemoInput.trim()} onClick={handleAddMemberMemo}>등록</button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
                 <div className="add-profile-actions">
                   <button className="ghost-btn" onClick={() => setDetail(null)}>닫기</button>
                   {canUpdateMember && (
@@ -803,7 +914,7 @@ function MembersContent() {
                   <div key={g.id} className="grade-item">
                     <span className="grade-dot" style={{ background: g.color ?? "var(--line-strong)" }} />
                     <span className="grade-name">{g.name}</span>
-                    <button className="text-btn danger" disabled={busy} onClick={() => handleDeleteGrade(g)}>삭제</button>
+                    <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteGrade(g)}>삭제</button>
                   </div>
                 ))}
               </div>
@@ -833,7 +944,7 @@ function MembersContent() {
             <div className="sheet-lead">필요한 회원 정보만 선택해서 내보낼 수 있어요.</div>
 
             <div className="csv-cols">
-              {CSV_COLUMNS.map((c) => (
+              {CSV_COLUMNS.filter((c) => c.key !== "phone" || canViewPhone).map((c) => (
                 <label key={c.key} className="csv-col">
                   <input
                     type="checkbox"

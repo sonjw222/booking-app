@@ -142,6 +142,7 @@ export async function searchAccounts(keyword: string): Promise<{ id: string; nam
   const { data, error } = await supabase
     .from("accounts")
     .select("id, name, phone")
+    .is("merged_into", null) // 이미 다른 계정에 합쳐진(계정 연동) 계정은 검색·초대 대상에서 제외
     .or(`name.ilike.%${kw}%,phone.ilike.%${kw}%`)
     .limit(10);
   if (error) throw new Error("계정 검색에 실패했어요: " + error.message);

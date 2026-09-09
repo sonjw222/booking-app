@@ -62,20 +62,20 @@ describe("writeReview() sanitizes before calling write_review RPC (UI-002)", () 
 
   it("strips <script> from the review content", async () => {
     await writeReview("center-1", 5, "좋아요<script>alert(1)</script>!");
-    const params = rpcMock.mock.calls[0][1];
+    const params = rpcMock.mock.calls.find((c) => c[0] === "write_review")![1];
     expect(params.p_content).not.toContain("<script");
     expect(params.p_content).toContain("좋아요");
   });
 
   it("strips <iframe> from the review content", async () => {
     await writeReview("center-1", 5, '설명<iframe src="https://evil.example"></iframe>');
-    const params = rpcMock.mock.calls[0][1];
+    const params = rpcMock.mock.calls.find((c) => c[0] === "write_review")![1];
     expect(params.p_content).not.toContain("<iframe");
   });
 
   it("strips <svg><script> nested inside the review content", async () => {
     await writeReview("center-1", 5, "<svg><script>alert(1)</script></svg>내용");
-    const params = rpcMock.mock.calls[0][1];
+    const params = rpcMock.mock.calls.find((c) => c[0] === "write_review")![1];
     expect(params.p_content).not.toMatch(/<svg/i);
     expect(params.p_content).not.toMatch(/<script/i);
     expect(params.p_content).toContain("내용");
@@ -83,20 +83,20 @@ describe("writeReview() sanitizes before calling write_review RPC (UI-002)", () 
 
   it("strips javascript: URI schemes from the review content", async () => {
     await writeReview("center-1", 5, '<a href="javascript:alert(1)">클릭</a>');
-    const params = rpcMock.mock.calls[0][1];
+    const params = rpcMock.mock.calls.find((c) => c[0] === "write_review")![1];
     expect(params.p_content).not.toMatch(/javascript:/i);
   });
 
   it("strips event handler attributes from the review content", async () => {
     await writeReview("center-1", 5, '<img src=x onerror=alert(1)><div onclick="a()">t</div>');
-    const params = rpcMock.mock.calls[0][1];
+    const params = rpcMock.mock.calls.find((c) => c[0] === "write_review")![1];
     expect(params.p_content).not.toMatch(/onerror/i);
     expect(params.p_content).not.toMatch(/onclick/i);
   });
 
   it("strips background:url(...) from the review content's style", async () => {
     await writeReview("center-1", 5, '<div style="background:url(https://evil.example/x)">좋아요</div>');
-    const params = rpcMock.mock.calls[0][1];
+    const params = rpcMock.mock.calls.find((c) => c[0] === "write_review")![1];
     expect(params.p_content).not.toMatch(/background/i);
     expect(params.p_content).not.toMatch(/url\(/i);
     expect(params.p_content).toContain("좋아요");
@@ -107,7 +107,7 @@ describe("writeReview() sanitizes before calling write_review RPC (UI-002)", () 
       "center-1", 5,
       '<b>정말</b> <i>좋아요</i> <u>!</u> <span style="color:#7B2D3B;font-size:20px">추천</span>'
     );
-    const params = rpcMock.mock.calls[0][1];
+    const params = rpcMock.mock.calls.find((c) => c[0] === "write_review")![1];
     expect(params.p_content).toContain("<b>정말</b>");
     expect(params.p_content).toContain("<i>좋아요</i>");
     expect(params.p_content).toContain("<u>!</u>");
@@ -117,7 +117,7 @@ describe("writeReview() sanitizes before calling write_review RPC (UI-002)", () 
 
   it("passes rating/centerId through unchanged alongside the sanitized content", async () => {
     await writeReview("center-77", 4, "좋아요");
-    const params = rpcMock.mock.calls[0][1];
+    const params = rpcMock.mock.calls.find((c) => c[0] === "write_review")![1];
     expect(params.p_center_id).toBe("center-77");
     expect(params.p_rating).toBe(4);
   });

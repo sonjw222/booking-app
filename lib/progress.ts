@@ -5,6 +5,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { getMyAccountId } from "./authAccount";
 
 export type ProgressCategory = {
   id: string;
@@ -137,13 +138,7 @@ export async function recordProgress(
   note: string | null
 ): Promise<void> {
   if (categoryIds.length === 0) return;
-  const { data: authData } = await supabase.auth.getUser();
-  let coachAccountId: string | null = null;
-  if (authData.user) {
-    const { data: acc } = await supabase
-      .from("accounts").select("id").eq("auth_id", authData.user.id).maybeSingle();
-    coachAccountId = acc?.id ?? null;
-  }
+  const coachAccountId = await getMyAccountId();
 
   const rows = categoryIds.map((cid) => ({
     profile_id: profileId,

@@ -392,7 +392,7 @@ export default function SalesPage() {
                 <span className="profit-net">순이익 {won(summary.totalSales - summarizeExpenses(expenses).total)}</span>
               </div>
               {summary.totalUnpaid > 0 && (
-                <div className="sales-unpaid">미수금 {won(summary.totalUnpaid)}</div>
+                <div className="sales-unpaid is-error-text">미수금 {won(summary.totalUnpaid)}</div>
               )}
             </div>
           )}
@@ -503,7 +503,7 @@ export default function SalesPage() {
                     <div className="sales-row-sub">{e.spentAt}{e.memo && ` · ${e.memo}`}</div>
                   </div>
                   <div className="sales-amount minus">-{won(e.amount)}</div>
-                  <button className="text-btn danger" style={{ marginLeft: 8 }} disabled={busy} onClick={() => handleDeleteExpense(e.id)}>삭제</button>
+                  <button className="quiet-action danger" style={{ marginLeft: 8 }} disabled={busy} onClick={() => handleDeleteExpense(e.id)}>삭제</button>
                 </div>
               ))}
             </div>

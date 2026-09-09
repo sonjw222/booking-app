@@ -14,7 +14,7 @@ import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
-  fetchProducts, createProduct, updateProduct, deleteProduct,
+  fetchProducts, createProduct, updateProduct, deleteProduct, toggleProductSale,
   fetchRules, addRule, deleteRule, ruleToText, won, DAYS,
   type Product, type ScheduleRule,
 } from "../../../lib/passes";
@@ -92,6 +92,7 @@ export default function MembershipRulesPage() {
   // 상품 CRUD(등록=pass.create, 수정/삭제=pass.update)는 P1-5b에서 RLS를 실제로 좁힘
   // (fix_permission_products_rooms_rls.sql) — 그 전까지는 my_managed_center_ids()만 체크했다.
   const canCreateProduct = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "pass.create");
+  const canToggleSale = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "pass.sale_toggle");
 
   const load = useCallback(async () => {
     if (!centerId) return;
@@ -199,6 +200,15 @@ export default function MembershipRulesPage() {
     finally { setBusy(false); }
   }
 
+  async function handleToggleSale(p: Product) {
+    const next = !p.isOnSale;
+    if (!(await globalThis.appConfirm(next ? `'${p.name}' 판매를 다시 시작할까요?` : `'${p.name}' 판매를 정지할까요? (기존 보유자는 영향 없어요)`))) return;
+    setBusy(true);
+    try { await toggleProductSale(p.id, next); showToast(next ? "판매를 재개했어요" : "판매를 정지했어요"); await load(); }
+    catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
   async function handleAddRule() {
     if (!ruleFor) return;
     setBusy(true);
@@ -302,15 +312,25 @@ export default function MembershipRulesPage() {
                     <div className="pass-name">
                       {p.name}
                       {p.groupLabel && <span className="pass-group-tag">{p.groupLabel}</span>}
+                      {!p.isOnSale && <span className="pass-group-tag" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>판매정지</span>}
                     </div>
                     <div className="pass-sub">
                       {won(p.price)}{p.totalCount ? ` · ${p.totalCount}회` : ""}
                     </div>
                   </div>
-                  {canEditRules && (
+                  {(canEditRules || canToggleSale) && (
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                      <button className="quiet-action" disabled={busy} onClick={() => openEditSheet(p)}>수정</button>
-                      <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteProduct(p)}>삭제</button>
+                      {canToggleSale && (
+                        <button className="quiet-action" disabled={busy} onClick={() => handleToggleSale(p)}>
+                          {p.isOnSale ? "판매정지" : "판매재개"}
+                        </button>
+                      )}
+                      {canEditRules && (
+                        <>
+                          <button className="quiet-action" disabled={busy} onClick={() => openEditSheet(p)}>수정</button>
+                          <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteProduct(p)}>삭제</button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

@@ -6,6 +6,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { getMyAccountId } from "./authAccount";
 
 export type Order = {
   id: string;
@@ -32,17 +33,15 @@ export async function createOrder(input: {
   // 스튜디오 오너/회원 UX 감사) — 생략하면 기존처럼 대표 프로필로 자동 배정(하위 호환).
   profileId?: string;
 }): Promise<string> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) throw new Error("로그인이 필요해요");
-  const { data: acc } = await supabase.from("accounts").select("id").eq("auth_id", authData.user.id).single();
-  if (!acc) throw new Error("계정을 찾을 수 없어요");
+  const accountId = await getMyAccountId();
+  if (!accountId) throw new Error("로그인이 필요해요");
 
   let profileId = input.profileId;
   if (!profileId) {
     // 대표 프로필 우선, 없으면 가장 먼저 만든 프로필 사용 (single() 실패 방지)
     const { data: profs } = await supabase
       .from("profiles").select("id, is_primary, created_at")
-      .eq("account_id", acc.id)
+      .eq("account_id", accountId)
       .is("deleted_at", null)
       .order("is_primary", { ascending: false })
       .order("created_at", { ascending: true })
@@ -164,10 +163,20 @@ const KST_DT_FULL = new Intl.DateTimeFormat("ko-KR", {
 });
 
 export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
+  // memberships RLS는 매니저에게도 조회를 허용해서(customer.member.view), profile_id 필터
+  // 없이 조회하면 매니저 겸 회원인 계정에 다른 회원의 수강권이 "내 구매내역"에 섞여
+  // 나온다 — 명시적으로 내 프로필로 좁힌다(QA에서 발견된 버그, 2026-09-09).
+  const accountId = await getMyAccountId();
+  if (!accountId) return [];
+  const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", accountId).is("deleted_at", null);
+  const profileIds = (profs ?? []).map((p: any) => p.id);
+  if (profileIds.length === 0) return [];
+
   // 발급된 수강권 (환불 가능 판단 대상)
   const { data: mems } = await supabase
     .from("memberships")
     .select("id, center_id, product_id, product_name, total_count, remaining_count, status, created_at, centers(name), products(product_kind)")
+    .in("profile_id", profileIds)
     .order("created_at", { ascending: false })
     .limit(100);
 
@@ -175,6 +184,7 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
   const { data: ords } = await supabase
     .from("orders")
     .select("id, center_id, product_name, amount, status, created_at, centers(name)")
+    .in("profile_id", profileIds)
     .order("created_at", { ascending: false })
     .limit(100);
 

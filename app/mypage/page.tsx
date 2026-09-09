@@ -132,7 +132,9 @@ export default function MyPage() {
                 </div>
               )}
               <div className="expire">
-                {left == null ? "기간 무제한" : `${m.expiresAt}까지 · ${left > 0 ? `${left}일 남음` : "만료됨"}`}
+                {left == null
+                  ? "기간 무제한"
+                  : <>{m.expiresAt}까지 · {left > 0 ? `${left}일 남음` : <span className="is-error-text">만료됨</span>}</>}
               </div>
               {!isGoods && <div className="membership-cta">이 수강권으로 예약하기 ›</div>}
               {refundEligibility(m).ok && (

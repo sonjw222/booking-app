@@ -423,12 +423,29 @@ describe("P~Q [v2, 2026-08-14 추가]: 사용자가 지적한 SEC-112/SEC-101 �
 
 describe("K [2026-08-14 추가]: 회원 관계(center_members)와 manager_centers 관계의 독립성", () => {
   it("K: centerA의 정식 회원(center_members)이어도 manager_centers self-join은 여전히 거부된다", async () => {
+    // ⚠ centerAId/userA는 여러 통합테스트 파일이 공유하는 영속 픽스처라, 다른 파일의
+    // Mock 결제 흐름(ensure_center_member() 호출)이 같은 (center_id, profile_id)로
+    // 동시에 center_members 행을 만들어두는 경우가 실측으로 확인됐다(2026-09-10,
+    // PR #129 CI) — 순수 insert는 그 경쟁에서 unique 제약(23505)에 걸릴 수 있으므로,
+    // 이미 존재하면 그 행을 그대로 쓰고(남의 행은 지우지 않음) 없을 때만 새로 만들어서
+    // 이 테스트가 끝나면 직접 치운다.
     const admin = getFixtureAdminClient();
-    const { data: member, error: memberErr } = await admin
+    const { data: existing } = await admin
       .from("center_members")
-      .insert({ center_id: centerAId, profile_id: userA.profileId, status: "active" })
-      .select("id").single();
-    expect(memberErr).toBeNull();
+      .select("id")
+      .eq("center_id", centerAId)
+      .eq("profile_id", userA.profileId)
+      .maybeSingle();
+
+    let createdMemberId: string | null = null;
+    if (!existing) {
+      const { data: member, error: memberErr } = await admin
+        .from("center_members")
+        .insert({ center_id: centerAId, profile_id: userA.profileId, status: "active" })
+        .select("id").single();
+      expect(memberErr).toBeNull();
+      createdMemberId = (member as any)?.id ?? null;
+    }
 
     try {
       await asUserA();
@@ -441,7 +458,7 @@ describe("K [2026-08-14 추가]: 회원 관계(center_members)와 manager_center
       // A/B/C와 동일하게 거부돼야 한다 — 두 관계가 서로 독립적임을 증명.
       expect(error).not.toBeNull();
     } finally {
-      if (member) await admin.from("center_members").delete().eq("id", (member as any).id);
+      if (createdMemberId) await admin.from("center_members").delete().eq("id", createdMemberId);
     }
   });
 });

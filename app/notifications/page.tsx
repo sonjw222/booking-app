@@ -20,6 +20,7 @@ import {
 import {
   fetchMyAnnouncements, announcementPhotoUrl, type Announcement,
 } from "../../lib/announcements";
+import { formatMonthDayWeekday } from "../../lib/kst";
 
 // UX 감사(A-17) — 알림이 쌓이면(실측 9,600px) 날짜 구분도 페이징도 없이 쭉 나열됐다. 카드
 // 탭 시 딥링크 이동, 읽음/안읽음 구분(진입 즉시 자동 읽음 처리)은 이미 구현돼 있었음
@@ -30,10 +31,8 @@ function dateHeading(iso: string) {
   const today = KST_DATE.format(new Date());
   const key = KST_DATE.format(d);
   if (key === today) return "오늘";
-  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
   const [y, m, day] = key.split("-").map(Number);
-  const local = new Date(y, m - 1, day);
-  return `${m}월 ${day}일 (${weekdays[local.getDay()]})`;
+  return formatMonthDayWeekday(y, m, day);
 }
 
 export default function NotificationsPage() {

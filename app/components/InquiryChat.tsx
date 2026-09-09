@@ -11,16 +11,17 @@ import { useEffect, useRef, useState } from "react";
 import { ZoomableImage } from "./ImageViewer";
 import {
   fetchMessages, sendMessage, readThread, subscribeMessages,
-  uploadInquiryPhoto, inquiryPhotoUrl, type InquiryMessage,
+  uploadInquiryPhoto, inquiryPhotoUrl, deleteMessage, type InquiryMessage,
 } from "../../lib/inquiries";
 
 export default function InquiryChat({
-  threadId, title, onBack, canSend = true,
+  threadId, title, onBack, canSend = true, canDeleteOthers = false,
 }: {
   threadId: string;
   title: string;
   onBack: () => void;
   canSend?: boolean; // 매니저 쪽에서 board.inquiry.comment 권한이 없을 때만 false — 회원 쪽은 항상 true(생략 시 기본값)
+  canDeleteOthers?: boolean; // board.inquiry.comment_other — 다른 스태프가 보낸 메시지도 삭제 가능. 회원 쪽은 항상 false(생략 시 기본값)
 }) {
   const [messages, setMessages] = useState<InquiryMessage[]>([]);
   const [text, setText] = useState("");
@@ -72,6 +73,17 @@ export default function InquiryChat({
     } finally { setSending(false); }
   }
 
+  async function handleDelete(messageId: string) {
+    if (!(await globalThis.appConfirm("이 메시지를 삭제할까요?"))) return;
+    setError(null);
+    try {
+      await deleteMessage(messageId);
+      await reload();
+    } catch (e: any) {
+      setError("삭제에 실패했어요: " + e.message);
+    }
+  }
+
   async function handlePhoto(file: File) {
     setUploading(true);
     setError(null);
@@ -96,24 +108,34 @@ export default function InquiryChat({
         ) : messages.length === 0 ? (
           <div className="chat-empty">첫 메시지를 남겨보세요.</div>
         ) : (
-          messages.map((m) => (
-            <div key={m.id} className={`chat-msg ${m.mine ? "mine" : "theirs"}`}>
-              <div className="chat-bubble">
-                {m.body && <div className="chat-text">{m.body}</div>}
-                {m.photos && m.photos.length > 0 && (
-                  <div className="chat-photos">
-                    {m.photos.map((ph, i) => (
-                      <ZoomableImage
-                        key={i} src={inquiryPhotoUrl(ph) ?? ""}
-                        group={m.photos!.map((p) => inquiryPhotoUrl(p) ?? "")} groupIndex={i}
-                      />
-                    ))}
-                  </div>
-                )}
+          messages.map((m) => {
+            // 회원 메시지는 이 삭제 기능의 대상이 아님(board.inquiry.comment*는 스태프
+            // 게시판 관리용 권한) — RPC도 같은 규칙을 강제하지만 버튼도 여기서 미리 숨긴다.
+            const canDelete = m.senderRole === "manager" && (m.mine || canDeleteOthers);
+            return (
+              <div key={m.id} className={`chat-msg ${m.mine ? "mine" : "theirs"}`}>
+                <div className="chat-bubble">
+                  {m.body && <div className="chat-text">{m.body}</div>}
+                  {m.photos && m.photos.length > 0 && (
+                    <div className="chat-photos">
+                      {m.photos.map((ph, i) => (
+                        <ZoomableImage
+                          key={i} src={inquiryPhotoUrl(ph) ?? ""}
+                          group={m.photos!.map((p) => inquiryPhotoUrl(p) ?? "")} groupIndex={i}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="chat-time">
+                  {m.createdAt}
+                  {canDelete && (
+                    <button className="chat-delete-btn" onClick={() => handleDelete(m.id)}>삭제</button>
+                  )}
+                </div>
               </div>
-              <div className="chat-time">{m.createdAt}</div>
-            </div>
-          ))
+            );
+          })
         )}
         <div ref={bottomRef} />
       </div>

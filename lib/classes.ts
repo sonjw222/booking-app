@@ -721,7 +721,7 @@ export async function fetchUnplacedPasses(centerId: string): Promise<UnplacedPas
 
 // 특정 수강권으로 다시 자동배치 시도 (정원을 늘린 뒤 눌러서 재시도)
 export async function retryAutoBook(membershipId: string): Promise<number> {
-  const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: membershipId });
+  const { data, error } = await supabase.rpc("retry_auto_book_membership_safe", { p_membership_id: membershipId });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
   return (data as any)?.booked ?? 0;
 }
@@ -933,7 +933,7 @@ async function insertCopiedClasses(
   }
 
   const { data, error } = await supabase.rpc("create_recurring_classes_safe", {
-    p_center_id: centerId, p_rows: rows,
+    p_center_id: centerId, p_rows: rows, p_is_copy: true,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
 

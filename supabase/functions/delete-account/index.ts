@@ -67,6 +67,10 @@ Deno.serve(async (req: Request) => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
+  // 계정 연동(account_auth_identities) fallback을 의도적으로 안 쓴다 — 병합으로 흡수된
+  // 계정(B)으로 로그인해 탈퇴를 누르면 "지금 이 로그인으로 실제 만들어진 accounts 행"(B의
+  // 흡수된 stub)만 지워야 한다. fallback을 넣으면 B로 로그인한 채 남은(A) 계정 전체를
+  // 삭제해버리는 사고가 난다.
   const { data: account, error: findErr } = await admin
     .from("accounts")
     .select("id")
