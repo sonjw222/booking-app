@@ -19,6 +19,12 @@
   플래그로 후속 처리 필요(docs/TODO.md P3-5).
 - 위 두 건 모두 이번 PR의 코드 자체가 아니라 이번 세션에서 적용한 SQL 마이그레이션의
   결함으로, 통합테스트 전체 스위트 재실행(259개)으로 다른 회귀 없음을 확인.
+- **완전히 무관한 라이브 DB 드리프트도 하나 발견**: `confirm_test_payment()`가
+  `ensure_center_member()`를 호출 안 하는 상태로 돌아가 있어(`sync-test-payment-center-
+  member.test.ts` 실패, 원래 `fix_sync_test_payment_center_member_draft_proposed.sql`이
+  이 호출을 추가했어야 함) — 이번 PR 코드/마이그레이션 어디에도 이 함수를 건드린 곳이
+  없어 다른 세션 작업일 가능성을 먼저 확인(같은 live dev Supabase를 공유하므로) 후
+  재적용해 원상복구.
 
 ## 2026-09-10 — PR #129 CI 회귀 2건 추가 수정 (진짜 원인) + 테스트 픽스처 정리
 
