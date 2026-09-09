@@ -217,13 +217,6 @@ a { color: inherit; text-decoration: none; }
 }
 .hero .deco { position: absolute; right: -10px; bottom: -14px; font-size: 88px; opacity: 0.9; transform: rotate(-8deg); }
 
-.tabs {
-  display: flex; gap: 22px; padding: 22px 20px 0; overflow-x: auto;
-  font-size: 15.5px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; border-bottom: 1px solid var(--line);
-}
-.tabs .tab { padding-bottom: 12px; cursor: pointer; background: none; border: none; font: inherit; color: inherit; }
-.tabs .tab.active { color: var(--ink); border-bottom: 3px solid var(--ink); }
-
 .cat-grid { padding: 20px 14px 4px; display: grid; grid-template-columns: repeat(5, 1fr); row-gap: 20px; }
 .cat-item { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; position: relative; cursor: pointer; }
 .cat-icon {
@@ -2262,11 +2255,6 @@ a.membership-card { text-decoration: none; display: block; }
 .mem-pass-more { font-size: 11.5px; font-weight: 700; color: var(--accent); background: none; border: none; cursor: pointer; padding: 2px 4px; }
 .mem-pass-chip.goods { border-color: var(--gold); }
 
-/* 회원 관리 - 탭 (전체/담당/상담) */
-.mem-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--line); margin: 0 16px 8px; }
-.mem-tab { flex: 1; padding: 11px 0; font-size: 13.5px; font-weight: 700; color: var(--text-dim); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; }
-.mem-tab.on { color: var(--accent); border-bottom-color: var(--accent); }
-
 /* 예약 상단바 - 센터 선택 */
 .resv-top-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 8px; }
 .resv-top-title { font-size: 18px; font-weight: 800; color: var(--text); }
@@ -3922,8 +3910,8 @@ a.membership-card { text-decoration: none; display: block; }
 .reservation-list-controls .segmented-tabs { min-width: 0; }
 .availability-filter { min-height: 44px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg); color: var(--ink-soft); font: inherit; font-size: 11px; font-weight: 650; white-space: nowrap; }
 .availability-filter span { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
-.availability-filter.on { color: var(--ink); border-color: color-mix(in srgb,var(--brand) 44%,var(--line)); }
-.availability-filter.on span { background: var(--brand); box-shadow: 0 0 0 4px var(--brand-soft); }
+.availability-filter.on { color: var(--ink); border-color: color-mix(in srgb,var(--accent) 44%,var(--line)); }
+.availability-filter.on span { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
 .member-reservation .daylist { gap: 0; padding: 0 var(--page-gutter) calc(var(--floating-nav-clearance) + 24px); }
 .reservation-period-label { padding: 20px 0 8px; color: var(--ink-soft); font-size: 12px; font-weight: 680; }
 .reservation-period-label:first-child { padding-top: 5px; }
