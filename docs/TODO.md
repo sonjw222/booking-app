@@ -738,9 +738,11 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 | 관련 문서 | [REQUIREMENTS 6-1](./REQUIREMENTS.md), [DATABASE 5절](./DATABASE.md), [ROUTES `/settings/notifications`](./ROUTES.md) |
 
 **후속(2026-09-08, 알림톡 애드온+추가요금 구조)**: `ALIGO_USER_ID`/`ALIGO_API_KEY` 발급 완료.
-남은 것 — (1) `add_center_alimtalk_addon_billing.sql` + `fix_notification_rule_alimtalk_template_code.sql`
-Supabase SQL Editor 적용, (2) `supabase functions deploy send-alimtalk`(애드온 게이트 +
-자동규칙 templateCode 버그 수정 반영), (3) 카카오 채널을 알리고 콘솔에 연동해
+~~(1) SQL 2개 적용, (2) Edge Function 재배포~~ **[2026-09-09 완료 확인]** 문서가 "적용 대기"로
+남아있었지만 실제로는 (1) SQL 2개 모두 라이브에 이미 적용돼 있었음(직접 쿼리로 재확인,
+문서 드리프트). (2)는 실제로 아직 안 배포된 상태였음(로컬 코드가 마지막 배포보다 최신) —
+2026-09-09에 `supabase functions deploy send-alimtalk` 실행, version 7→8로 실제 배포 완료.
+남은 건 순수 외부 계정 절차뿐 — (3) 카카오 채널을 알리고 콘솔에 연동해
 `ALIGO_SENDER_KEY` 발급 + `ALIGO_SENDER_PHONE` 등록 + 시크릿 4개 전부 `supabase secrets set`,
 (4) `/admin/subscriptions`에서 알림톡 애드온을 신청한 센터마다 켜기(월 요금 입력),
 (5) 자동 규칙 5종을 실제로 쓰려면 각 트리거별 템플릿을 `/manager/alimtalk/templates`에서
@@ -1126,6 +1128,31 @@ reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시�
 없어 죽은 설정으로 보임)은 여전히 미해결 — P2/P3 후속 범위(프라이빗 셀프 슬롯 예약 UI를
 만들지 여부와 함께 제품 결정 필요)로 남긴다.
 
+**후속(2026-09-09, 남아있던 "준비 중" 4개 전부 완료)**: 전체 QA 재점검으로 이 화면의 마지막
+"준비 중" 4개를 발견해 사용자 확인 후 전부 실제로 구현함.
+- **당일 예약 변경 가능 시간**(`same_day_change_hours/minutes`) — 스케줄러가 필요하다던 옛
+  판단이 틀렸음을 확인. `calc_deadline()`이 당일 예약 건엔 항상 "어제"로 마감을 계산해
+  사실상 취소 불가능했던 버그 — `cancel_reservation()`에 당일 예약 전용 마감 후보를 추가해
+  해결(`fix_same_day_cancel_and_waitlist_auto_deadline.sql`, 적용 완료).
+- **예약대기 자동 예약 시간**(`waitlist_auto_hours/minutes`) — 마찬가지로 스케줄러 불필요,
+  같은 파일에서 `cancel_reservation()`의 즉시승격 로직에 시작 전 시간 조건을 추가. 기본
+  0/0이면 기존 동작(항상 즉시승격) 그대로 유지.
+- **수업 폐강 시간**(`autocancel_hours/minutes`) — 이건 실제로 스케줄러가 필요한 케이스라
+  `dispatch-web-push`와 동일한 pg_cron(1분마다)+Edge Function 패턴으로 구현
+  (`add_autocancel_scheduler.sql` + `supabase/functions/dispatch-autocancel`, 둘 다 적용·배포
+  완료). 사용자 요청으로 새 켜기/끄기 토글(`autocancel_enabled`) 추가, 기본값 꺼짐.
+- **수강권으로 볼 수 없는 수업도 표시**(`show_all_classes`) — `reserve_class()`/
+  `reserve_with_membership()`가 각자 중복 구현하던 자격판정 로직을 공용 함수
+  `is_membership_eligible_for_class()`로 뽑아 하나로 통합(이전 auto_book_membership vs
+  reserve_class 드리프트 재발 방지) + 회원 캘린더 필터링 연결
+  (`add_shared_class_eligibility_and_show_all_classes_filter.sql`, 적용 완료). `show_all_classes`
+  기본값(true)인 센터는 동작 전혀 안 바뀜.
+
+**남은 문제(2026-09-09 QA에서 새로 발견, 미해결)**: `show_point_history`("회원앱 포인트 내역
+조회", P1-1 범위로 넘겨졌던 필드)는 매니저 화면에 토글 자체가 없음 — 기능(회원 포인트내역
+화면, P1-1 참고)은 이미 동작하는데 센터 오너가 켜고 끌 UI가 없어 DB 직접 수정만 가능한 상태.
+`private_slot_unit`도 여전히 미해결(위 문단 참고, 위 4개와 달리 이번엔 범위에 없었음).
+
 2026-08-18 전수 재감사(2026-08-02 목록을 코드로 다시 확인): 그 사이(SEC-114 정책회귀 배치 등)
 `allow_same_day_booking`/`daily_book_limit(_enabled)`/`waitlist_weekly_limit`이 이미 실제
 RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wiring돼 있음을
@@ -1150,6 +1177,28 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
   "준비 중" 배지 + 안내문구만 추가함(완료조건 (b) 선택). 별도 배치로 남김.
 - `show_point_history`(회원앱 포인트 내역 조회)는 회원앱에 포인트 내역 화면 자체가 없어서
   P1-1(포인트 원장 이원화 정리)과 직접 겹쳐 그쪽 범위로 넘김(이 항목에서는 제외).
+
+### P1-19. (신규, 2026-09-09, 완료) 마케팅 알림(플랫폼 전체 발송) 신규 기능
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **완료.** `/settings/notifications`의 "혜택·이벤트 알림" 토글이 그동안 실제로
+만드는 알림이 없어 "준비 중"이었던 것을 해결 — 플랫폼 운영자가 전체 회원에게 마케팅
+알림을 발송하는 새 도구를 만듦. 기존 "공지사항"(센터별)과는 별개(사용자 확인, 재사용
+안 함). |
+| 근거 파일 | `add_marketing_notifications.sql`(적용 완료), `app/admin/marketing/page.tsx`(신규),
+`lib/marketing.ts`(신규), `lib/notifications.ts`(`notiPrefKeyForKind`에 `marketing` 매핑
+추가), `app/admin/page.tsx`/`app/components/AdminChrome.tsx`(내비 진입점 추가) |
+| 완료 조건 | 운영자 전용 발송 화면 + 발송 이력, `is_member=true` 전체 계정에 `push_notification()`
+팬아웃(현재 86명, 배치 불필요 규모), 회원 알림설정의 "혜택·이벤트" 토글이 실제로 이
+종류의 알림 팝업을 필터링하도록 연결 |
+| 관련 문서 | [ROUTES `/admin/marketing`](./ROUTES.md) |
+
+`marketing_messages` 테이블(RLS: `is_platform_admin()`만 조회/등록) + `create_announcement()`의
+팬아웃 패턴을 그대로 가져온 `create_marketing_message_safe()` RPC. `banners`(홈 화면 배너,
+수동 노출뿐)와도 다르고 `center_announcements`(센터별)와도 다른, 알림함/실시간 팝업/웹·네이티브
+푸시로 실제로 전달되는 플랫폼 단위 채널.
 
 ### P1-13. (2026-08-14, 완료) 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
 

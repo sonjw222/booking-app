@@ -101,7 +101,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data: page, error: memErr } = await supabase
         .from("memberships")
-        .select("center_id, remaining_count, expires_at, status")
+        .select("id, center_id, remaining_count, expires_at, status")
         .in("profile_id", myProfileIds)
         .range(from, from + PAGE_SIZE - 1);
       if (memErr) throw new Error("수강권 정보를 불러오지 못했어요: " + memErr.message);
@@ -110,11 +110,16 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     }
   }
   const myMembershipCenters = new Set<string>();
+  // show_all_classes=false 센터의 수업 필터링에 쓸 활성 수강권 id 목록(센터별)
+  const activeMembershipIdsByCenter: Record<string, string[]> = {};
   for (const m of myMems) {
     const active = (m as any).status === "active"
       && ((m as any).remaining_count == null || (m as any).remaining_count > 0)
       && ((m as any).expires_at == null || (m as any).expires_at >= monthStartDateOnly || new Date((m as any).expires_at) >= new Date());
-    if (active) myMembershipCenters.add((m as any).center_id);
+    if (active) {
+      myMembershipCenters.add((m as any).center_id);
+      (activeMembershipIdsByCenter[(m as any).center_id] ??= []).push((m as any).id);
+    }
   }
 
   // 이번 달 수업 (확정 예약 수 포함)
@@ -146,7 +151,36 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   }
 
   // DB 쿼리 자체가 이미 수강권 보유 센터로 좁혀져 있으므로 별도 필터가 필요 없다.
-  const filteredClassRows = classRows;
+  let filteredClassRows = classRows;
+
+  // center_settings.show_all_classes(기본 true) — false인 센터는 "이 회원의 어떤 수강권으로도
+  // 예약할 수 없는 수업"을 걸러낸다(P1-9). 자격 판정은 reserve_class()/reserve_with_membership()
+  // 와 완전히 같은 SQL 함수(is_membership_eligible_for_class)를 쓰는 filter_eligible_class_ids
+  // RPC로 위임 — 클라이언트에서 판정 로직을 다시 구현하면 예전에 겪은 auto_book_membership vs
+  // reserve_class 드리프트가 재발할 위험이 있어 반드시 서버 함수를 그대로 재사용한다.
+  if (membershipCenterIds.length > 0) {
+    const { data: settingsRows, error: settingsErr } = await supabase
+      .from("center_settings").select("center_id, show_all_classes").in("center_id", membershipCenterIds);
+    if (settingsErr) throw new Error("운영 설정을 불러오지 못했어요: " + settingsErr.message);
+    const restrictedCenterIds = new Set(
+      (settingsRows ?? []).filter((s: any) => s.show_all_classes === false).map((s: any) => s.center_id)
+    );
+    if (restrictedCenterIds.size > 0) {
+      const restrictedClassRows = filteredClassRows.filter((c) => restrictedCenterIds.has(c.center_id));
+      if (restrictedClassRows.length > 0) {
+        const membershipIds = Array.from(restrictedCenterIds).flatMap((cid) => activeMembershipIdsByCenter[cid] ?? []);
+        const { data: eligibleIds, error: eligErr } = await supabase.rpc("filter_eligible_class_ids", {
+          p_membership_ids: membershipIds,
+          p_class_ids: restrictedClassRows.map((c) => c.id),
+        });
+        if (eligErr) throw new Error("수업 자격을 확인하지 못했어요: " + eligErr.message);
+        const eligibleSet = new Set((eligibleIds as string[]) ?? []);
+        filteredClassRows = filteredClassRows.filter(
+          (c) => !restrictedCenterIds.has(c.center_id) || eligibleSet.has(c.id)
+        );
+      }
+    }
+  }
 
   const classIds = filteredClassRows.map((c) => c.id);
 

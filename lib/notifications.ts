@@ -15,6 +15,7 @@ const KST = new Intl.DateTimeFormat("ko-KR", {
 
 export type NotiKind =
   | "announcement"
+  | "marketing"
   | "pass_expired" | "pass_used_up"
   | "reservation_3days" | "reservation_today"
   | "reservation_confirmed" | "reservation_waitlisted" | "waitlist_promoted"
@@ -72,6 +73,8 @@ export function notiPrefKeyForKind(kind: NotiKind): NotiPrefKey | null {
     case "reservation_3days":
     case "reservation_today":
       return "reminder";
+    case "marketing":
+      return "marketing";
     default:
       return null;
   }
