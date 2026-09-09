@@ -1219,8 +1219,9 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 | 현재 상태 | **완료.** 2026-09-01 결정 이후 문서 감사에서 방치된 채 재발견(2026-09-09) → 같은 배치에서 구현. |
 | 배경 | `docs/08_Decision_Log.md` DEC-004가 **자동** 병합은 명시적으로 거부했지만("Alternatives A"), 사용자 확인을 거치는 **명시적** 연결(예: 이메일로 이미 가입된 사람이 소셜 로그인 시도 → "이미 계정이 있어요, 연결할까요?")은 대안으로만 남겨두고 미구현 상태였음. |
 | 설계·구현 | Supabase `linkIdentity()`는 "이미 다른 auth.users가 점유한 identity"에는 못 써서(이미 따로 생긴 두 계정을 합치는 이번 시나리오와 안 맞음) 직접 구현: **일회성 코드 교환** 방식으로 A(로그인 상태에서 코드 발급)와 B(코드 입력)를 연결 → B의 데이터를 A로 재배정 + B의 `auth.users.id`를 `account_auth_identities`에 A로 매핑(B의 auth.users 행 자체는 삭제 안 함 — 삭제하면 재로그인마다 새 계정이 또 생김). `my_account_id()`/`is_platform_admin()`/`_is_owner_of_center()`가 이 매핑을 인지하도록 재정의, `accounts` 테이블 RLS 3개 정책에도 OR 분기 추가(이 셋은 `my_account_id()`를 안 거치는 예외였음). `manager_centers`/`class_trainers`/`staff_salaries`/`member_center_colors`/`inquiry_threads`의 unique 제약 충돌은 각각 규칙으로 처리(급여만 자동 병합 대신 명시적 에러). `lib/*.ts` 17개 파일 + Edge Function 2개의 중복된 `.eq("auth_id", ...)` 인라인 조회를 `getMyAccountId()`(신규, `lib/authAccount.ts`) 공유 호출로 통일. |
-| 근거 파일 | `add_account_linking.sql`(적용 완료), `fix_link_accounts_by_code_native_push_tokens_optional.sql`(적용 완료), `fix_my_account_id_merged_into_priority.sql`(적용 완료), `lib/authAccount.ts`(`getMyAccountId()`), `lib/accountLinking.ts`(신규), `app/mypage/info/page.tsx`("다른 계정과 연결" 섹션), `lib/roles.ts`(`searchAccounts()`에 `merged_into is null` 필터), `supabase/functions/send-alimtalk/index.ts`(`resolveAccountId()`) |
+| 근거 파일 | `add_account_linking.sql`(적용 완료), `fix_link_accounts_by_code_native_push_tokens_optional.sql`(적용 완료), `fix_my_account_id_merged_into_priority.sql`(적용 완료), `add_account_link_email_prompt.sql`(적용 완료), `lib/authAccount.ts`(`getMyAccountId()`), `lib/accountLinking.ts`(신규), `app/mypage/info/page.tsx`("다른 계정과 연결" 섹션), `app/components/SessionWatcher.tsx`(반응형 병합 모달), `lib/roles.ts`(`searchAccounts()`에 `merged_into is null` 필터), `supabase/functions/send-alimtalk/index.ts`(`resolveAccountId()`) |
 | 완료 조건 | 전부 충족 — `npm run build`/`npm run test`(262개) 통과 + **실제 이메일 테스트 계정 2개로 브라우저 왕복 완료 확인**(A가 코드 발급 → B가 입력 → 병합 → B로 재로그인해도 A로 정확히 resolve됨). 왕복 중 실제 버그 2건 발견해 즉시 수정(위 fix_* 파일, 자세한 내용은 CHANGELOG 2026-09-09 참고). |
+| 후속(반응형 흐름) | 사용자 요청으로 "가입 시점에 같은 이메일이 이미 있으면 바로 병합 제안"하는 흐름 추가(`find_mergeable_account_by_my_email()` RPC + `SessionWatcher`의 병합 모달, 비밀번호 확인 후 기존 코드교환 RPC 2개를 격리된 Supabase 클라이언트로 자동 수행 — 새 병합 로직 없이 이미 검증된 경로 재사용). **미확인 사항**: 이 프로젝트 Supabase Auth는 `auth.users.email`이 unique라(admin API로 직접 확인, 같은 이메일로 두 번째 유저 생성 시도 시 `email_exists` 에러) 구글/애플 OAuth가 실제로 이 상황에서 "자동으로 기존 identity에 연결"할 수도 있음 — 그렇다면 이 반응형 흐름은 트리거될 상황 자체가 드물 수 있음(트리거 안 돼도 무해, 죽은 코드 정도). 실제 구글/애플 계정으로 회원가입해서 확인 필요(대시보드 "Automatic Linking" 설정은 API로 조회 불가해 코드로는 확정 못함). |
 | 관련 문서 | `docs/08_Decision_Log.md` DEC-004, [REQUIREMENTS 5-1, 6-2](./REQUIREMENTS.md), `lib/authAccount.ts` |
 
 ### P2-1. 애플 OAuth 운영 설정 (구글·카카오·네이버는 완료 — 아래 참고)
@@ -2702,9 +2703,12 @@ worktree 생성 직후 습관으로 굳힐 것).
 - 다크모드 시맨틱 컬러 토큰(`--brand`/`--danger`/`--brand-ink`/`--brand-soft`/`--warning`/
   `--info`/`--success`/`--star`/`--private`) 재정의 추가. PR #87.
 - `--accent` 위 흰 글자(`background:var(--accent)`+`color:var(--text-inverse)`) 28곳의
-  대비 미달을 `--ink` 때와 동일한 패턴(`color:var(--bg)`)으로 수정. **단, `--accent` 자체의
-  색상(라이트=검정/다크=코랄, 두 액센트 공존 문제)은 그대로 둠** — 앱 전체 주요 버튼 색을
-  바꾸는 별도의 큰 디자인 결정이라 사용자 확인 필요, 미착수로 유지. PR #87.
+  대비 미달을 `--ink` 때와 동일한 패턴(`color:var(--bg)`)으로 수정. 당시엔 `--accent` 자체의
+  색상(라이트=검정/다크=코랄, 두 액센트 공존 문제)을 큰 디자인 결정이라 미착수로 남겼으나,
+  **2026-09-08 네이비 리브랜딩 배치에서 실질적으로 해결됨** — 라이트 `#0A2446`/다크 `#3E7BC4`
+  로 바뀌면서 HSL 색조(hue)가 둘 다 212~214°로 같은 네이비 계열이 됐고(2026-09-09 재확인,
+  명도만 테마별로 조정된 정상 구조), "두 액센트가 서로 다른 색 성격"이라는 원래 문제는 더
+  이상 존재하지 않음. PR #87 + 네이비 리브랜딩 배치.
 - 빈 상태/에러 상태 통일 — `app/components/ErrorState.tsx` 신규(EmptyState와 같은 시각
   언어, danger 톤 아이콘). `/checkout`(파라미터 없이 진입, 뒤로가기 링크가 `/center/`(빈
   ID)로 가던 404도 함께 수정)과 `/manager/staff/permissions`(권한 거부)의 복구 수단 없는

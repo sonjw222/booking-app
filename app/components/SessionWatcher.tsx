@@ -26,13 +26,30 @@
   2026-08-14 — provider 조건 없이 phone만 봤던 최초 구현의 버그).
 */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { ensureAccountForCurrentUser, completeSocialProfile } from "../../lib/authAccount";
 import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
+import { checkMergeableAccountByEmail, mergeViaPasswordVerification } from "../../lib/accountLinking";
 import AddressField from "./AddressField";
 
 export default function SessionWatcher() {
+  // 계정 연동(반응형, 2026-09-09) — 방금 새로 만들어진 계정(구글/애플 등 실제 이메일 provider)의
+  // 이메일이 이미 다른 계정에 쓰이고 있으면, 그 계정 비밀번호 확인만으로 그 자리에서 바로
+  // 합쳐준다. 이 확인은 "제안"이라 틀리거나 건너뛰어도 계속 진행(새 계정 그대로 사용)할 수 있다.
+  const [mergePromptEmail, setMergePromptEmail] = useState<string | null>(null);
+  const [mergePassword, setMergePassword] = useState("");
+  const [mergeSubmitting, setMergeSubmitting] = useState(false);
+  const [mergeMessage, setMergeMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
+  const [mergeDismissed, setMergeDismissedState] = useState(false);
+  // onAuthStateChange 콜백은 마운트 시 한 번만 만들어져(useEffect deps []) mergeDismissed를
+  // 클로저로 캡처하면 항상 마운트 시점 값(false)만 본다 — ref로 최신 값을 읽는다.
+  const mergeDismissedRef = useRef(false);
+  function setMergeDismissed(v: boolean) {
+    mergeDismissedRef.current = v;
+    setMergeDismissedState(v);
+  }
+
   const [phoneGateAccountId, setPhoneGateAccountId] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
   const [addressBase, setAddressBase] = useState("");
@@ -111,11 +128,17 @@ export default function SessionWatcher() {
       if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
         void ensureAccountForCurrentUser().then((account) => {
           setPhoneGateAccountId(account && account.isSocial && !account.phone ? account.id : null);
+          if (account?.wasCreated && !mergeDismissedRef.current) {
+            void checkMergeableAccountByEmail().then((match) => {
+              if (match) setMergePromptEmail(match.email);
+            });
+          }
         });
         return;
       }
       if (event !== "SIGNED_OUT") return;
       setPhoneGateAccountId(null);
+      setMergePromptEmail(null);
       if (window.location.pathname.startsWith("/login")) return;
       if (window.location.pathname.startsWith("/reset-password")) return;
       window.location.href = "/login?expired=1";
@@ -144,6 +167,63 @@ export default function SessionWatcher() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleMergeConfirm() {
+    if (!mergePromptEmail || mergeSubmitting) return;
+    if (!mergePassword) {
+      setMergeMessage({ type: "error", text: "비밀번호를 입력해주세요" });
+      return;
+    }
+    setMergeSubmitting(true);
+    setMergeMessage(null);
+    try {
+      await mergeViaPasswordVerification(mergePromptEmail, mergePassword);
+      // 병합 후 my_account_id()가 이 세션을 병합 대상 계정으로 resolve하도록, 지금까지
+      // 읽어들인 화면 상태를 전부 버리고 새로 시작한다(수동 연동 흐름과 동일한 이유).
+      window.location.href = "/";
+    } catch (e: any) {
+      setMergeSubmitting(false);
+      setMergeMessage({ type: "error", text: e.message ?? "연동에 실패했어요" });
+    }
+  }
+
+  function handleMergeSkip() {
+    setMergeDismissed(true);
+    setMergePromptEmail(null);
+    setMergePassword("");
+    setMergeMessage(null);
+  }
+
+  if (mergePromptEmail) {
+    return (
+      <div className="sheet-overlay">
+        <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet-title">이미 계정이 있어요</div>
+          <div className="perm-guide" style={{ margin: "0 0 12px" }}>
+            <b>{mergePromptEmail}</b>로 이미 가입된 계정이 있어요. 그 계정 비밀번호를 입력하면
+            지금 계정을 그쪽으로 합쳐드려요. 원하지 않으면 건너뛰고 새 계정으로 계속 쓸 수 있어요.
+          </div>
+          <input
+            className="input-field"
+            type="password"
+            placeholder="기존 계정 비밀번호"
+            value={mergePassword}
+            onChange={(e) => setMergePassword(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleMergeConfirm()}
+          />
+          {mergeMessage && <div className={`auth-msg ${mergeMessage.type}`} style={{ marginTop: 8 }}>{mergeMessage.text}</div>}
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            <button className="ghost-btn" onClick={handleMergeSkip} disabled={mergeSubmitting}>
+              건너뛰기
+            </button>
+            <button className="primary-btn" onClick={handleMergeConfirm} disabled={mergeSubmitting}>
+              {mergeSubmitting ? "합치는 중..." : "계정 합치기"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (phoneGateAccountId) {

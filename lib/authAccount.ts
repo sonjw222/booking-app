@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 
-export type EnsuredAccount = { id: string; phone: string | null; isSocial: boolean };
+export type EnsuredAccount = { id: string; phone: string | null; isSocial: boolean; wasCreated: boolean };
 
 // 소셜 로그인(카카오/네이버/애플/구글)으로 처음 로그인한 사용자는 auth.users 행만 생기고
 // 우리 앱의 accounts/profiles 행은 아무도 만들어주지 않는다 — 이메일 회원가입
@@ -71,7 +71,7 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
       .eq("id", existingId)
       .maybeSingle();
     if (findErr) return null; // 조회 실패 시 조용히 넘어감(RLS 등) — 이후 실제 데이터 호출에서 다시 드러남
-    if (existing) return { id: existing.id, phone: existing.phone, isSocial };
+    if (existing) return { id: existing.id, phone: existing.phone, isSocial, wasCreated: false };
   }
 
   const meta = user.user_metadata ?? {};
@@ -90,7 +90,7 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
   }
 
   await supabase.from("profiles").insert({ account_id: account.id, name, is_primary: true });
-  return { id: account.id, phone: account.phone, isSocial };
+  return { id: account.id, phone: account.phone, isSocial, wasCreated: true };
 }
 
 // 소셜 가입 직후 "휴대폰 번호 입력" 모달(SessionWatcher)에서 호출 — phone은 필수, address는

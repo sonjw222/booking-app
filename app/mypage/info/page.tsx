@@ -228,22 +228,17 @@ export default function MyInfoPage() {
               들어와요.
             </div>
 
-            <div className="admin-card" style={{ marginBottom: 12 }}>
-              <div className="admin-row">
-                <span className="k">이 계정을 남기고 연동</span>
-                <span className="v">
-                  <button className="ghost-btn" onClick={handleCreateLinkCode} disabled={creatingCode}>
-                    {creatingCode ? "발급 중..." : "연동 코드 만들기"}
-                  </button>
-                </span>
-              </div>
-              {linkCode && (
-                <div className="admin-row">
-                  <span className="k">코드 (10분 유효)</span>
-                  <span className="v" style={{ fontWeight: 700, letterSpacing: 1 }}>{linkCode}</span>
+            <button className="ghost-btn" onClick={handleCreateLinkCode} disabled={creatingCode}>
+              {creatingCode ? "발급 중..." : "이 계정을 남기고 연동 코드 만들기"}
+            </button>
+            {linkCode && (
+              <div className="perm-guide" style={{ margin: "12px 0 0", textAlign: "center" }}>
+                코드 (10분 유효)
+                <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: 2, color: "var(--ink)", marginTop: 4 }}>
+                  {linkCode}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
             {linkCodeMessage && <div className={`auth-msg ${linkCodeMessage.type}`}>{linkCodeMessage.text}</div>}
             {linkCode && (
               <div className="perm-guide" style={{ margin: "0 0 8px" }}>
