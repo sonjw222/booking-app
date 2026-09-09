@@ -25,6 +25,15 @@
   이 호출을 추가했어야 함) — 이번 PR 코드/마이그레이션 어디에도 이 함수를 건드린 곳이
   없어 다른 세션 작업일 가능성을 먼저 확인(같은 live dev Supabase를 공유하므로) 후
   재적용해 원상복구.
+  **⚠ 이 복구 자체가 또 다른 회귀를 만듦(자체 발견·수정)**: 재적용한
+  `fix_sync_test_payment_center_member_draft_proposed.sql`은 그 이후 `add_confirm_real_
+  payment.sql`이 `confirm_test_payment()`를 공통 헬퍼(`_issue_membership_and_record_
+  payment`) 호출 방식으로 리팩터하기 *이전* 세대의 독립형(standalone) 버전이었다 —
+  재적용하면서 SEC-118(주문 금액 서버검증, 그 공통 헬퍼 안에 있음) 경로를 실수로
+  되돌려버림(`order-amount-verification.test.ts` 4건이 검출: 조작된 금액/쿠폰/포인트
+  주장이 더는 거부되지 않고 통과). `fix_confirm_test_payment_wrapper_regression.sql`로
+  최신 세대(공통 헬퍼 호출) 형태를 기준으로 `ensure_center_member()` 호출만 추가해 재수정
+  — 두 마감을 한 번에 만족(SEC-118 검증 유지 + SYNC-001 유지) 확인.
 
 ## 2026-09-10 — PR #129 CI 회귀 2건 추가 수정 (진짜 원인) + 테스트 픽스처 정리
 
