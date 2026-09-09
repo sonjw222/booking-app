@@ -71,7 +71,7 @@
   --radius-md: 13px;
   --radius-lg: 22px;
   --radius-sheet: 26px;
-  --page-gutter: 16px;
+  --page-gutter: 20px;
   --shadow-float: 0 6px 22px rgba(20,20,20,.10);
   --type-display: 28px;
   --type-title: 22px;
@@ -182,7 +182,7 @@ a { color: inherit; text-decoration: none; }
   padding-bottom: 70px; /* 하단 네비 높이만큼 여백 */
 }
 
-.header { padding: 14px 20px 14px; }
+.header { padding: 14px var(--page-gutter) 14px; }
 .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .location { display: flex; align-items: center; gap: 4px; font-size: 19px; font-weight: 800; letter-spacing: -0.3px; }
 .location .caret { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
@@ -552,14 +552,14 @@ a { color: inherit; text-decoration: none; }
 /* ============================================================
    홈 화면 하단 사업자정보 푸터 (전자상거래법 표시 의무 — 로그인 없이도 상시 노출)
    ============================================================ */
-.home-footer { padding: 20px 20px 4px; border-top: 1px solid var(--line); margin-top: 8px; }
+.home-footer { padding: 20px var(--page-gutter) 4px; border-top: 1px solid var(--line); margin-top: 8px; }
 .home-footer-links { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 10px; }
 .home-footer-links a { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); text-decoration: none; }
 
 /* ============================================================
    약관/정책 본문 (이용약관·개인정보처리방침·사업자정보·환불정책)
    ============================================================ */
-.legal-page { padding: 4px 20px 60px; font-size: 13.5px; line-height: 1.7; color: var(--ink); }
+.legal-page { padding: 4px var(--page-gutter) 60px; font-size: 13.5px; line-height: 1.7; color: var(--ink); }
 .legal-page .legal-updated { color: var(--ink-soft); font-size: 12.5px; margin-bottom: 16px; }
 .legal-page h2 { font-size: 15px; font-weight: 800; margin: 22px 0 8px; }
 .legal-page h2:first-of-type { margin-top: 4px; }
@@ -591,8 +591,8 @@ a { color: inherit; text-decoration: none; }
 /* ============================================================
    프로필 관리
    ============================================================ */
-.profiles-intro { padding: 4px 20px 16px; font-size: 13px; color: var(--ink-soft); font-weight: 600; line-height: 1.5; }
-.profile-list { padding: 0 20px; display: flex; flex-direction: column; gap: 10px; }
+.profiles-intro { padding: 4px var(--page-gutter) 16px; font-size: 13px; color: var(--ink-soft); font-weight: 600; line-height: 1.5; }
+.profile-list { padding: 0 var(--page-gutter); display: flex; flex-direction: column; gap: 10px; }
 .profile-item {
   display: flex; align-items: center; gap: 12px;
   background: var(--surface); border-radius: 14px; padding: 14px;
@@ -620,7 +620,7 @@ a { color: inherit; text-decoration: none; }
   border: 1.5px dashed var(--ink-soft); background: none; color: var(--accent);
   font: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer;
 }
-.add-profile-form { padding: 16px 20px 0; }
+.add-profile-form { padding: 16px var(--page-gutter) 0; }
 .add-profile-actions { display: flex; gap: 10px; margin-top: 4px; }
 
 /* ============================================================
@@ -633,7 +633,7 @@ a { color: inherit; text-decoration: none; }
 .mgr-mode-label { font-size: 13.5px; font-weight: 800; display: inline-flex; align-items: center; gap: 5px; }
 .mgr-mode-switch { font-size: 12px; font-weight: 700; opacity: 0.85; }
 
-.center-switcher { display: flex; gap: 8px; padding: 14px 20px 6px; overflow-x: auto; }
+.center-switcher { display: flex; gap: 8px; padding: 14px var(--page-gutter) 6px; overflow-x: auto; }
 .center-chip {
   flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
   padding: 9px 14px; border-radius: 999px; border: 1.5px solid var(--line);
@@ -722,7 +722,7 @@ a { color: inherit; text-decoration: none; }
 /* ============================================================
    매니저용: 수강권 예약조건 설정
    ============================================================ */
-.mgr-header { padding: 20px 20px 14px; }
+.mgr-header { padding: 20px var(--page-gutter) 14px; }
 .mgr-title { font-size: 19px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 6px; }
 .mgr-sub { font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; font-weight: 600; }
 
@@ -761,7 +761,7 @@ a { color: inherit; text-decoration: none; }
 /* ============================================================
    매니저용: 회원 진도표
    ============================================================ */
-.member-head { display: flex; align-items: center; gap: 12px; padding: 20px 20px 12px; }
+.member-head { display: flex; align-items: center; gap: 12px; padding: 20px var(--page-gutter) 12px; }
 .member-name { font-size: 16.5px; font-weight: 800; margin-bottom: 2px; }
 .member-meta { font-size: 12px; color: var(--ink-soft); font-weight: 600; }
 
@@ -796,8 +796,8 @@ a { color: inherit; text-decoration: none; }
 }
 .save-btn:disabled { background: var(--ink-soft); cursor: default; }
 
-.history-title { padding: 16px 20px 6px; font-size: 16px; font-weight: 800; }
-.history-list { padding: 0 20px 26px; display: flex; flex-direction: column; gap: 10px; }
+.history-title { padding: 16px var(--page-gutter) 6px; font-size: 16px; font-weight: 800; }
+.history-list { padding: 0 var(--page-gutter) 26px; display: flex; flex-direction: column; gap: 10px; }
 .history-row { display: flex; gap: 12px; background: var(--surface); border-radius: 12px; padding: 12px 14px; }
 .history-date { font-size: 13px; font-weight: 800; color: var(--accent); flex: 0 0 44px; }
 .history-body { flex: 1; }
@@ -889,7 +889,7 @@ a { color: inherit; text-decoration: none; }
    매니저 - 회원 관리 (/manager/members)
    ============================================================ */
 
-.mem-search { padding: 8px 20px 4px; }
+.mem-search { padding: 8px var(--page-gutter) 4px; }
 
 .mem-filters {
   display: flex;
@@ -947,7 +947,7 @@ a { color: inherit; text-decoration: none; }
 .text-btn:disabled { opacity: 0.5; }
 .text-btn.danger { color: var(--danger); }
 
-.mem-list { padding: 0 20px 40px; }
+.mem-list { padding: 0 var(--page-gutter) 40px; }
 
 .mem-row {
   width: 100%;
@@ -1076,7 +1076,7 @@ a { color: inherit; text-decoration: none; }
   flex: 0 0 auto;
 }
 
-.perm-list { padding: 0 20px 40px; }
+.perm-list { padding: 0 var(--page-gutter) 40px; }
 
 .perm-group {
   border-bottom: 1px solid var(--line);
@@ -1313,7 +1313,7 @@ a { color: inherit; text-decoration: none; }
 .bd-label { color: var(--text-dim); }
 .bd-value { color: var(--text); font-weight: 600; }
 
-.sales-list { padding: 0 20px 40px; }
+.sales-list { padding: 0 var(--page-gutter) 40px; }
 .sales-row {
   display: flex;
   align-items: center;
@@ -1488,7 +1488,7 @@ a { color: inherit; text-decoration: none; }
    매니저 - 진도표 기술 목록 (/manager/progress)
    ============================================================ */
 
-.prog-wrap { padding: 0 20px 20px; }
+.prog-wrap { padding: 0 var(--page-gutter) 20px; }
 
 .prog-add-top {
   display: flex;
@@ -1547,9 +1547,9 @@ a { color: inherit; text-decoration: none; }
 /* ============================================================
    휴무일 설정 (/manager/holidays)
    ============================================================ */
-.hol-add { display: flex; flex-direction: column; gap: 8px; padding: 12px 20px; }
+.hol-add { display: flex; flex-direction: column; gap: 8px; padding: 12px var(--page-gutter); }
 .hol-add .primary-btn.small { align-self: flex-end; }
-.hol-list { padding: 0 20px 40px; }
+.hol-list { padding: 0 var(--page-gutter) 40px; }
 .hol-row {
   display: flex; align-items: center; justify-content: space-between;
   padding: 13px 0; border-bottom: 1px solid var(--line);
@@ -1562,7 +1562,7 @@ a { color: inherit; text-decoration: none; }
 /* ============================================================
    진도 기록 (/manager/progress/record)
    ============================================================ */
-.prog-rec-wrap { padding: 0 20px; }
+.prog-rec-wrap { padding: 0 var(--page-gutter); }
 .prog-rec-group { margin-bottom: 12px; }
 .prog-rec-top { font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 6px; }
 .prog-rec-skills { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -1575,7 +1575,7 @@ a { color: inherit; text-decoration: none; }
 }
 .skill-chip.on { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
 
-.prog-hist { padding: 0 20px 20px; }
+.prog-hist { padding: 0 var(--page-gutter) 20px; }
 .prog-hist-day { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .prog-hist-date { flex: 0 0 44px; font-size: 13px; font-weight: 700; color: var(--accent); padding-top: 2px; }
 .prog-hist-body { flex: 1; min-width: 0; }
@@ -1641,7 +1641,7 @@ a { color: inherit; text-decoration: none; }
 .assign-confirm-member { font-size: 14px; font-weight: 800; color: var(--text); }
 .assign-confirm-class { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
 
-.fullhist { padding: 0 20px 20px; }
+.fullhist { padding: 0 var(--page-gutter) 20px; }
 .fullhist-day { margin-bottom: 14px; }
 .fullhist-date {
   font-size: 13px;
@@ -1672,7 +1672,7 @@ a { color: inherit; text-decoration: none; }
 /* ============================================================
    수강권 예약조건 (/manager/membership-rules)
    ============================================================ */
-.pass-list { padding: 0 20px 20px; }
+.pass-list { padding: 0 var(--page-gutter) 20px; }
 .pass-card {
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -1763,7 +1763,7 @@ a { color: inherit; text-decoration: none; }
   padding: 4px 20px 8px; font-size: 14px; color: var(--text);
   line-height: 1.7; white-space: pre-wrap;
 }
-.center-class-list { padding: 0 20px; }
+.center-class-list { padding: 0 var(--page-gutter); }
 .center-class-row {
   display: flex; align-items: center; justify-content: space-between;
   padding: 13px 0; border-bottom: 1px solid var(--line);
@@ -1953,7 +1953,7 @@ a.membership-card { text-decoration: none; display: block; }
    구조라 원형 대신 기존 사각 셀 그대로 채움색만 맞춘다. */
 .mypage-cal-cell.tappable.sel { background: var(--brand-soft); outline: none; }
 .mypage-cal-cell.tappable.sel .mypage-cal-day { color: var(--brand-ink); font-weight: 700; }
-.cal-detail { padding: 0 20px; }
+.cal-detail { padding: 0 var(--page-gutter); }
 .cal-detail-date { font-size: 15px; font-weight: 800; color: var(--text); margin: 8px 0 12px; }
 .cal-detail-card { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
 .cal-detail-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
@@ -2103,7 +2103,7 @@ a.membership-card { text-decoration: none; display: block; }
 .checkout-order-name { font-size: 15px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px; }
 .checkout-order-price { font-size: 15px; font-weight: 800; color: var(--text); }
 .checkout-order-detail { font-size: 12.5px; color: var(--text-dim); margin-top: 6px; }
-.pay-methods { display: flex; flex-direction: column; gap: 8px; padding: 0 20px; }
+.pay-methods { display: flex; flex-direction: column; gap: 8px; padding: 0 var(--page-gutter); }
 .pay-method { display: flex; align-items: center; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); cursor: pointer; font-size: 14px; color: var(--text); font-weight: 600; }
 .pay-method.on { border-color: var(--accent); background: var(--surface); }
 .pay-method-emoji { display: grid; place-items: center; width: 22px; height: 22px; flex: 0 0 auto; color: var(--ink-soft); }
@@ -2157,7 +2157,7 @@ a.membership-card { text-decoration: none; display: block; }
 
 
 /* 테마 설정 */
-.theme-options { display: flex; flex-direction: column; gap: 10px; padding: 0 20px; }
+.theme-options { display: flex; flex-direction: column; gap: 10px; padding: 0 var(--page-gutter); }
 .theme-option { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); cursor: pointer; text-align: left; }
 .theme-option.on { border-color: var(--accent); background: var(--surface); }
 .theme-swatch { width: 28px; height: 28px; border-radius: 8px; flex: 0 0 auto; border: 1px solid rgba(0,0,0,0.1); }
@@ -2175,7 +2175,7 @@ a.membership-card { text-decoration: none; display: block; }
 .noti-desc { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
 
 /* 센터 소개 - 블로그식 (회원 뷰) */
-.center-intro-blocks { padding: 0 20px; }
+.center-intro-blocks { padding: 0 var(--page-gutter); }
 .center-intro-text { font-size: 14px; color: var(--text); line-height: 1.7; margin: 0 0 12px; white-space: pre-wrap; }
 .center-intro-img { width: 100%; border-radius: 14px; margin: 0 0 14px; display: block; }
 
@@ -2341,7 +2341,7 @@ a.membership-card { text-decoration: none; display: block; }
 .cart-size-label { font-size: 12px; color: var(--text-dim); margin-right: 4px; }
 
 /* 보유 쿠폰 목록 */
-.coupon-list { display: flex; flex-direction: column; gap: 6px; padding: 8px 20px 0; }
+.coupon-list { display: flex; flex-direction: column; gap: 6px; padding: 8px var(--page-gutter) 0; }
 .coupon-item {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 11px 14px; border: 1px solid var(--line); border-radius: 10px;
@@ -2424,7 +2424,7 @@ a.membership-card { text-decoration: none; display: block; }
 .autobook-box { margin: 0 20px; padding: 14px 16px; background: var(--surface); border-radius: 12px; }
 
 /* 후기 */
-.review-list { display: flex; flex-direction: column; padding: 0 20px; }
+.review-list { display: flex; flex-direction: column; padding: 0 var(--page-gutter); }
 .review-item { padding: 14px 0; border-bottom: 1px solid var(--line); }
 .review-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .review-stars { font-size: 13px; color: var(--star); letter-spacing: 1px; }
@@ -2701,7 +2701,7 @@ a.membership-card { text-decoration: none; display: block; }
 .announce-detail-date { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 
 /* 알림 목록 */
-.noti-list { display: flex; flex-direction: column; padding: 0 20px; }
+.noti-list { display: flex; flex-direction: column; padding: 0 var(--page-gutter); }
 .noti-row {
   display: flex; align-items: flex-start; gap: 12px;
   padding: 14px 0; border-bottom: 1px solid var(--line); cursor: pointer;
@@ -3490,14 +3490,14 @@ a.membership-card { text-decoration: none; display: block; }
 .goods-card-content { min-width:0; flex:1; }
 .goods-card-actions { flex:none; }
 .goods-card-actions .quiet-action { min-width:52px; }
-.room-card-list { display:grid; gap:12px; padding:14px 20px 120px; }
+.room-card-list { display:grid; gap:12px; padding:14px var(--page-gutter) 120px; }
 .room-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--card-bg); box-shadow:0 8px 24px rgba(16,24,40,.035); }
 .room-card-main { min-width:0; display:grid; gap:5px; padding:0; border:0; background:transparent; text-align:left; }
 .room-card-name { font-size:17px; font-weight:780; }
 .room-card-memo,.room-card-address { color:var(--ink-soft); font-size:13px; line-height:1.45; }
 .room-card-actions { align-self:start; }
 .room-edit-sheet .map-location-btn { width:100%; margin-top:10px; }
-.assignment-log-list { display:grid; gap:10px; padding:0 20px 120px; }
+.assignment-log-list { display:grid; gap:10px; padding:0 var(--page-gutter) 120px; }
 .assignment-log { position:relative; padding:15px 16px 15px 19px; border:1px solid var(--line); border-radius:16px; background:var(--card-bg); overflow:hidden; }
 .assignment-log::before { content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--brand); }
 .assignment-log.action-admin_cancel::before,.assignment-log.action-admin_free_cancel::before { background:var(--danger); }

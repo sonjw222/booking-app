@@ -36,6 +36,7 @@ import {
 import { fetchStaff, fetchMyEffectivePermissionKeys, canSeeManagerMenu, type Staff } from "../../../lib/roles";
 import { fetchClassMemos, createClassMemo, updateClassMemo, deleteClassMemo, type ScheduleMemo } from "../../../lib/scheduleMemos";
 import { getMyAccountId } from "../../../lib/authAccount";
+import { formatMonthDayWeekday } from "../../../lib/kst";
 import { fetchMemberDetail, type MemberDetailData } from "../../../lib/members";
 import {
   fetchProducts, fetchRulesForProducts, findScheduleExcludedProducts, ruleToText,
@@ -1025,7 +1026,7 @@ export default function ClassManagePage() {
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
       {toast && <div className="toast">{toast}</div>}
 
-      <div className="menu-section-label">{month}월 {selectedDay}일 수업 ({dayClasses.length})</div>
+      <div className="menu-section-label">{formatMonthDayWeekday(year, month, selectedDay)} 수업 ({dayClasses.length})</div>
 
       {holidayDates.has(`${year}-${pad2(month)}-${pad2(selectedDay)}`) && (
         <div className="holiday-notice manager-holiday-notice">

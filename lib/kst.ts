@@ -29,3 +29,12 @@ export function getKstMonthUtcRange(year: number, month: number): { startUtcIso:
     endUtcIso: new Date(toKstIso(endDate, "00:00")).toISOString(),
   };
 }
+
+// 이미 KST 기준으로 확정된 연/월/일을 "9월 9일 (화)" 형태로 표시. 요일은 달력상 날짜에만
+// 의존해 머신 타임존과 무관하므로(위 경고와 달리 UTC 절대시각 변환이 필요 없는 경우),
+// new Date(year, month, day) 사용이 안전하다.
+export function formatMonthDayWeekday(year: number, month: number, day: number): string {
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  const weekday = weekdays[new Date(year, month - 1, day).getDay()];
+  return `${month}월 ${day}일 (${weekday})`;
+}

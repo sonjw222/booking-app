@@ -44,7 +44,11 @@ const KST_DT = new Intl.DateTimeFormat("ko-KR", {
   hour: "2-digit", minute: "2-digit", hour12: false,
 });
 function fmtDateTime(iso: string) {
-  return KST_DT.format(new Date(iso)).replace(/\. /g, "-").replace(".", "").replace(",", "");
+  // KST_DT 원본 출력은 "2026. 08. 07. 21:00"(점 3개) 형태라, 무조건 ". "을 전부 "-"로
+  // 바꾸면 날짜-시간 구분자까지 "-"가 돼버려 "2026-08-07-21:00"이 나온다(공백이어야 함,
+  // 이 파일의 when 타입 주석과 splitWhen()이 기대하는 형식이 깨짐). 날짜 3부분만 "-"로
+  // 잇고 마지막 구분자는 공백으로 남긴다.
+  return KST_DT.format(new Date(iso)).replace(/^(\d{4})\. (\d{2})\. (\d{2})\. (\d{2}:\d{2})$/, "$1-$2-$3 $4");
 }
 
 async function getMyContext(): Promise<{ accountId: string; profileId: string; name: string; phone: string | null; isMember: boolean; isManager: boolean; isPlatformAdmin: boolean }> {

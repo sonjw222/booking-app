@@ -11,6 +11,7 @@ import { fetchMyPage, type HistoryItem } from "../../lib/mypage";
 import { cancelReservation } from "../../lib/reservations";
 import Loading from "../components/Loading";
 import { memberFacingBadge, type ReservationType } from "../../lib/reservationTypes";
+import { formatMonthDayWeekday } from "../../lib/kst";
 import UiIcon from "../components/UiIcon";
 import SegmentedTabs from "../components/SegmentedTabs";
 import EmptyState from "../components/EmptyState";
@@ -32,8 +33,7 @@ function splitWhen(when: string) {
 function dateHeading(date: string) {
   const parsed = new Date(`${date}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return date;
-  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-  return `${parsed.getMonth() + 1}월 ${parsed.getDate()}일 ${weekdays[parsed.getDay()]}요일`;
+  return formatMonthDayWeekday(parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate());
 }
 
 export default function MyReservationsPage() {
