@@ -34,6 +34,13 @@
   주장이 더는 거부되지 않고 통과). `fix_confirm_test_payment_wrapper_regression.sql`로
   최신 세대(공통 헬퍼 호출) 형태를 기준으로 `ensure_center_member()` 호출만 추가해 재수정
   — 두 마감을 한 번에 만족(SEC-118 검증 유지 + SYNC-001 유지) 확인.
+- **위 SYNC-001 복구 자체가 새로운 통합테스트 경쟁 상태를 노출시킴**:
+  `manager-centers-privilege-escalation.test.ts`의 K 테스트가 `center_members`에 순수
+  `insert()`를 쓰는데, `ensure_center_member()`가 다시 호출되면서 다른 통합테스트 파일의
+  Mock 결제 흐름이 같은 (centerA, userA) 쌍으로 동시에 그 행을 만들어두는 경우가 CI에서
+  3회 연속 재현됨(23505 unique 위반) — 정적 데이터 잔재가 아니라 파일 간 공유 픽스처의
+  진짜 경쟁이었음. 존재하면 그 행을 그대로 쓰고 없을 때만 만들어서 직접 치우도록 K를
+  수정해 해결.
 
 ## 2026-09-10 — PR #129 CI 회귀 2건 추가 수정 (진짜 원인) + 테스트 픽스처 정리
 
