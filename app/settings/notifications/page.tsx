@@ -29,7 +29,7 @@ const ITEMS: { key: NotiPrefKey; label: string; desc: string; ready: boolean }[]
   { key: "reservation", label: "예약 확정·취소 알림", desc: "예약이 확정되거나 취소될 때 팝업으로 알려드려요", ready: true },
   { key: "waitlist", label: "대기 승격 알림", desc: "대기하던 수업에 자리가 났을 때 팝업으로 알려드려요", ready: true },
   { key: "reminder", label: "수업 리마인더", desc: "수업 시작 전 미리 팝업으로 알려드려요", ready: true },
-  { key: "marketing", label: "혜택·이벤트 알림", desc: "쿠폰, 이벤트 등 마케팅 소식 (준비 중)", ready: false },
+  { key: "marketing", label: "혜택·이벤트 알림", desc: "쿠폰, 이벤트 등 마케팅 소식", ready: true },
 ];
 
 export default function NotificationSettingsPage() {

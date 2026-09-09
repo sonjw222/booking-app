@@ -1141,6 +1141,13 @@ reserve_with_membership/admin_assign_reservation에 "같은 센터·같은 시�
   `dispatch-web-push`와 동일한 pg_cron(1분마다)+Edge Function 패턴으로 구현
   (`add_autocancel_scheduler.sql` + `supabase/functions/dispatch-autocancel`, 둘 다 적용·배포
   완료). 사용자 요청으로 새 켜기/끄기 토글(`autocancel_enabled`) 추가, 기본값 꺼짐.
+  **2026-09-09 배치 후 QA에서 치명적 버그 발견·수정**: `run_autocancel_sweep()`가
+  `cancel_source='SYSTEM'`을 넣으려 했는데 라이브 `reservations` 체크 제약조건은
+  `'MEMBER'/'ADMIN'/'HOLIDAY'`만 허용해서, 이 토글을 켠 순간 크론이 매분 에러로 실패하는
+  상태였음(제약조건 직접 조회로 재확인, 데이터 손상 없음 — 매칭되는 수업이 있을 때만
+  에러가 나고 트랜잭션이 롤백돼 부분 반영은 없었음. 이 시점엔 켜놓은 센터가 0개라 실사용
+  영향도 없었음). `'ADMIN'`으로 수정해 재적용 완료. 부수로 시/분이 둘 다 0이면 "시작 전"
+  조건 자체가 성립 불가해 절대 실행 안 되는 것도 발견 — 설정 화면에 경고문구 추가.
 - **수강권으로 볼 수 없는 수업도 표시**(`show_all_classes`) — `reserve_class()`/
   `reserve_with_membership()`가 각자 중복 구현하던 자격판정 로직을 공용 함수
   `is_membership_eligible_for_class()`로 뽑아 하나로 통합(이전 auto_book_membership vs
@@ -1199,6 +1206,15 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 팬아웃 패턴을 그대로 가져온 `create_marketing_message_safe()` RPC. `banners`(홈 화면 배너,
 수동 노출뿐)와도 다르고 `center_announcements`(센터별)와도 다른, 알림함/실시간 팝업/웹·네이티브
 푸시로 실제로 전달되는 플랫폼 단위 채널.
+
+**후속(2026-09-09, 발견 및 수정)**: `app/settings/notifications/page.tsx`의 `ITEMS` 배열에서
+"혜택·이벤트 알림" 항목이 `ready: false`로 하드코딩돼 있어 토글 버튼 자체가 비활성 상태였음
+(클릭이 전부 무시됨, 데스크 "(준비 중)" 문구도 그대로 남아있었음) — 이 기능이 실제로 완료된
+뒤에도 남아있던 잔재. `ready: true`로 수정하고 문구 정리. 수정 후 실사용자 계정을
+`is_platform_admin`으로 임시 승격해 라이브 테스트: 토글 ON 상태에서 마케팅 알림 발송 시
+팝업이 뜨고, OFF 상태에서는 알림함에는 기록되지만 팝업이 안 뜨는 것 모두 확인. 테스트로
+만든 `marketing_messages` 4건과 그 팬아웃 알림, 임시 승격한 `is_platform_admin`은 테스트
+종료 후 전부 롤백함.
 
 ### P1-13. (2026-08-14, 완료) 센터정보(`/manager/center-info`) 수정 권한이 "오너 전용" 주석과 실제 RLS가 불일치
 

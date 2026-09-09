@@ -209,6 +209,12 @@ export default function SettingsPage() {
               <div className="set-soon-note">폐강되면 확정·대기 예약이 모두 취소되고 수강권 횟수가
                 복구돼요. 회원에게는 알림이 가요 — 기본값은 꺼짐이라, 켜기 전엔 지금처럼 수업 관리
                 화면에서 수동으로 처리해주세요.</div>
+              {(s.autocancelHours ?? 0) === 0 && (s.autocancelMinutes ?? 0) === 0 && (
+                <div className="set-soon-note" style={{ color: "var(--warning)" }}>
+                  시간·분이 모두 0이면 "시작 전"이라는 조건 자체가 성립하지 않아 자동 폐강이 실행되지
+                  않아요 — 최소 몇 분 이상으로 설정해주세요.
+                </div>
+              )}
             </div>
           )}
 

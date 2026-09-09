@@ -87,7 +87,7 @@ begin
             end if;
 
             update reservations
-            set status = 'cancelled', cancel_source = 'SYSTEM', cancelled_at = now()
+            set status = 'cancelled', cancel_source = 'ADMIN', cancelled_at = now()
             where id = v_res.id;
 
             v_cancelled_reservations := v_cancelled_reservations + 1;
