@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-09-09 — facility.room.manage 권한 RLS 연결 SQL 적용 완료
+
+`fix_facility_room_manage_permission_wiring.sql`을 사용자가 라이브 DB에 적용, `pg_policies`
+대조로 "룸 매니저 삭제/생성/수정" 3개 정책이 `facility.room`/`facility.room.manage`/
+`is_platform_admin()` OR 조건으로 정상 재생성됐음을 확인. 자세한 내용은 [TODO.md P2-31](./TODO.md) 참고.
+
 ## 2026-09-09 — 저장 버튼 위계 수정 (디자인 정합성 B-3)
 
 `.header-action`(작은 텍스트 링크, 원래 용도는 시트/모달 열기)로 실제 폼 저장 액션을 구현한
