@@ -58,6 +58,8 @@ function toTimeStr(iso: string) {
 // 이 함수로 한 번만 조회한 뒤 두 함수에 넘기면, 매번 중복으로 auth.getUser()+accounts 조회를
 // 반복하지 않아도 됨 (예약 화면 성능 개선 — app/reservation/page.tsx의 load() 참고).
 export async function getMyAccountId(): Promise<string> {
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData.user) throw new Error("로그인이 필요해요");
   const accountId = await getMyAccountIdBase();
   if (!accountId) throw new Error("계정 정보를 찾을 수 없어요");
   return accountId;

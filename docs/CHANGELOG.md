@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## 2026-09-10 — PR #129 CI 회귀 2건 추가 수정 (진짜 원인) + 테스트 픽스처 정리
+
+앞서 "당일예약 취소마감 회귀"로 진단했던 것과 별개로, CI를 재실행하며 실제 원인 2건을 더
+찾아 수정:
+- **`tests/e2e/fixtures/pageHelpers.ts`의 `saveManagerSettings()`가 진짜 원인**이었음
+  (`button.header-action` 셀렉터를 찾다 60초 타임아웃) — B-1/B-3 디자인 정합성 커밋에서
+  `/manager/settings` 저장 버튼을 헤더 텍스트 링크에서 하단 `primary-btn`으로 옮겼는데
+  이 헬퍼가 갱신 안 됐던 것. 이 헬퍼를 쓰는 booking-deadline/booking-open-deadline/
+  cancel-deadline/daily-book-limit 스펙이 전부 이걸로 실패한 거였음(당일예약 SQL은
+  무관했음 — 그 SQL 수정 자체는 유효한 개선이라 유지).
+- **`lib/reservations.ts`의 `getMyAccountId()`가 계정 연동(account linking) 리팩터로
+  "비로그인" 케이스의 에러 메시지를 잃음**: 원래 `!authData.user`일 때 "로그인이
+  필요해요"를 명시적으로 던졌는데, 리팩터 후 그 체크가 사라지고 항상 "계정 정보를 찾을
+  수 없어요"만 던지게 됨 — `app/reservation/page.tsx`가 `error.includes("로그인")`로
+  분기하는 유일한 화면이라 비로그인 시 잘못된 에러 화면이 뜸(`post-login-return.spec.ts`가
+  검출). "비로그인" 체크를 되살려 수정. 전체 앱에서 이 에러 텍스트로 분기하는 곳은 이
+  한 곳뿐임을 확인(다른 lib/*.ts 17개 파일도 같은 리팩터를 겪었지만 전부 "로그인이
+  필요해요" 문구를 그대로 유지해 실제 영향 없음).
+- **`[TEST] 통합테스트 전용 10회권` 테스트 수강권 1804건(및 연결된 결제 1804건)이 "통합
+  테스트" 프로필에 정리 안 되고 누적**돼 있어 `daily-book-limit.spec.ts`가 수강권 다중
+  선택 UI로 빠져 실패 — 전부 삭제(실 회원 데이터 아님, 참조 예약 0건 확인 후 진행).
+  근본적인 테스트 정리 로직 부재는 여전히 미해결(사전에 알려진 이슈, 별도 후속 필요).
+
 ## 2026-09-09 — PR #129 CI가 잡은 당일예약 취소마감 회귀 수정
 
 PR #129 CI(`tests/e2e/settings/cancel-deadline.spec.ts`)에서 발견: 당일예약 취소마감
