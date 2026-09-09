@@ -133,9 +133,7 @@ export default function SettingsPage() {
       <div className="back-header">
         <a className="side" href="/manager">‹</a>
         <div className="title">운영 설정</div>
-        <button className="header-action" disabled={busy || !dirty || !canSave} onClick={handleSave}>
-          {busy ? "저장 중" : dirty ? "저장" : "저장됨"}
-        </button>
+        <div className="side" />
       </div>
 
       {!loading && activeCenter && !canSave && (
@@ -337,7 +335,15 @@ export default function SettingsPage() {
             수강권별로 예약 가능한 수업만 걸러 보여주려면 서버 쪽 자격 판정 로직을 그대로
             재사용하는 별도 작업이 필요해요.</div>
 
-          <div style={{ height: 40 }} />
+          <div style={{ padding: "20px 20px 40px" }}>
+            <button
+              className="primary-btn"
+              disabled={busy || !dirty || !canSave}
+              onClick={handleSave}
+            >
+              {busy ? "저장 중" : dirty ? "저장" : "저장됨"}
+            </button>
+          </div>
         </div>
       )}
     </div>
