@@ -4023,12 +4023,8 @@ a.membership-card { text-decoration: none; display: block; }
 .center-detail-v2 .center-bar-btn { min-height: 52px; padding: 0 12px; border-radius: var(--radius-md); box-shadow: 0 5px 18px rgba(20,20,20,.12); }
 .center-detail-v2 .center-bar-btn.buy { border: 1px solid var(--line); background: var(--card-bg); }
 
-.commerce-page .back-header,
-.purchase-page-v2 .back-header { justify-content: flex-start; gap: 10px; }
-.commerce-page .back-header .title,
-.purchase-page-v2 .back-header .title { flex: 1; text-align: left; font-size: 28px; }
-.commerce-page .back-header .side:last-child,
-.purchase-page-v2 .back-header .side:last-child { display: none; }
+/* 2026-09-09: 뒤로가기 버튼이 있는 서브 화면이라 헤더는 다른 서브 화면과 같은 기본
+   .back-header(소형·중앙형)를 쓴다(디자인 정합성 B-1) — 예전엔 대형 좌측 타이틀이었음. */
 .commerce-title { display: flex; align-items: baseline; gap: 8px; padding: 24px var(--page-gutter) 12px; }
 .commerce-title strong { font-size: 19px; }
 .commerce-title span { color: var(--ink-soft); font-size: 12px; }
