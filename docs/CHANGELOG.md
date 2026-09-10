@@ -1,5 +1,112 @@
 # CHANGELOG
 
+## 2026-09-10 — iOS 네이티브 푸시: Firebase iOS SDK(FCM) 연동
+
+`ios/`를 이번엔 읽기 전용이 아니라 직접 수정(사용자가 Firebase Console에 iOS 앱
+`com.mwhabit.app` 등록 + APNs 인증 키 등록(Sandbox/Production) + Xcode Signing &
+Capabilities(Push Notifications, Background Modes > Remote notifications)를 전부
+마친 뒤 요청함). 이전 항목("FCM 네이티브 푸시 실발송 버그 수정")에서 남겨뒀던 iOS
+갭 — Capacitor `push-notifications`가 iOS에서 주는 값이 FCM 토큰이 아니라 APNs
+원시 디바이스 토큰이라 FCM이 그 값을 거부하는 문제 — 를 해소했다.
+
+**구조 조사 결과**: 이 프로젝트는 `pod` CLI 자체가 없고(Podfile 없음) Capacitor 8의
+SPM 통합(`ios/App/CapApp-SPM`, 로컬 Swift Package로 Capacitor 플러그인들을 호스팅)만
+쓰고 있어, Firebase도 CocoaPods가 아니라 **Swift Package Manager로** 추가하는 게
+이 프로젝트 구조에 맞음(사용자 요청에 따라 두 방식을 저울질한 뒤 결정). 단,
+`CapApp-SPM/Package.swift`는 파일 자체에 "DO NOT MODIFY — managed by Capacitor CLI
+commands"라고 적혀 있고 `npx cap sync`가 설치된 Capacitor npm 플러그인만 보고 자동
+재생성하는 파일이라(Firebase는 npm 플러그인이 아님) 거기 넣으면 다음 sync 때
+사라질 위험이 있어, **`App.xcodeproj` 프로젝트 레벨에 직접** `XCRemoteSwiftPackageReference`
+(`firebase-ios-sdk`, upToNextMajor 11.0.0)와 `FirebaseCore`/`FirebaseMessaging`
+product dependency를 추가했다(`project.pbxproj` 직접 편집 — 이미 사용자가 Xcode로
+Signing/Push Notifications/Background Modes를 설정해둔 상태라 그 엔트리들은 건드리지
+않고 필요한 5개 섹션에만 추가: PBXBuildFile, PBXFileReference, PBXFrameworksBuildPhase,
+target의 packageProductDependencies, PBXProject의 packageReferences,
+XCRemoteSwiftPackageReference/XCSwiftPackageProductDependency 신규 섹션).
+
+**Swift 코드 변경**:
+- `AppDelegate.swift`: `FirebaseApp.configure()`를 `didFinishLaunchingWithOptions`
+  한 곳에서만 호출(중복 호출 방지) + `Messaging.messaging().delegate = self`.
+  `didRegisterForRemoteNotificationsWithDeviceToken`에서 `Messaging.messaging().apnsToken`에
+  APNs 토큰을 넘겨 FCM 토큰으로 교환(공식 방식) — 이 콜백 자체가 기존엔 이 파일에
+  전혀 없어서 공식 `@capacitor/push-notifications`가 요구하는
+  `.capacitorDidRegisterForRemoteNotifications` NotificationCenter 브릿지도 같이
+  추가함(빠져있던 필수 연동, Capacitor 공식 문서 기준). `MessagingDelegate` 확장을
+  추가해 `didReceiveRegistrationToken`으로 실제 FCM 등록 토큰을 받음.
+- 신규 `ios/App/App/FcmTokenPlugin.swift`: Android의
+  `android/app/src/main/java/com/mwhabit/app/AppSettingsPlugin.java`와 동일한
+  패턴(이 앱 전용 최소 커스텀 Capacitor 플러그인, 외부 npm 패키지
+  `@capacitor-firebase/messaging` 추가 대신 직접 작성) — AppDelegate가 받은 FCM
+  토큰을 `"fcmTokenReceived"` 이벤트로 JS에 전달, `getToken()`으로 이미 발급된
+  토큰을 즉시 조회하는 메서드도 제공(레이스 대비).
+- `SceneDelegate.swift`: `FcmTokenPlugin`이 npm 패키지가 아니라
+  `capacitor.config.json`의 자동 생성 `packageClassList`에 실리지 않으므로,
+  bridge가 만들어진 직후 `bridge?.registerPluginInstance(FcmTokenPlugin())`으로
+  직접 등록(Android `MainActivity.registerPlugin()`과 동일한 역할) — `cap sync`를
+  다시 돌려도 지워지지 않는 방식.
+- `lib/nativePush.ts`: `@capacitor/core`의 `registerPlugin("FcmToken")`으로 위
+  네이티브 플러그인을 연결, `enableNativePush()`가 플랫폼별로 분기하도록 수정 —
+  Android는 기존 그대로 공식 `PushNotifications`의 `"registration"` 이벤트(이미
+  FCM 토큰) 사용, iOS는 새 `FcmToken.addListener("fcmTokenReceived", ...)` +
+  `FcmToken.getToken()`(캐시값 즉시 조회)로 받은 값을 저장. `native_push_tokens`
+  upsert 로직 자체(`onConflict: "token"`)는 그대로 재사용 — 어느 값을 넘기느냐만
+  갈림. `disableNativePush()`/`registerNativePushTapHandler()`는 플랫폼 무관이라
+  변경 없음.
+
+**검증**: `xcodebuild -project ios/App/App.xcodeproj -scheme App -sdk iphonesimulator
+-destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build` —
+Firebase iOS SDK 11.15.0을 SPM으로 실제로 resolve하고 **BUILD SUCCEEDED**까지 확인
+(위 pbxproj 편집이 구조적으로 올바르고 Swift 코드가 실제로 컴파일됨을 증명 — 단
+시뮬레이터에서는 APNs/FCM 등록 자체가 Apple 정책상 항상 실패하므로 이건 컴파일
+검증일 뿐, 실제 푸시 수신은 실기기에서만 확인 가능하고 아직 안 함,
+`docs/TODO.md` P1-3c 12(f) 참고). `npx cap sync ios` 재실행해도 우리 변경이 지워지지
+않음을 확인(`capacitor.config.json`/`CapApp-SPM/Package.swift`만 재생성되는데 둘 다
+이 작업과 무관 — 의도한 대로 그 파일들에 의존하지 않게 설계함). `npm run build` 통과.
+사용자가 이미 만든 `App.entitlements`/`GoogleService-Info.plist`/Info.plist의
+Signing·capability·권한 설명 문구는 전혀 건드리지 않음.
+
+변경 파일: `ios/App/App.xcodeproj/project.pbxproj`, `ios/App/App/AppDelegate.swift`,
+`ios/App/App/SceneDelegate.swift`, 신규 `ios/App/App/FcmTokenPlugin.swift`,
+`lib/nativePush.ts`. 새 SQL 마이그레이션 없음. `ios/App/App/Info.plist`,
+`App.entitlements`, `GoogleService-Info.plist`는 사용자가 이미 만들어둔 상태 그대로
+(내용 출력·수정 안 함). Android 쪽은 전혀 건드리지 않음.
+
+## 2026-09-10 — FCM 네이티브 푸시 실발송 버그 수정(시크릿 이름 불일치) + 로그아웃 시 토큰 해제 + 테스트 발송 경로
+
+`supabase/functions/send-web-push/index.ts`는 이미 FCM HTTP v1 발송 코드(서비스 계정
+JWT 서명 → OAuth2 access token 교환 → `messages:send` 호출, jose 라이브러리 사용)를
+갖고 있었지만, 시크릿을 `FCM_PROJECT_ID`/`FCM_CLIENT_EMAIL`/`FCM_PRIVATE_KEY`로 읽고
+있었던 반면 실제 Supabase에 등록된 시크릿 이름은 `FIREBASE_PROJECT_ID`/
+`FIREBASE_CLIENT_EMAIL`/`FIREBASE_PRIVATE_KEY`였다 — 이름이 안 맞아 `fcmConfigured`가
+항상 false로 평가되어 네이티브 푸시(Android/iOS 앱)가 조용히 전송되지 않던 상태였음(웹
+푸시는 별개 경로라 영향 없었음). 세 가지를 고침:
+1. **환경변수 이름을 실제 등록된 `FIREBASE_*`로 수정**하고 재배포(`supabase functions
+   deploy send-web-push`). 가짜 토큰으로 실제 호출까지 확인 — OAuth2 access token 발급에
+   성공한 뒤 FCM이 `INVALID_ARGUMENT`(가짜 토큰이라 당연함)를 반환, 즉 자격 증명·서명·API
+   호출 경로 전체가 정상 동작함을 검증(실 기기 토큰이 없어 실제 수신까지는 확인 못 함).
+2. **FCM 에러코드 `INVALID_ARGUMENT`도 무효 토큰으로 취급**해 `native_push_tokens`에서
+   삭제하도록 추가(기존엔 `UNREGISTERED`/`NOT_FOUND`만 처리).
+3. **테스트 발송 분기 추가**: 요청 본문에 `{"testToken": "..."}`가 있으면 `notifications`
+   큐 스윕을 건너뛰고 그 토큰 하나에만 즉시 발송 — pg_cron이 매분 보내는 본문은 항상
+   `{}`라 일반 발송 경로와 절대 겹치지 않음.
+4. **로그아웃 시 네이티브 푸시 토큰 해제**: `lib/mypage.ts`의 `logout()`과
+   `app/mypage/info/page.tsx`의 "로그아웃하고 다시 로그인하기" 버튼이 `signOut()`보다
+   먼저 `disableNativePush()`를 호출하도록 수정. 안 하면 같은 기기에서 다른 계정으로
+   재로그인할 때 `native_push_tokens`의 UPDATE RLS(계정 본인 소유 행만)에 막혀 토큰
+   upsert가 실패할 수 있었고, 로그아웃 후에도 이전 계정이 그 기기로 계속 푸시를 받는
+   문제도 있었음.
+
+**iOS는 이 수정과 무관하게 여전히 실제 FCM 수신이 안 됨** — Capacitor
+`push-notifications`가 iOS에서 주는 값은 FCM 토큰이 아니라 순수 APNs 디바이스 토큰이고,
+`ios/`에 Firebase iOS SDK(`FirebaseMessaging`)가 연동돼 있지 않아(Podfile 없음)
+그 값을 FCM 토큰으로 교환할 수 없음. `ios/`는 이번 작업에서 읽기 전용으로 다뤘고(사용자가
+로컬 Xcode로 직접 관리 중), Xcode 작업이 필요해 `docs/TODO.md` P1-3c 8-1번에 남김.
+
+변경 파일: `supabase/functions/send-web-push/index.ts`(env 이름 수정, INVALID_ARGUMENT
+처리, testToken 분기), `lib/mypage.ts`(`logout()`), `app/mypage/info/page.tsx`(재로그인
+버튼). 새 SQL 마이그레이션 없음(`native_push_tokens` 테이블은 기존 `add_native_push_tokens.sql`
+그대로 재사용). `npm run build` 통과.
+
 ## 2026-09-10 — iOS 네이티브 화면 QA: 스플래시 잘림/색상 + 검색 자동확대 + 리스트 오버플로 수정
 
 iOS 시뮬레이터에서 신고된 3건 확인·수정:

@@ -13,6 +13,7 @@ import { supabase } from "../../../lib/supabaseClient";
 import { deactivateCurrentAccount } from "../../../lib/accountDeletion";
 import { fetchMyAccountInfo } from "../../../lib/mypage";
 import { createAccountLinkCode, linkAccountsByCode } from "../../../lib/accountLinking";
+import { disableNativePush } from "../../../lib/nativePush";
 
 const WITHDRAW_CONFIRM_PHRASE = "탈퇴합니다";
 const SYNTHETIC_EMAIL_SUFFIX = ".socialauth.invalid";
@@ -260,7 +261,18 @@ export default function MyInfoPage() {
             />
             {linkMessage && <div className={`auth-msg ${linkMessage.type}`}>{linkMessage.text}</div>}
             {linked ? (
-              <button className="primary-btn" onClick={async () => { await supabase.auth.signOut(); window.location.href = "/login"; }}>
+              <button
+                className="primary-btn"
+                onClick={async () => {
+                  // 같은 기기에서 다른 계정으로 재로그인하는 흐름이라 signOut() 전에 이 기기의
+                  // 네이티브 푸시 토큰을 반드시 떼어내야 한다 — 안 하면 새 계정이 같은 기기에서
+                  // 토큰을 upsert할 때 RLS(본인 소유 행만 수정 가능)에 막힐 수 있다(lib/mypage.ts
+                  // logout()과 동일한 이유, disableNativePush 참고).
+                  await disableNativePush().catch(() => {});
+                  await supabase.auth.signOut();
+                  window.location.href = "/login";
+                }}
+              >
                 로그아웃하고 다시 로그인하기
               </button>
             ) : (
