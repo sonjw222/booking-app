@@ -141,6 +141,33 @@ JWT 서명 → OAuth2 access token 교환 → `messages:send` 호출, jose 라�
 버튼). 새 SQL 마이그레이션 없음(`native_push_tokens` 테이블은 기존 `add_native_push_tokens.sql`
 그대로 재사용). `npm run build` 통과.
 
+## 2026-09-10 — Android 권한/네이티브 접근 감사: CAMERA 미사용 권한 삭제 + 권한 영구거부 시 설정 이동 버튼 추가
+
+권한/네이티브 접근 전체 감사(위치/카메라/사진/알림). 핵심 발견: 이 앱은 `@capacitor/camera`,
+`@capacitor/geolocation` JS 플러그인을 쓰지 않고 평범한 웹 API(`navigator.geolocation`,
+`<input type="file">`)만 쓰는데, Capacitor 8.x의 기본 `BridgeWebChromeClient`
+(`node_modules/@capacitor/android` 소스로 직접 확인)가 `onGeolocationPermissionsShowPrompt`/
+`onShowFileChooser`를 이미 구현해놔서 이 웹 API 호출 시점에 자동으로 실제 OS 런타임 권한
+다이얼로그·Android 13+ 포토피커를 띄운다 — 앱 시작 시 한꺼번에 권한을 묻는 코드도 없음
+(`MainActivity`가 원래 빈 `BridgeActivity` 서브클래스). 즉 요구사항 2/3/4/5/8은 이미
+충족돼 있었고, 실제로 고친 것은 두 가지뿐:
+- **`CAMERA` 권한 삭제**(`AndroidManifest.xml`): `capture` 속성이 쓰인 `<input type="file">`이
+  코드 전체에 0건, `getUserMedia` 호출도 0건이라 이 권한을 트리거할 경로가 아예 없음(완전히
+  죽은 선언, least-privilege 위반) — 확인 후 삭제.
+- **권한 영구거부("다시 묻지 않음") 후 복구 경로 추가**: 위치(`app/manager/center-info/page.tsx`
+  "현재위치")와 알림(`app/settings/notifications/page.tsx` 푸시 토글)이 거부 시 안내 문구만
+  보여주고 실제로 다시 요청할 방법이 없던 것을 고쳐, 거부 상태에서 "설정에서 권한 열기" 버튼이
+  뜨도록 함. Capacitor 코어/`@capacitor/push-notifications`에 이걸 여는 API가 없어(공식
+  플러그인 아님) 최소 네이티브 플러그인 하나(`android/app/src/main/java/com/mwhabit/app/
+  AppSettingsPlugin.java`, `ACTION_APPLICATION_DETAILS_SETTINGS` 인텐트 1개 메서드)와
+  웹 쪽 래퍼(`lib/nativeAppSettings.ts`)를 추가 — `MainActivity`에 `registerPlugin()` 1줄.
+  iOS는 건드리지 않음.
+
+`lib/nativePush.ts`(푸시 권한 요청 타이밍 — 부팅 시 X, 설정 화면 토글 시에만)와
+`app/components/CapacitorBootstrap.tsx`(부팅 시 권한 요청 없음)는 확인만 하고 변경 없음 —
+이미 요구사항대로 동작 중. `npm run build` 및 `cd android && ./gradlew assembleDebug` 모두
+통과. `ios/` 미변경.
+
 ## 2026-09-10 — iOS 네이티브 화면 QA: 스플래시 잘림/색상 + 검색 자동확대 + 리스트 오버플로 수정
 
 iOS 시뮬레이터에서 신고된 3건 확인·수정:
