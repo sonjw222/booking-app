@@ -2564,6 +2564,26 @@ PR #86(UI/UX 감사 배치, 이 PR은 예약/한도 로직을 전혀 건드리�
 정리가 스킵되는 게 근본 원인이라 언제든 다시 쌓인다 — 정기 정리 스크립트를 cron이나 CI
 후처리로 실제로 돌리는 방안이 필요.
 
+### P2-32. (신규, 2026-09-10, 완료) "매달 자동" 수강권(rolling_month) 신규 기능
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **완료.** `add_rolling_month_product_expiry.sql`(적용 완료). 상품에 컷오프
+일자를 정해두면 구매 시점에 따라 자동으로 이번 달/다음 달 수강권으로 배정되고, 다음 달로
+넘어가면 원칙적으로 그 달 1일 전까지 예약에 못 쓰게 `memberships.starts_at`을 체크(센터가
+`rolling_month_allow_early_use`로 완화 가능). |
+| 완료 조건 | `products.expiry_mode`에 4번째 값 추가, `fulfill_order`/`_issue_membership_
+and_record_payment`/`reserve_class`/`reserve_with_membership`/`usable_memberships_for_
+classes`/`auto_book_membership` 전부 starts_at 인지. 관리자 상품 생성 화면(`ExpiryOptionField`
+공용 컴포넌트) + 마이페이지 "아직 시작 안 함" 안내. |
+| 미해결로 남긴 것 | 이 기능에 대한 자동 테스트(unit/integration/e2e)를 따로 안 만듦 —
+브라우저로 상품 생성 1건 + SQL로 날짜 계산 3가지 케이스만 직접 검증함. 회귀 방지용 정식
+테스트 커버리지는 후속 필요. |
+| 근거 파일 | `add_rolling_month_product_expiry.sql`, `lib/passes.ts`, `lib/mypage.ts`,
+`app/components/ExpiryOptionField.tsx`, `app/manager/goods/page.tsx`,
+`app/manager/membership-rules/page.tsx`, `app/mypage/page.tsx` |
+
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
 
 ### P3-1. 수업 구분과 복수 강사 배정

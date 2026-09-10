@@ -19,6 +19,7 @@ export type Membership = {
   totalCount: number;
   remainingCount: number;
   expiresAt: string | null; // "2026-10-31", null = 기간 무제한
+  startsAt: string | null; // "2026-06-01", null = 제한 없음(구매 즉시 사용 가능). rolling_month 상품 전용(add_rolling_month_product_expiry.sql)
   createdAt: string; // 구매 시각 (환불 24시간 판단용)
   profileName: string; // 어느 프로필 것인지 (대표면 "")
 };
@@ -121,7 +122,7 @@ export async function fetchMyPage() {
   // 수강권 + 상품 (모든 프로필)
   const { data: memRows, error: memErr } = await supabase
     .from("memberships")
-    .select("id, profile_id, bound_profile_id, center_id, product_id, product_name, total_count, remaining_count, expires_at, created_at, centers(name), products(product_kind, unlimited)")
+    .select("id, profile_id, bound_profile_id, center_id, product_id, product_name, total_count, remaining_count, expires_at, starts_at, created_at, centers(name), products(product_kind, unlimited)")
     .in("profile_id", profileIds)
     .neq("status", "refunded")
     .order("expires_at", { ascending: true });
@@ -168,6 +169,7 @@ export async function fetchMyPage() {
       totalCount: m.total_count,
       remainingCount: m.remaining_count,
       expiresAt: m.expires_at,
+      startsAt: m.starts_at ?? null,
       createdAt: m.created_at,
       profileName: m.bound_profile_id ? (profileLabel[m.bound_profile_id] ?? "") : "",
     }));

@@ -25,6 +25,15 @@ function daysLeft(dateStr: string | null): number | null {
   return Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+// rolling_month 상품(add_rolling_month_product_expiry.sql)이 다음 달로 넘어가면서
+// starts_at이 미래로 찍힌 경우 — 그날이 되기 전까지는 예약에 못 쓴다(예약 RPC들이
+// 서버에서도 동일하게 막음, 이건 그 이유를 화면에 미리 알려주는 용도).
+function notYetStarted(startsAt: string | null): boolean {
+  if (!startsAt) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return startsAt > today;
+}
+
 export default function MyPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [memberships, setMemberships] = useState<Membership[]>([]);
@@ -117,6 +126,7 @@ export default function MyPage() {
         const renderCard = (m: Membership, isGoods: boolean) => {
           const pct = m.totalCount > 0 ? (m.remainingCount / m.totalCount) * 100 : 0;
           const left = daysLeft(m.expiresAt);
+          const pending = notYetStarted(m.startsAt);
           return (
             <a key={m.id} className={`membership-card ${isGoods ? "goods" : ""}`} href={`/reservation?center=${m.centerId}`}>
               <div className="name">
@@ -132,11 +142,13 @@ export default function MyPage() {
                 </div>
               )}
               <div className="expire">
-                {left == null
-                  ? "기간 무제한"
-                  : <>{m.expiresAt}까지 · {left > 0 ? `${left}일 남음` : <span className="is-error-text">만료됨</span>}</>}
+                {pending
+                  ? <span className="is-error-text">{m.startsAt}부터 사용 가능해요</span>
+                  : left == null
+                    ? "기간 무제한"
+                    : <>{m.expiresAt}까지 · {left > 0 ? `${left}일 남음` : <span className="is-error-text">만료됨</span>}</>}
               </div>
-              {!isGoods && <div className="membership-cta">이 수강권으로 예약하기 ›</div>}
+              {!isGoods && !pending && <div className="membership-cta">이 수강권으로 예약하기 ›</div>}
               {refundEligibility(m).ok && (
                 <button className="membership-refund" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRefund(m); }}>
                   환불하기 (24시간 이내·미사용)

@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-09-10 — "매달 자동" 수강권(rolling_month) 신규 기능
+
+매달 새 상품을 만들어야 했던 "9월 수강권" 같은 케이스를 일반화 — 상품에 컷오프 일자(1~31)를
+하나 정해두면 구매 시점에 따라 자동으로 이번 달/다음 달 수강권으로 배정되고 만료일도 그 달
+말일로 자동 계산됨(`products.expiry_mode='rolling_month'`, 기존 none/days/date 3가지 방식에
+네 번째로 추가). 다음 달로 넘어간 경우 원칙적으로 그 달 1일이 되기 전까지는 예약에 못 쓰게
+`memberships.starts_at`을 새로 도입(기본 동작, 사용자 확인) — `rolling_month_allow_early_use`
+토글로 센터가 "즉시 사용 허용"으로 완화할 수도 있음. `fulfill_order()`/`_issue_membership_
+and_record_payment()`/`reserve_class()`/`reserve_with_membership()`/`usable_memberships_
+for_classes()`/`auto_book_membership()` 전부 라이브 정의 기준으로 수정(add_rolling_month_
+product_expiry.sql). 관리자 상품 생성 화면(수강권·상품 공용 `ExpiryOptionField`)에 "매달 자동"
+옵션 추가, 회원 마이페이지에 "아직 시작 안 함" 안내 추가. 브라우저로 실제 상품 생성까지
+검증(DB 값 확인 포함).
+
 ## 2026-09-10 — PR #129 통합테스트에서 회귀 2건 추가 발견·수정
 
 - **내가 만든 "당일예약 회귀 수정" 자체가 또 다른 회귀를 만듦**: 조건을 "정상 계산된

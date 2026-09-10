@@ -29,7 +29,7 @@ export default function GoodsPage() {
   const [pName, setPName] = useState("");
   const [pPrice, setPPrice] = useState("");
   const [unlimited, setUnlimited] = useState(false);
-  const [pExpiry, setPExpiry] = useState<ExpiryOptionValue>({ mode: "none", days: "", date: "" });
+  const [pExpiry, setPExpiry] = useState<ExpiryOptionValue>({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
   const [pCount, setPCount] = useState("");
   const [pDesc, setPDesc] = useState("");
   const [pSizes, setPSizes] = useState("");
@@ -85,16 +85,22 @@ export default function GoodsPage() {
     if (!unlimited && num(pCount) === 0) { setError("횟수를 입력해주세요"); return; }
     if (pExpiry.mode === "days" && !pExpiry.days.trim()) { setError("만료까지 며칠인지 입력해주세요"); return; }
     if (pExpiry.mode === "date" && !pExpiry.date) { setError("만료일을 선택해주세요"); return; }
+    if (pExpiry.mode === "rolling_month" && (!pExpiry.cutoffDay.trim() || num(pExpiry.cutoffDay) < 1 || num(pExpiry.cutoffDay) > 31)) {
+      setError("며칠부터 다음 달로 칠지 1~31 사이로 입력해주세요"); return;
+    }
     setBusy(true);
     try {
       const sizeArr = pSizes.split(",").map((s) => s.trim()).filter(Boolean);
-      const expiry = { mode: pExpiry.mode, days: pExpiry.mode === "days" ? num(pExpiry.days) : null, date: pExpiry.mode === "date" ? pExpiry.date : null };
+      const expiry = {
+        mode: pExpiry.mode, days: pExpiry.mode === "days" ? num(pExpiry.days) : null, date: pExpiry.mode === "date" ? pExpiry.date : null,
+        cutoffDay: pExpiry.mode === "rolling_month" ? num(pExpiry.cutoffDay) : null, allowEarlyUse: pExpiry.allowEarlyUse,
+      };
       if (editId) {
         await updateProduct(editId, pName.trim(), num(pPrice), num(pCount), unlimited, { description: pDesc.trim(), sizes: sizeArr, expiry });
       } else {
         await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "goods", unlimited, { description: pDesc.trim(), sizes: sizeArr, expiry });
       }
-      setPName(""); setPPrice(""); setPCount(""); setUnlimited(false); setPDesc(""); setPSizes(""); setPExpiry({ mode: "none", days: "", date: "" });
+      setPName(""); setPPrice(""); setPCount(""); setUnlimited(false); setPDesc(""); setPSizes(""); setPExpiry({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
       setSheet(false);
       showToast(editId ? "상품을 수정했어요" : "상품을 추가했어요");
       setEditId(null);
@@ -115,13 +121,15 @@ export default function GoodsPage() {
       mode: p.expiryMode ?? "none",
       days: p.expiryDays != null ? String(p.expiryDays) : "",
       date: p.expiryDate ?? "",
+      cutoffDay: p.rollingMonthCutoffDay != null ? String(p.rollingMonthCutoffDay) : "",
+      allowEarlyUse: p.rollingMonthAllowEarlyUse ?? false,
     });
     setSheet(true);
   }
 
   function openCreate() {
     setEditId(null);
-    setPName(""); setPPrice(""); setPCount(""); setUnlimited(false); setPDesc(""); setPSizes(""); setPExpiry({ mode: "none", days: "", date: "" });
+    setPName(""); setPPrice(""); setPCount(""); setUnlimited(false); setPDesc(""); setPSizes(""); setPExpiry({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
     setSheet(true);
   }
 

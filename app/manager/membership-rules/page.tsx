@@ -43,7 +43,7 @@ export default function MembershipRulesPage() {
   const [pPrice, setPPrice] = useState("");
   const [pCount, setPCount] = useState("");
   const [pUnlimited, setPUnlimited] = useState(false);
-  const [pExpiry, setPExpiry] = useState<ExpiryOptionValue>({ mode: "none", days: "", date: "" });
+  const [pExpiry, setPExpiry] = useState<ExpiryOptionValue>({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
 
   // 조건 추가 시트 (어느 상품에)
   const [ruleFor, setRuleFor] = useState<Product | null>(null);
@@ -116,7 +116,7 @@ export default function MembershipRulesPage() {
     setProdSheet(false); setEditingId(null);
     setPName(""); setPGroupLabel(""); setPDesc(""); setPPrice(""); setPCount("");
     setPAutoDays([]); setPAutoClasses([]);
-    setPUnlimited(false); setPExpiry({ mode: "none", days: "", date: "" });
+    setPUnlimited(false); setPExpiry({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
   }
 
   function openCreateSheet() {
@@ -138,6 +138,8 @@ export default function MembershipRulesPage() {
       mode: p.expiryMode,
       days: p.expiryDays ? String(p.expiryDays) : "",
       date: p.expiryDate ?? "",
+      cutoffDay: p.rollingMonthCutoffDay != null ? String(p.rollingMonthCutoffDay) : "",
+      allowEarlyUse: p.rollingMonthAllowEarlyUse ?? false,
     });
     setProdSheet(true);
   }
@@ -148,13 +150,19 @@ export default function MembershipRulesPage() {
     if (!pUnlimited && num(pCount) <= 0) { setError("총 횟수를 입력해주세요 (또는 '횟수 제한 없음'을 켜주세요)"); return; }
     if (pExpiry.mode === "days" && !pExpiry.days.trim()) { setError("만료까지 며칠인지 입력해주세요"); return; }
     if (pExpiry.mode === "date" && !pExpiry.date) { setError("만료일을 선택해주세요"); return; }
+    if (pExpiry.mode === "rolling_month" && (!pExpiry.cutoffDay.trim() || num(pExpiry.cutoffDay) < 1 || num(pExpiry.cutoffDay) > 31)) {
+      setError("며칠부터 다음 달로 칠지 1~31 사이로 입력해주세요"); return;
+    }
     setBusy(true);
     try {
       const extra = {
         autoBookDays: pAutoDays,
         unlimitedPass: pUnlimited,
         description: pDesc.trim(),
-        expiry: { mode: pExpiry.mode, days: pExpiry.mode === "days" ? num(pExpiry.days) : null, date: pExpiry.mode === "date" ? pExpiry.date : null },
+        expiry: {
+          mode: pExpiry.mode, days: pExpiry.mode === "days" ? num(pExpiry.days) : null, date: pExpiry.mode === "date" ? pExpiry.date : null,
+          cutoffDay: pExpiry.mode === "rolling_month" ? num(pExpiry.cutoffDay) : null, allowEarlyUse: pExpiry.allowEarlyUse,
+        },
         groupLabel: pGroupLabel.trim() || undefined,
       };
       if (editingId) {
