@@ -1,5 +1,55 @@
 # CHANGELOG
 
+## 2026-09-10 — iOS 네이티브 화면 QA: 스플래시 잘림/색상 + 검색 자동확대 + 리스트 오버플로 수정
+
+iOS 시뮬레이터에서 신고된 3건 확인·수정:
+- **스플래시 로고 잘림/배경색 불일치**: `LaunchScreen.storyboard`의 이미지뷰가
+  `contentMode="scaleAspectFill"`이라 세로로 긴 화면에 맞추며 좌우가 잘렸고, 배경도
+  흰색(`systemBackgroundColor`)이라 레터박스 여백이 네이비 브랜드 톤과 안 맞았음.
+  `scaleAspectFit`(비율 유지, 잘림 없음) + 배경색을 `#0A2545`(Android 스플래시 수정에서
+  쓴 것과 동일한 브랜드 네이비, 기존 splash 에셋 픽셀과도 일치)로 변경.
+- **검색 화면 버튼이 화면 밖으로 잘림**: 폭/포지셔닝 문제가 아니라 iOS 전용 동작 —
+  검색창에 `autoFocus`가 걸려 있는데 `font-size`가 14px(16px 미만)라 iOS Safari/
+  WKWebView가 포커스 시 페이지를 자동으로 확대(pinch-zoom), 그 결과 우측 검색 버튼이
+  확대된 뷰포트 밖으로 밀림(Android/Chrome은 이 자동확대가 없어 재현 안 됨). `font-size`를
+  16px(iOS 자동확대 임계값)로 올려 근본 수정.
+- **`.list-row` 우측 오버플로**(감사 중 신규 발견, 플랫폼 무관이지만 iOS에서 더 두드러짐):
+  `width:100%` + margin(-inline) 조합에서 `width:100%`가 마진을 안 뺀 부모 전체 폭
+  기준으로 계산돼 마진만큼(375px 폭 실측 20px) 우측으로 넘침. `width:100%` 제거,
+  기본 block 너비(auto)로 마진을 자동으로 빼도록 수정 — 마이페이지/매니저/관리자 등
+  `.list-row`를 쓰는 모든 화면에 적용됨.
+
+실기기/시뮬레이터 접근 없이 코드·에셋 분석 + Chrome iframe 뷰포트 시뮬레이션으로 검증;
+`npm run build` 통과. 스플래시 시각 결과와 검색 화면 자동확대 해소는 실기기 재확인 필요.
+
+## 2026-09-10 — 로그인 화면 설명문·종목 아이콘 겹침 수정 (반응형)
+
+좁은 화면/짧은 화면에서 로그인 화면 설명 문구와 종목 아이콘이 겹치는 버그(사용자 스크린샷
+제보). 원인: `.auth-activities`(아이콘 4개)가 `position:absolute; right/bottom` 고정
+오프셋으로 텍스트 흐름과 완전히 독립돼 있어, 텍스트가 줄바꿈으로 늘어나면 그 고정 자리를
+그대로 침범. `.auth-scene`을 `display:flex;flex-direction:column`으로 바꿔 로고→텍스트→
+아이콘이 일반 문서 흐름으로 쌓이게 하고, 아이콘 행은 `position:relative`+`justify-content:
+flex-end`로 우측 정렬 유지(텍스트가 몇 줄이든 그 아래로 밀려날 뿐 겹칠 수 없음).
+제목/본문 폰트·여백을 `clamp()`로 부드럽게 스케일링. iPhone SE(320×568)부터 iPhone 13 Pro
+Max(428×926), Galaxy S21/Pixel 7, 극단적 작은+짧은 케이스(320×480, 375×500)까지 10개
+실기기 크기를 iframe 뷰포트 시뮬레이션으로 검증, 전부 겹침 없음. `npm run build` 통과.
+
+## 2026-09-10 — Android 전체 화면비 QA: 홈 화면 헤딩·"관리자 모드" 배지 간격 0px 수정
+
+Android 12+ 스플래시 수정에 이어 홈/로그인/검색/예약/마이/센터 상세를 320~430px 폭에서
+QA(iframe으로 폭 강제 + 스크린샷). 방금 다른 세션이 고친 로그인 화면 `.auth-scene` 겹침
+버그(`position:absolute` 고정 오프셋이 텍스트 흐름과 무관해서 생긴 겹침)와 같은 원인의
+버그를 홈 화면에서 발견: `.home-heading-row .location`(헤딩 텍스트)에 고정
+`max-width`(245px, 좁은 화면 210px)를 줘서 "관리자 모드"/"로그인" 배지와의 간격을
+확보했는데, 그 값이 실제 배지 폭보다 살짝 커서 320px 폭에서는 텍스트가 2줄로
+줄바꿈되며 배지에 틈 없이 딱 붙었음(겹치진 않지만 간격 0px). 같은 방식으로 수정 —
+`max-width` 매직넘버를 지우고 `flex:1 1 auto`(헤딩)/`flex:0 0 auto`(배지)+`gap:10px`로
+바꿔, 남는 공간만큼만 차지하고 배지와의 최소 간격이 항상 보장되게 함(`app/globals.css`).
+그 외 100vw/고정 width·min-width 오버플로우, position:fixed/absolute 겹침 패턴을
+전체 grep으로 훑었으나 이 한 건 외에는 발견 못함(기존 코드가 이미 `min-width:0`,
+`-webkit-line-clamp`, `calc(100vw - Npx)` 등으로 대체로 잘 방어돼 있었음). 검증: 320/
+390/430px + 375x500(짧은 높이) iframe 스크린샷으로 확인, `npm run build` 통과.
+
 ## 2026-09-10 — rolling_month QA에서 전체 구매를 깨뜨릴 뻔한 회귀 발견·즉시 수정
 
 바로 전에 추가한 "매달 자동" 수강권 기능의 자동 QA(크롬 브라우저로 실제 구매+예약 플로우

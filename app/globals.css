@@ -536,7 +536,14 @@ a { color: inherit; text-decoration: none; }
 .list-row {
   display: flex; align-items: center; justify-content: space-between;
   padding: 15px 20px; border-bottom: 1px solid var(--line);
-  width: 100%; background: none; border-left: none; border-right: none; border-top: none;
+  /* width:100% 대신 기본 block 너비(auto)를 씀 — .mypage-shell .list-row,
+     .manager-home-v2 > .list-row, .discovery-page-v2 .list-row 등 여러 화면이 여기에
+     margin(-inline)으로 좌우 여백을 얹는데, width:100%는 그 마진을 뺀 나머지가 아니라
+     부모 전체 너비를 기준으로 계산돼 마진만큼(예: 20px) 우측 밖으로 넘쳐(overflow)
+     화면 우측 끝이 살짝 잘려 보이는 문제가 있었다(iOS에서 특히 두드러짐, 375px 폭
+     기준 실측 20px 초과). auto면 block-level 요소가 마진을 제외한 나머지만 채워 항상
+     부모 안쪽에 맞는다. */
+  background: none; border-left: none; border-right: none; border-top: none;
   font: inherit; color: var(--ink); cursor: pointer; text-align: left;
 }
 .list-row .left { display: flex; align-items: center; gap: 12px; font-size: 14.5px; font-weight: 700; }
@@ -1900,8 +1907,8 @@ a.membership-card { text-decoration: none; display: block; }
    (2026-08-31 사용자 피드백). */
 .error-toast-action {
   flex: 0 0 100%; margin-top: 4px; display: block; text-align: center;
-  background: var(--bg); color: var(--danger); text-decoration: none;
-  padding: 11px; border-radius: 14px; font-size: 14px; font-weight: 800;
+  background: var(--bg); color: var(--danger); text-decoration: none; border: none;
+  padding: 11px; border-radius: 14px; font-size: 14px; font-weight: 800; cursor: pointer;
 }
 .error-toast-action:active { background: var(--surface); }
 
@@ -3775,9 +3782,15 @@ a.membership-card { text-decoration: none; display: block; }
    Batch 3 — member home, search and category discovery
    ============================================================ */
 .member-home .header { padding: 22px var(--page-gutter) 12px; }
-.home-heading-row { align-items: flex-start; margin-bottom: 7px; }
-.home-heading-row .location { max-width: 245px; font-size: 22px; line-height: 1.28; font-weight: 720; letter-spacing: -.035em; }
-.home-heading-row .header-icons { min-height: 40px; align-items: flex-start; }
+/* home-heading-row: 원래 .location에 고정 max-width(245px, 좁은 화면에선 210px)를 줘서
+   "관리자 모드"/"로그인" 배지와의 간격을 확보했는데, 그 값이 실제 배지 폭보다 살짝
+   커서 320px 폭에서는 텍스트가 2줄로 줄바꿈되면서 배지와 틈 없이 딱 붙어버렸다(겹치진
+   않지만 간격이 0px). auth-scene 버그와 같은 원인(콘텐츠 폭과 무관한 고정 px 값)이라
+   같은 방식으로 고친다 — max-width 매직넘버 대신 flex:1(남는 공간만큼만 차지 +
+   min-width:0으로 필요하면 줄바꿈)과 gap으로 배지와의 최소 간격을 항상 보장한다. */
+.home-heading-row { align-items: flex-start; gap: 10px; margin-bottom: 7px; }
+.home-heading-row .location { flex: 1 1 auto; min-width: 0; font-size: 22px; line-height: 1.28; font-weight: 720; letter-spacing: -.035em; }
+.home-heading-row .header-icons { flex: 0 0 auto; min-height: 40px; align-items: flex-start; }
 .login-link { min-height: 38px; padding: 0 14px; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); font-size: 12px; font-weight: 620; white-space: nowrap; }
 .home-location-row { min-height: 34px; width: fit-content; margin-bottom: 12px; display: inline-flex; align-items: center; gap: 5px; color: var(--brand-ink); font-size: 12px; font-weight: 620; }
 .home-location-row b { font-size: 15px; font-weight: 500; }
@@ -3822,7 +3835,15 @@ a.membership-card { text-decoration: none; display: block; }
 
 .discovery-page-v2 .search-header { padding: 20px var(--page-gutter) 14px; gap: 8px; background: var(--bg); border-bottom: 1px solid var(--line); }
 .discovery-page-v2 .search-header .side,.category-page-v2 .back-header .side { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
-.discovery-page-v2 .search-input { min-width: 0; height: 50px; padding: 0 15px; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--surface); font-size: 14px; }
+/* iOS 검색 화면 버튼이 화면 우측 밖으로 잘려 보이던 버그의 실제 원인: 이 input에
+   autoFocus가 걸려 있고(app/search/page.tsx) font-size가 16px 미만이면, iOS
+   Safari/WKWebView가 포커스 시 "입력창이 읽기 너무 작다"고 판단해 페이지 전체를
+   자동으로 확대(pinch-zoom)한다 — 페이지 로드 즉시 autoFocus가 발동하므로 사용자가
+   보기도 전에 확대되고, 그 결과 우측 여백 없이 배치된 검색 버튼(.search-go)이 확대된
+   뷰포트 밖으로 밀려나 잘린 것처럼 보인다(Android/Chrome은 이 자동 확대가 없어 재현되지
+   않음). 폭/포지셔닝 문제가 아니라 이 자동 확대를 막는 것이 근본 수정이라 다른 곳의
+   레이아웃(width, flex)은 그대로 두고 font-size만 iOS 임계값인 16px로 올린다. */
+.discovery-page-v2 .search-input { min-width: 0; height: 50px; padding: 0 15px; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--surface); font-size: 16px; }
 .discovery-page-v2 .search-input:focus { border-color: var(--brand); outline: 0; }
 .discovery-page-v2 .search-go { min-width: 56px; height: 44px; padding: 0 12px; border: 0; border-radius: var(--radius-md); background: var(--ink); color: var(--bg); font-size: 12.5px; font-weight: 650; }
 .search-suggestions { padding: 34px var(--page-gutter) 130px; }
@@ -3864,7 +3885,7 @@ a.membership-card { text-decoration: none; display: block; }
 .category-page-v2 .cat-center-action { margin-top: 10px; display: inline-flex; align-items: center; gap: 5px; color: var(--brand-ink); font-size: 11.5px; font-weight: 650; }
 
 @media (max-width: 360px) {
-  .home-heading-row .location { max-width: 210px; font-size: 20px; }
+  .home-heading-row .location { font-size: 20px; }
   .home-value-line { gap: 6px; font-size: 9.5px; }
   .member-home .cat-icon { width: 52px; height: 52px; }
   .home-class-row,.category-page-v2 .cat-center-card { grid-template-columns: 96px minmax(0,1fr); gap: 12px; }
@@ -4098,10 +4119,17 @@ a.membership-card { text-decoration: none; display: block; }
    다크 모드에서 --ink가 거의 흰색으로 뒤집혀 흰 배경 위 흰 텍스트가 된다(.admin-chrome과
    동일한 이유로 --grad1 사용). */
 .auth-page-v2{display:block;min-height:100dvh;padding-bottom:0;background:var(--grad1)}
-.auth-scene{position:relative;min-height:278px;padding:max(24px,env(safe-area-inset-top)) 22px 36px;overflow:hidden;color:var(--text-inverse);background:var(--grad1)}
+/* auth-scene: 예전엔 .auth-activities가 position:absolute(right/bottom 고정 오프셋)로
+   text와 완전히 독립돼 있어, 좁은 화면에서 헤딩/설명문이 줄바꿈으로 늘어나면 고정된
+   아이콘 자리를 그대로 침범했다(디자인 QA에서 재현된 실제 겹침 버그). 겹침의 원인이
+   absolute 위치 그 자체였으므로, 아이콘도 일반 문서 흐름(flex column의 한 아이템)으로
+   바꿔 항상 텍스트 다음에 오도록 고쳤다 — 텍스트가 몇 줄이 되든 아이콘은 그 아래로
+   밀려날 뿐 절대 겹치지 않는다. 폰트 크기/여백은 clamp()로 뷰포트에 맞춰 부드럽게
+   줄어들어 320px 폭에서도 강제 줄바꿈이 줄어든다. */
+.auth-scene{position:relative;display:flex;flex-direction:column;min-height:278px;padding:max(24px,env(safe-area-inset-top)) 22px clamp(20px,5vh,36px);overflow:hidden;color:var(--text-inverse);background:var(--grad1)}
 .auth-scene:before,.auth-scene:after{content:"";position:absolute;border:1px solid rgba(255,255,255,.14);border-radius:50%}.auth-scene:before{width:250px;height:250px;right:-88px;top:18px}.auth-scene:after{width:145px;height:145px;right:-32px;top:74px}
-.auth-home-link{position:relative;z-index:2;color:var(--text-inverse);font-size:13px;font-weight:750}.auth-scene-copy{position:relative;z-index:2;margin-top:24px}.auth-scene-copy>span{color:rgba(255,255,255,.55);font-size:10px;font-weight:750;letter-spacing:1.4px}.auth-scene-copy h1{margin-top:10px;font-size:27px;line-height:1.25;letter-spacing:-.9px}.auth-scene-copy p{margin-top:9px;color:rgba(255,255,255,.68);font-size:13px;line-height:1.55}
-.auth-activities{position:absolute;z-index:2;right:18px;bottom:28px;display:flex;gap:6px}.auth-activities>div{display:grid;place-items:center;width:48px;height:48px;border:1px solid rgba(255,255,255,.13);border-radius:15px;background:rgba(255,255,255,.06)}.auth-activities span{display:none}.auth-activities img{width:30px;height:30px;object-fit:contain;border-radius:50%}
+.auth-home-link{position:relative;z-index:2;flex:0 0 auto;color:var(--text-inverse);font-size:13px;font-weight:750}.auth-scene-copy{position:relative;z-index:2;flex:0 1 auto;min-width:0;margin-top:clamp(14px,4vh,24px)}.auth-scene-copy>span{color:rgba(255,255,255,.55);font-size:10px;font-weight:750;letter-spacing:1.4px}.auth-scene-copy h1{margin-top:10px;font-size:clamp(21px,6.5vw,27px);line-height:1.25;letter-spacing:-.9px;text-wrap:balance}.auth-scene-copy p{margin-top:9px;color:rgba(255,255,255,.68);font-size:clamp(12px,3.4vw,13px);line-height:1.55;overflow-wrap:break-word}
+.auth-activities{position:relative;z-index:2;flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;margin-top:clamp(14px,4vh,20px)}.auth-activities>div{flex:0 0 auto;display:grid;place-items:center;width:48px;height:48px;border:1px solid rgba(255,255,255,.13);border-radius:15px;background:rgba(255,255,255,.06)}.auth-activities span{display:none}.auth-activities img{width:30px;height:30px;object-fit:contain;border-radius:50%}
 .auth-panel{position:relative;z-index:3;min-height:calc(100dvh - 254px);margin-top:-24px;padding:18px 20px max(32px,env(safe-area-inset-bottom));border-radius:26px 26px 0 0;background:var(--bg)}
 .auth-panel .mode-tabs{display:flex;width:190px;margin:0 0 22px;gap:20px;background:transparent}.auth-panel .mode-tab{min-height:34px;padding:0;border-bottom:2px solid transparent;color:var(--ink-soft);font-size:13px;font-weight:650}.auth-panel .mode-tab.on{border-bottom-color:var(--ink);color:var(--ink);background:transparent}.auth-panel-heading{margin-bottom:20px}.auth-panel-heading h2{font-size:23px;letter-spacing:-.6px}.auth-panel-heading p{margin-top:6px;color:var(--ink-soft);font-size:12.5px}
 .auth-panel .role-select{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}.auth-panel .role-btn{min-height:92px;padding:13px 10px;display:grid;grid-template-columns:36px 1fr;grid-template-rows:auto auto;column-gap:9px;text-align:left;border:1px solid var(--line);border-radius:15px;background:var(--card-bg)}.auth-panel .role-btn.on{border:2px solid var(--ink);background:var(--surface)}.auth-panel .role-emoji{grid-row:1/3;display:grid;place-items:center;width:36px;height:36px;margin:0;border-radius:12px;background:var(--surface)}
@@ -4295,7 +4323,7 @@ textarea:focus-visible,
   :root { --page-gutter: 14px; }
   .home-value-line { gap: 5px; font-size: 11px; }
   .home-value-line i { display: none; }
-  .home-heading-row .location { max-width: 210px; font-size: 21px; }
+  .home-heading-row .location { font-size: 21px; }
   .auth-panel { padding-inline: 14px; }
   .auth-panel .role-select { grid-template-columns: 1fr; }
   .bottom-nav { width: calc(100% - 16px); padding-inline: 5px; }
