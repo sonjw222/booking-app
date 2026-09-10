@@ -12,6 +12,13 @@
 //   5) 처리한 알림은 성공/실패 여부와 무관하게 pushed_at을 채운다(재시도 없음 — 최선 노력
 //      전달. 실패해도 알림함(/notifications)에는 이미 기록이 남아 있어 앱을 열면 확인 가능)
 //
+// 2026-09-10 Privacy Emergency Fix Batch (P1-3, 이중 차단): supabase/functions/delete-account가
+// 토큰을 지우는 것과 별개로, 이 함수도 발송 직전에 accounts.deactivated_at을 확인해
+// 탈퇴/익명화된 계정이면 토큰이 실수로 남아 있어도 보내지 않는다 — 그리고 그 자리에서
+// 남은 토큰/구독을 같이 정리한다(자가치유). 같은 배치에서 native_push_tokens 테이블이
+// 아직 운영 DB에 없는 경우(add_native_push_tokens.sql 미적용)도 방어해, 그 테이블이
+// 생기기 전까지는 웹 푸시가 통째로 500을 내지 않고 계속 동작하게 했다.
+//
 // 이미 로그인/화면을 보고 있는 사용자에게는 실시간 팝업(NotificationToaster, Realtime
 // 구독)이 따로 동작하므로, 이 푸시는 "앱을 안 보고 있을 때"를 위한 보완 채널이다.
 //
@@ -205,12 +212,30 @@ Deno.serve(async (req: Request) => {
 
   if (subsErr) return json({ error: subsErr.message }, 500);
 
-  const { data: nativeTokens, error: nativeErr } = await admin
+  // native_push_tokens는 add_native_push_tokens.sql이 아직 이 프로젝트 운영 DB에 적용되지
+  // 않았으면 존재하지 않는다(2026-09-10 확인) — "42P01 relation does not exist"만 빈
+  // 목록으로 취급해 웹푸시는 계속 정상 동작하게 하고, 그 외 실패는 그대로 알린다.
+  const nativeQuery = await admin
     .from("native_push_tokens")
     .select("id, account_id, token")
     .in("account_id", accountIds);
+  if (nativeQuery.error && (nativeQuery.error as { code?: string }).code !== "42P01") {
+    return json({ error: nativeQuery.error.message }, 500);
+  }
+  const nativeTokens = nativeQuery.error ? [] : nativeQuery.data;
 
-  if (nativeErr) return json({ error: nativeErr.message }, 500);
+  // P1-3 (이중 차단): 탈퇴/익명화된 계정(accounts.deactivated_at is not null)은 토큰이
+  // 실수로 남아 있어도 절대 발송하지 않는다 — delete-account의 토큰 삭제만 믿지 않고
+  // 발송 측에서도 독립적으로 걸러낸다. 발견되면 남아있는 토큰/구독도 이 자리에서 같이
+  // 정리한다(자가치유 — 아래 staleSubscriptionIds/staleNativeTokenIds가 실제 DELETE함).
+  const { data: accountRows, error: accountsErr } = await admin
+    .from("accounts")
+    .select("id, deactivated_at")
+    .in("id", accountIds);
+  if (accountsErr) return json({ error: accountsErr.message }, 500);
+  const deactivatedAccountIds = new Set(
+    (accountRows ?? []).filter((a) => a.deactivated_at !== null).map((a) => a.id),
+  );
 
   const subsByAccount = new Map<string, typeof subs>();
   for (const s of subs ?? []) {
@@ -235,6 +260,14 @@ Deno.serve(async (req: Request) => {
   const staleNativeTokenIds = new Set<string>();
 
   for (const n of pending) {
+    // 탈퇴/익명화된 계정이면 남아있는 토큰이 있어도 이번 배치에서 전부 지우고 발송은
+    // 건너뛴다(P1-3) — pushed_at은 아래에서 그대로 채워 무한 재시도되지 않게 한다.
+    if (deactivatedAccountIds.has(n.recipient_account_id)) {
+      for (const s of subsByAccount.get(n.recipient_account_id) ?? []) staleSubscriptionIds.add(s.id);
+      for (const t of nativeByAccount.get(n.recipient_account_id) ?? []) staleNativeTokenIds.add(t.id);
+      continue;
+    }
+
     const targets = subsByAccount.get(n.recipient_account_id) ?? [];
     const nativeTargets = nativeByAccount.get(n.recipient_account_id) ?? [];
     const link = n.link ?? "/notifications";
