@@ -1,0 +1,17 @@
+-- FCM/웹푸시 병합 작업 중 발견: notifications에 service_role GRANT가 전혀 없다
+-- (information_schema.role_table_grants 직접 조회로 확인, 0건 — anon/authenticated에만
+-- 있었음).
+--
+-- fix_service_role_missing_grants_accounts_*.sql / _products.sql / _profiles_*.sql /
+-- _membership_schedule_rules_*.sql / _payments_*.sql / _for_e2e_admin_*.sql /
+-- _center_holidays.sql와 동일한 패턴 — 새 테이블에 service_role GRANT를 추가하는 걸
+-- 빠뜨린 경우다.
+--
+-- 근거: supabase/functions/send-web-push가 admin(service_role) 클라이언트로
+-- notifications를 select(미발송 큐 조회)/update(pushed_at 기록)하는데, 배포된 함수를
+-- 실제로 호출해 "permission denied for table notifications"가 재현됐다(2026-09-10,
+-- 이 배치 작업 중 직접 확인). pg_cron이 이 함수를 계속 호출해왔다면(add_notification_scheduler.sql
+-- 등) 웹/네이티브 푸시 발송이 이 GRANT 누락 때문에 계속 500으로 막혀 있었을 가능성이 높다.
+--
+-- delete는 이 함수가 notifications에 직접 delete하지 않아 제외(select/update만 필요).
+grant select, insert, update on notifications to service_role;

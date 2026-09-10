@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## 2026-09-10 — notifications 테이블 service_role GRANT 누락 수정 (푸시 발송 전체 500 버그)
+
+FCM/Privacy 배치 병합 후 재배포한 `send-web-push`를 실제로 호출해 검증하던 중
+`permission denied for table notifications`가 재현됨. `information_schema.role_table_grants`
+직접 조회 결과 `notifications` 테이블에 `service_role` GRANT가 전혀 없었음(anon/authenticated만
+있었음) — `fix_service_role_missing_grants_accounts_*.sql` 등 기존에 이미 6차례 있었던
+"새 테이블에 service_role GRANT 추가를 빠뜨림" 패턴과 동일. `send-web-push`가 admin
+(service_role) 클라이언트로 `notifications`를 select/update하므로, pg_cron이 이 함수를
+호출할 때마다(웹/네이티브 푸시 공통 경로) 계속 500으로 막혀 있었을 가능성이 높음 — 이번
+FCM 작업과 무관하게 그전부터 있었던 별도 버그.
+
+`grant select, insert, update on notifications to service_role;` 적용 후 재호출로 정상
+동작 확인(`processed:200`으로 그동안 막혀 쌓여있던 미발송 큐가 처리되기 시작).
+
+변경 파일: `fix_service_role_missing_grants_notifications.sql`(신규, 적용 완료).
+
 ## 2026-09-10 — Privacy Emergency Fix Batch: 탈퇴 후 push 토큰/avatar 잔존 수정 (P0-1/P0-2/P1-3)
 
 개인정보 실사 조사(N섹션)에서 발견한 긴급 항목 중 P0/P1 4건을 수정. 브랜치
