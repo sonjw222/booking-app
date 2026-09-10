@@ -31,6 +31,7 @@ import RichTextEditor from "../../components/RichTextEditor";
 import { fetchCategories, type ServiceCategory } from "../../../lib/operator";
 import { ZoomableImage } from "../../components/ImageViewer";
 import UiIcon from "../../components/UiIcon";
+import { isAppSettingsSupported, openAppSettings } from "../../../lib/nativeAppSettings";
 
 // 구버전 평문 블록을 HTML로 변환 (줄바꿈 유지 + 태그 이스케이프)
 function escapeToHtml(text: string): string {
@@ -63,6 +64,9 @@ export default function CenterInfoPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 위치 권한을 "다시 묻지 않음"으로 거부한 경우 — 앱 안에서 재요청이 불가능해(OS가
+  // 다이얼로그를 다시 안 띄움) 설정 화면 진입 버튼을 error-toast에 추가로 보여준다.
+  const [locPermDenied, setLocPermDenied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
@@ -223,7 +227,15 @@ export default function CenterInfoPage() {
         여기 입력한 내용이 회원에게 보이는 <b>센터 상세 화면</b>에 표시돼요.
       </div>
 
-      {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
+      {error && (
+        <div className={`error-toast${locPermDenied && isAppSettingsSupported() ? " error-toast-with-action" : ""}`}>
+          {error}
+          <button onClick={() => { setError(null); setLocPermDenied(false); }}>×</button>
+          {locPermDenied && isAppSettingsSupported() && (
+            <button className="error-toast-action" onClick={() => openAppSettings()}>설정에서 위치 권한 열기</button>
+          )}
+        </div>
+      )}
 
       {mapPicker && (
         <MapPicker
@@ -273,9 +285,15 @@ export default function CenterInfoPage() {
           <div className="loc-btn-row">
             <button className="ghost-btn" onClick={() => {
               if (!navigator.geolocation) { setError("이 브라우저는 위치를 지원하지 않아요"); return; }
+              setLocPermDenied(false);
               navigator.geolocation.getCurrentPosition(
                 (pos) => { setLat(pos.coords.latitude); setLng(pos.coords.longitude); showToast("현재 위치를 저장했어요"); },
-                () => setError("위치를 가져올 수 없어요 (권한 확인)")
+                (err) => {
+                  // code 1 === PERMISSION_DENIED (POSITION_UNAVAILABLE=2, TIMEOUT=3은
+                  // 권한과 무관 — "설정 열기" 버튼은 실제 거부일 때만 보여준다)
+                  setLocPermDenied(err.code === 1);
+                  setError("위치를 가져올 수 없어요 (권한 확인)");
+                }
               );
             }}>현재위치</button>
             <button className="ghost-btn" onClick={() => setMapPicker(true)}>위치찾기</button>

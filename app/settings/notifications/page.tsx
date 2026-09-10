@@ -16,6 +16,7 @@ import { Capacitor } from "@capacitor/core";
 import { NOTI_PREF_STORAGE_KEY, NOTI_PREF_DEFAULTS, getNotiPrefs, type NotiPrefKey } from "../../../lib/notifications";
 import { getWebPushStatus, enableWebPush, disableWebPush, type WebPushStatus } from "../../../lib/webPush";
 import { getNativePushStatus, enableNativePush, disableNativePush } from "../../../lib/nativePush";
+import { isAppSettingsSupported, openAppSettings } from "../../../lib/nativeAppSettings";
 
 // 네이티브 앱(Capacitor)에서는 웹푸시(VAPID) 대신 FCM 기반 네이티브 푸시를 쓴다
 // (iOS WKWebView가 웹푸시 구독 자체를 지원하지 않음 — lib/nativePush.ts 상단 주석 참고).
@@ -37,6 +38,9 @@ export default function NotificationSettingsPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [pushStatus, setPushStatus] = useState<WebPushStatus>("unsubscribed");
   const [pushBusy, setPushBusy] = useState(false);
+  // 알림 권한을 "다시 묻지 않음"으로 거부한 경우 — 네이티브에서는 앱 안에서 재요청이
+  // 안 되므로(OS가 다이얼로그를 다시 안 띄움) 토스트 대신 설정 화면 진입 버튼을 보여준다.
+  const [pushPermDenied, setPushPermDenied] = useState(false);
 
   useEffect(() => {
     setPrefs(getNotiPrefs());
@@ -59,8 +63,13 @@ export default function NotificationSettingsPage() {
         const res = await enablePush();
         if (res.ok) {
           setPushStatus("subscribed");
+          setPushPermDenied(false);
           setToast("앱을 닫아도 알림을 받을 수 있어요");
         } else {
+          // 문자열로만 구분하는 건 임시방편이지만, enableNativePush/enableWebPush가
+          // 이미 이 정확한 문구로 "권한 거부"를 알려주고 있어(lib/nativePush.ts,
+          // lib/webPush.ts) 별도 에러 코드 필드를 추가하지 않고 재사용한다.
+          setPushPermDenied(!!res.error?.includes("권한"));
           setToast(res.error ?? "알림 구독에 실패했어요");
         }
       }
@@ -113,6 +122,14 @@ export default function NotificationSettingsPage() {
             <span className="knob" />
           </button>
         </div>
+        {pushPermDenied && isAppSettingsSupported() && (
+          <div className="perm-guide" style={{ margin: "0 20px 8px" }}>
+            알림 권한이 거부돼 있어요.{" "}
+            <button className="text-btn" style={{ fontSize: "inherit" }} onClick={() => openAppSettings()}>
+              설정에서 권한 열기
+            </button>
+          </div>
+        )}
         {ITEMS.map((it) => (
           <div key={it.key} className="noti-row">
             <div className="noti-info">
