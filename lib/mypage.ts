@@ -5,6 +5,7 @@
 
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
+import { disableNativePush } from "./nativePush";
 
 export type Profile = { name: string; phone: string | null; isMember: boolean; isManager: boolean; isPlatformAdmin: boolean };
 
@@ -200,6 +201,14 @@ export async function fetchMyPage() {
 }
 
 export async function logout() {
+  // 로그아웃 전에 이 기기의 네이티브 푸시 토큰(FCM)을 계정에서 떼어낸다 — signOut() 이후엔
+  // getMyAccountId()가 세션이 없어 동작하지 않으므로 반드시 signOut()보다 먼저 호출해야
+  // 한다. 안 하면 같은 기기에서 다른 계정으로 재로그인할 때 native_push_tokens의 UPDATE
+  // RLS 정책(계정 본인 소유 행만 수정 가능)에 막혀 토큰 upsert가 실패하고, 로그아웃 상태
+  // 그대로 방치되면 이전 계정이 이 기기로 계속 푸시를 받는 문제도 있었다(lib/nativePush.ts
+  // disableNativePush 참고). 웹에서는 isNativePlatform()이 false라 즉시 { ok: true }로
+  // 넘어가 비용이 거의 없다.
+  await disableNativePush().catch(() => {});
   await supabase.auth.signOut();
   window.location.href = "/login";
 }

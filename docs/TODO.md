@@ -804,7 +804,7 @@ test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P1 (출시 로드맵 9단계 — App Store/Google Play 유통을 위한 필수 작업, 다만 지금 진행 중인 "직접결제만 여는 베타"는 웹으로 먼저 출시하고 이건 병행 트랙) |
-| 현재 상태 | **Claude Code가 로컬에서 할 수 있는 부분은 전부 완료 — 실제 빌드·서명·실기기 테스트는 전혀 안 됨(대표님의 로컬 환경 필요).** `server.url` 모드(정적 export 불가한 구조라 실제 배포 사이트를 WebView로 그대로 로드)로 `capacitor.config.ts` 작성, `npx cap add ios`/`add android`/`sync` 전부 Xcode.app·Android Studio 설치 없이 CLI만으로 성공(로컬엔 Xcode Command Line Tools만 있고 둘 다 실제 설치 안 돼 있음, 확인됨). `npm run build`/`npm run test`(262개) 통과. |
+| 현재 상태 | **Claude Code가 로컬에서 할 수 있는 부분은 전부 완료 — 실제 빌드·서명·실기기 테스트는 전혀 안 됨(대표님의 로컬 환경 필요).** `server.url` 모드(정적 export 불가한 구조라 실제 배포 사이트를 WebView로 그대로 로드)로 `capacitor.config.ts` 작성, `npx cap add ios`/`add android`/`sync` 전부 Xcode.app·Android Studio 설치 없이 CLI만으로 성공(로컬엔 Xcode Command Line Tools만 있고 둘 다 실제 설치 안 돼 있음, 확인됨). `npm run build`/`npm run test`(262개) 통과. **2026-09-10 추가**: FCM 실제 발송 경로 버그 수정 — Firebase 시크릿이 `FIREBASE_PROJECT_ID`/`FIREBASE_CLIENT_EMAIL`/`FIREBASE_PRIVATE_KEY`로 등록됐는데 `send-web-push`는 `FCM_PROJECT_ID` 등 다른 이름으로 읽고 있어 `fcmConfigured`가 항상 false — 네이티브 푸시가 조용히 전송 안 되던 상태였음(수정 후 재배포, OAuth2 access token 발급 + FCM `messages:send` 호출까지 실제로 왕복 확인 — 가짜 토큰으로 `INVALID_ARGUMENT` 응답을 받아 자격 증명 경로가 정상 동작함을 검증함, 실 기기 토큰으로 최종 수신 확인은 아직 안 함). FCM 에러코드에 `INVALID_ARGUMENT`도 무효 토큰으로 처리하도록 추가, `testToken` 필드로 개별 토큰 테스트 발송하는 분기도 추가(운영 큐와 분리). 로그아웃 시 `disableNativePush()`를 `signOut()` 이전에 호출하도록 `lib/mypage.ts`의 `logout()`과 `app/mypage/info/page.tsx`의 재로그인 버튼에 추가(안 하면 같은 기기 재로그인 시 RLS 때문에 토큰 upsert가 막힐 수 있었음). **2026-09-10 추가 완료**: iOS FCM SDK 연동 — `ios/`를 이번엔 직접 수정(사용자가 Firebase Console iOS 앱 등록 + APNs 인증 키 등록 + Xcode Signing/Push Notifications capability/Background Modes를 전부 마친 뒤 요청함). Firebase iOS SDK를 CocoaPods가 아니라 **Swift Package Manager로** 추가(이 프로젝트가 이미 `CapApp-SPM`을 통해 전부 SPM 기반으로 Capacitor 의존성을 관리 중이라 — Podfile/`pod` 자체가 없음 — 일관된 방식). `firebase-ios-sdk`(upToNextMajor 11.0.0, 실제 resolve된 버전 11.15.0)를 `CapApp-SPM`이 아니라 **Xcode 프로젝트(`App.xcodeproj`) 레벨에** 직접 추가함(`CapApp-SPM/Package.swift`는 "DO NOT MODIFY — managed by Capacitor CLI" 파일이라 `npx cap sync`가 덮어쓸 수 있어서 그쪽엔 안 넣음). `AppDelegate.swift`에 `FirebaseApp.configure()`(앱 시작 시 1회) + `MessagingDelegate` 구현 + `didRegisterForRemoteNotificationsWithDeviceToken`에서 `Messaging.messaging().apnsToken` 설정(공식 방식) 추가, 신규 커스텀 Capacitor 플러그인 `ios/App/App/FcmTokenPlugin.swift`(Android `AppSettingsPlugin.java`와 동일한 패턴)로 실제 FCM 토큰을 JS(`lib/nativePush.ts`)로 전달, `SceneDelegate.swift`에서 `registerPluginInstance()`로 수동 등록(npm 패키지가 아니라 `capacitor.config.json`의 자동 생성 `packageClassList`엔 안 실림 — `cap sync`를 다시 돌려도 지워지지 않는 방식으로 설계함, 확인됨). `xcodebuild -scheme App -sdk iphonesimulator build`로 실제 컴파일 성공까지 확인(시뮬레이터는 컴파일 검증용일 뿐 — 실제 푸시 수신 검증 기준으로 쓰지 않음, 그건 실기기 전용). **실기기 최종 수신 확인은 아직 안 됨** — 아래 12번에 추가. |
 | 근거 파일 | `capacitor.config.ts`(신규), `ios/`·`android/`(신규, `npx cap add`로 생성), `add_native_push_tokens.sql`(신규), `supabase/functions/send-web-push/index.ts`(FCM 발송 추가), `lib/nativePush.ts`(신규), `app/components/CapacitorBootstrap.tsx`(신규), `app/settings/notifications/page.tsx`(웹/네이티브 자동 분기) |
 | 완료 조건 | 아래 "대표님이 진행해야 하는 것" 전부 + OAuth 4종·푸시 수신·safe-area 렌더링 실기기 확인 |
 | 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-04 항목, `/Users/sonjw/.claude/plans/cryptic-coalescing-moth.md`(설계 계획 원본) |
@@ -830,9 +830,19 @@ test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx 
    가능**)
 6. 앱 아이콘(1024×1024)·스플래시 소스 이미지 준비(디자인 산출물, 현재 저장소에 전혀
    없음) → `npx @capacitor/assets generate`로 전체 사이즈 자동 생성
-7. 서비스 계정 키 발급 후 `supabase secrets set FCM_PROJECT_ID=... FCM_CLIENT_EMAIL=...
-   FCM_PRIVATE_KEY=...` 등록 + `supabase functions deploy send-web-push` 재배포
+7. **완료(2026-09-10)** — 서비스 계정 키를 `supabase secrets set FIREBASE_PROJECT_ID=...
+   FIREBASE_CLIENT_EMAIL=... FIREBASE_PRIVATE_KEY=...`로 등록함 + `send-web-push`가 이
+   이름을 읽도록 코드 수정 후 재배포 완료. Android는 이걸로 실제 FCM 발송이 동작할 준비가
+   됐음(실기기 토큰으로 최종 확인은 아직 안 함, 아래 12번). iOS도 2026-09-10에 FCM SDK
+   연동까지 코드로 완료함 — 아래 8-1번 참고
 8. `add_native_push_tokens.sql`을 SQL Editor에서 실행
+8-1. **(2026-09-10, 완료)** iOS FCM SDK 연동 — Firebase iOS SDK(SPM)를 `App.xcodeproj`에
+    추가하고 `AppDelegate.swift`/`SceneDelegate.swift`/신규 `FcmTokenPlugin.swift`로
+    APNs→FCM 토큰 교환 경로를 연결함(자세한 내용은 `docs/CHANGELOG.md` 2026-09-10 iOS
+    FCM 항목 참고). 컴파일은 `xcodebuild`로 확인됐지만 **실기기 최종 수신 확인은 아직
+    안 됨**(12번). `App.entitlements`의 `aps-environment`가 현재 `development`뿐이라
+    배포용(App Store) 빌드 전엔 Xcode가 서명 설정에 따라 자동으로 `production`으로
+    바꿔주는지 확인 필요(사용자가 Xcode에서 직접 확인, 이 파일은 건드리지 않음).
 9. 시뮬레이터/실기기로 Kakao/Naver/Google/Apple 로그인 4종이 WebView 안에서 실제로
    왕복되는지 확인(외부 도메인 이동을 `capacitor.config.ts`의 `allowNavigation`으로
    허용해뒀지만 실기기 검증 전) + `app/components/BackButton.tsx`의
@@ -843,6 +853,19 @@ test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx 
 11. Apple Developer Program 가입 — **사업자 상호 변경(현재 진행 예정) + D-U-N-S 번호
     확보 후 Organization으로 가입**하기로 결정(개인 계정이 아닌 이유: 상호가 바뀔
     예정이라 나중에 앱스토어 게시자명을 새 상호로 표시하기 위함)
+12. (2026-09-10 추가) 실기기 확인 필요 — FCM 실제 수신 테스트: 코드·컴파일 검증은 이번
+    배치에서 끝났고 실행 검증만 남음. (e) Android 실기기에서 알림 설정을 켜서
+    `native_push_tokens`에 토큰이 저장되는지 확인 후, `send-web-push`에
+    `{"testToken": "<그 토큰>"}`으로 테스트 호출을 보내 실제로 기기에 푸시가 뜨는지 —
+    Edge Function 쪽(자격 증명 교환 + FCM API 호출)은 가짜 토큰으로 왕복 확인했지만 실
+    기기 수신 자체는 아직 확인 안 됨(테스트 토큰이 없어 이번 배치에서는 불가능했음).
+    (f) **iOS 실기기**에서 알림 설정을 켜서 `native_push_tokens`에 저장되는 토큰이
+    (APNs 원시 토큰이 아니라) 실제 FCM 등록 토큰 형식인지 확인 — Xcode 콘솔 로그나
+    Supabase에서 직접 값 형식으로 판별 가능(FCM 토큰은 보통 `:`로 구분된 긴 문자열,
+    APNs 토큰은 64자리 hex뿐). 그 토큰으로 (e)와 동일하게 `testToken` 테스트 호출 →
+    실기기 수신 확인. **시뮬레이터에서는 APNs/FCM 등록 자체가 항상 실패하니(Apple
+    정책, 실제 기기 필요) iOS는 이 항목을 시뮬레이터로 "통과"로 표시하면 안 됨** —
+    코드는 `xcodebuild`로 컴파일만 확인했고 런타임 동작은 실기기 전용.
 
 **참고**: `npx cap doctor` 실행 시 Android에서 `index.html file is missing` 경고가
 뜨는데, `server.url` 모드라 로컬 정적 번들 자체가 없어서 나는 예상된 경고이고 실제 동작에
