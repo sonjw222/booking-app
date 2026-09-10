@@ -789,6 +789,28 @@ test.ts`의 `afterAll`이 존재하지 않는 변수(`userA`)를 참조해 `npx 
    먼저 홈 화면에 추가한 뒤 테스트해야 한다. Android Chrome은 이런 제약 없이 일반 브라우저
    탭에서도 동작한다.
 
+**2026-09-10 Privacy Emergency Fix Batch(P1-3, 이중 차단) — 코드 완료, SQL/배포 대기**:
+개인정보 실사 N-1 항목 대응으로 `send-web-push`가 발송 직전에 `accounts.deactivated_at`을
+확인해 탈퇴/익명화된 계정은 토큰이 남아있어도 발송하지 않고, 그 자리에서 남은
+`push_subscriptions`/`native_push_tokens`도 같이 삭제(자가치유)하도록 수정. 신규 컬럼 없이
+기존 `deactivated_at`만 사용.
+
+**부수 발견(중요, 별도 기존 버그일 가능성)**: `supabase db query --linked`로 원격 확인한
+결과 **`native_push_tokens` 테이블이 이 프로젝트 운영 DB에 아직 존재하지 않는다**
+(`add_native_push_tokens.sql` 미적용, `to_regclass('public.native_push_tokens')`가 null,
+2026-09-10 확인). 배포된 `send-web-push`(버전 6, ACTIVE)는 이 테이블을 조건 없이 조회하는
+코드였어서, cron이 1분마다 호출할 때마다 `42P01 relation does not exist`로 함수 전체가
+500 실패했을 가능성이 높다 — **네이티브 앱뿐 아니라 웹 푸시까지 같이 막혔을 수 있는
+기존 버그**(이번 배치가 발견했지만 원인은 이전 배치, 네이티브 앱 QA 세션과 무관). 이번
+배치에서 `42P01`만 빈 목록으로 처리하는 방어 코드를 같은 파일에 추가해 웹 푸시는 테이블
+존재 여부와 무관하게 계속 동작하게 했다. **완료 조건**: (1) `add_native_push_tokens.sql`을
+Supabase SQL Editor에서 실행(신규 테이블 생성 + RLS 정책 포함, 멱등) — 그래야 iOS/Android
+네이티브 푸시가 실제로 쌍이 맞음. (2) `supabase functions deploy delete-account` +
+`supabase functions deploy send-web-push` — 코드는 이 배치에서 이미 수정 완료, 배포만 대기
+(이번 배치 방침상 사용자 승인 전 미배포). (3) 배포 후 `tests/integration/account-deletion-
+anonymization.test.ts`의 새 테스트("탈퇴 시 native_push_tokens/push_subscriptions ...")
+재실행해 통과 확인.
+
 ### P1-2c. (2026-09-05, 완료 — 실브라우저 왕복 확인까지 끝남) 회원가입 휴대폰 인증(OTP)
 
 | 필드 | 내용 |
@@ -2212,6 +2234,50 @@ P2-20 조사 과정에서 발견됐지만 이번 배치 범위 밖이라 코드 
 | 이번 배치에서 한 것 | 기존 방식(2026-08-13, `deactivated_at` + `auth.users` ban)은 로그인만 막을 뿐 이름/전화번호/이메일 등 개인정보가 그대로 DB에 남는 **소프트 삭제**였음 — Apple/Google 계정 삭제 가이드라인은 실제 삭제 또는 식별 불가 처리를 요구해 정책 상 P0 갭으로 재분류. 사용자 결정(2026-08-19): (1) 탈퇴 후 같은 전화번호/이메일/소셜 계정으로 **재가입 허용**, (2) 이미 탈퇴한 기존 계정에도 **새 정책 소급 적용**. `delete-account` Edge Function을 재작성해 `accounts`/`profiles`(가족 프로필 포함)의 이름/닉네임/전화번호/주소/아바타/메모/생년월일/라벨을 익명값으로 덮어쓰고, `auth.users` 행을 밴이 아니라 **실제 삭제**(`admin.auth.admin.deleteUser`)하도록 변경(FK 안전성 확인: `accounts.auth_id`는 FK 제약 없음, `auth` 스키마 내부 테이블은 전부 `ON DELETE CASCADE`). `reservations`/`orders`/`payments`/`memberships`는 CLAUDE.md 규칙 3 및 전자상거래법 보관 의무에 따라 그대로 유지 — 익명화된 accounts/profiles를 통해서만 "탈퇴한 회원"으로 보임. `center_members.app_email` 등 센터 자체 CRM 데이터는 범위 밖(우리 플랫폼 개인정보 아님)이라 건드리지 않음. `app/settings/account/page.tsx` 탈퇴 안내 문구를 새 정책(개인정보 삭제/식별불가, 재가입 가능)에 맞게 수정. **사용자가 SQL 실행 + Edge Function 재배포 완료 — 라이브 재조회로 accounts/profiles 익명화, auth.users 삭제(count=0) 직접 확인.** 이어서 자동 통합테스트 신규 작성: service_role로 전용 임시 계정(본인+자녀 프로필)을 만들고, 실제 배포된 `delete-account`를 호출해 (1) accounts/profiles 8개 필드 전부 익명화 (2) `auth.users` 실제 삭제(`getUserById` 404) (3) 같은 이메일로 즉시 재가입 성공까지 왕복 검증 — 실행 결과 1/1 통과, `afterAll`에서 테스트 데이터 전부 정리(라이브 재조회로 leftover 0건 확인). `npm run build` 통과 확인. |
 | 남은 작업 | (1) 소셜 로그인 계정의 진짜 재인증(현재는 확인 문구로 낮은 문턱만 둠) (2) 탈퇴 회원이 매니저 쪽 회원 검색/명단에 계속 노출되는지 등 후속 화면 영향 검토 (3) 실제 화면에서 손으로 눌러보는 수동 왕복 QA(자동테스트는 Edge Function을 직접 호출 — UI 클릭 흐름 자체는 아직 미확인) |
 | 관련 문서 | `docs/platform-spec/epics/EPIC_03_Authentication.md` AUTH-08 |
+
+**2026-09-10 Privacy Emergency Fix Batch(P0-1/P0-2) — 코드 완료, 배포 대기**: 개인정보 실사
+N-1/N-2 항목 대응. 기존 익명화 로직은 `accounts` 행을 삭제하지 않아 `native_push_tokens`/
+`push_subscriptions`의 `on delete cascade`가 절대 발동하지 않았고(P0-1), `profiles.
+avatar_url`도 컬럼만 비우고 `avatars` 버킷의 실제 object는 그대로 남아 공개 URL을 아는
+사람에게 orphan 파일로 노출됐다(P0-2). `delete-account`에 다음을 추가: (1) 익명화/auth
+삭제 전에 그 계정의 `native_push_tokens`/`push_subscriptions`를 명시적으로 DELETE(실패
+시 탈퇴 자체를 막음 — DB 삭제는 재시도가 값싸고 안전하므로 조용히 넘기지 않음), (2)
+`profiles.avatar_url`을 null로 덮기 *전에* 실제 avatar Storage object를 삭제(순서
+중요 — 재시도 가능성 보존, 실패해도 탈퇴 자체는 막지 않는 best-effort — Storage는 외부
+서비스라 일시적 실패가 더 흔하고, 이미 DB 개인정보는 지워졌는데 탈퇴가 막히는 게 더 나쁜
+결과라 판단), (3) 외부/미확인 URL(레거시, 테스트 fixture)은 소유 판별 불가 시 스킵.
+**완료 조건**: (1) `supabase functions deploy delete-account` 배포(이번 배치 방침상 사용자
+승인 전 미배포) — 이 배포 전까지는 라이브 탈퇴에서 P0-1/P0-2 버그가 그대로 남아있다. (2)
+배포 후 `tests/integration/account-deletion-anonymization.test.ts` 재실행해 push
+토큰/avatar object 정리 검증 케이스 통과 확인.
+
+**후속(우선순위 P2, 별도 배치 권장) — avatar 교체 시 이전 파일 orphan 방치**: 이번 배치
+조사 중 발견 — `lib/profiles.ts`의 `uploadAvatar()`는 매번 새 랜덤 파일명으로 업로드하고
+(`upsert:false`), 이전 avatar object를 지우지 않는다. 즉 사용자가 프로필 사진을 여러 번
+바꾸면 이전 사진들이 계속 `avatars` 버킷에 orphan으로 쌓인다(탈퇴와 무관하게 평상시에도
+발생) — 이번 배치의 P0-2 수정은 "탈퇴 시점에 **현재** `avatar_url`이 가리키는 파일"만
+지울 수 있어 이 문제는 해결하지 못한다. 완료 조건: `updateProfile()`이 이전
+`avatar_url` 값을 조회해 새 값으로 덮기 전에 이전 object를 지우도록 수정(단, 다른 곳에서
+같은 object를 참조하지 않는지 확인 필요 — 이번 조사로는 avatar object가 프로필당
+1:1이라 안전할 것으로 보임).
+
+**후속(우선순위 P3) — 가족 프로필 개별 삭제(`deleteProfile()`, 계정 탈퇴 아님)도 avatar
+Storage object를 안 지움**: `lib/profiles.ts`의 `deleteProfile()`(가족 구성원 한 명만
+삭제, 계정 전체 탈퇴 아님)도 `avatar_url` 컬럼만 null로 덮고 Storage object는 그대로
+남긴다 — `delete-account`와 동일한 패턴의 버그지만 이번 배치는 "탈퇴"(P0-2) 범위로
+한정해 이 경로는 손대지 않았다. 완료 조건: `deleteAvatarObjects`류 로직을 `deleteProfile()`
+에도 적용(간단한 추출/재사용으로 가능, 큰 리팩토링 불필요).
+
+**2026-09-10 RLS 원격 적용 감사(P1-4, 읽기 전용, 완료)**: 개인정보 실사 N-3/N-6 항목
+대응. `supabase db query --linked`로 원격 DB를 직접 조회(migration 파일만 보고 판단 안
+함) — `staff_salaries`/`leads`/`messages`/`notification_logs`/`accounts`/`profiles`/
+`push_subscriptions` 전부 `relrowsecurity=true` + policy 1개 이상 확인, **적용 완료**로
+확인. `chat_messages`는 RLS enabled이나 policy 0건(deny-all — 노출 아님, 미사용 테이블과
+일치, N-4와 같은 맥락). `messages`(대량 SMS/LMS/Push 발송이력) SELECT 정책은 이미
+`channel = ANY(['sms','lms']) AND has_permission(...'message.sms.view')` OR `channel='push'
+AND has_permission(...'message.push.view')`로 **채널 분리가 적용돼 있음** — 실사 N-6("아직
+실행하지 않음, 승인 대기 중")은 이미 해소된 상태로 보임(문서 드리프트, 이번 배치에서
+코드/SQL 변경 없이 확인만 함). 조치 필요 항목 없음.
 
 ### P2-22. (신규, 2026-08-13 / 2026-08-14 leftover 정리 완료) `getOrCreateOwnedTestCenter()` self-healing sweep이 미래 시각 leftover class는 못 잡음 — AUTO-SEC-I 간헐 실패 원인
 

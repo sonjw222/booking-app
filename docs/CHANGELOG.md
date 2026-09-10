@@ -1,5 +1,39 @@
 # CHANGELOG
 
+## 2026-09-10 — Privacy Emergency Fix Batch: 탈퇴 후 push 토큰/avatar 잔존 수정 (P0-1/P0-2/P1-3)
+
+개인정보 실사 조사(N섹션)에서 발견한 긴급 항목 중 P0/P1 4건을 수정. 브랜치
+`privacy-emergency-fix`, main 병합 전 사용자 승인 대기 — SQL 실행/Edge Function 배포는
+아직 하지 않음(별도 승인 필요, 아래 항목 참고).
+
+- **(P0-1) 탈퇴 후 push 토큰 미삭제**: `delete-account`가 `accounts` 행을 익명화만 하고
+  삭제하지 않아 `native_push_tokens`/`push_subscriptions`의 `on delete cascade`가 절대
+  발동하지 않았음 — 탈퇴한 사용자에게 계속 푸시가 나갈 수 있었던 구조. `delete-account`
+  에서 두 테이블을 명시적으로 DELETE하도록 수정(실패 시 탈퇴 자체를 막음 — 조용히 무시
+  안 함). 부수 발견: `native_push_tokens` 테이블이 원격 운영 DB에 아직 없음
+  (`add_native_push_tokens.sql` 미적용, 2026-09-10 확인) — 이것 때문에 배포된
+  `send-web-push`가 매 실행(1분 주기) 전체 500 에러로 실패하고 있었을 가능성이 높음
+  (웹푸시까지 같이 막혔을 수 있는 별도 기존 버그, 이번에 같은 파일에서 방어 코드 추가).
+- **(P0-2) 탈퇴 후 avatar Storage object 잔존**: `profiles.avatar_url` 컬럼만 비우고
+  `avatars` 버킷의 실제 object는 지우지 않아 공개 URL을 아는 사람은 계속 접근 가능한
+  orphan 파일로 남았음. `delete-account`에서 컬럼을 비우기 *전에* 실제 Storage object를
+  먼저 삭제(순서 중요 — idempotent 재시도 보장). 외부/미확인 URL(레거시 데이터, 테스트
+  fixture 등)은 소유 판별 불가 시 삭제하지 않고 안전하게 스킵.
+- **(P1-3) 발송 측 이중 차단 없음**: `send-web-push`가 발송 대상 계정의 탈퇴 여부를
+  전혀 확인하지 않아, 토큰 삭제(P0-1)에만 의존하고 있었음. 기존 `accounts.deactivated_at`
+  컬럼(신규 컬럼 추가 없음)을 발송 직전에 확인해 탈퇴 계정은 토큰이 남아있어도 발송하지
+  않고, 그 자리에서 남은 토큰/구독도 같이 정리(자가치유)하도록 수정.
+- **(P1-4) RLS 원격 적용 감사(읽기 전용)**: `supabase db query --linked`로 직접 확인—
+  `staff_salaries`/`leads`/`messages`/`notification_logs`/`accounts`/`profiles`/
+  `push_subscriptions` 전부 RLS enabled + policy 존재 확인 완료(적용 안 된 게 없음).
+  `chat_messages`는 RLS enabled이나 policy 0건(deny-all, 미사용 테이블과 일치, 노출
+  아님). `messages`(대량 발송이력) SELECT 정책은 채널(sms/lms vs push) 분리가 이미
+  적용돼 있음 — 감사 문서의 관련 우려(N-6)는 기우였음.
+
+테스트: 단위테스트 262개 통과, `npm run build` 통과, `deno check`로 두 Edge Function
+타입체크 통과. `tests/integration/account-deletion-anonymization.test.ts`에 P0-1/P0-2
+검증 케이스 추가(배포 전이라 이번 실행에서는 통과 못 함 — 배포 후 재실행 필요, 상세는
+아래 TODO 참고).
 ## 2026-09-10 — iOS 네이티브 푸시: Firebase iOS SDK(FCM) 연동
 
 `ios/`를 이번엔 읽기 전용이 아니라 직접 수정(사용자가 Firebase Console에 iOS 앱
