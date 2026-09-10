@@ -19,6 +19,7 @@ export type Membership = {
   totalCount: number;
   remainingCount: number;
   expiresAt: string | null; // "2026-10-31", null = 기간 무제한
+  startsAt: string | null; // "2026-06-01" — DB는 NOT NULL(기본 구매일)이라 실제로 null은 안 오지만 방어적으로 nullable로 둠. rolling_month 상품이 다음 달로 넘어간 경우에만 미래 날짜(2026-09-10 QA로 starts_at이 기존 schema.sql 컬럼 재사용임을 확인, add_rolling_month_product_expiry.sql 참고)
   createdAt: string; // 구매 시각 (환불 24시간 판단용)
   profileName: string; // 어느 프로필 것인지 (대표면 "")
 };
@@ -121,7 +122,7 @@ export async function fetchMyPage() {
   // 수강권 + 상품 (모든 프로필)
   const { data: memRows, error: memErr } = await supabase
     .from("memberships")
-    .select("id, profile_id, bound_profile_id, center_id, product_id, product_name, total_count, remaining_count, expires_at, created_at, centers(name), products(product_kind, unlimited)")
+    .select("id, profile_id, bound_profile_id, center_id, product_id, product_name, total_count, remaining_count, expires_at, starts_at, created_at, centers(name), products(product_kind, unlimited)")
     .in("profile_id", profileIds)
     .neq("status", "refunded")
     .order("expires_at", { ascending: true });
@@ -168,6 +169,7 @@ export async function fetchMyPage() {
       totalCount: m.total_count,
       remainingCount: m.remaining_count,
       expiresAt: m.expires_at,
+      startsAt: m.starts_at ?? null,
       createdAt: m.created_at,
       profileName: m.bound_profile_id ? (profileLabel[m.bound_profile_id] ?? "") : "",
     }));

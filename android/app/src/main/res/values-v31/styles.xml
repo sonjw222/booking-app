@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      Android 12+(API 31) 전용 오버라이드.
+
+      API 31부터는 OS 자체의 SplashScreen API가 앱 프로세스가 뜨기 전에 자기 배경을
+      먼저 그린다. 이 파일이 없으면 windowSplashScreenBackground 기본값(흰색)이 잠깐
+      노출된 뒤에야 기존 Capacitor WebView 스플래시(드로어블 splash.png, 네이비)가
+      떠서 화면이 한 번 번쩍인다.
+
+      android:windowSplashScreenBackground를 네이비로 지정해 그 번쩍임을 없앤다.
+      #0A2545는 app/globals.css의 brand 토큰(변수명 brand, 하이픈 두 개 CSS 커스텀
+      프로퍼티 표기 생략) 값이자 drawable/splash.png의 실제 배경색(RGB 10,37,70)과
+      동일해, 기존 스플래시/브랜드 톤과 연속성이 유지된다.
+      windowSplashScreenAnimatedIcon은 지정하지 않음 — 지정하지 않으면 플랫폼이
+      android:icon(런처 아이콘)을 자동으로 써서, 기존에 보이던 "동그란 앱 아이콘"
+      모양은 그대로 유지되고 이번에 신고된 배경색 문제만 고친다.
+
+      API 30 이하 기기는 이 폴더(values-v31)가 적용되지 않으므로 기존 동작에
+      영향 없음.
+    -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="android:background">@drawable/splash</item>
+        <item name="android:windowSplashScreenBackground">#0A2545</item>
+    </style>
+</resources>

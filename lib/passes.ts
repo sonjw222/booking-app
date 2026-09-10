@@ -10,7 +10,7 @@ import { supabase } from "./supabaseClient";
 
 export const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
-export type ExpiryMode = "none" | "days" | "date";
+export type ExpiryMode = "none" | "days" | "date" | "rolling_month";
 
 export type Product = {
   id: string;
@@ -22,9 +22,11 @@ export type Product = {
   kind: "pass" | "goods";
   unlimited: boolean;
   unlimitedPass: boolean;          // 수강권(pass) 횟수 무제한 — goods의 unlimited와 별개(add_product_expiry_options.sql)
-  expiryMode: ExpiryMode;          // none=만료 없음, days=구매일+expiryDays, date=expiryDate 고정(시즌권)
+  expiryMode: ExpiryMode;          // none=만료 없음, days=구매일+expiryDays, date=expiryDate 고정(시즌권), rolling_month=매달 자동(add_rolling_month_product_expiry.sql)
   expiryDays: number | null;
   expiryDate: string | null;       // "YYYY-MM-DD"
+  rollingMonthCutoffDay: number | null;      // rolling_month일 때: 1~31, 이 날짜부터 다음 달로 넘어감
+  rollingMonthAllowEarlyUse: boolean;        // true면 다음 달로 넘어가도 즉시 사용 허용(starts_at 안 걸림)
   description: string | null;
   sizes: string[] | null;
   autoBookDays: number[] | null;   // 요일반 수강권: 자동예약 요일 (0=일~6=토)
@@ -42,7 +44,7 @@ export type ScheduleRule = {
 export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "pass"): Promise<Product[]> {
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, price, pass_type, total_count, is_on_sale, product_kind, unlimited, unlimited_pass, expiry_mode, expiry_days, expiry_date, description, sizes, auto_book_days, group_label")
+    .select("id, name, price, pass_type, total_count, is_on_sale, product_kind, unlimited, unlimited_pass, expiry_mode, expiry_days, expiry_date, rolling_month_cutoff_day, rolling_month_allow_early_use, description, sizes, auto_book_days, group_label")
     .eq("center_id", centerId)
     .eq("is_active", true)
     .eq("product_kind", kind)
@@ -53,13 +55,17 @@ export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "
     passType: p.pass_type, totalCount: p.total_count, isOnSale: p.is_on_sale,
     kind: p.product_kind, unlimited: p.unlimited,
     unlimitedPass: p.unlimited_pass, expiryMode: p.expiry_mode, expiryDays: p.expiry_days, expiryDate: p.expiry_date,
+    rollingMonthCutoffDay: p.rolling_month_cutoff_day ?? null, rollingMonthAllowEarlyUse: p.rolling_month_allow_early_use ?? false,
     description: p.description ?? null, sizes: p.sizes ?? null,
     autoBookDays: p.auto_book_days ?? null,
     groupLabel: p.group_label ?? null,
   }));
 }
 
-export type ExpiryOption = { mode: ExpiryMode; days: number | null; date: string | null };
+export type ExpiryOption = {
+  mode: ExpiryMode; days: number | null; date: string | null;
+  cutoffDay: number | null; allowEarlyUse: boolean;
+};
 
 export async function createProduct(
   centerId: string, name: string, price: number, totalCount: number,
@@ -76,6 +82,8 @@ export async function createProduct(
     expiry_mode: extra?.expiry?.mode ?? "none",
     expiry_days: extra?.expiry?.mode === "days" ? extra.expiry.days : null,
     expiry_date: extra?.expiry?.mode === "date" ? extra.expiry.date : null,
+    rolling_month_cutoff_day: extra?.expiry?.mode === "rolling_month" ? extra.expiry.cutoffDay : null,
+    rolling_month_allow_early_use: extra?.expiry?.mode === "rolling_month" ? (extra.expiry.allowEarlyUse ?? false) : false,
     description: extra?.description || null,
     sizes: extra?.sizes && extra.sizes.length > 0 ? extra.sizes : null,
     auto_book_days: extra?.autoBookDays && extra.autoBookDays.length > 0 ? extra.autoBookDays : null,
@@ -97,6 +105,8 @@ export async function updateProduct(
     expiry_mode: extra?.expiry?.mode ?? "none",
     expiry_days: extra?.expiry?.mode === "days" ? extra.expiry.days : null,
     expiry_date: extra?.expiry?.mode === "date" ? extra.expiry.date : null,
+    rolling_month_cutoff_day: extra?.expiry?.mode === "rolling_month" ? extra.expiry.cutoffDay : null,
+    rolling_month_allow_early_use: extra?.expiry?.mode === "rolling_month" ? (extra.expiry.allowEarlyUse ?? false) : false,
     description: extra?.description || null,
     sizes: extra?.sizes && extra.sizes.length > 0 ? extra.sizes : null,
     auto_book_days: extra?.autoBookDays && extra.autoBookDays.length > 0 ? extra.autoBookDays : null,

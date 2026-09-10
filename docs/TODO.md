@@ -2564,6 +2564,35 @@ PR #86(UI/UX 감사 배치, 이 PR은 예약/한도 로직을 전혀 건드리�
 정리가 스킵되는 게 근본 원인이라 언제든 다시 쌓인다 — 정기 정리 스크립트를 cron이나 CI
 후처리로 실제로 돌리는 방안이 필요.
 
+### P2-32. (신규, 2026-09-10, 완료) "매달 자동" 수강권(rolling_month) 신규 기능
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **완료.** `add_rolling_month_product_expiry.sql`(적용 완료). 상품에 컷오프
+일자를 정해두면 구매 시점에 따라 자동으로 이번 달/다음 달 수강권으로 배정되고, 다음 달로
+넘어가면 원칙적으로 그 달 1일 전까지 예약에 못 쓰게 `memberships.starts_at`을 체크(센터가
+`rolling_month_allow_early_use`로 완화 가능). |
+| 완료 조건 | `products.expiry_mode`에 4번째 값 추가, `fulfill_order`/`_issue_membership_
+and_record_payment`/`reserve_class`/`reserve_with_membership`/`usable_memberships_for_
+classes`/`auto_book_membership` 전부 starts_at 인지. 관리자 상품 생성 화면(`ExpiryOptionField`
+공용 컴포넌트) + 마이페이지 "아직 시작 안 함" 안내. |
+| 미해결로 남긴 것 | 이 기능에 대한 자동 테스트(unit/integration/e2e)를 따로 안 만듦 —
+크롬 자동 QA로 컷오프 경계(9/10/11일)와 즉시사용 허용 토글 4가지를 실제 구매→예약시도
+흐름으로 검증함(아래 QA 항목 참고). 회귀 방지용 정식 테스트 커버리지는 후속 필요. |
+| 근거 파일 | `add_rolling_month_product_expiry.sql`,
+`fix_rolling_month_starts_at_not_null_regression.sql`, `lib/passes.ts`, `lib/mypage.ts`,
+`app/components/ExpiryOptionField.tsx`, `app/manager/goods/page.tsx`,
+`app/manager/membership-rules/page.tsx`, `app/mypage/page.tsx` |
+
+**QA(2026-09-10, 크롬 자동 QA로 발견·즉시 수정)**: `memberships.starts_at`이 schema.sql에
+원래 있던 컬럼(NOT NULL, default current_date)인 걸 놓치고 `add column if not exists`가
+no-op된 상태에서 새 코드가 `null`을 넣으려다, rolling_month 여부와 무관하게 **전체 구매
+경로가 전부 깨지는 회귀**를 만들었었음 — QA의 즉시사용허용 케이스에서 발견,
+`fix_rolling_month_starts_at_not_null_regression.sql`로 즉시 수정(null 대신 current_date).
+적용 이후 실사용자 구매 없어 실제 영향 없었음(DB 조회로 확인). 이후 컷오프=9/10/11일 +
+즉시사용허용 on/off 4가지 시나리오 모두 실제 구매→예약시도까지 재검증, 전부 통과.
+
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
 
 ### P3-1. 수업 구분과 복수 강사 배정
