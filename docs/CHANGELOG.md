@@ -1,12 +1,28 @@
 # CHANGELOG
 
+## 2026-09-10 — rolling_month QA에서 전체 구매를 깨뜨릴 뻔한 회귀 발견·즉시 수정
+
+바로 전에 추가한 "매달 자동" 수강권 기능의 자동 QA(크롬 브라우저로 실제 구매+예약 플로우
+검증) 중 심각한 버그 발견: `memberships.starts_at`이 실은 신규 컬럼이 아니라 schema.sql에
+원래부터 있던 컬럼이었다(NOT NULL, default current_date — 지금까지 아무 RPC도 안 읽던
+정보용 필드). `add column if not exists`가 조용히 no-op이라 이 사실을 놓쳤고, 새로 쓴
+`fulfill_order()`/`_issue_membership_and_record_payment()`가 이 컬럼에 `null`을 넣으려다
+NOT NULL 위반으로 **rolling_month 여부와 무관하게 모든 구매(기존 상품 포함)가 깨지는
+상태**였음(QA의 컷오프=9/즉시사용허용 케이스에서 처음 드러났지만, 실제로는 이 기능 배치
+자체가 적용된 순간부터 전체 구매 경로가 이미 망가진 상태였음). `null` 대신 `current_date`로
+초기화하도록 수정(`fix_rolling_month_starts_at_not_null_regression.sql`, 이 컬럼의 원래
+기본값과 정확히 같은 의미라 기존 동작과 완전히 호환) — 적용 이후 실제 사용자 구매가
+없었어서 실사용 영향은 없었음을 DB 조회로 확인. 크롬 자동 QA로 컷오프 경계(9일/10일/11일)와
+"즉시사용 허용" 토글까지 4개 시나리오 모두 실제 구매→예약시도 흐름으로 재검증, 전부 통과.
+
 ## 2026-09-10 — "매달 자동" 수강권(rolling_month) 신규 기능
 
 매달 새 상품을 만들어야 했던 "9월 수강권" 같은 케이스를 일반화 — 상품에 컷오프 일자(1~31)를
 하나 정해두면 구매 시점에 따라 자동으로 이번 달/다음 달 수강권으로 배정되고 만료일도 그 달
 말일로 자동 계산됨(`products.expiry_mode='rolling_month'`, 기존 none/days/date 3가지 방식에
 네 번째로 추가). 다음 달로 넘어간 경우 원칙적으로 그 달 1일이 되기 전까지는 예약에 못 쓰게
-`memberships.starts_at`을 새로 도입(기본 동작, 사용자 확인) — `rolling_month_allow_early_use`
+`memberships.starts_at`(schema.sql에 원래 있던 미사용 컬럼, 아래 QA 항목 참고)을
+활용해 그 전까지 예약을 막음(기본 동작, 사용자 확인) — `rolling_month_allow_early_use`
 토글로 센터가 "즉시 사용 허용"으로 완화할 수도 있음. `fulfill_order()`/`_issue_membership_
 and_record_payment()`/`reserve_class()`/`reserve_with_membership()`/`usable_memberships_
 for_classes()`/`auto_book_membership()` 전부 라이브 정의 기준으로 수정(add_rolling_month_

@@ -2578,11 +2578,20 @@ and_record_payment`/`reserve_class`/`reserve_with_membership`/`usable_membership
 classes`/`auto_book_membership` 전부 starts_at 인지. 관리자 상품 생성 화면(`ExpiryOptionField`
 공용 컴포넌트) + 마이페이지 "아직 시작 안 함" 안내. |
 | 미해결로 남긴 것 | 이 기능에 대한 자동 테스트(unit/integration/e2e)를 따로 안 만듦 —
-브라우저로 상품 생성 1건 + SQL로 날짜 계산 3가지 케이스만 직접 검증함. 회귀 방지용 정식
-테스트 커버리지는 후속 필요. |
-| 근거 파일 | `add_rolling_month_product_expiry.sql`, `lib/passes.ts`, `lib/mypage.ts`,
+크롬 자동 QA로 컷오프 경계(9/10/11일)와 즉시사용 허용 토글 4가지를 실제 구매→예약시도
+흐름으로 검증함(아래 QA 항목 참고). 회귀 방지용 정식 테스트 커버리지는 후속 필요. |
+| 근거 파일 | `add_rolling_month_product_expiry.sql`,
+`fix_rolling_month_starts_at_not_null_regression.sql`, `lib/passes.ts`, `lib/mypage.ts`,
 `app/components/ExpiryOptionField.tsx`, `app/manager/goods/page.tsx`,
 `app/manager/membership-rules/page.tsx`, `app/mypage/page.tsx` |
+
+**QA(2026-09-10, 크롬 자동 QA로 발견·즉시 수정)**: `memberships.starts_at`이 schema.sql에
+원래 있던 컬럼(NOT NULL, default current_date)인 걸 놓치고 `add column if not exists`가
+no-op된 상태에서 새 코드가 `null`을 넣으려다, rolling_month 여부와 무관하게 **전체 구매
+경로가 전부 깨지는 회귀**를 만들었었음 — QA의 즉시사용허용 케이스에서 발견,
+`fix_rolling_month_starts_at_not_null_regression.sql`로 즉시 수정(null 대신 current_date).
+적용 이후 실사용자 구매 없어 실제 영향 없었음(DB 조회로 확인). 이후 컷오프=9/10/11일 +
+즉시사용허용 on/off 4가지 시나리오 모두 실제 구매→예약시도까지 재검증, 전부 통과.
 
 아래 항목은 스키마 또는 권한 근거만 있고 완성된 앱 흐름이 없습니다. 사용자·제품 결정 없이 구현 또는 삭제하지 않습니다.
 

@@ -15,9 +15,18 @@
 --
 -- [핵심 설계 포인트, 사용자와 논의로 확정] 다음 달로 넘어간 경우, 이 수강권은 "다음 달이
 -- 되기 전까지는 쓸 수 없어야" 의도한 동작이 완성된다(안 그러면 5/15에 사서 받은 "6월
--- 수강권"으로 5/17 수업을 예약할 수 있게 돼버려 의미가 없어짐) — 그래서 memberships에
--- "언제부터 쓸 수 있는지"(starts_at)를 새로 추가한다. 이 필드는 기존 3가지 만료방식에는
--- 전혀 영향 없음(계속 null = 제한 없음, 구매 즉시 사용 가능).
+-- 수강권"으로 5/17 수업을 예약할 수 있게 돼버려 의미가 없어짐) — 이걸 위해
+-- memberships."언제부터 쓸 수 있는지"(starts_at)를 쓴다.
+--
+-- ⚠ 2026-09-10 QA에서 발견: 이 컬럼은 실제로는 신규가 아니라 schema.sql에 원래부터 있던
+-- 컬럼이다(NOT NULL, default current_date, "수강권 시작일" — 지금까지 항상 오늘 날짜로만
+-- 채워지던 정보용 필드, 이 세션 전에는 어떤 RPC도 실제로 읽지 않았음). 아래 [1]의
+-- "add column if not exists"가 조용히 no-op이라 처음에 이 사실을 놓쳤고, rolling_month이
+-- 아닌 일반 구매 경로에서 이 컬럼에 null을 넣으려다 NOT NULL 위반으로 전체 구매가 깨지는
+-- 회귀를 만들었다(fix_rolling_month_starts_at_not_null_regression.sql로 즉시 수정 —
+-- null 대신 current_date를 넣도록 고침, 이게 이 컬럼의 원래 기본값과 정확히 같은 의미).
+-- 그래서 "제한 없음"의 실제 표현은 null이 아니라 **current_date(구매일)**이다 — 오늘
+-- 날짜는 항상 "오늘 이하"라 예약 체크(starts_at <= current_date)를 그냥 통과한다.
 --
 -- 다만 센터가 "다음 달로 넘어가도 즉시 써도 된다"를 선택할 수 있게
 -- rolling_month_allow_early_use 토글도 같이 둔다(기본 false = 엄격하게 다음 달부터만).
@@ -57,11 +66,13 @@ comment on column products.rolling_month_allow_early_use is
     'rolling_month 상품에서 대상 월이 다음 달로 넘어간 경우에도 구매 즉시 사용을 허용할지.
      false(기본)면 memberships.starts_at이 대상 월 1일로 찍혀 그 전까지는 예약에 못 쓴다';
 
+-- ⚠ 이 컬럼은 이미 schema.sql에 NOT NULL default current_date로 존재해서 이 줄은
+-- no-op이다(위 주석 참고) — 새 컬럼을 만드는 게 아니라 기존 컬럼을 재사용하는 것.
 alter table memberships add column if not exists starts_at date;
 comment on column memberships.starts_at is
-    '이 수강권을 실제로 예약에 쓸 수 있는 시작일(KST). null=제한 없음(구매 즉시 사용
-     가능, 기존 모든 만료방식은 계속 이 값이 null). rolling_month 상품이 대상 월을
-     다음 달로 넘겼고 allow_early_use가 꺼져있을 때만 그 달 1일로 채워진다';
+    '이 수강권을 실제로 예약에 쓸 수 있는 시작일(KST), NOT NULL. 기본값(제한 없음,
+     구매 즉시 사용 가능)은 current_date(구매일) — null이 아니다. rolling_month 상품이
+     대상 월을 다음 달로 넘겼고 allow_early_use가 꺼져있을 때만 그 달 1일로 채워진다';
 
 -- ------------------------------------------------------------
 -- [2] 공용 헬퍼: 구매 시각 + 컷오프로 대상 월의 시작일/말일 계산

@@ -19,7 +19,7 @@ export type Membership = {
   totalCount: number;
   remainingCount: number;
   expiresAt: string | null; // "2026-10-31", null = 기간 무제한
-  startsAt: string | null; // "2026-06-01", null = 제한 없음(구매 즉시 사용 가능). rolling_month 상품 전용(add_rolling_month_product_expiry.sql)
+  startsAt: string | null; // "2026-06-01" — DB는 NOT NULL(기본 구매일)이라 실제로 null은 안 오지만 방어적으로 nullable로 둠. rolling_month 상품이 다음 달로 넘어간 경우에만 미래 날짜(2026-09-10 QA로 starts_at이 기존 schema.sql 컬럼 재사용임을 확인, add_rolling_month_product_expiry.sql 참고)
   createdAt: string; // 구매 시각 (환불 24시간 판단용)
   profileName: string; // 어느 프로필 것인지 (대표면 "")
 };
