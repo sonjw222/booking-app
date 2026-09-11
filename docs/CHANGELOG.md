@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-09-11 — 통신판매업 신고번호 확정값 반영 (제2026-성남분당B-0866호)
+
+`lib/businessInfo.ts`의 `mailOrderRegNo` placeholder("신고 진행 중")를 사용자가 확정해준
+실제 신고번호로 교체. 이 필드를 단일 출처로 참조하는 `/legal/business`,
+`/manager/subscription` 두 화면 모두 자동으로 반영됨(다른 필드는 변경 없음).
+
 ## 2026-09-11 — 토스 빌링 심사 pre-review 수정: 통신판매업 신고번호 단일 출처화 + VAT 문구 일관화
 
 직전 커밋(토스 빌링 계약심사 준비 배치)에 대한 사용자 검토 후 제출 전 보완:

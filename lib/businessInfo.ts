@@ -14,8 +14,6 @@ export const BUSINESS_INFO = {
   address: "경기도 성남시 분당구 중앙공원로 20, 420동 702호",
   customerServicePhone: "010-6505-8700",
   email: "sonjw222@naver.com",
-  // ⚠ 실제 신고번호를 아직 모름(2026-09-11) — 절대 임의 번호를 채우지 말 것. 신고가
-  // 완료되면 이 값 하나만 실제 번호 문자열로 바꾸면 이 필드를 쓰는 모든 화면에 반영된다.
-  // 토스 자동결제 심사 제출 전 반드시 실제 번호로 교체해야 하는 TODO(docs/TODO.md 참고).
-  mailOrderRegNo: "신고 진행 중",
+  // 2026-09-11 확정값(사용자 제공).
+  mailOrderRegNo: "제2026-성남분당B-0866호",
 } as const;

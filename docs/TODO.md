@@ -614,12 +614,10 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 
 **대표님이 진행해야 하는 것(코드로 대체 불가)**:
 - 통신판매업 신고(관할 성남시 분당구청 또는 정부24) — 신고 전에는 실제 유상 거래 시작 금지.
-  **현재 상태(2026-09-04): 신고서 제출 완료, 심사 진행 중(완료 아님).** [2026-09-11 갱신]
-  신고번호 표시 위치를 `lib/businessInfo.ts`의 `mailOrderRegNo` 필드 하나로 단일화함
-  (`app/legal/business/page.tsx` + `app/manager/subscription/page.tsx` 둘 다 이 필드
-  참조) — 신고 완료 시 이 필드 값만 실제 번호로 교체하면 두 화면 모두 반영됨. **토스
-  빌링(자동결제) 계약심사 제출 전 반드시 실제 번호로 교체 필요**(`toss-billing-review`
-  브랜치, docs/CHANGELOG.md 2026-09-11 항목 참고)
+  **[2026-09-11 완료] 신고번호 확정: 제2026-성남분당B-0866호.** `lib/businessInfo.ts`의
+  `mailOrderRegNo` 필드에 반영 완료(`app/legal/business/page.tsx` +
+  `app/manager/subscription/page.tsx` 둘 다 이 필드 참조 — 실제 값 반영으로 두 화면
+  모두 자동 갱신됨, `toss-billing-review` 브랜치)
 - **상호·주소 변경 정정신고 완료 확인 후 아래 두 가지 반영**(2026-09-06 사용자 결정):
   1. `lib/businessInfo.ts`(2026-09-11부터 단일 출처, 이전엔 `app/legal/business/page.tsx`에
      하드코딩)의 "상호"(손장욱→모하빗)·"사업장 소재지" 필드를 정정된 실제 값으로 교체
