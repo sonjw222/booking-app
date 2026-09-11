@@ -34,11 +34,12 @@ Privacy/Toss 코드는 건드리지 않음, cron 주기/notifications 데이터�
   시나리오에서 전체 스위트 실행 횟수가 6회(PR 5회 + merge 시 push 1회)→5회로 감소 —
   merge 빈도가 늘수록 절감폭도 비례해서 커짐(매 merge마다 100% 중복이던 1회를 제거).
 - **cron 3개(dispatch-web-push/autocancel/alimtalk) 주기 완화안**: 실제 변경은 하지
-  않고 `propose_cron_interval_reduction_draft_proposed.sql`(신규, 미실행)로 제안만
-  작성. `dispatch-autocancel`은 `center_settings.autocancel_minutes`가 분 단위로
-  설정 가능해 지연에 가장 민감 — 1분 유지 권장. `dispatch-web-push`는 2분, `dispatch-alimtalk`
-  (OTP는 별도 경로라 무관, 공지성 메시지만 다룸)는 5분으로 완화 시 하루 4,320회→
-  2,448회(43% 감소) 예상.
+  않고 제안만 작성(`propose_cron_interval_reduction_draft_proposed.sql`로 작성했으나
+  사용자 결정에 따라 **이번 merge에는 포함하지 않음** — cron 주기는 이번 배치 범위
+  밖, 별도 승인 후 별도로 진행). `dispatch-autocancel`은 `center_settings.autocancel_minutes`가
+  분 단위로 설정 가능해 지연에 가장 민감 — 1분 유지 권장. `dispatch-web-push`는 2분,
+  `dispatch-alimtalk`(OTP는 별도 경로라 무관, 공지성 메시지만 다룸)는 5분으로 완화
+  시 하루 4,320회→2,448회(43% 감소) 예상.
 - **`notifications` 94,749행 원인 분석**(집계 쿼리만 사용, 대량 row fetch/삭제 없음):
   이름이 "통합테스트계정"인 계정으로 간 notification이 **92,873건(98.0%)** — 사실상
   전부 통합/E2E 테스트가 반복적으로 예약 생성/취소를 수행하며 쌓은 것으로 확인(추측
@@ -56,8 +57,8 @@ Privacy/Toss 코드는 건드리지 않음, cron 주기/notifications 데이터�
   Toss 테스트도 재실행하지 않음).
 
 변경 파일: `app/components/InquiryChat.tsx`, `lib/inquiries.ts`, `tests/integration/setup.ts`,
-`.github/workflows/test.yml`, `docs/TODO.md`, `tests/unit/mapInquiryMessageRow.test.ts`(신규),
-`propose_cron_interval_reduction_draft_proposed.sql`(신규, 미실행).
+`.github/workflows/test.yml`, `docs/TODO.md`, `tests/unit/mapInquiryMessageRow.test.ts`(신규).
+cron 완화 제안 SQL은 위 사유로 이번 merge에서 제외.
 
 ## 2026-09-11 — Security Hotfix (P0): accounts.is_platform_admin / merged_into 자가 수정으로 인한 권한 상승·계정 탈취 취약점
 

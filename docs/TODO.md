@@ -2661,6 +2661,16 @@ PR #86(UI/UX 감사 배치, 이 PR은 예약/한도 로직을 전혀 건드리�
 정리가 스킵되는 게 근본 원인이라 언제든 다시 쌓인다 — 정기 정리 스크립트를 cron이나 CI
 후처리로 실제로 돌리는 방안이 필요.
 
+### P2-33. (신규, 2026-09-11) CI push(main) e2e/integration skip 조건 — 실제 GitHub Actions 실행으로 미검증
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인 필요** — 로컬에서 YAML 파싱 + `if` 조건 수동 케이스 추적(성공/skipped/실패 조합, fork PR 조합)만 검증함. 실제 GitHub Actions 러너에서 이 조건이 의도대로 평가되는지는 아직 확인 안 됨 |
+| 근거 파일 | `.github/workflows/test.yml`(Low-Egress Fix Batch, `e2e`/`integration` job의 `if: github.event_name != 'push' && ...`, `unit`/`build`의 `if: always() && (needs.X.result == 'success' \|\| (needs.X.result == 'skipped' && github.event_name == 'push'))`) |
+| 완료 조건 | 이 배치가 담긴 PR이 merge된 뒤, main에 실제로 발생하는 첫 `push` 이벤트 워크플로 실행을 GitHub Actions 탭에서 열어 (a) `e2e`/`integration` job이 실제로 `skipped`로 표시되는지 (b) `unit`/`build`는 정상적으로 `success`(또는 실 실패)로 진행되는지 확인. PR 자체의 실행은 `pull_request` 경로만 타므로 이 push 경로 검증에 쓸 수 없음 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-11 Low-Egress Fix Batch 항목 |
+
 ### P3-11. (신규, 2026-09-11) InquiryChat 이전 대화 더보기(pagination) 없음
 
 | 필드 | 내용 |
