@@ -2746,6 +2746,13 @@ no-op된 상태에서 새 코드가 `null`을 넣으려다, rolling_month 여부
 | 완료 조건 | 센터 정의 필드와 회원 입력값의 노출·수정 권한을 결정하고 실제 설정·입력 화면을 구현하거나 미사용 결정을 기록함 |
 | 관련 문서 | [DATABASE 5절](./DATABASE.md), [REQUIREMENTS 12절](./REQUIREMENTS.md) |
 
+**2026-09-11 갱신(Privacy 배치 #8)**: 재확인 결과 `center_member_fields`/`profile_center_fields`를
+읽거나 쓰는 코드가 app/lib 전체에 0건 — 센터가 커스텀 필드를 정의하는 UI 자체가 아직 없어서
+민감정보(주민번호·건강정보 등)를 수집할 수 있는 실제 경로가 현재는 존재하지 않음(당장 노출된
+취약점 아님). 이 기능을 실제로 구현할 때는 필드 이름/타입에 민감정보 금지 검증(denylist 또는
+허용 타입 제한)을 반드시 요구사항에 포함할 것 — 이번 배치에서는 미리 validation/schema를
+추가하지 않음(기능 자체가 없는데 제약만 먼저 넣는 것은 범위 밖).
+
 ### P3-4. 커뮤니티·대회정보·팝업공지
 
 | 필드 | 내용 |
@@ -3292,6 +3299,51 @@ Empty/Error/Skeleton 공용 컴포넌트 3종 → 3주차 액센트 단일화 + 
 RPC(`open_inquiry_thread`/`send_inquiry_message`/`read_inquiry_thread`) + 실시간 구독으로 완전히
 대체되어 있음을 확인함. **결론: 정책 추가 후보가 아니라 삭제 후보.** 이번 배치는 실제 DROP을
 하지 않음 — 사용자 승인 후 별도 배치에서 `chat_messages` DROP 마이그레이션을 작성할 것.
+
+**2026-09-11 갱신(Privacy 배치 #5)**: 0 rows 재확인(읽기 전용 쿼리). 사용자 결정 — **DROP하지
+않고 유지**(이번 출시 준비 단계에서 schema 삭제의 실익이 적다고 판단, 2026-08-01의 "삭제 후보"
+결론 자체는 유효하나 실행은 보류). 이 항목은 계속 dead schema TODO로만 남긴다 — DROP SQL을
+새로 작성하지 말 것.
+
+### P0-9. (신규, 2026-09-11, 수정 작성 완료·미적용) accounts.is_platform_admin / merged_into 자가 수정으로 권한 상승·계정 탈취 가능
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 (권한 상승 + 계정 탈취 — 출시 전 필수 수정) |
+| 현재 상태 | **운영 설정 필요** — migration 작성/실제 취약점 재현/테스트까지 완료, SQL은 사용자 승인 후 실행 예정 |
+| 근거 파일 | `fix_accounts_admin_and_merged_into_privilege_escalation.sql`(신규), `tests/integration/accounts-privilege-escalation.test.ts`(신규, 실제 라이브 dev DB에서 재현 확인) |
+| 완료 조건 | SQL 실행 후 `tests/integration/accounts-privilege-escalation.test.ts` 8개 전부 통과(현재 A/B 2개 실패로 취약점 확인됨, D는 별도 add_marketing_consent.sql 미적용으로 실패 중) |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-11 Security Hotfix 항목 |
+
+상세 내용은 CHANGELOG 참고. 요약: "본인 계정 수정" RLS 정책이 컬럼 제한 없이 행
+전체를 허용하는데 `is_platform_admin`/`merged_into`엔 `pg_checkout_override`가 받은
+것과 같은 보호 트리거가 없었음 — 전자는 자가 운영자 승격, 후자는(더 심각) 임의
+계정으로 identity resolution을 가로채 그 계정의 매니저/운영자 권한을 통째로 탈취
+가능. 부수 발견: `account_auth_identities`에 `service_role` GRANT 자체가 없음(6차례
+넘게 반복된 패턴, 이 배치 범위 밖이라 별도 기록만).
+
+### P0-10. (신규, 2026-09-11) account_auth_identities 테이블에 service_role GRANT 없음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0로 분류하되 시급하지 않음 — 현재 이 테이블을 service_role로 접근하는 운영 코드가 없어 활성 장애는 아니지만, 이미 6차례 반복된 동일 패턴이라 언제든 재발 가능 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `add_account_linking.sql`(테이블 생성), `information_schema.role_table_grants`로 확인 — `authenticated`/`postgres`만 있고 `service_role`은 SELECT조차 없음 |
+| 완료 조건 | `fix_service_role_missing_grants_accounts_*.sql` 등 기존 6개 선례와 동일한 형식으로 `grant select, insert, update, delete on account_auth_identities to service_role;` 파일 작성 후 적용 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-11 Security Hotfix 항목(P0-9 작업 중 테스트 fixture 정리하다가 우연히 발견) |
+
+### P1-25. (신규, 2026-09-11) 개인정보처리방침이 약속한 법정 보유기간 경과 후 자동 파기가 실제로 구현되어 있지 않음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 (개인정보처리방침이 이미 공개적으로 약속한 내용과 실제 동작이 어긋남 — 법적 리스크) |
+| 현재 상태 | **미완성** |
+| 근거 파일 | `app/legal/privacy/page.tsx`(3절 — 계약/청약철회 5년, 결제기록 5년, 분쟁처리 3년, 표시광고 6개월, 접속기록 3개월 등 법정 보관기간별 "기간 경과 시 파기" 명시); `supabase/functions/` 전체에 retention/purge/cleanup류 자동화 없음(확인됨) |
+| 완료 조건 | (a) 정책의 각 보관기간 카테고리가 실제 어느 테이블/행에 대응하는지 매핑을 법무/사용자가 확정(예: 결제기록 5년 → `payments`/`orders` 어느 컬럼 기준인지, 접속 로그 3개월 → 그런 로그 테이블이 현재 존재하는지부터 확인 필요) (b) 카테고리별로 "파기"가 hard delete인지 비식별화인지 결정 (c) pg_cron 또는 Edge Function으로 자동화 구현 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-11 Privacy 배치 항목(#3, 이번 배치에서 의도적으로 미착수 — 정책 확정 전) |
+
+Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기간 정책이 먼저 확정돼야 구현
+가능해 이번 배치에서는 의도적으로 손대지 않음(사용자 결정). 별도 배치 대상.
 
 ### P2-31. (신규 2026-09-09, 완료 2026-09-09) 스태프 권한 카탈로그 중 상당수가 RLS/RPC에 연결 안 됨 — 무늬만 있는 체크박스
 

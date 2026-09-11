@@ -21,7 +21,7 @@ import UiIcon from "../components/UiIcon";
 import CenterRegistrationForm, { type CenterFieldsValue } from "../components/CenterRegistrationForm";
 import AddressField from "../components/AddressField";
 import { validateCenterRegistrationInput, registerCenterForAccount } from "../../lib/centers";
-import { setBootstrapSuppressed } from "../../lib/authAccount";
+import { setBootstrapSuppressed, stashSignupMarketingConsent } from "../../lib/authAccount";
 import { startNaverLogin } from "../../lib/naverAuth";
 import { startKakaoLogin } from "../../lib/kakaoAuth";
 import { stashPostLoginNext } from "../../lib/postLoginReturn";
@@ -253,6 +253,11 @@ export default function LoginPage() {
             address: address || null,
             is_member: true, // 매니저도 기본적으로 회원 역할은 가짐
             is_manager: role === "manager",
+            // 마케팅 동의(선택)는 이 화면의 agreeMarketing 체크박스 값을 그대로 저장한다 —
+            // marketing_consent_at은 "동의한 시각"이지 가입 시각이 아니므로, 동의 안 했으면
+            // null로 둔다(add_marketing_consent.sql 참고).
+            marketing_consent: agreeMarketing,
+            marketing_consent_at: agreeMarketing ? new Date().toISOString() : null,
           })
           .select("id")
           .single();
@@ -305,6 +310,10 @@ export default function LoginPage() {
     // 소셜 로그인도 "로그인 상태 유지" 설정을 그대로 따른다 — 이 탭에서 리다이렉트로
     // 나갔다가 돌아오므로, 세션이 실제로 만들어지기 전에 미리 저장해둬야 한다.
     localStorage.setItem(REMEMBER_ME_KEY, rememberMe ? "1" : "0");
+    // 회원가입 모드일 때만 마케팅 동의 체크박스 값을 리다이렉트 전에 임시 저장한다 —
+    // ensureAccountForCurrentUser()가 새 계정을 만들 때 한 번 읽는다(로그인 모드에서는
+    // 이미 있는 계정이라 어차피 안 읽힘, 굳이 저장할 필요 없음).
+    if (mode === "signup") stashSignupMarketingConsent(agreeMarketing);
 
     // 네이버는 Supabase의 기본 제공 OAuth provider가 아니라 signInWithOAuth를 못 쓴다 —
     // 커스텀 authorize URL + Edge Function 흐름을 대신 쓴다(lib/naverAuth.ts,

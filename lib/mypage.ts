@@ -86,14 +86,28 @@ async function getMyContext(): Promise<{ accountId: string; profileId: string; n
 
 // "내 정보 관리"(app/mypage/info) 조회 전용 — getMyContext()는 manager_centers/profiles까지
 // 같이 조회해 무겁다. 이름/휴대폰번호만 필요한 화면이라 계정 행 하나만 가볍게 가져온다.
-export async function fetchMyAccountInfo(): Promise<{ name: string; phone: string | null }> {
+export async function fetchMyAccountInfo(): Promise<{ name: string; phone: string | null; marketingConsent: boolean }> {
   const accountId = await getMyAccountId();
   if (!accountId) throw new Error("로그인이 필요해요");
   const { data: acc, error } = await supabase
-    .from("accounts").select("name, phone")
+    .from("accounts").select("name, phone, marketing_consent")
     .eq("id", accountId).single();
   if (error || !acc) throw new Error("계정 정보를 찾을 수 없어요");
-  return { name: acc.name, phone: acc.phone };
+  return { name: acc.name, phone: acc.phone, marketingConsent: !!(acc as any).marketing_consent };
+}
+
+// 마케팅 정보 수신 동의를 나중에 켜거나 끈다(철회 포함) — marketing_consent_at은
+// 값이 바뀔 때마다 "지금"으로 갱신되므로, 동의 시각뿐 아니라 철회 시각도 이 한 컬럼으로
+// 증빙된다(add_marketing_consent.sql 참고). RLS의 기존 "본인 계정 수정" 정책이 본인
+// auth_id만 통과시키므로 다른 계정의 동의 상태는 이 함수로도 바꿀 수 없다.
+export async function setMyMarketingConsent(consent: boolean): Promise<void> {
+  const accountId = await getMyAccountId();
+  if (!accountId) throw new Error("로그인이 필요해요");
+  const { error } = await supabase
+    .from("accounts")
+    .update({ marketing_consent: consent, marketing_consent_at: new Date().toISOString() })
+    .eq("id", accountId);
+  if (error) throw new Error("마케팅 동의 설정을 저장하지 못했어요: " + error.message);
 }
 
 export async function fetchMyPage() {

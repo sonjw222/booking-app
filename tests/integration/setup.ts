@@ -398,25 +398,30 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
     if (roleErr) throw new Error(`center_roles 조회 실패: ${describeAdminQueryError("center_roles", roleErr)}`);
     const ownerRoleIds = new Set((roles ?? []).filter((r: any) => r.is_owner).map((r: any) => r.id));
     const centerIds = (rows ?? []).map((r: any) => r.center_id).filter(Boolean);
+    // created_at 오름차순(+id를 동률 방지용 2차 정렬)으로 명시 정렬한다 — PostgREST의 기본
+    // 행 순서는 보장되지 않는데, 과거 실행에서 정리되지 않고 남은 중복 "통합테스트센터-%"가
+    // 이 매니저 앞으로 여러 개 있으면(라이브 dev DB를 여러 PR이 동시에 공유해서 생기는
+    // 픽스처 오염) 매 실행마다 다른 센터를 고를 수 있었다 — E2E CI가 간헐적으로 실패하던
+    // 원인. 항상 "가장 먼저 만들어진 것" 하나로 고정해 실행마다 결과가 달라지지 않게 한다.
     const { data: centers, error: centerLookupError } = centerIds.length > 0
-      ? await admin.from("centers").select("id, name").in("id", centerIds)
+      ? await admin.from("centers").select("id, name")
+          .in("id", centerIds)
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
       : { data: [], error: null };
     if (centerLookupError) {
       throw new Error(`centers 조회 실패: ${describeAdminQueryError("centers", centerLookupError)}`);
     }
-    const integrationCenterIds = new Set(
-      (centers ?? [])
-        .filter((center: any) => String(center.name ?? "").startsWith("통합테스트센터-"))
-        .map((center: any) => center.id)
-    );
-    const owned = (rows ?? []).find(
-      (r: any) => ownerRoleIds.has(r.role_id) && integrationCenterIds.has(r.center_id)
+    const roleIdByCenterId = new Map((rows ?? []).map((r: any) => [r.center_id, r.role_id]));
+    const owned = (centers ?? []).find(
+      (center: any) =>
+        String(center.name ?? "").startsWith("통합테스트센터-") &&
+        ownerRoleIds.has(roleIdByCenterId.get(center.id))
     );
     if (owned) {
-      const centerId = (owned as any).center_id as string;
-      const { data: centerRow } = await admin.from("centers").select("name").eq("id", centerId).maybeSingle();
-      await sweepStaleTestClasses(centerId, (centerRow as any)?.name ?? "");
-      await resetStaleTestCenterSettings(centerId, (centerRow as any)?.name ?? "");
+      const centerId = (owned as any).id as string;
+      await sweepStaleTestClasses(centerId, (owned as any).name ?? "");
+      await resetStaleTestCenterSettings(centerId, (owned as any).name ?? "");
       return centerId;
     }
   }

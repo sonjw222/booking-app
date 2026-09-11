@@ -1,5 +1,138 @@
 # CHANGELOG
 
+## 2026-09-11 — Security Hotfix (P0): accounts.is_platform_admin / merged_into 자가 수정으로 인한 권한 상승·계정 탈취 취약점
+
+Privacy 배치 #1(add_marketing_consent.sql) SQL 안전성 감사 중 "본인 계정 수정" RLS
+정책이 컬럼 제한 없이 accounts 행 전체를 UPDATE 허용한다는 걸 재확인하다가, 이번
+Privacy 배치와 무관한 기존 P0급 취약점 2건을 발견해 별도 핫픽스로 처리.
+
+**취약점 1 — is_platform_admin 자가 승격**: `add_platform_admin.sql`이 컬럼만 추가하고
+`pg_checkout_override`(add_pg_checkout_reviewer_override.sql) 때와 달리 보호 트리거를
+만든 적이 없었음 — 로그인한 사용자 누구나
+`supabase.from("accounts").update({is_platform_admin:true})`를 직접 호출해 스스로
+플랫폼 운영자(센터 승인/반려 등 `/admin/*` 전체 권한)가 될 수 있었음.
+
+**취약점 2 — merged_into로 임의 계정 가로채기(더 심각)**: `my_account_id()`
+(fix_my_account_id_merged_into_priority.sql)가 `coalesce(merged_into, id)`로 계정을
+resolve하고 `is_platform_admin()`/`my_managed_center_ids()` 등 거의 모든 권한 판단이
+그 함수를 경유함 — `merged_into`도 보호가 없어서 본인 계정의 이 값을 임의의 다른
+account id로 바꾸면 그 이후 모든 요청이 그 타깃 계정으로 resolve됨(정상 흐름인
+`link_accounts_by_code()`의 코드 기반 상호 동의 검증을 완전히 우회, 타깃이 매니저/
+운영자면 그 권한을 그대로 탈취).
+
+실제 통합 테스트(`tests/integration/accounts-privilege-escalation.test.ts`)로 두
+취약점 모두 라이브 dev DB에서 재현 확인함(전용 임시 계정만 사용, 실제 사용자 데이터
+훼손 없음).
+
+**수정**(`fix_accounts_admin_and_merged_into_privilege_escalation.sql`, 신규, **미적용**):
+- `is_platform_admin`: `pg_checkout_override`와 동일한 BEFORE UPDATE 트리거 패턴
+  재사용(자가 변경 차단, `auth.uid() is null`(SQL Editor/service_role) 또는 이미
+  `is_platform_admin()`인 행위자만 허용). `link_accounts_by_code()`의 "권한 플래그
+  합집합(OR)" 갱신 로직도 수학적으로 이 조건을 항상 통과함을 검증(파일 내 주석 참고).
+- `merged_into`: `auth.uid()`가 SECURITY DEFINER로도 안 바뀌는 세션 GUC라
+  `is_platform_admin` 패턴을 그대로 못 씀 — 트랜잭션 로컬 플래그
+  (`set_config('app.allow_merged_into_change','true',true)`)를 `link_accounts_by_code()`
+  내부의 실제 UPDATE 직전에만 세워서 그 RPC를 통한 정상 연동만 통과시킴.
+  `link_accounts_by_code()`는 라이브 DB의 실제 배포 버전(`pg_get_functiondef`로 직접
+  확인 — `fix_link_accounts_by_code_native_push_tokens_optional.sql`까지 반영된 버전)에
+  이 한 줄만 추가해 재정의함.
+
+**부수 발견(이번 배치 범위 밖)**: `account_auth_identities` 테이블에 `service_role`
+GRANT가 전혀 없음(이 저장소에서 6차례 이상 반복된 "새 테이블에 service_role GRANT
+빠뜨림" 패턴과 동일 — `authenticated`/`postgres`만 있고 `service_role`은 SELECT조차
+없음, `information_schema.role_table_grants`로 확인). 테스트 fixture 정리 중 우연히
+발견 — SQL Editor(직접 postgres 연결)는 영향 없지만, service_role API 키를 쓰는 모든
+코드(Edge Function 등)는 이 테이블에 접근 못 함. 이번 Security Hotfix와 무관한 별개
+이슈라 여기서 고치지 않음, `docs/TODO.md`에 별도 기록.
+
+SQL 실행 필요(YES) — 운영 DB에는 사용자 승인 후 적용 예정, 아직 미실행.
+
+변경 파일: `fix_accounts_admin_and_merged_into_privilege_escalation.sql`(신규),
+`tests/integration/accounts-privilege-escalation.test.ts`(신규).
+
+## 2026-09-11 — Privacy 배치 #1/#2/#6/#7: 마케팅 동의 저장, Aligo 위탁 고지, avatar orphan 정리
+
+이전 세션의 Privacy Emergency Fix(P0/P1)에서 별도 배치로 미룬 8개 항목 중 결정이 필요
+없는 4개를 구현.
+
+- **#1 마케팅 정보 수신 동의 실제 저장**: `app/login/page.tsx`의 `agreeMarketing`
+  체크박스 값이 어디에도 저장되지 않던 문제 — `accounts.marketing_consent`/
+  `marketing_consent_at`(값이 바뀔 때마다 갱신 — 동의/철회 둘 다 증빙 가능) 컬럼을
+  추가(`add_marketing_consent.sql`, 미적용)하고, 이메일 가입(`handleSignup`)과 소셜
+  가입(`ensureAccountForCurrentUser`, OAuth 리다이렉트 전 sessionStorage로 값을
+  넘김 — `stashSignupMarketingConsent`/`stashPostLoginNext`와 동일 패턴) 양쪽에서
+  실제로 저장하도록 수정. 기존 "본인 계정 수정" RLS 정책이 컬럼 제한 없이 이미
+  본인만 UPDATE를 허용하므로 새 정책/트리거 불필요(add_pg_checkout_reviewer_override.sql
+  때와 동일 분석). `내 정보 관리`(app/mypage/info) 화면에 철회 가능한 토글 추가
+  (`lib/mypage.ts`의 `setMyMarketingConsent`).
+- **#2 Aligo 위탁 고지 불일치 수정**: 개인정보처리방침이 "알림톡 발송 기능은 준비
+  중"이라고 잘못 기재돼 있었는데, 실제로는 `send-phone-otp`/`send-alimtalk`
+  Edge Function이 이미 Aligo로 OTP/알림톡을 실제 발송 중이었음(코드로 확인) —
+  처리위탁 표에 알리고(Aligo) 행 추가, 잘못된 문구 제거. 같은 화면에서 생년월일이
+  "필수 항목"으로 잘못 기재돼 있던 것도 실제 가입 폼(생년월일 미수집, 프로필 관리
+  화면에서만 선택 입력)과 일치하도록 "선택 항목"으로 이동(#4 — 가입 폼에 새로
+  추가하지 않음, 문구만 실제와 맞춤).
+- **#6 avatar 재업로드 시 이전 파일 orphan 방치 수정**: `lib/profiles.ts`의
+  `updateProfile()`이 DB의 이전 `avatar_url`을 update 전에 조회해두고, update가
+  *성공한 뒤에만*(실패 안전) 새 값과 실제로 다를 때만 이전 Storage object를
+  지우도록 수정 — `delete-account`의 `avatarObjectKey()`와 동일 로직으로 소유
+  판별 안 되는 값(외부 URL 등)은 절대 건드리지 않음.
+- **#7 가족 프로필 개별 삭제 시 avatar 미삭제 수정**: `deleteProfile()`이 soft-delete
+  전에 `avatar_url`을 같이 조회해 soft-delete 성공 후 Storage object도 지우도록
+  수정(#6과 같은 헬퍼 재사용).
+- **avatars 버킷에 DELETE RLS 정책이 아예 없었음을 발견**: `add_profile_fields.sql`이
+  버킷을 만들 때 INSERT/SELECT만 추가하고 DELETE는 빠뜨려서, 클라이언트(anon/
+  authenticated)로는 avatar object를 지울 방법이 없었음 — `delete-account`가
+  지금까지 지울 수 있었던 건 그 함수만 RLS를 우회하는 service_role을 쓰기 때문.
+  `add_avatar_storage_delete_policy.sql`(신규, 미적용) — `owner = auth.uid()`로
+  본인이 올린 object만 지울 수 있게 제한(읽기 전용 쿼리로 기존 avatar object 7개
+  전부 owner가 이미 채워져 있음을 확인, 안전).
+- 신규 테스트: `tests/integration/marketing-consent.test.ts`(동의/철회/타인 계정
+  변경 불가), `tests/integration/avatar-storage-cleanup.test.ts`(최초 업로드/재업로드/
+  무사진/외부 URL 보호/가족 프로필 삭제). 위 두 마이그레이션이 미적용 상태라 이
+  실행에서는 관련 단언 3개가 예상대로 실패(컬럼 없음/Storage 삭제 RLS 막힘) —
+  나머지(외부 URL 보호, 무사진 케이스 등 마이그레이션과 무관한 안전 로직)는 이미
+  통과 확인됨. 배포 후 재실행 필요.
+- **이번 배치에서 구현하지 않은 것**(사용자 결정): #3 보유기간 자동파기(법적 정책
+  확정 필요), #5 chat_messages dead schema(DROP하지 않고 유지하기로 결정), #8
+  center custom fields 민감정보 제한(관련 기능 자체가 아직 없어 지금은 미적용).
+- 기존 Privacy Emergency Fix(native_push_tokens/push_subscriptions 삭제, avatar
+  Storage 삭제, 탈퇴 계정 발송 차단)가 origin/main과 실제 배포된 Edge Function
+  양쪽에 그대로 살아있음을 읽기 전용으로 재확인(`delete-account`/`send-web-push`
+  둘 다 ACTIVE, native_push_tokens/push_subscriptions 테이블 존재 확인).
+
+변경 파일: `app/legal/privacy/page.tsx`, `app/login/page.tsx`, `app/mypage/info/page.tsx`,
+`lib/authAccount.ts`, `lib/mypage.ts`, `lib/profiles.ts`,
+`add_marketing_consent.sql`(신규), `add_avatar_storage_delete_policy.sql`(신규),
+`tests/integration/marketing-consent.test.ts`(신규),
+`tests/integration/avatar-storage-cleanup.test.ts`(신규).
+
+## 2026-09-11 — E2E CI 간헐 실패 수정: `getOrCreateOwnedTestCenter()` 비결정적 센터 선택
+
+`tests/e2e/admin/new-class-creation.spec.ts` TEST6이 CI에서 간헐적으로 `.pass-pick-list`
+타임아웃으로 실패하던 문제의 원인을 확정. `getOrCreateOwnedTestCenter()`가 매니저 소유의
+"통합테스트센터-%" 후보가 여러 개(여러 PR이 동시에 같은 라이브 dev Supabase를 공유해서
+생긴 픽스처 오염 — managerA 앞으로 5개 이상 확인됨) 있을 때 PostgREST가 반환하는 행 순서
+그대로 `.find()`로 첫 번째를 골랐는데, 이 순서가 보장되지 않아 실행마다 다른 센터가 선택될
+수 있었음(각 센터는 서로 다른 leftover 상태를 가질 수 있어 어떤 걸 고르느냐에 따라
+결과가 달라짐).
+
+`tests/integration/setup.ts`의 `getOrCreateOwnedTestCenter()`를 수정 — 후보 센터를
+`created_at`(+동률 방지용 `id`) 오름차순으로 명시 정렬한 뒤 "가장 먼저 만들어진 것" 하나로
+고정 선택하도록 변경(기존 sweep/reset 로직은 그대로 유지). 이 함수를 쓰는 통합/E2E 테스트
+전부(10개 이상 파일)가 영향을 받으므로 별도 파일 수정 없이 스위트 전체에 적용됨.
+
+`npx playwright test tests/e2e/admin/new-class-creation.spec.ts`로 실측 확인 — 수정 전/후
+동일 조건에서 TEST6은 양쪽 다 통과(원래도 항상 재현되는 실패가 아니라 간헐적이었음이 재확인됨).
+같은 실행에서 TEST4가 별개 사유로 실패했는데, 로컬 `.env.local`의
+`NEXT_PUBLIC_PAYMENT_PROVIDER=toss`(다른 세션이 실제 토스 게이트웨이 테스트용으로 켜둔 것으로
+추정) 때문에 0원 결제가 진짜 Toss SDK로 넘어가 거부된 것(`금액은 0보다 커야 합니다`,
+`tests/e2e/checkout/real-toss-gateway-open.spec.ts`에 이미 문서화된 동일 현상)으로 확인 —
+이번 수정과 무관하고 GitHub Actions는 이 환경변수를 설정하지 않아(기본값 mock) CI 신호와도
+무관함. `.env.local`은 다른 세션이 쓰고 있을 수 있는 공유 상태라 건드리지 않음.
+
+변경 파일: `tests/integration/setup.ts`.
+
 ## 2026-09-10 — notifications 테이블 service_role GRANT 누락 수정 (푸시 발송 전체 500 버그)
 
 FCM/Privacy 배치 병합 후 재배포한 `send-web-push`를 실제로 호출해 검증하던 중
