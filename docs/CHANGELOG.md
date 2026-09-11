@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## 2026-09-11 — iOS Splash 감사
+
+실기기(iPhone) 첫 실행 시 Splash가 이상하게 보였고 Xcode Assets에 `The image set
+"Splash" has 3 unassigned children.` 경고 확인.
+
+**원인 1(경고)**: `ios/App/App/Assets.xcassets/Splash.imageset/`에 `Contents.json`이
+전혀 참조하지 않는 파일 3개(`splash-2732x2732.png`, `-1.png`, `-2.png`)가 남아있었음
+— `@capacitor/assets generate` 같은 생성 도구의 중간 산출물로 추정, 실제 사용되는
+`Default@1x/2x/3x~universal~anyany(-dark).png` 6개와 내용이 겹치는 잔여 파일. 삭제
+후 `actool --notices --warnings`로 직접 재컴파일해 경고 사라짐 확인.
+
+**원인 2(실제 시각적 문제로 더 유력)**: 이 앱은 `capacitor.config.ts`의 `server.url`
+모드로 WebView가 로컬 번들이 아니라 실제 네트워크로 `mwhabit.com`을 불러온다.
+`@capacitor/splash-screen`의 `launchAutoHide` 기본값(true)은 WebView 네비게이션이
+시작되면 곧바로 네이티브 스플래시를 내리는데, 실제 페이지 로드(네트워크 왕복+CSS/
+폰트/이미지)는 그보다 오래 걸릴 수 있어 스플래시가 내려간 자리에 아직 덜 그려진
+페이지가 잠깐 보일 수 있었음(LaunchScreen.storyboard/실제 Splash 이미지 자체는
+aspectFit·배경색 #0A2545 모두 이미 올바르게 설정돼 있었음 — 이미지 콘텐츠 문제
+아님).
+
+**수정**: `capacitor.config.ts`에 `plugins.SplashScreen.launchAutoHide: false` 추가,
+`app/components/CapacitorBootstrap.tsx`가 `document.readyState === "complete"`가
+아니면 `window` `load` 이벤트(모든 리소스 로드 완료)까지 기다렸다가 명시적으로
+`SplashScreen.hide()`를 호출하도록 변경. 앱 아이콘은 건드리지 않음.
+
+변경 파일: `capacitor.config.ts`, `app/components/CapacitorBootstrap.tsx`. 삭제한
+이미지: `ios/App/App/Assets.xcassets/Splash.imageset/{splash-2732x2732,splash-2732x2732-1,splash-2732x2732-2}.png`.
+최종 Splash.imageset: `Contents.json` + `Default@{1,2,3}x~universal~anyany.png` +
+`Default@{1,2,3}x~universal~anyany-dark.png`(6개, 전부 2732×2732, unassigned 0개).
+
 ## 2026-09-11 — Native Push Permission & Registration Fix Batch
 
 실기기(iPhone) 최초 실기기 테스트에서 iOS 설정 → 알림 목록에 앱 자체가 안 뜨고, Xcode
