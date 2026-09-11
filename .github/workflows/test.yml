@@ -37,11 +37,21 @@ jobs:
     # 걸려 cancelled됐음을 실측 확인(20분 15초, 20분 6초). integration job이 같은 이유로
     # 20→35로 상향된 전례(P2-27, docs/TODO.md)와 동일하게 조정.
     timeout-minutes: 30
+    # Low-Egress Fix Batch(2026-09-11) — push(main)는 항상 직전에 병합된 PR이 pull_request로
+    # 이미 이 스위트 전체를 돌린 같은 코드(merge commit이라 SHA만 다름)라, push에서 또
+    # 돌리면 매 merge마다 라이브 dev Supabase에 똑같은 E2E/통합 테스트를 두 번 태우는
+    # 셈이었다(9/15까지 Supabase Free Plan Egress 절약 필요, PostgREST Egress Audit
+    # 참고). push에서는 이 job(E2E, 라이브 DB 사용)을 건너뛰고 unit/build만 돈다 — PR
+    # 없이 곧장 main에 push하는 드문 경로에서도 build/typecheck는 여전히 걸리므로
+    # 검증이 완전히 사라지지는 않는다. pull_request/workflow_dispatch는 기존과 동일하게
+    # 항상 전체 스위트가 돈다.
+    #
     # unit/integration과 마찬가지로 fork PR은 Secrets가 없어 애초에 통과할 수 없고, 있어도
     # 노출시키면 안 되므로 막는다.
     if: >
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event_name != 'push' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -100,7 +110,16 @@ jobs:
     # (실제로 재현됨: e2e가 병렬로 돌자 operational-settings-wiring/reservation-cancel-grace-period가
     # 실패). unit 자체는 Supabase가 필요 없지만, 여기서 순서를 강제해 e2e → unit → integration →
     # build 전체가 항상 순차 실행되게 한다.
+    #
+    # Low-Egress Fix Batch — push에서는 e2e가 위 job 자체에서 건너뛰어진다(skipped).
+    # needs만 두면 GitHub Actions 기본 동작상 필요한 job이 skipped여도 이 job까지 같이
+    # skipped 처리되므로, e2e가 성공했거나 push라서 건너뛰어진 경우 둘 다 이어서 돌도록
+    # 명시적으로 조건을 준다. "e2e가 skipped면 무조건 진행"이 아니라 push일 때로 좁힌
+    # 이유 — e2e가 fork PR이라 skipped된 경우(원래 동작)까지 진행시키면 안 되기
+    # 때문이다(fork는 Secrets가 없어 build 등 뒷단이 그대로 실패함, 예전엔 cascade로
+    # 전부 자동 skip됐던 것 — 그 동작을 그대로 유지).
     needs: e2e
+    if: always() && (needs.e2e.result == 'success' || (needs.e2e.result == 'skipped' && github.event_name == 'push'))
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -124,16 +143,21 @@ jobs:
     # 없애면 2026-08-14/15처럼 진짜 멈춘 job이 전역 큐를 몇 시간씩 막는 사고가 재발하므로,
     # 없애는 대신 정상 실행 기록(과거 30~34분)을 감안해 35분으로 늘린다.
     timeout-minutes: 35
-    # push/workflow_dispatch에서는 항상 실행.
+    # workflow_dispatch에서는 항상 실행.
     # pull_request에서는 "같은 저장소 브랜치 간" PR일 때만 실행 — fork에서 온 PR은
     # GitHub이 Secrets를 주입하지 않아 애초에 통과할 수 없고, 주입되더라도 남의 fork에
     # 우리 Secrets를 노출시키면 안 되므로 명시적으로 막는다.
     # 이 조건 덕분에 "feature 브랜치 → PR" 단계에서도(merge 전) 통합 테스트가 돌아
     # PR 자체가 검증 게이트 역할을 한다 — 이전 버전은 pull_request를 전부 건너뛰어
     # merge 이후(push to main)에야 실행됐던 문제를 수정함.
+    #
+    # Low-Egress Fix Batch — push(main)에서는 e2e와 마찬가지로 건너뛴다(라이브 DB 통합
+    # 테스트, 바로 위 e2e job의 주석과 동일한 이유 — 직전 PR의 pull_request 실행이 이미
+    # 같은 코드를 검증했음). unit은 push에서도 항상 돌므로 needs: unit 자체는 그대로 둔다.
     if: >
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event_name != 'push' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -164,7 +188,12 @@ jobs:
   build:
     name: Build (production, typecheck 포함)
     runs-on: ubuntu-latest
+    # Low-Egress Fix Batch — push에서는 integration이 skipped되므로(위 job 참고),
+    # unit job과 동일한 이유(+동일한 fork-PR 예외 처리)로 "성공했거나 push라서
+    # 건너뛰어졌으면 계속 진행" 조건을 둔다. push에서도 build(typecheck 포함)는 항상
+    # 돌아야 main 직접 push 경로의 검증이 완전히 사라지지 않는다.
     needs: integration
+    if: always() && (needs.integration.result == 'success' || (needs.integration.result == 'skipped' && github.event_name == 'push'))
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

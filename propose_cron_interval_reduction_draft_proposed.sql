@@ -1,0 +1,93 @@
+-- ============================================================
+-- 제안(DRAFT, 절대 실행 금지) — 분당 cron 3개(dispatch-web-push/autocancel/alimtalk)
+-- 주기 완화안. Low-Egress Fix Batch(2026-09-11)의 PostgREST Egress Audit TOP10에서
+-- 1순위로 꼽힌 항목 — 사용자 활동과 무관하게 하루 1,440회씩(3개 합쳐 4,320회) 계속
+-- 도는 유일한 "바닥값" egress 원인.
+--
+-- ⚠️ 이 파일은 제안일 뿐이다. 실제 cron.schedule() 재호출(=주기 변경)은 사용자 승인
+--    없이 이번 배치에서 실행하지 않았다. 아래 세 블록 중 승인된 것만 골라 SQL
+--    Editor에서 직접 실행할 것.
+--
+-- ------------------------------------------------------------
+-- 근거별 추천 주기
+-- ------------------------------------------------------------
+--
+-- 1) dispatch-autocancel — 추천: 1분 유지(가장 보수적으로 가야 함)
+--    center_settings.autocancel_hours/autocancel_minutes(schema.sql)는 분 단위까지
+--    설정 가능하고, run_autocancel_sweep()은 정확히
+--      now() >= class.start_time - (autocancel_hours시간 + autocancel_minutes분)
+--    을 기준으로 취소를 발동한다(add_autocancel_scheduler.sql:63). 센터가 이 값을
+--    짧게(예: 0시간 5분) 설정했다면 cron 주기 자체가 그 임계값의 상당 부분을
+--    차지하게 된다 — 2분 주기만 돼도 "5분 전"으로 설정한 센터에서 실제 취소가
+--    최대 2분 늦어질 수 있고, 이는 그 임계값의 40%에 해당하는 오차라 무시하기
+--    어렵다. **세 cron 중 가장 지연에 민감** — 이번 제안에서는 1분 유지를 권장.
+--    (2분으로 낮추더라도 여전히 "웬만한 설정값 대비 오차 10% 미만"이라는 반론도
+--    있어 아래 대안도 남겨둠 — 최종 판단은 사업 결정.)
+--
+-- 2) dispatch-web-push — 추천: 2분
+--    send-web-push는 예약 확정/취소, 대기 승격, 수업 리마인더, 혜택·이벤트 등
+--    여러 종류(notifications.kind)를 한 큐에서 같이 처리한다. 이 중 "대기 승격"은
+--    회원이 빈 자리를 놓치지 않게 빨리 알아야 하는 종류라 너무 느려지면 안 되지만,
+--    1→2분 정도는 실사용에서 체감되지 않을 정도로 작은 변화다. 나머지(예약 확정/
+--    취소 안내, 혜택 알림)는 수 분 지연이 사실상 무해하다. 5분까지 늦추면 대기
+--    승격 알림 체감이 나빠질 수 있어 2분을 절충안으로 제안.
+--
+-- 3) dispatch-alimtalk — 추천: 5분
+--    이 cron이 다루는 알림톡은 실시간성이 필요한 OTP 인증번호가 아니다(OTP는
+--    send-phone-otp가 별도 경로로 즉시 처리 — 이 cron과 무관, 전혀 영향 없음).
+--    여기서 발송되는 건 관리자가 큐에 넣은 공지성 메시지/규칙 기반 자동 알림톡
+--    (add_notification_rule_evaluators.sql)로, 카카오톡 메시지 자체가 사용자에게
+--    "즉시"보다는 "곧" 오는 것으로 이미 인식되는 채널이라 세 cron 중 지연에 가장
+--    관대할 수 있다. 5분으로 낮추면 하루 호출 수가 1,440회→288회(80% 감소)로
+--    가장 큰 절감 효과.
+--
+-- ------------------------------------------------------------
+-- 적용 시 실행할 SQL (승인된 것만 골라서, 이 배치는 실행하지 않음)
+-- ------------------------------------------------------------
+
+-- 옵션 A: dispatch-autocancel — 1분 유지(권장, 변경 없음 — 참고용으로만 남김)
+-- select cron.schedule('dispatch-autocancel', '* * * * *', $$ ... 기존 본문 그대로 ... $$);
+
+-- 옵션 B: dispatch-web-push — 2분으로 완화
+-- select cron.schedule(
+--     'dispatch-web-push',
+--     '*/2 * * * *',
+--     $$
+--     select net.http_post(
+--         url := 'https://bxntqggkfwnhcczsbqtj.supabase.co/functions/v1/send-web-push',
+--         headers := jsonb_build_object(
+--             'Content-Type', 'application/json',
+--             'Authorization', 'Bearer ' || (
+--                 select decrypted_secret from vault.decrypted_secrets
+--                 where name = 'service_role_key' limit 1
+--             )
+--         ),
+--         body := '{}'::jsonb
+--     );
+--     $$
+-- );
+
+-- 옵션 C: dispatch-alimtalk — 5분으로 완화
+-- select cron.schedule(
+--     'dispatch-alimtalk',
+--     '*/5 * * * *',
+--     $$
+--     select net.http_post(
+--         url := 'https://bxntqggkfwnhcczsbqtj.supabase.co/functions/v1/send-alimtalk',
+--         headers := jsonb_build_object(
+--             'Content-Type', 'application/json',
+--             'Authorization', 'Bearer ' || (
+--                 select decrypted_secret from vault.decrypted_secrets
+--                 where name = 'service_role_key' limit 1
+--             )
+--         ),
+--         body := '{}'::jsonb
+--     );
+--     $$
+-- );
+
+-- ------------------------------------------------------------
+-- 적용 후 확인 (실행했다면)
+-- ------------------------------------------------------------
+-- select jobname, schedule from cron.job where jobname in
+--   ('dispatch-web-push', 'dispatch-autocancel', 'dispatch-alimtalk');

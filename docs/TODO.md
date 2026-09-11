@@ -2661,6 +2661,16 @@ PR #86(UI/UX 감사 배치, 이 PR은 예약/한도 로직을 전혀 건드리�
 정리가 스킵되는 게 근본 원인이라 언제든 다시 쌓인다 — 정기 정리 스크립트를 cron이나 CI
 후처리로 실제로 돌리는 방안이 필요.
 
+### P3-11. (신규, 2026-09-11) InquiryChat 이전 대화 더보기(pagination) 없음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **확인 필요** — Low-Egress Fix Batch에서 `fetchMessages()`가 최근 300개로 제한됨(`lib/inquiries.ts`의 `MESSAGE_HISTORY_LIMIT`) — 그 이상 오래된 메시지를 보는 UI가 없음 |
+| 근거 파일 | `lib/inquiries.ts`(`fetchMessages`), `app/components/InquiryChat.tsx` |
+| 완료 조건 | 300개를 넘는 문의방이 실제로 생기면 "이전 대화 더보기" 버튼 + `created_at` 커서 기반 추가 조회 구현 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-11 Low-Egress Fix Batch 항목 |
+
 ### P2-32. (신규, 2026-09-10, 완료) "매달 자동" 수강권(rolling_month) 신규 기능
 
 | 필드 | 내용 |
