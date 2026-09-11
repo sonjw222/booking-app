@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 2026-09-11 — iOS Info.plist Privacy Usage Description 키 오류 수정
+
+`release-test` 워크트리에서 Xcode Info 탭으로 카메라/사진/위치 권한 설명을 추가하는
+과정에서, 카메라와 위치 두 항목이 실제 raw plist 키(`NSCameraUsageDescription`,
+`NSLocationWhenInUseUsageDescription`)가 아니라 Xcode UI에 표시되는 사람이 읽는
+이름이 문자 그대로(`Privacy - Camera Usage Description-`, `Privacy - Location When
+In Use Usage Description-` — 끝에 하이픈까지 포함) 저장되는 문제가 있었다. 이 상태로는
+iOS가 이 값을 카메라/위치 권한 설명으로 인식하지 못해, 실제 권한 요청 시 설명 없이
+크래시하거나 심사에서 거절될 수 있었다(사진 보관함 항목은 올바르게 `NSPhotoLibraryUsageDescription`으로
+저장돼 있어 문제 없었음).
+
+두 키만 올바른 이름으로 정정(설명 문구 자체는 이미 맞게 입력돼 있어 그대로 유지).
+같은 워크트리의 `project.pbxproj` 변경은 실제 capability 추가 없이 Xcode가 기존
+항목들을 알파벳순으로 재정렬한 것뿐(순수 cosmetic, 기능 변화 0)이라 반영하지 않음.
+
+`plutil -lint`로 plist 유효성 확인, `xcodebuild -sdk iphonesimulator` BUILD SUCCEEDED
+재확인.
+
+변경 파일: `ios/App/App/Info.plist`.
+
 ## 2026-09-11 — iOS Release Readiness: 수출 규정 신고 자동화
 
 App Store 제출 시 반복되는 "Export Compliance"(암호화 사용 여부) 질문을 자동으로
