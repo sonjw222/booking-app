@@ -21,7 +21,7 @@ export default function BusinessInfoPage() {
             <tr><th>상호</th><td>{BUSINESS_INFO.companyName}</td></tr>
             <tr><th>대표자</th><td>{BUSINESS_INFO.ceoName}</td></tr>
             <tr><th>사업자등록번호</th><td>{BUSINESS_INFO.businessRegNo}</td></tr>
-            <tr><th>통신판매업 신고번호</th><td>신고 진행 중</td></tr>
+            <tr><th>통신판매업 신고번호</th><td>{BUSINESS_INFO.mailOrderRegNo}</td></tr>
             <tr><th>사업장 소재지</th><td>{BUSINESS_INFO.address}</td></tr>
             <tr><th>고객센터</th><td>{BUSINESS_INFO.customerServicePhone}</td></tr>
             <tr><th>이메일</th><td>{BUSINESS_INFO.email}</td></tr>

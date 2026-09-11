@@ -222,7 +222,7 @@ function ManagerSubscriptionContent() {
               <div className="set-row">
                 <div className="set-label">플랜</div>
                 <div className="set-inline">{subscription.planName}
-                  {subscription.monthlyPrice > 0 ? ` (월 ${subscription.monthlyPrice.toLocaleString()}원)` : " (가격 미정)"}</div>
+                  {subscription.monthlyPrice > 0 ? ` (월 ${subscription.monthlyPrice.toLocaleString()}원, 부가세 포함)` : " (가격 미정)"}</div>
               </div>
               <div className="set-row">
                 <div className="set-label">상태</div>
@@ -309,7 +309,7 @@ function ManagerSubscriptionContent() {
               맨 아래에 배치한다(lib/businessInfo.ts가 단일 출처, /legal/business와 동일 값). */}
           <div className="set-row col" style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--border-color, #e5e5e5)", fontSize: 12, color: "var(--text-muted, #888)", lineHeight: 1.8 }}>
             <div>{BUSINESS_INFO.serviceName} · 상호 {BUSINESS_INFO.companyName} · 대표 {BUSINESS_INFO.ceoName}</div>
-            <div>사업자등록번호 {BUSINESS_INFO.businessRegNo}</div>
+            <div>사업자등록번호 {BUSINESS_INFO.businessRegNo} · 통신판매업 신고번호 {BUSINESS_INFO.mailOrderRegNo}</div>
             <div>{BUSINESS_INFO.address}</div>
             <div>고객센터 {BUSINESS_INFO.customerServicePhone} · {BUSINESS_INFO.email}</div>
             <div><a href="/legal/business" target="_blank" rel="noopener noreferrer">사업자 정보 전체보기</a></div>

@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 2026-09-11 — 토스 빌링 심사 pre-review 수정: 통신판매업 신고번호 단일 출처화 + VAT 문구 일관화
+
+직전 커밋(토스 빌링 계약심사 준비 배치)에 대한 사용자 검토 후 제출 전 보완:
+
+- `lib/businessInfo.ts`에 `mailOrderRegNo`(통신판매업 신고번호) 필드 추가 — 실제 신고번호를
+  아직 몰라 값은 채우지 않고 기존 표시 문구("신고 진행 중")를 그대로 명시적 placeholder로
+  옮겨둠. `app/legal/business/page.tsx`(기존 하드코딩), `app/manager/subscription/page.tsx`
+  (신규) 두 화면이 이 한 필드만 참조하도록 정리 — 실제 번호가 나오면 여기 한 곳만 바꾸면
+  됨. **토스 심사 제출 전 이 값을 실제 번호로 교체해야 하는 TODO** (docs/TODO.md 참고).
+- `/manager/subscription`의 "플랜" 상태 행이 가격을 `(월 X원)`으로만 표시해 상단 상품
+  안내 박스의 "(부가세 포함)" 문구와 어긋나 있던 것을 발견해 통일(`(월 X원, 부가세 포함)`).
+- 홈 화면(`app/page.tsx`)에는 의도적으로 사업자정보를 추가하지 않음 — 2026-09-04에 이미
+  "사업자 주소가 자택이라 홈 화면에 상시 노출하는 걸 원치 않음"이라는 명시적 결정이
+  코드 주석에 남아있어(전자상거래법 준수는 `/legal/business` 링크로 충족), 이번 지시와
+  충돌하는 부분이라 임의로 덮어쓰지 않고 보고로 남김.
+- 환불정책(`/legal/refund` 6항)은 이번 단계에서 **내용을 고치지 않음** — 사용자 승인 후
+  별도 처리.
+
+변경 파일: `lib/businessInfo.ts`, `app/legal/business/page.tsx`, `app/manager/subscription/page.tsx`.
+
 ## 2026-09-11 — 토스페이먼츠 빌링(자동결제) 계약심사 준비 (branch `toss-billing-review`)
 
 토스에서 받은 빌링결제(신용카드 정기결제) 계약 심사 정보(MID `bill_vbook4iia`, 심사용
