@@ -1,5 +1,129 @@
 # CHANGELOG
 
+## 2026-09-11 — iOS Release Readiness: 수출 규정 신고 자동화
+
+App Store 제출 시 반복되는 "Export Compliance"(암호화 사용 여부) 질문을 자동으로
+답하기 위해 `ios/App/App/Info.plist`에 `ITSAppUsesNonExemptEncryption`이 없던 것을
+확인 — dependency 감사 결과 이 앱은 표준 HTTPS/TLS(Supabase REST/Realtime, Toss/
+Kakao/Naver OAuth 전부 HTTPS)와 Firebase(FirebaseCore/FirebaseMessaging, 표준
+암호화로 취급됨) 외에 커스텀/비표준 암호화 라이브러리를 전혀 쓰지 않음을
+`package.json`과 `App.xcodeproj`의 SPM 의존성(firebase-ios-sdk만 있음) 기준으로
+확인함 — `ITSAppUsesNonExemptEncryption: false` 한 줄만 최소 추가(기존 3개 커밋이
+건드리지 않았던 파일, 이번에 처음 최소 변경). 다른 세션이 이 파일을 병행 관리 중이라
+이 항목 하나만 정확히 추가하고 다른 줄은 전혀 건드리지 않음(diff 2줄).
+
+발견했지만 이번엔 안 건드린 것(다른 세션의 uncommitted 작업과 겹칠 수 있어 보고만):
+`NSCameraUsageDescription`/`NSPhotoLibraryUsageDescription`/
+`NSLocationWhenInUseUsageDescription`/`UIBackgroundModes`(remote-notification)가
+이 tracked Info.plist엔 없음(다른 세션이 로컬에서 이미 작업 중인 것으로 추정).
+
+변경 파일: `ios/App/App/Info.plist`(2줄 추가).
+
+## 2026-09-11 — iOS Real Device UX Polish Batch (overscroll 검정 레터박스 + tap-highlight)
+
+실제 iPhone 구동에서 발견된 UX 문제 중 확실한 근거로 수정 가능한 항목만 반영(motion/
+transition은 아래 별도 절 참고 — 이번엔 손대지 않음).
+
+**overscroll 검정 레터박스 — 원인 2가지 모두 확정, 둘 다 수정**:
+1. `app/layout.tsx`의 `viewport` export에 `viewportFit: "cover"`가 없었음 — 이게
+   없으면 iOS WKWebView에서 CSS `env(safe-area-inset-*)`가 스펙상 전부 0으로 계산된다.
+   `app/globals.css`의 `--floating-nav-clearance`가 이미
+   `env(safe-area-inset-bottom)`에 기대고 있었는데 실제로는 항상 0을 받고 있었던 것
+   — 하단 홈 인디케이터 영역을 제대로 못 피하던 원인 중 하나이기도 함.
+2. `capacitor.config.ts`에 최상위 `backgroundColor`가 없었음 — 네이티브 WKWebView/
+   UIScrollView 자체의 배경색(CSS가 못 건드리는 레이어)이 iOS 기본값으로 남아 있어
+   위/아래로 당겨 튕기는 구간에 그 기본색이 드러났다. `html`/`body`의 CSS `background`
+   (이미 `var(--bg)`로 올바르게 설정돼 있었음)는 문서 영역 안쪽만 그리므로 이 레이어엔
+   영향이 없었다. 앱 배경/스플래시와 동일한 `#0A2545`로 지정.
+
+**버튼 tap 하이라이트**: `-webkit-tap-highlight-color`가 전혀 설정돼 있지 않아 iOS
+WKWebView에서 버튼/링크를 누를 때마다 기본 회색-파란 오버레이가 반짝였음(웹스럽게
+느껴지는 요소) — `html, body`에 `transparent`로 추가. 실제 눌림 피드백은 각 컴포넌트의
+기존 스타일이 계속 담당.
+
+**motion/transition(페이지 전환·버튼 press feedback 등)은 이번에 코드를 바꾸지
+않음** — 조사 결과 `app/layout.tsx` 주석에 이미 명시된 대로 이 앱은 `<Link>` 대신
+일반 `<a href>`로 **전체 페이지를 다시 로드**하는 방식이라(server.url 모드, Next.js
+클라이언트 라우팅 미사용), "페이지 전환 애니메이션"을 만들려면 네비게이션 아키텍처
+자체를 바꿔야 한다 — 이번 배치의 "최소 수정" 범위를 크게 벗어나고 회귀 위험도 큼.
+버튼/모달 등 기존 transition은 이미 대체로 transform/opacity 기반이고
+`prefers-reduced-motion`도 이미 여러 곳에서 존중하고 있어(app/globals.css 확인),
+근거 없이 추가로 손대지 않음. 별도 배치로 남김.
+
+변경 파일: `app/layout.tsx`, `capacitor.config.ts`, `app/globals.css`.
+
+**검증**: `npm run build` 성공, `npx tsc --noEmit` 통과, `xcodebuild -scheme App -sdk
+iphonesimulator build` **BUILD SUCCEEDED**(이번 배치 3개 전부 포함해 통합 컴파일
+확인 — GoogleService-Info.plist는 다른 worktree에서 로컬 검증용으로만 복사, 커밋
+안 함). 실제 iPhone 최종 확인은 사용자가 직접 진행.
+
+## 2026-09-11 — iOS Splash 감사
+
+실기기(iPhone) 첫 실행 시 Splash가 이상하게 보였고 Xcode Assets에 `The image set
+"Splash" has 3 unassigned children.` 경고 확인.
+
+**원인 1(경고)**: `ios/App/App/Assets.xcassets/Splash.imageset/`에 `Contents.json`이
+전혀 참조하지 않는 파일 3개(`splash-2732x2732.png`, `-1.png`, `-2.png`)가 남아있었음
+— `@capacitor/assets generate` 같은 생성 도구의 중간 산출물로 추정, 실제 사용되는
+`Default@1x/2x/3x~universal~anyany(-dark).png` 6개와 내용이 겹치는 잔여 파일. 삭제
+후 `actool --notices --warnings`로 직접 재컴파일해 경고 사라짐 확인.
+
+**원인 2(실제 시각적 문제로 더 유력)**: 이 앱은 `capacitor.config.ts`의 `server.url`
+모드로 WebView가 로컬 번들이 아니라 실제 네트워크로 `mwhabit.com`을 불러온다.
+`@capacitor/splash-screen`의 `launchAutoHide` 기본값(true)은 WebView 네비게이션이
+시작되면 곧바로 네이티브 스플래시를 내리는데, 실제 페이지 로드(네트워크 왕복+CSS/
+폰트/이미지)는 그보다 오래 걸릴 수 있어 스플래시가 내려간 자리에 아직 덜 그려진
+페이지가 잠깐 보일 수 있었음(LaunchScreen.storyboard/실제 Splash 이미지 자체는
+aspectFit·배경색 #0A2545 모두 이미 올바르게 설정돼 있었음 — 이미지 콘텐츠 문제
+아님).
+
+**수정**: `capacitor.config.ts`에 `plugins.SplashScreen.launchAutoHide: false` 추가,
+`app/components/CapacitorBootstrap.tsx`가 `document.readyState === "complete"`가
+아니면 `window` `load` 이벤트(모든 리소스 로드 완료)까지 기다렸다가 명시적으로
+`SplashScreen.hide()`를 호출하도록 변경. 앱 아이콘은 건드리지 않음.
+
+변경 파일: `capacitor.config.ts`, `app/components/CapacitorBootstrap.tsx`. 삭제한
+이미지: `ios/App/App/Assets.xcassets/Splash.imageset/{splash-2732x2732,splash-2732x2732-1,splash-2732x2732-2}.png`.
+최종 Splash.imageset: `Contents.json` + `Default@{1,2,3}x~universal~anyany.png` +
+`Default@{1,2,3}x~universal~anyany-dark.png`(6개, 전부 2732×2732, unassigned 0개).
+
+## 2026-09-11 — Native Push Permission & Registration Fix Batch
+
+실기기(iPhone) 최초 실기기 테스트에서 iOS 설정 → 알림 목록에 앱 자체가 안 뜨고, Xcode
+로그에 `PushNotifications addListener`만 보이고 `requestPermissions`/`register`/APNs/FCM
+관련 로그가 전혀 없는 증상 발견. Android(Pixel 9 에뮬레이터, Android 16)도 동일 증상
+(알림 권한 팝업 자체가 안 뜸).
+
+**근본 원인**: `enableNativePush()`(`lib/nativePush.ts` — `PushNotifications.checkPermissions()`/
+`requestPermissions()`/`register()`를 실제로 호출하는 유일한 함수)가 `app/settings/
+notifications/page.tsx`의 토글 버튼을 눌러야만 호출되는 구조였다 — 앱 부팅 시
+(`app/components/CapacitorBootstrap.tsx`)는 알림 탭 핸들러(`registerNativePushTapHandler`,
+로그의 "addListener"가 바로 이것)만 등록하고 권한 요청 자체는 어디서도 자동으로 트리거하지
+않았다. 즉 권한을 "거부"한 게 아니라 애초에 **물어본 적이 없는 상태**였다 — iOS/Android
+둘 다 동일 원인(공유 JS 코드 경로, `POST_NOTIFICATIONS`는 이미 AndroidManifest.xml에
+있었음을 확인 — 매니페스트 문제 아님). iOS AppDelegate의 Firebase 자동 swizzling
+(`FirebaseMessaging Remote Notifications proxy enabled` 로그)과 기존 수동
+`didRegisterForRemoteNotificationsWithDeviceToken` 구현은 서로 중복 실행되긴 하지만
+충돌은 아님(둘 다 각자 올바르게 동작 — swizzling이 개발자 구현을 막지 않음) — 애초에
+`PushNotifications.register()`가 한 번도 안 불려서 이 네이티브 코드 자체가 실행될
+기회가 없었던 것이 실제 원인. 네이티브 코드는 건드리지 않음.
+
+**수정**: `lib/nativePush.ts`에 `autoRegisterNativePushOnLogin()` 추가 — 계정이 확보되는
+시점(로그인 완료/세션 복원)에만 시도하도록 `app/components/SessionWatcher.tsx`의
+`SIGNED_IN`/`INITIAL_SESSION` 핸들러에 연결(`ensureAccountForCurrentUser()`가 유효한
+계정을 반환했을 때만). 이미 구독 중이면 아무것도 안 함(불필요한 register() 반복/DB
+upsert 반복 방지). 이미 거부(denied)된 상태여도 이 함수를 호출은 하되 내부적으로
+`requestPermissions()` 자체를 다시 안 부르므로(기존 로직 그대로) OS가 팝업을 다시
+띄우지 않음 — "거부 후 매 앱 시작마다 팝업 반복" 문제 없음. 네이티브 브릿지 예외가
+나도 try/catch로 흡수해 로그인 흐름을 막지 않음.
+
+**진단 로그 추가**(토큰 값 자체는 절대 출력 안 함): 권한 상태, 권한 요청 시점,
+`register()` 호출 시점, registration 에러, 토큰 획득 여부, `native_push_tokens` upsert
+성공/실패를 각각 `console.log`로 구분 가능하게 함.
+
+변경 파일: `lib/nativePush.ts`, `app/components/SessionWatcher.tsx`. Android 기존 위치
+권한 흐름은 손대지 않음.
+
 ## 2026-09-11 — Low-Egress Fix Batch: PostgREST Egress 감사 후속 조치
 
 9/15까지 Supabase Free Plan Egress 절약 목표로, 앞서 진행한 PostgREST Egress Audit의

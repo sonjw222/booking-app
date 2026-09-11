@@ -53,8 +53,11 @@ export async function enableNativePush(): Promise<{ ok: boolean; error?: string 
   if (!accountId) return { ok: false, error: "로그인이 필요해요" };
 
   let permStatus = await PushNotifications.checkPermissions();
+  console.log(`[nativePush] permission status: ${permStatus.receive}`);
   if (permStatus.receive === "prompt") {
+    console.log("[nativePush] requesting permission");
     permStatus = await PushNotifications.requestPermissions();
+    console.log(`[nativePush] permission after request: ${permStatus.receive}`);
   }
   if (permStatus.receive !== "granted") {
     return { ok: false, error: "알림 권한이 거부됐어요. 기기 설정에서 허용해주세요" };
@@ -66,10 +69,12 @@ export async function enableNativePush(): Promise<{ ok: boolean; error?: string 
   }
 
   async function saveToken(token: string): Promise<{ ok: boolean; error?: string }> {
+    console.log("[nativePush] token obtained, upserting to native_push_tokens"); // 토큰 값 자체는 절대 로그에 남기지 않음
     const { error } = await supabase.from("native_push_tokens").upsert(
       { account_id: accountId, platform, token },
       { onConflict: "token" }
     );
+    console.log(`[nativePush] native_push_tokens upsert: ${error ? "failed — " + error.message : "success"}`);
     return error ? { ok: false, error: "토큰 저장에 실패했어요: " + error.message } : { ok: true };
   }
 
@@ -101,14 +106,43 @@ export async function enableNativePush(): Promise<{ ok: boolean; error?: string 
     }
 
     PushNotifications.addListener("registrationError", (err) => {
+      console.log(`[nativePush] registration error: ${(err as { error?: string })?.error ?? "unknown"}`);
       resolve({ ok: false, error: (err as { error?: string })?.error ?? "푸시 등록에 실패했어요" });
     });
 
     // iOS/Android 공통 — UIApplication.registerForRemoteNotifications()를 트리거한다.
     // iOS에선 이 호출이 결국 AppDelegate의 didRegisterForRemoteNotificationsWithDeviceToken을
     // 거쳐 Firebase Messaging → FcmToken 플러그인으로 이어진다.
+    console.log(`[nativePush] calling PushNotifications.register() (platform: ${platform})`);
     PushNotifications.register();
   });
+}
+
+// 로그인 완료(SIGNED_IN/INITIAL_SESSION) 시 자동으로 호출한다(app/components/SessionWatcher.tsx).
+// 실기기 진단 결과(2026-09-11) — enableNativePush()가 그동안 app/settings/notifications
+// 화면의 토글을 눌러야만 호출되는 구조였다: 그 화면을 스스로 찾아가 토글하는 사용자가
+// 없으면 PushNotifications.requestPermissions()/register()가 단 한 번도 실행되지 않아,
+// iOS/Android 둘 다 설정 앱의 알림 목록에 이 앱 자체가 아예 안 뜨는 상태였다(권한을
+// "거부"한 게 아니라 "물어본 적이 없음"). 이 함수가 그 공백을 메운다.
+//
+// "이미 subscribed"면 그냥 반환한다 — 매 로그인/앱 재실행마다 불필요하게 register()를
+// 다시 부르고 같은 토큰을 다시 upsert하지 않기 위함(egress 절제). "denied"(명시적으로
+// 거부)여도 이 함수를 그냥 호출은 하되, enableNativePush() 내부 로직상
+// checkPermissions().receive가 'prompt'가 아니면 requestPermissions() 자체를 안 부르므로
+// OS 팝업이 다시 뜨지 않는다 — "거부 후 매 앱 시작마다 팝업 반복" 문제가 OS 레벨에서
+// 자연히 방지된다(추가 상태 저장 불필요).
+export async function autoRegisterNativePushOnLogin(): Promise<void> {
+  if (!isNativePushSupported()) return;
+  try {
+    const status = await getNativePushStatus();
+    if (status === "subscribed") return;
+    const result = await enableNativePush();
+    if (!result.ok) console.log(`[nativePush] auto-register on login skipped/failed: ${result.error}`);
+  } catch (e) {
+    // 네이티브 브릿지 예외가 나도 로그인 흐름 자체는 절대 막지 않는다(요구사항 7 —
+    // 권한/등록 실패로 앱이 크래시하거나 로그인이 막히면 안 됨).
+    console.log(`[nativePush] auto-register on login threw: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 export async function disableNativePush(): Promise<{ ok: boolean; error?: string }> {
