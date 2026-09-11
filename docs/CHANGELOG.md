@@ -1,5 +1,43 @@
 # CHANGELOG
 
+## 2026-09-11 — iOS Real Device UX Polish Batch (overscroll 검정 레터박스 + tap-highlight)
+
+실제 iPhone 구동에서 발견된 UX 문제 중 확실한 근거로 수정 가능한 항목만 반영(motion/
+transition은 아래 별도 절 참고 — 이번엔 손대지 않음).
+
+**overscroll 검정 레터박스 — 원인 2가지 모두 확정, 둘 다 수정**:
+1. `app/layout.tsx`의 `viewport` export에 `viewportFit: "cover"`가 없었음 — 이게
+   없으면 iOS WKWebView에서 CSS `env(safe-area-inset-*)`가 스펙상 전부 0으로 계산된다.
+   `app/globals.css`의 `--floating-nav-clearance`가 이미
+   `env(safe-area-inset-bottom)`에 기대고 있었는데 실제로는 항상 0을 받고 있었던 것
+   — 하단 홈 인디케이터 영역을 제대로 못 피하던 원인 중 하나이기도 함.
+2. `capacitor.config.ts`에 최상위 `backgroundColor`가 없었음 — 네이티브 WKWebView/
+   UIScrollView 자체의 배경색(CSS가 못 건드리는 레이어)이 iOS 기본값으로 남아 있어
+   위/아래로 당겨 튕기는 구간에 그 기본색이 드러났다. `html`/`body`의 CSS `background`
+   (이미 `var(--bg)`로 올바르게 설정돼 있었음)는 문서 영역 안쪽만 그리므로 이 레이어엔
+   영향이 없었다. 앱 배경/스플래시와 동일한 `#0A2545`로 지정.
+
+**버튼 tap 하이라이트**: `-webkit-tap-highlight-color`가 전혀 설정돼 있지 않아 iOS
+WKWebView에서 버튼/링크를 누를 때마다 기본 회색-파란 오버레이가 반짝였음(웹스럽게
+느껴지는 요소) — `html, body`에 `transparent`로 추가. 실제 눌림 피드백은 각 컴포넌트의
+기존 스타일이 계속 담당.
+
+**motion/transition(페이지 전환·버튼 press feedback 등)은 이번에 코드를 바꾸지
+않음** — 조사 결과 `app/layout.tsx` 주석에 이미 명시된 대로 이 앱은 `<Link>` 대신
+일반 `<a href>`로 **전체 페이지를 다시 로드**하는 방식이라(server.url 모드, Next.js
+클라이언트 라우팅 미사용), "페이지 전환 애니메이션"을 만들려면 네비게이션 아키텍처
+자체를 바꿔야 한다 — 이번 배치의 "최소 수정" 범위를 크게 벗어나고 회귀 위험도 큼.
+버튼/모달 등 기존 transition은 이미 대체로 transform/opacity 기반이고
+`prefers-reduced-motion`도 이미 여러 곳에서 존중하고 있어(app/globals.css 확인),
+근거 없이 추가로 손대지 않음. 별도 배치로 남김.
+
+변경 파일: `app/layout.tsx`, `capacitor.config.ts`, `app/globals.css`.
+
+**검증**: `npm run build` 성공, `npx tsc --noEmit` 통과, `xcodebuild -scheme App -sdk
+iphonesimulator build` **BUILD SUCCEEDED**(이번 배치 3개 전부 포함해 통합 컴파일
+확인 — GoogleService-Info.plist는 다른 worktree에서 로컬 검증용으로만 복사, 커밋
+안 함). 실제 iPhone 최종 확인은 사용자가 직접 진행.
+
 ## 2026-09-11 — iOS Splash 감사
 
 실기기(iPhone) 첫 실행 시 Splash가 이상하게 보였고 Xcode Assets에 `The image set

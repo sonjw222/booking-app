@@ -14,6 +14,12 @@ const config: CapacitorConfig = {
   appId: "com.mwhabit.app",
   appName: "모하빗",
   webDir: "public", // server.url 모드에선 실제로 안 쓰이지만 Capacitor 스키마상 필수 필드
+  // 실기기 진단(2026-09-11) — 이 값이 없으면 네이티브 WKWebView/UIScrollView 자체의
+  // 배경색이 iOS 기본값(검정에 가까움)으로 남아, 위/아래로 당겨 튕기는(rubber-band
+  // overscroll) 구간에서 앱 배경(var(--bg), #0A2545 계열)이 아니라 그 네이티브 기본색이
+  // 드러난다 — html/body에 CSS background를 줘도(app/globals.css) 이 레이어는 CSS가
+  // 그리는 문서 영역 밖이라 안 먹는다. 앱 전체 배경색/스플래시와 동일한 값으로 맞춘다.
+  backgroundColor: "#0A2545",
   server: {
     // 커스텀 도메인 연결 완료(2026-09-04, 실제 배포 응답 확인함)
     url: "https://mwhabit.com",

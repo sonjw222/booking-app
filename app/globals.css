@@ -146,6 +146,11 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
                "Pretendard", "Malgun Gothic", sans-serif;
   transition: background 0.2s ease, color 0.2s ease;
+  /* 실기기 진단(2026-09-11) — 이게 없으면 iOS WKWebView에서 버튼/링크를 누를 때마다
+     기본 회색-파란 하이라이트 오버레이가 반짝였다가 사라진다(가장 "웹스럽다"고 느껴지는
+     요소 중 하나 — 네이티브 UIKit 컨트롤엔 이런 하이라이트가 없음). 실제 눌림 피드백은
+     각 컴포넌트의 :active/버튼 스타일이 이미 담당하므로, 이 기본 오버레이만 끈다. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 a { color: inherit; text-decoration: none; }
