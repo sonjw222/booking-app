@@ -23,6 +23,46 @@ SQL/RLS 변경 없음(BATCH A 범위 밖). 결제/iOS 설정 미변경.
 
 변경 파일: `android/app/build.gradle`, `android/.gitignore`.
 
+## 2026-09-11 — 센터 후기 신고(UGC Moderation) 추가 — Release Blocker Cleanup Batch A
+
+Apple App Store Review Guideline 1.2(UGC)가 요구하는 콘텐츠 신고 메커니즘 부재를
+해소. 기존에는 `center_reviews`(센터 후기)에 매니저/운영자 삭제·답변(add_review_
+reply.sql)만 있었고, 회원이 부적절한 후기를 신고할 방법이 없었음.
+
+- **신고 UI**: `app/center/[id]/page.tsx` 후기 목록에서 본인 후기가 아닌 항목에만
+  눈에 띄지 않는 "신고" 버튼 노출(본인 후기는 기존 수정/삭제 버튼 유지). 클릭 시
+  사유(부적절한 내용/욕설·비방/광고·스팸/허위·오해유발/개인정보노출/기타) + 선택적
+  상세 사유를 받는 시트. 로그인 안 된 상태로 시도하면 자연스러운 에러 메시지로
+  안내(새 로그인 상태 추적 코드를 이 화면에 추가하지 않음 — 기존 구조 최소 변경).
+- **DB**: `review_reports` 테이블 신규(`add_review_reports.sql`, 미실행) —
+  `unique(review_id, reporter_account_id)`로 동일 사용자 반복 신고를 DB 레벨에서
+  차단. RLS: 본인 명의로만 INSERT 가능(다른 사용자 명의 신고 불가), 일반 사용자
+  SELECT/UPDATE 정책은 아예 없어 "다른 신고 조회 불가"/"임의 status 변경 불가"를
+  policy 부재로 보장, 운영자(`is_platform_admin()`)만 SELECT/UPDATE — 기존
+  `add_platform_admin.sql`/`add_account_linking.sql`의 판정 방식 재사용, service_role
+  우회 없음. 이 저장소에서 6차례 넘게 반복된 "새 테이블 service_role GRANT 누락"을
+  선제 방어(같은 파일에 포함).
+- **운영자 화면**: `app/admin/reviews`(신규) — 상태별(대기/확인완료/기각) 신고 목록,
+  후기 원문·작성자·신고자·사유 표시, "기각"/"확인 완료"/"후기 삭제"(기존
+  `deleteReviewAsManager()` 재사용, 새 삭제 경로 안 만듦) 액션. `/admin` 허브에
+  메뉴 추가.
+- **사용자 차단 기능 검토**: 이 서비스는 SNS/팔로우/DM 구조가 아니라 후기 중심
+  UGC라, 신고+운영자 검토+삭제 조합으로 첫 출시 요건은 충분하다고 판단(정책 판단
+  — 별도 대규모 차단 시스템은 이번 배치에 만들지 않음).
+- 신규 통합 테스트: `tests/integration/review-reports.test.ts`(9개 케이스 — 비로그인
+  신고 차단, 타인 명의 신고 차단, 정상 신고, 중복 신고 차단, 존재하지 않는 후기
+  신고 차단, 일반 사용자 조회 차단, 운영자 조회/상태변경). 마이그레이션 미적용
+  상태라 이번 실행에서는 관련 6개 케이스가 예상대로 실패(테이블 없음), 기존 로직에
+  의존하지 않는 3개(fixture 준비, 비로그인 차단, 타인 명의 차단)만 통과 — 배포 후
+  재실행 필요.
+- 기존 후기 작성/별점/사진/수정삭제/센터평균/목록 쿼리(`lib/reviews.ts`)는 변경
+  없음 — 회귀 없음.
+
+변경 파일: `add_review_reports.sql`(신규, 미실행), `lib/reviews.ts`,
+`app/center/[id]/page.tsx`, `app/admin/reviews/page.tsx`(신규), `app/admin/page.tsx`,
+`app/components/AdminChrome.tsx`, `app/globals.css`,
+`tests/integration/review-reports.test.ts`(신규).
+
 ## 2026-09-11 — iOS Info.plist Privacy Usage Description 키 오류 수정
 
 `release-test` 워크트리에서 Xcode Info 탭으로 카메라/사진/위치 권한 설명을 추가하는

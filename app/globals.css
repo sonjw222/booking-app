@@ -2682,6 +2682,12 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .review-actions .review-edit { color: var(--accent); }
 .review-actions .review-del { color: var(--text-dim); }
+/* 신고 버튼 — 본인 글 수정/삭제와 달리 눈에 띄지 않는 secondary 액션(요청 A-1) */
+.review-actions .review-report {
+  border-color: transparent; background: none;
+  color: var(--text-dim); opacity: 0.55; font-weight: 500;
+}
+.review-actions .review-report:hover { opacity: 0.9; }
 
 /* 후기 답변 (회원 화면) */
 .review-reply { margin-top: 10px; padding: 10px 12px; background: var(--surface); border-radius: 10px; border-left: 3px solid var(--accent); }
