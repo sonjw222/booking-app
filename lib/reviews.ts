@@ -219,3 +219,94 @@ export async function deleteReviewAsManager(reviewId: string): Promise<void> {
   const { error } = await supabase.from("center_reviews").delete().eq("id", reviewId);
   if (error) throw new Error("후기 삭제에 실패했어요: " + error.message);
 }
+
+/* ============================================================
+   후기 신고 (UGC Moderation, Release Blocker Cleanup Batch A)
+   ============================================================ */
+
+export type ReviewReportReason = "inappropriate" | "abuse" | "spam" | "misleading" | "privacy" | "other";
+
+export const REVIEW_REPORT_REASON_LABELS: Record<ReviewReportReason, string> = {
+  inappropriate: "부적절한 내용",
+  abuse: "욕설/비방",
+  spam: "광고/스팸",
+  misleading: "허위 또는 오해를 유발하는 내용",
+  privacy: "개인정보 노출",
+  other: "기타",
+};
+
+// 회원이 후기를 신고한다. 같은 (review_id, reporter_account_id) 조합은 DB unique
+// 제약(add_review_reports.sql)이 막으므로, 그 에러(23505)만 사람이 읽을 수 있는
+// 문구로 바꿔준다 — 신고 여부를 미리 조회할 SELECT 권한을 회원에게 안 줬으므로
+// (add_review_reports.sql 설계 참고) 이 방식이 유일한 중복 방지 확인 경로다.
+export async function reportReview(reviewId: string, reason: ReviewReportReason, detail?: string): Promise<void> {
+  const accountId = await getMyAccountId();
+  if (!accountId) throw new Error("로그인이 필요해요");
+  const { error } = await supabase.from("review_reports").insert({
+    review_id: reviewId,
+    reporter_account_id: accountId,
+    reason,
+    detail: detail?.trim() || null,
+  });
+  if (error) {
+    if (error.code === "23505") throw new Error("이미 신고한 후기예요");
+    throw new Error("신고 접수에 실패했어요: " + error.message);
+  }
+}
+
+/* ============================================================
+   운영자 - 후기 신고 관리
+   ============================================================ */
+
+export type ReviewReportStatus = "pending" | "reviewed" | "dismissed";
+
+export type ReviewReportForAdmin = {
+  id: string;
+  reviewId: string;
+  reason: ReviewReportReason;
+  detail: string | null;
+  status: ReviewReportStatus;
+  createdAt: string;
+  reviewContent: string;
+  reviewRating: number;
+  reviewWriterName: string;
+  reporterName: string;
+};
+
+export async function fetchReviewReportsForAdmin(status?: ReviewReportStatus): Promise<ReviewReportForAdmin[]> {
+  let q = supabase
+    .from("review_reports")
+    .select(
+      "id, review_id, reason, detail, status, created_at, " +
+      "center_reviews(content, rating, profiles(name, nickname)), " +
+      "accounts:reporter_account_id(name)"
+    )
+    .order("created_at", { ascending: false });
+  if (status) q = q.eq("status", status);
+  const { data, error } = await q;
+  if (error) throw new Error("신고 목록을 불러오지 못했어요: " + error.message);
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    reviewId: r.review_id,
+    reason: r.reason,
+    detail: r.detail,
+    status: r.status,
+    createdAt: KST_MD.format(new Date(r.created_at)),
+    reviewContent: sanitizeRichText(r.center_reviews?.content ?? ""),
+    reviewRating: r.center_reviews?.rating ?? 0,
+    reviewWriterName: r.center_reviews?.profiles?.nickname || r.center_reviews?.profiles?.name || "회원",
+    reporterName: r.accounts?.name ?? "알 수 없음",
+  }));
+}
+
+// 신고를 "확인 완료" 또는 "기각"으로 처리(RLS: is_platform_admin()만 통과).
+// 후기 자체를 지우려면 기존 deleteReviewAsManager()를 그대로 쓴다(새 삭제 경로
+// 안 만듦 — 요청 A-4/A-6).
+export async function resolveReviewReport(reportId: string, status: "reviewed" | "dismissed"): Promise<void> {
+  const accountId = await getMyAccountId();
+  const { error } = await supabase
+    .from("review_reports")
+    .update({ status, reviewed_at: new Date().toISOString(), reviewed_by: accountId })
+    .eq("id", reportId);
+  if (error) throw new Error("신고 처리에 실패했어요: " + error.message);
+}
