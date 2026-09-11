@@ -224,9 +224,28 @@ export async function requestCenterBillingAuth(centerId: string): Promise<void> 
   const tossPayments = window.TossPayments(clientKey);
   const payment = tossPayments.payment({ customerKey: tossCustomerKeyForCenter(centerId) });
   const origin = window.location.origin;
+  // 카드 등록 버튼이 실제로 있는 화면(app/manager/subscription/page.tsx)으로 되돌아와야
+  // 그 화면의 useEffect가 authKey/customerKey를 받아 아래 confirmCenterBilling()을 호출할
+  // 수 있다 — 예전엔 존재하지 않는 /manager/settings 쿼리로 돌아가 후속 처리가 전혀
+  // 실행되지 않았다(카드 등록은 토스 쪽엔 성공하는데 billing_key 교환이 안 되는 상태로 남음).
   await payment.requestBillingAuth({
     method: "CARD",
-    successUrl: `${origin}/manager/settings?billing=success&center=${centerId}`,
-    failUrl: `${origin}/manager/settings?billing=fail&center=${centerId}`,
+    successUrl: `${origin}/manager/subscription?billing=success&center=${centerId}`,
+    failUrl: `${origin}/manager/subscription?billing=fail&center=${centerId}`,
   });
+}
+
+// successUrl로 돌아온 뒤 authKey/customerKey를 billingKey로 교환 + 최초 결제까지 서버에서
+// 처리(app/api/billing/confirm, 시크릿 키 필요 — 브라우저에서 직접 호출 불가).
+export async function confirmCenterBilling(
+  authKey: string, customerKey: string, centerId: string
+): Promise<{ status: SubscriptionStatus; nextBillingDate: string }> {
+  const res = await fetch("/api/billing/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ authKey, customerKey, centerId }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error ?? "카드 등록 확정에 실패했어요");
+  return { status: data.status, nextBillingDate: data.nextBillingDate };
 }

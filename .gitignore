@@ -56,3 +56,7 @@ next-env.d.ts
 
 # Supabase CLI 로컬 상태/캐시(project-ref, linked-project.json 등) — 머신별로 생성됨
 supabase/.temp/
+
+# 토스페이먼츠 등 외부 계약/심사 제출용 자료(스크린샷, 회신 이메일 초안 등) — 공개 저장소
+# asset이 아니라 로컬 전용 산출물이라 항상 gitignore
+/review-artifacts/

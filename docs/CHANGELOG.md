@@ -1,5 +1,44 @@
 # CHANGELOG
 
+## 2026-09-11 — 토스페이먼츠 빌링(자동결제) 계약심사 준비 (branch `toss-billing-review`)
+
+토스에서 받은 빌링결제(신용카드 정기결제) 계약 심사 정보(MID `bill_vbook4iia`, 심사용
+상품 "모하빗 센터 이용권" 월 39,000원)를 기준으로, 기존 P0-8(센터→플랫폼 구독료) 구현의
+남은 갭을 채우고 심사 제출 준비를 진행. DB 스키마/RLS/관리자·오너 화면은 이전 세션(P0-8)이
+이미 구현해뒀음을 확인 — 이번 배치는 그 위에 아래만 추가:
+
+- **`app/api/billing/confirm/route.ts`(신규)**: 토스 카드 등록창(v2 SDK
+  `requestBillingAuth`) 성공 후 돌아오는 authKey를 `POST /v1/billing/authorizations/issue`로
+  billingKey 교환 + `POST /v1/billing/{billingKey}`로 최초 결제까지 서버에서 처리(시크릿
+  키 필요, `app/api/payments/confirm`과 동일 패턴). 금액은 클라이언트를 신뢰하지 않고
+  `subscription_plans.monthly_price`를 서버에서 직접 조회. 토스 공식 문서(2026-09 기준)로
+  엔드포인트/응답 필드 확인 후 구현.
+- **버그 수정**: `requestCenterBillingAuth()`의 successUrl/failUrl이 존재하지 않는
+  `/manager/settings`를 가리키고 있어(실제 화면은 `/manager/subscription`) 카드 등록에
+  성공해도 billingKey 교환이 실행될 방법이 전혀 없었음 — 대상 경로 수정.
+- **`app/manager/subscription/page.tsx`**: 토스 심사가 요구하는 상품 상세 disclosure(가격,
+  부가세 포함 여부, 자동갱신, 제공기간, 해지방법, 환불/약관/개인정보처리방침 링크)와
+  하단 사업자정보 블록 추가. 카드 등록창에서 돌아온 뒤 결과를 안내하는 처리도 추가.
+- **`lib/businessInfo.ts`(신규)**: 사업자정보(상호/사업자등록번호/주소 등) 단일 출처 —
+  기존 `/legal/business` 페이지에 있던 값을 그대로 재사용(새로 입력한 값 아님), 구독
+  페이지와 함께 참조.
+- **`/legal/refund`**: "6. 센터 플랫폼 구독료(월 이용료) 해지·환불" 절 신규 — 기존 1~5항은
+  일반 회원의 수강권 결제 기준이라 성격이 달라 별도 항목으로 추가.
+- **`fix_center_platform_subscription_review_price.sql`(신규, 적용 대기)**: "기본 플랜"
+  가격을 심사값(월 39,000원)으로 설정. 가격은 사업 결정 사항이라 이번 배치가 자동으로
+  실행하지 않음 — 사용자 승인 후 적용 필요.
+
+의도적으로 이번 배치에 넣지 않은 것: 매월 자동 청구 스케줄러(계약 승인 전 실사용자 대상
+자동 청구를 시작하는 건 시기상조로 판단, 상태 구조만 준비된 상태 유지), VAT 표기("부가세
+포함"으로 기본 표시해뒀으나 사업자 최종 확인 필요), 실제 production 화면 캡처(이 브랜치가
+아직 main에 병합/배포되지 않아 불가능).
+
+`npm run build` 통과 확인(TypeScript 타입체크 포함). 변경 파일:
+`app/api/billing/confirm/route.ts`, `lib/centerSubscription.ts`, `app/manager/subscription/page.tsx`,
+`lib/businessInfo.ts`, `app/legal/business/page.tsx`, `app/legal/refund/page.tsx`,
+`fix_center_platform_subscription_review_price.sql`, `.gitignore`(`review-artifacts/` 추가).
+토스 제출용 매니페스트/체크리스트/이메일 초안은 `review-artifacts/toss/`(gitignored)에 준비.
+
 ## 2026-09-10 — notifications 테이블 service_role GRANT 누락 수정 (푸시 발송 전체 500 버그)
 
 FCM/Privacy 배치 병합 후 재배포한 `send-web-push`를 실제로 호출해 검증하던 중

@@ -1,3 +1,5 @@
+import { BUSINESS_INFO } from "../../../lib/businessInfo";
+
 export default function BusinessInfoPage() {
   return (
     <div className="app-shell settings-page-v2">
@@ -15,14 +17,14 @@ export default function BusinessInfoPage() {
 
         <table>
           <tbody>
-            <tr><th>서비스명</th><td>모하빗</td></tr>
-            <tr><th>상호</th><td>손장욱</td></tr>
-            <tr><th>대표자</th><td>손장욱</td></tr>
-            <tr><th>사업자등록번호</th><td>589-77-00451</td></tr>
+            <tr><th>서비스명</th><td>{BUSINESS_INFO.serviceName}</td></tr>
+            <tr><th>상호</th><td>{BUSINESS_INFO.companyName}</td></tr>
+            <tr><th>대표자</th><td>{BUSINESS_INFO.ceoName}</td></tr>
+            <tr><th>사업자등록번호</th><td>{BUSINESS_INFO.businessRegNo}</td></tr>
             <tr><th>통신판매업 신고번호</th><td>신고 진행 중</td></tr>
-            <tr><th>사업장 소재지</th><td>경기도 성남시 분당구 중앙공원로 20, 420동 702호</td></tr>
-            <tr><th>고객센터</th><td>010-6505-8700</td></tr>
-            <tr><th>이메일</th><td>sonjw222@naver.com</td></tr>
+            <tr><th>사업장 소재지</th><td>{BUSINESS_INFO.address}</td></tr>
+            <tr><th>고객센터</th><td>{BUSINESS_INFO.customerServicePhone}</td></tr>
+            <tr><th>이메일</th><td>{BUSINESS_INFO.email}</td></tr>
             <tr><th>호스팅 서비스</th><td>Vercel Inc. / Supabase Inc.</td></tr>
           </tbody>
         </table>
