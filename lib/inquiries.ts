@@ -132,16 +132,14 @@ export function resolveMemberName(accounts: {
   return primary?.nickname || primary?.name || accounts.name || "회원";
 }
 
-// ── 메시지 목록 ──
-export async function fetchMessages(threadId: string): Promise<InquiryMessage[]> {
-  const myAccountId = await getMyAccountId();
-  const { data, error } = await supabase
-    .from("inquiry_messages")
-    .select("id, thread_id, sender_account_id, sender_role, body, photos, created_at")
-    .eq("thread_id", threadId)
-    .order("created_at", { ascending: true });
-  if (error) throw new Error("메시지를 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((m: any) => ({
+// DB row → InquiryMessage. fetchMessages()와 실시간 INSERT 핸들러(app/components/
+// InquiryChat.tsx) 양쪽에서 같은 변환을 쓰기 위해 분리 — 실시간으로 들어온 새 메시지
+// 하나만 받았을 때도 전체 재조회 없이 이 함수로 바로 화면에 append할 수 있다.
+export function mapInquiryMessageRow(
+  m: { id: string; thread_id: string; sender_account_id: string | null; sender_role: "member" | "manager"; body: string | null; photos: string[] | null; created_at: string },
+  myAccountId: string | null,
+): InquiryMessage {
+  return {
     id: m.id,
     threadId: m.thread_id,
     senderRole: m.sender_role,
@@ -150,7 +148,28 @@ export async function fetchMessages(threadId: string): Promise<InquiryMessage[]>
     createdAt: KST.format(new Date(m.created_at)),
     createdAtRaw: m.created_at,
     mine: myAccountId != null && m.sender_account_id === myAccountId,
-  }));
+  };
+}
+
+// ── 메시지 목록 ──
+// myAccountId를 이미 알고 있으면 넘겨서 getMyAccountId() 왕복을 한 번 아낄 수 있다
+// (InquiryChat.tsx가 마운트 시 한 번만 조회해 재사용 — PostgREST egress 절감).
+// 최근 MESSAGE_HISTORY_LIMIT개만 가져온다 — 그보다 오래된 메시지를 보여주는 "이전
+// 대화 더보기"는 아직 없음(별도 pagination 과제, docs/TODO.md 참고).
+const MESSAGE_HISTORY_LIMIT = 300;
+
+export async function fetchMessages(threadId: string, myAccountId?: string | null): Promise<InquiryMessage[]> {
+  const resolvedAccountId = myAccountId !== undefined ? myAccountId : await getMyAccountId();
+  const { data, error } = await supabase
+    .from("inquiry_messages")
+    .select("id, thread_id, sender_account_id, sender_role, body, photos, created_at")
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: false })
+    .limit(MESSAGE_HISTORY_LIMIT);
+  if (error) throw new Error("메시지를 불러오지 못했어요: " + error.message);
+  // 최신순으로 가져왔으니(위 limit이 "최근 N개"를 뜻하려면 desc여야 함) 화면 표시
+  // 순서(과거→최신)로 뒤집는다.
+  return (data ?? []).reverse().map((m: any) => mapInquiryMessageRow(m, resolvedAccountId));
 }
 
 // ── 메시지 전송 ──
@@ -175,14 +194,21 @@ export async function readThread(threadId: string): Promise<void> {
 }
 
 // ── 실시간 구독 (해당 방에 새 메시지) ──
-export function subscribeMessages(threadId: string, onNew: () => void): () => void {
+// onInsert가 새로 들어온 행 자체를 받는다(payload.new) — 예전엔 인자 없이 "뭔가
+// 바뀌었다"만 알려줘서 호출부가 매번 fetchMessages()로 스레드 전체를 다시 조회했다
+// (메시지 1건당 REST 요청 1건이 아니라 스레드 전체 크기만큼의 요청이 됨, PostgREST
+// egress 원인). 이제 이 행 하나만으로 화면에 append할 수 있어 재조회가 필요 없다.
+export function subscribeMessages(
+  threadId: string,
+  onInsert: (row: { id: string; thread_id: string; sender_account_id: string | null; sender_role: "member" | "manager"; body: string | null; photos: string[] | null; created_at: string }) => void,
+): () => void {
   const uniq = Math.random().toString(36).slice(2);
   const channel = supabase
     .channel(`inquiry-${threadId}-${uniq}`)
     .on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "inquiry_messages", filter: `thread_id=eq.${threadId}` },
-      () => onNew()
+      (payload) => onInsert(payload.new as any)
     )
     .subscribe();
   return () => { supabase.removeChannel(channel); };

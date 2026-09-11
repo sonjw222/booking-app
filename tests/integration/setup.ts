@@ -316,11 +316,17 @@ async function sweepStaleTestClasses(centerId: string, centerName: string): Prom
   const admin = getFixtureAdminClient();
   const staleBefore = new Date(Date.now() - 3600 * 1000).toISOString();
 
+  // Low-Egress Fix Batch(2026-09-11) — 방어적 상한. 정상 상태에선 이 헬퍼가 파일마다
+  // 계속 스윕해 밀린 건이 거의 없지만(자기치유), 혹시 대량 backlog가 생겨도 한 번의
+  // 호출이 그걸 전부 읽어오지 않게 한다 — 못 지운 나머지는 다음 호출(다음 테스트
+  // 파일)에서 마저 처리된다(이미 "결국 다 지워진다"는 기존 전제 그대로, 한 번에
+  // 처리하는 양만 상한을 둔 것).
   const { data: staleClasses, error: findErr } = await admin
     .from("classes")
     .select("id")
     .eq("center_id", centerId)
-    .lt("start_time", staleBefore);
+    .lt("start_time", staleBefore)
+    .limit(1000);
   if (findErr) {
     // 스윕 실패는 이 테스트 실행 자체를 막을 이유가 아니다 — 다음 실행에서 다시 시도된다.
     return;
@@ -382,48 +388,45 @@ async function resetStaleTestCenterSettings(centerId: string, centerName: string
 export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<string> {
   const admin = getFixtureAdminClient();
 
+  // Low-Egress Fix Batch(2026-09-11) — manager_centers/center_roles/centers를 각각
+  // 따로 조회하던 걸(요청 3번) PostgREST embedded select 하나로 합쳤다(요청 1번).
+  // manager_centers.role_id → center_roles(id)와 manager_centers.center_id →
+  // centers(id) FK가 둘 다 유일한 경로라 embed가 모호하지 않음. 이 헬퍼가 56개
+  // 호출부에서 파일마다 최소 1번씩 불리므로, 왕복 1회를 줄이면 스위트 전체에서
+  // 그대로 쿼리 수가 1/3로 줄어든다(정렬/필터 로직은 완전히 동일 — 이제 각 행에
+  // center_roles/centers가 내장된 형태로 와서 JS에서 같은 순서로 다시 정렬·필터할
+  // 뿐, 결과가 달라지지 않는다).
   const { data: rows, error: mcErr } = await admin
     .from("manager_centers")
-    .select("center_id, role_id")
+    .select("center_id, role_id, center_roles(is_owner), centers(id, name, created_at)")
     .eq("account_id", manager.accountId)
     .eq("status", "active");
   if (mcErr) throw new Error(`manager_centers 조회 실패: ${describeAdminQueryError("manager_centers", mcErr)}`);
 
-  const roleIds = (rows ?? []).map((r: any) => r.role_id).filter(Boolean);
-  if (roleIds.length > 0) {
-    const { data: roles, error: roleErr } = await admin
-      .from("center_roles")
-      .select("id, is_owner")
-      .in("id", roleIds);
-    if (roleErr) throw new Error(`center_roles 조회 실패: ${describeAdminQueryError("center_roles", roleErr)}`);
-    const ownerRoleIds = new Set((roles ?? []).filter((r: any) => r.is_owner).map((r: any) => r.id));
-    const centerIds = (rows ?? []).map((r: any) => r.center_id).filter(Boolean);
-    // created_at 오름차순(+id를 동률 방지용 2차 정렬)으로 명시 정렬한다 — PostgREST의 기본
-    // 행 순서는 보장되지 않는데, 과거 실행에서 정리되지 않고 남은 중복 "통합테스트센터-%"가
-    // 이 매니저 앞으로 여러 개 있으면(라이브 dev DB를 여러 PR이 동시에 공유해서 생기는
-    // 픽스처 오염) 매 실행마다 다른 센터를 고를 수 있었다 — E2E CI가 간헐적으로 실패하던
-    // 원인. 항상 "가장 먼저 만들어진 것" 하나로 고정해 실행마다 결과가 달라지지 않게 한다.
-    const { data: centers, error: centerLookupError } = centerIds.length > 0
-      ? await admin.from("centers").select("id, name")
-          .in("id", centerIds)
-          .order("created_at", { ascending: true })
-          .order("id", { ascending: true })
-      : { data: [], error: null };
-    if (centerLookupError) {
-      throw new Error(`centers 조회 실패: ${describeAdminQueryError("centers", centerLookupError)}`);
-    }
-    const roleIdByCenterId = new Map((rows ?? []).map((r: any) => [r.center_id, r.role_id]));
-    const owned = (centers ?? []).find(
-      (center: any) =>
-        String(center.name ?? "").startsWith("통합테스트센터-") &&
-        ownerRoleIds.has(roleIdByCenterId.get(center.id))
-    );
-    if (owned) {
-      const centerId = (owned as any).id as string;
-      await sweepStaleTestClasses(centerId, (owned as any).name ?? "");
-      await resetStaleTestCenterSettings(centerId, (owned as any).name ?? "");
-      return centerId;
-    }
+  // created_at 오름차순(+id를 동률 방지용 2차 정렬) — PostgREST의 기본 행 순서는
+  // 보장되지 않는데, 과거 실행에서 정리되지 않고 남은 중복 "통합테스트센터-%"가
+  // 이 매니저 앞으로 여러 개 있으면(라이브 dev DB를 여러 PR이 동시에 공유해서 생기는
+  // 픽스처 오염) 매 실행마다 다른 센터를 고를 수 있었다 — E2E CI가 간헐적으로 실패하던
+  // 원인. 항상 "가장 먼저 만들어진 것" 하나로 고정해 실행마다 결과가 달라지지 않게 한다.
+  const candidates = (rows ?? [])
+    .map((r: any) => ({
+      centerId: r.center_id as string | null,
+      isOwner: !!r.center_roles?.is_owner,
+      centerName: String(r.centers?.name ?? ""),
+      createdAt: r.centers?.created_at as string | undefined,
+    }))
+    .filter((c) => c.centerId && c.isOwner && c.centerName.startsWith("통합테스트센터-"))
+    .sort((a, b) => {
+      const byCreatedAt = (a.createdAt ?? "").localeCompare(b.createdAt ?? "");
+      return byCreatedAt !== 0 ? byCreatedAt : (a.centerId as string).localeCompare(b.centerId as string);
+    });
+
+  if (candidates.length > 0) {
+    const owned = candidates[0];
+    const centerId = owned.centerId as string;
+    await sweepStaleTestClasses(centerId, owned.centerName);
+    await resetStaleTestCenterSettings(centerId, owned.centerName);
+    return centerId;
   }
 
   const { data: center, error: centerErr } = await admin

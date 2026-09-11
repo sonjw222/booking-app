@@ -1,5 +1,65 @@
 # CHANGELOG
 
+## 2026-09-11 — Low-Egress Fix Batch: PostgREST Egress 감사 후속 조치
+
+9/15까지 Supabase Free Plan Egress 절약 목표로, 앞서 진행한 PostgREST Egress Audit의
+TOP10 중 기능을 바꾸지 않고 안전하게 줄일 수 있는 항목만 실제 반영. 결제/Auth/RLS/
+Privacy/Toss 코드는 건드리지 않음, cron 주기/notifications 데이터는 실제 변경 없이
+분석·제안만.
+
+- **InquiryChat Realtime+REST 중복 제거**: `subscribeMessages()`가 인자 없는 콜백
+  대신 실제 INSERT된 행(payload.new)을 넘기도록 변경 — 예전엔 새 메시지 1건마다
+  `fetchMessages()`로 스레드 전체를 `limit` 없이 다시 조회했음(Realtime 이벤트 1건 =
+  REST 요청 1건이 아니라 스레드 크기만큼의 요청). 이제 그 행 하나만 `mapInquiryMessageRow()`
+  (신규, `lib/inquiries.ts`)로 변환해 화면 상태에 id 기준 중복 방지하며 append. 메시지
+  전송 후의 `reload()`(자기 메시지의 realtime echo와 겹쳐 사실상 한 건에 REST 요청
+  2번 나가던 것)와 삭제 후의 `reload()`도 각각 realtime append / 로컬 filter로 대체해
+  제거. 초기 `fetchMessages()`에는 최근 300개 상한(`MESSAGE_HISTORY_LIMIT`) 추가 —
+  그 이상 오래된 메시지 pagination은 `docs/TODO.md`(P3-11)로 분리.
+- **`getOrCreateOwnedTestCenter()` 쿼리 통합**: `manager_centers`/`center_roles`/
+  `centers` 3개 쿼리를 PostgREST embedded select 하나로 합침(FK 경로가 유일해 모호성
+  없음) — 정렬/필터 로직은 완전히 동일하게 유지, 56개 호출부 전체에 그대로 적용되어
+  스위트 전체 쿼리 수가 이 헬퍼 기준 1/3로 감소. `sweepStaleTestClasses()`의 stale
+  classes 조회에 `.limit(1000)` 방어적 상한 추가(정상 동작 시 영향 없음, 대량 backlog
+  상황에서만 한 번에 처리하는 양을 제한). 파일 간(vitest 기본 `isolate: true`) 캐싱은
+  검토했으나 실효성이 없어(모듈이 파일마다 새로 로드됨) 적용하지 않음 — 검토 과정과
+  근거는 세션 기록 참고.
+- **CI push/pull_request 중복 실행 제거**: `.github/workflows/test.yml` — `push`(main,
+  보통 방금 병합된 PR과 동일한 코드)에서는 라이브 Supabase를 쓰는 `e2e`/`integration`
+  job을 건너뛰고 `unit`/`build`(typecheck)만 실행하도록 수정. `pull_request`/
+  `workflow_dispatch`는 기존과 완전히 동일(전체 스위트, fork PR 제외 로직 포함)하게
+  유지. `unit`/`build`가 "e2e/integration이 skipped여도(push라서) 계속 진행"하되
+  "fork PR이라 skipped된 경우는 여전히 cascade skip"하도록 조건을 정밀하게 나눔(기존
+  fork PR 동작 회귀 없음, 수동으로 케이스 추적 확인). 한 PR에 커밋 5번 push하는
+  시나리오에서 전체 스위트 실행 횟수가 6회(PR 5회 + merge 시 push 1회)→5회로 감소 —
+  merge 빈도가 늘수록 절감폭도 비례해서 커짐(매 merge마다 100% 중복이던 1회를 제거).
+- **cron 3개(dispatch-web-push/autocancel/alimtalk) 주기 완화안**: 실제 변경은 하지
+  않고 제안만 작성(`propose_cron_interval_reduction_draft_proposed.sql`로 작성했으나
+  사용자 결정에 따라 **이번 merge에는 포함하지 않음** — cron 주기는 이번 배치 범위
+  밖, 별도 승인 후 별도로 진행). `dispatch-autocancel`은 `center_settings.autocancel_minutes`가
+  분 단위로 설정 가능해 지연에 가장 민감 — 1분 유지 권장. `dispatch-web-push`는 2분,
+  `dispatch-alimtalk`(OTP는 별도 경로라 무관, 공지성 메시지만 다룸)는 5분으로 완화
+  시 하루 4,320회→2,448회(43% 감소) 예상.
+- **`notifications` 94,749행 원인 분석**(집계 쿼리만 사용, 대량 row fetch/삭제 없음):
+  이름이 "통합테스트계정"인 계정으로 간 notification이 **92,873건(98.0%)** — 사실상
+  전부 통합/E2E 테스트가 반복적으로 예약 생성/취소를 수행하며 쌓은 것으로 확인(추측
+  아님, accounts.name 직접 join으로 검증). kind별로는 `new_reservation`/
+  `reservation_confirmed`/`reservation_canceled` 세 종류가 81,213건(85.7%)으로
+  이 가설과 일치. 최근 30일에 67,979건(71.7%)이 생성돼 가속 증가 중 — CI 실행
+  빈도와 상관관계로 추정. 완전한 "중복 발송 버그"인지는 이번 집계만으론 단정 불가
+  (같은 recipient+kind+link 조합이 많이 반복되지만 `link`가 라우트 단일값이라 서로
+  다른 실제 예약 건인지 진짜 중복인지 이 레벨에서 구분 안 됨 — 필요하면 후속으로
+  reservation 단위 상관 분석 필요). **삭제는 하지 않음**(지시대로).
+- 신규 단위 테스트: `tests/unit/mapInquiryMessageRow.test.ts`(라이브 DB 불필요, 순수
+  함수 검증). 최소 검증만 실행 — `npm run build`, 위 신규 unit 테스트, 그리고
+  `getOrCreateOwnedTestCenter()`를 쓰는 가장 작은 통합 테스트 파일 1개만 실행해 refactor
+  결과 확인(전체 integration/E2E suite는 실행하지 않음, 이미 통과했던 Security/Privacy/
+  Toss 테스트도 재실행하지 않음).
+
+변경 파일: `app/components/InquiryChat.tsx`, `lib/inquiries.ts`, `tests/integration/setup.ts`,
+`.github/workflows/test.yml`, `docs/TODO.md`, `tests/unit/mapInquiryMessageRow.test.ts`(신규).
+cron 완화 제안 SQL은 위 사유로 이번 merge에서 제외.
+
 ## 2026-09-11 — Security Hotfix (P0): accounts.is_platform_admin / merged_into 자가 수정으로 인한 권한 상승·계정 탈취 취약점
 
 Privacy 배치 #1(add_marketing_consent.sql) SQL 안전성 감사 중 "본인 계정 수정" RLS
