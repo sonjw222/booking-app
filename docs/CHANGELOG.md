@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## 2026-09-11 — review-reports.test.ts insert().select() 버그 수정
+
+`tests/integration/review-reports.test.ts`가 일반 사용자 client로 `review_reports`에
+`.insert(...).select("id")`를 체이닝해 5개 케이스가 42501로 잘못 실패하던 버그 수정.
+`review_reports`는 설계상(add_review_reports.sql) 일반 사용자에게 SELECT 정책이 없음
+— PostgREST의 insert+return=representation은 SELECT 가시성을 요구하므로, 정상적인
+본인 신고 생성조차 RLS 위반으로 실패했었음(실제로는 신고 생성 자체는 정상 동작).
+
+수정은 테스트 파일에만 적용: 일반 사용자 client는 순수 `.insert()`만 수행하고 성공
+여부는 `error`로만 판단하도록 변경(프로덕션 `lib/reviews.ts`의 `reportReview()`와
+동일한 패턴). "A가 본인 명의로 정상 신고를 생성할 수 있다" 케이스는 insert 성공 확인
+후 생성된 행의 id를 admin(service_role) client로 후속 조회해 `reportIdByA`를 채움.
+
+`review_reports`/`center_reviews` 스키마·RLS 변경 없음, 프로덕션 코드 변경 없음, 다른
+테스트 파일 변경 없음. 재실행 결과 9/9 PASS.
+
+변경 파일: `tests/integration/review-reports.test.ts`.
+
 ## 2026-09-11 — center_reviews 테이블 service_role GRANT 누락 수정 (review_reports 검증 중 발견)
 
 Release Blocker Cleanup Batch A(후기 신고)의 통합 테스트(`tests/integration/review-
