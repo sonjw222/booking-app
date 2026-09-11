@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## 2026-09-11 — E2E CI 간헐 실패 수정: `getOrCreateOwnedTestCenter()` 비결정적 센터 선택
+
+`tests/e2e/admin/new-class-creation.spec.ts` TEST6이 CI에서 간헐적으로 `.pass-pick-list`
+타임아웃으로 실패하던 문제의 원인을 확정. `getOrCreateOwnedTestCenter()`가 매니저 소유의
+"통합테스트센터-%" 후보가 여러 개(여러 PR이 동시에 같은 라이브 dev Supabase를 공유해서
+생긴 픽스처 오염 — managerA 앞으로 5개 이상 확인됨) 있을 때 PostgREST가 반환하는 행 순서
+그대로 `.find()`로 첫 번째를 골랐는데, 이 순서가 보장되지 않아 실행마다 다른 센터가 선택될
+수 있었음(각 센터는 서로 다른 leftover 상태를 가질 수 있어 어떤 걸 고르느냐에 따라
+결과가 달라짐).
+
+`tests/integration/setup.ts`의 `getOrCreateOwnedTestCenter()`를 수정 — 후보 센터를
+`created_at`(+동률 방지용 `id`) 오름차순으로 명시 정렬한 뒤 "가장 먼저 만들어진 것" 하나로
+고정 선택하도록 변경(기존 sweep/reset 로직은 그대로 유지). 이 함수를 쓰는 통합/E2E 테스트
+전부(10개 이상 파일)가 영향을 받으므로 별도 파일 수정 없이 스위트 전체에 적용됨.
+
+`npx playwright test tests/e2e/admin/new-class-creation.spec.ts`로 실측 확인 — 수정 전/후
+동일 조건에서 TEST6은 양쪽 다 통과(원래도 항상 재현되는 실패가 아니라 간헐적이었음이 재확인됨).
+같은 실행에서 TEST4가 별개 사유로 실패했는데, 로컬 `.env.local`의
+`NEXT_PUBLIC_PAYMENT_PROVIDER=toss`(다른 세션이 실제 토스 게이트웨이 테스트용으로 켜둔 것으로
+추정) 때문에 0원 결제가 진짜 Toss SDK로 넘어가 거부된 것(`금액은 0보다 커야 합니다`,
+`tests/e2e/checkout/real-toss-gateway-open.spec.ts`에 이미 문서화된 동일 현상)으로 확인 —
+이번 수정과 무관하고 GitHub Actions는 이 환경변수를 설정하지 않아(기본값 mock) CI 신호와도
+무관함. `.env.local`은 다른 세션이 쓰고 있을 수 있는 공유 상태라 건드리지 않음.
+
+변경 파일: `tests/integration/setup.ts`.
+
 ## 2026-09-10 — notifications 테이블 service_role GRANT 누락 수정 (푸시 발송 전체 500 버그)
 
 FCM/Privacy 배치 병합 후 재배포한 `send-web-push`를 실제로 호출해 검증하던 중
