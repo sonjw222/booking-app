@@ -1,5 +1,42 @@
 # CHANGELOG
 
+## 2026-09-11 — Native Push Permission & Registration Fix Batch
+
+실기기(iPhone) 최초 실기기 테스트에서 iOS 설정 → 알림 목록에 앱 자체가 안 뜨고, Xcode
+로그에 `PushNotifications addListener`만 보이고 `requestPermissions`/`register`/APNs/FCM
+관련 로그가 전혀 없는 증상 발견. Android(Pixel 9 에뮬레이터, Android 16)도 동일 증상
+(알림 권한 팝업 자체가 안 뜸).
+
+**근본 원인**: `enableNativePush()`(`lib/nativePush.ts` — `PushNotifications.checkPermissions()`/
+`requestPermissions()`/`register()`를 실제로 호출하는 유일한 함수)가 `app/settings/
+notifications/page.tsx`의 토글 버튼을 눌러야만 호출되는 구조였다 — 앱 부팅 시
+(`app/components/CapacitorBootstrap.tsx`)는 알림 탭 핸들러(`registerNativePushTapHandler`,
+로그의 "addListener"가 바로 이것)만 등록하고 권한 요청 자체는 어디서도 자동으로 트리거하지
+않았다. 즉 권한을 "거부"한 게 아니라 애초에 **물어본 적이 없는 상태**였다 — iOS/Android
+둘 다 동일 원인(공유 JS 코드 경로, `POST_NOTIFICATIONS`는 이미 AndroidManifest.xml에
+있었음을 확인 — 매니페스트 문제 아님). iOS AppDelegate의 Firebase 자동 swizzling
+(`FirebaseMessaging Remote Notifications proxy enabled` 로그)과 기존 수동
+`didRegisterForRemoteNotificationsWithDeviceToken` 구현은 서로 중복 실행되긴 하지만
+충돌은 아님(둘 다 각자 올바르게 동작 — swizzling이 개발자 구현을 막지 않음) — 애초에
+`PushNotifications.register()`가 한 번도 안 불려서 이 네이티브 코드 자체가 실행될
+기회가 없었던 것이 실제 원인. 네이티브 코드는 건드리지 않음.
+
+**수정**: `lib/nativePush.ts`에 `autoRegisterNativePushOnLogin()` 추가 — 계정이 확보되는
+시점(로그인 완료/세션 복원)에만 시도하도록 `app/components/SessionWatcher.tsx`의
+`SIGNED_IN`/`INITIAL_SESSION` 핸들러에 연결(`ensureAccountForCurrentUser()`가 유효한
+계정을 반환했을 때만). 이미 구독 중이면 아무것도 안 함(불필요한 register() 반복/DB
+upsert 반복 방지). 이미 거부(denied)된 상태여도 이 함수를 호출은 하되 내부적으로
+`requestPermissions()` 자체를 다시 안 부르므로(기존 로직 그대로) OS가 팝업을 다시
+띄우지 않음 — "거부 후 매 앱 시작마다 팝업 반복" 문제 없음. 네이티브 브릿지 예외가
+나도 try/catch로 흡수해 로그인 흐름을 막지 않음.
+
+**진단 로그 추가**(토큰 값 자체는 절대 출력 안 함): 권한 상태, 권한 요청 시점,
+`register()` 호출 시점, registration 에러, 토큰 획득 여부, `native_push_tokens` upsert
+성공/실패를 각각 `console.log`로 구분 가능하게 함.
+
+변경 파일: `lib/nativePush.ts`, `app/components/SessionWatcher.tsx`. Android 기존 위치
+권한 흐름은 손대지 않음.
+
 ## 2026-09-11 — Low-Egress Fix Batch: PostgREST Egress 감사 후속 조치
 
 9/15까지 Supabase Free Plan Egress 절약 목표로, 앞서 진행한 PostgREST Egress Audit의
