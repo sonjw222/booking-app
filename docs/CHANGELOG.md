@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 2026-09-11 — iOS Release Readiness: 수출 규정 신고 자동화
+
+App Store 제출 시 반복되는 "Export Compliance"(암호화 사용 여부) 질문을 자동으로
+답하기 위해 `ios/App/App/Info.plist`에 `ITSAppUsesNonExemptEncryption`이 없던 것을
+확인 — dependency 감사 결과 이 앱은 표준 HTTPS/TLS(Supabase REST/Realtime, Toss/
+Kakao/Naver OAuth 전부 HTTPS)와 Firebase(FirebaseCore/FirebaseMessaging, 표준
+암호화로 취급됨) 외에 커스텀/비표준 암호화 라이브러리를 전혀 쓰지 않음을
+`package.json`과 `App.xcodeproj`의 SPM 의존성(firebase-ios-sdk만 있음) 기준으로
+확인함 — `ITSAppUsesNonExemptEncryption: false` 한 줄만 최소 추가(기존 3개 커밋이
+건드리지 않았던 파일, 이번에 처음 최소 변경). 다른 세션이 이 파일을 병행 관리 중이라
+이 항목 하나만 정확히 추가하고 다른 줄은 전혀 건드리지 않음(diff 2줄).
+
+발견했지만 이번엔 안 건드린 것(다른 세션의 uncommitted 작업과 겹칠 수 있어 보고만):
+`NSCameraUsageDescription`/`NSPhotoLibraryUsageDescription`/
+`NSLocationWhenInUseUsageDescription`/`UIBackgroundModes`(remote-notification)가
+이 tracked Info.plist엔 없음(다른 세션이 로컬에서 이미 작업 중인 것으로 추정).
+
+변경 파일: `ios/App/App/Info.plist`(2줄 추가).
+
 ## 2026-09-11 — iOS Real Device UX Polish Batch (overscroll 검정 레터박스 + tap-highlight)
 
 실제 iPhone 구동에서 발견된 UX 문제 중 확실한 근거로 수정 가능한 항목만 반영(motion/
