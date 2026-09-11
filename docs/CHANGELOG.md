@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## 2026-09-11 — Release Blocker Cleanup BATCH B: Android release signing 구조 준비
+
+Release Audit에서 발견된 P0 — `android/app/build.gradle`의 `buildTypes.release`에
+`signingConfig` 참조가 전혀 없어 `./gradlew bundleRelease`로 서명된 AAB를 만들 방법이
+없었음(실측 확인 — 서명 정보 없이도 bundleRelease 자체는 성공하지만 산출물 AAB의
+META-INF에 서명 파일이 전혀 없어 Play Console 업로드용으로는 무효).
+
+`signingConfigs.release`를 추가하되 `MWHABIT_KEYSTORE_FILE`/`MWHABIT_KEYSTORE_PASSWORD`/
+`MWHABIT_KEY_ALIAS`/`MWHABIT_KEY_PASSWORD`(환경변수 또는 `~/.gradle/gradle.properties`
+중 어느 쪽에 있어도 인식됨)가 설정된 경우에만 `release` buildType에 실제로 연결되게
+조건부 구성 — 값이 없으면 지금까지와 동일하게(서명 없이) 빌드되고, `assembleDebug`는
+이 변경과 완전히 무관해 항상 그대로 동작함(실측 확인). 업로드 키 파일 경로/비밀번호는
+코드에 하드코딩하지 않음 — 기존 사용자가 Android Studio GUI로 만든
+`mwhabit-upload-key.jks`(repo 밖에 위치 확인됨, 내용 미열람)를 그대로 재사용하는
+구조로 설계.
+
+`android/.gitignore`의 `*.jks`/`*.keystore` 제외 규칙이 주석 처리돼 있던 것도 복구
+(주석 해제) — 이미 추적 중인 keystore 파일은 없음을 확인함.
+
+SQL/RLS 변경 없음(BATCH A 범위 밖). 결제/iOS 설정 미변경.
+
+변경 파일: `android/app/build.gradle`, `android/.gitignore`.
+
 ## 2026-09-11 — 센터 후기 신고(UGC Moderation) 추가 — Release Blocker Cleanup Batch A
 
 Apple App Store Review Guideline 1.2(UGC)가 요구하는 콘텐츠 신고 메커니즘 부재를
