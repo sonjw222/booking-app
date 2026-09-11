@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## 2026-09-11 — center_reviews 테이블 service_role GRANT 누락 수정 (review_reports 검증 중 발견)
+
+Release Blocker Cleanup Batch A(후기 신고)의 통합 테스트(`tests/integration/review-
+reports.test.ts`)가 fixture 준비 단계에서 service_role(admin) 클라이언트로
+`center_reviews`에 테스트용 후기를 넣으려다 `permission denied for table
+center_reviews`로 실패해 발견 — `anon`/`authenticated`/`postgres`에는 GRANT가 있는데
+`service_role`에는 전혀 없었음. 이 저장소에서 이미 여러 차례(notifications,
+account_auth_identities 등) 반복된 "새 테이블 service_role GRANT 추가 누락" 패턴과
+동일.
+
+`fix_service_role_missing_grants_center_reviews.sql`(신규, 미실행) — `grant select,
+insert, update, delete on center_reviews to service_role;` 한 줄. 기존 RLS 정책
+6개(본인 작성/수정/삭제, 공개 조회, 매니저 삭제/답변)나 anon/authenticated 권한은
+전혀 안 건드림 — service_role은 `rolbypassrls=true`(직접 확인)라 RLS와 무관하게
+항상 우회하고, GRANT는 "테이블 접근 가능 여부"만 결정하는 별개 레이어라 이 컬럼
+하나만 추가되는 것. 현재 이 테이블을 쓰는 Edge Function/cron은 없어 운영 영향
+없음(방어적 선제 수정).
+
+review_reports 자체의 RLS/정책(같은 배치에서 추가된 SQL)은 전혀 건드리지 않음 —
+이번 수정은 오직 center_reviews의 GRANT 한 줄뿐.
+
 ## 2026-09-11 — Release Blocker Cleanup BATCH B: Android release signing 구조 준비
 
 Release Audit에서 발견된 P0 — `android/app/build.gradle`의 `buildTypes.release`에
