@@ -11,6 +11,26 @@ export type EnsuredAccount = { id: string; phone: string | null; isSocial: boole
 // 밖이라 null로 비워두고, 이름은 소셜 프로필 메타데이터에서 최대한 가져온다.
 let bootstrapSuppressed = false;
 
+// 소셜 회원가입(카카오/네이버/애플/구글)은 signInWithOAuth/커스텀 authorize URL로
+// 다른 도메인을 거쳐 돌아오므로, 가입 폼의 마케팅 동의 체크박스 React 상태가 그대로
+// 사라진다 — sessionStorage에 잠깐 담아뒀다가 계정이 실제로 만들어지는 시점(아래
+// ensureAccountForCurrentUser)에 한 번 읽고 지운다. 리다이렉트 동안에도 값이 남는
+// 이유는 lib/postLoginReturn.ts의 stashPostLoginNext와 동일(동일 탭+동일 출처로
+// 돌아오면 sessionStorage가 유지됨).
+const MARKETING_CONSENT_STASH_KEY = "signup_marketing_consent";
+
+// app/login/page.tsx가 소셜 회원가입 버튼을 누르기 직전(리다이렉트 전)에 호출한다.
+// 로그인 모드에서는 호출하지 않는다 — 이미 있는 계정에는 어차피 아래에서 읽히지 않음.
+export function stashSignupMarketingConsent(agreed: boolean): void {
+  sessionStorage.setItem(MARKETING_CONSENT_STASH_KEY, agreed ? "1" : "0");
+}
+
+function consumeSignupMarketingConsent(): boolean {
+  const v = sessionStorage.getItem(MARKETING_CONSENT_STASH_KEY);
+  if (v !== null) sessionStorage.removeItem(MARKETING_CONSENT_STASH_KEY);
+  return v === "1";
+}
+
 // 회원가입 화면(app/login/page.tsx의 handleSignup)이 signUp() 직후 accounts/profiles(+매니저면
 // centers)를 자기 손으로 한 번에 만드는 동안에는 이 함수를 끈다. SessionWatcher가 앱 전체에서
 // SIGNED_IN 이벤트마다 이 함수를 호출하는데, signUp()도 SIGNED_IN을 발생시키므로 두 insert가
@@ -78,9 +98,16 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
   const name: string =
     meta.full_name || meta.name || meta.nickname || (user.email ? user.email.split("@")[0] : "회원");
 
+  const marketingConsent = consumeSignupMarketingConsent();
   const { data: account, error: accErr } = await supabase
     .from("accounts")
-    .insert({ auth_id: user.id, name, is_member: true })
+    .insert({
+      auth_id: user.id,
+      name,
+      is_member: true,
+      marketing_consent: marketingConsent,
+      marketing_consent_at: marketingConsent ? new Date().toISOString() : null,
+    })
     .select("id, phone")
     .single();
   if (accErr || !account) {

@@ -1,5 +1,62 @@
 # CHANGELOG
 
+## 2026-09-11 — Privacy 배치 #1/#2/#6/#7: 마케팅 동의 저장, Aligo 위탁 고지, avatar orphan 정리
+
+이전 세션의 Privacy Emergency Fix(P0/P1)에서 별도 배치로 미룬 8개 항목 중 결정이 필요
+없는 4개를 구현.
+
+- **#1 마케팅 정보 수신 동의 실제 저장**: `app/login/page.tsx`의 `agreeMarketing`
+  체크박스 값이 어디에도 저장되지 않던 문제 — `accounts.marketing_consent`/
+  `marketing_consent_at`(값이 바뀔 때마다 갱신 — 동의/철회 둘 다 증빙 가능) 컬럼을
+  추가(`add_marketing_consent.sql`, 미적용)하고, 이메일 가입(`handleSignup`)과 소셜
+  가입(`ensureAccountForCurrentUser`, OAuth 리다이렉트 전 sessionStorage로 값을
+  넘김 — `stashSignupMarketingConsent`/`stashPostLoginNext`와 동일 패턴) 양쪽에서
+  실제로 저장하도록 수정. 기존 "본인 계정 수정" RLS 정책이 컬럼 제한 없이 이미
+  본인만 UPDATE를 허용하므로 새 정책/트리거 불필요(add_pg_checkout_reviewer_override.sql
+  때와 동일 분석). `내 정보 관리`(app/mypage/info) 화면에 철회 가능한 토글 추가
+  (`lib/mypage.ts`의 `setMyMarketingConsent`).
+- **#2 Aligo 위탁 고지 불일치 수정**: 개인정보처리방침이 "알림톡 발송 기능은 준비
+  중"이라고 잘못 기재돼 있었는데, 실제로는 `send-phone-otp`/`send-alimtalk`
+  Edge Function이 이미 Aligo로 OTP/알림톡을 실제 발송 중이었음(코드로 확인) —
+  처리위탁 표에 알리고(Aligo) 행 추가, 잘못된 문구 제거. 같은 화면에서 생년월일이
+  "필수 항목"으로 잘못 기재돼 있던 것도 실제 가입 폼(생년월일 미수집, 프로필 관리
+  화면에서만 선택 입력)과 일치하도록 "선택 항목"으로 이동(#4 — 가입 폼에 새로
+  추가하지 않음, 문구만 실제와 맞춤).
+- **#6 avatar 재업로드 시 이전 파일 orphan 방치 수정**: `lib/profiles.ts`의
+  `updateProfile()`이 DB의 이전 `avatar_url`을 update 전에 조회해두고, update가
+  *성공한 뒤에만*(실패 안전) 새 값과 실제로 다를 때만 이전 Storage object를
+  지우도록 수정 — `delete-account`의 `avatarObjectKey()`와 동일 로직으로 소유
+  판별 안 되는 값(외부 URL 등)은 절대 건드리지 않음.
+- **#7 가족 프로필 개별 삭제 시 avatar 미삭제 수정**: `deleteProfile()`이 soft-delete
+  전에 `avatar_url`을 같이 조회해 soft-delete 성공 후 Storage object도 지우도록
+  수정(#6과 같은 헬퍼 재사용).
+- **avatars 버킷에 DELETE RLS 정책이 아예 없었음을 발견**: `add_profile_fields.sql`이
+  버킷을 만들 때 INSERT/SELECT만 추가하고 DELETE는 빠뜨려서, 클라이언트(anon/
+  authenticated)로는 avatar object를 지울 방법이 없었음 — `delete-account`가
+  지금까지 지울 수 있었던 건 그 함수만 RLS를 우회하는 service_role을 쓰기 때문.
+  `add_avatar_storage_delete_policy.sql`(신규, 미적용) — `owner = auth.uid()`로
+  본인이 올린 object만 지울 수 있게 제한(읽기 전용 쿼리로 기존 avatar object 7개
+  전부 owner가 이미 채워져 있음을 확인, 안전).
+- 신규 테스트: `tests/integration/marketing-consent.test.ts`(동의/철회/타인 계정
+  변경 불가), `tests/integration/avatar-storage-cleanup.test.ts`(최초 업로드/재업로드/
+  무사진/외부 URL 보호/가족 프로필 삭제). 위 두 마이그레이션이 미적용 상태라 이
+  실행에서는 관련 단언 3개가 예상대로 실패(컬럼 없음/Storage 삭제 RLS 막힘) —
+  나머지(외부 URL 보호, 무사진 케이스 등 마이그레이션과 무관한 안전 로직)는 이미
+  통과 확인됨. 배포 후 재실행 필요.
+- **이번 배치에서 구현하지 않은 것**(사용자 결정): #3 보유기간 자동파기(법적 정책
+  확정 필요), #5 chat_messages dead schema(DROP하지 않고 유지하기로 결정), #8
+  center custom fields 민감정보 제한(관련 기능 자체가 아직 없어 지금은 미적용).
+- 기존 Privacy Emergency Fix(native_push_tokens/push_subscriptions 삭제, avatar
+  Storage 삭제, 탈퇴 계정 발송 차단)가 origin/main과 실제 배포된 Edge Function
+  양쪽에 그대로 살아있음을 읽기 전용으로 재확인(`delete-account`/`send-web-push`
+  둘 다 ACTIVE, native_push_tokens/push_subscriptions 테이블 존재 확인).
+
+변경 파일: `app/legal/privacy/page.tsx`, `app/login/page.tsx`, `app/mypage/info/page.tsx`,
+`lib/authAccount.ts`, `lib/mypage.ts`, `lib/profiles.ts`,
+`add_marketing_consent.sql`(신규), `add_avatar_storage_delete_policy.sql`(신규),
+`tests/integration/marketing-consent.test.ts`(신규),
+`tests/integration/avatar-storage-cleanup.test.ts`(신규).
+
 ## 2026-09-11 — E2E CI 간헐 실패 수정: `getOrCreateOwnedTestCenter()` 비결정적 센터 선택
 
 `tests/e2e/admin/new-class-creation.spec.ts` TEST6이 CI에서 간헐적으로 `.pass-pick-list`
