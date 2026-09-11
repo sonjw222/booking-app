@@ -109,6 +109,20 @@ export async function fetchCenterSubscription(centerId: string): Promise<CenterS
   return rowToSubscription(data as unknown as CenterSubscriptionRow);
 }
 
+// 토스페이먼츠 빌링(자동결제) 계약 심사용 "심사관 전용 센터" 판별(2026-09-11,
+// add_center_subscription_billing_reviewer_override.sql — lib/authAccount.ts의
+// fetchMyPgCheckoutOverride()와 동일한 패턴, 계정이 아니라 센터 스코프인 것만 다름).
+// 이 값은 운영자만 바꿀 수 있고(트리거로 보호) — 조회 실패 시 안전하게 false로 취급한다
+// (전역 게이트가 꺼져 있으면 기본은 항상 버튼 비활성화).
+export async function fetchCenterBillingReviewOverride(centerId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("center_subscriptions")
+    .select("billing_review_override")
+    .eq("center_id", centerId)
+    .maybeSingle();
+  return !!(data as { billing_review_override?: boolean } | null)?.billing_review_override;
+}
+
 // 운영자 - 전체 센터 구독 현황
 export async function fetchAllCenterSubscriptions(): Promise<AdminCenterSubscription[]> {
   const { data, error } = await supabase
@@ -206,12 +220,15 @@ export function tossCustomerKeyForCenter(centerId: string): string {
   return `center-${centerId}`;
 }
 
-// 카드 등록 창 열기. NEXT_PUBLIC_BILLING_ENABLED가 꺼져 있으면 항상 예외를
-// 던진다 — 호출하는 화면 쪽에서도 버튼 자체를 비활성화해 이 경로를 이중으로
-// 막아둔다(플래그가 꺼진 상태에서 실제로 호출되면 토스 쪽에서 계약 심사 관련
-// 에러가 나기 때문).
-export async function requestCenterBillingAuth(centerId: string): Promise<void> {
-  if (!BILLING_ENABLED) {
+// 카드 등록 창 열기. enabled가 false면 항상 예외를 던진다 — 호출하는 화면 쪽에서도
+// 버튼 자체를 비활성화해 이 경로를 이중으로 막아둔다(플래그가 꺼진 상태에서 실제로
+// 호출되면 토스 쪽에서 계약 심사 관련 에러가 나기 때문). enabled는 기본값이
+// BILLING_ENABLED(전역 플래그)지만, 호출부(app/manager/subscription/page.tsx)가
+// fetchCenterBillingReviewOverride()로 확인한 "이 센터는 심사용으로 지정됨" 여부를
+// OR로 합쳐서 넘겨준다 — 전역 플래그를 켜지 않고도 심사용 센터 하나만 예외적으로
+// 통과시키기 위함(2026-09-11, add_center_subscription_billing_reviewer_override.sql).
+export async function requestCenterBillingAuth(centerId: string, enabled: boolean = BILLING_ENABLED): Promise<void> {
+  if (!enabled) {
     throw new Error("구독 결제 연동이 아직 꺼져 있어요");
   }
   const clientKey = process.env.NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY;

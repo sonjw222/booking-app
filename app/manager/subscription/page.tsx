@@ -16,7 +16,8 @@ import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
   fetchCenterSubscription, requestCenterBillingAuth, confirmCenterBilling, centerChangeOwnSubscriptionPlan,
-  centerCancelOwnSubscription, BILLING_ENABLED, STATUS_LABEL, type CenterSubscription,
+  centerCancelOwnSubscription, fetchCenterBillingReviewOverride, BILLING_ENABLED, STATUS_LABEL,
+  type CenterSubscription,
 } from "../../../lib/centerSubscription";
 import { fetchSubscriptionPlans, type SubscriptionPlan } from "../../../lib/operator";
 import { BUSINESS_INFO } from "../../../lib/businessInfo";
@@ -42,6 +43,12 @@ function ManagerSubscriptionContent() {
   const [subBusy, setSubBusy] = useState(false);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [billingNotice, setBillingNotice] = useState<string | null>(null);
+  // 전역 플래그(BILLING_ENABLED)가 꺼져 있어도 이 센터가 토스 심사용으로 지정돼 있으면
+  // (center_subscriptions.billing_review_override) 카드 등록 버튼만 예외적으로 연다 —
+  // lib/authAccount.ts의 fetchMyPgCheckoutOverride() + app/checkout/page.tsx의
+  // pgCheckoutEnabled와 동일한 패턴(2026-09-11, add_center_subscription_billing_
+  // reviewer_override.sql). 일반 센터 오너에게는 아무 변화 없음.
+  const [billingEnabled, setBillingEnabled] = useState(BILLING_ENABLED);
 
   useEffect(() => {
     (async () => {
@@ -64,6 +71,14 @@ function ManagerSubscriptionContent() {
       const [sub, planList] = await Promise.all([fetchCenterSubscription(centerId), fetchSubscriptionPlans()]);
       setSubscription(sub);
       setPlans(planList.filter((p) => p.isActive));
+      // 전역 게이트가 이미 켜져 있으면 굳이 조회하지 않는다(app/checkout/page.tsx의
+      // PG_CHECKOUT_ENABLED 최적화와 동일 이유).
+      if (!BILLING_ENABLED) {
+        try {
+          const override = await fetchCenterBillingReviewOverride(centerId);
+          setBillingEnabled(override);
+        } catch { /* 조회 실패 시 조용히 무시 — 기본값(비활성화)만 유지 */ }
+      }
     } catch (e: any) { setSubError(e.message); }
     finally { setSubLoading(false); setLoading(false); }
   }, [centerId]);
@@ -109,7 +124,7 @@ function ManagerSubscriptionContent() {
     if (!centerId) return;
     setSubBusy(true); setSubError(null);
     try {
-      await requestCenterBillingAuth(centerId);
+      await requestCenterBillingAuth(centerId, billingEnabled);
       // 성공 시 토스 결제창이 successUrl/failUrl로 브라우저를 이동시키므로
       // 여기서는 별도 후처리가 필요 없음(플래그가 꺼진 지금은 이 경로 자체가 실행되지 않음).
     } catch (e: any) {
@@ -135,7 +150,7 @@ function ManagerSubscriptionContent() {
   // 오히려 혼란스럽다(QA 중 발견). 버튼 자체는 남겨두되 비활성화 + 안내 문구로 카드
   // 등록 버튼과 동일한 패턴을 쓰고, 실결제 연동 후 이 게이트를 풀 것.
   async function handleCancel() {
-    if (!centerId || !BILLING_ENABLED) return;
+    if (!centerId || !billingEnabled) return;
     const ok = await globalThis.appConfirm("플랫폼 구독을 취소할까요? 취소해도 지금 쓰고 있는 기능은 그대로 이용할 수 있어요.");
     if (!ok) return;
     setSubBusy(true); setSubError(null);
@@ -247,7 +262,7 @@ function ManagerSubscriptionContent() {
               {subscription.status === "pending_billing_setup" && (
                 <div className="set-row col">
                   <div className="set-label">카드 등록</div>
-                  {BILLING_ENABLED ? (
+                  {billingEnabled ? (
                     <button className="primary-btn" disabled={subBusy} onClick={handleCardRegister}>
                       {subBusy ? "처리 중..." : "카드 등록"}
                     </button>
@@ -289,7 +304,7 @@ function ManagerSubscriptionContent() {
                 </div>
               )}
               {subscription.status !== "canceled" && (
-                BILLING_ENABLED ? (
+                billingEnabled ? (
                   <button className="profile-del" style={{ marginTop: 6 }} disabled={subBusy} onClick={handleCancel}>
                     구독 취소
                   </button>

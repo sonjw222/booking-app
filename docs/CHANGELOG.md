@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## 2026-09-11 — 토스 빌링 심사관 전용 센터 카드등록 노출 (전역 플래그 대신 센터별 override)
+
+`NEXT_PUBLIC_BILLING_ENABLED`를 전역으로 켜면 심사관뿐 아니라 실제 운영 중인 모든 센터
+오너에게도 "카드 등록" 버튼이 열려 진짜 청구가 발생할 위험이 있다는 지적에 따라, 전역
+플래그를 켜지 않고 **심사용 센터 하나만** 예외적으로 노출하는 방식으로 변경. 이미 같은
+문제(B2C 결제 심사, `PG_CHECKOUT_ENABLED`)를 풀어둔 `add_pg_checkout_reviewer_override.sql`
+(계정 스코프)과 정확히 같은 패턴을 센터 스코프로 옮겨 적용:
+
+- `add_center_subscription_billing_reviewer_override.sql`(신규, **미실행** — SQL Editor에서
+  사용자 승인 후 적용 필요): `center_subscriptions.billing_review_override boolean` 컬럼 +
+  자기수정 방지 BEFORE UPDATE 트리거(운영자 또는 service_role만 변경 가능).
+  `accounts`가 아니라 `center_subscriptions`(센터 스코프)로 둔 이유: Billing 관련 화면·RPC가
+  전부 centerId 기준이고, 계정 스코프였다면 심사용 계정이 우연히 다른 진짜 센터도 갖게 될
+  경우 그쪽까지 함께 열리는 과잉 노출이 생기기 때문.
+- `lib/centerSubscription.ts`: `fetchCenterBillingReviewOverride(centerId)` 신규(패턴은
+  `lib/authAccount.ts`의 `fetchMyPgCheckoutOverride()`와 동일). `requestCenterBillingAuth()`가
+  이제 `enabled` 파라미터를 받음(기본값 `BILLING_ENABLED`) — 호출부가 전역 플래그와 센터별
+  override를 합친 값을 넘겨준다.
+- `app/manager/subscription/page.tsx`: 로컬 `billingEnabled` state 추가(전역 플래그로
+  초기화 후, 꺼져 있으면 이 센터의 override만 별도 조회해 병합) — 카드 등록/구독 취소
+  버튼 노출과 `handleCardRegister`/`handleCancel`이 전부 이 값을 참조하도록 교체
+  (`app/checkout/page.tsx`의 `pgCheckoutEnabled` state와 동일 패턴).
+
+일반 센터 오너 노출에는 변화 없음(override 컬럼이 기본 false). SQL은 아직 미실행.
+
 ## 2026-09-11 — 통신판매업 신고번호 확정값 반영 (제2026-성남분당B-0866호)
 
 `lib/businessInfo.ts`의 `mailOrderRegNo` placeholder("신고 진행 중")를 사용자가 확정해준
