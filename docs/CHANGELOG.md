@@ -1,5 +1,55 @@
 # CHANGELOG
 
+## 2026-09-11 — Security Hotfix (P0): accounts.is_platform_admin / merged_into 자가 수정으로 인한 권한 상승·계정 탈취 취약점
+
+Privacy 배치 #1(add_marketing_consent.sql) SQL 안전성 감사 중 "본인 계정 수정" RLS
+정책이 컬럼 제한 없이 accounts 행 전체를 UPDATE 허용한다는 걸 재확인하다가, 이번
+Privacy 배치와 무관한 기존 P0급 취약점 2건을 발견해 별도 핫픽스로 처리.
+
+**취약점 1 — is_platform_admin 자가 승격**: `add_platform_admin.sql`이 컬럼만 추가하고
+`pg_checkout_override`(add_pg_checkout_reviewer_override.sql) 때와 달리 보호 트리거를
+만든 적이 없었음 — 로그인한 사용자 누구나
+`supabase.from("accounts").update({is_platform_admin:true})`를 직접 호출해 스스로
+플랫폼 운영자(센터 승인/반려 등 `/admin/*` 전체 권한)가 될 수 있었음.
+
+**취약점 2 — merged_into로 임의 계정 가로채기(더 심각)**: `my_account_id()`
+(fix_my_account_id_merged_into_priority.sql)가 `coalesce(merged_into, id)`로 계정을
+resolve하고 `is_platform_admin()`/`my_managed_center_ids()` 등 거의 모든 권한 판단이
+그 함수를 경유함 — `merged_into`도 보호가 없어서 본인 계정의 이 값을 임의의 다른
+account id로 바꾸면 그 이후 모든 요청이 그 타깃 계정으로 resolve됨(정상 흐름인
+`link_accounts_by_code()`의 코드 기반 상호 동의 검증을 완전히 우회, 타깃이 매니저/
+운영자면 그 권한을 그대로 탈취).
+
+실제 통합 테스트(`tests/integration/accounts-privilege-escalation.test.ts`)로 두
+취약점 모두 라이브 dev DB에서 재현 확인함(전용 임시 계정만 사용, 실제 사용자 데이터
+훼손 없음).
+
+**수정**(`fix_accounts_admin_and_merged_into_privilege_escalation.sql`, 신규, **미적용**):
+- `is_platform_admin`: `pg_checkout_override`와 동일한 BEFORE UPDATE 트리거 패턴
+  재사용(자가 변경 차단, `auth.uid() is null`(SQL Editor/service_role) 또는 이미
+  `is_platform_admin()`인 행위자만 허용). `link_accounts_by_code()`의 "권한 플래그
+  합집합(OR)" 갱신 로직도 수학적으로 이 조건을 항상 통과함을 검증(파일 내 주석 참고).
+- `merged_into`: `auth.uid()`가 SECURITY DEFINER로도 안 바뀌는 세션 GUC라
+  `is_platform_admin` 패턴을 그대로 못 씀 — 트랜잭션 로컬 플래그
+  (`set_config('app.allow_merged_into_change','true',true)`)를 `link_accounts_by_code()`
+  내부의 실제 UPDATE 직전에만 세워서 그 RPC를 통한 정상 연동만 통과시킴.
+  `link_accounts_by_code()`는 라이브 DB의 실제 배포 버전(`pg_get_functiondef`로 직접
+  확인 — `fix_link_accounts_by_code_native_push_tokens_optional.sql`까지 반영된 버전)에
+  이 한 줄만 추가해 재정의함.
+
+**부수 발견(이번 배치 범위 밖)**: `account_auth_identities` 테이블에 `service_role`
+GRANT가 전혀 없음(이 저장소에서 6차례 이상 반복된 "새 테이블에 service_role GRANT
+빠뜨림" 패턴과 동일 — `authenticated`/`postgres`만 있고 `service_role`은 SELECT조차
+없음, `information_schema.role_table_grants`로 확인). 테스트 fixture 정리 중 우연히
+발견 — SQL Editor(직접 postgres 연결)는 영향 없지만, service_role API 키를 쓰는 모든
+코드(Edge Function 등)는 이 테이블에 접근 못 함. 이번 Security Hotfix와 무관한 별개
+이슈라 여기서 고치지 않음, `docs/TODO.md`에 별도 기록.
+
+SQL 실행 필요(YES) — 운영 DB에는 사용자 승인 후 적용 예정, 아직 미실행.
+
+변경 파일: `fix_accounts_admin_and_merged_into_privilege_escalation.sql`(신규),
+`tests/integration/accounts-privilege-escalation.test.ts`(신규).
+
 ## 2026-09-11 — Privacy 배치 #1/#2/#6/#7: 마케팅 동의 저장, Aligo 위탁 고지, avatar orphan 정리
 
 이전 세션의 Privacy Emergency Fix(P0/P1)에서 별도 배치로 미룬 8개 항목 중 결정이 필요

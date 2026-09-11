@@ -3305,6 +3305,33 @@ RPC(`open_inquiry_thread`/`send_inquiry_message`/`read_inquiry_thread`) + 실시
 결론 자체는 유효하나 실행은 보류). 이 항목은 계속 dead schema TODO로만 남긴다 — DROP SQL을
 새로 작성하지 말 것.
 
+### P0-9. (신규, 2026-09-11, 수정 작성 완료·미적용) accounts.is_platform_admin / merged_into 자가 수정으로 권한 상승·계정 탈취 가능
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 (권한 상승 + 계정 탈취 — 출시 전 필수 수정) |
+| 현재 상태 | **운영 설정 필요** — migration 작성/실제 취약점 재현/테스트까지 완료, SQL은 사용자 승인 후 실행 예정 |
+| 근거 파일 | `fix_accounts_admin_and_merged_into_privilege_escalation.sql`(신규), `tests/integration/accounts-privilege-escalation.test.ts`(신규, 실제 라이브 dev DB에서 재현 확인) |
+| 완료 조건 | SQL 실행 후 `tests/integration/accounts-privilege-escalation.test.ts` 8개 전부 통과(현재 A/B 2개 실패로 취약점 확인됨, D는 별도 add_marketing_consent.sql 미적용으로 실패 중) |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-11 Security Hotfix 항목 |
+
+상세 내용은 CHANGELOG 참고. 요약: "본인 계정 수정" RLS 정책이 컬럼 제한 없이 행
+전체를 허용하는데 `is_platform_admin`/`merged_into`엔 `pg_checkout_override`가 받은
+것과 같은 보호 트리거가 없었음 — 전자는 자가 운영자 승격, 후자는(더 심각) 임의
+계정으로 identity resolution을 가로채 그 계정의 매니저/운영자 권한을 통째로 탈취
+가능. 부수 발견: `account_auth_identities`에 `service_role` GRANT 자체가 없음(6차례
+넘게 반복된 패턴, 이 배치 범위 밖이라 별도 기록만).
+
+### P0-10. (신규, 2026-09-11) account_auth_identities 테이블에 service_role GRANT 없음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0로 분류하되 시급하지 않음 — 현재 이 테이블을 service_role로 접근하는 운영 코드가 없어 활성 장애는 아니지만, 이미 6차례 반복된 동일 패턴이라 언제든 재발 가능 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `add_account_linking.sql`(테이블 생성), `information_schema.role_table_grants`로 확인 — `authenticated`/`postgres`만 있고 `service_role`은 SELECT조차 없음 |
+| 완료 조건 | `fix_service_role_missing_grants_accounts_*.sql` 등 기존 6개 선례와 동일한 형식으로 `grant select, insert, update, delete on account_auth_identities to service_role;` 파일 작성 후 적용 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-11 Security Hotfix 항목(P0-9 작업 중 테스트 fixture 정리하다가 우연히 발견) |
+
 ### P1-25. (신규, 2026-09-11) 개인정보처리방침이 약속한 법정 보유기간 경과 후 자동 파기가 실제로 구현되어 있지 않음
 
 | 필드 | 내용 |
