@@ -70,10 +70,10 @@ BEGIN;
 alter table center_subscriptions add column if not exists billing_locked_until timestamptz;
 
 comment on column center_subscriptions.billing_locked_until is
-    '자동 청구 처리 중 잠금(리스) 만료 시각. app/api/billing/charge-due가 청구 대상을 ' ||
-    '고를 때 UPDATE...WHERE (billing_locked_until is null or < now())로 원자적으로 ' ||
-    '선점해 같은 구독이 동시에 두 번 청구되는 것을 막는다. 처리가 끝나면(성공/실패 ' ||
-    '무관) 항상 null로 해제한다 — 만약 서버가 처리 도중 죽어서 해제가 안 되더라도 ' ||
+    '자동 청구 처리 중 잠금(리스) 만료 시각. app/api/billing/charge-due가 청구 대상을 '
+    '고를 때 UPDATE...WHERE (billing_locked_until is null or < now())로 원자적으로 '
+    '선점해 같은 구독이 동시에 두 번 청구되는 것을 막는다. 처리가 끝나면(성공/실패 '
+    '무관) 항상 null로 해제한다 — 만약 서버가 처리 도중 죽어서 해제가 안 되더라도 '
     '리스가 만료되면(15분) 다음 실행에서 다시 집힐 수 있다.';
 
 -- ------------------------------------------------------------
@@ -82,9 +82,9 @@ comment on column center_subscriptions.billing_locked_until is
 alter table center_subscription_charges add column if not exists order_id text;
 
 comment on column center_subscription_charges.order_id is
-    '토스에 보낸 주문번호. 정기 청구는 sub-recur-{centerId}-{그 회차의 next_billing_date} ' ||
-    '형태로 결정적으로 만든다(app/api/billing/charge-due) — 같은 회차를 재시도해도 ' ||
-    '동일한 orderId를 재사용해서, 토스 쪽 orderId 유일성 제약이 이중 청구를 한 번 더 ' ||
+    '토스에 보낸 주문번호. 정기 청구는 sub-recur-{centerId}-{그 회차의 next_billing_date} '
+    '형태로 결정적으로 만든다(app/api/billing/charge-due) — 같은 회차를 재시도해도 '
+    '동일한 orderId를 재사용해서, 토스 쪽 orderId 유일성 제약이 이중 청구를 한 번 더 '
     '막아준다(DB 리스가 실패하더라도 토스가 중복 orderId를 거부).';
 
 COMMIT;
