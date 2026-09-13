@@ -187,7 +187,13 @@ a { color: inherit; text-decoration: none; }
   padding-bottom: 70px; /* 하단 네비 높이만큼 여백 */
 }
 
-.header { padding: 14px var(--page-gutter) 14px; }
+/* 실기기 iOS 진단(2026-09-13) — 상단 패딩이 고정 14px라 safe-area-inset-top(노치/Dynamic
+   Island)을 전혀 반영하지 않았다. capacitor.config.ts가 StatusBar overlaysWebView:true로
+   WebView를 상태바 아래까지 확장시키는데(viewport-fit=cover와 짝) 이 헤더만 안전영역을
+   안 챙겨서, 화면 전환 순간 "오늘은 어떤 움직임을 찾나요?" 텍스트가 상태바 시계/아이콘과
+   겹쳐 보였다. 다른 화면들(.mypage-shell .profile-block 등)과 동일한
+   max(Npx, env(safe-area-inset-top)) 패턴으로 통일 — 노치 없는 기기에서는 기존 14px 그대로. */
+.header { padding: max(14px, env(safe-area-inset-top)) var(--page-gutter) 14px; }
 .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .location { display: flex; align-items: center; gap: 4px; font-size: 19px; font-weight: 800; letter-spacing: -0.3px; }
 .location .caret { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }

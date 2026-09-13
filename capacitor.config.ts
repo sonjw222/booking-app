@@ -40,8 +40,16 @@ const config: CapacitorConfig = {
     ],
   },
   ios: {
-    // 기존 app/globals.css의 env(safe-area-inset-*) 레이아웃과 충돌을 최소화
-    contentInset: "automatic",
+    // 실기기 진단(2026-09-13, safe-area/status bar 겹침) — "automatic"은 네이티브
+    // UIScrollView가 safe area만큼 콘텐츠를 자동으로 밀어내는 설정(contentInsetAdjustmentBehavior
+    // = .automatic)인데, 이 앱은 이미 app/globals.css 전역에서 env(safe-area-inset-*)로
+    // 직접 여백을 계산해 쓰고 있다(수십 곳). 네이티브 자동 inset과 CSS 수동 inset이
+    // 동시에 적용되면 이중 여백/불일치가 생기고, 특히 이 앱처럼 화면 전환마다 전체
+    // 페이지가 새로 로드되는 구조에서는 네이티브 inset이 재계산되는 시점과 CSS가
+    // 페인트되는 시점이 어긋나 전환 프레임에 헤더와 상태바가 겹쳐 보이는 원인이 됐다.
+    // Capacitor 공식 기본값이자 CSS로 직접 처리하는 앱에 권장되는 "never"로 되돌려
+    // 네이티브 자동 inset을 끄고 전적으로 CSS에 위임한다.
+    contentInset: "never",
   },
   plugins: {
     // 실기기 진단(2026-09-11) — 이 앱은 server.url 모드라(위 주석) WebView가 로컬 번들이
