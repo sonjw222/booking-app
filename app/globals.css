@@ -1397,6 +1397,43 @@ a { color: inherit; text-decoration: none; }
 
 .settings-wrap { padding-bottom: 20px; }
 
+/* /manager/subscription(토스 빌링 심사 화면)의 "플랜 변경" select — 유일하게 이 레이아웃
+   (.settings-wrap)에서 select를 쓰는 곳이라 여기 스코프로 고정. 기본 .input-field는
+   select에 appearance:none을 주지 않아서 브라우저가 select 박스 자체(닫힌 상태 배경)를
+   네이티브 위젯으로 그리는데, 그 네이티브 배경은 OS 설정이 아니라 우리 앱의 data-theme
+   토글과 무관하게 대체로 밝은 색 고정이다 — 반면 글자색은 .input-field의 color:var(--ink)가
+   정상 적용돼 다크 모드에서 거의 흰색이 되면서 "밝은 배경 + 거의 흰 글자"로 깨졌다
+   (production 실측, 2026-09-14). .manager-v3-content select.input-field가 이미 쓰는
+   "appearance:none + 커스텀 화살표" 패턴을 재사용하되, 그 규칙은 배경을 var(--text-inverse)
+   (항상 흰색 고정 토큰)로 둬서 다크 모드에서 똑같은 문제가 재현될 수 있어 그대로 가져오지
+   않고 배경을 이미 다크 모드 대응이 돼 있는 var(--card-bg)로 바꿔 쓴다. */
+.settings-wrap select.input-field {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--card-bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2374767d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px 16px;
+  padding-right: 40px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  /* 닫힌 select 박스는 위에서 appearance:none으로 완전히 재스킨하지만, 클릭해서 여는
+     option 목록 팝업은 대부분 브라우저가 여전히 OS 네이티브로 그려서 커스텀 background/
+     color가 option에 잘 안 먹는다(Chrome/Safari 공통) — color-scheme만이 그 팝업을
+     올바른 명/암 팔레트로 그리게 하는 신뢰할 수 있는 방법이라 테마에 맞춰 같이 선언한다. */
+  color-scheme: light;
+}
+[data-theme="charcoal"] .settings-wrap select.input-field { color-scheme: dark; }
+.settings-wrap select.input-field:disabled { opacity: .6; cursor: default; }
+.settings-wrap select.input-field option { background-color: var(--card-bg); color: var(--ink); }
+
+/* .ghost-btn(100곳 이상에서 재사용되는 공용 버튼)에 disabled 스타일이 아예 없어서
+   disabled여도 활성 버튼과 똑같이 보이는 문제 — 다른 화면까지 한번에 바꾸는 대신
+   이번 요청 범위(이 화면)로만 한정. 다른 .ghost-btn 사용처의 disabled 상태는
+   docs/TODO.md에 별도로 기록. */
+.settings-wrap .ghost-btn:disabled { opacity: .5; cursor: default; }
+
 .set-section-title {
   padding: 18px 20px 6px;
   font-size: 12.5px;

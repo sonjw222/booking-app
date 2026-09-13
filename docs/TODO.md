@@ -3414,6 +3414,25 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 | 근거 파일 | `add_schedule_permission_completion.sql`, `add_schedule_memo_feature.sql`, `fix_schedule_memo_owner_only_override.sql`, `fix_pass_product_permission_cleanup.sql`, `add_pass_autobook_permission.sql`, `add_pass_sale_toggle.sql`, `fix_customer_permission_cleanup.sql`, `fix_customer_member_pass_detail_permission.sql`, `fix_customer_member_pass_detail_full_wiring.sql`, `add_customer_memo_feature.sql`, `add_customer_member_phone_masking.sql`, `fix_customer_member_phone_masking_center_scope.sql`, `add_inquiry_comment_delete_feature.sql`, `fix_contract_permission_catalog_hide.sql`, `fix_facility_salary_permission_catalog_hide.sql` |
 | 관련 문서 | [DATABASE.md](./DATABASE.md) |
 
+### P2-36. (신규, 2026-09-14) 다크 모드 select/버튼 대비 문제 — `/manager/subscription`은 수정, 나머지는 미해결
+
+`/manager/subscription`(토스 빌링 심사 화면)의 "플랜 변경" select가 다크 모드에서 배경이
+밝은 네이티브 색 그대로 남고 글자만 `--ink`(거의 흰색)로 바뀌어 "플랜 선택..." 문구가
+안 보이는 문제를 사용자가 production에서 실측 신고 — 원인은 기본 `.input-field`가 `select`에
+`appearance: none`을 안 줘서 닫힌 박스 배경을 브라우저가 네이티브로 그리기 때문(다크 모드
+자체는 `data-theme="charcoal"` JS 토글이지 OS `prefers-color-scheme`가 아니라서 네이티브
+위젯 배경과 어긋남). `.settings-wrap select.input-field`(이 페이지만 스코프, 다른 화면
+영향 없음 확인됨)에 appearance 리셋 + `var(--card-bg)` 배경 + `color-scheme` 테마 연동을
+추가해 해결.
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | `/manager/subscription`만 해결. 조사 중 **같은 근본 원인의 더 넓은 문제 2건**을 추가로 발견했으나 이번 배치 범위(사용자가 명시적으로 이 화면만 지정) 밖이라 손대지 않음 |
+| 발견했지만 미해결 | (1) `.manager-v3-content select.input-field`(관리자/매니저 v3 레이아웃 전반에서 널리 쓰이는 select 스타일)가 배경을 `var(--text-inverse)`(테마 무관 항상 흰색 고정 토큰)로 써서, 다크 모드에서 이번과 똑같이 "흰 배경 + 거의 흰 글자"가 재현될 것으로 보임(코드 리딩으로 확인, 실제 화면 캡처는 안 함) — `.manager-v3-content`를 쓰는 모든 매니저/운영자 화면의 select에 영향 가능성. (2) `.ghost-btn`(사이트 전체 100곳 이상에서 재사용되는 버튼)에 `:disabled` 스타일이 전혀 없어 비활성 상태여도 활성 버튼과 똑같이 보임 — 다른 버튼 클래스(`.primary-btn`/`.social-btn`/`.save-btn` 등)는 전부 `opacity` 기반 disabled 스타일이 있는 것과 대비됨. |
+| 권장 후속 작업 | (1)은 `.manager-v3-content select.input-field`의 `background-color`를 `var(--text-inverse)`에서 `var(--card-bg)`로 바꾸는 것만으로 해결될 가능성이 높음 — 다만 그 클래스를 쓰는 화면이 많아 실제 다크 모드 스크린샷으로 폭넓게 확인 후 적용 권장. (2)는 `.ghost-btn:disabled { opacity: .5; cursor: default; }` 한 줄 추가로 전체 화면에 일괄 적용 가능(다른 버튼 클래스와 동일한 값) — 다만 100곳 넘는 사용처 전체의 시각적 변화라 별도 작업으로 분리해 스크린샷 확인 권장. |
+| 근거 파일 | `app/globals.css`(`.settings-wrap select.input-field` 신규 규칙), `app/manager/subscription/page.tsx` |
+
 ## 8. 상태 갱신 체크리스트
 
 항목을 완료로 바꾸기 전에 다음을 확인합니다.

@@ -1,5 +1,41 @@
 # CHANGELOG
 
+## 2026-09-14 — `/manager/subscription` 다크 모드 select 대비 문제 수정
+
+토스 빌링 심사 화면(`/manager/subscription`)의 "플랜 변경" select가 production 다크
+모드에서 배경이 밝은 네이티브 색으로 남고 글자만 `--ink`(거의 흰색)로 바뀌어 "플랜
+선택..." 문구가 안 보인다는 실측 신고 반영.
+
+- **원인**: `.input-field`(select에도 그대로 쓰이는 공용 입력 클래스)가 `appearance: none`을
+  안 줘서, 닫힌 select 박스의 배경을 브라우저가 여전히 네이티브 위젯으로 그린다. 이 앱의
+  다크 모드는 `data-theme="charcoal"` JS 토글(시스템 설정을 따라가되 수동 전환도 가능)이라
+  브라우저의 네이티브 위젯 배경(대체로 고정 밝은색)과 어긋나면서 "밝은 배경 + 거의 흰
+  글자"가 됐다.
+- **수정**: `app/globals.css`에 `.settings-wrap select.input-field` 규칙 추가 —
+  `appearance:none` + `.manager-v3-content select.input-field`가 이미 쓰던 커스텀 화살표
+  패턴을 재사용하되, 그 규칙의 `background-color: var(--text-inverse)`(테마 무관 항상 흰색)는
+  다크 모드에서 같은 문제를 재현할 수 있어 가져오지 않고 이미 다크 대응이 된
+  `var(--card-bg)`로 바꿔 씀. 열린 option 목록 팝업(대부분 브라우저가 네이티브로 그려
+  커스텀 background/color가 잘 안 먹음)은 `color-scheme`을 테마에 맞춰 명시해 올바른
+  명/암 팔레트를 쓰게 함. `.settings-wrap`을 쓰는 화면은 `/manager/subscription`뿐이라
+  (`grep` 확인) 다른 페이지 영향 없음.
+- **부수 수정**: 같은 화면의 "카드 등록" ghost-btn이 `disabled` 상태여도 시각적으로
+  활성 버튼과 구분이 안 되던 것 — `.settings-wrap .ghost-btn:disabled { opacity: .5; }`
+  추가(다른 버튼 클래스들과 동일한 기존 관례 재사용, 이 화면으로만 스코프).
+- **검증**: `.tsx` 없이 실제 `globals.css`를 그대로 로드하는 정적 HTML로 라이트/다크 두
+  테마를 나란히 렌더링해 스크린샷으로 확인 — select/상태 배지/버튼/사업자정보 전부
+  두 테마 다 판독 가능. (네이티브 select의 열린 옵션 팝업 자체는 OS 레이어라 스크린샷
+  도구로 픽셀 확인은 못 함 — `color-scheme`으로 올바른 팔레트를 쓰게 하는 것이 표준적
+  대응.)
+
+조사 중 발견했지만 이번 배치 범위(사용자가 이 화면만 지정) 밖이라 손대지 않은 것:
+`.manager-v3-content select.input-field`도 동일한 `var(--text-inverse)` 배경 패턴을 써서
+다른 매니저/운영자 화면들에서 같은 다크 모드 문제가 재현될 가능성, `.ghost-btn`(사이트
+전체 100곳 이상)에 disabled 스타일이 전무한 문제 — 둘 다 `docs/TODO.md` P2-36에 기록.
+
+`npm run build`/유닛테스트 288개 통과(회귀 없음). 네이티브 파일(ios/android) 변경 없음.
+변경 파일: `app/globals.css`.
+
 ## 2026-09-14 — 센터 정기결제 실패(연체) 정책 확정 반영: 최대 7회/7일 재시도 후 자동중지
 
 사용자가 확정한 연체 정책(실패 시 past_due, 하루 1회 재시도, 최대 7회, 소진 시 자동중지 —
