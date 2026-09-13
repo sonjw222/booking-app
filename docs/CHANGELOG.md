@@ -1,5 +1,39 @@
 # CHANGELOG
 
+## 2026-09-13 — classes RLS 권한 우회 차단 + service_role GRANT 전체 감사
+
+"수업 예약 취소 불가 + 수강권 판매 수량 제한" 기능(별도 PR #142)을 Chrome 자동 QA로
+검증하는 과정에서 그 기능과 무관한(더 오래된) 보안 취약점 2건을 실제 공격으로 발견해
+수정.
+
+1) **classes RLS 권한 우회** — `classes`의 INSERT/UPDATE/DELETE RLS가
+   `my_managed_center_ids()`(그 센터 소속인지)만 확인하고, 앱이 실제로 쓰는
+   `create_class_safe`/`update_class_safe`/`delete_class_safe` RPC가 확인하는
+   `schedule.own/other.{group|private}.{create|update|delete|past_*}` 세분권한은
+   전혀 확인하지 않았다 — schedule 권한이 전혀 없는 스태프가 RPC를 거치지 않고
+   테이블에 직접 REST 요청을 보내면 정원·담당강사·취소마감 등 아무 컬럼이나 바꿀 수
+   있었다(실제 재현 확인). `products`/`rooms`에 이미 적용된 것과 동일한 패턴
+   (`fix_permission_products_rooms_rls.sql`)으로 `can_write_class()` 헬퍼를 만들어
+   RLS에 `has_permission()` 확인을 추가(`fix_classes_rls_permission_bypass.sql`,
+   신규). `classes`에 쓰기 작업을 하는 다른 내부 함수 8개를 전수 확인해 전부
+   `SECURITY DEFINER` + 테이블 소유자(`postgres`) 실행이라 이 RLS 변경의 영향을
+   받지 않음을 확인 — 정상 앱 동작은 그대로, 우회 경로만 차단됨. own/other·
+   담당강사 미배정 케이스까지 실제 계정으로 재현 검증 완료.
+
+2) **부수 발견 — service_role GRANT 전체 감사** — 1번을 검증하다가 `role_permissions`/
+   `class_trainers` 테이블에 `service_role` GRANT가 아예 없어 검증 스크립트가
+   "permission denied"로 막힌 것을 발견. 이 저장소에서 반복돼온 "새 테이블 생성 시
+   service_role GRANT 빠뜨림" 패턴이 이번까지 6차례째라, `public` 스키마 전체를
+   감사해서 한 번에 정리(`fix_service_role_grants_full_audit.sql`, 신규) — 테이블
+   47개는 GRANT가 전혀 없었고 4개는 일부만, 뷰 3개도 SELECT가 없었다. service_role은
+   `rolbypassrls=true`라 RLS 우회는 이미 가능했으므로 이번 GRANT는 새 접근범위를 여는
+   게 아니라 막혀있던 배관 문제만 없앰(anon/authenticated 권한·RLS 정책 미변경).
+
+두 파일 모두 적용 후 실제 공격 시나리오 재현 스크립트로 재검증 완료(차단돼야 할 것은
+차단, 정상 경로는 그대로 동작).
+
+변경 파일: `fix_classes_rls_permission_bypass.sql`(신규), `fix_service_role_grants_full_audit.sql`(신규).
+
 ## 2026-09-11 — review-reports.test.ts insert().select() 버그 수정
 
 `tests/integration/review-reports.test.ts`가 일반 사용자 client로 `review_reports`에
