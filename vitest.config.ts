@@ -12,6 +12,12 @@ export default defineConfig({
     env: {
       NEXT_PUBLIC_SUPABASE_URL: "https://unit-test-placeholder.supabase.co",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "unit-test-placeholder-anon-key",
+      // app/api/billing/charge-due/route.ts, app/api/billing/confirm/route.ts가 모듈
+      // 로드 시점에 읽는 더미 값(tests/unit/billing.chargeDue.test.ts 전용) — 실제
+      // 시크릿 아님, 테스트에서만 쓰는 플레이스홀더.
+      SUPABASE_SERVICE_ROLE_KEY: "unit-test-placeholder-service-role-key",
+      TOSS_SECRET_KEY: "unit-test-placeholder-toss-secret",
+      BILLING_CRON_SECRET: "unit-test-placeholder-cron-secret",
     },
   },
 });

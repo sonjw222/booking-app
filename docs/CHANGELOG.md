@@ -1,5 +1,53 @@
 # CHANGELOG
 
+## 2026-09-14 — 센터 정기결제 실패(연체) 정책 확정 반영: 최대 7회/7일 재시도 후 자동중지
+
+사용자가 확정한 연체 정책(실패 시 past_due, 하루 1회 재시도, 최대 7회, 소진 시 자동중지 —
+카드 재등록 전까지 재개 불가, 재시도 불가능한 카드 오류는 즉시 중지)을 기존 정기 청구
+구조(`app/api/billing/charge-due/route.ts`, PR #145)에 반영.
+
+- **`add_center_subscription_billing_retry_policy.sql`(신규)**: `center_subscriptions.
+  retry_count`(연속 실패 횟수) 컬럼 추가 + `status` CHECK 제약에 `payment_failed`(신규
+  terminal 상태) 추가. 새 RLS/트리거 없음 — 이 테이블은 이미 일반 사용자에게 쓰기 정책이
+  전혀 없어(service_role 전용) 기존 보호가 그대로 적용됨.
+- **`app/api/billing/charge-due/route.ts`**: 실패할 때마다 `retry_count`를 늘리고
+  `retry_count >= 7`이면 `payment_failed`로 전환(자동 재시도 대상 쿼리 `status in
+  ('active','past_due')`에서 자연히 제외됨). 성공하면 `retry_count`를 0으로 리셋.
+  docs.tosspayments.com 공식 오류코드 문서를 직접 조회해 확인한 "카드 자체 문제라
+  재시도해도 성공할 수 없는" 오류 코드(`INVALID_CARD_EXPIRATION` 등 6종)는 재시도
+  횟수를 채우지 않고 즉시 `payment_failed`로 전환 — **이 목록에 없는(확인 안 된) 코드는
+  절대 추측 분류하지 않고 전부 기본 7회 재시도 정책으로 처리**(안전한 쪽으로만 치우치는
+  설계).
+- **`app/api/billing/confirm/route.ts`**: `payment_failed` 상태도 카드 재등록(claim)
+  대상에 포함하도록 확장 — 오너가 새 카드를 등록하면 이 라우트가 그대로 재활성화까지
+  처리하고 `retry_count`를 0으로 리셋한다. `billing_key` 등 기존 카드 정보는 어떤 경로로도
+  자동 삭제하지 않음(감사 보존, 사용자 명시 요구사항).
+- **`lib/centerSubscription.ts`**: `SubscriptionStatus`에 `payment_failed` 추가,
+  `retryCount` 필드 추가, `STATUS_LABEL` 갱신.
+- **UI(`app/manager/subscription/page.tsx`, `app/admin/subscriptions/page.tsx`)**:
+  `past_due`("결제 실패, 자동 재시도 중 + 새 카드로 다시 등록" 버튼)와 `payment_failed`
+  ("정기결제가 중지되었습니다. 결제수단을 다시 등록해주세요." + 카드 등록 버튼) 각각에
+  맞는 안내 추가. 전체 기능 접근은 기존처럼 막지 않음(사용자 결정 — 지금도 status로
+  기능을 게이트하는 구조가 없음).
+- **테스트**: `tests/unit/billing.chargeDue.test.ts`(16개), `tests/unit/billing.confirm.
+  test.ts`(5개) 신규 — 실제 Supabase/토스 없이 createClient()와 토스 fetch를 전부
+  스텁해 검증(성공/1회 실패/재시도 성공/6·7회째 실패/재시도 불가 오류 즉시중지/미확인
+  오류코드는 기본정책/canceled·pending_billing_setup·payment_failed 제외/리스 경합/
+  billing_key 없음 방어/payment_failed 재등록/409 케이스들). 실제 카드 결제는 어떤
+  테스트에서도 실행되지 않음.
+
+의도적으로 넣지 않은 것: `payment_failed`에서 운영자가 강제로 재개하는 관리자 RPC(정책상
+"오너의 새 카드 등록"이 유일한 재개 경로), 정교한 dunning(이메일/알림톡 안내 등) — 이번
+배치 범위 밖.
+
+`npm run build`/`npx tsc --noEmit` 통과, 유닛테스트 288개 전부 통과(신규 21개 포함).
+`tests/integration/subscription-plan-limits.test.ts`(기존 스키마 영향 없음 재확인,
+15/15). 변경 파일: `add_center_subscription_billing_retry_policy.sql`,
+`app/api/billing/charge-due/route.ts`, `app/api/billing/confirm/route.ts`,
+`lib/centerSubscription.ts`, `app/manager/subscription/page.tsx`,
+`app/admin/subscriptions/page.tsx`, `vitest.config.ts`(테스트 전용 더미 env 3개 추가),
+`tests/unit/billing.chargeDue.test.ts`(신규), `tests/unit/billing.confirm.test.ts`(신규).
+
 ## 2026-09-14 — 토스페이먼츠 빌링 카드사 심사 준비 완료 (`toss-billing-review` 브랜치)
 
 2026-09-11 배치(카드 등록/최초 결제 서버 처리) 이후 남아있던 카드사 심사 준비 갭을
