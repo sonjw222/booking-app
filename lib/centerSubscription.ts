@@ -21,7 +21,12 @@
 import { supabase } from "./supabaseClient";
 import "./tossSdk"; // window.TossPayments 전역 타입 선언(공용, lib/payments/TossPaymentProvider.ts와 공유)
 
-export type SubscriptionStatus = "pending_billing_setup" | "active" | "past_due" | "canceled";
+// payment_failed(2026-09-14 정책 확정, add_center_subscription_billing_retry_policy.sql):
+// 정기 청구가 7회(최대 7일) 연속 실패했거나, 카드 만료/분실/정지처럼 재시도해도 성공
+// 가능성이 없는 오류로 즉시 자동중지된 terminal 상태. 새 카드 등록(app/api/billing/
+// confirm/route.ts가 이 상태도 재등록 대상에 포함)으로만 active로 되돌아갈 수 있다.
+export type SubscriptionStatus =
+  "pending_billing_setup" | "active" | "past_due" | "canceled" | "payment_failed";
 
 export type CenterSubscription = {
   id: string;
@@ -34,6 +39,8 @@ export type CenterSubscription = {
   cardCompany: string | null;
   nextBillingDate: string | null; // "YYYY-MM-DD"
   updatedAt: string;
+  // 정기 청구 연속 실패 횟수(성공 시 0으로 리셋) — app/api/billing/charge-due 참고.
+  retryCount: number;
   // 카카오 알림톡/SMS 발송 애드온(add_center_alimtalk_addon_billing.sql) — 신청한 센터만
   // supabase/functions/send-alimtalk가 실제 발송을 허용한다. 가격은 건당(발송 1건마다,
   // fix_alimtalk_addon_per_message_pricing.sql) — 알리고 실제 과금 방식과 일치시킴.
@@ -48,8 +55,9 @@ export type AdminCenterSubscription = CenterSubscription & {
 export const STATUS_LABEL: Record<SubscriptionStatus, string> = {
   pending_billing_setup: "카드 등록 대기",
   active: "정상",
-  past_due: "연체",
+  past_due: "결제 실패(재시도 중)",
   canceled: "해지됨",
+  payment_failed: "정기결제 중지됨",
 };
 
 // 결제 연동 활성화 여부. 값이 정확히 "true"가 아니면(비워둔 경우 포함) 항상 꺼짐.
@@ -66,6 +74,7 @@ type CenterSubscriptionRow = {
   card_company: string | null;
   next_billing_date: string | null;
   updated_at: string;
+  retry_count: number;
   alimtalk_addon: boolean;
   alimtalk_addon_unit_price: number | null;
   subscription_plans: SubscriptionPlanEmbed;
@@ -87,13 +96,14 @@ function rowToSubscription(r: CenterSubscriptionRow): CenterSubscription {
     cardCompany: r.card_company,
     nextBillingDate: r.next_billing_date,
     updatedAt: r.updated_at,
+    retryCount: r.retry_count,
     alimtalkAddon: r.alimtalk_addon,
     alimtalkAddonUnitPrice: r.alimtalk_addon_unit_price,
   };
 }
 
 const SELECT_COLUMNS =
-  "id, center_id, plan_id, status, card_last4, card_company, next_billing_date, updated_at, " +
+  "id, center_id, plan_id, status, card_last4, card_company, next_billing_date, updated_at, retry_count, " +
   "alimtalk_addon, alimtalk_addon_unit_price, subscription_plans(name, monthly_price)";
 
 // 매니저 - 내 센터의 구독 상태 조회.

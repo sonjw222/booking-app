@@ -78,20 +78,22 @@ export async function POST(request: Request) {
   // 한쪽만 행을 받는다(app/api/billing/charge-due/route.ts와 동일한 리스 패턴 재사용 —
   // billing_locked_until, add_center_subscription_recurring_billing.sql). 이 라우트는
   // 처리가 몇 초 안에 끝나므로 짧은 리스로 충분.
+  // pending_billing_setup(최초 등록) 또는 payment_failed(2026-09-14 정책 — 정기 청구
+  // 7회 실패/재시도 무의미한 카드 오류로 자동중지된 구독을 새 카드로 재등록해 재개하는
+  // 경로, add_center_subscription_billing_retry_policy.sql) 둘 다 대상.
   const leaseUntil = new Date(Date.now() + 2 * 60_000).toISOString();
   const { data: sub, error: subErr } = await admin
     .from("center_subscriptions")
     .update({ billing_locked_until: leaseUntil })
     .eq("center_id", centerId)
-    .eq("status", "pending_billing_setup")
+    .in("status", ["pending_billing_setup", "payment_failed"])
     .or(`billing_locked_until.is.null,billing_locked_until.lt.${new Date().toISOString()}`)
     .select("id, status, subscription_plans(name, monthly_price)")
     .maybeSingle();
   if (subErr) return json({ error: `구독 정보 조회 실패: ${subErr.message}` }, 500);
   if (!sub) {
-    // 이미 카드가 등록됐거나(status가 더 이상 pending_billing_setup이 아님), 다른 요청이
-    // 방금 먼저 선점한 경우 — 매번 재청구하면 안 되므로 여기서 막는다. 카드 재등록은
-    // 별도 플로우(향후 작업).
+    // 이미 카드가 등록돼 정상 운영 중(active/past_due)이거나, 다른 요청이 방금 먼저
+    // 선점한 경우 — 매번 재청구하면 안 되므로 여기서 막는다.
     return json({ error: "이미 카드가 등록됐거나 처리 중인 구독이에요" }, 409);
   }
   const plan = sub.subscription_plans as unknown as { name: string; monthly_price: number } | null;
@@ -159,6 +161,7 @@ export async function POST(request: Request) {
     billing_key: billingKey, billing_customer_key: customerKey,
     card_last4: cardLast4, card_company: cardCompany,
     status: "active", next_billing_date: nextBillingDateStr, billing_locked_until: null,
+    retry_count: 0, // payment_failed에서 새 카드로 재등록한 경우 연속 실패 카운트 초기화
   }).eq("id", sub.id);
   await admin.from("center_subscription_charges").insert({
     subscription_id: sub.id, amount, order_id: orderId, status: "succeeded",
