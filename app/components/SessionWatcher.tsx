@@ -140,6 +140,13 @@ export default function SessionWatcher() {
           // 완료/세션 복원)에만 시도 — 로그인 전에는 토큰을 저장할 계정이 없어 어차피
           // 의미가 없다. 이미 구독 중이거나 웹이면 함수 내부에서 조용히 반환된다.
           if (account) void autoRegisterNativePushOnLogin();
+        }).catch((e) => {
+          // 실기기 iOS 진단(2026-09-13) — 원래 .catch()가 없어서, 계정 부트스트랩 중
+          // 네트워크 요청 하나가 실패해도 콘솔에조차 안 남고 조용히 사라졌다(사용자
+          // 입장에선 아무 반응도 없어 "멈춘 것"과 구분이 안 됨). 실패해도 다음 SIGNED_IN/
+          // INITIAL_SESSION 이벤트(재실행 등)에서 다시 시도되므로 여기서 UI를 막을
+          // 필요는 없고, 최소한 원인 추적이 가능하게 로그만 남긴다.
+          console.error("ensureAccountForCurrentUser failed", e);
         });
         return;
       }
