@@ -19,6 +19,7 @@ export type ManagedClass = {
   reserved: number;
   recurringGroupId: string | null;
   allowGoods: boolean;
+  allowCancel: boolean; // false면 회원이 예약을 스스로 취소할 수 없음(특강 등)
   roomId: string | null;
   cancelDeadlineMin: number | null; // null이면 운영설정 기본값 사용
   bookingDeadlineMin: number | null; // null이면 운영설정 기본값 사용(CLASS-001)
@@ -126,7 +127,7 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data: page, error } = await supabase
       .from("classes")
-      .select("id, title, description, start_time, end_time, capacity, recurring_group_id, allow_goods, room_id, cancel_deadline_min, booking_deadline_min, class_format, status, pass_selection_mode")
+      .select("id, title, description, start_time, end_time, capacity, recurring_group_id, allow_goods, allow_cancel, room_id, cancel_deadline_min, booking_deadline_min, class_format, status, pass_selection_mode")
       .eq("center_id", centerId)
       .gte("start_time", toKstIso(fromDate, "00:00"))
       .lte("start_time", toKstIso(toDate, "23:59"))
@@ -183,6 +184,7 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
     reserved: counts[c.id] ?? 0,
     recurringGroupId: c.recurring_group_id ?? null,
     allowGoods: c.allow_goods ?? false,
+    allowCancel: c.allow_cancel ?? true,
     roomId: c.room_id ?? null,
     cancelDeadlineMin: c.cancel_deadline_min ?? null,
     bookingDeadlineMin: c.booking_deadline_min ?? null,
@@ -201,6 +203,7 @@ export type ClassInput = {
   end: string;
   capacity: number;
   allowGoods: boolean;
+  allowCancel?: boolean;               // false면 회원 셀프취소 불가(특강 등). 기본값 true
   roomId?: string | null;
   cancelDeadlineMin?: number | null;   // 예약취소 마감 (분). null이면 센터 설정 사용
   bookingDeadlineMin?: number | null;  // 예약마감 (분). null이면 센터 설정 사용(CLASS-001)
@@ -225,6 +228,7 @@ export async function createClass(centerId: string, input: ClassInput): Promise<
     p_booking_deadline_min: input.bookingDeadlineMin ?? null,
     p_class_format: input.classFormat ?? "group",
     p_pass_selection_mode: input.passSelectionMode ?? "all",
+    p_allow_cancel: input.allowCancel ?? true,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
   return data as string;
@@ -245,6 +249,7 @@ export async function updateClass(classId: string, input: ClassInput): Promise<v
     p_booking_deadline_min: input.bookingDeadlineMin ?? null,
     p_class_format: input.classFormat ?? "group",
     p_pass_selection_mode: input.passSelectionMode ?? "all",
+    p_allow_cancel: input.allowCancel ?? true,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
 }

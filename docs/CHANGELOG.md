@@ -1,5 +1,50 @@
 # CHANGELOG
 
+## 2026-09-13 — 수업 "예약 취소 불가" 설정 + 수강권 판매 수량 제한 추가
+
+사용자 요청(특강처럼 예약 취소를 막고 싶은 수업, 정원만큼만 팔고 싶은 수강권)에 따라
+두 기능을 추가.
+
+1) `classes.allow_cancel`(기본 true, `add_class_cancel_lock.sql`) — false로 설정하면
+   회원이 그 수업 예약을 스스로 취소할 수 없다. `cancel_reservation()`(회원 셀프취소
+   RPC)에만 체크를 추가했고, 매니저의 관리자 취소/노쇼 처리(`admin_cancel_reservation`,
+   `manager_set_attendance`)는 건드리지 않았다 — 회원이 취소 못 하게 하는 것이지 센터가
+   관리 못 하게 하는 게 아니기 때문. 예약 직후 10분 유예(오조작 방지 안전장치,
+   `v_grace_deadline`)는 취소불가 수업에도 그대로 유지되고, 유예시간이 지난 뒤에만
+   완전히 차단된다. `create_class_safe`/`update_class_safe`에 `p_allow_cancel`
+   파라미터 추가(기본 true, 기존 호출부 영향 없음). 매니저 수업 등록/수정 화면에 토글
+   추가, 회원 예약 확인 모달에 "해당 수업은 예약 취소가 불가능한 수업입니다.
+   예약하시겠습니까?" 경고 표시. 취소 버튼 자체는 기존 취소마감(`cancel_deadline_min`)
+   케이스와 동일하게 항상 노출하고 서버 응답 메시지를 그대로 보여준다(유예기간 안에는
+   여전히 취소 가능해야 하므로 버튼을 미리 숨기지 않음). 반복수업 일괄 생성
+   (`create_recurring_classes_safe`)에는 아직 이 파라미터가 없어 개별 인스턴스를
+   수정 화면에서 따로 켜야 한다([TODO](./TODO.md)에 기록).
+
+2) `products.max_quantity`(nullable, `add_product_sale_limit.sql`) — 설정하면 그
+   개수만큼 발급(환불 제외 `memberships` 행 수 기준)된 뒤 자동으로 추가 판매를 막는다.
+   `registerPayment`/`grantProductToMember`(직접 insert)와 `fulfill_order()`(회원 주문
+   처리) 등 수강권 발급 경로가 여러 곳이라, 각 경로마다 체크를 넣는 대신 `memberships`
+   INSERT/UPDATE 트리거(`trg_enforce_product_sale_limit`) 하나로 통일해 어느 경로로
+   발급·재지정하든 동일하게 강제되게 했다(기존 membership의 product_id를 매진 상품으로
+   재지정하거나 환불건을 다시 active로 되돌리는 우회도 함께 차단) — `products` 행을
+   FOR UPDATE로 잠가 동시 구매 경쟁 상태도 방지. `product_sale_counts` 뷰로 판매
+   개수를 노출해 매니저 화면엔 "판매 N/M개", 회원 화면엔 "N개 남음"/"매진"을 표시하고
+   매진 시 담기·구매 버튼을 숨긴다. 다만 현재 주문 흐름은 결제 즉시가 아니라 매니저
+   승인(`fulfill_order`) 시점에 실제 발급되므로, 여러 명이 동시에 "구매"를 눌러 대기
+   중인 주문이 정원을 넘는 경우는 승인 시점에야 막힌다(주문 단계에서 자리를 미리
+   잡아두는 기능은 이번 범위 밖).
+
+Chrome 자동 QA로 정상 시나리오·디자인 일관성·그레이스 기간 경계값을 실제 계정으로
+검증 완료(신규 UI 요소는 기존 switch/set-row/pass-group-tag 컴포넌트 재사용이라
+디자인 이질감 없음). review_reports/center_reviews 등 기존 스키마·RLS는 전혀
+건드리지 않음. `npm run build`, `npx tsc --noEmit` 통과(기존 베이스라인 27개 오류만
+남고 신규 오류 없음).
+
+변경 파일: `add_class_cancel_lock.sql`(신규), `add_product_sale_limit.sql`(신규),
+`lib/reservations.ts`, `lib/classes.ts`, `lib/passes.ts`, `lib/center.ts`,
+`app/reservation/page.tsx`, `app/manager/classes/page.tsx`,
+`app/manager/membership-rules/page.tsx`, `app/center/[id]/page.tsx`.
+
 ## 2026-09-11 — review-reports.test.ts insert().select() 버그 수정
 
 `tests/integration/review-reports.test.ts`가 일반 사용자 client로 `review_reports`에

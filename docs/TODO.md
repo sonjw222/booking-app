@@ -2681,6 +2681,26 @@ PR #86(UI/UX 감사 배치, 이 PR은 예약/한도 로직을 전혀 건드리�
 | 완료 조건 | 이 배치가 담긴 PR이 merge된 뒤, main에 실제로 발생하는 첫 `push` 이벤트 워크플로 실행을 GitHub Actions 탭에서 열어 (a) `e2e`/`integration` job이 실제로 `skipped`로 표시되는지 (b) `unit`/`build`는 정상적으로 `success`(또는 실 실패)로 진행되는지 확인. PR 자체의 실행은 `pull_request` 경로만 타므로 이 push 경로 검증에 쓸 수 없음 |
 | 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-11 Low-Egress Fix Batch 항목 |
 
+### P2-34. (신규, 2026-09-13) 반복수업 일괄 생성에 "예약 취소 불가" 옵션 없음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **미완성** — `classes.allow_cancel`(`add_class_cancel_lock.sql`)은 단일 수업 생성/수정(`create_class_safe`/`update_class_safe`)에만 파라미터로 연결됨. 반복수업 일괄 생성(`create_recurring_classes_safe`)에는 아직 없어, 반복수업으로 만든 특강은 생성 직후 인스턴스마다 수정 화면을 열어 개별로 켜야 함 |
+| 근거 파일 | `lib/classes.ts`(`createRecurringClasses`/`createRecurringClassesPerDay`), `add_class_cancel_lock.sql` |
+| 완료 조건 | `create_recurring_classes_safe`에 `p_allow_cancel` 파라미터 추가 + 매니저 반복수업 생성 UI에 토글 노출, 생성된 모든 인스턴스에 일괄 반영 확인 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-13 항목 |
+
+### P2-35. (신규, 2026-09-13) 수강권 판매 수량 제한이 주문 단계에서는 아직 안 막힘
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인 필요** — `products.max_quantity`(`add_product_sale_limit.sql`)는 `memberships` INSERT 시점(=매니저가 주문을 승인해 `fulfill_order()`를 호출하는 시점)에만 강제된다. 이 앱의 주문 흐름은 결제 즉시 발급이 아니라 매니저 수동 승인이라, 여러 회원이 거의 동시에 "구매"를 눌러 만든 `pending` 주문이 정원을 넘는 경우 회원 화면에는 계속 "N개 남음"으로 보이다가 매니저가 나중에 승인하는 시점에야 일부가 거절된다(선착순 순서가 결제 시점이 아닌 승인 처리 순서로 결정됨) |
+| 근거 파일 | `add_product_sale_limit.sql`(`trg_enforce_product_sale_limit`), `lib/orders.ts`(`updateOrderStatus`→`fulfill_order`), `orders` 테이블(`docs/DATABASE.md` 4-3절, 상태 "미완성") |
+| 완료 조건 | 제품 결정 필요 — (a) 그대로 두고 매니저 승인 화면에 "정원 초과로 거절됨" 안내만 명확히 하거나, (b) `orders` 생성 시점부터 `pending` 주문도 잠정 차감에 포함시켜 진짜 선착순으로 만들지 결정 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-13 항목 |
+
 ### P3-11. (신규, 2026-09-11) InquiryChat 이전 대화 더보기(pagination) 없음
 
 | 필드 | 내용 |

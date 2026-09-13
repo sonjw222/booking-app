@@ -380,7 +380,14 @@ function CenterDetailContent() {
                           {group.items.map((p) => (
                             <div key={p.id} className="center-product-row">
                               <button className="center-product-info" style={{ background: "none", border: "none", textAlign: "left", flex: 1, cursor: p.description ? "pointer" : "default" }} onClick={() => p.description && setDescProduct(p)}>
-                                <div className="center-product-name">{p.name}{p.description ? " ⓘ" : ""}</div>
+                                <div className="center-product-name">
+                                  {p.name}{p.description ? " ⓘ" : ""}
+                                  {p.remaining != null && (
+                                    <span className="pass-group-tag" style={p.remaining <= 0 ? { background: "var(--danger-soft)", color: "var(--danger)" } : undefined}>
+                                      {p.remaining <= 0 ? "매진" : `${p.remaining}개 남음`}
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="center-product-detail">
                                   {p.unlimited ? "무제한" : p.totalCount ? `${p.totalCount}회` : ""} · {won(p.price)}
                                 </div>
@@ -391,8 +398,8 @@ function CenterDetailContent() {
                                 )}
                               </button>
                               <div className="center-product-actions">
-                                <button className="center-product-cart" onClick={() => handleAddCart(p)}>담기</button>
-                                <button className="center-product-buy" onClick={() => handlePurchase(p)}>구매</button>
+                                {p.remaining !== 0 && <button className="center-product-cart" onClick={() => handleAddCart(p)}>담기</button>}
+                                {p.remaining !== 0 && <button className="center-product-buy" onClick={() => handlePurchase(p)}>구매</button>}
                               </div>
                             </div>
                           ))}
@@ -408,14 +415,21 @@ function CenterDetailContent() {
                       {visibleProducts.filter((p) => p.kind === "goods").map((p) => (
                         <div key={p.id} className="center-product-row">
                           <button className="center-product-info" style={{ background: "none", border: "none", textAlign: "left", flex: 1, cursor: p.description ? "pointer" : "default" }} onClick={() => p.description && setDescProduct(p)}>
-                            <div className="center-product-name">{p.name}{p.description ? " ⓘ" : ""}</div>
+                            <div className="center-product-name">
+                              {p.name}{p.description ? " ⓘ" : ""}
+                              {p.remaining != null && (
+                                <span className="pass-group-tag" style={p.remaining <= 0 ? { background: "var(--danger-soft)", color: "var(--danger)" } : undefined}>
+                                  {p.remaining <= 0 ? "매진" : `${p.remaining}개 남음`}
+                                </span>
+                              )}
+                            </div>
                             <div className="center-product-detail">
                               {p.unlimited ? "무제한" : p.totalCount ? `${p.totalCount}회` : ""} · {won(p.price)}
                             </div>
                           </button>
                           <div className="center-product-actions">
-                            <button className="center-product-cart" onClick={() => handleAddCart(p)}>담기</button>
-                            <button className="center-product-buy" onClick={() => handlePurchase(p)}>구매</button>
+                            {p.remaining !== 0 && <button className="center-product-cart" onClick={() => handleAddCart(p)}>담기</button>}
+                            {p.remaining !== 0 && <button className="center-product-buy" onClick={() => handlePurchase(p)}>구매</button>}
                           </div>
                         </div>
                       ))}
