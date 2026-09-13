@@ -10,11 +10,6 @@ export default function BusinessInfoPage() {
       </div>
 
       <div className="legal-page">
-        <div className="legal-note">
-          통신판매업 신고번호는 신고 절차 진행 중입니다. 신고가 완료되는 대로 이 페이지를
-          갱신할 예정입니다.
-        </div>
-
         <table>
           <tbody>
             <tr><th>서비스명</th><td>{BUSINESS_INFO.serviceName}</td></tr>

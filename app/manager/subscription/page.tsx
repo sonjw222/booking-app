@@ -203,9 +203,9 @@ function ManagerSubscriptionContent() {
         <div className="settings-wrap">
           {subError && <div className="error-toast">{subError}<button onClick={() => setSubError(null)}>×</button></div>}
           {subscription && (
-            <div className="set-row col" style={{ background: "var(--card-bg, #f7f7f9)", borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
+            <div className="set-row col" style={{ background: "var(--card-bg)", borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
               <div className="set-label" style={{ fontWeight: 600, marginBottom: 6 }}>상품 안내 — {subscription.planName}</div>
-              <div style={{ fontSize: 13, lineHeight: 1.7, color: "var(--text-muted, #666)" }}>
+              <div style={{ fontSize: 13, lineHeight: 1.7, color: "var(--text-dim)" }}>
                 {subscription.monthlyPrice > 0 ? (
                   <>월 {subscription.monthlyPrice.toLocaleString()}원 (부가세 포함) · 신용카드 자동(정기)결제<br /></>
                 ) : (
@@ -322,7 +322,7 @@ function ManagerSubscriptionContent() {
               정보를 결제 상품 화면 하단에 표시. 이 앱은 모바일 앱 셸 구조(전역 하단
               네비게이션 바)라 전통적인 웹사이트 footer가 없어, 결제 상품 화면 자체의
               맨 아래에 배치한다(lib/businessInfo.ts가 단일 출처, /legal/business와 동일 값). */}
-          <div className="set-row col" style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--border-color, #e5e5e5)", fontSize: 12, color: "var(--text-muted, #888)", lineHeight: 1.8 }}>
+          <div className="set-row col" style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--line)", fontSize: 12, color: "var(--text-dim)", lineHeight: 1.8 }}>
             <div>{BUSINESS_INFO.serviceName} · 상호 {BUSINESS_INFO.companyName} · 대표 {BUSINESS_INFO.ceoName}</div>
             <div>사업자등록번호 {BUSINESS_INFO.businessRegNo} · 통신판매업 신고번호 {BUSINESS_INFO.mailOrderRegNo}</div>
             <div>{BUSINESS_INFO.address}</div>

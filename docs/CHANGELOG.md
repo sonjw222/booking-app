@@ -1,5 +1,58 @@
 # CHANGELOG
 
+## 2026-09-14 — 토스페이먼츠 빌링 카드사 심사 준비 완료 (`toss-billing-review` 브랜치)
+
+2026-09-11 배치(카드 등록/최초 결제 서버 처리) 이후 남아있던 카드사 심사 준비 갭을
+마저 채움. `origin/main`(그 사이 병합된 29개 커밋, iOS release-blocker 브랜치와는
+파일 겹침 없음)을 이 브랜치에 먼저 병합한 뒤 진행.
+
+- **`app/api/billing/charge-due/route.ts`(신규)** + **`add_center_subscription_
+  recurring_billing.sql`(신규)**: 2회차 이후 매월 자동 청구. pg_cron이 하루 1회(사용자
+  지시 — "cron 주기는 과도하게 짧게 만들지 말 것") `x-cron-secret` 헤더로 인증된 이
+  라우트를 직접 호출(기존 autocancel/alimtalk 스케줄러와 달리 Edge Function을 거치지
+  않음 — TOSS_SECRET_KEY를 Vercel에만 두기 위한 의도적 설계 차이, 파일 상단 주석 참고).
+  `status in ('active','past_due')`이고 `next_billing_date`가 지난 구독만 대상, 가격은
+  매번 `subscription_plans`에서 새로 조회(캐시 안 함). 실패하면 `past_due`로 표시하고
+  다음 날 같은 회차로 재시도(성공할 때까지) — 몇 번 실패하면 강제 해지할지 같은 정교한
+  연체 정책은 사업 결정 사항이라 이번 배치에 넣지 않음(docs/TODO.md에 기록).
+- **중복 청구 방지 보강**: `center_subscriptions.billing_locked_until`(리스 마커) +
+  `center_subscription_charges.order_id`(토스 orderId 기록) 컬럼 추가. 최초 결제
+  라우트(`app/api/billing/confirm/route.ts`)도 기존엔 단순 SELECT 후 조건부 UPDATE라
+  거의 동시에 두 번 호출되면(네트워크 재시도 등) 이론상 이중 청구 가능성이 있었음 —
+  같은 리스 패턴으로 원자적 선점(claim)하도록 보강. 정기 청구는 추가로 회차별
+  결정적 orderId(`sub-recur-{centerId}-{next_billing_date}`)를 써서 DB 리스가 실패해도
+  토스 쪽 orderId 유일성이 이중 방어가 되도록 함.
+- **`fix_center_platform_subscription_review_price.sql` 보강**: 39,000원 반영 UPDATE는
+  그대로 두고, production에 남아있던 테스트성 junk 플랜("ㄹ", 222,222원, `is_default`
+  아님이라 신규 센터엔 영향 없었지만 `is_active=true`라 매니저 "플랜 변경" 드롭다운에
+  노출되고 있었음)을 함께 비활성화(`is_active=false`, 삭제 아님)하도록 확장. 아직
+  미실행 — 가격은 사업 결정 사항이라 사용자 승인 후 직접 실행 필요(변경 없음).
+- **디자인 시스템 회귀 수정**: main 병합으로 새로 들어온 `designSystem.contract.test.ts`의
+  "inline style에 hardcoded hex 금지" 검사가 `app/manager/subscription/page.tsx`(이
+  브랜치가 2026-09-11에 추가한 상품 안내/사업자정보 블록)에서 실패 — `var(--card-bg,
+  #f7f7f9)`처럼 존재하지도 않는 토큰 이름에 hex fallback을 붙여 쓰고 있었음. 실제
+  존재하는 토큰(`--card-bg`, `--text-dim`, `--line`)으로 교체해 fallback 없이도 항상
+  정상 해석되도록 수정.
+- **`lib/centerSubscription.ts` 문서 주석 정리**: 이 브랜치 자체가 이미 구현해둔
+  `confirmCenterBilling()`/자동 청구를 여전히 "범위 밖"이라고 설명하던 stale 주석을
+  실제 상태에 맞게 갱신.
+- **`app/legal/business/page.tsx` 모순 문구 제거**: `mailOrderRegNo`가 2026-09-11에
+  이미 실제 확정 신고번호로 바뀌었는데도, 그 값을 표로 보여주는 바로 위에 "통신판매업
+  신고번호는 신고 절차 진행 중입니다"라는 이전 placeholder 시절 안내문이 그대로 남아있어
+  화면이 자기모순적이었음(토스 심사관이 이 페이지를 보면 혼란스러울 수 있는 부분) — 제거.
+
+의도적으로 이번 배치에 넣지 않은 것: 연체(past_due) 재시도 횟수 제한/자동 해지 정책,
+past_due 상태에서 오너가 카드를 재등록/재시도하는 UI, 실제 `NEXT_PUBLIC_BILLING_ENABLED`/
+`NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY`/`BILLING_CRON_SECRET` production 환경변수 설정
+(Vercel/Supabase secrets — 이 세션이 값을 알 수도, 대신 설정할 수도 없음), price SQL
+실행, main 병합/배포, 실제 화면 캡처.
+
+`npm run build`/유닛테스트 267개 통과(디자인 시스템 회귀 수정 포함). 통합테스트는
+`docs/AI_PLAYBOOK.md`/`CLAUDE.md` 규칙에 따라 별도로 실행·기록(결과는 이 배치 보고서 참고).
+변경 파일: `app/api/billing/charge-due/route.ts`, `app/api/billing/confirm/route.ts`,
+`add_center_subscription_recurring_billing.sql`, `fix_center_platform_subscription_review_
+price.sql`, `app/manager/subscription/page.tsx`, `lib/centerSubscription.ts`.
+
 ## 2026-09-13 — 수업 "예약 취소 불가" 설정 + 수강권 판매 수량 제한 추가
 
 사용자 요청(특강처럼 예약 취소를 막고 싶은 수업, 정원만큼만 팔고 싶은 수강권)에 따라
