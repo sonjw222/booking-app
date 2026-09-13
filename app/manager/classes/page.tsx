@@ -55,7 +55,7 @@ const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 // 입력해주세요" 검증에 걸린다(2026-09-06 UX 감사 — 정각 시간을 만들려던 게 아니라 화면에
 // 보이는 값과 실제 저장되는 값이 달라서 생긴 문제였다). 애초에 유효한 시각으로 채워두면
 // 이 불일치 자체가 없어지고, 매번 시간을 직접 다 고를 필요도 없어진다.
-const EMPTY: ClassInput = { title: "", description: "", date: "", start: "10:00", end: "11:00", capacity: 8, allowGoods: true, roomId: null, cancelDeadlineMin: null, bookingDeadlineMin: null, classFormat: "group" };
+const EMPTY: ClassInput = { title: "", description: "", date: "", start: "10:00", end: "11:00", capacity: 8, allowGoods: true, allowCancel: true, roomId: null, cancelDeadlineMin: null, bookingDeadlineMin: null, classFormat: "group" };
 
 export default function ClassManagePage() {
   const nowD = new Date();
@@ -629,7 +629,7 @@ export default function ClassManagePage() {
     setEditId(c.id);
     setEditGroupId(c.recurringGroupId);
     setApplyToGroup(false);
-    setForm({ title: c.title, description: c.description ?? "", date: c.date, start: c.start, end: c.end, capacity: c.capacity, allowGoods: c.allowGoods, roomId: c.roomId, cancelDeadlineMin: c.cancelDeadlineMin, bookingDeadlineMin: c.bookingDeadlineMin, classFormat: c.classFormat });
+    setForm({ title: c.title, description: c.description ?? "", date: c.date, start: c.start, end: c.end, capacity: c.capacity, allowGoods: c.allowGoods, allowCancel: c.allowCancel, roomId: c.roomId, cancelDeadlineMin: c.cancelDeadlineMin, bookingDeadlineMin: c.bookingDeadlineMin, classFormat: c.classFormat });
     fillDeadline(c.cancelDeadlineMin);
     fillBookDeadline(c.bookingDeadlineMin);
     // 'all'이면(class_allowed_products는 원래 비어 있음) 전체 체크 상태로 즉시 보여준다 —
@@ -1301,22 +1301,33 @@ export default function ClassManagePage() {
               운영설정보다 이 값이 우선 적용돼요(CLASS-001).
             </div>
 
-            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>예약취소 가능 시간</div>
-            <div className="deadline-row">
-              <span className="deadline-pre">수업 시작</span>
-              <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
-                value={cancelD} onChange={(e) => setCancelD(e.target.value)} />
-              <span className="deadline-unit">일</span>
-              <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
-                value={cancelH} onChange={(e) => setCancelH(e.target.value)} />
-              <span className="deadline-unit">시간</span>
-              <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
-                value={cancelM} onChange={(e) => setCancelM(e.target.value)} />
-              <span className="deadline-unit">분 전까지</span>
+            <div className="set-row" style={{ padding: "12px 0", borderBottom: "none" }}>
+              <div className="set-label">예약 취소 완전 불가<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>특강 등 — 켜면 회원이 예약을 스스로 취소할 수 없어요(관리자 취소/노쇼 처리는 그대로 가능)</span></div>
+              <button className={`switch ${!form.allowCancel ? "on" : ""}`} onClick={() => setForm({ ...form, allowCancel: !form.allowCancel })}>
+                <span className="knob" />
+              </button>
             </div>
-            <div className="perm-guide" style={{ margin: "4px 0 0" }}>
-              모두 비우면 운영설정의 기본 취소 시간이 적용돼요.
-            </div>
+
+            {form.allowCancel && (
+              <>
+                <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>예약취소 가능 시간</div>
+                <div className="deadline-row">
+                  <span className="deadline-pre">수업 시작</span>
+                  <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+                    value={cancelD} onChange={(e) => setCancelD(e.target.value)} />
+                  <span className="deadline-unit">일</span>
+                  <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+                    value={cancelH} onChange={(e) => setCancelH(e.target.value)} />
+                  <span className="deadline-unit">시간</span>
+                  <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+                    value={cancelM} onChange={(e) => setCancelM(e.target.value)} />
+                  <span className="deadline-unit">분 전까지</span>
+                </div>
+                <div className="perm-guide" style={{ margin: "4px 0 0" }}>
+                  모두 비우면 운영설정의 기본 취소 시간이 적용돼요.
+                </div>
+              </>
+            )}
             </div>
 
             {/* 상품 사용 허용 */}

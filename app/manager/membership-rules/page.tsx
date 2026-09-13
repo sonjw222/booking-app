@@ -44,6 +44,8 @@ export default function MembershipRulesPage() {
   const [pCount, setPCount] = useState("");
   const [pUnlimited, setPUnlimited] = useState(false);
   const [pExpiry, setPExpiry] = useState<ExpiryOptionValue>({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
+  const [pLimitSale, setPLimitSale] = useState(false);
+  const [pMaxQty, setPMaxQty] = useState("");
 
   // 조건 추가 시트 (어느 상품에)
   const [ruleFor, setRuleFor] = useState<Product | null>(null);
@@ -117,6 +119,7 @@ export default function MembershipRulesPage() {
     setPName(""); setPGroupLabel(""); setPDesc(""); setPPrice(""); setPCount("");
     setPAutoDays([]); setPAutoClasses([]);
     setPUnlimited(false); setPExpiry({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
+    setPLimitSale(false); setPMaxQty("");
   }
 
   function openCreateSheet() {
@@ -141,6 +144,8 @@ export default function MembershipRulesPage() {
       cutoffDay: p.rollingMonthCutoffDay != null ? String(p.rollingMonthCutoffDay) : "",
       allowEarlyUse: p.rollingMonthAllowEarlyUse ?? false,
     });
+    setPLimitSale(p.maxQuantity != null);
+    setPMaxQty(p.maxQuantity != null ? String(p.maxQuantity) : "");
     setProdSheet(true);
   }
 
@@ -153,6 +158,7 @@ export default function MembershipRulesPage() {
     if (pExpiry.mode === "rolling_month" && (!pExpiry.cutoffDay.trim() || num(pExpiry.cutoffDay) < 1 || num(pExpiry.cutoffDay) > 31)) {
       setError("며칠부터 다음 달로 칠지 1~31 사이로 입력해주세요"); return;
     }
+    if (pLimitSale && num(pMaxQty) <= 0) { setError("판매 수량을 입력해주세요 (또는 '판매 수량 제한'을 꺼주세요)"); return; }
     setBusy(true);
     try {
       const extra = {
@@ -164,6 +170,7 @@ export default function MembershipRulesPage() {
           cutoffDay: pExpiry.mode === "rolling_month" ? num(pExpiry.cutoffDay) : null, allowEarlyUse: pExpiry.allowEarlyUse,
         },
         groupLabel: pGroupLabel.trim() || undefined,
+        maxQuantity: pLimitSale ? num(pMaxQty) : null,
       };
       if (editingId) {
         await updateProduct(editingId, pName.trim(), num(pPrice), num(pCount), false, extra);
@@ -321,9 +328,15 @@ export default function MembershipRulesPage() {
                       {p.name}
                       {p.groupLabel && <span className="pass-group-tag">{p.groupLabel}</span>}
                       {!p.isOnSale && <span className="pass-group-tag" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>판매정지</span>}
+                      {p.maxQuantity != null && (
+                        <span className="pass-group-tag" style={p.soldCount >= p.maxQuantity ? { background: "var(--danger-soft)", color: "var(--danger)" } : undefined}>
+                          {p.soldCount >= p.maxQuantity ? "매진" : `${p.maxQuantity - p.soldCount}개 남음`}
+                        </span>
+                      )}
                     </div>
                     <div className="pass-sub">
                       {won(p.price)}{p.totalCount ? ` · ${p.totalCount}회` : ""}
+                      {p.maxQuantity != null && ` · 판매 ${p.soldCount}/${p.maxQuantity}`}
                     </div>
                   </div>
                   {(canEditRules || canToggleSale) && (
@@ -414,6 +427,29 @@ export default function MembershipRulesPage() {
               <>
                 <div className="menu-section-label" style={{ padding: "6px 0 6px" }}>총 횟수</div>
                 <input inputMode="numeric" className="input-field" placeholder="예: 8" value={pCount} onChange={(e) => setPCount(e.target.value)} />
+              </>
+            )}
+
+            {/* 판매 수량 제한 — "총 횟수"(수강권 1개당 사용 가능 횟수)와는 별개로, 이 상품
+                자체를 몇 개까지만 판매할지(예: 정원 10명짜리 특강이면 10개) 설정 */}
+            <div className="set-row" style={{ padding: "12px 0 6px", borderBottom: "none" }}>
+              <div className="set-label">판매 수량 제한<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>특강 등 — 정한 개수만큼 팔리면 자동으로 판매가 멈춰요</span></div>
+              <button className={`switch ${pLimitSale ? "on" : ""}`} onClick={() => setPLimitSale(!pLimitSale)}>
+                <span className="knob" />
+              </button>
+            </div>
+            {pLimitSale && (
+              <>
+                <input inputMode="numeric" className="input-field" placeholder="예: 10" value={pMaxQty} onChange={(e) => setPMaxQty(e.target.value)} />
+                {editingId && (() => {
+                  const cur = products.find((x) => x.id === editingId);
+                  if (!cur) return null;
+                  return (
+                    <div className="perm-guide" style={{ margin: "4px 0 0" }}>
+                      지금까지 <b>{cur.soldCount}개</b> 판매됐어요. 이보다 적은 수로 줄이면 바로 추가 판매가 막혀요.
+                    </div>
+                  );
+                })()}
               </>
             )}
 

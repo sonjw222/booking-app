@@ -14,6 +14,14 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#0A2545",
+  // 실기기 진단(2026-09-11) — 이게 없으면 iOS WKWebView에서 CSS env(safe-area-inset-*)가
+  // 전부 0으로 계산된다(스펙상 viewport-fit=cover가 있어야 값이 채워짐). 이미 여러 곳(예:
+  // app/globals.css의 --floating-nav-clearance)이 env(safe-area-inset-bottom)에 기대고
+  // 있었는데 이 메타가 빠져 있어 실제로는 항상 0으로 계산되고 있었다 — 하단 홈 인디케이터
+  // 영역을 제대로 못 피하던 원인 중 하나. Capacitor의 StatusBar.setOverlaysWebView(true)
+  // (CapacitorBootstrap.tsx)는 상태바를 오버레이하는 것과 별개로, 이 메타 자체가 있어야
+  // safe-area 값을 CSS가 실제로 읽을 수 있다.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

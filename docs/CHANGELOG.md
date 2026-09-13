@@ -1,5 +1,523 @@
 # CHANGELOG
 
+## 2026-09-13 — 수업 "예약 취소 불가" 설정 + 수강권 판매 수량 제한 추가
+
+사용자 요청(특강처럼 예약 취소를 막고 싶은 수업, 정원만큼만 팔고 싶은 수강권)에 따라
+두 기능을 추가.
+
+1) `classes.allow_cancel`(기본 true, `add_class_cancel_lock.sql`) — false로 설정하면
+   회원이 그 수업 예약을 스스로 취소할 수 없다. `cancel_reservation()`(회원 셀프취소
+   RPC)에만 체크를 추가했고, 매니저의 관리자 취소/노쇼 처리(`admin_cancel_reservation`,
+   `manager_set_attendance`)는 건드리지 않았다 — 회원이 취소 못 하게 하는 것이지 센터가
+   관리 못 하게 하는 게 아니기 때문. 예약 직후 10분 유예(오조작 방지 안전장치,
+   `v_grace_deadline`)는 취소불가 수업에도 그대로 유지되고, 유예시간이 지난 뒤에만
+   완전히 차단된다. `create_class_safe`/`update_class_safe`에 `p_allow_cancel`
+   파라미터 추가(기본 true, 기존 호출부 영향 없음). 매니저 수업 등록/수정 화면에 토글
+   추가, 회원 예약 확인 모달에 "해당 수업은 예약 취소가 불가능한 수업입니다.
+   예약하시겠습니까?" 경고 표시. 취소 버튼 자체는 기존 취소마감(`cancel_deadline_min`)
+   케이스와 동일하게 항상 노출하고 서버 응답 메시지를 그대로 보여준다(유예기간 안에는
+   여전히 취소 가능해야 하므로 버튼을 미리 숨기지 않음). 반복수업 일괄 생성
+   (`create_recurring_classes_safe`)에는 아직 이 파라미터가 없어 개별 인스턴스를
+   수정 화면에서 따로 켜야 한다([TODO](./TODO.md)에 기록).
+
+2) `products.max_quantity`(nullable, `add_product_sale_limit.sql`) — 설정하면 그
+   개수만큼 발급(환불 제외 `memberships` 행 수 기준)된 뒤 자동으로 추가 판매를 막는다.
+   `registerPayment`/`grantProductToMember`(직접 insert)와 `fulfill_order()`(회원 주문
+   처리) 등 수강권 발급 경로가 여러 곳이라, 각 경로마다 체크를 넣는 대신 `memberships`
+   INSERT/UPDATE 트리거(`trg_enforce_product_sale_limit`) 하나로 통일해 어느 경로로
+   발급·재지정하든 동일하게 강제되게 했다(기존 membership의 product_id를 매진 상품으로
+   재지정하거나 환불건을 다시 active로 되돌리는 우회도 함께 차단) — `products` 행을
+   FOR UPDATE로 잠가 동시 구매 경쟁 상태도 방지. `product_sale_counts` 뷰로 판매
+   개수를 노출해 매니저 화면엔 "판매 N/M개", 회원 화면엔 "N개 남음"/"매진"을 표시하고
+   매진 시 담기·구매 버튼을 숨긴다. 다만 현재 주문 흐름은 결제 즉시가 아니라 매니저
+   승인(`fulfill_order`) 시점에 실제 발급되므로, 여러 명이 동시에 "구매"를 눌러 대기
+   중인 주문이 정원을 넘는 경우는 승인 시점에야 막힌다(주문 단계에서 자리를 미리
+   잡아두는 기능은 이번 범위 밖).
+
+Chrome 자동 QA로 정상 시나리오·디자인 일관성·그레이스 기간 경계값을 실제 계정으로
+검증 완료(신규 UI 요소는 기존 switch/set-row/pass-group-tag 컴포넌트 재사용이라
+디자인 이질감 없음). review_reports/center_reviews 등 기존 스키마·RLS는 전혀
+건드리지 않음. `npm run build`, `npx tsc --noEmit` 통과(기존 베이스라인 27개 오류만
+남고 신규 오류 없음).
+
+변경 파일: `add_class_cancel_lock.sql`(신규), `add_product_sale_limit.sql`(신규),
+`lib/reservations.ts`, `lib/classes.ts`, `lib/passes.ts`, `lib/center.ts`,
+`app/reservation/page.tsx`, `app/manager/classes/page.tsx`,
+`app/manager/membership-rules/page.tsx`, `app/center/[id]/page.tsx`.
+
+## 2026-09-13 — classes RLS 권한 우회 차단 + service_role GRANT 전체 감사
+
+"수업 예약 취소 불가 + 수강권 판매 수량 제한" 기능(별도 PR #142)을 Chrome 자동 QA로
+검증하는 과정에서 그 기능과 무관한(더 오래된) 보안 취약점 2건을 실제 공격으로 발견해
+수정.
+
+1) **classes RLS 권한 우회** — `classes`의 INSERT/UPDATE/DELETE RLS가
+   `my_managed_center_ids()`(그 센터 소속인지)만 확인하고, 앱이 실제로 쓰는
+   `create_class_safe`/`update_class_safe`/`delete_class_safe` RPC가 확인하는
+   `schedule.own/other.{group|private}.{create|update|delete|past_*}` 세분권한은
+   전혀 확인하지 않았다 — schedule 권한이 전혀 없는 스태프가 RPC를 거치지 않고
+   테이블에 직접 REST 요청을 보내면 정원·담당강사·취소마감 등 아무 컬럼이나 바꿀 수
+   있었다(실제 재현 확인). `products`/`rooms`에 이미 적용된 것과 동일한 패턴
+   (`fix_permission_products_rooms_rls.sql`)으로 `can_write_class()` 헬퍼를 만들어
+   RLS에 `has_permission()` 확인을 추가(`fix_classes_rls_permission_bypass.sql`,
+   신규). `classes`에 쓰기 작업을 하는 다른 내부 함수 8개를 전수 확인해 전부
+   `SECURITY DEFINER` + 테이블 소유자(`postgres`) 실행이라 이 RLS 변경의 영향을
+   받지 않음을 확인 — 정상 앱 동작은 그대로, 우회 경로만 차단됨. own/other·
+   담당강사 미배정 케이스까지 실제 계정으로 재현 검증 완료.
+
+2) **부수 발견 — service_role GRANT 전체 감사** — 1번을 검증하다가 `role_permissions`/
+   `class_trainers` 테이블에 `service_role` GRANT가 아예 없어 검증 스크립트가
+   "permission denied"로 막힌 것을 발견. 이 저장소에서 반복돼온 "새 테이블 생성 시
+   service_role GRANT 빠뜨림" 패턴이 이번까지 6차례째라, `public` 스키마 전체를
+   감사해서 한 번에 정리(`fix_service_role_grants_full_audit.sql`, 신규) — 테이블
+   47개는 GRANT가 전혀 없었고 4개는 일부만, 뷰 3개도 SELECT가 없었다. service_role은
+   `rolbypassrls=true`라 RLS 우회는 이미 가능했으므로 이번 GRANT는 새 접근범위를 여는
+   게 아니라 막혀있던 배관 문제만 없앰(anon/authenticated 권한·RLS 정책 미변경).
+
+두 파일 모두 적용 후 실제 공격 시나리오 재현 스크립트로 재검증 완료(차단돼야 할 것은
+차단, 정상 경로는 그대로 동작).
+
+변경 파일: `fix_classes_rls_permission_bypass.sql`(신규), `fix_service_role_grants_full_audit.sql`(신규).
+
+## 2026-09-11 — review-reports.test.ts insert().select() 버그 수정
+
+`tests/integration/review-reports.test.ts`가 일반 사용자 client로 `review_reports`에
+`.insert(...).select("id")`를 체이닝해 5개 케이스가 42501로 잘못 실패하던 버그 수정.
+`review_reports`는 설계상(add_review_reports.sql) 일반 사용자에게 SELECT 정책이 없음
+— PostgREST의 insert+return=representation은 SELECT 가시성을 요구하므로, 정상적인
+본인 신고 생성조차 RLS 위반으로 실패했었음(실제로는 신고 생성 자체는 정상 동작).
+
+수정은 테스트 파일에만 적용: 일반 사용자 client는 순수 `.insert()`만 수행하고 성공
+여부는 `error`로만 판단하도록 변경(프로덕션 `lib/reviews.ts`의 `reportReview()`와
+동일한 패턴). "A가 본인 명의로 정상 신고를 생성할 수 있다" 케이스는 insert 성공 확인
+후 생성된 행의 id를 admin(service_role) client로 후속 조회해 `reportIdByA`를 채움.
+
+`review_reports`/`center_reviews` 스키마·RLS 변경 없음, 프로덕션 코드 변경 없음, 다른
+테스트 파일 변경 없음. 재실행 결과 9/9 PASS.
+
+변경 파일: `tests/integration/review-reports.test.ts`.
+
+## 2026-09-11 — center_reviews 테이블 service_role GRANT 누락 수정 (review_reports 검증 중 발견)
+
+Release Blocker Cleanup Batch A(후기 신고)의 통합 테스트(`tests/integration/review-
+reports.test.ts`)가 fixture 준비 단계에서 service_role(admin) 클라이언트로
+`center_reviews`에 테스트용 후기를 넣으려다 `permission denied for table
+center_reviews`로 실패해 발견 — `anon`/`authenticated`/`postgres`에는 GRANT가 있는데
+`service_role`에는 전혀 없었음. 이 저장소에서 이미 여러 차례(notifications,
+account_auth_identities 등) 반복된 "새 테이블 service_role GRANT 추가 누락" 패턴과
+동일.
+
+`fix_service_role_missing_grants_center_reviews.sql`(신규, 미실행) — `grant select,
+insert, update, delete on center_reviews to service_role;` 한 줄. 기존 RLS 정책
+6개(본인 작성/수정/삭제, 공개 조회, 매니저 삭제/답변)나 anon/authenticated 권한은
+전혀 안 건드림 — service_role은 `rolbypassrls=true`(직접 확인)라 RLS와 무관하게
+항상 우회하고, GRANT는 "테이블 접근 가능 여부"만 결정하는 별개 레이어라 이 컬럼
+하나만 추가되는 것. 현재 이 테이블을 쓰는 Edge Function/cron은 없어 운영 영향
+없음(방어적 선제 수정).
+
+review_reports 자체의 RLS/정책(같은 배치에서 추가된 SQL)은 전혀 건드리지 않음 —
+이번 수정은 오직 center_reviews의 GRANT 한 줄뿐.
+
+## 2026-09-11 — Release Blocker Cleanup BATCH B: Android release signing 구조 준비
+
+Release Audit에서 발견된 P0 — `android/app/build.gradle`의 `buildTypes.release`에
+`signingConfig` 참조가 전혀 없어 `./gradlew bundleRelease`로 서명된 AAB를 만들 방법이
+없었음(실측 확인 — 서명 정보 없이도 bundleRelease 자체는 성공하지만 산출물 AAB의
+META-INF에 서명 파일이 전혀 없어 Play Console 업로드용으로는 무효).
+
+`signingConfigs.release`를 추가하되 `MWHABIT_KEYSTORE_FILE`/`MWHABIT_KEYSTORE_PASSWORD`/
+`MWHABIT_KEY_ALIAS`/`MWHABIT_KEY_PASSWORD`(환경변수 또는 `~/.gradle/gradle.properties`
+중 어느 쪽에 있어도 인식됨)가 설정된 경우에만 `release` buildType에 실제로 연결되게
+조건부 구성 — 값이 없으면 지금까지와 동일하게(서명 없이) 빌드되고, `assembleDebug`는
+이 변경과 완전히 무관해 항상 그대로 동작함(실측 확인). 업로드 키 파일 경로/비밀번호는
+코드에 하드코딩하지 않음 — 기존 사용자가 Android Studio GUI로 만든
+`mwhabit-upload-key.jks`(repo 밖에 위치 확인됨, 내용 미열람)를 그대로 재사용하는
+구조로 설계.
+
+`android/.gitignore`의 `*.jks`/`*.keystore` 제외 규칙이 주석 처리돼 있던 것도 복구
+(주석 해제) — 이미 추적 중인 keystore 파일은 없음을 확인함.
+
+SQL/RLS 변경 없음(BATCH A 범위 밖). 결제/iOS 설정 미변경.
+
+변경 파일: `android/app/build.gradle`, `android/.gitignore`.
+
+## 2026-09-11 — 센터 후기 신고(UGC Moderation) 추가 — Release Blocker Cleanup Batch A
+
+Apple App Store Review Guideline 1.2(UGC)가 요구하는 콘텐츠 신고 메커니즘 부재를
+해소. 기존에는 `center_reviews`(센터 후기)에 매니저/운영자 삭제·답변(add_review_
+reply.sql)만 있었고, 회원이 부적절한 후기를 신고할 방법이 없었음.
+
+- **신고 UI**: `app/center/[id]/page.tsx` 후기 목록에서 본인 후기가 아닌 항목에만
+  눈에 띄지 않는 "신고" 버튼 노출(본인 후기는 기존 수정/삭제 버튼 유지). 클릭 시
+  사유(부적절한 내용/욕설·비방/광고·스팸/허위·오해유발/개인정보노출/기타) + 선택적
+  상세 사유를 받는 시트. 로그인 안 된 상태로 시도하면 자연스러운 에러 메시지로
+  안내(새 로그인 상태 추적 코드를 이 화면에 추가하지 않음 — 기존 구조 최소 변경).
+- **DB**: `review_reports` 테이블 신규(`add_review_reports.sql`, 미실행) —
+  `unique(review_id, reporter_account_id)`로 동일 사용자 반복 신고를 DB 레벨에서
+  차단. RLS: 본인 명의로만 INSERT 가능(다른 사용자 명의 신고 불가), 일반 사용자
+  SELECT/UPDATE 정책은 아예 없어 "다른 신고 조회 불가"/"임의 status 변경 불가"를
+  policy 부재로 보장, 운영자(`is_platform_admin()`)만 SELECT/UPDATE — 기존
+  `add_platform_admin.sql`/`add_account_linking.sql`의 판정 방식 재사용, service_role
+  우회 없음. 이 저장소에서 6차례 넘게 반복된 "새 테이블 service_role GRANT 누락"을
+  선제 방어(같은 파일에 포함).
+- **운영자 화면**: `app/admin/reviews`(신규) — 상태별(대기/확인완료/기각) 신고 목록,
+  후기 원문·작성자·신고자·사유 표시, "기각"/"확인 완료"/"후기 삭제"(기존
+  `deleteReviewAsManager()` 재사용, 새 삭제 경로 안 만듦) 액션. `/admin` 허브에
+  메뉴 추가.
+- **사용자 차단 기능 검토**: 이 서비스는 SNS/팔로우/DM 구조가 아니라 후기 중심
+  UGC라, 신고+운영자 검토+삭제 조합으로 첫 출시 요건은 충분하다고 판단(정책 판단
+  — 별도 대규모 차단 시스템은 이번 배치에 만들지 않음).
+- 신규 통합 테스트: `tests/integration/review-reports.test.ts`(9개 케이스 — 비로그인
+  신고 차단, 타인 명의 신고 차단, 정상 신고, 중복 신고 차단, 존재하지 않는 후기
+  신고 차단, 일반 사용자 조회 차단, 운영자 조회/상태변경). 마이그레이션 미적용
+  상태라 이번 실행에서는 관련 6개 케이스가 예상대로 실패(테이블 없음), 기존 로직에
+  의존하지 않는 3개(fixture 준비, 비로그인 차단, 타인 명의 차단)만 통과 — 배포 후
+  재실행 필요.
+- 기존 후기 작성/별점/사진/수정삭제/센터평균/목록 쿼리(`lib/reviews.ts`)는 변경
+  없음 — 회귀 없음.
+
+변경 파일: `add_review_reports.sql`(신규, 미실행), `lib/reviews.ts`,
+`app/center/[id]/page.tsx`, `app/admin/reviews/page.tsx`(신규), `app/admin/page.tsx`,
+`app/components/AdminChrome.tsx`, `app/globals.css`,
+`tests/integration/review-reports.test.ts`(신규).
+
+## 2026-09-11 — iOS Info.plist Privacy Usage Description 키 오류 수정
+
+`release-test` 워크트리에서 Xcode Info 탭으로 카메라/사진/위치 권한 설명을 추가하는
+과정에서, 카메라와 위치 두 항목이 실제 raw plist 키(`NSCameraUsageDescription`,
+`NSLocationWhenInUseUsageDescription`)가 아니라 Xcode UI에 표시되는 사람이 읽는
+이름이 문자 그대로(`Privacy - Camera Usage Description-`, `Privacy - Location When
+In Use Usage Description-` — 끝에 하이픈까지 포함) 저장되는 문제가 있었다. 이 상태로는
+iOS가 이 값을 카메라/위치 권한 설명으로 인식하지 못해, 실제 권한 요청 시 설명 없이
+크래시하거나 심사에서 거절될 수 있었다(사진 보관함 항목은 올바르게 `NSPhotoLibraryUsageDescription`으로
+저장돼 있어 문제 없었음).
+
+두 키만 올바른 이름으로 정정(설명 문구 자체는 이미 맞게 입력돼 있어 그대로 유지).
+같은 워크트리의 `project.pbxproj` 변경은 실제 capability 추가 없이 Xcode가 기존
+항목들을 알파벳순으로 재정렬한 것뿐(순수 cosmetic, 기능 변화 0)이라 반영하지 않음.
+
+`plutil -lint`로 plist 유효성 확인, `xcodebuild -sdk iphonesimulator` BUILD SUCCEEDED
+재확인.
+
+변경 파일: `ios/App/App/Info.plist`.
+
+## 2026-09-11 — iOS Release Readiness: 수출 규정 신고 자동화
+
+App Store 제출 시 반복되는 "Export Compliance"(암호화 사용 여부) 질문을 자동으로
+답하기 위해 `ios/App/App/Info.plist`에 `ITSAppUsesNonExemptEncryption`이 없던 것을
+확인 — dependency 감사 결과 이 앱은 표준 HTTPS/TLS(Supabase REST/Realtime, Toss/
+Kakao/Naver OAuth 전부 HTTPS)와 Firebase(FirebaseCore/FirebaseMessaging, 표준
+암호화로 취급됨) 외에 커스텀/비표준 암호화 라이브러리를 전혀 쓰지 않음을
+`package.json`과 `App.xcodeproj`의 SPM 의존성(firebase-ios-sdk만 있음) 기준으로
+확인함 — `ITSAppUsesNonExemptEncryption: false` 한 줄만 최소 추가(기존 3개 커밋이
+건드리지 않았던 파일, 이번에 처음 최소 변경). 다른 세션이 이 파일을 병행 관리 중이라
+이 항목 하나만 정확히 추가하고 다른 줄은 전혀 건드리지 않음(diff 2줄).
+
+발견했지만 이번엔 안 건드린 것(다른 세션의 uncommitted 작업과 겹칠 수 있어 보고만):
+`NSCameraUsageDescription`/`NSPhotoLibraryUsageDescription`/
+`NSLocationWhenInUseUsageDescription`/`UIBackgroundModes`(remote-notification)가
+이 tracked Info.plist엔 없음(다른 세션이 로컬에서 이미 작업 중인 것으로 추정).
+
+변경 파일: `ios/App/App/Info.plist`(2줄 추가).
+
+## 2026-09-11 — iOS Real Device UX Polish Batch (overscroll 검정 레터박스 + tap-highlight)
+
+실제 iPhone 구동에서 발견된 UX 문제 중 확실한 근거로 수정 가능한 항목만 반영(motion/
+transition은 아래 별도 절 참고 — 이번엔 손대지 않음).
+
+**overscroll 검정 레터박스 — 원인 2가지 모두 확정, 둘 다 수정**:
+1. `app/layout.tsx`의 `viewport` export에 `viewportFit: "cover"`가 없었음 — 이게
+   없으면 iOS WKWebView에서 CSS `env(safe-area-inset-*)`가 스펙상 전부 0으로 계산된다.
+   `app/globals.css`의 `--floating-nav-clearance`가 이미
+   `env(safe-area-inset-bottom)`에 기대고 있었는데 실제로는 항상 0을 받고 있었던 것
+   — 하단 홈 인디케이터 영역을 제대로 못 피하던 원인 중 하나이기도 함.
+2. `capacitor.config.ts`에 최상위 `backgroundColor`가 없었음 — 네이티브 WKWebView/
+   UIScrollView 자체의 배경색(CSS가 못 건드리는 레이어)이 iOS 기본값으로 남아 있어
+   위/아래로 당겨 튕기는 구간에 그 기본색이 드러났다. `html`/`body`의 CSS `background`
+   (이미 `var(--bg)`로 올바르게 설정돼 있었음)는 문서 영역 안쪽만 그리므로 이 레이어엔
+   영향이 없었다. 앱 배경/스플래시와 동일한 `#0A2545`로 지정.
+
+**버튼 tap 하이라이트**: `-webkit-tap-highlight-color`가 전혀 설정돼 있지 않아 iOS
+WKWebView에서 버튼/링크를 누를 때마다 기본 회색-파란 오버레이가 반짝였음(웹스럽게
+느껴지는 요소) — `html, body`에 `transparent`로 추가. 실제 눌림 피드백은 각 컴포넌트의
+기존 스타일이 계속 담당.
+
+**motion/transition(페이지 전환·버튼 press feedback 등)은 이번에 코드를 바꾸지
+않음** — 조사 결과 `app/layout.tsx` 주석에 이미 명시된 대로 이 앱은 `<Link>` 대신
+일반 `<a href>`로 **전체 페이지를 다시 로드**하는 방식이라(server.url 모드, Next.js
+클라이언트 라우팅 미사용), "페이지 전환 애니메이션"을 만들려면 네비게이션 아키텍처
+자체를 바꿔야 한다 — 이번 배치의 "최소 수정" 범위를 크게 벗어나고 회귀 위험도 큼.
+버튼/모달 등 기존 transition은 이미 대체로 transform/opacity 기반이고
+`prefers-reduced-motion`도 이미 여러 곳에서 존중하고 있어(app/globals.css 확인),
+근거 없이 추가로 손대지 않음. 별도 배치로 남김.
+
+변경 파일: `app/layout.tsx`, `capacitor.config.ts`, `app/globals.css`.
+
+**검증**: `npm run build` 성공, `npx tsc --noEmit` 통과, `xcodebuild -scheme App -sdk
+iphonesimulator build` **BUILD SUCCEEDED**(이번 배치 3개 전부 포함해 통합 컴파일
+확인 — GoogleService-Info.plist는 다른 worktree에서 로컬 검증용으로만 복사, 커밋
+안 함). 실제 iPhone 최종 확인은 사용자가 직접 진행.
+
+## 2026-09-11 — iOS Splash 감사
+
+실기기(iPhone) 첫 실행 시 Splash가 이상하게 보였고 Xcode Assets에 `The image set
+"Splash" has 3 unassigned children.` 경고 확인.
+
+**원인 1(경고)**: `ios/App/App/Assets.xcassets/Splash.imageset/`에 `Contents.json`이
+전혀 참조하지 않는 파일 3개(`splash-2732x2732.png`, `-1.png`, `-2.png`)가 남아있었음
+— `@capacitor/assets generate` 같은 생성 도구의 중간 산출물로 추정, 실제 사용되는
+`Default@1x/2x/3x~universal~anyany(-dark).png` 6개와 내용이 겹치는 잔여 파일. 삭제
+후 `actool --notices --warnings`로 직접 재컴파일해 경고 사라짐 확인.
+
+**원인 2(실제 시각적 문제로 더 유력)**: 이 앱은 `capacitor.config.ts`의 `server.url`
+모드로 WebView가 로컬 번들이 아니라 실제 네트워크로 `mwhabit.com`을 불러온다.
+`@capacitor/splash-screen`의 `launchAutoHide` 기본값(true)은 WebView 네비게이션이
+시작되면 곧바로 네이티브 스플래시를 내리는데, 실제 페이지 로드(네트워크 왕복+CSS/
+폰트/이미지)는 그보다 오래 걸릴 수 있어 스플래시가 내려간 자리에 아직 덜 그려진
+페이지가 잠깐 보일 수 있었음(LaunchScreen.storyboard/실제 Splash 이미지 자체는
+aspectFit·배경색 #0A2545 모두 이미 올바르게 설정돼 있었음 — 이미지 콘텐츠 문제
+아님).
+
+**수정**: `capacitor.config.ts`에 `plugins.SplashScreen.launchAutoHide: false` 추가,
+`app/components/CapacitorBootstrap.tsx`가 `document.readyState === "complete"`가
+아니면 `window` `load` 이벤트(모든 리소스 로드 완료)까지 기다렸다가 명시적으로
+`SplashScreen.hide()`를 호출하도록 변경. 앱 아이콘은 건드리지 않음.
+
+변경 파일: `capacitor.config.ts`, `app/components/CapacitorBootstrap.tsx`. 삭제한
+이미지: `ios/App/App/Assets.xcassets/Splash.imageset/{splash-2732x2732,splash-2732x2732-1,splash-2732x2732-2}.png`.
+최종 Splash.imageset: `Contents.json` + `Default@{1,2,3}x~universal~anyany.png` +
+`Default@{1,2,3}x~universal~anyany-dark.png`(6개, 전부 2732×2732, unassigned 0개).
+
+## 2026-09-11 — Native Push Permission & Registration Fix Batch
+
+실기기(iPhone) 최초 실기기 테스트에서 iOS 설정 → 알림 목록에 앱 자체가 안 뜨고, Xcode
+로그에 `PushNotifications addListener`만 보이고 `requestPermissions`/`register`/APNs/FCM
+관련 로그가 전혀 없는 증상 발견. Android(Pixel 9 에뮬레이터, Android 16)도 동일 증상
+(알림 권한 팝업 자체가 안 뜸).
+
+**근본 원인**: `enableNativePush()`(`lib/nativePush.ts` — `PushNotifications.checkPermissions()`/
+`requestPermissions()`/`register()`를 실제로 호출하는 유일한 함수)가 `app/settings/
+notifications/page.tsx`의 토글 버튼을 눌러야만 호출되는 구조였다 — 앱 부팅 시
+(`app/components/CapacitorBootstrap.tsx`)는 알림 탭 핸들러(`registerNativePushTapHandler`,
+로그의 "addListener"가 바로 이것)만 등록하고 권한 요청 자체는 어디서도 자동으로 트리거하지
+않았다. 즉 권한을 "거부"한 게 아니라 애초에 **물어본 적이 없는 상태**였다 — iOS/Android
+둘 다 동일 원인(공유 JS 코드 경로, `POST_NOTIFICATIONS`는 이미 AndroidManifest.xml에
+있었음을 확인 — 매니페스트 문제 아님). iOS AppDelegate의 Firebase 자동 swizzling
+(`FirebaseMessaging Remote Notifications proxy enabled` 로그)과 기존 수동
+`didRegisterForRemoteNotificationsWithDeviceToken` 구현은 서로 중복 실행되긴 하지만
+충돌은 아님(둘 다 각자 올바르게 동작 — swizzling이 개발자 구현을 막지 않음) — 애초에
+`PushNotifications.register()`가 한 번도 안 불려서 이 네이티브 코드 자체가 실행될
+기회가 없었던 것이 실제 원인. 네이티브 코드는 건드리지 않음.
+
+**수정**: `lib/nativePush.ts`에 `autoRegisterNativePushOnLogin()` 추가 — 계정이 확보되는
+시점(로그인 완료/세션 복원)에만 시도하도록 `app/components/SessionWatcher.tsx`의
+`SIGNED_IN`/`INITIAL_SESSION` 핸들러에 연결(`ensureAccountForCurrentUser()`가 유효한
+계정을 반환했을 때만). 이미 구독 중이면 아무것도 안 함(불필요한 register() 반복/DB
+upsert 반복 방지). 이미 거부(denied)된 상태여도 이 함수를 호출은 하되 내부적으로
+`requestPermissions()` 자체를 다시 안 부르므로(기존 로직 그대로) OS가 팝업을 다시
+띄우지 않음 — "거부 후 매 앱 시작마다 팝업 반복" 문제 없음. 네이티브 브릿지 예외가
+나도 try/catch로 흡수해 로그인 흐름을 막지 않음.
+
+**진단 로그 추가**(토큰 값 자체는 절대 출력 안 함): 권한 상태, 권한 요청 시점,
+`register()` 호출 시점, registration 에러, 토큰 획득 여부, `native_push_tokens` upsert
+성공/실패를 각각 `console.log`로 구분 가능하게 함.
+
+변경 파일: `lib/nativePush.ts`, `app/components/SessionWatcher.tsx`. Android 기존 위치
+권한 흐름은 손대지 않음.
+
+## 2026-09-11 — Low-Egress Fix Batch: PostgREST Egress 감사 후속 조치
+
+9/15까지 Supabase Free Plan Egress 절약 목표로, 앞서 진행한 PostgREST Egress Audit의
+TOP10 중 기능을 바꾸지 않고 안전하게 줄일 수 있는 항목만 실제 반영. 결제/Auth/RLS/
+Privacy/Toss 코드는 건드리지 않음, cron 주기/notifications 데이터는 실제 변경 없이
+분석·제안만.
+
+- **InquiryChat Realtime+REST 중복 제거**: `subscribeMessages()`가 인자 없는 콜백
+  대신 실제 INSERT된 행(payload.new)을 넘기도록 변경 — 예전엔 새 메시지 1건마다
+  `fetchMessages()`로 스레드 전체를 `limit` 없이 다시 조회했음(Realtime 이벤트 1건 =
+  REST 요청 1건이 아니라 스레드 크기만큼의 요청). 이제 그 행 하나만 `mapInquiryMessageRow()`
+  (신규, `lib/inquiries.ts`)로 변환해 화면 상태에 id 기준 중복 방지하며 append. 메시지
+  전송 후의 `reload()`(자기 메시지의 realtime echo와 겹쳐 사실상 한 건에 REST 요청
+  2번 나가던 것)와 삭제 후의 `reload()`도 각각 realtime append / 로컬 filter로 대체해
+  제거. 초기 `fetchMessages()`에는 최근 300개 상한(`MESSAGE_HISTORY_LIMIT`) 추가 —
+  그 이상 오래된 메시지 pagination은 `docs/TODO.md`(P3-11)로 분리.
+- **`getOrCreateOwnedTestCenter()` 쿼리 통합**: `manager_centers`/`center_roles`/
+  `centers` 3개 쿼리를 PostgREST embedded select 하나로 합침(FK 경로가 유일해 모호성
+  없음) — 정렬/필터 로직은 완전히 동일하게 유지, 56개 호출부 전체에 그대로 적용되어
+  스위트 전체 쿼리 수가 이 헬퍼 기준 1/3로 감소. `sweepStaleTestClasses()`의 stale
+  classes 조회에 `.limit(1000)` 방어적 상한 추가(정상 동작 시 영향 없음, 대량 backlog
+  상황에서만 한 번에 처리하는 양을 제한). 파일 간(vitest 기본 `isolate: true`) 캐싱은
+  검토했으나 실효성이 없어(모듈이 파일마다 새로 로드됨) 적용하지 않음 — 검토 과정과
+  근거는 세션 기록 참고.
+- **CI push/pull_request 중복 실행 제거**: `.github/workflows/test.yml` — `push`(main,
+  보통 방금 병합된 PR과 동일한 코드)에서는 라이브 Supabase를 쓰는 `e2e`/`integration`
+  job을 건너뛰고 `unit`/`build`(typecheck)만 실행하도록 수정. `pull_request`/
+  `workflow_dispatch`는 기존과 완전히 동일(전체 스위트, fork PR 제외 로직 포함)하게
+  유지. `unit`/`build`가 "e2e/integration이 skipped여도(push라서) 계속 진행"하되
+  "fork PR이라 skipped된 경우는 여전히 cascade skip"하도록 조건을 정밀하게 나눔(기존
+  fork PR 동작 회귀 없음, 수동으로 케이스 추적 확인). 한 PR에 커밋 5번 push하는
+  시나리오에서 전체 스위트 실행 횟수가 6회(PR 5회 + merge 시 push 1회)→5회로 감소 —
+  merge 빈도가 늘수록 절감폭도 비례해서 커짐(매 merge마다 100% 중복이던 1회를 제거).
+- **cron 3개(dispatch-web-push/autocancel/alimtalk) 주기 완화안**: 실제 변경은 하지
+  않고 제안만 작성(`propose_cron_interval_reduction_draft_proposed.sql`로 작성했으나
+  사용자 결정에 따라 **이번 merge에는 포함하지 않음** — cron 주기는 이번 배치 범위
+  밖, 별도 승인 후 별도로 진행). `dispatch-autocancel`은 `center_settings.autocancel_minutes`가
+  분 단위로 설정 가능해 지연에 가장 민감 — 1분 유지 권장. `dispatch-web-push`는 2분,
+  `dispatch-alimtalk`(OTP는 별도 경로라 무관, 공지성 메시지만 다룸)는 5분으로 완화
+  시 하루 4,320회→2,448회(43% 감소) 예상.
+- **`notifications` 94,749행 원인 분석**(집계 쿼리만 사용, 대량 row fetch/삭제 없음):
+  이름이 "통합테스트계정"인 계정으로 간 notification이 **92,873건(98.0%)** — 사실상
+  전부 통합/E2E 테스트가 반복적으로 예약 생성/취소를 수행하며 쌓은 것으로 확인(추측
+  아님, accounts.name 직접 join으로 검증). kind별로는 `new_reservation`/
+  `reservation_confirmed`/`reservation_canceled` 세 종류가 81,213건(85.7%)으로
+  이 가설과 일치. 최근 30일에 67,979건(71.7%)이 생성돼 가속 증가 중 — CI 실행
+  빈도와 상관관계로 추정. 완전한 "중복 발송 버그"인지는 이번 집계만으론 단정 불가
+  (같은 recipient+kind+link 조합이 많이 반복되지만 `link`가 라우트 단일값이라 서로
+  다른 실제 예약 건인지 진짜 중복인지 이 레벨에서 구분 안 됨 — 필요하면 후속으로
+  reservation 단위 상관 분석 필요). **삭제는 하지 않음**(지시대로).
+- 신규 단위 테스트: `tests/unit/mapInquiryMessageRow.test.ts`(라이브 DB 불필요, 순수
+  함수 검증). 최소 검증만 실행 — `npm run build`, 위 신규 unit 테스트, 그리고
+  `getOrCreateOwnedTestCenter()`를 쓰는 가장 작은 통합 테스트 파일 1개만 실행해 refactor
+  결과 확인(전체 integration/E2E suite는 실행하지 않음, 이미 통과했던 Security/Privacy/
+  Toss 테스트도 재실행하지 않음).
+
+변경 파일: `app/components/InquiryChat.tsx`, `lib/inquiries.ts`, `tests/integration/setup.ts`,
+`.github/workflows/test.yml`, `docs/TODO.md`, `tests/unit/mapInquiryMessageRow.test.ts`(신규).
+cron 완화 제안 SQL은 위 사유로 이번 merge에서 제외.
+
+## 2026-09-11 — Security Hotfix (P0): accounts.is_platform_admin / merged_into 자가 수정으로 인한 권한 상승·계정 탈취 취약점
+
+Privacy 배치 #1(add_marketing_consent.sql) SQL 안전성 감사 중 "본인 계정 수정" RLS
+정책이 컬럼 제한 없이 accounts 행 전체를 UPDATE 허용한다는 걸 재확인하다가, 이번
+Privacy 배치와 무관한 기존 P0급 취약점 2건을 발견해 별도 핫픽스로 처리.
+
+**취약점 1 — is_platform_admin 자가 승격**: `add_platform_admin.sql`이 컬럼만 추가하고
+`pg_checkout_override`(add_pg_checkout_reviewer_override.sql) 때와 달리 보호 트리거를
+만든 적이 없었음 — 로그인한 사용자 누구나
+`supabase.from("accounts").update({is_platform_admin:true})`를 직접 호출해 스스로
+플랫폼 운영자(센터 승인/반려 등 `/admin/*` 전체 권한)가 될 수 있었음.
+
+**취약점 2 — merged_into로 임의 계정 가로채기(더 심각)**: `my_account_id()`
+(fix_my_account_id_merged_into_priority.sql)가 `coalesce(merged_into, id)`로 계정을
+resolve하고 `is_platform_admin()`/`my_managed_center_ids()` 등 거의 모든 권한 판단이
+그 함수를 경유함 — `merged_into`도 보호가 없어서 본인 계정의 이 값을 임의의 다른
+account id로 바꾸면 그 이후 모든 요청이 그 타깃 계정으로 resolve됨(정상 흐름인
+`link_accounts_by_code()`의 코드 기반 상호 동의 검증을 완전히 우회, 타깃이 매니저/
+운영자면 그 권한을 그대로 탈취).
+
+실제 통합 테스트(`tests/integration/accounts-privilege-escalation.test.ts`)로 두
+취약점 모두 라이브 dev DB에서 재현 확인함(전용 임시 계정만 사용, 실제 사용자 데이터
+훼손 없음).
+
+**수정**(`fix_accounts_admin_and_merged_into_privilege_escalation.sql`, 신규, **미적용**):
+- `is_platform_admin`: `pg_checkout_override`와 동일한 BEFORE UPDATE 트리거 패턴
+  재사용(자가 변경 차단, `auth.uid() is null`(SQL Editor/service_role) 또는 이미
+  `is_platform_admin()`인 행위자만 허용). `link_accounts_by_code()`의 "권한 플래그
+  합집합(OR)" 갱신 로직도 수학적으로 이 조건을 항상 통과함을 검증(파일 내 주석 참고).
+- `merged_into`: `auth.uid()`가 SECURITY DEFINER로도 안 바뀌는 세션 GUC라
+  `is_platform_admin` 패턴을 그대로 못 씀 — 트랜잭션 로컬 플래그
+  (`set_config('app.allow_merged_into_change','true',true)`)를 `link_accounts_by_code()`
+  내부의 실제 UPDATE 직전에만 세워서 그 RPC를 통한 정상 연동만 통과시킴.
+  `link_accounts_by_code()`는 라이브 DB의 실제 배포 버전(`pg_get_functiondef`로 직접
+  확인 — `fix_link_accounts_by_code_native_push_tokens_optional.sql`까지 반영된 버전)에
+  이 한 줄만 추가해 재정의함.
+
+**부수 발견(이번 배치 범위 밖)**: `account_auth_identities` 테이블에 `service_role`
+GRANT가 전혀 없음(이 저장소에서 6차례 이상 반복된 "새 테이블에 service_role GRANT
+빠뜨림" 패턴과 동일 — `authenticated`/`postgres`만 있고 `service_role`은 SELECT조차
+없음, `information_schema.role_table_grants`로 확인). 테스트 fixture 정리 중 우연히
+발견 — SQL Editor(직접 postgres 연결)는 영향 없지만, service_role API 키를 쓰는 모든
+코드(Edge Function 등)는 이 테이블에 접근 못 함. 이번 Security Hotfix와 무관한 별개
+이슈라 여기서 고치지 않음, `docs/TODO.md`에 별도 기록.
+
+SQL 실행 필요(YES) — 운영 DB에는 사용자 승인 후 적용 예정, 아직 미실행.
+
+변경 파일: `fix_accounts_admin_and_merged_into_privilege_escalation.sql`(신규),
+`tests/integration/accounts-privilege-escalation.test.ts`(신규).
+
+## 2026-09-11 — Privacy 배치 #1/#2/#6/#7: 마케팅 동의 저장, Aligo 위탁 고지, avatar orphan 정리
+
+이전 세션의 Privacy Emergency Fix(P0/P1)에서 별도 배치로 미룬 8개 항목 중 결정이 필요
+없는 4개를 구현.
+
+- **#1 마케팅 정보 수신 동의 실제 저장**: `app/login/page.tsx`의 `agreeMarketing`
+  체크박스 값이 어디에도 저장되지 않던 문제 — `accounts.marketing_consent`/
+  `marketing_consent_at`(값이 바뀔 때마다 갱신 — 동의/철회 둘 다 증빙 가능) 컬럼을
+  추가(`add_marketing_consent.sql`, 미적용)하고, 이메일 가입(`handleSignup`)과 소셜
+  가입(`ensureAccountForCurrentUser`, OAuth 리다이렉트 전 sessionStorage로 값을
+  넘김 — `stashSignupMarketingConsent`/`stashPostLoginNext`와 동일 패턴) 양쪽에서
+  실제로 저장하도록 수정. 기존 "본인 계정 수정" RLS 정책이 컬럼 제한 없이 이미
+  본인만 UPDATE를 허용하므로 새 정책/트리거 불필요(add_pg_checkout_reviewer_override.sql
+  때와 동일 분석). `내 정보 관리`(app/mypage/info) 화면에 철회 가능한 토글 추가
+  (`lib/mypage.ts`의 `setMyMarketingConsent`).
+- **#2 Aligo 위탁 고지 불일치 수정**: 개인정보처리방침이 "알림톡 발송 기능은 준비
+  중"이라고 잘못 기재돼 있었는데, 실제로는 `send-phone-otp`/`send-alimtalk`
+  Edge Function이 이미 Aligo로 OTP/알림톡을 실제 발송 중이었음(코드로 확인) —
+  처리위탁 표에 알리고(Aligo) 행 추가, 잘못된 문구 제거. 같은 화면에서 생년월일이
+  "필수 항목"으로 잘못 기재돼 있던 것도 실제 가입 폼(생년월일 미수집, 프로필 관리
+  화면에서만 선택 입력)과 일치하도록 "선택 항목"으로 이동(#4 — 가입 폼에 새로
+  추가하지 않음, 문구만 실제와 맞춤).
+- **#6 avatar 재업로드 시 이전 파일 orphan 방치 수정**: `lib/profiles.ts`의
+  `updateProfile()`이 DB의 이전 `avatar_url`을 update 전에 조회해두고, update가
+  *성공한 뒤에만*(실패 안전) 새 값과 실제로 다를 때만 이전 Storage object를
+  지우도록 수정 — `delete-account`의 `avatarObjectKey()`와 동일 로직으로 소유
+  판별 안 되는 값(외부 URL 등)은 절대 건드리지 않음.
+- **#7 가족 프로필 개별 삭제 시 avatar 미삭제 수정**: `deleteProfile()`이 soft-delete
+  전에 `avatar_url`을 같이 조회해 soft-delete 성공 후 Storage object도 지우도록
+  수정(#6과 같은 헬퍼 재사용).
+- **avatars 버킷에 DELETE RLS 정책이 아예 없었음을 발견**: `add_profile_fields.sql`이
+  버킷을 만들 때 INSERT/SELECT만 추가하고 DELETE는 빠뜨려서, 클라이언트(anon/
+  authenticated)로는 avatar object를 지울 방법이 없었음 — `delete-account`가
+  지금까지 지울 수 있었던 건 그 함수만 RLS를 우회하는 service_role을 쓰기 때문.
+  `add_avatar_storage_delete_policy.sql`(신규, 미적용) — `owner = auth.uid()`로
+  본인이 올린 object만 지울 수 있게 제한(읽기 전용 쿼리로 기존 avatar object 7개
+  전부 owner가 이미 채워져 있음을 확인, 안전).
+- 신규 테스트: `tests/integration/marketing-consent.test.ts`(동의/철회/타인 계정
+  변경 불가), `tests/integration/avatar-storage-cleanup.test.ts`(최초 업로드/재업로드/
+  무사진/외부 URL 보호/가족 프로필 삭제). 위 두 마이그레이션이 미적용 상태라 이
+  실행에서는 관련 단언 3개가 예상대로 실패(컬럼 없음/Storage 삭제 RLS 막힘) —
+  나머지(외부 URL 보호, 무사진 케이스 등 마이그레이션과 무관한 안전 로직)는 이미
+  통과 확인됨. 배포 후 재실행 필요.
+- **이번 배치에서 구현하지 않은 것**(사용자 결정): #3 보유기간 자동파기(법적 정책
+  확정 필요), #5 chat_messages dead schema(DROP하지 않고 유지하기로 결정), #8
+  center custom fields 민감정보 제한(관련 기능 자체가 아직 없어 지금은 미적용).
+- 기존 Privacy Emergency Fix(native_push_tokens/push_subscriptions 삭제, avatar
+  Storage 삭제, 탈퇴 계정 발송 차단)가 origin/main과 실제 배포된 Edge Function
+  양쪽에 그대로 살아있음을 읽기 전용으로 재확인(`delete-account`/`send-web-push`
+  둘 다 ACTIVE, native_push_tokens/push_subscriptions 테이블 존재 확인).
+
+변경 파일: `app/legal/privacy/page.tsx`, `app/login/page.tsx`, `app/mypage/info/page.tsx`,
+`lib/authAccount.ts`, `lib/mypage.ts`, `lib/profiles.ts`,
+`add_marketing_consent.sql`(신규), `add_avatar_storage_delete_policy.sql`(신규),
+`tests/integration/marketing-consent.test.ts`(신규),
+`tests/integration/avatar-storage-cleanup.test.ts`(신규).
+
+## 2026-09-11 — E2E CI 간헐 실패 수정: `getOrCreateOwnedTestCenter()` 비결정적 센터 선택
+
+`tests/e2e/admin/new-class-creation.spec.ts` TEST6이 CI에서 간헐적으로 `.pass-pick-list`
+타임아웃으로 실패하던 문제의 원인을 확정. `getOrCreateOwnedTestCenter()`가 매니저 소유의
+"통합테스트센터-%" 후보가 여러 개(여러 PR이 동시에 같은 라이브 dev Supabase를 공유해서
+생긴 픽스처 오염 — managerA 앞으로 5개 이상 확인됨) 있을 때 PostgREST가 반환하는 행 순서
+그대로 `.find()`로 첫 번째를 골랐는데, 이 순서가 보장되지 않아 실행마다 다른 센터가 선택될
+수 있었음(각 센터는 서로 다른 leftover 상태를 가질 수 있어 어떤 걸 고르느냐에 따라
+결과가 달라짐).
+
+`tests/integration/setup.ts`의 `getOrCreateOwnedTestCenter()`를 수정 — 후보 센터를
+`created_at`(+동률 방지용 `id`) 오름차순으로 명시 정렬한 뒤 "가장 먼저 만들어진 것" 하나로
+고정 선택하도록 변경(기존 sweep/reset 로직은 그대로 유지). 이 함수를 쓰는 통합/E2E 테스트
+전부(10개 이상 파일)가 영향을 받으므로 별도 파일 수정 없이 스위트 전체에 적용됨.
+
+`npx playwright test tests/e2e/admin/new-class-creation.spec.ts`로 실측 확인 — 수정 전/후
+동일 조건에서 TEST6은 양쪽 다 통과(원래도 항상 재현되는 실패가 아니라 간헐적이었음이 재확인됨).
+같은 실행에서 TEST4가 별개 사유로 실패했는데, 로컬 `.env.local`의
+`NEXT_PUBLIC_PAYMENT_PROVIDER=toss`(다른 세션이 실제 토스 게이트웨이 테스트용으로 켜둔 것으로
+추정) 때문에 0원 결제가 진짜 Toss SDK로 넘어가 거부된 것(`금액은 0보다 커야 합니다`,
+`tests/e2e/checkout/real-toss-gateway-open.spec.ts`에 이미 문서화된 동일 현상)으로 확인 —
+이번 수정과 무관하고 GitHub Actions는 이 환경변수를 설정하지 않아(기본값 mock) CI 신호와도
+무관함. `.env.local`은 다른 세션이 쓰고 있을 수 있는 공유 상태라 건드리지 않음.
+
+변경 파일: `tests/integration/setup.ts`.
+
 ## 2026-09-11 — 환불정책 6항(센터 구독료 해지·환불) 확정본 반영
 
 사용자가 확정한 최종 문구로 `/legal/refund` "6. 센터 플랫폼 구독료(월 이용료) 해지·환불"

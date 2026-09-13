@@ -173,19 +173,33 @@ export type CenterProduct = {
   sizes: string[] | null;
   autoBookDays: number[] | null;
   groupLabel: string | null;
+  remaining: number | null; // 판매 수량 제한이 없으면 null(무제한), 있으면 남은 개수(0=매진)
 };
 
 export async function fetchCenterProducts(centerId: string): Promise<CenterProduct[]> {
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, price, product_kind, total_count, unlimited, description, sizes, auto_book_days, group_label")
+    .select("id, name, price, product_kind, total_count, unlimited, description, sizes, auto_book_days, group_label, max_quantity")
     .eq("center_id", centerId)
     .eq("is_active", true)
     .eq("is_on_sale", true)
     .order("product_kind", { ascending: true })
     .order("price", { ascending: true });
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((p: any) => ({
+  const rows = data ?? [];
+
+  const limitedIds = rows.filter((p: any) => p.max_quantity != null).map((p: any) => p.id);
+  let soldByProduct: Record<string, number> = {};
+  if (limitedIds.length > 0) {
+    const { data: counts, error: countErr } = await supabase
+      .from("product_sale_counts")
+      .select("product_id, sold_count")
+      .in("product_id", limitedIds);
+    if (countErr) throw new Error("판매 개수를 불러오지 못했어요: " + countErr.message);
+    for (const c of counts ?? []) soldByProduct[(c as any).product_id] = (c as any).sold_count;
+  }
+
+  return rows.map((p: any) => ({
     id: p.id, name: p.name, price: p.price,
     kind: p.product_kind === "goods" ? "goods" : "pass",
     totalCount: p.total_count, unlimited: p.unlimited ?? false,
@@ -194,6 +208,7 @@ export async function fetchCenterProducts(centerId: string): Promise<CenterProdu
     sizes: p.sizes ?? null,
     autoBookDays: p.auto_book_days ?? null,
     groupLabel: p.group_label ?? null,
+    remaining: p.max_quantity != null ? Math.max(0, p.max_quantity - (soldByProduct[p.id] ?? 0)) : null,
   }));
 }
 

@@ -10,9 +10,10 @@
 import { useEffect, useRef, useState } from "react";
 import { ZoomableImage } from "./ImageViewer";
 import {
-  fetchMessages, sendMessage, readThread, subscribeMessages,
+  fetchMessages, sendMessage, readThread, subscribeMessages, mapInquiryMessageRow,
   uploadInquiryPhoto, inquiryPhotoUrl, deleteMessage, type InquiryMessage,
 } from "../../lib/inquiries";
+import { getMyAccountId } from "../../lib/authAccount";
 
 export default function InquiryChat({
   threadId, title, onBack, canSend = true, canDeleteOthers = false,
@@ -31,24 +32,36 @@ export default function InquiryChat({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // 마운트 시 한 번만 조회해 재사용 — fetchMessages()/실시간 append 양쪽에서 매번
+  // getMyAccountId()를 다시 부르지 않게 한다(왕복 1회 절감).
+  const myAccountIdRef = useRef<string | null>(null);
 
   async function reload() {
     try {
-      const ms = await fetchMessages(threadId);
+      const ms = await fetchMessages(threadId, myAccountIdRef.current);
       setMessages(ms);
     } catch (e: any) {
       setError("메시지를 불러오지 못했어요: " + e.message);
     }
   }
 
+  // 실시간 INSERT로 들어온 행 하나만 화면에 반영 — 스레드 전체를 다시 조회하지
+  // 않는다. id로 중복 체크해두면 재연결 등으로 같은 이벤트가 두 번 오거나(드묾),
+  // 방금 내가 보낸 메시지의 realtime echo가 이미 반영된 상태와 겹쳐도 안전하다.
+  function appendMessage(row: Parameters<typeof mapInquiryMessageRow>[0]) {
+    const msg = mapInquiryMessageRow(row, myAccountIdRef.current);
+    setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+  }
+
   useEffect(() => {
     (async () => {
+      myAccountIdRef.current = await getMyAccountId();
       await reload();
       setLoading(false);
       await readThread(threadId);
     })();
-    const unsub = subscribeMessages(threadId, async () => {
-      await reload();
+    const unsub = subscribeMessages(threadId, async (row) => {
+      appendMessage(row);
       await readThread(threadId);
     });
     return () => unsub();
@@ -67,7 +80,10 @@ export default function InquiryChat({
     try {
       await sendMessage(threadId, body, photos);
       setText(""); setPhotos([]);
-      await reload();
+      // 화면 갱신은 reload()가 아니라 이 전송으로 발생한 실시간 INSERT 이벤트가
+      // appendMessage()로 처리한다 — 여기서 다시 fetchMessages()를 부르면 메시지
+      // 1건 전송에 REST 요청이 두 번(이 reload + 실시간이 유발하던 예전 reload)
+      // 나가던 중복이었다.
     } catch (e: any) {
       setError("전송에 실패했어요: " + e.message);
     } finally { setSending(false); }
@@ -78,7 +94,10 @@ export default function InquiryChat({
     setError(null);
     try {
       await deleteMessage(messageId);
-      await reload();
+      // 삭제는 실시간 이벤트를 안 듣고 있으니(DELETE 구독 없음) 방금 지운 메시지를
+      // 로컬 state에서 직접 제거한다 — 이 한 건 때문에 스레드 전체를 다시 조회할
+      // 필요는 없음.
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
     } catch (e: any) {
       setError("삭제에 실패했어요: " + e.message);
     }

@@ -146,6 +146,11 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
                "Pretendard", "Malgun Gothic", sans-serif;
   transition: background 0.2s ease, color 0.2s ease;
+  /* 실기기 진단(2026-09-11) — 이게 없으면 iOS WKWebView에서 버튼/링크를 누를 때마다
+     기본 회색-파란 하이라이트 오버레이가 반짝였다가 사라진다(가장 "웹스럽다"고 느껴지는
+     요소 중 하나 — 네이티브 UIKit 컨트롤엔 이런 하이라이트가 없음). 실제 눌림 피드백은
+     각 컴포넌트의 :active/버튼 스타일이 이미 담당하므로, 이 기본 오버레이만 끈다. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -2677,6 +2682,12 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .review-actions .review-edit { color: var(--accent); }
 .review-actions .review-del { color: var(--text-dim); }
+/* 신고 버튼 — 본인 글 수정/삭제와 달리 눈에 띄지 않는 secondary 액션(요청 A-1) */
+.review-actions .review-report {
+  border-color: transparent; background: none;
+  color: var(--text-dim); opacity: 0.55; font-weight: 500;
+}
+.review-actions .review-report:hover { opacity: 0.9; }
 
 /* 후기 답변 (회원 화면) */
 .review-reply { margin-top: 10px; padding: 10px 12px; background: var(--surface); border-radius: 10px; border-left: 3px solid var(--accent); }

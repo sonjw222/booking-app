@@ -14,6 +14,12 @@ const config: CapacitorConfig = {
   appId: "com.mwhabit.app",
   appName: "모하빗",
   webDir: "public", // server.url 모드에선 실제로 안 쓰이지만 Capacitor 스키마상 필수 필드
+  // 실기기 진단(2026-09-11) — 이 값이 없으면 네이티브 WKWebView/UIScrollView 자체의
+  // 배경색이 iOS 기본값(검정에 가까움)으로 남아, 위/아래로 당겨 튕기는(rubber-band
+  // overscroll) 구간에서 앱 배경(var(--bg), #0A2545 계열)이 아니라 그 네이티브 기본색이
+  // 드러난다 — html/body에 CSS background를 줘도(app/globals.css) 이 레이어는 CSS가
+  // 그리는 문서 영역 밖이라 안 먹는다. 앱 전체 배경색/스플래시와 동일한 값으로 맞춘다.
+  backgroundColor: "#0A2545",
   server: {
     // 커스텀 도메인 연결 완료(2026-09-04, 실제 배포 응답 확인함)
     url: "https://mwhabit.com",
@@ -36,6 +42,19 @@ const config: CapacitorConfig = {
   ios: {
     // 기존 app/globals.css의 env(safe-area-inset-*) 레이아웃과 충돌을 최소화
     contentInset: "automatic",
+  },
+  plugins: {
+    // 실기기 진단(2026-09-11) — 이 앱은 server.url 모드라(위 주석) WebView가 로컬 번들이
+    // 아니라 실제 네트워크로 mwhabit.com을 불러온다. launchAutoHide 기본값(true)은
+    // WebView 네비게이션이 "시작"되면 곧바로 네이티브 스플래시를 내려버려서, 실제 페이지
+    // 로딩(네트워크 왕복 + CSS/폰트/이미지)이 끝나기 전에 스플래시가 사라지고 그 사이
+    // 빈 화면/미완성 레이아웃이 잠깐 보이는 문제가 있었다 — "첫 실행 Splash가 이상하게
+    // 보였다"는 실기기 증상의 유력한 원인. 자동 숨김을 끄고 대신
+    // app/components/CapacitorBootstrap.tsx가 window 'load' 이벤트(리소스까지 전부 로드
+    // 완료)를 기다린 뒤 명시적으로 SplashScreen.hide()를 부르도록 바꿨다.
+    SplashScreen: {
+      launchAutoHide: false,
+    },
   },
 };
 

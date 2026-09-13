@@ -56,6 +56,10 @@ export default function AdminHub() {
         <div className="left"><span className="icon"><UiIcon name="message" /></span>마케팅 알림</div>
         <span className="chevron">›</span>
       </a>
+      <a className="list-row" href="/admin/reviews">
+        <div className="left"><span className="icon"><UiIcon name="alert" /></span>후기 신고 관리</div>
+        <span className="chevron">›</span>
+      </a>
       <a className="list-row" href="/admin/subscriptions">
         <div className="left"><span className="icon"><UiIcon name="card" /></span>구독 현황</div>
         <span className="chevron">›</span>

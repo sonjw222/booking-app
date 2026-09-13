@@ -27,7 +27,21 @@ export default function CapacitorBootstrap() {
       ]);
 
       await StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
-      await SplashScreen.hide().catch(() => {});
+
+      // 실기기 진단(2026-09-11) — 이 앱은 server.url 모드라 WebView가 실제 네트워크로
+      // mwhabit.com을 불러온다. capacitor.config.ts에서 launchAutoHide를 껐으니, 여기서도
+      // 이 useEffect가 도는 시점(React 하이드레이션 완료)이 아니라 문서의 모든 리소스
+      // (이미지/폰트 등)가 실제로 로드 완료된 시점(window "load")까지 기다렸다가 숨긴다 —
+      // 안 그러면 네트워크가 느릴 때 스플래시가 내려간 자리에 아직 다 안 그려진 페이지가
+      // 잠깐 보일 수 있다. 이미 로드가 끝난 뒤(document.readyState === "complete")라면
+      // 바로 숨긴다.
+      const hideSplash = () => SplashScreen.hide().catch(() => {});
+      if (document.readyState === "complete") {
+        await hideSplash();
+      } else {
+        window.addEventListener("load", () => { void hideSplash(); }, { once: true });
+      }
+
       registerNativePushTapHandler((link) => {
         window.location.href = link;
       });

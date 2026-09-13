@@ -30,6 +30,7 @@ export type ClassInfo = {
   waitlisted: number;
   capacity: number;
   allowGoods: boolean;
+  allowCancel: boolean; // false면 예약 취소 불가(특강 등) — 예약 전 확인 문구 표시용
   classFormat: "group" | "private"; // CLASS-001 D-2: 회원 앱에 프라이빗 배지 표시용
   showReservedCount: boolean; // 운영설정 "회원에게 예약 인원 표시"(show_group_reserved_count)
   showWaitlistCount: boolean; // 운영설정 "회원에게 대기 인원 표시"(show_group_waitlist_count)
@@ -140,7 +141,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data: page, error: clsErr } = await supabase
         .from("classes")
-        .select("id, center_id, title, description, start_time, end_time, capacity, allow_goods, class_format, room_id, centers(id, name, categories), rooms(name)")
+        .select("id, center_id, title, description, start_time, end_time, capacity, allow_goods, allow_cancel, class_format, room_id, centers(id, name, categories), rooms(name)")
         .in("center_id", membershipCenterIds)
         .gte("start_time", startUtcIso)
         .lt("start_time", endUtcIso)
@@ -325,6 +326,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
       waitlisted: waitlistedCount[c.id] ?? 0,
       capacity: c.capacity,
       allowGoods: c.allow_goods ?? false,
+      allowCancel: c.allow_cancel ?? true,
       classFormat: (c.class_format ?? "group") as "group" | "private",
       // 설정 행이 없으면 DEFAULT_SETTINGS.showGroupReservedCount(true)와 동일하게 기본 표시
       showReservedCount: showReservedCountByCenter[c.center_id] ?? true,

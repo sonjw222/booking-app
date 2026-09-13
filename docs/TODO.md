@@ -2668,6 +2668,56 @@ PR #86(UI/UX 감사 배치, 이 PR은 예약/한도 로직을 전혀 건드리�
 정리가 스킵되는 게 근본 원인이라 언제든 다시 쌓인다 — 정기 정리 스크립트를 cron이나 CI
 후처리로 실제로 돌리는 방안이 필요.
 
+### P3-12. (신규, 2026-09-11) 네이티브 앱 페이지 전환 모션이 웹처럼 느껴짐 — 네비게이션 아키텍처 문제
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 (UX 개선, 기능 결함 아님) |
+| 현재 상태 | **확인 필요** — 근본 원인은 확정, 해결책은 아키텍처 결정 필요 |
+| 근거 파일 | `app/layout.tsx`(주석에 이미 명시: "이 앱은 `<Link>` 대신 일반 `<a href>`를 쓰는 전체 페이지 로드 방식") |
+| 완료 조건 | 페이지 전환을 자연스럽게 만들려면 최소한 주요 네비게이션 경로를 Next.js `<Link>`/클라이언트 라우팅으로 전환해야 함 — 이 앱이 왜 `<a href>` 전체 리로드 방식을 택했는지(server.url 모드, 로그인 리다이렉트 등과의 상호작용) 먼저 파악 후 범위를 정해 별도 배치로 진행 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-11 iOS Real Device UX Polish Batch 항목 |
+
+### P2-33. (신규, 2026-09-11) CI push(main) e2e/integration skip 조건 — 실제 GitHub Actions 실행으로 미검증
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인 필요** — 로컬에서 YAML 파싱 + `if` 조건 수동 케이스 추적(성공/skipped/실패 조합, fork PR 조합)만 검증함. 실제 GitHub Actions 러너에서 이 조건이 의도대로 평가되는지는 아직 확인 안 됨 |
+| 근거 파일 | `.github/workflows/test.yml`(Low-Egress Fix Batch, `e2e`/`integration` job의 `if: github.event_name != 'push' && ...`, `unit`/`build`의 `if: always() && (needs.X.result == 'success' \|\| (needs.X.result == 'skipped' && github.event_name == 'push'))`) |
+| 완료 조건 | 이 배치가 담긴 PR이 merge된 뒤, main에 실제로 발생하는 첫 `push` 이벤트 워크플로 실행을 GitHub Actions 탭에서 열어 (a) `e2e`/`integration` job이 실제로 `skipped`로 표시되는지 (b) `unit`/`build`는 정상적으로 `success`(또는 실 실패)로 진행되는지 확인. PR 자체의 실행은 `pull_request` 경로만 타므로 이 push 경로 검증에 쓸 수 없음 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-11 Low-Egress Fix Batch 항목 |
+
+### P2-34. (신규, 2026-09-13) 반복수업 일괄 생성에 "예약 취소 불가" 옵션 없음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **미완성** — `classes.allow_cancel`(`add_class_cancel_lock.sql`)은 단일 수업 생성/수정(`create_class_safe`/`update_class_safe`)에만 파라미터로 연결됨. 반복수업 일괄 생성(`create_recurring_classes_safe`)에는 아직 없어, 반복수업으로 만든 특강은 생성 직후 인스턴스마다 수정 화면을 열어 개별로 켜야 함 |
+| 근거 파일 | `lib/classes.ts`(`createRecurringClasses`/`createRecurringClassesPerDay`), `add_class_cancel_lock.sql` |
+| 완료 조건 | `create_recurring_classes_safe`에 `p_allow_cancel` 파라미터 추가 + 매니저 반복수업 생성 UI에 토글 노출, 생성된 모든 인스턴스에 일괄 반영 확인 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-13 항목 |
+
+### P2-35. (신규, 2026-09-13) 수강권 판매 수량 제한이 주문 단계에서는 아직 안 막힘
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인 필요** — `products.max_quantity`(`add_product_sale_limit.sql`)는 `memberships` INSERT 시점(=매니저가 주문을 승인해 `fulfill_order()`를 호출하는 시점)에만 강제된다. 이 앱의 주문 흐름은 결제 즉시 발급이 아니라 매니저 수동 승인이라, 여러 회원이 거의 동시에 "구매"를 눌러 만든 `pending` 주문이 정원을 넘는 경우 회원 화면에는 계속 "N개 남음"으로 보이다가 매니저가 나중에 승인하는 시점에야 일부가 거절된다(선착순 순서가 결제 시점이 아닌 승인 처리 순서로 결정됨) |
+| 근거 파일 | `add_product_sale_limit.sql`(`trg_enforce_product_sale_limit`), `lib/orders.ts`(`updateOrderStatus`→`fulfill_order`), `orders` 테이블(`docs/DATABASE.md` 4-3절, 상태 "미완성") |
+| 완료 조건 | 제품 결정 필요 — (a) 그대로 두고 매니저 승인 화면에 "정원 초과로 거절됨" 안내만 명확히 하거나, (b) `orders` 생성 시점부터 `pending` 주문도 잠정 차감에 포함시켜 진짜 선착순으로 만들지 결정 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-13 항목 |
+
+### P3-11. (신규, 2026-09-11) InquiryChat 이전 대화 더보기(pagination) 없음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3 |
+| 현재 상태 | **확인 필요** — Low-Egress Fix Batch에서 `fetchMessages()`가 최근 300개로 제한됨(`lib/inquiries.ts`의 `MESSAGE_HISTORY_LIMIT`) — 그 이상 오래된 메시지를 보는 UI가 없음 |
+| 근거 파일 | `lib/inquiries.ts`(`fetchMessages`), `app/components/InquiryChat.tsx` |
+| 완료 조건 | 300개를 넘는 문의방이 실제로 생기면 "이전 대화 더보기" 버튼 + `created_at` 커서 기반 추가 조회 구현 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-11 Low-Egress Fix Batch 항목 |
+
 ### P2-32. (신규, 2026-09-10, 완료) "매달 자동" 수강권(rolling_month) 신규 기능
 
 | 필드 | 내용 |
@@ -2752,6 +2802,13 @@ no-op된 상태에서 새 코드가 `null`을 넣으려다, rolling_month 여부
 | 근거 파일 | `schema.sql`, `reservation_functions.sql`; `center_member_fields`, `profile_center_fields` |
 | 완료 조건 | 센터 정의 필드와 회원 입력값의 노출·수정 권한을 결정하고 실제 설정·입력 화면을 구현하거나 미사용 결정을 기록함 |
 | 관련 문서 | [DATABASE 5절](./DATABASE.md), [REQUIREMENTS 12절](./REQUIREMENTS.md) |
+
+**2026-09-11 갱신(Privacy 배치 #8)**: 재확인 결과 `center_member_fields`/`profile_center_fields`를
+읽거나 쓰는 코드가 app/lib 전체에 0건 — 센터가 커스텀 필드를 정의하는 UI 자체가 아직 없어서
+민감정보(주민번호·건강정보 등)를 수집할 수 있는 실제 경로가 현재는 존재하지 않음(당장 노출된
+취약점 아님). 이 기능을 실제로 구현할 때는 필드 이름/타입에 민감정보 금지 검증(denylist 또는
+허용 타입 제한)을 반드시 요구사항에 포함할 것 — 이번 배치에서는 미리 validation/schema를
+추가하지 않음(기능 자체가 없는데 제약만 먼저 넣는 것은 범위 밖).
 
 ### P3-4. 커뮤니티·대회정보·팝업공지
 
@@ -3299,6 +3356,51 @@ Empty/Error/Skeleton 공용 컴포넌트 3종 → 3주차 액센트 단일화 + 
 RPC(`open_inquiry_thread`/`send_inquiry_message`/`read_inquiry_thread`) + 실시간 구독으로 완전히
 대체되어 있음을 확인함. **결론: 정책 추가 후보가 아니라 삭제 후보.** 이번 배치는 실제 DROP을
 하지 않음 — 사용자 승인 후 별도 배치에서 `chat_messages` DROP 마이그레이션을 작성할 것.
+
+**2026-09-11 갱신(Privacy 배치 #5)**: 0 rows 재확인(읽기 전용 쿼리). 사용자 결정 — **DROP하지
+않고 유지**(이번 출시 준비 단계에서 schema 삭제의 실익이 적다고 판단, 2026-08-01의 "삭제 후보"
+결론 자체는 유효하나 실행은 보류). 이 항목은 계속 dead schema TODO로만 남긴다 — DROP SQL을
+새로 작성하지 말 것.
+
+### P0-9. (신규, 2026-09-11, 수정 작성 완료·미적용) accounts.is_platform_admin / merged_into 자가 수정으로 권한 상승·계정 탈취 가능
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0 (권한 상승 + 계정 탈취 — 출시 전 필수 수정) |
+| 현재 상태 | **운영 설정 필요** — migration 작성/실제 취약점 재현/테스트까지 완료, SQL은 사용자 승인 후 실행 예정 |
+| 근거 파일 | `fix_accounts_admin_and_merged_into_privilege_escalation.sql`(신규), `tests/integration/accounts-privilege-escalation.test.ts`(신규, 실제 라이브 dev DB에서 재현 확인) |
+| 완료 조건 | SQL 실행 후 `tests/integration/accounts-privilege-escalation.test.ts` 8개 전부 통과(현재 A/B 2개 실패로 취약점 확인됨, D는 별도 add_marketing_consent.sql 미적용으로 실패 중) |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-11 Security Hotfix 항목 |
+
+상세 내용은 CHANGELOG 참고. 요약: "본인 계정 수정" RLS 정책이 컬럼 제한 없이 행
+전체를 허용하는데 `is_platform_admin`/`merged_into`엔 `pg_checkout_override`가 받은
+것과 같은 보호 트리거가 없었음 — 전자는 자가 운영자 승격, 후자는(더 심각) 임의
+계정으로 identity resolution을 가로채 그 계정의 매니저/운영자 권한을 통째로 탈취
+가능. 부수 발견: `account_auth_identities`에 `service_role` GRANT 자체가 없음(6차례
+넘게 반복된 패턴, 이 배치 범위 밖이라 별도 기록만).
+
+### P0-10. (신규, 2026-09-11) account_auth_identities 테이블에 service_role GRANT 없음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0로 분류하되 시급하지 않음 — 현재 이 테이블을 service_role로 접근하는 운영 코드가 없어 활성 장애는 아니지만, 이미 6차례 반복된 동일 패턴이라 언제든 재발 가능 |
+| 현재 상태 | **확인 필요** |
+| 근거 파일 | `add_account_linking.sql`(테이블 생성), `information_schema.role_table_grants`로 확인 — `authenticated`/`postgres`만 있고 `service_role`은 SELECT조차 없음 |
+| 완료 조건 | `fix_service_role_missing_grants_accounts_*.sql` 등 기존 6개 선례와 동일한 형식으로 `grant select, insert, update, delete on account_auth_identities to service_role;` 파일 작성 후 적용 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-11 Security Hotfix 항목(P0-9 작업 중 테스트 fixture 정리하다가 우연히 발견) |
+
+### P1-25. (신규, 2026-09-11) 개인정보처리방침이 약속한 법정 보유기간 경과 후 자동 파기가 실제로 구현되어 있지 않음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 (개인정보처리방침이 이미 공개적으로 약속한 내용과 실제 동작이 어긋남 — 법적 리스크) |
+| 현재 상태 | **미완성** |
+| 근거 파일 | `app/legal/privacy/page.tsx`(3절 — 계약/청약철회 5년, 결제기록 5년, 분쟁처리 3년, 표시광고 6개월, 접속기록 3개월 등 법정 보관기간별 "기간 경과 시 파기" 명시); `supabase/functions/` 전체에 retention/purge/cleanup류 자동화 없음(확인됨) |
+| 완료 조건 | (a) 정책의 각 보관기간 카테고리가 실제 어느 테이블/행에 대응하는지 매핑을 법무/사용자가 확정(예: 결제기록 5년 → `payments`/`orders` 어느 컬럼 기준인지, 접속 로그 3개월 → 그런 로그 테이블이 현재 존재하는지부터 확인 필요) (b) 카테고리별로 "파기"가 hard delete인지 비식별화인지 결정 (c) pg_cron 또는 Edge Function으로 자동화 구현 |
+| 관련 문서 | [CHANGELOG](./CHANGELOG.md) 2026-09-11 Privacy 배치 항목(#3, 이번 배치에서 의도적으로 미착수 — 정책 확정 전) |
+
+Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기간 정책이 먼저 확정돼야 구현
+가능해 이번 배치에서는 의도적으로 손대지 않음(사용자 결정). 별도 배치 대상.
 
 ### P2-31. (신규 2026-09-09, 완료 2026-09-09) 스태프 권한 카탈로그 중 상당수가 RLS/RPC에 연결 안 됨 — 무늬만 있는 체크박스
 

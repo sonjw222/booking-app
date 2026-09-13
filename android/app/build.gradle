@@ -16,10 +16,34 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release Blocker Cleanup(2026-09-11, BATCH B) — 업로드 키(mwhabit-upload-key.jks)는
+    // repo 밖(사용자 로컬)에만 존재하고, 이 파일은 그 위치/비밀번호를 절대 하드코딩하지
+    // 않는다. 아래 네 값을 환경변수 또는 ~/.gradle/gradle.properties(둘 중 아무 쪽에
+    // 있어도 findProperty()가 집어옴) 중 편한 쪽에 설정해두면 signing이 적용되고, 아무
+    // 것도 안 넣으면 release buildType이 지금처럼(이번 변경 전과 동일하게) signingConfig
+    // 없이 그대로 빌드된다 — assembleDebug는 이 설정과 전혀 무관해 항상 그대로 동작한다.
+    //   MWHABIT_KEYSTORE_FILE      — .jks 파일의 절대경로
+    //   MWHABIT_KEYSTORE_PASSWORD  — 키스토어 비밀번호
+    //   MWHABIT_KEY_ALIAS          — 키 alias
+    //   MWHABIT_KEY_PASSWORD       — 키 비밀번호
+    def mwhabitKeystoreFile = System.getenv("MWHABIT_KEYSTORE_FILE") ?: project.findProperty("MWHABIT_KEYSTORE_FILE")
+    signingConfigs {
+        release {
+            if (mwhabitKeystoreFile != null) {
+                storeFile file(mwhabitKeystoreFile)
+                storePassword System.getenv("MWHABIT_KEYSTORE_PASSWORD") ?: project.findProperty("MWHABIT_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("MWHABIT_KEY_ALIAS") ?: project.findProperty("MWHABIT_KEY_ALIAS")
+                keyPassword System.getenv("MWHABIT_KEY_PASSWORD") ?: project.findProperty("MWHABIT_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (mwhabitKeystoreFile != null) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

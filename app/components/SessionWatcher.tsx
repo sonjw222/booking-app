@@ -31,6 +31,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { ensureAccountForCurrentUser, completeSocialProfile } from "../../lib/authAccount";
 import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
 import { checkMergeableAccountByEmail, mergeViaPasswordVerification } from "../../lib/accountLinking";
+import { autoRegisterNativePushOnLogin } from "../../lib/nativePush";
 import AddressField from "./AddressField";
 
 export default function SessionWatcher() {
@@ -133,6 +134,12 @@ export default function SessionWatcher() {
               if (match) setMergePromptEmail(match.email);
             });
           }
+          // 실기기 진단(2026-09-11) — 네이티브 앱에서 이 호출이 없으면 requestPermissions()/
+          // register()가 영원히 안 불려서 iOS/Android 둘 다 알림 권한을 물어본 적조차
+          // 없는 상태로 남았다(lib/nativePush.ts 주석 참고). 계정이 확보된 시점(로그인
+          // 완료/세션 복원)에만 시도 — 로그인 전에는 토큰을 저장할 계정이 없어 어차피
+          // 의미가 없다. 이미 구독 중이거나 웹이면 함수 내부에서 조용히 반환된다.
+          if (account) void autoRegisterNativePushOnLogin();
         });
         return;
       }

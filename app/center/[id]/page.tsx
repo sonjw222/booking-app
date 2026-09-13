@@ -17,7 +17,10 @@ import {
 } from "../../../lib/center";
 import { ZoomableImage } from "../../components/ImageViewer";
 import { addToCart, cartCount } from "../../../lib/cart";
-import { fetchReviews, myReviewFor, writeReview, deleteReview, uploadReviewPhoto, reviewPhotoUrl, type Review } from "../../../lib/reviews";
+import {
+  fetchReviews, myReviewFor, writeReview, deleteReview, uploadReviewPhoto, reviewPhotoUrl, type Review,
+  reportReview, REVIEW_REPORT_REASON_LABELS, type ReviewReportReason,
+} from "../../../lib/reviews";
 import { reservationReturnUrl } from "../../../lib/reservationNav";
 import { extractPlainText } from "../../../lib/security";
 import { fetchRulesForProducts, ruleToText, type ScheduleRule } from "../../../lib/passes";
@@ -98,6 +101,11 @@ function CenterDetailContent() {
   const [rvPhotos, setRvPhotos] = useState<string[]>([]);
   const [rvUploading, setRvUploading] = useState(false);
   const [rvEditing, setRvEditing] = useState(false);
+  // 후기 신고 (Release Blocker Cleanup Batch A) — reportTargetId가 신고 시트를 연 후기의 id
+  const [reportTargetId, setReportTargetId] = useState<string | null>(null);
+  const [reportReason, setReportReason] = useState<ReviewReportReason>("inappropriate");
+  const [reportDetail, setReportDetail] = useState("");
+  const [reportBusy, setReportBusy] = useState(false);
   const [mapSheet, setMapSheet] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -206,6 +214,19 @@ function CenterDetailContent() {
       setMyReview(null);
     } catch (e: any) { setError(e.message); }
     finally { setRvBusy(false); }
+  }
+
+  async function handleReportSubmit() {
+    if (!reportTargetId) return;
+    setReportBusy(true);
+    try {
+      await reportReview(reportTargetId, reportReason, reportDetail);
+      setReportTargetId(null);
+      showToast("신고가 접수됐어요. 운영팀이 확인할게요.");
+    } catch (e: any) {
+      setError(e.message);
+      setReportTargetId(null);
+    } finally { setReportBusy(false); }
   }
 
   async function handleAddCart(p: CenterProduct) {
@@ -359,7 +380,14 @@ function CenterDetailContent() {
                           {group.items.map((p) => (
                             <div key={p.id} className="center-product-row">
                               <button className="center-product-info" style={{ background: "none", border: "none", textAlign: "left", flex: 1, cursor: p.description ? "pointer" : "default" }} onClick={() => p.description && setDescProduct(p)}>
-                                <div className="center-product-name">{p.name}{p.description ? " ⓘ" : ""}</div>
+                                <div className="center-product-name">
+                                  {p.name}{p.description ? " ⓘ" : ""}
+                                  {p.remaining != null && (
+                                    <span className="pass-group-tag" style={p.remaining <= 0 ? { background: "var(--danger-soft)", color: "var(--danger)" } : undefined}>
+                                      {p.remaining <= 0 ? "매진" : `${p.remaining}개 남음`}
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="center-product-detail">
                                   {p.unlimited ? "무제한" : p.totalCount ? `${p.totalCount}회` : ""} · {won(p.price)}
                                 </div>
@@ -370,8 +398,8 @@ function CenterDetailContent() {
                                 )}
                               </button>
                               <div className="center-product-actions">
-                                <button className="center-product-cart" onClick={() => handleAddCart(p)}>담기</button>
-                                <button className="center-product-buy" onClick={() => handlePurchase(p)}>구매</button>
+                                {p.remaining !== 0 && <button className="center-product-cart" onClick={() => handleAddCart(p)}>담기</button>}
+                                {p.remaining !== 0 && <button className="center-product-buy" onClick={() => handlePurchase(p)}>구매</button>}
                               </div>
                             </div>
                           ))}
@@ -387,14 +415,21 @@ function CenterDetailContent() {
                       {visibleProducts.filter((p) => p.kind === "goods").map((p) => (
                         <div key={p.id} className="center-product-row">
                           <button className="center-product-info" style={{ background: "none", border: "none", textAlign: "left", flex: 1, cursor: p.description ? "pointer" : "default" }} onClick={() => p.description && setDescProduct(p)}>
-                            <div className="center-product-name">{p.name}{p.description ? " ⓘ" : ""}</div>
+                            <div className="center-product-name">
+                              {p.name}{p.description ? " ⓘ" : ""}
+                              {p.remaining != null && (
+                                <span className="pass-group-tag" style={p.remaining <= 0 ? { background: "var(--danger-soft)", color: "var(--danger)" } : undefined}>
+                                  {p.remaining <= 0 ? "매진" : `${p.remaining}개 남음`}
+                                </span>
+                              )}
+                            </div>
                             <div className="center-product-detail">
                               {p.unlimited ? "무제한" : p.totalCount ? `${p.totalCount}회` : ""} · {won(p.price)}
                             </div>
                           </button>
                           <div className="center-product-actions">
-                            <button className="center-product-cart" onClick={() => handleAddCart(p)}>담기</button>
-                            <button className="center-product-buy" onClick={() => handlePurchase(p)}>구매</button>
+                            {p.remaining !== 0 && <button className="center-product-cart" onClick={() => handleAddCart(p)}>담기</button>}
+                            {p.remaining !== 0 && <button className="center-product-buy" onClick={() => handlePurchase(p)}>구매</button>}
                           </div>
                         </div>
                       ))}
@@ -462,6 +497,44 @@ function CenterDetailContent() {
               <button className="ghost-btn" onClick={() => setReviewSheet(false)}>취소</button>
               <button className="primary-btn" disabled={rvBusy} onClick={handleWriteReview}>
                 {rvBusy ? "등록 중..." : "등록하기"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 후기 신고 (Release Blocker Cleanup Batch A) */}
+      {reportTargetId && (
+        <div className="sheet-overlay" onClick={() => setReportTargetId(null)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-title">후기 신고</div>
+            <div className="perm-guide" style={{ margin: "0 0 12px" }}>
+              신고 내용은 운영팀이 확인 후 처리해요.
+            </div>
+            <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>신고 사유</div>
+            {(Object.keys(REVIEW_REPORT_REASON_LABELS) as ReviewReportReason[]).map((key) => (
+              <label key={key} className="admin-row" style={{ cursor: "pointer" }}>
+                <input
+                  type="radio" name="report-reason" value={key}
+                  checked={reportReason === key}
+                  onChange={() => setReportReason(key)}
+                  style={{ marginRight: 8 }}
+                />
+                <span className="v">{REVIEW_REPORT_REASON_LABELS[key]}</span>
+              </label>
+            ))}
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>상세 사유 (선택)</div>
+            <textarea
+              className="input-field"
+              style={{ width: "100%", minHeight: 60 }}
+              placeholder="추가로 전달하고 싶은 내용이 있다면 적어주세요"
+              value={reportDetail}
+              onChange={(e) => setReportDetail(e.target.value)}
+            />
+            <div className="add-profile-actions" style={{ marginTop: 14 }}>
+              <button className="ghost-btn" onClick={() => setReportTargetId(null)}>취소</button>
+              <button className="primary-btn" disabled={reportBusy} onClick={handleReportSubmit}>
+                {reportBusy ? "접수 중..." : "신고하기"}
               </button>
             </div>
           </div>
@@ -647,10 +720,19 @@ function CenterDetailContent() {
                   <div className="review-reply-body" dangerouslySetInnerHTML={{ __html: r.reply }} />
                 </div>
               )}
-              {myReview && myReview.id === r.id && (
+              {myReview && myReview.id === r.id ? (
                 <div className="review-actions">
                   <button className="review-edit" disabled={rvBusy} onClick={openEditReview}>수정</button>
                   <button className="review-del" disabled={rvBusy} onClick={handleDeleteReview}>삭제</button>
+                </div>
+              ) : (
+                <div className="review-actions">
+                  <button
+                    className="review-report"
+                    onClick={() => { setReportTargetId(r.id); setReportReason("inappropriate"); setReportDetail(""); }}
+                  >
+                    신고
+                  </button>
                 </div>
               )}
             </div>

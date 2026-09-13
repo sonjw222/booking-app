@@ -11,7 +11,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabaseClient";
 import { deactivateCurrentAccount } from "../../../lib/accountDeletion";
-import { fetchMyAccountInfo } from "../../../lib/mypage";
+import { fetchMyAccountInfo, setMyMarketingConsent } from "../../../lib/mypage";
 import { createAccountLinkCode, linkAccountsByCode } from "../../../lib/accountLinking";
 import { disableNativePush } from "../../../lib/nativePush";
 
@@ -37,6 +37,10 @@ export default function MyInfoPage() {
   const [name, setName] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
   const [infoError, setInfoError] = useState<string | null>(null);
+
+  // 마케팅 정보 수신 동의(선택) — 가입 시 체크한 값이 여기서 조회/철회된다(Privacy #1).
+  const [marketingConsent, setMarketingConsentState] = useState(false);
+  const [marketingBusy, setMarketingBusy] = useState(false);
 
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
@@ -69,9 +73,23 @@ export default function MyInfoPage() {
       setLoadingUser(false);
     });
     fetchMyAccountInfo()
-      .then((info) => { setName(info.name); setPhone(info.phone); })
+      .then((info) => { setName(info.name); setPhone(info.phone); setMarketingConsentState(info.marketingConsent); })
       .catch((e: any) => setInfoError(e.message ?? "회원정보를 불러오지 못했어요"));
   }, []);
+
+  async function toggleMarketingConsent() {
+    if (marketingBusy) return;
+    const next = !marketingConsent;
+    setMarketingBusy(true);
+    try {
+      await setMyMarketingConsent(next);
+      setMarketingConsentState(next);
+    } catch (e: any) {
+      setInfoError(e.message ?? "마케팅 동의 설정을 저장하지 못했어요");
+    } finally {
+      setMarketingBusy(false);
+    }
+  }
 
   async function changePassword() {
     if (saving) return;
@@ -188,6 +206,23 @@ export default function MyInfoPage() {
                 <div className="admin-row"><span className="k">휴대폰</span><span className="v">{phone ?? "-"}</span></div>
               </div>
             )}
+          </div>
+
+          <div className="menu-section-label">마케팅 정보 수신 동의</div>
+          <div style={{ padding: "0 20px 24px" }}>
+            <div className="noti-row">
+              <div className="noti-info">
+                <div className="noti-label">이벤트·혜택 정보 수신</div>
+                <div className="noti-desc">쿠폰, 이벤트 등 마케팅 정보를 받아볼게요(선택, 언제든 철회할 수 있어요)</div>
+              </div>
+              <button
+                className={`switch ${marketingConsent ? "on" : ""}`}
+                onClick={toggleMarketingConsent}
+                disabled={marketingBusy}
+              >
+                <span className="knob" />
+              </button>
+            </div>
           </div>
 
           <div className="menu-section-label">비밀번호 변경</div>
