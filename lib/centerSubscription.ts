@@ -4,22 +4,29 @@
   - 운영자: 전체 센터 구독 현황 조회
   - DB 쪽 스키마/RLS: add_center_platform_subscription.sql 참고
 
-  실제 카드 등록(토스 자동결제 SDK)은 NEXT_PUBLIC_BILLING_ENABLED가 정확히
-  "true"일 때만 동작한다. 토스 자동결제는 계약 심사가 끝나야 카드 등록(빌링키
-  발급)이 가능해서(심사 전 테스트 키로 시도하면 에러가 난다는 게 토스 공식
-  문서로 확인됨), 심사가 끝나기 전까지는 이 플래그를 켜지 않는다.
+  실제 카드 등록(토스 자동결제 SDK)은 BILLING_ENABLED(전역 플래그) 또는 센터별
+  billing_review_override 중 하나라도 켜져 있을 때만 동작한다(requestCenterBillingAuth의
+  enabled 파라미터). 토스 자동결제는 계약 심사가 끝나야 카드 등록(빌링키 발급)이
+  가능해서(심사 전 테스트 키로 시도하면 에러가 난다는 게 토스 공식 문서로 확인됨),
+  전역 플래그는 심사가 끝나기 전까지 켜지 않는다 — 심사 기간 중에는 심사용 센터
+  하나만 override로 예외 허용한다(add_center_subscription_billing_reviewer_override.sql).
 
-  ※ requestBillingAuth로 카드 등록 창을 여는 것까지만 이 함수가 담당한다.
-    등록이 실제로 성공했을 때 토스가 돌려주는 authKey를 billing_key로 교환해서
-    center_subscriptions에 저장하는 처리는 여기 없다 — 그 교환은 토스 시크릿
-    키가 필요한 서버 전용 작업인데, 이 앱은 별도 API 서버가 없어서 이번 배치
-    범위 밖으로 뒀다(토스 승인 후 별도 작업 필요, docs/TODO.md 참고).
+  [2026-09-11] authKey → billingKey 교환 + 최초 결제는 app/api/billing/confirm/route.ts가
+  서버에서 처리한다(시크릿 키 필요, 이 파일의 confirmCenterBilling()이 그 라우트를 호출).
+  매월 자동 청구(2회차 이후)는 app/api/billing/charge-due/route.ts + pg_cron(하루 1회,
+  add_center_subscription_recurring_billing.sql)이 담당 — 자세한 내용은 각 파일의 주석과
+  docs/TODO.md P0-8 참고.
 */
 
 import { supabase } from "./supabaseClient";
 import "./tossSdk"; // window.TossPayments 전역 타입 선언(공용, lib/payments/TossPaymentProvider.ts와 공유)
 
-export type SubscriptionStatus = "pending_billing_setup" | "active" | "past_due" | "canceled";
+// payment_failed(2026-09-14 정책 확정, add_center_subscription_billing_retry_policy.sql):
+// 정기 청구가 7회(최대 7일) 연속 실패했거나, 카드 만료/분실/정지처럼 재시도해도 성공
+// 가능성이 없는 오류로 즉시 자동중지된 terminal 상태. 새 카드 등록(app/api/billing/
+// confirm/route.ts가 이 상태도 재등록 대상에 포함)으로만 active로 되돌아갈 수 있다.
+export type SubscriptionStatus =
+  "pending_billing_setup" | "active" | "past_due" | "canceled" | "payment_failed";
 
 export type CenterSubscription = {
   id: string;
@@ -32,6 +39,8 @@ export type CenterSubscription = {
   cardCompany: string | null;
   nextBillingDate: string | null; // "YYYY-MM-DD"
   updatedAt: string;
+  // 정기 청구 연속 실패 횟수(성공 시 0으로 리셋) — app/api/billing/charge-due 참고.
+  retryCount: number;
   // 카카오 알림톡/SMS 발송 애드온(add_center_alimtalk_addon_billing.sql) — 신청한 센터만
   // supabase/functions/send-alimtalk가 실제 발송을 허용한다. 가격은 건당(발송 1건마다,
   // fix_alimtalk_addon_per_message_pricing.sql) — 알리고 실제 과금 방식과 일치시킴.
@@ -46,8 +55,9 @@ export type AdminCenterSubscription = CenterSubscription & {
 export const STATUS_LABEL: Record<SubscriptionStatus, string> = {
   pending_billing_setup: "카드 등록 대기",
   active: "정상",
-  past_due: "연체",
+  past_due: "결제 실패(재시도 중)",
   canceled: "해지됨",
+  payment_failed: "정기결제 중지됨",
 };
 
 // 결제 연동 활성화 여부. 값이 정확히 "true"가 아니면(비워둔 경우 포함) 항상 꺼짐.
@@ -64,6 +74,7 @@ type CenterSubscriptionRow = {
   card_company: string | null;
   next_billing_date: string | null;
   updated_at: string;
+  retry_count: number;
   alimtalk_addon: boolean;
   alimtalk_addon_unit_price: number | null;
   subscription_plans: SubscriptionPlanEmbed;
@@ -85,13 +96,14 @@ function rowToSubscription(r: CenterSubscriptionRow): CenterSubscription {
     cardCompany: r.card_company,
     nextBillingDate: r.next_billing_date,
     updatedAt: r.updated_at,
+    retryCount: r.retry_count,
     alimtalkAddon: r.alimtalk_addon,
     alimtalkAddonUnitPrice: r.alimtalk_addon_unit_price,
   };
 }
 
 const SELECT_COLUMNS =
-  "id, center_id, plan_id, status, card_last4, card_company, next_billing_date, updated_at, " +
+  "id, center_id, plan_id, status, card_last4, card_company, next_billing_date, updated_at, retry_count, " +
   "alimtalk_addon, alimtalk_addon_unit_price, subscription_plans(name, monthly_price)";
 
 // 매니저 - 내 센터의 구독 상태 조회.
@@ -107,6 +119,20 @@ export async function fetchCenterSubscription(centerId: string): Promise<CenterS
   if (error) throw new Error("구독 정보를 불러오지 못했어요: " + error.message);
   if (!data) return null;
   return rowToSubscription(data as unknown as CenterSubscriptionRow);
+}
+
+// 토스페이먼츠 빌링(자동결제) 계약 심사용 "심사관 전용 센터" 판별(2026-09-11,
+// add_center_subscription_billing_reviewer_override.sql — lib/authAccount.ts의
+// fetchMyPgCheckoutOverride()와 동일한 패턴, 계정이 아니라 센터 스코프인 것만 다름).
+// 이 값은 운영자만 바꿀 수 있고(트리거로 보호) — 조회 실패 시 안전하게 false로 취급한다
+// (전역 게이트가 꺼져 있으면 기본은 항상 버튼 비활성화).
+export async function fetchCenterBillingReviewOverride(centerId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("center_subscriptions")
+    .select("billing_review_override")
+    .eq("center_id", centerId)
+    .maybeSingle();
+  return !!(data as { billing_review_override?: boolean } | null)?.billing_review_override;
 }
 
 // 운영자 - 전체 센터 구독 현황
@@ -206,12 +232,15 @@ export function tossCustomerKeyForCenter(centerId: string): string {
   return `center-${centerId}`;
 }
 
-// 카드 등록 창 열기. NEXT_PUBLIC_BILLING_ENABLED가 꺼져 있으면 항상 예외를
-// 던진다 — 호출하는 화면 쪽에서도 버튼 자체를 비활성화해 이 경로를 이중으로
-// 막아둔다(플래그가 꺼진 상태에서 실제로 호출되면 토스 쪽에서 계약 심사 관련
-// 에러가 나기 때문).
-export async function requestCenterBillingAuth(centerId: string): Promise<void> {
-  if (!BILLING_ENABLED) {
+// 카드 등록 창 열기. enabled가 false면 항상 예외를 던진다 — 호출하는 화면 쪽에서도
+// 버튼 자체를 비활성화해 이 경로를 이중으로 막아둔다(플래그가 꺼진 상태에서 실제로
+// 호출되면 토스 쪽에서 계약 심사 관련 에러가 나기 때문). enabled는 기본값이
+// BILLING_ENABLED(전역 플래그)지만, 호출부(app/manager/subscription/page.tsx)가
+// fetchCenterBillingReviewOverride()로 확인한 "이 센터는 심사용으로 지정됨" 여부를
+// OR로 합쳐서 넘겨준다 — 전역 플래그를 켜지 않고도 심사용 센터 하나만 예외적으로
+// 통과시키기 위함(2026-09-11, add_center_subscription_billing_reviewer_override.sql).
+export async function requestCenterBillingAuth(centerId: string, enabled: boolean = BILLING_ENABLED): Promise<void> {
+  if (!enabled) {
     throw new Error("구독 결제 연동이 아직 꺼져 있어요");
   }
   const clientKey = process.env.NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY;
@@ -224,9 +253,28 @@ export async function requestCenterBillingAuth(centerId: string): Promise<void> 
   const tossPayments = window.TossPayments(clientKey);
   const payment = tossPayments.payment({ customerKey: tossCustomerKeyForCenter(centerId) });
   const origin = window.location.origin;
+  // 카드 등록 버튼이 실제로 있는 화면(app/manager/subscription/page.tsx)으로 되돌아와야
+  // 그 화면의 useEffect가 authKey/customerKey를 받아 아래 confirmCenterBilling()을 호출할
+  // 수 있다 — 예전엔 존재하지 않는 /manager/settings 쿼리로 돌아가 후속 처리가 전혀
+  // 실행되지 않았다(카드 등록은 토스 쪽엔 성공하는데 billing_key 교환이 안 되는 상태로 남음).
   await payment.requestBillingAuth({
     method: "CARD",
-    successUrl: `${origin}/manager/settings?billing=success&center=${centerId}`,
-    failUrl: `${origin}/manager/settings?billing=fail&center=${centerId}`,
+    successUrl: `${origin}/manager/subscription?billing=success&center=${centerId}`,
+    failUrl: `${origin}/manager/subscription?billing=fail&center=${centerId}`,
   });
+}
+
+// successUrl로 돌아온 뒤 authKey/customerKey를 billingKey로 교환 + 최초 결제까지 서버에서
+// 처리(app/api/billing/confirm, 시크릿 키 필요 — 브라우저에서 직접 호출 불가).
+export async function confirmCenterBilling(
+  authKey: string, customerKey: string, centerId: string
+): Promise<{ status: SubscriptionStatus; nextBillingDate: string }> {
+  const res = await fetch("/api/billing/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ authKey, customerKey, centerId }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error ?? "카드 등록 확정에 실패했어요");
+  return { status: data.status, nextBillingDate: data.nextBillingDate };
 }

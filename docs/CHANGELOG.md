@@ -1,5 +1,106 @@
 # CHANGELOG
 
+## 2026-09-14 — 센터 정기결제 실패(연체) 정책 확정 반영: 최대 7회/7일 재시도 후 자동중지
+
+사용자가 확정한 연체 정책(실패 시 past_due, 하루 1회 재시도, 최대 7회, 소진 시 자동중지 —
+카드 재등록 전까지 재개 불가, 재시도 불가능한 카드 오류는 즉시 중지)을 기존 정기 청구
+구조(`app/api/billing/charge-due/route.ts`, PR #145)에 반영.
+
+- **`add_center_subscription_billing_retry_policy.sql`(신규)**: `center_subscriptions.
+  retry_count`(연속 실패 횟수) 컬럼 추가 + `status` CHECK 제약에 `payment_failed`(신규
+  terminal 상태) 추가. 새 RLS/트리거 없음 — 이 테이블은 이미 일반 사용자에게 쓰기 정책이
+  전혀 없어(service_role 전용) 기존 보호가 그대로 적용됨.
+- **`app/api/billing/charge-due/route.ts`**: 실패할 때마다 `retry_count`를 늘리고
+  `retry_count >= 7`이면 `payment_failed`로 전환(자동 재시도 대상 쿼리 `status in
+  ('active','past_due')`에서 자연히 제외됨). 성공하면 `retry_count`를 0으로 리셋.
+  docs.tosspayments.com 공식 오류코드 문서를 직접 조회해 확인한 "카드 자체 문제라
+  재시도해도 성공할 수 없는" 오류 코드(`INVALID_CARD_EXPIRATION` 등 6종)는 재시도
+  횟수를 채우지 않고 즉시 `payment_failed`로 전환 — **이 목록에 없는(확인 안 된) 코드는
+  절대 추측 분류하지 않고 전부 기본 7회 재시도 정책으로 처리**(안전한 쪽으로만 치우치는
+  설계).
+- **`app/api/billing/confirm/route.ts`**: `payment_failed` 상태도 카드 재등록(claim)
+  대상에 포함하도록 확장 — 오너가 새 카드를 등록하면 이 라우트가 그대로 재활성화까지
+  처리하고 `retry_count`를 0으로 리셋한다. `billing_key` 등 기존 카드 정보는 어떤 경로로도
+  자동 삭제하지 않음(감사 보존, 사용자 명시 요구사항).
+- **`lib/centerSubscription.ts`**: `SubscriptionStatus`에 `payment_failed` 추가,
+  `retryCount` 필드 추가, `STATUS_LABEL` 갱신.
+- **UI(`app/manager/subscription/page.tsx`, `app/admin/subscriptions/page.tsx`)**:
+  `past_due`("결제 실패, 자동 재시도 중 + 새 카드로 다시 등록" 버튼)와 `payment_failed`
+  ("정기결제가 중지되었습니다. 결제수단을 다시 등록해주세요." + 카드 등록 버튼) 각각에
+  맞는 안내 추가. 전체 기능 접근은 기존처럼 막지 않음(사용자 결정 — 지금도 status로
+  기능을 게이트하는 구조가 없음).
+- **테스트**: `tests/unit/billing.chargeDue.test.ts`(16개), `tests/unit/billing.confirm.
+  test.ts`(5개) 신규 — 실제 Supabase/토스 없이 createClient()와 토스 fetch를 전부
+  스텁해 검증(성공/1회 실패/재시도 성공/6·7회째 실패/재시도 불가 오류 즉시중지/미확인
+  오류코드는 기본정책/canceled·pending_billing_setup·payment_failed 제외/리스 경합/
+  billing_key 없음 방어/payment_failed 재등록/409 케이스들). 실제 카드 결제는 어떤
+  테스트에서도 실행되지 않음.
+
+의도적으로 넣지 않은 것: `payment_failed`에서 운영자가 강제로 재개하는 관리자 RPC(정책상
+"오너의 새 카드 등록"이 유일한 재개 경로), 정교한 dunning(이메일/알림톡 안내 등) — 이번
+배치 범위 밖.
+
+`npm run build`/`npx tsc --noEmit` 통과, 유닛테스트 288개 전부 통과(신규 21개 포함).
+`tests/integration/subscription-plan-limits.test.ts`(기존 스키마 영향 없음 재확인,
+15/15). 변경 파일: `add_center_subscription_billing_retry_policy.sql`,
+`app/api/billing/charge-due/route.ts`, `app/api/billing/confirm/route.ts`,
+`lib/centerSubscription.ts`, `app/manager/subscription/page.tsx`,
+`app/admin/subscriptions/page.tsx`, `vitest.config.ts`(테스트 전용 더미 env 3개 추가),
+`tests/unit/billing.chargeDue.test.ts`(신규), `tests/unit/billing.confirm.test.ts`(신규).
+
+## 2026-09-14 — 토스페이먼츠 빌링 카드사 심사 준비 완료 (`toss-billing-review` 브랜치)
+
+2026-09-11 배치(카드 등록/최초 결제 서버 처리) 이후 남아있던 카드사 심사 준비 갭을
+마저 채움. `origin/main`(그 사이 병합된 29개 커밋, iOS release-blocker 브랜치와는
+파일 겹침 없음)을 이 브랜치에 먼저 병합한 뒤 진행.
+
+- **`app/api/billing/charge-due/route.ts`(신규)** + **`add_center_subscription_
+  recurring_billing.sql`(신규)**: 2회차 이후 매월 자동 청구. pg_cron이 하루 1회(사용자
+  지시 — "cron 주기는 과도하게 짧게 만들지 말 것") `x-cron-secret` 헤더로 인증된 이
+  라우트를 직접 호출(기존 autocancel/alimtalk 스케줄러와 달리 Edge Function을 거치지
+  않음 — TOSS_SECRET_KEY를 Vercel에만 두기 위한 의도적 설계 차이, 파일 상단 주석 참고).
+  `status in ('active','past_due')`이고 `next_billing_date`가 지난 구독만 대상, 가격은
+  매번 `subscription_plans`에서 새로 조회(캐시 안 함). 실패하면 `past_due`로 표시하고
+  다음 날 같은 회차로 재시도(성공할 때까지) — 몇 번 실패하면 강제 해지할지 같은 정교한
+  연체 정책은 사업 결정 사항이라 이번 배치에 넣지 않음(docs/TODO.md에 기록).
+- **중복 청구 방지 보강**: `center_subscriptions.billing_locked_until`(리스 마커) +
+  `center_subscription_charges.order_id`(토스 orderId 기록) 컬럼 추가. 최초 결제
+  라우트(`app/api/billing/confirm/route.ts`)도 기존엔 단순 SELECT 후 조건부 UPDATE라
+  거의 동시에 두 번 호출되면(네트워크 재시도 등) 이론상 이중 청구 가능성이 있었음 —
+  같은 리스 패턴으로 원자적 선점(claim)하도록 보강. 정기 청구는 추가로 회차별
+  결정적 orderId(`sub-recur-{centerId}-{next_billing_date}`)를 써서 DB 리스가 실패해도
+  토스 쪽 orderId 유일성이 이중 방어가 되도록 함.
+- **`fix_center_platform_subscription_review_price.sql` 보강**: 39,000원 반영 UPDATE는
+  그대로 두고, production에 남아있던 테스트성 junk 플랜("ㄹ", 222,222원, `is_default`
+  아님이라 신규 센터엔 영향 없었지만 `is_active=true`라 매니저 "플랜 변경" 드롭다운에
+  노출되고 있었음)을 함께 비활성화(`is_active=false`, 삭제 아님)하도록 확장. 아직
+  미실행 — 가격은 사업 결정 사항이라 사용자 승인 후 직접 실행 필요(변경 없음).
+- **디자인 시스템 회귀 수정**: main 병합으로 새로 들어온 `designSystem.contract.test.ts`의
+  "inline style에 hardcoded hex 금지" 검사가 `app/manager/subscription/page.tsx`(이
+  브랜치가 2026-09-11에 추가한 상품 안내/사업자정보 블록)에서 실패 — `var(--card-bg,
+  #f7f7f9)`처럼 존재하지도 않는 토큰 이름에 hex fallback을 붙여 쓰고 있었음. 실제
+  존재하는 토큰(`--card-bg`, `--text-dim`, `--line`)으로 교체해 fallback 없이도 항상
+  정상 해석되도록 수정.
+- **`lib/centerSubscription.ts` 문서 주석 정리**: 이 브랜치 자체가 이미 구현해둔
+  `confirmCenterBilling()`/자동 청구를 여전히 "범위 밖"이라고 설명하던 stale 주석을
+  실제 상태에 맞게 갱신.
+- **`app/legal/business/page.tsx` 모순 문구 제거**: `mailOrderRegNo`가 2026-09-11에
+  이미 실제 확정 신고번호로 바뀌었는데도, 그 값을 표로 보여주는 바로 위에 "통신판매업
+  신고번호는 신고 절차 진행 중입니다"라는 이전 placeholder 시절 안내문이 그대로 남아있어
+  화면이 자기모순적이었음(토스 심사관이 이 페이지를 보면 혼란스러울 수 있는 부분) — 제거.
+
+의도적으로 이번 배치에 넣지 않은 것: 연체(past_due) 재시도 횟수 제한/자동 해지 정책,
+past_due 상태에서 오너가 카드를 재등록/재시도하는 UI, 실제 `NEXT_PUBLIC_BILLING_ENABLED`/
+`NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY`/`BILLING_CRON_SECRET` production 환경변수 설정
+(Vercel/Supabase secrets — 이 세션이 값을 알 수도, 대신 설정할 수도 없음), price SQL
+실행, main 병합/배포, 실제 화면 캡처.
+
+`npm run build`/유닛테스트 267개 통과(디자인 시스템 회귀 수정 포함). 통합테스트는
+`docs/AI_PLAYBOOK.md`/`CLAUDE.md` 규칙에 따라 별도로 실행·기록(결과는 이 배치 보고서 참고).
+변경 파일: `app/api/billing/charge-due/route.ts`, `app/api/billing/confirm/route.ts`,
+`add_center_subscription_recurring_billing.sql`, `fix_center_platform_subscription_review_
+price.sql`, `app/manager/subscription/page.tsx`, `lib/centerSubscription.ts`.
+
 ## 2026-09-13 — 수업 "예약 취소 불가" 설정 + 수강권 판매 수량 제한 추가
 
 사용자 요청(특강처럼 예약 취소를 막고 싶은 수업, 정원만큼만 팔고 싶은 수강권)에 따라
@@ -517,6 +618,104 @@ SQL 실행 필요(YES) — 운영 DB에는 사용자 승인 후 적용 예정, �
 무관함. `.env.local`은 다른 세션이 쓰고 있을 수 있는 공유 상태라 건드리지 않음.
 
 변경 파일: `tests/integration/setup.ts`.
+
+## 2026-09-11 — 환불정책 6항(센터 구독료 해지·환불) 확정본 반영
+
+사용자가 확정한 최종 문구로 `/legal/refund` "6. 센터 플랫폼 구독료(월 이용료) 해지·환불"
+전체를 교체 — 결제 후 환불 기준을 "원칙적으로 환불 불가(초안)"에서 "미이용 시 결제일로부터
+7일 이내 전액 환불, 이용 개시 후에는 잔여 기간 기준 산정"으로 구체화. "정식 약관 확정 전
+초안" disclaimer(legal-note 박스)는 이제 확정된 정책이라 완전히 제거. 1~5항(일반 회원
+수강권 결제 기준)은 변경 없음.
+
+## 2026-09-11 — 토스 빌링 심사관 전용 센터 카드등록 노출 (전역 플래그 대신 센터별 override)
+
+`NEXT_PUBLIC_BILLING_ENABLED`를 전역으로 켜면 심사관뿐 아니라 실제 운영 중인 모든 센터
+오너에게도 "카드 등록" 버튼이 열려 진짜 청구가 발생할 위험이 있다는 지적에 따라, 전역
+플래그를 켜지 않고 **심사용 센터 하나만** 예외적으로 노출하는 방식으로 변경. 이미 같은
+문제(B2C 결제 심사, `PG_CHECKOUT_ENABLED`)를 풀어둔 `add_pg_checkout_reviewer_override.sql`
+(계정 스코프)과 정확히 같은 패턴을 센터 스코프로 옮겨 적용:
+
+- `add_center_subscription_billing_reviewer_override.sql`(신규, **미실행** — SQL Editor에서
+  사용자 승인 후 적용 필요): `center_subscriptions.billing_review_override boolean` 컬럼 +
+  자기수정 방지 BEFORE UPDATE 트리거(운영자 또는 service_role만 변경 가능).
+  `accounts`가 아니라 `center_subscriptions`(센터 스코프)로 둔 이유: Billing 관련 화면·RPC가
+  전부 centerId 기준이고, 계정 스코프였다면 심사용 계정이 우연히 다른 진짜 센터도 갖게 될
+  경우 그쪽까지 함께 열리는 과잉 노출이 생기기 때문.
+- `lib/centerSubscription.ts`: `fetchCenterBillingReviewOverride(centerId)` 신규(패턴은
+  `lib/authAccount.ts`의 `fetchMyPgCheckoutOverride()`와 동일). `requestCenterBillingAuth()`가
+  이제 `enabled` 파라미터를 받음(기본값 `BILLING_ENABLED`) — 호출부가 전역 플래그와 센터별
+  override를 합친 값을 넘겨준다.
+- `app/manager/subscription/page.tsx`: 로컬 `billingEnabled` state 추가(전역 플래그로
+  초기화 후, 꺼져 있으면 이 센터의 override만 별도 조회해 병합) — 카드 등록/구독 취소
+  버튼 노출과 `handleCardRegister`/`handleCancel`이 전부 이 값을 참조하도록 교체
+  (`app/checkout/page.tsx`의 `pgCheckoutEnabled` state와 동일 패턴).
+
+일반 센터 오너 노출에는 변화 없음(override 컬럼이 기본 false). SQL은 아직 미실행.
+
+## 2026-09-11 — 통신판매업 신고번호 확정값 반영 (제2026-성남분당B-0866호)
+
+`lib/businessInfo.ts`의 `mailOrderRegNo` placeholder("신고 진행 중")를 사용자가 확정해준
+실제 신고번호로 교체. 이 필드를 단일 출처로 참조하는 `/legal/business`,
+`/manager/subscription` 두 화면 모두 자동으로 반영됨(다른 필드는 변경 없음).
+
+## 2026-09-11 — 토스 빌링 심사 pre-review 수정: 통신판매업 신고번호 단일 출처화 + VAT 문구 일관화
+
+직전 커밋(토스 빌링 계약심사 준비 배치)에 대한 사용자 검토 후 제출 전 보완:
+
+- `lib/businessInfo.ts`에 `mailOrderRegNo`(통신판매업 신고번호) 필드 추가 — 실제 신고번호를
+  아직 몰라 값은 채우지 않고 기존 표시 문구("신고 진행 중")를 그대로 명시적 placeholder로
+  옮겨둠. `app/legal/business/page.tsx`(기존 하드코딩), `app/manager/subscription/page.tsx`
+  (신규) 두 화면이 이 한 필드만 참조하도록 정리 — 실제 번호가 나오면 여기 한 곳만 바꾸면
+  됨. **토스 심사 제출 전 이 값을 실제 번호로 교체해야 하는 TODO** (docs/TODO.md 참고).
+- `/manager/subscription`의 "플랜" 상태 행이 가격을 `(월 X원)`으로만 표시해 상단 상품
+  안내 박스의 "(부가세 포함)" 문구와 어긋나 있던 것을 발견해 통일(`(월 X원, 부가세 포함)`).
+- 홈 화면(`app/page.tsx`)에는 의도적으로 사업자정보를 추가하지 않음 — 2026-09-04에 이미
+  "사업자 주소가 자택이라 홈 화면에 상시 노출하는 걸 원치 않음"이라는 명시적 결정이
+  코드 주석에 남아있어(전자상거래법 준수는 `/legal/business` 링크로 충족), 이번 지시와
+  충돌하는 부분이라 임의로 덮어쓰지 않고 보고로 남김.
+- 환불정책(`/legal/refund` 6항)은 이번 단계에서 **내용을 고치지 않음** — 사용자 승인 후
+  별도 처리.
+
+변경 파일: `lib/businessInfo.ts`, `app/legal/business/page.tsx`, `app/manager/subscription/page.tsx`.
+
+## 2026-09-11 — 토스페이먼츠 빌링(자동결제) 계약심사 준비 (branch `toss-billing-review`)
+
+토스에서 받은 빌링결제(신용카드 정기결제) 계약 심사 정보(MID `bill_vbook4iia`, 심사용
+상품 "모하빗 센터 이용권" 월 39,000원)를 기준으로, 기존 P0-8(센터→플랫폼 구독료) 구현의
+남은 갭을 채우고 심사 제출 준비를 진행. DB 스키마/RLS/관리자·오너 화면은 이전 세션(P0-8)이
+이미 구현해뒀음을 확인 — 이번 배치는 그 위에 아래만 추가:
+
+- **`app/api/billing/confirm/route.ts`(신규)**: 토스 카드 등록창(v2 SDK
+  `requestBillingAuth`) 성공 후 돌아오는 authKey를 `POST /v1/billing/authorizations/issue`로
+  billingKey 교환 + `POST /v1/billing/{billingKey}`로 최초 결제까지 서버에서 처리(시크릿
+  키 필요, `app/api/payments/confirm`과 동일 패턴). 금액은 클라이언트를 신뢰하지 않고
+  `subscription_plans.monthly_price`를 서버에서 직접 조회. 토스 공식 문서(2026-09 기준)로
+  엔드포인트/응답 필드 확인 후 구현.
+- **버그 수정**: `requestCenterBillingAuth()`의 successUrl/failUrl이 존재하지 않는
+  `/manager/settings`를 가리키고 있어(실제 화면은 `/manager/subscription`) 카드 등록에
+  성공해도 billingKey 교환이 실행될 방법이 전혀 없었음 — 대상 경로 수정.
+- **`app/manager/subscription/page.tsx`**: 토스 심사가 요구하는 상품 상세 disclosure(가격,
+  부가세 포함 여부, 자동갱신, 제공기간, 해지방법, 환불/약관/개인정보처리방침 링크)와
+  하단 사업자정보 블록 추가. 카드 등록창에서 돌아온 뒤 결과를 안내하는 처리도 추가.
+- **`lib/businessInfo.ts`(신규)**: 사업자정보(상호/사업자등록번호/주소 등) 단일 출처 —
+  기존 `/legal/business` 페이지에 있던 값을 그대로 재사용(새로 입력한 값 아님), 구독
+  페이지와 함께 참조.
+- **`/legal/refund`**: "6. 센터 플랫폼 구독료(월 이용료) 해지·환불" 절 신규 — 기존 1~5항은
+  일반 회원의 수강권 결제 기준이라 성격이 달라 별도 항목으로 추가.
+- **`fix_center_platform_subscription_review_price.sql`(신규, 적용 대기)**: "기본 플랜"
+  가격을 심사값(월 39,000원)으로 설정. 가격은 사업 결정 사항이라 이번 배치가 자동으로
+  실행하지 않음 — 사용자 승인 후 적용 필요.
+
+의도적으로 이번 배치에 넣지 않은 것: 매월 자동 청구 스케줄러(계약 승인 전 실사용자 대상
+자동 청구를 시작하는 건 시기상조로 판단, 상태 구조만 준비된 상태 유지), VAT 표기("부가세
+포함"으로 기본 표시해뒀으나 사업자 최종 확인 필요), 실제 production 화면 캡처(이 브랜치가
+아직 main에 병합/배포되지 않아 불가능).
+
+`npm run build` 통과 확인(TypeScript 타입체크 포함). 변경 파일:
+`app/api/billing/confirm/route.ts`, `lib/centerSubscription.ts`, `app/manager/subscription/page.tsx`,
+`lib/businessInfo.ts`, `app/legal/business/page.tsx`, `app/legal/refund/page.tsx`,
+`fix_center_platform_subscription_review_price.sql`, `.gitignore`(`review-artifacts/` 추가).
+토스 제출용 매니페스트/체크리스트/이메일 초안은 `review-artifacts/toss/`(gitignored)에 준비.
 
 ## 2026-09-10 — notifications 테이블 service_role GRANT 누락 수정 (푸시 발송 전체 500 버그)
 

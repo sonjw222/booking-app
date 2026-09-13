@@ -434,9 +434,9 @@ RPC(SQL) 수정이 필요해 Track B("SQL 실행 금지·새 RLS 수정 금지·
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P0 |
-| 현재 상태 | **DB 구조·RLS·조회 화면 완료 + SQL 적용 완료 + 실 화면 QA 확인. 실제 카드 등록/청구만 외부 승인(토스 자동결제 계약 심사) 대기. 트리거 security definer 누락으로 CI 연쇄 실패했던 건 `fix_center_subscription_trigger_security_definer.sql` 적용 완료(2026-08-31, `pg_get_functiondef` 재조회로 `SECURITY DEFINER`/`search_path='public'` 반영 확인)** |
-| 근거 파일 | `add_center_platform_subscription.sql`(적용 완료), `rollback_add_center_platform_subscription.sql`, `add_subscription_plan_limits.sql`(적용 완료 — 플랜 제한 컬럼 4종 + 강제 트리거 4종 + `is_default`/RPC), `rollback_add_subscription_plan_limits.sql`, `add_admin_center_subscription_actions.sql`(신규, 적용 완료 — 운영자용 플랜 변경/구독 취소 RPC), `rollback_add_admin_center_subscription_actions.sql`, `add_owner_center_subscription_actions.sql`(신규, 적용 완료 — 오너 셀프서비스 플랜 변경/구독 취소 RPC), `rollback_add_owner_center_subscription_actions.sql`, `add_admin_reactivate_center_subscription.sql`(신규, 적용 완료 — 취소된 구독 재개 RPC), `rollback_add_admin_reactivate_center_subscription.sql`, `fix_service_role_missing_grants_rooms.sql`(적용 완료), `lib/centerSubscription.ts`(운영자·오너용 플랜변경/취소/재개 함수 + `planId` 필드 추가), `lib/operator.ts`(구독 플랜 CRUD), `app/manager/subscription/page.tsx`(스튜디오 오너 전용으로 고정, 권한 위임 불가 — 플랜 변경 드롭다운 포함, 구독 취소 버튼은 `BILLING_ENABLED`로 게이트), `app/manager/page.tsx`(메뉴를 오너 여부로 직접 게이트), `app/admin/subscriptions/page.tsx`(플랜 변경 드롭다운 + 구독 취소/재개 버튼 추가 — 원래 조회 전용이었음), `app/admin/subscription-plans/page.tsx`, `app/admin/page.tsx`, `tests/integration/subscription-plan-limits.test.ts`(15개 시나리오) |
-| 완료 조건 | 토스페이먼츠 자동결제 계약 심사 통과 후: (1) `NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY`/`NEXT_PUBLIC_BILLING_ENABLED=true` 운영 환경변수 설정, (2) 카드 등록 성공 시 토스가 반환하는 authKey를 billing_key로 교환해 `center_subscriptions`에 저장하는 서버 전용 처리 구현(토스 시크릿 키 필요 — 이 앱은 API 서버가 없어 별도 구축 필요, 예: Supabase Edge Function), (3) 매월 자동 청구 실행(pg_cron 또는 외부 스케줄러가 토스 API 호출 → `center_subscription_charges`에 성공/실패 기록 → `center_subscriptions.status`/`next_billing_date` 갱신), (4) 결제 실패(연체) 시 정책(유예기간, 기능 제한 여부 등)을 사업 결정 후 반영, (5) 오너의 "구독 취소" 버튼이 `BILLING_ENABLED`로 막혀 있는 것을 해제(실제로 청구가 시작돼야 "취소"라는 상태 전환이 의미가 생기기 때문에 임시로 막아둠 — 2026-08-26). 플랜의 실제 사용량 제한(룸/스태프/회원/상품), 운영자·오너의 플랜 변경, 운영자의 구독 취소는 이미 구현·Playwright 실브라우저 검증 완료 |
+| 현재 상태 | **DB 구조·RLS·조회 화면 완료 + SQL 적용 완료 + 실 화면 QA 확인. [2026-09-11] `toss-billing-review` 브랜치에서 완료 조건 (2)를 구현 — `app/api/billing/confirm/route.ts`로 authKey→billingKey 교환 + 최초 결제 청구까지 서버에서 처리, successUrl/failUrl 버그 수정, 상품 disclosure/사업자정보/환불조항 추가. [2026-09-14] 같은 브랜치에서 완료 조건 (3)까지 구현 — `app/api/billing/charge-due/route.ts` + `add_center_subscription_recurring_billing.sql`(pg_cron 하루 1회)로 2회차 이후 자동 청구 실행. 두 결제 라우트 모두에 원자적 claim(`billing_locked_until` 리스 + 결정적 토스 orderId)을 넣어 중복 청구를 이중으로 방지. `fix_center_platform_subscription_review_price.sql`을 확장해 테스트성 junk 플랜("ㄹ", 222,222원)도 함께 비활성화하도록 보완. `origin/main`을 이 브랜치에 병합해 최신화(iOS release-blocker 브랜치와는 파일 겹침 없음, 충돌 없이 병합됨) — 병합 후 새로 들어온 디자인 시스템 회귀 테스트가 이 브랜치의 인라인 스타일(하드코딩 hex fallback)을 실패시켜 실제 토큰(`--card-bg`/`--text-dim`/`--line`)으로 교체해 통과시킴. `NEXT_PUBLIC_BILLING_ENABLED`가 꺼져 있는 한 전역 영향은 여전히 0이고, `billing_review_override`가 true인 센터 하나만 전체 플로우(카드 등록→최초 결제→자동 갱신→해지)를 실제로 밟을 수 있다. main 병합/배포는 아직 안 함(이 배치가 자동으로 하지 않음, 사용자 확인 대기) — 아직 실제 카드 등록/청구는 토스 자동결제 계약 심사 통과 대기.** |
+| 근거 파일 | `add_center_platform_subscription.sql`(적용 완료), `rollback_add_center_platform_subscription.sql`, `add_subscription_plan_limits.sql`(적용 완료 — 플랜 제한 컬럼 4종 + 강제 트리거 4종 + `is_default`/RPC), `rollback_add_subscription_plan_limits.sql`, `add_admin_center_subscription_actions.sql`(신규, 적용 완료 — 운영자용 플랜 변경/구독 취소 RPC), `rollback_add_admin_center_subscription_actions.sql`, `add_owner_center_subscription_actions.sql`(신규, 적용 완료 — 오너 셀프서비스 플랜 변경/구독 취소 RPC), `rollback_add_owner_center_subscription_actions.sql`, `add_admin_reactivate_center_subscription.sql`(신규, 적용 완료 — 취소된 구독 재개 RPC), `rollback_add_admin_reactivate_center_subscription.sql`, `fix_service_role_missing_grants_rooms.sql`(적용 완료), `lib/centerSubscription.ts`(운영자·오너용 플랜변경/취소/재개 함수 + `planId` 필드 추가; 2026-09-11: `confirmCenterBilling()` 추가, successUrl/failUrl 수정), `lib/operator.ts`(구독 플랜 CRUD), `app/manager/subscription/page.tsx`(스튜디오 오너 전용으로 고정, 권한 위임 불가 — 플랜 변경 드롭다운 포함, 구독 취소 버튼은 `billingEnabled`(전역 플래그 OR 센터별 override)로 게이트; 2026-09-11: 카드등록 후속 처리 + 상품 disclosure + 사업자정보 블록 추가), `app/manager/page.tsx`(메뉴를 오너 여부로 직접 게이트), `app/admin/subscriptions/page.tsx`(플랜 변경 드롭다운 + 구독 취소/재개 버튼 추가 — 원래 조회 전용이었음), `app/admin/subscription-plans/page.tsx`, `app/admin/page.tsx`, `tests/integration/subscription-plan-limits.test.ts`(15개 시나리오), `app/api/billing/confirm/route.ts`(신규, 2026-09-11 — 2026-09-14 원자적 claim 추가), `app/api/billing/charge-due/route.ts`(신규, 2026-09-14 — 2회차 이후 자동 청구), `add_center_subscription_recurring_billing.sql`(신규, 2026-09-14 — pg_cron 하루 1회 + `billing_locked_until`/`order_id` 컬럼, vault 시크릿 자리만 마련), `add_center_subscription_billing_reviewer_override.sql`(신규, 2026-09-11 — 심사용 센터 override, 적용 대기), `lib/businessInfo.ts`(신규, 2026-09-11 — 사업자정보 단일 출처), `fix_center_platform_subscription_review_price.sql`(신규, 2026-09-11, 2026-09-14 junk 플랜 비활성화 추가 — 심사용 가격 39,000원 설정, 적용 대기, 사용자 승인 필요) |
+| 완료 조건 | 토스페이먼츠 자동결제 계약 심사 통과 후: (1) `NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY`/`NEXT_PUBLIC_BILLING_ENABLED=true` 운영 환경변수 설정 — **아직 미실행(Vercel 실제 값은 이 세션에서 확인 불가)**, (2) **[2026-09-11 완료]** 카드 등록 성공 시 토스가 반환하는 authKey를 billing_key로 교환해 `center_subscriptions`에 저장 + 최초 결제까지 처리하는 서버 전용 처리 구현 — `app/api/billing/confirm/route.ts`, (3) **[2026-09-14 완료]** 매월 자동 청구 실행 — `app/api/billing/charge-due/route.ts` + pg_cron(하루 1회, `add_center_subscription_recurring_billing.sql`)이 담당, (4) **[2026-09-14 확정·구현 완료]** 결제 실패(연체) 정책 — 실패 시 `past_due` + 하루 1회 재시도, 최대 7회(=최대 유예기간 7일), 소진 시 `payment_failed`(신규 terminal 상태, `add_center_subscription_billing_retry_policy.sql`)로 자동중지해 청구 대상에서 제외. 카드 만료/분실/정지 등 토스가 명시적으로 재시도 무의미하다고 알려주는 오류(`NON_RETRYABLE_CARD_ERROR_CODES`, `app/api/billing/charge-due/route.ts`)는 즉시 `payment_failed`. `payment_failed`에서는 오너가 새 카드를 등록(`app/api/billing/confirm/route.ts`가 이 상태도 재등록 대상으로 받음)해야만 재개 가능 — billing_key 등 기존 카드 정보는 삭제하지 않음(감사 보존). **남은 것**: 이 정책이 production에 아직 미적용(SQL 미실행), `past_due`/`payment_failed` UI 안내는 추가했으나 실제 화면 QA는 아직 못함, (5) 오너의 "구독 취소" 버튼이 `BILLING_ENABLED`로 막혀 있는 것을 해제(실제로 청구가 시작돼야 "취소"라는 상태 전환이 의미가 생기기 때문에 임시로 막아둠 — 2026-08-26; 2026-09-11부터는 전역 플래그 OR 센터별 `billing_review_override`로 심사용 센터만 예외적으로 풀림). 플랜의 실제 사용량 제한(룸/스태프/회원/상품), 운영자·오너의 플랜 변경, 운영자의 구독 취소는 이미 구현·Playwright 실브라우저 검증 완료 |
 | P0-1과의 관계 | P0-1(회원 → 센터 결제)과 결제 주체·대상이 다른 별개 축. 둘 다 "사업자/계약 승인 대기"라는 같은 종류의 외부 차단 요인을 공유함 |
 | 완료된 것 | 3개 테이블(`subscription_plans`/`center_subscriptions`/`center_subscription_charges`) + RLS(소속 매니저 SELECT만, INSERT/UPDATE는 service_role 전용 — 일반 사용자는 RLS로 차단), 센터 생성 시 기본 구독 행 자동 생성 트리거, 매니저 설정 화면의 상태 조회 섹션, 운영자 전용 전체 현황 조회 화면(`/admin/subscriptions`). 카드 등록 버튼은 `NEXT_PUBLIC_BILLING_ENABLED`가 꺼져 있으면(기본값) 비활성화되고 "구독 결제 연동 준비 중이에요" 안내만 표시 — 실제 토스 SDK 호출 경로는 이 플래그로 완전히 막혀 있음 |
 | 의도적으로 이번 배치에 없는 것 | 가입/센터 등록 시점에 결제를 강제하는 흐름 없음(사용자 확인: 센터 승인 절차와 결제 등록 시점을 분리하는 게 자연스럽다고 판단) — 매니저가 설정 화면에 스스로 들어가야 보이는 방식으로만 구현. "결제 안 하면 어떻게 되는지"(유예기간, 기능 제한 등) 정책은 사업 결정 필요 사항으로 남겨둠 |
@@ -614,20 +614,27 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 
 **대표님이 진행해야 하는 것(코드로 대체 불가)**:
 - 통신판매업 신고(관할 성남시 분당구청 또는 정부24) — 신고 전에는 실제 유상 거래 시작 금지.
-  **현재 상태(2026-09-04): 신고서 제출 완료, 심사 진행 중(완료 아님).** 신고 완료 시
-  `app/legal/business/page.tsx`의 신고번호를 실제 값으로 교체
+  **[2026-09-11 완료] 신고번호 확정: 제2026-성남분당B-0866호.** `lib/businessInfo.ts`의
+  `mailOrderRegNo` 필드에 반영 완료(`app/legal/business/page.tsx` +
+  `app/manager/subscription/page.tsx` 둘 다 이 필드 참조 — 실제 값 반영으로 두 화면
+  모두 자동 갱신됨, `toss-billing-review` 브랜치)
 - **상호·주소 변경 정정신고 완료 확인 후 아래 두 가지 반영**(2026-09-06 사용자 결정):
-  1. `app/legal/business/page.tsx`의 "상호"(손장욱→모하빗)·"사업장 소재지" 필드를
-     정정된 실제 값으로 교체(2026-09-04 기준 상호는 세무서에 "모하빗"으로 정정 신청,
-     주소도 자택 노출 문제로 별도 정정 신청 — 둘 다 아직 처리 중. 서비스명(브랜드명)은
-     이미 전면 "모하빗"으로 교체했지만(2026-09-04 CHANGELOG 참고), 상호·주소는 사업자
-     등록증 실제 반영 확인 전까지 의도적으로 안 바꿔둠)
+  1. `lib/businessInfo.ts`(2026-09-11부터 단일 출처, 이전엔 `app/legal/business/page.tsx`에
+     하드코딩)의 "상호"(손장욱→모하빗)·"사업장 소재지" 필드를 정정된 실제 값으로 교체
+     (2026-09-04 기준 상호는 세무서에 "모하빗"으로 정정 신청, 주소도 자택 노출 문제로
+     별도 정정 신청 — 둘 다 아직 처리 중. 서비스명(브랜드명)은 이미 전면 "모하빗"으로
+     교체했지만(2026-09-04 CHANGELOG 참고), 상호·주소는 사업자등록증 실제 반영 확인
+     전까지 의도적으로 안 바꿔둠)
   2. **`app/page.tsx` 홈 화면 하단에 사업자정보 텍스트 블록을 다시 노출**(2026-09-04에
      자택 주소 노출 우려로 링크 4개만 남기고 축소했던 것 — 상호/주소 정정 완료로 그 우려가
      해소되면 원복). 토스페이먼츠 PG 심사 안내 메일(2026-09-06)에 "홈페이지 하단에
      사업자정보를 기재해주시고, 사업자등록증 상 정보와 완전히 일치하도록" 요구사항이
      명시돼 있어, 지금처럼 `/legal/business` 클릭 후에만 보이는 구조보다 홈 화면에 바로
-     보이는 게 심사에 더 안전함. 완료되면 알려주시면 바로 반영
+     보이는 게 심사에 더 안전함. 완료되면 알려주시면 바로 반영. **[2026-09-11]** 이번에
+     진행한 토스 빌링(자동결제) 계약심사 준비에서도 동일한 요구사항이 다시 나와
+     `/manager/subscription`(로그인 후 화면) 하단에는 사업자정보를 추가했지만, 이 홈
+     화면 건은 상호·주소 정정 완료 여부를 확인할 수 없어 **의도적으로 그대로 둠**(정정이
+     아직 안 끝났다면 지금 다시 노출하면 안 됨 — 정정 완료 여부부터 확인 후 진행)
 - ~~고객센터 이메일 주소 확보 후 같은 파일의 "이메일: 준비 중"을 실제 값으로 교체~~ —
   완료(2026-09-04, `sonjw222@naver.com` 반영). 개인 이메일이라 나중에 여유 되면 전용
   이메일로 교체 권장(법적 문제는 없음)
