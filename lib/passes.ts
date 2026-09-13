@@ -31,6 +31,8 @@ export type Product = {
   sizes: string[] | null;
   autoBookDays: number[] | null;   // 요일반 수강권: 자동예약 요일 (0=일~6=토)
   groupLabel: string | null;       // 수강권 표시용 대분류(자유 텍스트, add_product_group_label.sql)
+  maxQuantity: number | null;      // 판매 수량 제한(null=무제한). add_product_sale_limit.sql
+  soldCount: number;                // 지금까지 발급된(환불 제외) 개수 — maxQuantity와 비교해 "N개 남음" 표시
 };
 
 export type ScheduleRule = {
@@ -44,13 +46,28 @@ export type ScheduleRule = {
 export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "pass"): Promise<Product[]> {
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, price, pass_type, total_count, is_on_sale, product_kind, unlimited, unlimited_pass, expiry_mode, expiry_days, expiry_date, rolling_month_cutoff_day, rolling_month_allow_early_use, description, sizes, auto_book_days, group_label")
+    .select("id, name, price, pass_type, total_count, is_on_sale, product_kind, unlimited, unlimited_pass, expiry_mode, expiry_days, expiry_date, rolling_month_cutoff_day, rolling_month_allow_early_use, description, sizes, auto_book_days, group_label, max_quantity")
     .eq("center_id", centerId)
     .eq("is_active", true)
     .eq("product_kind", kind)
     .order("created_at", { ascending: false });
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((p: any) => ({
+  const rows = data ?? [];
+
+  // 판매 수량 제한이 걸린 상품만 판매 개수를 조회 (add_product_sale_limit.sql의 뷰,
+  // 개인정보 없는 집계라 별도 권한 체크 불필요 — class_reservation_counts와 동일 패턴)
+  const limitedIds = rows.filter((p: any) => p.max_quantity != null).map((p: any) => p.id);
+  let soldByProduct: Record<string, number> = {};
+  if (limitedIds.length > 0) {
+    const { data: counts, error: countErr } = await supabase
+      .from("product_sale_counts")
+      .select("product_id, sold_count")
+      .in("product_id", limitedIds);
+    if (countErr) throw new Error("판매 개수를 불러오지 못했어요: " + countErr.message);
+    for (const c of counts ?? []) soldByProduct[(c as any).product_id] = (c as any).sold_count;
+  }
+
+  return rows.map((p: any) => ({
     id: p.id, name: p.name, price: p.price,
     passType: p.pass_type, totalCount: p.total_count, isOnSale: p.is_on_sale,
     kind: p.product_kind, unlimited: p.unlimited,
@@ -59,6 +76,8 @@ export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "
     description: p.description ?? null, sizes: p.sizes ?? null,
     autoBookDays: p.auto_book_days ?? null,
     groupLabel: p.group_label ?? null,
+    maxQuantity: p.max_quantity ?? null,
+    soldCount: soldByProduct[p.id] ?? 0,
   }));
 }
 
@@ -70,7 +89,7 @@ export type ExpiryOption = {
 export async function createProduct(
   centerId: string, name: string, price: number, totalCount: number,
   kind: "pass" | "goods" = "pass", unlimited = false,
-  extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string }
+  extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string; maxQuantity?: number | null }
 ): Promise<void> {
   const { error } = await supabase.from("products").insert({
     center_id: centerId, name, price,
@@ -88,6 +107,7 @@ export async function createProduct(
     sizes: extra?.sizes && extra.sizes.length > 0 ? extra.sizes : null,
     auto_book_days: extra?.autoBookDays && extra.autoBookDays.length > 0 ? extra.autoBookDays : null,
     group_label: extra?.groupLabel?.trim() || null,
+    max_quantity: extra?.maxQuantity ?? null,
   });
   if (error) throw new Error("상품 생성에 실패했어요: " + error.message);
 }
@@ -95,7 +115,7 @@ export async function createProduct(
 // 상품 수정 (이름·가격·횟수·설명·사이즈)
 export async function updateProduct(
   id: string, name: string, price: number, totalCount: number,
-  unlimited: boolean, extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string }
+  unlimited: boolean, extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string; maxQuantity?: number | null }
 ): Promise<void> {
   const { error } = await supabase.from("products").update({
     name, price,
@@ -111,6 +131,7 @@ export async function updateProduct(
     sizes: extra?.sizes && extra.sizes.length > 0 ? extra.sizes : null,
     auto_book_days: extra?.autoBookDays && extra.autoBookDays.length > 0 ? extra.autoBookDays : null,
     group_label: extra?.groupLabel?.trim() || null,
+    max_quantity: extra?.maxQuantity ?? null,
   }).eq("id", id);
   if (error) throw new Error("상품 수정에 실패했어요: " + error.message);
 }

@@ -399,6 +399,10 @@ function ReservationCalendarContent() {
     const mine = activeProfileId ? cls.myByProfile[activeProfileId] : undefined;
     if (!mine) return;
     if (busyClassId) return; // 중복 클릭/중복 요청 방지
+    // allowCancel=false인 수업도 예약취소 마감(cancel_deadline_min)처럼 버튼을 미리
+    // 숨기지 않는다 — 예약 직후 10분 유예(cancel_reservation의 grace period)는 이
+    // 수업에서도 그대로 유지되므로(사용자 요청, 2026-09-13), 실제 허용 여부는 서버가
+    // 판단하고 결과 메시지("이 수업은 예약 취소가 불가능해요" 등)를 그대로 보여준다.
     // UX 감사(A-10) — 예약 취소만 브라우저 기본 confirm()을 써서 앱 밖으로 튕긴 느낌을 줬다.
     // 다른 파괴적 동작(프로필 삭제·주문 취소)과 동일한 인앱 확인 모달로 통일.
     if (!(await globalThis.appConfirm("이 수업 예약을 취소할까요?"))) return;
@@ -755,6 +759,12 @@ function ReservationCalendarContent() {
                 )}
               </div>
             </section>
+
+            {!confirmClass.allowCancel && (
+              <div className="perm-guide is-error" style={{ margin: "0 0 10px" }}>
+                <UiIcon name="alert" size={13} /> 해당 수업은 예약 취소가 불가능한 수업입니다. 예약하시겠습니까?
+              </div>
+            )}
 
             {/* 사용할 수강권 선택 (계정 내 공유) */}
             <section className="booking-confirm-section booking-confirm-pass">

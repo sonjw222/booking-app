@@ -72,7 +72,7 @@
 | `center_settings` | 구현됨 | 예약·취소·폐강·대기·당일 예약 등 운영 규칙 |
 | `center_holidays` | 구현됨 | 센터 휴무일 |
 | `rooms` | 구현됨 | 수업 공간 |
-| `classes` | 구현됨(그룹) / MVP(프라이빗) | 반복그룹, 정원, 마감, 상태. 프라이빗은 2026-08-03 QA 배치(CLASS-001)에서 관리자 UI 선택 + 정원 1명 강제(CHECK)까지만 구현 — 지정회원전용 접근 제한은 아직 미구현(제품 결정 필요) |
+| `classes` | 구현됨(그룹) / MVP(프라이빗) | 반복그룹, 정원, 마감, 상태. 프라이빗은 2026-08-03 QA 배치(CLASS-001)에서 관리자 UI 선택 + 정원 1명 강제(CHECK)까지만 구현 — 지정회원전용 접근 제한은 아직 미구현(제품 결정 필요). `allow_cancel`(기본 true, `add_class_cancel_lock.sql`) — false면 회원 셀프취소(`cancel_reservation()`) 차단, 매니저의 관리자 취소/노쇼 처리에는 영향 없음. 반복수업 생성(`create_recurring_classes_safe`)에는 아직 파라미터로 안 뚫려 있어 개별 인스턴스 수정(`update_class_safe`)으로만 켤 수 있음 |
 | `class_allowed_products` | 구현됨 | 수업별 예약 가능한 수강권 상품 |
 | `reservations` | 구현됨 | 예약·대기·취소·출석·노쇼 및 개인 메모. `reservation_type`(MEMBER/ADMIN_ASSIGNMENT/ADMIN_FREE), `reservation_source`(USER/ADMIN/SYSTEM), `admin_reason_code`/`admin_reason_detail`, `is_capacity_override`, `membership_consumed`, `cancelled_by`/`cancel_reason`/`cancelled_at`, `created_by_account_id`, `updated_at` 추가(`add_admin_assignment.sql`) |
 | `admin_action_logs` | 구현됨 | 관리자 직접배치/무료배치/취소 작업 로그 (append-only, 일반 매니저 UI에서 수정·삭제 불가). `add_admin_assignment.sql` |
@@ -81,7 +81,7 @@
 
 | 테이블 | 상태 | 현재 역할 |
 |---|---|---|
-| `products` | 구현됨 | 수강권·굿즈 상품 정의. `group_label`(2026-09-06, `add_product_group_label.sql`) — 수강권 표시용 대분류(자유 텍스트, nullable), 회원용 상품선택 화면에서 그룹 헤더로 묶어 보여줄 때만 사용. 생성 시에만 입력 가능(수정 UI 없음, [TODO P2-0a](./TODO.md)) |
+| `products` | 구현됨 | 수강권·굿즈 상품 정의. `group_label`(2026-09-06, `add_product_group_label.sql`) — 수강권 표시용 대분류(자유 텍스트, nullable), 회원용 상품선택 화면에서 그룹 헤더로 묶어 보여줄 때만 사용. 생성 시에만 입력 가능(수정 UI 없음, [TODO P2-0a](./TODO.md)). `max_quantity`(nullable int, `add_product_sale_limit.sql`) — 판매 수량 제한(특강 등), null이면 무제한. `trg_enforce_product_sale_limit` 트리거(11절)가 `memberships` INSERT 시점에 강제하고, `product_sale_counts` 뷰(4-7절)로 판매된 개수를 노출 |
 | `membership_schedule_rules` | 구현됨 | 수강권 상품의 요일·시간·수업명 사용 조건 |
 | `memberships` | 구현됨 | 프로필이 보유한 횟수권·기간권, 잔여횟수와 상태 |
 | `cart_items` | 구현됨 | 회원 장바구니 |
@@ -130,6 +130,7 @@ Realtime publication과 운영 RLS 적용 상태는 저장소에서 확인할 �
 | 객체 | 종류 | 상태 | 용도 |
 |---|---|---|---|
 | `class_reservation_counts` | view | 구현됨 | 수업별 활성 예약 수 집계 |
+| `product_sale_counts` | view | 구현됨 | 상품별 판매 개수(환불 제외) 집계 — `max_quantity` 설정된 상품의 "N개 남음" 표시용, `add_product_sale_limit.sql` |
 | `revenue_summary` | view | 확인 필요 | SQL 정의는 있으나 현재 `app/`·`lib/`의 직접 조회는 확인하지 못함 |
 | `avatars` | Storage bucket | 구현됨 / 운영 설정 필요 | 프로필·센터·후기 이미지 업로드 |
 | `business-licenses` | private Storage bucket | 구현됨 / 운영 설정 필요 | 매니저 가입 사업자등록증 |
@@ -282,9 +283,10 @@ manager_centers * ── 1 center_roles
 
 | RPC | 호출 코드 | 역할 | 주의 |
 |---|---|---|---|
+| `create_class_safe` / `update_class_safe` | `lib/classes.ts` | 단일 수업 생성/수정(own/other 세분권한 판정) | `p_allow_cancel`(기본 true) 파라미터 추가(`add_class_cancel_lock.sql`, 2026-09-13) — `classes.allow_cancel`에 반영. 반복수업 생성(`create_recurring_classes_safe`)에는 아직 없음 |
 | `reserve_class` | `lib/reservations.ts` | 일반 수업 예약 | 여러 SQL 파일에서 재정의됨 |
 | `reserve_class_with_goods` | `lib/reservations.ts` | 굿즈 차감을 포함한 예약 | 상품 잔여량과 예약을 함께 변경 |
-| `cancel_reservation` | `lib/reservations.ts` | 취소, 수강권 복구/차감, 대기 승격 | 여러 SQL 파일에서 재정의됨 |
+| `cancel_reservation` | `lib/reservations.ts` | 취소, 수강권 복구/차감, 대기 승격 | 여러 SQL 파일에서 재정의됨. `add_class_cancel_lock.sql`(신규)이 `classes.allow_cancel = false`면 회원 셀프취소를 거부하는 체크를 추가(그 외 로직은 변경 없음) |
 | `usable_memberships_for_classes` | `lib/reservations.ts` | 여러 수업의 사용 가능한 수강권 배치 조회 | 최종 본문은 `add_class_trainers_pass_selection_mode_draft_proposed.sql`(2026-08-11, 적용 완료)이 재정의, `fix_security_definer_hardening_search_path_execute_draft_proposed.sql`(2026-08-13, 적용 완료)이 본문 변경 없이 search_path 고정 + EXECUTE를 authenticated로 제한. `add_usable_memberships_issued_at_draft_proposed.sql`(2026-08-25, **미적용 — 사용자 확인 대기**)이 RETURNS TABLE에 `issued_at` 추가 예정(A-8) |
 | `reserve_with_membership` | `lib/reservations.ts` | 지정 수강권으로 예약 | 공유 방식 최종 적용 여부 확인 필요 |
 | `manager_book_member` | `lib/classes.ts` | 매니저 보강 예약 | 권한과 수강권 차감 확인 |
@@ -375,6 +377,7 @@ manager_centers * ── 1 center_roles
 | `notify_new_review` | `center_reviews` | 신규 후기 알림 생성 | SQL 정의 확인, 운영 적용 확인 필요 |
 | `notify_reservation_insert` | `reservations` | 신규 예약·대기 알림 생성 | SQL 정의 확인, 운영 적용 확인 필요. `add_admin_assignment.sql`이 함수 본문을 `reservation_type`에 따라 분기하도록 확장(트리거 자체는 재생성하지 않음) |
 | `notify_reservation_update` | `reservations` | 예약 취소·상태 변경 알림 생성 | 위와 동일 — 관리자 배치/취소는 회원에게만 내부 정보 없이 안내, 다른 매니저에게는 알리지 않음 |
+| `trg_enforce_product_sale_limit` | `memberships` (BEFORE INSERT OR UPDATE OF product_id, status) | `products.max_quantity`(판매 수량 제한) 초과 발급 차단 | `add_product_sale_limit.sql`(신규). `products` 행을 FOR UPDATE로 잠가 동시 구매 경쟁 상태 방지. 발급 경로(registerPayment/grantProductToMember 직접 insert, `fulfill_order()`)를 가리지 않고 동일 적용. UPDATE도 함께 걸어 기존 membership의 product_id를 매진 상품으로 재지정하거나 환불건을 다시 active로 되돌리는 우회도 차단 |
 
 자동예약은 trigger가 아니라 `fulfill_order()` 내부에서 `auto_book_membership()`을 호출하는 함수 흐름입니다. 정기 리마인드도 DB trigger가 아니라 외부 스케줄러가 호출해야 하는 함수입니다.
 
