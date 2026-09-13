@@ -4,16 +4,18 @@
   - 운영자: 전체 센터 구독 현황 조회
   - DB 쪽 스키마/RLS: add_center_platform_subscription.sql 참고
 
-  실제 카드 등록(토스 자동결제 SDK)은 NEXT_PUBLIC_BILLING_ENABLED가 정확히
-  "true"일 때만 동작한다. 토스 자동결제는 계약 심사가 끝나야 카드 등록(빌링키
-  발급)이 가능해서(심사 전 테스트 키로 시도하면 에러가 난다는 게 토스 공식
-  문서로 확인됨), 심사가 끝나기 전까지는 이 플래그를 켜지 않는다.
+  실제 카드 등록(토스 자동결제 SDK)은 BILLING_ENABLED(전역 플래그) 또는 센터별
+  billing_review_override 중 하나라도 켜져 있을 때만 동작한다(requestCenterBillingAuth의
+  enabled 파라미터). 토스 자동결제는 계약 심사가 끝나야 카드 등록(빌링키 발급)이
+  가능해서(심사 전 테스트 키로 시도하면 에러가 난다는 게 토스 공식 문서로 확인됨),
+  전역 플래그는 심사가 끝나기 전까지 켜지 않는다 — 심사 기간 중에는 심사용 센터
+  하나만 override로 예외 허용한다(add_center_subscription_billing_reviewer_override.sql).
 
-  ※ requestBillingAuth로 카드 등록 창을 여는 것까지만 이 함수가 담당한다.
-    등록이 실제로 성공했을 때 토스가 돌려주는 authKey를 billing_key로 교환해서
-    center_subscriptions에 저장하는 처리는 여기 없다 — 그 교환은 토스 시크릿
-    키가 필요한 서버 전용 작업인데, 이 앱은 별도 API 서버가 없어서 이번 배치
-    범위 밖으로 뒀다(토스 승인 후 별도 작업 필요, docs/TODO.md 참고).
+  [2026-09-11] authKey → billingKey 교환 + 최초 결제는 app/api/billing/confirm/route.ts가
+  서버에서 처리한다(시크릿 키 필요, 이 파일의 confirmCenterBilling()이 그 라우트를 호출).
+  매월 자동 청구(2회차 이후)는 app/api/billing/charge-due/route.ts + pg_cron(하루 1회,
+  add_center_subscription_recurring_billing.sql)이 담당 — 자세한 내용은 각 파일의 주석과
+  docs/TODO.md P0-8 참고.
 */
 
 import { supabase } from "./supabaseClient";

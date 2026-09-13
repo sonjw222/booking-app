@@ -73,22 +73,32 @@ export async function POST(request: Request) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // 서버에서 가격 조회 — 클라이언트 요청값을 절대 믿지 않는다.
+  // 원자적 선점(claim) — 성공/실패 콜백이 네트워크 재시도 등으로 거의 동시에 두 번 와도
+  // (예: 브라우저가 successUrl 요청을 중복 전송) 단일 UPDATE...WHERE...RETURNING이라
+  // 한쪽만 행을 받는다(app/api/billing/charge-due/route.ts와 동일한 리스 패턴 재사용 —
+  // billing_locked_until, add_center_subscription_recurring_billing.sql). 이 라우트는
+  // 처리가 몇 초 안에 끝나므로 짧은 리스로 충분.
+  const leaseUntil = new Date(Date.now() + 2 * 60_000).toISOString();
   const { data: sub, error: subErr } = await admin
     .from("center_subscriptions")
-    .select("id, status, subscription_plans(name, monthly_price)")
+    .update({ billing_locked_until: leaseUntil })
     .eq("center_id", centerId)
+    .eq("status", "pending_billing_setup")
+    .or(`billing_locked_until.is.null,billing_locked_until.lt.${new Date().toISOString()}`)
+    .select("id, status, subscription_plans(name, monthly_price)")
     .maybeSingle();
   if (subErr) return json({ error: `구독 정보 조회 실패: ${subErr.message}` }, 500);
-  if (!sub) return json({ error: "구독 정보를 찾을 수 없어요" }, 404);
-  if (sub.status !== "pending_billing_setup") {
-    // 이미 카드가 등록된 구독에 이 라우트를 재호출(새로고침/중복 클릭 등)하는 경우 —
-    // 매번 재청구하면 안 되므로 여기서 막는다. 카드 재등록은 별도 플로우(향후 작업).
-    return json({ error: "이미 카드가 등록된 구독이에요" }, 409);
+  if (!sub) {
+    // 이미 카드가 등록됐거나(status가 더 이상 pending_billing_setup이 아님), 다른 요청이
+    // 방금 먼저 선점한 경우 — 매번 재청구하면 안 되므로 여기서 막는다. 카드 재등록은
+    // 별도 플로우(향후 작업).
+    return json({ error: "이미 카드가 등록됐거나 처리 중인 구독이에요" }, 409);
   }
   const plan = sub.subscription_plans as unknown as { name: string; monthly_price: number } | null;
   const amount = plan?.monthly_price ?? 0;
   if (amount <= 0) {
+    // 여기서 실패해도 리스는 반드시 풀어준다 — 안 풀면 최대 2분간 재시도가 막힌다.
+    await admin.from("center_subscriptions").update({ billing_locked_until: null }).eq("id", sub.id);
     return json({ error: "플랜 가격이 아직 설정되지 않았어요 — 운영자에게 문의해주세요" }, 400);
   }
 
@@ -100,6 +110,11 @@ export async function POST(request: Request) {
   });
   const issueData = await issueRes.json();
   if (!issueRes.ok) {
+    await admin.from("center_subscriptions").update({ billing_locked_until: null }).eq("id", sub.id);
+    await admin.from("center_subscription_charges").insert({
+      subscription_id: sub.id, amount, status: "failed",
+      failure_reason: issueData?.message ?? `billingKey 발급 실패 HTTP ${issueRes.status}`,
+    });
     return json({ error: issueData?.message ?? "카드 등록에 실패했어요" }, issueRes.status);
   }
   const billingKey: string = issueData.billingKey;
@@ -131,10 +146,10 @@ export async function POST(request: Request) {
     // 라우트가 재시도된다).
     await admin.from("center_subscriptions").update({
       billing_key: billingKey, billing_customer_key: customerKey,
-      card_last4: cardLast4, card_company: cardCompany,
+      card_last4: cardLast4, card_company: cardCompany, billing_locked_until: null,
     }).eq("id", sub.id);
     await admin.from("center_subscription_charges").insert({
-      subscription_id: sub.id, amount, status: "failed",
+      subscription_id: sub.id, amount, order_id: orderId, status: "failed",
       failure_reason: chargeData?.message ?? `HTTP ${chargeRes.status}`,
     });
     return json({ error: `카드는 등록됐지만 첫 결제에 실패했어요: ${chargeData?.message ?? "알 수 없는 오류"}` }, 402);
@@ -143,10 +158,10 @@ export async function POST(request: Request) {
   await admin.from("center_subscriptions").update({
     billing_key: billingKey, billing_customer_key: customerKey,
     card_last4: cardLast4, card_company: cardCompany,
-    status: "active", next_billing_date: nextBillingDateStr,
+    status: "active", next_billing_date: nextBillingDateStr, billing_locked_until: null,
   }).eq("id", sub.id);
   await admin.from("center_subscription_charges").insert({
-    subscription_id: sub.id, amount, status: "succeeded",
+    subscription_id: sub.id, amount, order_id: orderId, status: "succeeded",
     toss_payment_key: chargeData?.paymentKey ?? null,
   });
 
