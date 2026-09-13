@@ -337,6 +337,7 @@ manager_centers * ── 1 center_roles
 | `my_managed_center_ids()` | 현재 계정이 관리하는 센터 집합 | 계정 조회 재귀 방지본 확인 |
 | `is_platform_admin()` | 플랫폼 운영자 여부 | self-service 승격 경로 금지. 2026-09-09부터 `my_account_id()` 경유로 재작성(계정 연동된 계정도 원 계정의 운영자 권한 유지) |
 | `has_permission(center_id, key)` | 센터 역할·개인 예외를 반영한 권한 판정 | 예약·매출·회원 RPC에서 폭넓게 사용 |
+| `can_write_class(class_id, center_id, format, start_time, action)` | `classes` INSERT/UPDATE/DELETE의 own/other·group/private·verb 판정 | `fix_classes_rls_permission_bypass.sql`(2026-09-13, 신규) — `create_class_safe`/`update_class_safe`/`delete_class_safe` RPC와 완전히 동일한 로직을 RLS에서도 재사용해, RPC를 거치지 않고 `classes`에 직접 REST 요청을 보내는 우회를 차단. 담당 강사가 아직 배정되지 않은 수업은 own으로 취급(RPC와 동일한 기존 동작) |
 | `create_account_link_code()` / `link_accounts_by_code(code)` | 계정 연동 코드 발급/소비 | 2026-09-09 신규. 후자는 `manager_centers`/`class_trainers`/`member_center_colors`/`inquiry_threads` unique 충돌을 규칙대로 처리하고, `staff_salaries` 충돌 시 명시적 에러(자동 병합 안 함) |
 
 ### 10-2. RLS 보호 원칙
@@ -360,8 +361,10 @@ manager_centers * ── 1 center_roles
 | `add_roster_rls.sql` | 예약자 명단 조회 |
 | `fix_member_status.sql` | 회원 만료·휴면 상태 변경 |
 | `fix_center_reviews.sql` | 기존 `reviews`와 센터 후기 테이블 충돌 |
+| `fix_classes_rls_permission_bypass.sql` | (2026-09-13, 적용 완료) `classes` INSERT/UPDATE/DELETE RLS가 세분권한 미확인 — schedule 권한 없는 스태프의 직접 REST 우회 차단 |
+| `fix_service_role_grants_full_audit.sql` | (2026-09-13, 적용 완료) `public` 스키마 테이블 47개·뷰 3개에 `service_role` GRANT 전무(4개는 일부만) — 전수 감사 후 일괄 추가 |
 
-이 파일들이 저장소에 있다는 사실은 확인되지만 운영 DB에 모두 적용되었는지는 **확인 필요**입니다.
+이 파일들이 저장소에 있다는 사실은 확인되지만 운영 DB에 모두 적용되었는지는 **확인 필요**입니다(단, 위 2개는 이번 세션에서 직접 적용·재검증까지 완료함).
 
 ## 11. 핵심 트리거
 
