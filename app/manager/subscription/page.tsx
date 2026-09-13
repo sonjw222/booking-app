@@ -204,20 +204,35 @@ function ManagerSubscriptionContent() {
           {subError && <div className="error-toast">{subError}<button onClick={() => setSubError(null)}>×</button></div>}
           {subscription && (
             <div className="set-row col" style={{ background: "var(--card-bg)", borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
-              <div className="set-label" style={{ fontWeight: 600, marginBottom: 6 }}>상품 안내 — {subscription.planName}</div>
-              <div style={{ fontSize: 13, lineHeight: 1.7, color: "var(--text-dim)" }}>
-                {subscription.monthlyPrice > 0 ? (
-                  <>월 {subscription.monthlyPrice.toLocaleString()}원 (부가세 포함) · 신용카드 자동(정기)결제<br /></>
-                ) : (
-                  <>가격 미정 — 운영자가 플랜을 확정하는 대로 표시돼요<br /></>
-                )}
-                1회 결제당 서비스 제공기간은 1개월이며, 별도로 해지하지 않으면 매월 자동으로
-                갱신·청구돼요. 결제일은 최초 카드 등록일과 같은 날짜(매월)이며, 등록된
-                신용카드로 자동 청구돼요.<br />
-                제공 기능: 센터 회원·수업·예약·수강권 관리 등 모하빗 매니저 기능 전체.<br />
-                해지는 이 화면의 &ldquo;구독 취소&rdquo; 버튼으로 언제든 가능하며, 해지해도
-                이미 결제된 기간 동안은 계속 이용할 수 있고 다음 결제일부터 청구가 중단돼요.
-                <br />
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, flexWrap: "wrap" }}>
+                <div className="set-label" style={{ fontWeight: 700, fontSize: 15 }}>{subscription.planName}</div>
+                <span style={{
+                  fontSize: 10.5, fontWeight: 700, color: "var(--accent)", background: "var(--accent-soft)",
+                  padding: "2px 7px", borderRadius: 999,
+                }}>센터 운영자용 · 플랫폼 구독</span>
+              </div>
+              {/* 일반 회원이 센터에서 구매하는 수강권·상품과는 완전히 다른 축(센터 운영자가
+                  모하빗 플랫폼에 내는 B2B 월 구독료)임을 토스 심사관이 한눈에 구분할 수
+                  있도록 배지로 명시(2026-09-14, 토스 카드사 심사 보완). */}
+              <ul style={{
+                margin: "10px 0 0", padding: 0, listStyle: "none",
+                fontSize: 13, lineHeight: 1.9, color: "var(--text-dim)",
+              }}>
+                <li>
+                  <strong style={{ color: "var(--ink)" }}>가격</strong>{" — "}
+                  {subscription.monthlyPrice > 0
+                    ? `월 ${subscription.monthlyPrice.toLocaleString()}원 (부가세 포함)`
+                    : "운영자가 가격을 확정하는 대로 이 화면에 바로 반영돼요"}
+                </li>
+                <li><strong style={{ color: "var(--ink)" }}>결제 방식</strong>{" — "}신용카드 자동(정기)결제, 1회 결제당 서비스 제공기간 1개월</li>
+                <li><strong style={{ color: "var(--ink)" }}>제공 기능</strong>{" — "}센터 회원 관리, 수업·예약 관리, 수강권 관리, 회원 대상 알림 발송 등 모하빗 매니저 기능 전체</li>
+                <li><strong style={{ color: "var(--ink)" }}>자동 갱신</strong>{" — "}별도로 해지하지 않으면 매월 자동으로 갱신·청구돼요. 결제일은 최초 카드 등록일과 같은 날짜(매월)예요</li>
+                <li>
+                  <strong style={{ color: "var(--ink)" }}>해지</strong>{" — "}이 화면의 &ldquo;구독 취소&rdquo; 버튼으로 언제든 가능하며, 해지해도
+                  이미 결제된 기간 동안은 계속 이용할 수 있고 다음 결제일부터 청구가 중단돼요
+                </li>
+              </ul>
+              <div style={{ fontSize: 12, lineHeight: 1.7, color: "var(--text-dim)", marginTop: 10 }}>
                 자세한 환불 기준은{" "}
                 <a href="/legal/refund" target="_blank" rel="noopener noreferrer">환불·취소 정책</a>,
                 이용 약관은{" "}
