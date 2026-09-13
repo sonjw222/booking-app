@@ -243,7 +243,7 @@ function ManagerSubscriptionContent() {
                 <div className="set-label">상태</div>
                 <span className={`hist-status s-${
                   subscription.status === "active" ? "attended"
-                  : subscription.status === "pending_billing_setup" ? "waitlisted"
+                  : subscription.status === "pending_billing_setup" || subscription.status === "past_due" ? "waitlisted"
                   : "cancelled"
                 }`}>{STATUS_LABEL[subscription.status]}</span>
               </div>
@@ -257,6 +257,34 @@ function ManagerSubscriptionContent() {
                 <div className="set-row">
                   <div className="set-label">등록된 카드</div>
                   <div className="set-inline">{subscription.cardCompany ?? ""} {subscription.cardLast4}****</div>
+                </div>
+              )}
+              {subscription.status === "past_due" && (
+                <div className="set-row col">
+                  <div className="set-soon-note">
+                    최근 정기결제가 실패했어요. 등록된 카드로 매일 자동으로 다시
+                    시도하고 있고, 그동안 서비스는 계속 이용할 수 있어요. 카드 문제로
+                    보이면 아래에서 새 카드로 다시 등록해주세요.
+                  </div>
+                  {billingEnabled ? (
+                    <button className="ghost-btn" disabled={subBusy} onClick={handleCardRegister}>
+                      {subBusy ? "처리 중..." : "새 카드로 다시 등록"}
+                    </button>
+                  ) : null}
+                </div>
+              )}
+              {subscription.status === "payment_failed" && (
+                <div className="set-row col">
+                  <div className="set-soon-note" style={{ color: "var(--danger)" }}>
+                    정기결제가 중지되었습니다. 결제수단을 다시 등록해주세요.
+                  </div>
+                  {billingEnabled ? (
+                    <button className="primary-btn" disabled={subBusy} onClick={handleCardRegister}>
+                      {subBusy ? "처리 중..." : "새 카드 등록하고 재개"}
+                    </button>
+                  ) : (
+                    <div className="set-soon-note">자동결제 계약 심사가 끝나면 재등록할 수 있어요.</div>
+                  )}
                 </div>
               )}
               {subscription.status === "pending_billing_setup" && (

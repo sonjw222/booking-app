@@ -22,8 +22,9 @@ import { fetchSubscriptionPlans, type SubscriptionPlan } from "../../../lib/oper
 const STATUS_BADGE: Record<SubscriptionStatus, string> = {
   pending_billing_setup: "s-waitlisted",
   active: "s-attended",
-  past_due: "s-cancelled",
+  past_due: "s-waitlisted", // 아직 자동 재시도 중(최대 7일) — 완전히 끊긴 상태와 구분
   canceled: "s-cancelled",
+  payment_failed: "s-cancelled", // 자동 재시도 소진, terminal
 };
 
 export default function AdminSubscriptionsPage() {
