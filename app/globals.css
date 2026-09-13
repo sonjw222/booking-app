@@ -1397,17 +1397,23 @@ a { color: inherit; text-decoration: none; }
 
 .settings-wrap { padding-bottom: 20px; }
 
-/* /manager/subscription(토스 빌링 심사 화면)의 "플랜 변경" select — 유일하게 이 레이아웃
-   (.settings-wrap)에서 select를 쓰는 곳이라 여기 스코프로 고정. 기본 .input-field는
-   select에 appearance:none을 주지 않아서 브라우저가 select 박스 자체(닫힌 상태 배경)를
-   네이티브 위젯으로 그리는데, 그 네이티브 배경은 OS 설정이 아니라 우리 앱의 data-theme
-   토글과 무관하게 대체로 밝은 색 고정이다 — 반면 글자색은 .input-field의 color:var(--ink)가
-   정상 적용돼 다크 모드에서 거의 흰색이 되면서 "밝은 배경 + 거의 흰 글자"로 깨졌다
-   (production 실측, 2026-09-14). .manager-v3-content select.input-field가 이미 쓰는
-   "appearance:none + 커스텀 화살표" 패턴을 재사용하되, 그 규칙은 배경을 var(--text-inverse)
-   (항상 흰색 고정 토큰)로 둬서 다크 모드에서 똑같은 문제가 재현될 수 있어 그대로 가져오지
-   않고 배경을 이미 다크 모드 대응이 돼 있는 var(--card-bg)로 바꿔 쓴다. */
-.settings-wrap select.input-field {
+/* /manager/subscription(토스 빌링 심사 화면)의 "플랜 변경" select.
+   [2026-09-14 1차 수정] .settings-wrap select.input-field로 appearance:none +
+   var(--card-bg) 배경을 줬으나, 실제 production DevTools로 확인한 결과 여전히 다크
+   모드에서 흰 배경으로 나오는 회귀가 있었다.
+   [2026-09-14 근본 원인 확정] app/manager/layout.tsx가 /manager/* 전체를
+   <main className="manager-v3-content">로 감싸고 있어서(이 페이지의 page.tsx만
+   보고 그 상위 layout.tsx를 확인 안 해 처음에 놓쳤음), 실제 DOM은
+   .manager-v3-content > ... > .settings-wrap > select.input-field 구조다.
+   ".manager-v3-content select.input-field"(2클래스+1태그, specificity 0-2-1)와
+   ".settings-wrap select.input-field"(마찬가지로 0-2-1)가 정확히 같은 specificity라
+   파일 안에서 더 나중에 나오는 .manager-v3-content 쪽 규칙이 이겨서
+   background-color: var(--text-inverse)(테마 무관 항상 흰색 고정 토큰)가
+   var(--card-bg)를 덮어썼다 — 라이트 모드에서는 흰 배경이 우연히 맞는 값이라
+   증상이 안 보이고 다크 모드에서만 깨졌던 이유. 조상 클래스를 하나 더 얹어
+   specificity를 0-3-1로 올려서 소스 순서와 무관하게 확실히 이기게 한다
+   (!important 없이 해결). */
+.manager-v3-content .settings-wrap select.input-field {
   appearance: none;
   -webkit-appearance: none;
   background-color: var(--card-bg);
@@ -1424,9 +1430,9 @@ a { color: inherit; text-decoration: none; }
      올바른 명/암 팔레트로 그리게 하는 신뢰할 수 있는 방법이라 테마에 맞춰 같이 선언한다. */
   color-scheme: light;
 }
-[data-theme="charcoal"] .settings-wrap select.input-field { color-scheme: dark; }
-.settings-wrap select.input-field:disabled { opacity: .6; cursor: default; }
-.settings-wrap select.input-field option { background-color: var(--card-bg); color: var(--ink); }
+[data-theme="charcoal"] .manager-v3-content .settings-wrap select.input-field { color-scheme: dark; }
+.manager-v3-content .settings-wrap select.input-field:disabled { opacity: .6; cursor: default; }
+.manager-v3-content .settings-wrap select.input-field option { background-color: var(--card-bg); color: var(--ink); }
 
 /* .ghost-btn(100곳 이상에서 재사용되는 공용 버튼)에 disabled 스타일이 아예 없어서
    disabled여도 활성 버튼과 똑같이 보이는 문제 — 다른 화면까지 한번에 바꾸는 대신
