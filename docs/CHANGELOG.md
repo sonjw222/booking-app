@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## 2026-09-14 — `/manager/subscription` 다크 모드 select 대비 — 진짜 원인(specificity 동점) 수정
+
+직전 배치(`.settings-wrap select.input-field` 추가)를 실제 production에 배포했는데도
+다크 모드에서 여전히 흰 배경으로 보인다는 재신고를 받고, 사용자가 실제 production
+DevTools로 winning computed style을 직접 확인해 진짜 원인을 특정함: `.manager-v3-content
+select.input-field { background-color: var(--text-inverse) }`(항상 흰색 고정 토큰)가
+`.settings-wrap select.input-field { background-color: var(--card-bg) }`를 이기고 있었음.
+
+- **놓쳤던 것**: `/manager/subscription/page.tsx`만 읽고 그 상위 `app/manager/layout.tsx`를
+  확인하지 않아서, 실제 DOM이 `<main className="manager-v3-content">`로 페이지 전체를
+  감싸고 있다는 걸 몰랐다. 그래서 직전 배치의 검증(정적 HTML 하네스로 getComputedStyle
+  확인)도 이 조상 클래스를 빼먹은 채 만들어져 "정상"으로 잘못 판정됐었음 — CSS 파일에
+  들어갔는지, 심지어 격리된 하네스에서 통과하는지도 실제 DOM 구조가 다르면 검증이 아니다.
+- **진짜 원인**: `.manager-v3-content select.input-field`와 `.settings-wrap select.input-field`
+  둘 다 2클래스+1태그로 specificity가 정확히 동점(0-2-1) — 동점이면 파일에서 나중에 나오는
+  규칙이 이기는데, `.manager-v3-content` 쪽이 더 뒤에 있어서 그쪽이 이겼다. 라이트 모드는
+  `--text-inverse`가 우연히 흰색이라 증상이 안 보였고 다크 모드에서만 깨졌던 이유.
+- **수정**: 조상 클래스를 하나 더 명시한 `.manager-v3-content .settings-wrap
+  select.input-field`(3클래스+1태그, specificity 0-3-1)로 소스 순서와 무관하게 확실히
+  이기도록 함. `!important` 없이 기존 디자인 토큰(`--card-bg`/`--ink`/`--line`)만 재사용.
+- **검증**: 실제 DOM과 동일한 조상 구조(`.manager-v3-content > ... > .settings-wrap >
+  select.input-field`)로 정적 하네스를 다시 만들어 `getComputedStyle()`로 재확인 —
+  라이트 `rgb(255,255,255)`/`rgb(23,23,25)`, 다크 `rgb(32,33,39)`/`rgb(245,245,247)`
+  둘 다 의도한 토큰값과 정확히 일치.
+- **영향 범위**: `.manager-v3-content select.input-field`를 쓰는 다른 화면(다른 select들)은
+  이 새 규칙이 `.settings-wrap`도 함께 요구해 전혀 매칭되지 않음 — 이 페이지의 select
+  하나에만 영향.
+
+`npm run build`/유닛테스트 288개 통과(회귀 없음). 변경 파일: `app/globals.css`.
+
 ## 2026-09-14 — `/manager/subscription` 다크 모드 select 대비 문제 수정
 
 토스 빌링 심사 화면(`/manager/subscription`)의 "플랜 변경" select가 production 다크
