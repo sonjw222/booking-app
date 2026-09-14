@@ -24,6 +24,7 @@ import { validateCenterRegistrationInput, registerCenterForAccount } from "../..
 import { setBootstrapSuppressed, stashSignupMarketingConsent } from "../../lib/authAccount";
 import { startNaverLogin } from "../../lib/naverAuth";
 import { startKakaoLogin } from "../../lib/kakaoAuth";
+import { signInWithAppleNative, AppleSignInCancelledError } from "../../lib/appleAuth";
 import { stashPostLoginNext } from "../../lib/postLoginReturn";
 import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
 
@@ -345,13 +346,30 @@ export default function LoginPage() {
       return;
     }
 
+    // 애플은 구글/카카오/네이버와 다르게 브라우저 리다이렉트가 아니라 네이티브 모달
+    // (ASAuthorizationController)로 같은 화면 안에서 끝난다 — 실제 콘솔 설정(Supabase
+    // Client IDs = 앱 Bundle ID, Secret Key 비어 있음)이 웹 OAuth가 아니라 네이티브 플로우
+    // 설정과 일치해서 아래 공용 signInWithOAuth 경로를 쓰면 애초에 실패한다
+    // (lib/appleAuth.ts 주석, AUTH_SETUP.md 3-2절 참고).
+    if (provider === "apple") {
+      try {
+        await signInWithAppleNative();
+        window.location.href = "/";
+      } catch (e: any) {
+        setSocialLoading(null);
+        if (e instanceof AppleSignInCancelledError) return; // 사용자가 직접 취소 — 에러로 안 보여줌
+        setMessage({ type: "error", text: e.message ?? "애플 로그인에 실패했어요" });
+      }
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: provider as any,
       options: { redirectTo: `${window.location.origin}/` },
     });
     if (error) {
       setSocialLoading(null);
-      const label = provider === "kakao" ? "카카오" : provider === "apple" ? "애플" : provider === "google" ? "구글" : "네이버";
+      const label = provider === "kakao" ? "카카오" : provider === "google" ? "구글" : "네이버";
       setMessage({ type: "error", text: `${label} 로그인 설정이 아직 안 되어 있어요 (AUTH_SETUP.md 참고)` });
     }
     // 에러가 없으면 이 시점부터 브라우저가 provider 페이지로 이동하므로 loading을 되돌리지 않는다.

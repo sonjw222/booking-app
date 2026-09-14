@@ -29,7 +29,8 @@ export type HistoryItem = {
   id: string;
   title: string;
   centerName: string;
-  when: string; // "2026-07-14 20:00"
+  when: string; // "2026-07-14 20:00" (KST 표시용, 화면 렌더링 전용)
+  startAt: string | null; // classes.start_time 원본 ISO(timestamptz) — 미래/과거 판정은 반드시 이 값으로 한다(when은 KST 포맷 문자열이라 비교에 부적합)
   status: "confirmed" | "waitlisted" | "cancelled" | "attended" | "no_show";
   profileName: string; // 어느 프로필 것인지 (대표면 "")
   // "MEMBER" | "ADMIN_ASSIGNMENT" | "ADMIN_FREE" — 회원 화면에는 lib/reservationTypes.ts의
@@ -203,6 +204,7 @@ export async function fetchMyPage() {
     title: r.classes?.title ?? "",
     centerName: r.classes?.centers?.name ?? "",
     when: r.classes?.start_time ? fmtDateTime(r.classes.start_time) : "",
+    startAt: r.classes?.start_time ?? null,
     status: r.status,
     profileName: profileLabel[r.profile_id] ?? "",
     reservationType: r.reservation_type ?? "MEMBER",

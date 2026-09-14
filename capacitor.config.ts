@@ -16,10 +16,24 @@ const config: CapacitorConfig = {
   webDir: "public", // server.url 모드에선 실제로 안 쓰이지만 Capacitor 스키마상 필수 필드
   // 실기기 진단(2026-09-11) — 이 값이 없으면 네이티브 WKWebView/UIScrollView 자체의
   // 배경색이 iOS 기본값(검정에 가까움)으로 남아, 위/아래로 당겨 튕기는(rubber-band
-  // overscroll) 구간에서 앱 배경(var(--bg), #0A2545 계열)이 아니라 그 네이티브 기본색이
-  // 드러난다 — html/body에 CSS background를 줘도(app/globals.css) 이 레이어는 CSS가
-  // 그리는 문서 영역 밖이라 안 먹는다. 앱 전체 배경색/스플래시와 동일한 값으로 맞춘다.
-  backgroundColor: "#0A2545",
+  // overscroll) 구간에서 이 레이어가 그대로 드러난다 — html/body에 CSS background를 줘도
+  // (app/globals.css) 이 레이어는 CSS가 그리는 문서 영역 밖이라 안 먹는다.
+  //
+  // 릴리스 폴리시 배치(2026-09-14) — 위 주석이 "앱 전체 배경색이 #0A2545 계열"이라고
+  // 적고 그 값을 그대로 썼지만 실제로는 틀린 전제였다: app/globals.css의 --bg 토큰은
+  // 라이트(기본)/버건디 테마 모두 #FBFBFA(거의 흰색)이고, #0A2545(네이비)는
+  // LaunchScreen.storyboard의 스플래시 배경 및 app/layout.tsx의 viewport.themeColor일 뿐,
+  // 실제 페이지 배경이었던 적이 없다. 그 결과 오버스크롤 시 네이티브 레이어(네이비)와
+  // 실제 페이지 배경(거의 흰색)이 만나는 경계에 사용자가 보고한 "분리된 네이비 띠"가
+  // 보였다 — 이 값을 실제 기본 페이지 배경(--bg 라이트값)과 맞춘다.
+  // 릴리스 폴리시 배치(2026-09-14, 2차) — 위에서 남긴 "차콜(다크) 테마는 여전히 어긋난다"는
+  // 한계를 마저 해결했다: 이 값은 여전히 정적이라 그 자체로는 다크 테마까지 못 맞추지만,
+  // ios/App/App/SceneDelegate.swift가 브리지 초기화 직후 이 값을 iOS 시스템 라이트/다크
+  // 설정을 자동으로 따라가는 동적 UIColor로 즉시 덮어쓰고, 앱 안에서 사용자가 명시적으로
+  // 고른 테마(시스템 설정과 다를 수 있음)는 WebViewThemePlugin.swift를 통해 JS가 마저
+  // 알려준다(app/layout.tsx 인라인 스크립트 + app/settings/theme/page.tsx의 applyTheme()).
+  // 이 config 값 자체는 그 덮어쓰기 전 아주 짧은 순간의 안전한 기본값 역할만 한다.
+  backgroundColor: "#FBFBFA",
   server: {
     // 커스텀 도메인 연결 완료(2026-09-04, 실제 배포 응답 확인함)
     url: "https://mwhabit.com",

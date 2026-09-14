@@ -1,5 +1,99 @@
 # CHANGELOG
 
+## 2026-09-14 — 릴리스 폴리시 배치 2차: Apple 네이티브 로그인/다크 오버스크롤/탭 클라이언트 전환
+
+**Apple 로그인 아키텍처를 웹 OAuth에서 네이티브로 전환**: 실제 콘솔 설정(Supabase Apple
+Provider: Client IDs = 앱 Bundle ID, Secret Key 비어 있음)을 재확인한 결과 웹 OAuth가
+아니라 네이티브 플로우 설정과 일치 — 기존 `signInWithOAuth({provider:"apple"})`로는 토큰
+교환이 실패했을 것. `ASAuthorizationAppleIDProvider`(신규 로컬 커스텀 Capacitor 플러그인
+`ios/App/App/AppleSignInPlugin.swift`, `FcmTokenPlugin.swift`와 동일 패턴 — 신규 npm
+의존성 없음) → `supabase.auth.signInWithIdToken()`(`lib/appleAuth.ts`)로 교체. Services
+ID와 6개월마다 필요했던 OAuth 시크릿 재발급이 아예 필요 없어짐. nonce는 JS가 원본을 만들고
+SHA-256 해시만 Apple에 보내는 공식 요구사항을 따름(`sha256Hex`, NIST 테스트 벡터로 단위
+테스트). 애플이 최초 인증에서만 주는 이름은 세션스토리지 스태시로 타이밍 레이스 없이 처리
+(`stashAppleFullName`/`consumeAppleFullName`, 기존 마케팅 동의 스태시와 동일 패턴).
+
+**iOS 오버스크롤 다크모드 대응**: 지난 배치에서 라이트 테마 기준으로만 고쳤던 WKWebView
+배경색을 다크(차콜) 테마까지 커버 — `ios/App/App/SceneDelegate.swift`가 기동 시 iOS
+시스템 라이트/다크 설정을 자동으로 따라가는 `UIColor(dynamicProvider:)`를 baseline으로
+깔고, 신규 로컬 플러그인(`WebViewThemePlugin.swift`)을 통해 앱이 명시적으로 고른 테마
+(시스템 설정과 다를 수 있음)까지 JS가 알려준다(`app/layout.tsx` 인라인 스크립트 = 콜드
+스타트, `app/settings/theme/page.tsx`의 `applyTheme()` = 런타임 전환).
+
+**하단 탭 네비게이션을 client-side routing으로 전환**: 코드 조사 결과 이 앱에 client-side
+라우팅이 전혀 없다는 이전 결론은 이 nav 한정으로는 낡은 전제였음이 드러남 —
+`app/reservation/page.tsx`, `app/components/BackButton.tsx` 등에서는 이미 Next.js
+`router.push()`/`router.back()`으로 클라이언트 전환이 문제 없이 쓰이고 있었다(실사용
+검증됨). 회원 5탭(`BottomNav.tsx`)과 관리자 4탭(`ManagerNav.tsx`)만 `<a href>`에서
+`<Link>`로 전환 — 둘 다 각자의 공용 레이아웃(`app/layout.tsx`/`app/manager/layout.tsx`)
+아래에 있어 레이아웃은 유지한 채 탭 콘텐츠만 바뀌는 게 안전함을 확인. 이 전환으로
+CapacitorBootstrap/SessionWatcher/테마 스크립트가 탭마다 다시 실행되던 낭비가 없어짐.
+관리자 "회원" 탭 권한 재확인은 `[pathname]` 의존성으로 유지(마운트 유지해도 재확인
+빈도는 기존과 동일 — 실제 접근 통제는 RLS가 최종 담당하므로 보안 경계 변화 없음).
+이 nav 밖의 다른 화면 내부 링크는 이번 범위 밖(`docs/TODO.md` P3-12, 전면 전환은 별도 배치).
+
+**내 예약 정책 보완**: 미래 시간이지만 이미 취소된 예약이 "예정된 예약"에도 "지난 예약"에도
+안 뜨고 "전체"에만 보이던 것을 사용자 피드백으로 수정 — 취소 상태는 시각과 무관하게 항상
+"지난 예약"으로 분류(`classifyReservationDisplay`).
+
+**홈 화면 순차 fetch 병렬화**: `fetchMyUpcomingClasses()`가 다른 4개 fetch(Promise.all)가
+끝난 뒤에야 시작돼 불필요하게 순차적이었던 것을 동시 시작으로 수정.
+
+**검증**: `npm run build`/`npx tsc --noEmit`(신규 에러 0건) 통과. 단위테스트 317개 통과
+(신규 28개 — Apple SHA-256 해시 테스트 벡터, 미래 취소 건 분류 등). iOS
+`xcodebuild`(시뮬레이터 + 제네릭 Release, 신규 Swift 플러그인 2개 포함) 통과 — 신규
+파일을 `project.pbxproj`에 직접 등록(PBXBuildFile/PBXFileReference/그룹/Sources 빌드
+페이즈 4곳), `GoogleService-Info.plist`는 로컬 빌드 검증용 임시 파일만 만들었다가 직후
+삭제(커밋 없음). Android `./gradlew assembleDebug` 통과(iOS 전용 변경이라 영향 없음
+확인). 통합테스트는 `TEST_USER_*` 자격증명이 이 환경에 없어 미실행 — 사용자 환경에서
+실행 필요.
+
+변경 파일: `lib/appleAuth.ts`(신규), `ios/App/App/AppleSignInPlugin.swift`(신규),
+`ios/App/App/WebViewThemePlugin.swift`(신규), `lib/nativeTheme.ts`(신규),
+`ios/App/App/SceneDelegate.swift`, `ios/App/App.xcodeproj/project.pbxproj`,
+`app/login/page.tsx`, `lib/authAccount.ts`, `app/layout.tsx`,
+`app/settings/theme/page.tsx`, `capacitor.config.ts`, `app/components/BottomNav.tsx`,
+`app/components/ManagerNav.tsx`, `app/my-reservations/page.tsx`, `app/page.tsx`,
+`AUTH_SETUP.md`, `docs/TODO.md`. 새 SQL 마이그레이션 없음.
+
+## 2026-09-14 — 릴리스 폴리시 배치 Workstream A: 오버스크롤/내 예약 정책/네비 깜빡임
+
+**iOS 오버스크롤 네이비 띠**: `capacitor.config.ts`의 WKWebView `backgroundColor`가 실제
+페이지 배경(`--bg`, 라이트/버건디 `#FBFBFA`)이 아니라 스플래시 색(`#0A2545` 네이비)으로
+잘못 맞춰져 있던 것이 원인 — 당시 주석이 "앱 배경이 네이비"라고 잘못 적어놓은 전제였다.
+라이트/버건디 테마 기준으로 실제 배경과 일치시킴(차콜/다크 테마는 여전히 약간 어긋남 —
+네이티브 코드 없이는 완전히 못 고침, 알려진 한계로 기록). 같은 레이어가 탭 전환 중
+페인트 전 잠깐 드러나는 것이라 일반 화면 전환 flash도 함께 줄어듦.
+
+**내 예약("예정된 예약"/"지난 예약"/"전체") 정책 전면 개정**: 기존엔 `status`만 보고
+필터링해 지난 수업인데도 상태가 아직 안 바뀌면(출석 처리 전 등) 계속 "예약 확정"/취소
+버튼이 보이던 버그. `HistoryItem`에 `startAt`(원본 timestamptz ISO) 필드를 추가하고
+(`when`은 KST 표시용 포맷 문자열이라 비교 부적합), 시작 시각 기준(`startAt<=now`)으로
+과거/미래를 판정하도록 재작성 — 지난 예약은 상태 무관 무조건 이동, 최종 상태(출석/노쇼/
+취소) 없으면 새 상태를 만들지 않고 배지 없이 표시. 정렬(예정 오름차순/지난 내림차순)도
+이 기준으로 재작성.
+
+**하단 네비 "3탭→5탭"/관리자 네비 "3탭→4탭" 깜빡임**: 이 앱은 클라이언트 라우팅이 없어
+탭 전환마다 전체 페이지가 서버에서 다시 렌더링되는데, 기존 캐시가 localStorage 기반이라
+서버가 못 읽어 서버 렌더링(최초 페인트)은 항상 "판정 전" 상태로 시작한 뒤 클라이언트
+하이드레이션 후에야 보정돼 깜빡였다("layout에 한 번만 마운트"라는 기존 주석은 이
+아키텍처에서 성립하지 않음 — 탭 전환이 곧 문서 재로드라 어차피 매번 다시 마운트됨).
+캐시를 쿠키로 옮기고 `app/layout.tsx`/`app/manager/layout.tsx`(서버 컴포넌트)가
+`next/headers`의 `cookies()`로 읽어 최초 렌더링 값으로 내려주도록 변경 — 서버 렌더링
+시점부터 이미 맞는 탭 구성으로 그려진다.
+
+**검증**: `npm run build`/`npx tsc --noEmit`(신규 에러 0건, 기존 baseline과 동일) 통과.
+단위테스트 311개 통과(신규 23개 포함 — `classifyReservationDisplay` 경계값 9개,
+`isSocialProvider` 6개, 쿠키 파서 8개). iOS `xcodebuild`(시뮬레이터 + 제네릭 Release)
+통과 — `GoogleService-Info.plist`는 로컬 빌드 검증용 임시 파일만 만들었다가 검증 직후
+즉시 삭제(커밋 없음). Android `./gradlew assembleDebug` 통과(플레이스홀더 불필요).
+
+변경 파일: `capacitor.config.ts`, `lib/mypage.ts`, `app/my-reservations/page.tsx`,
+`lib/navState.ts`, `lib/roles.ts`, `app/layout.tsx`, `app/manager/layout.tsx`,
+`app/components/BottomNav.tsx`, `app/components/GlobalBottomNav.tsx`,
+`app/components/ManagerNav.tsx`, `lib/authAccount.ts`(`isSocialProvider` export),
+`AUTH_SETUP.md`, `docs/TODO.md`(P2-1). 새 SQL 마이그레이션 없음.
+
 ## 2026-09-14 — iOS 실기기 릴리즈 블로커 3건 최신 main에 재반영 (PR #144 rebase)
 
 PR #144(`fix/ios-release-blockers-splash-oauth-safearea`, 2026-09-13 작성)가 그 사이

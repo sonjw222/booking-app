@@ -137,6 +137,11 @@ export default function Home() {
       } catch { /* 위치 거부/실패 → 최신순 */ }
 
       try {
+        // 릴리스 폴리시 배치(2026-09-14, 3차) — fetchMyUpcomingClasses()가 원래 위 4개
+        // Promise.all이 끝난 "뒤"에 따로 시작돼 불필요하게 순차적이었다(서로 결과를
+        // 참조하지 않는데도 네트워크 왕복 하나가 그냥 더 얹힌 셈) — 동시에 시작해두고
+        // 마지막에만 기다린다. 비로그인 실패는 기존처럼 여기서 조용히 삼킨다.
+        const upcomingPromise = fetchMyUpcomingClasses().catch(() => null);
         const [cs, cl, bn, ct] = await Promise.all([
           fetchHomeCenters(lat, lng), fetchHomeClasses(), fetchBanners(true), fetchCategories(),
         ]);
@@ -144,7 +149,8 @@ export default function Home() {
         setClasses(cl);
         setBanners(bn);
         setCatList(ct);
-        try { setMyUpcoming(await fetchMyUpcomingClasses()); } catch { /* 비로그인 */ }
+        const upcoming = await upcomingPromise;
+        if (upcoming) setMyUpcoming(upcoming);
       } catch {
         // 홈은 로그인 전에도 열리므로 오류 시 조용히 빈 상태로
       } finally {

@@ -31,6 +31,26 @@ function consumeSignupMarketingConsent(): boolean {
   return v === "1";
 }
 
+// 애플은 "최초 인증"에서만 사용자 이름을 준다(그 이후 로그인엔 항상 없음) — 그 이름은
+// user_metadata가 아니라 ASAuthorizationAppleIDCredential.fullName이라는 별도 필드로만
+// 딱 한 번 오므로(ios/App/App/AppleSignInPlugin.swift), signInWithIdToken() 호출과
+// SessionWatcher의 onAuthStateChange(SIGNED_IN) → ensureAccountForCurrentUser() 실행
+// 사이의 타이밍에 의존하지 않도록(레이스 컨디션 — 둘 다 비동기라 어느 쪽이 먼저 끝날지
+// 보장 안 됨) 위 마케팅 동의와 동일한 세션스토리지 스태시 패턴을 그대로 재사용한다.
+const APPLE_FULL_NAME_STASH_KEY = "apple_first_auth_full_name";
+
+// lib/appleAuth.ts의 signInWithAppleNative()가 성공 직후(= supabase 세션이 이미 생겨
+// SessionWatcher의 SIGNED_IN 핸들러가 언제든 돌 수 있는 시점) 호출한다.
+export function stashAppleFullName(name: string): void {
+  sessionStorage.setItem(APPLE_FULL_NAME_STASH_KEY, name);
+}
+
+function consumeAppleFullName(): string | null {
+  const v = sessionStorage.getItem(APPLE_FULL_NAME_STASH_KEY);
+  if (v !== null) sessionStorage.removeItem(APPLE_FULL_NAME_STASH_KEY);
+  return v;
+}
+
 // 회원가입 화면(app/login/page.tsx의 handleSignup)이 signUp() 직후 accounts/profiles(+매니저면
 // centers)를 자기 손으로 한 번에 만드는 동안에는 이 함수를 끈다. SessionWatcher가 앱 전체에서
 // SIGNED_IN 이벤트마다 이 함수를 호출하는데, signUp()도 SIGNED_IN을 발생시키므로 두 insert가
@@ -57,7 +77,9 @@ export function setBootstrapSuppressed(v: boolean) {
 // 보면 카카오/네이버 가입자가 전부 isSocial=false로 판정돼 휴대폰 번호 모달이 영영 안 뜨는
 // 버그가 있었다(실사용자 계정에서 확인, 2026-09-01) — user_metadata.provider도 같이 본다.
 // user_metadata.provider는 두 로그인 함수가 계정 최초 생성 시점에만 세팅하고 이후 안 바뀐다.
-function isSocialProvider(user: {
+// 이 순수 predicate만 따로 export해 단위 테스트로 검증한다(구글/애플은 app_metadata.provider
+// 분기, 카카오/네이버는 user_metadata.provider 분기 — 아래 함수 본문 주석 참고).
+export function isSocialProvider(user: {
   app_metadata?: { provider?: string };
   user_metadata?: { provider?: string };
 }): boolean {
@@ -95,8 +117,11 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
   }
 
   const meta = user.user_metadata ?? {};
+  // 애플 최초 인증 이름(consumeAppleFullName 주석 참고)이 있으면 최우선 — user_metadata엔
+  // 애초에 안 실리는 값이라 meta.full_name보다 먼저 확인해야 한다. 다른 provider는 이
+  // 스태시가 항상 비어 있으므로(null) 기존 동작과 동일.
   const name: string =
-    meta.full_name || meta.name || meta.nickname || (user.email ? user.email.split("@")[0] : "회원");
+    consumeAppleFullName() || meta.full_name || meta.name || meta.nickname || (user.email ? user.email.split("@")[0] : "회원");
 
   const marketingConsent = consumeSignupMarketingConsent();
   const { data: account, error: accErr } = await supabase

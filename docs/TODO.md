@@ -1356,15 +1356,15 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 | 후속(반응형 흐름) | 사용자 요청으로 "가입 시점에 같은 이메일이 이미 있으면 바로 병합 제안"하는 흐름 추가(`find_mergeable_account_by_my_email()` RPC + `SessionWatcher`의 병합 모달, 비밀번호 확인 후 기존 코드교환 RPC 2개를 격리된 Supabase 클라이언트로 자동 수행 — 새 병합 로직 없이 이미 검증된 경로 재사용). **미확인 사항**: 이 프로젝트 Supabase Auth는 `auth.users.email`이 unique라(admin API로 직접 확인, 같은 이메일로 두 번째 유저 생성 시도 시 `email_exists` 에러) 구글/애플 OAuth가 실제로 이 상황에서 "자동으로 기존 identity에 연결"할 수도 있음 — 그렇다면 이 반응형 흐름은 트리거될 상황 자체가 드물 수 있음(트리거 안 돼도 무해, 죽은 코드 정도). 실제 구글/애플 계정으로 회원가입해서 확인 필요(대시보드 "Automatic Linking" 설정은 API로 조회 불가해 코드로는 확정 못함). |
 | 관련 문서 | `docs/08_Decision_Log.md` DEC-004, [REQUIREMENTS 5-1, 6-2](./REQUIREMENTS.md), `lib/authAccount.ts` |
 
-### P2-1. 애플 OAuth 운영 설정 (구글·카카오·네이버는 완료 — 아래 참고)
+### P2-1. 애플 네이티브 로그인 — 재빌드 + 실기기 검증만 남음 (구글·카카오·네이버는 완료)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **의도적으로 보류 — 앱 코드는 2026-08-07 social-auth 배치에서 이미 완료됨.** 2026-08-13 사용자 결정: Apple Developer Program 가입비($99/년)가 Sign in with Apple 사용 조건과 동일한 멤버십이라, 실제 서비스 출시가 가까워져 개발자 계정을 만드는 시점에 이 설정도 함께 진행하기로 함(구글/카카오/네이버처럼 미리 할 이유가 없음 — 미리 가입해도 별도 이득 없이 연 구독만 먼저 시작되는 구조). |
-| 근거 파일 | `app/login/page.tsx`, `app/components/SessionWatcher.tsx`, `lib/authAccount.ts`, `AUTH_SETUP.md` |
-| 이번 배치에서 한 것 | `ensureAccountForCurrentUser()` 호출을 홈 화면 전용에서 앱 전체(SessionWatcher, SIGNED_IN/INITIAL_SESSION)로 옮겨 어느 페이지로 리다이렉트돼도 계정/프로필이 보장되도록 함. 소셜 버튼 로딩 상태(중복 클릭 방지)·OAuth 콜백 실패(`#error=...`) 감지 후 `/login?oauth_error=...`로 안내하는 처리 추가. 계정 연동(같은 이메일, 다른 provider) 정책은 `docs/08_Decision_Log.md` DEC-004로 명문화(자동 병합 안 함). |
-| 완료 조건 | Supabase Apple Provider, Apple Developer 콘솔 설정(유료, 연 $99), Redirect URL과 Vercel 환경을 구성하고 신규·기존 계정 로그인과 실패 callback을 실제 provider로 검증함(코드는 준비됐지만 이 콘솔 설정 자체는 Claude가 대신 할 수 없음) |
+| 현재 상태 | **아키텍처를 웹 OAuth → 네이티브로 전환함(2026-09-14, 릴리스 폴리시 배치 2차).** 사용자가 이미 설정한 Supabase Apple Provider 값(Client IDs = 앱 Bundle ID, Secret Key 비어 있음)을 재확인한 결과 웹 OAuth가 아니라 네이티브 플로우 설정과 일치 — 기존 `signInWithOAuth({provider:"apple"})` 코드는 이 설정으로는 실패했을 것(Services ID/.p8 시크릿이 없어서). `ASAuthorizationAppleIDProvider`(네이티브) → `supabase.auth.signInWithIdToken()`으로 전환, 신규 로컬 커스텀 Capacitor 플러그인(`ios/App/App/AppleSignInPlugin.swift`, `FcmTokenPlugin.swift`와 동일 패턴 — npm 서드파티 의존성 없음)으로 구현. 장점: Services ID 자체가 불필요, **6개월마다 OAuth 시크릿을 재발급해야 하는 운영 부담이 완전히 없어짐**(Supabase 공식 문서 확인). 애플의 "이름은 최초 1회만 제공" 정책은 `user_metadata`가 아니라 네이티브 credential의 별도 필드로 오므로, 기존 마케팅 동의 스태시와 동일한 세션스토리지 패턴(`stashAppleFullName`/`consumeAppleFullName`)으로 비동기 레이스 없이 처리. **새로 발견해 미해결로 남긴 위험(불변)**: 애플의 "이메일 가리기"(private relay 이메일)를 쓰면 `lib/accountLinking.ts`의 실이메일 기반 자동 병합 제안이 트리거되지 않아 이미 실이메일로 가입한 사용자가 별도 계정을 새로 만들 수 있음 — 수동 연동으로는 여전히 우회 가능, 실사용 데이터로 빈도 확인 후 필요 시 별도 항목으로 분리할 것. |
+| 근거 파일 | `ios/App/App/AppleSignInPlugin.swift`(신규), `ios/App/App/SceneDelegate.swift`, `lib/appleAuth.ts`(신규), `app/login/page.tsx`, `lib/authAccount.ts`, `lib/accountLinking.ts`, `AUTH_SETUP.md` |
+| 이번 배치에서 한 것 | 웹 OAuth 코드 경로를 제거하고 네이티브 플로우로 교체. `AUTH_SETUP.md` 3-2절을 Services ID/6개월 로테이션 기반 안내에서 네이티브 기준(대부분 이미 완료, 재빌드/실기기 검증만 남음)으로 전면 갱신. |
+| 완료 조건 | **콘솔 설정은 이미 완료됨**(Apple Developer capability, Xcode capability, Supabase Provider 값 전부 사용자가 이미 함). 남은 건: (1) `AppleSignInPlugin.swift`를 포함해 Xcode에서 재빌드(필요 시 provisioning profile 재생성), (2) **실기기**에서 신규 가입/기존 로그인/취소/네트워크 실패 케이스 E2E 검증(시뮬레이터는 Apple ID 로그인 제약이 있어 권장 안 함) — 둘 다 Claude가 대신 할 수 없음. |
 | 관련 문서 | [REQUIREMENTS 5-1, 6-2](./REQUIREMENTS.md), [ROUTES `/login`](./ROUTES.md), `AUTH_SETUP.md` 3절 |
 
 ### P2-1d. (2026-08-13, 완료) 구글 로그인 — Supabase 기본 provider 그대로 사용, 운영 반영 완료

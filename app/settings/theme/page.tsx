@@ -7,6 +7,7 @@
 */
 
 import { useEffect, useState } from "react";
+import { syncNativeWebViewBackground } from "../../../lib/nativeTheme";
 
 type Theme = "system" | "burgundy" | "charcoal";
 
@@ -26,7 +27,12 @@ function resolveEffectiveTheme(theme: Theme): "burgundy" | "charcoal" {
 }
 
 export function applyTheme(theme: Theme) {
-  document.documentElement.setAttribute("data-theme", resolveEffectiveTheme(theme));
+  const effective = resolveEffectiveTheme(theme);
+  document.documentElement.setAttribute("data-theme", effective);
+  // iOS 오버스크롤 배경도 같이 맞춘다(lib/nativeTheme.ts 주석 참고) — 앱을 켜둔 채 여기서
+  // 테마를 바꾸는 경우(콜드 스타트는 app/layout.tsx의 인라인 스크립트가 이미 처리)까지
+  // 반영해야 다음 화면 전환 때 오버스크롤 색이 즉시 새 테마와 맞는다.
+  syncNativeWebViewBackground(effective === "charcoal");
 }
 
 export default function ThemeSettingsPage() {
