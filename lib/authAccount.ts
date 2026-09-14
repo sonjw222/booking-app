@@ -11,25 +11,6 @@ export type EnsuredAccount = { id: string; phone: string | null; isSocial: boole
 // 밖이라 null로 비워두고, 이름은 소셜 프로필 메타데이터에서 최대한 가져온다.
 let bootstrapSuppressed = false;
 
-// 소셜 회원가입(카카오/네이버/애플/구글)은 signInWithOAuth/커스텀 authorize URL로
-// 다른 도메인을 거쳐 돌아오므로, 가입 폼의 마케팅 동의 체크박스 React 상태가 그대로
-// 사라진다 — sessionStorage에 잠깐 담아뒀다가 계정이 실제로 만들어지는 시점(아래
-// ensureAccountForCurrentUser)에 한 번 읽고 지운다. 리다이렉트 동안에도 값이 남는
-// 이유는 lib/postLoginReturn.ts의 stashPostLoginNext와 동일(동일 탭+동일 출처로
-// 돌아오면 sessionStorage가 유지됨).
-const MARKETING_CONSENT_STASH_KEY = "signup_marketing_consent";
-
-// app/login/page.tsx가 소셜 회원가입 버튼을 누르기 직전(리다이렉트 전)에 호출한다.
-// 로그인 모드에서는 호출하지 않는다 — 이미 있는 계정에는 어차피 아래에서 읽히지 않음.
-export function stashSignupMarketingConsent(agreed: boolean): void {
-  sessionStorage.setItem(MARKETING_CONSENT_STASH_KEY, agreed ? "1" : "0");
-}
-
-function consumeSignupMarketingConsent(): boolean {
-  const v = sessionStorage.getItem(MARKETING_CONSENT_STASH_KEY);
-  if (v !== null) sessionStorage.removeItem(MARKETING_CONSENT_STASH_KEY);
-  return v === "1";
-}
 
 // 애플은 "최초 인증"에서만 사용자 이름을 준다(그 이후 로그인엔 항상 없음) — 그 이름은
 // user_metadata가 아니라 ASAuthorizationAppleIDCredential.fullName이라는 별도 필드로만
@@ -98,40 +79,83 @@ export async function getMyAccountId(): Promise<string | null> {
   return (data as string | null) ?? null;
 }
 
+// 실기기 QA(2026-09-14, 4차) — Apple 네이티브 신규 가입 실기기 테스트에서
+// "프로필이 없어요" 오류가 발생했다. 원인 두 가지를 모두 고침:
+// 1) 레이스 컨디션: app/login/page.tsx가 signInWithAppleNative() 성공 직후 곧바로
+//    window.location.href = "/"로 전체 페이지 이동을 시작하는데, 이 함수(accounts/
+//    profiles 두 번의 INSERT를 순차로 기다리는 비동기 함수)는 SessionWatcher의
+//    onAuthStateChange 핸들러가 "따로" 호출한다 — 둘 다 비동기라 이동이 먼저 끝나
+//    profiles INSERT가 실행되기도 전에 현재 탭의 JS 컨텍스트가 파괴될 수 있었다.
+//    (구글/카카오/네이버는 브라우저 자체가 provider로 나갔다 돌아오는 리다이렉트라
+//    "돌아온 새 페이지"에서 이 함수가 처음부터 다시 실행되므로 이 레이스가 없었다.)
+//    app/login/page.tsx가 이제 애플 성공 직후 이 함수를 명시적으로 await한 뒤에만
+//    이동한다 — 하지만 이 함수 자체도 아래 2)로 더 튼튼하게 만든다.
+// 2) profiles INSERT 실패를 확인하지 않고 무시했다 — accounts는 만들어졌는데
+//    profiles가 (RLS 문제 등으로) 실패해도 함수가 "성공"을 반환해, 이후
+//    getMyAccountId()는 계정을 찾으므로 existingId 분기로 들어가 profiles를 다시
+//    만들 기회 자체가 없었다(계정이 이미 있으니 "새로 만드는" 코드 경로에 다시는
+//    안 옴). 아래 ensureProfileRow()를 "계정이 이미 있는" 분기에서도 매번 호출해
+//    자가 치유(self-healing)되게 한다 — 다음 로그인/앱 재실행마다 프로필 존재를
+//    확인하고 없으면 그 자리에서 복구한다.
+async function ensureProfileRow(accountId: string, name: string): Promise<void> {
+  const { data: existing, error: findErr } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("account_id", accountId)
+    .is("deleted_at", null)
+    .limit(1);
+  if (findErr) return; // 조회 자체가 실패(RLS 등) — 이후 실제 화면에서 다시 드러남, 여기서 막지 않음
+  if (existing && existing.length > 0) return; // 이미 있음 — 정상 경로, 아무것도 안 함
+  const { error: insertErr } = await supabase.from("profiles").insert({ account_id: accountId, name, is_primary: true });
+  // 23505 = unique_violation: 동시에 열린 다른 탭/effect가 먼저 만든 경우 — 정상이므로 무시.
+  if (insertErr && insertErr.code !== "23505") {
+    console.error("프로필 자동 복구 실패", insertErr);
+  }
+}
+
 export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | null> {
   if (bootstrapSuppressed) return null;
   const { data: authData } = await supabase.auth.getUser();
   const user = authData.user;
   if (!user) return null;
   const isSocial = isSocialProvider(user);
+  const meta = user.user_metadata ?? {};
+  // 애플 최초 인증 이름(consumeAppleFullName 주석 참고)이 있으면 최우선 — user_metadata엔
+  // 애초에 안 실리는 값이라 meta.full_name보다 먼저 확인해야 한다. 다른 provider는 이
+  // 스태시가 항상 비어 있으므로(null) 기존 동작과 동일. existingId 분기(아래)에서도
+  // ensureProfileRow가 이 이름을 쓸 수 있어야 해서 여기서 한 번만 계산한다 — 단,
+  // consumeAppleFullName()은 호출 즉시 sessionStorage를 비우므로 정말로 필요한
+  // (프로필을 새로 만드는) 경우에만 소비해야 다른 곳에서 한 번 더 못 쓰는 낭비가 없다.
+  // existingId 분기에서 프로필이 이미 있으면 이름을 아예 안 쓰므로 무해하다.
 
   const existingId = await getMyAccountId();
   if (existingId) {
     const { data: existing, error: findErr } = await supabase
       .from("accounts")
-      .select("id, phone")
+      .select("id, phone, name")
       .eq("id", existingId)
       .maybeSingle();
     if (findErr) return null; // 조회 실패 시 조용히 넘어감(RLS 등) — 이후 실제 데이터 호출에서 다시 드러남
-    if (existing) return { id: existing.id, phone: existing.phone, isSocial, wasCreated: false };
+    if (existing) {
+      await ensureProfileRow(existing.id, existing.name || consumeAppleFullName() || meta.full_name || meta.name || meta.nickname || "회원");
+      return { id: existing.id, phone: existing.phone, isSocial, wasCreated: false };
+    }
   }
 
-  const meta = user.user_metadata ?? {};
-  // 애플 최초 인증 이름(consumeAppleFullName 주석 참고)이 있으면 최우선 — user_metadata엔
-  // 애초에 안 실리는 값이라 meta.full_name보다 먼저 확인해야 한다. 다른 provider는 이
-  // 스태시가 항상 비어 있으므로(null) 기존 동작과 동일.
   const name: string =
     consumeAppleFullName() || meta.full_name || meta.name || meta.nickname || (user.email ? user.email.split("@")[0] : "회원");
 
-  const marketingConsent = consumeSignupMarketingConsent();
+  // 마케팅 동의는 여기서는 항상 false로 시작한다 — 소셜 신규 가입의 실제 동의는 provider
+  // 인증 "이후" SessionWatcher의 소셜 가입 완료 모달에서 받고 completeSocialProfile()이
+  // 그 값으로 덮어쓴다(사전 스태시 방식 제거, 위 주석 참고).
   const { data: account, error: accErr } = await supabase
     .from("accounts")
     .insert({
       auth_id: user.id,
       name,
       is_member: true,
-      marketing_consent: marketingConsent,
-      marketing_consent_at: marketingConsent ? new Date().toISOString() : null,
+      marketing_consent: false,
+      marketing_consent_at: null,
     })
     .select("id, phone")
     .single();
@@ -141,14 +165,34 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
     return null;
   }
 
-  await supabase.from("profiles").insert({ account_id: account.id, name, is_primary: true });
+  await ensureProfileRow(account.id, name);
   return { id: account.id, phone: account.phone, isSocial, wasCreated: true };
 }
 
-// 소셜 가입 직후 "휴대폰 번호 입력" 모달(SessionWatcher)에서 호출 — phone은 필수, address는
-// 선택(도로명주소+상세주소를 합친 문자열 또는 null).
-export async function completeSocialProfile(accountId: string, phone: string, address: string | null): Promise<void> {
-  const { error } = await supabase.from("accounts").update({ phone, address }).eq("id", accountId);
+// 소셜 가입 완료 모달(SessionWatcher)에서 호출 — phone은 필수, address는 선택(도로명주소+
+// 상세주소를 합친 문자열 또는 null). 실기기 QA(2026-09-14, 4차) — 이 모달이 사실상 소셜
+// 회원가입을 "마무리"하는 유일한 화면인데 필수 약관(이용약관/개인정보처리방침) 동의를 전혀
+// 받지 않고 있었다 — 로그인 화면의 소셜 버튼은 "signup 모드"에서만 그 동의 체크박스를
+// 보여주는데, 신규 사용자가 기본값인 "login 모드"에서 소셜 버튼을 눌러도 계정이 만들어지므로
+// 그 경로를 타면 동의를 아예 안 거친다. 이 앱 전체에 약관/개인정보 동의를 DB에 개별 기록하는
+// 컬럼이 없다(마케팅 동의만 accounts.marketing_consent로 기록됨, 기존 구조 확인 — 새 컬럼을
+// 임의로 만들지 않는다) — 기존과 동일하게 "제출 전 체크 필수" UI 게이트만 추가하고, 마케팅
+// 동의는 기존 이메일 가입과 동일한 컬럼에 기록한다.
+export async function completeSocialProfile(
+  accountId: string,
+  phone: string,
+  address: string | null,
+  marketingConsent: boolean
+): Promise<void> {
+  const { error } = await supabase
+    .from("accounts")
+    .update({
+      phone,
+      address,
+      marketing_consent: marketingConsent,
+      marketing_consent_at: marketingConsent ? new Date().toISOString() : null,
+    })
+    .eq("id", accountId);
   if (error) {
     if (error.code === "23505") throw new Error("이미 다른 계정에 등록된 번호예요");
     throw new Error(error.message);

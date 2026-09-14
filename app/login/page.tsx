@@ -21,7 +21,7 @@ import UiIcon from "../components/UiIcon";
 import CenterRegistrationForm, { type CenterFieldsValue } from "../components/CenterRegistrationForm";
 import AddressField from "../components/AddressField";
 import { validateCenterRegistrationInput, registerCenterForAccount } from "../../lib/centers";
-import { setBootstrapSuppressed, stashSignupMarketingConsent } from "../../lib/authAccount";
+import { setBootstrapSuppressed, ensureAccountForCurrentUser } from "../../lib/authAccount";
 import { startNaverLogin } from "../../lib/naverAuth";
 import { startKakaoLogin } from "../../lib/kakaoAuth";
 import { signInWithAppleNative, AppleSignInCancelledError } from "../../lib/appleAuth";
@@ -302,19 +302,17 @@ export default function LoginPage() {
 
   async function handleSocial(provider: "kakao" | "apple" | "google" | "naver" | string) {
     if (socialLoading) return; // 중복 클릭/중복 콜백 실행 방지
-    if (mode === "signup" && (!agreeTerms || !agreePrivacy)) {
-      setMessage({ type: "error", text: "이용약관과 개인정보처리방침에 동의해주세요" });
-      return;
-    }
+    // 실기기 QA(2026-09-14, 4차) — 예전엔 "signup 모드 + 약관 미동의"면 소셜 버튼 자체를
+    // 막았는데, 그 체크박스는 signup 모드에서만 보여서 기본값인 login 모드로 들어온 진짜
+    // 신규 사용자는 애초에 체크박스를 본 적도 없이 계정이 만들어졌다(법적 동의 누락 위험).
+    // provider 인증 자체는 이제 항상 먼저 진행하고, 인증 후 실제로 신규 가입인 경우에만
+    // SessionWatcher의 소셜 가입 완료 모달(app/components/SessionWatcher.tsx)에서 약관
+    // 동의를 최종적으로 받는다 — 기존 회원의 로그인은 그 모달 자체가 안 뜨므로 영향 없음.
     setMessage(null);
     setSocialLoading(provider);
     // 소셜 로그인도 "로그인 상태 유지" 설정을 그대로 따른다 — 이 탭에서 리다이렉트로
     // 나갔다가 돌아오므로, 세션이 실제로 만들어지기 전에 미리 저장해둬야 한다.
     localStorage.setItem(REMEMBER_ME_KEY, rememberMe ? "1" : "0");
-    // 회원가입 모드일 때만 마케팅 동의 체크박스 값을 리다이렉트 전에 임시 저장한다 —
-    // ensureAccountForCurrentUser()가 새 계정을 만들 때 한 번 읽는다(로그인 모드에서는
-    // 이미 있는 계정이라 어차피 안 읽힘, 굳이 저장할 필요 없음).
-    if (mode === "signup") stashSignupMarketingConsent(agreeMarketing);
 
     // 네이버는 Supabase의 기본 제공 OAuth provider가 아니라 signInWithOAuth를 못 쓴다 —
     // 커스텀 authorize URL + Edge Function 흐름을 대신 쓴다(lib/naverAuth.ts,
@@ -357,6 +355,16 @@ export default function LoginPage() {
       console.log("[login] Apple 버튼 클릭 — 네이티브 경로로 진입(signInWithOAuth 미사용)");
       try {
         await signInWithAppleNative();
+        // 실기기 QA(2026-09-14, 4차) — 신규 Apple 계정으로 실기기 테스트 시 "프로필이
+        // 없어요" 오류가 발생했다. 원인: signInWithIdToken() 성공 직후 세션이 생기면
+        // SessionWatcher의 onAuthStateChange가 "따로" 비동기로 ensureAccountForCurrentUser()
+        // 를 호출해 accounts/profiles를 만드는데, 바로 다음 줄에서 window.location.href로
+        // 전체 페이지 이동을 시작해버리면 그 비동기 작업이 끝나기도 전에 현재 탭의 JS
+        // 컨텍스트가 파괴될 수 있었다(구글/카카오/네이버는 브라우저 자체가 리다이렉트로
+        // 나갔다 돌아오므로 이 레이스가 없음 — 애플 네이티브만의 문제). 이동하기 "전"에
+        // 여기서 직접 한 번 더 기다린다 — 이미 SessionWatcher가 먼저 끝냈으면 즉시
+        // 반환되는 멱등 함수라 중복 호출 비용은 거의 없다.
+        await ensureAccountForCurrentUser();
         window.location.href = "/";
       } catch (e: any) {
         setSocialLoading(null);

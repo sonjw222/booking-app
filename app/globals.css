@@ -435,7 +435,13 @@ a { color: inherit; text-decoration: none; }
 
 .input-field {
   width: 100%; background: var(--surface); border-radius: 12px; padding: 15px 16px;
-  font: inherit; font-size: 14.5px; color: var(--ink); border: 1px solid transparent; margin-bottom: 10px;
+  /* 실기기 QA(2026-09-14, 4차) — iOS Safari/WKWebView는 포커스되는 input/select/textarea의
+     computed font-size가 16px 미만이면 자동으로 화면을 확대한다(접근성 pinch-zoom을 막는
+     게 아니라 이 특정 동작만의 문제) — 이 앱에서 가장 널리 쓰이는 입력 클래스라 로그인/
+     회원가입/관리자 회원검색 등 거의 모든 입력창에서 재현됐다. 시각적으로 커 보이는 걸
+     막기 위해 padding/line-height로 보정하되 font-size 자체는 16px 밑으로 절대 안 내린다
+     (user-scalable=no, maximum-scale 같은 방식으로 줌 자체를 막는 건 접근성 훼손이라 금지). */
+  font: inherit; font-size: 16px; line-height: 1.3; color: var(--ink); border: 1px solid transparent; margin-bottom: 10px;
 }
 .input-field:focus { outline: none; border-color: var(--accent); background: var(--bg); }
 .input-field::placeholder { color: var(--ink-soft); }
@@ -2143,7 +2149,8 @@ a.membership-card { text-decoration: none; display: block; }
 .search-header .side { font-size: 24px; color: var(--text); text-decoration: none; flex: 0 0 auto; }
 .search-input {
   flex: 1; border: 1px solid var(--line); border-radius: 999px; padding: 9px 16px;
-  font-size: 14px; background: var(--surface); color: var(--text);
+  /* 실기기 QA(2026-09-14, 4차) — iOS 포커스 자동 확대 방지, .input-field와 동일한 이유. */
+  font-size: 16px; background: var(--surface); color: var(--text);
 }
 .search-go { flex: 0 0 auto; background: var(--accent); color: var(--bg); border: none; border-radius: 999px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .search-center-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); text-decoration: none; }
@@ -3430,7 +3437,7 @@ a.membership-card { text-decoration: none; display: block; }
 
 @media (max-width: 480px) {
   .cal-center-pick { min-width:116px; max-width:42vw; }
-  .cal-center-pick select { font-size:13px; }
+  .cal-center-pick select { font-size:16px; } /* 실기기 QA(2026-09-14, 4차) — iOS 포커스 자동 확대 방지 */
   .cal-memo-row { align-items:stretch; }
   .cal-memo-row .input-field { min-width:0; }
 }
@@ -4256,7 +4263,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-classes-v2 .manager-cal-header .cal-nav-btn{width:40px;height:40px;flex:0 0 40px;border:0;border-radius:50%;background:transparent;color:var(--ink);font-size:25px;font-weight:400}.manager-classes-v2 .manager-cal-header .cal-nav-btn:active{background:var(--surface)}
 .manager-center-select{position:relative;min-width:0;max-width:146px;height:40px;display:flex;align-items:center;padding:0 27px 0 11px;border:1px solid var(--line);border-radius:999px;background:var(--card-bg)}
 .manager-center-select:after{content:"";position:absolute;right:12px;top:50%;width:6px;height:6px;border-right:1.5px solid var(--ink-soft);border-bottom:1.5px solid var(--ink-soft);transform:translateY(-68%) rotate(45deg);pointer-events:none}
-.manager-center-select select{width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:12.5px;font-weight:680;text-overflow:ellipsis;appearance:none;cursor:pointer}
+.manager-center-select select{width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:16px;font-weight:680;text-overflow:ellipsis;appearance:none;cursor:pointer}
 .manager-classes-v2>.cal-weekdays{border-bottom:1px solid var(--line)}
 .manager-classes-v2>.cal-grid{padding-left:var(--page-gutter);padding-right:var(--page-gutter)}
 .manager-classes-v2>.cal-grid .cal-cell,.manager-classes-v2>.cal-grid .cal-cell.selected{min-height:56px;padding:9px 0 7px;border:0!important;border-radius:0!important;background:transparent!important}
@@ -4275,7 +4282,7 @@ a.membership-card { text-decoration: none; display: block; }
    --bg는 라이트/다크 모두 --ink의 반대쪽 극단이라(라이트: 거의 흰색, 다크: 거의 검정) 항상
    대비가 유지된다. */
 .manager-classes-v2>.fab-btn{width:calc(100% - (var(--page-gutter) * 2));bottom:104px;border-radius:15px;background:var(--ink);color:var(--bg);box-shadow:0 8px 24px rgba(20,20,20,.16)}
-.manager-classes-v2 .sheet input[type="date"]{min-height:50px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface);color:var(--ink);font-size:14px}.manager-classes-v2 .sheet .time-row input[type="date"]{flex:1;min-width:0}.manager-classes-v2 .sheet .perm-guide.schedule-rule-warning{border-left-color:var(--danger);color:var(--danger)!important}
+.manager-classes-v2 .sheet input[type="date"]{min-height:50px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface);color:var(--ink);font-size:16px}.manager-classes-v2 .sheet .time-row input[type="date"]{flex:1;min-width:0}.manager-classes-v2 .sheet .perm-guide.schedule-rule-warning{border-left-color:var(--danger);color:var(--danger)!important}
 @media(max-width:380px){.manager-classes-v2 .manager-cal-header .cal-title{min-width:102px;font-size:18px}.manager-classes-v2 .manager-cal-header .cal-nav-btn{width:34px;flex-basis:34px}.manager-center-select{max-width:116px}}
 
 /* Batch 7C: manager detail surfaces — shared hierarchy without replacing feature logic. */
@@ -4290,7 +4297,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-v3-content .filter-chip,.manager-v3-content .perm-tab{min-height:40px;padding:0 2px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--ink-soft);font-size:13px;font-weight:650;white-space:nowrap}.manager-v3-content .filter-chip.on,.manager-v3-content .perm-tab.on{border-bottom-color:var(--ink);background:transparent;color:var(--ink)}
 .manager-v3-content .input-field,
 .admin-v3-content .input-field,
-.manager-v3-content .date-input {min-height:50px;padding:0 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);font-size:14px;box-shadow:none}.manager-v3-content textarea.input-field,
+.manager-v3-content .date-input {min-height:50px;padding:0 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);font-size:16px;box-shadow:none}.manager-v3-content textarea.input-field,
 .admin-v3-content textarea.input-field {min-height:116px;padding-block:13px;line-height:1.6;resize:vertical}
 .manager-v3-content .perm-guide,
 .admin-v3-content .perm-guide {margin:12px var(--page-gutter);padding:13px 0 13px 14px;border:0;border-left:2px solid var(--brand);border-radius:0;background:transparent;color:var(--ink-soft);font-size:12px;line-height:1.6}

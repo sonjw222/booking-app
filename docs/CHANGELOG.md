@@ -1,5 +1,63 @@
 # CHANGELOG
 
+## 2026-09-14 — 릴리스 폴리시 배치 4차: 소셜 가입 온보딩, iOS input 자동확대, Android 전면 점검
+
+**Apple 신규 가입 "프로필이 없어요" 버그 수정(레이스 컨디션 + 자가 치유)**: 실기기(Vercel
+Preview로 이 PR의 실제 web+native 코드를 함께 테스트)에서 재현됨. 원인 둘: (1)
+`signInWithAppleNative()` 성공 직후 `window.location.href="/"`로 즉시 페이지 이동을
+시작하는데, `SessionWatcher`의 `onAuthStateChange`가 따로 비동기로 실행하는
+`ensureAccountForCurrentUser()`(accounts+profiles 두 번의 INSERT)가 끝나기 전에 현재
+탭의 JS 컨텍스트가 파괴될 수 있었다(구글/카카오/네이버는 브라우저 자체가 리다이렉트로
+나갔다 돌아와서 이 레이스가 없음, 애플 네이티브만의 문제) — `app/login/page.tsx`가 이동
+전에 그 함수를 직접 한 번 더 await하도록 수정. (2) `ensureAccountForCurrentUser()`가
+profiles INSERT 실패를 아예 확인하지 않았고, 계정이 이미 있으면 프로필을 다시 만들 기회
+자체가 없었다(existingId 분기가 항상 조기 반환) — `ensureProfileRow()`를 추가해 매 로그인/
+앱 재실행마다 프로필 존재를 확인하고 없으면 그 자리에서 복구하는 자가 치유 구조로 변경.
+
+**소셜 가입 약관 동의 누락 수정**: 로그인 화면의 약관 체크박스가 "signup 모드"에서만
+보였는데, 기본값인 "login 모드"로 들어온 진짜 신규 사용자는 그 체크박스를 본 적도 없이
+소셜 버튼만으로 계정이 만들어지고 있었다(법적 동의 누락). provider 인증 전 사전 체크는
+제거하고, 대신 `SessionWatcher`의 소셜 가입 완료 모달(기존 휴대폰 번호 입력 모달)에
+로그인 화면과 동일한 약관 UI를 추가 — 신규 가입인 경우에만, 인증 이후 이 모달에서 필수
+약관 동의를 받는다. "가입 취소"(로그아웃 후 로그인 화면 복귀) 탈출구도 추가.
+
+**iOS 포커스 자동 확대(input zoom) 제거**: `.input-field`(로그인/회원가입/휴대폰/주소/
+관리자 회원검색 등 앱 전역에서 가장 널리 쓰이는 입력 클래스)를 비롯해 `.search-input`,
+관리자 date/select 등 여러 입력 요소의 font-size가 16px 미만이었다 — iOS Safari/WKWebView는
+포커스되는 입력의 computed font-size가 16px 미만이면 자동으로 화면을 확대한다. 전부
+16px로 올림(user-scalable=no 등 줌 자체를 막는 방식은 접근성 훼손이라 사용 안 함).
+
+**Android 전면 점검(공식 문서 기준, 코드/빌드로 검증)**:
+- targetSdkVersion=36(Android 16) 확인 결과 edge-to-edge가 강제 적용되고 옵트아웃
+  (`windowOptOutEdgeToEdgeEnforcement`)도 이 타깃 SDK에서는 더 이상 동작하지 않음(Android
+  공식 문서 확인) — `MainActivity.java`에 `EdgeToEdge.enable()` + 시스템 바/키보드 인셋을
+  콘텐츠 루트에 padding으로 직접 적용하는 공식 권장 패턴을 추가(상태바/카메라 컷아웃/제스처
+  내비게이션 바와의 겹침 방지). `AndroidManifest.xml`에 `windowSoftInputMode="adjustResize"` 추가.
+- Android 하드웨어/제스처 back 버튼이 루트 화면(히스토리 없음)에서 아무 반응이 없던 것을
+  확인 — Capacitor `App` 플러그인의 공식 `backButton` 리스너 패턴을 추가해 히스토리가 없을
+  때 `App.exitApp()`로 종료(iOS에서는 공식적으로 no-op이라 안전).
+- Predictive back(targetSdk 36 기본 활성)은 Capacitor의 `@capacitor/app`가 이미
+  `androidx.activity.OnBackPressedDispatcher`(최신 공식 API)를 쓰고 있어 별도 대응 불필요
+  (코드 확인함).
+- 네이티브 overscroll(Android 기본 stretch/glow 효과)과 CSS 쪽(`overflow`/
+  `overscroll-behavior`) 모두 기존에 이를 막는 설정이 없음을 확인 — 코드 변경 없음, 플랫폼
+  기본 동작 그대로 유지.
+- iOS 전용 네이티브 변경(Apple 플러그인, WKWebView bounce/edge-swipe, 다크모드 오버스크롤
+  브리지)은 전부 `ios/App/App/*.swift`에만 있어 Android 빌드에 영향 없음 확인(빌드로 검증).
+
+**검증**: `npm run build`/`npx tsc --noEmit`(신규 에러 0) 통과. 단위테스트 321개 통과.
+iOS `xcodebuild`(시뮬레이터+제네릭 Release) 통과. Android `assembleDebug` 통과(신규
+`EdgeToEdge`/`WindowInsetsCompat`/`OnBackPressedCallback` 관련 코드 전부 정상 컴파일 확인).
+Android는 emulator/실기기 자체 접근이 이 환경에 없어 실기기 QA는 별도 체크리스트로 위임.
+
+변경 파일: `lib/authAccount.ts`, `app/login/page.tsx`, `app/components/SessionWatcher.tsx`,
+`app/components/CapacitorBootstrap.tsx`, `app/globals.css`,
+`tests/integration/auth-account-bootstrap.test.ts`,
+`android/app/src/main/java/com/mwhabit/app/MainActivity.java`,
+`android/app/src/main/AndroidManifest.xml`. 새 SQL 마이그레이션 없음(기존 구조 재사용 —
+새 동의 기록 컬럼을 추가하지 않음, 이 앱 전체에 이미 DB 레벨 약관 동의 기록이 없어 기존
+관례를 그대로 따름).
+
 ## 2026-09-14 — 릴리스 폴리시 배치 3차: 실기기 QA 회귀 대응(safe-area/overscroll/Apple/edge-swipe)
 
 PR #150을 실기기에 설치해 QA한 결과 여러 release blocker가 보고됨. 코드 재검증 결과 상당수
