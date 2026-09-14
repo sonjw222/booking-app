@@ -91,13 +91,30 @@ export default function Home() {
     }
     // 계정/프로필 부트스트랩(ensureAccountForCurrentUser)은 app/components/SessionWatcher.tsx로
     // 옮겨 앱 전체에서 한 번만 처리한다(어느 페이지로 로그인/OAuth 리다이렉트가 와도 보장됨).
-    supabase.auth.getUser().then(({ data }) => {
-      setLoggedIn(!!data.user);
+    //
+    // ⚠️ 실기기 iOS 진단(2026-09-13, Google 최초 로그인 무한 로딩) — 여기서 원래
+    // supabase.auth.getUser()를 썼는데, 이는 로컬 세션을 읽는 게 아니라 Supabase Auth
+    // 서버에 매번 새로 네트워크 요청을 보내 토큰을 검증한다. OAuth(암묵적 흐름, 해시
+    // 프래그먼트 토큰) 콜백으로 막 돌아온 이 시점엔 supabase-js가 URL 해시를 파싱해
+    // 세션을 세팅하는 내부 초기화(initializePromise)가 이미 끝난 뒤라 세션은 로컬에
+    // 이미 존재하는데, 그걸 확인하겠다고 다시 서버 왕복을 만드는 게 불필요했다. 구글
+    // OAuth 직후는 앱이 막 구글 서버와 통신하다 돌아온 직후라 실기기 모바일 네트워크가
+    // 아직 안정되지 않았을 수 있는데(특히 앱 최초 설치 후 첫 실행이라 TLS 연결도
+    // 전부 콜드 상태), 이 불필요한 추가 왕복이 느려지거나 걸리면 아래 로직 전체가
+    // 멈춘 것처럼 보인다 — 반면 세션 자체는 이미 로컬에 저장돼 있어서 앱을 강제
+    // 종료 후 재실행하면 이 네트워크 호출 없이도(대개 그때는 계정도 이미 만들어져
+    // 있어 SessionWatcher 쪽 경로도 더 짧아짐) 바로 로그인된 화면이 뜬다 — 실기기
+    // 재현 증상과 정확히 일치. getSession()은 로컬에 이미 세팅된 세션을 그대로
+    // 읽기만 해서(네트워크 요청 없음) 이 지연 원인 자체를 없앤다. 이메일/구글/애플/
+    // 카카오/네이버 다섯 갈래 전부 결국 이 홈 마운트를 거치므로 한 곳만 고치면 됨.
+    supabase.auth.getSession().then(({ data }) => {
+      const user = data.session?.user ?? null;
+      setLoggedIn(!!user);
       // 로그인이 필요해 /login?next=...로 갔다가 돌아온 경우, 이메일/구글/애플/카카오/네이버
       // 다섯 갈래 전부 결국 이 홈으로 도착하도록 이미 통일돼 있어(lib/postLoginReturn.ts
       // 주석 참고) 여기 한 곳에서만 원래 화면으로 이어서 보낸다. 실제로 로그인된 경우에만
-      // (data.user 존재) 이동한다 — 세션 없이 next만 남아있는 경우는 그대로 홈에 둔다.
-      if (data.user) {
+      // (user 존재) 이동한다 — 세션 없이 next만 남아있는 경우는 그대로 홈에 둔다.
+      if (user) {
         const next = consumePostLoginNext();
         if (next) { window.location.replace(next); return; }
         // 관리자 모드 진입 버튼(오른쪽 위) 노출 여부 — ACL-005와 동일하게 active
