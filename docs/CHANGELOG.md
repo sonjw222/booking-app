@@ -1,5 +1,231 @@
 # CHANGELOG
 
+## 2026-09-14 — 릴리스 폴리시 배치 5차: Android에서 Apple 로그인 버튼 숨김
+
+Android 네이티브 앱과 일반 웹 브라우저에서 Apple 버튼이 눌러도 "iOS 앱에서만 지원돼요"
+안내만 뜨는 죽은 CTA였던 것을 정리. `ASAuthorizationAppleIDProvider`가 iOS/macOS 전용
+API라 구조적으로 다른 플랫폼엔 대응할 방법이 없고, 새 web OAuth 경로(Services ID/시크릿
+필요)를 만드는 것도 요청 범위 밖이라 만들지 않음 — 대신 `lib/appleAuth.ts`의 기존
+`isAppleNativeSignInSupported()`(iOS 네이티브 여부 판정)를 `app/login/page.tsx`에서
+버튼 노출 여부에도 재사용. 로그인/회원가입 두 모드가 같은 `.social-list` 블록 하나를
+공유하므로 한 곳만 고치면 양쪽에 다 적용됨. Google/Kakao/Naver 버튼과 Apple 네이티브
+로그인 코드 자체(플러그인, nonce 처리, signInWithIdToken 등)는 전혀 건드리지 않음 —
+`.social-list`가 이미 `justify-content:center`라 버튼이 3개든 4개든 자동으로 가운데
+정렬되므로 별도 레이아웃 CSS 변경도 불필요.
+
+SSR 하이드레이션 불일치를 피하려고 `Capacitor.isNativePlatform()` 판정은 `useState(false)`
++ 마운트 후 `useEffect`로 갱신(서버는 항상 "web"으로 안전하게 평가되는 기존 Capacitor
+동작 방식과 일치, `app/globals.css`의 다른 네이티브 전용 분기들과 동일 패턴).
+
+**검증**: `npm run build`/`npx tsc --noEmit`(신규 에러 0) 통과. 단위테스트 328개 통과
+(신규 7개 — iOS/Android/웹 플랫폼별 노출 판정, 소스 구조 기준 Apple 버튼 조건부 렌더링 +
+Google/Kakao/Naver 무조건 렌더링 + Apple 네이티브 로그인 코드 존재 확인). iOS
+`xcodebuild`(시뮬레이터+제네릭 Release) 통과 — Apple 버튼 정상 노출 확인(코드 경로 기준).
+Android `assembleDebug` 통과.
+
+변경 파일: `app/login/page.tsx`, `docs/CHANGELOG.md`,
+`tests/unit/appleAuth.isAppleNativeSignInSupported.test.ts`(신규),
+`tests/unit/loginPage.appleButtonVisibility.test.ts`(신규). 새 SQL 없음.
+
+## 2026-09-14 — 릴리스 폴리시 배치 4차: 소셜 가입 온보딩, iOS input 자동확대, Android 전면 점검
+
+**Apple 신규 가입 "프로필이 없어요" 버그 수정(레이스 컨디션 + 자가 치유)**: 실기기(Vercel
+Preview로 이 PR의 실제 web+native 코드를 함께 테스트)에서 재현됨. 원인 둘: (1)
+`signInWithAppleNative()` 성공 직후 `window.location.href="/"`로 즉시 페이지 이동을
+시작하는데, `SessionWatcher`의 `onAuthStateChange`가 따로 비동기로 실행하는
+`ensureAccountForCurrentUser()`(accounts+profiles 두 번의 INSERT)가 끝나기 전에 현재
+탭의 JS 컨텍스트가 파괴될 수 있었다(구글/카카오/네이버는 브라우저 자체가 리다이렉트로
+나갔다 돌아와서 이 레이스가 없음, 애플 네이티브만의 문제) — `app/login/page.tsx`가 이동
+전에 그 함수를 직접 한 번 더 await하도록 수정. (2) `ensureAccountForCurrentUser()`가
+profiles INSERT 실패를 아예 확인하지 않았고, 계정이 이미 있으면 프로필을 다시 만들 기회
+자체가 없었다(existingId 분기가 항상 조기 반환) — `ensureProfileRow()`를 추가해 매 로그인/
+앱 재실행마다 프로필 존재를 확인하고 없으면 그 자리에서 복구하는 자가 치유 구조로 변경.
+
+**소셜 가입 약관 동의 누락 수정**: 로그인 화면의 약관 체크박스가 "signup 모드"에서만
+보였는데, 기본값인 "login 모드"로 들어온 진짜 신규 사용자는 그 체크박스를 본 적도 없이
+소셜 버튼만으로 계정이 만들어지고 있었다(법적 동의 누락). provider 인증 전 사전 체크는
+제거하고, 대신 `SessionWatcher`의 소셜 가입 완료 모달(기존 휴대폰 번호 입력 모달)에
+로그인 화면과 동일한 약관 UI를 추가 — 신규 가입인 경우에만, 인증 이후 이 모달에서 필수
+약관 동의를 받는다. "가입 취소"(로그아웃 후 로그인 화면 복귀) 탈출구도 추가.
+
+**iOS 포커스 자동 확대(input zoom) 제거**: `.input-field`(로그인/회원가입/휴대폰/주소/
+관리자 회원검색 등 앱 전역에서 가장 널리 쓰이는 입력 클래스)를 비롯해 `.search-input`,
+관리자 date/select 등 여러 입력 요소의 font-size가 16px 미만이었다 — iOS Safari/WKWebView는
+포커스되는 입력의 computed font-size가 16px 미만이면 자동으로 화면을 확대한다. 전부
+16px로 올림(user-scalable=no 등 줌 자체를 막는 방식은 접근성 훼손이라 사용 안 함).
+
+**Android 전면 점검(공식 문서 기준, 코드/빌드로 검증)**:
+- targetSdkVersion=36(Android 16) 확인 결과 edge-to-edge가 강제 적용되고 옵트아웃
+  (`windowOptOutEdgeToEdgeEnforcement`)도 이 타깃 SDK에서는 더 이상 동작하지 않음(Android
+  공식 문서 확인) — `MainActivity.java`에 `EdgeToEdge.enable()` + 시스템 바/키보드 인셋을
+  콘텐츠 루트에 padding으로 직접 적용하는 공식 권장 패턴을 추가(상태바/카메라 컷아웃/제스처
+  내비게이션 바와의 겹침 방지). `AndroidManifest.xml`에 `windowSoftInputMode="adjustResize"` 추가.
+- Android 하드웨어/제스처 back 버튼이 루트 화면(히스토리 없음)에서 아무 반응이 없던 것을
+  확인 — Capacitor `App` 플러그인의 공식 `backButton` 리스너 패턴을 추가해 히스토리가 없을
+  때 `App.exitApp()`로 종료(iOS에서는 공식적으로 no-op이라 안전).
+- Predictive back(targetSdk 36 기본 활성)은 Capacitor의 `@capacitor/app`가 이미
+  `androidx.activity.OnBackPressedDispatcher`(최신 공식 API)를 쓰고 있어 별도 대응 불필요
+  (코드 확인함).
+- 네이티브 overscroll(Android 기본 stretch/glow 효과)과 CSS 쪽(`overflow`/
+  `overscroll-behavior`) 모두 기존에 이를 막는 설정이 없음을 확인 — 코드 변경 없음, 플랫폼
+  기본 동작 그대로 유지.
+- iOS 전용 네이티브 변경(Apple 플러그인, WKWebView bounce/edge-swipe, 다크모드 오버스크롤
+  브리지)은 전부 `ios/App/App/*.swift`에만 있어 Android 빌드에 영향 없음 확인(빌드로 검증).
+
+**검증**: `npm run build`/`npx tsc --noEmit`(신규 에러 0) 통과. 단위테스트 321개 통과.
+iOS `xcodebuild`(시뮬레이터+제네릭 Release) 통과. Android `assembleDebug` 통과(신규
+`EdgeToEdge`/`WindowInsetsCompat`/`OnBackPressedCallback` 관련 코드 전부 정상 컴파일 확인).
+Android는 emulator/실기기 자체 접근이 이 환경에 없어 실기기 QA는 별도 체크리스트로 위임.
+
+변경 파일: `lib/authAccount.ts`, `app/login/page.tsx`, `app/components/SessionWatcher.tsx`,
+`app/components/CapacitorBootstrap.tsx`, `app/globals.css`,
+`tests/integration/auth-account-bootstrap.test.ts`,
+`android/app/src/main/java/com/mwhabit/app/MainActivity.java`,
+`android/app/src/main/AndroidManifest.xml`. 새 SQL 마이그레이션 없음(기존 구조 재사용 —
+새 동의 기록 컬럼을 추가하지 않음, 이 앱 전체에 이미 DB 레벨 약관 동의 기록이 없어 기존
+관례를 그대로 따름).
+
+## 2026-09-14 — 릴리스 폴리시 배치 3차: 실기기 QA 회귀 대응(safe-area/overscroll/Apple/edge-swipe)
+
+PR #150을 실기기에 설치해 QA한 결과 여러 release blocker가 보고됨. 코드 재검증 결과 상당수
+(회원/관리자 nav flash, "로그인 안 된 화면" 노출, Apple OAuth JSON 에러, 화면 전환 flash)는
+**이 PR의 웹/JS 변경이 실제로는 실기기에 반영되지 않았을 가능성이 매우 높다** — 이 앱은
+`server.url` 모드로 WKWebView가 로컬 번들이 아니라 `https://mwhabit.com`(프로덕션, main
+브랜치만 반영됨)을 네트워크로 직접 불러온다. `capacitor.config.ts`의 이 URL은 그대로이고
+별도 프리뷰 배포 연결 증거도 없어서, 네이티브(Swift) 변경은 실기기 빌드에 반영되지만 이
+PR의 `app/`·`lib/` 변경은 main에 머지·배포되기 전까지는 실기기에서 전혀 실행되지 않는다.
+특히 Apple 로그인 에러("Unsupported provider: missing OAuth secret")는 Supabase의 OAuth
+authorize 엔드포인트가 직접 반환하는 응답인데, 현재 코드는 `provider==="apple"`을 그 호출
+이전에 분기해 절대 도달할 수 없음을 재확인함(`tests/unit/appleAuth.noOAuthFallback.test.ts`로
+회귀 고정) — 실기기가 구버전 프로덕션 코드를 로드했다는 강한 증거. 이 사실과 무관하게 아래
+항목들은 코드 자체에서 실제 결함을 찾아 수정함.
+
+**상단 safe-area — 전면 감사 후 공용 토큰화**: `.back-header`(내 예약/장바구니/구매내역/
+프로필/문의/카테고리/설정 등 다수 화면이 공유하는 상단 바)가 `safe-area-inset-top`을 아예
+반영하지 않고 있었고, `.noti-head`/`.inquiry-head`, `.discovery-page-v2 .search-header`,
+그리고 `.member-my-reservations .back-header`/`.manager-classes-v2>.back-header`(전체
+padding을 재정의하며 safe-area를 빠뜨림) 등 개별 override도 마찬가지였다 — `.header`(홈)만
+이미 반영돼 있었음. `:root`에 `--safe-top`/`--safe-bottom` 공용 토큰을 추가하고 위 selector
+전부와 기존에 흩어져 있던 raw `env(safe-area-inset-top)` 사용처를 이 토큰으로 통일.
+
+**iOS 네이티브 오버스크롤 강제 활성화**: `webView.scrollView.bounces`/`alwaysBounceVertical`을
+`SceneDelegate.swift`에서 명시적으로 켬 — 기본값은 콘텐츠가 뷰포트보다 짧은 화면(로그인,
+빈 알림함 등)에서는 rubber-band가 아예 발생하지 않는다.
+
+**iOS 엣지 스와이프 뒤로가기 활성화**: `webView.allowsBackForwardNavigationGestures = true` —
+기본 false라 전혀 동작하지 않고 있었음. 브라우저 세션 히스토리(Next.js router의 pushState
+포함) 기준으로 동작해 이전 배치의 `<Link>` 전환과도 자연스럽게 맞물림.
+
+**Apple 로그인 방어 강화 + 진단 로그**: 네이티브 플러그인을 못 찾는 경우(`registerPlugin`의
+"not implemented" 예외) `signInWithOAuth`로 폴백하지 않고 "Apple 로그인을 초기화할 수
+없어요" 안내로 끝나도록 명시적으로 분기(`isPluginUnavailableError`). 각 단계에
+`console.log`를 남겨 실기기에서 실제 실행 경로를 Xcode 콘솔로 추적 가능하게 함. apple 분기가
+공용 `signInWithOAuth` 호출에 절대 도달하지 않음을 소스 구조 기준으로 테스트 고정.
+
+**Apple 버튼 시각 보정**: Apple 마크가 카카오(30px) 대비 눈에 띄게 작아(27px) 버튼 행에서
+시각적 무게가 어긋나 보이던 것을 동일 비율로 30px로 통일(마크 형태·비율·색상은 변형 없음).
+
+**검증**: `npm run build`/`npx tsc --noEmit`(신규 에러 0) 통과. 단위테스트 321개 통과(신규
+4개). iOS `xcodebuild`(시뮬레이터+제네릭 Release) 통과, Android `assembleDebug` 통과.
+
+변경 파일: `app/globals.css`, `app/login/page.tsx`, `lib/appleAuth.ts`,
+`ios/App/App/SceneDelegate.swift`, `tests/unit/appleAuth.noOAuthFallback.test.ts`(신규).
+새 SQL 없음.
+
+## 2026-09-14 — 릴리스 폴리시 배치 2차: Apple 네이티브 로그인/다크 오버스크롤/탭 클라이언트 전환
+
+**Apple 로그인 아키텍처를 웹 OAuth에서 네이티브로 전환**: 실제 콘솔 설정(Supabase Apple
+Provider: Client IDs = 앱 Bundle ID, Secret Key 비어 있음)을 재확인한 결과 웹 OAuth가
+아니라 네이티브 플로우 설정과 일치 — 기존 `signInWithOAuth({provider:"apple"})`로는 토큰
+교환이 실패했을 것. `ASAuthorizationAppleIDProvider`(신규 로컬 커스텀 Capacitor 플러그인
+`ios/App/App/AppleSignInPlugin.swift`, `FcmTokenPlugin.swift`와 동일 패턴 — 신규 npm
+의존성 없음) → `supabase.auth.signInWithIdToken()`(`lib/appleAuth.ts`)로 교체. Services
+ID와 6개월마다 필요했던 OAuth 시크릿 재발급이 아예 필요 없어짐. nonce는 JS가 원본을 만들고
+SHA-256 해시만 Apple에 보내는 공식 요구사항을 따름(`sha256Hex`, NIST 테스트 벡터로 단위
+테스트). 애플이 최초 인증에서만 주는 이름은 세션스토리지 스태시로 타이밍 레이스 없이 처리
+(`stashAppleFullName`/`consumeAppleFullName`, 기존 마케팅 동의 스태시와 동일 패턴).
+
+**iOS 오버스크롤 다크모드 대응**: 지난 배치에서 라이트 테마 기준으로만 고쳤던 WKWebView
+배경색을 다크(차콜) 테마까지 커버 — `ios/App/App/SceneDelegate.swift`가 기동 시 iOS
+시스템 라이트/다크 설정을 자동으로 따라가는 `UIColor(dynamicProvider:)`를 baseline으로
+깔고, 신규 로컬 플러그인(`WebViewThemePlugin.swift`)을 통해 앱이 명시적으로 고른 테마
+(시스템 설정과 다를 수 있음)까지 JS가 알려준다(`app/layout.tsx` 인라인 스크립트 = 콜드
+스타트, `app/settings/theme/page.tsx`의 `applyTheme()` = 런타임 전환).
+
+**하단 탭 네비게이션을 client-side routing으로 전환**: 코드 조사 결과 이 앱에 client-side
+라우팅이 전혀 없다는 이전 결론은 이 nav 한정으로는 낡은 전제였음이 드러남 —
+`app/reservation/page.tsx`, `app/components/BackButton.tsx` 등에서는 이미 Next.js
+`router.push()`/`router.back()`으로 클라이언트 전환이 문제 없이 쓰이고 있었다(실사용
+검증됨). 회원 5탭(`BottomNav.tsx`)과 관리자 4탭(`ManagerNav.tsx`)만 `<a href>`에서
+`<Link>`로 전환 — 둘 다 각자의 공용 레이아웃(`app/layout.tsx`/`app/manager/layout.tsx`)
+아래에 있어 레이아웃은 유지한 채 탭 콘텐츠만 바뀌는 게 안전함을 확인. 이 전환으로
+CapacitorBootstrap/SessionWatcher/테마 스크립트가 탭마다 다시 실행되던 낭비가 없어짐.
+관리자 "회원" 탭 권한 재확인은 `[pathname]` 의존성으로 유지(마운트 유지해도 재확인
+빈도는 기존과 동일 — 실제 접근 통제는 RLS가 최종 담당하므로 보안 경계 변화 없음).
+이 nav 밖의 다른 화면 내부 링크는 이번 범위 밖(`docs/TODO.md` P3-12, 전면 전환은 별도 배치).
+
+**내 예약 정책 보완**: 미래 시간이지만 이미 취소된 예약이 "예정된 예약"에도 "지난 예약"에도
+안 뜨고 "전체"에만 보이던 것을 사용자 피드백으로 수정 — 취소 상태는 시각과 무관하게 항상
+"지난 예약"으로 분류(`classifyReservationDisplay`).
+
+**홈 화면 순차 fetch 병렬화**: `fetchMyUpcomingClasses()`가 다른 4개 fetch(Promise.all)가
+끝난 뒤에야 시작돼 불필요하게 순차적이었던 것을 동시 시작으로 수정.
+
+**검증**: `npm run build`/`npx tsc --noEmit`(신규 에러 0건) 통과. 단위테스트 317개 통과
+(신규 28개 — Apple SHA-256 해시 테스트 벡터, 미래 취소 건 분류 등). iOS
+`xcodebuild`(시뮬레이터 + 제네릭 Release, 신규 Swift 플러그인 2개 포함) 통과 — 신규
+파일을 `project.pbxproj`에 직접 등록(PBXBuildFile/PBXFileReference/그룹/Sources 빌드
+페이즈 4곳), `GoogleService-Info.plist`는 로컬 빌드 검증용 임시 파일만 만들었다가 직후
+삭제(커밋 없음). Android `./gradlew assembleDebug` 통과(iOS 전용 변경이라 영향 없음
+확인). 통합테스트는 `TEST_USER_*` 자격증명이 이 환경에 없어 미실행 — 사용자 환경에서
+실행 필요.
+
+변경 파일: `lib/appleAuth.ts`(신규), `ios/App/App/AppleSignInPlugin.swift`(신규),
+`ios/App/App/WebViewThemePlugin.swift`(신규), `lib/nativeTheme.ts`(신규),
+`ios/App/App/SceneDelegate.swift`, `ios/App/App.xcodeproj/project.pbxproj`,
+`app/login/page.tsx`, `lib/authAccount.ts`, `app/layout.tsx`,
+`app/settings/theme/page.tsx`, `capacitor.config.ts`, `app/components/BottomNav.tsx`,
+`app/components/ManagerNav.tsx`, `app/my-reservations/page.tsx`, `app/page.tsx`,
+`AUTH_SETUP.md`, `docs/TODO.md`. 새 SQL 마이그레이션 없음.
+
+## 2026-09-14 — 릴리스 폴리시 배치 Workstream A: 오버스크롤/내 예약 정책/네비 깜빡임
+
+**iOS 오버스크롤 네이비 띠**: `capacitor.config.ts`의 WKWebView `backgroundColor`가 실제
+페이지 배경(`--bg`, 라이트/버건디 `#FBFBFA`)이 아니라 스플래시 색(`#0A2545` 네이비)으로
+잘못 맞춰져 있던 것이 원인 — 당시 주석이 "앱 배경이 네이비"라고 잘못 적어놓은 전제였다.
+라이트/버건디 테마 기준으로 실제 배경과 일치시킴(차콜/다크 테마는 여전히 약간 어긋남 —
+네이티브 코드 없이는 완전히 못 고침, 알려진 한계로 기록). 같은 레이어가 탭 전환 중
+페인트 전 잠깐 드러나는 것이라 일반 화면 전환 flash도 함께 줄어듦.
+
+**내 예약("예정된 예약"/"지난 예약"/"전체") 정책 전면 개정**: 기존엔 `status`만 보고
+필터링해 지난 수업인데도 상태가 아직 안 바뀌면(출석 처리 전 등) 계속 "예약 확정"/취소
+버튼이 보이던 버그. `HistoryItem`에 `startAt`(원본 timestamptz ISO) 필드를 추가하고
+(`when`은 KST 표시용 포맷 문자열이라 비교 부적합), 시작 시각 기준(`startAt<=now`)으로
+과거/미래를 판정하도록 재작성 — 지난 예약은 상태 무관 무조건 이동, 최종 상태(출석/노쇼/
+취소) 없으면 새 상태를 만들지 않고 배지 없이 표시. 정렬(예정 오름차순/지난 내림차순)도
+이 기준으로 재작성.
+
+**하단 네비 "3탭→5탭"/관리자 네비 "3탭→4탭" 깜빡임**: 이 앱은 클라이언트 라우팅이 없어
+탭 전환마다 전체 페이지가 서버에서 다시 렌더링되는데, 기존 캐시가 localStorage 기반이라
+서버가 못 읽어 서버 렌더링(최초 페인트)은 항상 "판정 전" 상태로 시작한 뒤 클라이언트
+하이드레이션 후에야 보정돼 깜빡였다("layout에 한 번만 마운트"라는 기존 주석은 이
+아키텍처에서 성립하지 않음 — 탭 전환이 곧 문서 재로드라 어차피 매번 다시 마운트됨).
+캐시를 쿠키로 옮기고 `app/layout.tsx`/`app/manager/layout.tsx`(서버 컴포넌트)가
+`next/headers`의 `cookies()`로 읽어 최초 렌더링 값으로 내려주도록 변경 — 서버 렌더링
+시점부터 이미 맞는 탭 구성으로 그려진다.
+
+**검증**: `npm run build`/`npx tsc --noEmit`(신규 에러 0건, 기존 baseline과 동일) 통과.
+단위테스트 311개 통과(신규 23개 포함 — `classifyReservationDisplay` 경계값 9개,
+`isSocialProvider` 6개, 쿠키 파서 8개). iOS `xcodebuild`(시뮬레이터 + 제네릭 Release)
+통과 — `GoogleService-Info.plist`는 로컬 빌드 검증용 임시 파일만 만들었다가 검증 직후
+즉시 삭제(커밋 없음). Android `./gradlew assembleDebug` 통과(플레이스홀더 불필요).
+
+변경 파일: `capacitor.config.ts`, `lib/mypage.ts`, `app/my-reservations/page.tsx`,
+`lib/navState.ts`, `lib/roles.ts`, `app/layout.tsx`, `app/manager/layout.tsx`,
+`app/components/BottomNav.tsx`, `app/components/GlobalBottomNav.tsx`,
+`app/components/ManagerNav.tsx`, `lib/authAccount.ts`(`isSocialProvider` export),
+`AUTH_SETUP.md`, `docs/TODO.md`(P2-1). 새 SQL 마이그레이션 없음.
+
 ## 2026-09-14 — iOS 실기기 릴리즈 블로커 3건 최신 main에 재반영 (PR #144 rebase)
 
 PR #144(`fix/ios-release-blockers-splash-oauth-safearea`, 2026-09-13 작성)가 그 사이

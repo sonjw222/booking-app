@@ -22,8 +22,12 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
-            android:exported="true">
-
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <!-- 실기기 QA(2026-09-14, 4차) — 키보드가 열릴 때 입력창이 가려지지 않도록 콘텐츠
+                 영역이 줄어들게 한다(Android 공식 키보드 마이그레이션 가이드 권장 —
+                 developer.android.com/develop/ui/views/layout/sw-keyboard). MainActivity.java의
+                 WindowInsetsCompat.Type.ime() 리스너와 함께 동작. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

@@ -21,9 +21,10 @@ import UiIcon from "../components/UiIcon";
 import CenterRegistrationForm, { type CenterFieldsValue } from "../components/CenterRegistrationForm";
 import AddressField from "../components/AddressField";
 import { validateCenterRegistrationInput, registerCenterForAccount } from "../../lib/centers";
-import { setBootstrapSuppressed, stashSignupMarketingConsent } from "../../lib/authAccount";
+import { setBootstrapSuppressed, ensureAccountForCurrentUser } from "../../lib/authAccount";
 import { startNaverLogin } from "../../lib/naverAuth";
 import { startKakaoLogin } from "../../lib/kakaoAuth";
+import { signInWithAppleNative, AppleSignInCancelledError, isAppleNativeSignInSupported } from "../../lib/appleAuth";
 import { stashPostLoginNext } from "../../lib/postLoginReturn";
 import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
 
@@ -71,6 +72,23 @@ export default function LoginPage() {
   // 소셜 버튼 각각의 리다이렉트 진행 상태 — 성공하면 곧바로 provider 페이지로 페이지 전체가
   // 이동하므로 별도로 false로 되돌릴 필요는 없다(에러일 때만 되돌림).
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
+  // Android UX 정리(2026-09-14) — Apple 네이티브 로그인(ios/App/App/AppleSignInPlugin.swift,
+  // lib/appleAuth.ts)은 ASAuthorizationAppleIDProvider가 iOS/macOS 전용 API라 구조적으로
+  // Android에는 존재할 수 없다. Android 네이티브 앱과 일반 웹 브라우저 둘 다
+  // isAppleNativeSignInSupported()가 false를 반환해 버튼을 눌러도 "iOS 앱에서만
+  // 지원돼요" 안내만 뜨는 죽은 CTA였다 — 조사 결과 웹 브라우저에서도 정확히 같은 이유로
+  // 동작할 수 없으므로(현재 Supabase Apple Provider 설정 자체가 네이티브 전용 — Client
+  // IDs=Bundle ID, Secret 없음), Android와 동일하게 숨기는 것이 "안전한 기존 구조 재사용"
+  // 결정이다(새 web OAuth 경로를 만들지 않음). iOS 네이티브 앱에서만 노출한다.
+  // Capacitor.isNativePlatform()/getPlatform()은 window 참조라 SSR에서는 항상
+  // false로 안전하게 평가되지만(하이드레이션 불일치 방지를 위해), 실제 네이티브 iOS
+  // 여부는 클라이언트에서만 확정할 수 있어 마운트 후 useEffect에서 갱신한다 — 초기값
+  // false(숨김)는 기존 로딩 상태 처리 관례(예: BottomNav의 hasUsable)와 동일하게
+  // "판정 전엔 안전한 쪽"을 따른다.
+  const [showAppleButton, setShowAppleButton] = useState(false);
+  useEffect(() => {
+    setShowAppleButton(isAppleNativeSignInSupported());
+  }, []);
   const [message, setMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
   // "로그인 상태 유지"(remember me, P1) — 기본 체크(기존과 동일하게 localStorage에 세션 저장).
   // 해제하면 이 브라우저 탭/창을 닫을 때 세션도 같이 사라진다(sessionStorage로 저장, P1).
@@ -301,19 +319,17 @@ export default function LoginPage() {
 
   async function handleSocial(provider: "kakao" | "apple" | "google" | "naver" | string) {
     if (socialLoading) return; // 중복 클릭/중복 콜백 실행 방지
-    if (mode === "signup" && (!agreeTerms || !agreePrivacy)) {
-      setMessage({ type: "error", text: "이용약관과 개인정보처리방침에 동의해주세요" });
-      return;
-    }
+    // 실기기 QA(2026-09-14, 4차) — 예전엔 "signup 모드 + 약관 미동의"면 소셜 버튼 자체를
+    // 막았는데, 그 체크박스는 signup 모드에서만 보여서 기본값인 login 모드로 들어온 진짜
+    // 신규 사용자는 애초에 체크박스를 본 적도 없이 계정이 만들어졌다(법적 동의 누락 위험).
+    // provider 인증 자체는 이제 항상 먼저 진행하고, 인증 후 실제로 신규 가입인 경우에만
+    // SessionWatcher의 소셜 가입 완료 모달(app/components/SessionWatcher.tsx)에서 약관
+    // 동의를 최종적으로 받는다 — 기존 회원의 로그인은 그 모달 자체가 안 뜨므로 영향 없음.
     setMessage(null);
     setSocialLoading(provider);
     // 소셜 로그인도 "로그인 상태 유지" 설정을 그대로 따른다 — 이 탭에서 리다이렉트로
     // 나갔다가 돌아오므로, 세션이 실제로 만들어지기 전에 미리 저장해둬야 한다.
     localStorage.setItem(REMEMBER_ME_KEY, rememberMe ? "1" : "0");
-    // 회원가입 모드일 때만 마케팅 동의 체크박스 값을 리다이렉트 전에 임시 저장한다 —
-    // ensureAccountForCurrentUser()가 새 계정을 만들 때 한 번 읽는다(로그인 모드에서는
-    // 이미 있는 계정이라 어차피 안 읽힘, 굳이 저장할 필요 없음).
-    if (mode === "signup") stashSignupMarketingConsent(agreeMarketing);
 
     // 네이버는 Supabase의 기본 제공 OAuth provider가 아니라 signInWithOAuth를 못 쓴다 —
     // 커스텀 authorize URL + Edge Function 흐름을 대신 쓴다(lib/naverAuth.ts,
@@ -345,13 +361,43 @@ export default function LoginPage() {
       return;
     }
 
+    // 애플은 구글/카카오/네이버와 다르게 브라우저 리다이렉트가 아니라 네이티브 모달
+    // (ASAuthorizationController)로 같은 화면 안에서 끝난다 — 실제 콘솔 설정(Supabase
+    // Client IDs = 앱 Bundle ID, Secret Key 비어 있음)이 웹 OAuth가 아니라 네이티브 플로우
+    // 설정과 일치해서 아래 공용 signInWithOAuth 경로를 쓰면 애초에 실패한다
+    // (lib/appleAuth.ts 주석, AUTH_SETUP.md 3-2절 참고).
+    if (provider === "apple") {
+      // 실기기 QA(2026-09-14) — Apple 버튼 클릭이 정확히 이 분기로 들어오는지, 그리고
+      // signInWithOAuth로는 절대 안 새는지 콘솔에서 바로 확인할 수 있게 로그를 남긴다.
+      console.log("[login] Apple 버튼 클릭 — 네이티브 경로로 진입(signInWithOAuth 미사용)");
+      try {
+        await signInWithAppleNative();
+        // 실기기 QA(2026-09-14, 4차) — 신규 Apple 계정으로 실기기 테스트 시 "프로필이
+        // 없어요" 오류가 발생했다. 원인: signInWithIdToken() 성공 직후 세션이 생기면
+        // SessionWatcher의 onAuthStateChange가 "따로" 비동기로 ensureAccountForCurrentUser()
+        // 를 호출해 accounts/profiles를 만드는데, 바로 다음 줄에서 window.location.href로
+        // 전체 페이지 이동을 시작해버리면 그 비동기 작업이 끝나기도 전에 현재 탭의 JS
+        // 컨텍스트가 파괴될 수 있었다(구글/카카오/네이버는 브라우저 자체가 리다이렉트로
+        // 나갔다 돌아오므로 이 레이스가 없음 — 애플 네이티브만의 문제). 이동하기 "전"에
+        // 여기서 직접 한 번 더 기다린다 — 이미 SessionWatcher가 먼저 끝냈으면 즉시
+        // 반환되는 멱등 함수라 중복 호출 비용은 거의 없다.
+        await ensureAccountForCurrentUser();
+        window.location.href = "/";
+      } catch (e: any) {
+        setSocialLoading(null);
+        if (e instanceof AppleSignInCancelledError) return; // 사용자가 직접 취소 — 에러로 안 보여줌
+        setMessage({ type: "error", text: e.message ?? "애플 로그인에 실패했어요" });
+      }
+      return; // 이 return 이후로는 절대 아래의 공용 signInWithOAuth 호출에 도달하지 않는다.
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: provider as any,
       options: { redirectTo: `${window.location.origin}/` },
     });
     if (error) {
       setSocialLoading(null);
-      const label = provider === "kakao" ? "카카오" : provider === "apple" ? "애플" : provider === "google" ? "구글" : "네이버";
+      const label = provider === "kakao" ? "카카오" : provider === "google" ? "구글" : "네이버";
       setMessage({ type: "error", text: `${label} 로그인 설정이 아직 안 되어 있어요 (AUTH_SETUP.md 참고)` });
     }
     // 에러가 없으면 이 시점부터 브라우저가 provider 페이지로 이동하므로 loading을 되돌리지 않는다.
@@ -562,15 +608,21 @@ export default function LoginPage() {
             <span className="social-ic" aria-hidden="true">N</span>
             <span className="sr-only">{socialLoading === "naver" ? "이동 중..." : mode === "signup" ? "네이버로 가입하기" : "네이버로 시작하기"}</span>
           </button>
+          {showAppleButton && (
           <button className="social-btn apple" onClick={() => handleSocial("apple")} disabled={!!socialLoading}>
             <span className="social-ic" aria-hidden="true">
               {/* viewBox를 path의 실제 bbox(-0.5 1.9 22 22, getBBox()로 측정)에 맞춰
                   정사각형으로 잘라 시각 중앙에 오도록 함 — 원래 "0 0 24 24"는 심볼
-                  자체가 왼쪽으로 치우쳐 있어 원 안에서 중앙정렬이 안 맞았다. */}
-              <svg width="27" height="27" viewBox="-0.5 1.9 22 22" fill="currentColor"><path d="M16.7 2.3c.1 1-.3 2-.9 2.7-.6.7-1.6 1.3-2.6 1.2-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.3ZM20.5 17c-.6 1.3-.9 1.9-1.6 3-1 1.5-2.5 3.4-4.3 3.4-1.6 0-2-1-4.1-1s-2.6 1-4.2 1c-1.8 0-3.2-1.7-4.2-3.2C.4 17-.4 12.7 1.6 9.7c1-1.5 2.6-2.4 4.2-2.4 1.6 0 2.7 1.1 4 1.1 1.3 0 2.1-1.1 4-1.1 1.3 0 2.7.7 3.7 1.9-3.3 1.8-2.8 6.5.3 7.8Z"/></svg>
+                  자체가 왼쪽으로 치우쳐 있어 원 안에서 중앙정렬이 안 맞았다.
+                  실기기 QA(2026-09-14) — 27px는 카카오 심볼(30px)보다 눈에 띄게 작아
+                  버튼 행에서 시각적 무게가 어긋나 보였다("부자연스럽다") — 같은 비율
+                  (viewBox·path 그대로, 크기만) 30px로 맞춤. Apple 마크 자체의 형태·비율·
+                  색상(검정 배경 위 흰색 — Apple 공식 "Black" 버튼 스타일)은 변형하지 않음. */}
+              <svg width="30" height="30" viewBox="-0.5 1.9 22 22" fill="currentColor"><path d="M16.7 2.3c.1 1-.3 2-.9 2.7-.6.7-1.6 1.3-2.6 1.2-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.3ZM20.5 17c-.6 1.3-.9 1.9-1.6 3-1 1.5-2.5 3.4-4.3 3.4-1.6 0-2-1-4.1-1s-2.6 1-4.2 1c-1.8 0-3.2-1.7-4.2-3.2C.4 17-.4 12.7 1.6 9.7c1-1.5 2.6-2.4 4.2-2.4 1.6 0 2.7 1.1 4 1.1 1.3 0 2.1-1.1 4-1.1 1.3 0 2.7.7 3.7 1.9-3.3 1.8-2.8 6.5.3 7.8Z"/></svg>
             </span>
             <span className="sr-only">{socialLoading === "apple" ? "이동 중..." : mode === "signup" ? "Apple로 가입하기" : "Apple로 계속하기"}</span>
           </button>
+          )}
         </div>
       </section>
     </div>

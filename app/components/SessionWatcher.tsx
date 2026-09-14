@@ -57,6 +57,13 @@ export default function SessionWatcher() {
   const [addressDetail, setAddressDetail] = useState("");
   const [saving, setSaving] = useState(false);
   const [gateError, setGateError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  // 실기기 QA(2026-09-14, 4차) — 이 모달이 사실상 소셜 회원가입을 마무리하는 유일한
+  // 화면인데 필수 약관 동의를 전혀 안 받고 있었다(app/login/page.tsx의 signup-agree 블록과
+  // 동일한 필드/문구를 그대로 재사용 — 새 UI 패턴을 만들지 않음).
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
+  const [agreeMarketing, setAgreeMarketing] = useState(false);
 
   // 휴대폰 인증(OTP) — app/login/page.tsx 이메일 가입과 동일한 절차/제약(2026-09-05).
   const [otpCode, setOtpCode] = useState("");
@@ -170,17 +177,31 @@ export default function SessionWatcher() {
       setGateError("휴대폰 인증을 완료해주세요");
       return;
     }
+    if (!agreeTerms || !agreePrivacy) {
+      setGateError("이용약관과 개인정보처리방침에 동의해주세요");
+      return;
+    }
     setSaving(true);
     setGateError(null);
     try {
       const address = addressDetail.trim() ? `${addressBase} ${addressDetail}`.trim() : addressBase.trim();
-      await completeSocialProfile(phoneGateAccountId, phone.trim(), address || null);
+      await completeSocialProfile(phoneGateAccountId, phone.trim(), address || null, agreeMarketing);
       setPhoneGateAccountId(null);
     } catch (e: any) {
       setGateError(e.message ?? "저장에 실패했어요");
     } finally {
       setSaving(false);
     }
+  }
+
+  // 실기기 QA(2026-09-14, 4차) — 이 모달은 닫을 방법이 없어서(뒤로가기/바깥 클릭 무시) 한 번
+  // 진입하면 완료하거나 앱을 강제 종료하는 것 외엔 빠져나갈 수 없었다. 가입 자체를 원하지
+  // 않는 사용자를 위해 로그아웃 후 로그인 화면으로 안전하게 돌려보내는 탈출구를 추가한다.
+  async function handleCancelOnboarding() {
+    if (cancelling) return;
+    setCancelling(true);
+    await supabase.auth.signOut().catch(() => {});
+    window.location.href = "/login";
   }
 
   async function handleMergeConfirm() {
@@ -244,7 +265,7 @@ export default function SessionWatcher() {
     return (
       <div className="sheet-overlay">
         <div className="sheet" onClick={(e) => e.stopPropagation()}>
-          <div className="sheet-title">휴대폰 번호를 입력해주세요</div>
+          <div className="sheet-title">회원가입을 마저 완료해주세요</div>
           <div className="perm-guide" style={{ margin: "0 0 12px" }}>
             소셜 계정 가입은 휴대폰 번호가 자동으로 전달되지 않아요.
             센터 운영자가 예약자 확인 시 볼 수 있도록 입력해주세요.
@@ -298,10 +319,35 @@ export default function SessionWatcher() {
             onChangeDetail={setAddressDetail}
             disabled={saving}
           />
+          {/* app/login/page.tsx의 signup-agree 블록과 동일한 필드/문구 재사용 — 마지막
+              CTA 바로 위에서 최종 동의를 받는다(소셜 인증 자체는 이미 끝난 뒤). */}
+          <div className="signup-agree" style={{ marginTop: 14 }}>
+            <label className="signup-agree-row">
+              <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} disabled={saving} />
+              <span>(필수) <a href="/legal/terms" target="_blank" rel="noopener noreferrer">이용약관</a> 동의</span>
+            </label>
+            <label className="signup-agree-row">
+              <input type="checkbox" checked={agreePrivacy} onChange={(e) => setAgreePrivacy(e.target.checked)} disabled={saving} />
+              <span>(필수) <a href="/legal/privacy" target="_blank" rel="noopener noreferrer">개인정보처리방침</a> 동의</span>
+            </label>
+            <label className="signup-agree-row">
+              <input type="checkbox" checked={agreeMarketing} onChange={(e) => setAgreeMarketing(e.target.checked)} disabled={saving} />
+              <span>(선택) 이벤트·혜택 알림 수신 동의</span>
+            </label>
+          </div>
           {gateError && <div className="auth-msg error" style={{ marginTop: 10 }}>{gateError}</div>}
-          <button className="primary-btn" style={{ marginTop: 14 }} onClick={handleCompletePhone} disabled={saving || !otpVerified}>
-            {saving ? "저장 중..." : "완료"}
-          </button>
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            <button className="ghost-btn" onClick={handleCancelOnboarding} disabled={saving || cancelling}>
+              {cancelling ? "취소하는 중..." : "가입 취소"}
+            </button>
+            <button
+              className="primary-btn"
+              onClick={handleCompletePhone}
+              disabled={saving || cancelling || !otpVerified || !agreeTerms || !agreePrivacy}
+            >
+              {saving ? "저장 중..." : "완료"}
+            </button>
+          </div>
         </div>
       </div>
     );

@@ -22,23 +22,30 @@ export function shouldShowMembershipTabs(hasUsable: boolean | null): boolean {
   return hasUsable === true;
 }
 
-// BottomNav는 페이지마다 새로 마운트되는 컴포넌트라(공용 layout이 아님) 판정 전 기본값을
-// null로 두면 수강권이 있는 사용자는 페이지를 옮길 때마다 "탭 3개 → 5개"로 깜빡인다.
-// 직전에 확인한 결과를 기기에 캐싱해두고 다음 마운트의 초기값으로 써서, 최초 1회(또는
-// 캐시가 없을 때)를 제외하면 깜빡임 없이 바로 맞는 탭 구성으로 그려지게 한다.
-const HAS_USABLE_CACHE_KEY = "nav_has_usable_membership";
-
-export function getCachedHasUsableMembership(): boolean | null {
-  try {
-    const v = localStorage.getItem(HAS_USABLE_CACHE_KEY);
-    if (v === "1") return true;
-    if (v === "0") return false;
-  } catch { /* 무시 */ }
-  return null;
-}
+// BottomNav는 페이지마다 새로 마운트되는 컴포넌트라(공용 layout이 아님, 이 앱은 클라이언트
+// 라우팅이 없어 탭 전환마다 전체 페이지가 서버에서부터 다시 렌더링된다 — app/layout.tsx
+// 주석 참고) 판정 전 기본값을 null로 두면 수강권이 있는 사용자는 탭을 옮길 때마다
+// "3탭 → 5탭"으로 깜빡인다. localStorage는 서버가 읽을 수 없어 서버 렌더링(=최초 페인트)
+// 자체는 못 바꾸므로, 쿠키에 직전 판정 결과를 저장해둔다 — 다음 전체 페이지 로드 때
+// app/layout.tsx(서버 컴포넌트)가 이 쿠키를 읽어 GlobalBottomNav의 최초 렌더링 값으로
+// 내려주면, 최초 1회(쿠키가 없을 때)를 제외하고는 깜빡임 없이 바로 맞는 탭 구성으로
+// 그려진다. 실제 자격 판정은 여전히 서버(RLS)/클라이언트 재확인이 하고, 이 쿠키는 그
+// 결과가 나오기 전까지 뭘 먼저 그릴지 정하는 힌트일 뿐이다.
+const HAS_USABLE_COOKIE_KEY = "nav_has_usable_membership";
 
 export function setCachedHasUsableMembership(v: boolean): void {
-  try { localStorage.setItem(HAS_USABLE_CACHE_KEY, v ? "1" : "0"); } catch { /* 무시 */ }
+  try {
+    document.cookie = `${HAS_USABLE_COOKIE_KEY}=${v ? "1" : "0"}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+  } catch { /* 무시 */ }
+}
+
+// app/layout.tsx(서버 컴포넌트)가 next/headers의 cookies()로 읽은 원시 문자열을 넘겨주면
+// 판정한다 — 이 파일은 클라이언트 컴포넌트에서도 import되므로 next/headers는 여기서
+// 직접 import하지 않는다(서버 전용 모듈이라 클라이언트 번들에 섞이면 안 됨).
+export function parseHasUsableMembershipCookie(raw: string | undefined): boolean | null {
+  if (raw === "1") return true;
+  if (raw === "0") return false;
+  return null;
 }
 
 export async function fetchHasUsableMembership(): Promise<boolean> {

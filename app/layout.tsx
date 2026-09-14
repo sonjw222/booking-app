@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { cookies } from "next/headers";
 import "./globals.css";
 import { ImageViewerProvider } from "./components/ImageViewer";
 import SessionWatcher from "./components/SessionWatcher";
 import AppConfirmProvider from "./components/AppConfirmProvider";
 import GlobalBottomNav from "./components/GlobalBottomNav";
 import CapacitorBootstrap from "./components/CapacitorBootstrap";
+import { parseHasUsableMembershipCookie } from "../lib/navState";
 
 export const metadata: Metadata = {
   title: "모하빗",
@@ -24,11 +26,20 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // 릴리스 폴리시 배치(2026-09-14) — 이 앱은 클라이언트 라우팅이 없어(아래 인라인 스크립트
+  // 주석 참고) 탭을 옮길 때마다 이 레이아웃부터 서버에서 다시 렌더링된다. "예약"/"내 예약"
+  // 탭 노출 여부(하단 nav)를 클라이언트에서만 캐싱(localStorage)하면 서버가 그 값을 몰라
+  // 매번 "탭 3개로 먼저 그려졌다가 5개로 바뀌는" 깜빡임이 생긴다 — 쿠키는 서버도 읽을 수
+  // 있으므로 여기서 미리 읽어 GlobalBottomNav에 최초 렌더링 값으로 내려준다. 실제 자격
+  // 판정은 여전히 BottomNav가 클라이언트에서 다시 확인(lib/navState.ts) — 이 값은 그 결과가
+  // 나오기 전까지 뭘 먼저 그릴지 정하는 힌트일 뿐이다.
+  const cookieStore = await cookies();
+  const initialHasUsable = parseHasUsableMembershipCookie(cookieStore.get("nav_has_usable_membership")?.value);
   return (
     <html
       lang="en"
@@ -45,10 +56,18 @@ export default function RootLayout({
             하이드레이션보다 먼저 동기 실행돼야 해서 인라인 스크립트로 넣는다.
             "system"(또는 저장된 값이 없음)이면 OS 다크모드 설정을 따른다 — 이 해석
             로직은 app/settings/theme/page.tsx의 resolveEffectiveTheme()과 동일해야
-            한다(하이드레이션 전/후 결과가 달라지면 화면이 깜빡임). */}
+            한다(하이드레이션 전/후 결과가 달라지면 화면이 깜빡임).
+
+            릴리스 폴리시 배치(2026-09-14, 2차) — iOS 오버스크롤 다크모드 대응: 여기서 정한
+            dark 여부를 네이티브 WKWebView 배경(ios/App/App/WebViewThemePlugin.swift,
+            SceneDelegate.swift가 이미 시스템 설정 기준 동적 색을 baseline으로 깔아둠)에도
+            그대로 반영한다 — "시스템 설정 따르기"가 아니라 앱에서 명시적으로 고른 테마가
+            시스템 설정과 다른 경우까지 커버하려면 이 시점에 실제 적용된 값을 네이티브에
+            알려줘야 한다. window.Capacitor는 네이티브 WKWebView에서만 존재(웹/Android는
+            이 플러그인 자체가 없음) — try/catch로 감싸 실패해도 화면엔 영향 없음. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("app_theme");var dark=t==="charcoal"||((!t||t==="system")&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(dark)document.documentElement.setAttribute("data-theme","charcoal");else if(t==="burgundy")document.documentElement.setAttribute("data-theme","burgundy");}catch(e){}`,
+            __html: `try{var t=localStorage.getItem("app_theme");var dark=t==="charcoal"||((!t||t==="system")&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(dark)document.documentElement.setAttribute("data-theme","charcoal");else if(t==="burgundy")document.documentElement.setAttribute("data-theme","burgundy");try{window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.WebViewTheme&&window.Capacitor.Plugins.WebViewTheme.setBackground({hex:dark?"#17181C":"#FBFBFA"});}catch(e2){}}catch(e){}`,
           }}
         />
         {/* 결제(app/checkout)의 TossPaymentProvider가 window.TossPayments를 씀 — npm 패키지
@@ -61,7 +80,7 @@ export default function RootLayout({
         <SessionWatcher />
         <AppConfirmProvider />
         <ImageViewerProvider>{children}</ImageViewerProvider>
-        <GlobalBottomNav />
+        <GlobalBottomNav initialHasUsable={initialHasUsable} />
       </body>
     </html>
   );

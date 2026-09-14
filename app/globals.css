@@ -85,6 +85,16 @@
      사라지는 버그가 있었다(관리자 "더보기" 화면 등에서 마지막 메뉴가 nav에 가려짐).
   */
   --floating-nav-clearance: calc(65px + max(16px, env(safe-area-inset-bottom)));
+
+  /* 릴리스 폴리시 배치(2026-09-14) — 실기기 QA: 홈 이외의 거의 모든 화면(내 예약/알림/
+     마이/장바구니/구매내역/프로필/문의/검색/카테고리/설정 등이 공유하는 .back-header,
+     그리고 .noti-head/.inquiry-head, .search-header)이 상단 safe-area를 아예 반영하지
+     않고 있었다 — 화면마다 개별적으로 env(safe-area-inset-top)를 넣거나 빠뜨리는 대신,
+     여기 한 곳에 공용 토큰을 정의해 모든 상단 바 selector가 이 값만 쓰도록 통일한다
+     (아래 여러 selector 참고). 값 자체는 기존에 이미 잘 동작하던 .header/.mypage-shell
+     .profile-block 등이 쓰던 것과 동일 — 토큰화만 새로 한 것, 동작은 그대로. */
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
 }
 
 /* 다크 모드 */
@@ -192,8 +202,8 @@ a { color: inherit; text-decoration: none; }
    WebView를 상태바 아래까지 확장시키는데(viewport-fit=cover와 짝) 이 헤더만 안전영역을
    안 챙겨서, 화면 전환 순간 "오늘은 어떤 움직임을 찾나요?" 텍스트가 상태바 시계/아이콘과
    겹쳐 보였다. 다른 화면들(.mypage-shell .profile-block 등)과 동일한
-   max(Npx, env(safe-area-inset-top)) 패턴으로 통일 — 노치 없는 기기에서는 기존 14px 그대로. */
-.header { padding: max(14px, env(safe-area-inset-top)) var(--page-gutter) 14px; }
+   max(Npx, var(--safe-top)) 패턴으로 통일 — 노치 없는 기기에서는 기존 14px 그대로. */
+.header { padding: max(14px, var(--safe-top)) var(--page-gutter) 14px; }
 .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .location { display: flex; align-items: center; gap: 4px; font-size: 19px; font-weight: 800; letter-spacing: -0.3px; }
 .location .caret { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
@@ -425,7 +435,13 @@ a { color: inherit; text-decoration: none; }
 
 .input-field {
   width: 100%; background: var(--surface); border-radius: 12px; padding: 15px 16px;
-  font: inherit; font-size: 14.5px; color: var(--ink); border: 1px solid transparent; margin-bottom: 10px;
+  /* 실기기 QA(2026-09-14, 4차) — iOS Safari/WKWebView는 포커스되는 input/select/textarea의
+     computed font-size가 16px 미만이면 자동으로 화면을 확대한다(접근성 pinch-zoom을 막는
+     게 아니라 이 특정 동작만의 문제) — 이 앱에서 가장 널리 쓰이는 입력 클래스라 로그인/
+     회원가입/관리자 회원검색 등 거의 모든 입력창에서 재현됐다. 시각적으로 커 보이는 걸
+     막기 위해 padding/line-height로 보정하되 font-size 자체는 16px 밑으로 절대 안 내린다
+     (user-scalable=no, maximum-scale 같은 방식으로 줌 자체를 막는 건 접근성 훼손이라 금지). */
+  font: inherit; font-size: 16px; line-height: 1.3; color: var(--ink); border: 1px solid transparent; margin-bottom: 10px;
 }
 .input-field:focus { outline: none; border-color: var(--accent); background: var(--bg); }
 .input-field::placeholder { color: var(--ink-soft); }
@@ -599,7 +615,12 @@ a { color: inherit; text-decoration: none; }
    공통: 뒤로가기 헤더 / ghost 버튼
    ============================================================ */
 .back-header {
-  display: flex; align-items: center; justify-content: space-between; padding: 8px 16px 12px;
+  display: flex; align-items: center; justify-content: space-between;
+  /* 실기기 QA(2026-09-14) — 이 selector가 이 앱에서 가장 많이 재사용되는 상단 바인데
+     (내 예약/장바구니/구매내역/프로필/문의/카테고리/설정 등) safe-area-inset-top을 전혀
+     반영하지 않아 상태바/Dynamic Island와 콘텐츠가 겹쳤다. 8px는 노치 없는 기기 기준
+     여백을 그대로 유지. */
+  padding: max(8px, var(--safe-top)) 16px 12px;
 }
 .back-header .side { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 19px; }
 .back-header .title { font-size: 16px; font-weight: 800; }
@@ -2128,7 +2149,8 @@ a.membership-card { text-decoration: none; display: block; }
 .search-header .side { font-size: 24px; color: var(--text); text-decoration: none; flex: 0 0 auto; }
 .search-input {
   flex: 1; border: 1px solid var(--line); border-radius: 999px; padding: 9px 16px;
-  font-size: 14px; background: var(--surface); color: var(--text);
+  /* 실기기 QA(2026-09-14, 4차) — iOS 포커스 자동 확대 방지, .input-field와 동일한 이유. */
+  font-size: 16px; background: var(--surface); color: var(--text);
 }
 .search-go { flex: 0 0 auto; background: var(--accent); color: var(--bg); border: none; border-radius: 999px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .search-center-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); text-decoration: none; }
@@ -3216,7 +3238,7 @@ a.membership-card { text-decoration: none; display: block; }
 
 /* Keep transient manager messages compact on every viewport. */
 .manager-v3-content .error-toast {
-  top: max(14px, env(safe-area-inset-top));
+  top: max(14px, var(--safe-top));
   left: 50%;
   right: auto;
   width: max-content;
@@ -3415,7 +3437,7 @@ a.membership-card { text-decoration: none; display: block; }
 
 @media (max-width: 480px) {
   .cal-center-pick { min-width:116px; max-width:42vw; }
-  .cal-center-pick select { font-size:13px; }
+  .cal-center-pick select { font-size:16px; } /* 실기기 QA(2026-09-14, 4차) — iOS 포커스 자동 확대 방지 */
   .cal-memo-row { align-items:stretch; }
   .cal-memo-row .input-field { min-width:0; }
 }
@@ -3601,7 +3623,7 @@ a.membership-card { text-decoration: none; display: block; }
 /* Compact account identity; membership and goods cards now belong to the light system. */
 .mypage-shell .profile-block {
   min-height: 108px;
-  padding: max(30px, env(safe-area-inset-top)) var(--page-gutter) 22px;
+  padding: max(30px, var(--safe-top)) var(--page-gutter) 22px;
   gap: 12px;
 }
 .mypage-shell .avatar { width: 52px; height: 52px; border-radius: 17px; font-size: 20px; }
@@ -3710,7 +3732,7 @@ a.membership-card { text-decoration: none; display: block; }
   top: 0;
   /* 관리자 sheet가 열리면 header가 sheet의 클릭 영역을 가리지 않도록 한다. */
   z-index: 30;
-  padding: max(18px,env(safe-area-inset-top)) var(--page-gutter) 16px;
+  padding: max(18px,var(--safe-top)) var(--page-gutter) 16px;
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb,var(--bg) 94%,transparent);
   backdrop-filter: blur(18px);
@@ -3779,7 +3801,7 @@ a.membership-card { text-decoration: none; display: block; }
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  padding: max(18px,env(safe-area-inset-top)) var(--page-gutter) 16px;
+  padding: max(18px,var(--safe-top)) var(--page-gutter) 16px;
   /* 항상 어두운 헤더 바(운영자 화면 전용 디자인) — --ink는 다크 모드에서 거의 흰색으로
      뒤집히는 "현재 테마의 강조색" 토큰이라 여기 쓰면 다크 모드에서 흰 바탕이 된다.
      --grad1은 라이트/다크 모두 거의 검정으로 고정돼 있어 항상 어두운 표면에 맞다. */
@@ -3893,7 +3915,7 @@ a.membership-card { text-decoration: none; display: block; }
 .home-class-copy small { margin-top: 4px; overflow: hidden; color: var(--ink-soft); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
 .home-class-copy small b { color: var(--brand-ink); font-weight: 680; }
 
-.discovery-page-v2 .search-header { padding: 20px var(--page-gutter) 14px; gap: 8px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.discovery-page-v2 .search-header { padding: max(20px, var(--safe-top)) var(--page-gutter) 14px; gap: 8px; background: var(--bg); border-bottom: 1px solid var(--line); }
 .discovery-page-v2 .search-header .side,.category-page-v2 .back-header .side { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
 /* iOS 검색 화면 버튼이 화면 우측 밖으로 잘려 보이던 버그의 실제 원인: 이 input에
    autoFocus가 걸려 있고(app/search/page.tsx) font-size가 16px 미만이면, iOS
@@ -4017,7 +4039,7 @@ a.membership-card { text-decoration: none; display: block; }
 .member-reservation .mini-btn { min-width: 48px; min-height: 40px; padding: 0 8px; border: 0; background: transparent; color: var(--ink); font-size: 12px; font-weight: 680; }
 .member-reservation .mini-btn:not(.done) { border-radius: 999px; background: var(--ink); color: var(--bg); }
 
-.member-my-reservations .back-header { padding: 32px var(--page-gutter) 18px; }
+.member-my-reservations .back-header { padding: max(32px, var(--safe-top)) var(--page-gutter) 18px; }
 .member-my-reservations .back-header .title { margin-right: auto; font-size: 30px; line-height: 1.08; font-weight: 720; letter-spacing: -.035em; }
 .member-my-reservations .back-header .side:first-child { display: none; }
 .member-my-reservations .cal-export-btn { width: 44px; height: 44px; color: var(--ink); }
@@ -4065,7 +4087,7 @@ a.membership-card { text-decoration: none; display: block; }
 .center-detail-v2 { position: relative; }
 .center-detail-v2 .center-detail-head {
   position: absolute; top: 0; left: 0; right: 0; z-index: 20;
-  padding-top: max(18px,env(safe-area-inset-top));
+  padding-top: max(18px,var(--safe-top));
   color: var(--text-inverse); background: linear-gradient(180deg,rgba(0,0,0,.44),transparent);
 }
 .center-detail-v2 .center-detail-head .title { opacity: 0; }
@@ -4151,7 +4173,7 @@ a.membership-card { text-decoration: none; display: block; }
 .commerce-page .checkout-done-icon::after { content: "✓"; color: var(--text-inverse); font-size: 25px; font-weight: 700; }
 /* Batch 6: member communication, account and authentication surfaces */
 .member-notifications,.member-inquiries,.mypage-shell,.account-page-v2{background:var(--bg)}
-.noti-head,.inquiry-head,.mypage-titlebar{display:flex;align-items:flex-end;justify-content:space-between;min-height:96px;padding:34px var(--page-gutter) 20px;border-bottom:1px solid var(--line)}
+.noti-head,.inquiry-head,.mypage-titlebar{display:flex;align-items:flex-end;justify-content:space-between;min-height:96px;padding:max(34px, var(--safe-top)) var(--page-gutter) 20px;border-bottom:1px solid var(--line)}
 .noti-head h1,.inquiry-head h1,.mypage-titlebar h1{font-size:28px;line-height:1.1;font-weight:800;letter-spacing:-.7px}
 .noti-head a,.noti-head button{min-height:40px;padding:0 4px;color:var(--brand-ink);font-size:13px;font-weight:700}
 .inquiry-head p{margin-top:6px;color:var(--ink-soft);font-size:12px}
@@ -4186,7 +4208,7 @@ a.membership-card { text-decoration: none; display: block; }
    바꿔 항상 텍스트 다음에 오도록 고쳤다 — 텍스트가 몇 줄이 되든 아이콘은 그 아래로
    밀려날 뿐 절대 겹치지 않는다. 폰트 크기/여백은 clamp()로 뷰포트에 맞춰 부드럽게
    줄어들어 320px 폭에서도 강제 줄바꿈이 줄어든다. */
-.auth-scene{position:relative;display:flex;flex-direction:column;min-height:278px;padding:max(24px,env(safe-area-inset-top)) 22px clamp(20px,5vh,36px);overflow:hidden;color:var(--text-inverse);background:var(--grad1)}
+.auth-scene{position:relative;display:flex;flex-direction:column;min-height:278px;padding:max(24px,var(--safe-top)) 22px clamp(20px,5vh,36px);overflow:hidden;color:var(--text-inverse);background:var(--grad1)}
 .auth-scene:before,.auth-scene:after{content:"";position:absolute;border:1px solid rgba(255,255,255,.14);border-radius:50%}.auth-scene:before{width:250px;height:250px;right:-88px;top:18px}.auth-scene:after{width:145px;height:145px;right:-32px;top:74px}
 .auth-home-link{position:relative;z-index:2;flex:0 0 auto;color:var(--text-inverse);font-size:13px;font-weight:750}.auth-scene-copy{position:relative;z-index:2;flex:0 1 auto;min-width:0;margin-top:clamp(14px,4vh,24px)}.auth-scene-copy>span{color:rgba(255,255,255,.55);font-size:10px;font-weight:750;letter-spacing:1.4px}.auth-scene-copy h1{margin-top:10px;font-size:clamp(21px,6.5vw,27px);line-height:1.25;letter-spacing:-.9px;text-wrap:balance}.auth-scene-copy p{margin-top:9px;color:rgba(255,255,255,.68);font-size:clamp(12px,3.4vw,13px);line-height:1.55;overflow-wrap:break-word}
 .auth-activities{position:relative;z-index:2;flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;margin-top:clamp(14px,4vh,20px)}.auth-activities>div{flex:0 0 auto;display:grid;place-items:center;width:48px;height:48px;border:1px solid rgba(255,255,255,.13);border-radius:15px;background:rgba(255,255,255,.06)}.auth-activities span{display:none}.auth-activities img{width:30px;height:30px;object-fit:contain;border-radius:50%}
@@ -4222,7 +4244,7 @@ a.membership-card { text-decoration: none; display: block; }
    기본적으로 숨겨져 "복사"/"휴무일" 버튼이 완전히 사라진다 — 선택자 특이성을 그 규칙보다
    높여(app-shell.manager-classes-v2 결합) 이 화면만 원래 3분할 레이아웃으로 되돌린다. */
 .manager-v3-content>.app-shell.manager-classes-v2>.back-header{display:flex}
-.manager-classes-v2>.back-header{min-height:88px;padding:28px var(--page-gutter) 18px;border-bottom:1px solid var(--line)}
+.manager-classes-v2>.back-header{min-height:88px;padding:max(28px, var(--safe-top)) var(--page-gutter) 18px;border-bottom:1px solid var(--line)}
 .manager-classes-v2>.back-header .title{font-size:27px;font-weight:800;letter-spacing:-.7px}
 .manager-classes-v2>.back-header .cal-export-btn{min-width:48px;min-height:40px;padding:0 8px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);font-weight:700}
 /* "일정 복사"는 "휴무일"보다 글자가 많아 같은 padding으로는 텍스트가 꽉 차 보였다 —
@@ -4241,7 +4263,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-classes-v2 .manager-cal-header .cal-nav-btn{width:40px;height:40px;flex:0 0 40px;border:0;border-radius:50%;background:transparent;color:var(--ink);font-size:25px;font-weight:400}.manager-classes-v2 .manager-cal-header .cal-nav-btn:active{background:var(--surface)}
 .manager-center-select{position:relative;min-width:0;max-width:146px;height:40px;display:flex;align-items:center;padding:0 27px 0 11px;border:1px solid var(--line);border-radius:999px;background:var(--card-bg)}
 .manager-center-select:after{content:"";position:absolute;right:12px;top:50%;width:6px;height:6px;border-right:1.5px solid var(--ink-soft);border-bottom:1.5px solid var(--ink-soft);transform:translateY(-68%) rotate(45deg);pointer-events:none}
-.manager-center-select select{width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:12.5px;font-weight:680;text-overflow:ellipsis;appearance:none;cursor:pointer}
+.manager-center-select select{width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:16px;font-weight:680;text-overflow:ellipsis;appearance:none;cursor:pointer}
 .manager-classes-v2>.cal-weekdays{border-bottom:1px solid var(--line)}
 .manager-classes-v2>.cal-grid{padding-left:var(--page-gutter);padding-right:var(--page-gutter)}
 .manager-classes-v2>.cal-grid .cal-cell,.manager-classes-v2>.cal-grid .cal-cell.selected{min-height:56px;padding:9px 0 7px;border:0!important;border-radius:0!important;background:transparent!important}
@@ -4260,7 +4282,7 @@ a.membership-card { text-decoration: none; display: block; }
    --bg는 라이트/다크 모두 --ink의 반대쪽 극단이라(라이트: 거의 흰색, 다크: 거의 검정) 항상
    대비가 유지된다. */
 .manager-classes-v2>.fab-btn{width:calc(100% - (var(--page-gutter) * 2));bottom:104px;border-radius:15px;background:var(--ink);color:var(--bg);box-shadow:0 8px 24px rgba(20,20,20,.16)}
-.manager-classes-v2 .sheet input[type="date"]{min-height:50px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface);color:var(--ink);font-size:14px}.manager-classes-v2 .sheet .time-row input[type="date"]{flex:1;min-width:0}.manager-classes-v2 .sheet .perm-guide.schedule-rule-warning{border-left-color:var(--danger);color:var(--danger)!important}
+.manager-classes-v2 .sheet input[type="date"]{min-height:50px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface);color:var(--ink);font-size:16px}.manager-classes-v2 .sheet .time-row input[type="date"]{flex:1;min-width:0}.manager-classes-v2 .sheet .perm-guide.schedule-rule-warning{border-left-color:var(--danger);color:var(--danger)!important}
 @media(max-width:380px){.manager-classes-v2 .manager-cal-header .cal-title{min-width:102px;font-size:18px}.manager-classes-v2 .manager-cal-header .cal-nav-btn{width:34px;flex-basis:34px}.manager-center-select{max-width:116px}}
 
 /* Batch 7C: manager detail surfaces — shared hierarchy without replacing feature logic. */
@@ -4275,7 +4297,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-v3-content .filter-chip,.manager-v3-content .perm-tab{min-height:40px;padding:0 2px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--ink-soft);font-size:13px;font-weight:650;white-space:nowrap}.manager-v3-content .filter-chip.on,.manager-v3-content .perm-tab.on{border-bottom-color:var(--ink);background:transparent;color:var(--ink)}
 .manager-v3-content .input-field,
 .admin-v3-content .input-field,
-.manager-v3-content .date-input {min-height:50px;padding:0 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);font-size:14px;box-shadow:none}.manager-v3-content textarea.input-field,
+.manager-v3-content .date-input {min-height:50px;padding:0 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);font-size:16px;box-shadow:none}.manager-v3-content textarea.input-field,
 .admin-v3-content textarea.input-field {min-height:116px;padding-block:13px;line-height:1.6;resize:vertical}
 .manager-v3-content .perm-guide,
 .admin-v3-content .perm-guide {margin:12px var(--page-gutter);padding:13px 0 13px 14px;border:0;border-left:2px solid var(--brand);border-radius:0;background:transparent;color:var(--ink-soft);font-size:12px;line-height:1.6}
@@ -4431,7 +4453,7 @@ textarea:focus-visible,
 
 .mypage-shell .profile-block {
   min-height: 108px;
-  padding: max(30px,env(safe-area-inset-top)) var(--page-gutter) 22px;
+  padding: max(30px,var(--safe-top)) var(--page-gutter) 22px;
   gap: 12px;
 }
 .mypage-shell .avatar {

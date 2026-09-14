@@ -307,22 +307,29 @@ export function canSeeManagerMenu(
   return myPerms?.has(permissionKey) ?? false;
 }
 
-// ManagerNav의 "회원" 탭 판정을 기기에 캐싱해 다음 진입 때 초기값으로 쓴다 — 판정 전에는
-// 탭을 숨겨야 하는데(권한 없는 스태프에게 잠깐이라도 보이면 안 됨), 그 로딩 상태가 매번
-// "숨김 → (권한 있으면) 표시"로 깜빡이는 걸 줄이기 위함이다(ManagerNav.tsx 참고).
-const CAN_SEE_MEMBERS_CACHE_KEY = "manager_nav_can_see_members";
-
-export function getCachedCanSeeMembers(): boolean | null {
-  try {
-    const v = localStorage.getItem(CAN_SEE_MEMBERS_CACHE_KEY);
-    if (v === "1") return true;
-    if (v === "0") return false;
-  } catch { /* 무시 */ }
-  return null;
-}
+// ManagerNav의 "회원" 탭 판정을 쿠키에 캐싱해 다음 진입의 서버 렌더링 초기값으로 쓴다 —
+// 판정 전에는 탭을 숨겨야 하는데(권한 없는 스태프에게 잠깐이라도 보이면 안 됨), 이 앱은
+// 클라이언트 라우팅이 없어(app/layout.tsx 주석 참고) 관리자 탭 전환도 매번 전체 페이지가
+// 서버에서부터 다시 렌더링된다 — localStorage는 서버가 못 읽어 서버 렌더링(=최초 페인트)
+// 자체를 못 바꾸므로, 쿠키에 직전 판정 결과를 저장해 app/manager/layout.tsx(서버
+// 컴포넌트)가 다음 로드 때 미리 반영하게 한다("탭 3개→4개" 깜빡임 방지). 실제 권한 판정은
+// 여전히 서버(RLS)/클라이언트 재확인이 하고, 이 쿠키는 그 결과가 나오기 전까지 뭘 먼저
+// 그릴지 정하는 힌트일 뿐이다.
+const CAN_SEE_MEMBERS_COOKIE_KEY = "manager_nav_can_see_members";
 
 export function setCachedCanSeeMembers(v: boolean): void {
-  try { localStorage.setItem(CAN_SEE_MEMBERS_CACHE_KEY, v ? "1" : "0"); } catch { /* 무시 */ }
+  try {
+    document.cookie = `${CAN_SEE_MEMBERS_COOKIE_KEY}=${v ? "1" : "0"}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+  } catch { /* 무시 */ }
+}
+
+// app/manager/layout.tsx(서버 컴포넌트)가 next/headers의 cookies()로 읽은 원시 문자열을
+// 넘겨주면 판정한다 — 이 파일은 클라이언트 컴포넌트에서도 import되므로 next/headers는
+// 여기서 직접 import하지 않는다(서버 전용 모듈이라 클라이언트 번들에 섞이면 안 됨).
+export function parseCanSeeMembersCookie(raw: string | undefined): boolean | null {
+  if (raw === "1") return true;
+  if (raw === "0") return false;
+  return null;
 }
 
 /*

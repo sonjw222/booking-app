@@ -7,16 +7,17 @@
 */
 
 import { usePathname } from "next/navigation";
-import { useEffect, useLayoutEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { fetchUnreadCount, subscribeNotifications } from "../../lib/notifications";
 import {
   fetchHasUsableMembership, shouldShowMembershipTabs,
-  getCachedHasUsableMembership, setCachedHasUsableMembership,
+  setCachedHasUsableMembership,
 } from "../../lib/navState";
 import NotificationToaster from "./NotificationToaster";
 import UiIcon from "./UiIcon";
 
-export default function BottomNav() {
+export default function BottomNav({ initialHasUsable = null }: { initialHasUsable?: boolean | null }) {
   const pathname = usePathname();
   const is = (p: string) => (p === "/" ? pathname === "/" : pathname.startsWith(p));
   // /mypage/calendar는 마이페이지가 아니라 내 예약(/my-reservations)에서 들어가는 화면이라
@@ -28,16 +29,15 @@ export default function BottomNav() {
   // 예약 가능한(usable) 수강권이 있는지 — 없으면 "예약"/"내 예약" 탭을 모두 숨긴다(NAV-001).
   // null = 아직 판단 전(로딩 중). 판단 전에 "있다"고 가정하면 탭이 잠깐 보였다가 사라지는
   // 깜빡임이 생기므로, 로딩 중에는 false와 동일하게 취급해 안정적으로 3탭만 보여준다.
-  // 서버 프리렌더와 맞추기 위해 초기값은 null로 두고, 마운트 직후 useLayoutEffect에서
-  // 캐시값을 화면에 그려지기 전에 반영한다(아래) — BottomNav가 페이지마다 새로 마운트돼
-  // 캐시가 없으면 페이지를 옮길 때마다 3탭→5탭으로 깜빡이는 문제가 있었다.
-  const [hasUsable, setHasUsable] = useState<boolean | null>(null);
+  // 릴리스 폴리시 배치(2026-09-14) — 이 앱은 클라이언트 라우팅이 없어 탭 전환마다 전체
+  // 페이지가 서버에서부터 다시 그려진다. localStorage 기반 useLayoutEffect 보정은 서버
+  // 렌더링(=최초 페인트) 자체에는 영향을 못 줘서 "3탭 화면이 먼저 그려졌다가 5탭으로
+  // 바뀌는" 깜빡임을 못 막았다 — 대신 app/layout.tsx(서버 컴포넌트)가 쿠키(lib/navState.ts의
+  // parseHasUsableMembershipCookie)를 읽어 이 값을 서버 렌더링 시점부터 이미 맞는 상태로
+  // 내려준다. initialHasUsable이 null이면(쿠키 없음, 최초 진입) 기존과 동일하게 판정 전까지
+  // 3탭으로 안전하게 시작한다.
+  const [hasUsable, setHasUsable] = useState<boolean | null>(initialHasUsable);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-
-  useLayoutEffect(() => {
-    const cached = getCachedHasUsableMembership();
-    if (cached !== null) setHasUsable(cached);
-  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -87,29 +87,41 @@ export default function BottomNav() {
   return (
     <>
       <NotificationToaster />
+      {/* 릴리스 폴리시 배치(2026-09-14, 3차) — 실기기에서 탭 전환이 느리고 스켈레톤이
+          반복되고 화면이 깜빡인다는 신고의 근본 원인은 이 nav가 <a href>라 클릭마다 전체
+          문서를 서버에서 다시 받아왔기 때문이다(app/layout.tsx 주석에 있던 "이 앱은
+          클라이언트 라우팅 없음" 설명 자체가 이 nav 한정으로는 낡은 전제였음 — 정작
+          app/reservation/page.tsx, app/components/BackButton.tsx 등 다른 화면에서는 이미
+          이전부터 Next.js router.push()/router.back()으로 실제 클라이언트 전환이 문제
+          없이 쓰이고 있었다는 게 이번에 확인됨). 이 nav가 감싸는 5개 탭은 전부 같은 루트
+          레이아웃(app/layout.tsx) 아래에 있어 레이아웃 자체는 유지한 채 탭 콘텐츠만
+          바뀌는 게 안전하다 — <Link>로 바꾸면 CapacitorBootstrap/SessionWatcher/테마
+          스크립트가 탭마다 다시 실행되던 낭비도 같이 없어진다(전부 세션당 한 번만 필요한
+          초기화). 이 nav 밖의(각 화면 안쪽) 다른 <a href> 링크들은 이번 범위 밖 —
+          docs/TODO.md P3-12 참고, 전면 전환은 별도 배치. */}
       <nav className={`bottom-nav ${keyboardOpen ? "keyboard-hidden" : ""}`} aria-label="회원 주요 메뉴">
-        <a className={`nav-item ${is("/") ? "active" : ""}`} href="/">
+        <Link className={`nav-item ${is("/") ? "active" : ""}`} href="/">
           <div className="nav-icon"><UiIcon name="home" /></div>홈
-        </a>
+        </Link>
         {showMembershipTabs && (
-          <a className={`nav-item ${is("/reservation") ? "active" : ""}`} href="/reservation">
+          <Link className={`nav-item ${is("/reservation") ? "active" : ""}`} href="/reservation">
             <div className="nav-icon"><UiIcon name="calendar" /></div>예약
-          </a>
+          </Link>
         )}
         {showMembershipTabs && (
-          <a className={`nav-item ${isMyReservations ? "active" : ""}`} href="/my-reservations">
+          <Link className={`nav-item ${isMyReservations ? "active" : ""}`} href="/my-reservations">
             <div className="nav-icon"><UiIcon name="list" /></div>내 예약
-          </a>
+          </Link>
         )}
-        <a className={`nav-item ${is("/notifications") ? "active" : ""}`} href="/notifications">
+        <Link className={`nav-item ${is("/notifications") ? "active" : ""}`} href="/notifications">
           <div className="nav-icon" style={{ position: "relative" }}>
             <UiIcon name="bell" />
             {unread > 0 && <span className="nav-badge">{unread > 9 ? "9+" : unread}</span>}
           </div>알림
-        </a>
-        <a className={`nav-item ${isMypage ? "active" : ""}`} href="/mypage">
+        </Link>
+        <Link className={`nav-item ${isMypage ? "active" : ""}`} href="/mypage">
           <div className="nav-icon"><UiIcon name="user" /></div>마이
-        </a>
+        </Link>
       </nav>
     </>
   );
