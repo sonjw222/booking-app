@@ -352,6 +352,9 @@ export default function LoginPage() {
     // 설정과 일치해서 아래 공용 signInWithOAuth 경로를 쓰면 애초에 실패한다
     // (lib/appleAuth.ts 주석, AUTH_SETUP.md 3-2절 참고).
     if (provider === "apple") {
+      // 실기기 QA(2026-09-14) — Apple 버튼 클릭이 정확히 이 분기로 들어오는지, 그리고
+      // signInWithOAuth로는 절대 안 새는지 콘솔에서 바로 확인할 수 있게 로그를 남긴다.
+      console.log("[login] Apple 버튼 클릭 — 네이티브 경로로 진입(signInWithOAuth 미사용)");
       try {
         await signInWithAppleNative();
         window.location.href = "/";
@@ -360,7 +363,7 @@ export default function LoginPage() {
         if (e instanceof AppleSignInCancelledError) return; // 사용자가 직접 취소 — 에러로 안 보여줌
         setMessage({ type: "error", text: e.message ?? "애플 로그인에 실패했어요" });
       }
-      return;
+      return; // 이 return 이후로는 절대 아래의 공용 signInWithOAuth 호출에 도달하지 않는다.
     }
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -584,8 +587,12 @@ export default function LoginPage() {
             <span className="social-ic" aria-hidden="true">
               {/* viewBox를 path의 실제 bbox(-0.5 1.9 22 22, getBBox()로 측정)에 맞춰
                   정사각형으로 잘라 시각 중앙에 오도록 함 — 원래 "0 0 24 24"는 심볼
-                  자체가 왼쪽으로 치우쳐 있어 원 안에서 중앙정렬이 안 맞았다. */}
-              <svg width="27" height="27" viewBox="-0.5 1.9 22 22" fill="currentColor"><path d="M16.7 2.3c.1 1-.3 2-.9 2.7-.6.7-1.6 1.3-2.6 1.2-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.3ZM20.5 17c-.6 1.3-.9 1.9-1.6 3-1 1.5-2.5 3.4-4.3 3.4-1.6 0-2-1-4.1-1s-2.6 1-4.2 1c-1.8 0-3.2-1.7-4.2-3.2C.4 17-.4 12.7 1.6 9.7c1-1.5 2.6-2.4 4.2-2.4 1.6 0 2.7 1.1 4 1.1 1.3 0 2.1-1.1 4-1.1 1.3 0 2.7.7 3.7 1.9-3.3 1.8-2.8 6.5.3 7.8Z"/></svg>
+                  자체가 왼쪽으로 치우쳐 있어 원 안에서 중앙정렬이 안 맞았다.
+                  실기기 QA(2026-09-14) — 27px는 카카오 심볼(30px)보다 눈에 띄게 작아
+                  버튼 행에서 시각적 무게가 어긋나 보였다("부자연스럽다") — 같은 비율
+                  (viewBox·path 그대로, 크기만) 30px로 맞춤. Apple 마크 자체의 형태·비율·
+                  색상(검정 배경 위 흰색 — Apple 공식 "Black" 버튼 스타일)은 변형하지 않음. */}
+              <svg width="30" height="30" viewBox="-0.5 1.9 22 22" fill="currentColor"><path d="M16.7 2.3c.1 1-.3 2-.9 2.7-.6.7-1.6 1.3-2.6 1.2-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.3ZM20.5 17c-.6 1.3-.9 1.9-1.6 3-1 1.5-2.5 3.4-4.3 3.4-1.6 0-2-1-4.1-1s-2.6 1-4.2 1c-1.8 0-3.2-1.7-4.2-3.2C.4 17-.4 12.7 1.6 9.7c1-1.5 2.6-2.4 4.2-2.4 1.6 0 2.7 1.1 4 1.1 1.3 0 2.1-1.1 4-1.1 1.3 0 2.7.7 3.7 1.9-3.3 1.8-2.8 6.5.3 7.8Z"/></svg>
             </span>
             <span className="sr-only">{socialLoading === "apple" ? "이동 중..." : mode === "signup" ? "Apple로 가입하기" : "Apple로 계속하기"}</span>
           </button>

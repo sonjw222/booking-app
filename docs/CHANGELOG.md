@@ -1,5 +1,52 @@
 # CHANGELOG
 
+## 2026-09-14 — 릴리스 폴리시 배치 3차: 실기기 QA 회귀 대응(safe-area/overscroll/Apple/edge-swipe)
+
+PR #150을 실기기에 설치해 QA한 결과 여러 release blocker가 보고됨. 코드 재검증 결과 상당수
+(회원/관리자 nav flash, "로그인 안 된 화면" 노출, Apple OAuth JSON 에러, 화면 전환 flash)는
+**이 PR의 웹/JS 변경이 실제로는 실기기에 반영되지 않았을 가능성이 매우 높다** — 이 앱은
+`server.url` 모드로 WKWebView가 로컬 번들이 아니라 `https://mwhabit.com`(프로덕션, main
+브랜치만 반영됨)을 네트워크로 직접 불러온다. `capacitor.config.ts`의 이 URL은 그대로이고
+별도 프리뷰 배포 연결 증거도 없어서, 네이티브(Swift) 변경은 실기기 빌드에 반영되지만 이
+PR의 `app/`·`lib/` 변경은 main에 머지·배포되기 전까지는 실기기에서 전혀 실행되지 않는다.
+특히 Apple 로그인 에러("Unsupported provider: missing OAuth secret")는 Supabase의 OAuth
+authorize 엔드포인트가 직접 반환하는 응답인데, 현재 코드는 `provider==="apple"`을 그 호출
+이전에 분기해 절대 도달할 수 없음을 재확인함(`tests/unit/appleAuth.noOAuthFallback.test.ts`로
+회귀 고정) — 실기기가 구버전 프로덕션 코드를 로드했다는 강한 증거. 이 사실과 무관하게 아래
+항목들은 코드 자체에서 실제 결함을 찾아 수정함.
+
+**상단 safe-area — 전면 감사 후 공용 토큰화**: `.back-header`(내 예약/장바구니/구매내역/
+프로필/문의/카테고리/설정 등 다수 화면이 공유하는 상단 바)가 `safe-area-inset-top`을 아예
+반영하지 않고 있었고, `.noti-head`/`.inquiry-head`, `.discovery-page-v2 .search-header`,
+그리고 `.member-my-reservations .back-header`/`.manager-classes-v2>.back-header`(전체
+padding을 재정의하며 safe-area를 빠뜨림) 등 개별 override도 마찬가지였다 — `.header`(홈)만
+이미 반영돼 있었음. `:root`에 `--safe-top`/`--safe-bottom` 공용 토큰을 추가하고 위 selector
+전부와 기존에 흩어져 있던 raw `env(safe-area-inset-top)` 사용처를 이 토큰으로 통일.
+
+**iOS 네이티브 오버스크롤 강제 활성화**: `webView.scrollView.bounces`/`alwaysBounceVertical`을
+`SceneDelegate.swift`에서 명시적으로 켬 — 기본값은 콘텐츠가 뷰포트보다 짧은 화면(로그인,
+빈 알림함 등)에서는 rubber-band가 아예 발생하지 않는다.
+
+**iOS 엣지 스와이프 뒤로가기 활성화**: `webView.allowsBackForwardNavigationGestures = true` —
+기본 false라 전혀 동작하지 않고 있었음. 브라우저 세션 히스토리(Next.js router의 pushState
+포함) 기준으로 동작해 이전 배치의 `<Link>` 전환과도 자연스럽게 맞물림.
+
+**Apple 로그인 방어 강화 + 진단 로그**: 네이티브 플러그인을 못 찾는 경우(`registerPlugin`의
+"not implemented" 예외) `signInWithOAuth`로 폴백하지 않고 "Apple 로그인을 초기화할 수
+없어요" 안내로 끝나도록 명시적으로 분기(`isPluginUnavailableError`). 각 단계에
+`console.log`를 남겨 실기기에서 실제 실행 경로를 Xcode 콘솔로 추적 가능하게 함. apple 분기가
+공용 `signInWithOAuth` 호출에 절대 도달하지 않음을 소스 구조 기준으로 테스트 고정.
+
+**Apple 버튼 시각 보정**: Apple 마크가 카카오(30px) 대비 눈에 띄게 작아(27px) 버튼 행에서
+시각적 무게가 어긋나 보이던 것을 동일 비율로 30px로 통일(마크 형태·비율·색상은 변형 없음).
+
+**검증**: `npm run build`/`npx tsc --noEmit`(신규 에러 0) 통과. 단위테스트 321개 통과(신규
+4개). iOS `xcodebuild`(시뮬레이터+제네릭 Release) 통과, Android `assembleDebug` 통과.
+
+변경 파일: `app/globals.css`, `app/login/page.tsx`, `lib/appleAuth.ts`,
+`ios/App/App/SceneDelegate.swift`, `tests/unit/appleAuth.noOAuthFallback.test.ts`(신규).
+새 SQL 없음.
+
 ## 2026-09-14 — 릴리스 폴리시 배치 2차: Apple 네이티브 로그인/다크 오버스크롤/탭 클라이언트 전환
 
 **Apple 로그인 아키텍처를 웹 OAuth에서 네이티브로 전환**: 실제 콘솔 설정(Supabase Apple

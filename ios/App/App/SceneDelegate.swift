@@ -39,6 +39,24 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             if #available(iOS 15.0, *) {
                 webView.underPageBackgroundColor = dynamicBg
             }
+
+            // 실기기 QA(2026-09-14) — "당겨도 전혀 안 튕긴다"는 신고 대응. WKWebView는
+            // 콘텐츠 높이가 뷰포트보다 짧은 화면(로그인, 빈 알림함 등)에서는
+            // alwaysBounceVertical 없이는 기본적으로 rubber-band가 아예 발생하지 않는다
+            // (콘텐츠가 실제로 넘칠 때만 자동으로 튕김) — 명시적으로 켜서 모든 화면에서
+            // 일관되게 당겨지는 느낌을 보장한다. bounces는 Capacitor/WKWebView 기본값이
+            // 이미 true지만, 다른 곳에서 의도치 않게 꺼지는 걸 방지하기 위해 여기서도
+            // 명시한다.
+            webView.scrollView.bounces = true
+            webView.scrollView.alwaysBounceVertical = true
+
+            // 실기기 QA(2026-09-14) — iOS 좌측 엣지 스와이프 뒤로가기가 전혀 동작하지
+            // 않는다는 신고 대응. WKWebView는 이 프로퍼티가 기본 false라 명시적으로 켜야
+            // 한다 — 브라우저 세션 히스토리(History API, Next.js router가 내부적으로 쓰는
+            // pushState 포함) 기준으로 동작하므로 이 앱의 <Link> 기반 탭 전환과도 자연스럽게
+            // 맞물린다(탭을 여러 개 거쳐온 뒤 스와이프하면 거쳐온 탭들을 순서대로 되짚는
+            // 것 — 일반 웹/Safari와 동일한 정상 동작, 별도로 억제하지 않음).
+            webView.allowsBackForwardNavigationGestures = true
         }
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
