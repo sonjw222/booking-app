@@ -24,7 +24,7 @@ import { validateCenterRegistrationInput, registerCenterForAccount } from "../..
 import { setBootstrapSuppressed, ensureAccountForCurrentUser } from "../../lib/authAccount";
 import { startNaverLogin } from "../../lib/naverAuth";
 import { startKakaoLogin } from "../../lib/kakaoAuth";
-import { signInWithAppleNative, AppleSignInCancelledError } from "../../lib/appleAuth";
+import { signInWithAppleNative, AppleSignInCancelledError, isAppleNativeSignInSupported } from "../../lib/appleAuth";
 import { stashPostLoginNext } from "../../lib/postLoginReturn";
 import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
 
@@ -72,6 +72,23 @@ export default function LoginPage() {
   // 소셜 버튼 각각의 리다이렉트 진행 상태 — 성공하면 곧바로 provider 페이지로 페이지 전체가
   // 이동하므로 별도로 false로 되돌릴 필요는 없다(에러일 때만 되돌림).
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
+  // Android UX 정리(2026-09-14) — Apple 네이티브 로그인(ios/App/App/AppleSignInPlugin.swift,
+  // lib/appleAuth.ts)은 ASAuthorizationAppleIDProvider가 iOS/macOS 전용 API라 구조적으로
+  // Android에는 존재할 수 없다. Android 네이티브 앱과 일반 웹 브라우저 둘 다
+  // isAppleNativeSignInSupported()가 false를 반환해 버튼을 눌러도 "iOS 앱에서만
+  // 지원돼요" 안내만 뜨는 죽은 CTA였다 — 조사 결과 웹 브라우저에서도 정확히 같은 이유로
+  // 동작할 수 없으므로(현재 Supabase Apple Provider 설정 자체가 네이티브 전용 — Client
+  // IDs=Bundle ID, Secret 없음), Android와 동일하게 숨기는 것이 "안전한 기존 구조 재사용"
+  // 결정이다(새 web OAuth 경로를 만들지 않음). iOS 네이티브 앱에서만 노출한다.
+  // Capacitor.isNativePlatform()/getPlatform()은 window 참조라 SSR에서는 항상
+  // false로 안전하게 평가되지만(하이드레이션 불일치 방지를 위해), 실제 네이티브 iOS
+  // 여부는 클라이언트에서만 확정할 수 있어 마운트 후 useEffect에서 갱신한다 — 초기값
+  // false(숨김)는 기존 로딩 상태 처리 관례(예: BottomNav의 hasUsable)와 동일하게
+  // "판정 전엔 안전한 쪽"을 따른다.
+  const [showAppleButton, setShowAppleButton] = useState(false);
+  useEffect(() => {
+    setShowAppleButton(isAppleNativeSignInSupported());
+  }, []);
   const [message, setMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
   // "로그인 상태 유지"(remember me, P1) — 기본 체크(기존과 동일하게 localStorage에 세션 저장).
   // 해제하면 이 브라우저 탭/창을 닫을 때 세션도 같이 사라진다(sessionStorage로 저장, P1).
@@ -591,6 +608,7 @@ export default function LoginPage() {
             <span className="social-ic" aria-hidden="true">N</span>
             <span className="sr-only">{socialLoading === "naver" ? "이동 중..." : mode === "signup" ? "네이버로 가입하기" : "네이버로 시작하기"}</span>
           </button>
+          {showAppleButton && (
           <button className="social-btn apple" onClick={() => handleSocial("apple")} disabled={!!socialLoading}>
             <span className="social-ic" aria-hidden="true">
               {/* viewBox를 path의 실제 bbox(-0.5 1.9 22 22, getBBox()로 측정)에 맞춰
@@ -604,6 +622,7 @@ export default function LoginPage() {
             </span>
             <span className="sr-only">{socialLoading === "apple" ? "이동 중..." : mode === "signup" ? "Apple로 가입하기" : "Apple로 계속하기"}</span>
           </button>
+          )}
         </div>
       </section>
     </div>

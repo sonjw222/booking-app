@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## 2026-09-14 — 릴리스 폴리시 배치 5차: Android에서 Apple 로그인 버튼 숨김
+
+Android 네이티브 앱과 일반 웹 브라우저에서 Apple 버튼이 눌러도 "iOS 앱에서만 지원돼요"
+안내만 뜨는 죽은 CTA였던 것을 정리. `ASAuthorizationAppleIDProvider`가 iOS/macOS 전용
+API라 구조적으로 다른 플랫폼엔 대응할 방법이 없고, 새 web OAuth 경로(Services ID/시크릿
+필요)를 만드는 것도 요청 범위 밖이라 만들지 않음 — 대신 `lib/appleAuth.ts`의 기존
+`isAppleNativeSignInSupported()`(iOS 네이티브 여부 판정)를 `app/login/page.tsx`에서
+버튼 노출 여부에도 재사용. 로그인/회원가입 두 모드가 같은 `.social-list` 블록 하나를
+공유하므로 한 곳만 고치면 양쪽에 다 적용됨. Google/Kakao/Naver 버튼과 Apple 네이티브
+로그인 코드 자체(플러그인, nonce 처리, signInWithIdToken 등)는 전혀 건드리지 않음 —
+`.social-list`가 이미 `justify-content:center`라 버튼이 3개든 4개든 자동으로 가운데
+정렬되므로 별도 레이아웃 CSS 변경도 불필요.
+
+SSR 하이드레이션 불일치를 피하려고 `Capacitor.isNativePlatform()` 판정은 `useState(false)`
++ 마운트 후 `useEffect`로 갱신(서버는 항상 "web"으로 안전하게 평가되는 기존 Capacitor
+동작 방식과 일치, `app/globals.css`의 다른 네이티브 전용 분기들과 동일 패턴).
+
+**검증**: `npm run build`/`npx tsc --noEmit`(신규 에러 0) 통과. 단위테스트 328개 통과
+(신규 7개 — iOS/Android/웹 플랫폼별 노출 판정, 소스 구조 기준 Apple 버튼 조건부 렌더링 +
+Google/Kakao/Naver 무조건 렌더링 + Apple 네이티브 로그인 코드 존재 확인). iOS
+`xcodebuild`(시뮬레이터+제네릭 Release) 통과 — Apple 버튼 정상 노출 확인(코드 경로 기준).
+Android `assembleDebug` 통과.
+
+변경 파일: `app/login/page.tsx`, `docs/CHANGELOG.md`,
+`tests/unit/appleAuth.isAppleNativeSignInSupported.test.ts`(신규),
+`tests/unit/loginPage.appleButtonVisibility.test.ts`(신규). 새 SQL 없음.
+
 ## 2026-09-14 — 릴리스 폴리시 배치 4차: 소셜 가입 온보딩, iOS input 자동확대, Android 전면 점검
 
 **Apple 신규 가입 "프로필이 없어요" 버그 수정(레이스 컨디션 + 자가 치유)**: 실기기(Vercel
