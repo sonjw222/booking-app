@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## 2026-09-14 — iOS 실기기 릴리즈 블로커 3건 최신 main에 재반영 (PR #144 rebase)
+
+PR #144(`fix/ios-release-blockers-splash-oauth-safearea`, 2026-09-13 작성)가 그 사이
+main에 22개 커밋(토스 빌링/다크모드 select/상품 안내 등)이 쌓이는 동안 미병합 상태로
+남아있었음. 오래된 브랜치를 그대로 merge하는 대신, 최신 `origin/main` 기준 새 브랜치를
+만들어 3개 커밋만 순서대로 cherry-pick — 실제로 겹치는 파일이 `app/globals.css` 하나뿐임을
+먼저 diff로 확인했고, 그 한 파일도 서로 다른 라인(`.header` vs `.settings-wrap` select)이라
+자동 병합됨(수동 충돌 해결 불필요).
+
+- **iOS cold start splash 다크모드 검정 자산 수정**: `Splash.imageset`의 다크 모드 변형
+  PNG 3개(1x/2x/3x)가 불투명 근흑색이었던 것을 정상 navy로 교체.
+- **Google 최초 로그인 후 무한 로딩 수정**: `app/page.tsx`의 OAuth 콜백 처리를
+  `supabase.auth.getUser()`(매번 네트워크 왕복)에서 `getSession()`(로컬 세션 즉시 반환)으로
+  교체. `SessionWatcher`의 `ensureAccountForCurrentUser()` 호출에 `.catch()` 로깅 추가.
+- **iOS safe-area/상태바 겹침 수정**: `.header`에 `env(safe-area-inset-top)` 반영,
+  `capacitor.config.ts`의 `ios.contentInset`을 `"automatic"`에서 Capacitor 공식 기본값
+  `"never"`로 되돌림(CSS 수동 inset과의 이중 처리 제거).
+
+세 커밋 모두 실기기 재현 기반 root-cause 진단이 이미 끝난 상태라 코드 내용은 원본 그대로
+가져왔고(핫픽스 아님, 원인 분석은 각 커밋 메시지 참고), 이번 배치는 "최신 main 기준으로
+충돌 없이 재적용됨"을 검증하는 것이 전부. billing/API/SQL/Android 파일은 전혀 안 건드림
+(diff로 확인). `npm run build`/`npx tsc --noEmit`(신규 에러 0건, 기존 baseline 27줄과
+동일)/유닛테스트 288개/Android `assembleDebug`/iOS 시뮬레이터+제네릭 Release
+`xcodebuild` 전부 통과. `App.entitlements`/`GoogleService-Info.plist`는 로컬 빌드
+검증용 임시 파일만 만들었다가 검증 직후 즉시 삭제(커밋 없음, `git status`로 확인).
+
+변경 파일: `app/components/SessionWatcher.tsx`, `app/globals.css`, `app/page.tsx`,
+`capacitor.config.ts`, `ios/App/App/Assets.xcassets/Splash.imageset/*-dark.png`(3개).
+
 ## 2026-09-14 — `/manager/subscription` 상품 안내 보완 (토스 카드사 심사 — 상품 요건)
 
 토스 카드사 심사 가이드가 요구하는 "실제 판매 상품 1개 이상 + 가격 일치 + 상품 이미지 또는
