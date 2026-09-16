@@ -124,11 +124,15 @@ export async function searchHome(keyword: string): Promise<{ centers: SearchCent
   const kw = keyword.trim();
   if (!kw) return { centers: [], categories: [] };
 
-  // 승인된 센터 전부 가져와서 클라이언트에서 매칭 (규모 작을 때 충분)
+  // 승인된 센터 전부 가져와서 클라이언트에서 매칭 (규모 작을 때 충분) — categories가
+  // 배열 컬럼이라 "종목 부분일치"까지 한 번에 서버 필터링하기 어려워 클라이언트 매칭
+  // 구조는 유지하되, 승인 센터 전체가 계속 불어나는 상황에 대비해 상한만 추가한다
+  // (egress 감사, 2026-09-15 — 지금 규모에선 동작 그대로).
   const { data, error } = await supabase
     .from("centers")
     .select("id, name, categories, intro, photo_url")
-    .eq("status", "approved");
+    .eq("status", "approved")
+    .limit(500);
   if (error) throw new Error("검색에 실패했어요: " + error.message);
 
   const centers: SearchCenter[] = (data ?? [])

@@ -7,7 +7,7 @@
 */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchMyPage, type HistoryItem } from "../../lib/mypage";
+import { fetchMyReservationHistory, type HistoryItem } from "../../lib/mypage";
 import { cancelReservation } from "../../lib/reservations";
 import Loading from "../components/Loading";
 import { memberFacingBadge, type ReservationType } from "../../lib/reservationTypes";
@@ -89,8 +89,8 @@ export default function MyReservationsPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const data = await fetchMyPage();
-      setHistory(data.history);
+      const data = await fetchMyReservationHistory();
+      setHistory(data);
     } catch (e: any) { setError(e.message ?? "불러오지 못했어요"); }
     finally { setLoading(false); }
   }, []);

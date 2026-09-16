@@ -97,13 +97,16 @@ export async function fetchMyThreads(): Promise<InquiryThread[]> {
 
 // ── 매니저: 자기 센터로 온 문의방 목록 ──
 export async function fetchCenterThreads(): Promise<InquiryThread[]> {
+  // egress 감사(2026-09-15) — 상한 없는 전체 조회라 안전판만 추가(최근 대화순 정렬은
+  // 이미 있음) — 지금까지 이 상한에 걸릴 만큼 문의방이 쌓인 센터는 없어 동작은 그대로다.
   const { data, error } = await supabase
     .from("inquiry_threads")
     .select(
       "id, center_id, member_account_id, last_message, last_message_at, manager_unread, centers(name), " +
       "accounts:member_account_id(name, profiles(nickname, name, is_primary))"
     )
-    .order("last_message_at", { ascending: false, nullsFirst: false });
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(500);
   // UX 감사(2026-09-06) — 예전엔 에러를 빈 배열로 삼켜서 진짜 오류(RLS, 네트워크)와
   // "문의가 없어요"를 매니저 화면에서 구분할 수 없었다.
   if (error) throw new Error("문의 목록을 불러오지 못했어요: " + error.message);

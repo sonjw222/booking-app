@@ -15,6 +15,7 @@ import {
   type PendingCenter,
 } from "../../../lib/admin";
 import { getBusinessLicenseUrl } from "../../../lib/storage";
+import { replaceTabNavigation } from "../../../lib/navState";
 
 type Tab = "pending" | "approved" | "rejected";
 
@@ -146,7 +147,7 @@ export default function AdminCentersPage() {
 
       <div className="mgr-mode-bar">
         <span className="mgr-mode-label"><UiIcon name="shield" size={15} /> 플랫폼 운영자</span>
-        <a className="mgr-mode-switch" href="/">회원 모드로 ↩</a>
+        <a className="mgr-mode-switch" href="/" onClick={(e) => replaceTabNavigation(e, "/")}>회원 모드로 ↩</a>
       </div>
 
       <div className="section-title" style={{ paddingTop: 14 }}>센터 승인 관리</div>

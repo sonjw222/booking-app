@@ -77,6 +77,18 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchAutoHide: false,
     },
+    // 릴리스 폴리시 배치 6차(2026-09-15) — 상단 safe-area 겹침 반복 신고(3회째)의 근본
+    // 원인 재진단: @capacitor/status-bar의 StatusBarPlugin.swift는 override load()에서
+    // 이 config 값을 읽어 브릿지 초기화 시점(첫 페인트 "전")에 네이티브로 곧바로
+    // 적용한다 — JS 쪽에서 StatusBar.setOverlaysWebView()를 부를 필요가 전혀 없고
+    // (이전엔 CapacitorBootstrap.tsx가 매 페이지 로드마다 JS로 다시 호출해 불필요한
+    // 네이티브 브릿지 왕복과 그로 인한 레이아웃 재계산 창을 만들었다 — 제거함), 이
+    // 값이 Capacitor 기본값(true)과 같아도 여기 명시해 의도를 코드로 고정한다.
+    // Android 15+(targetSdk 36)는 이 옵션 자체가 동작하지 않아(README 확인) 대신
+    // MainActivity.java의 EdgeToEdge.enable()이 동일한 역할을 네이티브로 담당한다.
+    StatusBar: {
+      overlaysWebView: true,
+    },
   },
 };
 

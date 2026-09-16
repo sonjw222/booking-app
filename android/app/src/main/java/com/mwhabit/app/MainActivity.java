@@ -15,6 +15,9 @@ public class MainActivity extends BridgeActivity {
         // (Capacitor 문서 관례 — BridgeActivity#load()가 super.onCreate() 안에서
         // bridgeBuilder로 Bridge를 만들기 때문).
         registerPlugin(AppSettingsPlugin.class);
+        // GoogleSignInPlugin.java — Google 네이티브 로그인(release blocker 대응,
+        // 2026-09-15). iOS의 GoogleSignInPlugin.swift와 동일한 jsName/계약.
+        registerPlugin(GoogleSignInPlugin.class);
 
         // 실기기 QA(2026-09-14, 4차) — Android 15(API 35)부터 타깃 SDK 35+ 앱은 edge-to-edge가
         // 강제 적용되고, 타깃 SDK 36(API 36, 이 앱의 현재 targetSdkVersion)에서는 그 강제를

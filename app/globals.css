@@ -203,7 +203,17 @@ a { color: inherit; text-decoration: none; }
    안 챙겨서, 화면 전환 순간 "오늘은 어떤 움직임을 찾나요?" 텍스트가 상태바 시계/아이콘과
    겹쳐 보였다. 다른 화면들(.mypage-shell .profile-block 등)과 동일한
    max(Npx, var(--safe-top)) 패턴으로 통일 — 노치 없는 기기에서는 기존 14px 그대로. */
-.header { padding: max(14px, var(--safe-top)) var(--page-gutter) 14px; }
+/* 릴리스 폴리시 배치 6차(2026-09-15) — 실기기 QA: 당겨서 튕기는(rubber-band overscroll)
+   동안 헤더도 같이 끌려 내려가 상태바 아래로 빈 공간이 생기는 문제(iOS 설정 앱처럼
+   헤더는 고정, 본문만 튕기길 기대). WKWebView 최상위 문서 스크롤(=이 앱이 이미 쓰는
+   러버밴드 메커니즘, ios/App/App/SceneDelegate.swift의 scrollView.bounces 참고)을 건드는
+   대신 — nested scroll container로 바꾸면 이미 검증된 네이티브 러버밴드 동작(회귀
+   금지 항목)이 깨질 위험이 크다 — position:sticky만으로 해결한다. iOS WebKit은 최상위
+   문서가 상단에서 elastic overscroll 중이어도 position:sticky;top:0 요소를 뷰포트
+   상단에 그대로 고정해준다(별도 JS 불필요, Safari/WKWebView의 표준 동작) — 즉 헤더
+   "구조"는 전혀 안 바꾸고 이 한 속성만 추가하면 된다. 배경색을 명시해야
+   스크롤되는 본문이 고정된 헤더 "뒤"로 비치지 않는다(색 불일치 방지 요구사항). */
+.header { position: sticky; top: 0; z-index: 15; background: var(--bg); padding: max(14px, var(--safe-top)) var(--page-gutter) 14px; }
 .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .location { display: flex; align-items: center; gap: 4px; font-size: 19px; font-weight: 800; letter-spacing: -0.3px; }
 .location .caret { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
@@ -621,6 +631,12 @@ a { color: inherit; text-decoration: none; }
      반영하지 않아 상태바/Dynamic Island와 콘텐츠가 겹쳤다. 8px는 노치 없는 기기 기준
      여백을 그대로 유지. */
   padding: max(8px, var(--safe-top)) 16px 12px;
+  /* 릴리스 폴리시 배치 6차(2026-09-15) — .header와 동일한 이유로 sticky 고정(주석은
+     .header 쪽 참고). .back-header는 이 앱에서 ~50개 화면이 그대로 재사용하는 "상세/
+     뒤로가기 헤더"의 유일한 공용 계약(class contract)이라, 여기 한 줄만 추가하면 그
+     화면들 전부에 개별 수정 없이 일괄 적용된다 — 이것이 요청된 "화면마다 ad-hoc
+     패치 대신 공용 계약"의 실제 구현이다. */
+  position: sticky; top: 0; z-index: 15; background: var(--bg);
 }
 .back-header .side { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 19px; }
 .back-header .title { font-size: 16px; font-weight: 800; }
@@ -3264,9 +3280,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-members-v2 .sheet .hol-add .primary-btn { width: 100%; padding-inline: 10px; }
 
 /* Manager menu uses one icon family and leaves the final row reachable. */
-.manager-home-v2 { padding-bottom: calc(var(--floating-nav-clearance) + 92px); }
 .manager-home-v2 > .list-row .icon svg { width: 22px; height: 22px; stroke-width: 1.7; }
-.manager-home-v2 > .list-row:last-of-type { margin-bottom: 128px; }
 
 /* Final 26-point refinement: these rules intentionally close the cascade. */
 .mypage-shell .membership-cta {
@@ -3368,9 +3382,6 @@ a.membership-card { text-decoration: none; display: block; }
   border-color: color-mix(in srgb,var(--brand) 42%,var(--line));
   background: var(--brand-soft); color: var(--brand-ink);
 }
-.manager-home-v2 { padding-bottom: calc(var(--floating-nav-clearance) + 170px); }
-.manager-home-v2 > .list-row:last-of-type { margin-bottom: 110px; }
-
 /* No notification/loading state may grow into a full-screen black slab. */
 .toast,
 .manager-v3-content .toast,
@@ -3915,7 +3926,7 @@ a.membership-card { text-decoration: none; display: block; }
 .home-class-copy small { margin-top: 4px; overflow: hidden; color: var(--ink-soft); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
 .home-class-copy small b { color: var(--brand-ink); font-weight: 680; }
 
-.discovery-page-v2 .search-header { padding: max(20px, var(--safe-top)) var(--page-gutter) 14px; gap: 8px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.discovery-page-v2 .search-header { padding: max(20px, var(--safe-top)) var(--page-gutter) 14px; gap: 8px; background: var(--bg); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 15; }
 .discovery-page-v2 .search-header .side,.category-page-v2 .back-header .side { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
 /* iOS 검색 화면 버튼이 화면 우측 밖으로 잘려 보이던 버그의 실제 원인: 이 input에
    autoFocus가 걸려 있고(app/search/page.tsx) font-size가 16px 미만이면, iOS
@@ -3927,7 +3938,13 @@ a.membership-card { text-decoration: none; display: block; }
    레이아웃(width, flex)은 그대로 두고 font-size만 iOS 임계값인 16px로 올린다. */
 .discovery-page-v2 .search-input { min-width: 0; height: 50px; padding: 0 15px; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--surface); font-size: 16px; }
 .discovery-page-v2 .search-input:focus { border-color: var(--brand); outline: 0; }
-.discovery-page-v2 .search-go { min-width: 56px; height: 44px; padding: 0 12px; border: 0; border-radius: var(--radius-md); background: var(--ink); color: var(--bg); font-size: 12.5px; font-weight: 650; }
+/* 릴리스 폴리시 배치 6차(2026-09-15, item 12) — 검색 CTA가 입력창(50px)보다 6px 낮아
+   (44px) .search-header가 align-items:center라 시각적으로는 세로 중앙정렬돼 보였지만
+   높이 자체가 안 맞아 나란히 보면 어긋나 보였다. 입력창과 동일한 50px로 맞춤(44px
+   터치 타겟 요구사항은 이미 만족하는 값이라 줄어들 걱정 없음). disabled 상태 스타일이
+   아예 없었던 것도 추가(.primary-btn:disabled 등 기존 관례와 동일하게 opacity+cursor). */
+.discovery-page-v2 .search-go { min-width: 56px; height: 50px; padding: 0 12px; border: 0; border-radius: var(--radius-md); background: var(--ink); color: var(--bg); font-size: 12.5px; font-weight: 650; }
+.discovery-page-v2 .search-go:disabled { opacity: .5; cursor: default; }
 .search-suggestions { padding: 34px var(--page-gutter) 130px; }
 .search-suggestion-title { font-size: 16px; font-weight: 680; }
 .search-suggestion-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
@@ -4173,9 +4190,19 @@ a.membership-card { text-decoration: none; display: block; }
 .commerce-page .checkout-done-icon::after { content: "✓"; color: var(--text-inverse); font-size: 25px; font-weight: 700; }
 /* Batch 6: member communication, account and authentication surfaces */
 .member-notifications,.member-inquiries,.mypage-shell,.account-page-v2{background:var(--bg)}
-.noti-head,.inquiry-head,.mypage-titlebar{display:flex;align-items:flex-end;justify-content:space-between;min-height:96px;padding:max(34px, var(--safe-top)) var(--page-gutter) 20px;border-bottom:1px solid var(--line)}
-.noti-head h1,.inquiry-head h1,.mypage-titlebar h1{font-size:28px;line-height:1.1;font-weight:800;letter-spacing:-.7px}
+.noti-head,.mypage-titlebar{display:flex;align-items:flex-end;justify-content:space-between;min-height:96px;padding:max(34px, var(--safe-top)) var(--page-gutter) 20px;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:15;background:var(--bg)}
+.noti-head h1,.mypage-titlebar h1{font-size:28px;line-height:1.1;font-weight:800;letter-spacing:-.7px}
 .noti-head a,.noti-head button{min-height:40px;padding:0 4px;color:var(--brand-ink);font-size:13px;font-weight:700}
+/* 릴리스 폴리시 배치 6차(2026-09-15) — 실기기 QA: 1:1 문의 목록 화면(app/inquiries/
+   page.tsx)에서 "새 문의" 버튼 위 공백이 과하다는 신고. 원인: 이 화면은 .back-header
+   (이미 자체 safe-area-inset-top 패딩을 가진, 이 앱에서 가장 많이 재사용되는 상단
+   바)를 먼저 렌더링하고 .inquiry-head를 그 "아래"에 두 번째 줄로 쌓는데, .inquiry-head는
+   원래 .noti-head(알림함 — 이 화면 하나로 끝나는 단독 최상단 바, safe-area를 자기가
+   직접 감당해야 함)와 같은 규칙을 공유하고 있어 이미 .back-header가 처리한 safe-area
+   상단 여백을 min-height 96px짜리 "또 다른 최상단 바"로 한 번 더 쌓고 있었다. 애초에
+   같이 묶일 selector가 아니었다 — .inquiry-head는 .back-header 아래 붙는 보조
+   서브헤더일 뿐이라 safe-area/큰 min-height가 필요 없다. */
+.inquiry-head{display:flex;align-items:flex-end;justify-content:space-between;padding:14px var(--page-gutter) 16px;border-bottom:1px solid var(--line)}
 .inquiry-head p{margin-top:6px;color:var(--ink-soft);font-size:12px}
 .inquiry-head .primary-btn{min-height:40px;border-radius:999px;background:var(--ink);color:var(--bg)}
 .member-notifications .noti-list,.member-inquiries .thread-list{padding:0 var(--page-gutter) 112px}
@@ -4217,10 +4244,10 @@ a.membership-card { text-decoration: none; display: block; }
 .auth-panel .role-select{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}.auth-panel .role-btn{min-height:92px;padding:13px 10px;display:grid;grid-template-columns:36px 1fr;grid-template-rows:auto auto;column-gap:9px;text-align:left;border:1px solid var(--line);border-radius:15px;background:var(--card-bg)}.auth-panel .role-btn.on{border:2px solid var(--ink);background:var(--surface)}.auth-panel .role-emoji{grid-row:1/3;display:grid;place-items:center;width:36px;height:36px;margin:0;border-radius:12px;background:var(--surface)}
 .auth-panel .input-field{min-height:52px;margin-bottom:8px;padding-left:2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}.auth-panel .login-submit{margin-top:12px;border-radius:14px}
 .auth-account-page{min-height:100dvh}.auth-account-page .back-header+*{margin-top:18px}.register-center-page-v2 .center-registration-form{margin-inline:var(--page-gutter)}
-@media(max-width:420px){.auth-panel{padding-inline:16px}.noti-head,.inquiry-head,.mypage-titlebar{min-height:90px}.auth-activities{opacity:.72}}
+@media(max-width:420px){.auth-panel{padding-inline:16px}.noti-head,.mypage-titlebar{min-height:90px}.auth-activities{opacity:.72}}
 
 /* Batch 7A: manager home, members, notifications and more */
-.manager-home-v2{padding-bottom:calc(var(--floating-nav-clearance) + 28px);background:var(--bg)}
+.manager-home-v2{background:var(--bg)}
 .manager-home-v2 .mgr-mode-bar{padding:22px var(--page-gutter) 14px;border-bottom:0}.manager-home-v2 .mgr-mode-label{font-size:13px;font-weight:750}.manager-home-v2 .mgr-mode-switch{min-height:40px;display:inline-flex;align-items:center;padding:0 13px;border:1px solid var(--line);border-radius:999px;font-size:12px;font-weight:650}
 .manager-home-v2 .center-switcher{padding:0 var(--page-gutter) 18px;gap:8px}.manager-home-v2 .center-chip{min-height:44px;padding:0 15px;border:1px solid var(--line);border-radius:14px;background:transparent}.manager-home-v2 .center-chip.on{border-color:var(--ink);background:var(--ink);color:var(--bg)}
 .manager-today-overview{margin:0 var(--page-gutter) 22px;padding:20px 0;border-block:1px solid var(--line)}
@@ -4492,19 +4519,25 @@ textarea:focus-visible,
   color: var(--bg);
 }
 
-.manager-home-v2 {
-  padding-bottom: calc(var(--floating-nav-clearance) + 92px);
-}
 .manager-home-v2 > .list-row .icon svg {
   width: 22px;
   height: 22px;
   stroke-width: 1.7;
 }
-.manager-home-v2 > .list-row:last-of-type { margin-bottom: 24px; }
 
 /* 2026-08-15 visual alignment pass.
    These rules intentionally live last: legacy screen rules must not restore
-   cramped controls, dark member actions, or content hidden by floating nav. */
+   cramped controls, dark member actions, or content hidden by floating nav.
+
+   릴리스 폴리시 배치 6차(2026-09-15) — 실기기 QA: 관리자 "더보기" 화면 마지막 메뉴와
+   하단 nav 사이에 공백이 과하다는 신고. 원인: 이 padding-bottom(nav 실제 높이 +
+   safe-bottom을 담은 --floating-nav-clearance + 104px 여유분)만으로 이미 충분한데,
+   JSX 맨 끝에 스크롤 영역 자체를 한 번 더 늘리는 별도 스페이서
+   (.manager-menu-end-spacer, height: clearance + 132px)가 같이 남아 있어 여백이
+   이중으로 쌓이고 있었다(이전 여러 차례의 "final" 시도가 서로를 지우지 않고 계속
+   쌓인 흔적 — 위에서 지운 92px/128px, 170px/110px 버전들도 같은 문제). 스페이서
+   엘리먼트(app/manager/page.tsx) 자체를 제거하고 이 padding-bottom 하나만 유일한
+   기준으로 남긴다. */
 .manager-v3-content > .app-shell,
 .manager-home-v2,
 .manager-members-v2,
@@ -4514,12 +4547,6 @@ textarea:focus-visible,
 .manager-v3-content .bottom-nav { bottom: max(18px,env(safe-area-inset-bottom)); }
 .manager-home-v2 > .list-row:last-of-type {
   margin-bottom: 0;
-}
-.manager-home-v2 .manager-menu-end-spacer {
-  width: 100%;
-  height: calc(var(--floating-nav-clearance) + 132px);
-  flex: 0 0 auto;
-  pointer-events: none;
 }
 
 /* A single select language across manager forms. Native platform arrows made

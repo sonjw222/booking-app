@@ -1,5 +1,223 @@
 # CHANGELOG
 
+## 2026-09-16 — Google Play 출시 준비: 공개 계정 삭제 안내 페이지(`/account-deletion`) 추가
+
+Google Play Console "데이터 보안 > 계정 삭제 URL"에 제출할 외부 웹페이지가 필요해 신설.
+로그인 없이 접근 가능(다른 `/legal/*` 페이지와 동일하게 인증 체크 없음). 내용은 실제
+탈퇴 구현(`app/mypage/info/page.tsx`의 "내 정보 관리 → 계정 탈퇴", `lib/accountDeletion.ts`,
+`supabase/functions/delete-account/index.ts`)을 코드로 확인해 사실에 맞게 작성 — 계정
+탈퇴 시 개인정보(이름/전화번호/주소/프로필/아바타/푸시 토큰)는 삭제·익명화되고
+`auth.users`도 실제 삭제(재가입 허용)되며, 예약/구매/결제 기록은 법적 보존 목적으로
+개인정보와 분리되어 남는다는 점을 그대로 반영. 앱에 로그인할 수 없는 사용자를 위한
+이메일(`contact@mwhabit.com`) 삭제 요청 절차와 `/legal/privacy` 링크도 포함. 기존
+계정 삭제 API/DB/RLS/Edge Function은 수정하지 않음(안내 페이지만 신규 추가).
+
+변경 파일: `app/account-deletion/page.tsx`(신규).
+
+## 2026-09-15 — 릴리스 폴리시 배치 6차: 검색 화면 back/search 버튼 UI 정리
+
+실기기 QA(item 12) — 뒤로가기 버튼은 이미 44×44 터치 타겟 + 광학 중앙정렬이 되어
+있었지만(회귀 확인용 테스트만 추가), 검색 CTA(`.search-go`)가 입력창(`.search-input`,
+50px)보다 6px 낮아(44px) 나란히 보면 높이가 어긋나 보였고, disabled 상태 스타일이
+아예 없었다.
+
+- `.discovery-page-v2 .search-go`의 `height`를 입력창과 동일한 50px로 통일(44px 터치
+  타겟 요구사항은 그대로 만족).
+- `:disabled` 상태 스타일 추가(`opacity:.5; cursor:default` — `.primary-btn:disabled`
+  등 기존 관례 재사용).
+- 검색 입력창은 이미 16px 폰트라 iOS 자동 확대 문제 없음(회귀 확인용 테스트 추가).
+- **검증**: `npm run build` 클린, 신규 유닛테스트 5개 포함 전체 379개 통과.
+
+변경 파일: `app/globals.css`, `tests/unit/searchPage.backSearchButtonUi.test.ts`(신규).
+
+## 2026-09-15 — 릴리스 폴리시 배치 6차: 관리자 "더보기" 화면 하단 여백 과다(이중 스페이서) 수정
+
+실기기 QA: 관리자 "더보기" 화면 마지막 메뉴와 하단 nav 사이 공백이 과하다는 신고.
+`git blame`격으로 CSS를 훑어보니 "final"이라고 주석 붙인 `.manager-home-v2` 여백 수정
+시도가 최소 4세대(92px/128px, 170px/110px, 28px, 104px!important) 쌓여 있었고, 그중
+가장 나중 것(104px !important)만 실제로 이기는데도 JSX에는 그와 별개로 스크롤 영역
+자체를 한 번 더 늘리는 스페이서 엘리먼트(`.manager-menu-end-spacer`, height:
+clearance+132px)가 그대로 남아 여백이 이중으로 쌓이고 있었다.
+
+- 스페이서 엘리먼트를 JSX(`app/manager/page.tsx`)와 CSS 양쪽에서 완전히 제거.
+- 죽은(더 이상 적용되지 않는) 92px/128px, 170px/110px, 28px 버전 규칙을 정리하고
+  실제로 적용되는 `calc(var(--floating-nav-clearance) + 104px) !important` 하나만
+  남김 — `--floating-nav-clearance`가 이미 "nav 실제 높이 + safe-bottom"을 계산해두고
+  있어(app/globals.css) 요청된 "nav 실제 높이+safe bottom+디자인 여유분" 계산 방식과
+  일치.
+- `background: var(--bg)` 등 여백과 무관한 선언은 살아있는 규칙에 그대로 보존.
+- **검증**: `npm run build`/`npx tsc --noEmit` 클린, 신규 유닛테스트 4개(이중 스페이서
+  재도입 방지) 포함 전체 374개 통과.
+
+변경 파일: `app/manager/page.tsx`, `app/globals.css`,
+`tests/unit/managerHome.bottomWhitespace.test.ts`(신규).
+
+## 2026-09-15 — 릴리스 폴리시 배치 6차: 만료/소진 수강권 정렬·CTA 정책 + 백엔드 예약 강제 확인
+
+마이페이지 수강권 목록에서 만료된 수강권이 활성 수강권보다 위에 뜨고, 만료돼도
+"이 수강권으로 예약하기" CTA가 그대로 보이던 문제 — 새 DB 상태값 없이 기존
+`memberships.status` enum(schema.sql: active/expired/paused/refunded/transferred)만
+써서 해결.
+
+- **정렬 정책**: `lib/mypage.ts`에 `classifyMembershipDisplay()`/
+  `sortMembershipsForDisplay()` 순수 함수 추가 — 활성 → 시작 예정 → 정지중(사용 가능)
+  → 만료/소진(항상 마지막) 순. 근본 원인은 `fetchMyPage()`의 DB 쿼리가
+  `order("expires_at", ascending:true)`만 썼던 것(오래된 만료일이 정렬상 가장 앞으로
+  옴) — 클라이언트에서 tier 재배치 후 반환.
+- **CTA 정책**: `app/mypage/page.tsx` — 만료/소진 카드는 "이 수강권으로 예약하기"를
+  절대 안 보여줌. 1순위 "다시 구매하기"(같은 상품이 아직 판매 중이면
+  `/checkout?center=&product=`로 직행, 상품이 사라졌으면 센터 상세 구매 가능 목록으로
+  폴백) → 2순위 "센터 문의하기"(상품은 없어졌지만 센터는 살아있으면 기존 `/inquiries`
+  1:1 문의 화면 재사용, 새 시스템 없음) → 3순위 CTA 없음(센터/상품 둘 다 비활성).
+  가용성 조회(`fetchRepurchaseAvailability()`, 신규)는 만료/소진된 pass만 골라 별도
+  호출해 활성 수강권만 있는 대다수 사용자에게 불필요한 쿼리가 안 붙게 함. 만료 카드는
+  전체 카드 클릭도 예약 화면으로 안 감(`<a>`→`<div>`), progress bar도 100%로 표시(횟수가
+  남아 있어도 기간 만료면 "아직 쓸 수 있어 보이는" 착시 방지) — 과도한 회색 처리는
+  하지 않음.
+- **백엔드 예약 강제(item 9) 조사 결과**: `reserve_class`/`reserve_with_membership`
+  (회원 셀프 예약이 실제로 쓰는 두 경로, `reservation_functions.sql`/
+  `add_rolling_month_product_expiry.sql`의 최신 재정의 기준)는 서버에서
+  `expires_at >= current_date`/`remaining_count > 0`/(reserve_with_membership는)
+  `status = 'active'`를 전부 다시 검증한다 — **UI 가드가 아니라 실제 서버 강제이며,
+  release blocker 아님**. 단, `manager_book_member`(관리자 수동 배정)는
+  `expires_at`을 검사하지 않는데, 함수 자체 주석("수강권 지정 시 유효성만 확인 =
+  보강 허용")상 매니저가 만료된 수강권으로도 보강 수업에 배정할 수 있게 하려는 의도로
+  보인다 — 버그로 단정하지 않고 사용자 확인이 필요한 항목으로 최종 보고서에 별도
+  기재(SQL 변경 없음, 이 배치에서 손대지 않음). `docs/DATABASE.md`가 이미 밝히듯
+  실제 운영 DB에 어느 버전이 최종 적용됐는지는 이 저장소의 파일만으로 100% 확정할 수
+  없어, 최종 보고서에 "실제 Supabase 콘솔에서 `pg_get_functiondef`로 한 번 더 확인
+  권장" 안내를 포함함.
+- **검증**: `npm run build`/`npx tsc --noEmit` 클린, 신규 유닛테스트 16개(정렬 10개 +
+  CTA 6개) 포함 전체 370개 통과.
+
+변경 파일: `lib/mypage.ts`, `app/mypage/page.tsx`,
+`tests/unit/mypage.membershipDisplay.test.ts`(신규),
+`tests/unit/mypage.expiredMembershipCta.test.ts`(신규).
+
+## 2026-09-15 — 릴리스 폴리시 배치 6차: 탭/모드 전환 edge-swipe 뒤로가기 히스토리 정책
+
+edge-swipe 뒤로가기가 "탭 전환"(바텀 nav, 회원↔관리자 모드)과 "상세 진입"(1:1 문의,
+프로필 수정 등)을 구분하지 못하고 전부 되돌아가던 문제 — 탭 전환은 REPLACE(되돌아가면
+안 됨), 상세 진입은 PUSH(되돌아가야 정상) 의미로 명확히 나눴다.
+
+- **BottomNav(5탭)/ManagerNav(4탭)**: 이미 이전 배치(3차, 2026-09-14)에서 `<a href>`
+  전체 페이지 로드 대신 Next.js `<Link>`(클라이언트 라우팅)로 바뀌어 있었다 — 여기에
+  `replace` prop 한 줄씩만 추가(`router.replace()` → `history.replaceState`,
+  WKWebView 뒤로가기 목록에 새 항목을 안 남김). 별도 커스텀 라우터/가드 레이어 없이
+  Next.js 공식 기능만으로 해결.
+- **탭-동등 단축 진입**(마이페이지의 "관리자 모드로 전환"/"예약 내역", 관리자 화면의
+  "회원 모드로 전환", 플랫폼 어드민 3곳의 "회원 모드로" 복귀, 홈 화면의 "관리자 모드"
+  버튼)은 전부 여전히 일반 `<a href>`(전체 페이지 로드)를 쓴다 — `lib/navState.ts`에
+  작은 헬퍼 `replaceTabNavigation(e, href)`를 추가해(일반 좌클릭만 가로채
+  `location.replace()`, Cmd/Ctrl/Shift/Alt/중클릭은 새 탭 열기 위해 그대로 기본 동작에
+  맡김) 총 7개 지점에 `onClick`으로만 적용 — `href`는 그대로 둬서 접근성/폴백은
+  기존과 동일.
+- **상세 화면 링크는 전혀 건드리지 않음** — 나머지 대다수 링크(1:1 문의, 프로필 수정,
+  구매내역, 관리자 목록→상세 등)는 일반 `<a>` 클릭의 기본 동작 자체가 이미 올바른
+  "push"라 손댈 필요가 없었다.
+- **딥링크로 탭에 바로 진입한 경우**: replace는 "현재 항목을 교체"하는 동작이라, 첫
+  진입(교체할 이전 항목이 없음)이면 자기 자신을 교체할 뿐 새 항목이 생기지 않는다 —
+  별도 분기 처리 없이 자연스럽게 안전.
+- **검증**: `npm run build`/`npx tsc --noEmit` 클린, 신규 유닛테스트 9개(정책 회귀
+  방지 — replace/push 판별 로직 + 7개 지점 소스 고정) 포함 전체 354개 통과.
+
+변경 파일: `lib/navState.ts`, `app/components/BottomNav.tsx`,
+`app/components/ManagerNav.tsx`, `app/mypage/page.tsx`, `app/manager/page.tsx`,
+`app/page.tsx`, `app/admin/settlement/page.tsx`, `app/admin/subscriptions/page.tsx`,
+`app/admin/centers/page.tsx`, `tests/unit/navState.replaceTabNavigation.test.ts`(신규).
+
+## 2026-09-15 — 릴리스 폴리시 배치 6차: 상단 safe-area 겹침 구조적 재진단(3번째 재신고 대응)
+
+홈 화면 상단 텍스트가 상태바와 겹친다는 신고가 CSS 패치를 세 번 거치고도 반복됐다 —
+이번엔 "또 다른 selector 패치"가 아니라 근본 원인을 다시 진단했다.
+
+- **근본 원인**: `@capacitor/status-bar`의 `overlaysWebView`는 `capacitor.config.ts`의
+  선언적 config로 지정하면 브릿지 초기화 시점(첫 페인트 "전")에 네이티브가 직접
+  적용한다(`StatusBarPlugin.swift`의 `override load()` 확인함 — `getConfig()`를 읽어
+  `StatusBar(bridge:config:)`를 곧바로 생성). 그런데 `CapacitorBootstrap.tsx`가 이 값을
+  또 JS로 `StatusBar.setOverlaysWebView({overlay:true})` 호출해 매 페이지 로드마다(이
+  앱은 탭 전환마다 전체 페이지가 새로 로드됨) 이미 적용된 값을 다시 네이티브 브릿지로
+  왕복시키고 있었다 — 이 왕복은 항상 첫 페인트 "이후"에 일어나므로, CSS의
+  `env(safe-area-inset-top)` 값 자체는 이미 맞는데도 레이아웃이 다시 계산되는 짧은
+  창이 매 화면 전환마다 생겨 반복 재현됐다. 이 JS 호출을 제거하고
+  `capacitor.config.ts`에 `StatusBar: { overlaysWebView: true }`를 명시(Capacitor 기본값과
+  동일하지만 의도를 코드로 고정) — Android는 이미 `MainActivity.java`의
+  `EdgeToEdge.enable()`이 동일 역할을 네이티브로 담당 중이라 그대로 둠.
+- **헤더 sticky 고정(iOS Settings 스타일)**: `.header`(홈 등 탭 루트)와 `.back-header`
+  (이 앱에서 ~50개 화면이 재사용하는 유일한 공용 상세/뒤로가기 헤더)에
+  `position: sticky; top: 0; background: var(--bg)`만 추가 — WKWebView 최상위 문서
+  스크롤(이미 검증된 네이티브 러버밴드 메커니즘, 회귀 금지 항목)은 전혀 안 건드리고,
+  iOS WebKit이 `position:sticky` 요소를 elastic overscroll 중에도 뷰포트 상단에 그대로
+  고정해주는 표준 동작만 이용했다(이미 `.manager-chrome`이 같은 패턴을 쓰고 있어 이
+  코드베이스에서 검증된 방식). `.back-header`가 공용 계약이라 이 한 줄만으로 재사용하는
+  화면 전부에 일괄 적용됨 — "화면마다 ad-hoc 패치" 대신 요청된 공용 계약의 실제 구현.
+  `.noti-head`/`.mypage-titlebar`/`.discovery-page-v2 .search-header`도 동일 적용.
+- **1:1 문의 목록 화면 이중 safe-area 패딩 버그**: "새 문의" 버튼 위 공백이 과하다는
+  신고 — `.inquiry-head`가 `.noti-head`(알림함 전용 단독 최상단 바)와 같은 규칙을
+  공유해 이미 `.back-header`가 처리한 safe-area 위에 `min-height:96px`짜리 "또 다른
+  최상단 바"를 이중으로 쌓고 있었다. `.inquiry-head`를 별도 규칙으로 분리 —
+  safe-area/큰 min-height 제거(자기 자신은 단독 헤더가 아니라 `.back-header` 아래 붙는
+  보조 서브헤더이므로 필요 없음).
+- **검증**: `npm run build`/`npx tsc --noEmit` 클린, 신규 유닛테스트 5개(구조 회귀
+  방지) 포함 전체 345개 통과. 디바이스 실측은 다음 QA 라운드에서 재확인 필요(이 환경엔
+  iOS 실기기/시뮬레이터 화면 접근이 없음).
+
+변경 파일: `app/components/CapacitorBootstrap.tsx`, `capacitor.config.ts`,
+`app/globals.css`, `tests/unit/safeArea.stickyHeaderContract.test.ts`(신규).
+
+## 2026-09-15 — 릴리스 폴리시 배치 6차: Google 네이티브 로그인(release blocker) + 소셜 버튼 영구 비활성화 방어
+
+실기기 QA(Vercel Preview, PR #150 기준)에서 Google 로그인이 완전히 깨져 있었다 — 기존
+`signInWithOAuth("google")`가 이 앱의 `server.url` 모드 WKWebView 안에서
+accounts.google.com으로 직접 이동하는데, Google이 임베디드 WebView OAuth를
+`disallowed_useragent` 정책으로 서버 단에서 차단한다. 그 결과 로그인이 앱 안에서
+끝나지 않고, 실패 상태로 돌아오면 `socialLoading`이 리셋될 기회가 없어(에러가 우리
+코드로 reject되지 않음) 구글/카카오/네이버/애플 버튼이 전부 영구 비활성화되는 사고로
+이어졌다.
+
+- **Google 네이티브 로그인 iOS**: `ios/App/App/GoogleSignInPlugin.swift`(로컬 커스텀
+  플러그인, `GoogleSignIn-iOS 9.0.0+` SPM 패키지 직접 추가 — Firebase와 동일한
+  `project.pbxproj` 직접 편집 방식) → `GIDSignIn.signIn(withPresenting:hint:
+  additionalScopes:nonce:)` → `signInWithIdToken`. `SceneDelegate.swift`에 플러그인
+  등록 + `GIDSignIn.sharedInstance.handle(context.url)` 콜백 처리 추가.
+  `@capgo/capacitor-social-login`(Facebook SDK+Alamofire를 불필요하게 끌어옴,
+  `Package.swift` 확인 후 기각)과 `@codetrix-studio/capacitor-google-auth`(2년+ 방치,
+  기각) 둘 다 검토 후 기각 — Apple과 동일한 "로컬 커스텀 플러그인" 패턴 재사용.
+- **Google 네이티브 로그인 Android**: `android/app/src/main/java/com/mwhabit/app/
+  GoogleSignInPlugin.java` — `androidx.credentials`(Credential Manager, Google 공식
+  최신 권장 API, 레거시 `play-services-auth` `GoogleSignInClient`는 deprecated) +
+  `com.google.android.libraries.identity.googleid`(1.2.0). `MainActivity.java`에
+  `registerPlugin()` 추가. `android/variables.gradle`/`android/app/build.gradle`에
+  버전/의존성 추가.
+- **공통**: `lib/googleAuth.ts` — Apple(`lib/appleAuth.ts`)과 동일한 raw/hashed nonce
+  패턴, `isGoogleNativeSignInSupported()`는 iOS/Android 둘 다 true(Apple과 달리 Google
+  네이티브 SDK는 두 플랫폼 다 있음). `app/login/page.tsx`의 google 분기는 네이티브
+  플랫폼에서만 이 경로로 들어가고, 일반 웹은 기존 `signInWithOAuth` 그대로 유지.
+- **소셜 버튼 영구 비활성화 방어(전체 provider)**: `app/login/page.tsx`에
+  `pageshow`(bfcache 복원, `event.persisted`)/`visibilitychange`(탭 재활성화) 리스너를
+  추가해 `socialLoading`이 이전 provider 값으로 굳어 있으면 항상 리셋 — 카카오/네이버는
+  여전히 브라우저 리다이렉트 방식이라 구조적으로 같은 문제가 이론상 남아 있어 defensive
+  cleanup으로 추가 방어.
+- **검증**: iOS 시뮬레이터 Debug + 제네릭 Release `xcodebuild` 둘 다 `GoogleSignIn-iOS
+  9.2.0` 패키지 해석 + Swift 컴파일 + 링크까지 통과(`App.entitlements`/
+  `GoogleService-Info.plist`는 로컬 빌드 검증용 임시 파일만 만들었다가 직후 삭제, 커밋
+  없음). Android `assembleDebug` 통과. `npm run build`/`npx tsc --noEmit`(google/login
+  관련 파일 0 에러)/유닛테스트 340개 전부 통과(신규 12개 포함).
+- **아직 필요한 것(코드 아님, 콘솔 설정)**: Supabase Google Provider에 Web+iOS Client
+  ID 등록, Google Cloud Console에 iOS/Android OAuth Client ID(Android는 패키지명
+  `com.mwhabit.app` + 실제 서명 키 SHA-1) 등록 — 최종 보고서에 정확한 메뉴 경로만 안내
+  (시크릿 값은 로그/문서 어디에도 출력하지 않음).
+
+변경 파일: `lib/googleAuth.ts`(신규), `app/login/page.tsx`, `ios/App/App/
+GoogleSignInPlugin.swift`(신규), `ios/App/App/SceneDelegate.swift`,
+`ios/App/App.xcodeproj/project.pbxproj`, `ios/App/App.xcodeproj/project.xcworkspace/
+xcshareddata/swiftpm/Package.resolved`, `android/app/src/main/java/com/mwhabit/app/
+GoogleSignInPlugin.java`(신규), `android/app/src/main/java/com/mwhabit/app/
+MainActivity.java`, `android/variables.gradle`, `android/app/build.gradle`,
+`tests/unit/googleAuth.isGoogleNativeSignInSupported.test.ts`(신규), `tests/unit/
+googleAuth.noOAuthFallback.test.ts`(신규), `tests/unit/loginPage.socialLoadingReset.
+test.ts`(신규).
+
 ## 2026-09-14 — 릴리스 폴리시 배치 5차: Android에서 Apple 로그인 버튼 숨김
 
 Android 네이티브 앱과 일반 웹 브라우저에서 Apple 버튼이 눌러도 "iOS 앱에서만 지원돼요"

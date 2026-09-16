@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import GoogleSignIn
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
@@ -28,6 +29,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // baseline으로 깔아둔다 — "시스템 설정 따르기"가 기본값인 사용자는 이것만으로
         // 이미 오버스크롤 배경이 맞는다.
         bridgeViewController.bridge?.registerPluginInstance(WebViewThemePlugin())
+        // GoogleSignInPlugin.swift — 같은 이유로 직접 등록.
+        bridgeViewController.bridge?.registerPluginInstance(GoogleSignInPlugin())
         if let webView = bridgeViewController.bridge?.webView {
             let dynamicBg = UIColor { traits in
                 traits.userInterfaceStyle == .dark
@@ -63,6 +66,15 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        // GoogleSignIn SDK는 로그인 시트가 시스템으로 돌아올 때(리버스 클라이언트 ID
+        // URL scheme) 이 콜백으로 완료 처리를 받아야 한다(Google 공식 SDK 요구사항) —
+        // 우리 앱 URL이면 GIDSignIn이 처리하고 true를 반환, 아니면 false라 기존 로직에
+        // 영향 없음.
+        for context in URLContexts {
+            if GIDSignIn.sharedInstance.handle(context.url) {
+                return
+            }
+        }
         SceneDelegateProxy.shared.scene(scene, openURLContexts: URLContexts)
     }
 

@@ -12,6 +12,7 @@ import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } 
 import { fetchMyCenters } from "../lib/manager";
 import { supabase } from "../lib/supabaseClient";
 import { consumePostLoginNext } from "../lib/postLoginReturn";
+import { replaceTabNavigation } from "../lib/navState";
 import UiIcon, { type IconName } from "./components/UiIcon";
 
 const CATEGORIES = [
@@ -178,7 +179,7 @@ export default function Home() {
                 <a className="login-link" href="/login">로그인</a>
               )}
               {isManager && (
-                <a className="login-link" href="/manager">관리자 모드</a>
+                <a className="login-link" href="/manager" onClick={(e) => replaceTabNavigation(e, "/manager")}>관리자 모드</a>
               )}
             </div>
           </div>

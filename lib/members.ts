@@ -83,7 +83,12 @@ export async function fetchMembers(centerId: string, filter: MemberFilter = {}):
 
   if (filter.gradeId) q = q.eq("grade_id", filter.gradeId);
 
-  const { data, error } = await q.order("registered_at", { ascending: false });
+  // egress 감사(2026-09-15) — status/keyword 검색이 조인·RPC 결과 기준이라 클라이언트에서
+  // 필터링되는 구조상(바로 아래 주석 참고) 이 쿼리 자체엔 상한이 없었다 — 센터가 오래
+  // 운영될수록(회원 = 수강권을 한 번이라도 보유한 전체 이력) 계속 커지는 전체 조회였다.
+  // 화면이 최근 등록순으로 이미 정렬해 보여주므로, 실사용 범위를 크게 웃도는 안전판만
+  // 추가한다 — 지금까지 이 상한에 걸릴 만큼 회원이 많은 센터는 없어 동작은 그대로다.
+  const { data, error } = await q.order("registered_at", { ascending: false }).limit(2000);
   if (error) throw new Error("회원 목록을 불러오지 못했어요: " + error.message);
 
   const rows = data ?? [];

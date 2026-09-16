@@ -177,11 +177,15 @@ export type ManagerReview = Review & {
 export type ReviewStats = { total: number; avgRating: number; noReply: number };
 
 export async function fetchCenterReviewsForManager(centerId: string): Promise<ManagerReview[]> {
+  // egress 감사(2026-09-15) — 상한이 없어 센터가 오래 운영될수록(사진 포함 후기 전체
+  // 이력) 계속 커지는 전체 조회였다. 최신순 정렬은 이미 있으니 안전판만 추가한다 —
+  // 지금까지 이 상한에 걸릴 만큼 후기가 쌓인 센터는 없어 동작은 그대로다.
   const { data, error } = await supabase
     .from("center_reviews")
     .select("id, profile_id, rating, content, photos, reply, replied_at, created_at, profiles(name, nickname)")
     .eq("center_id", centerId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(500);
   if (error) throw new Error("후기를 불러오지 못했어요: " + error.message);
   return (data ?? []).map((r: any) => ({
     id: r.id, profileId: r.profile_id,

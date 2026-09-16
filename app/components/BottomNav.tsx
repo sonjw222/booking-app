@@ -99,27 +99,32 @@ export default function BottomNav({ initialHasUsable = null }: { initialHasUsabl
           스크립트가 탭마다 다시 실행되던 낭비도 같이 없어진다(전부 세션당 한 번만 필요한
           초기화). 이 nav 밖의(각 화면 안쪽) 다른 <a href> 링크들은 이번 범위 밖 —
           docs/TODO.md P3-12 참고, 전면 전환은 별도 배치. */}
+      {/* 릴리스 폴리시 배치 6차(2026-09-15) — 탭 전환은 edge-swipe 뒤로가기로 이전 탭에
+          "되돌아가면" 안 된다(예: 마이 → 예약 tab → edge swipe → 마이로 복귀 = FAIL).
+          Next.js <Link>의 replace prop은 router.replace()를 써서 history.replaceState로
+          이동한다(pushState와 달리 WKWebView 뒤로가기 목록에 새 항목을 안 남김) — 탭
+          5개 전부 동일하게 적용. */}
       <nav className={`bottom-nav ${keyboardOpen ? "keyboard-hidden" : ""}`} aria-label="회원 주요 메뉴">
-        <Link className={`nav-item ${is("/") ? "active" : ""}`} href="/">
+        <Link className={`nav-item ${is("/") ? "active" : ""}`} href="/" replace>
           <div className="nav-icon"><UiIcon name="home" /></div>홈
         </Link>
         {showMembershipTabs && (
-          <Link className={`nav-item ${is("/reservation") ? "active" : ""}`} href="/reservation">
+          <Link className={`nav-item ${is("/reservation") ? "active" : ""}`} href="/reservation" replace>
             <div className="nav-icon"><UiIcon name="calendar" /></div>예약
           </Link>
         )}
         {showMembershipTabs && (
-          <Link className={`nav-item ${isMyReservations ? "active" : ""}`} href="/my-reservations">
+          <Link className={`nav-item ${isMyReservations ? "active" : ""}`} href="/my-reservations" replace>
             <div className="nav-icon"><UiIcon name="list" /></div>내 예약
           </Link>
         )}
-        <Link className={`nav-item ${is("/notifications") ? "active" : ""}`} href="/notifications">
+        <Link className={`nav-item ${is("/notifications") ? "active" : ""}`} href="/notifications" replace>
           <div className="nav-icon" style={{ position: "relative" }}>
             <UiIcon name="bell" />
             {unread > 0 && <span className="nav-badge">{unread > 9 ? "9+" : unread}</span>}
           </div>알림
         </Link>
-        <Link className={`nav-item ${isMypage ? "active" : ""}`} href="/mypage">
+        <Link className={`nav-item ${isMypage ? "active" : ""}`} href="/mypage" replace>
           <div className="nav-icon"><UiIcon name="user" /></div>마이
         </Link>
       </nav>

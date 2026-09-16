@@ -88,6 +88,10 @@ export async function fetchCenterOrders(centerId: string, status?: string): Prom
     .eq("center_id", centerId)
     .order("created_at", { ascending: false });
   if (status) q = q.eq("status", status);
+  // egress 감사(2026-09-15) — status 필터 없이 부르면(기본 화면 진입 시) 센터가 생긴
+  // 이후의 모든 주문을 상한 없이 통째로 가져왔다. 최신순 정렬은 이미 있었으니 안전판만
+  // 추가 — 지금까지 이 상한에 걸릴 만큼 주문이 쌓인 센터는 없어 동작은 그대로다.
+  q = q.limit(1000);
   const { data, error } = await q;
   if (error) throw new Error("주문을 불러오지 못했어요: " + error.message);
   return (data ?? []).map((o: any) => ({

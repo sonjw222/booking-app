@@ -25,6 +25,7 @@ import { setBootstrapSuppressed, ensureAccountForCurrentUser } from "../../lib/a
 import { startNaverLogin } from "../../lib/naverAuth";
 import { startKakaoLogin } from "../../lib/kakaoAuth";
 import { signInWithAppleNative, AppleSignInCancelledError, isAppleNativeSignInSupported } from "../../lib/appleAuth";
+import { signInWithGoogleNative, GoogleSignInCancelledError, isGoogleNativeSignInSupported } from "../../lib/googleAuth";
 import { stashPostLoginNext } from "../../lib/postLoginReturn";
 import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
 
@@ -88,6 +89,34 @@ export default function LoginPage() {
   const [showAppleButton, setShowAppleButton] = useState(false);
   useEffect(() => {
     setShowAppleButton(isAppleNativeSignInSupported());
+  }, []);
+
+  // 소셜 버튼 영구 비활성화 사고 방어(2026-09-15, release blocker 대응 — 근본 원인은
+  // Google을 네이티브로 전환해 구조적으로 없앴지만, 카카오/네이버는 여전히 브라우저
+  // 리다이렉트 방식이라 같은 종류의 문제가 이론상 남아 있다). 리다이렉트로 나갔다가
+  // provider 자체 페이지에서 실패/취소되면 우리 코드로 에러가 reject되지 않아
+  // setSocialLoading(null)이 호출될 기회가 없는데, 그 상태에서 뒤로 돌아오면(이 탭이
+  // 완전히 새로 로드되지 않고 WKWebView가 bfcache 유사 방식으로 기존 JS 컨텍스트를
+  // 복원) socialLoading이 이전 provider 값으로 남아 모든 소셜 버튼이 disabled 상태로
+  // 굳어버렸다. pageshow(persisted=true → bfcache 복원)와 visibilitychange(탭이 다시
+  // 보이는 시점, 앱 전환 후 복귀 등)를 감시해 항상 안전하게 리셋한다 — 정상 흐름에서는
+  // 이 시점에 이미 socialLoading이 null이라 사실상 비용이 없다.
+  useEffect(() => {
+    function resetStuckSocialLoading() {
+      setSocialLoading((current) => (current ? null : current));
+    }
+    function handlePageShow(e: PageTransitionEvent) {
+      if (e.persisted) resetStuckSocialLoading();
+    }
+    function handleVisibility() {
+      if (document.visibilityState === "visible") resetStuckSocialLoading();
+    }
+    window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
   const [message, setMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
   // "로그인 상태 유지"(remember me, P1) — 기본 체크(기존과 동일하게 localStorage에 세션 저장).
@@ -387,6 +416,30 @@ export default function LoginPage() {
         setSocialLoading(null);
         if (e instanceof AppleSignInCancelledError) return; // 사용자가 직접 취소 — 에러로 안 보여줌
         setMessage({ type: "error", text: e.message ?? "애플 로그인에 실패했어요" });
+      }
+      return; // 이 return 이후로는 절대 아래의 공용 signInWithOAuth 호출에 도달하지 않는다.
+    }
+
+    // 구글 네이티브 앱(iOS/Android) 전용 경로(2026-09-15, release blocker 수정) —
+    // 기존 signInWithOAuth("google")는 이 앱의 server.url 모드 WKWebView 안에서
+    // accounts.google.com으로 직접 이동하는데, Google이 임베디드 WebView에서의 OAuth를
+    // "disallowed_useragent" 정책으로 서버 단에서 차단해 로그인이 아예 끝나지 않았다
+    // (lib/googleAuth.ts 상단 주석 참고). 네이티브 플랫폼에서만 이 분기로 들어가고,
+    // 일반 웹 브라우저는 기존 아래의 공용 signInWithOAuth 경로를 그대로 쓴다(이 제품에
+    // 웹 OAuth를 없애야 할 요구사항은 없음).
+    if (provider === "google" && isGoogleNativeSignInSupported()) {
+      console.log("[login] Google 버튼 클릭 — 네이티브 경로로 진입(signInWithOAuth 미사용)");
+      try {
+        await signInWithGoogleNative();
+        // 애플 네이티브와 동일한 레이스 방지(윗 주석 참고) — signInWithIdToken() 성공
+        // 직후 SessionWatcher의 비동기 계정 부트스트랩이 끝나기 전에 페이지 이동으로
+        // JS 컨텍스트가 파괴되지 않도록 이동 전에 한 번 더 기다린다(멱등 함수).
+        await ensureAccountForCurrentUser();
+        window.location.href = "/";
+      } catch (e: any) {
+        setSocialLoading(null);
+        if (e instanceof GoogleSignInCancelledError) return; // 사용자가 직접 취소 — 에러로 안 보여줌
+        setMessage({ type: "error", text: e.message ?? "구글 로그인에 실패했어요" });
       }
       return; // 이 return 이후로는 절대 아래의 공용 signInWithOAuth 호출에 도달하지 않는다.
     }

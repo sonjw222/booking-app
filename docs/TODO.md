@@ -1367,16 +1367,57 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 | 완료 조건 | **콘솔 설정은 이미 완료됨**(Apple Developer capability, Xcode capability, Supabase Provider 값 전부 사용자가 이미 함). 남은 건: (1) `AppleSignInPlugin.swift`를 포함해 Xcode에서 재빌드(필요 시 provisioning profile 재생성), (2) **실기기**에서 신규 가입/기존 로그인/취소/네트워크 실패 케이스 E2E 검증(시뮬레이터는 Apple ID 로그인 제약이 있어 권장 안 함) — 둘 다 Claude가 대신 할 수 없음. |
 | 관련 문서 | [REQUIREMENTS 5-1, 6-2](./REQUIREMENTS.md), [ROUTES `/login`](./ROUTES.md), `AUTH_SETUP.md` 3절 |
 
-### P2-1d. (2026-08-13, 완료) 구글 로그인 — Supabase 기본 provider 그대로 사용, 운영 반영 완료
+### P2-1g. (반복 재확인, 2026-09-15) Apple 로그인 버튼 디자인 — 공식 asset 필요(외부 의존, 계속 블로킹)
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P2 |
-| 현재 상태 | **완료. 실제 구글 계정으로 로그인 왕복 성공 확인.** |
-| 근거 파일 | `AUTH_SETUP.md` 3-0절 |
-| 내용 | 구글은 이메일/프로필이 민감하지 않은 기본 스코프라 카카오와 달리 별도 우회 없이 Supabase 기본 제공 Google provider를 그대로 사용. Google Cloud Console에서 OAuth 동의 화면(외부, 테스트 상태) + OAuth 클라이언트(웹 애플리케이션, Supabase Callback URL 등록) 생성 후 Client ID/Secret을 Supabase Google Provider 설정에 등록. |
-| 알려진 제약(기능 영향 없음) | 구글 로그인 동의 화면에 앱 이름 대신 `xxxxx.supabase.co 서비스로 로그인`이 표시됨 — Supabase 공용 도메인을 거치는 구조상 발생, `supabase.co`는 소유하지 않은 도메인이라 구글 "승인된 도메인"에 등록 불가. Supabase 커스텀 도메인(유료) 또는 완전 커스텀 OAuth 흐름 전환 시 해결 가능, 실사용 서비스 오픈 시점에 재검토(`AUTH_SETUP.md` 3-0절 참고). |
-| 검증 | 실제 구글 계정으로 로그인 성공 확인(사용자 직접 테스트). |
+| 우선순위 | P3(기능 아님, 브랜딩/HIG 준수) |
+| 현재 상태 | **블로킹 지속.** 실기기 QA에서 반복 재신고됨. Apple 공식 로고 전용 asset(Apple Design Resources)은 Apple Developer 계정 로그인이 있어야 다운로드 가능해 이 세션이 직접 가져올 수 없음 — 비공식으로 인터넷에서 복사한 Apple 로고 PNG/SVG는 절대 쓰지 말라는 명시적 지시가 있어 임의 대체도 안 함. |
+| 필요한 것 | 사용자가 https://developer.apple.com/design/human-interface-guidelines/sign-in-with-apple/ 의 공식 리소스를 다운로드해 전달해야 교체 가능. |
+| 근거 파일 | `app/login/page.tsx`(현재 손으로 그린 SVG 심볼 사용 중, HIG의 정확한 비율/여백 보장 안 됨) |
+
+### P2-1d. (2026-09-15, 아키텍처 전환) 구글 로그인 — 웹 OAuth → 네이티브(release blocker 대응), 콘솔 설정만 남음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2(코드는 완료, 콘솔 설정 전까지 기능 자체는 동작 안 함 — 그 전까지는 실질적으로 P0급 블로커) |
+| 현재 상태 | **아키텍처를 웹 OAuth → 네이티브로 전환함(릴리스 폴리시 배치 6차).** 실기기 QA에서 기존 `signInWithOAuth("google")`이 이 앱의 `server.url` 모드 WKWebView 안에서 완전히 깨져 있음을 확인(Google의 `disallowed_useragent` 정책이 임베디드 WebView의 OAuth를 서버 단에서 차단 — 카카오/네이버와 달리 구글만의 정책). 그 결과 로그인이 앱 안에서 끝나지 않고, 실패 상태로 돌아오면 `socialLoading`이 리셋될 기회가 없어 전체 소셜 버튼이 영구 비활성화되는 사고로 이어졌음(별도로 방어 코드 추가 완료). Apple과 동일한 패턴(로컬 커스텀 Capacitor 플러그인 → ID 토큰 → `supabase.auth.signInWithIdToken`)으로 전환 — iOS는 `GoogleSignIn-iOS` SPM 패키지(Firebase와 동일한 방식으로 `project.pbxproj` 직접 편집해 추가), Android는 `androidx.credentials`(Credential Manager, Google 공식 최신 권장 API). 아래 P2-1d-Google-Setup 참고 — 콘솔 설정 전까지는 "구글 로그인 설정이 아직 안 되어 있어요" 안내만 뜸(에러/크래시 아님, 기존 카카오/네이버 미설정 시 동작과 동일한 패턴). |
+| 근거 파일 | `lib/googleAuth.ts`(신규), `ios/App/App/GoogleSignInPlugin.swift`(신규), `android/app/src/main/java/com/mwhabit/app/GoogleSignInPlugin.java`(신규), `app/login/page.tsx`, `AUTH_SETUP.md` 3-0절(갱신 필요 — 아직 웹 OAuth 기준으로 남아있음, 다음 라운드에서 정리) |
+| 검증 | iOS 시뮬레이터 Debug + 제네릭 Release, Android `assembleDebug`/`assembleRelease` 전부 실제 SDK(`GoogleSignIn-iOS 9.2.0`, `androidx.credentials 1.5.0`, `googleid 1.2.0`) 기준으로 빌드 성공. 실기기 로그인 왕복은 콘솔 설정(아래) 완료 후 필요. |
+| 알려진 제약(기존, 여전히 유효) | 순수 웹 브라우저 경로는 그대로 `signInWithOAuth` 유지(웹은 WebView 문제가 없어서 전환 불필요) — 웹에서는 여전히 구글 로그인 동의 화면에 `xxxxx.supabase.co` 도메인이 노출됨(`supabase.co`가 소유 도메인이 아니라 구글 "승인된 도메인" 등록 불가, 커스텀 도메인 전환 시 해결). |
+
+### P2-1d-Google-Setup. (신규, 2026-09-15) 구글 네이티브 로그인 — 사용자가 직접 해야 하는 콘솔 설정
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0급(이거 없으면 구글 로그인 자체가 전혀 동작 안 함) |
+| 현재 상태 | **운영 설정 필요.** 코드는 완료, 아래 콘솔 작업 전까지 기능이 켜지지 않음. Claude는 이 값들을 대신 발급/등록할 수 없음(외부 계정 인증 필요) — 이미 설정된 값이 있다면 재생성하지 말고 그대로 재사용할 것. |
+| 1) Google Cloud Console | "API 및 서비스 → 사용자 인증 정보"에서 OAuth 2.0 클라이언트 ID 2개 필요: **웹 애플리케이션**용 1개(Android 네이티브 플로우가 이 Web Client ID를 `serverClientId`/검증 대상으로 사용 — Supabase 공식 문서 확인함), **iOS**용 1개(번들 ID `com.mwhabit.app`로 등록). Android는 별도 Android Client ID 불필요 — 대신 "OAuth 동의 화면" 옆 사용자 인증정보에 실제 서명 키의 **SHA-1 지문**을 등록해야 함(디버그/릴리스 키 둘 다, 배포 키스토어는 사용자만 보유). |
+| 2) Supabase Dashboard | Authentication → Providers → Google에서 위에서 만든 **웹 Client ID + iOS Client ID를 함께** 등록(둘 다 필요 — Supabase `signInWithIdToken` 공식 문서 기준, Web Client ID가 audience 검증용). Client Secret은 네이티브 전용이면 비워도 됨(Apple 때와 동일 원칙). |
+| 3) 앱 환경변수 | `.env.local` 및 배포 환경(Vercel 등)에 `NEXT_PUBLIC_GOOGLE_IOS_CLIENT_ID`(iOS Client ID), `NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID`(웹 Client ID — Android 네이티브 플로우도 이 값을 씀) 등록. 카카오/네이버의 `NEXT_PUBLIC_KAKAO_CLIENT_ID` 등과 동일한 기존 관례. |
+| 4) iOS Info.plist | 리버스 iOS Client ID(예: `com.googleusercontent.apps.xxxx`)를 `CFBundleURLTypes`에 URL scheme으로 추가해야 로그인 완료 후 앱으로 돌아오는 리다이렉트가 처리됨 — 실제 Client ID가 나온 뒤에만 추가 가능(현재 미완료, 이 세션은 진짜 Client ID가 없어 값을 채울 수 없었음). |
+| 5) Android SHA-1 | 디버그 키스토어(`~/.android/debug.keystore`, 별칭 보통 `androiddebugkey`)와 실제 배포용 키스토어(`android/app/build.gradle`이 참조하는 `MWHABIT_KEYSTORE_FILE`) 둘 다의 SHA-1을 Google Cloud Console에 등록해야 실기기 릴리스 빌드에서도 동작함. |
+| 완료 조건 | 위 1~5 전부 완료 후 실기기(iOS/Android 둘 다)에서 기존 회원 재로그인 + 신규 계정 온보딩 왕복 성공 확인. |
+| 관련 문서 | `AUTH_SETUP.md`(아직 미반영 — 다음 라운드에서 3-0절을 네이티브 기준으로 갱신 필요, Apple 3-2절과 동일한 갱신 패턴), [REQUIREMENTS 5-1](./REQUIREMENTS.md) |
+
+### P2-1e. (신규, 2026-09-15) 관리자 수동 배정(`manager_book_member`) — 만료된 수강권 배정 허용 여부 확인 필요
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2(확인 필요 — 버그로 단정 안 함) |
+| 현재 상태 | **확인 필요.** 만료/소진 수강권 예약 강제 조사(릴리스 폴리시 배치 6차) 중 발견 — `manager_book_member()`(`reservation_functions.sql`, 최신 재정의는 `add_makeup_booking.sql`)는 관리자가 명시적 `p_membership_id`로 회원을 배정할 때 `remaining_count`(0 이하 거부, `p_deduct=true`일 때만)는 검사하지만 `expires_at`은 전혀 검사하지 않음. 함수 자체 주석("수강권 지정 시 유효성만 확인 = 보강 허용")상 관리자가 만료된 수강권으로도 보강(makeup) 수업에 배정할 수 있게 하려는 **의도적 설계**로 보이지만, 코드만으로는 제품 의도인지 놓친 케이스인지 확정할 수 없음. |
+| 한 것 | 이번 배치에서는 수정하지 않음(SQL 변경은 보고만, 실행 금지 원칙 + 의도 확인 전 임의 변경 금지). |
+| 필요한 것 | 대표님/제품 담당자 확인: "관리자가 만료된 수강권으로 보강 수업에 배정하는 게 의도된 기능이 맞는지". 아니라면 `manager_book_member`에 `expires_at >= current_date` 체크를 추가하는 새 `fix_*.sql` 필요(이번엔 작성 안 함). |
+| 근거 파일 | `reservation_functions.sql`(1841행 부근), `add_makeup_booking.sql` |
+
+### P2-1f. (신규, 2026-09-15) Kakao/Naver — Vercel Preview 도메인 로그인 실패는 콘솔 allowlist 문제(코드 정상)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3(정보성 — 조치 불필요, production 정상 동작 전제) |
+| 현재 상태 | **확인 완료, 조치 불필요.** `lib/kakaoAuth.ts`/`lib/naverAuth.ts`의 `redirect_uri`는 `window.location.origin`에서 동적으로 계산됨(하드코딩 아님) — 코드 자체는 정상. Vercel Preview 도메인에서 실패하는 건 그 도메인이 카카오/네이버 개발자 콘솔의 Redirect URI 허용 목록에 등록돼 있지 않기 때문(`AUTH_SETUP.md` 3-1/3-3절이 이미 "배포 환경마다 콘솔에 도메인 추가 필요"라고 명시하고 있었음 — Preview URL은 애초에 등록 대상이 아니었던 게 정상). |
+| 조치 | 없음. Preview에서 이 두 provider를 테스트하려면 카카오 개발자 콘솔(플랫폼 키 → Default REST API Key 수정 → Redirect URI)과 네이버 개발자 콘솔(Application → 서비스 URL/Callback URL)에 Preview 도메인을 **임시로** 추가했다가 테스트 후 제거하면 됨 — **production(mwhabit.com) 콜백은 절대 건드리지 말 것**. |
+| 관련 문서 | `AUTH_SETUP.md` 3-1절, 3-3절 |
 
 ### P2-1c. (2026-08-13, 완료) 카카오 로그인 — Supabase 기본 provider 불가, 커스텀 Edge Function으로 구현
 
@@ -3292,6 +3333,25 @@ UI를 추가(사이즈 있는 상품은 조합이 섞일 수 있어 대상에서
 **권장 순서**(감사 리포트 원안): 1주차 토큰 수정(P0, 완료) → 2주차 센터 상세 재작업 +
 Empty/Error/Skeleton 공용 컴포넌트 3종 → 3주차 액센트 단일화 + 헤더/탭 통일 + 버튼 위계 →
 4주차~ 타이포 스케일 점진 전환(stylelint로 신규 하드코딩 차단) + 나머지 P2/P3.
+
+### P2-37. (신규, 2026-09-16) `AUTH_SETUP.md` 4절("계정 탈퇴(소프트 삭제)")이 현재 구현과 어긋남 — 문서 갱신 필요
+
+Google Play 계정 삭제 URL 페이지(`/account-deletion`) 작업 중 실제 탈퇴 로직
+(`supabase/functions/delete-account/index.ts`)을 코드로 확인한 결과, 2026-08-19
+정책 변경으로 이미 "소프트 삭제(비활성화만)"에서 "개인정보 익명화 + `auth.users` 실제
+삭제(재가입 허용)"로 바뀌었는데도 `AUTH_SETUP.md` 4절은 여전히 옛 동작("실제 행을
+지우지 않고 `accounts.deactivated_at`을 채운 뒤 Auth에서 밴")을 그대로 설명하고 있다.
+CLAUDE.md 1번 규칙("문서와 코드가 다르면 코드를 신뢰")에 따라 이번 작업(공개 안내
+페이지 추가)에서는 코드를 기준으로 페이지 내용을 작성했지만, `AUTH_SETUP.md` 자체는
+이번 작업 범위(문서 갱신은 요청받지 않음, 탈퇴 로직·SQL 수정 금지 지시) 밖이라 손대지
+않았다.
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | 확인 필요 — 문서만 갱신하면 되는지, 참조 파일 경로(`app/settings/account/page.tsx`는 이미 없고 실제로는 `app/mypage/info/page.tsx`)도 같이 바로잡아야 하는지 결정 필요 |
+| 근거 파일 | `AUTH_SETUP.md`(211~231행), `supabase/functions/delete-account/index.ts`(상단 주석, 2026-08-19/2026-09-10 정책 변경 기록), `app/mypage/info/page.tsx` |
+| 권장 후속 작업 | `AUTH_SETUP.md` 4절을 실제 삭제 동작(익명화 + `auth.users` 삭제, 재가입 허용)으로 다시 쓰고, 화면 경로도 `app/mypage/info/page.tsx`(마이 → 내 정보 관리 → 계정 탈퇴)로 갱신 |
 
 ## 7. P3 — 용도·존속 여부가 불명확한 객체
 

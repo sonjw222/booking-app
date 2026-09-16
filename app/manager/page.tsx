@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import UiIcon from "../components/UiIcon";
 import { fetchMyCenters, fetchTodayClasses, type ManagedCenter, type TodayClass } from "../../lib/manager";
+import { replaceTabNavigation } from "../../lib/navState";
 import { fetchClassAttendees, setAttendance, type ClassAttendee } from "../../lib/classes";
 import { fetchMemberDetail, type MemberDetailData } from "../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../lib/roles";
@@ -190,7 +191,7 @@ export default function ManagerDashboard() {
       {/* 매니저 모드 헤더 */}
       <div className="mgr-mode-bar">
         <span className="mgr-mode-label"><UiIcon name="building" size={15} /> 관리자 모드</span>
-        <a className="mgr-mode-switch" href="/">회원 모드로 전환 ↩</a>
+        <a className="mgr-mode-switch" href="/" onClick={(e) => replaceTabNavigation(e, "/")}>회원 모드로 전환 ↩</a>
       </div>
 
       {/* 센터 선택 (여러 센터 운영 시) */}
@@ -439,8 +440,6 @@ export default function ManagerDashboard() {
           <span className="chevron">›</span>
         </a>
       )}
-      <div className="manager-menu-end-spacer" aria-hidden="true" />
-
       {/* 예약자 명단 시트 */}
       {rosterClass && (
         <div className="sheet-overlay" onClick={() => setRosterClass(null)}>

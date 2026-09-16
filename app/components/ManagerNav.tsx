@@ -102,22 +102,24 @@ export default function ManagerNav({ initialCanSeeMembers = null }: { initialCan
   return (
     <>
       <NotificationToaster />
+      {/* 릴리스 폴리시 배치 6차(2026-09-15) — BottomNav와 동일한 이유로 replace(주석은
+          BottomNav.tsx 참고). */}
       <nav className={`bottom-nav ${keyboardOpen ? "keyboard-hidden" : ""}`} aria-label="관리자 주요 메뉴">
-        <Link className={`nav-item ${is("/manager/classes") ? "active" : ""}`} href="/manager/classes">
+        <Link className={`nav-item ${is("/manager/classes") ? "active" : ""}`} href="/manager/classes" replace>
           <div className="nav-icon"><UiIcon name="calendar" /></div>수업
         </Link>
         {canSeeMembers && (
-          <Link className={`nav-item ${is("/manager/members") ? "active" : ""}`} href="/manager/members">
+          <Link className={`nav-item ${is("/manager/members") ? "active" : ""}`} href="/manager/members" replace>
             <div className="nav-icon"><UiIcon name="users" /></div>회원
           </Link>
         )}
-        <Link className={`nav-item ${is("/manager/notifications") ? "active" : ""}`} href="/manager/notifications">
+        <Link className={`nav-item ${is("/manager/notifications") ? "active" : ""}`} href="/manager/notifications" replace>
           <div className="nav-icon" style={{ position: "relative" }}>
             <UiIcon name="bell" />
             {unread > 0 && <span className="nav-badge">{unread > 9 ? "9+" : unread}</span>}
           </div>알림
         </Link>
-        <Link className={`nav-item ${isMore ? "active" : ""}`} href="/manager">
+        <Link className={`nav-item ${isMore ? "active" : ""}`} href="/manager" replace>
           <div className="nav-icon"><UiIcon name="list" /></div>더보기
         </Link>
       </nav>
