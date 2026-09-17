@@ -1331,6 +1331,46 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 전부 1회차 값으로 표시됨) — 날짜 필터를 `row_number()` 계산 이후로 옮겨 수정, Live
 재적용·재테스트로 확인(자세한 내용은 CHANGELOG 참고).
 
+### P1-11. (신규, 2026-09-18) 릴리스 폴리시 배치 8차 — 이번 배치에서 처리하지 못한 항목
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **일부 완료** — Navigation 정책/관리자 알림 전체삭제·swipe·pin/회원 검색·필터/테마 미리보기/태블릿 스플래시 로고/운영자 종목·센터 검색/홈 spacing/로딩 스켈레톤 완화는 완료. 아래 항목은 시간 예산상 이번 배치 범위 밖. |
+| 근거 | `mobile-ux-nav-manager-operator-polish` 브랜치(release-polish-batch 기준 격리 worktree) 커밋 이력, 최종 보고(세션 기록) 참고 |
+| 완료 조건 | 아래 각 항목이 실제로 구현·검증(가능하면 실기기)된 뒤 이 표에서 제거 |
+
+미완료 상세:
+1. **화면별 맞춤 로딩 스켈레톤** — 공용 `Loading.tsx`의 shape를 화면 중앙까지 자연스럽게
+   퍼지도록 완화(min-height/list-row 반복)했지만, "실제 최종 화면 구조와 완전히 동일한
+   위치에 skeleton 배치"(요청 2-1 이상적 형태)와 "준비된 section부터 progressive하게
+   렌더링"은 화면별 맞춤 작업이 필요해 못함(대상 화면이 많음).
+2. **관리자 회원 검색 client-side filtering 전환** — 지금은 서버 검색(디바운스/stale
+   가드만 개선)을 유지했다. 이유: 전화번호가 `customer.member.phone` 권한에 따라 서버가
+   마스킹해서 내려주는 등 응답 자체가 권한별로 달라 "이미 로드된 데이터"만으로는 안전하게
+   재현 불가 — client-side 우선 전환을 하려면 권한 마스킹 로직을 클라이언트로 옮기거나
+   전체 로드 후 필드별 재조회하는 구조 변경이 필요(범위 밖).
+3. **Business Scenario QA 프레임워크(`tests/integration/scenarios/`)** — 이 worktree
+   기준으로는 아직 존재하지 않음(병렬 세션이 만들고 있을 가능성 높음). 위치 기반 반경
+   필터의 필수 시나리오 10개(추가 시나리오 섹션)는 이 프레임워크가 있어야 자연스럽게
+   구현되는데, 없어서 `tests/unit/home.nearbyRadius.test.ts`(haversine 정확도/경계값
+   단위테스트)만 추가했다. 병렬 세션 merge 후 그 프레임워크로 GPS mock 기반 통합
+   시나리오(회원 위치별 표시 센터, 반경 경계, 권한 거부, 캐시 갱신, 좌표 없음 안전 처리 등)
+   를 별도로 추가해야 한다.
+4. **`lib/home.ts`의 `NEARBY_RADIUS_KM`/`haversineKm`** — 이 worktree엔 미구현이라 최소
+   구현을 추가했다(20km, client 계산). 병렬로 진행 중인 Business Logic Fix Batch가 같은
+   영역(위치 반경 SQL/로직)을 더 정교하게(서버 사이드 PostGIS 등) 다룰 수 있어, 두 브랜치
+   병합 시 반드시 조정 필요 — 값/구현 방식이 다르면 어느 쪽을 남길지 사용자 결정 필요.
+5. **알림 통합테스트 실행 확인** — `tests/integration/notification-pin-delete-all.test.ts`를
+   작성했지만 이 환경엔 `.env.test.local`(테스트 계정 자격증명)이 없어 실행해보지 못함(코드
+   레벨 리뷰만 함, docs/AUTOMATED_QA.md와 동일한 제약).
+6. **iOS/Android 실제 RUNTIME 검증(시뮬레이터/에뮬레이터 실행, XCUITest/Espresso 테스트
+   pass/fail)** — 이번 배치는 `xcodebuild build-for-testing`/`gradlew
+   compileDebugAndroidTestSources assembleDebugAndroidTest` **BUILD PASS만** 확인했다
+   (그 과정에서 실제 빌드 버그 2건 — Xcode 타겟 미등록, XML 주석 오류 — 을 발견·수정).
+   부팅된 시뮬레이터/에뮬레이터·실기기·네트워크로 닿는 백엔드가 이 세션엔 없어 실제 동작
+   확인은 못함.
+
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
 ### P2-39. (신규, 2026-09-18) 자동 QA 인프라 — 실기기/에뮬레이터 실행 + CI 활성화 후속 작업
