@@ -18,7 +18,7 @@
       drawable/splash_background.xml이 이 비트맵을 android:gravity="center"로 감싸
       "늘리지 않고 원래 크기 그대로 중앙 배치"하도록 바꾸는데, 그 background 레이어에 쓸
       단색이 필요해 여기서 정의한다. values-v31/styles.xml(Android 12+ 공식
-      SplashScreen API 경로)이 이미 같은 색(#0A2545, app/globals.css --brand 토큰과 동일)을
+      SplashScreen API 경로)이 이미 같은 색(#0A2545, app/globals.css의 brand CSS 변수와 동일)을
       windowSplashScreenBackground로 쓰고 있어 그 값을 그대로 재사용 — 새 브랜드 색을
       만들지 않는다.
     -->
