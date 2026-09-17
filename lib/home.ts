@@ -8,6 +8,27 @@
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
 
+// 릴리스 폴리시 배치 8차(2026-09-17/18) — "내 주변" 반경 필터. 감사 결과: 기존
+// fetchHomeCenters()는 위치가 있으면 "정렬"만 했지 실제로 반경 밖 센터를 제외하지는
+// 않았다(제주 사용자에게도 서울/부산 센터가 그냥 "멀리 있는 순서"로 계속 표시될 수 있었음
+// — 추가 시나리오 섹션이 지적한 문제). 병렬로 진행 중인 다른 세션(Business Logic Fix
+// Batch)이 이 위치 반경 로직을 더 정교하게 다룰 수도 있어(예약 당일예약/정원 invariant와
+// 같은 배치) 이 worktree에는 반영돼 있지 않다 — 이 worktree 기준으로는 미구현이 맞아서
+// 최소 구현을 추가한다. 값 자체(20km)는 도심형 센터 검색 UX 기준 임의값이라, 다른
+// 세션의 구현이 병합되면 이 상수/필터는 그쪽 값으로 대체/정리돼야 한다(최종 보고 참고).
+export const NEARBY_RADIUS_KM = 20;
+
+// 순수 함수로 분리 — 단위 테스트(경계값 등)에서 네트워크/Supabase 목 없이 바로 검증하려고
+// fetchHomeCenters() 밖으로 뺐다.
+export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export type HomeCenter = {
   id: string;
   name: string;
@@ -45,27 +66,24 @@ export async function fetchHomeCenters(userLat?: number, userLng?: number): Prom
 
   let centers: HomeCenter[] = (data ?? []).map((c: any) => ({
     id: c.id, name: c.name, categories: c.categories ?? [],
-    latitude: c.latitude, longitude: c.longitude, distanceKm: null,
+    // 좌표 값이 숫자가 아니면(잘못된 데이터, 문자열 "NaN" 등) 그 센터만 "좌표 없음"으로
+    // 안전하게 처리한다 — 목록 전체가 죽으면 안 된다(추가 시나리오 9번).
+    latitude: Number.isFinite(c.latitude) ? c.latitude : null,
+    longitude: Number.isFinite(c.longitude) ? c.longitude : null,
+    distanceKm: null,
   }));
 
-  // 내 위치가 있으면 거리 계산 후 가까운 순 정렬 (좌표 있는 센터 우선)
-  if (userLat != null && userLng != null) {
-    const toRad = (d: number) => (d * Math.PI) / 180;
+  // 내 위치가 있으면 거리 계산 → 반경(NEARBY_RADIUS_KM) 밖은 제외 → 가까운 순 정렬.
+  // 위치가 없으면(권한 거부/조회 실패) 기존과 동일하게 반경 필터 없이 최신순 그대로 —
+  // 위치 실패가 홈 화면 전체를 비우거나 죽이면 안 된다(추가 시나리오 6/7).
+  if (userLat != null && userLng != null && Number.isFinite(userLat) && Number.isFinite(userLng)) {
     for (const c of centers) {
       if (c.latitude != null && c.longitude != null) {
-        const dLat = toRad(c.latitude - userLat);
-        const dLng = toRad(c.longitude - userLng);
-        const a = Math.sin(dLat / 2) ** 2 +
-          Math.cos(toRad(userLat)) * Math.cos(toRad(c.latitude)) * Math.sin(dLng / 2) ** 2;
-        c.distanceKm = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        c.distanceKm = haversineKm(userLat, userLng, c.latitude, c.longitude);
       }
     }
-    centers.sort((a, b) => {
-      if (a.distanceKm == null && b.distanceKm == null) return 0;
-      if (a.distanceKm == null) return 1;
-      if (b.distanceKm == null) return -1;
-      return a.distanceKm - b.distanceKm;
-    });
+    centers = centers.filter((c) => c.distanceKm != null && c.distanceKm <= NEARBY_RADIUS_KM);
+    centers.sort((a, b) => (a.distanceKm as number) - (b.distanceKm as number));
   }
   return centers.slice(0, 10);
 }

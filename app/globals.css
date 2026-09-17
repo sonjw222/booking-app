@@ -962,12 +962,30 @@ a { color: inherit; text-decoration: none; }
 
 .mem-filters {
   display: flex;
+  align-items: center;
   gap: 6px;
   padding: 6px 20px;
+}
+/* 릴리스 폴리시 배치 8차(2026-09-17), 3-5/3-6 — "등급 전체"/"상태 전체"는
+   .mem-filters의 직계 자식(flex:0 0 auto인 .filter-chip 기본값)으로 항상 좌측 고정되고,
+   실제 등급/상태 칩만 이 안쪽 컨테이너에서 자체적으로 horizontal scroll된다(예전엔
+   .mem-filters 전체가 overflow-x:auto라 "전체" 칩까지 같이 스크롤되어 사라졌다). 긴
+   등급명도 white-space:nowrap(.filter-chip 기존 규칙)이라 줄바꿈 없이 자연스럽게 흐른다. */
+.mem-filters-scroll {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
   overflow-x: auto;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
-.mem-filters::-webkit-scrollbar { display: none; }
+.mem-filters-scroll::-webkit-scrollbar { display: none; }
+.mem-filters-scroll:empty { display: none; border-left: none; padding-left: 0; }
+.mem-filters .all-chip { flex: 0 0 auto; }
+/* 3-7 — 검색 중 인라인 표시(풀스크린 로딩 대신). */
+.mem-searching { color: var(--ink-soft); font-weight: 600; }
 
 .filter-chip {
   flex: 0 0 auto;
@@ -3937,7 +3955,13 @@ a.membership-card { text-decoration: none; display: block; }
    않지만 간격이 0px). auth-scene 버그와 같은 원인(콘텐츠 폭과 무관한 고정 px 값)이라
    같은 방식으로 고친다 — max-width 매직넘버 대신 flex:1(남는 공간만큼만 차지 +
    min-width:0으로 필요하면 줄바꿈)과 gap으로 배지와의 최소 간격을 항상 보장한다. */
-.home-heading-row { align-items: flex-start; gap: 10px; margin-bottom: 7px; }
+/* 릴리스 폴리시 배치 8차(2026-09-17) — 홈 상단 spacing 미세 조정(1번). safe-area 처리는
+   위 .member-home .header의 max(22px, var(--safe-top))가 이미 담당하므로 거기엔 손대지
+   않고(중복 패딩 방지), 제목 줄(.home-heading-row, 로그인/관리자 모드 배지 포함) 앞에만
+   margin-top 10px를 더해 헤더 상단 패딩과 제목 사이 여백만 넓힌다 — 아래
+   .home-location-row/.searchbar/히어로 배너/하단 nav 간격은 전부 기존 그대로(이 줄
+   자체만 10px 아래로 내려갈 뿐 그 이후 요소들 사이 gap은 안 바뀜). */
+.home-heading-row { align-items: flex-start; gap: 10px; margin-top: 10px; margin-bottom: 7px; }
 .home-heading-row .location { flex: 1 1 auto; min-width: 0; font-size: 22px; line-height: 1.28; font-weight: 720; letter-spacing: -.035em; }
 .home-heading-row .header-icons { flex: 0 0 auto; min-height: 40px; align-items: flex-start; }
 .login-link { min-height: 38px; padding: 0 14px; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); font-size: 12px; font-weight: 620; white-space: nowrap; }
