@@ -61,31 +61,46 @@ export const SCENARIOS: ScenarioMeta[] = [
   { id: "SCN-P1-14", title: "강제종료 후 재시작", priority: "P1", supportedLayers: ["ios", "android"], status: "blocked", reason: "P1-13과 동일" },
   { id: "SCN-P1-15", title: "느린 네트워크(더블탭/버튼 비활성화)", priority: "P1", supportedLayers: ["ios", "android"], status: "not-automated" },
 
-  // ---- P1 날짜/시간 경계(§9) ----
-  { id: "SCN-P1-20", title: "만료 당일", priority: "P1", supportedLayers: ["shared"], status: "not-automated", reason: "reservation_functions.sql의 calc_deadline 실제 구현 확인 후 작성 예정(추측 금지 원칙)" },
-  { id: "SCN-P1-21", title: "만료 직전/직후", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
-  { id: "SCN-P1-22", title: "예약 마감 직전", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
+  // ---- P1 날짜/시간 경계(§9) — Phase 3에서 실제 배포된 calc_deadline/reserve_class 본문
+  // (git 시간순 최종본) 기준으로 구현·실행 확인. 추측 금지 원칙에 따라 초 단위 경계 대신
+  // "명백히 마감 전 vs 명백히 마감 후" 두 구간으로 검증(파일 상단 주석 참고) ----
+  { id: "SCN-P1-20", title: "만료 당일", priority: "P1", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/date-boundaries.test.ts(SCN-P1-20) — expires_at=오늘(KST)인 수강권으로 예약 성공, PASS 확인" },
+  { id: "SCN-P1-21", title: "만료 직전/직후", priority: "P1", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/date-boundaries.test.ts(SCN-P1-21) — expires_at=어제(KST)인 수강권으로 예약 실패, PASS 확인. memberA는 leftover 수강권 오염 위험이 있어 전용 서브프로필(memberC)로 검증" },
+  { id: "SCN-P1-22", title: "예약 마감 직전", priority: "P1", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/date-boundaries.test.ts(SCN-P1-22) — 마감 전(48시간 뒤 수업) 성공 / 마감 후(2시간 뒤 임박 수업) 거부, PASS 확인" },
   { id: "SCN-P1-23", title: "취소 마감 경계", priority: "P1", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/reservation-cancel-grace-period.test.ts, tests/integration/class-cancel-deadline-override.test.ts" },
-  { id: "SCN-P1-24", title: "자정 경계", priority: "P1", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/month-boundary-kst.test.ts (KST 경계 처리 패턴 동일)" },
+  { id: "SCN-P1-24", title: "자정 경계", priority: "P1", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/date-boundaries.test.ts(SCN-P1-24a/24b) — 기존 createKstSameDayFutureClass 재사용. [BUG FOUND] 기본 설정(group_book_days_before=1)에서는 allow_same_day_booking=true여도 당일예약이 항상 마감 거부로 실패함을 재현(24a), group_book_days_before=0으로 바꾸면 정상 동작함을 대조 확인(24b) — 최종 보고서 BUG FOUND 섹션 참고" },
   { id: "SCN-P1-25", title: "월말 경계", priority: "P1", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/month-boundary-kst.test.ts" },
   { id: "SCN-P1-26", title: "연말 경계", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
   { id: "SCN-P1-27", title: "윤년/2월 경계", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
 
-  // ---- P1 관리자↔회원 동시 상태(§10) ----
+  // ---- P1 관리자↔회원 동시 상태(§10) — Phase 3에서 실제 update_class_safe RPC로 구현 확인.
+  // 실측 결과 이 RPC는 권한 체크만 하고 정원-확정인원 정합성/대기 승격 로직이 전혀 없음을
+  // 확인(두 건 모두 BUG FOUND로 별도 기록) ----
   { id: "SCN-P1-30", title: "관리자가 수업 정보 수정 중 회원 예약", priority: "P1", supportedLayers: ["shared", "ios", "android"], status: "not-automated" },
-  { id: "SCN-P1-31", title: "관리자가 정원 축소 직후 회원 예약", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
-  { id: "SCN-P1-32", title: "관리자가 정원 확대 시 대기 자동 승격 정책", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
+  { id: "SCN-P1-31", title: "관리자가 정원 축소 직후 회원 예약", priority: "P1", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/admin-member-concurrency.test.ts(SCN-P1-31-BUGFOUND) — [BUG FOUND] update_class_safe는 확정 인원과 무관하게 정원을 그대로 줄이며, 기존 확정자를 자동 정리하지 않아 '확정 인원 > 정원' 상태가 그대로 유지됨을 재현. checkCapacityInvariant가 이 상태를 정확히 위반으로 탐지함도 함께 확인, PASS" },
+  { id: "SCN-P1-32", title: "관리자가 정원 확대 시 대기 자동 승격 정책", priority: "P1", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/admin-member-concurrency.test.ts(SCN-P1-32-BUGFOUND) — [BUG FOUND] 정원 확대만으로는 기존 대기자가 자동 승격되지 않음(승격은 오직 cancel_reservation() 호출 시에만 발생)을 재현, 대조로 취소 이벤트 시 정상 승격됨도 함께 확인, PASS" },
   { id: "SCN-P1-33", title: "관리자 수동 배정 + 회원 셀프예약 동시", priority: "P1", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/private-class-capacity.test.ts (admin_assign_reservation 정원 강제배치 거부 검증)" },
   { id: "SCN-P1-34", title: "관리자 수동 취소, 회원 화면 상태 일치", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
   { id: "SCN-P1-35", title: "회원 취소 + 관리자 취소 동시(중복 환급 방지)", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
 
-  // ---- P1 멀티센터/권한(§11) ----
-  { id: "SCN-P1-40", title: "centerA 관리자가 centerA 회원 관리 — 성공", priority: "P1", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/manager-centers-privilege-escalation.test.ts (E, I 등)" },
-  { id: "SCN-P1-41", title: "centerA 관리자가 centerB 회원 수정 시도 — 거부", priority: "P1", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/manager-centers-privilege-escalation.test.ts (M~O)" },
-  { id: "SCN-P1-42", title: "centerA 관리자가 centerB 수업 수정 시도 — 거부", priority: "P1", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/manager-centers-privilege-escalation.test.ts (N: centers 정보 수정 거부)" },
-  { id: "SCN-P1-43", title: "일반 회원이 admin API 직접 호출 — 거부", priority: "P1", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/manager-centers-privilege-escalation.test.ts (M~O), tests/integration/acl-003-permission-read.test.ts" },
-  { id: "SCN-P1-44", title: "타인 예약 ID 조작 — 접근 불가", priority: "P1", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/manager-centers-privilege-escalation.test.ts (O: reservations 조회 거부)" },
+  // ---- P1 멀티센터/권한(§11) — Phase 3에서 기존 커버리지를 실제로 재실행해 재확인(19개 테스트
+  // 전부 PASS, 재구현 안 함 — 요청의 "기존 인프라 재사용" 원칙) ----
+  { id: "SCN-P1-40", title: "centerA 관리자가 centerA 회원 관리 — 성공", priority: "P1", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/manager-centers-privilege-escalation.test.ts (E, I 등) — Phase 3에서 19/19 PASS 재확인" },
+  { id: "SCN-P1-41", title: "centerA 관리자가 centerB 회원 수정 시도 — 거부", priority: "P1", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/manager-centers-privilege-escalation.test.ts (M~O) — Phase 3에서 재확인" },
+  { id: "SCN-P1-42", title: "centerA 관리자가 centerB 수업 수정 시도 — 거부", priority: "P1", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/manager-centers-privilege-escalation.test.ts (N: centers 정보 수정 거부) — Phase 3에서 재확인" },
+  { id: "SCN-P1-43", title: "일반 회원이 admin API 직접 호출 — 거부", priority: "P1", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/manager-centers-privilege-escalation.test.ts (M~O), tests/integration/acl-003-permission-read.test.ts — Phase 3에서 재확인" },
+  { id: "SCN-P1-44", title: "타인 예약 ID 조작 — 접근 불가", priority: "P1", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/manager-centers-privilege-escalation.test.ts (O: reservations 조회 거부) — Phase 3에서 재확인" },
   { id: "SCN-P1-45", title: "센터 전환 후 캐시 오염 없음", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
+
+  // ---- 위치 기반(사용자 추가 요청, Phase 3) — 실측 발견: "반경 필터" 기능은 실제 코드에
+  // 존재하지 않음(lib/home.ts fetchHomeCenters는 거리순 정렬만 함, radius 컷오프 없음) —
+  // 요청 원문의 "반경 안/밖 경계" 예시는 실제 구현과 다르므로, 실제 구현(거리순 정렬 +
+  // 좌표없음 처리)을 대신 검증했다. 최종 보고서에 이 갭을 별도로 명시 ----
+  { id: "SCN-LOC-01", title: "위치 기반 거리순 정렬", priority: "P2", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/location-nearby.test.ts(SCN-P2-LOC-01) — 근접/원거리 mock 좌표로 실제 fetchHomeCenters() 호출, 가까운 순 정렬 확인, PASS" },
+  { id: "SCN-LOC-02", title: "'반경 필터'가 아니라 '정렬'만 있음을 실제 코드로 확인", priority: "P2", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/location-nearby.test.ts(SCN-P2-LOC-02) — 요청 원문이 가정한 반경 기반 제외 기능은 실제로 없음을 명시적으로 기록" },
+  { id: "SCN-LOC-03", title: "위치 없음(권한 거부 등)", priority: "P2", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/location-nearby.test.ts(SCN-P2-LOC-03) — 위치 인자 없이 호출 시 distanceKm 전부 null, PASS" },
+  { id: "SCN-LOC-04", title: "잘못된/누락된 center 좌표", priority: "P2", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/location-nearby.test.ts(SCN-P2-LOC-04) — latitude/longitude=null 센터가 섞여도 에러 없이 처리, PASS" },
+  { id: "SCN-LOC-05", title: "stale GPS 캐시", priority: "P2", supportedLayers: ["ios", "android"], status: "not-automated", reason: "브라우저/네이티브의 위치 캐싱 동작은 Shared(Layer A) 범위 밖 — UI 레이어 관심사" },
 
   // ---- P1 invariants(§12) — 공통 헬퍼로 구현, 각 시나리오 실행 시 재사용 ----
   {
