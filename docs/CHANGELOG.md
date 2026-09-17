@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## 2026-09-18 — Business Scenario E2E Phase 2~4: 동시성/경계값/알림/UI 스모크 실제 검증
+
+Phase 1(대기 자동 승격) 이후 이어서 P1 동시성·경쟁, 날짜/시간 경계, 관리자↔회원 동시
+상태, 알림 큐, iOS/Android 대표 UI 스모크까지 실제 라이브 dev DB + 실제 xcodebuild/
+gradlew 빌드로 검증했다. 상세 시나리오별 결과는 `tests/integration/scenarios/registry.ts`
+참고.
+
+- **Phase 2(동시성)**: `concurrentClient.ts` 신설 — 기존 setup.ts 싱글턴은 세션 전환을
+  의도적으로 직렬화해 "진짜 동시 요청"을 표현할 수 없어서, race를 일으키는 RPC 호출만
+  독립 client 인스턴스로 Promise.all 실행. 더블클릭 중복예약 방지, 마지막 1자리 경쟁,
+  이중취소, 대기승격 동시성(정확히 1명만 승격), 재시도 idempotency 5개 PASS. 과정에서
+  "공유 테스트 센터에 누적된 leftover 수강권이 fixture 대신 선택돼 검증이 무의미해지는"
+  테스트 설계 결함을 발견/수정(`fetchReservationMembershipId()` 추가 — 실제 사용된
+  membership을 역추적해 델타로 검증).
+- **Phase 3(경계값/관리자동시성/위치)**: 수강권 만료 경계, 예약마감 경계, 자정 경계,
+  관리자 정원 축소/확대를 실제 배포된 RPC(git 시간순 최종본)로 검증. **BUG FOUND 3건**
+  (프로덕션 미수정): (1) 기본 설정에서 당일예약이 마감 계산 때문에 항상 거부됨(같은날
+  체크 분기에 도달하지도 못함), (2) 정원 축소 시 기존 확정자 자동 정리 없음, (3) 정원
+  확대 시 대기자 자동 승격 없음(취소 이벤트에서만 승격). 위치 기반 시나리오는 요청이
+  가정한 "반경 필터"가 실제 코드(`lib/home.ts`)에 없고 거리순 정렬만 있음을 확인 —
+  실제 구현을 검증.
+- **Phase 4(알림/UI 스모크)**: 예약 확정/대기/취소/승격 4개 알림 kind가 DB 트리거로
+  정확히 큐잉됨을 확인(`push_notification()`은 순수 INSERT라 실제 발송 코드 없음 —
+  "발송 금지" 원칙에 코드로 이미 부합). 홈 TTL 캐시(`app/page.tsx`)는 브라우저 모듈
+  레벨 변수라 Node 기반 Shared 레이어에서 원천적으로 테스트 불가함을 확인, BLOCKED로
+  정직하게 기록. iOS/Android 대표 예약화면 스모크 테스트를 기존 AppUITests/androidTest
+  구조에 추가(`ReservationSmokeTests.{swift,java}`), 실제 `xcodebuild build-for-testing`
+  (TEST BUILD SUCCEEDED)/`gradlew assembleDebugAndroidTest`(BUILD SUCCESSFUL)로 BUILD
+  PASS 확인(RUNTIME PASS는 미수행 — 후속 과제).
+
 ## 2026-09-18 — Business Scenario E2E: 대기 자동 승격(SCN-P0-20~25) 실제 검증
 
 직전 자동 QA Foundation 배치(`07532c1`) 구조를 그대로 재사용해(새 인프라 중복 생성

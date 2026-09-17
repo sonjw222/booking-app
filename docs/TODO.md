@@ -1333,15 +1333,16 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
-### P1-46. (신규, 2026-09-18) Business Scenario E2E — Phase 1(P0 대기승격) 완료, Phase 2~4 남음
+### P1-46. (2026-09-18, Phase 1~4 완료) Business Scenario E2E — 핵심 시나리오 구현 완료, 잔여 항목은 하위 항목으로 세분화
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P1(구조는 안정화됨, 남은 시나리오 구현이 다음 배치 범위) |
-| 현재 상태 | **Phase 1만 완료.** `tests/integration/scenarios/`에 얇은 공용 레이어(types/reporter/invariants/actors/registry)를 만들고, 그 위에 SCN-P0-20~25(정원 이내/도달/초과/대기 자동 승격/다중 대기 순서/대기자 자가취소)를 실제 라이브 dev Supabase에 대해 실행해 PASS 확인(`test-results/business-scenarios/*.json`). 나머지(P1 동시성/경쟁, 날짜 경계, 관리자↔회원 동시 상태, P2 UI/캐시/알림 등)는 `registry.ts`에 `not-automated`/`blocked`로 정직하게 표시만 해두고 아직 구현 안 함. |
-| 실측으로 발견한 중요 사실(2개) | (1) 저장소 루트의 `reservation_functions.sql`은 더 이상 실제 배포본과 같지 않다 — 실제 `reserve_class()`는 여러 `add_*/fix_*.sql`이 `create or replace`로 덮어써 왔고, `center_settings.waitlist_weekly_limit=0`(schema 기본값)이면 정원 초과 시 대기예약 자체를 거부한다("이 센터는 대기예약을 사용하지 않아요", 실제 RPC 호출로 재현). `tests/integration/setup.ts`의 `resetStaleTestCenterSettings()`가 매 테스트 파일 시작마다 이 값을 의도적으로 0으로 되돌리므로, 대기예약을 검증하는 새 테스트는 매번 명시적으로 이 값을 올려야 한다(waitlist-promotion.test.ts에서 처리함 — 새 SQL 아님, 기존 fixture admin 클라이언트로 기존 컬럼 값만 세팅). (2) `memberships` INSERT는 `fix_membership_rls.sql`/실제 배포본 기준 `has_permission(center_id,'customer.member.issue_pass')`(매니저 전용)가 있어야 통과한다 — 일반 회원 세션으로는 최초 발급이 실패한다. 기존 `createTestMembership()`을 회원 세션 직후 호출하는 듯 보이는 기존 파일들은, 해당 (profile,center) 조합이 이전 실행에서 이미 존재해 매번 admin(update) 분기를 타서 우연히 통과했던 것으로 보인다(최초 1회 생성 시점은 추적 안 됨) — 새 파일은 이 우연에 기대지 않고 반드시 매니저 세션에서 발급한다. |
-| 남은 작업 | Phase 2(P1 동시성/경쟁 — 특히 `unique_active_reservation` UNIQUE INDEX로 이미 구조적 보장되는 P1-01/02 확인 테스트, P1-03~07 실제 경쟁 시나리오), Phase 3(P1 날짜 경계는 `calc_deadline` 실제 구현 확인 후, P2 UI/권한/알림/캐시 — 특히 Batch 7의 홈 TTL 캐시를 직접 겨냥하는 P2-60~64가 고가치), Phase 4(iOS/Android 대표 세트를 기존 `AppUITests`/`androidTest`에 추가). `.github/workflows/mobile-ui-qa.yml`에 시나리오 등급 선택 `workflow_dispatch` 옵션 추가도 미착수. |
-| 근거 파일 | `tests/integration/scenarios/{types,reporter,invariants,actors,registry}.ts`, `tests/integration/scenarios/waitlist-promotion.test.ts`, `test-results/business-scenarios/SCN-P0-2{3,4,5}.json` |
+| 우선순위 | P1(핵심 구조/시나리오 완료, 남은 항목은 각자 P1-47~50 참고) |
+| 현재 상태 | **Phase 1~4 완료.** `tests/integration/scenarios/`에 공용 레이어(types/reporter/invariants/actors/registry/concurrentClient) + 시나리오 파일 6개(waitlist-promotion, reservation-concurrency, date-boundaries, admin-member-concurrency, location-nearby, notifications) — SCN-P0-20~25, P1-01/02/03/05/07/11, P1-20/21/22/24, P1-31/32, 위치 기반 4건, 알림 4종을 실제 라이브 dev Supabase에서 실행해 PASS 확인. iOS/Android 대표 예약화면 스모크(`ReservationSmokeTests.{swift,java}`)도 기존 AppUITests/androidTest 구조에 추가해 실제 BUILD PASS 확인(xcodebuild/gradlew). 상세 표는 `tests/integration/scenarios/registry.ts` 참고. |
+| BUG FOUND 3건(프로덕션 미수정, 별도 판단 필요) | (1) 기본 설정(`group_book_days_before=1`)에서는 `allow_same_day_booking=true`여도 당일예약이 항상 마감 거부로 실패(calc_deadline이 순수 날짜 산술이라 당일 수업 마감이 항상 "어제"가 됨). (2) `update_class_safe()`는 정원 축소 시 확정 인원과 비교하지 않아 "확정 인원 > 정원" 상태가 방치될 수 있음. (3) `update_class_safe()`는 정원 확대 시 대기자를 자동 승격시키지 않음(승격은 취소 이벤트에서만). 재현 테스트: `date-boundaries.test.ts`(SCN-P1-24a), `admin-member-concurrency.test.ts`(SCN-P1-31/32-BUGFOUND). |
+| 기능 갭 발견 | 요청된 "위치 반경 필터" 기능은 `lib/home.ts`에 존재하지 않음 — 실제로는 좌표 거리순 정렬만 있고 반경 컷오프가 없음(`location-nearby.test.ts`에서 실제 코드로 확인). |
+| 남은 작업(하위 항목) | P1-47(P1 나머지: P1-04/06/26/27/30/33~35/45), P1-48(P2 UI 복잡도/권한/결제 확장), P1-49(홈 TTL 캐시 — Playwright E2E 또는 네이티브 레이어 전용, Shared 불가 확인됨), P1-50(iOS/Android RUNTIME PASS — 실기기/부팅된 시뮬레이터 필요, P2-39와 동일 조건). `.github/workflows/mobile-ui-qa.yml` 시나리오 등급 선택 옵션 추가도 미착수. |
+| 근거 파일 | `tests/integration/scenarios/`, `test-results/business-scenarios/*.json`, `ios/App/AppUITests/ReservationSmokeTests.swift`, `android/app/src/androidTest/java/com/mwhabit/app/ReservationSmokeTests.java` |
 
 ### P2-39. (신규, 2026-09-18) 자동 QA 인프라 — 실기기/에뮬레이터 실행 + CI 활성화 후속 작업
 

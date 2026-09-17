@@ -130,15 +130,24 @@ export const SCENARIOS: ScenarioMeta[] = [
   { id: "SCN-P2-45", title: "정기 결제 재시도", priority: "P2", supportedLayers: ["shared"], status: "not-automated", reason: "정기결제(빌링) 기능 자체의 구현 여부부터 docs/REQUIREMENTS.md 확인 필요 — 미착수" },
   { id: "SCN-P2-46", title: "중복 결제 방지", priority: "P2", supportedLayers: ["shared"], status: "covered-by-existing", coveredBy: "tests/integration/order-amount-verification.test.ts, tests/integration/payment-security.test.ts" },
 
-  // ---- P2 알림(§17) ----
-  { id: "SCN-P2-50", title: "예약완료/취소/승격/만료임박/저잔여 알림", priority: "P2", supportedLayers: ["shared"], status: "not-automated" },
+  // ---- P2 알림(§17) — Phase 4에서 실제 DB 트리거로 구현·실행 확인 ----
+  { id: "SCN-P2-50", title: "예약완료/취소/승격/만료임박/저잔여 알림", priority: "P2", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/notifications.test.ts — add_admin_assignment.sql의 trg_notify_reservation_insert/update 트리거(git 시간순 최종본) 실제 동작 확인. reservation_confirmed/reservation_waitlisted/waitlist_promoted/reservation_canceled 4개 kind 모두 notifications 테이블에 정확히 큐잉됨을 확인, PASS. push_notification()은 순수 INSERT뿐 실제 발송 코드가 없어 '발송 금지' 원칙에 자연히 부합함을 코드로 확인 — 만료임박/저잔여 알림(notify_expiring_passes 등 cron성 함수)은 미착수" },
 
-  // ---- P2 캐시/stale data(§18) — Batch 7 home TTL 캐시 관련, 고가치 후보 ----
-  { id: "SCN-P2-60", title: "관리자 데이터 변경 후 회원 홈 재진입", priority: "P2", supportedLayers: ["shared", "ios"], status: "not-automated", reason: "다음 단계 우선순위 — Batch 7에서 추가된 홈 TTL 캐시 직접 검증 대상" },
-  { id: "SCN-P2-61", title: "TTL 경계 시점 데이터 변경", priority: "P2", supportedLayers: ["shared"], status: "not-automated" },
-  { id: "SCN-P2-62", title: "예약 직후 홈/내예약 이동", priority: "P2", supportedLayers: ["shared", "ios"], status: "not-automated" },
-  { id: "SCN-P2-63", title: "정원 변경, 회원 화면 stale 확인", priority: "P2", supportedLayers: ["shared"], status: "not-automated" },
-  { id: "SCN-P2-64", title: "백그라운드 1분 후 포그라운드", priority: "P2", supportedLayers: ["ios", "android"], status: "not-automated" },
+  // ---- P2 캐시/stale data(§18) — Batch 7 home TTL 캐시. Phase 4에서 실제 코드 확인 결과
+  // Shared(Layer A, Node 기반) 레이어에서는 원천적으로 테스트 불가능함을 확인했다 ----
+  { id: "SCN-P2-60", title: "관리자 데이터 변경 후 회원 홈 재진입", priority: "P2", supportedLayers: ["shared", "ios"], status: "blocked", reason: "실제 코드 확인 결과(app/page.tsx) 이 캐시는 브라우저/WebView 자바스크립트 런타임의 모듈 레벨 변수(homeDataCache)다 — Node 기반 tests/integration에는 이 모듈의 실행 컨텍스트 자체가 없어 원천적으로 검증 불가. Playwright E2E(tests/e2e) 또는 네이티브 UI 레이어에서 별도 자동화가 필요하며 이번 배치 범위 밖" },
+  { id: "SCN-P2-61", title: "TTL 경계 시점 데이터 변경", priority: "P2", supportedLayers: ["shared"], status: "blocked", reason: "SCN-P2-60과 동일 근거" },
+  { id: "SCN-P2-62", title: "예약 직후 홈/내예약 이동", priority: "P2", supportedLayers: ["shared", "ios"], status: "blocked", reason: "SCN-P2-60과 동일 근거" },
+  { id: "SCN-P2-63", title: "정원 변경, 회원 화면 stale 확인", priority: "P2", supportedLayers: ["shared"], status: "blocked", reason: "SCN-P2-60과 동일 근거" },
+  { id: "SCN-P2-64", title: "백그라운드 1분 후 포그라운드", priority: "P2", supportedLayers: ["ios", "android"], status: "not-automated", reason: "실기기/부팅된 시뮬레이터·에뮬레이터에서의 실제 lifecycle 이벤트 필요 — 기존 SafeAreaTests가 background/foreground 전환 자체는 다루지만 캐시 staleness까지는 미검증" },
+
+  // ---- Phase 4: iOS/Android 대표 UI 시나리오 매핑(§19-20) — 기존 AppUITests/androidTest
+  // 구조 재사용(새 타겟/새 CI 워크플로 생성 안 함), 파일 단위로만 추가 ----
+  {
+    id: "SCN-UI-RESERVE-SMOKE", title: "예약 화면 진입 + 예약가능/대기/empty 상태 스모크(P0-03/P0-23 대표)", priority: "P0",
+    supportedLayers: ["ios", "android"], status: "implemented",
+    implementedIn: "ios/App/AppUITests/ReservationSmokeTests.swift, android/app/src/androidTest/java/com/mwhabit/app/ReservationSmokeTests.java — 전체 예약/대기승격 로직은 Shared(Layer A)가 이미 실제 RPC로 검증했으므로(SCN-P0-23/24/25 등), UI 레이어는 '회원이 실제로 예약 화면까지 도달해 액션 버튼을 볼 수 있는가'만 스모크로 확인(중복 구현 방지 원칙). BUILD PASS 확인: iOS `xcodebuild build-for-testing`(TEST BUILD SUCCEEDED, 임시 placeholder GoogleService-Info.plist/App.entitlements는 검증 직후 삭제·미커밋), Android `./gradlew compileDebugAndroidTestSources`+`assembleDebugAndroidTest`(BUILD SUCCESSFUL) 둘 다 실제 실행해 확인. RUNTIME PASS(실제 부팅된 시뮬레이터/에뮬레이터 실행)는 이 세션에서 미수행 — docs/TODO.md P2-39와 동일 후속 과제",
+  },
 ];
 
 export function scenarioSummary(): { total: number; byStatus: Record<string, number>; byPriority: Record<string, number> } {
