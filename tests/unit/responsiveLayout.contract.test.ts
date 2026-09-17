@@ -11,8 +11,9 @@ describe("responsive workspace layout contract", () => {
   it("keeps mobile as the base layout and enables tablet/desktop progressively", () => {
     expect(css).toContain(".member-desktop-nav,\n.workspace-sidebar { display: none; }");
     expect(css).toContain("@media (min-width: 768px)");
-    expect(css).toContain("@media (min-width: 1120px)");
+    expect(css).not.toContain("@media (min-width: 1120px)");
     expect(css).toContain("@media (min-width: 1280px)");
+    expect(css).toContain("@media (min-width: 1360px)");
     expect(css).toContain("--safe-top");
     expect(css).toContain("--safe-bottom");
   });

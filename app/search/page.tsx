@@ -65,15 +65,17 @@ export default function SearchPage() {
       ) : (
         <>
           {categories.length > 0 && (
-            <>
+            <section className="search-category-results" aria-label="종목 검색 결과">
               <div className="menu-section-label">종목</div>
+              <div className="search-category-grid">
               {categories.map((cat) => (
                 <a key={cat} className="list-row" href={`/category/${encodeURIComponent(cat)}`}>
                   <div className="left"><span className="icon" aria-hidden="true" />{cat}</div>
                   <span className="chevron">›</span>
                 </a>
               ))}
-            </>
+              </div>
+            </section>
           )}
 
           <div className="menu-section-label">센터 {centers.length > 0 ? `(${centers.length})` : ""}</div>
@@ -81,6 +83,7 @@ export default function SearchPage() {
             <EmptyState icon="search" title="검색 결과가 없어요" description="센터 이름을 짧게 입력하거나 다른 종목으로 검색해보세요." />
           ) : (
             <>
+              <div className="search-center-grid">
               {centers.slice(0, visibleCount).map((c) => (
                 <a key={c.id} className="search-center-row" href={`/center/${c.id}`}>
                   {c.photoUrl
@@ -94,6 +97,7 @@ export default function SearchPage() {
                   <span className="chevron">›</span>
                 </a>
               ))}
+              </div>
               {centers.length > visibleCount && (
                 <button className="ghost-btn" style={{ margin: "12px 20px" }} onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}>
                   더보기 ({centers.length - visibleCount}건 더 있음)

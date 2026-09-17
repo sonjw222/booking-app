@@ -4864,6 +4864,18 @@ textarea:focus-visible,
   .member-home .home-class-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; padding-inline: var(--workspace-gutter); }
   .member-home .home-class-row { min-height: 112px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--card-bg); }
   .member-home .home-footer { padding-inline: var(--workspace-gutter); }
+  .discovery-page-v2 .search-header { gap: 12px; }
+  .discovery-page-v2 .search-input { min-width: 0; }
+  .discovery-page-v2 .search-suggestions { max-width: 760px; padding: 32px var(--workspace-gutter); }
+  .discovery-page-v2 .search-category-results { padding: 0 var(--workspace-gutter); }
+  .discovery-page-v2 .search-category-results > .menu-section-label { padding-inline: 0; }
+  .discovery-page-v2 .search-category-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 24px; }
+  .discovery-page-v2 .search-category-grid .list-row { margin-inline: 0; }
+  .discovery-page-v2 .search-center-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; padding: 0 var(--workspace-gutter) 20px; }
+  .discovery-page-v2 .search-center-grid .search-center-row { min-height: 90px; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--card-bg); }
+  .discovery-page-v2 > .app-empty-state,
+  .manager-v3-content .daylist-empty,
+  .admin-v3-content .daylist-empty { min-height: 38dvh; max-width: 720px; margin-inline: auto; }
 
   .manager-v3,.admin-v3 {
     width: 100%; max-width: none; margin: 0; padding-left: var(--workspace-sidebar); background: var(--surface);
@@ -4906,6 +4918,9 @@ textarea:focus-visible,
     padding: 17px; border: 1px solid var(--line); border-radius: 16px; background: var(--card-bg);
   }
   .manager-v3-content .mem-toolbar { display: grid; grid-template-columns:minmax(260px,1fr) auto; align-items:center; gap: 12px; }
+  .manager-v3-content .mem-toolbar,
+  .manager-v3-content .admin-filters,
+  .admin-v3-content .admin-filters { position: sticky; top: 0; z-index: 12; background: color-mix(in srgb,var(--bg) 96%,transparent); backdrop-filter: blur(14px); }
   .manager-v3-content .mem-list { padding-inline: 24px; }
   .manager-v3-content .mem-row { display: grid; grid-template-columns: minmax(180px,1.4fr) minmax(140px,1fr) auto; align-items: center; min-height: 72px; padding-inline: 10px; }
   .manager-v3-content .noti-list { padding-inline: 24px; }
@@ -4923,9 +4938,12 @@ textarea:focus-visible,
   .manager-v3-content .sales-row { display: grid; grid-template-columns: minmax(220px,1.5fr) minmax(120px,.7fr) auto; align-items: center; gap: 18px; }
   .admin-v3-content .admin-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; padding: 20px 24px 36px; }
   .admin-v3-content .admin-card { margin: 0; }
+  .admin-home-v2 { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-content: start; gap: 12px; padding: 20px 24px 36px!important; }
+  .admin-home-v2 > .menu-section-label { grid-column: 1 / -1; padding: 4px 0 8px; }
+  .admin-home-v2 > .list-row { min-height: 68px; margin: 0; padding: 0 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--card-bg); }
 }
 
-@media (min-width: 1120px) {
+@media (min-width: 1360px) {
   :root { --workspace-sidebar: 244px; --workspace-rail: 244px; }
   .member-desktop-nav,.workspace-sidebar { padding-inline: 16px; }
   .desktop-brand { justify-content: flex-start; padding-inline: 9px; }
@@ -4963,4 +4981,16 @@ textarea:focus-visible,
   .member-reservation > .daylist-header { margin-top: 0; border-top: 0; }
   .member-reservation > .daylist { max-height: calc(100dvh - 300px); overflow-y: auto; }
   .member-home .home-class-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .admin-v3-content .admin-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .search-center-row,.manager-v3-content .mem-row,.manager-v3-content .sales-row,
+  .manager-v3-content .noti-row,.admin-v3-content .admin-card,.admin-home-v2 > .list-row {
+    transition: border-color 140ms ease,background 140ms ease,transform 140ms ease;
+  }
+  .search-center-row:hover,.manager-v3-content .mem-row:hover,.manager-v3-content .sales-row:hover,
+  .manager-v3-content .noti-row:hover,.admin-home-v2 > .list-row:hover {
+    border-color: var(--line-strong); background: var(--surface); transform: translateY(-1px);
+  }
 }
