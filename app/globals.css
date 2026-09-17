@@ -3918,11 +3918,20 @@ a.membership-card { text-decoration: none; display: block; }
 .admin-chrome > a { border: 1px solid rgba(255,255,255,.22); color: var(--text-inverse); }
 
 .loading-wrap {
-  min-height: 250px;
+  /* 릴리스 폴리시 배치 8차(2026-09-18), 2-1 — 250px 고정이던 것을 뷰포트 기준으로
+     늘려서(최대 640px) 스켈레톤이 화면 상단에만 몰리지 않고 중앙~하단까지 자연스럽게
+     이어지게 한다. bottom-nav/safe-area는 이 컴포넌트가 손대는 영역이 아니라(레이아웃이
+     감싸는 형태) 그대로 유지됨. */
+  min-height: min(72dvh, 640px);
   display: block;
   padding: 30px var(--page-gutter);
 }
 .loading-skeleton { width: 100%; max-width: 560px; margin: 0 auto; }
+.loading-skeleton-row { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
+.loading-skeleton-row-icon { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 12px; }
+.loading-skeleton-row-lines { flex: 1; min-width: 0; }
+.loading-skeleton-row-lines i { margin-bottom: 8px; }
+.loading-skeleton-row-lines i:last-child { margin-bottom: 0; }
 .loading-skeleton i {
   display: block;
   overflow: hidden;
