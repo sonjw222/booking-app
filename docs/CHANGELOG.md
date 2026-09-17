@@ -1,5 +1,40 @@
 # CHANGELOG
 
+## 2026-09-18 — MWHABIT Business Logic Fix Batch: QA에서 발견된 실제 버그 3건 + 기능 갭 1건 수정
+
+Automated Business Scenario E2E Phase 2~4가 발견한 버그/갭을 수정했다. SQL 2건은 이 세션에
+Supabase 직접 실행 수단이 없어 작성만 하고 사용자가 Supabase SQL Editor에서 직접 적용해야
+한다(CLAUDE.md 규칙 3/4) — 자세한 SQL 전문/적용 순서/확인 방법은 최종 보고서 참고.
+
+- **당일예약 허용 버그(SQL 필요, `fix_same_day_booking_deadline.sql`)**: calc_deadline()이
+  순수 날짜 산술이라 기본 설정(group_book_days_before=1)에서는 allow_same_day_booking=true
+  여도 당일예약이 항상 마감 거부로 실패했다. 당일 수업 + booking_deadline_min 오버라이드
+  없음 + 당일예약 허용 ON이면 마감을 수업 시작 시각으로 대체하도록 reserve_class()/
+  reserve_with_membership() 둘 다 수정 — 당일예약 허용 OFF/수업 시작 이후 차단 등 기존
+  제한은 그대로 유지. 기존 43개 파일의 같은-날 테스트는 전부 group_book_days_before=0을
+  명시적으로 써서 이 버그를 우회해왔음을 확인(회귀 위험 낮음, 정적 분석으로 교차검증).
+- **정원 축소 invariant(SQL 필요, `fix_class_capacity_invariants.sql`)**: update_class_safe()
+  가 확정 인원과 무관하게 정원을 그대로 줄일 수 있어 "확정 인원 > 정원"인 silent
+  over-capacity 상태가 가능했다. 확정 인원보다 작은 값으로의 축소를 명시적으로 거부하도록
+  수정("현재 확정 예약 인원(N명)보다 적게 정원을 줄일 수 없습니다.") — 기존 예약은 자동
+  취소하지 않음. classes 행을 for update로 잠가 동시 요청과의 race를 방지. 매니저 UI
+  (app/manager/classes/page.tsx)에도 동일 조건의 클라이언트 사전 체크 추가(서버가 최종
+  권한, UI는 더 친절한 안내용).
+- **정원 확대 시 대기자 자동 승격(SQL 필요, 같은 파일)**: update_class_safe()에 정원 확대분
+  만큼 대기 순번대로(수강권 유효성 확인, for update 잠금) 자동 승격하는 루프를 추가하고
+  promoted_count를 반환하도록 수정. lib/classes.ts의 updateClass() 반환 타입을 갱신해
+  관리자 UI가 승격 인원 토스트를 띄우도록 함(app/manager/classes/page.tsx).
+- **위치 반경 필터(SQL 불필요, 순수 TS)**: 요청이 가정한 "반경 내 센터만 표시" 기능이 실제
+  코드(lib/home.ts)에 없었다 — 좌표 기반 거리순 정렬만 있고 반경 컷오프가 아예 없었음.
+  NEARBY_RADIUS_KM(20km, 단일 상수) 기반 반경 필터를 실제로 구현 — 반경 밖 센터/좌표 없는
+  센터/잘못된 좌표(범위 밖 숫자) 모두 안전하게 제외, 위치 없으면 기존 fallback 유지.
+
+기존 QA 시나리오(SCN-P1-24, SCN-P1-31/32, 위치 시나리오)를 "BUG reproduction"에서 "expected
+behavior PASS" regression test로 전환했다 — expectation을 약화하지 않고 실제 수정된 동작을
+그대로 검증하도록 다시 작성. 위치 시나리오는 SQL이 필요 없어 실제 라이브 DB에 대해 즉시
+실행해 전부 PASS 확인(9/9). 당일예약/정원 시나리오는 SQL 미적용 상태에서 실행해 의도한 대로
+전부 FAIL(레드)하는 것을 확인함 — SQL 적용 후 재실행하면 PASS로 전환되어야 한다.
+
 ## 2026-09-18 — Business Scenario E2E Phase 2~4: 동시성/경계값/알림/UI 스모크 실제 검증
 
 Phase 1(대기 자동 승격) 이후 이어서 P1 동시성·경쟁, 날짜/시간 경계, 관리자↔회원 동시

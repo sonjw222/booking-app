@@ -234,9 +234,14 @@ export async function createClass(centerId: string, input: ClassInput): Promise<
   return data as string;
 }
 
-export async function updateClass(classId: string, input: ClassInput): Promise<void> {
+// QA Fix Batch(2026-09-18) — update_class_safe()가 이제 정원 축소를 확정 인원 미만으로
+// 거부하고(서버가 최종 권한 — 아래 app/manager/classes/page.tsx의 사전 체크는 UX 편의일
+// 뿐), 정원 확대 시 대기자를 자동 승격한 뒤 promoted_count를 반환한다. 반환 타입이
+// void→json으로 바뀌었지만 기존 호출부는 error만 확인했으므로 하위호환된다 — 여기서
+// promotedCount를 노출해 호출부가 원하면 안내 토스트를 띄울 수 있게 했다.
+export async function updateClass(classId: string, input: ClassInput): Promise<{ promotedCount: number }> {
   assertValidClassTimeRange(input.start, input.end);
-  const { error } = await supabase.rpc("update_class_safe", {
+  const { data, error } = await supabase.rpc("update_class_safe", {
     p_class_id: classId,
     p_title: input.title,
     p_description: input.description ?? null,
@@ -252,6 +257,7 @@ export async function updateClass(classId: string, input: ClassInput): Promise<v
     p_allow_cancel: input.allowCancel ?? true,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+  return { promotedCount: (data as any)?.promoted_count ?? 0 };
 }
 
 // 반복 그룹 일괄 적용(updateClassGroup)은 title/start/end/capacity만 바꾸고 이 인스턴스의

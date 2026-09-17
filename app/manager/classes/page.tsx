@@ -78,6 +78,11 @@ export default function ClassManagePage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editGroupId, setEditGroupId] = useState<string | null>(null);
+  // QA Fix Batch(2026-09-18) — 정원 축소 invariant(요청 2번)의 클라이언트 측 사전 체크용.
+  // 서버(update_class_safe)가 최종 권한이라 이 값이 없거나 틀려도 안전하지만, 저장을
+  // 누르기 전에 더 친절한 안내를 보여주기 위해 수정 시트를 열 때 현재 확정 인원을
+  // 기억해둔다.
+  const [editReservedCount, setEditReservedCount] = useState(0);
   const [applyToGroup, setApplyToGroup] = useState(false);
   // 삭제 확인 시트
   const [deleteTarget, setDeleteTarget] = useState<ManagedClass | null>(null);
@@ -629,6 +634,7 @@ export default function ClassManagePage() {
     setEditId(c.id);
     setEditGroupId(c.recurringGroupId);
     setApplyToGroup(false);
+    setEditReservedCount(c.reserved);
     setForm({ title: c.title, description: c.description ?? "", date: c.date, start: c.start, end: c.end, capacity: c.capacity, allowGoods: c.allowGoods, allowCancel: c.allowCancel, roomId: c.roomId, cancelDeadlineMin: c.cancelDeadlineMin, bookingDeadlineMin: c.bookingDeadlineMin, classFormat: c.classFormat });
     fillDeadline(c.cancelDeadlineMin);
     fillBookDeadline(c.bookingDeadlineMin);
@@ -815,6 +821,14 @@ export default function ClassManagePage() {
       setError("종료시간은 시작시간 이후여야 해요 (자정을 넘기는 경우는 6시간 이내만 허용)");
       return;
     }
+    // QA Fix Batch(2026-09-18) — 정원 축소 invariant(요청 2번)의 클라이언트 측 사전
+    // 체크. 서버(update_class_safe)가 동일 조건을 최종적으로 다시 검사해 거부하므로
+    // 이 체크를 우회해도 안전하다 — 여기서는 저장 버튼을 누르기 전에 더 친절하게
+    // 안내하기 위한 것뿐.
+    if (editId && !applyToGroup && form.capacity < editReservedCount) {
+      setError(`현재 확정 예약 인원보다 적게 정원을 줄일 수 없습니다. (현재 확정 ${editReservedCount}명)`);
+      return;
+    }
     const resolved = resolvePassSelection();
     if (!resolved) {
       setError("예약 가능 수강권을 최소 1개 이상 선택해주세요 (전체 허용은 '전체 선택' 버튼을 사용하세요)");
@@ -831,6 +845,7 @@ export default function ClassManagePage() {
         return;
       }
       const passMode = resolved.mode;
+      let promotedCount = 0;
       if (editId) {
         if (applyToGroup && editGroupId) {
           const groupIds = await updateClassGroup(editGroupId, form.title, form.start, form.end, form.capacity);
@@ -841,7 +856,8 @@ export default function ClassManagePage() {
           // 담당 강사는 title/시간/정원과 마찬가지로 그룹 전체에 동일하게 적용한다.
           await setClassTrainersForGroup(groupIds, selectedTrainers);
         } else {
-          await updateClass(editId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin(), passSelectionMode: passMode });
+          const result = await updateClass(editId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin(), passSelectionMode: passMode });
+          promotedCount = result.promotedCount;
           await setClassTrainers(editId, selectedTrainers);
         }
         await setClassProducts(editId, resolved.productIds);
@@ -853,6 +869,12 @@ export default function ClassManagePage() {
 
       setFormOpen(false);
       await loadClasses(activeCenterId, year, month);
+      // QA Fix Batch(2026-09-18) — 정원 확대로 대기자가 자동 승격됐으면(요청 3번)
+      // 관리자에게 알려준다. 0명이면 조용히 넘어간다(정원을 늘렸지만 대기자가
+      // 없었거나, 애초에 정원을 줄이거나 그대로 둔 경우).
+      if (promotedCount > 0) {
+        showToast(`대기자 ${promotedCount}명이 자동으로 확정 예약으로 전환됐어요`);
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {

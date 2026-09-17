@@ -1333,6 +1333,17 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
+### P0-1. (신규, 2026-09-18) MWHABIT Business Logic Fix Batch — SQL 2건 사용자 적용 필요
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0(실제 버그 수정, 코드는 완성됐으나 SQL이 아직 라이브 DB에 적용되지 않음) |
+| 현재 상태 | 당일예약 허용 버그(reserve_class/reserve_with_membership)와 정원 축소/확대 invariant(update_class_safe) 수정 SQL을 작성 완료했다. 이 세션은 Supabase에 직접 SQL을 실행할 수단(DATABASE_URL 등)이 없어, 사용자가 Supabase SQL Editor에서 직접 실행해야 한다. |
+| 적용할 파일 | `fix_same_day_booking_deadline.sql`(먼저), `fix_class_capacity_invariants.sql`(그다음) — 저장소 루트 |
+| 적용 후 할 일 | `npm run test:integration -- tests/integration/scenarios/date-boundaries.test.ts tests/integration/scenarios/admin-member-concurrency.test.ts`(또는 동등한 vitest 명령)로 재실행해 SCN-P1-24-ON/OFF/STARTED/DAYS-0~2, SCN-P1-31-A, SCN-P1-32-A/B/D가 전부 PASS로 전환됐는지 확인. 현재(SQL 미적용) 상태에서는 의도적으로 FAIL한다(정상 — 레드 확인 완료). |
+| 위치 반경 필터 | SQL 불필요, `lib/home.ts`에 이미 적용·검증 완료(`NEARBY_RADIUS_KM`, PASS 확인됨). |
+| 근거 파일 | `fix_same_day_booking_deadline.sql`, `fix_class_capacity_invariants.sql`, `tests/integration/scenarios/date-boundaries.test.ts`, `tests/integration/scenarios/admin-member-concurrency.test.ts`, `tests/integration/scenarios/registry.ts` |
+
 ### P1-46. (2026-09-18, Phase 1~4 완료) Business Scenario E2E — 핵심 시나리오 구현 완료, 잔여 항목은 하위 항목으로 세분화
 
 | 필드 | 내용 |

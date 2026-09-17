@@ -17,6 +17,22 @@ export type HomeCenter = {
   distanceKm: number | null;
 };
 
+// QA Fix Batch(2026-09-18) — "내 주변 센터" 반경(km). 감사 결과 이 앱에는 센터별/회원별로
+// 설정 가능한 검색 반경 컬럼이나 화면이 없다(center_settings, app 설정 어디에도 없음 —
+// Business Scenario E2E Phase 3에서 이미 확인됨). 그래서 제품에 적합한 기본값을 여기
+// 한 곳에만 정의한다 — 값을 바꾸고 싶으면 이 상수 하나만 바꾸면 된다(매직넘버를 여러
+// 파일에 흩어놓지 않기 위함). 한국 대도시권에서 "차로 이동 가능한 생활권" 수준인 20km를
+// 기본값으로 선택했다(서울 강남↔종로 정도 거리) — 나중에 회원/센터가 반경을 직접 고를 수
+// 있는 UI가 생기면 이 값을 기본 선택값으로 재사용하면 된다.
+export const NEARBY_RADIUS_KM = 20;
+
+function isValidCoordinate(lat: unknown, lng: unknown): boolean {
+  return (
+    typeof lat === "number" && Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
+    typeof lng === "number" && Number.isFinite(lng) && lng >= -180 && lng <= 180
+  );
+}
+
 export type HomeClass = {
   id: string;
   title: string;
@@ -48,25 +64,29 @@ export async function fetchHomeCenters(userLat?: number, userLng?: number): Prom
     latitude: c.latitude, longitude: c.longitude, distanceKm: null,
   }));
 
-  // 내 위치가 있으면 거리 계산 후 가까운 순 정렬 (좌표 있는 센터 우선)
-  if (userLat != null && userLng != null) {
+  // 내 위치가 유효하면(잘못된 좌표는 무시 — 권한 거부/획득 실패 시 그냥 undefined로
+  // 넘어오므로 이 분기 자체를 안 탐, 여기서 거르는 건 "숫자이긴 한데 범위를 벗어난"
+  // 방어적인 경우) 거리 계산 → 반경(NEARBY_RADIUS_KM) 밖은 제외 → 가까운 순 정렬한다.
+  // QA Fix Batch(2026-09-18) 이전에는 반경 컷오프가 없어 "내 주변"을 눌러도 전국 센터가
+  // 그냥 거리순으로만 나열됐다 — 이제 실제로 반경 밖 센터는 결과에서 빠진다.
+  if (isValidCoordinate(userLat, userLng)) {
     const toRad = (d: number) => (d * Math.PI) / 180;
     for (const c of centers) {
-      if (c.latitude != null && c.longitude != null) {
-        const dLat = toRad(c.latitude - userLat);
-        const dLng = toRad(c.longitude - userLng);
+      if (isValidCoordinate(c.latitude, c.longitude)) {
+        const dLat = toRad(c.latitude! - userLat!);
+        const dLng = toRad(c.longitude! - userLng!);
         const a = Math.sin(dLat / 2) ** 2 +
-          Math.cos(toRad(userLat)) * Math.cos(toRad(c.latitude)) * Math.sin(dLng / 2) ** 2;
+          Math.cos(toRad(userLat!)) * Math.cos(toRad(c.latitude!)) * Math.sin(dLng / 2) ** 2;
         c.distanceKm = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       }
+      // 좌표가 없거나 유효하지 않은 센터는 distanceKm이 null로 남는다 — "내 주변"
+      // 기능 성격상 거리를 확신할 수 없으면 안전하게 제외한다(아래 filter).
     }
-    centers.sort((a, b) => {
-      if (a.distanceKm == null && b.distanceKm == null) return 0;
-      if (a.distanceKm == null) return 1;
-      if (b.distanceKm == null) return -1;
-      return a.distanceKm - b.distanceKm;
-    });
+    centers = centers.filter((c) => c.distanceKm != null && c.distanceKm <= NEARBY_RADIUS_KM);
+    centers.sort((a, b) => (a.distanceKm as number) - (b.distanceKm as number));
   }
+  // 위치가 없으면(권한 거부/미획득) 기존 fallback — 반경 필터 없이 최신 승인순 그대로
+  // 반환한다(요청 원문 "위치 권한 없음 → 기존 fallback UX 유지").
   return centers.slice(0, 10);
 }
 

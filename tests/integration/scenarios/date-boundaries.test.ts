@@ -34,6 +34,7 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
   let originalWaitlistWeeklyLimit: number | null = null;
   let originalGroupBookDaysBefore: number | null = null;
   let originalGroupBookTime: string | null = null;
+  let originalAllowSameDayBooking: boolean | null = null;
   const pendingClassIds: string[] = [];
   const pendingMembershipIds: string[] = [];
 
@@ -44,13 +45,14 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
     const admin = getFixtureAdminClient();
     const { data: existingSettings, error: readErr } = await admin
       .from("center_settings")
-      .select("waitlist_weekly_limit, group_book_days_before, group_book_time")
+      .select("waitlist_weekly_limit, group_book_days_before, group_book_time, allow_same_day_booking")
       .eq("center_id", centerAId)
       .single();
     if (readErr) throw new Error(`테스트 센터 설정 조회 실패: ${readErr.message}`);
     originalWaitlistWeeklyLimit = (existingSettings as any).waitlist_weekly_limit;
     originalGroupBookDaysBefore = (existingSettings as any).group_book_days_before;
     originalGroupBookTime = (existingSettings as any).group_book_time;
+    originalAllowSameDayBooking = (existingSettings as any).allow_same_day_booking;
 
     const memberA = await loginMemberA();
     memberAProfileId = memberA.profileId;
@@ -61,6 +63,19 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
     // memberC(전용 서브프로필, 다른 파일이 손댄 적 없음)를 대신 쓴다.
     const memberC = await memberCSubProfile(memberA.accountId);
     memberCProfileId = memberC.profileId;
+
+    // ⚠ 추가 하드닝(Fix Batch 2026-09-18): memberC는 여러 시나리오 파일이 공유
+    // createTestMembership()(product_name="통합테스트 수강권" get-or-create)으로 함께
+    // 쓴다 — 어느 파일의 실행이 중간에 끊기면(타임아웃 등) 그 파일 자신의 afterEach가
+    // 못 돌아 이 행이 남을 수 있고, 그러면 "memberC는 유효한 수강권이 없다"를 전제하는
+    // 이 파일의 SCN-P1-21이 거짓 실패한다(실측 재현됨 — 이 리팩터 과정에서 두 번
+    // 발견). 다른 파일의 종료 시점 정리에 기대지 않고, 이 파일 시작 시점에 직접 한 번
+    // 더 쓸어낸다.
+    await admin
+      .from("memberships")
+      .delete()
+      .eq("profile_id", memberCProfileId)
+      .eq("product_name", "통합테스트 수강권");
   }, 60000);
 
   afterAll(async () => {
@@ -73,6 +88,9 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
         .from("center_settings")
         .update({ group_book_days_before: originalGroupBookDaysBefore, group_book_time: originalGroupBookTime })
         .eq("center_id", centerAId);
+    }
+    if (originalAllowSameDayBooking !== null) {
+      await admin.from("center_settings").update({ allow_same_day_booking: originalAllowSameDayBooking }).eq("center_id", centerAId);
     }
   }, 30000);
 
@@ -256,57 +274,32 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
     });
   }, 60000);
 
-  it("SCN-P1-24a: [BUG FOUND 재현] 기본 설정(group_book_days_before=1)에서는 allow_same_day_booking=true여도 당일예약이 항상 마감으로 거부된다", async () => {
-    // calc_deadline(..., 'book')은 순수 날짜 산술이다(wire_settings.sql 실제 본문 확인):
-    //   v_deadline_date := class_date - group_book_days_before
-    // group_book_days_before=1(resetStaleTestCenterSettings가 되돌리는 기본값)이면, "오늘"
-    // 수업의 마감일은 항상 "어제"가 된다 — 즉 당일 수업의 예약 마감시각은 시작도 하기 전에
-    // 이미 지나있다. reserve_class()는 이 마감 체크를 먼저 통과해야만 그 아래의 "당일예약
-    // 허용 여부(allow_same_day_booking)" 분기에 도달하는데, 마감 체크에서 이미 예외가
-    // 발생하므로 allow_same_day_booking=true라는 설정 자체가 이 기본 설정 조합에서는 전혀
-    // 발동되지 않는다 — 관리자 화면에 "당일 예약 허용" 토글이 있어도(app/manager/settings)
-    // group_book_days_before>=1인 한 실제로는 절대 당일예약이 안 된다는 뜻. 이건 이번 QA
-    // 배치의 목적(임의 규칙을 만들지 않고 실제 코드로 검증)이 실측으로 찾아낸 진짜 버그이며,
-    // 아래에서 함께 재현·고정한다(프로덕션 코드는 고치지 않음 — 최종 보고서 "BUG FOUND"
-    // 섹션 참고).
-    await loginManagerA();
-    const cls = await createKstSameDayFutureClass(centerAId, { capacity: 8, title: `QA-당일버그재현-${newRunId()}` });
-    pendingClassIds.push(cls.id);
+  // ============================================================
+  // MWHABIT Business Logic Fix Batch(2026-09-18) — 당일예약 허용 버그 수정 후 regression.
+  // 이전 버전(SCN-P1-24a-BUGFOUND)은 "기본 설정에서 당일예약이 항상 거부된다"는 버그를
+  // 재현하는 테스트였다. fix_same_day_booking_deadline.sql 적용 후에는 이 기대가
+  // 뒤집힌다 — expectation을 약화해 버그를 숨기는 게 아니라, 실제로 수정된 동작(허용
+  // ON이면 성공)을 있는 그대로 검증하도록 테스트 자체를 "expected behavior PASS"로
+  // 전환한다(요청 원문: "테스트 자체가 제품 버그를 숨기도록 expectation을 변경하지
+  // 말 것" — 이건 버그를 숨기는 게 아니라 고쳐진 사실을 반영하는 것).
+  //
+  // ⚠ 이 SQL은 이 세션에서 Supabase에 직접 실행되지 않았다(직접 SQL 실행 수단 없음).
+  // 아래 테스트들은 SQL이 실제로 적용된 이후에 PASS로 전환될 것으로 설계됐다 — SQL
+  // 미적용 상태에서 이 파일을 실행하면 의도적으로 FAIL한다(그게 정상이다 — 수정 전
+  // 실제 버그가 여전히 살아있다는 증거). 최종 보고서에 정확한 실행 결과를 기록한다.
+  // ============================================================
 
+  it("SCN-P1-24-ON: 당일예약 허용 ON(기본 설정, group_book_days_before=1) → 당일예약 성공 [FIX 검증]", async () => {
+    await loginManagerA();
+    const cls = await createKstSameDayFutureClass(centerAId, { capacity: 8, title: `QA-당일ON-${newRunId()}` });
+    pendingClassIds.push(cls.id);
     await issueMembershipWithExpiry(memberAProfileId, kstDateStr(60));
 
-    await runScenario("SCN-P1-24a-BUGFOUND", ["memberA"], async (assertions) => {
+    await runScenario("SCN-P1-24-ON", ["memberA"], async (assertions) => {
       await loginMemberA();
       const res = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
       assertions.push({
-        name: "BUG FOUND 재현: group_book_days_before=1(기본값) + allow_same_day_booking=true여도 당일예약은 '마감시간이 지났어요'로 거부됨",
-        passed: !!res.error && !!res.error?.message.includes("마감"),
-        detail: JSON.stringify({ data: res.data, error: res.error?.message, classStart: cls.startTime }),
-      });
-      expect(res.error).not.toBeNull();
-      expect(res.error?.message).toContain("마감");
-    });
-  }, 60000);
-
-  it("SCN-P1-24b: group_book_days_before=0으로 설정하면 당일예약이 실제로 성공한다(같은 날 안에서의 자정 경계 정상 동작)", async () => {
-    const admin = getFixtureAdminClient();
-    await admin.from("center_settings").update({ group_book_days_before: 0, group_book_time: "23:55" }).eq("center_id", centerAId);
-
-    await loginManagerA();
-    // kstSafeSameDayFutureTime의 minRunwayMinutes(자정까지 최소 여유)를 넉넉히 둬 이 테스트가
-    // KST 23:55 이후(위 group_book_time과 충돌) 실행돼도 방어적으로 동작하게 한다 — 그런
-    // 극단적 시각에 CI가 돈다면 kstSafeSameDayFutureTime 자체가 명시적 에러를 던진다(기존
-    // 헬퍼 설계 그대로, 새로 만들지 않음).
-    const cls = await createKstSameDayFutureClass(centerAId, { capacity: 8, title: `QA-당일정상-${newRunId()}`, preferredMinutesFromNow: 60 });
-    pendingClassIds.push(cls.id);
-
-    await issueMembershipWithExpiry(memberAProfileId, kstDateStr(60));
-
-    await runScenario("SCN-P1-24b", ["memberA"], async (assertions) => {
-      await loginMemberA();
-      const res = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      assertions.push({
-        name: "group_book_days_before=0(당일 마감)로 바꾸면 당일예약 성공 — allow_same_day_booking 분기가 실제로 의미 있게 동작함을 확인",
+        name: "[FIX] group_book_days_before=1(기본값) + allow_same_day_booking=true → 당일예약 성공(수정 전에는 항상 거부됐음)",
         passed: !res.error && (res.data as any)?.status === "confirmed",
         detail: JSON.stringify({ data: res.data, error: res.error?.message, classStart: cls.startTime }),
       });
@@ -314,4 +307,89 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
       expect((res.data as any).status).toBe("confirmed");
     });
   }, 60000);
+
+  it("SCN-P1-24-OFF: 당일예약 허용 OFF → 당일예약 차단 [FIX 검증 — 최소 테스트]", async () => {
+    const admin = getFixtureAdminClient();
+    await admin.from("center_settings").update({ allow_same_day_booking: false }).eq("center_id", centerAId);
+
+    await loginManagerA();
+    const cls = await createKstSameDayFutureClass(centerAId, { capacity: 8, title: `QA-당일OFF-${newRunId()}` });
+    pendingClassIds.push(cls.id);
+    await issueMembershipWithExpiry(memberAProfileId, kstDateStr(60));
+
+    await runScenario("SCN-P1-24-OFF", ["memberA"], async (assertions) => {
+      await loginMemberA();
+      const res = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
+      assertions.push({
+        name: "[FIX] allow_same_day_booking=false → 당일예약은 명시적으로 차단됨('당일 예약은 허용되지 않아요')",
+        passed: !!res.error && !!res.error?.message.includes("당일"),
+        detail: JSON.stringify({ data: res.data, error: res.error?.message }),
+      });
+      expect(res.error).not.toBeNull();
+      expect(res.error?.message).toContain("당일");
+    });
+
+    await admin.from("center_settings").update({ allow_same_day_booking: true }).eq("center_id", centerAId);
+  }, 60000);
+
+  it("SCN-P1-24-STARTED: 수업 시작 이후에는 당일예약 허용 여부와 무관하게 차단됨 [FIX 검증 — 기존 제한 유지 확인]", async () => {
+    const runId = newRunId();
+    await loginManagerA();
+    // 당일예약이 100% 허용된 설정에서도, 이미 시작된 수업은 여전히 막혀야 한다(요청 조건:
+    // "마감시간/수업 시작 이후 예약 등 기존 제한은 유지"). 5분 전에 시작한 수업을 직접
+    // 만든다.
+    const { data: cls, error: clsErr } = await supabase
+      .from("classes")
+      .insert({
+        center_id: centerAId,
+        title: `QA-당일시작후-${runId}`,
+        start_time: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+        end_time: new Date(Date.now() + 55 * 60 * 1000).toISOString(),
+        capacity: 8,
+        class_format: "group",
+      })
+      .select("id")
+      .single();
+    if (clsErr || !cls) throw new Error(`수업 생성 실패: ${clsErr?.message}`);
+    pendingClassIds.push((cls as any).id);
+    await issueMembershipWithExpiry(memberAProfileId, kstDateStr(60));
+
+    await runScenario("SCN-P1-24-STARTED", ["memberA"], async (assertions) => {
+      await loginMemberA();
+      const res = await supabase.rpc("reserve_class", { p_class_id: (cls as any).id, p_profile_id: null });
+      assertions.push({
+        name: "[FIX] 이미 시작된 수업은 당일예약 허용과 무관하게 차단됨('수업이 시작되었습니다')",
+        passed: !!res.error && !!res.error?.message.includes("시작"),
+        detail: JSON.stringify({ data: res.data, error: res.error?.message }),
+      });
+      expect(res.error).not.toBeNull();
+      expect(res.error?.message).toContain("시작");
+    });
+  }, 60000);
+
+  it.each([0, 1, 2])(
+    "SCN-P1-24-DAYS-%i: allow_same_day_booking=true면 group_book_days_before 값과 무관하게 당일예약이 항상 성공한다 [FIX 검증 — 경계값]",
+    async (daysBefore) => {
+      const admin = getFixtureAdminClient();
+      await admin.from("center_settings").update({ group_book_days_before: daysBefore }).eq("center_id", centerAId);
+
+      await loginManagerA();
+      const cls = await createKstSameDayFutureClass(centerAId, { capacity: 8, title: `QA-당일경계값-${daysBefore}-${newRunId()}` });
+      pendingClassIds.push(cls.id);
+      await issueMembershipWithExpiry(memberAProfileId, kstDateStr(60));
+
+      await runScenario(`SCN-P1-24-DAYS-${daysBefore}`, ["memberA"], async (assertions) => {
+        await loginMemberA();
+        const res = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
+        assertions.push({
+          name: `[FIX] group_book_days_before=${daysBefore}이어도 당일예약 허용 ON이면 성공(수정 전에는 days_before>=1이면 무조건 실패했음)`,
+          passed: !res.error && (res.data as any)?.status === "confirmed",
+          detail: JSON.stringify({ daysBefore, data: res.data, error: res.error?.message }),
+        });
+        expect(res.error).toBeNull();
+        expect((res.data as any).status).toBe("confirmed");
+      });
+    },
+    60000
+  );
 });
