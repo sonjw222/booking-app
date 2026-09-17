@@ -2849,6 +2849,34 @@ a.membership-card { text-decoration: none; display: block; }
   font-size: 18px; line-height: 1; cursor: pointer; padding: 2px 4px;
 }
 
+/* 릴리스 폴리시 배치 8차(2026-09-17) — 관리자 알림 swipe actions(SwipeRow.tsx). 범용으로
+   만들어 다른 리스트에서도 재사용 가능하게 했다. transform만 바꿔 애니메이션하므로(레이아웃
+   속성 변경 없음) 알림이 많아도 layout thrashing이 없다. */
+.swipe-row { position: relative; overflow: hidden; }
+.swipe-row-actions {
+  position: absolute; top: 0; right: 0; bottom: 0; display: flex; align-items: stretch;
+}
+.swipe-row-content {
+  position: relative; background: var(--bg); touch-action: pan-y; will-change: transform;
+}
+.swipe-action-btn {
+  flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; border: none; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700;
+  color: var(--text-inverse); min-width: 64px;
+}
+.swipe-action-btn.pin { background: var(--accent); }
+.swipe-action-btn.delete { background: var(--danger); }
+
+/* row 삭제 애니메이션 — collapse(max-height) + opacity, 아래 목록이 자연스럽게 올라온다. */
+.noti-row-wrap { max-height: 160px; opacity: 1; overflow: hidden; transition: max-height 220ms ease, opacity 180ms ease; }
+.noti-row-wrap.removing { max-height: 0; opacity: 0; }
+
+.noti-pin-badge {
+  display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto;
+  padding: 2px 7px 2px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+  font-size: 10px; font-weight: 800;
+}
+
 /* 네비게이션 안읽음 뱃지 */
 .nav-badge {
   position: absolute; top: -6px; right: -10px; min-width: 16px; height: 16px;
@@ -4297,6 +4325,28 @@ a.membership-card { text-decoration: none; display: block; }
    accent-soft 배경이 있어 정상). 배경 전체를 다시 칠하면 우선순위(priority-important) 배경
    과 겹쳐 헷갈리므로, 제목 앞 점 하나로 가볍게 표시한다. */
 .manager-notifications-v2 .noti-row.unread .noti-title::before{content:"";display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:var(--accent);vertical-align:middle}
+
+/* 릴리스 폴리시 배치 8차(2026-09-17) — 3-2 전체 삭제 헤더, 3-1 "더보기" 중앙 정렬. */
+.manager-notifications-v2 .noti-page-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px var(--page-gutter) 4px;
+}
+.manager-notifications-v2 .noti-page-count { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+.manager-notifications-v2 .noti-delete-all-btn {
+  border: none; background: none; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 750; color: var(--danger); padding: 6px 4px;
+}
+/* 이전엔 .ghost-btn(display:block;width:100%) + 인라인 margin:12px 20px 조합이라 부모
+   패딩/마진이 조금이라도 어긋나면 좌우 여백이 달라 보일 수 있었다(translateX 없이도
+   재현 가능한 구조적 원인). flex justify-content:center로 부모 폭과 무관하게 항상
+   기하학적으로 중앙에 오도록 바꾸고, 버튼 자체는 내용 너비만 차지하게 한다(기존
+   .ghost-btn과 동일한 배경/글자 크기/굵기/패딩/radius는 유지). */
+.manager-notifications-v2 .noti-load-more-row { display: flex; justify-content: center; padding: 12px var(--page-gutter) 20px; }
+.manager-notifications-v2 .noti-load-more-btn {
+  display: inline-block; border: none; cursor: pointer;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 15.5px; font-weight: 800;
+  padding: 15px 26px; border-radius: 14px; text-align: center;
+}
 @media(max-width:420px){.manager-today-metrics>a{padding-inline:9px}.manager-today-metrics b{font-size:21px}.manager-home-v2 .dash-card-value{font-size:18px}}
 
 /* Batch 7B: manager classes — keep current scheduling logic, align the surface. */

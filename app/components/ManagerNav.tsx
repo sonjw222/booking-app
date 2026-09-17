@@ -15,6 +15,7 @@ import {
   fetchMyEffectivePermissionKeys, canSeeManagerMenu,
   setCachedCanSeeMembers,
 } from "../../lib/roles";
+import { replaceTabNavigation } from "../../lib/navState";
 import NotificationToaster from "./NotificationToaster";
 import UiIcon from "./UiIcon";
 
@@ -110,7 +111,7 @@ export default function ManagerNav({ initialCanSeeMembers = null }: { initialCan
         </a>
         <div className="workspace-sidebar-scroll">
           <div className="desktop-nav-section">업무</div>
-          <a className={`desktop-nav-item ${pathname === "/manager" ? "active" : ""}`} href="/manager"><UiIcon name="grid" /><span>대시보드</span></a>
+          <a className={`desktop-nav-item ${pathname === "/manager" ? "active" : ""}`} href="/manager" onClick={(e) => replaceTabNavigation(e, "/manager")}><UiIcon name="grid" /><span>대시보드</span></a>
           <Link className={`desktop-nav-item ${is("/manager/classes") ? "active" : ""}`} href="/manager/classes" replace><UiIcon name="calendar" /><span>수업·예약</span></Link>
           {canSeeMembers && <Link className={`desktop-nav-item ${is("/manager/members") ? "active" : ""}`} href="/manager/members" replace><UiIcon name="users" /><span>회원</span></Link>}
           <Link className={`desktop-nav-item ${is("/manager/notifications") ? "active" : ""}`} href="/manager/notifications" replace>
@@ -137,7 +138,7 @@ export default function ManagerNav({ initialCanSeeMembers = null }: { initialCan
           {isOwner && <a className={`desktop-nav-item ${is("/manager/subscription") ? "active" : ""}`} href="/manager/subscription"><UiIcon name="card" /><span>플랫폼 구독</span></a>}
           {isOwner && <a className={`desktop-nav-item ${is("/manager/settlement") ? "active" : ""}`} href="/manager/settlement"><UiIcon name="bank" /><span>정산계좌</span></a>}
         </div>
-        <a className="workspace-sidebar-mode" href="/"><UiIcon name="user" /><span>회원 화면으로 전환</span></a>
+        <a className="workspace-sidebar-mode" href="/" onClick={(e) => replaceTabNavigation(e, "/")}><UiIcon name="user" /><span>회원 화면으로 전환</span></a>
       </aside>
       {/* 릴리스 폴리시 배치 6차(2026-09-15) — BottomNav와 동일한 이유로 replace(주석은
           BottomNav.tsx 참고). */}

@@ -216,7 +216,9 @@ export default function SessionWatcher() {
       await mergeViaPasswordVerification(mergePromptEmail, mergePassword);
       // 병합 후 my_account_id()가 이 세션을 병합 대상 계정으로 resolve하도록, 지금까지
       // 읽어들인 화면 상태를 전부 버리고 새로 시작한다(수동 연동 흐름과 동일한 이유).
-      window.location.href = "/";
+      // 릴리스 폴리시 배치 8차(2026-09-17) — replace로: 인증 상태가 바뀌는 전환이라 이전
+      // (병합 전) 화면 상태로 뒤로가기가 되면 안 됨(navigation policy, 4-5).
+      window.location.replace("/");
     } catch (e: any) {
       setMergeSubmitting(false);
       setMergeMessage({ type: "error", text: e.message ?? "연동에 실패했어요" });

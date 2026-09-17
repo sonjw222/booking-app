@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import UiIcon, { type IconName } from "./UiIcon";
+import { replaceTabNavigation } from "../../lib/navState";
 
 const ITEMS: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/admin", label: "운영 대시보드", icon: "grid" },
@@ -27,12 +28,13 @@ export default function AdminNav() {
       <div className="workspace-sidebar-scroll">
         <div className="desktop-nav-section">운영 관리</div>
         {ITEMS.map((item) => (
-          <a key={item.href} className={`desktop-nav-item ${active(item.href) ? "active" : ""}`} href={item.href}>
+          <a key={item.href} className={`desktop-nav-item ${active(item.href) ? "active" : ""}`} href={item.href}
+            onClick={item.href === "/admin" ? (e) => replaceTabNavigation(e, "/admin") : undefined}>
             <UiIcon name={item.icon} /><span>{item.label}</span>
           </a>
         ))}
       </div>
-      <a className="workspace-sidebar-mode" href="/"><UiIcon name="user" /><span>회원 화면으로 전환</span></a>
+      <a className="workspace-sidebar-mode" href="/" onClick={(e) => replaceTabNavigation(e, "/")}><UiIcon name="user" /><span>회원 화면으로 전환</span></a>
     </aside>
   );
 }

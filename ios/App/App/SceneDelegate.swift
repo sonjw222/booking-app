@@ -31,6 +31,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         bridgeViewController.bridge?.registerPluginInstance(WebViewThemePlugin())
         // GoogleSignInPlugin.swift — 같은 이유로 직접 등록.
         bridgeViewController.bridge?.registerPluginInstance(GoogleSignInPlugin())
+        // NavigationPolicyPlugin.swift — 같은 이유로 직접 등록. root 화면에서 edge-swipe
+        // 뒤로가기를 끄는 데 쓴다(릴리스 폴리시 배치 8차, 아래 allowsBackForwardNavigationGestures
+        // 주석 참고).
+        bridgeViewController.bridge?.registerPluginInstance(NavigationPolicyPlugin())
         if let webView = bridgeViewController.bridge?.webView {
             let dynamicBg = UIColor { traits in
                 traits.userInterfaceStyle == .dark
@@ -59,6 +63,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             // pushState 포함) 기준으로 동작하므로 이 앱의 <Link> 기반 탭 전환과도 자연스럽게
             // 맞물린다(탭을 여러 개 거쳐온 뒤 스와이프하면 거쳐온 탭들을 순서대로 되짚는
             // 것 — 일반 웹/Safari와 동일한 정상 동작, 별도로 억제하지 않음).
+            //
+            // 릴리스 폴리시 배치 8차(2026-09-17) — 이 전역 기본값(true)은 콜드 스타트 초기
+            // 프레임과 이 값이 아직 맞지 않은 아주 짧은 순간을 위한 baseline일 뿐이다.
+            // 실제로는 app/components/NavigationPolicy.tsx가 화면(경로)이 바뀔 때마다
+            // NavigationPolicyPlugin을 통해 이 값을 다시 계산해 덮어쓴다 — root 화면
+            // (홈/예약/내예약/알림/마이, 수업/회원/알림/더보기, 운영 홈)에서는 false로 꺼서
+            // edge swipe로 로그인 화면·이전 모드가 뒤에서 보이는 문제를 막고, 상세 화면에서는
+            // true로 켜서 기존 정상 back은 그대로 유지한다.
             webView.allowsBackForwardNavigationGestures = true
         }
 
