@@ -22,6 +22,21 @@ allprojects {
         google()
         mavenCentral()
     }
+    // Automated QA Foundation Batch(2026-09-18) — androidx.test.uiautomator/espresso-web
+    // (신규, app/build.gradle)를 추가해 처음으로 실제 instrumentation 테스트 APK를
+    // 패키징(assembleDebugAndroidTest)해보니, org.jetbrains.kotlin:kotlin-stdlib-jdk7/
+    // kotlin-stdlib-jdk8(옛 분리 아티팩트, Kotlin 1.8부터 kotlin-stdlib 본체에 이미
+    // 합쳐짐)를 전이 의존성으로 끌어오는 라이브러리가 여러 서브프로젝트(app뿐 아니라
+    // capacitor-cordova-android-plugins 등 Capacitor cap-sync 생성 모듈들도 포함)에
+    // 걸쳐 있어, 각 모듈이 독립적으로 kotlin-stdlib 버전을 resolve하면서 "Duplicate
+    // class" 빌드 실패가 났다(각 모듈의 :dependencies로 직접 추적 확인함, 추측 아님).
+    // 앱 전체 빌드 스크립트 중 이 파일만 cap-sync가 건드리지 않는 진짜 루트라, 여기
+    // 한 곳에서 전체 서브프로젝트에 동일하게 적용한다 — jdk7/jdk8 확장 함수는 이미
+    // kotlin-stdlib 안에 있어 제외해도 동작에 영향 없는 순수 중복 제거.
+    configurations.all {
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+    }
 }
 
 task clean(type: Delete) {

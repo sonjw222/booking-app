@@ -1,5 +1,76 @@
 # CHANGELOG
 
+## 2026-09-18 — 자동 QA 인프라 구축: iOS XCUITest + Android Espresso 기반 마련
+
+앱 기능은 전혀 안 건드리고, 핵심 사용자 플로우(탭 전환, 회원/관리자 모드, 검색,
+safe-area 구조)를 자동으로 검증할 수 있는 UI 테스트 뼈대를 처음으로 추가.
+
+- **기술적 전제**: 이 앱은 Capacitor `server.url` 모드라 화면 전부가 WKWebView/Android
+  WebView 콘텐츠고, 별도 네이티브 UI가 없음 — 두 플랫폼의 UI 테스트 프레임워크가
+  WebView 안을 보는 방식이 근본적으로 달라서(iOS XCUITest는 label/value/placeholder
+  텍스트로만 조회 가능, `accessibilityIdentifier` 사용 불가 — Apple 공식 문서로 확인;
+  Android Espresso-Web은 실제 DOM CSS 셀렉터/`id`로 직접 조회 가능) 두 플랫폼의
+  구현 전략이 다름. iOS는 이 앱이 한국어 단일 언어(다국어 로드맵 없음 확인)라 기존
+  한국어 텍스트를 그대로 안정적인 조회 키로 재사용 — 기존 엘리먼트의 `aria-label`을
+  덮어써 실제 스크린리더 사용자의 접근성 경험을 망가뜨리는 방식은 쓰지 않음(요청의
+  "실제 UI/UX 변경 금지" 원칙). Android는 Espresso-Web이 기존 CSS 클래스로 바로 조회
+  가능해 웹 앱 코드를 한 줄도 안 건드림.
+- **iOS**: `ios/App/App.xcodeproj/project.pbxproj`에 신규 `AppUITests` XCUITest 타겟을
+  객체 그래프 수준에서 직접 추가(PBXNativeTarget/PBXTargetDependency/
+  PBXContainerItemProxy/XCConfigurationList 등, Batch 6의 SPM 패키지 추가와 동일한
+  방식). 이 프로젝트에 커밋된 공유 scheme이 한 번도 없었어서 `App.xcscheme`도 새로
+  작성. 테스트 파일 6개(`ios/App/AppUITests/`) — 앱 실행/홈 표시, 하단 탭 전환,
+  회원↔관리자 모드, 검색, safe-area(헤더 frame이 상태바 영역을 침범하지 않는지 —
+  `XCUIElementTypeQueryProvider.statusBars` 공식 API로 frame 비교), background/
+  foreground. iOS Debug/Release 앱 빌드 + AppUITests Debug/Release build-for-testing
+  전부 성공. 실제 시뮬레이터 1회 실행 시도 — 이 샌드박스의 가짜(placeholder)
+  GoogleService-Info.plist 때문에 Firebase가 API 키 검증에 실패해 앱이 크래시함을
+  확인(`FIRInstallations validateAPIKey`, crash log로 원인 확정) — 테스트/앱 코드
+  버그가 아니라 가짜 Firebase 설정의 당연한 결과, 실제 키가 있는 환경에서는 재현
+  안 돼야 정상.
+- **Android**: 남아있던 Capacitor 템플릿 기본 테스트 2개(`com.getcapacitor.myapp`
+  패키지, 실제 앱 패키지 `com.mwhabit.app`와 안 맞아 돌았으면 실패했을 죽은 코드) 삭제.
+  `espresso-web`/`uiautomator`/`androidx.test:rules` 추가(전부 `dl.google.com` 최신
+  stable 확인, 추측 안 함). `android/app/src/androidTest/java/com/mwhabit/app/`에
+  테스트 파일 6개 — iOS와 동일한 플로우 커버, 추가로 하드웨어 back이 탭 전환의
+  replace 정책(6/7차 배치)을 어기지 않는지 회귀 테스트 포함. `assembleDebugAndroidTest`
+  로 실제 instrumentation APK까지 패키징 성공 — 그 과정에서 처음으로 실제 발견된 버그:
+  `com.google.android.libraries.identity.googleid`(6차 배치, Google 네이티브 로그인용)
+  가 전이 의존성으로 끌어오는 구식 `kotlin-stdlib-jdk7/8`가 여러 서브모듈에서 각각
+  resolve되며 "Duplicate class" 빌드 실패를 일으키고 있었음(`./gradlew :app:dependencies`
+  로 직접 추적 확인) — `android/build.gradle`의 `allprojects` 블록에 전역 exclude
+  추가로 수정(이미 `kotlin-stdlib` 본체에 합쳐진 빈 아티팩트 제외라 동작 영향 없음).
+- **테스트 계정 정책**: 외부 OAuth(Google/Apple/Kakao/Naver)는 전혀 자동화하지
+  않음 — 버튼 존재/탭 가능 여부만 확인. 로그인이 필요한 테스트는 기존 Playwright
+  E2E 스위트(`tests/e2e/`)와 완전히 같은 이름의 테스트 계정 env var
+  (`TEST_USER_A_EMAIL` 등, 새로 안 만듦)를 재사용 — iOS는 `xcodebuild`의
+  `TEST_RUNNER_` 접두사 공식 메커니즘, Android는 `testInstrumentationRunnerArguments`
+  (Gradle이 호스트 env를 읽어 계측 인자로 전달)로 각각 주입. 계정 정보가 없으면
+  실패가 아니라 건너뜀(graceful skip).
+- **문서/CI**: `docs/AUTOMATED_QA.md`(신규) — 로컬 실행법(iOS/Android), Firebase Test
+  Lab 제출 명령(`gcloud firebase test android/ios run`), 실패 산출물 위치, 자주 나는
+  오류 해결법. `.github/workflows/mobile-ui-qa.yml`(신규) — `workflow_dispatch`
+  전용(기존 `test.yml`/배포 게이트에 전혀 영향 없음), Secrets 없으면 두 job 모두
+  경고만 남기고 조용히 건너뜀. iOS CI job은 `App.entitlements`/
+  `GoogleService-Info.plist`가 저장소에 없어 아직 실제로는 실패함 — Secrets 기반 복원
+  스텝 추가가 후속 작업으로 필요함을 명시적으로 남김(얼버무리지 않음).
+- **SQL 변경**: 없음. DB/RLS/결제/예약 백엔드 로직: 전혀 안 건드림.
+- **검증**: `npm run build`/`npx tsc --noEmit`(신규 오류 0) 클린, `npx vitest run
+  tests/unit` 57파일/403개 전부 통과(변경 없음 — 웹 앱 코드를 안 건드렸으므로 당연함).
+  iOS: App Debug/Release 빌드 + AppUITests build-for-testing Debug/Release 전부
+  성공. Android: `assembleDebug`/`assembleRelease`/`assembleDebugAndroidTest`
+  전부 성공, 세 APK(app-debug/app-release-unsigned/app-debug-androidTest) 전부 생성
+  확인 — Firebase Test Lab 제출 준비 완료.
+
+변경 파일: `ios/App/App.xcodeproj/project.pbxproj`,
+`ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme`(신규),
+`ios/App/AppUITests/*.swift`(신규 6개), `android/build.gradle`,
+`android/app/build.gradle`, `android/variables.gradle`,
+`android/app/src/androidTest/java/com/mwhabit/app/*.java`(신규 6개),
+`android/app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java`
+(삭제), `android/app/src/test/java/com/getcapacitor/myapp/ExampleUnitTest.java`(삭제),
+`docs/AUTOMATED_QA.md`(신규), `.github/workflows/mobile-ui-qa.yml`(신규).
+
 ## 2026-09-17 — 릴리스 폴리시 배치 7차: safe-area 전수 재감사 + 상태바 아이콘 색 + 체감 성능
 
 실기기 재신고: 6차 배치에서 `.header`/`.back-header` 공용 계약을 고쳤는데도 홈/예약

@@ -1333,6 +1333,17 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
+### P2-39. (신규, 2026-09-18) 자동 QA 인프라 — 실기기/에뮬레이터 실행 + CI 활성화 후속 작업
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2(뼈대는 완료, 실제 가동은 후속 작업) |
+| 현재 상태 | **운영 설정 필요.** iOS `AppUITests`/Android instrumentation 테스트 둘 다 컴파일/링크/패키징까지만 검증됨(이 세션엔 실기기·부팅된 에뮬레이터·실제 테스트 계정이 없음) — 실제 통과 여부는 확인 안 됨. |
+| 필요한 것(iOS) | (1) `.github/workflows/mobile-ui-qa.yml`의 `ios-ui-tests` job이 지금 그대로 돌면 `App.entitlements`/`GoogleService-Info.plist` 부재로 App 빌드 자체가 실패함 — 두 파일을 base64 등으로 Secrets에 등록하고 워크플로우에 복원 스텝 추가 필요(민감 파일이라 저장소에 직접 커밋 금지, 기존 정책 유지). (2) `TEST_USER_A_EMAIL` 등 GitHub Secrets 등록(이미 Playwright E2E용으로 등록돼 있다면 그대로 재사용 가능, 새로 만들 필요 없음). (3) 실기기/시뮬레이터로 최초 1회 실제 실행해 그린 확인. |
+| 필요한 것(Android) | (1) 위와 동일하게 `TEST_USER_A_EMAIL` 등 Secrets 확인. (2) `reactivecircus/android-emulator-runner`가 `ubuntu-latest`에서 실제로 정상 부팅/가속되는지 최초 1회 확인(러너 세대에 따라 KVM 가속이 불안정할 수 있음 — 문제 있으면 `macos-latest`로 전환 검토, 비용 증가 감수). |
+| 필요한 것(공통) | 둘 다 그린 확인 후에만 `.github/workflows/mobile-ui-qa.yml`에 `pull_request`/`push` 트리거 추가를 검토(지금은 의도적으로 `workflow_dispatch`만 — 요청 원칙: "main 보호에 영향 주지 않게, 실패해도 현재 배포를 막지 않게"). |
+| 근거 파일 | `docs/AUTOMATED_QA.md`, `.github/workflows/mobile-ui-qa.yml`, `ios/App/AppUITests/`, `android/app/src/androidTest/java/com/mwhabit/app/` |
+
 ### P2-38. (신규, 2026-09-17) backdrop-filter(blur) 저사양 Android 실측 필요
 
 | 필드 | 내용 |
