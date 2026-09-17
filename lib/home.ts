@@ -8,6 +8,31 @@
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
 
+// QA Fix Batch(2026-09-18) — "내 주변 센터" 반경(km). 감사 결과 이 앱에는 센터별/회원별로
+// 설정 가능한 검색 반경 컬럼이나 화면이 없다(center_settings, app 설정 어디에도 없음 —
+// Business Scenario E2E Phase 3에서 이미 확인됨). 그래서 제품에 적합한 기본값을 여기
+// 한 곳에만 정의한다 — 값을 바꾸고 싶으면 이 상수 하나만 바꾸면 된다(매직넘버를 여러
+// 파일에 흩어놓지 않기 위함). 한국 대도시권에서 "차로 이동 가능한 생활권" 수준인 20km를
+// 기본값으로 선택했다(서울 강남↔종로 정도 거리) — 나중에 회원/센터가 반경을 직접 고를 수
+// 있는 UI가 생기면 이 값을 기본 선택값으로 재사용하면 된다.
+//
+// (병렬 폴리시 배치 8차가 별도 worktree에서 같은 기능을 먼저 최소 구현했다가, 병합 시
+// 이 QA Fix Batch 버전으로 통일했다 — 반경 필터/좌표 검증 로직은 이 파일 기준이 최종.
+// haversineKm()만 그쪽 단위테스트(tests/unit/home.nearbyRadius.test.ts)와의 호환을 위해
+// 순수 함수로 유지한다.)
+export const NEARBY_RADIUS_KM = 20;
+
+// 순수 함수로 분리 — 단위 테스트(경계값 등)에서 네트워크/Supabase 목 없이 바로 검증할 수
+// 있게 fetchHomeCenters() 밖으로 뺐다.
+export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export type HomeCenter = {
   id: string;
   name: string;
@@ -16,15 +41,6 @@ export type HomeCenter = {
   longitude: number | null;
   distanceKm: number | null;
 };
-
-// QA Fix Batch(2026-09-18) — "내 주변 센터" 반경(km). 감사 결과 이 앱에는 센터별/회원별로
-// 설정 가능한 검색 반경 컬럼이나 화면이 없다(center_settings, app 설정 어디에도 없음 —
-// Business Scenario E2E Phase 3에서 이미 확인됨). 그래서 제품에 적합한 기본값을 여기
-// 한 곳에만 정의한다 — 값을 바꾸고 싶으면 이 상수 하나만 바꾸면 된다(매직넘버를 여러
-// 파일에 흩어놓지 않기 위함). 한국 대도시권에서 "차로 이동 가능한 생활권" 수준인 20km를
-// 기본값으로 선택했다(서울 강남↔종로 정도 거리) — 나중에 회원/센터가 반경을 직접 고를 수
-// 있는 UI가 생기면 이 값을 기본 선택값으로 재사용하면 된다.
-export const NEARBY_RADIUS_KM = 20;
 
 function isValidCoordinate(lat: unknown, lng: unknown): boolean {
   return (
@@ -61,7 +77,11 @@ export async function fetchHomeCenters(userLat?: number, userLng?: number): Prom
 
   let centers: HomeCenter[] = (data ?? []).map((c: any) => ({
     id: c.id, name: c.name, categories: c.categories ?? [],
-    latitude: c.latitude, longitude: c.longitude, distanceKm: null,
+    // 좌표 값이 숫자가 아니면(잘못된 데이터, 문자열 "NaN" 등) 그 센터만 "좌표 없음"으로
+    // 안전하게 처리한다 — 목록 전체가 죽으면 안 된다(추가 시나리오 9번).
+    latitude: Number.isFinite(c.latitude) ? c.latitude : null,
+    longitude: Number.isFinite(c.longitude) ? c.longitude : null,
+    distanceKm: null,
   }));
 
   // 내 위치가 유효하면(잘못된 좌표는 무시 — 권한 거부/획득 실패 시 그냥 undefined로
@@ -70,14 +90,9 @@ export async function fetchHomeCenters(userLat?: number, userLng?: number): Prom
   // QA Fix Batch(2026-09-18) 이전에는 반경 컷오프가 없어 "내 주변"을 눌러도 전국 센터가
   // 그냥 거리순으로만 나열됐다 — 이제 실제로 반경 밖 센터는 결과에서 빠진다.
   if (isValidCoordinate(userLat, userLng)) {
-    const toRad = (d: number) => (d * Math.PI) / 180;
     for (const c of centers) {
       if (isValidCoordinate(c.latitude, c.longitude)) {
-        const dLat = toRad(c.latitude! - userLat!);
-        const dLng = toRad(c.longitude! - userLng!);
-        const a = Math.sin(dLat / 2) ** 2 +
-          Math.cos(toRad(userLat!)) * Math.cos(toRad(c.latitude!)) * Math.sin(dLng / 2) ** 2;
-        c.distanceKm = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        c.distanceKm = haversineKm(userLat!, userLng!, c.latitude!, c.longitude!);
       }
       // 좌표가 없거나 유효하지 않은 센터는 distanceKm이 null로 남는다 — "내 주변"
       // 기능 성격상 거리를 확신할 수 없으면 안전하게 제외한다(아래 filter).

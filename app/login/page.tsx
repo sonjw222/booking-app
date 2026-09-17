@@ -224,7 +224,10 @@ export default function LoginPage() {
       setMessage({ type: "error", text: msg });
       return;
     }
-    window.location.href = "/";
+    // 릴리스 폴리시 배치 8차(2026-09-17) — 로그인 성공 → 홈 이동은 replace로: push를 쓰면
+    // WKWebView 뒤로가기 목록에 /login이 그대로 남아 로그인 성공 직후에도 뒤로가기(edge
+    // swipe 포함)로 로그인 화면이 다시 보였다.
+    window.location.replace("/");
   }
 
   async function handleSignup() {
@@ -411,7 +414,7 @@ export default function LoginPage() {
         // 여기서 직접 한 번 더 기다린다 — 이미 SessionWatcher가 먼저 끝냈으면 즉시
         // 반환되는 멱등 함수라 중복 호출 비용은 거의 없다.
         await ensureAccountForCurrentUser();
-        window.location.href = "/";
+        window.location.replace("/");
       } catch (e: any) {
         setSocialLoading(null);
         if (e instanceof AppleSignInCancelledError) return; // 사용자가 직접 취소 — 에러로 안 보여줌
@@ -435,7 +438,7 @@ export default function LoginPage() {
         // 직후 SessionWatcher의 비동기 계정 부트스트랩이 끝나기 전에 페이지 이동으로
         // JS 컨텍스트가 파괴되지 않도록 이동 전에 한 번 더 기다린다(멱등 함수).
         await ensureAccountForCurrentUser();
-        window.location.href = "/";
+        window.location.replace("/");
       } catch (e: any) {
         setSocialLoading(null);
         if (e instanceof GoogleSignInCancelledError) return; // 사용자가 직접 취소 — 에러로 안 보여줌

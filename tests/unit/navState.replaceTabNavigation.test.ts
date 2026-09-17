@@ -102,8 +102,15 @@ describe("탭 전환 링크 소스 고정 — 회귀 방지", () => {
     const source = read("app/mypage/page.tsx");
     // /mypage에는 1:1 문의로 가는 직접 링크가 없지만(설정 하위), 이 화면 안의 다른
     // "상세 진입" 링크들(프로필 수정, 구매내역, 포인트 내역 등)은 replaceTabNavigation을
-    // 쓰면 안 된다 — 오직 관리자모드 전환/예약내역 두 곳만 예외적으로 써야 한다.
+    // 쓰면 안 된다 — 관리자모드 전환/예약 내역/운영자 설정, 오직 root destination으로
+    // 가는 3곳만 예외적으로 써야 한다(릴리스 폴리시 배치 8차 — "/admin"도 운영자 모드
+    // root라 추가됨, navigation policy 4-5).
     const replaceUsageCount = (source.match(/replaceTabNavigation\(/g) ?? []).length;
-    expect(replaceUsageCount).toBe(2); // import 제외하고 호출부만
+    expect(replaceUsageCount).toBe(3); // import 제외하고 호출부만
+  });
+
+  it("마이페이지의 '운영자 설정' 진입이 replaceTabNavigation을 쓴다(운영자 모드 root)", () => {
+    const source = read("app/mypage/page.tsx");
+    expect(source).toContain('href="/admin" onClick={(e) => replaceTabNavigation(e, "/admin")}');
   });
 });

@@ -14,6 +14,11 @@ import { supabase } from "../lib/supabaseClient";
 import { consumePostLoginNext } from "../lib/postLoginReturn";
 import { replaceTabNavigation } from "../lib/navState";
 import UiIcon, { type IconName } from "./components/UiIcon";
+// 릴리스 폴리시 배치 8차(2026-09-18), 5번 — 운영자 모드 "종목 관리"가 이 홈 화면과
+// 똑같은 아이콘을 재사용해야 해서(이모지 제거) CATEGORY_ICONS/CATEGORY_IMAGES를
+// app/components/categoryIcons.ts로 옮겼다(단일 출처, 새 asset 없음). 이 파일은 그
+// 공용 모듈을 그대로 import — 동작은 이전과 동일하다.
+import { CATEGORY_ICONS, CATEGORY_IMAGES } from "./components/categoryIcons";
 
 const CATEGORIES = [
   { icon: "skate" as IconName, image: "/icons/categories/skate.png", label: "피겨스케이팅" },
@@ -25,23 +30,6 @@ const CATEGORIES = [
   { icon: "swim" as IconName, image: "/icons/categories/swim.png", label: "수영" },
   { icon: "golf" as IconName, image: "/icons/categories/golf.png", label: "골프" },
 ];
-
-const CATEGORY_ICONS: Record<string, IconName> = {
-  피겨스케이팅: "skate", 필라테스: "pilates", 발레: "ballet", 리듬체조: "rhythm",
-  요가: "yoga", 복싱: "boxing", 수영: "swim", 골프: "golf",
-};
-
-// 종목 둘러보기 그리드용 아이콘 이미지(2026-09-02, 사용자 제공 디자인으로 교체) —
-// UiIcon 단색 라인 아이콘 대신 이 이미지를 쓴다. "곧 시작하는 클래스" 목록의 사진
-// 없는 클래스 썸네일(home-class-photo, 브랜드 그라데이션 배경 + 단색 아이콘)은 디자인
-// 맥락이 달라 그대로 UiIcon(CATEGORY_ICONS)을 유지한다.
-const CATEGORY_IMAGES: Record<string, string> = {
-  피겨스케이팅: "/icons/categories/skate.png", 필라테스: "/icons/categories/pilates.png",
-  발레: "/icons/categories/ballet.png", 리듬체조: "/icons/categories/rhythm.png",
-  요가: "/icons/categories/yoga.png", 복싱: "/icons/categories/boxing.png",
-  수영: "/icons/categories/swim.png", 골프: "/icons/categories/golf.png",
-  테니스: "/icons/categories/tennis.png",
-};
 
 // 릴리스 폴리시 배치 7차(2026-09-17) — 성능 조사: 이 앱은 Next.js App Router라 레이아웃
 // (BottomNav 등)은 탭 전환 사이 유지되지만, 페이지 컴포넌트 자체(이 Home())는 다른 탭에

@@ -24,6 +24,7 @@
 
 import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
+import { rootNavState } from "../../lib/navState";
 
 export default function CapacitorBootstrap() {
   useEffect(() => {
@@ -45,8 +46,14 @@ export default function CapacitorBootstrap() {
       // 기존과 동일하게 히스토리를 따라가고, 더 갈 곳이 없을 때만 앱을 종료(백그라운드)한다.
       // exitApp()은 iOS에서는 공식적으로 no-op이라(Apple 정책상 앱 자체 종료 불가) 이
       // 리스너를 플랫폼 분기 없이 그대로 둬도 안전하다.
+      // 릴리스 폴리시 배치 8차(2026-09-17) — Root Navigation 정책: root 화면(회원 5탭/
+      // 관리자 4탭/운영자 1탭, app/components/NavigationPolicy.tsx가 매 경로 변경마다
+      // lib/navState.ts의 rootNavState를 갱신)에서는 canGoBack이 true여도 이전 화면(이전
+      // 모드/로그인 등)으로 돌아가지 않는다 — 다른 다수 앱의 "루트 탭에서 뒤로가기 = 앱
+      // 종료/백그라운드" 관례와 동일하게 처리한다. 상세 화면은 기존과 동일하게 그대로
+      // history.back().
       App.addListener("backButton", ({ canGoBack }) => {
-        if (canGoBack) window.history.back();
+        if (canGoBack && !rootNavState.isRoot) window.history.back();
         else App.exitApp();
       });
 

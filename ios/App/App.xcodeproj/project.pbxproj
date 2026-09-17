@@ -17,6 +17,7 @@
 		4A61DEA2CC8F4947B442DB83 /* AppleSignInPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40CF00292DB74C7D99A39C3A /* AppleSignInPlugin.swift */; };
 		FA2BE0B41F73434C96A4AF20 /* WebViewThemePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 904EDFC269344FDEA4C02973 /* WebViewThemePlugin.swift */; };
 		C21FFA11D3B74E898336716E /* GoogleSignInPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7132C41267E0423EA4B177C5 /* GoogleSignInPlugin.swift */; };
+		70A3E3BE762840FF8B786BA1 /* NavigationPolicyPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AAE95F2083946EC9DDD3883 /* NavigationPolicyPlugin.swift */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
@@ -49,6 +50,7 @@
 		40CF00292DB74C7D99A39C3A /* AppleSignInPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInPlugin.swift; sourceTree = "<group>"; };
 		904EDFC269344FDEA4C02973 /* WebViewThemePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewThemePlugin.swift; sourceTree = "<group>"; };
 		7132C41267E0423EA4B177C5 /* GoogleSignInPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleSignInPlugin.swift; sourceTree = "<group>"; };
+		6AAE95F2083946EC9DDD3883 /* NavigationPolicyPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationPolicyPlugin.swift; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -134,6 +136,7 @@
 				40CF00292DB74C7D99A39C3A /* AppleSignInPlugin.swift */,
 				904EDFC269344FDEA4C02973 /* WebViewThemePlugin.swift */,
 				7132C41267E0423EA4B177C5 /* GoogleSignInPlugin.swift */,
+				6AAE95F2083946EC9DDD3883 /* NavigationPolicyPlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -269,6 +272,7 @@
 				4A61DEA2CC8F4947B442DB83 /* AppleSignInPlugin.swift in Sources */,
 				FA2BE0B41F73434C96A4AF20 /* WebViewThemePlugin.swift in Sources */,
 				C21FFA11D3B74E898336716E /* GoogleSignInPlugin.swift in Sources */,
+				70A3E3BE762840FF8B786BA1 /* NavigationPolicyPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

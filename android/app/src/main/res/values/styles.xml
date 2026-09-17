@@ -16,7 +16,16 @@
     </style>
 
 
+    <!--
+      릴리스 폴리시 배치 8차(2026-09-17), 14번 — Android 12(API 31) 미만 기기의 스플래시
+      배경(values-v31/styles.xml은 이보다 우선 적용되는 API 31+ 전용 오버라이드라 이
+      값을 안 씀). 예전엔 @drawable/splash(폰 세로 비율 고정 래스터 비트맵)를 바로 썼는데,
+      windowBackground가 일반 비트맵이면 화면 크기에 맞춰 종횡비 무시하고 늘어나
+      태블릿(훨씬 넓고 짧은 화면)에서 로고가 찌그러져 보였다(values/colors.xml의
+      splashBackground 주석에 상세 원인). drawable/splash_background.xml이 같은 이미지를
+      늘리지 않고 중앙 배치하도록 감싼 것으로 교체 — 새 이미지 asset은 만들지 않았다.
+    -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <item name="android:background">@drawable/splash_background</item>
     </style>
 </resources>

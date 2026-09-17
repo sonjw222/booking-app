@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      릴리스 폴리시 배치 8차(2026-09-17), 14번 — 태블릿/대화면 Android에서 첫 화면(cold
+      start 스플래시, 이 앱은 server.url 모드라 원격 사이트를 실제로 로드하는 동안 이
+      화면이 그대로 노출됨) 상단에 모하빗 로고가 찌그러져 보이는 문제의 실제 원인.
+
+      drawable/splash.png는 320x480(폰 세로 비율) 고정 크기 래스터 비트맵인데,
+      values/styles.xml의 AppTheme.NoActionBarLaunch(Android 12=API 31 미만 기기가 쓰는
+      레거시 스플래시 테마)가 이 비트맵을 android:windowBackground로 "직접" 참조하고
+      있었다 — Android는 windowBackground가 일반 비트맵 drawable이면 뷰(=화면 전체) 크기에
+      맞춰 종횡비 무시하고 늘려 채운다. 폰(세로로 길쭉함)에서는 원본과 비율이 비슷해 거의
+      안 보이지만, 태블릿(훨씬 더 넓고 짧은 종횡비)에서는 안에 그려진 로고까지 함께
+      옆으로 늘어나 찌그러져 보인다 — iPhone에서 안 보이는 이유는 iOS는 LaunchScreen이
+      Auto Layout 기반이라 이런 무비율 스트레칭 자체가 없기 때문(같은 원인이 아니라 iOS엔
+      애초에 이 매커니즘이 없음).
+
+      drawable/splash_background.xml이 이 비트맵을 android:gravity="center"로 감싸
+      "늘리지 않고 원래 크기 그대로 중앙 배치"하도록 바꾸는데, 그 background 레이어에 쓸
+      단색이 필요해 여기서 정의한다. values-v31/styles.xml(Android 12+ 공식
+      SplashScreen API 경로)이 이미 같은 색(#0A2545, app/globals.css의 brand CSS 변수와 동일)을
+      windowSplashScreenBackground로 쓰고 있어 그 값을 그대로 재사용 — 새 브랜드 색을
+      만들지 않는다.
+    -->
+    <color name="splashBackground">#0A2545</color>
+</resources>

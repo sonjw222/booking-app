@@ -71,6 +71,38 @@ export function replaceTabNavigation(
   window.location.replace(href);
 }
 
+// 릴리스 폴리시 배치 8차(2026-09-17) — Root Navigation 정책: 회원 5개 탭(홈/예약/내예약/
+// 알림/마이), 관리자 4개 탭(수업/회원/알림/더보기), 운영자 1개(운영 홈)는 전부 "root
+// destination"이다 — iOS edge-swipe/Android 하드웨어·제스처 back으로 이 화면들 "밖"(이전
+// 모드, 로그인 화면 등)으로 나가면 안 된다(QA 신고: 관리자 더보기에서 edge swipe 시 로그인
+// 화면이 뒤에서 보임). 반대로 상세 화면(회원 상세, 수업 상세, 센터 상세 등)에서는 기존
+// back이 정상 동작해야 한다(전역 차단 금지). 이 판정은 정확히 이 경로들과 "일치"할 때만
+// true — 하위 상세 경로(prefix)는 포함하지 않는다(예: "/manager/members/123"은 상세라
+// false여야 뒤로가기가 "/manager/members" 목록으로 정상 동작함).
+const MEMBER_ROOT_PATHS = ["/", "/reservation", "/my-reservations", "/notifications", "/mypage"];
+const MANAGER_ROOT_PATHS = ["/manager", "/manager/classes", "/manager/members", "/manager/notifications"];
+const ADMIN_ROOT_PATHS = ["/admin"];
+
+export function isRootNavPath(pathname: string): boolean {
+  return (
+    MEMBER_ROOT_PATHS.includes(pathname) ||
+    MANAGER_ROOT_PATHS.includes(pathname) ||
+    ADMIN_ROOT_PATHS.includes(pathname)
+  );
+}
+
+// CapacitorBootstrap.tsx의 backButton 리스너(레이아웃 마운트 시 1회 등록, 이후 재구독하지
+// 않음)가 "지금 root 화면인지"를 매 경로 변경마다 다시 알 수 있도록 하는 공유 상태 —
+// NavigationPolicy.tsx가 경로가 바뀔 때마다 이 값을 갱신하고, 리스너는 호출 시점에 이
+// 값을 읽기만 한다(리스너를 경로마다 add/remove 하지 않아도 됨).
+export const rootNavState = { isRoot: false };
+
+export function updateRootNavState(pathname: string): boolean {
+  const root = isRootNavPath(pathname);
+  rootNavState.isRoot = root;
+  return root;
+}
+
 export async function fetchHasUsableMembership(): Promise<boolean> {
   const accountId = await getMyAccountId();
   if (!accountId) return false;

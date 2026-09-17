@@ -233,7 +233,7 @@ export default function ManagerDashboard() {
 
       {/* 매출 요약 대시보드 */}
       {canSeeMenu("pass.sales.view") && (
-        <>
+        <section className="manager-dashboard-block" aria-label="매출 요약">
           <div className="period-tabs">
             {([["today", "오늘"], ["7d", "7일"], ["30d", "30일"]] as [DashPeriod, string][]).map(([p, label]) => (
               <button key={p} className={`period-chip ${dashPeriod === p ? "on" : ""}`} onClick={() => setDashPeriod(p)}>
@@ -290,10 +290,11 @@ export default function ManagerDashboard() {
               )}
             </>
           ) : null}
-        </>
+        </section>
       )}
 
       {/* 오늘 수업 요약 */}
+      <section className="manager-today-classes" aria-label="오늘 수업">
       <div className="section-title" style={{ paddingTop: 8 }}>
         오늘 수업 {todayClasses.length > 0 && <span className="info">({todayClasses.length}개)</span>}
       </div>
@@ -320,8 +321,10 @@ export default function ManagerDashboard() {
           })
         )}
       </div>
+      </section>
 
       {/* 관리 메뉴 */}
+      <section className="manager-menu-panel" aria-label={`${activeCenter?.name ?? "센터"} 관리 메뉴`}>
       <div className="menu-section-label">{activeCenter?.name ?? "센터"} 관리</div>
       {(canSeeMenu("pass.create") || canSeeMenu("pass.update")) && (
         <a className="list-row" href="/manager/membership-rules">
@@ -440,6 +443,7 @@ export default function ManagerDashboard() {
           <span className="chevron">›</span>
         </a>
       )}
+      </section>
       {/* 예약자 명단 시트 */}
       {rosterClass && (
         <div className="sheet-overlay" onClick={() => setRosterClass(null)}>

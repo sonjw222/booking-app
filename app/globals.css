@@ -665,6 +665,21 @@ a { color: inherit; text-decoration: none; }
   display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800; flex: 0 0 auto;
 }
 .profile-item-info { flex: 1; min-width: 0; }
+/* 릴리스 폴리시 배치 8차(2026-09-18), 5번 — 운영자 "종목 관리" 목록의 아이콘(이모지
+   대체). .profile-avatar와 같은 자리·같은 크기감으로 맞춰 row height에 맞는 크기를
+   유지하고, 텍스트와 vertical-align이 자연스럽게 보이게 flex center 정렬. */
+.cat-row-icon {
+  width: 40px; height: 40px; flex: 0 0 auto; border-radius: 12px;
+  background: var(--surface-strong); display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.cat-row-icon img { width: 26px; height: 26px; object-fit: contain; }
+/* 5번 — "추가" 입력창 + 버튼 수직 중앙 정렬. .input-field 기본 margin-bottom(10px)이
+   align-items:center 기준을 아래로 밀던 원인이라 이 컨텍스트에서만 상쇄한다. 버튼
+   (.primary-btn.small) 자체 크기는 손대지 않음 — 좁은 iPhone에서도 두 요소가 같은
+   높이 축을 공유해 균형 있게 보인다. */
+.cat-add-row { display: flex; align-items: center; gap: 8px; }
+.cat-add-row .input-field { margin-bottom: 0; }
 .profile-item-name { font-size: 15px; font-weight: 800; display: flex; align-items: center; }
 .primary-badge {
   font-size: 10.5px; font-weight: 800; color: var(--accent); background: var(--accent-soft);
@@ -701,6 +716,21 @@ a { color: inherit; text-decoration: none; }
 }
 .mgr-mode-label { font-size: 13.5px; font-weight: 800; display: inline-flex; align-items: center; gap: 5px; }
 .mgr-mode-switch { font-size: 12px; font-weight: 700; opacity: 0.85; }
+
+/* 릴리스 폴리시 배치 8차(2026-09-18), 6번 — 센터 승인 관리 검색창. 기존 .input-field를
+   재사용하되(새 스타일 언어 안 만듦) 아이콘/clear 버튼을 얹기 위한 최소 wrapper. */
+.admin-center-search {
+  position: relative; display: flex; align-items: center;
+  margin: 4px var(--page-gutter) 0;
+}
+.admin-center-search > svg { position: absolute; left: 16px; color: var(--ink-soft); pointer-events: none; }
+.admin-center-search .input-field { padding-left: 40px; padding-right: 40px; margin-bottom: 0; }
+.admin-center-search-clear {
+  position: absolute; right: 8px; width: 28px; height: 28px; border-radius: 50%;
+  border: none; background: none; color: var(--ink-soft); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.admin-center-search-clear:active { background: var(--surface); }
 
 .center-switcher { display: flex; gap: 8px; padding: 14px var(--page-gutter) 6px; overflow-x: auto; }
 .center-chip {
@@ -962,12 +992,30 @@ a { color: inherit; text-decoration: none; }
 
 .mem-filters {
   display: flex;
+  align-items: center;
   gap: 6px;
   padding: 6px 20px;
+}
+/* 릴리스 폴리시 배치 8차(2026-09-17), 3-5/3-6 — "등급 전체"/"상태 전체"는
+   .mem-filters의 직계 자식(flex:0 0 auto인 .filter-chip 기본값)으로 항상 좌측 고정되고,
+   실제 등급/상태 칩만 이 안쪽 컨테이너에서 자체적으로 horizontal scroll된다(예전엔
+   .mem-filters 전체가 overflow-x:auto라 "전체" 칩까지 같이 스크롤되어 사라졌다). 긴
+   등급명도 white-space:nowrap(.filter-chip 기존 규칙)이라 줄바꿈 없이 자연스럽게 흐른다. */
+.mem-filters-scroll {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
   overflow-x: auto;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
-.mem-filters::-webkit-scrollbar { display: none; }
+.mem-filters-scroll::-webkit-scrollbar { display: none; }
+.mem-filters-scroll:empty { display: none; border-left: none; padding-left: 0; }
+.mem-filters .all-chip { flex: 0 0 auto; }
+/* 3-7 — 검색 중 인라인 표시(풀스크린 로딩 대신). */
+.mem-searching { color: var(--ink-soft); font-weight: 600; }
 
 .filter-chip {
   flex: 0 0 auto;
@@ -2849,6 +2897,34 @@ a.membership-card { text-decoration: none; display: block; }
   font-size: 18px; line-height: 1; cursor: pointer; padding: 2px 4px;
 }
 
+/* 릴리스 폴리시 배치 8차(2026-09-17) — 관리자 알림 swipe actions(SwipeRow.tsx). 범용으로
+   만들어 다른 리스트에서도 재사용 가능하게 했다. transform만 바꿔 애니메이션하므로(레이아웃
+   속성 변경 없음) 알림이 많아도 layout thrashing이 없다. */
+.swipe-row { position: relative; overflow: hidden; }
+.swipe-row-actions {
+  position: absolute; top: 0; right: 0; bottom: 0; display: flex; align-items: stretch;
+}
+.swipe-row-content {
+  position: relative; background: var(--bg); touch-action: pan-y; will-change: transform;
+}
+.swipe-action-btn {
+  flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; border: none; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700;
+  color: var(--text-inverse); min-width: 64px;
+}
+.swipe-action-btn.pin { background: var(--accent); }
+.swipe-action-btn.delete { background: var(--danger); }
+
+/* row 삭제 애니메이션 — collapse(max-height) + opacity, 아래 목록이 자연스럽게 올라온다. */
+.noti-row-wrap { max-height: 160px; opacity: 1; overflow: hidden; transition: max-height 220ms ease, opacity 180ms ease; }
+.noti-row-wrap.removing { max-height: 0; opacity: 0; }
+
+.noti-pin-badge {
+  display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto;
+  padding: 2px 7px 2px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+  font-size: 10px; font-weight: 800;
+}
+
 /* 네비게이션 안읽음 뱃지 */
 .nav-badge {
   position: absolute; top: -6px; right: -10px; min-width: 16px; height: 16px;
@@ -3842,11 +3918,20 @@ a.membership-card { text-decoration: none; display: block; }
 .admin-chrome > a { border: 1px solid rgba(255,255,255,.22); color: var(--text-inverse); }
 
 .loading-wrap {
-  min-height: 250px;
+  /* 릴리스 폴리시 배치 8차(2026-09-18), 2-1 — 250px 고정이던 것을 뷰포트 기준으로
+     늘려서(최대 640px) 스켈레톤이 화면 상단에만 몰리지 않고 중앙~하단까지 자연스럽게
+     이어지게 한다. bottom-nav/safe-area는 이 컴포넌트가 손대는 영역이 아니라(레이아웃이
+     감싸는 형태) 그대로 유지됨. */
+  min-height: min(72dvh, 640px);
   display: block;
   padding: 30px var(--page-gutter);
 }
 .loading-skeleton { width: 100%; max-width: 560px; margin: 0 auto; }
+.loading-skeleton-row { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
+.loading-skeleton-row-icon { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 12px; }
+.loading-skeleton-row-lines { flex: 1; min-width: 0; }
+.loading-skeleton-row-lines i { margin-bottom: 8px; }
+.loading-skeleton-row-lines i:last-child { margin-bottom: 0; }
 .loading-skeleton i {
   display: block;
   overflow: hidden;
@@ -3909,7 +3994,13 @@ a.membership-card { text-decoration: none; display: block; }
    않지만 간격이 0px). auth-scene 버그와 같은 원인(콘텐츠 폭과 무관한 고정 px 값)이라
    같은 방식으로 고친다 — max-width 매직넘버 대신 flex:1(남는 공간만큼만 차지 +
    min-width:0으로 필요하면 줄바꿈)과 gap으로 배지와의 최소 간격을 항상 보장한다. */
-.home-heading-row { align-items: flex-start; gap: 10px; margin-bottom: 7px; }
+/* 릴리스 폴리시 배치 8차(2026-09-17) — 홈 상단 spacing 미세 조정(1번). safe-area 처리는
+   위 .member-home .header의 max(22px, var(--safe-top))가 이미 담당하므로 거기엔 손대지
+   않고(중복 패딩 방지), 제목 줄(.home-heading-row, 로그인/관리자 모드 배지 포함) 앞에만
+   margin-top 10px를 더해 헤더 상단 패딩과 제목 사이 여백만 넓힌다 — 아래
+   .home-location-row/.searchbar/히어로 배너/하단 nav 간격은 전부 기존 그대로(이 줄
+   자체만 10px 아래로 내려갈 뿐 그 이후 요소들 사이 gap은 안 바뀜). */
+.home-heading-row { align-items: flex-start; gap: 10px; margin-top: 10px; margin-bottom: 7px; }
 .home-heading-row .location { flex: 1 1 auto; min-width: 0; font-size: 22px; line-height: 1.28; font-weight: 720; letter-spacing: -.035em; }
 .home-heading-row .header-icons { flex: 0 0 auto; min-height: 40px; align-items: flex-start; }
 .login-link { min-height: 38px; padding: 0 14px; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); font-size: 12px; font-weight: 620; white-space: nowrap; }
@@ -4297,6 +4388,28 @@ a.membership-card { text-decoration: none; display: block; }
    accent-soft 배경이 있어 정상). 배경 전체를 다시 칠하면 우선순위(priority-important) 배경
    과 겹쳐 헷갈리므로, 제목 앞 점 하나로 가볍게 표시한다. */
 .manager-notifications-v2 .noti-row.unread .noti-title::before{content:"";display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:var(--accent);vertical-align:middle}
+
+/* 릴리스 폴리시 배치 8차(2026-09-17) — 3-2 전체 삭제 헤더, 3-1 "더보기" 중앙 정렬. */
+.manager-notifications-v2 .noti-page-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px var(--page-gutter) 4px;
+}
+.manager-notifications-v2 .noti-page-count { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+.manager-notifications-v2 .noti-delete-all-btn {
+  border: none; background: none; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 750; color: var(--danger); padding: 6px 4px;
+}
+/* 이전엔 .ghost-btn(display:block;width:100%) + 인라인 margin:12px 20px 조합이라 부모
+   패딩/마진이 조금이라도 어긋나면 좌우 여백이 달라 보일 수 있었다(translateX 없이도
+   재현 가능한 구조적 원인). flex justify-content:center로 부모 폭과 무관하게 항상
+   기하학적으로 중앙에 오도록 바꾸고, 버튼 자체는 내용 너비만 차지하게 한다(기존
+   .ghost-btn과 동일한 배경/글자 크기/굵기/패딩/radius는 유지). */
+.manager-notifications-v2 .noti-load-more-row { display: flex; justify-content: center; padding: 12px var(--page-gutter) 20px; }
+.manager-notifications-v2 .noti-load-more-btn {
+  display: inline-block; border: none; cursor: pointer;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 15.5px; font-weight: 800;
+  padding: 15px 26px; border-radius: 14px; text-align: center;
+}
 @media(max-width:420px){.manager-today-metrics>a{padding-inline:9px}.manager-today-metrics b{font-size:21px}.manager-home-v2 .dash-card-value{font-size:18px}}
 
 /* Batch 7B: manager classes — keep current scheduling logic, align the surface. */
@@ -4780,3 +4893,217 @@ textarea:focus-visible,
 .app-date-week span:last-child  { color: var(--info); }
 .app-date-grid > button:not(.on):nth-child(7n+1) { color: var(--danger); }
 .app-date-grid > button:not(.on):nth-child(7n)   { color: var(--info); }
+
+/* ============================================================
+   Responsive workspace shell
+   mwhabit.com stays one domain and one Next.js app. Mobile remains the
+   source-of-truth UI; viewport width alone progressively adds navigation,
+   workspace panels and denser information layouts. Do not replace these
+   media queries with device/OS detection or separate mobile/desktop routes.
+   ============================================================ */
+.member-desktop-nav,
+.workspace-sidebar { display: none; }
+
+@media (min-width: 768px) {
+  :root {
+    --workspace-rail: 88px;
+    --workspace-sidebar: 88px;
+    --workspace-content-max: 1440px;
+    --workspace-gutter: clamp(24px,3vw,44px);
+  }
+  .member-desktop-nav,
+  .workspace-sidebar {
+    position: fixed; inset: 0 auto 0 0; z-index: 50;
+    width: var(--workspace-sidebar); display: flex; flex-direction: column; gap: 4px;
+    padding: max(20px,var(--safe-top)) 12px max(18px,var(--safe-bottom));
+    border-right: 1px solid var(--line); background: color-mix(in srgb,var(--bg) 96%,transparent);
+    box-shadow: 8px 0 28px rgba(20,20,20,.025); backdrop-filter: blur(18px);
+  }
+  .desktop-brand {
+    min-height: 54px; display: flex; align-items: center; justify-content: center; gap: 11px;
+    margin-bottom: 14px; color: var(--ink);
+  }
+  .desktop-brand-mark {
+    width: 40px; height: 40px; flex: 0 0 40px; display: grid; place-items: center;
+    border-radius: 13px; background: var(--brand); color: var(--brand-ink-strong);
+    font-size: 18px; font-weight: 850; letter-spacing: -.04em;
+  }
+  .desktop-brand > span:last-child,
+  .desktop-nav-item > span:not(.desktop-nav-badge),
+  .desktop-nav-section,
+  .desktop-nav-note,
+  .workspace-sidebar-mode > span { display: none; }
+  .desktop-brand b,.desktop-brand small { display: block; }
+  .desktop-brand b { font-size: 18px; letter-spacing: -.03em; }
+  .desktop-brand small { margin-top: 2px; color: var(--ink-soft); font-size: 11px; font-weight: 600; }
+  .desktop-nav-item,.workspace-sidebar-mode {
+    position: relative; min-height: 52px; display: flex; align-items: center; justify-content: center;
+    gap: 11px; padding: 0 12px; border-radius: 14px; color: var(--ink-soft);
+    font-size: 13.5px; font-weight: 680; transition: background 150ms ease,color 150ms ease;
+  }
+  .desktop-nav-item:hover,.workspace-sidebar-mode:hover { background: var(--surface); color: var(--ink); }
+  .desktop-nav-item.active { background: var(--brand-soft); color: var(--brand-ink); }
+  .desktop-nav-item svg,.workspace-sidebar-mode svg { flex: 0 0 auto; }
+  .desktop-nav-badge {
+    position: absolute; top: 7px; right: 7px; min-width: 18px; height: 18px;
+    display: grid; place-items: center; padding: 0 5px; border: 2px solid var(--bg);
+    border-radius: 999px; background: var(--danger); color: #fff; font-size: 9px; font-weight: 800;
+  }
+  .desktop-nav-spacer { flex: 1; }
+  .workspace-sidebar-scroll {
+    min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 4px;
+    overflow-y: auto; scrollbar-width: thin;
+  }
+  .workspace-sidebar-mode { margin-top: 10px; border: 1px solid var(--line); }
+
+  body:has(> .member-desktop-nav) .app-shell {
+    width: calc(100% - var(--workspace-rail)); max-width: 1120px;
+    margin-left: max(var(--workspace-rail),calc((100vw - var(--workspace-rail) - 1120px)/2 + var(--workspace-rail)));
+    margin-right: auto; padding-bottom: 40px;
+  }
+  body:has(> .member-desktop-nav) .bottom-nav { display: none; }
+  body:has(> .member-desktop-nav) .header,
+  body:has(> .member-desktop-nav) .back-header,
+  body:has(> .member-desktop-nav) .noti-head,
+  body:has(> .member-desktop-nav) .inquiry-head,
+  body:has(> .member-desktop-nav) .mypage-titlebar,
+  body:has(> .member-desktop-nav) .resv-page-head { padding-left: var(--workspace-gutter); padding-right: var(--workspace-gutter); }
+  .member-home .header { padding-bottom: 20px; }
+  .member-home .hero { margin-inline: var(--workspace-gutter); min-height: 190px; padding-inline: 30px; }
+  .member-home .hero h1 { max-width: 60%; font-size: clamp(24px,3vw,34px); }
+  .member-home .home-value-line,.member-home .home-category-head,.member-home .home-class-head { margin-inline: var(--workspace-gutter); }
+  .member-home .cat-grid { grid-template-columns: repeat(auto-fit,minmax(92px,1fr)); gap: 18px; padding-inline: var(--workspace-gutter); }
+  .member-home .cat-icon { width: 68px; height: 68px; }
+  .member-home .home-class-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; padding-inline: var(--workspace-gutter); }
+  .member-home .home-class-row { min-height: 112px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--card-bg); }
+  .member-home .home-footer { padding-inline: var(--workspace-gutter); }
+  .discovery-page-v2 .search-header { gap: 12px; }
+  .discovery-page-v2 .search-input { min-width: 0; }
+  .discovery-page-v2 .search-suggestions { max-width: 760px; padding: 32px var(--workspace-gutter); }
+  .discovery-page-v2 .search-category-results { padding: 0 var(--workspace-gutter); }
+  .discovery-page-v2 .search-category-results > .menu-section-label { padding-inline: 0; }
+  .discovery-page-v2 .search-category-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 24px; }
+  .discovery-page-v2 .search-category-grid .list-row { margin-inline: 0; }
+  .discovery-page-v2 .search-center-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; padding: 0 var(--workspace-gutter) 20px; }
+  .discovery-page-v2 .search-center-grid .search-center-row { min-height: 90px; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--card-bg); }
+  .discovery-page-v2 > .app-empty-state,
+  .manager-v3-content .daylist-empty,
+  .admin-v3-content .daylist-empty { min-height: 38dvh; max-width: 720px; margin-inline: auto; }
+
+  .manager-v3,.admin-v3 {
+    width: 100%; max-width: none; margin: 0; padding-left: var(--workspace-sidebar); background: var(--surface);
+  }
+  .manager-v3 > .manager-chrome,.admin-v3 > .admin-chrome { padding-left: var(--workspace-gutter); padding-right: var(--workspace-gutter); }
+  .manager-v3 > .manager-chrome {
+    min-height: 82px; display: flex; align-items: center; background: color-mix(in srgb,var(--bg) 95%,transparent);
+  }
+  .manager-chrome-main { width: 100%; }
+  .manager-chrome-main > a,.admin-chrome > a { width: auto; min-width: 42px; padding: 0 13px; gap: 8px; }
+  .manager-chrome-main > a span,.admin-chrome > a span { position: static; width: auto; height: auto; overflow: visible; clip: auto; font-size: 12px; font-weight: 700; }
+  .admin-v3 > .admin-chrome { min-height: 82px; align-items: center; }
+  .admin-chrome .app-chrome-title h1 { font-size: 24px; }
+  .manager-v3-content,.admin-v3-content {
+    width: 100%; max-width: var(--workspace-content-max); margin: 0 auto; padding: 24px var(--workspace-gutter) 48px;
+  }
+  .manager-v3-content > .app-shell,.admin-v3-content > .app-shell {
+    width: 100%; max-width: none; min-height: calc(100dvh - 154px); padding-bottom: 40px!important;
+    overflow: hidden; border: 1px solid var(--line); border-radius: 22px; background: var(--bg);
+    box-shadow: 0 12px 40px rgba(20,20,20,.045);
+  }
+  .manager-v3 > .bottom-nav { display: none; }
+  .manager-v3-content [class~="manager-menu-end-spacer"] { display: none; }
+  .manager-v3-content .sheet-overlay,.admin-v3-content .sheet-overlay { align-items: stretch; justify-content: flex-end; }
+  .manager-v3-content .sheet,.admin-v3-content .sheet {
+    width: min(520px,calc(100vw - var(--workspace-sidebar))); max-width: 520px; max-height: 100dvh;
+    height: 100%; margin: 0; padding: 22px 26px max(28px,var(--safe-bottom)); border-left: 1px solid var(--line); border-radius: 0;
+  }
+  .manager-v3-content .sheet:before,.admin-v3-content .sheet:before { display: none; }
+  .manager-v3-content .sheet-title,.admin-v3-content .sheet-title { top: -22px; margin-inline: -26px; padding: 22px 26px 16px; }
+
+  .manager-v3-content .pass-list,.manager-v3-content .order-list,.manager-v3-content .announce-list,
+  .manager-v3-content .mgr-review-list,.manager-v3-content .profile-list,.admin-v3-content .profile-list,
+  .manager-v3-content .room-card-list,.manager-v3-content .assignment-log-list {
+    grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; padding: 16px 24px 32px;
+  }
+  .manager-v3-content .pass-card,.manager-v3-content .order-row,.manager-v3-content .announce-item,
+  .manager-v3-content .mgr-review,.manager-v3-content .profile-item,.admin-v3-content .profile-item,
+  .manager-v3-content .room-card,.manager-v3-content .assignment-log {
+    padding: 17px; border: 1px solid var(--line); border-radius: 16px; background: var(--card-bg);
+  }
+  .manager-v3-content .mem-toolbar { display: grid; grid-template-columns:minmax(260px,1fr) auto; align-items:center; gap: 12px; }
+  .manager-v3-content .mem-toolbar,
+  .manager-v3-content .admin-filters,
+  .admin-v3-content .admin-filters { position: sticky; top: 0; z-index: 12; background: color-mix(in srgb,var(--bg) 96%,transparent); backdrop-filter: blur(14px); }
+  .manager-v3-content .mem-list { padding-inline: 24px; }
+  .manager-v3-content .mem-row { display: grid; grid-template-columns: minmax(180px,1.4fr) minmax(140px,1fr) auto; align-items: center; min-height: 72px; padding-inline: 10px; }
+  .manager-v3-content .noti-list { padding-inline: 24px; }
+  .manager-v3-content .noti-row { min-height: 82px; }
+  .manager-v3-content .date-range { grid-template-columns: repeat(2,minmax(180px,260px)); }
+  .manager-home-v2 .manager-dashboard-block { padding-bottom: 18px; }
+  .manager-home-v2 .manager-dashboard-block .period-tabs { padding-inline: 24px; }
+  .manager-home-v2 .manager-dashboard-block .dash-cards { grid-template-columns: repeat(3,minmax(0,1fr)); padding-inline: 24px; }
+  .manager-home-v2 .manager-today-classes .daylist { min-height: 0; }
+  .manager-home-v2 .manager-menu-panel { padding: 0 24px 28px; }
+  .manager-home-v2 .manager-menu-panel > .menu-section-label { padding-inline: 0; }
+  .manager-home-v2 .manager-menu-panel > .list-row { margin-inline: 0; }
+  .manager-v3-content .sales-summary { margin-inline: 24px; }
+  .manager-v3-content .sales-breakdown,.manager-v3-content .sales-list { margin-inline: 24px; }
+  .manager-v3-content .sales-row { display: grid; grid-template-columns: minmax(220px,1.5fr) minmax(120px,.7fr) auto; align-items: center; gap: 18px; }
+  .admin-v3-content .admin-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; padding: 20px 24px 36px; }
+  .admin-v3-content .admin-card { margin: 0; }
+  .admin-home-v2 { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-content: start; gap: 12px; padding: 20px 24px 36px!important; }
+  .admin-home-v2 > .menu-section-label { grid-column: 1 / -1; padding: 4px 0 8px; }
+  .admin-home-v2 > .list-row { min-height: 68px; margin: 0; padding: 0 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--card-bg); }
+}
+
+@media (min-width: 1360px) {
+  :root { --workspace-sidebar: 244px; --workspace-rail: 244px; }
+  .member-desktop-nav,.workspace-sidebar { padding-inline: 16px; }
+  .desktop-brand { justify-content: flex-start; padding-inline: 9px; }
+  .desktop-brand > span:last-child,.desktop-nav-item > span:not(.desktop-nav-badge),
+  .desktop-nav-section,.desktop-nav-note,.workspace-sidebar-mode > span { display: block; }
+  .desktop-nav-section { margin: 18px 12px 5px; color: var(--ink-soft); font-size: 10.5px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+  .desktop-nav-item,.workspace-sidebar-mode { justify-content: flex-start; }
+  .desktop-nav-badge { position: static; margin-left: auto; border: 0; }
+  .desktop-nav-note { padding: 14px 12px 4px; color: var(--ink-soft); font-size: 11px; line-height: 1.55; }
+}
+
+@media (min-width: 1280px) {
+  .manager-home-v2 { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(320px,.85fr); align-content: start; }
+  .manager-home-v2 > .center-switcher,.manager-home-v2 > .manager-today-overview { grid-column: 1 / -1; }
+  .manager-home-v2 > .manager-dashboard-block,.manager-home-v2 > .manager-today-classes { grid-column: 1; }
+  .manager-home-v2 > .manager-menu-panel { grid-column: 2; grid-row: 3 / span 2; border-left: 1px solid var(--line); }
+  .manager-home-v2 .dash-cards { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .manager-home-v2 .dash-daily { min-height: 210px; }
+  .manager-classes-v2 { display: grid; grid-template-columns: minmax(500px,1.08fr) minmax(380px,.92fr); align-content: start; }
+  .manager-classes-v2 > .back-header,
+  .manager-classes-v2 > .unplaced-banner,
+  .manager-classes-v2 > .assign-banner { grid-column: 1 / -1; }
+  .manager-classes-v2 > .manager-calendar-panel { grid-column: 1; padding: 18px 20px 28px; border-right: 1px solid var(--line); }
+  .manager-classes-v2 > .manager-agenda-panel { grid-column: 2; min-width: 0; padding: 18px 20px 28px; }
+  .manager-classes-v2 .manager-calendar-panel .cal-header { padding-inline: 0; }
+  .manager-classes-v2 .manager-calendar-panel .cal-grid { padding-inline: 0; }
+  .manager-classes-v2 .manager-agenda-panel > .menu-section-label { padding: 8px 0 12px; font-size: 13px; }
+  .manager-classes-v2 .manager-agenda-panel .daylist { max-height: calc(100dvh - 285px); overflow-y: auto; }
+  .manager-classes-v2 .fab-btn { left: auto; right: max(34px,calc((100vw - var(--workspace-sidebar) - var(--workspace-content-max))/2 + 34px)); transform: none; }
+  .member-reservation { display: grid; grid-template-columns: minmax(430px,.9fr) minmax(460px,1.1fr); align-content: start; }
+  .member-reservation > .resv-page-head,.member-reservation > .booking-steps,.member-reservation > .center-filter-banner { grid-column: 1 / -1; }
+  .member-reservation > .cal-header,.member-reservation > .cal-grid { grid-column: 1; }
+  .member-reservation > .daylist-header,.member-reservation > .profile-picker,
+  .member-reservation > .reservation-list-controls,.member-reservation > .holiday-notice,.member-reservation > .daylist { grid-column: 2; }
+  .member-reservation > .daylist-header { margin-top: 0; border-top: 0; }
+  .member-reservation > .daylist { max-height: calc(100dvh - 300px); overflow-y: auto; }
+  .member-home .home-class-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .admin-v3-content .admin-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .search-center-row,.manager-v3-content .mem-row,.manager-v3-content .sales-row,
+  .manager-v3-content .noti-row,.admin-v3-content .admin-card,.admin-home-v2 > .list-row {
+    transition: border-color 140ms ease,background 140ms ease,transform 140ms ease;
+  }
+  .search-center-row:hover,.manager-v3-content .mem-row:hover,.manager-v3-content .sales-row:hover,
+  .manager-v3-content .noti-row:hover,.admin-home-v2 > .list-row:hover {
+    border-color: var(--line-strong); background: var(--surface); transform: translateY(-1px);
+  }
+}

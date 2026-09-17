@@ -64,7 +64,8 @@ export default function NaverCallbackPage() {
         return;
       }
 
-      window.location.href = "/";
+      // 릴리스 폴리시 배치 8차(2026-09-17) — replace로: push면 /login으로 뒤로가기가 가능해짐.
+      window.location.replace("/");
     })();
 
     function fail(reason: string) {

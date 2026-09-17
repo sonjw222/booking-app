@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-09-18 — 릴리스 폴리시 배치 8차 + Business Logic Fix Batch 병합
+
+두 병렬 세션(release-polish-batch 직접 작업과 격리 worktree `mobile-ux-nav-manager-operator-polish`)
+을 병합했다. `lib/home.ts`의 위치 반경 필터는 두 세션이 각자 최소 구현을 갖고 있었는데,
+Business Logic Fix Batch 쪽(`NEARBY_RADIUS_KM`, `isValidCoordinate` 기반 유효성 검사, 요청
+원문 서울/강원/제주/부산 fixture로 9/9 PASS 검증됨)을 기준으로 통일하고, 폴리시 배치 쪽의
+`haversineKm()` 순수 함수만 그 단위테스트(`tests/unit/home.nearbyRadius.test.ts`)와의 호환을
+위해 유지했다(현재는 Fix Batch 로직이 이 함수를 호출하는 구조로 통합).
+
 ## 2026-09-18 — MWHABIT Business Logic Fix Batch: QA에서 발견된 실제 버그 3건 + 기능 갭 1건 수정
 
 Automated Business Scenario E2E Phase 2~4가 발견한 버그/갭을 수정했다. SQL 2건은 이 세션에
@@ -105,6 +114,59 @@ business-scenarios/*.json`). 앱/DB 로직은 전혀 건드리지 않음 — 기
   알림/캐시(특히 7차 배치 홈 TTL 캐시) 대부분 미착수 — `tests/integration/
   scenarios/registry.ts`에 시나리오별 상태(`implemented`/`covered-by-existing`/
   `not-automated`/`blocked`)를 정직하게 기록, `docs/TODO.md` P1-46 참고.
+
+## 2026-09-18 — 릴리스 폴리시 배치 8차: Root Navigation 정책, 관리자 알림 전체삭제/swipe/pin,
+회원 검색·필터 UX, 테마 미리보기, 태블릿 스플래시 로고 왜곡, 운영자 종목/센터 검색
+
+격리 worktree(`mobile-ux-nav-manager-operator-polish` 브랜치, release-polish-batch 기준)에서
+진행 — 같은 시각 다른 세션이 예약 당일예약/정원 invariant/위치 반경 SQL을 별도로 다룸(병합 시
+조정 필요, 아래 lib/home.ts 항목 참고).
+
+- **Root Navigation 정책**: `lib/navState.ts`에 `isRootNavPath`/`rootNavState` 추가. 회원
+  5탭(홈/예약/내예약/알림/마이), 관리자 4탭(수업/회원/알림/더보기), 운영자 1탭(운영 홈)에서
+  iOS edge-swipe(신규 `ios/App/App/NavigationPolicyPlugin.swift`로
+  `allowsBackForwardNavigationGestures` 화면별 토글)와 Android 하드웨어/제스처 back
+  (`CapacitorBootstrap.tsx`의 기존 backButton 리스너 확장)이 이전 화면(로그인/이전 모드)으로
+  못 가게 막음. 로그인 성공 후 홈 이동(로그인/카카오·네이버 콜백/계정 병합, 총 6곳)을
+  `location.href`(push) → `location.replace()`로 변경. 마이페이지 "운영자 설정" 등 root로
+  가는 나머지 링크들도 `replaceTabNavigation`으로 통일. `NavigationPolicyPlugin.swift`가
+  Xcode 프로젝트 타겟에 등록 안 돼 있어 실제 `xcodebuild build-for-testing`이 실패하던 것도
+  같이 발견해 고침(project.pbxproj 4곳 등록).
+- **관리자 알림**: 전체 삭제(ConfirmDialog 재사용, 더블탭 방지) + swipe-to-reveal 고정/삭제
+  액션(신규 범용 `app/components/SwipeRow.tsx`, transform 기반이라 리스트 rerender 없음).
+  고정 상태는 `add_notification_pin.sql`(`notifications.pinned` 컬럼, 기존 RLS 재사용)로
+  서버 영구 저장 — React state/localStorage만으로 저장하지 않음. "더보기" 버튼을
+  `justify-content:center` 기반으로 다시 짜 폭과 무관하게 중앙 정렬.
+- **관리자 회원**: "등급 전체"/"상태 전체"를 고정하고 실제 칩만 horizontal scroll되게 구조
+  분리. 검색 성능 — keystroke마다 전체 화면 로딩으로 바뀌던 것 제거(최초 진입만 풀스크린,
+  이후는 이전 결과 유지 + "검색 중…" 표시), 등급/상태/검색필드 변경은 즉시 반영, keyword
+  타이핑만 180ms 디바운스(기존 전부 300ms), stale response 가드 추가.
+- **테마 설정 미리보기**: "기본(라이트)"/"다크 모드" 카드가 `var(--bg)`(=현재 적용된 테마)를
+  그대로 써서 시스템이 다크면 라이트 옵션도 어둡게 보이던 버그 수정 — 각 옵션을 그 옵션이
+  뜻하는 결과 테마의 고정 색으로 직접 그림. "시스템 설정 따르기"만 `matchMedia`로 실제 OS
+  상태를 실시간 반영.
+- **태블릿 스플래시 로고 왜곡(Android)**: Android 12 미만 기기의 레거시 스플래시가 320x480
+  고정 비율 비트맵을 `windowBackground`로 직접 참조해 태블릿(다른 종횡비)에서 로고가
+  늘어나 보이던 게 원인 — 새 `drawable/splash_background.xml`(layer-list, gravity=center)로
+  감싸 해결(기존 이미지 asset 재사용, 신규 없음). iOS는 LaunchScreen이 Auto Layout
+  기반(`scaleAspectFit`)이라 애초에 이 문제가 없음을 확인.
+- **운영자 종목 관리**: 이모지 제거, 홈 화면과 같은 아이콘 소스(`app/components/categoryIcons.tsx`
+  로 단일화, 이미지 로드 실패 시 UiIcon 자동 대체) 재사용. "추가" 버튼-입력 수직 중앙 정렬.
+- **운영자 센터 승인 관리**: 검색창 추가(센터명/대표자/주소/전화/사업자번호, 대소문자 무시,
+  전화번호 "-" 유무 무관, client-side filtering이라 server round-trip 없음). 검색/상태 필터
+  독립 유지, empty state를 "필터에 없음"과 "검색 결과 없음"으로 구분.
+- **홈 상단 spacing**: `.home-heading-row`에 `margin-top:10px` 추가(safe-area 패딩과 중복
+  없음, 이후 요소 간격 불변).
+- **공용 로딩 스켈레톤**: 고정 250px라 화면 상단에만 몰리던 것을 `min(72dvh,640px)` +
+  list-row 모양 스켈레톤 반복으로 완화(화면별 맞춤 스켈레톤은 범위 밖, TODO 참고).
+- **위치 기반 반경 필터**: 이 worktree엔 미구현 상태였어서(병렬 세션이 다룰 가능성) 최소
+  구현(`lib/home.ts`의 `NEARBY_RADIUS_KM`/`haversineKm`)과 단위 테스트만 추가 — 병렬 세션의
+  구현과 병합 시 조정 필요.
+- iOS `xcodebuild build-for-testing`(`generic/platform=iOS Simulator`) TEST BUILD
+  SUCCEEDED, Android `./gradlew compileDebugAndroidTestSources assembleDebugAndroidTest`
+  BUILD SUCCESSFUL 둘 다 실제 검증(GoogleService-Info.plist/App.entitlements 임시
+  플레이스홀더 생성 후 검증 직후 즉시 삭제, 커밋 안 됨) — 과정에서 XML 주석 "--" 오류
+  (`colors.xml`)도 같이 발견해 수정.
 
 ## 2026-09-18 — 자동 QA 인프라 구축: iOS XCUITest + Android Espresso 기반 마련
 
