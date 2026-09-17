@@ -1333,6 +1333,21 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
+### P2-38. (신규, 2026-09-17) backdrop-filter(blur) 저사양 Android 실측 필요
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2(실기기 확인 전까지는 보류) |
+| 현재 상태 | **확인 필요.** 릴리스 폴리시 배치 7차 성능 조사 중 `.bottom-nav`/`.manager-chrome`
+(스크롤 내내 활성화되는 고정/sticky 헤더·nav, 둘 다 `backdrop-filter: blur(18px)`)이
+GPU 비용이 가장 클 후보로 지목됐으나, `color-mix(...88%,transparent)` + blur로 만든
+"젖빛 유리" 디자인이 명백히 의도적이라 실기기 확인 없이 제거/축소하면 시각 회귀
+위험이 커서 이번 배치에서는 손대지 않음. |
+| 필요한 것 | 저사양~중가 Android 기기에서 긴 리스트 스크롤 시 프레임드롭 체감 확인. 실제
+문제로 확인되면 blur 반경을 줄이거나, 저사양 기기 분기(예: `prefers-reduced-motion`
+또는 기기 성능 휴리스틱)로 blur를 끄는 방안 검토. |
+| 근거 파일 | `app/globals.css`(`.bottom-nav`, `.manager-chrome`) |
+
 ### P2-0a. (2026-09-06, 완료) 기존 수강권 이름/가격/그룹명 수정 UI 없음
 
 | 필드 | 내용 |

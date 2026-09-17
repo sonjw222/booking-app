@@ -63,11 +63,20 @@ export default async function RootLayout({
             SceneDelegate.swift가 이미 시스템 설정 기준 동적 색을 baseline으로 깔아둠)에도
             그대로 반영한다 — "시스템 설정 따르기"가 아니라 앱에서 명시적으로 고른 테마가
             시스템 설정과 다른 경우까지 커버하려면 이 시점에 실제 적용된 값을 네이티브에
-            알려줘야 한다. window.Capacitor는 네이티브 WKWebView에서만 존재(웹/Android는
-            이 플러그인 자체가 없음) — try/catch로 감싸 실패해도 화면엔 영향 없음. */}
+            알려줘야 한다. WebViewTheme 플러그인 자체는 iOS 전용(Android 구현 없음)이라
+            window.Capacitor.Plugins.WebViewTheme가 Android/웹에서는 falsy라 조용히
+            건너뛴다 — try/catch로 감싸 실패해도 화면엔 영향 없음.
+
+            릴리스 폴리시 배치(2026-09-17, 7차) — 상태바 아이콘 색(iOS/Android 공통, 이미
+            설치된 공식 @capacitor/status-bar) 동기화 추가: 지금까지 상태바 아이콘 색을
+            한 번도 명시적으로 설정한 적이 없어서 기기 시스템 다크/라이트 설정만 따라갔다
+            (Style.Default) — 폰은 라이트 모드인데 앱 안에서 차콜(다크) 테마를 고르면
+            어두운 배경에 어두운 아이콘이 남아 거의 안 보이는 상태가 될 수 있었다.
+            window.Capacitor.Plugins.StatusBar는 (WebViewTheme와 달리) iOS/Android 둘 다
+            존재하는 공식 플러그인이라 이 한 번의 호출로 양쪽 다 해결된다. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("app_theme");var dark=t==="charcoal"||((!t||t==="system")&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(dark)document.documentElement.setAttribute("data-theme","charcoal");else if(t==="burgundy")document.documentElement.setAttribute("data-theme","burgundy");try{window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.WebViewTheme&&window.Capacitor.Plugins.WebViewTheme.setBackground({hex:dark?"#17181C":"#FBFBFA"});}catch(e2){}}catch(e){}`,
+            __html: `try{var t=localStorage.getItem("app_theme");var dark=t==="charcoal"||((!t||t==="system")&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(dark)document.documentElement.setAttribute("data-theme","charcoal");else if(t==="burgundy")document.documentElement.setAttribute("data-theme","burgundy");try{window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.WebViewTheme&&window.Capacitor.Plugins.WebViewTheme.setBackground({hex:dark?"#17181C":"#FBFBFA"});}catch(e2){}try{window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.StatusBar&&window.Capacitor.Plugins.StatusBar.setStyle({style:dark?"DARK":"LIGHT"});}catch(e3){}}catch(e){}`,
           }}
         />
         {/* 결제(app/checkout)의 TossPaymentProvider가 window.TossPayments를 씀 — npm 패키지

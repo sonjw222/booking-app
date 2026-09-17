@@ -7,7 +7,7 @@
 */
 
 import { useEffect, useState } from "react";
-import { syncNativeWebViewBackground } from "../../../lib/nativeTheme";
+import { syncNativeWebViewBackground, syncNativeStatusBarStyle } from "../../../lib/nativeTheme";
 
 type Theme = "system" | "burgundy" | "charcoal";
 
@@ -33,6 +33,10 @@ export function applyTheme(theme: Theme) {
   // 테마를 바꾸는 경우(콜드 스타트는 app/layout.tsx의 인라인 스크립트가 이미 처리)까지
   // 반영해야 다음 화면 전환 때 오버스크롤 색이 즉시 새 테마와 맞는다.
   syncNativeWebViewBackground(effective === "charcoal");
+  // 상태바 아이콘 색(iOS/Android 공통, 7차 배치 신규 — lib/nativeTheme.ts 주석 참고)도
+  // 같이 맞춘다 — 안 그러면 시스템은 라이트인데 앱 안에서 차콜을 고른 경우 어두운
+  // 배경에 어두운 아이콘이 남아 거의 안 보이게 된다.
+  void syncNativeStatusBarStyle(effective === "charcoal");
 }
 
 export default function ThemeSettingsPage() {

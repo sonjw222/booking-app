@@ -27,3 +27,28 @@ export function syncNativeWebViewBackground(dark: boolean): void {
   const hex = dark ? "#17181C" : "#FBFBFA";
   WebViewThemeNative.setBackground({ hex }).catch(() => { /* 웹/미지원 플랫폼 — 화면엔 영향 없음 */ });
 }
+
+// 릴리스 폴리시 배치 7차(2026-09-17) — Android edge-to-edge/상태바 전수 감사 중 발견:
+// 이 앱은 시스템 다크/라이트 설정과 별개로 앱 안에서 직접 테마를 고를 수 있는데
+// (app/settings/theme/page.tsx), 상태바 "아이콘 색"(글자/시계/배터리 등)은 지금까지
+// 한 번도 명시적으로 설정한 적이 없었다 — iOS/Android 둘 다 Capacitor
+// StatusBar(@capacitor/status-bar, 이미 설치돼 capacitor.config.ts에도 등록돼 있음)의
+// 기본값(Style.Default = "기기의 시스템 다크/라이트 설정을 따름")에 그대로 맡겨져
+// 있었다. 그 결과 "폰은 라이트 모드인데 앱 안에서는 차콜(다크) 테마를 고른" 사용자는
+// 어두운 배경 위에 어두운 색 아이콘이 뜨는(대비 없이 거의 안 보이는) 상태가 될 수
+// 있다 — WebViewTheme(오버스크롤 배경색, 이 파일의 syncNativeWebViewBackground)와
+// 정확히 같은 이유·같은 두 호출 지점(app/layout.tsx의 하이드레이션 전 인라인
+// 스크립트, 이 함수)에서 앱의 실제 적용 테마를 네이티브에 알려줘야 한다. 커스텀
+// 플러그인을 새로 만들 필요 없이 이미 설치된 공식 @capacitor/status-bar 하나로
+// iOS/Android 둘 다 해결된다(Style.Dark="어두운 배경용 밝은 글자", Style.Light="밝은
+// 배경용 어두운 글자" — 공식 패키지 정의 주석 확인함, 이름이 반직관적이라 착각하기
+// 쉬움).
+export async function syncNativeStatusBarStyle(dark: boolean): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const { StatusBar, Style } = await import("@capacitor/status-bar");
+    await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light });
+  } catch {
+    /* 웹/미지원 플랫폼 — 화면엔 영향 없음 */
+  }
+}

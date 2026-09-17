@@ -1,5 +1,52 @@
 # CHANGELOG
 
+## 2026-09-17 — 릴리스 폴리시 배치 7차: safe-area 전수 재감사 + 상태바 아이콘 색 + 체감 성능
+
+실기기 재신고: 6차 배치에서 `.header`/`.back-header` 공용 계약을 고쳤는데도 홈/예약
+화면이 스크롤 없이 첫 페인트부터 여전히 상태바와 겹침. "패딩을 더 넣는" 대신 전수
+감사로 진짜 원인을 찾았다.
+
+- **근본 원인(패턴)**: 6차 배치는 `.header`/`.back-header` 두 selector만 고쳤는데,
+  이 앱에는 그 공용 계약과 무관한 전용 헤더 selector가 더 있었다 — 그리고 그중 하나
+  (`.member-home .header`)는 `.header`보다 specificity가 높아 6차의 수정 자체를
+  무효화하고 있었다. 전수 감사로 5곳에서 동일 패턴을 발견·수정:
+  1. `.member-home .header`(홈) — `.header` 기본 규칙보다 specificity가 높은 override가
+     safe-area 없이 `padding: 22px ...`로 통째로 덮어씀.
+  2. `.resv-page-head`(예약) — `.header`/`.back-header`와 전혀 다른 전용 selector라
+     애초에 6차 감사 대상 밖, safe-area 자체가 한 번도 없었음.
+  3. `.mgr-mode-bar`(관리자 홈 + 플랫폼 어드민 3화면) + `.manager-home-v2` override —
+     역시 전용 selector, safe-area 없었음.
+  4. `.toast`/`.error-toast`/`.noti-toaster`(회원 화면 기본 토스트/실시간 알림 팝업) —
+     `top: 18px`/`12px` 고정값, manager/admin 변형만 이미 safe-area가 있었음.
+  전부 sticky + `max(Npx, var(--safe-top))` 패턴으로 통일.
+- **상태바 아이콘 색 동기화(신규)**: 이 앱은 시스템 다크/라이트와 별개로 앱 안에서
+  테마를 직접 고를 수 있는데, 상태바 아이콘 색을 한 번도 명시적으로 설정한 적이 없어
+  기기 시스템 설정만 따라갔다 — 시스템은 라이트인데 앱은 차콜(다크)이면 어두운 배경에
+  어두운 아이콘이 남을 수 있었다. 이미 설치된 공식 `@capacitor/status-bar`의
+  `StatusBar.setStyle()`을 테마 전환 시점(콜드 스타트 인라인 스크립트 + 런타임 전환
+  둘 다)에 호출하도록 추가 — iOS/Android 둘 다 새 네이티브 코드 없이 해결.
+- **Android 네이티브 점검**: `MainActivity.java`(EdgeToEdge.enable() + 콘텐츠 뷰에
+  직접 시스템 바 padding, CSS env(safe-area-inset-*)에 기대지 않는 기존 구조)를
+  코드로 재확인 — 구조적으로 안전하다고 판단해 이번 배치에서 네이티브 파일은
+  건드리지 않음(상태바 아이콘 색만 JS 쪽에서 추가).
+- **체감 성능**: 홈 화면이 다른 탭에 갔다가 재진입할 때마다(Next.js App Router는
+  페이지 컴포넌트를 탭 전환마다 새로 마운트함) 센터/클래스/배너/카테고리 목록이 매번
+  비었다가 다시 채워지고, GPS 위치를 매번 새로 기다리느라(최대 4초) fetch 시작
+  자체가 늦어지던 문제 — 모듈 레벨 캐시(TTL 30초, 데이터 정확성은 항상 새로 fetch해서
+  유지) + 마지막 위치 캐시로 재진입 시 즉시 이전 결과를 먼저 보여주고 백그라운드로
+  갱신하도록 수정. 토글 스위치 애니메이션도 `left`(레이아웃 트리거) 대신
+  `transform`(컴포지터 전용)으로 교체.
+- **검증**: `npm run build`/`npx tsc --noEmit` 클린, `npx cap sync ios`/`android`,
+  iOS 시뮬레이터 Debug + 제네릭 Release, Android assembleDebug + assembleRelease 전부
+  성공. 신규 유닛테스트 15개(safe-area 감사 12개 + 상태바 스타일 동기화 6개 + 홈
+  재진입 캐시 6개 — 일부 겹침) 포함 전체 403개 통과.
+
+변경 파일: `app/globals.css`, `app/layout.tsx`, `app/page.tsx`,
+`app/settings/theme/page.tsx`, `lib/nativeTheme.ts`,
+`tests/unit/safeArea.headerOverrideAudit.test.ts`(신규),
+`tests/unit/nativeTheme.statusBarStyleSync.test.ts`(신규),
+`tests/unit/homePage.reentryCache.test.ts`(신규).
+
 ## 2026-09-16 — Google Play 출시 준비: 공개 계정 삭제 안내 페이지(`/account-deletion`) 추가
 
 Google Play Console "데이터 보안 > 계정 삭제 URL"에 제출할 외부 웹페이지가 필요해 신설.

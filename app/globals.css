@@ -496,8 +496,12 @@ a { color: inherit; text-decoration: none; }
 .divider-line span { font-size: 11.5px; color: var(--ink-soft); font-weight: 700; }
 
 /* 예약/취소 결과 토스트 */
+/* 릴리스 폴리시 배치 7차(2026-09-17) — 전수 감사 중 발견: 이 토스트(예약/취소 결과 등
+   회원 화면 전반에서 쓰임)는 고정 18px라 노치/Dynamic Island 기기에서 상태바 영역에
+   가려질 수 있었다. .manager-v3-content/.admin-v3-content 쪽 error-toast는 이미
+   safe-area 대응이 있었는데 이 회원용 기본 버전만 빠져 있었다. */
 .toast {
-  position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+  position: fixed; top: max(18px, var(--safe-top)); left: 50%; transform: translateX(-50%);
   background: var(--ink); color: var(--bg); font-size: 13px; font-weight: 700;
   padding: 11px 18px; border-radius: 999px; z-index: 100;
   box-shadow: 0 8px 24px rgba(0,0,0,0.25); max-width: 90%;
@@ -684,9 +688,16 @@ a { color: inherit; text-decoration: none; }
 /* ============================================================
    매니저 대시보드
    ============================================================ */
+/* 릴리스 폴리시 배치 7차(2026-09-17) — 전수 감사 중 발견: 관리자 홈(app/manager/page.tsx)
+   과 플랫폼 어드민의 회원모드 전환 화면(admin/centers, admin/subscriptions,
+   admin/settlement) 전부 이 바가 화면 최상단 첫 엘리먼트인데도 safe-area 토큰이
+   한 번도 없었다 — .header/.back-header(6차 배치에서 고친 공용 계약)와 별개의
+   전용 selector라 그 배치의 감사 범위 밖이었음. 동일 계약(sticky + safe-area
+   padding)으로 맞춘다. */
 .mgr-mode-bar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 20px; background: var(--ink); color: var(--bg);
+  position: sticky; top: 0; z-index: 15;
+  padding: max(14px, var(--safe-top)) 20px 14px; background: var(--ink); color: var(--bg);
 }
 .mgr-mode-label { font-size: 13.5px; font-weight: 800; display: inline-flex; align-items: center; gap: 5px; }
 .mgr-mode-switch { font-size: 12px; font-weight: 700; opacity: 0.85; }
@@ -1571,9 +1582,13 @@ a { color: inherit; text-decoration: none; }
   border-radius: 50%;
   /* 노브는 컬러 트랙 위에 올라가므로 카드 표면이 아니라 반전 색을 쓴다. */
   background: var(--text-inverse);
-  transition: left 0.15s;
+  /* 릴리스 폴리시 배치 7차(2026-09-17) — left를 직접 움직이면(레이아웃 트리거) 브라우저가
+     매 프레임 레이아웃을 다시 계산한다 — transform은 컴포지터 레이어에서만 처리돼 훨씬
+     저렴하다. 위치값(left: 3px)은 고정 시작점으로 그대로 두고, on 상태일 때만
+     transform: translateX()로 20px만큼 이동시킨다(3px→23px와 동일한 최종 위치). */
+  transition: transform 0.15s;
 }
-.switch.on .knob { left: 23px; }
+.switch.on .knob { transform: translateX(20px); }
 
 /* 매출 - 순이익 라인 */
 .profit-line {
@@ -1975,8 +1990,10 @@ a.membership-card { text-decoration: none; display: block; }
 .mem-status-badge.expired { background: var(--danger-soft); color: var(--danger); }
 
 /* 에러 토스트 - 시트 위에도 보이게 상단 고정 (z-index 시트보다 높음) */
+/* 릴리스 폴리시 배치 7차(2026-09-17) — .toast와 동일한 이유로 safe-area 추가(회원 화면
+   기본 버전만 빠져 있었음, manager/admin 변형은 이미 대응돼 있었음). */
 .error-toast {
-  position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+  position: fixed; top: max(18px, var(--safe-top)); left: 50%; transform: translateX(-50%);
   background: var(--danger); color: var(--text-inverse); font-size: 13px; font-weight: 700;
   padding: 11px 18px; border-radius: 12px; z-index: 120;
   box-shadow: 0 8px 24px rgba(182,66,66,0.35); max-width: 90%;
@@ -2840,8 +2857,9 @@ a.membership-card { text-decoration: none; display: block; }
 }
 
 /* 실시간 알림 팝업 */
+/* 릴리스 폴리시 배치 7차(2026-09-17) — 위 두 토스트와 동일한 이유로 safe-area 추가. */
 .noti-toaster {
-  position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+  position: fixed; top: max(12px, var(--safe-top)); left: 50%; transform: translateX(-50%);
   z-index: 3000; width: 100%; max-width: 440px; padding: 0 12px;
   display: flex; flex-direction: column; gap: 8px; pointer-events: none;
 }
@@ -3874,7 +3892,17 @@ a.membership-card { text-decoration: none; display: block; }
 /* ============================================================
    Batch 3 — member home, search and category discovery
    ============================================================ */
-.member-home .header { padding: 22px var(--page-gutter) 12px; }
+/* 릴리스 폴리시 배치 7차(2026-09-17) — 실기기 재신고: 홈 화면 상단이 스크롤 없이 첫
+   페인트부터 상태바와 겹침. 근본 원인: 6차 배치에서 .header 기본 규칙에
+   max(14px, var(--safe-top)) safe-area 패딩 + sticky를 추가했지만, 이 더 구체적인
+   selector(.member-home .header, 클래스 2개라 specificity가 더 높음 — 이 파일에서도
+   더 뒤에 있어 이중으로 이김)가 padding을 22px 고정값으로 통째로 덮어써 safe-area
+   보정 자체가 무효화되고 있었다. .header를 고쳤어도 홈 화면(.member-home 래퍼)만은
+   이 override 때문에 전혀 적용되지 않았던 것 — sticky/background는 이 규칙이
+   padding만 재선언해서 그대로 살아있었으므로 겹침이 "당김 중엔 고정, 첫 진입 시엔
+   여전히 겹침"으로 보였을 것. 기존 22px/12px 시각 간격 의도는 유지하되
+   max(Npx, var(--safe-top)) 패턴으로 안전영역을 되살린다. */
+.member-home .header { padding: max(22px, var(--safe-top)) var(--page-gutter) 12px; }
 /* home-heading-row: 원래 .location에 고정 max-width(245px, 좁은 화면에선 210px)를 줘서
    "관리자 모드"/"로그인" 배지와의 간격을 확보했는데, 그 값이 실제 배지 폭보다 살짝
    커서 320px 폭에서는 텍스트가 2줄로 줄바꿈되면서 배지와 틈 없이 딱 붙어버렸다(겹치진
@@ -3996,7 +4024,14 @@ a.membership-card { text-decoration: none; display: block; }
    Latest booking logic stays in the pages; this layer only defines presentation.
    ============================================================ */
 .member-reservation,.member-my-reservations { background: var(--bg); color: var(--ink); }
-.resv-page-head { padding: 32px var(--page-gutter) 22px; }
+/* 릴리스 폴리시 배치 7차(2026-09-17) — 실기기 재신고: 예약 화면 상단 "예약" 제목이
+   스크롤 없이 첫 페인트부터 상태바와 겹침. 근본 원인: 이 selector는 .header/
+   .back-header(6차 배치에서 safe-area+sticky를 고친 공용 헤더 계약)와 완전히 별개의
+   전용 클래스라 6차 배치의 감사·수정 대상에서 아예 빠져 있었다(app/reservation/
+   page.tsx만 쓰는 단독 selector, 다른 화면이 재사용하지 않아 발견이 늦어짐) —
+   safe-area 토큰 자체가 한 번도 없었음. .header와 동일한 계약(sticky 고정 +
+   max(Npx, var(--safe-top)) + 배경색)을 그대로 적용. */
+.resv-page-head { position: sticky; top: 0; z-index: 15; background: var(--bg); padding: max(32px, var(--safe-top)) var(--page-gutter) 22px; }
 .resv-page-head h1 { margin: 0; font-size: 30px; line-height: 1.08; font-weight: 720; letter-spacing: -.035em; }
 .booking-steps { display: flex; align-items: flex-start; padding: 0 var(--page-gutter) 26px; color: var(--ink-soft); }
 .booking-step { min-width: 62px; display: grid; justify-items: center; gap: 7px; font-size: 11px; }
@@ -4248,7 +4283,7 @@ a.membership-card { text-decoration: none; display: block; }
 
 /* Batch 7A: manager home, members, notifications and more */
 .manager-home-v2{background:var(--bg)}
-.manager-home-v2 .mgr-mode-bar{padding:22px var(--page-gutter) 14px;border-bottom:0}.manager-home-v2 .mgr-mode-label{font-size:13px;font-weight:750}.manager-home-v2 .mgr-mode-switch{min-height:40px;display:inline-flex;align-items:center;padding:0 13px;border:1px solid var(--line);border-radius:999px;font-size:12px;font-weight:650}
+.manager-home-v2 .mgr-mode-bar{padding:max(22px, var(--safe-top)) var(--page-gutter) 14px;border-bottom:0}.manager-home-v2 .mgr-mode-label{font-size:13px;font-weight:750}.manager-home-v2 .mgr-mode-switch{min-height:40px;display:inline-flex;align-items:center;padding:0 13px;border:1px solid var(--line);border-radius:999px;font-size:12px;font-weight:650}
 .manager-home-v2 .center-switcher{padding:0 var(--page-gutter) 18px;gap:8px}.manager-home-v2 .center-chip{min-height:44px;padding:0 15px;border:1px solid var(--line);border-radius:14px;background:transparent}.manager-home-v2 .center-chip.on{border-color:var(--ink);background:var(--ink);color:var(--bg)}
 .manager-today-overview{margin:0 var(--page-gutter) 22px;padding:20px 0;border-block:1px solid var(--line)}
 .manager-today-head{display:flex;align-items:end;justify-content:space-between;margin-bottom:16px}.manager-today-head div{display:flex;align-items:baseline;gap:8px}.manager-today-head span{font-size:17px;font-weight:750}.manager-today-head b,.manager-today-head>a{color:var(--ink-soft);font-size:11px;font-weight:650}

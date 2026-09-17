@@ -43,6 +43,32 @@ const CATEGORY_IMAGES: Record<string, string> = {
   테니스: "/icons/categories/tennis.png",
 };
 
+// 릴리스 폴리시 배치 7차(2026-09-17) — 성능 조사: 이 앱은 Next.js App Router라 레이아웃
+// (BottomNav 등)은 탭 전환 사이 유지되지만, 페이지 컴포넌트 자체(이 Home())는 다른 탭에
+// 갔다가 돌아올 때마다 매번 새로 마운트된다(App Router의 기본 동작, 버그 아님) — 그래서
+// "예약" 탭에 갔다가 "홈"으로 돌아올 때마다 아래 두 useEffect가 처음부터 다시 실행돼
+// 센터/클래스/배너/카테고리 목록이 잠깐 비었다가 다시 채워지는 게 매번 보였다("탭
+// 진입 시 순간적으로 다시 그려지는 느낌"의 실제 원인 중 하나). 두 개의 모듈 레벨 캐시로
+// 데이터 정확성은 그대로 유지하면서(항상 새로 fetch해서 갱신함) 재진입 시에만 마지막
+// 결과를 즉시 먼저 보여준다:
+//  1) homeDataCache — 센터/클래스/배너/카테고리 목록. TTL 안에서 재진입하면 그 값을
+//     먼저 화면에 채운 뒤, 그래도 항상 백그라운드로 새로 fetch해서 최신화한다.
+//  2) lastKnownPosition — GPS 위치. 매번 navigator.geolocation.getCurrentPosition()을
+//     기다리면(최대 4초 타임아웃) 센터 목록 fetch 자체가 그만큼 늦게 "시작"됐다(lat/lng를
+//     구하고 나서야 Promise.all을 시작하는 구조라 매 재진입마다 최대 4초를 그냥 날렸을
+//     수 있음) — 마지막으로 구한 위치가 있으면 그걸 즉시 써서 fetch를 바로 시작하고,
+//     최신 위치는 백그라운드로만 갱신해 다음 재진입 때 반영한다. 권한 프롬프트 자체는
+//     최초 1회만 뜨는 브라우저 표준 동작이라 이 캐시와 무관.
+let homeDataCache: {
+  centers: HomeCenter[];
+  classes: HomeClass[];
+  banners: HomeBanner[];
+  categories: ServiceCategory[];
+  at: number;
+} | null = null;
+const HOME_CACHE_TTL_MS = 30_000;
+let lastKnownPosition: { lat: number; lng: number } | null = null;
+
 export default function Home() {
   const [centers, setCenters] = useState<HomeCenter[]>([]);
   const [classes, setClasses] = useState<HomeClass[]>([]);
@@ -126,16 +152,36 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    // 탭을 옮겼다 홈으로 돌아왔을 때(TTL 이내) 마지막 결과를 먼저 보여줘 목록이 잠깐
+    // 비었다 채워지는 게 안 보이게 한다 — 아래에서 항상 새로 fetch하므로 데이터
+    // 정확성에는 영향 없다(자세한 설명은 파일 상단 homeDataCache 주석 참고).
+    if (homeDataCache && Date.now() - homeDataCache.at < HOME_CACHE_TTL_MS) {
+      setCenters(homeDataCache.centers);
+      setClasses(homeDataCache.classes);
+      setBanners(homeDataCache.banners);
+      setCatList(homeDataCache.categories);
+      setLoading(false);
+    }
+
     (async () => {
-      // 위치 권한 시도 (거부해도 그냥 최신순)
-      let lat: number | undefined, lng: number | undefined;
-      try {
-        const pos = await new Promise<GeolocationPosition>((res, rej) => {
-          if (!navigator.geolocation) return rej();
-          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 4000 });
-        });
-        lat = pos.coords.latitude; lng = pos.coords.longitude;
-      } catch { /* 위치 거부/실패 → 최신순 */ }
+      // 위치 권한 시도 (거부해도 그냥 최신순). 마지막으로 구했던 위치가 있으면 그걸
+      // 즉시 써서 센터 fetch를 바로 시작하고(매 재진입마다 최대 4초 기다리지 않음),
+      // 최신 위치는 아래에서 백그라운드로만 다시 구해 다음 재진입에 반영한다.
+      let lat: number | undefined = lastKnownPosition?.lat;
+      let lng: number | undefined = lastKnownPosition?.lng;
+      const freshPositionPromise = new Promise<GeolocationPosition>((res, rej) => {
+        if (!navigator.geolocation) return rej();
+        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 4000 });
+      })
+        .then((pos) => {
+          lastKnownPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          return lastKnownPosition;
+        })
+        .catch(() => null); // 위치 거부/실패 → 최신순(또는 캐시된 마지막 위치)
+      if (lat == null || lng == null) {
+        const fresh = await freshPositionPromise;
+        if (fresh) { lat = fresh.lat; lng = fresh.lng; }
+      }
 
       try {
         // 릴리스 폴리시 배치(2026-09-14, 3차) — fetchMyUpcomingClasses()가 원래 위 4개
@@ -150,6 +196,7 @@ export default function Home() {
         setClasses(cl);
         setBanners(bn);
         setCatList(ct);
+        homeDataCache = { centers: cs, classes: cl, banners: bn, categories: ct, at: Date.now() };
         const upcoming = await upcomingPromise;
         if (upcoming) setMyUpcoming(upcoming);
       } catch {
