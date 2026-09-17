@@ -1,5 +1,46 @@
 # CHANGELOG
 
+## 2026-09-18 — Business Scenario E2E: 대기 자동 승격(SCN-P0-20~25) 실제 검증
+
+직전 자동 QA Foundation 배치(`07532c1`) 구조를 그대로 재사용해(새 인프라 중복 생성
+없음) `tests/integration/scenarios/`에 공용 레이어(types/reporter/invariants/
+actors/registry)를 추가하고, 그 위에 그룹 수업 정원/대기 자동 승격 플로우(SCN-P0-20
+~25)를 실제 라이브 dev Supabase에 대해 작성·실행해 PASS 확인(`test-results/
+business-scenarios/*.json`). 앱/DB 로직은 전혀 건드리지 않음 — 기존 RPC
+(`reserve_class`/`cancel_reservation`)를 있는 그대로 호출해서 검증만 함.
+
+- **안전성 감사 먼저(요청 Section 0)**: 별도 QA/staging Supabase 없음(`.env.local`/
+  `.env.test.local`이 같은 프로젝트) 확인. 다만 기존 `tests/integration/`(43개 파일)이
+  이미 같은 공유 dev DB에 전용 테스트 계정/`"통합테스트센터-%"` 패턴 + 자가치유
+  정리로 안전하게 쓰기 작업을 해온 확립된 관례가 있어, 그 위에 얇게 얹는 방식으로
+  진행(새 Supabase 프로젝트/SQL/RLS 변경 없음).
+- **실측으로 발견한 버그성 사실 2건(추측 아님, 프로덕션 코드 수정 안 함, "BUG FOUND"로만
+  보고)**: (1) 루트의 `reservation_functions.sql`이 더 이상 실제 배포본과 다름 —
+  진짜 `reserve_class()`는 여러 `add_*/fix_*.sql`이 계속 `create or replace`해왔고,
+  `center_settings.waitlist_weekly_limit`이 0(schema 기본값)이면 대기예약 자체를
+  거부한다. 게다가 `tests/integration/setup.ts`의 `resetStaleTestCenterSettings()`가
+  매 테스트 파일 시작마다 이 값을 0으로 되돌리므로, 대기예약을 검증하려는 테스트는
+  매번 명시적으로 켜야 한다(새 SQL 아님 — 기존 fixture admin 클라이언트로 기존
+  컬럼값만 설정). (2) `memberships` INSERT는 매니저의 `customer.member.issue_pass`
+  권한이 있어야 통과한다(`fix_membership_rls.sql`) — 일반 회원 세션으로는 최초 발급이
+  실패한다. 기존 `createTestMembership()`을 회원 세션 직후 호출하는 듯 보이는 기존
+  테스트 파일들은 해당 (profile,center) 조합이 이전 실행에 이미 있어 admin(update)
+  분기를 타서 우연히 통과해온 것으로 보임 — 새 파일은 이 우연에 기대지 않음.
+- **3번째/4번째 예약 주체(memberC/D) 설계**: 새 계정/Secret을 만들지 않고, 기존
+  `TEST_USER_A/B` 계정 안에 앱이 실제로 지원하는 "가족/추가 프로필" 기능
+  (`lib/profiles.ts`)으로 서브 프로필을 만들어 충당 — capacity/waitlist는 profile_id
+  단위로 동작해 검증 목적에 완전히 부합.
+- **invariant 설계 보정**: `cancel_reservation()` 실제 본문 확인 결과, 대기 승격 시
+  나머지 대기자의 `waitlist_order` 값은 재정렬되지 않음(승격자만 null) — "waitlist
+  순번 재정렬"을 문자 그대로 구현하면 실제 코드와 안 맞는 거짓 실패가 나서, "중복
+  없음 + ORDER BY로 다음 대상 정확히 복원 가능"만 검증하도록 조정.
+- **npm 스크립트 추가**: `qa:business:p0`/`qa:business:p0p1`/`qa:business:all`
+  (`vitest -t` 필터로 우선순위별 실행).
+- **남은 범위**: P1 동시성/경쟁, 날짜 경계, 관리자↔회원 동시 상태, P2 UI/권한/결제/
+  알림/캐시(특히 7차 배치 홈 TTL 캐시) 대부분 미착수 — `tests/integration/
+  scenarios/registry.ts`에 시나리오별 상태(`implemented`/`covered-by-existing`/
+  `not-automated`/`blocked`)를 정직하게 기록, `docs/TODO.md` P1-46 참고.
+
 ## 2026-09-18 — 자동 QA 인프라 구축: iOS XCUITest + Android Espresso 기반 마련
 
 앱 기능은 전혀 안 건드리고, 핵심 사용자 플로우(탭 전환, 회원/관리자 모드, 검색,

@@ -1333,6 +1333,16 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
+### P1-46. (신규, 2026-09-18) Business Scenario E2E — Phase 1(P0 대기승격) 완료, Phase 2~4 남음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1(구조는 안정화됨, 남은 시나리오 구현이 다음 배치 범위) |
+| 현재 상태 | **Phase 1만 완료.** `tests/integration/scenarios/`에 얇은 공용 레이어(types/reporter/invariants/actors/registry)를 만들고, 그 위에 SCN-P0-20~25(정원 이내/도달/초과/대기 자동 승격/다중 대기 순서/대기자 자가취소)를 실제 라이브 dev Supabase에 대해 실행해 PASS 확인(`test-results/business-scenarios/*.json`). 나머지(P1 동시성/경쟁, 날짜 경계, 관리자↔회원 동시 상태, P2 UI/캐시/알림 등)는 `registry.ts`에 `not-automated`/`blocked`로 정직하게 표시만 해두고 아직 구현 안 함. |
+| 실측으로 발견한 중요 사실(2개) | (1) 저장소 루트의 `reservation_functions.sql`은 더 이상 실제 배포본과 같지 않다 — 실제 `reserve_class()`는 여러 `add_*/fix_*.sql`이 `create or replace`로 덮어써 왔고, `center_settings.waitlist_weekly_limit=0`(schema 기본값)이면 정원 초과 시 대기예약 자체를 거부한다("이 센터는 대기예약을 사용하지 않아요", 실제 RPC 호출로 재현). `tests/integration/setup.ts`의 `resetStaleTestCenterSettings()`가 매 테스트 파일 시작마다 이 값을 의도적으로 0으로 되돌리므로, 대기예약을 검증하는 새 테스트는 매번 명시적으로 이 값을 올려야 한다(waitlist-promotion.test.ts에서 처리함 — 새 SQL 아님, 기존 fixture admin 클라이언트로 기존 컬럼 값만 세팅). (2) `memberships` INSERT는 `fix_membership_rls.sql`/실제 배포본 기준 `has_permission(center_id,'customer.member.issue_pass')`(매니저 전용)가 있어야 통과한다 — 일반 회원 세션으로는 최초 발급이 실패한다. 기존 `createTestMembership()`을 회원 세션 직후 호출하는 듯 보이는 기존 파일들은, 해당 (profile,center) 조합이 이전 실행에서 이미 존재해 매번 admin(update) 분기를 타서 우연히 통과했던 것으로 보인다(최초 1회 생성 시점은 추적 안 됨) — 새 파일은 이 우연에 기대지 않고 반드시 매니저 세션에서 발급한다. |
+| 남은 작업 | Phase 2(P1 동시성/경쟁 — 특히 `unique_active_reservation` UNIQUE INDEX로 이미 구조적 보장되는 P1-01/02 확인 테스트, P1-03~07 실제 경쟁 시나리오), Phase 3(P1 날짜 경계는 `calc_deadline` 실제 구현 확인 후, P2 UI/권한/알림/캐시 — 특히 Batch 7의 홈 TTL 캐시를 직접 겨냥하는 P2-60~64가 고가치), Phase 4(iOS/Android 대표 세트를 기존 `AppUITests`/`androidTest`에 추가). `.github/workflows/mobile-ui-qa.yml`에 시나리오 등급 선택 `workflow_dispatch` 옵션 추가도 미착수. |
+| 근거 파일 | `tests/integration/scenarios/{types,reporter,invariants,actors,registry}.ts`, `tests/integration/scenarios/waitlist-promotion.test.ts`, `test-results/business-scenarios/SCN-P0-2{3,4,5}.json` |
+
 ### P2-39. (신규, 2026-09-18) 자동 QA 인프라 — 실기기/에뮬레이터 실행 + CI 활성화 후속 작업
 
 | 필드 | 내용 |
