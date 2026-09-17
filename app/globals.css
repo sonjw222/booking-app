@@ -4780,3 +4780,187 @@ textarea:focus-visible,
 .app-date-week span:last-child  { color: var(--info); }
 .app-date-grid > button:not(.on):nth-child(7n+1) { color: var(--danger); }
 .app-date-grid > button:not(.on):nth-child(7n)   { color: var(--info); }
+
+/* ============================================================
+   Responsive workspace shell
+   mwhabit.com stays one domain and one Next.js app. Mobile remains the
+   source-of-truth UI; viewport width alone progressively adds navigation,
+   workspace panels and denser information layouts. Do not replace these
+   media queries with device/OS detection or separate mobile/desktop routes.
+   ============================================================ */
+.member-desktop-nav,
+.workspace-sidebar { display: none; }
+
+@media (min-width: 768px) {
+  :root {
+    --workspace-rail: 88px;
+    --workspace-sidebar: 88px;
+    --workspace-content-max: 1440px;
+    --workspace-gutter: clamp(24px,3vw,44px);
+  }
+  .member-desktop-nav,
+  .workspace-sidebar {
+    position: fixed; inset: 0 auto 0 0; z-index: 50;
+    width: var(--workspace-sidebar); display: flex; flex-direction: column; gap: 4px;
+    padding: max(20px,var(--safe-top)) 12px max(18px,var(--safe-bottom));
+    border-right: 1px solid var(--line); background: color-mix(in srgb,var(--bg) 96%,transparent);
+    box-shadow: 8px 0 28px rgba(20,20,20,.025); backdrop-filter: blur(18px);
+  }
+  .desktop-brand {
+    min-height: 54px; display: flex; align-items: center; justify-content: center; gap: 11px;
+    margin-bottom: 14px; color: var(--ink);
+  }
+  .desktop-brand-mark {
+    width: 40px; height: 40px; flex: 0 0 40px; display: grid; place-items: center;
+    border-radius: 13px; background: var(--brand); color: var(--brand-ink-strong);
+    font-size: 18px; font-weight: 850; letter-spacing: -.04em;
+  }
+  .desktop-brand > span:last-child,
+  .desktop-nav-item > span:not(.desktop-nav-badge),
+  .desktop-nav-section,
+  .desktop-nav-note,
+  .workspace-sidebar-mode > span { display: none; }
+  .desktop-brand b,.desktop-brand small { display: block; }
+  .desktop-brand b { font-size: 18px; letter-spacing: -.03em; }
+  .desktop-brand small { margin-top: 2px; color: var(--ink-soft); font-size: 11px; font-weight: 600; }
+  .desktop-nav-item,.workspace-sidebar-mode {
+    position: relative; min-height: 52px; display: flex; align-items: center; justify-content: center;
+    gap: 11px; padding: 0 12px; border-radius: 14px; color: var(--ink-soft);
+    font-size: 13.5px; font-weight: 680; transition: background 150ms ease,color 150ms ease;
+  }
+  .desktop-nav-item:hover,.workspace-sidebar-mode:hover { background: var(--surface); color: var(--ink); }
+  .desktop-nav-item.active { background: var(--brand-soft); color: var(--brand-ink); }
+  .desktop-nav-item svg,.workspace-sidebar-mode svg { flex: 0 0 auto; }
+  .desktop-nav-badge {
+    position: absolute; top: 7px; right: 7px; min-width: 18px; height: 18px;
+    display: grid; place-items: center; padding: 0 5px; border: 2px solid var(--bg);
+    border-radius: 999px; background: var(--danger); color: #fff; font-size: 9px; font-weight: 800;
+  }
+  .desktop-nav-spacer { flex: 1; }
+  .workspace-sidebar-scroll {
+    min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 4px;
+    overflow-y: auto; scrollbar-width: thin;
+  }
+  .workspace-sidebar-mode { margin-top: 10px; border: 1px solid var(--line); }
+
+  body:has(> .member-desktop-nav) .app-shell {
+    width: calc(100% - var(--workspace-rail)); max-width: 1120px;
+    margin-left: max(var(--workspace-rail),calc((100vw - var(--workspace-rail) - 1120px)/2 + var(--workspace-rail)));
+    margin-right: auto; padding-bottom: 40px;
+  }
+  body:has(> .member-desktop-nav) .bottom-nav { display: none; }
+  body:has(> .member-desktop-nav) .header,
+  body:has(> .member-desktop-nav) .back-header,
+  body:has(> .member-desktop-nav) .noti-head,
+  body:has(> .member-desktop-nav) .inquiry-head,
+  body:has(> .member-desktop-nav) .mypage-titlebar,
+  body:has(> .member-desktop-nav) .resv-page-head { padding-left: var(--workspace-gutter); padding-right: var(--workspace-gutter); }
+  .member-home .header { padding-bottom: 20px; }
+  .member-home .hero { margin-inline: var(--workspace-gutter); min-height: 190px; padding-inline: 30px; }
+  .member-home .hero h1 { max-width: 60%; font-size: clamp(24px,3vw,34px); }
+  .member-home .home-value-line,.member-home .home-category-head,.member-home .home-class-head { margin-inline: var(--workspace-gutter); }
+  .member-home .cat-grid { grid-template-columns: repeat(auto-fit,minmax(92px,1fr)); gap: 18px; padding-inline: var(--workspace-gutter); }
+  .member-home .cat-icon { width: 68px; height: 68px; }
+  .member-home .home-class-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; padding-inline: var(--workspace-gutter); }
+  .member-home .home-class-row { min-height: 112px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--card-bg); }
+  .member-home .home-footer { padding-inline: var(--workspace-gutter); }
+
+  .manager-v3,.admin-v3 {
+    width: 100%; max-width: none; margin: 0; padding-left: var(--workspace-sidebar); background: var(--surface);
+  }
+  .manager-v3 > .manager-chrome,.admin-v3 > .admin-chrome { padding-left: var(--workspace-gutter); padding-right: var(--workspace-gutter); }
+  .manager-v3 > .manager-chrome {
+    min-height: 82px; display: flex; align-items: center; background: color-mix(in srgb,var(--bg) 95%,transparent);
+  }
+  .manager-chrome-main { width: 100%; }
+  .manager-chrome-main > a,.admin-chrome > a { width: auto; min-width: 42px; padding: 0 13px; gap: 8px; }
+  .manager-chrome-main > a span,.admin-chrome > a span { position: static; width: auto; height: auto; overflow: visible; clip: auto; font-size: 12px; font-weight: 700; }
+  .admin-v3 > .admin-chrome { min-height: 82px; align-items: center; }
+  .admin-chrome .app-chrome-title h1 { font-size: 24px; }
+  .manager-v3-content,.admin-v3-content {
+    width: 100%; max-width: var(--workspace-content-max); margin: 0 auto; padding: 24px var(--workspace-gutter) 48px;
+  }
+  .manager-v3-content > .app-shell,.admin-v3-content > .app-shell {
+    width: 100%; max-width: none; min-height: calc(100dvh - 154px); padding-bottom: 40px!important;
+    overflow: hidden; border: 1px solid var(--line); border-radius: 22px; background: var(--bg);
+    box-shadow: 0 12px 40px rgba(20,20,20,.045);
+  }
+  .manager-v3 > .bottom-nav { display: none; }
+  .manager-v3-content [class~="manager-menu-end-spacer"] { display: none; }
+  .manager-v3-content .sheet-overlay,.admin-v3-content .sheet-overlay { align-items: stretch; justify-content: flex-end; }
+  .manager-v3-content .sheet,.admin-v3-content .sheet {
+    width: min(520px,calc(100vw - var(--workspace-sidebar))); max-width: 520px; max-height: 100dvh;
+    height: 100%; margin: 0; padding: 22px 26px max(28px,var(--safe-bottom)); border-left: 1px solid var(--line); border-radius: 0;
+  }
+  .manager-v3-content .sheet:before,.admin-v3-content .sheet:before { display: none; }
+  .manager-v3-content .sheet-title,.admin-v3-content .sheet-title { top: -22px; margin-inline: -26px; padding: 22px 26px 16px; }
+
+  .manager-v3-content .pass-list,.manager-v3-content .order-list,.manager-v3-content .announce-list,
+  .manager-v3-content .mgr-review-list,.manager-v3-content .profile-list,.admin-v3-content .profile-list,
+  .manager-v3-content .room-card-list,.manager-v3-content .assignment-log-list {
+    grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; padding: 16px 24px 32px;
+  }
+  .manager-v3-content .pass-card,.manager-v3-content .order-row,.manager-v3-content .announce-item,
+  .manager-v3-content .mgr-review,.manager-v3-content .profile-item,.admin-v3-content .profile-item,
+  .manager-v3-content .room-card,.manager-v3-content .assignment-log {
+    padding: 17px; border: 1px solid var(--line); border-radius: 16px; background: var(--card-bg);
+  }
+  .manager-v3-content .mem-toolbar { display: grid; grid-template-columns:minmax(260px,1fr) auto; align-items:center; gap: 12px; }
+  .manager-v3-content .mem-list { padding-inline: 24px; }
+  .manager-v3-content .mem-row { display: grid; grid-template-columns: minmax(180px,1.4fr) minmax(140px,1fr) auto; align-items: center; min-height: 72px; padding-inline: 10px; }
+  .manager-v3-content .noti-list { padding-inline: 24px; }
+  .manager-v3-content .noti-row { min-height: 82px; }
+  .manager-v3-content .date-range { grid-template-columns: repeat(2,minmax(180px,260px)); }
+  .manager-home-v2 .manager-dashboard-block { padding-bottom: 18px; }
+  .manager-home-v2 .manager-dashboard-block .period-tabs { padding-inline: 24px; }
+  .manager-home-v2 .manager-dashboard-block .dash-cards { grid-template-columns: repeat(3,minmax(0,1fr)); padding-inline: 24px; }
+  .manager-home-v2 .manager-today-classes .daylist { min-height: 0; }
+  .manager-home-v2 .manager-menu-panel { padding: 0 24px 28px; }
+  .manager-home-v2 .manager-menu-panel > .menu-section-label { padding-inline: 0; }
+  .manager-home-v2 .manager-menu-panel > .list-row { margin-inline: 0; }
+  .manager-v3-content .sales-summary { margin-inline: 24px; }
+  .manager-v3-content .sales-breakdown,.manager-v3-content .sales-list { margin-inline: 24px; }
+  .manager-v3-content .sales-row { display: grid; grid-template-columns: minmax(220px,1.5fr) minmax(120px,.7fr) auto; align-items: center; gap: 18px; }
+  .admin-v3-content .admin-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; padding: 20px 24px 36px; }
+  .admin-v3-content .admin-card { margin: 0; }
+}
+
+@media (min-width: 1120px) {
+  :root { --workspace-sidebar: 244px; --workspace-rail: 244px; }
+  .member-desktop-nav,.workspace-sidebar { padding-inline: 16px; }
+  .desktop-brand { justify-content: flex-start; padding-inline: 9px; }
+  .desktop-brand > span:last-child,.desktop-nav-item > span:not(.desktop-nav-badge),
+  .desktop-nav-section,.desktop-nav-note,.workspace-sidebar-mode > span { display: block; }
+  .desktop-nav-section { margin: 18px 12px 5px; color: var(--ink-soft); font-size: 10.5px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+  .desktop-nav-item,.workspace-sidebar-mode { justify-content: flex-start; }
+  .desktop-nav-badge { position: static; margin-left: auto; border: 0; }
+  .desktop-nav-note { padding: 14px 12px 4px; color: var(--ink-soft); font-size: 11px; line-height: 1.55; }
+}
+
+@media (min-width: 1280px) {
+  .manager-home-v2 { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(320px,.85fr); align-content: start; }
+  .manager-home-v2 > .center-switcher,.manager-home-v2 > .manager-today-overview { grid-column: 1 / -1; }
+  .manager-home-v2 > .manager-dashboard-block,.manager-home-v2 > .manager-today-classes { grid-column: 1; }
+  .manager-home-v2 > .manager-menu-panel { grid-column: 2; grid-row: 3 / span 2; border-left: 1px solid var(--line); }
+  .manager-home-v2 .dash-cards { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .manager-home-v2 .dash-daily { min-height: 210px; }
+  .manager-classes-v2 { display: grid; grid-template-columns: minmax(500px,1.08fr) minmax(380px,.92fr); align-content: start; }
+  .manager-classes-v2 > .back-header,
+  .manager-classes-v2 > .unplaced-banner,
+  .manager-classes-v2 > .assign-banner { grid-column: 1 / -1; }
+  .manager-classes-v2 > .manager-calendar-panel { grid-column: 1; padding: 18px 20px 28px; border-right: 1px solid var(--line); }
+  .manager-classes-v2 > .manager-agenda-panel { grid-column: 2; min-width: 0; padding: 18px 20px 28px; }
+  .manager-classes-v2 .manager-calendar-panel .cal-header { padding-inline: 0; }
+  .manager-classes-v2 .manager-calendar-panel .cal-grid { padding-inline: 0; }
+  .manager-classes-v2 .manager-agenda-panel > .menu-section-label { padding: 8px 0 12px; font-size: 13px; }
+  .manager-classes-v2 .manager-agenda-panel .daylist { max-height: calc(100dvh - 285px); overflow-y: auto; }
+  .manager-classes-v2 .fab-btn { left: auto; right: max(34px,calc((100vw - var(--workspace-sidebar) - var(--workspace-content-max))/2 + 34px)); transform: none; }
+  .member-reservation { display: grid; grid-template-columns: minmax(430px,.9fr) minmax(460px,1.1fr); align-content: start; }
+  .member-reservation > .resv-page-head,.member-reservation > .booking-steps,.member-reservation > .center-filter-banner { grid-column: 1 / -1; }
+  .member-reservation > .cal-header,.member-reservation > .cal-grid { grid-column: 1; }
+  .member-reservation > .daylist-header,.member-reservation > .profile-picker,
+  .member-reservation > .reservation-list-controls,.member-reservation > .holiday-notice,.member-reservation > .daylist { grid-column: 2; }
+  .member-reservation > .daylist-header { margin-top: 0; border-top: 0; }
+  .member-reservation > .daylist { max-height: calc(100dvh - 300px); overflow-y: auto; }
+  .member-home .home-class-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}

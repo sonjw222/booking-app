@@ -87,6 +87,39 @@ export default function BottomNav({ initialHasUsable = null }: { initialHasUsabl
   return (
     <>
       <NotificationToaster />
+      <aside className="member-desktop-nav" aria-label="회원 데스크톱 메뉴">
+        <Link className="desktop-brand" href="/" replace aria-label="모하빗 홈">
+          <span className="desktop-brand-mark">M</span>
+          <span><b>모하빗</b><small>나에게 맞는 움직임</small></span>
+        </Link>
+        <div className="desktop-nav-section">둘러보기</div>
+        <Link className={`desktop-nav-item ${is("/") ? "active" : ""}`} href="/" replace>
+          <UiIcon name="home" /><span>홈</span>
+        </Link>
+        {showMembershipTabs && (
+          <Link className={`desktop-nav-item ${is("/reservation") ? "active" : ""}`} href="/reservation" replace>
+            <UiIcon name="calendar" /><span>예약</span>
+          </Link>
+        )}
+        {showMembershipTabs && (
+          <Link className={`desktop-nav-item ${isMyReservations ? "active" : ""}`} href="/my-reservations" replace>
+            <UiIcon name="list" /><span>내 예약</span>
+          </Link>
+        )}
+        <div className="desktop-nav-section">내 활동</div>
+        <Link className={`desktop-nav-item ${is("/notifications") ? "active" : ""}`} href="/notifications" replace>
+          <UiIcon name="bell" /><span>알림</span>
+          {unread > 0 && <span className="desktop-nav-badge">{unread > 99 ? "99+" : unread}</span>}
+        </Link>
+        <Link className={`desktop-nav-item ${isMypage ? "active" : ""}`} href="/mypage" replace>
+          <UiIcon name="user" /><span>마이페이지</span>
+        </Link>
+        <Link className={`desktop-nav-item ${is("/search") ? "active" : ""}`} href="/search" replace>
+          <UiIcon name="search" /><span>센터 찾기</span>
+        </Link>
+        <div className="desktop-nav-spacer" />
+        <div className="desktop-nav-note">태블릿과 데스크톱에서는 더 넓은 화면으로 편하게 탐색할 수 있어요.</div>
+      </aside>
       {/* 릴리스 폴리시 배치(2026-09-14, 3차) — 실기기에서 탭 전환이 느리고 스켈레톤이
           반복되고 화면이 깜빡인다는 신고의 근본 원인은 이 nav가 <a href>라 클릭마다 전체
           문서를 서버에서 다시 받아왔기 때문이다(app/layout.tsx 주석에 있던 "이 앱은

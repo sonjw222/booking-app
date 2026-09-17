@@ -970,6 +970,7 @@ export default function ClassManagePage() {
         </div>
       )}
 
+      <section className="manager-calendar-panel" aria-label="수업 달력">
       {/* 월 이동 */}
       <div className="cal-header manager-cal-header">
         <div className="cal-month-nav">
@@ -1022,10 +1023,12 @@ export default function ClassManagePage() {
           );
         })}
       </div>
+      </section>
 
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
       {toast && <div className="toast">{toast}</div>}
 
+      <section className="manager-agenda-panel" aria-label="선택한 날짜의 수업">
       <div className="menu-section-label">{formatMonthDayWeekday(year, month, selectedDay)} 수업 ({dayClasses.length})</div>
 
       {holidayDates.has(`${year}-${pad2(month)}-${pad2(selectedDay)}`) && (
@@ -1118,6 +1121,7 @@ export default function ClassManagePage() {
           })}
         </div>
       )}
+      </section>
 
       {/* 하단 고정 등록 버튼 */}
       {!assignMode && <button className="fab-btn" onClick={openCreate}>+ 수업 등록</button>}

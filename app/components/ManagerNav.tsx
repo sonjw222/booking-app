@@ -68,6 +68,7 @@ export default function ManagerNav({ initialCanSeeMembers = null }: { initialCan
     if (resolved) setCachedCanSeeMembers(liveCanSeeMembers);
   }, [resolved, liveCanSeeMembers]);
   const canSeeMembers = resolved ? liveCanSeeMembers : (cachedCanSeeMembers ?? false);
+  const canSee = (permissionKey: string) => canSeeManagerMenu(isOwner, myPerms, permissionKey);
 
   useEffect(() => {
     let mounted = true;
@@ -102,6 +103,42 @@ export default function ManagerNav({ initialCanSeeMembers = null }: { initialCan
   return (
     <>
       <NotificationToaster />
+      <aside className="workspace-sidebar manager-sidebar" aria-label="센터 관리자 메뉴">
+        <a className="desktop-brand" href="/manager">
+          <span className="desktop-brand-mark">M</span>
+          <span><b>모하빗</b><small>센터 관리자</small></span>
+        </a>
+        <div className="workspace-sidebar-scroll">
+          <div className="desktop-nav-section">업무</div>
+          <a className={`desktop-nav-item ${pathname === "/manager" ? "active" : ""}`} href="/manager"><UiIcon name="grid" /><span>대시보드</span></a>
+          <Link className={`desktop-nav-item ${is("/manager/classes") ? "active" : ""}`} href="/manager/classes" replace><UiIcon name="calendar" /><span>수업·예약</span></Link>
+          {canSeeMembers && <Link className={`desktop-nav-item ${is("/manager/members") ? "active" : ""}`} href="/manager/members" replace><UiIcon name="users" /><span>회원</span></Link>}
+          <Link className={`desktop-nav-item ${is("/manager/notifications") ? "active" : ""}`} href="/manager/notifications" replace>
+            <UiIcon name="bell" /><span>알림</span>{unread > 0 && <span className="desktop-nav-badge">{unread > 99 ? "99+" : unread}</span>}
+          </Link>
+          {canSee("pass.sales.view") && <a className={`desktop-nav-item ${is("/manager/sales") ? "active" : ""}`} href="/manager/sales"><UiIcon name="receipt" /><span>매출·결제</span></a>}
+
+          <div className="desktop-nav-section">고객 관리</div>
+          {canSee("customer.lead.view") && <a className={`desktop-nav-item ${is("/manager/leads") ? "active" : ""}`} href="/manager/leads"><UiIcon name="message" /><span>상담고객</span></a>}
+          {canSee("customer.progress") && <a className={`desktop-nav-item ${is("/manager/progress") ? "active" : ""}`} href="/manager/progress/record"><UiIcon name="edit" /><span>진도 기록</span></a>}
+          {canSee("message.alimtalk.view") && <a className={`desktop-nav-item ${is("/manager/alimtalk") ? "active" : ""}`} href="/manager/alimtalk"><UiIcon name="megaphone" /><span>알림톡</span></a>}
+          {canSee("pass.order.view") && <a className={`desktop-nav-item ${is("/manager/orders") ? "active" : ""}`} href="/manager/orders"><UiIcon name="cart" /><span>주문</span></a>}
+          {canSee("board.notice.view") && <a className={`desktop-nav-item ${is("/manager/announcements") ? "active" : ""}`} href="/manager/announcements"><UiIcon name="megaphone" /><span>공지사항</span></a>}
+          {canSee("board.inquiry.view") && <a className={`desktop-nav-item ${is("/manager/inquiries") ? "active" : ""}`} href="/manager/inquiries"><UiIcon name="message" /><span>1:1 문의</span></a>}
+          {canSee("facility.review.view") && <a className={`desktop-nav-item ${is("/manager/reviews") ? "active" : ""}`} href="/manager/reviews"><UiIcon name="star" /><span>후기</span></a>}
+
+          <div className="desktop-nav-section">센터 설정</div>
+          {(canSee("pass.create") || canSee("pass.update")) && <a className={`desktop-nav-item ${is("/manager/membership-rules") ? "active" : ""}`} href="/manager/membership-rules"><UiIcon name="ticket" /><span>수강권</span></a>}
+          {canSee("pass.goods.view") && <a className={`desktop-nav-item ${is("/manager/goods") ? "active" : ""}`} href="/manager/goods"><UiIcon name="receipt" /><span>상품</span></a>}
+          {canSee("facility.staff.view") && <a className={`desktop-nav-item ${is("/manager/staff") ? "active" : ""}`} href="/manager/staff"><UiIcon name="shield" /><span>스태프·권한</span></a>}
+          {canSee("facility.info") && <a className={`desktop-nav-item ${is("/manager/center-info") ? "active" : ""}`} href="/manager/center-info"><UiIcon name="building" /><span>센터 정보</span></a>}
+          {canSee("facility.room") && <a className={`desktop-nav-item ${is("/manager/rooms") ? "active" : ""}`} href="/manager/rooms"><UiIcon name="building" /><span>룸 관리</span></a>}
+          {canSee("facility.operation") && <a className={`desktop-nav-item ${is("/manager/settings") ? "active" : ""}`} href="/manager/settings"><UiIcon name="settings" /><span>운영 설정</span></a>}
+          {isOwner && <a className={`desktop-nav-item ${is("/manager/subscription") ? "active" : ""}`} href="/manager/subscription"><UiIcon name="card" /><span>플랫폼 구독</span></a>}
+          {isOwner && <a className={`desktop-nav-item ${is("/manager/settlement") ? "active" : ""}`} href="/manager/settlement"><UiIcon name="bank" /><span>정산계좌</span></a>}
+        </div>
+        <a className="workspace-sidebar-mode" href="/"><UiIcon name="user" /><span>회원 화면으로 전환</span></a>
+      </aside>
       {/* 릴리스 폴리시 배치 6차(2026-09-15) — BottomNav와 동일한 이유로 replace(주석은
           BottomNav.tsx 참고). */}
       <nav className={`bottom-nav ${keyboardOpen ? "keyboard-hidden" : ""}`} aria-label="관리자 주요 메뉴">

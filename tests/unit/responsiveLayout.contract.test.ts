@@ -1,0 +1,70 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const root = resolve(__dirname, "../..");
+const read = (path: string) => readFileSync(resolve(root, path), "utf8");
+
+describe("responsive workspace layout contract", () => {
+  const css = read("app/globals.css");
+
+  it("keeps mobile as the base layout and enables tablet/desktop progressively", () => {
+    expect(css).toContain(".member-desktop-nav,\n.workspace-sidebar { display: none; }");
+    expect(css).toContain("@media (min-width: 768px)");
+    expect(css).toContain("@media (min-width: 1120px)");
+    expect(css).toContain("@media (min-width: 1280px)");
+    expect(css).toContain("--safe-top");
+    expect(css).toContain("--safe-bottom");
+  });
+
+  it("uses shared workspace variables instead of per-screen sidebar widths", () => {
+    expect(css).toContain("--workspace-sidebar");
+    expect(css).toContain("--workspace-content-max");
+    expect(css).toContain("padding-left: var(--workspace-sidebar)");
+    expect(css).toContain("max-width: var(--workspace-content-max)");
+  });
+
+  it("keeps one Next.js app and chooses layout by viewport width, never device sniffing", () => {
+    const layoutSources = [
+      "app/layout.tsx",
+      "app/manager/layout.tsx",
+      "app/admin/layout.tsx",
+      "app/components/BottomNav.tsx",
+      "app/components/ManagerNav.tsx",
+      "app/components/AdminNav.tsx",
+    ].map(read).join("\n");
+    expect(css).toContain("viewport width alone");
+    expect(layoutSources).not.toMatch(/navigator\.userAgent|userAgentData|isMobile|isTablet|isDesktop/);
+    expect(layoutSources).not.toMatch(/mobile\.mwhabit\.com|desktop\.mwhabit\.com|m\.mwhabit\.com/);
+  });
+
+  it("keeps bottom navigation on mobile and replaces it with wide navigation", () => {
+    const memberNav = read("app/components/BottomNav.tsx");
+    const managerNav = read("app/components/ManagerNav.tsx");
+    expect(memberNav).toContain('className="member-desktop-nav"');
+    expect(memberNav).toContain("<nav className={`bottom-nav");
+    expect(managerNav).toContain('className="workspace-sidebar manager-sidebar"');
+    expect(managerNav).toContain("canSeeManagerMenu");
+    expect(css).toContain("body:has(> .member-desktop-nav) .bottom-nav { display: none; }");
+    expect(css).toContain(".manager-v3 > .bottom-nav { display: none; }");
+  });
+
+  it("provides operator navigation and desktop drawer behavior", () => {
+    const adminLayout = read("app/admin/layout.tsx");
+    const adminNav = read("app/components/AdminNav.tsx");
+    expect(adminLayout).toContain("<AdminNav />");
+    expect(adminNav).toContain('aria-label="플랫폼 운영 메뉴"');
+    expect(css).toContain("align-items: stretch; justify-content: flex-end");
+    expect(css).toContain("border-radius: 0");
+  });
+
+  it("groups manager dashboard regions for stable multi-panel placement", () => {
+    const managerHome = read("app/manager/page.tsx");
+    const managerClasses = read("app/manager/classes/page.tsx");
+    expect(managerHome).toContain('className="manager-dashboard-block"');
+    expect(managerHome).toContain('className="manager-today-classes"');
+    expect(managerHome).toContain('className="manager-menu-panel"');
+    expect(managerClasses).toContain('className="manager-calendar-panel"');
+    expect(managerClasses).toContain('className="manager-agenda-panel"');
+  });
+});
