@@ -665,6 +665,21 @@ a { color: inherit; text-decoration: none; }
   display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800; flex: 0 0 auto;
 }
 .profile-item-info { flex: 1; min-width: 0; }
+/* 릴리스 폴리시 배치 8차(2026-09-18), 5번 — 운영자 "종목 관리" 목록의 아이콘(이모지
+   대체). .profile-avatar와 같은 자리·같은 크기감으로 맞춰 row height에 맞는 크기를
+   유지하고, 텍스트와 vertical-align이 자연스럽게 보이게 flex center 정렬. */
+.cat-row-icon {
+  width: 40px; height: 40px; flex: 0 0 auto; border-radius: 12px;
+  background: var(--surface-strong); display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.cat-row-icon img { width: 26px; height: 26px; object-fit: contain; }
+/* 5번 — "추가" 입력창 + 버튼 수직 중앙 정렬. .input-field 기본 margin-bottom(10px)이
+   align-items:center 기준을 아래로 밀던 원인이라 이 컨텍스트에서만 상쇄한다. 버튼
+   (.primary-btn.small) 자체 크기는 손대지 않음 — 좁은 iPhone에서도 두 요소가 같은
+   높이 축을 공유해 균형 있게 보인다. */
+.cat-add-row { display: flex; align-items: center; gap: 8px; }
+.cat-add-row .input-field { margin-bottom: 0; }
 .profile-item-name { font-size: 15px; font-weight: 800; display: flex; align-items: center; }
 .primary-badge {
   font-size: 10.5px; font-weight: 800; color: var(--accent); background: var(--accent-soft);
@@ -701,6 +716,21 @@ a { color: inherit; text-decoration: none; }
 }
 .mgr-mode-label { font-size: 13.5px; font-weight: 800; display: inline-flex; align-items: center; gap: 5px; }
 .mgr-mode-switch { font-size: 12px; font-weight: 700; opacity: 0.85; }
+
+/* 릴리스 폴리시 배치 8차(2026-09-18), 6번 — 센터 승인 관리 검색창. 기존 .input-field를
+   재사용하되(새 스타일 언어 안 만듦) 아이콘/clear 버튼을 얹기 위한 최소 wrapper. */
+.admin-center-search {
+  position: relative; display: flex; align-items: center;
+  margin: 4px var(--page-gutter) 0;
+}
+.admin-center-search > svg { position: absolute; left: 16px; color: var(--ink-soft); pointer-events: none; }
+.admin-center-search .input-field { padding-left: 40px; padding-right: 40px; margin-bottom: 0; }
+.admin-center-search-clear {
+  position: absolute; right: 8px; width: 28px; height: 28px; border-radius: 50%;
+  border: none; background: none; color: var(--ink-soft); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.admin-center-search-clear:active { background: var(--surface); }
 
 .center-switcher { display: flex; gap: 8px; padding: 14px var(--page-gutter) 6px; overflow-x: auto; }
 .center-chip {

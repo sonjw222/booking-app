@@ -7,7 +7,7 @@
   - is_platform_admin = true 인 계정만 접근 가능
 */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
 import {
@@ -25,6 +25,33 @@ const TAB_LABEL: Record<Tab, string> = {
   rejected: "반려됨",
 };
 
+// 릴리스 폴리시 배치 8차(2026-09-18), 6번 — 센터 검색. fetchCenters(status)가 이미 그
+// 탭(상태)의 센터 전체를 한 번에 불러오므로(페이지네이션 없음, 운영자 화면이라 규모가
+// 작음) server round-trip 없이 client-side filtering으로 처리한다(디바운스/이전 결과
+// 유지/전체 skeleton 재표시 같은 고민 자체가 필요 없음 — 이미 로드된 배열을 그냥
+// 걸러서 보여줄 뿐이라 매 keystroke가 사실상 공짜).
+// normalize: 대소문자 무시(사업자번호/전화 등 영문 포함 가능성 대비), 앞뒤 공백 제거,
+// 전화번호는 "-" 유무 차이를 흡수하려고 숫자만 남긴 버전도 같이 비교한다.
+export function normalizeSearchText(s: string): string {
+  return s.trim().toLowerCase();
+}
+export function digitsOnly(s: string): string {
+  return s.replace(/[^0-9]/g, "");
+}
+export function centerMatchesKeyword(c: PendingCenter, keyword: string): boolean {
+  const kw = normalizeSearchText(keyword);
+  if (!kw) return true;
+  const kwDigits = digitsOnly(keyword);
+  const textFields = [c.name, c.ownerName, c.address];
+  if (textFields.some((v) => v && normalizeSearchText(v).includes(kw))) return true;
+  // 전화번호/사업자번호는 "-" 유무가 갈릴 수 있어 숫자만 비교(검색어에 숫자가 있을 때만).
+  if (kwDigits.length > 0) {
+    const numberFields = [c.phone, c.ownerPhone, c.businessNumber];
+    if (numberFields.some((v) => v && digitsOnly(v).includes(kwDigits))) return true;
+  }
+  return false;
+}
+
 export default function AdminCentersPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [tab, setTab] = useState<Tab>("pending");
@@ -33,6 +60,14 @@ export default function AdminCentersPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // 6번 — 검색어는 탭(상태)과 독립적인 state라 탭을 바꿔도 유지되고, 검색어를 지워도
+  // 방금 고른 상태 탭은 그대로 유지된다(요구사항: "검색어=지워도 상태 filter 유지,
+  // 상태 변경해도 검색어 유지").
+  const [keyword, setKeyword] = useState("");
+  const filteredCenters = useMemo(
+    () => centers.filter((c) => centerMatchesKeyword(c, keyword)),
+    [centers, keyword]
+  );
 
   // 반려 사유 입력 시트
   const [rejectTarget, setRejectTarget] = useState<PendingCenter | null>(null);
@@ -152,6 +187,29 @@ export default function AdminCentersPage() {
 
       <div className="section-title" style={{ paddingTop: 14 }}>센터 승인 관리</div>
 
+      {/* 릴리스 폴리시 배치 8차(2026-09-18), 6-1/6-3 — 검색창을 제목 아래, 상태 탭
+          위에 배치(권장 레이아웃). 입력 즉시 반영(client-side filter라 debounce/버튼
+          자체가 불필요), 기존 다른 검색 input과 동일하게 .input-field 재사용. */}
+      <div className="admin-center-search">
+        <UiIcon name="search" size={16} />
+        <input
+          className="input-field"
+          placeholder="센터명, 대표자, 주소, 전화번호로 검색"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+        />
+        {keyword && (
+          <button
+            type="button"
+            className="admin-center-search-clear"
+            aria-label="검색어 지우기"
+            onClick={() => setKeyword("")}
+          >
+            <UiIcon name="close" size={14} />
+          </button>
+        )}
+      </div>
+
       {/* 상태 탭 */}
       <div className="center-switcher">
         {(Object.keys(TAB_LABEL) as Tab[]).map((t) => (
@@ -167,13 +225,16 @@ export default function AdminCentersPage() {
 
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
-      {centers.length === 0 ? (
+      {filteredCenters.length === 0 ? (
         <div className="daylist-empty" style={{ paddingTop: 40 }}>
-          {tab === "pending" ? "승인 대기중인 센터가 없어요" : `${TAB_LABEL[tab]} 센터가 없어요`}
+          {/* 6-4 — "필터 자체에 데이터가 없음"과 "검색어 때문에 없음"을 구분한다. */}
+          {keyword.trim()
+            ? `'${keyword.trim()}' 검색 결과가 없어요`
+            : tab === "pending" ? "승인 대기중인 센터가 없어요" : `${TAB_LABEL[tab]} 센터가 없어요`}
         </div>
       ) : (
         <div className="admin-list">
-          {centers.map((c) => (
+          {filteredCenters.map((c) => (
             <div key={c.id} className="admin-card">
               <div className="admin-card-head">
                 <div className="admin-center-name">{c.name}</div>
