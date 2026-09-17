@@ -105,6 +105,22 @@ export async function fetchReservationStatus(reservationId: string): Promise<{ s
   return { status: (data as any).status, waitlistOrder: (data as any).waitlist_order };
 }
 
+/*
+  Phase 2 하드닝 중 실측으로 발견한 이유로 추가: reserve_class()는 profile_id+center_id로
+  "expires_at ASC LIMIT 1"로 유효 수강권을 자동 선택한다(add_rolling_month_product_expiry.sql
+  본문 확인) — 즉 테스트가 방금 만든 fixture 수강권이 아니라, 공유 테스트 센터에 43개 기존
+  파일이 남겨둔 다른(더 일찍 만료되는) 유효 수강권이 실제로 선택/차감될 수 있다(실측 재현:
+  memberA의 경우 같은 센터에 수십 건의 leftover 수강권이 있었고 그중 일부가 실제로 먼저
+  선택됨). 그래서 "내가 만든 특정 membership row의 remaining_count"를 직접 단언하면 그
+  행이 애초에 안 쓰였을 때 거짓으로 통과할 수 있다 — 반드시 예약이 "실제로 사용한"
+  membership_id를 역추적해서 그 행을 검증해야 한다.
+*/
+export async function fetchReservationMembershipId(reservationId: string): Promise<string | null> {
+  const { data, error } = await supabase.from("reservations").select("membership_id").eq("id", reservationId).single();
+  if (error) throw new Error(`예약의 membership_id 조회 실패: ${error.message}`);
+  return (data as any).membership_id;
+}
+
 // 위 개별 invariant들을 한 번에 실행 — 시나리오 테스트가 끝난 뒤(steps 이후) 한 번씩
 // 호출해 "여러 시나리오가 공통으로 지켜야 하는 규칙"을 매번 재작성하지 않게 한다.
 export async function checkCoreInvariants(

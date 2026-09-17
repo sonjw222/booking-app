@@ -44,18 +44,18 @@ export const SCENARIOS: ScenarioMeta[] = [
   { id: "SCN-P0-24", title: "다중 대기 승격 순서(C→confirmed, D는 다음 순번 유지)", priority: "P0", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/waitlist-promotion.test.ts — PASS 확인(test-results/business-scenarios/SCN-P0-24.json)" },
   { id: "SCN-P0-25", title: "대기자 자가 취소(환급/승격 없음, 나머지 대기자 영향 없음)", priority: "P0", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/waitlist-promotion.test.ts — PASS 확인(test-results/business-scenarios/SCN-P0-25.json)" },
 
-  // ---- P1 중복/경쟁(§7) ----
-  { id: "SCN-P1-01", title: "더블클릭 → 중복 예약 방지", priority: "P1", supportedLayers: ["shared", "ios", "android"], status: "not-automated", reason: "schema.sql의 unique_active_reservation UNIQUE INDEX(class_id, profile_id where status in (confirmed,waitlisted))가 DB 레벨에서 이미 구조적으로 보장 — 다음 단계에서 확인 테스트만 추가하면 됨" },
-  { id: "SCN-P1-02", title: "동시 중복 요청 방지", priority: "P1", supportedLayers: ["shared"], status: "not-automated", reason: "P1-01과 동일 근거(unique_active_reservation)" },
-  { id: "SCN-P1-03", title: "마지막 1자리 동시 경쟁", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
+  // ---- P1 중복/경쟁(§7) — Phase 2에서 실제 동시성으로 구현·실행 확인 ----
+  { id: "SCN-P1-01", title: "더블클릭 → 중복 예약 방지", priority: "P1", supportedLayers: ["shared", "ios", "android"], status: "implemented", implementedIn: "tests/integration/scenarios/reservation-concurrency.test.ts(SCN-P1-01-02) — 같은 계정으로 독립된 두 client 세션에서 동시(Promise.all) reserve_class 호출, 실제 라이브 DB에서 PASS 확인(정확히 1건만 성공)" },
+  { id: "SCN-P1-02", title: "동시 중복 요청 방지", priority: "P1", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/reservation-concurrency.test.ts(SCN-P1-01-02) — P1-01과 동일 테스트로 함께 검증(같은 불변식)" },
+  { id: "SCN-P1-03", title: "마지막 1자리 동시 경쟁", priority: "P1", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/reservation-concurrency.test.ts — capacity=1, 서로 다른 두 회원이 동시 요청 → 정확히 1명 확정+1명 대기, PASS 확인" },
   { id: "SCN-P1-04", title: "취소/예약 동시 경쟁", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
-  { id: "SCN-P1-05", title: "이중 취소 요청 방지", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
+  { id: "SCN-P1-05", title: "이중 취소 요청 방지", priority: "P1", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/reservation-concurrency.test.ts — 같은 예약을 동시에 2번 취소 → 정확히 1회만 환급(실제 사용된 membership row의 remaining_count 델타로 검증), PASS 확인" },
   { id: "SCN-P1-06", title: "승격 직전 대기자 취소", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
-  { id: "SCN-P1-07", title: "승격 후보 동시 상태변화", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
+  { id: "SCN-P1-07", title: "승격 후보 동시 상태변화", priority: "P1", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/reservation-concurrency.test.ts — 대기자 1명뿐인 상태에서 확정자 2명이 동시 취소 → 정확히 1회만 승격(다른 하나는 waitlist_promoted:false로 자연스럽게 스킵됨, for update 락으로 직렬화됨을 실측 확인), PASS 확인" },
 
   // ---- P1 네트워크(§8) ----
-  { id: "SCN-P1-10", title: "예약 중 네트워크 끊김", priority: "P1", supportedLayers: ["shared"], status: "blocked", reason: "이 샌드박스에서 실제 원격 네트워크 단절을 재현할 방법이 없음 — RPC 자체의 서버측 원자성(단일 트랜잭션)으로 간접 보장되지만 클라이언트 재시도 UX까지는 검증 불가" },
-  { id: "SCN-P1-11", title: "성공 응답 유실(idempotency)", priority: "P1", supportedLayers: ["shared"], status: "blocked", reason: "unique_active_reservation이 재시도 시 중복 삽입을 DB 레벨에서 막아줌(간접 보장) — 클라이언트 재시도 흐름 자체는 이 배치 범위에서 미검증" },
+  { id: "SCN-P1-10", title: "예약 중 네트워크 끊김", priority: "P1", supportedLayers: ["shared"], status: "blocked", reason: "이 샌드박스에서 실제 원격 네트워크 단절을 재현할 방법이 없음 — 대신 그 실패가 우려하는 결과(재시도 시 중복)는 SCN-P1-11이 직접 검증함" },
+  { id: "SCN-P1-11", title: "성공 응답 유실(idempotency)", priority: "P1", supportedLayers: ["shared"], status: "implemented", implementedIn: "tests/integration/scenarios/reservation-concurrency.test.ts — 예약 성공 직후 동일 요청 재시도(retry) 시뮬레이션 → 재시도는 명시적으로 거부되고, 실제 사용된 membership의 remaining_count가 재시도 전후로 불변임을 델타로 검증, PASS 확인" },
   { id: "SCN-P1-12", title: "취소 응답 유실(중복 환급 방지)", priority: "P1", supportedLayers: ["shared"], status: "not-automated" },
   { id: "SCN-P1-13", title: "예약 중 앱 백그라운드", priority: "P1", supportedLayers: ["ios", "android"], status: "blocked", reason: "실 기기/시뮬레이터 자동화 범위(§19-20 대표 세트) 밖" },
   { id: "SCN-P1-14", title: "강제종료 후 재시작", priority: "P1", supportedLayers: ["ios", "android"], status: "blocked", reason: "P1-13과 동일" },
