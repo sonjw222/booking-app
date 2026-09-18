@@ -40,9 +40,11 @@ describe("responsive workspace layout contract", () => {
     expect(css).toContain("word-break: keep-all");
   });
 
-  it("gives authentication screens tablet cards and a desktop split layout", () => {
+  it("gives authentication screens a compact-web and desktop split layout", () => {
     expect(css).toContain("Responsive authentication workspace");
+    expect(css).toContain("@media (min-width: 600px)");
     expect(css).toContain(".auth-page-v2");
+    expect(css).toContain("grid-template-columns: minmax(220px,38%) minmax(0,62%)");
     expect(css).toContain("grid-template-columns: minmax(390px,42%) minmax(560px,58%)");
     expect(css).toContain(".auth-page-v2 .auth-panel.login");
     expect(css).toContain(".auth-page-v2 .auth-panel.signup");

@@ -5262,68 +5262,97 @@ textarea:focus-visible,
 
 /* ============================================================
    Responsive authentication workspace
-   Mobile keeps the native-sized stacked flow. Tablet becomes a centered
-   account card; desktop uses a true split-screen web composition.
+   Mobile keeps the native-sized stacked flow. Compact web/tablet widths use
+   a narrow split view; larger desktops progressively widen both columns.
    ============================================================ */
-@media (min-width: 768px) {
+@media (min-width: 600px) {
   .auth-page-v2 {
     width: 100%;
     max-width: none;
     margin: 0;
-    padding-bottom: 48px;
-    background: var(--surface);
+    min-height: 100dvh;
+    display: grid;
+    grid-template-columns: minmax(220px,38%) minmax(0,62%);
+    align-items: stretch;
+    padding: 0;
+    background: var(--bg);
   }
   .auth-page-v2 .auth-scene {
-    min-height: 330px;
-    padding: max(36px,var(--safe-top)) clamp(48px,8vw,96px) 72px;
+    position: sticky;
+    top: 0;
+    min-height: 100dvh;
+    height: 100dvh;
+    justify-content: center;
+    padding: clamp(24px,4vw,48px);
   }
   .auth-page-v2 .auth-home-link {
-    font-size: 15px;
+    position: absolute;
+    top: max(26px,var(--safe-top));
+    left: clamp(24px,4vw,48px);
+    font-size: 14px;
   }
   .auth-page-v2 .auth-scene-copy {
-    max-width: 620px;
-    margin-top: 42px;
+    max-width: 430px;
+    margin: 0;
   }
   .auth-page-v2 .auth-scene-copy h1 {
-    margin-top: 14px;
-    font-size: clamp(32px,4.4vw,48px);
-    line-height: 1.14;
+    margin-top: 12px;
+    font-size: clamp(26px,4.5vw,42px);
+    line-height: 1.16;
     letter-spacing: -.055em;
+    overflow-wrap: normal;
+    word-break: keep-all;
   }
   .auth-page-v2 .auth-scene-copy p {
-    margin-top: 16px;
-    font-size: 14px;
+    margin-top: 14px;
+    font-size: 12.5px;
   }
   .auth-page-v2 .auth-activities {
     position: absolute;
-    right: clamp(48px,8vw,96px);
-    bottom: 66px;
-    max-width: 230px;
+    right: auto;
+    bottom: clamp(24px,5vh,52px);
+    left: clamp(24px,4vw,48px);
+    max-width: 150px;
+    justify-content: flex-start;
     margin: 0;
-    gap: 10px;
+    gap: 7px;
   }
   .auth-page-v2 .auth-activities > div {
-    width: 56px;
-    height: 56px;
-    border-radius: 18px;
+    width: 46px;
+    height: 46px;
+    border-radius: 15px;
   }
   .auth-page-v2 .auth-activities img {
-    width: 36px;
-    height: 36px;
+    width: 29px;
+    height: 29px;
   }
   .auth-page-v2 .auth-panel {
-    width: calc(100% - 64px);
-    max-width: 720px;
-    min-height: 0;
-    margin: -40px auto 0;
-    padding: 42px clamp(44px,7vw,76px) 48px;
-    border: 1px solid var(--line);
-    border-radius: 28px;
+    width: 100%;
+    max-width: none;
+    min-height: 100dvh;
+    margin: 0;
+    padding: clamp(34px,6vh,64px) clamp(26px,5vw,64px);
+    display: flex;
+    flex-direction: column;
+    border: 0;
+    border-radius: 0;
     background: var(--bg);
-    box-shadow: 0 24px 70px color-mix(in srgb,var(--ink) 10%,transparent);
+    box-shadow: none;
+  }
+  .auth-page-v2 .auth-panel.login {
+    justify-content: center;
+  }
+  .auth-page-v2 .auth-panel.signup {
+    justify-content: flex-start;
+  }
+  .auth-page-v2 .auth-panel > * {
+    width: 100%;
+    max-width: 620px;
+    margin-left: auto;
+    margin-right: auto;
   }
   .auth-page-v2 .auth-panel-heading h2 {
-    font-size: 28px;
+    font-size: clamp(23px,3vw,28px);
   }
   .auth-page-v2 .auth-panel-heading p {
     margin-top: 8px;
@@ -5345,14 +5374,14 @@ textarea:focus-visible,
     width: 100%;
     height: 54px;
     display: inline-flex;
-    gap: 10px;
+    gap: 7px;
     border-radius: 15px;
-    font-size: 14px;
+    font-size: clamp(11px,1.45vw,14px);
     font-weight: 750;
   }
   .auth-page-v2 .social-btn .social-ic {
-    width: 30px;
-    flex: 0 0 30px;
+    width: 26px;
+    flex: 0 0 26px;
   }
   .auth-page-v2 .social-btn .sr-only {
     position: static;
@@ -5362,6 +5391,24 @@ textarea:focus-visible,
     overflow: visible;
     clip: auto;
     white-space: nowrap;
+  }
+}
+
+@media (min-width: 600px) and (max-width: 819px) {
+  .auth-page-v2 .auth-scene-copy h1 {
+    font-size: clamp(20px,3.4vw,23px);
+  }
+  .auth-page-v2 .auth-scene-copy p {
+    font-size: 11.5px;
+  }
+}
+
+@media (min-width: 820px) and (max-width: 1099px) {
+  .auth-page-v2 {
+    grid-template-columns: minmax(280px,40%) minmax(0,60%);
+  }
+  .auth-page-v2 .auth-panel {
+    padding-inline: clamp(40px,6vw,72px);
   }
 }
 
