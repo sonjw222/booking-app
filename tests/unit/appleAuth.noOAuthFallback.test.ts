@@ -26,7 +26,7 @@ describe("isPluginUnavailableError", () => {
 describe("app/login/page.tsx — apple 분기가 공용 signInWithOAuth 호출보다 먼저 return한다(정책 고정)", () => {
   it("provider === \"apple\" 분기 안에 signInWithOAuth 호출이 없고, 분기 끝에 return이 있다", () => {
     const source = readFileSync(join(__dirname, "../../app/login/page.tsx"), "utf-8");
-    const appleBranchStart = source.indexOf('if (provider === "apple")');
+    const appleBranchStart = source.indexOf('if (provider === "apple" && isAppleNativeSignInSupported())');
     expect(appleBranchStart).toBeGreaterThan(-1);
     // apple 분기의 닫는 중괄호까지만 잘라서(다음 최상위 statement 직전) 그 구간에
     // signInWithOAuth 호출이 없는지 확인한다 — 공용 signInWithOAuth 호출부는 그 분기

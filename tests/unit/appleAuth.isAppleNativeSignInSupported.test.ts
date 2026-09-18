@@ -1,9 +1,7 @@
 /*
-  Android UX 정리(2026-09-14) — Apple 로그인 버튼은 iOS 네이티브 앱에서만 보여야 한다
-  (ASAuthorizationAppleIDProvider가 iOS/macOS 전용 API라 Android/웹에는 애초에 대응하는
-  게 없음 — app/login/page.tsx가 이 함수로 버튼 노출 여부를 결정한다). @capacitor/core를
-  모킹해 iOS 네이티브/Android 네이티브/일반 웹 세 가지 플랫폼에서 각각 올바른 값을
-  내는지 고정한다.
+  Apple 인증 정책 — iOS 네이티브 앱은 ASAuthorizationAppleIDProvider, 일반 웹은
+  Supabase OAuth를 사용한다. 인증 수단이 없는 Android 네이티브 앱에서만 버튼을 숨긴다.
+  @capacitor/core를 모킹해 세 플랫폼의 네이티브 지원/버튼 노출을 각각 고정한다.
 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,7 +15,7 @@ vi.mock("@capacitor/core", () => ({
   registerPlugin: () => ({}),
 }));
 
-import { isAppleNativeSignInSupported } from "../../lib/appleAuth";
+import { isAppleNativeSignInSupported, shouldShowAppleSignInButton } from "../../lib/appleAuth";
 
 describe("isAppleNativeSignInSupported", () => {
   beforeEach(() => {
@@ -41,5 +39,15 @@ describe("isAppleNativeSignInSupported", () => {
     mockState.isNative = false;
     mockState.platform = "web";
     expect(isAppleNativeSignInSupported()).toBe(false);
+  });
+
+  it("일반 웹에서는 OAuth 버튼을 보여준다", () => {
+    expect(shouldShowAppleSignInButton()).toBe(true);
+  });
+
+  it("Android 네이티브 앱에서만 버튼을 숨긴다", () => {
+    mockState.isNative = true;
+    mockState.platform = "android";
+    expect(shouldShowAppleSignInButton()).toBe(false);
   });
 });
