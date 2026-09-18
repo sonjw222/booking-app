@@ -44,6 +44,7 @@ export type Product = {
   maxQuantity: number | null;      // 판매 수량 제한(null=무제한). add_product_sale_limit.sql
   soldCount: number;                // 지금까지 발급된(환불 제외) 개수 — maxQuantity와 비교해 "N개 남음" 표시
   visibility: ProductVisibility;
+  couponEligible: boolean;          // false면 이 상품엔 어떤 쿠폰도 적용 불가(쿠폰 쪽 applies_to보다 우선). add_product_coupon_eligibility.sql
 };
 
 export type ScheduleRule = {
@@ -57,7 +58,7 @@ export type ScheduleRule = {
 export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "pass"): Promise<Product[]> {
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, price, pass_type, total_count, is_on_sale, product_kind, unlimited, unlimited_pass, expiry_mode, expiry_days, expiry_date, rolling_month_cutoff_day, rolling_month_allow_early_use, description, sizes, auto_book_days, group_label, max_quantity, visibility_type")
+    .select("id, name, price, pass_type, total_count, is_on_sale, product_kind, unlimited, unlimited_pass, expiry_mode, expiry_days, expiry_date, rolling_month_cutoff_day, rolling_month_allow_early_use, description, sizes, auto_book_days, group_label, max_quantity, visibility_type, coupon_eligible")
     .eq("center_id", centerId)
     .eq("is_active", true)
     .eq("product_kind", kind)
@@ -111,6 +112,7 @@ export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "
       gradeIds: gradesByProduct[p.id] ?? [],
       memberIds: membersByProduct[p.id] ?? [],
     },
+    couponEligible: p.coupon_eligible ?? true,
   }));
 }
 
@@ -148,7 +150,7 @@ async function saveProductVisibility(productId: string, visibility?: ProductVisi
 export async function createProduct(
   centerId: string, name: string, price: number, totalCount: number,
   kind: "pass" | "goods" = "pass", unlimited = false,
-  extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string; maxQuantity?: number | null; visibility?: ProductVisibility }
+  extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string; maxQuantity?: number | null; visibility?: ProductVisibility; couponEligible?: boolean }
 ): Promise<void> {
   const { data, error } = await supabase.from("products").insert({
     center_id: centerId, name, price,
@@ -168,6 +170,7 @@ export async function createProduct(
     group_label: extra?.groupLabel?.trim() || null,
     max_quantity: extra?.maxQuantity ?? null,
     visibility_type: extra?.visibility?.type ?? "all",
+    coupon_eligible: extra?.couponEligible ?? true,
   }).select("id").single();
   if (error || !data) throw new Error("상품 생성에 실패했어요: " + (error?.message ?? "no data"));
   await saveProductVisibility((data as any).id, extra?.visibility);
@@ -176,7 +179,7 @@ export async function createProduct(
 // 상품 수정 (이름·가격·횟수·설명·사이즈)
 export async function updateProduct(
   id: string, name: string, price: number, totalCount: number,
-  unlimited: boolean, extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string; maxQuantity?: number | null; visibility?: ProductVisibility }
+  unlimited: boolean, extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string; maxQuantity?: number | null; visibility?: ProductVisibility; couponEligible?: boolean }
 ): Promise<void> {
   const { error } = await supabase.from("products").update({
     name, price,
@@ -194,6 +197,9 @@ export async function updateProduct(
     group_label: extra?.groupLabel?.trim() || null,
     ...(extra?.visibility ? { visibility_type: extra.visibility.type } : {}),
     max_quantity: extra?.maxQuantity ?? null,
+    // extra.couponEligible을 안 넘긴 호출(예: 아직 이 옵션 UI가 없는 화면)은 기존 값을
+    // 건드리지 않는다 — visibility와 동일한 패턴, 매번 true로 되돌리면 안 됨.
+    ...(extra?.couponEligible !== undefined ? { coupon_eligible: extra.couponEligible } : {}),
   }).eq("id", id);
   if (error) throw new Error("상품 수정에 실패했어요: " + error.message);
   await saveProductVisibility(id, extra?.visibility);

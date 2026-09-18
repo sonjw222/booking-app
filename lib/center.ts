@@ -174,6 +174,7 @@ export type CenterProduct = {
   autoBookDays: number[] | null;
   groupLabel: string | null;
   remaining: number | null; // 판매 수량 제한이 없으면 null(무제한), 있으면 남은 개수(0=매진)
+  couponEligible: boolean;  // false면 결제 화면에서 쿠폰 선택 UI 자체를 숨긴다. add_product_coupon_eligibility.sql
 };
 
 export async function fetchCenterProducts(centerId: string): Promise<CenterProduct[]> {
@@ -186,7 +187,7 @@ export async function fetchCenterProducts(centerId: string): Promise<CenterProdu
   // price asc)도 RPC 안에서 그대로 유지한다.
   const { data, error } = await supabase
     .rpc("fetch_purchasable_products", { p_center_id: centerId })
-    .select("id, name, price, product_kind, total_count, unlimited, description, sizes, auto_book_days, group_label, max_quantity");
+    .select("id, name, price, product_kind, total_count, unlimited, description, sizes, auto_book_days, group_label, max_quantity, coupon_eligible");
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
   // Postgres 함수가 setof products를 반환하는 RPC라 supabase-js의 기본 타입 추론이
   // "단일 행 | 배열" 유니온으로 잡는다(.single() 없이도) — 실제로는 여러 행이 올 수
@@ -214,6 +215,7 @@ export async function fetchCenterProducts(centerId: string): Promise<CenterProdu
     autoBookDays: p.auto_book_days ?? null,
     groupLabel: p.group_label ?? null,
     remaining: p.max_quantity != null ? Math.max(0, p.max_quantity - (soldByProduct[p.id] ?? 0)) : null,
+    couponEligible: p.coupon_eligible ?? true,
   }));
 }
 

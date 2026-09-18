@@ -10,7 +10,7 @@ final class LaunchTests: XCTestCase {
 
     func testAppLaunchesAndShowsHome() throws {
         let app = XCUIApplication()
-        app.launch()
+        app.launchForUITesting()
         app.waitForWebContent()
 
         // 비로그인 상태의 홈 화면 고정 문구 — app/page.tsx. 로그인 상태여도 이 헤더
@@ -26,7 +26,7 @@ final class LaunchTests: XCTestCase {
     // 요청 2-F: background/foreground 후 화면 유지 확인.
     func testForegroundAfterBackground() throws {
         let app = XCUIApplication()
-        app.launch()
+        app.launchForUITesting()
         app.waitForWebContent()
         assertExists(app.webViews.staticTexts["오늘은 어떤 움직임을 찾나요?"], "백그라운드 진입 전 홈 화면")
 

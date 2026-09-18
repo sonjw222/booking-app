@@ -15,8 +15,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // 정확히 한 번만 호출돼야 한다(중복 호출은 크래시를 유발할 수 있어 이 한 곳에만 둠).
         // GoogleService-Info.plist(사용자가 Xcode로 이미 프로젝트에 추가함, 여기선 안 건드림)를
         // 자동으로 읽어 초기화한다.
-        FirebaseApp.configure()
-        Messaging.messaging().delegate = self
+        //
+        // XCUITest(iOS Automated QA Repair 배치, 2026-09-19)가 "--uitesting" launch
+        // argument로 자신을 띄운 경우에만 건너뛴다(AppUITests/TestSupport.swift의
+        // launchForUITesting() 참고) — 실제 기기/TestFlight/배포 빌드는 이 인자 없이
+        // 실행되므로 이 분기를 절대 타지 않는다. 처음엔
+        // ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"]로
+        // 판별하려 했으나, 그 환경변수는 UI 테스트가 별도 프로세스로 띄우는 "테스트 대상
+        // 앱"에는 전달되지 않아(Unit Test 호스트 프로세스에만 유효) 실패를 실측으로
+        // 확인했다 — launch argument 방식으로 교체.
+        //
+        // 실측으로 확인된 이유: placeholder GoogleService-Info.plist(진짜 키가 없는
+        // 로컬/CI 빌드 검증용, ios/App/App/에 커밋되지 않음)로는 FirebaseApp.configure()
+        // 안에서 FIRInstallations.validateAPIKey가 형식 검증에 실패해 앱이 즉시
+        // 크래시한다(SIGABRT, FIRInstallations.m:162) — 실제 키가 있는 환경(실기기/CI
+        // secrets 복원)에서는 이 분기 자체가 없어도 재현되지 않는다.
+        if !ProcessInfo.processInfo.arguments.contains("--uitesting") {
+            FirebaseApp.configure()
+            Messaging.messaging().delegate = self
+        }
         return true
     }
 

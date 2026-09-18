@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-09-19 — 수강권/상품별 "쿠폰 적용 불가" 옵션
+
+매니저가 수강권(`app/manager/membership-rules`)이나 상품(`app/manager/goods`)을 만들거나
+수정할 때 "쿠폰 적용 가능" 토글을 끄면, 그 상품엔 어떤 쿠폰(쿠폰 쪽 `applies_to='all'`
+이어도)도 적용할 수 없다 — 상품의 이 설정이 쿠폰 쪽 설정보다 항상 우선한다.
+`add_product_coupon_eligibility.sql`: `products.coupon_eligible boolean default true`
+추가(기존 상품 전부 그대로 쿠폰 적용 가능, 회귀 없음) + `_issue_membership_and_record_payment()`
+결제 확정 시점에 재검증(클라이언트가 뭘 보내든 서버가 다시 막음). 체크아웃 화면은
+`coupon_eligible=false` 상품이면 쿠폰 선택 UI 자체를 안 보여주고, 쿠폰 생성 화면의
+"적용 대상 수강권" 고르기에서도 그런 상품은 목록에서 제외(선택했다가 결제 시점에
+막히는 혼란 방지). QA: `membership-visibility-coupons.test.ts`에 [24-22] 추가(완전히
+유효한 쿠폰이어도 상품 레벨에서 차단되는지 + 차단된 시도로 쿠폰이 소비되지 않는지),
+19/19 PASS(기존 18개 회귀 없음).
+
 ## 2026-09-18 — MWHABIT Membership Visibility + Member Coupon Batch
 
 수강권 공개범위(전체/특정등급/지정회원)와 회원 할인쿠폰(정액/정률) 기능을 추가했다. 두 기능

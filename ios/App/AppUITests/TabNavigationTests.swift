@@ -16,7 +16,7 @@ final class TabNavigationTests: XCTestCase {
 
     func testMemberTabsAlwaysPresent() throws {
         let app = XCUIApplication()
-        app.launch()
+        app.launchForUITesting()
         app.waitForWebContent()
 
         for label in ["홈", "알림", "마이"] {
@@ -26,7 +26,7 @@ final class TabNavigationTests: XCTestCase {
 
     func testHomeToMyPageTabSwitch() throws {
         let app = XCUIApplication()
-        app.launch()
+        app.launchForUITesting()
         app.waitForWebContent()
 
         let myTab = app.webViews.links["마이"]
