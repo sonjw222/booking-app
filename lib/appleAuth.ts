@@ -44,6 +44,12 @@ export function isAppleNativeSignInSupported(): boolean {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
 }
 
+// Apple 로그인은 일반 웹에서는 OAuth로 제공하고, iOS 앱에서는 위 네이티브 플러그인을
+// 사용한다. 대응 가능한 Apple 인증 수단이 없는 Android 네이티브 앱에서만 버튼을 숨긴다.
+export function shouldShowAppleSignInButton(): boolean {
+  return !(Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android");
+}
+
 export class AppleSignInCancelledError extends Error {}
 
 // export해서 단위 테스트로 알려진 SHA-256 테스트 벡터와 대조 검증한다 — 이 해시가 틀리면

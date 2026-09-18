@@ -107,28 +107,26 @@ RLS 때문에 기본으로는 막혀있어서 정책을 열어줘야 합니다.
 8. 배포 환경에도 같은 `NEXT_PUBLIC_KAKAO_CLIENT_ID` 등록 + 카카오 콘솔 Redirect URI에
    실제 배포 도메인 추가
 
-### 3-2. 애플 — 네이티브(Sign in with Apple) 방식, 콘솔 설정 대부분 완료됨
+### 3-2. 애플 — iOS 네이티브 + 웹 OAuth
 
 > 2026-08-13에는 $99/년 가입비 때문에 출시 직전까지 의도적으로 보류했었지만, Apple
 > Developer Program 가입이 완료됐다(대표님 확인, 2026-09-14). **2026-09-14 릴리스 폴리시
-> 배치에서 아키텍처를 웹 OAuth → 네이티브로 전환**했다 — 처음엔 구글처럼
+> 배치에서 iOS 앱 인증을 웹 OAuth → 네이티브로 전환**했다 — 처음엔 구글처럼
 > `supabase.auth.signInWithOAuth({provider:"apple"})`를 쓰려 했으나, 이미 설정해둔 Supabase
 > Apple Provider 값(Client IDs = 앱 Bundle ID `com.mwhabit.app`, Secret Key = 비어 있음)이
 > 웹 OAuth가 아니라 **네이티브 플로우** 설정과 정확히 일치했다(Supabase 공식 문서: 웹 OAuth는
 > 별도 Services ID + .p8로 서명한 JWT 시크릿이 반드시 필요 — 이 상태로 `signInWithOAuth`를
-> 부르면 토큰 교환이 실패한다). 네이티브로 가면 Services ID 자체가 필요 없고, **6개월마다
-> OAuth 시크릿을 재발급해야 하는 운영 부담도 아예 없어진다**(Supabase 공식 문서: "Native-only
-> implementations don't require secret key rotation").
+> 부르면 토큰 교환이 실패한다). iOS 앱은 이 네이티브 방식을 유지하고, 일반 웹에서는
+> `signInWithOAuth({provider:"apple"})`를 사용한다. 따라서 웹 로그인을 실제로 운영하려면
+> Apple Services ID와 웹 OAuth Secret을 Supabase Apple Provider에 추가해야 한다.
 >
 > 코드: `ios/App/App/AppleSignInPlugin.swift`(신규 로컬 커스텀 Capacitor 플러그인 —
 > `ASAuthorizationAppleIDProvider`를 직접 감쌈, npm 서드파티 의존성 없음 — 기존
 > `FcmTokenPlugin.swift`와 동일한 선례), `lib/appleAuth.ts`(nonce 생성/해시 +
 > `supabase.auth.signInWithIdToken()` 호출), `app/login/page.tsx`의 `handleSocial("apple")`,
 > `lib/authAccount.ts`의 `ensureAccountForCurrentUser()`(계정 부트스트랩, 애플 최초 인증
-> 이름 처리 포함). **iOS 네이티브 앱에서만 동작** — 웹 브라우저/Android에서 애플 버튼을
-> 누르면 "Apple 로그인은 현재 iOS 앱에서만 지원돼요" 안내만 뜨고 앱이 죽지 않는다(이미
-> 구현됨 — `ASAuthorizationAppleIDProvider` 자체가 iOS/macOS 전용 네이티브 API라 웹엔
-> 대응하는 게 없고, 지금 Supabase 설정으로는 웹 OAuth 경로도 어차피 동작하지 않는다).
+> 이름 처리 포함). **iOS 네이티브 앱은 네이티브 인증, 일반 웹은 OAuth 인증**으로 분기한다.
+> Android 네이티브 앱에는 Apple 인증 수단이 없어 버튼을 표시하지 않는다.
 
 **애플의 이름 제공 정책(중요)**: 애플은 **최초 1회 인증에서만** 사용자 이름을 내려준다 — 게다가
 네이티브 플로우에서는 `user_metadata`가 아니라 `ASAuthorizationAppleIDCredential.fullName`이라는
@@ -157,10 +155,9 @@ Supabase 공식 문서도 이 케이스를 다루지 않는다 — 실사용 데
    자동으로 들어간다(Apple 공식 entitlement 키). 이 파일은 저장소에 커밋되지 않으므로
    (User가 로컬/Xcode에서 관리) Claude가 직접 확인/수정하지 않음 — Xcode에서 capability가
    켜져 있으면 이미 맞게 들어가 있을 것.
-3. ✅ Supabase → Authentication → Providers → Apple → Enable ON, Client IDs =
-   `com.mwhabit.app`, Secret Key = 비워둠, "Allow users without an email" = OFF (완료 —
-   네이티브 플로우에 정확히 맞는 값. **Services ID/​.p8 키/​6개월 시크릿 로테이션은 필요
-   없음** — 웹 OAuth 전용 요구사항이라 네이티브에서는 해당 없음)
+3. ⚠️ Supabase → Authentication → Providers → Apple → Enable ON. iOS 네이티브용
+   Bundle ID `com.mwhabit.app` 설정은 유지하고, 웹 로그인을 위해 Apple Services ID와
+   유효한 OAuth Secret을 추가해야 한다. Secret 갱신 일정도 운영 항목으로 관리한다.
 4. ❌ **아직 안 됨 — 필요**: 재빌드/재서명. `ios/App/App/AppleSignInPlugin.swift`가 신규
    파일이라 Xcode에서 `npx cap sync ios` 후 프로젝트를 다시 열어(또는 Xcode가 자동 인식)
    빌드해야 반영된다. 새 provisioning profile 재생성이 필요할 수도 있음(capability 추가

@@ -24,7 +24,12 @@ import { validateCenterRegistrationInput, registerCenterForAccount } from "../..
 import { setBootstrapSuppressed, ensureAccountForCurrentUser } from "../../lib/authAccount";
 import { startNaverLogin } from "../../lib/naverAuth";
 import { startKakaoLogin } from "../../lib/kakaoAuth";
-import { signInWithAppleNative, AppleSignInCancelledError, isAppleNativeSignInSupported } from "../../lib/appleAuth";
+import {
+  signInWithAppleNative,
+  AppleSignInCancelledError,
+  isAppleNativeSignInSupported,
+  shouldShowAppleSignInButton,
+} from "../../lib/appleAuth";
 import { signInWithGoogleNative, GoogleSignInCancelledError, isGoogleNativeSignInSupported } from "../../lib/googleAuth";
 import { stashPostLoginNext } from "../../lib/postLoginReturn";
 import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
@@ -73,14 +78,8 @@ export default function LoginPage() {
   // 소셜 버튼 각각의 리다이렉트 진행 상태 — 성공하면 곧바로 provider 페이지로 페이지 전체가
   // 이동하므로 별도로 false로 되돌릴 필요는 없다(에러일 때만 되돌림).
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
-  // Android UX 정리(2026-09-14) — Apple 네이티브 로그인(ios/App/App/AppleSignInPlugin.swift,
-  // lib/appleAuth.ts)은 ASAuthorizationAppleIDProvider가 iOS/macOS 전용 API라 구조적으로
-  // Android에는 존재할 수 없다. Android 네이티브 앱과 일반 웹 브라우저 둘 다
-  // isAppleNativeSignInSupported()가 false를 반환해 버튼을 눌러도 "iOS 앱에서만
-  // 지원돼요" 안내만 뜨는 죽은 CTA였다 — 조사 결과 웹 브라우저에서도 정확히 같은 이유로
-  // 동작할 수 없으므로(현재 Supabase Apple Provider 설정 자체가 네이티브 전용 — Client
-  // IDs=Bundle ID, Secret 없음), Android와 동일하게 숨기는 것이 "안전한 기존 구조 재사용"
-  // 결정이다(새 web OAuth 경로를 만들지 않음). iOS 네이티브 앱에서만 노출한다.
+  // Apple 버튼은 대응 가능한 인증 수단이 없는 Android 네이티브 앱에서만 숨긴다.
+  // iOS 앱은 네이티브 플러그인, 일반 웹(데스크톱/모바일 브라우저)은 Apple OAuth를 쓴다.
   // Capacitor.isNativePlatform()/getPlatform()은 window 참조라 SSR에서는 항상
   // false로 안전하게 평가되지만(하이드레이션 불일치 방지를 위해), 실제 네이티브 iOS
   // 여부는 클라이언트에서만 확정할 수 있어 마운트 후 useEffect에서 갱신한다 — 초기값
@@ -88,7 +87,7 @@ export default function LoginPage() {
   // "판정 전엔 안전한 쪽"을 따른다.
   const [showAppleButton, setShowAppleButton] = useState(false);
   useEffect(() => {
-    setShowAppleButton(isAppleNativeSignInSupported());
+    setShowAppleButton(shouldShowAppleSignInButton());
   }, []);
 
   // 소셜 버튼 영구 비활성화 사고 방어(2026-09-15, release blocker 대응 — 근본 원인은
@@ -216,7 +215,9 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
-      const msg = error.message.includes("Invalid login credentials")
+      const msg = /load failed|failed to fetch|network/i.test(error.message)
+        ? "로그인 서버에 연결하지 못했어요. 인터넷 연결과 Supabase 설정을 확인해주세요"
+        : error.message.includes("Invalid login credentials")
         ? "이메일 또는 비밀번호가 올바르지 않아요"
         : error.message.includes("Email not confirmed")
         ? "이메일 인증이 아직 완료되지 않았어요. 메일함을 확인해주세요"
@@ -393,12 +394,9 @@ export default function LoginPage() {
       return;
     }
 
-    // 애플은 구글/카카오/네이버와 다르게 브라우저 리다이렉트가 아니라 네이티브 모달
-    // (ASAuthorizationController)로 같은 화면 안에서 끝난다 — 실제 콘솔 설정(Supabase
-    // Client IDs = 앱 Bundle ID, Secret Key 비어 있음)이 웹 OAuth가 아니라 네이티브 플로우
-    // 설정과 일치해서 아래 공용 signInWithOAuth 경로를 쓰면 애초에 실패한다
-    // (lib/appleAuth.ts 주석, AUTH_SETUP.md 3-2절 참고).
-    if (provider === "apple") {
+    // iOS 네이티브 앱은 ASAuthorizationController를 사용한다. 일반 웹의 Apple 로그인은
+    // 이 분기를 건너뛰고 아래 공용 signInWithOAuth 경로로 이어진다.
+    if (provider === "apple" && isAppleNativeSignInSupported()) {
       // 실기기 QA(2026-09-14) — Apple 버튼 클릭이 정확히 이 분기로 들어오는지, 그리고
       // signInWithOAuth로는 절대 안 새는지 콘솔에서 바로 확인할 수 있게 로그를 남긴다.
       console.log("[login] Apple 버튼 클릭 — 네이티브 경로로 진입(signInWithOAuth 미사용)");
@@ -453,7 +451,7 @@ export default function LoginPage() {
     });
     if (error) {
       setSocialLoading(null);
-      const label = provider === "kakao" ? "카카오" : provider === "google" ? "구글" : "네이버";
+      const label = provider === "kakao" ? "카카오" : provider === "google" ? "구글" : provider === "apple" ? "애플" : "네이버";
       setMessage({ type: "error", text: `${label} 로그인 설정이 아직 안 되어 있어요 (AUTH_SETUP.md 참고)` });
     }
     // 에러가 없으면 이 시점부터 브라우저가 provider 페이지로 이동하므로 loading을 되돌리지 않는다.

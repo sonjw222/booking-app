@@ -25,6 +25,21 @@ describe("responsive workspace layout contract", () => {
     expect(css).toContain("max-width: var(--workspace-content-max)");
   });
 
+  it("expands compact rails without shifting workspace content", () => {
+    expect(css).toContain("@media (min-width: 768px) and (max-width: 1359px) and (hover: hover) and (pointer: fine)");
+    expect(css).toContain(".workspace-sidebar:focus-within");
+    expect(css).toContain("width: 244px");
+    expect(css).toContain("transition: width 220ms");
+    expect(css).toContain("max-width: 180px");
+  });
+
+  it("keeps manager controls readable in both color themes", () => {
+    expect(css).toContain("background-color: var(--card-bg)");
+    expect(css).toContain('[data-theme="charcoal"] .manager-v3-content select.input-field { color-scheme: dark; }');
+    expect(css).not.toContain("background-color: var(--text-inverse);\n  background-image:");
+    expect(css).toContain("word-break: keep-all");
+  });
+
   it("keeps one Next.js app and chooses layout by viewport width, never device sniffing", () => {
     const layoutSources = [
       "app/layout.tsx",
