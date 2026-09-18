@@ -5089,7 +5089,8 @@ textarea:focus-visible,
   .manager-v3-content .admin-filters,
   .admin-v3-content .admin-filters { position: sticky; top: 0; z-index: 12; background: color-mix(in srgb,var(--bg) 96%,transparent); backdrop-filter: blur(14px); }
   .manager-v3-content .mem-list { padding-inline: 24px; }
-  .manager-v3-content .mem-row { display: grid; grid-template-columns: minmax(180px,1.4fr) minmax(140px,1fr) auto; align-items: center; min-height: 72px; padding-inline: 10px; }
+  .manager-v3-content .mem-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; min-height: 72px; padding-inline: 16px; }
+  .manager-v3-content .mem-row:has(.mem-row-check) { grid-template-columns: 24px minmax(0,1fr); gap: 14px; }
   .manager-v3-content .noti-list { padding-inline: 24px; }
   .manager-v3-content .noti-row { min-height: 82px; }
   .manager-v3-content .date-range { grid-template-columns: repeat(2,minmax(180px,260px)); }
