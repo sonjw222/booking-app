@@ -165,8 +165,10 @@ export default function AdminSubscriptionsPage() {
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
       {toast && <div className="toast">{toast}</div>}
 
-      <div style={{ padding: "12px 20px" }}>
+      <div className="workspace-search" style={{ padding: "12px 20px" }}>
+        <label htmlFor="subscription-search">구독 센터 검색</label>
         <input
+          id="subscription-search"
           className="input-field"
           placeholder="센터 이름으로 검색"
           value={search}

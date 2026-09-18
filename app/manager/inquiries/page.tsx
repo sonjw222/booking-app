@@ -108,20 +108,9 @@ function ManagerInquiriesPageContent() {
 
   if (loading) return <Loading />;
 
-  if (active) {
-    return (
-      <div className="app-shell">
-        <InquiryChat
-          threadId={active.id} title={active.title} onBack={backToList}
-          canSend={canSendForCenter(active.centerId)}
-          canDeleteOthers={canDeleteOthersForCenter(active.centerId)}
-        />
-      </div>
-    );
-  }
-
   return (
-    <div className="app-shell">
+    <div className={`app-shell inquiry-workspace ${active ? "has-active" : ""}`}>
+      <section className="inquiry-index" aria-label="문의 목록">
       <div className="header">
         <div className="title" style={{ fontSize: 20, fontWeight: 800 }}>1:1 문의</div>
       </div>
@@ -135,7 +124,7 @@ function ManagerInquiriesPageContent() {
       ) : (
         <div className="thread-list">
           {threads.map((t) => (
-            <button key={t.id} className="thread-row" onClick={() => setActive({ id: t.id, title: t.centerName + " · 회원 문의", centerId: t.centerId })}>
+            <button key={t.id} className={`thread-row ${active?.id === t.id ? "selected" : ""}`} aria-pressed={active?.id === t.id} onClick={() => setActive({ id: t.id, title: t.centerName + " · 회원 문의", centerId: t.centerId })}>
               <div className="thread-avatar"><UiIcon name="message" size={18} /></div>
               <div className="thread-main">
                 <div className="thread-top">
@@ -151,6 +140,14 @@ function ManagerInquiriesPageContent() {
       )}
 
       <div style={{ height: 20 }} />
+      </section>
+      <section className="inquiry-conversation" aria-label="문의 대화">
+        {active ? <InquiryChat key={active.id}
+          threadId={active.id} title={active.title} onBack={backToList}
+          canSend={canSendForCenter(active.centerId)}
+          canDeleteOthers={canDeleteOthersForCenter(active.centerId)}
+        /> : <div className="inquiry-placeholder">목록에서 문의를 선택하면 대화와 답변을 확인할 수 있어요.</div>}
+      </section>
     </div>
   );
 }

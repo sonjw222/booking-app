@@ -950,6 +950,7 @@ export default function ClassManagePage() {
       <div className="back-header">
         <button className="side cal-export-btn cal-copy-btn" style={{ fontSize: 12 }} onClick={openCopy}>일정 복사</button>
         <div className="title">내 일정</div>
+        {!assignMode && <button className="primary-btn workspace-create-class" onClick={openCreate}>+ 수업 등록</button>}
         <a className="side cal-export-btn" href="/manager/holidays" style={{ fontSize: 12 }}>휴무일</a>
       </div>
 

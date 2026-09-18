@@ -1,4 +1,10 @@
 /* Shared management controls. All colors follow the active theme. */
+.workspace-create-class { display: none; }
+.inquiry-conversation { display: none; }
+.inquiry-workspace.has-active .inquiry-index { display: none; }
+.inquiry-workspace.has-active .inquiry-conversation { display: block; }
+.workspace-search label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 650; }
+.settlement-workspace .login-wrap > label { font-size: 14px; font-weight: 650; }
 .recipient-search { padding: 24px 20px 12px; display: grid; gap: 8px; }
 .recipient-search label { font-size: 14px; font-weight: 650; }
 .recipient-search .input-field { width: 100%; min-width: 0; margin: 0; }
@@ -16,6 +22,62 @@
 .recipient-row:focus-within { outline: 2px solid var(--brand); outline-offset: -2px; }
 
 @media (min-width: 768px) {
+  /* Explicit content sizes replace inherited mobile circles and full-width actions. */
+  .manager-chrome .manager-chrome-main > a,
+  .admin-v3 > .admin-chrome > a {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    flex: 0 0 auto; width: auto; min-width: 44px; height: 44px;
+    padding: 0 16px; border-radius: 10px; white-space: nowrap;
+    background: var(--card-bg); color: var(--ink); border: 1px solid var(--line);
+  }
+  .manager-chrome .manager-chrome-main > a span,
+  .admin-v3 > .admin-chrome > a span {
+    position: static; display: inline; width: auto; height: auto;
+    max-width: none; opacity: 1; visibility: visible; overflow: visible;
+    clip: auto; clip-path: none; font-size: 14px; white-space: nowrap;
+  }
+  .admin-v3 > .admin-chrome { background: var(--bg); color: var(--ink); border-bottom: 1px solid var(--line); }
+  .manager-v3-content > .manager-classes-v2 { min-height: 0; padding-bottom: 24px!important; }
+  .manager-classes-v2 > .back-header { display: flex; flex-wrap: wrap; gap: 12px; padding: 20px 24px; }
+  .manager-classes-v2 > .back-header .title { order: -1; flex: 1; text-align: left; }
+  .manager-classes-v2 > .back-header .side { width: auto; min-width: 76px; height: 44px; border-radius: 8px; padding: 0 12px; }
+  .manager-classes-v2 .workspace-create-class { display: inline-flex; width: auto; min-height: 44px; padding: 10px 18px; border-radius: 8px; }
+  .manager-classes-v2 > .fab-btn { display: none; }
+  .manager-classes-v2 .manager-agenda-panel .daylist-empty { min-height: 160px; }
+  .manager-classes-v2 .cal-cell.selected { background: var(--brand-soft); border-radius: 8px; box-shadow: inset 0 0 0 1px var(--brand); }
+  .manager-v3-content .announce-list { display: grid; grid-template-columns: minmax(0,1fr); gap: 16px; align-items: start; }
+  .manager-v3-content .announce-item { min-width: 0; padding: 20px; }
+  .manager-v3-content .announce-head { align-items: flex-start; gap: 12px; }
+  .manager-v3-content .announce-title { font-size: 17px; overflow-wrap: anywhere; }
+  .manager-v3-content .announce-body { max-height: 240px; overflow: auto; overflow-wrap: anywhere; padding-block: 8px; }
+  .manager-v3-content .review-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .manager-v3-content .review-actions button { min-height: 40px; padding: 8px 16px; font-size: 14px; }
+  .manager-v3-content > .inquiry-workspace { display: grid; grid-template-columns: minmax(220px,.8fr) minmax(0,1.6fr); min-height: 0; height: calc(100dvh - 155px); padding-bottom: 0!important; }
+  .inquiry-workspace.has-active .inquiry-index,.inquiry-workspace .inquiry-index { display: block; overflow-y: auto; border-right: 1px solid var(--line); min-width: 0; }
+  .inquiry-workspace .inquiry-conversation { display: block; min-width: 0; min-height: 0; }
+  .inquiry-workspace .chat-wrap { max-width: none; width: 100%; height: 100%; min-height: 0; }
+  .inquiry-workspace .chat-header { flex-shrink: 0; padding: 18px; }
+  .inquiry-workspace .chat-title { white-space: normal; overflow-wrap: anywhere; }
+  .inquiry-workspace .chat-body { padding: 24px; min-height: 0; }
+  .inquiry-workspace .chat-input-bar { position: static; flex-shrink: 0; padding: 16px; }
+  .inquiry-workspace .thread-top { flex-wrap: wrap; gap: 6px; }
+  .inquiry-workspace .thread-row { padding: 18px 16px; color: var(--ink); }
+  .inquiry-workspace .thread-row.selected { background: var(--brand-soft); box-shadow: inset 3px 0 var(--brand); }
+  .inquiry-placeholder { height: 100%; display: grid; place-items: center; padding: 32px; text-align: center; color: var(--text-dim); }
+  .manager-v3-content .settlement-workspace { display: grid; grid-template-columns: minmax(0,1fr); gap: 24px; padding: 24px; max-width: 1100px; margin-inline: auto; }
+  .settlement-workspace > .perm-guide { grid-column: 1 / -1; line-height: 1.7; }
+  .workspace-form-panel { min-width: 0; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-bg); }
+  .workspace-form-panel .menu-section-label { margin: 0 0 16px; padding: 0; font-size: 16px; color: var(--ink); }
+  .workspace-form-panel .login-wrap { display: grid; gap: 10px; min-height: 0; align-content: start; }
+  .workspace-form-panel :is(.primary-btn,.ghost-btn) { width: fit-content; min-width: 100px; padding: 10px 20px; justify-self: end; }
+  .admin-v3-content .admin-center-search { margin: 20px 24px 12px; max-width: 680px; }
+  .admin-v3-content .admin-center-search > svg { left: 14px; width: 18px; flex-shrink: 0; }
+  .admin-v3-content .admin-center-search input.input-field { padding-left: 44px; padding-right: 44px; width: 100%; }
+  .admin-v3-content .workspace-search { margin: 12px 4px; max-width: 728px; }
+  .admin-v3-content .admin-list { grid-template-columns: repeat(auto-fit,minmax(min(100%,340px),1fr)); align-items: start; }
+  .admin-v3-content .admin-card-head { flex-wrap: wrap; gap: 12px; }
+  .admin-v3-content .admin-center-name { min-width: 0; overflow-wrap: anywhere; }
+  .admin-v3-content .admin-row { flex-wrap: wrap; gap: 8px; }
   :is(.manager-v3-content,.admin-v3-content) {
     --work-control-height: 44px;
     --work-radius: 10px;
@@ -90,6 +152,10 @@
   .recipient-columns > :first-child { grid-column: 2; }
   .recipient-row { padding: 16px; min-height: 64px; }
   .recipient-row input { grid-row: auto; }
+}
+@media (min-width: 1100px) {
+  .manager-v3-content .announce-list { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .manager-v3-content .settlement-workspace { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
 }
 @media (hover: hover) {
   .recipient-row:hover { background: var(--surface); }
