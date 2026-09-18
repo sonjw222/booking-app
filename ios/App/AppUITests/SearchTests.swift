@@ -11,7 +11,7 @@ final class SearchTests: XCTestCase {
 
     func testSearchInputAndSuggestions() throws {
         let app = XCUIApplication()
-        app.launch()
+        app.launchForUITesting()
         app.waitForWebContent()
 
         // 홈 화면 검색바(app/page.tsx의 .searchbar)를 거쳐 /search로 진입한다 — 직접

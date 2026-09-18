@@ -29,6 +29,27 @@ enum TestAccount {
 }
 
 extension XCUIApplication {
+    // 이 launch argument가 있으면(AppDelegate.swift가 확인) FirebaseApp.configure()를
+    // 건너뛴다 — 실제 GoogleService-Info.plist 없이(CI/로컬 빌드 검증용 placeholder만
+    // 있는 상태) 앱을 띄우면 FIRInstallations.validateAPIKey가 형식 검증에 실패해 앱이
+    // 즉시 크래시한다(SIGABRT, 실측 확인, iOS Automated QA Repair 배치 2026-09-19).
+    //
+    // 처음엔 ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"]로
+    // 판별하려 했으나 실패했다 — 그 환경변수는 XCTest 번들 자신의 호스트 프로세스에는
+    // 안정적으로 심어지지만, UI 테스트가 XCUIApplication().launch()로 "테스트 대상 앱"을
+    // 별도 프로세스로 띄울 때는 자동으로 전달되지 않는다(Apple 공식 문서에 명시된 동작은
+    // 아니고, 실측으로 재크래시하는 걸 보고 확인함 — Unit Test 호스트 프로세스 감지에는
+    // 유효하지만 UI Test의 "피실험 앱" 프로세스 감지에는 안 맞는 방법이었음). 그래서 UI
+    // 테스트 쪽에서 launchArguments로 명시적으로 신호를 준다(업계에서 흔히 쓰는 방식).
+    static let uiTestingLaunchArgument = "--uitesting"
+
+    // 모든 UI 테스트가 app.launch() 대신 이걸 쓴다 — 위 launch argument를 빠뜨리면 다시
+    // Firebase 크래시로 되돌아가므로 개별 파일마다 반복하지 않고 한 곳에 모은다.
+    func launchForUITesting() {
+        launchArguments.append(Self.uiTestingLaunchArgument)
+        launch()
+    }
+
     // WKWebView 콘텐츠가 실제로 그려질 때까지 기다린다 — server.url 모드라 최초 로드는
     // 실제 네트워크 왕복을 거친다(로컬 번들이 아님), 시뮬레이터/CI 네트워크가 느릴 수
     // 있어 넉넉한 타임아웃을 쓴다.

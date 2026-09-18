@@ -26,7 +26,7 @@ final class ReservationSmokeTests: XCTestCase {
             throw XCTSkip("TEST_USER_A_EMAIL/PASSWORD가 설정되지 않아 건너뜀 — docs/AUTOMATED_QA.md 참고")
         }
         let app = XCUIApplication()
-        app.launch()
+        app.launchForUITesting()
         loginWithEmail(app, email: TestAccount.userAEmail!, password: TestAccount.userAPassword!)
         assertExists(app.webViews.staticTexts["오늘은 어떤 움직임을 찾나요?"], "로그인 후 홈 화면 복귀")
 
