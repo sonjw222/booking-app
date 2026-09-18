@@ -191,13 +191,17 @@ export default function AlimtalkSendPage() {
 
       {addonEnabled && (
         <>
-          <div style={{ padding: "0 20px 10px" }}>
+          <div className="recipient-search">
+            <label htmlFor="recipient-search">발송 대상 검색</label>
             <input
+              id="recipient-search"
               className="input-field"
-              placeholder="이름 또는 전화번호로 검색 (콤마로 여러 명: 회원1,회원2)"
+              placeholder="이름 또는 전화번호 검색"
+              aria-describedby="recipient-search-help"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
             />
+            <p id="recipient-search-help">여러 명을 찾으려면 쉼표로 구분하세요. 예: 회원1, 회원2</p>
           </div>
 
           <div className="mem-filters">
@@ -215,24 +219,28 @@ export default function AlimtalkSendPage() {
             ))}
           </div>
 
-          <div style={{ padding: "10px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span className="info">{selectedIds.size > 0 ? `${selectedIds.size}명 선택됨 (전체 ${members.length}명 중)` : `${members.length}명`}</span>
-            <button className="outline-action compact" onClick={selectAllFiltered} disabled={members.length === 0}>검색결과 전체 선택</button>
+          <div className="recipient-toolbar">
+            <span className="info" aria-live="polite">{selectedIds.size > 0 ? `${selectedIds.size}명 선택됨 (전체 ${members.length}명 중)` : `${members.length}명`}</span>
+            <div className="recipient-actions">
+              {selectedIds.size > 0 && <button className="outline-action compact" onClick={() => setSelectedIds(new Set())}>선택 해제</button>}
+              <button className="outline-action compact" onClick={selectAllFiltered} disabled={members.length === 0}>검색결과 전체 선택</button>
+            </div>
           </div>
 
           {loading ? (
             <Loading />
           ) : (
-            <div className="mem-detail-list" style={{ padding: "0 20px" }}>
+            <div className="recipient-list">
+              <div className="recipient-columns" aria-hidden="true"><span>회원 이름</span><span>전화번호</span><span>연락처 상태</span></div>
               {members.length === 0 ? (
                 <div className="daylist-empty">회원이 없어요</div>
               ) : (
                 members.map((m) => (
-                  <label key={m.id} className="mem-detail-row" style={{ cursor: "pointer" }}>
-                    <span className="mem-detail-main">
-                      <input type="checkbox" checked={selectedIds.has(m.id)} onChange={() => toggle(m.id)} style={{ marginRight: 8 }} />
-                      {m.name}{m.phone ? ` · ${m.phone}` : " · 번호없음"}
-                    </span>
+                  <label key={m.id} className={`recipient-row ${selectedIds.has(m.id) ? "selected" : ""}`}>
+                    <input type="checkbox" aria-label={`${m.name} 선택`} checked={selectedIds.has(m.id)} onChange={() => toggle(m.id)} />
+                    <span className="recipient-name">{m.name}</span>
+                    <span className="recipient-phone">{m.phone || "번호 없음"}</span>
+                    <span className="recipient-status">{m.phone ? "번호 등록됨" : "전화번호 필요"}</span>
                   </label>
                 ))
               )}
