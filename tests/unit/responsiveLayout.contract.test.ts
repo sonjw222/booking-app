@@ -40,6 +40,16 @@ describe("responsive workspace layout contract", () => {
     expect(css).toContain("word-break: keep-all");
   });
 
+  it("gives authentication screens tablet cards and a desktop split layout", () => {
+    expect(css).toContain("Responsive authentication workspace");
+    expect(css).toContain(".auth-page-v2");
+    expect(css).toContain("grid-template-columns: minmax(390px,42%) minmax(560px,58%)");
+    expect(css).toContain(".auth-page-v2 .auth-panel.login");
+    expect(css).toContain(".auth-page-v2 .auth-panel.signup");
+    expect(css).toContain("grid-template-columns: repeat(2,minmax(0,1fr))");
+    expect(css).toContain(".auth-page-v2 .social-btn .sr-only");
+  });
+
   it("keeps one Next.js app and chooses layout by viewport width, never device sniffing", () => {
     const layoutSources = [
       "app/layout.tsx",
