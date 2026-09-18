@@ -1373,16 +1373,23 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
-### P0-1. (신규, 2026-09-18) MWHABIT Business Logic Fix Batch — SQL 2건 사용자 적용 필요
+### P2-41. (신규, 2026-09-18) 통합테스트 — 51개 파일 전체 연속 실행 시 공유 테스트센터 상태 오염·Auth rate limit로 flaky
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P0(실제 버그 수정, 코드는 완성됐으나 SQL이 아직 라이브 DB에 적용되지 않음) |
-| 현재 상태 | 당일예약 허용 버그(reserve_class/reserve_with_membership)와 정원 축소/확대 invariant(update_class_safe) 수정 SQL을 작성 완료했다. 이 세션은 Supabase에 직접 SQL을 실행할 수단(DATABASE_URL 등)이 없어, 사용자가 Supabase SQL Editor에서 직접 실행해야 한다. |
-| 적용할 파일 | `fix_same_day_booking_deadline.sql`(먼저), `fix_class_capacity_invariants.sql`(그다음) — 저장소 루트 |
-| 적용 후 할 일 | `npm run test:integration -- tests/integration/scenarios/date-boundaries.test.ts tests/integration/scenarios/admin-member-concurrency.test.ts`(또는 동등한 vitest 명령)로 재실행해 SCN-P1-24-ON/OFF/STARTED/DAYS-0~2, SCN-P1-31-A, SCN-P1-32-A/B/D가 전부 PASS로 전환됐는지 확인. 현재(SQL 미적용) 상태에서는 의도적으로 FAIL한다(정상 — 레드 확인 완료). |
-| 위치 반경 필터 | SQL 불필요, `lib/home.ts`에 이미 적용·검증 완료(`NEARBY_RADIUS_KM`, PASS 확인됨). |
-| 근거 파일 | `fix_same_day_booking_deadline.sql`, `fix_class_capacity_invariants.sql`, `tests/integration/scenarios/date-boundaries.test.ts`, `tests/integration/scenarios/admin-member-concurrency.test.ts`, `tests/integration/scenarios/registry.ts` |
+| 우선순위 | P2(실제 제품 버그 아님 — 테스트 인프라 안정성 문제) |
+| 현재 상태 | 이번 배치 마무리 중 `tests/integration/` 전체(51개 파일)를 한 번에 돌렸더니 27개 파일에서 실패(33건)가 났다. 원인을 개별 재현으로 추적한 결과 **실제 코드 회귀가 아니라 두 가지 테스트 인프라 문제**로 확인됐다: (1) 여러 파일이 `signUp`/`signIn`을 짧은 시간에 몰아서 호출해 Supabase Auth rate limit("Request rate limit reached")에 걸리고, 이게 연쇄적으로 각 파일의 `beforeAll`/`afterAll`을 실패시킴(그 여파로 "Cannot read properties of undefined" 같은 2차 정리 오류도 다수 발생). (2) 여러 시나리오 파일이 `getOrCreateOwnedTestCenter()`로 **같은 물리적 테스트센터 1개를 공유**하는데, 그중 일부가 `center_settings`(`allow_same_day_booking`, `group_book_days_before` 등)를 테스트 중 바꿔두고 정리(`afterAll`)가 rate limit 등으로 못 돌면 다음 파일이 오염된 설정값을 물려받는다 — `date-boundaries.test.ts`(SCN-P1-24 당일예약 계열)가 이렇게 오염된 상태에서 실행되면 실제로는 정상인 `reserve_class()`가 "당일 예약은 허용되지 않아요"로 거부하는 것처럼 보였다. 개별/소규모 조합으로 재실행하면(`date-boundaries.test.ts` 단독 9/9, `admin-member-concurrency.test.ts` 단독 6/6 — 반복 재현) 매번 전부 통과해 실제 함수 로직은 정상임을 확인했다. |
+| 필요한 것 | (1) 이 배치처럼 51개 파일을 한 번에 다 돌리는 대신, 관련 있는 파일 묶음 단위로 나눠 실행하는 습관/문서화. (2) 근본적으로는 시나리오 파일들이 테스트센터를 공유하지 않고 각자 독립적으로 생성·정리하도록 리팩터하거나, 최소한 각 파일이 자신이 바꾼 `center_settings` 값을 `afterAll` 실패에도 불구하고 확실히 복원하도록(예: try/finally) 강화하는 방안 검토. (3) 공유 테스트 계정의 `signUp` 호출량을 줄이는 방안(예: 계정이 이미 있으면 곧장 `signInWithPassword`로 넘어가고 `signUp`은 최후에만 시도) 검토. |
+| 근거 파일 | `tests/integration/setup.ts`(signUp/rate limit), `tests/integration/scenarios/date-boundaries.test.ts`(공유 센터 사용), `tests/integration/scenarios/admin-member-concurrency.test.ts` |
+
+### P2-40. (신규, 2026-09-18) 쿠폰 — "직접결제"(센터 방문 결제)에서는 회원 쿠폰 선택 불가(의도된 범위 제외)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2(제품 결정 필요 — 지금은 의도적으로 막아둔 상태, 버그 아님) |
+| 현재 상태 | `app/checkout/page.tsx`의 쿠폰 선택 UI(`fetchApplicableCoupons`)는 `payMethod !== "direct"`일 때만 노출한다. 이유: 회원 쿠폰의 검증/소비(used 전환)는 전부 `_issue_membership_and_record_payment()`(카드/카카오페이/토스페이/계좌이체/Mock 경유) 안에서만 일어나는데, "직접결제"(센터 방문 결제)는 별도 경로인 `fulfill_order()`를 타고, 이 함수는 이번 배치 감사 범위 밖이라 쿠폰 소유자/센터/유효기간 검증이나 사용 처리 로직이 전혀 없다. 이 상태로 직접결제에 쿠폰을 허용하면 검증 없이 방치되거나(가벼운 경우) 정확한 금액 불일치로 `fulfill_order()`가 예외를 던지는 정도로 끝난다. |
+| 필요한 것 | 직접결제 흐름에서도 쿠폰을 지원하려면 `fulfill_order()`에 동일한 검증/소비 로직(또는 공용 헬퍼로 추출)을 추가해야 한다 — 제품 쪽에서 "센터 방문 결제도 쿠폰 대상에 포함할지" 결정 필요. |
+| 근거 파일 | `app/checkout/page.tsx`(canUseMemberCoupon), `fix_rolling_month_starts_at_not_null_regression.sql`(fulfill_order 최신 정의), `add_membership_visibility_and_coupons.sql`(_issue_membership_and_record_payment) |
 
 ### P1-46. (2026-09-18, Phase 1~4 완료) Business Scenario E2E — 핵심 시나리오 구현 완료, 잔여 항목은 하위 항목으로 세분화
 
@@ -1390,7 +1397,7 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 |---|---|
 | 우선순위 | P1(핵심 구조/시나리오 완료, 남은 항목은 각자 P1-47~50 참고) |
 | 현재 상태 | **Phase 1~4 완료.** `tests/integration/scenarios/`에 공용 레이어(types/reporter/invariants/actors/registry/concurrentClient) + 시나리오 파일 6개(waitlist-promotion, reservation-concurrency, date-boundaries, admin-member-concurrency, location-nearby, notifications) — SCN-P0-20~25, P1-01/02/03/05/07/11, P1-20/21/22/24, P1-31/32, 위치 기반 4건, 알림 4종을 실제 라이브 dev Supabase에서 실행해 PASS 확인. iOS/Android 대표 예약화면 스모크(`ReservationSmokeTests.{swift,java}`)도 기존 AppUITests/androidTest 구조에 추가해 실제 BUILD PASS 확인(xcodebuild/gradlew). 상세 표는 `tests/integration/scenarios/registry.ts` 참고. |
-| BUG FOUND 3건(프로덕션 미수정, 별도 판단 필요) | (1) 기본 설정(`group_book_days_before=1`)에서는 `allow_same_day_booking=true`여도 당일예약이 항상 마감 거부로 실패(calc_deadline이 순수 날짜 산술이라 당일 수업 마감이 항상 "어제"가 됨). (2) `update_class_safe()`는 정원 축소 시 확정 인원과 비교하지 않아 "확정 인원 > 정원" 상태가 방치될 수 있음. (3) `update_class_safe()`는 정원 확대 시 대기자를 자동 승격시키지 않음(승격은 취소 이벤트에서만). 재현 테스트: `date-boundaries.test.ts`(SCN-P1-24a), `admin-member-concurrency.test.ts`(SCN-P1-31/32-BUGFOUND). |
+| BUG FOUND 3건 — 2026-09-18 MWHABIT Business Logic Fix Batch에서 전부 수정·적용·재검증 완료 | (1) 당일예약 마감 버그 → `fix_same_day_booking_deadline.sql` 적용, `date-boundaries.test.ts` PASS. (2) 정원 축소 invariant 없음 → `fix_class_capacity_invariants_v2.sql`(최초 버전은 함수 오버로드 충돌로 실패, v2로 교체) 적용, `admin-member-concurrency.test.ts` 6/6 PASS. (3) 정원 확대 시 대기자 자동 승격 안 됨 → 같은 `fix_class_capacity_invariants_v2.sql`에 자동 승격 로직 포함해 함께 수정. 세 건 모두 라이브 DB 적용 및 실제 QA 재실행으로 확인됨(2026-09-18). |
 | 기능 갭 발견 | 요청된 "위치 반경 필터" 기능은 `lib/home.ts`에 존재하지 않음 — 실제로는 좌표 거리순 정렬만 있고 반경 컷오프가 없음(`location-nearby.test.ts`에서 실제 코드로 확인). |
 | 남은 작업(하위 항목) | P1-47(P1 나머지: P1-04/06/26/27/30/33~35/45), P1-48(P2 UI 복잡도/권한/결제 확장), P1-49(홈 TTL 캐시 — Playwright E2E 또는 네이티브 레이어 전용, Shared 불가 확인됨), P1-50(iOS/Android RUNTIME PASS — 실기기/부팅된 시뮬레이터 필요, P2-39와 동일 조건). `.github/workflows/mobile-ui-qa.yml` 시나리오 등급 선택 옵션 추가도 미착수. |
 | 근거 파일 | `tests/integration/scenarios/`, `test-results/business-scenarios/*.json`, `ios/App/AppUITests/ReservationSmokeTests.swift`, `android/app/src/androidTest/java/com/mwhabit/app/ReservationSmokeTests.java` |

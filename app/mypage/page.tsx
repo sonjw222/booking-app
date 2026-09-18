@@ -246,6 +246,10 @@ export default function MyPage() {
         <div className="left"><span className="icon"><UiIcon name="star" /></span>포인트 내역</div>
         <span className="chevron">›</span>
       </a>
+      <a className="list-row" href="/mypage/coupons">
+        <div className="left"><span className="icon"><UiIcon name="card" /></span>내 쿠폰</div>
+        <span className="chevron">›</span>
+      </a>
       <a className="list-row" href="/profiles">
         <div className="left"><span className="icon"><UiIcon name="users" /></span>프로필 관리</div>
         <span className="chevron">›</span>

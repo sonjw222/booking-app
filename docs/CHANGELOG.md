@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## 2026-09-18 — MWHABIT Membership Visibility + Member Coupon Batch
+
+수강권 공개범위(전체/특정등급/지정회원)와 회원 할인쿠폰(정액/정률) 기능을 추가했다. 두 기능
+모두 "UI에서만 숨기는 방식 금지" 원칙에 따라 최종 구매 자격/할인금액을 항상 서버(RLS +
+결제 확정 RPC)가 재검증하도록 설계했고, 18개 실제 QA 시나리오(회원 세션 기준, mock 결제 경유)로
+검증했다. SQL은 이 세션에 Supabase 직접 실행 수단이 없어 작성만 하고 사용자가 Supabase SQL
+Editor에서 직접 적용했다(CLAUDE.md 규칙 3/4) — 전문/적용 순서/확인 방법은 최종 보고서 참고.
+
+- **DB(`add_membership_visibility_and_coupons.sql` + 보정 3건)**: `products.visibility_type`
+  (all/grades/selected_members), `membership_product_grades`/`membership_product_members`
+  매핑 테이블(둘 다 센터 격리 RLS), `member_can_purchase_product()`/
+  `fetch_purchasable_products()` 자격 판정 RPC, `coupons`/`coupon_products`/`member_coupons`
+  테이블(같은 쿠폰-회원 쌍은 동시에 active 1개만 허용하는 partial unique index 포함),
+  `issue_coupon_to_members()`/`revoke_member_coupon()` RPC. `orders` INSERT RLS와
+  `_issue_membership_and_record_payment()`/`refund_membership()`을 확장해 구매 자격 재검증 +
+  실제 할인금액 서버 계산 + 결제 성공 시에만 쿠폰 소비(행 잠금으로 동시-사용 방지) +
+  전체 환불 시 쿠폰 복원을 구현. 적용 후 실측으로 잡힌 버그 3건(누락된 GRANT, RLS 때문에
+  일반 회원 세션에서 늘 false를 반환하던 `member_can_purchase_product()`의 SECURITY DEFINER
+  누락, `update_class_safe()` 함수 오버로드 충돌)을 보정 SQL로 수정.
+- **매니저 UI**: `app/manager/membership-rules/page.tsx`에 공개범위 설정(등급 다중선택,
+  회원 검색+다중선택 — 기존 회원검색 구조 재사용) 추가, 목록에 `[VIP 외 1개 등급]` 같은 배지
+  표시. 새 `app/manager/coupons/page.tsx`(쿠폰 생성/지급/회수/상세, `app/manager/goods/page.tsx`
+  구조 재사용) 추가.
+- **회원 UI**: `app/center/[id]` 구매 화면(`app/checkout/page.tsx`)이 이제 서버가 걸러준
+  구매 가능 상품만 보여주고(`fetch_purchasable_products` RPC), 지금 쓸 수 있는 내 쿠폰이 있으면
+  결제 화면에 선택 UI를 노출한다(기존 하드코딩 프로모코드 입력과는 별개 경로, 병행 유지).
+  단, "직접결제"(센터 방문 결제, `fulfill_order()` 경유)는 쿠폰 검증/소비 로직이 없어 이번
+  범위에서 제외했다 — 아래 TODO 참고. 새 `app/mypage/coupons/page.tsx`("내 쿠폰") 추가.
+
 ## 2026-09-18 — 릴리스 폴리시 배치 8차 + Business Logic Fix Batch 병합
 
 두 병렬 세션(release-polish-batch 직접 작업과 격리 worktree `mobile-ux-nav-manager-operator-polish`)

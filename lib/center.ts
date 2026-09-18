@@ -177,16 +177,21 @@ export type CenterProduct = {
 };
 
 export async function fetchCenterProducts(centerId: string): Promise<CenterProduct[]> {
+  // MWHABIT Membership Visibility Batch(2026-09-18) — 원래는 이 센터의 is_active+
+  // is_on_sale 상품을 전부(공개범위 무관) 가져왔다. fetch_purchasable_products()
+  // RPC(SECURITY DEFINER, add_membership_visibility_and_coupons.sql)가 로그인한
+  // 회원(my_profile_ids())이 실제로 구매 가능한 상품만 서버에서 걸러서 돌려준다 —
+  // "UI에서만 숨기는 방식으로 끝내지 말 것" 원칙에 따라 이 목록 자체가 서버 계산
+  // 결과이지, 클라이언트가 전체를 받아서 감추는 게 아니다. 정렬(product_kind asc,
+  // price asc)도 RPC 안에서 그대로 유지한다.
   const { data, error } = await supabase
-    .from("products")
-    .select("id, name, price, product_kind, total_count, unlimited, description, sizes, auto_book_days, group_label, max_quantity")
-    .eq("center_id", centerId)
-    .eq("is_active", true)
-    .eq("is_on_sale", true)
-    .order("product_kind", { ascending: true })
-    .order("price", { ascending: true });
+    .rpc("fetch_purchasable_products", { p_center_id: centerId })
+    .select("id, name, price, product_kind, total_count, unlimited, description, sizes, auto_book_days, group_label, max_quantity");
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
-  const rows = data ?? [];
+  // Postgres 함수가 setof products를 반환하는 RPC라 supabase-js의 기본 타입 추론이
+  // "단일 행 | 배열" 유니온으로 잡는다(.single() 없이도) — 실제로는 여러 행이 올 수
+  // 있으므로 배열로 명시한다.
+  const rows = (data ?? []) as any[];
 
   const limitedIds = rows.filter((p: any) => p.max_quantity != null).map((p: any) => p.id);
   let soldByProduct: Record<string, number> = {};

@@ -124,6 +124,7 @@ export default function ManagerNav({ initialCanSeeMembers = null }: { initialCan
           {canSee("customer.progress") && <a className={`desktop-nav-item ${is("/manager/progress") ? "active" : ""}`} href="/manager/progress/record"><UiIcon name="edit" /><span>진도 기록</span></a>}
           {canSee("message.alimtalk.view") && <a className={`desktop-nav-item ${is("/manager/alimtalk") ? "active" : ""}`} href="/manager/alimtalk"><UiIcon name="megaphone" /><span>알림톡</span></a>}
           {canSee("pass.order.view") && <a className={`desktop-nav-item ${is("/manager/orders") ? "active" : ""}`} href="/manager/orders"><UiIcon name="cart" /><span>주문</span></a>}
+          {canSee("customer.member.issue_pass") && <a className={`desktop-nav-item ${is("/manager/coupons") ? "active" : ""}`} href="/manager/coupons"><UiIcon name="card" /><span>쿠폰</span></a>}
           {canSee("board.notice.view") && <a className={`desktop-nav-item ${is("/manager/announcements") ? "active" : ""}`} href="/manager/announcements"><UiIcon name="megaphone" /><span>공지사항</span></a>}
           {canSee("board.inquiry.view") && <a className={`desktop-nav-item ${is("/manager/inquiries") ? "active" : ""}`} href="/manager/inquiries"><UiIcon name="message" /><span>1:1 문의</span></a>}
           {canSee("facility.review.view") && <a className={`desktop-nav-item ${is("/manager/reviews") ? "active" : ""}`} href="/manager/reviews"><UiIcon name="star" /><span>후기</span></a>}

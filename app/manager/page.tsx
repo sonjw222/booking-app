@@ -338,6 +338,12 @@ export default function ManagerDashboard() {
           <span className="chevron">›</span>
         </a>
       )}
+      {canSeeMenu("customer.member.issue_pass") && (
+        <a className="list-row" href="/manager/coupons">
+          <div className="left"><span className="icon"><UiIcon name="card" /></span>쿠폰 관리</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
       {canSeeMenu("customer.progress") && (
         <a className="list-row" href="/manager/progress/record">
           <div className="left"><span className="icon"><UiIcon name="edit" /></span>회원 진도 기록</div>

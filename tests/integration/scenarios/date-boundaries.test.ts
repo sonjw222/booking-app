@@ -236,6 +236,14 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
     if (farErr || !clsFar) throw new Error(`수업 생성 실패: ${farErr?.message}`);
     pendingClassIds.push((clsFar as any).id);
 
+    // ⚠ MWHABIT Business Logic Fix Batch(2026-09-18) 이후 수정: 당일예약 허용 버그가
+    // 고쳐지면서(fix_same_day_booking_deadline.sql), "2시간 뒤 시작하는 당일 수업"은
+    // 더 이상 날짜 기반(1일 전 22시) 마감으로 거부되지 않는다 — allow_same_day_booking
+    // 기본값 true라 수업 시작 전까지 정상 예약된다(정확히 SCN-P1-24-ON이 검증하는 동작).
+    // 그래서 이 시나리오("마감 자체가 지난 경우")는 당일예약 정책과 뒤섞이지 않도록,
+    // 개별 수업에 명시적 booking_deadline_min 오버라이드(시작 5시간 전)를 줘서 "지금이
+    // 이미 그 오버라이드 마감을 지난" 상태를 직접 만든다 — 센터 기본 설정이나 당일예약
+    // 허용 여부와 무관하게 항상 거부돼야 하는, 더 명확한 마감 경계 테스트가 된다.
     const { data: clsSoon, error: soonErr } = await supabase
       .from("classes")
       .insert({
@@ -245,6 +253,7 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
         end_time: new Date(Date.now() + 3 * 3600 * 1000).toISOString(),
         capacity: 8,
         class_format: "group",
+        booking_deadline_min: 300, // 시작 5시간 전 마감 — 2시간 뒤 시작이므로 마감은 3시간 전에 이미 지남
       })
       .select("id")
       .single();
@@ -265,7 +274,7 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
 
       const resSoon = await supabase.rpc("reserve_class", { p_class_id: (clsSoon as any).id, p_profile_id: null });
       assertions.push({
-        name: "마감 후(2시간 뒤 임박 수업, '1일 전 22시' 마감을 이미 지남) 예약 거부",
+        name: "마감 후(개별 수업 마감 오버라이드가 이미 지난 임박 수업) 예약 거부",
         passed: !!resSoon.error,
         detail: resSoon.error?.message,
       });
