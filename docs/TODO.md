@@ -1373,6 +1373,15 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
+### P2-42. (신규, 2026-09-19) Android SearchTests.searchInputAndResults — SM-T975N 실기기에서 검색 실행 직후 espresso-web Atom 평가가 복구 불가 상태로 깨짐
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2(제품 버그 아님 — 테스트 인프라 한계로 보임, 실기기 QA로 대체 가능) |
+| 현재 상태 | Samsung SM-T975N(Android 13) 실기기에서 `connectedDebugAndroidTest` 반복 실행 중 `SearchTests.searchInputAndResults`만 지속적으로 실패. 검색 실행을 트리거하는 액션(별도 `.search-go` 버튼 클릭, 또는 입력창에 Enter 키 — 둘 다 시도해봄)을 수행한 직후부터 `findElement`의 Atom 평가가 테스트가 끝날 때까지 회복되지 않고 전부 `"Atom evaluation returned null"`로 실패한다(logcat 실측). 고정 sleep→폴링 전환(최대 15초), IME 정착 유예 추가, `closeSoftKeyboard()` 제거, 검색 트리거 방식 변경(버튼→Enter키) 등 여러 방향으로 시도했으나 전부 동일하게 재현됨 — 타이밍 문제가 아니라 이 기기/WebView 조합에 특정된 더 깊은 espresso-web 호환성 이슈로 보인다. `.searchbar` 진입, `.search-input` 존재 확인, 타이핑까지는 전부 정상 동작하고, 오직 "검색 실행"이 트리거된 직후부터만 재현됨. |
+| 필요한 것 | (1) UiAutomator 기반(접근성 트리 직접 조회)으로 이 테스트만 별도 전환해 espresso-web Atom 평가 자체를 우회하는 방안 검토. (2) 다른 실기기(비삼성/다른 WebView 버전)에서도 재현되는지 교차 확인 — 삼성 WebView 특정 이슈인지 Android 13 전반 이슈인지 구분 필요. (3) 그때까지는 이 화면(검색 실행 후 결과 렌더링)은 실기기 수동 QA 체크리스트로 커버. |
+| 근거 파일 | `android/app/src/androidTest/java/com/mwhabit/app/SearchTests.java`, logcat `android/app/build/outputs/androidTest-results/connected/debug/SM-T975N - 13/logcat-com.mwhabit.app.SearchTests-searchInputAndResults.txt`(재현 시마다 생성) |
+
 ### P2-41. (신규, 2026-09-18) 통합테스트 — 51개 파일 전체 연속 실행 시 공유 테스트센터 상태 오염·Auth rate limit로 flaky
 
 | 필드 | 내용 |
