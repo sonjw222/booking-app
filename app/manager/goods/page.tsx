@@ -33,6 +33,8 @@ export default function GoodsPage() {
   const [pCount, setPCount] = useState("");
   const [pDesc, setPDesc] = useState("");
   const [pSizes, setPSizes] = useState("");
+  // 쿠폰 적용 가능 여부(add_product_coupon_eligibility.sql) — 기본값 true.
+  const [pCouponEligible, setPCouponEligible] = useState(true);
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
@@ -96,11 +98,11 @@ export default function GoodsPage() {
         cutoffDay: pExpiry.mode === "rolling_month" ? num(pExpiry.cutoffDay) : null, allowEarlyUse: pExpiry.allowEarlyUse,
       };
       if (editId) {
-        await updateProduct(editId, pName.trim(), num(pPrice), num(pCount), unlimited, { description: pDesc.trim(), sizes: sizeArr, expiry });
+        await updateProduct(editId, pName.trim(), num(pPrice), num(pCount), unlimited, { description: pDesc.trim(), sizes: sizeArr, expiry, couponEligible: pCouponEligible });
       } else {
-        await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "goods", unlimited, { description: pDesc.trim(), sizes: sizeArr, expiry });
+        await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "goods", unlimited, { description: pDesc.trim(), sizes: sizeArr, expiry, couponEligible: pCouponEligible });
       }
-      setPName(""); setPPrice(""); setPCount(""); setUnlimited(false); setPDesc(""); setPSizes(""); setPExpiry({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
+      setPName(""); setPPrice(""); setPCount(""); setUnlimited(false); setPDesc(""); setPSizes(""); setPExpiry({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false }); setPCouponEligible(true);
       setSheet(false);
       showToast(editId ? "상품을 수정했어요" : "상품을 추가했어요");
       setEditId(null);
@@ -124,12 +126,14 @@ export default function GoodsPage() {
       cutoffDay: p.rollingMonthCutoffDay != null ? String(p.rollingMonthCutoffDay) : "",
       allowEarlyUse: p.rollingMonthAllowEarlyUse ?? false,
     });
+    setPCouponEligible(p.couponEligible);
     setSheet(true);
   }
 
   function openCreate() {
     setEditId(null);
     setPName(""); setPPrice(""); setPCount(""); setUnlimited(false); setPDesc(""); setPSizes(""); setPExpiry({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
+    setPCouponEligible(true);
     setSheet(true);
   }
 
@@ -197,7 +201,14 @@ export default function GoodsPage() {
             <div key={p.id} className="pass-card">
               <div className="pass-head">
                 <div className="goods-card-content">
-                  <div className="pass-name">{p.name}</div>
+                  <div className="pass-name">
+                    {p.name}
+                    {!p.couponEligible && (
+                      <span className="pass-group-tag" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
+                        쿠폰 적용 불가
+                      </span>
+                    )}
+                  </div>
                   <div className="pass-sub">
                     {won(p.price)} · {p.unlimited ? "무제한" : `${p.totalCount ?? 0}회`}
                   </div>
@@ -244,6 +255,16 @@ export default function GoodsPage() {
             )}
 
             <ExpiryOptionField value={pExpiry} onChange={setPExpiry} />
+
+            {/* 쿠폰 적용 가능 여부(add_product_coupon_eligibility.sql) — 끄면 이 상품엔
+                쿠폰을 적용할 수 없다. 쿠폰 쪽 설정보다 우선하며, 결제 확정 시 서버가
+                다시 강제한다. */}
+            <div className="set-row" style={{ padding: "12px 0 6px", borderBottom: "none" }}>
+              <div className="set-label">쿠폰 적용 가능<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>끄면 이 상품엔 어떤 쿠폰도 적용할 수 없어요</span></div>
+              <button className={`switch ${pCouponEligible ? "on" : ""}`} onClick={() => setPCouponEligible(!pCouponEligible)}>
+                <span className="knob" />
+              </button>
+            </div>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>상세 설명 (선택)</div>
             <textarea className="input-field" style={{ minHeight: 70, resize: "vertical", lineHeight: 1.5 }}

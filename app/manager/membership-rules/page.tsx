@@ -47,6 +47,9 @@ export default function MembershipRulesPage() {
   const [pExpiry, setPExpiry] = useState<ExpiryOptionValue>({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
   const [pLimitSale, setPLimitSale] = useState(false);
   const [pMaxQty, setPMaxQty] = useState("");
+  // 쿠폰 적용 가능 여부(add_product_coupon_eligibility.sql) — 기본값 true(기존과 동일하게
+  // 쿠폰 적용 가능), 매니저가 끄면 이 상품엔 어떤 쿠폰도 적용 불가.
+  const [pCouponEligible, setPCouponEligible] = useState(true);
   // MWHABIT Membership Visibility Batch(2026-09-18) — 공개범위
   const [pVisType, setPVisType] = useState<ProductVisibility["type"]>("all");
   const [pVisGradeIds, setPVisGradeIds] = useState<string[]>([]);
@@ -134,6 +137,7 @@ export default function MembershipRulesPage() {
     setPAutoDays([]); setPAutoClasses([]);
     setPUnlimited(false); setPExpiry({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
     setPLimitSale(false); setPMaxQty("");
+    setPCouponEligible(true);
     setPVisType("all"); setPVisGradeIds([]); setPVisMemberIds([]); setPVisMemberLabels({});
     setVisMemberSearch(""); setVisMemberResults([]);
   }
@@ -162,6 +166,7 @@ export default function MembershipRulesPage() {
     });
     setPLimitSale(p.maxQuantity != null);
     setPMaxQty(p.maxQuantity != null ? String(p.maxQuantity) : "");
+    setPCouponEligible(p.couponEligible);
     // MWHABIT Membership Visibility Batch — 공개범위 프리필. "지정 회원" 칩에 이름/전화를
     // 보여주려면 center_member_id뿐 아니라 표시용 라벨도 필요해서, 이 센터의 회원
     // 목록(기존 fetchMembers 재사용)에서 매칭해 채운다.
@@ -238,6 +243,7 @@ export default function MembershipRulesPage() {
         groupLabel: pGroupLabel.trim() || undefined,
         maxQuantity: pLimitSale ? num(pMaxQty) : null,
         visibility: { type: pVisType, gradeIds: pVisGradeIds, memberIds: pVisMemberIds } as ProductVisibility,
+        couponEligible: pCouponEligible,
       };
       if (editingId) {
         await updateProduct(editingId, pName.trim(), num(pPrice), num(pCount), false, extra);
@@ -418,6 +424,13 @@ export default function MembershipRulesPage() {
                           지정회원 {p.visibility.memberIds.length}명
                         </span>
                       )}
+                      {/* 쿠폰 적용 가능은 기본값(true)이라 굳이 안 보여주고, 꺼져 있을 때만
+                          눈에 띄게 — 위 공개범위 배지와 동일한 "제한이 걸린 경우만" 원칙. */}
+                      {!p.couponEligible && (
+                        <span className="pass-group-tag" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
+                          쿠폰 적용 불가
+                        </span>
+                      )}
                     </div>
                     <div className="pass-sub">
                       {won(p.price)}{p.totalCount ? ` · ${p.totalCount}회` : ""}
@@ -541,6 +554,17 @@ export default function MembershipRulesPage() {
             {/* 횟수와 별개로 기간을 걸 수 있음 — 예: 무제한+한 달 기간 = 기간권 효과,
                 5회권+한 달 기간 = 5회 다 안 써도 한 달 뒤 자동 만료(사용자 요청, 2026-09-01) */}
             <ExpiryOptionField value={pExpiry} onChange={setPExpiry} />
+
+            {/* 쿠폰 적용 가능 여부(add_product_coupon_eligibility.sql) — 끄면 이 상품엔
+                어떤 쿠폰(모든 수강권 대상이든 이 상품을 직접 지정한 쿠폰이든)도 적용 못
+                한다. 쿠폰 쪽 설정보다 이 값이 항상 우선하고, 결제 확정 시점에 서버가
+                다시 강제한다(UI에서만 막는 게 아님). */}
+            <div className="set-row" style={{ padding: "12px 0 6px", borderBottom: "none" }}>
+              <div className="set-label">쿠폰 적용 가능<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>끄면 이 상품엔 어떤 쿠폰도 적용할 수 없어요</span></div>
+              <button className={`switch ${pCouponEligible ? "on" : ""}`} onClick={() => setPCouponEligible(!pCouponEligible)}>
+                <span className="knob" />
+              </button>
+            </div>
 
             {/* MWHABIT Membership Visibility Batch(2026-09-18) — 공개 범위. 최종 강제는
                 항상 서버(orders INSERT RLS + 결제 확정 RPC)에서 다시 하므로, 여기서

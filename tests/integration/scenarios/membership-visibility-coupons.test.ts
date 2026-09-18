@@ -110,7 +110,11 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
     return (data as any).id as string;
   }
 
-  async function makeProduct(centerId: string, price: number, visibility?: { type: string; gradeIds?: string[]; memberIds?: string[] }): Promise<string> {
+  async function makeProduct(
+    centerId: string, price: number,
+    visibility?: { type: string; gradeIds?: string[]; memberIds?: string[] },
+    couponEligible: boolean = true
+  ): Promise<string> {
     const admin = getFixtureAdminClient();
     const runId = newRunId();
     const { data, error } = await admin.from("products").insert({
@@ -123,6 +127,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       is_active: true,
       is_on_sale: true,
       visibility_type: visibility?.type ?? "all",
+      coupon_eligible: couponEligible,
     }).select("id").single();
     if (error || !data) throw new Error(`상품 생성 실패: ${error?.message ?? "no data"}`);
     const productId = (data as any).id as string;
@@ -435,6 +440,47 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       const payRes = await payWithMock(orderId);
       assertions.push({ name: "[보안] 유효기간 지난 쿠폰은 결제 확정 시점에 거부", passed: !!payRes.error, detail: payRes.error?.message });
       expect(payRes.error).not.toBeNull();
+    });
+  }, 60000);
+
+  // ============================================================
+  // §신규(2026-09-19): 상품별 "쿠폰 적용 불가" 옵션(add_product_coupon_eligibility.sql)
+  // — 쿠폰 쪽 applies_to='all'이어도, 상품 자체가 coupon_eligible=false면 그 어떤
+  // 쿠폰도 못 쓴다(상품 설정이 쿠폰 설정보다 우선). 유효하고, 소유자도 맞고, 최소금액도
+  // 만족하는 "완전히 정상적인" 쿠폰으로 시도해도 여전히 막혀야 한다 — 그래야 이게
+  // 진짜 상품 레벨 차단인지(다른 사유로 우연히 막힌 게 아닌지) 확실하다.
+  // ============================================================
+  it("[24-22] 쿠폰 적용 불가 상품 — 완전히 유효한 쿠폰이어도 서버가 차단", async () => {
+    const productId = await makeProduct(centerAId, 100000, { type: "all" }, false); // coupon_eligible=false
+    await setMemberGrade(centerAId, memberAProfileId, null);
+    const centerMemberId = await centerMemberIdOf(centerAId, memberAProfileId);
+    const couponId = await issueCoupon(centerAId, { name: "QA-쿠폰불가상품용쿠폰", discountType: "fixed", discountValue: 10000 });
+    const memberCouponId = await grantMemberCoupon(couponId, centerMemberId);
+
+    await runScenario("SCN-CPN-22", ["memberA"], async (assertions) => {
+      await loginMemberA();
+      // 할인 없이 원가로 시도해도(클라이언트가 할인을 아예 반영 안 한 경우) 서버가
+      // coupon_eligible 체크에서 먼저 막아야 한다 — 금액 불일치가 아니라 쿠폰 적용
+      // 자체가 차단되는지를 본다.
+      const orderRes = await createOrderAs(memberAProfileId, centerAId, productId, "QA-쿠폰불가상품테스트", 90000, memberCouponId);
+      expect(orderRes.error).toBeNull(); // orders INSERT는 상품 구매자격만 보므로 일단 통과
+      const orderId = (orderRes.data as any).id as string;
+      pendingOrderIds.push(orderId);
+
+      const payRes = await payWithMock(orderId);
+      assertions.push({
+        name: "[보안] coupon_eligible=false 상품은 유효한 쿠폰이어도 결제 확정 시점에 거부",
+        passed: !!payRes.error,
+        detail: payRes.error?.message,
+      });
+      expect(payRes.error).not.toBeNull();
+
+      // 쿠폰 자체는 이 실패한 시도로 소비되지 않아야 한다(다른 정상 상품에는 여전히
+      // 쓸 수 있어야 함) — 실패한 결제는 쿠폰 상태를 바꾸지 않는다는 기존 요청 18번
+      // 원칙과 동일선상의 회귀 방지.
+      const { data: mc } = await getFixtureAdminClient().from("member_coupons").select("status").eq("id", memberCouponId).single();
+      assertions.push({ name: "차단된 시도로 쿠폰이 소비되지 않음(여전히 available)", passed: (mc as any)?.status === "available", detail: JSON.stringify(mc) });
+      expect((mc as any)?.status).toBe("available");
     });
   }, 60000);
 
