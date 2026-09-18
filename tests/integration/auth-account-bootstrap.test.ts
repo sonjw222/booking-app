@@ -97,4 +97,29 @@ describe("ensureAccountForCurrentUser (P1 소셜 로그인 신규 계정 부트�
     const profiles = await supabase.from("profiles").select("id").eq("account_id", accounts.data![0].id);
     expect(profiles.data?.length).toBe(1);
   });
+
+  // 실기기 QA(2026-09-14, 4차) — Apple 네이티브 신규 가입 레이스 컨디션으로 accounts 행만
+  // 생기고 profiles 행이 안 생긴 채 남는 사고가 실제로 있었다(getMyContext()가 "프로필이
+  // 없어요"로 실패). accounts는 있는데 profiles만 없는 상태를 인위적으로 만들어, 다음
+  // ensureAccountForCurrentUser() 호출(다음 로그인/앱 재실행에 해당)이 profiles를 스스로
+  // 복구하는지 검증한다.
+  it("accounts는 있는데 profiles만 없으면(과거 부트스트랩 중간 실패) 다음 호출에서 자동 복구한다", async () => {
+    await ensureAccountForCurrentUser();
+
+    const admin = getFixtureAdminClient();
+    const accountRes = await supabase.from("accounts").select("id").eq("auth_id", authUserId).single();
+    expect(accountRes.error).toBeNull();
+    const accountId = accountRes.data!.id;
+
+    const delProfiles = await admin.from("profiles").delete().eq("account_id", accountId);
+    expect(delProfiles.error).toBeNull();
+    const profilesAfterDelete = await supabase.from("profiles").select("id").eq("account_id", accountId);
+    expect(profilesAfterDelete.data?.length).toBe(0);
+
+    await ensureAccountForCurrentUser();
+
+    const profilesAfterRepair = await supabase.from("profiles").select("id, is_primary").eq("account_id", accountId);
+    expect(profilesAfterRepair.data?.length).toBe(1);
+    expect(profilesAfterRepair.data?.[0].is_primary).toBe(true);
+  });
 });

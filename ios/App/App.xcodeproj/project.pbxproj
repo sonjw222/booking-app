@@ -12,7 +12,12 @@
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		CE5BF6818A3F52C68475B1C6 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2B667BC2ED1F282B29A8C612 /* FirebaseCore */; };
 		88DF3CEC2BEF7CAD5F3F3245 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 218E5D5A20692D6D03EF5CAF /* FirebaseMessaging */; };
+		B97FD9AE2A2F44819D82E01F /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 0660FB5C506A403A98D696E3 /* GoogleSignIn */; };
 		DC2F20A5B63567DCCF3AB232 /* FcmTokenPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBC931432FEA6A356F52D5D5 /* FcmTokenPlugin.swift */; };
+		4A61DEA2CC8F4947B442DB83 /* AppleSignInPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40CF00292DB74C7D99A39C3A /* AppleSignInPlugin.swift */; };
+		FA2BE0B41F73434C96A4AF20 /* WebViewThemePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 904EDFC269344FDEA4C02973 /* WebViewThemePlugin.swift */; };
+		C21FFA11D3B74E898336716E /* GoogleSignInPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7132C41267E0423EA4B177C5 /* GoogleSignInPlugin.swift */; };
+		70A3E3BE762840FF8B786BA1 /* NavigationPolicyPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AAE95F2083946EC9DDD3883 /* NavigationPolicyPlugin.swift */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
@@ -20,12 +25,32 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
+		C92F049C5D4938E2D87BFB29 /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439E5652D17937192B690497 /* TestSupport.swift */; };
+		0BD714AF9CB241CB3D8B9FBE /* LaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C797BC9E71F1598F28440854 /* LaunchTests.swift */; };
+		C84B9DA12EB8011068441640 /* TabNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48FF7E1C85BC9B301E0F07C8 /* TabNavigationTests.swift */; };
+		271FCF3488F84FD4A16D572F /* SafeAreaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29EF193E7D19F31DB980F085 /* SafeAreaTests.swift */; };
+		3E5C6184B1EEAE576EEB8643 /* SearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAD19AB790FEB8A05889A4B0 /* SearchTests.swift */; };
+		9365625BF316FEAFD3CDCA8C /* ManagerModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F30510D158416E3EA40BC56 /* ManagerModeTests.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		00202A65521AD461CD50AEDE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 504EC3031FED79650016851F;
+			remoteInfo = App;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		02EC2D9D305264BF0031DDCC /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		02EC2D9F305266E40031DDCC /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		EBC931432FEA6A356F52D5D5 /* FcmTokenPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FcmTokenPlugin.swift; sourceTree = "<group>"; };
+		40CF00292DB74C7D99A39C3A /* AppleSignInPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInPlugin.swift; sourceTree = "<group>"; };
+		904EDFC269344FDEA4C02973 /* WebViewThemePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewThemePlugin.swift; sourceTree = "<group>"; };
+		7132C41267E0423EA4B177C5 /* GoogleSignInPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleSignInPlugin.swift; sourceTree = "<group>"; };
+		6AAE95F2083946EC9DDD3883 /* NavigationPolicyPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationPolicyPlugin.swift; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -37,6 +62,13 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		18811C65C5EA378F3D728083 /* AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		439E5652D17937192B690497 /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
+		C797BC9E71F1598F28440854 /* LaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchTests.swift; sourceTree = "<group>"; };
+		48FF7E1C85BC9B301E0F07C8 /* TabNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabNavigationTests.swift; sourceTree = "<group>"; };
+		29EF193E7D19F31DB980F085 /* SafeAreaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeAreaTests.swift; sourceTree = "<group>"; };
+		DAD19AB790FEB8A05889A4B0 /* SearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchTests.swift; sourceTree = "<group>"; };
+		1F30510D158416E3EA40BC56 /* ManagerModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagerModeTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -47,6 +79,14 @@
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
 				CE5BF6818A3F52C68475B1C6 /* FirebaseCore in Frameworks */,
 				88DF3CEC2BEF7CAD5F3F3245 /* FirebaseMessaging in Frameworks */,
+				B97FD9AE2A2F44819D82E01F /* GoogleSignIn in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E579A9E67AD775FC2C322572 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -58,6 +98,7 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
+				FF49311999D1EB6821EB2815 /* AppUITests */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -66,8 +107,22 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+				18811C65C5EA378F3D728083 /* AppUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		FF49311999D1EB6821EB2815 /* AppUITests */ = {
+			isa = PBXGroup;
+			children = (
+				439E5652D17937192B690497 /* TestSupport.swift */,
+				C797BC9E71F1598F28440854 /* LaunchTests.swift */,
+				48FF7E1C85BC9B301E0F07C8 /* TabNavigationTests.swift */,
+				29EF193E7D19F31DB980F085 /* SafeAreaTests.swift */,
+				DAD19AB790FEB8A05889A4B0 /* SearchTests.swift */,
+				1F30510D158416E3EA40BC56 /* ManagerModeTests.swift */,
+			);
+			path = AppUITests;
 			sourceTree = "<group>";
 		};
 		504EC3061FED79650016851F /* App */ = {
@@ -78,6 +133,10 @@
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				EBC931432FEA6A356F52D5D5 /* FcmTokenPlugin.swift */,
+				40CF00292DB74C7D99A39C3A /* AppleSignInPlugin.swift */,
+				904EDFC269344FDEA4C02973 /* WebViewThemePlugin.swift */,
+				7132C41267E0423EA4B177C5 /* GoogleSignInPlugin.swift */,
+				6AAE95F2083946EC9DDD3883 /* NavigationPolicyPlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -109,10 +168,29 @@
 				4D22ABE82AF431CB00220026 /* CapApp-SPM */,
 				2B667BC2ED1F282B29A8C612 /* FirebaseCore */,
 				218E5D5A20692D6D03EF5CAF /* FirebaseMessaging */,
+				0660FB5C506A403A98D696E3 /* GoogleSignIn */,
 			);
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
+		};
+		9A27F90D2985CC6E44B87ABF /* AppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F3DB2751F291D47EB2EDA9A0 /* Build configuration list for PBXNativeTarget "AppUITests" */;
+			buildPhases = (
+				5A1217F1B80E7D50292DEBBF /* Sources */,
+				E579A9E67AD775FC2C322572 /* Frameworks */,
+				F7896A2D3396CF317AB67301 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6CDF881D04AAF9D6ED3083C2 /* PBXTargetDependency */,
+			);
+			name = AppUITests;
+			productName = AppUITests;
+			productReference = 18811C65C5EA378F3D728083 /* AppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
@@ -128,6 +206,11 @@
 						LastSwiftMigration = 1100;
 						ProvisioningStyle = Automatic;
 					};
+					9A27F90D2985CC6E44B87ABF = {
+						CreatedOnToolsVersion = 15.0;
+						ProvisioningStyle = Automatic;
+						TestTargetID = 504EC3031FED79650016851F;
+					};
 				};
 			};
 			buildConfigurationList = 504EC2FF1FED79650016851F /* Build configuration list for PBXProject "App" */;
@@ -142,12 +225,14 @@
 			packageReferences = (
 				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
 				4CD91B4FA1CBC99218BBC987 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				68DCC60A21024332AE929DF2 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				9A27F90D2985CC6E44B87ABF /* AppUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -167,6 +252,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F7896A2D3396CF317AB67301 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -177,10 +269,35 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				DC2F20A5B63567DCCF3AB232 /* FcmTokenPlugin.swift in Sources */,
+				4A61DEA2CC8F4947B442DB83 /* AppleSignInPlugin.swift in Sources */,
+				FA2BE0B41F73434C96A4AF20 /* WebViewThemePlugin.swift in Sources */,
+				C21FFA11D3B74E898336716E /* GoogleSignInPlugin.swift in Sources */,
+				70A3E3BE762840FF8B786BA1 /* NavigationPolicyPlugin.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5A1217F1B80E7D50292DEBBF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C92F049C5D4938E2D87BFB29 /* TestSupport.swift in Sources */,
+				0BD714AF9CB241CB3D8B9FBE /* LaunchTests.swift in Sources */,
+				C84B9DA12EB8011068441640 /* TabNavigationTests.swift in Sources */,
+				271FCF3488F84FD4A16D572F /* SafeAreaTests.swift in Sources */,
+				3E5C6184B1EEAE576EEB8643 /* SearchTests.swift in Sources */,
+				9365625BF316FEAFD3CDCA8C /* ManagerModeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		6CDF881D04AAF9D6ED3083C2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 504EC3031FED79650016851F /* App */;
+			targetProxy = 00202A65521AD461CD50AEDE /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		504EC30B1FED79650016851F /* Main.storyboard */ = {
@@ -359,6 +476,44 @@
 			};
 			name = Release;
 		};
+		3B08D1A491AFE55DA0D94815 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 6TKYLJJSD5;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.mwhabit.app.AppUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				// Automated QA Foundation Batch(2026-09-18) — TEST_TARGET_NAME이 UI 테스트
+				// 번들이 어느 앱을 실행/조작할지를 정한다(Xcode 공식 XCUITest 타겟 구성 방식,
+				// 유닛테스트의 TEST_HOST/BUNDLE_LOADER 조합과 다름). TargetAttributes의
+				// TestTargetID(위 PBXProject 섹션)와 함께 있어야 Xcode가 "App을 실행하고
+				// 그 위에서 이 UI 테스트를 돈다"고 인식한다.
+				TEST_TARGET_NAME = App;
+			};
+			name = Debug;
+		};
+		80EFD6AFA9B1F8FBFBD7A7D4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 6TKYLJJSD5;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.mwhabit.app.AppUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = App;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -376,6 +531,15 @@
 			buildConfigurations = (
 				504EC3171FED79650016851F /* Debug */,
 				504EC3181FED79650016851F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F3DB2751F291D47EB2EDA9A0 /* Build configuration list for PBXNativeTarget "AppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3B08D1A491AFE55DA0D94815 /* Debug */,
+				80EFD6AFA9B1F8FBFBD7A7D4 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -398,6 +562,14 @@
 				minimumVersion = 11.0.0;
 			};
 		};
+		68DCC60A21024332AE929DF2 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -415,6 +587,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4CD91B4FA1CBC99218BBC987 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseMessaging;
+		};
+		0660FB5C506A403A98D696E3 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 68DCC60A21024332AE929DF2 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

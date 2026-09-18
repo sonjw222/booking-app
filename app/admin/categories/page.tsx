@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchCategories, addCategory, deleteCategory, type ServiceCategory } from "../../../lib/operator";
 import { checkPlatformAdmin } from "../../../lib/admin";
 import Loading from "../../components/Loading";
+import CategoryIcon from "../../components/categoryIcons";
 
 export default function CategoriesPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
@@ -18,7 +19,6 @@ export default function CategoriesPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [label, setLabel] = useState("");
-  const [emoji, setEmoji] = useState("");
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2000); }
 
@@ -41,8 +41,12 @@ export default function CategoriesPage() {
     if (!label.trim()) { setError("종목 이름을 입력해주세요"); return; }
     setBusy(true);
     try {
-      await addCategory(label.trim(), emoji.trim());
-      setLabel(""); setEmoji("");
+      // 릴리스 폴리시 배치 8차(2026-09-18), 5번 — 이모지 표시를 없애면서 입력도 함께
+      // 없앴다(더 이상 쓸 곳이 없는 입력 남겨두면 혼란). DB의 emoji 컬럼 자체는 손대지
+      // 않는다(불필요한 마이그레이션 금지) — 그냥 빈 값으로 저장, 화면은 categoryIconFor()가
+      // 이름으로 매핑한 아이콘만 보여준다.
+      await addCategory(label.trim(), "");
+      setLabel("");
       showToast("종목을 추가했어요");
       await load();
     } catch (e: any) { setError(e.message); }
@@ -91,9 +95,12 @@ export default function CategoriesPage() {
         <div className="side" />
       </div>
 
+      {/* 릴리스 폴리시 배치 8차(2026-09-18), 5번 — 이모지 입력 제거, "추가" 버튼을 입력과
+          수직 중앙 정렬(.cat-add-row). 버튼 자체 크기(padding/font)는 안 바꿨다 — 기존
+          .primary-btn.small 그대로, row 레벨에서 align-items:center + input의 기본
+          margin-bottom만 이 컨텍스트에서 0으로 상쇄(app/globals.css). */}
       <div className="hol-add" style={{ padding: "8px 20px 4px" }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input className="input-field" style={{ width: 64 }} placeholder="🏷️" value={emoji} onChange={(e) => setEmoji(e.target.value)} />
+        <div className="cat-add-row">
           <input className="input-field" placeholder="종목 이름 (예: 클라이밍)" value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleAdd()} />
           <button className="primary-btn small" disabled={busy} onClick={() => handleAdd()}>추가</button>
         </div>
@@ -105,8 +112,12 @@ export default function CategoriesPage() {
         <div className="profile-list">
           {cats.map((c) => (
             <div key={c.id} className="profile-item">
+              {/* 5번 — 이모지(c.emoji) 대신 홈 화면과 같은 출처의 아이콘/이미지
+                  (CategoryIcon, app/components/categoryIcons.tsx)를 재사용. 이미지 로드
+                  실패 시 자동으로 UiIcon 아이콘으로 대체돼 레이아웃이 깨지지 않는다. */}
+              <div className="cat-row-icon"><CategoryIcon label={c.label} size={26} /></div>
               <div className="profile-item-info">
-                <div className="profile-item-name">{c.emoji} {c.label}</div>
+                <div className="profile-item-name">{c.label}</div>
               </div>
               <button className="profile-del" disabled={busy} onClick={() => handleDelete(c)}>삭제</button>
             </div>

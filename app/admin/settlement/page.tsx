@@ -16,6 +16,7 @@ import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
 import { checkPlatformAdmin } from "../../../lib/admin";
 import { fetchAdminSettlementSummary, toSettlementCsv, type AdminSettlementRow } from "../../../lib/settlementAccounts";
+import { replaceTabNavigation } from "../../../lib/navState";
 
 // toISOString()은 UTC로 변환하므로 UTC+9(KST)에서는 자정 직후 값이 전날로 밀린다
 // (예: 9/1 00:00 KST → 8/31 15:00 UTC) — 로컬 날짜 그대로 YYYY-MM-DD로 포맷한다.
@@ -107,7 +108,7 @@ export default function AdminSettlementPage() {
     <div className="app-shell">
       <div className="mgr-mode-bar">
         <span className="mgr-mode-label"><UiIcon name="shield" size={15} /> 플랫폼 운영자</span>
-        <a className="mgr-mode-switch" href="/">회원 모드로 ↩</a>
+        <a className="mgr-mode-switch" href="/" onClick={(e) => replaceTabNavigation(e, "/")}>회원 모드로 ↩</a>
       </div>
 
       <div className="back-header">

@@ -107,19 +107,63 @@ RLS 때문에 기본으로는 막혀있어서 정책을 열어줘야 합니다.
 8. 배포 환경에도 같은 `NEXT_PUBLIC_KAKAO_CLIENT_ID` 등록 + 카카오 콘솔 Redirect URI에
    실제 배포 도메인 추가
 
-### 3-2. 애플 (Apple Developer 계정 필요, 유료 연 $99) — 출시 직전으로 의도적 보류(2026-08-13)
+### 3-2. 애플 — iOS 네이티브 + 웹 OAuth
 
-> $99/년 가입비가 곧 Sign in with Apple 사용 조건이라, 지금 미리 가입해도 얻는 게 없이 구독만
-> 먼저 시작된다. 실제 서비스 출시가 가까워져 Apple Developer 계정을 만드는 시점에 아래 절차를
-> 함께 진행하기로 결정함(`docs/TODO.md` P2-1). 앱 코드(로그인 버튼, 콜백 처리)는 이미 완성돼
-> 있어 계정만 만들면 바로 이어서 설정할 수 있다.
+> 2026-08-13에는 $99/년 가입비 때문에 출시 직전까지 의도적으로 보류했었지만, Apple
+> Developer Program 가입이 완료됐다(대표님 확인, 2026-09-14). **2026-09-14 릴리스 폴리시
+> 배치에서 iOS 앱 인증을 웹 OAuth → 네이티브로 전환**했다 — 처음엔 구글처럼
+> `supabase.auth.signInWithOAuth({provider:"apple"})`를 쓰려 했으나, 이미 설정해둔 Supabase
+> Apple Provider 값(Client IDs = 앱 Bundle ID `com.mwhabit.app`, Secret Key = 비어 있음)이
+> 웹 OAuth가 아니라 **네이티브 플로우** 설정과 정확히 일치했다(Supabase 공식 문서: 웹 OAuth는
+> 별도 Services ID + .p8로 서명한 JWT 시크릿이 반드시 필요 — 이 상태로 `signInWithOAuth`를
+> 부르면 토큰 교환이 실패한다). iOS 앱은 이 네이티브 방식을 유지하고, 일반 웹에서는
+> `signInWithOAuth({provider:"apple"})`를 사용한다. 따라서 웹 로그인을 실제로 운영하려면
+> Apple Services ID와 웹 OAuth Secret을 Supabase Apple Provider에 추가해야 한다.
+>
+> 코드: `ios/App/App/AppleSignInPlugin.swift`(신규 로컬 커스텀 Capacitor 플러그인 —
+> `ASAuthorizationAppleIDProvider`를 직접 감쌈, npm 서드파티 의존성 없음 — 기존
+> `FcmTokenPlugin.swift`와 동일한 선례), `lib/appleAuth.ts`(nonce 생성/해시 +
+> `supabase.auth.signInWithIdToken()` 호출), `app/login/page.tsx`의 `handleSocial("apple")`,
+> `lib/authAccount.ts`의 `ensureAccountForCurrentUser()`(계정 부트스트랩, 애플 최초 인증
+> 이름 처리 포함). **iOS 네이티브 앱은 네이티브 인증, 일반 웹은 OAuth 인증**으로 분기한다.
+> Android 네이티브 앱에는 Apple 인증 수단이 없어 버튼을 표시하지 않는다.
 
-1. **developer.apple.com** → Certificates, IDs & Profiles
-2. Identifiers → App ID 생성 → "Sign In with Apple" 체크
-3. Services ID 생성 (이게 client_id 역할) → 도메인/Return URL에 Supabase Callback URL 등록
-4. Keys → "Sign in with Apple" 키 생성 → .p8 파일 다운로드
-5. Supabase → Authentication → Providers → **Apple** → Services ID, Team ID, Key ID, .p8 내용 입력 → Enable
-   - 애플은 설정이 까다로우니 Supabase 공식 문서(Apple provider) 참고 권장
+**애플의 이름 제공 정책(중요)**: 애플은 **최초 1회 인증에서만** 사용자 이름을 내려준다 — 게다가
+네이티브 플로우에서는 `user_metadata`가 아니라 `ASAuthorizationAppleIDCredential.fullName`이라는
+완전히 별도의 필드로, 딱 한 번만 온다. `lib/appleAuth.ts`가 `signInWithIdToken()` 호출
+**전**에 세션스토리지에 스태시하고(`lib/authAccount.ts`의 `stashAppleFullName`), 세션이 생긴
+뒤 실행되는 `ensureAccountForCurrentUser()`가 계정을 **처음 만들 때만** 그 값을 최우선으로
+읽는다(`consumeAppleFullName()` — 기존 마케팅 동의 스태시와 동일 패턴 재사용, 비동기
+타이밍 레이스에 안전). 최초 인증 시점을 놓치면(예: 테스트 후 계정 생성 실패) 그 사용자의
+이름을 다시 받을 방법이 없다 — 사용자가 설정에서 앱 권한을 철회했다가 재허용하면 다시 내려온다.
+
+**알려진 미해결 위험(조사만 함, 이번 배치 범위 밖)**: 애플의 "Hide My Email"(비공개 릴레이
+이메일, `*@privaterelay.appleid.com`)을 쓰면 `lib/accountLinking.ts`의
+`checkMergeableAccountByEmail()`(실제 이메일 일치로 기존 계정을 찾는 자동 병합 제안)가
+동작하지 않는다 — 릴레이 이메일은 기존에 가입한 실제 이메일과 절대 일치하지 않기 때문이다.
+즉 실제 이메일로 이미 가입한 사용자가 "이메일 가리기"를 켠 채 애플로 로그인하면 자동
+병합 제안 없이 별도 계정이 새로 만들어질 수 있다. 수동 연동(설정 화면의 연동 코드 입력,
+`createAccountLinkCode`/`linkAccountsByCode`)은 계속 쓸 수 있으므로 완전히 막힌 건 아니다.
+Supabase 공식 문서도 이 케이스를 다루지 않는다 — 실사용 데이터로 얼마나 자주 발생하는지
+확인 후 필요하면 별도 과제로 다룰 것(`docs/TODO.md` 참고).
+
+**남은 콘솔 설정(이미 완료된 항목 체크 포함)**:
+
+1. ✅ Apple Developer → App ID(`com.mwhabit.app`) → "Sign In with Apple" capability 활성화 (완료)
+2. ✅ Xcode target(`ios/App/App.xcodeproj`) → Signing & Capabilities → "Sign in with Apple" 추가 (완료)
+   — 이게 되면 `App.entitlements`에 `com.apple.developer.applesignin`(배열 값 `["Default"]`)이
+   자동으로 들어간다(Apple 공식 entitlement 키). 이 파일은 저장소에 커밋되지 않으므로
+   (User가 로컬/Xcode에서 관리) Claude가 직접 확인/수정하지 않음 — Xcode에서 capability가
+   켜져 있으면 이미 맞게 들어가 있을 것.
+3. ⚠️ Supabase → Authentication → Providers → Apple → Enable ON. iOS 네이티브용
+   Bundle ID `com.mwhabit.app` 설정은 유지하고, 웹 로그인을 위해 Apple Services ID와
+   유효한 OAuth Secret을 추가해야 한다. Secret 갱신 일정도 운영 항목으로 관리한다.
+4. ❌ **아직 안 됨 — 필요**: 재빌드/재서명. `ios/App/App/AppleSignInPlugin.swift`가 신규
+   파일이라 Xcode에서 `npx cap sync ios` 후 프로젝트를 다시 열어(또는 Xcode가 자동 인식)
+   빌드해야 반영된다. 새 provisioning profile 재생성이 필요할 수도 있음(capability 추가
+   직후 흔한 케이스 — Xcode가 "Automatically manage signing"이면 보통 자동 처리됨).
+5. 실기기 테스트 — 시뮬레이터는 Apple ID 로그인이 안 되는 경우가 많아(Apple 계정 자체가
+   시뮬레이터에 로그인돼 있어야 함) **실기기 권장**.
 
 ### 3-3. 네이버 (Supabase 기본 목록에 없음 → Edge Function 구현 완료, 설정만 하면 됨)
 

@@ -49,12 +49,16 @@ export async function fetchMyAnnouncements(): Promise<(Announcement & { centerNa
 
 // 특정 센터 공지 목록
 export async function fetchCenterAnnouncements(centerId: string): Promise<Announcement[]> {
+  // egress 감사(2026-09-15) — 상한 없는 전체 조회라 안전판만 추가(정렬은 이미 있음).
+  // body는 HTML 전문 + photos 배열이라 행당 크기가 다른 목록보다 커서 이 상한이 특히
+  // 유효하다 — 지금까지 걸릴 만큼 공지가 쌓인 센터는 없어 동작은 그대로다.
   const { data, error } = await supabase
     .from("center_announcements")
     .select("id, center_id, title, body, photos, pinned, created_at")
     .eq("center_id", centerId)
     .order("pinned", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(300);
   if (error) throw new Error("공지를 불러오지 못했어요: " + error.message);
   return (data ?? []).map(mapRow);
 }

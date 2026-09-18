@@ -6,7 +6,7 @@ export type IconName =
   | "shield" | "settings" | "sliders" | "location" | "clock" | "edit"
   | "megaphone" | "info" | "alert" | "check" | "grid" | "star"
   | "phone" | "cart" | "paperclip" | "close"
-  | "card" | "bank" | "handshake"
+  | "card" | "bank" | "handshake" | "userReturn" | "pin"
   | "pilates" | "skate" | "ballet" | "rhythm" | "yoga" | "boxing" | "swim" | "golf";
 
 export default function UiIcon({ name, size = 22 }: { name: IconName; size?: number }) {
@@ -42,6 +42,12 @@ export default function UiIcon({ name, size = 22 }: { name: IconName; size?: num
     card: <><rect x="2.5" y="5.5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6 15h5"/></>,
     bank: <><path d="M12 3 21 9H3l9-6Z"/><path d="M5 9v9M9 9v9M15 9v9M19 9v9"/><path d="M3 21h18"/></>,
     handshake: <><path d="M2.5 12.5 6 10l3 2.2L12 10l3 2.2 3-2.2 3.5 2.5"/><path d="M8 12.5l3 3a1.8 1.8 0 0 0 2.6 0l3-3"/></>,
+    // 운영자 모드 종료 → 회원 모드로 돌아가기(app/components/AdminChrome.tsx) 전용, 2026-09-17
+    // 릴리스 폴리시 배치 8차 추가 — 기존 shield 아이콘은 "운영자"를 뜻해 반대 의미(회원
+    // 모드로 돌아가기)로 오해를 줬다. 사람 아이콘 + 왼쪽 화살표로 "나가기" 의미를 표현.
+    userReturn: <><circle cx="14.5" cy="8" r="4"/><path d="M8.5 21c.6-4 3.2-6 6-6s5.3 2 6 6"/><path d="M2.5 11h6M5.5 8l-3 3 3 3"/></>,
+    // 관리자 알림 "고정" 표시/swipe action 전용(2026-09-17, 릴리스 폴리시 배치 8차).
+    pin: <><path d="M14.5 3.5 20.5 9.5 17 13l-1 6-3-3-4 4-1-1 4-4-3-3 6-1Z"/><path d="M9 15 4 20"/></>,
     close: <path d="M6 6l12 12M18 6 6 18"/>,
     pilates: <g transform="scale(.24)" stroke="none"><rect fill="currentColor" x="8" y="70" width="84" height="10" rx="5"/><rect fill="var(--brand-ink)" x="15" y="57" width="43" height="12" rx="6"/><rect fill="var(--brand)" x="61" y="42" width="10" height="28" rx="5"/><rect fill="currentColor" x="74" y="25" width="7" height="46" rx="3.5"/><rect fill="currentColor" x="68" y="23" width="20" height="7" rx="3.5"/><path fill="currentColor" d="M19 79h7l-4 14h-7Zm55 0h7l5 14h-7Z"/><circle fill="var(--brand)" cx="23" cy="51" r="9"/></g>,
     skate: <><path d="M8 4v10h9l2 3H8c-3 0-4-2-4-4V8"/><path d="M8 8h5M9 20h8"/></>,

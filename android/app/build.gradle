@@ -10,6 +10,20 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Automated QA Foundation Batch(2026-09-18) — tests/e2e(Playwright)와 완전히
+        // 같은 이름의 기존 테스트 전용 계정 env var를 그대로 재사용한다(.env.test.local.example,
+        // .github/workflows/test.yml 참고 — 새 이름을 만들지 않음). Gradle 설정 시점에
+        // 호스트 환경변수를 읽어 instrumentation 실행 인자로 전달하면, 테스트 코드는
+        // InstrumentationRegistry.getArguments().getString("TEST_USER_A_EMAIL", "")로
+        // 읽는다(android/app/src/androidTest/.../TestSupport.java 참고). 값이 없으면
+        // 빈 문자열이 전달되고, 로그인이 필요한 테스트는 그걸 보고 스스로 건너뛴다
+        // (실패 처리 안 함 — "secrets 없으면 graceful skip" 원칙).
+        testInstrumentationRunnerArguments = [
+            TEST_USER_A_EMAIL: (System.getenv("TEST_USER_A_EMAIL") ?: ""),
+            TEST_USER_A_PASSWORD: (System.getenv("TEST_USER_A_PASSWORD") ?: ""),
+            TEST_MANAGER_A_EMAIL: (System.getenv("TEST_MANAGER_A_EMAIL") ?: ""),
+            TEST_MANAGER_A_PASSWORD: (System.getenv("TEST_MANAGER_A_PASSWORD") ?: ""),
+        ]
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -59,10 +73,29 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    // Google 네이티브 로그인(release blocker, 2026-09-15, GoogleSignInPlugin.java 참고)
+    implementation "androidx.credentials:credentials:$androidxCredentialsVersion"
+    implementation "androidx.credentials:credentials-play-services-auth:$androidxCredentialsVersion"
+    // Automated QA Foundation Batch(2026-09-18) — googleid는 org.jetbrains.kotlin:
+    // kotlin-stdlib-jdk7/jdk8(옛 분리 아티팩트)를 전이 의존성으로 끌어와 "Duplicate
+    // class" 충돌의 근원 중 하나였다 — 실제 제외는 android/build.gradle의 allprojects
+    // 블록에서 전체 서브프로젝트에 일괄 적용한다(그 파일 주석 참고, 여기서 중복 선언
+    // 안 함).
+    implementation "com.google.android.libraries.identity.googleid:googleid:$googleIdVersion"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    // Automated QA Foundation Batch(2026-09-18) — 이 앱은 Capacitor server.url 모드라
+    // 화면 전부가 WebView 콘텐츠다(네이티브 UI 없음). espresso-web(WebDriver 스타일
+    // "Atom" 기반 DOM 조작 — onWebView().withElement(findElement(Locator.CSS_SELECTOR,
+    // ...)))이 실제 DOM을 조작할 수 있는 유일한 Espresso 계열 API라 필수로 추가.
+    // uiautomator는 Espresso가 못 건드리는 시스템 레벨(하드웨어 백, 키보드 표시 여부
+    // 등)용 — docs/AUTOMATED_QA.md 참고. androidx.test:rules는 ActivityScenarioRule
+    // 제공(androidx.test.ext:junit이 transitive로 끌어올 수도 있지만 명시적으로 선언).
+    androidTestImplementation "androidx.test.espresso:espresso-web:$androidxEspressoCoreVersion"
+    androidTestImplementation "androidx.test.uiautomator:uiautomator:$androidxTestUiAutomatorVersion"
+    androidTestImplementation "androidx.test:rules:$androidxTestRulesVersion"
     implementation project(':capacitor-cordova-android-plugins')
 }
 

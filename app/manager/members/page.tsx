@@ -70,6 +70,18 @@ function MembersContent() {
   const [members, setMembers] = useState<CenterMember[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [loading, setLoading] = useState(true);
+  // 릴리스 폴리시 배치 8차(2026-09-17), 3-7 검색 성능 감사 결과: 예전엔 keystroke마다
+  // setLoading(true)를 즉시 호출해 목록 영역 전체가 <Loading/> 풀스크린 스켈레톤으로
+  // 매번 바뀌었다(검색 중 이전 결과가 안 보임) — searching은 그 대신 쓰는 가벼운 표시용
+  // state로, 목록(members)은 새 결과가 도착하기 전까지 그대로 유지한다.
+  const [listSearching, setListSearching] = useState(false);
+  // 같은 이유로 "센터를 처음 선택했을 때"만 풀스크린 로딩을 보여주고, 그 뒤 필터/검색
+  // 변경으로 다시 fetch할 때는 loading을 다시 켜지 않는다.
+  const hasLoadedRef = useRef(false);
+  // stale response 방지 — 빠르게 입력하면 늦게 시작한 요청이 먼저 끝날 수 있어, 항상
+  // "가장 마지막으로 시작한 요청"의 결과만 반영한다(이전 검색어의 응답이 최신 검색어
+  // 결과를 덮어쓰지 않게).
+  const requestSeqRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -217,15 +229,26 @@ function MembersContent() {
 
   const load = useCallback(async () => {
     if (!centerId) return;
-    setLoading(true); setError(null);
+    const seq = ++requestSeqRef.current;
+    const isFirstLoad = !hasLoadedRef.current;
+    if (isFirstLoad) setLoading(true); else setListSearching(true);
+    setError(null);
     try {
       const [ms, gs] = await Promise.all([
         fetchMembers(centerId, { gradeId: gradeFilter, status: statusFilter, keyword, searchField }),
         fetchGrades(centerId),
       ]);
+      // 이 요청이 시작된 뒤 더 최신 요청이 이미 시작됐다면(빠른 연속 검색) 이 결과는
+      // stale이므로 버린다 — 화면엔 항상 "가장 최근에 시작한" 검색 결과만 반영된다.
+      if (seq !== requestSeqRef.current) return;
       setMembers(ms); setGrades(gs);
-    } catch (e: any) { setError(e.message); }
-    finally { setLoading(false); }
+      hasLoadedRef.current = true;
+    } catch (e: any) {
+      if (seq !== requestSeqRef.current) return;
+      setError(e.message);
+    } finally {
+      if (seq === requestSeqRef.current) { setLoading(false); setListSearching(false); }
+    }
   }, [centerId, gradeFilter, statusFilter, keyword, searchField]);
 
   // 알림톡 애드온 미신청 센터는 서버(send-alimtalk)가 발송을 거부하므로, 필터 갱신마다
@@ -237,11 +260,34 @@ function MembersContent() {
       .catch(() => setAlimtalkAddonEnabled(true));
   }, [centerId]);
 
-  // 검색어 입력 중엔 300ms 기다렸다 조회 (결과 깜빡임 방지)
+  // 센터 전환 시 "처음 선택"과 동일하게 다시 풀스크린 로딩부터 보여준다(다른 센터
+  // 데이터이므로 이전 목록을 그대로 유지하면 오히려 혼란).
+  useEffect(() => { hasLoadedRef.current = false; }, [centerId]);
+
+  // 릴리스 폴리시 배치 8차(2026-09-17), 3-7 검색 성능 개선 — 감사 결과 실제 병목은
+  // "등급/상태 필터 클릭까지 keyword와 똑같이 300ms 지연됨" + "매 keystroke마다 전체
+  // 화면 로딩으로 이전 결과가 사라짐" + "느린 응답이 최신 검색을 덮어쓸 수 있음"(위
+  // requestSeqRef) 세 가지였다. 등급/상태/검색필드/센터 전환은 사용자의 명시적 클릭이라
+  // 디바운스 없이 즉시 반영하고, "타이핑" 자체(keyword)만 120~200ms 디바운스한다(아래
+  // 별도 effect) — 이미 로드된 전체 목록을 다시 client-side로 필터링하는 대신 서버
+  // 검색을 유지한 이유: 회원 검색은 이름/전화/주소 전체를 대상으로 하고(searchField),
+  // 전화번호는 권한이 있는 사용자에게만 원문이 내려오는 등(customer.member.phone) 이미
+  // 서버 쪽에서 마스킹/권한 처리가 끝난 값만 클라이언트가 받는 구조라(lib/members.ts)
+  // "이미 로드된 데이터"만으로는애초에 안전하게 재현할 수 없다.
   useEffect(() => {
-    const t = setTimeout(() => { load(); }, 300);
+    if (!centerId) return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centerId, gradeFilter, statusFilter, searchField]);
+
+  // 타이핑(keyword)만 짧게 디바운스 — 첫 마운트 때는 위 effect가 이미 처리하므로 건너뛴다.
+  const keywordMounted = useRef(false);
+  useEffect(() => {
+    if (!keywordMounted.current) { keywordMounted.current = true; return; }
+    const t = setTimeout(() => { load(); }, 180);
     return () => clearTimeout(t);
-  }, [load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keyword]);
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
@@ -531,31 +577,39 @@ function MembersContent() {
           style={{ flex: 1 }}
           placeholder={searchField === "address" ? "주소 검색" : searchField === "phone" ? "휴대폰 번호 검색" : "이름 검색"}
           value={keyword}
-          onChange={(e) => { setKeyword(e.target.value); setLoading(true); }}
+          onChange={(e) => setKeyword(e.target.value)}
         />
       </div>
 
+      {/* 릴리스 폴리시 배치 8차(2026-09-17), 3-5 — "등급 전체"는 항상 좌측 고정, 실제
+          등급 칩만 horizontal scroll(.mem-filters-scroll)되게 분리. 예전엔 .mem-filters
+          전체가 하나의 overflow-x:auto라 "전체" 버튼까지 같이 스크롤되어 사라졌다. */}
       <div className="mem-filters">
-        <button className={`filter-chip ${!gradeFilter ? "on" : ""}`} onClick={() => setGradeFilter(null)}>등급 전체</button>
-        {grades.map((g) => (
-          <button key={g.id} className={`filter-chip ${gradeFilter === g.id ? "on" : ""}`} onClick={() => setGradeFilter(g.id)}>
-            <span className="grade-dot" style={{ background: g.color ?? "var(--line-strong)" }} />{g.name}
-          </button>
-        ))}
+        <button className={`filter-chip all-chip ${!gradeFilter ? "on" : ""}`} onClick={() => setGradeFilter(null)}>등급 전체</button>
+        <div className="mem-filters-scroll">
+          {grades.map((g) => (
+            <button key={g.id} className={`filter-chip ${gradeFilter === g.id ? "on" : ""}`} onClick={() => setGradeFilter(g.id)}>
+              <span className="grade-dot" style={{ background: g.color ?? "var(--line-strong)" }} />{g.name}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* 3-6 — 상태 필터도 동일 구조("상태 전체" 고정 + 나머지 스크롤). */}
       <div className="mem-filters">
-        <button className={`filter-chip ${!statusFilter ? "on" : ""}`} onClick={() => setStatusFilter(null)}>상태 전체</button>
-        {Object.entries(STATUS_LABEL).map(([k, v]) => (
-          <button key={k} className={`filter-chip ${statusFilter === k ? "on" : ""}`} onClick={() => setStatusFilter(k)}>{v}</button>
-        ))}
+        <button className={`filter-chip all-chip ${!statusFilter ? "on" : ""}`} onClick={() => setStatusFilter(null)}>상태 전체</button>
+        <div className="mem-filters-scroll">
+          {Object.entries(STATUS_LABEL).map(([k, v]) => (
+            <button key={k} className={`filter-chip ${statusFilter === k ? "on" : ""}`} onClick={() => setStatusFilter(k)}>{v}</button>
+          ))}
+        </div>
       </div>
       <div className="perm-guide" style={{ margin: "0 16px 4px", fontSize: 11.5 }}>
         수강권을 구매한 사람만 회원으로 표시돼요. 횟수 소진·기간 만료는 '만료', 휴면 처리 시 기간권 시간이 정지돼요.
       </div>
 
       <div className="mem-toolbar">
-        <span className="mem-count">전체 {members.length}명</span>
+        <span className="mem-count">전체 {members.length}명{listSearching && <span className="mem-searching"> · 검색 중…</span>}</span>
         <div className="mem-tools member-toolbar-actions">
           <button className="quiet-action" disabled={busy} onClick={handleSync} title="예약 이력은 있지만 아직 회원 목록에 없는 사람을 찾아 등록해요">예약자 동기화</button>
           <button className={`quiet-action ${selectMode ? "on" : ""}`} onClick={toggleSelectMode}>

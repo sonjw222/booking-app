@@ -175,10 +175,12 @@ export async function updateProgressNote(profileId: string, lessonDate: string, 
 
 // 진도 기록용 회원 목록 (센터 회원)
 export async function fetchProgressMembers(centerId: string): Promise<{ profileId: string; name: string }[]> {
+  // egress 감사(2026-09-15) — 상한 없는 전체 조회라 안전판만 추가.
   const { data, error } = await supabase
     .from("center_members")
     .select("profile_id, profiles(name)")
-    .eq("center_id", centerId);
+    .eq("center_id", centerId)
+    .limit(2000);
   if (error) throw new Error("회원 목록을 불러오지 못했어요: " + error.message);
   return (data ?? []).map((r: any) => ({
     profileId: r.profile_id, name: r.profiles?.name ?? "(이름 없음)",

@@ -14,7 +14,10 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:e2e": "playwright test",
     "test:e2e:report": "playwright show-report playwright-report",
-    "test:all": "npm run test && npm run test:integration"
+    "test:all": "npm run test && npm run test:integration",
+    "qa:business:p0": "vitest run --config vitest.integration.config.ts -t \"SCN-P0\" tests/integration/scenarios",
+    "qa:business:p0p1": "vitest run --config vitest.integration.config.ts -t \"SCN-P0|SCN-P1\" tests/integration/scenarios",
+    "qa:business:all": "vitest run --config vitest.integration.config.ts tests/integration/scenarios"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",

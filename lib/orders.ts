@@ -32,6 +32,14 @@ export async function createOrder(input: {
   // 가족(다중 프로필) 계정에서 "이 구매는 누구 앞으로"를 고를 수 있게 함(2026-09-06,
   // 스튜디오 오너/회원 UX 감사) — 생략하면 기존처럼 대표 프로필로 자동 배정(하위 호환).
   profileId?: string;
+  // MWHABIT Membership Visibility + Coupon Batch(2026-09-18) — 기존 couponCode(공개
+  // 프로모션 코드, WELCOME/FIGURE10 하드코딩)와는 별개의 새 경로. 실제 할인 계산은
+  // 여기서 하지 않는다(클라이언트가 보낸 amount/discountAmount는 결제 확정 시
+  // _issue_membership_and_record_payment()가 항상 다시 계산해서 검증함) — 여기서는
+  // "이 주문에 이 쿠폰을 쓰겠다"는 의사만 싣는다. orders INSERT RLS
+  // (member_can_purchase_product)가 상품 자체의 구매자격은 이미 주문 생성 시점에
+  // 막아주지만, 쿠폰 자격(소유자/센터/유효기간/최소금액 등)은 확정 시점에만 검증된다.
+  memberCouponId?: string;
 }): Promise<string> {
   const accountId = await getMyAccountId();
   if (!accountId) throw new Error("로그인이 필요해요");
@@ -64,6 +72,7 @@ export async function createOrder(input: {
     auto_book: input.autoBook ?? false,
     payment_provider: input.provider ?? null,
     points_used: input.pointsUsed ?? 0,
+    member_coupon_id: input.memberCouponId ?? null,
     status: "pending",
   }).select("id").single();
   if (error) throw new Error("주문 생성에 실패했어요: " + error.message);
@@ -88,6 +97,10 @@ export async function fetchCenterOrders(centerId: string, status?: string): Prom
     .eq("center_id", centerId)
     .order("created_at", { ascending: false });
   if (status) q = q.eq("status", status);
+  // egress 감사(2026-09-15) — status 필터 없이 부르면(기본 화면 진입 시) 센터가 생긴
+  // 이후의 모든 주문을 상한 없이 통째로 가져왔다. 최신순 정렬은 이미 있었으니 안전판만
+  // 추가 — 지금까지 이 상한에 걸릴 만큼 주문이 쌓인 센터는 없어 동작은 그대로다.
+  q = q.limit(1000);
   const { data, error } = await q;
   if (error) throw new Error("주문을 불러오지 못했어요: " + error.message);
   return (data ?? []).map((o: any) => ({

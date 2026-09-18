@@ -85,6 +85,16 @@
      사라지는 버그가 있었다(관리자 "더보기" 화면 등에서 마지막 메뉴가 nav에 가려짐).
   */
   --floating-nav-clearance: calc(65px + max(16px, env(safe-area-inset-bottom)));
+
+  /* 릴리스 폴리시 배치(2026-09-14) — 실기기 QA: 홈 이외의 거의 모든 화면(내 예약/알림/
+     마이/장바구니/구매내역/프로필/문의/검색/카테고리/설정 등이 공유하는 .back-header,
+     그리고 .noti-head/.inquiry-head, .search-header)이 상단 safe-area를 아예 반영하지
+     않고 있었다 — 화면마다 개별적으로 env(safe-area-inset-top)를 넣거나 빠뜨리는 대신,
+     여기 한 곳에 공용 토큰을 정의해 모든 상단 바 selector가 이 값만 쓰도록 통일한다
+     (아래 여러 selector 참고). 값 자체는 기존에 이미 잘 동작하던 .header/.mypage-shell
+     .profile-block 등이 쓰던 것과 동일 — 토큰화만 새로 한 것, 동작은 그대로. */
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
 }
 
 /* 다크 모드 */
@@ -192,8 +202,18 @@ a { color: inherit; text-decoration: none; }
    WebView를 상태바 아래까지 확장시키는데(viewport-fit=cover와 짝) 이 헤더만 안전영역을
    안 챙겨서, 화면 전환 순간 "오늘은 어떤 움직임을 찾나요?" 텍스트가 상태바 시계/아이콘과
    겹쳐 보였다. 다른 화면들(.mypage-shell .profile-block 등)과 동일한
-   max(Npx, env(safe-area-inset-top)) 패턴으로 통일 — 노치 없는 기기에서는 기존 14px 그대로. */
-.header { padding: max(14px, env(safe-area-inset-top)) var(--page-gutter) 14px; }
+   max(Npx, var(--safe-top)) 패턴으로 통일 — 노치 없는 기기에서는 기존 14px 그대로. */
+/* 릴리스 폴리시 배치 6차(2026-09-15) — 실기기 QA: 당겨서 튕기는(rubber-band overscroll)
+   동안 헤더도 같이 끌려 내려가 상태바 아래로 빈 공간이 생기는 문제(iOS 설정 앱처럼
+   헤더는 고정, 본문만 튕기길 기대). WKWebView 최상위 문서 스크롤(=이 앱이 이미 쓰는
+   러버밴드 메커니즘, ios/App/App/SceneDelegate.swift의 scrollView.bounces 참고)을 건드는
+   대신 — nested scroll container로 바꾸면 이미 검증된 네이티브 러버밴드 동작(회귀
+   금지 항목)이 깨질 위험이 크다 — position:sticky만으로 해결한다. iOS WebKit은 최상위
+   문서가 상단에서 elastic overscroll 중이어도 position:sticky;top:0 요소를 뷰포트
+   상단에 그대로 고정해준다(별도 JS 불필요, Safari/WKWebView의 표준 동작) — 즉 헤더
+   "구조"는 전혀 안 바꾸고 이 한 속성만 추가하면 된다. 배경색을 명시해야
+   스크롤되는 본문이 고정된 헤더 "뒤"로 비치지 않는다(색 불일치 방지 요구사항). */
+.header { position: sticky; top: 0; z-index: 15; background: var(--bg); padding: max(14px, var(--safe-top)) var(--page-gutter) 14px; }
 .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .location { display: flex; align-items: center; gap: 4px; font-size: 19px; font-weight: 800; letter-spacing: -0.3px; }
 .location .caret { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
@@ -425,7 +445,13 @@ a { color: inherit; text-decoration: none; }
 
 .input-field {
   width: 100%; background: var(--surface); border-radius: 12px; padding: 15px 16px;
-  font: inherit; font-size: 14.5px; color: var(--ink); border: 1px solid transparent; margin-bottom: 10px;
+  /* 실기기 QA(2026-09-14, 4차) — iOS Safari/WKWebView는 포커스되는 input/select/textarea의
+     computed font-size가 16px 미만이면 자동으로 화면을 확대한다(접근성 pinch-zoom을 막는
+     게 아니라 이 특정 동작만의 문제) — 이 앱에서 가장 널리 쓰이는 입력 클래스라 로그인/
+     회원가입/관리자 회원검색 등 거의 모든 입력창에서 재현됐다. 시각적으로 커 보이는 걸
+     막기 위해 padding/line-height로 보정하되 font-size 자체는 16px 밑으로 절대 안 내린다
+     (user-scalable=no, maximum-scale 같은 방식으로 줌 자체를 막는 건 접근성 훼손이라 금지). */
+  font: inherit; font-size: 16px; line-height: 1.3; color: var(--ink); border: 1px solid transparent; margin-bottom: 10px;
 }
 .input-field:focus { outline: none; border-color: var(--accent); background: var(--bg); }
 .input-field::placeholder { color: var(--ink-soft); }
@@ -470,8 +496,12 @@ a { color: inherit; text-decoration: none; }
 .divider-line span { font-size: 11.5px; color: var(--ink-soft); font-weight: 700; }
 
 /* 예약/취소 결과 토스트 */
+/* 릴리스 폴리시 배치 7차(2026-09-17) — 전수 감사 중 발견: 이 토스트(예약/취소 결과 등
+   회원 화면 전반에서 쓰임)는 고정 18px라 노치/Dynamic Island 기기에서 상태바 영역에
+   가려질 수 있었다. .manager-v3-content/.admin-v3-content 쪽 error-toast는 이미
+   safe-area 대응이 있었는데 이 회원용 기본 버전만 빠져 있었다. */
 .toast {
-  position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+  position: fixed; top: max(18px, var(--safe-top)); left: 50%; transform: translateX(-50%);
   background: var(--ink); color: var(--bg); font-size: 13px; font-weight: 700;
   padding: 11px 18px; border-radius: 999px; z-index: 100;
   box-shadow: 0 8px 24px rgba(0,0,0,0.25); max-width: 90%;
@@ -599,7 +629,18 @@ a { color: inherit; text-decoration: none; }
    공통: 뒤로가기 헤더 / ghost 버튼
    ============================================================ */
 .back-header {
-  display: flex; align-items: center; justify-content: space-between; padding: 8px 16px 12px;
+  display: flex; align-items: center; justify-content: space-between;
+  /* 실기기 QA(2026-09-14) — 이 selector가 이 앱에서 가장 많이 재사용되는 상단 바인데
+     (내 예약/장바구니/구매내역/프로필/문의/카테고리/설정 등) safe-area-inset-top을 전혀
+     반영하지 않아 상태바/Dynamic Island와 콘텐츠가 겹쳤다. 8px는 노치 없는 기기 기준
+     여백을 그대로 유지. */
+  padding: max(8px, var(--safe-top)) 16px 12px;
+  /* 릴리스 폴리시 배치 6차(2026-09-15) — .header와 동일한 이유로 sticky 고정(주석은
+     .header 쪽 참고). .back-header는 이 앱에서 ~50개 화면이 그대로 재사용하는 "상세/
+     뒤로가기 헤더"의 유일한 공용 계약(class contract)이라, 여기 한 줄만 추가하면 그
+     화면들 전부에 개별 수정 없이 일괄 적용된다 — 이것이 요청된 "화면마다 ad-hoc
+     패치 대신 공용 계약"의 실제 구현이다. */
+  position: sticky; top: 0; z-index: 15; background: var(--bg);
 }
 .back-header .side { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 19px; }
 .back-header .title { font-size: 16px; font-weight: 800; }
@@ -619,11 +660,27 @@ a { color: inherit; text-decoration: none; }
   background: var(--surface); border-radius: 14px; padding: 14px;
 }
 .profile-avatar {
-  width: 44px; height: 44px; border-radius: 50%; background: #fff; color: var(--ink);
+  /* Initials intentionally stay dark on a white identity tile in both themes. */
+  width: 44px; height: 44px; border-radius: 50%; background: #fff; color: #171719;
   border: 1px solid var(--line-strong);
   display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800; flex: 0 0 auto;
 }
 .profile-item-info { flex: 1; min-width: 0; }
+/* 릴리스 폴리시 배치 8차(2026-09-18), 5번 — 운영자 "종목 관리" 목록의 아이콘(이모지
+   대체). .profile-avatar와 같은 자리·같은 크기감으로 맞춰 row height에 맞는 크기를
+   유지하고, 텍스트와 vertical-align이 자연스럽게 보이게 flex center 정렬. */
+.cat-row-icon {
+  width: 40px; height: 40px; flex: 0 0 auto; border-radius: 12px;
+  background: var(--surface-strong); display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.cat-row-icon img { width: 26px; height: 26px; object-fit: contain; }
+/* 5번 — "추가" 입력창 + 버튼 수직 중앙 정렬. .input-field 기본 margin-bottom(10px)이
+   align-items:center 기준을 아래로 밀던 원인이라 이 컨텍스트에서만 상쇄한다. 버튼
+   (.primary-btn.small) 자체 크기는 손대지 않음 — 좁은 iPhone에서도 두 요소가 같은
+   높이 축을 공유해 균형 있게 보인다. */
+.cat-add-row { display: flex; align-items: center; gap: 8px; }
+.cat-add-row .input-field { margin-bottom: 0; }
 .profile-item-name { font-size: 15px; font-weight: 800; display: flex; align-items: center; }
 .primary-badge {
   font-size: 10.5px; font-weight: 800; color: var(--accent); background: var(--accent-soft);
@@ -647,12 +704,34 @@ a { color: inherit; text-decoration: none; }
 /* ============================================================
    매니저 대시보드
    ============================================================ */
+/* 릴리스 폴리시 배치 7차(2026-09-17) — 전수 감사 중 발견: 관리자 홈(app/manager/page.tsx)
+   과 플랫폼 어드민의 회원모드 전환 화면(admin/centers, admin/subscriptions,
+   admin/settlement) 전부 이 바가 화면 최상단 첫 엘리먼트인데도 safe-area 토큰이
+   한 번도 없었다 — .header/.back-header(6차 배치에서 고친 공용 계약)와 별개의
+   전용 selector라 그 배치의 감사 범위 밖이었음. 동일 계약(sticky + safe-area
+   padding)으로 맞춘다. */
 .mgr-mode-bar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 20px; background: var(--ink); color: var(--bg);
+  position: sticky; top: 0; z-index: 15;
+  padding: max(14px, var(--safe-top)) 20px 14px; background: var(--ink); color: var(--bg);
 }
 .mgr-mode-label { font-size: 13.5px; font-weight: 800; display: inline-flex; align-items: center; gap: 5px; }
 .mgr-mode-switch { font-size: 12px; font-weight: 700; opacity: 0.85; }
+
+/* 릴리스 폴리시 배치 8차(2026-09-18), 6번 — 센터 승인 관리 검색창. 기존 .input-field를
+   재사용하되(새 스타일 언어 안 만듦) 아이콘/clear 버튼을 얹기 위한 최소 wrapper. */
+.admin-center-search {
+  position: relative; display: flex; align-items: center;
+  margin: 4px var(--page-gutter) 0;
+}
+.admin-center-search > svg { position: absolute; left: 16px; color: var(--ink-soft); pointer-events: none; }
+.admin-center-search .input-field { padding-left: 40px; padding-right: 40px; margin-bottom: 0; }
+.admin-center-search-clear {
+  position: absolute; right: 8px; width: 28px; height: 28px; border-radius: 50%;
+  border: none; background: none; color: var(--ink-soft); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.admin-center-search-clear:active { background: var(--surface); }
 
 .center-switcher { display: flex; gap: 8px; padding: 14px var(--page-gutter) 6px; overflow-x: auto; }
 .center-chip {
@@ -914,12 +993,30 @@ a { color: inherit; text-decoration: none; }
 
 .mem-filters {
   display: flex;
+  align-items: center;
   gap: 6px;
   padding: 6px 20px;
+}
+/* 릴리스 폴리시 배치 8차(2026-09-17), 3-5/3-6 — "등급 전체"/"상태 전체"는
+   .mem-filters의 직계 자식(flex:0 0 auto인 .filter-chip 기본값)으로 항상 좌측 고정되고,
+   실제 등급/상태 칩만 이 안쪽 컨테이너에서 자체적으로 horizontal scroll된다(예전엔
+   .mem-filters 전체가 overflow-x:auto라 "전체" 칩까지 같이 스크롤되어 사라졌다). 긴
+   등급명도 white-space:nowrap(.filter-chip 기존 규칙)이라 줄바꿈 없이 자연스럽게 흐른다. */
+.mem-filters-scroll {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
   overflow-x: auto;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
-.mem-filters::-webkit-scrollbar { display: none; }
+.mem-filters-scroll::-webkit-scrollbar { display: none; }
+.mem-filters-scroll:empty { display: none; border-left: none; padding-left: 0; }
+.mem-filters .all-chip { flex: 0 0 auto; }
+/* 3-7 — 검색 중 인라인 표시(풀스크린 로딩 대신). */
+.mem-searching { color: var(--ink-soft); font-weight: 600; }
 
 .filter-chip {
   flex: 0 0 auto;
@@ -1534,9 +1631,13 @@ a { color: inherit; text-decoration: none; }
   border-radius: 50%;
   /* 노브는 컬러 트랙 위에 올라가므로 카드 표면이 아니라 반전 색을 쓴다. */
   background: var(--text-inverse);
-  transition: left 0.15s;
+  /* 릴리스 폴리시 배치 7차(2026-09-17) — left를 직접 움직이면(레이아웃 트리거) 브라우저가
+     매 프레임 레이아웃을 다시 계산한다 — transform은 컴포지터 레이어에서만 처리돼 훨씬
+     저렴하다. 위치값(left: 3px)은 고정 시작점으로 그대로 두고, on 상태일 때만
+     transform: translateX()로 20px만큼 이동시킨다(3px→23px와 동일한 최종 위치). */
+  transition: transform 0.15s;
 }
-.switch.on .knob { left: 23px; }
+.switch.on .knob { transform: translateX(20px); }
 
 /* 매출 - 순이익 라인 */
 .profit-line {
@@ -1938,8 +2039,10 @@ a.membership-card { text-decoration: none; display: block; }
 .mem-status-badge.expired { background: var(--danger-soft); color: var(--danger); }
 
 /* 에러 토스트 - 시트 위에도 보이게 상단 고정 (z-index 시트보다 높음) */
+/* 릴리스 폴리시 배치 7차(2026-09-17) — .toast와 동일한 이유로 safe-area 추가(회원 화면
+   기본 버전만 빠져 있었음, manager/admin 변형은 이미 대응돼 있었음). */
 .error-toast {
-  position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+  position: fixed; top: max(18px, var(--safe-top)); left: 50%; transform: translateX(-50%);
   background: var(--danger); color: var(--text-inverse); font-size: 13px; font-weight: 700;
   padding: 11px 18px; border-radius: 12px; z-index: 120;
   box-shadow: 0 8px 24px rgba(182,66,66,0.35); max-width: 90%;
@@ -1992,7 +2095,8 @@ a.membership-card { text-decoration: none; display: block; }
 .avatar-edit { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 14px; }
 .avatar-edit-img { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; }
 .avatar-edit-placeholder {
-  width: 88px; height: 88px; border-radius: 50%; background: #fff; color: var(--ink);
+  /* Match the compact avatar above; theme-flipping --ink would disappear here. */
+  width: 88px; height: 88px; border-radius: 50%; background: #fff; color: #171719;
   border: 1px solid var(--line-strong);
   display: flex; align-items: center; justify-content: center; font-size: 34px; font-weight: 800;
 }
@@ -2128,7 +2232,8 @@ a.membership-card { text-decoration: none; display: block; }
 .search-header .side { font-size: 24px; color: var(--text); text-decoration: none; flex: 0 0 auto; }
 .search-input {
   flex: 1; border: 1px solid var(--line); border-radius: 999px; padding: 9px 16px;
-  font-size: 14px; background: var(--surface); color: var(--text);
+  /* 실기기 QA(2026-09-14, 4차) — iOS 포커스 자동 확대 방지, .input-field와 동일한 이유. */
+  font-size: 16px; background: var(--surface); color: var(--text);
 }
 .search-go { flex: 0 0 auto; background: var(--accent); color: var(--bg); border: none; border-radius: 999px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .search-center-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); text-decoration: none; }
@@ -2794,6 +2899,34 @@ a.membership-card { text-decoration: none; display: block; }
   font-size: 18px; line-height: 1; cursor: pointer; padding: 2px 4px;
 }
 
+/* 릴리스 폴리시 배치 8차(2026-09-17) — 관리자 알림 swipe actions(SwipeRow.tsx). 범용으로
+   만들어 다른 리스트에서도 재사용 가능하게 했다. transform만 바꿔 애니메이션하므로(레이아웃
+   속성 변경 없음) 알림이 많아도 layout thrashing이 없다. */
+.swipe-row { position: relative; overflow: hidden; }
+.swipe-row-actions {
+  position: absolute; top: 0; right: 0; bottom: 0; display: flex; align-items: stretch;
+}
+.swipe-row-content {
+  position: relative; background: var(--bg); touch-action: pan-y; will-change: transform;
+}
+.swipe-action-btn {
+  flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; border: none; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700;
+  color: var(--text-inverse); min-width: 64px;
+}
+.swipe-action-btn.pin { background: var(--accent); }
+.swipe-action-btn.delete { background: var(--danger); }
+
+/* row 삭제 애니메이션 — collapse(max-height) + opacity, 아래 목록이 자연스럽게 올라온다. */
+.noti-row-wrap { max-height: 160px; opacity: 1; overflow: hidden; transition: max-height 220ms ease, opacity 180ms ease; }
+.noti-row-wrap.removing { max-height: 0; opacity: 0; }
+
+.noti-pin-badge {
+  display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto;
+  padding: 2px 7px 2px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+  font-size: 10px; font-weight: 800;
+}
+
 /* 네비게이션 안읽음 뱃지 */
 .nav-badge {
   position: absolute; top: -6px; right: -10px; min-width: 16px; height: 16px;
@@ -2802,8 +2935,9 @@ a.membership-card { text-decoration: none; display: block; }
 }
 
 /* 실시간 알림 팝업 */
+/* 릴리스 폴리시 배치 7차(2026-09-17) — 위 두 토스트와 동일한 이유로 safe-area 추가. */
 .noti-toaster {
-  position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+  position: fixed; top: max(12px, var(--safe-top)); left: 50%; transform: translateX(-50%);
   z-index: 3000; width: 100%; max-width: 440px; padding: 0 12px;
   display: flex; flex-direction: column; gap: 8px; pointer-events: none;
 }
@@ -3216,7 +3350,7 @@ a.membership-card { text-decoration: none; display: block; }
 
 /* Keep transient manager messages compact on every viewport. */
 .manager-v3-content .error-toast {
-  top: max(14px, env(safe-area-inset-top));
+  top: max(14px, var(--safe-top));
   left: 50%;
   right: auto;
   width: max-content;
@@ -3242,9 +3376,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-members-v2 .sheet .hol-add .primary-btn { width: 100%; padding-inline: 10px; }
 
 /* Manager menu uses one icon family and leaves the final row reachable. */
-.manager-home-v2 { padding-bottom: calc(var(--floating-nav-clearance) + 92px); }
 .manager-home-v2 > .list-row .icon svg { width: 22px; height: 22px; stroke-width: 1.7; }
-.manager-home-v2 > .list-row:last-of-type { margin-bottom: 128px; }
 
 /* Final 26-point refinement: these rules intentionally close the cascade. */
 .mypage-shell .membership-cta {
@@ -3346,9 +3478,6 @@ a.membership-card { text-decoration: none; display: block; }
   border-color: color-mix(in srgb,var(--brand) 42%,var(--line));
   background: var(--brand-soft); color: var(--brand-ink);
 }
-.manager-home-v2 { padding-bottom: calc(var(--floating-nav-clearance) + 170px); }
-.manager-home-v2 > .list-row:last-of-type { margin-bottom: 110px; }
-
 /* No notification/loading state may grow into a full-screen black slab. */
 .toast,
 .manager-v3-content .toast,
@@ -3415,7 +3544,7 @@ a.membership-card { text-decoration: none; display: block; }
 
 @media (max-width: 480px) {
   .cal-center-pick { min-width:116px; max-width:42vw; }
-  .cal-center-pick select { font-size:13px; }
+  .cal-center-pick select { font-size:16px; } /* 실기기 QA(2026-09-14, 4차) — iOS 포커스 자동 확대 방지 */
   .cal-memo-row { align-items:stretch; }
   .cal-memo-row .input-field { min-width:0; }
 }
@@ -3601,7 +3730,7 @@ a.membership-card { text-decoration: none; display: block; }
 /* Compact account identity; membership and goods cards now belong to the light system. */
 .mypage-shell .profile-block {
   min-height: 108px;
-  padding: max(30px, env(safe-area-inset-top)) var(--page-gutter) 22px;
+  padding: max(30px, var(--safe-top)) var(--page-gutter) 22px;
   gap: 12px;
 }
 .mypage-shell .avatar { width: 52px; height: 52px; border-radius: 17px; font-size: 20px; }
@@ -3710,7 +3839,7 @@ a.membership-card { text-decoration: none; display: block; }
   top: 0;
   /* 관리자 sheet가 열리면 header가 sheet의 클릭 영역을 가리지 않도록 한다. */
   z-index: 30;
-  padding: max(18px,env(safe-area-inset-top)) var(--page-gutter) 16px;
+  padding: max(18px,var(--safe-top)) var(--page-gutter) 16px;
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb,var(--bg) 94%,transparent);
   backdrop-filter: blur(18px);
@@ -3779,7 +3908,7 @@ a.membership-card { text-decoration: none; display: block; }
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  padding: max(18px,env(safe-area-inset-top)) var(--page-gutter) 16px;
+  padding: max(18px,var(--safe-top)) var(--page-gutter) 16px;
   /* 항상 어두운 헤더 바(운영자 화면 전용 디자인) — --ink는 다크 모드에서 거의 흰색으로
      뒤집히는 "현재 테마의 강조색" 토큰이라 여기 쓰면 다크 모드에서 흰 바탕이 된다.
      --grad1은 라이트/다크 모두 거의 검정으로 고정돼 있어 항상 어두운 표면에 맞다. */
@@ -3791,11 +3920,20 @@ a.membership-card { text-decoration: none; display: block; }
 .admin-chrome > a { border: 1px solid rgba(255,255,255,.22); color: var(--text-inverse); }
 
 .loading-wrap {
-  min-height: 250px;
+  /* 릴리스 폴리시 배치 8차(2026-09-18), 2-1 — 250px 고정이던 것을 뷰포트 기준으로
+     늘려서(최대 640px) 스켈레톤이 화면 상단에만 몰리지 않고 중앙~하단까지 자연스럽게
+     이어지게 한다. bottom-nav/safe-area는 이 컴포넌트가 손대는 영역이 아니라(레이아웃이
+     감싸는 형태) 그대로 유지됨. */
+  min-height: min(72dvh, 640px);
   display: block;
   padding: 30px var(--page-gutter);
 }
 .loading-skeleton { width: 100%; max-width: 560px; margin: 0 auto; }
+.loading-skeleton-row { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
+.loading-skeleton-row-icon { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 12px; }
+.loading-skeleton-row-lines { flex: 1; min-width: 0; }
+.loading-skeleton-row-lines i { margin-bottom: 8px; }
+.loading-skeleton-row-lines i:last-child { margin-bottom: 0; }
 .loading-skeleton i {
   display: block;
   overflow: hidden;
@@ -3841,14 +3979,30 @@ a.membership-card { text-decoration: none; display: block; }
 /* ============================================================
    Batch 3 — member home, search and category discovery
    ============================================================ */
-.member-home .header { padding: 22px var(--page-gutter) 12px; }
+/* 릴리스 폴리시 배치 7차(2026-09-17) — 실기기 재신고: 홈 화면 상단이 스크롤 없이 첫
+   페인트부터 상태바와 겹침. 근본 원인: 6차 배치에서 .header 기본 규칙에
+   max(14px, var(--safe-top)) safe-area 패딩 + sticky를 추가했지만, 이 더 구체적인
+   selector(.member-home .header, 클래스 2개라 specificity가 더 높음 — 이 파일에서도
+   더 뒤에 있어 이중으로 이김)가 padding을 22px 고정값으로 통째로 덮어써 safe-area
+   보정 자체가 무효화되고 있었다. .header를 고쳤어도 홈 화면(.member-home 래퍼)만은
+   이 override 때문에 전혀 적용되지 않았던 것 — sticky/background는 이 규칙이
+   padding만 재선언해서 그대로 살아있었으므로 겹침이 "당김 중엔 고정, 첫 진입 시엔
+   여전히 겹침"으로 보였을 것. 기존 22px/12px 시각 간격 의도는 유지하되
+   max(Npx, var(--safe-top)) 패턴으로 안전영역을 되살린다. */
+.member-home .header { padding: max(22px, var(--safe-top)) var(--page-gutter) 12px; }
 /* home-heading-row: 원래 .location에 고정 max-width(245px, 좁은 화면에선 210px)를 줘서
    "관리자 모드"/"로그인" 배지와의 간격을 확보했는데, 그 값이 실제 배지 폭보다 살짝
    커서 320px 폭에서는 텍스트가 2줄로 줄바꿈되면서 배지와 틈 없이 딱 붙어버렸다(겹치진
    않지만 간격이 0px). auth-scene 버그와 같은 원인(콘텐츠 폭과 무관한 고정 px 값)이라
    같은 방식으로 고친다 — max-width 매직넘버 대신 flex:1(남는 공간만큼만 차지 +
    min-width:0으로 필요하면 줄바꿈)과 gap으로 배지와의 최소 간격을 항상 보장한다. */
-.home-heading-row { align-items: flex-start; gap: 10px; margin-bottom: 7px; }
+/* 릴리스 폴리시 배치 8차(2026-09-17) — 홈 상단 spacing 미세 조정(1번). safe-area 처리는
+   위 .member-home .header의 max(22px, var(--safe-top))가 이미 담당하므로 거기엔 손대지
+   않고(중복 패딩 방지), 제목 줄(.home-heading-row, 로그인/관리자 모드 배지 포함) 앞에만
+   margin-top 10px를 더해 헤더 상단 패딩과 제목 사이 여백만 넓힌다 — 아래
+   .home-location-row/.searchbar/히어로 배너/하단 nav 간격은 전부 기존 그대로(이 줄
+   자체만 10px 아래로 내려갈 뿐 그 이후 요소들 사이 gap은 안 바뀜). */
+.home-heading-row { align-items: flex-start; gap: 10px; margin-top: 10px; margin-bottom: 7px; }
 .home-heading-row .location { flex: 1 1 auto; min-width: 0; font-size: 22px; line-height: 1.28; font-weight: 720; letter-spacing: -.035em; }
 .home-heading-row .header-icons { flex: 0 0 auto; min-height: 40px; align-items: flex-start; }
 .login-link { min-height: 38px; padding: 0 14px; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); font-size: 12px; font-weight: 620; white-space: nowrap; }
@@ -3893,7 +4047,7 @@ a.membership-card { text-decoration: none; display: block; }
 .home-class-copy small { margin-top: 4px; overflow: hidden; color: var(--ink-soft); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
 .home-class-copy small b { color: var(--brand-ink); font-weight: 680; }
 
-.discovery-page-v2 .search-header { padding: 20px var(--page-gutter) 14px; gap: 8px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.discovery-page-v2 .search-header { padding: max(20px, var(--safe-top)) var(--page-gutter) 14px; gap: 8px; background: var(--bg); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 15; }
 .discovery-page-v2 .search-header .side,.category-page-v2 .back-header .side { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
 /* iOS 검색 화면 버튼이 화면 우측 밖으로 잘려 보이던 버그의 실제 원인: 이 input에
    autoFocus가 걸려 있고(app/search/page.tsx) font-size가 16px 미만이면, iOS
@@ -3905,7 +4059,13 @@ a.membership-card { text-decoration: none; display: block; }
    레이아웃(width, flex)은 그대로 두고 font-size만 iOS 임계값인 16px로 올린다. */
 .discovery-page-v2 .search-input { min-width: 0; height: 50px; padding: 0 15px; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--surface); font-size: 16px; }
 .discovery-page-v2 .search-input:focus { border-color: var(--brand); outline: 0; }
-.discovery-page-v2 .search-go { min-width: 56px; height: 44px; padding: 0 12px; border: 0; border-radius: var(--radius-md); background: var(--ink); color: var(--bg); font-size: 12.5px; font-weight: 650; }
+/* 릴리스 폴리시 배치 6차(2026-09-15, item 12) — 검색 CTA가 입력창(50px)보다 6px 낮아
+   (44px) .search-header가 align-items:center라 시각적으로는 세로 중앙정렬돼 보였지만
+   높이 자체가 안 맞아 나란히 보면 어긋나 보였다. 입력창과 동일한 50px로 맞춤(44px
+   터치 타겟 요구사항은 이미 만족하는 값이라 줄어들 걱정 없음). disabled 상태 스타일이
+   아예 없었던 것도 추가(.primary-btn:disabled 등 기존 관례와 동일하게 opacity+cursor). */
+.discovery-page-v2 .search-go { min-width: 56px; height: 50px; padding: 0 12px; border: 0; border-radius: var(--radius-md); background: var(--ink); color: var(--bg); font-size: 12.5px; font-weight: 650; }
+.discovery-page-v2 .search-go:disabled { opacity: .5; cursor: default; }
 .search-suggestions { padding: 34px var(--page-gutter) 130px; }
 .search-suggestion-title { font-size: 16px; font-weight: 680; }
 .search-suggestion-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
@@ -3957,7 +4117,14 @@ a.membership-card { text-decoration: none; display: block; }
    Latest booking logic stays in the pages; this layer only defines presentation.
    ============================================================ */
 .member-reservation,.member-my-reservations { background: var(--bg); color: var(--ink); }
-.resv-page-head { padding: 32px var(--page-gutter) 22px; }
+/* 릴리스 폴리시 배치 7차(2026-09-17) — 실기기 재신고: 예약 화면 상단 "예약" 제목이
+   스크롤 없이 첫 페인트부터 상태바와 겹침. 근본 원인: 이 selector는 .header/
+   .back-header(6차 배치에서 safe-area+sticky를 고친 공용 헤더 계약)와 완전히 별개의
+   전용 클래스라 6차 배치의 감사·수정 대상에서 아예 빠져 있었다(app/reservation/
+   page.tsx만 쓰는 단독 selector, 다른 화면이 재사용하지 않아 발견이 늦어짐) —
+   safe-area 토큰 자체가 한 번도 없었음. .header와 동일한 계약(sticky 고정 +
+   max(Npx, var(--safe-top)) + 배경색)을 그대로 적용. */
+.resv-page-head { position: sticky; top: 0; z-index: 15; background: var(--bg); padding: max(32px, var(--safe-top)) var(--page-gutter) 22px; }
 .resv-page-head h1 { margin: 0; font-size: 30px; line-height: 1.08; font-weight: 720; letter-spacing: -.035em; }
 .booking-steps { display: flex; align-items: flex-start; padding: 0 var(--page-gutter) 26px; color: var(--ink-soft); }
 .booking-step { min-width: 62px; display: grid; justify-items: center; gap: 7px; font-size: 11px; }
@@ -4017,7 +4184,7 @@ a.membership-card { text-decoration: none; display: block; }
 .member-reservation .mini-btn { min-width: 48px; min-height: 40px; padding: 0 8px; border: 0; background: transparent; color: var(--ink); font-size: 12px; font-weight: 680; }
 .member-reservation .mini-btn:not(.done) { border-radius: 999px; background: var(--ink); color: var(--bg); }
 
-.member-my-reservations .back-header { padding: 32px var(--page-gutter) 18px; }
+.member-my-reservations .back-header { padding: max(32px, var(--safe-top)) var(--page-gutter) 18px; }
 .member-my-reservations .back-header .title { margin-right: auto; font-size: 30px; line-height: 1.08; font-weight: 720; letter-spacing: -.035em; }
 .member-my-reservations .back-header .side:first-child { display: none; }
 .member-my-reservations .cal-export-btn { width: 44px; height: 44px; color: var(--ink); }
@@ -4065,7 +4232,7 @@ a.membership-card { text-decoration: none; display: block; }
 .center-detail-v2 { position: relative; }
 .center-detail-v2 .center-detail-head {
   position: absolute; top: 0; left: 0; right: 0; z-index: 20;
-  padding-top: max(18px,env(safe-area-inset-top));
+  padding-top: max(18px,var(--safe-top));
   color: var(--text-inverse); background: linear-gradient(180deg,rgba(0,0,0,.44),transparent);
 }
 .center-detail-v2 .center-detail-head .title { opacity: 0; }
@@ -4151,9 +4318,19 @@ a.membership-card { text-decoration: none; display: block; }
 .commerce-page .checkout-done-icon::after { content: "✓"; color: var(--text-inverse); font-size: 25px; font-weight: 700; }
 /* Batch 6: member communication, account and authentication surfaces */
 .member-notifications,.member-inquiries,.mypage-shell,.account-page-v2{background:var(--bg)}
-.noti-head,.inquiry-head,.mypage-titlebar{display:flex;align-items:flex-end;justify-content:space-between;min-height:96px;padding:34px var(--page-gutter) 20px;border-bottom:1px solid var(--line)}
-.noti-head h1,.inquiry-head h1,.mypage-titlebar h1{font-size:28px;line-height:1.1;font-weight:800;letter-spacing:-.7px}
+.noti-head,.mypage-titlebar{display:flex;align-items:flex-end;justify-content:space-between;min-height:96px;padding:max(34px, var(--safe-top)) var(--page-gutter) 20px;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:15;background:var(--bg)}
+.noti-head h1,.mypage-titlebar h1{font-size:28px;line-height:1.1;font-weight:800;letter-spacing:-.7px}
 .noti-head a,.noti-head button{min-height:40px;padding:0 4px;color:var(--brand-ink);font-size:13px;font-weight:700}
+/* 릴리스 폴리시 배치 6차(2026-09-15) — 실기기 QA: 1:1 문의 목록 화면(app/inquiries/
+   page.tsx)에서 "새 문의" 버튼 위 공백이 과하다는 신고. 원인: 이 화면은 .back-header
+   (이미 자체 safe-area-inset-top 패딩을 가진, 이 앱에서 가장 많이 재사용되는 상단
+   바)를 먼저 렌더링하고 .inquiry-head를 그 "아래"에 두 번째 줄로 쌓는데, .inquiry-head는
+   원래 .noti-head(알림함 — 이 화면 하나로 끝나는 단독 최상단 바, safe-area를 자기가
+   직접 감당해야 함)와 같은 규칙을 공유하고 있어 이미 .back-header가 처리한 safe-area
+   상단 여백을 min-height 96px짜리 "또 다른 최상단 바"로 한 번 더 쌓고 있었다. 애초에
+   같이 묶일 selector가 아니었다 — .inquiry-head는 .back-header 아래 붙는 보조
+   서브헤더일 뿐이라 safe-area/큰 min-height가 필요 없다. */
+.inquiry-head{display:flex;align-items:flex-end;justify-content:space-between;padding:14px var(--page-gutter) 16px;border-bottom:1px solid var(--line)}
 .inquiry-head p{margin-top:6px;color:var(--ink-soft);font-size:12px}
 .inquiry-head .primary-btn{min-height:40px;border-radius:999px;background:var(--ink);color:var(--bg)}
 .member-notifications .noti-list,.member-inquiries .thread-list{padding:0 var(--page-gutter) 112px}
@@ -4186,7 +4363,7 @@ a.membership-card { text-decoration: none; display: block; }
    바꿔 항상 텍스트 다음에 오도록 고쳤다 — 텍스트가 몇 줄이 되든 아이콘은 그 아래로
    밀려날 뿐 절대 겹치지 않는다. 폰트 크기/여백은 clamp()로 뷰포트에 맞춰 부드럽게
    줄어들어 320px 폭에서도 강제 줄바꿈이 줄어든다. */
-.auth-scene{position:relative;display:flex;flex-direction:column;min-height:278px;padding:max(24px,env(safe-area-inset-top)) 22px clamp(20px,5vh,36px);overflow:hidden;color:var(--text-inverse);background:var(--grad1)}
+.auth-scene{position:relative;display:flex;flex-direction:column;min-height:278px;padding:max(24px,var(--safe-top)) 22px clamp(20px,5vh,36px);overflow:hidden;color:var(--text-inverse);background:var(--grad1)}
 .auth-scene:before,.auth-scene:after{content:"";position:absolute;border:1px solid rgba(255,255,255,.14);border-radius:50%}.auth-scene:before{width:250px;height:250px;right:-88px;top:18px}.auth-scene:after{width:145px;height:145px;right:-32px;top:74px}
 .auth-home-link{position:relative;z-index:2;flex:0 0 auto;color:var(--text-inverse);font-size:13px;font-weight:750}.auth-scene-copy{position:relative;z-index:2;flex:0 1 auto;min-width:0;margin-top:clamp(14px,4vh,24px)}.auth-scene-copy>span{color:rgba(255,255,255,.55);font-size:10px;font-weight:750;letter-spacing:1.4px}.auth-scene-copy h1{margin-top:10px;font-size:clamp(21px,6.5vw,27px);line-height:1.25;letter-spacing:-.9px;text-wrap:balance}.auth-scene-copy p{margin-top:9px;color:rgba(255,255,255,.68);font-size:clamp(12px,3.4vw,13px);line-height:1.55;overflow-wrap:break-word}
 .auth-activities{position:relative;z-index:2;flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;margin-top:clamp(14px,4vh,20px)}.auth-activities>div{flex:0 0 auto;display:grid;place-items:center;width:48px;height:48px;border:1px solid rgba(255,255,255,.13);border-radius:15px;background:rgba(255,255,255,.06)}.auth-activities span{display:none}.auth-activities img{width:30px;height:30px;object-fit:contain;border-radius:50%}
@@ -4195,11 +4372,11 @@ a.membership-card { text-decoration: none; display: block; }
 .auth-panel .role-select{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}.auth-panel .role-btn{min-height:92px;padding:13px 10px;display:grid;grid-template-columns:36px 1fr;grid-template-rows:auto auto;column-gap:9px;text-align:left;border:1px solid var(--line);border-radius:15px;background:var(--card-bg)}.auth-panel .role-btn.on{border:2px solid var(--ink);background:var(--surface)}.auth-panel .role-emoji{grid-row:1/3;display:grid;place-items:center;width:36px;height:36px;margin:0;border-radius:12px;background:var(--surface)}
 .auth-panel .input-field{min-height:52px;margin-bottom:8px;padding-left:2px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}.auth-panel .login-submit{margin-top:12px;border-radius:14px}
 .auth-account-page{min-height:100dvh}.auth-account-page .back-header+*{margin-top:18px}.register-center-page-v2 .center-registration-form{margin-inline:var(--page-gutter)}
-@media(max-width:420px){.auth-panel{padding-inline:16px}.noti-head,.inquiry-head,.mypage-titlebar{min-height:90px}.auth-activities{opacity:.72}}
+@media(max-width:420px){.auth-panel{padding-inline:16px}.noti-head,.mypage-titlebar{min-height:90px}.auth-activities{opacity:.72}}
 
 /* Batch 7A: manager home, members, notifications and more */
-.manager-home-v2{padding-bottom:calc(var(--floating-nav-clearance) + 28px);background:var(--bg)}
-.manager-home-v2 .mgr-mode-bar{padding:22px var(--page-gutter) 14px;border-bottom:0}.manager-home-v2 .mgr-mode-label{font-size:13px;font-weight:750}.manager-home-v2 .mgr-mode-switch{min-height:40px;display:inline-flex;align-items:center;padding:0 13px;border:1px solid var(--line);border-radius:999px;font-size:12px;font-weight:650}
+.manager-home-v2{background:var(--bg)}
+.manager-home-v2 .mgr-mode-bar{padding:max(22px, var(--safe-top)) var(--page-gutter) 14px;border-bottom:0}.manager-home-v2 .mgr-mode-label{font-size:13px;font-weight:750}.manager-home-v2 .mgr-mode-switch{min-height:40px;display:inline-flex;align-items:center;padding:0 13px;border:1px solid var(--line);border-radius:999px;font-size:12px;font-weight:650}
 .manager-home-v2 .center-switcher{padding:0 var(--page-gutter) 18px;gap:8px}.manager-home-v2 .center-chip{min-height:44px;padding:0 15px;border:1px solid var(--line);border-radius:14px;background:transparent}.manager-home-v2 .center-chip.on{border-color:var(--ink);background:var(--ink);color:var(--bg)}
 .manager-today-overview{margin:0 var(--page-gutter) 22px;padding:20px 0;border-block:1px solid var(--line)}
 .manager-today-head{display:flex;align-items:end;justify-content:space-between;margin-bottom:16px}.manager-today-head div{display:flex;align-items:baseline;gap:8px}.manager-today-head span{font-size:17px;font-weight:750}.manager-today-head b,.manager-today-head>a{color:var(--ink-soft);font-size:11px;font-weight:650}
@@ -4213,6 +4390,28 @@ a.membership-card { text-decoration: none; display: block; }
    accent-soft 배경이 있어 정상). 배경 전체를 다시 칠하면 우선순위(priority-important) 배경
    과 겹쳐 헷갈리므로, 제목 앞 점 하나로 가볍게 표시한다. */
 .manager-notifications-v2 .noti-row.unread .noti-title::before{content:"";display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:var(--accent);vertical-align:middle}
+
+/* 릴리스 폴리시 배치 8차(2026-09-17) — 3-2 전체 삭제 헤더, 3-1 "더보기" 중앙 정렬. */
+.manager-notifications-v2 .noti-page-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px var(--page-gutter) 4px;
+}
+.manager-notifications-v2 .noti-page-count { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+.manager-notifications-v2 .noti-delete-all-btn {
+  border: none; background: none; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 750; color: var(--danger); padding: 6px 4px;
+}
+/* 이전엔 .ghost-btn(display:block;width:100%) + 인라인 margin:12px 20px 조합이라 부모
+   패딩/마진이 조금이라도 어긋나면 좌우 여백이 달라 보일 수 있었다(translateX 없이도
+   재현 가능한 구조적 원인). flex justify-content:center로 부모 폭과 무관하게 항상
+   기하학적으로 중앙에 오도록 바꾸고, 버튼 자체는 내용 너비만 차지하게 한다(기존
+   .ghost-btn과 동일한 배경/글자 크기/굵기/패딩/radius는 유지). */
+.manager-notifications-v2 .noti-load-more-row { display: flex; justify-content: center; padding: 12px var(--page-gutter) 20px; }
+.manager-notifications-v2 .noti-load-more-btn {
+  display: inline-block; border: none; cursor: pointer;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 15.5px; font-weight: 800;
+  padding: 15px 26px; border-radius: 14px; text-align: center;
+}
 @media(max-width:420px){.manager-today-metrics>a{padding-inline:9px}.manager-today-metrics b{font-size:21px}.manager-home-v2 .dash-card-value{font-size:18px}}
 
 /* Batch 7B: manager classes — keep current scheduling logic, align the surface. */
@@ -4222,7 +4421,7 @@ a.membership-card { text-decoration: none; display: block; }
    기본적으로 숨겨져 "복사"/"휴무일" 버튼이 완전히 사라진다 — 선택자 특이성을 그 규칙보다
    높여(app-shell.manager-classes-v2 결합) 이 화면만 원래 3분할 레이아웃으로 되돌린다. */
 .manager-v3-content>.app-shell.manager-classes-v2>.back-header{display:flex}
-.manager-classes-v2>.back-header{min-height:88px;padding:28px var(--page-gutter) 18px;border-bottom:1px solid var(--line)}
+.manager-classes-v2>.back-header{min-height:88px;padding:max(28px, var(--safe-top)) var(--page-gutter) 18px;border-bottom:1px solid var(--line)}
 .manager-classes-v2>.back-header .title{font-size:27px;font-weight:800;letter-spacing:-.7px}
 .manager-classes-v2>.back-header .cal-export-btn{min-width:48px;min-height:40px;padding:0 8px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);font-weight:700}
 /* "일정 복사"는 "휴무일"보다 글자가 많아 같은 padding으로는 텍스트가 꽉 차 보였다 —
@@ -4241,7 +4440,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-classes-v2 .manager-cal-header .cal-nav-btn{width:40px;height:40px;flex:0 0 40px;border:0;border-radius:50%;background:transparent;color:var(--ink);font-size:25px;font-weight:400}.manager-classes-v2 .manager-cal-header .cal-nav-btn:active{background:var(--surface)}
 .manager-center-select{position:relative;min-width:0;max-width:146px;height:40px;display:flex;align-items:center;padding:0 27px 0 11px;border:1px solid var(--line);border-radius:999px;background:var(--card-bg)}
 .manager-center-select:after{content:"";position:absolute;right:12px;top:50%;width:6px;height:6px;border-right:1.5px solid var(--ink-soft);border-bottom:1.5px solid var(--ink-soft);transform:translateY(-68%) rotate(45deg);pointer-events:none}
-.manager-center-select select{width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:12.5px;font-weight:680;text-overflow:ellipsis;appearance:none;cursor:pointer}
+.manager-center-select select{width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:16px;font-weight:680;text-overflow:ellipsis;appearance:none;cursor:pointer}
 .manager-classes-v2>.cal-weekdays{border-bottom:1px solid var(--line)}
 .manager-classes-v2>.cal-grid{padding-left:var(--page-gutter);padding-right:var(--page-gutter)}
 .manager-classes-v2>.cal-grid .cal-cell,.manager-classes-v2>.cal-grid .cal-cell.selected{min-height:56px;padding:9px 0 7px;border:0!important;border-radius:0!important;background:transparent!important}
@@ -4260,7 +4459,7 @@ a.membership-card { text-decoration: none; display: block; }
    --bg는 라이트/다크 모두 --ink의 반대쪽 극단이라(라이트: 거의 흰색, 다크: 거의 검정) 항상
    대비가 유지된다. */
 .manager-classes-v2>.fab-btn{width:calc(100% - (var(--page-gutter) * 2));bottom:104px;border-radius:15px;background:var(--ink);color:var(--bg);box-shadow:0 8px 24px rgba(20,20,20,.16)}
-.manager-classes-v2 .sheet input[type="date"]{min-height:50px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface);color:var(--ink);font-size:14px}.manager-classes-v2 .sheet .time-row input[type="date"]{flex:1;min-width:0}.manager-classes-v2 .sheet .perm-guide.schedule-rule-warning{border-left-color:var(--danger);color:var(--danger)!important}
+.manager-classes-v2 .sheet input[type="date"]{min-height:50px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface);color:var(--ink);font-size:16px}.manager-classes-v2 .sheet .time-row input[type="date"]{flex:1;min-width:0}.manager-classes-v2 .sheet .perm-guide.schedule-rule-warning{border-left-color:var(--danger);color:var(--danger)!important}
 @media(max-width:380px){.manager-classes-v2 .manager-cal-header .cal-title{min-width:102px;font-size:18px}.manager-classes-v2 .manager-cal-header .cal-nav-btn{width:34px;flex-basis:34px}.manager-center-select{max-width:116px}}
 
 /* Batch 7C: manager detail surfaces — shared hierarchy without replacing feature logic. */
@@ -4275,7 +4474,7 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-v3-content .filter-chip,.manager-v3-content .perm-tab{min-height:40px;padding:0 2px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--ink-soft);font-size:13px;font-weight:650;white-space:nowrap}.manager-v3-content .filter-chip.on,.manager-v3-content .perm-tab.on{border-bottom-color:var(--ink);background:transparent;color:var(--ink)}
 .manager-v3-content .input-field,
 .admin-v3-content .input-field,
-.manager-v3-content .date-input {min-height:50px;padding:0 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);font-size:14px;box-shadow:none}.manager-v3-content textarea.input-field,
+.manager-v3-content .date-input {min-height:50px;padding:0 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);font-size:16px;box-shadow:none}.manager-v3-content textarea.input-field,
 .admin-v3-content textarea.input-field {min-height:116px;padding-block:13px;line-height:1.6;resize:vertical}
 .manager-v3-content .perm-guide,
 .admin-v3-content .perm-guide {margin:12px var(--page-gutter);padding:13px 0 13px 14px;border:0;border-left:2px solid var(--brand);border-radius:0;background:transparent;color:var(--ink-soft);font-size:12px;line-height:1.6}
@@ -4355,6 +4554,34 @@ button,
 input,
 select,
 textarea { font: inherit; }
+/* Body copy may break anywhere as a last-resort overflow guard, but controls
+   must keep Korean words intact and grow vertically instead of leaking out of
+   a fixed-size button. This contract also covers link-styled buttons. */
+button,
+.app-button,
+.primary-btn,
+.ghost-btn,
+.danger-btn,
+.outline-action,
+.quiet-action,
+.profile-del,
+.add-profile-btn {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+.app-button,
+.primary-btn,
+.ghost-btn,
+.danger-btn,
+.outline-action,
+.quiet-action,
+.profile-del,
+.add-profile-btn {
+  height: auto;
+  line-height: 1.35;
+}
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
@@ -4431,7 +4658,7 @@ textarea:focus-visible,
 
 .mypage-shell .profile-block {
   min-height: 108px;
-  padding: max(30px,env(safe-area-inset-top)) var(--page-gutter) 22px;
+  padding: max(30px,var(--safe-top)) var(--page-gutter) 22px;
   gap: 12px;
 }
 .mypage-shell .avatar {
@@ -4470,19 +4697,25 @@ textarea:focus-visible,
   color: var(--bg);
 }
 
-.manager-home-v2 {
-  padding-bottom: calc(var(--floating-nav-clearance) + 92px);
-}
 .manager-home-v2 > .list-row .icon svg {
   width: 22px;
   height: 22px;
   stroke-width: 1.7;
 }
-.manager-home-v2 > .list-row:last-of-type { margin-bottom: 24px; }
 
 /* 2026-08-15 visual alignment pass.
    These rules intentionally live last: legacy screen rules must not restore
-   cramped controls, dark member actions, or content hidden by floating nav. */
+   cramped controls, dark member actions, or content hidden by floating nav.
+
+   릴리스 폴리시 배치 6차(2026-09-15) — 실기기 QA: 관리자 "더보기" 화면 마지막 메뉴와
+   하단 nav 사이에 공백이 과하다는 신고. 원인: 이 padding-bottom(nav 실제 높이 +
+   safe-bottom을 담은 --floating-nav-clearance + 104px 여유분)만으로 이미 충분한데,
+   JSX 맨 끝에 스크롤 영역 자체를 한 번 더 늘리는 별도 스페이서
+   (.manager-menu-end-spacer, height: clearance + 132px)가 같이 남아 있어 여백이
+   이중으로 쌓이고 있었다(이전 여러 차례의 "final" 시도가 서로를 지우지 않고 계속
+   쌓인 흔적 — 위에서 지운 92px/128px, 170px/110px 버전들도 같은 문제). 스페이서
+   엘리먼트(app/manager/page.tsx) 자체를 제거하고 이 padding-bottom 하나만 유일한
+   기준으로 남긴다. */
 .manager-v3-content > .app-shell,
 .manager-home-v2,
 .manager-members-v2,
@@ -4493,22 +4726,18 @@ textarea:focus-visible,
 .manager-home-v2 > .list-row:last-of-type {
   margin-bottom: 0;
 }
-.manager-home-v2 .manager-menu-end-spacer {
-  width: 100%;
-  height: calc(var(--floating-nav-clearance) + 132px);
-  flex: 0 0 auto;
-  pointer-events: none;
-}
 
 /* A single select language across manager forms. Native platform arrows made
    otherwise identical fields look unrelated, so all regular selects use one
    quiet chevron and the same internal spacing. */
 .manager-v3-content select.input-field {
+  min-width: 0;
+  max-width: 100%;
   min-height: 54px;
   padding: 0 46px 0 16px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background-color: var(--text-inverse);
+  background-color: var(--card-bg);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2374767d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 15px center;
@@ -4519,7 +4748,13 @@ textarea:focus-visible,
   line-height: 1.35;
   appearance: none;
   -webkit-appearance: none;
+  color-scheme: light;
   box-shadow: none;
+}
+[data-theme="charcoal"] .manager-v3-content select.input-field { color-scheme: dark; }
+.manager-v3-content select.input-field option {
+  background: var(--card-bg);
+  color: var(--ink);
 }
 .manager-v3-content select.input-field:hover,
 .admin-v3-content select.input-field:hover { border-color: var(--line-strong); }
@@ -4696,3 +4931,589 @@ textarea:focus-visible,
 .app-date-week span:last-child  { color: var(--info); }
 .app-date-grid > button:not(.on):nth-child(7n+1) { color: var(--danger); }
 .app-date-grid > button:not(.on):nth-child(7n)   { color: var(--info); }
+
+/* ============================================================
+   Responsive workspace shell
+   mwhabit.com stays one domain and one Next.js app. Mobile remains the
+   source-of-truth UI; viewport width alone progressively adds navigation,
+   workspace panels and denser information layouts. Do not replace these
+   media queries with device/OS detection or separate mobile/desktop routes.
+   ============================================================ */
+.member-desktop-nav,
+.workspace-sidebar { display: none; }
+
+@media (min-width: 768px) {
+  :root {
+    --workspace-rail: 88px;
+    --workspace-sidebar: 88px;
+    --workspace-content-max: 1440px;
+    --workspace-gutter: clamp(24px,3vw,44px);
+  }
+  .member-desktop-nav,
+  .workspace-sidebar {
+    position: fixed; inset: 0 auto 0 0; z-index: 50;
+    width: var(--workspace-sidebar); display: flex; flex-direction: column; gap: 4px;
+    padding: max(20px,var(--safe-top)) 12px max(18px,var(--safe-bottom));
+    border-right: 1px solid var(--line); background: color-mix(in srgb,var(--bg) 96%,transparent);
+    overflow: hidden;
+    box-shadow: 8px 0 28px rgba(20,20,20,.025); backdrop-filter: blur(18px);
+    transition: width 220ms cubic-bezier(.2,.75,.2,1), padding 220ms cubic-bezier(.2,.75,.2,1), box-shadow 180ms ease;
+  }
+  .desktop-brand {
+    min-height: 54px; display: flex; align-items: center; justify-content: center; gap: 11px;
+    margin-bottom: 14px; color: var(--ink);
+  }
+  .desktop-brand-mark {
+    width: 40px; height: 40px; flex: 0 0 40px; display: grid; place-items: center;
+    border-radius: 13px; background: var(--brand); color: var(--brand-ink-strong);
+    font-size: 18px; font-weight: 850; letter-spacing: -.04em;
+  }
+  .desktop-brand > span:last-child,
+  .desktop-nav-item > span:not(.desktop-nav-badge),
+  .workspace-sidebar-mode > span {
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    white-space: nowrap;
+    transition: max-width 220ms cubic-bezier(.2,.75,.2,1), opacity 120ms ease, visibility 0s linear 220ms;
+  }
+  .desktop-nav-section,
+  .desktop-nav-note {
+    max-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    transition: max-height 180ms ease, margin 180ms ease, padding 180ms ease, opacity 100ms ease, visibility 0s linear 180ms;
+  }
+  .desktop-brand b,.desktop-brand small { display: block; }
+  .desktop-brand b { font-size: 18px; letter-spacing: -.03em; }
+  .desktop-brand small { margin-top: 2px; color: var(--ink-soft); font-size: 11px; font-weight: 600; }
+  .desktop-nav-item,.workspace-sidebar-mode {
+    position: relative; min-height: 52px; display: flex; align-items: center; justify-content: center;
+    gap: 11px; padding: 0 12px; border-radius: 14px; color: var(--ink-soft);
+    font-size: 13.5px; font-weight: 680; transition: background 150ms ease,color 150ms ease;
+  }
+  .desktop-nav-item:hover,.workspace-sidebar-mode:hover { background: var(--surface); color: var(--ink); }
+  .desktop-nav-item.active { background: var(--brand-soft); color: var(--brand-ink); }
+  .desktop-nav-item svg,.workspace-sidebar-mode svg { flex: 0 0 auto; }
+  .desktop-nav-badge {
+    position: absolute; top: 7px; right: 7px; min-width: 18px; height: 18px;
+    display: grid; place-items: center; padding: 0 5px; border: 2px solid var(--bg);
+    border-radius: 999px; background: var(--danger); color: #fff; font-size: 9px; font-weight: 800;
+  }
+  .desktop-nav-spacer { flex: 1; }
+  .workspace-sidebar-scroll {
+    min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 4px;
+    overflow-y: auto; scrollbar-width: thin;
+  }
+  .workspace-sidebar-mode { margin-top: 10px; border: 1px solid var(--line); }
+
+  body:has(> .member-desktop-nav) .app-shell {
+    width: calc(100% - var(--workspace-rail)); max-width: 1120px;
+    margin-left: max(var(--workspace-rail),calc((100vw - var(--workspace-rail) - 1120px)/2 + var(--workspace-rail)));
+    margin-right: auto; padding-bottom: 40px;
+  }
+  body:has(> .member-desktop-nav) .bottom-nav { display: none; }
+  body:has(> .member-desktop-nav) .header,
+  body:has(> .member-desktop-nav) .back-header,
+  body:has(> .member-desktop-nav) .noti-head,
+  body:has(> .member-desktop-nav) .inquiry-head,
+  body:has(> .member-desktop-nav) .mypage-titlebar,
+  body:has(> .member-desktop-nav) .resv-page-head { padding-left: var(--workspace-gutter); padding-right: var(--workspace-gutter); }
+  .member-home .header { padding-bottom: 20px; }
+  .member-home .hero { margin-inline: var(--workspace-gutter); min-height: 190px; padding-inline: 30px; }
+  .member-home .hero h1 { max-width: 60%; font-size: clamp(24px,3vw,34px); }
+  .member-home .home-value-line,.member-home .home-category-head,.member-home .home-class-head { margin-inline: var(--workspace-gutter); }
+  .member-home .cat-grid { grid-template-columns: repeat(auto-fit,minmax(92px,1fr)); gap: 18px; padding-inline: var(--workspace-gutter); }
+  .member-home .cat-icon { width: 68px; height: 68px; }
+  .member-home .home-class-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; padding-inline: var(--workspace-gutter); }
+  .member-home .home-class-row { min-height: 112px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--card-bg); }
+  .member-home .home-footer { padding-inline: var(--workspace-gutter); }
+  .discovery-page-v2 .search-header { gap: 12px; }
+  .discovery-page-v2 .search-input { min-width: 0; }
+  .discovery-page-v2 .search-suggestions { max-width: 760px; padding: 32px var(--workspace-gutter); }
+  .discovery-page-v2 .search-category-results { padding: 0 var(--workspace-gutter); }
+  .discovery-page-v2 .search-category-results > .menu-section-label { padding-inline: 0; }
+  .discovery-page-v2 .search-category-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 24px; }
+  .discovery-page-v2 .search-category-grid .list-row { margin-inline: 0; }
+  .discovery-page-v2 .search-center-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; padding: 0 var(--workspace-gutter) 20px; }
+  .discovery-page-v2 .search-center-grid .search-center-row { min-height: 90px; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--card-bg); }
+  .discovery-page-v2 > .app-empty-state,
+  .manager-v3-content .daylist-empty,
+  .admin-v3-content .daylist-empty { min-height: 38dvh; max-width: 720px; margin-inline: auto; }
+
+  .manager-v3,.admin-v3 {
+    width: 100%; max-width: none; margin: 0; padding-left: var(--workspace-sidebar); background: var(--surface);
+  }
+  .manager-v3 > .manager-chrome,.admin-v3 > .admin-chrome { padding-left: var(--workspace-gutter); padding-right: var(--workspace-gutter); }
+  .manager-v3 > .manager-chrome {
+    min-height: 82px; display: flex; align-items: center; background: color-mix(in srgb,var(--bg) 95%,transparent);
+  }
+  .manager-chrome-main { width: 100%; }
+  .manager-chrome-main > a,.admin-chrome > a { width: 42px; min-width: 42px; padding: 0; }
+  .admin-v3 > .admin-chrome { min-height: 82px; align-items: center; }
+  .admin-chrome .app-chrome-title h1 { font-size: 24px; }
+  .manager-v3-content,.admin-v3-content {
+    width: 100%; max-width: var(--workspace-content-max); margin: 0 auto; padding: 24px var(--workspace-gutter) 48px;
+  }
+  .manager-v3-content > .app-shell,.admin-v3-content > .app-shell {
+    width: 100%; max-width: none; min-height: calc(100dvh - 154px); padding-bottom: 40px!important;
+    overflow: hidden; border: 1px solid var(--line); border-radius: 22px; background: var(--bg);
+    box-shadow: 0 12px 40px rgba(20,20,20,.045);
+  }
+  .manager-v3 > .bottom-nav { display: none; }
+  .manager-v3-content [class~="manager-menu-end-spacer"] { display: none; }
+  .manager-v3-content .sheet-overlay,.admin-v3-content .sheet-overlay { align-items: stretch; justify-content: flex-end; }
+  .manager-v3-content .sheet,.admin-v3-content .sheet {
+    width: min(520px,calc(100vw - var(--workspace-sidebar))); max-width: 520px; max-height: 100dvh;
+    height: 100%; margin: 0; padding: 22px 26px max(28px,var(--safe-bottom)); border-left: 1px solid var(--line); border-radius: 0;
+  }
+  .manager-v3-content .sheet:before,.admin-v3-content .sheet:before { display: none; }
+  .manager-v3-content .sheet-title,.admin-v3-content .sheet-title { top: -22px; margin-inline: -26px; padding: 22px 26px 16px; }
+
+  .manager-v3-content .pass-list,.manager-v3-content .order-list,.manager-v3-content .announce-list,
+  .manager-v3-content .mgr-review-list,.manager-v3-content .profile-list,.admin-v3-content .profile-list,
+  .manager-v3-content .room-card-list,.manager-v3-content .assignment-log-list {
+    grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; padding: 16px 24px 32px;
+  }
+  .manager-v3-content .pass-card,.manager-v3-content .order-row,.manager-v3-content .announce-item,
+  .manager-v3-content .mgr-review,.manager-v3-content .profile-item,.admin-v3-content .profile-item,
+  .manager-v3-content .room-card,.manager-v3-content .assignment-log {
+    padding: 17px; border: 1px solid var(--line); border-radius: 16px; background: var(--card-bg);
+  }
+  .manager-v3-content .mem-toolbar { display: grid; grid-template-columns:minmax(260px,1fr) auto; align-items:center; gap: 12px; }
+  .manager-v3-content .mem-toolbar,
+  .manager-v3-content .admin-filters,
+  .admin-v3-content .admin-filters { position: sticky; top: 0; z-index: 12; background: color-mix(in srgb,var(--bg) 96%,transparent); backdrop-filter: blur(14px); }
+  .manager-v3-content .mem-list { padding-inline: 24px; }
+  .manager-v3-content .mem-row { display: grid; grid-template-columns: minmax(180px,1.4fr) minmax(140px,1fr) auto; align-items: center; min-height: 72px; padding-inline: 10px; }
+  .manager-v3-content .noti-list { padding-inline: 24px; }
+  .manager-v3-content .noti-row { min-height: 82px; }
+  .manager-v3-content .date-range { grid-template-columns: repeat(2,minmax(180px,260px)); }
+  .manager-home-v2 .manager-dashboard-block { padding-bottom: 18px; }
+  .manager-home-v2 .manager-dashboard-block .period-tabs { padding-inline: 24px; }
+  .manager-home-v2 .manager-dashboard-block .dash-cards { grid-template-columns: repeat(3,minmax(0,1fr)); padding-inline: 24px; }
+  .manager-home-v2 .manager-today-classes .daylist { min-height: 0; }
+  .manager-home-v2 .manager-menu-panel { padding: 0 24px 28px; }
+  .manager-home-v2 .manager-menu-panel > .menu-section-label { padding-inline: 0; }
+  .manager-home-v2 .manager-menu-panel > .list-row { margin-inline: 0; }
+  .manager-v3-content .sales-summary { margin-inline: 24px; }
+  .manager-v3-content .sales-breakdown,.manager-v3-content .sales-list { margin-inline: 24px; }
+  .manager-v3-content .sales-row { display: grid; grid-template-columns: minmax(220px,1.5fr) minmax(120px,.7fr) auto; align-items: center; gap: 18px; }
+  .admin-v3-content .admin-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; padding: 20px 24px 36px; }
+  .admin-v3-content .admin-card { margin: 0; }
+  .admin-home-v2 { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-content: start; gap: 12px; padding: 20px 24px 36px!important; }
+  .admin-home-v2 > .menu-section-label { grid-column: 1 / -1; padding: 4px 0 8px; }
+  .admin-home-v2 > .list-row { min-height: 68px; margin: 0; padding: 0 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--card-bg); }
+}
+
+/* An icon rail remains compact on touch tablets. With a precise pointer it
+   expands over the workspace on hover/focus, so the content never jumps and
+   every destination can be read before it is selected. */
+@media (min-width: 768px) and (max-width: 1359px) and (hover: hover) and (pointer: fine) {
+  .member-desktop-nav:hover,
+  .member-desktop-nav:focus-within,
+  .workspace-sidebar:hover,
+  .workspace-sidebar:focus-within {
+    width: 244px;
+    padding-inline: 16px;
+    box-shadow: 14px 0 36px color-mix(in srgb,var(--ink) 13%,transparent);
+  }
+  .member-desktop-nav:hover .desktop-brand,
+  .member-desktop-nav:focus-within .desktop-brand,
+  .workspace-sidebar:hover .desktop-brand,
+  .workspace-sidebar:focus-within .desktop-brand {
+    justify-content: flex-start;
+    padding-inline: 9px;
+  }
+  .member-desktop-nav:hover .desktop-nav-item,
+  .member-desktop-nav:focus-within .desktop-nav-item,
+  .workspace-sidebar:hover .desktop-nav-item,
+  .workspace-sidebar:focus-within .desktop-nav-item,
+  .workspace-sidebar:hover .workspace-sidebar-mode,
+  .workspace-sidebar:focus-within .workspace-sidebar-mode {
+    justify-content: flex-start;
+  }
+  .member-desktop-nav:hover .desktop-brand > span:last-child,
+  .member-desktop-nav:focus-within .desktop-brand > span:last-child,
+  .member-desktop-nav:hover .desktop-nav-item > span:not(.desktop-nav-badge),
+  .member-desktop-nav:focus-within .desktop-nav-item > span:not(.desktop-nav-badge),
+  .workspace-sidebar:hover .desktop-brand > span:last-child,
+  .workspace-sidebar:focus-within .desktop-brand > span:last-child,
+  .workspace-sidebar:hover .desktop-nav-item > span:not(.desktop-nav-badge),
+  .workspace-sidebar:focus-within .desktop-nav-item > span:not(.desktop-nav-badge),
+  .workspace-sidebar:hover .workspace-sidebar-mode > span,
+  .workspace-sidebar:focus-within .workspace-sidebar-mode > span {
+    max-width: 180px;
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0s,70ms,0s;
+  }
+  .member-desktop-nav:hover .desktop-nav-section,
+  .member-desktop-nav:focus-within .desktop-nav-section,
+  .workspace-sidebar:hover .desktop-nav-section,
+  .workspace-sidebar:focus-within .desktop-nav-section {
+    max-height: 32px;
+    margin: 18px 12px 5px;
+    opacity: 1;
+    visibility: visible;
+    color: var(--ink-soft);
+    font-size: 10.5px;
+    font-weight: 750;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    transition-delay: 0s,0s,0s,70ms,0s;
+  }
+  .member-desktop-nav:hover .desktop-nav-note,
+  .member-desktop-nav:focus-within .desktop-nav-note {
+    max-height: 96px;
+    padding: 14px 12px 4px;
+    opacity: 1;
+    visibility: visible;
+    color: var(--ink-soft);
+    font-size: 11px;
+    line-height: 1.55;
+    transition-delay: 0s,0s,0s,70ms,0s;
+  }
+  .member-desktop-nav:hover .desktop-nav-badge,
+  .member-desktop-nav:focus-within .desktop-nav-badge,
+  .workspace-sidebar:hover .desktop-nav-badge,
+  .workspace-sidebar:focus-within .desktop-nav-badge {
+    position: static;
+    margin-left: auto;
+    border: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .member-desktop-nav,
+  .workspace-sidebar,
+  .desktop-brand > span:last-child,
+  .desktop-nav-item > span:not(.desktop-nav-badge),
+  .desktop-nav-section,
+  .desktop-nav-note,
+  .workspace-sidebar-mode > span { transition: none !important; }
+}
+
+@media (min-width: 1360px) {
+  :root { --workspace-sidebar: 244px; --workspace-rail: 244px; }
+  .member-desktop-nav,.workspace-sidebar { padding-inline: 16px; }
+  .desktop-brand { justify-content: flex-start; padding-inline: 9px; }
+  .desktop-brand > span:last-child,.desktop-nav-item > span:not(.desktop-nav-badge),
+  .workspace-sidebar-mode > span {
+    max-width: 180px; opacity: 1; visibility: visible;
+  }
+  .desktop-nav-section,.desktop-nav-note { max-height: 96px; opacity: 1; visibility: visible; }
+  .desktop-nav-section { margin: 18px 12px 5px; color: var(--ink-soft); font-size: 10.5px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+  .desktop-nav-item,.workspace-sidebar-mode { justify-content: flex-start; }
+  .desktop-nav-badge { position: static; margin-left: auto; border: 0; }
+  .desktop-nav-note { padding: 14px 12px 4px; color: var(--ink-soft); font-size: 11px; line-height: 1.55; }
+  .manager-chrome-main > a,.admin-chrome > a {
+    width: auto; min-width: 42px; padding: 0 13px; display: inline-flex; gap: 8px;
+  }
+  .manager-chrome-main > a span,.admin-chrome > a span {
+    position: static; width: auto; height: auto; overflow: visible; clip: auto;
+    white-space: nowrap; font-size: 12px; font-weight: 700;
+  }
+}
+
+@media (min-width: 1280px) {
+  .manager-home-v2 { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(320px,.85fr); align-content: start; }
+  .manager-home-v2 > .center-switcher,.manager-home-v2 > .manager-today-overview { grid-column: 1 / -1; }
+  .manager-home-v2 > .manager-dashboard-block,.manager-home-v2 > .manager-today-classes { grid-column: 1; }
+  .manager-home-v2 > .manager-menu-panel { grid-column: 2; grid-row: 3 / span 2; border-left: 1px solid var(--line); }
+  .manager-home-v2 .dash-cards { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .manager-home-v2 .dash-daily { min-height: 210px; }
+  .manager-classes-v2 { display: grid; grid-template-columns: minmax(500px,1.08fr) minmax(380px,.92fr); align-content: start; }
+  .manager-classes-v2 > .back-header,
+  .manager-classes-v2 > .unplaced-banner,
+  .manager-classes-v2 > .assign-banner { grid-column: 1 / -1; }
+  .manager-classes-v2 > .manager-calendar-panel { grid-column: 1; padding: 18px 20px 28px; border-right: 1px solid var(--line); }
+  .manager-classes-v2 > .manager-agenda-panel { grid-column: 2; min-width: 0; padding: 18px 20px 28px; }
+  .manager-classes-v2 .manager-calendar-panel .cal-header { padding-inline: 0; }
+  .manager-classes-v2 .manager-calendar-panel .cal-grid { padding-inline: 0; }
+  .manager-classes-v2 .manager-agenda-panel > .menu-section-label { padding: 8px 0 12px; font-size: 13px; }
+  .manager-classes-v2 .manager-agenda-panel .daylist { max-height: calc(100dvh - 285px); overflow-y: auto; }
+  .manager-classes-v2 .fab-btn { left: auto; right: max(34px,calc((100vw - var(--workspace-sidebar) - var(--workspace-content-max))/2 + 34px)); transform: none; }
+  .member-reservation { display: grid; grid-template-columns: minmax(430px,.9fr) minmax(460px,1.1fr); align-content: start; }
+  .member-reservation > .resv-page-head,.member-reservation > .booking-steps,.member-reservation > .center-filter-banner { grid-column: 1 / -1; }
+  .member-reservation > .cal-header,.member-reservation > .cal-grid { grid-column: 1; }
+  .member-reservation > .daylist-header,.member-reservation > .profile-picker,
+  .member-reservation > .reservation-list-controls,.member-reservation > .holiday-notice,.member-reservation > .daylist { grid-column: 2; }
+  .member-reservation > .daylist-header { margin-top: 0; border-top: 0; }
+  .member-reservation > .daylist { max-height: calc(100dvh - 300px); overflow-y: auto; }
+  .member-home .home-class-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .admin-v3-content .admin-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .search-center-row,.manager-v3-content .mem-row,.manager-v3-content .sales-row,
+  .manager-v3-content .noti-row,.admin-v3-content .admin-card,.admin-home-v2 > .list-row {
+    transition: border-color 140ms ease,background 140ms ease,transform 140ms ease;
+  }
+  .search-center-row:hover,.manager-v3-content .mem-row:hover,.manager-v3-content .sales-row:hover,
+  .manager-v3-content .noti-row:hover,.admin-home-v2 > .list-row:hover {
+    border-color: var(--line-strong); background: var(--surface); transform: translateY(-1px);
+  }
+}
+
+/* ============================================================
+   Responsive authentication workspace
+   Mobile keeps the native-sized stacked flow. Compact web/tablet widths use
+   a narrow split view; larger desktops progressively widen both columns.
+   ============================================================ */
+@media (min-width: 600px) {
+  .auth-page-v2 {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    min-height: 100dvh;
+    display: grid;
+    grid-template-columns: minmax(220px,38%) minmax(0,62%);
+    align-items: stretch;
+    padding: 0;
+    background: var(--bg);
+  }
+  .auth-page-v2 .auth-scene {
+    position: sticky;
+    top: 0;
+    min-height: 100dvh;
+    height: 100dvh;
+    justify-content: center;
+    padding: clamp(24px,4vw,48px);
+  }
+  .auth-page-v2 .auth-home-link {
+    position: absolute;
+    top: max(26px,var(--safe-top));
+    left: clamp(24px,4vw,48px);
+    font-size: 14px;
+  }
+  .auth-page-v2 .auth-scene-copy {
+    max-width: 430px;
+    margin: 0;
+  }
+  .auth-page-v2 .auth-scene-copy h1 {
+    margin-top: 12px;
+    font-size: clamp(26px,4.5vw,42px);
+    line-height: 1.16;
+    letter-spacing: -.055em;
+    overflow-wrap: normal;
+    word-break: keep-all;
+  }
+  .auth-page-v2 .auth-scene-copy p {
+    margin-top: 14px;
+    font-size: 12.5px;
+  }
+  .auth-page-v2 .auth-activities {
+    position: absolute;
+    right: auto;
+    bottom: clamp(24px,5vh,52px);
+    left: clamp(24px,4vw,48px);
+    max-width: 150px;
+    justify-content: flex-start;
+    margin: 0;
+    gap: 7px;
+  }
+  .auth-page-v2 .auth-activities > div {
+    width: 46px;
+    height: 46px;
+    border-radius: 15px;
+  }
+  .auth-page-v2 .auth-activities img {
+    width: 29px;
+    height: 29px;
+  }
+  .auth-page-v2 .auth-panel {
+    width: 100%;
+    max-width: none;
+    min-height: 100dvh;
+    margin: 0;
+    padding: clamp(34px,6vh,64px) clamp(26px,5vw,64px);
+    display: flex;
+    flex-direction: column;
+    border: 0;
+    border-radius: 0;
+    background: var(--bg);
+    box-shadow: none;
+  }
+  .auth-page-v2 .auth-panel.login {
+    justify-content: center;
+  }
+  .auth-page-v2 .auth-panel.signup {
+    justify-content: flex-start;
+  }
+  .auth-page-v2 .auth-panel > * {
+    width: 100%;
+    max-width: 620px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .auth-page-v2 .auth-panel-heading h2 {
+    font-size: clamp(23px,3vw,28px);
+  }
+  .auth-page-v2 .auth-panel-heading p {
+    margin-top: 8px;
+    font-size: 14px;
+  }
+  .auth-page-v2 .auth-panel .input-field {
+    min-height: 58px;
+    font-size: 16px;
+  }
+  .auth-page-v2 .auth-panel .login-submit {
+    min-height: 56px;
+  }
+  .auth-page-v2 .social-list {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 10px;
+  }
+  .auth-page-v2 .social-btn {
+    width: 100%;
+    height: 54px;
+    display: inline-flex;
+    gap: 7px;
+    border-radius: 15px;
+    font-size: clamp(11px,1.45vw,14px);
+    font-weight: 750;
+  }
+  .auth-page-v2 .social-btn .social-ic {
+    width: 26px;
+    flex: 0 0 26px;
+  }
+  .auth-page-v2 .social-btn .sr-only {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 600px) and (max-width: 819px) {
+  .auth-page-v2 .auth-scene-copy h1 {
+    font-size: clamp(20px,3.4vw,23px);
+  }
+  .auth-page-v2 .auth-scene-copy p {
+    font-size: 11.5px;
+  }
+}
+
+@media (min-width: 820px) and (max-width: 1099px) {
+  .auth-page-v2 {
+    grid-template-columns: minmax(280px,40%) minmax(0,60%);
+  }
+  .auth-page-v2 .auth-panel {
+    padding-inline: clamp(40px,6vw,72px);
+  }
+}
+
+@media (min-width: 1100px) {
+  .auth-page-v2 {
+    min-height: 100dvh;
+    display: grid;
+    grid-template-columns: minmax(390px,42%) minmax(560px,58%);
+    align-items: stretch;
+    padding: 0;
+    background: var(--bg);
+  }
+  .auth-page-v2 .auth-scene {
+    position: sticky;
+    top: 0;
+    min-height: 100dvh;
+    height: 100dvh;
+    justify-content: center;
+    padding: clamp(42px,5vw,72px);
+  }
+  .auth-page-v2 .auth-home-link {
+    position: absolute;
+    top: max(38px,var(--safe-top));
+    left: clamp(42px,5vw,72px);
+  }
+  .auth-page-v2 .auth-scene-copy {
+    max-width: 520px;
+    margin: 0;
+  }
+  .auth-page-v2 .auth-scene-copy h1 {
+    font-size: clamp(38px,4.2vw,64px);
+  }
+  .auth-page-v2 .auth-scene-copy p {
+    max-width: 390px;
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  .auth-page-v2 .auth-activities {
+    position: absolute;
+    right: auto;
+    bottom: clamp(40px,6vh,72px);
+    left: clamp(42px,5vw,72px);
+    max-width: none;
+    justify-content: flex-start;
+  }
+  .auth-page-v2 .auth-activities > div {
+    width: auto;
+    min-width: 76px;
+    height: 76px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 9px 12px;
+    border-radius: 20px;
+  }
+  .auth-page-v2 .auth-activities img {
+    width: 34px;
+    height: 34px;
+  }
+  .auth-page-v2 .auth-activities span {
+    display: block;
+    color: rgba(255,255,255,.68);
+    font-size: 10px;
+    font-weight: 650;
+  }
+  .auth-page-v2 .auth-panel {
+    width: 100%;
+    max-width: none;
+    min-height: 100dvh;
+    margin: 0;
+    padding: clamp(54px,7vh,84px) clamp(64px,8vw,132px);
+    display: flex;
+    flex-direction: column;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .auth-page-v2 .auth-panel.login {
+    justify-content: center;
+  }
+  .auth-page-v2 .auth-panel.signup {
+    justify-content: flex-start;
+  }
+  .auth-page-v2 .auth-panel > * {
+    width: 100%;
+    max-width: 620px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .auth-page-v2 .auth-panel .mode-tabs {
+    max-width: 360px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .auth-page-v2 .auth-panel.signup .role-select {
+    gap: 12px;
+  }
+  .auth-page-v2 .auth-panel.signup .role-btn {
+    min-height: 104px;
+    padding: 16px;
+  }
+}
+
+@media (min-width: 1500px) {
+  .auth-page-v2 {
+    grid-template-columns: minmax(520px,46%) minmax(640px,54%);
+  }
+}

@@ -179,19 +179,21 @@ describe("read paths sanitize content for legacy/plain-text safety (UI-002)", ()
     fromMock.mockReturnValueOnce({
       select: () => ({
         eq: () => ({
-          order: () =>
-            Promise.resolve({
-              data: [
-                {
-                  id: "r3", profile_id: "p3", rating: 3,
-                  content: '<img src=x onerror=alert(1)>별로예요',
-                  photos: null, reply: null, replied_at: null,
-                  created_at: new Date().toISOString(),
-                  profiles: { name: "이영희", nickname: null },
-                },
-              ],
-              error: null,
-            }),
+          order: () => ({
+            limit: () =>
+              Promise.resolve({
+                data: [
+                  {
+                    id: "r3", profile_id: "p3", rating: 3,
+                    content: '<img src=x onerror=alert(1)>별로예요',
+                    photos: null, reply: null, replied_at: null,
+                    created_at: new Date().toISOString(),
+                    profiles: { name: "이영희", nickname: null },
+                  },
+                ],
+                error: null,
+              }),
+          }),
         }),
       }),
     });

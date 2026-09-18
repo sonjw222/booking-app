@@ -16,9 +16,10 @@ import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
   fetchProducts, createProduct, updateProduct, deleteProduct, toggleProductSale,
   fetchRules, addRule, deleteRule, ruleToText, won, DAYS,
-  type Product, type ScheduleRule,
+  type Product, type ScheduleRule, type ProductVisibility,
 } from "../../../lib/passes";
 import { fetchExistingClassOptions, type ExistingClassOption } from "../../../lib/classes";
+import { fetchGrades, fetchMembers, type Grade, type CenterMember } from "../../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 import ExpiryOptionField, { type ExpiryOptionValue } from "../../components/ExpiryOptionField";
 
@@ -46,6 +47,15 @@ export default function MembershipRulesPage() {
   const [pExpiry, setPExpiry] = useState<ExpiryOptionValue>({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
   const [pLimitSale, setPLimitSale] = useState(false);
   const [pMaxQty, setPMaxQty] = useState("");
+  // MWHABIT Membership Visibility Batch(2026-09-18) — 공개범위
+  const [pVisType, setPVisType] = useState<ProductVisibility["type"]>("all");
+  const [pVisGradeIds, setPVisGradeIds] = useState<string[]>([]);
+  const [pVisMemberIds, setPVisMemberIds] = useState<string[]>([]);
+  const [pVisMemberLabels, setPVisMemberLabels] = useState<Record<string, string>>({}); // center_member_id -> "이름 전화"
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [visMemberSearch, setVisMemberSearch] = useState("");
+  const [visMemberResults, setVisMemberResults] = useState<CenterMember[]>([]);
+  const [visMemberSearchBusy, setVisMemberSearchBusy] = useState(false);
 
   // 조건 추가 시트 (어느 상품에)
   const [ruleFor, setRuleFor] = useState<Product | null>(null);
@@ -106,6 +116,10 @@ export default function MembershipRulesPage() {
       const map: Record<string, ScheduleRule[]> = {};
       await Promise.all(prods.map(async (p) => { map[p.id] = await fetchRules(p.id); }));
       setRulesByProduct(map);
+      // MWHABIT Membership Visibility Batch — 공개범위 "특정 등급" 체크박스용 등급 목록.
+      // 다른 센터 등급은 fetchGrades(centerId)가 애초에 이 센터 것만 가져오므로(RLS도
+      // 이중 방어) 섞일 일 없음.
+      setGrades(await fetchGrades(centerId));
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   }, [centerId]);
@@ -120,6 +134,8 @@ export default function MembershipRulesPage() {
     setPAutoDays([]); setPAutoClasses([]);
     setPUnlimited(false); setPExpiry({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
     setPLimitSale(false); setPMaxQty("");
+    setPVisType("all"); setPVisGradeIds([]); setPVisMemberIds([]); setPVisMemberLabels({});
+    setVisMemberSearch(""); setVisMemberResults([]);
   }
 
   function openCreateSheet() {
@@ -127,7 +143,7 @@ export default function MembershipRulesPage() {
     setProdSheet(true);
   }
 
-  function openEditSheet(p: Product) {
+  async function openEditSheet(p: Product) {
     setEditingId(p.id);
     setPName(p.name);
     setPGroupLabel(p.groupLabel ?? "");
@@ -146,8 +162,56 @@ export default function MembershipRulesPage() {
     });
     setPLimitSale(p.maxQuantity != null);
     setPMaxQty(p.maxQuantity != null ? String(p.maxQuantity) : "");
+    // MWHABIT Membership Visibility Batch — 공개범위 프리필. "지정 회원" 칩에 이름/전화를
+    // 보여주려면 center_member_id뿐 아니라 표시용 라벨도 필요해서, 이 센터의 회원
+    // 목록(기존 fetchMembers 재사용)에서 매칭해 채운다.
+    setPVisType(p.visibility.type);
+    setPVisGradeIds(p.visibility.gradeIds);
+    setPVisMemberIds(p.visibility.memberIds);
+    if (p.visibility.type === "selected_members" && p.visibility.memberIds.length > 0 && centerId) {
+      const all = await fetchMembers(centerId);
+      const labels: Record<string, string> = {};
+      for (const cm of all) {
+        if (p.visibility.memberIds.includes(cm.id)) labels[cm.id] = `${cm.name}${cm.phone ? " " + cm.phone : ""}`;
+      }
+      setPVisMemberLabels(labels);
+    } else {
+      setPVisMemberLabels({});
+    }
     setProdSheet(true);
   }
+
+  function toggleVisGrade(gradeId: string) {
+    setPVisGradeIds((prev) => (prev.includes(gradeId) ? prev.filter((g) => g !== gradeId) : [...prev, gradeId]));
+  }
+
+  function addVisMember(cm: CenterMember) {
+    setPVisMemberIds((prev) => (prev.includes(cm.id) ? prev : [...prev, cm.id])); // 중복 선택 방지
+    setPVisMemberLabels((prev) => ({ ...prev, [cm.id]: `${cm.name}${cm.phone ? " " + cm.phone : ""}` }));
+  }
+
+  function removeVisMember(centerMemberId: string) {
+    setPVisMemberIds((prev) => prev.filter((id) => id !== centerMemberId));
+  }
+
+  // 회원검색 재사용(요청 2-3번 "기존 회원검색 구조 재사용") — lib/members.ts의
+  // fetchMembers(keyword)를 그대로 쓴다. 새 검색 컴포넌트/쿼리를 만들지 않음.
+  // 150ms 디바운스(폴리시 배치가 정착시킨 관례와 동일한 대역).
+  useEffect(() => {
+    if (!centerId || pVisType !== "selected_members" || !visMemberSearch.trim()) {
+      setVisMemberResults([]);
+      return;
+    }
+    const kw = visMemberSearch.trim();
+    setVisMemberSearchBusy(true);
+    const t = setTimeout(() => {
+      fetchMembers(centerId, { keyword: kw })
+        .then((rows) => setVisMemberResults(rows.slice(0, 30))) // 회원 많아도 버벅이지 않게 상한
+        .catch(() => setVisMemberResults([]))
+        .finally(() => setVisMemberSearchBusy(false));
+    }, 150);
+    return () => clearTimeout(t);
+  }, [centerId, pVisType, visMemberSearch]);
 
   async function handleCreateProduct() {
     if (!centerId || !pName.trim()) { setError("상품 이름을 입력해주세요"); return; }
@@ -159,6 +223,8 @@ export default function MembershipRulesPage() {
       setError("며칠부터 다음 달로 칠지 1~31 사이로 입력해주세요"); return;
     }
     if (pLimitSale && num(pMaxQty) <= 0) { setError("판매 수량을 입력해주세요 (또는 '판매 수량 제한'을 꺼주세요)"); return; }
+    if (pVisType === "grades" && pVisGradeIds.length === 0) { setError("공개범위를 '특정 회원등급'으로 하려면 등급을 1개 이상 선택해주세요"); return; }
+    if (pVisType === "selected_members" && pVisMemberIds.length === 0) { setError("공개범위를 '지정 회원만'으로 하려면 회원을 1명 이상 선택해주세요"); return; }
     setBusy(true);
     try {
       const extra = {
@@ -171,6 +237,7 @@ export default function MembershipRulesPage() {
         },
         groupLabel: pGroupLabel.trim() || undefined,
         maxQuantity: pLimitSale ? num(pMaxQty) : null,
+        visibility: { type: pVisType, gradeIds: pVisGradeIds, memberIds: pVisMemberIds } as ProductVisibility,
       };
       if (editingId) {
         await updateProduct(editingId, pName.trim(), num(pPrice), num(pCount), false, extra);
@@ -333,6 +400,24 @@ export default function MembershipRulesPage() {
                           {p.soldCount >= p.maxQuantity ? "매진" : `${p.maxQuantity - p.soldCount}개 남음`}
                         </span>
                       )}
+                      {/* MWHABIT Membership Visibility Batch — 공개범위 subtle badge(요청
+                          8번, "과도하게 복잡하지 않게"). 전체 공개는 굳이 표시 안 함(기본
+                          상태라 노이즈만 됨) — 제한이 걸린 경우만 눈에 띄게 보여준다. */}
+                      {p.visibility.type === "grades" && (
+                        <span className="pass-group-tag" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+                          {(() => {
+                            const names = p.visibility.gradeIds.map((id) => grades.find((g) => g.id === id)?.name).filter(Boolean);
+                            if (names.length === 0) return "등급 지정";
+                            if (names.length === 1) return names[0];
+                            return `${names[0]} 외 ${names.length - 1}개 등급`;
+                          })()}
+                        </span>
+                      )}
+                      {p.visibility.type === "selected_members" && (
+                        <span className="pass-group-tag" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+                          지정회원 {p.visibility.memberIds.length}명
+                        </span>
+                      )}
                     </div>
                     <div className="pass-sub">
                       {won(p.price)}{p.totalCount ? ` · ${p.totalCount}회` : ""}
@@ -456,6 +541,83 @@ export default function MembershipRulesPage() {
             {/* 횟수와 별개로 기간을 걸 수 있음 — 예: 무제한+한 달 기간 = 기간권 효과,
                 5회권+한 달 기간 = 5회 다 안 써도 한 달 뒤 자동 만료(사용자 요청, 2026-09-01) */}
             <ExpiryOptionField value={pExpiry} onChange={setPExpiry} />
+
+            {/* MWHABIT Membership Visibility Batch(2026-09-18) — 공개 범위. 최종 강제는
+                항상 서버(orders INSERT RLS + 결제 확정 RPC)에서 다시 하므로, 여기서
+                뭘 고르든 UI 실수만으로 자격 없는 회원에게 판매되지는 않는다. */}
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>공개 범위</div>
+            <div className="vis-type-options" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {([
+                { v: "all", label: "전체 회원" },
+                { v: "grades", label: "특정 회원등급" },
+                { v: "selected_members", label: "지정 회원만" },
+              ] as const).map((opt) => (
+                <label key={opt.v} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                  <input type="radio" name="pVisType" checked={pVisType === opt.v} onChange={() => setPVisType(opt.v)} />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+
+            {pVisType === "grades" && (
+              <div style={{ marginTop: 8 }}>
+                {grades.length === 0 ? (
+                  <div className="perm-guide">이 센터에 등록된 회원등급이 없어요. 회원 관리에서 등급을 먼저 만들어주세요.</div>
+                ) : (
+                  <div className="mem-filters" style={{ padding: 0, flexWrap: "wrap" }}>
+                    {grades.map((g) => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        className={`filter-chip ${pVisGradeIds.includes(g.id) ? "on" : ""}`}
+                        style={g.color ? { borderColor: g.color } : undefined}
+                        onClick={() => toggleVisGrade(g.id)}
+                      >
+                        {g.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {pVisType === "selected_members" && (
+              <div style={{ marginTop: 8 }}>
+                <input
+                  className="input-field"
+                  placeholder="회원 이름 또는 전화번호 검색"
+                  value={visMemberSearch}
+                  onChange={(e) => setVisMemberSearch(e.target.value)}
+                />
+                {visMemberSearchBusy && <div className="perm-guide" style={{ margin: "4px 0 0" }}>검색 중…</div>}
+                {visMemberResults.length > 0 && (
+                  <div className="vis-member-results" style={{ marginTop: 6, maxHeight: 180, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8 }}>
+                    {visMemberResults.map((cm) => (
+                      <button
+                        key={cm.id}
+                        type="button"
+                        className="quiet-action"
+                        style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: "8px 10px", textAlign: "left" }}
+                        disabled={pVisMemberIds.includes(cm.id)}
+                        onClick={() => { addVisMember(cm); setVisMemberSearch(""); setVisMemberResults([]); }}
+                      >
+                        <span>{cm.name}</span>
+                        <span style={{ color: "var(--text-dim)" }}>{cm.phone ?? ""}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="perm-guide" style={{ margin: "8px 0 4px" }}>선택된 회원 {pVisMemberIds.length}명</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {pVisMemberIds.map((id) => (
+                    <span key={id} className="filter-chip on" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      {pVisMemberLabels[id] ?? id}
+                      <button type="button" onClick={() => removeVisMember(id)} aria-label="선택 해제" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}>×</button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>
               요일반 수강권 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>· 선택 시 회원이 자동예약을 고를 수 있어요</span>

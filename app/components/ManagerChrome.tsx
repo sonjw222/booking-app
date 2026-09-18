@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import UiIcon from "./UiIcon";
+import { replaceTabNavigation } from "../../lib/navState";
 
 const TITLES: Record<string, string> = {
   "/manager": "관리 홈", "/manager/classes": "수업", "/manager/members": "회원",
@@ -10,6 +11,7 @@ const TITLES: Record<string, string> = {
   "/manager/staff": "스태프", "/manager/staff/permissions": "권한",
   "/manager/sales": "매출·결제", "/manager/announcements": "공지",
   "/manager/inquiries": "문의", "/manager/reviews": "후기", "/manager/orders": "주문",
+  "/manager/coupons": "쿠폰",
   "/manager/admin-assignments": "회원 직접 배치 기록", "/manager/center-info": "센터 정보",
   "/manager/rooms": "룸 관리", "/manager/holidays": "휴무일", "/manager/settings": "예약 운영 설정",
   "/manager/class-revenue": "수업매출", "/manager/leads": "상담고객 관리",
@@ -28,8 +30,12 @@ export default function ManagerChrome() {
         {!rootScreens.has(pathname) && <button type="button" className="app-back-btn" onClick={() => pathname === "/manager/settings" ? router.push("/manager") : router.back()} aria-label="뒤로가기">‹</button>}
         <h1>{TITLES[pathname] ?? "관리자"}</h1>
       </div>
-      {pathname === "/manager" ? <a className="manager-member-link" href="/" aria-label="회원 화면"><UiIcon name="user" size={20} /><span>회원 화면</span></a>
-        : <a className="manager-home-link" href="/manager" aria-label="관리 홈"><UiIcon name="grid" size={20} /><span>관리 홈</span></a>}
+      {/* 릴리스 폴리시 배치 8차(2026-09-17) — 둘 다 root destination("/", "/manager")으로
+          이동하는 링크라 replace로 이동한다(navigation policy 4-5) — push로 남으면 root
+          화면에서 Android back이 "이전 모드로 못 돌아감(정책대로)"과 "뒤에 남은 히스토리로
+          못 돌아감(예상 밖 동작)"이 뒤섞여 보일 수 있었다. */}
+      {pathname === "/manager" ? <a className="manager-member-link" href="/" aria-label="회원 화면" onClick={(e) => replaceTabNavigation(e, "/")}><UiIcon name="user" size={20} /><span>회원 화면</span></a>
+        : <a className="manager-home-link" href="/manager" aria-label="관리 홈" onClick={(e) => replaceTabNavigation(e, "/manager")}><UiIcon name="grid" size={20} /><span>관리 홈</span></a>}
     </div>
   </header>;
 }

@@ -18,6 +18,7 @@ import { reservationReturnUrl } from "../../lib/reservationNav";
 import { getPaymentService, resolveProviderName, PG_CHECKOUT_ENABLED, type PaymentScenario } from "../../lib/payments";
 import { supabase } from "../../lib/supabaseClient";
 import { fetchMyPgCheckoutOverride } from "../../lib/authAccount";
+import { fetchApplicableCoupons, previewDiscount, type MemberCoupon } from "../../lib/coupons";
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import UiIcon, { type IconName } from "../components/UiIcon";
 import ErrorState from "../components/ErrorState";
@@ -101,6 +102,13 @@ function CheckoutContent() {
   const [couponInput, setCouponInput] = useState("");
   const [discount, setDiscount] = useState(0);
   const [couponMsg, setCouponMsg] = useState<string | null>(null);
+  // 회원에게 지급된 실제 쿠폰(member_coupons) — 위의 couponInput/MY_COUPONS는 기존
+  // 하드코딩 프로모코드(WELCOME/FIGURE10) 경로라 건드리지 않고 그대로 둔다. 이건 완전히
+  // 별개의 새 경로(MWHABIT Membership Visibility + Member Coupon Batch, 2026-09-18) —
+  // 여기서 미리보기로 계산/표시하는 할인액은 전부 UX용이고, 실제 자격/금액은 결제 확정
+  // RPC가 다시 검증·계산한다(쿠폰 소유자 확인, 센터 일치, 유효기간, 최소금액 등).
+  const [applicableCoupons, setApplicableCoupons] = useState<MemberCoupon[]>([]);
+  const [selectedMemberCouponId, setSelectedMemberCouponId] = useState<string | null>(null);
   const [autoBook, setAutoBook] = useState(true);
   const [myPoints, setMyPoints] = useState(0);
   const [usePoint, setUsePoint] = useState("");
@@ -147,6 +155,17 @@ function CheckoutContent() {
     finally { setLoading(false); }
   }, [centerId, productId]);
   useEffect(() => { load(); }, [load]);
+
+  // 이 상품에 지금 실제로 쓸 수 있는 회원 쿠폰만 조회(요청 15번 "쿠폰 선택 UI는 usable
+  // 쿠폰이 있을 때만"). 비로그인/쿠폰 없음이면 조용히 빈 목록 — 화면 자체는 그대로 진행.
+  useEffect(() => {
+    if (!product) { setApplicableCoupons([]); return; }
+    let mounted = true;
+    fetchApplicableCoupons(product.id, product.price)
+      .then((list) => { if (mounted) setApplicableCoupons(list); })
+      .catch(() => { if (mounted) setApplicableCoupons([]); });
+    return () => { mounted = false; };
+  }, [product]);
 
   // 실제 PG(토스) 결제창은 app/checkout/success로 리다이렉트된 뒤 이 페이지로 다시
   // 돌아온다(같은 조회 쿼리 + paymentDone/paymentError 추가) — 그때 기존 "결제 완료"
@@ -209,6 +228,11 @@ function CheckoutContent() {
           selectedSize: selectedSize ?? undefined,
           couponCode: discount > 0 ? couponInput.trim().toUpperCase() : undefined,
           discountAmount: discount,
+          // member_coupon_id는 일부러 안 보낸다 — fulfill_order()(직접결제/매니저 수동
+          // 확정 RPC)는 _issue_membership_and_record_payment()와 별개 경로라 쿠폰
+          // 검증/사용처리 로직이 없다(이번 배치 감사 범위 밖). 직접결제에서 쿠폰을 쓰게
+          // 하면 소유/센터/유효기간 검증도, used 처리도 없이 방치되므로 애초에 막는다
+          // (아래 UI도 payMethod==="direct"일 땐 쿠폰 선택 자체를 숨김).
           autoBook: !!(product.autoBookDays && product.autoBookDays.length > 0) && autoBook,
           pointsUsed: pointToUse,
           profileId: selectedProfileId || undefined,
@@ -238,6 +262,7 @@ function CheckoutContent() {
         selectedSize: selectedSize ?? undefined,
         couponCode: discount > 0 ? couponInput.trim().toUpperCase() : undefined,
         discountAmount: discount,
+        memberCouponId: selectedMemberCouponId ?? undefined,
         autoBook: !!(product.autoBookDays && product.autoBookDays.length > 0) && autoBook,
         pointsUsed: pointToUse,
         profileId: selectedProfileId || undefined,
@@ -289,8 +314,13 @@ function CheckoutContent() {
 
   function won(n: number) { return n.toLocaleString("ko-KR") + "원"; }
 
-  // 포인트는 (상품가 - 쿠폰할인) 범위 안에서만, 보유량 한도로 사용
-  const afterCoupon = product ? Math.max(0, product.price - discount) : 0;
+  // 직접결제(센터 방문 결제)는 fulfill_order()가 쿠폰을 검증/소비하지 못하므로 애초에
+  // 적용 대상에서 뺀다(위 handlePay의 direct 분기 주석 참고).
+  const canUseMemberCoupon = payMethod !== "direct";
+  const selectedMemberCoupon = canUseMemberCoupon ? applicableCoupons.find((c) => c.id === selectedMemberCouponId) ?? null : null;
+  const memberCouponDiscount = product && selectedMemberCoupon ? previewDiscount(product.price, selectedMemberCoupon) : 0;
+  // 포인트는 (상품가 - 프로모코드할인 - 회원쿠폰할인) 범위 안에서만, 보유량 한도로 사용
+  const afterCoupon = product ? Math.max(0, product.price - discount - memberCouponDiscount) : 0;
   const pointToUse = Math.min(parseInt(usePoint || "0", 10) || 0, myPoints, afterCoupon);
   const finalTotal = Math.max(0, afterCoupon - pointToUse);
 
@@ -498,6 +528,33 @@ function CheckoutContent() {
         <div className={`perm-guide ${discount > 0 ? "is-success" : "is-error"}`} style={{ margin: "6px 20px 0" }}>{couponMsg}</div>
       )}
 
+      {/* 보유 쿠폰(센터가 회원에게 지급한 실제 쿠폰) — 위 "할인 쿠폰"(프로모코드 입력)과는
+          별개 경로. 지금 쓸 수 있는 쿠폰이 있을 때만 보여준다(요청 15번). 최종 할인금액은
+          항상 결제 확정 시점에 서버가 다시 계산 — 여기 미리보기 숫자를 그대로 믿지 않는다. */}
+      {canUseMemberCoupon && applicableCoupons.length > 0 && (
+        <>
+          <div className="menu-section-label commerce-label">내 쿠폰</div>
+          <div className="coupon-list">
+            <button
+              className={`coupon-item ${selectedMemberCouponId === null ? "on" : ""}`}
+              onClick={() => setSelectedMemberCouponId(null)}
+            >
+              <span className="coupon-label">쿠폰 사용 안 함</span>
+            </button>
+            {applicableCoupons.map((c) => (
+              <button
+                key={c.id}
+                className={`coupon-item ${selectedMemberCouponId === c.id ? "on" : ""}`}
+                onClick={() => setSelectedMemberCouponId(c.id)}
+              >
+                <span className="coupon-label">{c.couponName}</span>
+                <span className="coupon-amount">-{won(previewDiscount(product.price, c))}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       {/* 포인트 */}
       {myPoints > 0 && (
         <>
@@ -555,6 +612,12 @@ function CheckoutContent() {
         <div className="checkout-discount-row">
           <span>쿠폰 할인</span>
           <span>-{won(discount)}</span>
+        </div>
+      )}
+      {memberCouponDiscount > 0 && (
+        <div className="checkout-discount-row">
+          <span>내 쿠폰 할인</span>
+          <span>-{won(memberCouponDiscount)}</span>
         </div>
       )}
       {pointToUse > 0 && (

@@ -18,6 +18,7 @@ import {
   type AdminCenterSubscription, type SubscriptionStatus,
 } from "../../../lib/centerSubscription";
 import { fetchSubscriptionPlans, type SubscriptionPlan } from "../../../lib/operator";
+import { replaceTabNavigation } from "../../../lib/navState";
 
 const STATUS_BADGE: Record<SubscriptionStatus, string> = {
   pending_billing_setup: "s-waitlisted",
@@ -152,7 +153,7 @@ export default function AdminSubscriptionsPage() {
     <div className="app-shell">
       <div className="mgr-mode-bar">
         <span className="mgr-mode-label"><UiIcon name="shield" size={15} /> 플랫폼 운영자</span>
-        <a className="mgr-mode-switch" href="/">회원 모드로 ↩</a>
+        <a className="mgr-mode-switch" href="/" onClick={(e) => replaceTabNavigation(e, "/")}>회원 모드로 ↩</a>
       </div>
 
       <div className="back-header">

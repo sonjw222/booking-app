@@ -28,11 +28,14 @@ function mapRow(r: any): Lead {
 }
 
 export async function fetchLeads(centerId: string): Promise<Lead[]> {
+  // egress 감사(2026-09-15) — 상한 없는 전체 조회라 안전판만 추가(최신순 정렬은 이미
+  // 있음) — 지금까지 이 상한에 걸릴 만큼 쌓인 센터는 없어 동작은 그대로다.
   const { data, error } = await supabase
     .from("leads")
     .select("id, center_id, name, phone, channel, status, memo, created_at")
     .eq("center_id", centerId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(1000);
   if (error) throw new Error("상담고객 목록을 불러오지 못했어요: " + error.message);
   return (data ?? []).map(mapRow);
 }

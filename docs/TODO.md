@@ -1331,7 +1331,102 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 전부 1회차 값으로 표시됨) — 날짜 필터를 `row_number()` 계산 이후로 옮겨 수정, Live
 재적용·재테스트로 확인(자세한 내용은 CHANGELOG 참고).
 
+### P1-11. (신규, 2026-09-18) 릴리스 폴리시 배치 8차 — 이번 배치에서 처리하지 못한 항목
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **일부 완료** — Navigation 정책/관리자 알림 전체삭제·swipe·pin/회원 검색·필터/테마 미리보기/태블릿 스플래시 로고/운영자 종목·센터 검색/홈 spacing/로딩 스켈레톤 완화는 완료. 아래 항목은 시간 예산상 이번 배치 범위 밖. |
+| 근거 | `mobile-ux-nav-manager-operator-polish` 브랜치(release-polish-batch 기준 격리 worktree) 커밋 이력, 최종 보고(세션 기록) 참고 |
+| 완료 조건 | 아래 각 항목이 실제로 구현·검증(가능하면 실기기)된 뒤 이 표에서 제거 |
+
+미완료 상세:
+1. **화면별 맞춤 로딩 스켈레톤** — 공용 `Loading.tsx`의 shape를 화면 중앙까지 자연스럽게
+   퍼지도록 완화(min-height/list-row 반복)했지만, "실제 최종 화면 구조와 완전히 동일한
+   위치에 skeleton 배치"(요청 2-1 이상적 형태)와 "준비된 section부터 progressive하게
+   렌더링"은 화면별 맞춤 작업이 필요해 못함(대상 화면이 많음).
+2. **관리자 회원 검색 client-side filtering 전환** — 지금은 서버 검색(디바운스/stale
+   가드만 개선)을 유지했다. 이유: 전화번호가 `customer.member.phone` 권한에 따라 서버가
+   마스킹해서 내려주는 등 응답 자체가 권한별로 달라 "이미 로드된 데이터"만으로는 안전하게
+   재현 불가 — client-side 우선 전환을 하려면 권한 마스킹 로직을 클라이언트로 옮기거나
+   전체 로드 후 필드별 재조회하는 구조 변경이 필요(범위 밖).
+3. **Business Scenario QA 프레임워크(`tests/integration/scenarios/`)** — 이 worktree
+   기준으로는 아직 존재하지 않음(병렬 세션이 만들고 있을 가능성 높음). 위치 기반 반경
+   필터의 필수 시나리오 10개(추가 시나리오 섹션)는 이 프레임워크가 있어야 자연스럽게
+   구현되는데, 없어서 `tests/unit/home.nearbyRadius.test.ts`(haversine 정확도/경계값
+   단위테스트)만 추가했다. 병렬 세션 merge 후 그 프레임워크로 GPS mock 기반 통합
+   시나리오(회원 위치별 표시 센터, 반경 경계, 권한 거부, 캐시 갱신, 좌표 없음 안전 처리 등)
+   를 별도로 추가해야 한다.
+4. **`lib/home.ts`의 `NEARBY_RADIUS_KM`/`haversineKm`** — 이 worktree엔 미구현이라 최소
+   구현을 추가했다(20km, client 계산). 병렬로 진행 중인 Business Logic Fix Batch가 같은
+   영역(위치 반경 SQL/로직)을 더 정교하게(서버 사이드 PostGIS 등) 다룰 수 있어, 두 브랜치
+   병합 시 반드시 조정 필요 — 값/구현 방식이 다르면 어느 쪽을 남길지 사용자 결정 필요.
+5. **알림 통합테스트 실행 확인** — `tests/integration/notification-pin-delete-all.test.ts`를
+   작성했지만 이 환경엔 `.env.test.local`(테스트 계정 자격증명)이 없어 실행해보지 못함(코드
+   레벨 리뷰만 함, docs/AUTOMATED_QA.md와 동일한 제약).
+6. **iOS/Android 실제 RUNTIME 검증(시뮬레이터/에뮬레이터 실행, XCUITest/Espresso 테스트
+   pass/fail)** — 이번 배치는 `xcodebuild build-for-testing`/`gradlew
+   compileDebugAndroidTestSources assembleDebugAndroidTest` **BUILD PASS만** 확인했다
+   (그 과정에서 실제 빌드 버그 2건 — Xcode 타겟 미등록, XML 주석 오류 — 을 발견·수정).
+   부팅된 시뮬레이터/에뮬레이터·실기기·네트워크로 닿는 백엔드가 이 세션엔 없어 실제 동작
+   확인은 못함.
+
 ## 5. P2 — 운영 설정·개발환경·구조 검증
+
+### P2-41. (신규, 2026-09-18) 통합테스트 — 51개 파일 전체 연속 실행 시 공유 테스트센터 상태 오염·Auth rate limit로 flaky
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2(실제 제품 버그 아님 — 테스트 인프라 안정성 문제) |
+| 현재 상태 | 이번 배치 마무리 중 `tests/integration/` 전체(51개 파일)를 한 번에 돌렸더니 27개 파일에서 실패(33건)가 났다. 원인을 개별 재현으로 추적한 결과 **실제 코드 회귀가 아니라 두 가지 테스트 인프라 문제**로 확인됐다: (1) 여러 파일이 `signUp`/`signIn`을 짧은 시간에 몰아서 호출해 Supabase Auth rate limit("Request rate limit reached")에 걸리고, 이게 연쇄적으로 각 파일의 `beforeAll`/`afterAll`을 실패시킴(그 여파로 "Cannot read properties of undefined" 같은 2차 정리 오류도 다수 발생). (2) 여러 시나리오 파일이 `getOrCreateOwnedTestCenter()`로 **같은 물리적 테스트센터 1개를 공유**하는데, 그중 일부가 `center_settings`(`allow_same_day_booking`, `group_book_days_before` 등)를 테스트 중 바꿔두고 정리(`afterAll`)가 rate limit 등으로 못 돌면 다음 파일이 오염된 설정값을 물려받는다 — `date-boundaries.test.ts`(SCN-P1-24 당일예약 계열)가 이렇게 오염된 상태에서 실행되면 실제로는 정상인 `reserve_class()`가 "당일 예약은 허용되지 않아요"로 거부하는 것처럼 보였다. 개별/소규모 조합으로 재실행하면(`date-boundaries.test.ts` 단독 9/9, `admin-member-concurrency.test.ts` 단독 6/6 — 반복 재현) 매번 전부 통과해 실제 함수 로직은 정상임을 확인했다. |
+| 필요한 것 | (1) 이 배치처럼 51개 파일을 한 번에 다 돌리는 대신, 관련 있는 파일 묶음 단위로 나눠 실행하는 습관/문서화. (2) 근본적으로는 시나리오 파일들이 테스트센터를 공유하지 않고 각자 독립적으로 생성·정리하도록 리팩터하거나, 최소한 각 파일이 자신이 바꾼 `center_settings` 값을 `afterAll` 실패에도 불구하고 확실히 복원하도록(예: try/finally) 강화하는 방안 검토. (3) 공유 테스트 계정의 `signUp` 호출량을 줄이는 방안(예: 계정이 이미 있으면 곧장 `signInWithPassword`로 넘어가고 `signUp`은 최후에만 시도) 검토. |
+| 근거 파일 | `tests/integration/setup.ts`(signUp/rate limit), `tests/integration/scenarios/date-boundaries.test.ts`(공유 센터 사용), `tests/integration/scenarios/admin-member-concurrency.test.ts` |
+
+### P2-40. (신규, 2026-09-18) 쿠폰 — "직접결제"(센터 방문 결제)에서는 회원 쿠폰 선택 불가(의도된 범위 제외)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2(제품 결정 필요 — 지금은 의도적으로 막아둔 상태, 버그 아님) |
+| 현재 상태 | `app/checkout/page.tsx`의 쿠폰 선택 UI(`fetchApplicableCoupons`)는 `payMethod !== "direct"`일 때만 노출한다. 이유: 회원 쿠폰의 검증/소비(used 전환)는 전부 `_issue_membership_and_record_payment()`(카드/카카오페이/토스페이/계좌이체/Mock 경유) 안에서만 일어나는데, "직접결제"(센터 방문 결제)는 별도 경로인 `fulfill_order()`를 타고, 이 함수는 이번 배치 감사 범위 밖이라 쿠폰 소유자/센터/유효기간 검증이나 사용 처리 로직이 전혀 없다. 이 상태로 직접결제에 쿠폰을 허용하면 검증 없이 방치되거나(가벼운 경우) 정확한 금액 불일치로 `fulfill_order()`가 예외를 던지는 정도로 끝난다. |
+| 필요한 것 | 직접결제 흐름에서도 쿠폰을 지원하려면 `fulfill_order()`에 동일한 검증/소비 로직(또는 공용 헬퍼로 추출)을 추가해야 한다 — 제품 쪽에서 "센터 방문 결제도 쿠폰 대상에 포함할지" 결정 필요. |
+| 근거 파일 | `app/checkout/page.tsx`(canUseMemberCoupon), `fix_rolling_month_starts_at_not_null_regression.sql`(fulfill_order 최신 정의), `add_membership_visibility_and_coupons.sql`(_issue_membership_and_record_payment) |
+
+### P1-46. (2026-09-18, Phase 1~4 완료) Business Scenario E2E — 핵심 시나리오 구현 완료, 잔여 항목은 하위 항목으로 세분화
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1(핵심 구조/시나리오 완료, 남은 항목은 각자 P1-47~50 참고) |
+| 현재 상태 | **Phase 1~4 완료.** `tests/integration/scenarios/`에 공용 레이어(types/reporter/invariants/actors/registry/concurrentClient) + 시나리오 파일 6개(waitlist-promotion, reservation-concurrency, date-boundaries, admin-member-concurrency, location-nearby, notifications) — SCN-P0-20~25, P1-01/02/03/05/07/11, P1-20/21/22/24, P1-31/32, 위치 기반 4건, 알림 4종을 실제 라이브 dev Supabase에서 실행해 PASS 확인. iOS/Android 대표 예약화면 스모크(`ReservationSmokeTests.{swift,java}`)도 기존 AppUITests/androidTest 구조에 추가해 실제 BUILD PASS 확인(xcodebuild/gradlew). 상세 표는 `tests/integration/scenarios/registry.ts` 참고. |
+| BUG FOUND 3건 — 2026-09-18 MWHABIT Business Logic Fix Batch에서 전부 수정·적용·재검증 완료 | (1) 당일예약 마감 버그 → `fix_same_day_booking_deadline.sql` 적용, `date-boundaries.test.ts` PASS. (2) 정원 축소 invariant 없음 → `fix_class_capacity_invariants_v2.sql`(최초 버전은 함수 오버로드 충돌로 실패, v2로 교체) 적용, `admin-member-concurrency.test.ts` 6/6 PASS. (3) 정원 확대 시 대기자 자동 승격 안 됨 → 같은 `fix_class_capacity_invariants_v2.sql`에 자동 승격 로직 포함해 함께 수정. 세 건 모두 라이브 DB 적용 및 실제 QA 재실행으로 확인됨(2026-09-18). |
+| 기능 갭 발견 | 요청된 "위치 반경 필터" 기능은 `lib/home.ts`에 존재하지 않음 — 실제로는 좌표 거리순 정렬만 있고 반경 컷오프가 없음(`location-nearby.test.ts`에서 실제 코드로 확인). |
+| 남은 작업(하위 항목) | P1-47(P1 나머지: P1-04/06/26/27/30/33~35/45), P1-48(P2 UI 복잡도/권한/결제 확장), P1-49(홈 TTL 캐시 — Playwright E2E 또는 네이티브 레이어 전용, Shared 불가 확인됨), P1-50(iOS/Android RUNTIME PASS — 실기기/부팅된 시뮬레이터 필요, P2-39와 동일 조건). `.github/workflows/mobile-ui-qa.yml` 시나리오 등급 선택 옵션 추가도 미착수. |
+| 근거 파일 | `tests/integration/scenarios/`, `test-results/business-scenarios/*.json`, `ios/App/AppUITests/ReservationSmokeTests.swift`, `android/app/src/androidTest/java/com/mwhabit/app/ReservationSmokeTests.java` |
+
+### P2-39. (신규, 2026-09-18) 자동 QA 인프라 — 실기기/에뮬레이터 실행 + CI 활성화 후속 작업
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2(뼈대는 완료, 실제 가동은 후속 작업) |
+| 현재 상태 | **운영 설정 필요.** iOS `AppUITests`/Android instrumentation 테스트 둘 다 컴파일/링크/패키징까지만 검증됨(이 세션엔 실기기·부팅된 에뮬레이터·실제 테스트 계정이 없음) — 실제 통과 여부는 확인 안 됨. |
+| 필요한 것(iOS) | (1) `.github/workflows/mobile-ui-qa.yml`의 `ios-ui-tests` job이 지금 그대로 돌면 `App.entitlements`/`GoogleService-Info.plist` 부재로 App 빌드 자체가 실패함 — 두 파일을 base64 등으로 Secrets에 등록하고 워크플로우에 복원 스텝 추가 필요(민감 파일이라 저장소에 직접 커밋 금지, 기존 정책 유지). (2) `TEST_USER_A_EMAIL` 등 GitHub Secrets 등록(이미 Playwright E2E용으로 등록돼 있다면 그대로 재사용 가능, 새로 만들 필요 없음). (3) 실기기/시뮬레이터로 최초 1회 실제 실행해 그린 확인. |
+| 필요한 것(Android) | (1) 위와 동일하게 `TEST_USER_A_EMAIL` 등 Secrets 확인. (2) `reactivecircus/android-emulator-runner`가 `ubuntu-latest`에서 실제로 정상 부팅/가속되는지 최초 1회 확인(러너 세대에 따라 KVM 가속이 불안정할 수 있음 — 문제 있으면 `macos-latest`로 전환 검토, 비용 증가 감수). |
+| 필요한 것(공통) | 둘 다 그린 확인 후에만 `.github/workflows/mobile-ui-qa.yml`에 `pull_request`/`push` 트리거 추가를 검토(지금은 의도적으로 `workflow_dispatch`만 — 요청 원칙: "main 보호에 영향 주지 않게, 실패해도 현재 배포를 막지 않게"). |
+| 근거 파일 | `docs/AUTOMATED_QA.md`, `.github/workflows/mobile-ui-qa.yml`, `ios/App/AppUITests/`, `android/app/src/androidTest/java/com/mwhabit/app/` |
+
+### P2-38. (신규, 2026-09-17) backdrop-filter(blur) 저사양 Android 실측 필요
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2(실기기 확인 전까지는 보류) |
+| 현재 상태 | **확인 필요.** 릴리스 폴리시 배치 7차 성능 조사 중 `.bottom-nav`/`.manager-chrome`
+(스크롤 내내 활성화되는 고정/sticky 헤더·nav, 둘 다 `backdrop-filter: blur(18px)`)이
+GPU 비용이 가장 클 후보로 지목됐으나, `color-mix(...88%,transparent)` + blur로 만든
+"젖빛 유리" 디자인이 명백히 의도적이라 실기기 확인 없이 제거/축소하면 시각 회귀
+위험이 커서 이번 배치에서는 손대지 않음. |
+| 필요한 것 | 저사양~중가 Android 기기에서 긴 리스트 스크롤 시 프레임드롭 체감 확인. 실제
+문제로 확인되면 blur 반경을 줄이거나, 저사양 기기 분기(예: `prefers-reduced-motion`
+또는 기기 성능 휴리스틱)로 blur를 끄는 방안 검토. |
+| 근거 파일 | `app/globals.css`(`.bottom-nav`, `.manager-chrome`) |
 
 ### P2-0a. (2026-09-06, 완료) 기존 수강권 이름/가격/그룹명 수정 UI 없음
 
@@ -1356,27 +1451,68 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 | 후속(반응형 흐름) | 사용자 요청으로 "가입 시점에 같은 이메일이 이미 있으면 바로 병합 제안"하는 흐름 추가(`find_mergeable_account_by_my_email()` RPC + `SessionWatcher`의 병합 모달, 비밀번호 확인 후 기존 코드교환 RPC 2개를 격리된 Supabase 클라이언트로 자동 수행 — 새 병합 로직 없이 이미 검증된 경로 재사용). **미확인 사항**: 이 프로젝트 Supabase Auth는 `auth.users.email`이 unique라(admin API로 직접 확인, 같은 이메일로 두 번째 유저 생성 시도 시 `email_exists` 에러) 구글/애플 OAuth가 실제로 이 상황에서 "자동으로 기존 identity에 연결"할 수도 있음 — 그렇다면 이 반응형 흐름은 트리거될 상황 자체가 드물 수 있음(트리거 안 돼도 무해, 죽은 코드 정도). 실제 구글/애플 계정으로 회원가입해서 확인 필요(대시보드 "Automatic Linking" 설정은 API로 조회 불가해 코드로는 확정 못함). |
 | 관련 문서 | `docs/08_Decision_Log.md` DEC-004, [REQUIREMENTS 5-1, 6-2](./REQUIREMENTS.md), `lib/authAccount.ts` |
 
-### P2-1. 애플 OAuth 운영 설정 (구글·카카오·네이버는 완료 — 아래 참고)
+### P2-1. 애플 네이티브 로그인 — 재빌드 + 실기기 검증만 남음 (구글·카카오·네이버는 완료)
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P2 |
-| 현재 상태 | **의도적으로 보류 — 앱 코드는 2026-08-07 social-auth 배치에서 이미 완료됨.** 2026-08-13 사용자 결정: Apple Developer Program 가입비($99/년)가 Sign in with Apple 사용 조건과 동일한 멤버십이라, 실제 서비스 출시가 가까워져 개발자 계정을 만드는 시점에 이 설정도 함께 진행하기로 함(구글/카카오/네이버처럼 미리 할 이유가 없음 — 미리 가입해도 별도 이득 없이 연 구독만 먼저 시작되는 구조). |
-| 근거 파일 | `app/login/page.tsx`, `app/components/SessionWatcher.tsx`, `lib/authAccount.ts`, `AUTH_SETUP.md` |
-| 이번 배치에서 한 것 | `ensureAccountForCurrentUser()` 호출을 홈 화면 전용에서 앱 전체(SessionWatcher, SIGNED_IN/INITIAL_SESSION)로 옮겨 어느 페이지로 리다이렉트돼도 계정/프로필이 보장되도록 함. 소셜 버튼 로딩 상태(중복 클릭 방지)·OAuth 콜백 실패(`#error=...`) 감지 후 `/login?oauth_error=...`로 안내하는 처리 추가. 계정 연동(같은 이메일, 다른 provider) 정책은 `docs/08_Decision_Log.md` DEC-004로 명문화(자동 병합 안 함). |
-| 완료 조건 | Supabase Apple Provider, Apple Developer 콘솔 설정(유료, 연 $99), Redirect URL과 Vercel 환경을 구성하고 신규·기존 계정 로그인과 실패 callback을 실제 provider로 검증함(코드는 준비됐지만 이 콘솔 설정 자체는 Claude가 대신 할 수 없음) |
+| 현재 상태 | **아키텍처를 웹 OAuth → 네이티브로 전환함(2026-09-14, 릴리스 폴리시 배치 2차).** 사용자가 이미 설정한 Supabase Apple Provider 값(Client IDs = 앱 Bundle ID, Secret Key 비어 있음)을 재확인한 결과 웹 OAuth가 아니라 네이티브 플로우 설정과 일치 — 기존 `signInWithOAuth({provider:"apple"})` 코드는 이 설정으로는 실패했을 것(Services ID/.p8 시크릿이 없어서). `ASAuthorizationAppleIDProvider`(네이티브) → `supabase.auth.signInWithIdToken()`으로 전환, 신규 로컬 커스텀 Capacitor 플러그인(`ios/App/App/AppleSignInPlugin.swift`, `FcmTokenPlugin.swift`와 동일 패턴 — npm 서드파티 의존성 없음)으로 구현. 장점: Services ID 자체가 불필요, **6개월마다 OAuth 시크릿을 재발급해야 하는 운영 부담이 완전히 없어짐**(Supabase 공식 문서 확인). 애플의 "이름은 최초 1회만 제공" 정책은 `user_metadata`가 아니라 네이티브 credential의 별도 필드로 오므로, 기존 마케팅 동의 스태시와 동일한 세션스토리지 패턴(`stashAppleFullName`/`consumeAppleFullName`)으로 비동기 레이스 없이 처리. **새로 발견해 미해결로 남긴 위험(불변)**: 애플의 "이메일 가리기"(private relay 이메일)를 쓰면 `lib/accountLinking.ts`의 실이메일 기반 자동 병합 제안이 트리거되지 않아 이미 실이메일로 가입한 사용자가 별도 계정을 새로 만들 수 있음 — 수동 연동으로는 여전히 우회 가능, 실사용 데이터로 빈도 확인 후 필요 시 별도 항목으로 분리할 것. |
+| 근거 파일 | `ios/App/App/AppleSignInPlugin.swift`(신규), `ios/App/App/SceneDelegate.swift`, `lib/appleAuth.ts`(신규), `app/login/page.tsx`, `lib/authAccount.ts`, `lib/accountLinking.ts`, `AUTH_SETUP.md` |
+| 이번 배치에서 한 것 | 웹 OAuth 코드 경로를 제거하고 네이티브 플로우로 교체. `AUTH_SETUP.md` 3-2절을 Services ID/6개월 로테이션 기반 안내에서 네이티브 기준(대부분 이미 완료, 재빌드/실기기 검증만 남음)으로 전면 갱신. |
+| 완료 조건 | **콘솔 설정은 이미 완료됨**(Apple Developer capability, Xcode capability, Supabase Provider 값 전부 사용자가 이미 함). 남은 건: (1) `AppleSignInPlugin.swift`를 포함해 Xcode에서 재빌드(필요 시 provisioning profile 재생성), (2) **실기기**에서 신규 가입/기존 로그인/취소/네트워크 실패 케이스 E2E 검증(시뮬레이터는 Apple ID 로그인 제약이 있어 권장 안 함) — 둘 다 Claude가 대신 할 수 없음. |
 | 관련 문서 | [REQUIREMENTS 5-1, 6-2](./REQUIREMENTS.md), [ROUTES `/login`](./ROUTES.md), `AUTH_SETUP.md` 3절 |
 
-### P2-1d. (2026-08-13, 완료) 구글 로그인 — Supabase 기본 provider 그대로 사용, 운영 반영 완료
+### P2-1g. (반복 재확인, 2026-09-15) Apple 로그인 버튼 디자인 — 공식 asset 필요(외부 의존, 계속 블로킹)
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P2 |
-| 현재 상태 | **완료. 실제 구글 계정으로 로그인 왕복 성공 확인.** |
-| 근거 파일 | `AUTH_SETUP.md` 3-0절 |
-| 내용 | 구글은 이메일/프로필이 민감하지 않은 기본 스코프라 카카오와 달리 별도 우회 없이 Supabase 기본 제공 Google provider를 그대로 사용. Google Cloud Console에서 OAuth 동의 화면(외부, 테스트 상태) + OAuth 클라이언트(웹 애플리케이션, Supabase Callback URL 등록) 생성 후 Client ID/Secret을 Supabase Google Provider 설정에 등록. |
-| 알려진 제약(기능 영향 없음) | 구글 로그인 동의 화면에 앱 이름 대신 `xxxxx.supabase.co 서비스로 로그인`이 표시됨 — Supabase 공용 도메인을 거치는 구조상 발생, `supabase.co`는 소유하지 않은 도메인이라 구글 "승인된 도메인"에 등록 불가. Supabase 커스텀 도메인(유료) 또는 완전 커스텀 OAuth 흐름 전환 시 해결 가능, 실사용 서비스 오픈 시점에 재검토(`AUTH_SETUP.md` 3-0절 참고). |
-| 검증 | 실제 구글 계정으로 로그인 성공 확인(사용자 직접 테스트). |
+| 우선순위 | P3(기능 아님, 브랜딩/HIG 준수) |
+| 현재 상태 | **블로킹 지속.** 실기기 QA에서 반복 재신고됨. Apple 공식 로고 전용 asset(Apple Design Resources)은 Apple Developer 계정 로그인이 있어야 다운로드 가능해 이 세션이 직접 가져올 수 없음 — 비공식으로 인터넷에서 복사한 Apple 로고 PNG/SVG는 절대 쓰지 말라는 명시적 지시가 있어 임의 대체도 안 함. |
+| 필요한 것 | 사용자가 https://developer.apple.com/design/human-interface-guidelines/sign-in-with-apple/ 의 공식 리소스를 다운로드해 전달해야 교체 가능. |
+| 근거 파일 | `app/login/page.tsx`(현재 손으로 그린 SVG 심볼 사용 중, HIG의 정확한 비율/여백 보장 안 됨) |
+
+### P2-1d. (2026-09-15, 아키텍처 전환) 구글 로그인 — 웹 OAuth → 네이티브(release blocker 대응), 콘솔 설정만 남음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2(코드는 완료, 콘솔 설정 전까지 기능 자체는 동작 안 함 — 그 전까지는 실질적으로 P0급 블로커) |
+| 현재 상태 | **아키텍처를 웹 OAuth → 네이티브로 전환함(릴리스 폴리시 배치 6차).** 실기기 QA에서 기존 `signInWithOAuth("google")`이 이 앱의 `server.url` 모드 WKWebView 안에서 완전히 깨져 있음을 확인(Google의 `disallowed_useragent` 정책이 임베디드 WebView의 OAuth를 서버 단에서 차단 — 카카오/네이버와 달리 구글만의 정책). 그 결과 로그인이 앱 안에서 끝나지 않고, 실패 상태로 돌아오면 `socialLoading`이 리셋될 기회가 없어 전체 소셜 버튼이 영구 비활성화되는 사고로 이어졌음(별도로 방어 코드 추가 완료). Apple과 동일한 패턴(로컬 커스텀 Capacitor 플러그인 → ID 토큰 → `supabase.auth.signInWithIdToken`)으로 전환 — iOS는 `GoogleSignIn-iOS` SPM 패키지(Firebase와 동일한 방식으로 `project.pbxproj` 직접 편집해 추가), Android는 `androidx.credentials`(Credential Manager, Google 공식 최신 권장 API). 아래 P2-1d-Google-Setup 참고 — 콘솔 설정 전까지는 "구글 로그인 설정이 아직 안 되어 있어요" 안내만 뜸(에러/크래시 아님, 기존 카카오/네이버 미설정 시 동작과 동일한 패턴). |
+| 근거 파일 | `lib/googleAuth.ts`(신규), `ios/App/App/GoogleSignInPlugin.swift`(신규), `android/app/src/main/java/com/mwhabit/app/GoogleSignInPlugin.java`(신규), `app/login/page.tsx`, `AUTH_SETUP.md` 3-0절(갱신 필요 — 아직 웹 OAuth 기준으로 남아있음, 다음 라운드에서 정리) |
+| 검증 | iOS 시뮬레이터 Debug + 제네릭 Release, Android `assembleDebug`/`assembleRelease` 전부 실제 SDK(`GoogleSignIn-iOS 9.2.0`, `androidx.credentials 1.5.0`, `googleid 1.2.0`) 기준으로 빌드 성공. 실기기 로그인 왕복은 콘솔 설정(아래) 완료 후 필요. |
+| 알려진 제약(기존, 여전히 유효) | 순수 웹 브라우저 경로는 그대로 `signInWithOAuth` 유지(웹은 WebView 문제가 없어서 전환 불필요) — 웹에서는 여전히 구글 로그인 동의 화면에 `xxxxx.supabase.co` 도메인이 노출됨(`supabase.co`가 소유 도메인이 아니라 구글 "승인된 도메인" 등록 불가, 커스텀 도메인 전환 시 해결). |
+
+### P2-1d-Google-Setup. (신규, 2026-09-15) 구글 네이티브 로그인 — 사용자가 직접 해야 하는 콘솔 설정
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P0급(이거 없으면 구글 로그인 자체가 전혀 동작 안 함) |
+| 현재 상태 | **운영 설정 필요.** 코드는 완료, 아래 콘솔 작업 전까지 기능이 켜지지 않음. Claude는 이 값들을 대신 발급/등록할 수 없음(외부 계정 인증 필요) — 이미 설정된 값이 있다면 재생성하지 말고 그대로 재사용할 것. |
+| 1) Google Cloud Console | "API 및 서비스 → 사용자 인증 정보"에서 OAuth 2.0 클라이언트 ID 2개 필요: **웹 애플리케이션**용 1개(Android 네이티브 플로우가 이 Web Client ID를 `serverClientId`/검증 대상으로 사용 — Supabase 공식 문서 확인함), **iOS**용 1개(번들 ID `com.mwhabit.app`로 등록). Android는 별도 Android Client ID 불필요 — 대신 "OAuth 동의 화면" 옆 사용자 인증정보에 실제 서명 키의 **SHA-1 지문**을 등록해야 함(디버그/릴리스 키 둘 다, 배포 키스토어는 사용자만 보유). |
+| 2) Supabase Dashboard | Authentication → Providers → Google에서 위에서 만든 **웹 Client ID + iOS Client ID를 함께** 등록(둘 다 필요 — Supabase `signInWithIdToken` 공식 문서 기준, Web Client ID가 audience 검증용). Client Secret은 네이티브 전용이면 비워도 됨(Apple 때와 동일 원칙). |
+| 3) 앱 환경변수 | `.env.local` 및 배포 환경(Vercel 등)에 `NEXT_PUBLIC_GOOGLE_IOS_CLIENT_ID`(iOS Client ID), `NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID`(웹 Client ID — Android 네이티브 플로우도 이 값을 씀) 등록. 카카오/네이버의 `NEXT_PUBLIC_KAKAO_CLIENT_ID` 등과 동일한 기존 관례. |
+| 4) iOS Info.plist | 리버스 iOS Client ID(예: `com.googleusercontent.apps.xxxx`)를 `CFBundleURLTypes`에 URL scheme으로 추가해야 로그인 완료 후 앱으로 돌아오는 리다이렉트가 처리됨 — 실제 Client ID가 나온 뒤에만 추가 가능(현재 미완료, 이 세션은 진짜 Client ID가 없어 값을 채울 수 없었음). |
+| 5) Android SHA-1 | 디버그 키스토어(`~/.android/debug.keystore`, 별칭 보통 `androiddebugkey`)와 실제 배포용 키스토어(`android/app/build.gradle`이 참조하는 `MWHABIT_KEYSTORE_FILE`) 둘 다의 SHA-1을 Google Cloud Console에 등록해야 실기기 릴리스 빌드에서도 동작함. |
+| 완료 조건 | 위 1~5 전부 완료 후 실기기(iOS/Android 둘 다)에서 기존 회원 재로그인 + 신규 계정 온보딩 왕복 성공 확인. |
+| 관련 문서 | `AUTH_SETUP.md`(아직 미반영 — 다음 라운드에서 3-0절을 네이티브 기준으로 갱신 필요, Apple 3-2절과 동일한 갱신 패턴), [REQUIREMENTS 5-1](./REQUIREMENTS.md) |
+
+### P2-1e. (신규, 2026-09-15) 관리자 수동 배정(`manager_book_member`) — 만료된 수강권 배정 허용 여부 확인 필요
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2(확인 필요 — 버그로 단정 안 함) |
+| 현재 상태 | **확인 필요.** 만료/소진 수강권 예약 강제 조사(릴리스 폴리시 배치 6차) 중 발견 — `manager_book_member()`(`reservation_functions.sql`, 최신 재정의는 `add_makeup_booking.sql`)는 관리자가 명시적 `p_membership_id`로 회원을 배정할 때 `remaining_count`(0 이하 거부, `p_deduct=true`일 때만)는 검사하지만 `expires_at`은 전혀 검사하지 않음. 함수 자체 주석("수강권 지정 시 유효성만 확인 = 보강 허용")상 관리자가 만료된 수강권으로도 보강(makeup) 수업에 배정할 수 있게 하려는 **의도적 설계**로 보이지만, 코드만으로는 제품 의도인지 놓친 케이스인지 확정할 수 없음. |
+| 한 것 | 이번 배치에서는 수정하지 않음(SQL 변경은 보고만, 실행 금지 원칙 + 의도 확인 전 임의 변경 금지). |
+| 필요한 것 | 대표님/제품 담당자 확인: "관리자가 만료된 수강권으로 보강 수업에 배정하는 게 의도된 기능이 맞는지". 아니라면 `manager_book_member`에 `expires_at >= current_date` 체크를 추가하는 새 `fix_*.sql` 필요(이번엔 작성 안 함). |
+| 근거 파일 | `reservation_functions.sql`(1841행 부근), `add_makeup_booking.sql` |
+
+### P2-1f. (신규, 2026-09-15) Kakao/Naver — Vercel Preview 도메인 로그인 실패는 콘솔 allowlist 문제(코드 정상)
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3(정보성 — 조치 불필요, production 정상 동작 전제) |
+| 현재 상태 | **확인 완료, 조치 불필요.** `lib/kakaoAuth.ts`/`lib/naverAuth.ts`의 `redirect_uri`는 `window.location.origin`에서 동적으로 계산됨(하드코딩 아님) — 코드 자체는 정상. Vercel Preview 도메인에서 실패하는 건 그 도메인이 카카오/네이버 개발자 콘솔의 Redirect URI 허용 목록에 등록돼 있지 않기 때문(`AUTH_SETUP.md` 3-1/3-3절이 이미 "배포 환경마다 콘솔에 도메인 추가 필요"라고 명시하고 있었음 — Preview URL은 애초에 등록 대상이 아니었던 게 정상). |
+| 조치 | 없음. Preview에서 이 두 provider를 테스트하려면 카카오 개발자 콘솔(플랫폼 키 → Default REST API Key 수정 → Redirect URI)과 네이버 개발자 콘솔(Application → 서비스 URL/Callback URL)에 Preview 도메인을 **임시로** 추가했다가 테스트 후 제거하면 됨 — **production(mwhabit.com) 콜백은 절대 건드리지 말 것**. |
+| 관련 문서 | `AUTH_SETUP.md` 3-1절, 3-3절 |
 
 ### P2-1c. (2026-08-13, 완료) 카카오 로그인 — Supabase 기본 provider 불가, 커스텀 Edge Function으로 구현
 
@@ -3292,6 +3428,25 @@ UI를 추가(사이즈 있는 상품은 조합이 섞일 수 있어 대상에서
 **권장 순서**(감사 리포트 원안): 1주차 토큰 수정(P0, 완료) → 2주차 센터 상세 재작업 +
 Empty/Error/Skeleton 공용 컴포넌트 3종 → 3주차 액센트 단일화 + 헤더/탭 통일 + 버튼 위계 →
 4주차~ 타이포 스케일 점진 전환(stylelint로 신규 하드코딩 차단) + 나머지 P2/P3.
+
+### P2-37. (신규, 2026-09-16) `AUTH_SETUP.md` 4절("계정 탈퇴(소프트 삭제)")이 현재 구현과 어긋남 — 문서 갱신 필요
+
+Google Play 계정 삭제 URL 페이지(`/account-deletion`) 작업 중 실제 탈퇴 로직
+(`supabase/functions/delete-account/index.ts`)을 코드로 확인한 결과, 2026-08-19
+정책 변경으로 이미 "소프트 삭제(비활성화만)"에서 "개인정보 익명화 + `auth.users` 실제
+삭제(재가입 허용)"로 바뀌었는데도 `AUTH_SETUP.md` 4절은 여전히 옛 동작("실제 행을
+지우지 않고 `accounts.deactivated_at`을 채운 뒤 Auth에서 밴")을 그대로 설명하고 있다.
+CLAUDE.md 1번 규칙("문서와 코드가 다르면 코드를 신뢰")에 따라 이번 작업(공개 안내
+페이지 추가)에서는 코드를 기준으로 페이지 내용을 작성했지만, `AUTH_SETUP.md` 자체는
+이번 작업 범위(문서 갱신은 요청받지 않음, 탈퇴 로직·SQL 수정 금지 지시) 밖이라 손대지
+않았다.
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | 확인 필요 — 문서만 갱신하면 되는지, 참조 파일 경로(`app/settings/account/page.tsx`는 이미 없고 실제로는 `app/mypage/info/page.tsx`)도 같이 바로잡아야 하는지 결정 필요 |
+| 근거 파일 | `AUTH_SETUP.md`(211~231행), `supabase/functions/delete-account/index.ts`(상단 주석, 2026-08-19/2026-09-10 정책 변경 기록), `app/mypage/info/page.tsx` |
+| 권장 후속 작업 | `AUTH_SETUP.md` 4절을 실제 삭제 동작(익명화 + `auth.users` 삭제, 재가입 허용)으로 다시 쓰고, 화면 경로도 `app/mypage/info/page.tsx`(마이 → 내 정보 관리 → 계정 탈퇴)로 갱신 |
 
 ## 7. P3 — 용도·존속 여부가 불명확한 객체
 

@@ -21,7 +21,13 @@
       영향 없음.
     -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <!-- 릴리스 폴리시 배치 8차(2026-09-17), 14번 — API 31+에서는 windowSplashScreenBackground
+             (아래, 단색)가 실제로 그려지는 값이라 이 android:background는 평소엔 안 보이지만,
+             혹시라도 쓰이는 경로가 있을 때를 대비해 태블릿에서 로고가 늘어나 보이던 원인과
+             같은 값(@drawable/splash 원본 비트맵 직접 참조)을 계속 두지 않는다 — base
+             values/styles.xml과 동일하게 늘리지 않는 wrapper로 통일(values/colors.xml의
+             splashBackground 주석 참고). -->
+        <item name="android:background">@drawable/splash_background</item>
         <item name="android:windowSplashScreenBackground">#0A2545</item>
     </style>
 </resources>

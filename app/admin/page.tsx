@@ -32,7 +32,7 @@ export default function AdminHub() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell admin-home-v2">
       <div className="back-header">
         <a className="side" href="/mypage">‹</a>
         <div className="title">운영자 설정</div>

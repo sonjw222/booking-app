@@ -1,0 +1,138 @@
+name: Mobile UI QA (iOS XCUITest / Android Espresso)
+
+# Automated QA Foundation Batch(2026-09-18) — 신설, 아직 "준비" 단계다.
+# push/pull_request 트리거가 전혀 없다 — 의도적: 이 워크플로우가 기존 PR 검증(test.yml)
+# 이나 Vercel 배포 게이트에 영향을 주면 안 된다는 사용자 요청 원칙(요청 8번,
+# "main 보호에 영향 주지 않게, 실패해도 현재 배포를 막지 않게, 수동 실행 가능"). 준비가
+# 되면(테스트 계정 Secrets 등록 + 실기기로 최초 1회 그린 확인) push/pull_request 트리거를
+# 추가하는 건 별도 작업으로 남긴다 — 지금은 workflow_dispatch로만 수동 실행.
+on:
+  workflow_dispatch:
+
+jobs:
+  android-ui-tests:
+    name: Android Espresso/UI Automator (emulator)
+    runs-on: ubuntu-latest
+    # .github/workflows/test.yml과 동일한 이유(TEST_USER_A 등 공유 dev Supabase 테스트
+    # 계정을 쓰므로, fork PR에는 Secrets가 주입 안 됨 — 이 워크플로우는 workflow_dispatch만
+    # 있어 애초에 fork PR에서 트리거될 일이 없지만, 나중에 pull_request를 추가할 경우를
+    # 대비해 동일한 가드를 미리 심어둔다).
+    #
+    # Secrets가 아직 등록 안 됐을 수 있다(이 배치는 "준비" 단계라 실제 계정 Secrets
+    # 등록은 범위 밖) — 없으면 이 job 자체를 조용히 건너뛴다(실패로 안 뜸, 요청 8번
+    # "secrets 없으면 graceful skip").
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      (github.event.pull_request.head.repo.full_name == github.repository || github.event.pull_request == null)
+    timeout-minutes: 30
+    steps:
+      - name: Secrets 확인(없으면 이후 스텝 전부 건너뜀)
+        id: check-secrets
+        run: |
+          if [ -z "${{ secrets.TEST_USER_A_EMAIL }}" ]; then
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::TEST_USER_A_EMAIL 등 테스트 계정 Secrets가 아직 등록되지 않아 이 job을 건너뜁니다(docs/AUTOMATED_QA.md 참고)."
+          else
+            echo "has_secrets=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+      - run: npx cap sync android
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+      # ubuntu-latest 러너의 Android 에뮬레이터 하드웨어 가속(KVM) 가용성은 GitHub의
+      # 러너 이미지/정책 변경에 따라 달라질 수 있다(macOS 러너는 항상 가속 있음,
+      # Linux는 러너 세대에 따라 다름) — 느리거나 아예 못 뜨면 macos-latest로 옮기는
+      # 것도 고려할 것(다만 macOS 분당 과금이 Linux보다 훨씬 비쌈, 아래 "비용" 참고).
+      - name: Android 에뮬레이터로 Espresso 테스트 실행
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          script: cd android && ./gradlew connectedDebugAndroidTest
+        env:
+          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
+          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
+          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
+          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        if: steps.check-secrets.outputs.has_secrets == 'true' && !cancelled()
+        with:
+          name: android-ui-test-results
+          path: |
+            android/app/build/reports/androidTests/
+            android/app/build/outputs/androidTest-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  ios-ui-tests:
+    name: iOS XCUITest (simulator)
+    # macOS 러너 필수(iOS 시뮬레이터는 macOS에서만 구동 가능) — GitHub 호스팅 러너 중
+    # macos-latest는 Linux(ubuntu-latest) 대비 분당 비용이 훨씬 비싸다(GitHub 공식
+    # 요금 배수 기준 macOS가 Linux의 10배). 이 워크플로우가 workflow_dispatch 전용인
+    # 이유 중 하나가 이 비용 — 매 PR/push마다 자동으로 돌리면 안 됨.
+    runs-on: macos-latest
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      (github.event.pull_request.head.repo.full_name == github.repository || github.event.pull_request == null)
+    timeout-minutes: 30
+    steps:
+      - name: Secrets 확인(없으면 이후 스텝 전부 건너뜀)
+        id: check-secrets
+        run: |
+          if [ -z "${{ secrets.TEST_USER_A_EMAIL }}" ]; then
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::TEST_USER_A_EMAIL 등 테스트 계정 Secrets가 아직 등록되지 않아 이 job을 건너뜁니다(docs/AUTOMATED_QA.md 참고)."
+          else
+            echo "has_secrets=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+      - run: npx cap sync ios
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+      # App.entitlements/GoogleService-Info.plist는 이 저장소에 커밋돼 있지 않다(사용자
+      # 로컬/Secrets 전용 실제 값 필요, docs/AUTOMATED_QA.md 참고) — 이 job이 실제로
+      # 그린이 되려면 그 두 파일을 Secrets(base64 인코딩 등)로 등록하고 이 스텝 전에
+      # 복원하는 절차를 별도로 추가해야 한다. 이번 배치는 "준비" 단계라 그 등록까지는
+      # 하지 않음 — 지금 이대로 돌리면 App 타겟 빌드 자체가 그 두 파일 부재로 실패한다.
+      - name: 테스트 계정 env var로 XCUITest 실행
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        run: |
+          xcrun simctl list devices available
+          TEST_RUNNER_TEST_USER_A_EMAIL="${{ secrets.TEST_USER_A_EMAIL }}" \
+          TEST_RUNNER_TEST_USER_A_PASSWORD="${{ secrets.TEST_USER_A_PASSWORD }}" \
+          TEST_RUNNER_TEST_MANAGER_A_EMAIL="${{ secrets.TEST_MANAGER_A_EMAIL }}" \
+          TEST_RUNNER_TEST_MANAGER_A_PASSWORD="${{ secrets.TEST_MANAGER_A_PASSWORD }}" \
+          xcodebuild test \
+            -project ios/App/App.xcodeproj -scheme App \
+            -only-testing:AppUITests \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -resultBundlePath TestResults.xcresult
+      - uses: actions/upload-artifact@v4
+        if: steps.check-secrets.outputs.has_secrets == 'true' && !cancelled()
+        with:
+          name: ios-ui-test-results
+          path: TestResults.xcresult
+          retention-days: 14
+          if-no-files-found: ignore

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import UiIcon from "../components/UiIcon";
 import { fetchMyCenters, fetchTodayClasses, type ManagedCenter, type TodayClass } from "../../lib/manager";
+import { replaceTabNavigation } from "../../lib/navState";
 import { fetchClassAttendees, setAttendance, type ClassAttendee } from "../../lib/classes";
 import { fetchMemberDetail, type MemberDetailData } from "../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../lib/roles";
@@ -190,7 +191,7 @@ export default function ManagerDashboard() {
       {/* 매니저 모드 헤더 */}
       <div className="mgr-mode-bar">
         <span className="mgr-mode-label"><UiIcon name="building" size={15} /> 관리자 모드</span>
-        <a className="mgr-mode-switch" href="/">회원 모드로 전환 ↩</a>
+        <a className="mgr-mode-switch" href="/" onClick={(e) => replaceTabNavigation(e, "/")}>회원 모드로 전환 ↩</a>
       </div>
 
       {/* 센터 선택 (여러 센터 운영 시) */}
@@ -232,7 +233,7 @@ export default function ManagerDashboard() {
 
       {/* 매출 요약 대시보드 */}
       {canSeeMenu("pass.sales.view") && (
-        <>
+        <section className="manager-dashboard-block" aria-label="매출 요약">
           <div className="period-tabs">
             {([["today", "오늘"], ["7d", "7일"], ["30d", "30일"]] as [DashPeriod, string][]).map(([p, label]) => (
               <button key={p} className={`period-chip ${dashPeriod === p ? "on" : ""}`} onClick={() => setDashPeriod(p)}>
@@ -289,10 +290,11 @@ export default function ManagerDashboard() {
               )}
             </>
           ) : null}
-        </>
+        </section>
       )}
 
       {/* 오늘 수업 요약 */}
+      <section className="manager-today-classes" aria-label="오늘 수업">
       <div className="section-title" style={{ paddingTop: 8 }}>
         오늘 수업 {todayClasses.length > 0 && <span className="info">({todayClasses.length}개)</span>}
       </div>
@@ -319,8 +321,10 @@ export default function ManagerDashboard() {
           })
         )}
       </div>
+      </section>
 
       {/* 관리 메뉴 */}
+      <section className="manager-menu-panel" aria-label={`${activeCenter?.name ?? "센터"} 관리 메뉴`}>
       <div className="menu-section-label">{activeCenter?.name ?? "센터"} 관리</div>
       {(canSeeMenu("pass.create") || canSeeMenu("pass.update")) && (
         <a className="list-row" href="/manager/membership-rules">
@@ -331,6 +335,12 @@ export default function ManagerDashboard() {
       {canSeeMenu("pass.goods.view") && (
         <a className="list-row" href="/manager/goods">
           <div className="left"><span className="icon"><UiIcon name="receipt" /></span>상품 관리</div>
+          <span className="chevron">›</span>
+        </a>
+      )}
+      {canSeeMenu("customer.member.issue_pass") && (
+        <a className="list-row" href="/manager/coupons">
+          <div className="left"><span className="icon"><UiIcon name="card" /></span>쿠폰 관리</div>
           <span className="chevron">›</span>
         </a>
       )}
@@ -439,8 +449,7 @@ export default function ManagerDashboard() {
           <span className="chevron">›</span>
         </a>
       )}
-      <div className="manager-menu-end-spacer" aria-hidden="true" />
-
+      </section>
       {/* 예약자 명단 시트 */}
       {rosterClass && (
         <div className="sheet-overlay" onClick={() => setRosterClass(null)}>

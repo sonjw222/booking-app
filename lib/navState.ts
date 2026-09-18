@@ -22,23 +22,85 @@ export function shouldShowMembershipTabs(hasUsable: boolean | null): boolean {
   return hasUsable === true;
 }
 
-// BottomNav는 페이지마다 새로 마운트되는 컴포넌트라(공용 layout이 아님) 판정 전 기본값을
-// null로 두면 수강권이 있는 사용자는 페이지를 옮길 때마다 "탭 3개 → 5개"로 깜빡인다.
-// 직전에 확인한 결과를 기기에 캐싱해두고 다음 마운트의 초기값으로 써서, 최초 1회(또는
-// 캐시가 없을 때)를 제외하면 깜빡임 없이 바로 맞는 탭 구성으로 그려지게 한다.
-const HAS_USABLE_CACHE_KEY = "nav_has_usable_membership";
+// BottomNav는 페이지마다 새로 마운트되는 컴포넌트라(공용 layout이 아님, 이 앱은 클라이언트
+// 라우팅이 없어 탭 전환마다 전체 페이지가 서버에서부터 다시 렌더링된다 — app/layout.tsx
+// 주석 참고) 판정 전 기본값을 null로 두면 수강권이 있는 사용자는 탭을 옮길 때마다
+// "3탭 → 5탭"으로 깜빡인다. localStorage는 서버가 읽을 수 없어 서버 렌더링(=최초 페인트)
+// 자체는 못 바꾸므로, 쿠키에 직전 판정 결과를 저장해둔다 — 다음 전체 페이지 로드 때
+// app/layout.tsx(서버 컴포넌트)가 이 쿠키를 읽어 GlobalBottomNav의 최초 렌더링 값으로
+// 내려주면, 최초 1회(쿠키가 없을 때)를 제외하고는 깜빡임 없이 바로 맞는 탭 구성으로
+// 그려진다. 실제 자격 판정은 여전히 서버(RLS)/클라이언트 재확인이 하고, 이 쿠키는 그
+// 결과가 나오기 전까지 뭘 먼저 그릴지 정하는 힌트일 뿐이다.
+const HAS_USABLE_COOKIE_KEY = "nav_has_usable_membership";
 
-export function getCachedHasUsableMembership(): boolean | null {
+export function setCachedHasUsableMembership(v: boolean): void {
   try {
-    const v = localStorage.getItem(HAS_USABLE_CACHE_KEY);
-    if (v === "1") return true;
-    if (v === "0") return false;
+    document.cookie = `${HAS_USABLE_COOKIE_KEY}=${v ? "1" : "0"}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
   } catch { /* 무시 */ }
+}
+
+// app/layout.tsx(서버 컴포넌트)가 next/headers의 cookies()로 읽은 원시 문자열을 넘겨주면
+// 판정한다 — 이 파일은 클라이언트 컴포넌트에서도 import되므로 next/headers는 여기서
+// 직접 import하지 않는다(서버 전용 모듈이라 클라이언트 번들에 섞이면 안 됨).
+export function parseHasUsableMembershipCookie(raw: string | undefined): boolean | null {
+  if (raw === "1") return true;
+  if (raw === "0") return false;
   return null;
 }
 
-export function setCachedHasUsableMembership(v: boolean): void {
-  try { localStorage.setItem(HAS_USABLE_CACHE_KEY, v ? "1" : "0"); } catch { /* 무시 */ }
+// 릴리스 폴리시 배치 6차(2026-09-15) — 실기기 QA: 탭/모드 전환은 edge-swipe 뒤로가기로
+// 원래 위치가 되돌아오면 안 된다는 신고(예: 마이 → 관리자 모드 전환 → edge swipe →
+// 마이로 복귀 = 잘못된 동작. 반대로 1:1 문의 같은 "상세 진입"은 edge-swipe로 돌아와야
+// 정상). BottomNav/ManagerNav의 5/4개 탭은 이미 <Link>(Next.js 클라이언트 라우팅)라
+// <Link replace> 한 줄로 해결되지만, 이 함수가 대상으로 하는 링크들(마이의 "관리자
+// 모드로 전환"/"예약 내역" 단축 진입, 관리자↔회원 모드 전환 바, 플랫폼 어드민의 "회원
+// 모드로" 복귀)은 전부 여전히 일반 <a href>(전체 페이지 새로 로드)를 쓴다 — 상세
+// 화면(문의/프로필수정/구매내역 등 나머지 대다수 링크)은 그대로 둬도 이미 올바른
+// "push" 동작이라(모든 일반 <a> 클릭은 기본적으로 새 히스토리 항목을 남김) 손댈 필요가
+// 없고, 오직 "탭과 동등한" 이 소수의 링크만 "replace"로 바꾸면 된다.
+// location.replace()는 현재 히스토리 항목을 "교체"해 WKWebView의 뒤로가기 목록에 새
+// 항목을 남기지 않는다(location.href/기본 <a> 클릭은 always push). href는 그대로 둬서
+// 접근성·새 탭으로 열기(Cmd/Ctrl/중클릭)·JS 비활성 시 폴백은 기존과 동일하게 동작하고,
+// 그 경우들은 가로채지 않고 기본 동작에 맡긴다(표준 SPA 링크 가로채기 관례와 동일).
+export function replaceTabNavigation(
+  e: { defaultPrevented: boolean; button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean; preventDefault: () => void },
+  href: string,
+): void {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  window.location.replace(href);
+}
+
+// 릴리스 폴리시 배치 8차(2026-09-17) — Root Navigation 정책: 회원 5개 탭(홈/예약/내예약/
+// 알림/마이), 관리자 4개 탭(수업/회원/알림/더보기), 운영자 1개(운영 홈)는 전부 "root
+// destination"이다 — iOS edge-swipe/Android 하드웨어·제스처 back으로 이 화면들 "밖"(이전
+// 모드, 로그인 화면 등)으로 나가면 안 된다(QA 신고: 관리자 더보기에서 edge swipe 시 로그인
+// 화면이 뒤에서 보임). 반대로 상세 화면(회원 상세, 수업 상세, 센터 상세 등)에서는 기존
+// back이 정상 동작해야 한다(전역 차단 금지). 이 판정은 정확히 이 경로들과 "일치"할 때만
+// true — 하위 상세 경로(prefix)는 포함하지 않는다(예: "/manager/members/123"은 상세라
+// false여야 뒤로가기가 "/manager/members" 목록으로 정상 동작함).
+const MEMBER_ROOT_PATHS = ["/", "/reservation", "/my-reservations", "/notifications", "/mypage"];
+const MANAGER_ROOT_PATHS = ["/manager", "/manager/classes", "/manager/members", "/manager/notifications"];
+const ADMIN_ROOT_PATHS = ["/admin"];
+
+export function isRootNavPath(pathname: string): boolean {
+  return (
+    MEMBER_ROOT_PATHS.includes(pathname) ||
+    MANAGER_ROOT_PATHS.includes(pathname) ||
+    ADMIN_ROOT_PATHS.includes(pathname)
+  );
+}
+
+// CapacitorBootstrap.tsx의 backButton 리스너(레이아웃 마운트 시 1회 등록, 이후 재구독하지
+// 않음)가 "지금 root 화면인지"를 매 경로 변경마다 다시 알 수 있도록 하는 공유 상태 —
+// NavigationPolicy.tsx가 경로가 바뀔 때마다 이 값을 갱신하고, 리스너는 호출 시점에 이
+// 값을 읽기만 한다(리스너를 경로마다 add/remove 하지 않아도 됨).
+export const rootNavState = { isRoot: false };
+
+export function updateRootNavState(pathname: string): boolean {
+  const root = isRootNavPath(pathname);
+  rootNavState.isRoot = root;
+  return root;
 }
 
 export async function fetchHasUsableMembership(): Promise<boolean> {

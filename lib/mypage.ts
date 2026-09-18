@@ -23,13 +23,64 @@ export type Membership = {
   startsAt: string | null; // "2026-06-01" — DB는 NOT NULL(기본 구매일)이라 실제로 null은 안 오지만 방어적으로 nullable로 둠. rolling_month 상품이 다음 달로 넘어간 경우에만 미래 날짜(2026-09-10 QA로 starts_at이 기존 schema.sql 컬럼 재사용임을 확인, add_rolling_month_product_expiry.sql 참고)
   createdAt: string; // 구매 시각 (환불 24시간 판단용)
   profileName: string; // 어느 프로필 것인지 (대표면 "")
+  // schema.sql: active(사용중)/expired(만료)/paused(정지)/refunded(환불)/transferred(양도).
+  // 릴리스 폴리시 배치 6차(2026-09-15) — 마이페이지 정렬/CTA 정책(classifyMembershipDisplay)이
+  // "정지중" 티어를 구분하려면 필요해서 새로 select에 추가(새 DB 값을 만든 게 아니라
+  // 기존 컬럼을 처음으로 화면까지 가져온 것). refunded는 이 목록 쿼리 자체가 이미
+  // .neq("status","refunded")로 제외하므로 여기 값으로는 절대 안 옴.
+  status: string;
 };
+
+export type MembershipDisplayTier = 0 | 1 | 2 | 3; // 0=활성, 1=시작 예정, 2=정지중(사용 가능), 3=만료/소진(항상 마지막)
+
+// 실기기 QA(2026-09-15) — 마이페이지 수강권 목록이 만료일 오름차순으로만 정렬돼(원래
+// fetchMyPage()의 DB 쿼리가 order("expires_at", ascending:true)) 이미 만료된 수강권
+// (오래된 expires_at = 정렬상 가장 앞)이 실제 예약에 쓸 수 있는 수강권보다 위에
+// 뜨는 문제가 있었다. 활성 → 시작 예정 → 정지중(아직 사용 가능) → 만료/소진(항상
+// 마지막) 순으로 재배치한다. 새 DB 상태값을 만들지 않고 schema.sql의 기존 enum만
+// 쓴다. 정렬뿐 아니라 카드 CTA 판단(item 8)도 이 분류를 그대로 재사용해야 하므로
+// display 전용이 아닌 데이터 계층(이 파일)의 순수 함수로 둔다.
+export function classifyMembershipDisplay(
+  m: Pick<Membership, "unlimited" | "remainingCount" | "expiresAt" | "startsAt" | "status">,
+  todayStr: string = new Date().toISOString().slice(0, 10),
+): { tier: MembershipDisplayTier; isExpired: boolean; isExhausted: boolean; isPending: boolean; isPaused: boolean } {
+  const isExpired = !m.unlimited && m.expiresAt != null && m.expiresAt < todayStr;
+  const isExhausted = !m.unlimited && m.remainingCount != null && m.remainingCount <= 0;
+  const isPending = !!m.startsAt && m.startsAt > todayStr;
+  const isPaused = m.status === "paused";
+
+  let tier: MembershipDisplayTier;
+  if (isExpired || isExhausted) tier = 3;
+  else if (isPaused) tier = 2;
+  else if (isPending) tier = 1;
+  else tier = 0;
+
+  return { tier, isExpired, isExhausted, isPending, isPaused };
+}
+
+// 같은 tier 안에서는 기존과 동일하게 만료 임박(expires_at 오름차순) 우선 순으로 유지 —
+// unlimited(만료일 없음)는 비교할 날짜가 없으므로 같은 tier 안에서 맨 뒤로 보낸다.
+export function sortMembershipsForDisplay<T extends Pick<Membership, "unlimited" | "remainingCount" | "expiresAt" | "startsAt" | "status">>(
+  memberships: T[],
+  todayStr?: string,
+): T[] {
+  return [...memberships].sort((a, b) => {
+    const ta = classifyMembershipDisplay(a, todayStr).tier;
+    const tb = classifyMembershipDisplay(b, todayStr).tier;
+    if (ta !== tb) return ta - tb;
+    if (a.expiresAt == null && b.expiresAt == null) return 0;
+    if (a.expiresAt == null) return 1;
+    if (b.expiresAt == null) return -1;
+    return a.expiresAt < b.expiresAt ? -1 : a.expiresAt > b.expiresAt ? 1 : 0;
+  });
+}
 
 export type HistoryItem = {
   id: string;
   title: string;
   centerName: string;
-  when: string; // "2026-07-14 20:00"
+  when: string; // "2026-07-14 20:00" (KST 표시용, 화면 렌더링 전용)
+  startAt: string | null; // classes.start_time 원본 ISO(timestamptz) — 미래/과거 판정은 반드시 이 값으로 한다(when은 KST 포맷 문자열이라 비교에 부적합)
   status: "confirmed" | "waitlisted" | "cancelled" | "attended" | "no_show";
   profileName: string; // 어느 프로필 것인지 (대표면 "")
   // "MEMBER" | "ADMIN_ASSIGNMENT" | "ADMIN_FREE" — 회원 화면에는 lib/reservationTypes.ts의
@@ -137,7 +188,7 @@ export async function fetchMyPage() {
   // 수강권 + 상품 (모든 프로필)
   const { data: memRows, error: memErr } = await supabase
     .from("memberships")
-    .select("id, profile_id, bound_profile_id, center_id, product_id, product_name, total_count, remaining_count, expires_at, starts_at, created_at, centers(name), products(product_kind, unlimited)")
+    .select("id, profile_id, bound_profile_id, center_id, product_id, product_name, total_count, remaining_count, expires_at, starts_at, created_at, status, centers(name), products(product_kind, unlimited)")
     .in("profile_id", profileIds)
     .neq("status", "refunded")
     .order("expires_at", { ascending: true });
@@ -187,9 +238,84 @@ export async function fetchMyPage() {
       startsAt: m.starts_at ?? null,
       createdAt: m.created_at,
       profileName: m.bound_profile_id ? (profileLabel[m.bound_profile_id] ?? "") : "",
+      status: m.status,
     }));
 
-  // 예약내역 (모든 프로필, 최근순)
+  const profile: Profile = { name: me.name, phone: me.phone, isMember: me.isMember, isManager: me.isManager, isPlatformAdmin: me.isPlatformAdmin };
+
+  // 예약내역(history)은 이 함수 반환값에서 제외 — app/mypage/page.tsx는 이 값을 화면에
+  // 전혀 렌더링하지 않는데도(예약 내역은 /my-reservations 링크로만 안내) 매번 예약
+  // 최근 50건 + classes/centers 2단 조인을 통째로 받아오고 있었다(egress 감사,
+  // 2026-09-15). 예약 내역이 실제로 필요한 화면(app/my-reservations/page.tsx)은
+  // fetchMyReservationHistory()를 대신 쓴다 — 계정당 두 화면을 오가도 이 무거운 조인이
+  // 중복으로 두 번 불려나가지 않는다.
+  return { profile, memberships: sortMembershipsForDisplay(memberships) };
+}
+
+export type RepurchaseAvailability = { centerActive: boolean; productPurchasable: boolean };
+
+// 릴리스 폴리시 배치 6차(2026-09-15, item 8) — 만료/소진된 수강권 카드의 CTA 우선순위
+// (1순위 "다시 구매하기" → 2순위 "센터 문의하기" → 3순위 CTA 없음)를 정하려면 그
+// 수강권을 살 당시의 센터/상품이 "지금도" 유효한지 알아야 한다. fetchMyPage()가 매번
+// 이걸 같이 조회하면 활성 수강권만 있는(=대다수) 사용자에게도 불필요한 조회가
+// 붙으므로, 만료/소진된 pass만 화면에서 골라 별도로 호출한다(app/mypage/page.tsx).
+export async function fetchRepurchaseAvailability(
+  memberships: Pick<Membership, "id" | "centerId" | "productId">[],
+): Promise<Record<string, RepurchaseAvailability>> {
+  const result: Record<string, RepurchaseAvailability> = {};
+  if (memberships.length === 0) return result;
+
+  const centerIds = Array.from(new Set(memberships.map((m) => m.centerId)));
+  const productIds = Array.from(new Set(memberships.map((m) => m.productId).filter((id): id is string => !!id)));
+
+  const [{ data: centers, error: centerErr }, { data: products, error: productErr }] = await Promise.all([
+    supabase.from("centers").select("id, status").in("id", centerIds),
+    productIds.length > 0
+      ? supabase.from("products").select("id, is_active, is_on_sale").in("id", productIds)
+      : Promise.resolve({ data: [] as any[], error: null }),
+  ]);
+  if (centerErr) throw new Error("센터 상태를 확인하지 못했어요: " + centerErr.message);
+  if (productErr) throw new Error("상품 상태를 확인하지 못했어요: " + productErr.message);
+
+  const centerActiveMap: Record<string, boolean> = {};
+  for (const c of centers ?? []) centerActiveMap[(c as any).id] = (c as any).status === "approved";
+
+  const productPurchasableMap: Record<string, boolean> = {};
+  for (const p of products ?? []) productPurchasableMap[(p as any).id] = !!(p as any).is_active && !!(p as any).is_on_sale;
+
+  for (const m of memberships) {
+    result[m.id] = {
+      centerActive: centerActiveMap[m.centerId] ?? false,
+      productPurchasable: m.productId ? (productPurchasableMap[m.productId] ?? false) : false,
+    };
+  }
+  return result;
+}
+
+// "내 예약"(app/my-reservations) 전용 — fetchMyPage()의 프로필/수강권 조회(accounts,
+// manager_centers count, memberships+centers/products 조인)는 이 화면에서 안 쓰므로
+// 예약내역에 필요한 프로필 id만 가볍게 조회한다.
+export async function fetchMyReservationHistory(): Promise<HistoryItem[]> {
+  const accountId = await getMyAccountId();
+  if (!accountId) throw new Error("로그인이 필요해요");
+
+  const { data: profRows, error: profErr } = await supabase
+    .from("profiles")
+    .select("id, name, nickname, label, is_primary")
+    .eq("account_id", accountId)
+    .is("deleted_at", null)
+    .order("is_primary", { ascending: false });
+  if (profErr) throw new Error("프로필을 불러오지 못했어요: " + profErr.message);
+  const profiles = profRows ?? [];
+  const profileIds = profiles.map((p: any) => p.id);
+  if (profileIds.length === 0) return [];
+  const hasMultiple = profiles.length > 1;
+  const profileLabel: Record<string, string> = {};
+  for (const p of profiles) {
+    const nm = (p as any).nickname || (p as any).name;
+    profileLabel[(p as any).id] = !hasMultiple ? "" : ((p as any).label ? `${nm} · ${(p as any).label}` : nm);
+  }
+
   const { data: resRows, error: resErr } = await supabase
     .from("reservations")
     .select("id, profile_id, status, reservation_type, cancel_source, created_at, classes(title, start_time, centers(name))")
@@ -198,20 +324,17 @@ export async function fetchMyPage() {
     .limit(50);
   if (resErr) throw new Error("예약내역을 불러오지 못했어요: " + resErr.message);
 
-  const history: HistoryItem[] = (resRows ?? []).map((r: any) => ({
+  return (resRows ?? []).map((r: any) => ({
     id: r.id,
     title: r.classes?.title ?? "",
     centerName: r.classes?.centers?.name ?? "",
     when: r.classes?.start_time ? fmtDateTime(r.classes.start_time) : "",
+    startAt: r.classes?.start_time ?? null,
     status: r.status,
     profileName: profileLabel[r.profile_id] ?? "",
     reservationType: r.reservation_type ?? "MEMBER",
     cancelSource: r.cancel_source ?? null,
   }));
-
-  const profile: Profile = { name: me.name, phone: me.phone, isMember: me.isMember, isManager: me.isManager, isPlatformAdmin: me.isPlatformAdmin };
-
-  return { profile, memberships, history };
 }
 
 export async function logout() {
