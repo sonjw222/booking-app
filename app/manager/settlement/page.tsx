@@ -127,27 +127,31 @@ export default function ManagerSettlementPage() {
       {loading ? (
         <Loading />
       ) : (
-        <div className="settings-wrap">
+        <div className="settings-wrap settlement-workspace">
           <div className="perm-guide" style={{ margin: "0 0 12px" }}>
             회원 결제 대금은 지금 대표 사업자 계좌로 먼저 들어오고, 이 센터로는 별도
             정산됩니다. 아래 계좌를 입력해두시면 대표가 은행 대량이체로 정산할 때
             참고합니다.
           </div>
 
-          <div className="menu-section-label">정산 계좌 (수동 정산용)</div>
+          <section className="workspace-form-panel">
+          <h2 className="menu-section-label">정산 계좌 (수동 정산용)</h2>
           {manualLoading ? (
             <div className="set-row"><div className="set-label">불러오는 중...</div></div>
           ) : (
             <div className="login-wrap" style={{ padding: "10px 0 20px", alignItems: "stretch" }}>
-              <input
+              <label htmlFor="settlement-bank">은행명</label>
+              <input id="settlement-bank"
                 className="input-field" placeholder="은행명 (예: 국민은행)"
                 value={bankName} onChange={(e) => setBankName(e.target.value)}
               />
-              <input
+              <label htmlFor="settlement-number">계좌번호</label>
+              <input id="settlement-number"
                 className="input-field" placeholder="계좌번호" inputMode="numeric"
                 value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)}
               />
-              <input
+              <label htmlFor="settlement-holder">예금주명</label>
+              <input id="settlement-holder"
                 className="input-field" placeholder="예금주명"
                 value={accountHolderName} onChange={(e) => setAccountHolderName(e.target.value)}
               />
@@ -158,7 +162,9 @@ export default function ManagerSettlementPage() {
             </div>
           )}
 
-          <div className="menu-section-label">정산 자동화 (Toss 지급대행 — 준비 중)</div>
+          </section>
+          <section className="workspace-form-panel">
+          <h2 className="menu-section-label">정산 자동화 (Toss 지급대행 — 준비 중)</h2>
           {acctError && <div className="error-toast">{acctError}<button onClick={() => setAcctError(null)}>×</button></div>}
           {acctLoading ? (
             <div className="set-row"><div className="set-label">불러오는 중...</div></div>
@@ -205,6 +211,7 @@ export default function ManagerSettlementPage() {
               </div>
             </>
           )}
+          </section>
         </div>
       )}
     </div>
