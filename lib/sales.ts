@@ -472,17 +472,29 @@ export async function registerPoint(p: PointInput): Promise<void> {
 }
 
 export async function fetchPoints(centerId: string): Promise<PointRow[]> {
-  const { data, error } = await supabase
-    .from("point_transactions")
-    .select("id, profile_id, amount, reason, created_at, profiles(name)")
-    .eq("center_id", centerId)
-    .order("created_at", { ascending: true })   // 오래된 것부터 → 누적 잔액 계산
-    .limit(300);
-  if (error) throw new Error("포인트 내역을 불러오지 못했어요: " + error.message);
+  // 버그 수정(2026-09-19) — 예전엔 .limit(300)만 걸어서, 센터의 누적 포인트 거래가
+  // 300건을 넘으면 오래된 300건만 가져오고 그 뒤 모든 거래(최신 거래 포함)가 조회
+  // 자체에서 통째로 빠졌다 — 화면에 최신 내역이 안 보이는 것은 물론, 남아있는
+  // 300건만으로 누적 잔액(balanceAfter)을 계산해 잔액 자체도 틀리게 나왔다.
+  // lib/classes.ts의 fetchClasses()/lib/reservations.ts와 동일한 .range() 페이지
+  // 단위 반복 조회로 바꿔 전체 거래를 빠짐없이 가져온다.
+  const rows: any[] = [];
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page, error } = await supabase
+      .from("point_transactions")
+      .select("id, profile_id, amount, reason, created_at, profiles(name)")
+      .eq("center_id", centerId)
+      .order("created_at", { ascending: true })   // 오래된 것부터 → 누적 잔액 계산
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error("포인트 내역을 불러오지 못했어요: " + error.message);
+    rows.push(...(page ?? []));
+    if (!page || page.length < PAGE_SIZE) break;
+  }
 
   // 회원별로 누적 잔액을 계산하면서 각 거래 직후 잔액을 기록
   const running: Record<string, number> = {};
-  const asc: PointRow[] = (data ?? []).map((r: any) => {
+  const asc: PointRow[] = rows.map((r: any) => {
     const pid = r.profile_id;
     running[pid] = (running[pid] ?? 0) + r.amount;
     return {

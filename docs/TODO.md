@@ -1373,6 +1373,17 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
+### P2-46. (2026-09-19 발견·수정 완료) `fetchPoints()` — 센터 누적 포인트 거래 300건 초과 시 최신 내역·잔액이 조용히 누락됨
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 → **수정 완료** |
+| 경위 | 7주 전 로컬에 미커밋 상태로 방치돼 있던 별도 문서화 실험(`docs/20_Execution_Plan.md` 등, `archive/local-wip-2026-07` 브랜치로 백업 후 폐기)을 사용자 요청으로 검토하던 중, 그 문서가 지적한 70개 이슈를 현재 코드와 하나하나 대조했다. 대부분(38개 중 35개)은 이미 다른 경로로 고쳐졌거나 이미 `docs/TODO.md`에 추적 중이었지만, `lib/sales.ts`의 `fetchPoints()`에서 이전에 아무도 발견 못 한 별개의 실제 버그를 찾았다. |
+| 원인 | `fetchPoints()`가 `point_transactions`을 오래된 순으로 정렬한 뒤 `.limit(300)`만 걸어서, 센터의 누적 포인트 거래가 300건을 넘으면 **오래된 300건만 가져오고 그 이후 모든 거래(최신 거래 포함)가 조회 자체에서 통째로 빠졌다** — `/manager/sales` "포인트" 탭에 최신 내역이 안 보이는 것은 물론, 남아있는 300건만으로 누적 잔액(`balanceAfter`)을 계산해 잔액 자체도 틀리게 나왔다. `lib/classes.ts`의 `fetchClasses()` 등이 겪었던 것과 정확히 같은 패턴("오름차순 정렬 + 고정 limit → 최신 데이터 누락", PERF-001급). |
+| 수정 | `.limit(300)`을 제거하고 `fetchClasses()`/`fetchReservations()`가 이미 쓰는 `.range()` 페이지 단위 반복 조회(PAGE_SIZE=1000)로 교체 — 센터의 전체 포인트 거래를 빠짐없이 가져온 뒤 누적 잔액을 계산한다. |
+| 검증 | 신규 회귀 테스트 `tests/integration/scenarios/points-history-pagination.test.ts` — 1,050건(옛 300건 한도는 물론 새 페이지 경계 1,000건도 넘김)을 삽입해 전부 반환되고 `balanceAfter`가 삽입 순서대로 정확히 누적되는지 확인. 수정 전 코드로 먼저 실행해 정확히 300건에서 잘리는 것을 재현·확인한 뒤 수정 적용, 재실행으로 PASS 확인(회귀 테스트가 실제로 이 버그를 잡는다는 것을 직접 증명함). |
+| 근거 파일 | `lib/sales.ts`(`fetchPoints`), `tests/integration/scenarios/points-history-pagination.test.ts`(신규) |
+
 ### P2-45. (2026-09-19 Chrome QA에서 발견, 2026-09-19 Web QA P2 Fix Batch에서 수정 완료) `/manager/sales` 상단 "총 매출"과 "결제수단별" 카드 합계가 환불 존재 시 항상 불일치
 
 | 필드 | 내용 |
