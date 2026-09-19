@@ -8,7 +8,10 @@ export default function PrivacyPolicyPage() {
       </div>
 
       <div className="legal-page">
-        <div className="legal-updated">시행일: 2026년 9월 2일</div>
+        <div className="legal-updated">
+          공지일: 2026년 9월 20일<br />
+          시행일: 2026년 9월 27일
+        </div>
 
         <p>
           손장욱(이하 "회사")이 운영하는 "모하빗"(이하 "서비스")은 「개인정보
