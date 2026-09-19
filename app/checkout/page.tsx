@@ -158,8 +158,12 @@ function CheckoutContent() {
 
   // 이 상품에 지금 실제로 쓸 수 있는 회원 쿠폰만 조회(요청 15번 "쿠폰 선택 UI는 usable
   // 쿠폰이 있을 때만"). 비로그인/쿠폰 없음이면 조용히 빈 목록 — 화면 자체는 그대로 진행.
+  // 수강권/상품별 "쿠폰 적용 불가" 옵션(add_product_coupon_eligibility.sql) — 이 상품이
+  // couponEligible=false면 조회 자체를 안 한다(UI에 아예 안 보여줌). 실제 자격은 어차피
+  // 결제 확정 RPC가 다시 막지만(_issue_membership_and_record_payment), 여기서 먼저
+  // 걸러야 "쓸 수 없는 쿠폰을 굳이 보여줬다가 결제 시점에 막히는" 혼란을 안 준다.
   useEffect(() => {
-    if (!product) { setApplicableCoupons([]); return; }
+    if (!product || !product.couponEligible) { setApplicableCoupons([]); return; }
     let mounted = true;
     fetchApplicableCoupons(product.id, product.price)
       .then((list) => { if (mounted) setApplicableCoupons(list); })

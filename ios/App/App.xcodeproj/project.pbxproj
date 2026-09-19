@@ -31,6 +31,7 @@
 		271FCF3488F84FD4A16D572F /* SafeAreaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29EF193E7D19F31DB980F085 /* SafeAreaTests.swift */; };
 		3E5C6184B1EEAE576EEB8643 /* SearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAD19AB790FEB8A05889A4B0 /* SearchTests.swift */; };
 		9365625BF316FEAFD3CDCA8C /* ManagerModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F30510D158416E3EA40BC56 /* ManagerModeTests.swift */; };
+		E6CDC106E39D095CCBDB8839 /* ReservationSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE595EFBE9847E2F2C37492 /* ReservationSmokeTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +70,7 @@
 		29EF193E7D19F31DB980F085 /* SafeAreaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeAreaTests.swift; sourceTree = "<group>"; };
 		DAD19AB790FEB8A05889A4B0 /* SearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchTests.swift; sourceTree = "<group>"; };
 		1F30510D158416E3EA40BC56 /* ManagerModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagerModeTests.swift; sourceTree = "<group>"; };
+		CBE595EFBE9847E2F2C37492 /* ReservationSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReservationSmokeTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -121,6 +123,7 @@
 				29EF193E7D19F31DB980F085 /* SafeAreaTests.swift */,
 				DAD19AB790FEB8A05889A4B0 /* SearchTests.swift */,
 				1F30510D158416E3EA40BC56 /* ManagerModeTests.swift */,
+				CBE595EFBE9847E2F2C37492 /* ReservationSmokeTests.swift */,
 			);
 			path = AppUITests;
 			sourceTree = "<group>";
@@ -286,6 +289,7 @@
 				271FCF3488F84FD4A16D572F /* SafeAreaTests.swift in Sources */,
 				3E5C6184B1EEAE576EEB8643 /* SearchTests.swift in Sources */,
 				9365625BF316FEAFD3CDCA8C /* ManagerModeTests.swift in Sources */,
+				E6CDC106E39D095CCBDB8839 /* ReservationSmokeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

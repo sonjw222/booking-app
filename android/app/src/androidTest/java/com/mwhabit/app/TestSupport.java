@@ -101,4 +101,74 @@ final class TestSupport {
             return false;
         }
     }
+
+    // Android Runtime QA Repair(2026-09-19) — 고정 Thread.sleep 뒤 한 번만 확인하는
+    // 대신 폴링한다. 실기기(SM-T975N)로 실측: 검색처럼 실제 네트워크 왕복(Supabase
+    // 쿼리)이 끝나야 결과가 그려지는 화면은, 고정 2초 뒤 딱 한 번 조회하는 시점에 아직
+    // 응답이 안 와 있으면 findElement의 Atom 평가 자체가 일시적으로 실패한다("Atom
+    // evaluation returned null" — WebView가 요청 중간 상태라 JS 브릿지 평가가 잠깐
+    // 불안정한 것, 셀렉터가 잘못됐다는 뜻이 아님). 셀렉터/검증 기준을 느슨하게 풀지
+    // 않고, 짧은 간격으로 재시도해 "그 순간 마침 준비 안 됨"으로 인한 flaky 실패만
+    // 줄인다 — 결과가 timeoutMs 안에 끝내 안 나타나면 여전히 false(실패 처리)다.
+    static boolean waitForAnyElement(long timeoutMs, String... cssSelectors) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        do {
+            for (String sel : cssSelectors) {
+                if (webElementExists(sel)) return true;
+            }
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        } while (System.currentTimeMillis() < deadline);
+        return false;
+    }
+
+    // Android Runtime QA Repair(2026-09-19) — 회원 nav는 뷰포트 breakpoint에 따라 두
+    // 컨테이너가 DOM엔 항상 둘 다 있고 CSS display:none으로 한쪽만 보인다
+    // (app/globals.css "Responsive workspace shell", app/components/BottomNav.tsx):
+    //   - <768px: .bottom-nav 안의 a.nav-item[href=...]
+    //   - >=768px(태블릿 rail/데스크톱 사이드바): .member-desktop-nav 또는
+    //     .workspace-sidebar 안의 a.desktop-nav-item[href=...] (둘 다 같은 클래스명 재사용)
+    // 실기기(예: SM-T975N, 태블릿 rail 폭)에서 mobile 쪽 selector로 findElement는
+    // 성공하지만(DOM엔 존재) webClick()은 WebDriver 표준 동작대로 "안 보이는 엘리먼트"
+    // 예외(status 11)를 던진다 — 그래서 정확한 px 값을 여기 하드코딩해 CSS breakpoint와
+    // 따로 판단하지 않는다(그 값이 CSS와 어긋나면 다시 깨짐). 대신 실제로 클릭이 먹히는
+    // 쪽을 순서대로 시도한다 — 이게 "지금 실제로 보이는" 엘리먼트라는 뜻이다.
+    static void clickFirstVisible(String... cssSelectors) {
+        Throwable last = null;
+        for (String sel : cssSelectors) {
+            try {
+                onWebView().withElement(findElement(Locator.CSS_SELECTOR, sel)).perform(webClick());
+                return;
+            } catch (Throwable t) {
+                last = t;
+            }
+        }
+        throw new AssertionError(
+            "다음 selector 중 실제로 보이면서 클릭 가능한 엘리먼트를 찾지 못함: " + String.join(", ", cssSelectors),
+            last
+        );
+    }
+
+    // 회원 nav 탭(홈/예약/내예약/알림/마이)을 breakpoint와 무관하게 클릭한다 — mobile
+    // bottom-nav와 tablet/desktop rail 두 selector를 순서대로 시도.
+    static void clickNavTab(String href) {
+        clickFirstVisible(
+            "a.nav-item[href='" + href + "']",
+            "a.desktop-nav-item[href='" + href + "']"
+        );
+    }
+
+    // "이 nav 탭이 지금 화면에 있는가"(예: NAV-001 조건부 노출 확인용) — mobile/desktop
+    // 두 selector 중 하나라도 DOM에 있으면 그 탭 자체는 노출된 것이다(두 nav 컨테이너
+    // 모두 같은 조건(showMembershipTabs)으로 렌더링되므로, 조건부로 아예 렌더링 안 된
+    // 경우엔 두 selector 모두 존재하지 않는다 — CSS breakpoint로 "안 보이기만" 하는
+    // 경우와는 구분된다).
+    static boolean navTabAvailable(String href) {
+        return webElementExists("a.nav-item[href='" + href + "']")
+            || webElementExists("a.desktop-nav-item[href='" + href + "']");
+    }
 }

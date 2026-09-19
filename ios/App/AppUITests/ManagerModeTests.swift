@@ -18,7 +18,7 @@ final class ManagerModeTests: XCTestCase {
             throw XCTSkip("TEST_MANAGER_A_EMAIL/PASSWORD가 설정되지 않아 건너뜀 — docs/AUTOMATED_QA.md 참고")
         }
         let app = XCUIApplication()
-        app.launch()
+        app.launchForUITesting()
         loginWithEmail(app, email: TestAccount.managerAEmail!, password: TestAccount.managerAPassword!)
 
         // 로그인 성공 시 handleLogin()이 window.location.href = "/"로 이동 — 홈 화면이

@@ -339,23 +339,33 @@ export default function CouponsPage() {
               </label>
             </div>
 
-            {cAppliesTo === "selected" && (
-              <div className="mem-filters" style={{ padding: "8px 0 0", flexWrap: "wrap" }}>
-                {products.length === 0 ? (
-                  <div className="perm-guide">먼저 수강권 관리에서 상품을 만들어주세요.</div>
-                ) : (
-                  products.map((p) => (
-                    <button
-                      key={p.id} type="button"
-                      className={`filter-chip ${cProductIds.includes(p.id) ? "on" : ""}`}
-                      onClick={() => setCProductIds((prev) => prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id])}
-                    >
-                      {p.name}
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
+            {cAppliesTo === "selected" && (() => {
+              // 상품 자체가 "쿠폰 적용 불가"(add_product_coupon_eligibility.sql)면 여기서
+              // 골라도 결제 시점에 서버가 항상 막으므로, 애초에 고를 수 없게 목록에서
+              // 뺀다 — 매니저가 골랐다가 나중에 "왜 안 되지" 하는 혼란을 미리 없앤다.
+              const eligibleProducts = products.filter((p) => p.couponEligible);
+              return (
+                <div className="mem-filters" style={{ padding: "8px 0 0", flexWrap: "wrap" }}>
+                  {eligibleProducts.length === 0 ? (
+                    <div className="perm-guide">
+                      {products.length === 0
+                        ? "먼저 수강권 관리에서 상품을 만들어주세요."
+                        : "쿠폰 적용 가능한 상품이 없어요(전부 '쿠폰 적용 불가'로 설정됨 — 수강권 관리에서 바꿀 수 있어요)."}
+                    </div>
+                  ) : (
+                    eligibleProducts.map((p) => (
+                      <button
+                        key={p.id} type="button"
+                        className={`filter-chip ${cProductIds.includes(p.id) ? "on" : ""}`}
+                        onClick={() => setCProductIds((prev) => prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id])}
+                      >
+                        {p.name}
+                      </button>
+                    ))
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={resetSheet}>취소</button>

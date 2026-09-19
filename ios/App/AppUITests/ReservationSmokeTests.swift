@@ -5,7 +5,7 @@ import XCTest
   business scenario 매핑.
 
   전체 예약/취소/대기승격 로직(SCN-P0-03/04/20~25 등)은 이미 Shared(Layer A,
-  tests/integration/scenarios/*.test.ts)가 실제 RPC로 전부 원자성 있게 검증했다 — 이
+  tests/integration/scenarios/ 안의 *.test.ts 파일들)가 실제 RPC로 전부 원자성 있게 검증했다 — 이
   파일은 그걸 UI에서 "다시" 증명하지 않는다(요청 원칙: "모든 business scenario를
   플랫폼별로 재구현하지 않는다"). 대신 "회원이 실제로 예약 화면까지 도달해서 예약/대기
   액션 버튼을 볼 수 있는가"라는, Shared 레이어가 검증할 수 없는 딱 한 가지(실제 WebView
@@ -26,7 +26,7 @@ final class ReservationSmokeTests: XCTestCase {
             throw XCTSkip("TEST_USER_A_EMAIL/PASSWORD가 설정되지 않아 건너뜀 — docs/AUTOMATED_QA.md 참고")
         }
         let app = XCUIApplication()
-        app.launch()
+        app.launchForUITesting()
         loginWithEmail(app, email: TestAccount.userAEmail!, password: TestAccount.userAPassword!)
         assertExists(app.webViews.staticTexts["오늘은 어떤 움직임을 찾나요?"], "로그인 후 홈 화면 복귀")
 
