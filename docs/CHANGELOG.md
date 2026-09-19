@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2026-09-19 — Web QA P2 Fix Batch: 매출 표시 불일치(P2-45) 수정
+
+Chrome QA에서 확인된 `/manager/sales` "총 매출" vs "결제수단별" 합계 불일치를 수정했다.
+근본 원인은 `registerPayment()`가 환불(`sale_type='refund'`)일 때 `total_amount`만
+음수로 저장하고 `card_amount`/`cash_amount`/`transfer_amount`/`point_amount`는 계속
+양수로 저장해온 것 — `summarize()`의 byMethod 합계가 환불을 반영하지 못했다. 이 4개
+컬럼도 이제 `total_amount`와 같은 부호로 저장한다(기존 데이터는 `fix_payments_refund_method_amounts_sign.sql` 백필 필요). 추가로 `fetchPayments()`가
+`manager_dashboard_summary()` RPC와 다르게 mock 결제를 제외하지 않고 날짜 하한도
+KST 기준이 아니었던 것도 함께 맞춰, `/manager/sales`와 `/manager` 홈 대시보드의 같은
+기간 매출 총액이 이제 일치한다(라이브로 7,480,000원 일치 확인). 회귀 테스트
+`sales-refund-consistency.test.ts` 추가. 같은 QA에서 나온 P2-44(사이드바 문구 클리핑)는
+재조사 결과 production 버그가 아님(Next.js dev 모드 전용 인디케이터와의 우연한 겹침)으로
+확인돼 코드 변경 없음 — 대신 Playwright `responsive-breakpoints.spec.ts`로 767/768,
+1279/1280, 1359/1360 breakpoint 경계와 사이드바 문구 비-클리핑을 자동 회귀 검증하게 했다.
+
 ## 2026-09-19 — 수강권/상품별 "쿠폰 적용 불가" 옵션
 
 매니저가 수강권(`app/manager/membership-rules`)이나 상품(`app/manager/goods`)을 만들거나

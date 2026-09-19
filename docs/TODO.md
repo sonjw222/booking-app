@@ -1373,6 +1373,25 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
+### P2-45. (2026-09-19 Chrome QA에서 발견, 2026-09-19 Web QA P2 Fix Batch에서 수정 완료) `/manager/sales` 상단 "총 매출"과 "결제수단별" 카드 합계가 환불 존재 시 항상 불일치
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 → **수정 완료** |
+| 원래 진단(정정됨) | Chrome QA 1차 패스에선 "환불 레코드가 card_amount 등을 전부 0으로 저장한다"고 봤으나, fix batch에서 실제 코드(`registerPayment()`)를 다시 보니 그 함수 경로는 환불이어도 카드/현금 등을 **양수 그대로** 저장하고 `total_amount`만 음수로 저장하는 게 진짜 원인이었다(둘 다 "byMethod가 환불을 반영 못 함"이라는 결과는 같지만 원인 코드 경로가 다름 — 원래 관찰한 "card_amount=0" 행은 이 화면과 무관한 다른 경로/과거 데이터였던 것으로 보임). 추가로 `fetchPayments()`가 `manager_dashboard_summary()` RPC와 달리 mock 결제(`payment_provider='mock'`)를 제외하지 않고, 날짜 하한도 KST 자정이 아닌 UTC 자정 기준이라, `/manager/sales`(총 매출)와 `/manager` 홈 대시보드(이번 달 매출)가 같은 기간인데도 서로 다른 총액을 보여주는 **별개의 두 번째 원인**도 있었다(실측: 90,000원 차이, 수정 후 라이브 재확인으로 두 화면이 7,480,000원으로 정확히 일치함을 확인). |
+| 수정 내용 | (1) `lib/sales.ts`의 `registerPayment()` — 환불 시 `card_amount/cash_amount/transfer_amount/point_amount`도 `total_amount`와 같은 부호(음수)로 저장하도록 수정. (2) `fetchPayments()` — mock 결제 제외(단순 `.neq()`는 NULL 행까지 걸러내는 버그가 있어 `.or("payment_provider.is.null,payment_provider.neq.mock")`로 수정) + 날짜 하한을 KST 자정 기준으로 수정. (3) 기존에 이미 저장된 과거 환불 건은 코드 수정만으로는 안 고쳐지므로 백필 SQL(`fix_payments_refund_method_amounts_sign.sql`) 별도 작성 — **사용자가 Supabase에서 직접 실행해야 적용됨**. (4) 회귀 테스트 `tests/integration/scenarios/sales-refund-consistency.test.ts` 신규 추가(2/2 PASS). |
+| 남은 제약 | `refund_membership()`(회원 앱 자체 환불, SQL RPC) 경로는 이번 배치에서 안 건드림 — 그 경로는 애초에 card/cash 등을 전부 0으로 저장해(registerPayment()의 버그와는 다른, 그래도 여전히 "byMethod가 환불 반영 못 함"이라는 동일 부류의 제약) 별도 후속 조사가 필요하면 그때 다룰 것. |
+| 근거 파일 | `lib/sales.ts`(`registerPayment`, `fetchPayments`), `fix_payments_refund_method_amounts_sign.sql`(백필, 미실행 시 과거 환불 건만 계속 어긋나 보임), `tests/integration/scenarios/sales-refund-consistency.test.ts` |
+
+### P2-44. (2026-09-19 Chrome QA에서 발견, 2026-09-19 Web QA P2 Fix Batch에서 "실제 버그 아님"으로 재분류) 회원 모드 데스크톱(1360px+) 사이드바 하단 안내 문구가 프로필 아바타에 가려 잘려 보임
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | ~~P3~P2~~ → **재분류: production 버그 아님, 수정 불필요** |
+| 재조사 결과 | fix batch에서 production 빌드(`npm run build && npm run start`)로 같은 화면(1440px)을 다시 확인하니 안내 문구(`.desktop-nav-note`)가 전혀 잘리지 않고 완전하게 렌더링됐다. QA 1차 패스에서 겹쳐 보였던 좌하단 "N" 원형 배지는 **Next.js 개발 모드(`next dev`) 전용 dev-tools 인디케이터**였다 — `next.config.ts`에 `devIndicators` 커스터마이즈가 없어 기본 동작(개발 모드에서만 노출, production 빌드/배포에는 절대 안 나타남) 그대로였다. 즉 QA가 `next dev`로 떠 있던 서버를 대상으로 했기 때문에 생긴 착시였고, 실사용자가 보는 production 화면에는 이 겹침이 아예 존재하지 않는다. |
+| 처리 | production 코드/CSS 변경 없음(문제가 없으므로). 대신 이 재조사 결과 자체를 회귀로 남기기 위해 Playwright 스펙 `tests/e2e/production-readiness/responsive-breakpoints.spec.ts`에 `.desktop-nav-note`가 자체적으로(내부 scrollWidth/Height 기준) 텍스트를 잘라내지 않는지 확인하는 테스트를 추가함(767/768, 1279/1280, 1359/1360 breakpoint 경계 자동 검증과 함께 — 전체 11개 PASS). |
+| 근거 | production 서버(포트 3002, `npm run start`) 스크린샷으로 재현 확인(`.desktop-nav-note`가 잘림 없이 "태블릿과 데스크톱에서는 더 넓은 화면으로 편하게 탐색할 수 있어요." 전체 노출), `next.config.ts` 확인(devIndicators 커스텀 설정 없음 = 기본값 = dev 전용). |
+
 ### P2-43. (신규, 2026-09-19) `.search-go` 버튼 — espresso-web webClick()이 이 버튼 하나에서만 React onClick을 못 띄우는 원인 미확정
 
 | 필드 | 내용 |
