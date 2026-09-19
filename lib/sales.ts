@@ -87,8 +87,20 @@ const KST_DATETIME = new Intl.DateTimeFormat("ko-KR", {
 export async function registerPayment(p: PaymentInput): Promise<void> {
   const total =
     p.cardAmount + p.cashAmount + p.transferAmount + p.pointAmount;
+  const isRefund = p.saleType === "refund";
   // 환불이면 합계를 음수로 저장 (매출 집계에서 자동 차감됨)
-  const signedTotal = p.saleType === "refund" ? -Math.abs(total) : total;
+  const signedTotal = isRefund ? -Math.abs(total) : total;
+  // P2-45 fix(2026-09-19): 환불이어도 이 4개 컬럼엔 그동안 양수 그대로 저장돼
+  // "결제수단별" 합계(summarize()의 byMethod, manager_dashboard_summary RPC의
+  // byMethod 둘 다 이 컬럼들을 그대로 SUM)가 환불을 전혀 반영하지 못했다(총
+  // 매출은 total_amount가 이미 음수라 정상, 결제수단별만 어긋남 — QA P2-45).
+  // total_amount와 동일한 부호 규칙을 적용해 SUM(card_amount) 등이 자동으로
+  // 환불을 차감하도록 한다.
+  const sign = isRefund ? -1 : 1;
+  const signedCard = sign * Math.abs(p.cardAmount);
+  const signedCash = sign * Math.abs(p.cashAmount);
+  const signedTransfer = sign * Math.abs(p.transferAmount);
+  const signedPoint = sign * Math.abs(p.pointAmount);
 
   // 상품이 선택됐고 환불이 아니면 → 수강권(memberships) 새로 발급
   let membershipId = p.membershipId ?? null;
@@ -140,10 +152,10 @@ export async function registerPayment(p: PaymentInput): Promise<void> {
     membership_id: membershipId,
     sale_type: p.saleType,
     revenue_category: "membership",
-    card_amount: p.cardAmount,
-    cash_amount: p.cashAmount,
-    transfer_amount: p.transferAmount,
-    point_amount: p.pointAmount,
+    card_amount: signedCard,
+    cash_amount: signedCash,
+    transfer_amount: signedTransfer,
+    point_amount: signedPoint,
     total_amount: signedTotal,
     unpaid_amount: p.unpaidAmount,
     trainer_account_id: p.trainerAccountId ?? null,
@@ -271,7 +283,23 @@ export async function fetchPayments(
       memberships(product_name)
     `)
     .eq("center_id", centerId)
-    .gte("paid_at", fromDate)
+    // P2-45 fix(2026-09-19): 아래 두 조건 모두 manager_dashboard_summary() RPC
+    // (add_manager_dashboard_summary_draft_proposed.sql)와 기준을 맞춘 것 —
+    // 이전엔 여기(클라이언트 집계)만 기준이 달라 같은 기간의 "총 매출"이
+    // 홈 대시보드의 "이번 달 매출"과 어긋났다(QA P2-45).
+    // (1) mock 결제(payment_provider='mock', 결제 테스트 전용) 제외 — RPC는
+    //     원래부터 제외해왔는데 여기만 빠져 있었다. payment_provider는 대부분의
+    //     실결제에서 NULL이라(직접 확인) 단순 .neq()를 쓰면 SQL 3치 논리상
+    //     "NULL <> 'mock'"이 NULL로 평가돼 정상 결제 행까지 전부 걸러진다
+    //     (실제로 이 버그로 결제 내역이 통째로 사라지는 걸 재현·확인함) — RPC의
+    //     "is distinct from" 의미를 PostgREST에서 그대로 살리려면 NULL 허용을
+    //     명시해야 한다.
+    .or("payment_provider.is.null,payment_provider.neq.mock")
+    // (2) 하한을 KST 자정 기준으로 명시 — 기존엔 순수 날짜 문자열이라 timestamptz
+    //     비교 시 UTC 자정으로 해석돼, KST 00:00~09:00 사이에 발생한 결제가 하루
+    //     앞당겨져(그 날짜 조회에서 누락) 집계됐다. 상한은 원래부터 "+09:00"이
+    //     붙어 있어 문제없었다(하한만 짝이 안 맞았음).
+    .gte("paid_at", fromDate + "T00:00:00+09:00")
     .lte("paid_at", toDate + "T23:59:59+09:00")
     .order("paid_at", { ascending: false });
   if (error) throw new Error("매출 내역을 불러오지 못했어요: " + error.message);
