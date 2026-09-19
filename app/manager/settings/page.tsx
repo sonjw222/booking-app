@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../lib/managerCenterSelection";
 
 /*
   매니저 - 센터 운영 설정 (17항목)
@@ -11,6 +12,7 @@ import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../../lib/settings";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { useUnsavedChanges, confirmDiscardChanges } from "../../../lib/useUnsavedChanges";
 
 const SLOT_UNITS: { value: string; label: string }[] = [
   { value: "hour", label: "정시" },
@@ -23,11 +25,12 @@ const SLOT_UNITS: { value: string; label: string }[] = [
 
 export default function SettingsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [centerId, setCenterId] = useState<string | null>(null);
+  const [centerId, setCenterId] = useCenterSelection();
   const [s, setS] = useState<CenterSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
+  useUnsavedChanges(dirty);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
@@ -39,7 +42,7 @@ export default function SettingsPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(preferredCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
@@ -79,7 +82,7 @@ export default function SettingsPage() {
   }
 
   async function handleSave() {
-    if (!centerId || !s) return;
+    if (!centerId || !s || busy || !canSave) return;
     setBusy(true);
     try {
       await saveSettings(centerId, s);
@@ -143,7 +146,7 @@ export default function SettingsPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button key={c.id} disabled={busy} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={async () => { if (await confirmDiscardChanges()) setCenterId(c.id); }}>
               {c.name}
             </button>
           ))}

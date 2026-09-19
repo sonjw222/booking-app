@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../lib/managerCenterSelection";
 
 /*
   매니저 - 스태프 & 권한 관리
@@ -24,7 +25,7 @@ type Tab = "staff" | "perm";
 
 export default function StaffPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [centerId, setCenterId] = useState<string | null>(null);
+  const [centerId, setCenterId] = useCenterSelection();
   const [tab, setTab] = useState<Tab>("staff");
 
   const [roles, setRoles] = useState<Role[]>([]);
@@ -59,7 +60,7 @@ export default function StaffPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(preferredCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();

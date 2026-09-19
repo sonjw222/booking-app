@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../lib/managerCenterSelection";
 
 /*
   매니저 - 상담고객(leads) 관리 — P1-8
@@ -26,7 +27,7 @@ const STATUS_FILTERS: { key: LeadStatus | "all"; label: string }[] = [
 
 export default function LeadsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [centerId, setCenterId] = useState<string | null>(null);
+  const [centerId, setCenterId] = useCenterSelection();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [filter, setFilter] = useState<LeadStatus | "all">("all");
   const [loading, setLoading] = useState(true);
@@ -48,7 +49,7 @@ export default function LeadsPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(preferredCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();

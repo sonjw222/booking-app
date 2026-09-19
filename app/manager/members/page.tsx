@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../lib/managerCenterSelection";
 
 /*
   매니저 - 회원 관리 화면
@@ -9,6 +10,7 @@
 
 import { Suspense, useCallback, useEffect, useState, useRef } from "react";
 import Loading from "../../components/Loading";
+import { filterMemberWorklist, type MemberWorklist } from "../../../lib/memberWorklist";
 import { useSearchParams } from "next/navigation";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
@@ -66,8 +68,10 @@ export default function MembersPage() {
 
 function MembersContent() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [centerId, setCenterId] = useState<string | null>(null);
+  const [centerId, setCenterId] = useCenterSelection();
   const [members, setMembers] = useState<CenterMember[]>([]);
+  const [worklist, setWorklist] = useState<MemberWorklist>("all");
+  const visibleMembers = filterMemberWorklist(members, worklist);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [loading, setLoading] = useState(true);
   // 릴리스 폴리시 배치 8차(2026-09-17), 3-7 검색 성능 감사 결과: 예전엔 keystroke마다
@@ -221,7 +225,7 @@ function MembersContent() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(preferredCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
@@ -262,7 +266,11 @@ function MembersContent() {
 
   // 센터 전환 시 "처음 선택"과 동일하게 다시 풀스크린 로딩부터 보여준다(다른 센터
   // 데이터이므로 이전 목록을 그대로 유지하면 오히려 혼란).
-  useEffect(() => { hasLoadedRef.current = false; }, [centerId]);
+  useEffect(() => {
+    hasLoadedRef.current = false;
+    requestSeqRef.current += 1;
+    setDetail(null); setAlimtalkTargets(null); setGrantTarget(null); setMembers([]);
+  }, [centerId]);
 
   // 릴리스 폴리시 배치 8차(2026-09-17), 3-7 검색 성능 개선 — 감사 결과 실제 병목은
   // "등급/상태 필터 클릭까지 keyword와 똑같이 300ms 지연됨" + "매 keystroke마다 전체
@@ -321,6 +329,11 @@ function MembersContent() {
 
   // URL ?profile=<profileId> 로 들어오면 그 회원 상세를 자동으로 열기 (1회)
   const searchParams = useSearchParams();
+  useEffect(() => {
+    const value = searchParams.get("worklist");
+    if (["all", "expiring", "low_balance", "inactive"].includes(value ?? "")) setWorklist(value as MemberWorklist);
+  }, [searchParams]);
+  useEffect(() => { setSelectedIds(new Set()); }, [centerId, keyword, gradeFilter, statusFilter, searchField, worklist]);
   const autoOpened = useRef(false);
   useEffect(() => {
     if (autoOpened.current) return;
@@ -408,7 +421,7 @@ function MembersContent() {
     if (csvCols.length === 0) { setError("내보낼 항목을 1개 이상 선택해주세요"); return; }
     // customer.member.phone 권한이 없으면 체크박스로 골랐어도 전화번호 컬럼은 제외 (방어적 이중 확인)
     const safeCols = canViewPhone ? csvCols : csvCols.filter((c) => c !== "phone");
-    const csv = membersToCsv(members, safeCols);
+    const csv = membersToCsv(visibleMembers, safeCols);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -418,7 +431,7 @@ function MembersContent() {
     a.click();
     URL.revokeObjectURL(url);
     setCsvSheet(false);
-    showToast(`${members.length}명을 내보냈어요`);
+    showToast(`${visibleMembers.length}명을 내보냈어요`);
   }
 
   function toggleSelectMode() {
@@ -437,7 +450,7 @@ function MembersContent() {
   // members는 이미 등급/상태/검색 필터가 적용된 결과라, "전체 선택"이 곧 "필터링된
   // 회원 전체 선택"이다 — 별도의 "필터 결과에 발송" 경로를 안 만들어도 된다.
   function selectAllFiltered() {
-    setSelectedIds(new Set(members.map((m) => m.id)));
+    setSelectedIds(new Set(visibleMembers.map((m) => m.id)));
   }
 
   function deselectAll() {
@@ -445,7 +458,7 @@ function MembersContent() {
   }
 
   function openAlimtalkForSelected() {
-    const targets = members.filter((m) => selectedIds.has(m.id));
+    const targets = visibleMembers.filter((m) => selectedIds.has(m.id));
     if (targets.length === 0) return;
     setAlimtalkBlocks(emptyAlimtalkBlocks());
     setAlimtalkTargets(targets);
@@ -608,8 +621,14 @@ function MembersContent() {
         수강권을 구매한 사람만 회원으로 표시돼요. 횟수 소진·기간 만료는 '만료', 휴면 처리 시 기간권 시간이 정지돼요.
       </div>
 
+      <div className="workflow-toolbar">
+        <label>업무 보기<select className="input-field" value={worklist} onChange={(e) => setWorklist(e.target.value as MemberWorklist)}><option value="all">전체 회원</option><option value="expiring">7일 내 만료</option><option value="low_balance">잔여 2회 이하</option><option value="inactive">30일 이상 출석 없음</option></select></label>
+        <button className="outline-action" onClick={() => { try { localStorage.setItem(`member-worklist:${centerId}`, worklist); showToast("현재 업무 보기를 저장했어요"); } catch { showToast("이 브라우저에서는 저장할 수 없어요"); } }}>보기 저장</button>
+        <button className="outline-action" onClick={() => { try { const saved = localStorage.getItem(`member-worklist:${centerId}`); if (["all", "expiring", "low_balance", "inactive"].includes(saved ?? "")) setWorklist(saved as MemberWorklist); else showToast("저장된 보기가 없어요"); } catch { showToast("저장된 보기를 읽지 못했어요"); } }}>저장한 보기</button>
+      </div>
+      {members.length >= 2000 && <p className="perm-guide" role="status">조회 상한 2,000명에 도달했습니다. 검색·등급·상태 조건으로 범위를 줄여주세요. 선택과 내보내기는 현재 조회된 회원만 포함합니다.</p>}
       <div className="mem-toolbar">
-        <span className="mem-count">전체 {members.length}명{listSearching && <span className="mem-searching"> · 검색 중…</span>}</span>
+        <span className="mem-count">검색 결과 {visibleMembers.length}명{listSearching && <span className="mem-searching"> · 검색 중…</span>}</span>
         <div className="mem-tools member-toolbar-actions">
           <button className="quiet-action" disabled={busy} onClick={handleSync} title="예약 이력은 있지만 아직 회원 목록에 없는 사람을 찾아 등록해요">예약자 동기화</button>
           <button className={`quiet-action ${selectMode ? "on" : ""}`} onClick={toggleSelectMode}>
@@ -623,12 +642,12 @@ function MembersContent() {
 
       {selectMode && (
         <div className="mem-toolbar">
-          <span className="mem-count">{selectedIds.size}/{members.length}명 선택됨 (현재 필터 기준)</span>
+          <span className="mem-count">{selectedIds.size}/{visibleMembers.length}명 선택됨 · 조건을 바꾸면 선택이 해제됩니다</span>
           <div className="mem-tools member-toolbar-actions">
-            {selectedIds.size === members.length && members.length > 0 ? (
+            {selectedIds.size === visibleMembers.length && visibleMembers.length > 0 ? (
               <button className="quiet-action" onClick={deselectAll}>전체 해제</button>
             ) : (
-              <button className="quiet-action" disabled={members.length === 0} onClick={selectAllFiltered}>전체 선택</button>
+              <button className="quiet-action" disabled={visibleMembers.length === 0} onClick={selectAllFiltered}>검색 결과 전체 선택</button>
             )}
           </div>
         </div>
@@ -639,8 +658,8 @@ function MembersContent() {
 
       {loading ? (
         <Loading />
-      ) : members.length === 0 ? (
-        statusFilter || keyword.trim() ? (
+      ) : visibleMembers.length === 0 ? (
+        statusFilter || keyword.trim() || worklist !== "all" ? (
           <div className="daylist-empty" style={{ padding: "50px 20px", lineHeight: 1.7 }}>
             {keyword.trim()
               ? "검색 결과가 없어요"
@@ -662,16 +681,16 @@ function MembersContent() {
         )
       ) : (
         <div className="mem-list" style={selectMode && selectedIds.size > 0 ? { paddingBottom: 90 } : undefined}>
-          {members.map((m) => (
-            <button
+          {visibleMembers.map((m) => (
+            <div
               key={m.id}
               className={`mem-row ${selectMode && selectedIds.has(m.id) ? "selected" : ""}`}
-              onClick={() => (selectMode ? toggleSelected(m.id) : openDetail(m))}
             >
               {selectMode && (
                 <input
                   type="checkbox"
                   className="mem-row-check"
+                  aria-label={`${m.name} 선택`}
                   checked={selectedIds.has(m.id)}
                   onChange={() => toggleSelected(m.id)}
                   onClick={(e) => e.stopPropagation()}
@@ -679,7 +698,7 @@ function MembersContent() {
               )}
               <div className="mem-main">
                 <div className="mem-name-line">
-                  <span className="mem-name">{m.name}</span>
+                  <button type="button" className="member-name-action mem-name" onClick={() => selectMode ? toggleSelected(m.id) : openDetail(m)}>{m.name}</button>
                   {m.gradeName && (
                     <span className="grade-badge" style={{ background: m.gradeColor ? m.gradeColor + "22" : "var(--surface)", color: m.gradeColor ?? "var(--text-dim)" }}>
                       {m.gradeName}
@@ -689,14 +708,12 @@ function MembersContent() {
                   {m.status === "dormant" && <span className="mem-status-badge dormant">휴면</span>}
                   {m.status === "expired" && <span className="mem-status-badge expired">만료</span>}
                 </div>
-                <div className="mem-sub">
-                  {m.phone ?? "번호 없음"}
-                  {m.passName && ` · ${m.passName}`}
-                  {m.remainingCount != null && ` (${m.remainingCount}회)`}
-                </div>
+                <div className="mem-sub member-contact"><small>연락처</small>{m.phone ?? "번호 없음"}</div>
+                <div className="mem-sub member-pass"><small>수강권</small>{m.passName ?? "수강권 없음"}</div>
+                <div className="member-work-details"><span><small>만료일</small>{m.expiresAt ? m.expiresAt.slice(0, 10) : "없음"}</span><span><small>잔여 횟수</small>{!m.hasPass ? "—" : m.remainingCount == null ? "제한 없음" : `${m.remainingCount}회`}</span><span><small>최근 출석</small>{m.lastAttendedAt ? m.lastAttendedAt.slice(0, 10) : "기록 없음"}</span></div>
               </div>
-              {!selectMode && <span className="chevron">›</span>}
-            </button>
+              {!selectMode && <button type="button" className="outline-action" onClick={() => openDetail(m)} aria-label={`${m.name} 회원 상세`}>상세</button>}
+            </div>
           ))}
         </div>
       )}
@@ -1014,7 +1031,7 @@ function MembersContent() {
 
             <div className="add-profile-actions csv-export-actions">
               <button className="ghost-btn" onClick={() => setCsvSheet(false)}>취소</button>
-              <button className="primary-btn" onClick={handleCsvDownload}>{members.length}명 내보내기</button>
+              <button className="primary-btn" onClick={handleCsvDownload}>{visibleMembers.length}명 내보내기</button>
             </div>
           </div>
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import UiIcon, { type IconName } from "./UiIcon";
 import { replaceTabNavigation } from "../../lib/navState";
 
@@ -18,9 +19,12 @@ const ITEMS: Array<{ href: string; label: string; icon: IconName }> = [
 
 export default function AdminNav() {
   const pathname = usePathname();
+  const [pinned, setPinned] = useState(false);
+  useEffect(() => { try { setPinned(localStorage.getItem("admin_sidebar_pinned") === "1"); } catch { /* optional preference */ } }, []);
   const active = (href: string) => href === "/admin" ? pathname === href : pathname.startsWith(href);
   return (
-    <aside className="workspace-sidebar admin-sidebar" aria-label="플랫폼 운영 메뉴">
+    <aside className={`workspace-sidebar admin-sidebar ${pinned ? "is-pinned" : ""}`} aria-label="플랫폼 운영 메뉴">
+      <button type="button" className="sidebar-pin" aria-label={pinned ? "메뉴 접기" : "메뉴 펼쳐 고정"} aria-expanded={pinned} onClick={() => { const next = !pinned; setPinned(next); try { localStorage.setItem("admin_sidebar_pinned", next ? "1" : "0"); } catch { /* optional preference */ } }}>{pinned ? "메뉴 접기" : "☰"}</button>
       <a className="desktop-brand" href="/admin">
         <span className="desktop-brand-mark"><UiIcon name="shield" size={20} /></span>
         <span><b>모하빗</b><small>플랫폼 운영</small></span>

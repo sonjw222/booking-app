@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../lib/managerCenterSelection";
 
 /*
   수업 관리 화면 (매니저용)
@@ -37,6 +38,7 @@ import { fetchStaff, fetchMyEffectivePermissionKeys, canSeeManagerMenu, type Sta
 import { fetchClassMemos, createClassMemo, updateClassMemo, deleteClassMemo, type ScheduleMemo } from "../../../lib/scheduleMemos";
 import { getMyAccountId } from "../../../lib/authAccount";
 import { formatMonthDayWeekday } from "../../../lib/kst";
+import { monthCalendarRange, weekDates } from "../../../lib/calendarRange";
 import { fetchMemberDetail, type MemberDetailData } from "../../../lib/members";
 import {
   fetchProducts, fetchRulesForProducts, findScheduleExcludedProducts, ruleToText,
@@ -60,7 +62,7 @@ const EMPTY: ClassInput = { title: "", description: "", date: "", start: "10:00"
 export default function ClassManagePage() {
   const nowD = new Date();
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [activeCenterId, setActiveCenterId] = useState<string | null>(null);
+  const [activeCenterId, setActiveCenterId] = useCenterSelection();
   const [classes, setClasses] = useState<ManagedClass[]>([]);
   const [holidayDates, setHolidayDates] = useState<Set<string>>(new Set());
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -73,6 +75,9 @@ export default function ClassManagePage() {
   const [year, setYear] = useState<number>(nowD.getFullYear());
   const [month, setMonth] = useState<number>(nowD.getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState<number>(nowD.getDate());
+  const [calendarView, setCalendarView] = useState<"day" | "week" | "month">("month");
+  const classRequest = useRef(0);
+  const [classesLoading, setClassesLoading] = useState(false);
 
   // 폼 상태 (열림/수정 대상/입력값)
   const [formOpen, setFormOpen] = useState(false);
@@ -197,6 +202,7 @@ export default function ClassManagePage() {
   // 정상 하이드레이트까지 막지 않도록 독립적으로 추적한다.
   const trainerEditedRef = useRef(false);
   const [busy, setBusy] = useState(false);
+  const saveLock = useRef(false);
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   useEffect(() => {
@@ -210,16 +216,21 @@ export default function ClassManagePage() {
   }, [formOpen, activeCenterId, form.date, form.start, form.end, form.roomId, selectedTrainers, editId]);
 
   const loadClasses = useCallback(async (centerId: string, y: number, m: number) => {
+    const request = ++classRequest.current;
+    setClassesLoading(true);
     setError(null);
     try {
-      const from = `${y}-${String(m).padStart(2, "0")}-01`;
-      const to = `${y}-${String(m).padStart(2, "0")}-${new Date(y, m, 0).getDate()}`;
-      setClasses(await fetchClasses(centerId, from, to));
-      setHolidayDates(await fetchCenterHolidayDates(centerId));
-      try { setRooms(await fetchRooms(centerId)); } catch { /* 무시 */ }
-      try { setUnplaced(await fetchUnplacedPasses(centerId)); } catch { setUnplaced([]); }
+      const { from, to } = monthCalendarRange(y, m);
+      const [items, holidays, roomList, pending] = await Promise.all([
+        fetchClasses(centerId, from, to), fetchCenterHolidayDates(centerId),
+        fetchRooms(centerId).catch(() => []), fetchUnplacedPasses(centerId).catch(() => []),
+      ]);
+      if (request !== classRequest.current) return;
+      setClasses(items); setHolidayDates(holidays); setRooms(roomList); setUnplaced(pending);
     } catch (e: any) {
-      setError(e.message);
+      if (request === classRequest.current) setError(e.message);
+    } finally {
+      if (request === classRequest.current) setClassesLoading(false);
     }
   }, []);
 
@@ -229,8 +240,7 @@ export default function ClassManagePage() {
         const list = await fetchMyCenters();
         setCenters(list);
         if (list.length > 0) {
-          setActiveCenterId(list[0].id);
-          await loadClasses(list[0].id, year, month);
+          setActiveCenterId(preferredCenterId(list));
         }
       } catch (e: any) {
         setError(e.message);
@@ -242,19 +252,24 @@ export default function ClassManagePage() {
 
   // 달이 바뀌면 다시 로드
   useEffect(() => {
+    let active = true;
     if (activeCenterId) {
+      setClasses([]); setRooms([]); setUnplaced([]);
+      setPassProducts([]); setRulesByProduct({}); setStaffList([]);
       loadClasses(activeCenterId, year, month);
       fetchProducts(activeCenterId, "pass")
         .then((list) => {
+          if (!active) return {};
           setPassProducts(list);
           return fetchRulesForProducts(list.map((p) => p.id));
         })
-        .then((rules) => setRulesByProduct(rules))
+        .then((rules) => { if (active) setRulesByProduct(rules); })
         .catch(() => { /* 무시 */ });
       fetchStaff(activeCenterId)
-        .then((list) => setStaffList(list.filter((s) => s.status === "active")))
+        .then((list) => { if (active) setStaffList(list.filter((s) => s.status === "active")); })
         .catch(() => { /* 무시 */ });
     }
+    return () => { active = false; classRequest.current += 1; };
   }, [year, month, activeCenterId, loadClasses]);
 
   const activeCenter = centers.find((c) => c.id === activeCenterId);
@@ -716,6 +731,12 @@ export default function ClassManagePage() {
   }
 
   async function save() {
+    if (saveLock.current) return;
+    saveLock.current = true;
+    try { await saveChanges(); } finally { saveLock.current = false; }
+  }
+
+  async function saveChanges() {
     if (!activeCenterId) return;
 
     // 반복 등록 (신규일 때만)
@@ -846,6 +867,8 @@ export default function ClassManagePage() {
       }
       const passMode = resolved.mode;
       let promotedCount = 0;
+      if (editId && applyToGroup && editGroupId && !await globalThis.appConfirm("이 반복 그룹의 전체 수업에 수업명·시간·정원·담당 강사를 적용합니다. 현재 화면에 보이지 않는 날짜도 포함되며, 날짜와 수강권 정책은 전체 적용되지 않습니다. 계속할까요?")) return;
+      if (scheduleConflicts.length && !await globalThis.appConfirm("선택한 날짜에 룸 또는 강사 일정이 겹칩니다. 겹침을 확인하고도 저장할까요? 반복 그룹의 다른 날짜는 별도 확인이 필요합니다.")) return;
       if (editId) {
         if (applyToGroup && editGroupId) {
           const groupIds = await updateClassGroup(editGroupId, form.title, form.start, form.end, form.capacity);
@@ -931,6 +954,7 @@ export default function ClassManagePage() {
 
   const hasClassByDay: Record<number, number> = {};
   for (const c of classes) {
+    if (!c.date.startsWith(`${year}-${pad2(month)}-`)) continue;
     const day = parseInt(c.date.slice(8, 10), 10);
     hasClassByDay[day] = (hasClassByDay[day] ?? 0) + 1;
   }
@@ -938,6 +962,7 @@ export default function ClassManagePage() {
   const dayClasses = classes
     .filter((c) => c.date === selectedKey)
     .sort((a, b) => a.start.localeCompare(b.start));
+  const week = weekDates(selectedKey);
 
   return (
     <div className="app-shell manager-classes-v2" style={{ paddingBottom: 170 }}>
@@ -994,6 +1019,10 @@ export default function ClassManagePage() {
       )}
 
       <section className="manager-calendar-panel" aria-label="수업 달력">
+      <div className="workflow-toolbar" aria-label="일정 보기">
+        {(["day", "week", "month"] as const).map((view) => <button key={view} type="button" className="outline-action" aria-pressed={calendarView === view} onClick={() => setCalendarView(view)}>{view === "day" ? "일" : view === "week" ? "주" : "월"} 보기</button>)}
+        <button type="button" className="outline-action" onClick={() => { const today = new Date(); setYear(today.getFullYear()); setMonth(today.getMonth() + 1); setSelectedDay(today.getDate()); }}>오늘</button>
+      </div>
       {/* 월 이동 */}
       <div className="cal-header manager-cal-header">
         <div className="cal-month-nav">
@@ -1005,10 +1034,9 @@ export default function ClassManagePage() {
           <select
             aria-label="센터 선택"
             value={activeCenterId ?? ""}
-            onChange={async (event) => {
+            onChange={(event) => {
               const centerId = event.target.value;
               setActiveCenterId(centerId);
-              await loadClasses(centerId, year, month);
             }}
           >
             {centers.map((center) => <option key={center.id} value={center.id}>{center.name}</option>)}
@@ -1016,6 +1044,7 @@ export default function ClassManagePage() {
         </label>
       </div>
 
+      {calendarView === "month" && <>
       {/* 요일 */}
       <div className="cal-grid cal-weekdays">
         {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => (
@@ -1046,12 +1075,25 @@ export default function ClassManagePage() {
           );
         })}
       </div>
+      </>}
+      {calendarView === "day" && <label className="workflow-toolbar">날짜 선택<input type="date" className="input-field" value={selectedKey} onChange={(e) => { if (!e.target.value) return; const [y, m, d] = e.target.value.split("-").map(Number); setYear(y); setMonth(m); setSelectedDay(d); }} /></label>}
+      {calendarView === "week" && <div className="schedule-week-list" aria-label="주간 수업">
+        {week.map((date, i) => {
+          const items = classes.filter((c) => c.date === date).sort((a, b) => a.start.localeCompare(b.start));
+          return <section key={date} className={date === selectedKey ? "selected" : ""}>
+            <button className="schedule-day-heading" onClick={() => { const [y, m, d] = date.split("-").map(Number); setYear(y); setMonth(m); setSelectedDay(d); }}>{date.slice(5)} ({WEEKDAYS[i]}) · {items.length}개</button>
+            {items.map((c) => <button key={c.id} className="schedule-week-class" onClick={() => { const [y, m, d] = c.date.split("-").map(Number); setYear(y); setMonth(m); setSelectedDay(d); }}><b>{c.start}–{c.end} · {c.title}</b><span>{formatInstructorNames(c.instructorNames) || "강사 미지정"} · {rooms.find((r) => r.id === c.roomId)?.name ?? "룸 미지정"} · 예약 {c.reserved}/{c.capacity}</span></button>)}
+            {!items.length && <p>{classesLoading ? "불러오는 중…" : "등록된 수업 없음"}</p>}
+          </section>;
+        })}
+      </div>}
       </section>
 
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
       {toast && <div className="toast">{toast}</div>}
 
       <section className="manager-agenda-panel" aria-label="선택한 날짜의 수업">
+      {classesLoading && <p role="status">수업을 불러오는 중…</p>}
       <div className="menu-section-label">{formatMonthDayWeekday(year, month, selectedDay)} 수업 ({dayClasses.length})</div>
 
       {holidayDates.has(`${year}-${pad2(month)}-${pad2(selectedDay)}`) && (
@@ -1124,9 +1166,11 @@ export default function ClassManagePage() {
                 <div className="class-row-meta">
                   {c.start}~{c.end}
                   {instructorText && ` · ${instructorText}`}
+                  {` · ${rooms.find((r) => r.id === c.roomId)?.name ?? "룸 미지정"}`}
                 </div>
               </div>
               <div className="class-row-actions">
+                <button type="button" className="outline-action" onClick={(e) => { e.stopPropagation(); openEdit(c); }}>상세·수정</button>
                 {/* UX 감사(B-2) — 예전엔 "예약 N/M ›"가 21px짜리 인라인 텍스트 링크뿐이라
                     매니저가 매일 여는 예약자/출석 화면 진입이 오탭에 취약했다. 별도 버튼으로
                     분리해 44px 터치 영역을 확보(수업 수정은 행 전체 탭으로 계속 가능). */}
@@ -1604,12 +1648,11 @@ export default function ClassManagePage() {
 
             {/* 반복 수업 일괄 적용 (그룹 소속 수정일 때만) */}
             {editId && editGroupId && (
-              <div className="set-row" style={{ padding: "10px 0", borderBottom: "none" }}>
-                <div className="set-label">모든 반복 수업에 적용<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>수업명·시간·정원·담당 강사가 전체에 반영돼요 (날짜·수강권 정책 제외)</span></div>
-                <button className={`switch ${applyToGroup ? "on" : ""}`} onClick={() => setApplyToGroup(!applyToGroup)}>
-                  <span className="knob" />
-                </button>
-              </div>
+              <fieldset className="workflow-toolbar"><legend>수정 적용 범위</legend>
+                <label><input type="radio" name="class-edit-scope" checked={!applyToGroup} onChange={() => setApplyToGroup(false)} disabled={busy} /> 이 수업만</label>
+                <label><input type="radio" name="class-edit-scope" checked={applyToGroup} onChange={() => setApplyToGroup(true)} disabled={busy} /> 반복 그룹 전체</label>
+                <p>그룹 전체 적용: 수업명·시간·정원·담당 강사. 날짜·수강권 정책은 제외됩니다.</p>
+              </fieldset>
             )}
 
             {editId && (

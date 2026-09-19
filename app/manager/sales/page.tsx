@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../lib/managerCenterSelection";
 
 /*
   매니저 - 매출 관리 화면
@@ -8,7 +9,8 @@
   - "+ 결제 등록" 시트: 회원·매출구분·분할결제·미수금·담당강사
 */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { previousDateRange } from "../../../lib/calendarRange";
 import Loading from "../../components/Loading";
 import DatePicker from "../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
@@ -49,12 +51,30 @@ const SALES_CSV_COLUMNS = [
 
 export default function SalesPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [centerId, setCenterId] = useState<string | null>(null);
+  const [centerId, setCenterId] = useCenterSelection();
   const [tab, setTab] = useState<"sales" | "expense" | "point">("sales");
   const [from, setFrom] = useState(monthStartStr());
   const [to, setTo] = useState(todayStr());
   const [rows, setRows] = useState<PaymentRow[]>([]);
+  const [salesQuery, setSalesQuery] = useState("");
+  const [salesFilter, setSalesFilter] = useState("all");
+  const filteredRows = rows.filter((r) => `${r.profileName} ${r.productName ?? ""} ${r.trainerName ?? ""}`.toLowerCase().includes(salesQuery.toLowerCase()) && (salesFilter === "all" || (salesFilter === "unpaid" ? r.unpaidAmount > 0 : r.saleType === "refund")));
   const [summary, setSummary] = useState<RevenueSummary | null>(null);
+  const requestId = useRef(0);
+  const [compare, setCompare] = useState(false);
+  const [previousSales, setPreviousSales] = useState<number | null>(null);
+  const [comparisonError, setComparisonError] = useState(false);
+  const previousPeriod = previousDateRange(from, to);
+  useEffect(() => {
+    let active = true;
+    setPreviousSales(null); setComparisonError(false);
+    if (compare && centerId && previousPeriod) {
+      fetchPayments(centerId, previousPeriod.from, previousPeriod.to)
+        .then((data) => { if (active) setPreviousSales(summarize(data).totalSales); })
+        .catch(() => { if (active) setComparisonError(true); });
+    }
+    return () => { active = false; };
+  }, [compare, centerId, from, to]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [points, setPoints] = useState<PointRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,7 +139,7 @@ export default function SalesPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(preferredCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
@@ -144,6 +164,8 @@ export default function SalesPage() {
 
   const load = useCallback(async () => {
     if (!centerId) return;
+    const request = ++requestId.current;
+    if (!previousDateRange(from, to)) { setError("시작일과 종료일을 확인해주세요."); setLoading(false); return; }
     setLoading(true); setError(null);
     try {
       const [pay, exp, pts] = await Promise.all([
@@ -151,15 +173,16 @@ export default function SalesPage() {
         fetchExpenses(centerId, from, to),
         fetchPoints(centerId),
       ]);
+      if (request !== requestId.current) return;
       setRows(pay);
       setSummary(summarize(pay));
       setExpenses(exp);
       setPoints(pts);
-    } catch (e: any) { setError(e.message); }
-    finally { setLoading(false); }
+    } catch (e: any) { if (request === requestId.current) setError(e.message); }
+    finally { if (request === requestId.current) setLoading(false); }
   }, [centerId, from, to]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); return () => { requestId.current += 1; }; }, [load]);
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
@@ -204,7 +227,7 @@ export default function SalesPage() {
 
   function handleSalesCsvDownload() {
     if (csvCols.length === 0) { setError("내보낼 항목을 1개 이상 선택해주세요"); return; }
-    const csv = paymentsToCsv(rows, csvCols);
+    const csv = paymentsToCsv(filteredRows, csvCols);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -213,7 +236,7 @@ export default function SalesPage() {
     a.click();
     URL.revokeObjectURL(url);
     setCsvSheet(false);
-    showToast(`${rows.length}건을 내보냈어요`);
+    showToast(`${filteredRows.length}건을 내보냈어요`);
   }
 
   async function handleRegister() {
@@ -389,11 +412,14 @@ export default function SalesPage() {
               </div>
               <div className="profit-line">
                 <span>지출 {won(summarizeExpenses(expenses).total)}</span>
-                <span className="profit-net">순이익 {won(summary.totalSales - summarizeExpenses(expenses).total)}</span>
+                <span className="profit-net">등록 지출 차감액 {won(summary.totalSales - summarizeExpenses(expenses).total)}</span>
               </div>
               {summary.totalUnpaid > 0 && (
                 <div className="sales-unpaid is-error-text">미수금 {won(summary.totalUnpaid)}</div>
               )}
+              <p className="sales-metric-help">기간 내 결제 기록의 합계입니다. 환불은 차감되며 미수금 회수·포인트 결제도 포함됩니다. 미수금은 조회된 결제에 남은 잔액이며, 등록 지출 차감액은 회계상 순이익과 다를 수 있습니다.</p>
+              <label className="sales-compare-toggle"><input type="checkbox" checked={compare} onChange={(e) => setCompare(e.target.checked)} /> 직전 동일 일수와 비교</label>
+              {compare && previousPeriod && <p role="status">비교 기간 {previousPeriod.from}–{previousPeriod.to}: {comparisonError ? "비교 데이터를 불러오지 못했어요" : previousSales == null ? "불러오는 중…" : `${won(previousSales)} · 증감 ${won(summary.totalSales - previousSales)}`}</p>}
             </div>
           )}
 
@@ -431,14 +457,15 @@ export default function SalesPage() {
 
           {/* 결제 내역 */}
           <div className="menu-section-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>결제 내역 {summary ? `(${summary.count}건)` : ""}</span>
+            <span>결제 내역 ({filteredRows.length}건)</span>
             {rows.length > 0 && <button className="text-btn" onClick={() => setCsvSheet(true)}>엑셀 내보내기</button>}
           </div>
-          {rows.length === 0 ? (
+          <div className="workflow-toolbar"><label>거래 검색<input className="input-field" value={salesQuery} onChange={(e) => setSalesQuery(e.target.value)} placeholder="회원·상품·담당자" /></label><label>상태<select className="input-field" value={salesFilter} onChange={(e) => setSalesFilter(e.target.value)}><option value="all">전체</option><option value="unpaid">미수금 있음</option><option value="refund">환불</option></select></label><span>목록·내보내기에 적용 · 상단 요약은 전체 조회 기간 기준</span></div>
+          {filteredRows.length === 0 ? (
             <div className="daylist-empty" style={{ paddingTop: 20 }}>이 기간 결제 내역이 없어요</div>
           ) : (
             <div className="sales-list">
-              {rows.map((r) => (
+              {filteredRows.map((r) => (
                 <div key={r.id} className="sales-row">
                   <div className="sales-row-main">
                     <div className="sales-row-top">
@@ -672,7 +699,7 @@ export default function SalesPage() {
             </div>
             <div className="add-profile-actions">
               <button className="ghost-btn" onClick={() => setCsvSheet(false)}>취소</button>
-              <button className="outline-action" onClick={handleSalesCsvDownload}>{rows.length}건 내보내기</button>
+              <button className="outline-action" onClick={handleSalesCsvDownload}>{filteredRows.length}건 내보내기</button>
             </div>
           </div>
         </div>

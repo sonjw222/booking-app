@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../../lib/managerCenterSelection";
 
 /*
   매니저 - 알림톡 템플릿 관리 (더보기 > 알림톡 > 템플릿 관리)
@@ -30,7 +31,7 @@ const STATUS_BADGE: Record<AlimtalkTemplateStatus, string> = {
 
 export default function AlimtalkTemplatesPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [centerId, setCenterId] = useState<string | null>(null);
+  const [centerId, setCenterId] = useCenterSelection();
   const [templates, setTemplates] = useState<AlimtalkTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export default function AlimtalkTemplatesPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(preferredCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();

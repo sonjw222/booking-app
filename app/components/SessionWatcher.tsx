@@ -1,4 +1,5 @@
 "use client";
+import { clearInquiryDrafts } from "../../lib/inquiryDraftStorage";
 
 /*
   세션 만료 처리 (P1) — 토큰 리프레시가 실패하면 supabase-js가 세션을 지우고
@@ -158,6 +159,7 @@ export default function SessionWatcher() {
         return;
       }
       if (event !== "SIGNED_OUT") return;
+      clearInquiryDrafts();
       setPhoneGateAccountId(null);
       setMergePromptEmail(null);
       if (window.location.pathname.startsWith("/login")) return;

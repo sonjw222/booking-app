@@ -2,6 +2,8 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import UiIcon from "./UiIcon";
+import CurrentCenterLabel from "./CurrentCenterLabel";
+import { confirmDiscardChanges } from "../../lib/useUnsavedChanges";
 import { replaceTabNavigation } from "../../lib/navState";
 
 const TITLES: Record<string, string> = {
@@ -27,8 +29,8 @@ export default function ManagerChrome() {
   return <header className="manager-chrome">
     <div className="manager-chrome-main">
       <div className="app-chrome-title">
-        {!rootScreens.has(pathname) && <button type="button" className="app-back-btn" onClick={() => pathname === "/manager/settings" ? router.push("/manager") : router.back()} aria-label="뒤로가기">‹</button>}
-        <h1>{TITLES[pathname] ?? "관리자"}</h1>
+        {!rootScreens.has(pathname) && <button type="button" className="app-back-btn" onClick={async () => { if (await confirmDiscardChanges()) pathname === "/manager/settings" ? router.push("/manager") : router.back(); }} aria-label="뒤로가기">‹</button>}
+        <div><h1>{TITLES[pathname] ?? "관리자"}</h1><CurrentCenterLabel /></div>
       </div>
       {/* 릴리스 폴리시 배치 8차(2026-09-17) — 둘 다 root destination("/", "/manager")으로
           이동하는 링크라 replace로 이동한다(navigation policy 4-5) — push로 남으면 root

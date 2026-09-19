@@ -1,4 +1,54 @@
 /* Shared management controls. All colors follow the active theme. */
+.workflow-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 20px 24px; border-bottom: 1px solid var(--line); }
+.workflow-toolbar > label { display: grid; gap: 8px; min-width: 0; font-size: 14px; }
+.workflow-toolbar > label:has(input[type="checkbox"]) { display: flex; align-items: center; min-height: 44px; }
+.workflow-toolbar input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--brand); }
+.workflow-toolbar .input-field { margin: 0; }
+.workflow-toolbar button[aria-pressed="true"] { background: var(--brand-soft); border-color: var(--brand); color: var(--ink); }
+.schedule-week-list { display: grid; gap: 8px; padding: 16px; }
+.schedule-week-list > section { border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-width: 0; }
+.schedule-week-list > section.selected { border-color: var(--brand); background: var(--brand-soft); }
+.schedule-day-heading,.schedule-week-class { display: block; width: 100%; text-align: left; color: var(--ink); background: transparent; border: 0; padding: 10px; border-radius: 6px; overflow-wrap: anywhere; }
+.schedule-day-heading { font-size: 15px; font-weight: 700; min-height: 44px; }
+.schedule-week-class { border-top: 1px solid var(--line); }
+.schedule-week-class span { display: block; font-size: 13px; line-height: 1.6; color: var(--text-dim); }
+.schedule-week-list p { color: var(--text-dim); margin: 8px 10px; font-size: 13px; }
+@media (min-width: 768px) {
+  .schedule-week-list { max-height: 650px; overflow: auto; }
+  .admin-v3 > .admin-chrome .app-chrome-title h1,
+  .admin-v3 > .admin-chrome .app-back-btn { color: var(--ink); }
+}
+.current-center-label { margin-top: 6px; font-size: 13px; color: var(--text-dim); overflow-wrap: anywhere; }
+.member-work-details { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 6px; font-size: 13px; color: var(--text-dim); }
+.member-name-action { background: transparent; border: 0; padding: 6px 0; color: var(--ink); text-align: left; cursor: pointer; }
+.member-work-details small,.member-contact small,.member-pass small { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+@media (min-width: 1100px) {
+  .manager-v3-content .mem-list .mem-main { display: grid; grid-template-columns: minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,.6fr) minmax(0,.8fr); gap: 16px; align-items: center; flex: 1; overflow-wrap: anywhere; }
+  .manager-v3-content .mem-row:has(> .mem-row-check) { grid-template-columns: 24px minmax(0,1fr); }
+  .manager-v3-content .mem-list .mem-name-line { display: flex; align-items: center; gap: 6px; }
+  .manager-v3-content .mem-list .member-work-details { display: contents; }
+  .manager-v3-content .mem-list .mem-sub { margin: 0; overflow-wrap: anywhere; }
+}
+.sales-metric-help { font-size: 13px; line-height: 1.7; color: var(--text-dim); max-width: 80ch; }
+.sales-compare-toggle { display: flex; gap: 10px; align-items: center; min-height: 44px; font-size: 14px; }
+.sales-compare-toggle input { width: 20px; height: 20px; accent-color: var(--brand); }
+.chat-templates { padding: 12px 16px; border-top: 1px solid var(--line); }
+.inquiry-workflow-panel { padding: 16px; background: var(--card-bg); color: var(--ink); border-bottom: 1px solid var(--line); max-height: 45dvh; overflow: auto; flex-shrink: 0; }
+.inquiry-workflow-panel summary { cursor: pointer; min-height: 32px; font-weight: 650; }
+.inquiry-workflow-panel > label { display: grid; gap: 10px; margin-top: 12px; }
+.inquiry-workflow-panel li p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.inquiry-workspace .inquiry-conversation:has(.inquiry-workflow-panel) { display: flex; flex-direction: column; }
+.inquiry-workspace .inquiry-conversation:has(.inquiry-workflow-panel) .chat-wrap { flex: 1; min-height: 320px; height: auto; }
+.chat-templates select { width: 100%; min-height: 40px; color: var(--ink); background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px; }
+.sidebar-pin { min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--card-bg); color: var(--ink); cursor: pointer; }
+@media (min-width:768px) and (max-width:1359px) {
+  :is(.manager-v3,.admin-v3):has(.workspace-sidebar.is-pinned) { --workspace-sidebar: 244px; }
+  .workspace-sidebar.is-pinned { width: 244px; }
+  .workspace-sidebar.is-pinned :is(.desktop-brand,.desktop-nav-item,.workspace-sidebar-mode) { justify-content: flex-start; }
+  .workspace-sidebar.is-pinned :is(.desktop-brand > span:last-child,.desktop-nav-item > span:not(.desktop-nav-badge),.workspace-sidebar-mode > span) { max-width: 180px; opacity: 1; visibility: visible; }
+  .workspace-sidebar.is-pinned .desktop-nav-section { max-height: 96px; opacity: 1; visibility: visible; }
+}
+@media (min-width:1360px) { .sidebar-pin { display: none; } }
 .workspace-create-class { display: none; }
 .inquiry-conversation { display: none; }
 .inquiry-workspace.has-active .inquiry-index { display: none; }
@@ -42,20 +92,6 @@
 
 @media (min-width: 768px) {
   /* Explicit content sizes replace inherited mobile circles and full-width actions. */
-  .manager-chrome .manager-chrome-main > a,
-  .admin-v3 > .admin-chrome > a {
-    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    flex: 0 0 auto; width: auto; min-width: 44px; height: 44px;
-    padding: 0 16px; border-radius: 10px; white-space: nowrap;
-    background: var(--card-bg); color: var(--ink); border: 1px solid var(--line);
-  }
-  .manager-chrome .manager-chrome-main > a span,
-  .admin-v3 > .admin-chrome > a span {
-    position: static; display: inline; width: auto; height: auto;
-    max-width: none; opacity: 1; visibility: visible; overflow: visible;
-    clip: auto; clip-path: none; font-size: 14px; white-space: nowrap;
-  }
-  .admin-v3 > .admin-chrome { background: var(--bg); color: var(--ink); border-bottom: 1px solid var(--line); }
   .manager-v3-content > .manager-classes-v2 { min-height: 0; padding-bottom: 24px!important; }
   .manager-classes-v2 > .back-header { display: flex; flex-wrap: wrap; gap: 12px; padding: 20px 24px; }
   .manager-classes-v2 > .back-header .title { order: -1; flex: 1; text-align: left; }

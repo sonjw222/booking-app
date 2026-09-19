@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../../lib/managerCenterSelection";
 
 /*
   매니저 - 자동 발송 규칙 (더보기 > 알림톡 > 자동 발송 규칙)
@@ -40,7 +41,7 @@ function conditionSummary(rule: NotificationRuleDraft): string {
 
 export default function AlimtalkRulesPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [centerId, setCenterId] = useState<string | null>(null);
+  const [centerId, setCenterId] = useCenterSelection();
   const [rules, setRules] = useState<NotificationRule[]>([]);
   const [templates, setTemplates] = useState<AlimtalkTemplate[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -59,7 +60,7 @@ export default function AlimtalkRulesPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(preferredCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();

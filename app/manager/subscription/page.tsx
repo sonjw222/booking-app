@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../lib/managerCenterSelection";
 
 /*
   매니저 - 플랫폼 구독 (센터 → 우리에게 내는 월 구독료)
@@ -33,7 +34,7 @@ export default function ManagerSubscriptionPage() {
 function ManagerSubscriptionContent() {
   const sp = useSearchParams();
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [centerId, setCenterId] = useState<string | null>(null);
+  const [centerId, setCenterId] = useCenterSelection();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +57,7 @@ function ManagerSubscriptionContent() {
         const list = await fetchMyCenters();
         // 오너인 센터만 이 화면의 대상 — 스태프로만 소속된 센터는 전환 목록에서도 뺀다.
         setCenters(list.filter((c) => c.isOwner));
-        if (list.some((c) => c.isOwner)) setCenterId(list.find((c) => c.isOwner)!.id);
+        if (list.some((c) => c.isOwner)) setCenterId(preferredCenterId(list.filter((c) => c.isOwner)));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();

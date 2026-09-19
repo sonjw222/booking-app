@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../lib/managerCenterSelection";
 
 /*
   매니저 - 센터 정보 편집 (P1-13, 2026-08-14 최종 확정 — 두 세션이 같은 티켓을 서로 다른
@@ -45,7 +46,7 @@ function escapeToHtml(text: string): string {
 
 export default function CenterInfoPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [centerId, setCenterId] = useState<string | null>(null);
+  const [centerId, setCenterId] = useCenterSelection();
   const [intro, setIntro] = useState("");
   const [introBlocks, setIntroBlocks] = useState<IntroBlock[]>([]);
   const [uploadingBlock, setUploadingBlock] = useState(false);
@@ -109,7 +110,7 @@ export default function CenterInfoPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(preferredCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();

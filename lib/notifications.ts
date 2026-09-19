@@ -136,13 +136,14 @@ export function notiEmoji(kind: NotiKind): string {
 
 // 내 알림 목록 — 고정(pinned)을 최상단으로, 그 안/밖 각각 최신순(add_notification_pin.sql의
 // idx_notifications_recipient_pinned 인덱스가 이 정렬을 그대로 받쳐준다).
-export async function fetchNotifications(limit = 100): Promise<Notification[]> {
+export async function fetchNotifications(limit = 100, strict = false): Promise<Notification[]> {
   const { data, error } = await supabase
     .from("notifications")
     .select("id, kind, title, body, center_id, link, data, read_at, pinned, created_at")
     .order("pinned", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(limit);
+  if (error && strict) throw new Error("알림을 불러오지 못했어요. 다시 시도해주세요.");
   if (error) return [];
   return (data ?? []).map(mapRow);
 }
@@ -158,11 +159,17 @@ export async function fetchUnreadCount(): Promise<number> {
 }
 
 // 읽음 처리 (ids 없으면 전체)
-export async function markRead(ids?: string[]): Promise<void> {
+export async function markRead(ids?: string[], strict = false): Promise<void> {
+  if (ids && ids.length === 0) return;
   const { error } = await supabase.rpc("mark_notifications_read", {
     p_ids: ids && ids.length > 0 ? ids : null,
   });
-  if (error) { /* 조용히 무시 */ }
+  if (error && strict) throw new Error("읽음 상태를 저장하지 못했어요. 다시 시도해주세요.");
+  if (!error) notifyNotificationsChanged();
+}
+
+function notifyNotificationsChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("notifications-changed"));
 }
 
 // 알림 삭제 — 기존(X 버튼) hard delete 정책을 그대로 따른다(soft-delete/archive 컬럼이
@@ -170,6 +177,7 @@ export async function markRead(ids?: string[]): Promise<void> {
 export async function deleteNotification(id: string): Promise<void> {
   const { error } = await supabase.from("notifications").delete().eq("id", id);
   if (error) throw new Error(error.message);
+  notifyNotificationsChanged();
 }
 
 // 관리자 알림 "전체 삭제"(3-2) — 지금 이 계정에게 보이는(=RLS로 조회 가능한) 알림 전체를
@@ -181,6 +189,7 @@ export async function deleteAllNotifications(): Promise<void> {
   if (!accountId) return;
   const { error } = await supabase.from("notifications").delete().eq("recipient_account_id", accountId);
   if (error) throw new Error(error.message);
+  notifyNotificationsChanged();
 }
 
 // 알림 고정 / 고정 해제(3-3) — pinned는 add_notification_pin.sql로 영구 저장(로컬 state/

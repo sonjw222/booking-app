@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../lib/managerCenterSelection";
 
 /*
   매니저 - 공지사항
@@ -21,7 +22,7 @@ import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/
 
 export default function ManagerAnnouncementsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [centerId, setCenterId] = useState<string | null>(null);
+  const [centerId, setCenterId] = useCenterSelection();
   const [list, setList] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -47,7 +48,7 @@ export default function ManagerAnnouncementsPage() {
     try {
       const cs = await fetchMyCenters();
       setCenters(cs);
-      const cid = centerId ?? cs[0]?.id ?? null;
+      const cid = centerId ?? preferredCenterId(cs);
       setCenterId(cid);
       if (cid) setList(await fetchCenterAnnouncements(cid));
     } catch (e: any) {

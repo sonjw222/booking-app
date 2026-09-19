@@ -15,18 +15,33 @@ import {
 } from "../../lib/inquiries";
 import { getMyAccountId } from "../../lib/authAccount";
 
+export type InquiryDraft = { text: string; photos: string[] };
+
 export default function InquiryChat({
-  threadId, title, onBack, canSend = true, canDeleteOthers = false,
+  threadId, title, onBack, canSend = true, canDeleteOthers = false, draft, onDraftChange, templates,
 }: {
   threadId: string;
   title: string;
   onBack: () => void;
+  draft?: InquiryDraft;
+  onDraftChange?: (draft: InquiryDraft) => void;
+  templates?: string[];
   canSend?: boolean; // 매니저 쪽에서 board.inquiry.comment 권한이 없을 때만 false — 회원 쪽은 항상 true(생략 시 기본값)
   canDeleteOthers?: boolean; // board.inquiry.comment_other — 다른 스태프가 보낸 메시지도 삭제 가능. 회원 쪽은 항상 false(생략 시 기본값)
 }) {
   const [messages, setMessages] = useState<InquiryMessage[]>([]);
-  const [text, setText] = useState("");
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [text, setText] = useState(draft?.text ?? "");
+  const [photos, setPhotos] = useState<string[]>(draft?.photos ?? []);
+  const draftCallback = useRef(onDraftChange);
+  draftCallback.current = onDraftChange;
+  const sendLock = useRef(false);
+  useEffect(() => { draftCallback.current?.({ text, photos }); }, [text, photos]);
+  useEffect(() => {
+    if (!text.trim() && !photos.length) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [text, photos]);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -73,8 +88,10 @@ export default function InquiryChat({
   }, [messages]);
 
   async function handleSend() {
+    if (!canSend || sendLock.current || uploading) return;
     const body = text.trim();
     if (!body && photos.length === 0) return;
+    sendLock.current = true;
     setSending(true);
     setError(null);
     try {
@@ -86,7 +103,7 @@ export default function InquiryChat({
       // 나가던 중복이었다.
     } catch (e: any) {
       setError("전송에 실패했어요: " + e.message);
-    } finally { setSending(false); }
+    } finally { sendLock.current = false; setSending(false); }
   }
 
   async function handleDelete(messageId: string) {
@@ -165,7 +182,7 @@ export default function InquiryChat({
           {photos.map((ph, i) => (
             <div key={i} className="chat-photo-thumb">
               <img src={inquiryPhotoUrl(ph) ?? ""} alt="" />
-              <button onClick={() => setPhotos((prev) => prev.filter((_, x) => x !== i))}>×</button>
+              <button disabled={sending} aria-label="첨부 사진 제거" onClick={() => setPhotos((prev) => prev.filter((_, x) => x !== i))}>×</button>
             </div>
           ))}
         </div>
@@ -173,26 +190,29 @@ export default function InquiryChat({
 
       {error && <div className="auth-msg error" style={{ margin: "0 12px 8px" }}>{error}</div>}
 
+      {canSend && templates && <div className="chat-templates"><label>빠른 답변 <select aria-label="빠른 답변 삽입" value="" disabled={sending} onChange={(e) => setText((prev) => prev ? `${prev}\n${e.target.value}` : e.target.value)}><option value="">답변 선택</option>{templates.map((value) => <option key={value} value={value}>{value}</option>)}</select></label></div>}
       {canSend ? (
         <div className="chat-input-bar">
           <label className="chat-photo-btn">
             {uploading ? "…" : "＋"}
-            <input type="file" accept="image/*" hidden onChange={async (e) => {
+            <input type="file" accept="image/*" disabled={sending || uploading} hidden onChange={async (e) => {
               const f = e.target.files?.[0]; if (!f) return;
               await handlePhoto(f); e.target.value = "";
             }} />
           </label>
           <textarea
             className="chat-input"
+            aria-label="답변 내용"
+            disabled={sending}
             placeholder="메시지를 입력하세요"
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); handleSend(); }
             }}
             rows={1}
           />
-          <button className="chat-send" disabled={sending} onClick={handleSend}>전송</button>
+          <button className="chat-send" disabled={sending || uploading || (!text.trim() && !photos.length)} onClick={handleSend}>{sending ? "전송 중…" : "전송"}</button>
         </div>
       ) : (
         <div className="auth-msg" style={{ margin: "0 12px 12px", textAlign: "center" }}>

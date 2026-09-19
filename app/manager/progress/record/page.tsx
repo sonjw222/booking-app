@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../../lib/managerCenterSelection";
 
 /*
   매니저 - 진도 기록 (2단계)
@@ -38,7 +39,7 @@ export default function ProgressRecordPage() {
 
 function ProgressRecordContent() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [centerId, setCenterId] = useState<string | null>(null);
+  const [centerId, setCenterId] = useCenterSelection();
   const [tree, setTree] = useState<CategoryNode[]>([]);
   const [members, setMembers] = useState<{ profileId: string; name: string }[]>([]);
   const searchParams = useSearchParams();
@@ -64,7 +65,7 @@ function ProgressRecordContent() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(preferredCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();

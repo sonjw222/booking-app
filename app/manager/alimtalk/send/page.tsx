@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../../lib/managerCenterSelection";
 
 /*
   매니저 - 알림톡 보내기 (더보기 > 알림톡 > 알림톡 보내기)
@@ -7,17 +8,18 @@
   골라 바로 보내는 진입점.
 */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Loading from "../../../components/Loading";
 import AlimtalkComposer, {
   emptyAlimtalkBlocks, flattenAlimtalkBlocks, hasAlimtalkContent, type AlimtalkBlock,
 } from "../../../components/AlimtalkComposer";
 import { fetchMyCenters, type ManagedCenter } from "../../../../lib/manager";
 import {
-  fetchMembers, fetchGrades, sendAlimtalkToMembers, type CenterMember, type Grade,
+  fetchMembers, fetchGrades, sendAlimtalkToMembers, type CenterMember, type Grade, type AlimtalkSendResult,
 } from "../../../../lib/members";
 import { fetchAlimtalkTemplates, type AlimtalkTemplate } from "../../../../lib/alimtalk";
 import { fetchCenterSubscription } from "../../../../lib/centerSubscription";
+import { estimateAlimtalkCost } from "../../../../lib/messageEstimate";
 
 const STATUS_LABEL: Record<string, string> = {
   active: "이용중", expired: "만료", dormant: "휴면",
@@ -25,7 +27,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function AlimtalkSendPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [centerId, setCenterId] = useState<string | null>(null);
+  const [centerId, setCenterId] = useCenterSelection();
   const [members, setMembers] = useState<CenterMember[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [gradeFilter, setGradeFilter] = useState<string | null>(null);
@@ -39,6 +41,10 @@ export default function AlimtalkSendPage() {
   const [addonEnabled, setAddonEnabled] = useState(true); // 확인 전까지는 막지 않음(로딩 중 깜빡임 방지)
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [unitPrice, setUnitPrice] = useState<number | null>(null);
+  const sendLock = useRef(false);
+  const memberRequest = useRef(0);
+  const [deliveryResult, setDeliveryResult] = useState<AlimtalkSendResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -49,7 +55,7 @@ export default function AlimtalkSendPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(preferredCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
@@ -57,34 +63,37 @@ export default function AlimtalkSendPage() {
 
   // 센터가 바뀔 때만 다시 불러오는 것들(필터/검색과 무관) — 템플릿 목록, 등급 목록,
   // 애드온 신청 여부.
-  const loadMeta = useCallback(async () => {
+  useEffect(() => {
     if (!centerId) return;
-    try { setGrades(await fetchGrades(centerId)); } catch { setGrades([]); }
-    // 템플릿 관리 화면(app/manager/alimtalk/templates)에서 만든 템플릿을 여기서 바로
-    // 불러올 방법이 없어 보낼 때마다 처음부터 다시 타이핑해야 했다(2026-09-06 UX 감사).
-    try { setTemplates(await fetchAlimtalkTemplates(centerId)); } catch { setTemplates([]); }
-    // 알림톡 애드온 미신청 센터는 어차피 서버(send-alimtalk)가 발송을 거부하므로,
-    // 여러 명 실패 토스트를 보고 나서야 알게 되는 대신 여기서 미리 안내한다.
-    try { setAddonEnabled((await fetchCenterSubscription(centerId))?.alimtalkAddon ?? false); }
-    catch { setAddonEnabled(true); }
+    let active = true;
+    setGrades([]); setTemplates([]); setAddonEnabled(false); setDeliveryResult(null); setUnitPrice(null);
+    void Promise.all([fetchGrades(centerId), fetchAlimtalkTemplates(centerId), fetchCenterSubscription(centerId)])
+      .then(([nextGrades, nextTemplates, subscription]) => {
+        if (!active) return;
+        setGrades(nextGrades); setTemplates(nextTemplates); setAddonEnabled(subscription?.alimtalkAddon ?? false);
+        setUnitPrice(subscription?.alimtalkAddonUnitPrice ?? null);
+      }).catch(() => { if (active) setError("발송 설정을 확인하지 못했어요. 새로고침 후 다시 시도해주세요."); });
+    return () => { active = false; };
   }, [centerId]);
-
-  useEffect(() => { loadMeta(); }, [loadMeta]);
 
   // 등급/상태 필터 + 검색(콤마로 여러 명 동시 검색 가능, lib/members.ts의 fetchMembers 참고)
   const loadMembers = useCallback(async () => {
     if (!centerId) return;
+    const request = ++memberRequest.current;
     setLoading(true); setError(null);
     try {
-      setMembers(await fetchMembers(centerId, { gradeId: gradeFilter, status: statusFilter, keyword, searchField: "all" }));
-    } catch (e: any) { setError(e.message); }
-    finally { setLoading(false); }
+      const next = await fetchMembers(centerId, { gradeId: gradeFilter, status: statusFilter, keyword, searchField: "all" });
+      if (request === memberRequest.current) setMembers(next);
+    } catch (e: any) { if (request === memberRequest.current) setError(e.message); }
+    finally { if (request === memberRequest.current) setLoading(false); }
   }, [centerId, gradeFilter, statusFilter, keyword]);
 
   // 검색어 입력 중엔 300ms 기다렸다 조회 (결과 깜빡임 방지, app/manager/members와 동일 패턴)
   useEffect(() => {
+    memberRequest.current += 1;
+    setSelectedIds(new Set()); setMembers([]); setLoading(true);
     const t = setTimeout(() => { loadMembers(); }, 300);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); memberRequest.current += 1; };
   }, [loadMembers]);
 
   function toggle(id: string) {
@@ -100,8 +109,13 @@ export default function AlimtalkSendPage() {
   }
 
   async function handleSend() {
-    if (!centerId || selectedIds.size === 0 || !hasAlimtalkContent(blocks)) return;
+    if (sendLock.current || !addonEnabled || !centerId || selectedIds.size === 0 || !hasAlimtalkContent(blocks)) return;
     const targets = members.filter((m) => selectedIds.has(m.id));
+    const recipientCount = targets.filter((m) => m.phone).length;
+    if (!recipientCount) { setError("전화번호가 있는 발송 대상이 없어요."); return; }
+    sendLock.current = true;
+    setSending(true);
+    try {
     const content = flattenAlimtalkBlocks(blocks);
     // 승인된 템플릿을 고르고 문구를 그대로 뒀을 때만 templateCode를 실어 진짜 카카오 알림톡으로
     // 나가게 한다 — 고른 뒤 내용을 고치면(아래 onChange에서) 선택이 자동 해제되므로, 여기 남아있는
@@ -114,16 +128,14 @@ export default function AlimtalkSendPage() {
     // 알림톡(templateCode 있음)과 SMS는 건당 요금이 다르다 — SMS로 나갈 때는 실수로 카톡인 줄
     // 알고 다수 발송하는 걸 막기 위해 매번 확인받는다(app/components/AppConfirmProvider.tsx,
     // 다른 화면의 삭제/취소 확인과 같은 패턴).
-    if (!templateCode) {
-      const recipientCount = targets.filter((m) => m.phone).length;
+    {
       const ok = await globalThis.appConfirm(
-        `카카오 알림톡이 아니라 SMS로 나가요.\n번호가 있는 ${recipientCount}명에게 SMS 요금이 발생해요 — 계속할까요?`
+        `${templateCode ? "카카오 알림톡" : "SMS"} 발송: 선택 ${targets.length}명 중 번호 등록 ${recipientCount}명, 번호 없음 ${targets.length - recipientCount}명 제외.\n${estimateAlimtalkCost(recipientCount, unitPrice, !!templateCode) == null ? "해당 채널의 단가가 없어 예상 금액을 계산할 수 없습니다." : `센터 설정 단가 기준 예상 ${estimateAlimtalkCost(recipientCount, unitPrice, !!templateCode)?.toLocaleString()}원 (${recipientCount}명 × ${unitPrice}원).`} 대체 발송·실패·세금 반영에 따라 최종 청구액은 달라질 수 있습니다. 계속할까요?`
       );
       if (!ok) return;
     }
-    setSending(true);
-    try {
       const result = await sendAlimtalkToMembers(targets, content, centerId, templateCode);
+      setDeliveryResult(result);
       const parts: string[] = [];
       if (result.sent > 0) parts.push(`${result.sent}명 발송`);
       if (result.skipped > 0) parts.push(`${result.skipped}명 번호 없음`);
@@ -131,14 +143,14 @@ export default function AlimtalkSendPage() {
       showToast(parts.join(" · "));
       setSelectedIds(new Set());
       setComposerOpen(false);
-      setBlocks(emptyAlimtalkBlocks());
-      setTemplateId("");
+      if (!result.failed) { setBlocks(emptyAlimtalkBlocks()); setTemplateId(""); }
     } catch (e: any) { setError(e.message); }
-    finally { setSending(false); }
+    finally { sendLock.current = false; setSending(false); }
   }
 
-  function closeComposer() {
+  async function closeComposer() {
     if (sending) return;
+    if (hasAlimtalkContent(blocks) && !await globalThis.appConfirm("작성 중인 메시지를 버리고 닫을까요?")) return;
     setComposerOpen(false);
     setBlocks(emptyAlimtalkBlocks());
     setTemplateId("");
@@ -174,7 +186,7 @@ export default function AlimtalkSendPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); setSelectedIds(new Set()); setComposerOpen(false); setBlocks(emptyAlimtalkBlocks()); setTemplateId(""); }}>
+            <button key={c.id} disabled={sending} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={async () => { if (hasAlimtalkContent(blocks) && !await globalThis.appConfirm("작성 중인 메시지를 버리고 센터를 바꿀까요?")) return; setCenterId(c.id); setSelectedIds(new Set()); setComposerOpen(false); setBlocks(emptyAlimtalkBlocks()); setTemplateId(""); }}>
               {c.name}
             </button>
           ))}
@@ -182,6 +194,11 @@ export default function AlimtalkSendPage() {
       )}
 
       {error && <div className="daylist-empty" style={{ margin: "0 20px 10px" }}>{error}</div>}
+      {deliveryResult && <section className="workflow-toolbar" aria-label="발송 처리 결과" role="status">
+        <div><b>발송 요청 결과</b><p>접수 {deliveryResult.sent}명 · 번호 없음 {deliveryResult.skipped}명 · 실패 또는 결과 미확인 {deliveryResult.failed}명</p>
+        <p>접수는 최종 수신 완료를 의미하지 않습니다. 결과 미확인 건은 발송 이력을 확인한 뒤 재시도하세요. 중복 발송 방지를 위해 선택을 해제했습니다.</p>
+        <ul>{deliveryResult.recipients.map((item) => <li key={item.index}>{item.name}: {{ sent: "접수", skipped: "번호 없음", failed: "실패 응답", unknown: "결과 미확인 — 이력 확인 필요" }[item.status]}</li>)}</ul></div>
+      </section>}
 
       {!loading && !addonEnabled && (
         <div className="daylist-empty" style={{ margin: "0 20px 10px" }}>
@@ -255,6 +272,7 @@ export default function AlimtalkSendPage() {
             <div className="sheet-title">알림톡 보내기</div>
             <div className="perm-guide" style={{ margin: "0 0 10px" }}>
               선택한 {selectedIds.size}명에게 보내요. 전화번호가 없는 회원은 자동으로 건너뜁니다.
+              {(() => { const count = members.filter((m) => selectedIds.has(m.id) && m.phone).length; const template = templates.find((t) => t.id === templateId); const amount = estimateAlimtalkCost(count, unitPrice, template?.status === "approved" && !!template.aligoTemplateCode); return <p>{amount == null ? "현재 채널은 등록된 단가가 없어 예상 금액을 계산할 수 없습니다." : `센터 설정 단가 기준 예상 ${amount.toLocaleString()}원 · ${count}명 × ${unitPrice}원`}. 최종 청구액은 대체 발송·실패·세금 반영에 따라 달라질 수 있습니다.</p>; })()}
             </div>
             {templates.length > 0 && (
               <select
