@@ -9,17 +9,21 @@
 import { useCallback, useEffect, useState } from "react";
 import BottomNav from "../../components/BottomNav";
 
-type NotiKey = "reservation" | "waitlist" | "reminder" | "marketing";
+type NotiKey = "reservation" | "cancellation" | "waitlist" | "reminder" | "classChange" | "announcement" | "marketing";
 
 const ITEMS: { key: NotiKey; label: string; desc: string }[] = [
-  { key: "reservation", label: "예약 확정·취소 알림", desc: "예약이 확정되거나 취소될 때" },
+  { key: "reservation", label: "예약 확정·신청 알림", desc: "예약 신청과 확정 상태가 바뀔 때" },
+  { key: "cancellation", label: "예약 취소 알림", desc: "회원 또는 센터에서 예약을 취소했을 때" },
   { key: "waitlist", label: "대기 승격 알림", desc: "대기하던 수업에 자리가 났을 때" },
   { key: "reminder", label: "수업 리마인더", desc: "수업 시작 전 미리 알려드려요" },
+  { key: "classChange", label: "수업 변경 알림", desc: "시간, 강사 또는 장소가 변경됐을 때" },
+  { key: "announcement", label: "센터 공지 알림", desc: "이용 중인 센터에서 새 공지를 보낼 때" },
   { key: "marketing", label: "혜택·이벤트 알림", desc: "쿠폰, 이벤트 등 마케팅 소식" },
 ];
 
 const DEFAULTS: Record<NotiKey, boolean> = {
-  reservation: true, waitlist: true, reminder: true, marketing: false,
+  reservation: true, cancellation: true, waitlist: true, reminder: true,
+  classChange: true, announcement: true, marketing: false,
 };
 
 export default function NotificationSettingsPage() {
@@ -44,7 +48,7 @@ export default function NotificationSettingsPage() {
   }, []);
 
   return (
-    <div className="app-shell">
+    <div className="app-shell account-page-v2 settings-page-v2">
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
@@ -54,12 +58,13 @@ export default function NotificationSettingsPage() {
       </div>
 
       <div className="perm-guide" style={{ margin: "8px 20px" }}>
-        받고 싶은 알림을 골라주세요. (실제 발송 연동은 준비 중이에요)
+        중요한 예약 알림과 선택적인 소식을 각각 설정할 수 있어요. 설정은 이 기기에 저장돼요.
       </div>
 
       <div className="noti-list">
+        <div className="noti-settings-group">수업과 예약</div>
         {ITEMS.map((it) => (
-          <div key={it.key} className="noti-row">
+          <div key={it.key} className={`noti-row ${it.key === "marketing" ? "optional-start" : ""}`}>
             <div className="noti-info">
               <div className="noti-label">{it.label}</div>
               <div className="noti-desc">{it.desc}</div>

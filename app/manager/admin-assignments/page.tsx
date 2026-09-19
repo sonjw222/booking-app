@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
+import DatePicker from "../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchAdminActionLogs, type AdminActionLog, type AdminActionLogFilters } from "../../../lib/adminAssignment";
 import { RESERVATION_TYPE_LABELS, ADMIN_REASON_CODES, ADMIN_REASON_LABELS, type ReservationType, type AdminReasonCode } from "../../../lib/reservationTypes";
@@ -81,7 +82,7 @@ export default function AdminAssignmentLogPage() {
   }
 
   return (
-    <div className="app-shell" style={{ paddingBottom: 90 }}>
+    <div className="app-shell assignments-page-v4" style={{ paddingBottom: 90 }}>
       <div className="back-header">
         <a className="side" href="/manager">‹</a>
         <div className="title">관리자 배치 내역</div>
@@ -102,9 +103,9 @@ export default function AdminAssignmentLogPage() {
 
       <div className="menu-section-label" style={{ padding: "10px 20px 6px" }}>기간</div>
       <div className="time-row" style={{ padding: "0 20px" }}>
-        <input className="input-field" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+        <DatePicker value={fromDate} onChange={setFromDate} label="조회 시작일" />
         <span className="time-sep">~</span>
-        <input className="input-field" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+        <DatePicker value={toDate} onChange={setToDate} label="조회 종료일" />
       </div>
 
       <div className="menu-section-label" style={{ padding: "10px 20px 6px" }}>배치 유형</div>
@@ -138,14 +139,14 @@ export default function AdminAssignmentLogPage() {
         ))}
       </div>
 
-      <div className="set-row" style={{ padding: "10px 20px" }}>
+      <div className="set-row assignments-toggle">
         <div className="set-label">정원 초과 배치만 보기</div>
         <button className={`switch ${capacityOnly ? "on" : ""}`} onClick={() => setCapacityOnly((v) => !v)}>
           <span className="knob" />
         </button>
       </div>
 
-      <div style={{ padding: "0 20px" }}>
+      <div className="assignments-search">
         <input className="input-field" placeholder="회원 / 관리자 / 수업명 검색"
           value={keyword} onChange={(e) => setKeyword(e.target.value)} />
       </div>
@@ -161,7 +162,7 @@ export default function AdminAssignmentLogPage() {
               <div className="hist-main" style={{ width: "100%" }}>
                 <div className="hist-title">
                   <span className="profile-tag sm">{ACTION_LABELS[l.actionType]}</span>
-                  {l.memberName} 회원
+                  <span className="hist-title-text">{l.memberName} 회원</span>
                   {l.capacityOverride && <span className="profile-tag sm">정원 초과 배치</span>}
                 </div>
                 <div className="hist-sub">

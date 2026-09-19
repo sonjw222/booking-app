@@ -1,49 +1,62 @@
 # Decision Log
 
-## 상태
+Status: Active ADR Index
+Version: 1.1.0
+Current-State Source: Master Spec and implementation evidence
+Target-State Status: Proposed items require approval
+Last Updated: 2026-07-31
 
-- `Accepted`: 구현 기준
-- `Proposed`: 검토 필요, 구현 전 확정
-- `Superseded`: 다른 결정으로 대체
+## Status Values
 
-## 결정 목록
+- `Accepted`: 현재 기준
+- `Proposed`: 사용자 결정 필요
+- `Superseded`: 대체됨
+- `Blocked`: 외부 조건 필요
 
-| ID | 상태 | 결정 | 근거 |
+## Decisions
+
+| ID | Status | Decision | Consequence |
 |---|---|---|---|
-| ADR-001 | Accepted | 센터를 기본 테넌트 경계로 하고 모든 센터 데이터에 `center_id`를 둔다. | 데이터 격리와 권한 검증의 일관성 |
-| ADR-002 | Accepted | 사용자와 센터 역할을 Membership으로 분리한다. | 한 사용자의 다중 센터/다중 역할 지원 |
-| ADR-003 | Accepted | v1 역할은 Owner, Admin, Staff, Customer이며 검사는 permission 기반이다. | 단순한 UI와 향후 확장성 |
-| ADR-004 | Accepted | 관리자/직원 추가는 만료·취소 가능한 이메일 초대로 수행한다. | 이메일 소유 확인과 감사 가능성 |
-| ADR-005 | Accepted | 동일 이메일만으로 소셜 계정을 자동 병합하지 않는다. | 계정 탈취 및 잘못된 병합 방지 |
-| ADR-006 | Accepted | Access Token + 회전형 Refresh Token, 서버 측 세션/기기 철회를 사용한다. | 탈취 탐지와 사용자 제어 |
-| ADR-007 | Accepted | 비밀번호 재설정 완료 시 기존 세션을 철회한다. | 탈취 계정 회복 보장 |
-| ADR-008 | Accepted | 예약 충돌은 DB 트랜잭션/제약으로 최종 방어한다. | 동시 요청 정합성 |
-| ADR-009 | Proposed | v1 백엔드는 모듈형 모놀리스로 시작한다. | 빠른 개발, 단일 트랜잭션, 낮은 운영 복잡도 |
-| ADR-010 | Proposed | 웹 세션 전달은 HttpOnly 보안 쿠키를 기본으로 한다. | 브라우저 토큰 탈취 면적 감소 |
-| ADR-011 | Proposed | 관계형 DB와 트랜잭셔널 아웃박스를 사용한다. | 예약 정합성과 신뢰성 있는 비동기 알림 |
+| ADR-001 | Accepted | Center를 데이터·운영 권한의 범위로 유지한다. | RLS/RPC와 쿼리에 center scope 필요 |
+| ADR-002 | Superseded | 조직 관계를 `memberships`로 모델링한다. | v1.1에서 실제 `manager_centers`로 교정 |
+| ADR-003 | Superseded | Owner/Admin/Staff/Customer 고정 역할만 사용한다. | 실제 커스텀 역할·permission 모델로 교정 |
+| ADR-004 | Proposed | 이메일 초대 기반 staff onboarding을 목표로 한다. | 현재 direct insert 흐름과 정책 차이 분석 필요 |
+| ADR-005 | Proposed | 이메일 일치만으로 social account를 자동 병합하지 않는다. | Account Linking 구현 전 승인 필요 |
+| ADR-006 | Superseded | 자체 Access/Refresh Token과 sessions/devices를 사용한다. | 현재 Supabase Auth 관리형 세션을 기준으로 함 |
+| ADR-007 | Proposed | 비밀번호 재설정 후 세션 정책을 정의한다. | Supabase Auth 기능/제품 UX 검토 필요 |
+| ADR-008 | Accepted | 예약 정합성은 Postgres RPC와 DB 제약에서 강제한다. | Client 사전 검사만으로 완료하지 않음 |
+| ADR-009 | Superseded | 기술 스택을 미확정으로 둔다. | Next.js 16.2.10 + React 19 + TypeScript + Supabase 확정 |
+| ADR-010 | Superseded | 자체 REST `/api/v1`을 현재 API로 사용한다. | 현재 `lib` → Supabase direct/RPC 구조 |
+| ADR-011 | Proposed | 외부 secret이 필요한 기능에만 server boundary를 추가한다. | Route Handler/Edge Function 선택 필요 |
+| ADR-012 | Accepted | `memberships`의 공식 기술 의미는 수강권/패스다. | 조직 관계와 용어 충돌 금지 |
+| ADR-013 | Accepted | 예약·수업·상품·사람의 기술 용어는 `reservations`, `classes`, `products`, `accounts/profiles`를 따른다. | 문서와 코드 검색 일치 |
+| ADR-014 | Accepted | 관리자 직접배치와 무료배치를 예약의 1급 유형으로 문서화한다. | `ADMIN_ASSIGNMENT`, `ADMIN_FREE` 및 audit 반영 |
+| ADR-015 | Accepted | Mock Payment는 Current State, 실제 PG는 Target/Blocked로 분리한다. | 테스트 결제를 운영 결제로 표현하지 않음 |
+| ADR-016 | Accepted | **Master Spec v1.1 교정:** 실제 코드가 Current State의 기준이며 기존 미구현 설계는 Target/Future로 이동한다. | 구현과 목표의 혼합 금지, 용어 맵 유지 |
 
-## 미확정 항목
+## Open Decisions
 
-| 항목 | 결정 필요 시점 | 판단 기준 |
+| ID | Decision Required | Options/Considerations |
 |---|---|---|
-| 클라이언트/서버 프레임워크 | 구현 착수 전 | 팀 역량, 유지보수, 배포 환경 |
-| DB/클라우드/리전 | 인프라 설계 전 | 트랜잭션·시간 범위 제약, 규정, 비용 |
-| 소셜 공급자 목록 | 인증 구현 전 | 대상 고객, 앱 심사, 계정 복구 |
-| 이메일 공급자 | 초대/인증 구현 전 | 전달률, 템플릿, 국내 규정 |
-| 관리자 간 권한 위임 범위 | Admin Epic 개발 전 | 운영 모델과 최소 권한 |
-| 토큰/세션 정확한 TTL | 보안 리뷰 전 | 위험도와 사용자 경험 |
-| 감사/PII 보존 기간 | 출시 전 | 법률, 분쟁, 비용 |
-| 예약 취소 정책 | Booking Epic 전 | 센터별 운영 요구 |
+| DR-01 | 실제 PG | Toss / PortOne / 기타; webhook와 환불 |
+| DR-02 | OAuth/Account Linking | 카카오·애플·네이버 범위, 충돌/복구 정책 |
+| DR-03 | Staff onboarding | direct assignment 유지 / 이메일 초대 도입 |
+| DR-04 | Auth recovery | password reset, MFA/passkey, session/device UX |
+| DR-05 | Admin assignment permission | 직접배치/무료배치/정원초과 key 및 정지·탈퇴 정책 |
+| DR-06 | Timezone | 한국 단일 timezone / 센터별 IANA timezone |
+| DR-07 | Server boundary | Next Route Handler / Supabase Edge Function / 혼합 |
+| DR-08 | Migration source of truth | Supabase CLI migration 구조와 운영 적용 추적 |
 
-## 결정 추가 양식
+## ADR Template
 
 ```md
-### ADR-NNN: 제목
-- 상태:
-- 날짜:
-- 맥락:
-- 결정:
-- 대안:
-- 결과/트레이드오프:
+### ADR-NNN: Title
+- Status:
+- Date:
+- Context:
+- Current State:
+- Decision:
+- Alternatives:
+- Consequences:
 ```
 

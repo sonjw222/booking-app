@@ -63,8 +63,8 @@ export default function RegisterCenterPage() {
   }
 
   return (
-    <div className="app-shell">
-      <div className="section-title" style={{ paddingTop: 20 }}>내 센터 등록하기</div>
+    <div className="app-shell account-page-v2 register-center-v2">
+      <div className="back-header"><button className="side" onClick={() => router.back()}>‹</button><div className="title">센터 등록</div><div className="side" /></div>
       <div className="hist-sub" style={{ padding: "0 16px 12px" }}>
         새 센터 정보를 등록하고 운영 승인을 요청합니다.
       </div>

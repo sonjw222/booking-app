@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import ManagerNav from "../../components/ManagerNav";
+import DatePicker from "../../components/DatePicker";
 import CopyCalendar from "./CopyCalendar";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchRooms, type Room } from "../../../lib/rooms";
@@ -448,7 +449,7 @@ export default function ClassManagePage() {
 
   async function handleCopy() {
     if (!activeCenterId) return;
-    if (!confirm(`${copyFrom} → ${copyTo}\n선택한 수업을 복사할까요?`)) return;
+    if (!await globalThis.appConfirm(`${copyFrom} → ${copyTo}\n선택한 수업을 복사할까요?`)) return;
     setCopyBusy(true);
     try {
       const n = copyMode === "weekday"
@@ -481,7 +482,7 @@ export default function ClassManagePage() {
       return;
     }
     if (status === "cancelled") {
-      const ok = confirm(
+      const ok = await globalThis.appConfirm(
         `${a.name}님의 예약을 취소할까요?\n\n` +
         `· 사용한 수강권 횟수가 1회 복구돼요\n` +
         `· 취소 후에는 출석·결석·노쇼로 되돌릴 수 없어요\n\n` +
@@ -714,19 +715,19 @@ export default function ClassManagePage() {
 
       {unplaced.length > 0 && (
         <button className="unplaced-banner" onClick={() => setUnplacedSheet(true)}>
-          <span className="unplaced-icon">⚠️</span>
+          <span className="unplaced-icon" aria-hidden="true">!</span>
           <span className="unplaced-text">
             예약이 덜 배치된 요일반 수강권 <b>{unplaced.length}건</b>
           </span>
-          <span className="unplaced-go">보기 ›</span>
+          <span className="unplaced-go">보기 <b aria-hidden="true">›</b></span>
         </button>
       )}
 
       {!assignMode ? (
-        <button className="unplaced-banner" style={{ background: "var(--surface-2, #f4f4f4)" }} onClick={openAssignMemberPicker}>
-          <span className="unplaced-icon">🗓️</span>
+        <button className="unplaced-banner direct-assign-row" onClick={openAssignMemberPicker}>
+          <span className="unplaced-icon direct" aria-hidden="true">+</span>
           <span className="unplaced-text">회원 직접배치</span>
-          <span className="unplaced-go">시작 ›</span>
+          <span className="unplaced-go">시작 <b aria-hidden="true">›</b></span>
         </button>
       ) : (
         <div className="assign-banner">
@@ -749,26 +750,26 @@ export default function ClassManagePage() {
         </div>
       )}
 
-      <div className="center-switcher">
-        {centers.map((c) => (
-          <button
-            key={c.id}
-            className={`center-chip ${c.id === activeCenterId ? "on" : ""}`}
-            onClick={async () => { setActiveCenterId(c.id); await loadClasses(c.id, year, month); }}
-          >
-            {c.name}
-          </button>
-        ))}
-      </div>
-
       {/* 월 이동 */}
-      <div className="cal-header">
+      <div className="cal-header manager-cal-header">
         <div className="cal-month-nav">
           <button className="cal-nav-btn" onClick={goPrevMonth}>‹</button>
-          <div className="cal-title">{year}.{pad2(month)}</div>
+          <div className="cal-title">{year}년 {month}월</div>
           <button className="cal-nav-btn" onClick={goNextMonth}>›</button>
         </div>
-        <button className="text-btn" onClick={goToday}>오늘</button>
+        <label className="manager-center-select">
+          <select
+            aria-label="센터 선택"
+            value={activeCenterId ?? ""}
+            onChange={async (event) => {
+              const centerId = event.target.value;
+              setActiveCenterId(centerId);
+              await loadClasses(centerId, year, month);
+            }}
+          >
+            {centers.map((center) => <option key={center.id} value={center.id}>{center.name}</option>)}
+          </select>
+        </label>
       </div>
 
       {/* 요일 */}
@@ -808,8 +809,11 @@ export default function ClassManagePage() {
       <div className="menu-section-label">{month}월 {selectedDay}일 수업 ({dayClasses.length})</div>
 
       {holidayDates.has(`${year}-${pad2(month)}-${pad2(selectedDay)}`) && (
-        <div className="holiday-notice" style={{ margin: "0 20px 10px" }}>
-          <div className="holiday-chip">🚫 이 날은 휴무일이에요 (수업 개설 불가)</div>
+        <div className="holiday-notice manager-holiday-notice">
+          <div className="holiday-chip">
+            <span className="hc-mark" aria-hidden="true" />
+            <span><b>센터 휴무일</b><small>이 날은 수업을 개설할 수 없어요.</small></span>
+          </div>
         </div>
       )}
 
@@ -819,9 +823,8 @@ export default function ClassManagePage() {
         ) : assignMode ? (
           <div className="daylist-empty" style={{ paddingTop: 20 }}>이 날 등록된 수업이 없어요.</div>
         ) : (
-          <div className="empty-action">
+          <div className="empty-action manager-class-empty">
             <div className="empty-action-text">이 날 등록된 수업이 없어요.</div>
-            <button className="empty-action-btn" onClick={openCreate}>+ 수업 등록하기</button>
           </div>
         )
       ) : assignMode ? (
@@ -914,9 +917,9 @@ export default function ClassManagePage() {
                 </div>
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>기간</div>
                 <div className="time-row">
-                  <input className="input-field" type="date" value={repFrom} onChange={(e) => setRepFrom(e.target.value)} />
+                  <DatePicker value={repFrom} onChange={setRepFrom} label="반복 시작일" />
                   <span className="time-sep">~</span>
-                  <input className="input-field" type="date" value={repTo} onChange={(e) => setRepTo(e.target.value)} />
+                  <DatePicker value={repTo} onChange={setRepTo} label="반복 종료일" />
                 </div>
                 {repDays.length > 0 && repFrom && repTo && repFrom <= repTo && (
                   <div className="rep-preview" style={{ marginBottom: 4 }}>
@@ -993,7 +996,7 @@ export default function ClassManagePage() {
                 )}
               </>
             ) : (
-              <input className="input-field" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+              <DatePicker value={form.date} onChange={(date) => setForm({ ...form, date })} label="수업 날짜" />
             )}
             {perDayMode && repeat && !editId && (
               <div className="common-box-label">공통 설정 <span>· 위에서 비워둔 칸에 적용돼요</span></div>
@@ -1341,7 +1344,7 @@ export default function ClassManagePage() {
                     복사될 수업 {copyPlan.length}개
                   </span>
                   <button className="copy-view-btn" onClick={() => setCopyView(copyView === "list" ? "calendar" : "list")}>
-                    {copyView === "list" ? "📅 달력" : "☰ 목록"}
+                    {copyView === "list" ? "달력 보기" : "목록 보기"}
                   </button>
                 </div>
 
@@ -1475,7 +1478,7 @@ export default function ClassManagePage() {
                     ))
                   )}
                 </div>
-                <a className="primary-btn" href={`/manager/members?profile=${memberInfo.profileId}`} style={{ marginTop: 10, display: "block", textAlign: "center" }}>회원 관리에서 전체 보기</a>
+                <a className="primary-btn" href={`/manager/member-detail?center=${activeCenterId ?? ""}&profile=${memberInfo.profileId}`} style={{ marginTop: 10, display: "block", textAlign: "center" }}>회원 상세 보기</a>
               </>
             )}
             <div className="add-profile-actions" style={{ marginTop: 6 }}>

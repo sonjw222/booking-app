@@ -69,7 +69,7 @@ export default function AdminCentersPage() {
   }
 
   async function handleApprove(c: PendingCenter) {
-    if (!confirm(`'${c.name}'을(를) 승인할까요?\n승인하면 회원들에게 센터와 수업이 노출됩니다.`)) return;
+    if (!await globalThis.appConfirm(`'${c.name}'을(를) 승인할까요?\n승인하면 회원들에게 센터와 수업이 노출됩니다.`)) return;
     setBusy(true);
     try {
       await approveCenter(c.id);
@@ -144,7 +144,7 @@ export default function AdminCentersPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="mgr-mode-bar">
-        <span className="mgr-mode-label">🛡️ 플랫폼 운영자</span>
+        <span className="mgr-mode-label">플랫폼 운영자</span>
         <a className="mgr-mode-switch" href="/">회원 모드로 ↩</a>
       </div>
 

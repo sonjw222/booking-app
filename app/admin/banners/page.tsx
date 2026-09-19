@@ -20,7 +20,6 @@ export default function BannersPage() {
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
-  const [emoji, setEmoji] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2000); }
@@ -41,11 +40,13 @@ export default function BannersPage() {
   }, [load]);
 
   async function handleAdd() {
-    if (!title.trim()) { setError("배너 문구를 입력해주세요"); return; }
+    if (title.trim().length < 2) { setError("배너 큰 문구를 2자 이상 입력해주세요"); return; }
+    if (title.trim().length > 40) { setError("배너 큰 문구는 40자 이하로 입력해주세요"); return; }
+    if (subtitle.trim().length > 60) { setError("작은 문구는 60자 이하로 입력해주세요"); return; }
     setBusy(true);
     try {
-      await addBanner({ title: title.trim(), subtitle: subtitle.trim(), emoji: emoji.trim(), linkUrl: linkUrl.trim() });
-      setTitle(""); setSubtitle(""); setEmoji(""); setLinkUrl(""); setAdding(false);
+      await addBanner({ title: title.trim(), subtitle: subtitle.trim(), emoji: "", linkUrl: linkUrl.trim() });
+      setTitle(""); setSubtitle(""); setLinkUrl(""); setAdding(false);
       showToast("배너를 추가했어요");
       await load();
     } catch (e: any) { setError(e.message); }
@@ -60,7 +61,7 @@ export default function BannersPage() {
   }
 
   async function handleDelete(b: HomeBanner) {
-    if (!confirm("이 배너를 삭제할까요?")) return;
+    if (!await globalThis.appConfirm("이 배너를 삭제할까요?")) return;
     setBusy(true);
     try { await deleteBanner(b.id); await load(); }
     catch (e: any) { setError(e.message); }
@@ -113,7 +114,7 @@ export default function BannersPage() {
             ) : banners.map((b) => (
               <div key={b.id} className="banner-admin-row">
                 <div className="banner-admin-main">
-                  <div className="banner-admin-title">{b.emoji} {b.title}</div>
+                  <div className="banner-admin-title">{b.title}</div>
                   {b.subtitle && <div className="banner-admin-sub">{b.subtitle}</div>}
                   {b.linkUrl && <div className="banner-admin-link">→ {b.linkUrl}</div>}
                 </div>
@@ -129,9 +130,13 @@ export default function BannersPage() {
 
           {adding ? (
             <div className="add-profile-form">
-              <input className="input-field" placeholder="큰 문구 (필수)" value={title} onChange={(e) => setTitle(e.target.value)} />
-              <input className="input-field" placeholder="작은 문구 (선택)" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} />
-              <input className="input-field" placeholder="이모지 (선택, 예: 🎁)" value={emoji} onChange={(e) => setEmoji(e.target.value)} />
+              <div className="banner-form-preview">
+                <span>홈 배너 미리보기</span>
+                <strong>{title.trim() || "큰 문구가 여기에 보여요"}</strong>
+                <small>{subtitle.trim() || "작은 문구는 한 줄로 표시돼요"}</small>
+              </div>
+              <input className="input-field" maxLength={40} placeholder="큰 문구 (필수, 최대 40자)" value={title} onChange={(e) => setTitle(e.target.value)} />
+              <input className="input-field" maxLength={60} placeholder="작은 문구 (선택, 최대 60자)" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} />
               <input className="input-field" placeholder="이동 링크 (선택, 예: /reservation)" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} />
               <div className="add-profile-actions">
                 <button className="ghost-btn" onClick={() => { setAdding(false); setError(null); }}>취소</button>

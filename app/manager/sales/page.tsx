@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import ManagerNav from "../../components/ManagerNav";
 import Loading from "../../components/Loading";
+import DatePicker from "../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
   registerPayment, fetchPayments, summarize, paymentsToCsv,
@@ -215,7 +216,7 @@ export default function SalesPage() {
   }
 
   async function handleDeleteExpense(id: string) {
-    if (!confirm("이 지출을 삭제할까요?")) return;
+    if (!await globalThis.appConfirm("이 지출을 삭제할까요?")) return;
     setBusy(true);
     try { await deleteExpense(id); showToast("삭제했어요"); await load(); }
     catch (e: any) { setError(e.message); }
@@ -249,7 +250,7 @@ export default function SalesPage() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell sales-page-v4">
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
@@ -277,9 +278,10 @@ export default function SalesPage() {
       {/* 기간 선택 (포인트 탭 제외) */}
       {tab !== "point" && (
         <div className="date-range">
-          <input type="date" className="date-input" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <span className="sales-period-label">조회 기간</span>
+          <DatePicker value={from} onChange={setFrom} label="조회 시작일" />
           <span className="date-tilde">~</span>
-          <input type="date" className="date-input" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DatePicker value={to} onChange={setTo} label="조회 종료일" />
         </div>
       )}
 
@@ -293,15 +295,18 @@ export default function SalesPage() {
           {summary && (
             <div className="sales-summary">
               <div className="sales-big">
-                <div className="sales-big-label">순매출</div>
+                <div className="sales-big-label">기간 순매출</div>
                 <div className="sales-big-value">{won(summary.totalSales)}</div>
               </div>
-              <div className="profit-line">
-                <span>지출 {won(summarizeExpenses(expenses).total)}</span>
-                <span className="profit-net">순이익 {won(summary.totalSales - summarizeExpenses(expenses).total)}</span>
+              <div className="sales-metric-grid">
+                <div><span>순이익</span><b>{won(summary.totalSales - summarizeExpenses(expenses).total)}</b></div>
+                <div><span>지출</span><b>{won(summarizeExpenses(expenses).total)}</b></div>
+                <div><span>결제</span><b>{summary.count}건</b></div>
               </div>
               {summary.totalUnpaid > 0 && (
-                <div className="sales-unpaid">미수금 {won(summary.totalUnpaid)}</div>
+                <button className="sales-unpaid" onClick={() => setDrill({ kind: "saleType", key: "unpaid", label: "미수금" })}>
+                  <span>확인할 미수금</span><b>{won(summary.totalUnpaid)}</b><em>›</em>
+                </button>
               )}
             </div>
           )}
@@ -313,8 +318,8 @@ export default function SalesPage() {
               <div className="sales-breakdown">
                 {(["card", "cash", "transfer", "point", "direct"] as const).map((m) => (
                   <button key={m} className="sales-bd-item clickable" onClick={() => setDrill({ kind: "method", key: m, label: METHOD_LABEL[m] })}>
-                    <span className="bd-label">{METHOD_LABEL[m]} ›</span>
-                    <span className="bd-value">{won(summary.byMethod[m] ?? 0)}</span>
+                    <span className="sales-bd-copy"><span className="bd-label">{METHOD_LABEL[m]}</span><span className="bd-value">{won(summary.byMethod[m] ?? 0)}</span></span>
+                    <span className="sales-bd-track"><i style={{ width: `${summary.totalSales > 0 ? Math.max(2, ((summary.byMethod[m] ?? 0) / summary.totalSales) * 100) : 0}%` }} /></span>
                   </button>
                 ))}
               </div>
@@ -326,8 +331,8 @@ export default function SalesPage() {
                   <div className="sales-breakdown">
                     {Object.entries(summary.bySaleType).map(([k, v]) => (
                       <button key={k} className="sales-bd-item clickable" onClick={() => setDrill({ kind: "saleType", key: k, label: SALE_TYPE_LABEL[k] ?? k })}>
-                        <span className="bd-label">{SALE_TYPE_LABEL[k] ?? k} ›</span>
-                        <span className="bd-value">{won(v)}</span>
+                        <span className="sales-bd-copy"><span className="bd-label">{SALE_TYPE_LABEL[k] ?? k}</span><span className="bd-value">{won(v)}</span></span>
+                        <span className="sales-bd-track"><i style={{ width: `${summary.totalSales > 0 ? Math.max(2, (v / summary.totalSales) * 100) : 0}%` }} /></span>
                       </button>
                     ))}
                   </div>
@@ -456,7 +461,7 @@ export default function SalesPage() {
               {members.map((m) => <option key={m.profileId} value={m.profileId}>{m.name}</option>)}
             </select>
 
-            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>🎫 수강권 (선택 시 발급)</div>
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>수강권 (선택 시 발급)</div>
             <select className="input-field" value={fProductId} onChange={(e) => setFProductId(e.target.value)}>
               <option value="">선택 안 함</option>
               {saleProducts.filter((p) => p.kind === "pass").map((p) => (
@@ -466,7 +471,7 @@ export default function SalesPage() {
               ))}
             </select>
 
-            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>🎽 상품 (선택 시 발급, 수강권과 함께 가능)</div>
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>상품 (선택 시 발급, 수강권과 함께 가능)</div>
             <select className="input-field" value={fGoodsId} onChange={(e) => setFGoodsId(e.target.value)}>
               <option value="">선택 안 함</option>
               {saleProducts.filter((p) => p.kind === "goods").map((p) => (
@@ -501,7 +506,7 @@ export default function SalesPage() {
             </select>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>결제일</div>
-            <input type="date" className="input-field" value={fPaidAt} onChange={(e) => setFPaidAt(e.target.value)} />
+            <DatePicker value={fPaidAt} onChange={setFPaidAt} label="결제일" />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>메모 (선택)</div>
             <input className="input-field" value={fMemo} onChange={(e) => setFMemo(e.target.value)} placeholder="예: 3개월 할인 적용" />
@@ -533,7 +538,7 @@ export default function SalesPage() {
             <input inputMode="numeric" className="input-field" value={eAmount} onChange={(e) => setEAmount(e.target.value)} placeholder="0" />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>지출일</div>
-            <input type="date" className="input-field" value={eDate} onChange={(e) => setEDate(e.target.value)} />
+            <DatePicker value={eDate} onChange={setEDate} label="지출일" />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>메모 (선택)</div>
             <input className="input-field" value={eMemo} onChange={(e) => setEMemo(e.target.value)} placeholder="예: 7월 임대료" />
@@ -604,14 +609,14 @@ export default function SalesPage() {
             if (drill.key === "point") return r.pointAmount !== 0;
             if (drill.key === "direct") return (r.directAmount ?? 0) !== 0;
           }
-          if (drill.kind === "saleType") return r.saleType === drill.key;
+          if (drill.kind === "saleType") return drill.key === "unpaid" ? r.unpaidAmount > 0 : r.saleType === drill.key;
           if (drill.kind === "member") return r.profileName === drill.key;
           return false;
         });
         const methodAmount = (r: PaymentRow) =>
           drill.kind === "method"
             ? (drill.key === "card" ? r.cardAmount : drill.key === "cash" ? r.cashAmount : drill.key === "transfer" ? r.transferAmount : drill.key === "direct" ? (r.directAmount ?? 0) : r.pointAmount)
-            : r.totalAmount;
+            : drill.kind === "saleType" && drill.key === "unpaid" ? r.unpaidAmount : r.totalAmount;
         const sum = filtered.reduce((s, r) => s + methodAmount(r), 0);
         return (
           <div className="sheet-overlay" onClick={() => setDrill(null)}>

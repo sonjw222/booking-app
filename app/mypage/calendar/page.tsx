@@ -67,7 +67,7 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell schedule-page-v2">
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
       <div className="back-header">
@@ -143,16 +143,20 @@ export default function CalendarPage() {
                     <button className="cal-add-one" onClick={() => downloadIcs([r], `${r.title}.ics`)}>
                       캘린더에 추가
                     </button>
-                    <div className="cal-memo-row">
-                      <input
-                        className="input-field"
-                        placeholder="메모 추가 (예: 준비물, 컨디션)"
-                        value={memoEdits[r.id] ?? r.memo ?? ""}
-                        onChange={(e) => setMemoEdits({ ...memoEdits, [r.id]: e.target.value })}
-                      />
-                      <button className="primary-btn small" disabled={savingId === r.id} onClick={() => saveMemo(r)}>
-                        {savingId === r.id ? "저장" : "저장"}
-                      </button>
+                    <div className="cal-memo-section">
+                      <div className="cal-memo-label">개인 메모</div>
+                      <div className="cal-memo-row">
+                        <input
+                          className="input-field"
+                          aria-label={`${r.title} 개인 메모`}
+                          placeholder="준비물이나 컨디션을 적어보세요"
+                          value={memoEdits[r.id] ?? r.memo ?? ""}
+                          onChange={(e) => setMemoEdits({ ...memoEdits, [r.id]: e.target.value })}
+                        />
+                        <button className="primary-btn small" disabled={savingId === r.id} onClick={() => saveMemo(r)}>
+                          {savingId === r.id ? "저장 중" : "저장"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))

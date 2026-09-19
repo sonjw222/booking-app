@@ -80,11 +80,11 @@ export default function InquiriesPage() {
   }
 
   return (
-    <div className="app-shell">
-      <div className="header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div className="title" style={{ fontSize: 20, fontWeight: 800 }}>1:1 문의</div>
+    <div className="app-shell member-inquiries">
+      <div className="inquiry-head">
+        <div><h1>1:1 문의</h1><p>센터와 나눈 대화를 확인하세요</p></div>
         <button className="primary-btn" style={{ width: "auto", padding: "8px 14px", fontSize: 13 }} onClick={openPicker}>
-          + 새 문의
+          새 문의
         </button>
       </div>
 

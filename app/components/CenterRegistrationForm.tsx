@@ -55,7 +55,7 @@ export default function CenterRegistrationForm({ value, onChange, onFileSelect, 
       />
       <label className="file-field">
         <span className="file-label">
-          {value.licenseFileName ? `📎 ${value.licenseFileName}` : "사업자등록증 첨부"}
+          {value.licenseFileName ? value.licenseFileName : "사업자등록증 파일 선택"}
         </span>
         <input
           type="file"

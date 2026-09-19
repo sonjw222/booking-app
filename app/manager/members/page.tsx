@@ -237,7 +237,7 @@ function MembersContent() {
   }
 
   async function handleDeleteGrade(g: Grade) {
-    if (!confirm(`'${g.name}' 등급을 삭제할까요?\n이 등급을 쓰던 회원은 등급 없음이 됩니다.`)) return;
+    if (!await globalThis.appConfirm(`'${g.name}' 등급을 삭제할까요?\n이 등급을 쓰던 회원은 등급 없음이 됩니다.`)) return;
     setBusy(true);
     try {
       await deleteGrade(g.id);
@@ -384,7 +384,7 @@ function MembersContent() {
       ) : (
         <div className="mem-list">
           {members.map((m) => (
-            <button key={m.id} className="mem-row" onClick={() => openDetail(m)}>
+            <a key={m.id} className="mem-row" href={`/manager/member-detail?center=${centerId ?? ""}&profile=${m.profileId}`}>
               <div className="mem-main">
                 <div className="mem-name-line">
                   <span className="mem-name">{m.name}</span>
@@ -404,7 +404,7 @@ function MembersContent() {
                 </div>
               </div>
               <span className="chevron">›</span>
-            </button>
+            </a>
           ))}
         </div>
       )}

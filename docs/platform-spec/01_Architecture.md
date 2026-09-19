@@ -1,87 +1,107 @@
 # Architecture
 
-## 1. 목표 구조
+Status: Active, Current/Target Split
+Version: 1.1.0
+Current-State Source: `package.json`, `app/**`, `lib/supabaseClient.ts`, `lib/**`, repository SQL
+Target-State Status: Future State is non-binding until approved
+Last Updated: 2026-07-31
 
-v1은 배포와 트랜잭션을 단순화한 **모듈형 모놀리스**를 기본안으로 한다. 각 모듈의 경계와 이벤트 계약을 명확히 하여 필요 시 독립 서비스로 분리할 수 있게 한다.
+## 1. Current Architecture
 
 ```text
-Customer Web/App ─┐
-Admin Console ────┼─> API / BFF ─> Application Modules ─> Relational DB
-Platform Console ─┘       │              │
-                          │              ├─> Cache / Rate Limit
-                          │              ├─> Job Queue / Worker
-                          │              ├─> Email / Push Provider
-                          │              └─> Social IdP
-                          └─> Observability / Audit
+Browser
+  └─ Next.js App Router Client Components
+       ├─ Member routes
+       ├─ /manager/* Staff/Admin routes
+       └─ /admin/* Platform Admin routes
+            │
+            └─ lib/*.ts
+                 └─ @supabase/supabase-js
+                      ├─ Supabase Auth
+                      ├─ PostgREST tables/views + RLS
+                      ├─ Postgres RPC
+                      ├─ Storage
+                      └─ Realtime
 ```
 
-## 2. 모듈 경계
+### Confirmed stack
 
-| 모듈 | 책임 |
+| Area | Current State |
 |---|---|
-| Identity | 가입, 로그인, 이메일 인증, 소셜 OAuth/OIDC, Account Linking |
-| Session | Access/Refresh 토큰, 회전, 기기, 철회 |
-| Organization | 센터, Membership, 역할, 초대 |
-| Catalog | 서비스, 직원, 제공 가능 서비스 |
-| Availability | 영업시간, 휴무, 직원 일정, 예약 가능 슬롯 계산 |
-| Booking | 예약 생성·변경·취소, 상태 전이, 중복 방지 |
-| Notification | 이메일/푸시 템플릿, 비동기 발송, 재시도 |
-| Audit | 감사 이벤트, 보안 이벤트, 관리자 조회 |
-| Platform Admin | 플랫폼 수준 센터/사용자 운영 |
+| Web | Next.js 16.2.10 App Router |
+| UI | React 19.2.4, Client Components 중심 |
+| Language | TypeScript 5 |
+| Backend/BaaS | Supabase JS 2.110.x |
+| Authentication | Supabase Auth |
+| Database | Supabase Postgres |
+| Authorization | RLS, security-aware RPC, permission functions |
+| Data access | Client → `lib/*.ts` → Supabase direct |
+| Server endpoints | `app/api` Route Handler 없음 |
+| Server mutations | Server Action 없음 |
+| Async/live | Supabase Realtime, DB triggers/functions 일부 |
+| Files | Supabase Storage |
 
-모듈은 다른 모듈의 테이블을 직접 수정하지 않는다. 동일 프로세스 내 명시적 서비스 계약 또는 도메인 이벤트를 사용한다.
+## 2. Application Boundaries
 
-## 3. 요청 컨텍스트와 멀티센터
+하나의 앱에서 세 영역이 공존한다.
 
-인증 미들웨어는 `actor_user_id`, `session_id`를 검증한다. 센터 범위 API는 경로의 `centerId`를 신뢰하지 않고 Membership을 조회해 `center_id`, 역할, 권한을 요청 컨텍스트에 주입한다.
+- **Member:** 홈, 센터, 예약, 장바구니/결제, 구매, 마이페이지, 프로필, 알림, 문의
+- **Center Operations:** `/manager/*`에서 센터, 수업, 회원, 주문, 매출, 역할/권한, 직접배치 관리
+- **Platform Operations:** `/admin/*`에서 입점 센터 승인, 카테고리, 배너 관리
 
-- 고객의 공개 조회도 노출 가능한 센터/서비스만 반환한다.
-- 플랫폼 관리자는 전역 권한을 별도 검사하며 자동으로 센터 회원으로 간주하지 않는다.
-- 센터 전환은 토큰의 권한을 바꾸는 행위가 아니라 다음 요청의 대상 센터를 선택하는 UI 행위다.
-- 저장소 계층은 센터 소유 엔티티 조회 시 `center_id`를 필수 인자로 받는다.
-- DB Row Level Security 사용 여부와 무관하게 애플리케이션 검증을 유지한다.
+현재 프론트엔드는 별도 BFF/API 계층 없이 Supabase를 호출한다. 보안은 브라우저의 화면 조건이 아니라 RLS와 RPC에서 최종 강제되어야 한다.
 
-## 4. 인증 구조
+## 3. Current Domain Flow
 
-- 짧은 수명의 Access Token과 회전형 Refresh Token을 사용한다.
-- 웹은 `HttpOnly`, `Secure`, 적절한 `SameSite` 쿠키를 기본안으로 한다.
-- Refresh Token 원문은 저장하지 않고 해시와 토큰 패밀리만 저장한다.
-- 소셜 로그인은 Authorization Code + PKCE, `state`, `nonce` 검증을 사용한다.
-- 동일 이메일이라는 이유만으로 계정을 자동 병합하지 않는다. 기존 로그인 재인증 또는 검증된 linking ticket이 필요하다.
-- 비밀번호 재설정 성공 시 기존 세션을 기본적으로 모두 철회하고 새 로그인으로 유도한다.
+- Supabase Auth user ID는 `accounts.auth_id`에 연결된다.
+- `accounts`는 로그인·플랫폼 권한 단위다.
+- `profiles`는 예약·수강권·진도·주문의 수강 주체다.
+- `manager_centers`는 계정과 센터의 운영 소속이며 `center_roles`에 연결된다.
+- `center_roles` + `role_permissions` + `account_center_permissions` + `has_permission()`이 센터 권한을 구성한다.
+- `classes`에 `reservations`가 연결되고 예약/취소/직접배치는 RPC가 원자적으로 처리한다.
+- `products` 구매는 `orders`를 만들고, Mock Provider는 테스트 RPC로 결제 상태와 수강권 발급을 처리한다.
 
-상세 정책은 [Security](./05_Security.md)를 따른다.
+## 4. Current Security and Consistency Boundary
 
-## 5. 예약 정합성
+| Concern | Current mechanism |
+|---|---|
+| Auth session | Supabase Auth SDK 관리형 세션 |
+| Center access | RLS, `manager_centers`, RPC permission check |
+| Custom permission | `has_permission(center_id, permission_key)` |
+| Reservation consistency | `reserve_*`, `cancel_reservation`, `admin_assign_reservation` RPC와 DB 제약 |
+| Realtime access | Realtime publication + 해당 테이블 RLS에 의존 |
+| Storage access | 버킷 정책과 경로 정책에 의존 |
 
-슬롯 조회는 힌트이며 예약 생성 시 서버가 다음을 같은 트랜잭션에서 재검증한다.
+## 5. Gap
 
-1. 센터·서비스·직원 활성 상태
-2. 영업시간, 휴무, 직원 근무시간
-3. 서비스 소요시간과 버퍼
-4. 기존 예약과 시간 범위 충돌
-5. 중복 요청 멱등성
+- 일부 `/manager`·`/admin` 화면은 사전 UI 가드가 일관되지 않다.
+- Supabase 클라이언트 타입이 생성 스키마 타입으로 강제되지 않고 `any` 사용이 많다.
+- SQL 파일이 누적되어 단일 migration 이력과 운영 적용 상태를 저장소만으로 확인하기 어렵다.
+- 외부 PG secret, webhook, 관리자 수준 작업처럼 브라우저에 둘 수 없는 기능을 위한 서버 신뢰 경계가 없다.
+- 자체 기기 목록/세션 철회 UI는 없다. Supabase Auth 세션을 사용한다.
+- 일부 날짜 표시가 `Asia/Seoul`에 고정되어 센터별 timezone 모델과 연결되지 않는다.
 
-지원 DB가 제공하는 배타 제약 또는 잠금으로 겹치는 활성 예약을 차단한다. 애플리케이션의 사전 조회만으로 동시성을 해결하지 않는다.
+## 6. Target Architecture
 
-## 6. 비동기 처리
+기존 v1.0의 모듈 경계·관측·복구 원칙은 목표로 유지하되 현재 구현으로 표현하지 않는다.
 
-이메일, 푸시, 분석 이벤트는 트랜잭셔널 아웃박스를 거쳐 워커가 처리한다.
+- 기능별 `lib` 모듈을 명확한 도메인 서비스 계약으로 정리
+- 생성된 Supabase Database 타입과 스키마 migration 체계
+- 민감한 외부 연동용 Next.js Route Handler 또는 Supabase Edge Function
+- 실제 PG 승인·취소·webhook의 서버 전용 secret 관리
+- 일관된 감사 이벤트 및 운영 지표
+- 필요할 때만 background job/outbox 또는 Supabase-native queue 도입
+- 서버 렌더링/Server Action 도입은 보안·성능 이점이 확인된 흐름부터 점진 적용
 
-- 도메인 변경과 outbox 기록은 하나의 DB 트랜잭션이다.
-- 소비자는 이벤트 ID로 중복 처리를 방지한다.
-- 지수 백오프와 최대 재시도 후 Dead Letter Queue로 이동한다.
-- 알림 실패는 예약 트랜잭션을 되돌리지 않는다.
+## 7. Decision Required
 
-## 7. 운영 및 확장
+- Next.js Route Handler와 Supabase Edge Function의 책임 분리
+- 운영 migration 도구와 기준 스키마
+- 결제 webhook 및 idempotency 저장 위치
+- 센터별 timezone 지원 범위
+- 세션·기기 관리가 제품 요구인지, Supabase 관리 기능으로 충분한지
 
-- 구조화 로그에 `request_id`, `actor_id`, `center_id`, `session_id`를 포함하되 토큰/비밀번호/민감정보는 제외한다.
-- 핵심 지표: 로그인 성공률, 비밀번호 재설정, 초대 수락, 예약 성공/충돌, API 오류율·지연, 큐 적체.
-- DB 자동 백업과 시점 복구를 사용하고 정기 복구 훈련을 한다.
-- 무중단 호환 마이그레이션(Expand → Migrate → Contract)을 사용한다.
-- 환경은 local/development, staging, production으로 분리하고 비밀값과 소셜 콜백 URL을 환경별로 격리한다.
+## 8. Not Current State
 
-## 8. 기술 선택 보류
-
-웹/모바일 프레임워크, 서버 언어, 관계형 DB 제품, 클라우드, 이메일 및 소셜 공급자는 미확정이다. 선택 전까지 이 문서의 계약을 특정 벤더 기능에 종속시키지 않는다.
+다음은 현재 구조가 아니다: 자체 REST BFF, 자체 Access/Refresh Token 발급·회전, `sessions`/`devices` 테이블, 트랜잭셔널 outbox, 마이크로서비스. 필요하면 ADR 승인 후 Target State에서 구현한다.
 

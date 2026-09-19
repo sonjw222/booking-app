@@ -10,6 +10,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { fetchUnreadCount, subscribeNotifications } from "../../lib/notifications";
 import NotificationToaster from "./NotificationToaster";
+import UiIcon from "./UiIcon";
 
 export default function ManagerNav() {
   const pathname = usePathname();
@@ -40,19 +41,19 @@ export default function ManagerNav() {
       <NotificationToaster />
       <div className="bottom-nav">
         <a className={`nav-item ${is("/manager/classes") ? "active" : ""}`} href="/manager/classes">
-          <div className="nav-icon">▤</div>수업
+          <div className="nav-icon"><UiIcon name="calendar" /></div>수업
         </a>
         <a className={`nav-item ${is("/manager/members") ? "active" : ""}`} href="/manager/members">
-          <div className="nav-icon">◍</div>회원
+          <div className="nav-icon"><UiIcon name="users" /></div>회원
         </a>
         <a className={`nav-item ${is("/manager/notifications") ? "active" : ""}`} href="/manager/notifications">
           <div className="nav-icon" style={{ position: "relative" }}>
-            🔔
+            <UiIcon name="bell" />
             {unread > 0 && <span className="nav-badge">{unread > 99 ? "99+" : unread}</span>}
           </div>알림
         </a>
         <a className={`nav-item ${isMore ? "active" : ""}`} href="/manager">
-          <div className="nav-icon">≡</div>더보기
+          <div className="nav-icon"><UiIcon name="list" /></div>더보기
         </a>
       </div>
     </>

@@ -10,12 +10,14 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { fetchUnreadCount, subscribeNotifications } from "../../lib/notifications";
 import NotificationToaster from "./NotificationToaster";
+import UiIcon from "./UiIcon";
 
 export default function BottomNav() {
   const pathname = usePathname();
   const is = (p: string) => (p === "/" ? pathname === "/" : pathname.startsWith(p));
 
   const [unread, setUnread] = useState(0);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -34,27 +36,40 @@ export default function BottomNav() {
     if (pathname.startsWith("/notifications")) setUnread(0);
   }, [pathname]);
 
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const check = () => setKeyboardOpen(window.innerHeight - viewport.height > 140);
+    viewport.addEventListener("resize", check);
+    viewport.addEventListener("scroll", check);
+    check();
+    return () => {
+      viewport.removeEventListener("resize", check);
+      viewport.removeEventListener("scroll", check);
+    };
+  }, []);
+
   return (
     <>
       <NotificationToaster />
-      <div className="bottom-nav">
+      <div className={`bottom-nav ${keyboardOpen ? "keyboard-hidden" : ""}`}>
         <a className={`nav-item ${is("/") ? "active" : ""}`} href="/">
-          <div className="nav-icon">⌂</div>홈
+          <div className="nav-icon"><UiIcon name="home" /></div>홈
         </a>
         <a className={`nav-item ${is("/reservation") ? "active" : ""}`} href="/reservation">
-          <div className="nav-icon">▤</div>예약
+          <div className="nav-icon"><UiIcon name="calendar" /></div>예약
         </a>
         <a className={`nav-item ${is("/my-reservations") ? "active" : ""}`} href="/my-reservations">
-          <div className="nav-icon">◑</div>내 예약
+          <div className="nav-icon"><UiIcon name="list" /></div>내 예약
         </a>
         <a className={`nav-item ${is("/notifications") ? "active" : ""}`} href="/notifications">
           <div className="nav-icon" style={{ position: "relative" }}>
-            🔔
-            {unread > 0 && <span className="nav-badge">{unread > 99 ? "99+" : unread}</span>}
+            <UiIcon name="bell" />
+            {unread > 0 && <span className="nav-badge">{unread > 9 ? "9+" : unread}</span>}
           </div>알림
         </a>
         <a className={`nav-item ${is("/mypage") ? "active" : ""}`} href="/mypage">
-          <div className="nav-icon">◔</div>마이페이지
+          <div className="nav-icon"><UiIcon name="user" /></div>마이
         </a>
       </div>
     </>

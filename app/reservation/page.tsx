@@ -11,10 +11,12 @@
   2. AUTH_SETUP.md 의 RLS 정책 실행 + 로그인 상태여야 함
 */
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Loading from "../components/Loading";
 import { useSearchParams, useRouter } from "next/navigation";
 import BottomNav from "../components/BottomNav";
+import UiIcon from "../components/UiIcon";
+import SegmentedTabs from "../components/SegmentedTabs";
 import {
   fetchMonthData,
   reserveClass, fetchUsableMembershipsByClass, reserveWithMembership, type UsableMembership,
@@ -80,7 +82,7 @@ function ReservationCalendarContent() {
   const [selectedDay, setSelectedDay] = useState<number>(now.getDate());
   const [classes, setClasses] = useState<ClassInfo[]>([]);
   const [centers, setCenters] = useState<CenterInfo[]>([]);
-  const [centerPick, setCenterPick] = useState<string | null>(null); // 로컬 센터 필터
+  const [centerPick, setCenterPick] = useState<string | null | undefined>(undefined); // undefined=URL 필터 유지, null=전체 센터
   const [centerSheet, setCenterSheet] = useState(false);
   // 수강권 선택 시트
   const [passSheet, setPassSheet] = useState<ClassInfo | null>(null);
@@ -107,6 +109,8 @@ function ReservationCalendarContent() {
   const [toast, setToast] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<BookingProfile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [timeFilter, setTimeFilter] = useState<"all" | "morning" | "afternoon" | "evening">("all");
+  const [availableOnly, setAvailableOnly] = useState(false);
 
   const cells = useMemo(() => buildCalendarGrid(year, month), [year, month]);
   const selectedKey = dateKey(year, month, selectedDay);
@@ -204,8 +208,8 @@ function ReservationCalendarContent() {
     const nowUsable = (usablePassesByClass[openClassId] ?? []).length > 0;
     showToast(
       nowUsable
-        ? "✅ 상품 구매가 완료되었으며 이용 가능한 수강권이 등록되었습니다. 바로 예약을 진행할 수 있어요."
-        : "✅ 상품 구매가 완료되었습니다. 수강권이 발급되면 예약을 진행할 수 있어요."
+        ? "상품 구매가 완료되었으며 이용 가능한 수강권이 등록되었습니다. 바로 예약을 진행할 수 있어요."
+        : "상품 구매가 완료되었습니다. 수강권이 발급되면 예약을 진행할 수 있어요."
     );
     const params = new URLSearchParams(searchParams.toString());
     params.delete("purchased");
@@ -365,7 +369,7 @@ function ReservationCalendarContent() {
     const mine = activeProfileId ? cls.myByProfile[activeProfileId] : undefined;
     if (!mine) return;
     if (busyClassId) return; // 중복 클릭/중복 요청 방지
-    if (!confirm("이 수업 예약을 취소할까요?")) return;
+    if (!await globalThis.appConfirm("이 수업 예약을 취소할까요?")) return;
     setBusyClassId(cls.id);
     try {
       await cancelReservation(mine.reservationId);
@@ -395,7 +399,6 @@ function ReservationCalendarContent() {
 
   const centerFilter = searchParams.get("center");
   const categoryFilter = searchParams.get("category");
-  const filteredCenterName = centerFilter ? centers.find((c) => c.id === centerFilter)?.name : null;
   // 카테고리 필터 시 해당 종목 센터들의 id 집합 (centers/categoryFilter가 바뀔 때만 새로 계산 —
   // 매 렌더링마다 새 Set을 만들면 아래 dayClasses useMemo의 deps가 매번 "새 객체"로 보여 무효화됨)
   const categoryCenterIds = useMemo(
@@ -408,17 +411,27 @@ function ReservationCalendarContent() {
 
   const publicHoliday = PUBLIC_HOLIDAYS[selectedKey];
   const centerHolidays = holidays.filter((h) => h.date === selectedKey);
-  const effectiveCenter = centerPick ?? centerFilter;
+  const effectiveCenter = centerPick === undefined ? centerFilter : centerPick;
+  const effectiveCenterName = effectiveCenter
+    ? (centers.find((c) => c.id === effectiveCenter)?.name ?? "선택한 센터")
+    : "전체 센터";
   // 날짜/센터/카테고리 필터가 바뀔 때만 다시 계산 (매 렌더링마다 3중 filter+sort를 새로 만들지 않음)
-  const dayClasses = useMemo(
-    () =>
-      classes
+  const dayClasses = useMemo(() => {
+    const inTimeRange = (start: string) => {
+      const hour = Number(start.split(":")[0]);
+      if (timeFilter === "morning") return hour < 12;
+      if (timeFilter === "afternoon") return hour >= 12 && hour < 18;
+      if (timeFilter === "evening") return hour >= 18;
+      return true;
+    };
+    return classes
         .filter((c) => c.date === selectedKey)
         .filter((c) => !effectiveCenter || c.centerId === effectiveCenter)
         .filter((c) => !categoryCenterIds || categoryCenterIds.has(c.centerId))
-        .sort((a, b) => a.start.localeCompare(b.start)),
-    [classes, selectedKey, effectiveCenter, categoryCenterIds]
-  );
+        .filter((c) => !availableOnly || c.reserved < c.capacity)
+        .filter((c) => inTimeRange(c.start))
+        .sort((a, b) => a.start.localeCompare(b.start));
+  }, [classes, selectedKey, effectiveCenter, categoryCenterIds, availableOnly, timeFilter]);
   // 예약 확인 모달에 표시할 수강권/상품 목록 (배치 조회 결과에서 파생 — 별도 조회 없음)
   const passList = confirmClass ? (usablePassesByClass[confirmClass.id] ?? []) : [];
   const confirmGoods = confirmClass ? (goodsByCenter[confirmClass.centerId] ?? []) : [];
@@ -432,34 +445,34 @@ function ReservationCalendarContent() {
   }
 
   if (error) {
+    const needsLogin = error.includes("로그인");
     return (
-      <div className="app-shell">
-        <div className="holiday-notice" style={{ marginTop: 60 }}>
-          <div className="holiday-chip">
-            <span className="hc-dot" />
-            {error}
-          </div>
-        </div>
-        <div style={{ padding: 20 }}>
-          <button className="primary-btn" onClick={load}>다시 시도</button>
+      <div className="app-shell auth-required-state">
+        <UiIcon name={needsLogin ? "user" : "info"} size={31} />
+        <h1>{needsLogin ? "로그인이 필요해요" : "예약 정보를 불러오지 못했어요"}</h1>
+        <p>{needsLogin ? "로그인하면 수강권을 확인하고 바로 예약할 수 있어요." : error}</p>
+        <div className="auth-required-actions">
+          {needsLogin ? <a className="primary-btn" href="/login?next=/reservation">로그인하고 계속하기</a> : <button className="primary-btn" onClick={load}>다시 불러오기</button>}
+          <a className="ghost-btn" href="/">홈으로 돌아가기</a>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell member-reservation">
       {toast && <div className="toast">{toast}</div>}
 
-      {centers.length > 1 && (
-        <div className="resv-top-bar">
-          <div className="resv-top-title">예약</div>
-          <button className="resv-center-pick" onClick={() => setCenterSheet(true)}>
-            {effectiveCenter ? (centers.find((c) => c.id === effectiveCenter)?.name ?? "센터") : "전체 센터"}
-          </button>
-        </div>
-      )}
-
+      <div className="resv-page-head">
+        <h1>예약</h1>
+      </div>
+      <div className="booking-steps" aria-label="예약 진행 단계">
+        <div className="booking-step complete"><span>✓</span><b>날짜 선택</b></div>
+        <i />
+        <div className={`booking-step ${confirmClass ? "complete" : "active"}`} aria-current={!confirmClass ? "step" : undefined}><span>{confirmClass ? "✓" : "2"}</span><b>수업 선택</b></div>
+        <i />
+        <div className={`booking-step ${confirmClass ? "active" : ""}`} aria-current={confirmClass ? "step" : undefined}><span>3</span><b>예약 확인</b></div>
+      </div>
       {centerSheet && (
         <div className="sheet-overlay" onClick={() => setCenterSheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
@@ -475,33 +488,23 @@ function ReservationCalendarContent() {
         </div>
       )}
 
-      {centerFilter && filteredCenterName && (
-        <div className="center-filter-banner">
-          <span>📍 {filteredCenterName} 수업만 보는 중</span>
-          <a href="/reservation" className="center-filter-clear">전체 보기</a>
-        </div>
-      )}
-
       {categoryFilter && (
         <div className="center-filter-banner">
-          <span>🏷️ {categoryFilter} 수업만 보는 중{categoryCenterIds && categoryCenterIds.size === 0 ? " (해당 종목 센터 없음)" : ""}</span>
+          <span>{categoryFilter} 수업만 보는 중{categoryCenterIds && categoryCenterIds.size === 0 ? " (해당 종목 센터 없음)" : ""}</span>
           <a href="/reservation" className="center-filter-clear">전체 보기</a>
         </div>
       )}
 
       <div className="cal-header">
-        <div className="cal-month-nav">
-          <button className="cal-nav-btn" onClick={goPrevMonth}>‹</button>
-          <div className="cal-title">{year}.{pad(month)}</div>
-          <button className="cal-nav-btn" onClick={goNextMonth}>›</button>
-        </div>
-        <div className="cal-legend">
-          {centers.map((c) => (
-            <span key={c.id} className="legend-item">
-              <span className="legend-dot" style={{ background: c.color }} />
-              {c.name}
-            </span>
-          ))}
+        <div className="cal-toolbar">
+          <div className="cal-month-control">
+            <button className="cal-nav-btn" onClick={goPrevMonth} aria-label="이전 달">‹</button>
+            <div className="cal-title">{year}년 {month}월</div>
+            <button className="cal-nav-btn" onClick={goNextMonth} aria-label="다음 달">›</button>
+          </div>
+          <button className="cal-center-pick" onClick={() => setCenterSheet(true)} aria-label={`센터 선택, 현재 ${effectiveCenterName}`}>
+            <span>{effectiveCenterName}</span><b>⌄</b>
+          </button>
         </div>
       </div>
 
@@ -530,9 +533,7 @@ function ReservationCalendarContent() {
                 <span className="cal-daynum">{day}</span>
               </span>
               <span className="cal-dots">
-                {dots.map((color) => (
-                  <span key={color} className="cal-dot" style={{ background: color }} />
-                ))}
+                {dots.length > 0 && <span className={`cal-dot ${bookedDays[key] ? "mine" : ""}`} />}
               </span>
             </button>
           );
@@ -562,6 +563,23 @@ function ReservationCalendarContent() {
         </div>
       )}
 
+      <div className="reservation-list-controls">
+        <SegmentedTabs
+          value={timeFilter}
+          onChange={(value) => setTimeFilter(value as typeof timeFilter)}
+          label="수업 시간대"
+          items={[
+            { value: "all", label: "전체" },
+            { value: "morning", label: "오전" },
+            { value: "afternoon", label: "오후" },
+            { value: "evening", label: "저녁" },
+          ]}
+        />
+        <button className={`availability-filter ${availableOnly ? "on" : ""}`} onClick={() => setAvailableOnly((value) => !value)}>
+          <span aria-hidden="true" /> 잔여석만
+        </button>
+      </div>
+
       {centerHolidays.length > 0 && (
         <div className="holiday-notice">
           {centerHolidays.map((h, idx) => {
@@ -582,7 +600,7 @@ function ReservationCalendarContent() {
             {centerHolidays.length > 0 ? "선택한 센터는 휴무일이에요" : "이 날은 예약 가능한 수업이 없어요"}
           </div>
         ) : (
-          dayClasses.map((cls) => {
+          dayClasses.map((cls, index) => {
             const center = centers.find((c) => c.id === cls.centerId);
             const full = cls.reserved >= cls.capacity;
             // 지금 선택된 프로필 기준으로 내 예약 상태 판단
@@ -590,28 +608,30 @@ function ReservationCalendarContent() {
             const mine = !!mineRec;
             const busy = busyClassId === cls.id;
             const passNames = usableProductNames(cls.id);
+            const hour = Number(cls.start.split(":")[0]);
+            const period = hour < 12 ? "오전" : hour < 18 ? "오후" : "저녁";
+            const previousHour = index > 0 ? Number(dayClasses[index - 1].start.split(":")[0]) : -1;
+            const previousPeriod = previousHour < 0 ? "" : previousHour < 12 ? "오전" : previousHour < 18 ? "오후" : "저녁";
             return (
-              <div key={cls.id} className={`class-row ${mine ? "mine" : ""}`}>
-                <div className="class-color" style={{ background: center?.color }} />
+              <Fragment key={cls.id}>
+              {period !== previousPeriod && <div className="reservation-period-label">{period}</div>}
+              <div className={`class-row ${mine ? "mine" : ""}`}>
+                <div className="class-time"><strong>{cls.start}</strong><span>{cls.end}</span></div>
                 <div className="class-info">
                   <div className="class-row-title">
                     {cls.title}
                     {mineRec?.status === "confirmed" && <span className="booked-tag">내 예약</span>}
                     {mineRec?.status === "waitlisted" && <span className="booked-tag">대기중</span>}
                   </div>
-                  <div className="class-row-meta">
-                    {cls.start}~{cls.end}
-                  </div>
-                  <div className="class-row-place">{cls.place}</div>
+                  <div className="class-row-meta">{center?.name}{cls.place ? ` · ${cls.place}` : ""}</div>
                   <div className="center-class-passes">
                     {passesLoading ? (
                       <span className="class-pass-chip all skeleton-shimmer">수강권 확인 중...</span>
                     ) : passNames.length > 0 ? (
                       <>
                         <span className="class-pass-label">사용 가능:</span>
-                        {passNames.map((n) => (
-                          <span key={n} className="class-pass-chip">{n}</span>
-                        ))}
+                        <span className="class-pass-chip">{passNames[0]}</span>
+                        {passNames.length > 1 && <span className="class-pass-more">외 {passNames.length - 1}개</span>}
                       </>
                     ) : (
                       <span className="class-pass-chip all">사용 가능한 수강권 없음</span>
@@ -632,11 +652,12 @@ function ReservationCalendarContent() {
                       disabled={busy}
                       onClick={() => handleReserve(cls)}
                     >
-                      {busy ? "..." : full ? "대기" : "예약"}
+                      {busy ? "..." : full ? "대기 신청" : "선택"}
                     </button>
                   )}
                 </div>
               </div>
+              </Fragment>
             );
           })
         )}
@@ -645,7 +666,8 @@ function ReservationCalendarContent() {
       {confirmClass && (
         <div className="sheet-overlay" onClick={() => setConfirmClass(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-title">예약하시겠어요?</div>
+            <div className="sheet-step">3 / 3 · 예약 확인</div>
+            <div className="sheet-title">예약 내용을 확인해주세요</div>
 
             {/* 사용할 수강권 선택 (계정 내 공유) */}
             {passesLoading ? (
@@ -741,9 +763,9 @@ function ReservationCalendarContent() {
             )}
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
-              <button className="ghost-btn" onClick={() => setConfirmClass(null)}>취소</button>
+              <button className="ghost-btn" onClick={() => setConfirmClass(null)}>닫기</button>
               <button className="primary-btn" disabled={busyClassId === confirmClass.id} onClick={doReserve}>
-                {busyClassId === confirmClass.id ? "예약 중..." : "예약하기"}
+                {busyClassId === confirmClass.id ? "예약 중..." : passList.length > 0 ? "이 수강권으로 예약하기" : "예약 확정하기"}
               </button>
             </div>
           </div>

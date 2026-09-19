@@ -40,7 +40,10 @@ const KST_DT = new Intl.DateTimeFormat("ko-KR", {
   hour: "2-digit", minute: "2-digit", hour12: false,
 });
 function fmtDateTime(iso: string) {
-  return KST_DT.format(new Date(iso)).replace(/\. /g, "-").replace(".", "").replace(",", "");
+  const parts = Object.fromEntries(
+    KST_DT.formatToParts(new Date(iso)).map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
 async function getMyContext(): Promise<{ accountId: string; profileId: string; name: string; phone: string | null; isMember: boolean; isManager: boolean; isPlatformAdmin: boolean }> {

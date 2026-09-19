@@ -73,7 +73,7 @@ export default function ManagerInquiriesPage() {
         <div className="thread-list">
           {threads.map((t) => (
             <button key={t.id} className="thread-row" onClick={() => setActive({ id: t.id, title: t.centerName + " · 회원 문의" })}>
-              <div className="thread-avatar">💬</div>
+              <div className="thread-avatar">문의</div>
               <div className="thread-main">
                 <div className="thread-top">
                   <span className="thread-name">{t.centerName} 회원</span>

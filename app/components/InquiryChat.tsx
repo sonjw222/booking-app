@@ -12,6 +12,7 @@ import {
   fetchMessages, sendMessage, readThread, subscribeMessages,
   uploadInquiryPhoto, inquiryPhotoUrl, type InquiryMessage,
 } from "../../lib/inquiries";
+import UiIcon from "./UiIcon";
 
 export default function InquiryChat({
   threadId, title, onBack,
@@ -85,7 +86,7 @@ export default function InquiryChat({
     <div className="chat-wrap">
       <div className="chat-header">
         <button className="chat-back" onClick={onBack}>‹</button>
-        <span className="chat-title">{title}</span>
+        <div className="chat-title-wrap"><span className="chat-title">{title}</span><small>보통 1시간 이내 답변</small></div><UiIcon name="info" size={23} />
       </div>
 
       <div className="chat-body">

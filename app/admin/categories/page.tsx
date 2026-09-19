@@ -50,7 +50,7 @@ export default function CategoriesPage() {
   }
 
   async function handleDelete(c: ServiceCategory) {
-    if (!confirm(`'${c.label}' 종목을 삭제할까요?`)) return;
+    if (!await globalThis.appConfirm(`'${c.label}' 종목을 삭제할까요?`)) return;
     setBusy(true);
     try { await deleteCategory(c.id); await load(); }
     catch (e: any) { setError(e.message); }
@@ -93,7 +93,7 @@ export default function CategoriesPage() {
 
       <div className="hol-add" style={{ padding: "8px 20px 4px" }}>
         <div style={{ display: "flex", gap: 8 }}>
-          <input className="input-field" style={{ width: 64 }} placeholder="🏷️" value={emoji} onChange={(e) => setEmoji(e.target.value)} />
+          <input className="input-field" style={{ width: 88 }} placeholder="아이콘" value={emoji} onChange={(e) => setEmoji(e.target.value)} />
           <input className="input-field" placeholder="종목 이름 (예: 클라이밍)" value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleAdd()} />
           <button className="primary-btn small" disabled={busy} onClick={() => handleAdd()}>추가</button>
         </div>

@@ -130,8 +130,17 @@ export default function SettingsPage() {
         <Loading />
       ) : (
         <div className="settings-wrap">
+          <nav className="settings-jump" aria-label="설정 항목 바로가기">
+            <a href="#settings-booking">예약·취소</a>
+            <a href="#settings-limits">예약 제한</a>
+            <a href="#settings-private">프라이빗</a>
+            <a href="#settings-member">회원 앱</a>
+          </nav>
+          <details className="settings-group" open>
+            <summary><span>예약 운영</span><small>예약·취소 시간, 대기와 예약 제한</small></summary>
+            <div className="settings-group-body">
           {/* 01. 예약·취소 가능 시간 */}
-          <div className="set-section-title">예약·취소 가능 시간</div>
+          <div className="set-section-title" id="settings-booking">예약·취소 가능 시간</div>
           <div className="set-row col">
             <div className="set-label">그룹 수업 예약</div>
             <div className="set-inline">수업 {numInput(s.groupBookDaysBefore, (n) => up("groupBookDaysBefore", n))}일 전
@@ -193,7 +202,7 @@ export default function SettingsPage() {
           </div>
 
           {/* 06. 일일 예약 */}
-          <div className="set-section-title">일일 예약 가능 횟수</div>
+          <div className="set-section-title" id="settings-limits">일일 예약 가능 횟수</div>
           <div className="set-row">
             <div className="set-label">일일 예약 횟수 제한</div>
             {toggle(s.dailyBookLimitEnabled, (b) => up("dailyBookLimitEnabled", b))}
@@ -219,7 +228,12 @@ export default function SettingsPage() {
           </div>
 
           {/* 08. 슬롯 단위 */}
-          <div className="set-section-title">프라이빗 예약 시간 단위</div>
+            </div>
+          </details>
+          <details className="settings-group" open>
+            <summary><span>프라이빗 수업</span><small>예약 시간 단위와 동시 수업 수</small></summary>
+            <div className="settings-group-body">
+          <div className="set-section-title" id="settings-private">프라이빗 예약 시간 단위</div>
           <div className="mem-filters" style={{ padding: "0 20px 8px" }}>
             {SLOT_UNITS.map((u) => (
               <button key={u.value} className={`filter-chip ${s.privateSlotUnit === u.value ? "on" : ""}`} onClick={() => up("privateSlotUnit", u.value)}>{u.label}</button>
@@ -240,7 +254,12 @@ export default function SettingsPage() {
           )}
 
           {/* 10. 인원 표시 */}
-          <div className="set-section-title">회원 앱 인원 표시</div>
+            </div>
+          </details>
+          <details className="settings-group" open>
+            <summary><span>회원 앱 표시</span><small>예약·대기 인원 공개 범위</small></summary>
+            <div className="settings-group-body">
+          <div className="set-section-title" id="settings-member">회원 앱 인원 표시</div>
           <div className="set-row">
             <div className="set-label">그룹 수업 예약 인원 표시</div>
             {toggle(s.showGroupReservedCount, (b) => up("showGroupReservedCount", b))}
@@ -251,6 +270,11 @@ export default function SettingsPage() {
           </div>
 
           {/* 11~17. 기능 on/off */}
+            </div>
+          </details>
+          <details className="settings-group" open>
+            <summary><span>부가 기능</span><small>문의, 락커, 라운지와 포인트</small></summary>
+            <div className="settings-group-body">
           <div className="set-section-title">기능 사용 여부</div>
           {([
             ["useInquiryBoard", "문의 게시판 사용"],
@@ -266,6 +290,8 @@ export default function SettingsPage() {
               {toggle(s[key] as boolean, (b) => up(key, b as any))}
             </div>
           ))}
+            </div>
+          </details>
 
           <div style={{ height: 40 }} />
         </div>

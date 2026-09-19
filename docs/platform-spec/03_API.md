@@ -1,114 +1,98 @@
-# API
+# Data Access and API
 
-## 1. 계약
+Status: Active Current-State Contract
+Version: 1.1.0
+Current-State Source: `lib/*.ts`, `lib/payments/**`, `app/**`, repository RPC SQL
+Target-State Status: Route Handler/Edge Function only where justified
+Last Updated: 2026-07-31
 
-- 기본 형식: HTTPS JSON REST, `/api/v1`
-- 인증: 보안 쿠키 또는 `Authorization: Bearer`
-- 센터 범위: `/centers/{centerId}/...`
-- 시각: ISO 8601 UTC, 센터 시간대는 IANA 이름
-- 목록: cursor pagination (`data`, `page.next_cursor`, `page.has_more`)
-- 쓰기 멱등성: `Idempotency-Key` 헤더
-- 낙관적 동시성: 예약/설정 변경에 `version` 또는 `If-Match`
-- 모든 응답에 추적 가능한 `request_id`
+## 1. Current State
 
-오류 형식:
+현재 앱의 애플리케이션 API는 자체 REST `/api/v1`이 아니다. Client Component가 `lib/*.ts` 함수를 호출하고, 이 함수가 Supabase JS로 PostgREST 테이블/view, RPC, Storage, Realtime에 직접 접근한다.
 
-```json
-{
-  "error": {
-    "code": "BOOKING_SLOT_UNAVAILABLE",
-    "message": "선택한 시간이 더 이상 예약 가능하지 않습니다.",
-    "details": {},
-    "request_id": "req_..."
-  }
-}
+```text
+Page/Component → lib domain function → supabase.from()/rpc()/storage/channel()
+                                      → RLS/RPC authorization
 ```
 
-클라이언트는 메시지 문자열이 아니라 안정적인 `code`를 기준으로 분기한다. 권한이 없는 리소스는 정보 노출을 막기 위해 상황에 따라 `404`를 반환한다.
+- `app/api/**/route.ts`: 없음
+- Server Action (`"use server"`): 없음
+- 자체 JSON 오류 envelope, cursor pagination, Bearer API 계약: 없음
+- Supabase SDK의 `{ data, error }`와 `lib` 함수의 Error 메시지가 현재 호출 계약이다.
 
-## 2. 인증 및 계정
+## 2. Current Client Data Modules
 
-| Method | Path | 설명 |
-|---|---|---|
-| POST | `/auth/sign-up` | 이메일 가입 및 인증 메일 발송 |
-| POST | `/auth/email/verify` | 이메일 인증 토큰 사용 |
-| POST | `/auth/sign-in` | 이메일/비밀번호 로그인 |
-| POST | `/auth/social/{provider}/start` | PKCE/State 기반 인증 시작 |
-| GET/POST | `/auth/social/{provider}/callback` | 공급자 콜백 완료 |
-| POST | `/auth/token/refresh` | Refresh Token 회전 |
-| POST | `/auth/sign-out` | 현재 세션 철회 |
-| POST | `/auth/sign-out-all` | 현재 또는 전체 세션 철회(정책 옵션) |
-| POST | `/auth/password/forgot` | 존재 여부를 숨긴 재설정 요청 |
-| POST | `/auth/password/reset` | 1회용 토큰으로 비밀번호 변경 |
-| GET | `/me` | 현재 사용자와 사용 가능한 센터 |
-| PATCH | `/me` | 프로필 수정 |
-| GET | `/me/identities` | 연결된 로그인 수단 |
-| POST | `/me/identities/{provider}/link/start` | 재인증 후 연결 시작 |
-| POST | `/me/identities/{provider}/link/complete` | 연결 완료 |
-| DELETE | `/me/identities/{identityId}` | 로그인 수단 연결 해제 |
-| GET | `/me/sessions` | 기기/세션 목록 |
-| DELETE | `/me/sessions/{sessionId}` | 특정 세션 철회 |
+| Module | Main responsibility |
+|---|---|
+| `lib/reservations.ts` | 월간 수업, 프로필, 수강권, 예약/취소 |
+| `lib/adminAssignment.ts` | 직접배치·무료배치·취소·작업 로그 |
+| `lib/classes.ts` | 센터 수업, 반복 등록, 회원 배치 |
+| `lib/orders.ts`, `lib/payments/**` | 주문, 발급, Mock 결제 |
+| `lib/roles.ts` | 커스텀 역할, 역할 permission, 개인 예외 |
+| `lib/manager.ts`, `lib/admin.ts` | 센터 운영/플랫폼 운영 |
+| `lib/members.ts`, `profiles.ts`, `passes.ts` | 회원·프로필·수강권 |
+| `lib/notifications.ts`, `inquiries.ts` | Realtime 알림·문의 |
 
-비밀번호 찾기 응답은 계정 존재 여부와 관계없이 동일한 상태·문구·유사한 처리 시간을 사용한다. 소셜 콜백에서 이메일 충돌이 발견되면 자동 병합하지 않고 `ACCOUNT_LINK_REQUIRED`와 짧은 수명의 linking ticket을 반환한다.
+## 3. Current Mutation Rules
 
-## 3. 센터 및 관리자
+### Direct table mutations
 
-| Method | Path | 권한 |
-|---|---|---|
-| POST | `/centers` | 플랫폼 정책상 허용된 사용자/Platform Admin |
-| GET/PATCH | `/centers/{centerId}` | `center.read` / `center.update` |
-| GET | `/centers/{centerId}/members` | `member.read` |
-| PATCH | `/centers/{centerId}/members/{membershipId}` | `member.manage` |
-| DELETE | `/centers/{centerId}/members/{membershipId}` | `member.manage` |
-| POST | `/centers/{centerId}/invitations` | `invitation.create` |
-| GET | `/centers/{centerId}/invitations` | `invitation.read` |
-| POST | `/centers/{centerId}/invitations/{id}/resend` | `invitation.create` |
-| DELETE | `/centers/{centerId}/invitations/{id}` | `invitation.revoke` |
-| GET | `/invitations/{token}/preview` | 공개, 제한·마스킹 |
-| POST | `/invitations/{token}/accept` | 로그인/가입 후 이메일 일치 |
-| GET | `/centers/{centerId}/audit-logs` | `audit.read` |
+단순 CRUD는 `.from(table).insert/update/delete`로 수행하고 RLS가 최종 허용 여부를 결정한다. 예: 프로필, 센터 설정, 역할, 상품, 주문의 일부 관리 작업.
 
-초대 생성은 이메일, 역할, 만료기간을 받는다. 기존 pending 초대는 중복 생성하지 않고 재전송 흐름을 사용한다. 마지막 활성 Owner의 강등/삭제는 거부한다.
+### RPC mutations
 
-## 4. 서비스, 가용성, 예약
+정합성과 여러 테이블의 원자적 변경이 필요한 작업은 RPC를 사용한다.
 
-| Method | Path | 설명 |
-|---|---|---|
-| GET/POST | `/centers/{centerId}/services` | 서비스 조회/관리 |
-| GET/POST | `/centers/{centerId}/staff` | 직원 조회/관리 |
-| PUT | `/centers/{centerId}/business-hours` | 영업시간 저장 |
-| POST/DELETE | `/centers/{centerId}/time-off...` | 휴무 관리 |
-| GET | `/centers/{centerId}/availability` | service/staff/date 범위 슬롯 조회 |
-| POST | `/centers/{centerId}/bookings` | 예약 생성; 멱등 키 필수 |
-| GET | `/centers/{centerId}/bookings` | 권한에 맞는 예약 목록 |
-| GET | `/centers/{centerId}/bookings/{id}` | 예약 상세 |
-| PATCH | `/centers/{centerId}/bookings/{id}` | 시간/직원/메모 변경 |
-| POST | `/centers/{centerId}/bookings/{id}/confirm` | 예약 확정 |
-| POST | `/centers/{centerId}/bookings/{id}/cancel` | 취소 사유와 함께 취소 |
-| POST | `/centers/{centerId}/bookings/{id}/complete` | 완료 |
-| POST | `/centers/{centerId}/bookings/{id}/no-show` | 노쇼 |
+- 회원 예약/취소 및 수강권 차감·복원
+- 관리자 직접배치/무료배치와 취소
+- 출석, 자동예약, 주문 발급
+- Mock 결제 확인/취소
+- 포인트, 환불, 문의, 알림 처리
 
-예약 생성 성공은 동일 멱등 키 재요청에 같은 결과를 반환한다. 같은 키에 다른 payload가 오면 `IDEMPOTENCY_KEY_REUSED`를 반환한다.
+클라이언트의 사전 검사나 표시값은 보안·정합성 근거가 아니다.
 
-## 5. 권한 매트릭스
+## 4. Current Error and Idempotency
 
-| 권한 | Owner | Admin | Staff | Customer |
-|---|---:|---:|---:|---:|
-| 센터 설정/소유권 | ✓ | 제한 | - | - |
-| 관리자 초대/권한 변경 | ✓ | 정책상 허용 | - | - |
-| 직원 관리 | ✓ | ✓ | - | - |
-| 서비스/영업시간 관리 | ✓ | ✓ | 제한 | - |
-| 전체 예약 조회/관리 | ✓ | ✓ | 정책상 허용 | - |
-| 본인 배정 예약 | ✓ | ✓ | ✓ | - |
-| 본인 예약 | - | - | - | ✓ |
-| 감사 로그 | ✓ | 정책상 허용 | - | - |
+- 오류는 Supabase error 또는 `lib`에서 변환한 한국어 `Error`로 전달된다.
+- 안정적인 전역 error code envelope는 없다.
+- 일부 RPC는 중복 상태를 확인하지만 모든 쓰기 흐름에 공통 `Idempotency-Key` 계약이 있는 것은 아니다.
+- Mock 결제 RPC는 이미 완료된 주문을 구분하는 결과를 제공한다.
 
-실제 검사는 역할명이 아니라 권한 문자열을 사용한다. Admin이 다른 Admin을 관리할 수 있는지 등 세부 정책은 센터 정책으로 완화할 수 있지만 Owner 보호 규칙은 우회할 수 없다.
+## 5. Gap
 
-## 6. Rate Limit과 웹훅
+- UI가 DB 오류 문자열에 의존하는 부분이 있어 안정적인 도메인 오류 분류가 부족하다.
+- 목록 pagination이 일관된 공통 계약으로 적용되지 않는다.
+- 실제 PG secret 및 webhook을 안전하게 처리할 서버 엔드포인트가 없다.
+- Supabase Database 타입 생성과 RPC 입출력 타입 자동화가 없다.
+- 외부 클라이언트용 공개 API 계약은 정의되지 않았다.
 
-- 로그인, forgot/reset, 초대, 소셜 콜백은 IP+계정/이메일 기반 제한을 적용한다.
-- `429`와 `Retry-After`를 반환한다.
-- 외부 웹훅은 서명, timestamp, replay 방지를 검증하고 원문 payload의 최소 보존 원칙을 따른다.
-- API 변경은 하위 호환을 우선하며 breaking change는 `/v2` 또는 승인된 마이그레이션 기간을 둔다.
+## 6. Target/Future State
+
+다음 경우에만 Route Handler 또는 Supabase Edge Function을 도입한다.
+
+- PG 승인·취소·webhook과 서버 전용 secret
+- 이메일/알림 공급자 secret 및 서명 검증
+- 관리자 전용 고위험 작업에 추가 감사·rate limit이 필요한 경우
+- 여러 외부 시스템을 조합하는 backend orchestration
+
+단순한 앱 CRUD를 REST로 중복 포장하는 것은 기본 목표가 아니다. RLS/RPC를 유지하면서 필요한 신뢰 경계만 추가한다.
+
+향후 공통화 후보:
+
+- 도메인 error code와 사용자 메시지 분리
+- pagination/filter/sort 계약
+- 결제 webhook idempotency
+- RPC TypeScript 타입 생성
+- 외부 API가 생길 때만 버전 관리와 인증 계약
+
+## 7. Not Current State
+
+v1.0의 `/api/v1/auth/*`, `/centers/{centerId}/*`, 자체 Refresh Token endpoint, `Idempotency-Key` 전역 규칙은 현재 구현이 아니다. 해당 개념은 필요한 경우 Target State의 별도 ADR로 승인한다.
+
+## 8. Decision Required
+
+- Route Handler와 Edge Function의 배치 기준
+- 실제 PG 공급자와 webhook 계약
+- 사용자 표시 오류와 내부 오류 코드 체계
+- public/partner API 제공 여부
 

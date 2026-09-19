@@ -1,95 +1,67 @@
 # EPIC 01 — Admin System
 
-## 1. 목표
+Status: Partially Implemented
+Version: 1.1.0
+Current-State Source: `app/manager/**`, `app/admin/**`, `lib/admin*.ts`, `lib/roles.ts`, permission/RLS SQL
+Target-State Status: Incremental hardening
+Last Updated: 2026-07-31
 
-센터 Owner와 Admin이 자신의 권한 범위 안에서 센터 운영, 구성원, 초대, 역할, 감사 기록을 안전하게 관리한다. Platform Admin의 전역 운영 기능은 센터 권한과 분리한다.
+## 1. Goal
 
-## 2. 범위
+Platform Admin과 Center Staff가 같은 앱 안에서 각 권한 범위의 운영 기능을 수행한다. 고정 역할이 아니라 센터별 custom role과 permission을 사용한다.
 
-- 센터 운영자 콘솔과 센터 전환
-- 구성원 목록, 검색, 역할/상태 변경
-- 관리자/직원 이메일 초대, 재전송, 취소, 만료, 수락
-- Owner 보호와 권한 위임
-- 센터 설정, 서비스, 직원, 영업시간의 관리 진입점
-- 감사 로그 조회
-- Platform Admin의 센터/사용자 상태 관리
+## 2. Current State
 
-## 3. 사용자 스토리와 수용 기준
+### Center operations
 
-### ADM-01 운영자 로그인과 콘솔 접근
+- `/manager/*`에서 대시보드, 수업, 룸, 회원, 수강권 조건, 상품, 주문, 매출, 진도, 후기, 공지, 문의, 설정, 스태프 관리
+- `manager_centers`로 Account-Center 운영 소속 관리
+- `center_roles`의 owner/manager/trainer 및 custom role
+- `permissions`, `role_permissions`, 개인 allow/deny
+- 관리자 직접배치/무료배치와 `/manager/admin-assignments` 작업 로그
 
-**As a** 센터 운영자, **I want** 허용된 센터만 선택해 관리하고 싶다.
+### Platform operations
 
-- 활성 Membership이 있는 센터만 표시한다.
-- 선택 센터의 권한에 따라 메뉴와 행동이 달라진다.
-- 서버는 모든 요청에서 Membership과 권한을 다시 검증한다.
-- 센터 전환 후 이전 센터 데이터가 캐시/화면에 남지 않는다.
+- `/admin`에서 입점 센터 승인/반려
+- 카테고리와 홈 배너 관리
+- `accounts.is_platform_admin` 및 RLS로 쓰기 제한
 
-### ADM-02 관리자/직원 초대
+### Staff onboarding
 
-**As a** 권한 있는 Owner/Admin, **I want** 이메일로 구성원을 초대하고 싶다.
+현재 `lib/roles.ts`의 staff 추가는 `manager_centers` row를 생성하는 방식이다. v1.0의 이메일 초대 토큰/만료/수락 흐름은 현재 구현으로 확인되지 않는다.
 
-- 이메일, 역할, 만료일을 입력하고 권한 요약을 확인한다.
-- 같은 센터/이메일에 pending 초대는 하나만 존재한다.
-- 초대 토큰은 해시 저장, 만료, 1회 사용한다.
-- 초대 수락 계정의 검증된 이메일이 초대 이메일과 일치해야 한다.
-- 생성, 전송, 재전송, 취소, 수락 결과를 감사한다.
+## 3. Gap
 
-### ADM-03 초대 관리
+- 세부 permission에 맞춘 메뉴/버튼 노출이 전체 `/manager`에 일관되지 않다.
+- 이메일 소유 확인이 있는 초대 onboarding이 없다.
+- 마지막 owner 보호와 owner 이전 UX/DB 보장을 전체 흐름에서 재검증해야 한다.
+- Platform Admin 페이지별 클라이언트 guard가 균일하지 않다.
+- 통합 감사 로그는 없고 직접배치 등 영역별 로그만 있다.
 
-- pending/accepted/expired/revoked 상태와 전송·만료 시각을 조회한다.
-- 재전송하면 기존 토큰을 무효화하고 새 만료를 적용한다.
-- pending 초대만 취소할 수 있다.
-- 이미 수락한 요청을 반복해도 권한이 중복 생성되지 않는다.
+## 4. Target State
 
-### ADM-04 구성원 및 역할 관리
+- permission-aware navigation/action guard
+- RLS/RPC와 동일한 permission 판정의 UI 공통화
+- 승인된 경우 이메일 초대, 만료·취소·수락
+- owner 이전/마지막 owner 보호
+- 역할·permission·센터 상태·주문·예약 관리자 변경의 통합 감사
+- Platform Admin 고위험 작업에 recent auth/MFA 검토
 
-- 권한 있는 운영자는 허용된 범위의 역할/상태만 변경한다.
-- 자기 권한 상승과 자신보다 높은 역할 부여를 차단한다.
-- 마지막 활성 Owner는 강등·정지·삭제할 수 없다.
-- Owner 이전은 대상의 확인과 최근 재인증을 요구한다.
-- 역할/상태 변경은 기존 세션에 합리적인 시간 내 반영하며 고위험 변경은 즉시 철회할 수 있다.
+## 5. Acceptance Criteria
 
-### ADM-05 감사 로그
+- A센터 staff가 B센터 관리 데이터를 접근하지 못한다.
+- custom role과 개인 allow/deny가 RLS/RPC 결과와 UI에 동일하게 반영된다.
+- `ADMIN_ASSIGNMENT`와 `ADMIN_FREE`가 다른 차감 규칙과 감사 기록을 갖는다.
+- Platform Admin이 아닌 Account는 센터 승인/카테고리/배너 쓰기를 할 수 없다.
+- Target 기능은 구현 전까지 화면/문서에서 현재 기능으로 표시하지 않는다.
 
-- 권한 있는 Owner/Admin만 센터 감사 로그를 조회한다.
-- 기간, 행위자, action, 대상, 결과로 필터한다.
-- 변경 전/후 전체 민감 데이터 대신 허용된 변경 요약을 표시한다.
-- 일반 관리자는 감사 기록을 수정·삭제할 수 없다.
+## 6. Decision Required / Blocked
 
-### ADM-06 Platform Admin
-
-- 센터 활성/정지, 사용자 정지와 지원용 메타데이터 조회를 제공한다.
-- 센터 상세 데이터 접근은 별도 권한과 감사 이벤트를 요구한다.
-- Platform Admin UI/권한/세션 정책을 센터 Admin과 분리한다.
-- impersonation은 v1에서 제공하지 않는다.
-
-## 4. 역할 기준
-
-| 기능 | Owner | Admin | Staff |
-|---|---:|---:|---:|
-| 센터 핵심 설정 | ✓ | 제한 | - |
-| Owner 이전 | ✓ | - | - |
-| Admin 초대/관리 | ✓ | 정책상 허용 | - |
-| Staff 초대/관리 | ✓ | ✓ | - |
-| 서비스/영업시간 | ✓ | ✓ | 제한 |
-| 전체 예약 | ✓ | ✓ | 정책상 허용 |
-| 감사 로그 | ✓ | 정책상 허용 | - |
-
-## 5. 비기능 요구
-
-- 모든 목록과 검색은 `center_id` 범위 및 pagination 적용
-- 초대 메일 발송 실패를 재시도하되 Membership을 조기 생성하지 않음
-- 권한 변경 p95 반영 목표와 감사 로그 조회 성능 목표는 구현 전 SLO로 확정
-- 관리자 핵심 작업은 키보드와 200% 확대에서 사용 가능
-
-## 6. 의존성과 완료 기준
-
-- 의존: EPIC 02 Membership/센터 격리, EPIC 03 인증·세션
-- 관련 문서: [API](../03_API.md), [Security](../05_Security.md), [Testing](../06_Testing.md)
-- 완료: 수용 기준, 권한/센터 교차 테스트, 감사 이벤트, 접근성, 운영 알림, 문서 갱신 모두 통과
-
-## 7. 제외
-
-커스텀 역할 편집기, SSO/SCIM, 관리자 가장, 대량 CSV 초대는 v1에서 제외한다.
+| Type | Item |
+|---|---|
+| Decision Required | staff direct add 유지 vs 이메일 초대 도입 |
+| Decision Required | manager가 다른 role/permission을 관리할 수 있는 범위 |
+| Decision Required | 직접배치/무료배치/정원초과 permission key |
+| Decision Required | 통합 감사 이벤트와 보존 기간 |
+| Blocked | 운영 Supabase의 최신 RLS/RPC 적용 확인 |
 

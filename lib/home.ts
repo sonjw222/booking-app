@@ -14,6 +14,7 @@ export type HomeCenter = {
   latitude: number | null;
   longitude: number | null;
   distanceKm: number | null;
+  photoUrl: string | null;
 };
 
 export type HomeClass = {
@@ -36,7 +37,7 @@ const KST_DT = new Intl.DateTimeFormat("ko-KR", {
 export async function fetchHomeCenters(userLat?: number, userLng?: number): Promise<HomeCenter[]> {
   const { data, error } = await supabase
     .from("centers")
-    .select("id, name, categories, latitude, longitude")
+    .select("id, name, categories, latitude, longitude, photo_url")
     .eq("status", "approved")
     .order("created_at", { ascending: false })
     .limit(30);
@@ -44,7 +45,7 @@ export async function fetchHomeCenters(userLat?: number, userLng?: number): Prom
 
   let centers: HomeCenter[] = (data ?? []).map((c: any) => ({
     id: c.id, name: c.name, categories: c.categories ?? [],
-    latitude: c.latitude, longitude: c.longitude, distanceKm: null,
+    latitude: c.latitude, longitude: c.longitude, distanceKm: null, photoUrl: c.photo_url,
   }));
 
   // 내 위치가 있으면 거리 계산 후 가까운 순 정렬 (좌표 있는 센터 우선)
@@ -116,6 +117,7 @@ export type SearchCenter = {
   categories: string[];
   intro: string | null;
   photoUrl: string | null;
+  nextClassText?: string | null;
 };
 
 // 센터명 또는 종목으로 검색
@@ -138,6 +140,7 @@ export async function searchHome(keyword: string): Promise<{ centers: SearchCent
     .map((c: any) => ({
       id: c.id, name: c.name, categories: c.categories ?? [],
       intro: c.intro, photoUrl: c.photo_url,
+      nextClassText: null,
     }));
 
   // 매칭되는 종목 (예: "피겨" → "피겨스케이팅")
@@ -157,9 +160,27 @@ export async function fetchCentersByCategory(category: string): Promise<SearchCe
     .eq("status", "approved")
     .contains("categories", [category]);
   if (error) throw new Error("센터를 불러오지 못했어요: " + error.message);
+  const centerIds = (data ?? []).map((c: any) => c.id);
+  const nextByCenter = new Map<string, string>();
+  if (centerIds.length > 0) {
+    const { data: upcoming } = await supabase
+      .from("classes")
+      .select("center_id, start_time")
+      .in("center_id", centerIds)
+      .eq("status", "open")
+      .gte("start_time", new Date().toISOString())
+      .order("start_time", { ascending: true })
+      .limit(80);
+    for (const row of upcoming ?? []) {
+      if (!nextByCenter.has((row as any).center_id)) {
+        nextByCenter.set((row as any).center_id, KST_DT.format(new Date((row as any).start_time)));
+      }
+    }
+  }
   return (data ?? []).map((c: any) => ({
     id: c.id, name: c.name, categories: c.categories ?? [],
     intro: c.intro, photoUrl: c.photo_url,
+    nextClassText: nextByCenter.get(c.id) ?? null,
   }));
 }
 

@@ -12,18 +12,22 @@ import { useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import BottomNav from "../components/BottomNav";
 import {
-  fetchNotifications, markRead, deleteNotification, notiEmoji,
+  fetchNotifications, markRead, deleteNotification,
   type Notification,
 } from "../../lib/notifications";
 import {
   fetchMyAnnouncements, announcementPhotoUrl, type Announcement,
 } from "../../lib/announcements";
+import UiIcon from "../components/UiIcon";
+import SegmentedTabs from "../components/SegmentedTabs";
+import EmptyState from "../components/EmptyState";
 
 export default function NotificationsPage() {
   const [list, setList] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [announcements, setAnnouncements] = useState<(Announcement & { centerName: string })[]>([]);
   const [openAnnounce, setOpenAnnounce] = useState<(Announcement & { centerName: string }) | null>(null);
+  const [filter, setFilter] = useState<"all" | "reservation" | "benefit" | "announcement">("all");
 
   useEffect(() => {
     (async () => {
@@ -31,12 +35,14 @@ export default function NotificationsPage() {
       setList(ns);
       setAnnouncements(ans);
       setLoading(false);
-      // 전체 읽음 처리 (뱃지 제거)
-      await markRead();
     })();
   }, []);
 
-  function handleClick(n: Notification) {
+  async function handleClick(n: Notification) {
+    if (!n.read) {
+      setList((prev) => prev.map((item) => item.id === n.id ? { ...item, read: true } : item));
+      await markRead([n.id]);
+    }
     // 공지 알림이면 상세 시트 열기
     if (n.kind === "announcement" && n.data?.announcement_id) {
       const found = announcements.find((a) => a.id === n.data.announcement_id);
@@ -46,41 +52,95 @@ export default function NotificationsPage() {
     if (n.link) window.location.href = n.link;
   }
 
+  async function handleReadAll() {
+    setList((prev) => prev.map((item) => ({ ...item, read: true })));
+    await markRead();
+  }
+
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation();
     await deleteNotification(id);
     setList((prev) => prev.filter((n) => n.id !== id));
   }
 
+  async function handleDeleteMany(ids: string[], e: React.MouseEvent) {
+    e.stopPropagation();
+    await Promise.all(ids.map((id) => deleteNotification(id)));
+    setList((prev) => prev.filter((n) => !ids.includes(n.id)));
+  }
+
   if (loading) return <Loading />;
+  const filtered = list.filter((n) => {
+    if (filter === "all") return true;
+    if (filter === "announcement") return n.kind === "announcement";
+    if (filter === "reservation") return n.kind.includes("reservation") || n.kind.includes("class");
+    return !n.kind.includes("reservation") && !n.kind.includes("class") && n.kind !== "announcement";
+  });
+  const groups = (() => {
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterday = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(yesterdayDate);
+    const map = new Map<string, Notification[]>();
+    for (const n of filtered) {
+      const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(n.createdAtRaw));
+      const label = date === today ? "오늘" : date === yesterday ? "어제" : date;
+      map.set(label, [...(map.get(label) ?? []), n]);
+    }
+    return Array.from(map.entries());
+  })();
+
+  function priorityOf(kind: string) {
+    if (["reservation_today", "waitlist_promoted", "reservation_canceled", "pass_expired"].includes(kind)) return "important";
+    return "normal";
+  }
+
+
+  function collapseSimilar(items: Notification[]) {
+    const collapsed = new Map<string, { item: Notification; ids: string[] }>();
+    for (const item of items) {
+      const key = `${item.kind}|${item.title}|${item.body}|${item.link ?? ""}`;
+      const current = collapsed.get(key);
+      if (current) current.ids.push(item.id);
+      else collapsed.set(key, { item, ids: [item.id] });
+    }
+    return Array.from(collapsed.values());
+  }
 
   return (
-    <div className="app-shell">
-      <div className="header">
-        <div className="title" style={{ fontSize: 20, fontWeight: 800 }}>알림</div>
+    <div className="app-shell member-notifications">
+      <div className="noti-head">
+        <h1>알림</h1>
+        {list.some((item) => !item.read) && <button onClick={handleReadAll}>모두 읽음</button>}
       </div>
+      <SegmentedTabs value={filter} onChange={setFilter} label="알림 종류"
+        items={[{ value: "all", label: "전체" },{ value: "reservation", label: "예약" },{ value: "benefit", label: "혜택" },{ value: "announcement", label: "공지" }]} />
 
-      {list.length === 0 ? (
-        <div className="empty-note" style={{ padding: "50px 20px", textAlign: "center", color: "var(--text-dim)" }}>
-          아직 알림이 없어요.
-        </div>
+      {filtered.length === 0 ? (
+        <EmptyState icon="bell" title={filter === "all" ? "아직 알림이 없어요" : "이 항목의 알림이 없어요"}
+          description="예약과 수강권 소식을 이곳에서 알려드릴게요."
+          action={<a className="ghost-btn" href={filter === "all" ? "/reservation" : "/settings/notifications"}>{filter === "all" ? "수업 둘러보기" : "알림 설정 보기"}</a>} />
       ) : (
         <div className="noti-list">
-          {list.map((n) => (
+          {groups.map(([label, group]) => <section key={label} className="noti-group">
+            <h2>{label}</h2>
+          {collapseSimilar(group).map(({ item: n, ids }) => (
             <div
               key={n.id}
-              className={`noti-row ${n.read ? "" : "unread"}`}
+              className={`noti-row ${n.read ? "" : "unread"} priority-${priorityOf(n.kind)}`}
               onClick={() => handleClick(n)}
             >
-              <span className="noti-emoji">{notiEmoji(n.kind)}</span>
+              {!n.read && <span className="noti-unread-dot" aria-label="읽지 않음" />}
+              <span className="noti-emoji"><UiIcon name={n.kind === "announcement" ? "megaphone" : n.kind.includes("reservation") ? "calendar" : n.kind.includes("class") ? "clock" : "ticket"} size={22} /></span>
               <div className="noti-main">
                 <div className="noti-title">{n.title}</div>
                 <div className="noti-body">{n.body}</div>
                 <div className="noti-time">{n.createdAt}</div>
               </div>
-              <button className="noti-del" onClick={(e) => handleDelete(n.id, e)}>×</button>
+              {ids.length > 1 && <span className="noti-repeat-count">{ids.length}건</span>}
+              <button className="noti-del" onClick={(e) => ids.length > 1 ? handleDeleteMany(ids, e) : handleDelete(n.id, e)}>×</button>
             </div>
-          ))}
+          ))}</section>)}
         </div>
       )}
 

@@ -74,7 +74,7 @@ export default function RoomsPage() {
   }
 
   async function handleDelete(r: Room) {
-    if (!confirm(`'${r.name}' 룸을 삭제할까요? (이 룸으로 지정된 수업은 장소가 비워져요)`)) return;
+    if (!await globalThis.appConfirm(`'${r.name}' 룸을 삭제할까요?\n이 룸으로 지정된 수업은 장소가 비워져요.`)) return;
     setBusy(true);
     try { await deleteRoom(r.id); await load(); }
     catch (e: any) { setError(e.message); }
@@ -112,9 +112,9 @@ export default function RoomsPage() {
               {rooms.map((r) => (
                 <div key={r.id} className="profile-item">
                   <button className="profile-item-info" style={{ textAlign: "left", background: "none", border: "none", flex: 1 }} onClick={() => openEdit(r)}>
-                    <div className="profile-item-name">🚪 {r.name}</div>
+                    <div className="profile-item-name">{r.name}</div>
                     {r.memo && <div className="profile-item-sub">{r.memo}</div>}
-                    {r.address && <div className="profile-item-sub">📍 {r.address}</div>}
+                    {r.address && <div className="profile-item-sub">{r.address}</div>}
                   </button>
                   <button className="room-edit" onClick={() => openEdit(r)}>수정</button>
                   <button className="profile-del" disabled={busy} onClick={() => handleDelete(r)}>삭제</button>
@@ -146,7 +146,7 @@ export default function RoomsPage() {
                 <button className="ghost-btn" style={{ marginTop: 8 }} onClick={() => setMapPicker(true)}>위치 수정하기</button>
               </>
             ) : (
-              <button className="ghost-btn" style={{ marginTop: 8 }} onClick={() => setMapPicker(true)}>🗺️ 지도에서 위치 지정</button>
+              <button className="ghost-btn" style={{ marginTop: 8 }} onClick={() => setMapPicker(true)}>지도에서 위치 지정</button>
             )}
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={closeSheet}>취소</button>

@@ -164,7 +164,7 @@ function CenterDetailContent() {
 
   async function handleDeleteReview() {
     if (!myReview) return;
-    if (!confirm("후기를 삭제할까요? (적립된 포인트는 회수되지 않아요)")) return;
+    if (!await globalThis.appConfirm("후기를 삭제할까요?\n적립된 포인트는 회수되지 않아요.")) return;
     setRvBusy(true);
     try {
       await deleteReview(myReview.id);
@@ -209,7 +209,7 @@ function CenterDetailContent() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell center-detail-v2">
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
       {toast && <div className="toast">{toast}</div>}
 
@@ -220,7 +220,7 @@ function CenterDetailContent() {
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">길찾기 앱 선택</div>
             <div className="perm-guide" style={{ margin: "0 0 12px" }}>
-              📍 {center.address}<br />
+              {center.address}<br />
               {center.latitude != null ? "목적지가 이 센터로 자동 설정돼요" : "정확한 길찾기는 센터 위치 좌표가 필요해요"}
             </div>
             <div className="map-app-list">
@@ -230,21 +230,21 @@ function CenterDetailContent() {
                 const hasCoord = center.latitude != null && center.longitude != null;
                 const lat = center.latitude, lng = center.longitude;
                 const apps = [
-                  { id: "kakao", label: "카카오맵으로 길찾기", emoji: "🟡",
+                  { id: "kakao", label: "카카오맵으로 길찾기", emoji: "K",
                     url: hasCoord
                       ? `https://map.kakao.com/link/to/${name},${lat},${lng}`
                       : `https://map.kakao.com/link/search/${addr}` },
-                  { id: "naver", label: "네이버 지도로 길찾기", emoji: "🟢",
+                  { id: "naver", label: "네이버 지도로 길찾기", emoji: "N",
                     // 앱: nmap 스킴(목적지 자동), 웹 대체: 검색
                     url: hasCoord
                       ? `nmap://route/car?dlat=${lat}&dlng=${lng}&dname=${name}&appname=woori.class`
                       : `https://map.naver.com/v5/search/${addr}` },
-                  { id: "tmap", label: "티맵으로 길찾기", emoji: "🔵",
+                  { id: "tmap", label: "티맵으로 길찾기", emoji: "T",
                     // 앱: tmap 스킴(목적지 자동)
                     url: hasCoord
                       ? `tmap://route?goalname=${name}&goalx=${lng}&goaly=${lat}`
                       : `https://tmap.life/route?goalname=${name}` },
-                  { id: "google", label: "구글 지도로 길찾기", emoji: "🗺️",
+                  { id: "google", label: "구글 지도로 길찾기", emoji: "G",
                     url: hasCoord
                       ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
                       : `https://www.google.com/maps/search/?api=1&query=${addr}` },
@@ -414,21 +414,21 @@ function CenterDetailContent() {
         </div>
       )}
 
-      <div className="back-header">
+      <div className="back-header center-detail-head">
         <a className="side" href={backHref}>‹</a>
-        <div className="title">센터 정보</div>
+        <div className="title">센터</div>
         <div className="side" />
       </div>
 
       {/* 센터 헤더 */}
       <div className="center-hero">
         {center.photoUrl
-          ? <img className="center-hero-photo" src={centerPhotoUrl(center.photoUrl) ?? ""} alt="" />
+          ? <img className="center-hero-photo" src={centerPhotoUrl(center.photoUrl) ?? ""} alt={`${center.name} 센터`} />
           : <div className="center-hero-badge">{center.name.slice(0, 1)}</div>}
         <div className="center-hero-name">{center.name}</div>
-        {center.address && <div className="center-hero-addr">📍 {center.address}</div>}
+        {center.address && <div className="center-hero-addr">{center.address}</div>}
         {center.phone && (
-          <a className="center-hero-phone" href={`tel:${center.phone}`}>📞 {center.phone}</a>
+          <a className="center-hero-phone" href={`tel:${center.phone}`}>{center.phone}</a>
         )}
         {center.sns && (
           <div className="center-sns">
@@ -452,7 +452,7 @@ function CenterDetailContent() {
         <>
           <div className="menu-section-label">위치</div>
           <button className="center-map-link" onClick={() => setMapSheet(true)}>
-            <div className="center-map-addr">📍 {center.address}</div>
+            <div className="center-map-addr">{center.address}</div>
             <div className="center-map-open">지도 · 길찾기 ›</div>
           </button>
         </>
@@ -577,8 +577,8 @@ function CenterDetailContent() {
 
       {/* 하단 고정 바: 예약하기 + 구매하기 */}
       <div className="center-bottom-bar">
-        <button className="center-bar-btn buy" onClick={() => setBuySheet(true)}>구매하기</button>
-        <button className="center-bar-btn reserve" onClick={handleReserveClick}>예약하러 가기</button>
+        <button className="center-bar-btn buy" onClick={() => setBuySheet(true)}>수강권 구매</button>
+        <button className="center-bar-btn reserve" onClick={handleReserveClick}>예약하기</button>
       </div>
       <BottomNav />
     </div>

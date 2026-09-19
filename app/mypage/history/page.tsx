@@ -60,7 +60,7 @@ export default function HistoryPage() {
   const attendedCount = items.filter((i) => i.status === "attended").length;
 
   return (
-    <div className="app-shell">
+    <div className="app-shell schedule-page-v2">
       <div className="back-header">
         <a className="side" href="/mypage">‹</a>
         <div className="title">전체 예약 내역</div>
@@ -99,7 +99,7 @@ export default function HistoryPage() {
                   <div className="fullhist-main">
                     <div className="fullhist-title">
                       {i.profileName && <span className="profile-tag sm">{i.profileName}</span>}
-                      {i.title}
+                      <span className="fullhist-title-text">{i.title}</span>
                     </div>
                     <div className="fullhist-center">{i.centerName}</div>
                   </div>

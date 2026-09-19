@@ -12,6 +12,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import ManagerNav from "../../../components/ManagerNav";
 import { useSearchParams } from "next/navigation";
 import Loading from "../../../components/Loading";
+import DatePicker from "../../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../../lib/manager";
 import {
   fetchCategories, buildCategoryTree, type CategoryNode,
@@ -119,7 +120,7 @@ function ProgressRecordContent() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("이 진도 기록을 삭제할까요?")) return;
+    if (!await globalThis.appConfirm("이 진도 기록을 삭제할까요?")) return;
     setBusy(true);
     try { await deleteProgressRecord(id); showToast("삭제했어요"); await loadHistory(); }
     catch (e: any) { setError(e.message); }
@@ -128,7 +129,7 @@ function ProgressRecordContent() {
 
   // 날짜별 카드: 삭제 (그 날 전체)
   async function handleDeleteDate(date: string) {
-    if (!confirm(`${fmtMD(date)} 진도 기록을 삭제할까요?`)) return;
+    if (!await globalThis.appConfirm(`${fmtMD(date)} 진도 기록을 삭제할까요?`)) return;
     setBusy(true);
     try { await deleteProgressByDate(profileId, date); showToast("삭제했어요"); await loadHistory(); }
     catch (e: any) { setError(e.message); }
@@ -172,7 +173,7 @@ function ProgressRecordContent() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell progress-record-page-v4">
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
@@ -204,7 +205,7 @@ function ProgressRecordContent() {
         <>
           {/* 회원 선택 */}
           <div className="menu-section-label">회원</div>
-          <div style={{ padding: "0 20px 8px" }}>
+          <div className="progress-member-pick">
             <select className="input-field" value={profileId} onChange={(e) => setProfileId(e.target.value)}>
               {members.length === 0 && <option value="">회원이 없어요</option>}
               {members.map((m) => <option key={m.profileId} value={m.profileId}>{m.name}</option>)}
@@ -212,8 +213,8 @@ function ProgressRecordContent() {
           </div>
 
           {/* 진도 추가 버튼 */}
-          <div style={{ padding: "4px 20px 12px" }}>
-            <button className="primary-btn" disabled={!profileId} onClick={openAddSheet}>+ 진도 기록 추가</button>
+          <div className="progress-add-action">
+            <button className="primary-btn" disabled={!profileId} onClick={openAddSheet}>진도 기록 추가</button>
           </div>
 
           <div className="divider" />
@@ -256,7 +257,7 @@ function ProgressRecordContent() {
             <div className="sheet-title">진도 기록</div>
 
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>수업 날짜</div>
-            <input type="date" className="input-field" value={lessonDate} onChange={(e) => setLessonDate(e.target.value)} />
+            <DatePicker value={lessonDate} onChange={setLessonDate} label="수업 날짜" />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>가르친 기술 (여러 개 가능)</div>
             <div className="prog-rec-wrap" style={{ padding: 0, maxHeight: 240, overflowY: "auto" }}>

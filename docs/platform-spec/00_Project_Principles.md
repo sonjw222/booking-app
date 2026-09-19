@@ -1,92 +1,104 @@
-# Booking App Master Spec v1.0 — Project Principles
+# Booking App Master Spec v1.1 — Project Principles
 
-> 상태: 기준 문서  
-> 버전: 1.0.0  
-> 기준일: 2026-07-31  
-> 적용 범위: 고객 예약 앱, 센터 운영자 콘솔, 플랫폼 운영 콘솔, 공통 API
+Status: Active Baseline
+Version: 1.1.0
+Current-State Source: `package.json`, `app/**`, `lib/**`, repository SQL, tests
+Target-State Status: Directional; not implemented unless explicitly marked Current State
+Last Updated: 2026-07-31
 
-## 1. 목적
+## 1. Purpose
 
-Booking App은 여러 센터가 하나의 플랫폼을 안전하게 공유하면서 고객, 직원, 일정, 예약을 독립적으로 운영할 수 있는 멀티센터 예약 플랫폼이다. 이 문서 세트는 구현·리뷰·테스트의 단일 기준점(Single Source of Truth)이다.
+Booking App은 여러 센터의 회원 예약·수강권·상품·운영을 하나의 앱에서 제공한다. 이 문서 세트는 실제 코드의 현재 상태와 장기 목표를 구분하는 기준 사양이다.
 
-현재 저장소에는 구현 코드가 없으므로 본 사양은 제품 및 시스템의 목표 상태를 정의한다. 프레임워크, 클라우드, 인증 벤더처럼 확정되지 않은 선택은 [Decision Log](./08_Decision_Log.md)에 `제안`으로 기록한다.
+규칙:
 
-## 2. 핵심 원칙
+- **Current State**는 저장소 코드에서 확인한 구현이다.
+- **Target State/Future State**는 앞으로의 목표이며 현재 구현으로 간주하지 않는다.
+- **Gap**은 현재와 목표의 차이다.
+- **Decision Required**는 제품 소유자의 결정 없이는 확정할 수 없다.
+- **Blocked**는 외부 공급자, 운영 Supabase 설정, 법률·사업 정책 등 저장소 밖 조건이 필요하다.
 
-1. **센터 격리가 기본값이다.** 모든 센터 소유 데이터는 `center_id`로 범위가 정해지며, 서버가 접근 범위를 강제한다.
-2. **인증과 권한을 분리한다.** 로그인 성공은 사용자 식별일 뿐이며, 센터별 역할과 권한을 별도로 평가한다.
-3. **최소 권한을 적용한다.** 기본 거부(default deny), 명시적 허용, 서버 측 검증을 원칙으로 한다.
-4. **하나의 사람은 하나의 계정이다.** 이메일/비밀번호와 복수의 소셜 계정은 검증된 Account Linking으로 하나의 사용자에 연결한다.
-5. **예약 정합성을 편의보다 우선한다.** 중복 예약은 DB 트랜잭션과 제약으로 최종 방어한다.
-6. **보안 이벤트는 추적 가능해야 한다.** 초대, 권한 변경, 로그인, 계정 연결, 세션 철회 등 중요 행위를 감사 로그로 남긴다.
-7. **민감정보는 최소 수집한다.** 목적, 보존 기간, 삭제 정책이 없는 개인정보는 저장하지 않는다.
-8. **API는 재시도에 안전해야 한다.** 예약 생성, 초대 수락 등 중요 쓰기 요청은 멱등성을 보장한다.
-9. **접근성과 모바일 우선을 지킨다.** 고객 흐름은 작은 화면과 보조기술에서 완결되어야 한다.
-10. **관측 가능성과 복구 가능성을 포함해 출시한다.** 로그, 지표, 알림, 백업, 복구 절차 없이 기능을 완료로 보지 않는다.
+## 2. Current State
 
-## 3. 사용자와 용어
+현재 앱은 Next.js 16.2.10 App Router, React 19.2.4, TypeScript 5, Supabase JS 2.x로 구현되어 있다. Supabase Auth, Postgres, RLS, RPC, Storage, Realtime을 사용한다.
 
-| 용어 | 정의 |
-|---|---|
-| Platform Admin | 전체 플랫폼을 관리하는 내부 운영자 |
-| Center Owner | 센터의 최고 관리자. 센터 설정 및 관리자 위임 가능 |
-| Center Admin | 센터 운영 관리자 |
-| Staff | 배정된 업무·일정·예약을 처리하는 직원 |
-| Customer | 센터 서비스를 예약하는 최종 사용자 |
-| Center | 데이터 및 권한 격리의 기본 테넌트 |
-| Membership | 사용자와 센터 사이의 역할·상태 관계 |
-| Invitation | 이메일 기반 센터 관리자/직원 초대 |
-| Identity | 비밀번호 또는 소셜 공급자에 속한 로그인 수단 |
-| Session | 특정 기기에서 발급된 로그인 상태 |
-| Device | 사용자에게 표시하고 철회할 수 있는 세션의 기기 표현 |
+- 브라우저 Client Component가 `lib/*.ts`를 통해 Supabase 테이블과 RPC를 직접 호출한다.
+- `app/api/**/route.ts` Route Handler와 Server Action은 없다.
+- 하나의 Next.js 앱에 회원 기능과 `/manager/*` 센터 운영 기능, `/admin/*` 플랫폼 운영 기능이 공존한다.
+- 다중 센터는 `centers`, `manager_centers`, 센터별 수강권과 운영 데이터로 구현된다.
+- 로그인 단위는 `accounts`, 실제 수강 주체는 복수의 `profiles`다.
+- 조직 역할 관계는 `manager_centers`, `center_roles`, `role_permissions`, `account_center_permissions`다.
+- `memberships`는 조직 Membership이 아니라 회원이 보유한 **수강권/패스**다.
+- 수업은 `classes`, 예약은 `reservations`, 판매 항목은 `products`, 주문은 `orders`다.
+- 관리자 직접배치와 무료 추가 배치는 `ADMIN_ASSIGNMENT`, `ADMIN_FREE` 예약 유형 및 RPC로 구현된다.
+- Payment Adapter와 Mock 결제는 구현됐고 실제 Toss/PortOne Provider는 골격만 있다.
 
-## 4. 제품 범위
+## 3. Product Principles
 
-### v1 필수
+1. **코드가 Current State의 기준이다.** 문서는 코드에 없는 기능을 구현 완료로 표현하지 않는다.
+2. **RLS/RPC가 최종 보안 경계다.** UI 가드는 사용자 경험이며 권한 통제의 대체물이 아니다.
+3. **센터 범위를 모든 계층에서 유지한다.** 쿼리, RPC, Storage, Realtime, UI 선택 상태가 다른 센터 데이터를 섞지 않아야 한다.
+4. **계정과 수강 주체를 구분한다.** `accounts` 하나가 여러 `profiles`를 관리할 수 있다.
+5. **운영 소속과 수강권을 구분한다.** `manager_centers`는 운영 관계, `memberships`는 수강권이다.
+6. **예약 정합성은 RPC/DB에서 보장한다.** 정원, 수강권, 중복, 대기, 차감은 브라우저 사전 검사만 믿지 않는다.
+7. **회원과 운영자가 같은 앱을 안전하게 공유한다.** 모드가 달라도 계정과 센터 경계를 일관되게 적용한다.
+8. **주문과 실제 결제를 혼동하지 않는다.** Mock 결제 성공과 운영 PG 승인은 다른 상태다.
+9. **권한은 고정 역할명이 아니라 카탈로그와 예외를 포함해 판정한다.**
+10. **미완성 기능은 제한과 다음 행동을 명시한다.**
 
-- 멀티센터 생성, 전환, 비활성화 및 데이터 격리
-- 역할 기반 접근 제어와 센터별 Membership
-- 이메일 관리자/직원 초대, 재전송, 취소, 만료, 수락
-- 이메일/비밀번호 가입·로그인·이메일 인증
-- 소셜 로그인과 안전한 Account Linking/Unlinking
-- 비밀번호 찾기 및 재설정
-- 세션 갱신, 로그아웃, 전체 로그아웃
-- 기기 목록, 개별 기기 로그아웃, 의심 세션 철회
-- 서비스·직원·영업시간·휴무·예약 기본 운영
-- 감사 로그, 보안 이벤트, 운영 모니터링
+## 4. Current Product Scope
 
-### 후속 범위
+### Implemented or partially implemented
 
-- 결제/환불, 대기열, 쿠폰, 정기 예약, 외부 캘린더 동기화
-- 세밀한 커스텀 역할, 엔터프라이즈 SSO/SCIM
-- 센터 간 고객 데이터 공유
+- 이메일/비밀번호 가입·로그인, Supabase OAuth 호출
+- 복수 프로필과 회원/매니저 모드
+- 센터 등록·승인, 다중 센터 운영
+- 수업, 룸, 휴무, 설정, 예약·취소·대기·출석·노쇼
+- 수강권, 예약 조건, 공유 수강권, 자동예약
+- 관리자 직접배치·무료배치·작업 로그
+- 상품, 장바구니, 주문, 수강권 발급, Mock 결제
+- 회원·진도·매출·공지·알림·문의·후기 관리
+- 커스텀 센터 역할, 역할별 권한, 개인별 allow/deny
 
-후속 범위는 별도 승인 없이 v1 API나 데이터 모델에 포함하지 않는다.
+### Blocked or partial
 
-## 5. 공통 상태 규칙
+- 카카오·애플 OAuth는 Supabase Provider/redirect 운영 설정이 필요하다.
+- 네이버 로그인은 완성된 Provider 흐름이 아니다.
+- 실제 PG는 미연동이다.
+- 외부 푸시·알림톡과 예약/만료 알림 스케줄러는 운영 연동이 필요하다.
+- 저장소 SQL이 운영 Supabase에 모두 적용됐는지는 저장소만으로 확정할 수 없다.
 
-- 사용자: `pending_verification | active | suspended | deleted`
-- 센터: `active | suspended | archived`
-- Membership: `invited | active | suspended | revoked`
-- 초대: `pending | accepted | expired | revoked`
-- 예약: `pending | confirmed | completed | cancelled | no_show`
-- 세션: `active | revoked | expired`
+## 5. Target State
 
-상태 변경은 허용된 전이만 사용하며, 변경 주체·시각·사유를 기록한다.
+다음은 기존 v1.0의 원칙을 보존한 목표다.
 
-## 6. 완료 정의
+- 안전한 Account Linking, 비밀번호 복구 UX, 세션·기기 관리
+- 운영 PG와 서명된 webhook
+- 세부 권한을 반영한 선제적 UI 가드
+- 일관된 감사 로그와 보안 이벤트
+- Route Handler/Edge Function 등 신뢰 서버 경계가 필요한 외부 연동
+- 운영 환경 관측, 백업·복구, 개인정보 보존·삭제 정책
 
-기능은 다음을 모두 만족해야 완료다.
+이 항목들은 현재 구현으로 간주하지 않는다.
 
-- 승인된 요구사항과 수용 기준 충족
-- 권한 및 센터 격리 테스트 포함
-- 정상·실패·경계·동시성 시나리오 검증
-- 접근성 및 반응형 UI 확인
-- 감사/관측 이벤트와 개인정보 마스킹 확인
-- API·DB·UI·테스트·변경 로그 문서 동기화
-- 롤백 또는 비활성화 전략 확보
+## 6. Decision Required
 
-## 7. 문서 우선순위
+- 실제 PG: Toss, PortOne 또는 다른 공급자
+- OAuth 공급자 우선순위와 Account Linking 정책
+- 비밀번호 복구, MFA/passkey, 세션·기기 UX 범위
+- 관리자 직접배치/무료배치 세부 permission key와 회원 상태 차단 정책
+- 센터별 시간대 일반화 여부(현재 예약 표시 로직 일부는 `Asia/Seoul` 고정)
+- 감사/개인정보 보존 기간
 
-충돌 시 우선순위는 보안/법적 요구사항 → 본 원칙 → Architecture/Database/API → Epic/UI/Testing → 구현 순이다. 충돌을 발견하면 임의로 해석하지 말고 [Decision Log](./08_Decision_Log.md)에 남긴다.
+## 7. Definition of Done
+
+- 코드, SQL, RLS/RPC와 문서의 Current State가 일치한다.
+- 센터 교차 접근, 권한 거부, 예약 동시성의 부정 테스트가 있다.
+- 운영 외부 조건은 Blocked로 표시하고 설정 증거 없이 완료 처리하지 않는다.
+- UI·DB·RPC·테스트·문서가 함께 갱신된다.
+- 배포 및 롤백/forward-fix 계획이 있다.
+
+## 8. Document Conflict Rule
+
+보안·법적 요구 → 실제 코드/적용된 DB → 본 원칙 → 하위 사양 순이다. 저장소 SQL은 설계 증거이나 운영 적용 상태의 증거는 아니다. 충돌은 [Decision Log](./08_Decision_Log.md)에 기록하고 용어는 [Terminology Map](./11_Terminology_Map.md)을 따른다.
 

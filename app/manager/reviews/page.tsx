@@ -86,10 +86,9 @@ export default function ManagerReviewsPage() {
 
   async function handleDelete(r: ManagerReview) {
     // 리뷰 내용이 HTML일 수 있어(굵게/색상 등), 확인창에는 태그를 뺀 실제
-    // 글자만 미리보기로 보여준다(브라우저 confirm()은 항상 순수 텍스트로만
-    // 표시되므로 이건 보안이 아니라 가독성 목적).
+    // 확인창에는 HTML 태그를 제거한 실제 글자만 미리 보여준다.
     const plainPreview = extractPlainText(r.content);
-    if (!confirm(
+    if (!await globalThis.appConfirm(
       `이 후기를 삭제할까요?\n\n` +
       `작성자: ${r.writerName}\n` +
       `내용: ${plainPreview.slice(0, 40)}${plainPreview.length > 40 ? "…" : ""}\n\n` +

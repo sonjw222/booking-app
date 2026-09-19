@@ -1,101 +1,98 @@
 # Testing
 
-## 1. 전략
+Status: Active Test Strategy
+Version: 1.1.0
+Current-State Source: `package.json`, `vitest*.config.ts`, `tests/**`, implementation and SQL
+Target-State Status: Coverage expansion required
+Last Updated: 2026-07-31
 
-테스트는 단위 → 모듈 통합 → API 계약 → E2E → 보안/성능 순의 피라미드를 따른다. 인증, 권한, 센터 격리, 예약 동시성은 테스트 비중과 무관하게 필수 통합 테스트로 둔다.
+## 1. Current Tooling
 
-## 2. 테스트 계층
+- Unit: Vitest (`npm test`)
+- Integration: Vitest integration config (`npm run test:integration`)
+- Combined: `npm run test:all`
+- Build/static: Next build, ESLint, TypeScript through project toolchain
 
-| 계층 | 대상 |
-|---|---|
-| Unit | 상태 전이, 권한 판정, 시간대/슬롯 계산, 토큰 정책 |
-| Integration | DB 제약, 트랜잭션, 저장소의 center scope, outbox |
-| API Contract | 요청/응답 스키마, 오류 코드, 멱등성, pagination |
-| E2E | 가입부터 예약, 초대 수락, Account Linking, 기기 철회 |
-| Security | IDOR, CSRF, XSS, OAuth 변조, token replay, rate limit |
-| Performance | 슬롯 조회, 예약 경합, 센터별 목록, 로그인 burst |
-| Accessibility | 키보드, 스크린리더, 대비, 확대, 오류 연결 |
+통합 테스트는 Supabase 환경·권한 fixture에 의존한다. 저장소 테스트 통과와 운영 Supabase 설정 완료는 별개다.
 
-## 3. 필수 시나리오
+## 2. Current-State Test Model
 
-### 멀티센터와 권한
+테스트 대상은 REST endpoint가 아니라 다음 계층이다.
 
-- A센터 Owner/Admin/Staff/Customer의 허용·거부 매트릭스
-- A센터 토큰/사용자로 B센터 ID 조회·수정·검색·내보내기 실패
-- body의 위조 `center_id` 무시 또는 거부
-- 센터 전환 후 이전 센터 캐시/목록/상세가 남지 않음
-- 정지/철회 Membership 즉시 차단
-- 마지막 Owner 강등/삭제 실패
-- Admin의 권한 상승과 범위를 넘는 역할 부여 실패
+- `lib/*.ts` 도메인 함수와 UI utility
+- Supabase table/view query 계약
+- Postgres RPC 결과와 RLS 거부
+- Next.js 페이지의 주요 사용자 흐름
+- Payment Provider/Service의 Mock scenario
 
-### 관리자 초대
+## 3. Mandatory Regression Matrix
 
-- 생성, 이메일 발송 이벤트, 미리보기, 가입/로그인 후 수락
-- 대소문자가 다른 같은 이메일 처리
-- 중복 pending, 재전송 시 이전 토큰 무효화, 취소, 만료
-- 다른 이메일 로그인 상태에서 수락 차단
-- 동시 두 번 수락 시 한 번만 성공
-- 초대한 사용자의 권한 철회 후 정책에 따른 수락 차단
+### Account/Profile
 
-### 인증 및 Account Linking
+- Auth user가 자신의 `accounts`만 연결
+- 한 Account의 복수 Profile 조회·예약
+- 다른 Account Profile 접근 차단
 
-- 이메일 가입/인증/로그인과 미인증 제한
-- 각 소셜 공급자 정상·거부·state/nonce 오류·callback 재실행
-- 신규 소셜 계정 생성과 기존 identity 로그인
-- 동일 이메일 충돌 시 자동 병합되지 않음
-- 기존 계정 재인증 후 linking, ticket 만료/재사용/다른 세션 사용 실패
-- 같은 provider subject를 두 사용자에게 연결 실패
-- 마지막 로그인 수단 unlink 실패
+### Multi-center authorization
 
-### 비밀번호와 세션/기기
+- A센터 staff가 B센터의 운영 데이터 접근 실패
+- owner/system/custom role 및 personal allow/deny 조합
+- Platform Admin과 Center staff 권한 분리
+- UI guard가 없어도 RLS/RPC가 차단
 
-- forgot 응답이 존재/미존재 계정에 동일
-- reset 토큰 만료·1회 사용·재요청 시 이전 토큰 정책
-- reset 성공 후 기존 세션 철회
-- Refresh 회전과 이전 토큰 재사용 시 family 전체 철회
-- 현재/개별/다른 모든 기기 로그아웃
-- 정지 사용자와 권한 변경 사용자의 기존 세션 행동
+### Reservations
 
-### 예약
+- `reserve_class`, 수강권 지정 예약, goods 동시 예약
+- 정원 도달 시 waitlisted, 취소 시 승격
+- 활성 중복 예약 방지
+- 수강권 잔여 횟수 음수 방지·취소 복원
+- 예약 조건, 공유 수강권, 자동예약과 미배치
+- 출석·노쇼 상태 전이
 
-- 영업시간, 휴무, DST 전환, 자정 경계, 서비스 버퍼
-- 동시에 같은 슬롯 예약 시 정확히 하나만 성공
-- 동일 멱등 키/동일 payload는 동일 결과
-- 동일 멱등 키/다른 payload는 충돌 오류
-- 취소 후 슬롯 재개방과 허용되지 않은 상태 전이 차단
+### Admin assignment
 
-## 4. 테스트 데이터
+- `ADMIN_ASSIGNMENT`는 유효한 수강권/미배치 조건에 맞게 차감
+- `ADMIN_FREE`는 수강권을 차감하지 않음
+- 정원 초과는 확인/permission 없이 우회 불가
+- 생성/취소가 `admin_action_logs`에 기록
+- 회원 화면은 내부 무료/사유 정보를 노출하지 않음
 
-- 테스트는 센터 A/B와 모든 역할을 기본 fixture로 가진다.
-- 각 테스트는 독립적이고 병렬 실행 가능해야 한다.
-- 실제 개인정보와 운영 토큰을 사용하지 않는다.
-- 시간은 주입 가능한 clock으로 고정하며 서울, UTC, DST 지역을 포함한다.
-- 소셜 공급자는 계약을 반영한 mock/stub을 사용하고 staging에서 실제 sandbox smoke test를 추가한다.
+### Products/orders/payments
 
-## 5. CI 품질 게이트
+- pass/goods 상품과 장바구니/주문
+- Mock success/failed/cancelled
+- 성공 RPC 중복 호출의 안전성
+- 타인 주문 확인/취소/발급 차단
+- 실제 PG Provider는 미구현임을 테스트/표시
 
-PR 병합 전:
+### Auth/Realtime/Storage
 
-- lint/type/static checks
-- unit/integration/API contract
-- 마이그레이션 적용 및 fresh DB 검증
-- 센터 격리·권한·인증 회귀 suite
-- 의존성/비밀값/정적 보안 스캔
-- 변경된 핵심 화면 접근성 검사
+- 이메일 로그인·회원가입 실패/성공
+- OAuth 설정 부재 시 안전한 실패
+- Realtime subscription이 RLS 범위를 넘지 않음
+- Storage bucket/path 정책
 
-배포 전 staging:
+## 4. Gap
 
-- 핵심 E2E와 실제 공급자 sandbox
-- 예약 경합/부하 smoke
-- DB backup/rollback 또는 forward-fix 검증
-- 관측 대시보드와 알림 확인
+- 브라우저 E2E와 접근성 자동화의 기준이 Master Spec에 연결되어 있지 않다.
+- 운영 스키마 migration 적용을 재현하는 단일 CI 흐름이 불명확하다.
+- SQL/RPC가 누적 파일에 분산되어 fresh DB 검증이 어렵다.
+- Account Linking, password recovery, session/device는 구현 전 테스트 대상이 아니다.
 
-## 6. 결함 우선순위
+## 5. Target State
 
-- **P0:** 센터 간 유출, 계정 탈취, 예약 무결성 대규모 손상
-- **P1:** 인증/예약 핵심 흐름 불가, 권한 우회, 데이터 손실
-- **P2:** 우회 가능한 주요 기능 오류, 접근성 핵심 위반
-- **P3:** 경미한 표시/사용성 문제
+- fresh Supabase DB migration → seed → RLS/RPC integration test
+- A/B center와 Account/Profile/role fixture 표준화
+- Playwright 기반 핵심 E2E 및 접근성 검사
+- generated Database type drift check
+- 결제 webhook replay/idempotency test
+- 운영 설정 smoke checklist
 
-P0/P1 미해결 상태로 출시하지 않는다. flaky test는 비활성화로 숨기지 않고 담당자와 기한을 지정한다.
+## 6. Release Gate
+
+- 코드 변경 범위에 맞는 unit/integration 통과
+- 센터 교차 접근과 permission 부정 테스트 통과
+- 예약/직접배치/결제 동시성·중복 테스트
+- Next build/lint 통과
+- Blocked 운영 설정은 담당자·검증 방법·출시 조건 명시
 

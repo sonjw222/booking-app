@@ -10,6 +10,8 @@
 import { useCallback, useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import Loading from "../components/Loading";
+import ConfirmDialog from "../components/ConfirmDialog";
+import DatePicker from "../components/DatePicker";
 import {
   fetchProfiles, addProfile, deleteProfile, updateProfile, uploadAvatar, avatarPublicUrl,
   type ProfileRow, type ProfileEdit,
@@ -29,6 +31,7 @@ export default function ProfilesPage() {
   const [editing, setEditing] = useState<ProfileRow | null>(null);
   const [edit, setEdit] = useState<ProfileEdit | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ProfileRow | null>(null);
 
   function openEdit(p: ProfileRow) {
     setEditing(p);
@@ -99,10 +102,16 @@ export default function ProfilesPage() {
   }
 
   async function handleDelete(p: ProfileRow) {
-    if (!confirm(`'${p.name}' 프로필을 삭제할까요? 예약·수강권 기록도 함께 사라져요.`)) return;
+    setDeleteTarget(p);
+  }
+
+  async function confirmDelete() {
+    const p = deleteTarget;
+    if (!p) return;
     setBusy(true);
     try {
       await deleteProfile(p.id);
+      setDeleteTarget(null);
       await load();
     } catch (e: any) {
       setError(e.message);
@@ -112,7 +121,17 @@ export default function ProfilesPage() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell account-page-v2">
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="이 프로필을 삭제할까요?"
+        description={`${deleteTarget?.name ?? "선택한 프로필"}의 예약과 수강권 기록도 함께 사라져요. 삭제 후에는 복구할 수 없어요.`}
+        confirmLabel="프로필 삭제"
+        danger
+        busy={busy}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
       <div className="back-header">
         <a className="side" href="/mypage">‹</a>
         <div className="title">프로필 관리</div>
@@ -135,7 +154,7 @@ export default function ProfilesPage() {
               <div key={p.id} className="profile-item">
                 <button className="profile-item-tap" onClick={() => openEdit(p)}>
                   {p.avatarUrl
-                    ? <img className="profile-avatar-img" src={avatarPublicUrl(p.avatarUrl) ?? ""} alt="" />
+                    ? <img className="profile-avatar-img" src={avatarPublicUrl(p.avatarUrl) ?? ""} alt={`${p.name} 프로필`} />
                     : <div className="profile-avatar">{p.name?.[0] ?? "?"}</div>}
                   <div className="profile-item-info">
                     <div className="profile-item-name">
@@ -161,7 +180,7 @@ export default function ProfilesPage() {
             <div className="add-profile-form">
               <input className="input-field" placeholder="프로필 이름 (필수)" value={newName} onChange={(e) => setNewName(e.target.value)} />
               <input className="input-field" placeholder="라벨 (선택) — 예: 오전반, 개인용" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} />
-              <input className="input-field" type="date" placeholder="생년월일 (선택)" value={newBirth} onChange={(e) => setNewBirth(e.target.value)} />
+              <DatePicker value={newBirth} onChange={setNewBirth} label="생년월일" />
               <div className="add-profile-actions">
                 <button className="ghost-btn" onClick={() => { setAdding(false); setError(null); }}>취소</button>
                 <button className="primary-btn" disabled={busy} onClick={handleAdd}>
@@ -186,7 +205,7 @@ export default function ProfilesPage() {
             {/* 프로필 사진 */}
             <div className="avatar-edit">
               {edit.avatarUrl
-                ? <img className="avatar-edit-img" src={avatarPublicUrl(edit.avatarUrl) ?? ""} alt="" />
+                ? <img className="avatar-edit-img" src={avatarPublicUrl(edit.avatarUrl) ?? ""} alt={`${editing.name} 프로필`} />
                 : <div className="avatar-edit-placeholder">{editing.name?.[0] ?? "?"}</div>}
               <label className="avatar-edit-btn">
                 {uploadingAvatar ? "업로드 중..." : "사진 변경"}
@@ -205,7 +224,7 @@ export default function ProfilesPage() {
             <input className="input-field" placeholder="예: 오전반, 개인용" value={edit.label} onChange={(e) => setEdit({ ...edit, label: e.target.value })} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>생년월일 (선택)</div>
-            <input className="input-field" type="date" value={edit.birthDate} onChange={(e) => setEdit({ ...edit, birthDate: e.target.value })} />
+            <DatePicker value={edit.birthDate} onChange={(birthDate) => setEdit({ ...edit, birthDate })} label="생년월일" />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>성별 (선택)</div>
             <div className="mem-filters" style={{ padding: 0 }}>

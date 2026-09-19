@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import ManagerNav from "../components/ManagerNav";
+import UiIcon from "../components/UiIcon";
 import { fetchMyCenters, fetchTodayClasses, type ManagedCenter, type TodayClass } from "../../lib/manager";
 import { fetchClassAttendees, setAttendance, type ClassAttendee } from "../../lib/classes";
 import { fetchMemberDetail, type MemberDetailData } from "../../lib/members";
@@ -38,7 +39,7 @@ export default function ManagerDashboard() {
       return;
     }
     if (status === "cancelled") {
-      const ok = confirm(
+      const ok = await globalThis.appConfirm(
         `${a.name}님의 예약을 취소할까요?\n\n` +
         `· 사용한 수강권 횟수가 1회 복구돼요\n` +
         `· 취소 후에는 출석·결석·노쇼로 되돌릴 수 없어요\n\n` +
@@ -136,20 +137,22 @@ export default function ManagerDashboard() {
   }
 
   if (error) {
+    const needsLogin = error.includes("로그인");
     return (
-      <div className="app-shell">
-        <div className="holiday-notice" style={{ marginTop: 60 }}>
-          <div className="holiday-chip"><span className="hc-dot" />{error}</div>
-        </div>
-        <div style={{ padding: 20 }}>
-          <a className="primary-btn" href="/mypage">마이페이지로</a>
+      <div className="app-shell auth-required-state manager-auth-state">
+        <UiIcon name={needsLogin ? "user" : "shield"} size={31} />
+        <h1>{needsLogin ? "관리자 로그인이 필요해요" : "관리 권한을 확인해주세요"}</h1>
+        <p>{needsLogin ? "센터 관리자 계정으로 로그인하면 운영 화면을 사용할 수 있어요." : error}</p>
+        <div className="auth-required-actions">
+          {needsLogin && <a className="primary-btn" href="/login?next=/manager">관리자 계정으로 로그인</a>}
+          <a className="ghost-btn" href="/">회원 화면으로 돌아가기</a>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell manager-home-v2">
       {/* 매니저 모드 헤더 */}
       <div className="mgr-mode-bar">
         <span className="mgr-mode-label">🏢 관리자 모드</span>
@@ -169,6 +172,20 @@ export default function ManagerDashboard() {
           </button>
         ))}
       </div>
+
+      <section className="manager-today-overview">
+        <div className="manager-today-head"><div><span>오늘 할 일</span><b>{new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "short" }).format(new Date())}</b></div><a href="/manager/classes">수업 관리 ›</a></div>
+        <div className="manager-today-metrics">
+          <a href="/manager/classes"><span>오늘 수업</span><b>{todayClasses.length}</b></a>
+          <a href="/manager/classes"><span>예약 인원</span><b>{todayClasses.reduce((sum, item) => sum + item.reserved, 0)}</b></a>
+          <a href="/manager/classes"><span>마감 수업</span><b>{todayClasses.filter((item) => item.reserved >= item.capacity).length}</b></a>
+        </div>
+        <div className="manager-today-actions">
+          <a href="/manager/inquiries"><UiIcon name="message" size={17} />문의 확인</a>
+          <a href="/manager/orders"><UiIcon name="receipt" size={17} />주문 확인</a>
+          <a href="/manager/admin-assignments"><UiIcon name="users" size={17} />회원 배치</a>
+        </div>
+      </section>
 
       {/* 오늘 수업 요약 */}
       <div className="section-title" style={{ paddingTop: 8 }}>
@@ -202,75 +219,75 @@ export default function ManagerDashboard() {
       <div className="menu-section-label">{activeCenter?.name ?? "센터"} 관리</div>
       {canSeeMenu("pass.create") && (
         <a className="list-row" href="/manager/membership-rules">
-          <div className="left"><span className="icon">🎫</span>수강권 관리</div>
+          <div className="left"><span className="icon"><UiIcon name="ticket" /></span>수강권 관리</div>
           <span className="chevron">›</span>
         </a>
       )}
       {/* 상품 관리: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
       <a className="list-row" href="/manager/goods">
-        <div className="left"><span className="icon">🎽</span>상품 관리</div>
+        <div className="left"><span className="icon"><UiIcon name="receipt" /></span>상품 관리</div>
         <span className="chevron">›</span>
       </a>
       {canSeeMenu("customer.progress") && (
         <a className="list-row" href="/manager/progress/record">
-          <div className="left"><span className="icon">📈</span>회원 진도 기록</div>
+          <div className="left"><span className="icon"><UiIcon name="edit" /></span>진도표 관리</div>
           <span className="chevron">›</span>
         </a>
       )}
       {canSeeMenu("facility.staff.view") && (
         <a className="list-row" href="/manager/staff">
-          <div className="left"><span className="icon">🔑</span>스태프 & 권한</div>
+          <div className="left"><span className="icon"><UiIcon name="shield" /></span>스태프 & 권한</div>
           <span className="chevron">›</span>
         </a>
       )}
       {canSeeMenu("pass.sales.view") && (
         <a className="list-row" href="/manager/sales">
-          <div className="left"><span className="icon">💰</span>매출 관리</div>
+          <div className="left"><span className="icon"><UiIcon name="receipt" /></span>매출·결제</div>
           <span className="chevron">›</span>
         </a>
       )}
       {canSeeMenu("board.notice.view") && (
         <a className="list-row" href="/manager/announcements">
-          <div className="left"><span className="icon">📢</span>공지사항</div>
+          <div className="left"><span className="icon"><UiIcon name="megaphone" /></span>공지사항</div>
           <span className="chevron">›</span>
         </a>
       )}
       {canSeeMenu("board.inquiry.view") && (
         <a className="list-row" href="/manager/inquiries">
-          <div className="left"><span className="icon">💬</span>1:1 문의</div>
+          <div className="left"><span className="icon"><UiIcon name="message" /></span>1:1 문의</div>
           <span className="chevron">›</span>
         </a>
       )}
       {/* 후기 관리: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
       <a className="list-row" href="/manager/reviews">
-        <div className="left"><span className="icon">⭐</span>후기 관리</div>
+        <div className="left"><span className="icon"><UiIcon name="star" /></span>후기 관리</div>
         <span className="chevron">›</span>
       </a>
       {/* 주문 관리: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
       <a className="list-row" href="/manager/orders">
-        <div className="left"><span className="icon">🧾</span>주문 관리 (수강권·상품 구매)</div>
+        <div className="left"><span className="icon"><UiIcon name="receipt" /></span>주문 관리 (수강권·상품 구매)</div>
         <span className="chevron">›</span>
       </a>
       {/* 관리자 배치 내역: 권한 카탈로그에 대응 키 없음 — 1차 범위에서는 노출 제한 없음 */}
       <a className="list-row" href="/manager/admin-assignments">
-        <div className="left"><span className="icon">📋</span>관리자 배치 내역</div>
+        <div className="left"><span className="icon"><UiIcon name="list" /></span>회원 직접 배치 기록</div>
         <span className="chevron">›</span>
       </a>
       {canSeeMenu("facility.info") && (
         <a className="list-row" href="/manager/center-info">
-          <div className="left"><span className="icon">🏢</span>센터 정보</div>
+          <div className="left"><span className="icon"><UiIcon name="building" /></span>센터 정보</div>
           <span className="chevron">›</span>
         </a>
       )}
       {canSeeMenu("facility.room") && (
         <a className="list-row" href="/manager/rooms">
-          <div className="left"><span className="icon">🚪</span>룸(장소) 관리</div>
+          <div className="left"><span className="icon"><UiIcon name="location" /></span>룸(장소) 관리</div>
           <span className="chevron">›</span>
         </a>
       )}
       {canSeeMenu("facility.operation") && (
         <a className="list-row" href="/manager/settings">
-          <div className="left"><span className="icon">⚙️</span>운영 설정</div>
+          <div className="left"><span className="icon"><UiIcon name="settings" /></span>운영 설정</div>
           <span className="chevron">›</span>
         </a>
       )}
@@ -360,7 +377,7 @@ export default function ManagerDashboard() {
                     ))
                   )}
                 </div>
-                <a className="primary-btn" href={`/manager/members?profile=${memberInfo.profileId}`} style={{ marginTop: 10, display: "block", textAlign: "center" }}>회원 관리에서 전체 보기</a>
+                <a className="primary-btn" href={`/manager/member-detail?center=${activeCenterId ?? ""}&profile=${memberInfo.profileId}`} style={{ marginTop: 10, display: "block", textAlign: "center" }}>회원 상세 보기</a>
               </>
             )}
             <div className="add-profile-actions" style={{ marginTop: 6 }}>
