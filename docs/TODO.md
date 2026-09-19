@@ -1373,14 +1373,14 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
-### P2-42. (신규, 2026-09-19) Android SearchTests.searchInputAndResults — SM-T975N 실기기에서 검색 실행 직후 espresso-web Atom 평가가 복구 불가 상태로 깨짐
+### P2-43. (신규, 2026-09-19) `.search-go` 버튼 — espresso-web webClick()이 이 버튼 하나에서만 React onClick을 못 띄우는 원인 미확정
 
 | 필드 | 내용 |
 |---|---|
-| 우선순위 | P2(제품 버그 아님 — 테스트 인프라 한계로 보임, 실기기 QA로 대체 가능) |
-| 현재 상태 | Samsung SM-T975N(Android 13) 실기기에서 `connectedDebugAndroidTest` 반복 실행 중 `SearchTests.searchInputAndResults`만 지속적으로 실패. 검색 실행을 트리거하는 액션(별도 `.search-go` 버튼 클릭, 또는 입력창에 Enter 키 — 둘 다 시도해봄)을 수행한 직후부터 `findElement`의 Atom 평가가 테스트가 끝날 때까지 회복되지 않고 전부 `"Atom evaluation returned null"`로 실패한다(logcat 실측). 고정 sleep→폴링 전환(최대 15초), IME 정착 유예 추가, `closeSoftKeyboard()` 제거, 검색 트리거 방식 변경(버튼→Enter키) 등 여러 방향으로 시도했으나 전부 동일하게 재현됨 — 타이밍 문제가 아니라 이 기기/WebView 조합에 특정된 더 깊은 espresso-web 호환성 이슈로 보인다. `.searchbar` 진입, `.search-input` 존재 확인, 타이핑까지는 전부 정상 동작하고, 오직 "검색 실행"이 트리거된 직후부터만 재현됨. |
-| 필요한 것 | (1) UiAutomator 기반(접근성 트리 직접 조회)으로 이 테스트만 별도 전환해 espresso-web Atom 평가 자체를 우회하는 방안 검토. (2) 다른 실기기(비삼성/다른 WebView 버전)에서도 재현되는지 교차 확인 — 삼성 WebView 특정 이슈인지 Android 13 전반 이슈인지 구분 필요. (3) 그때까지는 이 화면(검색 실행 후 결과 렌더링)은 실기기 수동 QA 체크리스트로 커버. |
-| 근거 파일 | `android/app/src/androidTest/java/com/mwhabit/app/SearchTests.java`, logcat `android/app/build/outputs/androidTest-results/connected/debug/SM-T975N - 13/logcat-com.mwhabit.app.SearchTests-searchInputAndResults.txt`(재현 시마다 생성) |
+| 우선순위 | P2(자동 테스트는 대체 경로로 우회 완료 — 실제 사용자 영향 여부만 미확정) |
+| 현재 상태 | P2-42(Android SearchTests Atom 평가 문제)를 재조사해 근본 원인 2가지를 확정하고 해결함(아래 CHANGELOG 참고) — 그중 하나가 이 항목: SM-T975N 실기기에서 `app/search/page.tsx`의 `.search-go` 버튼(`<button className="search-go" disabled={busy} onClick={() => doSearch()}>`)을 espresso-web의 `webClick()`으로 누르면 버튼이 시각적으로 포커스는 받지만(스크린샷 확인) `doSearch()`가 전혀 실행되지 않는 걸 전용 진단 테스트로 재현·확정했다(초 단위 DOM 상태 로그로 6초 내내 미실행 확인). 반면 같은 페이지의 추천 칩 버튼(`.search-suggestion-chips button`, 동일한 `doSearch()`를 호출)은 같은 `webClick()`으로 매번 1초 내 정상 동작 — `webClick()` 자체는 정상이고 이 버튼 하나에만 국한된 문제. 자동 테스트는 이미 정상 동작이 확인된 추천 칩 클릭으로 전환해 우회했다(`SearchTests.java`). |
+| 필요한 것 | 이 버튼이 **실제 사용자의 손가락 탭**에서도 이 문제를 겪는지는 확정 못 했다 — `adb shell input text`가 한글을 지원하지 않아(ASCII 전용, NullPointerException) "타이핑 후 이 버튼을 실제 탭"까지는 완전히 재현 못 함. (1) 실기기에서 사람이 직접 검색어를 입력하고 "검색" 버튼을 탭해 정상 동작하는지 수동 확인. (2) 정상이라면 espresso-web의 webClick() 좌표 계산이 이 버튼에서만 어긋나는(예: `disabled={busy}` prop이 있는 버튼과 추천 칩의 구조 차이) 테스트 도구 한정 이슈로 결론 — production 코드는 안 건드려도 됨. (3) 만약 실제 사용자도 이 버튼에서 문제를 겪는다면 그때 비로소 진짜 product bug로 재분류하고 수정. |
+| 근거 파일 | `android/app/src/androidTest/java/com/mwhabit/app/SearchTests.java`, `app/search/page.tsx`(`.search-go`/`.search-suggestion-chips`) |
 
 ### P2-41. (신규, 2026-09-18) 통합테스트 — 51개 파일 전체 연속 실행 시 공유 테스트센터 상태 오염·Auth rate limit로 flaky
 
