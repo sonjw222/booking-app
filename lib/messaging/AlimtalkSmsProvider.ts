@@ -37,7 +37,7 @@ export class AlimtalkSmsProvider implements MessageProvider {
     });
 
     if (error || !data) {
-      return { status: "failed", message: error?.message ?? "발송 요청에 실패했어요" };
+      return { status: "failed", outcomeUnknown: true, message: error?.message ?? "발송 결과를 확인하지 못했어요" };
     }
     return data;
   }

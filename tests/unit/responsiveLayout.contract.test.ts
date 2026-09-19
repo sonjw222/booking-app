@@ -71,7 +71,8 @@ describe("responsive workspace layout contract", () => {
     const managerNav = read("app/components/ManagerNav.tsx");
     expect(memberNav).toContain('className="member-desktop-nav"');
     expect(memberNav).toContain("<nav className={`bottom-nav");
-    expect(managerNav).toContain('className="workspace-sidebar manager-sidebar"');
+    expect(managerNav).toContain('className={`workspace-sidebar manager-sidebar');
+    expect(managerNav).toContain('aria-expanded={pinned}');
     expect(managerNav).toContain("canSeeManagerMenu");
     expect(css).toContain("body:has(> .member-desktop-nav) .bottom-nav { display: none; }");
     expect(css).toContain(".manager-v3 > .bottom-nav { display: none; }");

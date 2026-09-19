@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../lib/managerCenterSelection";
 
 /*
   매니저 - 후기 관리
@@ -21,7 +22,7 @@ import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/
 
 export default function ManagerReviewsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [centerId, setCenterId] = useState<string | null>(null);
+  const [centerId, setCenterId] = useCenterSelection();
   const [reviews, setReviews] = useState<ManagerReview[]>([]);
   const [stats, setStats] = useState<ReviewStats>({ total: 0, avgRating: 0, noReply: 0 });
   const [filter, setFilter] = useState<"all" | "noreply">("all");
@@ -44,7 +45,7 @@ export default function ManagerReviewsPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(preferredCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();

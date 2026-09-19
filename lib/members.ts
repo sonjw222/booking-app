@@ -530,6 +530,7 @@ export type AlimtalkSendResult = {
   skipped: number;      // 전화번호가 없어 건너뜀
   failed: number;       // 벤더가 실패로 응답
   failedNames: string[];
+  recipients: { index: number; name: string; status: "sent" | "skipped" | "failed" | "unknown" }[];
 };
 
 // 선택한 회원들에게 알림톡(실패 시 SMS 대체발송은 벤더 쪽에서 처리)을 보낸다.
@@ -543,16 +544,19 @@ export async function sendAlimtalkToMembers(
   templateCode?: string
 ): Promise<AlimtalkSendResult> {
   const service = getMessageService();
-  const result: AlimtalkSendResult = { sent: 0, skipped: 0, failed: 0, failedNames: [] };
-  for (const t of targets) {
-    if (!t.phone) { result.skipped++; continue; }
+  const result: AlimtalkSendResult = { sent: 0, skipped: 0, failed: 0, failedNames: [], recipients: [] };
+  for (const [index, t] of targets.entries()) {
+    if (!t.phone) { result.skipped++; result.recipients.push({ index, name: t.name, status: "skipped" }); continue; }
     try {
       const res = await service.send({ to: t.phone, content, channel: "alimtalk", centerId, templateCode });
       if (res.status === "sent") result.sent++;
       else { result.failed++; result.failedNames.push(t.name); }
+      result.recipients.push({ index, name: t.name, status: res.outcomeUnknown ? "unknown" : res.status === "sent" ? "sent" : "failed" });
     } catch {
       result.failed++;
       result.failedNames.push(t.name);
+      // A lost response is not proof of non-delivery. Never automatically retry it.
+      result.recipients.push({ index, name: t.name, status: "unknown" });
     }
   }
   return result;

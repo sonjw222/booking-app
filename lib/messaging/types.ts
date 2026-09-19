@@ -36,6 +36,7 @@ export type SendMessageInput = {
 
 export type SendMessageResult = {
   status: "sent" | "failed";
+  outcomeUnknown?: boolean; // transport failure: provider may have accepted the request
   providerMessageId?: string; // 벤더가 반환하는 자체 발송 식별자
   cost?: number; // 건당 비용(원) — notification_logs.cost와 대응
   message?: string;

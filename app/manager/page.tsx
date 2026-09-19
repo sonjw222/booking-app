@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../lib/managerCenterSelection";
 
 /*
   매니저 대시보드 (매니저 모드 홈)
@@ -37,7 +38,7 @@ function dashRangeFor(period: DashPeriod): { from: string; to: string } {
 
 export default function ManagerDashboard() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [activeCenterId, setActiveCenterId] = useState<string | null>(null);
+  const [activeCenterId, setActiveCenterId] = useCenterSelection();
   const [todayClasses, setTodayClasses] = useState<TodayClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +115,7 @@ export default function ManagerDashboard() {
     try {
       const list = await fetchMyCenters();
       setCenters(list);
-      if (list.length > 0) setActiveCenterId(list[0].id);
+      if (list.length > 0) setActiveCenterId(preferredCenterId(list));
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -219,6 +220,11 @@ export default function ManagerDashboard() {
           <a href="/manager/classes"><span>마감 수업</span><b>{todayClasses.filter((item) => item.reserved >= item.capacity).length}</b></a>
         </div>
         <div className="manager-today-actions">
+          {canSeeMenu("customer.member.view") && <>
+            <a href="/manager/members?worklist=expiring">7일 내 만료 회원</a>
+            <a href="/manager/members?worklist=low_balance">잔여 2회 이하 회원</a>
+            <a href="/manager/members?worklist=inactive">30일 미출석·출석 기록 없음</a>
+          </>}
           {canSeeMenu("board.inquiry.view") && (
             <a href="/manager/inquiries"><UiIcon name="message" size={17} />문의 확인</a>
           )}

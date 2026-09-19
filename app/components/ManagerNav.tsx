@@ -18,9 +18,15 @@ import {
 import { replaceTabNavigation } from "../../lib/navState";
 import NotificationToaster from "./NotificationToaster";
 import UiIcon from "./UiIcon";
+import { useCurrentCenterId } from "../../lib/managerCenterSelection";
 
 export default function ManagerNav({ initialCanSeeMembers = null }: { initialCanSeeMembers?: boolean | null }) {
   const pathname = usePathname();
+  const selectedCenter = useCurrentCenterId();
+  const [pinned, setPinned] = useState(false);
+  useEffect(() => {
+    try { setPinned(localStorage.getItem("manager_sidebar_pinned") === "1"); } catch { /* optional preference */ }
+  }, []);
   const is = (p: string) => pathname.startsWith(p);
   const isMore = pathname === "/manager";
 
@@ -49,10 +55,14 @@ export default function ManagerNav({ initialCanSeeMembers = null }: { initialCan
   // 그대로다.
   useEffect(() => {
     let cancelled = false;
+    setResolved(false);
+    setIsOwner(false);
+    setMyPerms(null);
     fetchMyCenters()
       .then((centers) => {
-        if (cancelled || centers.length === 0) { setResolved(true); return; }
-        const active = centers[0];
+        if (cancelled) return;
+        if (centers.length === 0) { setResolved(true); return; }
+        const active = centers.find((c) => c.id === selectedCenter) ?? centers[0];
         setIsOwner(active.isOwner);
         if (active.isOwner) { setResolved(true); return; }
         return fetchMyEffectivePermissionKeys(active.managerCenterId, active.roleId).then((keys) => {
@@ -62,13 +72,13 @@ export default function ManagerNav({ initialCanSeeMembers = null }: { initialCan
       .catch(() => { if (!cancelled) setResolved(true); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  }, [pathname, selectedCenter]);
 
   const liveCanSeeMembers = canSeeManagerMenu(isOwner, myPerms, "customer.member.view");
   useEffect(() => {
     if (resolved) setCachedCanSeeMembers(liveCanSeeMembers);
   }, [resolved, liveCanSeeMembers]);
-  const canSeeMembers = resolved ? liveCanSeeMembers : (cachedCanSeeMembers ?? false);
+  const canSeeMembers = resolved ? liveCanSeeMembers : (!selectedCenter && (cachedCanSeeMembers ?? false));
   const canSee = (permissionKey: string) => canSeeManagerMenu(isOwner, myPerms, permissionKey);
 
   useEffect(() => {
@@ -85,7 +95,11 @@ export default function ManagerNav({ initialCanSeeMembers = null }: { initialCan
   }, []);
 
   useEffect(() => {
-    if (pathname.startsWith("/manager/notifications")) setUnread(0);
+    let active = true;
+    const refresh = () => { void fetchUnreadCount().then((n) => { if (active) setUnread(n); }); };
+    refresh();
+    window.addEventListener("notifications-changed", refresh);
+    return () => { active = false; window.removeEventListener("notifications-changed", refresh); };
   }, [pathname]);
 
   useEffect(() => {
@@ -104,7 +118,8 @@ export default function ManagerNav({ initialCanSeeMembers = null }: { initialCan
   return (
     <>
       <NotificationToaster />
-      <aside className="workspace-sidebar manager-sidebar" aria-label="센터 관리자 메뉴">
+      <aside className={`workspace-sidebar manager-sidebar ${pinned ? "is-pinned" : ""}`} aria-label="센터 관리자 메뉴">
+        <button type="button" className="sidebar-pin" aria-label={pinned ? "메뉴 접기" : "메뉴 펼쳐 고정"} aria-expanded={pinned} onClick={() => { const next = !pinned; setPinned(next); try { localStorage.setItem("manager_sidebar_pinned", next ? "1" : "0"); } catch { /* optional preference */ } }}>{pinned ? "메뉴 접기" : "☰"}</button>
         <a className="desktop-brand" href="/manager">
           <span className="desktop-brand-mark">M</span>
           <span><b>모하빗</b><small>센터 관리자</small></span>

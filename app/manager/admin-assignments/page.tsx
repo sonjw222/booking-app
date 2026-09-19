@@ -1,4 +1,5 @@
 "use client";
+import { useCenterSelection, preferredCenterId } from "../../../lib/managerCenterSelection";
 
 /*
   매니저 - 관리자 배치 내역
@@ -30,7 +31,7 @@ function fmt(iso: string) {
 
 export default function AdminAssignmentLogPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
-  const [centerId, setCenterId] = useState<string | null>(null);
+  const [centerId, setCenterId] = useCenterSelection();
   const [logs, setLogs] = useState<AdminActionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +53,7 @@ export default function AdminAssignmentLogPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(preferredCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
