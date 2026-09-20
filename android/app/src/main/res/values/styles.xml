@@ -1,17 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <!--
+      태블릿 실기기 QA(2026-09-21) — SM-T975N에서 화면 최상단(상태바 바로 아래)에
+      "모하빗" 타이틀을 담은 네이티브 ActionBar 한 줄이 WebView 콘텐츠 위에 별도로
+      그려지는 문제를 uiautomator 덤프로 확정(android:id/action_bar_container,
+      android:id/action_bar 존재 — 아이콘 없는 액션 버튼 자리가 검은 사각형처럼,
+      액션바 로고 자리가 앱 아이콘처럼 보였음). 이 앱은 웹뷰 하나로만 돌아가는
+      Capacitor 구조라 네이티브 액션바가 애초에 불필요하다.
+
+      처음엔 AppCompat 전용 속성(windowActionBar/windowNoTitle, 접두사 없음)만
+      추가했는데 전혀 효과가 없었다 — aapt2 dump resources로 컴파일된 APK를 직접
+      열어보니 두 속성 다 정확히 반영돼 있었는데도(0x7f04... 앱 로컬 네임스페이스)
+      실기기 결과가 그대로였다. uiautomator가 잡은 리소스 id가 `android:id/...`
+      (프레임워크 네임스페이스, 0x0101...)라는 걸 다시 보고서야, 실제로 뜨는 건
+      AppCompat의 컴팻 ActionBar가 아니라 **프레임워크 네이티브 ActionBar**
+      (android.app.ActionBar)라는 걸 확정했다 — 그래서 android: 접두사가 붙은
+      프레임워크 속성(android:windowActionBar/android:windowNoTitle)도 반드시
+      같이 줘야 한다. 두 네임스페이스 속성을 전부 넣어 어느 경로로 테마가 적용되든
+      확실히 액션바가 꺼지게 한다.
+    -->
+
     <!-- Base application theme. -->
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
         <!-- Customize your theme here. -->
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
     </style>
 
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
         <item name="android:background">@null</item>
     </style>
 
@@ -27,5 +53,9 @@
     -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash_background</item>
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
     </style>
 </resources>

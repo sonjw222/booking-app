@@ -1371,6 +1371,32 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
    부팅된 시뮬레이터/에뮬레이터·실기기·네트워크로 닿는 백엔드가 이 세션엔 없어 실제 동작
    확인은 못함.
 
+### P1-48. (2026-09-21, 실기기 발견·수정 완료) Android FCM foreground/heads-up presentation + 태블릿 상단 ActionBar/스플래시
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 → **수정 완료** |
+| 범위 | MWHABIT Android Native Final Polish Batch — PR #160(P1-47과 같은 PR, 실기기 검증 중 이어서 발견) |
+| 1) FCM foreground | `pushNotificationReceived` 리스너가 코드 어디에도 없어, 앱이 foreground일 때 FCM 메시지가 와도 사용자에게 아무 것도 안 보였다(Android 표준 동작 — foreground에선 OS가 시스템 알림을 자동으로 안 띄우고 이 JS 이벤트로만 전달). `lib/nativePush.ts`에 `registerNativePushForegroundHandler()` 추가 — 바닐라 DOM으로 인앱 상단 배너(`.push-foreground-banner`) 표시, 탭하면 기존 탭 핸들러와 동일하게 링크 이동. background/terminated는 이 이벤트 자체가 안 오므로 구조적으로 중복 불가. |
+| 2) FCM background heads-up | `dumpsys notification` 실측 — Firebase 자동 fallback 채널이 IMPORTANCE_DEFAULT(3)라 shade엔 들어가도 heads-up이 안 떴다. 채널 importance는 생성 후 코드로 못 올려 새 채널(`mwhabit_default`, IMPORTANCE_HIGH)을 `MainActivity.java`에서 생성 + `AndroidManifest.xml`의 `default_notification_channel_id` meta-data로 지정. `send-web-push`가 channel_id를 명시 안 해 기본 채널을 그대로 쓰므로 Firebase Console 테스트 메시지와 production 발송이 같은 채널을 씀. |
+| 3) 태블릿 상단 ActionBar | SM-T975N 실기기에서 상태바 아래 네이티브 ActionBar 한 줄이 WebView 위에 별도로 그려지던 문제(검은 사각형처럼 보이는 빈 액션 버튼 자리 + 로고처럼 보이는 액션바 아이콘) — uiautomator 덤프로 `android:id/action_bar_container` 확정. AppCompat 전용 `windowActionBar` 속성만으론 실기기에서 전혀 안 먹혀(컴파일된 APK엔 반영됐는데도) `android:windowActionBar`(프레임워크 네임스페이스)도 같이 필요함을 실측으로 확정 — `AppTheme`/`AppTheme.NoActionBarLaunch`(base+v31) 전부 수정. |
+| 4) 태블릿 스플래시 크기 | 같은 기기에서 스플래시 로고가 화면 크기 대비 작아 보이던 문제 — 새 이미지 asset 없이 `drawable-sw600dp`(+`-land`) 한정자 폴더에 기존 비트맵을 명시적 크기로 감싸는 layer-list만 추가. 폰 전용 리소스 무변경(회귀 없음). |
+| 검증 | SM-T975N 실기기: ActionBar 제거 + 스플래시 확대를 포트레이트/랜드스케이프 둘 다 스크린샷+uiautomator로 확인. FCM foreground 배너·heads-up은 별도 실기기 검증(PR 코멘트/최종 보고 참고). |
+| SQL | 불필요 |
+| 근거 파일 | `lib/nativePush.ts`, `app/components/CapacitorBootstrap.tsx`, `app/globals.css`, `android/app/src/main/java/com/mwhabit/app/MainActivity.java`, `android/app/src/main/AndroidManifest.xml`, `android/app/src/main/res/values/styles.xml`, `android/app/src/main/res/values-v31/styles.xml`, `android/app/src/main/res/drawable-sw600dp{,-land}/splash_background.xml` |
+
+### P1-47. (2026-09-20, 실기기 발견·수정 완료) Android/iOS 네이티브 푸시 자동 등록 — OS 권한 granted를 "이 기기 등록 완료"로 잘못 판정해 FCM 등록이 통째로 스킵됨
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 → **수정 완료** |
+| 재현 | Samsung SM-T975N(Android 13) 실기기, USB 디버깅 + logcat으로 재현·확인. `PushNotifications.checkPermissions()` → `{"receive":"granted"}`(정상)인데도 `PushNotifications.register()` 호출 자체가 없고, FCM registration 이벤트도 없고, `native_push_tokens` 테이블이 계속 비어 있었다. |
+| 원인 | `lib/nativePush.ts`의 `getNativePushStatus()`가 "OS 알림 권한 granted"만 보고 `"subscribed"`를 반환 — `autoRegisterNativePushOnLogin()`이 이 값을 보고 "이미 구독 중"이라 판단해 `enableNativePush()`(→`PushNotifications.register()`) 자체를 건너뛰었다. 권한은 이 코드가 생기기 전부터 이미 granted 상태였을 수 있어("거부한 적 없음" ≠ "실제로 등록함") 이 둘은 서로 다른 상태인데 같은 것으로 취급한 게 근본 원인. |
+| 수정 | account_id+platform으로 `native_push_tokens`를 조회해 판정하는 방식은 의도적으로 쓰지 않음(같은 계정이 여러 기기를 쓸 수 있어 다른 기기의 등록 여부가 이 기기 판정을 오염시킴) — 대신 이 기기(앱 설치본)에만 저장되는 localStorage 플래그(`native_push_device_registered`)로 "이 기기가 실제로 토큰을 upsert했는지"를 추적. `saveToken()` 성공 시에만 플래그를 세우고, `disableNativePush()`(로그아웃 등)에서 항상 지운다. `autoRegisterNativePushOnLogin()`엔 모듈 스코프 in-flight Promise 잠금을 추가해 같은 세션에서 SIGNED_IN/INITIAL_SESSION이 중복 발생해도 `register()`가 한 번만 호출되게 함. iOS도 같은 함수(`getNativePushStatus`/`saveToken`)를 플랫폼 분기 없이 공유해 동일하게 수정됨. |
+| 부수 발견 | `android/.gitignore`의 65번째 줄이 Android Studio 기본 템플릿 그대로 `# google-services.json`(주석 처리)이라 실제로는 전혀 무시되지 않고 있었음 — 실제 Firebase API 키가 담긴 파일이 `git add` 시 그대로 커밋될 수 있는 상태였다. 주석 해제로 수정. |
+| 근거 파일 | `lib/nativePush.ts`, `tests/unit/nativePush.deviceRegistration.test.ts`(신규, 12개 시나리오), `android/.gitignore` |
+| SQL | 불필요 — `native_push_tokens` 테이블/RLS/unique(token) 제약은 기존 그대로 사용, 스키마 변경 없음 |
+
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
 ### P2-46. (2026-09-19 발견·수정 완료) `fetchPoints()` — 센터 누적 포인트 거래 300건 초과 시 최신 내역·잔액이 조용히 누락됨

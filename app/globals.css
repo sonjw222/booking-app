@@ -507,6 +507,34 @@ a { color: inherit; text-decoration: none; }
   box-shadow: 0 8px 24px rgba(0,0,0,0.25); max-width: 90%;
 }
 
+/* Android/iOS 네이티브 푸시 — foreground 인앱 상단 배너(2026-09-21). FCM은 앱이
+   foreground일 때 시스템 알림을 자동으로 띄우지 않는다(OS 표준 동작, background/
+   terminated 때만 시스템 트레이로 감) — lib/nativePush.ts의 pushNotificationReceived
+   리스너가 이 배너를 직접(바닐라 DOM으로) 만들어서 붙인다. .toast와 같은 상단
+   safe-area 공식을 쓰되, 제목+본문 두 줄이 들어가는 카드 형태라 폭/모양을 다르게 한다.
+   z-index는 .toast(100)보다 위 — 푸시는 지금 보고 있는 화면과 무관한 새 소식이라
+   그 화면의 자체 토스트보다 우선순위가 높아야 한다. */
+.push-foreground-banner {
+  position: fixed; top: max(14px, var(--safe-top)); left: 14px; right: 14px;
+  z-index: 200; display: flex; gap: 12px; align-items: flex-start;
+  background: var(--card-bg); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 16px; padding: 14px 16px; box-shadow: 0 12px 32px rgba(0,0,0,.28);
+  cursor: pointer; opacity: 0; transform: translateY(-12px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.push-foreground-banner.is-visible { opacity: 1; transform: translateY(0); }
+.push-foreground-banner .push-foreground-banner-dot {
+  flex: 0 0 auto; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--brand);
+}
+.push-foreground-banner .push-foreground-banner-body { min-width: 0; flex: 1; }
+.push-foreground-banner .push-foreground-banner-title {
+  font-size: 14px; font-weight: 800; margin: 0 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.push-foreground-banner .push-foreground-banner-text {
+  font-size: 13px; color: var(--ink-soft); margin: 0; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
 /* ============================================================
    소셜 로그인 버튼 (구글/카카오/네이버/애플) — 원형 아이콘 버튼을 가로로 나열.
    버튼 라벨("Google로 계속하기" 등)은 화면에는 안 보이고 .sr-only로 스크린리더용으로만 남긴다.

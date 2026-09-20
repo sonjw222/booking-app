@@ -29,5 +29,15 @@
              splashBackground 주석 참고). -->
         <item name="android:background">@drawable/splash_background</item>
         <item name="android:windowSplashScreenBackground">#0A2545</item>
+        <!-- 태블릿 실기기 QA(2026-09-21) — values/styles.xml의 같은 이름 스타일에 남긴
+             설명 참고. API 31+에서는 이 파일이 우선 적용되므로 여기도 동일하게 추가해야
+             실제 기기(Android 13, API 33)에서 네이티브 ActionBar가 사라진다. 실제로
+             뜨는 게 AppCompat 컴팻 ActionBar가 아니라 프레임워크 네이티브 ActionBar라
+             android: 접두사 붙은 프레임워크 속성도 반드시 같이 필요하다(같은 파일
+             윗부분 큰 주석 참고). -->
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
     </style>
 </resources>
