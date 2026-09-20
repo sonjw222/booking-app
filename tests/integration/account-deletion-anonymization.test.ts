@@ -14,7 +14,7 @@
 */
 import { describe, it, expect, afterAll } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { getFixtureAdminClient, requireEnv } from "./setup";
+import { getFixtureAdminClient, requireEnv, TEST_CENTER_ID } from "./setup";
 
 describe("계정 탈퇴 — 실제 개인정보 익명화 + auth 삭제 (P1-18)", () => {
   const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
@@ -74,11 +74,15 @@ describe("계정 탈퇴 — 실제 개인정보 익명화 + auth 삭제 (P1-18)"
           account_id: accountId, name: "탈퇴QA본인", nickname: "본인닉", phone,
           address: "서울시 QA구 테스트동", memo: "메모원본", avatar_url: "https://example.com/a.png",
           birth_date: "1990-01-01", label: "본인", is_primary: true,
+          // Privacy Release Blocker Batch #2 (2026-09-20): 이 3개 컬럼이 익명화에서
+          // 빠져 있어 탈퇴 후에도 남아 있었다 — fixture에 실제 값을 넣어 검증한다.
+          gender: "female", shoe_size: "240", cloth_size: "S",
         },
         {
           account_id: accountId, name: "탈퇴QA자녀", nickname: "자녀닉", phone: null,
           address: "서울시 QA구 테스트동", memo: "자녀메모", avatar_url: "https://example.com/b.png",
           birth_date: "2015-05-05", label: "자녀", is_primary: false,
+          gender: "male", shoe_size: "190", cloth_size: "XS",
         },
       ])
       .select("id");
@@ -113,7 +117,7 @@ describe("계정 탈퇴 — 실제 개인정보 익명화 + auth 삭제 (P1-18)"
     // 5) profiles(본인 + 자녀) 개인정보 익명화 확인 — 가족 프로필까지 전부 처리돼야 한다.
     const profAfter = await admin
       .from("profiles")
-      .select("name, nickname, phone, address, avatar_url, memo, birth_date, label")
+      .select("name, nickname, phone, address, avatar_url, memo, birth_date, label, gender, shoe_size, cloth_size")
       .eq("account_id", accountId);
     expect(profAfter.error).toBeFalsy();
     expect(profAfter.data?.length).toBe(2);
@@ -127,6 +131,12 @@ describe("계정 탈퇴 — 실제 개인정보 익명화 + auth 삭제 (P1-18)"
       expect(row.memo).toBeNull();
       expect(row.birth_date).toBeNull();
       expect(row.label).toBeNull();
+      // Privacy Release Blocker Batch #2 (2026-09-20) — 성별/신발 사이즈/옷 사이즈.
+      // 이 3개는 정산·법적 보관 근거가 전혀 없는 순수 개인속성인데 탈퇴 후에도 남아 있었고,
+      // profiles 행은 account_id/예약·수강권·결제 FK로 계속 연결돼 있어 익명 통계가 아니었다.
+      expect(row.gender).toBeNull();
+      expect(row.shoe_size).toBeNull();
+      expect(row.cloth_size).toBeNull();
     }
 
     // 6) auth.users 행이 밴이 아니라 실제로 삭제됐는지 확인
@@ -265,6 +275,168 @@ describe("계정 탈퇴 — 실제 개인정보 익명화 + auth 삭제 (P1-18)"
       }
       await admin.storage.from("avatars").remove([avatarKey]).catch(() => {});
       if (authId2) await admin.auth.admin.deleteUser(authId2).catch(() => {});
+    }
+  });
+
+  /*
+    Privacy Release Blocker Batch #2 (2026-09-20, P1) — 익명화 범위와 보존 범위를 한 번에 검증.
+
+    1) profiles의 gender/shoe_size/cloth_size까지 비워지는지(이번 배치의 수정 대상)
+    2) 보존해야 하는 기록(memberships/payments/reservations)은 삭제되지 않고, 여전히
+       "익명화된 그 프로필"을 정확히 참조하는지 — 익명화가 FK/이력을 깨뜨리지 않았다는
+       회귀 검증. 전자상거래법상 결제·청약철회 기록 보관 의무 때문에 이 기록들은 탈퇴
+       처리에서 지우지 않는 것이 의도된 정책이다(supabase/functions/delete-account 상단 주석).
+
+    주의: 이 테스트도 "배포된" delete-account를 호출한다 — 코드 수정 후
+    `supabase functions deploy delete-account`가 실행되기 전에는 gender/shoe_size/cloth_size
+    단언이 실패하는 게 정상이며, 그 실패 자체가 구 배포본이 아직 살아있다는 증거다.
+  */
+  it("탈퇴해도 보존 기록(수강권/결제/예약)은 남고 익명화된 프로필을 계속 참조한다 + 프로필 개인속성은 전부 비워진다", async () => {
+    const admin = getFixtureAdminClient();
+    const runId3 = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const email3 = `qa-delete-keep-${runId3}@example.com`;
+    const password3 = `Qa-delete-keep-pw-${runId3}`;
+    const phone3 = `010-${runId3.slice(0, 4)}-${runId3.slice(-4).padStart(4, "0")}`;
+
+    let authId3 = "";
+    let accountId3 = "";
+    let profileId3 = "";
+    let membershipId = "";
+    let paymentId = "";
+    let reservationId = "";
+    let classId = "";
+
+    try {
+      const created = await admin.auth.admin.createUser({ email: email3, password: password3, email_confirm: true });
+      if (created.error || !created.data.user) throw new Error(`테스트용 auth 계정 생성 실패: ${created.error?.message}`);
+      authId3 = created.data.user.id;
+
+      const accIns = await admin
+        .from("accounts")
+        .insert({ auth_id: authId3, name: "탈퇴QA보존원본", phone: phone3, is_member: true })
+        .select("id")
+        .single();
+      if (accIns.error || !accIns.data) throw new Error(`accounts 생성 실패: ${accIns.error?.message}`);
+      accountId3 = accIns.data.id as string;
+
+      const profIns = await admin
+        .from("profiles")
+        .insert({
+          account_id: accountId3, name: "탈퇴QA보존본인", nickname: "보존닉", phone: phone3,
+          address: "서울시 QA구 보존동", memo: "보존메모", birth_date: "1988-03-03", label: "본인",
+          gender: "female", shoe_size: "235", cloth_size: "M", is_primary: true,
+        })
+        .select("id")
+        .single();
+      if (profIns.error || !profIns.data) throw new Error(`profiles 생성 실패: ${profIns.error?.message}`);
+      profileId3 = profIns.data.id as string;
+
+      // 보존 대상 fixture — 수강권 / 결제 / 예약. 전부 service_role로 직접 넣는다
+      // (구매·예약 화면 로직은 이 테스트의 대상이 아님).
+      const memIns = await admin
+        .from("memberships")
+        .insert({
+          profile_id: profileId3, center_id: TEST_CENTER_ID, product_name: "탈퇴보존QA 수강권",
+          pass_type: "count", total_count: 5, remaining_count: 5,
+          expires_at: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+          status: "active",
+        })
+        .select("id")
+        .single();
+      if (memIns.error || !memIns.data) throw new Error(`memberships 생성 실패: ${memIns.error?.message}`);
+      membershipId = memIns.data.id as string;
+
+      const payIns = await admin
+        .from("payments")
+        .insert({
+          profile_id: profileId3, center_id: TEST_CENTER_ID, membership_id: membershipId,
+          sale_type: "new", card_amount: 100000, total_amount: 100000, status: "paid",
+        })
+        .select("id")
+        .single();
+      if (payIns.error || !payIns.data) throw new Error(`payments 생성 실패: ${payIns.error?.message}`);
+      paymentId = payIns.data.id as string;
+
+      const start = new Date(Date.now() + 72 * 3600 * 1000);
+      const clsIns = await admin
+        .from("classes")
+        .insert({
+          center_id: TEST_CENTER_ID, title: "탈퇴보존QA 수업",
+          start_time: start.toISOString(),
+          end_time: new Date(start.getTime() + 60 * 60 * 1000).toISOString(),
+          capacity: 8, class_format: "group",
+        })
+        .select("id")
+        .single();
+      if (clsIns.error || !clsIns.data) throw new Error(`classes 생성 실패: ${clsIns.error?.message}`);
+      classId = clsIns.data.id as string;
+
+      const resIns = await admin
+        .from("reservations")
+        .insert({ class_id: classId, profile_id: profileId3, membership_id: membershipId, status: "confirmed" })
+        .select("id")
+        .single();
+      if (resIns.error || !resIns.data) throw new Error(`reservations 생성 실패: ${resIns.error?.message}`);
+      reservationId = resIns.data.id as string;
+
+      const asDeletingUser: SupabaseClient = createClient(url, anonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const signIn = await asDeletingUser.auth.signInWithPassword({ email: email3, password: password3 });
+      if (signIn.error || !signIn.data.session) throw new Error(`테스트 계정 로그인 실패: ${signIn.error?.message}`);
+
+      const invoked = await asDeletingUser.functions.invoke("delete-account");
+      expect(invoked.error).toBeFalsy();
+
+      // 1) 프로필 개인속성 전부 비워졌는지 — gender/shoe_size/cloth_size 포함
+      const profAfter = await admin
+        .from("profiles")
+        .select("id, account_id, name, nickname, phone, address, memo, birth_date, label, gender, shoe_size, cloth_size")
+        .eq("id", profileId3)
+        .single();
+      expect(profAfter.error).toBeFalsy();
+      const prow = profAfter.data as Record<string, unknown>;
+      expect(prow.name).toBe("탈퇴한 회원");
+      expect(prow.gender).toBeNull();
+      expect(prow.shoe_size).toBeNull();
+      expect(prow.cloth_size).toBeNull();
+      expect(prow.nickname).toBeNull();
+      expect(prow.phone).toBeNull();
+      expect(prow.address).toBeNull();
+      expect(prow.memo).toBeNull();
+      expect(prow.birth_date).toBeNull();
+      expect(prow.label).toBeNull();
+      // 프로필 행 자체와 계정 연결은 남아 있어야 한다(보존 기록의 FK가 깨지면 안 됨).
+      expect(prow.id).toBe(profileId3);
+      expect(prow.account_id).toBe(accountId3);
+
+      // 2) 보존 대상 기록이 삭제되지 않고 그대로 그 프로필을 참조하는지
+      const memAfter = await admin.from("memberships").select("id, profile_id").eq("id", membershipId).single();
+      expect(memAfter.error).toBeFalsy();
+      expect(memAfter.data?.profile_id).toBe(profileId3);
+
+      const payAfter = await admin.from("payments").select("id, profile_id, total_amount").eq("id", paymentId).single();
+      expect(payAfter.error).toBeFalsy();
+      expect(payAfter.data?.profile_id).toBe(profileId3);
+      expect(payAfter.data?.total_amount).toBe(100000);
+
+      const resAfter = await admin.from("reservations").select("id, profile_id, status").eq("id", reservationId).single();
+      expect(resAfter.error).toBeFalsy();
+      expect(resAfter.data?.profile_id).toBe(profileId3);
+      expect(resAfter.data?.status).toBe("confirmed");
+
+      authId3 = ""; // delete-account가 auth.users를 이미 지웠음
+    } finally {
+      // best-effort 정리 — FK 순서대로(예약 → 수업 → 결제 → 수강권 → 프로필 → 계정).
+      if (reservationId) await admin.from("reservations").delete().eq("id", reservationId).then(() => {}, () => {});
+      if (classId) await admin.from("classes").delete().eq("id", classId).then(() => {}, () => {});
+      if (paymentId) await admin.from("payments").delete().eq("id", paymentId).then(() => {}, () => {});
+      if (membershipId) await admin.from("memberships").delete().eq("id", membershipId).then(() => {}, () => {});
+      if (accountId3) {
+        await admin.from("profiles").delete().eq("account_id", accountId3).then(() => {}, () => {});
+        await admin.from("accounts").delete().eq("id", accountId3).then(() => {}, () => {});
+      }
+      if (authId3) await admin.auth.admin.deleteUser(authId3).catch(() => {});
     }
   });
 });

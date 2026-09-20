@@ -12,6 +12,12 @@
 --
 -- 발송 대상: accounts.is_member = true 전체(현재 86명, 배치/비동기 처리 불필요한 규모).
 --
+-- ⚠ 2026-09-20 수정됨 — 위 "전체" 대상 선정은 광고성 정보를 수신 미동의자에게도 보내는
+-- 문제가 있어 fix_marketing_consent_fanout.sql이 create_marketing_message_safe()를
+-- 재정의했다(marketing_consent is true + deactivated_at is null 조건 추가).
+-- 이 파일을 다시 실행하면 그 수정이 되돌아가므로, 재실행이 필요하면 반드시
+-- fix_marketing_consent_fanout.sql을 뒤이어 실행할 것.
+--
 -- DB 재생성 불필요. 파일 전체를 Supabase SQL Editor에 붙여넣고 Run 하세요.
 -- 여러 번 실행해도 안전(create table if not exists / create or replace function).
 -- ============================================================

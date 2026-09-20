@@ -696,6 +696,16 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
+### P1-47. (신규, 2026-09-20, 코드 수정 완료·운영 적용 대기) Privacy Release Blocker Batch #2 — SQL 적용 + Edge Function 재배포 필요
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **코드/SQL 작성 완료, 운영 적용 미완료.** 이 배치의 두 수정은 둘 다 "저장소 변경만으로는 운영에 반영되지 않는" 종류다 — 대표님이 직접 실행해야 한다. |
+| 남은 작업 | (1) Supabase SQL Editor에서 `fix_marketing_consent_fanout.sql` 전문 실행 (2) `supabase functions deploy delete-account`로 Edge Function 재배포 (3) 두 가지가 끝난 뒤 `npm run test:integration -- tests/integration/account-deletion-anonymization.test.ts tests/integration/marketing-consent.test.ts` 실행해 통과 확인 |
+| 근거 | 통합테스트는 "배포된" Edge Function과 "적용된" SQL 함수를 호출한다(`functions.invoke`/`rpc`는 로컬 소스를 실행하지 않음) — 적용 전에는 새 단언이 실패하는 것이 정상이며, 그 실패가 곧 운영에 문제가 남아있다는 증거다. 소스 자체가 의도한 조건을 갖고 있는지는 `tests/unit/privacyReleaseBlockers.staticCheck.test.ts`가 지킨다. |
+| 근거 파일 | `fix_marketing_consent_fanout.sql`(신규), `supabase/functions/delete-account/index.ts`, `tests/unit/privacyReleaseBlockers.staticCheck.test.ts`(신규), `tests/integration/account-deletion-anonymization.test.ts`, `tests/integration/marketing-consent.test.ts` |
+
 ### P1-1. 포인트 원장 이원화 정합성
 
 | 필드 | 내용 |
@@ -1372,6 +1382,18 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
    확인은 못함.
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
+
+### P2-47. (신규, 2026-09-20 발견, 이번 범위 밖) `evaluate_notification_rules()`가 잔여횟수 조합조건·상품 지정 필터를 잃어버린 상태로 보임
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **확인 필요 — 이번 배치에서 고치지 않음(범위 밖, 별도 검증 필요).** |
+| 경위 | Privacy Release Blocker Batch #2에서 광고성 알림톡 규칙(birthday/expired_rebuy)에 마케팅 수신 동의 게이트를 넣기 위해 `evaluate_notification_rules()`의 최신 정의를 추적하다가 발견했다. |
+| 내용 | 이 함수는 저장소에서 4개 파일이 차례로 `create or replace`한다: `add_notification_rule_evaluators.sql` → `add_notification_rule_product_filter.sql`(`notification_rules.product_id` 필터 추가) → `add_notification_rule_count_filter.sql`(`threshold_count`/`days_before` 조합 조건 + `messages.rule_membership_id` 기반 "수강권 건당 1회" 멱등 체크 + `count_low`를 `=`에서 `<=`로) → `fix_notification_rule_alimtalk_template_code.sql`(2026-09-08, 가장 나중). 그런데 마지막 파일의 함수 본문은 product_filter/count_filter 보강이 **들어가기 전 버전**을 베이스로 작성돼 있어, 그 파일을 적용한 시점에 두 보강이 통째로 되돌아갔을 가능성이 높다(컬럼 `product_id`/`rule_membership_id`는 `add column if not exists`라 남아있지만 함수가 더 이상 읽지 않음). |
+| 왜 이번에 안 고치나 | 운영 DB에 실제로 어느 버전이 살아있는지는 `select prosrc from pg_proc where proname='evaluate_notification_rules'`로 확인해야 하고, 되살릴 경우 "매일 재평가 시 중복 발송" 멱등 규칙까지 같이 복원해야 해서 광고 동의 이슈와 성격이 다른 별도 작업이다. 이번 `fix_marketing_consent_fanout.sql`은 2026-09-08 정의를 그대로 베이스로 삼아 동의 조건만 덧붙였으므로, 이 문제를 **악화시키지도 고치지도 않는다**(현상 유지). |
+| 확인 방법 | Supabase SQL Editor에서 `select prosrc like '%rule.product_id%' as has_product_filter, prosrc like '%rule_membership_id%' as has_count_filter from pg_proc where proname = 'evaluate_notification_rules';` — 둘 다 false면 되돌아간 것이 확정된다. |
+| 근거 파일 | `add_notification_rule_evaluators.sql`, `add_notification_rule_product_filter.sql`, `add_notification_rule_count_filter.sql`, `fix_notification_rule_alimtalk_template_code.sql`, `fix_marketing_consent_fanout.sql` |
 
 ### P2-46. (2026-09-19 발견·수정 완료) `fetchPoints()` — 센터 누적 포인트 거래 300건 초과 시 최신 내역·잔액이 조용히 누락됨
 

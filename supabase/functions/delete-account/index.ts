@@ -19,9 +19,19 @@
 //   3) accounts의 개인정보(name/phone/address)를 익명값으로 덮어쓰고 deactivated_at을
 //      채운다(탈퇴 시각 기록 — 이 값 자체는 개인정보 아님)
 //   4) 그 계정의 모든 profiles(가족 프로필 포함)의 개인정보(name/nickname/phone/address/
-//      avatar_url/memo/birth_date/label)도 익명값으로 덮어쓴다
+//      avatar_url/memo/birth_date/label/gender/shoe_size/cloth_size)도 익명값으로 덮어쓴다
 //   5) auth.users 행을 실제로 삭제한다(admin.deleteUser) — 밴이 아니라 삭제라 같은
 //      이메일/전화번호/소셜 계정으로 나중에 재가입할 수 있다
+//
+// 2026-09-20 Privacy Release Blocker Batch #2 (P1): 위 4)가 gender/shoe_size/cloth_size
+// 세 컬럼을 빠뜨리고 있었다 — 탈퇴 후에도 성별·신발 사이즈·옷 사이즈가 profiles 행에
+// 그대로 남았고, 그 행은 account_id로 accounts와, id로 reservations/memberships/payments/
+// progress_records 등과 계속 연결돼 있어 "익명 통계"가 아니라 식별 가능한 실기록이었다.
+// 같은 저장소의 프로필 단건 삭제(lib/profiles.ts deleteProfile)는 처음부터 이 세 컬럼까지
+// 전부 비우고 있었으므로, 두 경로의 익명화 범위가 어긋나 있던 것이기도 하다 — 이번에
+// profiles 테이블의 개인속성 컬럼 전체(id/account_id/is_primary/created_at/deleted_at 같은
+// 구조 컬럼 제외)로 맞춘다. 보존 대상(reservations/memberships/payments 등 회계·법적
+// 보관 의무가 있는 테이블)은 그대로 둔다.
 //
 // 지우지 않는 것(CLAUDE.md 규칙 3, 회계·법적 근거): reservations/orders/payments/
 // memberships 등은 그대로 유지된다 — 전자상거래법상 결제·청약철회 기록 보관 의무,
@@ -195,11 +205,16 @@ Deno.serve(async (req: Request) => {
   if (accErr) return json({ error: `탈퇴 처리 중 문제가 발생했어요: ${accErr.message}` }, 500);
 
   // 4) 이 계정의 모든 프로필(가족 프로필 포함) 개인정보 익명화
+  //    profiles의 개인속성 컬럼 전부를 비운다 — gender/shoe_size/cloth_size는 2026-09-20
+  //    이전까지 빠져 있었다(파일 상단 주석 참고). 남는 컬럼은 id/account_id/is_primary/
+  //    created_at/deleted_at뿐이며 이들은 보존 기록(reservations/memberships/payments/
+  //    progress_records)의 FK 참조를 유지하는 데 필요한 구조 컬럼이라 건드리지 않는다.
   const { error: profErr } = await admin
     .from("profiles")
     .update({
       name: ANON_NAME, nickname: null, phone: null, address: null,
       avatar_url: null, memo: null, birth_date: null, label: null,
+      gender: null, shoe_size: null, cloth_size: null,
     })
     .eq("account_id", account.id);
   if (profErr) return json({ error: `프로필 정리 중 문제가 발생했어요: ${profErr.message}` }, 500);
