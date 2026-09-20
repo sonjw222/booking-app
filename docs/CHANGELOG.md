@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## 2026-09-21 — Android FCM foreground/heads-up presentation + 태블릿 상단 ActionBar/스플래시(P1-48)
+
+SM-T975N 실기기 QA에서 이어서 발견된 4건을 같은 PR(#160)에서 수정했다.
+(1) `pushNotificationReceived` 리스너가 없어 앱이 foreground일 때 FCM 메시지가
+와도 아무 것도 안 보이던 문제 — `lib/nativePush.ts`에
+`registerNativePushForegroundHandler()` 추가, 바닐라 DOM 인앱 상단 배너로 표시
+(`app/globals.css`의 `.push-foreground-banner`). (2) background heads-up이 안
+뜨던 문제 — Firebase 자동 fallback 채널이 IMPORTANCE_DEFAULT였던 게 원인,
+`MainActivity.java`에서 IMPORTANCE_HIGH 채널(`mwhabit_default`)을 새로 만들고
+`AndroidManifest.xml`의 `default_notification_channel_id`로 지정. (3) 태블릿
+실기기 상단에 네이티브 ActionBar가 WebView 위에 별도로 그려지던 문제 —
+AppCompat 전용 속성만으론 안 먹혀 `android:` 프레임워크 네임스페이스 속성도
+같이 추가해서 해결(`AppTheme`/`AppTheme.NoActionBarLaunch`). (4) 태블릿 스플래시
+로고가 작아 보이던 문제 — 새 이미지 없이 `drawable-sw600dp{,-land}` 한정자로
+기존 비트맵을 명시적 크기로 표시(폰 리소스 무변경). 포트레이트/랜드스케이프
+실기기 스크린샷+uiautomator로 검증.
+
 ## 2026-09-20 — Android/iOS 네이티브 푸시 자동 등록 P1 버그 수정(P1-47)
 
 Samsung SM-T975N(Android 13) 실기기에서 재현: 알림 권한은 granted인데
