@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## 2026-09-20 — Android/iOS 네이티브 푸시 자동 등록 P1 버그 수정(P1-47)
+
+Samsung SM-T975N(Android 13) 실기기에서 재현: 알림 권한은 granted인데
+`PushNotifications.register()`가 한 번도 호출되지 않아 FCM 토큰이 발급·저장되지 않는
+버그를 수정했다. `lib/nativePush.ts`의 `getNativePushStatus()`가 "OS 권한 granted"와
+"이 기기가 실제로 FCM에 등록됨"을 같은 상태로 취급한 게 원인 — 이 기기(앱 설치본)에만
+저장되는 localStorage 플래그(`native_push_device_registered`)로 실제 등록 완료 여부를
+따로 추적하도록 바꿨다(같은 계정이 여러 기기를 쓸 수 있어 `native_push_tokens` 테이블을
+account_id+platform으로 조회해 판정하는 방식은 의도적으로 배제). `disableNativePush()`가
+이 플래그도 같이 지우도록 해 로그아웃/계정전환 후 재등록이 정상 진행되게 했고,
+`autoRegisterNativePushOnLogin()`에 in-flight 잠금을 추가해 같은 세션의 중복 auth
+이벤트로 `register()`가 중복 호출되지 않게 했다. iOS도 동일 로직을 공유해 같이 고쳐짐.
+부수 발견: `android/.gitignore`의 `google-services.json` 제외 규칙이 주석 처리된 채
+방치돼 있어(Android Studio 기본 템플릿 그대로) 실제로는 전혀 무시되지 않고 있었음 —
+주석 해제. 회귀 테스트 `tests/unit/nativePush.deviceRegistration.test.ts`(12개 시나리오)
+추가, 수정 전 코드로 먼저 실패 재현 확인 후 수정 적용.
+
 ## 2026-09-19 — 포인트 내역 300건 초과 시 최신 내역·잔액 누락 버그 수정(P2-46)
 
 `lib/sales.ts`의 `fetchPoints()`가 `point_transactions`을 오래된 순 정렬 + `.limit(300)`으로만

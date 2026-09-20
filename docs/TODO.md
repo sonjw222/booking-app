@@ -1371,6 +1371,18 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
    부팅된 시뮬레이터/에뮬레이터·실기기·네트워크로 닿는 백엔드가 이 세션엔 없어 실제 동작
    확인은 못함.
 
+### P1-47. (2026-09-20, 실기기 발견·수정 완료) Android/iOS 네이티브 푸시 자동 등록 — OS 권한 granted를 "이 기기 등록 완료"로 잘못 판정해 FCM 등록이 통째로 스킵됨
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 → **수정 완료** |
+| 재현 | Samsung SM-T975N(Android 13) 실기기, USB 디버깅 + logcat으로 재현·확인. `PushNotifications.checkPermissions()` → `{"receive":"granted"}`(정상)인데도 `PushNotifications.register()` 호출 자체가 없고, FCM registration 이벤트도 없고, `native_push_tokens` 테이블이 계속 비어 있었다. |
+| 원인 | `lib/nativePush.ts`의 `getNativePushStatus()`가 "OS 알림 권한 granted"만 보고 `"subscribed"`를 반환 — `autoRegisterNativePushOnLogin()`이 이 값을 보고 "이미 구독 중"이라 판단해 `enableNativePush()`(→`PushNotifications.register()`) 자체를 건너뛰었다. 권한은 이 코드가 생기기 전부터 이미 granted 상태였을 수 있어("거부한 적 없음" ≠ "실제로 등록함") 이 둘은 서로 다른 상태인데 같은 것으로 취급한 게 근본 원인. |
+| 수정 | account_id+platform으로 `native_push_tokens`를 조회해 판정하는 방식은 의도적으로 쓰지 않음(같은 계정이 여러 기기를 쓸 수 있어 다른 기기의 등록 여부가 이 기기 판정을 오염시킴) — 대신 이 기기(앱 설치본)에만 저장되는 localStorage 플래그(`native_push_device_registered`)로 "이 기기가 실제로 토큰을 upsert했는지"를 추적. `saveToken()` 성공 시에만 플래그를 세우고, `disableNativePush()`(로그아웃 등)에서 항상 지운다. `autoRegisterNativePushOnLogin()`엔 모듈 스코프 in-flight Promise 잠금을 추가해 같은 세션에서 SIGNED_IN/INITIAL_SESSION이 중복 발생해도 `register()`가 한 번만 호출되게 함. iOS도 같은 함수(`getNativePushStatus`/`saveToken`)를 플랫폼 분기 없이 공유해 동일하게 수정됨. |
+| 부수 발견 | `android/.gitignore`의 65번째 줄이 Android Studio 기본 템플릿 그대로 `# google-services.json`(주석 처리)이라 실제로는 전혀 무시되지 않고 있었음 — 실제 Firebase API 키가 담긴 파일이 `git add` 시 그대로 커밋될 수 있는 상태였다. 주석 해제로 수정. |
+| 근거 파일 | `lib/nativePush.ts`, `tests/unit/nativePush.deviceRegistration.test.ts`(신규, 12개 시나리오), `android/.gitignore` |
+| SQL | 불필요 — `native_push_tokens` 테이블/RLS/unique(token) 제약은 기존 그대로 사용, 스키마 변경 없음 |
+
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
 ### P2-46. (2026-09-19 발견·수정 완료) `fetchPoints()` — 센터 누적 포인트 거래 300건 초과 시 최신 내역·잔액이 조용히 누락됨

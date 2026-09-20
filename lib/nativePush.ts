@@ -34,11 +34,54 @@ export function isNativePushSupported(): boolean {
   return Capacitor.isNativePlatform();
 }
 
+// P1 버그 수정(2026-09-20, 실기기 QA) — "OS 알림 권한이 granted"와 "이 기기가 실제로
+// FCM에 등록돼 서버(native_push_tokens)에 토큰이 저장돼 있다"는 서로 다른 상태인데
+// getNativePushStatus()가 이 둘을 같은 것으로 취급했다. 권한은 앱 설치 이력이나 OS
+// 정책에 따라 이 코드가 생기기 전에도 이미 granted였을 수 있어("거부한 적 없음"과
+// "실제로 등록함"은 다름), permission만 보고 subscribed로 판정하면
+// autoRegisterNativePushOnLogin()이 실제로는 한 번도 register()를 호출한 적 없는
+// 기기에서도 "이미 구독 중"이라 착각해 등록 자체를 건너뛴다 — 실기기 logcat으로
+// 재현·확인함(PushNotifications.register() 호출 없음, FCM registration 이벤트 없음,
+// native_push_tokens 빈 테이블).
+//
+// "이 기기가 등록을 마쳤는지"를 account_id+platform으로 DB를 조회해 판정하지 않는다
+// (요구사항) — 같은 계정으로 여러 대의 Android/iOS 기기를 쓸 수 있어, 다른 기기가
+// 이미 등록한 토큰이 있어도 "지금 이 기기"는 미등록일 수 있기 때문이다. 대신 이
+// 기기(앱 설치본)에 로컬로만 저장되는 localStorage 플래그로 판정한다 — 이미
+// lib/notifications.ts의 NOTI_PREF_STORAGE_KEY와 동일한 패턴(try/catch로 감싸 조용히
+// 무시). saveToken()이 실제로 upsert에 성공했을 때만 이 플래그를 세운다(아래).
+const DEVICE_REGISTERED_STORAGE_KEY = "native_push_device_registered";
+
+export function isDeviceRegisteredLocally(): boolean {
+  try {
+    return localStorage.getItem(DEVICE_REGISTERED_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markDeviceRegisteredLocally(): void {
+  try {
+    localStorage.setItem(DEVICE_REGISTERED_STORAGE_KEY, "1");
+  } catch { /* 무시 */ }
+}
+
+// disableNativePush()(로그아웃 등)에서 호출 — 이 로컬 플래그를 안 지우면, 서버 쪽
+// native_push_tokens 행은 삭제됐는데 다음 로그인(같은 계정 재로그인이든 같은 기기에서
+// 다른 계정으로 로그인이든) 때 getNativePushStatus()가 여전히 "subscribed"로 잘못
+// 판정해 재등록을 건너뛰는 같은 종류의 버그가 재발한다.
+export function clearDeviceRegisteredLocally(): void {
+  try {
+    localStorage.removeItem(DEVICE_REGISTERED_STORAGE_KEY);
+  } catch { /* 무시 */ }
+}
+
 export async function getNativePushStatus(): Promise<NativePushStatus> {
   if (!isNativePushSupported()) return "unsupported";
   try {
     const { receive } = await PushNotifications.checkPermissions();
-    return receive === "granted" ? "subscribed" : "unsubscribed";
+    if (receive !== "granted") return "unsubscribed";
+    return isDeviceRegisteredLocally() ? "subscribed" : "unsubscribed";
   } catch {
     return "unsubscribed";
   }
@@ -75,6 +118,7 @@ export async function enableNativePush(): Promise<{ ok: boolean; error?: string 
       { onConflict: "token" }
     );
     console.log(`[nativePush] native_push_tokens upsert: ${error ? "failed — " + error.message : "success"}`);
+    if (!error) markDeviceRegisteredLocally();
     return error ? { ok: false, error: "토큰 저장에 실패했어요: " + error.message } : { ok: true };
   }
 
@@ -125,28 +169,55 @@ export async function enableNativePush(): Promise<{ ok: boolean; error?: string 
 // iOS/Android 둘 다 설정 앱의 알림 목록에 이 앱 자체가 아예 안 뜨는 상태였다(권한을
 // "거부"한 게 아니라 "물어본 적이 없음"). 이 함수가 그 공백을 메운다.
 //
-// "이미 subscribed"면 그냥 반환한다 — 매 로그인/앱 재실행마다 불필요하게 register()를
-// 다시 부르고 같은 토큰을 다시 upsert하지 않기 위함(egress 절제). "denied"(명시적으로
-// 거부)여도 이 함수를 그냥 호출은 하되, enableNativePush() 내부 로직상
-// checkPermissions().receive가 'prompt'가 아니면 requestPermissions() 자체를 안 부르므로
-// OS 팝업이 다시 뜨지 않는다 — "거부 후 매 앱 시작마다 팝업 반복" 문제가 OS 레벨에서
-// 자연히 방지된다(추가 상태 저장 불필요).
+// "이미 subscribed"(권한 granted + 이 기기가 실제로 등록 완료)면 그냥 반환한다 — 매
+// 로그인/앱 재실행마다 불필요하게 register()를 다시 부르고 같은 토큰을 다시 upsert하지
+// 않기 위함(egress 절제). "denied"(명시적으로 거부)여도 이 함수를 그냥 호출은 하되,
+// enableNativePush() 내부 로직상 checkPermissions().receive가 'prompt'가 아니면
+// requestPermissions() 자체를 안 부르므로 OS 팝업이 다시 뜨지 않는다 — "거부 후 매 앱
+// 시작마다 팝업 반복" 문제가 OS 레벨에서 자연히 방지된다(추가 상태 저장 불필요).
+//
+// 모듈 스코프 in-flight 잠금(2026-09-20 추가) — SessionWatcher.tsx의
+// onAuthStateChange가 SIGNED_IN/INITIAL_SESSION을 같은 앱 세션 안에서 짧은 간격으로
+// 여러 번 쏠 수 있다(예: 앱 부팅 시 INITIAL_SESSION 직후 토큰 갱신으로 SIGNED_IN 재발생
+// 등). 이전에는 매번 독립적으로 enableNativePush()를 불러 PushNotifications.register()
+// 호출과 리스너 등록이 중첩될 수 있었다(리스너 자체는 안 지워도 무해하다고 기존 주석에
+// 적혀 있었지만, register() 중복 호출과 upsert 중복 실행까지 막을 이유는 없다) — 진행
+// 중인 시도가 있으면 그 Promise를 그대로 재사용해 중복 호출을 없앤다. 시도가 끝나면
+// (성공이든 실패든) 잠금을 풀어, 이후의 별도 로그인 이벤트(예: 다른 계정으로 재로그인)는
+// 새로 시도할 수 있게 한다.
+let inFlightAutoRegister: Promise<void> | null = null;
+
 export async function autoRegisterNativePushOnLogin(): Promise<void> {
   if (!isNativePushSupported()) return;
+  if (inFlightAutoRegister) return inFlightAutoRegister;
+
+  inFlightAutoRegister = (async () => {
+    try {
+      const status = await getNativePushStatus();
+      if (status === "subscribed") return;
+      const result = await enableNativePush();
+      if (!result.ok) console.log(`[nativePush] auto-register on login skipped/failed: ${result.error}`);
+    } catch (e) {
+      // 네이티브 브릿지 예외가 나도 로그인 흐름 자체는 절대 막지 않는다(요구사항 7 —
+      // 권한/등록 실패로 앱이 크래시하거나 로그인이 막히면 안 됨).
+      console.log(`[nativePush] auto-register on login threw: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  })();
+
   try {
-    const status = await getNativePushStatus();
-    if (status === "subscribed") return;
-    const result = await enableNativePush();
-    if (!result.ok) console.log(`[nativePush] auto-register on login skipped/failed: ${result.error}`);
-  } catch (e) {
-    // 네이티브 브릿지 예외가 나도 로그인 흐름 자체는 절대 막지 않는다(요구사항 7 —
-    // 권한/등록 실패로 앱이 크래시하거나 로그인이 막히면 안 됨).
-    console.log(`[nativePush] auto-register on login threw: ${e instanceof Error ? e.message : String(e)}`);
+    await inFlightAutoRegister;
+  } finally {
+    inFlightAutoRegister = null;
   }
 }
 
 export async function disableNativePush(): Promise<{ ok: boolean; error?: string }> {
   if (!isNativePushSupported()) return { ok: true };
+  // 로컬 "이 기기 등록 완료" 플래그도 항상 같이 지운다(계정 조회 성공 여부와 무관하게
+  // 맨 먼저) — 안 지우면 서버 쪽 native_push_tokens 행은 삭제됐는데 getNativePushStatus()가
+  // 여전히 "subscribed"로 잘못 판정해, 다음 로그인(같은 계정 재로그인이든 같은 기기에서
+  // 다른 계정으로 로그인이든) 때 재등록을 건너뛰는 동일한 버그가 재발한다.
+  clearDeviceRegisteredLocally();
   try {
     // 이 기기가 마지막으로 등록한 토큰 값을 다시 조회하는 API가 Capacitor에 없어(등록
     // 이벤트 시점에만 값을 받음), 이 계정·이 플랫폼의 토큰을 전부 지운다 — 같은 계정으로
