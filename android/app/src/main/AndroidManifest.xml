@@ -45,6 +45,14 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- 백그라운드 heads-up 실기기 QA(2026-09-21) — 이 값이 없으면 Firebase
+             Messaging이 알림 payload에 채널 지정이 없을 때 자체 fallback 채널
+             (IMPORTANCE_DEFAULT, heads-up 안 뜸)을 씀. MainActivity.java에서 만드는
+             NOTIFICATION_CHANNEL_ID(IMPORTANCE_HIGH)와 문자열이 정확히 일치해야 한다. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="mwhabit_default" />
+
     </application>
 
 </manifest>

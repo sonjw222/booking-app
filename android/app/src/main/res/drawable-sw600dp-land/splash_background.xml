@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  태블릿 실기기 QA(2026-09-21) — drawable-sw600dp/splash_background.xml(포트레이트)의
+  가로 방향 짝. splash.png 가로 비율(land 계열, 예: xxhdpi 1600×960 = 1.667)에 맞춰
+  width:height = 1.667 유지 — width 566dp/height 340dp(포트레이트 값을 서로 바꿈).
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splashBackground" />
+    <item
+        android:width="566dp"
+        android:height="340dp"
+        android:gravity="center">
+        <bitmap
+            android:src="@drawable/splash"
+            android:gravity="center" />
+    </item>
+</layer-list>

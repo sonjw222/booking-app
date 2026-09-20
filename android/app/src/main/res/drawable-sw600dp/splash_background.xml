@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  태블릿 실기기 QA(2026-09-21) — SM-T975N에서 스플래시 로고가 화면 크기에 비해 너무
+  작아 보인다는 신고 확인. 원인: drawable/splash_background.xml(density 버킷별
+  splash.png들)은 gravity="center"로만 배치하고 명시적 크기를 안 줘서, 각 밀도
+  버킷의 비트맵이 "그 밀도에서의 원래 dp 크기" 그대로 나온다(Android 표준 밀도
+  스케일링) — 이 dp 크기 자체는 기기마다 달라지지 않는데, 태블릿은 논리적 화면
+  자체가(같은 밀도라도) 훨씬 넓어서 같은 절대 dp 크기 로고가 화면에 비해 작아
+  보인다.
+
+  새 이미지 asset을 만들지 않고(기존 splash 비트맵 재사용), sw600dp(7인치 이상
+  태블릿 전용 한정자) 폴더에서만 layer-list item에 명시적 width/height를 줘서
+  로고를 더 크게 표시한다 — 이 폴더는 스몰레스트폭 600dp 미만 기기(모든 폰)에는
+  전혀 적용되지 않으므로 폰 회귀 없음.
+
+  포트레이트 전용(가로 방향은 drawable-sw600dp-land/splash_background.xml).
+  splash.png 세로 비율(port 계열, 예: xxhdpi 960×1600 = 0.6)에 맞춰
+  width:height = 0.6 유지(찌그러짐 없음) — width 340dp/height 566dp.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splashBackground" />
+    <item
+        android:width="340dp"
+        android:height="566dp"
+        android:gravity="center">
+        <bitmap
+            android:src="@drawable/splash"
+            android:gravity="center" />
+    </item>
+</layer-list>

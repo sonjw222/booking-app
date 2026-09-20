@@ -246,3 +246,88 @@ export function registerNativePushTapHandler(onNavigate: (link: string) => void)
     if (typeof link === "string") onNavigate(link);
   });
 }
+
+// Android/iOS 네이티브 푸시 foreground presentation 버그 수정(2026-09-21, 실기기 QA) —
+// 실기기(Firebase Console Test Message)로 확인: background/terminated 상태에선 OS가
+// 시스템 알림(heads-up/notification shade)을 자동으로 띄워줬지만, 앱이 foreground일
+// 땐 사용자에게 보이는 게 아무 것도 없었다. FCM Android SDK의 표준 동작이 원인이다 —
+// 앱이 foreground면 OS가 시스템 알림을 절대 자동으로 띄우지 않고(중복 방지를 위한
+// 의도된 설계), 대신 PushNotifications의 "pushNotificationReceived" 이벤트로만 앱에
+// 전달한다. 이 앱 코드는 "pushNotificationActionPerformed"(탭)만 듣고 있었고
+// "pushNotificationReceived"는 어디서도 리스닝하지 않아 — 이벤트 자체는 정상적으로
+// 오는데 받는 쪽이 없어 그냥 버려지고 있었다(실기기 logcat으로 직접 확인).
+//
+// background/terminated 상태의 시스템 알림과 절대 중복되면 안 된다 — 이 이벤트는
+// FCM Android SDK 설계상 앱이 foreground일 때만 발생하므로(백그라운드/종료 상태에선
+// 아예 이 JS 이벤트 자체가 안 옴, OS가 시스템 트레이로 직행), 이 함수가 여는 인앱
+// 배너는 구조적으로 foreground 전용이라 별도 상태 체크 없이도 중복이 발생할 수 없다.
+//
+// UI는 새 React 컴포넌트/상태 대신 바닐라 DOM으로 직접 만든다 — 이 앱은 탭/페이지
+// 전환마다 전체 페이지가 새로 로드되는 구조라(app/layout.tsx 주석 참고) 이 리스너를
+// 등록하는 CapacitorBootstrap 쪽도 페이지마다 다시 마운트되는 평범한 useEffect일 뿐,
+// 전역 React 상태 관리자가 없다 — 기존 페이지별 .toast(React state)와 달리, 어느
+// 화면에 있든 상관없이 즉시 띄울 수 있어야 하므로 document.body에 직접 붙이는 편이
+// 가장 단순하고 확실하다.
+let foregroundBannerEl: HTMLElement | null = null;
+
+function showForegroundPushBanner(title: string, body: string, onTap: () => void): void {
+  // 이미 배너가 떠 있으면 내용만 교체(쌓이지 않게) — 알림이 짧은 간격으로 연달아
+  // 와도 배너가 여러 개 겹쳐 쌓이는 일이 없다.
+  if (foregroundBannerEl) {
+    foregroundBannerEl.remove();
+    foregroundBannerEl = null;
+  }
+
+  const el = document.createElement("div");
+  el.className = "push-foreground-banner";
+  el.setAttribute("role", "button");
+  el.setAttribute("tabindex", "0");
+
+  const dot = document.createElement("span");
+  dot.className = "push-foreground-banner-dot";
+
+  const textWrap = document.createElement("div");
+  textWrap.className = "push-foreground-banner-body";
+
+  const titleEl = document.createElement("p");
+  titleEl.className = "push-foreground-banner-title";
+  titleEl.textContent = title || "모하빗";
+
+  const bodyEl = document.createElement("p");
+  bodyEl.className = "push-foreground-banner-text";
+  bodyEl.textContent = body;
+
+  textWrap.appendChild(titleEl);
+  textWrap.appendChild(bodyEl);
+  el.appendChild(dot);
+  el.appendChild(textWrap);
+
+  let dismissTimer: ReturnType<typeof setTimeout>;
+  const dismiss = () => {
+    clearTimeout(dismissTimer);
+    el.classList.remove("is-visible");
+    setTimeout(() => el.remove(), 200); // transition(180ms) 끝난 뒤 DOM에서 제거
+    if (foregroundBannerEl === el) foregroundBannerEl = null;
+  };
+  el.addEventListener("click", () => {
+    dismiss();
+    onTap();
+  });
+
+  document.body.appendChild(el);
+  foregroundBannerEl = el;
+  // 붙인 직후 바로 클래스를 주면 transition이 안 먹을 수 있어(같은 프레임) 한 틱 뒤로 미룬다.
+  requestAnimationFrame(() => el.classList.add("is-visible"));
+  dismissTimer = setTimeout(dismiss, 4000);
+}
+
+// 앱 부팅 시 CapacitorBootstrap에서 registerNativePushTapHandler와 함께 1회만 등록한다.
+export function registerNativePushForegroundHandler(onNavigate: (link: string) => void): void {
+  if (!isNativePushSupported()) return;
+  PushNotifications.addListener("pushNotificationReceived", (notification) => {
+    const link = (notification.data as { link?: string } | undefined)?.link;
+    showForegroundPushBanner(notification.title ?? "", notification.body ?? "", () => {
+      if (typeof link === "string") onNavigate(link);
+    });
+  });
+}
