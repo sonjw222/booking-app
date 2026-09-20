@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## 2026-09-21 — Android 알림 풀컬러 앱 아이콘(large icon) 표시(P2-49)
+
+기존엔 default_notification_icon meta-data가 없어 FCM이 앱 런처 아이콘을 그대로
+상태바 아이콘으로 써서 Android가 알파만 추출해 흰 덩어리처럼 뭉개져 보였다. 큰
+아이콘(large icon, 실제 컬러 아이콘 아바타)까지 넣으려면 Capacitor push 플러그인의
+기본 FirebaseMessagingService로는 불가능해(notification 타입 payload는
+background/terminated일 때 OS가 자동 표시해버려 앱 코드가 아예 안 불림) Android
+전용으로 완전 data-only payload로 전환하고, `android/.../MwhabitMessagingService.java`
+(Capacitor의 MessagingService를 상속)가 직접 large icon 포함 알림을 만들어
+posting한다. `supabase/functions/send-web-push/index.ts`는 Android만 data-only로
+바꿨고 iOS는 기존 notification payload 그대로 유지(회귀 없음). `lib/nativePush.ts`의
+foreground 배너는 data/notification 두 payload 형태를 모두 읽도록 폴백 추가.
+새 상태바 아이콘(`ic_stat_notify`)과 large icon(`ic_notification_large_icon`)은
+새 이미지 디자인 없이 기존 miw 런처 에셋에서 파생. 실기기(SM-T975N) 검증:
+foreground(배너만, 중복 없음)/background(heads-up)/kill 후 재개(정상 전달)/
+force-stop(Android 정책상 보류, 회귀 아님)/탭 이동 확인. 알려진 제약: 작은 아이콘
+원형 배지 색은 Samsung One UI가 자체 팔레트로 재색칠(OS 레벨, 앱 코드로 통제 불가
+— Notification.color가 정확히 설정돼 있음을 dumpsys로 확인함). 큰 아이콘은 브랜드
+네이비와 정확히 일치. 브랜치: `feature/android-notification-large-icon`(PR 생성
+전, PR #160과 별개).
+
 ## 2026-09-21 — Android FCM foreground/heads-up presentation + 태블릿 상단 ActionBar/스플래시(P1-48)
 
 SM-T975N 실기기 QA에서 이어서 발견된 4건을 같은 PR(#160)에서 수정했다.

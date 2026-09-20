@@ -1399,6 +1399,20 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 
 ## 5. P2 — 운영 설정·개발환경·구조 검증
 
+### P2-49. (2026-09-21, 실기기 발견·수정 완료) Android 알림 상태바/큰 아이콘이 앱 런처 아이콘을 알파 추출해 뭉개진 흰 덩어리로 표시됨
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 → **수정 완료**(PR 생성 전, 브랜치 `feature/android-notification-large-icon`) |
+| 원인 | `AndroidManifest.xml`에 `default_notification_icon`이 없어 FCM이 앱 런처 아이콘(풀컬러 PNG)을 그대로 상태바 아이콘으로 썼다. Android 5.0+는 상태바/알림 작은 아이콘을 알파 채널만 추출해 흰 실루엣으로 강제 렌더링(OS 레벨 규칙, 코드로 못 바꿈)하는데, 풀컬러 로고를 이렇게 렌더링하면 실루엣이 뭉개져 정체를 알아볼 수 없는 흰 덩어리처럼 보였다. |
+| 큰 아이콘(large icon) 제약 | 실제 컬러 앱 아이콘 아바타(large icon)까지 넣으려면 Capacitor push 플러그인의 기본 `FirebaseMessagingService`로는 불가능 — "notification" 타입 payload는 앱이 background/terminated일 때 OS가 자동 표시해버려 앱 코드(`onMessageReceived`)가 아예 안 불린다(코드로 못 막는 OS 레벨 동작). |
+| 수정 | Android만 완전 data-only FCM payload로 전환(`supabase/functions/send-web-push/index.ts`, `platform` 컬럼으로 분기 — iOS는 기존 notification payload 그대로, 회귀 없음)해 `onMessageReceived`가 항상 호출되게 하고, Capacitor의 `MessagingService`를 상속한 `MwhabitMessagingService.java`(신규)가 large icon 포함 알림을 직접 build+post한다. 기존 앱당-서비스-하나 제약 때문에 `AndroidManifest.xml`에서 Capacitor 기본 서비스를 `tools:node="remove"`로 지우고 교체. `MainActivity.java`는 onStart/onStop으로 foreground 여부를 추적해(새 의존성 없음) foreground일 때는 중복 방지로 시스템 알림을 스킵(JS 배너가 이미 처리). 탭 시 기존 `pushNotificationActionPerformed` 계약은 `remoteMessage.toIntent()` extras를 그대로 전달해 그대로 유지. `lib/nativePush.ts`의 foreground 배너는 data-only(Android)/notification(iOS) 두 payload 형태를 모두 읽도록 title/body에 `data` 필드 폴백 추가. |
+| 새 아이콘 에셋 | `ic_stat_notify`(작은 상태바 아이콘, 흰 실루엣), `ic_notification_large_icon`(large icon, 정사각 컬러) — 새 이미지 디자인 없이 기존 miw 런처 에셋(`ic_launcher_foreground.png`/`ic_launcher.png`)에서 파생. `@mipmap/ic_launcher`를 large icon에 직접 쓰면 API 26+에서 adaptive-icon XML로 해석돼 `BitmapFactory.decodeResource()`가 null을 반환하는 문제가 있어(`android.largeIcon=null`로 조용히 빠짐) 별도 리소스명으로 분리. Android 13+ 테마 아이콘용 `<monochrome>` 레이어도 추가(같은 흰 실루엣 재사용). |
+| 알려진 제약(수정 불가) | 알림 작은 아이콘의 원형 배지 색이 Samsung One UI 자체 팔레트(RGB 53,119,181)로 재색칠됨 — `dumpsys notification`으로 `Notification.color=0xff0a2545`(정확한 브랜드 네이비)가 실제로 설정돼 있음을 확인했는데도 렌더링만 다르게 나옴. Notification.color, adaptive icon monochrome 레이어 둘 다 시도했지만 배지 색에 전혀 영향 없음 — OS(One UI) 레벨에서 결정되는 동작으로 확인, Android 공식 API 범위 밖. 큰 아이콘(large icon)은 브랜드 네이비와 정확히 일치해 실사용상 핵심 요구사항은 충족. |
+| 검증 | SM-T975N 실기기: foreground(배너 표시, 시스템 알림 중복 없음 — dumpsys로 active list 0건 확인)/background(heads-up, channel=mwhabit_default, large icon=68x68 BITMAP 정상)/`am kill` 후 재개(정상 전달, 채널/큰 아이콘 동일)/`am force-stop`(Android 정책상 앱 재실행 전까지 보류 — 문서화된 FCM 동작, 회귀 아님, 재실행 시 지연 전달 확인)/탭 시 `/notifications` 정상 이동(background·kill 상태 둘 다) 확인. |
+| SQL | 불필요 |
+| 근거 파일 | `android/app/src/main/java/com/mwhabit/app/MwhabitMessagingService.java`(신규), `android/app/src/main/java/com/mwhabit/app/MainActivity.java`, `android/app/src/main/AndroidManifest.xml`, `android/app/build.gradle`, `android/app/src/main/res/drawable-*dpi/ic_stat_notify.png`·`ic_notification_large_icon.png`(신규), `android/app/src/main/res/drawable-nodpi/ic_launcher_monochrome.png`(신규), `android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`·`ic_launcher_round.xml`, `lib/nativePush.ts`, `supabase/functions/send-web-push/index.ts` |
+
 ### P2-46. (2026-09-19 발견·수정 완료) `fetchPoints()` — 센터 누적 포인트 거래 300건 초과 시 최신 내역·잔액이 조용히 누락됨
 
 | 필드 | 내용 |
