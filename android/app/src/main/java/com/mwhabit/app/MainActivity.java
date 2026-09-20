@@ -20,6 +20,26 @@ public class MainActivity extends BridgeActivity {
     // 일치해야 FCM이 fallback 대신 이 채널을 쓴다.
     public static final String NOTIFICATION_CHANNEL_ID = "mwhabit_default";
 
+    // 알림 아이콘 실기기 QA(2026-09-21) — MwhabitMessagingService가 컬러 large icon 알림을
+    // 직접 만들어 띄울지 판단하는 데 쓴다(foreground면 JS 배너가 이미 보여주므로 중복
+    // 방지를 위해 시스템 알림을 만들지 않음, MwhabitMessagingService.java 참고).
+    // ProcessLifecycleOwner 같은 새 의존성 없이 액티비티 하나짜리 구조를 그대로 이용 —
+    // onStart/onStop이 "화면에 보이는 중"을 정확히 반영한다(onResume/onPause보다
+    // 시스템 다이얼로그 등에 덜 민감).
+    public static volatile boolean isForeground = false;
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        isForeground = true;
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        isForeground = false;
+    }
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         // registerPlugin()은 브릿지를 생성하는 super.onCreate() 이전에 호출해야 한다

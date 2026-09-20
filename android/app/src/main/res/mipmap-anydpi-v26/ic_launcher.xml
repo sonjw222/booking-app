@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  알림 아이콘 실기기 QA(2026-09-21) — <monochrome> 레이어가 없으면 Android
+  13+(테마 아이콘)/Samsung OneUI가 알림 아이콘 배지 색을 앱이 지정한
+  Notification.color 대신 자체 기본 파랑으로 대체하는 것으로 보여 추가한다(실기기
+  dumpsys로 Notification.color=0xff0a2545가 정확히 들어있는데도 배지만 다른 색으로
+  렌더링됨을 확인 — 작은 아이콘이 순색 실루엣이라 참조할 "테마 아이콘"이 없어서인
+  듯). drawable-nodpi/ic_launcher_monochrome.png는 foreground 레이어(miw 워드마크)와
+  같은 432x432 캔버스에서 뽑아낸 흰색 실루엣이라 같은 16.7% inset을 그대로 써도
+  비율이 어긋나지 않는다.
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background>
         <inset android:drawable="@mipmap/ic_launcher_background" android:inset="16.7%" />
@@ -6,4 +16,7 @@
     <foreground>
         <inset android:drawable="@mipmap/ic_launcher_foreground" android:inset="16.7%" />
     </foreground>
+    <monochrome>
+        <inset android:drawable="@drawable/ic_launcher_monochrome" android:inset="16.7%" />
+    </monochrome>
 </adaptive-icon>

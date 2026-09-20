@@ -39,10 +39,12 @@
 //                                               (수정됨, docs/CHANGELOG.md 참고).
 //
 // 테스트 발송(운영 알림 큐를 건드리지 않고 특정 토큰 1개로만 발송 확인):
-//   POST 본문에 { "testToken": "<FCM 토큰>", "title": "...", "body": "...", "data": {...} }를
-//   담아 호출하면 notifications 큐 스윕을 건너뛰고 그 토큰 하나에만 즉시 보낸다. cron이
-//   호출할 때는 본문이 항상 '{}'라 testToken 필드가 없으므로 일반 발송 경로와 절대 겹치지
-//   않는다. service_role 키로만 호출 가능(verify_jwt=true).
+//   POST 본문에 { "testToken": "<FCM 토큰>", "title": "...", "body": "...", "data": {...},
+//   "platform": "ios"|"android" }를 담아 호출하면 notifications 큐 스윕을 건너뛰고 그 토큰
+//   하나에만 즉시 보낸다. platform 생략 시 기존 동작(iOS/알림 메시지 형식)과 동일하게
+//   "ios"로 간주 — Android data-only 경로를 테스트하려면 반드시 "android"를 명시해야 한다.
+//   cron이 호출할 때는 본문이 항상 '{}'라 testToken 필드가 없으므로 일반 발송 경로와 절대
+//   겹치지 않는다. service_role 키로만 호출 가능(verify_jwt=true).
 // 배포: `supabase functions deploy send-web-push`
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -114,12 +116,28 @@ async function getFcmAccessToken(): Promise<string | null> {
 // 문제다)면 해당 native_push_tokens 행을 지운다(웹푸시의 404/410 삭제와 동일한 관례).
 const FCM_STALE_TOKEN_STATUSES = new Set(["UNREGISTERED", "NOT_FOUND", "INVALID_ARGUMENT"]);
 
-async function sendFcm(accessToken: string, token: string, payload: {
+async function sendFcm(accessToken: string, token: string, platform: string, payload: {
   title: string; body: string; link: string; data?: Record<string, string>;
 }): Promise<{ ok: boolean; stale: boolean; error?: string }> {
   // data는 FCM 요구사항상 문자열 값만 허용 — link를 항상 포함하고(기존 알림 탭 이동
   // 규칙과 동일한 키), 호출부가 추가로 넘긴 값이 있으면 합친다(link는 덮어쓰지 않음).
   const data: Record<string, string> = { ...(payload.data ?? {}), link: payload.link };
+
+  // Android 알림 아이콘 실기기 QA(2026-09-21) — "notification" 키가 있는 메시지는 앱이
+  // background/terminated일 때 Android FCM SDK가 자체적으로(OS 레벨, 코드로 못 막음)
+  // 알림을 자동 표시해버려 android/app/.../MwhabitMessagingService.java의
+  // onMessageReceived가 아예 호출되지 않는다 — 그러면 컬러 앱 아이콘(large icon)을 넣을
+  // 방법이 없다. 그래서 Android만 완전 data-only로 보내 항상 onMessageReceived가 호출되게
+  // 하고, title/body도 data 안에 넣는다. iOS는 절대 건드리지 않는다 — APNs가 알림을
+  // 자체적으로 잘 띄우고 있고(별도 아이콘 이슈 없음), notification 키를 빼면 iOS 알림
+  // 자체가 안 뜨는 회귀 위험이 있다.
+  const message: Record<string, unknown> = { token, data };
+  if (platform === "android") {
+    data.title = payload.title;
+    data.body = payload.body;
+  } else {
+    message.notification = { title: payload.title, body: payload.body };
+  }
 
   const res = await fetch(
     `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT_ID}/messages:send`,
@@ -129,13 +147,7 @@ async function sendFcm(accessToken: string, token: string, payload: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        message: {
-          token,
-          notification: { title: payload.title, body: payload.body },
-          data,
-        },
-      }),
+      body: JSON.stringify({ message }),
     },
   );
   if (res.ok) return { ok: true, stale: false };
@@ -185,7 +197,8 @@ Deno.serve(async (req: Request) => {
             Object.entries(body.data as Record<string, unknown>).map(([k, v]) => [k, String(v)]),
           )
         : undefined;
-    const result = await sendFcm(accessToken, body.testToken, {
+    const platform = body.platform === "android" ? "android" : "ios";
+    const result = await sendFcm(accessToken, body.testToken, platform, {
       title,
       body: bodyText,
       link,
@@ -217,7 +230,7 @@ Deno.serve(async (req: Request) => {
   // 목록으로 취급해 웹푸시는 계속 정상 동작하게 하고, 그 외 실패는 그대로 알린다.
   const nativeQuery = await admin
     .from("native_push_tokens")
-    .select("id, account_id, token")
+    .select("id, account_id, token, platform")
     .in("account_id", accountIds);
   if (nativeQuery.error && (nativeQuery.error as { code?: string }).code !== "42P01") {
     return json({ error: nativeQuery.error.message }, 500);
@@ -296,7 +309,7 @@ Deno.serve(async (req: Request) => {
 
     if (fcmAccessToken) {
       for (const t of nativeTargets) {
-        const result = await sendFcm(fcmAccessToken, t.token, {
+        const result = await sendFcm(fcmAccessToken, t.token, t.platform, {
           title: n.title,
           body: n.body ?? "",
           link,

@@ -325,8 +325,16 @@ function showForegroundPushBanner(title: string, body: string, onTap: () => void
 export function registerNativePushForegroundHandler(onNavigate: (link: string) => void): void {
   if (!isNativePushSupported()) return;
   PushNotifications.addListener("pushNotificationReceived", (notification) => {
-    const link = (notification.data as { link?: string } | undefined)?.link;
-    showForegroundPushBanner(notification.title ?? "", notification.body ?? "", () => {
+    // Android 알림 아이콘 실기기 QA(2026-09-21) — Android만 data-only FCM 메시지로
+    // 바뀌어(MwhabitMessagingService.java, supabase/functions/send-web-push 주석 참고)
+    // title/body가 최상위가 아니라 notification.data 안에 들어온다. iOS는 여전히
+    // "notification" 타입 payload라 최상위 title/body가 그대로 채워지므로, 최상위 값이
+    // 없을 때만 data를 보는 순서로 두 플랫폼 다 안전하게 처리한다.
+    const data = notification.data as { link?: string; title?: string; body?: string } | undefined;
+    const title = notification.title ?? data?.title ?? "";
+    const body = notification.body ?? data?.body ?? "";
+    const link = data?.link;
+    showForegroundPushBanner(title, body, () => {
       if (typeof link === "string") onNavigate(link);
     });
   });
