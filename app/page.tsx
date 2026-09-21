@@ -346,7 +346,6 @@ export default function Home() {
           </div>
         </div>
 
-        <div style={{ height: 80 }} />
       </div>
 
       {/* 하단 네비게이션 */}

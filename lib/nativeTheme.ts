@@ -20,7 +20,12 @@ interface WebViewThemeNativePlugin {
   setBackground(options: { hex: string }): Promise<void>;
 }
 
+interface AndroidStatusBarBackgroundNativePlugin {
+  setDark(options: { dark: boolean }): Promise<void>;
+}
+
 const WebViewThemeNative = registerPlugin<WebViewThemeNativePlugin>("WebViewTheme");
+const AndroidStatusBarBackgroundNative = registerPlugin<AndroidStatusBarBackgroundNativePlugin>("AndroidStatusBarBackground");
 
 export function syncNativeWebViewBackground(dark: boolean): void {
   if (!Capacitor.isNativePlatform()) return;
@@ -48,6 +53,9 @@ export async function syncNativeStatusBarStyle(dark: boolean): Promise<void> {
   try {
     const { StatusBar, Style } = await import("@capacitor/status-bar");
     await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light });
+    if (Capacitor.getPlatform() === "android") {
+      await AndroidStatusBarBackgroundNative.setDark({ dark });
+    }
   } catch {
     /* 웹/미지원 플랫폼 — 화면엔 영향 없음 */
   }

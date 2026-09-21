@@ -4,6 +4,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.graphics.Color;
 import android.view.View;
 import androidx.activity.EdgeToEdge;
 import androidx.core.graphics.Insets;
@@ -46,6 +47,7 @@ public class MainActivity extends BridgeActivity {
         // (Capacitor 문서 관례 — BridgeActivity#load()가 super.onCreate() 안에서
         // bridgeBuilder로 Bridge를 만들기 때문).
         registerPlugin(AppSettingsPlugin.class);
+        registerPlugin(AndroidStatusBarBackgroundPlugin.class);
         // GoogleSignInPlugin.java — Google 네이티브 로그인(release blocker 대응,
         // 2026-09-15). iOS의 GoogleSignInPlugin.swift와 동일한 jsName/계약.
         registerPlugin(GoogleSignInPlugin.class);
@@ -77,6 +79,9 @@ public class MainActivity extends BridgeActivity {
         // 필요가 없다. AndroidManifest.xml의 windowSoftInputMode="adjustResize"와 함께
         // 동작한다(Android 공식 키보드 마이그레이션 가이드 권장 조합).
         View contentRoot = findViewById(android.R.id.content);
+        // Edge-to-edge exposes this padded view behind the transparent status bar.
+        // Without an explicit surface the launch theme's navy remains visible.
+        contentRoot.setBackgroundColor(Color.rgb(251, 251, 250));
         ViewCompat.setOnApplyWindowInsetsListener(contentRoot, (v, windowInsets) -> {
             Insets insets = windowInsets.getInsets(
                 WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.ime()
