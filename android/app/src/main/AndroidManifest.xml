@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
 
@@ -44,6 +45,42 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- 백그라운드 heads-up 실기기 QA(2026-09-21) — 이 값이 없으면 Firebase
+             Messaging이 알림 payload에 채널 지정이 없을 때 자체 fallback 채널
+             (IMPORTANCE_DEFAULT, heads-up 안 뜸)을 씀. MainActivity.java에서 만드는
+             NOTIFICATION_CHANNEL_ID(IMPORTANCE_HIGH)와 문자열이 정확히 일치해야 한다. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="mwhabit_default" />
+
+        <!-- 알림 아이콘 실기기 QA(2026-09-21) — production payload가 Android는 항상
+             data-only라 실제로는 MwhabitMessagingService가 직접 만든 알림만 뜨지만,
+             혹시 어딘가에서 "notification" 키가 있는 payload가 들어와도(예: 다른 발송
+             경로, Firebase Console 캠페인) 최소한 풀컬러 런처 아이콘이 알파로 뭉개지는
+             일은 없도록 방어적으로 지정한다. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_notify" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/splashBackground" />
+
+        <!-- 알림 아이콘 실기기 QA(2026-09-21) — Capacitor push-notifications 플러그인이
+             자기 AAR 매니페스트로 등록하는 기본 FirebaseMessagingService(MessagingService)를
+             지우고, 그걸 상속해 large icon 알림을 직접 만드는 MwhabitMessagingService로
+             대체한다. 앱 하나엔 FirebaseMessagingService가 하나만 있어야 하므로(intent-filter
+             중복 시 어느 쪽이 호출될지 보장 안 됨) 반드시 remove 후 등록해야 한다. -->
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".MwhabitMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
     </application>
 

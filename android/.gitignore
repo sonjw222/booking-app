@@ -62,7 +62,10 @@ captures/
 .cxx/
 
 # Google Services (e.g. APIs or Firebase)
-# google-services.json
+# 2026-09-20 발견·수정: 이 줄이 Android Studio 기본 템플릿 그대로 주석 처리돼 있어
+# 실제로는 전혀 무시되지 않고 있었다(google-services.json에 실제 Firebase API 키가
+# 들어있어 git add 시 그대로 커밋될 수 있는 상태였음) — 주석 해제.
+google-services.json
 
 # Freeline
 freeline.py

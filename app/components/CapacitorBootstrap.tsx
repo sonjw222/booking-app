@@ -20,6 +20,10 @@
   - 푸시 알림 탭 시 알림에 담긴 링크로 이동한다(lib/nativePush.ts,
     public/sw.js의 notificationclick과 동일 개념) — 이 앱은 <Link> 대신 일반 <a href>를
     쓰는 전체 페이지 로드 방식이라(app/layout.tsx 주석 참고) 여기도 동일하게 맞춘다.
+  - foreground(앱을 보고 있는 중) 상태에서 푸시가 오면 인앱 상단 배너로 직접 보여준다
+    (lib/nativePush.ts의 registerNativePushForegroundHandler) — background/terminated는
+    OS가 시스템 알림으로 이미 처리해서 여기선 손댈 필요가 없고(실기기 QA 2026-09-21
+    확인), foreground일 때만 아무 것도 안 보이던 문제를 고친 것.
 */
 
 import { useEffect } from "react";
@@ -31,7 +35,7 @@ export default function CapacitorBootstrap() {
     if (!Capacitor.isNativePlatform()) return;
 
     (async () => {
-      const [{ SplashScreen }, { App }, { registerNativePushTapHandler }] = await Promise.all([
+      const [{ SplashScreen }, { App }, { registerNativePushTapHandler, registerNativePushForegroundHandler }] = await Promise.all([
         import("@capacitor/splash-screen"),
         import("@capacitor/app"),
         import("../../lib/nativePush"),
@@ -72,6 +76,11 @@ export default function CapacitorBootstrap() {
       }
 
       registerNativePushTapHandler((link) => {
+        window.location.href = link;
+      });
+      // foreground presentation 버그 수정(2026-09-21, 실기기 QA) — lib/nativePush.ts의
+      // registerNativePushForegroundHandler 주석 참고.
+      registerNativePushForegroundHandler((link) => {
         window.location.href = link;
       });
     })();

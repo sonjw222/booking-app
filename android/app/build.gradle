@@ -82,6 +82,14 @@ dependencies {
     // 블록에서 전체 서브프로젝트에 일괄 적용한다(그 파일 주석 참고, 여기서 중복 선언
     // 안 함).
     implementation "com.google.android.libraries.identity.googleid:googleid:$googleIdVersion"
+    // 알림 아이콘 실기기 QA(2026-09-21) — MwhabitMessagingService.java가
+    // com.google.firebase.messaging.RemoteMessage/FirebaseMessagingService를 직접 참조한다.
+    // capacitor-push-notifications가 firebase-messaging을 이미 implementation으로
+    // 갖고 있어 런타임엔 항상 있었지만, implementation 스코프라 app 모듈 컴파일
+    // 클래스패스엔 안 보여서 명시적으로 다시 선언 — 버전은 그 플러그인의 기본값과
+    // 동일하게 맞춰 중복/충돌 없이 하나로 합쳐지게 한다(node_modules/@capacitor/
+    // push-notifications/android/build.gradle 확인).
+    implementation "com.google.firebase:firebase-messaging:25.0.1"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

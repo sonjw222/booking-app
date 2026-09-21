@@ -1,5 +1,8 @@
 package com.mwhabit.app;
 
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import androidx.activity.EdgeToEdge;
@@ -9,6 +12,34 @@ import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+    // 백그라운드 heads-up 실기기 QA(2026-09-21) — Firebase Messaging이 앱에 커스텀
+    // 채널 지정이 없으면 자동으로 만드는 fallback 채널(fcm_fallback_notification_channel)
+    // 이 IMPORTANCE_DEFAULT(3)로 생성돼, 알림이 shade엔 들어가지만 heads-up 배너로는
+    // 안 뜨는 걸 실기기 dumpsys notification으로 확인했다. 이 채널 ID는 이 상수와
+    // AndroidManifest.xml의 default_notification_channel_id meta-data 양쪽에서 정확히
+    // 일치해야 FCM이 fallback 대신 이 채널을 쓴다.
+    public static final String NOTIFICATION_CHANNEL_ID = "mwhabit_default";
+
+    // 알림 아이콘 실기기 QA(2026-09-21) — MwhabitMessagingService가 컬러 large icon 알림을
+    // 직접 만들어 띄울지 판단하는 데 쓴다(foreground면 JS 배너가 이미 보여주므로 중복
+    // 방지를 위해 시스템 알림을 만들지 않음, MwhabitMessagingService.java 참고).
+    // ProcessLifecycleOwner 같은 새 의존성 없이 액티비티 하나짜리 구조를 그대로 이용 —
+    // onStart/onStop이 "화면에 보이는 중"을 정확히 반영한다(onResume/onPause보다
+    // 시스템 다이얼로그 등에 덜 민감).
+    public static volatile boolean isForeground = false;
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        isForeground = true;
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        isForeground = false;
+    }
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         // registerPlugin()은 브릿지를 생성하는 super.onCreate() 이전에 호출해야 한다
@@ -18,6 +49,12 @@ public class MainActivity extends BridgeActivity {
         // GoogleSignInPlugin.java — Google 네이티브 로그인(release blocker 대응,
         // 2026-09-15). iOS의 GoogleSignInPlugin.swift와 동일한 jsName/계약.
         registerPlugin(GoogleSignInPlugin.class);
+
+        // 채널 importance는 한 번 생성되면 코드로 다시 못 올린다(OS 정책 — 사용자가
+        // 시스템 설정에서 직접 바꾸는 것만 허용). 이미 같은 ID로 만들어져 있으면
+        // createNotificationChannel()은 그냥 no-op이라(공식 문서) 매 실행마다 불러도
+        // 안전 — 앱을 한 번이라도 실행해야 채널이 생기므로 여기서 만든다.
+        createHighImportanceNotificationChannel();
 
         // 실기기 QA(2026-09-14, 4차) — Android 15(API 35)부터 타깃 SDK 35+ 앱은 edge-to-edge가
         // 강제 적용되고, 타깃 SDK 36(API 36, 이 앱의 현재 targetSdkVersion)에서는 그 강제를
@@ -47,5 +84,21 @@ public class MainActivity extends BridgeActivity {
             v.setPadding(insets.left, insets.top, insets.right, insets.bottom);
             return WindowInsetsCompat.CONSUMED;
         });
+    }
+
+    private void createHighImportanceNotificationChannel() {
+        // 채널은 Android 8(API 26) 이상에만 존재하는 개념이다.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+
+        NotificationChannel channel = new NotificationChannel(
+            NOTIFICATION_CHANNEL_ID,
+            "모하빗 알림",
+            NotificationManager.IMPORTANCE_HIGH
+        );
+        channel.setDescription("예약, 수강권, 공지 등 모하빗 앱의 주요 알림이 이 채널로 와요.");
+        channel.enableVibration(true);
+
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) manager.createNotificationChannel(channel);
     }
 }
