@@ -3,6 +3,9 @@
   - 공지사항(center_announcements)과 별개. 센터 단위가 아니라 전체 회원에게 보낸다.
   - 발송은 add_marketing_notifications.sql의 create_marketing_message_safe() RPC가
     등록 + 팬아웃(push_notification)까지 한 트랜잭션으로 처리한다.
+  - 광고성 정보이므로 그 RPC의 대상 선정은 accounts.marketing_consent = true인 미탈퇴
+    회원으로 제한된다(fix_marketing_consent_fanout.sql). 여기 targetCount는 "전체 회원 수"가
+    아니라 "실제로 발송된 수신 동의 회원 수"다.
 */
 
 import { supabase } from "./supabaseClient";

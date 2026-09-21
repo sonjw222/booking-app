@@ -2,7 +2,10 @@
 
 /*
   운영자 - 마케팅 알림
-  - 공지사항(센터별)과 별개로, 플랫폼 전체 회원에게 혜택·이벤트 알림을 발송한다.
+  - 공지사항(센터별)과 별개로, 플랫폼 차원의 혜택·이벤트 알림을 발송한다.
+  - 광고성 정보이므로 발송 대상은 accounts.marketing_consent = true인 미탈퇴 회원뿐이다
+    (fix_marketing_consent_fanout.sql의 create_marketing_message_safe()가 대상 선정 단계에서
+    거른다 — 동의를 철회하면 그 이후 발송부터 즉시 제외된다).
   - 발송하면 알림함(/notifications) + 실시간 팝업(켜둔 회원만, "혜택·이벤트 알림" 토글) +
     웹/네이티브 푸시(구독한 회원만)로 전달된다.
 */
@@ -43,7 +46,7 @@ export default function MarketingPage() {
 
   async function handleSend() {
     if (!title.trim() || !body.trim()) { setError("제목과 내용을 모두 입력해주세요"); return; }
-    if (!(await globalThis.appConfirm("전체 회원에게 이 알림을 발송할까요?\n발송 후에는 되돌릴 수 없어요."))) return;
+    if (!(await globalThis.appConfirm("마케팅 수신에 동의한 회원에게 이 알림을 발송할까요?\n발송 후에는 되돌릴 수 없어요."))) return;
     setBusy(true);
     try {
       await sendMarketingMessage(title.trim(), body.trim(), link.trim());
@@ -89,8 +92,9 @@ export default function MarketingPage() {
       </div>
 
       <div className="perm-guide" style={{ margin: "8px 20px" }}>
-        센터별 공지사항과 달리, 여기서 보내면 전체 회원에게 한 번에 발송돼요. 회원이 "혜택·이벤트
-        알림"을 꺼두면 팝업은 안 뜨지만 알림함에는 그대로 남아요.
+        센터별 공지사항과 달리, 여기서 보내면 한 번에 발송돼요. 광고성 정보라서 마케팅 정보
+        수신에 동의한 회원에게만 나가요(동의하지 않았거나 동의를 철회한 회원, 탈퇴한 계정은
+        제외돼요). 회원이 "혜택·이벤트 알림"을 꺼두면 팝업은 안 뜨지만 알림함에는 그대로 남아요.
       </div>
 
       {composing ? (

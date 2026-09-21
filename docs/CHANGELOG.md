@@ -1,5 +1,57 @@
 # CHANGELOG
 
+## 2026-09-20 — Privacy Release Blocker Batch #2: 탈퇴 잔존 개인속성 + 광고 알림 수신동의 미적용
+
+PR #159가 개인정보처리방침 "문구"를 실제 수집 항목에 맞춘 데 이어, 2차 개인정보 실사에서
+문구가 아니라 **실제 처리 동작**이 잘못된 릴리스 블로커 2건이 나와 수정했다.
+
+- **(P1-1) 계정 탈퇴가 프로필 개인속성 3개를 남기고 있었다.**
+  `supabase/functions/delete-account/index.ts`의 profiles 익명화가
+  `name/nickname/phone/address/avatar_url/memo/birth_date/label`만 비우고
+  **`gender`/`shoe_size`/`cloth_size`는 건드리지 않아** 탈퇴 후에도 성별·신발 사이즈·
+  옷 사이즈가 그대로 남았다. 이 행은 `account_id`로 accounts와, `id`로 reservations/
+  memberships/payments/progress_records와 계속 연결돼 있어 "익명 통계"가 아니라 식별
+  가능한 실기록이었다. `schema.sql` + `add_profile_fields.sql` + `add_profile_extras.sql`로
+  profiles 컬럼 전체를 다시 대조해, 구조 컬럼(`id`/`account_id`/`is_primary`/`created_at`/
+  `deleted_at`)을 뺀 개인속성 컬럼은 이 3개가 전부임을 확인하고 전부 null로 비우도록 했다.
+  같은 저장소의 프로필 단건 삭제(`lib/profiles.ts` `deleteProfile`)는 처음부터 이 3개까지
+  비우고 있었으므로, 두 경로의 익명화 범위가 어긋나 있던 것이기도 하다. 보존 대상
+  (reservations/memberships/payments 등 전자상거래법상 보관 의무)은 그대로 두고 프로필
+  행 자체도 삭제하지 않는 기존 정책을 유지했다 — FK 무결성 회귀 테스트로 못박았다.
+- **(P1-2) 광고성 알림 팬아웃이 `marketing_consent`를 전혀 보지 않았다.**
+  `add_marketing_consent.sql`이 동의 값을 저장하게는 했지만 "그 값으로 발송 대상을 거르는"
+  쪽이 어디에도 연결되지 않아, `create_marketing_message_safe()`가
+  `select id from accounts where is_member = true` 전체(미동의자 + 이미 탈퇴·익명화된
+  계정 포함 — 탈퇴는 행을 지우지 않고 `is_member`도 true로 남는다)에 광고 알림을 만들고
+  있었다. 센터별 알림톡 자동 규칙 5종 중 광고성인 `birthday`(생일 혜택)·`expired_rebuy`
+  (만료 후 재구매 유도)도 마찬가지였다. `fix_marketing_consent_fanout.sql`(신규)로 **대상
+  선정 단계에만** 조건을 추가했다 — 전자는 `marketing_consent is true and deactivated_at
+  is null`, 후자는 `join accounts a ... and a.marketing_consent is true`. `= true`가 아니라
+  `is true`를 쓴 건 값이 없는 경우를 미동의로 취급하는 opt-in 원칙을 스키마와 무관하게
+  보장하기 위해서다. 두 함수 모두 발송 시점에 accounts를 직접 조회하므로 동의 철회가
+  이후 발송부터 즉시 반영된다.
+- **필수 운영 알림은 의도적으로 건드리지 않았다** — `count_low`/`membership_expiring`/
+  `pause_ending`(수강권 잔여·만료·정지 종료 안내)과 `create_announcement()`/
+  `notify_upcoming_reservations()`/`notify_expiring_passes()`/예약·결제 트리거는 이 파일이
+  재정의조차 하지 않는다. 동의 여부와 무관하게 전원에게 나가야 하는 계약 이행 고지다.
+- **문구 정정**: `app/account-deletion/page.tsx` 3절의 "탈퇴 시 비워지는 항목" 열거에
+  성별·신발 사이즈·의류 사이즈를 추가(이전 문구는 수정 전에도 이미 부정확했다).
+  `app/admin/marketing/page.tsx`는 "전체 회원에게 발송"이라는 안내와 확인 문구를 "마케팅
+  수신에 동의한 회원에게만"으로 바꿨다. 개인정보처리방침(`app/legal/privacy/page.tsx`)은
+  이미 "마케팅(별도 동의 시에 한함)"·"지정된 항목을 비웁니다"로 적혀 있어 문구 변경 불필요 —
+  오히려 이번 수정으로 그 문구가 비로소 사실이 됐다.
+- **테스트**: `tests/unit/privacyReleaseBlockers.staticCheck.test.ts`(신규, 12개) —
+  익명화 대상 컬럼/보존 테이블 미삭제/푸시 토큰 삭제 회귀, 광고성 2종만 동의 게이트를 갖고
+  필수 3종엔 없다는 것, 알림톡 템플릿 코드 저장(5개 insert)을 되돌리지 않았다는 것을 파일
+  텍스트로 고정한다. `tests/integration/account-deletion-anonymization.test.ts`에 세 번째
+  케이스 추가(수강권/결제/예약 fixture를 만들고 탈퇴시켜, 개인속성은 전부 비워지고 보존
+  기록은 남아 익명화된 프로필을 계속 참조하는지 확인). `tests/integration/marketing-consent.test.ts`에
+  팬아웃 describe 추가(동의/미동의/미설정/탈퇴/철회 5케이스 + 미동의 계정도 센터 공지는
+  그대로 받는 필수 알림 회귀). `npm test` 456/456 PASS(63파일), `npm run build` 성공,
+  `deno check supabase/functions/delete-account/index.ts` 성공.
+- **적용 필요(대표님)**: `fix_marketing_consent_fanout.sql`을 Supabase SQL Editor에서 실행 +
+  `supabase functions deploy delete-account` 재배포. 둘 다 끝나야 통합테스트가 통과한다
+  (docs/TODO.md P1-47). 추적 중 발견한 별개 문제는 P2-47로 기록.
 ## 2026-09-21 — Android 알림 풀컬러 앱 아이콘(large icon) 표시(P2-49)
 
 기존엔 default_notification_icon meta-data가 없어 FCM이 앱 런처 아이콘을 그대로
