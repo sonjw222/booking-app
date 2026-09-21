@@ -1,5 +1,60 @@
 # CHANGELOG
 
+## 2026-09-21 — `fix_marketing_consent_fanout.sql` 최종 안전 보완: 탈퇴 계정 광고성 알림톡 제외
+
+운영 적용 직전 재검증에서 발견: `delete-account` Edge Function은 탈퇴 시
+`accounts.marketing_consent`를 false로 바꾸지 않는다(익명화 대상 컬럼이 아니라서 의도적으로
+안 건드림 — 동의 이력 자체는 개인속성이 아니라 보존). 즉 탈퇴 전 마케팅 수신에 동의했던
+계정은 탈퇴 후에도 `marketing_consent`가 true로 남는다. `create_marketing_message_safe()`는
+`deactivated_at is null`을 이미 같이 확인해 안전했지만, `evaluate_notification_rules()`의
+광고성 두 분기(`birthday`/`expired_rebuy`)는 `a.marketing_consent is true`만 있고 탈퇴 계정
+제외 조건이 없어서, 탈퇴 후에도 광고성 알림톡이 계속 나갈 수 있었다. `fix_marketing_consent_fanout.sql`
+(기존 파일, 아직 운영 미적용)의 두 분기 모두에 `and a.deactivated_at is null`을 추가해 마케팅
+수신 동의 여부와 무관하게 탈퇴 계정을 모든 광고성 자동 fanout 대상에서 무조건 제외한다.
+필수 운영 알림(`count_low`/`membership_expiring`/`pause_ending`)과 `create_marketing_message_safe()`는
+무변경. `tests/unit/privacyReleaseBlockers.staticCheck.test.ts`에 회귀 테스트 추가(광고성
+두 분기에 탈퇴 제외 조건이 정확히 2회만 들어갔는지 확인) — 13/13 PASS, `npm run build` 성공.
+아직 운영 Supabase에 미적용 — `fix_marketing_consent_fanout.sql` 파일 전체를 SQL Editor에서
+실행해야 한다(기존 `create or replace function`만 사용, idempotent).
+
+## 2026-09-21 — Android 알림 풀컬러 앱 아이콘(large icon) 표시(P2-49)
+
+기존엔 default_notification_icon meta-data가 없어 FCM이 앱 런처 아이콘을 그대로
+상태바 아이콘으로 써서 Android가 알파만 추출해 흰 덩어리처럼 뭉개져 보였다. 큰
+아이콘(large icon, 실제 컬러 아이콘 아바타)까지 넣으려면 Capacitor push 플러그인의
+기본 FirebaseMessagingService로는 불가능해(notification 타입 payload는
+background/terminated일 때 OS가 자동 표시해버려 앱 코드가 아예 안 불림) Android
+전용으로 완전 data-only payload로 전환하고, `android/.../MwhabitMessagingService.java`
+(Capacitor의 MessagingService를 상속)가 직접 large icon 포함 알림을 만들어
+posting한다. `supabase/functions/send-web-push/index.ts`는 Android만 data-only로
+바꿨고 iOS는 기존 notification payload 그대로 유지(회귀 없음). `lib/nativePush.ts`의
+foreground 배너는 data/notification 두 payload 형태를 모두 읽도록 폴백 추가.
+새 상태바 아이콘(`ic_stat_notify`)과 large icon(`ic_notification_large_icon`)은
+새 이미지 디자인 없이 기존 miw 런처 에셋에서 파생. 실기기(SM-T975N) 검증:
+foreground(배너만, 중복 없음)/background(heads-up)/kill 후 재개(정상 전달)/
+force-stop(Android 정책상 보류, 회귀 아님)/탭 이동 확인. 알려진 제약: 작은 아이콘
+원형 배지 색은 Samsung One UI가 자체 팔레트로 재색칠(OS 레벨, 앱 코드로 통제 불가
+— Notification.color가 정확히 설정돼 있음을 dumpsys로 확인함). 큰 아이콘은 브랜드
+네이비와 정확히 일치. 브랜치: `feature/android-notification-large-icon`(PR 생성
+전, PR #160과 별개).
+
+## 2026-09-21 — Android FCM foreground/heads-up presentation + 태블릿 상단 ActionBar/스플래시(P1-48)
+
+SM-T975N 실기기 QA에서 이어서 발견된 4건을 같은 PR(#160)에서 수정했다.
+(1) `pushNotificationReceived` 리스너가 없어 앱이 foreground일 때 FCM 메시지가
+와도 아무 것도 안 보이던 문제 — `lib/nativePush.ts`에
+`registerNativePushForegroundHandler()` 추가, 바닐라 DOM 인앱 상단 배너로 표시
+(`app/globals.css`의 `.push-foreground-banner`). (2) background heads-up이 안
+뜨던 문제 — Firebase 자동 fallback 채널이 IMPORTANCE_DEFAULT였던 게 원인,
+`MainActivity.java`에서 IMPORTANCE_HIGH 채널(`mwhabit_default`)을 새로 만들고
+`AndroidManifest.xml`의 `default_notification_channel_id`로 지정. (3) 태블릿
+실기기 상단에 네이티브 ActionBar가 WebView 위에 별도로 그려지던 문제 —
+AppCompat 전용 속성만으론 안 먹혀 `android:` 프레임워크 네임스페이스 속성도
+같이 추가해서 해결(`AppTheme`/`AppTheme.NoActionBarLaunch`). (4) 태블릿 스플래시
+로고가 작아 보이던 문제 — 새 이미지 없이 `drawable-sw600dp{,-land}` 한정자로
+기존 비트맵을 명시적 크기로 표시(폰 리소스 무변경). 포트레이트/랜드스케이프
+실기기 스크린샷+uiautomator로 검증.
+
 ## 2026-09-20 — Privacy Release Blocker Batch #2: 탈퇴 잔존 개인속성 + 광고 알림 수신동의 미적용
 
 PR #159가 개인정보처리방침 "문구"를 실제 수집 항목에 맞춘 데 이어, 2차 개인정보 실사에서
@@ -52,43 +107,6 @@ PR #159가 개인정보처리방침 "문구"를 실제 수집 항목에 맞춘 �
 - **적용 필요(대표님)**: `fix_marketing_consent_fanout.sql`을 Supabase SQL Editor에서 실행 +
   `supabase functions deploy delete-account` 재배포. 둘 다 끝나야 통합테스트가 통과한다
   (docs/TODO.md P1-47). 추적 중 발견한 별개 문제는 P2-47로 기록.
-## 2026-09-21 — Android 알림 풀컬러 앱 아이콘(large icon) 표시(P2-49)
-
-기존엔 default_notification_icon meta-data가 없어 FCM이 앱 런처 아이콘을 그대로
-상태바 아이콘으로 써서 Android가 알파만 추출해 흰 덩어리처럼 뭉개져 보였다. 큰
-아이콘(large icon, 실제 컬러 아이콘 아바타)까지 넣으려면 Capacitor push 플러그인의
-기본 FirebaseMessagingService로는 불가능해(notification 타입 payload는
-background/terminated일 때 OS가 자동 표시해버려 앱 코드가 아예 안 불림) Android
-전용으로 완전 data-only payload로 전환하고, `android/.../MwhabitMessagingService.java`
-(Capacitor의 MessagingService를 상속)가 직접 large icon 포함 알림을 만들어
-posting한다. `supabase/functions/send-web-push/index.ts`는 Android만 data-only로
-바꿨고 iOS는 기존 notification payload 그대로 유지(회귀 없음). `lib/nativePush.ts`의
-foreground 배너는 data/notification 두 payload 형태를 모두 읽도록 폴백 추가.
-새 상태바 아이콘(`ic_stat_notify`)과 large icon(`ic_notification_large_icon`)은
-새 이미지 디자인 없이 기존 miw 런처 에셋에서 파생. 실기기(SM-T975N) 검증:
-foreground(배너만, 중복 없음)/background(heads-up)/kill 후 재개(정상 전달)/
-force-stop(Android 정책상 보류, 회귀 아님)/탭 이동 확인. 알려진 제약: 작은 아이콘
-원형 배지 색은 Samsung One UI가 자체 팔레트로 재색칠(OS 레벨, 앱 코드로 통제 불가
-— Notification.color가 정확히 설정돼 있음을 dumpsys로 확인함). 큰 아이콘은 브랜드
-네이비와 정확히 일치. 브랜치: `feature/android-notification-large-icon`(PR 생성
-전, PR #160과 별개).
-
-## 2026-09-21 — Android FCM foreground/heads-up presentation + 태블릿 상단 ActionBar/스플래시(P1-48)
-
-SM-T975N 실기기 QA에서 이어서 발견된 4건을 같은 PR(#160)에서 수정했다.
-(1) `pushNotificationReceived` 리스너가 없어 앱이 foreground일 때 FCM 메시지가
-와도 아무 것도 안 보이던 문제 — `lib/nativePush.ts`에
-`registerNativePushForegroundHandler()` 추가, 바닐라 DOM 인앱 상단 배너로 표시
-(`app/globals.css`의 `.push-foreground-banner`). (2) background heads-up이 안
-뜨던 문제 — Firebase 자동 fallback 채널이 IMPORTANCE_DEFAULT였던 게 원인,
-`MainActivity.java`에서 IMPORTANCE_HIGH 채널(`mwhabit_default`)을 새로 만들고
-`AndroidManifest.xml`의 `default_notification_channel_id`로 지정. (3) 태블릿
-실기기 상단에 네이티브 ActionBar가 WebView 위에 별도로 그려지던 문제 —
-AppCompat 전용 속성만으론 안 먹혀 `android:` 프레임워크 네임스페이스 속성도
-같이 추가해서 해결(`AppTheme`/`AppTheme.NoActionBarLaunch`). (4) 태블릿 스플래시
-로고가 작아 보이던 문제 — 새 이미지 없이 `drawable-sw600dp{,-land}` 한정자로
-기존 비트맵을 명시적 크기로 표시(폰 리소스 무변경). 포트레이트/랜드스케이프
-실기기 스크린샷+uiautomator로 검증.
 
 ## 2026-09-20 — Android/iOS 네이티브 푸시 자동 등록 P1 버그 수정(P1-47)
 

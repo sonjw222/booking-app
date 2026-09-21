@@ -703,6 +703,7 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 | 우선순위 | P1 |
 | 현재 상태 | **코드/SQL 작성 완료, 운영 적용 미완료.** 이 배치의 두 수정은 둘 다 "저장소 변경만으로는 운영에 반영되지 않는" 종류다 — 대표님이 직접 실행해야 한다. |
 | 남은 작업 | (1) Supabase SQL Editor에서 `fix_marketing_consent_fanout.sql` 전문 실행 (2) `supabase functions deploy delete-account`로 Edge Function 재배포 (3) 두 가지가 끝난 뒤 `npm run test:integration -- tests/integration/account-deletion-anonymization.test.ts tests/integration/marketing-consent.test.ts` 실행해 통과 확인 |
+| 2026-09-21 최종 안전 보완 | 운영 적용 직전 재검증에서 `delete-account`가 탈퇴 시 `marketing_consent`를 false로 바꾸지 않는다는 것을 확인 — `evaluate_notification_rules()`의 광고성 두 분기(`birthday`/`expired_rebuy`)에 `and a.deactivated_at is null`을 추가해 탈퇴 계정을 동의 여부와 무관하게 제외하도록 `fix_marketing_consent_fanout.sql`을 같은 파일 안에서 보강함(별도 PR — 브랜치 `fix/marketing-consent-fanout-deactivated-exclusion`, 머지 전). 실행할 SQL 파일 경로는 여전히 같은 `fix_marketing_consent_fanout.sql` 하나뿐 — 이 PR이 먼저 머지된 뒤 그 최신 버전을 실행해야 한다. |
 | 근거 | 통합테스트는 "배포된" Edge Function과 "적용된" SQL 함수를 호출한다(`functions.invoke`/`rpc`는 로컬 소스를 실행하지 않음) — 적용 전에는 새 단언이 실패하는 것이 정상이며, 그 실패가 곧 운영에 문제가 남아있다는 증거다. 소스 자체가 의도한 조건을 갖고 있는지는 `tests/unit/privacyReleaseBlockers.staticCheck.test.ts`가 지킨다. |
 | 근거 파일 | `fix_marketing_consent_fanout.sql`(신규), `supabase/functions/delete-account/index.ts`, `tests/unit/privacyReleaseBlockers.staticCheck.test.ts`(신규), `tests/integration/account-deletion-anonymization.test.ts`, `tests/integration/marketing-consent.test.ts` |
 

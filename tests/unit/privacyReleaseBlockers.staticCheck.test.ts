@@ -115,6 +115,22 @@ describe("fix_marketing_consent_fanout.sql — 광고성 팬아웃 수신 동의
     }
   });
 
+  it("광고성 규칙(birthday / expired_rebuy)은 탈퇴 계정도 제외한다 (최종 안전 보완 — delete-account가 marketing_consent를 false로 바꾸지 않으므로 이 조건이 없으면 탈퇴 후에도 광고가 나갈 수 있음)", () => {
+    for (const t of ["birthday", "expired_rebuy"]) {
+      const branch = ruleBranch(t);
+      expect(branch, `${t} 분기에 탈퇴 계정 제외 조건이 없습니다`).toMatch(/a\.deactivated_at is null/);
+    }
+    // evaluate_notification_rules() 함수 본문(주석/검증 쿼리 제외)에서 정확히 2회(두
+    // 광고성 분기에만)여야 한다 — 필수 알림 분기에 실수로 번지지 않았는지, 혹은
+    // 중복 삽입되지 않았는지 확인. (주석/맨 아래 검증 SELECT 문에도 같은 문자열이
+    // 나와서 파일 전체를 세면 안 됨 — fnStart/fnEnd로 함수 본문만 잘라서 센다.)
+    const fnStart = fanoutSql.indexOf("create or replace function evaluate_notification_rules");
+    const fnEnd = fanoutSql.indexOf("comment on function evaluate_notification_rules");
+    const fnBody = fanoutSql.slice(fnStart, fnEnd);
+    const count = (fnBody.match(/a\.deactivated_at is null/g) ?? []).length;
+    expect(count).toBe(2);
+  });
+
   it("필수 운영 알림(count_low / membership_expiring / pause_ending)은 동의 게이트가 없다 (회귀)", () => {
     for (const t of ["count_low", "membership_expiring", "pause_ending"]) {
       const branch = ruleBranch(t);

@@ -30,6 +30,18 @@
 --   2) evaluate_notification_rules(): 'birthday'와 'expired_rebuy' 분기에만
 --      `join accounts a on a.id = pr.account_id and a.marketing_consent is true` 추가.
 --
+-- ⚠ 최종 안전 보완(운영 적용 직전 재검증, 같은 날): delete-account Edge Function은
+-- 탈퇴 시 accounts.marketing_consent를 false로 바꾸지 않는다(익명화 대상이 아니라서
+-- 의도적으로 안 건드림 — 동의 이력 자체는 개인속성이 아니라 보존해도 무방하다고 판단한
+-- 부분). 즉 탈퇴 전 마케팅 수신에 동의했던 계정은 탈퇴 후에도 marketing_consent가
+-- true로 남는다. create_marketing_message_safe()는 `deactivated_at is null`을 이미
+-- 같이 확인해 안전하지만, evaluate_notification_rules()의 광고성 두 분기
+-- (birthday/expired_rebuy)는 `a.marketing_consent is true`만 있고 탈퇴 계정 제외
+-- 조건이 없어서, 탈퇴 후에도 marketing_consent가 true로 남은 계정에는 계속 광고성
+-- 알림톡이 나갈 수 있었다. 두 분기 모두에 `and a.deactivated_at is null`을 추가해
+-- 마케팅 수신 동의 여부와 무관하게 탈퇴 계정을 모든 광고성 자동 fanout 대상에서
+-- 무조건 제외한다.
+--
 -- 필수(운영) 알림은 의도적으로 건드리지 않는다 — 수신 동의와 무관하게 지금까지와
 -- 똑같이 모든 회원에게 나가야 한다:
 --   - evaluate_notification_rules()의 count_low / membership_expiring / pause_ending
@@ -114,9 +126,9 @@ revoke all on function create_marketing_message_safe(text, text, text) from anon
 grant execute on function create_marketing_message_safe(text, text, text) to authenticated;
 
 -- ------------------------------------------------------------
--- 2) 알림톡 자동 발송 규칙 — 광고성 2종(birthday / expired_rebuy)만 동의 게이트 추가
---    나머지 3종(count_low / membership_expiring / pause_ending)은 필수 운영 알림이라
---    기존 쿼리 그대로(동의 여부와 무관하게 전원 대상).
+-- 2) 알림톡 자동 발송 규칙 — 광고성 2종(birthday / expired_rebuy)만 동의 게이트 +
+--    탈퇴 계정 제외 추가. 나머지 3종(count_low / membership_expiring / pause_ending)은
+--    필수 운영 알림이라 기존 쿼리 그대로(동의 여부와 무관하게 전원 대상).
 -- ------------------------------------------------------------
 create or replace function evaluate_notification_rules()
 returns integer
@@ -194,7 +206,7 @@ begin
                 v_count := v_count + 1;
             end loop;
 
-        -- [광고성] 만료 후 재구매 유도 — 마케팅 수신 동의자만
+        -- [광고성] 만료 후 재구매 유도 — 마케팅 수신 동의자 + 탈퇴하지 않은 계정만
         elsif rule.trigger_type = 'expired_rebuy' and rule.days_before is not null then
             for target in
                 select m.id as membership_id, m.profile_id,
@@ -207,6 +219,7 @@ begin
                    and m.center_id = rule.center_id
                    and m.expires_at = current_date - rule.days_before
                    and a.marketing_consent is true
+                   and a.deactivated_at is null
             loop
                 continue when exists (
                     select 1 from messages
@@ -246,7 +259,7 @@ begin
                 v_count := v_count + 1;
             end loop;
 
-        -- [광고성] 생일 축하·혜택 — 마케팅 수신 동의자만
+        -- [광고성] 생일 축하·혜택 — 마케팅 수신 동의자 + 탈퇴하지 않은 계정만
         elsif rule.trigger_type = 'birthday' then
             for target in
                 select distinct pr.id as profile_id, pr.name as member_name
@@ -256,6 +269,7 @@ begin
                  where m.center_id = rule.center_id
                    and pr.birth_date is not null
                    and a.marketing_consent is true
+                   and a.deactivated_at is null
                    and extract(month from pr.birth_date) = extract(month from (now() at time zone 'Asia/Seoul'))
                    and extract(day from pr.birth_date) = extract(day from (now() at time zone 'Asia/Seoul'))
             loop
@@ -278,15 +292,15 @@ $$;
 
 comment on function evaluate_notification_rules() is
     '활성 알림톡 자동 발송 규칙을 평가해 대상 회원에게 messages 큐 행을 만든다(템플릿 코드 포함). '
-    '광고성 규칙(birthday/expired_rebuy)은 accounts.marketing_consent = true인 회원만 대상으로 하고, '
-    '필수 운영 알림(count_low/membership_expiring/pause_ending)은 동의 여부와 무관하게 전원 대상. '
-    '실제 발송은 dispatch-alimtalk cron이 담당';
+    '광고성 규칙(birthday/expired_rebuy)은 accounts.marketing_consent = true이고 deactivated_at이 '
+    'null인(탈퇴하지 않은) 회원만 대상으로 하고, 필수 운영 알림(count_low/membership_expiring/'
+    'pause_ending)은 동의·탈퇴 여부와 무관하게 전원 대상. 실제 발송은 dispatch-alimtalk cron이 담당';
 
 -- ============================================================
 -- 확인
 -- ============================================================
 
--- (1) 두 함수 정의에 동의 조건이 실제로 반영됐는지 — 아래 두 행 모두 true여야 한다.
+-- (1) 두 함수 정의에 동의 조건이 실제로 반영됐는지 — 아래 세 행 모두 true여야 한다.
 select
     prosrc like '%marketing_consent is true%' as marketing_message_consent_gate
 from pg_proc where proname = 'create_marketing_message_safe';
@@ -294,6 +308,13 @@ from pg_proc where proname = 'create_marketing_message_safe';
 select
     (length(prosrc) - length(replace(prosrc, 'a.marketing_consent is true', ''))) / length('a.marketing_consent is true') = 2
         as rule_consent_gate_count_is_2
+from pg_proc where proname = 'evaluate_notification_rules';
+
+-- (1-b) 최종 안전 보완 — 광고성 두 분기(birthday/expired_rebuy) 모두에
+--       탈퇴 계정 제외 조건이 정확히 들어갔는지. true여야 한다.
+select
+    (length(prosrc) - length(replace(prosrc, 'a.deactivated_at is null', ''))) / length('a.deactivated_at is null') = 2
+        as rule_deactivated_exclusion_count_is_2
 from pg_proc where proname = 'evaluate_notification_rules';
 
 -- (2) 실제 발송 대상 수 확인 — 적용 전후로 이 값이 "전체 회원 수"에서
