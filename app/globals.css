@@ -2936,6 +2936,9 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .swipe-row-content {
   position: relative; background: var(--bg); touch-action: pan-y; will-change: transform;
+  /* 안정화 배치(2026-09-22) — Pointer Events로 mouse/pen drag도 지원하면서, 드래그 중
+     텍스트가 선택되거나(mouse) 브라우저 기본 드래그 고스트 이미지가 뜨는 것을 막는다. */
+  -webkit-user-select: none; user-select: none;
 }
 .swipe-action-btn {
   flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
