@@ -148,6 +148,48 @@
 [data-theme="charcoal"] textarea::placeholder { color: var(--text-dim); }
 [data-theme="charcoal"] .rte-area { background: var(--surface); color: var(--text); }
 
+/* 안정화 배치(2026-09-22) — 공용 체크박스 디자인. 스태프 권한 화면(.perm-item) 등에서
+   OS/브라우저 기본 checkbox가 그대로 노출돼 흰 네모로 보이던 문제(appearance 리셋이
+   전혀 없었음, accent-color만 일부 화면에 있었음). 실제 <input type="checkbox">는 그대로
+   두고(새 컴포넌트로 감싸지 않음 — label click/name-value/폼 제출/접근성이 공짜로 유지됨)
+   appearance:none으로 OS chrome만 걷어내 브랜드 토큰으로 다시 그린다. 위 다크모드
+   `input` 배경 재정의보다 아래(=소스 순서상 나중)에 둬서 동일 특정도에서 이 규칙이
+   이긴다 — .perm-item input[type="checkbox"] 같은 화면별 크기 override는 선택자
+   특정도가 더 높아 이 아래에서도 정상적으로 계속 이긴다(크기만 재정의, 모양은 공유).
+   체크 표시는 인라인 SVG data URI 배경 이미지 — currentColor를 못 쓰는 방식이라 흰색을
+   고정하고, 배경(--accent)과의 대비는 light/dark 두 --accent 값 모두 확인함. */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  border: 1.5px solid var(--line-strong);
+  background-color: var(--card-bg);
+  background-image: none;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 68%;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 80ms ease;
+}
+input[type="checkbox"]:hover:not(:disabled) { border-color: var(--accent); }
+input[type="checkbox"]:active:not(:disabled) { transform: scale(0.92); }
+input[type="checkbox"]:checked {
+  border-color: var(--accent);
+  background-color: var(--accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E");
+}
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
@@ -3726,7 +3768,7 @@ a.membership-card { text-decoration: none; display: block; }
 .room-card-list { display:grid; gap:12px; padding:14px var(--page-gutter) 120px; }
 .room-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--card-bg); box-shadow:0 8px 24px rgba(16,24,40,.035); }
 .room-card-main { min-width:0; display:grid; gap:5px; padding:0; border:0; background:transparent; text-align:left; }
-.room-card-name { font-size:17px; font-weight:780; }
+.room-card-name { color:var(--ink); font-size:17px; font-weight:780; }
 .room-card-memo,.room-card-address { color:var(--ink-soft); font-size:13px; line-height:1.45; }
 .room-card-actions { align-self:start; }
 .room-edit-sheet .map-location-btn { width:100%; margin-top:10px; }
@@ -4583,6 +4625,13 @@ button,
 input,
 select,
 textarea { font: inherit; }
+/* 안정화 배치(2026-09-22) — 위 리셋이 font만 상속시키고 color는 그대로 둬서, 배경이
+   투명한 <button>(예: .room-card-main) 안의 텍스트가 브랜드 텍스트 색 대신 브라우저/
+   WebView 기본 버튼 텍스트 색(플랫폼별로 채도 낮은 회색인 경우가 많음)을 그대로 써
+   카드 배경과 대비가 낮아지는 문제(룸 관리 카드 제목이 "거의 안 보임" 등)의 근본
+   원인이었다. color도 함께 상속시켜 명시적으로 색을 지정한 버튼은 그대로, 지정 안 한
+   버튼은 부모 색을 정상적으로 물려받게 한다. */
+button { color: inherit; }
 /* Body copy may break anywhere as a last-resort overflow guard, but controls
    must keep Korean words intact and grow vertically instead of leaking out of
    a fixed-size button. This contract also covers link-styled buttons. */
