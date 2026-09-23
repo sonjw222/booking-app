@@ -1,5 +1,57 @@
 # CHANGELOG
 
+## 2026-09-23 — 안정화 배치: Google 로그인 조사 + 태블릿/웹 UX 10건 + 홈 카테고리 grid
+
+Play Store 내부 테스트(versionCode 2)에서 Google 로그인만 실패하는 문제와, Android
+tablet landscape 기준 UX 문제 10건을 조사·수정했다. 이후 추가 요청으로 홈 "종목
+둘러보기" 반응형 레이아웃과 Google 로그인 심화 추적(versionCode 4, 여전히 실패)도
+같은 배치로 처리했다. 서로 성격이 다른 항목이 많아 **4개 이상의 별도 브랜치**로
+나눠 커밋했다(하나의 거대한 PR로 묶지 않음).
+
+- **Google 로그인 (`fix/google-login-android-release-investigation`, 코드 변경 없음)**:
+  코드는 이미 올바른 아키텍처(`androidx.credentials` Credential Manager, WebView OAuth
+  리다이렉트 사용 안 함). 근본 원인은 Play App Signing 인증서 SHA-1이 Google Cloud
+  Console Android OAuth 클라이언트에 등록돼 있지 않았던 것(`android/app/
+  google-services.json`의 `oauth_client` 배열이 최초 확인 시 0개였음, 이후 사용자가
+  등록·재다운로드해 3개로 확인됨). 방어 처리(`app/login/page.tsx`)는 이미 실패 시
+  토스트로 안내하고 `socialLoading`을 리셋하고 있어 추가 코드 변경 불필요.
+  **심화 추적(2차)**: SHA-1 재등록 + Web Client ID 정정(Vercel env) + 새 AAB(versionCode
+  4) 이후에도 여전히 실패 — 실제 배포된 프로덕션 번들을 직접 fetch해 확인한 결과 이
+  앱은 `capacitor.config.ts`의 `server.url` 모드라 Android AAB 자체에는
+  `NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID`가 전혀 포함되지 않고, WebView가 매번 로드하는
+  `mwhabit.com`의 실시간 JS 번들에만 존재한다 — 즉 "새 AAB를 만들었다"는 이 값에
+  영향이 없다. 라이브 fetch로 현재 배포본이 올바른 Web Client ID(544111273413-...)를
+  이미 정확히 서빙 중임을 확인했고, 로컬 `google-services.json`(gitignore 대상,
+  git 이력에 없음)도 Play-signing/업로드 키 SHA-1 둘 다 올바르게 등록돼 있음을
+  확인했다. 코드/배포 양쪽 모두 현재 상태로는 결함을 찾지 못함 — 남은 원인은 Google
+  쪽 전파 지연이거나 Console 쪽에서 이 리포로는 볼 수 없는 설정 문제일 가능성이 높음
+  (최종 보고서에 재현 절차 제안 별도 기록).
+- **알림 swipe UX (`fix/notification-swipe-ux`)**: 기존 `SwipeRow.tsx`(이미 snap-open/
+  close 구현돼 있었음)를 Touch Events → Pointer Events로 교체(touch/pen/mouse 통일),
+  velocity 기반 flick 추가, prefers-reduced-motion 대응. 회원 알림(`app/notifications/
+  page.tsx`)에도 동일 컴포넌트로 삭제 swipe 적용(고정은 회원 화면에 없던 기능이라
+  추가 안 함).
+- **디자인 시스템 (`fix/design-system-checkbox-contrast-spacing`)**: 공용
+  `input[type="checkbox"]` 스타일(appearance:none + 브랜드 토큰, light/dark 전체
+  상태) 도입. 룸 관리 카드 제목 대비 문제 — 근본 원인은 `button`에 `color: inherit`이
+  없어 배경 투명 버튼 안 텍스트가 플랫폼 기본색을 쓴 것(전역 수정, 같은 패턴의 다른
+  화면도 함께 해결됨). 관리자 "플랫폼 구독" 화면 첫 카드가 헤더에 붙어 보이던 spacing
+  문제 수정.
+- **Navigation (`fix/manager-nav-flicker-expandable-drawer`)**: `ManagerNav`
+  초기 로딩 깜빡임("4개→전체") — "회원" 탭만 캐싱하던 쿠키를 오너 여부+보유 권한 키
+  전체로 일반화(`lib/roles.ts`). 768–1359px 터치 확장 rail(기존 hover 전용 CSS에
+  edge-swipe/rail 클릭 경로 추가, `useExpandableNavRail.ts` 신규 훅). nav scroll
+  position을 sessionStorage로 유지. 제스처/클릭 충돌 방지.
+- **홈 "종목 둘러보기" (`fix/home-category-responsive-grid`)**: `slice(0,8)` +
+  별도 두 번째 grid로 인한 빈 공간/테니스 단독 중앙 배치 문제 — 하나의 grid +
+  `grid-auto-rows:0` 기반 2행 클램프로 교체, "전체 종목" 버튼은 실제 overflow가
+  있을 때만 ResizeObserver로 표시.
+
+검증: 각 브랜치에서 `npm run build`(Turbopack, 타입체크) + `npx vitest run tests/unit`
+(468/468) 통과 확인. `npm run lint`는 기존에 설정 파일 부재로 실패하는 상태 그대로
+(CLAUDE.md 6번 규칙, 새로 고치는 작업 범위 아님). SQL 변경 없음.
+
+
 ## 2026-09-20 — Privacy Release Blocker Batch #2: 탈퇴 잔존 개인속성 + 광고 알림 수신동의 미적용
 
 PR #159가 개인정보처리방침 "문구"를 실제 수집 항목에 맞춘 데 이어, 2차 개인정보 실사에서

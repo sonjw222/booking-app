@@ -6,13 +6,17 @@
   - 들어오면 전체 읽음 처리
   - 공지 알림은 눌러서 상세(제목/본문/사진) 확인
   - 재등록 알림은 눌러서 센터로 이동해 바로 결제
+  - 안정화 배치(2026-09-22) — 관리자 알림(app/manager/notifications/page.tsx)에서 쓰던
+    swipe-to-delete를 SwipeRow(공용 컴포넌트)로 그대로 재사용. 회원 알림엔 "고정" 기능이
+    UI에 노출된 적이 없어(제품 기능 아님) 삭제 action만 연결한다.
 */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Loading from "../components/Loading";
 import { ZoomableImage } from "../components/ImageViewer";
 import UiIcon from "../components/UiIcon";
 import EmptyState from "../components/EmptyState";
+import SwipeRow from "../components/SwipeRow";
 import {
   fetchNotifications, markRead, deleteNotification, notificationHref,
   type Notification,
@@ -35,6 +39,8 @@ function dateHeading(iso: string) {
   return formatMonthDayWeekday(y, m, day);
 }
 
+const SWIPE_ACTION_WIDTH = 72; // 관리자 알림(144px, 고정+삭제 2개)의 절반 — 여긴 삭제 1개뿐.
+
 export default function NotificationsPage() {
   const [list, setList] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +48,11 @@ export default function NotificationsPage() {
   const [openAnnounce, setOpenAnnounce] = useState<(Announcement & { centerName: string }) | null>(null);
   const PAGE_SIZE = 20;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  // swipe로 열려 있는 row(한 번에 하나만) — app/manager/notifications/page.tsx와 동일 패턴.
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const busyIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     (async () => {
@@ -54,6 +65,18 @@ export default function NotificationsPage() {
     })();
   }, []);
 
+  // outside tap(리스트 바깥 아무 곳이나 탭) 시 열려 있는 row를 닫는다 — 관리자 알림과 동일.
+  useEffect(() => {
+    if (!openRowId) return;
+    function onPointerDown(e: PointerEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("[data-swipe-row-id]")) return;
+      setOpenRowId(null);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [openRowId]);
+
   function handleClick(n: Notification) {
     // 공지 알림이면 상세 시트 열기
     if (n.kind === "announcement" && n.data?.announcement_id) {
@@ -65,10 +88,25 @@ export default function NotificationsPage() {
     window.location.href = notificationHref(n);
   }
 
-  async function handleDelete(id: string, e: React.MouseEvent) {
-    e.stopPropagation();
-    await deleteNotification(id);
-    setList((prev) => prev.filter((n) => n.id !== id));
+  async function handleDelete(id: string, e?: React.MouseEvent) {
+    e?.stopPropagation();
+    if (busyIds.current.has(id)) return; // 중복 요청 방지(× 버튼과 swipe 둘 다 연결돼 있어 동시 클릭 가능)
+    busyIds.current.add(id);
+    setOpenRowId((v) => (v === id ? null : v));
+    setRemovingId(id);
+    try {
+      await deleteNotification(id);
+      // collapse + opacity 애니메이션이 보이도록 잠깐 기다렸다가 목록에서 실제로 제거
+      // (app/manager/notifications/page.tsx와 동일 패턴).
+      window.setTimeout(() => {
+        setList((prev) => prev.filter((n) => n.id !== id));
+        setRemovingId((v) => (v === id ? null : v));
+        busyIds.current.delete(id);
+      }, 220);
+    } catch {
+      setRemovingId((v) => (v === id ? null : v));
+      busyIds.current.delete(id);
+    }
   }
 
   if (loading) return <Loading />;
@@ -99,18 +137,37 @@ export default function NotificationsPage() {
             <div key={g.heading}>
               <div className="menu-section-label">{g.heading}</div>
               {g.items.map((n) => (
-                <div
-                  key={n.id}
-                  className={`noti-row ${n.read ? "" : "unread"}`}
-                  onClick={() => handleClick(n)}
-                >
-                  <span className="noti-emoji"><UiIcon name={n.kind === "announcement" ? "megaphone" : n.kind.includes("reservation") ? "calendar" : n.kind.includes("class") ? "clock" : "ticket"} size={22} /></span>
-                  <div className="noti-main">
-                    <div className="noti-title">{n.title}</div>
-                    <div className="noti-body">{n.body}</div>
-                    <div className="noti-time">{n.createdAt}</div>
-                  </div>
-                  <button className="noti-del" onClick={(e) => handleDelete(n.id, e)}>×</button>
+                <div key={n.id} className={`noti-row-wrap ${removingId === n.id ? "removing" : ""}`}>
+                  <SwipeRow
+                    id={n.id}
+                    openId={openRowId}
+                    onOpenChange={setOpenRowId}
+                    actionWidth={SWIPE_ACTION_WIDTH}
+                    actions={
+                      <button
+                        type="button"
+                        className="swipe-action-btn delete"
+                        aria-label="삭제"
+                        onClick={() => handleDelete(n.id)}
+                      >
+                        <UiIcon name="close" size={19} />
+                        <span>삭제</span>
+                      </button>
+                    }
+                  >
+                    <div
+                      className={`noti-row ${n.read ? "" : "unread"}`}
+                      onClick={() => handleClick(n)}
+                    >
+                      <span className="noti-emoji"><UiIcon name={n.kind === "announcement" ? "megaphone" : n.kind.includes("reservation") ? "calendar" : n.kind.includes("class") ? "clock" : "ticket"} size={22} /></span>
+                      <div className="noti-main">
+                        <div className="noti-title">{n.title}</div>
+                        <div className="noti-body">{n.body}</div>
+                        <div className="noti-time">{n.createdAt}</div>
+                      </div>
+                      <button className="noti-del" onClick={(e) => handleDelete(n.id, e)}>×</button>
+                    </div>
+                  </SwipeRow>
                 </div>
               ))}
             </div>

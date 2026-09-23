@@ -148,6 +148,48 @@
 [data-theme="charcoal"] textarea::placeholder { color: var(--text-dim); }
 [data-theme="charcoal"] .rte-area { background: var(--surface); color: var(--text); }
 
+/* 안정화 배치(2026-09-22) — 공용 체크박스 디자인. 스태프 권한 화면(.perm-item) 등에서
+   OS/브라우저 기본 checkbox가 그대로 노출돼 흰 네모로 보이던 문제(appearance 리셋이
+   전혀 없었음, accent-color만 일부 화면에 있었음). 실제 <input type="checkbox">는 그대로
+   두고(새 컴포넌트로 감싸지 않음 — label click/name-value/폼 제출/접근성이 공짜로 유지됨)
+   appearance:none으로 OS chrome만 걷어내 브랜드 토큰으로 다시 그린다. 위 다크모드
+   `input` 배경 재정의보다 아래(=소스 순서상 나중)에 둬서 동일 특정도에서 이 규칙이
+   이긴다 — .perm-item input[type="checkbox"] 같은 화면별 크기 override는 선택자
+   특정도가 더 높아 이 아래에서도 정상적으로 계속 이긴다(크기만 재정의, 모양은 공유).
+   체크 표시는 인라인 SVG data URI 배경 이미지 — currentColor를 못 쓰는 방식이라 흰색을
+   고정하고, 배경(--accent)과의 대비는 light/dark 두 --accent 값 모두 확인함. */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  border: 1.5px solid var(--line-strong);
+  background-color: var(--card-bg);
+  background-image: none;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 68%;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 80ms ease;
+}
+input[type="checkbox"]:hover:not(:disabled) { border-color: var(--accent); }
+input[type="checkbox"]:active:not(:disabled) { transform: scale(0.92); }
+input[type="checkbox"]:checked {
+  border-color: var(--accent);
+  background-color: var(--accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E");
+}
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
@@ -248,7 +290,17 @@ a { color: inherit; text-decoration: none; }
 }
 .hero .deco { position: absolute; right: -10px; bottom: -14px; font-size: 88px; opacity: 0.9; transform: rotate(-8deg); }
 
-.cat-grid { padding: 20px 14px 4px; display: grid; grid-template-columns: repeat(5, 1fr); row-gap: 20px; }
+/* 추가 요구사항 배치(2026-09-23) — "종목 둘러보기"를 하나의 grid로 통합하고, 접힌
+   상태에서는 최대 2행까지만 보이게 CSS만으로 자른다(magic pixel height 없이):
+   grid-template-rows로 딱 2개의 auto 행만 만들고, grid-auto-rows:0으로 그 이상
+   행(3행+)은 높이를 0으로 접어버린 뒤 overflow:hidden으로 클리핑한다. 몇 개가
+   2행 안에 들어가는지는 breakpoint별 grid-template-columns(아래, 768px+에서
+   auto-fit)이 이미 결정하므로 항목 수를 하드코딩하지 않는다 — 컨테이너 폭이 넓어
+   9개가 전부 1~2행 안에 들어가면 자동으로 전부 보이고(app/page.tsx의 ResizeObserver가
+   실제로 잘리는 게 있는지 측정해 "전체 종목" 버튼도 필요할 때만 보여줌), 좁으면
+   기존과 동일하게 잘려서 접힌다. .is-expanded면 이 제한을 해제한다. */
+.cat-grid { padding: 20px 14px 4px; display: grid; grid-template-columns: repeat(5, 1fr); row-gap: 20px; grid-template-rows: repeat(2, auto); grid-auto-rows: 0; overflow: hidden; }
+.cat-grid.is-expanded { grid-template-rows: none; grid-auto-rows: auto; overflow: visible; }
 .cat-item { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; position: relative; cursor: pointer; }
 .cat-icon {
   width: 58px; height: 58px; border-radius: 18px; background: var(--surface);
@@ -1505,22 +1557,38 @@ a { color: inherit; text-decoration: none; }
 }
 .pay-total b { color: var(--accent); font-size: 15px; }
 
-/* 헤더 우측 액션 버튼 (+ 등록, 등급 등). side(30px 고정)와 달리 글자 폭 확보 */
+/* 헤더 우측 액션 버튼 (+ 등록, 등급 등). side(30px 고정)와 달리 글자 폭 확보.
+   스토어 스크린샷 QA(2026-09-23) — "회원" 화면의 "+회원"이 LIGHT MODE 흰 배경 위에서
+   매우 옅게 보인다는 실기기 리포트. color: var(--accent)만으로는 이론상 대비(라이트
+   #0A2446 on #FBFBFA)는 충분하지만, background:none인 순수 텍스트라 실제 화면에서는
+   버튼이라는 시각적 무게감 자체가 없어(경계선/배경 없음, 13px) 흐릿하게 느껴진 것으로
+   보인다 — 네이티브 기본 버튼처럼 튀게 만들지 않으면서(테두리 있는 진한 버튼 X),
+   다른 뱃지류(.noti-pin-badge 등)와 동일한 --accent-soft 배경의 옅은 pill로 시각적
+   무게를 준다. 이 클래스는 manager 화면 10곳 이상에서 "+ 추가" 패턴에 재사용되므로
+   전부 함께 개선된다. hover/active/focus-visible/disabled 상태 신규 추가(기존엔
+   전혀 없었음 — 같은 계열의 다른 버튼 클래스는 대부분 갖고 있던 것과 대비됨). */
 .back-header .header-action {
   min-width: 30px;
   height: 30px;
-  padding: 0 6px;
+  padding: 0 10px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 4px;
   white-space: nowrap;
-  background: none;
+  background: var(--accent-soft);
   border: none;
+  border-radius: 999px;
   color: var(--accent);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
+  transition: background 120ms ease, opacity 120ms ease;
 }
+.back-header .header-action:hover { background: color-mix(in srgb, var(--accent-soft) 70%, var(--accent) 30%); }
+.back-header .header-action:active { background: color-mix(in srgb, var(--accent-soft) 50%, var(--accent) 50%); color: var(--text-inverse); }
+.back-header .header-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.back-header .header-action:disabled { opacity: .5; cursor: not-allowed; background: var(--surface); color: var(--ink-soft); }
 
 /* ============================================================
    매니저 - 운영 설정 (/manager/settings)
@@ -2346,7 +2414,16 @@ a.membership-card { text-decoration: none; display: block; }
 .class-pass-label { font-size: 10.5px; font-weight: 700; color: var(--ink-soft); }
 .center-bottom-bar {
   position: fixed; left: 50%; transform: translateX(-50%);
-  bottom: 84px; width: 100%; max-width: 480px;
+  /* 스토어 스크린샷 QA(2026-09-23) — 원래 이 84px는 하단 nav를 고려하지 않은 순수
+     매직 넘버였다(safe-area-inset-bottom을 전혀 참조하지 않음) — 다른 화면들이 전부
+     쓰는 공용 --floating-nav-clearance(하단 nav의 실제 상단 경계, "67px + safe-area"
+     로 정의됨, app/globals.css :root 참고) 대신 고정값을 써서, safe-area-inset-bottom이
+     16px보다 큰 기기(예: 홈 인디케이터가 있는 iOS, 일부 Android 제스처 내비게이션)에서
+     하단 nav가 위로 올라간 만큼 이 CTA와의 간격이 좁아지거나 겹칠 수 있었다. 다른
+     floating 버튼(app/globals.css의 유사 패턴, "calc(var(--floating-nav-clearance) +
+     10px)")과 동일한 공식으로 맞춘다 — 화면마다 다른 매직 넘버 대신 공용 계약 하나로
+     통일. */
+  bottom: calc(var(--floating-nav-clearance) + 10px); width: 100%; max-width: 480px;
   display: flex; gap: 10px; padding: 0 16px;
   background: transparent; z-index: 40; pointer-events: none;
 }
@@ -2936,6 +3013,9 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .swipe-row-content {
   position: relative; background: var(--bg); touch-action: pan-y; will-change: transform;
+  /* 안정화 배치(2026-09-22) — Pointer Events로 mouse/pen drag도 지원하면서, 드래그 중
+     텍스트가 선택되거나(mouse) 브라우저 기본 드래그 고스트 이미지가 뜨는 것을 막는다. */
+  -webkit-user-select: none; user-select: none;
 }
 .swipe-action-btn {
   flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -3726,7 +3806,7 @@ a.membership-card { text-decoration: none; display: block; }
 .room-card-list { display:grid; gap:12px; padding:14px var(--page-gutter) 120px; }
 .room-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--card-bg); box-shadow:0 8px 24px rgba(16,24,40,.035); }
 .room-card-main { min-width:0; display:grid; gap:5px; padding:0; border:0; background:transparent; text-align:left; }
-.room-card-name { font-size:17px; font-weight:780; }
+.room-card-name { color:var(--ink); font-size:17px; font-weight:780; }
 .room-card-memo,.room-card-address { color:var(--ink-soft); font-size:13px; line-height:1.45; }
 .room-card-actions { align-self:start; }
 .room-edit-sheet .map-location-btn { width:100%; margin-top:10px; }
@@ -4153,9 +4233,16 @@ a.membership-card { text-decoration: none; display: block; }
    page.tsx만 쓰는 단독 selector, 다른 화면이 재사용하지 않아 발견이 늦어짐) —
    safe-area 토큰 자체가 한 번도 없었음. .header와 동일한 계약(sticky 고정 +
    max(Npx, var(--safe-top)) + 배경색)을 그대로 적용. */
-.resv-page-head { position: sticky; top: 0; z-index: 15; background: var(--bg); padding: max(32px, var(--safe-top)) var(--page-gutter) 22px; }
+/* 스토어 스크린샷 QA(2026-09-23) — 모바일 첫 뷰포트에서 날짜 선택 UI(페이지 타이틀+
+   단계 표시+달력)가 화면 대부분을 차지해 수업 카드가 안 보이던 문제. 실측(각 요소의
+   padding/line-height 합산): 페이지 타이틀+단계 표시+달력 헤더+요일 행+달력 셀(5~6행)+
+   날짜별 수업 섹션 타이틀만으로 이미 600~710px 안팎을 차지해, 웬만한 휴대폰의 첫
+   뷰포트 전체와 맞먹거나 넘어섰다. 달력 셀(터치 영역, min-height:58px)과 달력 네비
+   버튼(44px, 접근성 최소 터치 크기)은 그대로 두고, 터치 대상이 아닌 여백/타이포만
+   줄인다 — 아래 .booking-steps/.cal-header/.cal-weekday/.daylist-header도 동일 원칙. */
+.resv-page-head { position: sticky; top: 0; z-index: 15; background: var(--bg); padding: max(32px, var(--safe-top)) var(--page-gutter) 12px; }
 .resv-page-head h1 { margin: 0; font-size: 30px; line-height: 1.08; font-weight: 720; letter-spacing: -.035em; }
-.booking-steps { display: flex; align-items: flex-start; padding: 0 var(--page-gutter) 26px; color: var(--ink-soft); }
+.booking-steps { display: flex; align-items: flex-start; padding: 0 var(--page-gutter) 14px; color: var(--ink-soft); }
 .booking-step { min-width: 62px; display: grid; justify-items: center; gap: 7px; font-size: 11px; }
 .booking-step span { width: 27px; height: 27px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--bg); font-size: 11px; font-weight: 700; }
 .booking-step b { font-weight: 560; white-space: nowrap; }
@@ -4165,7 +4252,7 @@ a.membership-card { text-decoration: none; display: block; }
 .booking-steps > i { flex: 1; height: 1px; margin: 13px 3px 0; background: var(--line); }
 
 .member-reservation .center-filter-banner { margin: 0; padding-inline: var(--page-gutter); border-radius: 0; border-left: 0; border-right: 0; }
-.member-reservation .cal-header { padding: 20px var(--page-gutter) 10px; }
+.member-reservation .cal-header { padding: 14px var(--page-gutter) 8px; }
 .cal-toolbar { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .cal-month-control { min-width: 0; display: flex; align-items: center; gap: 2px; }
 .member-reservation .cal-title { min-width: 118px; margin: 0; text-align: center; font-size: 19px; line-height: 1; font-weight: 700; letter-spacing: -.02em; white-space: nowrap; }
@@ -4180,7 +4267,7 @@ a.membership-card { text-decoration: none; display: block; }
 .cal-center-pick b { position: static; flex: 0 0 auto; color: var(--ink-soft); font-size: 14px; font-weight: 500; }
 .member-reservation .cal-grid { padding-inline: var(--page-gutter); }
 .member-reservation .cal-weekdays { border-bottom: 1px solid var(--line); }
-.member-reservation .cal-weekday { padding: 12px 0; font-size: 12px; font-weight: 580; }
+.member-reservation .cal-weekday { padding: 6px 0; font-size: 12px; font-weight: 580; }
 .member-reservation .cal-cell,.member-reservation .cal-cell.selected { min-height: 58px; padding: 8px 0 6px; gap: 4px; background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
 .member-reservation .daynum-wrap { width: 34px; height: 34px; display: grid; place-items: center; border: 0 !important; border-radius: 50%; background: transparent; box-shadow: none !important; }
 .member-reservation .cal-daynum { font-size: 14px; font-weight: 560; }
@@ -4191,8 +4278,12 @@ a.membership-card { text-decoration: none; display: block; }
 .member-reservation .cal-dot.mine { width: 5px; height: 5px; background: var(--brand) !important; }
 .member-reservation .cal-cell.selected .cal-dot { opacity: 0; }
 
-.member-reservation .daylist-header { margin-top: 14px; padding: 30px var(--page-gutter) 16px; border-top: 1px solid var(--line); font-size: 25px; line-height: 1.2; font-weight: 720; letter-spacing: -.035em; }
+.member-reservation .daylist-header { margin-top: 8px; padding: 16px var(--page-gutter) 10px; border-top: 1px solid var(--line); font-size: 19px; line-height: 1.25; font-weight: 720; letter-spacing: -.03em; }
 .member-reservation .profile-picker { padding-inline: var(--page-gutter); border-radius: 0; background: transparent; border-bottom: 1px solid var(--line); }
+/* 4차 재조사(2026-09-24) — 1280px+ split layout에서만 쓰는 전체 폭 구분선. 그 아래
+   1280px+ media query가 grid-area(divider)로 자리를 잡아주기 전까지는(<1280px 포함)
+   빈 div가 레이아웃에 아무 영향도 주면 안 되므로 기본값은 숨김. */
+.resv-split-divider { display: none; }
 .reservation-list-controls { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 10px; margin: 5px var(--page-gutter) 14px; }
 .reservation-list-controls .segmented-tabs { min-width: 0; }
 .availability-filter { min-height: 44px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg); color: var(--ink-soft); font: inherit; font-size: 11px; font-weight: 650; white-space: nowrap; }
@@ -4583,6 +4674,13 @@ button,
 input,
 select,
 textarea { font: inherit; }
+/* 안정화 배치(2026-09-22) — 위 리셋이 font만 상속시키고 color는 그대로 둬서, 배경이
+   투명한 <button>(예: .room-card-main) 안의 텍스트가 브랜드 텍스트 색 대신 브라우저/
+   WebView 기본 버튼 텍스트 색(플랫폼별로 채도 낮은 회색인 경우가 많음)을 그대로 써
+   카드 배경과 대비가 낮아지는 문제(룸 관리 카드 제목이 "거의 안 보임" 등)의 근본
+   원인이었다. color도 함께 상속시켜 명시적으로 색을 지정한 버튼은 그대로, 지정 안 한
+   버튼은 부모 색을 정상적으로 물려받게 한다. */
+button { color: inherit; }
 /* Body copy may break anywhere as a last-resort overflow guard, but controls
    must keep Korean words intact and grow vertically instead of leaking out of
    a fixed-size button. This contract also covers link-styled buttons. */
@@ -5218,6 +5316,59 @@ textarea:focus-visible,
   }
 }
 
+/*
+  안정화 배치(2026-09-22) — 항목 8: 위 블록은 (hover:hover) and (pointer:fine) 조건이 있어
+  마우스 사용자만 hover/focus-within으로 rail을 펼쳐볼 수 있다(터치 전용 태블릿은 hover가
+  성립하지 않아 대상 밖 — 이게 실제로 빠져 있던 부분). 새 CSS 체계를 따로 만들지 않고
+  위와 완전히 동일한 최종 스타일을, 조건 없는(모든 입력 방식) 768–1359 구간에서
+  `.workspace-sidebar[aria-expanded="true"]`일 때만 적용한다 — 이 attribute는
+  useExpandableNavRail.ts가 터치 edge-swipe/rail 클릭으로 열렸을 때만 "true"가 된다
+  (ManagerNav/AdminNav 참고, 접근성용 aria-expanded를 CSS 훅으로 그대로 재사용 — 새 class를
+  추가하면 responsiveLayout.contract.test.ts가 검사하는 className 리터럴이 깨져서 class
+  대신 attribute selector를 썼다). .member-desktop-nav(회원용)는 이번 배치 범위 밖이라
+  포함하지 않는다.
+*/
+@media (min-width: 768px) and (max-width: 1359px) {
+  .workspace-sidebar[aria-expanded="true"] {
+    width: 244px;
+    padding-inline: 16px;
+    box-shadow: 14px 0 36px color-mix(in srgb,var(--ink) 13%,transparent);
+  }
+  .workspace-sidebar[aria-expanded="true"] .desktop-brand {
+    justify-content: flex-start;
+    padding-inline: 9px;
+  }
+  .workspace-sidebar[aria-expanded="true"] .desktop-nav-item,
+  .workspace-sidebar[aria-expanded="true"] .workspace-sidebar-mode {
+    justify-content: flex-start;
+  }
+  .workspace-sidebar[aria-expanded="true"] .desktop-brand > span:last-child,
+  .workspace-sidebar[aria-expanded="true"] .desktop-nav-item > span:not(.desktop-nav-badge),
+  .workspace-sidebar[aria-expanded="true"] .workspace-sidebar-mode > span {
+    max-width: 180px;
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0s,70ms,0s;
+  }
+  .workspace-sidebar[aria-expanded="true"] .desktop-nav-section {
+    max-height: 32px;
+    margin: 18px 12px 5px;
+    opacity: 1;
+    visibility: visible;
+    color: var(--ink-soft);
+    font-size: 10.5px;
+    font-weight: 750;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    transition-delay: 0s,0s,0s,70ms,0s;
+  }
+  .workspace-sidebar[aria-expanded="true"] .desktop-nav-badge {
+    position: static;
+    margin-left: auto;
+    border: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .member-desktop-nav,
   .workspace-sidebar,
@@ -5268,13 +5419,71 @@ textarea:focus-visible,
   .manager-classes-v2 .manager-agenda-panel > .menu-section-label { padding: 8px 0 12px; font-size: 13px; }
   .manager-classes-v2 .manager-agenda-panel .daylist { max-height: calc(100dvh - 285px); overflow-y: auto; }
   .manager-classes-v2 .fab-btn { left: auto; right: max(34px,calc((100vw - var(--workspace-sidebar) - var(--workspace-content-max))/2 + 34px)); transform: none; }
-  .member-reservation { display: grid; grid-template-columns: minmax(430px,.9fr) minmax(460px,1.1fr); align-content: start; }
-  .member-reservation > .resv-page-head,.member-reservation > .booking-steps,.member-reservation > .center-filter-banner { grid-column: 1 / -1; }
-  .member-reservation > .cal-header,.member-reservation > .cal-grid { grid-column: 1; }
-  .member-reservation > .daylist-header,.member-reservation > .profile-picker,
-  .member-reservation > .reservation-list-controls,.member-reservation > .holiday-notice,.member-reservation > .daylist { grid-column: 2; }
-  .member-reservation > .daylist-header { margin-top: 0; border-top: 0; }
-  .member-reservation > .daylist { max-height: calc(100dvh - 300px); overflow-y: auto; }
+  /* 재조사(2026-09-24, 2차) — 1차 수정(.member-reservation 자체를 grid로 두고
+     .resv-cal-col/.resv-list-col을 그 grid item으로 배치)은 Preview 실기기에서
+     실패가 확인됐다. .member-reservation 안에는 resv-page-head/booking-steps/
+     (조건부)center-filter-banner처럼 grid-column:1/-1(전체 너비)인 아이템과
+     grid-column:1 또는 2(일반 너비)인 아이템이 같은 auto-placement 커서를 공유하며
+     섞여 있었는데, 이 커서가 "이전에 배치된 아이템의 행"을 기준으로 다음 아이템의
+     행을 찾는 방식이라 항상 두 컬럼이 같은 행에 붙는다고 신뢰할 수 있는 구조가
+     아니었다(스펙상 가능은 해도, 전체너비 아이템과 일반너비 아이템이 뒤섞인 순서
+     의존적 배치라 확정적으로 보장되지 않음). 이번엔 auto-placement 규칙에 기대지
+     않는다 — .resv-split을 .member-reservation과 분리된 독립 grid로 새로 만들고,
+     그 grid의 자식은 .resv-cal-col/.resv-list-col 딱 2개뿐이다(resv-page-head 등
+     앞선 전체너비 요소와 완전히 다른 grid라 서로 전혀 영향을 주지 않음) — 자식이
+     둘뿐이고 grid-column도 지정하지 않으므로 기본 row-flow auto-placement가
+     "첫째→1열, 둘째→2열, 같은 행"으로만 해석될 수 있는 유일한 경우라 모호성이
+     원천적으로 없다. .daylist-header의 margin-top/padding-top/border-top도 전부
+     0으로 리셋(app/globals.css의 .member-reservation .daylist-header가 이미
+     padding-top:16px를 주고 있었는데 1차 수정에서 margin-top/border-top만 지우고
+     padding-top은 놓쳐 16px가 그대로 남아있었음 — 이번에 같이 정리). */
+  /* 재조사(2026-09-24, 4차) — 헤더 텍스트 세로 정렬(3차 수정, diff<1px 확정)은 됐지만
+     실제 Preview에서 "가운데가 끊긴 구분선" 문제가 남아있었다: .cal-weekdays의
+     border-bottom(왼쪽, 헤더 바로 아래)과 .profile-picker의 border-bottom(오른쪽,
+     프로필 칩 밑이라 훨씬 아래)이 서로 다른 높이에서 각자 그어져 하나의 선처럼 안
+     이어져 보였다. .cal-header/.daylist-header를 .resv-split의 직계 자식으로 끌어올려
+     (app/reservation/page.tsx 참고) grid-template-areas로 "헤더 좌우 한 행 + 그 아래
+     전체 폭 구분선 한 줄 + 본문 좌우 한 행"을 이름으로 명시 배치한다 — auto-placement
+     추측 없이 이름으로 고정되므로 앞선 두 차례의 auto-placement 신뢰성 문제와 무관하다. */
+  .resv-split {
+    display: grid;
+    grid-template-columns: minmax(430px,.9fr) minmax(460px,1.1fr);
+    grid-template-areas:
+      "header-left header-right"
+      "divider divider"
+      "cal-col list-col";
+    align-items: start;
+  }
+  .resv-split > .resv-header-left { grid-area: header-left; }
+  .resv-split > .resv-header-right { grid-area: header-right; }
+  .resv-split > .resv-cal-col { grid-area: cal-col; }
+  .resv-split > .resv-list-col { grid-area: list-col; }
+  .resv-cal-col, .resv-list-col { min-width: 0; }
+  /* 재조사(2026-09-24, 3차) — 실제 Next.js 앱(devtest 라우트)에 getBoundingClientRect로
+     측정한 결과 .cal-header/.daylist-header 박스 자체의 top은 이미 완전히 동일했다
+     (grid align-items:start 정상 동작, 1280/1360/1600px 전부 확인) — 남은 차이는
+     "박스 top"이 아니라 "텍스트가 보이는 위치"였다: .cal-header가 padding-top 14px +
+     .cal-toolbar 안의 44px 높이 nav 버튼(.cal-nav-btn, 터치 영역 확보용이라 못 줄임)이
+     .cal-title를 세로 중앙 정렬해서 텍스트 자체는 박스 top보다 실측 26px 아래에서
+     시작한다. .daylist-header는 그런 내부 구조가 없어 박스 top에 텍스트가 바로 붙는다
+     — 그래서 "박스는 맞는데 글자는 26px 어긋남". 달력 nav 버튼을 줄여 없앨 수 없는
+     차이라(접근성 최소 터치 크기), margin-top 음수 보정이 아니라 daylist-header 쪽에
+     동일한 만큼의 padding-top을 더해 "텍스트 baseline"을 맞춘다(실측값 그대로 반영 —
+     추측치 아님). */
+  .resv-header-right.daylist-header { margin-top: 0; padding-top: 26px; border-top: 0; }
+  /* 4차 — 전체 폭을 가로지르는 구분선 하나만 남기고, 각 컬럼 내부에서 개별적으로
+     그려지던 중복 border는 이 split 레이아웃 범위에서만 없앤다(<1280px 단일 컬럼에서는
+     그대로 유지 — 거긴 이 media query 밖이라 아래 두 규칙의 영향을 받지 않음). */
+  .resv-split-divider {
+    display: block;
+    grid-area: divider;
+    height: 1px;
+    margin: 10px 0;
+    background: var(--line);
+  }
+  .resv-cal-col > .cal-weekdays { border-bottom: 0; }
+  .resv-list-col > .profile-picker { border-bottom: 0; }
+  .resv-list-col > .daylist { max-height: calc(100dvh - 300px); overflow-y: auto; }
   .member-home .home-class-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .admin-v3-content .admin-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
 }

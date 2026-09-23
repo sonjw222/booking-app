@@ -6,7 +6,7 @@
   - 카테고리·클래스·센터·하단 네비를 실제 라우트로 연결
 */
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
 import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, type HomeCenter, type HomeClass } from "../lib/home";
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
 import { fetchMyCenters } from "../lib/manager";
@@ -87,10 +87,72 @@ export default function Home() {
       : CATEGORIES),
     [catList]
   );
-  const visibleCategories = useMemo(() => allCategories.slice(0, 8), [allCategories]);
-  // 기본 8개 밖의 나머지 종목 — "전체 종목"을 누르면 검색창으로 보내는 대신 이 목록을
-  // 같은 화면 아래에 펼쳐 보여준다(사용자 요청, 2026-09-02).
-  const remainingCategories = useMemo(() => allCategories.slice(8), [allCategories]);
+  // 추가 요구사항 배치(2026-09-23) — "종목 둘러보기" 반응형 레이아웃. 예전엔
+  // allCategories.slice(0,8)로 항상 딱 8개만 첫 grid에 렌더하고, 나머지(9번째 이상,
+  // 예: 테니스)를 완전히 별개의 두 번째 .cat-grid에 렌더했다. 그 결과: (1) 태블릿/데스크톱
+  // 처럼 8개보다 훨씬 많은 아이콘이 한 줄에 들어갈 수 있는 폭에서도 8개 이상은 절대
+  // 안 보여줘서 오른쪽에 큰 빈 공간이 남았고, (2) "전체 종목"을 펼치면 9번째 항목이 첫
+  // grid의 column 흐름과 무관한 "새 grid 컨테이너에 아이템 1개"가 되어, auto-fit 트랙이
+  // 그 아이템 하나에 1fr 전체 폭을 몰아줘 화면 중앙에 혼자 떠 보였다(각 breakpoint의
+  // .cat-grid { grid-template-columns: repeat(N,1fr) 또는 auto-fit,minmax(...) } 확인).
+  //
+  // 수정: 모든 종목을 하나의 .cat-grid에 순서 그대로 렌더한다(mobile/desktop용 배열을
+  // 따로 관리하지 않음) — tablet/desktop(768px+)은 .cat-grid의 CSS 2행 클램프
+  // (grid-template-rows:repeat(2,auto); grid-auto-rows:0; overflow:hidden)에 그대로
+  // 맡긴다(breakpoint별 컬럼 수가 "2행에 몇 개"를 자연스럽게 결정).
+  //
+  // 추가 QA 배치(2026-09-24) — mobile(<768, 4열)에서는 위 CSS 클램프 방식이 "안 보이게
+  // 자르기만" 해서, 9번째 아이템이 실제로는 DOM에 렌더된 채 3번째(잘린) 행 상단 1px~
+  // 몇 px가 overflow:hidden 경계 바로 위에서 살짝 삐져나와 보이는 문제가 있었다(row-gap
+  // 계산과 서브픽셀 반올림 때문 — 완전히 0이 아님). 모바일은 "안 보이게 자르기"가 아니라
+  // "애초에 렌더 대상 자체를 8개로 제한"하는 방식으로 바꾼다(요구사항 그대로) — 9번째
+  // 이상은 DOM에 존재조차 하지 않아 삐져나올 수가 없다. 768px 이상은 기존 CSS 클램프
+  // 방식을 그대로 유지(그쪽은 "실제로 몇 개가 한 행에 들어가는지"가 컨테이너 폭에 따라
+  // 달라져야 해서 고정 개수로 자르면 안 됨).
+  const MOBILE_COLLAPSED_COUNT = 8;
+  const catGridRef = useRef<HTMLDivElement>(null);
+  // SSR/최초 클라이언트 렌더는 항상 "모바일"로 가정(이 앱 트래픽 대부분이 모바일이고,
+  // 서버는 실제 뷰포트를 모르므로 하이드레이션 불일치를 피하려면 서버·클라이언트 첫
+  // 렌더가 반드시 같아야 한다 — window.innerWidth를 렌더링에 직접 쓰지 않음). 마운트
+  // 직후 useLayoutEffect(페인트 전)가 matchMedia로 실제 값을 반영해, 데스크톱에서도
+  // 화면에 "8개만 있다가 늘어나는" 게 보이지 않는다.
+  const [isMobileViewport, setIsMobileViewport] = useState(true);
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => setIsMobileViewport(!mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  const displayCategories = useMemo(() => {
+    if (showAllCategories) return allCategories;
+    if (isMobileViewport) return allCategories.slice(0, MOBILE_COLLAPSED_COUNT);
+    return allCategories;
+  }, [allCategories, showAllCategories, isMobileViewport]);
+
+  const [collapsedHasOverflow, setCollapsedHasOverflow] = useState(true);
+  useLayoutEffect(() => {
+    // 모바일은 이제 렌더 대상 자체가 최대 8개라 "잘리는 게 있는지" 측정이 필요 없고
+    // (항상 정확히 8개뿐이라 클리핑 자체가 발생하지 않음), 대신 버튼 노출 여부는 전체
+    // 종목 수를 8과 단순 비교해서 정한다(아래 showCategoryToggle).
+    if (showAllCategories || isMobileViewport) return;
+    const el = catGridRef.current;
+    if (!el) return;
+    function measure() {
+      if (!el) return;
+      setCollapsedHasOverflow(el.scrollHeight - el.clientHeight > 4);
+    }
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [showAllCategories, isMobileViewport, allCategories.length]);
+  // mobile: 종목이 MOBILE_COLLAPSED_COUNT개를 넘을 때만 필요(단순 개수 비교 — 요구사항
+  // "8개 이하라면 버튼 불필요, 9개 이상이면 표시"). tablet/desktop: 펼친 상태이거나,
+  // 접힌 상태에서 실제로 잘리는 항목이 있을 때만(ResizeObserver 실측).
+  const showCategoryToggle = showAllCategories || (
+    isMobileViewport ? allCategories.length > MOBILE_COLLAPSED_COUNT : collapsedHasOverflow
+  );
   const visibleClasses = useMemo(() => myUpcoming.length > 0 ? myUpcoming : classes, [classes, myUpcoming]);
 
   useEffect(() => {
@@ -267,14 +329,14 @@ export default function Home() {
         {/* 종목 카테고리 그리드 */}
         <div className="home-category-head">
           <h2>종목 둘러보기</h2>
-          {remainingCategories.length > 0 && (
+          {showCategoryToggle && (
             <button type="button" onClick={() => setShowAllCategories((v) => !v)}>
               {showAllCategories ? "접기" : "전체 종목"}
             </button>
           )}
         </div>
-        <div className="cat-grid">
-          {visibleCategories.map((cat) => (
+        <div className={`cat-grid ${showAllCategories ? "is-expanded" : ""}`} ref={catGridRef}>
+          {displayCategories.map((cat) => (
             <a className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`}>
               <div className="cat-icon">
                 {cat.image ? <img src={cat.image} alt="" /> : <UiIcon name={cat.icon} size={27} />}
@@ -283,18 +345,6 @@ export default function Home() {
             </a>
           ))}
         </div>
-        {showAllCategories && remainingCategories.length > 0 && (
-          <div className="cat-grid">
-            {remainingCategories.map((cat) => (
-              <a className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`}>
-                <div className="cat-icon">
-                  {cat.image ? <img src={cat.image} alt="" /> : <UiIcon name={cat.icon} size={27} />}
-                </div>
-                <div className="cat-label">{cat.label}</div>
-              </a>
-            ))}
-          </div>
-        )}
 
         {/* 비회원(로그인 안 한 상태)에게는 "곧 시작하는 클래스"/"내 수강권으로 예약
             가능"을 아예 숨긴다(2026-09-04, 사용자 결정) — 종목 둘러보기·센터 정보·내 주변

@@ -555,11 +555,37 @@ function ReservationCalendarContent() {
         </div>
       )}
 
-      <div className="cal-header">
+      {/* 재조사(2026-09-24, 2차) — 1차 수정(.resv-cal-col/.resv-list-col을 .member-reservation의
+          직계 grid item으로 그대로 둠)은 실제 렌더에서 실패했다. 이유: .member-reservation
+          자체가 grid이고 resv-page-head/booking-steps/(조건부)center-filter-banner가 전체
+          너비(column:1/-1)로 먼저 auto-placement되는데, 이 "전체 너비 아이템 vs 일반 아이템
+          섞인 auto-placement 커서 동작"이 (스펙상 가능은 하지만) 실제 두 컬럼을 항상 같은
+          행에 붙여준다고 보장할 만큼 견고하지 않았다 — 커서가 어느 아이템 기준으로 전진하는지가
+          "이전에 배치된 아이템"에 의존해 조건부 형제(center-filter-banner)나 다른 요인에
+          따라 결과가 달라질 여지가 있었다(auto-placement 규칙을 재추적해도 100% 확정하기
+          어려움 — 그래서 이번엔 규칙 자체에 기대지 않는 구조로 바꾼다).
+          해결: 달력+수업목록 두 컬럼을 .member-reservation과 별개의 독립된 작은 grid
+          (.resv-split)로 완전히 분리한다 — 이 grid의 자식은 .resv-cal-col/.resv-list-col
+          딱 2개뿐이고 각자 grid-column을 지정하지 않아도 기본 auto-flow가 "첫 아이템→1열,
+          둘째 아이템→2열, 같은 행"으로만 해석될 수 있는 유일한 경우라 auto-placement
+          모호성이 원천적으로 없다(resv-page-head 등 앞선 전체너비 요소와 완전히 분리된
+          별도 grid라 그것들의 배치와 전혀 상호작용하지 않음). 1280px 미만에서는
+          .resv-split도 일반 block(기본값)이라 기존 단일 컬럼 순서 그대로 유지된다.
+
+          재조사(2026-09-24, 4차) — 세로 정렬(위 3차 수정으로 diff<1px 확정)은 됐지만,
+          .cal-weekdays의 border-bottom(왼쪽, 헤더 바로 아래)과 .profile-picker의
+          border-bottom(오른쪽, 훨씬 아래— 프로필 칩 밑)이 서로 다른 높이에서 각자
+          그어져 "가운데가 끊긴 구분선"처럼 보였다. .cal-header/.daylist-header를
+          .resv-split의 직계 자식으로 끌어올려(각 컬럼 안에 있던 걸 밖으로) grid-area
+          기반 명시적 배치("header-left header-right" / "divider divider" /
+          "cal-col list-col")로 왼쪽·오른쪽 헤더 + 그 사이 단 하나의 전체 폭
+          .resv-split-divider를 만든다 — auto-placement 추측 없이 이름으로 고정. */}
+      <div className="resv-split">
+      <div className="cal-header resv-header-left">
         <div className="cal-toolbar">
           <div className="cal-month-control cal-month-nav">
             <button className="cal-nav-btn" onClick={goPrevMonth} aria-label="이전 달">‹</button>
-            <div className="cal-title">{year}.{pad(month)}</div>
+            <div className="cal-title resv-month-title">{year}.{pad(month)}</div>
             <button className="cal-nav-btn" onClick={goNextMonth} aria-label="다음 달">›</button>
           </div>
           <button className="cal-center-pick" onClick={() => setCenterSheet(true)} aria-label={`센터 선택, 현재 ${effectiveCenterName}`}>
@@ -568,6 +594,17 @@ function ReservationCalendarContent() {
         </div>
       </div>
 
+      <div className="daylist-header resv-header-right">
+        <span className="resv-day-title">{pad(month)}.{pad(selectedDay)} 수업</span>
+        {publicHoliday && <span className="pub-badge">{publicHoliday}</span>}
+      </div>
+
+      {/* 1280px+ split에서만 grid-area로 배치되는 전체 폭 구분선 — 아래 CSS
+          (.resv-split-divider) 참고. 1280px 미만에서는 display:none이라 mobile/tablet
+          단일 컬럼 레이아웃에 영향 없음. */}
+      <div className="resv-split-divider" aria-hidden="true" />
+
+      <div className="resv-cal-col">
       <div className="cal-grid cal-weekdays">
         {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => (
           <div key={d} className={`cal-weekday ${i === 0 ? "sun" : ""} ${i === 6 ? "sat" : ""}`}>
@@ -599,12 +636,9 @@ function ReservationCalendarContent() {
           );
         })}
       </div>
-
-      <div className="daylist-header">
-        {pad(month)}.{pad(selectedDay)} 수업
-        {publicHoliday && <span className="pub-badge">{publicHoliday}</span>}
       </div>
 
+      <div className="resv-list-col">
       {/* 예약 주체 선택: 프로필이 2개 이상일 때만 표시 (자녀 대신 예약 등) */}
       {profiles.length > 1 && (
         <div className="profile-picker">
@@ -739,6 +773,8 @@ function ReservationCalendarContent() {
             );
           })
         )}
+      </div>
+      </div>
       </div>
       {/* 예약 확인 모달 */}
       {confirmClass && (
