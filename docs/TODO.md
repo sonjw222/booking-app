@@ -3698,16 +3698,22 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 | 남은 가설(미확정) | (1) Google 쪽 SHA-1/OAuth 클라이언트 등록 전파 지연(공식 문서상 수 분~수 시간 소요 가능) — 등록 후 충분한 시간이 지난 뒤 재테스트 필요. (2) Console에 이 리포에서 볼 수 없는 설정 문제(예: 동일 패키지명의 중복/구버전 Android 앱 엔트리에 fingerprint가 잘못 연결됨) — Firebase 콘솔에서 해당 Android 앱 엔트리가 정확히 하나뿐인지 직접 확인 필요. (3) 테스트 기기의 Google Play services가 이전 "미등록" 판정을 로컬에 캐싱하고 있을 가능성 — 기기에서 Google Play services 앱 데이터/캐시를 지우거나 다른 기기/계정으로 재현 시도 권장. (4) 최근 logcat(`UNREGISTERED_ON_API_CONSOLE`)이 SHA-1 재등록 "이전" 테스트의 기록인지, 재등록 "이후"에도 재현되는지 불명확 — versionCode 4 설치본에서 새로 logcat을 떠서 동일 에러가 재현되는지부터 확인 필요. |
 | 근거 파일 | `lib/googleAuth.ts`, `android/app/src/main/java/com/mwhabit/app/GoogleSignInPlugin.java`, `capacitor.config.ts`, `android/app/google-services.json`(gitignore 대상 — git 이력 없음) |
 
-### P3-Cat-Grid-Gap. (2026-09-23) 홈 종목 그리드 — 항목 수가 열 수의 배수가 아닐 때 하단 여백 1칸 추가
+### P3-Cat-Grid-Gap. (2026-09-23, 2026-09-24 mobile은 해결됨) 홈 종목 그리드 — tablet/desktop에서 항목 수가 열 수의 배수가 아닐 때 하단 여백 1칸 추가
 
 | 필드 | 내용 |
 |---|---|
 | 우선순위 | P3(사소한 시각적 흠, 기능 영향 없음) |
-| 현재 상태 | `app/page.tsx`/`app/globals.css`의 `.cat-grid` 2행 클램프(`grid-auto-rows:0`)가 CSS grid의 row-gap을 "보이는 마지막 행"과 "0-height로 접힌 다음 행" 사이에도 그대로 적용해, 항목 수가 열 수의 배수가 아니면(예: mobile 4열에 9개 → 4+4+1) 접힌 상태 맨 아래에 `row-gap`(약 20px) 만큼의 여백이 더 남는다. |
+| 현재 상태 | **mobile(<768)은 2026-09-24 배치에서 해결됨** — collapsed 상태가 이제 CSS 클램프가 아니라 `displayCategories`로 렌더 대상 자체를 정확히 8개(4열의 배수)로 제한해 이 문제 자체가 발생하지 않는다(`app/page.tsx`). **tablet/desktop(768px+)은 여전히 남아있음** — `.cat-grid` 2행 클램프(`grid-auto-rows:0`)가 CSS grid의 row-gap을 "보이는 마지막 행"과 "0-height로 접힌 다음 행" 사이에도 그대로 적용해, 실제 컨테이너 폭에서 한 행에 들어가는 개수가 전체 종목 수의 배수가 아니면 접힌 상태 맨 아래에 `row-gap`(약 20px) 만큼의 여백이 더 남을 수 있다. |
 | 권장 후속 작업 | 필요하면 breakpoint별 실제 아이템 한 행 높이를 측정해 `overflow:hidden` 컨테이너에 정확한 `max-height`(2행 + gap 1개)를 계산해 적용 — 우선순위가 낮아 이번 배치에서는 보류. |
-| 근거 파일 | `app/globals.css`(`.cat-grid`, `.cat-grid.is-expanded`) |
+| 근거 파일 | `app/globals.css`(`.cat-grid`, `.cat-grid.is-expanded`), `app/page.tsx`(`displayCategories`) |
 
-## 8. 상태 갱신 체크리스트
+### P3-Cat-Personalization. (2026-09-24, 향후 검토) 홈 "종목 둘러보기" 개인화 정렬
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3(향후 기능 후보) |
+| 현재 상태 | 미구현(의도적으로 범위 밖) — 종목 클릭 횟수/검색에서 종목·센터 선택 횟수/최근 사용 등을 기반으로 사용자별 "종목 둘러보기" 순서를 바꾸는 personalization은 이번 배치(2026-09-24)에서 명시적으로 제외됐다. DB 컬럼 추가나 localStorage 기반 구현 둘 다 하지 않았고, 기본 종목 순서(`catList`/`CATEGORIES` 원래 순서)를 그대로 유지한다. |
+| 근거 파일 | `app/page.tsx`(`allCategories`) |
 
 항목을 완료로 바꾸기 전에 다음을 확인합니다.
 

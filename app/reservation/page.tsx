@@ -555,6 +555,21 @@ function ReservationCalendarContent() {
         </div>
       )}
 
+      {/* 안정화 배치 추가 QA(2026-09-24) — .resv-cal-col/.resv-list-col: 1280px+ split
+          layout에서 오른쪽 컬럼(.daylist-header 등)이 왼쪽 달력과 시작선이 안 맞고
+          중앙쯤에서 시작하던 문제의 수정. 원인은 CSS Grid 암묵적 배치(auto-placement) —
+          .cal-header/.cal-grid(weekdays)/.cal-grid(cells)가 전부 개별적으로 grid-column만
+          지정돼 있고 grid-row는 지정 안 해서, 자동 배치 커서가 DOM 순서대로 하나씩
+          전진하며 각각 별도 행을 차지했다(cal-header→행N, weekdays→행N+1, cells→행N+2).
+          그 뒤에 오는 .daylist-header(grid-column:2)는 그 시점의 커서 위치(행N+2, 즉
+          달력 "셀" 행)부터 빈 열을 찾아 배치돼, 결과적으로 달력 헤더+요일행 높이만큼
+          아래(대략 중간 지점)에서 시작하는 것처럼 보였다. 달력 관련 요소 전체를 컬럼
+          래퍼 하나로 묶으면 grid item이 "왼쪽 1개 vs 오른쪽 1개"로 단순해져 자동 배치가
+          항상 같은 행에 나란히 놓는다(둘 다 각자 컬럼만 요구하는 유일한 아이템이라
+          커서가 전진할 이유가 없음) — 하드코딩된 행 번호 없이 항상 정확히 맞는다.
+          1280px 미만에서는 이 div들에 별도 스타일이 없어 완전히 투명(mobile/tablet
+          단일 컬럼 레이아웃에 영향 없음). */}
+      <div className="resv-cal-col">
       <div className="cal-header">
         <div className="cal-toolbar">
           <div className="cal-month-control cal-month-nav">
@@ -599,7 +614,9 @@ function ReservationCalendarContent() {
           );
         })}
       </div>
+      </div>
 
+      <div className="resv-list-col">
       <div className="daylist-header">
         {pad(month)}.{pad(selectedDay)} 수업
         {publicHoliday && <span className="pub-badge">{publicHoliday}</span>}
@@ -739,6 +756,7 @@ function ReservationCalendarContent() {
             );
           })
         )}
+      </div>
       </div>
       {/* 예약 확인 모달 */}
       {confirmClass && (

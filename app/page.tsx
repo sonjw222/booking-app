@@ -97,21 +97,45 @@ export default function Home() {
   // .cat-grid { grid-template-columns: repeat(N,1fr) 또는 auto-fit,minmax(...) } 확인).
   //
   // 수정: 모든 종목을 하나의 .cat-grid에 순서 그대로 렌더한다(mobile/desktop용 배열을
-  // 따로 관리하지 않음). "몇 개가 보이는지"는 이제 JS 카운트가 아니라 순수 CSS로 정한다
-  // — .cat-grid는 기본적으로 grid-template-rows: repeat(2,auto); grid-auto-rows: 0;
-  // overflow: hidden;으로 "최대 2행"까지만 보이게 자르고(2행에 몇 개가 들어가는지는
-  // breakpoint별 컬럼 수가 이미 자연스럽게 결정 — mobile 4열이면 8개, tablet auto-fit이면
-  // 실제 컨테이너 폭만큼), 펼치면(.is-expanded) 이 제한을 해제한다. 그 결과 태블릿/
-  // 데스크톱에서 폭이 충분해 9개가 이미 2행 안에(대개 1행에) 다 들어가면 전혀 잘리지
-  // 않고, 아래 ResizeObserver가 "잘린 게 있는지"를 실제로 측정해 있을 때만 버튼을
-  // 보여준다 — window.innerWidth 분기 없이 실제 렌더된 높이로 판단하므로 줌/폰트 크기
-  // 변화에도 정확하고, hydration 불일치도 없다(초기값은 "있을 수 있다"고 가정해 버튼을
-  // 보여주고, 마운트 직후 useLayoutEffect가 페인트 전에 실제 값으로 보정 — 아이콘 자체의
-  // 개수/위치는 이 과정에서 전혀 바뀌지 않아 flicker 없음).
+  // 따로 관리하지 않음) — tablet/desktop(768px+)은 .cat-grid의 CSS 2행 클램프
+  // (grid-template-rows:repeat(2,auto); grid-auto-rows:0; overflow:hidden)에 그대로
+  // 맡긴다(breakpoint별 컬럼 수가 "2행에 몇 개"를 자연스럽게 결정).
+  //
+  // 추가 QA 배치(2026-09-24) — mobile(<768, 4열)에서는 위 CSS 클램프 방식이 "안 보이게
+  // 자르기만" 해서, 9번째 아이템이 실제로는 DOM에 렌더된 채 3번째(잘린) 행 상단 1px~
+  // 몇 px가 overflow:hidden 경계 바로 위에서 살짝 삐져나와 보이는 문제가 있었다(row-gap
+  // 계산과 서브픽셀 반올림 때문 — 완전히 0이 아님). 모바일은 "안 보이게 자르기"가 아니라
+  // "애초에 렌더 대상 자체를 8개로 제한"하는 방식으로 바꾼다(요구사항 그대로) — 9번째
+  // 이상은 DOM에 존재조차 하지 않아 삐져나올 수가 없다. 768px 이상은 기존 CSS 클램프
+  // 방식을 그대로 유지(그쪽은 "실제로 몇 개가 한 행에 들어가는지"가 컨테이너 폭에 따라
+  // 달라져야 해서 고정 개수로 자르면 안 됨).
+  const MOBILE_COLLAPSED_COUNT = 8;
   const catGridRef = useRef<HTMLDivElement>(null);
+  // SSR/최초 클라이언트 렌더는 항상 "모바일"로 가정(이 앱 트래픽 대부분이 모바일이고,
+  // 서버는 실제 뷰포트를 모르므로 하이드레이션 불일치를 피하려면 서버·클라이언트 첫
+  // 렌더가 반드시 같아야 한다 — window.innerWidth를 렌더링에 직접 쓰지 않음). 마운트
+  // 직후 useLayoutEffect(페인트 전)가 matchMedia로 실제 값을 반영해, 데스크톱에서도
+  // 화면에 "8개만 있다가 늘어나는" 게 보이지 않는다.
+  const [isMobileViewport, setIsMobileViewport] = useState(true);
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => setIsMobileViewport(!mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  const displayCategories = useMemo(() => {
+    if (showAllCategories) return allCategories;
+    if (isMobileViewport) return allCategories.slice(0, MOBILE_COLLAPSED_COUNT);
+    return allCategories;
+  }, [allCategories, showAllCategories, isMobileViewport]);
+
   const [collapsedHasOverflow, setCollapsedHasOverflow] = useState(true);
   useLayoutEffect(() => {
-    if (showAllCategories) return; // 펼친 상태에선 "접혔을 때 잘리는지"를 측정할 대상이 없음
+    // 모바일은 이제 렌더 대상 자체가 최대 8개라 "잘리는 게 있는지" 측정이 필요 없고
+    // (항상 정확히 8개뿐이라 클리핑 자체가 발생하지 않음), 대신 버튼 노출 여부는 전체
+    // 종목 수를 8과 단순 비교해서 정한다(아래 showCategoryToggle).
+    if (showAllCategories || isMobileViewport) return;
     const el = catGridRef.current;
     if (!el) return;
     function measure() {
@@ -122,9 +146,13 @@ export default function Home() {
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [showAllCategories, allCategories.length]);
-  // 펼쳐진 상태(접기 버튼 필요)거나, 접힌 상태에서 실제로 잘리는 항목이 있을 때만 버튼 노출.
-  const showCategoryToggle = showAllCategories || collapsedHasOverflow;
+  }, [showAllCategories, isMobileViewport, allCategories.length]);
+  // mobile: 종목이 MOBILE_COLLAPSED_COUNT개를 넘을 때만 필요(단순 개수 비교 — 요구사항
+  // "8개 이하라면 버튼 불필요, 9개 이상이면 표시"). tablet/desktop: 펼친 상태이거나,
+  // 접힌 상태에서 실제로 잘리는 항목이 있을 때만(ResizeObserver 실측).
+  const showCategoryToggle = showAllCategories || (
+    isMobileViewport ? allCategories.length > MOBILE_COLLAPSED_COUNT : collapsedHasOverflow
+  );
   const visibleClasses = useMemo(() => myUpcoming.length > 0 ? myUpcoming : classes, [classes, myUpcoming]);
 
   useEffect(() => {
@@ -308,7 +336,7 @@ export default function Home() {
           )}
         </div>
         <div className={`cat-grid ${showAllCategories ? "is-expanded" : ""}`} ref={catGridRef}>
-          {allCategories.map((cat) => (
+          {displayCategories.map((cat) => (
             <a className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`}>
               <div className="cat-icon">
                 {cat.image ? <img src={cat.image} alt="" /> : <UiIcon name={cat.icon} size={27} />}
