@@ -555,20 +555,23 @@ function ReservationCalendarContent() {
         </div>
       )}
 
-      {/* 안정화 배치 추가 QA(2026-09-24) — .resv-cal-col/.resv-list-col: 1280px+ split
-          layout에서 오른쪽 컬럼(.daylist-header 등)이 왼쪽 달력과 시작선이 안 맞고
-          중앙쯤에서 시작하던 문제의 수정. 원인은 CSS Grid 암묵적 배치(auto-placement) —
-          .cal-header/.cal-grid(weekdays)/.cal-grid(cells)가 전부 개별적으로 grid-column만
-          지정돼 있고 grid-row는 지정 안 해서, 자동 배치 커서가 DOM 순서대로 하나씩
-          전진하며 각각 별도 행을 차지했다(cal-header→행N, weekdays→행N+1, cells→행N+2).
-          그 뒤에 오는 .daylist-header(grid-column:2)는 그 시점의 커서 위치(행N+2, 즉
-          달력 "셀" 행)부터 빈 열을 찾아 배치돼, 결과적으로 달력 헤더+요일행 높이만큼
-          아래(대략 중간 지점)에서 시작하는 것처럼 보였다. 달력 관련 요소 전체를 컬럼
-          래퍼 하나로 묶으면 grid item이 "왼쪽 1개 vs 오른쪽 1개"로 단순해져 자동 배치가
-          항상 같은 행에 나란히 놓는다(둘 다 각자 컬럼만 요구하는 유일한 아이템이라
-          커서가 전진할 이유가 없음) — 하드코딩된 행 번호 없이 항상 정확히 맞는다.
-          1280px 미만에서는 이 div들에 별도 스타일이 없어 완전히 투명(mobile/tablet
-          단일 컬럼 레이아웃에 영향 없음). */}
+      {/* 재조사(2026-09-24, 2차) — 1차 수정(.resv-cal-col/.resv-list-col을 .member-reservation의
+          직계 grid item으로 그대로 둠)은 실제 렌더에서 실패했다. 이유: .member-reservation
+          자체가 grid이고 resv-page-head/booking-steps/(조건부)center-filter-banner가 전체
+          너비(column:1/-1)로 먼저 auto-placement되는데, 이 "전체 너비 아이템 vs 일반 아이템
+          섞인 auto-placement 커서 동작"이 (스펙상 가능은 하지만) 실제 두 컬럼을 항상 같은
+          행에 붙여준다고 보장할 만큼 견고하지 않았다 — 커서가 어느 아이템 기준으로 전진하는지가
+          "이전에 배치된 아이템"에 의존해 조건부 형제(center-filter-banner)나 다른 요인에
+          따라 결과가 달라질 여지가 있었다(auto-placement 규칙을 재추적해도 100% 확정하기
+          어려움 — 그래서 이번엔 규칙 자체에 기대지 않는 구조로 바꾼다).
+          해결: 달력+수업목록 두 컬럼을 .member-reservation과 별개의 독립된 작은 grid
+          (.resv-split)로 완전히 분리한다 — 이 grid의 자식은 .resv-cal-col/.resv-list-col
+          딱 2개뿐이고 각자 grid-column을 지정하지 않아도 기본 auto-flow가 "첫 아이템→1열,
+          둘째 아이템→2열, 같은 행"으로만 해석될 수 있는 유일한 경우라 auto-placement
+          모호성이 원천적으로 없다(resv-page-head 등 앞선 전체너비 요소와 완전히 분리된
+          별도 grid라 그것들의 배치와 전혀 상호작용하지 않음). 1280px 미만에서는
+          .resv-split도 일반 block(기본값)이라 기존 단일 컬럼 순서 그대로 유지된다. */}
+      <div className="resv-split">
       <div className="resv-cal-col">
       <div className="cal-header">
         <div className="cal-toolbar">
@@ -756,6 +759,7 @@ function ReservationCalendarContent() {
             );
           })
         )}
+      </div>
       </div>
       </div>
       {/* 예약 확인 모달 */}
