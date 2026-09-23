@@ -290,7 +290,17 @@ a { color: inherit; text-decoration: none; }
 }
 .hero .deco { position: absolute; right: -10px; bottom: -14px; font-size: 88px; opacity: 0.9; transform: rotate(-8deg); }
 
-.cat-grid { padding: 20px 14px 4px; display: grid; grid-template-columns: repeat(5, 1fr); row-gap: 20px; }
+/* 추가 요구사항 배치(2026-09-23) — "종목 둘러보기"를 하나의 grid로 통합하고, 접힌
+   상태에서는 최대 2행까지만 보이게 CSS만으로 자른다(magic pixel height 없이):
+   grid-template-rows로 딱 2개의 auto 행만 만들고, grid-auto-rows:0으로 그 이상
+   행(3행+)은 높이를 0으로 접어버린 뒤 overflow:hidden으로 클리핑한다. 몇 개가
+   2행 안에 들어가는지는 breakpoint별 grid-template-columns(아래, 768px+에서
+   auto-fit)이 이미 결정하므로 항목 수를 하드코딩하지 않는다 — 컨테이너 폭이 넓어
+   9개가 전부 1~2행 안에 들어가면 자동으로 전부 보이고(app/page.tsx의 ResizeObserver가
+   실제로 잘리는 게 있는지 측정해 "전체 종목" 버튼도 필요할 때만 보여줌), 좁으면
+   기존과 동일하게 잘려서 접힌다. .is-expanded면 이 제한을 해제한다. */
+.cat-grid { padding: 20px 14px 4px; display: grid; grid-template-columns: repeat(5, 1fr); row-gap: 20px; grid-template-rows: repeat(2, auto); grid-auto-rows: 0; overflow: hidden; }
+.cat-grid.is-expanded { grid-template-rows: none; grid-auto-rows: auto; overflow: visible; }
 .cat-item { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; position: relative; cursor: pointer; }
 .cat-icon {
   width: 58px; height: 58px; border-radius: 18px; background: var(--surface);
