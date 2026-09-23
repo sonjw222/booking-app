@@ -570,10 +570,18 @@ function ReservationCalendarContent() {
           둘째 아이템→2열, 같은 행"으로만 해석될 수 있는 유일한 경우라 auto-placement
           모호성이 원천적으로 없다(resv-page-head 등 앞선 전체너비 요소와 완전히 분리된
           별도 grid라 그것들의 배치와 전혀 상호작용하지 않음). 1280px 미만에서는
-          .resv-split도 일반 block(기본값)이라 기존 단일 컬럼 순서 그대로 유지된다. */}
+          .resv-split도 일반 block(기본값)이라 기존 단일 컬럼 순서 그대로 유지된다.
+
+          재조사(2026-09-24, 4차) — 세로 정렬(위 3차 수정으로 diff<1px 확정)은 됐지만,
+          .cal-weekdays의 border-bottom(왼쪽, 헤더 바로 아래)과 .profile-picker의
+          border-bottom(오른쪽, 훨씬 아래— 프로필 칩 밑)이 서로 다른 높이에서 각자
+          그어져 "가운데가 끊긴 구분선"처럼 보였다. .cal-header/.daylist-header를
+          .resv-split의 직계 자식으로 끌어올려(각 컬럼 안에 있던 걸 밖으로) grid-area
+          기반 명시적 배치("header-left header-right" / "divider divider" /
+          "cal-col list-col")로 왼쪽·오른쪽 헤더 + 그 사이 단 하나의 전체 폭
+          .resv-split-divider를 만든다 — auto-placement 추측 없이 이름으로 고정. */}
       <div className="resv-split">
-      <div className="resv-cal-col">
-      <div className="cal-header">
+      <div className="cal-header resv-header-left">
         <div className="cal-toolbar">
           <div className="cal-month-control cal-month-nav">
             <button className="cal-nav-btn" onClick={goPrevMonth} aria-label="이전 달">‹</button>
@@ -586,6 +594,17 @@ function ReservationCalendarContent() {
         </div>
       </div>
 
+      <div className="daylist-header resv-header-right">
+        <span className="resv-day-title">{pad(month)}.{pad(selectedDay)} 수업</span>
+        {publicHoliday && <span className="pub-badge">{publicHoliday}</span>}
+      </div>
+
+      {/* 1280px+ split에서만 grid-area로 배치되는 전체 폭 구분선 — 아래 CSS
+          (.resv-split-divider) 참고. 1280px 미만에서는 display:none이라 mobile/tablet
+          단일 컬럼 레이아웃에 영향 없음. */}
+      <div className="resv-split-divider" aria-hidden="true" />
+
+      <div className="resv-cal-col">
       <div className="cal-grid cal-weekdays">
         {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => (
           <div key={d} className={`cal-weekday ${i === 0 ? "sun" : ""} ${i === 6 ? "sat" : ""}`}>
@@ -620,11 +639,6 @@ function ReservationCalendarContent() {
       </div>
 
       <div className="resv-list-col">
-      <div className="daylist-header">
-        <span className="resv-day-title">{pad(month)}.{pad(selectedDay)} 수업</span>
-        {publicHoliday && <span className="pub-badge">{publicHoliday}</span>}
-      </div>
-
       {/* 예약 주체 선택: 프로필이 2개 이상일 때만 표시 (자녀 대신 예약 등) */}
       {profiles.length > 1 && (
         <div className="profile-picker">
