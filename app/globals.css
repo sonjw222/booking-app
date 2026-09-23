@@ -5439,7 +5439,18 @@ textarea:focus-visible,
     align-items: start;
   }
   .resv-cal-col, .resv-list-col { min-width: 0; }
-  .resv-list-col > .daylist-header { margin-top: 0; padding-top: 0; border-top: 0; }
+  /* 재조사(2026-09-24, 3차) — 실제 Next.js 앱(devtest 라우트)에 getBoundingClientRect로
+     측정한 결과 .resv-cal-col/.resv-list-col 박스 자체의 top은 이미 완전히 동일했다
+     (grid align-items:start 정상 동작, 1280/1360/1600px 전부 확인) — 남은 차이는
+     "박스 top"이 아니라 "텍스트가 보이는 위치"였다: .cal-header가 padding-top 14px +
+     .cal-toolbar 안의 44px 높이 nav 버튼(.cal-nav-btn, 터치 영역 확보용이라 못 줄임)이
+     .cal-title를 세로 중앙 정렬해서 텍스트 자체는 박스 top보다 실측 26px 아래에서
+     시작한다. .daylist-header는 그런 내부 구조가 없어 박스 top에 텍스트가 바로 붙는다
+     — 그래서 "박스는 맞는데 글자는 26px 어긋남". 달력 nav 버튼을 줄여 없앨 수 없는
+     차이라(접근성 최소 터치 크기), margin-top 음수 보정이 아니라 daylist-header 쪽에
+     동일한 만큼의 padding-top을 더해 "텍스트 baseline"을 맞춘다(실측값 그대로 반영 —
+     추측치 아님). */
+  .resv-list-col > .daylist-header { margin-top: 0; padding-top: 26px; border-top: 0; }
   .resv-list-col > .daylist { max-height: calc(100dvh - 300px); overflow-y: auto; }
   .member-home .home-class-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .admin-v3-content .admin-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
