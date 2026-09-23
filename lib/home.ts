@@ -159,34 +159,57 @@ export async function searchHome(keyword: string): Promise<{ centers: SearchCent
   const kw = keyword.trim();
   if (!kw) return { centers: [], categories: [] };
 
-  // 승인된 센터 전부 가져와서 클라이언트에서 매칭 (규모 작을 때 충분) — categories가
-  // 배열 컬럼이라 "종목 부분일치"까지 한 번에 서버 필터링하기 어려워 클라이언트 매칭
-  // 구조는 유지하되, 승인 센터 전체가 계속 불어나는 상황에 대비해 상한만 추가한다
-  // (egress 감사, 2026-09-15 — 지금 규모에선 동작 그대로).
-  const { data, error } = await supabase
-    .from("centers")
-    .select("id, name, categories, intro, photo_url")
-    .eq("status", "approved")
-    .limit(500);
-  if (error) throw new Error("검색에 실패했어요: " + error.message);
-
-  const centers: SearchCenter[] = (data ?? [])
-    .filter((c: any) =>
-      c.name?.includes(kw) ||
-      (c.categories ?? []).some((cat: string) => cat.includes(kw))
-    )
-    .map((c: any) => ({
-      id: c.id, name: c.name, categories: c.categories ?? [],
-      intro: c.intro, photoUrl: c.photo_url,
-    }));
-
-  // 매칭되는 종목 (예: "피겨" → "피겨스케이팅")
-  const { data: cats } = await supabase.from("service_categories").select("label");
+  // 스토어 스크린샷 QA(2026-09-23) — 승인 센터가 500개를 넘어가면서 위 "전부 읽어와
+  // 클라이언트에서 매칭"이 뒤 순번 센터를 검색에서 통째로 누락시켰다(이름을 정확히
+  // 입력해도 500번째 밖이면 후보에 아예 없었음 — fetchCentersByCategory는 서버 필터라
+  // 이 문제가 없어 "종목 탐색으로는 들어가지는데 검색만 안 된다"는 증상으로 나타남).
+  // 이름/종목 매칭을 각각 서버(DB) 쿼리로 옮겨 상한 없이 정확하게 찾는다 — 대량 egress
+  // 방지 원칙은 그대로 유지: 전체 목록을 읽지 않고 매칭된 결과만 받아온다.
+  //
+  // 종목 매칭은 배열 컬럼(categories)의 "부분일치"를 PostgREST 필터 하나로 표현할 수
+  // 없어서(예: "피겨" 검색이 "피겨스케이팅" 라벨을 찾아야 함), 먼저 service_categories에서
+  // 라벨 자체가 키워드를 포함하는 종목을 구한 뒤(이 테이블은 작아 상한 문제 없음),
+  // 그 라벨 전체 목록과 categories 배열이 하나라도 겹치는지(overlaps)를 서버에서
+  // 필터링한다 — 기존 클라이언트 매칭과 동일한 결과를 내면서 서버 쪽에서 실행된다.
+  const { data: cats, error: catLabelError } = await supabase.from("service_categories").select("label");
+  if (catLabelError) throw new Error("검색에 실패했어요: " + catLabelError.message);
   const categories = (cats ?? [])
     .map((c: any) => c.label)
     .filter((label: string) => label.includes(kw));
 
-  return { centers, categories };
+  const nameQuery = supabase
+    .from("centers")
+    .select("id, name, categories, intro, photo_url")
+    .eq("status", "approved")
+    .ilike("name", `%${kw}%`);
+  const categoryQuery = categories.length > 0
+    ? supabase
+        .from("centers")
+        .select("id, name, categories, intro, photo_url")
+        .eq("status", "approved")
+        .overlaps("categories", categories)
+    : null;
+
+  const [nameResult, categoryResult] = await Promise.all([
+    nameQuery,
+    categoryQuery ?? Promise.resolve({ data: [] as any[], error: null }),
+  ]);
+  if (nameResult.error) throw new Error("검색에 실패했어요: " + nameResult.error.message);
+  if (categoryResult.error) throw new Error("검색에 실패했어요: " + categoryResult.error.message);
+
+  // 이름/종목 두 쿼리 모두에 걸리는 센터가 있을 수 있어(예: 센터명에 종목이 들어간
+  // 경우) id 기준으로 중복 제거.
+  const merged = new Map<string, SearchCenter>();
+  for (const c of [...(nameResult.data ?? []), ...(categoryResult.data ?? [])] as any[]) {
+    if (!merged.has(c.id)) {
+      merged.set(c.id, {
+        id: c.id, name: c.name, categories: c.categories ?? [],
+        intro: c.intro, photoUrl: c.photo_url,
+      });
+    }
+  }
+
+  return { centers: Array.from(merged.values()), categories };
 }
 
 // 특정 종목의 센터 목록
