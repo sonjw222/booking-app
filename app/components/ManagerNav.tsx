@@ -13,13 +13,20 @@ import { fetchUnreadCount, subscribeNotifications } from "../../lib/notification
 import { fetchMyCenters } from "../../lib/manager";
 import {
   fetchMyEffectivePermissionKeys, canSeeManagerMenu,
-  setCachedCanSeeMembers,
+  setCachedCanSeeMembers, setCachedManagerNavState,
+  type ManagerNavCachedState,
 } from "../../lib/roles";
 import { replaceTabNavigation } from "../../lib/navState";
 import NotificationToaster from "./NotificationToaster";
 import UiIcon from "./UiIcon";
+import { useExpandableNavRail } from "./useExpandableNavRail";
 
-export default function ManagerNav({ initialCanSeeMembers = null }: { initialCanSeeMembers?: boolean | null }) {
+export default function ManagerNav({
+  initialCanSeeMembers = null, initialNavState = null,
+}: {
+  initialCanSeeMembers?: boolean | null;
+  initialNavState?: ManagerNavCachedState | null;
+}) {
   const pathname = usePathname();
   const is = (p: string) => pathname.startsWith(p);
   const isMore = pathname === "/manager";
@@ -30,11 +37,16 @@ export default function ManagerNav({ initialCanSeeMembers = null }: { initialCan
   // P1-5: "회원" 탭은 customer.member.view 권한으로 가린다("수업"/"알림"은 본인 일정·본인
   // 알림함이라 권한 카탈로그에 애초에 대응 키가 없음 — schema.sql 참고, 의도적으로 그대로
   // 둠). app/manager/page.tsx의 메뉴 노출 계산과 동일한 패턴(오너는 전권, 로딩 중엔 숨김).
-  // initialCanSeeMembers는 app/manager/layout.tsx(서버 컴포넌트)가 쿠키(lib/roles.ts)를
-  // 읽어 내려주는 값으로, 관리자 영역에 처음 들어올 때(새로고침/딥링크 등) 서버 렌더링
-  // 시점부터 이미 맞는 탭 개수로 그려지게 해 "탭 3개→4개" 깜빡임을 막는다.
-  const [isOwner, setIsOwner] = useState(false);
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
+  //
+  // 안정화 배치(2026-09-22, nav 깜빡임) — 예전엔 "회원" 탭 하나만 쿠키로 캐싱해 그 탭만
+  // 안 깜빡였고, 나머지 15개 이상 권한 게이트 메뉴(매출·결제/스태프·권한/룸 관리 등)는
+  // fetchMyEffectivePermissionKeys()가 끝날 때까지 전부 숨겨졌다가 한꺼번에 나타났다
+  // ("탭 4개→전체" 신고). initialNavState(오너 여부 + 보유 권한 키 전체, 서버 쿠키로
+  // 캐싱됨 — app/manager/layout.tsx, lib/roles.ts 참고)를 초기값으로 써서 첫 페인트부터
+  // 전체 메뉴가 정확하게 그려지게 한다. 이 캐시는 순수 UX 힌트라 실제 접근 통제(RLS)를
+  // 느슨하게 만들지 않는다 — 아래에서 실시간 재확인 결과로 항상 덮어쓴다.
+  const [isOwner, setIsOwner] = useState(initialNavState?.isOwner ?? false);
+  const [myPerms, setMyPerms] = useState<Set<string> | null>(initialNavState?.permKeys ?? null);
   const [resolved, setResolved] = useState(false);
   const [cachedCanSeeMembers] = useState<boolean | null>(initialCanSeeMembers);
 
@@ -66,8 +78,14 @@ export default function ManagerNav({ initialCanSeeMembers = null }: { initialCan
 
   const liveCanSeeMembers = canSeeManagerMenu(isOwner, myPerms, "customer.member.view");
   useEffect(() => {
-    if (resolved) setCachedCanSeeMembers(liveCanSeeMembers);
-  }, [resolved, liveCanSeeMembers]);
+    if (resolved) {
+      setCachedCanSeeMembers(liveCanSeeMembers);
+      // 오너면 개별 권한 목록이 없어도(myPerms=null) 전권이므로 빈 Set을 캐싱해도 무방 —
+      // 다음 로드 때 initialNavState.isOwner만으로 canSeeManagerMenu가 true를 반환한다.
+      setCachedManagerNavState(isOwner, myPerms ?? new Set());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolved, liveCanSeeMembers, isOwner, myPerms]);
   const canSeeMembers = resolved ? liveCanSeeMembers : (cachedCanSeeMembers ?? false);
   const canSee = (permissionKey: string) => canSeeManagerMenu(isOwner, myPerms, permissionKey);
 
@@ -101,20 +119,30 @@ export default function ManagerNav({ initialCanSeeMembers = null }: { initialCan
     };
   }, []);
 
+  // 안정화 배치(2026-09-22) — 항목 8/9/10: 768–1359 터치 확장 rail + scroll 위치 유지.
+  const { navRef, scrollRef, expanded, handleRailClick, collapseAfterNavigate } =
+    useExpandableNavRail("manager_nav_scroll_top");
+
   return (
     <>
       <NotificationToaster />
-      <aside className="workspace-sidebar manager-sidebar" aria-label="센터 관리자 메뉴">
+      <aside
+        ref={navRef as React.RefObject<HTMLElement>}
+        className="workspace-sidebar manager-sidebar"
+        aria-label="센터 관리자 메뉴"
+        aria-expanded={expanded}
+        onClick={handleRailClick}
+      >
         <a className="desktop-brand" href="/manager">
           <span className="desktop-brand-mark">M</span>
           <span><b>모하빗</b><small>센터 관리자</small></span>
         </a>
-        <div className="workspace-sidebar-scroll">
+        <div className="workspace-sidebar-scroll" ref={scrollRef}>
           <div className="desktop-nav-section">업무</div>
           <a className={`desktop-nav-item ${pathname === "/manager" ? "active" : ""}`} href="/manager" onClick={(e) => replaceTabNavigation(e, "/manager")}><UiIcon name="grid" /><span>대시보드</span></a>
-          <Link className={`desktop-nav-item ${is("/manager/classes") ? "active" : ""}`} href="/manager/classes" replace><UiIcon name="calendar" /><span>수업·예약</span></Link>
-          {canSeeMembers && <Link className={`desktop-nav-item ${is("/manager/members") ? "active" : ""}`} href="/manager/members" replace><UiIcon name="users" /><span>회원</span></Link>}
-          <Link className={`desktop-nav-item ${is("/manager/notifications") ? "active" : ""}`} href="/manager/notifications" replace>
+          <Link className={`desktop-nav-item ${is("/manager/classes") ? "active" : ""}`} href="/manager/classes" replace onClick={collapseAfterNavigate}><UiIcon name="calendar" /><span>수업·예약</span></Link>
+          {canSeeMembers && <Link className={`desktop-nav-item ${is("/manager/members") ? "active" : ""}`} href="/manager/members" replace onClick={collapseAfterNavigate}><UiIcon name="users" /><span>회원</span></Link>}
+          <Link className={`desktop-nav-item ${is("/manager/notifications") ? "active" : ""}`} href="/manager/notifications" replace onClick={collapseAfterNavigate}>
             <UiIcon name="bell" /><span>알림</span>{unread > 0 && <span className="desktop-nav-badge">{unread > 99 ? "99+" : unread}</span>}
           </Link>
           {canSee("pass.sales.view") && <a className={`desktop-nav-item ${is("/manager/sales") ? "active" : ""}`} href="/manager/sales"><UiIcon name="receipt" /><span>매출·결제</span></a>}

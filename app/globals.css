@@ -5218,6 +5218,59 @@ textarea:focus-visible,
   }
 }
 
+/*
+  안정화 배치(2026-09-22) — 항목 8: 위 블록은 (hover:hover) and (pointer:fine) 조건이 있어
+  마우스 사용자만 hover/focus-within으로 rail을 펼쳐볼 수 있다(터치 전용 태블릿은 hover가
+  성립하지 않아 대상 밖 — 이게 실제로 빠져 있던 부분). 새 CSS 체계를 따로 만들지 않고
+  위와 완전히 동일한 최종 스타일을, 조건 없는(모든 입력 방식) 768–1359 구간에서
+  `.workspace-sidebar[aria-expanded="true"]`일 때만 적용한다 — 이 attribute는
+  useExpandableNavRail.ts가 터치 edge-swipe/rail 클릭으로 열렸을 때만 "true"가 된다
+  (ManagerNav/AdminNav 참고, 접근성용 aria-expanded를 CSS 훅으로 그대로 재사용 — 새 class를
+  추가하면 responsiveLayout.contract.test.ts가 검사하는 className 리터럴이 깨져서 class
+  대신 attribute selector를 썼다). .member-desktop-nav(회원용)는 이번 배치 범위 밖이라
+  포함하지 않는다.
+*/
+@media (min-width: 768px) and (max-width: 1359px) {
+  .workspace-sidebar[aria-expanded="true"] {
+    width: 244px;
+    padding-inline: 16px;
+    box-shadow: 14px 0 36px color-mix(in srgb,var(--ink) 13%,transparent);
+  }
+  .workspace-sidebar[aria-expanded="true"] .desktop-brand {
+    justify-content: flex-start;
+    padding-inline: 9px;
+  }
+  .workspace-sidebar[aria-expanded="true"] .desktop-nav-item,
+  .workspace-sidebar[aria-expanded="true"] .workspace-sidebar-mode {
+    justify-content: flex-start;
+  }
+  .workspace-sidebar[aria-expanded="true"] .desktop-brand > span:last-child,
+  .workspace-sidebar[aria-expanded="true"] .desktop-nav-item > span:not(.desktop-nav-badge),
+  .workspace-sidebar[aria-expanded="true"] .workspace-sidebar-mode > span {
+    max-width: 180px;
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0s,70ms,0s;
+  }
+  .workspace-sidebar[aria-expanded="true"] .desktop-nav-section {
+    max-height: 32px;
+    margin: 18px 12px 5px;
+    opacity: 1;
+    visibility: visible;
+    color: var(--ink-soft);
+    font-size: 10.5px;
+    font-weight: 750;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    transition-delay: 0s,0s,0s,70ms,0s;
+  }
+  .workspace-sidebar[aria-expanded="true"] .desktop-nav-badge {
+    position: static;
+    margin-left: auto;
+    border: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .member-desktop-nav,
   .workspace-sidebar,
