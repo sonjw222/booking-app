@@ -200,7 +200,11 @@ function ManagerSubscriptionContent() {
       {loading ? (
         <Loading />
       ) : (
-        <div className="settings-wrap">
+        /* 안정화 배치(2026-09-22) — 이 화면의 첫 카드(플랜 카드, 아래)가 위(모바일은
+           back-header, tablet/desktop은 ManagerChrome 상단바) 경계에 바로 붙어 보이던
+           문제. .settings-wrap은 여러 화면이 공유하는 클래스라 여기 top padding을 주면
+           다른 화면까지 영향을 주므로, 이 페이지 인스턴스에만 인라인으로 좁게 적용한다. */
+        <div className="settings-wrap" style={{ paddingTop: 16 }}>
           {subError && <div className="error-toast">{subError}<button onClick={() => setSubError(null)}>×</button></div>}
           {subscription && (
             <div className="set-row col" style={{ background: "var(--card-bg)", borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
