@@ -577,7 +577,7 @@ function ReservationCalendarContent() {
         <div className="cal-toolbar">
           <div className="cal-month-control cal-month-nav">
             <button className="cal-nav-btn" onClick={goPrevMonth} aria-label="이전 달">‹</button>
-            <div className="cal-title">{year}.{pad(month)}</div>
+            <div className="cal-title resv-month-title">{year}.{pad(month)}</div>
             <button className="cal-nav-btn" onClick={goNextMonth} aria-label="다음 달">›</button>
           </div>
           <button className="cal-center-pick" onClick={() => setCenterSheet(true)} aria-label={`센터 선택, 현재 ${effectiveCenterName}`}>
@@ -621,7 +621,7 @@ function ReservationCalendarContent() {
 
       <div className="resv-list-col">
       <div className="daylist-header">
-        {pad(month)}.{pad(selectedDay)} 수업
+        <span className="resv-day-title">{pad(month)}.{pad(selectedDay)} 수업</span>
         {publicHoliday && <span className="pub-badge">{publicHoliday}</span>}
       </div>
 
