@@ -6,7 +6,7 @@
   - 카테고리·클래스·센터·하단 네비를 실제 라우트로 연결
 */
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
 import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, type HomeCenter, type HomeClass } from "../lib/home";
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
 import { fetchMyCenters } from "../lib/manager";
@@ -87,10 +87,44 @@ export default function Home() {
       : CATEGORIES),
     [catList]
   );
-  const visibleCategories = useMemo(() => allCategories.slice(0, 8), [allCategories]);
-  // 기본 8개 밖의 나머지 종목 — "전체 종목"을 누르면 검색창으로 보내는 대신 이 목록을
-  // 같은 화면 아래에 펼쳐 보여준다(사용자 요청, 2026-09-02).
-  const remainingCategories = useMemo(() => allCategories.slice(8), [allCategories]);
+  // 추가 요구사항 배치(2026-09-23) — "종목 둘러보기" 반응형 레이아웃. 예전엔
+  // allCategories.slice(0,8)로 항상 딱 8개만 첫 grid에 렌더하고, 나머지(9번째 이상,
+  // 예: 테니스)를 완전히 별개의 두 번째 .cat-grid에 렌더했다. 그 결과: (1) 태블릿/데스크톱
+  // 처럼 8개보다 훨씬 많은 아이콘이 한 줄에 들어갈 수 있는 폭에서도 8개 이상은 절대
+  // 안 보여줘서 오른쪽에 큰 빈 공간이 남았고, (2) "전체 종목"을 펼치면 9번째 항목이 첫
+  // grid의 column 흐름과 무관한 "새 grid 컨테이너에 아이템 1개"가 되어, auto-fit 트랙이
+  // 그 아이템 하나에 1fr 전체 폭을 몰아줘 화면 중앙에 혼자 떠 보였다(각 breakpoint의
+  // .cat-grid { grid-template-columns: repeat(N,1fr) 또는 auto-fit,minmax(...) } 확인).
+  //
+  // 수정: 모든 종목을 하나의 .cat-grid에 순서 그대로 렌더한다(mobile/desktop용 배열을
+  // 따로 관리하지 않음). "몇 개가 보이는지"는 이제 JS 카운트가 아니라 순수 CSS로 정한다
+  // — .cat-grid는 기본적으로 grid-template-rows: repeat(2,auto); grid-auto-rows: 0;
+  // overflow: hidden;으로 "최대 2행"까지만 보이게 자르고(2행에 몇 개가 들어가는지는
+  // breakpoint별 컬럼 수가 이미 자연스럽게 결정 — mobile 4열이면 8개, tablet auto-fit이면
+  // 실제 컨테이너 폭만큼), 펼치면(.is-expanded) 이 제한을 해제한다. 그 결과 태블릿/
+  // 데스크톱에서 폭이 충분해 9개가 이미 2행 안에(대개 1행에) 다 들어가면 전혀 잘리지
+  // 않고, 아래 ResizeObserver가 "잘린 게 있는지"를 실제로 측정해 있을 때만 버튼을
+  // 보여준다 — window.innerWidth 분기 없이 실제 렌더된 높이로 판단하므로 줌/폰트 크기
+  // 변화에도 정확하고, hydration 불일치도 없다(초기값은 "있을 수 있다"고 가정해 버튼을
+  // 보여주고, 마운트 직후 useLayoutEffect가 페인트 전에 실제 값으로 보정 — 아이콘 자체의
+  // 개수/위치는 이 과정에서 전혀 바뀌지 않아 flicker 없음).
+  const catGridRef = useRef<HTMLDivElement>(null);
+  const [collapsedHasOverflow, setCollapsedHasOverflow] = useState(true);
+  useLayoutEffect(() => {
+    if (showAllCategories) return; // 펼친 상태에선 "접혔을 때 잘리는지"를 측정할 대상이 없음
+    const el = catGridRef.current;
+    if (!el) return;
+    function measure() {
+      if (!el) return;
+      setCollapsedHasOverflow(el.scrollHeight - el.clientHeight > 4);
+    }
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [showAllCategories, allCategories.length]);
+  // 펼쳐진 상태(접기 버튼 필요)거나, 접힌 상태에서 실제로 잘리는 항목이 있을 때만 버튼 노출.
+  const showCategoryToggle = showAllCategories || collapsedHasOverflow;
   const visibleClasses = useMemo(() => myUpcoming.length > 0 ? myUpcoming : classes, [classes, myUpcoming]);
 
   useEffect(() => {
@@ -267,14 +301,14 @@ export default function Home() {
         {/* 종목 카테고리 그리드 */}
         <div className="home-category-head">
           <h2>종목 둘러보기</h2>
-          {remainingCategories.length > 0 && (
+          {showCategoryToggle && (
             <button type="button" onClick={() => setShowAllCategories((v) => !v)}>
               {showAllCategories ? "접기" : "전체 종목"}
             </button>
           )}
         </div>
-        <div className="cat-grid">
-          {visibleCategories.map((cat) => (
+        <div className={`cat-grid ${showAllCategories ? "is-expanded" : ""}`} ref={catGridRef}>
+          {allCategories.map((cat) => (
             <a className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`}>
               <div className="cat-icon">
                 {cat.image ? <img src={cat.image} alt="" /> : <UiIcon name={cat.icon} size={27} />}
@@ -283,18 +317,6 @@ export default function Home() {
             </a>
           ))}
         </div>
-        {showAllCategories && remainingCategories.length > 0 && (
-          <div className="cat-grid">
-            {remainingCategories.map((cat) => (
-              <a className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`}>
-                <div className="cat-icon">
-                  {cat.image ? <img src={cat.image} alt="" /> : <UiIcon name={cat.icon} size={27} />}
-                </div>
-                <div className="cat-label">{cat.label}</div>
-              </a>
-            ))}
-          </div>
-        )}
 
         {/* 비회원(로그인 안 한 상태)에게는 "곧 시작하는 클래스"/"내 수강권으로 예약
             가능"을 아예 숨긴다(2026-09-04, 사용자 결정) — 종목 둘러보기·센터 정보·내 주변
