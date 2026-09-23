@@ -332,6 +332,49 @@ export function parseCanSeeMembersCookie(raw: string | undefined): boolean | nul
   return null;
 }
 
+// 안정화 배치(2026-09-22, 태블릿/웹 nav 깜빡임) — 위 CAN_SEE_MEMBERS_COOKIE_KEY는 "회원"
+// 탭 하나만 캐싱한다. ManagerNav의 나머지 메뉴(매출·결제/스태프·권한/룸 관리 등 15개+)는
+// 이 캐시가 없어 fetchMyEffectivePermissionKeys()가 끝날 때까지 전부 숨겨졌다가 응답이
+// 오면 한꺼번에 나타났다("탭 4개→전체" 신고와 일치). 같은 메커니즘(document.cookie ↔
+// app/manager/layout.tsx의 next/headers cookies())을 오너 여부 + 보유 권한 키 전체로
+// 확장한다. 기존 CAN_SEE_MEMBERS 쿠키/함수는 그대로 둔다(단위 테스트가 있고, 지우면
+// 얻는 것 없이 위험만 늘어남) — ManagerNav는 이제 아래 일반화된 쪽만 쓴다.
+const MANAGER_NAV_STATE_COOKIE_KEY = "manager_nav_state";
+
+export interface ManagerNavCachedState {
+  isOwner: boolean;
+  permKeys: Set<string>;
+}
+
+export function setCachedManagerNavState(isOwner: boolean, permKeys: Set<string>): void {
+  try {
+    // 권한 카탈로그 키는 schema.sql 기준 영문/점/언더스코어만 쓰여 콤마 구분과 충돌하지
+    // 않는다 — 그래도 쿠키 값 자체는 encodeURIComponent로 감싸 안전하게 보관한다.
+    const encoded = `${isOwner ? "1" : "0"}:${Array.from(permKeys).join(",")}`;
+    document.cookie = `${MANAGER_NAV_STATE_COOKIE_KEY}=${encodeURIComponent(encoded)}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+  } catch { /* 무시 — 실패해도 다음 로드 때 기존 방식(전부 숨김 후 표시)으로 안전하게 폴백 */ }
+}
+
+// app/manager/layout.tsx가 next/headers cookies()로 읽은 원시 문자열을 넘기면 판정한다
+// (parseCanSeeMembersCookie와 동일한 이유로 next/headers는 여기서 직접 import 안 함).
+// 이 캐시는 순수 UX 힌트다 — 실제 접근 통제는 RLS가 최종 방어선이라, 여기서 판정이
+// 틀려도(쿠키가 오래됐거나 조작돼도) 데이터 노출로는 이어지지 않고, 클라이언트 재확인
+// (fetchMyEffectivePermissionKeys)이 끝나면 항상 올바른 값으로 덮어써진다.
+export function parseManagerNavStateCookie(raw: string | undefined): ManagerNavCachedState | null {
+  if (!raw) return null;
+  try {
+    const decoded = decodeURIComponent(raw);
+    const sep = decoded.indexOf(":");
+    if (sep === -1) return null;
+    const isOwner = decoded.slice(0, sep) === "1";
+    const rest = decoded.slice(sep + 1);
+    const permKeys = new Set(rest.length > 0 ? rest.split(",").filter(Boolean) : []);
+    return { isOwner, permKeys };
+  } catch {
+    return null;
+  }
+}
+
 /*
   로그인한 스태프 본인의 유효 권한 키 목록 (메뉴 노출 등 UI 표시용).
   오너는 전권이므로 이 함수를 호출하지 않고 호출측에서 isOwner로 별도 처리한다.
