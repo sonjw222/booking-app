@@ -3688,6 +3688,25 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 | 권장 후속 작업 | (1)은 `.manager-v3-content select.input-field`의 `background-color`를 `var(--text-inverse)`에서 `var(--card-bg)`로 바꾸는 것만으로 해결될 가능성이 높음 — 다만 그 클래스를 쓰는 화면이 많아 실제 다크 모드 스크린샷으로 폭넓게 확인 후 적용 권장. (2)는 `.ghost-btn:disabled { opacity: .5; cursor: default; }` 한 줄 추가로 전체 화면에 일괄 적용 가능(다른 버튼 클래스와 동일한 값) — 다만 100곳 넘는 사용처 전체의 시각적 변화라 별도 작업으로 분리해 스크린샷 확인 권장. |
 | 근거 파일 | `app/globals.css`(`.settings-wrap select.input-field` 신규 규칙), `app/manager/subscription/page.tsx` |
 
+### P1-Google-3. (2026-09-23) Google 로그인 — SHA-1/Web Client ID 정정 후에도 여전히 실패, 원인 미해결
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1(release blocker) |
+| 현재 상태 | Play App Signing SHA-1 등록 + Web Client ID(Vercel env) 정정 + 새 AAB(versionCode 4) 이후에도 여전히 실패. 코드/배포 산출물을 직접 검증(프로덕션 JS 번들 라이브 fetch, 로컬 `google-services.json` 파싱, keystore SHA-1 추출)한 결과 **이 리포에서 볼 수 있는 범위에서는 결함을 찾지 못함** — Web Client ID는 배포본에 정확히 반영돼 있고(`544111273413-...`), Android/Web OAuth 클라이언트 3개 모두 올바른 프로젝트·패키지·SHA-1로 등록돼 있음. |
+| 중요 발견 | 이 앱은 `capacitor.config.ts`의 `server.url` 모드라 **Android AAB 자체에는 `NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID`가 전혀 포함되지 않는다** — WebView가 매번 `mwhabit.com`에서 실시간으로 받는 JS 번들에만 존재한다. 즉 "새 AAB(versionCode 4)를 만들어 재배포했다"는 이 값의 반영과 무관하다(향후 이 값 때문에 재배포가 필요한 경우는 없음 — Vercel 배포만으로 충분). |
+| 남은 가설(미확정) | (1) Google 쪽 SHA-1/OAuth 클라이언트 등록 전파 지연(공식 문서상 수 분~수 시간 소요 가능) — 등록 후 충분한 시간이 지난 뒤 재테스트 필요. (2) Console에 이 리포에서 볼 수 없는 설정 문제(예: 동일 패키지명의 중복/구버전 Android 앱 엔트리에 fingerprint가 잘못 연결됨) — Firebase 콘솔에서 해당 Android 앱 엔트리가 정확히 하나뿐인지 직접 확인 필요. (3) 테스트 기기의 Google Play services가 이전 "미등록" 판정을 로컬에 캐싱하고 있을 가능성 — 기기에서 Google Play services 앱 데이터/캐시를 지우거나 다른 기기/계정으로 재현 시도 권장. (4) 최근 logcat(`UNREGISTERED_ON_API_CONSOLE`)이 SHA-1 재등록 "이전" 테스트의 기록인지, 재등록 "이후"에도 재현되는지 불명확 — versionCode 4 설치본에서 새로 logcat을 떠서 동일 에러가 재현되는지부터 확인 필요. |
+| 근거 파일 | `lib/googleAuth.ts`, `android/app/src/main/java/com/mwhabit/app/GoogleSignInPlugin.java`, `capacitor.config.ts`, `android/app/google-services.json`(gitignore 대상 — git 이력 없음) |
+
+### P3-Cat-Grid-Gap. (2026-09-23) 홈 종목 그리드 — 항목 수가 열 수의 배수가 아닐 때 하단 여백 1칸 추가
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P3(사소한 시각적 흠, 기능 영향 없음) |
+| 현재 상태 | `app/page.tsx`/`app/globals.css`의 `.cat-grid` 2행 클램프(`grid-auto-rows:0`)가 CSS grid의 row-gap을 "보이는 마지막 행"과 "0-height로 접힌 다음 행" 사이에도 그대로 적용해, 항목 수가 열 수의 배수가 아니면(예: mobile 4열에 9개 → 4+4+1) 접힌 상태 맨 아래에 `row-gap`(약 20px) 만큼의 여백이 더 남는다. |
+| 권장 후속 작업 | 필요하면 breakpoint별 실제 아이템 한 행 높이를 측정해 `overflow:hidden` 컨테이너에 정확한 `max-height`(2행 + gap 1개)를 계산해 적용 — 우선순위가 낮아 이번 배치에서는 보류. |
+| 근거 파일 | `app/globals.css`(`.cat-grid`, `.cat-grid.is-expanded`) |
+
 ## 8. 상태 갱신 체크리스트
 
 항목을 완료로 바꾸기 전에 다음을 확인합니다.
