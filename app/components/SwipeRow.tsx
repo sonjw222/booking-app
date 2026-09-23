@@ -5,7 +5,7 @@
   범용 swipe-to-reveal row. 화면별 duplicate 구현을 피하려고 범용 컴포넌트로 분리했다(다른
   리스트에서도 필요해지면 재사용 가능).
 
-  성능(3-4, 알림 70~100개에서도 부드러워야 함): touchmove마다 React state를 갱신하지 않는다
+  성능(3-4, 알림 70~100개에서도 부드러워야 함): pointermove마다 React state를 갱신하지 않는다
   — 드래그 중 위치는 ref + DOM 직접 조작(style.transform)만 쓰고, requestAnimationFrame으로
   묶어서 적용한다. 부모(리스트)로 올리는 state는 "지금 열려 있는 row id" 하나뿐이라
   swipe 자체가 리스트 전체를 리렌더시키지 않는다. transform/opacity만 사용(layout 속성
@@ -14,13 +14,30 @@
   제스처: 왼쪽으로 끌면 오른쪽 action 영역이 드러난다(iOS 네이티브 swipe action과 동일
   방향). 수직 스크롤과 충돌하지 않도록 첫 8px 이동까지는 수평/수직 의도를 판정만 하고
   실제 이동을 적용하지 않는다(threshold) — 수직으로 판단되면 그 제스처 동안은 그대로
-  터치 스크롤에 맡긴다(touch-action: pan-y로 브라우저에도 힌트).
+  터치 스크롤에 맡긴다(CSS touch-action: pan-y, .swipe-row-content 참고).
+
+  안정화 배치(2026-09-22, 태블릿/웹 QA) — 다음 세 가지를 추가:
+  1) Pointer Events로 교체(Touch Events 전용이었음) — touch/pen/mouse 전부 같은 코드로
+     동작. mouse는 눌렀다 뗄 때까지 요소 밖으로 나가도 계속 추적해야 하므로
+     setPointerCapture를 쓴다(터치도 동일하게 캡처 — 리스트 스크롤 도중 손가락이 row
+     경계를 살짝 벗어나도 제스처가 끊기지 않게).
+  2) velocity 기반 flick — 기존엔 놓는 순간의 위치 비율(OPEN_RATIO)만 봐서, 짧게 끌고
+     빠르게 놓는 "flick" 제스처가 거리 부족으로 무시될 수 있었다. 마지막 구간의
+     속도(px/ms)를 같이 계산해 임계값을 넘으면 거리와 무관하게 방향대로 스냅한다.
+  3) prefers-reduced-motion — 켜져 있으면 스냅 애니메이션을 즉시 전환(transition 없음)으로
+     바꾼다.
 */
 import { useEffect, useRef, type ReactNode } from "react";
 
 const MOVE_THRESHOLD = 8; // px — 이보다 작은 움직임에는 반응하지 않음(의도치 않은 오픈 방지)
 const OVERSWIPE_CUSHION = 22; // px — actionWidth를 넘어서도 살짝 더 끌리는 여유(고무줄 느낌), 그 이상은 clamp
 const OPEN_RATIO = 0.42; // actionWidth의 이 비율 이상 끌리면 스냅 오픈
+const FLICK_VELOCITY = 0.5; // px/ms — 이 이상으로 빠르게 놓으면 거리와 무관하게 방향대로 스냅
+const FLICK_SAMPLE_WINDOW = 80; // ms — 이보다 오래된 샘플은 velocity 계산에서 버림(멈췄다 다시 움직인 경우 대비)
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+}
 
 export default function SwipeRow({
   id, openId, onOpenChange, actions, children, actionWidth = 144, className,
@@ -34,8 +51,12 @@ export default function SwipeRow({
   className?: string;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
-  const dragState = useRef<{ startX: number; startY: number; axis: "x" | "y" | null; dragging: boolean; x: number }>({
-    startX: 0, startY: 0, axis: null, dragging: false, x: 0,
+  const dragState = useRef<{
+    pointerId: number | null;
+    startX: number; startY: number; axis: "x" | "y" | null; dragging: boolean; x: number;
+    samples: { t: number; x: number }[]; // velocity 계산용 최근 이동 샘플
+  }>({
+    pointerId: null, startX: 0, startY: 0, axis: null, dragging: false, x: 0, samples: [],
   });
   const isOpen = openId === id;
   const rafId = useRef<number | null>(null);
@@ -43,7 +64,7 @@ export default function SwipeRow({
   function applyTransform(x: number, animate: boolean) {
     const el = contentRef.current;
     if (!el) return;
-    el.style.transition = animate ? "transform 220ms cubic-bezier(.22,.85,.32,1)" : "none";
+    el.style.transition = animate && !prefersReducedMotion() ? "transform 220ms cubic-bezier(.22,.85,.32,1)" : "none";
     el.style.transform = `translateX(${x}px)`;
   }
 
@@ -55,37 +76,68 @@ export default function SwipeRow({
     applyTransform(target, true);
   }, [isOpen, actionWidth]);
 
-  function onTouchStart(e: React.TouchEvent) {
-    const t = e.touches[0];
-    dragState.current = { startX: t.clientX, startY: t.clientY, axis: null, dragging: true, x: dragState.current.x };
+  function onPointerDown(e: React.PointerEvent) {
+    const s = dragState.current;
+    if (s.pointerId != null) return; // 이미 다른 포인터(멀티터치 등)를 추적 중이면 무시
+    s.pointerId = e.pointerId;
+    s.startX = e.clientX;
+    s.startY = e.clientY;
+    s.axis = null;
+    s.dragging = true;
+    s.samples = [{ t: performance.now(), x: e.clientX }];
+    // x는 유지(이미 열려 있으면 열린 상태에서 이어서 드래그).
   }
 
-  function onTouchMove(e: React.TouchEvent) {
+  function onPointerMove(e: React.PointerEvent) {
     const s = dragState.current;
-    if (!s.dragging) return;
-    const t = e.touches[0];
-    const dx = t.clientX - s.startX;
-    const dy = t.clientY - s.startY;
+    if (!s.dragging || s.pointerId !== e.pointerId) return;
+    const dx = e.clientX - s.startX;
+    const dy = e.clientY - s.startY;
     if (!s.axis) {
       if (Math.abs(dx) < MOVE_THRESHOLD && Math.abs(dy) < MOVE_THRESHOLD) return;
       s.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      if (s.axis === "x") {
+        // 방향이 수평으로 확정된 시점부터만 이후 제스처 동안 이 포인터를 계속 추적한다
+        // (요소 밖으로 나가도 pointermove가 끊기지 않음 — mouse drag에 특히 중요).
+        (e.target as Element).setPointerCapture?.(e.pointerId);
+      }
     }
     if (s.axis === "y") return; // 수직 스크롤에 맡김
     e.preventDefault();
     const base = isOpen ? -actionWidth : 0;
     const next = Math.max(-actionWidth - OVERSWIPE_CUSHION, Math.min(OVERSWIPE_CUSHION, base + dx));
     s.x = next;
+    const now = performance.now();
+    s.samples.push({ t: now, x: e.clientX });
+    // 오래된 샘플은 버려서 "멈췄다가 다시 움직인" 경우 이전 구간이 velocity에 섞이지 않게 한다.
+    while (s.samples.length > 1 && now - s.samples[0].t > FLICK_SAMPLE_WINDOW) s.samples.shift();
     if (rafId.current != null) cancelAnimationFrame(rafId.current);
     rafId.current = requestAnimationFrame(() => applyTransform(next, false));
   }
 
-  function onTouchEnd() {
+  function endDrag(e: React.PointerEvent) {
     const s = dragState.current;
+    if (s.pointerId !== e.pointerId) return;
+    (e.target as Element).releasePointerCapture?.(e.pointerId);
+    s.pointerId = null;
     if (!s.dragging) return;
     s.dragging = false;
     if (s.axis !== "x") { s.axis = null; return; }
     s.axis = null;
-    const shouldOpen = s.x < -actionWidth * OPEN_RATIO;
+
+    // velocity: 마지막 샘플 구간(최근 FLICK_SAMPLE_WINDOW ms) 기준 px/ms.
+    const first = s.samples[0];
+    const last = s.samples[s.samples.length - 1];
+    const dt = last.t - first.t;
+    const velocity = dt > 0 ? (last.x - first.x) / dt : 0;
+
+    let shouldOpen: boolean;
+    if (Math.abs(velocity) > FLICK_VELOCITY) {
+      // 빠른 flick — 놓인 위치 비율과 무관하게 방향대로 스냅.
+      shouldOpen = velocity < 0;
+    } else {
+      shouldOpen = s.x < -actionWidth * OPEN_RATIO;
+    }
     const target = shouldOpen ? -actionWidth : 0;
     s.x = target;
     applyTransform(target, true);
@@ -104,10 +156,10 @@ export default function SwipeRow({
         ref={contentRef}
         className="swipe-row-content"
         style={{ transform: `translateX(${isOpen ? -actionWidth : 0}px)` }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        onTouchCancel={onTouchEnd}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
         onClickCapture={handleContentClickCapture}
       >
         {children}
