@@ -604,20 +604,26 @@ function CenterDetailContent() {
           action={<button type="button" className="primary-btn" onClick={() => setTab("class")}>수업 보러가기 ›</button>}
         />
       )}
+      {/* iPad portrait 배치(2026-09-24) — .center-info-2col: 위치/소개가 짧을 때 아래
+          공백이 지나치게 커 보이던 문제. 768~1279px에서만 2열 grid가 되고(app/globals.css),
+          그 아래/1280px 미만에서는 이 wrapper가 아무 스타일도 없어 기존 세로 스택 그대로다.
+          둘 중 하나만 있으면(:only-child) 전체 폭을 쓰도록 CSS에서 처리 — 억지 min-height
+          없이 align-items:start로 각자 자연스러운 높이만 차지한다. */}
+      <div className="center-info-2col">
       {/* 위치 */}
       {center.address && (
-        <>
+        <div className="center-info-col">
           <div className="menu-section-label">위치</div>
           <button className="center-map-link" onClick={() => setMapSheet(true)}>
             <div className="center-map-addr"><UiIcon name="location" size={14} /> {center.address}</div>
             <div className="center-map-open">지도 · 길찾기 ›</div>
           </button>
-        </>
+        </div>
       )}
 
       {/* 소개 (블로그식: 글/사진 번갈아) */}
       {(center.introBlocks.length > 0 || center.intro) && (
-        <>
+        <div className="center-info-col">
           <div className="menu-section-label">센터 소개</div>
           <div className="center-intro-blocks">
             {center.introBlocks.length > 0
@@ -645,8 +651,9 @@ function CenterDetailContent() {
                 ))
               : <p className="center-intro-text">{center.intro}</p>}
           </div>
-        </>
+        </div>
       )}
+      </div>
 
       </>)}
 
