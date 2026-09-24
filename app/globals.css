@@ -4181,6 +4181,12 @@ a.membership-card { text-decoration: none; display: block; }
 .search-suggestion-chips button { min-height: 42px; padding: 0 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--ink); font-size: 13px; font-weight: 580; }
 .search-suggestion-chips button:active { background: var(--brand-soft); border-color: var(--brand); }
 .search-suggestions p { margin-top: 22px; color: var(--ink-soft); font-size: 13px; }
+/* iPad portrait 배치(2026-09-24) — 검색 전(초기) 상태가 인기 종목 칩 4개 + 안내문
+   한 줄뿐이라 태블릿 세로에서 화면 대부분이 비어 보였다. 새 추천 로직 없이 기존
+   .search-category-grid/.list-row, .search-center-grid/.search-center-row를 그대로
+   재사용한 보조 콘텐츠(종목별 탐색 + 가까운 센터) — 768~1279px 구간에서만 노출하고
+   모바일/데스크톱은 이 블록 자체가 없는 것처럼 그대로 유지한다. */
+.search-tablet-extra { display: none; }
 .discovery-page-v2 .menu-section-label { padding: 20px var(--page-gutter) 8px; color: var(--ink-soft); font-size: 12px; font-weight: 600; }
 .discovery-page-v2 .list-row,.discovery-page-v2 .search-center-row { margin: 0 var(--page-gutter); padding: 14px 0; border-bottom: 1px solid var(--line); }
 .discovery-page-v2 .search-center-photo,.discovery-page-v2 .search-center-badge { width: 58px; height: 58px; border-radius: var(--radius-md); }
@@ -5419,32 +5425,48 @@ textarea:focus-visible,
   .manager-classes-v2 .manager-agenda-panel > .menu-section-label { padding: 8px 0 12px; font-size: 13px; }
   .manager-classes-v2 .manager-agenda-panel .daylist { max-height: calc(100dvh - 285px); overflow-y: auto; }
   .manager-classes-v2 .fab-btn { left: auto; right: max(34px,calc((100vw - var(--workspace-sidebar) - var(--workspace-content-max))/2 + 34px)); transform: none; }
-  /* 재조사(2026-09-24, 2차) — 1차 수정(.member-reservation 자체를 grid로 두고
-     .resv-cal-col/.resv-list-col을 그 grid item으로 배치)은 Preview 실기기에서
-     실패가 확인됐다. .member-reservation 안에는 resv-page-head/booking-steps/
-     (조건부)center-filter-banner처럼 grid-column:1/-1(전체 너비)인 아이템과
-     grid-column:1 또는 2(일반 너비)인 아이템이 같은 auto-placement 커서를 공유하며
-     섞여 있었는데, 이 커서가 "이전에 배치된 아이템의 행"을 기준으로 다음 아이템의
-     행을 찾는 방식이라 항상 두 컬럼이 같은 행에 붙는다고 신뢰할 수 있는 구조가
-     아니었다(스펙상 가능은 해도, 전체너비 아이템과 일반너비 아이템이 뒤섞인 순서
-     의존적 배치라 확정적으로 보장되지 않음). 이번엔 auto-placement 규칙에 기대지
-     않는다 — .resv-split을 .member-reservation과 분리된 독립 grid로 새로 만들고,
-     그 grid의 자식은 .resv-cal-col/.resv-list-col 딱 2개뿐이다(resv-page-head 등
-     앞선 전체너비 요소와 완전히 다른 grid라 서로 전혀 영향을 주지 않음) — 자식이
-     둘뿐이고 grid-column도 지정하지 않으므로 기본 row-flow auto-placement가
-     "첫째→1열, 둘째→2열, 같은 행"으로만 해석될 수 있는 유일한 경우라 모호성이
-     원천적으로 없다. .daylist-header의 margin-top/padding-top/border-top도 전부
-     0으로 리셋(app/globals.css의 .member-reservation .daylist-header가 이미
-     padding-top:16px를 주고 있었는데 1차 수정에서 margin-top/border-top만 지우고
-     padding-top은 놓쳐 16px가 그대로 남아있었음 — 이번에 같이 정리). */
-  /* 재조사(2026-09-24, 4차) — 헤더 텍스트 세로 정렬(3차 수정, diff<1px 확정)은 됐지만
-     실제 Preview에서 "가운데가 끊긴 구분선" 문제가 남아있었다: .cal-weekdays의
-     border-bottom(왼쪽, 헤더 바로 아래)과 .profile-picker의 border-bottom(오른쪽,
-     프로필 칩 밑이라 훨씬 아래)이 서로 다른 높이에서 각자 그어져 하나의 선처럼 안
-     이어져 보였다. .cal-header/.daylist-header를 .resv-split의 직계 자식으로 끌어올려
-     (app/reservation/page.tsx 참고) grid-template-areas로 "헤더 좌우 한 행 + 그 아래
-     전체 폭 구분선 한 줄 + 본문 좌우 한 행"을 이름으로 명시 배치한다 — auto-placement
-     추측 없이 이름으로 고정되므로 앞선 두 차례의 auto-placement 신뢰성 문제와 무관하다. */
+  .member-home .home-class-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .admin-v3-content .admin-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
+
+/* 재조사(2026-09-24, 2차) — 1차 수정(.member-reservation 자체를 grid로 두고
+   .resv-cal-col/.resv-list-col을 그 grid item으로 배치)은 Preview 실기기에서
+   실패가 확인됐다. .member-reservation 안에는 resv-page-head/booking-steps/
+   (조건부)center-filter-banner처럼 grid-column:1/-1(전체 너비)인 아이템과
+   grid-column:1 또는 2(일반 너비)인 아이템이 같은 auto-placement 커서를 공유하며
+   섞여 있었는데, 이 커서가 "이전에 배치된 아이템의 행"을 기준으로 다음 아이템의
+   행을 찾는 방식이라 항상 두 컬럼이 같은 행에 붙는다고 신뢰할 수 있는 구조가
+   아니었다(스펙상 가능은 해도, 전체너비 아이템과 일반너비 아이템이 뒤섞인 순서
+   의존적 배치라 확정적으로 보장되지 않음). 이번엔 auto-placement 규칙에 기대지
+   않는다 — .resv-split을 .member-reservation과 분리된 독립 grid로 새로 만들고,
+   그 grid의 자식은 .resv-cal-col/.resv-list-col 딱 2개뿐이다(resv-page-head 등
+   앞선 전체너비 요소와 완전히 다른 grid라 서로 전혀 영향을 주지 않음) — 자식이
+   둘뿐이고 grid-column도 지정하지 않으므로 기본 row-flow auto-placement가
+   "첫째→1열, 둘째→2열, 같은 행"으로만 해석될 수 있는 유일한 경우라 모호성이
+   원천적으로 없다. .daylist-header의 margin-top/padding-top/border-top도 전부
+   0으로 리셋(app/globals.css의 .member-reservation .daylist-header가 이미
+   padding-top:16px를 주고 있었는데 1차 수정에서 margin-top/border-top만 지우고
+   padding-top은 놓쳐 16px가 그대로 남아있었음 — 이번에 같이 정리).
+
+   재조사(2026-09-24, 4차) — 헤더 텍스트 세로 정렬(3차 수정, diff<1px 확정)은 됐지만
+   실제 Preview에서 "가운데가 끊긴 구분선" 문제가 남아있었다: .cal-weekdays의
+   border-bottom(왼쪽, 헤더 바로 아래)과 .profile-picker의 border-bottom(오른쪽,
+   프로필 칩 밑이라 훨씬 아래)이 서로 다른 높이에서 각자 그어져 하나의 선처럼 안
+   이어져 보였다. .cal-header/.daylist-header를 .resv-split의 직계 자식으로 끌어올려
+   (app/reservation/page.tsx 참고) grid-template-areas로 "헤더 좌우 한 행 + 그 아래
+   전체 폭 구분선 한 줄 + 본문 좌우 한 행"을 이름으로 명시 배치한다 — auto-placement
+   추측 없이 이름으로 고정되므로 앞선 두 차례의 auto-placement 신뢰성 문제와 무관하다.
+
+   iPad portrait 배치(2026-09-24, 5차) — 이 블록을 원래 있던 공용 "min-width:1280px"
+   대형 블록(다른 무관한 desktop-only 규칙들과 섞여 있었음)에서 완전히 분리해 독립된
+   "min-width:900px"(상한 없음) 블록으로 옮겼다. .resv-split의 두 컬럼 min-width 합이
+   890px(430+460)라 900px부터는 겹침 없이 안전하게 들어간다 — 그 결과 태블릿 세로 중
+   폭이 넉넉한 기기(1024/1032px)는 데스크톱과 동일한 2열 split을 그대로 재사용하고
+   (새 레이아웃을 또 만들지 않음), 그보다 좁은 iPad mini portrait(820px)는 900px 미만이라
+   이 블록 밖 — 기존 1280px 미만 단일 컬럼 그대로 안전하게 유지된다(요구사항 8: 820px는
+   회귀 확인만, 강제로 2열을 만들지 않음). 1280px+ 데스크톱은 상한이 없는 이 블록이
+   그대로 계속 적용되므로 동작 변화 없음. */
+@media (min-width: 900px) {
   .resv-split {
     display: grid;
     grid-template-columns: minmax(430px,.9fr) minmax(460px,1.1fr);
@@ -5472,8 +5494,8 @@ textarea:focus-visible,
      추측치 아님). */
   .resv-header-right.daylist-header { margin-top: 0; padding-top: 26px; border-top: 0; }
   /* 4차 — 전체 폭을 가로지르는 구분선 하나만 남기고, 각 컬럼 내부에서 개별적으로
-     그려지던 중복 border는 이 split 레이아웃 범위에서만 없앤다(<1280px 단일 컬럼에서는
-     그대로 유지 — 거긴 이 media query 밖이라 아래 두 규칙의 영향을 받지 않음). */
+     그려지던 중복 border는 이 split 레이아웃 범위에서만 없앤다(900px 미만 단일 컬럼
+     에서는 그대로 유지 — 거긴 이 media query 밖이라 아래 두 규칙의 영향을 받지 않음). */
   .resv-split-divider {
     display: block;
     grid-area: divider;
@@ -5484,8 +5506,6 @@ textarea:focus-visible,
   .resv-cal-col > .cal-weekdays { border-bottom: 0; }
   .resv-list-col > .profile-picker { border-bottom: 0; }
   .resv-list-col > .daylist { max-height: calc(100dvh - 300px); overflow-y: auto; }
-  .member-home .home-class-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
-  .admin-v3-content .admin-list { grid-template-columns: repeat(3,minmax(0,1fr)); }
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -5785,4 +5805,74 @@ textarea:focus-visible,
   .member-home .home-category-head { min-height: 42px; padding-top: 10px; padding-bottom: 4px; }
   .member-home .cat-grid { padding-top: 2px; }
   .member-home .cat-icon { width: 52px; height: 52px; }
+}
+
+/* ============================================================
+   iPad portrait 레이아웃 폴리시 배치(2026-09-24)
+   - 13인치 iPad 세로(대략 768~1279px, 특히 820~1032px 실측 구간)에서 "데스크톱을
+     단순 확대한 느낌"이 나던 5개 화면 개선.
+   - 기존 breakpoint 체계(<768 모바일 / 768~1279 태블릿 아이콘 레일 / 1280+ 데스크톱
+     워크스페이스 / 1360+ 244px 텍스트 사이드바)를 그대로 따르고, 새 구간을 임의로
+     추가하지 않았다 — 예약 화면의 2열 split만 예외적으로 900px까지 하한을 낮췄는데
+     (근거는 아래 해당 규칙 주석), 그마저도 기존 데스크톱 grid를 그대로 재사용한 것이지
+     새 레이아웃을 만든 게 아니다.
+   - 모바일(<768)과 데스크톱(1280+, 1360+)에는 아무 영향이 없다 — 아래 규칙은 전부
+     768px 이상에서만 시작하거나(검색/회원 nav), 900px 이상 전용(예약)이라 1280px+에서는
+     이미 있던 desktop 규칙과 동일한 값으로 이어진다.
+   ============================================================ */
+
+/* 1. 센터 탐색 초기 화면 — .search-tablet-extra(app/search/page.tsx)는 기본 display:none
+   (위에서 이미 선언, 모바일/데스크톱 그대로) — 768~1279px에서만 노출한다. 새 추천
+   알고리즘/DB 없이 기존 .search-category-grid/.list-row, .search-center-grid/
+   .search-center-row 스타일(이미 768px+에 정의돼 있음, 위쪽 참고)을 그대로 물려받는다. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .search-tablet-extra { display: block; margin-top: 28px; }
+  .search-tablet-extra > section + section { margin-top: 8px; }
+}
+
+/* 2. 내 예약 — 예약이 1~2건뿐일 때 .hist-item이 태블릿 전체 폭(최대 1120px 컨텐츠
+   영역)까지 늘어나 "짧은 카드 한 줄 + 나머지 전부 공백"으로 보였다. .reservation-date-list
+   를 grid로 바꾸되 auto-fit이 아니라 auto-fill을 쓴다 — auto-fit은 아이템이 적으면
+   남는 트랙을 아예 접어 카드를 다시 넓게 늘리지만, auto-fill은 채워지지 않은 트랙을
+   빈 공간으로 "남겨두기"만 해서 카드 폭 자체가 min 360px를 넘어 늘어나지 않는다(요구
+   사항 "카드 폭을 너무 길게 늘이지 말 것"에 정확히 대응). 여러 건이면 트랙이 자연스럽게
+   여러 줄로 채워져 list/grid로 확장된다(요구사항 그대로). */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .reservation-date-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 10px 16px;
+    border-top: 0;
+  }
+  .hist-item { border-bottom: 1px solid var(--line); border-radius: 12px; padding: 14px 4px; }
+}
+
+/* 3. 센터 상세 — .center-info-2col(app/center/[id]/page.tsx)은 "위치"와 "센터 소개"를
+   768~1279px에서만 2열로 배치한다. align-items:start라 소개 글이 길어도 위치 칸을
+   억지로 늘리지 않고(요구사항 "억지 min-height로 채우지 말 것"), 위치/소개 중 하나만
+   있으면 :only-child로 전체 폭을 그대로 쓴다. 기존 하단 고정 CTA/nav 가림 방지 padding
+   (.center-detail-v2 { padding-bottom: ... !important })은 그대로 유지되므로 재발 없음. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .center-info-2col {
+    display: grid;
+    grid-template-columns: minmax(220px,.85fr) minmax(280px,1.15fr);
+    gap: 0 28px;
+    align-items: start;
+  }
+  .center-info-2col > .center-info-col:only-child { grid-column: 1 / -1; }
+}
+
+/* 5. 관리자 회원 목록(및 manager/admin 공용 nav) — 768~1023px(iPad mini portrait급
+   좁은 태블릿)에서 rail을 88px→72px로 더 좁힌다. 컴포넌트(ManagerNav/AdminNav)는
+   전혀 건드리지 않고 공용 CSS 변수(--workspace-rail/--workspace-sidebar)만 재정의 —
+   .manager-v3/.admin-v3의 padding-left가 이 변수를 그대로 쓰므로 회원 목록 등 콘텐츠
+   폭이 자동으로 늘어난다(요구사항 "manager/admin 공통 nav 구조 재사용, 중복 수정
+   최소화"). 펼치기(edge-swipe/rail 클릭 → aria-expanded="true") 시 244px로 넓어지는
+   기존 동작과 최소 터치 영역(.desktop-nav-item min-height:52px)은 손대지 않았다 —
+   좁아지는 건 "접혔을 때의 폭/좌우 padding"뿐이다. 1024px 이상(더 넓은 iPad landscape/
+   기존 태블릿)과 1280px+ 데스크톱은 이 규칙 밖이라 기존 88px/244px 그대로다. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  :root { --workspace-rail: 72px; --workspace-sidebar: 72px; }
+  .workspace-sidebar { padding-inline: 8px; }
+  .desktop-nav-item, .workspace-sidebar-mode { padding: 0 6px; gap: 8px; }
 }
