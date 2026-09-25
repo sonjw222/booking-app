@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2026-09-25 — iPhone 실기기 QA 12건 + 태블릿/중간 폭 rail 확장 개선 (`fix/mobile-real-device-qa-polish-2026-09-25`)
+
+실기기(iPhone, 다크 모드 중심) 캡처 12장에서 발견된 UI/UX/기능 문제를 한 배치로 수정. DB/RLS/SQL 변경 없음, native 파일 변경 없음.
+
+- **다크 모드 표면**: 센터 상세 탭(`.center-tabs` 라이트 하드코딩 배경 → `--bg` 토큰), 공용 뒤로가기 `button.side`(기본 버튼 면이 흰색으로 보임 → 배경/테두리 리셋), 검색 `검색` 버튼(`--ink` 채움 → 입력창과 같은 surface 계열), 스켈레톤 sweep 하이라이트(다크에서 번쩍임 → 은은하게).
+- **로딩/스켈레톤**: `app/loading.tsx`가 중앙정렬 flex(`system-state-v2`)로 감싸 스켈레톤이 좁은 세로 띠로 깨지던 것을 전용 `.route-loading` 래퍼로 분리. `.loading-wrap`은 usable viewport(헤더/하단 네비/safe-area 제외) 높이를 채우고 넘치는 row는 잘라냄.
+- **테마 설정**: 카드 배경/글자를 옵션의 실제 테마 색으로 칠하던 것을 중립 surface로 바꾸고, 테마 차이는 작은 스와치, 선택은 accent 테두리 + 라디오로 표시.
+- **예약 캘린더 버튼(`/mypage/calendar`)**: `내 캘린더에 추가`/`캘린더에 추가`는 blob + `<a download>`가 iOS WKWebView에서 조용히 무시되던 게 원인 → `exportIcs()`(Web Share 파일 공유 → 일반 브라우저 다운로드 → 앱에서 불가하면 에러 표시). `저장`(메모)은 성공/실패 피드백이 없고 RLS 0행 갱신을 성공으로 오인할 수 있어 `.select("id")`로 검증 + "저장됨" 표시.
+- **SwipeRow 재설계(회원/관리자 알림 공용)**: 좌→우 = 고정/고정 해제, 우→좌 = 삭제(한 쪽에 둘이 같이 나오지 않음). release는 항상 closed 또는 action 폭(±88px) 두 곳 중 하나로만 스냅(빈 공간 고정 방지). 가로 확정 후 1.0→1.4배 gain, 7px 미만 무시, 약 19px 의도 swipe로 열림, flick 인식. dragging(즉시 응답)/released(rAF 감속 이징) 분리, action 라벨은 진행도에 맞춰 reveal. 회원 알림에도 고정/해제 추가(기존 `notifications.pinned`·`setNotificationPinned` 재사용).
+- **캘린더 선택 날짜**: 채움+사각 테두리 → 날짜 숫자를 감싼 얇은 accent 링(회원 예약/매니저 수업/마이페이지 캘린더 공통). 주말 색·수업 있는 날 점 유지.
+- **iOS 길게 누르기**: `a[href]`/버튼/role 요소에 `-webkit-touch-callout: none`(user-select 미변경).
+- **센터 선택 시트**: `.filter-chip` 알약 + 큰 닫기 블록 → 기존 `.sheet` + X 닫기 + 균일한 옵션 행 + 체크 표시(`CenterSelectSheet.tsx`).
+- **태블릿/중간 폭(768–1359px) rail**: rail 위 어디서나 시작한 가로 swipe로 펼침/접힘(방향 잠금, 세로 스크롤과 분리), 로고 터치는 펼침, 메뉴 항목은 기존대로 즉시 라우팅, 경로 변경 시 compact 복귀, 회원용 `.member-desktop-nav`도 같은 공용 훅 적용, 라벨은 opacity + translateX로 폭 전개와 동기화.
+- 테스트: 신규 5개 파일(swipeRow.gesture, centerSelectSheet.options, myCalendar.exportIcs, navRail.expandContract, realDeviceQa.styleContract) → 총 522개 통과.
+
 ## 2026-09-23 — 안정화 배치: Google 로그인 조사 + 태블릿/웹 UX 10건 + 홈 카테고리 grid
 
 Play Store 내부 테스트(versionCode 2)에서 Google 로그인만 실패하는 문제와, Android

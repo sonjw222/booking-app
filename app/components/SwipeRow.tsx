@@ -1,183 +1,291 @@
 "use client";
 
 /*
-  릴리스 폴리시 배치 8차(2026-09-17) — 관리자 알림 swipe actions(고정/삭제) 전용으로 만든
-  범용 swipe-to-reveal row. 화면별 duplicate 구현을 피하려고 범용 컴포넌트로 분리했다(다른
-  리스트에서도 필요해지면 재사용 가능).
+  범용 swipe-to-reveal row — 회원/관리자 알림 공용(app/notifications, app/manager/notifications).
 
-  성능(3-4, 알림 70~100개에서도 부드러워야 함): pointermove마다 React state를 갱신하지 않는다
-  — 드래그 중 위치는 ref + DOM 직접 조작(style.transform)만 쓰고, requestAnimationFrame으로
-  묶어서 적용한다. 부모(리스트)로 올리는 state는 "지금 열려 있는 row id" 하나뿐이라
-  swipe 자체가 리스트 전체를 리렌더시키지 않는다. transform/opacity만 사용(layout 속성
-  변경 없음 → layout thrashing 최소화).
+  실기기 QA 재설계(2026-09-25) — 사용자가 iPhone에서 발견한 문제:
+    1) 왼쪽 방향 한 쪽에 "고정+삭제"가 같이 나와 헷갈린다 → 방향별로 분리:
+       오른쪽→왼쪽 = rightAction(삭제), 왼쪽→오른쪽 = leftAction(고정/고정 해제).
+    2) 조금만 밀고 놓으면 action 없는 빈 공간이 생긴 채 row가 어정쩡하게 멈춘다 →
+       release 시 "닫힘(0)" 또는 "해당 action이 완전히 드러난 위치(±width)" 두 곳 중 하나로만
+       스냅한다(중간 정지 상태가 존재하지 않는다).
+    3) 손가락을 따라오는 거리가 손가락 이동량과 같아 반응이 굼뜨다 → 가로 의도가 확정된 뒤부터
+       손가락보다 살짝 빠르게(최대 1.4배, 6~30px 구간에서 1.0→1.4로 부드럽게 증가 — 확정 순간
+       튀지 않음) 따라온다. 7px 미만 움직임은 무시(의도치 않은 터치/스크롤 보호).
+    4) 애니메이션: dragging 상태(즉시 응답, transition 없음)와 released 상태(rAF로 구동하는
+       감속 이징)를 분리. 같은 프레임에서 content transform과 action 패널의 reveal 진행도
+       (--swipe-p-l/r → label opacity)를 함께 갱신하므로 버튼 라벨/아이콘이 열림/닫힘 애니메이션에
+       맞춰 자연스럽게 나타난다(CSS transition을 덧대는 방식이 아님).
 
-  제스처: 왼쪽으로 끌면 오른쪽 action 영역이 드러난다(iOS 네이티브 swipe action과 동일
-  방향). 수직 스크롤과 충돌하지 않도록 첫 8px 이동까지는 수평/수직 의도를 판정만 하고
-  실제 이동을 적용하지 않는다(threshold) — 수직으로 판단되면 그 제스처 동안은 그대로
-  터치 스크롤에 맡긴다(CSS touch-action: pan-y, .swipe-row-content 참고).
+  성능: pointermove마다 React state를 갱신하지 않는다 — 위치는 ref + DOM(style)로만 다루고, 부모로
+  올리는 state는 "지금 열린 row id" 하나뿐이다.
 
-  안정화 배치(2026-09-22, 태블릿/웹 QA) — 다음 세 가지를 추가:
-  1) Pointer Events로 교체(Touch Events 전용이었음) — touch/pen/mouse 전부 같은 코드로
-     동작. mouse는 눌렀다 뗄 때까지 요소 밖으로 나가도 계속 추적해야 하므로
-     setPointerCapture를 쓴다(터치도 동일하게 캡처 — 리스트 스크롤 도중 손가락이 row
-     경계를 살짝 벗어나도 제스처가 끊기지 않게).
-  2) velocity 기반 flick — 기존엔 놓는 순간의 위치 비율(OPEN_RATIO)만 봐서, 짧게 끌고
-     빠르게 놓는 "flick" 제스처가 거리 부족으로 무시될 수 있었다. 마지막 구간의
-     속도(px/ms)를 같이 계산해 임계값을 넘으면 거리와 무관하게 방향대로 스냅한다.
-  3) prefers-reduced-motion — 켜져 있으면 스냅 애니메이션을 즉시 전환(transition 없음)으로
-     바꾼다.
-
-  민감도 배치(2026-09-24) — 사용자 피드백: "지금은 정직하게 일정 범위 이상 끌어야
-  버튼이 나오고 사라지는데, 조금만 밀어도 자연스러운 애니메이션과 함께 나오고
-  사라지면 좋겠다." 기존 OPEN_RATIO(42%, actionWidth 144px 기준 약 60px)는 매번
-  절반 가까이 끌어야 열렸고, 게다가 "닫는" 쪽은 항상 절대 위치(s.x) 기준으로만
-  판정해서 이미 열린 상태에서 되돌리려면 반대로 훨씬 더 크게(약 84px) 끌어야 하는
-  비대칭 문제도 있었다(열기 42% vs 닫기 실질 58%). 절대 비율 대신, 제스처 "시작
-  상태 기준 상대 이동량"이 SMALL_TOGGLE_PX(약 16px, MOVE_THRESHOLD 8px보다 살짝
-  큰 정도)만 넘으면 방향대로 스냅하도록 바꿔 열기/닫기 둘 다 동일하게 "조금만
-  밀어도" 반응한다. 이 컴포넌트는 관리자/회원 알림 양쪽에서 공용으로 쓰이고
-  모바일/태블릿 전부 같은 코드 경로라 여기 값만 바꾸면 앱 전체에 적용된다. 빠른
-  flick(velocity)과 prefers-reduced-motion 처리는 기존 그대로 유지.
+  제스처 보호: touch-action: pan-y(CSS) — 수직 스크롤은 브라우저가 가져가면 pointercancel로 끝난다.
+  가로 확정은 |dx| ≥ 7px 이면서 |dx| > |dy| × 1.5 일 때만 → 수직 스크롤 중 생긴 작은 x 움직임으로는
+  열리지 않는다. 삭제/고정은 오직 버튼 탭으로만 실행된다(스와이프 자체는 열기만 함).
 */
 import { useEffect, useRef, type ReactNode } from "react";
 
-const MOVE_THRESHOLD = 8; // px — 이보다 작은 움직임에는 반응하지 않음(의도치 않은 오픈 방지, 방향 판정용)
-const OVERSWIPE_CUSHION = 22; // px — actionWidth를 넘어서도 살짝 더 끌리는 여유(고무줄 느낌), 그 이상은 clamp
-const SMALL_TOGGLE_PX = 16; // px — 시작 상태 기준 이만큼만 밀어도 방향대로 스냅(열기/닫기 동일하게 적용)
-const FLICK_VELOCITY = 0.5; // px/ms — 이 이상으로 빠르게 놓으면 거리와 무관하게 방향대로 스냅
-const FLICK_SAMPLE_WINDOW = 80; // ms — 이보다 오래된 샘플은 velocity 계산에서 버림(멈췄다 다시 움직인 경우 대비)
+export const SWIPE_INTENT_PX = 7;          // 이보다 작은 움직임은 무시(방향 판정도 안 함)
+export const SWIPE_AXIS_RATIO = 1.5;       // |dx| > |dy| * 1.5 일 때만 가로로 확정
+export const SWIPE_GAIN_MAX = 1.4;         // 손가락 이동량 대비 row 이동량 최대 배율
+const GAIN_RAMP_PX = 24;                   // 의도 확정(7px) 이후 이 거리에 걸쳐 gain이 1.0 → GAIN_MAX
+export const SWIPE_OPEN_THRESHOLD_PX = 24; // 닫힌 상태에서 이만큼(표시 이동량) 끌면 열림 (손가락 ≈ 19px)
+export const SWIPE_CLOSE_THRESHOLD_PX = 20; // 열린 상태에서 이만큼 되돌리면 닫힘
+export const SWIPE_FLICK_VELOCITY = 0.35;  // px/ms — 이 이상으로 빠르게 놓으면 방향대로 스냅
+const FLICK_MIN_TRAVEL_PX = 12;            // flick 판정에 필요한 최소 표시 이동량
+const FLICK_SAMPLE_WINDOW = 100;           // ms — velocity 계산에 쓰는 최근 샘플 구간
+const OVERSWIPE_MAX = 24;                  // px — action 폭을 넘어 끌 수 있는 고무줄 여유
+const OVERSWIPE_RESISTANCE = 0.35;
+
+export type SwipeSide = "left" | "right"; // left: 왼쪽 action이 열림(콘텐츠가 오른쪽으로), right: 오른쪽 action
+
+/** 손가락 이동량 dx(부호 포함) → 표시할 row 이동량. 가로 확정 이후 1.0 → SWIPE_GAIN_MAX로 부드럽게 증가. */
+export function applySwipeGain(dx: number): number {
+  const abs = Math.abs(dx);
+  const ramp = Math.min(1, Math.max(0, (abs - SWIPE_INTENT_PX) / GAIN_RAMP_PX));
+  return dx * (1 + (SWIPE_GAIN_MAX - 1) * ramp);
+}
+
+/** action 폭을 넘는 구간에 고무줄 저항 적용. 범위 밖(반대 방향)은 0으로 clamp. */
+export function clampSwipeX(x: number, leftWidth: number, rightWidth: number, base: number): number {
+  const min = base > 0 ? 0 : -rightWidth; // 왼쪽 action이 열려 있으면 오른쪽으로 넘어가지 못함(그 반대도 동일)
+  const max = base < 0 ? 0 : leftWidth;
+  let v = x;
+  // 닫는 방향의 끝(0)은 하드 clamp — 열려 있던 row가 반대편 action 영역으로 넘어가 보이지 않게.
+  if (base < 0 && v > 0) v = 0;
+  if (base > 0 && v < 0) v = 0;
+  if (v > max) v = max + Math.min(OVERSWIPE_MAX, (v - max) * OVERSWIPE_RESISTANCE);
+  if (v < min) v = min - Math.min(OVERSWIPE_MAX, (min - v) * OVERSWIPE_RESISTANCE);
+  // action이 없는 쪽으로는 거의 움직이지 않게(살짝 저항감만) — 빈 공간이 드러나지 않도록.
+  if (leftWidth <= 0 && v > 0) v = Math.min(6, v * 0.15);
+  if (rightWidth <= 0 && v < 0) v = Math.max(-6, v * 0.15);
+  return v;
+}
+
+export interface SwipeReleaseInput {
+  x: number;            // release 시점의 표시 이동량(+ = 왼쪽 action 방향)
+  velocity: number;     // 손가락 velocity(px/ms, + = 오른쪽으로)
+  base: number;         // 제스처 시작 위치(0, +leftWidth, -rightWidth)
+  leftWidth: number;
+  rightWidth: number;
+}
+
+/**
+ * release 결정 — 반환값은 스냅할 최종 위치(0 | +leftWidth | -rightWidth) 뿐이다. 중간 위치로는
+ * 절대 정지하지 않는다(사용자 리포트의 "빈 공간이 생긴 채 고정" 방지).
+ */
+export function resolveSwipeRelease({ x, velocity, base, leftWidth, rightWidth }: SwipeReleaseInput): number {
+  const fast = Math.abs(velocity) >= SWIPE_FLICK_VELOCITY;
+  if (base === 0) {
+    // 닫힌 상태에서 시작 — 방향별 action이 있을 때만 열린다.
+    if (x > 0 && leftWidth > 0) {
+      if (x >= SWIPE_OPEN_THRESHOLD_PX) return leftWidth;
+      if (fast && velocity > 0 && x >= FLICK_MIN_TRAVEL_PX) return leftWidth;
+    }
+    if (x < 0 && rightWidth > 0) {
+      if (-x >= SWIPE_OPEN_THRESHOLD_PX) return -rightWidth;
+      if (fast && velocity < 0 && -x >= FLICK_MIN_TRAVEL_PX) return -rightWidth;
+    }
+    return 0; // threshold 미만 → closed로 복귀
+  }
+  // 열린 상태에서 시작 — 되돌리는 방향으로 조금만(또는 빠르게) 움직이면 닫힘, 아니면 그대로 유지.
+  const openSide: SwipeSide = base > 0 ? "left" : "right";
+  const towardClosed = openSide === "left" ? base - x : x - base; // 닫힘 방향으로 이동한 양(px)
+  const velTowardClosed = openSide === "left" ? -velocity : velocity;
+  if (towardClosed >= SWIPE_CLOSE_THRESHOLD_PX) return 0;
+  if (fast && velTowardClosed > 0 && towardClosed >= 6) return 0;
+  return base;
+}
 
 function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 }
 
+// 빠르게 시작해 끝에서 감속하는 이징(easeOutQuart) — "손가락을 놓자마자 즉각 반응 → 부드럽게 정착".
+const easeOut = (t: number) => 1 - Math.pow(1 - t, 4);
+
 export default function SwipeRow({
-  id, openId, onOpenChange, actions, children, actionWidth = 144, className,
+  id, openId, onOpenChange, leftAction, rightAction,
+  leftActionWidth = 88, rightActionWidth = 88, children, className,
 }: {
   id: string;
   openId: string | null;
   onOpenChange: (id: string | null) => void;
-  actions: ReactNode;
+  leftAction?: ReactNode;   // 왼쪽→오른쪽 스와이프로 드러남(예: 고정/고정 해제)
+  rightAction?: ReactNode;  // 오른쪽→왼쪽 스와이프로 드러남(예: 삭제)
+  leftActionWidth?: number;
+  rightActionWidth?: number;
   children: ReactNode;
-  actionWidth?: number;
   className?: string;
 }) {
+  const leftW = leftAction ? leftActionWidth : 0;
+  const rightW = rightAction ? rightActionWidth : 0;
+  const rowRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const dragState = useRef<{
-    pointerId: number | null;
-    startX: number; startY: number; axis: "x" | "y" | null; dragging: boolean; x: number;
-    samples: { t: number; x: number }[]; // velocity 계산용 최근 이동 샘플
-  }>({
-    pointerId: null, startX: 0, startY: 0, axis: null, dragging: false, x: 0, samples: [],
-  });
   const isOpen = openId === id;
-  const rafId = useRef<number | null>(null);
 
-  function applyTransform(x: number, animate: boolean) {
-    const el = contentRef.current;
-    if (!el) return;
-    el.style.transition = animate && !prefersReducedMotion() ? "transform 220ms cubic-bezier(.22,.85,.32,1)" : "none";
-    el.style.transform = `translateX(${x}px)`;
+  // 최신 props를 ref로 — pointer 핸들러/애니메이션 루프가 항상 최신 값을 본다.
+  const cfg = useRef({ leftW, rightW, isOpen, openId, onOpenChange });
+  cfg.current = { leftW, rightW, isOpen, openId, onOpenChange };
+
+  const openSide = useRef<SwipeSide | null>(null);
+  const pos = useRef(0);                       // 현재 표시 위치(px)
+  const anim = useRef<number | null>(null);    // 진행 중인 released 애니메이션 rAF id
+  const dragRaf = useRef<number | null>(null);
+  const suppressClick = useRef(false);
+  const drag = useRef<{
+    pointerId: number | null; startX: number; startY: number;
+    axis: "x" | "y" | null; base: number; x: number; samples: { t: number; x: number }[];
+  }>({ pointerId: null, startX: 0, startY: 0, axis: null, base: 0, x: 0, samples: [] });
+
+  function paint(x: number) {
+    pos.current = x;
+    const content = contentRef.current;
+    const row = rowRef.current;
+    if (!content || !row) return;
+    content.style.transform = x === 0 ? "" : `translate3d(${x}px,0,0)`;
+    const { leftW: lw, rightW: rw } = cfg.current;
+    const l = Math.max(0, x);
+    const r = Math.max(0, -x);
+    row.style.setProperty("--swipe-l", `${l}px`);
+    row.style.setProperty("--swipe-r", `${r}px`);
+    row.style.setProperty("--swipe-p-l", lw > 0 ? String(Math.min(1, l / lw)) : "0");
+    row.style.setProperty("--swipe-p-r", rw > 0 ? String(Math.min(1, r / rw)) : "0");
   }
 
-  // 외부에서 openId가 바뀌면(다른 row를 열었거나, outside tap으로 전부 닫힘) 애니메이션과
-  // 함께 동기화 — 이때만 정상적인 리렌더 경로(React state)를 타므로 비용이 거의 없다.
+  function cancelAnim() {
+    if (anim.current != null) { cancelAnimationFrame(anim.current); anim.current = null; }
+  }
+
+  // released 상태 — 현재 위치에서 target까지 rAF로 감속 이동(content와 action reveal을 같은 프레임에 갱신).
+  function settleTo(target: number) {
+    cancelAnim();
+    const from = pos.current;
+    if (from === target) { paint(target); rowRef.current?.setAttribute("data-swipe-state", "idle"); return; }
+    if (prefersReducedMotion()) { paint(target); rowRef.current?.setAttribute("data-swipe-state", "idle"); return; }
+    const dist = Math.abs(target - from);
+    const duration = Math.min(320, 190 + dist * 1.1);
+    const t0 = performance.now();
+    rowRef.current?.setAttribute("data-swipe-state", "settling");
+    const step = (now: number) => {
+      const t = Math.min(1, (now - t0) / duration);
+      paint(from + (target - from) * easeOut(t));
+      if (t < 1) anim.current = requestAnimationFrame(step);
+      else { anim.current = null; paint(target); rowRef.current?.setAttribute("data-swipe-state", "idle"); }
+    };
+    anim.current = requestAnimationFrame(step);
+  }
+
+  // 외부에서 openId가 바뀌면(다른 row를 열었거나 outside tap으로 닫힘) 동기화.
   useEffect(() => {
-    const target = isOpen ? -actionWidth : 0;
-    dragState.current.x = target;
-    applyTransform(target, true);
-  }, [isOpen, actionWidth]);
+    if (drag.current.axis === "x") return; // 드래그 중에는 건드리지 않음
+    const target = isOpen ? (openSide.current === "left" ? leftW : -rightW) : 0;
+    if (!isOpen) openSide.current = null;
+    settleTo(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, leftW, rightW]);
+
+  useEffect(() => () => { cancelAnim(); if (dragRaf.current != null) cancelAnimationFrame(dragRaf.current); }, []);
 
   function onPointerDown(e: React.PointerEvent) {
-    const s = dragState.current;
-    if (s.pointerId != null) return; // 이미 다른 포인터(멀티터치 등)를 추적 중이면 무시
+    const s = drag.current;
+    if (s.pointerId != null) return; // 멀티터치 등 이미 추적 중
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     s.pointerId = e.pointerId;
-    s.startX = e.clientX;
-    s.startY = e.clientY;
+    s.startX = e.clientX; s.startY = e.clientY;
     s.axis = null;
-    s.dragging = true;
+    s.base = pos.current;
     s.samples = [{ t: performance.now(), x: e.clientX }];
-    // x는 유지(이미 열려 있으면 열린 상태에서 이어서 드래그).
   }
 
   function onPointerMove(e: React.PointerEvent) {
-    const s = dragState.current;
-    if (!s.dragging || s.pointerId !== e.pointerId) return;
+    const s = drag.current;
+    if (s.pointerId !== e.pointerId) return;
     const dx = e.clientX - s.startX;
     const dy = e.clientY - s.startY;
     if (!s.axis) {
-      if (Math.abs(dx) < MOVE_THRESHOLD && Math.abs(dy) < MOVE_THRESHOLD) return;
-      s.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
-      if (s.axis === "x") {
-        // 방향이 수평으로 확정된 시점부터만 이후 제스처 동안 이 포인터를 계속 추적한다
-        // (요소 밖으로 나가도 pointermove가 끊기지 않음 — mouse drag에 특히 중요).
-        (e.target as Element).setPointerCapture?.(e.pointerId);
+      const adx = Math.abs(dx), ady = Math.abs(dy);
+      if (adx < SWIPE_INTENT_PX && ady < SWIPE_INTENT_PX) return; // 1~6px 움직임은 무시
+      if (adx > ady * SWIPE_AXIS_RATIO && adx >= SWIPE_INTENT_PX) {
+        s.axis = "x";
+        cancelAnim(); // 정착 애니메이션 도중 다시 잡으면 현재 위치에서 이어서 드래그
+        s.base = pos.current;
+        rowRef.current?.setAttribute("data-swipe-state", "dragging");
+        try { (e.currentTarget as Element).setPointerCapture?.(e.pointerId); } catch { /* 이미 끝난 포인터 등 — 캡처 없이도 동작 */ }
+        // 다른 row가 열려 있으면 즉시 닫는다.
+        const { openId: cur, onOpenChange: change } = cfg.current;
+        if (cur !== null && cur !== id) change(null);
+      } else if (ady >= SWIPE_INTENT_PX) {
+        s.axis = "y"; // 세로 스크롤에 맡김 — 이 제스처 동안은 아무것도 하지 않는다
+      } else {
+        return; // 아직 방향 불명확 — 조금 더 지켜본다
       }
     }
-    if (s.axis === "y") return; // 수직 스크롤에 맡김
+    if (s.axis !== "x") return;
     e.preventDefault();
-    const base = isOpen ? -actionWidth : 0;
-    const next = Math.max(-actionWidth - OVERSWIPE_CUSHION, Math.min(OVERSWIPE_CUSHION, base + dx));
-    s.x = next;
+    const next = clampSwipeX(s.base + applySwipeGain(dx), cfg.current.leftW, cfg.current.rightW, s.base);
+    s.x = next; // release 판정은 rAF에 밀리지 않도록 이 값(마지막 계산 위치)을 쓴다
     const now = performance.now();
     s.samples.push({ t: now, x: e.clientX });
-    // 오래된 샘플은 버려서 "멈췄다가 다시 움직인" 경우 이전 구간이 velocity에 섞이지 않게 한다.
     while (s.samples.length > 1 && now - s.samples[0].t > FLICK_SAMPLE_WINDOW) s.samples.shift();
-    if (rafId.current != null) cancelAnimationFrame(rafId.current);
-    rafId.current = requestAnimationFrame(() => applyTransform(next, false));
+    if (dragRaf.current != null) cancelAnimationFrame(dragRaf.current);
+    dragRaf.current = requestAnimationFrame(() => { dragRaf.current = null; paint(next); });
   }
 
   function endDrag(e: React.PointerEvent) {
-    const s = dragState.current;
+    const s = drag.current;
     if (s.pointerId !== e.pointerId) return;
-    (e.target as Element).releasePointerCapture?.(e.pointerId);
+    try { (e.currentTarget as Element).releasePointerCapture?.(e.pointerId); } catch { /* 무시 */ }
     s.pointerId = null;
-    if (!s.dragging) return;
-    s.dragging = false;
-    if (s.axis !== "x") { s.axis = null; return; }
+    const axis = s.axis;
     s.axis = null;
+    if (axis !== "x") return;
+    if (dragRaf.current != null) { cancelAnimationFrame(dragRaf.current); dragRaf.current = null; }
+    // 드래그였다면 뒤따르는 click(내비게이션 등)은 삼킨다.
+    suppressClick.current = true;
+    window.setTimeout(() => { suppressClick.current = false; }, 0);
 
-    // velocity: 마지막 샘플 구간(최근 FLICK_SAMPLE_WINDOW ms) 기준 px/ms.
     const first = s.samples[0];
     const last = s.samples[s.samples.length - 1];
     const dt = last.t - first.t;
     const velocity = dt > 0 ? (last.x - first.x) / dt : 0;
 
-    // 이 제스처가 "시작한 상태"(열림/닫힘) 기준 상대 이동량 — 절대 위치(s.x)가 아니라
-    // base(제스처 시작 시점의 위치)로부터 얼마나 움직였는지로 판정해야 열기/닫기가
-    // 대칭이 된다(주석 상단 "민감도 배치" 참고).
-    const base = isOpen ? -actionWidth : 0;
-    const dxFromBase = s.x - base;
-
-    let shouldOpen: boolean;
-    if (Math.abs(velocity) > FLICK_VELOCITY) {
-      // 빠른 flick — 이동량과 무관하게 방향대로 스냅.
-      shouldOpen = velocity < 0;
-    } else if (!isOpen && dxFromBase < -SMALL_TOGGLE_PX) {
-      shouldOpen = true; // 닫힌 상태 → 조금만 왼쪽으로 밀어도 열림
-    } else if (isOpen && dxFromBase > SMALL_TOGGLE_PX) {
-      shouldOpen = false; // 열린 상태 → 조금만 오른쪽으로 밀어도 닫힘
+    const { leftW: lw, rightW: rw, onOpenChange: change } = cfg.current;
+    paint(s.x);
+    const target = resolveSwipeRelease({ x: s.x, velocity, base: s.base, leftWidth: lw, rightWidth: rw });
+    if (target === 0) {
+      openSide.current = null;
+      settleTo(0);
+      change(null);
     } else {
-      shouldOpen = isOpen; // 임계값 못 넘으면 원래 상태로 스냅백
+      openSide.current = target > 0 ? "left" : "right";
+      settleTo(target);
+      change(id);
     }
-    const target = shouldOpen ? -actionWidth : 0;
-    s.x = target;
-    applyTransform(target, true);
-    onOpenChange(shouldOpen ? id : null);
   }
 
   // 열린 상태에서 콘텐츠(아직 보이는 부분)를 탭하면 이동하지 않고 닫히기만 한다(iOS 관례).
   function handleContentClickCapture(e: React.MouseEvent) {
-    if (isOpen) { e.preventDefault(); e.stopPropagation(); onOpenChange(null); }
+    if (suppressClick.current) { e.preventDefault(); e.stopPropagation(); return; }
+    if (cfg.current.isOpen) { e.preventDefault(); e.stopPropagation(); cfg.current.onOpenChange(null); }
   }
 
   return (
-    <div className={`swipe-row ${className ?? ""}`} data-swipe-row-id={id}>
-      <div className="swipe-row-actions" style={{ width: actionWidth }}>{actions}</div>
+    <div ref={rowRef} className={`swipe-row ${className ?? ""}`} data-swipe-row-id={id} data-swipe-state="idle">
+      {leftAction && (
+        <div className="swipe-row-actions swipe-row-actions-left" style={{ ["--action-w" as string]: `${leftW}px` }}>
+          <div className="swipe-action-inner">{leftAction}</div>
+        </div>
+      )}
+      {rightAction && (
+        <div className="swipe-row-actions swipe-row-actions-right" style={{ ["--action-w" as string]: `${rightW}px` }}>
+          <div className="swipe-action-inner">{rightAction}</div>
+        </div>
+      )}
       <div
         ref={contentRef}
         className="swipe-row-content"
-        style={{ transform: `translateX(${isOpen ? -actionWidth : 0}px)` }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}

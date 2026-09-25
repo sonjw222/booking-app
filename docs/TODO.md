@@ -37,6 +37,11 @@
 5. 사용자 결정이 필요한 기능은 결정 기록 없이 완료 처리하지 않습니다.
 6. 완료된 항목은 [CHANGELOG.md](./CHANGELOG.md)에 근거와 함께 기록한 뒤 이 문서에서 제거하거나 완료 이력으로 이동합니다.
 
+### P2-RealDevice-QA-0925. (2026-09-25) 실기기 확인이 필요한 항목 — 코드로는 검증 불가
+- **캘린더 파일 내보내기(iOS/Android 앱)**: `exportIcs()`는 Web Share(파일)를 우선 사용. WKWebView/Android WebView에서 `navigator.share({files})`가 실제로 열리는지 실기기 확인 필요. 안 되면 별도 native 작업(Capacitor Share/Filesystem 플러그인 또는 EventKit 연동) 필요 — 이번 배치에서는 native 미변경.
+- **iOS 길게 누르기 링크 미리보기**: CSS(`-webkit-touch-callout: none`)만 적용. 실기기에서 여전히 뜨면 `capacitor.config`의 `ios.allowsLinkPreview: false`(native 설정 변경) 필요.
+- **관리자 알림 목록 상단 두 행이 우측으로 밀려 있던 캡처(IMG_2276)**: 이전 SwipeRow가 중간 위치에 남던 증상으로 판단해 재설계로 해소했으나, 재현 확인은 실기기에서 필요.
+
 ## 3. P0 — 핵심 거래·알림·보안·DB 재현성
 
 ### P0-1. 실제 PG 결제 연동

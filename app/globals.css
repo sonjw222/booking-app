@@ -386,8 +386,15 @@ a { color: inherit; text-decoration: none; }
   padding: 7px 0 6px; border-radius: 12px; font: inherit; color: var(--ink);
 }
 .cal-cell.empty { cursor: default; }
-.cal-cell.selected { background: var(--accent); }
-.cal-cell.selected .cal-daynum { color: var(--text-inverse) !important; }
+/* 실기기 QA(2026-09-25) — 선택 날짜가 "accent 채움 + 사각 셀 테두리"로 이중 강조돼 무거웠다
+   (특히 매니저 수업 캘린더: 셀 전체가 진한 navy 사각형 + 안쪽 원). 채움을 없애고 날짜 숫자를
+   감싼 얇은 accent 링 하나로 통일한다(.daynum-wrap의 inset box-shadow — 레이아웃 폭 변화 없음).
+   오늘/주말/수업 있는 날 점과 충돌하지 않도록: 점은 그대로 보이고, 주말은 본래 색(danger/info)
+   을 유지하며 링만 표시. */
+.cal-cell.selected { background: transparent; }
+.cal-cell.selected .daynum-wrap { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.cal-cell.selected:not(.sun):not(.sat) .cal-daynum { color: var(--accent); font-weight: 750; }
+.cal-cell.selected.sun .cal-daynum, .cal-cell.selected.sat .cal-daynum { font-weight: 750; }
 .cal-daynum { font-size: 14px; font-weight: 600; }
 .cal-cell.sun .cal-daynum { color: var(--danger); }   /* 일요일·공휴일 */
 .cal-cell.sat .cal-daynum { color: var(--info); }   /* 토요일 */
@@ -395,7 +402,7 @@ a { color: inherit; text-decoration: none; }
 /* 내가 예약한 날: 날짜를 동그라미로 감싸기 */
 .daynum-wrap { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
 .cal-cell.booked .daynum-wrap { border: 2px solid var(--accent); }
-.cal-cell.selected.booked .daynum-wrap { border-color: var(--text-inverse); }
+.cal-cell.selected.booked .daynum-wrap { border-color: var(--accent); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent); }
 
 .cal-dots { display: flex; gap: 3px; height: 6px; }
 .cal-dot { width: 6px; height: 6px; border-radius: 50%; }
@@ -723,6 +730,11 @@ a { color: inherit; text-decoration: none; }
   position: sticky; top: 0; z-index: 15; background: var(--bg);
 }
 .back-header .side { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 19px; }
+/* 실기기 QA(2026-09-25) — BackButton은 <button class="side">인데 배경/테두리 리셋이 없어
+   iOS WKWebView가 기본 버튼 면(밝은 회색/흰색)을 그대로 그렸다(다크 모드에서 왼쪽 위
+   뒤로가기만 하얀 사각형으로 튐). 공용 .side 계약에서 한 번만 투명 처리 — <a class="side">
+   와 시각적으로 동일해지고, 화면별 패치가 필요 없다. */
+button.side { background: transparent; border: 0; padding: 0; color: var(--ink); cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .back-header .title { font-size: 16px; font-weight: 800; }
 .ghost-btn {
   display: block; width: 100%; text-align: center; border: none; cursor: pointer;
@@ -2210,7 +2222,7 @@ a.membership-card { text-decoration: none; display: block; }
 .mypage-cal-dow { text-align: center; font-size: 11px; color: var(--text-dim); font-weight: 700; padding: 4px 0; }
 .mypage-cal-cell { min-height: 42px; display: flex; flex-direction: column; align-items: center; padding-top: 4px; }
 .mypage-cal-cell.empty { min-height: 42px; }
-.mypage-cal-day { font-size: 12px; color: var(--text); }
+.mypage-cal-day { display: inline-grid; place-items: center; min-width: 26px; height: 26px; border-radius: 50%; font-size: 12px; color: var(--text); }
 .mypage-cal-dots { display: flex; gap: 2px; margin-top: 3px; flex-wrap: wrap; justify-content: center; }
 .mypage-cal-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
 .mypage-cal-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
@@ -2221,8 +2233,8 @@ a.membership-card { text-decoration: none; display: block; }
 /* 캘린더 선택 상태 통일 — 다른 캘린더들과 같은 brand-soft 패턴(globals.css의
    .app-date-grid button.on 주석 참고). 이 셀은 숫자 아래 점(dots)이 함께 들어가는
    구조라 원형 대신 기존 사각 셀 그대로 채움색만 맞춘다. */
-.mypage-cal-cell.tappable.sel { background: var(--brand-soft); outline: none; }
-.mypage-cal-cell.tappable.sel .mypage-cal-day { color: var(--brand-ink); font-weight: 700; }
+.mypage-cal-cell.tappable.sel { background: transparent; outline: none; }
+.mypage-cal-cell.tappable.sel .mypage-cal-day { box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent); font-weight: 700; }
 .cal-detail { padding: 0 var(--page-gutter); }
 .cal-detail-date { font-size: 15px; font-weight: 800; color: var(--text); margin: 8px 0 12px; }
 .cal-detail-card { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
@@ -2438,9 +2450,17 @@ a.membership-card { text-decoration: none; display: block; }
 
 /* 테마 설정 */
 .theme-options { display: flex; flex-direction: column; gap: 10px; padding: 0 var(--page-gutter); }
-.theme-option { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); cursor: pointer; text-align: left; }
-.theme-option.on { border-color: var(--accent); background: var(--surface); }
-.theme-swatch { width: 28px; height: 28px; border-radius: 8px; flex: 0 0 auto; border: 1px solid rgba(0,0,0,0.1); }
+/* 실기기 QA(2026-09-25) — 카드 전체를 "그 옵션의 결과 테마 색"으로 칠해서 다크 모드에선
+   라이트 카드만 새하얗게, 라이트 모드에선 다크 카드만 새까맣게 튀었다. 카드는 현재 화면의
+   중립 surface 토큰만 쓰고, 테마 차이는 작은 미리보기 스와치(.theme-swatch)로만 표현한다.
+   선택 상태는 accent 테두리 + 오른쪽 라디오(●/○). */
+.theme-option { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-bg); color: var(--ink); cursor: pointer; text-align: left; }
+.theme-option.on { border-color: var(--accent); }
+.theme-swatch { position: relative; width: 32px; height: 32px; border-radius: 9px; flex: 0 0 auto; border: 1px solid var(--line-strong); overflow: hidden; }
+.theme-swatch::after { content: ""; position: absolute; left: 7px; bottom: 7px; width: 10px; height: 10px; border-radius: 50%; background: var(--swatch-dot, currentColor); }
+.theme-swatch-split { display: flex; }
+.theme-swatch-split::after { display: none; }
+.theme-swatch-split > i { flex: 1 1 50%; display: block; }
 .theme-emoji { font-size: 22px; }
 .theme-text { flex: 1; display: flex; flex-direction: column; }
 .theme-label { font-size: 14.5px; font-weight: 700; color: var(--text); }
@@ -3007,28 +3027,39 @@ a.membership-card { text-decoration: none; display: block; }
 /* 릴리스 폴리시 배치 8차(2026-09-17) — 관리자 알림 swipe actions(SwipeRow.tsx). 범용으로
    만들어 다른 리스트에서도 재사용 가능하게 했다. transform만 바꿔 애니메이션하므로(레이아웃
    속성 변경 없음) 알림이 많아도 layout thrashing이 없다. */
-.swipe-row { position: relative; overflow: hidden; }
-.swipe-row-actions {
-  position: absolute; top: 0; right: 0; bottom: 0; display: flex; align-items: stretch;
-}
+.swipe-row { position: relative; overflow: hidden; background: var(--bg); }
+/* 실기기 QA 재설계(2026-09-25) — 좌/우 action 패널. 폭은 JS가 갱신하는 --swipe-l/--swipe-r(현재
+   드러난 px)이라 고무줄 구간에서도 빈 공간 없이 패널이 채워지고, 라벨(.swipe-action-inner)은
+   고정 폭(--action-w)을 유지한 채 바깥쪽 가장자리에 붙어 "가려져 있다가 드러나는" 느낌을 준다.
+   라벨/아이콘 opacity는 --swipe-p-l/r(0~1 진행도)에 묶여 콘텐츠 이동과 같은 프레임에 갱신. */
+.swipe-row-actions { position: absolute; top: 0; bottom: 0; display: flex; align-items: stretch; overflow: hidden; }
+.swipe-row-actions-left { left: 0; width: var(--swipe-l, 0px); justify-content: flex-start; }
+.swipe-row-actions-right { right: 0; width: var(--swipe-r, 0px); justify-content: flex-end; }
+.swipe-action-inner { flex: 0 0 var(--action-w, 88px); width: var(--action-w, 88px); display: flex; align-items: stretch; }
+.swipe-row-actions-left .swipe-action-btn { opacity: clamp(0, calc((var(--swipe-p-l, 0) - .25) * 2), 1); transform: translateX(calc((1 - var(--swipe-p-l, 0)) * -10px)); }
+.swipe-row-actions-right .swipe-action-btn { opacity: clamp(0, calc((var(--swipe-p-r, 0) - .25) * 2), 1); transform: translateX(calc((1 - var(--swipe-p-r, 0)) * 10px)); }
 .swipe-row-content {
   position: relative; background: var(--bg); touch-action: pan-y; will-change: transform;
-  /* 안정화 배치(2026-09-22) — Pointer Events로 mouse/pen drag도 지원하면서, 드래그 중
-     텍스트가 선택되거나(mouse) 브라우저 기본 드래그 고스트 이미지가 뜨는 것을 막는다. */
+  /* 드래그 중 텍스트가 선택되거나(mouse) 브라우저 기본 드래그 고스트 이미지가 뜨는 것을 막는다.
+     dragging/settling 위치는 JS(rAF)가 직접 구동하므로 여기에는 CSS transition이 없다. */
   -webkit-user-select: none; user-select: none;
 }
 .swipe-action-btn {
   flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 3px; border: none; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700;
-  color: var(--text-inverse); min-width: 64px;
+  color: var(--text-inverse); min-width: 0; will-change: opacity, transform;
 }
 .swipe-action-btn.pin { background: var(--accent); }
 .swipe-action-btn.delete { background: var(--danger); }
+@media (prefers-reduced-motion: reduce) {
+  .swipe-row-actions-left .swipe-action-btn, .swipe-row-actions-right .swipe-action-btn { transform: none; }
+}
 
 /* row 삭제 애니메이션 — collapse(max-height) + opacity, 아래 목록이 자연스럽게 올라온다. */
 .noti-row-wrap { max-height: 160px; opacity: 1; overflow: hidden; transition: max-height 220ms ease, opacity 180ms ease; }
 .noti-row-wrap.removing { max-height: 0; opacity: 0; }
 
+.noti-title-row { display: flex; align-items: center; gap: 7px; }
 .noti-pin-badge {
   display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto;
   padding: 2px 7px 2px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent);
@@ -4033,10 +4064,22 @@ a.membership-card { text-decoration: none; display: block; }
      늘려서(최대 640px) 스켈레톤이 화면 상단에만 몰리지 않고 중앙~하단까지 자연스럽게
      이어지게 한다. bottom-nav/safe-area는 이 컴포넌트가 손대는 영역이 아니라(레이아웃이
      감싸는 형태) 그대로 유지됨. */
-  min-height: min(72dvh, 640px);
-  display: block;
+  /* 실기기 QA(2026-09-25) — 72dvh 고정이라 상단 헤더/하단 네비와 무관하게 위쪽에만
+     몰리거나(짧은 콘텐츠), 부모가 flex 센터링이면 좁은 띠로 깨졌다. usable viewport
+     (상단 헤더 ≈72px + safe-area, 하단 floating nav 여백)를 뺀 높이를 채우고, 넘치는
+     row는 잘라낸다. width:100%/align-self:stretch로 부모 정렬과 무관하게 실제 콘텐츠
+     폭을 유지한다. */
+  display: block; width: 100%; align-self: stretch; box-sizing: border-box;
+  min-height: max(360px, calc(100dvh - var(--safe-top, 0px) - 72px - var(--floating-nav-clearance)));
+  max-height: max(360px, calc(100dvh - var(--safe-top, 0px) - 72px - var(--floating-nav-clearance)));
+  overflow: hidden;
   padding: 30px var(--page-gutter);
 }
+/* 라우트 전환용 전체 화면 로딩(app/loading.tsx) — 헤더가 아직 없는 상태라 상단 safe-area만
+   반영하고 하단 네비 여백은 .loading-wrap 높이 계산에 이미 포함된다. */
+.route-loading { display: block; min-height: 100dvh; padding-top: var(--safe-top, 0px); background: var(--bg); }
+.route-loading .loading-wrap { max-width: 480px; margin: 0 auto; }
+@media (min-width: 768px) { .route-loading .loading-wrap { max-width: 720px; } }
 .loading-skeleton { width: 100%; max-width: 560px; margin: 0 auto; }
 .loading-skeleton-row { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
 .loading-skeleton-row-icon { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 12px; }
@@ -4063,6 +4106,9 @@ a.membership-card { text-decoration: none; display: block; }
 .loading-skeleton-line.short { width: 46%; }
 .loading-skeleton-card { height: 112px; margin: 25px 0 20px; border-radius: var(--radius-md); }
 @keyframes loadingSweep { to { transform: translateX(100%); } }
+/* 실기기 QA(2026-09-25) — sweep 하이라이트가 rgba(255,255,255,.72) 고정이라 다크 모드에서 스켈레톤
+   왼쪽이 번쩍이는 흰 그라데이션(캡처 2)으로 보였다. 다크에선 은은한 톤으로만. */
+[data-theme="charcoal"] .loading-skeleton i::after { background: linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent); }
 
 .system-state-v2 {
   min-height: 100dvh;
@@ -4173,7 +4219,10 @@ a.membership-card { text-decoration: none; display: block; }
    높이 자체가 안 맞아 나란히 보면 어긋나 보였다. 입력창과 동일한 50px로 맞춤(44px
    터치 타겟 요구사항은 이미 만족하는 값이라 줄어들 걱정 없음). disabled 상태 스타일이
    아예 없었던 것도 추가(.primary-btn:disabled 등 기존 관례와 동일하게 opacity+cursor). */
-.discovery-page-v2 .search-go { min-width: 56px; height: 50px; padding: 0 12px; border: 0; border-radius: var(--radius-md); background: var(--ink); color: var(--bg); font-size: 12.5px; font-weight: 650; }
+/* 실기기 QA(2026-09-25) — background:var(--ink)는 다크 모드에서 거의 순백이라 검색 버튼만
+   튀었다. 입력창(.search-input)과 같은 surface 계열 + 1px 테두리 + ink 글자로 통일(라이트/
+   다크 공통, 강한 primary CTA 톤 제거). */
+.discovery-page-v2 .search-go { min-width: 56px; height: 50px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font-size: 12.5px; font-weight: 650; }
 .discovery-page-v2 .search-go:disabled { opacity: .5; cursor: default; }
 .search-suggestions { padding: 34px var(--page-gutter) 130px; }
 .search-suggestion-title { font-size: 16px; font-weight: 680; }
@@ -4277,12 +4326,12 @@ a.membership-card { text-decoration: none; display: block; }
 .member-reservation .cal-cell,.member-reservation .cal-cell.selected { min-height: 58px; padding: 8px 0 6px; gap: 4px; background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
 .member-reservation .daynum-wrap { width: 34px; height: 34px; display: grid; place-items: center; border: 0 !important; border-radius: 50%; background: transparent; box-shadow: none !important; }
 .member-reservation .cal-daynum { font-size: 14px; font-weight: 560; }
-.member-reservation .cal-cell.selected .daynum-wrap { background: var(--brand-soft) !important; }
-.member-reservation .cal-cell.selected .cal-daynum { color: var(--brand-ink) !important; font-weight: 720; }
+.member-reservation .cal-cell.selected .daynum-wrap { background: transparent !important; box-shadow: inset 0 0 0 1.5px var(--accent) !important; }
+.member-reservation .cal-cell.selected:not(.sun):not(.sat) .cal-daynum { color: var(--accent) !important; font-weight: 720; }
+.member-reservation .cal-cell.selected.sun .cal-daynum, .member-reservation .cal-cell.selected.sat .cal-daynum { font-weight: 720; }
 .member-reservation .cal-dots { height: 6px; display: flex; justify-content: center; }
 .member-reservation .cal-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--text-dim) !important; }
 .member-reservation .cal-dot.mine { width: 5px; height: 5px; background: var(--brand) !important; }
-.member-reservation .cal-cell.selected .cal-dot { opacity: 0; }
 
 .member-reservation .daylist-header { margin-top: 8px; padding: 16px var(--page-gutter) 10px; border-top: 1px solid var(--line); font-size: 19px; line-height: 1.25; font-weight: 720; letter-spacing: -.03em; }
 .member-reservation .profile-picker { padding-inline: var(--page-gutter); border-radius: 0; background: transparent; border-bottom: 1px solid var(--line); }
@@ -4378,7 +4427,10 @@ a.membership-card { text-decoration: none; display: block; }
 .center-detail-v2 .center-hero-name { font-size: 27px; font-weight: 800; word-break: keep-all; }
 .center-detail-v2 .center-hero-addr { margin-top: 10px; font-size: 14px; }
 .center-detail-v2 .center-hero-phone { display: inline-block; margin-top: 8px; color: var(--ink-soft); font-size: 13px; }
-.center-detail-v2 .center-tabs { position: sticky; top: 0; z-index: 15; margin: 0; padding: 0 var(--page-gutter); background: rgba(251,251,250,.94); backdrop-filter: blur(16px); }
+/* 실기기 QA(2026-09-25) — 배경이 라이트 톤 rgba(251,251,250,.94)로 하드코딩돼 다크 모드에서
+   탭 영역만 밝은 회색 띠로 튀었다. 테마 토큰(--bg)으로 바꿔 라이트/다크 모두 주변 배경과
+   이어지고, 선택 탭은 기존 .center-tab.on(accent 글자 + 하단 underline)만 쓴다. */
+.center-detail-v2 .center-tabs { position: sticky; top: 0; z-index: 15; margin: 0; padding: 0 var(--page-gutter); background: color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter: blur(16px); }
 .center-detail-v2 .center-tab { font-size: 14px; font-weight: 650; }
 .center-detail-v2 .menu-section-label { padding-top: 26px; color: var(--ink); font-size: 17px; }
 .center-detail-v2 .center-map-link { min-height: 68px; }
@@ -4571,9 +4623,9 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-classes-v2>.cal-grid{padding-left:var(--page-gutter);padding-right:var(--page-gutter)}
 .manager-classes-v2>.cal-grid .cal-cell,.manager-classes-v2>.cal-grid .cal-cell.selected{min-height:56px;padding:9px 0 7px;border:0!important;border-radius:0!important;background:transparent!important}
 .manager-classes-v2 .cal-cell .daynum-wrap{width:34px;height:34px;border:0!important;border-radius:50%;background:transparent!important;box-shadow:none!important}
-.manager-classes-v2 .cal-cell.selected .daynum-wrap{background:var(--brand-soft)!important;color:var(--brand-ink)!important}.manager-classes-v2 .cal-cell.selected .cal-daynum{color:var(--brand-ink)!important;font-weight:750}
+.manager-classes-v2 .cal-cell.selected .daynum-wrap{background:transparent!important;box-shadow:inset 0 0 0 1.5px var(--accent)!important}.manager-classes-v2 .cal-cell.selected:not(.sun):not(.sat) .cal-daynum{color:var(--accent)!important}.manager-classes-v2 .cal-cell.selected .cal-daynum{font-weight:750}
 .manager-classes-v2 .cal-cell.holiday:not(.selected) .daynum-wrap{background:transparent!important}.manager-classes-v2 .cal-cell.holiday:not(.selected) .cal-daynum{background:transparent!important;color:var(--danger)!important}
-.manager-classes-v2 .cal-dots{height:6px;display:flex;justify-content:center}.manager-classes-v2 .cal-dot{width:5px!important;height:5px!important;border-radius:50%;background:var(--brand)!important}.manager-classes-v2 .cal-cell.holiday .cal-dot{background:var(--danger)!important}.manager-classes-v2 .cal-cell.selected .cal-dots{opacity:0}
+.manager-classes-v2 .cal-dots{height:6px;display:flex;justify-content:center}.manager-classes-v2 .cal-dot{width:5px!important;height:5px!important;border-radius:50%;background:var(--brand)!important}.manager-classes-v2 .cal-cell.holiday .cal-dot{background:var(--danger)!important}
 .manager-classes-v2>.menu-section-label{margin-top:12px;padding:22px var(--page-gutter) 8px;color:var(--ink);font-size:18px;font-weight:800}
 .manager-classes-v2 .manager-holiday-notice{margin:0 var(--page-gutter) 8px}.manager-classes-v2 .manager-holiday-notice .holiday-chip{min-height:66px;padding:12px 14px;display:flex;align-items:center;gap:12px;border:1px solid var(--danger-border);border-radius:16px;background:var(--danger-soft)}
 .manager-holiday-notice .hc-mark{position:relative;width:32px;height:32px;flex:0 0 32px;border:1.5px solid var(--danger);border-radius:50%}.manager-holiday-notice .hc-mark:after{content:"";position:absolute;left:5px;right:5px;top:14px;height:1.5px;background:var(--danger);transform:rotate(-45deg)}
@@ -5335,27 +5387,35 @@ textarea:focus-visible,
   포함하지 않는다.
 */
 @media (min-width: 768px) and (max-width: 1359px) {
+  .member-desktop-nav[aria-expanded="true"],
   .workspace-sidebar[aria-expanded="true"] {
     width: 244px;
     padding-inline: 16px;
     box-shadow: 14px 0 36px color-mix(in srgb,var(--ink) 13%,transparent);
   }
+  .member-desktop-nav[aria-expanded="true"] .desktop-brand,
   .workspace-sidebar[aria-expanded="true"] .desktop-brand {
     justify-content: flex-start;
     padding-inline: 9px;
   }
+  .member-desktop-nav[aria-expanded="true"] .desktop-nav-item,
   .workspace-sidebar[aria-expanded="true"] .desktop-nav-item,
+  .member-desktop-nav[aria-expanded="true"] .workspace-sidebar-mode,
   .workspace-sidebar[aria-expanded="true"] .workspace-sidebar-mode {
     justify-content: flex-start;
   }
+  .member-desktop-nav[aria-expanded="true"] .desktop-brand > span:last-child,
   .workspace-sidebar[aria-expanded="true"] .desktop-brand > span:last-child,
+  .member-desktop-nav[aria-expanded="true"] .desktop-nav-item > span:not(.desktop-nav-badge),
   .workspace-sidebar[aria-expanded="true"] .desktop-nav-item > span:not(.desktop-nav-badge),
+  .member-desktop-nav[aria-expanded="true"] .workspace-sidebar-mode > span,
   .workspace-sidebar[aria-expanded="true"] .workspace-sidebar-mode > span {
     max-width: 180px;
     opacity: 1;
     visibility: visible;
     transition-delay: 0s,70ms,0s;
   }
+  .member-desktop-nav[aria-expanded="true"] .desktop-nav-section,
   .workspace-sidebar[aria-expanded="true"] .desktop-nav-section {
     max-height: 32px;
     margin: 18px 12px 5px;
@@ -5368,10 +5428,21 @@ textarea:focus-visible,
     text-transform: uppercase;
     transition-delay: 0s,0s,0s,70ms,0s;
   }
+  .member-desktop-nav[aria-expanded="true"] .desktop-nav-badge,
   .workspace-sidebar[aria-expanded="true"] .desktop-nav-badge {
     position: static;
     margin-left: auto;
     border: 0;
+  }
+  .member-desktop-nav[aria-expanded="true"] .desktop-nav-note {
+    max-height: 96px;
+    padding: 14px 12px 4px;
+    opacity: 1;
+    visibility: visible;
+    color: var(--ink-soft);
+    font-size: 11px;
+    line-height: 1.55;
+    transition-delay: 0s,0s,0s,70ms,0s;
   }
 }
 
@@ -5875,4 +5946,80 @@ textarea:focus-visible,
   :root { --workspace-rail: 72px; --workspace-sidebar: 72px; }
   .workspace-sidebar { padding-inline: 8px; }
   .desktop-nav-item, .workspace-sidebar-mode { padding: 0 6px; gap: 8px; }
+}
+
+
+/* ============================================================
+   실기기 QA(2026-09-25) — iOS WKWebView 길게 누르기 링크 미리보기 방지
+   앱(Capacitor)에서 <a href>/버튼을 길게 누르면 mwhabit.com 페이지 미리보기와 Open Link /
+   Copy Link / Share 메뉴가 떴다. 가장 작은 범위(내비게이션 링크와 상호작용 요소)에만
+   -webkit-touch-callout: none을 적용한다. user-select는 건드리지 않아 입력창/일반 텍스트
+   선택·복사와 탭 내비게이션은 그대로다(-webkit-touch-callout은 상속 속성이라 링크 안의
+   자식 요소까지 포함).
+   ============================================================ */
+a[href],
+button,
+[role="button"],
+[role="link"],
+[role="tab"],
+[role="radio"] { -webkit-touch-callout: none; }
+input, textarea, [contenteditable="true"] { -webkit-touch-callout: default; }
+
+/* 실기기 QA(2026-09-25) — 센터 선택 시트(app/components/CenterSelectSheet.tsx). 옵션 행은 모두
+   같은 높이, 선택은 체크 + accent 글자(전체 채움 없음), 하단 safe-area 반영. */
+.center-select-sheet { padding-bottom: max(24px, var(--safe-bottom, 0px)); }
+.center-select-sheet .sheet-title { margin-bottom: 4px; }
+.sheet-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 52px; padding: 0 4px; border: 0; border-bottom: 1px solid var(--line);
+  background: transparent; color: var(--ink); font: inherit; font-size: 15px; font-weight: 600;
+  text-align: left; cursor: pointer;
+}
+.sheet-option:last-child { border-bottom: 0; }
+.sheet-option:active { background: var(--surface); }
+.sheet-option.on { color: var(--accent); font-weight: 750; }
+.sheet-option-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-option-check { flex: 0 0 auto; color: var(--accent); }
+
+/* ============================================================
+   실기기 QA(2026-09-25) — 태블릿/중간 폭 rail 확장 애니메이션·제스처 보강(768–1359px)
+   - rail은 position: fixed overlay라 확장해도 콘텐츠가 밀리거나 reflow되지 않는다(레이아웃 폭
+     변수 --workspace-sidebar는 그대로 compact 값 유지).
+   - 라벨은 max-width/opacity에 더해 작은 translateX(-6px → 0)로 등장해 폭 전개 타이밍(220ms)에
+     맞춰 자연스럽게 나타나고, 접힐 때도 반대로 사라진다. bounce 없음(같은 ease-out 곡선).
+   - touch-action: pan-y — rail의 가로 swipe를 브라우저가 가져가지 않게(세로 스크롤만 허용).
+   ============================================================ */
+@media (min-width: 768px) and (max-width: 1359px) {
+  .member-desktop-nav, .workspace-sidebar { touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+  .desktop-brand > span:last-child,
+  .desktop-nav-item > span:not(.desktop-nav-badge),
+  .workspace-sidebar-mode > span {
+    transform: translateX(-6px);
+    transition: max-width 220ms cubic-bezier(.2,.75,.2,1), opacity 160ms ease, visibility 0s linear 220ms, transform 220ms cubic-bezier(.2,.75,.2,1);
+  }
+  .member-desktop-nav[aria-expanded="true"] .desktop-brand > span:last-child,
+  .member-desktop-nav[aria-expanded="true"] .desktop-nav-item > span:not(.desktop-nav-badge),
+  .workspace-sidebar[aria-expanded="true"] .desktop-brand > span:last-child,
+  .workspace-sidebar[aria-expanded="true"] .desktop-nav-item > span:not(.desktop-nav-badge),
+  .workspace-sidebar[aria-expanded="true"] .workspace-sidebar-mode > span {
+    transform: none;
+    transition: max-width 220ms cubic-bezier(.2,.75,.2,1), opacity 160ms ease 60ms, visibility 0s, transform 220ms cubic-bezier(.2,.75,.2,1) 40ms;
+  }
+}
+@media (min-width: 768px) and (max-width: 1359px) and (hover: hover) and (pointer: fine) {
+  .member-desktop-nav:hover .desktop-brand > span:last-child,
+  .member-desktop-nav:focus-within .desktop-brand > span:last-child,
+  .member-desktop-nav:hover .desktop-nav-item > span:not(.desktop-nav-badge),
+  .member-desktop-nav:focus-within .desktop-nav-item > span:not(.desktop-nav-badge),
+  .workspace-sidebar:hover .desktop-brand > span:last-child,
+  .workspace-sidebar:focus-within .desktop-brand > span:last-child,
+  .workspace-sidebar:hover .desktop-nav-item > span:not(.desktop-nav-badge),
+  .workspace-sidebar:focus-within .desktop-nav-item > span:not(.desktop-nav-badge),
+  .workspace-sidebar:hover .workspace-sidebar-mode > span,
+  .workspace-sidebar:focus-within .workspace-sidebar-mode > span { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .desktop-brand > span:last-child,
+  .desktop-nav-item > span:not(.desktop-nav-badge),
+  .workspace-sidebar-mode > span { transform: none !important; }
 }

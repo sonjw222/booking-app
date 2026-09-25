@@ -36,9 +36,10 @@ export function resolveThemePreviewMode(id: Theme, systemDark: boolean): Preview
 
 // app/globals.css :root/[data-theme="charcoal"]의 실제 토큰 값과 동일(라이트=기본 :root,
 // 다크=charcoal) — 미리보기가 실제 화면 색과 어긋나지 않도록 그대로 가져다 쓴다.
-const PREVIEW_TOKENS: Record<PreviewMode, { bg: string; ink: string; line: string; accent: string; swatch: string }> = {
-  light: { bg: "#FBFBFA", ink: "#171719", line: "#DEDEDA", accent: "#0A2446", swatch: "#0A2446" },
-  dark: { bg: "#17181C", ink: "#F5F5F7", line: "#34353C", accent: "#3E7BC4", swatch: "#17181C" },
+// 이제 카드 자체가 아니라 작은 스와치(.theme-swatch)에만 쓴다.
+const PREVIEW_TOKENS: Record<PreviewMode, { bg: string; accent: string }> = {
+  light: { bg: "#FBFBFA", accent: "#0A2446" },
+  dark: { bg: "#17181C", accent: "#3E7BC4" },
 };
 
 // layout.tsx의 하이드레이션 전 인라인 스크립트와 반드시 같은 판정을 내려야 한다(안 그러면
@@ -48,6 +49,12 @@ function resolveEffectiveTheme(theme: Theme): "burgundy" | "charcoal" {
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "charcoal" : "burgundy";
   }
   return theme;
+}
+
+// 선택 표시(라디오/테두리)는 저장된 테마 id와 정확히 일치할 때만 — 미리보기 색(mode)과는
+// 완전히 독립(시스템 다크에서 "다크 모드" 옵션이 자동으로 선택돼 보이면 안 됨).
+export function isThemeOptionSelected(current: Theme, optionId: Theme): boolean {
+  return current === optionId;
 }
 
 export function applyTheme(theme: Theme) {
@@ -114,24 +121,41 @@ export default function ThemeSettingsPage() {
         원하는 색 테마를 골라주세요. 선택은 이 기기에 저장돼요.
       </div>
 
-      <div className="theme-options">
+      {/* 실기기 QA(2026-09-25): 카드는 현재 화면의 중립 surface(.theme-option)만 쓴다 — 예전엔
+          카드 배경/글자색 자체를 옵션의 "결과 테마 색"으로 칠해 다크 모드에선 라이트 카드가
+          새하얗게, 라이트 모드에선 다크 카드가 새까맣게 튀었다. 테마 차이는 작은 스와치로만
+          표현하고, 선택 상태는 accent 테두리 + 라디오(●/○)로 표시한다. */}
+      <div className="theme-options" role="radiogroup" aria-label="테마">
         {OPTIONS.map((o) => {
           const mode = resolveThemePreviewMode(o.id, systemDark);
           const t = PREVIEW_TOKENS[mode];
-          const on = theme === o.id;
+          const on = isThemeOptionSelected(theme, o.id);
           return (
             <button
               key={o.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
               className={`theme-option ${on ? "on" : ""}`}
               onClick={() => choose(o.id)}
-              style={{ background: t.bg, borderColor: on ? t.accent : t.line }}
             >
-              <span className="theme-swatch" style={{ background: t.swatch }} />
+              {o.id === "system" ? (
+                <span className="theme-swatch theme-swatch-split" aria-hidden="true">
+                  <i style={{ background: PREVIEW_TOKENS.light.bg }} />
+                  <i style={{ background: PREVIEW_TOKENS.dark.bg }} />
+                </span>
+              ) : (
+                <span
+                  className="theme-swatch"
+                  aria-hidden="true"
+                  style={{ background: t.bg, ["--swatch-dot" as string]: t.accent }}
+                />
+              )}
               <span className="theme-text">
-                <span className="theme-label" style={{ color: t.ink }}>{o.label}</span>
-                <span className="theme-desc" style={{ color: t.ink, opacity: 0.62 }}>{o.desc}</span>
+                <span className="theme-label">{o.label}</span>
+                <span className="theme-desc">{o.desc}</span>
               </span>
-              <span className="theme-check" style={{ color: on ? t.accent : t.ink, opacity: on ? 1 : 0.55 }}>{on ? "●" : "○"}</span>
+              <span className="theme-check" aria-hidden="true">{on ? "●" : "○"}</span>
             </button>
           );
         })}

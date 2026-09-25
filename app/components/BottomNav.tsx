@@ -15,10 +15,13 @@ import {
   setCachedHasUsableMembership,
 } from "../../lib/navState";
 import NotificationToaster from "./NotificationToaster";
+import { useExpandableNavRail } from "./useExpandableNavRail";
 import UiIcon from "./UiIcon";
 
 export default function BottomNav({ initialHasUsable = null }: { initialHasUsable?: boolean | null }) {
   const pathname = usePathname();
+  // 태블릿/중간 폭(768–1359px) rail 확장 — 관리자/플랫폼 rail과 같은 공용 훅(swipe·탭·바깥 탭으로 접기).
+  const { navRef, expanded, handleRailClick } = useExpandableNavRail("member_nav_scroll_top");
   const is = (p: string) => (p === "/" ? pathname === "/" : pathname.startsWith(p));
   // /mypage/calendar는 마이페이지가 아니라 내 예약(/my-reservations)에서 들어가는 화면이라
   // "마이" 탭이 아닌 "내 예약" 탭이 활성화돼야 한다.
@@ -87,7 +90,7 @@ export default function BottomNav({ initialHasUsable = null }: { initialHasUsabl
   return (
     <>
       <NotificationToaster />
-      <aside className="member-desktop-nav" aria-label="회원 데스크톱 메뉴">
+      <aside className="member-desktop-nav" aria-label="회원 데스크톱 메뉴" ref={navRef as React.RefObject<HTMLElement>} aria-expanded={expanded} onClick={handleRailClick}>
         <Link className="desktop-brand" href="/" replace aria-label="모하빗 홈">
           <span className="desktop-brand-mark">M</span>
           <span><b>모하빗</b><small>나에게 맞는 움직임</small></span>
