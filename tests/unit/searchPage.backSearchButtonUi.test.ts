@@ -13,8 +13,9 @@ const cssSource = readFileSync(join(__dirname, "../../app/globals.css"), "utf-8"
 const pageSource = readFileSync(join(__dirname, "../../app/search/page.tsx"), "utf-8");
 
 describe("검색 화면 back/search 버튼 UI", () => {
-  it("뒤로가기 버튼(.side)이 44×44 이상의 터치 타겟을 갖는다", () => {
-    expect(cssSource).toMatch(/\.discovery-page-v2 \.search-header \.side[^{]*\{[^}]*min-width:\s*44px[^}]*min-height:\s*44px/);
+  it("찾기 탭에 제목과 검색 입력 레이블이 있다", () => {
+    expect(pageSource).toContain("<h1>찾기</h1>");
+    expect(pageSource).toContain('htmlFor="discovery-search"');
   });
 
   it("검색 CTA(.search-go)와 입력창(.search-input)의 높이가 동일하다(세로 중앙정렬 어긋남 방지)", () => {
@@ -36,6 +37,6 @@ describe("검색 화면 back/search 버튼 UI", () => {
   });
 
   it("검색 CTA는 disabled 상태를 실제로 busy 플래그와 연결해 렌더링한다", () => {
-    expect(pageSource).toContain('<button className="search-go" disabled={busy}');
+    expect(pageSource).toMatch(/<AppButton className="search-go"[^>]*disabled=\{busy \|\| kw\.trim\(\)\.length < 2\}/);
   });
 });

@@ -231,7 +231,7 @@ export default function MyPage() {
         );
       })()}
 
-      <div className="menu-section-label">내 정보</div>
+      <div className="menu-section-label">내 활동</div>
       {/* UX 감사(A-13) — /mypage/history는 /my-reservations로 기능이 이전된 뒤에도(주석 참고,
           app/my-reservations/page.tsx) 이 링크만 안 고쳐진 채 남아 있었다. */}
       <a className="list-row" href="/my-reservations" onClick={(e) => replaceTabNavigation(e, "/my-reservations")}>
@@ -250,6 +250,8 @@ export default function MyPage() {
         <div className="left"><span className="icon"><UiIcon name="card" /></span>내 쿠폰</div>
         <span className="chevron">›</span>
       </a>
+
+      <div className="menu-section-label">계정</div>
       <a className="list-row" href="/profiles">
         <div className="left"><span className="icon"><UiIcon name="users" /></span>프로필 관리</div>
         <span className="chevron">›</span>
@@ -258,16 +260,19 @@ export default function MyPage() {
         <div className="left"><span className="icon"><UiIcon name="shield" /></span>내 정보 관리</div>
         <span className="chevron">›</span>
       </a>
+
+      <div className="menu-section-label">고객지원</div>
       <a className="list-row" href="/inquiries">
         <div className="left"><span className="icon"><UiIcon name="message" /></span>1:1 문의</div>
         <span className="chevron">›</span>
       </a>
+      <a className="list-row" href="/legal"><div className="left"><span className="icon"><UiIcon name="info" /></span>약관 및 정책</div><span className="chevron">›</span></a>
 
       <div className="menu-section-label">설정</div>
       <a className="list-row" href="/notifications"><div className="left"><span className="icon"><UiIcon name="bell" /></span>알림</div><span className="chevron">›</span></a>
       <a className="list-row" href="/settings/theme"><div className="left"><span className="icon"><UiIcon name="palette" /></span>테마 설정</div><span className="chevron">›</span></a>
       <a className="list-row" href="/settings/notifications"><div className="left"><span className="icon"><UiIcon name="bell" /></span>알림 설정</div><span className="chevron">›</span></a>
-      <a className="list-row" href="/legal"><div className="left"><span className="icon"><UiIcon name="info" /></span>약관 및 정책</div><span className="chevron">›</span></a>
+      <div className="menu-section-label">비즈니스</div>
       {profile?.isPlatformAdmin && (
         <a className="list-row" href="/admin" onClick={(e) => replaceTabNavigation(e, "/admin")}>
           <div className="left"><span className="icon"><UiIcon name="shield" /></span>운영자 설정</div>

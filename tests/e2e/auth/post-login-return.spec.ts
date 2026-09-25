@@ -136,7 +136,7 @@ test.describe("로그인 필요 → 로그인 → 원래 화면 복귀", () => {
     await page.waitForURL((u) => u.pathname === "/reservation", { timeout: 15000 });
     // 로그인된 상태로 돌아왔으니 "로그인이 필요해요" 상태가 더는 아니어야 한다(캘린더가 보임)
     await expect(page.locator(".app-empty-state")).toHaveCount(0, { timeout: 15000 });
-    await expect(page.locator(".booking-steps")).toBeVisible();
+    await expect(page.locator(".reservation-top-tabs")).toBeVisible();
 
     await context.close();
   });

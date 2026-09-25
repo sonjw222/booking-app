@@ -190,6 +190,40 @@ export type SearchCenter = {
   photoUrl: string | null;
 };
 
+export type SearchClass = {
+  id: string;
+  title: string;
+  centerName: string;
+  startText: string;
+  date: string;
+  centerId: string;
+};
+
+// 검색에서는 시작 전인 공개 수업만 최대 20개 보여주고, 전체 일정은 예약 화면에서 본다.
+export async function searchClasses(keyword: string): Promise<SearchClass[]> {
+  const kw = keyword.trim();
+  if (kw.length < 2) return [];
+  const { data, error } = await supabase.from("classes")
+    .select("id, title, center_id, start_time, centers!inner(name, status)")
+    .eq("centers.status", "approved")
+    .ilike("title", `%${kw}%`)
+    .gte("start_time", new Date().toISOString())
+    .order("start_time", { ascending: true })
+    .limit(20);
+  if (error) throw new Error("수업 검색에 실패했어요: " + error.message);
+  const dateFormatter = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
+  return (data ?? []).map((row) => {
+    const start = new Date(row.start_time);
+    const dateParts = dateFormatter.formatToParts(start);
+    const part = (type: string) => dateParts.find((item) => item.type === type)?.value ?? "";
+    return {
+      id: row.id, title: row.title, centerId: row.center_id,
+      centerName: (row.centers as unknown as { name: string }).name,
+      startText: KST_DT.format(start), date: `${part("year")}-${part("month")}-${part("day")}`,
+    };
+  });
+}
+
 // 센터명 또는 종목으로 검색
 export async function searchHome(keyword: string): Promise<{ centers: SearchCenter[]; categories: string[] }> {
   const kw = keyword.trim();

@@ -157,6 +157,10 @@ export default function MyReservationsPage() {
         <div className="title">내 예약</div>
         <a className="side cal-export-btn" href="/mypage/calendar" aria-label="캘린더"><UiIcon name="calendar" size={27} /></a>
       </div>
+      <nav className="reservation-top-tabs" aria-label="예약 메뉴">
+        <a href="/reservation">수업 예약</a>
+        <a href="/my-reservations" aria-current="page">내 예약</a>
+      </nav>
 
       <SegmentedTabs value={filter} onChange={setFilter} label="예약 내역 종류"
         items={[{ value: "upcoming", label: "예정된 예약" },{ value: "past", label: "지난 예약" },{ value: "all", label: "전체" }]} />

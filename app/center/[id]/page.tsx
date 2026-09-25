@@ -28,6 +28,7 @@ import RichTextEditor from "../../components/RichTextEditor";
 import UiIcon from "../../components/UiIcon";
 import EmptyState from "../../components/EmptyState";
 import BackButton from "../../components/BackButton";
+import AppButton from "../../components/AppButton";
 import { loginHrefWithReturnToHere } from "../../../lib/postLoginReturn";
 
 // 수강권 대분류(group_label) 기준으로 묶는다 — 라벨 없는 상품은 맨 위에 헤더 없이,
@@ -351,9 +352,7 @@ function CenterDetailContent() {
             <a href="/cart" className="cart-link-btn">
               <UiIcon name="cart" size={16} /> 장바구니 보기{cartItemCount > 0 ? ` (${cartItemCount})` : ""}
             </a>
-            <div className="perm-guide" style={{ margin: "8px 0 4px" }}>
-              <b>담기</b>는 장바구니에 모아뒀다가 한번에 결제, <b>구매</b>는 이것만 바로 결제해요.
-            </div>
+            <p className="center-buy-help">수강권을 선택하고 바로 구매하거나 장바구니에 담을 수 있어요.</p>
             {filterProductIds && (
               <div className="class-filter-notice">
                 <span>{applyFilter ? "이 수업에 사용할 수 있는 수강권만 표시 중" : "전체 상품 표시 중"}</span>
@@ -398,8 +397,8 @@ function CenterDetailContent() {
                                 )}
                               </button>
                               <div className="center-product-actions">
-                                {p.remaining !== 0 && <button className="center-product-cart" onClick={() => handleAddCart(p)}>담기</button>}
-                                {p.remaining !== 0 && <button className="center-product-buy" onClick={() => handlePurchase(p)}>구매</button>}
+                                {p.remaining !== 0 && <AppButton variant="secondary" className="center-product-cart" onClick={() => handleAddCart(p)}>담기</AppButton>}
+                                {p.remaining !== 0 && <AppButton className="center-product-buy" onClick={() => handlePurchase(p)}>구매</AppButton>}
                               </div>
                             </div>
                           ))}
@@ -428,8 +427,8 @@ function CenterDetailContent() {
                             </div>
                           </button>
                           <div className="center-product-actions">
-                            {p.remaining !== 0 && <button className="center-product-cart" onClick={() => handleAddCart(p)}>담기</button>}
-                            {p.remaining !== 0 && <button className="center-product-buy" onClick={() => handlePurchase(p)}>구매</button>}
+                            {p.remaining !== 0 && <AppButton variant="secondary" className="center-product-cart" onClick={() => handleAddCart(p)}>담기</AppButton>}
+                            {p.remaining !== 0 && <AppButton className="center-product-buy" onClick={() => handlePurchase(p)}>구매</AppButton>}
                           </div>
                         </div>
                       ))}
