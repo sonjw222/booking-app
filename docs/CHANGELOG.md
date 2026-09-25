@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-09-26 — 네이티브 "캘린더에 추가" + iOS 길게 누르기 텍스트 선택 방지 (`fix/native-calendar-and-longpress-ux-2026-09-26`)
+
+iPhone 실기기 QA 2건. DB/RLS/SQL 변경 없음. **native 변경이 있어 앱 재빌드가 필요**(server.url 모드라 웹 변경만으로는 반영되지 않는 부분).
+
+- **캘린더에 추가**: 기존엔 `.ics` 다운로드/공유만 해서 실제 캘린더에 들어가지 않았다. 앱(iOS/Android)에서는 선택 시트(`CalendarAddSheet`)를 띄운다 — `기본 캘린더에 추가`(iOS: EventKitUI `EKEventEditViewController`, Android: `CalendarContract ACTION_INSERT`; 둘 다 시스템 화면에서 사용자가 저장을 눌러 확정), `다른 캘린더 앱 선택`(iOS: 시스템 Share Sheet로 .ics, Android: `Intent.createChooser`). iOS는 설치된 캘린더 앱을 열거하는 공통 API가 없어 앱 목록은 OS에 맡긴다. 웹/플러그인이 없는 구버전 앱은 기존 `exportIcs`(Web Share → .ics 다운로드) 유지. 시간은 epoch ms로 넘겨 KST 9시간 밀림 없음, 종료 시각이 없으면 1시간, 같은 예약 중복 실행은 in-flight 잠금. 상단 `내 캘린더에 추가`는 기존 의도(예정 예약 전체)를 유지해 시트에서 일정별 [추가] + 전체 .ics 내보내기로 처리.
+- **native**: iOS `CalendarEventPlugin`(기존 `WebViewThemePlugin.swift` 안에 포함 — 새 .swift 파일이면 보호 대상 `project.pbxproj`를 수정해야 해서), `SceneDelegate` 등록, `Info.plist`에 `NSCalendarsUsageDescription`(iOS 15/16 저장 권한용; iOS 17+는 권한 불필요). Android `CalendarEventPlugin.java` + `MainActivity` 등록(권한/Manifest 변경 없음).
+- **길게 누르기**: 링크 미리보기는 이전 배치에서 해결됐지만 버튼/하단 nav를 오래 누르면 글자가 선택되고 selection handle이 끌렸다 → 탭하는 UI(a/button/role/nav/tab/chip/list-row)에만 `user-select: none` + `-webkit-touch-callout: none` + `touch-action: manipulation`, 입력창/textarea/contenteditable은 text 선택 명시 복원(앱 전체 none 아님). pressed 모션은 `:where()`(특이도 0) + `scale: .985`로 기존 스타일 보존. 앱에서만 `contextmenu`/`dragstart`를 탭 UI에 한해 막는 `InteractiveGuard`.
+- 테스트: 신규 4개 파일 → 총 558개 통과.
+
 ## 2026-09-25 — iPhone 실기기 QA 12건 + 태블릿/중간 폭 rail 확장 개선 (`fix/mobile-real-device-qa-polish-2026-09-25`)
 
 실기기(iPhone, 다크 모드 중심) 캡처 12장에서 발견된 UI/UX/기능 문제를 한 배치로 수정. DB/RLS/SQL 변경 없음, native 파일 변경 없음.

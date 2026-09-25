@@ -35,6 +35,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // 뒤로가기를 끄는 데 쓴다(릴리스 폴리시 배치 8차, 아래 allowsBackForwardNavigationGestures
         // 주석 참고).
         bridgeViewController.bridge?.registerPluginInstance(NavigationPolicyPlugin())
+        // CalendarEventPlugin(WebViewThemePlugin.swift 안) — 같은 이유로 직접 등록. "캘린더에 추가"의
+        // 시스템 일정 추가 화면 / .ics Share Sheet(lib/calendarAdd.ts).
+        bridgeViewController.bridge?.registerPluginInstance(CalendarEventPlugin())
         if let webView = bridgeViewController.bridge?.webView {
             let dynamicBg = UIColor { traits in
                 traits.userInterfaceStyle == .dark

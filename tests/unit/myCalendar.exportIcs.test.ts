@@ -47,9 +47,11 @@ describe("exportIcs", () => {
 
 describe("예약 캘린더 화면 — 버튼이 실제 핸들러에 연결돼 있다", () => {
   const src = readFileSync(join(__dirname, "../../app/mypage/calendar/page.tsx"), "utf-8");
-  it("상단 '내 캘린더에 추가'와 카드별 '캘린더에 추가'가 exportIcs 경로를 호출한다", () => {
-    expect(src).toContain("void exportToCalendar(upcoming,");
-    expect(src).toContain("void exportToCalendar([r],");
+  it("상단 '내 캘린더에 추가'와 카드별 '캘린더에 추가'가 openCalendarAdd(앱=선택 시트, 웹=exportIcs)를 호출한다", () => {
+    expect(src).toContain("openCalendarAdd(upcoming,");
+    expect(src).toContain("openCalendarAdd([r],");
+    // 웹/구버전 앱 fallback은 기존 exportIcs 경로 유지
+    expect(src).toContain("await exportIcs(items, filename)");
     expect(src).not.toContain("downloadIcs(");
   });
   it("'저장'은 저장 성공 후에만 '저장됨'을 표시하고, 실패는 에러로 알린다", () => {

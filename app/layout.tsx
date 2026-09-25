@@ -8,6 +8,7 @@ import SessionWatcher from "./components/SessionWatcher";
 import AppConfirmProvider from "./components/AppConfirmProvider";
 import GlobalBottomNav from "./components/GlobalBottomNav";
 import CapacitorBootstrap from "./components/CapacitorBootstrap";
+import InteractiveGuard from "./components/InteractiveGuard";
 import NavigationPolicy from "./components/NavigationPolicy";
 import { parseHasUsableMembershipCookie } from "../lib/navState";
 
@@ -88,6 +89,7 @@ export default async function RootLayout({
             확인, lib/payments/TossPaymentProvider.ts 상단 주석 참고). */}
         <Script src="https://js.tosspayments.com/v2/standard" strategy="afterInteractive" />
         <CapacitorBootstrap />
+        <InteractiveGuard />
         <NavigationPolicy />
         <SessionWatcher />
         <AppConfirmProvider />

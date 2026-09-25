@@ -5950,20 +5950,55 @@ textarea:focus-visible,
 
 
 /* ============================================================
-   실기기 QA(2026-09-25) — iOS WKWebView 길게 누르기 링크 미리보기 방지
-   앱(Capacitor)에서 <a href>/버튼을 길게 누르면 mwhabit.com 페이지 미리보기와 Open Link /
-   Copy Link / Share 메뉴가 떴다. 가장 작은 범위(내비게이션 링크와 상호작용 요소)에만
-   -webkit-touch-callout: none을 적용한다. user-select는 건드리지 않아 입력창/일반 텍스트
-   선택·복사와 탭 내비게이션은 그대로다(-webkit-touch-callout은 상속 속성이라 링크 안의
-   자식 요소까지 포함).
+   iOS WKWebView 길게 누르기 정리 (2026-09-25 링크 미리보기 방지 → 2026-09-26 텍스트 선택/드래그 방지 확장)
+   1) 링크 미리보기(Open Link/Copy Link/Share): -webkit-touch-callout: none (2026-09-25).
+   2) 실기기 확인(2026-09-26): 그래도 버튼/하단 nav를 오래 누르면 글자가 선택되고 selection handle이
+      끌린다(하단 nav "마이" 등) → 사용자가 "탭하는 UI"에만 user-select: none을 함께 건다.
+      앱 전체(*, body) user-select: none은 쓰지 않는다 — 일반 본문 텍스트 복사는 그대로.
+   3) 입력창/편집 영역은 아래에서 명시적으로 text 선택/callout을 복원한다.
+   4) 길게 눌러도 "일반 탭과 같은 pressed 모션"만 유지: :active 동안 scale(속성, transform과 별도라
+      기존 translate/transform과 충돌 없음)이 그대로 유지되고, 컨텍스트 메뉴/선택 핸들/미리보기는
+      뜨지 않으며 action은 release(click) 때 1회만 실행된다(pointerdown 시 실행 없음).
+   touch-action: manipulation — 더블탭 확대 지연만 제거(pan-x/pan-y/pinch는 그대로라 SwipeRow(pan-y),
+      nav rail(pan-y)의 제스처와 교집합으로 충돌하지 않는다).
    ============================================================ */
 a[href],
 button,
 [role="button"],
 [role="link"],
 [role="tab"],
-[role="radio"] { -webkit-touch-callout: none; }
-input, textarea, [contenteditable="true"] { -webkit-touch-callout: default; }
+[role="radio"],
+[role="option"],
+[role="menuitem"],
+.bottom-nav,
+.desktop-nav-item,
+.workspace-sidebar,
+.member-desktop-nav,
+.filter-chip,
+.center-tab,
+.list-row {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+a[href],
+button,
+[role="button"],
+[role="link"],
+[role="tab"],
+[role="radio"] { touch-action: manipulation; }
+input, textarea, select, [contenteditable=""], [contenteditable="true"] {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+/* pressed 모션 — 기존 :active 스타일(배경/색 변화)은 그대로 두고 아주 미세한 scale만 더한다. */
+:where(a[href], button, [role="button"], [role="tab"]) { transition: scale 110ms cubic-bezier(.2,.75,.2,1); }
+:where(a[href]:active, button:not(:disabled):active, [role="button"]:active, [role="tab"]:active) { scale: .985; }
+@media (prefers-reduced-motion: reduce) {
+  :where(a[href]:active, button:not(:disabled):active, [role="button"]:active, [role="tab"]:active) { scale: 1; }
+}
 
 /* 실기기 QA(2026-09-25) — 센터 선택 시트(app/components/CenterSelectSheet.tsx). 옵션 행은 모두
    같은 높이, 선택은 체크 + accent 글자(전체 채움 없음), 하단 safe-area 반영. */
@@ -6023,3 +6058,15 @@ input, textarea, [contenteditable="true"] { -webkit-touch-callout: default; }
   .desktop-nav-item > span:not(.desktop-nav-badge),
   .workspace-sidebar-mode > span { transform: none !important; }
 }
+
+/* "캘린더에 추가" 시트(app/components/CalendarAddSheet.tsx) — .sheet-option 행을 그대로 쓰되 보조 설명/행 안 버튼만 추가. */
+.calendar-add-sheet { padding-bottom: max(24px, var(--safe-bottom, 0px)); }
+.calendar-add-summary { display: flex; flex-direction: column; gap: 2px; padding: 4px 4px 12px; color: var(--ink-soft); font-size: 13px; }
+.calendar-add-summary b { color: var(--ink); font-size: 14.5px; font-weight: 700; }
+.sheet-option small { display: block; margin-top: 2px; color: var(--ink-soft); font-size: 12px; font-weight: 500; white-space: normal; }
+.sheet-option .sheet-option-label { white-space: normal; }
+.sheet-option:disabled { opacity: .5; cursor: default; }
+.calendar-add-row { min-height: 60px; }
+.calendar-add-btn { flex: 0 0 auto; min-height: 34px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); color: var(--accent); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.calendar-add-btn:disabled { opacity: .5; cursor: default; }
+.calendar-add-done { flex: 0 0 auto; color: var(--ink-soft); font-size: 13px; font-weight: 700; }

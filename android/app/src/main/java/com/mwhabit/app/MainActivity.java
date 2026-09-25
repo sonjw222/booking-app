@@ -51,6 +51,9 @@ public class MainActivity extends BridgeActivity {
         // GoogleSignInPlugin.java — Google 네이티브 로그인(release blocker 대응,
         // 2026-09-15). iOS의 GoogleSignInPlugin.swift와 동일한 jsName/계약.
         registerPlugin(GoogleSignInPlugin.class);
+        // CalendarEventPlugin.java — "캘린더에 추가"(2026-09-26). 시스템 캘린더 일정 추가 인텐트,
+        // iOS의 CalendarEventPlugin과 동일한 jsName/계약(lib/calendarAdd.ts).
+        registerPlugin(CalendarEventPlugin.class);
 
         // 채널 importance는 한 번 생성되면 코드로 다시 못 올린다(OS 정책 — 사용자가
         // 시스템 설정에서 직접 바꾸는 것만 허용). 이미 같은 ID로 만들어져 있으면
