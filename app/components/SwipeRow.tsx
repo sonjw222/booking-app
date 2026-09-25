@@ -26,12 +26,24 @@
      속도(px/ms)를 같이 계산해 임계값을 넘으면 거리와 무관하게 방향대로 스냅한다.
   3) prefers-reduced-motion — 켜져 있으면 스냅 애니메이션을 즉시 전환(transition 없음)으로
      바꾼다.
+
+  민감도 배치(2026-09-24) — 사용자 피드백: "지금은 정직하게 일정 범위 이상 끌어야
+  버튼이 나오고 사라지는데, 조금만 밀어도 자연스러운 애니메이션과 함께 나오고
+  사라지면 좋겠다." 기존 OPEN_RATIO(42%, actionWidth 144px 기준 약 60px)는 매번
+  절반 가까이 끌어야 열렸고, 게다가 "닫는" 쪽은 항상 절대 위치(s.x) 기준으로만
+  판정해서 이미 열린 상태에서 되돌리려면 반대로 훨씬 더 크게(약 84px) 끌어야 하는
+  비대칭 문제도 있었다(열기 42% vs 닫기 실질 58%). 절대 비율 대신, 제스처 "시작
+  상태 기준 상대 이동량"이 SMALL_TOGGLE_PX(약 16px, MOVE_THRESHOLD 8px보다 살짝
+  큰 정도)만 넘으면 방향대로 스냅하도록 바꿔 열기/닫기 둘 다 동일하게 "조금만
+  밀어도" 반응한다. 이 컴포넌트는 관리자/회원 알림 양쪽에서 공용으로 쓰이고
+  모바일/태블릿 전부 같은 코드 경로라 여기 값만 바꾸면 앱 전체에 적용된다. 빠른
+  flick(velocity)과 prefers-reduced-motion 처리는 기존 그대로 유지.
 */
 import { useEffect, useRef, type ReactNode } from "react";
 
-const MOVE_THRESHOLD = 8; // px — 이보다 작은 움직임에는 반응하지 않음(의도치 않은 오픈 방지)
+const MOVE_THRESHOLD = 8; // px — 이보다 작은 움직임에는 반응하지 않음(의도치 않은 오픈 방지, 방향 판정용)
 const OVERSWIPE_CUSHION = 22; // px — actionWidth를 넘어서도 살짝 더 끌리는 여유(고무줄 느낌), 그 이상은 clamp
-const OPEN_RATIO = 0.42; // actionWidth의 이 비율 이상 끌리면 스냅 오픈
+const SMALL_TOGGLE_PX = 16; // px — 시작 상태 기준 이만큼만 밀어도 방향대로 스냅(열기/닫기 동일하게 적용)
 const FLICK_VELOCITY = 0.5; // px/ms — 이 이상으로 빠르게 놓으면 거리와 무관하게 방향대로 스냅
 const FLICK_SAMPLE_WINDOW = 80; // ms — 이보다 오래된 샘플은 velocity 계산에서 버림(멈췄다 다시 움직인 경우 대비)
 
@@ -131,12 +143,22 @@ export default function SwipeRow({
     const dt = last.t - first.t;
     const velocity = dt > 0 ? (last.x - first.x) / dt : 0;
 
+    // 이 제스처가 "시작한 상태"(열림/닫힘) 기준 상대 이동량 — 절대 위치(s.x)가 아니라
+    // base(제스처 시작 시점의 위치)로부터 얼마나 움직였는지로 판정해야 열기/닫기가
+    // 대칭이 된다(주석 상단 "민감도 배치" 참고).
+    const base = isOpen ? -actionWidth : 0;
+    const dxFromBase = s.x - base;
+
     let shouldOpen: boolean;
     if (Math.abs(velocity) > FLICK_VELOCITY) {
-      // 빠른 flick — 놓인 위치 비율과 무관하게 방향대로 스냅.
+      // 빠른 flick — 이동량과 무관하게 방향대로 스냅.
       shouldOpen = velocity < 0;
+    } else if (!isOpen && dxFromBase < -SMALL_TOGGLE_PX) {
+      shouldOpen = true; // 닫힌 상태 → 조금만 왼쪽으로 밀어도 열림
+    } else if (isOpen && dxFromBase > SMALL_TOGGLE_PX) {
+      shouldOpen = false; // 열린 상태 → 조금만 오른쪽으로 밀어도 닫힘
     } else {
-      shouldOpen = s.x < -actionWidth * OPEN_RATIO;
+      shouldOpen = isOpen; // 임계값 못 넘으면 원래 상태로 스냅백
     }
     const target = shouldOpen ? -actionWidth : 0;
     s.x = target;
