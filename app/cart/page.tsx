@@ -15,6 +15,9 @@ import Loading from "../components/Loading";
 import UiIcon, { type IconName } from "../components/UiIcon";
 import BackButton from "../components/BackButton";
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import AppButton from "../components/AppButton";
 
 // 카카오페이/토스페이는 로고 자산이 없어 outline 아이콘 하나로 뭉치면 구분이 안 되므로
 // --vendor-* 색 점(dot)으로, 나머지는 의미가 통하는 outline 아이콘으로 구분한다.
@@ -38,6 +41,7 @@ export default function CartPage() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   const [payMethod, setPayMethod] = useState("card");
   const [allowedPay, setAllowedPay] = useState<string[] | null>(null);
@@ -54,7 +58,7 @@ export default function CartPage() {
   const [selectedProfileId, setSelectedProfileId] = useState<string>("");
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setLoadError(false);
     try {
       const list = await fetchCart();
       setItems(list);
@@ -72,7 +76,7 @@ export default function CartPage() {
           if (c?.payMethods && c.payMethods.length > 0) setPayMethod(c.payMethods[0]);
         } catch { /* 무시 */ }
       }
-    } catch (e: any) { setError(e.message); }
+    } catch { setLoadError(true); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -219,13 +223,12 @@ export default function CartPage() {
         <div className="side" />
       </div>
 
-      {loading ? <Loading /> : items.length === 0 ? (
-        <div className="commerce-empty">
-          <div className="commerce-empty-mark" aria-hidden="true">0</div>
-          <b>장바구니가 비어 있어요</b>
-          <span>센터에서 수강권이나 상품을 둘러보세요.</span>
-          <a className="primary-btn" href="/search">센터 찾아보기</a>
-        </div>
+      {loading ? <Loading /> : loadError ? (
+        <ErrorState title="장바구니를 불러오지 못했어요" description="연결 상태를 확인하고 다시 시도해 주세요."
+          action={<AppButton onClick={load}>다시 시도</AppButton>} />
+      ) : items.length === 0 ? (
+        <EmptyState icon="cart" title="장바구니가 비어 있어요" description="센터에서 수강권이나 상품을 둘러보세요."
+          action={<a className="primary-btn" href="/search">센터 찾아보기</a>} />
       ) : (
         <>
           {/* 주문 정보 */}
@@ -260,9 +263,9 @@ export default function CartPage() {
                 </div>
                 {/* UX 감사(A-18) — 수량조절 UI */}
                 <div className="cart-qty">
-                  <button type="button" className="cart-qty-btn" disabled={busy} onClick={() => handleDecrement(g.ids)} aria-label="수량 줄이기">−</button>
+                  <button type="button" className="cart-qty-btn" disabled={busy} onClick={() => handleDecrement(g.ids)} aria-label={`${g.productName} 수량 줄이기`}>−</button>
                   <span className="cart-qty-count">{g.ids.length}개</span>
-                  <button type="button" className="cart-qty-btn" disabled={busy} onClick={() => handleIncrement(g)} aria-label="수량 늘리기">+</button>
+                  <button type="button" className="cart-qty-btn" disabled={busy} onClick={() => handleIncrement(g)} aria-label={`${g.productName} 수량 늘리기`}>+</button>
                 </div>
               </div>
             ))}
@@ -338,9 +341,9 @@ export default function CartPage() {
             <span>총 {items.length}개 · 결제 금액</span>
             <b>{won(total)}</b>
           </div>
-          <button className="primary-btn checkout-pay-btn" disabled={busy} onClick={handleCheckoutAll}>
-            {busy ? "처리 중..." : `${won(total)} 결제하기`}
-          </button>
+          <AppButton className="checkout-pay-btn" disabled={busy} onClick={handleCheckoutAll}>
+            {busy ? "처리 중..." : `${won(total)} 주문 접수하기`}
+          </AppButton>
           <div className="perm-guide" style={{ margin: "10px 20px" }}>
             결제 연동 전이라 주문서만 접수돼요. 센터에서 확인 후 처리해요.
           </div>

@@ -4432,7 +4432,7 @@ a.membership-card { text-decoration: none; display: block; }
 .center-detail-v2 .center-hero-name { font-size: 27px; font-weight: 800; word-break: keep-all; }
 .center-detail-v2 .center-hero-addr { margin-top: 10px; font-size: 14px; }
 .center-detail-v2 .center-hero-phone { display: inline-block; margin-top: 8px; color: var(--ink-soft); font-size: 13px; }
-.center-detail-v2 .center-tabs { position: sticky; top: 0; z-index: 15; margin: 0; padding: 0 var(--page-gutter); background: rgba(251,251,250,.94); backdrop-filter: blur(16px); }
+.center-detail-v2 .center-tabs { position: sticky; top: 0; z-index: 15; margin: 0; padding: 0 var(--page-gutter); background: color-mix(in srgb,var(--bg) 94%,transparent); backdrop-filter: blur(16px); }
 .center-detail-v2 .center-tab { font-size: 14px; font-weight: 650; }
 .center-detail-v2 .menu-section-label { padding-top: 26px; color: var(--ink); font-size: 17px; }
 .center-detail-v2 .center-map-link { min-height: 68px; }
@@ -5821,6 +5821,29 @@ textarea:focus-visible,
   .auth-page-v2 {
     grid-template-columns: minmax(520px,46%) minmax(640px,54%);
   }
+}
+
+/* Member discovery and activity pages share the same spacious card rhythm on
+   tablet/desktop while keeping the existing navy-and-neutral palette. */
+@media (min-width: 768px) {
+  .category-page-v2 .category-results-v3 {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 0 22px;
+    padding-inline: var(--workspace-gutter);
+  }
+  .category-page-v2 .category-results-head { grid-column: 1 / -1; }
+  .category-page-v2 .cat-center-card { min-width: 0; }
+  .purchase-page-v2 .purchase-list {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 0 22px;
+  }
+  .purchase-page-v2 .purchase-item { min-width: 0; border-bottom: 1px solid var(--line); }
+}
+@media (max-width: 900px) and (min-width: 768px) {
+  .category-page-v2 .category-results-v3,
+  .purchase-page-v2 .purchase-list { grid-template-columns: 1fr; }
 }
 
 /* Short phone viewports: fit the first category row above the floating nav.
