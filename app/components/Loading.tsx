@@ -13,7 +13,10 @@
 // 아래쪽까지 채운다). 화면마다 정확히 다른 모양의 스켈레톤을 새로 그리는 건 이번
 // 배치 범위를 넘는 화면별 커스텀 작업이라(대상 화면이 너무 많음), 이 공용 컴포넌트
 // 하나를 "list-row가 여러 개 있는 화면" 일반형에 더 가깝게 다듬어 재사용률을 유지한다.
-export default function Loading({ text = "화면을 준비하고 있어요", rows = 4 }: { text?: string; rows?: number }) {
+// 실기기 QA(2026-09-25): row를 넉넉히(10) 그리고 .loading-wrap이 usable viewport 높이로
+// overflow를 잘라, 화면 크기(모바일/태블릿/데스크톱)와 무관하게 상단에만 몰리지 않고
+// 하단 네비 바로 위까지 자연스럽게 채운다.
+export default function Loading({ text = "화면을 준비하고 있어요", rows = 10 }: { text?: string; rows?: number }) {
   return (
     <div className="loading-wrap" role="status" aria-live="polite">
       <span className="sr-only">{text}</span>

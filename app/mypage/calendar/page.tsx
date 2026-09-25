@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import {
-  fetchMyReservationsForCalendar, updateReservationMemo, downloadIcs,
+  fetchMyReservationsForCalendar, updateReservationMemo, exportIcs,
   type CalReservation,
 } from "../../../lib/mypage";
 
@@ -26,6 +26,8 @@ export default function CalendarPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [memoEdits, setMemoEdits] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null); // 방금 저장 성공한 예약(버튼에 "저장됨" 표시)
+  const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -59,16 +61,31 @@ export default function CalendarPage() {
 
   async function saveMemo(r: CalReservation) {
     const val = memoEdits[r.id] ?? r.memo ?? "";
-    setSavingId(r.id);
+    setSavingId(r.id); setSavedId(null);
     try {
       await updateReservationMemo(r.id, val);
       setResv((prev) => prev.map((x) => x.id === r.id ? { ...x, memo: val } : x));
+      // 실제로 저장된 뒤에만 표시한다(updateReservationMemo가 0행 갱신도 에러로 던짐).
+      setSavedId(r.id);
     } catch (e: any) { setError(e.message); }
     finally { setSavingId(null); }
   }
 
+  // 캘린더 파일 내보내기 — 결과(공유 시트/다운로드/취소/실패)를 사용자에게 그대로 알린다.
+  async function exportToCalendar(items: CalReservation[], filename: string) {
+    try {
+      const result = await exportIcs(items, filename);
+      if (result === "downloaded") setToast("캘린더 파일을 저장했어요. 파일을 열어 캘린더에 추가해주세요");
+      else if (result === "shared") setToast("공유 창에서 캘린더를 선택해 추가해주세요");
+      if (result !== "cancelled") setTimeout(() => setToast(null), 3000);
+    } catch (e: any) {
+      setError(e?.message ?? "캘린더에 추가하지 못했어요");
+    }
+  }
+
   return (
     <div className="app-shell">
+      {toast && <div className="toast">{toast}</div>}
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
       <div className="back-header">
@@ -77,7 +94,7 @@ export default function CalendarPage() {
         <button className="cal-export-btn" onClick={() => {
           const upcoming = resv.filter((r) => r.status === "confirmed" || r.status === "waitlisted");
           if (upcoming.length === 0) { setError("내보낼 예약이 없어요"); return; }
-          downloadIcs(upcoming, "우리동네클래스_예약.ics");
+          void exportToCalendar(upcoming, "모하빗_예약.ics");
         }}>내 캘린더에 추가</button>
       </div>
 
@@ -147,13 +164,13 @@ export default function CalendarPage() {
                         className="input-field"
                         placeholder="메모 추가 (예: 준비물, 컨디션)"
                         value={memoEdits[r.id] ?? r.memo ?? ""}
-                        onChange={(e) => setMemoEdits({ ...memoEdits, [r.id]: e.target.value })}
+                        onChange={(e) => { setMemoEdits({ ...memoEdits, [r.id]: e.target.value }); if (savedId === r.id) setSavedId(null); }}
                       />
                       <button className="primary-btn small" disabled={savingId === r.id} onClick={() => saveMemo(r)}>
-                        {savingId === r.id ? "저장" : "저장"}
+                        {savingId === r.id ? "저장 중" : savedId === r.id ? "저장됨" : "저장"}
                       </button>
                     </div>
-                    <button className="cal-add-one" onClick={() => downloadIcs([r], `${r.title}.ics`)}>
+                    <button className="cal-add-one" onClick={() => void exportToCalendar([r], `${r.title}.ics`)}>
                       캘린더에 추가
                     </button>
                   </div>

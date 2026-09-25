@@ -11,6 +11,7 @@
   2. AUTH_SETUP.md 의 RLS 정책 실행 + 로그인 상태여야 함
 */
 
+import CenterSelectSheet from "../components/CenterSelectSheet";
 import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Loading from "../components/Loading";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -534,18 +535,12 @@ function ReservationCalendarContent() {
       </div>
 
       {centerSheet && (
-        <div className="sheet-overlay" onClick={() => setCenterSheet(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-title">센터 선택</div>
-            <button className={`filter-chip ${!effectiveCenter ? "on" : ""}`} style={{ width: "100%", marginBottom: 6 }}
-              onClick={() => { setCenterPick(null); setCenterSheet(false); }}>전체 센터</button>
-            {centers.map((c) => (
-              <button key={c.id} className={`filter-chip ${effectiveCenter === c.id ? "on" : ""}`} style={{ width: "100%", marginBottom: 6 }}
-                onClick={() => { setCenterPick(c.id); setCenterSheet(false); }}>{c.name}</button>
-            ))}
-            <button className="ghost-btn" style={{ width: "100%", marginTop: 6 }} onClick={() => setCenterSheet(false)}>닫기</button>
-          </div>
-        </div>
+        <CenterSelectSheet
+          centers={centers}
+          selectedId={effectiveCenter}
+          onSelect={(id) => { setCenterPick(id); setCenterSheet(false); }}
+          onClose={() => setCenterSheet(false)}
+        />
       )}
 
       {categoryFilter && (

@@ -22,7 +22,7 @@ import {
 } from "../../../lib/notifications";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 
-const SWIPE_ACTION_WIDTH = 144;
+const SWIPE_ACTION_WIDTH = 88; // 좌(고정/해제)·우(삭제) 각각 1개 — 방향별로 하나씩만 드러난다(SwipeRow 2026-09-25 재설계).
 
 export default function ManagerNotificationsPage() {
   const router = useRouter();
@@ -192,28 +192,29 @@ export default function ManagerNotificationsPage() {
                 id={n.id}
                 openId={openRowId}
                 onOpenChange={setOpenRowId}
-                actionWidth={SWIPE_ACTION_WIDTH}
-                actions={
-                  <>
-                    <button
-                      type="button"
-                      className="swipe-action-btn pin"
-                      aria-label={n.pinned ? "고정 해제" : "고정"}
-                      onClick={() => handleTogglePin(n)}
-                    >
-                      <UiIcon name="pin" size={19} />
-                      <span>{n.pinned ? "고정 해제" : "고정"}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="swipe-action-btn delete"
-                      aria-label="삭제"
-                      onClick={() => handleDelete(n.id)}
-                    >
-                      <UiIcon name="close" size={19} />
-                      <span>삭제</span>
-                    </button>
-                  </>
+                leftActionWidth={SWIPE_ACTION_WIDTH}
+                rightActionWidth={SWIPE_ACTION_WIDTH}
+                leftAction={
+                  <button
+                    type="button"
+                    className="swipe-action-btn pin"
+                    aria-label={n.pinned ? "고정 해제" : "고정"}
+                    onClick={() => handleTogglePin(n)}
+                  >
+                    <UiIcon name="pin" size={19} />
+                    <span>{n.pinned ? "고정 해제" : "고정"}</span>
+                  </button>
+                }
+                rightAction={
+                  <button
+                    type="button"
+                    className="swipe-action-btn delete"
+                    aria-label="삭제"
+                    onClick={() => handleDelete(n.id)}
+                  >
+                    <UiIcon name="close" size={19} />
+                    <span>삭제</span>
+                  </button>
                 }
               >
                 <div

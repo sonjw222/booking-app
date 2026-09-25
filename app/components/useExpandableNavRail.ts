@@ -22,31 +22,45 @@
   244px 텍스트 sidebar 정책 — 새 overlay를 또 만들지 않음).
 */
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
-const EDGE_ZONE = 24; // px — 화면 왼쪽 이 폭 안에서 시작한 제스처만 "edge swipe"로 인정
-const OPEN_DISTANCE = 60; // px — 이 이상 오른쪽으로 끌면 펼침(닫힌 상태에서 여는 edge-swipe)
-const CLOSE_DISTANCE = 40; // px — 펼쳐진 상태에서 왼쪽으로 이 이상 끌면 닫힘
-const FLICK_VELOCITY = 0.5; // px/ms — SwipeRow.tsx와 동일 기준(빠른 flick은 거리 무관하게 인정)
-const MOVE_THRESHOLD = 8; // px — 방향(가로/세로) 판정 전 최소 이동량, 세로 스크롤과 구분
-const SAMPLE_WINDOW = 80; // ms — velocity 계산에 쓰는 최근 샘플 유지 시간
+/*
+  실기기 QA 개선(2026-09-25) — 이전 구현은 (1) 여는 swipe가 "화면 왼쪽 24px 가장자리"에서 시작한
+  제스처만 인정해 rail 위 어디서든 밀어도 안 열렸고, (2) 회원용 .member-desktop-nav에는 아예
+  적용되지 않았고, (3) 로고(brand) 링크를 눌러도 펼쳐지지 않았다. 지금은:
+    - rail(nav 요소) 안에서 시작한 터치/펜 제스처만 처리 — 오른쪽으로 밀면 펼침, 펼친 상태에서
+      왼쪽으로 밀면 접힘. 페이지 콘텐츠(캐러셀/SwipeRow/가로 스크롤)와는 이벤트가 겹치지 않는다.
+    - 방향 잠금: 7px 이상 움직였을 때 |dx| > |dy|×1.5 면 가로, 아니면 세로(=rail 스크롤에 맡기고
+      제스처 취소). 가로로 확정된 뒤 dx가 TRIGGER_PX(24)를 넘는 즉시(손을 떼기 전에) 반응한다.
+    - 로고 링크는 compact 상태에서 터치하면 이동 대신 펼침(펼친 뒤엔 정상 이동), 메뉴 항목(a/button)은
+      언제나 즉시 라우팅. swipe 직후 발생할 수 있는 click은 삼킨다.
+    - 경로가 바뀌면 compact로 복귀(태블릿/중간 폭 정책).
+*/
+export const NAV_RAIL_MEDIA = "(min-width: 768px) and (max-width: 1359px)";
+export const SWIPE_INTENT_PX = 7;   // 방향 판정 전 최소 이동량 — 1~6px 떨림은 무시
+export const AXIS_RATIO = 1.5;      // |dx| > |dy|×1.5 일 때만 가로
+export const TRIGGER_PX = 24;       // 가로 확정 후 이만큼 밀면 즉시 펼침/접힘
+export const FLICK_VELOCITY = 0.45; // px/ms — 빠른 flick은 TRIGGER_PX 미만이어도 인정
+const FLICK_MIN_PX = 10;
+const SAMPLE_WINDOW = 90;           // ms
 
-type Axis = "x" | "y" | null;
-interface GestureState {
-  active: boolean;
-  startX: number;
-  startY: number;
-  axis: Axis;
-  samples: { t: number; x: number }[];
+/** rail 제스처 판정(순수 함수 — 단위 테스트 대상). null이면 아직/영영 아무 것도 하지 않음. */
+export function resolveRailSwipe(dx: number, dy: number, velocity: number, expanded: boolean): "expand" | "collapse" | null {
+  const adx = Math.abs(dx), ady = Math.abs(dy);
+  if (adx < SWIPE_INTENT_PX || adx <= ady * AXIS_RATIO) return null; // 세로/불명확 → 취소
+  if (!expanded) {
+    if (dx >= TRIGGER_PX) return "expand";
+    if (dx >= FLICK_MIN_PX && velocity >= FLICK_VELOCITY) return "expand";
+  } else {
+    if (dx <= -TRIGGER_PX) return "collapse";
+    if (dx <= -FLICK_MIN_PX && velocity <= -FLICK_VELOCITY) return "collapse";
+  }
+  return null;
 }
 
-function newState(): GestureState {
-  return { active: false, startX: 0, startY: 0, axis: null, samples: [] };
-}
-
-function velocityOf(s: GestureState): number {
-  if (s.samples.length < 2) return 0;
-  const first = s.samples[0];
-  const last = s.samples[s.samples.length - 1];
+function velocityOf(samples: { t: number; x: number }[]): number {
+  if (samples.length < 2) return 0;
+  const first = samples[0], last = samples[samples.length - 1];
   const dt = last.t - first.t;
   return dt > 0 ? (last.x - first.x) / dt : 0;
 }
@@ -56,105 +70,81 @@ export function useExpandableNavRail(scrollStorageKey: string) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [inRailRange, setInRailRange] = useState(false);
+  const pathname = usePathname();
+  const lastPointerType = useRef<string>("mouse");
+  const swiped = useRef(false); // 방금 swipe로 처리한 제스처 — 뒤따르는 click을 삼킨다
+  const expandedRef = useRef(false);
+  expandedRef.current = expanded;
 
-  // 768–1359px(터치 확장 대상 구간) 여부를 매체 쿼리로 정확히 추적한다 — 리사이즈/
-  // 회전에도 반응. 1360px 이상은 이미 상시 sidebar라 여기서 손대지 않는다.
+  // 768–1359px(rail 확장 대상 구간) 여부를 매체 쿼리로 정확히 추적 — 리사이즈/회전에도 반응.
+  // 1360px 이상은 이미 상시 244px sidebar라 손대지 않는다(원래 정책).
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px) and (max-width: 1359px)");
+    const mq = window.matchMedia(NAV_RAIL_MEDIA);
     const update = () => setInRailRange(mq.matches);
     update();
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  // 리사이즈로 범위를 벗어나면(예: 태블릿을 데스크톱 폭으로) 강제로 접힌 상태로.
+  // 범위를 벗어나면(예: 회전/리사이즈로 데스크톱 폭) 강제로 접힌 상태.
   useEffect(() => { if (!inRailRange) setExpanded(false); }, [inRailRange]);
 
-  // 1) 닫힌 상태 — 왼쪽 끝에서 오른쪽으로 미는 edge-swipe로 펼치기.
-  useEffect(() => {
-    if (!inRailRange || expanded) return;
-    const s = newState();
-    function onPointerDown(e: PointerEvent) {
-      if (e.pointerType === "mouse") return; // mouse는 이미 hover로 펼쳐짐 — edge-swipe 불필요
-      if (e.clientX > EDGE_ZONE) return;
-      s.active = true; s.startX = e.clientX; s.startY = e.clientY; s.axis = null;
-      s.samples = [{ t: performance.now(), x: e.clientX }];
-    }
-    function onPointerMove(e: PointerEvent) {
-      if (!s.active) return;
-      const dx = e.clientX - s.startX;
-      const dy = e.clientY - s.startY;
-      if (!s.axis) {
-        if (Math.abs(dx) < MOVE_THRESHOLD && Math.abs(dy) < MOVE_THRESHOLD) return;
-        s.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
-      }
-      if (s.axis !== "x") return;
-      const now = performance.now();
-      s.samples.push({ t: now, x: e.clientX });
-      while (s.samples.length > 1 && now - s.samples[0].t > SAMPLE_WINDOW) s.samples.shift();
-    }
-    function onPointerUp(e: PointerEvent) {
-      if (!s.active) return;
-      s.active = false;
-      if (s.axis !== "x") return;
-      const dx = e.clientX - s.startX;
-      if (dx > OPEN_DISTANCE || velocityOf(s) > FLICK_VELOCITY) setExpanded(true);
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("pointermove", onPointerMove);
-    document.addEventListener("pointerup", onPointerUp);
-    document.addEventListener("pointercancel", onPointerUp);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("pointermove", onPointerMove);
-      document.removeEventListener("pointerup", onPointerUp);
-      document.removeEventListener("pointercancel", onPointerUp);
-    };
-  }, [inRailRange, expanded]);
+  // 경로가 바뀌면 compact로 복귀 — 클라이언트 전환/풀 리로드 어느 쪽이든 같은 결과.
+  useEffect(() => { setExpanded(false); }, [pathname]);
 
-  // 2) 펼친 상태 — nav 영역 안에서 왼쪽으로 미는 swipe로 닫기(반대 방향).
+  // 1) rail 위에서 시작한 가로 swipe — 펼침(→)/접힘(←). 마우스는 hover/click이 이미 처리.
   useEffect(() => {
     const nav = navRef.current;
-    if (!nav || !inRailRange || !expanded) return;
-    const s = newState();
+    if (!nav || !inRailRange) return;
+    const g = { active: false, decided: false, startX: 0, startY: 0, samples: [] as { t: number; x: number }[] };
     function onPointerDown(e: PointerEvent) {
+      lastPointerType.current = e.pointerType;
       if (e.pointerType === "mouse") return;
-      s.active = true; s.startX = e.clientX; s.startY = e.clientY; s.axis = null;
-      s.samples = [{ t: performance.now(), x: e.clientX }];
+      g.active = true; g.decided = false; g.startX = e.clientX; g.startY = e.clientY;
+      g.samples = [{ t: performance.now(), x: e.clientX }];
     }
     function onPointerMove(e: PointerEvent) {
-      if (!s.active) return;
-      const dx = e.clientX - s.startX;
-      const dy = e.clientY - s.startY;
-      if (!s.axis) {
-        if (Math.abs(dx) < MOVE_THRESHOLD && Math.abs(dy) < MOVE_THRESHOLD) return;
-        s.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
-      }
-      if (s.axis !== "x") return;
+      if (!g.active || g.decided) return;
+      const dx = e.clientX - g.startX, dy = e.clientY - g.startY;
       const now = performance.now();
-      s.samples.push({ t: now, x: e.clientX });
-      while (s.samples.length > 1 && now - s.samples[0].t > SAMPLE_WINDOW) s.samples.shift();
+      g.samples.push({ t: now, x: e.clientX });
+      while (g.samples.length > 1 && now - g.samples[0].t > SAMPLE_WINDOW) g.samples.shift();
+      if (Math.abs(dy) >= SWIPE_INTENT_PX && Math.abs(dy) >= Math.abs(dx) * 0.7) { g.active = false; return; } // 세로 의도 → 취소
+      const decision = resolveRailSwipe(dx, dy, velocityOf(g.samples), expandedRef.current);
+      if (decision) {
+        g.decided = true;
+        swiped.current = true;
+        window.setTimeout(() => { swiped.current = false; }, 350);
+        setExpanded(decision === "expand");
+      }
     }
-    function onPointerUp(e: PointerEvent) {
-      if (!s.active) return;
-      s.active = false;
-      if (s.axis !== "x") return;
-      const dx = e.clientX - s.startX;
-      if (dx < -CLOSE_DISTANCE || velocityOf(s) < -FLICK_VELOCITY) setExpanded(false);
+    function end() { g.active = false; }
+    // swipe 직후의 click(메뉴 항목 우발 이동 등)은 캡처 단계에서 삼킨다.
+    // 로고(.desktop-brand) 링크는 compact 상태에서 터치하면 이동 대신 펼침 — Next <Link>는 자신의
+    // onClick에서 바로 라우팅하므로 버블 단계(React onClick)로는 늦다 → 여기(캡처 단계)서 처리한다.
+    function onClickCapture(e: MouseEvent) {
+      if (swiped.current) { e.preventDefault(); e.stopPropagation(); return; }
+      const target = e.target as HTMLElement | null;
+      if (!expandedRef.current && lastPointerType.current !== "mouse" && target?.closest(".desktop-brand")) {
+        e.preventDefault(); e.stopPropagation();
+        setExpanded(true);
+      }
     }
     nav.addEventListener("pointerdown", onPointerDown);
     nav.addEventListener("pointermove", onPointerMove);
-    nav.addEventListener("pointerup", onPointerUp);
-    nav.addEventListener("pointercancel", onPointerUp);
+    nav.addEventListener("pointerup", end);
+    nav.addEventListener("pointercancel", end);
+    nav.addEventListener("click", onClickCapture, true);
     return () => {
       nav.removeEventListener("pointerdown", onPointerDown);
       nav.removeEventListener("pointermove", onPointerMove);
-      nav.removeEventListener("pointerup", onPointerUp);
-      nav.removeEventListener("pointercancel", onPointerUp);
+      nav.removeEventListener("pointerup", end);
+      nav.removeEventListener("pointercancel", end);
+      nav.removeEventListener("click", onClickCapture, true);
     };
-  }, [inRailRange, expanded]);
+  }, [inRailRange]);
 
-  // 3) 펼친 상태 — 바깥 클릭 / ESC로 닫기.
+  // 2) 펼친 상태 — rail 바깥 탭/클릭, ESC로 닫기.
   useEffect(() => {
     if (!expanded) return;
     function onPointerDownOutside(e: PointerEvent) {
@@ -172,9 +162,10 @@ export function useExpandableNavRail(scrollStorageKey: string) {
     };
   }, [expanded]);
 
-  // rail의 "빈 영역"(브랜드 로고/구분선/여백 — 실제 링크·버튼이 아닌 곳)을 클릭해도
-  // 펼쳐지게 한다. 메뉴 항목 자체(a/button)는 여기서 가로채지 않고 항상 즉시
-  // 라우팅되게 둔다(요구사항 10 — 이중 네비게이션/탭 딜레이 금지).
+  // rail 탭으로 펼치기 — compact 상태에서:
+  //  · 빈 영역(로고/구분선/여백 등 링크·버튼이 아닌 곳)을 누르면 펼침
+  //  · 로고(.desktop-brand) 링크의 터치 탭은 위 캡처 리스너가 처리(이동 대신 펼침, 펼친 뒤엔 정상 이동)
+  //  · 메뉴 항목(a/button)은 여기서 가로채지 않고 항상 즉시 라우팅(이중 내비게이션/탭 딜레이 금지)
   function handleRailClick(e: React.MouseEvent) {
     if (!inRailRange || expanded) return;
     const target = e.target as HTMLElement;
@@ -182,13 +173,13 @@ export function useExpandableNavRail(scrollStorageKey: string) {
     setExpanded(true);
   }
 
-  // 메뉴 선택 후 768–1359에서는 compact rail로 자연스럽게 복귀(클라이언트 전환 항목만
-  // 명시적으로 필요 — 전체 페이지 리로드인 항목은 리로드 자체로 상태가 초기화됨).
+  // 메뉴 선택 후 768–1359에서는 compact rail로 복귀(경로 변경 effect가 이미 처리하지만, 같은
+  // 경로를 다시 눌렀을 때도 접히도록 유지).
   function collapseAfterNavigate() {
     if (inRailRange) setExpanded(false);
   }
 
-  // 4) scroll position 유지 — route 이동/compact↔expanded 전환에도 세션 동안 유지.
+  // 3) scroll position 유지 — route 이동/compact↔expanded 전환에도 세션 동안 유지.
   // 이 nav는 클라이언트 전환 시 계속 마운트 상태로 남지만, 메뉴 대부분은 여전히
   // <a href>(전체 페이지 리로드)라 컴포넌트가 다시 마운트된다 — sessionStorage를 써서
   // 두 경우 모두 커버한다(리로드돼도 세션스토리지는 유지됨).

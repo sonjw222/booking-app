@@ -486,11 +486,14 @@ export async function fetchMyReservationsForCalendar(): Promise<CalReservation[]
 }
 
 export async function updateReservationMemo(reservationId: string, memo: string): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("reservations")
     .update({ member_memo: memo || null })
-    .eq("id", reservationId);
+    .eq("id", reservationId)
+    .select("id");
   if (error) throw new Error("메모 저장에 실패했어요: " + error.message);
+  // RLS가 조용히 0행을 갱신하는 경우(에러 없이 저장 안 됨)를 성공으로 오인하지 않는다.
+  if (!data || data.length === 0) throw new Error("메모를 저장하지 못했어요. 다시 시도해주세요.");
 }
 
 /* ============================================================
@@ -534,7 +537,7 @@ export function reservationsToIcs(items: CalReservation[]): string {
   return lines.filter(Boolean).join("\r\n");
 }
 
-// ICS 파일 다운로드 트리거
+// ICS 파일 다운로드 트리거(데스크톱/안드로이드 크롬 등 일반 브라우저용)
 export function downloadIcs(items: CalReservation[], filename = "내예약.ics") {
   const ics = reservationsToIcs(items);
   const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
@@ -546,6 +549,42 @@ export function downloadIcs(items: CalReservation[], filename = "내예약.ics")
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export type IcsExportResult = "shared" | "downloaded" | "cancelled";
+
+/*
+  실기기 QA(2026-09-25) — "내 캘린더에 추가"/"캘린더에 추가" 버튼이 iPhone 앱에서 아무 반응이
+  없던 원인: downloadIcs()의 blob: URL + <a download> 클릭은 iOS WKWebView(Capacitor)가
+  처리하지 않는다(다운로드 핸들러가 없어 조용히 무시됨 — 에러도 안 남음). 그래서 iOS 앱에서
+  두 버튼이 "눌러도 아무 일도 안 일어나는" 상태였다.
+  수정: 1) Web Share API(파일 공유 — iOS 공유 시트에서 "캘린더"/파일 앱 저장 선택 가능)를
+  먼저 시도, 2) 지원 안 하는 일반 브라우저는 기존 anchor 다운로드, 3) 네이티브 앱인데 둘 다
+  불가하면 조용히 넘어가지 않고 에러를 던져 화면에 실패를 알린다(가짜 성공 토스트 금지).
+  새 네이티브 플러그인/권한 없이 기존 웹 API만 사용.
+*/
+export async function exportIcs(items: CalReservation[], filename: string): Promise<IcsExportResult> {
+  const ics = reservationsToIcs(items);
+  const nav = typeof navigator !== "undefined" ? (navigator as Navigator & { canShare?: (d: ShareData) => boolean }) : null;
+  if (nav && typeof nav.share === "function" && typeof File !== "undefined") {
+    const file = new File([ics], filename, { type: "text/calendar" });
+    if (typeof nav.canShare === "function" && nav.canShare({ files: [file] })) {
+      try {
+        await nav.share({ files: [file], title: filename.replace(/\.ics$/i, "") });
+        return "shared";
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return "cancelled"; // 사용자가 공유 시트를 닫음
+        // 그 외 실패는 아래 anchor 다운로드로 폴백
+      }
+    }
+  }
+  const isNativeApp = typeof window !== "undefined" && !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
+  if (isNativeApp) {
+    // 앱 WebView에서는 anchor 다운로드가 동작하지 않는다 — 조용히 실패시키지 않는다.
+    throw new Error("이 기기에서는 캘린더 파일을 바로 열 수 없어요. 앱을 최신 버전으로 업데이트한 뒤 다시 시도해주세요.");
+  }
+  downloadIcs(items, filename);
+  return "downloaded";
 }
 
 /* ============================================================

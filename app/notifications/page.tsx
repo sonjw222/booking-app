@@ -7,8 +7,10 @@
   - 공지 알림은 눌러서 상세(제목/본문/사진) 확인
   - 재등록 알림은 눌러서 센터로 이동해 바로 결제
   - 안정화 배치(2026-09-22) — 관리자 알림(app/manager/notifications/page.tsx)에서 쓰던
-    swipe-to-delete를 SwipeRow(공용 컴포넌트)로 그대로 재사용. 회원 알림엔 "고정" 기능이
-    UI에 노출된 적이 없어(제품 기능 아님) 삭제 action만 연결한다.
+    swipe-to-delete를 SwipeRow(공용 컴포넌트)로 그대로 재사용.
+  - 실기기 QA(2026-09-25) — 사용자 요청으로 관리자 알림과 동일하게 방향별 action:
+    오른쪽→왼쪽 = 삭제, 왼쪽→오른쪽 = 고정 / 고정 해제(기존 notifications.pinned 컬럼과
+    setNotificationPinned 재사용 — DB/RLS 변경 없음, fetchNotifications가 이미 고정 우선 정렬).
 */
 
 import { useEffect, useRef, useState } from "react";
@@ -18,7 +20,7 @@ import UiIcon from "../components/UiIcon";
 import EmptyState from "../components/EmptyState";
 import SwipeRow from "../components/SwipeRow";
 import {
-  fetchNotifications, markRead, deleteNotification, notificationHref,
+  fetchNotifications, markRead, deleteNotification, setNotificationPinned, notificationHref,
   type Notification,
 } from "../../lib/notifications";
 import {
@@ -39,7 +41,7 @@ function dateHeading(iso: string) {
   return formatMonthDayWeekday(y, m, day);
 }
 
-const SWIPE_ACTION_WIDTH = 72; // 관리자 알림(144px, 고정+삭제 2개)의 절반 — 여긴 삭제 1개뿐.
+const SWIPE_ACTION_WIDTH = 88; // 좌(고정/해제)·우(삭제) 각각 1개 — 관리자 알림과 동일(공용 SwipeRow).
 
 export default function NotificationsPage() {
   const [list, setList] = useState<Notification[]>([]);
@@ -109,6 +111,30 @@ export default function NotificationsPage() {
     }
   }
 
+  // 고정 / 고정 해제 — 관리자 알림(app/manager/notifications)과 같은 낙관적 갱신 + 실패 시 롤백.
+  // 정렬은 서버(fetchNotifications)와 동일: 고정 우선, 그 안은 최신순.
+  async function handleTogglePin(n: Notification) {
+    if (busyIds.current.has(n.id)) return;
+    busyIds.current.add(n.id);
+    const nextPinned = !n.pinned;
+    const prevList = list;
+    setList((prev) => {
+      const updated = prev.map((item) => item.id === n.id ? { ...item, pinned: nextPinned } : item);
+      return [...updated].sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        return b.createdAtRaw.localeCompare(a.createdAtRaw);
+      });
+    });
+    setOpenRowId((v) => (v === n.id ? null : v));
+    try {
+      await setNotificationPinned(n.id, nextPinned);
+    } catch {
+      setList(prevList);
+    } finally {
+      busyIds.current.delete(n.id);
+    }
+  }
+
   if (loading) return <Loading />;
 
   return (
@@ -142,8 +168,20 @@ export default function NotificationsPage() {
                     id={n.id}
                     openId={openRowId}
                     onOpenChange={setOpenRowId}
-                    actionWidth={SWIPE_ACTION_WIDTH}
-                    actions={
+                    leftActionWidth={SWIPE_ACTION_WIDTH}
+                    rightActionWidth={SWIPE_ACTION_WIDTH}
+                    leftAction={
+                      <button
+                        type="button"
+                        className="swipe-action-btn pin"
+                        aria-label={n.pinned ? "고정 해제" : "고정"}
+                        onClick={() => handleTogglePin(n)}
+                      >
+                        <UiIcon name="pin" size={19} />
+                        <span>{n.pinned ? "고정 해제" : "고정"}</span>
+                      </button>
+                    }
+                    rightAction={
                       <button
                         type="button"
                         className="swipe-action-btn delete"
@@ -161,7 +199,10 @@ export default function NotificationsPage() {
                     >
                       <span className="noti-emoji"><UiIcon name={n.kind === "announcement" ? "megaphone" : n.kind.includes("reservation") ? "calendar" : n.kind.includes("class") ? "clock" : "ticket"} size={22} /></span>
                       <div className="noti-main">
-                        <div className="noti-title">{n.title}</div>
+                        <div className="noti-title-row">
+                          {n.pinned && <span className="noti-pin-badge" aria-hidden="true"><UiIcon name="pin" size={11} />고정</span>}
+                          <div className="noti-title">{n.title}</div>
+                        </div>
                         <div className="noti-body">{n.body}</div>
                         <div className="noti-time">{n.createdAt}</div>
                       </div>
