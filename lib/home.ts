@@ -188,6 +188,8 @@ export type SearchCenter = {
   categories: string[];
   intro: string | null;
   photoUrl: string | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export type SearchClass = {
@@ -197,28 +199,31 @@ export type SearchClass = {
   startText: string;
   date: string;
   centerId: string;
+  latitude: number | null;
+  longitude: number | null;
 };
 
-// 검색에서는 시작 전인 공개 수업만 최대 20개 보여주고, 전체 일정은 예약 화면에서 본다.
+// 검색에서는 시작 전인 수업을 최대 100개 읽고, 화면에는 20개씩 점진 표시한다.
 export async function searchClasses(keyword: string): Promise<SearchClass[]> {
   const kw = keyword.trim();
   if (kw.length < 2) return [];
   const { data, error } = await supabase.from("classes")
-    .select("id, title, center_id, start_time, centers!inner(name, status)")
+    .select("id, title, center_id, start_time, centers!inner(name, status, latitude, longitude)")
     .eq("centers.status", "approved")
     .ilike("title", `%${kw}%`)
     .gte("start_time", new Date().toISOString())
     .order("start_time", { ascending: true })
-    .limit(20);
+    .limit(100);
   if (error) throw new Error("수업 검색에 실패했어요: " + error.message);
   const dateFormatter = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
   return (data ?? []).map((row) => {
     const start = new Date(row.start_time);
     const dateParts = dateFormatter.formatToParts(start);
     const part = (type: string) => dateParts.find((item) => item.type === type)?.value ?? "";
+    const center = row.centers as unknown as { name: string; latitude: number | null; longitude: number | null };
     return {
       id: row.id, title: row.title, centerId: row.center_id,
-      centerName: (row.centers as unknown as { name: string }).name,
+      centerName: center.name, latitude: center.latitude, longitude: center.longitude,
       startText: KST_DT.format(start), date: `${part("year")}-${part("month")}-${part("day")}`,
     };
   });
@@ -249,13 +254,13 @@ export async function searchHome(keyword: string): Promise<{ centers: SearchCent
 
   const nameQuery = supabase
     .from("centers")
-    .select("id, name, categories, intro, photo_url")
+    .select("id, name, categories, intro, photo_url, latitude, longitude")
     .eq("status", "approved")
     .ilike("name", `%${kw}%`);
   const categoryQuery = categories.length > 0
     ? supabase
         .from("centers")
-        .select("id, name, categories, intro, photo_url")
+        .select("id, name, categories, intro, photo_url, latitude, longitude")
         .eq("status", "approved")
         .overlaps("categories", categories)
     : null;
@@ -275,6 +280,8 @@ export async function searchHome(keyword: string): Promise<{ centers: SearchCent
       merged.set(c.id, {
         id: c.id, name: c.name, categories: c.categories ?? [],
         intro: c.intro, photoUrl: c.photo_url,
+        latitude: typeof c.latitude === "number" ? c.latitude : null,
+        longitude: typeof c.longitude === "number" ? c.longitude : null,
       });
     }
   }
@@ -286,13 +293,15 @@ export async function searchHome(keyword: string): Promise<{ centers: SearchCent
 export async function fetchCentersByCategory(category: string): Promise<SearchCenter[]> {
   const { data, error } = await supabase
     .from("centers")
-    .select("id, name, categories, intro, photo_url")
+    .select("id, name, categories, intro, photo_url, latitude, longitude")
     .eq("status", "approved")
     .contains("categories", [category]);
   if (error) throw new Error("센터를 불러오지 못했어요: " + error.message);
   return (data ?? []).map((c: any) => ({
     id: c.id, name: c.name, categories: c.categories ?? [],
     intro: c.intro, photoUrl: c.photo_url,
+    latitude: typeof c.latitude === "number" ? c.latitude : null,
+    longitude: typeof c.longitude === "number" ? c.longitude : null,
   }));
 }
 

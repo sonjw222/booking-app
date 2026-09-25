@@ -4216,6 +4216,12 @@ a.membership-card { text-decoration: none; display: block; }
 .discovery-scopes { display: flex; gap: 6px; margin: 12px var(--page-gutter) 2px; padding: 4px; border-radius: 13px; background: var(--surface); }
 .discovery-scopes button { flex: 1; min-height: 44px; border: 0; border-radius: 10px; background: transparent; color: var(--ink-soft); font: inherit; font-size: 13px; font-weight: 650; }
 .discovery-scopes button.on { background: var(--card-bg); color: var(--brand-ink); box-shadow: 0 1px 4px color-mix(in srgb,var(--ink) 9%,transparent); }
+.discovery-filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px var(--page-gutter); }
+.discovery-filters button { min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 99px; background: var(--card-bg); color: var(--ink-soft); font: inherit; font-size: 12px; font-weight: 650; }
+.discovery-filters button.on { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-ink); }
+.discovery-filters button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.discovery-location-error { padding: 0 var(--page-gutter); color: var(--ink-soft); font-size: 12px; }
+.search-center-distance { margin-top: 5px; color: var(--ink-soft); font-size: 12px; }
 .discovery-scopes button:focus-visible,.search-class-row:focus-visible,.discovery-more:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .discovery-status,.discovery-section-empty { padding: 12px var(--page-gutter); color: var(--ink-soft); font-size: 13px; }
 .discovery-error { margin: 12px var(--page-gutter); padding: 15px; border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font-size: 13px; }
@@ -4230,6 +4236,7 @@ a.membership-card { text-decoration: none; display: block; }
 @media (min-width: 768px) {
   .discovery-page-v2 .discovery-heading,.discovery-page-v2 .search-header { padding-inline: var(--workspace-gutter); }
   .discovery-page-v2 .discovery-scopes { margin-inline: var(--workspace-gutter); }
+  .discovery-page-v2 .discovery-filters { margin-inline: var(--workspace-gutter); }
   .discovery-page-v2 .search-class-grid { grid-template-columns: repeat(2,minmax(0,1fr)); padding-inline: var(--workspace-gutter); }
   .discovery-page-v2 .discovery-status,.discovery-page-v2 .discovery-section-empty { padding-inline: var(--workspace-gutter); }
 }
