@@ -17,6 +17,8 @@ import { fetchClassAttendees, setAttendance, type ClassAttendee } from "../../li
 import { fetchMemberDetail, type MemberDetailData } from "../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../lib/roles";
 import { fetchDashboardSummary, won, type DashboardSummary } from "../../lib/sales";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
 
 type DashPeriod = "today" | "7d" | "30d";
 
@@ -39,6 +41,7 @@ export default function ManagerDashboard() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [activeCenterId, setActiveCenterId] = useState<string | null>(null);
   const [todayClasses, setTodayClasses] = useState<TodayClass[]>([]);
+  const [todayLoading, setTodayLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // 메뉴 노출용 유효 권한 (오너는 전권이라 계산하지 않음 — null이면 "아직 로딩중")
@@ -128,15 +131,21 @@ export default function ManagerDashboard() {
 
   useEffect(() => {
     if (!activeCenterId) return;
+    let cancelled = false;
+    setTodayClasses([]);
+    setTodayLoading(true);
     fetchTodayClasses(activeCenterId)
-      .then(setTodayClasses)
-      .catch((e) => setError(e.message));
+      .then((classes) => { if (!cancelled) setTodayClasses(classes); })
+      .catch((e) => { if (!cancelled) setError(e.message); })
+      .finally(() => { if (!cancelled) setTodayLoading(false); });
+    return () => { cancelled = true; };
   }, [activeCenterId]);
 
   useEffect(() => {
     if (!activeCenterId) return;
     let cancelled = false;
     setDashLoading(true);
+    setDash(null);
     setDashError(null);
     const { from, to } = dashRangeFor(dashPeriod);
     fetchDashboardSummary(activeCenterId, from, to)
@@ -173,21 +182,25 @@ export default function ManagerDashboard() {
     );
   }
 
-  if (error) {
+  if (error && centers.length === 0) {
     return (
       <div className="app-shell">
-        <div className="holiday-notice" style={{ marginTop: 60 }}>
-          <div className="holiday-chip"><span className="hc-dot" />{error}</div>
-        </div>
-        <div style={{ padding: 20 }}>
-          <a className="primary-btn" href="/mypage">마이페이지로</a>
-        </div>
+        <ErrorState title="관리 화면을 불러오지 못했어요" description={error}
+          action={<button type="button" className="primary-btn" onClick={loadCenters}>다시 시도</button>} />
       </div>
     );
   }
 
+  if (centers.length === 0) return <div className="app-shell">
+    <EmptyState icon="building" title="관리할 센터가 없어요" description="센터를 등록하거나 관리자 초대를 확인해 주세요."
+      action={<a className="primary-btn" href="/mypage/register-center">센터 등록하기</a>} />
+  </div>;
+
   return (
     <div className="app-shell manager-home-v2">
+      {error && <div className="workspace-inline-error" role="alert">
+        <span>{error}</span><button type="button" onClick={() => setError(null)} aria-label="오류 닫기">×</button>
+      </div>}
       {/* 매니저 모드 헤더 */}
       <div className="mgr-mode-bar">
         <span className="mgr-mode-label"><UiIcon name="building" size={15} /> 관리자 모드</span>
@@ -200,7 +213,14 @@ export default function ManagerDashboard() {
           <button
             key={c.id}
             className={`center-chip ${c.id === activeCenterId ? "on" : ""}`}
-            onClick={() => setActiveCenterId(c.id)}
+            onClick={() => {
+              if (c.id === activeCenterId) return;
+              setError(null);
+              setRosterClass(null);
+              setMemberInfo(null);
+              setActiveCenterId(c.id);
+            }}
+            aria-pressed={c.id === activeCenterId}
           >
             {c.name}
             <span className="center-role">{c.roleName}</span>
@@ -214,9 +234,9 @@ export default function ManagerDashboard() {
           <a href="/manager/classes">수업 관리 ›</a>
         </div>
         <div className="manager-today-metrics">
-          <a href="/manager/classes"><span>오늘 수업</span><b>{todayClasses.length}</b></a>
-          <a href="/manager/classes"><span>예약 인원</span><b>{todayClasses.reduce((sum, item) => sum + item.reserved, 0)}</b></a>
-          <a href="/manager/classes"><span>마감 수업</span><b>{todayClasses.filter((item) => item.reserved >= item.capacity).length}</b></a>
+          <a href="/manager/classes"><span>오늘 수업</span><b>{todayLoading ? "—" : todayClasses.length}</b></a>
+          <a href="/manager/classes"><span>예약 인원</span><b>{todayLoading ? "—" : todayClasses.reduce((sum, item) => sum + item.reserved, 0)}</b></a>
+          <a href="/manager/classes"><span>마감 수업</span><b>{todayLoading ? "—" : todayClasses.filter((item) => item.reserved >= item.capacity).length}</b></a>
         </div>
         <div className="manager-today-actions">
           {canSeeMenu("board.inquiry.view") && (
@@ -299,7 +319,7 @@ export default function ManagerDashboard() {
         오늘 수업 {todayClasses.length > 0 && <span className="info">({todayClasses.length}개)</span>}
       </div>
       <div className="daylist" style={{ minHeight: 0 }}>
-        {todayClasses.length === 0 ? (
+        {todayLoading ? <Loading /> : todayClasses.length === 0 ? (
           <div className="daylist-empty">오늘 등록된 수업이 없어요</div>
         ) : (
           todayClasses.map((cls) => {

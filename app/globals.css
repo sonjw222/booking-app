@@ -5846,6 +5846,69 @@ textarea:focus-visible,
   .purchase-page-v2 .purchase-list { grid-template-columns: 1fr; }
 }
 
+.workspace-inline-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px var(--page-gutter) 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--danger-line);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.workspace-inline-error button {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 22px;
+  cursor: pointer;
+}
+@media (min-width: 768px) {
+  .manager-home-v2 .workspace-inline-error { grid-column: 1 / -1; }
+}
+
+.admin-home-v2 .admin-home-intro { padding: 26px var(--page-gutter) 10px; }
+.admin-home-intro h2 { color: var(--ink); font-size: 23px; font-weight: 760; }
+.admin-home-intro p { margin-top: 6px; color: var(--ink-soft); font-size: 13px; }
+.admin-home-group { padding: 18px var(--page-gutter) 8px; }
+.admin-home-group h3 { margin-bottom: 10px; color: var(--ink); font-size: 15px; font-weight: 720; }
+.admin-home-grid { display: grid; gap: 10px; }
+.admin-home-card {
+  min-width: 0;
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  color: var(--ink);
+}
+.admin-home-card-icon { flex: 0 0 42px; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; background: var(--brand-soft); color: var(--brand-ink); }
+.admin-home-card-copy { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 4px; }
+.admin-home-card-copy strong { font-size: 14px; font-weight: 700; }
+.admin-home-card-copy small { color: var(--ink-soft); font-size: 12px; }
+.admin-home-card .chevron { color: var(--ink-soft); }
+.admin-home-card:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+@media (min-width: 768px) {
+  .admin-v3-content .admin-home-v2 { display: block; padding: 0 0 36px !important; }
+  .admin-home-v2 .admin-home-intro { padding: 32px var(--workspace-gutter) 8px; }
+  .admin-home-v2 .admin-home-group { padding: 20px var(--workspace-gutter) 6px; }
+  .admin-home-v2 .admin-home-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (min-width: 1200px) {
+  .admin-home-v2 .admin-home-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
+
 /* Short phone viewports: fit the first category row above the floating nav.
    Taller phones keep the original spacing; the last item still clears the nav
    through .member-home's shared clearance rather than a second fixed spacer. */
