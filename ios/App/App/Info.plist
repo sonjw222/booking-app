@@ -30,6 +30,8 @@
 	<string>프로필 사진 등록 및 이미지 업로드를 위해 사진 보관함 접근 권한이 필요합니다.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>예약한 수업을 내 캘린더에 추가하기 위해 캘린더 접근 권한이 필요합니다.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>모하빗의 수업 및 예약 일정을 사용자가 선택한 캘린더에 추가하기 위해 캘린더 쓰기 권한이 필요합니다.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>프로필 사진 촬영 및 이미지 등록을 위해 카메라 접근 권한이 필요합니다.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

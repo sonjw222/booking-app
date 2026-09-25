@@ -47,12 +47,15 @@ describe("exportIcs", () => {
 
 describe("예약 캘린더 화면 — 버튼이 실제 핸들러에 연결돼 있다", () => {
   const src = readFileSync(join(__dirname, "../../app/mypage/calendar/page.tsx"), "utf-8");
-  it("상단 '내 캘린더에 추가'와 카드별 '캘린더에 추가'가 openCalendarAdd(앱=선택 시트, 웹=exportIcs)를 호출한다", () => {
-    expect(src).toContain("openCalendarAdd(upcoming,");
-    expect(src).toContain("openCalendarAdd([r],");
-    // 웹/구버전 앱 fallback은 기존 exportIcs 경로 유지
-    expect(src).toContain("await exportIcs(items, filename)");
-    expect(src).not.toContain("downloadIcs(");
+  it("상단 '내 캘린더에 추가'는 현재 표시 중인 달(cal.y/cal.m) 기준으로 시트를 연다", () => {
+    expect(src).toContain('onClick={openMonthSheet}');
+    expect(src).toContain("filterEventsByMonth(upcoming, cal.y, cal.m)");
+    expect(src).toContain("`${cal.y}년 ${cal.m}월 일정`");
+  });
+  it("카드의 '캘린더에 추가'는 같은 공용 서비스(addCalendarEvents/시트)를 쓴다", () => {
+    expect(src).toContain("void addOne(r)");
+    expect(src).toContain('mode: "single"');
+    expect(src).toContain("addCalendarEvents([item]");
   });
   it("'저장'은 저장 성공 후에만 '저장됨'을 표시하고, 실패는 에러로 알린다", () => {
     expect(src).toContain('savedId === r.id ? "저장됨"');

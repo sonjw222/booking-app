@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-09-26 (2차) — 캘린더 다중 선택/일괄 추가 + 관리자 수업 캘린더 + 다른 앱 선택 개선 + 관리자 홈 상단 정리
+
+실기기 QA 후속. DB/RLS/SQL 변경 없음. **native 변경 있음 → 앱 재빌드 필요**(Info.plist에 `NSCalendarsWriteOnlyAccessUsageDescription` 추가).
+
+- **회원 상단 "내 캘린더에 추가"**: 이전엔 예정 예약 전체를 목록으로만 보여줘 선택할 수 없었다. 지금은 **현재 표시 중인 달**의 예정 예약(확정/대기)만 체크박스 목록(날짜·시간·수업·센터)으로 보여주고, 전체 선택/전체 해제/선택 개수/0개면 CTA 비활성. 월을 이동한 뒤 누르면 클릭 시점의 달로 다시 계산.
+- **여러 일정 한 번에 기본 캘린더에 추가**: iOS는 사용자가 시트에서 CTA를 누른 뒤 OS 권한을 한 번 승인받아 batch 저장(iOS 17+ `requestWriteOnlyAccessToEvents` — 기존 캘린더를 읽지 않음, 15/16은 `requestAccess`), 결과는 성공/실패 개수 그대로 안내(전부 실패면 에러). Android는 시스템 일정 추가 인텐트가 한 번에 하나만 받아 여러 건은 `.ics`(여러 VEVENT)를 FileProvider로 ACTION_VIEW — 캘린더 권한/Manifest 변경 없음(기존 provider의 cache-path 사용).
+- **다른 캘린더 앱 선택**: iOS는 Share Sheet 대신 `UIDocumentInteractionController` "Open In" 메뉴(이 `.ics`를 열 수 있다고 OS에 등록된 설치 앱만 표시, 없으면 Share Sheet로 자동 전환). 앱 이름/URL scheme은 추측하지 않는다 — 네이버 캘린더 등이 목록에 나오는지는 그 앱이 iOS에 `.ics` 처리기를 등록했는지에 달려 있다. Android는 `Intent.createChooser`.
+- **관리자 수업 화면**: 달력 아래 `내 캘린더에 추가`(같은 시트/서비스). 현재 표시 월 + 현재 선택된 센터 범위의 수업(취소 제외)과 센터 휴무일을 함께 표시(유형 배지 수업/휴무일). 휴무일은 하루 종일 일정 — 연속된 날짜는 하나의 기간으로 합치고 DTEND는 exclusive.
+- **공용 구조**: `lib/calendarEvents.ts`(이벤트 모델·매퍼·월 필터·선택·ICS), `lib/calendarAdd.ts`(플랫폼 분기·네이티브 브리지), `CalendarAddSheet`. 회원 ICS(`reservationsToIcs`)도 같은 직렬화기 사용.
+- **관리자 홈 상단**: 센터 선택 칩(`background: var(--ink)`=다크에서 순백)과 회원 화면 전환 원형 버튼(ink 채움)을 중립 surface + 얇은 테두리로. 라이트도 검은 원/진한 색을 없앰. 기능/route 변경 없음.
+- 테스트: 신규 3개 파일 + 기존 갱신 → 총 589개 통과. Android `compileDebugJavaWithJavac`, iOS `xcodebuild`(simulator) 성공.
+
 ## 2026-09-26 — 네이티브 "캘린더에 추가" + iOS 길게 누르기 텍스트 선택 방지 (`fix/native-calendar-and-longpress-ux-2026-09-26`)
 
 iPhone 실기기 QA 2건. DB/RLS/SQL 변경 없음. **native 변경이 있어 앱 재빌드가 필요**(server.url 모드라 웹 변경만으로는 반영되지 않는 부분).

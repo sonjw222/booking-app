@@ -6066,7 +6066,37 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
 .sheet-option small { display: block; margin-top: 2px; color: var(--ink-soft); font-size: 12px; font-weight: 500; white-space: normal; }
 .sheet-option .sheet-option-label { white-space: normal; }
 .sheet-option:disabled { opacity: .5; cursor: default; }
-.calendar-add-row { min-height: 60px; }
-.calendar-add-btn { flex: 0 0 auto; min-height: 34px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); color: var(--accent); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
-.calendar-add-btn:disabled { opacity: .5; cursor: default; }
-.calendar-add-done { flex: 0 0 auto; color: var(--ink-soft); font-size: 13px; font-weight: 700; }
+.calendar-add-empty { padding: 28px 8px 20px; text-align: center; color: var(--ink-soft); font-size: 14px; }
+.calendar-add-controls { display: flex; align-items: center; gap: 6px; padding: 0 0 8px; }
+.calendar-add-link { min-height: 34px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.calendar-add-link:disabled { opacity: .45; cursor: default; }
+.calendar-add-count { margin-left: auto; color: var(--ink-soft); font-size: 13px; font-weight: 650; }
+.calendar-add-list { max-height: min(46vh, 380px); overflow-y: auto; border-top: 1px solid var(--line); -webkit-overflow-scrolling: touch; }
+.calendar-add-item { -webkit-user-select: none; user-select: none; display: flex; align-items: flex-start; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.calendar-add-item input[type="checkbox"] { flex: 0 0 auto; margin-top: 2px; }
+.calendar-add-item-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.calendar-add-item-main b { color: var(--ink); font-size: 14px; font-weight: 700; }
+.calendar-add-item-main span { color: var(--ink); font-size: 14px; }
+.calendar-add-item-main small { color: var(--ink-soft); font-size: 12px; }
+.calendar-add-kind { display: inline-block; margin-right: 6px; padding: 1px 7px; border-radius: 999px; background: var(--surface); color: var(--ink-soft); font-size: 11px; font-style: normal; font-weight: 700; vertical-align: 1px; }
+.calendar-add-kind.holiday { background: var(--danger-soft); color: var(--danger); }
+.calendar-add-kind.class { background: var(--accent-soft); color: var(--accent); }
+.calendar-add-footer { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; }
+
+/* 관리자 수업 화면 — 달력 헤더 아래 "내 캘린더에 추가"(회원 예약 캘린더 상단 버튼과 같은 .cal-export-btn 필). */
+.manager-cal-add-row { display: flex; justify-content: flex-end; padding: 0 var(--page-gutter) 8px; }
+.manager-cal-add-row .cal-export-btn { min-height: 36px; padding: 0 14px; }
+.manager-cal-add-row .cal-export-btn:disabled { opacity: .5; cursor: default; }
+
+/* ============================================================
+   관리자 홈 상단 다크/라이트 정리(2026-09-26 실기기 QA)
+   - 센터 선택 칩(.manager-home-v2 .center-chip.on)이 background: var(--ink)(다크에선 거의 순백)라
+     주변 다크 배경에서 너무 튀었고, 회원 화면 전환 원형 버튼(.manager-chrome-main > a)도 같은
+     var(--ink) 채움(다크=흰 원, 라이트=검은 원)이었다. 둘 다 앱의 다른 헤더 액션과 같은 계열의
+     중립 surface(--card-bg) + 얇은 테두리 + --ink 글자로 통일. 선택 표시는 accent를 약하게 섞은
+     테두리와 작은 역할 배지로만. 기능/route 변경 없음.
+   ============================================================ */
+.manager-home-v2 .center-chip.on { border-color: color-mix(in srgb, var(--accent) 45%, var(--line-strong)); background: var(--card-bg); color: var(--ink); }
+.manager-home-v2 .center-chip.on .center-role { background: var(--accent-soft); color: var(--accent); }
+.manager-chrome-main > a { border: 1px solid var(--line-strong); background: var(--card-bg); color: var(--ink); }
+.manager-chrome-main > a:active { background: var(--surface); }

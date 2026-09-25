@@ -18,18 +18,37 @@ describe("iOS CalendarEvent 플러그인", () => {
     const ts = read("lib/calendarAdd.ts");
     expect(ts).toContain('registerPlugin<CalendarEventPlugin>("CalendarEvent")');
   });
-  it("표준 시스템 일정 UI(EKEventEditViewController) — 사용자가 저장을 눌러야 확정, EKEventStore.save 직접 호출 없음", () => {
+  it("1건은 표준 시스템 일정 UI(EKEventEditViewController) — 사용자가 저장을 눌러야 확정", () => {
     expect(swift).toContain("EKEventEditViewController()");
-    expect(swift).not.toMatch(/eventStore\.save\(/);
     expect(swift).toContain("didCompleteWith action");
   });
-  it("다른 앱 선택은 시스템 Share Sheet(UIActivityViewController) — 앱 이름/URL scheme 추측 없음", () => {
-    expect(swift).toContain("UIActivityViewController(activityItems: [url]");
-    expect(swift).not.toMatch(/googlecalendar|ms-outlook|canOpenURL/);
+  it("여러 건 batch 저장은 addEvents(사용자가 시트에서 CTA를 누른 뒤 호출)에서만, 권한 승인 후에만 save", () => {
+    expect(swift).toContain('CAPPluginMethod(name: "addEvents"');
+    const saves = swift.match(/eventStore\.save\(/g) ?? [];
+    expect(saves).toHaveLength(1); // saveBatch 안 한 곳뿐
+    const batch = swift.slice(swift.indexOf("@objc func addEvents"), swift.indexOf("private func finish(resolve"));
+    expect(batch).toContain("eventStore.save(event, span: .thisEvent, commit: false)");
+    expect(batch).toContain("try eventStore.commit()");
+    // commit 실패는 성공으로 보고하지 않는다
+    expect(batch).toContain("saved = 0");
   });
-  it("iOS 15/16 접근 요청은 Info.plist 키가 있을 때만(없으면 UNAVAILABLE → JS가 Share로 전환)", () => {
-    expect(swift).toContain('forInfoDictionaryKey: "NSCalendarsUsageDescription"');
+  it("iOS 17+는 write-only 접근(기존 캘린더를 읽지 않음), 15/16은 event access", () => {
+    expect(swift).toContain("requestWriteOnlyAccessToEvents");
+    expect(swift).toContain('hasPlistKey("NSCalendarsWriteOnlyAccessUsageDescription")');
+    expect(swift).toContain("requestAccess(to: .event)");
+    expect(swift).toContain('hasPlistKey("NSCalendarsUsageDescription")');
+    expect(swift).not.toContain("requestFullAccessToEvents");
     expect(swift).toContain("UNAVAILABLE");
+  });
+  it("하루 종일 일정: EventKit endDate는 마지막 날(포함) — DTEND(exclusive)에서 하루를 뺀다", () => {
+    expect(swift).toContain("event.isAllDay = true");
+    expect(swift).toContain("byAdding: .day, value: -1");
+  });
+  it("다른 앱 선택은 UIDocumentInteractionController Open In → 앱이 없으면 Share Sheet — 앱 이름/URL scheme 추측 없음", () => {
+    expect(swift).toContain('CAPPluginMethod(name: "openIcs"');
+    expect(swift).toContain("presentOpenInMenu(from:");
+    expect(swift).toContain("UIActivityViewController(activityItems: [url]");
+    expect(swift).not.toMatch(/googlecalendar|ms-outlook|naver|canOpenURL/i);
   });
   it("중복 실행 방지(pendingCall/sharing)", () => {
     expect(swift).toContain("guard pendingCall == nil");
@@ -60,6 +79,17 @@ describe("Android CalendarEvent 플러그인", () => {
   it("MainActivity에 등록", () => {
     expect(read("android/app/src/main/java/com/mwhabit/app/MainActivity.java")).toContain("registerPlugin(CalendarEventPlugin.class)");
   });
+  it("여러 건은 FileProvider(cache)로 .ics를 ACTION_VIEW(text/calendar) — 기존 provider 재사용", () => {
+    expect(java).toContain("public void openIcs");
+    expect(java).toContain("Intent.ACTION_VIEW");
+    expect(java).toContain('"text/calendar"');
+    expect(java).toContain("FileProvider.getUriForFile");
+    expect(java).toContain('getPackageName() + ".fileprovider"');
+    expect(java).toContain("EXTRA_EVENT_ALL_DAY");
+    const manifest = read("android/app/src/main/AndroidManifest.xml");
+    expect(manifest).toContain("${applicationId}.fileprovider");
+    expect(read("android/app/src/main/res/xml/file_paths.xml")).toContain("cache-path");
+  });
   it("AndroidManifest에 캘린더 권한이 필요 없다(인텐트 방식)", () => {
     expect(read("android/app/src/main/AndroidManifest.xml")).not.toMatch(/WRITE_CALENDAR|READ_CALENDAR/);
   });
@@ -70,5 +100,9 @@ describe("Info.plist", () => {
     const plist = read("ios/App/App/Info.plist");
     expect(plist).toContain("<key>NSCalendarsUsageDescription</key>");
     expect(plist).toContain("예약한 수업을 내 캘린더에 추가하기 위해");
+    // iOS 17+ write-only(batch 저장) — 읽기 권한 문구(FullAccess)는 요구하지 않는다
+    expect(plist).toContain("<key>NSCalendarsWriteOnlyAccessUsageDescription</key>");
+    expect(plist).toContain("캘린더 쓰기 권한이 필요합니다");
+    expect(plist).not.toContain("NSCalendarsFullAccessUsageDescription");
   });
 });

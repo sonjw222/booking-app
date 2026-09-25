@@ -37,9 +37,10 @@
 5. 사용자 결정이 필요한 기능은 결정 기록 없이 완료 처리하지 않습니다.
 6. 완료된 항목은 [CHANGELOG.md](./CHANGELOG.md)에 근거와 함께 기록한 뒤 이 문서에서 제거하거나 완료 이력으로 이동합니다.
 
-### P1-Native-Calendar-0926. (2026-09-26) 캘린더 추가 native 실기기 확인 + 재빌드
+### P1-Native-Calendar-0926. (2026-09-26, 2차 갱신) 캘린더 추가 native 실기기 확인 + 재빌드
 - iOS/Android 앱 **재빌드/재배포 필요**(CalendarEventPlugin은 native 코드). 재빌드 전 구버전 앱은 자동으로 기존 .ics 내보내기로 동작한다.
 - 실기기 체크리스트(iPhone/Android)는 2026-09-26 작업 보고 참고. 특히 iOS 15/16 저장 권한 흐름과 iOS 17+ 권한 없는 이벤트 UI, Android 기본 캘린더 앱 미지정 시 시스템 선택창.
+- 2차: iOS batch 저장(write-only 권한), Open In 메뉴의 네이버 캘린더 표시 여부, Android 여러 건 `.ics` ACTION_VIEW(Google/Samsung 캘린더의 가져오기 화면)는 실기기 확인 필요. 네이버 캘린더가 iOS `.ics` 처리기로 등록돼 있지 않으면 OS가 표시하지 않는다(앱 이름/URL scheme은 추측하지 않음).
 - Android는 저장/취소 결과를 앱이 알 수 없어 "추가됨" 표시를 하지 않는다(iOS만 실제 저장 확인 후 표시).
 
 ### P2-RealDevice-QA-0925. (2026-09-25) 실기기 확인이 필요한 항목 — 코드로는 검증 불가
