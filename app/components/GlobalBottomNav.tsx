@@ -28,8 +28,8 @@ function isMemberNavRoute(pathname: string): boolean {
   return MEMBER_NAV_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
-export default function GlobalBottomNav({ initialHasUsable = null }: { initialHasUsable?: boolean | null }) {
+export default function GlobalBottomNav() {
   const pathname = usePathname();
   if (!isMemberNavRoute(pathname)) return null;
-  return <BottomNav initialHasUsable={initialHasUsable} />;
+  return <BottomNav />;
 }

@@ -4098,7 +4098,7 @@ a.membership-card { text-decoration: none; display: block; }
    padding만 재선언해서 그대로 살아있었으므로 겹침이 "당김 중엔 고정, 첫 진입 시엔
    여전히 겹침"으로 보였을 것. 기존 22px/12px 시각 간격 의도는 유지하되
    max(Npx, var(--safe-top)) 패턴으로 안전영역을 되살린다. */
-.member-home .header { padding: max(22px, var(--safe-top)) var(--page-gutter) 12px; }
+.member-home .header { position: relative; padding: max(22px, var(--safe-top)) var(--page-gutter) 12px; }
 /* home-heading-row: 원래 .location에 고정 max-width(245px, 좁은 화면에선 210px)를 줘서
    "관리자 모드"/"로그인" 배지와의 간격을 확보했는데, 그 값이 실제 배지 폭보다 살짝
    커서 320px 폭에서는 텍스트가 2줄로 줄바꿈되면서 배지와 틈 없이 딱 붙어버렸다(겹치진
@@ -4119,6 +4119,15 @@ a.membership-card { text-decoration: none; display: block; }
 .home-location-row b { font-size: 15px; font-weight: 500; }
 .member-home .searchbar { min-height: 50px; padding: 0 17px; justify-content: flex-start; gap: 12px; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--surface); color: var(--ink-soft); font-size: 14px; }
 .member-home .searchbar svg { margin-left: auto; }
+.home-notification-link { position: relative; width: 44px; height: 44px; display: grid; place-items: center; color: var(--ink); border-radius: 50%; }
+.home-notification-link:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.home-notification-badge { position: absolute; top: 1px; right: 0; min-width: 17px; height: 17px; padding: 0 4px; display: grid; place-items: center; border: 2px solid var(--bg); border-radius: 99px; background: var(--brand); color: var(--text-inverse); font-size: 9px; font-weight: 750; }
+.home-next-reservation { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-height: 130px; padding: 17px 18px; margin-bottom: 14px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--card-bg); color: var(--ink); text-decoration: none; }
+.home-next-reservation:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.home-next-label { color: var(--brand-ink); font-size: 11px; font-weight: 750; }
+.home-next-reservation strong { max-width: 100%; font-size: 18px; line-height: 1.4; overflow-wrap: anywhere; }
+.home-next-reservation > span:not(.home-next-label) { color: var(--ink-soft); font-size: 13px; line-height: 1.4; }
+.home-next-reservation b { margin-top: 4px; display: inline-flex; align-items: center; gap: 4px; color: var(--brand-ink); font-size: 13px; }
 .home-value-line { min-height: 48px; margin: 0 var(--page-gutter) 14px; display: flex; align-items: center; justify-content: center; gap: 9px; color: var(--ink-soft); font-size: 10.5px; font-weight: 600; }
 .home-value-line a { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; color: inherit; text-decoration: none; }
 .home-value-line i { width: 2px; height: 2px; border-radius: 50%; background: var(--ink-soft); opacity: .55; }

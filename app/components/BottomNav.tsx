@@ -2,74 +2,26 @@
 
 /*
   하단 네비게이션 (모든 회원 화면 공통)
-  - 홈 / 예약 / 내 예약 / 알림 / 마이페이지
-  - 알림 탭에 안읽음 뱃지 + 실시간 팝업
+  - 회원 상태와 관계없이 홈 / 찾기 / 예약 / 마이 4개를 고정한다.
+  - 알림은 홈 헤더와 마이페이지에서 접근한다.
 */
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { fetchUnreadCount, subscribeNotifications } from "../../lib/notifications";
-import {
-  fetchHasUsableMembership, shouldShowMembershipTabs,
-  setCachedHasUsableMembership,
-} from "../../lib/navState";
 import NotificationToaster from "./NotificationToaster";
 import UiIcon from "./UiIcon";
 
-export default function BottomNav({ initialHasUsable = null }: { initialHasUsable?: boolean | null }) {
+export default function BottomNav() {
   const pathname = usePathname();
   const is = (p: string) => (p === "/" ? pathname === "/" : pathname.startsWith(p));
-  // /mypage/calendar는 마이페이지가 아니라 내 예약(/my-reservations)에서 들어가는 화면이라
-  // "마이" 탭이 아닌 "내 예약" 탭이 활성화돼야 한다.
   const isMyReservations = is("/my-reservations") || pathname.startsWith("/mypage/calendar");
-  const isMypage = is("/mypage") && !pathname.startsWith("/mypage/calendar");
+  const isMypage = (is("/mypage") && !pathname.startsWith("/mypage/calendar")) ||
+    ["/notifications", "/profiles", "/purchases", "/inquiries", "/settings", "/cart", "/checkout"].some(is);
+  const isDiscovery = is("/search") || is("/category") || is("/center");
+  const isReservation = is("/reservation") || isMyReservations;
 
-  const [unread, setUnread] = useState(0);
-  // 예약 가능한(usable) 수강권이 있는지 — 없으면 "예약"/"내 예약" 탭을 모두 숨긴다(NAV-001).
-  // null = 아직 판단 전(로딩 중). 판단 전에 "있다"고 가정하면 탭이 잠깐 보였다가 사라지는
-  // 깜빡임이 생기므로, 로딩 중에는 false와 동일하게 취급해 안정적으로 3탭만 보여준다.
-  // 릴리스 폴리시 배치(2026-09-14) — 이 앱은 클라이언트 라우팅이 없어 탭 전환마다 전체
-  // 페이지가 서버에서부터 다시 그려진다. localStorage 기반 useLayoutEffect 보정은 서버
-  // 렌더링(=최초 페인트) 자체에는 영향을 못 줘서 "3탭 화면이 먼저 그려졌다가 5탭으로
-  // 바뀌는" 깜빡임을 못 막았다 — 대신 app/layout.tsx(서버 컴포넌트)가 쿠키(lib/navState.ts의
-  // parseHasUsableMembershipCookie)를 읽어 이 값을 서버 렌더링 시점부터 이미 맞는 상태로
-  // 내려준다. initialHasUsable이 null이면(쿠키 없음, 최초 진입) 기존과 동일하게 판정 전까지
-  // 3탭으로 안전하게 시작한다.
-  const [hasUsable, setHasUsable] = useState<boolean | null>(initialHasUsable);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    let unsub: (() => void) | null = null;
-
-    fetchUnreadCount().then((n) => { if (mounted) setUnread(n); });
-
-    subscribeNotifications(() => {
-      if (mounted) setUnread((prev) => prev + 1);
-    }).then((fn) => { unsub = fn; });
-
-    return () => { mounted = false; if (unsub) unsub(); };
-  }, []);
-
-  useEffect(() => {
-    if (pathname.startsWith("/notifications")) setUnread(0);
-  }, [pathname]);
-
-  useEffect(() => {
-    // 페이지 이동마다(구매 후 이동 포함) 새로고침 없이 재확인한다 — BottomNav는 페이지마다
-    // 개별적으로 마운트되는 공통 컴포넌트라 pathname 변경 시 이 effect가 다시 실행된다.
-    // 위 캐시값(또는 이전 페이지에서 이미 확정된 값)을 화면에 유지한 채 백그라운드로
-    // 재확인만 하고, 값이 바뀔 때만 갱신한다 — 매 이동마다 null로 비웠다가 다시 채우면
-    // 그 자체로 깜빡임이 생긴다.
-    let mounted = true;
-    fetchHasUsableMembership()
-      .then((v) => { if (mounted) { setHasUsable(v); setCachedHasUsableMembership(v); } })
-      .catch(() => { if (mounted) setHasUsable(true); }); // 조회 실패 시 탭을 숨기지 않음(안전 기본값)
-    return () => { mounted = false; };
-  }, [pathname]);
-
-  const showMembershipTabs = shouldShowMembershipTabs(hasUsable);
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -96,26 +48,14 @@ export default function BottomNav({ initialHasUsable = null }: { initialHasUsabl
         <Link className={`desktop-nav-item ${is("/") ? "active" : ""}`} href="/" replace>
           <UiIcon name="home" /><span>홈</span>
         </Link>
-        {showMembershipTabs && (
-          <Link className={`desktop-nav-item ${is("/reservation") ? "active" : ""}`} href="/reservation" replace>
-            <UiIcon name="calendar" /><span>예약</span>
-          </Link>
-        )}
-        {showMembershipTabs && (
-          <Link className={`desktop-nav-item ${isMyReservations ? "active" : ""}`} href="/my-reservations" replace>
-            <UiIcon name="list" /><span>내 예약</span>
-          </Link>
-        )}
-        <div className="desktop-nav-section">내 활동</div>
-        <Link className={`desktop-nav-item ${is("/notifications") ? "active" : ""}`} href="/notifications" replace>
-          <UiIcon name="bell" /><span>알림</span>
-          {unread > 0 && <span className="desktop-nav-badge">{unread > 99 ? "99+" : unread}</span>}
+        <Link className={`desktop-nav-item ${isDiscovery ? "active" : ""}`} href="/search" replace>
+          <UiIcon name="search" /><span>찾기</span>
+        </Link>
+        <Link className={`desktop-nav-item ${isReservation ? "active" : ""}`} href="/reservation" replace>
+          <UiIcon name="calendar" /><span>예약</span>
         </Link>
         <Link className={`desktop-nav-item ${isMypage ? "active" : ""}`} href="/mypage" replace>
-          <UiIcon name="user" /><span>마이페이지</span>
-        </Link>
-        <Link className={`desktop-nav-item ${is("/search") ? "active" : ""}`} href="/search" replace>
-          <UiIcon name="search" /><span>센터 찾기</span>
+          <UiIcon name="user" /><span>마이</span>
         </Link>
         <div className="desktop-nav-spacer" />
         <div className="desktop-nav-note">태블릿과 데스크톱에서는 더 넓은 화면으로 편하게 탐색할 수 있어요.</div>
@@ -141,21 +81,11 @@ export default function BottomNav({ initialHasUsable = null }: { initialHasUsabl
         <Link className={`nav-item ${is("/") ? "active" : ""}`} href="/" replace>
           <div className="nav-icon"><UiIcon name="home" /></div>홈
         </Link>
-        {showMembershipTabs && (
-          <Link className={`nav-item ${is("/reservation") ? "active" : ""}`} href="/reservation" replace>
-            <div className="nav-icon"><UiIcon name="calendar" /></div>예약
-          </Link>
-        )}
-        {showMembershipTabs && (
-          <Link className={`nav-item ${isMyReservations ? "active" : ""}`} href="/my-reservations" replace>
-            <div className="nav-icon"><UiIcon name="list" /></div>내 예약
-          </Link>
-        )}
-        <Link className={`nav-item ${is("/notifications") ? "active" : ""}`} href="/notifications" replace>
-          <div className="nav-icon" style={{ position: "relative" }}>
-            <UiIcon name="bell" />
-            {unread > 0 && <span className="nav-badge">{unread > 9 ? "9+" : unread}</span>}
-          </div>알림
+        <Link className={`nav-item ${isDiscovery ? "active" : ""}`} href="/search" replace>
+          <div className="nav-icon"><UiIcon name="search" /></div>찾기
+        </Link>
+        <Link className={`nav-item ${isReservation ? "active" : ""}`} href="/reservation" replace>
+          <div className="nav-icon"><UiIcon name="calendar" /></div>예약
         </Link>
         <Link className={`nav-item ${isMypage ? "active" : ""}`} href="/mypage" replace>
           <div className="nav-icon"><UiIcon name="user" /></div>마이

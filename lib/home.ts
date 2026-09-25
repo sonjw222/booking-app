@@ -59,6 +59,42 @@ export type HomeClass = {
   capacity: number;
 };
 
+export type NextReservation = {
+  title: string;
+  centerName: string;
+  startText: string;
+  status: "confirmed" | "waitlisted";
+};
+
+// 홈은 전체 예약 이력 대신 앞으로의 첫 예약 한 건만 읽는다.
+export async function fetchNextReservation(): Promise<NextReservation | null> {
+  const accountId = await getMyAccountId();
+  if (!accountId) return null;
+  const { data: profiles, error: profileError } = await supabase
+    .from("profiles").select("id").eq("account_id", accountId).is("deleted_at", null);
+  if (profileError) throw profileError;
+  const ids = (profiles ?? []).map((profile) => profile.id);
+  if (ids.length === 0) return null;
+
+  const { data, error } = await supabase
+    .from("classes")
+    .select("title, start_time, centers(name), reservations!inner(profile_id, status)")
+    .in("reservations.profile_id", ids)
+    .in("reservations.status", ["confirmed", "waitlisted"])
+    .gte("start_time", new Date().toISOString())
+    .order("start_time", { ascending: true })
+    .limit(1);
+  if (error) throw error;
+  const cls = data?.[0] as unknown as {
+    title: string; start_time: string; centers?: { name: string };
+    reservations?: { status: "confirmed" | "waitlisted" }[];
+  } | undefined;
+  return cls && cls.reservations?.[0] ? {
+    title: cls.title, centerName: cls.centers?.name ?? "",
+    startText: KST_DT.format(new Date(cls.start_time)), status: cls.reservations[0].status,
+  } : null;
+}
+
 const KST_DT = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul",
   month: "numeric", day: "numeric", weekday: "short",

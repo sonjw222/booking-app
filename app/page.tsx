@@ -7,12 +7,13 @@
 */
 
 import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
-import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, type HomeCenter, type HomeClass } from "../lib/home";
+import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, fetchNextReservation, type HomeCenter, type HomeClass, type NextReservation } from "../lib/home";
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
 import { fetchMyCenters } from "../lib/manager";
 import { supabase } from "../lib/supabaseClient";
 import { consumePostLoginNext } from "../lib/postLoginReturn";
 import { replaceTabNavigation } from "../lib/navState";
+import { fetchUnreadCount, subscribeNotifications } from "../lib/notifications";
 import UiIcon, { type IconName } from "./components/UiIcon";
 // 릴리스 폴리시 배치 8차(2026-09-18), 5번 — 운영자 모드 "종목 관리"가 이 홈 화면과
 // 똑같은 아이콘을 재사용해야 해서(이모지 제거) CATEGORY_ICONS/CATEGORY_IMAGES를
@@ -61,6 +62,8 @@ export default function Home() {
   const [centers, setCenters] = useState<HomeCenter[]>([]);
   const [classes, setClasses] = useState<HomeClass[]>([]);
   const [myUpcoming, setMyUpcoming] = useState<HomeClass[]>([]);
+  const [nextReservation, setNextReservation] = useState<NextReservation | null>(null);
+  const [unread, setUnread] = useState(0);
   const [banners, setBanners] = useState<HomeBanner[]>([]);
   const [catList, setCatList] = useState<ServiceCategory[]>([]);
   const [bannerIdx, setBannerIdx] = useState(0);
@@ -72,6 +75,14 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [isManager, setIsManager] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    let unsubscribe: (() => void) | null = null;
+    fetchUnreadCount().then((count) => { if (mounted) setUnread(count); }).catch(() => {});
+    subscribeNotifications(() => { if (mounted) setUnread((count) => count + 1); })
+      .then((stop) => { if (mounted) unsubscribe = stop; else stop(); }).catch(() => {});
+    return () => { mounted = false; unsubscribe?.(); };
+  }, []);
   const validBanners = useMemo(
     () => banners.filter((banner) => banner.title?.trim().length >= 2),
     [banners]
@@ -192,6 +203,7 @@ export default function Home() {
       // 주석 참고) 여기 한 곳에서만 원래 화면으로 이어서 보낸다. 실제로 로그인된 경우에만
       // (user 존재) 이동한다 — 세션 없이 next만 남아있는 경우는 그대로 홈에 둔다.
       if (user) {
+        fetchNextReservation().then(setNextReservation).catch(() => {});
         const next = consumePostLoginNext();
         if (next) { window.location.replace(next); return; }
         // 관리자 모드 진입 버튼(오른쪽 위) 노출 여부 — ACL-005와 동일하게 active
@@ -257,20 +269,13 @@ export default function Home() {
     })();
   }, []);
 
-  // 배너 자동 회전 (4초마다)
-  useEffect(() => {
-    if (validBanners.length <= 1) return;
-    const t = setInterval(() => setBannerIdx((i) => (i + 1) % validBanners.length), 4000);
-    return () => clearInterval(t);
-  }, [validBanners.length]);
-
   return (
     <div>
       <div className="app-shell member-home">
         {/* 헤더 */}
         <div className="header">
           <div className="header-row home-heading-row">
-            <div className="location">오늘은 어떤 움직임을 찾나요?</div>
+            <div className="location">{nextReservation ? "다음 수업을 확인해요" : "오늘은 어떤 움직임을 찾나요?"}</div>
             <div className="header-icons">
               {loggedIn === false && (
                 <a className="login-link" href="/login">로그인</a>
@@ -278,24 +283,24 @@ export default function Home() {
               {isManager && (
                 <a className="login-link" href="/manager" onClick={(e) => replaceTabNavigation(e, "/manager")}>관리자 모드</a>
               )}
+              {loggedIn && <a className="home-notification-link" href="/notifications" aria-label={`알림${unread > 0 ? `, 읽지 않은 알림 ${unread}개` : ""}`}>
+                <UiIcon name="bell" size={22} />{unread > 0 && <span className="home-notification-badge">{unread > 9 ? "9+" : unread}</span>}
+              </a>}
             </div>
           </div>
-          <a className="home-location-row" href="/search"><UiIcon name="location" size={15} /><span>내 주변 클래스</span><b>›</b></a>
+          {nextReservation && <a className="home-next-reservation" href="/my-reservations">
+            <span className="home-next-label">{nextReservation.status === "waitlisted" ? "대기 중인 수업" : "다가오는 예약"}</span>
+            <strong>{nextReservation.title}</strong>
+            <span>{nextReservation.startText} · {nextReservation.centerName}</span>
+            <b>예약 확인하기 <span aria-hidden="true">›</span></b>
+          </a>}
           <a className="searchbar" href="/search">
             <span>클래스, 센터를 검색해보세요</span>
             <UiIcon name="search" size={20} />
           </a>
         </div>
 
-        {/* UX 감사(A-11) — 아이콘+라벨이 이 앱의 다른 클릭 가능한 칩/버튼과 같은 모양이라
-            눌러보게 되는데 실제로는 장식용 <span>이라 반응이 없었다. 실제 링크로 연결. */}
-        <div className="home-value-line" aria-label="서비스 주요 기능">
-          <a href="/search"><UiIcon name="search" size={15} />내 주변 수업 찾기</a><i />
-          <a href="/reservation"><UiIcon name="calendar" size={15} />한 번에 예약</a><i />
-          <a href="/mypage"><UiIcon name="ticket" size={15} />수강권 관리</a>
-        </div>
-
-        {/* 히어로 배너 (운영자 관리, 자동 회전) */}
+        {/* 히어로 배너 (운영자 관리, 사용자가 직접 넘김) */}
         {validBanners.length > 0 ? (
           <div
             className="hero-wrap"
