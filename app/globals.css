@@ -5899,6 +5899,27 @@ textarea:focus-visible,
 .admin-home-card-copy small { color: var(--ink-soft); font-size: 12px; }
 .admin-home-card .chevron { color: var(--ink-soft); }
 .admin-home-card:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+
+/* Shared control finish applies to member, center and platform screens. */
+.back-header .side { min-width: 44px; min-height: 44px; }
+.ghost-btn:disabled,
+.filter-chip:disabled,
+.text-btn:disabled { opacity: .5; cursor: default; }
+.app-button,
+.primary-btn,
+.ghost-btn { transition: background-color 140ms ease, border-color 140ms ease, opacity 140ms ease; }
+.confirm-sheet { max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 32px); overflow-y: auto; overscroll-behavior: contain; }
+.confirm-sheet p { white-space: pre-line; }
+.app-empty-action .primary-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; }
+@media (pointer: coarse) {
+  .filter-chip,
+  .manager-v3-content .filter-chip,
+  .admin-v3-content .filter-chip,
+  .cart-qty-btn,
+  .purchase-refund-btn,
+  .category-results-head a { min-height: 44px; }
+  .cart-qty-btn { min-width: 44px; }
+}
 @media (min-width: 768px) {
   .admin-v3-content .admin-home-v2 { display: block; padding: 0 0 36px !important; }
   .admin-home-v2 .admin-home-intro { padding: 32px var(--workspace-gutter) 8px; }

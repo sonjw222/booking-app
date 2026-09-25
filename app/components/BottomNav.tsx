@@ -45,20 +45,19 @@ export default function BottomNav() {
           <span><b>모하빗</b><small>나에게 맞는 움직임</small></span>
         </Link>
         <div className="desktop-nav-section">둘러보기</div>
-        <Link className={`desktop-nav-item ${is("/") ? "active" : ""}`} href="/" replace>
+        <Link className={`desktop-nav-item ${is("/") ? "active" : ""}`} href="/" replace aria-current={is("/") ? "page" : undefined}>
           <UiIcon name="home" /><span>홈</span>
         </Link>
-        <Link className={`desktop-nav-item ${isDiscovery ? "active" : ""}`} href="/search" replace>
+        <Link className={`desktop-nav-item ${isDiscovery ? "active" : ""}`} href="/search" replace aria-current={isDiscovery ? "page" : undefined}>
           <UiIcon name="search" /><span>찾기</span>
         </Link>
-        <Link className={`desktop-nav-item ${isReservation ? "active" : ""}`} href="/reservation" replace>
+        <Link className={`desktop-nav-item ${isReservation ? "active" : ""}`} href="/reservation" replace aria-current={isReservation ? "page" : undefined}>
           <UiIcon name="calendar" /><span>예약</span>
         </Link>
-        <Link className={`desktop-nav-item ${isMypage ? "active" : ""}`} href="/mypage" replace>
+        <Link className={`desktop-nav-item ${isMypage ? "active" : ""}`} href="/mypage" replace aria-current={isMypage ? "page" : undefined}>
           <UiIcon name="user" /><span>마이</span>
         </Link>
         <div className="desktop-nav-spacer" />
-        <div className="desktop-nav-note">태블릿과 데스크톱에서는 더 넓은 화면으로 편하게 탐색할 수 있어요.</div>
       </aside>
       {/* 릴리스 폴리시 배치(2026-09-14, 3차) — 실기기에서 탭 전환이 느리고 스켈레톤이
           반복되고 화면이 깜빡인다는 신고의 근본 원인은 이 nav가 <a href>라 클릭마다 전체
@@ -78,16 +77,16 @@ export default function BottomNav() {
           이동한다(pushState와 달리 WKWebView 뒤로가기 목록에 새 항목을 안 남김) — 탭
           5개 전부 동일하게 적용. */}
       <nav className={`bottom-nav ${keyboardOpen ? "keyboard-hidden" : ""}`} aria-label="회원 주요 메뉴">
-        <Link className={`nav-item ${is("/") ? "active" : ""}`} href="/" replace>
+        <Link className={`nav-item ${is("/") ? "active" : ""}`} href="/" replace aria-current={is("/") ? "page" : undefined}>
           <div className="nav-icon"><UiIcon name="home" /></div>홈
         </Link>
-        <Link className={`nav-item ${isDiscovery ? "active" : ""}`} href="/search" replace>
+        <Link className={`nav-item ${isDiscovery ? "active" : ""}`} href="/search" replace aria-current={isDiscovery ? "page" : undefined}>
           <div className="nav-icon"><UiIcon name="search" /></div>찾기
         </Link>
-        <Link className={`nav-item ${isReservation ? "active" : ""}`} href="/reservation" replace>
+        <Link className={`nav-item ${isReservation ? "active" : ""}`} href="/reservation" replace aria-current={isReservation ? "page" : undefined}>
           <div className="nav-icon"><UiIcon name="calendar" /></div>예약
         </Link>
-        <Link className={`nav-item ${isMypage ? "active" : ""}`} href="/mypage" replace>
+        <Link className={`nav-item ${isMypage ? "active" : ""}`} href="/mypage" replace aria-current={isMypage ? "page" : undefined}>
           <div className="nav-icon"><UiIcon name="user" /></div>마이
         </Link>
       </nav>

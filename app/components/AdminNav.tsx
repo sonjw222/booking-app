@@ -42,6 +42,7 @@ export default function AdminNav() {
         <div className="desktop-nav-section">운영 관리</div>
         {ITEMS.map((item) => (
           <a key={item.href} className={`desktop-nav-item ${active(item.href) ? "active" : ""}`} href={item.href}
+            aria-current={active(item.href) ? "page" : undefined}
             onClick={item.href === "/admin" ? (e) => replaceTabNavigation(e, "/admin") : () => collapseAfterNavigate()}>
             <UiIcon name={item.icon} /><span>{item.label}</span>
           </a>
