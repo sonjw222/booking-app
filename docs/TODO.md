@@ -1,5 +1,11 @@
 # TODO
 
+## 2026-09-26 UI QA 후속 검증
+
+- **P1 / 확인 필요**: `design/mwhabit-ui-refresh-qa-polish-20260926`을 실계정 Preview 및 iOS/Android WebView에서 확인. 키보드/ safe-area/중첩 sheet focus, swipe·long-press, 실제 로그인/예약/주문/알림톡/Realtime 왕복은 로컬 fixture 테스트로 대체하지 않는다.
+- **P2 / 확인 필요**: Safari·Firefox, 실제 iPad 13-inch, 긴 운영 데이터/대량 목록/센터 이미지, VoiceOver/TalkBack 회귀 확인. 전체 scope와 결과는 [UI QA 보고서](./UI_QA_POLISH_20260926.md)에 기록.
+
+
 ## 1. 문서 메타데이터
 
 | 항목 | 값 |

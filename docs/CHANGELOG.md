@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-09-26 — 디자인 브랜치 UI QA polish
+
+기존 6개 디자인 commit을 보존한 QA 브랜치에서 navy/neutral 테마, responsive controls/sheets, 회원·관리자 화면 간격과 접근성을 정리했다. Leaflet stacking context를 격리해 header 겹침을 수정하고, 알림함 분류·Apple mark·알림톡 수신자 검증·운영자 발신 안내를 개선했다. DB/native/auth/payment/reservation 서비스 변경은 없다.
+
+검증 범위와 실기기 미검증 항목: [UI_QA_POLISH_20260926.md](./UI_QA_POLISH_20260926.md). 로컬 fixture browser 640 조합/104 interaction 및 전체 unit suite 결과를 별도로 기록한다.
+
+
 ## 2026-09-23 — 안정화 배치: Google 로그인 조사 + 태블릿/웹 UX 10건 + 홈 카테고리 grid
 
 Play Store 내부 테스트(versionCode 2)에서 Google 로그인만 실패하는 문제와, Android
