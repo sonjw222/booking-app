@@ -72,12 +72,11 @@ describe("캘린더 선택 날짜", () => {
   });
 });
 
-describe("iOS long-press 링크 미리보기", () => {
-  it("링크/버튼/role 요소에만 -webkit-touch-callout: none, user-select는 건드리지 않는다", () => {
-    const start = css.lastIndexOf("a[href],\nbutton,");
-    const blk = css.slice(start, css.indexOf("-webkit-touch-callout: default; }", start));
+describe("iOS long-press 링크 미리보기(2026-09-25) — 09-26 확장은 longPress.interactiveContract 참고", () => {
+  it("링크/버튼/role 요소에 -webkit-touch-callout: none", () => {
+    const start = css.lastIndexOf("a[href],\nbutton,", css.indexOf(".list-row {\n  -webkit-touch-callout: none"));
+    const blk = css.slice(start, css.indexOf("input, textarea, select", start));
     expect(blk).toContain("-webkit-touch-callout: none");
     expect(blk).toContain("a[href]");
-    expect(blk).not.toContain("user-select");
   });
 });

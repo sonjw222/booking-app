@@ -8,8 +8,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
+import CalendarAddSheet from "../../components/CalendarAddSheet";
+import { addCalendarEvents, describeCalendarResult, detectCalendarPlatform, type CalendarAddResult } from "../../../lib/calendarAdd";
+import { filterEventsByMonth, reservationToEvent, type CalendarEventItem } from "../../../lib/calendarEvents";
 import {
-  fetchMyReservationsForCalendar, updateReservationMemo, exportIcs,
+  fetchMyReservationsForCalendar, updateReservationMemo,
   type CalReservation,
 } from "../../../lib/mypage";
 
@@ -28,6 +31,8 @@ export default function CalendarPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null); // 방금 저장 성공한 예약(버튼에 "저장됨" 표시)
   const [toast, setToast] = useState<string | null>(null);
+  // 앱(iOS/Android)에서는 선택 시트, 웹/구버전 앱은 기존처럼 바로 .ics 내보내기.
+  const [sheet, setSheet] = useState<{ items: CalendarEventItem[]; subtitle?: string; mode: "select" | "single" } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -71,16 +76,31 @@ export default function CalendarPage() {
     finally { setSavingId(null); }
   }
 
-  // 캘린더 파일 내보내기 — 결과(공유 시트/다운로드/취소/실패)를 사용자에게 그대로 알린다.
-  async function exportToCalendar(items: CalReservation[], filename: string) {
+  /*
+    "캘린더에 추가" — 회원/관리자 공용 서비스(lib/calendarAdd.ts, 이벤트 모델 lib/calendarEvents.ts).
+    · 상단 "내 캘린더에 추가": 지금 화면에 표시 중인 달(cal.y/cal.m)의 예정 예약(확정/대기)만 체크 목록으로 보여준다.
+      월을 이동한 뒤 누르면 새로 표시 중인 달 기준으로 다시 계산된다(버튼 클릭 시점에 계산).
+    · 카드의 "캘린더에 추가": 그 예약 1건 — 앱은 선택 시트(기본 캘린더/다른 앱), 웹은 바로 .ics 내보내기.
+  */
+  function openMonthSheet() {
+    const upcoming = resv.filter((r) => r.status === "confirmed" || r.status === "waitlisted").map(reservationToEvent);
+    setSheet({ items: filterEventsByMonth(upcoming, cal.y, cal.m), subtitle: `${cal.y}년 ${cal.m}월 일정`, mode: "select" });
+  }
+
+  async function addOne(r: CalReservation) {
+    const item = reservationToEvent(r);
+    if (detectCalendarPlatform() !== "web") { setSheet({ items: [item], mode: "single" }); return; }
     try {
-      const result = await exportIcs(items, filename);
-      if (result === "downloaded") setToast("캘린더 파일을 저장했어요. 파일을 열어 캘린더에 추가해주세요");
-      else if (result === "shared") setToast("공유 창에서 캘린더를 선택해 추가해주세요");
-      if (result !== "cancelled") setTimeout(() => setToast(null), 3000);
+      handleCalendarResult(await addCalendarEvents([item], "default", "web"));
     } catch (e: any) {
       setError(e?.message ?? "캘린더에 추가하지 못했어요");
     }
+  }
+
+  function handleCalendarResult(result: CalendarAddResult) {
+    // 실제로 확인된 결과만 안내한다(iOS 저장 개수, 웹 파일 내보내기). Android/시스템 화면은 그 화면이 안내.
+    const msg = describeCalendarResult(result) ?? (result.kind === "shared" && detectCalendarPlatform() === "web" ? "캘린더 파일을 내보냈어요. 파일을 열어 캘린더에 추가해주세요" : null);
+    if (msg) { setToast(msg); setTimeout(() => setToast(null), 3000); }
   }
 
   return (
@@ -91,12 +111,20 @@ export default function CalendarPage() {
       <div className="back-header">
         <a className="side" href="/my-reservations">‹</a>
         <div className="title">예약 캘린더</div>
-        <button className="cal-export-btn" onClick={() => {
-          const upcoming = resv.filter((r) => r.status === "confirmed" || r.status === "waitlisted");
-          if (upcoming.length === 0) { setError("내보낼 예약이 없어요"); return; }
-          void exportToCalendar(upcoming, "모하빗_예약.ics");
-        }}>내 캘린더에 추가</button>
+        <button className="cal-export-btn" onClick={openMonthSheet}>내 캘린더에 추가</button>
       </div>
+
+      {sheet && (
+        <CalendarAddSheet
+          items={sheet.items}
+          subtitle={sheet.subtitle}
+          mode={sheet.mode}
+          platform={detectCalendarPlatform()}
+          onClose={() => setSheet(null)}
+          onDone={handleCalendarResult}
+          onError={(m) => setError(m)}
+        />
+      )}
 
       {loading ? (
         <Loading />
@@ -170,7 +198,7 @@ export default function CalendarPage() {
                         {savingId === r.id ? "저장 중" : savedId === r.id ? "저장됨" : "저장"}
                       </button>
                     </div>
-                    <button className="cal-add-one" onClick={() => void exportToCalendar([r], `${r.title}.ics`)}>
+                    <button className="cal-add-one" onClick={() => void addOne(r)}>
                       캘린더에 추가
                     </button>
                   </div>

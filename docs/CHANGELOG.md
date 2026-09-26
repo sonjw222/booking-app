@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## 2026-09-26 (2차) — 캘린더 다중 선택/일괄 추가 + 관리자 수업 캘린더 + 다른 앱 선택 개선 + 관리자 홈 상단 정리
+
+실기기 QA 후속. DB/RLS/SQL 변경 없음. **native 변경 있음 → 앱 재빌드 필요**(Info.plist에 `NSCalendarsWriteOnlyAccessUsageDescription` 추가).
+
+- **회원 상단 "내 캘린더에 추가"**: 이전엔 예정 예약 전체를 목록으로만 보여줘 선택할 수 없었다. 지금은 **현재 표시 중인 달**의 예정 예약(확정/대기)만 체크박스 목록(날짜·시간·수업·센터)으로 보여주고, 전체 선택/전체 해제/선택 개수/0개면 CTA 비활성. 월을 이동한 뒤 누르면 클릭 시점의 달로 다시 계산.
+- **여러 일정 한 번에 기본 캘린더에 추가**: iOS는 사용자가 시트에서 CTA를 누른 뒤 OS 권한을 한 번 승인받아 batch 저장(iOS 17+ `requestWriteOnlyAccessToEvents` — 기존 캘린더를 읽지 않음, 15/16은 `requestAccess`), 결과는 성공/실패 개수 그대로 안내(전부 실패면 에러). Android는 시스템 일정 추가 인텐트가 한 번에 하나만 받아 여러 건은 `.ics`(여러 VEVENT)를 FileProvider로 ACTION_VIEW — 캘린더 권한/Manifest 변경 없음(기존 provider의 cache-path 사용).
+- **다른 캘린더 앱 선택**: iOS는 Share Sheet 대신 `UIDocumentInteractionController` "Open In" 메뉴(이 `.ics`를 열 수 있다고 OS에 등록된 설치 앱만 표시, 없으면 Share Sheet로 자동 전환). 앱 이름/URL scheme은 추측하지 않는다 — 네이버 캘린더 등이 목록에 나오는지는 그 앱이 iOS에 `.ics` 처리기를 등록했는지에 달려 있다. Android는 `Intent.createChooser`.
+- **관리자 수업 화면**: 달력 아래 `내 캘린더에 추가`(같은 시트/서비스). 현재 표시 월 + 현재 선택된 센터 범위의 수업(취소 제외)과 센터 휴무일을 함께 표시(유형 배지 수업/휴무일). 휴무일은 하루 종일 일정 — 연속된 날짜는 하나의 기간으로 합치고 DTEND는 exclusive.
+- **공용 구조**: `lib/calendarEvents.ts`(이벤트 모델·매퍼·월 필터·선택·ICS), `lib/calendarAdd.ts`(플랫폼 분기·네이티브 브리지), `CalendarAddSheet`. 회원 ICS(`reservationsToIcs`)도 같은 직렬화기 사용.
+- **관리자 홈 상단**: 센터 선택 칩(`background: var(--ink)`=다크에서 순백)과 회원 화면 전환 원형 버튼(ink 채움)을 중립 surface + 얇은 테두리로. 라이트도 검은 원/진한 색을 없앰. 기능/route 변경 없음.
+- 테스트: 신규 3개 파일 + 기존 갱신 → 총 589개 통과. Android `compileDebugJavaWithJavac`, iOS `xcodebuild`(simulator) 성공.
+
+## 2026-09-26 — 네이티브 "캘린더에 추가" + iOS 길게 누르기 텍스트 선택 방지 (`fix/native-calendar-and-longpress-ux-2026-09-26`)
+
+iPhone 실기기 QA 2건. DB/RLS/SQL 변경 없음. **native 변경이 있어 앱 재빌드가 필요**(server.url 모드라 웹 변경만으로는 반영되지 않는 부분).
+
+- **캘린더에 추가**: 기존엔 `.ics` 다운로드/공유만 해서 실제 캘린더에 들어가지 않았다. 앱(iOS/Android)에서는 선택 시트(`CalendarAddSheet`)를 띄운다 — `기본 캘린더에 추가`(iOS: EventKitUI `EKEventEditViewController`, Android: `CalendarContract ACTION_INSERT`; 둘 다 시스템 화면에서 사용자가 저장을 눌러 확정), `다른 캘린더 앱 선택`(iOS: 시스템 Share Sheet로 .ics, Android: `Intent.createChooser`). iOS는 설치된 캘린더 앱을 열거하는 공통 API가 없어 앱 목록은 OS에 맡긴다. 웹/플러그인이 없는 구버전 앱은 기존 `exportIcs`(Web Share → .ics 다운로드) 유지. 시간은 epoch ms로 넘겨 KST 9시간 밀림 없음, 종료 시각이 없으면 1시간, 같은 예약 중복 실행은 in-flight 잠금. 상단 `내 캘린더에 추가`는 기존 의도(예정 예약 전체)를 유지해 시트에서 일정별 [추가] + 전체 .ics 내보내기로 처리.
+- **native**: iOS `CalendarEventPlugin`(기존 `WebViewThemePlugin.swift` 안에 포함 — 새 .swift 파일이면 보호 대상 `project.pbxproj`를 수정해야 해서), `SceneDelegate` 등록, `Info.plist`에 `NSCalendarsUsageDescription`(iOS 15/16 저장 권한용; iOS 17+는 권한 불필요). Android `CalendarEventPlugin.java` + `MainActivity` 등록(권한/Manifest 변경 없음).
+- **길게 누르기**: 링크 미리보기는 이전 배치에서 해결됐지만 버튼/하단 nav를 오래 누르면 글자가 선택되고 selection handle이 끌렸다 → 탭하는 UI(a/button/role/nav/tab/chip/list-row)에만 `user-select: none` + `-webkit-touch-callout: none` + `touch-action: manipulation`, 입력창/textarea/contenteditable은 text 선택 명시 복원(앱 전체 none 아님). pressed 모션은 `:where()`(특이도 0) + `scale: .985`로 기존 스타일 보존. 앱에서만 `contextmenu`/`dragstart`를 탭 UI에 한해 막는 `InteractiveGuard`.
+- 테스트: 신규 4개 파일 → 총 558개 통과.
+
 ## 2026-09-26 — 디자인 브랜치 UI QA polish
 
 기존 6개 디자인 commit을 보존한 QA 브랜치에서 navy/neutral 테마, responsive controls/sheets, 회원·관리자 화면 간격과 접근성을 정리했다. Leaflet stacking context를 격리해 header 겹침을 수정하고, 알림함 분류·Apple mark·알림톡 수신자 검증·운영자 발신 안내를 개선했다. DB/native/auth/payment/reservation 서비스 변경은 없다.

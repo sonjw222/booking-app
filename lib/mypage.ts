@@ -3,6 +3,7 @@
   - 프로필, 수강권(잔여/유효기간), 예약내역, 출석기록 조회
 */
 
+import { calendarEventsToIcs, reservationToEvent } from "./calendarEvents";
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
 import { disableNativePush } from "./nativePush";
@@ -500,46 +501,14 @@ export async function updateReservationMemo(reservationId: string, memo: string)
    예약을 .ics (iCalendar) 로 변환 → 아이폰/구글 캘린더에 추가
    ============================================================ */
 
-function toIcsDate(iso: string): string {
-  // UTC 기준 YYYYMMDDTHHMMSSZ
-  const d = new Date(iso);
-  return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-}
-
-function escapeIcs(text: string): string {
-  return text.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
-}
-
-// 예약 여러 개 → ICS 문자열
+// 예약 여러 개 → ICS 문자열 — 회원/관리자 공용 직렬화기(lib/calendarEvents.ts)를 그대로 쓴다
+// (2026-09-26: 예전엔 여기서 따로 만들었다. UID는 그대로 "<id>@woori-class" 계열 유지).
 export function reservationsToIcs(items: CalReservation[]): string {
-  const lines = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//모하빗//예약//KR",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
-  ];
-  const now = toIcsDate(new Date().toISOString());
-  for (const r of items) {
-    lines.push(
-      "BEGIN:VEVENT",
-      `UID:${r.id}@woori-class`,
-      `DTSTAMP:${now}`,
-      `DTSTART:${toIcsDate(r.startIso)}`,
-      `DTEND:${toIcsDate(r.endIso)}`,
-      `SUMMARY:${escapeIcs(r.title + (r.centerName ? ` · ${r.centerName}` : ""))}`,
-      `DESCRIPTION:${escapeIcs((r.profileName ? r.profileName + " " : "") + (r.memo ? "메모: " + r.memo : ""))}`,
-      r.centerName ? `LOCATION:${escapeIcs(r.centerName)}` : "",
-      "END:VEVENT",
-    );
-  }
-  lines.push("END:VCALENDAR");
-  return lines.filter(Boolean).join("\r\n");
+  return calendarEventsToIcs(items.map(reservationToEvent));
 }
 
-// ICS 파일 다운로드 트리거(데스크톱/안드로이드 크롬 등 일반 브라우저용)
-export function downloadIcs(items: CalReservation[], filename = "내예약.ics") {
-  const ics = reservationsToIcs(items);
+// ICS 문자열 다운로드 트리거(데스크톱/안드로이드 크롬 등 일반 브라우저용)
+export function downloadIcsString(ics: string, filename: string) {
   const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -551,20 +520,20 @@ export function downloadIcs(items: CalReservation[], filename = "내예약.ics")
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// (기존 호환) 예약 배열 → ICS 다운로드
+export function downloadIcs(items: CalReservation[], filename = "내예약.ics") {
+  downloadIcsString(reservationsToIcs(items), filename);
+}
+
 export type IcsExportResult = "shared" | "downloaded" | "cancelled";
 
 /*
-  실기기 QA(2026-09-25) — "내 캘린더에 추가"/"캘린더에 추가" 버튼이 iPhone 앱에서 아무 반응이
-  없던 원인: downloadIcs()의 blob: URL + <a download> 클릭은 iOS WKWebView(Capacitor)가
-  처리하지 않는다(다운로드 핸들러가 없어 조용히 무시됨 — 에러도 안 남음). 그래서 iOS 앱에서
-  두 버튼이 "눌러도 아무 일도 안 일어나는" 상태였다.
-  수정: 1) Web Share API(파일 공유 — iOS 공유 시트에서 "캘린더"/파일 앱 저장 선택 가능)를
-  먼저 시도, 2) 지원 안 하는 일반 브라우저는 기존 anchor 다운로드, 3) 네이티브 앱인데 둘 다
-  불가하면 조용히 넘어가지 않고 에러를 던져 화면에 실패를 알린다(가짜 성공 토스트 금지).
-  새 네이티브 플러그인/권한 없이 기존 웹 API만 사용.
+  ICS 문자열 내보내기(웹/구버전 앱 fallback, 회원/관리자 공용).
+  2026-09-25 — blob + <a download>는 iOS WKWebView에서 조용히 무시된다. Web Share(파일)를 먼저 쓰고,
+  일반 브라우저는 anchor 다운로드, 네이티브 앱인데 둘 다 불가하면 조용히 넘어가지 않고 에러를 던진다
+  (가짜 성공 금지). 새 네이티브 플러그인 없이 기존 웹 API만 사용.
 */
-export async function exportIcs(items: CalReservation[], filename: string): Promise<IcsExportResult> {
-  const ics = reservationsToIcs(items);
+export async function exportIcsString(ics: string, filename: string): Promise<IcsExportResult> {
   const nav = typeof navigator !== "undefined" ? (navigator as Navigator & { canShare?: (d: ShareData) => boolean }) : null;
   if (nav && typeof nav.share === "function" && typeof File !== "undefined") {
     const file = new File([ics], filename, { type: "text/calendar" });
@@ -583,8 +552,13 @@ export async function exportIcs(items: CalReservation[], filename: string): Prom
     // 앱 WebView에서는 anchor 다운로드가 동작하지 않는다 — 조용히 실패시키지 않는다.
     throw new Error("이 기기에서는 캘린더 파일을 바로 열 수 없어요. 앱을 최신 버전으로 업데이트한 뒤 다시 시도해주세요.");
   }
-  downloadIcs(items, filename);
+  downloadIcsString(ics, filename);
   return "downloaded";
+}
+
+// (기존 호환) 예약 배열 → 내보내기
+export async function exportIcs(items: CalReservation[], filename: string): Promise<IcsExportResult> {
+  return exportIcsString(reservationsToIcs(items), filename);
 }
 
 /* ============================================================

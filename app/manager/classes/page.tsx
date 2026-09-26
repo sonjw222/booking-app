@@ -20,6 +20,9 @@ import { formatInstructorNames } from "../../../lib/instructorDisplay";
 import CopyCalendar from "./CopyCalendar";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchRooms, type Room } from "../../../lib/rooms";
+import CalendarAddSheet from "../../components/CalendarAddSheet";
+import { describeCalendarResult, detectCalendarPlatform, type CalendarAddResult } from "../../../lib/calendarAdd";
+import { classToEvent, filterEventsByMonth, holidaysToEvents, monthPrefix, type CalendarEventItem } from "../../../lib/calendarEvents";
 import {
   fetchClasses, createClass, updateClass, updateClassPassSelectionMode, deleteClass,
   createRecurringClasses, createRecurringClassesPerDay, expandRecurringDates,
@@ -69,6 +72,7 @@ export default function ClassManagePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [calSheet, setCalSheet] = useState<{ items: CalendarEventItem[]; subtitle: string } | null>(null);
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
   // 달력 상태
@@ -924,6 +928,31 @@ export default function ClassManagePage() {
   // 달력 셀 + 수업 있는 날 표시
   const pad2 = (n: number) => String(n).padStart(2, "0");
   const selectedKey = `${year}-${pad2(month)}-${pad2(selectedDay)}`;
+  /*
+    "내 캘린더에 추가"(2026-09-26) — 회원 예약 캘린더와 같은 공용 시트/서비스(CalendarAddSheet,
+    lib/calendarAdd.ts, lib/calendarEvents.ts). 지금 화면에 표시 중인 달(year/month)과 지금 선택된
+    센터(activeCenterId) 범위의 수업 + 센터 휴무일만 목록에 올린다. 월/센터를 바꾼 뒤 누르면 클릭 시점의
+    화면 상태로 다시 계산된다. 취소된 수업은 제외. 연속된 휴무일은 하나의 하루 종일 기간으로 합친다.
+  */
+  function openCalendarSheet() {
+    if (!activeCenter) return;
+    const roomOf = (id: string | null) => (id ? rooms.find((r) => r.id === id) : undefined);
+    const classEvents = classes
+      .filter((c) => c.status !== "cancelled")
+      .map((c) => classToEvent(c, { centerName: activeCenter.name, roomName: roomOf(c.roomId)?.name, roomAddress: roomOf(c.roomId)?.address }));
+    const prefix = monthPrefix(year, month);
+    const holidayEvents = holidaysToEvents(Array.from(holidayDates).filter((d) => d.startsWith(prefix)), activeCenter.id, activeCenter.name);
+    setCalSheet({
+      items: filterEventsByMonth([...classEvents, ...holidayEvents], year, month),
+      subtitle: `${activeCenter.name} · ${year}년 ${month}월 일정`,
+    });
+  }
+
+  function handleCalendarResult(result: CalendarAddResult) {
+    const msg = describeCalendarResult(result) ?? (result.kind === "shared" && detectCalendarPlatform() === "web" ? "캘린더 파일을 내보냈어요. 파일을 열어 캘린더에 추가해주세요" : null);
+    if (msg) { setToast(msg); setTimeout(() => setToast(null), 3000); }
+  }
+
   const firstDow = new Date(year, month - 1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
   const cells: (number | null)[] = [];
@@ -1017,6 +1046,9 @@ export default function ClassManagePage() {
           </select>
         </label>
       </div>
+      <div className="manager-cal-add-row">
+        <button type="button" className="cal-export-btn" onClick={openCalendarSheet} disabled={!activeCenter}>내 캘린더에 추가</button>
+      </div>
 
       {/* 요일 */}
       <div className="cal-grid cal-weekdays">
@@ -1052,6 +1084,16 @@ export default function ClassManagePage() {
 
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
       {toast && <div className="toast">{toast}</div>}
+      {calSheet && (
+        <CalendarAddSheet
+          items={calSheet.items}
+          subtitle={calSheet.subtitle}
+          platform={detectCalendarPlatform()}
+          onClose={() => setCalSheet(null)}
+          onDone={handleCalendarResult}
+          onError={(m) => setError(m)}
+        />
+      )}
 
       <section className="manager-agenda-panel" aria-label="선택한 날짜의 수업">
       <div className="menu-section-label">{formatMonthDayWeekday(year, month, selectedDay)} 수업 ({dayClasses.length})</div>

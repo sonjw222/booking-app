@@ -6123,20 +6123,55 @@ textarea:focus-visible,
 
 
 /* ============================================================
-   실기기 QA(2026-09-25) — iOS WKWebView 길게 누르기 링크 미리보기 방지
-   앱(Capacitor)에서 <a href>/버튼을 길게 누르면 mwhabit.com 페이지 미리보기와 Open Link /
-   Copy Link / Share 메뉴가 떴다. 가장 작은 범위(내비게이션 링크와 상호작용 요소)에만
-   -webkit-touch-callout: none을 적용한다. user-select는 건드리지 않아 입력창/일반 텍스트
-   선택·복사와 탭 내비게이션은 그대로다(-webkit-touch-callout은 상속 속성이라 링크 안의
-   자식 요소까지 포함).
+   iOS WKWebView 길게 누르기 정리 (2026-09-25 링크 미리보기 방지 → 2026-09-26 텍스트 선택/드래그 방지 확장)
+   1) 링크 미리보기(Open Link/Copy Link/Share): -webkit-touch-callout: none (2026-09-25).
+   2) 실기기 확인(2026-09-26): 그래도 버튼/하단 nav를 오래 누르면 글자가 선택되고 selection handle이
+      끌린다(하단 nav "마이" 등) → 사용자가 "탭하는 UI"에만 user-select: none을 함께 건다.
+      앱 전체(*, body) user-select: none은 쓰지 않는다 — 일반 본문 텍스트 복사는 그대로.
+   3) 입력창/편집 영역은 아래에서 명시적으로 text 선택/callout을 복원한다.
+   4) 길게 눌러도 "일반 탭과 같은 pressed 모션"만 유지: :active 동안 scale(속성, transform과 별도라
+      기존 translate/transform과 충돌 없음)이 그대로 유지되고, 컨텍스트 메뉴/선택 핸들/미리보기는
+      뜨지 않으며 action은 release(click) 때 1회만 실행된다(pointerdown 시 실행 없음).
+   touch-action: manipulation — 더블탭 확대 지연만 제거(pan-x/pan-y/pinch는 그대로라 SwipeRow(pan-y),
+      nav rail(pan-y)의 제스처와 교집합으로 충돌하지 않는다).
    ============================================================ */
 a[href],
 button,
 [role="button"],
 [role="link"],
 [role="tab"],
-[role="radio"] { -webkit-touch-callout: none; }
-input, textarea, [contenteditable="true"] { -webkit-touch-callout: default; }
+[role="radio"],
+[role="option"],
+[role="menuitem"],
+.bottom-nav,
+.desktop-nav-item,
+.workspace-sidebar,
+.member-desktop-nav,
+.filter-chip,
+.center-tab,
+.list-row {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+a[href],
+button,
+[role="button"],
+[role="link"],
+[role="tab"],
+[role="radio"] { touch-action: manipulation; }
+input, textarea, select, [contenteditable=""], [contenteditable="true"] {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+/* pressed 모션 — 기존 :active 스타일(배경/색 변화)은 그대로 두고 아주 미세한 scale만 더한다. */
+:where(a[href], button, [role="button"], [role="tab"]) { transition: scale 110ms cubic-bezier(.2,.75,.2,1); }
+:where(a[href]:active, button:not(:disabled):active, [role="button"]:active, [role="tab"]:active) { scale: .985; }
+@media (prefers-reduced-motion: reduce) {
+  :where(a[href]:active, button:not(:disabled):active, [role="button"]:active, [role="tab"]:active) { scale: 1; }
+}
 
 /* 실기기 QA(2026-09-25) — 센터 선택 시트(app/components/CenterSelectSheet.tsx). 옵션 행은 모두
    같은 높이, 선택은 체크 + accent 글자(전체 채움 없음), 하단 safe-area 반영. */
@@ -6196,3 +6231,45 @@ input, textarea, [contenteditable="true"] { -webkit-touch-callout: default; }
   .desktop-nav-item > span:not(.desktop-nav-badge),
   .workspace-sidebar-mode > span { transform: none !important; }
 }
+
+/* "캘린더에 추가" 시트(app/components/CalendarAddSheet.tsx) — .sheet-option 행을 그대로 쓰되 보조 설명/행 안 버튼만 추가. */
+.calendar-add-sheet { padding-bottom: max(24px, var(--safe-bottom, 0px)); }
+.calendar-add-summary { display: flex; flex-direction: column; gap: 2px; padding: 4px 4px 12px; color: var(--ink-soft); font-size: 13px; }
+.calendar-add-summary b { color: var(--ink); font-size: 14.5px; font-weight: 700; }
+.sheet-option small { display: block; margin-top: 2px; color: var(--ink-soft); font-size: 12px; font-weight: 500; white-space: normal; }
+.sheet-option .sheet-option-label { white-space: normal; }
+.sheet-option:disabled { opacity: .5; cursor: default; }
+.calendar-add-empty { padding: 28px 8px 20px; text-align: center; color: var(--ink-soft); font-size: 14px; }
+.calendar-add-controls { display: flex; align-items: center; gap: 6px; padding: 0 0 8px; }
+.calendar-add-link { min-height: 34px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.calendar-add-link:disabled { opacity: .45; cursor: default; }
+.calendar-add-count { margin-left: auto; color: var(--ink-soft); font-size: 13px; font-weight: 650; }
+.calendar-add-list { max-height: min(46vh, 380px); overflow-y: auto; border-top: 1px solid var(--line); -webkit-overflow-scrolling: touch; }
+.calendar-add-item { -webkit-user-select: none; user-select: none; display: flex; align-items: flex-start; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.calendar-add-item input[type="checkbox"] { flex: 0 0 auto; margin-top: 2px; }
+.calendar-add-item-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.calendar-add-item-main b { color: var(--ink); font-size: 14px; font-weight: 700; }
+.calendar-add-item-main span { color: var(--ink); font-size: 14px; }
+.calendar-add-item-main small { color: var(--ink-soft); font-size: 12px; }
+.calendar-add-kind { display: inline-block; margin-right: 6px; padding: 1px 7px; border-radius: 999px; background: var(--surface); color: var(--ink-soft); font-size: 11px; font-style: normal; font-weight: 700; vertical-align: 1px; }
+.calendar-add-kind.holiday { background: var(--danger-soft); color: var(--danger); }
+.calendar-add-kind.class { background: var(--accent-soft); color: var(--accent); }
+.calendar-add-footer { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; }
+
+/* 관리자 수업 화면 — 달력 헤더 아래 "내 캘린더에 추가"(회원 예약 캘린더 상단 버튼과 같은 .cal-export-btn 필). */
+.manager-cal-add-row { display: flex; justify-content: flex-end; padding: 0 var(--page-gutter) 8px; }
+.manager-cal-add-row .cal-export-btn { min-height: 36px; padding: 0 14px; }
+.manager-cal-add-row .cal-export-btn:disabled { opacity: .5; cursor: default; }
+
+/* ============================================================
+   관리자 홈 상단 다크/라이트 정리(2026-09-26 실기기 QA)
+   - 센터 선택 칩(.manager-home-v2 .center-chip.on)이 background: var(--ink)(다크에선 거의 순백)라
+     주변 다크 배경에서 너무 튀었고, 회원 화면 전환 원형 버튼(.manager-chrome-main > a)도 같은
+     var(--ink) 채움(다크=흰 원, 라이트=검은 원)이었다. 둘 다 앱의 다른 헤더 액션과 같은 계열의
+     중립 surface(--card-bg) + 얇은 테두리 + --ink 글자로 통일. 선택 표시는 accent를 약하게 섞은
+     테두리와 작은 역할 배지로만. 기능/route 변경 없음.
+   ============================================================ */
+.manager-home-v2 .center-chip.on { border-color: color-mix(in srgb, var(--accent) 45%, var(--line-strong)); background: var(--card-bg); color: var(--ink); }
+.manager-home-v2 .center-chip.on .center-role { background: var(--accent-soft); color: var(--accent); }
+.manager-chrome-main > a { border: 1px solid var(--line-strong); background: var(--card-bg); color: var(--ink); }
+.manager-chrome-main > a:active { background: var(--surface); }
