@@ -6,8 +6,8 @@ import { replaceTabNavigation } from "../../lib/navState";
 
 const TITLES: Record<string, string> = {
   "/manager": "관리 홈", "/manager/classes": "수업", "/manager/members": "회원",
-  "/manager/notifications": "알림", "/manager/membership-rules": "수강권",
-  "/manager/goods": "상품", "/manager/progress": "진도", "/manager/progress/record": "진도 기록",
+  "/manager/notifications": "알림", "/manager/membership-rules": "수강권 설정",
+  "/manager/goods": "상품 관리", "/manager/progress": "진도", "/manager/progress/record": "진도 기록",
   "/manager/staff": "스태프", "/manager/staff/permissions": "권한",
   "/manager/sales": "매출·결제", "/manager/announcements": "공지",
   "/manager/inquiries": "문의", "/manager/reviews": "후기", "/manager/orders": "주문",

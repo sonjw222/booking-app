@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../components/SheetOverlay";
+
 /*
   회원 1:1 문의
   - 내 문의방 목록
@@ -137,7 +139,7 @@ function InquiriesPageContent() {
 
       {/* 새 문의 - 센터 선택 시트 */}
       {picker && (
-        <div className="sheet-overlay" onClick={() => setPicker(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setPicker(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">어느 센터에 문의할까요?</div>
 
@@ -174,7 +176,7 @@ function InquiriesPageContent() {
 
             <button className="ghost-btn" style={{ width: "100%", marginTop: 12 }} onClick={() => setPicker(false)}>닫기</button>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       <div style={{ height: 20 }} />

@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../components/SheetOverlay";
+
 /*
   예약 캘린더 화면 - Supabase 실연동 버전
   - 달력: 주말·공휴일만 색상, 수업 있는 날 센터별 점, 내 예약 있는 날 동그라미
@@ -35,6 +37,7 @@ import UiIcon from "../components/UiIcon";
 import EmptyState from "../components/EmptyState";
 import ErrorState from "../components/ErrorState";
 import SegmentedTabs from "../components/SegmentedTabs";
+import AppButton from "../components/AppButton";
 import { PUBLIC_HOLIDAYS } from "../../lib/publicHolidays";
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 
@@ -135,6 +138,7 @@ function ReservationCalendarContent() {
   const [confirmClass, setConfirmClass] = useState<ClassInfo | null>(null);
   const [selectedGoodsId, setSelectedGoodsId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [reservationError, setReservationError] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<BookingProfile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
 
@@ -362,6 +366,7 @@ function ReservationCalendarContent() {
     // 예약 확인 모달 열기 — 수강권/상품 모두 이미 배치로 가져온 결과에서 즉시 계산
     // (수업을 누른 시점에 추가 조회가 없으므로 이전 수업의 결과가 섞이거나 잠깐 보이는 일이 없음)
     setConfirmClass(cls);
+    setReservationError(null);
     setSelectedGoodsId(null);
     const list = usablePassesByClass[cls.id] ?? [];
     setPassPick(pickDefaultMembership(list));
@@ -390,7 +395,7 @@ function ReservationCalendarContent() {
       setConfirmClass(null);
       await load({ silent: true });
     } catch (e: any) {
-      showToast(e.message);
+      setReservationError(e?.message ?? "예약할 수 없어요. 수강권과 수업 상태를 확인해주세요.");
     } finally {
       setBusyClassId(null);
     }
@@ -528,11 +533,10 @@ function ReservationCalendarContent() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="resv-page-head"><h1>예약</h1></div>
-      <div className="booking-steps" aria-label="예약 진행 단계">
-        <div className="booking-step complete"><span>✓</span><b>날짜 선택</b></div><i />
-        <div className={`booking-step ${confirmClass ? "complete" : "active"}`} aria-current={!confirmClass ? "step" : undefined}><span>{confirmClass ? "✓" : "2"}</span><b>수업 선택</b></div><i />
-        <div className={`booking-step ${confirmClass ? "active" : ""}`} aria-current={confirmClass ? "step" : undefined}><span>3</span><b>예약 확인</b></div>
-      </div>
+      <nav className="reservation-top-tabs" aria-label="예약 메뉴">
+        <a href="/reservation" aria-current="page">수업 예약</a>
+        <a href="/my-reservations">내 예약</a>
+      </nav>
 
       {centerSheet && (
         <CenterSelectSheet
@@ -640,7 +644,7 @@ function ReservationCalendarContent() {
           <span className="profile-picker-label">프로필:</span>
           <div className="profile-picker-chips">
             {profiles.map((p) => (
-              <button
+              <button aria-pressed={p.id === activeProfileId}
                 key={p.id}
                 className={`center-chip ${p.id === activeProfileId ? "on" : ""}`}
                 onClick={() => setActiveProfileId(p.id)}
@@ -718,7 +722,6 @@ function ReservationCalendarContent() {
                     {mineRec?.status === "waitlisted" && <span className="booked-tag">대기중</span>}
                   </div>
                   <div className="class-row-place">{center?.name}{instructorText ? ` · ${instructorText}` : ""}</div>
-                  {cls.place && <div className="class-row-meta">{cls.place}</div>}
                   {/* UX 감사(A-7) — 수강권 이름을 최대 11개까지 칩으로 전부 나열해 정작
                       중요한 수업명·시간·잔여석이 밀렸다. 어떤 수강권을 쓸지는 예약 확인
                       시트에서 다시 고르므로(pickDefaultMembership), 카드에서는 "예약
@@ -736,31 +739,21 @@ function ReservationCalendarContent() {
                   </div>
                 </div>
                 <div className="class-right">
-                  {cls.showReservedCount ? (
-                    <div className={`class-count ${full ? "full" : ""}`}>
-                      예약 {cls.reserved}/{cls.capacity}
-                    </div>
-                  ) : (
-                    // 운영설정에서 인원 표시를 껐으면 정원마감 여부만(정확한 인원수는 숨김)
-                    full && <div className="class-count full">마감</div>
-                  )}
-                  {cls.showWaitlistCount && cls.waitlisted > 0 && (
-                    <div className="class-count">대기 {cls.waitlisted}</div>
-                  )}
+                  {full && <div className="class-count full">마감</div>}
                   {mine ? (
-                    <button className="mini-btn done" disabled={busy} onClick={() => handleCancel(cls)}>
+                    <AppButton variant="secondary" className="mini-btn done" disabled={busy} onClick={() => handleCancel(cls)}>
                       {busy ? "..." : "취소"}
-                    </button>
+                    </AppButton>
                   ) : hasStarted ? (
                     <div className="mini-btn-note">수업이 시작되었습니다.</div>
                   ) : (
-                    <button
+                    <AppButton
                       className={`mini-btn ${full ? "wait" : ""}`}
                       disabled={busy}
                       onClick={() => handleReserve(cls)}
                     >
                       {busy ? "..." : full ? "대기" : "예약"}
-                    </button>
+                    </AppButton>
                   )}
                 </div>
               </div>
@@ -773,7 +766,7 @@ function ReservationCalendarContent() {
       </div>
       {/* 예약 확인 모달 */}
       {confirmClass && (
-        <div className="sheet-overlay" onClick={() => setConfirmClass(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setConfirmClass(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">예약하시겠어요?</div>
 
@@ -785,6 +778,8 @@ function ReservationCalendarContent() {
                   <div className="confirm-class-sub" style={{ whiteSpace: "pre-wrap" }}>{confirmClass.description}</div>
                 )}
                 <div className="confirm-class-sub">{confirmClass.place} · {confirmClass.date} {confirmClass.start}</div>
+                {confirmClass.showReservedCount && <div className="confirm-class-sub">예약 {confirmClass.reserved}/{confirmClass.capacity}</div>}
+                {confirmClass.showWaitlistCount && confirmClass.waitlisted > 0 && <div className="confirm-class-sub">대기 {confirmClass.waitlisted}명</div>}
                 {confirmClass.instructorNames.length > 0 && (
                   <div className="confirm-class-sub">담당 강사: {confirmClass.instructorNames.join(", ")}</div>
                 )}
@@ -892,6 +887,7 @@ function ReservationCalendarContent() {
               </section>
             )}
 
+            {reservationError && <div className="booking-inline-error" role="alert">{reservationError}<span>수강권이나 수업 상태를 확인한 뒤 다시 시도해주세요.</span></div>}
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => setConfirmClass(null)}>취소</button>
               <button className="primary-btn" disabled={busyClassId === confirmClass.id} onClick={doReserve}>
@@ -899,7 +895,7 @@ function ReservationCalendarContent() {
               </button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
     </div>

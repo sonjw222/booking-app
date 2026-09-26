@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../components/SheetOverlay";
+
 /*
   프로필 관리 화면
   - 한 계정 아래 여러 프로필(수강 주체)을 관리
@@ -160,8 +162,8 @@ export default function ProfilesPage() {
 
           {adding ? (
             <div className="add-profile-form">
-              <input className="input-field" placeholder="프로필 이름 (필수)" value={newName} onChange={(e) => setNewName(e.target.value)} />
-              <input className="input-field" placeholder="라벨 (선택) — 예: 오전반, 개인용" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} />
+              <input aria-label="프로필 이름 (필수)" className="input-field" placeholder="프로필 이름 (필수)" value={newName} onChange={(e) => setNewName(e.target.value)} />
+              <input aria-label="라벨 (선택) — 예: 오전반, 개인용" className="input-field" placeholder="라벨 (선택) — 예: 오전반, 개인용" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} />
               <DatePicker value={newBirth} onChange={setNewBirth} label="생년월일 선택" />
               <div className="add-profile-actions">
                 <button className="ghost-btn" onClick={() => { setAdding(false); setError(null); }}>취소</button>
@@ -180,7 +182,7 @@ export default function ProfilesPage() {
 
       {/* 프로필 수정 시트 */}
       {editing && edit && (
-        <div className="sheet-overlay" onClick={() => { setEditing(null); setEdit(null); }}>
+        <SheetOverlay className="sheet-overlay" onClick={() => { setEditing(null); setEdit(null); }}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">프로필 수정</div>
 
@@ -200,10 +202,10 @@ export default function ProfilesPage() {
             <input className="input-field" value={editing.name} disabled style={{ opacity: 0.6 }} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>별명 (선택) — 커뮤니티에서 이름 대신 표시돼요</div>
-            <input className="input-field" placeholder="예: 발레하는곰" value={edit.nickname} onChange={(e) => setEdit({ ...edit, nickname: e.target.value })} />
+            <input aria-label="예: 발레하는곰" className="input-field" placeholder="예: 발레하는곰" value={edit.nickname} onChange={(e) => setEdit({ ...edit, nickname: e.target.value })} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>라벨 (선택)</div>
-            <input className="input-field" placeholder="예: 오전반, 개인용" value={edit.label} onChange={(e) => setEdit({ ...edit, label: e.target.value })} />
+            <input aria-label="예: 오전반, 개인용" className="input-field" placeholder="예: 오전반, 개인용" value={edit.label} onChange={(e) => setEdit({ ...edit, label: e.target.value })} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>생년월일 (선택)</div>
             <DatePicker value={edit.birthDate} onChange={(birthDate) => setEdit({ ...edit, birthDate })} label="생년월일 선택" />
@@ -211,31 +213,31 @@ export default function ProfilesPage() {
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>성별 (선택)</div>
             <div className="mem-filters" style={{ padding: 0 }}>
               {[["male", "남"], ["female", "여"], ["other", "기타"]].map(([v, lbl]) => (
-                <button key={v} className={`filter-chip ${edit.gender === v ? "on" : ""}`} onClick={() => setEdit({ ...edit, gender: edit.gender === v ? "" : v })}>{lbl}</button>
+                <button aria-pressed={edit.gender === v} key={v} className={`filter-chip ${edit.gender === v ? "on" : ""}`} onClick={() => setEdit({ ...edit, gender: edit.gender === v ? "" : v })}>{lbl}</button>
               ))}
             </div>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>발 사이즈 (선택) — 피겨화 등 대여용</div>
-            <input className="input-field" inputMode="numeric" placeholder="예: 240" value={edit.shoeSize} onChange={(e) => setEdit({ ...edit, shoeSize: e.target.value })} />
+            <input aria-label="예: 240" className="input-field" inputMode="numeric" placeholder="예: 240" value={edit.shoeSize} onChange={(e) => setEdit({ ...edit, shoeSize: e.target.value })} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>옷 사이즈 (선택) — 대여복 등</div>
-            <input className="input-field" placeholder="예: M, 95, 100" value={edit.clothSize} onChange={(e) => setEdit({ ...edit, clothSize: e.target.value })} />
+            <input aria-label="예: M, 95, 100" className="input-field" placeholder="예: M, 95, 100" value={edit.clothSize} onChange={(e) => setEdit({ ...edit, clothSize: e.target.value })} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>주소 (선택)</div>
-            <input className="input-field" placeholder="예: 서울 강남구 ..." value={edit.address} onChange={(e) => setEdit({ ...edit, address: e.target.value })} />
+            <input aria-label="예: 서울 강남구 ..." className="input-field" placeholder="예: 서울 강남구 ..." value={edit.address} onChange={(e) => setEdit({ ...edit, address: e.target.value })} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>추가 연락처 (선택)</div>
-            <input className="input-field" inputMode="tel" placeholder="예: 010-1234-5678" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} />
+            <input aria-label="예: 010-1234-5678" className="input-field" inputMode="tel" placeholder="예: 010-1234-5678" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>특이사항 메모 (선택)</div>
-            <input className="input-field" placeholder="예: 무릎 부상 이력" value={edit.memo} onChange={(e) => setEdit({ ...edit, memo: e.target.value })} />
+            <input aria-label="예: 무릎 부상 이력" className="input-field" placeholder="예: 무릎 부상 이력" value={edit.memo} onChange={(e) => setEdit({ ...edit, memo: e.target.value })} />
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => { setEditing(null); setEdit(null); }}>취소</button>
               <button className="primary-btn" disabled={busy} onClick={handleSaveEdit}>{busy ? "저장 중..." : "저장"}</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
     </div>
   );

@@ -216,7 +216,7 @@ export default function CenterInfoPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
               {c.name}
             </button>
           ))}
@@ -249,17 +249,20 @@ export default function CenterInfoPage() {
       {loading ? (
         <Loading />
       ) : (
-        <div style={{ padding: "0 20px 40px" }}>
+        <div className="center-info-form" style={{ padding: "0 20px 40px" }}>
+          <section className="form-section">
           <div className="menu-section-label" style={{ padding: "8px 0 6px" }}>종목 (여러 개 선택 가능 · 홈 분류용)</div>
           <div className="mem-filters" style={{ padding: 0, marginBottom: 4 }}>
             {catOptions.map((cat) => (
-              <button key={cat.id} className={`filter-chip ${categories.includes(cat.label) ? "on" : ""}`}
+              <button aria-pressed={categories.includes(cat.label)} key={cat.id} className={`filter-chip ${categories.includes(cat.label) ? "on" : ""}`}
                 onClick={() => setCategories((prev) => prev.includes(cat.label) ? prev.filter((x) => x !== cat.label) : [...prev, cat.label])}>
                 {cat.label.replace(/^[^\p{L}\p{N}]+/u, "")}
               </button>
             ))}
           </div>
+          </section>
 
+          <section className="form-section">
           <div className="menu-section-label" style={{ padding: "8px 0 6px" }}>프로필 사진 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>· 센터 이름 위에 뜨는 작은 사진</span></div>
           <div className="avatar-edit" style={{ alignItems: "flex-start" }}>
             {photoUrl
@@ -276,10 +279,14 @@ export default function CenterInfoPage() {
               }} />
             </label>
           </div>
+          </section>
 
+          <section className="form-section">
           <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>주소</div>
-          <input className="input-field" placeholder="예: 서울 강남구 ..." value={address} onChange={(e) => setAddress(e.target.value)} />
+          <input aria-label="주소" className="input-field" placeholder="예: 서울 강남구 ..." value={address} onChange={(e) => setAddress(e.target.value)} />
+          </section>
 
+          <section className="form-section form-section-wide">
           <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>센터 위치</div>
           {lat != null && lng != null && <MapPreview lat={lat} lng={lng} />}
           <div className="loc-btn-row">
@@ -303,7 +310,9 @@ export default function CenterInfoPage() {
               회원 홈에서 가까운 순으로 노출되고, 길찾기 목적지로 쓰여요
             </div>
           )}
+          </section>
 
+          <section className="form-section form-section-wide">
           <div className="menu-section-label" style={{ padding: "18px 0 6px" }}>센터 소개 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>· 사진과 글을 자유롭게 배치</span></div>
           <div className="intro-editor">
             {introBlocks.length === 0 && (
@@ -312,8 +321,8 @@ export default function CenterInfoPage() {
             {introBlocks.map((blk, i) => (
               <div key={i} className="intro-block">
                 <div className="intro-block-controls">
-                  <button className="ib-btn" onClick={() => moveBlock(i, -1)} disabled={i === 0}>↑</button>
-                  <button className="ib-btn" onClick={() => moveBlock(i, 1)} disabled={i === introBlocks.length - 1}>↓</button>
+                  <button className="ib-btn" aria-label="블록 위로 이동" onClick={() => moveBlock(i, -1)} disabled={i === 0}>↑</button>
+                  <button className="ib-btn" aria-label="블록 아래로 이동" onClick={() => moveBlock(i, 1)} disabled={i === introBlocks.length - 1}>↓</button>
                   <button className="ib-btn del" onClick={() => removeBlock(i)} aria-label="블록 삭제"><UiIcon name="close" size={13} /></button>
                 </div>
                 {blk.type === "text" ? (
@@ -340,7 +349,9 @@ export default function CenterInfoPage() {
               </label>
             </div>
           </div>
+          </section>
 
+          <section className="form-section">
           <div className="menu-section-label" style={{ padding: "18px 0 6px" }}>결제 수단 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>· 회원 결제화면에 보일 수단</span></div>
           <div className="mem-filters" style={{ padding: 0, opacity: canEditPayMethods ? 1 : 0.5 }}>
             {[
@@ -350,7 +361,7 @@ export default function CenterInfoPage() {
               { id: "transfer", label: "계좌이체" },
               { id: "direct", label: "직접결제" },
             ].map((m) => (
-              <button key={m.id} className={`filter-chip ${payMethods.includes(m.id) ? "on" : ""}`}
+              <button aria-pressed={payMethods.includes(m.id)} key={m.id} className={`filter-chip ${payMethods.includes(m.id) ? "on" : ""}`}
                 disabled={!canEditPayMethods}
                 onClick={() => setPayMethods((prev) => prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id])}>
                 {m.label}
@@ -366,27 +377,34 @@ export default function CenterInfoPage() {
               ? "선택한 결제 수단만 회원 화면에 보여요. 아무것도 선택하지 않으면 표시하지 않아요."
               : "결제수단 변경 권한이 없어요 — 오너에게 문의하세요."}
           </div>
+          </section>
 
+          <section className="form-section">
           <div className="menu-section-label" style={{ padding: "18px 0 6px" }}>후기 작성 포인트 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>· 회원이 후기를 쓰면 지급</span></div>
-          <input className="input-field" inputMode="numeric" placeholder="예: 1000" disabled={!canEditReviewPoint}
+          <input aria-label="후기 작성 포인트" className="input-field" inputMode="numeric" placeholder="예: 1000" disabled={!canEditReviewPoint}
             value={reviewPoint} onChange={(e) => setReviewPoint(e.target.value.replace(/[^0-9]/g, ""))} />
           <div className="perm-guide" style={{ margin: "4px 0 0" }}>
             {canEditReviewPoint
               ? "0으로 두면 포인트를 지급하지 않아요. 적립된 포인트는 이 센터 결제에만 쓸 수 있어요."
               : "후기 포인트 변경은 오너만 할 수 있어요."}
           </div>
+          </section>
 
+          <section className="form-section">
           <div className="menu-section-label" style={{ padding: "18px 0 6px" }}>연락처</div>
-          <input className="input-field" placeholder="예: 02-1234-5678" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <input aria-label="연락처" className="input-field" placeholder="예: 02-1234-5678" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </section>
 
+          <section className="form-section form-section-wide">
           <div className="menu-section-label" style={{ padding: "18px 0 6px" }}>SNS (한 줄에 하나씩)</div>
-          <textarea
+          <textarea aria-label={"예:\n인스타그램 @mystudio\n카카오톡 채널 mystudio\n네이버 예약 ..."}
             className="input-field"
             style={{ minHeight: 90, resize: "vertical", lineHeight: 1.6 }}
             placeholder={"예:\n인스타그램 @mystudio\n카카오톡 채널 mystudio\n네이버 예약 ..."}
             value={sns}
             onChange={(e) => setSns(e.target.value)}
           />
+          </section>
 
           <button
             className="primary-btn"

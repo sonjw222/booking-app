@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   센터 상세 화면
   - 센터 소개/주소/연락처 + 예약 가능한 수업 목록
@@ -28,6 +30,7 @@ import RichTextEditor from "../../components/RichTextEditor";
 import UiIcon from "../../components/UiIcon";
 import EmptyState from "../../components/EmptyState";
 import BackButton from "../../components/BackButton";
+import AppButton from "../../components/AppButton";
 import { loginHrefWithReturnToHere } from "../../../lib/postLoginReturn";
 
 // 수강권 대분류(group_label) 기준으로 묶는다 — 라벨 없는 상품은 맨 위에 헤더 없이,
@@ -283,7 +286,7 @@ function CenterDetailContent() {
       {/* 수강권 구매 안내 시트 */}
       {/* 지도/길찾기 앱 선택 */}
       {mapSheet && center && (
-        <div className="sheet-overlay" onClick={() => setMapSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setMapSheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">길찾기 앱 선택</div>
             <div className="perm-guide" style={{ margin: "0 0 12px" }}>
@@ -333,14 +336,14 @@ function CenterDetailContent() {
             </div>
             <button className="ghost-btn" style={{ width: "100%", marginTop: 12 }} onClick={() => setMapSheet(false)}>닫기</button>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {buySheet && (() => {
         const applyFilter = filterProductIds && !showAllProducts;
         const visibleProducts = applyFilter ? products.filter((p) => filterProductIds!.has(p.id)) : products;
         return (
-        <div className="sheet-overlay" onClick={() => setBuySheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setBuySheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">
               수강권 · 상품 구매
@@ -351,9 +354,7 @@ function CenterDetailContent() {
             <a href="/cart" className="cart-link-btn">
               <UiIcon name="cart" size={16} /> 장바구니 보기{cartItemCount > 0 ? ` (${cartItemCount})` : ""}
             </a>
-            <div className="perm-guide" style={{ margin: "8px 0 4px" }}>
-              <b>담기</b>는 장바구니에 모아뒀다가 한번에 결제, <b>구매</b>는 이것만 바로 결제해요.
-            </div>
+            <p className="center-buy-help">수강권을 선택하고 바로 구매하거나 장바구니에 담을 수 있어요.</p>
             {filterProductIds && (
               <div className="class-filter-notice">
                 <span>{applyFilter ? "이 수업에 사용할 수 있는 수강권만 표시 중" : "전체 상품 표시 중"}</span>
@@ -398,8 +399,8 @@ function CenterDetailContent() {
                                 )}
                               </button>
                               <div className="center-product-actions">
-                                {p.remaining !== 0 && <button className="center-product-cart" onClick={() => handleAddCart(p)}>담기</button>}
-                                {p.remaining !== 0 && <button className="center-product-buy" onClick={() => handlePurchase(p)}>구매</button>}
+                                {p.remaining !== 0 && <AppButton variant="secondary" className="center-product-cart" onClick={() => handleAddCart(p)}>담기</AppButton>}
+                                {p.remaining !== 0 && <AppButton className="center-product-buy" onClick={() => handlePurchase(p)}>구매</AppButton>}
                               </div>
                             </div>
                           ))}
@@ -428,8 +429,8 @@ function CenterDetailContent() {
                             </div>
                           </button>
                           <div className="center-product-actions">
-                            {p.remaining !== 0 && <button className="center-product-cart" onClick={() => handleAddCart(p)}>담기</button>}
-                            {p.remaining !== 0 && <button className="center-product-buy" onClick={() => handlePurchase(p)}>구매</button>}
+                            {p.remaining !== 0 && <AppButton variant="secondary" className="center-product-cart" onClick={() => handleAddCart(p)}>담기</AppButton>}
+                            {p.remaining !== 0 && <AppButton className="center-product-buy" onClick={() => handlePurchase(p)}>구매</AppButton>}
                           </div>
                         </div>
                       ))}
@@ -440,13 +441,13 @@ function CenterDetailContent() {
             )}
             <button className="ghost-btn" style={{ width: "100%", marginTop: 12 }} onClick={() => setBuySheet(false)}>닫기</button>
           </div>
-        </div>
+        </SheetOverlay>
         );
       })()}
 
       {/* 후기 작성 */}
       {reviewSheet && (
-        <div className="sheet-overlay" onClick={() => setReviewSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setReviewSheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{rvEditing ? "후기 수정" : "후기 쓰기"}</div>
             <div className="perm-guide" style={{ margin: "0 0 12px" }}>
@@ -500,12 +501,12 @@ function CenterDetailContent() {
               </button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 후기 신고 (Release Blocker Cleanup Batch A) */}
       {reportTargetId && (
-        <div className="sheet-overlay" onClick={() => setReportTargetId(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setReportTargetId(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">후기 신고</div>
             <div className="perm-guide" style={{ margin: "0 0 12px" }}>
@@ -524,7 +525,7 @@ function CenterDetailContent() {
               </label>
             ))}
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>상세 사유 (선택)</div>
-            <textarea
+            <textarea aria-label="추가로 전달하고 싶은 내용이 있다면 적어주세요"
               className="input-field"
               style={{ width: "100%", minHeight: 60 }}
               placeholder="추가로 전달하고 싶은 내용이 있다면 적어주세요"
@@ -538,12 +539,12 @@ function CenterDetailContent() {
               </button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 상품 상세 설명 */}
       {descProduct && (
-        <div className="sheet-overlay" onClick={() => setDescProduct(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setDescProduct(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{descProduct.name}</div>
             <div className="checkout-order-detail" style={{ marginBottom: 8 }}>
@@ -558,11 +559,11 @@ function CenterDetailContent() {
               <button className="primary-btn" onClick={() => { const p = descProduct; setDescProduct(null); handlePurchase(p); }}>구매하기</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       <div className="back-header center-detail-head">
-        <a className="side" href={backHref}>‹</a>
+        <a className="side" aria-label="뒤로가기" href={backHref}>‹</a>
         <div className="title">센터</div>
         <div className="side" />
       </div>

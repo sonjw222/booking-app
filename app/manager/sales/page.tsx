@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   매니저 - 매출 관리 화면
   - 상단: 기간 선택 + 순매출/미수금 요약
@@ -344,7 +346,7 @@ export default function SalesPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
               {c.name}
             </button>
           ))}
@@ -352,9 +354,9 @@ export default function SalesPage() {
       )}
 
       <div className="perm-tabs">
-        <button className={`perm-tab ${tab === "sales" ? "on" : ""}`} onClick={() => setTab("sales")}>매출</button>
-        <button className={`perm-tab ${tab === "expense" ? "on" : ""}`} onClick={() => setTab("expense")}>지출</button>
-        <button className={`perm-tab ${tab === "point" ? "on" : ""}`} onClick={() => setTab("point")}>포인트</button>
+        <button aria-pressed={tab === "sales"} className={`perm-tab ${tab === "sales" ? "on" : ""}`} onClick={() => setTab("sales")}>매출</button>
+        <button aria-pressed={tab === "expense"} className={`perm-tab ${tab === "expense" ? "on" : ""}`} onClick={() => setTab("expense")}>지출</button>
+        <button aria-pressed={tab === "point"} className={`perm-tab ${tab === "point" ? "on" : ""}`} onClick={() => setTab("point")}>포인트</button>
       </div>
 
       {tab === "sales" && (
@@ -543,7 +545,7 @@ export default function SalesPage() {
 
       {/* 결제 등록 시트 */}
       {sheet && (
-        <div className="sheet-overlay" onClick={() => setSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setSheet(false)}>
           <div className="sheet tall payment-register-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">결제 등록</div>
 
@@ -576,22 +578,22 @@ export default function SalesPage() {
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>매출 구분</div>
             <div className="mem-filters" style={{ padding: 0 }}>
               {Object.entries(SALE_TYPE_LABEL).map(([k, v]) => (
-                <button key={k} className={`filter-chip ${fSaleType === k ? "on" : ""}`} onClick={() => setFSaleType(k)}>{v}</button>
+                <button aria-pressed={fSaleType === k} key={k} className={`filter-chip ${fSaleType === k ? "on" : ""}`} onClick={() => setFSaleType(k)}>{v}</button>
               ))}
             </div>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>결제 금액 (분할 가능)</div>
             <div className="pay-grid">
-              <label className="pay-field"><span>카드</span><input inputMode="numeric" className="input-field" value={fCard} onChange={(e) => setFCard(e.target.value)} placeholder="0" /></label>
-              <label className="pay-field"><span>현금</span><input inputMode="numeric" className="input-field" value={fCash} onChange={(e) => setFCash(e.target.value)} placeholder="0" /></label>
-              <label className="pay-field"><span>계좌이체</span><input inputMode="numeric" className="input-field" value={fTransfer} onChange={(e) => setFTransfer(e.target.value)} placeholder="0" /></label>
-              <label className="pay-field"><span>포인트</span><input inputMode="numeric" className="input-field" value={fPoint} onChange={(e) => setFPoint(e.target.value)} placeholder="0" /></label>
+              <label className="pay-field"><span>카드</span><input aria-label="카드 결제 금액" inputMode="numeric" className="input-field" value={fCard} onChange={(e) => setFCard(e.target.value)} placeholder="0" /></label>
+              <label className="pay-field"><span>현금</span><input aria-label="현금 결제 금액" inputMode="numeric" className="input-field" value={fCash} onChange={(e) => setFCash(e.target.value)} placeholder="0" /></label>
+              <label className="pay-field"><span>계좌이체</span><input aria-label="계좌이체 결제 금액" inputMode="numeric" className="input-field" value={fTransfer} onChange={(e) => setFTransfer(e.target.value)} placeholder="0" /></label>
+              <label className="pay-field"><span>포인트</span><input aria-label="포인트 결제 금액" inputMode="numeric" className="input-field" value={fPoint} onChange={(e) => setFPoint(e.target.value)} placeholder="0" /></label>
             </div>
             <div className="pay-total">합계 <b>{won(formTotal)}</b></div>
 
             <label className="pay-field" style={{ marginTop: 8 }}>
               <span>미수금{autoUnpaidInput && !fUnpaidTouched && fUnpaid ? " (자동계산)" : ""}</span>
-              <input
+              <input aria-label="미수금"
                 inputMode="numeric" className="input-field" value={fUnpaid}
                 onChange={(e) => { setFUnpaidTouched(true); setFUnpaid(e.target.value); }}
                 placeholder="0"
@@ -608,7 +610,7 @@ export default function SalesPage() {
             <DatePicker value={fPaidAt} onChange={setFPaidAt} label="결제일 선택" />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>메모 (선택)</div>
-            <input className="input-field" value={fMemo} onChange={(e) => setFMemo(e.target.value)} placeholder="예: 3개월 할인 적용" />
+            <input aria-label="예: 3개월 할인 적용" className="input-field" value={fMemo} onChange={(e) => setFMemo(e.target.value)} placeholder="예: 3개월 할인 적용" />
 
             {(fProductId || fGoodsId) && !canIssuePass && (
               <div className="perm-guide is-error" style={{ margin: "10px 0 0" }}>
@@ -617,47 +619,47 @@ export default function SalesPage() {
             )}
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => setSheet(false)}>취소</button>
-              <button className="outline-action" disabled={busy || ((!!fProductId || !!fGoodsId) && !canIssuePass)} onClick={handleRegister}>
+              <button className="primary-btn" disabled={busy || ((!!fProductId || !!fGoodsId) && !canIssuePass)} onClick={handleRegister}>
                 {busy ? "등록 중..." : "등록"}
               </button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 지출 등록 시트 */}
       {expSheet && (
-        <div className="sheet-overlay" onClick={() => setExpSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setExpSheet(false)}>
           <div className="sheet sales-export-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">지출 등록</div>
 
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>항목</div>
             <div className="mem-filters" style={{ padding: 0 }}>
               {EXPENSE_CATEGORIES.map((c) => (
-                <button key={c} className={`filter-chip ${eCategory === c ? "on" : ""}`} onClick={() => setECategory(c)}>{c}</button>
+                <button aria-pressed={eCategory === c} key={c} className={`filter-chip ${eCategory === c ? "on" : ""}`} onClick={() => setECategory(c)}>{c}</button>
               ))}
             </div>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>금액</div>
-            <input inputMode="numeric" className="input-field" value={eAmount} onChange={(e) => setEAmount(e.target.value)} placeholder="0" />
+            <input aria-label="지출 금액" inputMode="numeric" className="input-field" value={eAmount} onChange={(e) => setEAmount(e.target.value)} placeholder="0" />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>지출일</div>
             <DatePicker value={eDate} onChange={setEDate} label="지출일 선택" />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>메모 (선택)</div>
-            <input className="input-field" value={eMemo} onChange={(e) => setEMemo(e.target.value)} placeholder="예: 7월 임대료" />
+            <input aria-label="예: 7월 임대료" className="input-field" value={eMemo} onChange={(e) => setEMemo(e.target.value)} placeholder="예: 7월 임대료" />
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => setExpSheet(false)}>취소</button>
               <button className="primary-btn" disabled={busy} onClick={handleRegisterExpense}>{busy ? "등록 중..." : "등록"}</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 엑셀 내보내기 시트 */}
       {csvSheet && (
-        <div className="sheet-overlay" onClick={() => setCsvSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setCsvSheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">매출 엑셀 내보내기</div>
             <div className="menu-section-label" style={{ padding: "4px 0 8px" }}>내보낼 항목을 선택하세요 ({from} ~ {to})</div>
@@ -675,12 +677,12 @@ export default function SalesPage() {
               <button className="outline-action" onClick={handleSalesCsvDownload}>{rows.length}건 내보내기</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 결제 상세 시트 */}
       {payDetail && (
-        <div className="sheet-overlay" onClick={() => setPayDetail(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setPayDetail(null)}>
           <div className="sheet payment-detail-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">결제 상세</div>
             <div className="admin-row"><span className="k">회원</span><span className="v">{payDetail.profileName}</span></div>
@@ -703,12 +705,12 @@ export default function SalesPage() {
                 )}
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 미수금 받기 시트 */}
       {collectFor && (
-        <div className="sheet-overlay" onClick={() => !collecting && setCollectFor(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => !collecting && setCollectFor(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">미수금 받기</div>
             <div className="perm-guide" style={{ margin: "0 0 12px" }}>
@@ -716,21 +718,21 @@ export default function SalesPage() {
               새 결제 내역으로 남고, 이 결제의 미수금이 그만큼 줄어들어요.
             </div>
             <div className="pay-grid">
-              <label className="pay-field"><span>카드</span><input inputMode="numeric" className="input-field" value={cCard} onChange={(e) => setCCard(e.target.value)} placeholder="0" /></label>
-              <label className="pay-field"><span>현금</span><input inputMode="numeric" className="input-field" value={cCash} onChange={(e) => setCCash(e.target.value)} placeholder="0" /></label>
-              <label className="pay-field"><span>계좌이체</span><input inputMode="numeric" className="input-field" value={cTransfer} onChange={(e) => setCTransfer(e.target.value)} placeholder="0" /></label>
-              <label className="pay-field"><span>포인트</span><input inputMode="numeric" className="input-field" value={cPoint} onChange={(e) => setCPoint(e.target.value)} placeholder="0" /></label>
+              <label className="pay-field"><span>카드</span><input aria-label="카드 수금 금액" inputMode="numeric" className="input-field" value={cCard} onChange={(e) => setCCard(e.target.value)} placeholder="0" /></label>
+              <label className="pay-field"><span>현금</span><input aria-label="현금 수금 금액" inputMode="numeric" className="input-field" value={cCash} onChange={(e) => setCCash(e.target.value)} placeholder="0" /></label>
+              <label className="pay-field"><span>계좌이체</span><input aria-label="계좌이체 수금 금액" inputMode="numeric" className="input-field" value={cTransfer} onChange={(e) => setCTransfer(e.target.value)} placeholder="0" /></label>
+              <label className="pay-field"><span>포인트</span><input aria-label="포인트 수금 금액" inputMode="numeric" className="input-field" value={cPoint} onChange={(e) => setCPoint(e.target.value)} placeholder="0" /></label>
             </div>
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>받은 날짜</div>
             <DatePicker value={cPaidAt} onChange={setCPaidAt} label="받은 날짜 선택" />
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>메모 (선택)</div>
-            <input className="input-field" value={cMemo} onChange={(e) => setCMemo(e.target.value)} placeholder="예: 현장에서 카드로 받음" />
+            <input aria-label="예: 현장에서 카드로 받음" className="input-field" value={cMemo} onChange={(e) => setCMemo(e.target.value)} placeholder="예: 현장에서 카드로 받음" />
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" disabled={collecting} onClick={() => setCollectFor(null)}>취소</button>
               <button className="primary-btn" disabled={collecting} onClick={handleCollect}>{collecting ? "처리 중..." : "받기"}</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 매출 드릴다운 시트 */}
@@ -753,7 +755,7 @@ export default function SalesPage() {
             : r.totalAmount;
         const sum = filtered.reduce((s, r) => s + methodAmount(r), 0);
         return (
-          <div className="sheet-overlay" onClick={() => setDrill(null)}>
+          <SheetOverlay className="sheet-overlay" onClick={() => setDrill(null)}>
             <div className="sheet" onClick={(e) => e.stopPropagation()}>
               <div className="sheet-title">{drill.label} 내역</div>
               <div className="hist-summary" style={{ padding: "0 0 8px" }}>
@@ -779,19 +781,19 @@ export default function SalesPage() {
                 <button className="ghost-btn" onClick={() => setDrill(null)}>닫기</button>
               </div>
             </div>
-          </div>
+          </SheetOverlay>
         );
       })()}
 
       {/* 포인트 등록 시트 */}
       {ptSheet && (
-        <div className="sheet-overlay" onClick={() => setPtSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setPtSheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">포인트 {ptSign === "earn" ? "적립" : "사용"}</div>
 
             <div className="mem-filters" style={{ padding: "4px 0 8px" }}>
-              <button className={`filter-chip ${ptSign === "earn" ? "on" : ""}`} onClick={() => setPtSign("earn")}>적립 (+)</button>
-              <button className={`filter-chip ${ptSign === "use" ? "on" : ""}`} onClick={() => setPtSign("use")}>사용 (−)</button>
+              <button aria-pressed={ptSign === "earn"} className={`filter-chip ${ptSign === "earn" ? "on" : ""}`} onClick={() => setPtSign("earn")}>적립 (+)</button>
+              <button aria-pressed={ptSign === "use"} className={`filter-chip ${ptSign === "use" ? "on" : ""}`} onClick={() => setPtSign("use")}>사용 (−)</button>
             </div>
 
             <div className="menu-section-label" style={{ padding: "8px 0 6px" }}>회원</div>
@@ -801,17 +803,17 @@ export default function SalesPage() {
             </select>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>포인트</div>
-            <input inputMode="numeric" className="input-field" value={ptAmount} onChange={(e) => setPtAmount(e.target.value)} placeholder="0" />
+            <input aria-label="포인트 금액" inputMode="numeric" className="input-field" value={ptAmount} onChange={(e) => setPtAmount(e.target.value)} placeholder="0" />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>사유 (선택)</div>
-            <input className="input-field" value={ptReason} onChange={(e) => setPtReason(e.target.value)} placeholder="예: 재등록 적립" />
+            <input aria-label="예: 재등록 적립" className="input-field" value={ptReason} onChange={(e) => setPtReason(e.target.value)} placeholder="예: 재등록 적립" />
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => setPtSheet(false)}>취소</button>
               <button className="primary-btn" disabled={busy} onClick={handleRegisterPoint}>{busy ? "등록 중..." : "등록"}</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
     </div>
   );

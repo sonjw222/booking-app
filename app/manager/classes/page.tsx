@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   수업 관리 화면 (매니저용)
   - 내 센터의 수업 목록 (이번 달)
@@ -1036,7 +1038,7 @@ export default function ClassManagePage() {
           if (dow === 0) cn.push("sun");
           else if (dow === 6) cn.push("sat");
           return (
-            <button key={i} className={cn.join(" ")} onClick={() => setSelectedDay(day)}>
+            <button key={i} aria-label={`${month}월 ${day}일`} aria-pressed={day === selectedDay} className={cn.join(" ")} onClick={() => setSelectedDay(day)}>
               <span className="daynum-wrap"><span className="cal-daynum">{day}</span></span>
               <span className="cal-dots">
                 {isHoliday ? <span className="cal-dot" style={{ background: "var(--danger)" }} />
@@ -1151,13 +1153,13 @@ export default function ClassManagePage() {
 
       {/* 등록/수정 시트 */}
       {formOpen && (
-        <div className="sheet-overlay" onClick={() => setFormOpen(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setFormOpen(false)}>
           <div className="sheet direct-member-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{editId ? "수업 수정" : "수업 등록"}</div>
-            <input className="input-field" placeholder="수업명" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <input aria-label="수업명" className="input-field" placeholder="수업명" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>수업 소개 (선택)</div>
-            <textarea className="input-field" style={{ minHeight: 70, resize: "vertical", lineHeight: 1.5 }}
+            <textarea aria-label="회원이 예약할 때 수업명 아래에 보여요" className="input-field" style={{ minHeight: 70, resize: "vertical", lineHeight: 1.5 }}
               placeholder="회원이 예약할 때 수업명 아래에 보여요" value={form.description ?? ""}
               onChange={(e) => setForm({ ...form, description: e.target.value })} />
 
@@ -1176,7 +1178,7 @@ export default function ClassManagePage() {
                 <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>반복 요일</div>
                 <div className="mem-filters" style={{ padding: 0 }}>
                   {WEEKDAYS.map((d, i) => (
-                    <button key={i} className={`filter-chip ${repDays.includes(i) ? "on" : ""}`} onClick={() => toggleRepDay(i)}>{d}</button>
+                    <button aria-pressed={repDays.includes(i)} key={i} className={`filter-chip ${repDays.includes(i) ? "on" : ""}`} onClick={() => toggleRepDay(i)}>{d}</button>
                   ))}
                 </div>
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>기간</div>
@@ -1214,7 +1216,7 @@ export default function ClassManagePage() {
                                 <input className="input-field" type="time" value={ov.start} onChange={(e) => setOv({ start: e.target.value })} />
                                 <span className="time-sep">~</span>
                                 <input className="input-field" type="time" value={ov.end} onChange={(e) => setOv({ end: e.target.value })} />
-                                <input className="input-field" inputMode="numeric" style={{ maxWidth: 66 }} placeholder="정원"
+                                <input aria-label="정원" className="input-field" inputMode="numeric" style={{ maxWidth: 66 }} placeholder="정원"
                                   value={ov.capacity} onChange={(e) => setOv({ capacity: e.target.value })} />
                               </div>
 
@@ -1222,12 +1224,12 @@ export default function ClassManagePage() {
                                 <div className="perday-sub">
                                   <span className="perday-sub-label">룸</span>
                                   <div className="perday-chips">
-                                    <button className={`filter-chip sm ${ov.roomId === undefined ? "on" : ""}`}
+                                    <button aria-pressed={ov.roomId === undefined} className={`filter-chip sm ${ov.roomId === undefined ? "on" : ""}`}
                                       onClick={() => setOv({ roomId: undefined })}>공통</button>
-                                    <button className={`filter-chip sm ${ov.roomId === null ? "on" : ""}`}
+                                    <button aria-pressed={ov.roomId === null} className={`filter-chip sm ${ov.roomId === null ? "on" : ""}`}
                                       onClick={() => setOv({ roomId: null })}>없음</button>
                                     {rooms.map((r) => (
-                                      <button key={r.id} className={`filter-chip sm ${ov.roomId === r.id ? "on" : ""}`}
+                                      <button aria-pressed={ov.roomId === r.id} key={r.id} className={`filter-chip sm ${ov.roomId === r.id ? "on" : ""}`}
                                         onClick={() => setOv({ roomId: r.id })}>{r.name}</button>
                                     ))}
                                   </div>
@@ -1237,13 +1239,13 @@ export default function ClassManagePage() {
                               <div className="perday-sub">
                                 <span className="perday-sub-label">취소</span>
                                 <div className="deadline-row">
-                                  <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+                                  <input aria-label="요일별 취소 마감 일" className="input-field deadline-num" inputMode="numeric" placeholder="0"
                                     value={ov.cd} onChange={(e) => setOv({ cd: e.target.value })} />
                                   <span className="deadline-unit">일</span>
-                                  <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+                                  <input aria-label="요일별 취소 마감 시간" className="input-field deadline-num" inputMode="numeric" placeholder="0"
                                     value={ov.ch} onChange={(e) => setOv({ ch: e.target.value })} />
                                   <span className="deadline-unit">시간</span>
-                                  <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+                                  <input aria-label="요일별 취소 마감 분" className="input-field deadline-num" inputMode="numeric" placeholder="0"
                                     value={ov.cm} onChange={(e) => setOv({ cm: e.target.value })} />
                                   <span className="deadline-unit">분 전</span>
                                 </div>
@@ -1277,15 +1279,15 @@ export default function ClassManagePage() {
               </div>
               <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>수업 형태</div>
               <div className="mem-filters" style={{ padding: 0 }}>
-                <button className={`filter-chip ${form.classFormat !== "private" ? "on" : ""}`}
+                <button aria-pressed={form.classFormat !== "private"} className={`filter-chip ${form.classFormat !== "private" ? "on" : ""}`}
                   onClick={() => setForm({ ...form, classFormat: "group" })}>그룹</button>
-                <button className={`filter-chip ${form.classFormat === "private" ? "on" : ""}`}
+                <button aria-pressed={form.classFormat === "private"} className={`filter-chip ${form.classFormat === "private" ? "on" : ""}`}
                   onClick={() => setForm({ ...form, classFormat: "private", capacity: 1 })}>프라이빗(1:1)</button>
               </div>
 
               <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>정원</div>
               <div className="deadline-row">
-                <input className="input-field" inputMode="numeric" style={{ maxWidth: 90 }}
+                <input aria-label="8" className="input-field" inputMode="numeric" style={{ maxWidth: 90 }}
                   value={form.capacity} placeholder="8"
                   disabled={form.classFormat === "private"}
                   onChange={(e) => {
@@ -1302,9 +1304,9 @@ export default function ClassManagePage() {
               <>
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>룸(장소)</div>
                 <div className="mem-filters" style={{ padding: 0 }}>
-                  <button className={`filter-chip ${!form.roomId ? "on" : ""}`} onClick={() => setForm({ ...form, roomId: null })}>미지정</button>
+                  <button aria-pressed={!form.roomId} className={`filter-chip ${!form.roomId ? "on" : ""}`} onClick={() => setForm({ ...form, roomId: null })}>미지정</button>
                   {rooms.map((r) => (
-                    <button key={r.id} className={`filter-chip ${form.roomId === r.id ? "on" : ""}`} onClick={() => setForm({ ...form, roomId: r.id })}>{r.name}</button>
+                    <button aria-pressed={form.roomId === r.id} key={r.id} className={`filter-chip ${form.roomId === r.id ? "on" : ""}`} onClick={() => setForm({ ...form, roomId: r.id })}>{r.name}</button>
                   ))}
                 </div>
               </>
@@ -1313,13 +1315,13 @@ export default function ClassManagePage() {
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>예약 가능 시간(마감)</div>
             <div className="deadline-row">
               <span className="deadline-pre">수업 시작</span>
-              <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+              <input aria-label="예약 마감 일" className="input-field deadline-num" inputMode="numeric" placeholder="0"
                 value={bookD} onChange={(e) => setBookD(e.target.value)} />
               <span className="deadline-unit">일</span>
-              <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+              <input aria-label="예약 마감 시간" className="input-field deadline-num" inputMode="numeric" placeholder="0"
                 value={bookH} onChange={(e) => setBookH(e.target.value)} />
               <span className="deadline-unit">시간</span>
-              <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+              <input aria-label="예약 마감 분" className="input-field deadline-num" inputMode="numeric" placeholder="0"
                 value={bookM} onChange={(e) => setBookM(e.target.value)} />
               <span className="deadline-unit">분 전까지</span>
             </div>
@@ -1340,13 +1342,13 @@ export default function ClassManagePage() {
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>예약취소 가능 시간</div>
                 <div className="deadline-row">
                   <span className="deadline-pre">수업 시작</span>
-                  <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+                  <input aria-label="취소 마감 일" className="input-field deadline-num" inputMode="numeric" placeholder="0"
                     value={cancelD} onChange={(e) => setCancelD(e.target.value)} />
                   <span className="deadline-unit">일</span>
-                  <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+                  <input aria-label="취소 마감 시간" className="input-field deadline-num" inputMode="numeric" placeholder="0"
                     value={cancelH} onChange={(e) => setCancelH(e.target.value)} />
                   <span className="deadline-unit">시간</span>
-                  <input className="input-field deadline-num" inputMode="numeric" placeholder="0"
+                  <input aria-label="취소 마감 분" className="input-field deadline-num" inputMode="numeric" placeholder="0"
                     value={cancelM} onChange={(e) => setCancelM(e.target.value)} />
                   <span className="deadline-unit">분 전까지</span>
                 </div>
@@ -1440,7 +1442,7 @@ export default function ClassManagePage() {
             ) : (
               <>
                 {passProducts.length > 1 && (
-                  <input
+                  <input aria-label="수강권 이름 검색"
                     className="input-field"
                     style={{ marginBottom: 8 }}
                     placeholder="수강권 이름 검색"
@@ -1486,7 +1488,7 @@ export default function ClassManagePage() {
                     );
                   }
                   const chip = (p: Product) => (
-                    <button
+                    <button aria-pressed={selectedProducts.includes(p.id)}
                       key={p.id}
                       className={`filter-chip ${selectedProducts.includes(p.id) ? "on" : ""}`}
                       onClick={() => {
@@ -1553,7 +1555,7 @@ export default function ClassManagePage() {
             ) : (
               <>
                 {staffList.length > 1 && (
-                  <input
+                  <input aria-label="강사 이름 검색"
                     className="input-field"
                     style={{ marginBottom: 8 }}
                     placeholder="강사 이름 검색"
@@ -1574,7 +1576,7 @@ export default function ClassManagePage() {
                   return (
                     <div className="mem-filters class-trainers-list" style={{ padding: "0 0 6px" }}>
                       {filtered.map((s) => (
-                        <button
+                        <button aria-pressed={selectedTrainers.includes(s.accountId)}
                           key={s.accountId}
                           className={`filter-chip ${selectedTrainers.includes(s.accountId) ? "on" : ""}`}
                           onClick={() => {
@@ -1649,7 +1651,7 @@ export default function ClassManagePage() {
                 })}
                 {canAddMemo && (
                   <div style={{ display: "flex", gap: 6 }}>
-                    <textarea
+                    <textarea aria-label="메모를 남겨보세요"
                       className="input-field" style={{ flex: 1, minHeight: 40 }}
                       placeholder="메모를 남겨보세요" value={memoInput} onChange={(e) => setMemoInput(e.target.value)}
                     />
@@ -1663,12 +1665,12 @@ export default function ClassManagePage() {
               {busy ? "저장 중..." : editId ? "수정하기" : "등록하기"}
             </button>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 삭제 확인 시트 */}
       {deleteTarget && (
-        <div className="sheet-overlay" onClick={() => setDeleteTarget(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setDeleteTarget(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">수업 삭제</div>
             <div className="perm-guide" style={{ margin: "0 0 14px" }}>
@@ -1695,13 +1697,13 @@ export default function ClassManagePage() {
               </div>
             )}
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 예약자 명단 시트 */}
       {/* 보강 예약 - 회원 선택 */}
       {bookSheet && rosterClass && (
-        <div className="sheet-overlay on-top" onClick={() => setBookSheet(false)}>
+        <SheetOverlay className="sheet-overlay on-top" onClick={() => setBookSheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">보강 예약</div>
             <div className="perm-guide" style={{ margin: "0 0 12px" }}>
@@ -1711,7 +1713,7 @@ export default function ClassManagePage() {
 
             {!bookPick ? (
               <>
-                <input className="input-field" placeholder="회원 이름 검색"
+                <input aria-label="회원 이름 검색" className="input-field" placeholder="회원 이름 검색"
                   value={bookKw} onChange={(e) => setBookKw(e.target.value)} />
                 <div className="book-member-list">
                   {bookMembers
@@ -1748,11 +1750,11 @@ export default function ClassManagePage() {
                   </div>
                 ) : (
                   <div className="mem-filters" style={{ padding: 0 }}>
-                    <button className={`filter-chip ${!bookMemId ? "on" : ""}`} onClick={() => setBookMemId(null)}>
+                    <button aria-pressed={!bookMemId} className={`filter-chip ${!bookMemId ? "on" : ""}`} onClick={() => setBookMemId(null)}>
                       사용 안 함
                     </button>
                     {bookPick.memberships.map((mm) => (
-                      <button key={mm.id} className={`filter-chip ${bookMemId === mm.id ? "on" : ""}`}
+                      <button aria-pressed={bookMemId === mm.id} key={mm.id} className={`filter-chip ${bookMemId === mm.id ? "on" : ""}`}
                         onClick={() => setBookMemId(mm.id)}>
                         {mm.name}{mm.remaining != null ? ` ${mm.remaining}회` : ""}
                       </button>
@@ -1783,12 +1785,12 @@ export default function ClassManagePage() {
               </button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 미배치 수강권 */}
       {unplacedSheet && (
-        <div className="sheet-overlay" onClick={() => setUnplacedSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setUnplacedSheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">배치 안 된 수강권</div>
             <div className="perm-guide" style={{ margin: "0 0 12px" }}>
@@ -1829,22 +1831,22 @@ export default function ClassManagePage() {
 
             <button className="ghost-btn" style={{ width: "100%", marginTop: 12 }} onClick={() => setUnplacedSheet(false)}>닫기</button>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 스케줄 복사 */}
       {copySheet && (
-        <div className="sheet-overlay" onClick={() => setCopySheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setCopySheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">스케줄 복사</div>
 
             {/* 복사 방식 */}
             <div className="mem-filters" style={{ padding: 0 }}>
-              <button className={`filter-chip ${copyMode === "weekday" ? "on" : ""}`}
+              <button aria-pressed={copyMode === "weekday"} className={`filter-chip ${copyMode === "weekday" ? "on" : ""}`}
                 onClick={() => { setCopyMode("weekday"); setCopyPlan(null); if (copyFrom) loadCopySource(copyFrom, "weekday"); }}>
                 요일 기준
               </button>
-              <button className={`filter-chip ${copyMode === "date" ? "on" : ""}`}
+              <button aria-pressed={copyMode === "date"} className={`filter-chip ${copyMode === "date" ? "on" : ""}`}
                 onClick={() => { setCopyMode("date"); setCopyPlan(null); if (copyFrom) loadCopySource(copyFrom, "date"); }}>
                 날짜 기준
               </button>
@@ -1945,11 +1947,11 @@ export default function ClassManagePage() {
               </button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {rosterClass && (
-        <div className="sheet-overlay" onClick={() => setRosterClass(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setRosterClass(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{rosterClass.title} 예약자</div>
             <button className="ghost-btn" style={{ marginBottom: 10 }} onClick={openBookSheet}>
@@ -2023,12 +2025,12 @@ export default function ClassManagePage() {
               <button className="ghost-btn" onClick={() => setRosterClass(null)}>닫기</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 회원 정보 팝업 (명단에서 이름 클릭) */}
       {memberInfo && (
-        <div className="sheet-overlay" onClick={() => setMemberInfo(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setMemberInfo(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{memberInfo.name}</div>
             {!memberInfo.data ? (
@@ -2064,14 +2066,14 @@ export default function ClassManagePage() {
               <button className="ghost-btn" onClick={() => setMemberInfo(null)}>닫기</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
       {/* 직접배치 - 대상 회원 선택 */}
       {assignMemberSheet && (
-        <div className="sheet-overlay on-top" onClick={() => setAssignMemberSheet(false)}>
+        <SheetOverlay className="sheet-overlay on-top" onClick={() => setAssignMemberSheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">직접배치 대상 회원 선택</div>
-            <input className="input-field" placeholder="회원 이름 검색"
+            <input aria-label="회원 이름 검색" className="input-field" placeholder="회원 이름 검색"
               value={assignKw} onChange={(e) => setAssignKw(e.target.value)} />
             <div className="book-member-list">
               {assignMembersList
@@ -2102,12 +2104,12 @@ export default function ClassManagePage() {
               <button className="ghost-btn" onClick={() => setAssignMemberSheet(false)}>취소</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 직접배치 - 확인 팝업 (일반 직접배치 / 무료 추가 배치 / 정원 초과) */}
       {assignConfirm && assignMember && (
-        <div className="sheet-overlay on-top" onClick={() => !assignBusy && setAssignConfirm(null)}>
+        <SheetOverlay className="sheet-overlay on-top" onClick={() => !assignBusy && setAssignConfirm(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             {assignConfirm.capacityBlocked ? (
               <>
@@ -2144,7 +2146,7 @@ export default function ClassManagePage() {
                 ) : (
                   <div className="mem-filters" style={{ padding: 0 }}>
                     {assignMember.memberships.map((mm) => (
-                      <button key={mm.id} className={`filter-chip ${assignConfirm.membershipId === mm.id ? "on" : ""}`}
+                      <button aria-pressed={assignConfirm.membershipId === mm.id} key={mm.id} className={`filter-chip ${assignConfirm.membershipId === mm.id ? "on" : ""}`}
                         onClick={() => setAssignConfirm({ ...assignConfirm, membershipId: mm.id })}>
                         {mm.name}{mm.remaining != null ? ` ${mm.remaining}회` : ""}
                       </button>
@@ -2165,7 +2167,7 @@ export default function ClassManagePage() {
             </div>
             <div className="mem-filters" style={{ padding: 0 }}>
               {ADMIN_REASON_CODES.map((code) => (
-                <button key={code} className={`filter-chip ${assignConfirm.reasonCode === code ? "on" : ""}`}
+                <button aria-pressed={assignConfirm.reasonCode === code} key={code} className={`filter-chip ${assignConfirm.reasonCode === code ? "on" : ""}`}
                   onClick={() => setAssignConfirm({ ...assignConfirm, reasonCode: code })}>
                   {ADMIN_REASON_LABELS[code]}
                 </button>
@@ -2173,7 +2175,7 @@ export default function ClassManagePage() {
             </div>
             {assignConfirm.reasonCode === "OTHER" && (
               <>
-                <textarea className="input-field" style={{ marginTop: 8, minHeight: 60, width: "100%" }}
+                <textarea aria-label="상세 사유 (필수, 최대 200자)" className="input-field" style={{ marginTop: 8, minHeight: 60, width: "100%" }}
                   placeholder="상세 사유 (필수, 최대 200자)" maxLength={200}
                   value={assignConfirm.reasonDetail}
                   onChange={(e) => setAssignConfirm({ ...assignConfirm, reasonDetail: e.target.value })} />
@@ -2190,19 +2192,19 @@ export default function ClassManagePage() {
               </button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 관리자 배치 취소 확인 */}
       {adminCancelTarget && (
-        <div className="sheet-overlay on-top" onClick={() => !adminCancelBusy && setAdminCancelTarget(null)}>
+        <SheetOverlay className="sheet-overlay on-top" onClick={() => !adminCancelBusy && setAdminCancelTarget(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">이 회원의 관리자 배치 예약을 취소하시겠습니까?</div>
             <div className="perm-guide" style={{ margin: "0 0 12px" }}>
               관리자 배치 취소 내역은 별도로 기록되며 회원에게 취소 알림이 전송됩니다.
             </div>
             <div className="hist-summary" style={{ padding: "0 0 8px" }}>{adminCancelTarget.name} 회원</div>
-            <input className="input-field" placeholder="취소 사유 (선택)"
+            <input aria-label="취소 사유 (선택)" className="input-field" placeholder="취소 사유 (선택)"
               value={adminCancelReason} onChange={(e) => setAdminCancelReason(e.target.value)} />
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" disabled={adminCancelBusy} onClick={() => setAdminCancelTarget(null)}>취소</button>
@@ -2211,7 +2213,7 @@ export default function ClassManagePage() {
               </button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
     </div>

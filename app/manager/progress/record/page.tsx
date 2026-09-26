@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../../components/SheetOverlay";
+
 /*
   매니저 - 진도 기록 (2단계)
   - 회원 선택 → 오늘 가르친 기술 여러 개 체크 → 저장
@@ -270,7 +272,7 @@ function ProgressRecordContent() {
 
       {/* 진도 기록 입력 시트 */}
       {addSheet && (
-        <div className="sheet-overlay" onClick={() => setAddSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setAddSheet(false)}>
           <div className="sheet prog-add-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">진도 기록</div>
 
@@ -307,7 +309,7 @@ function ProgressRecordContent() {
               </button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
     </div>
   );

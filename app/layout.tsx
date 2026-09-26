@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
-import { cookies } from "next/headers";
 import "./globals.css";
 import "./workspace.css";
 import { ImageViewerProvider } from "./components/ImageViewer";
@@ -9,7 +8,6 @@ import AppConfirmProvider from "./components/AppConfirmProvider";
 import GlobalBottomNav from "./components/GlobalBottomNav";
 import CapacitorBootstrap from "./components/CapacitorBootstrap";
 import NavigationPolicy from "./components/NavigationPolicy";
-import { parseHasUsableMembershipCookie } from "../lib/navState";
 
 export const metadata: Metadata = {
   title: "모하빗",
@@ -28,23 +26,14 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // 릴리스 폴리시 배치(2026-09-14) — 이 앱은 클라이언트 라우팅이 없어(아래 인라인 스크립트
-  // 주석 참고) 탭을 옮길 때마다 이 레이아웃부터 서버에서 다시 렌더링된다. "예약"/"내 예약"
-  // 탭 노출 여부(하단 nav)를 클라이언트에서만 캐싱(localStorage)하면 서버가 그 값을 몰라
-  // 매번 "탭 3개로 먼저 그려졌다가 5개로 바뀌는" 깜빡임이 생긴다 — 쿠키는 서버도 읽을 수
-  // 있으므로 여기서 미리 읽어 GlobalBottomNav에 최초 렌더링 값으로 내려준다. 실제 자격
-  // 판정은 여전히 BottomNav가 클라이언트에서 다시 확인(lib/navState.ts) — 이 값은 그 결과가
-  // 나오기 전까지 뭘 먼저 그릴지 정하는 힌트일 뿐이다.
-  const cookieStore = await cookies();
-  const initialHasUsable = parseHasUsableMembershipCookie(cookieStore.get("nav_has_usable_membership")?.value);
   return (
     <html
-      lang="en"
+      lang="ko"
       // data-theme는 아래 인라인 스크립트가 하이드레이션 전에 클라이언트에서만 붙인다
       // (서버는 localStorage를 모름) — 이 경우의 불일치는 의도된 것이므로 React가
       // hydration mismatch 콘솔 에러를 내지 않도록 명시적으로 억제한다.
@@ -92,7 +81,7 @@ export default async function RootLayout({
         <SessionWatcher />
         <AppConfirmProvider />
         <ImageViewerProvider>{children}</ImageViewerProvider>
-        <GlobalBottomNav initialHasUsable={initialHasUsable} />
+        <GlobalBottomNav />
       </body>
     </html>
   );

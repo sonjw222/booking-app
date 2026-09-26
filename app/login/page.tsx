@@ -2,12 +2,8 @@
 
 /*
   로그인 / 회원가입 화면 (Supabase Auth 연동)
-  - 회원가입 시 일반(member) / 센터 운영자(manager) 가입 유형 선택 — 내부 role 값은
-    그대로지만 화면 표시는 UI-003 정책에 따라 "일반"/"센터 운영자"로 바꿨다.
-    (ACL-005: 이 선택은 최초 온보딩 분기일 뿐, 이후 관리자 모드 진입 자격과는 무관하다 —
-     진입 자격은 오직 active manager_centers 소속 여부로만 판단한다.)
-  - 센터 운영자 선택 시 센터 정보 입력란 표시(app/components/CenterRegistrationForm.tsx,
-    마이페이지 "내 센터 등록하기"와 공용)
+  - 회원가입은 이메일 → 이름/휴대폰 인증·동의 순서로 진행
+  - 센터 등록은 가입 완료 후 마이페이지에서 별도로 진행
   - 가입 성공 시:
       · 공통: accounts 행 생성
       · 일반: 본인 profiles 행 생성 (is_primary=true)
@@ -17,10 +13,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase, REMEMBER_ME_KEY } from "../../lib/supabaseClient";
-import UiIcon from "../components/UiIcon";
-import CenterRegistrationForm, { type CenterFieldsValue } from "../components/CenterRegistrationForm";
-import AddressField from "../components/AddressField";
-import { validateCenterRegistrationInput, registerCenterForAccount } from "../../lib/centers";
+import AppButton from "../components/AppButton";
 import { setBootstrapSuppressed, ensureAccountForCurrentUser } from "../../lib/authAccount";
 import { startNaverLogin } from "../../lib/naverAuth";
 import { startKakaoLogin } from "../../lib/kakaoAuth";
@@ -36,9 +29,6 @@ import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
 
 type Mode = "login" | "signup";
 // 내부 키는 그대로 유지(회원=member/센터 운영자=manager) — UI-003은 화면 표시 문구만 바꾼다.
-type SignupRole = "member" | "manager";
-
-const EMPTY_CENTER_FIELDS: CenterFieldsValue = { name: "", address: "", phone: "", businessNumber: "", licenseFileName: "" };
 
 // 실제로는 이메일 인증(Confirm email)을 쓰지 않는데도 "확인 메일이 발송됐어요"라고 안내하던
 // 문제(섹션 1) — signUp 직후 세션이 바로 확보되는 것 자체가 이 프로젝트에서 이메일 인증이
@@ -47,7 +37,7 @@ export const SIGNUP_SUCCESS_MESSAGE = "회원가입이 완료되었습니다. �
 
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("login");
-  const [role, setRole] = useState<SignupRole>("member");
+  const [signupStep, setSignupStep] = useState<"account" | "profile">("account");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -65,14 +55,6 @@ export default function LoginPage() {
   const [otpCooldown, setOtpCooldown] = useState(0);
   const [otpMessage, setOtpMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
   const [otpDevCode, setOtpDevCode] = useState<string | null>(null); // 테스트 우회 응답에만 들어옴(운영에서는 항상 null)
-  // 도로명주소(선택) — 다음 우편번호 팝업으로 채우는 base + 직접 입력하는 상세주소, 합쳐서 accounts.address에 저장
-  const [addressBase, setAddressBase] = useState("");
-  const [addressDetail, setAddressDetail] = useState("");
-
-  // 센터 운영자 가입용 센터 정보 — app/mypage/register-center/page.tsx와 완전히 같은
-  // 필드 타입/입력 컴포넌트(CenterRegistrationForm)·저장 로직(lib/centers.ts)을 공유한다.
-  const [centerFields, setCenterFields] = useState<CenterFieldsValue>(EMPTY_CENTER_FIELDS);
-  const [licenseFile, setLicenseFile] = useState<File | null>(null); // 실제 파일
 
   const [loading, setLoading] = useState(false);
   // 소셜 버튼 각각의 리다이렉트 진행 상태 — 성공하면 곧바로 provider 페이지로 페이지 전체가
@@ -244,13 +226,6 @@ export default function LoginPage() {
       setMessage({ type: "error", text: "휴대폰 인증을 완료해주세요" });
       return;
     }
-    if (role === "manager") {
-      const centerValidationError = validateCenterRegistrationInput({ ...centerFields, licenseFile });
-      if (centerValidationError) {
-        setMessage({ type: "error", text: centerValidationError });
-        return;
-      }
-    }
     setLoading(true);
     setMessage(null);
 
@@ -294,16 +269,15 @@ export default function LoginPage() {
         }
 
         // 1) accounts 행 생성 (회원+매니저 여부 표시)
-        const address = addressDetail.trim() ? `${addressBase} ${addressDetail}`.trim() : addressBase.trim();
         const { data: account, error: accErr } = await supabase
           .from("accounts")
           .insert({
             auth_id: data.user.id,
             name,
             phone,
-            address: address || null,
-            is_member: true, // 매니저도 기본적으로 회원 역할은 가짐
-            is_manager: role === "manager",
+            address: null,
+            is_member: true,
+            is_manager: false,
             // 마케팅 동의(선택)는 이 화면의 agreeMarketing 체크박스 값을 그대로 저장한다 —
             // marketing_consent_at은 "동의한 시각"이지 가입 시각이 아니므로, 동의 안 했으면
             // null로 둔다(add_marketing_consent.sql 참고).
@@ -324,17 +298,6 @@ export default function LoginPage() {
           name,
           is_primary: true,
         });
-
-        // 3) 센터 운영자면 센터 + manager_centers 생성 — app/mypage/register-center/page.tsx와
-        //    완전히 같은 저장 로직(lib/centers.ts)을 재사용한다(로직 복제 금지, UI-003/ACL-005).
-        if (role === "manager") {
-          try {
-            await registerCenterForAccount({ ...centerFields, licenseFile });
-          } catch (e: any) {
-            setMessage({ type: "error", text: e.message });
-            return;
-          }
-        }
 
         // 위 단계까지 오면 session이 이미 확보돼 있다(= 이메일 인증이 꺼져 있어 확인 메일 자체가
         // 발송되지 않는 상태) — accounts/profiles/centers insert에만 필요했던 세션이므로, 로그인
@@ -463,6 +426,15 @@ export default function LoginPage() {
       setMessage({ type: "error", text: "이메일과 비밀번호를 입력해주세요" });
       return;
     }
+    if (mode === "signup" && signupStep === "account") {
+      if (password.length < 6) {
+        setMessage({ type: "error", text: "비밀번호는 6자 이상 입력해주세요" });
+        return;
+      }
+      setMessage(null);
+      setSignupStep("profile");
+      return;
+    }
     if (mode === "signup" && (!agreeTerms || !agreePrivacy)) {
       setMessage({ type: "error", text: "이용약관과 개인정보처리방침에 동의해주세요" });
       return;
@@ -491,45 +463,31 @@ export default function LoginPage() {
       <section className={`auth-panel ${mode}`}>
 
         <div className="mode-tabs">
-          <button className={`mode-tab ${mode === "login" ? "on" : ""}`} onClick={() => { setMode("login"); setMessage(null); }}>
+          <button className={`mode-tab ${mode === "login" ? "on" : ""}`} onClick={() => { setMode("login"); setSignupStep("account"); setMessage(null); }}>
             로그인
           </button>
-          <button className={`mode-tab ${mode === "signup" ? "on" : ""}`} onClick={() => { setMode("signup"); setMessage(null); }}>
+          <button className={`mode-tab ${mode === "signup" ? "on" : ""}`} onClick={() => { setMode("signup"); setSignupStep("account"); setMessage(null); }}>
             회원가입
           </button>
         </div>
 
         <div className="auth-panel-heading">
-          <h2>{mode === "login" ? "다시 만나서 반가워요" : "계정을 만들어볼까요?"}</h2>
-          <p>{mode === "login" ? "가입한 이메일로 로그인하세요." : "예약에 필요한 기본 정보만 입력해주세요."}</p>
+          <h2>{mode === "login" ? "다시 만나서 반가워요" : signupStep === "account" ? "계정을 만들어볼까요?" : "이제 기본 정보만 확인할게요"}</h2>
+          <p>{mode === "login" ? "가입한 이메일로 로그인하세요." : signupStep === "account" ? "먼저 로그인할 이메일과 비밀번호를 입력해주세요." : "이름과 휴대폰 번호를 인증하면 가입이 끝나요."}</p>
         </div>
-
-        {/* 회원가입일 때만 역할 선택 */}
-        {mode === "signup" && (
-          <div className="role-select">
-            <button className={`role-btn ${role === "member" ? "on" : ""}`} onClick={() => setRole("member")}>
-              <div className="role-emoji"><UiIcon name="user" size={25} /></div>
-              <div className="role-name">일반 회원</div>
-              <div className="role-desc">수업 검색과 예약</div>
-            </button>
-            <button className={`role-btn ${role === "manager" ? "on" : ""}`} onClick={() => setRole("manager")}>
-              <div className="role-emoji"><UiIcon name="building" size={25} /></div>
-              <div className="role-name">센터 운영자</div>
-              <div className="role-desc">센터 등록과 운영</div>
-            </button>
-          </div>
+        {mode === "signup" && <div className="signup-progress" aria-label={`회원가입 ${signupStep === "account" ? "1" : "2"}단계, 총 2단계`}>
+          <span className="on" /><span className={signupStep === "profile" ? "on" : ""} />
+        </div>}
+        {mode === "signup" && signupStep === "profile" && (
+          <input aria-label="이름" className="input-field" placeholder="이름" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
         )}
-
-        {mode === "signup" && (
-          <input className="input-field" placeholder={role === "manager" ? "대표자 이름" : "이름"} value={name} onChange={(e) => setName(e.target.value)} />
-        )}
-        {mode === "signup" && (
+        {mode === "signup" && signupStep === "profile" && (
           <>
             <div style={{ display: "flex", gap: 8 }}>
               <input
                 className="input-field"
                 type="tel"
-                placeholder={role === "manager" ? "대표자 휴대폰 번호" : "휴대폰 번호"}
+                aria-label="휴대폰 번호" placeholder="휴대폰 번호"
                 value={phone}
                 onChange={(e) => handlePhoneChange(e.target.value)}
                 disabled={otpVerified}
@@ -568,27 +526,15 @@ export default function LoginPage() {
             {otpMessage && <div className={`auth-msg ${otpMessage.type}`} style={{ marginTop: 8 }}>{otpMessage.text}</div>}
           </>
         )}
-        {mode === "signup" && (
-          <AddressField
-            base={addressBase}
-            detail={addressDetail}
-            onChangeBase={setAddressBase}
-            onChangeDetail={setAddressDetail}
-            disabled={loading}
-          />
-        )}
-        <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>
-          {mode === "signup" ? "이메일로 가입하기" : "이메일로 로그인"}
-        </div>
-        <input className="input-field" type="email" placeholder="이메일" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input
-          className="input-field"
-          type="password"
-          placeholder="비밀번호 (6자 이상)"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
-        />
+        {(mode === "login" || signupStep === "account") && <>
+          <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>
+            {mode === "signup" ? "이메일로 가입하기" : "이메일로 로그인"}
+          </div>
+          <input className="input-field" aria-label="이메일" type="email" autoComplete="email" placeholder="이메일" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input className="input-field" aria-label="비밀번호" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            placeholder="비밀번호 (6자 이상)" value={password} onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submit()} />
+        </>}
 
         {mode === "login" && (
           <div className="login-row-options">
@@ -600,17 +546,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* 센터 운영자 가입 시 센터 정보 — app/mypage/register-center/page.tsx와 같은 컴포넌트 재사용 */}
-        {mode === "signup" && role === "manager" && (
-          <CenterRegistrationForm
-            value={centerFields}
-            onChange={(patch) => setCenterFields((f) => ({ ...f, ...patch }))}
-            onFileSelect={setLicenseFile}
-            disabled={loading}
-          />
-        )}
-
-        {mode === "signup" && (
+        {mode === "signup" && signupStep === "profile" && (
           <div className="signup-agree">
             <label className="signup-agree-row">
               <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} />
@@ -629,11 +565,12 @@ export default function LoginPage() {
 
         {message && <div className={`auth-msg ${message.type}`}>{message.text}</div>}
 
-        <button className="primary-btn login-submit" onClick={submit} disabled={loading || (mode === "signup" && !otpVerified)}>
-          {loading ? "처리 중..." : mode === "login" ? "로그인" : role === "manager" ? "센터 운영자로 가입하기" : "일반으로 가입하기"}
-        </button>
+        <AppButton className="login-submit" onClick={submit} disabled={loading || (mode === "signup" && signupStep === "profile" && !otpVerified)}>
+          {loading ? "처리 중..." : mode === "login" ? "로그인" : signupStep === "account" ? "다음" : "회원가입 완료"}
+        </AppButton>
+        {mode === "signup" && signupStep === "profile" && <button className="auth-step-back" type="button" onClick={() => { setSignupStep("account"); setMessage(null); }}>이메일 수정하기</button>}
 
-        <div className="divider-line">
+        {(mode === "login" || signupStep === "account") && <><div className="divider-line">
           <div className="line" /><span>또는</span><div className="line" />
         </div>
 
@@ -665,19 +602,15 @@ export default function LoginPage() {
           {showAppleButton && (
           <button className="social-btn apple" onClick={() => handleSocial("apple")} disabled={!!socialLoading}>
             <span className="social-ic" aria-hidden="true">
-              {/* viewBox를 path의 실제 bbox(-0.5 1.9 22 22, getBBox()로 측정)에 맞춰
-                  정사각형으로 잘라 시각 중앙에 오도록 함 — 원래 "0 0 24 24"는 심볼
-                  자체가 왼쪽으로 치우쳐 있어 원 안에서 중앙정렬이 안 맞았다.
-                  실기기 QA(2026-09-14) — 27px는 카카오 심볼(30px)보다 눈에 띄게 작아
-                  버튼 행에서 시각적 무게가 어긋나 보였다("부자연스럽다") — 같은 비율
-                  (viewBox·path 그대로, 크기만) 30px로 맞춤. Apple 마크 자체의 형태·비율·
-                  색상(검정 배경 위 흰색 — Apple 공식 "Black" 버튼 스타일)은 변형하지 않음. */}
-              <svg width="30" height="30" viewBox="-0.5 1.9 22 22" fill="currentColor"><path d="M16.7 2.3c.1 1-.3 2-.9 2.7-.6.7-1.6 1.3-2.6 1.2-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.3ZM20.5 17c-.6 1.3-.9 1.9-1.6 3-1 1.5-2.5 3.4-4.3 3.4-1.6 0-2-1-4.1-1s-2.6 1-4.2 1c-1.8 0-3.2-1.7-4.2-3.2C.4 17-.4 12.7 1.6 9.7c1-1.5 2.6-2.4 4.2-2.4 1.6 0 2.7 1.1 4 1.1 1.3 0 2.1-1.1 4-1.1 1.3 0 2.7.7 3.7 1.9-3.3 1.8-2.8 6.5.3 7.8Z"/></svg>
+              {/* Official Apple logo-only button artwork, downloaded at 3× resolution. */}
+              <img src="/brand/apple-signin.png" width="30" height="30" alt="" />
             </span>
             <span className="sr-only">{socialLoading === "apple" ? "이동 중..." : mode === "signup" ? "Apple로 가입하기" : "Apple로 계속하기"}</span>
           </button>
           )}
         </div>
+        </>}
+        {mode === "signup" && <p className="auth-center-note">센터를 운영하시나요? 가입 후 마이페이지에서 센터를 등록할 수 있어요.</p>}
       </section>
     </div>
   );

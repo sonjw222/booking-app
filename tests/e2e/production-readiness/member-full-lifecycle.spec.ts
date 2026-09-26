@@ -121,6 +121,9 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
     await test.step("회원가입: 신규 이메일로 일반 회원 가입", async () => {
       await page.goto("/login");
       await page.locator(".mode-tab", { hasText: "회원가입" }).click();
+      await page.locator('input[type="email"]').fill(email);
+      await page.locator('input[type="password"]').fill(password);
+      await page.getByRole("button", { name: "다음", exact: true }).click();
       await page.locator('input[placeholder="이름"]').fill("E2E 생애주기 회원");
       await page.locator('input[type="tel"]').fill(phone);
       // 휴대폰 인증(OTP, 2026-09-05) — 예약된 테스트 접두사라 실제 Aligo 호출 없이
@@ -130,8 +133,6 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
       await page.locator('input[placeholder="인증번호 6자리"]').fill(devCode.replace(/[^0-9]/g, ""));
       await page.getByRole("button", { name: "인증하기" }).click();
       await expect(page.getByRole("button", { name: "인증완료" })).toBeVisible({ timeout: 10_000 });
-      await page.locator('input[type="email"]').fill(email);
-      await page.locator('input[type="password"]').fill(password);
       // 이용약관/개인정보처리방침 동의는 필수라 체크 안 하면 제출이 막힌다(app/login/page.tsx)
       await page.locator('.signup-agree-row input[type="checkbox"]').nth(0).check();
       await page.locator('.signup-agree-row input[type="checkbox"]').nth(1).check();

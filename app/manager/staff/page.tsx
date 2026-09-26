@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   매니저 - 스태프 & 권한 관리
   - 스태프 탭: 초대(계정 검색), 역할 변경, 삭제
@@ -250,7 +252,7 @@ export default function StaffPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
               {c.name}
             </button>
           ))}
@@ -258,8 +260,8 @@ export default function StaffPage() {
       )}
 
       <div className="perm-tabs">
-        <button className={`perm-tab ${tab === "staff" ? "on" : ""}`} onClick={() => setTab("staff")}>스태프</button>
-        <button className={`perm-tab ${tab === "perm" ? "on" : ""}`} onClick={() => setTab("perm")}>역할별 권한</button>
+        <button aria-pressed={tab === "staff"} className={`perm-tab ${tab === "staff" ? "on" : ""}`} onClick={() => setTab("staff")}>스태프</button>
+        <button aria-pressed={tab === "perm"} className={`perm-tab ${tab === "perm" ? "on" : ""}`} onClick={() => setTab("perm")}>역할별 권한</button>
       </div>
 
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
@@ -319,7 +321,7 @@ export default function StaffPage() {
 
           <div className="mem-filters">
             {roles.map((r) => (
-              <button
+              <button aria-pressed={activeRoleId === r.id}
                 key={r.id}
                 className={`filter-chip ${activeRoleId === r.id ? "on" : ""}`}
                 onClick={() => setActiveRoleId(r.id)}
@@ -341,7 +343,7 @@ export default function StaffPage() {
               {/* 카테고리 탭 */}
               <div className="mem-filters">
                 {Object.entries(CATEGORY_LABEL).map(([k, v]) => (
-                  <button key={k} className={`filter-chip ${activeCat === k ? "on" : ""}`} onClick={() => setActiveCat(k)}>
+                  <button aria-pressed={activeCat === k} key={k} className={`filter-chip ${activeCat === k ? "on" : ""}`} onClick={() => setActiveCat(k)}>
                     {v}
                   </button>
                 ))}
@@ -419,13 +421,13 @@ export default function StaffPage() {
 
       {/* 스태프 추가 시트 */}
       {inviteSheet && (
-        <div className="sheet-overlay" onClick={() => setInviteSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setInviteSheet(false)}>
           <div className="sheet staff-invite-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">스태프 추가</div>
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>이미 가입한 계정을 검색해서 추가해요</div>
 
             <div className="staff-search-row">
-              <input
+              <input aria-label="이름 또는 전화번호"
                 className="input-field"
                 placeholder="이름 또는 전화번호"
                 value={searchKw}
@@ -438,7 +440,7 @@ export default function StaffPage() {
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>역할</div>
             <div className="mem-filters" style={{ padding: 0 }}>
               {roles.filter((r) => !r.isOwner).map((r) => (
-                <button key={r.id} className={`filter-chip ${inviteRoleId === r.id ? "on" : ""}`} onClick={() => setInviteRoleId(r.id)}>
+                <button aria-pressed={inviteRoleId === r.id} key={r.id} className={`filter-chip ${inviteRoleId === r.id ? "on" : ""}`} onClick={() => setInviteRoleId(r.id)}>
                   {r.name}
                 </button>
               ))}
@@ -462,12 +464,12 @@ export default function StaffPage() {
               <button className="ghost-btn" onClick={() => setInviteSheet(false)}>닫기</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 스태프 상세 시트 */}
       {staffDetail && (
-        <div className="sheet-overlay" onClick={() => setStaffDetail(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setStaffDetail(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{staffDetail.name}</div>
             <div className="admin-row"><span className="k">전화</span><span className="v">{staffDetail.phone ?? "-"}</span></div>
@@ -478,7 +480,7 @@ export default function StaffPage() {
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>역할 변경</div>
                 <div className="mem-filters" style={{ padding: 0 }}>
                   {roles.filter((r) => !r.isOwner).map((r) => (
-                    <button key={r.id} className={`filter-chip ${staffDetail.roleId === r.id ? "on" : ""}`} disabled={busy} onClick={() => handleChangeRole(r.id)}>
+                    <button aria-pressed={staffDetail.roleId === r.id} key={r.id} className={`filter-chip ${staffDetail.roleId === r.id ? "on" : ""}`} disabled={busy} onClick={() => handleChangeRole(r.id)}>
                       {r.name}
                     </button>
                   ))}
@@ -504,12 +506,12 @@ export default function StaffPage() {
               </a>
             )}
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 역할 관리 시트 */}
       {roleSheet && (
-        <div className="sheet-overlay" onClick={() => setRoleSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setRoleSheet(false)}>
           <div className="sheet role-manage-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">역할 관리</div>
 
@@ -530,18 +532,18 @@ export default function StaffPage() {
             {canManageRolePermissions && (
               <>
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>새 역할 추가</div>
-                <input className="input-field" placeholder="역할 이름 (예: 데스크)" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} />
+                <input aria-label="역할 이름 (예: 데스크)" className="input-field" placeholder="역할 이름 (예: 데스크)" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} />
               </>
             )}
 
             <div className="add-profile-actions">
               <button className="ghost-btn" onClick={() => setRoleSheet(false)}>닫기</button>
               {canManageRolePermissions && (
-                <button className="outline-action" disabled={busy} onClick={handleCreateRole}>추가</button>
+                <button className="primary-btn" disabled={busy} onClick={handleCreateRole}>추가</button>
               )}
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
     </div>
   );

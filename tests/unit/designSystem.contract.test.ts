@@ -316,10 +316,10 @@ describe("2026-08-22 design token regression guards (P2-DS-1)", () => {
     expect(css).toMatch(/\.app-shell\s*\{[^}]*min-height:\s*100dvh/);
   });
 
-  it("keeps default profile avatars white-background/dark-text (not inverted) in both mypage and profiles", () => {
+  it("uses readable theme surfaces for default profile avatars in both themes", () => {
     const css = read("app/globals.css");
-    expect(css).toMatch(/\.profile-avatar\s*\{[^}]*background:\s*#fff/);
-    expect(css).toMatch(/\.avatar-edit-placeholder\s*\{[^}]*background:\s*#fff/);
+    expect(css).toMatch(/\.profile-avatar\s*\{[^}]*background:\s*var\(--surface-strong\)/);
+    expect(css).toMatch(/\.avatar-edit-placeholder\s*\{[^}]*background:\s*var\(--surface\)/);
   });
 });
 

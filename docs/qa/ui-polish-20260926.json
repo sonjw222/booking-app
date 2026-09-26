@@ -1,0 +1,8040 @@
+{
+  "date": "2026-09-26",
+  "browser": "Chrome Headless Shell 131.0.6778.204",
+  "data": "synthetic Supabase fixtures; no live transaction testing",
+  "base": "be109d2ca8e51046564562a5c526a6f5ef6994e6",
+  "matrixCount": 640,
+  "horizontalOverflow": 0,
+  "runtimeErrors": 0,
+  "ctaNavOverlap": 0,
+  "interactionCount": 104,
+  "interactionFailures": 0,
+  "matrix": [
+    {
+      "route": "/",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "burgundy",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "burgundy",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "burgundy",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "burgundy",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "burgundy",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "burgundy",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "burgundy",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "burgundy",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "burgundy",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "burgundy",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/reservation",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/search",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/center/00000000-0000-4000-8000-000000000001",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/my-reservations",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/classes",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/login",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/cart",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/members",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/profiles",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/membership-rules",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/center-info",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/settings",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/mypage/info",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/staff",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/goods",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/send",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/settings/notifications",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/legal",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/inquiries",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/sales",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/coupons",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/orders",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/rooms",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/admin-assignments",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "charcoal",
+      "viewport": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "charcoal",
+      "viewport": [
+        430,
+        932
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "charcoal",
+      "viewport": [
+        820,
+        1180
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "charcoal",
+      "viewport": [
+        1024,
+        1366
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "charcoal",
+      "viewport": [
+        1180,
+        820
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "charcoal",
+      "viewport": [
+        1366,
+        1024
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "charcoal",
+      "viewport": [
+        1280,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "charcoal",
+      "viewport": [
+        1360,
+        900
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "charcoal",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/templates",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/rules",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    },
+    {
+      "route": "/manager/alimtalk/settings",
+      "theme": "charcoal",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "overflow": false,
+      "errors": [],
+      "ctaOverlap": []
+    }
+  ],
+  "interactions": [
+    {
+      "name": "/center/00000000-0000-4000-8000-000000000001 sheet",
+      "theme": "burgundy",
+      "width": 390,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/profiles sheet",
+      "theme": "burgundy",
+      "width": 390,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/rooms sheet",
+      "theme": "burgundy",
+      "width": 390,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/goods sheet",
+      "theme": "burgundy",
+      "width": 390,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/membership-rules sheet",
+      "theme": "burgundy",
+      "width": 390,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/coupons sheet",
+      "theme": "burgundy",
+      "width": 390,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/sales sheet",
+      "theme": "burgundy",
+      "width": 390,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "search and navigation",
+      "theme": "burgundy",
+      "width": 390,
+      "pass": true,
+      "background": "rgb(10, 36, 70)",
+      "color": "rgb(255, 255, 255)"
+    },
+    {
+      "name": "alimtalk selection",
+      "theme": "burgundy",
+      "width": 390,
+      "pass": true,
+      "noPhoneDisabled": true
+    },
+    {
+      "name": "cart bottom clearance",
+      "theme": "burgundy",
+      "width": 390,
+      "pass": true,
+      "cta": {
+        "top": 520.046875,
+        "bottom": 572.046875
+      },
+      "nav": {
+        "top": 761,
+        "bottom": 828
+      },
+      "overlap": false
+    },
+    {
+      "name": "staff permissions",
+      "theme": "burgundy",
+      "width": 390,
+      "pass": true,
+      "checkboxes": 2
+    },
+    {
+      "name": "signup step",
+      "theme": "burgundy",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "name": "map stacking",
+      "theme": "burgundy",
+      "width": 390,
+      "pass": true,
+      "isolation": "isolate",
+      "zIndex": "0",
+      "leaflet": true,
+      "headerClear": true
+    },
+    {
+      "name": "/center/00000000-0000-4000-8000-000000000001 sheet",
+      "theme": "burgundy",
+      "width": 820,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/profiles sheet",
+      "theme": "burgundy",
+      "width": 820,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/rooms sheet",
+      "theme": "burgundy",
+      "width": 820,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/goods sheet",
+      "theme": "burgundy",
+      "width": 820,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/membership-rules sheet",
+      "theme": "burgundy",
+      "width": 820,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/coupons sheet",
+      "theme": "burgundy",
+      "width": 820,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/sales sheet",
+      "theme": "burgundy",
+      "width": 820,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "search and navigation",
+      "theme": "burgundy",
+      "width": 820,
+      "pass": true,
+      "background": "rgb(10, 36, 70)",
+      "color": "rgb(255, 255, 255)"
+    },
+    {
+      "name": "alimtalk selection",
+      "theme": "burgundy",
+      "width": 820,
+      "pass": true,
+      "noPhoneDisabled": true
+    },
+    {
+      "name": "cart bottom clearance",
+      "theme": "burgundy",
+      "width": 820,
+      "pass": true,
+      "cta": {
+        "top": 780.421875,
+        "bottom": 832.421875
+      },
+      "nav": {
+        "top": 0,
+        "bottom": 0
+      },
+      "overlap": false
+    },
+    {
+      "name": "staff permissions",
+      "theme": "burgundy",
+      "width": 820,
+      "pass": true,
+      "checkboxes": 2
+    },
+    {
+      "name": "signup step",
+      "theme": "burgundy",
+      "width": 820,
+      "pass": true
+    },
+    {
+      "name": "map stacking",
+      "theme": "burgundy",
+      "width": 820,
+      "pass": true,
+      "isolation": "isolate",
+      "zIndex": "0",
+      "leaflet": true,
+      "headerClear": true
+    },
+    {
+      "name": "/center/00000000-0000-4000-8000-000000000001 sheet",
+      "theme": "burgundy",
+      "width": 1180,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/profiles sheet",
+      "theme": "burgundy",
+      "width": 1180,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/rooms sheet",
+      "theme": "burgundy",
+      "width": 1180,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/goods sheet",
+      "theme": "burgundy",
+      "width": 1180,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/membership-rules sheet",
+      "theme": "burgundy",
+      "width": 1180,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/coupons sheet",
+      "theme": "burgundy",
+      "width": 1180,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/sales sheet",
+      "theme": "burgundy",
+      "width": 1180,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "search and navigation",
+      "theme": "burgundy",
+      "width": 1180,
+      "pass": true,
+      "background": "rgb(10, 36, 70)",
+      "color": "rgb(255, 255, 255)"
+    },
+    {
+      "name": "alimtalk selection",
+      "theme": "burgundy",
+      "width": 1180,
+      "pass": true,
+      "noPhoneDisabled": true
+    },
+    {
+      "name": "cart bottom clearance",
+      "theme": "burgundy",
+      "width": 1180,
+      "pass": true,
+      "cta": {
+        "top": 635.421875,
+        "bottom": 687.421875
+      },
+      "nav": {
+        "top": 0,
+        "bottom": 0
+      },
+      "overlap": false
+    },
+    {
+      "name": "staff permissions",
+      "theme": "burgundy",
+      "width": 1180,
+      "pass": true,
+      "checkboxes": 2
+    },
+    {
+      "name": "signup step",
+      "theme": "burgundy",
+      "width": 1180,
+      "pass": true
+    },
+    {
+      "name": "map stacking",
+      "theme": "burgundy",
+      "width": 1180,
+      "pass": true,
+      "isolation": "isolate",
+      "zIndex": "0",
+      "leaflet": true,
+      "headerClear": true
+    },
+    {
+      "name": "/center/00000000-0000-4000-8000-000000000001 sheet",
+      "theme": "burgundy",
+      "width": 1440,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/profiles sheet",
+      "theme": "burgundy",
+      "width": 1440,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/rooms sheet",
+      "theme": "burgundy",
+      "width": 1440,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/goods sheet",
+      "theme": "burgundy",
+      "width": 1440,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/membership-rules sheet",
+      "theme": "burgundy",
+      "width": 1440,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/coupons sheet",
+      "theme": "burgundy",
+      "width": 1440,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/sales sheet",
+      "theme": "burgundy",
+      "width": 1440,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "search and navigation",
+      "theme": "burgundy",
+      "width": 1440,
+      "pass": true,
+      "background": "rgb(10, 36, 70)",
+      "color": "rgb(255, 255, 255)"
+    },
+    {
+      "name": "alimtalk selection",
+      "theme": "burgundy",
+      "width": 1440,
+      "pass": true,
+      "noPhoneDisabled": true
+    },
+    {
+      "name": "cart bottom clearance",
+      "theme": "burgundy",
+      "width": 1440,
+      "pass": true,
+      "cta": {
+        "top": 780.421875,
+        "bottom": 832.421875
+      },
+      "nav": {
+        "top": 0,
+        "bottom": 0
+      },
+      "overlap": false
+    },
+    {
+      "name": "staff permissions",
+      "theme": "burgundy",
+      "width": 1440,
+      "pass": true,
+      "checkboxes": 2
+    },
+    {
+      "name": "signup step",
+      "theme": "burgundy",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "name": "map stacking",
+      "theme": "burgundy",
+      "width": 1440,
+      "pass": true,
+      "isolation": "isolate",
+      "zIndex": "0",
+      "leaflet": true,
+      "headerClear": true
+    },
+    {
+      "name": "/center/00000000-0000-4000-8000-000000000001 sheet",
+      "theme": "charcoal",
+      "width": 390,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/profiles sheet",
+      "theme": "charcoal",
+      "width": 390,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/rooms sheet",
+      "theme": "charcoal",
+      "width": 390,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/goods sheet",
+      "theme": "charcoal",
+      "width": 390,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/membership-rules sheet",
+      "theme": "charcoal",
+      "width": 390,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/coupons sheet",
+      "theme": "charcoal",
+      "width": 390,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/sales sheet",
+      "theme": "charcoal",
+      "width": 390,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "search and navigation",
+      "theme": "charcoal",
+      "width": 390,
+      "pass": true,
+      "background": "rgb(50, 102, 159)",
+      "color": "rgb(255, 255, 255)"
+    },
+    {
+      "name": "alimtalk selection",
+      "theme": "charcoal",
+      "width": 390,
+      "pass": true,
+      "noPhoneDisabled": true
+    },
+    {
+      "name": "cart bottom clearance",
+      "theme": "charcoal",
+      "width": 390,
+      "pass": true,
+      "cta": {
+        "top": 520.046875,
+        "bottom": 572.046875
+      },
+      "nav": {
+        "top": 761,
+        "bottom": 828
+      },
+      "overlap": false
+    },
+    {
+      "name": "staff permissions",
+      "theme": "charcoal",
+      "width": 390,
+      "pass": true,
+      "checkboxes": 2
+    },
+    {
+      "name": "signup step",
+      "theme": "charcoal",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "name": "map stacking",
+      "theme": "charcoal",
+      "width": 390,
+      "pass": true,
+      "isolation": "isolate",
+      "zIndex": "0",
+      "leaflet": true,
+      "headerClear": true
+    },
+    {
+      "name": "/center/00000000-0000-4000-8000-000000000001 sheet",
+      "theme": "charcoal",
+      "width": 820,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/profiles sheet",
+      "theme": "charcoal",
+      "width": 820,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/rooms sheet",
+      "theme": "charcoal",
+      "width": 820,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/goods sheet",
+      "theme": "charcoal",
+      "width": 820,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/membership-rules sheet",
+      "theme": "charcoal",
+      "width": 820,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/coupons sheet",
+      "theme": "charcoal",
+      "width": 820,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/sales sheet",
+      "theme": "charcoal",
+      "width": 820,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "search and navigation",
+      "theme": "charcoal",
+      "width": 820,
+      "pass": true,
+      "background": "rgb(50, 102, 159)",
+      "color": "rgb(255, 255, 255)"
+    },
+    {
+      "name": "alimtalk selection",
+      "theme": "charcoal",
+      "width": 820,
+      "pass": true,
+      "noPhoneDisabled": true
+    },
+    {
+      "name": "cart bottom clearance",
+      "theme": "charcoal",
+      "width": 820,
+      "pass": true,
+      "cta": {
+        "top": 780.421875,
+        "bottom": 832.421875
+      },
+      "nav": {
+        "top": 0,
+        "bottom": 0
+      },
+      "overlap": false
+    },
+    {
+      "name": "staff permissions",
+      "theme": "charcoal",
+      "width": 820,
+      "pass": true,
+      "checkboxes": 2
+    },
+    {
+      "name": "signup step",
+      "theme": "charcoal",
+      "width": 820,
+      "pass": true
+    },
+    {
+      "name": "map stacking",
+      "theme": "charcoal",
+      "width": 820,
+      "pass": true,
+      "isolation": "isolate",
+      "zIndex": "0",
+      "leaflet": true,
+      "headerClear": true
+    },
+    {
+      "name": "/center/00000000-0000-4000-8000-000000000001 sheet",
+      "theme": "charcoal",
+      "width": 1180,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/profiles sheet",
+      "theme": "charcoal",
+      "width": 1180,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/rooms sheet",
+      "theme": "charcoal",
+      "width": 1180,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/goods sheet",
+      "theme": "charcoal",
+      "width": 1180,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/membership-rules sheet",
+      "theme": "charcoal",
+      "width": 1180,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/coupons sheet",
+      "theme": "charcoal",
+      "width": 1180,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/sales sheet",
+      "theme": "charcoal",
+      "width": 1180,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "search and navigation",
+      "theme": "charcoal",
+      "width": 1180,
+      "pass": true,
+      "background": "rgb(50, 102, 159)",
+      "color": "rgb(255, 255, 255)"
+    },
+    {
+      "name": "alimtalk selection",
+      "theme": "charcoal",
+      "width": 1180,
+      "pass": true,
+      "noPhoneDisabled": true
+    },
+    {
+      "name": "cart bottom clearance",
+      "theme": "charcoal",
+      "width": 1180,
+      "pass": true,
+      "cta": {
+        "top": 635.421875,
+        "bottom": 687.421875
+      },
+      "nav": {
+        "top": 0,
+        "bottom": 0
+      },
+      "overlap": false
+    },
+    {
+      "name": "staff permissions",
+      "theme": "charcoal",
+      "width": 1180,
+      "pass": true,
+      "checkboxes": 2
+    },
+    {
+      "name": "signup step",
+      "theme": "charcoal",
+      "width": 1180,
+      "pass": true
+    },
+    {
+      "name": "map stacking",
+      "theme": "charcoal",
+      "width": 1180,
+      "pass": true,
+      "isolation": "isolate",
+      "zIndex": "0",
+      "leaflet": true,
+      "headerClear": true
+    },
+    {
+      "name": "/center/00000000-0000-4000-8000-000000000001 sheet",
+      "theme": "charcoal",
+      "width": 1440,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/profiles sheet",
+      "theme": "charcoal",
+      "width": 1440,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/rooms sheet",
+      "theme": "charcoal",
+      "width": 1440,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/goods sheet",
+      "theme": "charcoal",
+      "width": 1440,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/membership-rules sheet",
+      "theme": "charcoal",
+      "width": 1440,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/coupons sheet",
+      "theme": "charcoal",
+      "width": 1440,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "/manager/sales sheet",
+      "theme": "charcoal",
+      "width": 1440,
+      "pass": true,
+      "label": "_r_0_",
+      "bodyLocked": true,
+      "within": true,
+      "focusInside": true
+    },
+    {
+      "name": "search and navigation",
+      "theme": "charcoal",
+      "width": 1440,
+      "pass": true,
+      "background": "rgb(50, 102, 159)",
+      "color": "rgb(255, 255, 255)"
+    },
+    {
+      "name": "alimtalk selection",
+      "theme": "charcoal",
+      "width": 1440,
+      "pass": true,
+      "noPhoneDisabled": true
+    },
+    {
+      "name": "cart bottom clearance",
+      "theme": "charcoal",
+      "width": 1440,
+      "pass": true,
+      "cta": {
+        "top": 780.421875,
+        "bottom": 832.421875
+      },
+      "nav": {
+        "top": 0,
+        "bottom": 0
+      },
+      "overlap": false
+    },
+    {
+      "name": "staff permissions",
+      "theme": "charcoal",
+      "width": 1440,
+      "pass": true,
+      "checkboxes": 2
+    },
+    {
+      "name": "signup step",
+      "theme": "charcoal",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "name": "map stacking",
+      "theme": "charcoal",
+      "width": 1440,
+      "pass": true,
+      "isolation": "isolate",
+      "zIndex": "0",
+      "leaflet": true,
+      "headerClear": true
+    }
+  ]
+}

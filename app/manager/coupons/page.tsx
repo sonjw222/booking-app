@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   매니저 - 쿠폰 관리 (MWHABIT Membership Visibility + Member Coupon Batch, 2026-09-18)
   - 쿠폰 정의 생성/보관
@@ -238,7 +240,7 @@ export default function CouponsPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>{c.name}</button>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>{c.name}</button>
           ))}
         </div>
       )}
@@ -292,12 +294,12 @@ export default function CouponsPage() {
 
       {/* 쿠폰 생성 시트 */}
       {sheet && (
-        <div className="sheet-overlay" onClick={resetSheet}>
+        <SheetOverlay className="sheet-overlay" onClick={resetSheet}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">쿠폰 만들기</div>
 
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>쿠폰명</div>
-            <input className="input-field" placeholder="예: VIP 특별 3만원 할인" value={cName} onChange={(e) => setCName(e.target.value)} />
+            <input aria-label="쿠폰명" className="input-field" placeholder="예: VIP 특별 3만원 할인" value={cName} onChange={(e) => setCName(e.target.value)} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>할인 방식</div>
             <div style={{ display: "flex", gap: 12 }}>
@@ -310,17 +312,17 @@ export default function CouponsPage() {
             </div>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>할인값{cType === "percentage" ? " (%)" : " (원)"}</div>
-            <input inputMode="numeric" className="input-field" placeholder={cType === "percentage" ? "예: 20" : "예: 30000"} value={cValue} onChange={(e) => setCValue(e.target.value)} />
+            <input aria-label={cType === "percentage" ? "예: 20" : "예: 30000"} inputMode="numeric" className="input-field" placeholder={cType === "percentage" ? "예: 20" : "예: 30000"} value={cValue} onChange={(e) => setCValue(e.target.value)} />
 
             {cType === "percentage" && (
               <>
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>최대 할인금액 (선택)</div>
-                <input inputMode="numeric" className="input-field" placeholder="예: 30000" value={cMaxDiscount} onChange={(e) => setCMaxDiscount(e.target.value)} />
+                <input aria-label="최대 할인 금액" inputMode="numeric" className="input-field" placeholder="예: 30000" value={cMaxDiscount} onChange={(e) => setCMaxDiscount(e.target.value)} />
               </>
             )}
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>최소 결제금액 (선택)</div>
-            <input inputMode="numeric" className="input-field" placeholder="예: 100000" value={cMinOrder} onChange={(e) => setCMinOrder(e.target.value)} />
+            <input aria-label="최소 결제 금액" inputMode="numeric" className="input-field" placeholder="예: 100000" value={cMinOrder} onChange={(e) => setCMinOrder(e.target.value)} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>사용 시작일 (선택)</div>
             <input type="date" className="input-field" value={cValidFrom} onChange={(e) => setCValidFrom(e.target.value)} />
@@ -353,7 +355,7 @@ export default function CouponsPage() {
                     </div>
                   ) : (
                     eligibleProducts.map((p) => (
-                      <button
+                      <button aria-pressed={cProductIds.includes(p.id)}
                         key={p.id} type="button"
                         className={`filter-chip ${cProductIds.includes(p.id) ? "on" : ""}`}
                         onClick={() => setCProductIds((prev) => prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id])}
@@ -368,18 +370,18 @@ export default function CouponsPage() {
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={resetSheet}>취소</button>
-              <button className="outline-action" disabled={busy} onClick={handleCreateCoupon}>쿠폰 생성</button>
+              <button className="primary-btn" disabled={busy} onClick={handleCreateCoupon}>쿠폰 생성</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 지급 시트 */}
       {issueFor && (
-        <div className="sheet-overlay" onClick={() => setIssueFor(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setIssueFor(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">쿠폰 지급 — {issueFor.name}</div>
-            <input className="input-field" placeholder="이름 또는 전화번호 검색" value={issueSearch} onChange={(e) => setIssueSearch(e.target.value)} />
+            <input aria-label="이름 또는 전화번호 검색" className="input-field" placeholder="이름 또는 전화번호 검색" value={issueSearch} onChange={(e) => setIssueSearch(e.target.value)} />
             {issueResults.length > 0 && (
               <div style={{ marginTop: 6, maxHeight: 200, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8 }}>
                 {issueResults.map((cm) => (
@@ -405,15 +407,15 @@ export default function CouponsPage() {
               <button className="outline-action" disabled={busy} onClick={handleIssue}>쿠폰 지급</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 상세 시트 */}
       {detailFor && (
-        <div className="sheet-overlay" onClick={() => setDetailFor(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setDetailFor(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{detailFor.name} — 지급 내역</div>
-            <input className="input-field" placeholder="회원명 또는 전화번호 검색" value={detailSearch} onChange={(e) => setDetailSearch(e.target.value)} />
+            <input aria-label="회원명 또는 전화번호 검색" className="input-field" placeholder="회원명 또는 전화번호 검색" value={detailSearch} onChange={(e) => setDetailSearch(e.target.value)} />
             {detailLoading ? (
               <Loading />
             ) : filteredDetailRows.length === 0 ? (
@@ -442,7 +444,7 @@ export default function CouponsPage() {
               <button className="ghost-btn" onClick={() => setDetailFor(null)}>닫기</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
     </div>
   );

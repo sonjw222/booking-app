@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../../components/SheetOverlay";
+
 /*
   매니저 - 알림톡 템플릿 관리 (더보기 > 알림톡 > 템플릿 관리)
   카카오 알림톡은 자유 문장이 아니라 사전 승인된 템플릿만 발송 가능하다 — 여기서 승인 신청용
@@ -7,7 +9,7 @@
   status를 approved로 바꾼다(승인 여부 확인은 알리고 콘솔에서, 이 화면은 상태 기록용).
 */
 
-import { useCallback, useEffect, useState } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
 import Loading from "../../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../../lib/manager";
 import { checkPlatformAdmin } from "../../../../lib/admin";
@@ -37,6 +39,7 @@ export default function AlimtalkTemplatesPage() {
   const [toast, setToast] = useState<string | null>(null);
 
   const [editing, setEditing] = useState<AlimtalkTemplate | "new" | null>(null);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [aligoCode, setAligoCode] = useState("");
@@ -200,7 +203,7 @@ export default function AlimtalkTemplatesPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>{c.name}</button>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>{c.name}</button>
           ))}
         </div>
       )}
@@ -211,7 +214,7 @@ export default function AlimtalkTemplatesPage() {
         <Loading />
       ) : templates.length === 0 ? (
         <div className="daylist-empty" style={{ paddingTop: 60 }}>
-          등록된 템플릿이 없어요.<br />+ 버튼으로 새 템플릿을 만들어보세요.
+          등록된 템플릿이 없어요.<br /><button className="outline-action" onClick={openNew}>첫 템플릿 만들기</button>
         </div>
       ) : (
         templates.map((t) => (
@@ -232,7 +235,7 @@ export default function AlimtalkTemplatesPage() {
       )}
 
       {editing && (
-        <div className="sheet-overlay" onClick={() => !saving && setEditing(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => !saving && setEditing(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{editing === "new" ? "새 템플릿" : "템플릿 수정"}</div>
             {!canEditThis && (
@@ -243,15 +246,17 @@ export default function AlimtalkTemplatesPage() {
             {isAdmin && editing === "new" && (
               <label className="csv-col" style={{ marginBottom: 8 }}>
                 <input type="checkbox" checked={isCommon} onChange={(e) => setIsCommon(e.target.checked)} disabled={saving} />
-                모든 센터 공통으로 등록(운영자가 알리고에 직접 만든 템플릿 등)
+                모든 센터 공통으로 등록
               </label>
             )}
             {editing !== "new" && editingIsCommon && (
               <div className="perm-guide" style={{ margin: "0 0 8px" }}>공통 템플릿 — 모든 센터가 같이 써요.</div>
             )}
-            <input className="input-field" placeholder="템플릿 이름 (내부 관리용)" value={title}
+            <input aria-label="템플릿 이름 (내부 관리용)" className="input-field" placeholder="템플릿 이름 (내부 관리용)" value={title}
               onChange={(e) => setTitle(e.target.value)} disabled={saving || !canEditThis} style={{ marginBottom: 8 }} />
+            <label className="menu-section-label" htmlFor="template-content">문구</label>
             <textarea
+              id="template-content" ref={contentRef}
               className="input-field"
               style={{ minHeight: 120, resize: "vertical", paddingTop: 12, marginBottom: 8 }}
               placeholder={"승인 신청용 문구를 입력하세요. 변수는 [[회원명]] 형태로 쓰세요.\n예: [[회원명]]님, [[수강권명]] 잔여횟수가 [[수강권 잔여횟수]]회 남았어요."}
@@ -259,6 +264,17 @@ export default function AlimtalkTemplatesPage() {
               onChange={(e) => setContent(e.target.value)}
               disabled={saving || !canEditThis}
             />
+            <div className="field-count">{content.length.toLocaleString()}자</div>
+            <div className="variable-chips" aria-label="문구에 변수 삽입">
+              {["회원명", "수강권명", "수강권 잔여횟수", "수강권 잔여일"].map(variable => <button key={variable} type="button" disabled={saving || !canEditThis} onClick={() => {
+                const field = contentRef.current;
+                const start = field?.selectionStart ?? content.length;
+                const end = field?.selectionEnd ?? start;
+                const token = `[[${variable}]]`;
+                setContent(content.slice(0, start) + token + content.slice(end));
+                requestAnimationFrame(() => { field?.focus(); field?.setSelectionRange(start + token.length, start + token.length); });
+              }}>{`[[${variable}]]`}</button>)}
+            </div>
             {editing !== "new" && (
               <>
                 {canEditThis && !aligoCode && (
@@ -294,7 +310,7 @@ export default function AlimtalkTemplatesPage() {
                     </select>
                   )
                 )}
-                <input className="input-field" placeholder="알리고 템플릿 코드 (카카오 승인 후 입력)" value={aligoCode}
+                <input aria-label="알리고 템플릿 코드 (카카오 승인 후 입력)" className="input-field" placeholder="알리고 템플릿 코드 (카카오 승인 후 입력)" value={aligoCode}
                   onChange={(e) => setAligoCode(e.target.value)} disabled={saving || !canEditThis} style={{ marginBottom: 8 }} />
                 <select className="input-field" value={status} onChange={(e) => setStatus(e.target.value as AlimtalkTemplateStatus)} disabled={saving || !canEditThis} style={{ marginBottom: 8 }}>
                   {(Object.keys(STATUS_LABEL) as AlimtalkTemplateStatus[]).map((s) => (
@@ -315,7 +331,7 @@ export default function AlimtalkTemplatesPage() {
               )}
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {toast && <div className="toast">{toast}</div>}

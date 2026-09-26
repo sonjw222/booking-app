@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../../components/SheetOverlay";
+
 /*
   매니저 - 자동 발송 규칙 (더보기 > 알림톡 > 자동 발송 규칙)
   evaluate_notification_rules()(add_notification_rule_evaluators.sql)가 매일 평가하는 5가지
@@ -158,7 +160,7 @@ export default function AlimtalkRulesPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>{c.name}</button>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>{c.name}</button>
           ))}
         </div>
       )}
@@ -169,19 +171,19 @@ export default function AlimtalkRulesPage() {
         <Loading />
       ) : rules.length === 0 ? (
         <div className="daylist-empty" style={{ paddingTop: 60 }}>
-          아직 만든 자동 발송 규칙이 없어요.<br />"+ 새로 만들기"로 시작해보세요.
+          아직 만든 자동 발송 규칙이 없어요.<br /><button className="outline-action" onClick={openNew}>새로 만들기</button>
         </div>
       ) : (
         rules.map((rule) => {
           const tpl = templates.find((t) => t.id === rule.templateId);
           const product = products.find((p) => p.id === rule.productId);
           return (
-            <div key={rule.id} className="hist-item clickable" onClick={() => openEdit(rule)}>
+            <div key={rule.id} className="rule-card" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEdit(rule); } }} onClick={() => openEdit(rule)}>
               <div className="hist-main">
                 <div className="hist-title">{TRIGGER_TYPE_LABEL[rule.triggerType]}</div>
                 <div className="hist-sub">
                   {product ? `${product.name} · ` : "전체 수강권 · "}{conditionSummary(rule)}
-                  {tpl ? ` · ${tpl.title}` : " · 템플릿 미지정"}
+                  {tpl ? ` · ${tpl.title}` : <span style={{ color: "var(--warning)" }}> · 템플릿 미지정</span>}
                 </div>
               </div>
               <span className={`hist-status ${rule.isActive ? "s-rule_on" : "s-rule_off"}`}>
@@ -193,7 +195,7 @@ export default function AlimtalkRulesPage() {
       )}
 
       {sheetMode && draft && (
-        <div className="sheet-overlay" onClick={() => !saving && closeSheet()}>
+        <SheetOverlay className="sheet-overlay" onClick={() => !saving && closeSheet()}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{sheetMode === "new" ? "새 자동 발송 규칙" : "규칙 수정"}</div>
 
@@ -317,7 +319,7 @@ export default function AlimtalkRulesPage() {
               <button className="primary-btn" disabled={saving} onClick={handleSave}>{saving ? "저장 중..." : "저장"}</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {toast && <div className="toast">{toast}</div>}

@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   매니저 - 휴무일 설정
   - 날짜 + 사유로 휴무일 추가
@@ -184,7 +186,7 @@ export default function HolidaysPage() {
       )}
       {/* 예약자 있는 수업 삭제 확인 */}
       {confirmHoliday && (
-        <div className="sheet-overlay" onClick={() => setConfirmHoliday(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setConfirmHoliday(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">휴무일로 지정할까요?</div>
             <div className="perm-guide" style={{ margin: "0 0 14px" }}>
@@ -201,7 +203,7 @@ export default function HolidaysPage() {
               <button className="ghost-btn" style={{ width: "100%", marginTop: 10 }} onClick={() => setConfirmHoliday(null)}>취소</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
     </div>
   );

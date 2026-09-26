@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../../components/SheetOverlay";
+
 /*
   매니저 - 알림톡 보내기 (더보기 > 알림톡 > 알림톡 보내기)
   회원탭(app/manager/members/page.tsx)의 발송 시트와 같은 컴포저(AlimtalkComposer)·같은
@@ -96,12 +98,16 @@ export default function AlimtalkSendPage() {
   }
 
   function selectAllFiltered() {
-    setSelectedIds(new Set(members.map((m) => m.id)));
+    setSelectedIds(new Set(members.filter((m) => m.phone?.trim()).map((m) => m.id)));
   }
 
   async function handleSend() {
     if (!centerId || selectedIds.size === 0 || !hasAlimtalkContent(blocks)) return;
     const targets = members.filter((m) => selectedIds.has(m.id));
+    if (targets.length !== selectedIds.size || targets.some((m) => !m.phone?.trim())) {
+      setError("선택한 회원의 연락처가 변경됐어요. 전화번호를 확인하고 다시 선택해주세요.");
+      return;
+    }
     const content = flattenAlimtalkBlocks(blocks);
     // 승인된 템플릿을 고르고 문구를 그대로 뒀을 때만 templateCode를 실어 진짜 카카오 알림톡으로
     // 나가게 한다 — 고른 뒤 내용을 고치면(아래 onChange에서) 선택이 자동 해제되므로, 여기 남아있는
@@ -146,7 +152,7 @@ export default function AlimtalkSendPage() {
 
   if (centers.length === 0 && !loading) {
     return (
-      <div className="app-shell">
+      <div className="app-shell recipient-page">
         <div className="back-header">
           <a className="side" href="/manager/alimtalk">‹</a>
           <div className="title">알림톡 보내기</div>
@@ -158,23 +164,17 @@ export default function AlimtalkSendPage() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell recipient-page">
       <div className="back-header">
         <a className="side" href="/manager/alimtalk">‹</a>
         <div className="title">알림톡 보내기</div>
-        <div style={{ minWidth: 30 }}>
-          {selectedIds.size > 0 && (
-            <button className="header-action" style={{ whiteSpace: "nowrap" }} onClick={() => setComposerOpen(true)}>
-              알림톡 보내기 ({selectedIds.size})
-            </button>
-          )}
-        </div>
+        <div className="side" />
       </div>
 
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); setSelectedIds(new Set()); setComposerOpen(false); setBlocks(emptyAlimtalkBlocks()); setTemplateId(""); }}>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); setSelectedIds(new Set()); setComposerOpen(false); setBlocks(emptyAlimtalkBlocks()); setTemplateId(""); }}>
               {c.name}
             </button>
           ))}
@@ -205,17 +205,17 @@ export default function AlimtalkSendPage() {
           </div>
 
           <div className="mem-filters">
-            <button className={`filter-chip ${!gradeFilter ? "on" : ""}`} onClick={() => setGradeFilter(null)}>등급 전체</button>
+            <button aria-pressed={!gradeFilter} className={`filter-chip ${!gradeFilter ? "on" : ""}`} onClick={() => setGradeFilter(null)}>등급 전체</button>
             {grades.map((g) => (
-              <button key={g.id} className={`filter-chip ${gradeFilter === g.id ? "on" : ""}`} onClick={() => setGradeFilter(g.id)}>
+              <button aria-pressed={gradeFilter === g.id} key={g.id} className={`filter-chip ${gradeFilter === g.id ? "on" : ""}`} onClick={() => setGradeFilter(g.id)}>
                 <span className="grade-dot" style={{ background: g.color ?? "var(--line-strong)" }} />{g.name}
               </button>
             ))}
           </div>
           <div className="mem-filters">
-            <button className={`filter-chip ${!statusFilter ? "on" : ""}`} onClick={() => setStatusFilter(null)}>상태 전체</button>
+            <button aria-pressed={!statusFilter} className={`filter-chip ${!statusFilter ? "on" : ""}`} onClick={() => setStatusFilter(null)}>상태 전체</button>
             {Object.entries(STATUS_LABEL).map(([k, v]) => (
-              <button key={k} className={`filter-chip ${statusFilter === k ? "on" : ""}`} onClick={() => setStatusFilter(k)}>{v}</button>
+              <button aria-pressed={statusFilter === k} key={k} className={`filter-chip ${statusFilter === k ? "on" : ""}`} onClick={() => setStatusFilter(k)}>{v}</button>
             ))}
           </div>
 
@@ -237,7 +237,7 @@ export default function AlimtalkSendPage() {
               ) : (
                 members.map((m) => (
                   <label key={m.id} className={`recipient-row ${selectedIds.has(m.id) ? "selected" : ""}`}>
-                    <input type="checkbox" aria-label={`${m.name} 선택`} checked={selectedIds.has(m.id)} onChange={() => toggle(m.id)} />
+                    <input type="checkbox" aria-label={`${m.name} 선택`} disabled={!m.phone?.trim()} checked={selectedIds.has(m.id)} onChange={() => toggle(m.id)} />
                     <span className="recipient-name">{m.name}</span>
                     <span className="recipient-phone">{m.phone || "번호 없음"}</span>
                     <span className="recipient-status">{m.phone ? "번호 등록됨" : "전화번호 필요"}</span>
@@ -249,12 +249,18 @@ export default function AlimtalkSendPage() {
         </>
       )}
 
+      {addonEnabled && <div className="recipient-sticky-action">
+        <button className="primary-btn" disabled={selectedIds.size === 0 || loading} onClick={() => setComposerOpen(true)}>
+          {selectedIds.size}명에게 알림톡 보내기
+        </button>
+      </div>}
+
       {composerOpen && (
-        <div className="sheet-overlay" onClick={closeComposer}>
+        <SheetOverlay className="sheet-overlay" onClick={closeComposer}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">알림톡 보내기</div>
             <div className="perm-guide" style={{ margin: "0 0 10px" }}>
-              선택한 {selectedIds.size}명에게 보내요. 전화번호가 없는 회원은 자동으로 건너뜁니다.
+              선택한 {selectedIds.size}명에게 보내요. 발송 전 연락처를 다시 확인해요.
             </div>
             {templates.length > 0 && (
               <select
@@ -304,7 +310,7 @@ export default function AlimtalkSendPage() {
               </button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {toast && <div className="toast">{toast}</div>}

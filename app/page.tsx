@@ -7,12 +7,13 @@
 */
 
 import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
-import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, type HomeCenter, type HomeClass } from "../lib/home";
+import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, fetchNextReservation, type HomeCenter, type HomeClass, type NextReservation } from "../lib/home";
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
 import { fetchMyCenters } from "../lib/manager";
 import { supabase } from "../lib/supabaseClient";
 import { consumePostLoginNext } from "../lib/postLoginReturn";
 import { replaceTabNavigation } from "../lib/navState";
+import { fetchUnreadCount, subscribeNotifications } from "../lib/notifications";
 import UiIcon, { type IconName } from "./components/UiIcon";
 // 릴리스 폴리시 배치 8차(2026-09-18), 5번 — 운영자 모드 "종목 관리"가 이 홈 화면과
 // 똑같은 아이콘을 재사용해야 해서(이모지 제거) CATEGORY_ICONS/CATEGORY_IMAGES를
@@ -61,6 +62,8 @@ export default function Home() {
   const [centers, setCenters] = useState<HomeCenter[]>([]);
   const [classes, setClasses] = useState<HomeClass[]>([]);
   const [myUpcoming, setMyUpcoming] = useState<HomeClass[]>([]);
+  const [nextReservation, setNextReservation] = useState<NextReservation | null>(null);
+  const [unread, setUnread] = useState(0);
   const [banners, setBanners] = useState<HomeBanner[]>([]);
   const [catList, setCatList] = useState<ServiceCategory[]>([]);
   const [bannerIdx, setBannerIdx] = useState(0);
@@ -72,6 +75,14 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [isManager, setIsManager] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    let unsubscribe: (() => void) | null = null;
+    fetchUnreadCount().then((count) => { if (mounted) setUnread(count); }).catch(() => {});
+    subscribeNotifications(() => { if (mounted) setUnread((count) => count + 1); })
+      .then((stop) => { if (mounted) unsubscribe = stop; else stop(); }).catch(() => {});
+    return () => { mounted = false; unsubscribe?.(); };
+  }, []);
   const validBanners = useMemo(
     () => banners.filter((banner) => banner.title?.trim().length >= 2),
     [banners]
@@ -192,6 +203,7 @@ export default function Home() {
       // 주석 참고) 여기 한 곳에서만 원래 화면으로 이어서 보낸다. 실제로 로그인된 경우에만
       // (user 존재) 이동한다 — 세션 없이 next만 남아있는 경우는 그대로 홈에 둔다.
       if (user) {
+        fetchNextReservation().then(setNextReservation).catch(() => {});
         const next = consumePostLoginNext();
         if (next) { window.location.replace(next); return; }
         // 관리자 모드 진입 버튼(오른쪽 위) 노출 여부 — ACL-005와 동일하게 active
@@ -257,20 +269,13 @@ export default function Home() {
     })();
   }, []);
 
-  // 배너 자동 회전 (4초마다)
-  useEffect(() => {
-    if (validBanners.length <= 1) return;
-    const t = setInterval(() => setBannerIdx((i) => (i + 1) % validBanners.length), 4000);
-    return () => clearInterval(t);
-  }, [validBanners.length]);
-
   return (
     <div>
       <div className="app-shell member-home">
         {/* 헤더 */}
         <div className="header">
           <div className="header-row home-heading-row">
-            <div className="location">오늘은 어떤 움직임을 찾나요?</div>
+            <div className="location">{nextReservation ? "다음 수업을 확인해요" : "오늘은 어떤 움직임을 찾나요?"}</div>
             <div className="header-icons">
               {loggedIn === false && (
                 <a className="login-link" href="/login">로그인</a>
@@ -278,53 +283,22 @@ export default function Home() {
               {isManager && (
                 <a className="login-link" href="/manager" onClick={(e) => replaceTabNavigation(e, "/manager")}>관리자 모드</a>
               )}
+              {loggedIn && <a className="home-notification-link" href="/notifications" aria-label={`알림${unread > 0 ? `, 읽지 않은 알림 ${unread}개` : ""}`}>
+                <UiIcon name="bell" size={22} />{unread > 0 && <span className="home-notification-badge">{unread > 9 ? "9+" : unread}</span>}
+              </a>}
             </div>
           </div>
-          <a className="home-location-row" href="/search"><UiIcon name="location" size={15} /><span>내 주변 클래스</span><b>›</b></a>
+          {nextReservation && <a className="home-next-reservation" href="/my-reservations">
+            <span className="home-next-label">{nextReservation.status === "waitlisted" ? "대기 중인 수업" : "다가오는 예약"}</span>
+            <strong>{nextReservation.title}</strong>
+            <span>{nextReservation.startText} · {nextReservation.centerName}</span>
+            <b>예약 확인하기 <span aria-hidden="true">›</span></b>
+          </a>}
           <a className="searchbar" href="/search">
             <span>클래스, 센터를 검색해보세요</span>
             <UiIcon name="search" size={20} />
           </a>
         </div>
-
-        {/* UX 감사(A-11) — 아이콘+라벨이 이 앱의 다른 클릭 가능한 칩/버튼과 같은 모양이라
-            눌러보게 되는데 실제로는 장식용 <span>이라 반응이 없었다. 실제 링크로 연결. */}
-        <div className="home-value-line" aria-label="서비스 주요 기능">
-          <a href="/search"><UiIcon name="search" size={15} />내 주변 수업 찾기</a><i />
-          <a href="/reservation"><UiIcon name="calendar" size={15} />한 번에 예약</a><i />
-          <a href="/mypage"><UiIcon name="ticket" size={15} />수강권 관리</a>
-        </div>
-
-        {/* 히어로 배너 (운영자 관리, 자동 회전) */}
-        {validBanners.length > 0 ? (
-          <div
-            className="hero-wrap"
-            onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
-            onTouchEnd={(e) => {
-              const dx = e.changedTouches[0].clientX - touchStartX.current;
-              if (Math.abs(dx) > 40) goBanner(dx < 0 ? 1 : -1);
-            }}
-          >
-            <a className="hero" href={validBanners[bannerIdx]?.linkUrl || "/reservation"} style={{ display: "flex", textDecoration: "none" }}>
-              <div className="eyebrow">추천</div>
-              <h1>{validBanners[bannerIdx]?.title}</h1>
-              {validBanners[bannerIdx]?.subtitle && <div className="chip">{validBanners[bannerIdx]?.subtitle}</div>}
-              <div className="deco" aria-hidden="true" />
-              {validBanners.length > 1 && (
-                <div className="banner-dots">
-                  {validBanners.map((_, i) => <span key={i} className={`banner-dot ${i === bannerIdx ? "on" : ""}`} />)}
-                </div>
-              )}
-            </a>
-          </div>
-        ) : (
-          <a className="hero" href="/reservation" style={{ display: "flex", textDecoration: "none" }}>
-            <div className="eyebrow">이번 주 추천</div>
-            <h1>내 주변에서 시작하는<br />새로운 움직임</h1>
-            <div className="chip">원하는 종목과 시간을 찾아보세요</div>
-            <div className="deco" aria-hidden="true" />
-          </a>
-        )}
 
         {/* 종목 카테고리 그리드 */}
         <div className="home-category-head">
@@ -345,6 +319,39 @@ export default function Home() {
             </a>
           ))}
         </div>
+
+        {/* 프로모션 슬롯: 종목 다음, 수업 목록 이전. 광고 SDK와 독립적인 영역. */}
+        <section className="promotion-slot" aria-label="프로모션">
+        {validBanners.length > 0 ? (
+          <div className="hero-wrap"
+            onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+            onTouchEnd={(e) => {
+              const dx = e.changedTouches[0].clientX - touchStartX.current;
+              if (Math.abs(dx) > 40) goBanner(dx < 0 ? 1 : -1);
+            }}>
+            <a className="hero" href={validBanners[bannerIdx]?.linkUrl || "/reservation"} style={{ display: "flex", textDecoration: "none" }}>
+              <div className="eyebrow">추천</div>
+              <h1>{validBanners[bannerIdx]?.title}</h1>
+              {validBanners[bannerIdx]?.subtitle && <div className="chip">{validBanners[bannerIdx]?.subtitle}</div>}
+              <div className="deco" aria-hidden="true" />
+              {validBanners.length > 1 && <div className="banner-dots" aria-hidden="true">{validBanners.map((_, i) => <span key={i} className={`banner-dot ${i === bannerIdx ? "on" : ""}`} />)}</div>}
+            </a>
+            {validBanners.length > 1 && <div className="home-banner-controls">
+              <button type="button" onClick={() => goBanner(-1)} aria-label="이전 추천">‹</button>
+              <span aria-live="polite">{bannerIdx + 1} / {validBanners.length}</span>
+              <button type="button" onClick={() => goBanner(1)} aria-label="다음 추천">›</button>
+            </div>}
+          </div>
+        ) : (
+          <a className="hero" href="/search" style={{ display: "flex", textDecoration: "none" }}>
+            <div className="eyebrow">이번 주 추천</div>
+            <h1>내 주변에서 시작하는<br />새로운 움직임</h1>
+            <div className="chip">원하는 종목과 시간을 찾아보세요</div>
+            <div className="deco" aria-hidden="true" />
+          </a>
+        )}
+
+        </section>
 
         {/* 비회원(로그인 안 한 상태)에게는 "곧 시작하는 클래스"/"내 수강권으로 예약
             가능"을 아예 숨긴다(2026-09-04, 사용자 결정) — 종목 둘러보기·센터 정보·내 주변

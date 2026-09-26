@@ -216,6 +216,7 @@ export default function MyInfoPage() {
                 <div className="noti-desc">쿠폰, 이벤트 등 마케팅 정보를 받아볼게요(선택, 언제든 철회할 수 있어요)</div>
               </div>
               <button
+                role="switch" aria-label="이벤트·혜택 정보 수신" aria-checked={marketingConsent}
                 className={`switch ${marketingConsent ? "on" : ""}`}
                 onClick={toggleMarketingConsent}
                 disabled={marketingBusy}
@@ -233,14 +234,14 @@ export default function MyInfoPage() {
             </div>
           ) : (
             <div className="login-wrap" style={{ padding: "0 20px 40px", alignItems: "stretch" }}>
-              <input
+              <input aria-label="새 비밀번호 (6자 이상)"
                 className="input-field"
                 type="password"
                 placeholder="새 비밀번호 (6자 이상)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              <input
+              <input aria-label="새 비밀번호 확인"
                 className="input-field"
                 type="password"
                 placeholder="새 비밀번호 확인"
@@ -258,10 +259,8 @@ export default function MyInfoPage() {
           <div className="menu-section-label">다른 계정과 연결</div>
           <div className="login-wrap" style={{ padding: "0 20px 40px", alignItems: "stretch" }}>
             <div className="perm-guide" style={{ margin: "0 0 8px" }}>
-              이메일로 가입했는데 나중에 카카오/구글 등으로 로그인해서 계정이 따로 생겼다면
-              여기서 하나로 합칠 수 있어요. <b>코드를 만든 이 계정이 남고, 코드를 입력한 계정이
-              이 계정에 합쳐져요.</b> 합쳐진 뒤에도 그 계정으로 다시 로그인하면 지금 이 계정으로
-              들어와요.
+              <b>남길 계정에서 연동 코드를 만드세요.</b> 다른 계정으로 로그인한 뒤 코드를 입력하면
+              두 계정이 합쳐져요. 연결 후에는 어느 로그인 방법으로든 남긴 계정을 이용할 수 있어요.
             </div>
 
             <button className="ghost-btn" onClick={handleCreateLinkCode} disabled={creatingCode}>
@@ -285,7 +284,7 @@ export default function MyInfoPage() {
 
             <div style={{ height: 1, background: "var(--line)", margin: "8px 0 16px" }} />
 
-            <input
+            <input aria-label="다른 계정에서 만든 연동 코드 입력"
               className="input-field"
               type="text"
               placeholder="다른 계정에서 만든 연동 코드 입력"
@@ -317,7 +316,7 @@ export default function MyInfoPage() {
             )}
           </div>
 
-          <div className="menu-section-label">계정 탈퇴</div>
+          <div className="menu-section-label account-danger-title">계정 탈퇴</div>
           <div className="login-wrap" style={{ padding: "0 20px 40px", alignItems: "stretch" }}>
             <div className="perm-guide" style={{ margin: "0 0 8px" }}>
               탈퇴하면 이름·전화번호 등 개인정보는 삭제되어 더 이상 알아볼 수 없게 처리돼요.
@@ -326,7 +325,7 @@ export default function MyInfoPage() {
             </div>
 
             {isEmailProvider ? (
-              <input
+              <input aria-label="본인 확인을 위한 현재 비밀번호"
                 className="input-field"
                 type="password"
                 placeholder="본인 확인을 위한 현재 비밀번호"
@@ -335,7 +334,7 @@ export default function MyInfoPage() {
                 onKeyDown={(e) => e.key === "Enter" && withdraw()}
               />
             ) : (
-              <input
+              <input aria-label={`확인을 위해 "${WITHDRAW_CONFIRM_PHRASE}" 입력`}
                 className="input-field"
                 type="text"
                 placeholder={`확인을 위해 "${WITHDRAW_CONFIRM_PHRASE}" 입력`}

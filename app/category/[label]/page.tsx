@@ -12,17 +12,22 @@ import { fetchCentersByCategory, type SearchCenter } from "../../../lib/home";
 import { centerPhotoUrl } from "../../../lib/center";
 import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
+import ErrorState from "../../components/ErrorState";
+import EmptyState from "../../components/EmptyState";
+import BackButton from "../../components/BackButton";
 
 export default function CategoryPage() {
   const params = useParams();
   const label = decodeURIComponent((params?.label as string) ?? "");
   const [centers, setCenters] = useState<SearchCenter[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(false);
     try { setCenters(await fetchCentersByCategory(label)); }
-    catch { /* 무시 */ }
+    catch { setError(true); }
     finally { setLoading(false); }
   }, [label]);
   useEffect(() => { load(); }, [load]);
@@ -30,18 +35,18 @@ export default function CategoryPage() {
   return (
     <div className="app-shell discovery-page-v2 category-page-v2">
       <div className="back-header">
-        <a className="side" href="/">‹</a>
+        <BackButton fallbackHref="/" />
         <div className="title">{label}</div>
         <div className="side" />
       </div>
 
-      {loading ? <Loading /> : centers.length === 0 ? (
-        <div className="category-empty">
-          <UiIcon name="search" size={29} />
-          <b>아직 {label} 센터가 없어요</b>
-          <span>다른 종목을 둘러보거나 새로운 센터를 검색해보세요.</span>
-          <a className="primary-btn" href="/search">다른 종목 찾아보기</a>
-        </div>
+      {loading ? <Loading /> : error ? (
+        <ErrorState title="센터를 불러오지 못했어요" description="연결 상태를 확인하고 다시 시도해 주세요."
+          action={<button type="button" className="primary-btn" onClick={load}>다시 시도</button>} />
+      ) : centers.length === 0 ? (
+        <EmptyState icon="search" title={`아직 ${label} 센터가 없어요`}
+          description="다른 종목을 둘러보거나 새로운 센터를 검색해보세요."
+          action={<a className="primary-btn" href="/search">다른 종목 찾아보기</a>} />
       ) : (
         <main className="category-results-v3">
           <div className="category-results-head">

@@ -16,6 +16,9 @@ import { requestRefund } from "../../lib/mypage";
 import Loading from "../components/Loading";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DatePicker from "../components/DatePicker";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import BackButton from "../components/BackButton";
 
 const STATUS_LABEL: Record<string, string> = {
   active: "이용중",
@@ -118,16 +121,16 @@ export default function PurchasesPage() {
       />
 
       <div className="back-header">
-        <a className="side" href="/mypage">‹</a>
+        <BackButton fallbackHref="/mypage" />
         <div className="title">구매 내역</div>
         <div className="side" />
       </div>
 
       {/* 필터 */}
       <div className="mem-filters">
-        <button className={`filter-chip ${kindFilter === "all" ? "on" : ""}`} onClick={() => setKindFilter("all")}>전체</button>
-        <button className={`filter-chip ${kindFilter === "pass" ? "on" : ""}`} onClick={() => setKindFilter("pass")}>수강권</button>
-        <button className={`filter-chip ${kindFilter === "goods" ? "on" : ""}`} onClick={() => setKindFilter("goods")}>상품</button>
+        <button type="button" aria-pressed={kindFilter === "all"} className={`filter-chip ${kindFilter === "all" ? "on" : ""}`} onClick={() => setKindFilter("all")}>전체</button>
+        <button type="button" aria-pressed={kindFilter === "pass"} className={`filter-chip ${kindFilter === "pass" ? "on" : ""}`} onClick={() => setKindFilter("pass")}>수강권</button>
+        <button type="button" aria-pressed={kindFilter === "goods"} className={`filter-chip ${kindFilter === "goods" ? "on" : ""}`} onClick={() => setKindFilter("goods")}>상품</button>
       </div>
       <div className="purchase-daterange">
         <DatePicker value={fromDate} onChange={setFromDate} label="조회 시작일" />
@@ -138,10 +141,14 @@ export default function PurchasesPage() {
         )}
       </div>
 
-      {loading ? <Loading /> : shown.length === 0 ? (
-        <div className="daylist-empty" style={{ padding: "60px 20px" }}>
-          {items.length === 0 ? "구매 내역이 없어요" : "조건에 맞는 내역이 없어요"}
-        </div>
+      {loading ? <Loading /> : error && items.length === 0 ? (
+        <ErrorState title="구매 내역을 불러오지 못했어요" description="잠시 후 다시 시도해 주세요."
+          action={<button type="button" className="primary-btn" onClick={load}>다시 시도</button>} />
+      ) : shown.length === 0 ? (
+        <EmptyState icon="card" title={items.length === 0 ? "구매 내역이 없어요" : "조건에 맞는 내역이 없어요"}
+          description={items.length === 0 ? "센터에서 수강권과 상품을 살펴보세요." : "조회 기간이나 종류를 바꿔보세요."}
+          action={items.length === 0 ? <a className="primary-btn" href="/search">센터 찾아보기</a> :
+            <button type="button" className="primary-btn" onClick={() => { setFromDate(""); setToDate(""); setKindFilter("all"); }}>필터 초기화</button>} />
       ) : (
         <div className="purchase-list">
           {shown.map((it) => (

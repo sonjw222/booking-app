@@ -8,7 +8,6 @@
 */
 
 import { useEffect, useState } from "react";
-import Loading from "../../../components/Loading";
 import { supabase } from "../../../../lib/supabaseClient";
 
 export default function AlimtalkSettingsPage() {
@@ -33,30 +32,23 @@ export default function AlimtalkSettingsPage() {
         <div className="side" />
       </div>
 
-      <div style={{ padding: "20px" }}>
-        <div className="menu-section-label" style={{ padding: "0 0 8px" }}>알리고 연동 상태</div>
-        {connected === null ? (
-          <Loading />
-        ) : error ? (
-          <div className="daylist-empty">{error}</div>
-        ) : (
-          <div className="holiday-notice">
-            <div className="holiday-chip">
-              <span className="hc-dot" style={{ background: connected ? "var(--accent)" : "var(--danger)" }} />
-              {connected ? "연결됨 — 알림톡을 발송할 수 있어요" : "연결 안 됨 — 아직 알리고 계정이 등록되지 않았어요"}
-            </div>
-          </div>
-        )}
-
-        <div className="menu-section-label" style={{ padding: "20px 0 8px" }}>연동 절차</div>
-        <div className="perm-guide" style={{ lineHeight: 1.7 }}>
-          1. 알리고(aligo.in) 가입 + 사업자 인증<br />
-          2. 카카오톡 채널 개설 후 알리고와 연결(발신프로필 등록)<br />
-          3. <a href="/manager/alimtalk/templates">템플릿 관리</a>에서 보낼 문구를 등록하고 카카오 승인 요청<br />
-          4. 승인이 끝나면 발급된 템플릿 코드를 템플릿 관리 화면에 입력<br />
-          5. 플랫폼 운영자가 Supabase 대시보드에서 API 키를 시크릿으로 등록하면 이 화면의 상태가
-          "연결됨"으로 바뀌어요(여기서는 키를 직접 입력하지 않아요 — 유출 방지)
-        </div>
+      <div className="connection-settings" style={{ padding: "20px" }}>
+        <section className="connection-card" aria-live="polite">
+          <h2 className="menu-section-label">알림톡 연결 상태</h2>
+          {error ? <p role="alert">{error}</p> : connected === null ? <p>확인 중</p> : <>
+            <strong style={{ color: connected ? "var(--ink)" : "var(--danger)" }}>{connected ? "연결됨" : "연결 필요"}</strong>
+            <p>{connected ? "알림톡을 발송할 수 있어요." : "아직 알리고 계정이 연결되지 않았어요. 아래 준비 사항을 확인해주세요."}</p>
+          </>}
+          <p>모하빗에서 연결 상태를 확인합니다. 도움이 필요하면 운영자에게 문의해주세요.</p>
+        </section>
+        <h2 className="menu-section-label" style={{ padding: "24px 0 8px" }}>연결 준비</h2>
+        <ol className="connection-steps">
+          <li>알리고에 가입하고 사업자 인증을 완료하세요.</li>
+          <li>카카오톡 채널을 개설하세요.</li>
+          <li>알리고에서 카카오 채널을 연결하고 발신프로필을 등록하세요.</li>
+          <li><a href="/manager/alimtalk/templates">템플릿 관리</a>에서 문구를 등록하고 카카오 승인을 요청하세요.</li>
+          <li>승인된 템플릿을 확인하고, 모하빗 운영자에게 연결 확인을 요청하세요.</li>
+        </ol>
       </div>
     </div>
   );
