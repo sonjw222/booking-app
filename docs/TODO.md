@@ -1,5 +1,9 @@
 # TODO
 
+## 종목 아이콘 전체 세트 신규 제작
+
+- **P3 / 미완성**: 현재 컨셉을 기반으로 피겨스케이팅 / 필라테스 / 발레 / 리듬체조 / 요가 / 복싱 / 수영 / 골프 및 추가 종목 전체를 하나의 통일된 illustration system으로 처음부터 새로 제작한다. 2026-09-27 렌더링 폴리시와 분리된 후속 작업이며, 이번 변경에는 신규 그림 제작을 포함하지 않는다.
+
 ## 2026-09-26 UI QA 후속 검증
 
 - **P1 / 확인 필요**: `design/mwhabit-ui-refresh-qa-polish-20260926`을 실계정 Preview 및 iOS/Android WebView에서 확인. 키보드/ safe-area/중첩 sheet focus, swipe·long-press, 실제 로그인/예약/주문/알림톡/Realtime 왕복은 로컬 fixture 테스트로 대체하지 않는다.

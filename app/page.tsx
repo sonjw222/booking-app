@@ -19,7 +19,7 @@ import UiIcon, { type IconName } from "./components/UiIcon";
 // 똑같은 아이콘을 재사용해야 해서(이모지 제거) CATEGORY_ICONS/CATEGORY_IMAGES를
 // app/components/categoryIcons.ts로 옮겼다(단일 출처, 새 asset 없음). 이 파일은 그
 // 공용 모듈을 그대로 import — 동작은 이전과 동일하다.
-import { CATEGORY_ICONS, CATEGORY_IMAGES } from "./components/categoryIcons";
+import CategoryIcon, { CATEGORY_ICONS, CATEGORY_IMAGES } from "./components/categoryIcons";
 
 const CATEGORIES = [
   { icon: "skate" as IconName, image: "/icons/categories/skate.png", label: "피겨스케이팅" },
@@ -313,7 +313,7 @@ export default function Home() {
           {displayCategories.map((cat) => (
             <a className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`}>
               <div className="cat-icon">
-                {cat.image ? <img src={cat.image} alt="" /> : <UiIcon name={cat.icon} size={27} />}
+                <CategoryIcon label={cat.label} size="100%" />
               </div>
               <div className="cat-label">{cat.label}</div>
             </a>
