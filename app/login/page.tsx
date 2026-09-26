@@ -479,7 +479,7 @@ export default function LoginPage() {
           <span className="on" /><span className={signupStep === "profile" ? "on" : ""} />
         </div>}
         {mode === "signup" && signupStep === "profile" && (
-          <input className="input-field" placeholder="이름" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input aria-label="이름" className="input-field" placeholder="이름" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
         )}
         {mode === "signup" && signupStep === "profile" && (
           <>
@@ -487,7 +487,7 @@ export default function LoginPage() {
               <input
                 className="input-field"
                 type="tel"
-                placeholder="휴대폰 번호"
+                aria-label="휴대폰 번호" placeholder="휴대폰 번호"
                 value={phone}
                 onChange={(e) => handlePhoneChange(e.target.value)}
                 disabled={otpVerified}
@@ -530,8 +530,8 @@ export default function LoginPage() {
           <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>
             {mode === "signup" ? "이메일로 가입하기" : "이메일로 로그인"}
           </div>
-          <input className="input-field" type="email" autoComplete="email" placeholder="이메일" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input className="input-field" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"}
+          <input className="input-field" aria-label="이메일" type="email" autoComplete="email" placeholder="이메일" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input className="input-field" aria-label="비밀번호" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"}
             placeholder="비밀번호 (6자 이상)" value={password} onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()} />
         </>}
@@ -602,14 +602,8 @@ export default function LoginPage() {
           {showAppleButton && (
           <button className="social-btn apple" onClick={() => handleSocial("apple")} disabled={!!socialLoading}>
             <span className="social-ic" aria-hidden="true">
-              {/* viewBox를 path의 실제 bbox(-0.5 1.9 22 22, getBBox()로 측정)에 맞춰
-                  정사각형으로 잘라 시각 중앙에 오도록 함 — 원래 "0 0 24 24"는 심볼
-                  자체가 왼쪽으로 치우쳐 있어 원 안에서 중앙정렬이 안 맞았다.
-                  실기기 QA(2026-09-14) — 27px는 카카오 심볼(30px)보다 눈에 띄게 작아
-                  버튼 행에서 시각적 무게가 어긋나 보였다("부자연스럽다") — 같은 비율
-                  (viewBox·path 그대로, 크기만) 30px로 맞춤. Apple 마크 자체의 형태·비율·
-                  색상(검정 배경 위 흰색 — Apple 공식 "Black" 버튼 스타일)은 변형하지 않음. */}
-              <svg width="30" height="30" viewBox="-0.5 1.9 22 22" fill="currentColor"><path d="M16.7 2.3c.1 1-.3 2-.9 2.7-.6.7-1.6 1.3-2.6 1.2-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.3ZM20.5 17c-.6 1.3-.9 1.9-1.6 3-1 1.5-2.5 3.4-4.3 3.4-1.6 0-2-1-4.1-1s-2.6 1-4.2 1c-1.8 0-3.2-1.7-4.2-3.2C.4 17-.4 12.7 1.6 9.7c1-1.5 2.6-2.4 4.2-2.4 1.6 0 2.7 1.1 4 1.1 1.3 0 2.1-1.1 4-1.1 1.3 0 2.7.7 3.7 1.9-3.3 1.8-2.8 6.5.3 7.8Z"/></svg>
+              {/* Official Apple logo-only button artwork, downloaded at 3× resolution. */}
+              <img src="/brand/apple-signin.png" width="30" height="30" alt="" />
             </span>
             <span className="sr-only">{socialLoading === "apple" ? "이동 중..." : mode === "signup" ? "Apple로 가입하기" : "Apple로 계속하기"}</span>
           </button>

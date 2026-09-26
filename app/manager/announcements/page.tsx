@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   매니저 - 공지사항
   - 자기 센터 공지 작성 (제목 + 서식 본문 + 사진)
@@ -203,7 +205,7 @@ export default function ManagerAnnouncementsPage() {
 
       {/* 작성/수정 시트 */}
       {sheet && (
-        <div className="sheet-overlay" onClick={() => setSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setSheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{editingId ? "공지 수정" : "새 공지"}</div>
 
@@ -247,7 +249,7 @@ export default function ManagerAnnouncementsPage() {
               </button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {toast && <div className="toast">{toast}</div>}

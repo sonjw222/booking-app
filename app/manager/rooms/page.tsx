@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   매니저 - 룸(장소) 관리
   - 센터가 사용하는 강습 공간 추가/수정/삭제
@@ -106,14 +108,14 @@ export default function RoomsPage() {
         <a className="side" href="/manager">‹</a>
         <div className="title">룸(장소) 관리</div>
         {canManageRooms && (
-          <button className="header-action" onClick={openAdd}>추가</button>
+          <button className="header-action" onClick={openAdd}>+ 추가</button>
         )}
       </div>
 
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>{c.name}</button>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>{c.name}</button>
           ))}
         </div>
       )}
@@ -151,15 +153,15 @@ export default function RoomsPage() {
 
       {/* 추가/수정 시트 */}
       {(adding || editing) && (
-        <div className="sheet-overlay" onClick={closeSheet}>
+        <SheetOverlay className="sheet-overlay" onClick={closeSheet}>
           <div className="sheet room-edit-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{editing ? "룸 수정" : "룸 추가"}</div>
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>룸 이름</div>
-            <input className="input-field" placeholder="예: A룸, 1번 스튜디오" value={name} onChange={(e) => setName(e.target.value)} />
+            <input aria-label="룸 이름" className="input-field" placeholder="예: A룸, 1번 스튜디오" value={name} onChange={(e) => setName(e.target.value)} />
             <div className="menu-section-label" style={{ padding: "10px 0 6px" }}>설명 (선택)</div>
-            <input className="input-field" placeholder="예: 2층, 거울방" value={memo} onChange={(e) => setMemo(e.target.value)} />
+            <input aria-label="룸 설명" className="input-field" placeholder="예: 2층, 거울방" value={memo} onChange={(e) => setMemo(e.target.value)} />
             <div className="menu-section-label" style={{ padding: "10px 0 6px" }}>주소 (회원 길찾기용, 선택)</div>
-            <input className="input-field" placeholder="예: 서울 강남구 ..." value={address} onChange={(e) => setAddress(e.target.value)} />
+            <input aria-label="주소" className="input-field" placeholder="예: 서울 강남구 ..." value={address} onChange={(e) => setAddress(e.target.value)} />
             {lat != null && lng != null ? (
               <>
                 <MapPreview lat={lat} lng={lng} />
@@ -170,10 +172,10 @@ export default function RoomsPage() {
             )}
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={closeSheet}>취소</button>
-              <button className="outline-action" disabled={busy || !canManageRooms} onClick={handleSave}>{editing ? "수정하기" : "추가하기"}</button>
+              <button className="primary-btn" disabled={busy || !canManageRooms} onClick={handleSave}>{editing ? "수정하기" : "추가하기"}</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {mapPicker && (

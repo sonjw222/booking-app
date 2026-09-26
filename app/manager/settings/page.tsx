@@ -7,6 +7,7 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
+import SegmentedTabs from "../../components/SegmentedTabs";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../../lib/settings";
@@ -120,8 +121,8 @@ export default function SettingsPage() {
   // 자체가 없어서, "수강권으로 볼 수 없는 수업도 표시"(showAllClasses, 준비 중 배지 붙어있음)
   // 토글만 계속 켜고 끌 수 있고 값도 실제로 저장됐다 — 매니저가 "껐는데 왜 계속 다 보이지"로
   // 혼란스러울 수 있었다.
-  const toggle = (on: boolean, onCh: (b: boolean) => void, disabled = false) => (
-    <button className={`switch ${on ? "on" : ""}`} disabled={disabled} onClick={() => onCh(!on)}>
+  const toggle = (label: string, on: boolean, onCh: (b: boolean) => void, disabled = false) => (
+    <button role="switch" aria-label={label} aria-checked={on} className={`switch ${on ? "on" : ""}`} disabled={disabled} onClick={() => onCh(!on)}>
       <span className="knob" />
     </button>
   );
@@ -143,7 +144,7 @@ export default function SettingsPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
               {c.name}
             </button>
           ))}
@@ -199,7 +200,7 @@ export default function SettingsPage() {
           <div className="set-section-title">수업 폐강 시간</div>
           <div className="set-row">
             <div className="set-label">자동 폐강 사용</div>
-            {toggle(s.autocancelEnabled, (b) => up("autocancelEnabled", b))}
+            {toggle("자동 폐강 사용", s.autocancelEnabled, (b) => up("autocancelEnabled", b))}
           </div>
           {s.autocancelEnabled && (
             <div className="set-row col">
@@ -237,7 +238,7 @@ export default function SettingsPage() {
           <div className="set-section-title">일일 예약 가능 횟수</div>
           <div className="set-row">
             <div className="set-label">일일 예약 횟수 제한</div>
-            {toggle(s.dailyBookLimitEnabled, (b) => up("dailyBookLimitEnabled", b))}
+            {toggle("일일 예약 횟수 제한", s.dailyBookLimitEnabled, (b) => up("dailyBookLimitEnabled", b))}
           </div>
           {s.dailyBookLimitEnabled && (
             <div className="set-row">
@@ -263,7 +264,7 @@ export default function SettingsPage() {
           <div className="set-section-title">프라이빗 예약 시간 단위</div>
           <div className="mem-filters" style={{ padding: "0 20px 8px" }}>
             {SLOT_UNITS.map((u) => (
-              <button key={u.value} className={`filter-chip ${s.privateSlotUnit === u.value ? "on" : ""}`} onClick={() => up("privateSlotUnit", u.value)}>{u.label}</button>
+              <button aria-pressed={s.privateSlotUnit === u.value} key={u.value} className={`filter-chip ${s.privateSlotUnit === u.value ? "on" : ""}`} onClick={() => up("privateSlotUnit", u.value)}>{u.label}</button>
             ))}
           </div>
 
@@ -271,7 +272,7 @@ export default function SettingsPage() {
           <div className="set-section-title">프라이빗 동시 수업 최대 개수</div>
           <div className="set-row">
             <div className="set-label">같은 시간대 최대 개수 제한</div>
-            {toggle(s.privateMaxConcurrentEnabled, (b) => up("privateMaxConcurrentEnabled", b))}
+            {toggle("프라이빗 동시 수업 제한", s.privateMaxConcurrentEnabled, (b) => up("privateMaxConcurrentEnabled", b))}
           </div>
           {s.privateMaxConcurrentEnabled && (
             <div className="set-row">
@@ -284,16 +285,9 @@ export default function SettingsPage() {
           <div className="set-section-title">수업매출 캘린더 — 정기권 매출 배분 방식</div>
           <div className="set-row col">
             <div className="set-label">무제한/기간제 수강권의 매출을 어떻게 표시할지</div>
-            <div className="mem-filters" style={{ padding: "8px 0 0" }}>
-              <button
-                className={`filter-chip ${s.unlimitedPassRevenueMode === "usage_split" ? "on" : ""}`}
-                onClick={() => up("unlimitedPassRevenueMode", "usage_split")}
-              >기간 중 이용 횟수로 분배</button>
-              <button
-                className={`filter-chip ${s.unlimitedPassRevenueMode === "purchase_date_full" ? "on" : ""}`}
-                onClick={() => up("unlimitedPassRevenueMode", "purchase_date_full")}
-              >구매일에 전액 표시</button>
-            </div>
+            <SegmentedTabs label="정기권 매출 표시 방식" value={s.unlimitedPassRevenueMode}
+              items={[{ value: "usage_split", label: "이용 횟수로 분배" }, { value: "purchase_date_full", label: "구매일에 전액 표시" }]}
+              onChange={(value) => up("unlimitedPassRevenueMode", value)} />
             <div className="set-soon-note">
               "기간 중 이용 횟수로 분배"는 결제금액을 그 수강권으로 실제 이용한 수업 횟수로
               나눠 각 수업 날짜에 배분해요(기간이 끝나기 전에는 지금까지의 이용 횟수 기준
@@ -306,11 +300,11 @@ export default function SettingsPage() {
           <div className="set-section-title">회원 앱 인원 표시</div>
           <div className="set-row">
             <div className="set-label">그룹 수업 예약 인원 표시</div>
-            {toggle(s.showGroupReservedCount, (b) => up("showGroupReservedCount", b))}
+            {toggle("그룹 수업 예약 인원 표시", s.showGroupReservedCount, (b) => up("showGroupReservedCount", b))}
           </div>
           <div className="set-row">
             <div className="set-label">그룹 수업 대기 인원 표시</div>
-            {toggle(s.showGroupWaitlistCount, (b) => up("showGroupWaitlistCount", b))}
+            {toggle("그룹 수업 대기 인원 표시", s.showGroupWaitlistCount, (b) => up("showGroupWaitlistCount", b))}
           </div>
 
           {/* 11~17. 기능 on/off */}
@@ -326,7 +320,7 @@ export default function SettingsPage() {
           ] as [keyof CenterSettings, string][]).map(([key, label]) => (
             <div className="set-row" key={key}>
               <div className="set-label">{label}</div>
-              {toggle(s[key] as boolean, (b) => up(key, b as any))}
+              {toggle(label, s[key] as boolean, (b) => up(key, b as any))}
             </div>
           ))}
           {/* P1-9 완료(2026-09-09): is_membership_eligible_for_class() 공용 SQL 함수를
@@ -335,17 +329,17 @@ export default function SettingsPage() {
               eligibility_and_show_all_classes_filter.sql 참고). */}
           <div className="set-row">
             <div className="set-label">수강권으로 볼 수 없는 수업도 표시</div>
-            {toggle(s.showAllClasses, (b) => up("showAllClasses", b), true)}
+            {toggle("수강권으로 볼 수 없는 수업 표시", s.showAllClasses, (b) => up("showAllClasses", b), true)}
           </div>
 
           <div style={{ padding: "20px 20px 40px" }}>
-            <button
+            {!dirty && !busy ? <span className="save-status" role="status">저장됨</span> : <button
               className="primary-btn"
               disabled={busy || !dirty || !canSave}
               onClick={handleSave}
             >
-              {busy ? "저장 중" : dirty ? "저장" : "저장됨"}
-            </button>
+              {busy ? "저장 중" : "변경사항 저장"}
+            </button>}
           </div>
         </div>
       )}

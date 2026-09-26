@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   매니저 - 상품 관리 (대여·물품)
   - 피겨화 대여 같은 상품. 수강권과 별개.
@@ -173,7 +175,7 @@ export default function GoodsPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
               {c.name}
             </button>
           ))}
@@ -230,15 +232,15 @@ export default function GoodsPage() {
 
       {/* 상품 추가 시트 */}
       {sheet && (
-        <div className="sheet-overlay" onClick={() => setSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setSheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{editId ? "상품 수정" : "상품 추가"}</div>
 
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>상품 이름</div>
-            <input className="input-field" placeholder="예: 피겨화 대여" value={pName} onChange={(e) => setPName(e.target.value)} />
+            <input aria-label="상품 이름" className="input-field" placeholder="예: 피겨화 대여" value={pName} onChange={(e) => setPName(e.target.value)} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>가격</div>
-            <input inputMode="numeric" className="input-field" placeholder="0" value={pPrice} onChange={(e) => setPPrice(e.target.value)} />
+            <input aria-label="가격" inputMode="numeric" className="input-field" placeholder="0" value={pPrice} onChange={(e) => setPPrice(e.target.value)} />
 
             <div className="set-row" style={{ padding: "14px 0 6px", borderBottom: "none" }}>
               <div className="set-label">횟수 제한 없음 (무제한)</div>
@@ -250,7 +252,7 @@ export default function GoodsPage() {
             {!unlimited && (
               <>
                 <div className="menu-section-label" style={{ padding: "6px 0 6px" }}>총 횟수 (예: 5회권 → 5)</div>
-                <input inputMode="numeric" className="input-field" placeholder="예: 5" value={pCount} onChange={(e) => setPCount(e.target.value)} />
+                <input aria-label="총 횟수" inputMode="numeric" className="input-field" placeholder="예: 5" value={pCount} onChange={(e) => setPCount(e.target.value)} />
               </>
             )}
 
@@ -267,21 +269,22 @@ export default function GoodsPage() {
             </div>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>상세 설명 (선택)</div>
-            <textarea className="input-field" style={{ minHeight: 70, resize: "vertical", lineHeight: 1.5 }}
+            <textarea aria-label="상품 설명 (회원이 이름을 누르면 보여요)" className="input-field" style={{ minHeight: 70, resize: "vertical", lineHeight: 1.5 }}
               placeholder="상품 설명 (회원이 이름을 누르면 보여요)" value={pDesc} onChange={(e) => setPDesc(e.target.value)} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>사이즈 (선택, 쉼표로 구분)</div>
-            <input className="input-field" placeholder="예: 230, 240, 250, 260" value={pSizes} onChange={(e) => setPSizes(e.target.value)} />
+            <input aria-label="사이즈 (쉼표로 구분)" className="input-field" placeholder="예: 230, 240, 250, 260" value={pSizes} onChange={(e) => setPSizes(e.target.value)} />
+            <div className="size-preview" aria-label="사이즈 미리보기">{[...new Set(pSizes.split(",").map(s => s.trim()).filter(Boolean))].map(size => <span key={size}>{size}</span>)}</div>
             <div className="perm-guide" style={{ margin: "4px 0 0" }}>
               대여화·의류처럼 사이즈가 있으면 입력하세요. 회원이 구매 시 사이즈를 선택해요.
             </div>
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => { setSheet(false); setEditId(null); }}>취소</button>
-              <button className="outline-action" disabled={busy} onClick={handleCreate}>{editId ? "수정" : "추가"}</button>
+              <button className="primary-btn" disabled={busy} onClick={handleCreate}>{editId ? "수정" : "추가"}</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
     </div>
   );

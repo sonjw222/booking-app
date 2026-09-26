@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   매니저 - 상담고객(leads) 관리 — P1-8
   - 등록 전 잠재고객(전화 문의, 방문 상담 등) 기록·상태 관리
@@ -172,7 +174,7 @@ export default function LeadsPage() {
       )}
 
       {(adding || editing) && (
-        <div className="sheet-overlay" onClick={closeSheet}>
+        <SheetOverlay className="sheet-overlay" onClick={closeSheet}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{editing ? "상담고객 정보 수정" : "상담고객 등록"}</div>
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>이름</div>
@@ -188,7 +190,7 @@ export default function LeadsPage() {
               <button className="primary-btn" disabled={busy} onClick={handleSave}>{editing ? "수정하기" : "등록하기"}</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
     </div>
   );

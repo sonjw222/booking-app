@@ -32,6 +32,21 @@ export default function InquiryChat({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const fit = () => {
+      const element = viewportRef.current;
+      if (!element) return;
+      const top = Math.max(0, element.getBoundingClientRect().top - (viewport?.offsetTop ?? 0));
+      element.style.setProperty("--chat-available-height", `${Math.max(180, (viewport?.height ?? window.innerHeight) - top)}px`);
+    };
+    fit();
+    viewport?.addEventListener("resize", fit);
+    viewport?.addEventListener("scroll", fit);
+    window.addEventListener("resize", fit);
+    return () => { viewport?.removeEventListener("resize", fit); viewport?.removeEventListener("scroll", fit); window.removeEventListener("resize", fit); };
+  }, []);
   // 마운트 시 한 번만 조회해 재사용 — fetchMessages()/실시간 append 양쪽에서 매번
   // getMyAccountId()를 다시 부르지 않게 한다(왕복 1회 절감).
   const myAccountIdRef = useRef<string | null>(null);
@@ -115,9 +130,9 @@ export default function InquiryChat({
   }
 
   return (
-    <div className="chat-wrap">
+    <div className="chat-wrap" ref={viewportRef}>
       <div className="chat-header">
-        <button className="chat-back" onClick={onBack}>‹</button>
+        <button aria-label="문의 목록으로" className="chat-back" onClick={onBack}>‹</button>
         <span className="chat-title">{title}</span>
       </div>
 
@@ -177,13 +192,13 @@ export default function InquiryChat({
         <div className="chat-input-bar">
           <label className="chat-photo-btn">
             {uploading ? "…" : "＋"}
-            <input type="file" accept="image/*" hidden onChange={async (e) => {
+            <input aria-label="사진 첨부" type="file" accept="image/*" hidden onChange={async (e) => {
               const f = e.target.files?.[0]; if (!f) return;
               await handlePhoto(f); e.target.value = "";
             }} />
           </label>
           <textarea
-            className="chat-input"
+            aria-label="메시지" className="chat-input"
             placeholder="메시지를 입력하세요"
             value={text}
             onChange={(e) => setText(e.target.value)}

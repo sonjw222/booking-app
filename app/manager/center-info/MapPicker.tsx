@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   지도에서 위치 지정 (API 키 불필요)
   - OpenStreetMap + Leaflet(CDN)
@@ -97,7 +99,7 @@ export default function MapPicker({ initialLat, initialLng, onPick, onClose }: P
   }
 
   return (
-    <div className="sheet-overlay" onClick={onClose}>
+    <SheetOverlay className="sheet-overlay" onClick={onClose}>
       <div className="sheet map-picker-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-title">지도에서 위치 지정</div>
         <div className="map-search-row">
@@ -125,6 +127,6 @@ export default function MapPicker({ initialLat, initialLng, onPick, onClose }: P
           </button>
         </div>
       </div>
-    </div>
+    </SheetOverlay>
   );
 }

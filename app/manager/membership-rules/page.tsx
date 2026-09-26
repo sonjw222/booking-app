@@ -1,12 +1,14 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   매니저 - 수강권 상품 & 예약조건 설정
   - 상품(수강권 종류) 생성/삭제
   - 상품마다 "요일 + 시간 + 수업명" 조건을 여러 개 부여
   - 조건이 없으면 = 모든 수업 예약 가능
   - 예: "안무반 수강권" → 월 19:00 안무반, 수 21:00 안무반만 예약 가능
-  - 수강권 관리 권한(pass.update) 필요
+  - 수강권 설정 권한(pass.update) 필요
 */
 
 import { useCallback, useEffect, useState } from "react";
@@ -325,7 +327,7 @@ export default function MembershipRulesPage() {
       <div className="app-shell">
         <div className="back-header">
           <a className="side" href="/manager">‹</a>
-          <div className="title">수강권 관리</div>
+          <div className="title">수강권 설정</div>
           <div className="side" />
         </div>
         <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
@@ -339,7 +341,7 @@ export default function MembershipRulesPage() {
 
       <div className="back-header">
         <a className="side" href="/manager">‹</a>
-        <div className="title">수강권 관리</div>
+        <div className="title">수강권 설정</div>
         {canCreateProduct && (
           <button className="header-action" onClick={openCreateSheet}>+ 수강권</button>
         )}
@@ -350,7 +352,7 @@ export default function MembershipRulesPage() {
           <div className="menu-section-label" style={{ padding: "0 20px 4px" }}>지금 보는 센터</div>
           <div className="center-switcher">
             {centers.map((c) => (
-              <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+              <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
                 {c.name}
               </button>
             ))}
@@ -366,7 +368,7 @@ export default function MembershipRulesPage() {
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
       {!loading && products.length > 10 && (
-        <input
+        <input aria-label="상품 이름 검색"
           className="input-field"
           style={{ margin: "0 20px 10px", width: "calc(100% - 40px)" }}
           placeholder="상품 이름 검색"
@@ -494,15 +496,15 @@ export default function MembershipRulesPage() {
 
       {/* 상품 추가/수정 시트 */}
       {prodSheet && (
-        <div className="sheet-overlay" onClick={resetProdSheet}>
+        <SheetOverlay className="sheet-overlay" onClick={resetProdSheet}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{editingId ? "수강권 수정" : "수강권 추가"}</div>
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>상품 이름</div>
-            <input className="input-field" placeholder="예: 안무반 수강권" value={pName} onChange={(e) => setPName(e.target.value)} />
+            <input aria-label="상품 이름" className="input-field" placeholder="예: 안무반 수강권" value={pName} onChange={(e) => setPName(e.target.value)} />
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>
               그룹명 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>· 선택, 회원 화면에서 이 이름으로 묶여 보여요</span>
             </div>
-            <input className="input-field" list="pass-group-label-options" placeholder="예: 요일고정, 자유이용" value={pGroupLabel} onChange={(e) => setPGroupLabel(e.target.value)} />
+            <input aria-label="수강권 그룹명" className="input-field" list="pass-group-label-options" placeholder="예: 요일고정, 자유이용" value={pGroupLabel} onChange={(e) => setPGroupLabel(e.target.value)} />
             <datalist id="pass-group-label-options">
               {Array.from(new Set(products.map((p) => p.groupLabel).filter((g): g is string => !!g))).map((g) => (
                 <option key={g} value={g} />
@@ -511,10 +513,10 @@ export default function MembershipRulesPage() {
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>
               설명 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>· 선택, 회원이 이름을 누르면 보여요</span>
             </div>
-            <textarea className="input-field" style={{ minHeight: 60, resize: "vertical", lineHeight: 1.5 }}
+            <textarea aria-label="예: 화 19:00 안무반 전용 수강권이에요" className="input-field" style={{ minHeight: 60, resize: "vertical", lineHeight: 1.5 }}
               placeholder="예: 화 19:00 안무반 전용 수강권이에요" value={pDesc} onChange={(e) => setPDesc(e.target.value)} />
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>가격</div>
-            <input inputMode="numeric" className="input-field" placeholder="0" value={pPrice} onChange={(e) => setPPrice(e.target.value)} />
+            <input aria-label="가격" inputMode="numeric" className="input-field" placeholder="0" value={pPrice} onChange={(e) => setPPrice(e.target.value)} />
             <div className="set-row" style={{ padding: "12px 0 6px", borderBottom: "none" }}>
               <div className="set-label">횟수 제한 없음 (무제한)</div>
               <button className={`switch ${pUnlimited ? "on" : ""}`} onClick={() => setPUnlimited(!pUnlimited)}>
@@ -524,7 +526,7 @@ export default function MembershipRulesPage() {
             {!pUnlimited && (
               <>
                 <div className="menu-section-label" style={{ padding: "6px 0 6px" }}>총 횟수</div>
-                <input inputMode="numeric" className="input-field" placeholder="예: 8" value={pCount} onChange={(e) => setPCount(e.target.value)} />
+                <input aria-label="총 횟수" inputMode="numeric" className="input-field" placeholder="예: 8" value={pCount} onChange={(e) => setPCount(e.target.value)} />
               </>
             )}
 
@@ -538,7 +540,7 @@ export default function MembershipRulesPage() {
             </div>
             {pLimitSale && (
               <>
-                <input inputMode="numeric" className="input-field" placeholder="예: 10" value={pMaxQty} onChange={(e) => setPMaxQty(e.target.value)} />
+                <input aria-label="판매 수량" inputMode="numeric" className="input-field" placeholder="예: 10" value={pMaxQty} onChange={(e) => setPMaxQty(e.target.value)} />
                 {editingId && (() => {
                   const cur = products.find((x) => x.id === editingId);
                   if (!cur) return null;
@@ -590,7 +592,7 @@ export default function MembershipRulesPage() {
                 ) : (
                   <div className="mem-filters" style={{ padding: 0, flexWrap: "wrap" }}>
                     {grades.map((g) => (
-                      <button
+                      <button aria-pressed={pVisGradeIds.includes(g.id)}
                         key={g.id}
                         type="button"
                         className={`filter-chip ${pVisGradeIds.includes(g.id) ? "on" : ""}`}
@@ -607,7 +609,7 @@ export default function MembershipRulesPage() {
 
             {pVisType === "selected_members" && (
               <div style={{ marginTop: 8 }}>
-                <input
+                <input aria-label="회원 이름 또는 전화번호 검색"
                   className="input-field"
                   placeholder="회원 이름 또는 전화번호 검색"
                   value={visMemberSearch}
@@ -648,7 +650,7 @@ export default function MembershipRulesPage() {
             </div>
             <div className="mem-filters" style={{ padding: 0 }}>
               {["일", "월", "화", "수", "목", "금", "토"].map((w, i) => (
-                <button key={i} className={`filter-chip ${pAutoDays.includes(i) ? "on" : ""}`}
+                <button aria-pressed={pAutoDays.includes(i)} key={i} className={`filter-chip ${pAutoDays.includes(i) ? "on" : ""}`}
                   onClick={() => setPAutoDays((prev) => prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i])}>
                   {w}
                 </button>
@@ -697,12 +699,12 @@ export default function MembershipRulesPage() {
               <button className="primary-btn" disabled={busy} onClick={handleCreateProduct}>{editingId ? "저장" : "추가"}</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 조건 추가 시트 */}
       {ruleFor && (
-        <div className="sheet-overlay" onClick={() => setRuleFor(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setRuleFor(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{ruleFor.name} 조건 추가</div>
 
@@ -757,9 +759,9 @@ export default function MembershipRulesPage() {
                 ))
               ) : (
                 <>
-                  <button className={`filter-chip ${rDays.length === 0 ? "on" : ""}`} onClick={() => setRDays([])}>모든 요일</button>
+                  <button aria-pressed={rDays.length === 0} className={`filter-chip ${rDays.length === 0 ? "on" : ""}`} onClick={() => setRDays([])}>모든 요일</button>
                   {DAYS.map((d, i) => (
-                    <button key={i} className={`filter-chip ${rDays.includes(i) ? "on" : ""}`} onClick={() => setRDays((prev) => prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i])}>{d}</button>
+                    <button aria-pressed={rDays.includes(i)} key={i} className={`filter-chip ${rDays.includes(i) ? "on" : ""}`} onClick={() => setRDays((prev) => prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i])}>{d}</button>
                   ))}
                 </>
               )}
@@ -769,14 +771,14 @@ export default function MembershipRulesPage() {
             <input type="time" className="input-field" value={rTime} onChange={(e) => setRTime(e.target.value)} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>수업명 포함 (비우면 모든 수업)</div>
-            <input className="input-field" placeholder="예: 안무반" value={rTitle} onChange={(e) => setRTitle(e.target.value)} />
+            <input aria-label="수업명 포함 조건" className="input-field" placeholder="예: 안무반" value={rTitle} onChange={(e) => setRTitle(e.target.value)} />
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => setRuleFor(null)}>취소</button>
               <button className="primary-btn" disabled={busy} onClick={handleAddRule}>추가</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
     </div>
   );

@@ -110,11 +110,12 @@ export default function NotificationSettingsPage() {
             <div className="noti-label">앱을 닫아도 알림 받기</div>
             <div className="noti-desc">
               {pushStatus === "unsupported"
-                ? "이 환경은 지원하지 않아요"
+                ? "이 브라우저에서는 지원하지 않아요. 앱의 알림함에서 확인할 수 있어요."
                 : "OS 푸시로 새 알림을 바로 받아요"}
             </div>
           </div>
           <button
+            role="switch" aria-label="앱을 닫아도 알림 받기" aria-checked={pushStatus === "subscribed"}
             className={`switch ${pushStatus === "subscribed" ? "on" : ""}`}
             onClick={togglePush}
             disabled={pushStatus === "unsupported" || pushBusy}
@@ -137,6 +138,7 @@ export default function NotificationSettingsPage() {
               <div className="noti-desc">{it.desc}</div>
             </div>
             <button
+              role="switch" aria-label={it.label} aria-checked={prefs[it.key] && it.ready}
               className={`switch ${prefs[it.key] && it.ready ? "on" : ""}`}
               onClick={() => it.ready && toggle(it.key)}
               disabled={!it.ready}

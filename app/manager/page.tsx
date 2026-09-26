@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../components/SheetOverlay";
+
 /*
   매니저 대시보드 (매니저 모드 홈)
   - 내가 운영하는 센터 선택 (여러 개면 전환)
@@ -472,7 +474,7 @@ export default function ManagerDashboard() {
       </section>
       {/* 예약자 명단 시트 */}
       {rosterClass && (
-        <div className="sheet-overlay" onClick={() => setRosterClass(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setRosterClass(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{rosterClass.title} 예약자</div>
             <div className="hist-summary" style={{ padding: "0 0 8px" }}>
@@ -532,12 +534,12 @@ export default function ManagerDashboard() {
               <button className="ghost-btn" onClick={() => setRosterClass(null)}>닫기</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 회원 정보 팝업 */}
       {memberInfo && (
-        <div className="sheet-overlay" onClick={() => setMemberInfo(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setMemberInfo(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{memberInfo.name}</div>
             {!memberInfo.data ? (
@@ -573,7 +575,7 @@ export default function ManagerDashboard() {
               <button className="ghost-btn" onClick={() => setMemberInfo(null)}>닫기</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
     </div>
   );

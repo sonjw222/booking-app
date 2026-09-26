@@ -246,7 +246,7 @@ export default function CartPage() {
                 <div className="cart-sizes">
                   <span className="cart-size-label">사이즈</span>
                   {it.sizes!.map((sz) => (
-                    <button key={sz} className={`filter-chip ${it.selectedSize === sz ? "on" : ""}`}
+                    <button aria-pressed={it.selectedSize === sz} key={sz} className={`filter-chip ${it.selectedSize === sz ? "on" : ""}`}
                       disabled={busy} onClick={() => handleSize(it, sz)}>{sz}</button>
                   ))}
                 </div>
@@ -277,7 +277,7 @@ export default function CartPage() {
               <div className="menu-section-label commerce-label">누구 앞으로 구매할까요?</div>
               <div className="mem-filters">
                 {profiles.map((p) => (
-                  <button key={p.id} className={`filter-chip ${selectedProfileId === p.id ? "on" : ""}`}
+                  <button aria-pressed={selectedProfileId === p.id} key={p.id} className={`filter-chip ${selectedProfileId === p.id ? "on" : ""}`}
                     onClick={() => setSelectedProfileId(p.id)}>
                     {p.name}{p.isPrimary ? " (본인)" : ""}
                   </button>
@@ -289,7 +289,7 @@ export default function CartPage() {
           {/* 쿠폰 */}
           <div className="menu-section-label commerce-label">할인 쿠폰</div>
           <div className="commerce-code-row">
-            <input className="input-field" style={{ flex: 1 }} placeholder="쿠폰 코드 입력"
+            <input aria-label="쿠폰 코드 입력" className="input-field" style={{ flex: 1 }} placeholder="쿠폰 코드 입력"
               value={couponInput}
               onChange={(e) => { setCouponInput(e.target.value); setCouponMsg(null); }}
               onKeyDown={(e) => { if (e.key === "Enter") applyCoupon(); }} />

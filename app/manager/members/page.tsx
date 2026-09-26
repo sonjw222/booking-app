@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   매니저 - 회원 관리 화면
   - 센터 선택 → 회원 목록 (등급/상태 필터 + 이름·전화 검색)
@@ -556,7 +558,7 @@ function MembersContent() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
               {c.name}
             </button>
           ))}
@@ -572,7 +574,7 @@ function MembersContent() {
           {canViewPhone && <option value="phone">휴대폰</option>}
           <option value="address">주소</option>
         </select>
-        <input
+        <input aria-label={searchField === "address" ? "주소 검색" : searchField === "phone" ? "휴대폰 번호 검색" : "이름 검색"}
           className="input-field"
           style={{ flex: 1 }}
           placeholder={searchField === "address" ? "주소 검색" : searchField === "phone" ? "휴대폰 번호 검색" : "이름 검색"}
@@ -585,10 +587,10 @@ function MembersContent() {
           등급 칩만 horizontal scroll(.mem-filters-scroll)되게 분리. 예전엔 .mem-filters
           전체가 하나의 overflow-x:auto라 "전체" 버튼까지 같이 스크롤되어 사라졌다. */}
       <div className="mem-filters">
-        <button className={`filter-chip all-chip ${!gradeFilter ? "on" : ""}`} onClick={() => setGradeFilter(null)}>등급 전체</button>
+        <button aria-pressed={!gradeFilter} className={`filter-chip all-chip ${!gradeFilter ? "on" : ""}`} onClick={() => setGradeFilter(null)}>등급 전체</button>
         <div className="mem-filters-scroll">
           {grades.map((g) => (
-            <button key={g.id} className={`filter-chip ${gradeFilter === g.id ? "on" : ""}`} onClick={() => setGradeFilter(g.id)}>
+            <button aria-pressed={gradeFilter === g.id} key={g.id} className={`filter-chip ${gradeFilter === g.id ? "on" : ""}`} onClick={() => setGradeFilter(g.id)}>
               <span className="grade-dot" style={{ background: g.color ?? "var(--line-strong)" }} />{g.name}
             </button>
           ))}
@@ -597,10 +599,10 @@ function MembersContent() {
 
       {/* 3-6 — 상태 필터도 동일 구조("상태 전체" 고정 + 나머지 스크롤). */}
       <div className="mem-filters">
-        <button className={`filter-chip all-chip ${!statusFilter ? "on" : ""}`} onClick={() => setStatusFilter(null)}>상태 전체</button>
+        <button aria-pressed={!statusFilter} className={`filter-chip all-chip ${!statusFilter ? "on" : ""}`} onClick={() => setStatusFilter(null)}>상태 전체</button>
         <div className="mem-filters-scroll">
           {Object.entries(STATUS_LABEL).map(([k, v]) => (
-            <button key={k} className={`filter-chip ${statusFilter === k ? "on" : ""}`} onClick={() => setStatusFilter(k)}>{v}</button>
+            <button aria-pressed={statusFilter === k} key={k} className={`filter-chip ${statusFilter === k ? "on" : ""}`} onClick={() => setStatusFilter(k)}>{v}</button>
           ))}
         </div>
       </div>
@@ -710,7 +712,7 @@ function MembersContent() {
 
       {/* 회원 상세 시트 */}
       {detail && (
-        <div className="sheet-overlay" onClick={() => setDetail(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setDetail(null)}>
           <div className="sheet member-detail-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title mem-detail-title">
               <span>{detail.name}</span>
@@ -774,10 +776,10 @@ function MembersContent() {
 
             {/* 탭 */}
             <div className="perm-tabs" style={{ marginTop: 4 }}>
-              <button className={`perm-tab ${detailTab === "info" ? "on" : ""}`} onClick={() => setDetailTab("info")}>정보</button>
-              <button className={`perm-tab ${detailTab === "reservations" ? "on" : ""}`} onClick={() => setDetailTab("reservations")}>예약</button>
-              <button className={`perm-tab ${detailTab === "progress" ? "on" : ""}`} onClick={() => setDetailTab("progress")}>진도</button>
-              <button className={`perm-tab ${detailTab === "payments" ? "on" : ""}`} onClick={() => setDetailTab("payments")}>결제</button>
+              <button aria-pressed={detailTab === "info"} className={`perm-tab ${detailTab === "info" ? "on" : ""}`} onClick={() => setDetailTab("info")}>정보</button>
+              <button aria-pressed={detailTab === "reservations"} className={`perm-tab ${detailTab === "reservations" ? "on" : ""}`} onClick={() => setDetailTab("reservations")}>예약</button>
+              <button aria-pressed={detailTab === "progress"} className={`perm-tab ${detailTab === "progress" ? "on" : ""}`} onClick={() => setDetailTab("progress")}>진도</button>
+              <button aria-pressed={detailTab === "payments"} className={`perm-tab ${detailTab === "payments" ? "on" : ""}`} onClick={() => setDetailTab("payments")}>결제</button>
             </div>
 
             {detailTab === "info" && (
@@ -789,9 +791,9 @@ function MembersContent() {
 
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>등급</div>
                 <div className="mem-filters" style={{ padding: 0 }}>
-                  <button className={`filter-chip ${!detail.gradeId ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetGrade(null)}>없음</button>
+                  <button aria-pressed={!detail.gradeId} className={`filter-chip ${!detail.gradeId ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetGrade(null)}>없음</button>
                   {grades.map((g) => (
-                    <button key={g.id} className={`filter-chip ${detail.gradeId === g.id ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetGrade(g.id)}>
+                    <button aria-pressed={detail.gradeId === g.id} key={g.id} className={`filter-chip ${detail.gradeId === g.id ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetGrade(g.id)}>
                       <span className="grade-dot" style={{ background: g.color ?? "var(--line-strong)" }} />{g.name}
                     </button>
                   ))}
@@ -799,9 +801,9 @@ function MembersContent() {
 
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>회원 상태</div>
                 <div className="mem-filters" style={{ padding: 0 }}>
-                  <button className={`filter-chip ${detail.status === "active" ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetStatus("active")}>활성</button>
-                  <button className={`filter-chip ${detail.status === "dormant" ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetStatus("dormant")}>휴면</button>
-                  <button className={`filter-chip ${detail.status === "expired" ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetStatus("expired")}>만료</button>
+                  <button aria-pressed={detail.status === "active"} className={`filter-chip ${detail.status === "active" ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetStatus("active")}>활성</button>
+                  <button aria-pressed={detail.status === "dormant"} className={`filter-chip ${detail.status === "dormant" ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetStatus("dormant")}>휴면</button>
+                  <button aria-pressed={detail.status === "expired"} className={`filter-chip ${detail.status === "expired" ? "on" : ""}`} disabled={busy || !canUpdateMember} onClick={() => handleSetStatus("expired")}>만료</button>
                 </div>
                 <div className="perm-guide" style={{ margin: "6px 0 0" }}>
                   {canUpdateMember
@@ -839,10 +841,10 @@ function MembersContent() {
                 })()}
 
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>주소 (관리자 기록용)</div>
-                <input className="input-field" disabled={!canUpdateMember} placeholder="예: 서울 강남구 ..." value={addressText} onChange={(e) => setAddressText(e.target.value)} />
+                <input aria-label="회원 주소" className="input-field" disabled={!canUpdateMember} placeholder="예: 서울 강남구 ..." value={addressText} onChange={(e) => setAddressText(e.target.value)} />
 
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>관리자 메모 (회원에게 보이지 않음)</div>
-                <input className="input-field" disabled={!canUpdateMember} placeholder="예: 무릎 부상 이력" value={memoText} onChange={(e) => setMemoText(e.target.value)} />
+                <input aria-label="회원 메모" className="input-field" disabled={!canUpdateMember} placeholder="예: 무릎 부상 이력" value={memoText} onChange={(e) => setMemoText(e.target.value)} />
 
                 {canViewMemo && (
                   <>
@@ -883,7 +885,7 @@ function MembersContent() {
                       {memberMemos.length === 0 && <div className="daylist-empty" style={{ padding: 12 }}>등록된 메모가 없어요</div>}
                       {canAddMemo && (
                         <div style={{ display: "flex", gap: 6 }}>
-                          <textarea
+                          <textarea aria-label="메모를 남겨보세요"
                             className="input-field" style={{ width: "100%", minHeight: 50 }}
                             placeholder="메모를 남겨보세요" value={memberMemoInput} onChange={(e) => setMemberMemoInput(e.target.value)}
                           />
@@ -951,12 +953,12 @@ function MembersContent() {
             )}
             </>)}
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 등급 관리 시트 */}
       {gradeSheet && (
-        <div className="sheet-overlay" onClick={() => setGradeSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setGradeSheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">회원 등급 관리</div>
 
@@ -975,7 +977,7 @@ function MembersContent() {
             )}
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>등급 추가</div>
-            <input className="input-field" placeholder="등급 이름 (예: VIP)" value={newGradeName} onChange={(e) => setNewGradeName(e.target.value)} />
+            <input aria-label="등급 이름 (예: VIP)" className="input-field" placeholder="등급 이름 (예: VIP)" value={newGradeName} onChange={(e) => setNewGradeName(e.target.value)} />
             <div className="color-picker">
               {GRADE_COLORS.map((c) => (
                 <button key={c} className={`color-dot ${newGradeColor === c ? "on" : ""}`} style={{ background: c }} onClick={() => setNewGradeColor(c)} />
@@ -987,12 +989,12 @@ function MembersContent() {
               <button className="primary-btn" disabled={busy} onClick={handleCreateGrade}>추가</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 엑셀 내보내기 시트 */}
       {csvSheet && (
-        <div className="sheet-overlay" onClick={() => setCsvSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setCsvSheet(false)}>
           <div className="sheet csv-export-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">엑셀 내보내기</div>
             <div className="sheet-lead">필요한 회원 정보만 선택해서 내보낼 수 있어요.</div>
@@ -1017,12 +1019,12 @@ function MembersContent() {
               <button className="primary-btn" onClick={handleCsvDownload}>{members.length}명 내보내기</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 회원 추가 시트 */}
       {addSheet && (
-        <div className="sheet-overlay" onClick={() => setAddSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setAddSheet(false)}>
           <div className="sheet member-add-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">회원 추가</div>
             <div className="perm-guide" style={{ margin: "0 0 10px" }}>
@@ -1031,7 +1033,7 @@ function MembersContent() {
             </div>
             <div className="hol-add member-add-search" style={{ padding: 0 }}>
               <div className="member-add-search-row">
-                <input
+                <input aria-label="이름 또는 전화번호 (2글자 이상)"
                   className="input-field"
                   placeholder="이름 또는 전화번호 (2글자 이상)"
                   value={searchKw}
@@ -1065,12 +1067,12 @@ function MembersContent() {
               <button className="ghost-btn" onClick={() => setAddSheet(false)}>닫기</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 수강권/상품 지급 시트 — 주문 없이 매니저가 바로 발급(서비스 무상 지급 포함) */}
       {grantTarget && (
-        <div className="sheet-overlay" onClick={() => !granting && setGrantTarget(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => !granting && setGrantTarget(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{grantTarget.name}님에게 지급</div>
 
@@ -1087,7 +1089,7 @@ function MembersContent() {
             </select>
 
             <div className="menu-section-label" style={{ padding: "0 0 6px" }}>가격</div>
-            <input
+            <input aria-label="0원이면 서비스로 지급"
               className="input-field" type="number" min={0} style={{ marginBottom: 10 }}
               placeholder="0원이면 서비스로 지급" value={grantPrice} disabled={granting}
               onChange={(e) => {
@@ -1104,7 +1106,7 @@ function MembersContent() {
                 <span className="filter-chip on">서비스(무상 지급)</span>
               ) : (
                 (["card", "cash", "transfer"] as const).map((m) => (
-                  <button
+                  <button aria-pressed={grantMethod === m}
                     key={m} className={`filter-chip ${grantMethod === m ? "on" : ""}`} disabled={granting}
                     onClick={() => setGrantMethod(m)}
                   >
@@ -1115,7 +1117,7 @@ function MembersContent() {
             </div>
 
             <div className="menu-section-label" style={{ padding: "0 0 6px" }}>관리자 메모 (회원에게 보이지 않음)</div>
-            <input
+            <input aria-label="예: 이벤트 당첨 증정"
               className="input-field" style={{ marginBottom: 10 }}
               placeholder="예: 이벤트 당첨 증정" value={grantMemo} disabled={granting}
               onChange={(e) => setGrantMemo(e.target.value)}
@@ -1134,12 +1136,12 @@ function MembersContent() {
               </button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {/* 알림톡 발송 시트 — 회원 목록 다중 선택 또는 상세에서 1명 */}
       {alimtalkTargets && (
-        <div className="sheet-overlay" onClick={() => !sendingAlimtalk && setAlimtalkTargets(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => !sendingAlimtalk && setAlimtalkTargets(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">알림톡 보내기</div>
             <div className="perm-guide" style={{ margin: "0 0 10px" }}>
@@ -1156,7 +1158,7 @@ function MembersContent() {
               </button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
     </div>
   );

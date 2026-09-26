@@ -320,6 +320,39 @@ export default function Home() {
           ))}
         </div>
 
+        {/* 프로모션 슬롯: 종목 다음, 수업 목록 이전. 광고 SDK와 독립적인 영역. */}
+        <section className="promotion-slot" aria-label="프로모션">
+        {validBanners.length > 0 ? (
+          <div className="hero-wrap"
+            onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+            onTouchEnd={(e) => {
+              const dx = e.changedTouches[0].clientX - touchStartX.current;
+              if (Math.abs(dx) > 40) goBanner(dx < 0 ? 1 : -1);
+            }}>
+            <a className="hero" href={validBanners[bannerIdx]?.linkUrl || "/reservation"} style={{ display: "flex", textDecoration: "none" }}>
+              <div className="eyebrow">추천</div>
+              <h1>{validBanners[bannerIdx]?.title}</h1>
+              {validBanners[bannerIdx]?.subtitle && <div className="chip">{validBanners[bannerIdx]?.subtitle}</div>}
+              <div className="deco" aria-hidden="true" />
+              {validBanners.length > 1 && <div className="banner-dots" aria-hidden="true">{validBanners.map((_, i) => <span key={i} className={`banner-dot ${i === bannerIdx ? "on" : ""}`} />)}</div>}
+            </a>
+            {validBanners.length > 1 && <div className="home-banner-controls">
+              <button type="button" onClick={() => goBanner(-1)} aria-label="이전 추천">‹</button>
+              <span aria-live="polite">{bannerIdx + 1} / {validBanners.length}</span>
+              <button type="button" onClick={() => goBanner(1)} aria-label="다음 추천">›</button>
+            </div>}
+          </div>
+        ) : (
+          <a className="hero" href="/search" style={{ display: "flex", textDecoration: "none" }}>
+            <div className="eyebrow">이번 주 추천</div>
+            <h1>내 주변에서 시작하는<br />새로운 움직임</h1>
+            <div className="chip">원하는 종목과 시간을 찾아보세요</div>
+            <div className="deco" aria-hidden="true" />
+          </a>
+        )}
+
+        </section>
+
         {/* 비회원(로그인 안 한 상태)에게는 "곧 시작하는 클래스"/"내 수강권으로 예약
             가능"을 아예 숨긴다(2026-09-04, 사용자 결정) — 종목 둘러보기·센터 정보·내 주변
             센터 검색은 비회원도 그대로 이용 가능, 예약 관련 개인화 목록만 가입 유도. 로딩
@@ -355,36 +388,6 @@ export default function Home() {
               </div>
             )}
           </>
-        )}
-
-        {/* 추천 콘텐츠는 예약·종목 뒤에 두고, 배너는 직접 넘길 때만 바뀐다. */}
-        {validBanners.length > 0 ? (
-          <div className="hero-wrap"
-            onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
-            onTouchEnd={(e) => {
-              const dx = e.changedTouches[0].clientX - touchStartX.current;
-              if (Math.abs(dx) > 40) goBanner(dx < 0 ? 1 : -1);
-            }}>
-            <a className="hero" href={validBanners[bannerIdx]?.linkUrl || "/reservation"} style={{ display: "flex", textDecoration: "none" }}>
-              <div className="eyebrow">추천</div>
-              <h1>{validBanners[bannerIdx]?.title}</h1>
-              {validBanners[bannerIdx]?.subtitle && <div className="chip">{validBanners[bannerIdx]?.subtitle}</div>}
-              <div className="deco" aria-hidden="true" />
-              {validBanners.length > 1 && <div className="banner-dots" aria-hidden="true">{validBanners.map((_, i) => <span key={i} className={`banner-dot ${i === bannerIdx ? "on" : ""}`} />)}</div>}
-            </a>
-            {validBanners.length > 1 && <div className="home-banner-controls">
-              <button type="button" onClick={() => goBanner(-1)} aria-label="이전 추천">‹</button>
-              <span aria-live="polite">{bannerIdx + 1} / {validBanners.length}</span>
-              <button type="button" onClick={() => goBanner(1)} aria-label="다음 추천">›</button>
-            </div>}
-          </div>
-        ) : (
-          <a className="hero" href="/search" style={{ display: "flex", textDecoration: "none" }}>
-            <div className="eyebrow">이번 주 추천</div>
-            <h1>내 주변에서 시작하는<br />새로운 움직임</h1>
-            <div className="chip">원하는 종목과 시간을 찾아보세요</div>
-            <div className="deco" aria-hidden="true" />
-          </a>
         )}
 
         {/* 전자상거래법상 사업자정보는 로그인 없이도 항상 볼 수 있어야 해서 홈 화면에

@@ -82,7 +82,7 @@ export default function AdminAssignmentLogPage() {
   useEffect(() => { setVisibleCount(PAGE_SIZE); }, [logs, kw]);
 
   if (loading && logs.length === 0) {
-    return <div className="app-shell"><Loading /></div>;
+    return <div className="app-shell assignment-page"><Loading /></div>;
   }
 
   return (
@@ -98,13 +98,17 @@ export default function AdminAssignmentLogPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
               {c.name}
             </button>
           ))}
         </div>
       )}
 
+      {(fromDate || toDate || typeFilter !== "all" || actionFilter !== "all" || reasonFilter !== "all" || capacityOnly || keyword) && <div className="filter-summary">
+        <span>{[fromDate || toDate ? "기간" : "", typeFilter !== "all" ? RESERVATION_TYPE_LABELS[typeFilter] : "", actionFilter !== "all" ? ACTION_LABELS[actionFilter] : "", reasonFilter !== "all" ? ADMIN_REASON_LABELS[reasonFilter] : "", capacityOnly ? "정원 초과" : "", keyword ? "검색어" : ""].filter(Boolean).join(" · ")}</span>
+        <button className="text-btn" onClick={() => { setFromDate(""); setToDate(""); setTypeFilter("all"); setActionFilter("all"); setReasonFilter("all"); setCapacityOnly(false); setKeyword(""); }}>초기화</button>
+      </div>}
       <div className="menu-section-label" style={{ padding: "10px 20px 6px" }}>기간</div>
       <div className="time-row" style={{ padding: "0 20px" }}>
         <DatePicker value={fromDate} onChange={setFromDate} label="조회 시작일" />
@@ -114,20 +118,20 @@ export default function AdminAssignmentLogPage() {
 
       <div className="menu-section-label" style={{ padding: "10px 20px 6px" }}>배치 유형</div>
       <div className="mem-filters">
-        <button className={`filter-chip ${typeFilter === "all" ? "on" : ""}`} onClick={() => setTypeFilter("all")}>전체</button>
-        <button className={`filter-chip ${typeFilter === "ADMIN_ASSIGNMENT" ? "on" : ""}`} onClick={() => setTypeFilter("ADMIN_ASSIGNMENT")}>
+        <button aria-pressed={typeFilter === "all"} className={`filter-chip ${typeFilter === "all" ? "on" : ""}`} onClick={() => setTypeFilter("all")}>전체</button>
+        <button aria-pressed={typeFilter === "ADMIN_ASSIGNMENT"} className={`filter-chip ${typeFilter === "ADMIN_ASSIGNMENT" ? "on" : ""}`} onClick={() => setTypeFilter("ADMIN_ASSIGNMENT")}>
           {RESERVATION_TYPE_LABELS.ADMIN_ASSIGNMENT}
         </button>
-        <button className={`filter-chip ${typeFilter === "ADMIN_FREE" ? "on" : ""}`} onClick={() => setTypeFilter("ADMIN_FREE")}>
+        <button aria-pressed={typeFilter === "ADMIN_FREE"} className={`filter-chip ${typeFilter === "ADMIN_FREE" ? "on" : ""}`} onClick={() => setTypeFilter("ADMIN_FREE")}>
           {RESERVATION_TYPE_LABELS.ADMIN_FREE}
         </button>
       </div>
 
       <div className="menu-section-label" style={{ padding: "10px 20px 6px" }}>작업</div>
       <div className="mem-filters">
-        <button className={`filter-chip ${actionFilter === "all" ? "on" : ""}`} onClick={() => setActionFilter("all")}>전체</button>
+        <button aria-pressed={actionFilter === "all"} className={`filter-chip ${actionFilter === "all" ? "on" : ""}`} onClick={() => setActionFilter("all")}>전체</button>
         {(Object.keys(ACTION_LABELS) as AdminActionLog["actionType"][]).map((a) => (
-          <button key={a} className={`filter-chip ${actionFilter === a ? "on" : ""}`} onClick={() => setActionFilter(a)}>
+          <button aria-pressed={actionFilter === a} key={a} className={`filter-chip ${actionFilter === a ? "on" : ""}`} onClick={() => setActionFilter(a)}>
             {ACTION_LABELS[a]}
           </button>
         ))}
@@ -135,9 +139,9 @@ export default function AdminAssignmentLogPage() {
 
       <div className="menu-section-label" style={{ padding: "10px 20px 6px" }}>배치 사유</div>
       <div className="mem-filters">
-        <button className={`filter-chip ${reasonFilter === "all" ? "on" : ""}`} onClick={() => setReasonFilter("all")}>전체</button>
+        <button aria-pressed={reasonFilter === "all"} className={`filter-chip ${reasonFilter === "all" ? "on" : ""}`} onClick={() => setReasonFilter("all")}>전체</button>
         {ADMIN_REASON_CODES.map((code) => (
-          <button key={code} className={`filter-chip ${reasonFilter === code ? "on" : ""}`} onClick={() => setReasonFilter(code)}>
+          <button aria-pressed={reasonFilter === code} key={code} className={`filter-chip ${reasonFilter === code ? "on" : ""}`} onClick={() => setReasonFilter(code)}>
             {ADMIN_REASON_LABELS[code]}
           </button>
         ))}
@@ -145,13 +149,13 @@ export default function AdminAssignmentLogPage() {
 
       <div className="set-row" style={{ padding: "10px 20px" }}>
         <div className="set-label">정원 초과 배치만 보기</div>
-        <button className={`switch ${capacityOnly ? "on" : ""}`} onClick={() => setCapacityOnly((v) => !v)}>
+        <button role="switch" aria-label="정원 초과 배치만 보기" aria-checked={capacityOnly} className={`switch ${capacityOnly ? "on" : ""}`} onClick={() => setCapacityOnly((v) => !v)}>
           <span className="knob" />
         </button>
       </div>
 
       <div style={{ padding: "0 20px" }}>
-        <input className="input-field" placeholder="회원 / 관리자 / 수업명 검색"
+        <input aria-label="회원 / 관리자 / 수업명 검색" className="input-field" placeholder="회원 / 관리자 / 수업명 검색"
           value={keyword} onChange={(e) => setKeyword(e.target.value)} />
       </div>
 

@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../components/SheetOverlay";
+
 /*
   회원 알림 화면
   - 공지 / 예약 임박 / 수강권 만료·소진 재등록 등 알림 누적 목록
@@ -183,7 +185,7 @@ export default function NotificationsPage() {
 
       {/* 공지 상세 시트 */}
       {openAnnounce && (
-        <div className="sheet-overlay" onClick={() => setOpenAnnounce(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setOpenAnnounce(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="announce-detail-center">{openAnnounce.centerName}</div>
             <div className="sheet-title" style={{ marginTop: 2 }}>{openAnnounce.title}</div>
@@ -204,7 +206,7 @@ export default function NotificationsPage() {
               닫기
             </button>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       <div style={{ height: 20 }} />

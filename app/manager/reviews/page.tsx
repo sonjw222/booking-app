@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   매니저 - 후기 관리
   - 자기 센터에 달린 후기 모아보기
@@ -228,7 +230,7 @@ export default function ManagerReviewsPage() {
 
       {/* 답변 시트 */}
       {replyFor && (
-        <div className="sheet-overlay" onClick={() => setReplyFor(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setReplyFor(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">답변 {replyFor.reply ? "수정" : "달기"}</div>
 
@@ -257,7 +259,7 @@ export default function ManagerReviewsPage() {
               <button className="primary-btn" disabled={busy || !canReplyReview} onClick={handleReply}>저장</button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       <div style={{ height: 20 }} />

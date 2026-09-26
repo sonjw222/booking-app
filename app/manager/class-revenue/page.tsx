@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../../components/SheetOverlay";
+
 /*
   매니저 - 수업매출 캘린더
   - 결제일이 아니라 "수업이 실제로 열린 날짜" 기준 매출을 본다.
@@ -321,7 +323,7 @@ export default function ClassRevenuePage() {
 
       {/* 회차별 금액 편집 모달 */}
       {editTarget && (
-        <div className="sheet-overlay" onClick={() => !editSaving && setEditTarget(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => !editSaving && setEditTarget(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">회차별 금액 수정{editTarget.classTitle ? ` — ${editTarget.classTitle}` : ""}</div>
             {editLoading ? (
@@ -363,7 +365,7 @@ export default function ClassRevenuePage() {
               </div>
             )}
           </div>
-        </div>
+        </SheetOverlay>
       )}
     </div>
   );

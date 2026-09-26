@@ -1,5 +1,7 @@
 "use client";
 
+import SheetOverlay from "../components/SheetOverlay";
+
 /*
   예약 캘린더 화면 - Supabase 실연동 버전
   - 달력: 주말·공휴일만 색상, 수업 있는 날 센터별 점, 내 예약 있는 날 동그라미
@@ -536,18 +538,18 @@ function ReservationCalendarContent() {
       </nav>
 
       {centerSheet && (
-        <div className="sheet-overlay" onClick={() => setCenterSheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setCenterSheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">센터 선택</div>
-            <button className={`filter-chip ${!effectiveCenter ? "on" : ""}`} style={{ width: "100%", marginBottom: 6 }}
+            <button aria-pressed={!effectiveCenter} className={`filter-chip ${!effectiveCenter ? "on" : ""}`} style={{ width: "100%", marginBottom: 6 }}
               onClick={() => { setCenterPick(null); setCenterSheet(false); }}>전체 센터</button>
             {centers.map((c) => (
-              <button key={c.id} className={`filter-chip ${effectiveCenter === c.id ? "on" : ""}`} style={{ width: "100%", marginBottom: 6 }}
+              <button aria-pressed={effectiveCenter === c.id} key={c.id} className={`filter-chip ${effectiveCenter === c.id ? "on" : ""}`} style={{ width: "100%", marginBottom: 6 }}
                 onClick={() => { setCenterPick(c.id); setCenterSheet(false); }}>{c.name}</button>
             ))}
             <button className="ghost-btn" style={{ width: "100%", marginTop: 6 }} onClick={() => setCenterSheet(false)}>닫기</button>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
       {categoryFilter && (
@@ -647,7 +649,7 @@ function ReservationCalendarContent() {
           <span className="profile-picker-label">프로필:</span>
           <div className="profile-picker-chips">
             {profiles.map((p) => (
-              <button
+              <button aria-pressed={p.id === activeProfileId}
                 key={p.id}
                 className={`center-chip ${p.id === activeProfileId ? "on" : ""}`}
                 onClick={() => setActiveProfileId(p.id)}
@@ -769,7 +771,7 @@ function ReservationCalendarContent() {
       </div>
       {/* 예약 확인 모달 */}
       {confirmClass && (
-        <div className="sheet-overlay" onClick={() => setConfirmClass(null)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setConfirmClass(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">예약하시겠어요?</div>
 
@@ -898,7 +900,7 @@ function ReservationCalendarContent() {
               </button>
             </div>
           </div>
-        </div>
+        </SheetOverlay>
       )}
 
     </div>
