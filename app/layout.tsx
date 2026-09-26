@@ -33,7 +33,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="ko"
       // data-theme는 아래 인라인 스크립트가 하이드레이션 전에 클라이언트에서만 붙인다
       // (서버는 localStorage를 모름) — 이 경우의 불일치는 의도된 것이므로 React가
       // hydration mismatch 콘솔 에러를 내지 않도록 명시적으로 억제한다.

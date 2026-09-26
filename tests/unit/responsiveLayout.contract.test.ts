@@ -77,13 +77,13 @@ describe("responsive workspace layout contract", () => {
     expect(css).toContain(".manager-v3 > .bottom-nav { display: none; }");
   });
 
-  it("provides operator navigation and desktop drawer behavior", () => {
+  it("provides operator navigation and bounded centered desktop dialogs", () => {
     const adminLayout = read("app/admin/layout.tsx");
     const adminNav = read("app/components/AdminNav.tsx");
     expect(adminLayout).toContain("<AdminNav />");
     expect(adminNav).toContain('aria-label="플랫폼 운영 메뉴"');
-    expect(css).toContain("align-items: stretch; justify-content: flex-end");
-    expect(css).toContain("border-radius: 0");
+    expect(css).toContain("align-items: center; justify-content: center");
+    expect(css).toContain("width: min(640px,100%); max-width: 640px; max-height: 100%");
   });
 
   it("groups manager dashboard regions for stable multi-panel placement", () => {
