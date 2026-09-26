@@ -21,6 +21,25 @@
 .recipient-row.selected { background: var(--brand-soft); }
 .recipient-row:focus-within { outline: 2px solid var(--brand); outline-offset: -2px; }
 
+@media (min-width: 600px) {
+  /* In a split desktop window, keep the destination name visible rather than
+     reverting to the phone-sized round icon button. */
+  .manager-chrome .manager-chrome-main > a,
+  .admin-v3 > .admin-chrome > a {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    flex: 0 0 auto; width: auto; min-width: 44px; height: 44px;
+    padding: 0 16px; border-radius: 10px; white-space: nowrap;
+    background: var(--card-bg); color: var(--ink); border: 1px solid var(--line);
+  }
+  .manager-chrome .manager-chrome-main > a span,
+  .admin-v3 > .admin-chrome > a span {
+    position: static; display: inline; width: auto; height: auto;
+    max-width: none; opacity: 1; visibility: visible; overflow: visible;
+    clip: auto; clip-path: none; font-size: 14px; white-space: nowrap;
+  }
+  .admin-v3 > .admin-chrome { background: var(--bg); color: var(--ink); border-bottom: 1px solid var(--line); }
+}
+
 @media (min-width: 768px) {
   /* Explicit content sizes replace inherited mobile circles and full-width actions. */
   .manager-chrome .manager-chrome-main > a,
