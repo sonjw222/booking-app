@@ -46,6 +46,7 @@ export const CATEGORY_OPTICS: Record<string, { scale: number; x: number; y: numb
   복싱: { scale: 1.03, x: 0, y: 0 },
   수영: { scale: 1.02, x: 0, y: -6 },
   골프: { scale: .96, x: -2, y: -3 },
+  테니스: { scale: 1.16, x: 0, y: -5 },
 };
 
 export default function CategoryIcon({ label, size = 27 }: { label: string; size?: number | string }) {
