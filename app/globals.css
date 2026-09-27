@@ -5718,7 +5718,7 @@ textarea:focus-visible,
     height: 46px;
     border-radius: 15px;
   }
-  .auth-page-v2 .auth-activities img {
+  .auth-page-v2 .auth-activities :is(img, svg) {
     width: 29px;
     height: 29px;
   }
@@ -5860,7 +5860,7 @@ textarea:focus-visible,
     padding: 9px 12px;
     border-radius: 20px;
   }
-  .auth-page-v2 .auth-activities img {
+  .auth-page-v2 .auth-activities :is(img, svg) {
     width: 34px;
     height: 34px;
   }
