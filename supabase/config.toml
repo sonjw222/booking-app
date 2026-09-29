@@ -1,0 +1,15 @@
+# Supabase CLI 프로젝트 설정.
+#
+# 이 파일은 이번 배치(2026-09-30) 전까지 이 저장소에 존재하지 않았다 — 지금까지 모든
+# Edge Function(send-phone-otp, naver-login, kakao-login 등)은 config.toml 없이
+# `supabase functions deploy <name> --project-ref <ref>`로만 배포돼 왔다(project ref는
+# 로컬 `supabase link`가 만드는 .gitignore 처리된 supabase/.temp/project-ref, 또는 명령마다
+# 직접 넘기는 --project-ref로 해결됨 — 이 파일에 project_id를 새로 넣지 않는다).
+#
+# 이번에 이 파일을 새로 만든 유일한 이유는 check-signup-email 하나에 verify_jwt = false를
+# 명시하기 위해서다 — 이 함수는 로그인 전(세션 없음) 회원가입 단계에서 호출되는 공개
+# 엔드포인트라 유효한 사용자 JWT가 없을 수 있다(app/login/page.tsx, lib/emailSignupCheck.ts
+# 참고). 다른 기존 Edge Function은 여기 나열하지 않는다 — CLI/대시보드의 기존 기본값을
+# 그대로 유지한다(이 파일이 명시하지 않은 함수는 이 파일의 영향을 받지 않는다).
+[functions.check-signup-email]
+verify_jwt = false

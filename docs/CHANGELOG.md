@@ -17,6 +17,19 @@
   시도하는 경우도 차단한다(DEC-004 — 계정 자동 병합은 하지 않음, "중복 신규가입 방지"만).
   확인 자체가 실패하면 fail-open(다음 단계로 진행, 서버가 최종적으로 다시 막음). rate limit은
   IP 해시 기준 10분당 20회.
+  **2026-09-30 보안 보완(코드 리뷰 반영)**: (1) `email_signup_available`/새 `consume_email_
+  check_attempt` 둘 다 `set search_path = ''`로 강화(search_path hijacking 차단, 모든 테이블
+  참조에 스키마 명시: `auth.users`/`public.email_check_attempts`). (2) rate limit을 Edge
+  Function의 "조회 후 삽입" 2단계(동시 요청 race 있음)에서 `consume_email_check_attempt()`
+  RPC 하나(`pg_advisory_xact_lock`으로 같은 IP 해시에 대한 동시 실행을 직렬화, 원자적으로
+  확인+기록)로 이전 — Edge Function은 이제 `email_check_attempts`를 직접 만지지 않는다.
+  (3) RPC 실패 시 원본 Postgres/Supabase 오류 메시지를 응답에 절대 싣지 않고(콘솔에만 기록),
+  항상 안전한 한글 문구(500: "이메일 확인 중 문제가 발생했어요...", 429: "요청이 너무
+  많아요...")만 반환. (4) 클라이언트 IP 판별을 `cf-connecting-ip` → `x-real-ip` →
+  `x-forwarded-for`(첫 값) → `unknown` 순으로 조정. (5) `supabase/config.toml` 신설,
+  `check-signup-email`에만 `verify_jwt = false`(로그인 전 공개 엔드포인트라 세션 JWT가 없을
+  수 있음) — 다른 기존 Edge Function 설정은 건드리지 않음(그 함수들을 이 파일에 나열하지
+  않음).
 - **사용자 오류 한글화**: `lib/userError.ts`(`toUserMessage`) 신설 — 이 프로젝트의 서버 측
   `raise exception` 메시지가 전부(1,100개 이상 확인) 한글이라는 점에 착안해, "한글이 없으면
   raw 기술 오류로 간주해 안전한 기본 문구로 치환"하는 방식으로 판정한다. `accounts_phone_key`

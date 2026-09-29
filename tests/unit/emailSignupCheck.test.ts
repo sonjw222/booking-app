@@ -41,6 +41,24 @@ describe("checkEmailAvailable", () => {
     expect(res.available).toBe(true);
   });
 
+  it("429(rate limit)도 fail-open — supabase-js는 비2xx 응답을 error로 넘긴다(FunctionsHttpError 유사 형태)", async () => {
+    invokeMock.mockResolvedValue({ data: null, error: { message: "Edge Function returned a non-2xx status code", context: { status: 429 } } });
+    const res = await checkEmailAvailable("whoever@example.com");
+    expect(res.available).toBe(true);
+  });
+
+  it("500(서버 내부 오류)도 fail-open", async () => {
+    invokeMock.mockResolvedValue({ data: null, error: { message: "Edge Function returned a non-2xx status code", context: { status: 500 } } });
+    const res = await checkEmailAvailable("whoever@example.com");
+    expect(res.available).toBe(true);
+  });
+
+  it("Edge Function 자체가 아직 배포되지 않은 경우(호출 실패)도 fail-open", async () => {
+    invokeMock.mockResolvedValue({ data: null, error: { message: "Failed to send a request to the Edge Function" } });
+    const res = await checkEmailAvailable("whoever@example.com");
+    expect(res.available).toBe(true);
+  });
+
   it("빈 이메일은 호출 자체를 생략하고 가입 가능으로 처리", async () => {
     const res = await checkEmailAvailable("   ");
     expect(res.available).toBe(true);

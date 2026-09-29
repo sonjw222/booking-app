@@ -47,12 +47,16 @@
 5. 사용자 결정이 필요한 기능은 결정 기록 없이 완료 처리하지 않습니다.
 6. 완료된 항목은 [CHANGELOG.md](./CHANGELOG.md)에 근거와 함께 기록한 뒤 이 문서에서 제거하거나 완료 이력으로 이동합니다.
 
-### P1-Postlaunch-0929. (2026-09-29) 출시 후 개선 Batch — SQL/배포 대기 항목
-- **email_signup_available() RPC + email_check_attempts 테이블** — `add_email_signup_precheck.sql`
-  준비 완료, production 미실행(승인 대기). 실행 전까지 이메일 사전 중복 확인/네이버 실제
-  이메일 중복 차단 기능은 fail-open으로 조용히 비활성 상태(기존 동작과 동일, 회귀 없음).
-- **check-signup-email Edge Function** — 코드 작성 완료, `supabase functions deploy
-  check-signup-email` 필요(위 SQL과 함께 배포돼야 정상 동작).
+### P1-Postlaunch-0929. (2026-09-29, 2026-09-30 보안 보완) 출시 후 개선 Batch — SQL/배포 대기 항목
+- **email_signup_available() + consume_email_check_attempt() RPC + email_check_attempts 테이블**
+  — `add_email_signup_precheck.sql` 준비 완료(2026-09-30 재보완: search_path hardening,
+  rate limit을 advisory lock 기반 원자적 RPC로 전환), production 미실행(승인 대기). 실행
+  전까지 이메일 사전 중복 확인/네이버 실제 이메일 중복 차단 기능은 fail-open으로 조용히
+  비활성 상태(기존 동작과 동일, 회귀 없음).
+- **check-signup-email Edge Function** — 코드 작성 완료(2026-09-30: rate limit RPC 호출로
+  변경, raw 오류 비노출, IP 판별 순서 조정), `supabase functions deploy check-signup-email`
+  필요(위 SQL과 함께 배포돼야 정상 동작). 같이 배포해야 하는 `supabase/config.toml`
+  (`verify_jwt = false`)도 이번에 신설.
 - **QA용 알림톡 테스트 센터** — `add_qa_center_alimtalk_test.sql` 준비 완료, production
   미실행(승인 대기).
 - **NEXT_PUBLIC_PG_CHECKOUT_ENABLED=true** — Vercel 프로덕션 환경변수 설정 필요(Toss 카드
