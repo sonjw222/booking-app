@@ -1,62 +1,83 @@
-// 알리고(Aligo) 발송 공용 모듈 — send-alimtalk와 send-phone-otp가 함께 쓴다.
-// 원래 send-alimtalk/index.ts 안에만 있던 sendViaAligo()를 그대로 옮긴 것(로직 변경 없음).
+// 알리고(Aligo) 공용 모듈.
+// 모든 Aligo API 호출은 고정 egress IP를 가진 Oracle 프록시를 통해 수행한다.
 //
-// 필요한 환경변수(호출하는 Edge Function 각각에 `supabase secrets set`으로 등록):
-//   ALIGO_USER_ID, ALIGO_API_KEY       — 알리고 가입 후 발급
-//   ALIGO_SENDER_KEY                   — 카카오 알림톡 발신프로필 키(카카오 채널 연결 후 발급)
-//   ALIGO_SENDER_PHONE                 — SMS 대체발송용 발신번호(사전 등록된 번호)
+// 필요한 Supabase Edge Function secrets:
+//   ALIGO_PROXY_URL   — 예: https://aligo-proxy.mwhabit.com
+//   ALIGO_PROXY_TOKEN — Oracle 프록시 인증용 Bearer token
 //
-// ⚠️ 알리고 실제 계정을 발급받는 시점에 아래 요청 필드명을 최신 API 문서와 한 번 더
-//    대조해야 한다(작성 시점엔 계정이 없어 문서 대조가 불가능했음).
+// Aligo 계정/API 키/발신프로필 키/발신번호는 Oracle 서버에만 저장하고
+// Supabase Edge Function에서는 직접 사용하지 않는다.
 
-const ALIGO_USER_ID = Deno.env.get("ALIGO_USER_ID") ?? "";
-const ALIGO_API_KEY = Deno.env.get("ALIGO_API_KEY") ?? "";
-const ALIGO_SENDER_KEY = Deno.env.get("ALIGO_SENDER_KEY") ?? "";
-const ALIGO_SENDER_PHONE = Deno.env.get("ALIGO_SENDER_PHONE") ?? "";
+const ALIGO_PROXY_URL = (Deno.env.get("ALIGO_PROXY_URL") ?? "").replace(/\/+$/, "");
+const ALIGO_PROXY_TOKEN = Deno.env.get("ALIGO_PROXY_TOKEN") ?? "";
 
-export type SendResult = { status: "sent" | "failed"; providerMessageId?: string; message?: string };
+export type SendResult = {
+  status: "sent" | "failed";
+  providerMessageId?: string;
+  message?: string;
+};
 
-// 발신 설정 화면(app/manager/alimtalk/settings)의 연결 상태 조회용 — 키 값 자체는 절대 반환하지 않음.
-export function isAligoConfigured(): boolean {
-  return !!(ALIGO_USER_ID && ALIGO_API_KEY && ALIGO_SENDER_KEY && ALIGO_SENDER_PHONE);
+function isProxyConfigured(): boolean {
+  return !!(ALIGO_PROXY_URL && ALIGO_PROXY_TOKEN);
 }
 
-// 알리고에 등록된(카카오 사전심사까지 거친) 템플릿 목록 — 필드명은 알리고 공식 문서
-// (smartsms.aligo.in/alimapi.html)와 실제 구현체(github.com/esinx/aligo-kakao-api)로
-// 2026-09-08에 대조 확인함. senderkey 하나로 조회하는 계정 전체 목록이라 우리 DB의
-// center_id 구분은 없다 — 여러 센터 템플릿이 한 목록에 섞여 나오므로 이름으로 구분해야 함.
+// 발신 설정 화면(app/manager/alimtalk/settings)의 연결 상태 조회용.
+// 비밀값 자체는 절대 반환하지 않는다.
+export function isAligoConfigured(): boolean {
+  return isProxyConfigured();
+}
+
+async function callAligoProxy(
+  path: string,
+  payload: Record<string, unknown>,
+): Promise<any> {
+  if (!isProxyConfigured()) {
+    throw new Error(
+      "알리고 프록시가 아직 연동되지 않았어요 (ALIGO_PROXY_URL / ALIGO_PROXY_TOKEN 미등록)",
+    );
+  }
+
+  const res = await fetch(`${ALIGO_PROXY_URL}${path}`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${ALIGO_PROXY_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const resJson = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(
+      resJson?.provider?.message ??
+        resJson?.error ??
+        `알리고 프록시 요청 실패 (HTTP ${res.status})`,
+    );
+  }
+
+  return resJson?.provider ?? {};
+}
+
+// 알리고에 등록된(카카오 사전심사까지 거친) 템플릿 목록.
 export type AligoTemplateInfo = {
   templtCode: string;
   templtName: string;
   templtContent: string;
-  inspStatus: "REG" | "REQ" | "APR" | "REJ" | string; // 등록/심사요청/승인/반려
+  inspStatus: "REG" | "REQ" | "APR" | "REJ" | string;
 };
 
 export async function fetchAligoTemplateList(): Promise<AligoTemplateInfo[]> {
-  if (!ALIGO_USER_ID || !ALIGO_API_KEY || !ALIGO_SENDER_KEY) {
-    throw new Error("알리고 계정/발신프로필이 아직 연동되지 않았어요");
+  const provider = await callAligoProxy("/v1/template/list", {});
+
+  if (Number(provider?.code) !== 0) {
+    throw new Error(provider?.message ?? "템플릿 목록 조회 실패");
   }
-  const body = new URLSearchParams({
-    apikey: ALIGO_API_KEY,
-    userid: ALIGO_USER_ID,
-    senderkey: ALIGO_SENDER_KEY,
-  });
-  const res = await fetch("https://kakaoapi.aligo.in/akv10/template/list", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  const resJson = await res.json().catch(() => ({}));
-  if (!res.ok || resJson?.code !== 0) {
-    throw new Error(resJson?.message ?? `템플릿 목록 조회 실패 (HTTP ${res.status})`);
-  }
-  return resJson?.list ?? [];
+
+  return provider?.list ?? [];
 }
 
-// 우리 앱의 [[변수]] 표기를 알리고/카카오 공식 표기 #{변수}로 바꾼다 — 알리고 문서
-// (template/add 예제)와 실제 구현체(esinx/aligo-kakao-api의 replaceAllTokens)가 공통으로
-// #{...}를 쓰는 걸 확인함(2026-09-08). 우리 DB(alimtalk_templates.content)에는 항상
-// [[...]] 형태로 저장해두고, 알리고로 나가는 시점에만 이 함수로 변환한다.
+// 우리 앱의 [[변수]] 표기를 알리고/카카오 공식 표기 #{변수}로 바꾼다.
 export function toAligoVariableSyntax(content: string): string {
   return content.replace(/\[\[([^\]]+)\]\]/g, (_m, v) => `#{${v}}`);
 }
@@ -65,123 +86,115 @@ export type AligoTemplateCreateResult = {
   templtCode: string;
   templtName: string;
   templtContent: string;
-  inspStatus: string; // 생성 직후엔 항상 REG
+  inspStatus: string;
 };
 
-// 신규 템플릿 생성(카카오 승인 신청 전 단계) — POST /akv10/template/add/.
-// tplName은 호출하는 쪽에서 센터명 등을 이미 접두사로 붙여서 넘겨야 한다(여러 센터가
-// 같은 알리고 계정을 공유해서, 알리고 쪽 목록에서 이름으로 구분해야 하기 때문).
-export async function createAligoTemplate(tplName: string, tplContent: string): Promise<AligoTemplateCreateResult> {
-  if (!ALIGO_USER_ID || !ALIGO_API_KEY || !ALIGO_SENDER_KEY) {
-    throw new Error("알리고 계정/발신프로필이 아직 연동되지 않았어요");
-  }
-  const body = new URLSearchParams({
-    apikey: ALIGO_API_KEY,
-    userid: ALIGO_USER_ID,
-    senderkey: ALIGO_SENDER_KEY,
-    tpl_name: tplName,
-    tpl_content: toAligoVariableSyntax(tplContent),
+// 신규 템플릿 생성(카카오 승인 신청 전 단계).
+export async function createAligoTemplate(
+  tplName: string,
+  tplContent: string,
+): Promise<AligoTemplateCreateResult> {
+  const provider = await callAligoProxy("/v1/template/add", {
+    name: tplName,
+    content: toAligoVariableSyntax(tplContent),
   });
-  const res = await fetch("https://kakaoapi.aligo.in/akv10/template/add/", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  const resJson = await res.json().catch(() => ({}));
-  if (!res.ok || resJson?.code !== 0) {
-    throw new Error(resJson?.message ?? `템플릿 생성 실패 (HTTP ${res.status})`);
+
+  if (Number(provider?.code) !== 0) {
+    throw new Error(provider?.message ?? "템플릿 생성 실패");
   }
-  return resJson?.data;
+
+  return provider?.data;
 }
 
-// 생성된 템플릿을 카카오 사전심사에 올린다 — POST /akv10/template/request/.
-// 심사 결과(4-5일 소요)는 fetchAligoTemplateList()로 나중에 다시 조회해서 확인해야 한다
-// (이 API는 "요청 접수" 응답만 주고 즉시 심사가 끝나는 게 아님).
-export async function requestAligoTemplateApproval(tplCode: string): Promise<void> {
-  if (!ALIGO_USER_ID || !ALIGO_API_KEY || !ALIGO_SENDER_KEY) {
-    throw new Error("알리고 계정/발신프로필이 아직 연동되지 않았어요");
-  }
-  const body = new URLSearchParams({
-    apikey: ALIGO_API_KEY,
-    userid: ALIGO_USER_ID,
-    senderkey: ALIGO_SENDER_KEY,
-    tpl_code: tplCode,
+// 생성된 템플릿을 카카오 사전심사에 올린다.
+export async function requestAligoTemplateApproval(
+  tplCode: string,
+): Promise<void> {
+  const provider = await callAligoProxy("/v1/template/request", {
+    templateCode: tplCode,
   });
-  const res = await fetch("https://kakaoapi.aligo.in/akv10/template/request/", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  const resJson = await res.json().catch(() => ({}));
-  if (!res.ok || resJson?.code !== 0) {
-    throw new Error(resJson?.message ?? `승인 신청 실패 (HTTP ${res.status})`);
+
+  if (Number(provider?.code) !== 0) {
+    throw new Error(provider?.message ?? "승인 신청 실패");
   }
 }
 
-function renderTemplate(content: string, variables?: Record<string, string>): string {
+function renderTemplate(
+  content: string,
+  variables?: Record<string, string>,
+): string {
   if (!variables) return content;
+
   let out = content;
-  for (const [k, v] of Object.entries(variables)) out = out.split(`[[${k}]]`).join(v);
+  for (const [k, v] of Object.entries(variables)) {
+    out = out.split(`[[${k}]]`).join(v);
+  }
   return out;
 }
 
-// 알리고 실발송 — 계정 미준비 상태(키 없음)면 명시적으로 실패 반환(조용히 성공한 척 안 함).
+// 알리고 실발송.
+// templateCode가 있으면 알림톡(+ Aligo SMS failover), 없으면 SMS로 발송한다.
 export async function sendViaAligo(input: {
   to: string;
   content: string;
   templateCode?: string;
   templateVariables?: Record<string, string>;
 }): Promise<SendResult> {
-  if (!ALIGO_USER_ID || !ALIGO_API_KEY) {
-    return { status: "failed", message: "알리고 계정이 아직 연동되지 않았어요 (ALIGO_* 시크릿 미등록)" };
+  if (!isProxyConfigured()) {
+    return {
+      status: "failed",
+      message:
+        "알리고 프록시가 아직 연동되지 않았어요 (ALIGO_PROXY_URL / ALIGO_PROXY_TOKEN 미등록)",
+    };
   }
 
   try {
     if (input.templateCode) {
-      // 알림톡 템플릿 발송 — 실패 시 SMS 대체발송(failover)
-      const body = new URLSearchParams({
-        apikey: ALIGO_API_KEY,
-        userid: ALIGO_USER_ID,
-        senderkey: ALIGO_SENDER_KEY,
-        tpl_code: input.templateCode,
-        sender: ALIGO_SENDER_PHONE,
-        receiver_1: input.to,
-        message_1: renderTemplate(input.content, input.templateVariables),
-        failover: "Y",
-        fsubject_1: "안내",
-        fmessage_1: input.content,
+      const provider = await callAligoProxy("/v1/alimtalk/send", {
+        to: input.to,
+        message: renderTemplate(input.content, input.templateVariables),
+        templateCode: input.templateCode,
+        // 기존 동작과 동일하게 대체발송 문구는 input.content를 사용한다.
+        fallbackMessage: input.content,
       });
-      const res = await fetch("https://kakaoapi.aligo.in/akv10/alimtalk/send/", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body,
-      });
-      const resJson = await res.json().catch(() => ({}));
-      if (!res.ok || resJson?.code !== 0) {
-        return { status: "failed", message: resJson?.message ?? `알림톡 발송 실패 (HTTP ${res.status})` };
+
+      if (Number(provider?.code) !== 0) {
+        return {
+          status: "failed",
+          message: provider?.message ?? "알림톡 발송 실패",
+        };
       }
-      return { status: "sent", providerMessageId: resJson?.info?.mid ?? undefined };
+
+      return {
+        status: "sent",
+        providerMessageId: provider?.info?.mid ?? undefined,
+      };
     }
 
-    // 템플릿 없음(자유 문장) — SMS로 바로 발송
-    const body = new URLSearchParams({
-      apikey: ALIGO_API_KEY,
-      userid: ALIGO_USER_ID,
-      sender: ALIGO_SENDER_PHONE,
-      receiver: input.to,
-      msg: input.content,
+    const provider = await callAligoProxy("/v1/sms/send", {
+      to: input.to,
+      message: input.content,
     });
-    const res = await fetch("https://apis.aligo.in/send/", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
-    const resJson = await res.json().catch(() => ({}));
-    if (!res.ok || resJson?.result_code !== "1") {
-      return { status: "failed", message: resJson?.message ?? `SMS 발송 실패 (HTTP ${res.status})` };
+
+    if (String(provider?.result_code) !== "1") {
+      return {
+        status: "failed",
+        message: provider?.message ?? "SMS 발송 실패",
+      };
     }
-    return { status: "sent", providerMessageId: resJson?.msg_id ? String(resJson.msg_id) : undefined };
+
+    return {
+      status: "sent",
+      providerMessageId: provider?.msg_id
+        ? String(provider.msg_id)
+        : undefined,
+    };
   } catch (err) {
-    return { status: "failed", message: err instanceof Error ? err.message : "발송 중 알 수 없는 오류" };
+    return {
+      status: "failed",
+      message: err instanceof Error
+        ? err.message
+        : "발송 중 알 수 없는 오류",
+    };
   }
 }

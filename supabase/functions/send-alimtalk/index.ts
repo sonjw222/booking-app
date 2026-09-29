@@ -24,10 +24,12 @@
 //   dispatch-alimtalk cron만 앎)면 내부 호출로 신뢰한다.
 //
 // 필요한 Edge Function 환경변수(`supabase secrets set`으로 등록, 코드/DB에 저장 안 함):
-//   ALIGO_USER_ID, ALIGO_API_KEY       — 알리고 가입 후 발급
-//   ALIGO_SENDER_KEY                   — 카카오 알림톡 발신프로필 키(카카오 채널 연결 후 발급)
-//   ALIGO_SENDER_PHONE                 — SMS 대체발송용 발신번호(사전 등록된 번호)
+//   ALIGO_PROXY_URL                    — Oracle 고정-IP Aligo 프록시 URL
+//   ALIGO_PROXY_TOKEN                  — 프록시 서버 인증용 Bearer token
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY — Supabase가 기본 주입
+//
+// Aligo 계정/API 키/발신프로필 키/발신번호는 Oracle 프록시 서버에만 보관하고,
+// 이 Edge Function에서는 직접 보유하거나 Aligo API에 직접 접속하지 않는다.
 //
 // 알리고 실발송 로직(sendViaAligo)은 ../_shared/aligo.ts로 옮겨졌다 — send-phone-otp(휴대폰
 // 인증번호 발송, 2026-09-05)도 같은 로직을 쓰기 때문(로그인 전 호출이라 이 함수의

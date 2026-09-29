@@ -21,9 +21,10 @@
 // 둔다. 시크릿을 등록하지 않으면(기본값) 이 우회는 완전히 비활성화된다.
 //
 // 필요한 환경변수(`supabase secrets set`으로 등록):
-//   ALIGO_USER_ID, ALIGO_API_KEY, ALIGO_SENDER_KEY, ALIGO_SENDER_PHONE — send-alimtalk와 공용
-//   ALIGO_OTP_TEMPLATE_CODE       — 카카오 "인증번호 안내" 템플릿 승인 후 등록(선택, 없으면 SMS로 발송)
-//   PHONE_OTP_TEST_BYPASS_PREFIX  — CI/QA 전용, 운영에서는 등록하지 않음(선택)
+//   ALIGO_PROXY_URL              — Oracle 고정-IP Aligo 프록시 URL
+//   ALIGO_PROXY_TOKEN            — 프록시 서버 인증용 Bearer token
+//   ALIGO_OTP_TEMPLATE_CODE      — 승인된 카카오 "인증번호 안내" 템플릿 코드
+//   PHONE_OTP_TEST_BYPASS_PREFIX — CI/QA 전용, 운영에서는 등록하지 않음(선택)
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — Supabase가 기본 주입
 //
 // 배포: `supabase functions deploy send-phone-otp`
@@ -114,7 +115,7 @@ Deno.serve(async (req: Request) => {
 
   const result = await sendViaAligo({
     to: phone,
-    content: `인증번호는 [[code]]입니다`.replace("[[code]]", code),
+    content: `인증번호는 [[code]]입니다.`.replace("[[code]]", code),
     templateCode: ALIGO_OTP_TEMPLATE_CODE || undefined,
     templateVariables: { code },
   });
