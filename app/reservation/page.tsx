@@ -40,6 +40,7 @@ import SegmentedTabs from "../components/SegmentedTabs";
 import AppButton from "../components/AppButton";
 import { PUBLIC_HOLIDAYS } from "../../lib/publicHolidays";
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
+import { toUserMessage } from "../../lib/userError";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -193,7 +194,7 @@ function ReservationCalendarContent() {
       setProfiles(profs);
       setActiveProfileId((prev) => prev ?? profs.find((p) => p.isPrimary)?.id ?? profs[0]?.id ?? null);
     } catch (e: any) {
-      setError(e.message ?? "데이터를 불러오지 못했어요");
+      setError(toUserMessage(e, "데이터를 불러오지 못했어요"));
     } finally {
       setLoading(false);
     }
@@ -395,7 +396,7 @@ function ReservationCalendarContent() {
       setConfirmClass(null);
       await load({ silent: true });
     } catch (e: any) {
-      setReservationError(e?.message ?? "예약할 수 없어요. 수강권과 수업 상태를 확인해주세요.");
+      setReservationError(toUserMessage(e, "예약할 수 없어요. 수강권과 수업 상태를 확인해주세요."));
     } finally {
       setBusyClassId(null);
     }
@@ -418,7 +419,7 @@ function ReservationCalendarContent() {
       showToast(deducted ? "취소됐지만 마감 이후라 수강권 1회가 차감됐어요" : "예약이 취소됐어요");
       await load({ silent: true });
     } catch (e: any) {
-      showToast(e.message);
+      showToast(toUserMessage(e, "취소하지 못했어요"));
     } finally {
       setBusyClassId(null);
     }

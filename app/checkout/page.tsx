@@ -18,6 +18,7 @@ import { reservationReturnUrl } from "../../lib/reservationNav";
 import { getPaymentService, resolveProviderName, PG_CHECKOUT_ENABLED, type PaymentScenario } from "../../lib/payments";
 import { supabase } from "../../lib/supabaseClient";
 import { fetchMyPgCheckoutOverride } from "../../lib/authAccount";
+import { toUserMessage } from "../../lib/userError";
 import { fetchApplicableCoupons, previewDiscount, type MemberCoupon } from "../../lib/coupons";
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import UiIcon, { type IconName } from "../components/UiIcon";
@@ -151,7 +152,7 @@ function CheckoutContent() {
       } catch { /* 비로그인 — 무시, 결제 시점에 로그인 유도 */ }
       const products = await fetchCenterProducts(centerId);
       setProduct(products.find((p) => p.id === productId) ?? null);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId, productId]);
   useEffect(() => { load(); }, [load]);
@@ -246,7 +247,7 @@ function CheckoutContent() {
         if (pointToUse > 0) await usePoints(centerId, pointToUse, directOrderId);
         setPendingManualPayment(true);
         setDone(true);
-      } catch (e: any) { setError(e.message); }
+      } catch (e: any) { setError(toUserMessage(e)); }
       finally { setBusy(false); }
       return;
     }
@@ -312,7 +313,7 @@ function CheckoutContent() {
       } else {
         setError(result.message ?? "결제에 실패했어요. 다시 시도해주세요.");
       }
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -600,9 +601,16 @@ function CheckoutContent() {
           온라인 결제(카드·카카오페이·토스페이·계좌이체)는 준비 중이라, 지금은 센터에서
           직접 결제만 가능해요.
         </div>
-      ) : resolveProviderName() === "mock" && (
+      ) : resolveProviderName() === "mock" ? (
         <div className="perm-guide" style={{ margin: "10px 20px" }}>
           실제 PG(카드/카카오페이 등) 연동은 준비 중이라, 지금은 테스트 결제(Mock)로 처리돼요.
+        </div>
+      ) : payMethod === "card" && resolveProviderName() === "toss" && (
+        // 실기기 QA(2026-09-29) — 카드사별 결제 가능 여부는 토스 결제창(PG)이 직접 제어한다
+        // (이 앱이 카드사 목록 UI를 따로 구현하지 않음). 일부 카드사(예: 카드사 심사 진행 중)는
+        // 결제창에서 바로 확인되므로, 앱에서는 과도하게 구체적인 안내 대신 자연스러운 문구만.
+        <div className="perm-guide" style={{ margin: "10px 20px" }}>
+          카드 결제창에서 일부 카드사는 아직 준비 중일 수 있어요.
         </div>
       )}
       {payMethod === "direct" && (

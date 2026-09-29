@@ -1,5 +1,41 @@
 # CHANGELOG
 
+## 2026-09-29 — 출시 후 개선 Batch: 회원가입 UX/보안, 센터등록 safe-area, 오류 한글화, Toss 결제 재노출
+
+정식 출시 후 첫 개선 배치. DB 스키마/RLS 변경 없음(이번 배치에서 추가한 SQL 2건은 준비만
+하고 **아직 production에 실행하지 않음** — 아래 "필요 SQL" 참고, 사용자 승인 후 실행).
+
+- **회원가입 약관 UI**: 체크박스(15px→20px)/글자(12.5px→14px) 확대 + 각 행 44px 이상 터치
+  타겟 확보(새 강조색 없음, 기존 --accent/--ink 유지). 기존 3개 약관 아래 여백 + 구분선과
+  함께 "전체 동의" 추가 — 별도 state 없이 3개 값의 파생값이라 개별/전체 토글이 항상
+  자연스럽게 동기화된다. 필수 2개(이용약관/개인정보처리방침)만 가입 필수 유지, 마케팅
+  수신은 그대로 선택.
+- **이메일 회원가입 사전 중복 확인**: "다음" 클릭 시 휴대폰 OTP 발송 "전"에 서버(Edge
+  Function `check-signup-email` + 신규 `email_signup_available()` RPC, service_role 전용)가
+  먼저 확인한다. `auth.users.email`뿐 아니라 네이버 로그인의 실제 이메일(`raw_user_meta_data.
+  naver_email`)까지 함께 봐서, 이미 네이버로 가입한 실제 이메일로 이메일 회원가입을 다시
+  시도하는 경우도 차단한다(DEC-004 — 계정 자동 병합은 하지 않음, "중복 신규가입 방지"만).
+  확인 자체가 실패하면 fail-open(다음 단계로 진행, 서버가 최종적으로 다시 막음). rate limit은
+  IP 해시 기준 10분당 20회.
+- **사용자 오류 한글화**: `lib/userError.ts`(`toUserMessage`) 신설 — 이 프로젝트의 서버 측
+  `raise exception` 메시지가 전부(1,100개 이상 확인) 한글이라는 점에 착안해, "한글이 없으면
+  raw 기술 오류로 간주해 안전한 기본 문구로 치환"하는 방식으로 판정한다. `accounts_phone_key`
+  같은 raw DB 제약조건명이 그대로 노출되던 사례(회원가입 화면)를 포함해 인증/회원가입/
+  센터등록/결제/예약 핵심 흐름에 적용. 개발 로그에는 원본 오류를 그대로 남긴다.
+- **"내 센터 등록하기" safe-area**: 이 화면만 `.back-header` 없이 `.section-title`을 최상단
+  요소로 바로 써서 상단이 상태바/Dynamic Island에 가려졌다. 공용 `.section-title` 규칙은
+  그대로 두고(관리자/매니저 화면 회귀 방지), 이 화면 전용 클래스(`padding-top: max(20px,
+  var(--safe-top))`)로만 고쳤다 — 하드코딩된 큰 padding 대신 실제 safe-area 토큰 사용.
+- **Toss 결제 재노출**: 코드 변경 없음 — 이미 `NEXT_PUBLIC_PG_CHECKOUT_ENABLED` 환경변수
+  하나로 켜고 끄는 구조였다(2026-09-04 출시 전략). Vercel 프로덕션에 그 값을 `true`로
+  설정하면 코드 재배포 없이 바로 노출된다. 카드사(현대카드 등) 노출은 Toss 결제창이 직접
+  제어하므로 앱에 카드사 선택 UI를 새로 만들지 않았고, 카드 결제 선택 시 자연스러운
+  "일부 카드사는 준비 중일 수 있어요" 안내만 추가.
+- **QA용 알림톡 테스트 센터**: `add_qa_center_alimtalk_test.sql` 준비(아직 미실행, 사용자
+  승인 대기) — 새 컬럼 없이 기존 `centers.status='pending'`(회원 화면 비노출, 매니저 기능은
+  정상)만 사용. `sonjw8030@gmail.com`을 오너로, 같은 계정의 대표 프로필을 테스트 회원으로
+  연결. 결제/수강권/예약 데이터는 만들지 않는다.
+
 ## 2026-09-26 (2차) — 캘린더 다중 선택/일괄 추가 + 관리자 수업 캘린더 + 다른 앱 선택 개선 + 관리자 홈 상단 정리
 
 실기기 QA 후속. DB/RLS/SQL 변경 없음. **native 변경 있음 → 앱 재빌드 필요**(Info.plist에 `NSCalendarsWriteOnlyAccessUsageDescription` 추가).

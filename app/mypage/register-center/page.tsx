@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import CenterRegistrationForm, { type CenterFieldsValue } from "../../components/CenterRegistrationForm";
 import { registerCenterForAccount } from "../../../lib/centers";
 import { supabase } from "../../../lib/supabaseClient";
+import { toUserMessage } from "../../../lib/userError";
 
 const EMPTY: CenterFieldsValue = { name: "", address: "", phone: "", businessNumber: "", licenseFileName: "" };
 
@@ -37,7 +38,7 @@ export default function RegisterCenterPage() {
       await registerCenterForAccount({ ...fields, licenseFile });
       setDone(true);
     } catch (e: any) {
-      setError(e.message);
+      setError(toUserMessage(e));
     } finally {
       setBusy(false);
     }
@@ -46,7 +47,7 @@ export default function RegisterCenterPage() {
   if (done) {
     return (
       <div className="app-shell account-page-v2 register-center-page-v2">
-        <div className="holiday-notice" style={{ marginTop: 60 }}>
+        <div className="holiday-notice register-center-done-notice">
           <div className="holiday-chip">
             <span className="hc-dot" />
             신청이 접수됐어요. 운영자 승인 후 관리자 모드에서 이용할 수 있어요.
@@ -61,7 +62,7 @@ export default function RegisterCenterPage() {
 
   return (
     <div className="app-shell account-page-v2 register-center-page-v2">
-      <div className="section-title" style={{ paddingTop: 20 }}>내 센터 등록하기</div>
+      <div className="section-title register-center-head">내 센터 등록하기</div>
       <div className="hist-sub" style={{ padding: "0 16px 12px" }}>
         새 센터 정보를 등록하고 운영 승인을 요청합니다.
       </div>

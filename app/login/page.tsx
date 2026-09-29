@@ -27,6 +27,8 @@ import {
 import { signInWithGoogleNative, GoogleSignInCancelledError, isGoogleNativeSignInSupported } from "../../lib/googleAuth";
 import { stashPostLoginNext } from "../../lib/postLoginReturn";
 import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
+import { toUserMessage } from "../../lib/userError";
+import { checkEmailAvailable } from "../../lib/emailSignupCheck";
 
 type Mode = "login" | "signup";
 // 내부 키는 그대로 유지(회원=member/센터 운영자=manager) — UI-003은 화면 표시 문구만 바꾼다.
@@ -204,7 +206,7 @@ export default function LoginPage() {
         ? "이메일 또는 비밀번호가 올바르지 않아요"
         : error.message.includes("Email not confirmed")
         ? "이메일 인증이 아직 완료되지 않았어요. 메일함을 확인해주세요"
-        : error.message;
+        : toUserMessage(error);
       setMessage({ type: "error", text: msg });
       return;
     }
@@ -243,10 +245,10 @@ export default function LoginPage() {
       });
       if (error) {
         const msg = error.message.includes("already registered")
-          ? "이미 가입된 이메일이에요"
+          ? "이미 가입된 이메일이에요. 기존 계정으로 로그인해 주세요."
           : error.message.includes("Password should be")
           ? "비밀번호는 6자 이상이어야 해요"
-          : error.message;
+          : toUserMessage(error);
         setMessage({ type: "error", text: msg });
         return;
       }
@@ -289,7 +291,7 @@ export default function LoginPage() {
           .single();
 
         if (accErr || !account) {
-          setMessage({ type: "error", text: "계정 생성 중 문제가 발생했어요: " + (accErr?.message ?? "") });
+          setMessage({ type: "error", text: toUserMessage(accErr, "계정 생성 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.") });
           return;
         }
 
@@ -380,7 +382,7 @@ export default function LoginPage() {
       } catch (e: any) {
         setSocialLoading(null);
         if (e instanceof AppleSignInCancelledError) return; // 사용자가 직접 취소 — 에러로 안 보여줌
-        setMessage({ type: "error", text: e.message ?? "애플 로그인에 실패했어요" });
+        setMessage({ type: "error", text: toUserMessage(e, "애플 로그인에 실패했어요") });
       }
       return; // 이 return 이후로는 절대 아래의 공용 signInWithOAuth 호출에 도달하지 않는다.
     }
@@ -404,7 +406,7 @@ export default function LoginPage() {
       } catch (e: any) {
         setSocialLoading(null);
         if (e instanceof GoogleSignInCancelledError) return; // 사용자가 직접 취소 — 에러로 안 보여줌
-        setMessage({ type: "error", text: e.message ?? "구글 로그인에 실패했어요" });
+        setMessage({ type: "error", text: toUserMessage(e, "구글 로그인에 실패했어요") });
       }
       return; // 이 return 이후로는 절대 아래의 공용 signInWithOAuth 호출에 도달하지 않는다.
     }
@@ -421,8 +423,12 @@ export default function LoginPage() {
     // 에러가 없으면 이 시점부터 브라우저가 provider 페이지로 이동하므로 loading을 되돌리지 않는다.
   }
 
-  function submit() {
-    if (loading) return;
+  // 이메일 사전 중복 확인 중(OTP 발송 전 "다음" 클릭 → 서버 확인 대기) — 별도 state로 분리해
+  // 기존 loading(로그인/최종 가입 제출)과 문구가 섞이지 않게 한다.
+  const [checkingEmail, setCheckingEmail] = useState(false);
+
+  async function submit() {
+    if (loading || checkingEmail) return;
     if (!email.trim() || !password.trim()) {
       setMessage({ type: "error", text: "이메일과 비밀번호를 입력해주세요" });
       return;
@@ -433,6 +439,18 @@ export default function LoginPage() {
         return;
       }
       setMessage(null);
+      // 실기기 QA(2026-09-29) — 예전엔 여기서 바로 OTP 단계로 넘어가, 이미 가입된 이메일이어도
+      // 휴대폰 인증(카카오 알림톡/SMS 발송)까지 거친 뒤에야 "이미 가입된 이메일"을 알게 됐다.
+      // 서버에서 먼저 확인해 중복이면 OTP 단계 자체로 넘어가지 않는다. 확인 자체가 실패(네트워크
+      // 오류 등)하면 열려서(fail-open) 기존처럼 다음 단계로 보낸다 — 최종적으로는 어차피
+      // handleSignup()의 서버측 중복 처리가 다시 막아주므로 사용자가 완전히 막히지 않는다.
+      setCheckingEmail(true);
+      const check = await checkEmailAvailable(email.trim());
+      setCheckingEmail(false);
+      if (!check.available) {
+        setMessage({ type: "error", text: check.reason ?? "이미 가입된 계정이에요. 기존에 사용한 로그인 방법으로 로그인해 주세요." });
+        return; // OTP 단계로 진입하지 않음 — 인증번호 발송 자체가 없음
+      }
       setSignupStep("profile");
       return;
     }
@@ -561,13 +579,24 @@ export default function LoginPage() {
               <input type="checkbox" checked={agreeMarketing} onChange={(e) => setAgreeMarketing(e.target.checked)} />
               <span>(선택) 이벤트·혜택 알림 수신 동의</span>
             </label>
+            {/* 실기기 QA(2026-09-29) — 전체 동의는 별도 state로 들고 있지 않는다(개별 state와
+                어긋나는 동기화 버그 방지). 3개 개별 값의 파생값이라 "모두 체크되면 자동 체크,
+                하나라도 해제되면 자동 해제"가 항상 자연히 성립한다. */}
+            <label className="signup-agree-row signup-agree-all">
+              <input
+                type="checkbox"
+                checked={agreeTerms && agreePrivacy && agreeMarketing}
+                onChange={(e) => { setAgreeTerms(e.target.checked); setAgreePrivacy(e.target.checked); setAgreeMarketing(e.target.checked); }}
+              />
+              <span>전체 동의</span>
+            </label>
           </div>
         )}
 
         {message && <div className={`auth-msg ${message.type}`}>{message.text}</div>}
 
-        <AppButton className="login-submit" onClick={submit} disabled={loading || (mode === "signup" && signupStep === "profile" && !otpVerified)}>
-          {loading ? "처리 중..." : mode === "login" ? "로그인" : signupStep === "account" ? "다음" : "회원가입 완료"}
+        <AppButton className="login-submit" onClick={submit} disabled={loading || checkingEmail || (mode === "signup" && signupStep === "profile" && !otpVerified)}>
+          {checkingEmail ? "확인 중..." : loading ? "처리 중..." : mode === "login" ? "로그인" : signupStep === "account" ? "다음" : "회원가입 완료"}
         </AppButton>
         {mode === "signup" && signupStep === "profile" && <button className="auth-step-back" type="button" onClick={() => { setSignupStep("account"); setMessage(null); }}>이메일 수정하기</button>}
 

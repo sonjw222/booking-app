@@ -15,6 +15,7 @@ import { formatMonthDayWeekday } from "../../lib/kst";
 import UiIcon from "../components/UiIcon";
 import SegmentedTabs from "../components/SegmentedTabs";
 import EmptyState from "../components/EmptyState";
+import { toUserMessage } from "../../lib/userError";
 
 const STATUS_LABEL: Record<string, string> = {
   confirmed: "예약 확정",
@@ -91,7 +92,7 @@ export default function MyReservationsPage() {
     try {
       const data = await fetchMyReservationHistory();
       setHistory(data);
-    } catch (e: any) { setError(e.message ?? "불러오지 못했어요"); }
+    } catch (e: any) { setError(toUserMessage(e, "불러오지 못했어요")); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -107,7 +108,7 @@ export default function MyReservationsPage() {
       showToast(deducted ? "취소됐지만 마감 이후라 수강권 1회가 차감됐어요" : "예약이 취소됐어요");
       await load();
     } catch (e: any) {
-      showToast(e.message ?? "취소하지 못했어요");
+      showToast(toUserMessage(e, "취소하지 못했어요"));
     } finally {
       setBusyId(null);
     }

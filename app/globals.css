@@ -527,13 +527,23 @@ a { color: inherit; text-decoration: none; }
 .remember-me { display: flex; align-items: center; gap: 6px; color: var(--ink-soft); font-weight: 700; cursor: pointer; }
 .remember-me input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
 
-.signup-agree { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; }
+.signup-agree { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 10px; }
+/* 실기기 QA(2026-09-29) — 체크박스/글자가 너무 작아 모바일에서 오탭이 잦다는 신고.
+   체크박스 시각 크기와 글자 크기를 조금 키우고, 각 행 자체를 44px 이상의 터치 타겟으로
+   만든다(글자 크기만 키우고 행 높이는 그대로 두면 여전히 좁은 히트 영역만 반응함).
+   새 강조색 없이 기존 --accent(체크박스)/--ink-soft(본문)/--ink(링크) 그대로 사용. */
 .signup-agree-row {
-  display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600;
-  color: var(--ink-soft); cursor: pointer;
+  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 3px 0;
+  font-size: 14px; font-weight: 600; color: var(--ink-soft); cursor: pointer;
 }
-.signup-agree-row input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.signup-agree-row input { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
 .signup-agree-row a { color: var(--ink); font-weight: 700; text-decoration: underline; }
+/* "전체 동의" — 기존 3개 약관과 시각적으로 구분되도록 위쪽에 여백 + 구분선만 추가(새 색 없음). */
+.signup-agree-all {
+  margin-top: 10px; padding-top: 14px; border-top: 1px solid var(--line);
+  font-size: 14.5px; font-weight: 700; color: var(--ink);
+}
+.signup-agree-all input { width: 22px; height: 22px; }
 .forgot-pw-link { color: var(--ink-soft); font-weight: 700; text-decoration: none; }
 .forgot-pw-link:hover { color: var(--accent); }
 
@@ -6273,3 +6283,18 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
 .manager-home-v2 .center-chip.on .center-role { background: var(--accent-soft); color: var(--accent); }
 .manager-chrome-main > a { border: 1px solid var(--line-strong); background: var(--card-bg); color: var(--ink); }
 .manager-chrome-main > a:active { background: var(--surface); }
+
+/* ============================================================
+   실기기 QA(2026-09-29) — "내 센터 등록하기"(app/mypage/register-center/page.tsx) 상단
+   잘림. 이 화면은 다른 mypage 화면들과 달리 .back-header(자체적으로 safe-top을 반영하는
+   공용 헤더 계약)를 쓰지 않고 .section-title을 화면 맨 위 요소로 바로 쓰는데, .section-title
+   자체 규칙(위쪽 39번째 줄)은 고정 padding-top: 20px라 safe-area를 전혀 반영하지 않는다.
+   .section-title은 관리자/매니저 화면(이미 상단에 ManagerChrome/AdminChrome이 safe-top을
+   반영한 뒤 그 아래 보조 제목으로만 쓰임)에서도 재사용되므로 그 공용 규칙 자체를 바꾸지
+   않고, 이 화면 전용 클래스에서만 safe-top을 더한다(이중 적용 방지 — 이 화면엔 다른
+   상단 safe-area 요소가 없으므로 여기서 한 번만 더하면 됨). 큰 값을 하드코딩하지 않고
+   실제 safe-area 토큰(--safe-top, 노치 없는 기기의 fallback은 --page-gutter와 같은
+   20px)만 사용 — Android/웹은 --safe-top이 0이라 기존과 동일하게 20px 그대로 유지된다.
+   ============================================================ */
+.register-center-head { padding-top: max(20px, var(--safe-top)); }
+.register-center-done-notice { margin-top: max(60px, calc(var(--safe-top) + 40px)); }

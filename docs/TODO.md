@@ -47,6 +47,21 @@
 5. 사용자 결정이 필요한 기능은 결정 기록 없이 완료 처리하지 않습니다.
 6. 완료된 항목은 [CHANGELOG.md](./CHANGELOG.md)에 근거와 함께 기록한 뒤 이 문서에서 제거하거나 완료 이력으로 이동합니다.
 
+### P1-Postlaunch-0929. (2026-09-29) 출시 후 개선 Batch — SQL/배포 대기 항목
+- **email_signup_available() RPC + email_check_attempts 테이블** — `add_email_signup_precheck.sql`
+  준비 완료, production 미실행(승인 대기). 실행 전까지 이메일 사전 중복 확인/네이버 실제
+  이메일 중복 차단 기능은 fail-open으로 조용히 비활성 상태(기존 동작과 동일, 회귀 없음).
+- **check-signup-email Edge Function** — 코드 작성 완료, `supabase functions deploy
+  check-signup-email` 필요(위 SQL과 함께 배포돼야 정상 동작).
+- **QA용 알림톡 테스트 센터** — `add_qa_center_alimtalk_test.sql` 준비 완료, production
+  미실행(승인 대기).
+- **NEXT_PUBLIC_PG_CHECKOUT_ENABLED=true** — Vercel 프로덕션 환경변수 설정 필요(Toss 카드
+  심사 대부분 통과, 현대카드만 남음 — 사용자 결정에 따라 지금 켜도 됨).
+- **raw 오류 한글화 범위 확대**: `lib/userError.ts`를 이번엔 인증/회원가입/센터등록/결제/
+  예약에만 적용했다. `.message`를 직접 노출하는 다른 화면(프로필/쿠폰/포인트/리뷰/문의 등,
+  전수 검색 시 58개 이상 파일에서 `.message` 패턴 발견)은 이번 배치 범위 밖 — 후속 배치에서
+  같은 헬퍼로 점진 확대 필요.
+
 ### P1-Native-Calendar-0926. (2026-09-26, 2차 갱신) 캘린더 추가 native 실기기 확인 + 재빌드
 - iOS/Android 앱 **재빌드/재배포 필요**(CalendarEventPlugin은 native 코드). 재빌드 전 구버전 앱은 자동으로 기존 .ics 내보내기로 동작한다.
 - 실기기 체크리스트(iPhone/Android)는 2026-09-26 작업 보고 참고. 특히 iOS 15/16 저장 권한 흐름과 iOS 17+ 권한 없는 이벤트 UI, Android 기본 캘린더 앱 미지정 시 시스템 선택창.
