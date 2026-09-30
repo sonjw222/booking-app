@@ -833,6 +833,12 @@ button.side { background: transparent; border: 0; padding: 0; color: var(--ink);
 }
 .add-profile-form { padding: 16px var(--page-gutter) 0; }
 .add-profile-actions { display: flex; gap: 10px; margin-top: 4px; }
+/* 2026-10-01(B-6/B-7/B-8) — 취소/저장 두 버튼을 정확히 반반이 아니라 약 3:7 비율로(저장/
+   등록 쪽이 주 행동) — 기존 .add-profile-actions(모든 화면 공용 계약)를 건드리면 다른
+   수십 개 화면에 영향이 가므로, 이 비율이 필요한 시트에만 같이 붙이는 추가(additive)
+   클래스로 분리했다. 정확한 30/70 픽셀을 강제하진 않고 flex-grow 비율로만 자연스럽게. */
+.sheet-actions-37 .ghost-btn { flex: 3; }
+.sheet-actions-37 .primary-btn { flex: 7; }
 
 /* ============================================================
    매니저 대시보드
@@ -3836,6 +3842,16 @@ a.membership-card { text-decoration: none; display: block; }
 .member-detail-sheet .admin-row .v { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .member-detail-sheet .mem-detail-row { display:grid; grid-template-columns:74px minmax(0,1fr) auto; gap:10px; align-items:center; }
 .member-detail-sheet .mem-detail-date { white-space:nowrap; line-height:1.2; }
+/* 2026-10-01(B-9~B-12) — 수업 등록 sheet의 drag-to-dismiss. 이 sheet에서만 쓰는
+   .direct-member-sheet 클래스라 다른 화면에 영향 없음. transform은 JS가 인라인으로
+   주고(드래그 중 실시간 추적), transition은 놓았을 때(스냅백/닫힘)만 살아난다 — 드래그
+   도중엔 React가 style.transition을 없애 즉시 손가락을 따라간다(끊김 없음, B-12: "drag
+   중 transition 없음"). prefers-reduced-motion이면 애니메이션 없이 즉시 반영. */
+.direct-member-sheet { transition: transform .25s cubic-bezier(.2,.8,.2,1); }
+@media (prefers-reduced-motion: reduce) { .direct-member-sheet { transition: none; } }
+.sheet-drag-handle { display: flex; justify-content: center; padding: 4px 0 12px; margin-top: -10px; cursor: grab; touch-action: none; }
+.sheet-drag-handle:active { cursor: grabbing; }
+.sheet-drag-handle-bar { width: 36px; height: 4px; border-radius: 999px; background: var(--line-strong); }
 .direct-member-sheet .book-member-list { margin-top:12px; border-top:1px solid var(--line); }
 .direct-member-sheet .book-member-row { width:100%; min-height:66px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 2px; border:0; border-bottom:1px solid var(--line); background:transparent; text-align:left; }
 .book-member-identity { display:flex; align-items:center; gap:11px; min-width:0; }

@@ -354,14 +354,20 @@ export default function ClassRevenuePage() {
                     {won(editSum)} {editValid ? "" : `(총 결제금액과 ${won(Math.abs(editSum - editPaidTotal))} 차이)`}
                   </div>
                 </div>
-                <button
-                  className="primary-btn"
-                  style={{ width: "100%", marginTop: 12 }}
-                  disabled={!editValid || editSaving}
-                  onClick={saveSessionEdit}
-                >
-                  {editSaving ? "저장 중" : "저장"}
-                </button>
+                {/* 2026-10-01(B-8, 전체 sheet 감사에서 발견) — "저장" 버튼 하나뿐이라 여러
+                    회차 금액을 수정하다 그만두고 싶을 때 명시적으로 빠져나갈 방법이 없었다
+                    (배경 탭은 되지만 버튼으로 보이지 않음). 취소를 추가하고 배경 탭과 같은
+                    동작(editSaving 중엔 막힘)을 쓴다. */}
+                <div className="add-profile-actions sheet-actions-37" style={{ marginTop: 12 }}>
+                  <button className="ghost-btn" disabled={editSaving} onClick={() => setEditTarget(null)}>취소</button>
+                  <button
+                    className="primary-btn"
+                    disabled={!editValid || editSaving}
+                    onClick={saveSessionEdit}
+                  >
+                    {editSaving ? "저장 중" : "저장"}
+                  </button>
+                </div>
               </div>
             )}
           </div>

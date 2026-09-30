@@ -43,6 +43,7 @@ import { fetchClassMemos, createClassMemo, updateClassMemo, deleteClassMemo, typ
 import { getMyAccountId } from "../../../lib/authAccount";
 import { formatMonthDayWeekday } from "../../../lib/kst";
 import { fetchMemberDetail, type MemberDetailData } from "../../../lib/members";
+import { fetchSettings, type CenterSettings } from "../../../lib/settings";
 import {
   fetchProducts, fetchRulesForProducts, findScheduleExcludedProducts, ruleToText,
   type Product, type ScheduleRule,
@@ -82,6 +83,44 @@ export default function ClassManagePage() {
 
   // 폼 상태 (열림/수정 대상/입력값)
   const [formOpen, setFormOpen] = useState(false);
+  // 2026-10-01(B-9~B-12) — 수업 등록/수정 sheet를 아래로 끌어서 닫는 제스처(drag-to-dismiss).
+  // dragY: 현재 끌린 거리(px, 0 이상만). dragging: true인 동안만 transition을 끈다(끄는
+  // 도중엔 손가락을 그대로 따라가야 하고, 놓았을 때만(스냅백/닫힘) 애니메이션이 붙는다).
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const dragStartY = useRef<number | null>(null);
+  const sheetBoxRef = useRef<HTMLDivElement>(null);
+
+  // 취소 버튼/배경 탭/드래그 닫기가 전부 같은 함수를 쓴다(B-11) — unsaved 확인 정책이나
+  // state 정리가 앞으로 추가되더라도 세 경로가 어긋나지 않는다.
+  function closeFormSheet() {
+    setFormOpen(false);
+    setDragY(0);
+  }
+
+  function handleDragHandlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragStartY.current = e.clientY;
+    setDragging(true);
+  }
+  function handleDragHandlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (dragStartY.current == null) return;
+    // 아래로만 반응한다(위로 끌어도 0에서 멈춤) — 실수로 위로 밀었을 때 이상하게 보이지 않게.
+    setDragY(Math.max(0, e.clientY - dragStartY.current));
+  }
+  function handleDragHandlePointerUp() {
+    if (dragStartY.current == null) return;
+    dragStartY.current = null;
+    setDragging(false);
+    // B-10 — velocity가 아니라 거리만 본다(실수 방지 우선). sheet 실제 높이의 35% 이상
+    // 끌었을 때만 닫힘 — 30~40% 범위의 중간값.
+    const height = sheetBoxRef.current?.getBoundingClientRect().height ?? 0;
+    if (height > 0 && dragY > height * 0.35) {
+      closeFormSheet();
+    } else {
+      setDragY(0); // 원위치로 spring-back(아래 CSS transition이 처리)
+    }
+  }
   const [editId, setEditId] = useState<string | null>(null);
   const [editGroupId, setEditGroupId] = useState<string | null>(null);
   // QA Fix Batch(2026-09-18) — 정원 축소 invariant(요청 2번)의 클라이언트 측 사전 체크용.
@@ -113,6 +152,7 @@ export default function ClassManagePage() {
   }>>({});
   const [perDayMode, setPerDayMode] = useState(false);
   // 예약취소 마감: 일/시간/분 입력 → 분으로 환산해 저장
+  const [centerSettings, setCenterSettings] = useState<CenterSettings | null>(null);
   const [cancelD, setCancelD] = useState("");
   const [cancelH, setCancelH] = useState("");
   const [cancelM, setCancelM] = useState("");
@@ -263,6 +303,15 @@ export default function ClassManagePage() {
     }
   }, [year, month, activeCenterId, loadClasses]);
 
+  // 2026-10-01(B-1/B-2) — 예약/취소 마감을 비워두면 운영설정 기본값이 적용되는데, 화면에는
+  // 그 기본값이 뭔지 전혀 안 보여서 "0일 0시간 0분"처럼 보이는 빈 입력칸만 있었다(실제로는
+  // 운영설정의 날짜+시각 기준 값이 적용됨). year/month와 무관하게 센터가 바뀔 때만 다시
+  // 불러온다(수업 목록처럼 달마다 새로 부를 필요 없음).
+  useEffect(() => {
+    if (!activeCenterId) { setCenterSettings(null); return; }
+    fetchSettings(activeCenterId).then(setCenterSettings).catch(() => setCenterSettings(null));
+  }, [activeCenterId]);
+
   const activeCenter = centers.find((c) => c.id === activeCenterId);
 
   useEffect(() => {
@@ -320,6 +369,22 @@ export default function ClassManagePage() {
   function fillBookDeadline(min: number | null) {
     const { d, h, m } = minutesToDhm(min);
     setBookD(d); setBookH(h); setBookM(m);
+  }
+
+  // 2026-10-01(B-2) — 운영설정 기본값을 "N일 전 HH:MM까지"라는 운영설정 화면과 동일한
+  // 형식 그대로 보여준다(수업 등록의 일/시간/분-전 입력 형식으로 억지로 환산하지 않음 —
+  // 환산하려면 이 수업의 실제 시작 날짜·시각 기준으로 날짜 계산이 필요해 버그 위험이
+  // 크고, 운영설정 화면에서 이미 쓰는 표현을 그대로 재사용하는 쪽이 더 안전하고 일관적).
+  function effectiveDeadlineText(kind: "book" | "cancel"): string | null {
+    if (!centerSettings) return null;
+    const isPrivate = form.classFormat === "private";
+    const daysBefore = kind === "book"
+      ? (isPrivate ? centerSettings.privateBookDaysBefore : centerSettings.groupBookDaysBefore)
+      : (isPrivate ? centerSettings.privateCancelDaysBefore : centerSettings.groupCancelDaysBefore);
+    const time = kind === "book"
+      ? (isPrivate ? centerSettings.privateBookTime : centerSettings.groupBookTime)
+      : (isPrivate ? centerSettings.privateCancelTime : centerSettings.groupCancelTime);
+    return `운영설정 기본값: 수업 ${daysBefore}일 전 ${time}까지`;
   }
 
   function openCreate() {
@@ -1195,8 +1260,29 @@ export default function ClassManagePage() {
 
       {/* 등록/수정 시트 */}
       {formOpen && (
-        <SheetOverlay className="sheet-overlay" onClick={() => setFormOpen(false)}>
-          <div className="sheet direct-member-sheet" onClick={(e) => e.stopPropagation()}>
+        <SheetOverlay className="sheet-overlay" onClick={closeFormSheet}>
+          <div
+            ref={sheetBoxRef}
+            className="sheet direct-member-sheet"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
+              transition: dragging ? "none" : undefined,
+            }}
+          >
+            {/* 2026-10-01(B-9~B-12) — drag handle. 이 막대에서 시작한 드래그만 허용하고
+                (폼 내부 스크롤과 충돌 없음), 아래로 충분히 끌면 취소 버튼과 완전히 같은
+                동작(closeFormSheet)으로 닫힌다. */}
+            <div
+              className="sheet-drag-handle"
+              role="presentation"
+              onPointerDown={handleDragHandlePointerDown}
+              onPointerMove={handleDragHandlePointerMove}
+              onPointerUp={handleDragHandlePointerUp}
+              onPointerCancel={handleDragHandlePointerUp}
+            >
+              <span className="sheet-drag-handle-bar" aria-hidden="true" />
+            </div>
             <div className="sheet-title">{editId ? "수업 수정" : "수업 등록"}</div>
             <input aria-label="수업명" className="input-field" placeholder="수업명" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
 
@@ -1367,10 +1453,22 @@ export default function ClassManagePage() {
                 value={bookM} onChange={(e) => setBookM(e.target.value)} />
               <span className="deadline-unit">분 전까지</span>
             </div>
-            <div className="perm-guide" style={{ margin: "4px 0 0" }}>
-              모두 비우면 운영설정의 기본 예약 마감 시간이 적용돼요. 지정하면 이 수업에는
-              운영설정보다 이 값이 우선 적용돼요(CLASS-001).
-            </div>
+            {/* 2026-10-01(B-1/B-2) — 빈 칸이면 운영설정 기본값이 적용된다는 사실은 알아도
+                "그래서 지금 실제로 며칠 전인지"는 이 화면만으로 알 수 없었다 — 운영설정
+                화면과 같은 표현으로 실제 적용값을 바로 보여준다(별도 변환 없이 그대로,
+                DB에는 여전히 비워둔 상태 그대로 저장돼 나중에 운영설정이 바뀌면 자동으로
+                따라간다 — B-3, override를 새로 저장하지 않음). 값을 입력해 override한
+                뒤에는 "운영설정 값으로 되돌리기"로 다시 상속 상태(빈 칸)로 되돌릴 수 있다. */}
+            {bookD === "" && bookH === "" && bookM === "" ? (
+              effectiveDeadlineText("book") && (
+                <div className="perm-guide" style={{ margin: "4px 0 0" }}>{effectiveDeadlineText("book")} (운영설정 값 사용 중)</div>
+              )
+            ) : (
+              <div className="perm-guide" style={{ margin: "4px 0 0", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span>이 수업만 다른 값으로 지정했어요(운영설정보다 우선 적용).</span>
+                <button type="button" className="text-btn" style={{ fontWeight: 800 }} onClick={() => fillBookDeadline(null)}>운영설정 값으로 되돌리기</button>
+              </div>
+            )}
 
             <div className="set-row" style={{ padding: "12px 0", borderBottom: "none" }}>
               <div className="set-label">예약 취소 완전 불가<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>특강 등 — 켜면 회원이 예약을 스스로 취소할 수 없어요(관리자 취소/노쇼 처리는 그대로 가능)</span></div>
@@ -1394,9 +1492,16 @@ export default function ClassManagePage() {
                     value={cancelM} onChange={(e) => setCancelM(e.target.value)} />
                   <span className="deadline-unit">분 전까지</span>
                 </div>
-                <div className="perm-guide" style={{ margin: "4px 0 0" }}>
-                  모두 비우면 운영설정의 기본 취소 시간이 적용돼요.
-                </div>
+                {cancelD === "" && cancelH === "" && cancelM === "" ? (
+                  effectiveDeadlineText("cancel") && (
+                    <div className="perm-guide" style={{ margin: "4px 0 0" }}>{effectiveDeadlineText("cancel")} (운영설정 값 사용 중)</div>
+                  )
+                ) : (
+                  <div className="perm-guide" style={{ margin: "4px 0 0", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span>이 수업만 다른 값으로 지정했어요(운영설정보다 우선 적용).</span>
+                    <button type="button" className="text-btn" style={{ fontWeight: 800 }} onClick={() => fillDeadline(null)}>운영설정 값으로 되돌리기</button>
+                  </div>
+                )}
               </>
             )}
             </div>
@@ -1703,9 +1808,16 @@ export default function ClassManagePage() {
               </div>
             )}
 
-            <button className="primary-btn" style={{ marginTop: 20 }} disabled={busy} onClick={save}>
-              {busy ? "저장 중..." : editId ? "수정하기" : "등록하기"}
-            </button>
+            {/* 2026-10-01(B-6) — 예전엔 "등록하기"(저장) 버튼 하나뿐이라 저장하지 않고
+                나가려면 배경을 눌러 닫는 방법뿐이었다(뒤로가기/명시적 취소 버튼 없음).
+                취소 버튼을 추가하고, 배경 탭과 완전히 같은 동작(setFormOpen(false))을
+                쓴다 — drag-to-dismiss(B-9~B-11)도 같은 동작을 공유한다. */}
+            <div className="add-profile-actions sheet-actions-37" style={{ marginTop: 20 }}>
+              <button className="ghost-btn" disabled={busy} onClick={closeFormSheet}>취소</button>
+              <button className="primary-btn" disabled={busy} onClick={save}>
+                {busy ? "저장 중..." : editId ? "수정하기" : "등록하기"}
+              </button>
+            </div>
           </div>
         </SheetOverlay>
       )}

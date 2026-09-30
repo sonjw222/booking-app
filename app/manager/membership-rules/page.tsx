@@ -694,7 +694,8 @@ export default function MembershipRulesPage() {
               );
             })()}
 
-            <div className="add-profile-actions" style={{ marginTop: 14 }}>
+            {/* 2026-10-01(B-7) — 취소/저장을 정확히 반반 대신 약 3:7 비율로(저장 쪽이 주 행동) */}
+            <div className="add-profile-actions sheet-actions-37" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={resetProdSheet}>취소</button>
               <button className="primary-btn" disabled={busy} onClick={handleCreateProduct}>{editingId ? "저장" : "추가"}</button>
             </div>
