@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 2026-10-01 — 예약 운영 설정 iOS 입력/확대/터치 불가 버그 수정
+
+iPhone 14 Pro 실기기 QA(Vercel Preview)에서 보고된 `/manager/settings` 3건 긴급 버그픽스.
+데이터 로직/스키마/저장 API는 전혀 건드리지 않음(UI 레이어 버그만).
+
+- **viewport 자동 확대**: `.set-num`/`.set-time`(예약 운영 설정뿐 아니라 알림톡 자동발송
+  규칙/수업매출/구독 플랜 화면도 공유하는 클래스) `font-size`가 13px로 iOS Safari/WKWebView의
+  auto-zoom 임계값(16px) 미만이었다 — 16px로 올려 근본 원인을 제거(`app/globals.css`).
+  `maximum-scale=1`/`user-scalable=no` 등 확대 차단 우회책은 쓰지 않음 — 핀치줌은 그대로 유지.
+- **예약대기 자동 예약 시간 입력 불가**: `waitlistAutoHours`/`waitlistAutoMinutes`
+  (+ 같은 원인의 `sameDayChangeHours`/`sameDayChangeMinutes`) input이 `disabled=true`로
+  하드코딩돼 있었다. `fix_same_day_cancel_and_waitlist_auto_deadline.sql`에서 이미
+  `cancel_reservation()`이 이 값들을 실제로 읽어 마감 계산에 쓰도록 고쳐졌는데("스케줄러
+  없음" 전제가 틀렸었음을 그 마이그레이션 자체가 기록함), UI의 잠금만 되돌려지지 않았던
+  회귀 — 입력을 다시 허용(`app/manager/settings/page.tsx`).
+- **숫자 필드에 일반(한글) 키보드가 뜸**: `type="number"`만으로는 iOS WKWebView에서
+  숫자 키패드가 확정적으로 뜨지 않아, `inputMode="numeric" pattern="[0-9]*"`를 추가.
+- 전체 통제 감사 결과 `showAllClasses`(수강권으로 볼 수 없는 수업 표시) 토글의
+  `disabled=true`는 별도의 유효한 사유(P1-9 자격 판정 로직 관련)로 이번 범위에서 제외.
+
 ## 2026-09-30 — 알림톡 템플릿 불러오기 UX, 발신 설정 문구 정정, 승인 대기 배너 문구 수정
 
 QA 진행 중(`[QA] 모하빗 알림톡 테스트 센터`) 발견된 UX 문제 3건. 백엔드(send-alimtalk Edge

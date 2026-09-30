@@ -1707,21 +1707,33 @@ button.side { background: transparent; border: 0; padding: 0; color: var(--ink);
   flex-wrap: wrap;
 }
 
+/* 실기기 QA(2026-10-01) — iPhone에서 이 input(또는 .set-time)에 포커스하면 페이지 전체
+   viewport가 확대되는 버그의 근본 원인: font-size 13px는 iOS Safari/WKWebView의 auto-zoom
+   임계값(16px) 미만이다. 이 페이지(.set-num/.set-time은 예약 운영 설정/알림톡 자동발송
+   규칙/수업매출 등 매니저 화면에서 공유하는 숫자·시간 입력 클래스 — app/manager/settings,
+   app/manager/alimtalk/rules, app/manager/class-revenue, app/admin/subscription-plans)
+   전체가 이 클래스를 쓰므로 같은 버그가 있을 수 있는 모든 곳에 공통으로 고친다(전역
+   input{font-size:16px}가 아니라 이 두 클래스로만 한정 — 다른 입력에는 영향 없음).
+   viewport meta의 user-scalable=no/maximum-scale=1 같은 확대 차단은 전혀 쓰지 않았다 —
+   사용자가 직접 핀치줌하는 기능은 그대로 살아있고, 이 fix는 "브라우저가 자동으로" 확대하는
+   것만 막는다. 박스가 커 보이지 않도록 좌우 padding을 8px→6px로 줄이고, 호출부
+   (app/manager/settings/page.tsx numInput)의 기본 width도 56→60px로 살짝 넓혀 두 자리
+   숫자가 여유 있게 들어가게 했다 — 전체적인 높이/테두리/배경 등 기존 디자인은 그대로. */
 .set-num {
-  padding: 6px 8px;
+  padding: 6px 6px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 16px;
   text-align: center;
   background: var(--surface);
   color: var(--text);
 }
 
 .set-time {
-  padding: 6px 8px;
+  padding: 6px 6px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 16px;
   background: var(--surface);
   color: var(--text);
 }

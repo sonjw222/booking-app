@@ -104,9 +104,20 @@ export default function SettingsPage() {
   }
 
   // 숫자 입력 (음수 방지)
-  const numInput = (val: number, onCh: (n: number) => void, w = 56, disabled = false) => (
+  // 실기기 QA(2026-10-01) — iPhone에서 이 input에 포커스하면 전체 viewport가 확대되고,
+  // 숫자 전용 키패드 대신 일반(한글) 키보드가 뜨는 두 가지 버그가 확인됐다.
+  //  1) viewport 확대: iOS는 focus되는 control의 computed font-size가 16px 미만이면 자동으로
+  //     확대한다 — 이 input이 쓰는 .set-num 클래스가 13px이었다(app/globals.css). 최소
+  //     16px로 올려 근본 원인을 없앴다(viewport 태그의 user-scalable=no 같은 우회책 아님 —
+  //     사용자가 직접 핀치줌하는 기능은 그대로 살아있다).
+  //  2) 키보드 종류: type="number"만으로는 iOS WKWebView(특히 한국어 시스템 키보드가 기본일
+  //     때)가 가끔 숫자 키패드 대신 일반 키보드를 띄운다 — inputMode="numeric"을 같이
+  //     지정하면 이 휴리스틱과 무관하게 숫자 키패드가 확정적으로 뜬다. pattern="[0-9]*"는
+  //     이 조합을 신뢰성 있게 만드는 iOS 권장 보완 속성(type=number에서는 표준상 무시되지만
+  //     해가 없다). value/onChange 파싱 로직은 그대로 — 검증 규칙을 바꾸지 않는다.
+  const numInput = (val: number, onCh: (n: number) => void, w = 60, disabled = false) => (
     <input
-      type="number" min={0} className="set-num" style={{ width: w }}
+      type="number" inputMode="numeric" pattern="[0-9]*" min={0} className="set-num" style={{ width: w }}
       value={val} disabled={disabled}
       onChange={(e) => onCh(Math.max(0, parseInt(e.target.value || "0", 10)))}
     />
@@ -191,8 +202,15 @@ export default function SettingsPage() {
           {s.allowSameDayBooking && (
             <div className="set-row col">
               <div className="set-label">당일 예약 변경 가능 시간 (그룹 수업, 시작 전까지)</div>
-              <div className="set-inline">{numInput(s.sameDayChangeHours, (n) => up("sameDayChangeHours", n), 56, true)}시간
-                {numInput(s.sameDayChangeMinutes, (n) => up("sameDayChangeMinutes", n), 56, true)}분 전</div>
+              {/* 실기기 QA(2026-10-01) — 이 두 input이 항상 disabled였다(disabled 인자로 true
+                  고정). fix_same_day_cancel_and_waitlist_auto_deadline.sql 주석에 따르면 "정기
+                  스케줄러가 필요해서 저장만 되고 실제로 안 읽힌다"는 판단은 틀렸고, 그 마이그레이션
+                  에서 cancel_reservation()이 이미 same_day_change_hours/minutes를 실제로 읽어
+                  당일 예약 취소 마감 계산에 쓰도록 고쳐졌다 — 즉 이 값은 지금 라이브 백엔드에서
+                  정상 동작 중인데 UI만 영구히 잠겨 있었다(값 변경 자체가 불가능한 상태). 저장
+                  방식/검증 로직(음수 방지)은 그대로 두고 입력만 다시 허용한다. */}
+              <div className="set-inline">{numInput(s.sameDayChangeHours, (n) => up("sameDayChangeHours", n))}시간
+                {numInput(s.sameDayChangeMinutes, (n) => up("sameDayChangeMinutes", n))}분 전</div>
             </div>
           )}
 
@@ -223,8 +241,15 @@ export default function SettingsPage() {
           <div className="set-section-title">예약대기 자동 예약 시간</div>
           <div className="set-row col">
             <div className="set-label">공석 발생 시, 시작 전까지 자동 예약 (0이면 취소시간 적용)</div>
-            <div className="set-inline">{numInput(s.waitlistAutoHours, (n) => up("waitlistAutoHours", n), 56, true)}시간
-              {numInput(s.waitlistAutoMinutes, (n) => up("waitlistAutoMinutes", n), 56, true)}분 전</div>
+            {/* 실기기 QA(2026-10-01, root cause) — "0시간/0분을 눌러도 반응이 없다"는 리포트의
+                원인: 이 두 input이 disabled=true로 하드코딩돼 있었다(아래 위와 동일한
+                fix_same_day_cancel_and_waitlist_auto_deadline.sql 마이그레이션이 cancel_
+                reservation()에서 waitlist_auto_hours/minutes를 실제로 읽어 대기 자동승격 마감을
+                계산하도록 이미 고쳐놓은 상태 — "스케줄러가 없어 작동 안 함"이라는 예전 전제가
+                틀렸었다). 0은 "취소시간 적용"이라는 유효한 값이라(주석 그대로) validation으로
+                막지 않는다 — min=0만 유지, 상한 없음, 기존 그대로. */}
+            <div className="set-inline">{numInput(s.waitlistAutoHours, (n) => up("waitlistAutoHours", n))}시간
+              {numInput(s.waitlistAutoMinutes, (n) => up("waitlistAutoMinutes", n))}분 전</div>
           </div>
 
           {/* 05. 대기 횟수 */}
