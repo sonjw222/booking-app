@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## 2026-10-01 — 알림톡 변수 처리 정상화 + 템플릿 관리 UX 재정리 (Batch A)
+
+실제 승인된 Aligo 템플릿(UL_2071 등)은 `#{변수}` 문법을 쓰는데 앱 내부 표준은 `[[변수]]`라
+치환이 전혀 안 되고 있던 문제를 고쳤다. `data`/스키마 변경 없음.
+
+- **변수 정규화**: `fromAligoVariableSyntax()`(`#{v}`→`[[v]]`) 신설, 템플릿을 읽거나
+  저장할 때(`fromTemplateRow`/`createAlimtalkTemplate`/`updateAlimtalkTemplate`) 항상
+  정규화한다(normalize-on-read/write) — production 데이터 migration 없이 기존 `#{...}`
+  저장 행도 안전하게 고쳐진다. `extractTemplateVariables`는 `[[...]]`/`#{...}` 둘 다
+  방어적으로 인식.
+- **자동/수동 변수 채움**: `resolveKnownAlimtalkVariables()`가 회원명·고객명(alias)/
+  센터명/수강권명/수강권 잔여횟수·잔여일을 대상별로 자동 채움. 자동으로 알 수 없는
+  변수(예: 수업명/예약일시)는 "알림톡 보내기" 화면이 입력창을 보여주고, 다 채우기 전엔
+  발송을 막는다(`app/manager/alimtalk/send/page.tsx`).
+- **미해결 변수 발송 차단**: 클라이언트(`lib/members.ts` sendAlimtalkToMembers)와 서버
+  (`supabase/functions/_shared/aligo.ts` sendViaAligo) 양쪽에서 최종 발송 직전 `[[...]]`/
+  `#{...}`가 남아있으면 실제 Aligo API를 호출하지 않는다. SMS 대체발송(fallbackMessage)도
+  원문이 아니라 렌더링된 최종 문구를 쓰도록 수정. OTP 발송(`templateVariables: { code }`)
+  흐름은 그대로.
+- **템플릿 관리 UI**: 승인(APR) 템플릿은 "템플릿 상세"(읽기 전용) + "새 템플릿으로 복제"만
+  제공(고정 문구를 수정해서 보내는 사고 방지). 심사 중(REQ)은 잠금. REG/REJ 편집 화면은
+  [템플릿 내용]/[카카오 승인] 두 섹션으로 재구성, 알리고 코드/내부 상태를 직접 바꾸는
+  input/select 제거(읽기 전용 표시로 대체). 편집 시트 안에 중복돼 있던 "알리고에서
+  불러오기"는 메인 "알리고 템플릿 불러오기" 하나로 통합. 그 시트에 검색(이름/코드/내용)과
+  내용 미리보기(펼치기/접기) 추가. 로컬 목록 카드도 기존 hist-item 계열 클래스 재사용
+  범위 안에서 제목·상태·미리보기·코드 계층을 정리.
+- 삭제는 항상 로컬(alimtalk_templates) 행만 지운다는 사실을 재확인(Aligo API 호출 없음) —
+  승인 템플릿에 한해 문구를 "센터에서 제거"로 바꿔 오해를 줄임.
+
 ## 2026-10-01 — 센터 상세 화면 뒤로가기 버튼 ↔ 프로필 이미지 겹침 수정 (회원용)
 
 iPhone 14 Pro 실기기 QA에서 발견. `.center-detail-head`(뒤로가기 헤더)가 absolute라

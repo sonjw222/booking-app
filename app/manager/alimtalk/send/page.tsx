@@ -18,7 +18,10 @@ import { fetchMyCenters, type ManagedCenter } from "../../../../lib/manager";
 import {
   fetchMembers, fetchGrades, sendAlimtalkToMembers, type CenterMember, type Grade,
 } from "../../../../lib/members";
-import { fetchAlimtalkTemplates, type AlimtalkTemplate } from "../../../../lib/alimtalk";
+import {
+  fetchAlimtalkTemplates, extractTemplateVariables, hasUnresolvedAlimtalkVariables,
+  ALIMTALK_AUTO_VARIABLE_NAMES, type AlimtalkTemplate,
+} from "../../../../lib/alimtalk";
 import { fetchCenterSubscription } from "../../../../lib/centerSubscription";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -38,6 +41,11 @@ export default function AlimtalkSendPage() {
   const [blocks, setBlocks] = useState<AlimtalkBlock[]>(emptyAlimtalkBlocks());
   const [templates, setTemplates] = useState<AlimtalkTemplate[]>([]);
   const [templateId, setTemplateId] = useState("");
+  // 2026-10-01(A-4/A-5) — 템플릿의 변수 중 자동으로 알 수 없는 것(예: [[수업명]],
+  // [[예약일시]])은 매니저가 여기서 직접 값을 입력한다. 선택한 대상 전원에게 동일하게
+  // 적용되고(회원마다 다른 [[회원명]] 등은 자동으로 채워짐 — resolveKnownAlimtalkVariables),
+  // 전부 채우기 전에는 발송 버튼을 막는다(A-6, 원문 그대로 발송 금지).
+  const [manualVars, setManualVars] = useState<Record<string, string>>({});
   const [addonEnabled, setAddonEnabled] = useState(true); // 확인 전까지는 막지 않음(로딩 중 깜빡임 방지)
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -101,8 +109,16 @@ export default function AlimtalkSendPage() {
     setSelectedIds(new Set(members.filter((m) => m.phone?.trim()).map((m) => m.id)));
   }
 
+  // 2026-10-01(A-5) — 현재 문구의 변수 중 자동으로 못 채우는 것(입력창이 필요한 것)만 뽑는다.
+  // ALIMTALK_AUTO_VARIABLE_NAMES에 있는 건 발송 시 대상별로 자동 치환되니 여기서 빼도 된다.
+  const composerContent = flattenAlimtalkBlocks(blocks);
+  const manualVarNames = extractTemplateVariables(composerContent).filter(
+    (v) => !ALIMTALK_AUTO_VARIABLE_NAMES.includes(v)
+  );
+  const manualVarsFilled = manualVarNames.every((v) => manualVars[v]?.trim());
+
   async function handleSend() {
-    if (!centerId || selectedIds.size === 0 || !hasAlimtalkContent(blocks)) return;
+    if (!centerId || selectedIds.size === 0 || !hasAlimtalkContent(blocks) || !manualVarsFilled) return;
     const targets = members.filter((m) => selectedIds.has(m.id));
     if (targets.length !== selectedIds.size || targets.some((m) => !m.phone?.trim())) {
       setError("선택한 회원의 연락처가 변경됐어요. 전화번호를 확인하고 다시 선택해주세요.");
@@ -129,16 +145,25 @@ export default function AlimtalkSendPage() {
     }
     setSending(true);
     try {
-      const result = await sendAlimtalkToMembers(targets, content, centerId, templateCode);
+      const centerName = centers.find((c) => c.id === centerId)?.name ?? "";
+      // 2026-10-01(A-4) — 회원마다 다른 자동 변수(회원명/수강권명/잔여횟수/잔여일)를 채울 수
+      // 있도록 대상 목록에 passName/remainingCount/expiresAt도 같이 넘긴다(기존엔 name/phone만
+      // 넘겨서 [[회원명]] 조차 자동으로 안 채워졌다).
+      const result = await sendAlimtalkToMembers(
+        targets.map((m) => ({ name: m.name, phone: m.phone, passName: m.passName, remainingCount: m.remainingCount, expiresAt: m.expiresAt })),
+        content, centerId, templateCode, { centerName, commonVariables: manualVars }
+      );
       const parts: string[] = [];
       if (result.sent > 0) parts.push(`${result.sent}명 발송`);
       if (result.skipped > 0) parts.push(`${result.skipped}명 번호 없음`);
       if (result.failed > 0) parts.push(`${result.failed}명 실패`);
+      if (result.unresolved > 0) parts.push(`${result.unresolved}명 변수 미입력으로 건너뜀`);
       showToast(parts.join(" · "));
       setSelectedIds(new Set());
       setComposerOpen(false);
       setBlocks(emptyAlimtalkBlocks());
       setTemplateId("");
+      setManualVars({});
     } catch (e: any) { setError(e.message); }
     finally { setSending(false); }
   }
@@ -148,6 +173,7 @@ export default function AlimtalkSendPage() {
     setComposerOpen(false);
     setBlocks(emptyAlimtalkBlocks());
     setTemplateId("");
+    setManualVars({});
   }
 
   if (centers.length === 0 && !loading) {
@@ -273,6 +299,7 @@ export default function AlimtalkSendPage() {
                   setTemplateId(id);
                   const t = templates.find((x) => x.id === id);
                   if (t) setBlocks([{ type: "text", value: t.content }]);
+                  setManualVars({}); // 템플릿이 바뀌면 변수 목록도 바뀌니 입력값 초기화
                 }}
               >
                 <option value="">템플릿 불러오기 (선택)</option>
@@ -295,6 +322,29 @@ export default function AlimtalkSendPage() {
               }}
               disabled={sending}
             />
+            {/* 2026-10-01(A-4/A-5/A-6) — [[회원명]]처럼 대상마다 자동으로 채워지는 변수는
+                입력창 없이 그대로 두고, [[수업명]]/[[예약일시]]처럼 자동으로 알 수 없는 변수만
+                여기서 미리 입력받는다. 전부 채우기 전에는 발송을 막는다(원문 placeholder
+                그대로 발송 금지). */}
+            {manualVarNames.length > 0 && (
+              <div className="alimtalk-manual-vars" style={{ margin: "0 0 10px" }}>
+                <div className="menu-section-label" style={{ padding: "2px 0 6px" }}>
+                  자동으로 알 수 없는 변수 — 직접 입력해주세요
+                </div>
+                {manualVarNames.map((v) => (
+                  <input
+                    key={v}
+                    aria-label={v}
+                    className="input-field"
+                    style={{ marginBottom: 8 }}
+                    placeholder={v}
+                    value={manualVars[v] ?? ""}
+                    disabled={sending}
+                    onChange={(e) => setManualVars((prev) => ({ ...prev, [v]: e.target.value }))}
+                  />
+                ))}
+              </div>
+            )}
             <div className="perm-guide" style={{ margin: "4px 0 0" }}>
               {(() => {
                 const t = templates.find((x) => x.id === templateId);
@@ -303,9 +353,14 @@ export default function AlimtalkSendPage() {
                   : "카카오 알림톡은 승인된 템플릿 문구 그대로만 가능해요 — 지금은 SMS로 나가요.";
               })()}
             </div>
+            {manualVarNames.length > 0 && !manualVarsFilled && (
+              <div className="perm-guide is-error" style={{ margin: "4px 0 0" }}>
+                {manualVarNames.join(", ")}을(를) 입력해 주세요.
+              </div>
+            )}
             <div className="add-profile-actions">
               <button className="ghost-btn" disabled={sending} onClick={closeComposer}>취소</button>
-              <button className="primary-btn" disabled={sending || !hasAlimtalkContent(blocks)} onClick={handleSend}>
+              <button className="primary-btn" disabled={sending || !hasAlimtalkContent(blocks) || !manualVarsFilled} onClick={handleSend}>
                 {sending ? "발송 중..." : "발송"}
               </button>
             </div>

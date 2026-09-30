@@ -70,10 +70,14 @@ describe("1-C/1-D. 가져오기 + 매핑 + 중복 방지", () => {
 
 describe("1-E. OTP 시스템 템플릿 제외 — 실제 OTP 발송 구조는 그대로", () => {
   it("불러오기 목록 조회 시 excludeSystemAligoTemplates로 필터링한다", () => {
+    // 2026-10-01(A-11) — 편집 시트 안의 중복 불러오기(handleLoadFromAligo)가 제거되면서
+    // 사람이 고르는 목록은 이제 loadImportList 하나뿐이다(occurrences 2 → 1, 의도된 변경).
+    // handleRefreshStatus는 특정 코드 하나만 찾는 내부 조회라 OTP 템플릿을 목록에서 골라낼
+    // 필요가 없어 excludeSystemAligoTemplates를 안 거친다(사용자에게 고를 목록을 보여주지
+    // 않으므로 실수로 OTP 템플릿을 고를 위험 자체가 없음).
     expect(source).toContain("excludeSystemAligoTemplates(await fetchAligoRemoteTemplates(centerId))");
-    // 새 시트(loadImportList)와 기존 편집 시트(handleLoadFromAligo) 둘 다 필터링돼야 한다.
     const occurrences = source.match(/excludeSystemAligoTemplates\(await fetchAligoRemoteTemplates\(centerId\)\)/g) ?? [];
-    expect(occurrences.length).toBeGreaterThanOrEqual(2);
+    expect(occurrences.length).toBe(1);
   });
 
   it("send-phone-otp/ALIGO_OTP_TEMPLATE_CODE 등 실제 OTP 발송 코드는 이 파일에서 건드리지 않는다", () => {
@@ -93,9 +97,12 @@ describe("1-F. 기존 생성/수정/삭제/승인 흐름 회귀 없음", () => {
     expect(source).toContain("await submitAligoTemplateForApproval(centerParam, created.templtCode);");
   });
 
-  it("기존 편집 시트 안의 '알리고에서 불러오기'(코드/상태만 채우는 용도)는 그대로 남아 있다", () => {
-    expect(source).toContain("알리고에서 불러오기");
-    expect(source).toContain("function handlePickRemote(templtCode: string)");
+  // 2026-10-01(A-11) — 편집 시트 안의 "알리고에서 불러오기"(코드/상태만 채우는 용도)는
+  // 메인 화면의 "알리고 템플릿 불러오기"(openImportSheet)와 기능이 겹쳐 제거됐다(의도된
+  // 변경 — 중복 기능 정리). 이 항목은 더 이상 유효하지 않아 아래로 대체한다.
+  it("편집 시트 안에는 더 이상 중복된 '알리고에서 불러오기' 코드/상태 수동 매칭 UI가 없다 — 메인 화면의 '알리고 템플릿 불러오기' 하나로 통합됨", () => {
+    expect(source).not.toContain("function handlePickRemote");
+    expect(source).not.toContain("알리고 템플릿 선택해서 코드/상태 채우기");
   });
 });
 

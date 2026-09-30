@@ -514,11 +514,16 @@ function MembersContent() {
     setSendingAlimtalk(true);
     try {
       const content = flattenAlimtalkBlocks(alimtalkBlocks);
-      const result = await sendAlimtalkToMembers(alimtalkTargets, content, centerId);
+      // 2026-10-01(A-4) — 이 화면은 템플릿 선택 없이 자유 문장만 쓰지만, sendAlimtalkToMembers가
+      // 이제 [[변수]]를 항상 검사·치환한다(회귀 없음 — 자유 문장에 우연히 [[..]] 형태가
+      // 없으면 평소처럼 그대로 나간다). centerName은 [[센터명]]을 직접 타이핑한 경우에만 쓰임.
+      const centerName = centers.find((c) => c.id === centerId)?.name ?? "";
+      const result = await sendAlimtalkToMembers(alimtalkTargets, content, centerId, undefined, { centerName });
       const parts: string[] = [];
       if (result.sent > 0) parts.push(`${result.sent}명 발송`);
       if (result.skipped > 0) parts.push(`${result.skipped}명 번호 없음`);
       if (result.failed > 0) parts.push(`${result.failed}명 실패`);
+      if (result.unresolved > 0) parts.push(`${result.unresolved}명 변수 미입력으로 건너뜀`);
       showToast(parts.join(" · "));
       setAlimtalkTargets(null);
       setSelectMode(false);

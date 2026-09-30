@@ -673,6 +673,36 @@ a { color: inherit; text-decoration: none; }
 .s-tpl_rejected { background: var(--danger-soft); color: var(--danger); }
 .hist-item.clickable { cursor: pointer; }
 
+/* 2026-10-01(A-8) — 알림톡 템플릿 목록 카드: 기존 hist-item/hist-title/hist-sub/hist-status
+   틀 안에서 제목+상태를 한 줄에, 본문 미리보기(2줄 clamp), 코드는 더 작은 보조 줄로
+   분리했다(이전엔 본문+코드가 한 줄에 합쳐져 있었음) — 새 색상/카드 프레임 없음. */
+.alimtalk-template-card .hist-title { display: flex; align-items: center; gap: 4px; }
+.alimtalk-template-preview {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  margin-top: 4px; line-height: 1.5;
+}
+.alimtalk-template-code { margin-top: 4px; font-size: 11px; color: var(--ink-soft); opacity: .8; }
+.alimtalk-template-chevron { margin-left: 8px; flex: 0 0 auto; color: var(--ink-soft); font-size: 18px; }
+
+/* 2026-10-01(A-9) — 승인(APR) 템플릿 상세의 읽기 전용 문구 — 기존 .input-field와 같은
+   토큰/두께를 쓰되 입력 가능한 것처럼 보이지 않도록 border를 투명하게, 커서는 기본값. */
+.alimtalk-readonly-content {
+  width: 100%; min-height: 96px; background: var(--surface); border-radius: 12px;
+  padding: 12px 14px; font-size: 14px; line-height: 1.6; color: var(--ink);
+  white-space: pre-wrap; word-break: break-word; margin-bottom: 8px;
+}
+
+/* 2026-10-01(A-13) — 알리고 불러오기 목록의 항목별 내용 미리보기(접기/펼치기). 기본
+   2~3줄만 보이다가 펼치면 전체 문구가 보인다(sheet 바깥으로 넘치지 않게 부모의
+   max-height: 220px 등 기존 sheet 규칙을 그대로 따름 — 새 overflow 규칙 추가 안 함). */
+.alimtalk-import-item { padding-top: 12px; padding-bottom: 12px; }
+.alimtalk-import-preview-toggle { margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--accent); align-self: flex-start; }
+.alimtalk-import-preview {
+  margin-top: 4px; font-size: 12.5px; color: var(--ink-soft); line-height: 1.55; white-space: pre-wrap;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.alimtalk-import-preview.expanded { -webkit-line-clamp: unset; overflow: visible; }
+
 .list-row {
   display: flex; align-items: center; justify-content: space-between;
   padding: 15px 20px; border-bottom: 1px solid var(--line);

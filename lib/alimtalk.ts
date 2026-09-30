@@ -25,16 +25,32 @@ export type AlimtalkTemplate = {
 };
 
 function fromTemplateRow(r: any): AlimtalkTemplate {
+  // 2026-10-01 — 읽는 시점에 항상 정규화한다(normalize-on-read, A-2). DB에 예전 알리고
+  // 원격 템플릿을 그대로 가져와 #{변수} 문법으로 저장된 행이 있을 수 있는데(예: UL_2071),
+  // production 데이터 migration 없이 안전하게 고치는 방법으로 이 방식을 택했다 — 이 함수를
+  // 거치는 모든 화면(템플릿 관리, 알림톡 보내기 템플릿 선택 등)이 항상 [[변수]] 문법만
+  // 보게 된다. fromAligoVariableSyntax는 이미 [[...]]인 텍스트에는 아무 효과가 없어(멱등)
+  // 정상 행을 다시 불러와도 안전하다. variables도 저장된 값을 그대로 믿지 않고 정규화된
+  // content에서 다시 추출한다 — 예전 #{...} 전용 추출 로직 시절엔 variables가 빈 배열로
+  // 저장됐을 수 있기 때문(추출 로직 버그, 지금은 고쳐짐).
+  const content = fromAligoVariableSyntax(r.content);
   return {
     id: r.id,
     centerId: r.center_id,
     aligoTemplateCode: r.aligo_template_code,
     title: r.title,
-    content: r.content,
-    variables: r.variables ?? [],
+    content,
+    variables: extractTemplateVariables(content),
     status: r.status,
     isActive: r.is_active,
   };
+}
+
+// 알리고/카카오 공식 변수 문법(#{변수})을 앱 내부 표준([[변수]])으로 바꾼다 — Oracle 프록시
+// 쪽 toAligoVariableSyntax(supabase/functions/_shared/aligo.ts, [[변수]] → #{변수})의 반대
+// 방향. 이미 [[...]]인 텍스트에는 아무 영향이 없다(멱등 — 여러 번 적용해도 안전).
+export function fromAligoVariableSyntax(content: string): string {
+  return content.replace(/#\{([^}]+)\}/g, (_m, v) => `[[${v}]]`);
 }
 
 // 이 센터 전용 템플릿 + 공통(center_id null) 템플릿을 같이 불러온다 — 공통 템플릿은 사장님이
@@ -60,8 +76,11 @@ export async function createAlimtalkTemplate(
     aligoTemplateCode?: string | null; status?: AlimtalkTemplateStatus;
   }
 ): Promise<string> {
+  // 2026-10-01 — 저장 시점에도 정규화한다(normalize-on-write) — DB 내부 표준을 항상
+  // [[변수]]로 유지(A-2). 이미 [[...]]인 내용은 그대로(멱등).
+  const content = fromAligoVariableSyntax(input.content);
   const { data, error } = await supabase.from("alimtalk_templates").insert({
-    center_id: centerId, title: input.title, content: input.content, variables: input.variables,
+    center_id: centerId, title: input.title, content, variables: input.variables,
     ...(input.aligoTemplateCode !== undefined ? { aligo_template_code: input.aligoTemplateCode } : {}),
     ...(input.status !== undefined ? { status: input.status } : {}),
   }).select("id").single();
@@ -75,7 +94,7 @@ export async function updateAlimtalkTemplate(
 ): Promise<void> {
   const row: Record<string, unknown> = {};
   if (patch.title !== undefined) row.title = patch.title;
-  if (patch.content !== undefined) row.content = patch.content;
+  if (patch.content !== undefined) row.content = fromAligoVariableSyntax(patch.content);
   if (patch.variables !== undefined) row.variables = patch.variables;
   if (patch.aligoTemplateCode !== undefined) row.aligo_template_code = patch.aligoTemplateCode;
   if (patch.status !== undefined) row.status = patch.status;
@@ -89,13 +108,83 @@ export async function deleteAlimtalkTemplate(id: string): Promise<void> {
   if (error) throw new Error("템플릿 삭제에 실패했어요: " + error.message);
 }
 
-// 템플릿 문구의 [[변수]]를 자동으로 뽑는다 — evaluate_notification_rules()가 [[회원명]]/
+// 템플릿 문구의 변수를 자동으로 뽑는다 — evaluate_notification_rules()가 [[회원명]]/
 // [[수강권명]]/[[수강권 잔여횟수]]/[[수강권 잔여일]]로 치환한다. 새 템플릿 작성(수동)과
 // 알리고 원격 템플릿 가져오기 양쪽에서 같은 로직을 재사용한다(2026-09-30 — 기존 app/manager/
 // alimtalk/templates/page.tsx의 inline 함수를 이 파일로 옮김, 로직 변경 없음).
+// 2026-10-01(A-3) — DB 내부 표준은 [[...]]로 유지하지만, 예전에 #{...} 상태로 저장된
+// 레거시 행(fromTemplateRow가 정규화하기 전에 만들어진 행, 또는 아직 정규화를 거치지 않은
+// 원문을 직접 넘기는 호출부)과의 호환을 위해 방어적으로 두 문법을 모두 인식한다. 같은
+// 변수 이름이 두 문법으로 각각 나와도 중복 제거된다.
 export function extractTemplateVariables(text: string): string[] {
-  const found = text.match(/\[\[([^\]]+)\]\]/g) ?? [];
-  return [...new Set(found.map((v) => v.slice(2, -2)))];
+  const bracket = (text.match(/\[\[([^\]]+)\]\]/g) ?? []).map((v) => v.slice(2, -2));
+  const brace = (text.match(/#\{([^}]+)\}/g) ?? []).map((v) => v.slice(2, -1));
+  return [...new Set([...bracket, ...brace])];
+}
+
+// 최종 발송 직전 방어(A-6) — 치환 안 된 [[변수]] 또는 #{변수} placeholder가 하나라도
+// 남아있으면 true. 클라이언트(발송 버튼 비활성화)와 서버(Edge Function, Aligo 호출 직전)
+// 양쪽에서 같은 판정을 쓴다 — Edge Function은 Deno라 이 lib를 import할 수 없어
+// supabase/functions/_shared/aligo.ts에 동일한 정규식으로 복제해 둔다(로직 동일 유지 필수).
+export function hasUnresolvedAlimtalkVariables(content: string): boolean {
+  return /\[\[([^\]]+)\]\]|#\{([^}]+)\}/.test(content);
+}
+
+// values에 있는 변수만 치환하고 나머지는 그대로 둔다(둘 다 채워지지 않으면
+// hasUnresolvedAlimtalkVariables가 여전히 true를 반환 — 발송 차단으로 이어짐).
+// supabase/functions/_shared/aligo.ts의 renderTemplate과 같은 로직이다(Edge Function은
+// Deno 런타임이라 이 lib를 import할 수 없어 별도 파일에 복제, 로직은 반드시 동일하게 유지).
+export function renderAlimtalkVariables(content: string, values: Record<string, string>): string {
+  let out = content;
+  for (const [k, v] of Object.entries(values)) {
+    out = out.split(`[[${k}]]`).join(v).split(`#{${k}}`).join(v);
+  }
+  return out;
+}
+
+// 자동으로 채울 수 있는 변수(A-4) — 회원명/고객명(alias), 센터명, 수강권명, 수강권
+// 잔여횟수, 수강권 잔여일. varNames 중 이 목록에 없거나 recipient/center 쪽 값 자체가
+// 없는 건 결과에서 빠진다(호출부가 "남은 게 있으면 수동 입력 UI 필요"로 구분, A-5).
+const ALIMTALK_NAME_ALIASES = ["회원명", "고객명"];
+
+// 화면(app/manager/alimtalk/send, app/manager/members)이 "이 변수는 자동으로 채워지니
+// 입력창을 따로 안 보여줘도 된다"를 판단할 때 쓰는 목록 — resolveKnownAlimtalkVariables가
+// 실제로 처리하는 이름과 반드시 같게 유지한다(둘 중 하나만 고치면 화면에는 입력창이 없는데
+// 실제로는 못 채워지는 변수가 생길 수 있음).
+export const ALIMTALK_AUTO_VARIABLE_NAMES = [
+  ...ALIMTALK_NAME_ALIASES, "센터명", "수강권명", "수강권 잔여횟수", "수강권 잔여일",
+];
+
+export type AlimtalkRecipientContext = {
+  name: string;
+  passName?: string | null;
+  remainingCount?: number | null;
+  expiresAt?: string | null; // ISO 날짜 문자열 (lib/members.ts CenterMember.expiresAt)
+};
+
+// "수강권 잔여일" — 자동 발송 규칙(add_notification_rule_evaluators.sql)의 [[수강권 잔여일]]은
+// 그 규칙에 설정된 days_before(트리거 임계값)를 그대로 쓴다(트리거가 발동했다는 것 자체가
+// 이미 "그 날짜가 됐다"는 뜻이라 재계산이 불필요). 하지만 즉시 발송은 그런 트리거 임계값이
+// 없으므로, 여기서는 오늘부터 실제 만료일까지 남은 일수를 직접 계산한다(같은 변수 이름이지만
+// 값을 만드는 맥락이 다름 — 의도적인 차이, 버그 아님).
+function daysUntil(iso: string): number {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const target = new Date(iso); target.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / 86400000);
+}
+
+export function resolveKnownAlimtalkVariables(
+  varNames: string[], centerName: string, recipient: AlimtalkRecipientContext
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const v of varNames) {
+    if (ALIMTALK_NAME_ALIASES.includes(v)) { out[v] = recipient.name; continue; }
+    if (v === "센터명") { out[v] = centerName; continue; }
+    if (v === "수강권명" && recipient.passName) { out[v] = recipient.passName; continue; }
+    if (v === "수강권 잔여횟수" && recipient.remainingCount != null) { out[v] = String(recipient.remainingCount); continue; }
+    if (v === "수강권 잔여일" && recipient.expiresAt) { out[v] = String(daysUntil(recipient.expiresAt)); continue; }
+  }
+  return out;
 }
 
 // 알리고 계정에 등록된 템플릿 목록 조회(send-alimtalk Edge Function의 action:"list_templates").

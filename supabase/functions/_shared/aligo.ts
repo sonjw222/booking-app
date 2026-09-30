@@ -127,9 +127,22 @@ function renderTemplate(
 
   let out = content;
   for (const [k, v] of Object.entries(variables)) {
-    out = out.split(`[[${k}]]`).join(v);
+    // 2026-10-01(A-3) — [[변수]]가 DB 내부 표준이지만, 정규화(lib/alimtalk.ts의
+    // fromTemplateRow/createAlimtalkTemplate 정규화-on-write)를 거치지 않고 들어온 원문이
+    // 방어적으로 섞여 있을 수 있어 #{변수}도 같이 치환한다(lib/alimtalk.ts의
+    // renderAlimtalkVariables와 동일 로직 — Deno 런타임이라 그 파일을 import할 수 없어
+    // 여기 복제해 둠, 로직을 바꿀 때는 양쪽 다 같이 고쳐야 함).
+    out = out.split(`[[${k}]]`).join(v).split(`#{${k}}`).join(v);
   }
   return out;
+}
+
+// 최종 발송 직전 방어(A-6, 서버 쪽) — 치환 안 된 [[변수]] 또는 #{변수} placeholder가
+// 하나라도 남아있으면 true. lib/alimtalk.ts의 hasUnresolvedAlimtalkVariables와 동일 로직
+// (클라이언트도 같은 판정으로 미리 막지만, 서버도 독립적으로 다시 확인 — 클라이언트를
+// 우회한 직접 호출까지 막기 위함).
+function hasUnresolvedVariables(content: string): boolean {
+  return /\[\[([^\]]+)\]\]|#\{([^}]+)\}/.test(content);
 }
 
 // 알리고 실발송.
@@ -150,12 +163,31 @@ export async function sendViaAligo(input: {
 
   try {
     if (input.templateCode) {
+      const rendered = renderTemplate(input.content, input.templateVariables);
+
+      // A-6(서버 방어) — 치환 안 된 [[변수]]/#{변수}가 남아있으면 실제 Aligo API를
+      // 호출하지 않는다. 클라이언트(app/manager/alimtalk/send, app/manager/members)가
+      // 이미 막지만, 이 Edge Function을 클라이언트 밖에서 직접 호출하는 경로(예: 향후
+      // 다른 내부 호출)까지 대비한 독립적인 마지막 방어선이다. OTP 발송(send-phone-otp,
+      // templateVariables: { code })처럼 실제로 모든 변수가 채워지는 정상 호출은 렌더 후
+      // placeholder가 남지 않아 이 분기를 타지 않는다(회귀 없음).
+      if (hasUnresolvedVariables(rendered)) {
+        return {
+          status: "failed",
+          message: "템플릿에 채워지지 않은 변수가 있어 발송할 수 없어요",
+        };
+      }
+
       const provider = await callAligoProxy("/v1/alimtalk/send", {
         to: input.to,
-        message: renderTemplate(input.content, input.templateVariables),
+        message: rendered,
         templateCode: input.templateCode,
-        // 기존 동작과 동일하게 대체발송 문구는 input.content를 사용한다.
-        fallbackMessage: input.content,
+        // 2026-10-01(A-7) — 예전에는 원문(input.content, [[변수]] placeholder가 그대로
+        // 남아있는 문구)을 대체발송 문구로 그대로 보냈다. 카카오톡 발송 실패 시 Aligo가
+        // 이 fallbackMessage로 SMS 대체발송을 하므로, 회원이 "[[회원명]]님의 예약이…"처럼
+        // 치환 안 된 문자를 그대로 받는 문제가 있었다 — 알림톡과 동일하게 렌더링된 최종
+        // 문구를 쓴다.
+        fallbackMessage: rendered,
       });
 
       if (Number(provider?.code) !== 0) {
@@ -168,6 +200,14 @@ export async function sendViaAligo(input: {
       return {
         status: "sent",
         providerMessageId: provider?.info?.mid ?? undefined,
+      };
+    }
+
+    // A-6 — SMS 경로(템플릿 없이 자유 문장 발송)도 같은 마지막 방어선을 적용한다.
+    if (hasUnresolvedVariables(input.content)) {
+      return {
+        status: "failed",
+        message: "템플릿에 채워지지 않은 변수가 있어 발송할 수 없어요",
       };
     }
 

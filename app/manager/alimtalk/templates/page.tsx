@@ -48,20 +48,22 @@ export default function AlimtalkTemplatesPage() {
   const [aligoCode, setAligoCode] = useState("");
   const [status, setStatus] = useState<AlimtalkTemplateStatus>("draft");
   const [saving, setSaving] = useState(false);
-  const [remoteTemplates, setRemoteTemplates] = useState<AligoRemoteTemplate[] | null>(null);
-  const [remoteLoading, setRemoteLoading] = useState(false);
-  const [remoteError, setRemoteError] = useState<string | null>(null);
-  // "알리고 템플릿 불러오기"(2026-09-30) — 편집 시트 안의 위 remoteTemplates(특정 템플릿의
-  // 코드/상태만 채우는 용도)와는 별개 상태다. 이건 메인 화면에서 로컬 템플릿이 0개여도 항상
-  // 열 수 있는 별도 시트로, 고른 템플릿을 새 로컬 템플릿으로 "가져온다".
+  // "알리고 템플릿 불러오기"(2026-09-30) — 메인 화면에서 로컬 템플릿이 0개여도 항상 열 수
+  // 있는 별도 시트. 고른 템플릿을 새 로컬 템플릿으로 "가져온다". 2026-10-01(A-11)부터
+  // 편집 시트 안에 따로 있던 "알리고에서 불러오기"(특정 템플릿의 코드/상태만 채우는 용도,
+  // remoteTemplates/handleLoadFromAligo/handlePickRemote)는 이 flow와 기능이 겹쳐서
+  // 제거했다 — 알리고 템플릿을 가져오는 방법은 이제 이 진입점 하나뿐이다.
   const [importOpen, setImportOpen] = useState(false);
   const [importList, setImportList] = useState<AligoRemoteTemplate[] | null>(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importingCode, setImportingCode] = useState<string | null>(null); // 지금 가져오는 중인 코드(중복 클릭 방지)
+  const [importSearch, setImportSearch] = useState(""); // A-12 — 이름/코드/내용 검색(클라이언트 필터)
+  const [expandedCode, setExpandedCode] = useState<string | null>(null); // A-13 — 원격 목록 상세 미리보기 토글
   const [isCommon, setIsCommon] = useState(false); // "공통"(플랫폼 전체) 템플릿 여부, 운영자만
   const [isAdmin, setIsAdmin] = useState(false);
   const [requestingApproval, setRequestingApproval] = useState(false);
+  const [refreshingStatus, setRefreshingStatus] = useState(false);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -90,15 +92,27 @@ export default function AlimtalkTemplatesPage() {
 
   function openNew() {
     setTitle(""); setContent(""); setAligoCode(""); setStatus("draft"); setIsCommon(false);
-    setRemoteTemplates(null); setRemoteError(null);
     setEditing("new");
   }
 
   function openEdit(t: AlimtalkTemplate) {
     setTitle(t.title); setContent(t.content); setAligoCode(t.aligoTemplateCode ?? ""); setStatus(t.status);
     setIsCommon(t.centerId === null);
-    setRemoteTemplates(null); setRemoteError(null);
     setEditing(t);
+  }
+
+  // A-10 — 승인 완료(APR) 템플릿의 "새 템플릿으로 복제": 문구는 그대로 복사하되
+  // aligo_template_code는 가져오지 않고(새 템플릿은 카카오 승인이 안 된 상태이므로 기존
+  // 코드를 재사용하면 안 됨) status도 draft로 초기화한다 — createAlimtalkTemplate을 그대로
+  // 타므로(editing === "new" 경로) "저장하기"를 눌러야 실제로 생성되고, 취소하면 아무것도
+  // 만들어지지 않는다(DB insert가 버튼 클릭 즉시 일어나지 않음).
+  function cloneAsNew(t: AlimtalkTemplate) {
+    setTitle(`${t.title} 복제`);
+    setContent(t.content);
+    setAligoCode("");
+    setStatus("draft");
+    setIsCommon(t.centerId === null);
+    setEditing("new");
   }
 
   // 이 템플릿의 owner 판정: 새 템플릿이면 지금 고른 공통 체크박스, 기존 템플릿이면
@@ -106,19 +120,36 @@ export default function AlimtalkTemplatesPage() {
   // (RLS도 동일하게 막음, add_alimtalk_template_common.sql) — 화면에서도 미리 잠가둔다.
   const editingIsCommon = editing === "new" ? isCommon : editing?.centerId === null;
   const canEditThis = editing === "new" ? (isCommon ? isAdmin : true) : (editingIsCommon ? isAdmin : true);
+  // A-9 — 카카오 승인(APR) 완료 문구는 고정 문구라 수정하면 안 된다(상세만 보여줌).
+  // 심사 중(REQ, 로컬 status="pending")도 결과가 나올 때까지 잠근다. REG(로컬 "draft")와
+  // REJ(로컬 "rejected")만 자유롭게 수정 가능.
+  const isApprovedDetail = editing !== "new" && editing?.status === "approved";
+  const isLocked = editing !== "new" && (editing?.status === "approved" || editing?.status === "pending");
 
-  // 알리고 계정에 등록된 템플릿 목록을 불러온다 — 승인상태/코드를 수동으로 옮겨 적는 대신
-  // 여기서 골라서 자동으로 채운다(2026-09-08). 플랫폼 단일 알리고 계정 전체 목록이라
-  // 다른 센터 템플릿도 섞여 나올 수 있어 이름으로 구분해서 골라야 한다.
-  async function handleLoadFromAligo() {
-    if (!centerId) return;
-    setRemoteLoading(true); setRemoteError(null);
+  // 2026-10-01 — A-11에서 편집 시트 안의 "알리고에서 불러오기"(코드/상태 수동 매칭)를
+  // 없앤 대신, 심사 요청(REQ) 중인 템플릿은 카카오 심사 결과가 나와도 이 화면이 자동으로
+  // 알 방법이 없어진다(웹훅/폴링 없음, 기존에도 없었음). 완전히 새 API를 추가하지 않고
+  // 기존 fetchAligoRemoteTemplates(알리고 계정 템플릿 전체 목록, 이미 있는 함수)에서 같은
+  // 코드를 찾아 상태만 동기화하는 최소한의 보완 — 사용자가 다시 확인하고 싶을 때 누르는
+  // 읽기 전용 동작이라 센터 관리자가 상태를 "직접 변경"하는 input/select는 아니다.
+  async function handleRefreshStatus() {
+    if (editing === "new" || !editing || !editing.aligoTemplateCode || !centerId) return;
+    setRefreshingStatus(true); setError(null);
     try {
-      // OTP 전용 시스템 템플릿(UL_8353)은 여기서도 제외한다 — 편집 중인 수동 템플릿의
-      // 코드를 실수로 그 코드로 채우는 걸 막는다(1-E, 실제 OTP 발송 구조는 그대로).
-      setRemoteTemplates(excludeSystemAligoTemplates(await fetchAligoRemoteTemplates(centerId)));
-    } catch (e: any) { setRemoteError(toUserMessage(e, "알리고 템플릿을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")); }
-    finally { setRemoteLoading(false); }
+      const remote = await fetchAligoRemoteTemplates(centerId);
+      const match = remote.find((r) => r.templtCode === editing.aligoTemplateCode);
+      if (!match) { showToast("알리고에서 같은 코드의 템플릿을 찾지 못했어요."); return; }
+      const nextStatus = inspStatusToLocalStatus(match.inspStatus);
+      if (nextStatus === editing.status) { showToast("상태 변화가 없어요 — 여전히 " + ALIGO_INSP_STATUS_KO[match.inspStatus]); return; }
+      await updateAlimtalkTemplate(editing.id, { status: nextStatus });
+      setStatus(nextStatus);
+      showToast(`상태가 "${ALIGO_INSP_STATUS_KO[match.inspStatus]}"(으)로 바뀌었어요`);
+      await load();
+    } catch (e: any) {
+      setError(toUserMessage(e, "상태를 확인하지 못했어요. 잠시 후 다시 시도해 주세요."));
+    } finally {
+      setRefreshingStatus(false);
+    }
   }
 
   // ============================================================
@@ -160,13 +191,6 @@ export default function AlimtalkTemplatesPage() {
     } finally {
       setImportingCode(null);
     }
-  }
-
-  function handlePickRemote(templtCode: string) {
-    const t = remoteTemplates?.find((r) => r.templtCode === templtCode);
-    if (!t) return;
-    setAligoCode(t.templtCode);
-    setStatus(inspStatusToLocalStatus(t.inspStatus));
   }
 
   async function handleSave() {
@@ -213,12 +237,23 @@ export default function AlimtalkTemplatesPage() {
     finally { setRequestingApproval(false); }
   }
 
+  // A-10 — "삭제"가 실제로는 로컬(alimtalk_templates) 행만 지우고 알리고에 등록된 원격
+  // 템플릿은 전혀 건드리지 않는다(deleteAlimtalkTemplate 확인 — supabase 테이블 delete뿐,
+  // Aligo API 호출 없음). 승인 완료(APR) 템플릿에 한해서만 "삭제"라는 표현이 "카카오
+  // 승인까지 취소되는 것" 같은 오해를 줄 수 있어 문구를 "센터에서 제거"로 바꾸고, 실제로도
+  // 로컬에서만 없어진다는 설명을 덧붙인다(실수로 원격 승인 템플릿을 지우는 새 기능을
+  // 만들지 않음 — 기존 local-only 삭제 그대로).
   async function handleDelete(t: AlimtalkTemplate) {
-    const ok = await globalThis.appConfirm(`"${t.title}" 템플릿을 삭제할까요? 이 템플릿을 쓰는 자동 발송 규칙이 있다면 같이 꺼질 수 있어요.`);
+    const isApproved = t.status === "approved";
+    const ok = await globalThis.appConfirm(
+      isApproved
+        ? `"${t.title}"을(를) 이 센터에서 제거할까요?\n알리고에 등록된 카카오 승인 템플릿 자체는 그대로 남고, 이 센터 목록에서만 없어져요. 이 템플릿을 쓰는 자동 발송 규칙이 있다면 같이 꺼질 수 있어요.`
+        : `"${t.title}" 템플릿을 삭제할까요? 이 템플릿을 쓰는 자동 발송 규칙이 있다면 같이 꺼질 수 있어요.`
+    );
     if (!ok) return;
     try {
       await deleteAlimtalkTemplate(t.id);
-      showToast("삭제했어요");
+      showToast(isApproved ? "센터에서 제거했어요" : "삭제했어요");
       await load();
     } catch (e: any) { setError(toUserMessage(e, "템플릿을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.")); }
   }
@@ -271,19 +306,23 @@ export default function AlimtalkTemplatesPage() {
           </div>
         </div>
       ) : (
+        // A-8 — 기존 hist-item/hist-title/hist-sub/hist-status 클래스만 그대로 재사용(새
+        // 카드 프레임/색상 없음). 이전엔 본문 미리보기와 코드가 한 줄에 합쳐져 있어 "관리자
+        // 웹사이트 같다"는 인상을 줬다 — 제목·상태를 한 줄에, 본문 2줄 미리보기, 코드는
+        // 더 작은 보조 줄로 분리해 정보 계층을 명확히 했다. 오른쪽 끝의 '›'는 새 아이콘을
+        // 추가하지 않고 기존 back-header의 '‹' 글리프 관례를 그대로 따른 상세보기 표시.
         templates.map((t) => (
-          <div key={t.id} className="hist-item clickable" onClick={() => openEdit(t)}>
+          <div key={t.id} className="hist-item clickable alimtalk-template-card" onClick={() => openEdit(t)}>
             <div className="hist-main">
               <div className="hist-title">
                 {t.title}
                 {t.centerId === null && <span className="grade-badge" style={{ marginLeft: 6 }}>공통</span>}
+                <span className={`hist-status ${STATUS_BADGE[t.status]}`} style={{ marginLeft: "auto" }}>{STATUS_LABEL[t.status]}</span>
               </div>
-              <div className="hist-sub">
-                {t.content.slice(0, 28)}{t.content.length > 28 ? "…" : ""}
-                {t.aligoTemplateCode ? ` · ${t.aligoTemplateCode}` : ""}
-              </div>
+              <div className="hist-sub alimtalk-template-preview">{t.content}</div>
+              {t.aligoTemplateCode && <div className="hist-sub alimtalk-template-code">{t.aligoTemplateCode}</div>}
             </div>
-            <span className={`hist-status ${STATUS_BADGE[t.status]}`}>{STATUS_LABEL[t.status]}</span>
+            <span className="alimtalk-template-chevron" aria-hidden="true">›</span>
           </div>
         ))
       )}
@@ -291,7 +330,9 @@ export default function AlimtalkTemplatesPage() {
       {editing && (
         <SheetOverlay className="sheet-overlay" onClick={() => !saving && setEditing(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-title">{editing === "new" ? "새 템플릿" : "템플릿 수정"}</div>
+            {/* A-9 — 승인(APR) 완료 템플릿은 "수정"이 아니라 "상세"다. 고정 문구를 자유롭게
+                고쳐서 보내면 카카오 심사를 통과한 문구와 실제 발송 문구가 달라질 수 있다. */}
+            <div className="sheet-title">{editing === "new" ? "새 템플릿" : isApprovedDetail ? "템플릿 상세" : "템플릿 수정"}</div>
             {!canEditThis && (
               <div className="perm-guide" style={{ margin: "0 0 8px" }}>
                 공통 템플릿은 플랫폼 운영자만 수정/삭제할 수 있어요 — 읽기만 가능해요.
@@ -306,32 +347,65 @@ export default function AlimtalkTemplatesPage() {
             {editing !== "new" && editingIsCommon && (
               <div className="perm-guide" style={{ margin: "0 0 8px" }}>공통 템플릿 — 모든 센터가 같이 써요.</div>
             )}
+            {isApprovedDetail && (
+              <div className="perm-guide" style={{ margin: "0 0 8px" }}>
+                카카오 승인이 끝난 문구는 그대로 유지돼요. 내용을 바꾸려면 "새 템플릿으로 복제"를 눌러 새로 만들고 다시 승인을 신청해주세요.
+              </div>
+            )}
+            {isLocked && !isApprovedDetail && (
+              <div className="perm-guide" style={{ margin: "0 0 8px" }}>
+                카카오 심사 중이에요 — 결과가 나올 때까지 수정할 수 없어요.
+              </div>
+            )}
+
+            {/* A-11 — [템플릿 내용] 섹션: 이름/문구/변수 삽입만 */}
+            <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>템플릿 내용</div>
             <input aria-label="템플릿 이름 (내부 관리용)" className="input-field" placeholder="템플릿 이름 (내부 관리용)" value={title}
-              onChange={(e) => setTitle(e.target.value)} disabled={saving || !canEditThis} style={{ marginBottom: 8 }} />
-            <label className="menu-section-label" htmlFor="template-content">문구</label>
-            <textarea
-              id="template-content" ref={contentRef}
-              className="input-field"
-              style={{ minHeight: 120, resize: "vertical", paddingTop: 12, marginBottom: 8 }}
-              placeholder={"승인 신청용 문구를 입력하세요. 변수는 [[회원명]] 형태로 쓰세요.\n예: [[회원명]]님, [[수강권명]] 잔여횟수가 [[수강권 잔여횟수]]회 남았어요."}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              disabled={saving || !canEditThis}
-            />
-            <div className="field-count">{content.length.toLocaleString()}자</div>
-            <div className="variable-chips" aria-label="문구에 변수 삽입">
-              {["회원명", "수강권명", "수강권 잔여횟수", "수강권 잔여일"].map(variable => <button key={variable} type="button" disabled={saving || !canEditThis} onClick={() => {
-                const field = contentRef.current;
-                const start = field?.selectionStart ?? content.length;
-                const end = field?.selectionEnd ?? start;
-                const token = `[[${variable}]]`;
-                setContent(content.slice(0, start) + token + content.slice(end));
-                requestAnimationFrame(() => { field?.focus(); field?.setSelectionRange(start + token.length, start + token.length); });
-              }}>{`[[${variable}]]`}</button>)}
-            </div>
-            {editing !== "new" && (
+              onChange={(e) => setTitle(e.target.value)} disabled={saving || !canEditThis || isLocked} style={{ marginBottom: 8 }} />
+            {isApprovedDetail ? (
+              // A-9 — 편집 가능한 textarea 대신 읽기 전용 미리보기로 보여준다(저장/상태
+              // 변경 같은 편집 액션 자체가 노출되지 않음).
+              <div className="alimtalk-readonly-content" aria-label="승인된 문구 (읽기 전용)">{content}</div>
+            ) : (
               <>
-                {canEditThis && !aligoCode && (
+                <label className="menu-section-label" htmlFor="template-content">문구</label>
+                <textarea
+                  id="template-content" ref={contentRef}
+                  className="input-field"
+                  style={{ minHeight: 120, resize: "vertical", paddingTop: 12, marginBottom: 8 }}
+                  placeholder={"승인 신청용 문구를 입력하세요. 변수는 [[회원명]] 형태로 쓰세요.\n예: [[회원명]]님, [[수강권명]] 잔여횟수가 [[수강권 잔여횟수]]회 남았어요."}
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  disabled={saving || !canEditThis || isLocked}
+                />
+                <div className="field-count">{content.length.toLocaleString()}자</div>
+                {!isLocked && (
+                  <div className="variable-chips" aria-label="문구에 변수 삽입">
+                    {["회원명", "수강권명", "수강권 잔여횟수", "수강권 잔여일"].map(variable => <button key={variable} type="button" disabled={saving || !canEditThis} onClick={() => {
+                      const field = contentRef.current;
+                      const start = field?.selectionStart ?? content.length;
+                      const end = field?.selectionEnd ?? start;
+                      const token = `[[${variable}]]`;
+                      setContent(content.slice(0, start) + token + content.slice(end));
+                      requestAnimationFrame(() => { field?.focus(); field?.setSelectionRange(start + token.length, start + token.length); });
+                    }}>{`[[${variable}]]`}</button>)}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* A-11 — [카카오 승인] 섹션: 현재 상태(읽기 전용) + 승인 신청 버튼만.
+                알리고 코드/내부 상태를 직접 바꾸는 input/select는 더 이상 없다 — 코드는
+                카카오 승인 신청(handleRequestApproval)이 자동으로 채우고, 상태는 그 결과
+                또는 "상태 새로고침"(handleRefreshStatus)로만 바뀐다. */}
+            {editing !== "new" && editing && (
+              <>
+                <div className="menu-section-label" style={{ padding: "14px 0 6px" }}>카카오 승인</div>
+                <div className="perm-guide" style={{ margin: "0 0 8px" }}>
+                  현재 상태: <strong>{STATUS_LABEL[editing.status]}</strong>
+                  {aligoCode && ` · ${aligoCode}`}
+                </div>
+                {canEditThis && !isLocked && !aligoCode && (
                   <button
                     type="button" className="outline-action compact" style={{ marginBottom: 8 }}
                     disabled={saving || requestingApproval} onClick={handleRequestApproval}
@@ -339,46 +413,30 @@ export default function AlimtalkTemplatesPage() {
                     {requestingApproval ? "신청 중..." : "카카오 승인 신청하기"}
                   </button>
                 )}
-                <button
-                  type="button" className="outline-action compact" style={{ marginBottom: 8, marginLeft: canEditThis && !aligoCode ? 8 : 0 }}
-                  disabled={saving || remoteLoading} onClick={handleLoadFromAligo}
-                >
-                  {remoteLoading ? "불러오는 중..." : "알리고에서 불러오기"}
-                </button>
-                {remoteError && <div className="perm-guide" style={{ margin: "0 0 8px", color: "var(--danger)" }}>{remoteError}</div>}
-                {remoteTemplates && (
-                  remoteTemplates.length === 0 ? (
-                    <div className="perm-guide" style={{ margin: "0 0 8px" }}>알리고에 등록된 템플릿이 없어요.</div>
-                  ) : (
-                    <select
-                      className="input-field" defaultValue="" disabled={saving}
-                      onChange={(e) => { if (e.target.value) handlePickRemote(e.target.value); }}
-                      style={{ marginBottom: 8 }}
-                    >
-                      <option value="">알리고 템플릿 선택해서 코드/상태 채우기...</option>
-                      {remoteTemplates.map((t) => (
-                        <option key={t.templtCode} value={t.templtCode}>
-                          {t.templtName} · {INSP_STATUS_LABEL[t.inspStatus] ?? t.inspStatus} · {t.templtCode}
-                        </option>
-                      ))}
-                    </select>
-                  )
+                {editing.status === "pending" && editing.aligoTemplateCode && (
+                  <button
+                    type="button" className="outline-action compact" style={{ marginBottom: 8 }}
+                    disabled={refreshingStatus} onClick={handleRefreshStatus}
+                  >
+                    {refreshingStatus ? "확인 중..." : "상태 새로고침"}
+                  </button>
                 )}
-                <input aria-label="알리고 템플릿 코드 (카카오 승인 후 입력)" className="input-field" placeholder="알리고 템플릿 코드 (카카오 승인 후 입력)" value={aligoCode}
-                  onChange={(e) => setAligoCode(e.target.value)} disabled={saving || !canEditThis} style={{ marginBottom: 8 }} />
-                <select className="input-field" value={status} onChange={(e) => setStatus(e.target.value as AlimtalkTemplateStatus)} disabled={saving || !canEditThis} style={{ marginBottom: 8 }}>
-                  {(Object.keys(STATUS_LABEL) as AlimtalkTemplateStatus[]).map((s) => (
-                    <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-                  ))}
-                </select>
               </>
             )}
+
             <div className="add-profile-actions">
               {editing !== "new" && canEditThis && (
-                <button className="ghost-btn" disabled={saving} onClick={() => { handleDelete(editing); setEditing(null); }}>삭제</button>
+                <button className="ghost-btn" disabled={saving} onClick={() => { handleDelete(editing); setEditing(null); }}>
+                  {editing.status === "approved" ? "센터에서 제거" : "삭제"}
+                </button>
               )}
-              <button className="ghost-btn" disabled={saving} onClick={() => setEditing(null)}>취소</button>
-              {canEditThis && (
+              {isApprovedDetail && canEditThis && (
+                <button className="outline-action compact" disabled={saving} onClick={() => cloneAsNew(editing as AlimtalkTemplate)}>
+                  새 템플릿으로 복제
+                </button>
+              )}
+              <button className="ghost-btn" disabled={saving} onClick={() => setEditing(null)}>{isLocked ? "닫기" : "취소"}</button>
+              {!isLocked && canEditThis && (
                 <button className="primary-btn" disabled={saving || !title.trim() || !content.trim()} onClick={handleSave}>
                   {saving ? "저장 중..." : "저장"}
                 </button>
@@ -388,53 +446,83 @@ export default function AlimtalkTemplatesPage() {
         </SheetOverlay>
       )}
 
-      {importOpen && (
-        <SheetOverlay className="sheet-overlay" onClick={() => setImportOpen(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-title">알리고 템플릿 불러오기</div>
-            <div className="perm-guide" style={{ margin: "0 0 10px" }}>
-              이미 알리고에 등록·승인된 템플릿을 골라 이 센터의 템플릿으로 가져올 수 있어요.
-            </div>
-            {importLoading ? (
-              <Loading />
-            ) : importError ? (
-              <div className="perm-guide" style={{ margin: "0 0 8px", color: "var(--danger)" }}>{importError}</div>
-            ) : importList && importList.length === 0 ? (
-              <div className="perm-guide" style={{ margin: "0 0 8px" }}>알리고에 등록된 템플릿이 없어요.</div>
-            ) : (
-              importList?.map((t) => {
-                const already = isAligoTemplateAlreadyImported(templates, t.templtCode);
-                const localStatus = inspStatusToLocalStatus(t.inspStatus);
-                return (
-                  <div key={t.templtCode} className="hist-item">
-                    <div className="hist-main">
-                      <div className="hist-title">{t.templtName}</div>
-                      {/* 원본 알리고 코드는 강조 없이 보조 정보로만(1-B) */}
-                      <div className="hist-sub">{t.templtCode}</div>
+      {importOpen && (() => {
+        // A-12 — 이름/코드/내용으로 클라이언트 필터링(불필요한 API 재호출 없음, 이미 받아온
+        // importList 안에서만 검색). A-13 — 각 항목을 눌러 전체 문구를 펼쳐볼 수 있다(기본
+        // 2~3줄 미리보기, 다시 누르면 접힘) — "가져오기"를 누르기 전에 실제 승인 문구를
+        // 확인할 수 있게 하기 위함.
+        const q = importSearch.trim().toLowerCase();
+        const filtered = !q ? importList : (importList ?? []).filter((t) =>
+          t.templtName.toLowerCase().includes(q) || t.templtCode.toLowerCase().includes(q) || t.templtContent.toLowerCase().includes(q)
+        );
+        return (
+          <SheetOverlay className="sheet-overlay" onClick={() => setImportOpen(false)}>
+            <div className="sheet" onClick={(e) => e.stopPropagation()}>
+              <div className="sheet-title">알리고 템플릿 불러오기</div>
+              <div className="perm-guide" style={{ margin: "0 0 10px" }}>
+                이미 알리고에 등록·승인된 템플릿을 골라 이 센터의 템플릿으로 가져올 수 있어요.
+              </div>
+              {importList && importList.length > 0 && (
+                <input
+                  aria-label="템플릿 검색" className="input-field" style={{ marginBottom: 10 }}
+                  placeholder="템플릿 이름·코드·내용 검색"
+                  value={importSearch} onChange={(e) => setImportSearch(e.target.value)}
+                />
+              )}
+              {importLoading ? (
+                <Loading />
+              ) : importError ? (
+                <div className="perm-guide" style={{ margin: "0 0 8px", color: "var(--danger)" }}>{importError}</div>
+              ) : importList && importList.length === 0 ? (
+                <div className="perm-guide" style={{ margin: "0 0 8px" }}>알리고에 등록된 템플릿이 없어요.</div>
+              ) : filtered && filtered.length === 0 ? (
+                <div className="perm-guide" style={{ margin: "0 0 8px" }}>검색 결과가 없어요.</div>
+              ) : (
+                filtered?.map((t) => {
+                  const already = isAligoTemplateAlreadyImported(templates, t.templtCode);
+                  const localStatus = inspStatusToLocalStatus(t.inspStatus);
+                  const expanded = expandedCode === t.templtCode;
+                  return (
+                    <div key={t.templtCode} className="hist-item alimtalk-import-item" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                        <div className="hist-main">
+                          <div className="hist-title">{t.templtName}</div>
+                          {/* 원본 알리고 코드는 강조 없이 보조 정보로만(1-B) */}
+                          <div className="hist-sub">{t.templtCode}</div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flex: "0 0 auto" }}>
+                          <span className={`hist-status ${STATUS_BADGE[localStatus]}`}>{ALIGO_INSP_STATUS_KO[t.inspStatus] ?? t.inspStatus}</span>
+                          {already ? (
+                            <span className="hist-sub">이미 등록됨</span>
+                          ) : (
+                            <button
+                              type="button" className="outline-action compact"
+                              disabled={importingCode !== null} onClick={() => handleImport(t)}
+                            >
+                              {importingCode === t.templtCode ? "가져오는 중..." : "가져오기"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button" className="text-btn alimtalk-import-preview-toggle"
+                        onClick={() => setExpandedCode(expanded ? null : t.templtCode)}
+                        aria-expanded={expanded}
+                      >
+                        {expanded ? "내용 접기 ▲" : "내용 미리보기 ▼"}
+                      </button>
+                      <div className={`alimtalk-import-preview ${expanded ? "expanded" : ""}`}>{t.templtContent}</div>
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                      <span className={`hist-status ${STATUS_BADGE[localStatus]}`}>{ALIGO_INSP_STATUS_KO[t.inspStatus] ?? t.inspStatus}</span>
-                      {already ? (
-                        <span className="hist-sub">이미 등록됨</span>
-                      ) : (
-                        <button
-                          type="button" className="outline-action compact"
-                          disabled={importingCode !== null} onClick={() => handleImport(t)}
-                        >
-                          {importingCode === t.templtCode ? "가져오는 중..." : "가져오기"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-            <div className="add-profile-actions">
-              <button className="ghost-btn" onClick={() => setImportOpen(false)}>닫기</button>
+                  );
+                })
+              )}
+              <div className="add-profile-actions">
+                <button className="ghost-btn" onClick={() => setImportOpen(false)}>닫기</button>
+              </div>
             </div>
-          </div>
-        </SheetOverlay>
-      )}
+          </SheetOverlay>
+        );
+      })()}
 
       {toast && <div className="toast">{toast}</div>}
     </div>

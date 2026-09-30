@@ -8,6 +8,10 @@
 
 import { supabase } from "./supabaseClient";
 import { getMessageService } from "./messaging";
+import {
+  extractTemplateVariables, resolveKnownAlimtalkVariables, renderAlimtalkVariables,
+  hasUnresolvedAlimtalkVariables, type AlimtalkRecipientContext,
+} from "./alimtalk";
 
 export type Grade = {
   id: string;
@@ -529,25 +533,52 @@ export type AlimtalkSendResult = {
   sent: number;
   skipped: number;      // 전화번호가 없어 건너뜀
   failed: number;       // 벤더가 실패로 응답
+  unresolved: number;   // 2026-10-01(A-6) — 변수가 안 채워져 발송 자체를 시도하지 않고 건너뜀
   failedNames: string[];
 };
+
+// 알림톡 발송 대상 — 이름/전화번호는 필수, 나머지는 자동 변수 채우기([[수강권명]]/
+// [[수강권 잔여횟수]]/[[수강권 잔여일]])에 쓰인다(A-4). 호출부가 이 값들을 모르면(옵셔널)
+// 해당 변수는 자동으로 안 채워지고, commonVariables로 수동 입력된 값이 있으면 그걸 쓴다.
+export type AlimtalkSendTarget = AlimtalkRecipientContext & { phone: string | null };
 
 // 선택한 회원들에게 알림톡(실패 시 SMS 대체발송은 벤더 쪽에서 처리)을 보낸다.
 // lib/messaging의 Adapter Pattern을 그대로 쓰므로, 벤더 미확정 상태에서는 Mock으로
 // 발송을 시뮬레이션하고(실제로 전송 안 됨), NEXT_PUBLIC_MESSAGE_PROVIDER=alimtalk로
 // 바꾸고 AlimtalkSmsProvider 구현을 채우면 이 함수·화면은 그대로 실제 발송에 쓸 수 있다.
+//
+// 2026-10-01(A-4~A-6) — content에 [[변수]]/#{변수}가 남아있으면 그동안 그 문자 그대로
+// 발송됐다(회원마다 달라야 할 [[회원명]] 등이 전혀 치환되지 않음). 이제 대상마다:
+//   1) 자동으로 알 수 있는 변수(회원명/고객명, 센터명, 수강권명, 수강권 잔여횟수·잔여일)를
+//      resolveKnownAlimtalkVariables로 채우고
+//   2) 나머지는 호출부가 미리 입력받아 넘긴 commonVariables(모든 대상에 공통, 예:
+//      "수업명"/"예약일시"처럼 자동으로 알 수 없는 값)로 채운 뒤
+//   3) 그래도 placeholder가 남아있으면(자동도 아니고 공통 입력도 안 된 변수) 그 대상은
+//      건너뛴다 — 절대 원문 그대로("[[수업명]]님...") 발송하지 않는다. 화면(app/manager/
+//      alimtalk/send, app/manager/members)이 발송 전에 이미 같은 방식으로 검증해 이 경로를
+//      타지 않게 막지만, 이 함수 자체도 독립적으로 다시 막는다(마지막 방어선, 서버
+//      Edge Function의 hasUnresolvedVariables 검증과 같은 원칙).
 export async function sendAlimtalkToMembers(
-  targets: { name: string; phone: string | null }[],
+  targets: AlimtalkSendTarget[],
   content: string,
   centerId: string,
-  templateCode?: string
+  templateCode?: string,
+  options?: { centerName?: string; commonVariables?: Record<string, string> }
 ): Promise<AlimtalkSendResult> {
   const service = getMessageService();
-  const result: AlimtalkSendResult = { sent: 0, skipped: 0, failed: 0, failedNames: [] };
+  const result: AlimtalkSendResult = { sent: 0, skipped: 0, failed: 0, unresolved: 0, failedNames: [] };
+  const varNames = extractTemplateVariables(content);
   for (const t of targets) {
     if (!t.phone) { result.skipped++; continue; }
+    const known = resolveKnownAlimtalkVariables(varNames, options?.centerName ?? "", t);
+    const rendered = renderAlimtalkVariables(content, { ...known, ...(options?.commonVariables ?? {}) });
+    if (hasUnresolvedAlimtalkVariables(rendered)) {
+      result.unresolved++;
+      result.failedNames.push(t.name);
+      continue;
+    }
     try {
-      const res = await service.send({ to: t.phone, content, channel: "alimtalk", centerId, templateCode });
+      const res = await service.send({ to: t.phone, content: rendered, channel: "alimtalk", centerId, templateCode });
       if (res.status === "sent") result.sent++;
       else { result.failed++; result.failedNames.push(t.name); }
     } catch {

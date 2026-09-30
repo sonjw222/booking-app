@@ -1469,6 +1469,16 @@ RPC(`reserve_class`/`reserve_with_membership`/`auto_book_membership` 등)에 wir
 | 왜 이번에 안 고치나 | 운영 DB에 실제로 어느 버전이 살아있는지는 `select prosrc from pg_proc where proname='evaluate_notification_rules'`로 확인해야 하고, 되살릴 경우 "매일 재평가 시 중복 발송" 멱등 규칙까지 같이 복원해야 해서 광고 동의 이슈와 성격이 다른 별도 작업이다. 이번 `fix_marketing_consent_fanout.sql`은 2026-09-08 정의를 그대로 베이스로 삼아 동의 조건만 덧붙였으므로, 이 문제를 **악화시키지도 고치지도 않는다**(현상 유지). |
 | 확인 방법 | Supabase SQL Editor에서 `select prosrc like '%rule.product_id%' as has_product_filter, prosrc like '%rule_membership_id%' as has_count_filter from pg_proc where proname = 'evaluate_notification_rules';` — 둘 다 false면 되돌아간 것이 확정된다. |
 | 근거 파일 | `add_notification_rule_evaluators.sql`, `add_notification_rule_product_filter.sql`, `add_notification_rule_count_filter.sql`, `fix_notification_rule_alimtalk_template_code.sql`, `fix_marketing_consent_fanout.sql` |
+### P2-50. (신규, 2026-10-01, A-15) 예약/결제 등 이벤트성 승인 템플릿을 실제 도메인 이벤트 자동 발송에 연결
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P2 |
+| 현재 상태 | **미구현 — 이번 배치 범위 밖.** |
+| 내용 | "예약완료"/"예약취소"/"예약변경"처럼 카카오 승인까지 받은 이벤트성 템플릿은 매니저가 "알림톡 보내기"로 수동 발송하는 대신, 실제 예약 생성/취소/변경 시점에 자동으로 발송되는 게 더 자연스럽다. 현재 자동 발송은 `notification_rules`(count_low/membership_expiring/expired_rebuy/pause_ending/birthday, `evaluate_notification_rules()` SQL) 기반 정기 재평가 구조뿐이고, 예약 이벤트에 훅을 거는 구조는 없다. |
+| 왜 이번에 안 하나 | `reserve_class`/`cancel_reservation` 등 예약 관련 RPC에 알림 발송 훅을 추가하는 건 대규모 도메인 이벤트 연동이라(트랜잭션 경계, 실패 시 재시도, 중복 발송 방지 등 새로 설계 필요) 이번 알림톡 변수/템플릿 UX 정리와는 성격이 다른 별도 작업이다(Batch A 범위 밖, 사용자 명시). |
+| 근거 | `add_notification_rule_evaluators.sql`(현재 자동 발송 구조), `app/manager/alimtalk/send/page.tsx`(현재는 수동 발송만) |
+
 ### P2-49. (2026-09-21, 실기기 발견·수정 완료) Android 알림 상태바/큰 아이콘이 앱 런처 아이콘을 알파 추출해 뭉개진 흰 덩어리로 표시됨
 
 | 필드 | 내용 |
