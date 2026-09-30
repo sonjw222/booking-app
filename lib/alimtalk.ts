@@ -53,12 +53,20 @@ export async function fetchAlimtalkTemplates(centerId: string): Promise<Alimtalk
 // 매니저가 호출하면 그냥 DB 에러로 막힌다(화면에서도 운영자에게만 그 옵션을 보여줌).
 export async function createAlimtalkTemplate(
   centerId: string | null,
-  input: { title: string; content: string; variables: string[] }
-): Promise<void> {
-  const { error } = await supabase.from("alimtalk_templates").insert({
+  input: {
+    title: string; content: string; variables: string[];
+    // 알리고 원격 템플릿 가져오기(2026-09-30)에서만 채워 넣는다 — 새 템플릿을 직접 작성할
+    // 때는 여전히 비워두면 기존과 동일하게 draft/코드 없음으로 생성된다(회귀 없음).
+    aligoTemplateCode?: string | null; status?: AlimtalkTemplateStatus;
+  }
+): Promise<string> {
+  const { data, error } = await supabase.from("alimtalk_templates").insert({
     center_id: centerId, title: input.title, content: input.content, variables: input.variables,
-  });
+    ...(input.aligoTemplateCode !== undefined ? { aligo_template_code: input.aligoTemplateCode } : {}),
+    ...(input.status !== undefined ? { status: input.status } : {}),
+  }).select("id").single();
   if (error) throw new Error("템플릿 등록에 실패했어요: " + error.message);
+  return data.id;
 }
 
 export async function updateAlimtalkTemplate(
@@ -79,6 +87,15 @@ export async function updateAlimtalkTemplate(
 export async function deleteAlimtalkTemplate(id: string): Promise<void> {
   const { error } = await supabase.from("alimtalk_templates").delete().eq("id", id);
   if (error) throw new Error("템플릿 삭제에 실패했어요: " + error.message);
+}
+
+// 템플릿 문구의 [[변수]]를 자동으로 뽑는다 — evaluate_notification_rules()가 [[회원명]]/
+// [[수강권명]]/[[수강권 잔여횟수]]/[[수강권 잔여일]]로 치환한다. 새 템플릿 작성(수동)과
+// 알리고 원격 템플릿 가져오기 양쪽에서 같은 로직을 재사용한다(2026-09-30 — 기존 app/manager/
+// alimtalk/templates/page.tsx의 inline 함수를 이 파일로 옮김, 로직 변경 없음).
+export function extractTemplateVariables(text: string): string[] {
+  const found = text.match(/\[\[([^\]]+)\]\]/g) ?? [];
+  return [...new Set(found.map((v) => v.slice(2, -2)))];
 }
 
 // 알리고 계정에 등록된 템플릿 목록 조회(send-alimtalk Edge Function의 action:"list_templates").
@@ -137,6 +154,23 @@ export async function submitAligoTemplateForApproval(centerId: string | undefine
   if (error || !data?.ok) throw new Error(await functionsErrorMessage(error, "승인 신청에 실패했어요"));
 }
 
+// 회원가입 OTP 전용 시스템 템플릿(supabase/functions/send-phone-otp, ALIGO_OTP_TEMPLATE_CODE
+// 시크릿) — 이 코드/발송 구조 자체는 이번 변경에서 전혀 건드리지 않는다. 센터 관리자용
+// "알리고 템플릿 불러오기" 목록에서만 제외해, 실수로 자기 센터의 수동 템플릿으로 가져가는
+// 것을 막는다(2026-09-30).
+export const OTP_SYSTEM_ALIGO_TEMPLATE_CODE = "UL_8353";
+
+export function excludeSystemAligoTemplates(list: AligoRemoteTemplate[]): AligoRemoteTemplate[] {
+  return list.filter((t) => t.templtCode !== OTP_SYSTEM_ALIGO_TEMPLATE_CODE);
+}
+
+// "알리고 템플릿 불러오기" 목록 전용 상태 라벨(간결한 4단어) — 기존 편집 시트의
+// INSP_STATUS_LABEL(더 자세한 설명 문구, app/manager/alimtalk/templates/page.tsx)과는
+// 별개로 유지한다(기존 화면 문구를 바꾸면 회귀이므로 건드리지 않음).
+export const ALIGO_INSP_STATUS_KO: Record<string, string> = {
+  REG: "등록", REQ: "심사 중", APR: "승인", REJ: "반려",
+};
+
 // 알리고 inspStatus → 이 앱의 AlimtalkTemplateStatus 매핑.
 export function inspStatusToLocalStatus(inspStatus: string): AlimtalkTemplateStatus {
   switch (inspStatus) {
@@ -145,6 +179,23 @@ export function inspStatusToLocalStatus(inspStatus: string): AlimtalkTemplateSta
     case "REJ": return "rejected";
     default: return "draft"; // REG(카카오 심사 요청 전) 등
   }
+}
+
+// 알리고 원격 템플릿을 이 센터의 로컬 alimtalk_templates 행으로 가져온다(2026-09-30) —
+// title/content/aligo_template_code/status를 그대로 매핑하고, 새 템플릿 생성과 동일한
+// createAlimtalkTemplate()을 그대로 재사용한다(새 insert 경로를 따로 만들지 않음).
+export function isAligoTemplateAlreadyImported(templates: AlimtalkTemplate[], templtCode: string): boolean {
+  return templates.some((t) => t.aligoTemplateCode === templtCode);
+}
+
+export async function importAligoTemplateAsLocal(centerId: string, remote: AligoRemoteTemplate): Promise<string> {
+  return createAlimtalkTemplate(centerId, {
+    title: remote.templtName,
+    content: remote.templtContent,
+    variables: extractTemplateVariables(remote.templtContent),
+    aligoTemplateCode: remote.templtCode,
+    status: inspStatusToLocalStatus(remote.inspStatus),
+  });
 }
 
 // evaluate_notification_rules()(SQL)가 실제로 처리하는 트리거만 화면에 노출한다 —

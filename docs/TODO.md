@@ -47,20 +47,19 @@
 5. 사용자 결정이 필요한 기능은 결정 기록 없이 완료 처리하지 않습니다.
 6. 완료된 항목은 [CHANGELOG.md](./CHANGELOG.md)에 근거와 함께 기록한 뒤 이 문서에서 제거하거나 완료 이력으로 이동합니다.
 
-### P1-Postlaunch-0929. (2026-09-29, 2026-09-30 보안 보완) 출시 후 개선 Batch — SQL/배포 대기 항목
-- **email_signup_available() + consume_email_check_attempt() RPC + email_check_attempts 테이블**
-  — `add_email_signup_precheck.sql` 준비 완료(2026-09-30 재보완: search_path hardening,
-  rate limit을 advisory lock 기반 원자적 RPC로 전환), production 미실행(승인 대기). 실행
-  전까지 이메일 사전 중복 확인/네이버 실제 이메일 중복 차단 기능은 fail-open으로 조용히
-  비활성 상태(기존 동작과 동일, 회귀 없음).
-- **check-signup-email Edge Function** — 코드 작성 완료(2026-09-30: rate limit RPC 호출로
-  변경, raw 오류 비노출, IP 판별 순서 조정), `supabase functions deploy check-signup-email`
-  필요(위 SQL과 함께 배포돼야 정상 동작). 같이 배포해야 하는 `supabase/config.toml`
-  (`verify_jwt = false`)도 이번에 신설.
-- **QA용 알림톡 테스트 센터** — `add_qa_center_alimtalk_test.sql` 준비 완료, production
-  미실행(승인 대기).
+### P1-Postlaunch-0929. (2026-09-29~30) 출시 후 개선 Batch — 진행 상태
+- **email_signup_available() + consume_email_check_attempt() RPC + email_check_attempts 테이블
+  + check-signup-email Edge Function** — (2026-09-30, 사용자 확인) production SQL 실행 +
+  Edge Function 배포 완료. 실기기 QA에서 OTP 알림톡 실제 수신까지 확인됨.
+- **QA용 알림톡 테스트 센터(`[QA] 모하빗 알림톡 테스트 센터`)** — (2026-09-30, 사용자 확인)
+  생성 완료, `status='pending'`으로 회원 화면 비노출, 관리자 연결 정상.
 - **NEXT_PUBLIC_PG_CHECKOUT_ENABLED=true** — Vercel 프로덕션 환경변수 설정 필요(Toss 카드
-  심사 대부분 통과, 현대카드만 남음 — 사용자 결정에 따라 지금 켜도 됨).
+  심사 대부분 통과, 현대카드만 남음 — 사용자 결정에 따라 지금 켜도 됨). 아직 미확인.
+- **alimtalk_templates에 (center_id, aligo_template_code) unique 제약 없음** (2026-09-30
+  발견, 이번 배치에서는 의도적으로 schema 변경 안 함) — "알리고 템플릿 불러오기"의 중복
+  가져오기 방지는 현재 클라이언트 쪽 검사(로컬 템플릿 목록 기준)뿐이다. 동시에 두 탭에서
+  가져오기를 누르는 등 경합 상황에서는 중복 행이 생길 수 있다 — 후속 배치에서 부분 unique
+  인덱스 추가를 검토.
 - **raw 오류 한글화 범위 확대**: `lib/userError.ts`를 이번엔 인증/회원가입/센터등록/결제/
   예약에만 적용했다. `.message`를 직접 노출하는 다른 화면(프로필/쿠폰/포인트/리뷰/문의 등,
   전수 검색 시 58개 이상 파일에서 `.message` 패턴 발견)은 이번 배치 범위 밖 — 후속 배치에서

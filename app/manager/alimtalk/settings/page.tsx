@@ -5,6 +5,15 @@
   플랫폼(sonjw) 단일 알리고 계정으로 전 센터를 대행 발송하는 구조라(사용자 결정, 2026-09-01),
   API 키 자체는 여기서 등록/수정하지 않는다(Supabase 대시보드에서 `supabase secrets set`으로만
   관리, CLAUDE.md 5번 규칙) — 이 화면은 연동 여부를 읽기 전용으로 보여주고 안내만 한다.
+
+  실기기 QA(2026-09-30) — 이전 화면은 "알리고 가입 → 사업자 인증 → 카카오 채널 개설 → 발신
+  프로필 등록 → 모하빗 운영자에게 연결 확인 요청" 같은 1~5단계 안내를 그대로 보여줬는데,
+  실제로는 센터 관리자가 전혀 거치지 않는 절차다(센터마다 개별 Aligo 연동을 하는 SaaS 구조가
+  아니라, 플랫폼 공용 send-alimtalk → Oracle 고정 IP 프록시 → 단일 Aligo 계정 → 모하빗
+  카카오 채널을 모든 센터가 함께 쓴다). 센터 관리자가 실제로 해야 할 일이 없는 기술 절차를
+  보여주는 대신, "이미 연결돼 있고 템플릿만 등록하면 된다"는 사실만 전달한다. API key/sender
+  key/Oracle proxy 등 내부 인프라 정보는 원래도 화면에 없었고 이번에도 추가하지 않는다.
+  Edge Function 호출("status" 액션)과 연결 상태 판정 로직 자체는 손대지 않았다.
 */
 
 import { useEffect, useState } from "react";
@@ -34,21 +43,19 @@ export default function AlimtalkSettingsPage() {
 
       <div className="connection-settings" style={{ padding: "20px" }}>
         <section className="connection-card" aria-live="polite">
-          <h2 className="menu-section-label">알림톡 연결 상태</h2>
+          <h2 className="menu-section-label">모하빗 알림톡 발송 서비스</h2>
           {error ? <p role="alert">{error}</p> : connected === null ? <p>확인 중</p> : <>
-            <strong style={{ color: connected ? "var(--ink)" : "var(--danger)" }}>{connected ? "연결됨" : "연결 필요"}</strong>
-            <p>{connected ? "알림톡을 발송할 수 있어요." : "아직 알리고 계정이 연결되지 않았어요. 아래 준비 사항을 확인해주세요."}</p>
+            <strong style={{ color: connected ? "var(--ink)" : "var(--danger)" }}>{connected ? "사용 가능" : "일시적으로 이용할 수 없어요"}</strong>
+            <p>{connected ? "승인된 알림톡 템플릿으로 회원에게 메시지를 보낼 수 있어요." : "지금은 알림톡 발송이 어려워요. 잠시 후 다시 시도하거나 운영자에게 문의해주세요."}</p>
           </>}
-          <p>모하빗에서 연결 상태를 확인합니다. 도움이 필요하면 운영자에게 문의해주세요.</p>
         </section>
-        <h2 className="menu-section-label" style={{ padding: "24px 0 8px" }}>연결 준비</h2>
-        <ol className="connection-steps">
-          <li>알리고에 가입하고 사업자 인증을 완료하세요.</li>
-          <li>카카오톡 채널을 개설하세요.</li>
-          <li>알리고에서 카카오 채널을 연결하고 발신프로필을 등록하세요.</li>
-          <li><a href="/manager/alimtalk/templates">템플릿 관리</a>에서 문구를 등록하고 카카오 승인을 요청하세요.</li>
-          <li>승인된 템플릿을 확인하고, 모하빗 운영자에게 연결 확인을 요청하세요.</li>
-        </ol>
+        <div className="perm-guide" style={{ margin: "16px 0 0" }}>
+          별도의 알리고 가입이나 카카오톡 채널 연결 없이 모하빗 알림톡 서비스를 바로 이용할 수 있어요.
+          <br />
+          <a href="/manager/alimtalk/templates">템플릿 관리</a>에서 승인된 알림톡 템플릿을 등록하면 회원에게 자동으로 메시지를 보낼 수 있어요.
+          <br />
+          알림톡 발송이 실패하면 문자로 대체 발송될 수 있어요.
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,37 @@
 # CHANGELOG
 
+## 2026-09-30 — 알림톡 템플릿 불러오기 UX, 발신 설정 문구 정정, 승인 대기 배너 문구 수정
+
+QA 진행 중(`[QA] 모하빗 알림톡 테스트 센터`) 발견된 UX 문제 3건. 백엔드(send-alimtalk Edge
+Function, Oracle 고정 IP 프록시, Aligo secret 구조)는 전혀 수정하지 않음 — 이미 존재하는
+`fetchAligoRemoteTemplates`/`createAlimtalkTemplate` 등 helper를 재사용해 UX만 연결했다.
+
+- **알리고 템플릿 불러오기**: 기존 "알리고에서 불러오기" 기능이 `editing !== "new"`(기존 템플릿
+  편집 중) 조건 안에만 있어, 로컬 템플릿이 0개인 센터는 접근할 방법이 없었다(빈 상태 UI에
+  버튼 자체가 없음). 메인 화면 헤더 + 빈 상태 양쪽에 독립된 "알리고 템플릿 불러오기"
+  진입점을 추가(새 템플릿 생성 "+ 템플릿"과 구분). 목록은 이름/코드(보조 정보로만)/상태
+  (APR→승인, REQ→심사 중, REG→등록, REJ→반려)를 보여주고, "가져오기"를 누르면 `title←
+  templtName, content←templtContent, aligo_template_code←templtCode, status←기존
+  inspStatusToLocalStatus`로 매핑해 `createAlimtalkTemplate`(확장: 이제 aligo_template_code/
+  status도 같이 받고 새 id를 반환)을 그대로 호출해 로컬 템플릿으로 등록한다. 같은 `aligo_
+  template_code`가 이미 로컬에 있으면(DB에 실제 unique 제약은 없음을 확인, 새 제약/migration은
+  추가하지 않음) 클라이언트에서 먼저 막고 "이미 등록된 템플릿이에요."로 안내. 회원가입 OTP
+  전용 템플릿(`UL_8353`)은 두 불러오기 목록(새 진입점 + 기존 편집 시트 안 목록) 모두에서
+  제외 — `send-phone-otp`/`ALIGO_OTP_TEMPLATE_CODE`/실제 OTP 발송 구조는 전혀 건드리지 않음.
+- **발신 설정 문구**: "알리고 가입 → 사업자 인증 → 카카오 채널 개설 → 발신프로필 등록 →
+  모하빗 운영자에게 연결 확인 요청" 1~5단계 안내를 제거 — 실제로는 센터마다 개별 Aligo
+  연동을 하지 않는 플랫폼 공용 구조(센터 관리자 → MWHABIT → 공용 send-alimtalk → Oracle
+  고정 IP 프록시 → 단일 Aligo 계정 → 모하빗 카카오 채널 → 회원)라 이 절차 자체가 없다.
+  "모하빗 알림톡 발송 서비스"로 프레이밍하고 템플릿 등록 안내 + 실패 시 문자 대체 발송
+  가능성만 전달. API key/sender key/Oracle 프록시 등 내부 인프라 정보는 원래도 없었고 이번에도
+  추가하지 않음. `status` 액션 호출/연결 상태 판정 로직(`isAligoConfigured` 계열)은 그대로.
+- **승인 대기 배너**: `PendingApprovalBanner`가 `<b>{센터명}</b>` 뒤에 "센터는"을 무조건
+  붙여, 센터 이름 자체에 "센터"가 들어 있으면(`[QA] 모하빗 알림톡 테스트 센터`) "...센터
+  센터는"으로 보였다. 이름 뒤에 명사를 더 붙이지 않고 조사 "는"만 바로 이어 붙이도록 수정
+  (은/는을 정확히 가리는 별도 helper는 만들지 않음 — 요청 범위 밖).
+- 사용자 오류 한글화: 템플릿 관리 화면의 모든 catch를 `lib/userError.ts`(`toUserMessage`)로
+  감싸 raw Supabase/Postgres 오류가 노출되지 않게 함(기존 흐름 포함 전수 적용).
+
 ## 2026-09-29 — 출시 후 개선 Batch: 회원가입 UX/보안, 센터등록 safe-area, 오류 한글화, Toss 결제 재노출
 
 정식 출시 후 첫 개선 배치. DB 스키마/RLS 변경 없음(이번 배치에서 추가한 SQL 2건은 준비만

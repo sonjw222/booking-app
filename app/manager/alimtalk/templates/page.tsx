@@ -16,8 +16,11 @@ import { checkPlatformAdmin } from "../../../../lib/admin";
 import {
   fetchAlimtalkTemplates, createAlimtalkTemplate, updateAlimtalkTemplate, deleteAlimtalkTemplate,
   fetchAligoRemoteTemplates, inspStatusToLocalStatus, createAligoRemoteTemplate, submitAligoTemplateForApproval,
+  extractTemplateVariables, excludeSystemAligoTemplates, ALIGO_INSP_STATUS_KO,
+  isAligoTemplateAlreadyImported, importAligoTemplateAsLocal,
   type AlimtalkTemplate, type AlimtalkTemplateStatus, type AligoRemoteTemplate,
 } from "../../../../lib/alimtalk";
+import { toUserMessage } from "../../../../lib/userError";
 
 const INSP_STATUS_LABEL: Record<string, string> = {
   REG: "등록(심사 전)", REQ: "심사 요청중", APR: "승인됨", REJ: "반려됨",
@@ -48,6 +51,14 @@ export default function AlimtalkTemplatesPage() {
   const [remoteTemplates, setRemoteTemplates] = useState<AligoRemoteTemplate[] | null>(null);
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [remoteError, setRemoteError] = useState<string | null>(null);
+  // "알리고 템플릿 불러오기"(2026-09-30) — 편집 시트 안의 위 remoteTemplates(특정 템플릿의
+  // 코드/상태만 채우는 용도)와는 별개 상태다. 이건 메인 화면에서 로컬 템플릿이 0개여도 항상
+  // 열 수 있는 별도 시트로, 고른 템플릿을 새 로컬 템플릿으로 "가져온다".
+  const [importOpen, setImportOpen] = useState(false);
+  const [importList, setImportList] = useState<AligoRemoteTemplate[] | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importingCode, setImportingCode] = useState<string | null>(null); // 지금 가져오는 중인 코드(중복 클릭 방지)
   const [isCommon, setIsCommon] = useState(false); // "공통"(플랫폼 전체) 템플릿 여부, 운영자만
   const [isAdmin, setIsAdmin] = useState(false);
   const [requestingApproval, setRequestingApproval] = useState(false);
@@ -61,7 +72,7 @@ export default function AlimtalkTemplatesPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e, "운영 중인 센터 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")); setLoading(false); }
     })();
     checkPlatformAdmin().then(setIsAdmin).catch(() => setIsAdmin(false));
   }, []);
@@ -71,7 +82,7 @@ export default function AlimtalkTemplatesPage() {
     setLoading(true); setError(null);
     try {
       setTemplates(await fetchAlimtalkTemplates(centerId));
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e, "템플릿 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -103,9 +114,52 @@ export default function AlimtalkTemplatesPage() {
     if (!centerId) return;
     setRemoteLoading(true); setRemoteError(null);
     try {
-      setRemoteTemplates(await fetchAligoRemoteTemplates(centerId));
-    } catch (e: any) { setRemoteError(e.message); }
+      // OTP 전용 시스템 템플릿(UL_8353)은 여기서도 제외한다 — 편집 중인 수동 템플릿의
+      // 코드를 실수로 그 코드로 채우는 걸 막는다(1-E, 실제 OTP 발송 구조는 그대로).
+      setRemoteTemplates(excludeSystemAligoTemplates(await fetchAligoRemoteTemplates(centerId)));
+    } catch (e: any) { setRemoteError(toUserMessage(e, "알리고 템플릿을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")); }
     finally { setRemoteLoading(false); }
+  }
+
+  // ============================================================
+  // "알리고 템플릿 불러오기"(1-A~1-D, 2026-09-30) — 로컬 템플릿이 0개여도 항상 열 수 있는
+  // 메인 화면 전용 시트. 위 handleLoadFromAligo(편집 중인 템플릿 하나의 코드/상태만 채움)와
+  // 달리, 고른 항목을 완전히 새로운 로컬 템플릿 행으로 "가져온다".
+  // ============================================================
+  function openImportSheet() {
+    setImportOpen(true);
+    setImportList(null);
+    setImportError(null);
+    loadImportList();
+  }
+
+  async function loadImportList() {
+    if (!centerId) return;
+    setImportLoading(true); setImportError(null);
+    try {
+      setImportList(excludeSystemAligoTemplates(await fetchAligoRemoteTemplates(centerId)));
+    } catch (e: any) { setImportError(toUserMessage(e, "알리고 템플릿을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")); }
+    finally { setImportLoading(false); }
+  }
+
+  async function handleImport(remote: AligoRemoteTemplate) {
+    if (!centerId || importingCode) return; // 중복 클릭 방지
+    // 클라이언트 쪽 1차 방어 — DB에는 (center_id, aligo_template_code) unique 제약이 없어
+    // (schema 확인, 2026-09-30) 이 목록 기준 확인이 사실상 유일한 중복 방지선이다.
+    if (isAligoTemplateAlreadyImported(templates, remote.templtCode)) {
+      showToast("이미 등록된 템플릿이에요.");
+      return;
+    }
+    setImportingCode(remote.templtCode);
+    try {
+      await importAligoTemplateAsLocal(centerId, remote);
+      showToast("템플릿을 가져왔어요");
+      await load();
+    } catch (e: any) {
+      showToast(toUserMessage(e, "템플릿을 등록하지 못했어요. 잠시 후 다시 시도해 주세요."));
+    } finally {
+      setImportingCode(null);
+    }
   }
 
   function handlePickRemote(templtCode: string) {
@@ -115,18 +169,11 @@ export default function AlimtalkTemplatesPage() {
     setStatus(inspStatusToLocalStatus(t.inspStatus));
   }
 
-  // 템플릿 문구의 [[변수]]를 자동으로 뽑아 저장 — evaluate_notification_rules()가
-  // [[회원명]]/[[수강권명]]/[[수강권 잔여횟수]]/[[수강권 잔여일]]로 치환한다.
-  function extractVariables(text: string): string[] {
-    const found = text.match(/\[\[([^\]]+)\]\]/g) ?? [];
-    return [...new Set(found.map((v) => v.slice(2, -2)))];
-  }
-
   async function handleSave() {
     if (!centerId || !title.trim() || !content.trim()) return;
     setSaving(true);
     try {
-      const variables = extractVariables(content);
+      const variables = extractTemplateVariables(content);
       if (editing === "new") {
         await createAlimtalkTemplate(isCommon ? null : centerId, { title: title.trim(), content: content.trim(), variables });
       } else if (editing) {
@@ -138,7 +185,7 @@ export default function AlimtalkTemplatesPage() {
       setEditing(null);
       showToast("저장했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e, "템플릿을 등록하지 못했어요. 잠시 후 다시 시도해 주세요.")); }
     finally { setSaving(false); }
   }
 
@@ -162,7 +209,7 @@ export default function AlimtalkTemplatesPage() {
       setStatus("pending");
       showToast("카카오 승인을 신청했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e, "카카오 승인 신청에 실패했어요. 잠시 후 다시 시도해 주세요.")); }
     finally { setRequestingApproval(false); }
   }
 
@@ -173,7 +220,7 @@ export default function AlimtalkTemplatesPage() {
       await deleteAlimtalkTemplate(t.id);
       showToast("삭제했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e, "템플릿을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.")); }
   }
 
   if (centers.length === 0 && !loading) {
@@ -197,7 +244,10 @@ export default function AlimtalkTemplatesPage() {
             버튼과의 space-between 정렬용 빈 자리만 남겨둔다. */}
         <div className="side" />
         <div className="title">템플릿 관리</div>
-        <button className="header-action" style={{ fontSize: 15, padding: "0 12px" }} onClick={openNew}>+ 템플릿</button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button className="header-action" style={{ fontSize: 15, padding: "0 12px" }} onClick={openImportSheet}>알리고 불러오기</button>
+          <button className="header-action" style={{ fontSize: 15, padding: "0 12px" }} onClick={openNew}>+ 템플릿</button>
+        </div>
       </div>
 
       {centers.length > 1 && (
@@ -214,7 +264,11 @@ export default function AlimtalkTemplatesPage() {
         <Loading />
       ) : templates.length === 0 ? (
         <div className="daylist-empty" style={{ paddingTop: 60 }}>
-          등록된 템플릿이 없어요.<br /><button className="outline-action" onClick={openNew}>첫 템플릿 만들기</button>
+          등록된 템플릿이 없어요.<br />
+          <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
+            <button className="outline-action" onClick={openImportSheet}>알리고 템플릿 불러오기</button>
+            <button className="outline-action" onClick={openNew}>첫 템플릿 만들기</button>
+          </div>
         </div>
       ) : (
         templates.map((t) => (
@@ -329,6 +383,54 @@ export default function AlimtalkTemplatesPage() {
                   {saving ? "저장 중..." : "저장"}
                 </button>
               )}
+            </div>
+          </div>
+        </SheetOverlay>
+      )}
+
+      {importOpen && (
+        <SheetOverlay className="sheet-overlay" onClick={() => setImportOpen(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-title">알리고 템플릿 불러오기</div>
+            <div className="perm-guide" style={{ margin: "0 0 10px" }}>
+              이미 알리고에 등록·승인된 템플릿을 골라 이 센터의 템플릿으로 가져올 수 있어요.
+            </div>
+            {importLoading ? (
+              <Loading />
+            ) : importError ? (
+              <div className="perm-guide" style={{ margin: "0 0 8px", color: "var(--danger)" }}>{importError}</div>
+            ) : importList && importList.length === 0 ? (
+              <div className="perm-guide" style={{ margin: "0 0 8px" }}>알리고에 등록된 템플릿이 없어요.</div>
+            ) : (
+              importList?.map((t) => {
+                const already = isAligoTemplateAlreadyImported(templates, t.templtCode);
+                const localStatus = inspStatusToLocalStatus(t.inspStatus);
+                return (
+                  <div key={t.templtCode} className="hist-item">
+                    <div className="hist-main">
+                      <div className="hist-title">{t.templtName}</div>
+                      {/* 원본 알리고 코드는 강조 없이 보조 정보로만(1-B) */}
+                      <div className="hist-sub">{t.templtCode}</div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                      <span className={`hist-status ${STATUS_BADGE[localStatus]}`}>{ALIGO_INSP_STATUS_KO[t.inspStatus] ?? t.inspStatus}</span>
+                      {already ? (
+                        <span className="hist-sub">이미 등록됨</span>
+                      ) : (
+                        <button
+                          type="button" className="outline-action compact"
+                          disabled={importingCode !== null} onClick={() => handleImport(t)}
+                        >
+                          {importingCode === t.templtCode ? "가져오는 중..." : "가져오기"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            <div className="add-profile-actions">
+              <button className="ghost-btn" onClick={() => setImportOpen(false)}>닫기</button>
             </div>
           </div>
         </SheetOverlay>
