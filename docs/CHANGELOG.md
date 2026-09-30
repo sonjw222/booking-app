@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## 2026-10-01 — 센터 상세 화면 뒤로가기 버튼 ↔ 프로필 이미지 겹침 수정 (회원용)
+
+iPhone 14 Pro 실기기 QA에서 발견. `.center-detail-head`(뒤로가기 헤더)가 absolute라
+정상 흐름에서 높이를 차지하지 않는데, 사진이 없는 센터의 placeholder 배지(`.center-hero-badge`)
+는 이를 고정값 `margin-top: 90px`로만 밀어내고 있었다 — 이 값이 헤더의 실제 렌더 높이
+(safe-area-inset-top 포함)와 무관해, Dynamic Island 기기(iPhone 14 Pro, safe-area-inset-top
+≈ 59px)에서 헤더 실제 높이(~101px)가 90px를 넘어서며 겹쳤다. 헤더의 실제 높이를
+`--center-detail-head-h`(safe-area + 아이콘 + padding 계산) CSS 변수 하나로 정의하고,
+배지의 margin-top을 `calc(var(--center-detail-head-h) + 16px)`로 바꿔 어떤 기기의
+safe-area 값에서도 항상 헤더보다 아래에서 시작하게 했다(매직 넘버 하나로 통일). 뒤로가기
+버튼 위치/사진(.center-hero-photo) 크기는 그대로(사진은 310px로 헤더보다 항상 커서 원래도
+안 겹침 — 이미지 축소로 회피하지 않음).
+
+## 2026-10-01 — 룸 관리 "지도에서 위치 지정"에 도로명 주소 검색 + 상세주소 추가
+
+기존 MapPicker(Leaflet + Nominatim, API 키 불필요)는 검색 결과를 `limit=1`로 자동 선택해
+사용자가 고를 수 없었고, 지도 클릭/검색 모두 좌표만 반영할 뿐 주소 텍스트는 전혀 채워주지
+않았다. 새 지도 라이브러리나 새 API 키 없이 기존 인프라만 재사용해 확장:
+- 장소명/도로명 주소 통합 검색이 결과 최대 5개를 목록으로 보여주고 고르게 함(`lib/geocoding.ts`
+  신설, Nominatim search/reverse 래퍼).
+- "정확한 도로명 주소로 찾기" — 기존 `lib/daumPostcode.ts`(회원가입 폼의 AddressField가 이미
+  쓰던 다음 우편번호 서비스) 재사용. 한국 도로명주소 정확도가 Nominatim보다 높음(실측 확인,
+  최종 보고서에 명시) — 선택한 주소를 Nominatim으로 한 번 더 지오코딩해 좌표를 붙인다.
+- 지도 직접 클릭(기존 기능) 그대로 유지 + 역지오코딩으로 주소를 최선 노력으로 채움(실패해도
+  좌표 저장은 막지 않음).
+- 상세주소(건물명/층/호수 등)는 `rooms.detail_address` 새 컬럼(마이그레이션만 준비, production
+  미실행 — `add_room_detail_address.sql`)에 도로명주소와 완전히 분리 저장 — 기존 `address`
+  자유 텍스트와 concat하지 않음(기존 값이 도로명주소 형식이 아닐 수 있어 재분리가 불가능하기
+  때문). 컬럼이 아직 없어도(마이그레이션 미실행) 룸 조회/저장이 깨지지 않게 방어 처리.
+
 ## 2026-10-01 — 예약 운영 설정 iOS 입력/확대/터치 불가 버그 수정
 
 iPhone 14 Pro 실기기 QA(Vercel Preview)에서 보고된 `/manager/settings` 3건 긴급 버그픽스.

@@ -31,6 +31,7 @@ export default function RoomsPage() {
   const [name, setName] = useState("");
   const [memo, setMemo] = useState("");
   const [address, setAddress] = useState("");
+  const [detailAddress, setDetailAddress] = useState("");
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [mapPicker, setMapPicker] = useState(false);
@@ -73,8 +74,8 @@ export default function RoomsPage() {
   }, [centerId]);
   useEffect(() => { load(); }, [load]);
 
-  function openAdd() { setAdding(true); setEditing(null); setName(""); setMemo(""); setAddress(""); setLat(null); setLng(null); }
-  function openEdit(r: Room) { setEditing(r); setAdding(false); setName(r.name); setMemo(r.memo ?? ""); setAddress(r.address ?? ""); setLat(r.latitude); setLng(r.longitude); }
+  function openAdd() { setAdding(true); setEditing(null); setName(""); setMemo(""); setAddress(""); setDetailAddress(""); setLat(null); setLng(null); }
+  function openEdit(r: Room) { setEditing(r); setAdding(false); setName(r.name); setMemo(r.memo ?? ""); setAddress(r.address ?? ""); setDetailAddress(r.detailAddress ?? ""); setLat(r.latitude); setLng(r.longitude); }
   function closeSheet() { setAdding(false); setEditing(null); }
 
   async function handleSave() {
@@ -82,7 +83,7 @@ export default function RoomsPage() {
     if (!centerId) return;
     setBusy(true);
     try {
-      const input = { name: name.trim(), memo: memo.trim(), address: address.trim(), latitude: lat, longitude: lng };
+      const input = { name: name.trim(), memo: memo.trim(), address: address.trim(), detailAddress: detailAddress.trim(), latitude: lat, longitude: lng };
       if (editing) { await updateRoom(editing.id, input); showToast("룸을 수정했어요"); }
       else { await addRoom(centerId, input); showToast("룸을 추가했어요"); }
       closeSheet();
@@ -136,7 +137,9 @@ export default function RoomsPage() {
                   <button className="room-card-main" onClick={() => openEdit(r)}>
                     <div className="room-card-name">{r.name}</div>
                     {r.memo && <div className="room-card-memo">{r.memo}</div>}
-                    {r.address && <div className="room-card-address">{r.address}</div>}
+                    {r.address && (
+                      <div className="room-card-address">{r.address}{r.detailAddress ? ` ${r.detailAddress}` : ""}</div>
+                    )}
                   </button>
                   {canManageRooms && (
                     <div className="row-actions room-card-actions">
@@ -160,8 +163,15 @@ export default function RoomsPage() {
             <input aria-label="룸 이름" className="input-field" placeholder="예: A룸, 1번 스튜디오" value={name} onChange={(e) => setName(e.target.value)} />
             <div className="menu-section-label" style={{ padding: "10px 0 6px" }}>설명 (선택)</div>
             <input aria-label="룸 설명" className="input-field" placeholder="예: 2층, 거울방" value={memo} onChange={(e) => setMemo(e.target.value)} />
-            <div className="menu-section-label" style={{ padding: "10px 0 6px" }}>주소 (회원 길찾기용, 선택)</div>
-            <input aria-label="주소" className="input-field" placeholder="예: 서울 강남구 ..." value={address} onChange={(e) => setAddress(e.target.value)} />
+            <div className="menu-section-label" style={{ padding: "10px 0 6px" }}>도로명 주소 (회원 길찾기용, 선택)</div>
+            {/* 2026-10-01 — 기존처럼 직접 타이핑도 그대로 가능(회귀 없음). 지도에서 검색/
+                클릭으로 주소를 찾으면 이 필드에 자동으로 채워지고(직접 입력한 값이 이미
+                있으면 지도 직접 클릭은 그 값을 덮지 않음 — MapPicker 참고), 검색 결과를
+                고르면 항상 최신 선택으로 덮어쓴다. 이 필드는 기존에도 .input-field라
+                이미 16px로 iOS 확대 버그가 없다(app/globals.css 기존 규칙, 새 변경 없음). */}
+            <input aria-label="도로명 주소" className="input-field" placeholder="예: 서울 강남구 ... (직접 입력하거나 지도에서 검색)" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <div className="menu-section-label" style={{ padding: "10px 0 6px" }}>상세주소 (건물명, 층, 호수 등, 선택)</div>
+            <input aria-label="상세주소" className="input-field" placeholder="예: 3층 301호" value={detailAddress} onChange={(e) => setDetailAddress(e.target.value)} />
             {lat != null && lng != null ? (
               <>
                 <MapPreview lat={lat} lng={lng} />
@@ -182,7 +192,14 @@ export default function RoomsPage() {
         <MapPicker
           initialLat={lat}
           initialLng={lng}
-          onPick={(la, ln) => { setLat(la); setLng(ln); showToast("지도에서 위치를 지정했어요"); }}
+          onPick={(la, ln, addr) => {
+            setLat(la); setLng(ln);
+            // addr(검색 결과 선택 또는 지도 클릭 역지오코딩)이 있으면 도로명 주소를
+            // 최신 선택으로 갱신한다. 없으면(역지오코딩 실패 등) 기존에 직접 입력해둔
+            // 주소를 그대로 둔다 — 좌표 지정 자체는 addr 유무와 무관하게 항상 반영됨.
+            if (addr) setAddress(addr);
+            showToast("지도에서 위치를 지정했어요");
+          }}
           onClose={() => setMapPicker(false)}
         />
       )}

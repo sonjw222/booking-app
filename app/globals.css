@@ -2550,6 +2550,15 @@ a.membership-card { text-decoration: none; display: block; }
 .map-picker-sheet { max-height: 88vh; overflow-y: auto; }
 .map-search-row { display: flex; gap: 8px; margin-bottom: 4px; }
 .map-picker-canvas { position: relative; isolation: isolate; z-index: 0; width: 100%; height: 300px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+/* 2026-10-01 — 도로명 주소 검색 결과 목록(여러 개 중 고르기) + "정확한 도로명 주소로
+   찾기"(다음 우편번호 서비스) 진입 버튼. 새 색상 체계 없이 기존 토큰만 재사용. 목록이
+   길어도 시트 밖으로 넘치지 않게 자체 스크롤을 준다(max-height). */
+.map-daum-search-btn { display: block; width: 100%; text-align: left; font-size: 13px; font-weight: 700; color: var(--accent); padding: 6px 2px 10px; }
+.map-search-results { list-style: none; margin: 0 0 8px; padding: 0; max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; }
+.map-search-result-item { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; padding: 10px 12px; min-height: 44px; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--text); }
+.map-search-result-item:last-child { border-bottom: 0; }
+.map-search-result-main { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.map-search-result-sub { font-size: 12px; color: var(--ink-soft); }
 
 /* 진도 이력 - 날짜별 표시 */
 .prog-hist-day { padding: 12px 0; border-bottom: 1px solid var(--line); }
@@ -4486,7 +4495,24 @@ a.membership-card { text-decoration: none; display: block; }
 /* ── Batch 5 — center detail and commerce ───────────────────────────── */
 .app-shell:has(> .center-bottom-bar) { padding-bottom: calc(var(--floating-nav-clearance) + 78px); }
 
-.center-detail-v2 { position: relative; }
+.center-detail-v2 {
+  position: relative;
+  /* 실기기 QA(2026-10-01, iPhone 14 Pro) — 뒤로가기 버튼(.center-detail-head)과
+     프로필 배지(.center-hero-badge)가 겹치는 문제의 근본 원인: .center-detail-head가
+     absolute라 정상 흐름에서 높이를 전혀 차지하지 않는데, 그 아래 .center-hero-badge는
+     이를 피하려고 margin-top 90px라는 고정값 하나로 "대충" 밀어내고 있었다. 이 90px는
+     헤더의 실제 렌더 높이(padding-top(safe-area-inset-top) + 아이콘 30px + padding-bottom
+     12px)와 아무 연결이 없는 별개의 숫자라, safe-area-inset-top이 큰 기기(Dynamic Island —
+     iPhone 14 Pro는 59px 안팎)에서는 실제 헤더 높이(~101px)가 90px를 넘어서며 겹쳤다(=
+     사용자가 제시한 원인 후보 중 D: "safe-area 값이 커지면서 두 요소가 겹침"과 일치).
+     다른 좌표(뒤로가기 버튼 위치, absolute 자체)는 건드리지 않고 — 버튼은 이미 정상
+     safe-area 위치에 있다 — 헤더의 실제 높이를 이 한 변수로만 계산해서 badge 쪽 spacing이
+     항상 그 값을 따라가게 한다(매직 넘버를 여러 곳에 두지 않고 이 한 규칙만 고치면 됨).
+     사진이 있는 경우(.center-hero-photo, 310px)는 이 헤더 최대 높이보다 항상 훨씬 커서
+     원래부터 겹치지 않는다(어떤 safe-area 값에서도 310px > 헤더 높이) — 사진을 여기에
+     맞춰 줄이거나 구조를 바꾸지 않음(요청사항: 이미지 축소로 회피 금지). */
+  --center-detail-head-h: calc(max(18px, var(--safe-top)) + 30px + 12px);
+}
 .center-detail-v2 .center-detail-head {
   position: absolute; top: 0; left: 0; right: 0; z-index: 20;
   padding-top: max(18px,var(--safe-top));
@@ -4494,12 +4520,14 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .center-detail-v2 .center-detail-head .title { opacity: 0; }
 /* display:flow-root(대신 block)로 새 블록 서식 맥락을 만들어 첫 자식(.center-hero-badge)의
-   margin-top이 부모 밖으로 collapse되는 걸 막는다 — collapse되면 .center-hero-badge의
-   "90px 아래로" margin이 사실상 무시되고 badge가 .center-hero의 top(=0, absolute인
-   .center-detail-head와 같은 지점)에 그대로 붙어 뒤로가기 버튼과 겹쳤다(UI 감사 P0-2). */
+   margin-top이 부모 밖으로 collapse되는 걸 막는다 — collapse되면 margin이 사실상 무시되고
+   badge가 .center-hero의 top(=0, absolute인 .center-detail-head와 같은 지점)에 그대로
+   붙어 뒤로가기 버튼과 겹친다(UI 감사 P0-2, 2026-10-01 재확인). */
 .center-detail-v2 .center-hero { padding: 0 0 24px; display: flow-root; text-align: left; }
 .center-detail-v2 .center-hero-photo { width: 100%; height: 310px; margin: 0 0 24px; border-radius: 0 0 24px 24px; object-fit: cover; }
-.center-detail-v2 .center-hero-badge { margin: 90px 16px 24px; }
+/* 헤더 실제 높이(--center-detail-head-h) + 16px 여유(요청된 12~20px 범위) — 기존
+   spacing scale(24px 계열)에 가까운 값이라 임의 숫자를 새로 만들지 않음. */
+.center-detail-v2 .center-hero-badge { margin: calc(var(--center-detail-head-h) + 16px) 16px 24px; }
 .center-detail-v2 .center-hero-name,
 .center-detail-v2 .center-hero-addr,
 .center-detail-v2 .center-hero-phone,

@@ -735,6 +735,16 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
+### P1-48. (신규, 2026-10-01, 코드 완료·SQL 적용 대기) 룸 상세주소 — `add_room_detail_address.sql` 미실행
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | 코드(`lib/rooms.ts`, `app/manager/rooms/page.tsx`)는 `rooms.detail_address` 컬럼을 읽고 쓰지만, 이 컬럼을 추가하는 `add_room_detail_address.sql`은 이 세션에서 production에 실행하지 않았다(사용자 승인 필요). |
+| 영향 | 컬럼이 없어도(42703) `fetchRooms`/`addRoom`/`updateRoom`이 컬럼 없이 자동 재시도하도록 방어 처리가 있어 **기존 룸 조회/저장 자체는 깨지지 않는다** — 다만 이 SQL을 실행하기 전까지는 상세주소 입력이 항상 저장되지 않고(무시됨) 빈 값으로 보인다. |
+| 남은 작업 | Supabase SQL Editor에서 `add_room_detail_address.sql` 전문 실행 → 이미 통과 중인 `tests/unit/roomLocationSearch.staticCheck.test.ts`/`tests/unit/geocoding.test.ts`와 별개로, 실제 저장은 Preview/운영에서 실기기로 재확인 필요. |
+| 근거 파일 | `add_room_detail_address.sql`(신규), `lib/rooms.ts`, `app/manager/rooms/page.tsx` |
+
 ### P1-47. (신규, 2026-09-20, 코드 수정 완료·운영 적용 대기) Privacy Release Blocker Batch #2 — SQL 적용 + Edge Function 재배포 필요
 
 | 필드 | 내용 |
