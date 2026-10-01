@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## 2026-10-01 — 실사용 QA 10건 + 예약 목록 룸 표시 + 공용 Bottom Sheet drag-dismiss
+
+신규 SQL 4쌍(전부 **production 미실행**, 실행 순서는 최종 보고 참고): `fix_order_issuance_and_auto_booking.sql`,
+`add_reservation_goods_usage.sql`, `fix_recurring_class_description_and_group_update.sql`,
+`fix_manager_centers_rls_recursion_final.sql`(+ 각 `rollback_*`).
+- **자동예약(QA 1/4B)**: 만료일·시작일을 KST 날짜로 비교(예전 UTC 날짜), 만료일 밖 수업은 횟수가 남아도 예약하지 않음.
+  수동예약과 같은 `is_membership_eligible_for_class()` 사용(bound 요일·시간 반영) — 구매 시 요일 선택 상품은
+  `auto_book_days`가 null이라 자동예약이 항상 `not_weekday_pass`로 끝나던 것이 승인 후 미예약의 원인.
+  `unplaced_weekday_passes()`가 만료 여부/재시도 가능 여부/사유 코드를 반환, 만료된 수강권은 "다시 배치" 비활성.
+- **주문 발급(QA 3/4B)**: 직접결제 `fulfill_order()`가 할인 후 금액을 상품 원가와 비교해 거절하던 문제 →
+  PG 경로와 같은 `_order_expected_amount()`(상품가 − 서버 검증 센터쿠폰 − 원장 확인 포인트)로 통일. 직접결제도 센터
+  쿠폰 사용 처리. 자동예약은 공통 헬퍼로 두 경로(직접/PG) 모두 실행하고 `exception when others then null` 삼킴 제거 —
+  결과(`auto_book_requested/auto_booked_count/unplaced_count/auto_book_reason/auto_book_error`) 반환, 관리자 토스트에 표시.
+  주문의 선택 사이즈를 `memberships.selected_size`로 복사.
+- **쿠폰(QA 2)**: 하드코딩 WELCOME/FIGURE10 및 결제/장바구니 데모 쿠폰 UI 제거(DB 행 아님 — DB 삭제 SQL 없음).
+  센터 쿠폰(coupons/member_coupons) 흐름 유지, 쿠폰이 없으면 영역 숨김.
+- **PG 게이트**: `lib/payMethods.ts`로 checkout·cart 공통 — `NEXT_PUBLIC_PG_CHECKOUT_ENABLED`가 정확히 true가 아니면 direct만
+  (센터 pay_methods와 무관, 기본 direct). `/api/payments/confirm`도 같은 조건으로 서버에서 차단(심사관 override 계정만 예외).
+- **대여상품(QA 5/6)**: `reserve_with_goods()`로 수강권+상품 차감을 원자적으로 처리, `reservation_goods_usages`로 추적,
+  취소/대기승격은 트리거로 정확히 1회 복원/차감. 관리자 예약자 목록에 "상품명 사이즈" 표시.
+- **반복수업(QA 7/10)**: 반복 생성 payload에 `description` 누락(두 경로 + RPC INSERT) 수정. "모든 반복 수업에 적용"은
+  공통 속성(수업명·소개·정원·강사)만 반영하고 날짜·시간은 유지, "시간도 함께 변경"은 별도 옵션(기본 OFF).
+- **메모(QA 8)**: 수업 수정 하단 "메모" = `schedule_memos`(관리자 내부 메모) → 라벨 "관리자 메모" + 비공개 안내.
+- **스태프 RLS(QA 9)**: 라이브에 남아 있던 `매니저센터 생성` 정책의 manager_centers raw self-subquery가 재귀 원인 →
+  헬퍼 기반으로 교체, owner 역할 부여·오너 행 수정/삭제는 오너만, 마지막 오너 삭제 금지.
+- **예약 화면(QA 4/5)**: 목록 카드에 룸 이름(`rooms(name)`는 이미 조회 중이었고 목록 render만 누락), 배지/버튼 겹침 정리,
+  예약·취소 후 수강권/상품 잔여를 항상 재조회(stale "4회 남음" 해결).
+- **공용 Bottom Sheet**: `lib/sheetDrag.ts` + `SheetOverlay` — handle에서 시작한 drag만 dismiss, slide-out 후 onClose 1회,
+  reduced-motion/중복 pointer/nested/저장 중 차단 대응. 수업 수정 sheet의 로컬 drag 코드는 공용 구현으로 승격.
+
 ## 2026-10-01 — 토스페이먼츠 전자결제 심사 대응: 공개 상품 안내·사업자 표시·약관 정정
 
 심사용 홈페이지 점검에서 확인된 4건. 결제/빌링 로직은 변경 없음.

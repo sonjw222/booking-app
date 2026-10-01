@@ -34,7 +34,7 @@ import {
   copyByWeekday, copyByDate,
   type CopyGroup, type CopyDateItem, type CopyPlanItem,
   fetchBookableMembers, managerBookMember, type BookableMember, maskPhone,
-  fetchUnplacedPasses, retryAutoBook, type UnplacedPass,
+  fetchUnplacedPasses, retryAutoBook, unplacedReasonText, type UnplacedPass,
   type ManagedClass, type ClassInput, type ClassAttendee,
   isValidClassTimeRange, checkScheduleConflicts, type ScheduleConflict,
 } from "../../../lib/classes";
@@ -83,43 +83,11 @@ export default function ClassManagePage() {
 
   // 폼 상태 (열림/수정 대상/입력값)
   const [formOpen, setFormOpen] = useState(false);
-  // 2026-10-01(B-9~B-12) — 수업 등록/수정 sheet를 아래로 끌어서 닫는 제스처(drag-to-dismiss).
-  // dragY: 현재 끌린 거리(px, 0 이상만). dragging: true인 동안만 transition을 끈다(끄는
-  // 도중엔 손가락을 그대로 따라가야 하고, 놓았을 때만(스냅백/닫힘) 애니메이션이 붙는다).
-  const [dragY, setDragY] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const dragStartY = useRef<number | null>(null);
-  const sheetBoxRef = useRef<HTMLDivElement>(null);
-
-  // 취소 버튼/배경 탭/드래그 닫기가 전부 같은 함수를 쓴다(B-11) — unsaved 확인 정책이나
-  // state 정리가 앞으로 추가되더라도 세 경로가 어긋나지 않는다.
+  // 취소 버튼/배경 탭/드래그 닫기가 전부 같은 함수를 쓴다(B-11) — unsaved 확인 정책이나 state 정리가
+  // 앞으로 추가되더라도 세 경로가 어긋나지 않는다. drag-to-dismiss 자체는 이제 공용
+  // SheetOverlay(lib/sheetDrag.ts)가 처리한다(2026-10-01, 23fcb9d의 로컬 구현을 공용으로 승격).
   function closeFormSheet() {
     setFormOpen(false);
-    setDragY(0);
-  }
-
-  function handleDragHandlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    dragStartY.current = e.clientY;
-    setDragging(true);
-  }
-  function handleDragHandlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (dragStartY.current == null) return;
-    // 아래로만 반응한다(위로 끌어도 0에서 멈춤) — 실수로 위로 밀었을 때 이상하게 보이지 않게.
-    setDragY(Math.max(0, e.clientY - dragStartY.current));
-  }
-  function handleDragHandlePointerUp() {
-    if (dragStartY.current == null) return;
-    dragStartY.current = null;
-    setDragging(false);
-    // B-10 — velocity가 아니라 거리만 본다(실수 방지 우선). sheet 실제 높이의 35% 이상
-    // 끌었을 때만 닫힘 — 30~40% 범위의 중간값.
-    const height = sheetBoxRef.current?.getBoundingClientRect().height ?? 0;
-    if (height > 0 && dragY > height * 0.35) {
-      closeFormSheet();
-    } else {
-      setDragY(0); // 원위치로 spring-back(아래 CSS transition이 처리)
-    }
   }
   const [editId, setEditId] = useState<string | null>(null);
   const [editGroupId, setEditGroupId] = useState<string | null>(null);
@@ -129,6 +97,8 @@ export default function ClassManagePage() {
   // 기억해둔다.
   const [editReservedCount, setEditReservedCount] = useState(0);
   const [applyToGroup, setApplyToGroup] = useState(false);
+  // 2026-10-01(QA 10) — "시간도 함께 변경"(기본 OFF). 꺼져 있으면 그룹 적용 시 각 수업의 기존 날짜·시간을 유지한다.
+  const [applyTimeToGroup, setApplyTimeToGroup] = useState(false);
   // 삭제 확인 시트
   const [deleteTarget, setDeleteTarget] = useState<ManagedClass | null>(null);
   // 수업 메모 (schedule_memos, class_id 경로) — 수정 시트를 열 때만 로드
@@ -393,6 +363,7 @@ export default function ClassManagePage() {
     setBookD(""); setBookH(""); setBookM("");
     setEditGroupId(null);
     setApplyToGroup(false);
+    setApplyTimeToGroup(false);
     const dayStr = `${year}-${String(month).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
     const lastDay = `${year}-${String(month).padStart(2, "0")}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
     setForm({ ...EMPTY, date: dayStr });
@@ -426,7 +397,7 @@ export default function ClassManagePage() {
     setUnplacedBusy(true);
     try {
       const n = await retryAutoBook(u.membershipId);
-      showToast(n > 0 ? `${n}개 수업에 배치했어요` : "배치할 수 있는 수업이 없어요 (정원 확인)");
+      showToast(n > 0 ? `${n}개 수업에 배치했어요` : "배치할 수 있는 수업이 없어요 (아래 사유 확인)");
       if (activeCenterId) {
         await loadUnplaced(activeCenterId);
         await loadClasses(activeCenterId, year, month);
@@ -705,6 +676,7 @@ export default function ClassManagePage() {
     setEditId(c.id);
     setEditGroupId(c.recurringGroupId);
     setApplyToGroup(false);
+    setApplyTimeToGroup(false);
     setEditReservedCount(c.reserved);
     setForm({ title: c.title, description: c.description ?? "", date: c.date, start: c.start, end: c.end, capacity: c.capacity, allowGoods: c.allowGoods, allowCancel: c.allowCancel, roomId: c.roomId, cancelDeadlineMin: c.cancelDeadlineMin, bookingDeadlineMin: c.bookingDeadlineMin, classFormat: c.classFormat });
     fillDeadline(c.cancelDeadlineMin);
@@ -849,6 +821,7 @@ export default function ClassManagePage() {
           }
           ids = await createRecurringClassesPerDay(activeCenterId, {
             title: form.title,
+            description: form.description,
             fromDate: repFrom, toDate: repTo,
             days,
             // 예약마감(CLASS-001)은 요일별 개별 지정 UI가 없어 공통 설정값을 그대로 쓴다
@@ -860,7 +833,7 @@ export default function ClassManagePage() {
           });
         } else {
           ids = await createRecurringClasses(activeCenterId, {
-            title: form.title, daysOfWeek: repDays,
+            title: form.title, description: form.description, daysOfWeek: repDays,
             fromDate: repFrom, toDate: repTo,
             start: form.start, end: form.end, capacity: form.capacity, roomId: form.roomId, cancelDeadlineMin: deadlineToMin(),
             bookingDeadlineMin: bookDeadlineToMin(),
@@ -919,8 +892,13 @@ export default function ClassManagePage() {
       let promotedCount = 0;
       if (editId) {
         if (applyToGroup && editGroupId) {
-          const groupIds = await updateClassGroup(editGroupId, form.title, form.start, form.end, form.capacity);
-          // updateClassGroup은 title/start/end/capacity만 그룹 전체에 반영하고 이 인스턴스의
+          // 공통 속성(수업명·소개·정원)만 그룹에 반영하고, 날짜·시간은 각 수업의 기존 값을 유지한다.
+          // 시간까지 바꾸려면 "시간도 함께 변경"을 명시적으로 켠 경우에만 보낸다.
+          const groupIds = await updateClassGroup(editGroupId, form.title, form.capacity, {
+            description: form.description ?? "",
+            time: applyTimeToGroup ? { start: form.start, end: form.end } : undefined,
+          });
+          // updateClassGroup은 수업명/소개/정원(+선택 시 시간)만 그룹 전체에 반영하고 이 인스턴스의
           // 수강권 정책 컬럼은 건드리지 않으므로, 이 인스턴스만 따로 맞춰준다(수강권 정책·
           // 허용 상품은 여전히 인스턴스별 — 그룹 적용 대상이 아님).
           await updateClassPassSelectionMode(editId, passMode);
@@ -1261,28 +1239,7 @@ export default function ClassManagePage() {
       {/* 등록/수정 시트 */}
       {formOpen && (
         <SheetOverlay className="sheet-overlay" onClick={closeFormSheet}>
-          <div
-            ref={sheetBoxRef}
-            className="sheet direct-member-sheet"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
-              transition: dragging ? "none" : undefined,
-            }}
-          >
-            {/* 2026-10-01(B-9~B-12) — drag handle. 이 막대에서 시작한 드래그만 허용하고
-                (폼 내부 스크롤과 충돌 없음), 아래로 충분히 끌면 취소 버튼과 완전히 같은
-                동작(closeFormSheet)으로 닫힌다. */}
-            <div
-              className="sheet-drag-handle"
-              role="presentation"
-              onPointerDown={handleDragHandlePointerDown}
-              onPointerMove={handleDragHandlePointerMove}
-              onPointerUp={handleDragHandlePointerUp}
-              onPointerCancel={handleDragHandlePointerUp}
-            >
-              <span className="sheet-drag-handle-bar" aria-hidden="true" />
-            </div>
+          <div className="sheet direct-member-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{editId ? "수업 수정" : "수업 등록"}</div>
             <input aria-label="수업명" className="input-field" placeholder="수업명" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
 
@@ -1754,8 +1711,16 @@ export default function ClassManagePage() {
             {/* 반복 수업 일괄 적용 (그룹 소속 수정일 때만) */}
             {editId && editGroupId && (
               <div className="set-row" style={{ padding: "10px 0", borderBottom: "none" }}>
-                <div className="set-label">모든 반복 수업에 적용<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>수업명·시간·정원·담당 강사가 전체에 반영돼요 (날짜·수강권 정책 제외)</span></div>
-                <button className={`switch ${applyToGroup ? "on" : ""}`} onClick={() => setApplyToGroup(!applyToGroup)}>
+                <div className="set-label">모든 반복 수업에 적용<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>수업명·소개·정원·담당 강사 등 공통 설정만 반복 수업에 적용돼요. 날짜·시간은 유지돼요.</span></div>
+                <button className={`switch ${applyToGroup ? "on" : ""}`} onClick={() => { setApplyToGroup(!applyToGroup); if (applyToGroup) setApplyTimeToGroup(false); }}>
+                  <span className="knob" />
+                </button>
+              </div>
+            )}
+            {editId && editGroupId && applyToGroup && (
+              <div className="set-row" style={{ padding: "4px 0 10px", borderBottom: "none" }}>
+                <div className="set-label">시간도 함께 변경<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>켜면 모든 반복 수업의 시작·종료 시간이 위에 입력한 시간으로 바뀌어요. 요일마다 시간이 다르면 꺼두세요.</span></div>
+                <button className={`switch ${applyTimeToGroup ? "on" : ""}`} aria-pressed={applyTimeToGroup} onClick={() => setApplyTimeToGroup(!applyTimeToGroup)}>
                   <span className="knob" />
                 </button>
               </div>
@@ -1763,7 +1728,7 @@ export default function ClassManagePage() {
 
             {editId && (
               <div className="set-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10, padding: "14px 0" }}>
-                <div className="set-label">메모</div>
+                <div className="set-label">관리자 메모<br /><span style={{ fontSize: 11, color: "var(--text-dim)", fontWeight: 500 }}>센터 운영자만 보는 내부 메모이며 회원에게 표시되지 않아요. (회원에게 보이는 설명은 위의 ‘수업 소개’에 적어주세요.)</span></div>
                 {memos.map((m) => {
                   const canEditThis = (m.authorAccountId === myAccountId && canEditOwnMemo) || canManageAnyMemo;
                   return (
@@ -1798,9 +1763,9 @@ export default function ClassManagePage() {
                 })}
                 {canAddMemo && (
                   <div style={{ display: "flex", gap: 6 }}>
-                    <textarea aria-label="메모를 남겨보세요"
+                    <textarea aria-label="관리자 메모 입력"
                       className="input-field" style={{ flex: 1, minHeight: 40 }}
-                      placeholder="메모를 남겨보세요" value={memoInput} onChange={(e) => setMemoInput(e.target.value)}
+                      placeholder="운영자만 보는 메모를 남겨보세요" value={memoInput} onChange={(e) => setMemoInput(e.target.value)}
                     />
                     <button className="quiet-action" disabled={memoBusy || !memoInput.trim()} onClick={handleAddMemo}>등록</button>
                   </div>
@@ -1824,7 +1789,7 @@ export default function ClassManagePage() {
 
       {/* 삭제 확인 시트 */}
       {deleteTarget && (
-        <SheetOverlay className="sheet-overlay" onClick={() => setDeleteTarget(null)}>
+        <SheetOverlay className="sheet-overlay" swipeDismiss={false} onClick={() => setDeleteTarget(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">수업 삭제</div>
             <div className="perm-guide" style={{ margin: "0 0 14px" }}>
@@ -1949,7 +1914,7 @@ export default function ClassManagePage() {
             <div className="sheet-title">배치 안 된 수강권</div>
             <div className="perm-guide" style={{ margin: "0 0 12px" }}>
               요일반 수강권을 샀지만 정원이 차거나 수업이 없어서
-              예약이 다 잡히지 못한 회원이에요.<br />
+              예약이 다 잡히지 못한 회원이에요. 수강권 만료일 이후의 수업은 횟수가 남아 있어도 자동으로 예약하지 않아요.<br />
               <b>정원을 늘리거나 수업을 추가한 뒤</b> "다시 배치"를 누르면 자동으로 넣어드려요.
               보강 예약으로 직접 넣어도 돼요. (먼저 구매한 순서)
             </div>
@@ -1970,11 +1935,16 @@ export default function ClassManagePage() {
                       {u.expiresAt && <> · ~{u.expiresAt.slice(5).replace("-", "/")}</>}
                     </div>
                     <div className="unplaced-sub">{u.purchasedAt} 구매</div>
+                    {/* 미배치 사유 — 만료일 초과 / 정원 부족 / 조건 불일치 / 이미 예약 등을 구분해서 보여준다 */}
+                    <div className={`unplaced-reason ${u.reason === "outside_membership_period" ? "is-expired" : ""}`}>
+                      {unplacedReasonText(u)}
+                    </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    <button className="unplaced-retry" disabled={unplacedBusy}
+                    <button className="unplaced-retry" disabled={unplacedBusy || !u.canRetry}
+                      title={u.canRetry ? undefined : "수강권 만료일이 지나 다시 배치할 수 없어요"}
                       onClick={() => handleRetryAutoBook(u)}>다시 배치</button>
-                    {canAssignReservation && (
+                    {canAssignReservation && !u.expired && (
                       <button className="unplaced-retry" style={{ background: "var(--surface)", color: "var(--text)" }}
                         onClick={() => startAssignFromUnplaced(u)}>직접배치</button>
                     )}
@@ -2126,6 +2096,7 @@ export default function ClassManagePage() {
                       <button className="roster-name-btn" onClick={() => openMemberInfo(a)}>
                         {a.name}
                         {a.status === "waitlisted" && a.waitlistOrder != null && <span className="roster-wait"> 대기{a.waitlistOrder}</span>}
+                        {a.goodsLabel && <span className="roster-goods"> · {a.goodsLabel}</span>}
                       </button>
                       <span className={`hist-status s-${a.status}`}>
                         {a.status === "confirmed" ? "확정" : a.status === "waitlisted" ? "대기"
@@ -2263,7 +2234,7 @@ export default function ClassManagePage() {
 
       {/* 직접배치 - 확인 팝업 (일반 직접배치 / 무료 추가 배치 / 정원 초과) */}
       {assignConfirm && assignMember && (
-        <SheetOverlay className="sheet-overlay on-top" onClick={() => !assignBusy && setAssignConfirm(null)}>
+        <SheetOverlay className="sheet-overlay on-top" swipeDismiss={false} onClick={() => !assignBusy && setAssignConfirm(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             {assignConfirm.capacityBlocked ? (
               <>
@@ -2351,7 +2322,7 @@ export default function ClassManagePage() {
 
       {/* 관리자 배치 취소 확인 */}
       {adminCancelTarget && (
-        <SheetOverlay className="sheet-overlay on-top" onClick={() => !adminCancelBusy && setAdminCancelTarget(null)}>
+        <SheetOverlay className="sheet-overlay on-top" swipeDismiss={false} onClick={() => !adminCancelBusy && setAdminCancelTarget(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">이 회원의 관리자 배치 예약을 취소하시겠습니까?</div>
             <div className="perm-guide" style={{ margin: "0 0 12px" }}>

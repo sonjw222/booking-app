@@ -342,6 +342,11 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   return { classes, centers, holidays };
 }
 
+// 예약 목록 카드 첫 meta line: "센터명 · 담당 강사"(없는 쪽은 구분자 없이 생략)
+export function classListMetaText(centerName?: string | null, instructorText?: string | null): string {
+  return [centerName, instructorText].filter((x): x is string => !!x && x.trim() !== "").join(" · ");
+}
+
 // ---------------- 예약하기 ----------------
 // DB 함수(reserve_class)를 호출 → 정원확인·수강권검증·차감이 서버에서 원자적으로 처리됨
 // p_profile_id 를 넘기면 그 프로필로 예약(자녀 등), 없으면 대표 프로필로 예약
@@ -596,5 +601,33 @@ export async function reserveWithMembership(
     p_class_id: classId, p_profile_id: profileId, p_membership_id: membershipId,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+  return ((data as any)?.status ?? "confirmed") as "confirmed" | "waitlisted";
+}
+
+// 2026-10-01(QA 5) — 수강권 지정 예약 + 대여상품 사용을 서버의 한 함수(reserve_with_goods,
+// add_reservation_goods_usage.sql)에서 원자적으로 처리한다(수강권·상품 차감, 예약 생성, 사용 기록).
+// 이전에는 수강권을 직접 고르면(reserveWithMembership) 선택한 대여상품이 버려졌다.
+// 서버 SQL이 아직 적용되지 않은 환경(함수 없음: PGRST202/42883)에서는 상품을 조용히 버리지 않는다:
+//   - 수강권 미지정이면 기존 reserve_class_with_goods로 폴백
+//   - 수강권 지정 + 상품 조합이면 명확한 오류를 던진다(부분 차감/상품 누락 방지)
+export async function reserveWithGoods(
+  classId: string, profileId: string | null, membershipId: string | null, goodsMembershipId: string | null
+): Promise<"confirmed" | "waitlisted"> {
+  const { data, error } = await supabase.rpc("reserve_with_goods", {
+    p_class_id: classId,
+    p_profile_id: profileId,
+    p_membership_id: membershipId,
+    p_goods_membership_id: goodsMembershipId,
+  });
+  if (error) {
+    const missing = error.code === "PGRST202" || error.code === "42883";
+    if (missing) {
+      if (membershipId) {
+        throw new Error("수강권과 대여상품을 함께 사용하는 기능이 아직 준비되지 않았어요. 대여상품을 '사용 안 함'으로 두고 예약해주세요.");
+      }
+      return reserveClass(classId, profileId, goodsMembershipId);
+    }
+    throw new Error(error.message.replace(/^.*?:\s*/, ""));
+  }
   return ((data as any)?.status ?? "confirmed") as "confirmed" | "waitlisted";
 }

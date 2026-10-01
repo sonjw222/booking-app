@@ -19,7 +19,7 @@ import Loading from "../components/Loading";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   fetchMonthData,
-  reserveClass, fetchUsableMembershipsByClass, reserveWithMembership, type UsableMembership,
+  reserveClass, fetchUsableMembershipsByClass, reserveWithMembership, reserveWithGoods, classListMetaText, type UsableMembership,
   fetchMyGoodsByCenter,
   fetchPurchasableProductsByClass, type PurchasableProduct,
   cancelReservation,
@@ -138,6 +138,9 @@ function ReservationCalendarContent() {
   // 예약 확인 모달
   const [confirmClass, setConfirmClass] = useState<ClassInfo | null>(null);
   const [selectedGoodsId, setSelectedGoodsId] = useState<string | null>(null);
+  // 2026-10-01(QA 5) — 예약/취소 직후 수강권·상품 잔여횟수를 서버(authoritative)에서 다시 가져오기 위한 키.
+  // 수업 id 목록이 그대로여도 이 값이 바뀌면 아래 두 조회 효과가 다시 실행된다(예전엔 "4회 남음"이 그대로 남았다).
+  const [passesRefreshKey, setPassesRefreshKey] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [reservationError, setReservationError] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<BookingProfile[]>([]);
@@ -316,7 +319,7 @@ function ReservationCalendarContent() {
         setPassesLoading(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classIdsForSelectedDay, activeProfileId]);
+  }, [classIdsForSelectedDay, activeProfileId, passesRefreshKey]);
 
   // 선택한 날짜의 수업들이 속한 센터들에 대해 "보유 상품(goods)"을 한 번에 조회 (센터별 반복 조회 방지)
   // activeProfileId나 날짜가 바뀔 때마다 다시 조회하며, 응답이 늦게 온 이전 요청은 무시함
@@ -341,7 +344,7 @@ function ReservationCalendarContent() {
         if (goodsReqRef.current !== reqId) return;
         setGoodsLoading(false);
       });
-  }, [centerIdsForSelectedDay, activeProfileId]);
+  }, [centerIdsForSelectedDay, activeProfileId, passesRefreshKey]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -387,13 +390,17 @@ function ReservationCalendarContent() {
     if (busyClassId) return; // 중복 클릭/중복 요청 방지 (disabled 렌더링 전에 두 번 눌리는 경우 대비)
     setBusyClassId(cls.id);
     try {
-      const status = passPick
-        ? await reserveWithMembership(cls.id, activeProfileId!, passPick)
-        : await reserveClass(cls.id, activeProfileId, selectedGoodsId);
+      // 대여상품을 고른 모든 경우는 서버의 한 함수(reserve_with_goods)에서 수강권+상품을 함께 처리한다.
+      const status = selectedGoodsId
+        ? await reserveWithGoods(cls.id, activeProfileId ?? null, passPick, selectedGoodsId)
+        : passPick
+          ? await reserveWithMembership(cls.id, activeProfileId!, passPick)
+          : await reserveClass(cls.id, activeProfileId);
       const who = profiles.find((p) => p.id === activeProfileId);
       const prefix = who && !who.isPrimary ? `${who.name} · ` : "";
       showToast(prefix + (status === "confirmed" ? "예약이 완료됐어요!" : "정원이 차서 대기 등록됐어요"));
       setConfirmClass(null);
+      setPassesRefreshKey((k) => k + 1);
       await load({ silent: true });
     } catch (e: any) {
       setReservationError(toUserMessage(e, "예약할 수 없어요. 수강권과 수업 상태를 확인해주세요."));
@@ -417,6 +424,7 @@ function ReservationCalendarContent() {
     try {
       const { deducted } = await cancelReservation(mine.reservationId);
       showToast(deducted ? "취소됐지만 마감 이후라 수강권 1회가 차감됐어요" : "예약이 취소됐어요");
+      setPassesRefreshKey((k) => k + 1);
       await load({ silent: true });
     } catch (e: any) {
       showToast(toUserMessage(e, "취소하지 못했어요"));
@@ -716,13 +724,19 @@ function ReservationCalendarContent() {
               <div className={`class-row ${mine ? "mine" : ""}`}>
                 <div className="class-time"><strong>{cls.start}</strong><span>{cls.end}</span></div>
                 <div className="class-info">
-                  <div className="class-row-title">
-                    {cls.title}
-                    {cls.classFormat === "private" && <span className="booked-tag private-tag">프라이빗</span>}
-                    {mineRec?.status === "confirmed" && <span className="booked-tag">내 예약</span>}
-                    {mineRec?.status === "waitlisted" && <span className="booked-tag">대기중</span>}
-                  </div>
-                  <div className="class-row-place">{center?.name}{instructorText ? ` · ${instructorText}` : ""}</div>
+                  <div className="class-row-title"><span className="class-row-title-text">{cls.title}</span></div>
+                  {/* 2026-10-01 QA — 배지(프라이빗/내 예약/대기중)를 제목 줄 안에 두면 긴 수업명·긴 센터명과
+                      우측 취소/예약 버튼 영역 위로 겹쳤다. 제목 아래 독립된 줄(wrap)로 분리한다. */}
+                  {(cls.classFormat === "private" || mineRec) && (
+                    <div className="class-row-tags">
+                      {cls.classFormat === "private" && <span className="booked-tag private-tag">프라이빗</span>}
+                      {mineRec?.status === "confirmed" && <span className="booked-tag">내 예약</span>}
+                      {mineRec?.status === "waitlisted" && <span className="booked-tag">대기중</span>}
+                    </div>
+                  )}
+                  <div className="class-row-place">{classListMetaText(center?.name, instructorText)}</div>
+                  {/* 룸 이름 — 예약 확인 시트와 같은 cls.place(= classes.room_id → rooms.name)를 쓴다. 없으면 줄 자체를 그리지 않음. */}
+                  {cls.place && <div className="class-row-room">{cls.place}</div>}
                   {/* UX 감사(A-7) — 수강권 이름을 최대 11개까지 칩으로 전부 나열해 정작
                       중요한 수업명·시간·잔여석이 밀렸다. 어떤 수강권을 쓸지는 예약 확인
                       시트에서 다시 고르므로(pickDefaultMembership), 카드에서는 "예약

@@ -279,31 +279,47 @@ export async function deleteClass(classId: string): Promise<void> {
    - 그룹 전체 삭제
    ============================================================ */
 
-// 그룹 전체 수정 (제목/시작·종료 시간/정원만. 날짜는 각 수업 유지)
+// 그룹 전체 수정 — "공통 속성"(수업명·수업 소개·정원)만 그룹 전체에 반영한다.
+// 2026-10-01(QA 10) — 예전에는 편집 중인 수업의 시작/종료 시각을 그룹 전체에 덮어써서, 월 20:00 / 수 18:00처럼
+// 요일마다 시간이 다른 그룹에서 월요일 수업의 이름만 바꿔도 수요일 시간이 월요일 시간으로 바뀌었다.
+// 이제 기본값은 각 수업의 "기존 날짜·기존 시작/종료 시각"을 그대로 보내 시간을 건드리지 않는다.
+// 정말 시간을 같이 바꾸고 싶을 때만 options.time을 명시적으로 넘긴다("시간도 함께 변경" 옵션, 기본 OFF).
 // 반환값: 이 그룹에 속한 class id 전체 — 담당 강사 일괄 적용(setClassTrainersForGroup) 등
-// 그룹 전체를 다시 대상으로 삼아야 하는 후속 작업에서 재사용한다(같은 조회를 두 번 하지
-// 않도록).
+// 그룹 전체를 다시 대상으로 삼아야 하는 후속 작업에서 재사용한다(같은 조회를 두 번 하지 않도록).
+export type GroupClassRow = { id: string; start_time: string; end_time: string };
+
+// 순수 함수(테스트 대상): 그룹의 각 수업에 보낼 update payload를 만든다.
+export function buildGroupUpdates(
+  rows: GroupClassRow[],
+  options?: { time?: { start: string; end: string }; description?: string | null }
+): { id: string; start_time: string; end_time: string; description?: string }[] {
+  return rows.map((r) => {
+    let start_time = r.start_time;
+    let end_time = r.end_time;
+    if (options?.time) {
+      const dateStr = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(r.start_time));
+      start_time = toKstIso(dateStr, options.time.start);
+      end_time = toKstIso(classEndDate(dateStr, options.time.start, options.time.end), options.time.end);
+    }
+    const u: { id: string; start_time: string; end_time: string; description?: string } = { id: r.id, start_time, end_time };
+    // 서버는 'description' 키가 있을 때만 갱신한다(빈 문자열 = 소개 지우기).
+    if (options && options.description !== undefined) u.description = options.description ?? "";
+    return u;
+  });
+}
+
 export async function updateClassGroup(
-  groupId: string, title: string, start: string, end: string, capacity: number
+  groupId: string, title: string, capacity: number,
+  options?: { time?: { start: string; end: string }; description?: string | null }
 ): Promise<string[]> {
-  assertValidClassTimeRange(start, end);
-  // 그룹의 모든 수업을 가져와 각자의 날짜에 새 시간 적용(날짜별 새 시각 계산은 클라이언트가
-  // 하고, 실제 쓰기는 update_class_group_safe RPC 한 번으로 — own/other 판정을 서버에서
-  // 한 번만 하면 되도록).
+  if (options?.time) assertValidClassTimeRange(options.time.start, options.time.end);
   const { data: rows, error: fErr } = await supabase
     .from("classes")
-    .select("id, start_time")
+    .select("id, start_time, end_time")
     .eq("recurring_group_id", groupId);
   if (fErr) throw new Error("반복 수업을 불러오지 못했어요: " + fErr.message);
 
-  const updates = (rows ?? []).map((r: any) => {
-    const dateStr = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(r.start_time));
-    return {
-      id: r.id,
-      start_time: toKstIso(dateStr, start),
-      end_time: toKstIso(classEndDate(dateStr, start, end), end),
-    };
-  });
+  const updates = buildGroupUpdates((rows ?? []) as GroupClassRow[], options);
 
   const { data, error } = await supabase.rpc("update_class_group_safe", {
     p_group_id: groupId, p_title: title, p_capacity: capacity, p_updates: updates,
@@ -326,6 +342,7 @@ export async function deleteClassGroup(groupId: string): Promise<void> {
 
 export type RecurringInput = {
   title: string;
+  description?: string | null;   // 수업 소개 — 생성되는 모든 수업에 동일하게 복제
   daysOfWeek: number[];   // [1,3,5] = 월수금 (0=일 ~ 6=토)
   fromDate: string;       // "2026-08-01"
   toDate: string;         // "2026-08-31"
@@ -370,6 +387,7 @@ export async function createRecurringClasses(centerId: string, input: RecurringI
   const groupId = crypto.randomUUID();
   const rows = dates.map((d) => ({
     title: input.title,
+    description: input.description?.trim() || null,
     start_time: toKstIso(d, input.start),
     end_time: toKstIso(classEndDate(d, input.start, input.end), input.end),
     capacity: input.capacity,
@@ -388,6 +406,7 @@ export async function createRecurringClasses(centerId: string, input: RecurringI
 
 export type PerDayRecurringInput = {
   title: string;
+  description?: string | null;   // 수업 소개 — 요일별 개별 시간이어도 모든 수업에 동일하게 복제
   fromDate: string;
   toDate: string;
   // 요일마다 시간·정원·룸·취소마감이 다를 수 있는 "요일별 개별 지정" 모드용 입력
@@ -418,6 +437,7 @@ export async function createRecurringClassesPerDay(centerId: string, input: PerD
     for (const date of dates) {
       rows.push({
         title: input.title,
+        description: input.description?.trim() || null,
         start_time: toKstIso(date, d.start),
         end_time: toKstIso(classEndDate(date, d.start, d.end), d.end),
         capacity: d.capacity,
@@ -450,18 +470,38 @@ export type ClassAttendee = {
   waitlistOrder: number | null;
   reservationType: ReservationType;
   isCapacityOverride: boolean;
+  // 예약 시 함께 사용한 대여상품(reservation_goods_usages, add_reservation_goods_usage.sql). 없으면 null.
+  goodsLabel: string | null;
 };
 
+type GoodsUsageRow = { product_name_snapshot: string; size_snapshot: string | null; status: string };
+
+// 관리자 예약자 목록에 이름 옆에 붙일 "대여상품 · 사이즈" 문구. 차감/대기(pending) 상태만 보여주고
+// 복원(restored)·건너뜀(skipped)은 숨긴다. 사이즈를 알 수 없으면 "사이즈 미입력".
+export function formatGoodsUsageLabel(usages: GoodsUsageRow[] | null | undefined): string | null {
+  const active = (usages ?? []).filter((u) => u.status === "deducted" || u.status === "pending");
+  if (active.length === 0) return null;
+  return active
+    .map((u) => `${u.product_name_snapshot} ${u.size_snapshot ? u.size_snapshot : "사이즈 미입력"}`)
+    .join(", ");
+}
+
 export async function fetchClassAttendees(classId: string): Promise<ClassAttendee[]> {
-  const { data, error } = await supabase
+  const base = "id, profile_id, status, waitlist_order, reservation_type, is_capacity_override, profiles(name)";
+  const run = (select: string) => supabase
     .from("reservations")
-    .select("id, profile_id, status, waitlist_order, reservation_type, is_capacity_override, profiles(name)")
+    .select(select)
     .eq("class_id", classId)
     .in("status", ["confirmed", "waitlisted", "attended", "no_show", "cancelled"])
     .order("status")
     .order("waitlist_order", { ascending: true, nullsFirst: true });
+  let { data, error } = await run(`${base}, reservation_goods_usages(product_name_snapshot, size_snapshot, status)`);
+  if (error) {
+    // add_reservation_goods_usage.sql 미실행 환경(테이블/관계 없음) 방어 — 명단 자체는 항상 보여준다.
+    ({ data, error } = await run(base));
+  }
   if (error) throw new Error("예약자 명단을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => ({
+  return ((data ?? []) as any[]).map((r: any) => ({
     reservationId: r.id,
     profileId: r.profile_id,
     name: r.profiles?.name ?? "(이름 없음)",
@@ -469,6 +509,7 @@ export async function fetchClassAttendees(classId: string): Promise<ClassAttende
     waitlistOrder: r.waitlist_order,
     reservationType: (r.reservation_type ?? "MEMBER") as ReservationType,
     isCapacityOverride: r.is_capacity_override ?? false,
+    goodsLabel: formatGoodsUsageLabel(r.reservation_goods_usages),
   }));
 }
 
@@ -698,6 +739,15 @@ export async function managerBookMember(
    - 관리자가 정원을 늘리거나 보강 예약으로 수동 배치
    ============================================================ */
 
+export type UnplacedReason =
+  | "outside_membership_period"   // 만료일(또는 시작일) 밖이라 더 배치할 수 없음
+  | "no_class_in_period"          // 사용기간 안에 일치하는 수업이 없음
+  | "capacity_full"               // 정원 부족
+  | "condition_mismatch"          // 예약조건/요일·시간 불일치
+  | "already_reserved"            // 이미 예약된 날짜
+  | "booking_window"              // 휴무일/예약 가능 기간 밖
+  | "not_weekday_pass" | "no_remaining" | "membership_inactive" | "unknown";
+
 export type UnplacedPass = {
   membershipId: string;
   profileId: string;
@@ -708,11 +758,35 @@ export type UnplacedPass = {
   autoBookDays: number[];
   expiresAt: string | null;
   purchasedAt: string;
+  boundDayOfWeek: number | null;
+  boundStartTime: string | null;
+  expired: boolean;        // 수강권 만료일이 이미 지남
+  canRetry: boolean;       // 만료되지 않아 "다시 배치"를 누를 수 있음
+  reason: UnplacedReason;
+  placeableCount: number;  // 지금 다시 배치하면 들어갈 수 있는 횟수
 };
 
 const KST_MD_SHORT = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit",
 });
+
+// 미배치 사유를 관리자에게 보여줄 한국어 문구(순수 함수 — 테스트 대상).
+export function unplacedReasonText(u: Pick<UnplacedPass, "reason" | "remainingCount" | "expiresAt" | "expired">): string {
+  const n = u.remainingCount;
+  const exp = u.expiresAt ? ` · 수강권 만료일 ${u.expiresAt}` : "";
+  switch (u.reason) {
+    case "outside_membership_period":
+      return u.expired
+        ? `만료일 초과로 ${n}회 미배치${exp}`
+        : `만료일 이후 수업만 남아 ${n}회 미배치${exp}`;
+    case "no_class_in_period": return `만료일 안에 일치하는 수업이 없어 ${n}회 미배치${exp}`;
+    case "capacity_full": return `정원이 가득 차 ${n}회 미배치 — 정원을 늘린 뒤 다시 배치해보세요`;
+    case "condition_mismatch": return `예약 조건(요일·시간·수강권 지정)이 맞는 수업이 없어 ${n}회 미배치`;
+    case "already_reserved": return `이미 예약된 날짜라 ${n}회 미배치`;
+    case "booking_window": return `휴무일/예약 가능 기간 때문에 ${n}회 미배치`;
+    default: return `${n}회 미배치`;
+  }
+}
 
 export async function fetchUnplacedPasses(centerId: string): Promise<UnplacedPass[]> {
   const { data, error } = await supabase.rpc("unplaced_weekday_passes", { p_center_id: centerId });
@@ -727,6 +801,13 @@ export async function fetchUnplacedPasses(centerId: string): Promise<UnplacedPas
     autoBookDays: r.auto_book_days ?? [],
     expiresAt: r.expires_at,
     purchasedAt: KST_MD_SHORT.format(new Date(r.purchased_at)),
+    boundDayOfWeek: r.bound_day_of_week ?? null,
+    boundStartTime: r.bound_start_time ?? null,
+    // add_...sql 적용 전(옛 RPC)에는 아래 필드가 없다 — 만료일로 직접 판정해 안전하게 대체.
+    expired: r.expired ?? (!!r.expires_at && r.expires_at < new Date().toISOString().slice(0, 10)),
+    canRetry: r.can_retry ?? !(!!r.expires_at && r.expires_at < new Date().toISOString().slice(0, 10)),
+    reason: (r.reason_code ?? "unknown") as UnplacedReason,
+    placeableCount: r.placeable_count ?? 0,
   }));
 }
 
