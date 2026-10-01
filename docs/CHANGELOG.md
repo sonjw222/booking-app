@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-02 — Production QA 시나리오: 직접결제 주문 → 관리자 확정·발급
+- `npm run qa:production:direct-payment`(실행 전 별도 승인): 회원 `createOrder`(direct) → pending 상태/미발급 확인 → QA 매니저 `updateOrderStatus('done')`(fulfill_order) → 수강권 1건·결제 1건·중복 확정 방지 검증. 쿠폰 없음, 이번 runId 데이터만 정리.
+
 ## 2026-10-02 — Production 격리 QA 기반(코드 + SQL 준비, 실행 안 함)
 - `tests/qa/`: Production 전용 QA runner(안전장치 `QA_TARGET_PROJECT_REF`/`QA_PRODUCTION_ACK=1`, runId 기반 정리, 센터/회원 bootstrap을 시나리오와 분리),
   시나리오 `qa:production:goods`(예약 시 대여상품 4→3, 취소 시 3→4 복원)와 `qa:production:visibility`(QA 센터 숨김 검증). 기본 test/integration에서는 실행되지 않음.

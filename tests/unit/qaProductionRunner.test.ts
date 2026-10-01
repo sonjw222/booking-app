@@ -62,10 +62,11 @@ describe("실행 단위 / 정리 범위", () => {
     const t = new FixtureTracker("qa-test");
     const u = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
     t.add("products", u(1)); t.add("memberships", u(2)); t.add("classes", u(3)); t.add("reservations", u(4)); t.add("reservations", u(4));
+    t.add("payments", u(5)); t.add("orders", u(6));
     t.add("classes", "not-a-uuid"); t.add("classes", null); t.add("classes", "'; drop table classes; --");
-    expect(t.total()).toBe(4);
-    expect(t.plan().map((s) => s.kind)).toEqual(["reservations", "classes", "memberships", "products"]);
-    expect(CLEANUP_ORDER).toEqual(["reservations", "classes", "memberships", "products"]);
+    expect(t.total()).toBe(6);
+    expect(t.plan().map((s) => s.kind)).toEqual(["reservations", "classes", "payments", "memberships", "orders", "products"]);
+    expect(CLEANUP_ORDER).toEqual(["reservations", "classes", "payments", "memberships", "orders", "products"]);
     expect(new FixtureTracker("empty").plan()).toEqual([]);
   });
   it("cleanup은 이번 실행의 UUID 목록으로만 삭제(.in(id, ids)), 한 단계 실패가 나머지를 막지 않고, keep이면 아무것도 안 지운다", async () => {

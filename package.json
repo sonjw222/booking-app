@@ -19,7 +19,8 @@
     "qa:business:p0p1": "vitest run --config vitest.integration.config.ts -t \"SCN-P0|SCN-P1\" tests/integration/scenarios",
     "qa:business:all": "vitest run --config vitest.integration.config.ts tests/integration/scenarios",
     "qa:production:goods": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/reservation-goods-usage.qa.test.ts",
-    "qa:production:visibility": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/qa-center-visibility.qa.test.ts"
+    "qa:production:visibility": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/qa-center-visibility.qa.test.ts",
+    "qa:production:direct-payment": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/direct-payment-issue.qa.test.ts"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",

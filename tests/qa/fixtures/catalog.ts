@@ -55,3 +55,19 @@ export async function createQaGoodsMembership(
   t.add("memberships", mem.data.id);
   return { productId: prod.data.id as string, membershipId: mem.data.id as string };
 }
+
+// 일반 count pass 상품(정상 판매 상태). QA 센터가 internal이라 일반 사용자에게는 노출되지 않는다.
+export async function createQaPassProduct(
+  admin: SupabaseClient, t: FixtureTracker, centerId: string, opts?: { price?: number; totalCount?: number }
+): Promise<{ productId: string; name: string; price: number; totalCount: number }> {
+  const price = opts?.price ?? 50000;
+  const totalCount = opts?.totalCount ?? 10;
+  const name = qaName(t.runId, `직접결제 ${totalCount}회 수강권`);
+  const { data, error } = await admin.from("products").insert({
+    center_id: centerId, name, price, pass_type: "count", total_count: totalCount, product_kind: "pass",
+    is_active: true, is_on_sale: true, visibility_type: "all", expiry_mode: "none", unlimited: false, unlimited_pass: false,
+  }).select("id").single();
+  if (error || !data) throw new Error(`QA 수강권 상품 생성 실패: ${error?.message}`);
+  t.add("products", data.id);
+  return { productId: data.id as string, name, price, totalCount };
+}
