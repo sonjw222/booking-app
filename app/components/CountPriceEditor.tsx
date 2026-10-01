@@ -49,7 +49,8 @@ export default function CountPriceEditor({
           onFocus={() => setEditingMax(true)}
           onBlur={() => { setEditingMax(false); setMaxText(String(maxTierCount(rows))); }}
           onChange={(e) => changeMax(e.target.value)} />
-        <span className="count-price-max-unit">회 (1회 ~ {rowMax}회, 최대 {MAX_TIER_COUNT}회)</span>
+        <span className="count-price-max-unit">회</span>
+        <span className="count-price-max-cap">최대 {MAX_TIER_COUNT}회</span>
       </div>
       {stillBlocked && (
         <div className="perm-guide is-warning" role="alert" style={{ margin: "6px 0 0" }}>

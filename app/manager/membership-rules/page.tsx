@@ -472,10 +472,11 @@ export default function MembershipRulesPage() {
             const rules = rulesByProduct[p.id] ?? [];
             return (
               <div key={p.id} className="pass-card">
+                {/* 상품 정보(전체 폭) — 제목 / badge(줄바꿈 가능, badge 글자는 한 줄) / 가격 요약 */}
                 <div className="pass-head">
-                  <div>
-                    <div className="pass-name">
-                      {p.name}
+                  <div className="pass-info">
+                    <div className="pass-name">{p.name}</div>
+                    <div className="pass-tags">
                       {p.groupLabel && <span className="pass-group-tag">{p.groupLabel}</span>}
                       {!p.isOnSale && <span className="pass-group-tag" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>판매정지</span>}
                       {p.maxQuantity != null && (
@@ -516,8 +517,10 @@ export default function MembershipRulesPage() {
                       {p.maxQuantity != null && ` · 판매 ${p.soldCount}/${p.maxQuantity}`}
                     </div>
                   </div>
-                  {(canEditRules || canToggleSale) && (
-                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                </div>
+                {/* 액션은 정보 아래 별도 행(정보와 같은 행에서 폭을 다투지 않음) */}
+                {(canEditRules || canToggleSale) && (
+                  <div className="pass-actions">
                       {canToggleSale && (
                         <button className="quiet-action" disabled={busy} onClick={() => handleToggleSale(p)}>
                           {p.isOnSale ? "판매정지" : "판매재개"}
@@ -532,9 +535,8 @@ export default function MembershipRulesPage() {
                           <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteProduct(p)}>삭제</button>
                         </>
                       )}
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 <button className="pass-rules-toggle" onClick={() => setExpandedProducts((prev) => {
                   const next = new Set(prev); if (next.has(p.id)) next.delete(p.id); else next.add(p.id); return next;

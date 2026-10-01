@@ -122,7 +122,7 @@ describe("편집기/레이아웃 계약", () => {
     expect(css).toMatch(/\.count-price-editor \.input-field \{[^}]*min-width: 0[^}]*font-size: 16px; padding: 11px 12px/);
   });
   it("채우기 버튼은 작고(width:auto) 컨테이너 밖으로 나가지 않으며, 좁은 화면에서는 세로로 쌓는다(가로 스크롤 없음)", () => {
-    expect(css).toMatch(/\.count-price-fill \.ghost-btn\.count-price-fill-btn \{[^}]*width: auto[^}]*padding: 9px 12px; font-size: 13px/);
+    expect(css).toMatch(/\.count-price-fill \.ghost-btn\.count-price-fill-btn \{[^}]*width: auto[^}]*height: 44px[^}]*white-space: nowrap/);
     expect(css).toMatch(/\.count-price-fill \{[^}]*min-width: 0; max-width: 100%/);
     expect(css).toMatch(/@media \(max-width: 420px\) \{\s*\.count-price-fill \{ flex-direction: column/);
     expect(css).toMatch(/\.count-price-editor \{ min-width: 0; max-width: 100%/);
