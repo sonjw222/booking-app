@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-10-02 — Production QA 시나리오: 센터 쿠폰 주문 → 서버 검증 → 발급 → 사용 처리 → 방어
+- `npm run qa:production:coupon`(실행 전 별도 승인): 쿠폰 지급/주문(checkout과 같은 amount·discountAmount·memberCouponId) → 확정 전 쿠폰 available → 확정 후 수강권 1건·결제(할인 후 금액)·쿠폰 used+order_id,
+  재사용/금액 변조/다른 상품 전용 쿠폰 거부 검증. 이번 runId 데이터만 정리(결제→수강권→주문→지급쿠폰→적용대상→쿠폰→상품).
+
 ## 2026-10-02 — Production QA 시나리오: 직접결제 주문 → 관리자 확정·발급
 - `npm run qa:production:direct-payment`(실행 전 별도 승인): 회원 `createOrder`(direct) → pending 상태/미발급 확인 → QA 매니저 `updateOrderStatus('done')`(fulfill_order) → 수강권 1건·결제 1건·중복 확정 방지 검증. 쿠폰 없음, 이번 runId 데이터만 정리.
 

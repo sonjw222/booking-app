@@ -22,15 +22,21 @@ export function isQaRunName(name: string | null | undefined, runId: string): boo
 }
 
 // 정리 순서: 예약(→ 대여 사용 기록 cascade/복원 트리거) → 수업 → 결제(payments는 memberships/orders를 참조) → 수강권/상품 보유(memberships)
-//            → 주문(orders) → 상품
-export type FixtureKind = "reservations" | "classes" | "payments" | "memberships" | "orders" | "products";
-export const CLEANUP_ORDER: FixtureKind[] = ["reservations", "classes", "payments", "memberships", "orders", "products"];
+//            → 주문(orders; member_coupons.order_id는 on delete set null) → 지급 쿠폰(member_coupons) → 쿠폰 적용 대상(coupon_products)
+//            → 쿠폰 정의(coupons) → 상품
+export type FixtureKind =
+  | "reservations" | "classes" | "payments" | "memberships" | "orders" | "member_coupons" | "coupon_products" | "coupons" | "products";
+export const CLEANUP_ORDER: FixtureKind[] = [
+  "reservations", "classes", "payments", "memberships", "orders", "member_coupons", "coupon_products", "coupons", "products",
+];
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export class FixtureTracker {
   readonly runId: string;
-  private ids: Record<FixtureKind, string[]> = { reservations: [], classes: [], payments: [], memberships: [], orders: [], products: [] };
+  private ids: Record<FixtureKind, string[]> = {
+    reservations: [], classes: [], payments: [], memberships: [], orders: [], member_coupons: [], coupon_products: [], coupons: [], products: [],
+  };
   constructor(runId: string) { this.runId = runId; }
 
   add(kind: FixtureKind, id: string | null | undefined): void {
