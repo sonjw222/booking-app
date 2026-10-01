@@ -203,8 +203,11 @@ comment on function fetch_purchasable_products is
     ' products SELECT RLS 자체는 안 건드림(매니저 전체 관리 화면은 그대로 전체를 봄) — '
     '이 RPC만 회원용 "내가 살 수 있는 것" 뷰를 제공.';
 
-revoke execute on function fetch_purchasable_products(uuid) from anon;
-grant execute on function fetch_purchasable_products(uuid) to authenticated;
+-- 권한: 기본 PUBLIC execute를 먼저 걷어내야 한다. anon만 revoke하면 PostgreSQL의 PUBLIC 기본 EXECUTE 권한을 통해
+-- anon이 여전히 실행할 수 있다(2026-10-02 production에서 확인되어 수정). 회원 등급/지정 회원 전용 상품이 비로그인에게
+-- 새지 않도록 이 RPC는 authenticated/service_role 전용이다(비로그인 공개 목록은 별도 fetch_public_storefront_products).
+revoke all on function public.fetch_purchasable_products(uuid) from public, anon;
+grant execute on function public.fetch_purchasable_products(uuid) to authenticated, service_role;
 
 -- ============================================================
 -- [4] orders: 구매 자격을 INSERT 시점(가장 이른 시점)에도 강제

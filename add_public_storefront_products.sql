@@ -106,8 +106,14 @@ comment on function fetch_public_storefront_products is
 revoke all on function fetch_public_storefront_products(uuid) from public;
 grant execute on function fetch_public_storefront_products(uuid) to anon, authenticated;
 
+-- 권한 계약: 비로그인(anon)이 실행할 수 있는 상품 조회 RPC는 위 공개 RPC "하나뿐"이다. 회원용 fetch_purchasable_products는
+-- authenticated/service_role 전용이어야 한다(PUBLIC 기본 EXECUTE까지 회수해야 anon이 막힌다 —
+-- add_membership_visibility_and_coupons.sql에서 수정됨). 이미 안전한 상태에서 다시 실행해도 무해한 멱등 보강:
+revoke all on function public.fetch_purchasable_products(uuid) from public, anon;
+grant execute on function public.fetch_purchasable_products(uuid) to authenticated, service_role;
+
 -- ============================================================
--- 확인 — 함수가 anon에게 열려 있고, 기존 회원용 RPC는 여전히 anon 차단인지(둘 다 false/true 아래 설명)
+-- 확인 — 공개 RPC만 anon 허용(true), 회원용 RPC는 anon 차단(false)
 -- ============================================================
 select
     has_function_privilege('anon', 'fetch_public_storefront_products(uuid)', 'execute') as public_rpc_anon_ok,      -- true 여야 함
