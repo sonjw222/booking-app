@@ -11,6 +11,12 @@ drop trigger if exists orders_guard_status_transition on orders;
 drop function if exists orders_restore_points_on_cancel();
 drop function if exists orders_guard_status_transition();
 drop function if exists _restore_order_points(uuid, text);
+-- 적용 전 Production 정책으로 정확히 복원(INSERT, roles=public, with check = 관리 센터만)
+drop policy if exists "매니저 포인트 등록" on point_transactions;
+create policy "매니저 포인트 등록" on point_transactions
+    for insert
+    with check (center_id in (select my_managed_center_ids()));
+
 drop index if exists uq_point_tx_order_debit;
 drop index if exists uq_point_tx_reverses_id;
 -- alter table point_transactions drop column if exists reverses_id;

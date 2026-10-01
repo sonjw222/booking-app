@@ -1,5 +1,5 @@
 /*
-  QA 시나리오 — 주문 포인트 생명주기: 사용(차감) → 취소/전체 환불 시 정확히 1회 복원 → 중복/변조/재확정 방어.
+  QA 시나리오(CASE 1~12) — 주문 포인트 생명주기: 사용(차감) → 취소/전체 환불 시 정확히 1회 복원 → 중복/변조/재확정 방어.
   - 실행: npm run qa:production:points (QA_TARGET_PROJECT_REF / QA_PRODUCTION_ACK=1 필요). add: fix_order_point_lifecycle.sql 적용 후에만 의미가 있다.
   - 앱 경로: 회원 createOrder + usePoints(checkout direct 분기와 같은 순서) → 회원 updateOrderStatus('cancelled')(app/purchases) /
     QA 매니저 updateOrderStatus('cancelled'|'done')(app/manager/orders) / 회원 requestRefund(refund_membership).
@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cancelMyPendingOrderQuietly, createOrder, updateOrderStatus } from "../../../lib/orders";
 import { requestRefund } from "../../../lib/mypage";
 import { fetchMyPoints, usePoints } from "../../../lib/reviews";
+import { supabase } from "../../../lib/supabaseClient";
 import { getFixtureAdminClient, signOutTestSession, switchToTestUser } from "../../integration/setup";
 import { bootstrapQa } from "../fixtures/bootstrap";
 import { createQaPassProduct } from "../fixtures/catalog";
@@ -262,6 +263,63 @@ describe("QA: 주문 포인트 사용/복원 생명주기", () => {
     expect(rowsOf(await ledger(id), "restore")).toHaveLength(1);
     expect(await cancelMyPendingOrderQuietly(orderD)).toBe(false);   // 발급 완료(done)된 주문은 취소되지 않는다
     expect((await orderRow(orderD)).status).toBe("done");
+  });
+
+  step("CASE 11 — 매니저 직접 INSERT 정책: 수기 조정(order_id/reverses_id null)만 허용, 주문 연계/복원 행 위조는 거부", async () => {
+    await asManager();
+    const before = await balance();
+    // 정상 수기 포인트 등록(lib/sales.ts registerPoint와 같은 모양) — 기존대로 성공
+    const manual = await supabase.from("point_transactions").insert({
+      center_id: state.centerId, profile_id: state.memberProfileId, amount: 1000, reason: qaName(tracker.runId, "수기 포인트 조정"),
+    }).select("id").single();
+    expect(manual.error).toBeNull();
+    tracker.add("point_transactions", manual.data?.id);
+    expect(await balance()).toBe(before + 1000);
+
+    // reverses_id를 지정한 직접 INSERT → 거부
+    const debit = rowsOf(await ledger(orderD), "debit")[0];
+    const forgedReverse = await supabase.from("point_transactions").insert({
+      center_id: state.centerId, profile_id: state.memberProfileId, amount: 5000, reason: "위조 복원", reverses_id: debit.id,
+    });
+    expect(forgedReverse.error).not.toBeNull();
+    // 새 주문에 order_id + '결제 시 사용' 차감 행을 직접 INSERT → 거부(주문당 차감 unique 선점 방지)
+    await asMember();
+    const freshOrder = await createOrder(buildDirectOrderInput({ centerId: state.centerId, productId: product.productId, productName: product.name, price: PRICE }));
+    tracker.add("orders", freshOrder);
+    await asManager();
+    const forgedDebit = await supabase.from("point_transactions").insert({
+      center_id: state.centerId, profile_id: state.memberProfileId, amount: -100, reason: "결제 시 사용", order_id: freshOrder,
+    });
+    expect(forgedDebit.error).not.toBeNull();
+    expect(await ledger(freshOrder)).toHaveLength(0);
+    expect(rowsOf(await ledger(orderD), "restore")).toHaveLength(0);
+    expect(await balance()).toBe(before + 1000);
+    // 서버 경로(use_points → 차감, 취소 → 복원)는 그대로 성공 — 위조 시도가 있었어도 해당 주문의 정상 차감/복원이 가능
+    await asMember();
+    const real = await memberOrderWithPoints(2000);
+    expect(rowsOf(await ledger(real), "debit")).toHaveLength(1);
+    await updateOrderStatus(real, "cancelled");
+    expect(rowsOf(await ledger(real), "restore")).toHaveLength(1);
+    expect(await balance()).toBe(before + 1000);
+  });
+
+  step("CASE 12 — 주문 상태 전이: pending→paid는 허용, paid→pending/cancelled→pending/done→cancelled는 거부, paid→cancelled는 복원과 함께 허용", async () => {
+    const id = await memberOrderWithPoints(POINTS);
+    const before = await balance();
+    await asManager();
+    const toPaid = await supabase.from("orders").update({ status: "paid" }).eq("id", id).select("id");
+    expect(toPaid.error).toBeNull();
+    expect((await orderRow(id)).status).toBe("paid");
+    const back = await supabase.from("orders").update({ status: "pending" }).eq("id", id).select("id");
+    expect(back.error).not.toBeNull();   // paid → pending 금지
+    expect((await orderRow(id)).status).toBe("paid");
+    const cancel = await supabase.from("orders").update({ status: "cancelled" }).eq("id", id).select("id");
+    expect(cancel.error).toBeNull();     // paid → cancelled 허용(포인트 복원)
+    expect(rowsOf(await ledger(id), "restore")).toHaveLength(1);
+    expect(await balance()).toBe(before + POINTS);
+    const revive = await supabase.from("orders").update({ status: "pending" }).eq("id", id).select("id");
+    expect(revive.error).not.toBeNull(); // cancelled → 다른 상태 금지
+    expect((await orderRow(id)).status).toBe("cancelled");
   });
 
   step("다른 주문의 포인트 오염 없음: 이번 실행의 모든 복원 행은 자기 주문의 차감 행만 가리킨다", async () => {

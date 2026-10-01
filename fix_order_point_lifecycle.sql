@@ -18,7 +18,10 @@
 --      cancelled는 종료 상태, done은 변경 불가(환불은 refund_membership 경로).
 --   4) use_points(): 주문 소유/센터/pending 상태/금액 일치/중복 차감 방어. 주문 없는 용도(order_id null)는 기존 동작 유지.
 --   5) refund_membership(): 기존 로직 그대로 + 포인트 복원 1줄(라이브 정의 기준, search_path 고정 추가).
---   6) fulfill_order / confirm_real_payment: cancelled 주문 발급/확정 차단(라이브 정의 기준, 나머지 동일).
+--   6) fulfill_order / confirm_real_payment: cancelled 주문 발급/확정 차단(라이브 정의 기준, 나머지 동일). confirm_real_payment는 search_path도 고정.
+--   7) point_transactions "매니저 포인트 등록" INSERT 정책을 좁힌다: 수기 조정(order_id null AND reverses_id null)만 REST로 직접 INSERT 가능.
+--      주문 연계 차감/복원 행은 use_points/_restore_order_points(SECURITY DEFINER)와 service_role만 만들 수 있다(위조로 unique 구조 선점 방지).
+--   8) orders 상태 전이 허용표(명시): pending→paid|done|cancelled, paid→done|cancelled, 같은 값 재설정(no-op). 그 외(paid→pending 등) 전부 차단.
 --
 -- 변경하지 않는 것: payments 금액 정의, 쿠폰 정책, 환불 가능 조건(24시간/미사용), PG 승인/환불 API.
 -- 사전 확인(적용 전 0이어야 함): 파일 하단 "적용 전 확인" 쿼리. 이 세션에서는 production에 실행하지 않았습니다.
@@ -32,6 +35,18 @@ create unique index if not exists uq_point_tx_reverses_id
     on point_transactions (reverses_id) where reverses_id is not null;
 create unique index if not exists uq_point_tx_order_debit
     on point_transactions (order_id) where order_id is not null and reason = '결제 시 사용' and amount < 0;
+
+-- 1b) 직접 INSERT 정책 축소 — 기존 정책(center_id in (select my_managed_center_ids()))에 order_id/reverses_id 제약만 추가.
+--     기존 수기 포인트 등록(lib/sales.ts registerPoint: order_id/reverses_id 미지정)은 그대로 허용된다.
+--     use_points / _restore_order_points / 트리거는 SECURITY DEFINER(RLS 우회), QA fixture는 service_role이라 영향 없다.
+drop policy if exists "매니저 포인트 등록" on point_transactions;
+create policy "매니저 포인트 등록" on point_transactions
+    for insert
+    with check (
+        center_id in (select my_managed_center_ids())
+        and order_id is null
+        and reverses_id is null
+    );
 
 -- 2) 내부 헬퍼: 주문에 실제로 차감된 포인트를 한 번만 복원하고, 복원한 금액을 돌려준다
 create or replace function _restore_order_points(p_order_id uuid, p_reason text)
@@ -89,7 +104,14 @@ begin
     if old.status = 'done' then
         raise exception '이미 발급된 주문은 상태를 바꿀 수 없어요. 환불은 환불 기능을 이용해주세요';
     end if;
-    return new;
+    -- 명시적 허용 전이(Mock/실 결제의 pending→paid→done 흐름과 기존 취소 경로 호환)
+    if old.status = 'pending' and new.status in ('paid', 'done', 'cancelled') then
+        return new;
+    end if;
+    if old.status = 'paid' and new.status in ('done', 'cancelled') then
+        return new;
+    end if;
+    raise exception '허용되지 않는 주문 상태 변경이에요(% → %)', old.status, new.status;
 end;
 $$;
 revoke all on function orders_guard_status_transition() from public, anon, authenticated;
@@ -403,11 +425,12 @@ begin
 end;
 $function$;
 
--- 7) confirm_real_payment — 라이브 정의 + cancelled 차단
+-- 7) confirm_real_payment — 라이브 정의 + cancelled 차단 + search_path 고정
 CREATE OR REPLACE FUNCTION public.confirm_real_payment(p_order_id uuid, p_payment_key text, p_amount integer)
  RETURNS json
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 declare
     v_order  orders;
@@ -447,6 +470,8 @@ COMMIT;
 -- 적용 전 확인(읽기 전용, 0이어야 unique 인덱스가 만들어진다)
 -- ============================================================
 -- select count(*) from (select order_id from point_transactions where order_id is not null and reason = '결제 시 사용' and amount < 0 group by order_id having count(*) > 1) d;
+-- 현재(적용 전) INSERT 정책 — 'center_id IN (...)' 만 있어야 한다:
+-- select policyname, cmd, with_check from pg_policies where schemaname = 'public' and tablename = 'point_transactions' and cmd = 'INSERT';
 
 -- ============================================================
 -- 적용 후 확인(읽기 전용)
@@ -460,4 +485,9 @@ select
     has_function_privilege('authenticated', 'use_points(uuid,uuid,integer,uuid)', 'execute') as use_points_auth_must_be_true,
     (select pg_get_functiondef('refund_membership(uuid)'::regprocedure) like '%_restore_order_points%') as refund_restores_must_be_true,
     (select pg_get_functiondef('fulfill_order(uuid)'::regprocedure) like '%취소된 주문은 발급할 수 없어요%') as fulfill_blocks_cancelled_must_be_true,
-    (select pg_get_functiondef('confirm_real_payment(uuid,text,integer)'::regprocedure) like '%취소된 주문은 결제를 확정할 수 없어요%') as confirm_blocks_cancelled_must_be_true;
+    (select pg_get_functiondef('confirm_real_payment(uuid,text,integer)'::regprocedure) like '%취소된 주문은 결제를 확정할 수 없어요%') as confirm_blocks_cancelled_must_be_true,
+    (select coalesce('search_path=public' = any (proconfig), false) from pg_proc where oid = 'confirm_real_payment(uuid,text,integer)'::regprocedure) as confirm_search_path_must_be_true,
+    (select pg_get_functiondef('orders_guard_status_transition()'::regprocedure) like '%허용되지 않는 주문 상태 변경이에요%') as guard_has_allowlist_must_be_true,
+    (select count(*) from pg_policies where schemaname = 'public' and tablename = 'point_transactions' and cmd = 'INSERT') as insert_policy_count_must_be_1,
+    (select with_check like '%order_id IS NULL%' and with_check like '%reverses_id IS NULL%' and with_check like '%my_managed_center_ids%'
+       from pg_policies where schemaname = 'public' and tablename = 'point_transactions' and policyname = '매니저 포인트 등록') as insert_policy_blocks_order_and_reverses_must_be_true;

@@ -87,6 +87,20 @@ describe("취소 경로 — 어느 진입점이든 같은 트랜잭션에서 복
     expect(sql).toContain("before update of status on orders");
     expect(sql).toContain("revoke all on function orders_guard_status_transition() from public, anon, authenticated;");
   });
+  it("허용 전이를 명시: pending→paid|done|cancelled, paid→done|cancelled, 같은 값 no-op — 그 외(paid→pending 등)는 예외", () => {
+    const g = fn(sql, "orders_guard_status_transition");
+    expect(g).toContain("old.status = 'pending' and new.status in ('paid', 'done', 'cancelled')");
+    expect(g).toContain("old.status = 'paid' and new.status in ('done', 'cancelled')");
+    expect(g).toContain("허용되지 않는 주문 상태 변경이에요");
+    expect(g.indexOf("허용되지 않는 주문 상태 변경이에요")).toBeGreaterThan(g.indexOf("old.status = 'paid' and new.status"));
+    // 마지막 허용 분기 뒤에는 raise뿐 — paid→pending이 통과할 return이 없다
+    const tail = g.slice(g.indexOf("old.status = 'paid' and new.status"));
+    expect(tail.match(/return new;/g)).toHaveLength(1);
+    // Mock confirm(pending→paid→done)과 cancel_test_payment(→cancelled)는 모두 허용 전이
+    const mock = read("add_payment_test_provider.sql");
+    expect(mock).toContain("update orders set status = 'paid'");
+    expect(mock).toContain("update orders set status = 'done'");
+  });
   it("트리거 함수는 SECURITY DEFINER + search_path 고정(회원은 point_transactions INSERT 권한이 없으므로)", () => {
     for (const n of ["orders_guard_status_transition", "orders_restore_points_on_cancel"]) {
       const f = fn(sql, n);
@@ -142,6 +156,9 @@ describe("cancelled 주문 재발급 금지", () => {
     const c = fn(sql, "confirm_real_payment");
     expect(c).toContain("취소된 주문은 결제를 확정할 수 없어요");
     expect(c.indexOf("v_order.status = 'cancelled'")).toBeLessThan(c.indexOf("_issue_membership_and_record_payment"));
+    expect(c).toContain("SET search_path TO 'public'");
+    // 이번 범위 밖: cancel_real_payment / _issue_membership_and_record_payment는 교체하지 않는다
+    expect(sql).not.toMatch(/function (public\.)?(cancel_real_payment|_issue_membership_and_record_payment)\(/i);
   });
   it("fulfill_order 나머지 라이브 로직(권한/금액 검증/횟수선택/자동예약/쿠폰 사용)이 보존된다", () => {
     const f = fn(sql, "fulfill_order");
@@ -155,11 +172,46 @@ describe("cancelled 주문 재발급 금지", () => {
   });
 });
 
+describe("point_transactions 직접 INSERT 정책 — 주문 연계 행 위조 차단", () => {
+  const policy = raw.slice(raw.indexOf('create policy "매니저 포인트 등록"'), raw.indexOf("-- 2) 내부 헬퍼"));
+  it("수기 조정만 허용: 관리 센터 + order_id null + reverses_id null (기존 center 조건 유지)", () => {
+    expect(sql).toContain('drop policy if exists "매니저 포인트 등록" on point_transactions;');
+    expect(policy).toContain("for insert");
+    expect(policy).toContain("center_id in (select my_managed_center_ids())");
+    expect(policy).toContain("and order_id is null");
+    expect(policy).toContain("and reverses_id is null");
+    expect(policy).not.toMatch(/\bto\s+(anon|authenticated)\b/i);   // 기존 정책처럼 roles=public(별도 TO 지정 없음)
+  });
+  it("새 permission 체계를 만들지 않고, 다른 정책은 건드리지 않는다", () => {
+    expect((sql.match(/create policy/gi) ?? [])).toHaveLength(1);
+    expect(sql).not.toMatch(/insert into permissions|alter policy/i);
+  });
+  it("정상 수기 지급 클라이언트(registerPoint)는 order_id/reverses_id를 보내지 않는다", () => {
+    const f = read("lib/sales.ts");
+    const body = f.slice(f.indexOf("export async function registerPoint"), f.indexOf("export async function fetchPoints"));
+    expect(body).not.toMatch(/order_id|reverses_id/);
+  });
+  it("서버 경로는 RLS를 우회하는 SECURITY DEFINER(use_points/_restore_order_points/트리거), 정책에 의존하지 않는다", () => {
+    for (const n of ["use_points", "_restore_order_points", "orders_restore_points_on_cancel"]) expect(fn(sql, n)).toContain("security definer");
+  });
+  it("rollback은 적용 전 Production 정책으로 정확히 복원", () => {
+    expect(rollback).toContain('drop policy if exists "매니저 포인트 등록" on point_transactions;');
+    expect(rollback).toMatch(/create policy "매니저 포인트 등록" on point_transactions\s+for insert\s+with check \(center_id in \(select my_managed_center_ids\(\)\)\);/);
+    expect(rollback).not.toMatch(/order_id is null|reverses_id is null/);
+    expect(rollback.indexOf('create policy "매니저 포인트 등록"')).toBeLessThan(rollback.indexOf("drop index if exists uq_point_tx_reverses_id"));
+  });
+  it("적용 전/후 read-only 검증이 정책 정의를 확인한다", () => {
+    for (const s of ["insert_policy_blocks_order_and_reverses_must_be_true", "insert_policy_count_must_be_1", "order_id IS NULL", "reverses_id IS NULL", "guard_has_allowlist_must_be_true", "confirm_search_path_must_be_true"]) expect(raw).toContain(s);
+    expect(raw).toContain("where schemaname = 'public' and tablename = 'point_transactions' and cmd = 'INSERT'");
+  });
+});
+
 describe("migration 구조 / rollback", () => {
-  it("BEGIN/COMMIT, 새 테이블/RLS 정책 변경 없음", () => {
+  it("BEGIN/COMMIT, 새 테이블 없음, RLS 정책 변경은 point_transactions INSERT 정책 1개뿐", () => {
     expect(sql.trim().startsWith("BEGIN;")).toBe(true);
     expect(sql).toContain("COMMIT;");
-    expect(sql).not.toMatch(/create table|(create|drop|alter) policy/i);
+    expect(sql).not.toMatch(/create table/i);
+    expect([...sql.matchAll(/(create|drop|alter) policy[^;]*on (\w+)/gi)].map((m) => m[2])).toEqual(["point_transactions", "point_transactions"]);
   });
   it("rollback: 트리거/헬퍼/인덱스 제거 + 4개 함수를 적용 전 라이브 정의로 복원, 복원 원장 행은 지우지 않는다", () => {
     for (const s of ["drop trigger if exists orders_restore_points_on_cancel", "drop trigger if exists orders_guard_status_transition", "drop function if exists _restore_order_points(uuid, text);",
@@ -167,6 +219,7 @@ describe("migration 구조 / rollback", () => {
     expect(rollback).not.toMatch(/delete from point_transactions/i);
     expect(rollback).not.toContain("_restore_order_points(v_order_id");
     expect(rollback).not.toContain("취소된 주문은 발급할 수 없어요");
+    expect(fn(rollback, "confirm_real_payment")).not.toContain("search_path");   // 적용 전 라이브 정의 그대로
     for (const n of ["use_points", "refund_membership", "fulfill_order", "confirm_real_payment"]) expect(rollback).toContain(`FUNCTION public.${n}(`);
   });
   it("적용 후 read-only 검증 쿼리 포함", () => {
@@ -206,6 +259,10 @@ describe("Production QA 시나리오(실행 안 함)와 격리", () => {
   it("별도 명령으로만 실행, 기본 test/integration/all에 포함되지 않는다", () => {
     expect(scripts["qa:production:points"]).toBe("vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/order-points.qa.test.ts");
     for (const k of ["test", "test:integration", "test:all"]) expect(scripts[k] ?? "").not.toMatch(/qa/);
+  });
+  it("시나리오가 CASE 11(직접 INSERT 정책)·12(상태 전이)도 다룬다", () => {
+    const sc = read("tests/qa/scenarios/order-points.qa.test.ts");
+    for (const s of ["CASE 11", "CASE 12", "reverses_id: debit.id", "reason: \"결제 시 사용\", order_id: freshOrder", "forgedReverse.error).not.toBeNull()", "forgedDebit.error).not.toBeNull()", "수기 포인트 조정", "paid → pending 금지"]) expect(sc).toContain(s);
   });
   it("시나리오가 CASE 1~10(취소/중복/관리자/확정/환불/중복환불/변조/재확정/중복차감/PG 정리)을 다룬다", () => {
     const sc = read("tests/qa/scenarios/order-points.qa.test.ts");

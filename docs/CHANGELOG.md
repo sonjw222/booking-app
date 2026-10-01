@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-10-02 — 주문 포인트 라이프사이클 보완(적용 전 보안/정합성 갭)
+- point_transactions "매니저 포인트 등록" INSERT 정책을 order_id/reverses_id가 null인 수기 조정으로 축소(주문 연계 차감/복원 행 위조로 unique 구조를 선점하는 경로 차단, rollback은 적용 전 정책 복원).
+- orders 상태 전이를 허용표로 명시(pending→paid|done|cancelled, paid→done|cancelled) — paid→pending 등 역전이 차단. confirm_real_payment에 search_path 고정. QA CASE 11/12 추가(실행 안 함).
+
 ## 2026-10-02 — 주문 포인트 생명주기: 취소/전체 환불 시 정확히 1회 복원(SQL 파일만 작성, 미실행)
 - 감사: 주문 취소(회원 UPDATE·관리자·cancel_real_payment)와 refund_membership 모두 차감된 포인트를 복원하지 않았고, use_points는 주문당 중복 차감이 가능했으며, fulfill_order/confirm_real_payment는 cancelled 주문을 재발급할 수 있었다. 토스 failUrl 페이지는 주문을 정리하지 않아 재시도 시 포인트가 이중 차감될 수 있었다.
 - `fix_order_point_lifecycle.sql`(+rollback): point_transactions.reverses_id + unique 인덱스(복원 1회, 주문당 차감 1행), 내부 헬퍼 `_restore_order_points`, orders 상태 전이 가드/취소 시 복원 트리거, use_points 방어, refund_membership 포인트 복원, cancelled 재발급 차단.
