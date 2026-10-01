@@ -26,7 +26,7 @@ import { classToEvent, filterEventsByMonth, holidaysToEvents, monthPrefix, type 
 import {
   fetchClasses, createClass, updateClass, updateClassPassSelectionMode, deleteClass,
   createRecurringClasses, createRecurringClassesPerDay, expandRecurringDates,
-  updateClassGroup, deleteClassGroup,
+  updateClassGroup, deleteClassGroup, diffGroupFields,
   fetchClassAttendees, setAttendance, fetchClassProducts, setClassProducts, setClassProductsBulk,
   fetchClassTrainers, setClassTrainers, setClassTrainersBulk, setClassTrainersForGroup, fetchClassPassSelectionMode,
   fetchCenterHolidayDates,
@@ -99,6 +99,8 @@ export default function ClassManagePage() {
   const [applyToGroup, setApplyToGroup] = useState(false);
   // 2026-10-01(QA 10) — "시간도 함께 변경"(기본 OFF). 꺼져 있으면 그룹 적용 시 각 수업의 기존 날짜·시간을 유지한다.
   const [applyTimeToGroup, setApplyTimeToGroup] = useState(false);
+  // 수정 시트를 연 시점의 값 — "모든 반복 수업에 적용" 때 사용자가 실제로 바꾼 공통 필드만 그룹에 보내기 위한 기준.
+  const origFormRef = useRef<ClassInput | null>(null);
   // 삭제 확인 시트
   const [deleteTarget, setDeleteTarget] = useState<ManagedClass | null>(null);
   // 수업 메모 (schedule_memos, class_id 경로) — 수정 시트를 열 때만 로드
@@ -678,7 +680,9 @@ export default function ClassManagePage() {
     setApplyToGroup(false);
     setApplyTimeToGroup(false);
     setEditReservedCount(c.reserved);
-    setForm({ title: c.title, description: c.description ?? "", date: c.date, start: c.start, end: c.end, capacity: c.capacity, allowGoods: c.allowGoods, allowCancel: c.allowCancel, roomId: c.roomId, cancelDeadlineMin: c.cancelDeadlineMin, bookingDeadlineMin: c.bookingDeadlineMin, classFormat: c.classFormat });
+    const openedForm: ClassInput = { title: c.title, description: c.description ?? "", date: c.date, start: c.start, end: c.end, capacity: c.capacity, allowGoods: c.allowGoods, allowCancel: c.allowCancel, roomId: c.roomId, cancelDeadlineMin: c.cancelDeadlineMin, bookingDeadlineMin: c.bookingDeadlineMin, classFormat: c.classFormat };
+    origFormRef.current = openedForm;
+    setForm(openedForm);
     fillDeadline(c.cancelDeadlineMin);
     fillBookDeadline(c.bookingDeadlineMin);
     // 'all'이면(class_allowed_products는 원래 비어 있음) 전체 체크 상태로 즉시 보여준다 —
@@ -890,17 +894,25 @@ export default function ClassManagePage() {
       }
       const passMode = resolved.mode;
       let promotedCount = 0;
+      let groupAppliedCount = 0;
       if (editId) {
         if (applyToGroup && editGroupId) {
-          // 공통 속성(수업명·소개·정원)만 그룹에 반영하고, 날짜·시간은 각 수업의 기존 값을 유지한다.
-          // 시간까지 바꾸려면 "시간도 함께 변경"을 명시적으로 켠 경우에만 보낸다.
+          // 공통 속성(수업명 + 이 시트에서 "바뀐" 소개·정원·룸·취소/예약 마감·취소 허용·상품 허용)을 같은 반복 그룹
+          // 전체에 한 번에 반영한다. 날짜·시간은 각 수업의 기존 값을 유지하되, 지금 편집 중인 수업 자신의 날짜/시간
+          // 변경은 반드시 저장한다. 모든 수업의 시간까지 바꾸려면 "시간도 함께 변경"을 명시적으로 켠 경우에만 보낸다.
+          const orig = origFormRef.current;
+          const cur: ClassInput = { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin() };
+          const changes = orig ? diffGroupFields(orig, cur) : { description: form.description ?? "" };
+          const ownChanged = !!orig && (orig.date !== form.date || orig.start !== form.start || orig.end !== form.end);
           const groupIds = await updateClassGroup(editGroupId, form.title, form.capacity, {
-            description: form.description ?? "",
+            changes,
             time: applyTimeToGroup ? { start: form.start, end: form.end } : undefined,
+            own: ownChanged || applyTimeToGroup ? { id: editId, date: form.date, start: form.start, end: form.end } : undefined,
           });
-          // updateClassGroup은 수업명/소개/정원(+선택 시 시간)만 그룹 전체에 반영하고 이 인스턴스의
-          // 수강권 정책 컬럼은 건드리지 않으므로, 이 인스턴스만 따로 맞춰준다(수강권 정책·
-          // 허용 상품은 여전히 인스턴스별 — 그룹 적용 대상이 아님).
+          groupAppliedCount = groupIds.length;
+          // updateClassGroup은 위 공통 필드만 그룹 전체에 반영하고 수강권 정책 컬럼(pass_selection_mode)과
+          // 허용 수강권(class_allowed_products)은 건드리지 않으므로, 이 수업만 따로 맞춰준다(수강권 정책·
+          // 허용 상품은 여전히 수업별 — 그룹 적용 대상이 아님).
           await updateClassPassSelectionMode(editId, passMode);
           // 담당 강사는 title/시간/정원과 마찬가지로 그룹 전체에 동일하게 적용한다.
           await setClassTrainersForGroup(groupIds, selectedTrainers);
@@ -921,7 +933,9 @@ export default function ClassManagePage() {
       // QA Fix Batch(2026-09-18) — 정원 확대로 대기자가 자동 승격됐으면(요청 3번)
       // 관리자에게 알려준다. 0명이면 조용히 넘어간다(정원을 늘렸지만 대기자가
       // 없었거나, 애초에 정원을 줄이거나 그대로 둔 경우).
-      if (promotedCount > 0) {
+      if (groupAppliedCount > 0) {
+        showToast(`반복 수업 ${groupAppliedCount}개를 수정했어요`);
+      } else if (promotedCount > 0) {
         showToast(`대기자 ${promotedCount}명이 자동으로 확정 예약으로 전환됐어요`);
       }
     } catch (e: any) {
@@ -1711,7 +1725,7 @@ export default function ClassManagePage() {
             {/* 반복 수업 일괄 적용 (그룹 소속 수정일 때만) */}
             {editId && editGroupId && (
               <div className="set-row" style={{ padding: "10px 0", borderBottom: "none" }}>
-                <div className="set-label">모든 반복 수업에 적용<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>수업명·소개·정원·담당 강사 등 공통 설정만 반복 수업에 적용돼요. 날짜·시간은 유지돼요.</span></div>
+                <div className="set-label">모든 반복 수업에 적용<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>수업명·소개·정원·룸·담당 강사 등 바꾼 공통 설정이 반복 수업 전체에 적용돼요. 날짜·시간·수강권 정책은 수업별로 유지돼요.</span></div>
                 <button className={`switch ${applyToGroup ? "on" : ""}`} onClick={() => { setApplyToGroup(!applyToGroup); if (applyToGroup) setApplyTimeToGroup(false); }}>
                   <span className="knob" />
                 </button>

@@ -288,44 +288,111 @@ export async function deleteClass(classId: string): Promise<void> {
 // 그룹 전체를 다시 대상으로 삼아야 하는 후속 작업에서 재사용한다(같은 조회를 두 번 하지 않도록).
 export type GroupClassRow = { id: string; start_time: string; end_time: string };
 
+// "모든 반복 수업에 적용"에서 그룹 전체에 반영할 공통 필드(사용자가 실제로 바꾼 것만 담긴다).
+// 분류 — 그룹 전체: 수업명(title, 항상) · 수업 소개 · 정원 · 룸 · 수업 상품 허용 · 취소 허용 · 취소마감 · 예약마감 · 담당 강사(별도 RPC).
+//        이 수업만: 날짜 · 시작/종료 시간(기본) · 수강권 정책/허용 수강권(class_allowed_products, pass_selection_mode) · 예약/출석.
+//        recurring_group_id/center_id/id는 수정 대상이 아니다.
+// "바뀐 것만" 보내는 이유: 요일별 개별 설정(perDay 반복 등록에서 요일마다 다를 수 있는 정원/룸/취소마감)을 한 수업의 값으로
+// 통일해 버리지 않기 위해서다(시간을 덮어쓰던 QA 10과 같은 종류의 문제).
+export type GroupFieldChanges = {
+  description?: string | null;
+  capacity?: number;
+  roomId?: string | null;
+  allowGoods?: boolean;
+  allowCancel?: boolean;
+  cancelDeadlineMin?: number | null;
+  bookingDeadlineMin?: number | null;
+};
+
+const normDesc = (s: string | null | undefined) => (s ?? "").trim();
+
+// 편집 시작 시점의 값(orig)과 저장 시점의 값(cur)을 비교해 "바뀐 공통 필드"만 뽑는다(순수 함수 — 테스트 대상).
+export function diffGroupFields(orig: ClassInput, cur: ClassInput): GroupFieldChanges {
+  const out: GroupFieldChanges = {};
+  if (normDesc(orig.description) !== normDesc(cur.description)) out.description = normDesc(cur.description);
+  if (orig.capacity !== cur.capacity) out.capacity = cur.capacity;
+  if ((orig.roomId ?? null) !== (cur.roomId ?? null)) out.roomId = cur.roomId ?? null;
+  if (!!orig.allowGoods !== !!cur.allowGoods) out.allowGoods = !!cur.allowGoods;
+  if ((orig.allowCancel ?? true) !== (cur.allowCancel ?? true)) out.allowCancel = cur.allowCancel ?? true;
+  if ((orig.cancelDeadlineMin ?? null) !== (cur.cancelDeadlineMin ?? null)) out.cancelDeadlineMin = cur.cancelDeadlineMin ?? null;
+  if ((orig.bookingDeadlineMin ?? null) !== (cur.bookingDeadlineMin ?? null)) out.bookingDeadlineMin = cur.bookingDeadlineMin ?? null;
+  return out;
+}
+
+export type GroupUpdateOptions = {
+  // "시간도 함께 변경"(기본 OFF): 모든 수업의 시각(time-of-day)만 바꾸고 각 수업의 날짜는 유지한다.
+  time?: { start: string; end: string };
+  // 지금 편집 중인 수업 자신의 날짜/시간 변경(전체 적용 ON이어도 이 수업의 변경은 반드시 저장돼야 한다). 다른 수업에는 영향 없음.
+  own?: { id: string; date: string; start: string; end: string };
+  changes?: GroupFieldChanges;
+  description?: string | null;   // 하위 호환: changes.description과 같다
+};
+
+export type GroupUpdateRow = {
+  id: string; start_time: string; end_time: string;
+  description?: string; capacity?: number; room_id?: string | null; allow_goods?: boolean; allow_cancel?: boolean;
+  cancel_deadline_min?: number | null; booking_deadline_min?: number | null;
+};
+
 // 순수 함수(테스트 대상): 그룹의 각 수업에 보낼 update payload를 만든다.
-export function buildGroupUpdates(
-  rows: GroupClassRow[],
-  options?: { time?: { start: string; end: string }; description?: string | null }
-): { id: string; start_time: string; end_time: string; description?: string }[] {
+export function buildGroupUpdates(rows: GroupClassRow[], options?: GroupUpdateOptions): GroupUpdateRow[] {
+  const changes: GroupFieldChanges = { ...(options?.changes ?? {}) };
+  if (options?.description !== undefined && changes.description === undefined) changes.description = options.description;
+  const kstDate = (iso: string) =>
+    new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
   return rows.map((r) => {
     let start_time = r.start_time;
     let end_time = r.end_time;
-    if (options?.time) {
-      const dateStr = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(r.start_time));
+    const own = options?.own && options.own.id === r.id ? options.own : null;
+    if (own) {
+      start_time = toKstIso(own.date, own.start);
+      end_time = toKstIso(classEndDate(own.date, own.start, own.end), own.end);
+    } else if (options?.time) {
+      const dateStr = kstDate(r.start_time);
       start_time = toKstIso(dateStr, options.time.start);
       end_time = toKstIso(classEndDate(dateStr, options.time.start, options.time.end), options.time.end);
     }
-    const u: { id: string; start_time: string; end_time: string; description?: string } = { id: r.id, start_time, end_time };
-    // 서버는 'description' 키가 있을 때만 갱신한다(빈 문자열 = 소개 지우기).
-    if (options && options.description !== undefined) u.description = options.description ?? "";
+    const u: GroupUpdateRow = { id: r.id, start_time, end_time };
+    // 서버는 키가 "있을 때만" 갱신한다(빈 문자열 소개 = 지우기, room_id null = 룸 없음).
+    if (changes.description !== undefined) u.description = changes.description ?? "";
+    if (changes.capacity !== undefined) u.capacity = changes.capacity;
+    if (changes.roomId !== undefined) u.room_id = changes.roomId;
+    if (changes.allowGoods !== undefined) u.allow_goods = changes.allowGoods;
+    if (changes.allowCancel !== undefined) u.allow_cancel = changes.allowCancel;
+    if (changes.cancelDeadlineMin !== undefined) u.cancel_deadline_min = changes.cancelDeadlineMin;
+    if (changes.bookingDeadlineMin !== undefined) u.booking_deadline_min = changes.bookingDeadlineMin;
     return u;
   });
 }
 
+// 반환값: 실제로 수정된 class id 전체 — 담당 강사 일괄 적용(setClassTrainersForGroup) 등 후속 작업에서 재사용한다.
+// 그룹 행 수와 서버가 돌려준 id 수가 다르면(일부만 수정됨/0개) 조용히 성공시키지 않고 오류로 알린다.
+// 같은 center + 같은 recurring_group_id 범위만 갱신되고(서버 RPC가 한 트랜잭션으로 처리), title로 그룹을 추론하지 않는다.
+// capacity 인자는 하위 호환용이다 — 정원은 options.changes.capacity(바뀐 경우에만)로 전달한다.
 export async function updateClassGroup(
-  groupId: string, title: string, capacity: number,
-  options?: { time?: { start: string; end: string }; description?: string | null }
+  groupId: string, title: string, capacity: number, options?: GroupUpdateOptions
 ): Promise<string[]> {
   if (options?.time) assertValidClassTimeRange(options.time.start, options.time.end);
+  if (options?.own) assertValidClassTimeRange(options.own.start, options.own.end);
   const { data: rows, error: fErr } = await supabase
     .from("classes")
     .select("id, start_time, end_time")
     .eq("recurring_group_id", groupId);
   if (fErr) throw new Error("반복 수업을 불러오지 못했어요: " + fErr.message);
+  const groupRows = (rows ?? []) as GroupClassRow[];
+  if (groupRows.length === 0) throw new Error("반복 수업 정보를 찾지 못했어요");
 
-  const updates = buildGroupUpdates((rows ?? []) as GroupClassRow[], options);
+  const updates = buildGroupUpdates(groupRows, options);
 
   const { data, error } = await supabase.rpc("update_class_group_safe", {
     p_group_id: groupId, p_title: title, p_capacity: capacity, p_updates: updates,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
-  return (data as string[]) ?? [];
+  const ids = (data as string[]) ?? [];
+  if (ids.length !== groupRows.length) {
+    throw new Error(`반복 수업 ${groupRows.length}개 중 ${ids.length}개만 수정됐어요. 새로고침 후 다시 확인해주세요.`);
+  }
+  return ids;
 }
 
 // 그룹 전체 삭제

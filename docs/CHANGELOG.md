@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-01 — "모든 반복 수업에 적용" 실제 반영 보강
+- 원인: `update_class_group_safe`가 title/정원/시간만 받아 소개·룸·마감·취소/상품 허용은 그룹에 반영되지 않았고, 정원은 편집 중인 수업 값이 그룹 전체에 강제됐으며,
+  전체 적용 ON이면 편집 중인 수업 자신의 날짜/시간 변경까지 버려졌다("시간도 함께 변경" OFF 기본). → 사용자가 바꾼 공통 필드만(diff) 선택 키로 보내고 서버가 같은
+  center + recurring_group_id 범위만 한 문장으로 갱신(`fix_recurring_class_description_and_group_update.sql` 보강, **production 미실행**). 수정 개수 불일치는 오류, 성공 시 "반복 수업 N개를 수정했어요".
+
 ## 2026-10-01 — 수강권/상품 "구매 횟수 선택 + 회차별 가격표" + 수강권·상품 검색/필터
 - 신규 SQL `add_selectable_count_pricing.sql`(**production 미실행**): `products.purchase_count_selectable` + child 테이블 `product_count_prices`
   (unique(product_id,count), price>0, 가격표에 있는 회차만 구매 가능, 쓰기는 `set_product_count_prices()` RPC만). 선택형의 `products.price`는 최저가 호환 값.

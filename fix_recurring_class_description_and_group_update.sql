@@ -6,11 +6,13 @@
 --   description = NULL이었고 회원 예약 확인창에도 소개가 보이지 않았다.
 --   → JSON 행의 'description'을 classes.description에 저장한다(없거나 빈 문자열이면 NULL).
 --
--- [QA 10] "모든 반복 수업에 적용"이 시간까지 덮어쓰던 문제는 클라이언트 payload 문제라(각 수업의
---   기존 시작/종료를 그대로 보내면 됨) 시간 보존 자체는 SQL이 필요 없다. 다만 "수업 소개"를 그룹
---   전체에 적용하려면 update_class_group_safe가 description을 받아야 해서, 시그니처(오버로드)는
---   그대로 두고 p_updates JSON 행에 'description' 키가 "있을 때만" 그 값으로 갱신한다
---   (키가 없으면 기존 소개 유지 → 이전 클라이언트와 완전 호환).
+-- [QA 10] "모든 반복 수업에 적용"이 시간까지 덮어쓰던 문제는 클라이언트 payload 문제(각 수업의 기존 시작/종료를 그대로
+--   보내면 됨)였다. 그런데 이 RPC는 title/capacity/시간만 받아 소개·룸·마감·취소 허용·상품 허용은 어떤 경우에도 그룹에
+--   반영되지 않았고, 정원은 편집 중인 수업의 값을 그룹 전체에 강제했다(요일별 정원이 다르면 덮어씀).
+--   시그니처(오버로드)는 그대로 두고 p_updates JSON 행의 선택 키(description, capacity, room_id, allow_goods,
+--   allow_cancel, cancel_deadline_min, booking_deadline_min)가 "있을 때만" 그 값으로 갱신한다 — 클라이언트는 사용자가
+--   실제로 바꾼 필드만 보낸다. 같은 center_id + recurring_group_id 범위만, 한 문장(=한 트랜잭션)이며 룸의 센터 일치와
+--   정원 하한(확정 인원)을 서버에서 검증한다. p_capacity는 하위 호환용으로만 남기고 그룹 전체에 강제하지 않는다.
 --
 -- 라이브 정의(2026-10-01 조회)를 기준으로 description 처리만 추가했다. 권한 판정/그 외 로직은 동일.
 -- 기존 description이 NULL인 반복수업은 건드리지 않는다(추측 복구 금지 — 별도 제안 SQL은 최종 보고 참고).
@@ -75,6 +77,8 @@ declare
     v_key text;
     v_verb text;
     v_ids uuid[];
+    v_row jsonb;
+    v_confirmed int;
 begin
     select center_id into v_center_id from classes where recurring_group_id = p_group_id limit 1;
     if v_center_id is null then
@@ -100,19 +104,42 @@ begin
         raise exception '이 수업을 수정할 권한이 없어요';
     end if;
 
+    -- 선택 항목 검증: 룸은 같은 센터 것만, 정원은 현재 확정 인원 아래로 줄일 수 없다(update_class_safe와 동일한 불변식).
+    for v_row in select u from jsonb_array_elements(p_updates) u loop
+        if v_row ? 'room_id' and nullif(v_row->>'room_id', '') is not null
+           and not exists (select 1 from rooms r where r.id = (v_row->>'room_id')::uuid and r.center_id = v_center_id) then
+            raise exception '이 센터의 룸이 아니에요';
+        end if;
+        if v_row ? 'capacity' then
+            select count(*) into v_confirmed from reservations
+             where class_id = (v_row->>'id')::uuid and status in ('confirmed', 'attended');
+            if (v_row->>'capacity')::int < v_confirmed then
+                raise exception '현재 확정 예약 인원(%명)보다 적게 정원을 줄일 수 없어요', v_confirmed;
+            end if;
+        end if;
+    end loop;
+
+    -- 같은 center_id + 같은 recurring_group_id의 수업만, 한 문장(=한 트랜잭션)으로 갱신한다.
+    -- p_updates 각 행은 id/start_time/end_time(각 수업의 기존 값 또는 의도된 값)과, "바뀐 공통 필드만" 선택 키로 온다:
+    --   description, capacity, room_id, allow_goods, allow_cancel, cancel_deadline_min, booking_deadline_min
+    -- 키가 없으면 그 수업의 기존 값을 유지한다(요일마다 다른 정원/룸/마감 설정을 덮어쓰지 않음).
+    -- p_capacity는 하위 호환용으로만 남겼고 더 이상 그룹 전체에 강제하지 않는다(행의 'capacity' 키가 대신한다).
     with upd as (
         update classes c set
             title = p_title,
-            capacity = p_capacity,
             start_time = (u->>'start_time')::timestamptz,
             end_time = (u->>'end_time')::timestamptz,
-            -- 'description' 키가 있을 때만 갱신(빈 문자열 = 소개 지우기). 키가 없으면 기존 값 유지.
-            description = case
-                when u ? 'description' then nullif(btrim(coalesce(u->>'description', '')), '')
-                else c.description
-            end
+            capacity = case when u ? 'capacity' then (u->>'capacity')::int else c.capacity end,
+            description = case when u ? 'description' then nullif(btrim(coalesce(u->>'description', '')), '') else c.description end,
+            room_id = case when u ? 'room_id' then nullif(u->>'room_id', '')::uuid else c.room_id end,
+            allow_goods = case when u ? 'allow_goods' then (u->>'allow_goods')::boolean else c.allow_goods end,
+            allow_cancel = case when u ? 'allow_cancel' then (u->>'allow_cancel')::boolean else c.allow_cancel end,
+            cancel_deadline_min = case when u ? 'cancel_deadline_min' then nullif(u->>'cancel_deadline_min', '')::int else c.cancel_deadline_min end,
+            booking_deadline_min = case when u ? 'booking_deadline_min' then nullif(u->>'booking_deadline_min', '')::int else c.booking_deadline_min end
         from jsonb_array_elements(p_updates) as u
-        where c.id = (u->>'id')::uuid and c.recurring_group_id = p_group_id
+        where c.id = (u->>'id')::uuid
+          and c.recurring_group_id = p_group_id
+          and c.center_id = v_center_id
         returning c.id
     )
     select array_agg(id) into v_ids from upd;
