@@ -11,6 +11,7 @@ import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, fetchNextRe
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
 import { fetchMyCenters } from "../lib/manager";
 import { supabase } from "../lib/supabaseClient";
+import { BUSINESS_INFO } from "../lib/businessInfo";
 import { consumePostLoginNext } from "../lib/postLoginReturn";
 import { replaceTabNavigation } from "../lib/navState";
 import { fetchUnreadCount, subscribeNotifications } from "../lib/notifications";
@@ -391,15 +392,26 @@ export default function Home() {
         )}
 
         {/* 전자상거래법상 사업자정보는 로그인 없이도 항상 볼 수 있어야 해서 홈 화면에
-            링크는 남겨두되(비회원도 접근 가능), 주소·연락처까지 통째로 펼쳐 보여주던
-            블록은 없앤다 — 상세 내용은 /legal/business에서 확인(2026-09-04, 사용자 결정:
-            사업자 주소가 자택이라 홈 화면에 상시 노출하는 걸 원치 않음). */}
+            링크는 남겨두되(비회원도 접근 가능), 주소까지 통째로 펼쳐 보여주던 블록은 없앤다
+            — 사업장 주소는 /legal/business에서만 확인(2026-09-04, 사용자 결정: 사업자 주소가
+            자택이라 홈 화면에 상시 노출하는 걸 원치 않음, 이 정책 유지).
+            2026-10-01 — 토스페이먼츠 전자결제 심사 안내("홈페이지 하단에 상호명을 넣어주세요")
+            대응으로 상호·대표자·사업자등록번호·통신판매업 신고번호·고객센터만 한 블록으로
+            직접 표시한다(주소/이메일 제외). 값은 lib/businessInfo.ts 단일 출처 — 여기서
+            하드코딩하지 않는다. */}
         <div className="home-footer">
           <div className="home-footer-links">
+            <a href="/products">판매 상품</a>
             <a href="/legal/terms">이용약관</a>
             <a href="/legal/privacy">개인정보처리방침</a>
             <a href="/legal/business">사업자 정보</a>
             <a href="/legal/refund">환불·취소 정책</a>
+          </div>
+          <div className="home-footer-biz">
+            <div>{BUSINESS_INFO.companyName} · 대표 {BUSINESS_INFO.ceoName}</div>
+            <div>사업자등록번호 {BUSINESS_INFO.businessRegNo}</div>
+            <div>통신판매업 신고번호 {BUSINESS_INFO.mailOrderRegNo}</div>
+            <div>고객센터 {BUSINESS_INFO.customerServicePhone}</div>
           </div>
         </div>
 

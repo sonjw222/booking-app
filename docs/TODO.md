@@ -47,6 +47,15 @@
 5. 사용자 결정이 필요한 기능은 결정 기록 없이 완료 처리하지 않습니다.
 6. 완료된 항목은 [CHANGELOG.md](./CHANGELOG.md)에 근거와 함께 기록한 뒤 이 문서에서 제거하거나 완료 이력으로 이동합니다.
 
+### P1-PaymentReview-1001. (신규, 2026-10-01) PG 활성화 시 개인정보처리방침/약관 문구 갱신 + 공개 상품 SQL 적용
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **미완료(의도적).** 개인정보처리방침 "결제 관련 안내"는 "현재 일반 회원용 온라인 PG 결제는 비활성화되어 있으며…"로 사실 그대로 유지했다(Production에서 PG를 아직 켜지 않음 — 지어서 "운영 중"으로 바꾸지 않음). |
+| 남은 작업 | (1) **`NEXT_PUBLIC_PG_CHECKOUT_ENABLED`를 켜는 시점에** `app/legal/privacy/page.tsx`의 위 문구와 위탁 표(토스페이먼츠 "온라인 PG 결제 기능 활성화 시…" 행), 필요하면 이용약관 결제 조항을 실제 운영 상태로 함께 수정. (2) `add_public_storefront_products.sql`을 production에 실행해야 비로그인 상품 조회/`/products`가 동작(실행 전에는 비로그인 센터 화면이 상품 조회 실패로 계속 "찾을 수 없어요"). |
+| 근거 파일 | `app/legal/privacy/page.tsx`, `add_public_storefront_products.sql`, `rollback_add_public_storefront_products.sql` |
+
 ### P1-WeekdayTime-1001. (신규, 2026-10-01, Batch C 조사 중 발견) 수강권 자동갱신(auto_renew)이 실제로 구현되어 있지 않음
 
 | 필드 | 내용 |

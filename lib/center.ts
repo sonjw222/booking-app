@@ -185,7 +185,76 @@ export type CenterProduct = {
 const CENTER_PRODUCTS_SELECT_BASE = "id, name, price, product_kind, total_count, unlimited, description, sizes, auto_book_days, group_label, max_quantity, coupon_eligible";
 const CENTER_PRODUCTS_SELECT_WEEKDAY = `${CENTER_PRODUCTS_SELECT_BASE}, weekday_selectable, time_selectable`;
 
+// 2026-10-01 — 토스페이먼츠 전자결제 심사 대응. 비로그인 사용자는 fetch_purchasable_products()를
+// 호출할 권한이 없어(일부러 anon revoke — 회원 등급/지정 회원 전용 상품이 새지 않게) 센터
+// 화면 전체가 "찾을 수 없어요"로 떨어졌다. 그래서 두 경로로 나눈다:
+//   - 로그인 회원 → 기존 fetchMemberCenterProducts()(회원별 구매 가능 상품, 보안 정책 그대로)
+//   - 비로그인    → fetch_public_storefront_products()(승인 센터의 활성·판매중·전체공개 상품만)
+// 구매(checkout)는 여전히 로그인이 필요하다 — 여기서 공개되는 건 "조회"뿐이다.
 export async function fetchCenterProducts(centerId: string): Promise<CenterProduct[]> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return fetchPublicCenterProducts(centerId);
+  try {
+    return await fetchMemberCenterProducts(centerId);
+  } catch (e: any) {
+    // 세션 토큰이 만료돼 요청이 anon으로 처리되면 회원용 RPC는 권한 오류(42501)로 실패한다 —
+    // 이때만 공개 목록으로 대체한다(그 외 오류는 그대로 던짐).
+    if (e?.code === "42501") return fetchPublicCenterProducts(centerId);
+    throw e;
+  }
+}
+
+export type PublicStorefrontProduct = {
+  id: string; centerId: string; centerName: string; name: string; price: number;
+  kind: "pass" | "goods"; description: string | null; totalCount: number | null;
+  unlimited: boolean; unlimitedPass: boolean; groupLabel: string | null;
+  remaining: number | null; // null=수량 제한 없음, 0=매진
+};
+
+// 비로그인 포함 누구나 호출 가능한 공개 판매상품(add_public_storefront_products.sql).
+// centerId를 생략하면 승인된 모든 센터의 공개 상품(/products 페이지용).
+export async function fetchPublicStorefrontProducts(centerId?: string | null): Promise<PublicStorefrontProduct[]> {
+  const { data, error } = await supabase.rpc(
+    "fetch_public_storefront_products",
+    centerId ? { p_center_id: centerId } : {}
+  );
+  if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
+  return ((data ?? []) as any[]).map((p) => ({
+    id: p.id, centerId: p.center_id, centerName: p.center_name, name: p.name, price: p.price,
+    kind: p.product_kind === "goods" ? "goods" : "pass",
+    description: p.description ?? null, totalCount: p.total_count ?? null,
+    unlimited: p.unlimited ?? false, unlimitedPass: p.unlimited_pass ?? false,
+    groupLabel: p.group_label ?? null, remaining: p.remaining ?? null,
+  }));
+}
+
+// 센터별로 묶는다(서버가 센터명 순으로 정렬해서 주므로 등장 순서를 그대로 유지). 상품이 있는
+// 센터만 그룹이 생기므로 빈 그룹은 구조적으로 만들어지지 않는다(/products 페이지용).
+export function groupPublicProductsByCenter(products: PublicStorefrontProduct[]) {
+  const groups: { centerId: string; centerName: string; items: PublicStorefrontProduct[] }[] = [];
+  for (const p of products) {
+    let g = groups.find((x) => x.centerId === p.centerId);
+    if (!g) { g = { centerId: p.centerId, centerName: p.centerName, items: [] }; groups.push(g); }
+    g.items.push(p);
+  }
+  return groups;
+}
+
+// 센터 화면이 쓰는 CenterProduct 형태로 변환. 사이즈/자동예약/요일 선택/쿠폰 가능 여부처럼
+// 공개 RPC가 일부러 반환하지 않는 항목은 안전한 기본값 — 어차피 구매는 로그인 후
+// 회원용 경로(sizes 등 전체 필드)로 진행된다.
+async function fetchPublicCenterProducts(centerId: string): Promise<CenterProduct[]> {
+  const rows = await fetchPublicStorefrontProducts(centerId);
+  return rows.map((p) => ({
+    id: p.id, name: p.name, price: p.price, kind: p.kind,
+    totalCount: p.totalCount, unlimited: p.unlimited,
+    validDays: null, description: p.description, sizes: null, autoBookDays: null,
+    groupLabel: p.groupLabel, remaining: p.remaining, couponEligible: true,
+    weekdaySelectable: false, timeSelectable: false,
+  }));
+}
+
+async function fetchMemberCenterProducts(centerId: string): Promise<CenterProduct[]> {
   // MWHABIT Membership Visibility Batch(2026-09-18) — 원래는 이 센터의 is_active+
   // is_on_sale 상품을 전부(공개범위 무관) 가져왔다. fetch_purchasable_products()
   // RPC(SECURITY DEFINER, add_membership_visibility_and_coupons.sql)가 로그인한
@@ -209,7 +278,7 @@ export async function fetchCenterProducts(centerId: string): Promise<CenterProdu
     data = fallback.data as any;
     error = fallback.error;
   }
-  if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
+  if (error) throw Object.assign(new Error("상품을 불러오지 못했어요: " + error.message), { code: error.code });
   // Postgres 함수가 setof products를 반환하는 RPC라 supabase-js의 기본 타입 추론이
   // "단일 행 | 배열" 유니온으로 잡는다(.single() 없이도) — 실제로는 여러 행이 올 수
   // 있으므로 배열로 명시한다.

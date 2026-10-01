@@ -8,7 +8,9 @@
 
 export const BUSINESS_INFO = {
   serviceName: "모하빗",
-  companyName: "손장욱",
+  // 상호(사업자등록증상 상호) — 2026-10-01 "손장욱"(대표자 이름)에서 "모하빗"으로 정정.
+  // 상호와 대표자를 혼동하지 말 것: 상호=모하빗, 대표자=손장욱, 서비스명=모하빗.
+  companyName: "모하빗",
   ceoName: "손장욱",
   businessRegNo: "589-77-00451",
   address: "경기도 성남시 분당구 중앙공원로 20, 420동 702호",

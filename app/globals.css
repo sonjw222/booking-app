@@ -735,6 +735,11 @@ a { color: inherit; text-decoration: none; }
 .home-footer { padding: 20px var(--page-gutter) 4px; border-top: 1px solid var(--line); margin-top: 8px; }
 .home-footer-links { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 10px; }
 .home-footer-links a { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); text-decoration: none; }
+/* 2026-10-01 — 토스 심사용 사업자 표시(상호/대표/등록번호/통신판매업/고객센터). 링크 줄보다
+   한 단계 작고 옅게, 주소는 넣지 않는다(/legal/business에서만). */
+.home-footer-biz { font-size: 11.5px; line-height: 1.75; color: var(--ink-soft); font-weight: 500; }
+/* 공개 판매 상품 목록의 상품 설명 — 길어도 2줄까지만. */
+.products-desc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 /* ============================================================
    약관/정책 본문 (이용약관·개인정보처리방침·사업자정보·환불정책)
