@@ -16,7 +16,7 @@ import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
   fetchMembers, fetchGrades, createGrade, deleteGrade,
   updateMemberGrade, updateMemberMemo, updateMemberAddress, updateMemberStatus, syncMembersFromReservations,
-  membersToCsv, fetchMemberDetail, searchAccountsForMember, addMemberToCenter, sendAlimtalkToMembers,
+  membersToCsv, fetchMemberDetail, searchAccountsForMember, addMemberToCenter, sendAlimtalkToMembers, extendMembershipExpiry,
   type CenterMember, type Grade, type MemberDetailData,
 } from "../../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
@@ -28,6 +28,10 @@ import { fetchCenterSubscription } from "../../../lib/centerSubscription";
 import { fetchGrantableProducts, grantProductToMember, won, type GrantInput, type SaleProduct } from "../../../lib/sales";
 import { countOptionLabel, priceSummary, tierPriceFor } from "../../../lib/selectableCount";
 import { defaultGrantPrice, grantBlockReason, grantCountOptions, grantSheetTitle, holdingLabel, productNeedsSize, suggestGrantSize, type GrantKind } from "../../../lib/memberGrant";
+import {
+  EXPIRY_PERMISSION_KEY, MAX_REASON_LENGTH, QUICK_EXTEND_DAYS, extensionConfirmMessage, extensionSuccessMessage, formatDotDate, isExtendablePass, previewExtension,
+  type ExtendMode,
+} from "../../../lib/membershipExpiry";
 import { fetchPurchaseScheduleOptions } from "../../../lib/center";
 import { DAYS, type SelectableSchedule } from "../../../lib/passes";
 import AlimtalkComposer, {
@@ -139,6 +143,13 @@ function MembersContent() {
   // 수강권 지급 / 상품 지급은 서로 다른 시트(같은 컴포넌트, 목록·사이즈 UI만 다름) — 회원 상세의 각 보유 섹션에서 연다.
   const [grantKind, setGrantKind] = useState<GrantKind>("pass");
   const [grantSize, setGrantSize] = useState<string | null>(null);
+  // 수강권 만료일 연장(2026-10-02) — 대상 수강권, 방식(N일/날짜 지정), 입력값, 요청 중 상태
+  const [extendTarget, setExtendTarget] = useState<{ id: string; name: string; expiresAt: string } | null>(null);
+  const [extendMode, setExtendMode] = useState<ExtendMode>("days");
+  const [extendDays, setExtendDays] = useState("30");
+  const [extendDate, setExtendDate] = useState("");
+  const [extendReason, setExtendReason] = useState("");
+  const [extending, setExtending] = useState(false);
   // 구매 횟수 선택형 상품일 때만 사용하는 지급 횟수(고정 상품은 상품 정의 횟수로 지급)
   const [grantCount, setGrantCount] = useState<number | null>(null);
   const [grantProducts, setGrantProducts] = useState<SaleProduct[]>([]);
@@ -328,6 +339,8 @@ function MembersContent() {
   // memberships/payments insert RLS가 각각 이 두 키를 요구한다(fix_membership_rls.sql,
   // app/manager/sales/page.tsx의 registerPayment 주석과 동일한 조합).
   const canGrantPass = canDo("customer.member.issue_pass") && canDo("pass.payment.create");
+  // 수강권 만료일 연장은 전용 권한(오너는 자동 통과). pass_detail/issue_pass만으로는 서버가 거부한다(RPC + expires_at 가드 트리거).
+  const canExtendExpiry = canDo(EXPIRY_PERMISSION_KEY);
   const canExportMembers = canDo("customer.member.export");
   const canViewPhone = canDo("customer.member.phone");
   const canViewMemo = canDo("customer.memo.view");
@@ -504,6 +517,36 @@ function MembersContent() {
     } else {
       setGrantScheduleOptions(null);
     }
+  }
+
+  function openExtend(p: { id: string; name: string; expiresAt: string | null }) {
+    if (!p.expiresAt) return;
+    setExtendTarget({ id: p.id, name: p.name, expiresAt: p.expiresAt });
+    setExtendMode("days"); setExtendDays("30"); setExtendDate(""); setExtendReason("");
+  }
+
+  async function handleExtend() {
+    if (!extendTarget || extending) return;
+    const pv = previewExtension({ currentExpiresAt: extendTarget.expiresAt, mode: extendMode, days: extendDays, newDate: extendDate });
+    if (pv.error || !pv.newExpiresAt) { setError(pv.error ?? "새 만료일을 확인해주세요"); return; }
+    if (extendReason.length > MAX_REASON_LENGTH) { setError(`연장 사유는 ${MAX_REASON_LENGTH}자 이내로 입력해주세요`); return; }
+    const ok = await globalThis.appConfirm(extensionConfirmMessage({
+      passName: extendTarget.name, current: extendTarget.expiresAt, next: pv.newExpiresAt, mode: extendMode,
+      days: extendMode === "days" ? parseInt(extendDays, 10) : null,
+    }));
+    if (!ok) return;
+    setExtending(true); setError(null);
+    try {
+      const r = await extendMembershipExpiry({
+        membershipId: extendTarget.id, mode: extendMode,
+        days: extendMode === "days" ? parseInt(extendDays, 10) : null,
+        newExpiresAt: extendMode === "date" ? extendDate : null, reason: extendReason,
+      });
+      showToast(extensionSuccessMessage(r.newExpiresAt));
+      setExtendTarget(null);
+      if (detail) await openDetail(detail);   // 회원 상세를 다시 불러와 새 만료일이 바로 보이게
+    } catch (e: any) { setError(e.message); }
+    finally { setExtending(false); }
   }
 
   async function handleGrant() {
@@ -793,8 +836,14 @@ function MembersContent() {
                     ) : (
                       <div className="mem-pass-summary">
                         {(showAllPasses ? passes : passes.slice(0, 3)).map((p) => (
-                          <div key={p.id} className="mem-pass-chip">
-                            {p.name}{p.remaining != null ? ` · ${p.remaining}회` : ""} <span className="mem-pass-exp">~{p.expiresAt ?? "무제한"}</span>
+                          <div key={p.id} className="mem-pass-chip mem-pass-chip-row">
+                            <span className="mem-pass-chip-text">
+                              {p.name}{p.remaining != null ? ` · ${p.remaining}회` : ""} <span className="mem-pass-exp">~{p.expiresAt ?? "무제한"}</span>
+                            </span>
+                            {/* 만료일이 있는 수강권만(무제한/상품 제외) + 전용 권한이 있을 때만 */}
+                            {canExtendExpiry && isExtendablePass(p) && (
+                              <button type="button" className="mem-pass-extend" onClick={() => openExtend(p)}>연장</button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1126,6 +1175,69 @@ function MembersContent() {
           </div>
         </SheetOverlay>
       )}
+
+      {/* 수강권 만료일 연장 시트 — 이미 발급된 수강권 1개의 만료일만 연장(단축/무제한 변환 불가). 서버가 최종 검증 */}
+      {extendTarget && (() => {
+        const pv = previewExtension({ currentExpiresAt: extendTarget.expiresAt, mode: extendMode, days: extendDays, newDate: extendDate });
+        return (
+          <SheetOverlay className="sheet-overlay" swipeDismiss={!extending} onClick={() => !extending && setExtendTarget(null)}>
+            <div className="sheet" onClick={(e) => e.stopPropagation()}>
+              <div className="sheet-title">수강권 만료일 연장</div>
+              <div className="admin-row"><span className="k">수강권</span><span className="v">{extendTarget.name}</span></div>
+              <div className="admin-row"><span className="k">현재 만료일</span><span className="v">{formatDotDate(extendTarget.expiresAt)}</span></div>
+
+              <div className="mem-filters" style={{ padding: 0, margin: "10px 0" }}>
+                <button type="button" aria-pressed={extendMode === "days"} className={`filter-chip ${extendMode === "days" ? "on" : ""}`}
+                  disabled={extending} onClick={() => setExtendMode("days")}>N일 연장</button>
+                <button type="button" aria-pressed={extendMode === "date"} className={`filter-chip ${extendMode === "date" ? "on" : ""}`}
+                  disabled={extending} onClick={() => setExtendMode("date")}>날짜 지정</button>
+              </div>
+
+              {extendMode === "days" ? (
+                <>
+                  <div className="menu-section-label" style={{ padding: "0 0 6px" }}>연장 일수</div>
+                  <div className="deadline-row">
+                    <input aria-label="연장 일수" className="input-field" inputMode="numeric" style={{ maxWidth: 110 }}
+                      value={extendDays} disabled={extending}
+                      onChange={(e) => setExtendDays(e.target.value.replace(/[^0-9]/g, ""))} />
+                    <span className="deadline-unit">일</span>
+                  </div>
+                  <div className="mem-filters" style={{ padding: 0, marginTop: 8 }}>
+                    {QUICK_EXTEND_DAYS.map((n) => (
+                      <button type="button" key={n} aria-pressed={extendDays === String(n)} className={`filter-chip ${extendDays === String(n) ? "on" : ""}`}
+                        disabled={extending} onClick={() => setExtendDays(String(n))}>+{n}일</button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="menu-section-label" style={{ padding: "0 0 6px" }}>새 만료일</div>
+                  <input aria-label="새 만료일" type="date" className="input-field" value={extendDate} disabled={extending}
+                    min={extendTarget.expiresAt} onChange={(e) => setExtendDate(e.target.value)} />
+                </>
+              )}
+
+              <div className={`perm-guide ${pv.error && (extendMode === "date" ? extendDate : extendDays) ? "is-error" : ""}`} style={{ margin: "10px 0" }}>
+                {pv.newExpiresAt && !pv.error
+                  ? `${formatDotDate(extendTarget.expiresAt)} → ${formatDotDate(pv.newExpiresAt)}${pv.daysAdded ? ` (+${pv.daysAdded}일)` : ""}`
+                  : pv.error ?? "연장할 기간을 입력해주세요"}
+              </div>
+
+              <div className="menu-section-label" style={{ padding: "0 0 6px" }}>연장 사유 (선택)</div>
+              <input aria-label="연장 사유" className="input-field" maxLength={MAX_REASON_LENGTH} placeholder="예: 회원 부상으로 2주 연장"
+                value={extendReason} disabled={extending} onChange={(e) => setExtendReason(e.target.value)} style={{ marginBottom: 10 }} />
+              <div className="perm-guide" style={{ margin: "0 0 10px" }}>잔여 횟수·결제·예약은 바뀌지 않고, 이 수강권 1개의 만료일만 연장돼요.</div>
+
+              <div className="add-profile-actions">
+                <button className="ghost-btn" disabled={extending} onClick={() => setExtendTarget(null)}>취소</button>
+                <button className="primary-btn" disabled={extending || !!pv.error || !pv.newExpiresAt} onClick={handleExtend}>
+                  {extending ? "연장 중..." : "만료일 연장"}
+                </button>
+              </div>
+            </div>
+          </SheetOverlay>
+        );
+      })()}
 
       {/* 수강권/상품 지급 시트 — 주문 없이 매니저가 바로 발급(서비스 무상 지급 포함) */}
       {grantTarget && (

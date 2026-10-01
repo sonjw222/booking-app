@@ -775,6 +775,11 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
+### [P1] 수강권 만료일 연장 — SQL 적용 후 확인 (2026-10-02)
+- `add_membership_expiry_extension.sql` 적용 후 파일 끝 검증 SELECT 확인 → 오너가 권한 카탈로그에서 필요한 직원에게 "수강권 만료일 연장" 위임.
+- `admin_action_logs.membership_id` FK가 cascade 없음 → 수강권을 삭제하는 경로/QA 정리는 로그를 먼저 지워야 함.
+- 적용 승인 후 `npm run qa:production:membership-expiry` 1회 실행(우회 UPDATE 차단·감사 로그 확인).
+
 ### P1-48. (신규, 2026-10-01, 코드 완료·SQL 적용 대기) 룸 상세주소 — `add_room_detail_address.sql` 미실행
 
 | 필드 | 내용 |

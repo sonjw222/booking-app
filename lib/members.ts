@@ -7,6 +7,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { extensionErrorMessage } from "./membershipExpiry";
 import { getMessageService } from "./messaging";
 import {
   extractTemplateVariables, resolveKnownAlimtalkVariables, renderAlimtalkVariables,
@@ -244,6 +245,23 @@ export async function updateMemberAddress(profileId: string, address: string): P
   if (error) throw new Error("주소 저장에 실패했어요: " + error.message);
 }
 
+// 관리자 "수강권 만료일 연장"(add_membership_expiry_extension.sql) — 클라이언트가 memberships.expires_at을 직접 UPDATE하지 않고
+// 전용 RPC만 호출한다(서버가 권한/상태/날짜를 최종 검증하고 감사 로그를 남긴다).
+export async function extendMembershipExpiry(input: {
+  membershipId: string; mode: "days" | "date"; days?: number | null; newExpiresAt?: string | null; reason?: string | null;
+}): Promise<{ oldExpiresAt: string; newExpiresAt: string; daysAdded: number }> {
+  const { data, error } = await supabase.rpc("manager_extend_membership_expiry", {
+    p_membership_id: input.membershipId,
+    p_mode: input.mode,
+    p_days: input.mode === "days" ? input.days ?? null : null,
+    p_new_expires_at: input.mode === "date" ? input.newExpiresAt ?? null : null,
+    p_reason: input.reason?.trim() ? input.reason.trim() : null,
+  });
+  if (error) throw new Error(extensionErrorMessage(error));
+  const d = data as any;
+  return { oldExpiresAt: d.oldExpiresAt, newExpiresAt: d.newExpiresAt, daysAdded: d.daysAdded };
+}
+
 // 회원 상태 변경 (활성/만료/휴면) — 권한: customer.member.update (오너 자동 통과)
 export async function updateMemberStatus(
   memberId: string, status: "active" | "expired" | "dormant"
@@ -262,27 +280,13 @@ export async function updateMemberStatus(
     patch.dormant_since = new Date().toISOString();
   } else if (cm?.status === "dormant" && cm?.dormant_since) {
     // 휴면 → 활성/만료 복귀: 휴면 기간만큼 기간권 만료일 연장
-    const dormantDays = Math.floor((Date.now() - new Date(cm.dormant_since).getTime()) / 86400000);
-    if (dormantDays > 0 && cm.center_id && cm.profile_id) {
-      const { data: periodPasses } = await supabase
-        .from("memberships")
-        .select("id, expires_at, pass_type, status")
-        .eq("profile_id", cm.profile_id)
-        .eq("center_id", cm.center_id)
-        .eq("status", "active");
-      for (const p of periodPasses ?? []) {
-        // 만료일이 있는 수강권만 연장(기간 무제한이면 애초에 연장할 게 없음) — pass_type이
-        // 'period'인지가 아니라 expires_at 존재 여부로 판단해야 새 방식(unlimited_pass+
-        // expiry_mode, add_product_expiry_options.sql)으로 만든 수강권도 정상 연장된다 —
-        // 신규 상품은 pass_type을 항상 'count'로 저장해서 pass_type==='period' 조건으로는
-        // 절대 안 걸림(2026-09-01 감사에서 발견).
-        if ((p as any).expires_at) {
-          const newExp = new Date(new Date((p as any).expires_at).getTime() + dormantDays * 86400000);
-          await supabase.from("memberships")
-            .update({ expires_at: newExp.toISOString().slice(0, 10) })
-            .eq("id", (p as any).id);
-        }
-      }
+    // 휴면 기간만큼 만료일이 있는 수강권 연장 — 서버 함수가 같은 계산으로 처리한다(expires_at 직접 UPDATE는 가드 트리거가 막는다).
+    // 함수가 아직 없는 환경(SQL 미적용)에서만 예전 직접 UPDATE 경로로 폴백한다.
+    const { error: extErr } = await supabase.rpc("extend_passes_after_dormant", { p_center_member_id: memberId });
+    if (extErr) {
+      const missing = extErr.code === "PGRST202" || extErr.code === "42883" || /Could not find the function/i.test(extErr.message ?? "");
+      if (!missing) throw new Error("휴면 기간만큼 수강권을 연장하지 못했어요: " + extErr.message);
+      await legacyExtendPassesAfterDormant(cm);
     }
     patch.dormant_since = null;
   }
@@ -594,4 +598,22 @@ export async function sendAlimtalkToMembers(
     }
   }
   return result;
+}
+
+// (폴백) add_membership_expiry_extension.sql 적용 전 환경용 — 예전 클라이언트 직접 UPDATE.
+async function legacyExtendPassesAfterDormant(cm: { center_id: string; profile_id: string; dormant_since: string }): Promise<void> {
+  const dormantDays = Math.floor((Date.now() - new Date(cm.dormant_since).getTime()) / 86400000);
+  if (!(dormantDays > 0)) return;
+  const { data: periodPasses } = await supabase
+    .from("memberships")
+    .select("id, expires_at, pass_type, status")
+    .eq("profile_id", cm.profile_id)
+    .eq("center_id", cm.center_id)
+    .eq("status", "active");
+  for (const p of periodPasses ?? []) {
+    if ((p as any).expires_at) {
+      const newExp = new Date(new Date((p as any).expires_at).getTime() + dormantDays * 86400000);
+      await supabase.from("memberships").update({ expires_at: newExp.toISOString().slice(0, 10) }).eq("id", (p as any).id);
+    }
+  }
 }

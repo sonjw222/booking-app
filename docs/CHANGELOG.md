@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-10-02 — 관리자 수강권 만료일 연장(SQL 파일만 작성, 미실행)
+- 새 권한 `customer.member.pass_expiry.update`(수강권 만료일 연장, 부모 `pass_detail`): 기존 역할/개인 권한에 자동 부여하지 않아 SQL 적용 직후엔 오너만 가능, 이후 권한 카탈로그 UI로 위임.
+- `manager_extend_membership_expiry` RPC(행 잠금, 수강권 행의 center로 서버 권한 검증, 연장만 허용, goods/무제한/환불·이관 제외, admin_action_logs 기록) + `memberships.expires_at` 직접 UPDATE 차단 트리거(pass_detail/issue_pass 우회 방지).
+  휴면 복귀 기간 연장은 같은 가드를 통과하도록 `extend_passes_after_dormant` RPC로 이동(함수 없으면 기존 경로 폴백).
+- 회원 상세 "보유 수강권"에 연장 버튼/시트(N일·날짜 지정, 미리보기, 사유, 확인). `add_membership_expiry_extension.sql` / `rollback_…` 작성, `npm run qa:production:membership-expiry` 준비(실행 안 함).
+
 ## 2026-10-02 — Production QA 시나리오: 센터 쿠폰 주문 → 서버 검증 → 발급 → 사용 처리 → 방어
 - `npm run qa:production:coupon`(실행 전 별도 승인): 쿠폰 지급/주문(checkout과 같은 amount·discountAmount·memberCouponId) → 확정 전 쿠폰 available → 확정 후 수강권 1건·결제(할인 후 금액)·쿠폰 used+order_id,
   재사용/금액 변조/다른 상품 전용 쿠폰 거부 검증. 이번 runId 데이터만 정리(결제→수강권→주문→지급쿠폰→적용대상→쿠폰→상품).

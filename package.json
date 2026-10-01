@@ -21,7 +21,8 @@
     "qa:production:goods": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/reservation-goods-usage.qa.test.ts",
     "qa:production:visibility": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/qa-center-visibility.qa.test.ts",
     "qa:production:direct-payment": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/direct-payment-issue.qa.test.ts",
-    "qa:production:coupon": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/coupon-order-issue.qa.test.ts"
+    "qa:production:coupon": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/coupon-order-issue.qa.test.ts",
+    "qa:production:membership-expiry": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/membership-expiry.qa.test.ts"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",
