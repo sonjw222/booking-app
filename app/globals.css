@@ -6514,14 +6514,25 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
 .checkout-count-select { padding: 8px 0 2px; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
 
 /* 회차별 가격표 편집기(CountPriceEditor) */
-.count-price-fill { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-.count-price-fill .input-field { flex: 1 1 auto; min-width: 0; font-size: 16px; }
-.count-price-fill .ghost-btn { flex: 0 0 auto; white-space: nowrap; }
-.count-price-rows { display: flex; flex-direction: column; gap: 6px; }
-.count-price-row { display: grid; grid-template-columns: 22px 44px minmax(0, 1fr); align-items: center; gap: 8px; }
+.count-price-editor { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.count-price-editor .input-field { box-sizing: border-box; max-width: 100%; min-width: 0; font-size: 16px; padding: 11px 12px; }
+.count-price-max { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.count-price-max .input-field { flex: 0 0 88px; width: 88px; text-align: center; }
+.count-price-max-unit { font-size: 12px; color: var(--ink-soft); font-weight: 600; min-width: 0; }
+/* 기준 가격 입력 + 작은 채우기 버튼: 한 줄(넓은 화면), 좁은 화면에서는 세로로 쌓아 컨테이너 밖으로 나가지 않게 */
+.count-price-fill { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; min-width: 0; max-width: 100%; }
+.count-price-fill .input-field { flex: 1 1 0; min-width: 0; }
+.count-price-fill .ghost-btn.count-price-fill-btn { flex: 0 0 auto; width: auto; display: inline-block; padding: 9px 12px; font-size: 13px; font-weight: 700; border-radius: 10px; white-space: nowrap; }
+@media (max-width: 420px) {
+  .count-price-fill { flex-direction: column; align-items: stretch; }
+  .count-price-fill .ghost-btn.count-price-fill-btn { width: 100%; }
+}
+.count-price-rows { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 100%; }
+/* 회차 행: 체크 · 라벨은 고정 폭, 가격 input이 남는 공간을 모두 차지(34,000 / 640,000 같은 숫자가 잘리지 않게) */
+.count-price-row { display: grid; grid-template-columns: 22px 38px minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; }
 .count-price-row.off .count-price-count { color: var(--ink-soft); }
-.count-price-row .input-field { min-width: 0; font-size: 16px; }
-.count-price-count { font-weight: 700; font-size: 13.5px; }
+.count-price-row .input-field { width: 100%; font-variant-numeric: tabular-nums; }
+.count-price-count { font-weight: 700; font-size: 13.5px; white-space: nowrap; }
 
 /* 센터 구매 sheet — 기본 .sheet-title이 sticky(top:-22px, 보이는 높이 ≈18px, z-index 2)라서 검색/필터 sticky는 그 바로 아래(top:18px)에 붙이고
    z-index를 낮춰(1) 제목/닫기 버튼과 겹치지 않게 한다. 목록이 길어 스크롤해도 제목 → 검색/필터 순서로 상단에 고정된다. */

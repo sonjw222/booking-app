@@ -7,7 +7,10 @@ import { fillTiersFromUnit, priceSummary, validateTierDrafts, type CountTier, ty
 
 export type GoodsPricingMode = "fixed" | "selectable";
 
-export const TIER_ROWS = 12;   // 가격표 편집기에 보여주는 기본 행 수(1~12회). 서버는 임의의 회차를 지원한다.
+// 새 선택형 상품의 기본 "최대 횟수"(편집기가 처음 보여주는 행 수). 고정 한도가 아니다 — 관리자가 최대 횟수를 직접 정하고
+// (센터마다 5·8·20·30회 등), 서버(product_count_prices)는 임의의 회차를 지원한다.
+export const TIER_ROWS = 12;
+export const MAX_TIER_COUNT = 100;   // 편집기 안전 상한(실수로 큰 수를 넣어 화면이 멈추는 것 방지)
 
 export type GoodsFormInput = {
   mode: GoodsPricingMode;
@@ -36,6 +39,41 @@ export function draftsFromTiers(tiers: CountTier[] | null | undefined, rows = TI
     const price = byCount.get(count);
     return { count, price: price != null ? String(price) : "", enabled: price != null };
   });
+}
+
+// 행에 실제로 판매 중인 가격이 들어 있는지(체크 + 가격 입력). 축소 시 이 데이터는 조용히 지우지 않는다.
+const isActiveDraft = (r: TierDraft) => r.enabled && r.price.replace(/[^0-9]/g, "") !== "";
+
+// 가장 큰 "판매 중" 회차(없으면 0).
+export function highestActiveCount(rows: TierDraft[]): number {
+  return rows.reduce((m, r) => (isActiveDraft(r) ? Math.max(m, r.count) : m), 0);
+}
+
+// 편집기 행의 최대 회차(= 보여주는 행 수).
+export function maxTierCount(rows: TierDraft[]): number {
+  return rows.reduce((m, r) => Math.max(m, r.count), 0);
+}
+
+export type ResizeResult = {
+  rows: TierDraft[];
+  effectiveMax: number;        // 실제로 보여주는 최대 회차
+  blockedBy: number | null;    // 요청한 최대 횟수보다 큰 회차에 판매 중인 가격이 있어 줄이지 못했다면 그 최대 회차
+};
+
+// 최대 횟수 변경 → 행 늘리기/줄이기. 기존 입력값은 항상 보존한다:
+//  · 늘리기: 새 회차는 체크 해제 + 빈 가격으로 추가(기존 행/가격 불변)
+//  · 줄이기: 큰 회차 중 "판매 중인 가격이 있는" 행이 있으면 그 회차까지는 남겨 두고 blockedBy로 알린다(조용히 삭제 금지).
+//    관리자가 해당 회차의 체크를 해제하거나 가격을 지운 뒤에야 줄어든다. 데이터가 없는 큰 행만 제거한다.
+export function resizeTierDrafts(rows: TierDraft[], requestedMax: number): ResizeResult {
+  const want = Math.min(MAX_TIER_COUNT, Math.max(1, Math.floor(requestedMax) || 1));
+  const byCount = new Map(rows.map((r) => [r.count, r]));
+  const floor = highestActiveCount(rows);
+  const effectiveMax = Math.max(want, floor);
+  const next: TierDraft[] = Array.from({ length: effectiveMax }, (_, i) => {
+    const count = i + 1;
+    return byCount.get(count) ?? { count, price: "", enabled: false };
+  });
+  return { rows: next, effectiveMax, blockedBy: floor > want ? floor : null };
 }
 
 // "기준 1회 가격으로 채우기" — 모든 행을 체크하고 unit×count로 채운다(이후 행별 수정 가능, 저장 값이 authoritative).

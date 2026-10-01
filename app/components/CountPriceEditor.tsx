@@ -1,30 +1,68 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { TierDraft } from "../../lib/selectableCount";
-import { fillDraftsFromUnit } from "../../lib/goodsForm";
+import { fillDraftsFromUnit, MAX_TIER_COUNT, maxTierCount, resizeTierDrafts } from "../../lib/goodsForm";
 
 /*
   구매자가 횟수 선택 — 회차별 가격표 편집기(/manager/goods, /manager/membership-rules 공용, 2026-10-01).
-  행마다 [☑ N회] [가격]: 체크 해제한 회차는 판매하지 않는다(가격표에 저장되지 않음 → 회원 선택지에 안 나옴).
-  "기준 1회 가격 → 기본 가격 채우기"는 편의 기능일 뿐, 저장되는 값은 행별 입력값이다.
+  - "판매 최대 횟수"를 먼저 정하면 1회~최대 횟수까지 행이 생긴다(센터마다 5·8·20·30회 등). 늘리면 행이 추가되고,
+    줄일 때 큰 회차에 판매 중인 가격이 있으면 조용히 지우지 않고 경고와 함께 그 회차까지 남긴다.
+  - 행마다 [☑ N회] [가격]: 체크 해제한 회차는 판매하지 않는다(가격표에 저장되지 않음 → 회원 선택지에 안 나옴).
+  - "기준 1회 가격 → 기본 가격 채우기"는 편의 기능일 뿐(현재 행 수만큼 unit×count), 저장되는 값은 행별 입력값이다.
 */
 export default function CountPriceEditor({
   rows, onChange, disabled,
 }: { rows: TierDraft[]; onChange: (rows: TierDraft[]) => void; disabled?: boolean }) {
   const [unit, setUnit] = useState("");
+  const rowMax = maxTierCount(rows);
+  const [maxText, setMaxText] = useState(String(rowMax));
+  const [editingMax, setEditingMax] = useState(false);
+  const [blockedBy, setBlockedBy] = useState<number | null>(null);
+
+  // 다른 상품을 열거나 값이 외부에서 바뀌면 입력창을 실제 행 수에 맞춘다(입력 중에는 건드리지 않음).
+  useEffect(() => { if (!editingMax) setMaxText(String(rowMax)); }, [rowMax, editingMax]);
+
   const setRow = (count: number, patch: Partial<TierDraft>) =>
     onChange(rows.map((r) => (r.count === count ? { ...r, ...patch } : r)));
   const unitNum = Number(unit.replace(/[^0-9]/g, ""));
 
+  function changeMax(text: string) {
+    const clean = text.replace(/[^0-9]/g, "");
+    setMaxText(clean);
+    const n = Number(clean);
+    if (!(n >= 1)) return;                       // 비었거나 0이면 행을 건드리지 않는다
+    const res = resizeTierDrafts(rows, n);
+    setBlockedBy(res.blockedBy);
+    if (res.effectiveMax !== rowMax || res.rows.length !== rows.length) onChange(res.rows);
+  }
+
+  // 행에서 판매 중인 가격을 해제/삭제해 줄일 수 있게 되었는지 다시 확인(경고 자동 해제)
+  const stillBlocked = blockedBy !== null && rows.some((r) => r.count > Number(maxText) && r.enabled && r.price !== "");
+
   return (
     <div className="count-price-editor">
+      <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>판매 최대 횟수</div>
+      <div className="count-price-max">
+        <input aria-label="판매 최대 횟수" inputMode="numeric" className="input-field" placeholder="예: 8"
+          value={maxText} disabled={disabled} maxLength={3}
+          onFocus={() => setEditingMax(true)}
+          onBlur={() => { setEditingMax(false); setMaxText(String(maxTierCount(rows))); }}
+          onChange={(e) => changeMax(e.target.value)} />
+        <span className="count-price-max-unit">회 (1회 ~ {rowMax}회, 최대 {MAX_TIER_COUNT}회)</span>
+      </div>
+      {stillBlocked && (
+        <div className="perm-guide is-warning" role="alert" style={{ margin: "6px 0 0" }}>
+          {blockedBy}회까지 판매 중인 가격이 있어 줄일 수 없어요. 줄이려면 그 회차의 체크를 해제하거나 가격을 지워주세요.
+        </div>
+      )}
+
       <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>회차별 가격</div>
       <div className="count-price-fill">
         <input aria-label="기준 1회 가격" inputMode="numeric" className="input-field" placeholder="기준 1회 가격 (예: 6000)"
           value={unit} disabled={disabled} onChange={(e) => setUnit(e.target.value.replace(/[^0-9]/g, ""))} />
-        <button type="button" className="ghost-btn" disabled={disabled || !(unitNum > 0)}
-          onClick={() => onChange(fillDraftsFromUnit(unitNum, rows))}>기본 가격 채우기</button>
+        <button type="button" className="ghost-btn count-price-fill-btn" disabled={disabled || !(unitNum > 0)}
+          onClick={() => onChange(fillDraftsFromUnit(unitNum, rows))}>가격 채우기</button>
       </div>
       <div className="count-price-rows">
         {rows.map((r) => (
