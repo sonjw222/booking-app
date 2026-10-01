@@ -22,6 +22,7 @@ import { fetchMyPgCheckoutOverride } from "../../lib/authAccount";
 import { toUserMessage } from "../../lib/userError";
 import { fetchApplicableCoupons, previewDiscount, type MemberCoupon } from "../../lib/coupons";
 import { visiblePayMethodIds, resolveSelectedPayMethod } from "../../lib/payMethods";
+import { computeBaseAmount, countOptionLabel, isCountSelectable, sortedTiers } from "../../lib/selectableCount";
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import UiIcon, { type IconName } from "../components/UiIcon";
 import ErrorState from "../components/ErrorState";
@@ -96,6 +97,11 @@ function CheckoutContent() {
   const [pgCheckoutEnabled, setPgCheckoutEnabled] = useState(PG_CHECKOUT_ENABLED);
   const [payMethod, setPayMethod] = useState(PG_CHECKOUT_ENABLED ? "card" : "direct");
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  // 2026-10-01 — 구매 횟수 선택형 상품의 선택 횟수(센터 구매 sheet에서 ?count=&size=로 넘어옴, 여기서도 변경 가능).
+  // 상품 기본금액 = 1회가×횟수(표시용). 최종 금액/발급 횟수는 서버가 주문 snapshot(selected_count)으로 다시 확정한다.
+  const [selectedCount, setSelectedCount] = useState<number | null>(null);
+  const countSelectable = !!product && isCountSelectable(product);
+  const baseAmount = product ? (computeBaseAmount(product, selectedCount) ?? product.price) : 0;
   // 센터가 회원에게 지급한 실제 쿠폰(member_coupons)만 쓴다. 플랫폼 기본/데모 쿠폰(과거 하드코딩
   // 프로모코드)은 2026-10-01에 제거됨. 여기서 미리보기로 계산/표시하는 할인액은 UX용이고, 실제
   // 자격/금액은 결제 확정 RPC(fulfill_order/_issue_membership_and_record_payment)가 공통 함수
@@ -150,6 +156,13 @@ function CheckoutContent() {
       const products = await fetchCenterProducts(centerId);
       const found = products.find((p) => p.id === productId) ?? null;
       setProduct(found);
+      if (found && isCountSelectable(found)) {
+        // URL의 count/size를 유효한 값이면 그대로, 아니면 최소 횟수로 시작(구매 sheet → checkout 선택 보존)
+        const want = Number(sp.get("count"));
+        setSelectedCount(computeBaseAmount(found, want) != null ? want : found.minCount);
+      }
+      const wantSize = sp.get("size");
+      if (found?.sizes && wantSize && found.sizes.includes(wantSize)) setSelectedSize(wantSize);
       if (found?.weekdaySelectable) {
         try { setScheduleOptions(await fetchPurchaseScheduleOptions(found.id)); }
         catch { setScheduleOptions({ days: [], timesByDay: {} }); }
@@ -168,11 +181,11 @@ function CheckoutContent() {
   useEffect(() => {
     if (!product || !product.couponEligible) { setApplicableCoupons([]); return; }
     let mounted = true;
-    fetchApplicableCoupons(product.id, product.price)
+    fetchApplicableCoupons(product.id, baseAmount)
       .then((list) => { if (mounted) setApplicableCoupons(list); })
       .catch(() => { if (mounted) setApplicableCoupons([]); });
     return () => { mounted = false; };
-  }, [product]);
+  }, [product, baseAmount]);
 
   // 실제 PG(토스) 결제창은 app/checkout/success로 리다이렉트된 뒤 이 페이지로 다시
   // 돌아온다(같은 조회 쿼리 + paymentDone/paymentError 추가) — 그때 기존 "결제 완료"
@@ -214,6 +227,11 @@ function CheckoutContent() {
 
   async function handlePay() {
     if (!product) return;
+    // 선택형: 가격표에 없는 횟수는 결제를 진행하지 않는다(서버도 같은 기준으로 주문 생성을 거부한다).
+    if (countSelectable && computeBaseAmount(product, selectedCount) == null) {
+      setError("구매할 횟수를 선택해주세요");
+      return;
+    }
     // 사이즈 있는 상품인데 미선택
     if (product.sizes && product.sizes.length > 0 && !selectedSize) {
       setError("사이즈를 선택해주세요");
@@ -245,6 +263,7 @@ function CheckoutContent() {
           centerId, productId: product.id, productName: product.name,
           amount: finalTotal, payMethod: effectivePayMethod,
           selectedSize: selectedSize ?? undefined,
+          selectedCount: countSelectable ? selectedCount : undefined,
           discountAmount: memberCouponDiscount,
           // 2026-10-01 — fulfill_order()가 이제 PG 경로와 같은 공통 검증(_order_expected_amount)으로
           // 센터 쿠폰의 소유/센터/유효기간/최소금액을 확인하고 발급 성공 시 used 처리까지 하므로
@@ -279,6 +298,7 @@ function CheckoutContent() {
         centerId, productId: product.id, productName: product.name,
         amount: finalAmount, payMethod: effectivePayMethod,
         selectedSize: selectedSize ?? undefined,
+        selectedCount: countSelectable ? selectedCount : undefined,
         discountAmount: memberCouponDiscount,
         memberCouponId: selectedMemberCouponId ?? undefined,
         autoBook: autoBookRequested,
@@ -335,9 +355,9 @@ function CheckoutContent() {
   function won(n: number) { return n.toLocaleString("ko-KR") + "원"; }
 
   const selectedMemberCoupon = applicableCoupons.find((c) => c.id === selectedMemberCouponId) ?? null;
-  const memberCouponDiscount = product && selectedMemberCoupon ? previewDiscount(product.price, selectedMemberCoupon) : 0;
+  const memberCouponDiscount = product && selectedMemberCoupon ? previewDiscount(baseAmount, selectedMemberCoupon) : 0;
   // 포인트는 (상품가 - 센터 쿠폰 할인) 범위 안에서만, 보유량 한도로 사용
-  const afterCoupon = product ? Math.max(0, product.price - memberCouponDiscount) : 0;
+  const afterCoupon = product ? Math.max(0, baseAmount - memberCouponDiscount) : 0;
   const pointToUse = Math.min(parseInt(usePoint || "0", 10) || 0, myPoints, afterCoupon);
   const finalTotal = Math.max(0, afterCoupon - pointToUse);
 
@@ -369,7 +389,7 @@ function CheckoutContent() {
           </div>
           <div className="checkout-done-sub">
             {centerName}<br />
-            {product?.name} · {won(product?.price ?? 0)}<br /><br />
+            {product?.name}{countSelectable && selectedCount ? ` · ${selectedCount}회` : ""} · {won(baseAmount)}<br /><br />
             {pendingManualPayment ? (
               "센터에 방문하거나 연락해 결제를 완료해주세요. 결제 확인 후 이용권이 발급돼요."
             ) : (
@@ -461,11 +481,24 @@ function CheckoutContent() {
             <span className={`product-kind-tag ${product.kind}`}>{product.kind === "goods" ? "상품" : "수강권"}</span>
             {product.name}
           </span>
-          <span className="checkout-order-price">{won(product.price)}</span>
+          <span className="checkout-order-price">{won(baseAmount)}</span>
         </div>
         <div className="checkout-order-detail">
-          {product.unlimited ? "무제한" : product.totalCount ? `${product.totalCount}회` : ""}
+          {countSelectable
+            ? `${selectedCount ?? "-"}회 · ${won(baseAmount)}${selectedSize ? ` · ${selectedSize}` : ""}`
+            : product.unlimited ? "무제한" : product.totalCount ? `${product.totalCount}회` : ""}
         </div>
+        {countSelectable && (
+          <div className="checkout-count-select">
+            <label>
+              <span>구매 횟수</span>
+              <select aria-label="구매 횟수" value={selectedCount ?? ""} disabled={busy}
+                onChange={(e) => setSelectedCount(Number(e.target.value))}>
+                {sortedTiers(product).map((t) => <option key={t.count} value={t.count}>{countOptionLabel(t)}</option>)}
+              </select>
+            </label>
+          </div>
+        )}
         {product.description && (
           <div className="checkout-order-desc">{product.description}</div>
         )}
@@ -595,7 +628,7 @@ function CheckoutContent() {
                 onClick={() => setSelectedMemberCouponId(c.id)}
               >
                 <span className="coupon-label">{c.couponName}</span>
-                <span className="coupon-amount">-{won(previewDiscount(product.price, c))}</span>
+                <span className="coupon-amount">-{won(previewDiscount(baseAmount, c))}</span>
               </button>
             ))}
           </div>
@@ -612,7 +645,7 @@ function CheckoutContent() {
             <input className="input-field" style={{ flex: 1 }} inputMode="numeric" placeholder="사용할 포인트"
               value={usePoint} onChange={(e) => setUsePoint(e.target.value.replace(/[^0-9]/g, ""))} />
             <button className="ghost-btn" style={{ flex: "0 0 80px" }}
-              onClick={() => setUsePoint(String(Math.min(myPoints, Math.max(0, product.price - memberCouponDiscount))))}>
+              onClick={() => setUsePoint(String(Math.min(myPoints, Math.max(0, baseAmount - memberCouponDiscount))))}>
               전액
             </button>
           </div>

@@ -147,6 +147,9 @@ export default function ManagerOrdersPage() {
                 </div>
                 <div className="order-product">
                   <span className={`product-kind-tag ${o.productId ? "pass" : "pass"}`}></span>{o.productName}
+                  {/* 구매 횟수 선택형 상품/사이즈 상품은 선택 내용(횟수·사이즈)을 함께 보여준다 */}
+                  {o.selectedCount != null && <span className="order-selection"> · {o.selectedCount}회</span>}
+                  {o.selectedSize && <span className="order-selection"> · {o.selectedSize}</span>}
                 </div>
                 <div className="order-meta">{won(o.amount)} · {o.payMethod ?? "미지정"} · {fmt(o.createdAt)}</div>
               </div>

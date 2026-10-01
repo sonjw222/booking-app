@@ -6,6 +6,7 @@
   - 조건이 있으면 = 하나라도 매칭되는 수업만 예약 가능
 */
 
+import type { CountTier } from "./selectableCount";
 import { supabase } from "./supabaseClient";
 
 export const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -52,6 +53,11 @@ export type Product = {
   // memberships.sql 참고, 중복 데이터 없음).
   weekdaySelectable: boolean;
   timeSelectable: boolean;          // weekdaySelectable이 꺼져 있으면 의미 없음
+  // 2026-10-01 — pass/goods 공통 "구매자가 횟수 선택 + 회차별 가격표"(add_selectable_count_pricing.sql).
+  // true면 countPrices(product_count_prices)에 등록된 회차만 구매 가능하고 price는 가격표 최저가(호환 값)다.
+  // products.max_quantity(판매 가능 개수)와는 별개 개념.
+  countSelectable: boolean;
+  countPrices: CountTier[];
 };
 
 export type ScheduleRule = {
@@ -63,6 +69,7 @@ export type ScheduleRule = {
 
 const PRODUCTS_SELECT_BASE = "id, name, price, pass_type, total_count, is_on_sale, product_kind, unlimited, unlimited_pass, expiry_mode, expiry_days, expiry_date, rolling_month_cutoff_day, rolling_month_allow_early_use, description, sizes, auto_book_days, group_label, max_quantity, visibility_type, coupon_eligible";
 const PRODUCTS_SELECT_WEEKDAY = `${PRODUCTS_SELECT_BASE}, weekday_selectable, time_selectable`;
+const PRODUCTS_SELECT_FULL = `${PRODUCTS_SELECT_WEEKDAY}, purchase_count_selectable`;
 
 // 센터 상품 목록
 // 2026-10-01(Batch C) — weekday_selectable/time_selectable은 add_weekday_time_fixed_
@@ -70,25 +77,20 @@ const PRODUCTS_SELECT_WEEKDAY = `${PRODUCTS_SELECT_BASE}, weekday_selectable, ti
 // 깨지지 않도록 방어적으로 재시도한다(lib/rooms.ts의 detail_address와 동일 패턴) — 이
 // 함수는 수업/체크아웃/상품관리/매출 등 거의 전 화면이 쓰는 핵심 경로라 특히 중요하다.
 export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "pass"): Promise<Product[]> {
-  const first = await supabase
-    .from("products")
-    .select(PRODUCTS_SELECT_WEEKDAY)
-    .eq("center_id", centerId)
-    .eq("is_active", true)
-    .eq("product_kind", kind)
-    .order("created_at", { ascending: false });
-  let data: any[] | null = first.data;
-  let error = first.error;
-  if (error?.code === "42703") {
-    const fallback = await supabase
+  // 컬럼 세트를 좁혀 가며 재시도(42703 = 아직 미적용 SQL의 컬럼 없음): 전체 → 요일/시간까지 → 기본
+  let data: any[] | null = null;
+  let error: { code?: string; message: string } | null = null;
+  for (const cols of [PRODUCTS_SELECT_FULL, PRODUCTS_SELECT_WEEKDAY, PRODUCTS_SELECT_BASE]) {
+    const res = await supabase
       .from("products")
-      .select(PRODUCTS_SELECT_BASE)
+      .select(cols)
       .eq("center_id", centerId)
       .eq("is_active", true)
       .eq("product_kind", kind)
       .order("created_at", { ascending: false });
-    data = fallback.data;
-    error = fallback.error;
+    data = res.data as any[] | null;
+    error = res.error;
+    if (error?.code !== "42703") break;
   }
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
   const rows = data ?? [];
@@ -123,6 +125,21 @@ export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "
     for (const m of memberRows ?? []) (membersByProduct[(m as any).product_id] ??= []).push((m as any).center_member_id);
   }
 
+  // 횟수 선택형 상품의 회차별 가격표 — 선택형 상품 id 전체로 한 번만 조회(N+1 방지). 테이블이 아직 없거나(SQL 미적용)
+  // 조회가 실패하면 빈 가격표로 폴백해 이 핵심 목록 조회 자체는 깨지지 않게 한다(선택형은 "가격표 없음"으로 보인다).
+  const tiersByProduct: Record<string, CountTier[]> = {};
+  const selectableIds = rows.filter((p: any) => p.purchase_count_selectable).map((p: any) => p.id);
+  if (selectableIds.length > 0) {
+    const { data: tierRows, error: tierErr } = await supabase
+      .from("product_count_prices")
+      .select("product_id, count, price")
+      .in("product_id", selectableIds);
+    if (!tierErr) {
+      for (const t of tierRows ?? []) (tiersByProduct[(t as any).product_id] ??= []).push({ count: (t as any).count, price: (t as any).price });
+      for (const id of Object.keys(tiersByProduct)) tiersByProduct[id].sort((a, b) => a.count - b.count);
+    }
+  }
+
   return rows.map((p: any) => ({
     id: p.id, name: p.name, price: p.price,
     passType: p.pass_type, totalCount: p.total_count, isOnSale: p.is_on_sale,
@@ -142,6 +159,8 @@ export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "
     couponEligible: p.coupon_eligible ?? true,
     weekdaySelectable: p.weekday_selectable ?? false,
     timeSelectable: p.time_selectable ?? false,
+    countSelectable: p.purchase_count_selectable ?? false,
+    countPrices: tiersByProduct[p.id] ?? [],
   }));
 }
 
@@ -176,18 +195,40 @@ async function saveProductVisibility(productId: string, visibility?: ProductVisi
   }
 }
 
+const SELECTABLE_NEEDS_SQL = "구매 횟수 선택형 상품은 DB 업데이트(add_selectable_count_pricing.sql) 적용 후 사용할 수 있어요";
+
+// 회차별 가격표 전체 교체(= 선택형 설정). tiers가 비었거나 null이면 고정 상품으로 되돌린다(가격표 삭제).
+// 서버 RPC(set_product_count_prices)가 권한/중복/가격 검증 + products.price(최저가)·purchase_count_selectable 동기화를
+// 한 트랜잭션으로 처리한다. RPC가 아직 없는 환경(SQL 미적용)에서는 조용히 고정 상품으로 저장하지 않고 명확한 오류를 낸다.
+export async function saveProductCountPrices(productId: string, tiers: CountTier[] | null): Promise<void> {
+  const { error } = await supabase.rpc("set_product_count_prices", {
+    p_product_id: productId,
+    p_tiers: (tiers ?? []).map((t) => ({ count: t.count, price: t.price })),
+  });
+  if (!error) return;
+  const missing = error.code === "PGRST202" || error.code === "42883" || /Could not find the function/i.test(error.message ?? "");
+  if (missing) throw new Error(SELECTABLE_NEEDS_SQL);
+  throw new Error(error.message.replace(/^.*?:\s*/, ""));
+}
+
+const minTierPrice = (tiers: CountTier[]) => Math.min(...tiers.map((t) => t.price));
+
 export async function createProduct(
   centerId: string, name: string, price: number, totalCount: number,
   kind: "pass" | "goods" = "pass", unlimited = false,
-  extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string; maxQuantity?: number | null; visibility?: ProductVisibility; couponEligible?: boolean; weekdaySelectable?: boolean; timeSelectable?: boolean }
-): Promise<void> {
+  extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string; maxQuantity?: number | null; visibility?: ProductVisibility; couponEligible?: boolean; weekdaySelectable?: boolean; timeSelectable?: boolean; countSelectable?: boolean; countPrices?: CountTier[] }
+): Promise<string> {
+  // 횟수 선택형: 먼저 "고정 상품 형태"로 만들고(price=가격표 최저가, total_count 없음, 무제한 아님) 바로 가격표 RPC로 선택형 전환.
+  const selectable = extra?.countSelectable === true;
+  if (selectable && (!extra?.countPrices || extra.countPrices.length === 0)) throw new Error("판매할 횟수와 가격을 1개 이상 입력해주세요");
+  if (selectable) { price = minTierPrice(extra!.countPrices!); unlimited = false; }
   const row: Record<string, unknown> = {
     center_id: centerId, name, price,
     product_kind: kind,
     unlimited,
-    unlimited_pass: extra?.unlimitedPass ?? false,
+    unlimited_pass: selectable ? false : (extra?.unlimitedPass ?? false),
     pass_type: "count",
-    total_count: unlimited || extra?.unlimitedPass ? null : totalCount,
+    total_count: selectable || unlimited || extra?.unlimitedPass ? null : totalCount,
     expiry_mode: extra?.expiry?.mode ?? "none",
     expiry_days: extra?.expiry?.mode === "days" ? extra.expiry.days : null,
     expiry_date: extra?.expiry?.mode === "date" ? extra.expiry.date : null,
@@ -205,25 +246,40 @@ export async function createProduct(
   };
   let { data, error } = await supabase.from("products").insert(row).select("id").single();
   if (error?.code === "42703") {
-    // 2026-10-01(Batch C) — add_weekday_time_fixed_memberships.sql 미실행 환경 방어
-    // (lib/rooms.ts와 동일 패턴) — 이 두 옵션 없이 재시도해 상품 생성 자체는 막히지 않게.
+    // 2026-10-01(Batch C) — add_weekday_time_fixed_memberships.sql 미실행 환경 방어(lib/rooms.ts와 동일 패턴).
     const { weekday_selectable, time_selectable, ...withoutWeekday } = row;
     ({ data, error } = await supabase.from("products").insert(withoutWeekday).select("id").single());
   }
   if (error || !data) throw new Error("상품 생성에 실패했어요: " + (error?.message ?? "no data"));
-  await saveProductVisibility((data as any).id, extra?.visibility);
+  const newId = (data as any).id as string;
+  if (selectable) {
+    try {
+      await saveProductCountPrices(newId, extra!.countPrices!);
+    } catch (e) {
+      // 가격표 저장이 실패하면 방금 만든 상품이 "가격표 없는 고정 상품(최저가)"으로 남아 잘못 팔리지 않게 정리한다.
+      const del = await supabase.from("products").delete().eq("id", newId);
+      if (del.error) await supabase.from("products").update({ is_active: false, is_on_sale: false }).eq("id", newId);
+      throw e;
+    }
+  }
+  await saveProductVisibility(newId, extra?.visibility);
+  return newId;
 }
 
 // 상품 수정 (이름·가격·횟수·설명·사이즈)
 export async function updateProduct(
   id: string, name: string, price: number, totalCount: number,
-  unlimited: boolean, extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string; maxQuantity?: number | null; visibility?: ProductVisibility; couponEligible?: boolean; weekdaySelectable?: boolean; timeSelectable?: boolean }
+  unlimited: boolean, extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string; maxQuantity?: number | null; visibility?: ProductVisibility; couponEligible?: boolean; weekdaySelectable?: boolean; timeSelectable?: boolean; countSelectable?: boolean; countPrices?: CountTier[]; wasCountSelectable?: boolean }
 ): Promise<void> {
+  // countSelectable=true → 가격표 저장(선택형), false이고 wasCountSelectable → 가격표 해제(고정으로 복귀), 미지정 → 건드리지 않음.
+  const selectable = extra?.countSelectable === true;
+  if (selectable && (!extra?.countPrices || extra.countPrices.length === 0)) throw new Error("판매할 횟수와 가격을 1개 이상 입력해주세요");
+  if (selectable) { price = minTierPrice(extra!.countPrices!); unlimited = false; }
   const row: Record<string, unknown> = {
     name, price,
     unlimited,
-    unlimited_pass: extra?.unlimitedPass ?? false,
-    total_count: unlimited || extra?.unlimitedPass ? null : totalCount,
+    unlimited_pass: selectable ? false : (extra?.unlimitedPass ?? false),
+    total_count: selectable || unlimited || extra?.unlimitedPass ? null : totalCount,
     expiry_mode: extra?.expiry?.mode ?? "none",
     expiry_days: extra?.expiry?.mode === "days" ? extra.expiry.days : null,
     expiry_date: extra?.expiry?.mode === "date" ? extra.expiry.date : null,
@@ -247,6 +303,8 @@ export async function updateProduct(
     ({ error } = await supabase.from("products").update(withoutWeekday).eq("id", id));
   }
   if (error) throw new Error("상품 수정에 실패했어요: " + error.message);
+  if (selectable) await saveProductCountPrices(id, extra!.countPrices!);
+  else if (extra?.countSelectable === false && extra.wasCountSelectable) await saveProductCountPrices(id, null);
   await saveProductVisibility(id, extra?.visibility);
 }
 

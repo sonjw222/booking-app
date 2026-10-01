@@ -26,7 +26,8 @@ import {
 } from "../../../lib/memberMemos";
 import { fetchCenterSubscription } from "../../../lib/centerSubscription";
 import { fetchGrantableProducts, grantProductToMember, won, type GrantInput, type SaleProduct } from "../../../lib/sales";
-import { grantBlockReason, grantSheetTitle, holdingLabel, productNeedsSize, suggestGrantSize, type GrantKind } from "../../../lib/memberGrant";
+import { countOptionLabel, priceSummary, tierPriceFor } from "../../../lib/selectableCount";
+import { defaultGrantPrice, grantBlockReason, grantCountOptions, grantSheetTitle, holdingLabel, productNeedsSize, suggestGrantSize, type GrantKind } from "../../../lib/memberGrant";
 import { fetchPurchaseScheduleOptions } from "../../../lib/center";
 import { DAYS, type SelectableSchedule } from "../../../lib/passes";
 import AlimtalkComposer, {
@@ -138,6 +139,8 @@ function MembersContent() {
   // 수강권 지급 / 상품 지급은 서로 다른 시트(같은 컴포넌트, 목록·사이즈 UI만 다름) — 회원 상세의 각 보유 섹션에서 연다.
   const [grantKind, setGrantKind] = useState<GrantKind>("pass");
   const [grantSize, setGrantSize] = useState<string | null>(null);
+  // 구매 횟수 선택형 상품일 때만 사용하는 지급 횟수(고정 상품은 상품 정의 횟수로 지급)
+  const [grantCount, setGrantCount] = useState<number | null>(null);
   const [grantProducts, setGrantProducts] = useState<SaleProduct[]>([]);
   const [grantProductId, setGrantProductId] = useState("");
   const [grantPrice, setGrantPrice] = useState("");
@@ -473,7 +476,7 @@ function MembersContent() {
     if (!centerId) return;
     setGrantKind(kind);
     setGrantProductId(""); setGrantPrice(""); setGrantMethod("card"); setGrantMemo("");
-    setGrantScheduleOptions(null); setGrantScheduleDay(null); setGrantScheduleTime(null); setGrantSize(null);
+    setGrantScheduleOptions(null); setGrantScheduleDay(null); setGrantScheduleTime(null); setGrantSize(null); setGrantCount(null);
     setGrantProducts([]);
     setGrantTarget(m);
     try {
@@ -485,9 +488,13 @@ function MembersContent() {
   function pickGrantProduct(id: string) {
     setGrantProductId(id);
     const p = grantProducts.find((x) => x.id === id);
-    setGrantPrice(p ? String(p.price) : "");
+    // 선택형 상품은 최소 횟수를 기본으로 두고 가격 기본값 = 1회가 × 횟수(관리자가 수정 가능), 고정 상품은 상품가
+    const firstCount = grantCountOptions(p)[0] ?? null;
+    setGrantCount(firstCount);
+    const dp = defaultGrantPrice(p, firstCount);
+    setGrantPrice(p && dp != null ? String(dp) : "");
     // 가격이 있는 상품을 새로 고르면 "서비스"로 남아있던 결제방법을 실수로 유지하지 않게 초기화
-    if (p && p.price > 0 && grantMethod === "service") setGrantMethod("card");
+    if (p && (dp ?? 0) > 0 && grantMethod === "service") setGrantMethod("card");
     // 2026-10-01(Batch C, C-10) — 상품을 바꾸면 이전 상품의 요일/시간 선택은 무효이므로 초기화.
     setGrantScheduleDay(null); setGrantScheduleTime(null);
     // 프로필 신발 사이즈가 상품 sizes 중 하나면 기본 선택으로 제안(관리자가 확인·변경 가능)
@@ -508,7 +515,7 @@ function MembersContent() {
     const product = grantProducts.find((p) => p.id === grantProductId);
     if (!product) return;
     // 2026-10-01(Batch C, C-10) — 구매 화면(app/checkout)과 동일하게 선택 없이는 발급을 막는다.
-    const blocked = grantBlockReason({ product, price: grantPrice, selectedSize: grantSize, scheduleDay: grantScheduleDay, scheduleTime: grantScheduleTime });
+    const blocked = grantBlockReason({ product, price: grantPrice, selectedSize: grantSize, scheduleDay: grantScheduleDay, scheduleTime: grantScheduleTime, selectedCount: grantCount });
     if (blocked) { setError(blocked); return; }
     setGranting(true); setError(null);
     try {
@@ -519,6 +526,8 @@ function MembersContent() {
         boundDayOfWeek: product.kind !== "goods" && product.weekdaySelectable ? grantScheduleDay : undefined,
         boundStartTime: product.kind !== "goods" && product.weekdaySelectable && product.timeSelectable ? grantScheduleTime : undefined,
         selectedSize: productNeedsSize(product) ? grantSize : undefined,
+        // 선택형 상품만 횟수를 보낸다(고정 상품은 서버가 상품 정의 횟수로 지급하고 횟수 지정을 거부).
+        selectedCount: grantCountOptions(product).length > 0 ? grantCount : undefined,
       });
       showToast(price === 0 ? "서비스로 지급했어요" : "지급하고 매출에 반영했어요");
       setGrantTarget(null);
@@ -1132,7 +1141,7 @@ function MembersContent() {
             >
               <option value="">{grantKind === "goods" ? "상품 선택..." : "수강권 선택..."}</option>
               {grantProducts.map((p) => (
-                <option key={p.id} value={p.id}>{p.name} · {won(p.price)}{!p.onSale ? " (판매중지)" : ""}</option>
+                <option key={p.id} value={p.id}>{p.name} · {p.countSelectable ? priceSummary(p) : won(p.price)}{!p.onSale ? " (판매중지)" : ""}</option>
               ))}
             </select>
 
@@ -1143,6 +1152,32 @@ function MembersContent() {
                   : "지급할 수 있는 수강권이 없어요."}
               </div>
             )}
+
+            {/* 지급 횟수 — 구매 횟수 선택형 상품만(고정 상품은 상품 정의 횟수로 지급) */}
+            {(() => {
+              const sel = grantProducts.find((p) => p.id === grantProductId);
+              const choices = grantCountOptions(sel);
+              if (choices.length === 0) return null;
+              return (
+                <>
+                  <div className="menu-section-label" style={{ padding: "0 0 6px" }}>지급 횟수</div>
+                  <select aria-label="지급 횟수" className="input-field" style={{ marginBottom: 10 }}
+                    value={grantCount ?? ""} disabled={granting}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setGrantCount(n);
+                      // 가격이 아직 기본값(1회가×이전 횟수)이면 새 횟수에 맞춰 갱신, 관리자가 직접 바꾼 값이면 유지
+                      const dpPrev = defaultGrantPrice(sel, grantCount);
+                      if (grantPrice === "" || Number(grantPrice) === dpPrev) {
+                        const next = defaultGrantPrice(sel, n);
+                        if (next != null) setGrantPrice(String(next));
+                      }
+                    }}>
+                    {choices.map((n) => <option key={n} value={n}>{countOptionLabel({ count: n, price: tierPriceFor(sel!, n) ?? 0 })}</option>)}
+                  </select>
+                </>
+              );
+            })()}
 
             {/* 사이즈 — 상품에 sizes가 정의돼 있으면 필수(memberships.selected_size에 저장) */}
             {(() => {
@@ -1260,7 +1295,7 @@ function MembersContent() {
                   granting ||
                   grantBlockReason({
                     product: grantProducts.find((p) => p.id === grantProductId),
-                    price: grantPrice, selectedSize: grantSize, scheduleDay: grantScheduleDay, scheduleTime: grantScheduleTime,
+                    price: grantPrice, selectedSize: grantSize, scheduleDay: grantScheduleDay, scheduleTime: grantScheduleTime, selectedCount: grantCount,
                   }) !== null
                 }
                 onClick={handleGrant}

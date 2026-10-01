@@ -73,7 +73,10 @@ describe("[3] 주문 금액 검증 — 원가가 아니라 서버 기대금액�
   });
   it("기대금액 공식 = 상품가 - 서버가 검증한 쿠폰 할인 - 원장 확인 포인트(0 하한)", () => {
     const e = fn("_order_expected_amount");
-    expect(e).toContain("greatest(0, v_product.price - v_verified_discount - coalesce(p_order.points_used, 0))");
+    // 상품 기본금액 = 주문 생성 시 서버가 가격표/상품가에서 확정한 snapshot(없는 옛 주문만 현재 상품가) → 그 위에 검증된 쿠폰·포인트
+    expect(e).toContain("v_base := coalesce(p_order.product_amount_snapshot, v_product.price);");
+    expect(e).toContain("greatest(0, v_base - v_verified_discount - coalesce(p_order.points_used, 0))");
+    expect(e.indexOf("v_base :=")).toBeLessThan(e.indexOf("greatest(0, v_base"));
     expect(e).toContain("from point_transactions");
     expect(e).toContain("본인에게 지급된 쿠폰만 사용할 수 있어요");
     expect(e).toContain("이 센터에서 사용할 수 없는 쿠폰이에요");

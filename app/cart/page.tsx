@@ -7,7 +7,8 @@
 */
 
 import { useCallback, useEffect, useState } from "react";
-import { fetchCart, addToCart, removeFromCart, clearCart, updateCartSize, type CartItem } from "../../lib/cart";
+import { fetchCart, addToCart, removeFromCart, clearCart, updateCartSize, updateCartCount, type CartItem } from "../../lib/cart";
+import { cartItemAmount, countOptionLabel, sortedTiers } from "../../lib/selectableCount";
 import { createOrder } from "../../lib/orders";
 import { fetchCenterDetail } from "../../lib/center";
 import { fetchProfiles, type ProfileRow } from "../../lib/profiles";
@@ -77,15 +78,19 @@ export default function CartPage() {
 
   const visibleMethodIds = visiblePayMethodIds({ pgEnabled, allowed: allowedPay, all: PAY_METHODS.map((m) => m.id) });
   const effectivePayMethod = resolveSelectedPayMethod(payMethod, visibleMethodIds);
-  const subtotal = items.reduce((s, i) => s + i.price, 0);
+  // 횟수 선택형 row 금액 = 1회가×선택 횟수(표시용 — 주문 생성 시 서버가 다시 확정), 그 외는 row 금액 그대로
+  const itemAmount = (i: CartItem) => cartItemAmount(i);
+  const subtotal = items.reduce((s, i) => s + itemAmount(i), 0);
   const total = subtotal;
   function won(n: number) { return n.toLocaleString("ko-KR") + "원"; }
 
   // 사이즈 없는 상품만 productId 기준으로 묶어 "행 개수 = 수량"으로 표현(위 handleIncrement
   // 주석 참고). 사이즈 있는 상품은 행별로 그대로 유지.
-  const sizedItems = items.filter((it) => it.sizes && it.sizes.length > 0);
+  const selectableItems = items.filter((it) => it.countSelectable);
+  const sizedItems = items.filter((it) => !it.countSelectable && it.sizes && it.sizes.length > 0);
   const noSizeGroups: { productId: string; centerId: string; productName: string; price: number; ids: string[] }[] = [];
   for (const it of items) {
+    if (it.countSelectable) continue;
     if (it.sizes && it.sizes.length > 0) continue;
     const g = noSizeGroups.find((x) => x.productId === it.productId);
     if (g) g.ids.push(it.id);
@@ -128,6 +133,16 @@ export default function CartPage() {
     finally { setBusy(false); }
   }
 
+  async function handleCount(it: CartItem, count: number) {
+    setBusy(true);
+    try {
+      const price = cartItemAmount({ ...it, selectedCount: count });
+      await updateCartCount(it.id, count, price);
+      setItems((prev) => prev.map((x) => x.id === it.id ? { ...x, selectedCount: count, price } : x));
+    } catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
   async function handleSize(it: CartItem, size: string) {
     setBusy(true);
     try {
@@ -149,8 +164,9 @@ export default function CartPage() {
       for (const it of items) {
         await createOrder({
           centerId: it.centerId, productId: it.productId, productName: it.productName,
-          amount: it.price, payMethod: effectivePayMethod,
+          amount: itemAmount(it), payMethod: effectivePayMethod,
           selectedSize: it.selectedSize ?? undefined,
+          selectedCount: it.countSelectable ? it.selectedCount : undefined,
           profileId: selectedProfileId || undefined,
         });
       }
@@ -205,6 +221,39 @@ export default function CartPage() {
           {/* 주문 정보 */}
           <div className="commerce-title"><strong>담은 상품</strong><span>{items.length}개</span></div>
           <div className="cart-list">
+            {/* 구매 횟수 선택형: 상품(+사이즈)당 한 row. 수량 stepper 대신 횟수 select, 사이즈는 chip */}
+            {selectableItems.map((it) => (
+              <div key={it.id} className="cart-row-wrap">
+                <div className="cart-row">
+                  <div className="commerce-product-mark">P</div><div className="cart-info">
+                    <div className="cart-name">{it.productName}</div>
+                    <div className="cart-price">
+                      {it.selectedCount ?? "-"}회{it.selectedSize ? ` · ${it.selectedSize}` : ""} · {won(itemAmount(it))}
+                    </div>
+                  </div>
+                  <button className="cart-remove" disabled={busy} onClick={() => handleRemove(it.id)}>삭제</button>
+                </div>
+                <div className="cart-count-select">
+                  <label>
+                    <span className="cart-size-label">횟수</span>
+                    <select aria-label={`${it.productName} 구매 횟수`} value={it.selectedCount ?? ""} disabled={busy}
+                      onChange={(e) => handleCount(it, Number(e.target.value))}>
+                      {sortedTiers(it).map((t) => <option key={t.count} value={t.count}>{countOptionLabel(t)}</option>)}
+                    </select>
+                  </label>
+                  <span className="cart-count-total">총 {won(itemAmount(it))}</span>
+                </div>
+                {it.sizes && it.sizes.length > 0 && (
+                  <div className="cart-sizes">
+                    <span className="cart-size-label">사이즈</span>
+                    {it.sizes.map((sz) => (
+                      <button aria-pressed={it.selectedSize === sz} key={sz} className={`filter-chip ${it.selectedSize === sz ? "on" : ""}`}
+                        disabled={busy} onClick={() => handleSize(it, sz)}>{sz}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
             {sizedItems.map((it) => (
               <div key={it.id} className="cart-row-wrap">
                 <div className="cart-row">

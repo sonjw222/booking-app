@@ -166,8 +166,11 @@ export default function PurchasesPage() {
                 {it.amount > 0 ? <>{won(it.amount)} · </> : it.amount === 0 && <>무료 · </>}
                 {it.purchasedAt}
                 {it.totalCount != null && (
-                  <> · {it.remainingCount ?? 0}/{it.totalCount}회 남음</>
+                  it.membershipId
+                    ? <> · {it.remainingCount ?? 0}/{it.totalCount}회 남음</>
+                    : <> · {it.totalCount}회 구매 신청</>   // 미발급 주문(횟수 선택형): 고른 횟수 표시
                 )}
+                {it.selectedSize && <> · {it.selectedSize}</>}
               </div>
 
               {it.status !== "refunded" && (

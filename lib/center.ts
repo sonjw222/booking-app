@@ -9,6 +9,7 @@ import { supabase } from "./supabaseClient";
 import { sanitizeRichText } from "./security";
 import { getMyAccountId } from "./authAccount";
 import { computeSelectableSchedule, type ScheduleRule, type SelectableSchedule } from "./passes";
+import type { CountTier } from "./selectableCount";
 
 export type CenterDetail = {
   id: string;
@@ -180,10 +181,19 @@ export type CenterProduct = {
   // 같은 의미, 회원용(CenterProduct) 타입에도 그대로 추가.
   weekdaySelectable: boolean;
   timeSelectable: boolean;
+  // 2026-10-01 — 구매 횟수 선택형(회차별 가격표, add_selectable_count_pricing.sql). pass/goods 공통.
+  // 선택형의 price는 호환 값(가격표 최저가)일 뿐 주문 금액이 아니다 — 금액은 항상 countPrices(서버는 주문 snapshot).
+  countSelectable: boolean;
+  countPrices: CountTier[];        // 로그인 경로에서만 채워진다(공개 RPC는 요약만)
+  minCount: number | null;         // 가격표/공개 RPC에서 계산된 선택 가능 횟수 범위(표시용)
+  maxCount: number | null;
+  minTierPrice: number | null;     // "~원부터" 표시용 최저 회차 가격
 };
 
 const CENTER_PRODUCTS_SELECT_BASE = "id, name, price, product_kind, total_count, unlimited, description, sizes, auto_book_days, group_label, max_quantity, coupon_eligible";
 const CENTER_PRODUCTS_SELECT_WEEKDAY = `${CENTER_PRODUCTS_SELECT_BASE}, weekday_selectable, time_selectable`;
+// 구매 횟수 선택형 컬럼까지 포함(가장 먼저 시도, 컬럼이 없는 환경은 42703으로 순서대로 폴백)
+const CENTER_PRODUCTS_SELECT_FULL = `${CENTER_PRODUCTS_SELECT_WEEKDAY}, purchase_count_selectable`;
 
 // 2026-10-01 — 토스페이먼츠 전자결제 심사 대응. 비로그인 사용자는 fetch_purchasable_products()를
 // 호출할 권한이 없어(일부러 anon revoke — 회원 등급/지정 회원 전용 상품이 새지 않게) 센터
@@ -209,6 +219,7 @@ export type PublicStorefrontProduct = {
   kind: "pass" | "goods"; description: string | null; totalCount: number | null;
   unlimited: boolean; unlimitedPass: boolean; groupLabel: string | null;
   remaining: number | null; // null=수량 제한 없음, 0=매진
+  countSelectable: boolean; minCount: number | null; maxCount: number | null; minTierPrice: number | null;
 };
 
 // 비로그인 포함 누구나 호출 가능한 공개 판매상품(add_public_storefront_products.sql).
@@ -225,6 +236,9 @@ export async function fetchPublicStorefrontProducts(centerId?: string | null): P
     description: p.description ?? null, totalCount: p.total_count ?? null,
     unlimited: p.unlimited ?? false, unlimitedPass: p.unlimited_pass ?? false,
     groupLabel: p.group_label ?? null, remaining: p.remaining ?? null,
+    countSelectable: p.purchase_count_selectable ?? false,
+    minCount: p.min_purchase_count ?? null, maxCount: p.max_purchase_count ?? null,
+    minTierPrice: p.min_tier_price ?? null,
   }));
 }
 
@@ -251,6 +265,8 @@ async function fetchPublicCenterProducts(centerId: string): Promise<CenterProduc
     validDays: null, description: p.description, sizes: null, autoBookDays: null,
     groupLabel: p.groupLabel, remaining: p.remaining, couponEligible: true,
     weekdaySelectable: false, timeSelectable: false,
+    countSelectable: p.countSelectable, countPrices: [], minCount: p.minCount, maxCount: p.maxCount,
+    minTierPrice: p.minTierPrice,
   }));
 }
 
@@ -268,15 +284,22 @@ async function fetchMemberCenterProducts(centerId: string): Promise<CenterProduc
   // 구매 화면 전체가 깨지지 않도록 방어(lib/rooms.ts, lib/passes.ts와 동일 패턴).
   const first = await supabase
     .rpc("fetch_purchasable_products", { p_center_id: centerId })
-    .select(CENTER_PRODUCTS_SELECT_WEEKDAY);
+    .select(CENTER_PRODUCTS_SELECT_FULL);
   let data: any[] | null = first.data as any;
   let error = first.error;
   if (error?.code === "42703") {
-    const fallback = await supabase
+    const second = await supabase
       .rpc("fetch_purchasable_products", { p_center_id: centerId })
-      .select(CENTER_PRODUCTS_SELECT_BASE);
-    data = fallback.data as any;
-    error = fallback.error;
+      .select(CENTER_PRODUCTS_SELECT_WEEKDAY);
+    data = second.data as any;
+    error = second.error;
+    if (error?.code === "42703") {
+      const fallback = await supabase
+        .rpc("fetch_purchasable_products", { p_center_id: centerId })
+        .select(CENTER_PRODUCTS_SELECT_BASE);
+      data = fallback.data as any;
+      error = fallback.error;
+    }
   }
   if (error) throw Object.assign(new Error("상품을 불러오지 못했어요: " + error.message), { code: error.code });
   // Postgres 함수가 setof products를 반환하는 RPC라 supabase-js의 기본 타입 추론이
@@ -295,20 +318,46 @@ async function fetchMemberCenterProducts(centerId: string): Promise<CenterProduc
     for (const c of counts ?? []) soldByProduct[(c as any).product_id] = (c as any).sold_count;
   }
 
-  return rows.map((p: any) => ({
-    id: p.id, name: p.name, price: p.price,
-    kind: p.product_kind === "goods" ? "goods" : "pass",
-    totalCount: p.total_count, unlimited: p.unlimited ?? false,
-    validDays: null,
-    description: p.description ?? null,
-    sizes: p.sizes ?? null,
-    autoBookDays: p.auto_book_days ?? null,
-    groupLabel: p.group_label ?? null,
-    remaining: p.max_quantity != null ? Math.max(0, p.max_quantity - (soldByProduct[p.id] ?? 0)) : null,
-    couponEligible: p.coupon_eligible ?? true,
-    weekdaySelectable: p.weekday_selectable ?? false,
-    timeSelectable: p.time_selectable ?? false,
-  }));
+  // 회차별 가격표(product_count_prices) — 선택형 상품 id들만 한 번에 조회. 테이블이 없거나 조회가 실패하면
+  // 빈 가격표로 취급하고, 가격표가 없는 선택형 상품은 구매 불가이므로 아래에서 목록에서 제외한다
+  // (1회분 가격으로 잘못 팔리는 일이 없게).
+  const selectableIds = rows.filter((p: any) => p.purchase_count_selectable).map((p: any) => p.id);
+  const tiersByProduct: Record<string, CountTier[]> = {};
+  if (selectableIds.length > 0) {
+    const { data: tierRows, error: tierErr } = await supabase
+      .from("product_count_prices")
+      .select("product_id, count, price")
+      .in("product_id", selectableIds);
+    if (!tierErr) {
+      for (const t of (tierRows ?? []) as any[]) (tiersByProduct[t.product_id] ??= []).push({ count: t.count, price: t.price });
+    }
+    for (const id of Object.keys(tiersByProduct)) tiersByProduct[id].sort((a, b) => a.count - b.count);
+  }
+
+  return rows
+    .filter((p: any) => !p.purchase_count_selectable || (tiersByProduct[p.id]?.length ?? 0) > 0)
+    .map((p: any) => {
+      const tiers = tiersByProduct[p.id] ?? [];
+      return {
+        id: p.id, name: p.name, price: p.price,
+        kind: p.product_kind === "goods" ? "goods" : "pass",
+        totalCount: p.total_count, unlimited: p.unlimited ?? false,
+        validDays: null,
+        description: p.description ?? null,
+        sizes: p.sizes ?? null,
+        autoBookDays: p.auto_book_days ?? null,
+        groupLabel: p.group_label ?? null,
+        remaining: p.max_quantity != null ? Math.max(0, p.max_quantity - (soldByProduct[p.id] ?? 0)) : null,
+        couponEligible: p.coupon_eligible ?? true,
+        weekdaySelectable: p.weekday_selectable ?? false,
+        timeSelectable: p.time_selectable ?? false,
+        countSelectable: p.purchase_count_selectable ?? false,
+        countPrices: tiers,
+        minCount: tiers.length ? tiers[0].count : null,
+        maxCount: tiers.length ? tiers[tiers.length - 1].count : null,
+        minTierPrice: tiers.length ? Math.min(...tiers.map((t) => t.price)) : null,
+      } as CenterProduct;
+    });
 }
 
 // 2026-10-01(Batch C, C-5) — weekdaySelectable 상품의 구매 시 요일/시간 선택 후보.

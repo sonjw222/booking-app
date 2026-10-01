@@ -19,6 +19,12 @@ import {
 } from "../../../lib/center";
 import { ZoomableImage } from "../../components/ImageViewer";
 import { addToCart, cartCount } from "../../../lib/cart";
+import { availabilityLabel, computeBaseAmount, countOptionLabel, isCountSelectable, priceSummary, sortedTiers } from "../../../lib/selectableCount";
+import {
+  EMPTY_CATALOG_FILTER, catalogEmptyMessage, filterCatalog, isFilterActive, nextFilterOnKind, uniqueGroupLabels,
+  type CatalogFilterState, type KindFilter,
+} from "../../../lib/catalogFilter";
+import CatalogSearchFilter from "../../components/CatalogSearchFilter";
 import {
   fetchReviews, myReviewFor, writeReview, deleteReview, uploadReviewPhoto, reviewPhotoUrl, type Review,
   reportReview, REVIEW_REPORT_REASON_LABELS, type ReviewReportReason,
@@ -91,6 +97,13 @@ function CenterDetailContent() {
   const [cartItemCount, setCartItemCount] = useState(0);
   const [passRules, setPassRules] = useState<Record<string, ScheduleRule[]>>({});
   const [descProduct, setDescProduct] = useState<CenterProduct | null>(null);
+  // 구매 sheet 검색/필터(2026-10-01) — 이미 받아 온 상품 배열을 클라이언트에서 거르기만 한다(새 API 없음).
+  const [catalogFilter, setCatalogFilter] = useState<CatalogFilterState>(EMPTY_CATALOG_FILTER);
+  // 상품별 선택(횟수/사이즈)은 row 밖(상위 state)에 둔다 — 필터/검색으로 row가 사라졌다 돌아와도 선택이 유지된다.
+  const [selections, setSelections] = useState<Record<string, Partial<ProductSelection>>>({});
+  const changeSelection = useCallback((productId: string, patch: Partial<ProductSelection>) => {
+    setSelections((prev) => ({ ...prev, [productId]: { ...prev[productId], ...patch } }));
+  }, []);
   // 후기
   const [reviews, setReviews] = useState<Review[]>([]);
   const [myReview, setMyReview] = useState<Review | null>(null);
@@ -165,10 +178,13 @@ function CenterDetailContent() {
     window.location.href = `/reservation?center=${centerId}`;
   }
 
-  function handlePurchase(p: CenterProduct) {
+  function handlePurchase(p: CenterProduct, sel?: ProductSelection) {
     // 결제 화면으로 이동 (예약창에서 넘어온 경우, 예약할 수업/필터 상태도 함께 전달해
     // 결제 완료 후 또는 뒤로가기 시 지금 이 화면 상태로 되돌아올 수 있게 함)
     let url = `/checkout?center=${centerId}&product=${p.id}`;
+    // 구매 횟수 선택형 상품은 고른 횟수/사이즈를 checkout까지 그대로 넘긴다(최종 금액·횟수는 서버가 다시 확정).
+    if (sel?.count != null) url += `&count=${sel.count}`;
+    if (sel?.size) url += `&size=${encodeURIComponent(sel.size)}`;
     if (reserveClassId && reserveDate) {
       url += `&reserveClassId=${reserveClassId}&reserveDate=${encodeURIComponent(reserveDate)}`;
       if (reserveCenter) url += `&reserveCenter=${reserveCenter}`;
@@ -232,10 +248,15 @@ function CenterDetailContent() {
     } finally { setReportBusy(false); }
   }
 
-  async function handleAddCart(p: CenterProduct) {
-    // 사이즈 있는 상품은 결제화면에서 선택하도록 안내 (장바구니는 사이즈 없는 것 위주)
+  async function handleAddCart(p: CenterProduct, sel?: ProductSelection) {
+    // 사이즈 있는 고정 상품은 결제화면에서 선택하도록 안내(장바구니는 사이즈 없는 것 위주).
+    // 횟수 선택형 상품은 고른 횟수/사이즈를 그대로 담는다(같은 상품+사이즈는 한 row, 다시 담으면 선택 변경).
     try {
-      await addToCart({ centerId, productId: p.id, productName: p.name, price: p.price });
+      await addToCart({
+        centerId, productId: p.id, productName: p.name,
+        price: computeBaseAmount(p, sel?.count) ?? p.price,
+        selectedSize: sel?.size ?? null, selectedCount: sel?.count ?? null,
+      });
       showToast(`'${p.name}' 장바구니에 담았어요`);
       cartCount().then(setCartItemCount);
     } catch (e: any) { setError(e.message); }
@@ -244,6 +265,21 @@ function CenterDetailContent() {
   useEffect(() => {
     if (buySheet) cartCount().then(setCartItemCount);
   }, [buySheet]);
+
+  // 구매 sheet 목록: (수업 지정 필터) → 종류/그룹/검색 필터. 기존 정렬 순서는 그대로 두고 항목만 제거한다.
+  const classScopedProducts = useMemo(
+    () => (filterProductIds && !showAllProducts ? products.filter((p) => filterProductIds.has(p.id)) : products),
+    [products, filterProductIds, showAllProducts],
+  );
+  const groupLabels = useMemo(() => uniqueGroupLabels(classScopedProducts), [classScopedProducts]);
+  const effectiveCatalogFilter = useMemo<CatalogFilterState>(
+    () => ({ ...catalogFilter, group: catalogFilter.group && groupLabels.includes(catalogFilter.group) ? catalogFilter.group : null }),
+    [catalogFilter, groupLabels],
+  );
+  const catalogProducts = useMemo(
+    () => filterCatalog(classScopedProducts, effectiveCatalogFilter),
+    [classScopedProducts, effectiveCatalogFilter],
+  );
 
   if (loading) {
     return (
@@ -341,7 +377,8 @@ function CenterDetailContent() {
 
       {buySheet && (() => {
         const applyFilter = filterProductIds && !showAllProducts;
-        const visibleProducts = applyFilter ? products.filter((p) => filterProductIds!.has(p.id)) : products;
+        const visibleProducts = catalogProducts;
+        const filterActive = isFilterActive(effectiveCatalogFilter);
         return (
         <SheetOverlay className="sheet-overlay" onClick={() => setBuySheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
@@ -363,9 +400,30 @@ function CenterDetailContent() {
                 </button>
               </div>
             )}
-            {visibleProducts.length === 0 ? (
+            {/* 검색 + 종류(전체/수강권/상품) + 그룹(group_label 동적) — 입력 즉시 클라이언트에서 거른다. */}
+            {classScopedProducts.length > 0 && (
+              <CatalogSearchFilter
+                query={catalogFilter.query}
+                onQuery={(q) => setCatalogFilter((f) => ({ ...f, query: q }))}
+                placeholder="수강권·상품 검색" searchLabel="수강권·상품 검색"
+                kind={catalogFilter.kind}
+                onKind={(k: KindFilter) => setCatalogFilter((f) => nextFilterOnKind(f, k))}
+                groups={groupLabels}
+                group={effectiveCatalogFilter.group}
+                onGroup={(g) => setCatalogFilter((f) => ({ ...f, group: g }))}
+                resultText={filterActive ? `${visibleProducts.length}개` : null}
+              />
+            )}
+            {classScopedProducts.length === 0 ? (
               <div className="daylist-empty" style={{ padding: 16 }}>
-                {applyFilter ? "이 수업에 쓸 수 있는 판매중인 상품이 없어요" : "판매 중인 상품이 없어요"}
+                {applyFilter ? "이 수업에 쓸 수 있는 판매중인 상품이 없어요" : catalogEmptyMessage(0, EMPTY_CATALOG_FILTER)}
+              </div>
+            ) : visibleProducts.length === 0 ? (
+              <div className="catalog-empty">
+                {catalogEmptyMessage(classScopedProducts.length, effectiveCatalogFilter)}
+                <div>
+                  <button type="button" className="quiet-action" onClick={() => setCatalogFilter(EMPTY_CATALOG_FILTER)}>필터 초기화</button>
+                </div>
               </div>
             ) : (
               <>
@@ -379,30 +437,7 @@ function CenterDetailContent() {
                         )}
                         <div className="center-products">
                           {group.items.map((p) => (
-                            <div key={p.id} className="center-product-row">
-                              <button className="center-product-info" style={{ background: "none", border: "none", textAlign: "left", flex: 1, cursor: p.description ? "pointer" : "default" }} onClick={() => p.description && setDescProduct(p)}>
-                                <div className="center-product-name">
-                                  {p.name}{p.description ? " ⓘ" : ""}
-                                  {p.remaining != null && (
-                                    <span className="pass-group-tag" style={p.remaining <= 0 ? { background: "var(--danger-soft)", color: "var(--danger)" } : undefined}>
-                                      {p.remaining <= 0 ? "매진" : `${p.remaining}개 남음`}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="center-product-detail">
-                                  {p.unlimited ? "무제한" : p.totalCount ? `${p.totalCount}회` : ""} · {won(p.price)}
-                                </div>
-                                {(passRules[p.id] ?? []).length > 0 && (
-                                  <div className="center-product-detail" style={{ color: "var(--brand)" }}>
-                                    {(passRules[p.id] ?? []).map(ruleToText).join(" / ")}
-                                  </div>
-                                )}
-                              </button>
-                              <div className="center-product-actions">
-                                {p.remaining !== 0 && <AppButton variant="secondary" className="center-product-cart" onClick={() => handleAddCart(p)}>담기</AppButton>}
-                                {p.remaining !== 0 && <AppButton className="center-product-buy" onClick={() => handlePurchase(p)}>구매</AppButton>}
-                              </div>
-                            </div>
+                            <CenterProductRow key={p.id} p={p} rules={passRules[p.id]} value={selections[p.id]} onChange={changeSelection} onDesc={setDescProduct} onAddCart={handleAddCart} onBuy={handlePurchase} />
                           ))}
                         </div>
                       </div>
@@ -414,25 +449,7 @@ function CenterDetailContent() {
                     <div className="menu-section-label" style={{ padding: "10px 0 6px" }}>상품</div>
                     <div className="center-products">
                       {visibleProducts.filter((p) => p.kind === "goods").map((p) => (
-                        <div key={p.id} className="center-product-row">
-                          <button className="center-product-info" style={{ background: "none", border: "none", textAlign: "left", flex: 1, cursor: p.description ? "pointer" : "default" }} onClick={() => p.description && setDescProduct(p)}>
-                            <div className="center-product-name">
-                              {p.name}{p.description ? " ⓘ" : ""}
-                              {p.remaining != null && (
-                                <span className="pass-group-tag" style={p.remaining <= 0 ? { background: "var(--danger-soft)", color: "var(--danger)" } : undefined}>
-                                  {p.remaining <= 0 ? "매진" : `${p.remaining}개 남음`}
-                                </span>
-                              )}
-                            </div>
-                            <div className="center-product-detail">
-                              {p.unlimited ? "무제한" : p.totalCount ? `${p.totalCount}회` : ""} · {won(p.price)}
-                            </div>
-                          </button>
-                          <div className="center-product-actions">
-                            {p.remaining !== 0 && <AppButton variant="secondary" className="center-product-cart" onClick={() => handleAddCart(p)}>담기</AppButton>}
-                            {p.remaining !== 0 && <AppButton className="center-product-buy" onClick={() => handlePurchase(p)}>구매</AppButton>}
-                          </div>
-                        </div>
+                        <CenterProductRow key={p.id} p={p} value={selections[p.id]} onChange={changeSelection} onDesc={setDescProduct} onAddCart={handleAddCart} onBuy={handlePurchase} />
                       ))}
                     </div>
                   </>
@@ -756,6 +773,73 @@ function CenterDetailContent() {
       <div className="center-bottom-bar">
         <button className="center-bar-btn buy" onClick={() => setBuySheet(true)}>수강권 구매</button>
         <button className="center-bar-btn reserve" onClick={handleReserveClick}>예약하기</button>
+      </div>
+    </div>
+  );
+}
+
+
+// 구매 sheet의 상품 한 줄. 구매 횟수 선택형(회차별 가격표) 수강권/상품은 목록에 한 번만 나오고, 횟수(+사이즈) 선택 후 즉시 그 회차의
+// 가격을 보여준다. 가격은 미리보기일 뿐 — 서버가 주문 생성 시 가격표에서 다시 확정한다. "판매 가능 N개"(max_quantity)는 이용 횟수와
+// 무관한 판매 수량이라 제목 옆 badge가 아니라 보조 줄의 작은 글씨로만 표시한다. 선택값(횟수/사이즈)은 부모 state(value/onChange)에 있어
+// 검색/필터로 row가 사라졌다 돌아와도 유지된다.
+type ProductSelection = { count: number | null; size: string | null };
+const won = (n: number) => n.toLocaleString("ko-KR") + "원";
+
+function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy }: {
+  p: CenterProduct;
+  rules?: ScheduleRule[];
+  value?: Partial<ProductSelection>;
+  onChange: (productId: string, patch: Partial<ProductSelection>) => void;
+  onDesc: (p: CenterProduct) => void;
+  onAddCart: (p: CenterProduct, sel?: ProductSelection) => void;
+  onBuy: (p: CenterProduct, sel?: ProductSelection) => void;
+}) {
+  const selectable = isCountSelectable(p);
+  const tiers = selectable ? sortedTiers(p) : [];
+  const count = value?.count != null && tiers.some((t) => t.count === value.count) ? value.count : (tiers[0]?.count ?? null);
+  const needsSize = selectable && !!p.sizes && p.sizes.length > 0;
+  const size = value?.size ?? "";
+  const total = selectable ? computeBaseAmount(p, count) : null;
+  const avail = availabilityLabel(p.remaining);
+  const soldOut = p.remaining === 0;
+  const sel: ProductSelection | undefined = selectable ? { count, size: needsSize ? size : null } : undefined;
+  const blocked = (needsSize && !size) || (selectable && count == null);
+  return (
+    <div className={`center-product-row${selectable ? " is-selectable" : ""}`}>
+      <button className="center-product-info" style={{ background: "none", border: "none", textAlign: "left", flex: 1, cursor: p.description ? "pointer" : "default" }} onClick={() => p.description && onDesc(p)}>
+        <div className="center-product-name">{p.name}{p.description ? " ⓘ" : ""}</div>
+        <div className="center-product-detail">{priceSummary(p)}</div>
+        {rules && rules.length > 0 && (
+          <div className="center-product-detail" style={{ color: "var(--brand)" }}>
+            {rules.map(ruleToText).join(" / ")}
+          </div>
+        )}
+        {avail && <div className={`center-product-avail${soldOut ? " is-soldout" : ""}`}>{avail}</div>}
+      </button>
+      {selectable && !soldOut && (
+        <div className="center-product-select">
+          <label className="center-product-select-field">
+            <span>횟수</span>
+            <select aria-label={`${p.name} 구매 횟수`} value={count ?? ""} onChange={(e) => onChange(p.id, { count: Number(e.target.value) })}>
+              {tiers.map((t) => <option key={t.count} value={t.count}>{countOptionLabel(t)}</option>)}
+            </select>
+          </label>
+          {needsSize && (
+            <label className="center-product-select-field">
+              <span>사이즈</span>
+              <select aria-label={`${p.name} 사이즈`} value={size} onChange={(e) => onChange(p.id, { size: e.target.value })}>
+                <option value="">선택</option>
+                {p.sizes!.map((sz) => <option key={sz} value={sz}>{sz}</option>)}
+              </select>
+            </label>
+          )}
+          <div className="center-product-total">{count != null ? `${count}회` : "-"} · {total != null ? won(total) : "-"}</div>
+        </div>
+      )}
+      <div className="center-product-actions">
+        {!soldOut && <AppButton variant="secondary" className="center-product-cart" disabled={blocked} onClick={() => onAddCart(p, sel)}>담기</AppButton>}
+        {!soldOut && <AppButton className="center-product-buy" disabled={blocked} onClick={() => onBuy(p, sel)}>구매</AppButton>}
       </div>
     </div>
   );

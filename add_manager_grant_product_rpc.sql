@@ -28,7 +28,8 @@
 --     Toss 온라인 PG를 실행하지 않는다).
 --   · 지급자 기록: payments에 granted_by 컬럼이 없어, 새 테이블 없이 memo 앞에 "[관리자 지급 · 이름]"을 붙인다.
 --
--- 선행: fix_order_issuance_and_auto_booking.sql(memberships.selected_size 컬럼). 여러 번 실행해도 안전.
+-- [2026-10-01 보강] 구매 횟수 선택형 상품: p_selected_count(가격표에 등록된 회차만)만큼 지급, 고정 상품은 상품 정의 횟수(횟수 지정 시 거부).
+-- 선행: add_selectable_count_pricing.sql(상품 컬럼), fix_order_issuance_and_auto_booking.sql(memberships.selected_size 컬럼). 여러 번 실행해도 안전.
 -- 이 세션에서는 production에 실행하지 않았습니다.
 -- ============================================================
 
@@ -45,7 +46,8 @@ create or replace function manager_grant_product(
     p_trainer_account_id uuid default null,
     p_bound_day_of_week integer default null,
     p_bound_start_time time default null,
-    p_selected_size text default null
+    p_selected_size text default null,
+    p_selected_count integer default null
 )
 returns json
 language plpgsql
@@ -68,6 +70,7 @@ declare
     v_memo        text;
     v_membership_id uuid;
     v_payment_id    uuid;
+    v_granted_count int;
 begin
     if not (
         (has_permission(p_center_id, 'customer.member.issue_pass') and has_permission(p_center_id, 'pass.payment.create'))
@@ -147,9 +150,24 @@ begin
         end if;
     end if;
 
-    -- 횟수/만료는 상품 정의 그대로
+    -- 횟수/만료는 상품 정의 그대로. 구매 횟수 선택형 상품은 관리자가 고른 횟수(범위 안)를 지급한다.
     v_unlimited := case when v_is_goods then coalesce(v_product.unlimited, false) else coalesce(v_product.unlimited_pass, false) end;
-    v_count := case when v_unlimited then null else v_product.total_count end;
+    if coalesce(v_product.purchase_count_selectable, false) then
+        if p_selected_count is null then
+            raise exception '지급할 횟수를 선택해주세요';
+        end if;
+        -- 가격표에 등록된 회차만 지급 가능(구매와 같은 기준). 지급 금액은 관리자가 정하므로 여기서 가격은 강제하지 않는다.
+        if not exists (select 1 from product_count_prices where product_id = v_product.id and count = p_selected_count) then
+            raise exception '이 상품에서 지급할 수 없는 횟수예요(%회)', p_selected_count;
+        end if;
+        v_count := p_selected_count;
+    else
+        if p_selected_count is not null then
+            raise exception '이 상품은 지급 횟수를 고를 수 없어요(상품 정의의 횟수로 지급돼요)';
+        end if;
+        v_count := case when v_unlimited then null else v_product.total_count end;
+    end if;
+    v_granted_count := v_count;
     if v_product.expiry_mode = 'rolling_month' then
         select * into v_rm from calc_rolling_month_dates(now(), v_product.rolling_month_cutoff_day);
         v_expires := v_rm.expires_at;
@@ -198,17 +216,18 @@ begin
         'membership_id', v_membership_id,
         'payment_id', v_payment_id,
         'product_kind', v_product.product_kind,
-        'selected_size', v_size
+        'selected_size', v_size,
+        'granted_count', v_granted_count
     );
 end;
 $$;
 
-revoke all on function manager_grant_product(uuid, uuid, uuid, integer, text, text, timestamptz, uuid, integer, time, text) from public, anon;
-grant execute on function manager_grant_product(uuid, uuid, uuid, integer, text, text, timestamptz, uuid, integer, time, text) to authenticated, service_role;
+revoke all on function manager_grant_product(uuid, uuid, uuid, integer, text, text, timestamptz, uuid, integer, time, text, integer) from public, anon;
+grant execute on function manager_grant_product(uuid, uuid, uuid, integer, text, text, timestamptz, uuid, integer, time, text, integer) to authenticated, service_role;
 
 -- ============================================================
 -- 확인(읽기 전용)
 -- ============================================================
 select
-    to_regprocedure('manager_grant_product(uuid,uuid,uuid,integer,text,text,timestamptz,uuid,integer,time,text)') is not null as fn_ok,
-    has_function_privilege('anon', 'manager_grant_product(uuid,uuid,uuid,integer,text,text,timestamptz,uuid,integer,time,text)', 'execute') as anon_must_be_false;
+    to_regprocedure('manager_grant_product(uuid,uuid,uuid,integer,text,text,timestamptz,uuid,integer,time,text,integer)') is not null as fn_ok,
+    has_function_privilege('anon', 'manager_grant_product(uuid,uuid,uuid,integer,text,text,timestamptz,uuid,integer,time,text,integer)', 'execute') as anon_must_be_false;

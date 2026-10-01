@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-10-01 — 수강권/상품 "구매 횟수 선택 + 회차별 가격표" + 수강권·상품 검색/필터
+- 신규 SQL `add_selectable_count_pricing.sql`(**production 미실행**): `products.purchase_count_selectable` + child 테이블 `product_count_prices`
+  (unique(product_id,count), price>0, 가격표에 있는 회차만 구매 가능, 쓰기는 `set_product_count_prices()` RPC만). 선택형의 `products.price`는 최저가 호환 값.
+  주문은 `orders.selected_count`/`product_amount_snapshot`(서버 트리거가 가격표에서 확정, 이후 가격표를 바꿔도 기존 주문 불변)로 snapshot,
+  발급 횟수=selected_count. max_quantity("판매 가능 개수")와 무관. 기존 1~12회 상품은 자동 병합/삭제하지 않음(후보 SELECT만 SQL 주석).
+- 관리자: `/manager/goods`·`/manager/membership-rules`에 "고정 / 구매자가 횟수 선택" + 회차별 가격 편집기(기본 가격 채우기), 회원 상세 지급도 가격표 사용.
+- 회원: 선택형은 한 row("1~12회 선택 · 6,000원부터" → 횟수 선택 시 가격), 공개 `/products` 요약, 장바구니(상품+사이즈당 한 선택 row)·체크아웃·직접결제 연동.
+- "N개 남음" badge → 보조 줄 "판매 가능 N개". 검색/필터(`lib/catalogFilter.ts`, `CatalogSearchFilter`): 회원 구매 sheet(전체/수강권/상품 + group_label 동적 chip + 검색, AND), 관리자 수강권 설정/상품 검색.
+
 ## 2026-10-01 — 관리자 회원 상세: 수강권 지급 / 상품 지급 분리 + 서버 원자 지급
 - 회원 상세의 통합 "수강권/상품 지급" 버튼 → 보유 수강권/보유 상품 섹션별 "+ 수강권 지급" / "+ 상품 지급"(0개여도 섹션·버튼 유지).
   상품 시트는 goods만(활성이면 판매중지도 가능), 수강권 시트는 판매중 non-goods만. sizes가 있는 상품은 사이즈 필수(`memberships.selected_size`).

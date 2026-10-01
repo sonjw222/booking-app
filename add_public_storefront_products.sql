@@ -22,6 +22,11 @@
 -- 로그인 회원은 기존 fetch_purchasable_products()를 그대로 쓴다(회원별 구매 가능 상품).
 -- 구매(checkout)는 여전히 로그인이 필요하다 — 이 RPC는 "조회"만 공개한다.
 --
+-- [2026-10-01 보강] 횟수 선택형(회차별 가격표) 상품은 purchase_count_selectable + 가격표에서 계산한 선택 가능 횟수 범위
+--   (min/max_purchase_count)와 가격 범위(min/max_tier_price)만 반환해 "1~12회 선택 · 6,000원부터"로 표시할 수 있게 한다.
+--   회차별 가격표 자체는 공개하지 않는다(product_count_prices는 anon 접근 불가, 이 함수가 요약만 계산).
+--   선행: add_selectable_count_pricing.sql(컬럼/가격표 테이블). 내부용 컬럼(공개범위 목록 등)은 여전히 공개하지 않는다.
+--
 -- 파일 전체를 SQL Editor에 붙여넣고 Run 하세요. 여러 번 실행해도 안전(create or replace).
 -- 이 세션에서는 production에 실행하지 않았습니다.
 -- ============================================================
@@ -39,7 +44,12 @@ returns table (
     unlimited      boolean,
     unlimited_pass boolean,
     group_label    text,
-    remaining      integer
+    remaining      integer,
+    purchase_count_selectable boolean,
+    min_purchase_count        integer,
+    max_purchase_count        integer,
+    min_tier_price            integer,
+    max_tier_price            integer
 )
 language sql
 stable
@@ -67,13 +77,21 @@ as $$
                     where m.product_id = p.id and m.status <> 'refunded'
                 )
             )
-        end
+        end,
+        coalesce(p.purchase_count_selectable, false),
+        (select min(t.count) from product_count_prices t where t.product_id = p.id),
+        (select max(t.count) from product_count_prices t where t.product_id = p.id),
+        (select min(t.price) from product_count_prices t where t.product_id = p.id),
+        (select max(t.price) from product_count_prices t where t.product_id = p.id)
     from products p
     join centers c on c.id = p.center_id
     where c.status = 'approved'
       and p.is_active
       and p.is_on_sale
       and p.visibility_type = 'all'
+      -- 횟수 선택형인데 가격표가 아직 없으면(설정 중) 공개하지 않는다
+      and (not coalesce(p.purchase_count_selectable, false)
+           or exists (select 1 from product_count_prices t where t.product_id = p.id))
       and (p_center_id is null or p.center_id = p_center_id)
     order by c.name asc, p.product_kind asc, p.price asc
     limit 500;

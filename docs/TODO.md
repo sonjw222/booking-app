@@ -51,6 +51,10 @@
 - 현재 수강권/상품 지급 모두 `customer.member.issue_pass` + `pass.payment.create`를 요구(기존 memberships/payments INSERT RLS와 동일). 수강권 지급/상품 카탈로그 수정/상품 지급 권한 세분화는 permission schema 추가가 필요해 이번 release에서는 보류.
 - 지급 기록의 "지급자"는 payments에 granted_by 컬럼이 없어 memo 접두("[관리자 지급 · 이름]")로 남김 — 필요 시 별도 컬럼/감사 테이블.
 
+### P2-TierPricing-1001. (신규, 2026-10-01) 가격표 모델 후속
+- production 적용 후: 센터가 새 통합 상품(선택형)을 만들고 기존 "N회" 반복 상품을 판매중지 — 후보 조회 SELECT는 `add_selectable_count_pricing.sql` 하단 주석.
+- 매출 수동 등록(`sales`)은 선택형 상품을 지원하지 않음(가격=최저가). 필요 시 회차 선택 추가.
+
 ### P1-QA-1001. (신규, 2026-10-01) 이번 QA 배치 SQL 4건 production 적용 + 후속 확인
 - 적용 순서: ① `add_public_storefront_products.sql`(기존 미실행) ② `fix_order_issuance_and_auto_booking.sql` ③ `add_reservation_goods_usage.sql`
   ③-b `add_manager_grant_product_rpc.sql` ④ `fix_recurring_class_description_and_group_update.sql` ⑤ `fix_manager_centers_rls_recursion_final.sql` — 적용 후 `send-alimtalk` 재배포,

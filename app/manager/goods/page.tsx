@@ -10,12 +10,17 @@ import SheetOverlay from "../../components/SheetOverlay";
   - 수강권 관리 권한(pass.update) 필요
 */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchProducts, createProduct, updateProduct, deleteProduct, won, type Product } from "../../../lib/passes";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 import ExpiryOptionField, { type ExpiryOptionValue } from "../../components/ExpiryOptionField";
+import { validateGoodsForm, goodsListLabel, nextUnlimitedForMode, draftsFromTiers, type GoodsPricingMode } from "../../../lib/goodsForm";
+import { draftsToTiers, type TierDraft } from "../../../lib/selectableCount";
+import { filterCatalog, catalogEmptyMessage, EMPTY_CATALOG_FILTER } from "../../../lib/catalogFilter";
+import CountPriceEditor from "../../components/CountPriceEditor";
+import CatalogSearchFilter from "../../components/CatalogSearchFilter";
 
 export default function GoodsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -37,6 +42,12 @@ export default function GoodsPage() {
   const [pSizes, setPSizes] = useState("");
   // 쿠폰 적용 가능 여부(add_product_coupon_eligibility.sql) — 기본값 true.
   const [pCouponEligible, setPCouponEligible] = useState(true);
+  // 2026-10-01 — 가격 방식: 고정 횟수 상품 / 구매자가 횟수 선택(회차별 개별 가격표, 가격이 있는 회차만 판매)
+  const [pMode, setPMode] = useState<GoodsPricingMode>("fixed");
+  const [pTiers, setPTiers] = useState<TierDraft[]>(() => draftsFromTiers([]));
+  const [editWasSelectable, setEditWasSelectable] = useState(false);
+  // 상품 검색(이름/설명) — load() 후에도 유지되는 컴포넌트 state
+  const [query, setQuery] = useState("");
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
@@ -83,10 +94,16 @@ export default function GoodsPage() {
   useEffect(() => { load(); }, [load]);
 
   const num = (s: string) => parseInt(s.replace(/[^0-9]/g, "") || "0", 10);
+  // 상품 검색(이름/설명). 이미 받아 온 목록을 즉시 거를 뿐 순서는 그대로, 새 API 없음.
+  const shownProducts = useMemo(
+    () => filterCatalog(products.map((p) => ({ ...p, kind: p.kind })), { ...EMPTY_CATALOG_FILTER, query }),
+    [products, query],
+  );
 
   async function handleCreate() {
     if (!centerId || !pName.trim()) { setError("상품 이름을 입력해주세요"); return; }
-    if (!unlimited && num(pCount) === 0) { setError("횟수를 입력해주세요"); return; }
+    const formError = validateGoodsForm({ mode: pMode, unlimited, price: num(pPrice), totalCount: num(pCount), tiers: pTiers });
+    if (formError) { setError(formError); return; }
     if (pExpiry.mode === "days" && !pExpiry.days.trim()) { setError("만료까지 며칠인지 입력해주세요"); return; }
     if (pExpiry.mode === "date" && !pExpiry.date) { setError("만료일을 선택해주세요"); return; }
     if (pExpiry.mode === "rolling_month" && (!pExpiry.cutoffDay.trim() || num(pExpiry.cutoffDay) < 1 || num(pExpiry.cutoffDay) > 31)) {
@@ -99,12 +116,19 @@ export default function GoodsPage() {
         mode: pExpiry.mode, days: pExpiry.mode === "days" ? num(pExpiry.days) : null, date: pExpiry.mode === "date" ? pExpiry.date : null,
         cutoffDay: pExpiry.mode === "rolling_month" ? num(pExpiry.cutoffDay) : null, allowEarlyUse: pExpiry.allowEarlyUse,
       };
+      // 선택형은 유한 횟수 상품이라 unlimited=false로 저장하고, 가격표는 서버 RPC(set_product_count_prices)가 한 번에 교체한다.
+      // 고정으로 되돌리면(이전이 선택형이었던 경우만) 가격표를 해제한다.
+      const selectableExtra = {
+        countSelectable: pMode === "selectable",
+        countPrices: pMode === "selectable" ? draftsToTiers(pTiers) : undefined,
+        wasCountSelectable: editWasSelectable,
+      };
       if (editId) {
-        await updateProduct(editId, pName.trim(), num(pPrice), num(pCount), unlimited, { description: pDesc.trim(), sizes: sizeArr, expiry, couponEligible: pCouponEligible });
+        await updateProduct(editId, pName.trim(), num(pPrice), num(pCount), unlimited, { description: pDesc.trim(), sizes: sizeArr, expiry, couponEligible: pCouponEligible, ...selectableExtra });
       } else {
-        await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "goods", unlimited, { description: pDesc.trim(), sizes: sizeArr, expiry, couponEligible: pCouponEligible });
+        await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "goods", unlimited, { description: pDesc.trim(), sizes: sizeArr, expiry, couponEligible: pCouponEligible, ...selectableExtra });
       }
-      setPName(""); setPPrice(""); setPCount(""); setUnlimited(false); setPDesc(""); setPSizes(""); setPExpiry({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false }); setPCouponEligible(true);
+      setPName(""); setPPrice(""); setPCount(""); setUnlimited(false); setPDesc(""); setPSizes(""); setPMode("fixed"); setPTiers(draftsFromTiers([])); setEditWasSelectable(false); setPExpiry({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false }); setPCouponEligible(true);
       setSheet(false);
       showToast(editId ? "상품을 수정했어요" : "상품을 추가했어요");
       setEditId(null);
@@ -119,6 +143,9 @@ export default function GoodsPage() {
     setPPrice(String(p.price ?? ""));
     setPCount(String(p.totalCount ?? ""));
     setUnlimited(p.unlimited);
+    setPMode(p.countSelectable ? "selectable" : "fixed");
+    setPTiers(draftsFromTiers(p.countPrices));
+    setEditWasSelectable(p.countSelectable);
     setPDesc(p.description ?? "");
     setPSizes((p.sizes ?? []).join(", "));
     setPExpiry({
@@ -136,6 +163,7 @@ export default function GoodsPage() {
     setEditId(null);
     setPName(""); setPPrice(""); setPCount(""); setUnlimited(false); setPDesc(""); setPSizes(""); setPExpiry({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
     setPCouponEligible(true);
+    setPMode("fixed"); setPTiers(draftsFromTiers([])); setEditWasSelectable(false);
     setSheet(true);
   }
 
@@ -199,7 +227,18 @@ export default function GoodsPage() {
         </div>
       ) : (
         <div className="pass-list">
-          {products.map((p) => (
+          <CatalogSearchFilter
+            query={query} onQuery={setQuery} placeholder="상품 검색" searchLabel="상품 검색"
+            groups={[]} group={null} onGroup={() => {}} sticky={false}
+            resultText={query.trim() ? `검색 결과 ${shownProducts.length}개` : null}
+          />
+          {shownProducts.length === 0 && (
+            <div className="catalog-empty">
+              {catalogEmptyMessage(products.length, { ...EMPTY_CATALOG_FILTER, query }, "상품")}
+              <div><button type="button" className="quiet-action" onClick={() => setQuery("")}>전체 보기</button></div>
+            </div>
+          )}
+          {shownProducts.map((p) => (
             <div key={p.id} className="pass-card">
               <div className="pass-head">
                 <div className="goods-card-content">
@@ -212,7 +251,7 @@ export default function GoodsPage() {
                     )}
                   </div>
                   <div className="pass-sub">
-                    {won(p.price)} · {p.unlimited ? "무제한" : `${p.totalCount ?? 0}회`}
+                    {goodsListLabel(p)}
                   </div>
                   {p.description && <div className="goods-description">{p.description}</div>}
                   {!!p.sizes?.length && <div className="goods-sizes">{p.sizes.map((size) => <span key={size}>{size}</span>)}</div>}
@@ -239,21 +278,35 @@ export default function GoodsPage() {
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>상품 이름</div>
             <input aria-label="상품 이름" className="input-field" placeholder="예: 피겨화 대여" value={pName} onChange={(e) => setPName(e.target.value)} />
 
-            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>가격</div>
-            <input aria-label="가격" inputMode="numeric" className="input-field" placeholder="0" value={pPrice} onChange={(e) => setPPrice(e.target.value)} />
-
-            <div className="set-row" style={{ padding: "14px 0 6px", borderBottom: "none" }}>
-              <div className="set-label">횟수 제한 없음 (무제한)</div>
-              <button className={`switch ${unlimited ? "on" : ""}`} onClick={() => setUnlimited(!unlimited)}>
-                <span className="knob" />
-              </button>
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>가격 방식</div>
+            <div className="mem-filters" style={{ padding: 0 }}>
+              <button aria-pressed={pMode === "fixed"} className={`filter-chip ${pMode === "fixed" ? "on" : ""}`}
+                onClick={() => setPMode("fixed")}>고정 횟수 상품</button>
+              <button aria-pressed={pMode === "selectable"} className={`filter-chip ${pMode === "selectable" ? "on" : ""}`}
+                onClick={() => { setPMode("selectable"); setUnlimited(nextUnlimitedForMode("selectable", unlimited)); }}>구매자가 횟수 선택</button>
             </div>
 
-            {!unlimited && (
+            {pMode === "fixed" ? (
               <>
-                <div className="menu-section-label" style={{ padding: "6px 0 6px" }}>총 횟수 (예: 5회권 → 5)</div>
-                <input aria-label="총 횟수" inputMode="numeric" className="input-field" placeholder="예: 5" value={pCount} onChange={(e) => setPCount(e.target.value)} />
+                <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>가격</div>
+                <input aria-label="가격" inputMode="numeric" className="input-field" placeholder="0" value={pPrice} onChange={(e) => setPPrice(e.target.value)} />
+
+                <div className="set-row" style={{ padding: "14px 0 6px", borderBottom: "none" }}>
+                  <div className="set-label">횟수 제한 없음 (무제한)</div>
+                  <button className={`switch ${unlimited ? "on" : ""}`} onClick={() => setUnlimited(!unlimited)}>
+                    <span className="knob" />
+                  </button>
+                </div>
+
+                {!unlimited && (
+                  <>
+                    <div className="menu-section-label" style={{ padding: "6px 0 6px" }}>총 횟수 (예: 5회권 → 5)</div>
+                    <input aria-label="총 횟수" inputMode="numeric" className="input-field" placeholder="예: 5" value={pCount} onChange={(e) => setPCount(e.target.value)} />
+                  </>
+                )}
               </>
+            ) : (
+              <CountPriceEditor rows={pTiers} onChange={setPTiers} disabled={busy} />
             )}
 
             <ExpiryOptionField value={pExpiry} onChange={setPExpiry} />

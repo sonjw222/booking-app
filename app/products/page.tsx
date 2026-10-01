@@ -19,6 +19,7 @@ import Loading from "../components/Loading";
 import { fetchPublicStorefrontProducts, groupPublicProductsByCenter, type PublicStorefrontProduct } from "../../lib/center";
 import { BUSINESS_INFO } from "../../lib/businessInfo";
 import { toUserMessage } from "../../lib/userError";
+import { availabilityLabel, isCountSelectable, priceSummary } from "../../lib/selectableCount";
 
 function won(n: number) { return n.toLocaleString("ko-KR") + "원"; }
 
@@ -69,13 +70,16 @@ export default function PublicProductsPage() {
               {g.items.map((p) => (
                 <div key={p.id} className="center-product-row">
                   <div className="center-product-info">
-                    <div className="center-product-name">
-                      {p.name}
-                      {p.remaining != null && (
-                        <span className="pass-group-tag">{p.remaining <= 0 ? "매진" : `${p.remaining}개 남음`}</span>
-                      )}
+                    <div className="center-product-name">{p.name}</div>
+                    {/* 구매 횟수 선택형은 "회당 6,000원 · 1~12회 선택", 고정 상품은 기존 표시 그대로 */}
+                    <div className="center-product-detail">
+                      {isCountSelectable(p)
+                        ? `${productMeta(p)} · ${priceSummary(p)}`
+                        : <>{productMeta(p)} · {won(p.price)}</>}
                     </div>
-                    <div className="center-product-detail">{productMeta(p)} · {won(p.price)}</div>
+                    {availabilityLabel(p.remaining) && (
+                      <div className={`center-product-avail${p.remaining != null && p.remaining <= 0 ? " is-soldout" : ""}`}>{availabilityLabel(p.remaining)}</div>
+                    )}
                     {p.description && <div className="center-product-detail products-desc">{p.description}</div>}
                   </div>
                 </div>

@@ -19,6 +19,9 @@ export type Order = {
   status: "pending" | "paid" | "cancelled" | "done";
   createdAt: string;
   paidAt: string | null;
+  // 2026-10-01 — 구매 횟수 선택형 상품의 주문 snapshot / 선택 사이즈(관리자 주문 확인·구매내역 표시용)
+  selectedCount: number | null;
+  selectedSize: string | null;
 };
 
 // 회원: 주문 생성 (결제 화면에서 "결제하기" 시)
@@ -45,6 +48,10 @@ export async function createOrder(input: {
   // 값을 그대로 새 memberships 행의 bound_day_of_week/bound_start_time으로 복사한다.
   selectedDayOfWeek?: number | null;
   selectedStartTime?: string | null;
+  // 2026-10-01 — 구매 횟수 선택형 상품에서 구매자가 고른 횟수. orders.selected_count에 저장되고, 서버(orders BEFORE INSERT
+  // 트리거)가 가격표(product_count_prices)에 있는 회차인지 검증한 뒤 그 회차 가격으로 product_amount_snapshot을 확정한다. 아래 amount는 클라이언트가 계산한
+  // 표시 금액일 뿐이라 발급 시점에 서버가 snapshot - 쿠폰 - 포인트로 다시 계산해 다르면 거부한다(클라이언트 금액 불신).
+  selectedCount?: number | null;
 }): Promise<string> {
   const accountId = await getMyAccountId();
   if (!accountId) throw new Error("로그인이 필요해요");
@@ -81,14 +88,20 @@ export async function createOrder(input: {
     status: "pending",
     selected_day_of_week: input.selectedDayOfWeek ?? null,
     selected_start_time: input.selectedStartTime ?? null,
+    selected_count: input.selectedCount ?? null,
   };
   let { data, error } = await supabase.from("orders").insert(row).select("id").single();
+  if (error?.code === "42703" && input.selectedCount != null) {
+    // add_selectable_count_pricing.sql 미적용 환경에서 선택형 주문을 selected_count 없이 만들면 최저 회차 금액으로
+    // 오해될 수 있으므로 조용히 제외하지 않고 명확히 실패시킨다.
+    throw new Error("횟수 선택 상품 구매는 아직 준비 중이에요. 잠시 후 다시 시도해주세요.");
+  }
   if (error?.code === "42703") {
     // 2026-10-01(Batch C) — add_weekday_time_fixed_memberships.sql 미실행 환경 방어
     // (lib/rooms.ts/lib/passes.ts와 동일 패턴). 이 경우 요일/시간 선택 자체는 화면에서
     // 막히지 않지만(체크아웃 UI가 여전히 선택을 받음) 그 선택값은 저장되지 않는다 —
     // 주문 생성 자체가 막히는 것보다 훨씬 안전한 실패 방향.
-    const { selected_day_of_week, selected_start_time, ...withoutWeekday } = row;
+    const { selected_day_of_week, selected_start_time, selected_count, ...withoutWeekday } = row;
     ({ data, error } = await supabase.from("orders").insert(withoutWeekday).select("id").single());
   }
   if (error || !data) throw new Error("주문 생성에 실패했어요: " + (error?.message ?? "no data"));
@@ -97,27 +110,28 @@ export async function createOrder(input: {
 
 // 회원: 내 주문 내역
 export async function fetchMyOrders(): Promise<Order[]> {
-  const { data, error } = await supabase
-    .from("orders")
-    .select("id, center_id, profile_id, product_id, product_name, amount, pay_method, status, created_at, paid_at, centers(name)")
-    .order("created_at", { ascending: false });
+  const myCols = "id, center_id, profile_id, product_id, product_name, amount, pay_method, status, created_at, paid_at, centers(name)";
+  const runMy = (cols: string) => supabase.from("orders").select(cols).order("created_at", { ascending: false });
+  let { data, error } = (await runMy(`${myCols}, selected_count, selected_size`)) as any;
+  if (error?.code === "42703") ({ data, error } = (await runMy(myCols)) as any);
   if (error) throw new Error("주문 내역을 불러오지 못했어요: " + error.message);
   return (data ?? []).map(mapOrder);
 }
 
 // 매니저: 자기 센터 주문 목록
 export async function fetchCenterOrders(centerId: string, status?: string): Promise<(Order & { memberName: string; memberPhone: string | null })[]> {
-  let q = supabase
-    .from("orders")
-    .select("id, center_id, profile_id, product_id, product_name, amount, pay_method, status, created_at, paid_at, profiles(name, accounts(phone))")
-    .eq("center_id", centerId)
-    .order("created_at", { ascending: false });
-  if (status) q = q.eq("status", status);
-  // egress 감사(2026-09-15) — status 필터 없이 부르면(기본 화면 진입 시) 센터가 생긴
+  const centerCols = "id, center_id, profile_id, product_id, product_name, amount, pay_method, status, created_at, paid_at, profiles(name, accounts(phone))";
+  const build = (cols: string) => {
+    let q = supabase.from("orders").select(cols).eq("center_id", centerId).order("created_at", { ascending: false });
+    if (status) q = q.eq("status", status);
+    // egress 감사(2026-09-15) — status 필터 없이 부르면(기본 화면 진입 시) 센터가 생긴
   // 이후의 모든 주문을 상한 없이 통째로 가져왔다. 최신순 정렬은 이미 있었으니 안전판만
   // 추가 — 지금까지 이 상한에 걸릴 만큼 주문이 쌓인 센터는 없어 동작은 그대로다.
-  q = q.limit(1000);
-  const { data, error } = await q;
+    return q.limit(1000);
+  };
+  // 구매 횟수/사이즈(2026-10-01) 컬럼이 없는 환경(42703)은 기존 컬럼만으로 다시 조회
+  let { data, error } = (await build(`${centerCols}, selected_count, selected_size`)) as any;
+  if (error?.code === "42703") ({ data, error } = (await build(centerCols)) as any);
   if (error) throw new Error("주문을 불러오지 못했어요: " + error.message);
   return (data ?? []).map((o: any) => ({
     ...mapOrder(o),
@@ -203,6 +217,7 @@ function mapOrder(o: any): Order & { centerName?: string } {
     id: o.id, centerId: o.center_id, profileId: o.profile_id,
     productId: o.product_id, productName: o.product_name, amount: o.amount,
     payMethod: o.pay_method, status: o.status, createdAt: o.created_at, paidAt: o.paid_at,
+    selectedCount: o.selected_count ?? null, selectedSize: o.selected_size ?? null,
     centerName: o.centers?.name,
   };
 }
@@ -226,6 +241,7 @@ export type PurchaseItem = {
   createdAtIso: string;       // 환불 24시간 판단용
   totalCount: number | null;
   remainingCount: number | null;
+  selectedSize: string | null;   // 2026-10-01 — 구매 시 고른 사이즈(대여화 등). 선택형 상품의 구매 횟수는 totalCount.
   refundable: boolean;
   refundReason: string;
   cancellable: boolean;       // P1-2: 아직 미발급 주문을 회원이 직접 취소할 수 있는지
@@ -248,20 +264,18 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
   if (profileIds.length === 0) return [];
 
   // 발급된 수강권 (환불 가능 판단 대상)
-  const { data: mems } = await supabase
-    .from("memberships")
-    .select("id, center_id, product_id, product_name, total_count, remaining_count, status, created_at, centers(name), products(product_kind)")
-    .in("profile_id", profileIds)
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const memCols = "id, center_id, product_id, product_name, total_count, remaining_count, status, created_at, centers(name), products(product_kind)";
+  const runMem = (cols: string) => supabase.from("memberships").select(cols)
+    .in("profile_id", profileIds).order("created_at", { ascending: false }).limit(100);
+  let { data: mems, error: memsErr } = (await runMem(`${memCols}, selected_size`)) as any;
+  if (memsErr?.code === "42703") ({ data: mems } = (await runMem(memCols)) as any);
 
   // 주문 (아직 발급 안 된 것 포함)
-  const { data: ords } = await supabase
-    .from("orders")
-    .select("id, center_id, product_name, amount, status, created_at, centers(name)")
-    .in("profile_id", profileIds)
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const ordCols = "id, center_id, product_name, amount, status, created_at, centers(name)";
+  const runOrd = (cols: string) => supabase.from("orders").select(cols)
+    .in("profile_id", profileIds).order("created_at", { ascending: false }).limit(100);
+  let { data: ords, error: ordsErr } = (await runOrd(`${ordCols}, selected_count, selected_size`)) as any;
+  if (ordsErr?.code === "42703") ({ data: ords } = (await runOrd(ordCols)) as any);
 
   const out: PurchaseItem[] = [];
 
@@ -297,6 +311,7 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
       purchasedAt: KST_DT_FULL.format(new Date(created)),
       createdAtIso: created,
       totalCount: total, remainingCount: remain,
+      selectedSize: (m as any).selected_size ?? null,
       refundable, refundReason: reason,
       cancellable: false, // 이미 발급됨 — 취소가 아니라 환불(refundable) 경로
       kind: ((m as any).products?.product_kind === "goods" ? "goods" : "pass"),
@@ -322,7 +337,9 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
       status: st,
       purchasedAt: KST_DT_FULL.format(new Date((o as any).created_at)),
       createdAtIso: (o as any).created_at,
-      totalCount: null, remainingCount: null,
+      // 미발급 주문: 구매 횟수 선택형이면 고른 횟수/사이즈를 보여준다("5회 · 240mm").
+      totalCount: (o as any).selected_count ?? null, remainingCount: null,
+      selectedSize: (o as any).selected_size ?? null,
       refundable: false,
       refundReason: cancellable ? "" : "취소된 주문이에요",
       cancellable,

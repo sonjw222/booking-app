@@ -6463,3 +6463,66 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
 .mem-pass-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .mem-pass-head-actions { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .mem-pass-empty { font-size: 12.5px; color: var(--ink-soft); padding: 6px 2px 2px; }
+
+/* 상품 관리 — 구매 횟수 선택형: 최소/최대 횟수 입력 한 줄(좁은 폭에서는 줄바꿈) */
+.goods-count-range { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 13px; color: var(--ink-soft); }
+.goods-count-range .input-field { width: 72px; text-align: center; }
+
+.order-selection { font-weight: 600; color: var(--ink-soft); }
+
+/* 수강권·상품 검색/필터(CatalogSearchFilter) — 회원 구매 sheet / 관리자 수강권 설정 공용 */
+.catalog-filter { display: flex; flex-direction: column; gap: 8px; padding: 8px 0 10px; background: var(--card-bg, var(--bg)); }
+.catalog-filter.is-sticky { position: sticky; top: 0; z-index: 3; }
+.catalog-search { position: relative; }
+.catalog-search-input {
+  width: 100%; box-sizing: border-box; min-height: 44px; padding: 0 40px 0 14px;
+  font-size: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink);
+  -webkit-appearance: none; appearance: none;
+}
+.catalog-search-input::-webkit-search-cancel-button { display: none; }
+.catalog-search-clear {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 36px; height: 36px; border: 0; background: transparent; color: var(--ink-soft); font-size: 20px; line-height: 1; cursor: pointer;
+}
+.catalog-chips { display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; max-width: 100%; padding: 1px 0; }
+.catalog-chips::-webkit-scrollbar { display: none; }
+.catalog-chips .filter-chip { flex: 0 0 auto; white-space: nowrap; max-width: 70vw; overflow: hidden; text-overflow: ellipsis; }
+.catalog-result-count { font-size: 11.5px; color: var(--ink-soft); font-weight: 600; }
+.catalog-empty { text-align: center; padding: 28px 12px; color: var(--ink-soft); font-size: 13.5px; line-height: 1.6; }
+.catalog-empty .quiet-action { margin-top: 10px; }
+
+/* ===== 구매 횟수 선택형 상품 / 판매 가능 수량 표시(2026-10-01) ===== */
+/* "판매 가능 3개"(products.max_quantity 기준)는 이용 횟수와 다른 개념 — 제목 옆 pill이 아니라 보조 줄의 작은 글씨 */
+.center-product-avail { margin-top: 3px; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); white-space: nowrap; }
+.center-product-avail.is-soldout { color: var(--danger); }
+.center-product-name { flex-wrap: wrap; overflow-wrap: anywhere; word-break: keep-all; }
+.center-product-row.is-selectable { flex-wrap: wrap; }
+.center-product-row.is-selectable .center-product-info { flex: 1 1 100%; }
+.center-product-select { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 10px; min-width: 0; }
+.center-product-select-field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; font-weight: 700; color: var(--ink-soft); min-width: 0; }
+.center-product-select-field select { min-height: 40px; min-width: 88px; max-width: 100%; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card-bg); color: var(--ink); font: inherit; font-size: 16px; /* iOS 자동 확대 방지 */ }
+.center-product-total { flex: 1 1 100%; font-size: 13px; font-weight: 800; color: var(--ink); overflow-wrap: anywhere; }
+.center-product-row.is-selectable .center-product-actions { width: 100%; justify-content: flex-end; }
+@media (min-width: 400px) {
+  .center-product-total { flex: 1 1 auto; text-align: right; align-self: center; }
+}
+/* 장바구니/체크아웃 횟수 선택 */
+.cart-count-select { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 6px 20px 2px; }
+.cart-count-select select, .checkout-count-select select { min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card-bg); color: var(--ink); font: inherit; font-size: 16px; }
+.cart-count-select label, .checkout-count-select label { display: inline-flex; align-items: center; gap: 8px; }
+.cart-count-total { font-size: 13px; font-weight: 800; color: var(--ink); }
+.checkout-count-select { padding: 8px 0 2px; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+
+/* 회차별 가격표 편집기(CountPriceEditor) */
+.count-price-fill { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.count-price-fill .input-field { flex: 1 1 auto; min-width: 0; font-size: 16px; }
+.count-price-fill .ghost-btn { flex: 0 0 auto; white-space: nowrap; }
+.count-price-rows { display: flex; flex-direction: column; gap: 6px; }
+.count-price-row { display: grid; grid-template-columns: 22px 44px minmax(0, 1fr); align-items: center; gap: 8px; }
+.count-price-row.off .count-price-count { color: var(--ink-soft); }
+.count-price-row .input-field { min-width: 0; font-size: 16px; }
+.count-price-count { font-weight: 700; font-size: 13.5px; }
+
+/* 센터 구매 sheet — 기본 .sheet-title이 sticky(top:-22px, 보이는 높이 ≈18px, z-index 2)라서 검색/필터 sticky는 그 바로 아래(top:18px)에 붙이고
+   z-index를 낮춰(1) 제목/닫기 버튼과 겹치지 않게 한다. 목록이 길어 스크롤해도 제목 → 검색/필터 순서로 상단에 고정된다. */
+.sheet .catalog-filter.is-sticky { top: 18px; z-index: 1; }

@@ -24,6 +24,10 @@
 --   으로 돌려준다. 발급 자체는 기존 정책대로 롤백하지 않는다(자동예약만 서브트랜잭션으로 격리).
 -- [수정 6] 주문의 선택 사이즈를 memberships.selected_size로 복사(예전엔 유실).
 --
+-- [선행] add_selectable_count_pricing.sql(orders.selected_count / orders.product_amount_snapshot, 회차별 가격표).
+--   기대금액의 "상품 기본금액"은 주문 생성 시점에 서버가 확정한 product_amount_snapshot(고정=상품가, 선택형=가격표에서 그 횟수의 가격)을 쓰고,
+--   발급 횟수는 선택형이면 orders.selected_count, 고정이면 상품 total_count다.
+--
 -- 변경 대상: 컬럼 2개 추가, 함수 신규 3개, 함수 교체 5개(+ unplaced_weekday_passes는 반환 컬럼이
 --   늘어 DROP 후 재생성). 기존 데이터는 건드리지 않는다. 여러 번 실행해도 안전.
 -- 이 세션에서는 production에 실행하지 않았습니다.
@@ -46,6 +50,7 @@ declare
     v_member_coupon     record;
     v_verified_discount int := 0;
     v_points_verified   boolean;
+    v_base              int;
 begin
     if p_order.product_id is null then
         return null;
@@ -54,6 +59,10 @@ begin
     if not found then
         return null;
     end if;
+
+    -- 상품 기본금액: 주문 생성 시점에 서버(orders BEFORE INSERT 트리거)가 확정한 snapshot — 이후 상품 가격이
+    -- 바뀌어도 기존 주문의 검증/발급 금액이 변하지 않는다. snapshot이 없는 옛 주문만 현재 상품가로 계산한다.
+    v_base := coalesce(p_order.product_amount_snapshot, v_product.price);
 
     if p_order.member_coupon_id is not null then
         if not coalesce(v_product.coupon_eligible, true) then
@@ -106,7 +115,7 @@ begin
         ) then
             raise exception '이 수강권에는 사용할 수 없는 쿠폰이에요';
         end if;
-        if v_member_coupon.minimum_order_amount is not null and v_product.price < v_member_coupon.minimum_order_amount then
+        if v_member_coupon.minimum_order_amount is not null and v_base < v_member_coupon.minimum_order_amount then
             raise exception '최소 결제금액(%원) 미만이라 쿠폰을 사용할 수 없어요', v_member_coupon.minimum_order_amount;
         end if;
 
@@ -114,8 +123,8 @@ begin
             v_verified_discount := v_member_coupon.discount_value;
         else
             v_verified_discount := least(
-                (v_product.price * v_member_coupon.discount_value) / 100,
-                coalesce(v_member_coupon.max_discount_amount, v_product.price)
+                (v_base * v_member_coupon.discount_value) / 100,
+                coalesce(v_member_coupon.max_discount_amount, v_base)
             );
         end if;
     end if;
@@ -133,7 +142,7 @@ begin
         end if;
     end if;
 
-    return greatest(0, v_product.price - v_verified_discount - coalesce(p_order.points_used, 0));
+    return greatest(0, v_base - v_verified_discount - coalesce(p_order.points_used, 0));
 end;
 $$;
 revoke all on function _order_expected_amount(orders, boolean) from public, anon, authenticated;
@@ -530,7 +539,15 @@ begin
     if v_order.product_id is not null then
         select * into v_product from products where id = v_order.product_id;
         if found then
-            v_count := case when v_product.unlimited_pass then null else v_product.total_count end;
+            -- 횟수 선택형 상품은 주문에 snapshot된 selected_count만큼, 고정 상품은 상품 정의 횟수(클라이언트 값 무시).
+            if coalesce(v_product.purchase_count_selectable, false) then
+                if v_order.selected_count is null or v_order.selected_count < 1 then
+                    raise exception '구매 횟수 정보가 없는 주문이에요(관리자 문의)';
+                end if;
+                v_count := v_order.selected_count;
+            else
+                v_count := case when v_product.unlimited_pass then null else v_product.total_count end;
+            end if;
             if v_product.expiry_mode = 'rolling_month' then
                 select * into v_rm from calc_rolling_month_dates(now(), v_product.rolling_month_cutoff_day);
                 v_expires := v_rm.expires_at;
@@ -625,7 +642,16 @@ begin
                 raise exception '이 수강권을 구매할 수 있는 대상이 아닙니다.';
             end if;
 
-            v_count := case when v_product.unlimited_pass then null else v_product.total_count end;
+            -- 횟수 선택형 상품: 주문 snapshot의 selected_count를 발급 횟수로(PG에서 amount를 1회분만 결제하고
+            -- 12회를 받는 식의 조작 방지 — 금액은 아래 _order_expected_amount가 같은 snapshot으로 검증).
+            if coalesce(v_product.purchase_count_selectable, false) then
+                if p_order.selected_count is null or p_order.selected_count < 1 then
+                    raise exception '구매 횟수 정보가 없는 주문이에요(관리자 문의)';
+                end if;
+                v_count := p_order.selected_count;
+            else
+                v_count := case when v_product.unlimited_pass then null else v_product.total_count end;
+            end if;
             if v_product.expiry_mode = 'rolling_month' then
                 select * into v_rm from calc_rolling_month_dates(now(), v_product.rolling_month_cutoff_day);
                 v_expires := v_rm.expires_at;

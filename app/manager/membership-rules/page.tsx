@@ -11,7 +11,7 @@ import SheetOverlay from "../../components/SheetOverlay";
   - 수강권 설정 권한(pass.update) 필요
 */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
@@ -24,6 +24,11 @@ import { fetchExistingClassOptions, type ExistingClassOption } from "../../../li
 import { fetchGrades, fetchMembers, type Grade, type CenterMember } from "../../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 import ExpiryOptionField, { type ExpiryOptionValue } from "../../components/ExpiryOptionField";
+import CountPriceEditor from "../../components/CountPriceEditor";
+import CatalogSearchFilter from "../../components/CatalogSearchFilter";
+import { validateGoodsForm, goodsListLabel, draftsFromTiers, type GoodsPricingMode } from "../../../lib/goodsForm";
+import { draftsToTiers, type TierDraft } from "../../../lib/selectableCount";
+import { filterCatalog, uniqueGroupLabels, catalogEmptyMessage, isFilterActive, EMPTY_CATALOG_FILTER } from "../../../lib/catalogFilter";
 
 export default function MembershipRulesPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -46,6 +51,11 @@ export default function MembershipRulesPage() {
   const [pPrice, setPPrice] = useState("");
   const [pCount, setPCount] = useState("");
   const [pUnlimited, setPUnlimited] = useState(false);
+  // 2026-10-01 — 가격 방식: 고정 횟수/고정 가격 vs 구매자가 횟수 선택(회차별 가격표). 선택 횟수는 예약조건과 독립이다
+  // (group_label/요일·시간 선택/예약조건/class_allowed_products/만료/자동예약은 상품 단위로 그대로).
+  const [pMode, setPMode] = useState<GoodsPricingMode>("fixed");
+  const [pTiers, setPTiers] = useState<TierDraft[]>(() => draftsFromTiers([]));
+  const [editWasSelectable, setEditWasSelectable] = useState(false);
   const [pExpiry, setPExpiry] = useState<ExpiryOptionValue>({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
   const [pLimitSale, setPLimitSale] = useState(false);
   const [pMaxQty, setPMaxQty] = useState("");
@@ -83,7 +93,9 @@ export default function MembershipRulesPage() {
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
   // UX 감사(B-8) — 수강권 상품이 100개+(이름이 UUID로 끝나 구분도 안 됨)면 검색/페이징 없이
   // 전부 렌더돼 원하는 걸 찾기 어려웠다. 이름 검색 + 20개씩 "더보기"로 완화.
-  const [search, setSearch] = useState("");
+  // 검색/그룹 필터(2026-10-01): load()가 다시 불러와도 리셋되지 않는 컴포넌트 state — 수정/추가 후에도 유지된다.
+  const [query, setQuery] = useState("");
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const PAGE_SIZE = 20;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -142,12 +154,19 @@ export default function MembershipRulesPage() {
   useEffect(() => { load(); }, [load]);
 
   const num = (s: string) => parseInt(s.replace(/[^0-9]/g, "") || "0", 10);
+  // 검색/그룹 필터 — 이미 받아 온 목록을 즉시 거를 뿐(AND, 기존 정렬 유지, 새 API 없음). group chip은 센터가 실제로 쓰는 group_label.
+  const groupLabels = useMemo(() => uniqueGroupLabels(products), [products]);
+  const filteredProducts = useMemo(
+    () => filterCatalog(products, { ...EMPTY_CATALOG_FILTER, group: groupFilter, query }),
+    [products, groupFilter, query],
+  );
 
   function resetProdSheet() {
     setProdSheet(false); setEditingId(null);
     setPName(""); setPGroupLabel(""); setPDesc(""); setPPrice(""); setPCount("");
     setPAutoDays([]); setPAutoClasses([]);
     setPUnlimited(false); setPExpiry({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
+    setPMode("fixed"); setPTiers(draftsFromTiers([])); setEditWasSelectable(false);
     setPLimitSale(false); setPMaxQty("");
     setPCouponEligible(true);
     setPWeekdaySelectable(false); setPTimeSelectable(false);
@@ -167,6 +186,7 @@ export default function MembershipRulesPage() {
   async function openDuplicateSheet(p: Product) {
     await openEditSheet(p); // 기존 "수정" 프리필 로직을 그대로 재사용(필드 목록 중복 방지)
     setEditingId(null);     // 수정이 아니라 "새로 만들기"로 전환 — 저장 시 createProduct 경로를 탐
+    setEditWasSelectable(false); // 복제본은 새 상품(가격표는 프리필된 값으로 새로 저장)
     setPName(`${p.name} 복제`);
     setDuplicateFromId(p.id);
   }
@@ -179,6 +199,9 @@ export default function MembershipRulesPage() {
     setPPrice(String(p.price));
     setPCount(p.totalCount ? String(p.totalCount) : "");
     setPUnlimited(p.unlimitedPass);
+    setPMode(p.countSelectable ? "selectable" : "fixed");
+    setPTiers(draftsFromTiers(p.countPrices));
+    setEditWasSelectable(p.countSelectable);
     setPAutoDays(p.autoBookDays ?? []);
     setPAutoClasses([]);
     setPExpiry({
@@ -246,8 +269,13 @@ export default function MembershipRulesPage() {
 
   async function handleCreateProduct() {
     if (!centerId || !pName.trim()) { setError("상품 이름을 입력해주세요"); return; }
-    if (num(pPrice) <= 0) { setError("가격을 입력해주세요"); return; }
-    if (!pUnlimited && num(pCount) <= 0) { setError("총 횟수를 입력해주세요 (또는 '횟수 제한 없음'을 켜주세요)"); return; }
+    if (pMode === "selectable") {
+      const tierError = validateGoodsForm({ mode: "selectable", unlimited: pUnlimited, price: 0, totalCount: 0, tiers: pTiers });
+      if (tierError) { setError(tierError); return; }
+    } else {
+      if (num(pPrice) <= 0) { setError("가격을 입력해주세요"); return; }
+      if (!pUnlimited && num(pCount) <= 0) { setError("총 횟수를 입력해주세요 (또는 '횟수 제한 없음'을 켜주세요)"); return; }
+    }
     if (pExpiry.mode === "days" && !pExpiry.days.trim()) { setError("만료까지 며칠인지 입력해주세요"); return; }
     if (pExpiry.mode === "date" && !pExpiry.date) { setError("만료일을 선택해주세요"); return; }
     if (pExpiry.mode === "rolling_month" && (!pExpiry.cutoffDay.trim() || num(pExpiry.cutoffDay) < 1 || num(pExpiry.cutoffDay) > 31)) {
@@ -260,7 +288,11 @@ export default function MembershipRulesPage() {
     try {
       const extra = {
         autoBookDays: pAutoDays,
-        unlimitedPass: pUnlimited,
+        unlimitedPass: pMode === "selectable" ? false : pUnlimited,
+        // 회차별 가격표(선택형)는 서버 RPC가 한 번에 교체한다. 고정으로 되돌리면(이전이 선택형이었던 경우만) 가격표 해제.
+        countSelectable: pMode === "selectable",
+        countPrices: pMode === "selectable" ? draftsToTiers(pTiers) : undefined,
+        wasCountSelectable: editWasSelectable,
         description: pDesc.trim(),
         expiry: {
           mode: pExpiry.mode, days: pExpiry.mode === "days" ? num(pExpiry.days) : null, date: pExpiry.mode === "date" ? pExpiry.date : null,
@@ -280,11 +312,12 @@ export default function MembershipRulesPage() {
         await load();
         return;
       }
-      await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "pass", false, extra);
+      const newProductId = await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "pass", false, extra);
       // 선택한 수업이 있으면 예약조건으로 자동 등록 — 실패한 조건이 있으면 조용히 넘어가지 않고 안내한다.
       let failedRuleCount = 0;
-      const fresh = (pAutoClasses.length > 0 || duplicateFromId) ? await fetchProducts(centerId, "pass") : null;
-      const made = fresh?.find((x) => x.name === pName.trim());
+      const fresh = !newProductId && (pAutoClasses.length > 0 || duplicateFromId) ? await fetchProducts(centerId, "pass") : null;
+      // 새로 만든 상품 id를 그대로 쓴다(이름 매칭은 같은 이름 상품이 있으면 틀릴 수 있음). fresh는 id가 없을 때만 폴백.
+      const made = newProductId ? { id: newProductId } : fresh?.find((x) => x.name === pName.trim());
       if (pAutoClasses.length > 0 && made) {
         for (const key of pAutoClasses) {
           const [dw, st2, ti] = key.split("|");
@@ -404,14 +437,16 @@ export default function MembershipRulesPage() {
 
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
-      {!loading && products.length > 10 && (
-        <input aria-label="상품 이름 검색"
-          className="input-field"
-          style={{ margin: "0 20px 10px", width: "calc(100% - 40px)" }}
-          placeholder="상품 이름 검색"
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE); }}
-        />
+      {!loading && products.length > 0 && (
+        <div style={{ padding: "0 20px" }}>
+          <CatalogSearchFilter
+            query={query} onQuery={(q) => { setQuery(q); setVisibleCount(PAGE_SIZE); }}
+            placeholder="수강권 검색" searchLabel="수강권 검색"
+            groups={groupLabels} group={groupFilter} onGroup={(g) => { setGroupFilter(g); setVisibleCount(PAGE_SIZE); }}
+            resultText={isFilterActive({ ...EMPTY_CATALOG_FILTER, group: groupFilter, query }) ? `검색 결과 ${filteredProducts.length}개` : null}
+            sticky={false}
+          />
+        </div>
       )}
 
       {loading ? (
@@ -422,11 +457,14 @@ export default function MembershipRulesPage() {
           <span style={{ fontSize: 12 }}>우측 상단 '+ 수강권'으로 추가하세요</span>
         </div>
       ) : (() => {
-        const filtered = search.trim()
-          ? products.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
-          : products;
+        const filtered = filteredProducts;
         if (filtered.length === 0) {
-          return <div className="daylist-empty" style={{ paddingTop: 30 }}>"{search}"와(과) 일치하는 상품이 없어요</div>;
+          return (
+            <div className="catalog-empty">
+              {catalogEmptyMessage(products.length, { ...EMPTY_CATALOG_FILTER, group: groupFilter, query }, "수강권")}
+              <div><button type="button" className="quiet-action" onClick={() => { setQuery(""); setGroupFilter(null); }}>필터 초기화</button></div>
+            </div>
+          );
         }
         return (
         <div className="pass-list">
@@ -472,7 +510,9 @@ export default function MembershipRulesPage() {
                       )}
                     </div>
                     <div className="pass-sub">
-                      {won(p.price)}{p.totalCount ? ` · ${p.totalCount}회` : ""}
+                      {p.countSelectable
+                        ? goodsListLabel(p)
+                        : <>{won(p.price)}{p.totalCount ? ` · ${p.totalCount}회` : ""}</>}
                       {p.maxQuantity != null && ` · 판매 ${p.soldCount}/${p.maxQuantity}`}
                     </div>
                   </div>
@@ -558,19 +598,32 @@ export default function MembershipRulesPage() {
             </div>
             <textarea aria-label="예: 화 19:00 안무반 전용 수강권이에요" className="input-field" style={{ minHeight: 60, resize: "vertical", lineHeight: 1.5 }}
               placeholder="예: 화 19:00 안무반 전용 수강권이에요" value={pDesc} onChange={(e) => setPDesc(e.target.value)} />
-            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>가격</div>
-            <input aria-label="가격" inputMode="numeric" className="input-field" placeholder="0" value={pPrice} onChange={(e) => setPPrice(e.target.value)} />
-            <div className="set-row" style={{ padding: "12px 0 6px", borderBottom: "none" }}>
-              <div className="set-label">횟수 제한 없음 (무제한)</div>
-              <button className={`switch ${pUnlimited ? "on" : ""}`} onClick={() => setPUnlimited(!pUnlimited)}>
-                <span className="knob" />
-              </button>
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>가격 방식</div>
+            <div className="mem-filters" style={{ padding: 0 }}>
+              <button type="button" aria-pressed={pMode === "fixed"} className={`filter-chip ${pMode === "fixed" ? "on" : ""}`}
+                onClick={() => setPMode("fixed")}>고정 횟수/고정 가격</button>
+              <button type="button" aria-pressed={pMode === "selectable"} className={`filter-chip ${pMode === "selectable" ? "on" : ""}`}
+                onClick={() => { setPMode("selectable"); setPUnlimited(false); }}>구매자가 횟수 선택</button>
             </div>
-            {!pUnlimited && (
+            {pMode === "fixed" ? (
               <>
-                <div className="menu-section-label" style={{ padding: "6px 0 6px" }}>총 횟수</div>
-                <input aria-label="총 횟수" inputMode="numeric" className="input-field" placeholder="예: 8" value={pCount} onChange={(e) => setPCount(e.target.value)} />
+                <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>가격</div>
+                <input aria-label="가격" inputMode="numeric" className="input-field" placeholder="0" value={pPrice} onChange={(e) => setPPrice(e.target.value)} />
+                <div className="set-row" style={{ padding: "12px 0 6px", borderBottom: "none" }}>
+                  <div className="set-label">횟수 제한 없음 (무제한)</div>
+                  <button className={`switch ${pUnlimited ? "on" : ""}`} onClick={() => setPUnlimited(!pUnlimited)}>
+                    <span className="knob" />
+                  </button>
+                </div>
+                {!pUnlimited && (
+                  <>
+                    <div className="menu-section-label" style={{ padding: "6px 0 6px" }}>총 횟수</div>
+                    <input aria-label="총 횟수" inputMode="numeric" className="input-field" placeholder="예: 8" value={pCount} onChange={(e) => setPCount(e.target.value)} />
+                  </>
+                )}
               </>
+            ) : (
+              <CountPriceEditor rows={pTiers} onChange={setPTiers} disabled={busy} />
             )}
 
             {/* 판매 수량 제한 — "총 횟수"(수강권 1개당 사용 가능 횟수)와는 별개로, 이 상품

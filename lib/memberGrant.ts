@@ -5,6 +5,8 @@
   - 회원 프로필의 shoe_size가 상품 sizes 중 하나와 일치하면 기본 선택값으로 "제안"만 한다(관리자가 바꿀 수 있음).
   UI 컴포넌트(app/manager/members/page.tsx)가 이 함수들만으로 버튼 활성/문구를 결정해 테스트로 고정한다.
 */
+import { countOptions, isCountSelectable, tierPriceFor, type CountTier } from "./selectableCount";
+
 export type GrantKind = "pass" | "goods";
 
 export type GrantableProduct = {
@@ -16,10 +18,25 @@ export type GrantableProduct = {
   weekdaySelectable: boolean;
   timeSelectable: boolean;
   onSale: boolean;
+  // 구매 횟수 선택형(add_selectable_count_pricing.sql): 회차별 가격표(가격이 등록된 회차만 지급 가능, pass/goods 공통)
+  countSelectable?: boolean;
+  countPrices?: CountTier[];
 };
 
 export function filterGrantProducts<T extends { kind: "pass" | "goods" }>(products: T[], kind: GrantKind): T[] {
   return products.filter((p) => (kind === "goods" ? p.kind === "goods" : p.kind !== "goods"));
+}
+
+// 선택형 상품의 지급 횟수 후보(= 가격표에 등록된 회차)/기본 가격(= 그 회차의 가격표 가격, 관리자가 수정할 수 있고 0원이면 서비스 지급)
+export function grantCountOptions(p: Pick<GrantableProduct, "countSelectable" | "countPrices"> | undefined | null): number[] {
+  if (!p || !isCountSelectable({ countSelectable: !!p.countSelectable, countPrices: p.countPrices })) return [];
+  return countOptions({ countPrices: p.countPrices });
+}
+
+export function defaultGrantPrice(p: GrantableProduct | undefined | null, count: number | null): number | null {
+  if (!p) return null;
+  if (grantCountOptions(p).length === 0) return p.price;   // 고정 상품은 상품가 그대로
+  return tierPriceFor({ countPrices: p.countPrices }, count);   // 가격표에 없는 횟수면 null
 }
 
 export function productNeedsSize(p: Pick<GrantableProduct, "sizes"> | undefined | null): boolean {
@@ -43,10 +60,13 @@ export function grantBlockReason(input: {
   selectedSize: string | null;
   scheduleDay: number | null;
   scheduleTime: string | null;
+  selectedCount?: number | null;   // 구매 횟수 선택형 상품에서만 사용
 }): string | null {
   const { product } = input;
   if (!product) return "지급할 상품을 선택해주세요";
   if (input.price.trim() === "" || !Number.isFinite(Number(input.price)) || Number(input.price) < 0) return "가격을 숫자로 입력해주세요";
+  const countChoices = grantCountOptions(product);
+  if (countChoices.length > 0 && (input.selectedCount == null || !countChoices.includes(input.selectedCount))) return "지급할 횟수를 선택해주세요";
   if (productNeedsSize(product) && !input.selectedSize) return "사이즈를 선택해주세요";
   if (product.kind !== "goods" && product.weekdaySelectable && input.scheduleDay === null) return "이용 요일을 선택해주세요";
   if (product.kind !== "goods" && product.weekdaySelectable && product.timeSelectable && !input.scheduleTime) return "이용 시간을 선택해주세요";

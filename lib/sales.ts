@@ -4,6 +4,7 @@
   - 매출 조회 (기간별 합계, 구분별·수단별 집계, 목록)
 */
 
+import type { CountTier } from "./selectableCount";
 import { supabase } from "./supabaseClient";
 
 export const SALE_TYPE_LABEL: Record<string, string> = {
@@ -189,6 +190,8 @@ export type GrantInput = {
   boundStartTime?: string | null;
   // 2026-10-01 — 상품(대여화 등)에 sizes가 정의돼 있으면 필수. memberships.selected_size에 저장된다.
   selectedSize?: string | null;
+  // 2026-10-01 — 구매 횟수 선택형 상품만: 지급 횟수(범위는 서버가 검증). 고정 상품에는 넘기지 않는다(서버가 거부).
+  selectedCount?: number | null;
 };
 
 // 2026-10-01 — 지급은 서버 원자 RPC(manager_grant_product, add_manager_grant_product_rpc.sql)가 담당한다:
@@ -207,10 +210,13 @@ export async function grantProductToMember(input: GrantInput): Promise<void> {
     p_bound_day_of_week: input.boundDayOfWeek ?? null,
     p_bound_start_time: input.boundStartTime ?? null,
     p_selected_size: input.selectedSize ?? null,
+    p_selected_count: input.selectedCount ?? null,
   });
   if (!rpcErr) return;
   const missing = rpcErr.code === "PGRST202" || rpcErr.code === "42883" || /Could not find the function/i.test(rpcErr.message ?? "");
   if (!missing) throw new Error(rpcErr.message.replace(/^.*?:\s*/, ""));
+  // 레거시 2단계 경로는 선택형 횟수를 알지 못한다 — 1회 가격으로 잘못 지급되지 않게 막는다.
+  if (input.selectedCount != null) throw new Error("구매 횟수 선택형 상품은 DB 업데이트(add_manager_grant_product_rpc.sql) 적용 후 지급할 수 있어요");
   await grantProductToMemberLegacy(input);
 }
 
@@ -574,6 +580,8 @@ export type SaleProduct = {
   id: string; name: string; price: number; totalCount: number | null; kind: "pass" | "goods"; unlimited: boolean;
   weekdaySelectable: boolean; timeSelectable: boolean; // Batch C, C-10 — 관리자 수동 발급에서도 선택을 받아야 함
   sizes: string[]; onSale: boolean;                     // 2026-10-01 — 상품 지급 시트의 사이즈 선택/판매중지 표시
+  // 구매 횟수 선택형(add_selectable_count_pricing.sql): true면 countPrices(회차별 가격표)에 있는 회차만 지급할 수 있다.
+  countSelectable: boolean; countPrices: CountTier[];
 };
 
 // 관리자 회원 상세 지급 시트용 상품 목록(2026-10-01). 수강권 지급은 판매중인 수강권(기존 정책 유지),
@@ -585,15 +593,31 @@ export async function fetchGrantableProducts(centerId: string, kind: "pass" | "g
     q = kind === "goods" ? q.eq("product_kind", "goods") : q.neq("product_kind", "goods").eq("is_on_sale", true);
     return q.order("created_at", { ascending: false });
   };
-  const first = await run(`${base}, weekday_selectable, time_selectable`);
-  let data: any[] | null = first.data as any[] | null;
-  let error = first.error;
-  if (error?.code === "42703") {
-    const fallback = await run(base);
-    data = fallback.data as any[] | null;
-    error = fallback.error;
+  // 컬럼 세트를 좁혀 가며 재시도(42703 = 미적용 SQL): 전체(선택형 포함) → 요일/시간 → 기본
+  let data: any[] | null = null;
+  let error: { code?: string; message: string } | null = null;
+  for (const cols of [
+    `${base}, weekday_selectable, time_selectable, purchase_count_selectable`,
+    `${base}, weekday_selectable, time_selectable`,
+    base,
+  ]) {
+    const res = await run(cols);
+    data = res.data as any[] | null;
+    error = res.error;
+    if (error?.code !== "42703") break;
   }
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
+  // 선택형 상품의 회차별 가격표를 한 번에 조회(테이블이 없거나 실패하면 빈 가격표 — 선택형은 지급 횟수 후보가 없어 지급이 막힌다)
+  const tiersByProduct: Record<string, CountTier[]> = {};
+  const selectableIds = (data ?? []).filter((p: any) => p.purchase_count_selectable).map((p: any) => p.id);
+  if (selectableIds.length > 0) {
+    const { data: tierRows, error: tierErr } = await supabase
+      .from("product_count_prices").select("product_id, count, price").in("product_id", selectableIds);
+    if (!tierErr) {
+      for (const t of tierRows ?? []) (tiersByProduct[(t as any).product_id] ??= []).push({ count: (t as any).count, price: (t as any).price });
+      for (const id of Object.keys(tiersByProduct)) tiersByProduct[id].sort((a, b) => a.count - b.count);
+    }
+  }
   return (data ?? []).map((p: any) => ({
     id: p.id, name: p.name, price: p.price, totalCount: p.total_count,
     kind: p.product_kind === "goods" ? "goods" : "pass",
@@ -602,6 +626,8 @@ export async function fetchGrantableProducts(centerId: string, kind: "pass" | "g
     timeSelectable: p.time_selectable ?? false,
     sizes: Array.isArray(p.sizes) ? p.sizes : [],
     onSale: p.is_on_sale ?? true,
+    countSelectable: p.purchase_count_selectable ?? false,
+    countPrices: tiersByProduct[p.id] ?? [],
   }));
 }
 
@@ -635,6 +661,7 @@ export async function fetchSaleProducts(centerId: string): Promise<SaleProduct[]
     weekdaySelectable: p.weekday_selectable ?? false,
     timeSelectable: p.time_selectable ?? false,
     sizes: [], onSale: true,
+    countSelectable: false, countPrices: [],
   }));
 }
 
