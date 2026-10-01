@@ -25,7 +25,7 @@ import { describeCalendarResult, detectCalendarPlatform, type CalendarAddResult 
 import { classToEvent, filterEventsByMonth, holidaysToEvents, monthPrefix, type CalendarEventItem } from "../../../lib/calendarEvents";
 import {
   fetchClasses, createClass, updateClass, updateClassPassSelectionMode, deleteClass,
-  createRecurringClasses, createRecurringClassesPerDay, expandRecurringDates,
+  createRecurringClasses, createRecurringClassesPerDay, createClassOnDateSlots, expandRecurringDates,
   updateClassGroup, deleteClassGroup, diffGroupFields,
   fetchClassAttendees, setAttendance, fetchClassProducts, setClassProducts, setClassProductsBulk,
   fetchClassTrainers, setClassTrainers, setClassTrainersBulk, setClassTrainersForGroup, fetchClassPassSelectionMode,
@@ -41,6 +41,7 @@ import {
 import { fetchStaff, fetchMyEffectivePermissionKeys, canSeeManagerMenu, type Staff } from "../../../lib/roles";
 import { fetchClassMemos, createClassMemo, updateClassMemo, deleteClassMemo, type ScheduleMemo } from "../../../lib/scheduleMemos";
 import { getMyAccountId } from "../../../lib/authAccount";
+import { addSlot, allSlots, countClasses, removeSlot, updateSlot, validateSlots, MAX_TIME_SLOTS, type TimeSlot } from "../../../lib/classTimeSlots";
 import { formatMonthDayWeekday } from "../../../lib/kst";
 import { fetchMemberDetail, type MemberDetailData } from "../../../lib/members";
 import { fetchSettings, type CenterSettings } from "../../../lib/settings";
@@ -121,7 +122,10 @@ export default function ClassManagePage() {
     start: string; end: string; capacity: string;
     roomId: string | null | undefined;   // undefined = 미지정(공통값 사용)
     cd: string; ch: string; cm: string;  // 취소마감 일/시간/분
+    extraSlots?: TimeSlot[];             // 이 요일의 추가 타임(2026-10-02, 첫 타임은 위 start/end)
   }>>({});
+  // 새 수업 등록 전용 "한 날 여러 타임": 첫 타임은 form.start/form.end, 두 번째 이후는 여기(수정 화면에서는 쓰지 않음)
+  const [extraSlots, setExtraSlots] = useState<TimeSlot[]>([]);
   const [perDayMode, setPerDayMode] = useState(false);
   // 예약취소 마감: 일/시간/분 입력 → 분으로 환산해 저장
   const [centerSettings, setCenterSettings] = useState<CenterSettings | null>(null);
@@ -369,6 +373,8 @@ export default function ClassManagePage() {
     const dayStr = `${year}-${String(month).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
     const lastDay = `${year}-${String(month).padStart(2, "0")}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
     setForm({ ...EMPTY, date: dayStr });
+    setExtraSlots([]);
+    setDayOverrides({});
     setRepeat(false);
     setRepDays([]);
     setRepFrom(dayStr);
@@ -775,9 +781,11 @@ export default function ClassManagePage() {
         setError("시작·종료 시간을 입력해주세요");
         return;
       }
-      if (!perDayMode && !isValidClassTimeRange(form.start, form.end)) {
-        setError("종료시간은 시작시간 이후여야 해요 (자정을 넘기는 경우는 6시간 이내만 허용)");
-        return;
+      // 한 날 여러 타임: 첫 타임(form.start/end) + 추가 타임 각각에 기존 시간 범위 검증 + 완전 중복 차단
+      const commonSlots = allSlots({ start: form.start, end: form.end }, extraSlots);
+      if (!perDayMode) {
+        const slotErr = validateSlots(commonSlots);
+        if (slotErr) { setError(slotErr); return; }
       }
       if (repDays.length === 0) { setError("반복할 요일을 선택해주세요"); return; }
       if (!repFrom || !repTo || repFrom > repTo) { setError("기간을 올바르게 선택해주세요"); return; }
@@ -806,7 +814,7 @@ export default function ClassManagePage() {
           // 요일마다 다른 설정(시간/정원/룸/취소마감)을 먼저 전부 계산해두고, RPC는 아래에서
           // 한 번만 호출한다(요일별로 따로 호출하면 그 개수만큼 별도 트랜잭션이 생겨 중간
           // 요일에서 실패 시 이전 요일들만 반영된 채 남는 원자성 문제가 있었음).
-          const days: { dow: number; start: string; end: string; capacity: number; roomId?: string | null; cancelDeadlineMin?: number | null }[] = [];
+          const days: { dow: number; start: string; end: string; capacity: number; roomId?: string | null; cancelDeadlineMin?: number | null; slots?: { start: string; end: string }[] }[] = [];
           for (const dow of repDays) {
             const ov = dayOverrides[dow] ?? { start: "", end: "", capacity: "", roomId: undefined, cd: "", ch: "", cm: "" };
             const st = ov.start || form.start;
@@ -821,7 +829,11 @@ export default function ClassManagePage() {
               ? (parseInt(ov.cd || "0", 10) || 0) * 1440 + (parseInt(ov.ch || "0", 10) || 0) * 60 + (parseInt(ov.cm || "0", 10) || 0)
               : deadlineToMin();
             if (!st || !en) { setError(`${WEEKDAYS[dow]}요일 시간을 입력해주세요 (공통 설정도 비어 있어요)`); setBusy(false); return; }
-            days.push({ dow, start: st, end: en, capacity: cap, roomId: rid, cancelDeadlineMin: ovMin });
+            // 요일마다 타임 개수가 달라도 된다: 첫 타임(요일별 값 또는 공통값) + 그 요일의 추가 타임
+            const daySlots = allSlots({ start: st, end: en }, ov.extraSlots);
+            const slotErr = validateSlots(daySlots, `${WEEKDAYS[dow]}요일`);
+            if (slotErr) { setError(slotErr); setBusy(false); return; }
+            days.push({ dow, start: st, end: en, capacity: cap, roomId: rid, cancelDeadlineMin: ovMin, slots: ov.extraSlots && ov.extraSlots.length > 0 ? daySlots : undefined });
           }
           ids = await createRecurringClassesPerDay(activeCenterId, {
             title: form.title,
@@ -843,6 +855,8 @@ export default function ClassManagePage() {
             bookingDeadlineMin: bookDeadlineToMin(),
             passSelectionMode: passMode,
             excludeDates: holidays,
+            // 추가 타임이 없으면 undefined → 기존과 완전히 같은 단일 타임 반복 등록
+            slots: extraSlots.length > 0 ? commonSlots : undefined,
           });
         }
         // 선택한 수강권을 모든 생성 수업에 연결('all'이면 productIds가 비어 있어 아무것도 안 씀)
@@ -868,6 +882,12 @@ export default function ClassManagePage() {
     if (!isValidClassTimeRange(form.start, form.end)) {
       setError("종료시간은 시작시간 이후여야 해요 (자정을 넘기는 경우는 6시간 이내만 허용)");
       return;
+    }
+    // 새 수업 등록에서 시간을 추가했다면 모든 타임을 검증한다(수정 화면에는 추가 타임이 없다)
+    const singleSlots = allSlots({ start: form.start, end: form.end }, !editId ? extraSlots : []);
+    if (singleSlots.length > 1) {
+      const slotErr = validateSlots(singleSlots);
+      if (slotErr) { setError(slotErr); return; }
     }
     // QA Fix Batch(2026-09-18) — 정원 축소 invariant(요청 2번)의 클라이언트 측 사전
     // 체크. 서버(update_class_safe)가 동일 조건을 최종적으로 다시 검사해 거부하므로
@@ -895,6 +915,7 @@ export default function ClassManagePage() {
       const passMode = resolved.mode;
       let promotedCount = 0;
       let groupAppliedCount = 0;
+      let groupCreatedCount = 0;
       if (editId) {
         if (applyToGroup && editGroupId) {
           // 공통 속성(수업명 + 이 시트에서 "바뀐" 소개·정원·룸·취소/예약 마감·취소 허용·상품 허용)을 같은 반복 그룹
@@ -906,7 +927,8 @@ export default function ClassManagePage() {
           const ownChanged = !!orig && (orig.date !== form.date || orig.start !== form.start || orig.end !== form.end);
           const groupIds = await updateClassGroup(editGroupId, form.title, form.capacity, {
             changes,
-            time: applyTimeToGroup ? { start: form.start, end: form.end } : undefined,
+            // 같은 날 여러 타임으로 등록된 그룹은 편집 중인 수업과 "원래 같은 시각"의 수업에만 시간 변경을 적용한다(타임끼리 덮어쓰기 방지)
+            time: applyTimeToGroup ? { start: form.start, end: form.end, only: orig ? { start: orig.start, end: orig.end } : undefined } : undefined,
             own: ownChanged || applyTimeToGroup ? { id: editId, date: form.date, start: form.start, end: form.end } : undefined,
           });
           groupAppliedCount = groupIds.length;
@@ -922,6 +944,16 @@ export default function ClassManagePage() {
           await setClassTrainers(editId, selectedTrainers);
         }
         await setClassProducts(editId, resolved.productIds);
+      } else if (singleSlots.length > 1) {
+        // 한 날짜 여러 타임: 한 번에(한 트랜잭션 또는 실패 시 보상 삭제) 만들고, 수강권/강사는 만들어진 모든 수업에 적용한다.
+        const newIds = await createClassOnDateSlots(
+          activeCenterId,
+          { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin(), passSelectionMode: passMode },
+          singleSlots,
+        );
+        if (resolved.productIds.length > 0) await setClassProductsBulk(newIds, resolved.productIds);
+        if (selectedTrainers.length > 0) await setClassTrainersBulk(newIds, selectedTrainers);
+        groupCreatedCount = newIds.length;
       } else {
         const newId = await createClass(activeCenterId, { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin(), passSelectionMode: passMode });
         await setClassProducts(newId, resolved.productIds);
@@ -933,7 +965,9 @@ export default function ClassManagePage() {
       // QA Fix Batch(2026-09-18) — 정원 확대로 대기자가 자동 승격됐으면(요청 3번)
       // 관리자에게 알려준다. 0명이면 조용히 넘어간다(정원을 늘렸지만 대기자가
       // 없었거나, 애초에 정원을 줄이거나 그대로 둔 경우).
-      if (groupAppliedCount > 0) {
+      if (groupCreatedCount > 0) {
+        showToast(`${groupCreatedCount}개의 수업을 등록했어요`);
+      } else if (groupAppliedCount > 0) {
         showToast(`반복 수업 ${groupAppliedCount}개를 수정했어요`);
       } else if (promotedCount > 0) {
         showToast(`대기자 ${promotedCount}명이 자동으로 확정 예약으로 전환됐어요`);
@@ -984,6 +1018,17 @@ export default function ClassManagePage() {
 
   // 달력 셀 + 수업 있는 날 표시
   const pad2 = (n: number) => String(n).padStart(2, "0");
+  // 반복 등록 미리보기 개수 = 날짜 수 × 타임 수(요일별 모드는 요일마다 그 요일 날짜 수 × 그 요일 타임 수의 합)
+  const previewClassCount = (() => {
+    if (!repeat || repDays.length === 0 || !repFrom || !repTo || repFrom > repTo) return 0;
+    if (perDayMode) {
+      return repDays.reduce((sum, dow) => {
+        const dates = expandRecurringDates(repFrom, repTo, [dow]).length;
+        return sum + countClasses(dates, 1 + (dayOverrides[dow]?.extraSlots?.length ?? 0));
+      }, 0);
+    }
+    return countClasses(expandRecurringDates(repFrom, repTo, repDays).length, 1 + extraSlots.length);
+  })();
   const selectedKey = `${year}-${pad2(month)}-${pad2(selectedDay)}`;
   /*
     "내 캘린더에 추가"(2026-09-26) — 회원 예약 캘린더와 같은 공용 시트/서비스(CalendarAddSheet,
@@ -1288,7 +1333,7 @@ export default function ClassManagePage() {
                 </div>
                 {repDays.length > 0 && repFrom && repTo && repFrom <= repTo && (
                   <div className="rep-preview" style={{ marginBottom: 4 }}>
-                    총 {expandRecurringDates(repFrom, repTo, repDays).length}개 수업이 만들어져요
+                    총 {previewClassCount}개 수업이 만들어져요
                   </div>
                 )}
 
@@ -1318,6 +1363,23 @@ export default function ClassManagePage() {
                                 <input aria-label="정원" className="input-field" inputMode="numeric" style={{ maxWidth: 66 }} placeholder="정원"
                                   value={ov.capacity} onChange={(e) => setOv({ capacity: e.target.value })} />
                               </div>
+
+                              {/* 이 요일의 추가 타임 — 요일마다 타임 개수가 달라도 된다 */}
+                              {(ov.extraSlots ?? []).map((sl, idx) => (
+                                <div key={sl.id} className="perday-inputs perday-slot-extra">
+                                  <input aria-label={`${WEEKDAYS[d]}요일 시간 ${idx + 2} 시작`} className="input-field" type="time" value={sl.start}
+                                    onChange={(e) => setOv({ extraSlots: updateSlot(ov.extraSlots ?? [], sl.id, { start: e.target.value }) })} />
+                                  <span className="time-sep">~</span>
+                                  <input aria-label={`${WEEKDAYS[d]}요일 시간 ${idx + 2} 종료`} className="input-field" type="time" value={sl.end}
+                                    onChange={(e) => setOv({ extraSlots: updateSlot(ov.extraSlots ?? [], sl.id, { end: e.target.value }) })} />
+                                  <button type="button" className="time-slot-remove" aria-label={`${WEEKDAYS[d]}요일 시간 ${idx + 2} 삭제`}
+                                    onClick={() => setOv({ extraSlots: removeSlot(ov.extraSlots ?? [], sl.id) })}>삭제</button>
+                                </div>
+                              ))}
+                              {(ov.extraSlots?.length ?? 0) + 1 < MAX_TIME_SLOTS && (
+                                <button type="button" className="time-slot-add"
+                                  onClick={() => setOv({ extraSlots: addSlot(ov.extraSlots ?? [], { start: ov.start || form.start, end: ov.end || form.end }) })}>+ 시간 추가</button>
+                              )}
 
                               {rooms.length > 0 && (
                                 <div className="perday-sub">
@@ -1376,6 +1438,38 @@ export default function ClassManagePage() {
                 <span className="ampm-time-label">종료</span>
                 <AmPmTimeInput value={form.end} onChange={(v) => setForm({ ...form, end: v })} />
               </div>
+              {/* 같은 날 여러 타임(새 수업 등록 전용): 시간 추가 → 같은 수업명/설정으로 타임마다 수업이 만들어진다.
+                  요일별로 다르게 모드에서는 각 요일 카드 안에서 추가한다. 수정 화면에서는 보이지 않는다. */}
+              {!editId && !(perDayMode && repeat) && (
+                <>
+                  {extraSlots.map((sl, idx) => (
+                    <div key={sl.id} className="time-slot-extra">
+                      <div className="time-slot-extra-head">
+                        <span>시간 {idx + 2}</span>
+                        <button type="button" className="time-slot-remove" aria-label={`시간 ${idx + 2} 삭제`}
+                          onClick={() => setExtraSlots((prev) => removeSlot(prev, sl.id))}>삭제</button>
+                      </div>
+                      <div className="ampm-time-row">
+                        <span className="ampm-time-label">시작</span>
+                        <AmPmTimeInput value={sl.start} onChange={(v) => setExtraSlots((prev) => updateSlot(prev, sl.id, { start: v }))} />
+                      </div>
+                      <div className="ampm-time-row">
+                        <span className="ampm-time-label">종료</span>
+                        <AmPmTimeInput value={sl.end} onChange={(v) => setExtraSlots((prev) => updateSlot(prev, sl.id, { end: v }))} />
+                      </div>
+                    </div>
+                  ))}
+                  {extraSlots.length + 1 < MAX_TIME_SLOTS && (
+                    <button type="button" className="time-slot-add"
+                      onClick={() => setExtraSlots((prev) => addSlot(prev, { start: form.start, end: form.end }))}>+ 시간 추가</button>
+                  )}
+                  {extraSlots.length > 0 && (
+                    <div className="perm-guide" style={{ margin: "6px 0 0" }}>
+                      {repeat ? "선택한 모든 날짜마다 " : "이 날짜에 "}시간 {extraSlots.length + 1}개만큼 수업이 만들어져요.
+                    </div>
+                  )}
+                </>
+              )}
               <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>수업 형태</div>
               <div className="mem-filters" style={{ padding: 0 }}>
                 <button aria-pressed={form.classFormat !== "private"} className={`filter-chip ${form.classFormat !== "private" ? "on" : ""}`}

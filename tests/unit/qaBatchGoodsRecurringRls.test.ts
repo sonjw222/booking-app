@@ -161,7 +161,7 @@ describe("[10] 모든 반복 수업에 적용 — 요일별 시간 보존", () =
   it("매니저 화면: 시간 옵션은 기본 OFF이고 안내 문구가 있다", () => {
     const page = read("app/manager/classes/page.tsx");
     expect(page).toContain("const [applyTimeToGroup, setApplyTimeToGroup] = useState(false);");
-    expect(page).toContain("time: applyTimeToGroup ? { start: form.start, end: form.end } : undefined");
+    expect(page).toContain("time: applyTimeToGroup ? { start: form.start, end: form.end, only: orig ? { start: orig.start, end: orig.end } : undefined } : undefined");
     expect(page).toContain("날짜·시간·수강권 정책은 수업별로 유지돼요");
     expect(page).toContain("시간도 함께 변경");
   });

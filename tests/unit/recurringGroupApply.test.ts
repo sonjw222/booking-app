@@ -184,6 +184,7 @@ describe("SQL 계약 · 안내 문구", () => {
   it("반복 생성/스케줄 복사 4경로(공통시간·요일별 개별시간·요일 복사·날짜 복사) 모두 한 작업의 모든 occurrence에 같은 recurring_group_id를 준다", () => {
     const lib = read("lib/classes.ts");
     expect((lib.match(/const groupId = crypto\.randomUUID\(\);/g) ?? []).length).toBe(4);
-    expect((lib.match(/recurring_group_id: groupId,/g) ?? []).length).toBe(4);
+    // 4경로 + 2026-10-02 한 날 여러 타임 단일 날짜 등록(createClassOnDateSlots) = 5곳이 같은 그룹 id 변수를 쓴다
+    expect((lib.match(/recurring_group_id: groupId,/g) ?? []).length).toBe(5);
   });
 });

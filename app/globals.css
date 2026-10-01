@@ -6537,3 +6537,21 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
 /* 센터 구매 sheet — 기본 .sheet-title이 sticky(top:-22px, 보이는 높이 ≈18px, z-index 2)라서 검색/필터 sticky는 그 바로 아래(top:18px)에 붙이고
    z-index를 낮춰(1) 제목/닫기 버튼과 겹치지 않게 한다. 목록이 길어 스크롤해도 제목 → 검색/필터 순서로 상단에 고정된다. */
 .sheet .catalog-filter.is-sticky { top: 18px; z-index: 1; }
+
+/* 관리자 수업 캘린더 — 선택 날짜의 외곽 네모 제거(2026-10-02).
+   원인: 전역 `button:focus-visible { outline: 3px … }`가 날짜 셀 버튼 전체(직사각형)에 포커스 outline을 그렸고, 선택 날짜에는
+   원형(.daynum-wrap) 선택 링이 이미 있어 "네모 안의 원"으로 겹쳐 보였다. 셀 전체 outline만 끄고(레이아웃/간격 불변),
+   키보드 포커스(:focus-visible)는 날짜 원형에 링으로 옮겨 접근성을 유지한다 — 큰 직사각형 박스는 쓰지 않는다. */
+.manager-classes-v2 .cal-cell:focus,
+.manager-classes-v2 .cal-cell:focus-visible { outline: none; }
+.manager-classes-v2 .cal-cell:focus-visible .daynum-wrap {
+  box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 0 3px color-mix(in srgb, var(--accent) 32%, transparent) !important;
+}
+
+/* 수업 등록 — 한 날 여러 타임(추가 시간 슬롯). 기존 AmPmTimeInput/보조 버튼 스타일 재사용, 가로 overflow 없음 */
+.time-slot-extra { margin: 8px 0 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.time-slot-extra-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+.time-slot-add { margin-top: 8px; padding: 7px 12px; border: 1px dashed var(--line); border-radius: 10px; background: transparent; color: var(--ink-soft); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; max-width: 100%; }
+.time-slot-remove { flex: 0 0 auto; padding: 5px 10px; border: 0; border-radius: 8px; background: var(--surface); color: var(--danger); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.perday-slot-extra { margin-top: 6px; flex-wrap: wrap; }
+.perday-slot-extra .input-field { min-width: 0; }

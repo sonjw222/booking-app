@@ -321,7 +321,9 @@ export function diffGroupFields(orig: ClassInput, cur: ClassInput): GroupFieldCh
 
 export type GroupUpdateOptions = {
   // "시간도 함께 변경"(기본 OFF): 모든 수업의 시각(time-of-day)만 바꾸고 각 수업의 날짜는 유지한다.
-  time?: { start: string; end: string };
+  // only(2026-10-02): 같은 날 여러 타임을 한 번에 등록한 그룹에서는 한 타임의 시각을 다른 타임에 덮어쓰면 같은 날 수업이
+  // 서로 겹치게 되므로, 편집 중인 수업의 "원래 시각"과 같은 시각의 수업(같은 타임 시리즈)에만 적용한다.
+  time?: { start: string; end: string; only?: { start: string; end: string } };
   // 지금 편집 중인 수업 자신의 날짜/시간 변경(전체 적용 ON이어도 이 수업의 변경은 반드시 저장돼야 한다). 다른 수업에는 영향 없음.
   own?: { id: string; date: string; start: string; end: string };
   changes?: GroupFieldChanges;
@@ -334,12 +336,27 @@ export type GroupUpdateRow = {
   cancel_deadline_min?: number | null; booking_deadline_min?: number | null;
 };
 
+// 같은 날(KST)에 그룹 수업이 2개 이상 있으면 "한 날 여러 타임" 그룹이다.
+export function hasMultiSlotDates(rows: GroupClassRow[]): boolean {
+  const seen = new Set<string>();
+  for (const r of rows) {
+    const t = new Date(r.start_time);
+    if (Number.isNaN(t.getTime())) continue;   // 잘못된 값은 판정에서 제외(그룹 수정 자체를 막지 않는다)
+    const d = KST_DATE.format(t);
+    if (seen.has(d)) return true;
+    seen.add(d);
+  }
+  return false;
+}
+
 // 순수 함수(테스트 대상): 그룹의 각 수업에 보낼 update payload를 만든다.
 export function buildGroupUpdates(rows: GroupClassRow[], options?: GroupUpdateOptions): GroupUpdateRow[] {
   const changes: GroupFieldChanges = { ...(options?.changes ?? {}) };
   if (options?.description !== undefined && changes.description === undefined) changes.description = options.description;
   const kstDate = (iso: string) =>
     new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
+  const kstTimeOfDay = (iso: string) => KST_TIME.format(new Date(iso)).replace(/^24:/, "00:");
+  const multiSlot = hasMultiSlotDates(rows);
   return rows.map((r) => {
     let start_time = r.start_time;
     let end_time = r.end_time;
@@ -347,7 +364,7 @@ export function buildGroupUpdates(rows: GroupClassRow[], options?: GroupUpdateOp
     if (own) {
       start_time = toKstIso(own.date, own.start);
       end_time = toKstIso(classEndDate(own.date, own.start, own.end), own.end);
-    } else if (options?.time) {
+    } else if (options?.time && (!multiSlot || !options.time.only || kstTimeOfDay(r.start_time) === options.time.only.start && kstTimeOfDay(r.end_time) === options.time.only.end)) {
       const dateStr = kstDate(r.start_time);
       start_time = toKstIso(dateStr, options.time.start);
       end_time = toKstIso(classEndDate(dateStr, options.time.start, options.time.end), options.time.end);
@@ -421,6 +438,9 @@ export type RecurringInput = {
   cancelDeadlineMin?: number | null;
   bookingDeadlineMin?: number | null;
   passSelectionMode?: "all" | "selected"; // 기본값 'all'
+  // 한 날 여러 타임(2026-10-02): 있으면 start/end 대신 이 슬롯들 전부를 선택된 모든 날짜에 만든다(날짜 수 × 슬롯 수).
+  // 없으면 기존처럼 start/end 한 타임만 만든다.
+  slots?: { start: string; end: string }[];
 };
 
 // 기간 내 해당 요일의 날짜들을 모두 구함
@@ -445,30 +465,73 @@ export function expandRecurringDates(fromDate: string, toDate: string, daysOfWee
 }
 
 export async function createRecurringClasses(centerId: string, input: RecurringInput): Promise<string[]> {
-  assertValidClassTimeRange(input.start, input.end);
+  const slots = input.slots && input.slots.length > 0 ? input.slots : [{ start: input.start, end: input.end }];
+  for (const sl of slots) assertValidClassTimeRange(sl.start, sl.end);
   let dates = expandRecurringDates(input.fromDate, input.toDate, input.daysOfWeek);
   if (input.excludeDates) dates = dates.filter((d) => !input.excludeDates!.has(d));
   if (dates.length === 0) return [];
 
-  // 이 반복 등록을 하나로 묶는 그룹 id
+  // 이 반복 등록을 하나로 묶는 그룹 id — 여러 타임이어도 한 등록 작업의 모든 수업이 같은 그룹이다.
   const groupId = crypto.randomUUID();
-  const rows = dates.map((d) => ({
+  const rows = dates.flatMap((d) => slots.map((sl) => ({
     title: input.title,
     description: input.description?.trim() || null,
-    start_time: toKstIso(d, input.start),
-    end_time: toKstIso(classEndDate(d, input.start, input.end), input.end),
+    start_time: toKstIso(d, sl.start),
+    end_time: toKstIso(classEndDate(d, sl.start, sl.end), sl.end),
     capacity: input.capacity,
     room_id: input.roomId ?? null,
     cancel_deadline_min: input.cancelDeadlineMin ?? null,
     booking_deadline_min: input.bookingDeadlineMin ?? null,
     recurring_group_id: groupId,
     pass_selection_mode: input.passSelectionMode ?? "all",
-  }));
+  })));
   const { data, error } = await supabase.rpc("create_recurring_classes_safe", {
     p_center_id: centerId, p_rows: rows,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
   return (data as string[]) ?? [];
+}
+
+// 한 날짜에 여러 타임을 한 번에 등록한다(2026-10-02, 새 수업 등록 전용). 반환: 생성된 class id 전체(순서 = 슬롯 순서).
+//  · 그룹 수업(+ 회원 취소 허용)이면 create_recurring_classes_safe에 모든 행을 한 번에 보내 한 트랜잭션으로 만든다
+//    (일부만 저장되지 않음). 같은 등록 작업의 수업은 같은 recurring_group_id로 묶인다.
+//  · 프라이빗/취소 불가 수업은 그 RPC가 class_format·allow_cancel을 다루지 못하므로 create_class_safe를 순서대로 호출하되,
+//    중간에 실패하면 이미 만든 수업을 삭제(보상)하고 오류를 던진다 — 일부만 남지 않게 한다.
+export async function createClassOnDateSlots(
+  centerId: string, input: ClassInput, slots: { start: string; end: string }[]
+): Promise<string[]> {
+  for (const sl of slots) assertValidClassTimeRange(sl.start, sl.end);
+  if (slots.length === 0) return [];
+  const atomicEligible = (input.classFormat ?? "group") !== "private" && (input.allowCancel ?? true) !== false;
+  if (atomicEligible) {
+    const groupId = slots.length > 1 ? crypto.randomUUID() : null;
+    const rows = slots.map((sl) => ({
+      title: input.title,
+      description: input.description?.trim() || null,
+      start_time: toKstIso(input.date, sl.start),
+      end_time: toKstIso(classEndDate(input.date, sl.start, sl.end), sl.end),
+      capacity: input.capacity,
+      room_id: input.roomId ?? null,
+      cancel_deadline_min: input.cancelDeadlineMin ?? null,
+      booking_deadline_min: input.bookingDeadlineMin ?? null,
+      recurring_group_id: groupId,
+      pass_selection_mode: input.passSelectionMode ?? "all",
+      allow_goods: input.allowGoods,
+    }));
+    const { data, error } = await supabase.rpc("create_recurring_classes_safe", { p_center_id: centerId, p_rows: rows });
+    if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+    return (data as string[]) ?? [];
+  }
+  const created: string[] = [];
+  try {
+    for (const sl of slots) {
+      created.push(await createClass(centerId, { ...input, start: sl.start, end: sl.end }));
+    }
+  } catch (e) {
+    for (const id of created) { try { await deleteClass(id); } catch { /* 보상 삭제는 best-effort */ } }
+    throw e;
+  }
+  return created;
 }
 
 export type PerDayRecurringInput = {
@@ -484,6 +547,8 @@ export type PerDayRecurringInput = {
     capacity: number;
     roomId?: string | null;
     cancelDeadlineMin?: number | null;
+    // 이 요일의 여러 타임(2026-10-02). 있으면 start/end 대신 이 슬롯들을 이 요일의 모든 날짜에 만든다(요일마다 개수가 달라도 됨).
+    slots?: { start: string; end: string }[];
   }[];
   excludeDates?: Set<string>;
   bookingDeadlineMin?: number | null;
@@ -498,22 +563,25 @@ export async function createRecurringClassesPerDay(centerId: string, input: PerD
   const groupId = crypto.randomUUID();
   const rows: Record<string, unknown>[] = [];
   for (const d of input.days) {
-    assertValidClassTimeRange(d.start, d.end);
+    const slots = d.slots && d.slots.length > 0 ? d.slots : [{ start: d.start, end: d.end }];
+    for (const sl of slots) assertValidClassTimeRange(sl.start, sl.end);
     let dates = expandRecurringDates(input.fromDate, input.toDate, [d.dow]);
     if (input.excludeDates) dates = dates.filter((x) => !input.excludeDates!.has(x));
     for (const date of dates) {
-      rows.push({
-        title: input.title,
-        description: input.description?.trim() || null,
-        start_time: toKstIso(date, d.start),
-        end_time: toKstIso(classEndDate(date, d.start, d.end), d.end),
-        capacity: d.capacity,
-        room_id: d.roomId ?? null,
-        cancel_deadline_min: d.cancelDeadlineMin ?? null,
-        booking_deadline_min: input.bookingDeadlineMin ?? null,
-        recurring_group_id: groupId,
-        pass_selection_mode: input.passSelectionMode ?? "all",
-      });
+      for (const sl of slots) {
+        rows.push({
+          title: input.title,
+          description: input.description?.trim() || null,
+          start_time: toKstIso(date, sl.start),
+          end_time: toKstIso(classEndDate(date, sl.start, sl.end), sl.end),
+          capacity: d.capacity,
+          room_id: d.roomId ?? null,
+          cancel_deadline_min: d.cancelDeadlineMin ?? null,
+          booking_deadline_min: input.bookingDeadlineMin ?? null,
+          recurring_group_id: groupId,
+          pass_selection_mode: input.passSelectionMode ?? "all",
+        });
+      }
     }
   }
   if (rows.length === 0) return [];
