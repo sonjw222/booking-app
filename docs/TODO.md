@@ -55,6 +55,10 @@
 - production 적용 후: 센터가 새 통합 상품(선택형)을 만들고 기존 "N회" 반복 상품을 판매중지 — 후보 조회 SELECT는 `add_selectable_count_pricing.sql` 하단 주석.
 - 매출 수동 등록(`sales`)은 선택형 상품을 지원하지 않음(가격=최저가). 필요 시 회차 선택 추가.
 
+### P1-QAFixture-1002. (신규, 2026-10-02) Production QA 센터 활성화
+- `add_internal_qa_center_flag.sql` 적용 → `npm run qa:production:visibility`로 숨김 확인 → `npm run qa:production:goods`. 실행 전 .env.test.local에 QA_TARGET_PROJECT_REF/QA_PRODUCTION_ACK 설정.
+- 다음 시나리오 후보: 직접결제 승인, 쿠폰 금액, 선택형 가격표, 관리자 지급, 반복수업 수정, 대기 승격, 스태프 권한. `center_settings` 조회 정책은 로그인 사용자 전체 허용이라 QA 센터 설정이 UUID로 조회될 수 있음(민감정보 없음, 필요 시 별도 보강).
+
 ### P1-QA-1001. (신규, 2026-10-01) 이번 QA 배치 SQL 4건 production 적용 + 후속 확인
 - 적용 순서: ① `add_public_storefront_products.sql`(기존 미실행) ② `fix_order_issuance_and_auto_booking.sql` ③ `add_reservation_goods_usage.sql`
   ③-b `add_manager_grant_product_rpc.sql` ④ `fix_recurring_class_description_and_group_update.sql` ⑤ `fix_manager_centers_rls_recursion_final.sql` — 적용 후 `send-alimtalk` 재배포,

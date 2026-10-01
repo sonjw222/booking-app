@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-02 — Production 격리 QA 기반(코드 + SQL 준비, 실행 안 함)
+- `tests/qa/`: Production 전용 QA runner(안전장치 `QA_TARGET_PROJECT_REF`/`QA_PRODUCTION_ACK=1`, runId 기반 정리, 센터/회원 bootstrap을 시나리오와 분리),
+  시나리오 `qa:production:goods`(예약 시 대여상품 4→3, 취소 시 3→4 복원)와 `qa:production:visibility`(QA 센터 숨김 검증). 기본 test/integration에서는 실행되지 않음.
+- `add_internal_qa_center_flag.sql`(**production 미실행**): `centers.is_internal` + 정책/RPC로 QA 센터를 approved 상태로 두되 일반 사용자/anon에게 숨김.
+
 ## 2026-10-02 — Preview QA UI 보정(가격표 편집기·수강권 카드·그룹 필터)
 - 가격표 편집기: "기준 1회 가격" 입력과 "가격 채우기" 버튼 높이(44px)·중앙선 정렬, "판매 최대 횟수" 문구를 `[N] 회  최대 100회`로 단순화(상한 로직 불변).
 - `/manager/membership-rules` 수강권 카드: 정보(제목/badge/가격 요약)를 전체 폭으로, 판매정지·수정·복제·삭제는 정보 아래 별도 액션 행(한 줄, 좁은 화면 2×2)으로 분리해 이름·그룹명이 한 글자씩 세로로 깨지던 문제 수정.
