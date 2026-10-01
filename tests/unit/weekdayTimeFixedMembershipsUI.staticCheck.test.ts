@@ -88,19 +88,23 @@ describe("C-15~C-17 — 수강권 복제", () => {
 describe("C-10 — 관리자 수동 발급도 요일/시간 선택 없이는 막는다(구매 플로우와 동일 원칙)", () => {
   it("handleGrant가 weekdaySelectable 상품의 미선택을 막는다", () => {
     const fn = members.slice(members.indexOf("async function handleGrant"), members.indexOf("async function handleGrant") + 1200);
-    expect(fn).toContain("product.weekdaySelectable && grantScheduleDay === null");
-    expect(fn).toContain("product.weekdaySelectable && product.timeSelectable && !grantScheduleTime");
+    // 2026-10-01 — 검증은 lib/memberGrant.grantBlockReason(요일/시간/사이즈 공통, tests/unit/memberGrantProduct.test.ts에서 실제 실행)으로 모았다.
+    expect(fn).toContain("grantBlockReason({ product, price: grantPrice, selectedSize: grantSize, scheduleDay: grantScheduleDay, scheduleTime: grantScheduleTime })");
+    const lib = readFileSync(join(__dirname, "../../lib/memberGrant.ts"), "utf-8");
+    expect(lib).toContain("product.kind !== \"goods\" && product.weekdaySelectable && input.scheduleDay === null");
+    expect(lib).toContain("product.weekdaySelectable && product.timeSelectable && !input.scheduleTime");
   });
 
   it("grantProductToMember에 boundDayOfWeek/boundStartTime을 넘긴다", () => {
     const fn = members.slice(members.indexOf("await grantProductToMember({"), members.indexOf("await grantProductToMember({") + 500);
-    expect(fn).toContain("boundDayOfWeek: product.weekdaySelectable ? grantScheduleDay : undefined");
-    expect(fn).toContain("boundStartTime: product.weekdaySelectable && product.timeSelectable ? grantScheduleTime : undefined");
+    expect(fn).toContain("boundDayOfWeek: product.kind !== \"goods\" && product.weekdaySelectable ? grantScheduleDay : undefined");
+    expect(fn).toContain("boundStartTime: product.kind !== \"goods\" && product.weekdaySelectable && product.timeSelectable ? grantScheduleTime : undefined");
   });
 
   it("지급하기 버튼은 선택 미완료 시 비활성화된다", () => {
     const block = members.slice(members.indexOf('className="add-profile-actions">\n              <button className="ghost-btn" disabled={granting} onClick={() => setGrantTarget(null)}'), members.indexOf("지급 중..."));
-    expect(block).toContain("grantScheduleDay === null");
+    expect(block).toContain("grantBlockReason({");
+    expect(block).toContain("scheduleDay: grantScheduleDay");
   });
 });
 

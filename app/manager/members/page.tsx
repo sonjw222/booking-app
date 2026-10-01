@@ -25,7 +25,8 @@ import {
   fetchMemberMemos, createMemberMemo, updateMemberMemoEntry, deleteMemberMemoEntry, type MemberMemo,
 } from "../../../lib/memberMemos";
 import { fetchCenterSubscription } from "../../../lib/centerSubscription";
-import { fetchSaleProducts, grantProductToMember, won, type GrantInput, type SaleProduct } from "../../../lib/sales";
+import { fetchGrantableProducts, grantProductToMember, won, type GrantInput, type SaleProduct } from "../../../lib/sales";
+import { grantBlockReason, grantSheetTitle, holdingLabel, productNeedsSize, suggestGrantSize, type GrantKind } from "../../../lib/memberGrant";
 import { fetchPurchaseScheduleOptions } from "../../../lib/center";
 import { DAYS, type SelectableSchedule } from "../../../lib/passes";
 import AlimtalkComposer, {
@@ -134,6 +135,9 @@ function MembersContent() {
 
   // 수강권/상품 지급 — 주문 없이 매니저가 바로 발급(서비스로 무상 지급하는 경우 포함)
   const [grantTarget, setGrantTarget] = useState<CenterMember | null>(null);
+  // 수강권 지급 / 상품 지급은 서로 다른 시트(같은 컴포넌트, 목록·사이즈 UI만 다름) — 회원 상세의 각 보유 섹션에서 연다.
+  const [grantKind, setGrantKind] = useState<GrantKind>("pass");
+  const [grantSize, setGrantSize] = useState<string | null>(null);
   const [grantProducts, setGrantProducts] = useState<SaleProduct[]>([]);
   const [grantProductId, setGrantProductId] = useState("");
   const [grantPrice, setGrantPrice] = useState("");
@@ -465,13 +469,16 @@ function MembersContent() {
     setAlimtalkTargets([m]);
   }
 
-  async function openGrant(m: CenterMember) {
+  async function openGrant(m: CenterMember, kind: GrantKind) {
     if (!centerId) return;
+    setGrantKind(kind);
     setGrantProductId(""); setGrantPrice(""); setGrantMethod("card"); setGrantMemo("");
-    setGrantScheduleOptions(null); setGrantScheduleDay(null); setGrantScheduleTime(null);
+    setGrantScheduleOptions(null); setGrantScheduleDay(null); setGrantScheduleTime(null); setGrantSize(null);
+    setGrantProducts([]);
     setGrantTarget(m);
     try {
-      setGrantProducts(await fetchSaleProducts(centerId));
+      // 수강권 시트에는 goods가 나오지 않고, 상품 시트에는 goods만 나온다(서버 쿼리 + 순수 필터 이중).
+      setGrantProducts(await fetchGrantableProducts(centerId, kind));
     } catch (e: any) { setError(e.message); }
   }
 
@@ -483,6 +490,8 @@ function MembersContent() {
     if (p && p.price > 0 && grantMethod === "service") setGrantMethod("card");
     // 2026-10-01(Batch C, C-10) — 상품을 바꾸면 이전 상품의 요일/시간 선택은 무효이므로 초기화.
     setGrantScheduleDay(null); setGrantScheduleTime(null);
+    // 프로필 신발 사이즈가 상품 sizes 중 하나면 기본 선택으로 제안(관리자가 확인·변경 가능)
+    setGrantSize(p ? suggestGrantSize(p, detailData?.profileInfo?.shoeSize) : null);
     if (p?.weekdaySelectable) {
       fetchPurchaseScheduleOptions(p.id).then(setGrantScheduleOptions).catch(() => setGrantScheduleOptions({ days: [], timesByDay: {} }));
     } else {
@@ -499,16 +508,17 @@ function MembersContent() {
     const product = grantProducts.find((p) => p.id === grantProductId);
     if (!product) return;
     // 2026-10-01(Batch C, C-10) — 구매 화면(app/checkout)과 동일하게 선택 없이는 발급을 막는다.
-    if (product.weekdaySelectable && grantScheduleDay === null) { setError("이용 요일을 선택해주세요"); return; }
-    if (product.weekdaySelectable && product.timeSelectable && !grantScheduleTime) { setError("이용 시간을 선택해주세요"); return; }
+    const blocked = grantBlockReason({ product, price: grantPrice, selectedSize: grantSize, scheduleDay: grantScheduleDay, scheduleTime: grantScheduleTime });
+    if (blocked) { setError(blocked); return; }
     setGranting(true); setError(null);
     try {
       await grantProductToMember({
         centerId, profileId: grantTarget.profileId, productId: product.id, productName: product.name,
         price, payMethod: grantMethod, memo: grantMemo.trim() || undefined,
         paidAt: new Date().toISOString(),
-        boundDayOfWeek: product.weekdaySelectable ? grantScheduleDay : undefined,
-        boundStartTime: product.weekdaySelectable && product.timeSelectable ? grantScheduleTime : undefined,
+        boundDayOfWeek: product.kind !== "goods" && product.weekdaySelectable ? grantScheduleDay : undefined,
+        boundStartTime: product.kind !== "goods" && product.weekdaySelectable && product.timeSelectable ? grantScheduleTime : undefined,
+        selectedSize: productNeedsSize(product) ? grantSize : undefined,
       });
       showToast(price === 0 ? "서비스로 지급했어요" : "지급하고 매출에 반영했어요");
       setGrantTarget(null);
@@ -742,9 +752,6 @@ function MembersContent() {
             <div className="sheet-title mem-detail-title">
               <span>{detail.name}</span>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                {canGrantPass && (
-                  <button className="outline-action compact" onClick={() => openGrant(detail)}>수강권/상품 지급</button>
-                )}
                 <button className="outline-action compact" onClick={() => openAlimtalkForOne(detail)}>알림톡 보내기</button>
               </div>
             </div>
@@ -757,16 +764,24 @@ function MembersContent() {
               const goods = detailData.activePasses.filter((p) => p.kind === "goods");
               return (
                 <>
-                  {passes.length > 0 && (
-                    <div className="mem-pass-block">
-                      <div className="mem-pass-head">
-                        <span className="mem-pass-head-title">보유 수강권 {passes.length}</span>
+                  {/* 보유 수강권 — 0개여도 섹션과 지급 버튼은 항상 보인다("직접배치"와는 별개: 이건 보유상품 추가) */}
+                  <div className="mem-pass-block">
+                    <div className="mem-pass-head">
+                      <span className="mem-pass-head-title">보유 수강권 {passes.length}</span>
+                      <span className="mem-pass-head-actions">
                         {passes.length > 3 && (
                           <button className="mem-pass-more" onClick={() => setShowAllPasses((v) => !v)}>
                             {showAllPasses ? "접기" : "전체보기"}
                           </button>
                         )}
-                      </div>
+                        {canGrantPass && (
+                          <button className="outline-action compact" onClick={() => openGrant(detail, "pass")}>+ 수강권 지급</button>
+                        )}
+                      </span>
+                    </div>
+                    {passes.length === 0 ? (
+                      <div className="mem-pass-empty">보유 중인 수강권이 없어요</div>
+                    ) : (
                       <div className="mem-pass-summary">
                         {(showAllPasses ? passes : passes.slice(0, 3)).map((p) => (
                           <div key={p.id} className="mem-pass-chip">
@@ -774,27 +789,35 @@ function MembersContent() {
                           </div>
                         ))}
                       </div>
-                    </div>
-                  )}
-                  {goods.length > 0 && (
-                    <div className="mem-pass-block">
-                      <div className="mem-pass-head">
-                        <span className="mem-pass-head-title">보유 상품 {goods.length}</span>
+                    )}
+                  </div>
+                  {/* 보유 상품(대여화 등) */}
+                  <div className="mem-pass-block">
+                    <div className="mem-pass-head">
+                      <span className="mem-pass-head-title">보유 상품 {goods.length}</span>
+                      <span className="mem-pass-head-actions">
                         {goods.length > 3 && (
                           <button className="mem-pass-more" onClick={() => setShowAllGoods((v) => !v)}>
                             {showAllGoods ? "접기" : "전체보기"}
                           </button>
                         )}
-                      </div>
+                        {canGrantPass && (
+                          <button className="outline-action compact" onClick={() => openGrant(detail, "goods")}>+ 상품 지급</button>
+                        )}
+                      </span>
+                    </div>
+                    {goods.length === 0 ? (
+                      <div className="mem-pass-empty">보유 중인 상품이 없어요</div>
+                    ) : (
                       <div className="mem-pass-summary">
                         {(showAllGoods ? goods : goods.slice(0, 3)).map((p) => (
                           <div key={p.id} className="mem-pass-chip goods">
-                            {p.name}{p.remaining != null ? ` · ${p.remaining}회` : ""} <span className="mem-pass-exp">~{p.expiresAt ?? "무제한"}</span>
+                            {holdingLabel({ name: p.name, remaining: p.remaining, selectedSize: p.selectedSize })} <span className="mem-pass-exp">~{p.expiresAt ?? "무제한"}</span>
                           </div>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </>
               );
             })()}
@@ -1099,19 +1122,45 @@ function MembersContent() {
       {grantTarget && (
         <SheetOverlay className="sheet-overlay" swipeDismiss={!granting} onClick={() => !granting && setGrantTarget(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-title">{grantTarget.name}님에게 지급</div>
+            <div className="sheet-title">{grantSheetTitle(grantTarget.name, grantKind)}</div>
 
-            <div className="menu-section-label" style={{ padding: "0 0 6px" }}>상품/수강권</div>
+            <div className="menu-section-label" style={{ padding: "0 0 6px" }}>{grantKind === "goods" ? "상품" : "수강권"}</div>
             <select
               className="input-field" style={{ marginBottom: 10 }}
               value={grantProductId} disabled={granting}
               onChange={(e) => pickGrantProduct(e.target.value)}
             >
-              <option value="">상품 선택...</option>
+              <option value="">{grantKind === "goods" ? "상품 선택..." : "수강권 선택..."}</option>
               {grantProducts.map((p) => (
-                <option key={p.id} value={p.id}>{p.name} · {won(p.price)}</option>
+                <option key={p.id} value={p.id}>{p.name} · {won(p.price)}{!p.onSale ? " (판매중지)" : ""}</option>
               ))}
             </select>
+
+            {grantProducts.length === 0 && (
+              <div className="perm-guide" style={{ margin: "0 0 10px" }}>
+                {grantKind === "goods"
+                  ? "지급할 수 있는 상품이 없어요. 상품 관리에서 대여/판매 상품을 먼저 만들어주세요."
+                  : "지급할 수 있는 수강권이 없어요."}
+              </div>
+            )}
+
+            {/* 사이즈 — 상품에 sizes가 정의돼 있으면 필수(memberships.selected_size에 저장) */}
+            {(() => {
+              const sel = grantProducts.find((p) => p.id === grantProductId);
+              if (!productNeedsSize(sel)) return null;
+              return (
+                <>
+                  <div className="menu-section-label" style={{ padding: "0 0 6px" }}>사이즈</div>
+                  <div className="mem-filters" style={{ padding: 0, marginBottom: 10 }}>
+                    {sel!.sizes.map((sz) => (
+                      <button key={sz} aria-pressed={grantSize === sz}
+                        className={`filter-chip ${grantSize === sz ? "on" : ""}`} disabled={granting}
+                        onClick={() => setGrantSize(sz)}>{sz}</button>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
 
             <div className="menu-section-label" style={{ padding: "0 0 6px" }}>가격</div>
             <input aria-label="0원이면 서비스로 지급"
@@ -1135,7 +1184,7 @@ function MembersContent() {
                     key={m} className={`filter-chip ${grantMethod === m ? "on" : ""}`} disabled={granting}
                     onClick={() => setGrantMethod(m)}
                   >
-                    {m === "card" ? "카드" : m === "cash" ? "현금" : "계좌이체"}
+                    {m === "card" ? "카드(센터 결제)" : m === "cash" ? "현금" : "계좌이체"}
                   </button>
                 ))
               )}
@@ -1184,6 +1233,12 @@ function MembersContent() {
               );
             })()}
 
+            {Number(grantPrice) > 0 && (
+              <div className="perm-guide" style={{ margin: "0 0 10px" }}>
+                센터에서 직접 받은 금액을 기록하는 거예요. 온라인 결제(Toss)는 실행되지 않아요.
+              </div>
+            )}
+
             <div className="menu-section-label" style={{ padding: "0 0 6px" }}>관리자 메모 (회원에게 보이지 않음)</div>
             <input aria-label="예: 이벤트 당첨 증정"
               className="input-field" style={{ marginBottom: 10 }}
@@ -1193,7 +1248,7 @@ function MembersContent() {
 
             {Number(grantPrice) === 0 && (
               <div className="perm-guide" style={{ margin: "0 0 10px" }}>
-                서비스로 지급하면 매출액에는 0원으로 잡히고, 결제 내역에 "서비스"로 구분되어 남아요.
+                무상 지급은 매출 0원으로 기록돼요. 결제 내역에 "서비스"로 구분되어 남아요.
               </div>
             )}
 
@@ -1202,10 +1257,11 @@ function MembersContent() {
               <button
                 className="primary-btn"
                 disabled={
-                  granting || !grantProductId || grantPrice.trim() === "" ||
-                  !!(grantProducts.find((p) => p.id === grantProductId)?.weekdaySelectable && grantScheduleDay === null) ||
-                  !!(grantProducts.find((p) => p.id === grantProductId)?.weekdaySelectable &&
-                     grantProducts.find((p) => p.id === grantProductId)?.timeSelectable && !grantScheduleTime)
+                  granting ||
+                  grantBlockReason({
+                    product: grantProducts.find((p) => p.id === grantProductId),
+                    price: grantPrice, selectedSize: grantSize, scheduleDay: grantScheduleDay, scheduleTime: grantScheduleTime,
+                  }) !== null
                 }
                 onClick={handleGrant}
               >

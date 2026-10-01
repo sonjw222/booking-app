@@ -47,9 +47,13 @@
 5. 사용자 결정이 필요한 기능은 결정 기록 없이 완료 처리하지 않습니다.
 6. 완료된 항목은 [CHANGELOG.md](./CHANGELOG.md)에 근거와 함께 기록한 뒤 이 문서에서 제거하거나 완료 이력으로 이동합니다.
 
+### P2-GrantPerm-1001. (신규, 2026-10-01) 상품(goods) 지급 전용 권한 분리
+- 현재 수강권/상품 지급 모두 `customer.member.issue_pass` + `pass.payment.create`를 요구(기존 memberships/payments INSERT RLS와 동일). 수강권 지급/상품 카탈로그 수정/상품 지급 권한 세분화는 permission schema 추가가 필요해 이번 release에서는 보류.
+- 지급 기록의 "지급자"는 payments에 granted_by 컬럼이 없어 memo 접두("[관리자 지급 · 이름]")로 남김 — 필요 시 별도 컬럼/감사 테이블.
+
 ### P1-QA-1001. (신규, 2026-10-01) 이번 QA 배치 SQL 4건 production 적용 + 후속 확인
 - 적용 순서: ① `add_public_storefront_products.sql`(기존 미실행) ② `fix_order_issuance_and_auto_booking.sql` ③ `add_reservation_goods_usage.sql`
-  ④ `fix_recurring_class_description_and_group_update.sql` ⑤ `fix_manager_centers_rls_recursion_final.sql` — 적용 후 `send-alimtalk` 재배포,
+  ③-b `add_manager_grant_product_rpc.sql` ④ `fix_recurring_class_description_and_group_update.sql` ⑤ `fix_manager_centers_rls_recursion_final.sql` — 적용 후 `send-alimtalk` 재배포,
   Vercel에 `TOSS_BILLING_SECRET_KEY` 확인. 적용 전까지 앱은 구버전 RPC/폴백으로 동작(대여상품+수강권 동시 선택은 명확한 오류).
 - 후속: (1) 소개가 NULL인 기존 반복수업은 자동 복구하지 않음 — `fix_recurring_class_description_and_group_update.sql` 하단의 제안 SELECT로 후보 확인 후 별도 승인,
   (2) (해결됨 2026-10-01) 마지막 활성 오너 UPDATE 강등은 `manager_centers_protect_last_owner` 트리거로 차단, (3) 관리자 직접배치/`manager_book_member` 경로는 대여상품 미지원,

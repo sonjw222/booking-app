@@ -355,7 +355,7 @@ export type MemberDetailData = {
   reservations: { id: string; title: string; date: string; status: string }[];
   progress: { id: string; skill: string; date: string; note: string | null }[];
   payments: { id: string; amount: number; unpaid: number; saleType: string; date: string }[];
-  activePasses: { id: string; name: string; remaining: number | null; expiresAt: string | null; kind: string }[];
+  activePasses: { id: string; name: string; remaining: number | null; expiresAt: string | null; kind: string; selectedSize: string | null }[];
   // 회원이 마이페이지에서 입력한 정보
   profileInfo: {
     birthDate: string | null; gender: string | null;
@@ -403,12 +403,18 @@ export async function fetchMemberDetail(profileId: string, centerId: string): Pr
   });
   const phone = (phoneRows ?? [])[0]?.profile_phone ?? null;
 
-  const { data: mem } = await supabase
+  // selected_size(2026-10-01)는 SQL 미적용 환경에서 없을 수 있어 42703이면 컬럼 없이 다시 조회한다.
+  const memQuery = (cols: string) => supabase
     .from("memberships")
-    .select("id, product_id, product_name, remaining_count, expires_at, status")
+    .select(cols)
     .eq("profile_id", profileId)
     .eq("status", "active")
     .order("expires_at", { ascending: true });
+  const memFirst = await memQuery("id, product_id, product_name, remaining_count, expires_at, status, selected_size");
+  let mem: any[] | null = memFirst.data as any[] | null;
+  if (memFirst.error?.code === "42703") {
+    mem = (await memQuery("id, product_id, product_name, remaining_count, expires_at, status")).data as any[] | null;
+  }
 
   // 각 수강권의 종류(수강권/상품) 파악
   const prodIds = Array.from(new Set((mem ?? []).map((m: any) => m.product_id).filter(Boolean)));
@@ -447,6 +453,7 @@ export async function fetchMemberDetail(profileId: string, centerId: string): Pr
       remaining: m.remaining_count,
       expiresAt: m.expires_at,
       kind: m.product_id ? (kindById[m.product_id] ?? "pass") : "pass",
+      selectedSize: m.selected_size ?? null,
     })),
     profileInfo: prof ? {
       birthDate: (prof as any).birth_date ?? null,

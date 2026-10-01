@@ -187,9 +187,34 @@ export type GrantInput = {
   // 선택을 받아 여기로 넘긴다.
   boundDayOfWeek?: number | null;
   boundStartTime?: string | null;
+  // 2026-10-01 — 상품(대여화 등)에 sizes가 정의돼 있으면 필수. memberships.selected_size에 저장된다.
+  selectedSize?: string | null;
 };
 
+// 2026-10-01 — 지급은 서버 원자 RPC(manager_grant_product, add_manager_grant_product_rpc.sql)가 담당한다:
+// 권한/같은 센터/사이즈/요일·시간/판매수량 검증 + memberships·payments를 한 트랜잭션으로 생성(goods는 revenue_category 'etc').
+// RPC가 아직 없는 환경(SQL 미적용)에서만 아래 레거시 2단계 경로로 폴백한다.
 export async function grantProductToMember(input: GrantInput): Promise<void> {
+  const { error: rpcErr } = await supabase.rpc("manager_grant_product", {
+    p_center_id: input.centerId,
+    p_profile_id: input.profileId,
+    p_product_id: input.productId,
+    p_price: input.price,
+    p_pay_method: input.payMethod,
+    p_memo: input.memo ?? null,
+    p_paid_at: input.paidAt,
+    p_trainer_account_id: input.trainerAccountId ?? null,
+    p_bound_day_of_week: input.boundDayOfWeek ?? null,
+    p_bound_start_time: input.boundStartTime ?? null,
+    p_selected_size: input.selectedSize ?? null,
+  });
+  if (!rpcErr) return;
+  const missing = rpcErr.code === "PGRST202" || rpcErr.code === "42883" || /Could not find the function/i.test(rpcErr.message ?? "");
+  if (!missing) throw new Error(rpcErr.message.replace(/^.*?:\s*/, ""));
+  await grantProductToMemberLegacy(input);
+}
+
+async function grantProductToMemberLegacy(input: GrantInput): Promise<void> {
   const { data: product, error: prodErr } = await supabase
     .from("products")
     .select("product_kind, unlimited, unlimited_pass, total_count, expiry_mode, expiry_days, expiry_date")
@@ -220,11 +245,12 @@ export async function grantProductToMember(input: GrantInput): Promise<void> {
     status: "active",
     bound_day_of_week: input.boundDayOfWeek ?? null,
     bound_start_time: input.boundStartTime ?? null,
+    selected_size: input.selectedSize ?? null,
   };
   let { data: mem, error: memErr } = await supabase.from("memberships").insert(membershipRow).select("id").single();
   if (memErr?.code === "42703") {
-    // 2026-10-01(Batch C) — add_weekday_time_fixed_memberships.sql 미실행 환경 방어.
-    const { bound_day_of_week, bound_start_time, ...withoutWeekday } = membershipRow;
+    // 2026-10-01(Batch C) — add_weekday_time_fixed_memberships.sql / selected_size 미실행 환경 방어.
+    const { bound_day_of_week, bound_start_time, selected_size, ...withoutWeekday } = membershipRow;
     ({ data: mem, error: memErr } = await supabase.from("memberships").insert(withoutWeekday).select("id").single());
   }
   if (memErr || !mem) throw new Error("수강권 발급에 실패했어요: " + (memErr?.message ?? "no data"));
@@ -234,7 +260,7 @@ export async function grantProductToMember(input: GrantInput): Promise<void> {
     profile_id: input.profileId,
     membership_id: mem.id,
     sale_type: input.payMethod === "service" ? "service" : "new",
-    revenue_category: "membership",
+    revenue_category: product.product_kind === "goods" ? "etc" : "membership",
     card_amount: input.payMethod === "card" ? input.price : 0,
     cash_amount: input.payMethod === "cash" ? input.price : 0,
     transfer_amount: input.payMethod === "transfer" ? input.price : 0,
@@ -547,7 +573,37 @@ export function computeAutoUnpaid(productPrice: number, paidAmount: number): num
 export type SaleProduct = {
   id: string; name: string; price: number; totalCount: number | null; kind: "pass" | "goods"; unlimited: boolean;
   weekdaySelectable: boolean; timeSelectable: boolean; // Batch C, C-10 — 관리자 수동 발급에서도 선택을 받아야 함
+  sizes: string[]; onSale: boolean;                     // 2026-10-01 — 상품 지급 시트의 사이즈 선택/판매중지 표시
 };
+
+// 관리자 회원 상세 지급 시트용 상품 목록(2026-10-01). 수강권 지급은 판매중인 수강권(기존 정책 유지),
+// 상품(goods) 지급은 활성 상품이면 판매중지여도 지급 가능(보상/서비스 목적).
+export async function fetchGrantableProducts(centerId: string, kind: "pass" | "goods"): Promise<SaleProduct[]> {
+  const base = "id, name, price, total_count, product_kind, unlimited, sizes, is_on_sale";
+  const run = (cols: string) => {
+    let q = supabase.from("products").select(cols).eq("center_id", centerId).eq("is_active", true);
+    q = kind === "goods" ? q.eq("product_kind", "goods") : q.neq("product_kind", "goods").eq("is_on_sale", true);
+    return q.order("created_at", { ascending: false });
+  };
+  const first = await run(`${base}, weekday_selectable, time_selectable`);
+  let data: any[] | null = first.data as any[] | null;
+  let error = first.error;
+  if (error?.code === "42703") {
+    const fallback = await run(base);
+    data = fallback.data as any[] | null;
+    error = fallback.error;
+  }
+  if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
+  return (data ?? []).map((p: any) => ({
+    id: p.id, name: p.name, price: p.price, totalCount: p.total_count,
+    kind: p.product_kind === "goods" ? "goods" : "pass",
+    unlimited: p.unlimited ?? false,
+    weekdaySelectable: p.weekday_selectable ?? false,
+    timeSelectable: p.time_selectable ?? false,
+    sizes: Array.isArray(p.sizes) ? p.sizes : [],
+    onSale: p.is_on_sale ?? true,
+  }));
+}
 
 export async function fetchSaleProducts(centerId: string): Promise<SaleProduct[]> {
   const base = "id, name, price, total_count, product_kind, unlimited";
@@ -578,6 +634,7 @@ export async function fetchSaleProducts(centerId: string): Promise<SaleProduct[]
     unlimited: p.unlimited ?? false,
     weekdaySelectable: p.weekday_selectable ?? false,
     timeSelectable: p.time_selectable ?? false,
+    sizes: [], onSale: true,
   }));
 }
 

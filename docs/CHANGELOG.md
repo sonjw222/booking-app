@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-10-01 — 관리자 회원 상세: 수강권 지급 / 상품 지급 분리 + 서버 원자 지급
+- 회원 상세의 통합 "수강권/상품 지급" 버튼 → 보유 수강권/보유 상품 섹션별 "+ 수강권 지급" / "+ 상품 지급"(0개여도 섹션·버튼 유지).
+  상품 시트는 goods만(활성이면 판매중지도 가능), 수강권 시트는 판매중 non-goods만. sizes가 있는 상품은 사이즈 필수(`memberships.selected_size`).
+- 지급을 `manager_grant_product()` RPC(`add_manager_grant_product_rpc.sql`, **production 미실행**)로 통일 — 권한·같은 센터·사이즈·요일/시간·판매수량 검증 +
+  memberships/payments 한 트랜잭션(예전엔 클라이언트 2단계 INSERT + 실패 시 수동 DELETE). goods 매출은 `revenue_category='etc'`, 0원은 `service`.
+  RPC 미적용 환경에서는 기존 경로로 폴백. 직접배치(수업)와는 분리 유지.
+
 ## 2026-10-01 — main merge 전 마지막 안전 보강 2건
 - **마지막 활성 owner UPDATE 강등 차단**: `fix_manager_centers_rls_recursion_final.sql`에 BEFORE UPDATE 트리거
   `manager_centers_protect_last_owner` 추가(센터별 advisory lock, 다른 활성 owner가 있으면 강등 허용).
