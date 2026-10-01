@@ -25,11 +25,11 @@ export function isQaRunName(name: string | null | undefined, runId: string): boo
 //            → 주문(orders; member_coupons.order_id는 on delete set null) → 지급 쿠폰(member_coupons) → 쿠폰 적용 대상(coupon_products)
 //            → 쿠폰 정의(coupons) → 상품
 export type FixtureKind =
-  | "reservations" | "classes" | "payments" | "admin_action_logs" | "memberships" | "orders" | "member_coupons" | "coupon_products" | "coupons"
+  | "reservations" | "classes" | "payments" | "admin_action_logs" | "point_transactions" | "memberships" | "orders" | "member_coupons" | "coupon_products" | "coupons"
   | "products" | "manager_centers" | "center_roles";
-// admin_action_logs.membership_id는 on delete 동작이 없는 FK라 수강권보다 먼저 지운다. 이번 실행이 만든 QA 직원 연결/역할은 맨 끝에 정리한다.
+// admin_action_logs.membership_id는 on delete 동작이 없는 FK라 수강권보다 먼저 지운다. point_transactions.order_id도 on delete 동작이 없는 FK라 주문보다 먼저 지운다(복원 행의 reverses_id는 같은 DELETE 문에서 함께 지워진다). 이번 실행이 만든 QA 직원 연결/역할은 맨 끝에 정리한다.
 export const CLEANUP_ORDER: FixtureKind[] = [
-  "reservations", "classes", "payments", "admin_action_logs", "memberships", "orders", "member_coupons", "coupon_products", "coupons",
+  "reservations", "classes", "payments", "admin_action_logs", "point_transactions", "memberships", "orders", "member_coupons", "coupon_products", "coupons",
   "products", "manager_centers", "center_roles",
 ];
 
@@ -38,7 +38,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 export class FixtureTracker {
   readonly runId: string;
   private ids: Record<FixtureKind, string[]> = {
-    reservations: [], classes: [], payments: [], admin_action_logs: [], memberships: [], orders: [], member_coupons: [], coupon_products: [], coupons: [],
+    reservations: [], classes: [], payments: [], admin_action_logs: [], point_transactions: [], memberships: [], orders: [], member_coupons: [], coupon_products: [], coupons: [],
     products: [], manager_centers: [], center_roles: [],
   };
   constructor(runId: string) { this.runId = runId; }

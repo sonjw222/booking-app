@@ -10,6 +10,7 @@
 import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Loading from "../../components/Loading";
+import { cancelMyPendingOrderQuietly } from "../../../lib/orders";
 
 export default function CheckoutFailPage() {
   return (
@@ -24,12 +25,18 @@ function CheckoutFailContent() {
 
   useEffect(() => {
     const message = sp.get("message") ?? "결제가 취소됐어요";
+    const failedOrderId = sp.get("orderId");
     const backParams = new URLSearchParams(sp.toString());
     backParams.delete("code");
     backParams.delete("message");
     backParams.delete("orderId");
     backParams.set("paymentError", message);
-    window.location.href = `/checkout?${backParams.toString()}`;
+    // 토스 failUrl은 결제 "승인 전" 실패/취소로만 호출된다. 결제 화면에서 이미 차감한 포인트가 pending 주문에 묶인 채
+    // 남지 않도록 이 주문을 취소한다(취소 시 DB 트리거가 포인트를 1회 복원 — 재시도하면 새 주문으로 다시 차감하기 때문).
+    // 이미 승인·발급된(done) 주문은 RLS/상태 전이 가드로 취소되지 않는다. 취소 실패와 무관하게 결제 화면으로 돌아간다.
+    cancelMyPendingOrderQuietly(failedOrderId).finally(() => {
+      window.location.href = `/checkout?${backParams.toString()}`;
+    });
     // sp는 마운트 시점 쿼리만 필요
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

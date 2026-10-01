@@ -62,10 +62,10 @@ describe("실행 단위 / 정리 범위", () => {
     const t = new FixtureTracker("qa-test");
     const u = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
     t.add("products", u(1)); t.add("memberships", u(2)); t.add("classes", u(3)); t.add("reservations", u(4)); t.add("reservations", u(4));
-    t.add("payments", u(5)); t.add("orders", u(6)); t.add("coupons", u(7)); t.add("member_coupons", u(8)); t.add("coupon_products", u(9)); t.add("admin_action_logs", u(10)); t.add("manager_centers", u(11)); t.add("center_roles", u(12));
+    t.add("payments", u(5)); t.add("orders", u(6)); t.add("coupons", u(7)); t.add("member_coupons", u(8)); t.add("coupon_products", u(9)); t.add("admin_action_logs", u(10)); t.add("point_transactions", u(13)); t.add("manager_centers", u(11)); t.add("center_roles", u(12));
     t.add("classes", "not-a-uuid"); t.add("classes", null); t.add("classes", "'; drop table classes; --");
-    expect(t.total()).toBe(12);
-    const order = ["reservations", "classes", "payments", "admin_action_logs", "memberships", "orders", "member_coupons", "coupon_products", "coupons", "products", "manager_centers", "center_roles"];
+    expect(t.total()).toBe(13);
+    const order = ["reservations", "classes", "payments", "admin_action_logs", "point_transactions", "memberships", "orders", "member_coupons", "coupon_products", "coupons", "products", "manager_centers", "center_roles"];
     expect(t.plan().map((s) => s.kind)).toEqual(order);
     expect(CLEANUP_ORDER).toEqual(order);
     expect(new FixtureTracker("empty").plan()).toEqual([]);

@@ -212,6 +212,21 @@ export async function updateOrderStatus(
   }
 }
 
+// 결제가 승인되기 "전에" 끝난 흐름(토스 failUrl 복귀, 결제창 즉시 닫힘, 직접결제 포인트 차감 실패 등)에서 방금 만든
+// 내 pending 주문을 정리한다. 주문이 cancelled가 되는 순간 DB 트리거가 같은 트랜잭션에서 사용한 포인트를 복원하므로
+// 여기서 포인트를 따로 되돌리지 않는다. 이미 처리/취소된 주문(RLS 0행, 상태 전이 가드)은 조용히 무시한다 — 정리 실패가
+// 원래 오류 화면을 가리면 안 된다.
+export async function cancelMyPendingOrderQuietly(orderId: string | null | undefined): Promise<boolean> {
+  if (!orderId) return false;
+  try {
+    const { data, error } = await supabase
+      .from("orders").update({ status: "cancelled" }).eq("id", orderId).eq("status", "pending").select("id");
+    return !error && !!data && data.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function mapOrder(o: any): Order & { centerName?: string } {
   return {
     id: o.id, centerId: o.center_id, profileId: o.profile_id,

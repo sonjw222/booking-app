@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-02 — 주문 포인트 생명주기: 취소/전체 환불 시 정확히 1회 복원(SQL 파일만 작성, 미실행)
+- 감사: 주문 취소(회원 UPDATE·관리자·cancel_real_payment)와 refund_membership 모두 차감된 포인트를 복원하지 않았고, use_points는 주문당 중복 차감이 가능했으며, fulfill_order/confirm_real_payment는 cancelled 주문을 재발급할 수 있었다. 토스 failUrl 페이지는 주문을 정리하지 않아 재시도 시 포인트가 이중 차감될 수 있었다.
+- `fix_order_point_lifecycle.sql`(+rollback): point_transactions.reverses_id + unique 인덱스(복원 1회, 주문당 차감 1행), 내부 헬퍼 `_restore_order_points`, orders 상태 전이 가드/취소 시 복원 트리거, use_points 방어, refund_membership 포인트 복원, cancelled 재발급 차단.
+- 클라이언트: `/checkout/fail`과 checkout 오류 경로가 방금 만든 내 pending 주문을 정리(`cancelMyPendingOrderQuietly`, 복원은 DB 트리거). `npm run qa:production:points` 준비(실행 안 함).
+
 ## 2026-10-02 — 관리자 수강권 만료일 연장(SQL 파일만 작성, 미실행)
 - 새 권한 `customer.member.pass_expiry.update`(수강권 만료일 연장, 부모 `pass_detail`): 기존 역할/개인 권한에 자동 부여하지 않아 SQL 적용 직후엔 오너만 가능, 이후 권한 카탈로그 UI로 위임.
 - `manager_extend_membership_expiry` RPC(행 잠금, 수강권 행의 center로 서버 권한 검증, 연장만 허용, goods/무제한/환불·이관 제외, admin_action_logs 기록) + `memberships.expires_at` 직접 UPDATE 차단 트리거(pass_detail/issue_pass 우회 방지).

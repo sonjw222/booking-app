@@ -11,7 +11,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { fetchCenterDetail, fetchCenterProducts, fetchPurchaseScheduleOptions, type CenterProduct } from "../../lib/center";
 import { DAYS, type SelectableSchedule } from "../../lib/passes";
-import { createOrder } from "../../lib/orders";
+import { cancelMyPendingOrderQuietly, createOrder } from "../../lib/orders";
 import { fetchProfiles, type ProfileRow } from "../../lib/profiles";
 import { fetchMyPoints, usePoints } from "../../lib/reviews";
 import Loading from "../components/Loading";
@@ -255,6 +255,7 @@ function CheckoutContent() {
     // 기존 "미발급 주문" 화면(fulfill_order)에서 수동으로 발급한다.
     if (effectivePayMethod === "direct") {
       setBusy(true);
+      let directOrderIdForCleanup: string | null = null;
       try {
         // [SEC-118] 포인트는 주문번호와 묶여야 서버가 나중에 "실제로 이 주문에서 차감됐는지"
         // 확인할 수 있다(orders.points_used를 그냥 믿지 않음) — 주문을 먼저 만들고 그 id로
@@ -277,10 +278,16 @@ function CheckoutContent() {
           // 실제 결제가 없으므로 PG provider를 붙이지 않는다(mock/toss 어느 쪽 확정
           // 로직도 이 주문을 건드리지 않아야 함 — 매니저 수동 발급 전용 경로).
         });
+        directOrderIdForCleanup = directOrderId;
         if (pointToUse > 0) await usePoints(centerId, pointToUse, directOrderId);
+        directOrderIdForCleanup = null;
         setPendingManualPayment(true);
         setDone(true);
-      } catch (e: any) { setError(toUserMessage(e)); }
+      } catch (e: any) {
+        // 포인트 차감이 실패한 주문이 pending으로 남아 관리자 목록에 보이지 않게 정리(취소 시 DB가 이미 차감된 포인트가 있으면 복원).
+        await cancelMyPendingOrderQuietly(directOrderIdForCleanup);
+        setError(toUserMessage(e));
+      }
       finally { setBusy(false); }
       return;
     }
@@ -290,6 +297,7 @@ function CheckoutContent() {
       return;
     }
     setBusy(true);
+    let pgOrderIdForCleanup: string | null = null;
     try {
       // 화면에 표시된 값과 동일하게 계산 (pointToUse/finalTotal은 상단에서 계산됨)
       const finalAmount = finalTotal;
@@ -308,6 +316,7 @@ function CheckoutContent() {
         selectedStartTime: product.weekdaySelectable && product.timeSelectable ? selectedScheduleTime : undefined,
         provider: providerName, // Payment Adapter Pattern: env(NEXT_PUBLIC_PAYMENT_PROVIDER)로 전환
       });
+      pgOrderIdForCleanup = orderId;
       // [SEC-118] 주문을 먼저 만들고 그 id로 포인트를 사용한다 — 서버가 나중에 확정 시점에
       // "이 주문번호로 실제 차감된 point_transactions 행이 있는지"로 points_used를 검증한다.
       if (pointToUse > 0) await usePoints(centerId, pointToUse, orderId);
@@ -335,20 +344,27 @@ function CheckoutContent() {
         // 브라우저가 이미 결제창으로 이동 중 — 여기서 더 할 일 없음(성공 시 이 컴포넌트는
         // 언마운트된다). requestPayment가 reject되면(예: 사용자가 결제창을 즉시 닫음)
         // catch 블록으로 넘어가 busy가 풀린다.
+        pgOrderIdForCleanup = null;   // 결제창이 열린 뒤의 취소/실패는 /checkout/fail이 정리한다
         return;
       }
 
       const result = await paymentService.confirmPayment(created.paymentKey, orderId);
 
       if (result.status === "paid") {
+        pgOrderIdForCleanup = null;
         setIssuedMembershipId(result.membershipId ?? null);
         setDone(true);
       } else if (result.status === "cancelled") {
         setError(result.message ?? "결제가 취소됐어요. 다시 시도해주세요.");
       } else {
+        // 실패한 주문이 pending으로 남아 있으면 재시도(새 주문)가 포인트를 또 차감하므로 정리한다(done이면 취소되지 않음).
+        await cancelMyPendingOrderQuietly(pgOrderIdForCleanup);
         setError(result.message ?? "결제에 실패했어요. 다시 시도해주세요.");
       }
-    } catch (e: any) { setError(toUserMessage(e)); }
+    } catch (e: any) {
+      await cancelMyPendingOrderQuietly(pgOrderIdForCleanup);
+      setError(toUserMessage(e));
+    }
     finally { setBusy(false); }
   }
 

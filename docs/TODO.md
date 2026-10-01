@@ -775,6 +775,15 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
+### [P1] 주문 포인트 복원 — 후속 작업 (2026-10-02)
+- `fix_order_point_lifecycle.sql` 적용 후 검증 SELECT 확인 → 승인 후 `npm run qa:production:points` 1회 실행.
+- (후속) 토스 승인 "후" 환불(Toss cancel API 호출)과 refund_membership 연동 — 이번 배치는 DB 내부 포인트/쿠폰/수강권만 다룸.
+- (후속, 보안) `/api/payments/cancel`은 인증 없이 service_role로 `cancel_real_payment`를 호출한다 — 호출자 인증/본인 주문 확인 필요.
+- (후속) 토스 승인 성공 후 DB 확정(`confirm_real_payment`) 실패 시 보상 처리(재시도/자동 취소) 부재.
+- (후속, 회계) 앱 주문 매출 payments.point_amount는 항상 0이고 total_amount는 포인트·쿠폰 제외 실결제액(수동 매출 등록은 point 포함) — 정의 통일 필요. PG 주문은 결제수단과 무관하게 card_amount로 기록, refund 행은 방식별 금액 컬럼이 0.
+- (후속) confirm_real_payment/cancel_real_payment/_issue_membership_and_record_payment는 search_path 미고정(SECURITY DEFINER).
+- (후속) 매니저 INSERT 정책(point_transactions "매니저 포인트 등록")이 reverses_id 포함 임의 행 삽입을 허용 — 포인트 수기 지급은 RPC로 이전 검토.
+
 ### [P1] 수강권 만료일 연장 — SQL 적용 후 확인 (2026-10-02)
 - `add_membership_expiry_extension.sql` 적용 후 파일 끝 검증 SELECT 확인 → 오너가 권한 카탈로그에서 필요한 직원에게 "수강권 만료일 연장" 위임.
 - `admin_action_logs.membership_id` FK가 cascade 없음 → 수강권을 삭제하는 경로/QA 정리는 로그를 먼저 지워야 함.
