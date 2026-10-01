@@ -110,16 +110,17 @@ describe("Batch 5 center and commerce design contract", () => {
     expect(center).toContain("reservationReturnUrl");
   });
 
-  it("uses commerce layouts while retaining coupon, point and automatic booking logic", () => {
+  it("uses commerce layouts while retaining center-coupon, point and automatic booking logic (platform default coupons removed)", () => {
     const cart = read("app/cart/page.tsx");
     const checkout = read("app/checkout/page.tsx");
     expect(cart).toContain("commerce-page cart-page-v2");
     expect(cart).toContain("handleCheckoutAll");
-    expect(cart).toContain("applyCoupon");
+    expect(cart).not.toContain("applyCoupon");   // 2026-10-01 — 하드코딩 프로모 쿠폰 제거
     expect(checkout).toContain("commerce-page checkout-page-v2");
     expect(checkout).toContain("autoBook");
     expect(checkout).toContain("usePoint");
-    expect(checkout).toContain("applyCoupon");
+    expect(checkout).not.toContain("applyCoupon");
+    expect(checkout).toContain("selectedMemberCouponId");   // 센터가 지급한 쿠폰 경로는 유지
   });
 
   it("uses shared purchase controls and the tokenized Batch 5 style layer", () => {

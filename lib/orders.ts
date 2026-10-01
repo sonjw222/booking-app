@@ -126,19 +126,65 @@ export async function fetchCenterOrders(centerId: string, status?: string): Prom
   }));
 }
 
-// 매니저: 주문 처리 완료 (수강권 발급 + 매출 연동) 또는 취소
+// fulfill_order()가 돌려주는 발급/자동예약 결과(fix_order_issuance_and_auto_booking.sql 이후).
+// 이전 DB(미적용)에서는 자동예약 필드가 없으므로 모두 optional.
+export type FulfillOrderResult = {
+  alreadyDone: boolean;
+  membershipId: string | null;
+  autoBookRequested: boolean;
+  autoBookedCount: number;
+  unplacedCount: number | null;
+  autoBookReason: string | null;   // ok | not_requested | outside_membership_period | capacity_full | ... | error
+  autoBookError: string | null;
+};
+
+const AUTO_BOOK_REASON_TEXT: Record<string, string> = {
+  outside_membership_period: "수강권 만료일 이후 수업만 남아서",
+  no_class_in_period: "만료일 안에 일치하는 수업이 없어서",
+  capacity_full: "정원이 가득 차서",
+  condition_mismatch: "예약 조건(요일·시간)이 맞는 수업이 없어서",
+  already_reserved: "이미 예약된 날짜라서",
+  booking_window: "휴무일/예약 가능 기간 때문에",
+  not_weekday_pass: "요일 정보가 없어서",
+  no_remaining: "남은 횟수가 없어서",
+};
+
+// 관리자 토스트용 문구(순수 함수 — 테스트 대상). 자동예약 실패 이유가 반드시 보이게 한다.
+export function fulfillResultMessage(r: FulfillOrderResult | undefined): string {
+  const base = "수강권을 발급하고 매출에 반영했어요";
+  if (!r || !r.autoBookRequested) return base;
+  if (r.autoBookReason === "error") {
+    return `${base}. 다만 자동예약 중 오류가 나서 예약하지 못했어요(${r.autoBookError ?? "원인 미상"}) — 미배치 목록에서 다시 배치해주세요.`;
+  }
+  const booked = `${r.autoBookedCount}회 자동예약`;
+  if ((r.unplacedCount ?? 0) > 0) {
+    const why = AUTO_BOOK_REASON_TEXT[r.autoBookReason ?? ""] ?? "조건에 맞는 수업이 부족해서";
+    return `${base}. ${booked}했고, ${why} ${r.unplacedCount}회는 미배치예요(미배치 목록에서 확인).`;
+  }
+  return `${base}. ${booked}했어요.`;
+}
+
+function mapFulfillResult(d: any): FulfillOrderResult {
+  return {
+    alreadyDone: !!d?.already_done,
+    membershipId: d?.membership_id ?? null,
+    autoBookRequested: !!d?.auto_book_requested,
+    autoBookedCount: d?.auto_booked_count ?? 0,
+    unplacedCount: d?.unplaced_count ?? null,
+    autoBookReason: d?.auto_book_reason ?? null,
+    autoBookError: d?.auto_book_error ?? null,
+  };
+}
+
+// 매니저: 주문 처리 완료 (수강권 발급 + 매출 연동 + 요일반 자동예약) 또는 취소.
+// 'done'이면 발급/자동예약 결과를 돌려준다(관리자에게 실패 이유를 보여주기 위함).
 export async function updateOrderStatus(
   orderId: string, status: "done" | "cancelled"
-): Promise<void> {
+): Promise<FulfillOrderResult | undefined> {
   if (status === "done") {
-    // 수강권 자동 발급 + 매출 자동 기록 (+ 요일반이면 자동예약).
-    // fulfill_order()는 { already_done, membership_id, amount }만 반환하고 자동예약 결과(개수/
-    // 미배치 여부)는 반환하지 않는다 — 그 값을 기대하는 코드를 여기 두지 않는다(Track B에서
-    // 발견: 이전에는 존재하지 않는 auto_booked/remaining 필드를 읽어 항상 무시되는 죽은 분기가
-    // 있었다). RPC 반환값을 바꾸려면 SQL 변경이 필요해 이번 배치 범위 밖이다.
-    const { error } = await supabase.rpc("fulfill_order", { p_order_id: orderId });
+    const { data, error } = await supabase.rpc("fulfill_order", { p_order_id: orderId });
     if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
-    return;
+    return mapFulfillResult(data);
   }
   // .select()로 실제 바뀐 행을 받아온다 — RLS의 using() 조건(예: 회원 자가 취소는
   // status가 pending/paid일 때만 허용, add_order_self_cancel.sql)에 더 이상 안 맞는

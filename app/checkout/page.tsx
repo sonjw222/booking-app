@@ -21,6 +21,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { fetchMyPgCheckoutOverride } from "../../lib/authAccount";
 import { toUserMessage } from "../../lib/userError";
 import { fetchApplicableCoupons, previewDiscount, type MemberCoupon } from "../../lib/coupons";
+import { visiblePayMethodIds, resolveSelectedPayMethod } from "../../lib/payMethods";
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import UiIcon, { type IconName } from "../components/UiIcon";
 import ErrorState from "../components/ErrorState";
@@ -43,12 +44,6 @@ const EASY_PAY_BY_METHOD: Record<string, "KAKAOPAY" | "TOSSPAY" | undefined> = {
   kakao: "KAKAOPAY",
   toss: "TOSSPAY",
 };
-
-// 보유 쿠폰 (데모)
-const MY_COUPONS = [
-  { code: "WELCOME", label: "신규 가입 5,000원 할인", discount: 5000 },
-  { code: "FIGURE10", label: "피겨 클래스 10,000원 할인", discount: 10000 },
-];
 
 export default function CheckoutPage() {
   return (
@@ -101,14 +96,10 @@ function CheckoutContent() {
   const [pgCheckoutEnabled, setPgCheckoutEnabled] = useState(PG_CHECKOUT_ENABLED);
   const [payMethod, setPayMethod] = useState(PG_CHECKOUT_ENABLED ? "card" : "direct");
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
-  const [couponInput, setCouponInput] = useState("");
-  const [discount, setDiscount] = useState(0);
-  const [couponMsg, setCouponMsg] = useState<string | null>(null);
-  // 회원에게 지급된 실제 쿠폰(member_coupons) — 위의 couponInput/MY_COUPONS는 기존
-  // 하드코딩 프로모코드(WELCOME/FIGURE10) 경로라 건드리지 않고 그대로 둔다. 이건 완전히
-  // 별개의 새 경로(MWHABIT Membership Visibility + Member Coupon Batch, 2026-09-18) —
-  // 여기서 미리보기로 계산/표시하는 할인액은 전부 UX용이고, 실제 자격/금액은 결제 확정
-  // RPC가 다시 검증·계산한다(쿠폰 소유자 확인, 센터 일치, 유효기간, 최소금액 등).
+  // 센터가 회원에게 지급한 실제 쿠폰(member_coupons)만 쓴다. 플랫폼 기본/데모 쿠폰(과거 하드코딩
+  // 프로모코드)은 2026-10-01에 제거됨. 여기서 미리보기로 계산/표시하는 할인액은 UX용이고, 실제
+  // 자격/금액은 결제 확정 RPC(fulfill_order/_issue_membership_and_record_payment)가 공통 함수
+  // _order_expected_amount로 다시 검증·계산한다(소유자 확인, 센터 일치, 유효기간, 최소금액 등).
   const [applicableCoupons, setApplicableCoupons] = useState<MemberCoupon[]>([]);
   const [selectedMemberCouponId, setSelectedMemberCouponId] = useState<string | null>(null);
   const [autoBook, setAutoBook] = useState(true);
@@ -150,7 +141,6 @@ function CheckoutContent() {
       const c = await fetchCenterDetail(centerId);
       setCenterName(c?.name ?? "");
       setAllowedPay(c?.payMethods ?? null);
-      if (c?.payMethods && c.payMethods.length > 0) setPayMethod(c.payMethods[0]);
       try { setMyPoints(await fetchMyPoints(centerId)); } catch { /* 무시 */ }
       try {
         const profs = await fetchProfiles();
@@ -209,19 +199,18 @@ function CheckoutContent() {
     return () => clearTimeout(t);
   }, [done, reservationBackUrl, pendingManualPayment]);
 
-  function applyCoupon(code?: string) {
-    const c = (code ?? couponInput).trim().toUpperCase();
-    if (!c) return;
-    const found = MY_COUPONS.find((x) => x.code === c);
-    if (found) {
-      setDiscount(found.discount);
-      setCouponInput(found.code);
-      setCouponMsg(`쿠폰 적용됨: -${found.discount.toLocaleString("ko-KR")}원`);
-    } else {
-      setDiscount(0);
-      setCouponMsg("유효하지 않은 쿠폰이에요");
-    }
-  }
+  // 자동예약 요일: 상품에 고정된 요일(auto_book_days)이거나, 구매 시 회원이 고른 요일(weekdaySelectable).
+  const autoBookDaysEffective: number[] = product?.autoBookDays && product.autoBookDays.length > 0
+    ? product.autoBookDays
+    : product?.weekdaySelectable && selectedScheduleDay !== null ? [selectedScheduleDay] : [];
+  const showAutoBook = autoBookDaysEffective.length > 0;
+  const autoBookRequested = showAutoBook && autoBook;
+  // 화면에 보이는 결제수단(PG 게이트 + 센터 pay_methods + direct 안전 대체)
+  const visibleMethodIds = visiblePayMethodIds({
+    pgEnabled: pgCheckoutEnabled, allowed: allowedPay, all: PAY_METHODS.map((m) => m.id),
+  });
+
+  const effectivePayMethodUi = resolveSelectedPayMethod(payMethod, visibleMethodIds);
 
   async function handlePay() {
     if (!product) return;
@@ -240,10 +229,13 @@ function CheckoutContent() {
       setError("이용할 시간을 선택해 주세요.");
       return;
     }
+    // 숨겨진 PG 수단이 선택된 채 결제가 진행되는 일이 없도록 화면에 보이는 수단으로 한 번 더 보정한다.
+    const effectivePayMethod = resolveSelectedPayMethod(payMethod, visibleMethodIds);
+    if (effectivePayMethod !== payMethod) setPayMethod(effectivePayMethod);
     // "direct"(직접결제, 센터에서 결제)는 PG 자체를 거치지 않는다 — 실제 PG 연동 전
     // 이 앱의 원래 흐름과 동일하게 주문만 pending으로 만들고, 매니저가 결제를 확인한 뒤
     // 기존 "미발급 주문" 화면(fulfill_order)에서 수동으로 발급한다.
-    if (payMethod === "direct") {
+    if (effectivePayMethod === "direct") {
       setBusy(true);
       try {
         // [SEC-118] 포인트는 주문번호와 묶여야 서버가 나중에 "실제로 이 주문에서 차감됐는지"
@@ -251,16 +243,14 @@ function CheckoutContent() {
         // usePoints를 호출한다(예전엔 반대 순서였음).
         const directOrderId = await createOrder({
           centerId, productId: product.id, productName: product.name,
-          amount: finalTotal, payMethod,
+          amount: finalTotal, payMethod: effectivePayMethod,
           selectedSize: selectedSize ?? undefined,
-          couponCode: discount > 0 ? couponInput.trim().toUpperCase() : undefined,
-          discountAmount: discount,
-          // member_coupon_id는 일부러 안 보낸다 — fulfill_order()(직접결제/매니저 수동
-          // 확정 RPC)는 _issue_membership_and_record_payment()와 별개 경로라 쿠폰
-          // 검증/사용처리 로직이 없다(이번 배치 감사 범위 밖). 직접결제에서 쿠폰을 쓰게
-          // 하면 소유/센터/유효기간 검증도, used 처리도 없이 방치되므로 애초에 막는다
-          // (아래 UI도 payMethod==="direct"일 땐 쿠폰 선택 자체를 숨김).
-          autoBook: !!(product.autoBookDays && product.autoBookDays.length > 0) && autoBook,
+          discountAmount: memberCouponDiscount,
+          // 2026-10-01 — fulfill_order()가 이제 PG 경로와 같은 공통 검증(_order_expected_amount)으로
+          // 센터 쿠폰의 소유/센터/유효기간/최소금액을 확인하고 발급 성공 시 used 처리까지 하므로
+          // 직접결제에서도 쿠폰 ID를 보낸다. 최종 금액은 서버가 다시 계산해 비교한다.
+          memberCouponId: selectedMemberCouponId ?? undefined,
+          autoBook: autoBookRequested,
           pointsUsed: pointToUse,
           profileId: selectedProfileId || undefined,
           selectedDayOfWeek: product.weekdaySelectable ? selectedScheduleDay : undefined,
@@ -276,7 +266,7 @@ function CheckoutContent() {
       return;
     }
     // 나머지(카드/카카오페이/토스페이/계좌이체)는 실제 PG 결제창을 거친다.
-    if (resolveProviderName() === "toss" && !TOSS_SUPPORTED_METHODS.includes(payMethod)) {
+    if (resolveProviderName() === "toss" && !TOSS_SUPPORTED_METHODS.includes(effectivePayMethod)) {
       setError("지금은 카드/카카오페이/토스페이/계좌이체만 가능해요");
       return;
     }
@@ -287,12 +277,11 @@ function CheckoutContent() {
       const providerName = resolveProviderName();
       const orderId = await createOrder({
         centerId, productId: product.id, productName: product.name,
-        amount: finalAmount, payMethod,
+        amount: finalAmount, payMethod: effectivePayMethod,
         selectedSize: selectedSize ?? undefined,
-        couponCode: discount > 0 ? couponInput.trim().toUpperCase() : undefined,
-        discountAmount: discount,
+        discountAmount: memberCouponDiscount,
         memberCouponId: selectedMemberCouponId ?? undefined,
-        autoBook: !!(product.autoBookDays && product.autoBookDays.length > 0) && autoBook,
+        autoBook: autoBookRequested,
         pointsUsed: pointToUse,
         profileId: selectedProfileId || undefined,
         selectedDayOfWeek: product.weekdaySelectable ? selectedScheduleDay : undefined,
@@ -318,8 +307,8 @@ function CheckoutContent() {
         customerEmail: userData.user?.email ?? undefined,
         customerKey: userData.user?.id,
         successUrl, failUrl,
-        method: payMethod === "transfer" ? "TRANSFER" : "CARD",
-        easyPay: EASY_PAY_BY_METHOD[payMethod],
+        method: effectivePayMethod === "transfer" ? "TRANSFER" : "CARD",
+        easyPay: EASY_PAY_BY_METHOD[effectivePayMethod],
       });
 
       if (created.redirected) {
@@ -345,13 +334,10 @@ function CheckoutContent() {
 
   function won(n: number) { return n.toLocaleString("ko-KR") + "원"; }
 
-  // 직접결제(센터 방문 결제)는 fulfill_order()가 쿠폰을 검증/소비하지 못하므로 애초에
-  // 적용 대상에서 뺀다(위 handlePay의 direct 분기 주석 참고).
-  const canUseMemberCoupon = payMethod !== "direct";
-  const selectedMemberCoupon = canUseMemberCoupon ? applicableCoupons.find((c) => c.id === selectedMemberCouponId) ?? null : null;
+  const selectedMemberCoupon = applicableCoupons.find((c) => c.id === selectedMemberCouponId) ?? null;
   const memberCouponDiscount = product && selectedMemberCoupon ? previewDiscount(product.price, selectedMemberCoupon) : 0;
-  // 포인트는 (상품가 - 프로모코드할인 - 회원쿠폰할인) 범위 안에서만, 보유량 한도로 사용
-  const afterCoupon = product ? Math.max(0, product.price - discount - memberCouponDiscount) : 0;
+  // 포인트는 (상품가 - 센터 쿠폰 할인) 범위 안에서만, 보유량 한도로 사용
+  const afterCoupon = product ? Math.max(0, product.price - memberCouponDiscount) : 0;
   const pointToUse = Math.min(parseInt(usePoint || "0", 10) || 0, myPoints, afterCoupon);
   const finalTotal = Math.max(0, afterCoupon - pointToUse);
 
@@ -565,16 +551,16 @@ function CheckoutContent() {
       )}
 
       {/* 요일반 자동예약 */}
-      {product.autoBookDays && product.autoBookDays.length > 0 && (
+      {showAutoBook && (
         <>
           <div className="menu-section-label">자동 예약</div>
           <div className="autobook-box">
             <div className="set-row" style={{ padding: 0, borderBottom: "none" }}>
               <div className="set-label">
-                {product.autoBookDays.map((d) => ["일","월","화","수","목","금","토"][d]).join("·")}요일 수업 자동 예약
+                {autoBookDaysEffective.map((d) => ["일","월","화","수","목","금","토"][d]).join("·")}요일 수업 자동 예약
                 <br />
                 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-                  결제 확인 후 가까운 날짜부터 남은 횟수만큼 예약해드려요
+                  결제 확인 후 가까운 날짜부터 남은 횟수만큼 예약해드려요. 수강권 만료일 이후 수업은 예약하지 않아요.
                 </span>
               </div>
               <button className={`switch ${autoBook ? "on" : ""}`} onClick={() => setAutoBook((v) => !v)}>
@@ -590,31 +576,9 @@ function CheckoutContent() {
         </>
       )}
 
-      {/* 쿠폰 */}
-      <div className="menu-section-label commerce-label">할인 쿠폰</div>
-      <div className="commerce-code-row">
-        <input className="input-field" style={{ flex: 1 }} placeholder="쿠폰 코드 입력" value={couponInput}
-          onChange={(e) => { setCouponInput(e.target.value); setCouponMsg(null); }}
-          onKeyDown={(e) => { if (e.key === "Enter") applyCoupon(); }} />
-        <button className="ghost-btn" style={{ flex: "0 0 80px" }} onClick={() => applyCoupon()}>적용</button>
-      </div>
-      <div className="coupon-list">
-        {MY_COUPONS.map((c) => (
-          <button key={c.code} className={`coupon-item ${couponInput.toUpperCase() === c.code ? "on" : ""}`}
-            onClick={() => applyCoupon(c.code)}>
-            <span className="coupon-label">{c.label}</span>
-            <span className="coupon-amount">-{c.discount.toLocaleString("ko-KR")}원</span>
-          </button>
-        ))}
-      </div>
-      {couponMsg && (
-        <div className={`perm-guide ${discount > 0 ? "is-success" : "is-error"}`} style={{ margin: "6px 20px 0" }}>{couponMsg}</div>
-      )}
-
-      {/* 보유 쿠폰(센터가 회원에게 지급한 실제 쿠폰) — 위 "할인 쿠폰"(프로모코드 입력)과는
-          별개 경로. 지금 쓸 수 있는 쿠폰이 있을 때만 보여준다(요청 15번). 최종 할인금액은
-          항상 결제 확정 시점에 서버가 다시 계산 — 여기 미리보기 숫자를 그대로 믿지 않는다. */}
-      {canUseMemberCoupon && applicableCoupons.length > 0 && (
+      {/* 센터가 회원에게 지급한 쿠폰 — 쓸 수 있는 쿠폰이 있을 때만 보여준다(없으면 영역 자체를 숨김).
+          최종 할인금액은 항상 결제 확정 시점에 서버가 다시 계산 — 여기 미리보기 숫자를 그대로 믿지 않는다. */}
+      {applicableCoupons.length > 0 && (
         <>
           <div className="menu-section-label commerce-label">내 쿠폰</div>
           <div className="coupon-list">
@@ -648,7 +612,7 @@ function CheckoutContent() {
             <input className="input-field" style={{ flex: 1 }} inputMode="numeric" placeholder="사용할 포인트"
               value={usePoint} onChange={(e) => setUsePoint(e.target.value.replace(/[^0-9]/g, ""))} />
             <button className="ghost-btn" style={{ flex: "0 0 80px" }}
-              onClick={() => setUsePoint(String(Math.min(myPoints, Math.max(0, product.price - discount))))}>
+              onClick={() => setUsePoint(String(Math.min(myPoints, Math.max(0, product.price - memberCouponDiscount))))}>
               전액
             </button>
           </div>
@@ -662,15 +626,14 @@ function CheckoutContent() {
       <div className="menu-section-label commerce-label">결제 수단</div>
       <div className="pay-methods">
         {PAY_METHODS
-          .filter((m) => pgCheckoutEnabled || m.id === "direct")
-          .filter((m) => !allowedPay || allowedPay.length === 0 || allowedPay.includes(m.id))
+          .filter((m) => visibleMethodIds.includes(m.id))
           .map((m) => (
-          <button key={m.id} className={`pay-method ${payMethod === m.id ? "on" : ""}`} onClick={() => setPayMethod(m.id)}>
+          <button key={m.id} className={`pay-method ${effectivePayMethodUi === m.id ? "on" : ""}`} onClick={() => setPayMethod(m.id)}>
             <span className="pay-method-emoji">
               {m.dot ? <span className="vendor-dot" style={{ background: m.dot }} /> : <UiIcon name={m.icon!} size={20} />}
             </span>
             <span>{m.label}</span>
-            <span className="pay-method-check">{payMethod === m.id ? "●" : "○"}</span>
+            <span className="pay-method-check">{effectivePayMethodUi === m.id ? "●" : "○"}</span>
           </button>
         ))}
       </div>
@@ -683,7 +646,7 @@ function CheckoutContent() {
         <div className="perm-guide" style={{ margin: "10px 20px" }}>
           실제 PG(카드/카카오페이 등) 연동은 준비 중이라, 지금은 테스트 결제(Mock)로 처리돼요.
         </div>
-      ) : payMethod === "card" && resolveProviderName() === "toss" && (
+      ) : effectivePayMethodUi === "card" && resolveProviderName() === "toss" && (
         // 실기기 QA(2026-09-29) — 카드사별 결제 가능 여부는 토스 결제창(PG)이 직접 제어한다
         // (이 앱이 카드사 목록 UI를 따로 구현하지 않음). 일부 카드사(예: 카드사 심사 진행 중)는
         // 결제창에서 바로 확인되므로, 앱에서는 과도하게 구체적인 안내 대신 자연스러운 문구만.
@@ -691,22 +654,16 @@ function CheckoutContent() {
           카드 결제창에서 일부 카드사는 아직 준비 중일 수 있어요.
         </div>
       )}
-      {payMethod === "direct" && (
+      {effectivePayMethodUi === "direct" && (
         <div className="perm-guide" style={{ margin: "10px 20px" }}>
           결제 없이 주문만 접수돼요. 센터에서 결제를 확인하면 이용권이 발급돼요.
         </div>
       )}
 
       {/* 결제 금액 + 버튼 */}
-      {discount > 0 && (
-        <div className="checkout-discount-row">
-          <span>쿠폰 할인</span>
-          <span>-{won(discount)}</span>
-        </div>
-      )}
       {memberCouponDiscount > 0 && (
         <div className="checkout-discount-row">
-          <span>내 쿠폰 할인</span>
+          <span>쿠폰 할인</span>
           <span>-{won(memberCouponDiscount)}</span>
         </div>
       )}

@@ -18,6 +18,9 @@ import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import EmptyState from "../components/EmptyState";
 import ErrorState from "../components/ErrorState";
 import AppButton from "../components/AppButton";
+import { PG_CHECKOUT_ENABLED } from "../../lib/payments";
+import { fetchMyPgCheckoutOverride } from "../../lib/authAccount";
+import { visiblePayMethodIds, resolveSelectedPayMethod } from "../../lib/payMethods";
 
 // 카카오페이/토스페이는 로고 자산이 없어 outline 아이콘 하나로 뭉치면 구분이 안 되므로
 // --vendor-* 색 점(dot)으로, 나머지는 의미가 통하는 outline 아이콘으로 구분한다.
@@ -29,12 +32,6 @@ const PAY_METHODS: { id: string; label: string; icon?: IconName; dot?: string }[
   { id: "direct", label: "직접결제 (센터에서 결제)", icon: "handshake" },
 ];
 
-// 보유 쿠폰 (데모)
-const MY_COUPONS = [
-  { code: "WELCOME", label: "신규 가입 5,000원 할인", discount: 5000 },
-  { code: "FIGURE10", label: "피겨 클래스 10,000원 할인", discount: 10000 },
-];
-
 export default function CartPage() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,15 +40,10 @@ export default function CartPage() {
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
 
-  const [payMethod, setPayMethod] = useState("card");
+  // PG 게이트(토스 심사 전): 기본 결제수단은 항상 직접결제. 심사관 override 계정만 PG 수단이 열린다.
+  const [pgEnabled, setPgEnabled] = useState(PG_CHECKOUT_ENABLED);
+  const [payMethod, setPayMethod] = useState(PG_CHECKOUT_ENABLED ? "card" : "direct");
   const [allowedPay, setAllowedPay] = useState<string[] | null>(null);
-  const [couponInput, setCouponInput] = useState("");
-  // UX 감사(A-18) — "쿠폰 적용상태 표시 없음": 예전엔 discount 숫자와 couponInput 텍스트
-  // 일치 여부로만 적용 상태를 간접 추론했고, 취소할 방법도 없었다. 적용된 쿠폰 자체를
-  // 객체로 들고 있어 상태가 명확하고, 취소 버튼도 추가한다.
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; label: string; discount: number } | null>(null);
-  const [couponMsg, setCouponMsg] = useState<string | null>(null);
-  const discount = appliedCoupon?.discount ?? 0;
   // 가족(다중 프로필) 계정에서 "장바구니 전체는 누구 앞으로"를 고를 수 있게 함 —
   // 프로필이 1개뿐이면 UI를 숨기고 기존처럼 자동 배정한다.
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
@@ -62,6 +54,9 @@ export default function CartPage() {
     try {
       const list = await fetchCart();
       setItems(list);
+      if (!PG_CHECKOUT_ENABLED) {
+        try { if (await fetchMyPgCheckoutOverride()) { setPgEnabled(true); setPayMethod("card"); } } catch { /* 심사관 계정이 아니면 무시 */ }
+      }
       try {
         const profs = await fetchProfiles();
         setProfiles(profs);
@@ -73,7 +68,6 @@ export default function CartPage() {
         try {
           const c = await fetchCenterDetail(centerIds[0]);
           setAllowedPay(c?.payMethods ?? null);
-          if (c?.payMethods && c.payMethods.length > 0) setPayMethod(c.payMethods[0]);
         } catch { /* 무시 */ }
       }
     } catch { setLoadError(true); }
@@ -81,8 +75,10 @@ export default function CartPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  const visibleMethodIds = visiblePayMethodIds({ pgEnabled, allowed: allowedPay, all: PAY_METHODS.map((m) => m.id) });
+  const effectivePayMethod = resolveSelectedPayMethod(payMethod, visibleMethodIds);
   const subtotal = items.reduce((s, i) => s + i.price, 0);
-  const total = Math.max(0, subtotal - discount);
+  const total = subtotal;
   function won(n: number) { return n.toLocaleString("ko-KR") + "원"; }
 
   // 사이즈 없는 상품만 productId 기준으로 묶어 "행 개수 = 수량"으로 표현(위 handleIncrement
@@ -94,26 +90,6 @@ export default function CartPage() {
     const g = noSizeGroups.find((x) => x.productId === it.productId);
     if (g) g.ids.push(it.id);
     else noSizeGroups.push({ productId: it.productId, centerId: it.centerId, productName: it.productName, price: it.price, ids: [it.id] });
-  }
-
-  function applyCoupon(code?: string) {
-    const c = (code ?? couponInput).trim().toUpperCase();
-    if (!c) return;
-    const found = MY_COUPONS.find((x) => x.code === c);
-    if (found) {
-      setAppliedCoupon(found);
-      setCouponInput(found.code);
-      setCouponMsg(`쿠폰 적용됨: -${found.discount.toLocaleString("ko-KR")}원`);
-    } else {
-      setAppliedCoupon(null);
-      setCouponMsg("유효하지 않은 쿠폰이에요");
-    }
-  }
-
-  function removeCoupon() {
-    setAppliedCoupon(null);
-    setCouponInput("");
-    setCouponMsg(null);
   }
 
   async function handleRemove(id: string) {
@@ -169,17 +145,12 @@ export default function CartPage() {
 
     setBusy(true);
     try {
-      // 할인은 첫 항목에 적용 (단순화)
-      let left = discount;
+      // 장바구니는 쿠폰 없이 접수한다(플랫폼 기본 쿠폰 제거 — 센터 쿠폰은 상품별 결제 화면에서 적용).
       for (const it of items) {
-        const d = Math.min(left, it.price);
-        left -= d;
         await createOrder({
           centerId: it.centerId, productId: it.productId, productName: it.productName,
-          amount: it.price - d, payMethod,
+          amount: it.price, payMethod: effectivePayMethod,
           selectedSize: it.selectedSize ?? undefined,
-          couponCode: appliedCoupon?.code,
-          discountAmount: d,
           profileId: selectedProfileId || undefined,
         });
       }
@@ -286,33 +257,6 @@ export default function CartPage() {
             </>
           )}
 
-          {/* 쿠폰 */}
-          <div className="menu-section-label commerce-label">할인 쿠폰</div>
-          <div className="commerce-code-row">
-            <input aria-label="쿠폰 코드 입력" className="input-field" style={{ flex: 1 }} placeholder="쿠폰 코드 입력"
-              value={couponInput}
-              onChange={(e) => { setCouponInput(e.target.value); setCouponMsg(null); }}
-              onKeyDown={(e) => { if (e.key === "Enter") applyCoupon(); }} />
-            <button className="ghost-btn" style={{ flex: "0 0 80px" }} onClick={() => applyCoupon()}>적용</button>
-          </div>
-          <div className="coupon-list">
-            {MY_COUPONS.map((c) => (
-              <button key={c.code} className={`coupon-item ${appliedCoupon?.code === c.code ? "on" : ""}`}
-                onClick={() => applyCoupon(c.code)}>
-                <span className="coupon-label">{appliedCoupon?.code === c.code && <UiIcon name="check" size={13} />} {c.label}</span>
-                <span className="coupon-amount">-{won(c.discount)}</span>
-              </button>
-            ))}
-          </div>
-          {couponMsg && (
-            <div className={`perm-guide ${discount > 0 ? "is-success" : "is-error"}`} style={{ margin: "6px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-              <span>{couponMsg}</span>
-              {appliedCoupon && (
-                <button type="button" className="text-btn" onClick={removeCoupon}>취소</button>
-              )}
-            </div>
-          )}
-
           {/* 결제 수단 */}
           <div className="menu-section-label commerce-label">결제 수단</div>
           <div className="perm-guide" style={{ margin: "0 0 8px" }}>
@@ -320,23 +264,17 @@ export default function CartPage() {
             참고용이에요.
           </div>
           <div className="pay-methods">
-            {PAY_METHODS.filter((m) => !allowedPay || allowedPay.length === 0 || allowedPay.includes(m.id)).map((m) => (
-              <button key={m.id} className={`pay-method ${payMethod === m.id ? "on" : ""}`} onClick={() => setPayMethod(m.id)}>
+            {PAY_METHODS.filter((m) => visibleMethodIds.includes(m.id)).map((m) => (
+              <button key={m.id} className={`pay-method ${effectivePayMethod === m.id ? "on" : ""}`} onClick={() => setPayMethod(m.id)}>
                 <span className="pay-method-emoji">
                   {m.dot ? <span className="vendor-dot" style={{ background: m.dot }} /> : <UiIcon name={m.icon!} size={20} />}
                 </span>
                 <span>{m.label}</span>
-                <span className="pay-method-check">{payMethod === m.id ? "●" : "○"}</span>
+                <span className="pay-method-check">{effectivePayMethod === m.id ? "●" : "○"}</span>
               </button>
             ))}
           </div>
 
-          {discount > 0 && appliedCoupon && (
-            <div className="checkout-discount-row">
-              <span>할인 ({appliedCoupon.code})</span>
-              <span>-{won(discount)}</span>
-            </div>
-          )}
           <div className="checkout-total">
             <span>총 {items.length}개 · 결제 금액</span>
             <b>{won(total)}</b>

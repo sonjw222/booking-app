@@ -38,6 +38,20 @@ export async function POST(request: Request) {
     return json({ error: "paymentKey/orderId/amount가 모두 필요해요" }, 400);
   }
 
+  // 0) PG 게이트(토스 전자결제 심사 전 임시 출시, 2026-10-01): NEXT_PUBLIC_PG_CHECKOUT_ENABLED가 정확히
+  //    "true"가 아니면 일반 주문은 온라인 결제 승인을 거치지 않는다 — UI가 숨겨도 이 API를 직접 호출해
+  //    결제가 실행되지 않도록 서버에서도 막는다. 예외는 심사관 전용 계정(accounts.pg_checkout_override,
+  //    운영자만 설정 가능)이 만든 주문뿐이다. 게이트 판정은 토스 호출보다 먼저 한다.
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  if (process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED !== "true") {
+    const { data: ord } = await admin
+      .from("orders").select("profiles(accounts(pg_checkout_override))").eq("id", orderId).maybeSingle();
+    const override = (ord as any)?.profiles?.accounts?.pg_checkout_override;
+    if (!override) return json({ error: "온라인 결제는 아직 사용할 수 없어요" }, 403);
+  }
+
   // 1) 토스 결제 승인 API 호출 (서버-서버, 시크릿 키 Basic Auth)
   const credentials = Buffer.from(`${TOSS_SECRET_KEY}:`).toString("base64");
   const tossRes = await fetch("https://api.tosspayments.com/v1/payments/confirm", {
@@ -56,9 +70,6 @@ export async function POST(request: Request) {
   const confirmedAmount = typeof tossData?.totalAmount === "number" ? tossData.totalAmount : amount;
 
   // 2) service_role로 confirm_real_payment RPC 호출 — 이미 승인된 결제이므로 RLS 우회 필요
-  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
   const { data, error } = await admin.rpc("confirm_real_payment", {
     p_order_id: orderId,
     p_payment_key: paymentKey,

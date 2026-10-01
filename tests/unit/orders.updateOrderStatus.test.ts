@@ -1,7 +1,5 @@
-// Track B 관리자 기능 감사에서 발견: fulfill_order() RPC는 { already_done, membership_id, amount }
-// 만 반환하는데, updateOrderStatus()가 존재하지 않는 auto_booked/remaining 필드를 기대해 항상
-// 무시되는 죽은 분기를 만들고 있었다. 이 테스트는 그 필드를 더 이상 기대하지 않는지(반환값을
-// 그대로 신뢰하지 않는지) 확인한다.
+// updateOrderStatus(): 'done'이면 fulfill_order RPC 결과(2026-10-01 이후 auto_book_requested/
+// auto_booked_count/unplaced_count/auto_book_reason/auto_book_error 포함)를 매핑해 돌려주고, 구버전 RPC도 안전하게 처리한다.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const rpcMock = vi.fn();
@@ -31,14 +29,23 @@ describe("updateOrderStatus()", () => {
     selectMock.mockReset();
   });
 
-  it("'done' 처리 시 fulfill_order RPC를 호출하고, 존재하지 않는 필드를 반환하지 않는다(void)", async () => {
+  it("'done' 처리 시 fulfill_order RPC를 호출하고 자동예약 결과를 매핑해 돌려준다", async () => {
     rpcMock.mockResolvedValueOnce({
-      data: { already_done: false, membership_id: "m-1", amount: 50000 },
+      data: {
+        already_done: false, membership_id: "m-1", amount: 50000,
+        auto_book_requested: true, auto_booked_count: 2, unplaced_count: 2, auto_book_reason: "outside_membership_period",
+      },
       error: null,
     });
     const result = await updateOrderStatus("order-1", "done");
     expect(rpcMock).toHaveBeenCalledWith("fulfill_order", { p_order_id: "order-1" });
-    expect(result).toBeUndefined();
+    expect(result).toMatchObject({ membershipId: "m-1", autoBookRequested: true, autoBookedCount: 2, unplacedCount: 2 });
+  });
+
+  it("구버전 RPC(자동예약 필드 없음)도 안전하게 매핑한다", async () => {
+    rpcMock.mockResolvedValueOnce({ data: { already_done: false, membership_id: "m-1", amount: 1 }, error: null });
+    const result = await updateOrderStatus("order-1", "done");
+    expect(result).toMatchObject({ autoBookRequested: false, autoBookedCount: 0, unplacedCount: null });
   });
 
   it("RPC가 에러를 반환하면 에러 메시지를 그대로 던진다(접두사 제거)", async () => {

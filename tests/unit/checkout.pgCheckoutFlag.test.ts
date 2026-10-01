@@ -17,7 +17,8 @@ describe("PG_CHECKOUT_ENABLED — 환경변수 하나로 켜고 끄는 구조", 
   });
 
   it("checkout 화면의 결제수단 목록이 이 플래그로 필터링된다(꺼져 있으면 direct만)", () => {
-    expect(checkout).toContain(".filter((m) => pgCheckoutEnabled || m.id === \"direct\")");
+    expect(checkout).toContain("visiblePayMethodIds");
+    expect(checkout).toContain(".filter((m) => visibleMethodIds.includes(m.id))");
   });
 
   it("심사관 전용 override(accounts.pg_checkout_override)는 전역 플래그와 무관하게 계속 동작한다(변경하지 않음)", () => {
@@ -31,7 +32,7 @@ describe("PG_CHECKOUT_ENABLED — 환경변수 하나로 켜고 끄는 구조", 
   });
 
   it("카드 결제 선택 시에만 자연스러운 준비중 안내가 있다(카드사를 특정하지 않음)", () => {
-    const idx = checkout.indexOf('payMethod === "card" && resolveProviderName() === "toss"');
+    const idx = checkout.indexOf('effectivePayMethodUi === "card" && resolveProviderName() === "toss"');
     expect(idx).toBeGreaterThan(-1);
     const block = checkout.slice(idx, idx + 500);
     expect(block).not.toMatch(/현대카드/);

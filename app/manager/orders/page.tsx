@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
-import { fetchCenterOrders, updateOrderStatus, type Order } from "../../../lib/orders";
+import { fetchCenterOrders, updateOrderStatus, fulfillResultMessage, type Order } from "../../../lib/orders";
 import Loading from "../../components/Loading";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
@@ -73,11 +73,9 @@ export default function ManagerOrdersPage() {
     if (!(await globalThis.appConfirm(`${o.memberName}님에게 '${o.productName}'을(를) 발급하고 매출에 반영할까요?`))) return;
     setBusy(true);
     try {
-      await updateOrderStatus(o.id, "done");
-      // fulfill_order()는 자동예약 개수/미배치 여부를 반환하지 않아(위 lib/orders.ts 주석 참고)
-      // 여기서 그 결과를 안다고 가정하는 문구를 쓰지 않는다 — 요일반 자동예약은 서버에서
-      // 조용히 시도되며, 실제 배치 결과는 회원 예약내역/미배치 관리 화면에서 확인한다.
-      showToast("수강권을 발급하고 매출에 반영했어요");
+      const result = await updateOrderStatus(o.id, "done");
+      // 자동예약 결과(예약 수/미배치 수/사유/오류)를 그대로 보여준다 — 실패 이유가 조용히 묻히지 않게.
+      showToast(fulfillResultMessage(result));
       await load();
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
