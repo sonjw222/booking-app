@@ -188,7 +188,7 @@ describe("[8] 메모 필드 — 관리자 내부 메모 라벨", () => {
 describe("[9] manager_centers RLS — 재귀 제거 + 권한상승 방지(SQL 계약)", () => {
   const raw = read("fix_manager_centers_rls_recursion_final.sql");
   const sql = noComments(raw);
-  const policies = sql.slice(sql.indexOf('drop policy if exists "매니저센터 생성"'), sql.indexOf("COMMIT;"));
+  const policies = sql.slice(sql.indexOf('drop policy if exists "매니저센터 생성"'), sql.indexOf("create or replace function manager_centers_protect_last_owner"));
   it("정책 본문에 manager_centers raw self-subquery가 없다", () => {
     expect(policies).not.toMatch(/from\s+manager_centers/i);
     expect(policies).not.toMatch(/select\s+1\s+from\s+centers/i);   // centers 참조도 헬퍼로

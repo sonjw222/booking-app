@@ -27,7 +27,7 @@ describe("센터 자동결제 route — TOSS_BILLING_SECRET_KEY만 쓴다", () =
     vi.stubEnv("TOSS_SECRET_KEY", "checkout-key-only");
     vi.stubEnv("TOSS_BILLING_SECRET_KEY", "");
     const { POST } = await import("../../app/api/billing/confirm/route");
-    const res = await POST(new Request("http://localhost/api/billing/confirm", { method: "POST", body: "{}" }));
+    const res = await POST(new Request("http://localhost/api/billing/confirm", { method: "POST", body: JSON.stringify({ authKey: "a", customerKey: "center-c1", centerId: "c1" }) }));
     expect(res.status).toBe(500);
     expect((await res.json()).error).toBe(BILLING_MSG);
   });

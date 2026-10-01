@@ -50,10 +50,7 @@ function tossAuthHeader(): string {
 }
 
 export async function POST(request: Request) {
-  if (!TOSS_BILLING_SECRET_KEY) return json({ error: "결제 서버 설정이 없어요(TOSS_BILLING_SECRET_KEY)" }, 500);
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return json({ error: "결제 서버 설정이 없어요(SUPABASE_SERVICE_ROLE_KEY)" }, 500);
-  }
+  const billingEnabled = process.env.NEXT_PUBLIC_BILLING_ENABLED === "true";
 
   let body: { authKey?: string; customerKey?: string; centerId?: string };
   try {
@@ -64,6 +61,29 @@ export async function POST(request: Request) {
   const { authKey, customerKey, centerId } = body;
   if (!authKey || !customerKey || !centerId) {
     return json({ error: "authKey/customerKey/centerId가 모두 필요해요" }, 400);
+  }
+
+  // 서버 게이트(2026-10-01): 전역 스위치가 꺼져 있으면 UI가 숨겨져 있어도 이 URL을 직접 호출해 카드 등록/
+  // 최초 결제가 진행되지 않게 Toss 시크릿 확인·Toss 호출보다 먼저 403으로 막는다. 예외는 운영자가 지정한
+  // 토스 심사용 센터(center_subscriptions.billing_review_override — UI의 fetchCenterBillingReviewOverride와
+  // 같은 기준, 일반 센터 오너가 스스로 켤 수 없음)뿐이다.
+  if (!billingEnabled) {
+    let reviewCenter = false;
+    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+      const gate = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { data } = await gate.from("center_subscriptions")
+        .select("billing_review_override").eq("center_id", centerId).maybeSingle();
+      reviewCenter = !!(data as { billing_review_override?: boolean } | null)?.billing_review_override;
+    }
+    if (!reviewCenter) return json({ error: "자동결제는 아직 사용할 수 없어요", code: "billing_disabled" }, 403);
+  }
+
+  // TOSS_BILLING_SECRET_KEY는 자동결제가 실제로 켜진 경우(전역 ON 또는 심사 센터)에만 필요하다.
+  if (!TOSS_BILLING_SECRET_KEY) return json({ error: "결제 서버 설정이 없어요(TOSS_BILLING_SECRET_KEY)" }, 500);
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return json({ error: "결제 서버 설정이 없어요(SUPABASE_SERVICE_ROLE_KEY)" }, 500);
   }
   // customerKey는 lib/centerSubscription.ts의 tossCustomerKeyForCenter()와 동일한 규칙으로만
   // 발급됐어야 한다 — centerId와 짝이 맞는지 방어적으로 재확인(형식 위조 방지).

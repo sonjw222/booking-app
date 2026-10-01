@@ -125,6 +125,13 @@ export async function POST(request: Request) {
   if (!BILLING_CRON_SECRET || request.headers.get("x-cron-secret") !== BILLING_CRON_SECRET) {
     return json({ error: "unauthorized" }, 401);
   }
+  // 센터 플랫폼 자동결제 전역 스위치(NEXT_PUBLIC_BILLING_ENABLED, 토스 심사 전에는 꺼 둔다). 꺼져 있으면
+  // pg_cron이 매일 이 라우트를 호출해도 Toss 시크릿 확인·DB 선점·청구·retry_count/payment_failed 변경을
+  // 전혀 하지 않고 정상 응답(200)으로 끝낸다 — TOSS_BILLING_SECRET_KEY가 없어도 cron이 500을 내지 않는다.
+  // (cron 인증은 위에서 이미 통과한 요청에만 이 응답을 준다.)
+  if (process.env.NEXT_PUBLIC_BILLING_ENABLED !== "true") {
+    return json({ ok: true, skipped: "billing_disabled" });
+  }
   if (!TOSS_BILLING_SECRET_KEY) return json({ error: "결제 서버 설정이 없어요(TOSS_BILLING_SECRET_KEY)" }, 500);
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return json({ error: "결제 서버 설정이 없어요(SUPABASE_SERVICE_ROLE_KEY)" }, 500);

@@ -17,6 +17,7 @@ export default defineConfig({
       // 시크릿 아님, 테스트에서만 쓰는 플레이스홀더.
       SUPABASE_SERVICE_ROLE_KEY: "unit-test-placeholder-service-role-key",
       TOSS_SECRET_KEY: "unit-test-placeholder-toss-secret",
+      NEXT_PUBLIC_BILLING_ENABLED: "true",   // 기본은 자동결제 ON 경로를 검증 — OFF 케이스는 각 테스트가 stubEnv로 덮어쓴다
       TOSS_BILLING_SECRET_KEY: "unit-test-placeholder-toss-billing-secret",
       BILLING_CRON_SECRET: "unit-test-placeholder-cron-secret",
     },

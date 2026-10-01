@@ -52,7 +52,7 @@
   ④ `fix_recurring_class_description_and_group_update.sql` ⑤ `fix_manager_centers_rls_recursion_final.sql` — 적용 후 `send-alimtalk` 재배포,
   Vercel에 `TOSS_BILLING_SECRET_KEY` 확인. 적용 전까지 앱은 구버전 RPC/폴백으로 동작(대여상품+수강권 동시 선택은 명확한 오류).
 - 후속: (1) 소개가 NULL인 기존 반복수업은 자동 복구하지 않음 — `fix_recurring_class_description_and_group_update.sql` 하단의 제안 SELECT로 후보 확인 후 별도 승인,
-  (2) 마지막 오너 "강등"(UPDATE로 role 변경)은 트리거가 없어 이번엔 DELETE만 막음, (3) 관리자 직접배치/`manager_book_member` 경로는 대여상품 미지원,
+  (2) (해결됨 2026-10-01) 마지막 활성 오너 UPDATE 강등은 `manager_centers_protect_last_owner` 트리거로 차단, (3) 관리자 직접배치/`manager_book_member` 경로는 대여상품 미지원,
   (4) `schedule_memos` RLS가 회원 조회를 막는지 라이브 정책 재확인(이번 감사 범위 밖), (5) 실기기 모바일 sheet drag/예약 카드 겹침 수동 QA(320~430px).
 
 ### P1-PaymentReview-1001. (신규, 2026-10-01) PG 활성화 시 개인정보처리방침/약관 문구 갱신 + 공개 상품 SQL 적용

@@ -46,6 +46,8 @@ create policy "오너 스태프 삭제"
         and manager_centers_has_any_row(center_id, id)
     );
 
+drop trigger if exists manager_centers_protect_last_owner on manager_centers;
+drop function if exists manager_centers_protect_last_owner();
 drop function if exists manager_centers_is_last_active_owner(uuid, uuid);
 
 COMMIT;

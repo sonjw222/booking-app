@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-10-01 — main merge 전 마지막 안전 보강 2건
+- **마지막 활성 owner UPDATE 강등 차단**: `fix_manager_centers_rls_recursion_final.sql`에 BEFORE UPDATE 트리거
+  `manager_centers_protect_last_owner` 추가(센터별 advisory lock, 다른 활성 owner가 있으면 강등 허용).
+- **자동결제 OFF 안전화**: `NEXT_PUBLIC_BILLING_ENABLED`가 "true"가 아니면 `/api/billing/charge-due`는 cron 인증 후
+  `200 {ok:true, skipped:"billing_disabled"}`로 종료(Toss 시크릿/DB/청구 없음), `/api/billing/confirm`은 Toss 호출·시크릿
+  확인 전에 403(운영자 지정 토스 심사 센터만 예외). `TOSS_BILLING_SECRET_KEY`는 자동결제가 실제로 켜질 때만 필요.
+
 ## 2026-10-01 — 실사용 QA 10건 + 예약 목록 룸 표시 + 공용 Bottom Sheet drag-dismiss
 
 신규 SQL 4쌍(전부 **production 미실행**, 실행 순서는 최종 보고 참고): `fix_order_issuance_and_auto_booking.sql`,
