@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2026-10-01 — `add_weekday_time_fixed_memberships.sql` 재작성(라이브 정의 기준)
+
+처음 버전은 저장소의 옛 migration 파일을 기준으로 함수 5개를 다시 써서 라이브 DB와 어긋났다
+(실행 시 `42P13` — `usable_memberships_for_classes`의 라이브 전용 `issued_at` 반환 컬럼 누락. 에러로
+전체가 롤백돼 DB는 변경되지 않았음을 확인). 그대로 적용됐다면 `_issue_membership_and_record_payment`의
+쿠폰 검증/사용 처리·구매 자격 재검증·`payments.order_id`, `usable_memberships*`의
+`pass_selection_mode`/`starts_at` 조건이 옛 버전으로 되돌아갈 뻔했다. 지금은 라이브 DB에서
+`pg_get_functiondef`로 읽은 실제 정의에 요일/시간 조건(INSERT 컬럼 포함)만 추가했고, 롤백 SQL도
+"적용 전 라이브 정의"로 복원한다. 정적 테스트에 라이브 로직 보존 검사 추가.
+
 ## 2026-10-01 — 센터 구독 자동결제 Toss 시크릿 키 분리 (`TOSS_BILLING_SECRET_KEY`)
 
 센터 플랫폼 구독(자동결제) route 두 개(`app/api/billing/confirm`, `app/api/billing/charge-due`)가
