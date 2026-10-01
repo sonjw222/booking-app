@@ -1,5 +1,40 @@
 # CHANGELOG
 
+## 2026-10-01 — 구매 시 요일/시간 선택형 수강권 + 수강권 UX 개선/복제 (Batch C)
+
+DB 스키마 변경 필요(SQL 준비만, production 미실행 — `add_weekday_time_fixed_memberships.sql`/
+`rollback_add_weekday_time_fixed_memberships.sql`). 기존 기능 사전 조사 결과, 두 가지
+비슷해 보이지만 다른 기존 기능을 확인하고 재사용했다:
+- `products.auto_book_days`(요일반 자동예약)는 상품 전체에 동일 적용되는 "자동 예약" 기능 —
+  이번 기능(구매자별 선택)과 무관, 건드리지 않음.
+- `membership_schedule_rules`(예약조건)는 상품 단위 요일/시간 제한 — 이번 기능은 이 테이블을
+  "구매 시 고를 수 있는 후보"로 그대로 재사용한다(새 스케줄 데이터 없음).
+
+- **상품 설정**: `products.weekday_selectable`/`time_selectable` 토글 추가(`app/manager/
+  membership-rules`). 선택 후보는 새로 입력받지 않고 기존 예약조건에서 계산(`lib/passes.ts`
+  `computeSelectableSchedule`).
+- **구매 화면**: `app/checkout`에 요일/시간 선택 UI 추가, 선택 전에는 결제를 막는다.
+- **관리자 수동 발급**: `app/manager/members`의 직접 지급 흐름에도 동일 선택 요구.
+- **저장**: 구매 시 고른 값을 `orders.selected_day_of_week`/`selected_start_time`에 먼저
+  저장하고, `fulfill_order()`/`_issue_membership_and_record_payment()`가 새 `memberships.
+  bound_day_of_week`/`bound_start_time`으로 그대로 복사한다. 수업이 삭제/변경돼도 이 값은
+  자동으로 바뀌지 않는다(회원과의 계약 조건이라는 원칙, FK 없음).
+- **예약 검증(서버, 우회 불가)**: `reserve_class()`/`reserve_with_membership()`이 공용으로
+  쓰는 `is_membership_eligible_for_class()`(P1-9) 한 곳에 새 AND 조건을 추가해 두 예약 RPC
+  모두에 자동 적용. 화면 표시용 `usable_memberships()`/`usable_memberships_for_classes()`도
+  동일 조건을 받아 "화면엔 보이는데 예약은 거부"되는 혼란을 방지.
+- **기존 호환**: 새 컬럼은 전부 기본값 false/null — 기존 상품/수강권은 100% 동일하게 동작.
+  마이그레이션 미실행 환경에서도(42703) 상품/체크아웃/발급 화면이 깨지지 않게 방어 처리
+  (`lib/passes.ts`/`lib/center.ts`/`lib/orders.ts`/`lib/sales.ts`).
+- **수강권 복제**: 수강권 목록에 "복제" 추가 — id/생성일/판매량/원본 FK는 복사하지 않고
+  나머지 editable 필드(이름/가격/횟수/만료 정책/공개범위/새 요일·시간 옵션)와 예약조건까지
+  전부 새 독립 상품으로 복사한다. "저장"을 눌러야 실제 생성됨(복제 버튼만으로는 생성 안 함).
+- **문구 개선**: "매달 자동" 만료 옵션의 "다음 달로 넘어가도 즉시 사용 허용" 토글을 "구매
+  즉시 사용 허용"으로 줄이고, 토글 바로 아래 조건까지 포함한 1줄 설명을 추가(실제 동작은
+  `rolling_month_allow_early_use` 그대로, 문구만 변경).
+- **자동갱신(auto_renew) 조사**: `memberships.auto_renew` 컬럼이 저장만 되고 실제 처리
+  로직이 없음을 확인(`docs/TODO.md` P1-WeekdayTime-1001 기록, 이번 배치 범위 밖).
+
 ## 2026-10-01 — 수업/수강권 sheet UX + 운영설정 기본값 표현 방식 (Batch B)
 
 - **운영설정 기본값 표시(B-1~B-4)**: 수업 등록의 예약/취소 마감을 비워두면 운영설정

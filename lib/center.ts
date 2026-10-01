@@ -8,6 +8,7 @@
 import { supabase } from "./supabaseClient";
 import { sanitizeRichText } from "./security";
 import { getMyAccountId } from "./authAccount";
+import { computeSelectableSchedule, type ScheduleRule, type SelectableSchedule } from "./passes";
 
 export type CenterDetail = {
   id: string;
@@ -175,7 +176,14 @@ export type CenterProduct = {
   groupLabel: string | null;
   remaining: number | null; // 판매 수량 제한이 없으면 null(무제한), 있으면 남은 개수(0=매진)
   couponEligible: boolean;  // false면 결제 화면에서 쿠폰 선택 UI 자체를 숨긴다. add_product_coupon_eligibility.sql
+  // 2026-10-01(Batch C) — 구매 시 요일/시간 선택형 수강권. lib/passes.ts의 Product와
+  // 같은 의미, 회원용(CenterProduct) 타입에도 그대로 추가.
+  weekdaySelectable: boolean;
+  timeSelectable: boolean;
 };
+
+const CENTER_PRODUCTS_SELECT_BASE = "id, name, price, product_kind, total_count, unlimited, description, sizes, auto_book_days, group_label, max_quantity, coupon_eligible";
+const CENTER_PRODUCTS_SELECT_WEEKDAY = `${CENTER_PRODUCTS_SELECT_BASE}, weekday_selectable, time_selectable`;
 
 export async function fetchCenterProducts(centerId: string): Promise<CenterProduct[]> {
   // MWHABIT Membership Visibility Batch(2026-09-18) — 원래는 이 센터의 is_active+
@@ -185,9 +193,22 @@ export async function fetchCenterProducts(centerId: string): Promise<CenterProdu
   // "UI에서만 숨기는 방식으로 끝내지 말 것" 원칙에 따라 이 목록 자체가 서버 계산
   // 결과이지, 클라이언트가 전체를 받아서 감추는 게 아니다. 정렬(product_kind asc,
   // price asc)도 RPC 안에서 그대로 유지한다.
-  const { data, error } = await supabase
+  // fetch_purchasable_products()는 "select p.* from products p ..."라 add_weekday_
+  // time_fixed_memberships.sql이 만드는 두 새 컬럼도 RPC 자체는 자동으로 포함한다 —
+  // 이 select() 프로젝션 문자열만 바뀌면 된다. 컬럼이 아직 없는 환경(42703)에서도
+  // 구매 화면 전체가 깨지지 않도록 방어(lib/rooms.ts, lib/passes.ts와 동일 패턴).
+  const first = await supabase
     .rpc("fetch_purchasable_products", { p_center_id: centerId })
-    .select("id, name, price, product_kind, total_count, unlimited, description, sizes, auto_book_days, group_label, max_quantity, coupon_eligible");
+    .select(CENTER_PRODUCTS_SELECT_WEEKDAY);
+  let data: any[] | null = first.data as any;
+  let error = first.error;
+  if (error?.code === "42703") {
+    const fallback = await supabase
+      .rpc("fetch_purchasable_products", { p_center_id: centerId })
+      .select(CENTER_PRODUCTS_SELECT_BASE);
+    data = fallback.data as any;
+    error = fallback.error;
+  }
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
   // Postgres 함수가 setof products를 반환하는 RPC라 supabase-js의 기본 타입 추론이
   // "단일 행 | 배열" 유니온으로 잡는다(.single() 없이도) — 실제로는 여러 행이 올 수
@@ -216,7 +237,26 @@ export async function fetchCenterProducts(centerId: string): Promise<CenterProdu
     groupLabel: p.group_label ?? null,
     remaining: p.max_quantity != null ? Math.max(0, p.max_quantity - (soldByProduct[p.id] ?? 0)) : null,
     couponEligible: p.coupon_eligible ?? true,
+    weekdaySelectable: p.weekday_selectable ?? false,
+    timeSelectable: p.time_selectable ?? false,
   }));
+}
+
+// 2026-10-01(Batch C, C-5) — weekdaySelectable 상품의 구매 시 요일/시간 선택 후보.
+// lib/passes.ts의 매니저용 fetchRules/computeSelectableSchedule과 같은 테이블
+// (membership_schedule_rules)을 재사용한다 — 새 스케줄 데이터를 만들지 않음. RLS
+// "예약조건 조회"가 로그인한 사용자 전체에게 select를 허용해서(관리자 권한 불필요)
+// 회원 화면에서도 매니저 전용 함수를 거치지 않고 바로 조회할 수 있다.
+export async function fetchPurchaseScheduleOptions(productId: string): Promise<SelectableSchedule> {
+  const { data, error } = await supabase
+    .from("membership_schedule_rules")
+    .select("day_of_week, start_time")
+    .eq("product_id", productId);
+  if (error) throw new Error("선택 가능한 요일/시간을 불러오지 못했어요: " + error.message);
+  const rules: ScheduleRule[] = (data ?? []).map((r: any) => ({
+    id: "", dayOfWeek: r.day_of_week, startTime: r.start_time ? String(r.start_time).slice(0, 5) : null, classTitle: null,
+  }));
+  return computeSelectableSchedule(rules);
 }
 
 // 회원이 특정 센터에 유효한 수강권을 갖고 있는지 (예약 가능 여부 판단)

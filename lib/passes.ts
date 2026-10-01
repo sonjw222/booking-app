@@ -45,6 +45,13 @@ export type Product = {
   soldCount: number;                // 지금까지 발급된(환불 제외) 개수 — maxQuantity와 비교해 "N개 남음" 표시
   visibility: ProductVisibility;
   couponEligible: boolean;          // false면 이 상품엔 어떤 쿠폰도 적용 불가(쿠폰 쪽 applies_to보다 우선). add_product_coupon_eligibility.sql
+  // 2026-10-01(Batch C) — 구매 시 요일/시간 선택형 수강권. auto_book_days(자동예약, 상품
+  // 전체에 동일 적용)와는 다른 기능 — 이건 "구매자마다 다른 요일/시간을 고를 수 있게"
+  // 하는 것. 실제 고를 수 있는 후보는 새 컬럼이 아니라 기존 membership_schedule_rules
+  // (예약조건, day_of_week가 지정된 것들)를 그대로 재사용한다(add_weekday_time_fixed_
+  // memberships.sql 참고, 중복 데이터 없음).
+  weekdaySelectable: boolean;
+  timeSelectable: boolean;          // weekdaySelectable이 꺼져 있으면 의미 없음
 };
 
 export type ScheduleRule = {
@@ -54,15 +61,35 @@ export type ScheduleRule = {
   classTitle: string | null;  // null = 모든 수업
 };
 
+const PRODUCTS_SELECT_BASE = "id, name, price, pass_type, total_count, is_on_sale, product_kind, unlimited, unlimited_pass, expiry_mode, expiry_days, expiry_date, rolling_month_cutoff_day, rolling_month_allow_early_use, description, sizes, auto_book_days, group_label, max_quantity, visibility_type, coupon_eligible";
+const PRODUCTS_SELECT_WEEKDAY = `${PRODUCTS_SELECT_BASE}, weekday_selectable, time_selectable`;
+
 // 센터 상품 목록
+// 2026-10-01(Batch C) — weekday_selectable/time_selectable은 add_weekday_time_fixed_
+// memberships.sql이 아직 실행되지 않은 환경(42703, 컬럼 없음)에서도 이 목록 조회 자체가
+// 깨지지 않도록 방어적으로 재시도한다(lib/rooms.ts의 detail_address와 동일 패턴) — 이
+// 함수는 수업/체크아웃/상품관리/매출 등 거의 전 화면이 쓰는 핵심 경로라 특히 중요하다.
 export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "pass"): Promise<Product[]> {
-  const { data, error } = await supabase
+  const first = await supabase
     .from("products")
-    .select("id, name, price, pass_type, total_count, is_on_sale, product_kind, unlimited, unlimited_pass, expiry_mode, expiry_days, expiry_date, rolling_month_cutoff_day, rolling_month_allow_early_use, description, sizes, auto_book_days, group_label, max_quantity, visibility_type, coupon_eligible")
+    .select(PRODUCTS_SELECT_WEEKDAY)
     .eq("center_id", centerId)
     .eq("is_active", true)
     .eq("product_kind", kind)
     .order("created_at", { ascending: false });
+  let data: any[] | null = first.data;
+  let error = first.error;
+  if (error?.code === "42703") {
+    const fallback = await supabase
+      .from("products")
+      .select(PRODUCTS_SELECT_BASE)
+      .eq("center_id", centerId)
+      .eq("is_active", true)
+      .eq("product_kind", kind)
+      .order("created_at", { ascending: false });
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
   const rows = data ?? [];
   const ids = rows.map((p: any) => p.id);
@@ -113,6 +140,8 @@ export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "
       memberIds: membersByProduct[p.id] ?? [],
     },
     couponEligible: p.coupon_eligible ?? true,
+    weekdaySelectable: p.weekday_selectable ?? false,
+    timeSelectable: p.time_selectable ?? false,
   }));
 }
 
@@ -150,9 +179,9 @@ async function saveProductVisibility(productId: string, visibility?: ProductVisi
 export async function createProduct(
   centerId: string, name: string, price: number, totalCount: number,
   kind: "pass" | "goods" = "pass", unlimited = false,
-  extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string; maxQuantity?: number | null; visibility?: ProductVisibility; couponEligible?: boolean }
+  extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string; maxQuantity?: number | null; visibility?: ProductVisibility; couponEligible?: boolean; weekdaySelectable?: boolean; timeSelectable?: boolean }
 ): Promise<void> {
-  const { data, error } = await supabase.from("products").insert({
+  const row: Record<string, unknown> = {
     center_id: centerId, name, price,
     product_kind: kind,
     unlimited,
@@ -171,7 +200,16 @@ export async function createProduct(
     max_quantity: extra?.maxQuantity ?? null,
     visibility_type: extra?.visibility?.type ?? "all",
     coupon_eligible: extra?.couponEligible ?? true,
-  }).select("id").single();
+    weekday_selectable: extra?.weekdaySelectable ?? false,
+    time_selectable: extra?.timeSelectable ?? false,
+  };
+  let { data, error } = await supabase.from("products").insert(row).select("id").single();
+  if (error?.code === "42703") {
+    // 2026-10-01(Batch C) — add_weekday_time_fixed_memberships.sql 미실행 환경 방어
+    // (lib/rooms.ts와 동일 패턴) — 이 두 옵션 없이 재시도해 상품 생성 자체는 막히지 않게.
+    const { weekday_selectable, time_selectable, ...withoutWeekday } = row;
+    ({ data, error } = await supabase.from("products").insert(withoutWeekday).select("id").single());
+  }
   if (error || !data) throw new Error("상품 생성에 실패했어요: " + (error?.message ?? "no data"));
   await saveProductVisibility((data as any).id, extra?.visibility);
 }
@@ -179,9 +217,9 @@ export async function createProduct(
 // 상품 수정 (이름·가격·횟수·설명·사이즈)
 export async function updateProduct(
   id: string, name: string, price: number, totalCount: number,
-  unlimited: boolean, extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string; maxQuantity?: number | null; visibility?: ProductVisibility; couponEligible?: boolean }
+  unlimited: boolean, extra?: { description?: string; sizes?: string[]; autoBookDays?: number[]; unlimitedPass?: boolean; expiry?: ExpiryOption; groupLabel?: string; maxQuantity?: number | null; visibility?: ProductVisibility; couponEligible?: boolean; weekdaySelectable?: boolean; timeSelectable?: boolean }
 ): Promise<void> {
-  const { error } = await supabase.from("products").update({
+  const row: Record<string, unknown> = {
     name, price,
     unlimited,
     unlimited_pass: extra?.unlimitedPass ?? false,
@@ -200,7 +238,14 @@ export async function updateProduct(
     // extra.couponEligible을 안 넘긴 호출(예: 아직 이 옵션 UI가 없는 화면)은 기존 값을
     // 건드리지 않는다 — visibility와 동일한 패턴, 매번 true로 되돌리면 안 됨.
     ...(extra?.couponEligible !== undefined ? { coupon_eligible: extra.couponEligible } : {}),
-  }).eq("id", id);
+    weekday_selectable: extra?.weekdaySelectable ?? false,
+    time_selectable: extra?.timeSelectable ?? false,
+  };
+  let { error } = await supabase.from("products").update(row).eq("id", id);
+  if (error?.code === "42703") {
+    const { weekday_selectable, time_selectable, ...withoutWeekday } = row;
+    ({ error } = await supabase.from("products").update(withoutWeekday).eq("id", id));
+  }
   if (error) throw new Error("상품 수정에 실패했어요: " + error.message);
   await saveProductVisibility(id, extra?.visibility);
 }
@@ -282,6 +327,26 @@ export function ruleToText(r: ScheduleRule): string {
   parts.push(r.startTime === null ? "모든 시간" : r.startTime);
   parts.push(r.classTitle === null ? "모든 수업" : r.classTitle);
   return parts.join(" · ");
+}
+
+// 2026-10-01(Batch C) — "구매 시 요일/시간 선택" 후보를 기존 membership_schedule_rules
+// (예약조건)에서 계산한다. 새 스케줄 데이터를 따로 만들지 않고, 매니저가 이미 "예약조건
+// 추가"에서 등록해둔 요일 지정 규칙(day_of_week가 있는 것만 — "모든 요일"은 선택지가
+// 아니므로 제외)을 그대로 재사용한다(C-4/C-5). 예: 월16:00/월20:00/수16:00 규칙이 있으면
+// → { days: [1, 3], timesByDay: { 1: ["16:00", "20:00"], 3: ["16:00"] } }.
+export type SelectableSchedule = { days: number[]; timesByDay: Record<number, string[]> };
+
+export function computeSelectableSchedule(rules: ScheduleRule[]): SelectableSchedule {
+  const timesByDay: Record<number, Set<string>> = {};
+  for (const r of rules) {
+    if (r.dayOfWeek === null) continue; // "모든 요일" 규칙은 구매 시 고를 대상이 아님
+    const set = (timesByDay[r.dayOfWeek] ??= new Set());
+    if (r.startTime !== null) set.add(r.startTime);
+  }
+  const days = Object.keys(timesByDay).map(Number).sort((a, b) => a - b);
+  const out: Record<number, string[]> = {};
+  for (const d of days) out[d] = [...timesByDay[d]].sort();
+  return { days, timesByDay: out };
 }
 
 // 여러 상품의 예약조건을 한 번에 조회 (N+1 방지) — 수업 등록/수정 화면에서

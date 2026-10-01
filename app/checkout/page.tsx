@@ -9,7 +9,8 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { fetchCenterDetail, fetchCenterProducts, type CenterProduct } from "../../lib/center";
+import { fetchCenterDetail, fetchCenterProducts, fetchPurchaseScheduleOptions, type CenterProduct } from "../../lib/center";
+import { DAYS, type SelectableSchedule } from "../../lib/passes";
 import { createOrder } from "../../lib/orders";
 import { fetchProfiles, type ProfileRow } from "../../lib/profiles";
 import { fetchMyPoints, usePoints } from "../../lib/reviews";
@@ -111,6 +112,12 @@ function CheckoutContent() {
   const [applicableCoupons, setApplicableCoupons] = useState<MemberCoupon[]>([]);
   const [selectedMemberCouponId, setSelectedMemberCouponId] = useState<string | null>(null);
   const [autoBook, setAutoBook] = useState(true);
+  // 2026-10-01(Batch C, C-9) — 구매 시 요일/시간 선택형 수강권. product.weekdaySelectable일
+  // 때만 의미 있고, 선택 후보(scheduleOptions)는 이 상품의 기존 예약조건에서 계산된다
+  // (lib/center.ts fetchPurchaseScheduleOptions, 새 스케줄 데이터 없음).
+  const [scheduleOptions, setScheduleOptions] = useState<SelectableSchedule | null>(null);
+  const [selectedScheduleDay, setSelectedScheduleDay] = useState<number | null>(null);
+  const [selectedScheduleTime, setSelectedScheduleTime] = useState<string | null>(null);
   const [myPoints, setMyPoints] = useState(0);
   const [usePoint, setUsePoint] = useState("");
   const [loading, setLoading] = useState(true);
@@ -151,7 +158,12 @@ function CheckoutContent() {
         if (profs.length > 0) setSelectedProfileId(profs[0].id);
       } catch { /* 비로그인 — 무시, 결제 시점에 로그인 유도 */ }
       const products = await fetchCenterProducts(centerId);
-      setProduct(products.find((p) => p.id === productId) ?? null);
+      const found = products.find((p) => p.id === productId) ?? null;
+      setProduct(found);
+      if (found?.weekdaySelectable) {
+        try { setScheduleOptions(await fetchPurchaseScheduleOptions(found.id)); }
+        catch { setScheduleOptions({ days: [], timesByDay: {} }); }
+      }
     } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId, productId]);
@@ -218,6 +230,16 @@ function CheckoutContent() {
       setError("사이즈를 선택해주세요");
       return;
     }
+    // 2026-10-01(Batch C, C-9) — 요일/시간 선택형 수강권은 고르기 전엔 결제를 막는다
+    // (선택 없이 구매되면 이후 예약 제한을 걸 기준 자체가 없어지므로).
+    if (product.weekdaySelectable && selectedScheduleDay === null) {
+      setError("이용할 요일을 선택해 주세요.");
+      return;
+    }
+    if (product.weekdaySelectable && product.timeSelectable && !selectedScheduleTime) {
+      setError("이용할 시간을 선택해 주세요.");
+      return;
+    }
     // "direct"(직접결제, 센터에서 결제)는 PG 자체를 거치지 않는다 — 실제 PG 연동 전
     // 이 앱의 원래 흐름과 동일하게 주문만 pending으로 만들고, 매니저가 결제를 확인한 뒤
     // 기존 "미발급 주문" 화면(fulfill_order)에서 수동으로 발급한다.
@@ -241,6 +263,8 @@ function CheckoutContent() {
           autoBook: !!(product.autoBookDays && product.autoBookDays.length > 0) && autoBook,
           pointsUsed: pointToUse,
           profileId: selectedProfileId || undefined,
+          selectedDayOfWeek: product.weekdaySelectable ? selectedScheduleDay : undefined,
+          selectedStartTime: product.weekdaySelectable && product.timeSelectable ? selectedScheduleTime : undefined,
           // 실제 결제가 없으므로 PG provider를 붙이지 않는다(mock/toss 어느 쪽 확정
           // 로직도 이 주문을 건드리지 않아야 함 — 매니저 수동 발급 전용 경로).
         });
@@ -271,6 +295,8 @@ function CheckoutContent() {
         autoBook: !!(product.autoBookDays && product.autoBookDays.length > 0) && autoBook,
         pointsUsed: pointToUse,
         profileId: selectedProfileId || undefined,
+        selectedDayOfWeek: product.weekdaySelectable ? selectedScheduleDay : undefined,
+        selectedStartTime: product.weekdaySelectable && product.timeSelectable ? selectedScheduleTime : undefined,
         provider: providerName, // Payment Adapter Pattern: env(NEXT_PUBLIC_PAYMENT_PROVIDER)로 전환
       });
       // [SEC-118] 주문을 먼저 만들고 그 id로 포인트를 사용한다 — 서버가 나중에 확정 시점에
@@ -471,6 +497,58 @@ function CheckoutContent() {
               </button>
             ))}
           </div>
+        </>
+      )}
+
+      {/* 2026-10-01(Batch C, C-9) — 구매 시 요일/시간 선택. 선택 전엔 handlePay()가
+          결제를 막는다. 후보(scheduleOptions)는 이 상품의 기존 예약조건에서 계산돼서
+          매니저가 등록한 실제 요일/시간만 보여준다(새 데이터 없음). */}
+      {product.weekdaySelectable && (
+        <>
+          <div className="menu-section-label">수강 요일</div>
+          {scheduleOptions === null ? (
+            <div className="perm-guide" style={{ margin: "0 20px" }}>요일 정보를 불러오는 중이에요…</div>
+          ) : scheduleOptions.days.length === 0 ? (
+            <div className="perm-guide" style={{ margin: "0 20px" }}>
+              아직 선택 가능한 요일이 설정되지 않았어요. 센터에 문의해주세요.
+            </div>
+          ) : (
+            <>
+              <div className="mem-filters">
+                {scheduleOptions.days.map((d) => (
+                  <button
+                    key={d} aria-pressed={selectedScheduleDay === d}
+                    className={`filter-chip ${selectedScheduleDay === d ? "on" : ""}`}
+                    onClick={() => { setSelectedScheduleDay(d); setSelectedScheduleTime(null); }}
+                  >
+                    {DAYS[d]}요일
+                  </button>
+                ))}
+              </div>
+              {product.timeSelectable && selectedScheduleDay !== null && (
+                <>
+                  <div className="menu-section-label">수업 시간</div>
+                  {(scheduleOptions.timesByDay[selectedScheduleDay] ?? []).length === 0 ? (
+                    <div className="perm-guide" style={{ margin: "0 20px" }}>
+                      이 요일엔 선택 가능한 시간이 설정되지 않았어요. 센터에 문의해주세요.
+                    </div>
+                  ) : (
+                    <div className="mem-filters">
+                      {(scheduleOptions.timesByDay[selectedScheduleDay] ?? []).map((t) => (
+                        <button
+                          key={t} aria-pressed={selectedScheduleTime === t}
+                          className={`filter-chip ${selectedScheduleTime === t ? "on" : ""}`}
+                          onClick={() => setSelectedScheduleTime(t)}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
         </>
       )}
 

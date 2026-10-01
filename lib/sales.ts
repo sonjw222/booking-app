@@ -181,6 +181,12 @@ export type GrantInput = {
   memo?: string;
   trainerAccountId?: string | null;
   paidAt: string;
+  // 2026-10-01(Batch C, C-10) — weekdaySelectable 상품을 관리자가 직접 발급할 때도
+  // 요일/시간 귀속 없이 만들어지면 안 된다(구매 플로우와 동일한 누락 방지). 호출부
+  // (app/manager/members)가 상품의 weekdaySelectable/timeSelectable을 보고 UI에서
+  // 선택을 받아 여기로 넘긴다.
+  boundDayOfWeek?: number | null;
+  boundStartTime?: string | null;
 };
 
 export async function grantProductToMember(input: GrantInput): Promise<void> {
@@ -202,22 +208,26 @@ export async function grantProductToMember(input: GrantInput): Promise<void> {
     expiresAt = d.toISOString().slice(0, 10);
   } // expiry_mode === "none" → null(무제한)
 
-  const { data: mem, error: memErr } = await supabase
-    .from("memberships")
-    .insert({
-      profile_id: input.profileId,
-      center_id: input.centerId,
-      product_id: input.productId,
-      product_name: input.productName,
-      pass_type: "count",
-      total_count: totalCount,
-      remaining_count: totalCount,
-      expires_at: expiresAt,
-      status: "active",
-    })
-    .select("id")
-    .single();
-  if (memErr) throw new Error("수강권 발급에 실패했어요: " + memErr.message);
+  const membershipRow: Record<string, unknown> = {
+    profile_id: input.profileId,
+    center_id: input.centerId,
+    product_id: input.productId,
+    product_name: input.productName,
+    pass_type: "count",
+    total_count: totalCount,
+    remaining_count: totalCount,
+    expires_at: expiresAt,
+    status: "active",
+    bound_day_of_week: input.boundDayOfWeek ?? null,
+    bound_start_time: input.boundStartTime ?? null,
+  };
+  let { data: mem, error: memErr } = await supabase.from("memberships").insert(membershipRow).select("id").single();
+  if (memErr?.code === "42703") {
+    // 2026-10-01(Batch C) — add_weekday_time_fixed_memberships.sql 미실행 환경 방어.
+    const { bound_day_of_week, bound_start_time, ...withoutWeekday } = membershipRow;
+    ({ data: mem, error: memErr } = await supabase.from("memberships").insert(withoutWeekday).select("id").single());
+  }
+  if (memErr || !mem) throw new Error("수강권 발급에 실패했어요: " + (memErr?.message ?? "no data"));
 
   const { error: payErr } = await supabase.from("payments").insert({
     center_id: input.centerId,
@@ -534,19 +544,40 @@ export function computeAutoUnpaid(productPrice: number, paidAmount: number): num
 }
 
 // 결제 등록 시 선택할 수강권 상품 목록
-export async function fetchSaleProducts(centerId: string): Promise<{ id: string; name: string; price: number; totalCount: number | null; kind: "pass" | "goods"; unlimited: boolean }[]> {
-  const { data, error } = await supabase
+export type SaleProduct = {
+  id: string; name: string; price: number; totalCount: number | null; kind: "pass" | "goods"; unlimited: boolean;
+  weekdaySelectable: boolean; timeSelectable: boolean; // Batch C, C-10 — 관리자 수동 발급에서도 선택을 받아야 함
+};
+
+export async function fetchSaleProducts(centerId: string): Promise<SaleProduct[]> {
+  const base = "id, name, price, total_count, product_kind, unlimited";
+  const first = await supabase
     .from("products")
-    .select("id, name, price, total_count, product_kind, unlimited")
+    .select(`${base}, weekday_selectable, time_selectable`)
     .eq("center_id", centerId)
     .eq("is_active", true)
     .eq("is_on_sale", true)
     .order("created_at", { ascending: false });
+  let data: any[] | null = first.data;
+  let error = first.error;
+  if (error?.code === "42703") {
+    const fallback = await supabase
+      .from("products")
+      .select(base)
+      .eq("center_id", centerId)
+      .eq("is_active", true)
+      .eq("is_on_sale", true)
+      .order("created_at", { ascending: false });
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
   return (data ?? []).map((p: any) => ({
     id: p.id, name: p.name, price: p.price, totalCount: p.total_count,
     kind: p.product_kind === "goods" ? "goods" : "pass",
     unlimited: p.unlimited ?? false,
+    weekdaySelectable: p.weekday_selectable ?? false,
+    timeSelectable: p.time_selectable ?? false,
   }));
 }
 

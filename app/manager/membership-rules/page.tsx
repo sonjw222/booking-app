@@ -17,7 +17,7 @@ import UiIcon from "../../components/UiIcon";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
   fetchProducts, createProduct, updateProduct, deleteProduct, toggleProductSale,
-  fetchRules, addRule, deleteRule, ruleToText, won, DAYS,
+  fetchRules, addRule, deleteRule, ruleToText, won, DAYS, computeSelectableSchedule,
   type Product, type ScheduleRule, type ProductVisibility,
 } from "../../../lib/passes";
 import { fetchExistingClassOptions, type ExistingClassOption } from "../../../lib/classes";
@@ -49,6 +49,16 @@ export default function MembershipRulesPage() {
   const [pExpiry, setPExpiry] = useState<ExpiryOptionValue>({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
   const [pLimitSale, setPLimitSale] = useState(false);
   const [pMaxQty, setPMaxQty] = useState("");
+  // 2026-10-01(Batch C, C-3) — 구매 시 요일/시간 선택형 수강권. 실제 선택 후보는 이
+  // 상품의 기존 예약조건(membership_schedule_rules, day_of_week가 있는 것)에서 계산되므로
+  // (C-4/C-5, lib/passes.ts computeSelectableSchedule) 별도 후보 입력 UI를 새로 안 만든다.
+  const [pWeekdaySelectable, setPWeekdaySelectable] = useState(false);
+  const [pTimeSelectable, setPTimeSelectable] = useState(false);
+  // C-15~C-17 — 수강권 복제. "복제" 버튼을 누르면 새 상품 시트를 열되 기존 값을 채워
+  // 넣고, duplicateFromId에 원본을 기억해둔다 — 저장(handleCreateProduct)이 끝난 뒤에만
+  // 원본의 예약조건(membership_schedule_rules)도 같이 복사한다(id/생성일/판매량/원본과의
+  // FK 연결은 복사하지 않음 — 완전히 새로운 독립 상품).
+  const [duplicateFromId, setDuplicateFromId] = useState<string | null>(null);
   // 쿠폰 적용 가능 여부(add_product_coupon_eligibility.sql) — 기본값 true(기존과 동일하게
   // 쿠폰 적용 가능), 매니저가 끄면 이 상품엔 어떤 쿠폰도 적용 불가.
   const [pCouponEligible, setPCouponEligible] = useState(true);
@@ -140,6 +150,8 @@ export default function MembershipRulesPage() {
     setPUnlimited(false); setPExpiry({ mode: "none", days: "", date: "", cutoffDay: "", allowEarlyUse: false });
     setPLimitSale(false); setPMaxQty("");
     setPCouponEligible(true);
+    setPWeekdaySelectable(false); setPTimeSelectable(false);
+    setDuplicateFromId(null);
     setPVisType("all"); setPVisGradeIds([]); setPVisMemberIds([]); setPVisMemberLabels({});
     setVisMemberSearch(""); setVisMemberResults([]);
   }
@@ -147,6 +159,16 @@ export default function MembershipRulesPage() {
   function openCreateSheet() {
     resetProdSheet();
     setProdSheet(true);
+  }
+
+  // C-15~C-17 — "복제": 기존 상품의 모든 editable 필드를 새 상품 시트에 프리필하되,
+  // id/생성일/판매량/원본 FK는 옮기지 않는다(완전히 새 독립 상품). 이 시점엔 DB에 아무
+  // 것도 만들지 않는다 — "추가하기"를 눌러야(handleCreateProduct) 실제로 생성된다.
+  async function openDuplicateSheet(p: Product) {
+    await openEditSheet(p); // 기존 "수정" 프리필 로직을 그대로 재사용(필드 목록 중복 방지)
+    setEditingId(null);     // 수정이 아니라 "새로 만들기"로 전환 — 저장 시 createProduct 경로를 탐
+    setPName(`${p.name} 복제`);
+    setDuplicateFromId(p.id);
   }
 
   async function openEditSheet(p: Product) {
@@ -169,6 +191,8 @@ export default function MembershipRulesPage() {
     setPLimitSale(p.maxQuantity != null);
     setPMaxQty(p.maxQuantity != null ? String(p.maxQuantity) : "");
     setPCouponEligible(p.couponEligible);
+    setPWeekdaySelectable(p.weekdaySelectable);
+    setPTimeSelectable(p.timeSelectable);
     // MWHABIT Membership Visibility Batch — 공개범위 프리필. "지정 회원" 칩에 이름/전화를
     // 보여주려면 center_member_id뿐 아니라 표시용 라벨도 필요해서, 이 센터의 회원
     // 목록(기존 fetchMembers 재사용)에서 매칭해 채운다.
@@ -246,6 +270,8 @@ export default function MembershipRulesPage() {
         maxQuantity: pLimitSale ? num(pMaxQty) : null,
         visibility: { type: pVisType, gradeIds: pVisGradeIds, memberIds: pVisMemberIds } as ProductVisibility,
         couponEligible: pCouponEligible,
+        weekdaySelectable: pWeekdaySelectable,
+        timeSelectable: pWeekdaySelectable && pTimeSelectable,
       };
       if (editingId) {
         await updateProduct(editingId, pName.trim(), num(pPrice), num(pCount), false, extra);
@@ -257,17 +283,28 @@ export default function MembershipRulesPage() {
       await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "pass", false, extra);
       // 선택한 수업이 있으면 예약조건으로 자동 등록 — 실패한 조건이 있으면 조용히 넘어가지 않고 안내한다.
       let failedRuleCount = 0;
-      if (pAutoClasses.length > 0) {
-        const fresh = await fetchProducts(centerId, "pass");
-        const made = fresh.find((x) => x.name === pName.trim());
-        if (made) {
-          for (const key of pAutoClasses) {
-            const [dw, st2, ti] = key.split("|");
-            try {
-              await addRule(made.id, Number(dw), st2 || null, ti || null);
-            } catch {
-              failedRuleCount += 1;
-            }
+      const fresh = (pAutoClasses.length > 0 || duplicateFromId) ? await fetchProducts(centerId, "pass") : null;
+      const made = fresh?.find((x) => x.name === pName.trim());
+      if (pAutoClasses.length > 0 && made) {
+        for (const key of pAutoClasses) {
+          const [dw, st2, ti] = key.split("|");
+          try {
+            await addRule(made.id, Number(dw), st2 || null, ti || null);
+          } catch {
+            failedRuleCount += 1;
+          }
+        }
+      }
+      // C-16 — 복제라면 원본의 예약조건(membership_schedule_rules)도 그대로 복사한다.
+      // product_id만 새 상품으로 바뀔 뿐 나머지(day_of_week/start_time/class_title)는
+      // 완전히 동일 — id/생성일은 당연히 새로 발급됨(addRule이 insert).
+      if (duplicateFromId && made) {
+        const originalRules = rulesByProduct[duplicateFromId] ?? [];
+        for (const r of originalRules) {
+          try {
+            await addRule(made.id, r.dayOfWeek, r.startTime, r.classTitle);
+          } catch {
+            failedRuleCount += 1;
           }
         }
       }
@@ -275,7 +312,7 @@ export default function MembershipRulesPage() {
       if (failedRuleCount > 0) {
         setError(`상품은 추가됐지만 예약조건 ${failedRuleCount}건은 등록에 실패했어요. 조건 추가에서 다시 시도해주세요.`);
       } else {
-        showToast("상품을 추가했어요");
+        showToast(duplicateFromId ? "상품을 복제했어요" : "상품을 추가했어요");
       }
       await load();
     } catch (e: any) { setError(e.message); }
@@ -449,6 +486,9 @@ export default function MembershipRulesPage() {
                       {canEditRules && (
                         <>
                           <button className="quiet-action" disabled={busy} onClick={() => openEditSheet(p)}>수정</button>
+                          {canCreateProduct && (
+                            <button className="quiet-action" disabled={busy} onClick={() => openDuplicateSheet(p)}>복제</button>
+                          )}
                           <button className="quiet-action danger" disabled={busy} onClick={() => handleDeleteProduct(p)}>삭제</button>
                         </>
                       )}
@@ -498,7 +538,10 @@ export default function MembershipRulesPage() {
       {prodSheet && (
         <SheetOverlay className="sheet-overlay" onClick={resetProdSheet}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-title">{editingId ? "수강권 수정" : "수강권 추가"}</div>
+            <div className="sheet-title">{duplicateFromId ? "수강권 복제" : editingId ? "수강권 수정" : "수강권 추가"}</div>
+            {duplicateFromId && (
+              <div className="perm-guide" style={{ margin: "0 0 8px" }}>기존 수강권 설정을 복사했어요. 원하는 부분만 바꾼 뒤 추가해주세요.</div>
+            )}
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>상품 이름</div>
             <input aria-label="상품 이름" className="input-field" placeholder="예: 안무반 수강권" value={pName} onChange={(e) => setPName(e.target.value)} />
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>
@@ -691,6 +734,44 @@ export default function MembershipRulesPage() {
                     </div>
                   )}
                 </>
+              );
+            })()}
+
+            {/* 2026-10-01(Batch C, C-1~C-3) — 구매 시 요일/시간 선택형 수강권. 위
+                "요일반 수강권"(auto_book_days, 자동예약 트리거)과는 완전히 다른 기능이라
+                이름/문구를 분명히 구분했다 — 이건 "회원이 구매할 때 고르고, 그 요일/시간
+                수업만 예약할 수 있게 제한"하는 기능(자동으로 대신 예약해주지 않음). 실제
+                선택 후보는 이 상품에 등록된 예약조건(요일이 지정된 것)에서 계산돼서 여기서
+                새로 입력받지 않는다 — 조건이 아직 없으면 저장 후 아래 "예약조건 추가"로
+                등록하라고 안내한다. */}
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>구매 시 요일/시간 선택</div>
+            <div className="set-row" style={{ padding: "6px 0", borderBottom: "none" }}>
+              <div className="set-label">구매할 때 수강 요일 선택<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>회원이 구매할 때 이 수강권으로 이용할 요일을 선택해요.</span></div>
+              <button className={`switch ${pWeekdaySelectable ? "on" : ""}`} onClick={() => setPWeekdaySelectable(!pWeekdaySelectable)}>
+                <span className="knob" />
+              </button>
+            </div>
+            {pWeekdaySelectable && (
+              <div className="set-row" style={{ padding: "6px 0", borderBottom: "none" }}>
+                <div className="set-label">시간도 함께 선택<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>요일을 고른 뒤 이용할 수업 시간까지 선택해요.</span></div>
+                <button className={`switch ${pTimeSelectable ? "on" : ""}`} onClick={() => setPTimeSelectable(!pTimeSelectable)}>
+                  <span className="knob" />
+                </button>
+              </div>
+            )}
+            {pWeekdaySelectable && (() => {
+              const candidateRules = editingId ? (rulesByProduct[editingId] ?? []) : [];
+              const schedule = computeSelectableSchedule(candidateRules);
+              return schedule.days.length === 0 ? (
+                <div className="perm-guide" style={{ margin: "4px 0 0" }}>
+                  아직 요일이 지정된 예약조건이 없어요 — {editingId ? "아래" : "저장한 뒤"} "예약조건 추가"에서
+                  회원이 고를 수 있는 요일(과 시간)을 먼저 등록해주세요(예: 월 16:00, 월 20:00, 수 16:00).
+                </div>
+              ) : (
+                <div className="perm-guide" style={{ margin: "4px 0 0" }}>
+                  회원이 고를 수 있는 요일: {schedule.days.map((d) => DAYS[d]).join(", ")}
+                  {pTimeSelectable && ` (시간: ${[...new Set(Object.values(schedule.timesByDay).flat())].join(", ") || "미지정"})`}
+                </div>
               );
             })()}
 

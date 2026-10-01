@@ -47,6 +47,17 @@
 5. 사용자 결정이 필요한 기능은 결정 기록 없이 완료 처리하지 않습니다.
 6. 완료된 항목은 [CHANGELOG.md](./CHANGELOG.md)에 근거와 함께 기록한 뒤 이 문서에서 제거하거나 완료 이력으로 이동합니다.
 
+### P1-WeekdayTime-1001. (신규, 2026-10-01, Batch C 조사 중 발견) 수강권 자동갱신(auto_renew)이 실제로 구현되어 있지 않음
+
+| 필드 | 내용 |
+|---|---|
+| 우선순위 | P1 |
+| 현재 상태 | **미구현 확인됨(이번 배치 범위 밖, 코드 변경 없음).** |
+| 내용 | "구매 시 요일/시간 선택형 수강권" 작업 중 "자동갱신 시 요일/시간 귀속을 유지해야 하는지"(C-11)를 조사하다가, `memberships.auto_renew` 컬럼이 `schema.sql`에만 존재하고 이를 실제로 처리하는 RPC/cron/Edge Function이 저장소 전체에 하나도 없음을 확인했다(`grep -rln "auto_renew"` 결과 schema.sql만 나옴, app/lib 어디서도 참조 안 함). 관리자 결제창에 "자동연장"을 켤 수 있는 UI가 있다면 그 값은 저장만 되고 아무 효과가 없다. `center_subscriptions`(센터가 플랫폼에 내는 구독료)의 자동결제와는 완전히 다른, 회원 개인 수강권 재구매 자동화 기능 — 혼동 주의. |
+| 왜 이번에 안 고치나 | 이번 배치(Batch C)의 목적은 요일/시간 선택 기능이지 자동갱신 신규 구현이 아니다 — 범위 밖, 별도 기획/작업 필요. |
+| 향후 구현 시 참고 | 나중에 이 기능을 실제로 만들 때는, 갱신이 "같은 memberships 행을 연장"하는 방식이면 `bound_day_of_week`/`bound_start_time`은 자동으로 유지된다(같은 행이므로). "새 memberships 행을 발급"하는 방식으로 만든다면 이 두 컬럼을 명시적으로 이전 행에서 복사해야 한다 — 잊으면 회원이 매번 요일을 다시 골라야 하는 회귀가 생긴다. |
+| 근거 파일 | `schema.sql`(auto_renew 컬럼 정의), `add_weekday_time_fixed_memberships.sql`(Batch C) |
+
 ### P1-Postlaunch-0929. (2026-09-29~30) 출시 후 개선 Batch — 진행 상태
 - **email_signup_available() + consume_email_check_attempt() RPC + email_check_attempts 테이블
   + check-signup-email Edge Function** — (2026-09-30, 사용자 확인) production SQL 실행 +

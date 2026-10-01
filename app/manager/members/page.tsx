@@ -25,7 +25,9 @@ import {
   fetchMemberMemos, createMemberMemo, updateMemberMemoEntry, deleteMemberMemoEntry, type MemberMemo,
 } from "../../../lib/memberMemos";
 import { fetchCenterSubscription } from "../../../lib/centerSubscription";
-import { fetchSaleProducts, grantProductToMember, won, type GrantInput } from "../../../lib/sales";
+import { fetchSaleProducts, grantProductToMember, won, type GrantInput, type SaleProduct } from "../../../lib/sales";
+import { fetchPurchaseScheduleOptions } from "../../../lib/center";
+import { DAYS, type SelectableSchedule } from "../../../lib/passes";
 import AlimtalkComposer, {
   emptyAlimtalkBlocks, flattenAlimtalkBlocks, hasAlimtalkContent, type AlimtalkBlock,
 } from "../../components/AlimtalkComposer";
@@ -132,12 +134,17 @@ function MembersContent() {
 
   // 수강권/상품 지급 — 주문 없이 매니저가 바로 발급(서비스로 무상 지급하는 경우 포함)
   const [grantTarget, setGrantTarget] = useState<CenterMember | null>(null);
-  const [grantProducts, setGrantProducts] = useState<{ id: string; name: string; price: number }[]>([]);
+  const [grantProducts, setGrantProducts] = useState<SaleProduct[]>([]);
   const [grantProductId, setGrantProductId] = useState("");
   const [grantPrice, setGrantPrice] = useState("");
   const [grantMethod, setGrantMethod] = useState<GrantInput["payMethod"]>("card");
   const [grantMemo, setGrantMemo] = useState("");
   const [granting, setGranting] = useState(false);
+  // 2026-10-01(Batch C, C-10) — weekdaySelectable 상품을 수동 발급할 때도 구매 플로우와
+  // 동일하게 요일/시간 선택을 받는다(선택 없이 binding 누락된 membership이 생기지 않게).
+  const [grantScheduleOptions, setGrantScheduleOptions] = useState<SelectableSchedule | null>(null);
+  const [grantScheduleDay, setGrantScheduleDay] = useState<number | null>(null);
+  const [grantScheduleTime, setGrantScheduleTime] = useState<string | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -461,6 +468,7 @@ function MembersContent() {
   async function openGrant(m: CenterMember) {
     if (!centerId) return;
     setGrantProductId(""); setGrantPrice(""); setGrantMethod("card"); setGrantMemo("");
+    setGrantScheduleOptions(null); setGrantScheduleDay(null); setGrantScheduleTime(null);
     setGrantTarget(m);
     try {
       setGrantProducts(await fetchSaleProducts(centerId));
@@ -473,6 +481,13 @@ function MembersContent() {
     setGrantPrice(p ? String(p.price) : "");
     // 가격이 있는 상품을 새로 고르면 "서비스"로 남아있던 결제방법을 실수로 유지하지 않게 초기화
     if (p && p.price > 0 && grantMethod === "service") setGrantMethod("card");
+    // 2026-10-01(Batch C, C-10) — 상품을 바꾸면 이전 상품의 요일/시간 선택은 무효이므로 초기화.
+    setGrantScheduleDay(null); setGrantScheduleTime(null);
+    if (p?.weekdaySelectable) {
+      fetchPurchaseScheduleOptions(p.id).then(setGrantScheduleOptions).catch(() => setGrantScheduleOptions({ days: [], timesByDay: {} }));
+    } else {
+      setGrantScheduleOptions(null);
+    }
   }
 
   async function handleGrant() {
@@ -483,12 +498,17 @@ function MembersContent() {
     if (price > 0 && grantMethod === "service") { setError("가격이 있으면 '서비스'로는 지급할 수 없어요 — 결제방법을 골라주세요"); return; }
     const product = grantProducts.find((p) => p.id === grantProductId);
     if (!product) return;
+    // 2026-10-01(Batch C, C-10) — 구매 화면(app/checkout)과 동일하게 선택 없이는 발급을 막는다.
+    if (product.weekdaySelectable && grantScheduleDay === null) { setError("이용 요일을 선택해주세요"); return; }
+    if (product.weekdaySelectable && product.timeSelectable && !grantScheduleTime) { setError("이용 시간을 선택해주세요"); return; }
     setGranting(true); setError(null);
     try {
       await grantProductToMember({
         centerId, profileId: grantTarget.profileId, productId: product.id, productName: product.name,
         price, payMethod: grantMethod, memo: grantMemo.trim() || undefined,
         paidAt: new Date().toISOString(),
+        boundDayOfWeek: product.weekdaySelectable ? grantScheduleDay : undefined,
+        boundStartTime: product.weekdaySelectable && product.timeSelectable ? grantScheduleTime : undefined,
       });
       showToast(price === 0 ? "서비스로 지급했어요" : "지급하고 매출에 반영했어요");
       setGrantTarget(null);
@@ -1121,6 +1141,49 @@ function MembersContent() {
               )}
             </div>
 
+            {/* 2026-10-01(Batch C, C-10) — 요일/시간 선택형 상품은 관리자 발급에서도 선택을
+                받는다(구매 플로우와 동일 원칙 — binding 누락된 membership 방지). */}
+            {(() => {
+              const product = grantProducts.find((p) => p.id === grantProductId);
+              if (!product?.weekdaySelectable) return null;
+              return (
+                <>
+                  <div className="menu-section-label" style={{ padding: "0 0 6px" }}>이용 요일</div>
+                  {grantScheduleOptions === null ? (
+                    <div className="perm-guide" style={{ margin: "0 0 10px" }}>요일 정보를 불러오는 중이에요…</div>
+                  ) : grantScheduleOptions.days.length === 0 ? (
+                    <div className="perm-guide" style={{ margin: "0 0 10px" }}>이 상품에 아직 요일이 지정된 예약조건이 없어요.</div>
+                  ) : (
+                    <>
+                      <div className="mem-filters" style={{ marginBottom: 10 }}>
+                        {grantScheduleOptions.days.map((d) => (
+                          <button key={d} aria-pressed={grantScheduleDay === d}
+                            className={`filter-chip ${grantScheduleDay === d ? "on" : ""}`}
+                            onClick={() => { setGrantScheduleDay(d); setGrantScheduleTime(null); }}>
+                            {DAYS[d]}요일
+                          </button>
+                        ))}
+                      </div>
+                      {product.timeSelectable && grantScheduleDay !== null && (
+                        <>
+                          <div className="menu-section-label" style={{ padding: "0 0 6px" }}>이용 시간</div>
+                          <div className="mem-filters" style={{ marginBottom: 10 }}>
+                            {(grantScheduleOptions.timesByDay[grantScheduleDay] ?? []).map((t) => (
+                              <button key={t} aria-pressed={grantScheduleTime === t}
+                                className={`filter-chip ${grantScheduleTime === t ? "on" : ""}`}
+                                onClick={() => setGrantScheduleTime(t)}>
+                                {t}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+                </>
+              );
+            })()}
+
             <div className="menu-section-label" style={{ padding: "0 0 6px" }}>관리자 메모 (회원에게 보이지 않음)</div>
             <input aria-label="예: 이벤트 당첨 증정"
               className="input-field" style={{ marginBottom: 10 }}
@@ -1136,7 +1199,16 @@ function MembersContent() {
 
             <div className="add-profile-actions">
               <button className="ghost-btn" disabled={granting} onClick={() => setGrantTarget(null)}>취소</button>
-              <button className="primary-btn" disabled={granting || !grantProductId || grantPrice.trim() === ""} onClick={handleGrant}>
+              <button
+                className="primary-btn"
+                disabled={
+                  granting || !grantProductId || grantPrice.trim() === "" ||
+                  !!(grantProducts.find((p) => p.id === grantProductId)?.weekdaySelectable && grantScheduleDay === null) ||
+                  !!(grantProducts.find((p) => p.id === grantProductId)?.weekdaySelectable &&
+                     grantProducts.find((p) => p.id === grantProductId)?.timeSelectable && !grantScheduleTime)
+                }
+                onClick={handleGrant}
+              >
                 {granting ? "지급 중..." : "지급하기"}
               </button>
             </div>

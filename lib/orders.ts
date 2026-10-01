@@ -40,6 +40,11 @@ export async function createOrder(input: {
   // (member_can_purchase_product)가 상품 자체의 구매자격은 이미 주문 생성 시점에
   // 막아주지만, 쿠폰 자격(소유자/센터/유효기간/최소금액 등)은 확정 시점에만 검증된다.
   memberCouponId?: string;
+  // 2026-10-01(Batch C, C-9) — weekdaySelectable 상품 구매 시 고른 요일/시간. fulfill_order()/
+  // _issue_membership_and_record_payment()(add_weekday_time_fixed_memberships.sql)가 이
+  // 값을 그대로 새 memberships 행의 bound_day_of_week/bound_start_time으로 복사한다.
+  selectedDayOfWeek?: number | null;
+  selectedStartTime?: string | null;
 }): Promise<string> {
   const accountId = await getMyAccountId();
   if (!accountId) throw new Error("로그인이 필요해요");
@@ -59,7 +64,7 @@ export async function createOrder(input: {
     profileId = prof.id;
   }
 
-  const { data, error } = await supabase.from("orders").insert({
+  const row: Record<string, unknown> = {
     center_id: input.centerId,
     profile_id: profileId,
     product_id: input.productId,
@@ -74,8 +79,19 @@ export async function createOrder(input: {
     points_used: input.pointsUsed ?? 0,
     member_coupon_id: input.memberCouponId ?? null,
     status: "pending",
-  }).select("id").single();
-  if (error) throw new Error("주문 생성에 실패했어요: " + error.message);
+    selected_day_of_week: input.selectedDayOfWeek ?? null,
+    selected_start_time: input.selectedStartTime ?? null,
+  };
+  let { data, error } = await supabase.from("orders").insert(row).select("id").single();
+  if (error?.code === "42703") {
+    // 2026-10-01(Batch C) — add_weekday_time_fixed_memberships.sql 미실행 환경 방어
+    // (lib/rooms.ts/lib/passes.ts와 동일 패턴). 이 경우 요일/시간 선택 자체는 화면에서
+    // 막히지 않지만(체크아웃 UI가 여전히 선택을 받음) 그 선택값은 저장되지 않는다 —
+    // 주문 생성 자체가 막히는 것보다 훨씬 안전한 실패 방향.
+    const { selected_day_of_week, selected_start_time, ...withoutWeekday } = row;
+    ({ data, error } = await supabase.from("orders").insert(withoutWeekday).select("id").single());
+  }
+  if (error || !data) throw new Error("주문 생성에 실패했어요: " + (error?.message ?? "no data"));
   return data.id;
 }
 
