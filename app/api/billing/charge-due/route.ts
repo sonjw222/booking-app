@@ -43,7 +43,9 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 export const maxDuration = 60;
 
 const BILLING_CRON_SECRET = process.env.BILLING_CRON_SECRET;
-const TOSS_SECRET_KEY = process.env.TOSS_SECRET_KEY;
+// 센터 플랫폼 구독(자동결제) 전용 시크릿 키 — 일반 회원 결제(app/api/payments/*)가 쓰는
+// TOSS_SECRET_KEY와 분리한다(토스 자동결제 계약 키가 별도라서). 회원 결제 쪽은 그대로.
+const TOSS_BILLING_SECRET_KEY = process.env.TOSS_BILLING_SECRET_KEY;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -73,7 +75,7 @@ function json(body: unknown, status = 200) {
 }
 
 function tossAuthHeader(): string {
-  return "Basic " + Buffer.from(`${TOSS_SECRET_KEY}:`).toString("base64");
+  return "Basic " + Buffer.from(`${TOSS_BILLING_SECRET_KEY}:`).toString("base64");
 }
 
 function addOneMonth(dateStr: string): string {
@@ -123,7 +125,7 @@ export async function POST(request: Request) {
   if (!BILLING_CRON_SECRET || request.headers.get("x-cron-secret") !== BILLING_CRON_SECRET) {
     return json({ error: "unauthorized" }, 401);
   }
-  if (!TOSS_SECRET_KEY) return json({ error: "결제 서버 설정이 없어요(TOSS_SECRET_KEY)" }, 500);
+  if (!TOSS_BILLING_SECRET_KEY) return json({ error: "결제 서버 설정이 없어요(TOSS_BILLING_SECRET_KEY)" }, 500);
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return json({ error: "결제 서버 설정이 없어요(SUPABASE_SERVICE_ROLE_KEY)" }, 500);
   }

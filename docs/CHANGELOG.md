@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-10-01 — 센터 구독 자동결제 Toss 시크릿 키 분리 (`TOSS_BILLING_SECRET_KEY`)
+
+센터 플랫폼 구독(자동결제) route 두 개(`app/api/billing/confirm`, `app/api/billing/charge-due`)가
+일반 회원 결제와 같은 `TOSS_SECRET_KEY`를 쓰던 것을 `TOSS_BILLING_SECRET_KEY`로 분리(토스
+자동결제 계약 키가 별도). 회원 결제(`app/api/payments/*`)는 `TOSS_SECRET_KEY` 그대로, billing
+business logic 변경 없음. 키가 없을 때 오류 메시지는 "결제 서버 설정이 없어요(TOSS_BILLING_SECRET_KEY)".
+**배포 시 Vercel에 `TOSS_BILLING_SECRET_KEY`를 등록해야 한다**(미등록이면 billing route 500).
+
 ## 2026-10-01 — 센터 상세 화면 뒤로가기 버튼 ↔ 프로필 이미지 겹침 수정 (회원용)
 
 iPhone 14 Pro 실기기 QA에서 발견. `.center-detail-head`(뒤로가기 헤더)가 absolute라
