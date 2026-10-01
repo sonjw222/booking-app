@@ -186,7 +186,7 @@ export default function HolidaysPage() {
       )}
       {/* 예약자 있는 수업 삭제 확인 */}
       {confirmHoliday && (
-        <SheetOverlay className="sheet-overlay" onClick={() => setConfirmHoliday(null)}>
+        <SheetOverlay className="sheet-overlay" swipeDismiss={false} onClick={() => setConfirmHoliday(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">휴무일로 지정할까요?</div>
             <div className="perm-guide" style={{ margin: "0 0 14px" }}>

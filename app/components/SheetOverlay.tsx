@@ -1,15 +1,57 @@
 "use client";
 
 import { useEffect, useRef, useId, type HTMLAttributes } from "react";
+import { attachSheetDrag, type SheetDragController } from "../../lib/sheetDrag";
 
 let locks = 0;
 let previousOverflow = "";
 const focusable = 'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]';
 
+type SheetOverlayProps = HTMLAttributes<HTMLDivElement> & {
+  /**
+   * 모바일 bottom sheet 공통 drag-to-dismiss(상단 handle에서 시작한 아래 방향 drag). 기본 true.
+   * 저장/결제 처리 중이라 닫기를 막는 sheet(`!busy && close()`), 확인/경고·파괴적 확인, 지도처럼 본문 제스처가
+   * 핵심인 sheet는 false로 넘긴다(handle 자체가 나타나지 않는다). onClick(닫기 핸들러)이 없으면 항상 비활성.
+   */
+  swipeDismiss?: boolean;
+};
+
 /** Shared overlay contract; existing close handlers still decide whether closing is allowed. */
-export default function SheetOverlay({ children, className = "sheet-overlay", ...props }: HTMLAttributes<HTMLDivElement>) {
+export default function SheetOverlay({ children, className = "sheet-overlay", swipeDismiss = true, ...props }: SheetOverlayProps) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  const canSwipe = swipeDismiss && !!props.onClick;
+  // 공용 drag-to-dismiss — .sheet 맨 위에 drag handle을 심고(React가 관리하지 않는 노드), 그 handle에서
+  // 시작한 제스처만 dismiss로 인정한다(본문 스크롤과 충돌 없음). 닫기는 배경 탭/ESC와 같은 경로(overlay.click()).
+  useEffect(() => {
+    const overlay = ref.current;
+    if (!overlay || !canSwipe) return;
+    let ctrl: SheetDragController | null = null;
+    let handle: HTMLElement | null = null;
+    let attachedTo: HTMLElement | null = null;
+    const isTop = () => !document.querySelector('[role="alertdialog"]') && [...document.querySelectorAll("[data-sheet-overlay]")].at(-1) === overlay;
+    const detach = () => { ctrl?.destroy(); ctrl = null; handle?.remove(); handle = null; attachedTo = null; };
+    const ensure = () => {
+      const sheet = overlay.querySelector<HTMLElement>(":scope > .sheet");
+      if (sheet === attachedTo) return;
+      detach();
+      if (!sheet) return;
+      handle = document.createElement("div");
+      handle.className = "sheet-drag-handle";
+      handle.setAttribute("aria-hidden", "true");
+      handle.dataset.sheetDragHandle = "";
+      const bar = document.createElement("span");
+      bar.className = "sheet-drag-handle-bar";
+      handle.appendChild(bar);
+      sheet.insertBefore(handle, sheet.firstChild);
+      attachedTo = sheet;
+      ctrl = attachSheetDrag({ overlay, sheet, handle, isTop, onDismiss: () => overlay.click() });
+    };
+    ensure();
+    const mo = new MutationObserver(ensure);
+    mo.observe(overlay, { childList: true });
+    return () => { mo.disconnect(); detach(); };
+  }, [canSwipe]);
   useEffect(() => {
     const overlay = ref.current;
     if (!overlay) return;

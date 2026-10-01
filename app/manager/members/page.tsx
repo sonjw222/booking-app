@@ -1097,7 +1097,7 @@ function MembersContent() {
 
       {/* 수강권/상품 지급 시트 — 주문 없이 매니저가 바로 발급(서비스 무상 지급 포함) */}
       {grantTarget && (
-        <SheetOverlay className="sheet-overlay" onClick={() => !granting && setGrantTarget(null)}>
+        <SheetOverlay className="sheet-overlay" swipeDismiss={!granting} onClick={() => !granting && setGrantTarget(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{grantTarget.name}님에게 지급</div>
 
@@ -1218,7 +1218,7 @@ function MembersContent() {
 
       {/* 알림톡 발송 시트 — 회원 목록 다중 선택 또는 상세에서 1명 */}
       {alimtalkTargets && (
-        <SheetOverlay className="sheet-overlay" onClick={() => !sendingAlimtalk && setAlimtalkTargets(null)}>
+        <SheetOverlay className="sheet-overlay" swipeDismiss={!sendingAlimtalk} onClick={() => !sendingAlimtalk && setAlimtalkTargets(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">알림톡 보내기</div>
             <div className="perm-guide" style={{ margin: "0 0 10px" }}>

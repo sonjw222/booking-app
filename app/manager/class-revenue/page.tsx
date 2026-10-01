@@ -323,7 +323,7 @@ export default function ClassRevenuePage() {
 
       {/* 회차별 금액 편집 모달 */}
       {editTarget && (
-        <SheetOverlay className="sheet-overlay" onClick={() => !editSaving && setEditTarget(null)}>
+        <SheetOverlay className="sheet-overlay" swipeDismiss={!editSaving} onClick={() => !editSaving && setEditTarget(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">회차별 금액 수정{editTarget.classTitle ? ` — ${editTarget.classTitle}` : ""}</div>
             {editLoading ? (

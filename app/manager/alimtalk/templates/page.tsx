@@ -328,7 +328,7 @@ export default function AlimtalkTemplatesPage() {
       )}
 
       {editing && (
-        <SheetOverlay className="sheet-overlay" onClick={() => !saving && setEditing(null)}>
+        <SheetOverlay className="sheet-overlay" swipeDismiss={!saving} onClick={() => !saving && setEditing(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             {/* A-9 — 승인(APR) 완료 템플릿은 "수정"이 아니라 "상세"다. 고정 문구를 자유롭게
                 고쳐서 보내면 카카오 심사를 통과한 문구와 실제 발송 문구가 달라질 수 있다. */}

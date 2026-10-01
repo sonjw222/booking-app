@@ -710,7 +710,7 @@ export default function SalesPage() {
 
       {/* 미수금 받기 시트 */}
       {collectFor && (
-        <SheetOverlay className="sheet-overlay" onClick={() => !collecting && setCollectFor(null)}>
+        <SheetOverlay className="sheet-overlay" swipeDismiss={!collecting} onClick={() => !collecting && setCollectFor(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">미수금 받기</div>
             <div className="perm-guide" style={{ margin: "0 0 12px" }}>

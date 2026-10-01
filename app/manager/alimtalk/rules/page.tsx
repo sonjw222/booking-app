@@ -195,7 +195,7 @@ export default function AlimtalkRulesPage() {
       )}
 
       {sheetMode && draft && (
-        <SheetOverlay className="sheet-overlay" onClick={() => !saving && closeSheet()}>
+        <SheetOverlay className="sheet-overlay" swipeDismiss={!saving} onClick={() => !saving && closeSheet()}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{sheetMode === "new" ? "새 자동 발송 규칙" : "규칙 수정"}</div>
 

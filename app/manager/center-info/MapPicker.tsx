@@ -162,7 +162,7 @@ export default function MapPicker({ initialLat, initialLng, onPick, onClose }: P
   }
 
   return (
-    <SheetOverlay className="sheet-overlay" onClick={onClose}>
+    <SheetOverlay className="sheet-overlay" swipeDismiss={false} onClick={onClose}>
       <div className="sheet map-picker-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-title">지도에서 위치 지정</div>
         <div className="map-search-row">

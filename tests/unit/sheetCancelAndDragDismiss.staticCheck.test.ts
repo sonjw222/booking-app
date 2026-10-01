@@ -58,54 +58,44 @@ describe("B-6/B-7/B-8 공용 — sheet-actions-37 CSS가 정확히 3:7이고 기
   });
 });
 
-describe("B-9/B-10/B-11 — 수업 등록 sheet drag-to-dismiss", () => {
-  it("drag handle 전용 요소에만 pointer 핸들러가 붙는다(폼 내부 스크롤과 분리)", () => {
-    const block = classesSource.slice(classesSource.indexOf('className="sheet-drag-handle"'), classesSource.indexOf('className="sheet-drag-handle"') + 400);
-    expect(block).toContain("onPointerDown={handleDragHandlePointerDown}");
-    expect(block).toContain("onPointerMove={handleDragHandlePointerMove}");
-    expect(block).toContain("onPointerUp={handleDragHandlePointerUp}");
-    expect(block).toContain("onPointerCancel={handleDragHandlePointerUp}");
+const sheetOverlaySource = readFileSync(join(__dirname, "../../app/components/SheetOverlay.tsx"), "utf-8");
+const sheetDragSource = readFileSync(join(__dirname, "../../lib/sheetDrag.ts"), "utf-8");
+
+describe("B-9/B-10/B-11 — drag-to-dismiss는 공용 SheetOverlay/lib/sheetDrag로 승격됐다(2026-10-01)", () => {
+  it("수업 등록 sheet에는 더 이상 로컬 dragY/pointer handler가 없다(중복 gesture 금지)", () => {
+    const code = classesSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    expect(code).not.toMatch(/dragY|dragStartY|handleDragHandlePointer|sheetBoxRef|setDragging/);
   });
 
-  it("아래로만 반응한다(위로 끌면 0에서 멈춤 — Math.max(0, ...))", () => {
-    const fn = classesSource.slice(classesSource.indexOf("function handleDragHandlePointerMove"), classesSource.indexOf("function handleDragHandlePointerMove") + 300);
-    expect(fn).toContain("Math.max(0, e.clientY - dragStartY.current)");
+  it("공용 SheetOverlay가 handle을 심고 attachSheetDrag를 쓴다", () => {
+    expect(sheetOverlaySource).toContain("attachSheetDrag");
+    expect(sheetOverlaySource).toContain("sheet-drag-handle");
   });
 
-  it("velocity가 아니라 거리(sheet 높이의 35%)만으로 닫힘 여부를 정한다(B-10, 실수 방지 우선)", () => {
-    const fn = classesSource.slice(classesSource.indexOf("function handleDragHandlePointerUp"), classesSource.indexOf("function handleDragHandlePointerUp") + 600);
-    expect(fn).toContain("dragY > height * 0.35");
-    // 코드(주석 제외)에 velocity/speed 기반 판정 로직이 없는지 확인 — 이 파일 자체의
-    // 설명 주석("velocity가 아니라...")이 스스로 오탐하지 않도록 주석을 먼저 제거한다.
-    const code = fn.replace(/\/\/.*$/gm, "");
+  it("아래로만 반응 + 거리(sheet 높이의 35%)만으로 닫힘 여부를 정한다(velocity 없음)", () => {
+    expect(sheetDragSource).toContain("export const DISMISS_RATIO = 0.35;");
+    expect(sheetDragSource).toContain("dy > 0 ? dy : 0");
+    const code = sheetDragSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
     expect(code).not.toMatch(/velocity|speed/i);
   });
 
-  it("threshold 미달이면 원위치로(dragY를 0으로)만 돌아가고 닫히지 않는다", () => {
-    const fn = classesSource.slice(classesSource.indexOf("function handleDragHandlePointerUp"), classesSource.indexOf("function handleDragHandlePointerUp") + 600);
-    expect(fn).toMatch(/else \{\s*setDragY\(0\);/);
-  });
-
-  it("드래그로 닫힐 때도 closeFormSheet를 그대로 호출한다(취소 버튼과 완전히 같은 동작, B-11)", () => {
-    const fn = classesSource.slice(classesSource.indexOf("function handleDragHandlePointerUp"), classesSource.indexOf("function handleDragHandlePointerUp") + 600);
-    expect(fn).toContain("closeFormSheet();");
+  it("닫기는 배경 탭/ESC와 같은 경로(overlay.click → closeFormSheet)를 탄다", () => {
+    expect(sheetOverlaySource).toContain("onDismiss: () => overlay.click()");
+    expect(classesSource).toContain('<SheetOverlay className="sheet-overlay" onClick={closeFormSheet}>');
   });
 });
 
-describe("B-12 — 애니메이션: 드래그 중엔 transition 없음, 놓으면 스냅백/닫힘에 transition, reduced-motion 대응", () => {
-  it("드래그 중(dragging=true)엔 인라인 style.transition을 없앤다", () => {
-    expect(classesSource).toContain('transition: dragging ? "none" : undefined,');
+describe("B-12 — 애니메이션: 드래그 중 transition 없음, 놓으면 slide-out/snap-back, reduced-motion 대응", () => {
+  it("드래그 중엔 inline transition을 끈다", () => {
+    expect(sheetDragSource).toContain('sheet.style.transition = transition ?? "none";');
   });
 
-  it(".direct-member-sheet에 transform transition이 정의돼 있다(놓았을 때 쓰임)", () => {
-    expect(css).toMatch(/\.direct-member-sheet\s*\{\s*transition:\s*transform/);
+  it("prefers-reduced-motion이면 애니메이션 없이 즉시 처리한다", () => {
+    expect(sheetDragSource).toContain("prefers-reduced-motion: reduce");
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.sheet, \.sheet-overlay \{ transition: none !important; \}/);
   });
 
-  it("prefers-reduced-motion에서는 transition이 없다", () => {
-    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.direct-member-sheet\s*\{\s*transition:\s*none;/);
-  });
-
-  it("새 거대 애니메이션 라이브러리를 도입하지 않았다(순수 CSS transition + React state)", () => {
-    expect(classesSource).not.toMatch(/framer-motion|react-spring|gsap/i);
+  it("새 거대 애니메이션 라이브러리를 도입하지 않았다", () => {
+    expect(sheetDragSource + sheetOverlaySource).not.toMatch(/framer-motion|react-spring|gsap/i);
   });
 });
