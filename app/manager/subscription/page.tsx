@@ -13,6 +13,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Loading from "../../components/Loading";
+import UiIcon from "../../components/UiIcon";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
   fetchCenterSubscription, requestCenterBillingAuth, confirmCenterBilling, centerChangeOwnSubscriptionPlan,
@@ -21,6 +22,12 @@ import {
 } from "../../../lib/centerSubscription";
 import { fetchSubscriptionPlans, type SubscriptionPlan } from "../../../lib/operator";
 import { BUSINESS_INFO } from "../../../lib/businessInfo";
+
+// 결제/카드 등록 후속 안내의 종류 — 예전엔 성공/실패/진행중이 전부 같은 error-toast(빨간색)로
+// 보여서 "첫 결제 성공" 메시지까지 오류처럼 보였다(QA, 2026-10-01). 종류별로 스타일과
+// 접근성 role을 나눈다: success/info는 status-toast(기존 success/info 토큰 재사용,
+// role="status"), error는 기존 error-toast 그대로(role="alert").
+type BillingNotice = { type: "success" | "error" | "info"; message: string };
 
 export default function ManagerSubscriptionPage() {
   return (
@@ -42,7 +49,7 @@ function ManagerSubscriptionContent() {
   const [subError, setSubError] = useState<string | null>(null);
   const [subBusy, setSubBusy] = useState(false);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
-  const [billingNotice, setBillingNotice] = useState<string | null>(null);
+  const [billingNotice, setBillingNotice] = useState<BillingNotice | null>(null);
   // 전역 플래그(BILLING_ENABLED)가 꺼져 있어도 이 센터가 토스 심사용으로 지정돼 있으면
   // (center_subscriptions.billing_review_override) 카드 등록 버튼만 예외적으로 연다 —
   // lib/authAccount.ts의 fetchMyPgCheckoutOverride() + app/checkout/page.tsx의
@@ -95,25 +102,25 @@ function ManagerSubscriptionContent() {
     const qsCenterId = sp.get("center");
     window.history.replaceState(null, "", window.location.pathname);
     if (billing === "fail") {
-      setBillingNotice("카드 등록이 취소됐거나 실패했어요. 다시 시도해주세요.");
+      setBillingNotice({ type: "error", message: "카드 등록이 취소됐거나 실패했어요. 다시 시도해주세요." });
       return;
     }
     if (billing !== "success" || !qsCenterId) return;
     const authKey = sp.get("authKey");
     const customerKey = sp.get("customerKey");
     if (!authKey || !customerKey) {
-      setBillingNotice("카드 등록 응답이 올바르지 않아요. 다시 시도해주세요.");
+      setBillingNotice({ type: "error", message: "카드 등록 응답이 올바르지 않아요. 다시 시도해주세요." });
       return;
     }
     (async () => {
-      setBillingNotice("카드 등록을 확인하는 중이에요...");
+      setBillingNotice({ type: "info", message: "카드 등록을 확인하는 중이에요..." });
       try {
         await confirmCenterBilling(authKey, customerKey, qsCenterId);
-        setBillingNotice("카드 등록과 첫 결제가 완료돼서 구독이 시작됐어요.");
+        setBillingNotice({ type: "success", message: "카드 등록과 첫 결제가 완료돼서 구독이 시작됐어요." });
         setCenterId(qsCenterId);
         await loadSubscription();
       } catch (e: any) {
-        setBillingNotice(e.message ?? "카드 등록 확정에 실패했어요");
+        setBillingNotice({ type: "error", message: e.message ?? "카드 등록 확정에 실패했어요" });
       }
     })();
     // 마운트 시점 쿼리만 처리하면 됨(중복 확정 방지) — sp/loadSubscription 재실행 불필요.
@@ -151,7 +158,12 @@ function ManagerSubscriptionContent() {
   // 등록 버튼과 동일한 패턴을 쓰고, 실결제 연동 후 이 게이트를 풀 것.
   async function handleCancel() {
     if (!centerId || !billingEnabled) return;
-    const ok = await globalThis.appConfirm("플랫폼 구독을 취소할까요? 취소해도 지금 쓰고 있는 기능은 그대로 이용할 수 있어요.");
+    // appConfirm은 message 하나만 받고(첫 줄=제목, 나머지=설명, 버튼 문구는 고정 — 커스텀
+    // label 미지원이라 API를 확장하지 않고 문구만 정리). "취소"가 들어가 있어 확인 버튼은
+    // 자동으로 danger 스타일로 나온다.
+    const ok = await globalThis.appConfirm(
+      "구독을 취소할까요?\n이미 결제한 이용 기간까지는 계속 사용할 수 있어요\n다음 결제일부터 자동결제가 중단돼요"
+    );
     if (!ok) return;
     setSubBusy(true); setSubError(null);
     try {
@@ -195,7 +207,15 @@ function ManagerSubscriptionContent() {
       )}
 
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
-      {billingNotice && <div className="error-toast">{billingNotice}<button onClick={() => setBillingNotice(null)}>×</button></div>}
+      {billingNotice && (billingNotice.type === "error" ? (
+        <div className="error-toast" role="alert">{billingNotice.message}<button aria-label="닫기" onClick={() => setBillingNotice(null)}>×</button></div>
+      ) : (
+        <div className={`status-toast is-${billingNotice.type}`} role="status">
+          {billingNotice.type === "success" && <UiIcon name="check" size={16} />}
+          <span>{billingNotice.message}</span>
+          <button aria-label="닫기" onClick={() => setBillingNotice(null)}>×</button>
+        </div>
+      ))}
 
       {loading ? (
         <Loading />
@@ -350,17 +370,29 @@ function ManagerSubscriptionContent() {
                   </select>
                 </div>
               )}
+              {/* 구독 관리 — 다른 set-row와 같은 정렬(왼쪽 label+설명 / 오른쪽 버튼). 예전엔
+                  버튼만 단독으로 왼쪽 아래에 떠 있어 정렬이 안 맞고 위험 동작이라는 의미가
+                  약했다. 파괴적 동작이지만 solid 빨강 대신 기존 quiet-action.danger(테두리+
+                  danger 글자)를 써서 네이비/화이트 톤을 유지한다. canceled 상태에는 이 행
+                  자체가 없다(상태 행에 "해지됨"만 보임, 기존 정책 그대로). */}
               {subscription.status !== "canceled" && (
-                billingEnabled ? (
-                  <button className="profile-del" style={{ marginTop: 6 }} disabled={subBusy} onClick={handleCancel}>
+                <div className="set-row sub-manage-row" data-testid="subscription-manage-row">
+                  <div className="sub-manage-text">
+                    <div className="set-label">구독 관리</div>
+                    <div className="sub-manage-help">
+                      {billingEnabled
+                        ? "다음 결제일부터 자동결제를 중단할 수 있어요."
+                        : "구독 취소는 아직 지원하지 않아요 — 실제 결제 연동(자동결제 심사)이 끝나면 이용할 수 있어요."}
+                    </div>
+                  </div>
+                  <button
+                    className="quiet-action danger"
+                    disabled={subBusy || !billingEnabled}
+                    onClick={handleCancel}
+                  >
                     구독 취소
                   </button>
-                ) : (
-                  <div className="set-row col">
-                    <button className="ghost-btn" disabled>구독 취소</button>
-                    <div className="set-soon-note">구독 취소는 아직 지원하지 않아요 — 실제 결제 연동(자동결제 심사)이 끝나면 이용할 수 있어요.</div>
-                  </div>
-                )
+                </div>
               )}
             </>
           )}

@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## 2026-10-01 — 플랫폼 구독 결제 QA 후속: 성공 안내 색상 + 구독 취소 UI 정리
+
+실제 QA(월 100원, 카드 등록 → 첫 결제 성공 → active, 다음 결제일 2026-11-01)에서 확인된 UI
+문제 2건. 결제/빌링 로직(billing key, /api/billing/confirm, next_billing_date, 카드 저장,
+정기결제)은 건드리지 않음.
+- **안내 메시지 종류 구분**: `billingNotice`가 성공/실패/진행중 모두 같은 빨간 `error-toast`를
+  써서 "카드 등록과 첫 결제가 완료돼서 구독이 시작됐어요."가 오류처럼 보였다. `{ type:
+  success|error|info, message }`로 바꾸고 success/info는 새 `.status-toast`(기존 `--success`/
+  `--info` 토큰 재사용, `role="status"`, 성공엔 체크 아이콘), error는 기존 `error-toast`
+  (`role="alert"`) 유지. 닫기 X는 모두 유지.
+- **구독 취소 UI**: 왼쪽 아래에 단독으로 떠 있던 버튼을 다른 set-row와 같은 "구독 관리" 행
+  (왼쪽 label+설명 / 오른쪽 버튼, 좁은 화면에선 줄바꿈)으로 정리. 버튼은 기존
+  `quiet-action danger`(danger 글자+테두리, 44px) — solid 빨강 아님.
+- **취소 확인 문구**: "구독을 취소할까요? / 이미 결제한 이용 기간까지는 계속 사용할 수 있어요 /
+  다음 결제일부터 자동결제가 중단돼요". `appConfirm`은 message만 받고 버튼 라벨 커스텀을
+  지원하지 않아 API 확장 없이 문구만 변경(확인 버튼은 "취소" 단어 때문에 자동 danger).
+- 상태별(active/past_due/payment_failed/pending_billing_setup/canceled) 버튼·정책은 기존 그대로.
+
 ## 2026-10-01 — 구매 시 요일/시간 선택형 수강권 + 수강권 UX 개선/복제 (Batch C)
 
 DB 스키마 변경 필요(SQL 준비만, production 미실행 — `add_weekday_time_fixed_memberships.sql`/

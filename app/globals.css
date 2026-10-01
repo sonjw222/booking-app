@@ -2236,6 +2236,33 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .error-toast-action:active { background: var(--surface); }
 
+/* 2026-10-01 — 성공/진행 중 안내 토스트. 플랫폼 구독 결제 QA에서 "카드 등록과 첫 결제가
+   완료됐어요"가 error-toast(빨강)로 떠 오류처럼 보였다. 위치/크기는 .error-toast와 같고
+   색만 기존 --success/--info 토큰(perm-guide.is-success/is-info와 동일 쌍)을 쓴다 —
+   새 색 체계 없음. 오류는 계속 .error-toast. */
+.status-toast {
+  position: fixed; top: max(18px, var(--safe-top)); left: 50%; transform: translateX(-50%);
+  font-size: 13px; font-weight: 700; padding: 11px 18px; border-radius: 12px; z-index: 120;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12); max-width: 90%;
+  display: flex; align-items: center; gap: 10px; border: 1px solid transparent;
+}
+.status-toast.is-success { background: var(--success-soft); border-color: var(--success-line); color: var(--success); }
+.status-toast.is-info { background: var(--info-soft); border-color: var(--info-line); color: var(--info); }
+.status-toast svg { flex: 0 0 auto; }
+.status-toast button {
+  background: transparent; border: 1px solid currentColor; color: inherit; opacity: .7;
+  width: 20px; height: 20px; border-radius: 50%; cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+}
+
+/* 구독 관리 행 — 다른 .set-row와 같은 정렬(왼쪽 label+설명, 오른쪽 버튼). 좁은 화면에서는
+   설명 아래로 버튼이 자연스럽게 내려간다(flex-wrap). 버튼은 기존 .quiet-action.danger
+   (danger 글자)에 테두리만 danger-line으로 살짝 강조 — solid 빨강은 쓰지 않는다. */
+.sub-manage-row { flex-wrap: wrap; }
+.sub-manage-text { flex: 1 1 200px; min-width: 0; }
+.sub-manage-help { margin-top: 2px; font-size: 12px; line-height: 1.5; color: var(--text-dim); }
+.sub-manage-row .quiet-action.danger { min-height: 44px; padding: 0 16px; border-color: var(--danger-line); flex: 0 0 auto; }
+
 /* 마이페이지 상품 카드 - 수강권(붉은빛)과 구분되는 색 */
 .membership-card.goods {
   /* 기본 수강권 카드(.membership-card)와 같은 0/68/100 스톱 구조를 유지하되 mint 토큰으로 파생한다. */
@@ -3697,7 +3724,9 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-v3-content .toast,
 .admin-v3-content .toast,
 .error-toast,
+.status-toast,
 .manager-v3-content .error-toast,
+.manager-v3-content .status-toast,
 .admin-v3-content .error-toast {
   width: max-content !important;
   max-width: calc(100vw - 32px) !important;
