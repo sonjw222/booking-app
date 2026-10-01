@@ -1,36 +1,26 @@
 /*
-  결제 취소 서버 라우트 — 아직 승인(confirm) 전 단계에서 사용자가 결제창을 닫거나
-  실패한 경우, 주문을 cancelled로 되돌린다. 실제 토스 결제 자체가 이미 승인된 뒤의
-  "환불"은 이 범위 밖(매니저 화면에서 별도 처리 — 이번 배치는 승인 전 취소만 다룸).
+  결제 "승인 전" 주문 취소 서버 라우트 — 결제창을 닫거나 실패한 PG 주문을 cancelled로 되돌린다(차감한 포인트는 DB 트리거가 복원).
+  이미 승인·발급된 주문은 이 경로로 취소할 수 없다(환불은 /api/payments/refund). 토스 취소 API는 호출하지 않는다.
+  보안: Authorization: Bearer <access token> 필수(401), 본인 주문만(pg_order_context), pending 상태만. service_role은 위 검증 뒤 cancel_real_payment 호출에만 쓴다.
 */
-
-import { createClient } from "@supabase/supabase-js";
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+import { buildDeps, bearerToken, createAdminClient } from "../../../../lib/payments/server/deps";
+import { handleCancel } from "../../../../lib/payments/server/lifecycle";
 
 function json(body: unknown, status = 200) {
   return Response.json(body, { status });
 }
 
 export async function POST(request: Request) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return json({ error: "결제 서버 설정이 없어요(SUPABASE_SERVICE_ROLE_KEY)" }, 500);
-  }
+  const admin = createAdminClient();
+  if (!admin) return json({ error: "결제 서버 설정이 없어요(SUPABASE_SERVICE_ROLE_KEY)" }, 500);
 
-  let body: { orderId?: string };
+  let body: { orderId?: unknown };
   try {
     body = await request.json();
   } catch {
     return json({ error: "요청 형식이 올바르지 않아요" }, 400);
   }
-  if (!body.orderId) return json({ error: "orderId가 필요해요" }, 400);
-
-  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-  const { data, error } = await admin.rpc("cancel_real_payment", { p_order_id: body.orderId });
-  if (error) return json({ error: error.message }, 500);
-
-  return json({ ok: true, ...data });
+  // 이 경로는 토스를 호출하지 않으므로 시크릿 키를 넘기지 않는다(빈 값이면 deps가 토스 호출을 막는다).
+  const reply = await handleCancel({ token: bearerToken(request), orderId: body.orderId }, buildDeps(admin, ""));
+  return json(reply.body, reply.status);
 }

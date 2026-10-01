@@ -775,6 +775,15 @@ public` 추가, 로직 무변경. `npm run build` 통과(SQL/주석만 바뀜, �
 
 ## 4. P1 — 사용자 노출 미완성·금전·권한 UX
 
+### [P0/P1] 실 PG 결제 서버 라이프사이클 — 적용/후속 (2026-10-02)
+- `fix_pg_payment_lifecycle.sql` 적용 후 검증 SELECT 확인. 적용 시 confirm_test_payment(Mock)는 내부 QA 센터에서만 동작하므로 기존 통합 테스트(payment-lifecycle 등)가 쓰는 테스트 센터가 is_internal이 아니면 실패한다 — 테스트 센터 지정 또는 테스트 수정 필요.
+- 서버 라우트는 Authorization Bearer가 필수라 앱/웹 배포(Vercel)가 SQL 적용과 함께 나가야 한다(구버전 클라이언트는 401).
+- (후속) 승인 후 DB 확정 실패 + 보상 취소 실패 건을 위한 영구 알림/재처리 테이블(현재는 서버 로그 `[PG_COMPENSATION_FAILED]`/`[PG_REFUND_DB_FAILED_AFTER_PG_CANCEL]` 검색 + 사용자 안내).
+- (후속) 부분 환불/부분 취소, PortOne 승인·환불 경로, 토스 웹훅 기반 상태 동기화.
+- (후속, 보안) `/api/billing/confirm`, `/api/billing/charge-due`도 사용자 인증/소유권 검증이 없다(billing은 이번 범위 밖).
+- (후속) orders UPDATE 정책(관리자)이 amount/payment_provider 등 모든 컬럼 수정을 허용 — 컬럼 단위 제한 검토.
+- 회계 정의(payments.point_amount/total_amount, 환불 행의 결제수단별 금액)는 별도 TODO 유지.
+
 ### [P1] 주문 포인트 복원 — 후속 작업 (2026-10-02)
 - `fix_order_point_lifecycle.sql` 적용 후 검증 SELECT 확인 → 승인 후 `npm run qa:production:points` 1회 실행.
 - (후속) 토스 승인 "후" 환불(Toss cancel API 호출)과 refund_membership 연동 — 이번 배치는 DB 내부 포인트/쿠폰/수강권만 다룸.

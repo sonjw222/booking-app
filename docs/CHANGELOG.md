@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-10-02 — 실 PG 결제 서버 라이프사이클 보완(SQL 파일만 작성, 미실행 / Toss 실호출 없음)
+- `/api/payments/cancel`: 인증 없이 service_role로 cancel_real_payment를 호출하던 문제 수정 — Bearer 로그인 검증(401), 본인 주문만(pg_order_context), pending 상태만, 발급된 주문 거부.
+- `/api/payments/confirm`: 로그인/소유권/금액·상태 검증 후 토스 승인(금액은 DB 주문 값) → confirm_real_payment. 승인 성공 후 DB 확정이 실패하면 서버가 토스 보상 취소 1회(커밋 여부 재확인, 보상 실패 시 `[PG_COMPENSATION_FAILED]` 로그와 명확한 오류).
+- 신규 `/api/payments/refund`: 브라우저의 refund_membership 직접 호출을 대체 — 실 PG 주문은 토스 취소 → DB 환불(쿠폰/포인트 복원), direct/manual/mock은 기존 DB 환불. 토스 취소 후 DB 실패는 재요청으로 이어서 마무리.
+- `fix_pg_payment_lifecycle.sql`(+rollback): 환불 core/서버 전용 함수, 브라우저 refund_membership의 PG 주문 거부, cancel_real_payment/_issue_membership_and_record_payment search_path 고정,
+  confirm_test_payment(Mock)를 내부 QA 센터로 제한(회원이 mock 주문으로 결제 없이 수강권을 받던 경로 차단), 회원 INSERT 주문의 verified/status 서버 고정.
+
 ## 2026-10-02 — 주문 포인트 라이프사이클 보완(적용 전 보안/정합성 갭)
 - point_transactions "매니저 포인트 등록" INSERT 정책을 order_id/reverses_id가 null인 수기 조정으로 축소(주문 연계 차감/복원 행 위조로 unique 구조를 선점하는 경로 차단, rollback은 적용 전 정책 복원).
 - orders 상태 전이를 허용표로 명시(pending→paid|done|cancelled, paid→done|cancelled) — paid→pending 등 역전이 차단. confirm_real_payment에 search_path 고정. QA CASE 11/12 추가(실행 안 함).
