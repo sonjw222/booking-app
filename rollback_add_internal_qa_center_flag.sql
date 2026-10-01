@@ -4,6 +4,9 @@
 --   is_internal 센터가 없는지 확인하세요: select id, name from centers where is_internal;
 -- 컬럼 centers.is_internal은 데이터 보존을 위해 기본 유지(맨 아래 주석).
 -- ============================================================
+-- 정책 3개 + RPC 2개 + helper 제거를 한 트랜잭션으로 되돌린다(중간 실패 시 전부 롤백).
+BEGIN;
+
 drop policy if exists "승인된 센터 조회" on centers;
 create policy "승인된 센터 조회"
     on centers for select using (
@@ -136,6 +139,8 @@ revoke all on function public.fetch_purchasable_products(uuid) from public, anon
 grant execute on function public.fetch_purchasable_products(uuid) to authenticated, service_role;
 
 drop function if exists my_member_center_ids();
+
+COMMIT;
 
 -- 데이터 보존을 위해 기본은 주석 처리 — 정말 지울 때만:
 -- alter table centers drop column if exists is_internal;

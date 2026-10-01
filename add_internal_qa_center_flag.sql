@@ -19,6 +19,9 @@
 -- 여러 번 실행해도 안전. 이 세션에서는 production에 실행하지 않았습니다.
 -- ============================================================
 
+-- 컬럼 + helper + RLS 3개 + RPC 2개를 한 트랜잭션으로 적용한다(중간 실패 시 전부 롤백).
+BEGIN;
+
 alter table centers add column if not exists is_internal boolean not null default false;
 
 -- 내가 회원으로 등록된 센터 id(RLS 재귀 방지용 SECURITY DEFINER — my_managed_center_ids()와 같은 패턴).
@@ -181,6 +184,8 @@ AS $function$
 $function$;
 revoke all on function public.fetch_purchasable_products(uuid) from public, anon;
 grant execute on function public.fetch_purchasable_products(uuid) to authenticated, service_role;
+
+COMMIT;
 
 -- ============================================================
 -- 확인(읽기 전용)
