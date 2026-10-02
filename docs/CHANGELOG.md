@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-10-03 — 예약 무결성 Release Blocker 수정(SQL 파일만 작성, 미실행)
+- `fix_reservation_integrity_20261003.sql`(+rollback/verify): ① 서버 자격 판정의 수업명 비교를 LIKE → 정확 일치(UI와 동일, wildcard 악용 차단) ② 'selected' 수업의 예약조건 override 제거(수업 정책 AND 예약조건 AND bound) ③ 서버에서도 product_kind='pass' 강제(goods membership 예약/차감 차단, product_id 없는 legacy는 보존) ④ reservations 직접 UPDATE를 authenticated의 member_memo 컬럼으로만 제한(+anon 쓰기 권한 회수) ⑤ 회원 예약 자격 날짜를 KST 기준으로 통일 ⑥ is_membership_eligible_for_class PUBLIC/anon 실행 회수.
+- 앱 코드 변경 없음(직접 UPDATE는 lib/mypage.ts의 member_memo 하나뿐임을 테스트로 고정). Production 적용은 별도 검토 후.
+
 ## 2026-10-02 — 관리자 알림: 회원 셀프 환불 완료(SQL 파일만 작성, 미실행)
 - `fix_refund_manager_notification_20261002.sql`: memberships.status→refunded commit 시 센터 active 관리자별 `refund_completed` 1건(deferred constraint trigger + 마커 PK, 알림 실패는 환불을 막지 않음). OS 푸시 코드는 새로 만들지 않았다 — 기존 send-web-push가 kind 필터 없이 pushed_at IS NULL 행을 처리하므로 기존 push pipeline이 활성이면 refund_completed도 푸시 대상이다.
 - `push_notification` 실행 권한을 public/anon/authenticated에서 회수(클라이언트 직접 호출처 없음, 호출 함수 9개는 모두 SECURITY DEFINER).
