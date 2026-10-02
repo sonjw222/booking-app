@@ -7,7 +7,7 @@
   - 결제 수단 연동 전이므로 "결제하기" 시 주문 생성(pending) 후 완료 안내
 */
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { fetchCenterDetail, fetchCenterProductsForPurchase, fetchPurchaseScheduleOptions, type CenterProduct } from "../../lib/center";
 import { purchaseScheduleState } from "../../lib/purchaseSchedule";
@@ -123,6 +123,9 @@ function CheckoutContent() {
   const [usePoint, setUsePoint] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // 앱 복귀 후 PG 주문 상태 확인 중 / 확인 기간이 지나도 pending인 상태(결제 버튼 비활성 + 안내)
+  const [pgChecking, setPgChecking] = useState(false);
+  const [pgUnresolved, setPgUnresolved] = useState(false);
   const [done, setDone] = useState(false);
   // "direct"(직접결제, 센터에서 결제)는 PG를 거치지 않고 주문만 pending으로 접수한다 —
   // 실제 결제 완료가 아니므로 done 화면 문구를 구분해서 보여줘야 한다.
@@ -206,6 +209,8 @@ function CheckoutContent() {
   }, []);
 
   // 외부 Safari에서 결제를 마치고 앱(WebView)으로 돌아오면 이 화면의 로그인 세션으로 주문 상태를 확인한다(짧게 제한된 재시도만).
+  // 외부 Safari로 이동하면 handlePay의 finally가 돌아오지 않아 busy가 남을 수 있으므로 terminal 상태에서 명시적으로 풀어준다.
+  const checkPendingRef = useRef<() => void>(() => {});
   useEffect(() => {
     let alive = true;
     let running = false;
@@ -213,18 +218,22 @@ function CheckoutContent() {
       const pending = readPendingPgOrder();
       if (!pending || running) return;
       running = true;
+      setPgChecking(true);
       try {
         for (let i = 0; i < 5 && alive; i++) {   // 최대 5회(약 10초) — 무한 polling 금지
           const { data } = await supabase.from("orders").select("status").eq("id", pending.orderId).maybeSingle();
           const st = (data as { status?: string } | null)?.status;
-          if (st === "done") { clearPendingPgOrder(); if (alive) { setError(null); setDone(true); } return; }
-          if (st === "cancelled") { clearPendingPgOrder(); if (alive) setError("결제가 취소됐어요. 다시 시도해주세요."); return; }
-          if (!st) { clearPendingPgOrder(); return; }
+          if (st === "done") { clearPendingPgOrder(); if (alive) { setBusy(false); setPgUnresolved(false); setError(null); setDone(true); } return; }
+          if (st === "cancelled") { clearPendingPgOrder(); if (alive) { setBusy(false); setPgUnresolved(false); setError("결제가 취소됐어요. 다시 시도해주세요."); } return; }
+          if (!st) { clearPendingPgOrder(); if (alive) { setBusy(false); setPgUnresolved(false); } return; }
           await new Promise((r) => setTimeout(r, 2000));
         }
-        if (alive) setError("결제 결과를 확인하는 중이에요. 잠시 후 구매내역에서 확인해주세요.");   // pending 표시는 유지(다음 복귀 때 다시 확인)
-      } finally { running = false; }
+        // 계속 pending: 영구 "처리 중..."에 가두지 않는다. 중복 결제를 막기 위해 결제 버튼은 비활성으로 두되 "다시 확인"/구매내역 안내를 보여주고,
+        // marker는 유지해 다음 foreground에서 다시 확인한다.
+        if (alive) { setBusy(false); setPgUnresolved(true); }
+      } finally { running = false; if (alive) setPgChecking(false); }
     }
+    checkPendingRef.current = () => { void check(); };
     const onVisible = () => { if (document.visibilityState === "visible") void check(); };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
@@ -364,7 +373,9 @@ function CheckoutContent() {
       // 토스 결제창은 외부 Safari에서 열릴 수 있어(iOS 앱) 복귀 콜백이 앱의 로그인 세션을 공유하지 않는다 — Supabase 토큰 대신
       // 서버가 발급한 "이 주문 전용 복귀 토큰"만 URL에 싣는다. 발급 실패 시 결제창을 열지 않고(catch가 방금 만든 pending 주문을 정리) 오류를 보여준다.
       if (providerName === "toss") {
-        returnQuery.set("returnToken", await requestReturnToken(orderId));
+        returnQuery.set("returnToken", await requestReturnToken(orderId));   // 실패하면 throw → marker 저장 없이 catch가 pending 주문 정리
+        // 정상 결제창 진입에서는 createPayment()가 이 WebView로 돌아오지 않을 수 있으므로 marker는 결제창을 열기 "직전"에 저장한다.
+        savePendingPgOrder(orderId);
       }
       const successUrl = `${window.location.origin}/checkout/success?${returnQuery.toString()}`;
       const failUrl = `${window.location.origin}/checkout/fail?${returnQuery.toString()}`;
@@ -380,7 +391,6 @@ function CheckoutContent() {
       });
 
       if (created.redirected) {
-        savePendingPgOrder(orderId);   // 앱으로 돌아왔을 때(foreground) 이 주문 상태를 확인하기 위한 표시(orderId만)
         // 브라우저가 이미 결제창으로 이동 중 — 여기서 더 할 일 없음(성공 시 이 컴포넌트는
         // 언마운트된다). requestPayment가 reject되면(예: 사용자가 결제창을 즉시 닫음)
         // catch 블록으로 넘어가 busy가 풀린다.
@@ -402,7 +412,9 @@ function CheckoutContent() {
         setError(result.message ?? "결제에 실패했어요. 다시 시도해주세요.");
       }
     } catch (e: any) {
+      // createPayment/토큰 발급이 실패한 경우: pending 주문 정리 + 앱 복귀용 marker 제거(포인트 복원은 기존 DB 취소 트리거)
       await cancelMyPendingOrderQuietly(pgOrderIdForCleanup);
+      clearPendingPgOrder();
       setError(toUserMessage(e));
     }
     finally { setBusy(false); }
@@ -773,8 +785,17 @@ function CheckoutContent() {
       {scheduleState.required && scheduleState.blocked && scheduleState.message && (
         <div className="perm-guide" style={{ margin: "0 20px 8px" }} role="alert">{scheduleState.message}</div>
       )}
-      <button className="primary-btn checkout-pay-btn" disabled={busy || (scheduleState.required && ["loading", "load_failed", "no_options", "no_times"].includes(scheduleState.reason))} onClick={handlePay}>
-        {busy ? "처리 중..." : `${won(finalTotal)} 결제하기`}
+      {pgUnresolved && (
+        <div className="perm-guide is-warning" style={{ margin: "0 20px 8px" }} role="status">
+          결제 결과를 확인하는 중이에요. 중복 결제를 막기 위해 결제 버튼을 잠시 막았어요.
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+            <button type="button" className="quiet-action" disabled={pgChecking} onClick={() => checkPendingRef.current()}>{pgChecking ? "확인 중..." : "다시 확인"}</button>
+            <a className="quiet-action" href="/purchases">구매내역 확인</a>
+          </div>
+        </div>
+      )}
+      <button className="primary-btn checkout-pay-btn" disabled={busy || pgUnresolved || (scheduleState.required && ["loading", "load_failed", "no_options", "no_times"].includes(scheduleState.reason))} onClick={handlePay}>
+        {busy ? "처리 중..." : pgUnresolved ? "결제 결과 확인 중" : `${won(finalTotal)} 결제하기`}
       </button>
       <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "var(--text-dim)" }}>
         결제 시 <a href="/legal/refund" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>환불 정책</a>과{" "}

@@ -35,7 +35,7 @@ function CheckoutSuccessContent() {
     }
     (async () => {
       const r = await returnConfirm({ returnToken, paymentKey, orderId, amount });
-      setState(r.ok ? { kind: "done" } : { kind: "error", message: r.error ?? "결제 확정에 실패했어요. 모하빗 앱에서 구매내역을 확인해주세요." });
+      setState(r.ok ? { kind: "done" } : { kind: "error", message: (r.status === 0 || r.status >= 500 ? "결제 결과를 확인하지 못했어요. 모하빗 앱의 구매내역을 확인해주세요." : r.error ?? "결제 결과를 확인하지 못했어요. 모하빗 앱의 구매내역을 확인해주세요.") });
     })();
     // 마운트 시점 쿼리만 필요 — 재실행하면 중복 confirm이 된다
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -52,7 +52,7 @@ function CheckoutSuccessContent() {
       )}
       {state.kind === "error" && (
         <div className="daylist-empty" style={{ paddingTop: 80 }} role="alert">
-          <b>결제를 마치지 못했어요.</b><br />
+          <b>결제 결과를 확인하지 못했어요.</b><br />
           {state.message}
         </div>
       )}

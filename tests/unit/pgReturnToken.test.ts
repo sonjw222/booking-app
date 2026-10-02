@@ -83,12 +83,14 @@ describe("core 공유 — Bearer와 return 경로가 같은 안전 규칙", () =
 describe("routes", () => {
   afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.doUnmock("@supabase/supabase-js"); vi.resetModules(); });
   const mk = (path: string, body: object, headers: Record<string, string> = {}) => new Request(`http://localhost${path}`, { method: "POST", headers, body: JSON.stringify(body) });
-  function setup(rpc: (name: string) => any) {
+  function setup(rpc: (name: string) => any, override: boolean = false) {
     vi.resetModules();
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "x"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://x"); vi.stubEnv("TOSS_SECRET_KEY", "s"); vi.stubEnv("PAYMENT_RETURN_TOKEN_SECRET", SECRET);
     vi.stubEnv("NEXT_PUBLIC_PG_CHECKOUT_ENABLED", "true");
     const rpcMock = vi.fn(async (name: string) => rpc(name));
-    vi.doMock("@supabase/supabase-js", () => ({ createClient: () => ({ auth: { getUser: async (t: string) => (t === "good" ? { data: { user: { id: "u1" } }, error: null } : { data: { user: null }, error: { message: "bad" } }) }, rpc: rpcMock }) }));
+    vi.doMock("@supabase/supabase-js", () => ({ createClient: () => ({ auth: { getUser: async (t: string) => (t === "good" ? { data: { user: { id: "u1" } }, error: null } : { data: { user: null }, error: { message: "bad" } }) }, rpc: rpcMock,
+      // buildDeps.gateAllows(PG OFF)가 쓰는 체인: from("orders").select(...).eq("id", orderId).maybeSingle()
+      from: (table: string) => ({ select: () => ({ eq: (_c: string, id: string) => ({ maybeSingle: async () => ({ data: table === "orders" ? { profiles: { accounts: { pg_checkout_override: override } } } : null, id }) }) }) }) }) }));
     const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
     return { rpcMock, fetchMock };
   }
@@ -105,13 +107,21 @@ describe("routes", () => {
     vi.stubEnv("PAYMENT_RETURN_TOKEN_SECRET", "");
     expect((await POST(mk("/api/payments/return-token", { orderId: "o1" }, { Authorization: "Bearer good" }))).status).toBe(500);
   });
-  it("mint: PG 게이트 OFF면 발급 거부(403)", async () => {
-    setup(okRpc);
+  it("mint: PG 게이트 OFF + 일반 계정 → 정확히 403, returnToken 없음", async () => {
+    setup(okRpc, false);
     vi.stubEnv("NEXT_PUBLIC_PG_CHECKOUT_ENABLED", "false");
     const { POST } = await import("../../app/api/payments/return-token/route");
-    // gateAllows가 orders 조회(심사관 override)를 쓰므로 가짜에는 from이 없다 → 게이트는 거부로 귀결돼야 한다
-    const res = await POST(mk("/api/payments/return-token", { orderId: "o1" }, { Authorization: "Bearer good" })).catch(() => null);
-    expect(res === null || res.status === 403 || res.status >= 400).toBe(true);
+    const res = await POST(mk("/api/payments/return-token", { orderId: "o1" }, { Authorization: "Bearer good" }));
+    expect(res.status).toBe(403);
+    expect((await res.json()).returnToken).toBeUndefined();
+  });
+  it("mint: PG 게이트 OFF + 심사관 override 계정 → 기존 정책대로 발급 허용", async () => {
+    setup(okRpc, true);
+    vi.stubEnv("NEXT_PUBLIC_PG_CHECKOUT_ENABLED", "false");
+    const { POST } = await import("../../app/api/payments/return-token/route");
+    const res = await POST(mk("/api/payments/return-token", { orderId: "o1" }, { Authorization: "Bearer good" }));
+    expect(res.status).toBe(200);
+    expect(typeof (await res.json()).returnToken).toBe("string");
   });
   it("return confirm: 유효하지 않은 토큰(변조/만료/다른 주문/없음) → 401, 토스·DB 호출 0회", async () => {
     const { rpcMock, fetchMock } = setup(okRpc);
@@ -202,5 +212,54 @@ describe("클라이언트 계약", () => {
   });
   it("SQL/native 파일 변경 없음 + PortOne fail-closed 유지", () => {
     expect(read("lib/payments/server/lifecycle.ts")).toContain("portone_refund_unsupported");
+  });
+});
+
+describe("후속 보완 — marker 시점 / busy 복구 / fail·success UX", () => {
+  const checkout = read("app/checkout/page.tsx");
+  const fail = read("app/checkout/fail/page.tsx");
+  const success = read("app/checkout/success/page.tsx");
+  it("marker 저장은 토큰 발급 성공 직후, createPayment 호출보다 앞(토스 provider에만), redirected 분기에서는 저장하지 않는다", () => {
+    const tok = checkout.indexOf("await requestReturnToken(orderId)");
+    const save = checkout.indexOf("savePendingPgOrder(orderId);");
+    const pay = checkout.indexOf("paymentService.createPayment(");
+    expect(tok).toBeGreaterThan(-1);
+    expect(tok).toBeLessThan(save);
+    expect(save).toBeLessThan(pay);
+    expect((checkout.match(/savePendingPgOrder\(orderId\)/g) ?? []).length).toBe(1);
+    const block = checkout.slice(checkout.lastIndexOf('if (providerName === "toss")', save), save);
+    expect(block).toContain('providerName === "toss"');
+  });
+  it("토큰 발급 실패/ createPayment reject → catch가 pending 주문 정리 + marker clear (marker는 발급 성공 뒤에만 저장되므로 발급 실패 시 생성 안 됨)", () => {
+    expect(checkout).toContain("await cancelMyPendingOrderQuietly(pgOrderIdForCleanup);\n      clearPendingPgOrder();");
+  });
+  it("앱 복귀 done: marker clear + busy false + error null + done / cancelled: marker clear + busy false + 취소 안내", () => {
+    expect(checkout).toContain('if (st === "done") { clearPendingPgOrder(); if (alive) { setBusy(false); setPgUnresolved(false); setError(null); setDone(true); } return; }');
+    expect(checkout).toContain('if (st === "cancelled") { clearPendingPgOrder(); if (alive) { setBusy(false); setPgUnresolved(false); setError("결제가 취소됐어요. 다시 시도해주세요."); } return; }');
+  });
+  it("계속 pending: busy를 풀고 '결제 결과 확인 중' + 다시 확인/구매내역 안내(버튼은 중복 결제 방지로 비활성), marker 유지, 5회 제한", () => {
+    expect(checkout).toContain("i < 5");
+    expect(checkout).toContain("if (alive) { setBusy(false); setPgUnresolved(true); }");
+    expect(checkout).toContain("결제 결과 확인 중");
+    expect(checkout).toContain('href="/purchases"');
+    expect(checkout).toContain("disabled={busy || pgUnresolved ||");
+    const pend = checkout.slice(checkout.indexOf("계속 pending"), checkout.indexOf("checkPendingRef.current = "));
+    expect(pend).not.toContain("clearPendingPgOrder");
+  });
+  it("fail callback: working → returnCancel await → ok일 때만 '결제가 취소됐어요', 실패/토큰·orderId 없음은 오류(취소 단정 없음), 일시 오류만 1회 재시도, scrub 유지", () => {
+    expect(fail).toContain("let r = await returnCancel({ returnToken, orderId });");
+    expect(fail).toContain("r.status === 0 || r.status >= 500");
+    expect(fail).toContain('setState(r.ok ? { kind: "done", message } : { kind: "error" });');
+    expect(fail).toContain('if (!orderId || !returnToken) { setState({ kind: "error" }); return; }');
+    expect(fail).toContain("결제 취소 상태를 확인하지 못했어요.");
+    expect(fail.indexOf("scrubCallbackUrl()")).toBeLessThan(fail.indexOf("returnCancel("));
+    const done = fail.slice(fail.indexOf('state.kind === "done"'), fail.indexOf('state.kind === "error"'));
+    expect(done).toContain("결제가 취소됐어요.");
+    const err = fail.slice(fail.indexOf('state.kind === "error"'));
+    expect(err).not.toContain("결제가 취소됐어요.");
+  });
+  it("success callback: 네트워크/서버 오류는 실패로 단정하지 않고 구매내역 확인 안내", () => {
+    expect(success).toContain("결제 결과를 확인하지 못했어요. 모하빗 앱의 구매내역을 확인해주세요.");
+    expect(success).not.toContain("결제를 마치지 못했어요");
   });
 });
