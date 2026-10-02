@@ -9,7 +9,8 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { fetchCenterDetail, fetchCenterProducts, fetchPurchaseScheduleOptions, type CenterProduct } from "../../lib/center";
+import { fetchCenterDetail, fetchCenterProductsForPurchase, fetchPurchaseScheduleOptions, type CenterProduct } from "../../lib/center";
+import { purchaseScheduleState } from "../../lib/purchaseSchedule";
 import { DAYS, type SelectableSchedule } from "../../lib/passes";
 import { cancelMyPendingOrderQuietly, createOrder } from "../../lib/orders";
 import { fetchProfiles, type ProfileRow } from "../../lib/profiles";
@@ -113,6 +114,7 @@ function CheckoutContent() {
   // 때만 의미 있고, 선택 후보(scheduleOptions)는 이 상품의 기존 예약조건에서 계산된다
   // (lib/center.ts fetchPurchaseScheduleOptions, 새 스케줄 데이터 없음).
   const [scheduleOptions, setScheduleOptions] = useState<SelectableSchedule | null>(null);
+  const [scheduleOptionsFailed, setScheduleOptionsFailed] = useState(false);
   const [selectedScheduleDay, setSelectedScheduleDay] = useState<number | null>(null);
   const [selectedScheduleTime, setSelectedScheduleTime] = useState<string | null>(null);
   const [myPoints, setMyPoints] = useState(0);
@@ -153,7 +155,7 @@ function CheckoutContent() {
         setProfiles(profs);
         if (profs.length > 0) setSelectedProfileId(profs[0].id);
       } catch { /* 비로그인 — 무시, 결제 시점에 로그인 유도 */ }
-      const products = await fetchCenterProducts(centerId);
+      const products = await fetchCenterProductsForPurchase(centerId);
       const found = products.find((p) => p.id === productId) ?? null;
       setProduct(found);
       if (found && isCountSelectable(found)) {
@@ -164,8 +166,8 @@ function CheckoutContent() {
       const wantSize = sp.get("size");
       if (found?.sizes && wantSize && found.sizes.includes(wantSize)) setSelectedSize(wantSize);
       if (found?.weekdaySelectable) {
-        try { setScheduleOptions(await fetchPurchaseScheduleOptions(found.id)); }
-        catch { setScheduleOptions({ days: [], timesByDay: {} }); }
+        try { setScheduleOptions(await fetchPurchaseScheduleOptions(found.id)); setScheduleOptionsFailed(false); }
+        catch { setScheduleOptionsFailed(true); }   // 조회 실패를 "후보 없음"으로 숨기지 않는다
       }
     } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
@@ -225,6 +227,8 @@ function CheckoutContent() {
 
   const effectivePayMethodUi = resolveSelectedPayMethod(payMethod, visibleMethodIds);
 
+  const scheduleState = purchaseScheduleState(product, scheduleOptions, scheduleOptionsFailed, selectedScheduleDay, selectedScheduleTime);
+
   async function handlePay() {
     if (!product) return;
     // 선택형: 가격표에 없는 횟수는 결제를 진행하지 않는다(서버도 같은 기준으로 주문 생성을 거부한다).
@@ -237,14 +241,15 @@ function CheckoutContent() {
       setError("사이즈를 선택해주세요");
       return;
     }
-    // 2026-10-01(Batch C, C-9) — 요일/시간 선택형 수강권은 고르기 전엔 결제를 막는다
-    // (선택 없이 구매되면 이후 예약 제한을 걸 기준 자체가 없어지므로).
-    if (product.weekdaySelectable && selectedScheduleDay === null) {
-      setError("이용할 요일을 선택해 주세요.");
+    // 공개(비로그인) 목록으로 만든 모델은 요일/시간 선택 설정을 알 수 없다 — 이 상태로 결제하지 않는다.
+    if (product.publicFallback) {
+      setError("로그인 정보를 확인하지 못했어요. 다시 로그인한 뒤 시도해주세요.");
       return;
     }
-    if (product.weekdaySelectable && product.timeSelectable && !selectedScheduleTime) {
-      setError("이용할 시간을 선택해 주세요.");
+    // 2026-10-01(Batch C, C-9) — 요일/시간 선택형 수강권은 고르기 전엔 결제를 막는다
+    // (선택 없이 구매되면 이후 예약 제한을 걸 기준 자체가 없어지므로). direct/PG 분기보다 먼저 판정한다.
+    if (scheduleState.blocked) {
+      setError(scheduleState.message ?? "수강 요일 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.");
       return;
     }
     // 숨겨진 PG 수단이 선택된 채 결제가 진행되는 일이 없도록 화면에 보이는 수단으로 한 번 더 보정한다.
@@ -541,11 +546,15 @@ function CheckoutContent() {
       {product.weekdaySelectable && (
         <>
           <div className="menu-section-label">수강 요일</div>
-          {scheduleOptions === null ? (
+          {scheduleOptionsFailed ? (
+            <div className="perm-guide" style={{ margin: "0 20px" }}>
+              수강 요일 정보를 불러오지 못했어요. 새로고침 후 다시 시도해주세요.
+            </div>
+          ) : scheduleOptions === null ? (
             <div className="perm-guide" style={{ margin: "0 20px" }}>요일 정보를 불러오는 중이에요…</div>
           ) : scheduleOptions.days.length === 0 ? (
             <div className="perm-guide" style={{ margin: "0 20px" }}>
-              아직 선택 가능한 요일이 설정되지 않았어요. 센터에 문의해주세요.
+              아직 선택 가능한 요일이 설정되지 않아 구매할 수 없어요. 센터에 문의해주세요.
             </div>
           ) : (
             <>
@@ -726,7 +735,10 @@ function CheckoutContent() {
         <span>총 결제 금액</span>
         <b>{won(finalTotal)}</b>
       </div>
-      <button className="primary-btn checkout-pay-btn" disabled={busy} onClick={handlePay}>
+      {scheduleState.required && scheduleState.blocked && scheduleState.message && (
+        <div className="perm-guide" style={{ margin: "0 20px 8px" }} role="alert">{scheduleState.message}</div>
+      )}
+      <button className="primary-btn checkout-pay-btn" disabled={busy || (scheduleState.required && ["loading", "load_failed", "no_options", "no_times"].includes(scheduleState.reason))} onClick={handlePay}>
         {busy ? "처리 중..." : `${won(finalTotal)} 결제하기`}
       </button>
       <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "var(--text-dim)" }}>

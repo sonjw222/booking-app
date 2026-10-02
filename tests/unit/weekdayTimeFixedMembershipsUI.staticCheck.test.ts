@@ -14,11 +14,13 @@ const members = readFileSync(join(__dirname, "../../app/manager/members/page.tsx
 
 describe("C-9 — 체크아웃: 요일/시간 선택 없이는 결제를 막는다", () => {
   it("handlePay()가 weekdaySelectable 상품의 미선택을 막는다(직접결제/PG 결제 둘 다 이 체크를 거친 뒤 분기)", () => {
-    const fn = checkout.slice(checkout.indexOf("async function handlePay()"), checkout.indexOf("async function handlePay()") + 1200);
-    expect(fn).toContain("product.weekdaySelectable && selectedScheduleDay === null");
-    expect(fn).toContain("이용할 요일을 선택해 주세요.");
-    expect(fn).toContain("product.weekdaySelectable && product.timeSelectable && !selectedScheduleTime");
-    expect(fn).toContain("이용할 시간을 선택해 주세요.");
+    // 2026-10-02: 판정을 lib/purchaseSchedule.ts purchaseScheduleState로 모았다(요일/시간 미선택·후보 없음·조회 실패 모두 차단).
+    const fn = checkout.slice(checkout.indexOf("async function handlePay()"), checkout.indexOf("async function handlePay()") + 2400);
+    expect(fn).toContain("scheduleState.blocked");
+    expect(checkout).toContain("purchaseScheduleState(product, scheduleOptions, scheduleOptionsFailed, selectedScheduleDay, selectedScheduleTime)");
+    const lib = readFileSync(join(__dirname, "../../lib/purchaseSchedule.ts"), "utf-8");
+    expect(lib).toContain("이용할 요일을 선택해 주세요.");
+    expect(lib).toContain("이용할 시간을 선택해 주세요.");
   });
 
   it("두 결제 경로(직접결제/PG) 모두 selectedDayOfWeek/selectedStartTime을 createOrder에 넘긴다", () => {

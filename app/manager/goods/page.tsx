@@ -13,7 +13,9 @@ import SheetOverlay from "../../components/SheetOverlay";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
-import { fetchProducts, createProduct, updateProduct, deleteProduct, won, type Product } from "../../../lib/passes";
+import { fetchProducts, createProduct, updateProduct, deleteProduct, deleteProducts, won, type Product } from "../../../lib/passes";
+import { bulkDeleteConfirmMessage, bulkDeleteToast, effectiveSelection, selectAllVisible, toggleSelected } from "../../../lib/bulkSelect";
+import BulkSelectBar from "../../components/BulkSelectBar";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 import ExpiryOptionField, { type ExpiryOptionValue } from "../../components/ExpiryOptionField";
 import { validateGoodsForm, goodsListLabel, nextUnlimitedForMode, draftsFromTiers, type GoodsPricingMode } from "../../../lib/goodsForm";
@@ -49,6 +51,9 @@ export default function GoodsPage() {
   // 상품 검색(이름/설명) — load() 후에도 유지되는 컴포넌트 state
   const [query, setQuery] = useState("");
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
+  // 다중 선택 삭제 — 평상시에는 꺼져 있고 "선택"을 눌러야 체크 UI가 나타난다.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -175,6 +180,21 @@ export default function GoodsPage() {
     finally { setBusy(false); }
   }
 
+  const selectedIds = effectiveSelection(selected, shownProducts.map((p) => p.id));
+  function exitSelect() { setSelecting(false); setSelected(new Set()); }
+  async function handleBulkDelete() {
+    if (!centerId || selectedIds.length === 0) return;
+    if (!(await globalThis.appConfirm(bulkDeleteConfirmMessage(selectedIds.length)))) return;   // 취소하면 아무것도 바꾸지 않는다
+    setBusy(true);
+    try {
+      const n = await deleteProducts(centerId, selectedIds);
+      exitSelect();
+      showToast(bulkDeleteToast(n));
+      await load();
+    } catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
   if (centers.length === 0 && !loading) {
     return (
       <div className="app-shell">
@@ -232,6 +252,14 @@ export default function GoodsPage() {
             groups={[]} group={null} onGroup={() => {}} sticky={false}
             resultText={query.trim() ? `검색 결과 ${shownProducts.length}개` : null}
           />
+          {canEditProduct && (
+            <BulkSelectBar
+              selecting={selecting} selectedCount={selectedIds.length} totalVisible={shownProducts.length} busy={busy}
+              onEnter={() => setSelecting(true)} onCancel={exitSelect}
+              onSelectAll={() => setSelected(selectAllVisible(shownProducts.map((p) => p.id)))} onClear={() => setSelected(new Set())}
+              onDelete={handleBulkDelete}
+            />
+          )}
           {shownProducts.length === 0 && (
             <div className="catalog-empty">
               {catalogEmptyMessage(products.length, { ...EMPTY_CATALOG_FILTER, query }, "상품")}
@@ -239,7 +267,13 @@ export default function GoodsPage() {
             </div>
           )}
           {shownProducts.map((p) => (
-            <div key={p.id} className="pass-card">
+            <div key={p.id} className={`pass-card${selecting && selected.has(p.id) ? " bulk-selected" : ""}`}>
+              {selecting && (
+                <label className="bulk-check-row">
+                  <input type="checkbox" checked={selected.has(p.id)} onChange={() => setSelected((prev) => toggleSelected(prev, p.id))} aria-label={`${p.name} 선택`} />
+                  <span>선택</span>
+                </label>
+              )}
               <div className="pass-head">
                 <div className="goods-card-content">
                   <div className="pass-name">

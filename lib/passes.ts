@@ -314,6 +314,24 @@ export async function deleteProduct(id: string): Promise<void> {
   if (error) throw new Error("상품 삭제에 실패했어요: " + error.message);
 }
 
+// 여러 상품/수강권 일괄 삭제(소프트 삭제) — 단건 deleteProduct와 같은 RLS 경계(pass.update)를 그대로 쓴다.
+// 하나의 UPDATE 문이라 전부 바뀌거나 전부 안 바뀐다(원자적). 같은 센터의 상품만 대상(center_id 조건)이라
+// 권한이 없으면 RLS가 0행으로 막아 새 우회가 되지 않는다. 판매/발급/결제 이력은 건드리지 않는다.
+export async function deleteProducts(centerId: string, ids: string[]): Promise<number> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return 0;
+  const { data, error } = await supabase
+    .from("products").update({ is_active: false }).eq("center_id", centerId).in("id", unique).select("id");
+  if (error) throw new Error("선택 삭제에 실패했어요: " + error.message);
+  const n = data?.length ?? 0;
+  if (n !== unique.length) {
+    throw new Error(n === 0
+      ? "삭제할 수 없어요. 권한이 없거나 이미 처리된 항목이에요. 새로고침 후 다시 확인해주세요"
+      : "선택한 항목을 모두 삭제하지 못했어요. 새로고침 후 다시 확인해주세요");
+  }
+  return n;
+}
+
 // 판매정지/재개 — deleteProduct(영구 비활성화)와 달리 일시적으로 신규 판매만 막고
 // 언제든 재개할 수 있다. 기존 보유자의 예약/사용에는 영향 없음.
 export async function toggleProductSale(id: string, onSale: boolean): Promise<void> {

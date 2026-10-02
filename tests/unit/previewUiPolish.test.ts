@@ -39,7 +39,7 @@ describe("가격 채우기 정렬", () => {
 });
 
 describe("수강권 카드(/manager/membership-rules): 정보와 액션 분리", () => {
-  const card = page.slice(page.indexOf('<div key={p.id} className="pass-card">'), page.indexOf('className="pass-rules-toggle"'));
+  const card = page.slice(page.indexOf('<div key={p.id} className={`pass-card'), page.indexOf('className="pass-rules-toggle"'));
   it("정보 영역(.pass-head/.pass-info)과 액션(.pass-actions)이 서로 다른 블록이며, 액션이 정보와 같은 flex 행에 없다", () => {
     expect(card).toContain('<div className="pass-info">');
     expect(card).toContain('<div className="pass-actions">');

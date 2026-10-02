@@ -14,3 +14,31 @@ export function formatInstructorNames(names: string[]): string | null {
   if (names.length <= 2) return names.join(", ");
   return `${names[0]}, ${names[1]} 외 ${names.length - 2}명`;
 }
+
+/*
+  담당 강사 "선택한 순서"(2026-10-02) — 선택 순서가 source of truth다.
+  - toggleTrainerSelection: 선택하지 않은 강사를 누르면 배열 맨 뒤에 추가, 선택된 강사를 다시 누르면 제거(다시 선택하면 맨 뒤).
+  - trainerPreviewItems: 저장 전 "표시 순서 미리보기"용 번호 목록(선택 순서 그대로, 이름을 모르는 계정은 건너뜀).
+  - appendTrainerNames: class_trainer_names RPC 행(서버가 class_id, sort_order 순으로 정렬해 돌려줌)을 수업별 이름 배열로 모은다 — 행 순서를 그대로 유지한다.
+*/
+export function toggleTrainerSelection(order: readonly string[], accountId: string): string[] {
+  return order.includes(accountId) ? order.filter((x) => x !== accountId) : [...order, accountId];
+}
+
+export const TRAINER_PREVIEW_EMPTY = "담당 강사를 선택하면 표시 순서를 미리 볼 수 있어요";
+
+export function trainerPreviewItems(order: readonly string[], nameByAccountId: Readonly<Record<string, string>>): { position: number; accountId: string; name: string }[] {
+  const out: { position: number; accountId: string; name: string }[] = [];
+  for (const id of order) {
+    const name = nameByAccountId[id];
+    if (name) out.push({ position: out.length + 1, accountId: id, name });
+  }
+  return out;
+}
+
+export function appendTrainerNames(target: Record<string, string[]>, rows: readonly { class_id: string; name?: string | null }[] | null | undefined): void {
+  for (const r of rows ?? []) {
+    if (!r.name) continue;
+    (target[r.class_id] ??= []).push(r.name);
+  }
+}

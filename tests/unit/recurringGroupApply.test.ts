@@ -178,8 +178,9 @@ describe("SQL 계약 · 안내 문구", () => {
   });
   it("helper 문구가 실제 동작과 일치(공통 설정 적용 / 날짜·시간·수강권 정책은 수업별 유지)", () => {
     const page = read("app/manager/classes/page.tsx");
-    expect(page).toContain("수업명·소개·정원·룸·담당 강사 등 바꾼 공통 설정이 반복 수업 전체에 적용돼요. 날짜·시간·수강권 정책은 수업별로 유지돼요.");
-    expect(page).toContain("await updateClassPassSelectionMode(editId, passMode);");   // 수강권 정책은 이 수업만(명시적 제외)
+    expect(page).toContain("수업명·소개·정원·룸·담당 강사와 변경한 수강권 설정이 반복 수업 전체에 적용돼요. 날짜·시간은 수업별로 유지돼요.");
+    // 수강권 설정은 바꾼 경우에만 그룹 RPC가 전체에 적용하고, 바꾸지 않았으면 단건 갱신(기존 동작)만 유지한다
+    expect(page).toContain("if (!groupCarriedPassPolicy) await updateClassPassSelectionMode(editId, passMode);");
   });
   it("반복 생성/스케줄 복사 4경로(공통시간·요일별 개별시간·요일 복사·날짜 복사) 모두 한 작업의 모든 occurrence에 같은 recurring_group_id를 준다", () => {
     const lib = read("lib/classes.ts");

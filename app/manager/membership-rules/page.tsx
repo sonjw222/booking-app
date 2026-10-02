@@ -16,7 +16,7 @@ import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
-  fetchProducts, createProduct, updateProduct, deleteProduct, toggleProductSale,
+  fetchProducts, createProduct, updateProduct, deleteProduct, deleteProducts, toggleProductSale,
   fetchRules, addRule, deleteRule, ruleToText, won, DAYS, computeSelectableSchedule,
   type Product, type ScheduleRule, type ProductVisibility,
 } from "../../../lib/passes";
@@ -26,6 +26,8 @@ import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/
 import ExpiryOptionField, { type ExpiryOptionValue } from "../../components/ExpiryOptionField";
 import CountPriceEditor from "../../components/CountPriceEditor";
 import CatalogSearchFilter from "../../components/CatalogSearchFilter";
+import BulkSelectBar from "../../components/BulkSelectBar";
+import { bulkDeleteConfirmMessage, bulkDeleteToast, effectiveSelection, selectAllVisible, toggleSelected } from "../../../lib/bulkSelect";
 import { validateGoodsForm, goodsListLabel, draftsFromTiers, type GoodsPricingMode } from "../../../lib/goodsForm";
 import { draftsToTiers, type TierDraft } from "../../../lib/selectableCount";
 import { filterCatalog, uniqueGroupLabels, catalogEmptyMessage, isFilterActive, EMPTY_CATALOG_FILTER } from "../../../lib/catalogFilter";
@@ -91,6 +93,9 @@ export default function MembershipRulesPage() {
   const [existingClasses, setExistingClasses] = useState<ExistingClassOption[]>([]);
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
+  // 다중 선택 삭제 — 평상시에는 꺼져 있고 "선택"을 눌러야 체크 UI가 나타난다.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   // UX 감사(B-8) — 수강권 상품이 100개+(이름이 UUID로 끝나 구분도 안 됨)면 검색/페이징 없이
   // 전부 렌더돼 원하는 걸 찾기 어려웠다. 이름 검색 + 20개씩 "더보기"로 완화.
   // 검색/그룹 필터(2026-10-01): load()가 다시 불러와도 리셋되지 않는 컴포넌트 state — 수정/추가 후에도 유지된다.
@@ -360,6 +365,21 @@ export default function MembershipRulesPage() {
     finally { setBusy(false); }
   }
 
+  const selectedIds = effectiveSelection(selected, filteredProducts.map((p) => p.id));
+  function exitSelect() { setSelecting(false); setSelected(new Set()); }
+  async function handleBulkDelete() {
+    if (!centerId || selectedIds.length === 0) return;
+    if (!(await globalThis.appConfirm(bulkDeleteConfirmMessage(selectedIds.length)))) return;   // 취소하면 아무것도 바꾸지 않는다
+    setBusy(true);
+    try {
+      const n = await deleteProducts(centerId, selectedIds);
+      exitSelect();
+      showToast(bulkDeleteToast(n));
+      await load();
+    } catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
   async function handleToggleSale(p: Product) {
     const next = !p.isOnSale;
     if (!(await globalThis.appConfirm(next ? `'${p.name}' 판매를 다시 시작할까요?` : `'${p.name}' 판매를 정지할까요? (기존 보유자는 영향 없어요)`))) return;
@@ -468,10 +488,24 @@ export default function MembershipRulesPage() {
         }
         return (
         <div className="pass-list">
+          {canEditRules && (
+            <BulkSelectBar
+              selecting={selecting} selectedCount={selectedIds.length} totalVisible={filtered.length} busy={busy}
+              onEnter={() => setSelecting(true)} onCancel={exitSelect}
+              onSelectAll={() => setSelected(selectAllVisible(filtered.map((p) => p.id)))} onClear={() => setSelected(new Set())}
+              onDelete={handleBulkDelete}
+            />
+          )}
           {filtered.slice(0, visibleCount).map((p) => {
             const rules = rulesByProduct[p.id] ?? [];
             return (
-              <div key={p.id} className="pass-card">
+              <div key={p.id} className={`pass-card${selecting && selected.has(p.id) ? " bulk-selected" : ""}`}>
+                {selecting && (
+                  <label className="bulk-check-row">
+                    <input type="checkbox" checked={selected.has(p.id)} onChange={() => setSelected((prev) => toggleSelected(prev, p.id))} aria-label={`${p.name} 선택`} />
+                    <span>선택</span>
+                  </label>
+                )}
                 {/* 상품 정보(전체 폭) — 제목 / badge(줄바꿈 가능, badge 글자는 한 줄) / 가격 요약 */}
                 <div className="pass-head">
                   <div className="pass-info">
@@ -479,6 +513,10 @@ export default function MembershipRulesPage() {
                     <div className="pass-tags">
                       {p.groupLabel && <span className="pass-group-tag">{p.groupLabel}</span>}
                       {!p.isOnSale && <span className="pass-group-tag" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>판매정지</span>}
+                      {/* 요일 선택형인데 요일이 지정된 예약조건이 없으면 회원 구매 화면에 선택 후보가 없어 구매할 수 없다 — 조용히 두지 않고 표시 */}
+                      {p.weekdaySelectable && computeSelectableSchedule(rules).days.length === 0 && (
+                        <span className="pass-group-tag" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>요일 선택형 · 예약조건 필요</span>
+                      )}
                       {p.maxQuantity != null && (
                         <span className="pass-group-tag" style={p.soldCount >= p.maxQuantity ? { background: "var(--danger-soft)", color: "var(--danger)" } : undefined}>
                           {p.soldCount >= p.maxQuantity ? "매진" : `${p.maxQuantity - p.soldCount}개 남음`}

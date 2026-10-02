@@ -18,17 +18,17 @@ const css = read("app/globals.css");
 describe("[A] 예약 목록 룸 즉시 표시 — 데이터 경로", () => {
   it("수업 조회가 rooms(name)을 select하고 ClassInfo.place로 매핑한다(추가 SQL/조회 없음)", () => {
     expect(lib).toContain("room_id, centers(id, name, categories), rooms(name)");
-    expect(lib).toContain('place: (c as any).rooms?.name ?? ""');
+    expect(lib).toContain('place: roomNameFromEmbed((c as any).rooms)');   // 객체/배열 임베드 모두 처리(roomNameFromEmbed 테스트)
   });
 
   it("목록 카드와 예약 확인 시트가 같은 cls.place / confirmClass.place를 쓴다(다른 fallback 없음)", () => {
-    expect(page).toContain("{cls.place && <div className=\"class-row-room\">{cls.place}</div>}");
-    expect(page).toContain("{confirmClass.place} · {confirmClass.date} {confirmClass.start}");
+    expect(page).toContain("classListMetaText(center?.name, instructorText, cls.place)");   // 카드 meta 한 줄에 룸 포함
+    expect(page).toContain("confirmClassSubText(confirmClass.place, confirmClass.date, confirmClass.start)");   // 시트도 같은 place
   });
 
   it("룸이 없으면 룸 줄 자체를 그리지 않는다(빈 점/undefined/null 노출 없음)", () => {
-    expect(page).not.toMatch(/class-row-room[^\n]*\{cls\.place \?\? /);
-    expect(page).toContain("cls.place && ");
+    expect(page).not.toMatch(/\{cls\.place \?\? /);
+    expect(page).toContain("return meta ? <div className=\"class-row-place\">{meta}</div> : null;");   // meta가 비면 줄 자체를 그리지 않음
   });
 
   it("상세주소는 목록에 노출하지 않는다", () => {

@@ -19,7 +19,7 @@ import Loading from "../components/Loading";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   fetchMonthData,
-  reserveClass, fetchUsableMembershipsByClass, reserveWithMembership, reserveWithGoods, classListMetaText, type UsableMembership,
+  reserveClass, fetchUsableMembershipsByClass, reserveWithMembership, reserveWithGoods, classListMetaText, confirmClassSubText, type UsableMembership,
   fetchMyGoodsByCenter,
   fetchPurchasableProductsByClass, type PurchasableProduct,
   cancelReservation,
@@ -734,9 +734,11 @@ function ReservationCalendarContent() {
                       {mineRec?.status === "waitlisted" && <span className="booked-tag">대기중</span>}
                     </div>
                   )}
-                  <div className="class-row-place">{classListMetaText(center?.name, instructorText)}</div>
-                  {/* 룸 이름 — 예약 확인 시트와 같은 cls.place(= classes.room_id → rooms.name)를 쓴다. 없으면 줄 자체를 그리지 않음. */}
-                  {cls.place && <div className="class-row-room">{cls.place}</div>}
+                  {/* 센터명 · 담당 강사 · 룸(classes.room_id → rooms.name = cls.place)을 한 줄 meta로. 비어 있는 항목은 구분자째 생략하고, 좁은 폭에서는 자연스럽게 줄바꿈된다. */}
+                  {(() => {
+                    const meta = classListMetaText(center?.name, instructorText, cls.place);
+                    return meta ? <div className="class-row-place">{meta}</div> : null;
+                  })()}
                   {/* UX 감사(A-7) — 수강권 이름을 최대 11개까지 칩으로 전부 나열해 정작
                       중요한 수업명·시간·잔여석이 밀렸다. 어떤 수강권을 쓸지는 예약 확인
                       시트에서 다시 고르므로(pickDefaultMembership), 카드에서는 "예약
@@ -792,7 +794,7 @@ function ReservationCalendarContent() {
                 {confirmClass.description && (
                   <div className="confirm-class-sub" style={{ whiteSpace: "pre-wrap" }}>{confirmClass.description}</div>
                 )}
-                <div className="confirm-class-sub">{confirmClass.place} · {confirmClass.date} {confirmClass.start}</div>
+                <div className="confirm-class-sub">{confirmClassSubText(confirmClass.place, confirmClass.date, confirmClass.start)}</div>
                 {confirmClass.showReservedCount && <div className="confirm-class-sub">예약 {confirmClass.reserved}/{confirmClass.capacity}</div>}
                 {confirmClass.showWaitlistCount && confirmClass.waitlisted > 0 && <div className="confirm-class-sub">대기 {confirmClass.waitlisted}명</div>}
                 {confirmClass.instructorNames.length > 0 && (

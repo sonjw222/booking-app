@@ -16,7 +16,7 @@ import MonthPicker from "../../components/MonthPicker";
 import AmPmTimeInput from "../../components/AmPmTimeInput";
 import UiIcon from "../../components/UiIcon";
 import { dhmToMinutes, minutesToDhm } from "../../../lib/deadlineInput";
-import { formatInstructorNames } from "../../../lib/instructorDisplay";
+import { formatInstructorNames, toggleTrainerSelection, trainerPreviewItems, TRAINER_PREVIEW_EMPTY } from "../../../lib/instructorDisplay";
 import CopyCalendar from "./CopyCalendar";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchRooms, type Room } from "../../../lib/rooms";
@@ -26,7 +26,7 @@ import { classToEvent, filterEventsByMonth, holidaysToEvents, monthPrefix, type 
 import {
   fetchClasses, createClass, updateClass, updateClassPassSelectionMode, deleteClass,
   createRecurringClasses, createRecurringClassesPerDay, createClassOnDateSlots, expandRecurringDates,
-  updateClassGroup, deleteClassGroup, diffGroupFields,
+  updateClassGroup, deleteClassGroup, diffGroupFields, passPolicyChanged, type PassPolicy,
   fetchClassAttendees, setAttendance, fetchClassProducts, setClassProducts, setClassProductsBulk,
   fetchClassTrainers, setClassTrainers, setClassTrainersBulk, setClassTrainersForGroup, fetchClassPassSelectionMode,
   fetchCenterHolidayDates,
@@ -218,6 +218,8 @@ export default function ClassManagePage() {
   // fetch(fetchClassProducts/fetchClassTrainers)를 지연시킬 수 있어, 한쪽 편집이 다른 쪽의
   // 정상 하이드레이트까지 막지 않도록 독립적으로 추적한다.
   const trainerEditedRef = useRef(false);
+  // 수정 시작 시점(서버에서 읽은 실제 값)의 예약 가능 수강권 설정 — "바뀌었는지"를 집합 비교로 판정해 그룹 전체 적용 여부를 정한다.
+  const origPassRef = useRef<PassPolicy | null>(null);
   const [busy, setBusy] = useState(false);
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
@@ -681,6 +683,7 @@ export default function ClassManagePage() {
     const myToken = ++openTokenRef.current;
     userEditedRef.current = false;
     trainerEditedRef.current = false;
+    origPassRef.current = null;
     setEditId(c.id);
     setEditGroupId(c.recurringGroupId);
     setApplyToGroup(false);
@@ -706,6 +709,8 @@ export default function ClassManagePage() {
     try {
       // c.passSelectionMode(목록 캐시)를 신뢰하지 않고 이 class의 실제 현재 값을 다시 조회한다.
       const [ids, freshMode] = await Promise.all([fetchClassProducts(c.id), fetchClassPassSelectionMode(c.id)]);
+      // 원본 설정은 사용자의 편집 여부와 무관하게 항상 기록한다(최신 openEdit 호출의 값만).
+      if (myToken === openTokenRef.current) origPassRef.current = { mode: freshMode === "all" ? "all" : "selected", productIds: freshMode === "all" ? [] : ids };
       const isStale = myToken !== openTokenRef.current || userEditedRef.current;
       if (!isStale) setSelectedProducts(freshMode === "all" ? passProducts.map((p) => p.id) : ids);
     } catch { /* 무시 */ }
@@ -916,6 +921,7 @@ export default function ClassManagePage() {
       let promotedCount = 0;
       let groupAppliedCount = 0;
       let groupCreatedCount = 0;
+      let groupCarriedPassPolicy = false;   // 그룹 RPC가 수강권 설정까지 같은 트랜잭션에서 처리했는지
       if (editId) {
         if (applyToGroup && editGroupId) {
           // 공통 속성(수업명 + 이 시트에서 "바뀐" 소개·정원·룸·취소/예약 마감·취소 허용·상품 허용)을 같은 반복 그룹
@@ -924,6 +930,11 @@ export default function ClassManagePage() {
           const orig = origFormRef.current;
           const cur: ClassInput = { ...form, cancelDeadlineMin: deadlineToMin(), bookingDeadlineMin: bookDeadlineToMin() };
           const changes = orig ? diffGroupFields(orig, cur) : { description: form.description ?? "" };
+          // 예약 가능 수강권: 사용자가 실제로 바꾼 경우에만 그룹 전체에 적용(집합 비교). 원본을 아직 못 읽었으면 사용자가 손댄 경우로 본다.
+          const nextPolicy: PassPolicy = { mode: resolved.mode, productIds: resolved.productIds };
+          const passChanged = origPassRef.current ? passPolicyChanged(origPassRef.current, nextPolicy) : userEditedRef.current;
+          if (passChanged) changes.passPolicy = nextPolicy;
+          groupCarriedPassPolicy = passChanged;
           const ownChanged = !!orig && (orig.date !== form.date || orig.start !== form.start || orig.end !== form.end);
           const groupIds = await updateClassGroup(editGroupId, form.title, form.capacity, {
             changes,
@@ -932,10 +943,9 @@ export default function ClassManagePage() {
             own: ownChanged || applyTimeToGroup ? { id: editId, date: form.date, start: form.start, end: form.end } : undefined,
           });
           groupAppliedCount = groupIds.length;
-          // updateClassGroup은 위 공통 필드만 그룹 전체에 반영하고 수강권 정책 컬럼(pass_selection_mode)과
-          // 허용 수강권(class_allowed_products)은 건드리지 않으므로, 이 수업만 따로 맞춰준다(수강권 정책·
-          // 허용 상품은 여전히 수업별 — 그룹 적용 대상이 아님).
-          await updateClassPassSelectionMode(editId, passMode);
+          // 수강권 설정을 바꿨다면 위 그룹 RPC가 같은 트랜잭션에서 그룹 전체(편집 중인 수업 포함)에 이미 적용했다.
+          // 바꾸지 않았다면 기존 그룹의 수강권 설정을 건드리지 않고, 이 수업만 현재 화면 값에 맞춰 둔다(기존 동작).
+          if (!groupCarriedPassPolicy) await updateClassPassSelectionMode(editId, passMode);
           // 담당 강사는 title/시간/정원과 마찬가지로 그룹 전체에 동일하게 적용한다.
           await setClassTrainersForGroup(groupIds, selectedTrainers);
         } else {
@@ -943,7 +953,7 @@ export default function ClassManagePage() {
           promotedCount = result.promotedCount;
           await setClassTrainers(editId, selectedTrainers);
         }
-        await setClassProducts(editId, resolved.productIds);
+        if (!groupCarriedPassPolicy) await setClassProducts(editId, resolved.productIds);
       } else if (singleSlots.length > 1) {
         // 한 날짜 여러 타임: 한 번에(한 트랜잭션 또는 실패 시 보상 삭제) 만들고, 수강권/강사는 만들어진 모든 수업에 적용한다.
         const newIds = await createClassOnDateSlots(
@@ -1793,9 +1803,8 @@ export default function ClassManagePage() {
                           className={`filter-chip ${selectedTrainers.includes(s.accountId) ? "on" : ""}`}
                           onClick={() => {
                             trainerEditedRef.current = true;
-                            setSelectedTrainers((prev) =>
-                              prev.includes(s.accountId) ? prev.filter((x) => x !== s.accountId) : [...prev, s.accountId]
-                            );
+                            // 선택 순서가 곧 저장/표시 순서 — 새로 선택하면 맨 뒤, 해제 후 다시 선택해도 맨 뒤
+                            setSelectedTrainers((prev) => toggleTrainerSelection(prev, s.accountId));
                           }}
                         >
                           {s.name}
@@ -1804,6 +1813,21 @@ export default function ClassManagePage() {
                     </div>
                   );
                 })()}
+                {/* 표시 순서 미리보기 — 선택/해제 즉시 반영. 저장되는 순서이자 회원/관리자 화면에 보이는 순서다. */}
+                <div className="trainer-order-preview" aria-live="polite">
+                  <div className="trainer-order-title">표시 순서 미리보기</div>
+                  {(() => {
+                    const items = trainerPreviewItems(selectedTrainers, Object.fromEntries(staffList.map((s) => [s.accountId, s.name])));
+                    if (items.length === 0) return <div className="trainer-order-empty">{TRAINER_PREVIEW_EMPTY}</div>;
+                    return (
+                      <ol className="trainer-order-list">
+                        {items.map((it) => (
+                          <li key={it.accountId}><b>{it.position}</b><span>{it.name}</span></li>
+                        ))}
+                      </ol>
+                    );
+                  })()}
+                </div>
               </>
             )}
 
@@ -1819,7 +1843,7 @@ export default function ClassManagePage() {
             {/* 반복 수업 일괄 적용 (그룹 소속 수정일 때만) */}
             {editId && editGroupId && (
               <div className="set-row" style={{ padding: "10px 0", borderBottom: "none" }}>
-                <div className="set-label">모든 반복 수업에 적용<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>수업명·소개·정원·룸·담당 강사 등 바꾼 공통 설정이 반복 수업 전체에 적용돼요. 날짜·시간·수강권 정책은 수업별로 유지돼요.</span></div>
+                <div className="set-label">모든 반복 수업에 적용<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>수업명·소개·정원·룸·담당 강사와 변경한 수강권 설정이 반복 수업 전체에 적용돼요. 날짜·시간은 수업별로 유지돼요.</span></div>
                 <button className={`switch ${applyToGroup ? "on" : ""}`} onClick={() => { setApplyToGroup(!applyToGroup); if (applyToGroup) setApplyTimeToGroup(false); }}>
                   <span className="knob" />
                 </button>

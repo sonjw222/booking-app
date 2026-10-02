@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-10-02 — 관리자/수업/회원 예약 UX 보완(SQL 파일만 작성, 미실행)
+- 상품 관리·수강권 관리: "선택" 모드로 여러 항목을 체크해 한 번에 삭제(전체 선택/해제, 확인 후 소프트 삭제 is_active=false, 같은 센터 한정 단일 UPDATE — 단건 삭제와 같은 pass.update RLS).
+- 요일/시간 선택형 수강권: 구매 화면에서 후보 0개/조회 실패/공개 목록 모델이면 조용히 숨기지 않고 안내 + 구매 차단(direct/PG 분기 전), 관리자 카드에 "예약조건 필요" 표시, 서버(orders BEFORE INSERT)가 선택을 강제.
+  Production 실제 원인: 요일 선택형으로 저장된 활성 수강권의 예약조건(요일)이 0개였다.
+- 반복 수업 "모든 반복 수업에 적용": 사용자가 바꾼 예약 가능 수강권 설정도 그룹 전체에 같은 트랜잭션으로 적용(update_class_group_safe 확장), 바꾸지 않으면 기존 그룹 설정 보존.
+- 회원 예약 카드: 센터 · 강사 · 룸을 한 줄 meta로 표시(룸 임베드 객체/배열 모두 처리, 빈 구분자 없음), 확인 시트 부제도 정리.
+- 담당 강사: 선택한 순서를 class_trainers.sort_order로 저장/조회(class_trainer_names ORDER BY), 수정 화면에 "표시 순서 미리보기".
+- SQL: `fix_manager_product_class_ux_20261002.sql` / `rollback_fix_manager_product_class_ux_20261002.sql`.
+
 ## 2026-10-02 — 주문 포인트 라이프사이클 보완(적용 전 보안/정합성 갭)
 - point_transactions "매니저 포인트 등록" INSERT 정책을 order_id/reverses_id가 null인 수기 조정으로 축소(주문 연계 차감/복원 행 위조로 unique 구조를 선점하는 경로 차단, rollback은 적용 전 정책 복원).
 - orders 상태 전이를 허용표로 명시(pending→paid|done|cancelled, paid→done|cancelled) — paid→pending 등 역전이 차단. confirm_real_payment에 search_path 고정. QA CASE 11/12 추가(실행 안 함).
