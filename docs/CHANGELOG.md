@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-02 — 카카오페이/토스페이 결제수단 사용자 UI 비노출(구현 보존, SQL/native 변경 없음)
+- `lib/payMethods.ts`의 `HIDDEN_PAY_METHOD_IDS`로 checkout/cart 공통으로 kakao/toss를 숨긴다(센터 설정·stale 선택값과 무관). 다시 노출하려면 배열에서 id만 제거. Toss 연동/서버 lifecycle은 그대로.
+
 ## 2026-10-02 — iOS 결제 복귀 Universal Link(앱으로 복귀, Safari는 fallback 유지)
 - Associated Domains(`applinks:mwhabit.com`) + AASA(`/.well-known/apple-app-site-association`, success/fail 두 경로만) + CapacitorBootstrap의 appUrlOpen/getLaunchUrl 처리(`lib/paymentUniversalLink.ts`, 허용 URL만 앱 WebView에서 열기). 결제 lifecycle/콜백 페이지 변경 없음. 새 TestFlight 빌드 필요.
 
