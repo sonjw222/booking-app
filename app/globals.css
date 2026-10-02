@@ -6631,3 +6631,29 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
 .ptree-add .outline-action { padding:0; white-space:nowrap; display:flex; align-items:center; justify-content:center; }
 .ptree-max { padding:10px 14px 12px; font-size:12px; color:var(--ink-soft); }
 @media (prefers-reduced-motion: reduce) { .ptree-chevron { transition:none; } }
+
+/* ===== 회원 구매 sheet 정리(2026-10-03) ===== */
+/* 검색/필터 뒤 네모 띠의 원인: .catalog-filter가 카드용 토큰(--card-bg)을 배경으로 쓰는데 sheet 바탕은 --bg라서, 다크에서
+   (#202127 vs #17181C) 검색창·chip 뒤에 별도 사각 패널처럼 보였다. sheet 안에서는 sheet와 같은 바탕(--bg, sticky가 목록을 가리는 용도)을 쓴다.
+   관리자 수강권 설정 페이지(같은 컴포넌트)는 그대로 둔다. */
+.sheet .catalog-filter { background: var(--bg); padding: 4px 0 8px; gap: 10px; }
+/* 두 chip 행: 같은 시작 x(0), 같은 높이/padding/gap, 좁으면 줄바꿈(가로 스크롤 대신) */
+.sheet .catalog-chips { flex-wrap: wrap; overflow: visible; gap: 8px; padding: 0; }
+.sheet .catalog-chips .filter-chip { box-sizing: border-box; height: 36px; padding: 0 14px; justify-content: center; line-height: 1; font-size: 13px; font-weight: 600; max-width: 100%; }
+
+/* 상품 카드: 예약조건 accordion은 항상 카드 맨 아래 전체 폭 한 줄 — 담기/구매 버튼은 상품 정보 바로 옆/아래에 고정 */
+.center-product-row { flex-wrap: wrap; }
+.center-product-row > .center-product-info { flex: 1 1 0; }
+.rule-acc { flex: 1 1 100%; min-width: 0; }
+.rule-acc-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 36px; padding: 0; border: 0; background: transparent; color: var(--ink-soft); font: inherit; font-size: 12.5px; font-weight: 600; text-align: left; cursor: pointer; }
+.rule-acc-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rule-acc-more { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; color: var(--ink); }
+.rule-acc-chevron { display: inline-block; font-size: 16px; line-height: 1; transform: rotate(90deg); transition: transform 0.15s ease; }
+.rule-acc-chevron.open { transform: rotate(-90deg); }
+.rule-acc-panel { padding: 4px 0 2px; display: flex; flex-direction: column; gap: 8px; animation: rule-acc-in 0.15s ease; }
+.rule-day-label { font-size: 12px; font-weight: 800; color: var(--ink); margin-bottom: 2px; }
+.rule-row { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px; padding: 2px 0; font-size: 13px; line-height: 1.4; }
+.rule-time { font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.rule-title { color: var(--ink); overflow-wrap: anywhere; word-break: keep-all; }
+@keyframes rule-acc-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .rule-acc-panel { animation: none; } .rule-acc-chevron { transition: none; } }

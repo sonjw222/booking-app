@@ -32,7 +32,8 @@ import {
 } from "../../../lib/reviews";
 import { reservationReturnUrl } from "../../../lib/reservationNav";
 import { extractPlainText } from "../../../lib/security";
-import { fetchRulesForProducts, ruleToText, type ScheduleRule } from "../../../lib/passes";
+import ProductRuleAccordion from "../../components/ProductRuleAccordion";
+import { fetchRulesForProducts, type ScheduleRule } from "../../../lib/passes";
 import RichTextEditor from "../../components/RichTextEditor";
 import UiIcon from "../../components/UiIcon";
 import EmptyState from "../../components/EmptyState";
@@ -820,11 +821,6 @@ function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy 
       <button className="center-product-info" style={{ background: "none", border: "none", textAlign: "left", flex: 1, cursor: p.description ? "pointer" : "default" }} onClick={() => p.description && onDesc(p)}>
         <div className="center-product-name">{p.name}{p.description ? " ⓘ" : ""}</div>
         <div className="center-product-detail">{priceSummary(p)}</div>
-        {rules && rules.length > 0 && (
-          <div className="center-product-detail" style={{ color: "var(--brand)" }}>
-            {rules.map(ruleToText).join(" / ")}
-          </div>
-        )}
         {avail && <div className={`center-product-avail${soldOut ? " is-soldout" : ""}`}>{avail}</div>}
       </button>
       {selectable && !soldOut && (
@@ -851,6 +847,7 @@ function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy 
         {!soldOut && <AppButton variant="secondary" className="center-product-cart" disabled={blocked} onClick={() => onAddCart(p, sel)}>담기</AppButton>}
         {!soldOut && <AppButton className="center-product-buy" disabled={blocked} onClick={() => onBuy(p, sel)}>구매</AppButton>}
       </div>
+      <ProductRuleAccordion rules={rules} />
     </div>
   );
 }

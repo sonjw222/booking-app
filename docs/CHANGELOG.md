@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-10-03 — 회원 "수강권 · 상품 구매" sheet 정리 (Web)
+- 검색/필터 뒤 네모 띠: `.catalog-filter`가 카드 토큰(`--card-bg`)을 쓰는데 sheet 바탕은 `--bg`라 다크에서 별도 패널처럼 보였음 → sheet 범위에서만 `--bg`로 통일(관리자 페이지 공용 스타일은 유지). 두 chip 행은 같은 높이(36px)/padding/gap/시작 x, 좁으면 wrap.
+- 예약조건: 카드에 전부 펼치던 것을 기본 collapsed accordion(상품별 독립, aria-expanded/controls)으로 변경, 요약 1줄("예약조건 N개 · 월~일"). 월→일 정렬/요일 그룹/한 조건 한 row — `lib/ruleDisplay.ts`.
+
 ## 2026-10-03 — 출시 전 실기기 QA 후속 배치
 - Google 로그인 crash(TestFlight 1.0.2(5), `GIDSignIn.m:739`): Info.plist `CFBundleURLTypes`에 Google reversed URL scheme 영구 반영 + `GoogleSignInPlugin.swift`가 scheme 누락 시 crash 대신 `missing_url_scheme`로 reject. (Native — 다음 빌드)
 - 뒤로가기 white flash: html/body background transition(라이트→다크 페이드) 제거, 테마 스크립트를 `<head>`로 이동 + `colorScheme` 즉시 설정. (Web)
