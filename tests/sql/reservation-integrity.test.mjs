@@ -282,11 +282,12 @@ test('함수 권한: is_membership_eligible_for_class는 PUBLIC/anon 실행 불�
     // verify는 SELECT만, 적용 후 기대값(roles가 PGlite에서 table 권한 조회 가능)
     assert.doesNotMatch(verify, /\b(insert\s+into|update\s+\S+\s+set|delete\s+from|drop\s|alter\s|create\s|truncate\s|grant\s|revoke\s)/i);
     assert.match(verify.trim(), /^with\b/i); assert.equal((verify.match(/;/g) || []).length, 1);   // 단일 SELECT
-    const v = (await db.query(verify.replace(/'public\.memberships'/, `'public.memberships'`))).rows[0];
+    const v = (await db.query(verify)).rows[0];
     assert.equal(v.verdict, 'APPLIED');
-    for (const k of ['f1_exact_title_match_must_be_true', 'f2_no_selected_override_must_be_true', 'f3_pass_only_must_be_true', 'f5_kst_date_must_be_true', 'f4_auth_table_update_revoked_must_be_true', 'f4_auth_memo_update_must_be_true', 'eligible_fn_auth_must_be_true', 'eligible_fn_service_must_be_true']) assert.equal(v[k], true, k);
-    assert.equal(Number(v.f4_auth_other_update_columns_must_be_0), 0);
-    assert.equal(v.f4_anon_write_must_be_false, false); assert.equal(v.eligible_fn_anon_must_be_false, false);
+    const okCols = Object.keys(v).filter(k => k.endsWith('_ok'));
+    assert.ok(okCols.length >= 19, `*_ok 컬럼 ${okCols.length}개`);
+    for (const k of okCols) assert.equal(v[k], true, k);
+    assert.ok('info_auth_reservations_insert_privilege' in v && 'info_auth_reservations_delete_privilege' in v && 'info_null_product_memberships' in v);   // 정보용 컬럼은 verdict와 무관
   } finally { await db.close(); }
 });
 
@@ -312,5 +313,100 @@ test('migration 재실행 안전(idempotent) + rollback은 직전 라이브 상�
     assert.equal(await count(db, `select count(*)::int c from reservations where status='cancelled'`), 1);
     await db.exec(migration);
     assert.equal((await db.query(verify)).rows[0].verdict, 'APPLIED');
+  } finally { await db.close(); }
+});
+
+test('보완: reserve_class 자동선택은 status=active만(paused/expired/refunded/transferred 거부) — 환불 lifecycle 트리거 없이 SELECT 조건만으로', async () => {
+  const db = await world();   // fixture에는 reservations_guard_pg_refund_lock 같은 트리거가 없다 → 거부는 reserve_class 자체의 조건 때문
+  try {
+    assert.equal(await count(db, `select count(*)::int c from pg_trigger where tgrelid='reservations'::regclass and not tgisinternal`), 0);
+    const p = await newProduct(db, {});
+    const c = await newClass(db, { dow: 1, time: '19:00' });
+    for (const status of ['paused', 'expired', 'refunded', 'transferred']) {
+      await db.exec('delete from reservations; delete from memberships');
+      const m = await newMembership(db, p, { status, remaining: 3 });
+      await assert.rejects(reserveAuto(db, c), /사용할 수 있는 수강권이 없어요/, status);
+      assert.equal(await count(db, `select count(*)::int c from reservations`), 0, status);
+      assert.equal(await count(db, `select remaining_count c from memberships where id='${m}'`), 3, status);
+    }
+    await db.exec('delete from memberships');
+    const paused = await newMembership(db, p, { status: 'paused', remaining: 5, expires: `((now() at time zone 'Asia/Seoul')::date + 3)` });   // 더 일찍 만료 → 상태 조건이 없으면 1순위
+    const active = await newMembership(db, p, { status: 'active', remaining: 5 });
+    await reserveAuto(db, c);                                              // active → 예약 가능, paused는 건드리지 않는다
+    assert.equal(await count(db, `select count(*)::int c from reservations where membership_id='${active}'`), 1);
+    assert.equal(await count(db, `select remaining_count c from memberships where id='${paused}'`), 5);
+    // negative control: 수정 전 live 정의(rollback)에서는 paused membership으로도 예약된다(트리거가 없을 때) → 이 테스트가 실제 조건을 검증함
+    await db.exec(rollback);
+    await db.exec('delete from reservations; delete from memberships');
+    await newMembership(db, p, { status: 'paused', remaining: 3 });
+    await reserveAuto(db, c);
+    assert.equal(await count(db, `select count(*)::int c from reservations`), 1);
+  } finally { await db.close(); }
+});
+
+test('보완: usable_memberships()와 usable_memberships_for_classes()의 날짜 semantics 일치(NULL 만료 허용, KST 오늘 허용, KST 어제/미래 시작 제외)', async () => {
+  const db = await world();
+  try {
+    const p = await newProduct(db, {});
+    const c = await newClass(db, { dow: 1, time: '19:00' });
+    const today = `((now() at time zone 'Asia/Seoul')::date)`;
+    const cases = [
+      ['expires NULL + starts NULL', { expires: 'null' }, true],
+      ['expires KST 오늘', { expires: today }, true],
+      ['expires KST 어제', { expires: `(${today} - 1)` }, false],
+      ['starts KST 오늘', { starts: today }, true],
+      ['starts KST 내일', { starts: `(${today} + 1)` }, false],
+    ];
+    for (const tz of ['UTC', 'Etc/GMT+12', 'Pacific/Kiritimati']) {
+      await db.exec(`set time zone '${tz}'`);
+      for (const [label, o, ok] of cases) {
+        await db.exec('delete from reservations; delete from memberships');
+        await newMembership(db, p, { remaining: 2, ...o });
+        const single = await asRole(db, 'authenticated', ACC1, async () => (await db.query(`select membership_id from usable_memberships('${c}','${PROF1}')`)).rows.length);
+        const batch = await asRole(db, 'authenticated', ACC1, async () => (await db.query(`select membership_id from usable_memberships_for_classes(array['${c}']::uuid[],'${PROF1}')`)).rows.length);
+        assert.equal(single, ok ? 1 : 0, `${tz} single ${label}`);
+        assert.equal(batch, single, `${tz} batch==single ${label}`);
+      }
+    }
+  } finally { await db.close(); }
+});
+
+test('verify negative-control: 보안 상태를 하나씩 깨뜨리면 verdict가 반드시 NOT_APPLIED, 원복하면 APPLIED(정보성 값은 verdict에 영향 없음)', async () => {
+  const db = await world();
+  try {
+    const verdict = async () => (await db.query(verify)).rows[0].verdict;
+    assert.equal(await verdict(), 'APPLIED');
+    const breaks = [
+      ['A authenticated status 컬럼 UPDATE', `grant update (status) on reservations to authenticated`, `revoke update (status) on reservations from authenticated`],
+      ['A2 authenticated 테이블 UPDATE', `grant update on reservations to authenticated`, `revoke update on reservations from authenticated; grant update (member_memo) on reservations to authenticated`],
+      ['B anon UPDATE', `grant update on reservations to anon`, `revoke update on reservations from anon`],
+      ['B2 anon INSERT', `grant insert on reservations to anon`, `revoke insert on reservations from anon`],
+      ['B3 anon DELETE', `grant delete on reservations to anon`, `revoke delete on reservations from anon`],
+      ['B4 anon TRUNCATE', `grant truncate on reservations to anon`, `revoke truncate on reservations from anon`],
+      ['B5 authenticated TRUNCATE', `grant truncate on reservations to authenticated`, `revoke truncate on reservations from authenticated`],
+      ['C anon eligible 함수 EXECUTE', `grant execute on function is_membership_eligible_for_class(uuid,uuid) to anon`, `revoke execute on function is_membership_eligible_for_class(uuid,uuid) from anon`],
+      ['C2 authenticated eligible 함수 EXECUTE 제거', `revoke execute on function is_membership_eligible_for_class(uuid,uuid) from authenticated`, `grant execute on function is_membership_eligible_for_class(uuid,uuid) to authenticated`],
+      ['C3 service_role eligible 함수 EXECUTE 제거', `revoke execute on function is_membership_eligible_for_class(uuid,uuid) from service_role`, `grant execute on function is_membership_eligible_for_class(uuid,uuid) to service_role`],
+      ['D authenticated member_memo UPDATE 제거', `revoke update (member_memo) on reservations from authenticated`, `grant update (member_memo) on reservations to authenticated`],
+      ['E service_role UPDATE 제거', `revoke update on reservations from service_role`, `grant update on reservations to service_role`],
+      ['F memo RLS 정책 제거', `drop policy "본인 예약 메모 수정" on reservations`, `create policy "본인 예약 메모 수정" on reservations for update using (profile_id in (select my_profile_ids())) with check (profile_id in (select my_profile_ids()))`],
+    ];
+    for (const [label, breakSql, restoreSql] of breaks) {
+      await db.exec(breakSql);
+      assert.equal(await verdict(), 'NOT_APPLIED', label);
+      await db.exec(restoreSql);
+      assert.equal(await verdict(), 'APPLIED', `${label} 원복`);
+    }
+    // 정보성 값(authenticated INSERT/DELETE 권한)은 verdict에 영향이 없다
+    const before = (await db.query(verify)).rows[0];
+    await db.exec(`revoke insert, delete on reservations from authenticated`);
+    const after = (await db.query(verify)).rows[0];
+    assert.equal(after.verdict, 'APPLIED');
+    assert.equal(after.info_auth_reservations_insert_privilege, false);
+    assert.equal(before.info_auth_reservations_insert_privilege, true);
+    await db.exec(`grant insert, delete on reservations to authenticated`);
+    // 함수 정의가 되돌려지면(F1/F2/F3/F5/보완 항목) NOT_APPLIED
+    await db.exec(rollback);
+    assert.equal(await verdict(), 'NOT_APPLIED');
   } finally { await db.close(); }
 });

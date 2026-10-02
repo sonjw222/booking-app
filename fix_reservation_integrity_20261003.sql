@@ -16,6 +16,8 @@
 --      service_role/postgres는 그대로. 정상 예약/취소/대기승격은 기존 RPC로만 이루어진다.
 -- [F5] 회원 예약 자격의 starts_at/expires_at 비교가 DB TimeZone(UTC) 기준 current_date라 KST 00:00~08:59에 하루 어긋남 → (now() at time zone 'Asia/Seoul')::date로 통일
 --      (reserve_class, reserve_with_membership, usable_memberships, usable_memberships_for_classes). memberships.starts_at/expires_at은 date 컬럼(한국 날짜 의미).
+-- [보완] reserve_class 자동선택에 m.status = 'active'를 직접 추가(환불 lifecycle 트리거에 의존하지 않는 defense-in-depth), usable_memberships()의 날짜 조건을
+--        usable_memberships_for_classes()와 동일하게(expires_at NULL 허용 + starts_at 검사) 맞춤. reservations INSERT/DELETE 권한은 이번에 확대하지 않는다(RLS 정책 없음 → 이미 직접 INSERT 불가).
 -- [권한] is_membership_eligible_for_class는 PUBLIC/anon이 직접 실행 가능했다(SECURITY DEFINER 판정 oracle) → PUBLIC/anon 회수, authenticated/service_role 명시 유지.
 --
 -- 이번에 건드리지 않는 것: F6(manager_grant_product의 규칙 밖 bound 요일 지급 — 별도 follow-up), cancel_reservation/기타 함수의 current_date, 전화 검색, 진도 tree 등.
@@ -100,7 +102,9 @@ AS $function$
       and m.status = 'active'
       and pd.product_kind = 'pass'
       and (m.remaining_count is null or m.remaining_count > 0)
-      and m.expires_at >= (now() at time zone 'Asia/Seoul')::date
+      -- [usable_memberships_for_classes와 동일] 무제한(expires_at NULL) 보존, 미래 시작(starts_at) 제외 — 둘 다 KST 날짜 기준
+      and (m.expires_at is null or m.expires_at >= (now() at time zone 'Asia/Seoul')::date)
+      and (m.starts_at is null or m.starts_at <= (now() at time zone 'Asia/Seoul')::date)
       and m.profile_id in (select id from profiles where account_id = my_account_id())
       and (
             -- [수강권 허용 정책 변경] 'all'이면 class_allowed_products 존재 여부와
@@ -352,6 +356,9 @@ begin
     from memberships m
     where m.profile_id = v_profile_id
       and m.center_id = v_class.center_id
+      -- [defense-in-depth] 자동선택 단계에서 active가 아닌 수강권(paused/expired/refunded/transferred 등)은 고르지 않는다.
+      -- (PG 환불 lifecycle 트리거 reservations_guard_pg_refund_lock과 별개로 이 함수 자체가 상태 무결성을 보장)
+      and m.status = 'active'
       and (m.remaining_count is null or m.remaining_count > 0)
       and (m.expires_at is null or m.expires_at >= (now() at time zone 'Asia/Seoul')::date)
       and (m.starts_at is null or m.starts_at <= (now() at time zone 'Asia/Seoul')::date)

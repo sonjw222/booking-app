@@ -37,6 +37,32 @@ describe("fix_reservation_integrity_20261003.sql 계약", () => {
     expect(sql).toContain("revoke all on function public.is_membership_eligible_for_class(uuid, uuid) from public, anon;");
     expect(sql).toContain("grant execute on function public.is_membership_eligible_for_class(uuid, uuid) to authenticated, service_role;");
   });
+  it("보완: reserve_class는 status='active'를 직접 강제, usable_memberships()는 NULL 만료 허용 + starts_at 검사, INSERT/DELETE 권한은 확대(회수)하지 않는다", () => {
+    expect(sql).toContain("and m.status = 'active'\n      and (m.remaining_count is null or m.remaining_count > 0)\n      and (m.expires_at is null or m.expires_at >= (now() at time zone 'Asia/Seoul')::date)\n      and (m.starts_at is null or m.starts_at <= (now() at time zone 'Asia/Seoul')::date)\n      and is_membership_eligible_for_class(m.id, v_class.id)");
+    expect(sql.match(/m\.expires_at is null or m\.expires_at >= \(now\(\) at time zone 'Asia\/Seoul'\)::date/g)!.length).toBeGreaterThanOrEqual(3);
+    expect(sql).not.toMatch(/revoke[^;]*(insert|delete)[^;]*from authenticated/i);
+    expect(sql).not.toContain("reservations_guard_pg_refund_lock");   // PG/refund 방어 트리거는 건드리지 않는다
+  });
+  it("rollback의 reserve_class/usable_memberships는 migration 직전 live 정의(status 조건 없음, 옛 날짜 조건)", () => {
+    const rb = code(read("rollback_fix_reservation_integrity_20261003.sql"));
+    const rc = rb.slice(rb.indexOf("FUNCTION public.reserve_class"), rb.indexOf("FUNCTION public.reserve_with_membership"));
+    expect(rc).not.toContain("m.status = 'active'");
+    expect(rc).toContain("m.expires_at >= current_date");
+    const um = rb.slice(rb.indexOf("FUNCTION public.usable_memberships("), rb.indexOf("FUNCTION public.usable_memberships_for_classes"));
+    expect(um).toContain("and m.expires_at >= current_date");
+    expect(um).not.toContain("m.starts_at");
+  });
+  it("verify verdict는 모든 보안 체크의 AND(정보성 컬럼은 제외)", () => {
+    const v = code(read("verify_reservation_integrity_20261003.sql"));
+    const verdict = v.slice(v.indexOf("case when"), v.indexOf("end", v.indexOf("case when")));
+    const oks = ["f1_exact_title_ok", "f2_no_selected_override_ok", "f3_pass_only_ok", "f5_kst_date_ok", "reserve_class_active_ok", "usable_single_dates_ok",
+      "f4_auth_no_table_update_ok", "f4_auth_memo_update_ok", "f4_auth_no_other_update_columns_ok", "f4_anon_no_insert_ok", "f4_anon_no_update_ok", "f4_anon_no_delete_ok",
+      "f4_anon_no_truncate_ok", "f4_auth_no_truncate_ok", "eligible_fn_anon_denied_ok", "eligible_fn_auth_ok", "eligible_fn_service_ok", "service_role_update_ok", "memo_rls_policy_ok"];
+    for (const k of oks) { expect(verdict).toContain(k); expect(v).toMatch(new RegExp(`as ${k}\\b`)); }
+    expect(verdict).not.toContain("info_");
+    expect(v).toContain("as info_auth_reservations_insert_privilege");
+    expect(v).toContain("as info_auth_reservations_delete_privilege");
+  });
   it("범위 밖은 건드리지 않는다: F6(manager_grant_product)/PG·환불·정산/진도/전화 검색 함수가 없다", () => {
     for (const name of ["manager_grant_product", "refund", "settlement", "fulfill_order", "progress_categories", "search_accounts_for_member", "cancel_reservation"]) expect(sql).not.toContain(name);
   });
