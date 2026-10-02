@@ -1,18 +1,14 @@
 "use client";
 
 /*
-  토스 결제창(TossPaymentProvider.createPayment의 requestPayment)이 승인 성공 시
-  돌아오는 successUrl. app/checkout/page.tsx가 만든 successUrl에는 원래 조회 중이던
-  쿼리(센터/상품/예약 복귀 정보)가 이미 들어있고, 토스가 그 위에 paymentKey/orderId/amount를
-  덧붙여서 리다이렉트한다.
-
-  여기서 서버 승인(app/api/payments/confirm)까지 마친 뒤, 원래 쿼리를 유지한 채
-  /checkout으로 되돌려보내 기존 "결제 완료" 화면을 그대로 재사용한다(화면 중복 없음).
+  토스 successUrl — 외부 Safari에서 열릴 수 있어 앱(WebView)의 Supabase 로그인 세션이 없다. 그래서 세션에 의존하지 않고,
+  결제 시작 때 서버가 발급한 주문 전용 복귀 토큰(returnToken)으로 서버 복귀 전용 라우트(/api/payments/return/confirm)에 승인을 요청한다.
+  /checkout으로 다시 redirect하지 않고(세션이 없어 같은 문제가 반복) 결과를 이 페이지에 직접 보여준다. 앱으로 돌아가면 상태가 자동 반영된다.
+  처리 직후 주소창의 민감한 쿼리(returnToken/paymentKey)를 제거한다.
 */
-
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { getPaymentService } from "../../../lib/payments";
+import { returnConfirm, scrubCallbackUrl } from "../../../lib/payments/returnApi";
 import Loading from "../../components/Loading";
 
 export default function CheckoutSuccessPage() {
@@ -25,45 +21,41 @@ export default function CheckoutSuccessPage() {
 
 function CheckoutSuccessContent() {
   const sp = useSearchParams();
+  const [state, setState] = useState<{ kind: "working" } | { kind: "done" } | { kind: "error"; message: string }>({ kind: "working" });
 
   useEffect(() => {
     const paymentKey = sp.get("paymentKey");
     const orderId = sp.get("orderId");
-    const amount = sp.get("amount");
-
-    const backParams = new URLSearchParams(sp.toString());
-    backParams.delete("paymentKey");
-    backParams.delete("orderId");
-    backParams.delete("amount");
-
-    if (!paymentKey || !orderId || !amount) {
-      backParams.set("paymentError", "결제 정보가 올바르지 않아요");
-      window.location.href = `/checkout?${backParams.toString()}`;
+    const amount = Number(sp.get("amount"));
+    const returnToken = sp.get("returnToken");
+    scrubCallbackUrl();
+    if (!paymentKey || !orderId || !returnToken || !Number.isFinite(amount)) {
+      setState({ kind: "error", message: "결제 정보가 올바르지 않아요. 모하빗 앱에서 구매내역을 확인해주세요." });
       return;
     }
-
     (async () => {
-      try {
-        const result = await getPaymentService().confirmPayment(paymentKey, orderId, Number(amount));
-        if (result.status === "paid") {
-          backParams.set("paymentDone", "1");
-          if (result.membershipId) backParams.set("membershipId", result.membershipId);
-        } else {
-          backParams.set("paymentError", result.message ?? "결제 확정에 실패했어요");
-        }
-      } catch (e: any) {
-        backParams.set("paymentError", e.message ?? "결제 확정에 실패했어요");
-      } finally {
-        window.location.href = `/checkout?${backParams.toString()}`;
-      }
+      const r = await returnConfirm({ returnToken, paymentKey, orderId, amount });
+      setState(r.ok ? { kind: "done" } : { kind: "error", message: r.error ?? "결제 확정에 실패했어요. 모하빗 앱에서 구매내역을 확인해주세요." });
     })();
-    // sp는 마운트 시점 쿼리만 필요 — 재실행 불필요(중복 confirm 방지)
+    // 마운트 시점 쿼리만 필요 — 재실행하면 중복 confirm이 된다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div className="app-shell">
-      <Loading />
+      {state.kind === "working" && <Loading />}
+      {state.kind === "done" && (
+        <div className="daylist-empty" style={{ paddingTop: 80 }}>
+          <b>결제가 완료됐어요.</b><br />
+          모하빗 앱으로 돌아가면 구매내역이 자동으로 반영돼요.
+        </div>
+      )}
+      {state.kind === "error" && (
+        <div className="daylist-empty" style={{ paddingTop: 80 }} role="alert">
+          <b>결제를 마치지 못했어요.</b><br />
+          {state.message}
+        </div>
+      )}
     </div>
   );
 }

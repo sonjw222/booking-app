@@ -13,6 +13,8 @@ import { fetchCenterDetail, fetchCenterProductsForPurchase, fetchPurchaseSchedul
 import { purchaseScheduleState } from "../../lib/purchaseSchedule";
 import { DAYS, type SelectableSchedule } from "../../lib/passes";
 import { cancelMyPendingOrderQuietly, createOrder } from "../../lib/orders";
+import { requestReturnToken } from "../../lib/payments/tossPaymentApi";
+import { clearPendingPgOrder, readPendingPgOrder, savePendingPgOrder } from "../../lib/payments/returnApi";
 import { fetchProfiles, type ProfileRow } from "../../lib/profiles";
 import { fetchMyPoints, usePoints } from "../../lib/reviews";
 import Loading from "../components/Loading";
@@ -203,6 +205,33 @@ function CheckoutContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 외부 Safari에서 결제를 마치고 앱(WebView)으로 돌아오면 이 화면의 로그인 세션으로 주문 상태를 확인한다(짧게 제한된 재시도만).
+  useEffect(() => {
+    let alive = true;
+    let running = false;
+    async function check() {
+      const pending = readPendingPgOrder();
+      if (!pending || running) return;
+      running = true;
+      try {
+        for (let i = 0; i < 5 && alive; i++) {   // 최대 5회(약 10초) — 무한 polling 금지
+          const { data } = await supabase.from("orders").select("status").eq("id", pending.orderId).maybeSingle();
+          const st = (data as { status?: string } | null)?.status;
+          if (st === "done") { clearPendingPgOrder(); if (alive) { setError(null); setDone(true); } return; }
+          if (st === "cancelled") { clearPendingPgOrder(); if (alive) setError("결제가 취소됐어요. 다시 시도해주세요."); return; }
+          if (!st) { clearPendingPgOrder(); return; }
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+        if (alive) setError("결제 결과를 확인하는 중이에요. 잠시 후 구매내역에서 확인해주세요.");   // pending 표시는 유지(다음 복귀 때 다시 확인)
+      } finally { running = false; }
+    }
+    const onVisible = () => { if (document.visibilityState === "visible") void check(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    void check();
+    return () => { alive = false; document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("focus", onVisible); };
+  }, []);
+
   // 예약창에서 들어온 구매를 완료하면, 잠깐 완료 안내를 보여준 뒤 자동으로 그 예약 화면으로 돌아감
   // (기존 예약/결제 로직은 그대로 두고, 화면 전환만 자동화 — 즉시 클릭할 수 있는 버튼도 함께 남겨둠)
   useEffect(() => {
@@ -332,6 +361,11 @@ function CheckoutContent() {
       // 조회 중인 쿼리(센터/상품/예약 복귀 정보)를 그대로 유지해 돌아온 뒤 이 화면이 같은
       // 컨텍스트로 "결제 완료"를 보여줄 수 있게 한다. Mock은 이 값들을 그냥 무시한다.
       const returnQuery = new URLSearchParams(window.location.search);
+      // 토스 결제창은 외부 Safari에서 열릴 수 있어(iOS 앱) 복귀 콜백이 앱의 로그인 세션을 공유하지 않는다 — Supabase 토큰 대신
+      // 서버가 발급한 "이 주문 전용 복귀 토큰"만 URL에 싣는다. 발급 실패 시 결제창을 열지 않고(catch가 방금 만든 pending 주문을 정리) 오류를 보여준다.
+      if (providerName === "toss") {
+        returnQuery.set("returnToken", await requestReturnToken(orderId));
+      }
       const successUrl = `${window.location.origin}/checkout/success?${returnQuery.toString()}`;
       const failUrl = `${window.location.origin}/checkout/fail?${returnQuery.toString()}`;
       const { data: userData } = await supabase.auth.getUser();
@@ -346,6 +380,7 @@ function CheckoutContent() {
       });
 
       if (created.redirected) {
+        savePendingPgOrder(orderId);   // 앱으로 돌아왔을 때(foreground) 이 주문 상태를 확인하기 위한 표시(orderId만)
         // 브라우저가 이미 결제창으로 이동 중 — 여기서 더 할 일 없음(성공 시 이 컴포넌트는
         // 언마운트된다). requestPayment가 reject되면(예: 사용자가 결제창을 즉시 닫음)
         // catch 블록으로 넘어가 busy가 풀린다.

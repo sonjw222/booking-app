@@ -60,3 +60,11 @@ export async function cancelRealPaymentApi(orderId: string): Promise<void> {
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error ?? "결제를 취소하지 못했어요");
 }
+
+// 결제 시작 시 복귀 토큰 발급(앱 WebView의 로그인 세션으로만 호출 가능). Supabase 토큰이 아니라 이 주문 전용 서명 토큰을 받는다.
+export async function requestReturnToken(orderId: string): Promise<string> {
+  const res = await fetch("/api/payments/return-token", { method: "POST", headers: await authHeaders(), body: JSON.stringify({ orderId }) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || typeof data?.returnToken !== "string") throw new Error(data?.error ?? "결제를 시작하지 못했어요");
+  return data.returnToken;
+}
