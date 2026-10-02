@@ -139,7 +139,7 @@ export default function ProfilesPage() {
               <div key={p.id} className="profile-item">
                 <button className="profile-item-tap" onClick={() => openEdit(p)}>
                   {p.avatarUrl
-                    ? <img className="profile-avatar-img" src={avatarPublicUrl(p.avatarUrl) ?? ""} alt="" />
+                    ? <img className="profile-avatar-img" loading="lazy" decoding="async" src={avatarPublicUrl(p.avatarUrl) ?? ""} alt="" />
                     : <div className="profile-avatar">{p.name?.[0] ?? "?"}</div>}
                   <div className="profile-item-info">
                     <div className="profile-item-name">

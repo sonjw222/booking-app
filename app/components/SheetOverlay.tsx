@@ -88,15 +88,19 @@ export default function SheetOverlay({ children, className = "sheet-overlay", sw
       overlay.style.bottom = "auto";
     };
     fit();
-    viewport?.addEventListener("resize", fit);
-    viewport?.addEventListener("scroll", fit);
+    // viewport resize/scroll burst를 프레임당 한 번의 DOM 쓰기로 합친다(top/height 직접 쓰기는 유지 — 키보드에 맞춘 오버레이 크기 보정)
+    let fitRaf = 0;
+    const scheduleFit = () => { if (!fitRaf) fitRaf = requestAnimationFrame(() => { fitRaf = 0; fit(); }); };
+    viewport?.addEventListener("resize", scheduleFit);
+    viewport?.addEventListener("scroll", scheduleFit);
     document.addEventListener("keydown", onKey);
     document.addEventListener("focusin", onFocus);
     return () => {
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("focusin", onFocus);
-      viewport?.removeEventListener("resize", fit);
-      viewport?.removeEventListener("scroll", fit);
+      if (fitRaf) cancelAnimationFrame(fitRaf);
+      viewport?.removeEventListener("resize", scheduleFit);
+      viewport?.removeEventListener("scroll", scheduleFit);
       if (--locks === 0) document.body.style.overflow = previousOverflow;
       if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     };

@@ -58,7 +58,7 @@ export default function CategoryPage() {
             <Link key={c.id} className="cat-center-card" href={`/center/${c.id}`} prefetch={false}>
               <div className="cat-center-media">
                 {c.photoUrl
-                  ? <img className="cat-center-photo" src={centerPhotoUrl(c.photoUrl) ?? ""} alt={`${c.name} 센터`} />
+                  ? <img className="cat-center-photo" loading="lazy" decoding="async" src={centerPhotoUrl(c.photoUrl) ?? ""} alt={`${c.name} 센터`} />
                   : <div className="cat-center-photo-empty"><UiIcon name="building" size={24} /></div>}
               </div>
               <div className="cat-center-body">

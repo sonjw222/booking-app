@@ -29,11 +29,15 @@ export default function BottomNav() {
   useEffect(() => {
     const viewport = window.visualViewport;
     if (!viewport) return;
-    const check = () => setKeyboardOpen(window.innerHeight - viewport.height > 140);
+    // 이벤트 burst를 프레임당 한 번으로 합치고 값이 같으면 setState하지 않는다(키보드 열림/닫힘 중 연속 re-render 방지).
+    let raf = 0;
+    const apply = () => { raf = 0; const open = window.innerHeight - viewport.height > 140; setKeyboardOpen((prev) => (prev === open ? prev : open)); };
+    const check = () => { if (!raf) raf = requestAnimationFrame(apply); };
     viewport.addEventListener("resize", check);
     viewport.addEventListener("scroll", check);
-    check();
+    apply();
     return () => {
+      if (raf) cancelAnimationFrame(raf);
       viewport.removeEventListener("resize", check);
       viewport.removeEventListener("scroll", check);
     };

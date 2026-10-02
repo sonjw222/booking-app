@@ -161,7 +161,7 @@ export default function SearchPage() {
             <h2 className="menu-section-label">센터 {filteredCenters.length > 0 ? `(${filteredCenters.length})` : ""}</h2>
             {filteredCenters.length === 0 ? <p className="discovery-section-empty">조건에 맞는 센터가 없어요.</p> : <>
               <div className="search-center-grid">{filteredCenters.slice(0, visibleCount).map((c) => <Link key={c.id} className="search-center-row" href={`/center/${c.id}`} prefetch={false}>
-                {c.photoUrl ? <img className="search-center-photo" src={centerPhotoUrl(c.photoUrl) ?? ""} alt="" /> :
+                {c.photoUrl ? <img className="search-center-photo" loading="lazy" decoding="async" src={centerPhotoUrl(c.photoUrl) ?? ""} alt="" /> :
                   <div className="search-center-badge" aria-hidden="true">{c.name.slice(0, 1)}</div>}
                 <div className="search-center-info"><div className="search-center-name">{c.name}</div>
                   {c.categories.length > 0 && <div className="search-center-cat">{c.categories.join(" · ")}</div>}

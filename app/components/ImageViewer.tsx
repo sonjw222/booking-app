@@ -156,6 +156,8 @@ export function ZoomableImage({
       className={className}
       src={src}
       alt={alt}
+      loading="lazy"
+      decoding="async"
       onClick={() => open(group && group.length > 0 ? group : [src], group ? (groupIndex ?? 0) : 0)}
       style={{ cursor: "zoom-in" }}
     />

@@ -223,7 +223,7 @@ export default function ManagerAnnouncementsPage() {
             <div className="rv-photo-add">
               {photos.map((ph, i) => (
                 <div key={i} className="rv-photo-thumb">
-                  <img src={announcementPhotoUrl(ph) ?? ""} alt="" />
+                  <img src={announcementPhotoUrl(ph) ?? ""} alt="" loading="lazy" decoding="async" />
                   <button className="rv-photo-del" onClick={() => setPhotos((prev) => prev.filter((_, x) => x !== i))}>×</button>
                 </div>
               ))}

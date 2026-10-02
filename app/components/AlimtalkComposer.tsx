@@ -88,7 +88,7 @@ export default function AlimtalkComposer({
           />
         ) : (
           <div key={i} style={{ position: "relative", marginBottom: 8 }}>
-            <img src={b.url} alt="첨부 사진" style={{ maxWidth: "100%", borderRadius: 8, display: "block" }} />
+            <img src={b.url} alt="첨부 사진" loading="lazy" decoding="async" style={{ maxWidth: "100%", borderRadius: 8, display: "block" }} />
             {!disabled && (
               <button
                 type="button"

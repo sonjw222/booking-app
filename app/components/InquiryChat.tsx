@@ -179,7 +179,7 @@ export default function InquiryChat({
         <div className="chat-photo-preview">
           {photos.map((ph, i) => (
             <div key={i} className="chat-photo-thumb">
-              <img src={inquiryPhotoUrl(ph) ?? ""} alt="" />
+              <img src={inquiryPhotoUrl(ph) ?? ""} alt="" loading="lazy" decoding="async" />
               <button onClick={() => setPhotos((prev) => prev.filter((_, x) => x !== i))}>×</button>
             </div>
           ))}
