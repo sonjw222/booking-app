@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-02 — PG 환불 provider 경계 명시(코드만, SQL 변경 없음)
+- handleRefund: 외부 취소는 toss && 금액>0만. portone && 금액>0은 토스 API·환불 표시·DB 환불 없이 501 `portone_refund_unsupported`로 fail closed(PortOne 연동 미구현). portone 0원은 DB-only 환불, direct/manual/mock/null은 기존 동작.
+
 ## 2026-10-02 — 환불 완료 직후 예약 race 차단(SQL 파일 갱신만, 미실행)
 - reservations 트리거가 같은 FOR UPDATE 조회에서 memberships.status와 pg_refund_started_at을 함께 읽는다. 환불 core가 `status='refunded'` + 표시 해제를 한 UPDATE로 처리하므로, 잠금을 기다리다 깨어난 예약도 active가 아닌 수강권(refunded/paused/expired 등)이면 "사용할 수 없는 수강권이에요"로 거부된다(direct/manual 환불 포함).
 
