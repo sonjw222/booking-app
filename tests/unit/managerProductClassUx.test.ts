@@ -367,7 +367,9 @@ describe("[E] 담당 강사 선택 순서", () => {
       expect(sql).toContain(`revoke all on function ${fn}(`);
     }
     // 단일/그룹/반복 생성(bulk) 모두 입력 배열 순서(첫 위치 기준 dedup)를 0..n-1로 저장
-    expect(sql.match(/row_number\(\) over \(order by min\(x\.ord\)\) - 1/g)).toHaveLength(3);
+    // (검증된 배열을 첫 위치 기준 dedup으로 만든 뒤, 그 순서의 ordinality - 1을 sort_order로 저장)
+    expect(sql.match(/min\(x\.ord\) as first_ord/g)).toHaveLength(3);
+    expect(sql.match(/\(a\.ord - 1\)::int/g)).toHaveLength(3);
     const names = sql.slice(sql.indexOf("create or replace function class_trainer_names"), sql.indexOf("-- [C]"));
     expect(names).toContain("order by ct.class_id, ct.sort_order, ct.id");
     expect(names).toContain("returns table(class_id uuid, account_id uuid, name text)");
@@ -542,5 +544,94 @@ describe("[B] 요일 선택형 수강권 예약조건 미설정 — 관리자 UX
     const sql = read("fix_manager_product_class_ux_20261002.sql");
     expect(sql).not.toContain("d60c46cb-2f8b-43ae-8c3c-b46c6e50b9d6");   // 문제 상품 id 하드코딩 없음
     expect(sql).not.toMatch(/insert into membership_schedule_rules/i);
+  });
+});
+
+describe("[SQL] 강사 setter 3종 — p_account_ids 활성 스태프 검증(RLS 우회 불변식 복원)", () => {
+  const sql = noComments(read("fix_manager_product_class_ux_20261002.sql"));
+  const fnBody = (name: string) => {
+    const start = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+    expect(start).toBeGreaterThan(-1);
+    return sql.slice(start, sql.indexOf("$function$;", sql.indexOf("AS $function$", start) + 5));
+  };
+  const bodies = { single: fnBody("set_class_trainers_safe"), bulk: fnBody("set_class_trainers_bulk_safe"), group: fnBody("set_class_trainers_for_group_safe") };
+  const MSG = "이 센터의 활성 스태프만 담당 강사로 지정할 수 있어요";
+
+  // SQL 검증을 옮긴 순수 모델: manager_centers(center, account, status) 기준, 첫 위치 중복 제거 후 전체 검증 → 통과 시에만 저장 순서 반환
+  type MC = { center: string; account: string; status: string };
+  const MCS: MC[] = [
+    { center: "A", account: "s1", status: "active" }, { center: "A", account: "s2", status: "active" },
+    { center: "A", account: "s3", status: "inactive" }, { center: "B", account: "s4", status: "active" },
+  ];   // m1은 일반 회원(manager_centers에 없음)
+  function save(centerId: string, accounts: (string | null)[] | null, before: string[]): { ok: true; saved: string[] } | { ok: false; error: string; saved: string[] } {
+    if (!accounts || accounts.length === 0) return { ok: true, saved: [] };   // 비우기/빈 배열은 기존 의미 유지
+    const seen = new Set<string | null>(); const uniq: (string | null)[] = [];
+    for (const a of accounts) if (!seen.has(a)) { seen.add(a); uniq.push(a); }
+    const bad = uniq.some((a) => a === null || !MCS.some((m) => m.center === centerId && m.account === a && m.status === "active"));
+    if (bad) return { ok: false, error: MSG, saved: before };   // 거부: 기존 데이터 불변
+    return { ok: true, saved: uniq as string[] };
+  }
+
+  it("같은 센터 active staff 2명 → 성공, 선택 순서 A→B 유지 / B→A도 유지", () => {
+    expect(save("A", ["s1", "s2"], [])).toEqual({ ok: true, saved: ["s1", "s2"] });
+    expect(save("A", ["s2", "s1"], [])).toEqual({ ok: true, saved: ["s2", "s1"] });
+  });
+  it("일반 회원 / 다른 센터 active staff / 같은 센터 inactive staff / 존재하지 않는 id / null → 전체 거부, 기존 class_trainers 불변", () => {
+    for (const bad of ["m1", "s4", "s3", "ghost", null]) {
+      const r = save("A", ["s1", bad], ["old1", "old2"]);
+      expect(r).toEqual({ ok: false, error: MSG, saved: ["old1", "old2"] });
+    }
+  });
+  it("중복 account id는 첫 위치 기준 한 번만 저장, null/빈 배열은 기존 의미(비우기) 유지", () => {
+    expect(save("A", ["s2", "s1", "s2", "s1"], [])).toEqual({ ok: true, saved: ["s2", "s1"] });
+    expect(save("A", null, ["x"])).toEqual({ ok: true, saved: [] });
+    expect(save("A", [], ["x"])).toEqual({ ok: true, saved: [] });
+  });
+
+  for (const [name, body] of Object.entries(bodies)) {
+    it(`SQL ${name}: manager_centers(center=검증된 v_center_id, account, status='active')로 모든 id를 검증하고 실패 시 전체 거부`, () => {
+      expect(body).toContain("select array_agg(t.aid order by t.first_ord) into v_accounts");
+      expect(body).toContain("from manager_centers mc where mc.center_id = v_center_id and mc.account_id = a.aid and mc.status = 'active'");
+      expect(body).toContain("a.aid is null");
+      expect(body).toContain(`raise exception '${MSG}';`);
+      expect(body).toMatch(/v_accounts\s+uuid\[\];/);
+    });
+    it(`SQL ${name}: 검증이 DELETE/INSERT보다 먼저, 권한 판정 뒤, INSERT는 원본 p_account_ids가 아니라 검증된 v_accounts만 사용`, () => {
+      const v = body.indexOf(MSG);
+      const writes = ["delete from class_trainers", "insert into class_trainers"].map((x) => body.indexOf(x)).filter((i) => i > -1);
+      for (const w of writes) expect(v).toBeLessThan(w);
+      expect(body.indexOf("has_permission(")).toBeLessThan(v);
+      expect(body).toContain("unnest(v_accounts) with ordinality");
+      expect(body).not.toMatch(/insert into class_trainers[\s\S]*unnest\(p_account_ids\)/);
+      expect(body).toContain("SET search_path TO 'public'");
+      expect(body).toContain("SECURITY DEFINER");
+    });
+  }
+  it("기존 권한 판정(own/other, create 권한)과 cross-center/cross-group 검증은 유지", () => {
+    expect(bodies.single).toContain("(case when v_format = 'private' then 'private' else 'group' end) || '.update'");
+    expect(bodies.bulk).toContain("has_permission(v_center_id, 'schedule.own.group.create')");
+    expect(bodies.bulk).toContain("if v_centers <> 1 then");
+    expect(bodies.group).toContain("if v_no_group or v_groups <> 1 then");
+    expect(bodies.group).toContain("'.group.update'");
+  });
+  it("플랫폼 관리자 호출도 같은 데이터 불변식(권한 판정과 별개로 대상 검증은 항상 수행)", () => {
+    for (const b of Object.values(bodies)) {
+      expect(b).toContain("has_permission(v_center_id, v_key) or is_platform_admin()".replace("v_key", b.includes("schedule.own.group.create") ? "'schedule.own.group.create'" : "v_key"));
+      const perm = b.indexOf("is_platform_admin()");
+      expect(b.indexOf(MSG)).toBeGreaterThan(perm);   // 관리자라도 이후 검증을 건너뛰는 분기가 없다
+      expect(b).not.toMatch(/if is_platform_admin\(\) then/);
+    }
+  });
+  it("원래 RLS 불변식(Production 확인): class_trainers INSERT는 manager_centers(active) + 같은 센터 — 이 migration이 RPC에서 같은 조건을 복원", () => {
+    expect(read("fix_manager_product_class_ux_20261002.sql")).toContain("class_trainers INSERT RLS는");
+  });
+  it("rollback은 적용 전 라이브 정의(스태프 검증 없음)로 3개 setter를 복원 — 추가 수정 불필요", () => {
+    const rb = noComments(read("rollback_fix_manager_product_class_ux_20261002.sql"));
+    for (const n of ["set_class_trainers_safe", "set_class_trainers_bulk_safe", "set_class_trainers_for_group_safe"]) expect(rb).toContain(`FUNCTION public.${n}(`);
+    expect(rb).not.toContain("활성 스태프만 담당 강사");
+    expect(rb).not.toContain("v_accounts");
+  });
+  it("적용 후 검증 SQL에 3개 setter의 활성 스태프 검증 존재 확인 추가", () => {
+    expect(read("fix_manager_product_class_ux_20261002.sql")).toContain("setters_validate_active_staff_must_be_true");
   });
 });

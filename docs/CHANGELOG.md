@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-02 — 강사 setter 3종의 담당 강사 대상 서버 검증(SQL 파일 갱신만, 미실행)
+- set_class_trainers_safe / _bulk_safe / _for_group_safe가 SECURITY DEFINER로 class_trainers RLS("그 수업 센터의 active manager_centers 스태프만")를 우회하던 문제 — p_account_ids를 센터의 active 스태프로 전부 검증(일반 회원/다른 센터/비활성/없는 id/null은 전체 거부, "이 센터의 활성 스태프만 담당 강사로 지정할 수 있어요")한 뒤, 중복 제거한 검증된 배열로만 INSERT. 검증은 DELETE/INSERT보다 먼저, 플랫폼 관리자도 동일.
+
 ## 2026-10-02 — 강사 bulk/group RPC 교차 센터 차단 + 요일 선택형 미설정 관리자 UX(SQL 파일 갱신만, 미실행)
 - set_class_trainers_bulk_safe / set_class_trainers_for_group_safe: 첫 수업의 센터 권한만 확인한 뒤 배열 전체를 SECURITY DEFINER로 수정하던 문제 차단 — 모든 수업 존재 + 같은 센터(group은 같은 반복 그룹, null 불가)를 DELETE/INSERT보다 먼저 검증하고 검증된 id 집합으로만 수정.
 - 요일 선택형 수강권에 요일 예약조건이 0개면 카드에 "회원이 구매할 수 없는 상태" 안내 + 예약조건 추가 버튼, 저장 직후 안내 토스트와 기존 예약조건 추가 시트를 바로 연다(요일/시간 데이터는 관리자가 직접 등록).

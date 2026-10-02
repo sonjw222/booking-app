@@ -91,6 +91,7 @@ declare
     v_format text;
     v_is_own boolean;
     v_key text;
+    v_accounts uuid[];
 begin
     select center_id, class_format into v_center_id, v_format from classes where id = p_class_id;
     if v_center_id is null then
@@ -105,11 +106,26 @@ begin
         raise exception '담당 강사를 지정할 권한이 없어요';
     end if;
 
-    delete from class_trainers where class_id = p_class_id;
+    -- [NEW 2026-10-02] 담당 강사 대상 검증: 원래 class_trainers INSERT RLS는 "그 수업 센터의 active manager_centers 스태프"만 허용했는데
+    -- 이 함수는 SECURITY DEFINER라 RLS를 우회한다 — 같은 불변식을 여기서 보장한다(플랫폼 관리자가 호출해도 동일).
+    -- 중복은 첫 위치만 남긴 "검증된 배열"(v_accounts)만 이후 INSERT에 쓰고, 검증은 DELETE/INSERT보다 먼저 한다.
     if p_account_ids is not null and array_length(p_account_ids, 1) > 0 then
-        -- 선택한 순서(배열 순서)를 sort_order로 저장(중복은 첫 위치만)
+        select array_agg(t.aid order by t.first_ord) into v_accounts
+          from (select x.aid, min(x.ord) as first_ord from unnest(p_account_ids) with ordinality as x(aid, ord) group by x.aid) t;
+        if exists (
+            select 1 from unnest(v_accounts) a(aid)
+             where a.aid is null
+                or not exists (select 1 from manager_centers mc where mc.center_id = v_center_id and mc.account_id = a.aid and mc.status = 'active')
+        ) then
+            raise exception '이 센터의 활성 스태프만 담당 강사로 지정할 수 있어요';
+        end if;
+    end if;
+
+    delete from class_trainers where class_id = p_class_id;
+    if v_accounts is not null then
+        -- 선택한 순서(검증된 배열 순서)를 sort_order로 저장
         insert into class_trainers (class_id, account_id, sort_order)
-        select p_class_id, t.aid, t.pos from (select x.aid, (row_number() over (order by min(x.ord)) - 1)::int as pos from unnest(p_account_ids) with ordinality as x(aid, ord) group by x.aid) t;
+        select p_class_id, a.aid, (a.ord - 1)::int from unnest(v_accounts) with ordinality as a(aid, ord);
     end if;
 end;
 $function$;
@@ -128,6 +144,7 @@ declare
     v_ids       uuid[];
     v_found     integer;
     v_centers   integer;
+    v_accounts  uuid[];
 begin
     if p_class_ids is null or array_length(p_class_ids, 1) is null then
         return;
@@ -148,9 +165,24 @@ begin
         raise exception '담당 강사를 지정할 권한이 없어요';
     end if;
 
+    -- [NEW 2026-10-02] 담당 강사 대상 검증: 원래 class_trainers INSERT RLS는 "그 수업 센터의 active manager_centers 스태프"만 허용했는데
+    -- 이 함수는 SECURITY DEFINER라 RLS를 우회한다 — 같은 불변식을 여기서 보장한다(플랫폼 관리자가 호출해도 동일).
+    -- 중복은 첫 위치만 남긴 "검증된 배열"(v_accounts)만 이후 INSERT에 쓰고, 검증은 DELETE/INSERT보다 먼저 한다.
     if p_account_ids is not null and array_length(p_account_ids, 1) > 0 then
+        select array_agg(t.aid order by t.first_ord) into v_accounts
+          from (select x.aid, min(x.ord) as first_ord from unnest(p_account_ids) with ordinality as x(aid, ord) group by x.aid) t;
+        if exists (
+            select 1 from unnest(v_accounts) a(aid)
+             where a.aid is null
+                or not exists (select 1 from manager_centers mc where mc.center_id = v_center_id and mc.account_id = a.aid and mc.status = 'active')
+        ) then
+            raise exception '이 센터의 활성 스태프만 담당 강사로 지정할 수 있어요';
+        end if;
+    end if;
+
+    if v_accounts is not null then
         insert into class_trainers (class_id, account_id, sort_order)
-        select cid, t.aid, t.pos from unnest(v_ids) as cid, (select x.aid, (row_number() over (order by min(x.ord)) - 1)::int as pos from unnest(p_account_ids) with ordinality as x(aid, ord) group by x.aid) t;
+        select cid, a.aid, (a.ord - 1)::int from unnest(v_ids) as cid, unnest(v_accounts) with ordinality as a(aid, ord);
     end if;
 end;
 $function$;
@@ -173,6 +205,7 @@ declare
     v_centers   integer;
     v_groups    integer;
     v_no_group  boolean;
+    v_accounts  uuid[];
 begin
     if p_class_ids is null or array_length(p_class_ids, 1) is null then
         return;
@@ -201,10 +234,25 @@ begin
         raise exception '담당 강사를 지정할 권한이 없어요';
     end if;
 
-    delete from class_trainers where class_id = any(v_ids);
+    -- [NEW 2026-10-02] 담당 강사 대상 검증: 원래 class_trainers INSERT RLS는 "그 수업 센터의 active manager_centers 스태프"만 허용했는데
+    -- 이 함수는 SECURITY DEFINER라 RLS를 우회한다 — 같은 불변식을 여기서 보장한다(플랫폼 관리자가 호출해도 동일).
+    -- 중복은 첫 위치만 남긴 "검증된 배열"(v_accounts)만 이후 INSERT에 쓰고, 검증은 DELETE/INSERT보다 먼저 한다.
     if p_account_ids is not null and array_length(p_account_ids, 1) > 0 then
+        select array_agg(t.aid order by t.first_ord) into v_accounts
+          from (select x.aid, min(x.ord) as first_ord from unnest(p_account_ids) with ordinality as x(aid, ord) group by x.aid) t;
+        if exists (
+            select 1 from unnest(v_accounts) a(aid)
+             where a.aid is null
+                or not exists (select 1 from manager_centers mc where mc.center_id = v_center_id and mc.account_id = a.aid and mc.status = 'active')
+        ) then
+            raise exception '이 센터의 활성 스태프만 담당 강사로 지정할 수 있어요';
+        end if;
+    end if;
+
+    delete from class_trainers where class_id = any(v_ids);
+    if v_accounts is not null then
         insert into class_trainers (class_id, account_id, sort_order)
-        select cid, t.aid, t.pos from unnest(v_ids) as cid, (select x.aid, (row_number() over (order by min(x.ord)) - 1)::int as pos from unnest(p_account_ids) with ordinality as x(aid, ord) group by x.aid) t;
+        select cid, a.aid, (a.ord - 1)::int from unnest(v_ids) as cid, unnest(v_accounts) with ordinality as a(aid, ord);
     end if;
 end;
 $function$;
@@ -373,6 +421,7 @@ select
     (select pg_get_functiondef('set_class_trainers_safe(uuid,uuid[])'::regprocedure) like '%sort_order%') as setter_single_ordered_must_be_true,
     (select pg_get_functiondef('set_class_trainers_bulk_safe(uuid[],uuid[])'::regprocedure) like '%sort_order%') as setter_bulk_ordered_must_be_true,
     (select pg_get_functiondef('set_class_trainers_bulk_safe(uuid[],uuid[])'::regprocedure) like '%같은 센터의 수업만%') as setter_bulk_same_center_must_be_true,
+    (select bool_and(pg_get_functiondef(p.oid) like '%이 센터의 활성 스태프만 담당 강사로 지정할 수 있어요%') from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in ('set_class_trainers_safe', 'set_class_trainers_bulk_safe', 'set_class_trainers_for_group_safe')) as setters_validate_active_staff_must_be_true,
     (select pg_get_functiondef('set_class_trainers_for_group_safe(uuid[],uuid[])'::regprocedure) like '%같은 반복 수업 그룹의 수업만%') as setter_group_same_group_must_be_true,
     (select pg_get_functiondef('set_class_trainers_for_group_safe(uuid[],uuid[])'::regprocedure) like '%sort_order%') as setter_group_ordered_must_be_true,
     (select pg_get_functiondef('update_class_group_safe(uuid,text,integer,jsonb)'::regprocedure) like '%allowed_product_ids%') as group_rpc_has_pass_policy_must_be_true,
