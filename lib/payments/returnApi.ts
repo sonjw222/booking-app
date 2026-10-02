@@ -15,6 +15,25 @@ async function post(path: string, body: Record<string, unknown>): Promise<Return
 }
 
 export const returnConfirm = (p: { returnToken: string; paymentKey: string; orderId: string; amount: number }) => post("/api/payments/return/confirm", p);
+// 일시 오류(네트워크 status 0 / 서버 5xx)에서만 재시도한다 — 최초 1회 + 최대 2회 재시도(총 3회), 무한 재시도 없음.
+// 400/401/403/409 등 명확한 응답은 재시도하지 않는다. 서버(confirm core)는 멱등이라 같은 요청 재전송이 안전하다.
+// 값(paymentKey/returnToken)은 호출 인자로만 다루며 저장/로그/URL 재삽입을 하지 않는다.
+export const RETURN_CONFIRM_MAX_ATTEMPTS = 3;
+export const isTransientReturnFailure = (r: ReturnResult) => !r.ok && (r.status === 0 || r.status >= 500);
+export async function returnConfirmWithRetry(
+  p: { returnToken: string; paymentKey: string; orderId: string; amount: number },
+  opts: { delayMs?: number; confirm?: typeof returnConfirm } = {},
+): Promise<ReturnResult> {
+  const confirm = opts.confirm ?? returnConfirm;
+  const delay = opts.delayMs ?? 1500;
+  let r = await confirm(p);
+  for (let i = 1; i < RETURN_CONFIRM_MAX_ATTEMPTS && isTransientReturnFailure(r); i++) {
+    await new Promise((res) => setTimeout(res, delay));
+    r = await confirm(p);
+  }
+  return r;
+}
+
 export const returnCancel = (p: { returnToken: string; orderId: string }) => post("/api/payments/return/cancel", p);
 
 // 처리 직후 주소창에서 민감한 쿼리(returnToken/paymentKey 등)를 제거한다(뒤로가기/공유로 새지 않게).

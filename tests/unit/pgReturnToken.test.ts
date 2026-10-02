@@ -263,3 +263,36 @@ describe("후속 보완 — marker 시점 / busy 복구 / fail·success UX", () 
     expect(success).not.toContain("결제를 마치지 못했어요");
   });
 });
+
+describe("success callback — 일시 오류 bounded retry", () => {
+  const p = { returnToken: "t", paymentKey: "k", orderId: "o1", amount: 1 };
+  const okR = { ok: true, status: 200 };
+  const run = async (results: { ok: boolean; status: number }[]) => {
+    const { returnConfirmWithRetry } = await import("../../lib/payments/returnApi");
+    const confirm = vi.fn(async () => results.shift() ?? { ok: false, status: 0 });
+    const r = await returnConfirmWithRetry(p, { delayMs: 0, confirm });
+    return { r, n: confirm.mock.calls.length };
+  };
+  it("첫 status=0 → 두 번째 성공 / 첫 500 → 두 번째 성공 → 성공(총 2회)", async () => {
+    expect(await run([{ ok: false, status: 0 }, okR])).toMatchObject({ r: { ok: true }, n: 2 });
+    expect(await run([{ ok: false, status: 500 }, okR])).toMatchObject({ r: { ok: true }, n: 2 });
+  });
+  it("400/401/403/409는 재시도 0회(총 1회)", async () => {
+    for (const status of [400, 401, 403, 409]) expect(await run([{ ok: false, status }, okR])).toMatchObject({ r: { ok: false, status }, n: 1 });
+  });
+  it("계속 일시 오류여도 최대 3회(최초 1 + 재시도 2)에서 멈춘다", async () => {
+    const { RETURN_CONFIRM_MAX_ATTEMPTS } = await import("../../lib/payments/returnApi");
+    expect(RETURN_CONFIRM_MAX_ATTEMPTS).toBe(3);
+    expect(await run([{ ok: false, status: 0 }, { ok: false, status: 503 }, { ok: false, status: 0 }, okR])).toMatchObject({ r: { ok: false }, n: 3 });
+  });
+  it("success 페이지: query 읽기·scrub이 첫 confirm보다 앞, retry helper 사용, 세션 의존/저장/로그/URL 재삽입 없음, 실패 문구는 단정하지 않음", () => {
+    const s = read("app/checkout/success/page.tsx");
+    expect(s.indexOf("scrubCallbackUrl()")).toBeLessThan(s.indexOf("returnConfirmWithRetry("));
+    expect(s.indexOf('sp.get("returnToken")')).toBeLessThan(s.indexOf("scrubCallbackUrl()"));
+    expect(s).not.toMatch(/getSession|supabaseClient|sessionStorage|localStorage|console\./);
+    const a = read("lib/payments/returnApi.ts").replace(/\/\*[\s\S]*?\*\//g, "");
+    const fn = a.slice(a.indexOf("export async function returnConfirmWithRetry"), a.indexOf("export const returnCancel"));
+    expect(fn).not.toMatch(/sessionStorage|localStorage|console\.|replaceState|history/);
+    expect(s).toContain("결제 결과를 확인하지 못했어요. 모하빗 앱의 구매내역을 확인해주세요.");
+  });
+});

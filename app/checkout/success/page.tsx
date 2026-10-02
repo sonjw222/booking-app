@@ -8,7 +8,7 @@
 */
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { returnConfirm, scrubCallbackUrl } from "../../../lib/payments/returnApi";
+import { returnConfirmWithRetry, scrubCallbackUrl } from "../../../lib/payments/returnApi";
 import Loading from "../../components/Loading";
 
 export default function CheckoutSuccessPage() {
@@ -34,7 +34,7 @@ function CheckoutSuccessContent() {
       return;
     }
     (async () => {
-      const r = await returnConfirm({ returnToken, paymentKey, orderId, amount });
+      const r = await returnConfirmWithRetry({ returnToken, paymentKey, orderId, amount });
       setState(r.ok ? { kind: "done" } : { kind: "error", message: (r.status === 0 || r.status >= 500 ? "결제 결과를 확인하지 못했어요. 모하빗 앱의 구매내역을 확인해주세요." : r.error ?? "결제 결과를 확인하지 못했어요. 모하빗 앱의 구매내역을 확인해주세요.") });
     })();
     // 마운트 시점 쿼리만 필요 — 재실행하면 중복 confirm이 된다
