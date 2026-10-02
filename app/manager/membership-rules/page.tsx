@@ -32,6 +32,9 @@ import { validateGoodsForm, goodsListLabel, draftsFromTiers, type GoodsPricingMo
 import { draftsToTiers, type TierDraft } from "../../../lib/selectableCount";
 import { filterCatalog, uniqueGroupLabels, catalogEmptyMessage, isFilterActive, EMPTY_CATALOG_FILTER } from "../../../lib/catalogFilter";
 
+// 요일 선택형 수강권은 요일이 지정된 예약조건이 1개 이상 있어야 회원이 구매할 때 요일을 고를 수 있다.
+const WEEKDAY_NEEDS_RULES_MESSAGE = "요일 선택형 수강권은 예약조건을 1개 이상 등록해야 회원이 구매할 수 있어요.";
+
 export default function MembershipRulesPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [centerId, setCenterId] = useState<string | null>(null);
@@ -312,9 +315,15 @@ export default function MembershipRulesPage() {
       };
       if (editingId) {
         await updateProduct(editingId, pName.trim(), num(pPrice), num(pCount), false, extra);
+        const needRules = pWeekdaySelectable && computeSelectableSchedule(rulesByProduct[editingId] ?? []).days.length === 0;
         resetProdSheet();
-        showToast("수강권을 수정했어요");
+        showToast(needRules ? WEEKDAY_NEEDS_RULES_MESSAGE : "수강권을 수정했어요");
         await load();
+        // 요일 선택형인데 요일 예약조건이 하나도 없으면 회원이 구매할 수 없다 — 바로 예약조건 추가로 연결(요일/시간은 관리자가 직접 선택)
+        if (needRules) {
+          const fresh = (await fetchProducts(centerId, "pass")).find((x) => x.id === editingId);
+          if (fresh) await openRuleSheet(fresh);
+        }
         return;
       }
       const newProductId = await createProduct(centerId, pName.trim(), num(pPrice), num(pCount), "pass", false, extra);
@@ -346,13 +355,23 @@ export default function MembershipRulesPage() {
           }
         }
       }
+      // 요일이 지정된 예약조건이 하나도 없으면(수업 자동 등록/복제 원본 포함) 요일 선택형 수강권은 구매할 수 없다.
+      const createdHasDayRule = pAutoClasses.some((k) => k.split("|")[0] !== "")
+        || (duplicateFromId ? (rulesByProduct[duplicateFromId] ?? []).some((r) => r.dayOfWeek !== null) : false);
+      const createdNeedsRules = pWeekdaySelectable && !!made && !createdHasDayRule;
       resetProdSheet();
       if (failedRuleCount > 0) {
         setError(`상품은 추가됐지만 예약조건 ${failedRuleCount}건은 등록에 실패했어요. 조건 추가에서 다시 시도해주세요.`);
+      } else if (createdNeedsRules) {
+        showToast(WEEKDAY_NEEDS_RULES_MESSAGE);
       } else {
         showToast(duplicateFromId ? "상품을 복제했어요" : "상품을 추가했어요");
       }
       await load();
+      if (createdNeedsRules && made) {
+        const fresh = (await fetchProducts(centerId, "pass")).find((x) => x.id === made.id);
+        if (fresh) await openRuleSheet(fresh);
+      }
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
   }
@@ -387,6 +406,12 @@ export default function MembershipRulesPage() {
     try { await toggleProductSale(p.id, next); showToast(next ? "판매를 재개했어요" : "판매를 정지했어요"); await load(); }
     catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
+  }
+
+  // 예약조건 추가 시트 열기(카드 버튼/요일 선택형 안내에서 공용 — 새 UI를 만들지 않고 기존 시트를 재사용한다)
+  async function openRuleSheet(p: Product) {
+    setRuleFor(p); setRPick(""); setRDays([]); setRTime(""); setRTitle("");
+    if (centerId) { try { setExistingClasses(await fetchExistingClassOptions(centerId)); } catch { setExistingClasses([]); } }
   }
 
   async function handleAddRule() {
@@ -576,6 +601,15 @@ export default function MembershipRulesPage() {
                   </div>
                 )}
 
+                {/* 요일 선택형인데 요일 예약조건이 0개면 회원이 구매할 수 없다 — 이유를 설명하고 기존 예약조건 추가 시트로 바로 연결 */}
+                {p.weekdaySelectable && computeSelectableSchedule(rules).days.length === 0 && (
+                  <div className="perm-guide is-warning weekday-needs-rules" role="alert">
+                    <b>회원이 구매할 수 없는 상태예요.</b> {WEEKDAY_NEEDS_RULES_MESSAGE}
+                    {canEditRules && (
+                      <div><button type="button" className="quiet-action" disabled={busy} onClick={() => openRuleSheet(p)}>예약조건 추가</button></div>
+                    )}
+                  </div>
+                )}
                 <button className="pass-rules-toggle" onClick={() => setExpandedProducts((prev) => {
                   const next = new Set(prev); if (next.has(p.id)) next.delete(p.id); else next.add(p.id); return next;
                 })}>
@@ -597,7 +631,7 @@ export default function MembershipRulesPage() {
                 </div>}
 
                 {canEditRules && (
-                  <button className="prog-add-sub-btn" onClick={async () => { setRuleFor(p); setRPick(""); setRDays([]); setRTime(""); setRTitle(""); if (centerId) { try { setExistingClasses(await fetchExistingClassOptions(centerId)); } catch { setExistingClasses([]); } } }}>
+                  <button className="prog-add-sub-btn" onClick={() => openRuleSheet(p)}>
                     예약조건 추가
                   </button>
                 )}
@@ -882,6 +916,11 @@ export default function MembershipRulesPage() {
         <SheetOverlay className="sheet-overlay" onClick={() => setRuleFor(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{ruleFor.name} 조건 추가</div>
+            {ruleFor.weekdaySelectable && computeSelectableSchedule(rulesByProduct[ruleFor.id] ?? []).days.length === 0 && (
+              <div className="perm-guide is-warning" style={{ margin: "0 0 8px" }}>
+                {WEEKDAY_NEEDS_RULES_MESSAGE} 회원이 고를 요일(과 시간)을 직접 선택해 추가해주세요.
+              </div>
+            )}
 
             {(() => {
               const lockDays = ruleFor.autoBookDays ?? [];

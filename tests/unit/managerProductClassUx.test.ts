@@ -415,3 +415,132 @@ describe("[SQL] 단일 migration / rollback 구조", () => {
     expect(raw).toContain("적용 전 확인(읽기 전용)");
   });
 });
+
+describe("[SQL] 강사 bulk/group RPC — 교차 센터/교차 그룹 class id 주입 차단", () => {
+  const sql = noComments(read("fix_manager_product_class_ux_20261002.sql"));
+  const fnBody = (name: string) => {
+    const start = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+    expect(start).toBeGreaterThan(-1);
+    return sql.slice(start, sql.indexOf("$function$;", sql.indexOf("AS $function$", start) + 5));
+  };
+  const bulk = fnBody("set_class_trainers_bulk_safe");
+  const group = fnBody("set_class_trainers_for_group_safe");
+  const single = fnBody("set_class_trainers_safe");
+
+  // SQL 검증 분기를 옮긴 순수 모델(아래 소스 계약 테스트가 SQL과의 일치를 보증)
+  type C = { id: string; center: string; group: string | null };
+  const DB: C[] = [
+    { id: "a1", center: "A", group: "g1" }, { id: "a2", center: "A", group: "g1" }, { id: "a3", center: "A", group: "g1" },
+    { id: "a9", center: "A", group: "g2" }, { id: "b1", center: "B", group: "g3" }, { id: "n1", center: "A", group: null },
+  ];
+  function validate(ids: (string | null)[], needGroup: boolean): { ok: true; center: string } | { ok: false; error: string } {
+    const uniq = [...new Set(ids)];
+    const rows = DB.filter((c) => uniq.includes(c.id));
+    if (rows.length !== uniq.length) return { ok: false, error: "수업을 찾을 수 없어요" };
+    if (new Set(rows.map((r) => r.center)).size !== 1) return { ok: false, error: "같은 센터의 수업만 한 번에 지정할 수 있어요" };
+    if (needGroup && (rows.some((r) => r.group === null) || new Set(rows.map((r) => r.group)).size !== 1)) return { ok: false, error: "같은 반복 수업 그룹의 수업만 한 번에 지정할 수 있어요" };
+    return { ok: true, center: rows[0].center };
+  }
+
+  it("bulk: 같은 센터 3개 → 성공(중복 id는 제거)", () => {
+    expect(validate(["a1", "a2", "a3"], false)).toEqual({ ok: true, center: "A" });
+    expect(validate(["a1", "a1", "a2"], false)).toEqual({ ok: true, center: "A" });
+  });
+  it("bulk: 다른 센터 id 1개 섞기 → 전체 거부 / 존재하지 않는 id·null → 전체 거부", () => {
+    expect(validate(["a1", "a2", "b1"], false)).toMatchObject({ ok: false, error: "같은 센터의 수업만 한 번에 지정할 수 있어요" });
+    expect(validate(["b1", "a1"], false)).toMatchObject({ ok: false });   // 첫 id의 센터가 아니어도 거부
+    expect(validate(["a1", "zzz"], false)).toMatchObject({ ok: false, error: "수업을 찾을 수 없어요" });
+    expect(validate(["a1", null], false)).toMatchObject({ ok: false, error: "수업을 찾을 수 없어요" });
+  });
+  it("group: 같은 recurring_group → 성공 / 다른 센터 → 거부 / 같은 센터 다른 그룹 → 거부 / 그룹 없음(null) 섞임 → 거부", () => {
+    expect(validate(["a1", "a2", "a3"], true)).toEqual({ ok: true, center: "A" });
+    expect(validate(["a1", "b1"], true)).toMatchObject({ ok: false, error: "같은 센터의 수업만 한 번에 지정할 수 있어요" });
+    expect(validate(["a1", "a9"], true)).toMatchObject({ ok: false, error: "같은 반복 수업 그룹의 수업만 한 번에 지정할 수 있어요" });
+    expect(validate(["a1", "n1"], true)).toMatchObject({ ok: false, error: "같은 반복 수업 그룹의 수업만 한 번에 지정할 수 있어요" });
+  });
+
+  it("SQL bulk: 모든 수업 존재 + 같은 센터를 INSERT보다 먼저 확인, 권한(schedule.own.group.create)은 그 센터 기준, 검증된 id 집합으로만 INSERT", () => {
+    expect(bulk).toContain("select array_agg(distinct x) into v_ids from unnest(p_class_ids) x;");
+    expect(bulk).toContain("from classes where id = any(v_ids);");
+    expect(bulk).toContain("if v_found <> array_length(v_ids, 1) then");
+    expect(bulk).toContain("if v_centers <> 1 then");
+    expect(bulk).toContain("has_permission(v_center_id, 'schedule.own.group.create')");
+    expect(bulk).toContain("unnest(v_ids) as cid");
+    expect(bulk).not.toContain("unnest(p_class_ids) as cid");
+    expect(bulk.indexOf("if v_centers <> 1 then")).toBeLessThan(bulk.indexOf("has_permission("));
+    expect(bulk.indexOf("has_permission(")).toBeLessThan(bulk.indexOf("insert into class_trainers"));
+    expect(bulk).not.toContain("p_class_ids[1]");
+  });
+  it("SQL group: 존재/같은 센터/같은 그룹(null 불가) 검증이 DELETE보다 먼저, own/other 판정도 검증된 v_ids로만, DELETE/INSERT 모두 v_ids", () => {
+    for (const x of ["if v_found <> array_length(v_ids, 1) then", "if v_centers <> 1 then", "if v_no_group or v_groups <> 1 then", "count(distinct recurring_group_id)"]) expect(group).toContain(x);
+    const del = group.indexOf("delete from class_trainers");
+    for (const x of ["if v_found <> array_length", "if v_centers <> 1", "if v_no_group or v_groups <> 1", "has_permission("]) expect(group.indexOf(x)).toBeLessThan(del);
+    expect(group).toContain("delete from class_trainers where class_id = any(v_ids);");
+    expect(group).toContain("class_id = any(v_ids) and account_id = my_account_id()");
+    expect(group).toContain("unnest(v_ids) as cid");
+    expect(group).not.toMatch(/any\(p_class_ids\)|unnest\(p_class_ids\) as cid|p_class_ids\[1\]/);   // 원본 배열은 중복 제거에만 쓰고 이후 모두 검증된 v_ids
+    expect(group).toContain("'.group.update'");
+  });
+  it("거부 시 기존 class_trainers 불변: 예외는 항상 첫 DELETE/INSERT보다 앞(함수는 한 트랜잭션이라 예외 시 전부 롤백)", () => {
+    for (const body of [bulk, group]) {
+      const firstWrite = Math.min(...["delete from class_trainers", "insert into class_trainers"].map((x) => body.indexOf(x)).filter((i) => i > -1));
+      for (const m of ["수업을 찾을 수 없어요", "같은 센터의 수업만", "담당 강사를 지정할 권한이 없어요"]) expect(body.lastIndexOf(m, firstWrite)).toBeGreaterThan(-1);
+    }
+  });
+  it("단일 set_class_trainers_safe는 수업 자체의 center 기준 검사 그대로(불필요한 변경 없음), 3개 모두 anon 실행 회수 + search_path 고정", () => {
+    expect(single).toContain("select center_id, class_format into v_center_id, v_format from classes where id = p_class_id;");
+    expect(single).not.toContain("v_ids");
+    for (const sig of ["set_class_trainers_safe(uuid, uuid[])", "set_class_trainers_bulk_safe(uuid[], uuid[])", "set_class_trainers_for_group_safe(uuid[], uuid[])"]) {
+      expect(sql).toContain(`revoke all on function ${sig} from public, anon;`);
+    }
+    for (const b of [bulk, group, single]) expect(b).toContain("SET search_path TO 'public'");
+  });
+  it("적용 후 검증 SQL에 같은 센터/같은 그룹 검증 존재 확인 추가, rollback은 적용 전 라이브 정의(검증 없음)로 복원", () => {
+    const raw = read("fix_manager_product_class_ux_20261002.sql");
+    expect(raw).toContain("setter_bulk_same_center_must_be_true");
+    expect(raw).toContain("setter_group_same_group_must_be_true");
+    const rb = noComments(read("rollback_fix_manager_product_class_ux_20261002.sql"));
+    expect(rb).toContain("FUNCTION public.set_class_trainers_bulk_safe(");
+    expect(rb).not.toContain("같은 센터의 수업만");
+    expect(rb).not.toContain("array_agg(distinct x)");
+  });
+  it("앱 호출부는 그룹 수업 id만 넘긴다(setClassTrainersForGroup는 updateClassGroup이 돌려준 그룹 id, bulk는 방금 만든 id)", () => {
+    const page = read("app/manager/classes/page.tsx");
+    expect(page).toContain("await setClassTrainersForGroup(groupIds, selectedTrainers);");
+    expect(page).toContain("setClassTrainersBulk(newIds, selectedTrainers)");
+  });
+});
+
+describe("[B] 요일 선택형 수강권 예약조건 미설정 — 관리자 UX", () => {
+  const page = read("app/manager/membership-rules/page.tsx");
+  it("공용 안내 문구 + 기존 예약조건 추가 시트를 재사용하는 openRuleSheet(새 UI 없음)", () => {
+    expect(page).toContain('const WEEKDAY_NEEDS_RULES_MESSAGE = "요일 선택형 수강권은 예약조건을 1개 이상 등록해야 회원이 구매할 수 있어요.";');
+    expect(page).toContain("async function openRuleSheet(p: Product)");
+    expect(page).toContain('<button className="prog-add-sub-btn" onClick={() => openRuleSheet(p)}>');
+    expect((page.match(/setRuleFor\(p\)/g) ?? []).length).toBe(1);   // 시트를 여는 코드는 한 곳(중복 UI 없음)
+  });
+  it("카드: 요일 선택형 + 요일 예약조건 0개면 '회원이 구매할 수 없는 상태' 안내 + 예약조건 추가 버튼(권한 있을 때)", () => {
+    expect(page).toContain("p.weekdaySelectable && computeSelectableSchedule(rules).days.length === 0");
+    expect(page).toContain("회원이 구매할 수 없는 상태예요.");
+    expect(page).toContain("{canEditRules && (");
+    expect(page).toContain('onClick={() => openRuleSheet(p)}>예약조건 추가</button>');
+  });
+  it("수정 저장 직후: 요일 예약조건이 0개면 안내 토스트 + 예약조건 추가 시트를 바로 연다(요일/시간은 관리자가 직접 선택)", () => {
+    expect(page).toContain("const needRules = pWeekdaySelectable && computeSelectableSchedule(rulesByProduct[editingId] ?? []).days.length === 0;");
+    expect(page).toContain('showToast(needRules ? WEEKDAY_NEEDS_RULES_MESSAGE : "수강권을 수정했어요");');
+    expect(page).toContain("if (fresh) await openRuleSheet(fresh);");
+  });
+  it("새 상품 생성은 기존 '생성 → 예약조건 추가' 구조 유지: 생성 후 요일 조건이 없으면 안내 + 시트 연결", () => {
+    expect(page).toContain("const createdNeedsRules = pWeekdaySelectable && !!made && !createdHasDayRule;");
+    const createAt = page.indexOf("const newProductId = await createProduct(");
+    expect(createAt).toBeGreaterThan(-1);
+    expect(page.indexOf("createdNeedsRules", createAt)).toBeGreaterThan(createAt);
+    expect(page).toContain("showToast(WEEKDAY_NEEDS_RULES_MESSAGE);");
+  });
+  it("조건 추가 시트에도 같은 안내를 보여준다 / 실제 요일·시간 값은 코드·SQL에 하드코딩하지 않는다", () => {
+    expect(page).toContain("{WEEKDAY_NEEDS_RULES_MESSAGE} 회원이 고를 요일(과 시간)을 직접 선택해 추가해주세요.");
+    const sql = read("fix_manager_product_class_ux_20261002.sql");
+    expect(sql).not.toContain("d60c46cb-2f8b-43ae-8c3c-b46c6e50b9d6");   // 문제 상품 id 하드코딩 없음
+    expect(sql).not.toMatch(/insert into membership_schedule_rules/i);
+  });
+});

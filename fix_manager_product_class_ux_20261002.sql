@@ -125,14 +125,24 @@ CREATE OR REPLACE FUNCTION public.set_class_trainers_bulk_safe(p_class_ids uuid[
 AS $function$
 declare
     v_center_id uuid;
+    v_ids       uuid[];
+    v_found     integer;
+    v_centers   integer;
 begin
     if p_class_ids is null or array_length(p_class_ids, 1) is null then
         return;
     end if;
 
-    select center_id into v_center_id from classes where id = p_class_ids[1];
-    if v_center_id is null then
+    -- [NEW 2026-10-02] 교차 센터 id 주입 차단: 모든 수업이 존재하고 같은 센터여야 한다(권한은 그 센터 기준). 검증은 INSERT보다 먼저.
+    -- (이전에는 첫 번째 수업의 센터 권한만 확인한 뒤 SECURITY DEFINER로 배열 전체에 INSERT해, 다른 센터 수업을 섞어 넣을 수 있었다.)
+    select array_agg(distinct x) into v_ids from unnest(p_class_ids) x;   -- 중복 제거(null이 있으면 아래 존재 검사에서 거부)
+    select count(*), count(distinct center_id), min(center_id::text)::uuid into v_found, v_centers, v_center_id
+      from classes where id = any(v_ids);
+    if v_found <> array_length(v_ids, 1) then
         raise exception '수업을 찾을 수 없어요';
+    end if;
+    if v_centers <> 1 then
+        raise exception '같은 센터의 수업만 한 번에 지정할 수 있어요';
     end if;
     if not (has_permission(v_center_id, 'schedule.own.group.create') or is_platform_admin()) then
         raise exception '담당 강사를 지정할 권한이 없어요';
@@ -140,7 +150,7 @@ begin
 
     if p_account_ids is not null and array_length(p_account_ids, 1) > 0 then
         insert into class_trainers (class_id, account_id, sort_order)
-        select cid, t.aid, t.pos from unnest(p_class_ids) as cid, (select x.aid, (row_number() over (order by min(x.ord)) - 1)::int as pos from unnest(p_account_ids) with ordinality as x(aid, ord) group by x.aid) t;
+        select cid, t.aid, t.pos from unnest(v_ids) as cid, (select x.aid, (row_number() over (order by min(x.ord)) - 1)::int as pos from unnest(p_account_ids) with ordinality as x(aid, ord) group by x.aid) t;
     end if;
 end;
 $function$;
@@ -158,27 +168,43 @@ declare
     v_center_id uuid;
     v_is_own boolean;
     v_key text;
+    v_ids       uuid[];
+    v_found     integer;
+    v_centers   integer;
+    v_groups    integer;
+    v_no_group  boolean;
 begin
     if p_class_ids is null or array_length(p_class_ids, 1) is null then
         return;
     end if;
 
-    select center_id into v_center_id from classes where id = p_class_ids[1];
-    if v_center_id is null then
+    -- [NEW 2026-10-02] 교차 센터/교차 그룹 주입 차단: 모든 수업이 존재하고, 같은 센터이며, 같은 반복 그룹(recurring_group_id가 null이 아님)이어야 한다.
+    -- 검증은 DELETE/INSERT보다 먼저, own/other 권한 판정도 검증된 id 집합으로만 한다.
+    select array_agg(distinct x) into v_ids from unnest(p_class_ids) x;
+    select count(*), count(distinct center_id), count(distinct recurring_group_id), coalesce(bool_or(recurring_group_id is null), false), min(center_id::text)::uuid
+      into v_found, v_centers, v_groups, v_no_group, v_center_id
+      from classes where id = any(v_ids);
+    if v_found <> array_length(v_ids, 1) then
         raise exception '수업을 찾을 수 없어요';
     end if;
+    if v_centers <> 1 then
+        raise exception '같은 센터의 수업만 한 번에 지정할 수 있어요';
+    end if;
+    if v_no_group or v_groups <> 1 then
+        raise exception '같은 반복 수업 그룹의 수업만 한 번에 지정할 수 있어요';
+    end if;
 
-    v_is_own := not exists (select 1 from class_trainers where class_id = any(p_class_ids))
-             or exists (select 1 from class_trainers where class_id = any(p_class_ids) and account_id = my_account_id());
+    v_is_own := not exists (select 1 from class_trainers where class_id = any(v_ids))
+             or exists (select 1 from class_trainers where class_id = any(v_ids) and account_id = my_account_id());
     v_key := 'schedule.' || (case when v_is_own then 'own' else 'other' end) || '.group.update';
     if not (has_permission(v_center_id, v_key) or is_platform_admin()) then
         raise exception '담당 강사를 지정할 권한이 없어요';
     end if;
 
-    delete from class_trainers where class_id = any(p_class_ids);
+    delete from class_trainers where class_id = any(v_ids);
     if p_account_ids is not null and array_length(p_account_ids, 1) > 0 then
         insert into class_trainers (class_id, account_id, sort_order)
-        select cid, t.aid, t.pos from unnest(p_class_ids) as cid, (select x.aid, (row_number() over (order by min(x.ord)) - 1)::int as pos from unnest(p_account_ids) with ordinality as x(aid, ord) group by x.aid) t;
+        select cid, t.aid, t.pos from unnest(v_ids) as cid, (select x.aid, (row_number() over (order by min(x.ord)) - 1)::int as pos from unnest(p_account_ids) with ordinality as x(aid, ord) group by x.aid) t;
     end if;
 end;
 $function$;
@@ -346,6 +372,8 @@ select
     (select pg_get_functiondef('class_trainer_names(uuid[])'::regprocedure) like '%order by ct.class_id, ct.sort_order%') as names_ordered_must_be_true,
     (select pg_get_functiondef('set_class_trainers_safe(uuid,uuid[])'::regprocedure) like '%sort_order%') as setter_single_ordered_must_be_true,
     (select pg_get_functiondef('set_class_trainers_bulk_safe(uuid[],uuid[])'::regprocedure) like '%sort_order%') as setter_bulk_ordered_must_be_true,
+    (select pg_get_functiondef('set_class_trainers_bulk_safe(uuid[],uuid[])'::regprocedure) like '%같은 센터의 수업만%') as setter_bulk_same_center_must_be_true,
+    (select pg_get_functiondef('set_class_trainers_for_group_safe(uuid[],uuid[])'::regprocedure) like '%같은 반복 수업 그룹의 수업만%') as setter_group_same_group_must_be_true,
     (select pg_get_functiondef('set_class_trainers_for_group_safe(uuid[],uuid[])'::regprocedure) like '%sort_order%') as setter_group_ordered_must_be_true,
     (select pg_get_functiondef('update_class_group_safe(uuid,text,integer,jsonb)'::regprocedure) like '%allowed_product_ids%') as group_rpc_has_pass_policy_must_be_true,
     has_function_privilege('anon', 'update_class_group_safe(uuid,text,integer,jsonb)', 'execute') as group_rpc_anon_must_be_false,
