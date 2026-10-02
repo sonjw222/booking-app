@@ -43,6 +43,20 @@ public class GoogleSignInPlugin: CAPPlugin, CAPBridgedPlugin {
     private static let googleSignInErrorDomain = "com.google.GIDSignIn"
     private static let cancelledErrorCode = -5
 
+    // clientId "<id>.apps.googleusercontent.com" → 필요한 callback scheme "com.googleusercontent.apps.<id>"
+    static func reversedScheme(forClientId clientId: String) -> String? {
+        let suffix = ".apps.googleusercontent.com"
+        guard clientId.hasSuffix(suffix) else { return nil }
+        let id = String(clientId.dropLast(suffix.count))
+        return id.isEmpty ? nil : "com.googleusercontent.apps." + id
+    }
+
+    static func hasRequiredCallbackScheme(forClientId clientId: String, bundle: Bundle = .main) -> Bool {
+        guard let needed = reversedScheme(forClientId: clientId) else { return false }
+        let types = bundle.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] ?? []
+        return types.contains { ($0["CFBundleURLSchemes"] as? [String])?.contains(needed) == true }
+    }
+
     @objc func authorize(_ call: CAPPluginCall) {
         guard let clientId = call.getString("clientId"), !clientId.isEmpty else {
             call.reject("clientId가 필요해요")
@@ -50,6 +64,14 @@ public class GoogleSignInPlugin: CAPPlugin, CAPBridgedPlugin {
         }
         guard let hashedNonce = call.getString("hashedNonce"), !hashedNonce.isEmpty else {
             call.reject("hashedNonce가 필요해요")
+            return
+        }
+
+        // GoogleSignIn SDK는 콜백 URL scheme(= clientId의 reversed 값)이 Info.plist CFBundleURLSchemes에 없으면 signIn 안에서
+        // NSInvalidArgumentException을 던져 앱 전체가 SIGABRT로 종료된다(TestFlight 1.0.2(5) 실측, GIDSignIn.m). SDK 호출 전에 확인해
+        // 누락이면 앱을 죽이지 않고 reject로 안전하게 실패시킨다. 값은 로그/메시지에 포함하지 않는다.
+        guard Self.hasRequiredCallbackScheme(forClientId: clientId) else {
+            call.reject("Google 로그인 설정(URL scheme)이 이 앱 빌드에 없어요", "missing_url_scheme")
             return
         }
 
