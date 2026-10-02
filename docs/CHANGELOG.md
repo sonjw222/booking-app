@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## 2026-10-02 — 환불 완료 직후 예약 race 차단(SQL 파일 갱신만, 미실행)
+- reservations 트리거가 같은 FOR UPDATE 조회에서 memberships.status와 pg_refund_started_at을 함께 읽는다. 환불 core가 `status='refunded'` + 표시 해제를 한 UPDATE로 처리하므로, 잠금을 기다리다 깨어난 예약도 active가 아닌 수강권(refunded/paused/expired 등)이면 "사용할 수 없는 수강권이에요"로 거부된다(direct/manual 환불 포함).
+
+## 2026-10-02 — PG 결제 동시성 보완(SQL 파일 갱신만, 미실행 / Toss 실호출 없음)
+- confirm: DB 주문이 cancelled인데 토스가 DONE으로 남은 경우(취소·승인 경합) — 토스 confirm을 다시 호출하지 않고 조회만 해서, 주문/금액이 정확히 일치할 때만 승인을 취소한다(불일치는 payment_mismatch, 조회 실패는 state_unknown). 취소된 주문을 dbConfirm으로 되살리지 않는다.
+- reservations 트리거를 BEFORE INSERT OR UPDATE OF status, membership_id로 확장하고 수강권 행을 FOR UPDATE로 잠근 뒤 환불 표시를 확인(pg_refund_begin과 같은 잠금으로 직렬화). 대기→확정 승격/취소 복구/잠긴 수강권으로의 변경도 차단, cancelled로 가는 경로는 허용.
+- 셀프 환불의 "미사용" 판정(_refund_block_reason)이 횟수 소비 + 현재 활성 예약(confirmed/waitlisted/attended/no_show)을 함께 본다(무제한권/대기 포함, 취소된 예약은 제외). direct/manual 환불에도 동일 적용.
+- 동시성 Production QA 후보 `qa:production:pg-refund-lock`(실행 안 함).
+
+## 2026-10-02 — PG 결제 라이프사이클 정합성 보완(SQL 파일 갱신만, 미실행 / Toss 실호출 없음)
+- confirm: 토스가 ALREADY_PROCESSED/ALREADY_CANCELED를 돌려주면 토스 실제 상태를 조회해 DB를 수렴시킨다(DONE+주문/금액 일치 → DB 확정, CANCELED → 주문 cancelled + 포인트 복원, 그 외/조회 실패 → state_unknown + 로그, 임의 승인·취소 없음).
+- 보상 취소 후 DB 주문 정리 실패는 최대 1회 재시도하고, 그래도 실패하면 `payment_compensated_db_cleanup_failed` + `PG_COMPENSATION_DB_CLEANUP_FAILED` 로그로 구분한다.
+- 환불 TOCTOU 차단: memberships.pg_refund_started_at(서버 전용 표시) + pg_refund_begin/release. 표시 중에는 횟수 차감/새 예약을 DB 트리거가 거부하고, 환불 core는 24시간 조건만 건너뛰며 "이미 사용"은 항상 확인한다.
+
+## 2026-10-02 — 실 PG 결제 서버 라이프사이클 보완(SQL 파일만 작성, 미실행 / Toss 실호출 없음)
+- `/api/payments/cancel`: 인증 없이 service_role로 cancel_real_payment를 호출하던 문제 수정 — Bearer 로그인 검증(401), 본인 주문만(pg_order_context), pending 상태만, 발급된 주문 거부.
+- `/api/payments/confirm`: 로그인/소유권/금액·상태 검증 후 토스 승인(금액은 DB 주문 값) → confirm_real_payment. 승인 성공 후 DB 확정이 실패하면 서버가 토스 보상 취소 1회(커밋 여부 재확인, 보상 실패 시 `[PG_COMPENSATION_FAILED]` 로그와 명확한 오류).
+- 신규 `/api/payments/refund`: 브라우저의 refund_membership 직접 호출을 대체 — 실 PG 주문은 토스 취소 → DB 환불(쿠폰/포인트 복원), direct/manual/mock은 기존 DB 환불. 토스 취소 후 DB 실패는 재요청으로 이어서 마무리.
+- `fix_pg_payment_lifecycle.sql`(+rollback): 환불 core/서버 전용 함수, 브라우저 refund_membership의 PG 주문 거부, cancel_real_payment/_issue_membership_and_record_payment search_path 고정,
+  confirm_test_payment(Mock)를 내부 QA 센터로 제한(회원이 mock 주문으로 결제 없이 수강권을 받던 경로 차단), 회원 INSERT 주문의 verified/status 서버 고정.
+
 ## 2026-10-02 — 주문 포인트 라이프사이클 보완(적용 전 보안/정합성 갭)
 - point_transactions "매니저 포인트 등록" INSERT 정책을 order_id/reverses_id가 null인 수기 조정으로 축소(주문 연계 차감/복원 행 위조로 unique 구조를 선점하는 경로 차단, rollback은 적용 전 정책 복원).
 - orders 상태 전이를 허용표로 명시(pending→paid|done|cancelled, paid→done|cancelled) — paid→pending 등 역전이 차단. confirm_real_payment에 search_path 고정. QA CASE 11/12 추가(실행 안 함).

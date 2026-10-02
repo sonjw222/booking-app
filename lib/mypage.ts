@@ -5,6 +5,7 @@
 
 import { calendarEventsToIcs, reservationToEvent } from "./calendarEvents";
 import { supabase } from "./supabaseClient";
+import { refundMembershipApi } from "./payments/tossPaymentApi";
 import { getMyAccountId } from "./authAccount";
 import { disableNativePush } from "./nativePush";
 
@@ -578,7 +579,7 @@ export function refundEligibility(m: { createdAt: string; totalCount: number; re
 }
 
 export async function requestRefund(membershipId: string): Promise<void> {
-  // 서버에서 조건 검증 + 수강권 환불 + 매출 반영 + 회원상태 갱신
-  const { error } = await supabase.rpc("refund_membership", { p_membership_id: membershipId });
-  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+  // 서버 라우트가 조건 검증 + (실 PG 주문이면 토스 승인 취소) + 수강권 환불 + 매출/쿠폰/포인트 반영 + 회원상태 갱신을 처리한다.
+  // 브라우저에서 refund_membership RPC를 직접 부르지 않는다(실 PG 주문은 DB가 직접 호출을 거부).
+  await refundMembershipApi(membershipId);
 }

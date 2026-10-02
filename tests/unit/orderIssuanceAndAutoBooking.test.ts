@@ -200,7 +200,9 @@ describe("[3-B] PG 비노출 — direct만", () => {
     expect(checkout).toContain("fetchMyPgCheckoutOverride");
   });
   it("PG 코드(Toss 연동)는 삭제되지 않고 남아 있다", () => {
-    expect(read("app/api/payments/confirm/route.ts")).toContain("api.tosspayments.com/v1/payments/confirm");
+    expect(read("lib/payments/server/toss.ts")).toContain("api.tosspayments.com/v1");
+    expect(read("lib/payments/server/toss.ts")).toContain("/payments/confirm");
+    expect(read("app/api/payments/confirm/route.ts")).toContain("handleConfirm");
     expect(read("app/checkout/page.tsx")).toContain("getPaymentService");
   });
 });
@@ -211,14 +213,19 @@ describe("[3-B] 서버 게이트 — /api/payments/confirm", () => {
   function mockAdmin(override: boolean | null) {
     vi.doMock("@supabase/supabase-js", () => ({
       createClient: () => ({
+        auth: { getUser: async () => ({ data: { user: { id: "u" } }, error: null }) },
         from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: override === null ? null : { profiles: { accounts: { pg_checkout_override: override } } } }) }) }) }),
-        rpc: async () => ({ data: { membership_id: "m" }, error: null }),
+        // pg_order_context: 로그인한 본인의 pending toss 주문(금액 1000)
+        rpc: async () => ({ data: { orderId: "o", status: "pending", amount: 1000, provider: "toss" }, error: null }),
       }),
     }));
   }
-  const req = () => new Request("http://localhost/api/payments/confirm", { method: "POST", body: JSON.stringify({ paymentKey: "pk", orderId: "o", amount: 1000 }) });
+  const req = () => new Request("http://localhost/api/payments/confirm", {
+    method: "POST", headers: { Authorization: "Bearer test-token" }, body: JSON.stringify({ paymentKey: "pk", orderId: "o", amount: 1000 }),
+  });
   it("플래그가 true가 아니고 심사관 계정도 아니면 토스를 호출하지 않고 403", async () => {
     vi.stubEnv("NEXT_PUBLIC_PG_CHECKOUT_ENABLED", "false");
+    vi.stubEnv("TOSS_SECRET_KEY", "test-secret");
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "x"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://x");
     const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
     mockAdmin(false);
@@ -229,6 +236,7 @@ describe("[3-B] 서버 게이트 — /api/payments/confirm", () => {
   });
   it("플래그 미설정(undefined)도 막힌다(정확히 'true'만 허용)", async () => {
     vi.stubEnv("NEXT_PUBLIC_PG_CHECKOUT_ENABLED", "TRUE");
+    vi.stubEnv("TOSS_SECRET_KEY", "test-secret");
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "x"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://x");
     const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
     mockAdmin(null);
@@ -238,6 +246,7 @@ describe("[3-B] 서버 게이트 — /api/payments/confirm", () => {
   });
   it("심사관 override 계정의 주문은 플래그가 꺼져 있어도 토스 승인 단계로 진행한다", async () => {
     vi.stubEnv("NEXT_PUBLIC_PG_CHECKOUT_ENABLED", "false");
+    vi.stubEnv("TOSS_SECRET_KEY", "test-secret");
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "x"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://x");
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ message: "stop" }), { status: 400 })); vi.stubGlobal("fetch", fetchMock);
     mockAdmin(true);
