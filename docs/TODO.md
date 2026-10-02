@@ -1,5 +1,13 @@
 # TODO
 
+## 2026-10-03 post-release follow-up 이후 남은 것
+
+- **P1 / 승인 필요(PG·환불·주문 범위)**: `_issue_membership_and_record_payment`, `fulfill_order`의 `v_starts := current_date`와 days형 만료 `(now() + N days)::date`는 DB UTC 날짜 — 구매가 KST 00:00~08:59이면 days형 수강권 만료가 하루 일찍 계산된다. `_refund_membership_core`의 `expires_at >= current_date`도 같은 계열. PG/환불/주문 발급 수정 금지 범위라 이번에 손대지 않음 — 승인 후 같은 방식(`(now() at time zone 'Asia/Seoul')::date`)으로 수정.
+- **P2**: `cancel_reservation`/`update_class_safe`의 대기 승격은 `expires_at >= 오늘`이라 만료일이 NULL(무제한 기간)인 수강권은 승격되지 않는다(날짜가 아니라 NULL 처리 — reserve_*는 NULL 허용). 의도 확인 후 별도 수정.
+- **P2**: accounts "계정 조회" RLS 정책이 owner/`facility.staff.create` 권한자에게 accounts 전체 SELECT를 허용한다(스태프 초대 검색용, fix_staff_search.sql). 이번 회원 검색 RPC와는 별개이며 범위를 좁힐지 제품 결정 필요.
+- **P2**: 회원 추가 검색은 권한자가 전체 번호를 시도하면 이름이 확인된다(번호 열거 rate limit 없음) — 필요 시 호출 빈도 제한.
+- **P3**: reservations anon SELECT / authenticated DELETE(매니저 취소예약 정리 정책) 권한은 유지 중 — 세션 만료 시 동작 변화/통합테스트 의존 때문. 필요 시 별도 결정.
+
 ## 2026-10-03 출시 전 QA 후속
 
 - **P1 / 확인 필요**: 전화번호 검색이 TestFlight 1.0.2(6)에서는 되고 App Store 빌드에서는 안 되는 차이. 코드상 버전 분기 없음(server.url 동일, 클라이언트 RLS 질의). App Store 빌드 번호/사용 계정/관계(center_members 등) 확인 필요. 근본 해결은 서버측 검색 RPC(개인정보 범위 결정 필요).
