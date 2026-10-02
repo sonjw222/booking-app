@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-02 — iOS 결제 복귀 Universal Link(앱으로 복귀, Safari는 fallback 유지)
+- Associated Domains(`applinks:mwhabit.com`) + AASA(`/.well-known/apple-app-site-association`, success/fail 두 경로만) + CapacitorBootstrap의 appUrlOpen/getLaunchUrl 처리(`lib/paymentUniversalLink.ts`, 허용 URL만 앱 WebView에서 열기). 결제 lifecycle/콜백 페이지 변경 없음. 새 TestFlight 빌드 필요.
+
 ## 2026-10-02 — success 콜백 일시 오류 bounded retry(코드만)
 - 외부 Safari의 return/confirm 호출이 네트워크 오류(status 0)/5xx로 실패하면 최대 2회 재시도(총 3회). 400/401/403/409는 재시도 없음. 서버 core는 멱등이라 동일 요청 재전송이 안전.
 
