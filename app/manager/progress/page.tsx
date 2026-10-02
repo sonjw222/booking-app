@@ -3,25 +3,26 @@
 /*
   매니저 - 진도표 기술 목록 관리 (1단계)
   - 대분류 추가/삭제/이름수정 (예: 점프, 스핀, 스텝)
-  - 대분류 밑에 세부기술 추가/삭제 (예: 왈츠점프, 살코)
+  - 분류를 최대 7단계까지 중첩하고(accordion 접기/펼치기) 말단에 기술 추가/삭제 (예: 점프 › 싱글 점프 › 왈츠)
   - 진도표 관리 권한(customer.progress) 필요
 */
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
-  fetchCategories, buildCategoryTree,
-  addTopCategory, addSubCategory, renameCategory, deleteCategory,
-  type CategoryNode,
+  fetchCategories, addTopCategory, addSubCategory, renameCategory, deleteCategory,
 } from "../../../lib/progress";
+import {
+  buildTree, canAddChild, countDescendants, flattenTree, indentLevel, MAX_PROGRESS_DEPTH, type TreeNode,
+} from "../../../lib/progressTree";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 export default function ProgressCategoryPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [centerId, setCenterId] = useState<string | null>(null);
-  const [tree, setTree] = useState<CategoryNode[]>([]);
+  const [tree, setTree] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +31,7 @@ export default function ProgressCategoryPage() {
   // 입력 상태
   const [newTop, setNewTop] = useState("");
   const [subInput, setSubInput] = useState<Record<string, string>>({});   // parentId → 입력값
-  const [openSub, setOpenSub] = useState<Record<string, boolean>>({});     // 세부기술 입력창 열림
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});     // 접기/펼치기(accordion) — 입력값(subInput)은 접어도 유지된다
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
@@ -67,7 +68,7 @@ export default function ProgressCategoryPage() {
     setLoading(true); setError(null);
     try {
       const cats = await fetchCategories(centerId);
-      setTree(buildCategoryTree(cats));
+      setTree(buildTree(cats));
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   }, [centerId]);
@@ -86,14 +87,16 @@ export default function ProgressCategoryPage() {
     finally { setBusy(false); }
   }
 
-  async function handleAddSub(parentId: string, childCount: number) {
-    const name = (subInput[parentId] ?? "").trim();
-    if (!centerId || !name) { setError("세부기술 이름을 입력해주세요"); return; }
+  async function handleAddSub(parent: TreeNode) {
+    const name = (subInput[parent.id] ?? "").trim();
+    if (!centerId || !name) { setError("하위 분류 또는 기술 이름을 입력해주세요"); return; }
+    if (!canAddChild(parent)) { setError(`분류는 최대 ${MAX_PROGRESS_DEPTH}단계까지 만들 수 있어요`); return; }
     setBusy(true);
     try {
-      await addSubCategory(centerId, parentId, name, childCount);
-      setSubInput((p) => ({ ...p, [parentId]: "" }));
-      showToast("세부기술을 추가했어요");
+      await addSubCategory(centerId, parent.id, name, parent.children.length);
+      setSubInput((p) => ({ ...p, [parent.id]: "" }));
+      setExpanded((p) => ({ ...p, [parent.id]: true }));   // 추가한 항목이 바로 보이도록 펼친 채 유지
+      showToast("추가했어요");
       await load();
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
@@ -123,6 +126,73 @@ export default function ProgressCategoryPage() {
       await load();
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
+  }
+
+  // 재귀 렌더: 최상위는 카드(.prog-group), 하위는 같은 행 규격(.ptree-row)으로 들여쓰기 상한(4단계)까지만 밀고 이후는 깊이 배지로 구분한다.
+  function renderNode(node: TreeNode): React.ReactNode {
+    const hasKids = node.children.length > 0;
+    const open = !!expanded[node.id];
+    const typing = (subInput[node.id] ?? "").trim().length > 0;
+    const panelId = `ptree-${node.id}`;
+    const rowCommon = (
+      <>
+        <button
+          type="button"
+          className={`ptree-toggle${hasKids || canManageProgress ? "" : " is-leaf"}`}
+          aria-expanded={open}
+          aria-controls={panelId}
+          aria-label={`${node.name} ${open ? "접기" : "펼치기"}`}
+          onClick={() => setExpanded((p) => ({ ...p, [node.id]: !p[node.id] }))}
+        >
+          <span className={`ptree-chevron${open ? " open" : ""}`} aria-hidden="true">›</span>
+          <span className="ptree-name">{node.name}</span>
+          {hasKids && <span className="ptree-count">{countDescendants(node)}</span>}
+          {!hasKids && node.depth > 1 && <span className="ptree-tag">기술</span>}
+          {node.depth > 4 && <span className="ptree-lv">Lv {node.depth}</span>}
+          {!open && typing && <span className="ptree-typing" title="입력 중인 내용이 있어요">입력 중</span>}
+        </button>
+        {canManageProgress && (
+          <div className="ptree-actions">
+            <button className="quiet-action" onClick={() => handleRename(node.id, node.name)}>수정</button>
+            <button className="quiet-action danger" onClick={() => handleDelete(node.id, node.name, hasKids)}>삭제</button>
+          </div>
+        )}
+      </>
+    );
+    const panel = open && (
+      <div id={panelId} className="ptree-panel">
+        {node.children.map((c) => renderNode(c))}
+        {canManageProgress && (canAddChild(node) ? (
+          <div className="ptree-add" style={{ paddingLeft: `calc(14px + ${indentLevel(node.depth + 1) * 12}px)` }}>
+            <input
+              className="input-field"
+              aria-label={`${node.name} 하위 항목 이름`}
+              placeholder="하위 분류 또는 기술 이름"
+              value={subInput[node.id] ?? ""}
+              onChange={(e) => setSubInput((p) => ({ ...p, [node.id]: e.target.value }))}
+              onKeyDown={(e) => e.key === "Enter" && handleAddSub(node)}
+            />
+            <button className="outline-action" disabled={busy} onClick={() => handleAddSub(node)}>추가</button>
+          </div>
+        ) : (
+          <div className="ptree-max" style={{ paddingLeft: `calc(14px + ${indentLevel(node.depth + 1) * 12}px)` }}>최대 {MAX_PROGRESS_DEPTH}단계라 더 추가할 수 없어요</div>
+        ))}
+      </div>
+    );
+    if (node.depth === 1) {
+      return (
+        <div key={node.id} className="prog-group ptree-group">
+          <div className="ptree-row ptree-top">{rowCommon}</div>
+          {panel}
+        </div>
+      );
+    }
+    return (
+      <div key={node.id} className="ptree-node">
+        <div className="ptree-row" style={{ paddingLeft: `calc(14px + ${indentLevel(node.depth) * 12}px)` }}>{rowCommon}</div>
+        {panel}
+      </div>
+    );
   }
 
   if (centers.length === 0 && !loading) {
@@ -159,8 +229,8 @@ export default function ProgressCategoryPage() {
       )}
 
       <div className="perm-guide">
-        회원 진도를 기록할 <b>기술 목록</b>을 만들어요. 대분류(예: 점프) 아래에
-        세부기술(예: 왈츠점프)을 넣는 2단계 구조예요.
+        회원 진도를 기록할 <b>기술 목록</b>을 만들어요. 대분류(예: 점프) 아래에 하위 분류와 기술을
+        최대 7단계까지 넣을 수 있어요. 하위 항목이 없는 항목이 기록할 수 있는 기술이에요.
       </div>
 
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
@@ -191,52 +261,13 @@ export default function ProgressCategoryPage() {
               <span style={{ fontSize: 12 }}>위에서 대분류부터 추가해보세요</span>
             </div>
           ) : (
-            tree.map((top) => (
-              <div key={top.id} className="prog-group">
-                <div className="prog-top-row">
-                  <span className="prog-top-name">{top.name}</span>
-                  {canManageProgress && (
-                    <div className="prog-top-actions row-actions">
-                      <button className="quiet-action" onClick={() => handleRename(top.id, top.name)}>수정</button>
-                      <button className="quiet-action danger" onClick={() => handleDelete(top.id, top.name, top.children.length > 0)}>삭제</button>
-                    </div>
-                  )}
-                </div>
-
-                {/* 세부기술 목록 */}
-                <div className="prog-children">
-                  {top.children.map((c) => (
-                    <div key={c.id} className="prog-sub-row">
-                      <span className="prog-sub-name">{c.name}</span>
-                      {canManageProgress && (
-                        <div className="prog-top-actions row-actions">
-                          <button className="quiet-action" onClick={() => handleRename(c.id, c.name)}>수정</button>
-                          <button className="quiet-action danger" onClick={() => handleDelete(c.id, c.name, false)}>삭제</button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {/* 세부기술 추가 */}
-                  {!canManageProgress ? null : openSub[top.id] ? (
-                    <div className="prog-sub-add">
-                      <input
-                        className="input-field"
-                        placeholder="세부기술 이름 (예: 왈츠점프)"
-                        value={subInput[top.id] ?? ""}
-                        onChange={(e) => setSubInput((p) => ({ ...p, [top.id]: e.target.value }))}
-                        onKeyDown={(e) => e.key === "Enter" && handleAddSub(top.id, top.children.length)}
-                      />
-                      <button className="outline-action" disabled={busy} onClick={() => handleAddSub(top.id, top.children.length)}>추가</button>
-                    </div>
-                  ) : (
-                    <button className="prog-add-sub-btn" onClick={() => setOpenSub((p) => ({ ...p, [top.id]: true }))}>
-                      + 세부기술 추가
-                    </button>
-                  )}
-                </div>
+            <>
+              <div className="ptree-toolbar">
+                <button type="button" className="quiet-action" onClick={() => setExpanded(Object.fromEntries(flattenTree(tree).filter((n) => n.children.length > 0).map((n) => [n.id, true])))}>모두 펼치기</button>
+                <button type="button" className="quiet-action" onClick={() => setExpanded({})}>모두 접기</button>
               </div>
-            ))
+              {tree.map((top) => renderNode(top))}
+            </>
           )}
 
           <div style={{ height: 40 }} />

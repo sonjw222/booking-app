@@ -6609,3 +6609,25 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
 
 /* 네이티브 오프라인 안내 배너(기존 토큰만 사용, transform/opacity 없이 정적 표시) */
 .offline-notice { position:fixed; left:12px; right:12px; top:calc(env(safe-area-inset-top, 0px) + 8px); z-index:9000; padding:10px 14px; border-radius:12px; background:var(--ink); color:var(--card-bg); font-size:13px; font-weight:600; text-align:center; box-shadow:0 6px 18px rgba(0,0,0,.18); }
+
+/* 진도 기술 목록 tree(2026-10-03) — 제목/기술명/구분선/입력창의 좌우 기준(14px)을 통일, 입력창과 추가 버튼 같은 높이, 버튼 규격 통일. 색은 기존 토큰만 사용 */
+.ptree-toolbar { display:flex; justify-content:flex-end; gap:6px; padding:0 0 8px; }
+.ptree-group { overflow:hidden; }
+.ptree-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px; min-height:52px; padding:6px 14px; border-bottom:1px solid var(--line); background:var(--card-bg); }
+.ptree-row.ptree-top { background:var(--surface); min-height:58px; }
+.ptree-toggle { display:flex; align-items:center; gap:8px; min-width:0; min-height:44px; padding:0; border:0; background:none; color:var(--ink); font:inherit; font-weight:650; text-align:left; cursor:pointer; }
+.ptree-top .ptree-name { font-size:16px; font-weight:760; }
+.ptree-name { min-width:0; overflow-wrap:anywhere; font-size:14.5px; }
+.ptree-chevron { display:inline-flex; align-items:center; justify-content:center; width:18px; flex:0 0 18px; color:var(--ink-soft); font-size:18px; line-height:1; transition:transform 160ms ease; }
+.ptree-chevron.open { transform:rotate(90deg); }
+.ptree-count, .ptree-tag, .ptree-lv, .ptree-typing { flex:0 0 auto; padding:1px 7px; border-radius:999px; background:var(--surface); color:var(--ink-soft); font-size:11px; font-weight:700; white-space:nowrap; }
+.ptree-typing { border:1px solid var(--line-strong); }
+.ptree-actions { display:flex; gap:6px; flex:0 0 auto; }
+.ptree-actions .quiet-action { min-height:32px; min-width:44px; padding:0 10px; white-space:nowrap; }
+.ptree-panel { background:var(--card-bg); }   /* 들여쓰기는 행의 padding-left(깊이별, 4단계 상한)로만 — 중첩 panel 마진이 누적되어 폭이 줄지 않게 */
+.ptree-node .ptree-row { box-shadow: inset 2px 0 0 var(--line); }   /* 하위 항목 tree guide */
+.ptree-add { display:grid; grid-template-columns:minmax(0,1fr) 68px; gap:8px; align-items:stretch; padding:10px 14px 12px; }
+.ptree-add .input-field, .ptree-add .outline-action { min-height:48px; height:48px; margin:0; box-sizing:border-box; }
+.ptree-add .outline-action { padding:0; white-space:nowrap; display:flex; align-items:center; justify-content:center; }
+.ptree-max { padding:10px 14px 12px; font-size:12px; color:var(--ink-soft); }
+@media (prefers-reduced-motion: reduce) { .ptree-chevron { transition:none; } }

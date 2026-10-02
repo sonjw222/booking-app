@@ -6,6 +6,7 @@
 
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
+import { MAX_PROGRESS_DEPTH, checkParentChange } from "./progressTree";
 
 export type ProgressCategory = {
   id: string;
@@ -30,6 +31,9 @@ export async function fetchCategories(centerId: string): Promise<ProgressCategor
   }));
 }
 
+// 2026-10-03: 분류는 최대 7단계까지 중첩된다(lib/progressTree.ts의 buildTree/checkParentChange). 아래 buildCategoryTree는 기존 2단계 화면 호환용이다.
+export { buildTree, MAX_PROGRESS_DEPTH } from "./progressTree";
+
 // 트리로 묶기 (대분류 → 세부기술)
 export function buildCategoryTree(cats: ProgressCategory[]): CategoryNode[] {
   const tops = cats.filter((c) => !c.parentId);
@@ -47,8 +51,11 @@ export async function addTopCategory(centerId: string, name: string, sortOrder: 
   if (error) throw new Error("추가에 실패했어요: " + error.message);
 }
 
-// 세부기술 추가 (대분류 밑에)
+// 하위 항목 추가 — 부모의 깊이를 서버(트리거)와 별개로 미리 확인한다(깊이 8 이상은 거부). 같은 센터의 분류만 부모가 될 수 있다(서버 트리거도 강제).
 export async function addSubCategory(centerId: string, parentId: string, name: string, sortOrder: number): Promise<void> {
+  const flat = await fetchCategories(centerId);
+  const check = checkParentChange(null, parentId, flat);
+  if (!check.ok) throw new Error(check.reason === "depth" ? `분류는 최대 ${MAX_PROGRESS_DEPTH}단계까지 만들 수 있어요` : "이 분류 아래에는 추가할 수 없어요");
   const { error } = await supabase
     .from("progress_categories")
     .insert({ center_id: centerId, parent_id: parentId, name, sort_order: sortOrder });
@@ -64,12 +71,23 @@ export async function renameCategory(id: string, name: string): Promise<void> {
   if (error) throw new Error("수정에 실패했어요: " + error.message);
 }
 
-// 삭제 (하위도 FK on delete로 정리되지 않으므로, 하위 먼저 지움)
+// 삭제 — 하위 항목 전체(최대 7단계)를 가장 깊은 것부터 지운다. 진도 기록이 연결된 항목이 있으면 FK가 막아 삭제가 실패하고(기존 동작과 동일),
+// 일부만 지워지는 것을 피하려고 먼저 하위 전체에 기록이 있는지 확인한 뒤 시작한다.
 export async function deleteCategory(id: string): Promise<void> {
-  // 세부기술(자식) 먼저 삭제
-  await supabase.from("progress_categories").delete().eq("parent_id", id);
-  const { error } = await supabase.from("progress_categories").delete().eq("id", id);
-  if (error) throw new Error("삭제에 실패했어요: " + error.message);
+  const ids: string[] = [id];   // 얕은 것 → 깊은 것 순으로 쌓인다
+  let frontier = [id];
+  for (let level = 0; level < MAX_PROGRESS_DEPTH && frontier.length > 0; level++) {
+    const { data, error } = await supabase.from("progress_categories").select("id").in("parent_id", frontier);
+    if (error) throw new Error("삭제에 실패했어요: " + error.message);
+    frontier = (data ?? []).map((r: any) => r.id as string);
+    ids.push(...frontier);
+  }
+  const { count } = await supabase.from("progress_records").select("id", { count: "exact", head: true }).in("category_id", ids);
+  if ((count ?? 0) > 0) throw new Error("진도 기록이 있는 기술이 포함돼 있어 삭제할 수 없어요");
+  for (const cid of [...ids].reverse()) {   // 가장 깊은 것부터
+    const { error } = await supabase.from("progress_categories").delete().eq("id", cid);
+    if (error) throw new Error("삭제에 실패했어요: " + error.message);
+  }
 }
 
 /* ============================================================
@@ -109,14 +127,24 @@ export async function fetchMemberProgress(profileId: string): Promise<ProgressRe
 
   const rows = data ?? [];
   // 대분류 이름을 채우기 위해 parent_id 모으기
-  const parentIds = Array.from(new Set(rows.map((r: any) => r.progress_categories?.parent_id).filter(Boolean)));
+  // 조상 경로(최대 7단계)를 단계별로 모아 "점프 › 싱글 점프"처럼 표시한다(기존 1단계 부모는 그대로 부모 이름 하나).
+  const known: Record<string, { name: string; parentId: string | null }> = {};
+  let need = Array.from(new Set(rows.map((r: any) => r.progress_categories?.parent_id).filter(Boolean))) as string[];
+  for (let level = 0; level < MAX_PROGRESS_DEPTH && need.length > 0; level++) {
+    const { data: parents } = await supabase.from("progress_categories").select("id, name, parent_id").in("id", need);
+    const next: string[] = [];
+    for (const p of parents ?? []) {
+      known[(p as any).id] = { name: (p as any).name, parentId: (p as any).parent_id ?? null };
+      const pp = (p as any).parent_id as string | null;
+      if (pp && !known[pp]) next.push(pp);
+    }
+    need = Array.from(new Set(next));
+  }
   const parentNames: Record<string, string> = {};
-  if (parentIds.length > 0) {
-    const { data: parents } = await supabase
-      .from("progress_categories")
-      .select("id, name")
-      .in("id", parentIds);
-    for (const p of parents ?? []) parentNames[(p as any).id] = (p as any).name;
+  for (const id of Object.keys(known)) {
+    const names: string[] = []; let cur: string | null = id; const seen = new Set<string>();
+    while (cur && known[cur] && !seen.has(cur)) { names.unshift(known[cur].name); seen.add(cur); cur = known[cur].parentId; }
+    parentNames[id] = names.join(" › ");
   }
 
   return rows.map((r: any) => ({
