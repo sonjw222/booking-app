@@ -22,7 +22,7 @@ async function fixture() {
     create table notifications(recipient_account_id uuid, kind text, title text, body text, center_id uuid, link text, data jsonb);
     create table my_profiles(id uuid);
     create function my_profile_ids() returns setof uuid language sql as $$ select id from my_profiles $$;
-    create function push_notification(uuid,text,text,text,uuid,text,jsonb) returns void language sql as $$
+    create function push_notification(uuid,text,text,text,uuid,text,jsonb) returns void language sql security definer as $$
       insert into notifications values ($1,$2,$3,$4,$5,$6,$7);
     $$;
     insert into my_profiles values ('${ME}');
@@ -104,54 +104,33 @@ test('환불: 관리자 중복 행(같은 계정 2행)도 계정당 1건', async
   try { await db.exec(refund); assert.equal((await rows(db)).filter(x => x.recipient_account_id === A1).length, 1); } finally { await db.close(); }
 });
 
-test('주문 취소 RPC: 성공 시 active 관리자별 1건(환불 아님 문구), 중복 호출은 알림 없음', async () => {
+test('push_notification: authenticated/anon 직접 호출은 거부, DB 내부 SECURITY DEFINER 트리거 경로(authenticated가 환불 UPDATE)는 정상 알림', async () => {
   const db = await fixture();
   try {
-    const r1 = await db.query(`select member_cancel_pending_order('${O1}') as r`);
-    assert.equal(r1.rows[0].r.cancelled, true);
-    const r = await rows(db, 'order_cancelled');
-    assert.deepEqual(r.map(x => x.recipient_account_id), [A1, A2]);
-    assert.ok(r.every(x => x.link === `/manager/orders?center=${CENTER}` && x.body.includes('환불 아님') && x.title.includes('결제 전')));
-    const r2 = await db.query(`select member_cancel_pending_order('${O1}') as r`);
-    assert.equal(r2.rows[0].r.already, true);
-    assert.equal((await rows(db, 'order_cancelled')).length, 2);
-    assert.equal((await rows(db, 'refund_completed')).length, 0);   // 환불 알림과 이중 처리 없음
+    await db.exec(`grant select, insert, update on all tables in schema public to authenticated;`);
+    assert.equal((await db.query(`select has_function_privilege('authenticated','push_notification(uuid,text,text,text,uuid,text,jsonb)','execute') a`)).rows[0].a, false);
+    for (const role of ['authenticated', 'anon']) {
+      await db.exec(`set role ${role};`);
+      await assert.rejects(db.query(`select push_notification('${A1}','x','t','b',null,null,null)`));
+      await db.exec('reset role;');
+    }
+    assert.equal((await rows(db)).length, 0);
+    await db.exec(`set role authenticated;` + refund + `reset role;`);   // 로그인 사용자의 환불 → 트리거(소유자 권한)가 알림 생성
+    assert.equal((await rows(db, 'refund_completed')).length, 2);
   } finally { await db.close(); }
 });
-test('주문 취소 RPC: done 주문/남의 주문/없는 주문은 실패하고 알림 없음, 롤백 시 취소도 알림도 없음', async () => {
-  const db = await fixture();
-  try {
-    for (const oid of [O_DONE, O_OTHER, id(77)]) await assert.rejects(db.query(`select member_cancel_pending_order('${oid}')`));
-    assert.equal((await rows(db)).length, 0);
-    assert.equal((await db.query(`select status from orders where id='${O_DONE}'`)).rows[0].status, 'done');
-    await db.exec(`begin; select member_cancel_pending_order('${O1}'); rollback;`);
-    assert.equal((await rows(db)).length, 0);
-    assert.equal((await db.query(`select status from orders where id='${O1}'`)).rows[0].status, 'pending');
-  } finally { await db.close(); }
+test('주문 취소 알림/RPC는 이 migration에 없다(범위 밖)', async () => {
+  assert.ok(!/member_cancel_pending_order|order_cancelled/.test(migration.replace(/--.*$/gm, '')));
 });
-test('주문 취소 RPC: 직접 UPDATE(checkout 자동 정리/결제창 닫힘/보상 취소/관리자 취소)는 알림을 만들지 않는다', async () => {
-  const db = await fixture();
-  try {
-    await db.exec(`update orders set status='cancelled' where id='${O1}';`);
-    assert.equal((await rows(db)).length, 0);
-  } finally { await db.close(); }
-});
-test('주문 취소 RPC: 알림 helper 실패해도 주문 취소는 성공', async () => {
-  const db = await fixture();
-  try {
-    await db.exec(`create or replace function push_notification(uuid,text,text,text,uuid,text,jsonb) returns void language plpgsql as $$ begin raise exception 'helper failed'; end $$;`);
-    await db.query(`select member_cancel_pending_order('${O1}')`);
-    assert.equal((await db.query(`select status from orders where id='${O1}'`)).rows[0].status, 'cancelled');
-    assert.equal((await rows(db)).length, 0);
-  } finally { await db.close(); }
-});
-test('롤백 SQL: 트리거/함수/마커 테이블 제거, 이미 만든 알림은 유지', async () => {
+test('롤백 SQL: 트리거/마커 테이블 제거, push_notification 권한 복원, 이미 만든 알림은 유지', async () => {
   const db = await fixture();
   try {
     await db.exec(refund);
     await db.exec(rollbackSql);
     assert.equal((await rows(db)).length, 2);
     assert.equal((await db.query(`select count(*)::int c from pg_trigger where tgname='trg_refund_completed_managers'`)).rows[0].c, 0);
-    await assert.rejects(db.query(`select member_cancel_pending_order('${O1}')`));
+    await db.exec(`set role authenticated;`);
+    await db.query(`select push_notification('${A1}','x','t','b',null,null,null)`);   // 롤백 후 권한 복원
+    await db.exec('reset role;');
   } finally { await db.close(); }
 });

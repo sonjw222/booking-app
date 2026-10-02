@@ -38,10 +38,7 @@ export default function ManagerOrdersPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) {
-          const requestedCenter = new URLSearchParams(window.location.search).get("center");
-          setCenterId(list.find((c) => c.id === requestedCenter)?.id ?? list[0].id);
-        }
+        if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();

@@ -227,16 +227,6 @@ export async function cancelMyPendingOrderQuietly(orderId: string | null | undef
   }
 }
 
-// 구매내역 "주문 취소하기" 버튼 전용 — 서버 RPC가 취소와 관리자 알림(order_cancelled)을 같은 트랜잭션에서 처리한다.
-// checkout 자동 정리/결제창 닫힘/보상 취소는 이 함수를 쓰지 않으므로(조용히 취소) 관리자에게 불필요한 알림이 가지 않는다.
-// RPC가 아직 없는 환경(SQL 미적용: PGRST202/42883)은 기존 직접 취소로 대체한다(알림만 없음).
-export async function cancelMyOrderFromPurchases(orderId: string): Promise<void> {
-  const { error } = await supabase.rpc("member_cancel_pending_order", { p_order_id: orderId });
-  if (!error) return;
-  if (error.code === "PGRST202" || error.code === "42883") { await updateOrderStatus(orderId, "cancelled"); return; }
-  throw new Error(error.message.replace(/^.*?:\s*/, ""));
-}
-
 function mapOrder(o: any): Order & { centerName?: string } {
   return {
     id: o.id, centerId: o.center_id, profileId: o.profile_id,

@@ -1,7 +1,9 @@
 # CHANGELOG
 
-## 2026-10-02 — 관리자 알림: 환불 완료 / 결제 전 주문 취소(SQL 파일만 작성, 미실행)
-- `fix_refund_manager_notification_20261002.sql`: 회원 셀프 환불 완료(memberships.status→refunded, deferred constraint trigger + 마커 PK) 시 센터 active 관리자별 `refund_completed` 1건. 구매내역 "주문 취소하기" 전용 RPC `member_cancel_pending_order`가 취소 + `order_cancelled` 알림을 한 트랜잭션에서 처리(자동 정리/결제창 닫힘/보상 취소/관리자 취소는 알림 없음). 알림 실패는 환불/취소를 막지 않는다.
+## 2026-10-02 — 관리자 알림: 회원 셀프 환불 완료(SQL 파일만 작성, 미실행)
+- `fix_refund_manager_notification_20261002.sql`: memberships.status→refunded commit 시 센터 active 관리자별 `refund_completed` 1건(deferred constraint trigger + 마커 PK, 알림 실패는 환불을 막지 않음). OS 푸시 코드는 새로 만들지 않았다 — 기존 send-web-push가 kind 필터 없이 pushed_at IS NULL 행을 처리하므로 기존 push pipeline이 활성이면 refund_completed도 푸시 대상이다.
+- `push_notification` 실행 권한을 public/anon/authenticated에서 회수(클라이언트 직접 호출처 없음, 호출 함수 9개는 모두 SECURITY DEFINER).
+- build 정상화: 운영자 센터 검색 helper를 page.tsx에서 `lib/adminCenterSearch.ts`로 이동(동작 변경 없음).
 
 ## 2026-10-02 — iOS 체감 성능 배치(감사: docs/performance-audit-20261002.md)
 - 내부 이동 184곳 `<a>` → `<Link prefetch={false}>`(전체 리로드 제거, 결제/로그인/OAuth/세션 리셋/onClick 이동은 유지), Toss SDK 전역 로드 제거(결제 화면 온디맨드), ManagerNav 권한 재조회 60초 TTL.

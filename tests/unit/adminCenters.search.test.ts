@@ -4,7 +4,7 @@
   검증한다.
 */
 import { describe, expect, it } from "vitest";
-import { centerMatchesKeyword, digitsOnly, normalizeSearchText } from "../../app/admin/centers/page";
+import { centerMatchesKeyword, digitsOnly, normalizeSearchText } from "../../lib/adminCenterSearch";
 import type { PendingCenter } from "../../lib/admin";
 
 function makeCenter(overrides: Partial<PendingCenter> = {}): PendingCenter {

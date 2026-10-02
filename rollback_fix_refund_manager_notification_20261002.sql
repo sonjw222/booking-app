@@ -2,6 +2,7 @@
 begin;
 drop trigger if exists trg_refund_completed_managers on public.memberships;
 drop function if exists public.notify_refund_completed_managers();
-drop function if exists public.member_cancel_pending_order(uuid);
 drop table if exists public.refund_notification_events;
+-- push_notification 실행 권한을 이전 상태(PUBLIC 기본 + authenticated)로 되돌린다
+grant execute on function public.push_notification(uuid, text, text, text, uuid, text, jsonb) to public, anon, authenticated;
 commit;

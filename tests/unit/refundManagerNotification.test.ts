@@ -3,19 +3,10 @@
 */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 const read = (p: string) => readFileSync(join(__dirname, "../..", p), "utf-8");
 const sql = read("fix_refund_manager_notification_20261002.sql").replace(/--.*$/gm, "");
 
-const rpc = vi.fn(); const upd = vi.fn();
-vi.mock("../../lib/supabaseClient", () => ({
-  supabase: {
-    rpc: (...a: unknown[]) => rpc(...a),
-    from: () => ({ update: (p: unknown) => ({ eq: () => ({ select: async () => { upd(p); return { data: [{ id: "o" }], error: null }; } }) }) }),
-  },
-}));
-vi.mock("../../lib/authAccount", () => ({ getMyAccountId: async () => "a" }));
-import { cancelMyOrderFromPurchases } from "../../lib/orders";
 import { notiEmoji, notificationHref } from "../../lib/notifications";
 
 describe("SQL 계약", () => {
@@ -35,24 +26,15 @@ describe("SQL 계약", () => {
   it("대상: active manager_centers만(distinct account), 해당 센터 링크, 상품/금액 포함·개인정보(회원명) 미포함", () => {
     expect(sql).toContain("where center_id = v_mem.center_id and status = 'active'");
     expect(sql).toContain("'/manager/sales?center=' || v_mem.center_id::text");
-    expect(sql).toContain("'/manager/orders?center=' || v_order.center_id::text");
     expect(sql).not.toMatch(/profiles|name_snapshot|phone/i);
   });
-  it("주문 취소는 상태 트리거가 아니라 회원 버튼 전용 RPC(본인 주문·행 잠금·이미 취소면 알림 없음·done 거부), 문구는 환불 아님", () => {
-    expect(sql).not.toMatch(/create (constraint )?trigger trg_order_cancelled/i);
-    expect(sql).toContain("profile_id in (select my_profile_ids())");
-    expect(sql).toContain("for update;");
-    expect(sql).toContain("'already', true");
-    expect(sql).toContain("if v_order.status not in ('pending', 'paid') then");
-    expect(sql).toContain("발급 전 주문 취소(환불 아님)");
-    expect(sql).toContain("'결제 전 주문이 취소됐어요'");
+  it("이번 migration에는 주문 취소 알림/RPC가 없다(범위 밖)", () => {
+    expect(sql).not.toMatch(/member_cancel_pending_order|order_cancelled|on public\.orders|create trigger trg_order/i);
   });
   it("권한: 마커 테이블 RLS+revoke, 트리거 함수 revoke all, RPC는 anon 차단·authenticated 허용, search_path 고정", () => {
     expect(sql).toContain("revoke all on public.refund_notification_events from public, anon, authenticated;");
     expect(sql).toContain("revoke all on function public.notify_refund_completed_managers() from public, anon, authenticated;");
-    expect(sql).toContain("revoke all on function public.member_cancel_pending_order(uuid) from public, anon;");
-    expect(sql).toContain("grant execute on function public.member_cancel_pending_order(uuid) to authenticated, service_role;");
-    expect((sql.match(/set search_path = public/g) ?? []).length).toBe(2);
+    expect((sql.match(/set search_path = public/g) ?? []).length).toBe(1);
   });
   it("rollback 파일과 PGlite 격리 테스트가 존재", () => {
     expect(read("rollback_fix_refund_manager_notification_20261002.sql")).toContain("drop table if exists public.refund_notification_events;");
@@ -60,34 +42,39 @@ describe("SQL 계약", () => {
   });
 });
 
-describe("클라이언트", () => {
-  beforeEach(() => { rpc.mockReset(); upd.mockReset(); });
-  it("구매내역 취소 버튼은 RPC를 쓰고, RPC 미적용(PGRST202)이면 기존 직접 취소로 대체, 그 외 오류는 그대로 표시", async () => {
-    rpc.mockResolvedValueOnce({ error: null });
-    await cancelMyOrderFromPurchases("o1");
-    expect(rpc).toHaveBeenCalledWith("member_cancel_pending_order", { p_order_id: "o1" });
-    expect(upd).not.toHaveBeenCalled();
-    rpc.mockResolvedValueOnce({ error: { code: "PGRST202", message: "x" } });
-    await cancelMyOrderFromPurchases("o1");
-    expect(upd).toHaveBeenCalledWith({ status: "cancelled" });
-    rpc.mockResolvedValueOnce({ error: { code: "P0001", message: "P0001: 이미 발급·처리된 주문은 취소할 수 없어요" } });
-    await expect(cancelMyOrderFromPurchases("o1")).rejects.toThrow("이미 발급·처리된 주문은 취소할 수 없어요");
+describe("push_notification 권한 감사(저장소 전체)", () => {
+  it("정확한 시그니처에서 public/anon/authenticated EXECUTE만 회수(service_role/소유자는 유지)", () => {
+    expect(sql).toContain("revoke all on function public.push_notification(uuid, text, text, text, uuid, text, jsonb) from public, anon, authenticated;");
+    expect(sql).not.toMatch(/revoke[^;]*service_role/i);
   });
-  it("버튼 경로만 RPC, 자동 정리/보상 취소/관리자 취소는 기존 경로(알림 없음)", () => {
-    expect(read("app/purchases/page.tsx")).toContain("cancelMyOrderFromPurchases(it.orderId)");
-    expect(read("lib/orders.ts")).toContain('.from("orders").update({ status: "cancelled" }).eq("id", orderId).eq("status", "pending")');   // cancelMyPendingOrderQuietly
-    expect(read("app/manager/orders/page.tsx")).toContain('updateOrderStatus(o.id, "cancelled")');
+  it("클라이언트/edge function에서 push_notification을 rpc로 직접 호출하는 코드가 없다", () => {
+    const { execSync } = require("node:child_process");
+    const out = execSync(`grep -rnE "rpc\\([^)]*push_notification" app lib supabase --include='*.ts' --include='*.tsx' || true`, { cwd: join(__dirname, "../.."), encoding: "utf-8" });
+    expect(out.trim()).toBe("");
   });
-  it("알림 kind: 아이콘/이모지/링크(?center) 처리, 관리자 주문·매출 화면이 center 쿼리를 존중", () => {
-    expect(notiEmoji("order_cancelled")).toBe("❌");
+});
+
+describe("클라이언트/알림 표시", () => {
+  it("refund_completed: 이모지/아이콘/링크(?center) 처리, 매출 화면이 center 쿼리를 존중, 설정으로 끌 수 없는 kind", () => {
     expect(notiEmoji("refund_completed")).toBe("↩️");
     expect(notificationHref({ kind: "refund_completed", link: "/manager/sales?center=c1", data: null })).toBe("/manager/sales?center=c1");
     expect(read("app/manager/notifications/page.tsx")).toContain('kind.includes("refund")');
-    for (const f of ["app/manager/orders/page.tsx", "app/manager/sales/page.tsx"]) expect(read(f)).toContain('new URLSearchParams(window.location.search).get("center")');
-    // 팝업은 notiPrefKeyForKind가 null인 kind를 항상 표시(설정으로 끌 수 없는 매니저 알림)
+    expect(read("app/manager/sales/page.tsx")).toContain('new URLSearchParams(window.location.search).get("center")');
     expect(read("lib/notifications.ts")).toContain("default:\n      return null;");
   });
-  it("lifecycle/환불 코드는 이번 변경에서 수정하지 않았다", () => {
+  it("주문 취소 관련 클라이언트 변경은 없다(lib/orders.ts, purchases, manager/orders는 기준과 동일)", () => {
+    const { execSync } = require("node:child_process");
+    const diff = execSync("git diff e6f7f4d --name-only -- lib/orders.ts app/purchases/page.tsx app/manager/orders/page.tsx", { cwd: join(__dirname, "../.."), encoding: "utf-8" });
+    expect(diff.trim()).toBe("");
+    expect(read("lib/notifications.ts")).not.toContain("order_cancelled");
+  });
+  it("OS 푸시: 별도 코드를 추가하지 않았고, 기존 send-web-push가 kind 필터 없이 pushed_at IS NULL 행을 처리하므로 refund_completed도 기존 큐의 대상이다", () => {
+    const f = read("supabase/functions/send-web-push/index.ts");
+    expect(f).toContain("pushed_at");
+    expect(f).not.toMatch(/\.in\(\s*["']kind["']|\.eq\(\s*["']kind["']/);
+    expect(sql).not.toMatch(/fcm|web_push|send-web-push/i);
+  });
+  it("lifecycle/환불 코드는 수정하지 않았다", () => {
     expect(read("lib/payments/server/lifecycle.ts")).toContain("portone_refund_unsupported");
   });
 });

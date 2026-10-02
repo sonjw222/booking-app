@@ -19,7 +19,7 @@ export type NotiKind =
   | "pass_expired" | "pass_used_up"
   | "reservation_3days" | "reservation_today"
   | "reservation_confirmed" | "reservation_waitlisted" | "waitlist_promoted"
-  | "order_cancelled" | "refund_completed" | "new_order" | "new_review" | "new_reservation" | "reservation_canceled" | "no_show"
+  | "refund_completed" | "new_order" | "new_review" | "new_reservation" | "reservation_canceled" | "no_show"
   | "new_inquiry" | "inquiry_reply"
   | "admin_assigned" | "admin_cancelled"
   | string;
@@ -119,7 +119,6 @@ export function notiEmoji(kind: NotiKind): string {
     case "reservation_3days": return "🗓️";
     case "reservation_today": return "🔔";
     case "new_order": return "🧾";
-    case "order_cancelled": return "❌";
     case "refund_completed": return "↩️";
     case "new_review": return "⭐";
     case "new_reservation": return "✅";
