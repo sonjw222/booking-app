@@ -8,12 +8,16 @@
 */
 export const PG_PAY_METHOD_IDS = ["card", "kakao", "toss", "transfer"] as const;
 export const DIRECT_PAY_METHOD_ID = "direct";
+// 카카오페이/토스페이는 계약 활성화 전까지 사용자 UI에서만 숨긴다(2026-10-02). Toss 연동(EASY_PAY_BY_METHOD, TossPaymentProvider, 서버 lifecycle)은
+// 그대로 남아 있다 — 다시 노출하려면 이 배열에서 해당 id만 제거하면 된다. 센터 pay_methods 설정/stale 선택값과 무관하게 항상 숨긴다.
+export const HIDDEN_PAY_METHOD_IDS: readonly string[] = ["kakao", "toss"];
 
 export function visiblePayMethodIds(opts: { pgEnabled: boolean; allowed: string[] | null; all: string[] }): string[] {
   if (!opts.pgEnabled) return [DIRECT_PAY_METHOD_ID];
+  const all = opts.all.filter((id) => !HIDDEN_PAY_METHOD_IDS.includes(id));
   const byCenter = !opts.allowed || opts.allowed.length === 0
-    ? opts.all
-    : opts.all.filter((id) => opts.allowed!.includes(id));
+    ? all
+    : all.filter((id) => opts.allowed!.includes(id));
   return byCenter.length > 0 ? byCenter : [DIRECT_PAY_METHOD_ID];
 }
 

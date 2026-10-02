@@ -336,7 +336,7 @@ function CheckoutContent() {
     }
     // 나머지(카드/카카오페이/토스페이/계좌이체)는 실제 PG 결제창을 거친다.
     if (resolveProviderName() === "toss" && !TOSS_SUPPORTED_METHODS.includes(effectivePayMethod)) {
-      setError("지금은 카드/카카오페이/토스페이/계좌이체만 가능해요");
+      setError("지금은 카드/계좌이체만 가능해요");
       return;
     }
     setBusy(true);
@@ -744,12 +744,12 @@ function CheckoutContent() {
       </div>
       {!pgCheckoutEnabled ? (
         <div className="perm-guide" style={{ margin: "10px 20px" }}>
-          온라인 결제(카드·카카오페이·토스페이·계좌이체)는 준비 중이라, 지금은 센터에서
+          온라인 결제(카드·계좌이체)는 준비 중이라, 지금은 센터에서
           직접 결제만 가능해요.
         </div>
       ) : resolveProviderName() === "mock" ? (
         <div className="perm-guide" style={{ margin: "10px 20px" }}>
-          실제 PG(카드/카카오페이 등) 연동은 준비 중이라, 지금은 테스트 결제(Mock)로 처리돼요.
+          실제 PG(카드 등) 연동은 준비 중이라, 지금은 테스트 결제(Mock)로 처리돼요.
         </div>
       ) : effectivePayMethodUi === "card" && resolveProviderName() === "toss" && (
         // 실기기 QA(2026-09-29) — 카드사별 결제 가능 여부는 토스 결제창(PG)이 직접 제어한다
