@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-02 — success 콜백 일시 오류 bounded retry(코드만)
+- 외부 Safari의 return/confirm 호출이 네트워크 오류(status 0)/5xx로 실패하면 최대 2회 재시도(총 3회). 400/401/403/409는 재시도 없음. 서버 core는 멱등이라 동일 요청 재전송이 안전.
+
 ## 2026-10-02 — iOS 외부 Safari 결제 복귀 세션 분리 수정(코드만, SQL/native 변경 없음)
 - 토스 success/fail 콜백이 외부 Safari에서 열려 앱의 Supabase 세션이 없어 401이 나던 문제: 결제 시작 때 서버가 주문 전용 서명 복귀 토큰(short-lived, order-bound, 15분)을 발급(`/api/payments/return-token`, Bearer 필수)하고, 콜백은 `/api/payments/return/confirm|cancel`로 토큰 검증 후 기존 결제 core를 재사용한다. 로그인 토큰은 URL에 싣지 않는다.
 - 앱 복귀(visibility/focus) 시 pending PG 주문 상태를 최대 5회 확인해 완료/취소 화면에 반영. 새 서버 환경변수 `PAYMENT_RETURN_TOKEN_SECRET`(값은 저장소에 없음) 필요.

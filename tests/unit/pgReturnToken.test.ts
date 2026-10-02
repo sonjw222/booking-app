@@ -174,7 +174,7 @@ describe("클라이언트 계약", () => {
       expect(p).not.toMatch(/getSession|supabaseClient|getPaymentService|cancelMyPendingOrderQuietly|window\.location\.href/);
       expect(p).toContain("scrubCallbackUrl()");
     }
-    expect(success).toContain("returnConfirm(");
+    expect(success).toContain("returnConfirmWithRetry(");
     expect(fail).toContain("returnCancel(");
   });
   it("returnApi는 Supabase를 import하지 않고, 토큰/결제키를 저장하지 않으며 pending 표시는 orderId만", () => {
