@@ -19,7 +19,7 @@
 */
 
 import { supabase } from "./supabaseClient";
-import "./tossSdk"; // window.TossPayments 전역 타입 선언(공용, lib/payments/TossPaymentProvider.ts와 공유)
+import { loadTossSdk } from "./tossSdk"; // window.TossPayments 전역 타입 선언 + 온디맨드 SDK 로더(공용, lib/payments/TossPaymentProvider.ts와 공유)
 
 // payment_failed(2026-09-14 정책 확정, add_center_subscription_billing_retry_policy.sql):
 // 정기 청구가 7회(최대 7일) 연속 실패했거나, 카드 만료/분실/정지처럼 재시도해도 성공
@@ -202,28 +202,6 @@ export async function centerCancelOwnSubscription(centerId: string): Promise<voi
 // ------------------------------------------------------------
 // 토스 자동결제 카드 등록 (플래그 on일 때만 실제로 호출됨)
 // ------------------------------------------------------------
-
-const TOSS_SDK_SRC = "https://js.tosspayments.com/v2/standard";
-
-function loadTossSdk(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.TossPayments) {
-      resolve();
-      return;
-    }
-    const existing = document.querySelector(`script[src="${TOSS_SDK_SRC}"]`);
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () => reject(new Error("토스 결제 SDK를 불러오지 못했어요")));
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = TOSS_SDK_SRC;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("토스 결제 SDK를 불러오지 못했어요"));
-    document.head.appendChild(script);
-  });
-}
 
 // 센터별로 결정적으로 계산되는 토스 customerKey(예: "center-<uuid>"). 카드 등록에
 // 성공한 뒤 서버(향후 작업)가 같은 값을 billing_customer_key 컬럼에 기록해두면

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
 /*
@@ -227,7 +228,7 @@ export default function StaffPage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/manager">‹</a>
+          <Link className="side" href="/manager" prefetch={false}>‹</Link>
           <div className="title">스태프 & 권한</div>
           <div className="side" />
         </div>
@@ -244,7 +245,7 @@ export default function StaffPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/manager">‹</a>
+        <Link className="side" href="/manager" prefetch={false}>‹</Link>
         <div className="title">스태프 & 권한</div>
         <div className="side" />
       </div>
@@ -496,14 +497,14 @@ export default function StaffPage() {
             </div>
 
             {!staffDetail.isOwner && staffDetail.roleId && canManageRolePermissions && (
-              <a
+              <Link
                 className="list-row"
                 href={`/manager/staff/permissions?mc=${staffDetail.id}&role=${staffDetail.roleId}&name=${encodeURIComponent(staffDetail.name)}&center=${centerId}`}
                 style={{ marginTop: 8 }}
-              >
+               prefetch={false}>
                 <div className="left"><span className="icon"><UiIcon name="settings" /></span>개인 권한 설정 (역할 예외)</div>
                 <span className="chevron">›</span>
-              </a>
+              </Link>
             )}
           </div>
         </SheetOverlay>

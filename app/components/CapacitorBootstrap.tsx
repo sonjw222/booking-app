@@ -29,6 +29,7 @@
 import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { rootNavState } from "../../lib/navState";
+import { resolvePaymentCallbackTarget, shouldCheckLaunchUrl } from "../../lib/paymentUniversalLink";
 
 export default function CapacitorBootstrap() {
   useEffect(() => {
@@ -56,6 +57,20 @@ export default function CapacitorBootstrap() {
       // 모드/로그인 등)으로 돌아가지 않는다 — 다른 다수 앱의 "루트 탭에서 뒤로가기 = 앱
       // 종료/백그라운드" 관례와 동일하게 처리한다. 상세 화면은 기존과 동일하게 그대로
       // history.back().
+      // 결제 복귀 Universal Link(2026-10-02): 토스 successUrl/failUrl(https://mwhabit.com/checkout/success|fail)이 앱으로 전달되면
+      // 앱 WebView에서 같은 경로를 열어 기존 콜백 페이지를 실행한다. 허용 URL만(lib/paymentUniversalLink.ts), URL/쿼리는 저장·로그하지 않는다.
+      // 실행 중/백그라운드: appUrlOpen, 콜드 스타트: getLaunchUrl(세션당 1회만 — 풀 리로드마다 재실행되지 않게).
+      const goPaymentCallback = (raw: unknown) => {
+        const target = resolvePaymentCallbackTarget(raw);
+        if (target) window.location.replace(target);
+      };
+      App.addListener("appUrlOpen", (event) => goPaymentCallback(event?.url));
+      let launchStorage: Storage | null = null;
+      try { launchStorage = window.sessionStorage; } catch { launchStorage = null; }
+      if (shouldCheckLaunchUrl(launchStorage)) {
+        App.getLaunchUrl().then((r) => goPaymentCallback(r?.url)).catch(() => {});
+      }
+
       App.addListener("backButton", ({ canGoBack }) => {
         if (canGoBack && !rootNavState.isRoot) window.history.back();
         else App.exitApp();

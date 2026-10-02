@@ -6,6 +6,7 @@
   - 그 종목 센터들을 사진 + 소개와 함께 리스트
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { fetchCentersByCategory, type SearchCenter } from "../../../lib/home";
@@ -46,18 +47,18 @@ export default function CategoryPage() {
       ) : centers.length === 0 ? (
         <EmptyState icon="search" title={`아직 ${label} 센터가 없어요`}
           description="다른 종목을 둘러보거나 새로운 센터를 검색해보세요."
-          action={<a className="primary-btn" href="/search">다른 종목 찾아보기</a>} />
+          action={<Link className="primary-btn" href="/search" prefetch={false}>다른 종목 찾아보기</Link>} />
       ) : (
         <main className="category-results-v3">
           <div className="category-results-head">
             <div><b>{label} 센터</b><span>{centers.length}곳</span></div>
-            <a href="/search"><UiIcon name="sliders" size={18} />검색 조건</a>
+            <Link href="/search" prefetch={false}><UiIcon name="sliders" size={18} />검색 조건</Link>
           </div>
           {centers.map((c) => (
-            <a key={c.id} className="cat-center-card" href={`/center/${c.id}`}>
+            <Link key={c.id} className="cat-center-card" href={`/center/${c.id}`} prefetch={false}>
               <div className="cat-center-media">
                 {c.photoUrl
-                  ? <img className="cat-center-photo" src={centerPhotoUrl(c.photoUrl) ?? ""} alt={`${c.name} 센터`} />
+                  ? <img className="cat-center-photo" loading="lazy" decoding="async" src={centerPhotoUrl(c.photoUrl) ?? ""} alt={`${c.name} 센터`} />
                   : <div className="cat-center-photo-empty"><UiIcon name="building" size={24} /></div>}
               </div>
               <div className="cat-center-body">
@@ -66,7 +67,7 @@ export default function CategoryPage() {
                 {c.intro && <div className="cat-center-intro">{c.intro}</div>}
                 <div className="cat-center-action"><UiIcon name="calendar" size={14} />수업 일정 확인</div>
               </div>
-            </a>
+            </Link>
           ))}
         </main>
       )}

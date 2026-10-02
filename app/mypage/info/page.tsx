@@ -8,6 +8,7 @@
   - 회원 탈퇴
 */
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabaseClient";
 import { deactivateCurrentAccount } from "../../../lib/accountDeletion";
@@ -188,7 +189,7 @@ export default function MyInfoPage() {
   return (
     <div className="app-shell account-page-v2 settings-page-v2">
       <div className="back-header">
-        <a className="side" href="/mypage">‹</a>
+        <Link className="side" href="/mypage" prefetch={false}>‹</Link>
         <div className="title">내 정보 관리</div>
         <div className="side" />
       </div>

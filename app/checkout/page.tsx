@@ -14,6 +14,7 @@ import { purchaseScheduleState } from "../../lib/purchaseSchedule";
 import { DAYS, type SelectableSchedule } from "../../lib/passes";
 import { cancelMyPendingOrderQuietly, createOrder } from "../../lib/orders";
 import { requestReturnToken } from "../../lib/payments/tossPaymentApi";
+import { loadTossSdk } from "../../lib/tossSdk";
 import { clearPendingPgOrder, readPendingPgOrder, savePendingPgOrder } from "../../lib/payments/returnApi";
 import { fetchProfiles, type ProfileRow } from "../../lib/profiles";
 import { fetchMyPoints, usePoints } from "../../lib/reviews";
@@ -29,6 +30,7 @@ import { computeBaseAmount, countOptionLabel, isCountSelectable, sortedTiers } f
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import UiIcon, { type IconName } from "../components/UiIcon";
 import ErrorState from "../components/ErrorState";
+import { hapticSuccess } from "../../lib/nativeHaptics";
 
 // 카카오페이/토스페이는 로고 자산이 없어 outline 아이콘 하나로 뭉치면 구분이 안 되므로
 // --vendor-* 색 점(dot)으로, 나머지는 의미가 통하는 outline 아이콘으로 구분한다.
@@ -178,6 +180,8 @@ function CheckoutContent() {
     finally { setLoading(false); }
   }, [centerId, productId]);
   useEffect(() => { load(); }, [load]);
+  // 토스 SDK는 이 화면에서만 로드한다(전역 로드 제거). 결제 버튼을 누르기 전에 미리 받아 두고, 실패해도 createPayment가 다시 시도/안내한다.
+  useEffect(() => { if (resolveProviderName() === "toss") void loadTossSdk().catch(() => {}); }, []);
 
   // 이 상품에 지금 실제로 쓸 수 있는 회원 쿠폰만 조회(요청 15번 "쿠폰 선택 UI는 usable
   // 쿠폰이 있을 때만"). 비로그인/쿠폰 없음이면 조용히 빈 목록 — 화면 자체는 그대로 진행.
@@ -243,6 +247,9 @@ function CheckoutContent() {
 
   // 예약창에서 들어온 구매를 완료하면, 잠깐 완료 안내를 보여준 뒤 자동으로 그 예약 화면으로 돌아감
   // (기존 예약/결제 로직은 그대로 두고, 화면 전환만 자동화 — 즉시 클릭할 수 있는 버튼도 함께 남겨둠)
+  // 결제 완료 햅틱(직접결제 접수는 실제 결제가 아니므로 제외) — done이 true가 되는 순간 한 번만
+  useEffect(() => { if (done && !pendingManualPayment) void hapticSuccess(); }, [done, pendingManualPayment]);
+
   useEffect(() => {
     // 직접결제(direct)는 아직 실제로 결제되지 않아 예약에 쓸 수강권이 없다 — 자동 복귀시키지 않는다.
     if (!done || !reservationBackUrl || pendingManualPayment) return;

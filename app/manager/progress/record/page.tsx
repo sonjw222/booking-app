@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../../../components/SheetOverlay";
 
 /*
@@ -181,7 +182,7 @@ function ProgressRecordContent() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/manager">‹</a>
+          <Link className="side" href="/manager" prefetch={false}>‹</Link>
           <div className="title">진도 기록</div>
           <div className="side" />
         </div>
@@ -195,9 +196,9 @@ function ProgressRecordContent() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/manager">‹</a>
+        <Link className="side" href="/manager" prefetch={false}>‹</Link>
         <div className="title">진도 기록</div>
-        <a className="header-action" href="/manager/progress">기술 목록</a>
+        <Link className="header-action" href="/manager/progress" prefetch={false}>기술 목록</Link>
       </div>
 
       {centers.length > 1 && (
@@ -217,7 +218,7 @@ function ProgressRecordContent() {
       ) : tree.length === 0 ? (
         <div className="daylist-empty" style={{ paddingTop: 40 }}>
           먼저 기술 목록을 만들어주세요<br />
-          <a href="/manager/progress" className="more-link" style={{ display: "inline-block", marginTop: 8 }}>진도표 기술 목록 ›</a>
+          <Link href="/manager/progress" className="more-link" style={{ display: "inline-block", marginTop: 8 }} prefetch={false}>진도표 기술 목록 ›</Link>
         </div>
       ) : (
         <>

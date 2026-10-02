@@ -10,6 +10,7 @@
     RLS 정책만 "본인 소유 + 아직 미발급"으로 다르게 좁혀져 있다.)
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { fetchMyPurchases, updateOrderStatus, type PurchaseItem } from "../../lib/orders";
 import { requestRefund } from "../../lib/mypage";
@@ -147,7 +148,7 @@ export default function PurchasesPage() {
       ) : shown.length === 0 ? (
         <EmptyState icon="card" title={items.length === 0 ? "구매 내역이 없어요" : "조건에 맞는 내역이 없어요"}
           description={items.length === 0 ? "센터에서 수강권과 상품을 살펴보세요." : "조회 기간이나 종류를 바꿔보세요."}
-          action={items.length === 0 ? <a className="primary-btn" href="/search">센터 찾아보기</a> :
+          action={items.length === 0 ? <Link className="primary-btn" href="/search" prefetch={false}>센터 찾아보기</Link> :
             <button type="button" className="primary-btn" onClick={() => { setFromDate(""); setToDate(""); setKindFilter("all"); }}>필터 초기화</button>} />
       ) : (
         <div className="purchase-list">

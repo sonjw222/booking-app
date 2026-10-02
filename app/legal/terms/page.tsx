@@ -1,8 +1,9 @@
+import Link from "next/link";
 export default function TermsPage() {
   return (
     <div className="app-shell settings-page-v2">
       <div className="back-header">
-        <a className="side" href="/legal">‹</a>
+        <Link className="side" href="/legal" prefetch={false}>‹</Link>
         <div className="title">이용약관</div>
         <div className="side" />
       </div>
@@ -31,7 +32,7 @@ export default function TermsPage() {
         <h2>제3조 (약관의 게시와 개정)</h2>
         <p>
           회사는 이 약관의 내용을 회원이 쉽게 알 수 있도록 서비스 초기 화면 또는
-          <a href="/legal">약관 및 정책</a> 화면에 게시합니다. 회사는 관련 법령을 위반하지 않는
+          <Link href="/legal" prefetch={false}>약관 및 정책</Link> 화면에 게시합니다. 회사는 관련 법령을 위반하지 않는
           범위에서 이 약관을 개정할 수 있으며, 개정 시 적용일자 및 개정사유를 명시하여 적용일자
           7일 전부터 서비스 내 공지합니다. 회원에게 불리한 개정의 경우 30일 전에 공지합니다.
         </p>
@@ -47,7 +48,7 @@ export default function TermsPage() {
         <h2>제5조 (회원가입)</h2>
         <p>
           이용자는 회사가 정한 절차에 따라 회원정보를 입력하고 이 약관 및
-          <a href="/legal/privacy"> 개인정보처리방침</a>에 동의함으로써 회원가입을 신청합니다.
+          <Link href="/legal/privacy" prefetch={false}> 개인정보처리방침</Link>에 동의함으로써 회원가입을 신청합니다.
           회사는 원칙적으로 가입 신청을 승낙하나, 타인 정보 도용, 허위 정보 기재 등의 사유가
           있는 경우 승낙을 유보하거나 거부할 수 있습니다.
         </p>
@@ -62,7 +63,7 @@ export default function TermsPage() {
         <h2>제7조 (개인정보보호)</h2>
         <p>
           회사는 관계 법령이 정하는 바에 따라 회원의 개인정보를 보호하며, 자세한 사항은
-          <a href="/legal/privacy"> 개인정보처리방침</a>을 따릅니다.
+          <Link href="/legal/privacy" prefetch={false}> 개인정보처리방침</Link>을 따릅니다.
         </p>
 
         <h2>제8조 (회원의 의무)</h2>
@@ -88,7 +89,7 @@ export default function TermsPage() {
 
         <h2>제10조 (청약철회, 환불 및 취소)</h2>
         <p>
-          청약철회, 환불 및 취소에 관한 사항은 <a href="/legal/refund">환불·취소 정책</a>을
+          청약철회, 환불 및 취소에 관한 사항은 <Link href="/legal/refund" prefetch={false}>환불·취소 정책</Link>을
           따릅니다.
         </p>
 

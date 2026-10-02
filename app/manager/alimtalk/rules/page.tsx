@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../../../components/SheetOverlay";
 
 /*
@@ -299,7 +300,7 @@ export default function AlimtalkRulesPage() {
             </select>
             {approvedTemplates.length === 0 && (
               <div className="perm-guide" style={{ margin: "0 0 10px" }}>
-                승인된 템플릿이 없어요. <a href="/manager/alimtalk/templates">템플릿 관리</a>에서 먼저 등록해주세요.
+                승인된 템플릿이 없어요. <Link href="/manager/alimtalk/templates" prefetch={false}>템플릿 관리</Link>에서 먼저 등록해주세요.
               </div>
             )}
 

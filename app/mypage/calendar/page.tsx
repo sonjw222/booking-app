@@ -6,6 +6,7 @@
   - 날짜 누르면 아래에 그날 수업 정보 + 개인 메모
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import CalendarAddSheet from "../../components/CalendarAddSheet";
@@ -109,7 +110,7 @@ export default function CalendarPage() {
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
       <div className="back-header">
-        <a className="side" href="/my-reservations">‹</a>
+        <Link className="side" href="/my-reservations" prefetch={false}>‹</Link>
         <div className="title">예약 캘린더</div>
         <button className="cal-export-btn" onClick={openMonthSheet}>내 캘린더에 추가</button>
       </div>

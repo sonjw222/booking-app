@@ -6,6 +6,7 @@
   - 카테고리·클래스·센터·하단 네비를 실제 라우트로 연결
 */
 
+import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
 import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, fetchNextReservation, type HomeCenter, type HomeClass, type NextReservation } from "../lib/home";
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
@@ -284,21 +285,21 @@ export default function Home() {
               {isManager && (
                 <a className="login-link" href="/manager" onClick={(e) => replaceTabNavigation(e, "/manager")}>관리자 모드</a>
               )}
-              {loggedIn && <a className="home-notification-link" href="/notifications" aria-label={`알림${unread > 0 ? `, 읽지 않은 알림 ${unread}개` : ""}`}>
+              {loggedIn && <Link className="home-notification-link" href="/notifications" aria-label={`알림${unread > 0 ? `, 읽지 않은 알림 ${unread}개` : ""}`} prefetch={false}>
                 <UiIcon name="bell" size={22} />{unread > 0 && <span className="home-notification-badge">{unread > 9 ? "9+" : unread}</span>}
-              </a>}
+              </Link>}
             </div>
           </div>
-          {nextReservation && <a className="home-next-reservation" href="/my-reservations">
+          {nextReservation && <Link className="home-next-reservation" href="/my-reservations" prefetch={false}>
             <span className="home-next-label">{nextReservation.status === "waitlisted" ? "대기 중인 수업" : "다가오는 예약"}</span>
             <strong>{nextReservation.title}</strong>
             <span>{nextReservation.startText} · {nextReservation.centerName}</span>
             <b>예약 확인하기 <span aria-hidden="true">›</span></b>
-          </a>}
-          <a className="searchbar" href="/search">
+          </Link>}
+          <Link className="searchbar" href="/search" prefetch={false}>
             <span>클래스, 센터를 검색해보세요</span>
             <UiIcon name="search" size={20} />
-          </a>
+          </Link>
         </div>
 
         {/* 종목 카테고리 그리드 */}
@@ -312,12 +313,12 @@ export default function Home() {
         </div>
         <div className={`cat-grid ${showAllCategories ? "is-expanded" : ""}`} ref={catGridRef}>
           {displayCategories.map((cat) => (
-            <a className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`}>
+            <Link className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`} prefetch={false}>
               <div className="cat-icon">
                 <CategoryIcon label={cat.label} size="100%" />
               </div>
               <div className="cat-label">{cat.label}</div>
-            </a>
+            </Link>
           ))}
         </div>
 
@@ -344,12 +345,12 @@ export default function Home() {
             </div>}
           </div>
         ) : (
-          <a className="hero" href="/search" style={{ display: "flex", textDecoration: "none" }}>
+          <Link className="hero" href="/search" style={{ display: "flex", textDecoration: "none" }} prefetch={false}>
             <div className="eyebrow">이번 주 추천</div>
             <h1>내 주변에서 시작하는<br />새로운 움직임</h1>
             <div className="chip">원하는 종목과 시간을 찾아보세요</div>
             <div className="deco" aria-hidden="true" />
-          </a>
+          </Link>
         )}
 
         </section>
@@ -361,7 +362,7 @@ export default function Home() {
             확인되면(loggedIn === false) 숨긴다. */}
         {loggedIn !== false && (
           <>
-            <div className="home-class-head"><h2>{myUpcoming.length > 0 ? "내 수강권으로 예약 가능" : "곧 시작하는 클래스"}</h2><a href="/reservation">전체보기 ›</a></div>
+            <div className="home-class-head"><h2>{myUpcoming.length > 0 ? "내 수강권으로 예약 가능" : "곧 시작하는 클래스"}</h2><Link href="/reservation" prefetch={false}>전체보기 ›</Link></div>
             {visibleClasses.length === 0 ? (
               <div className="daylist-empty" style={{ padding: "12px 20px 30px" }}>
                 {loading ? "불러오는 중..." : "예약 가능한 수업이 없어요"}
@@ -372,7 +373,7 @@ export default function Home() {
                   const full = c.reserved >= c.capacity;
                   const center = centers.find((item) => item.id === c.centerId);
                   return (
-                    <a className="home-class-row" key={c.id} href={`/center/${c.centerId}`}>
+                    <Link className="home-class-row" key={c.id} href={`/center/${c.centerId}`} prefetch={false}>
                       <div className="home-class-photo photo-fallback" aria-label={`${center?.name ?? c.centerName} 클래스 이미지`}><UiIcon name={CATEGORY_ICONS[center?.categories[0] ?? ""] ?? "calendar"} size={26} /></div>
                       <div className="home-class-copy">
                         <span>{c.startText}</span>
@@ -383,7 +384,7 @@ export default function Home() {
                             숫자를 매번 다시 해석해야 했다. 두 화면이 이미 쓰는 형식으로 통일. */}
                         <small>예약 {c.reserved}/{c.capacity}{full ? " · 대기" : ""}</small>
                       </div>
-                    </a>
+                    </Link>
                   );
                 })}
               </div>
@@ -401,11 +402,11 @@ export default function Home() {
             하드코딩하지 않는다. */}
         <div className="home-footer">
           <div className="home-footer-links">
-            <a href="/products">판매 상품</a>
-            <a href="/legal/terms">이용약관</a>
-            <a href="/legal/privacy">개인정보처리방침</a>
-            <a href="/legal/business">사업자 정보</a>
-            <a href="/legal/refund">환불·취소 정책</a>
+            <Link href="/products" prefetch={false}>판매 상품</Link>
+            <Link href="/legal/terms" prefetch={false}>이용약관</Link>
+            <Link href="/legal/privacy" prefetch={false}>개인정보처리방침</Link>
+            <Link href="/legal/business" prefetch={false}>사업자 정보</Link>
+            <Link href="/legal/refund" prefetch={false}>환불·취소 정책</Link>
           </div>
           <div className="home-footer-biz">
             <div>{BUSINESS_INFO.companyName} · 대표 {BUSINESS_INFO.ceoName}</div>

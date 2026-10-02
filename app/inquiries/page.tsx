@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../components/SheetOverlay";
 
 /*
@@ -103,7 +104,7 @@ function InquiriesPageContent() {
   return (
     <div className="app-shell member-inquiries">
       <div className="back-header">
-        <a className="side" href="/mypage">‹</a>
+        <Link className="side" href="/mypage" prefetch={false}>‹</Link>
         <div className="title">1:1 문의</div>
         <div className="side" />
       </div>

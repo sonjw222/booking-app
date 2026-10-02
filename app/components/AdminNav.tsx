@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import UiIcon, { type IconName } from "./UiIcon";
 import { replaceTabNavigation } from "../../lib/navState";
@@ -34,10 +35,10 @@ export default function AdminNav() {
       aria-expanded={expanded}
       onClick={handleRailClick}
     >
-      <a className="desktop-brand" href="/admin">
+      <Link className="desktop-brand" href="/admin" prefetch={false}>
         <span className="desktop-brand-mark"><UiIcon name="shield" size={20} /></span>
         <span><b>모하빗</b><small>플랫폼 운영</small></span>
-      </a>
+      </Link>
       <div className="workspace-sidebar-scroll" ref={scrollRef}>
         <div className="desktop-nav-section">운영 관리</div>
         {ITEMS.map((item) => (

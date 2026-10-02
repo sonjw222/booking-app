@@ -8,6 +8,7 @@
   - is_platform_admin = true 인 계정만 접근 가능
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
@@ -157,7 +158,7 @@ export default function AdminSubscriptionsPage() {
       </div>
 
       <div className="back-header">
-        <a className="side" href="/admin">‹</a>
+        <Link className="side" href="/admin" prefetch={false}>‹</Link>
         <div className="title">구독 현황</div>
         <div className="side" />
       </div>

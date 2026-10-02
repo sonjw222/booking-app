@@ -16,6 +16,7 @@
   Edge Function 호출("status" 액션)과 연결 상태 판정 로직 자체는 손대지 않았다.
 */
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "../../../../lib/supabaseClient";
 
@@ -36,7 +37,7 @@ export default function AlimtalkSettingsPage() {
   return (
     <div className="app-shell">
       <div className="back-header">
-        <a className="side" href="/manager/alimtalk">‹</a>
+        <Link className="side" href="/manager/alimtalk" prefetch={false}>‹</Link>
         <div className="title">발신 설정</div>
         <div className="side" />
       </div>
@@ -52,7 +53,7 @@ export default function AlimtalkSettingsPage() {
         <div className="perm-guide" style={{ margin: "16px 0 0" }}>
           별도의 알리고 가입이나 카카오톡 채널 연결 없이 모하빗 알림톡 서비스를 바로 이용할 수 있어요.
           <br />
-          <a href="/manager/alimtalk/templates">템플릿 관리</a>에서 승인된 알림톡 템플릿을 등록하면 회원에게 자동으로 메시지를 보낼 수 있어요.
+          <Link href="/manager/alimtalk/templates" prefetch={false}>템플릿 관리</Link>에서 승인된 알림톡 템플릿을 등록하면 회원에게 자동으로 메시지를 보낼 수 있어요.
           <br />
           알림톡 발송이 실패하면 문자로 대체 발송될 수 있어요.
         </div>

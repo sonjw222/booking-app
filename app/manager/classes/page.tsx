@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
 /*
@@ -1094,7 +1095,7 @@ export default function ClassManagePage() {
         <button className="side cal-export-btn cal-copy-btn" style={{ fontSize: 12 }} onClick={openCopy}>일정 복사</button>
         <div className="title">내 일정</div>
         {!assignMode && <button className="primary-btn workspace-create-class" onClick={openCreate}>+ 수업 등록</button>}
-        <a className="side cal-export-btn" href="/manager/holidays" style={{ fontSize: 12 }}>휴무일</a>
+        <Link className="side cal-export-btn" href="/manager/holidays" style={{ fontSize: 12 }} prefetch={false}>휴무일</Link>
       </div>
 
       {unplaced.length > 0 && (
@@ -2272,7 +2273,7 @@ export default function ClassManagePage() {
                           ) : null}
                         </>
                       )}
-                      <a className="att-btn prog" href={`/manager/progress/record?profile=${a.profileId}`}>진도</a>
+                      <Link className="att-btn prog" href={`/manager/progress/record?profile=${a.profileId}`} prefetch={false}>진도</Link>
                     </div>
                   </div>
                 ))
@@ -2316,7 +2317,7 @@ export default function ClassManagePage() {
                     ))
                   )}
                 </div>
-                <a className="primary-btn" href={`/manager/members?profile=${memberInfo.profileId}`} style={{ marginTop: 10, display: "block", textAlign: "center" }}>회원 관리에서 전체 보기</a>
+                <Link className="primary-btn" href={`/manager/members?profile=${memberInfo.profileId}`} style={{ marginTop: 10, display: "block", textAlign: "center" }} prefetch={false}>회원 관리에서 전체 보기</Link>
               </>
             )}
             <div className="add-profile-actions" style={{ marginTop: 6 }}>

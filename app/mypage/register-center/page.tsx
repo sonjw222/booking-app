@@ -10,6 +10,7 @@
   센터 보유 여부와 무관하게 모든 로그인 사용자가 새 센터를 등록할 수 있다(정책 B).
 */
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import CenterRegistrationForm, { type CenterFieldsValue } from "../../components/CenterRegistrationForm";
@@ -54,7 +55,7 @@ export default function RegisterCenterPage() {
           </div>
         </div>
         <div style={{ padding: 20 }}>
-          <a className="primary-btn" href="/mypage">마이페이지로</a>
+          <Link className="primary-btn" href="/mypage" prefetch={false}>마이페이지로</Link>
         </div>
       </div>
     );

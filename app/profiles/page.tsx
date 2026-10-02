@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../components/SheetOverlay";
 
 /*
@@ -117,7 +118,7 @@ export default function ProfilesPage() {
   return (
     <div className="app-shell account-page-v2">
       <div className="back-header">
-        <a className="side" href="/mypage">‹</a>
+        <Link className="side" href="/mypage" prefetch={false}>‹</Link>
         <div className="title">프로필 관리</div>
         <div className="side" />
       </div>
@@ -138,7 +139,7 @@ export default function ProfilesPage() {
               <div key={p.id} className="profile-item">
                 <button className="profile-item-tap" onClick={() => openEdit(p)}>
                   {p.avatarUrl
-                    ? <img className="profile-avatar-img" src={avatarPublicUrl(p.avatarUrl) ?? ""} alt="" />
+                    ? <img className="profile-avatar-img" loading="lazy" decoding="async" src={avatarPublicUrl(p.avatarUrl) ?? ""} alt="" />
                     : <div className="profile-avatar">{p.name?.[0] ?? "?"}</div>}
                   <div className="profile-item-info">
                     <div className="profile-item-name">

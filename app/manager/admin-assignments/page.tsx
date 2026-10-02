@@ -6,6 +6,7 @@
   - 기본 조회 + 실무 필터만 구현 (통계 대시보드·엑셀 다운로드는 이번 범위 제외)
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import DatePicker from "../../components/DatePicker";
@@ -88,7 +89,7 @@ export default function AdminAssignmentLogPage() {
   return (
     <div className="app-shell" style={{ paddingBottom: 90 }}>
       <div className="back-header">
-        <a className="side" href="/manager">‹</a>
+        <Link className="side" href="/manager" prefetch={false}>‹</Link>
         <div className="title">관리자 배치 내역</div>
         <div className="side" />
       </div>

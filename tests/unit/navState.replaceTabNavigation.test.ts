@@ -83,8 +83,11 @@ describe("탭 전환 링크 소스 고정 — 회귀 방지", () => {
   it("ManagerNav의 4개 탭 <Link>가 전부 replace prop을 쓴다", () => {
     const source = read("app/components/ManagerNav.tsx");
     const linkTags = source.match(/<Link[^>]*href="\/[^"]*"[^>]*>/g) ?? [];
-    expect(linkTags.length).toBeGreaterThanOrEqual(4);
-    for (const tag of linkTags) expect(tag).toContain("replace");
+    // 탭(수업·예약/회원/알림/더보기)은 replace. 2026-10-02: 하위 메뉴 링크도 Link(prefetch 끔, push)로 바뀌어 탭 4곳만 replace를 요구한다.
+    const tabs = linkTags.filter((t) => /href="\/manager(\/classes|\/members|\/notifications)?"/.test(t) && !t.includes("prefetch={false}"));
+    expect(tabs.length).toBeGreaterThanOrEqual(4);
+    for (const tag of tabs) expect(tag).toContain("replace");
+    for (const tag of linkTags.filter((t) => t.includes("prefetch={false}"))) expect(tag).not.toContain("replace");
   });
 
   it("마이페이지의 '관리자 모드로 전환'/'예약 내역' 단축 진입이 replaceTabNavigation을 쓴다", () => {

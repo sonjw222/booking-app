@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import "./globals.css";
 import "./workspace.css";
 import { ImageViewerProvider } from "./components/ImageViewer";
 import SessionWatcher from "./components/SessionWatcher";
 import AppConfirmProvider from "./components/AppConfirmProvider";
 import GlobalBottomNav from "./components/GlobalBottomNav";
+import OfflineNotice from "./components/OfflineNotice";
 import CapacitorBootstrap from "./components/CapacitorBootstrap";
 import InteractiveGuard from "./components/InteractiveGuard";
 import NavigationPolicy from "./components/NavigationPolicy";
@@ -71,13 +71,9 @@ export default function RootLayout({
             __html: `try{var t=localStorage.getItem("app_theme");var dark=t==="charcoal"||((!t||t==="system")&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(dark)document.documentElement.setAttribute("data-theme","charcoal");else if(t==="burgundy")document.documentElement.setAttribute("data-theme","burgundy");try{window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.WebViewTheme&&window.Capacitor.Plugins.WebViewTheme.setBackground({hex:dark?"#17181C":"#FBFBFA"});}catch(e2){}try{window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.StatusBar&&window.Capacitor.Plugins.StatusBar.setStyle({style:dark?"DARK":"LIGHT"});window.Capacitor&&window.Capacitor.getPlatform&&window.Capacitor.getPlatform()==="android"&&window.Capacitor.Plugins&&window.Capacitor.Plugins.AndroidStatusBarBackground&&window.Capacitor.Plugins.AndroidStatusBarBackground.setDark({dark:dark});}catch(e3){}}catch(e){}`,
           }}
         />
-        {/* 결제(app/checkout)의 TossPaymentProvider가 window.TossPayments를 씀 — npm 패키지
-            설치 없이 토스 공식 가이드대로 script 태그로 전역 로드(afterInteractive: 페이지
-            렌더를 막지 않고 hydration 직후 로드). v1이 아니라 v2 SDK를 쓴다 — v1은 내부
-            호환 어댑터를 거치며 customerKey 처리 버그로 결제 요청이 항상 실패했음(실측
-            확인, lib/payments/TossPaymentProvider.ts 상단 주석 참고). */}
-        <Script src="https://js.tosspayments.com/v2/standard" strategy="afterInteractive" />
+        {/* 토스 결제 SDK는 전역으로 로드하지 않는다(2026-10-02) — lib/tossSdk.ts loadTossSdk()가 checkout/카드등록 화면에서만 온디맨드 로드 */}
         <CapacitorBootstrap />
+        <OfflineNotice />
         <InteractiveGuard />
         <NavigationPolicy />
         <SessionWatcher />

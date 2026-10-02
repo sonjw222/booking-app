@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { searchHome, searchClasses, haversineKm, NEARBY_RADIUS_KM, type SearchCenter, type SearchClass } from "../../lib/home";
 import { centerPhotoUrl } from "../../lib/center";
@@ -144,30 +145,30 @@ export default function SearchPage() {
         {noResults ? <EmptyState icon="search" title="검색 결과가 없어요" description="더 짧은 이름이나 다른 종목으로 검색해보세요." /> : <>
           {scope === "all" && categories.length > 0 && <section className="search-category-results" aria-label="종목 검색 결과">
             <h2 className="menu-section-label">종목</h2>
-            <div className="search-category-grid">{categories.map((cat) => <a key={cat} className="list-row" href={`/category/${encodeURIComponent(cat)}`}>
+            <div className="search-category-grid">{categories.map((cat) => <Link key={cat} className="list-row" href={`/category/${encodeURIComponent(cat)}`} prefetch={false}>
               <div className="left">{cat}</div><span className="chevron" aria-hidden="true">›</span>
-            </a>)}</div>
+            </Link>)}</div>
           </section>}
           {showClasses && <section aria-label="수업 검색 결과">
             <h2 className="menu-section-label">수업 {filteredClasses.length > 0 ? `(${filteredClasses.length}${classes.length === 100 ? "+" : ""})` : ""}</h2>
             {filteredClasses.length === 0 ? <p className="discovery-section-empty">조건에 맞는 예정 수업이 없어요.</p> :
-              <><div className="search-class-grid">{filteredClasses.slice(0, visibleClassCount).map((cls) => <a key={cls.id} className="search-class-row" href={`/reservation?openClassId=${encodeURIComponent(cls.id)}&openDate=${cls.date}`}>
+              <><div className="search-class-grid">{filteredClasses.slice(0, visibleClassCount).map((cls) => <Link key={cls.id} className="search-class-row" href={`/reservation?openClassId=${encodeURIComponent(cls.id)}&openDate=${cls.date}`} prefetch={false}>
                 <span className="search-class-time">{cls.startText}</span><strong>{cls.title}</strong><span>{cls.centerName}</span><b>예약 보기 <span aria-hidden="true">›</span></b>
-              </a>)}</div>
+              </Link>)}</div>
               {filteredClasses.length > visibleClassCount && <button type="button" className="discovery-more" onClick={() => setVisibleClassCount((count) => count + PAGE_SIZE)}>수업 더보기 ({filteredClasses.length - visibleClassCount}개 남음)</button>}</>}
           </section>}
           {showCenters && <section aria-label="센터 검색 결과">
             <h2 className="menu-section-label">센터 {filteredCenters.length > 0 ? `(${filteredCenters.length})` : ""}</h2>
             {filteredCenters.length === 0 ? <p className="discovery-section-empty">조건에 맞는 센터가 없어요.</p> : <>
-              <div className="search-center-grid">{filteredCenters.slice(0, visibleCount).map((c) => <a key={c.id} className="search-center-row" href={`/center/${c.id}`}>
-                {c.photoUrl ? <img className="search-center-photo" src={centerPhotoUrl(c.photoUrl) ?? ""} alt="" /> :
+              <div className="search-center-grid">{filteredCenters.slice(0, visibleCount).map((c) => <Link key={c.id} className="search-center-row" href={`/center/${c.id}`} prefetch={false}>
+                {c.photoUrl ? <img className="search-center-photo" loading="lazy" decoding="async" src={centerPhotoUrl(c.photoUrl) ?? ""} alt="" /> :
                   <div className="search-center-badge" aria-hidden="true">{c.name.slice(0, 1)}</div>}
                 <div className="search-center-info"><div className="search-center-name">{c.name}</div>
                   {c.categories.length > 0 && <div className="search-center-cat">{c.categories.join(" · ")}</div>}
                   {position && c.latitude != null && c.longitude != null && <div className="search-center-distance">{haversineKm(position.lat, position.lng, c.latitude, c.longitude).toFixed(1)}km</div>}
                   {c.intro && <div className="search-center-intro">{c.intro}</div>}
                 </div><span className="chevron" aria-hidden="true">›</span>
-              </a>)}</div>
+              </Link>)}</div>
               {filteredCenters.length > visibleCount && <button type="button" className="discovery-more" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>센터 더보기 ({filteredCenters.length - visibleCount}개 남음)</button>}
             </>}
           </section>}

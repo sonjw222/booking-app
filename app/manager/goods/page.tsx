@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
 /*
@@ -199,7 +200,7 @@ export default function GoodsPage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/manager">‹</a>
+          <Link className="side" href="/manager" prefetch={false}>‹</Link>
           <div className="title">상품 관리</div>
           <div className="side" />
         </div>
@@ -213,7 +214,7 @@ export default function GoodsPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/manager">‹</a>
+        <Link className="side" href="/manager" prefetch={false}>‹</Link>
         <div className="title">상품 관리</div>
         {canCreateProduct && (
           <button className="header-action" onClick={openCreate}>+ 상품</button>

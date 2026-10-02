@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
 /*
@@ -38,6 +39,7 @@ import EmptyState from "../../components/EmptyState";
 import BackButton from "../../components/BackButton";
 import AppButton from "../../components/AppButton";
 import { loginHrefWithReturnToHere } from "../../../lib/postLoginReturn";
+import { shareLink } from "../../../lib/nativeShare";
 
 // 수강권 대분류(group_label) 기준으로 묶는다 — 라벨 없는 상품은 맨 위에 헤더 없이,
 // 라벨 있는 상품은 처음 등장한 순서대로 그룹 헤더를 붙여 보여준다(add_product_group_label.sql).
@@ -130,6 +132,13 @@ function CenterDetailContent() {
   const [notFound, setNotFound] = useState(false);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
+  // 센터 공유: 네이티브는 iOS Share Sheet, 웹은 Web Share → 링크 복사 순(lib/nativeShare.ts). 사용자 취소는 안내하지 않는다.
+  async function handleShareCenter() {
+    if (!center) return;
+    const r = await shareLink({ title: center.name, text: `${center.name} · 모하빗`, url: `https://mwhabit.com/center/${centerId}` });
+    if (r === "copied") showToast("링크를 복사했어요");
+    else if (r === "unsupported") showToast("이 기기에서는 공유할 수 없어요");
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -388,9 +397,9 @@ function CenterDetailContent() {
                 <UiIcon name="close" size={20} />
               </button>
             </div>
-            <a href="/cart" className="cart-link-btn">
+            <Link href="/cart" className="cart-link-btn" prefetch={false}>
               <UiIcon name="cart" size={16} /> 장바구니 보기{cartItemCount > 0 ? ` (${cartItemCount})` : ""}
-            </a>
+            </Link>
             <p className="center-buy-help">수강권을 선택하고 바로 구매하거나 장바구니에 담을 수 있어요.</p>
             {filterProductIds && (
               <div className="class-filter-notice">
@@ -495,7 +504,7 @@ function CenterDetailContent() {
             <div className="rv-photo-add">
               {rvPhotos.map((ph, i) => (
                 <div key={i} className="rv-photo-thumb">
-                  <img src={reviewPhotoUrl(ph) ?? ""} alt="" />
+                  <img src={reviewPhotoUrl(ph) ?? ""} alt="" loading="lazy" decoding="async" />
                   <button className="rv-photo-del" onClick={() => setRvPhotos((prev) => prev.filter((_, x) => x !== i))}>×</button>
                 </div>
               ))}
@@ -591,6 +600,7 @@ function CenterDetailContent() {
           ? <ZoomableImage className="center-hero-photo" src={centerPhotoUrl(center.photoUrl) ?? ""} />
           : <div className="center-hero-badge">{center.name.slice(0, 1)}</div>}
         <div className="center-hero-name">{center.name}</div>
+        <button type="button" className="quiet-action" aria-label="센터 공유" onClick={handleShareCenter}>공유</button>
         {center.address && <div className="center-hero-addr"><UiIcon name="location" size={14} /> {center.address}</div>}
         {center.phone && (
           <a className="center-hero-phone" href={`tel:${center.phone}`}><UiIcon name="phone" size={14} /> {center.phone}</a>

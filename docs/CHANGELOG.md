@@ -1,7 +1,15 @@
 # CHANGELOG
 
+## 2026-10-02 — iOS 체감 성능 배치(감사: docs/performance-audit-20261002.md)
+- 내부 이동 184곳 `<a>` → `<Link prefetch={false}>`(전체 리로드 제거, 결제/로그인/OAuth/세션 리셋/onClick 이동은 유지), Toss SDK 전역 로드 제거(결제 화면 온디맨드), ManagerNav 권한 재조회 60초 TTL.
+- 목록 썸네일 lazy/async, visualViewport(키보드) burst를 rAF로 합치기.
+- 절제된 native polish: Haptics(예약 완료/취소/결제 완료만), Network 오프라인 배너, Share(센터 공유). 새 plugin은 Capacitor 8 공식(`@capacitor/haptics|network|share`) — 새 TestFlight 빌드 필요, 구버전 앱/웹은 fallback.
+
 ## 2026-10-02 — 카카오페이/토스페이 결제수단 사용자 UI 비노출(구현 보존, SQL/native 변경 없음)
 - `lib/payMethods.ts`의 `HIDDEN_PAY_METHOD_IDS`로 checkout/cart 공통으로 kakao/toss를 숨긴다(센터 설정·stale 선택값과 무관). 다시 노출하려면 배열에서 id만 제거. Toss 연동/서버 lifecycle은 그대로.
+
+## 2026-10-02 — iOS 결제 복귀 Universal Link(앱으로 복귀, Safari는 fallback 유지)
+- Associated Domains(`applinks:mwhabit.com`) + AASA(`/.well-known/apple-app-site-association`, success/fail 두 경로만) + CapacitorBootstrap의 appUrlOpen/getLaunchUrl 처리(`lib/paymentUniversalLink.ts`, 허용 URL만 앱 WebView에서 열기). 결제 lifecycle/콜백 페이지 변경 없음. 새 TestFlight 빌드 필요.
 
 ## 2026-10-02 — success 콜백 일시 오류 bounded retry(코드만)
 - 외부 Safari의 return/confirm 호출이 네트워크 오류(status 0)/5xx로 실패하면 최대 2회 재시도(총 3회). 400/401/403/409는 재시도 없음. 서버 core는 멱등이라 동일 요청 재전송이 안전.

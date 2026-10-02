@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../components/SheetOverlay";
 
 /*
@@ -233,22 +234,22 @@ export default function ManagerDashboard() {
       <section className="manager-today-overview">
         <div className="manager-today-head">
           <div><span>오늘 할 일</span><b>{new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "short" }).format(new Date())}</b></div>
-          <a href="/manager/classes">수업 관리 ›</a>
+          <Link href="/manager/classes" prefetch={false}>수업 관리 ›</Link>
         </div>
         <div className="manager-today-metrics">
-          <a href="/manager/classes"><span>오늘 수업</span><b>{todayLoading ? "—" : todayClasses.length}</b></a>
-          <a href="/manager/classes"><span>예약 인원</span><b>{todayLoading ? "—" : todayClasses.reduce((sum, item) => sum + item.reserved, 0)}</b></a>
-          <a href="/manager/classes"><span>마감 수업</span><b>{todayLoading ? "—" : todayClasses.filter((item) => item.reserved >= item.capacity).length}</b></a>
+          <Link href="/manager/classes" prefetch={false}><span>오늘 수업</span><b>{todayLoading ? "—" : todayClasses.length}</b></Link>
+          <Link href="/manager/classes" prefetch={false}><span>예약 인원</span><b>{todayLoading ? "—" : todayClasses.reduce((sum, item) => sum + item.reserved, 0)}</b></Link>
+          <Link href="/manager/classes" prefetch={false}><span>마감 수업</span><b>{todayLoading ? "—" : todayClasses.filter((item) => item.reserved >= item.capacity).length}</b></Link>
         </div>
         <div className="manager-today-actions">
           {canSeeMenu("board.inquiry.view") && (
-            <a href="/manager/inquiries"><UiIcon name="message" size={17} />문의 확인</a>
+            <Link href="/manager/inquiries" prefetch={false}><UiIcon name="message" size={17} />문의 확인</Link>
           )}
           {canSeeMenu("pass.order.view") && (
-            <a href="/manager/orders"><UiIcon name="receipt" size={17} />주문 확인</a>
+            <Link href="/manager/orders" prefetch={false}><UiIcon name="receipt" size={17} />주문 확인</Link>
           )}
           {canSeeMenu("schedule.admin_assignment_log.view") && (
-            <a href="/manager/admin-assignments"><UiIcon name="users" size={17} />회원 배치</a>
+            <Link href="/manager/admin-assignments" prefetch={false}><UiIcon name="users" size={17} />회원 배치</Link>
           )}
         </div>
       </section>
@@ -349,127 +350,127 @@ export default function ManagerDashboard() {
       <section className="manager-menu-panel" aria-label={`${activeCenter?.name ?? "센터"} 관리 메뉴`}>
       <div className="menu-section-label">{activeCenter?.name ?? "센터"} 관리</div>
       {(canSeeMenu("pass.create") || canSeeMenu("pass.update")) && (
-        <a className="list-row" href="/manager/membership-rules">
+        <Link className="list-row" href="/manager/membership-rules" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="ticket" /></span>수강권·예약조건 설정</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("pass.goods.view") && (
-        <a className="list-row" href="/manager/goods">
+        <Link className="list-row" href="/manager/goods" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="receipt" /></span>상품 관리</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("customer.member.issue_pass") && (
-        <a className="list-row" href="/manager/coupons">
+        <Link className="list-row" href="/manager/coupons" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="card" /></span>쿠폰 관리</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("customer.progress") && (
-        <a className="list-row" href="/manager/progress/record">
+        <Link className="list-row" href="/manager/progress/record" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="edit" /></span>회원 진도 기록</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {/* UX 감사(B-10) — 회원 목록이 하단 탭(ManagerNav)에만 있고 이 목록형 메뉴에는
           대응 항목이 없어, 메뉴를 훑는 사람은 못 찾는 문제 대응. ManagerNav의 "회원" 탭과
           동일한 권한 키(customer.member.view)로 가림. */}
       {canSeeMenu("customer.member.view") && (
-        <a className="list-row" href="/manager/members">
+        <Link className="list-row" href="/manager/members" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="users" /></span>회원 관리</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("customer.lead.view") && (
-        <a className="list-row" href="/manager/leads">
+        <Link className="list-row" href="/manager/leads" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="message" /></span>상담고객 관리</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("message.alimtalk.view") && (
-        <a className="list-row" href="/manager/alimtalk">
+        <Link className="list-row" href="/manager/alimtalk" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="bell" /></span>알림톡</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("facility.staff.view") && (
-        <a className="list-row" href="/manager/staff">
+        <Link className="list-row" href="/manager/staff" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="shield" /></span>스태프 & 권한</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("pass.sales.view") && (
-        <a className="list-row" href="/manager/sales">
+        <Link className="list-row" href="/manager/sales" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="receipt" /></span>매출 관리</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("board.notice.view") && (
-        <a className="list-row" href="/manager/announcements">
+        <Link className="list-row" href="/manager/announcements" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="megaphone" /></span>공지사항</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("board.inquiry.view") && (
-        <a className="list-row" href="/manager/inquiries">
+        <Link className="list-row" href="/manager/inquiries" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="message" /></span>1:1 문의</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("facility.review.view") && (
-        <a className="list-row" href="/manager/reviews">
+        <Link className="list-row" href="/manager/reviews" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="star" /></span>후기 관리</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("pass.order.view") && (
-        <a className="list-row" href="/manager/orders">
+        <Link className="list-row" href="/manager/orders" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="receipt" /></span>주문 관리 (수강권·상품 구매)</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("schedule.admin_assignment_log.view") && (
-        <a className="list-row" href="/manager/admin-assignments">
+        <Link className="list-row" href="/manager/admin-assignments" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="users" /></span>관리자 배치 내역</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("facility.info") && (
-        <a className="list-row" href="/manager/center-info">
+        <Link className="list-row" href="/manager/center-info" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="building" /></span>센터 정보</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("facility.room") && (
-        <a className="list-row" href="/manager/rooms">
+        <Link className="list-row" href="/manager/rooms" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="grid" /></span>룸(장소) 관리</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {canSeeMenu("facility.operation") && (
-        <a className="list-row" href="/manager/settings">
+        <Link className="list-row" href="/manager/settings" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="settings" /></span>운영 설정</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {/* 원래 운영 설정 안의 한 섹션이었으나, 회원/예약 운영 설정과 성격이 다른 축(우리
           쪽 매출·계약)이라 별도 메뉴로 분리(2026-08-26). 권한 키가 아니라 오너 여부로
           직접 고정(사용자 결정, 2026-08-26) — 스태프에게 위임 가능한 facility.operation과
           달리, 플랫폼과의 결제 계약 상태는 오너만 볼 수 있어야 한다는 판단. */}
       {activeCenter?.isOwner && (
-        <a className="list-row" href="/manager/subscription">
+        <Link className="list-row" href="/manager/subscription" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="card" /></span>플랫폼 구독</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       {/* 정산계좌(플랫폼 구독과 같은 이유로 오너 전용 고정) — 회원 결제는 플랫폼 명의로
           수납되고 센터에는 별도 정산하는 구조라, 정산계좌도 플랫폼과의 금전 관계다. */}
       {activeCenter?.isOwner && (
-        <a className="list-row" href="/manager/settlement">
+        <Link className="list-row" href="/manager/settlement" prefetch={false}>
           <div className="left"><span className="icon"><UiIcon name="bank" /></span>정산계좌</div>
           <span className="chevron">›</span>
-        </a>
+        </Link>
       )}
       </section>
       {/* 예약자 명단 시트 */}
@@ -524,7 +525,7 @@ export default function ManagerDashboard() {
                             onClick={() => handleAttendance(a, "cancelled")}>예약취소</button>
                         </>
                       )}
-                      <a className="att-btn prog" href={`/manager/progress/record?profile=${a.profileId}`}>진도</a>
+                      <Link className="att-btn prog" href={`/manager/progress/record?profile=${a.profileId}`} prefetch={false}>진도</Link>
                     </div>
                   </div>
                 ))
@@ -568,7 +569,7 @@ export default function ManagerDashboard() {
                     ))
                   )}
                 </div>
-                <a className="primary-btn" href={`/manager/members?profile=${memberInfo.profileId}`} style={{ marginTop: 10, display: "block", textAlign: "center" }}>회원 관리에서 전체 보기</a>
+                <Link className="primary-btn" href={`/manager/members?profile=${memberInfo.profileId}`} style={{ marginTop: 10, display: "block", textAlign: "center" }} prefetch={false}>회원 관리에서 전체 보기</Link>
               </>
             )}
             <div className="add-profile-actions" style={{ marginTop: 6 }}>

@@ -6,6 +6,7 @@
   - 선택을 localStorage("app_theme")에 저장하고 <html data-theme>에 반영
 */
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { syncNativeWebViewBackground, syncNativeStatusBarStyle } from "../../../lib/nativeTheme";
 
@@ -112,7 +113,7 @@ export default function ThemeSettingsPage() {
   return (
     <div className="app-shell">
       <div className="back-header">
-        <a className="side" href="/mypage">‹</a>
+        <Link className="side" href="/mypage" prefetch={false}>‹</Link>
         <div className="title">테마 설정</div>
         <div className="side" />
       </div>

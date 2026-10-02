@@ -11,6 +11,7 @@
     가능(DB가 부분 유니크 인덱스로 강제, RPC로 원자적 전환).
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   fetchSubscriptionPlans, createSubscriptionPlan, updateSubscriptionPlan,
@@ -141,7 +142,7 @@ export default function SubscriptionPlansPage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/admin">‹</a>
+          <Link className="side" href="/admin" prefetch={false}>‹</Link>
           <div className="title">구독 플랜 관리</div>
           <div className="side" />
         </div>
@@ -166,7 +167,7 @@ export default function SubscriptionPlansPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/admin">‹</a>
+        <Link className="side" href="/admin" prefetch={false}>‹</Link>
         <div className="title">구독 플랜 관리</div>
         <div className="side" />
       </div>

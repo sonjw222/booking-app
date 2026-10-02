@@ -6,6 +6,7 @@
   - 오너 또는 운영정보 설정 권한(facility.operation) 필요
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import SegmentedTabs from "../../components/SegmentedTabs";
 import Loading from "../../components/Loading";
@@ -94,7 +95,7 @@ export default function SettingsPage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/manager">‹</a>
+          <Link className="side" href="/manager" prefetch={false}>‹</Link>
           <div className="title">운영 설정</div>
           <div className="side" />
         </div>
@@ -143,7 +144,7 @@ export default function SettingsPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/manager">‹</a>
+        <Link className="side" href="/manager" prefetch={false}>‹</Link>
         <div className="title">운영 설정</div>
         <div className="side" />
       </div>
