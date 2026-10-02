@@ -12,7 +12,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { fetchMyPurchases, updateOrderStatus, type PurchaseItem } from "../../lib/orders";
+import { fetchMyPurchases, cancelMyOrderFromPurchases, type PurchaseItem } from "../../lib/orders";
 import { requestRefund } from "../../lib/mypage";
 import Loading from "../components/Loading";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -77,7 +77,7 @@ export default function PurchasesPage() {
     if (!it?.orderId) return;
     setBusy(true);
     try {
-      await updateOrderStatus(it.orderId, "cancelled");
+      await cancelMyOrderFromPurchases(it.orderId);
       showToast("주문을 취소했어요");
       setCancelTarget(null);
       await load();

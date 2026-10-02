@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-02 — 관리자 알림: 환불 완료 / 결제 전 주문 취소(SQL 파일만 작성, 미실행)
+- `fix_refund_manager_notification_20261002.sql`: 회원 셀프 환불 완료(memberships.status→refunded, deferred constraint trigger + 마커 PK) 시 센터 active 관리자별 `refund_completed` 1건. 구매내역 "주문 취소하기" 전용 RPC `member_cancel_pending_order`가 취소 + `order_cancelled` 알림을 한 트랜잭션에서 처리(자동 정리/결제창 닫힘/보상 취소/관리자 취소는 알림 없음). 알림 실패는 환불/취소를 막지 않는다.
+
 ## 2026-10-02 — iOS 체감 성능 배치(감사: docs/performance-audit-20261002.md)
 - 내부 이동 184곳 `<a>` → `<Link prefetch={false}>`(전체 리로드 제거, 결제/로그인/OAuth/세션 리셋/onClick 이동은 유지), Toss SDK 전역 로드 제거(결제 화면 온디맨드), ManagerNav 권한 재조회 60초 TTL.
 - 목록 썸네일 lazy/async, visualViewport(키보드) burst를 rAF로 합치기.

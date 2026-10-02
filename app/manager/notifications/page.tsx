@@ -134,7 +134,7 @@ export default function ManagerNotificationsPage() {
 
   function notificationIcon(kind: string) {
     if (kind.includes("reservation") || kind.includes("waitlist") || kind === "no_show") return "calendar" as const;
-    if (kind.includes("order")) return "receipt" as const;
+    if (kind.includes("order") || kind.includes("refund")) return "receipt" as const;
     if (kind.includes("review")) return "star" as const;
     if (kind.includes("inquiry")) return "message" as const;
     if (kind.includes("announcement")) return "megaphone" as const;
