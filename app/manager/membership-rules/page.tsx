@@ -28,6 +28,7 @@ import ExpiryOptionField, { type ExpiryOptionValue } from "../../components/Expi
 import CountPriceEditor from "../../components/CountPriceEditor";
 import CatalogSearchFilter from "../../components/CatalogSearchFilter";
 import BulkSelectBar from "../../components/BulkSelectBar";
+import { applyRulesToProducts, bulkRuleSummary } from "../../../lib/ruleBulk";
 import { bulkDeleteConfirmMessage, bulkDeleteToast, effectiveSelection, selectAllVisible, toggleSelected } from "../../../lib/bulkSelect";
 import { validateGoodsForm, goodsListLabel, draftsFromTiers, type GoodsPricingMode } from "../../../lib/goodsForm";
 import { draftsToTiers, type TierDraft } from "../../../lib/selectableCount";
@@ -100,6 +101,8 @@ export default function MembershipRulesPage() {
   // 다중 선택 삭제 — 평상시에는 꺼져 있고 "선택"을 눌러야 체크 UI가 나타난다.
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // 예약조건 일괄 설정: 선택한 수강권들(시트가 열려 있는 동안 고정). 기존 "예약조건 추가" 시트를 그대로 재사용한다.
+  const [bulkTargets, setBulkTargets] = useState<Product[] | null>(null);
   // UX 감사(B-8) — 수강권 상품이 100개+(이름이 UUID로 끝나 구분도 안 됨)면 검색/페이징 없이
   // 전부 렌더돼 원하는 걸 찾기 어려웠다. 이름 검색 + 20개씩 "더보기"로 완화.
   // 검색/그룹 필터(2026-10-01): load()가 다시 불러와도 리셋되지 않는 컴포넌트 state — 수정/추가 후에도 유지된다.
@@ -415,7 +418,41 @@ export default function MembershipRulesPage() {
     if (centerId) { try { setExistingClasses(await fetchExistingClassOptions(centerId)); } catch { setExistingClasses([]); } }
   }
 
+  async function openBulkRuleSheet() {
+    const targets = products.filter((p) => selectedIds.includes(p.id));
+    if (targets.length === 0) return;
+    setRPick(""); setRDays([]); setRTime(""); setRTitle("");
+    setBulkTargets(targets);
+  }
+
+  async function handleBulkAddRules() {
+    if (!bulkTargets || bulkTargets.length === 0) return;
+    setBusy(true);
+    try {
+      const result = await applyRulesToProducts(
+        bulkTargets.map((p) => ({ id: p.id, name: p.name, autoBookDays: p.autoBookDays ?? null, existingRules: rulesByProduct[p.id] ?? [] })),
+        { days: rDays.length > 0 ? rDays : [null], startTime: rTime || null, classTitle: rTitle },
+        addRule,
+      );
+      const sum = bulkRuleSummary(result);
+      if (sum.hasFailure) {
+        // 일부 실패: 성공처럼 닫지 않는다 — 시트를 유지하고 실패한 수강권만 남겨 다시 시도할 수 있게 한다
+        setError(sum.message);
+        const failedIds = new Set(result.failed.map((f) => f.id));
+        setBulkTargets(bulkTargets.filter((p) => failedIds.has(p.id)));
+        setSelected(failedIds);
+      } else {
+        setBulkTargets(null);
+        exitSelect();
+        showToast(sum.message);
+      }
+      await load();
+    } catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
   async function handleAddRule() {
+    if (bulkTargets) { await handleBulkAddRules(); return; }
     if (!ruleFor) return;
     setBusy(true);
     try {
@@ -520,6 +557,7 @@ export default function MembershipRulesPage() {
               onEnter={() => setSelecting(true)} onCancel={exitSelect}
               onSelectAll={() => setSelected(selectAllVisible(filtered.map((p) => p.id)))} onClear={() => setSelected(new Set())}
               onDelete={handleBulkDelete}
+              extraAction={{ label: "예약조건 일괄 설정", onClick: openBulkRuleSheet }}
             />
           )}
           {filtered.slice(0, visibleCount).map((p) => {
@@ -913,18 +951,19 @@ export default function MembershipRulesPage() {
       )}
 
       {/* 조건 추가 시트 */}
-      {ruleFor && (
-        <SheetOverlay className="sheet-overlay" onClick={() => setRuleFor(null)}>
+      {(ruleFor || bulkTargets) && (
+        <SheetOverlay className="sheet-overlay" onClick={() => { setRuleFor(null); setBulkTargets(null); }}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-title">{ruleFor.name} 조건 추가</div>
-            {ruleFor.weekdaySelectable && computeSelectableSchedule(rulesByProduct[ruleFor.id] ?? []).days.length === 0 && (
+            <div className="sheet-title">{bulkTargets ? `선택한 ${bulkTargets.length}개 수강권 예약조건 일괄 설정` : `${ruleFor!.name} 조건 추가`}</div>
+            {bulkTargets && <div className="perm-guide" style={{ margin: "0 0 8px" }}>선택한 <b>{bulkTargets.length}개</b> 수강권 모두에 아래 조건이 <b>추가</b>돼요(이미 같은 조건이 있으면 건너뛰고, 요일 고정 수강권은 고정 요일만 적용돼요).</div>}
+            {ruleFor && ruleFor.weekdaySelectable && computeSelectableSchedule(rulesByProduct[ruleFor.id] ?? []).days.length === 0 && (
               <div className="perm-guide is-warning" style={{ margin: "0 0 8px" }}>
                 {WEEKDAY_NEEDS_RULES_MESSAGE} 회원이 고를 요일(과 시간)을 직접 선택해 추가해주세요.
               </div>
             )}
 
             {(() => {
-              const lockDays = ruleFor.autoBookDays ?? [];
+              const lockDays = bulkTargets ? [] : (ruleFor!.autoBookDays ?? []);
               const isWeekdayPass = lockDays.length > 0;
               const pickable = isWeekdayPass
                 ? existingClasses.filter((c) => lockDays.includes(c.dayOfWeek))
@@ -965,11 +1004,11 @@ export default function MembershipRulesPage() {
             })()}
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>
-              요일 {(ruleFor.autoBookDays ?? []).length > 0 ? "(요일반이라 고정)" : "(여러 개 선택 가능, 안 고르면 모든 요일)"}
+              요일 {!bulkTargets && (ruleFor!.autoBookDays ?? []).length > 0 ? "(요일반이라 고정)" : "(여러 개 선택 가능, 안 고르면 모든 요일)"}
             </div>
             <div className="mem-filters" style={{ padding: 0 }}>
-              {(ruleFor.autoBookDays ?? []).length > 0 ? (
-                (ruleFor.autoBookDays ?? []).map((d) => (
+              {!bulkTargets && (ruleFor!.autoBookDays ?? []).length > 0 ? (
+                (ruleFor!.autoBookDays ?? []).map((d) => (
                   <button key={d} className="filter-chip on" disabled>{DAYS[d]}</button>
                 ))
               ) : (
@@ -989,8 +1028,8 @@ export default function MembershipRulesPage() {
             <input aria-label="수업명 포함 조건" className="input-field" placeholder="예: 안무반" value={rTitle} onChange={(e) => setRTitle(e.target.value)} />
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
-              <button className="ghost-btn" onClick={() => setRuleFor(null)}>취소</button>
-              <button className="primary-btn" disabled={busy} onClick={handleAddRule}>추가</button>
+              <button className="ghost-btn" onClick={() => { setRuleFor(null); setBulkTargets(null); }}>취소</button>
+              <button className="primary-btn" disabled={busy} onClick={handleAddRule}>{bulkTargets ? `${bulkTargets.length}개에 추가` : "추가"}</button>
             </div>
           </div>
         </SheetOverlay>
