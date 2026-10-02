@@ -143,11 +143,8 @@ describe("[3] 일괄 시트도 현재 센터 수업 목록을 새로 읽는다",
     const single = p.slice(p.indexOf("async function openRuleSheet"), p.indexOf("async function loadClassOptions"));
     expect(single).toContain("await loadClassOptions();");
   });
-  it("먼저 비우고(실패 시 stale 없음), 읽는 동안 센터가 바뀌면 늦은 결과를 버리고, 센터 변경 시 목록 초기화", () => {
-    const fn = p.slice(p.indexOf("async function loadClassOptions"), p.indexOf("async function openBulkRuleSheet"));
-    expect(fn.indexOf("setExistingClasses([]);")).toBeLessThan(fn.indexOf("await fetchExistingClassOptions(cid)"));
-    expect(fn).toContain("if (centerIdRef.current === cid) setExistingClasses(list);");
-    expect(fn).toContain("catch { setExistingClasses([]); }");
+  it("race 방어는 lib/classOptionsLoader.ts로 위임(동작은 releaseQaRaceAndAutoName.test.ts), 센터 변경 시 목록 초기화", () => {
+    expect(p).toContain("await loadClassOptionsGuarded({");
     expect(p).toContain("useEffect(() => { centerIdRef.current = centerId; setExistingClasses([]); }, [centerId]);");
   });
 });

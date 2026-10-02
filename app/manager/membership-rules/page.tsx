@@ -22,6 +22,7 @@ import {
   type Product, type ScheduleRule, type ProductVisibility,
 } from "../../../lib/passes";
 import { fetchExistingClassOptions, type ExistingClassOption } from "../../../lib/classes";
+import { loadClassOptionsGuarded } from "../../../lib/classOptionsLoader";
 import { fetchGrades, fetchMembers, type Grade, type CenterMember } from "../../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 import ExpiryOptionField, { type ExpiryOptionValue } from "../../components/ExpiryOptionField";
@@ -421,17 +422,9 @@ export default function MembershipRulesPage() {
     await loadClassOptions();
   }
 
-  // 단건/일괄 시트 공용: 시트를 열 때마다 현재 센터의 수업 목록을 새로 읽는다. 먼저 비워서(이전 센터/이전 시트 값 재사용 금지)
-  // 실패해도 stale 목록이 남지 않고, 읽는 동안 센터가 바뀌었으면 늦게 온 결과를 버린다.
+  // 단건/일괄 시트 공용: 시트를 열 때마다 현재 센터의 수업 목록을 새로 읽는다(race 방어는 lib/classOptionsLoader.ts — centerIdRef는 아래 effect에서만 갱신한다).
   async function loadClassOptions() {
-    setExistingClasses([]);
-    const cid = centerId;
-    centerIdRef.current = cid;
-    if (!cid) return;
-    try {
-      const list = await fetchExistingClassOptions(cid);
-      if (centerIdRef.current === cid) setExistingClasses(list);
-    } catch { setExistingClasses([]); }
+    await loadClassOptionsGuarded({ centerId, getCurrent: () => centerIdRef.current, fetchOptions: fetchExistingClassOptions, setOptions: setExistingClasses });
   }
 
   async function openBulkRuleSheet() {

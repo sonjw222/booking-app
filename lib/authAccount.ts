@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 
-export type EnsuredAccount = { id: string; phone: string | null; isSocial: boolean; wasCreated: boolean; name: string | null; profileName?: string | null };
+export type EnsuredAccount = { id: string; phone: string | null; isSocial: boolean; wasCreated: boolean; name: string | null; profileName?: string | null; emailLocalPart?: string | null };
 
 // 소셜 로그인(카카오/네이버/애플/구글)으로 처음 로그인한 사용자는 auth.users 행만 생기고
 // 우리 앱의 accounts/profiles 행은 아무도 만들어주지 않는다 — 이메일 회원가입
@@ -119,6 +119,7 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
   const user = authData.user;
   if (!user) return null;
   const isSocial = isSocialProvider(user);
+  const emailLocalPart = user.email ? user.email.split("@")[0] : null;   // 이름 fallback으로 쓰이는 값 — 자동 생성 이름 판별용(SessionWatcher gate)
   const meta = user.user_metadata ?? {};
   // 애플 최초 인증 이름(consumeAppleFullName 주석 참고)이 있으면 최우선 — user_metadata엔
   // 애초에 안 실리는 값이라 meta.full_name보다 먼저 확인해야 한다. 다른 provider는 이
@@ -140,7 +141,7 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
       await ensureProfileRow(existing.id, existing.name || consumeAppleFullName() || meta.full_name || meta.name || meta.nickname || "회원");
       // 관리자 회원목록의 source of truth는 대표 프로필 이름 — gate 판정에 함께 쓴다(조회 실패면 undefined → accounts.name만 본다).
       const { data: prof } = await supabase.from("profiles").select("name").eq("account_id", existing.id).eq("is_primary", true).is("deleted_at", null).limit(1);
-      return { id: existing.id, phone: existing.phone, isSocial, wasCreated: false, name: existing.name ?? null, profileName: prof && prof.length > 0 ? (prof[0].name as string | null) : undefined };
+      return { id: existing.id, phone: existing.phone, isSocial, wasCreated: false, name: existing.name ?? null, profileName: prof && prof.length > 0 ? (prof[0].name as string | null) : undefined, emailLocalPart };
     }
   }
 
@@ -168,7 +169,7 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
   }
 
   await ensureProfileRow(account.id, name);
-  return { id: account.id, phone: account.phone, isSocial, wasCreated: true, name, profileName: name };
+  return { id: account.id, phone: account.phone, isSocial, wasCreated: true, name, profileName: name, emailLocalPart };
 }
 
 // 소셜 가입 완료 모달(SessionWatcher)에서 호출 — phone은 필수, address는 선택(도로명주소+
