@@ -23,6 +23,7 @@
     "qa:production:direct-payment": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/direct-payment-issue.qa.test.ts",
     "qa:production:coupon": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/coupon-order-issue.qa.test.ts",
     "qa:production:points": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/order-points.qa.test.ts",
+    "qa:production:pg-refund-lock": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/pg-refund-lock.qa.test.ts",
     "qa:production:membership-expiry": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/membership-expiry.qa.test.ts"
   },
   "dependencies": {

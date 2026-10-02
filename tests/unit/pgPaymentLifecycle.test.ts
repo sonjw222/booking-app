@@ -376,6 +376,129 @@ describe("[1] ALREADY_PROCESSED_PAYMENT 복구 — 토스 실제 상태 기준 �
   });
 });
 
+describe("[1] DB cancelled + 토스 DONE 복구(취소/승인 경합)", () => {
+  const input = { token: "good", paymentKey: "pay_abcdef123456", orderId: "o1", amount: 35000 };
+  const cancelled = { ...baseOrder, status: "cancelled" };
+  const doneData = { status: "DONE", orderId: "o1", totalAmount: 35000 };
+
+  it("DB cancelled + 토스 DONE + 주문/금액 일치 → 토스 승인 취소 정확히 1회(멱등키), 새 승인/DB 확정은 절대 없음", async () => {
+    const d = deps({ orderContext: vi.fn(async () => cancelled), tossGet: vi.fn(async () => ({ ok: true as const, data: doneData })) });
+    const r = await handleConfirm(input, d);
+    expect(d.calls.tossCancel).toHaveBeenCalledTimes(1);
+    expect(d.calls.tossCancel).toHaveBeenCalledWith("pay_abcdef123456", expect.objectContaining({ idempotencyKey: "compensate:o1:pay_abcdef123456" }));
+    expect(d.calls.dbConfirm).not.toHaveBeenCalled();
+    expect((d as any).tossConfirm).not.toHaveBeenCalled();
+    expect(r.body).toMatchObject({ code: "payment_compensated" });
+  });
+  it("orderId 불일치 → 토스 취소 0회(남의 결제를 취소하지 않음) + payment_mismatch + 운영 로그", async () => {
+    const d = deps({ orderContext: vi.fn(async () => cancelled), tossGet: vi.fn(async () => ({ ok: true as const, data: { ...doneData, orderId: "other" } })) });
+    const r = await handleConfirm(input, d);
+    expect(r.body).toMatchObject({ code: "payment_mismatch" });
+    expect(d.calls.tossCancel).not.toHaveBeenCalled();
+    expect(d.calls.dbConfirm).not.toHaveBeenCalled();
+    expect(d.calls.log).toHaveBeenCalledWith("error", "PG_RECOVER_MISMATCH", expect.anything());
+  });
+  it("금액 불일치 → 토스 취소 0회", async () => {
+    const d = deps({ orderContext: vi.fn(async () => cancelled), tossGet: vi.fn(async () => ({ ok: true as const, data: { ...doneData, totalAmount: 1000 } })) });
+    expect((await handleConfirm(input, d)).body).toMatchObject({ code: "payment_mismatch" });
+    expect(d.calls.tossCancel).not.toHaveBeenCalled();
+  });
+  it("토스 CANCELED → 멱등 payment_canceled, 새 토스 cancel/confirm과 DB 호출 없음", async () => {
+    const d = deps({ orderContext: vi.fn(async () => cancelled), tossGet: vi.fn(async () => ({ ok: true as const, data: { status: "CANCELED" } })) });
+    const r = await handleConfirm(input, d);
+    expect(r.body).toMatchObject({ code: "payment_canceled", already: true });
+    expect(d.calls.tossCancel).not.toHaveBeenCalled();
+    expect((d as any).tossConfirm).not.toHaveBeenCalled();
+    expect(d.calls.dbConfirm).not.toHaveBeenCalled();
+    expect(d.calls.dbCancelOrder).not.toHaveBeenCalled();
+  });
+  it("토스 조회 실패/기타 상태 → state_unknown, 금전·DB 변경 없음", async () => {
+    for (const get of [
+      vi.fn(async () => ({ ok: false as const, status: 0, code: "NETWORK_ERROR", message: "timeout" })),
+      vi.fn(async () => ({ ok: true as const, data: { status: "IN_PROGRESS" } })),
+    ]) {
+      const d = deps({ orderContext: vi.fn(async () => cancelled), tossGet: get });
+      expect((await handleConfirm(input, d)).body).toMatchObject({ code: "state_unknown" });
+      expect(d.calls.tossCancel).not.toHaveBeenCalled();
+      expect(d.calls.dbConfirm).not.toHaveBeenCalled();
+      expect(d.calls.dbCancelOrder).not.toHaveBeenCalled();
+    }
+  });
+  it("cancelled 경로에서도 로그인/소유권/금액 검증이 먼저 적용된다(401/404/400 — 토스 조회 전)", async () => {
+    let d = deps({ orderContext: vi.fn(async () => cancelled) });
+    expect((await handleConfirm({ ...input, token: null }, d)).status).toBe(401);
+    expect((await handleConfirm({ ...input, amount: 1 }, d)).status).toBe(400);
+    d = deps({ orderContext: vi.fn(async () => null) });
+    expect((await handleConfirm(input, d)).status).toBe(404);
+    expect(d.calls.tossGet).not.toHaveBeenCalled();
+  });
+  it("done은 즉시 성공, pending은 기존 승인 흐름(토스 confirm 호출)", async () => {
+    let d = deps({ orderContext: vi.fn(async () => ({ ...baseOrder, status: "done" })) });
+    expect((await handleConfirm(input, d)).body).toMatchObject({ already_done: true });
+    expect(d.calls.tossGet).not.toHaveBeenCalled();
+    d = deps();
+    await handleConfirm(input, d);
+    expect(d.calls.tossConfirm).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("[2][4] 예약 트리거 직렬화 / 활성 예약 포함 미사용 판정 — SQL 계약", () => {
+  const guard = sql.slice(sql.indexOf("create or replace function reservations_guard_pg_refund_lock"), sql.indexOf("revoke all on function reservations_guard_pg_refund_lock"));
+  it("reservations 트리거: BEFORE INSERT OR UPDATE OF status, membership_id (취소/복구 경로는 별도 처리)", () => {
+    expect(sql).toContain("before insert or update of status, membership_id on reservations");
+  });
+  it("수강권 행을 FOR UPDATE로 잠근 뒤 표시를 확인한다(pg_refund_begin과 같은 잠금) — 일반 SELECT/exists 확인이 아니다", () => {
+    expect(guard).toContain("select pg_refund_started_at into v_started from memberships where id = new.membership_id for update;");
+    expect(guard).not.toMatch(/exists\s*\(\s*select 1 from memberships/);
+    const b = sql.slice(sql.indexOf("create or replace function pg_refund_begin"), sql.indexOf("create or replace function pg_refund_release"));
+    expect(b).toContain("for update;");   // begin도 같은 FOR UPDATE
+    expect(guard.indexOf("for update;")).toBeLessThan(guard.indexOf("if v_started is not null then"));
+  });
+  it("활성 상태(confirmed/waitlisted/attended/no_show)로 들어가거나 수강권이 바뀌는 경우만 검사 — cancelled로 가는 경로와 변화 없는 UPDATE는 통과", () => {
+    expect(guard).toContain("new.status not in ('confirmed', 'waitlisted', 'attended', 'no_show')");
+    expect(guard).toContain("new.status is not distinct from old.status and new.membership_id is not distinct from old.membership_id");
+    expect(guard.indexOf("new.status not in")).toBeLessThan(guard.indexOf("for update;"));   // cancelled는 잠금도 잡지 않고 즉시 통과
+  });
+  it("대기→확정 승격 / 취소 복구 / 잠긴 수강권으로의 변경이 같은 검사에 걸린다(status 또는 membership_id 변경)", () => {
+    expect(guard).toContain("tg_op = 'UPDATE'");
+    expect(guard).toContain("환불 처리 중인 수강권이라 지금은 예약에 사용할 수 없어요");
+  });
+  it("트리거 함수 권한: PUBLIC/anon/authenticated 실행 차단, SECURITY DEFINER + search_path", () => {
+    expect(sql).toContain("revoke all on function reservations_guard_pg_refund_lock() from public, anon, authenticated;");
+    expect(guard).toContain("security definer");
+    expect(guard).toContain("set search_path = public");
+  });
+  it("미사용 판정(_refund_block_reason)이 횟수 소비 + 현재 활성 예약을 함께 본다(무제한/대기 포함), cancelled 제외, skip은 시간 조건에만", () => {
+    const h = sql.slice(sql.indexOf("create or replace function _refund_block_reason"), sql.indexOf("revoke all on function _refund_block_reason"));
+    expect(h).toContain("from reservations r");
+    expect(h).toContain("r.membership_id = p_mem.id and r.status in ('confirmed', 'waitlisted', 'attended', 'no_show')");
+    expect(h).not.toContain("'cancelled'");   // 취소된 예약은 환불을 막지 않는다
+    expect(h).toContain("v_hours > 24 and not coalesce(p_skip_time, false)");
+    const after = h.slice(h.indexOf("p_mem.remaining_count is distinct"));
+    expect(after).not.toContain("p_skip_time");   // 횟수/예약 검사는 skip과 무관
+    expect(h).toContain("stable");
+  });
+  it("begin / core / context가 모두 같은 _refund_block_reason을 쓴다(source of truth 하나)", () => {
+    expect((sql.match(/_refund_block_reason\(v_mem/g) ?? []).length).toBeGreaterThanOrEqual(3);
+  });
+  it("lock 순서: begin/core는 수강권 행만 잠그고 예약/수업 행을 잠그지 않는다(역방향 대기 없음) — 예약 RPC 본문은 수정하지 않는다", () => {
+    const begin = sql.slice(sql.indexOf("create or replace function pg_refund_begin"), sql.indexOf("create or replace function pg_refund_release"));
+    expect(begin).not.toMatch(/from (reservations|classes)[^;]*for update/);
+    expect(sql).not.toMatch(/create or replace function (public\.)?(cancel_reservation|reserve_class|reserve_with_membership|manager_set_attendance)\(/i);
+  });
+  it("적용 후 검증 SQL: 예약 트리거 이벤트/잠금/미사용 판정/권한/정체 표시", () => {
+    const raw = read("fix_pg_payment_lifecycle.sql");
+    for (const x of ["reservation_guard_event_must_be_true", "reservation_guard_locks_membership_must_be_true", "unused_check_includes_reservations_must_be_true", "reservation_guard_auth_must_be_false", "block_reason_auth_must_be_false", "stuck_refund_locks_should_be_0"]) expect(raw).toContain(x);
+  });
+  it("동시성 Production QA 후보는 별도 명령으로만 존재하고 기본 테스트에 섞이지 않는다(로컬 Postgres 없음 — 순차+병렬 불변식)", () => {
+    const scripts = JSON.parse(read("package.json")).scripts as Record<string, string>;
+    expect(scripts["qa:production:pg-refund-lock"]).toBe("vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/pg-refund-lock.qa.test.ts");
+    for (const k of ["test", "test:integration"]) expect(scripts[k] ?? "").not.toMatch(/qa/);
+    const sc = read("tests/qa/scenarios/pg-refund-lock.qa.test.ts");
+    for (const x of ["pg_refund_begin", "환불 처리 중", "waitlisted", "무제한", "locked && active", "cleanupFixtures"]) expect(sc).toContain(x);
+  });
+});
+
 describe("[2] 보상 취소 후 DB 주문 정리 실패", () => {
   const input = { token: "good", paymentKey: "pay_abcdef123456", orderId: "o1", amount: 35000 };
   const dbFail = { data: null, error: { message: "P0001: 포인트 사용 내역이 확인되지 않아요" } };
@@ -522,8 +645,9 @@ describe("[3] 환불 진행 중 사용 차단 — SQL 계약", () => {
   });
   it("새 reservations INSERT도 표시된 수강권으로는 거부(횟수 차감이 없는 무제한/차감 없는 예약 포함)", () => {
     const r = sql.slice(sql.indexOf("create or replace function reservations_guard_pg_refund_lock"), sql.indexOf("drop trigger if exists reservations_guard_pg_refund_lock"));
-    expect(r).toContain("m.pg_refund_started_at is not null");
-    expect(sql).toContain("before insert on reservations");
+    expect(r).toContain("select pg_refund_started_at into v_started from memberships where id = new.membership_id for update;");
+    expect(r).toContain("if v_started is not null then");
+    expect(sql).toContain("before insert or update of status, membership_id on reservations");
   });
   it("begin은 행 잠금(FOR UPDATE) 아래에서 조건을 확인하고 표시를 건다 — 조건 확인과 표시 사이에 다른 트랜잭션이 끼어들 수 없다", () => {
     const b = sql.slice(sql.indexOf("create or replace function pg_refund_begin"), sql.indexOf("create or replace function pg_refund_release"));
@@ -690,7 +814,8 @@ describe("SQL 계약 — fix_pg_payment_lifecycle.sql", () => {
 describe("Production QA / 기본 테스트 격리", () => {
   it("이번 배치는 Production QA 스크립트를 새로 만들지 않고, 기본 test 계열에 qa가 섞이지 않는다", () => {
     const scripts = JSON.parse(read("package.json")).scripts as Record<string, string>;
-    expect(Object.keys(scripts).filter((k) => /pg|toss|refund/i.test(k))).toEqual([]);
+    // Production QA 후보(pg-refund-lock)는 실행하지 않는 별도 명령으로만 존재한다
+    expect(Object.keys(scripts).filter((k) => /pg|toss|refund/i.test(k))).toEqual(["qa:production:pg-refund-lock"]);
     for (const k of ["test", "test:integration"]) expect(scripts[k] ?? "").not.toMatch(/qa/);
   });
 });

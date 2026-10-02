@@ -59,7 +59,12 @@ export async function handleConfirm(input: { token: string | null; paymentKey?: 
   if (ctx.provider !== "toss") return { status: 400, body: { error: "토스 결제 주문이 아니에요" } };
   if (ctx.amount !== amount) return { status: 400, body: { error: "결제 금액이 주문 금액과 일치하지 않아요" } };
   if (ctx.status === "done") return { status: 200, body: { ok: true, already_done: true } };
-  if (ctx.status !== "pending") return { status: 409, body: { error: ctx.status === "cancelled" ? "취소된 주문은 결제할 수 없어요" : "결제를 진행할 수 없는 주문 상태예요" } };
+  if (ctx.status === "cancelled") {
+    // 취소된 주문은 새로 승인하지 않는다(토스 confirm 호출 없음). 다만 취소 요청과 승인이 경합해 토스 승인만 남았을 수 있으므로
+    // 전달된 paymentKey의 실제 토스 상태를 "조회만" 해서 복구한다(dbConfirm으로 취소된 주문을 다시 발급하는 일은 없다).
+    return recoverCancelledOrder(d, { orderId, paymentKey, uid, ctx });
+  }
+  if (ctx.status !== "pending") return { status: 409, body: { error: "결제를 진행할 수 없는 주문 상태예요" } };
   if (!(await d.gateAllows(orderId))) return { status: 403, body: { error: "온라인 결제는 아직 사용할 수 없어요" } };
 
   // 1) 토스 승인(돈이 움직이는 시점). 금액은 DB 주문 금액.
@@ -150,6 +155,27 @@ async function recoverProcessedPayment(d: LifecycleDeps, p: { orderId: string; p
     return { status: 409, body: { error: "취소된 결제예요", code: "payment_canceled" } };
   }
   return unknown(`toss status ${String(t.status)}`);   // 승인 미완료/만료 등 — 새 승인·취소를 임의로 하지 않는다
+}
+
+// DB 주문은 cancelled인데 토스 결제가 승인(DONE)으로 남은 경우의 복구 — 토스 조회 결과가 이 주문/금액과 정확히 일치할 때만 승인을 취소한다.
+async function recoverCancelledOrder(d: LifecycleDeps, p: { orderId: string; paymentKey: string; uid: string; ctx: OrderCtx }): Promise<Reply> {
+  const unknown = (reason: string): Reply => {
+    d.log("error", "PG_CONFIRM_STATE_UNKNOWN", { orderId: p.orderId, paymentKey: maskKey(p.paymentKey), reason });
+    return { status: 409, body: { error: "결제 상태를 확인하지 못했어요. 잠시 후 구매내역을 확인하거나 센터에 문의해주세요", code: "state_unknown" } };
+  };
+  const look = await d.tossGet(p.paymentKey);
+  if (!look.ok) return unknown(`toss lookup failed: ${look.message}`);
+  const t = look.data ?? {};
+  if (t.status === "DONE") {
+    if (t.orderId !== p.orderId || t.totalAmount !== p.ctx.amount) {
+      // 다른 주문/금액의 결제일 수 있다 — 이 paymentKey를 절대 취소하지 않는다.
+      d.log("error", "PG_RECOVER_MISMATCH", { orderId: p.orderId, paymentKey: maskKey(p.paymentKey), tossOrderMatches: t.orderId === p.orderId, tossAmountMatches: t.totalAmount === p.ctx.amount, dbStatus: "cancelled" });
+      return { status: 409, body: { error: "결제 정보가 주문과 일치하지 않아 처리할 수 없어요. 센터에 문의해주세요", code: "payment_mismatch" } };
+    }
+    return compensate(d, { orderId: p.orderId, paymentKey: p.paymentKey, cause: "취소된 주문의 결제가 승인되어 있어요", uid: p.uid });
+  }
+  if (t.status === "CANCELED") return { status: 409, body: { error: "취소된 결제예요", code: "payment_canceled", already: true } };
+  return unknown(`toss status ${String(t.status)}`);
 }
 
 // 주문을 cancelled로(포인트 복원은 트리거). 일시 실패를 고려해 최대 1회만 재시도.

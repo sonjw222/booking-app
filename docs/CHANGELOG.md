@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-10-02 — PG 결제 동시성 보완(SQL 파일 갱신만, 미실행 / Toss 실호출 없음)
+- confirm: DB 주문이 cancelled인데 토스가 DONE으로 남은 경우(취소·승인 경합) — 토스 confirm을 다시 호출하지 않고 조회만 해서, 주문/금액이 정확히 일치할 때만 승인을 취소한다(불일치는 payment_mismatch, 조회 실패는 state_unknown). 취소된 주문을 dbConfirm으로 되살리지 않는다.
+- reservations 트리거를 BEFORE INSERT OR UPDATE OF status, membership_id로 확장하고 수강권 행을 FOR UPDATE로 잠근 뒤 환불 표시를 확인(pg_refund_begin과 같은 잠금으로 직렬화). 대기→확정 승격/취소 복구/잠긴 수강권으로의 변경도 차단, cancelled로 가는 경로는 허용.
+- 셀프 환불의 "미사용" 판정(_refund_block_reason)이 횟수 소비 + 현재 활성 예약(confirmed/waitlisted/attended/no_show)을 함께 본다(무제한권/대기 포함, 취소된 예약은 제외). direct/manual 환불에도 동일 적용.
+- 동시성 Production QA 후보 `qa:production:pg-refund-lock`(실행 안 함).
+
 ## 2026-10-02 — PG 결제 라이프사이클 정합성 보완(SQL 파일 갱신만, 미실행 / Toss 실호출 없음)
 - confirm: 토스가 ALREADY_PROCESSED/ALREADY_CANCELED를 돌려주면 토스 실제 상태를 조회해 DB를 수렴시킨다(DONE+주문/금액 일치 → DB 확정, CANCELED → 주문 cancelled + 포인트 복원, 그 외/조회 실패 → state_unknown + 로그, 임의 승인·취소 없음).
 - 보상 취소 후 DB 주문 정리 실패는 최대 1회 재시도하고, 그래도 실패하면 `payment_compensated_db_cleanup_failed` + `PG_COMPENSATION_DB_CLEANUP_FAILED` 로그로 구분한다.

@@ -22,7 +22,11 @@
 --        · memberships.remaining_count 감소(모든 예약/차감 경로가 이 UPDATE를 거친다: reserve_class/reserve_with_membership/reserve_with_goods/
 --          manager_book_member/admin_assign_reservation/_auto_book_membership_core/manager_set_attendance 등)와
 --        · 그 수강권을 쓰는 새 reservations INSERT 를 DB 트리거가 거부한다(예약 RPC 본문은 수정하지 않는다 — 라이브 정의 보존).
---      표시는 서버(SECURITY DEFINER 함수의 GUC)만 바꿀 수 있다. 환불 core의 force는 24시간 조건만 건너뛰고 "이미 사용" 조건은 항상 확인한다.
+--      표시는 서버(SECURITY DEFINER 함수의 GUC)만 바꿀 수 있다.
+--      reservations 트리거는 BEFORE INSERT OR UPDATE OF status, membership_id 로 pg_refund_begin과 같은 수강권 행 잠금(FOR UPDATE)을 잡고 표시를 확인한다
+--      (예약 생성 / 대기→확정 승격 / 취소 복구 / 잠긴 수강권으로의 변경 차단, cancelled로 가는 경로는 허용).
+--      "미사용" 판정(_refund_block_reason)은 횟수 소비 + 현재 활성 예약(confirmed/waitlisted/attended/no_show)을 함께 본다(무제한권/대기 포함, cancelled 예약은 제외).
+--      ※ 이 판정은 direct/manual 셀프 환불에도 같이 적용된다(무제한권·대기 예약이 있던 수강권이 예전에는 환불 가능으로 잘못 판정됐다). 환불 core의 force는 24시간 조건만 건너뛰고 "이미 사용" 조건은 항상 확인한다.
 --
 -- 변경하지 않는 것: 회계 정의(payments), 쿠폰/포인트 복원 로직, 환불 조건(24시간/미사용), PG 승인/취소 API(서버 라우트), billing.
 -- 이 세션에서는 production에 실행하지 않았습니다.
@@ -131,16 +135,30 @@ create trigger memberships_guard_pg_refund
     before update of remaining_count, pg_refund_started_at on memberships
     for each row execute function memberships_guard_pg_refund();
 
+-- 환불 진행 중인 수강권을 쓰는 예약 생성/활성화를 막는다. pg_refund_begin과 "같은 행 잠금(FOR UPDATE)"으로 직렬화한다:
+--   예약이 먼저 수강권 행을 잡았으면 begin은 그 예약 트랜잭션이 끝난 뒤 최신 상태를 보고 판단(blocked),
+--   begin이 먼저 잡았으면 이 트리거가 begin 종료까지 기다린 뒤 표시를 보고 거부한다(횟수 차감이 없는 무제한권도 동일).
+-- 잠금 순서: 기존 예약 RPC가 이미 "수업(classes) → 수강권(memberships)" 순서로 잠그고, 이 트리거도 수강권 행만 추가로 잠근다(같은 행을 같은 트랜잭션이 다시 잠그는 것은 안전).
+--   begin/refund core는 수강권 행만 잠그고 예약/수업 행은 잠그지 않아(예약은 일반 SELECT) 역방향 대기가 생기지 않는다.
+-- 대상: INSERT, 그리고 status/membership_id UPDATE 중 "활성 상태(confirmed/waitlisted/attended/no_show)로 들어가거나 수강권이 바뀌는" 경우.
+--   cancelled로 가는 취소/복구 경로와 변화 없는 UPDATE는 막지 않는다. (대기 → 확정 승격, 취소된 예약의 복구, 잠긴 수강권으로의 변경을 차단)
 create or replace function reservations_guard_pg_refund_lock()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+    v_started timestamptz;
 begin
-    if new.membership_id is not null and exists (
-        select 1 from memberships m where m.id = new.membership_id and m.pg_refund_started_at is not null
-    ) then
+    if new.membership_id is null or new.status not in ('confirmed', 'waitlisted', 'attended', 'no_show') then
+        return new;
+    end if;
+    if tg_op = 'UPDATE' and new.status is not distinct from old.status and new.membership_id is not distinct from old.membership_id then
+        return new;
+    end if;
+    select pg_refund_started_at into v_started from memberships where id = new.membership_id for update;
+    if v_started is not null then
         raise exception '환불 처리 중인 수강권이라 지금은 예약에 사용할 수 없어요. 잠시 후 다시 시도해주세요';
     end if;
     return new;
@@ -150,7 +168,7 @@ revoke all on function reservations_guard_pg_refund_lock() from public, anon, au
 
 drop trigger if exists reservations_guard_pg_refund_lock on reservations;
 create trigger reservations_guard_pg_refund_lock
-    before insert on reservations
+    before insert or update of status, membership_id on reservations
     for each row execute function reservations_guard_pg_refund_lock();
 
 -- 4) 환불 공통 로직 + 서버 전용 진입점
@@ -188,9 +206,19 @@ begin
         return '결제 후 24시간이 지나 셀프 환불이 어려워요. 센터에 문의해주세요.';
     end if;
     -- 사용 여부는 p_skip_time과 무관하게 항상 확인한다
+    -- (1) 횟수 소비: 횟수권의 남은 횟수가 총 횟수와 다르면 사용한 것
     if not v_unlimited and p_mem.total_count is not null
        and p_mem.remaining_count is distinct from p_mem.total_count then
         return '이미 사용한 수강권은 셀프 환불이 어려워요. 센터에 문의해주세요.';
+    end if;
+    -- (2) 현재 활성 예약/사용 기록: 확정/대기/출석/결석 예약이 이 수강권에 연결돼 있으면 미사용이 아니다.
+    --     대기(waitlisted)는 확정 전이라 횟수를 차감하지 않고, 무제한권은 횟수 차감 자체가 없으므로 예약 상태로 판정한다.
+    --     취소(cancelled)된 예약은 횟수가 복구된 기존 동작과 같이 미사용으로 본다(예약 이력이 한 번 있었다고 영구 차단하지 않는다).
+    if exists (
+        select 1 from reservations r
+         where r.membership_id = p_mem.id and r.status in ('confirmed', 'waitlisted', 'attended', 'no_show')
+    ) then
+        return '예약 중이거나 이용한 수업이 있는 수강권은 셀프 환불이 어려워요. 센터에 문의해주세요.';
     end if;
     return null;
 end;
@@ -498,6 +526,11 @@ select
     (select pg_get_functiondef('refund_membership(uuid)'::regprocedure) like '%_refund_membership_core%') as refund_uses_core_must_be_true,
     (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'memberships' and column_name = 'pg_refund_started_at') as refund_lock_column_must_be_1,
     (select count(*) from pg_trigger where tgname in ('memberships_guard_pg_refund', 'reservations_guard_pg_refund_lock') and not tgisinternal) as refund_lock_triggers_must_be_2,
+    (select pg_get_triggerdef(oid) like '%BEFORE INSERT OR UPDATE OF status, membership_id ON public.reservations%' from pg_trigger where tgname = 'reservations_guard_pg_refund_lock' and not tgisinternal) as reservation_guard_event_must_be_true,
+    (select pg_get_functiondef('reservations_guard_pg_refund_lock()'::regprocedure) like '%for update%') as reservation_guard_locks_membership_must_be_true,
+    (select pg_get_functiondef('_refund_block_reason(memberships,boolean)'::regprocedure) like '%from reservations r%') as unused_check_includes_reservations_must_be_true,
+    has_function_privilege('authenticated', 'reservations_guard_pg_refund_lock()', 'execute') as reservation_guard_auth_must_be_false,
+    has_function_privilege('authenticated', '_refund_block_reason(memberships,boolean)', 'execute') as block_reason_auth_must_be_false,
     has_function_privilege('authenticated', 'pg_refund_begin(uuid,uuid)', 'execute') as refund_begin_auth_must_be_false,
     has_function_privilege('authenticated', 'pg_refund_release(uuid,uuid)', 'execute') as refund_release_auth_must_be_false,
     has_function_privilege('service_role', 'pg_refund_begin(uuid,uuid)', 'execute') as refund_begin_service_must_be_true,
