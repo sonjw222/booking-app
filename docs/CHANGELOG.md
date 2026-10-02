@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-02 — 카카오페이/토스페이 결제수단 사용자 UI 비노출(구현 보존, SQL/native 변경 없음)
+- `lib/payMethods.ts`의 `HIDDEN_PAY_METHOD_IDS`로 checkout/cart 공통으로 kakao/toss를 숨긴다(센터 설정·stale 선택값과 무관). 다시 노출하려면 배열에서 id만 제거. Toss 연동/서버 lifecycle은 그대로.
+
 ## 2026-10-02 — success 콜백 일시 오류 bounded retry(코드만)
 - 외부 Safari의 return/confirm 호출이 네트워크 오류(status 0)/5xx로 실패하면 최대 2회 재시도(총 3회). 400/401/403/409는 재시도 없음. 서버 core는 멱등이라 동일 요청 재전송이 안전.
 
