@@ -25,6 +25,7 @@
 --      표시는 서버(SECURITY DEFINER 함수의 GUC)만 바꿀 수 있다.
 --      reservations 트리거는 BEFORE INSERT OR UPDATE OF status, membership_id 로 pg_refund_begin과 같은 수강권 행 잠금(FOR UPDATE)을 잡고 표시를 확인한다
 --      (예약 생성 / 대기→확정 승격 / 취소 복구 / 잠긴 수강권으로의 변경 차단, cancelled로 가는 경로는 허용).
+--      같은 잠금 조회에서 memberships.status도 읽어 active가 아닌 수강권(refunded/paused/expired 등)은 표시 해제 직후에도 새 예약에 연결할 수 없다.
 --      "미사용" 판정(_refund_block_reason)은 횟수 소비 + 현재 활성 예약(confirmed/waitlisted/attended/no_show)을 함께 본다(무제한권/대기 포함, cancelled 예약은 제외).
 --      ※ 이 판정은 direct/manual 셀프 환불에도 같이 적용된다(무제한권·대기 예약이 있던 수강권이 예전에는 환불 가능으로 잘못 판정됐다). 환불 core의 force는 24시간 조건만 건너뛰고 "이미 사용" 조건은 항상 확인한다.
 --
@@ -150,6 +151,7 @@ set search_path = public
 as $$
 declare
     v_started timestamptz;
+    v_status  text;
 begin
     if new.membership_id is null or new.status not in ('confirmed', 'waitlisted', 'attended', 'no_show') then
         return new;
@@ -157,7 +159,15 @@ begin
     if tg_op = 'UPDATE' and new.status is not distinct from old.status and new.membership_id is not distinct from old.membership_id then
         return new;
     end if;
-    select pg_refund_started_at into v_started from memberships where id = new.membership_id for update;
+    -- 같은 FOR UPDATE 조회에서 status와 환불 표시를 함께 읽는다: 환불 core는 "status='refunded' + 표시 해제"를 한 UPDATE로 처리하므로,
+    -- 그 잠금을 기다리다 깨어난 예약은 표시가 null이어도 status로 차단된다(환불 완료 직후 race). direct/manual 환불과 예약 사이에도 같은 방어선이다.
+    select status, pg_refund_started_at into v_status, v_started from memberships where id = new.membership_id for update;
+    if not found then
+        raise exception '사용할 수 없는 수강권이에요';
+    end if;
+    if v_status is distinct from 'active' then
+        raise exception '사용할 수 없는 수강권이에요';
+    end if;
     if v_started is not null then
         raise exception '환불 처리 중인 수강권이라 지금은 예약에 사용할 수 없어요. 잠시 후 다시 시도해주세요';
     end if;

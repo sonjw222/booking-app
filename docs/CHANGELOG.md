@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-02 — 환불 완료 직후 예약 race 차단(SQL 파일 갱신만, 미실행)
+- reservations 트리거가 같은 FOR UPDATE 조회에서 memberships.status와 pg_refund_started_at을 함께 읽는다. 환불 core가 `status='refunded'` + 표시 해제를 한 UPDATE로 처리하므로, 잠금을 기다리다 깨어난 예약도 active가 아닌 수강권(refunded/paused/expired 등)이면 "사용할 수 없는 수강권이에요"로 거부된다(direct/manual 환불 포함).
+
 ## 2026-10-02 — PG 결제 동시성 보완(SQL 파일 갱신만, 미실행 / Toss 실호출 없음)
 - confirm: DB 주문이 cancelled인데 토스가 DONE으로 남은 경우(취소·승인 경합) — 토스 confirm을 다시 호출하지 않고 조회만 해서, 주문/금액이 정확히 일치할 때만 승인을 취소한다(불일치는 payment_mismatch, 조회 실패는 state_unknown). 취소된 주문을 dbConfirm으로 되살리지 않는다.
 - reservations 트리거를 BEFORE INSERT OR UPDATE OF status, membership_id로 확장하고 수강권 행을 FOR UPDATE로 잠근 뒤 환불 표시를 확인(pg_refund_begin과 같은 잠금으로 직렬화). 대기→확정 승격/취소 복구/잠긴 수강권으로의 변경도 차단, cancelled로 가는 경로는 허용.

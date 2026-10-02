@@ -448,11 +448,47 @@ describe("[2][4] 예약 트리거 직렬화 / 활성 예약 포함 미사용 판
     expect(sql).toContain("before insert or update of status, membership_id on reservations");
   });
   it("수강권 행을 FOR UPDATE로 잠근 뒤 표시를 확인한다(pg_refund_begin과 같은 잠금) — 일반 SELECT/exists 확인이 아니다", () => {
-    expect(guard).toContain("select pg_refund_started_at into v_started from memberships where id = new.membership_id for update;");
+    expect(guard).toContain("select status, pg_refund_started_at into v_status, v_started from memberships where id = new.membership_id for update;");
     expect(guard).not.toMatch(/exists\s*\(\s*select 1 from memberships/);
     const b = sql.slice(sql.indexOf("create or replace function pg_refund_begin"), sql.indexOf("create or replace function pg_refund_release"));
     expect(b).toContain("for update;");   // begin도 같은 FOR UPDATE
     expect(guard.indexOf("for update;")).toBeLessThan(guard.indexOf("if v_started is not null then"));
+  });
+  it("같은 FOR UPDATE 조회에서 status와 pg_refund_started_at을 함께 읽고, active + 표시 없음일 때만 통과한다(환불 완료 직후 race 차단)", () => {
+    expect(guard).toContain("select status, pg_refund_started_at into v_status, v_started from memberships where id = new.membership_id for update;");
+    expect(guard).toContain("if v_status is distinct from 'active' then");
+    expect(guard).toContain("사용할 수 없는 수강권이에요");
+    expect(guard).toContain("if v_started is not null then");
+    // 수강권이 없으면 거부, 순서: 잠금 조회 → 존재 → active → 표시
+    const i = [guard.indexOf("for update;"), guard.indexOf("if not found then"), guard.indexOf("v_status is distinct from 'active'"), guard.indexOf("if v_started is not null then")];
+    expect([...i].sort((x, y) => x - y)).toEqual(i);
+    expect(i.every((x) => x > -1)).toBe(true);
+  });
+  it("환불 core가 status='refunded'와 표시 해제를 같은 UPDATE로 처리하므로 대기하던 예약은 표시가 null이어도 status로 차단된다", () => {
+    expect(sql).toContain("set status = 'refunded', remaining_count = 0, pg_refund_started_at = null");
+  });
+  it("판정 모델(트리거 로직과 동일): active+표시 없음 허용 / active+표시 거부 / refunded·paused·expired 거부 / cancelled·무변경 UPDATE·membership null은 통과", () => {
+    // SQL 분기를 그대로 옮긴 순수 모델 — 소스 계약 테스트가 SQL과 모델의 일치를 보증한다.
+    const ACTIVE = ["confirmed", "waitlisted", "attended", "no_show"];
+    type M = { status: string; marker: boolean } | null;
+    const guardAllows = (op: "INSERT" | "UPDATE", n: { status: string; membership: M | undefined }, o?: { status: string; membershipSame: boolean }) => {
+      if (n.membership === undefined || !ACTIVE.includes(n.status)) return true;   // membership_id null 또는 비활성 상태로 가는 변경(취소 포함)
+      if (op === "UPDATE" && o && o.status === n.status && o.membershipSame) return true;
+      if (n.membership === null) return false;
+      if (n.membership.status !== "active") return false;
+      return !n.membership.marker;
+    };
+    expect(guardAllows("INSERT", { status: "confirmed", membership: { status: "active", marker: false } })).toBe(true);
+    expect(guardAllows("INSERT", { status: "confirmed", membership: { status: "active", marker: true } })).toBe(false);
+    expect(guardAllows("INSERT", { status: "waitlisted", membership: { status: "refunded", marker: false } })).toBe(false);
+    for (const st of ["paused", "expired", "transferred"]) expect(guardAllows("INSERT", { status: "confirmed", membership: { status: st, marker: false } })).toBe(false);
+    expect(guardAllows("UPDATE", { status: "cancelled", membership: { status: "refunded", marker: false } }, { status: "confirmed", membershipSame: true })).toBe(true);
+    expect(guardAllows("UPDATE", { status: "confirmed", membership: { status: "refunded", marker: false } }, { status: "confirmed", membershipSame: true })).toBe(true);
+    expect(guardAllows("UPDATE", { status: "confirmed", membership: { status: "refunded", marker: false } }, { status: "waitlisted", membershipSame: true })).toBe(false);
+    expect(guardAllows("INSERT", { status: "confirmed", membership: undefined })).toBe(true);
+    // 위 모델의 각 분기가 SQL에 존재
+    expect(guard).toContain("new.membership_id is null or new.status not in ('confirmed', 'waitlisted', 'attended', 'no_show')");
+    expect(guard).toContain("new.status is not distinct from old.status and new.membership_id is not distinct from old.membership_id");
   });
   it("활성 상태(confirmed/waitlisted/attended/no_show)로 들어가거나 수강권이 바뀌는 경우만 검사 — cancelled로 가는 경로와 변화 없는 UPDATE는 통과", () => {
     expect(guard).toContain("new.status not in ('confirmed', 'waitlisted', 'attended', 'no_show')");
@@ -645,7 +681,7 @@ describe("[3] 환불 진행 중 사용 차단 — SQL 계약", () => {
   });
   it("새 reservations INSERT도 표시된 수강권으로는 거부(횟수 차감이 없는 무제한/차감 없는 예약 포함)", () => {
     const r = sql.slice(sql.indexOf("create or replace function reservations_guard_pg_refund_lock"), sql.indexOf("drop trigger if exists reservations_guard_pg_refund_lock"));
-    expect(r).toContain("select pg_refund_started_at into v_started from memberships where id = new.membership_id for update;");
+    expect(r).toContain("select status, pg_refund_started_at into v_status, v_started from memberships where id = new.membership_id for update;");
     expect(r).toContain("if v_started is not null then");
     expect(sql).toContain("before insert or update of status, membership_id on reservations");
   });

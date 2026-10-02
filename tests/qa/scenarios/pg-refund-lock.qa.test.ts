@@ -97,6 +97,22 @@ describe("QA(후보): PG 환불 진행 표시와 예약", () => {
     await release(mem2);
   });
 
+  step("환불 완료(status=refunded, 표시 없음) 수강권으로는 새 confirmed/waitlisted 예약이 거부된다(표시 해제 직후 race의 최종 방어선)", async () => {
+    for (const make of [() => createQaPassMembership(admin(), tracker, state.centerId, state.memberProfileId, 5), unlimitedMembership]) {
+      const mem = await make();
+      await admin().from("memberships").update({ status: "refunded", remaining_count: 0, pg_refund_started_at: null }).eq("id", mem);
+      for (const st of ["confirmed", "waitlisted"]) {
+        const cls = await createQaClass(admin(), tracker, state.centerId);
+        const r = await addReservation(cls, mem, st);
+        expect(r.error?.message ?? "").toContain("사용할 수 없는 수강권");
+      }
+    }
+    const paused = await createQaPassMembership(admin(), tracker, state.centerId, state.memberProfileId, 5);
+    await admin().from("memberships").update({ status: "paused" }).eq("id", paused);
+    const c = await createQaClass(admin(), tracker, state.centerId);
+    expect((await addReservation(c, paused, "confirmed")).error?.message ?? "").toContain("사용할 수 없는 수강권");
+  });
+
   step("미사용 판정: 취소 예약만 있으면 환불 가능(locked), 활성 대기/무제한 확정 예약이 있으면 blocked", async () => {
     const onlyCancelled = await createQaPassMembership(admin(), tracker, state.centerId, state.memberProfileId, 5);
     const c1 = await createQaClass(admin(), tracker, state.centerId);
