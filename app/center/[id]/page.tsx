@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
 /*
@@ -388,9 +389,9 @@ function CenterDetailContent() {
                 <UiIcon name="close" size={20} />
               </button>
             </div>
-            <a href="/cart" className="cart-link-btn">
+            <Link href="/cart" className="cart-link-btn" prefetch={false}>
               <UiIcon name="cart" size={16} /> 장바구니 보기{cartItemCount > 0 ? ` (${cartItemCount})` : ""}
-            </a>
+            </Link>
             <p className="center-buy-help">수강권을 선택하고 바로 구매하거나 장바구니에 담을 수 있어요.</p>
             {filterProductIds && (
               <div className="class-filter-notice">

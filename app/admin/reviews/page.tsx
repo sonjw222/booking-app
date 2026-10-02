@@ -8,6 +8,7 @@
     (새 삭제 경로를 만들지 않음 — 자동 삭제/차단은 이번 범위 밖)
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   fetchReviewReportsForAdmin, resolveReviewReport, deleteReviewAsManager,
@@ -81,7 +82,7 @@ export default function AdminReviewReportsPage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/admin">‹</a>
+          <Link className="side" href="/admin" prefetch={false}>‹</Link>
           <div className="title">후기 신고 관리</div>
           <div className="side" />
         </div>
@@ -96,7 +97,7 @@ export default function AdminReviewReportsPage() {
   return (
     <div className="app-shell">
       <div className="back-header">
-        <a className="side" href="/admin">‹</a>
+        <Link className="side" href="/admin" prefetch={false}>‹</Link>
         <div className="title">후기 신고 관리</div>
         <div className="side" />
       </div>

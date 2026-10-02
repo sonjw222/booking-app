@@ -7,6 +7,7 @@
     (fetchMyPointHistory 안에서 필터링됨)
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import EmptyState from "../../components/EmptyState";
@@ -47,7 +48,7 @@ export default function PointHistoryPage() {
   return (
     <div className="app-shell">
       <div className="back-header">
-        <a className="side" href="/mypage">‹</a>
+        <Link className="side" href="/mypage" prefetch={false}>‹</Link>
         <div className="title">포인트 내역</div>
         <div className="side" />
       </div>

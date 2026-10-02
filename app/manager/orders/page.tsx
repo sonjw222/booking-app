@@ -7,6 +7,7 @@
   - 결제 연동 전이므로 주문은 pending으로 들어옴 → 매니저가 확인 후 발급
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchCenterOrders, updateOrderStatus, fulfillResultMessage, type Order } from "../../../lib/orders";
@@ -110,7 +111,7 @@ export default function ManagerOrdersPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/manager">‹</a>
+        <Link className="side" href="/manager" prefetch={false}>‹</Link>
         <div className="title">주문 관리</div>
         <div className="side" />
       </div>

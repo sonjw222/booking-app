@@ -5,6 +5,7 @@
   - 프로필, 수강권(잔여횟수/유효기간 프로그레스바), 예약내역, 로그아웃
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import {
@@ -123,7 +124,7 @@ export default function MyPage() {
         <div className="avatar">{profile?.name?.[0] ?? "?"}</div>
         <div>
           <div className="profile-name">{profile?.name} 님</div>
-          <a className="profile-edit" href="/profiles">프로필 수정 ›</a>
+          <Link className="profile-edit" href="/profiles" prefetch={false}>프로필 수정 ›</Link>
         </div>
       </div>
 
@@ -185,7 +186,7 @@ export default function MyPage() {
                 </a>
               )}
               {ended && !avail?.productPurchasable && avail?.centerActive && (
-                <a className="membership-cta" href="/inquiries">센터 문의하기 ›</a>
+                <Link className="membership-cta" href="/inquiries" prefetch={false}>센터 문의하기 ›</Link>
               )}
               {refundEligibility(m).ok && (
                 <button className="membership-refund" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRefund(m); }}>
@@ -232,46 +233,46 @@ export default function MyPage() {
       })()}
 
       <div className="menu-section-label">내 활동</div>
-      <a className="list-row" href="/notifications"><div className="left"><span className="icon"><UiIcon name="bell" /></span>알림함</div><span className="chevron">›</span></a>
+      <Link className="list-row" href="/notifications" prefetch={false}><div className="left"><span className="icon"><UiIcon name="bell" /></span>알림함</div><span className="chevron">›</span></Link>
       {/* UX 감사(A-13) — /mypage/history는 /my-reservations로 기능이 이전된 뒤에도(주석 참고,
           app/my-reservations/page.tsx) 이 링크만 안 고쳐진 채 남아 있었다. */}
       <a className="list-row" href="/my-reservations" onClick={(e) => replaceTabNavigation(e, "/my-reservations")}>
         <div className="left"><span className="icon"><UiIcon name="list" /></span>예약 내역</div>
         <span className="chevron">›</span>
       </a>
-      <a className="list-row" href="/purchases">
+      <Link className="list-row" href="/purchases" prefetch={false}>
         <div className="left"><span className="icon"><UiIcon name="receipt" /></span>구매 내역</div>
         <span className="chevron">›</span>
-      </a>
-      <a className="list-row" href="/mypage/points">
+      </Link>
+      <Link className="list-row" href="/mypage/points" prefetch={false}>
         <div className="left"><span className="icon"><UiIcon name="star" /></span>포인트 내역</div>
         <span className="chevron">›</span>
-      </a>
-      <a className="list-row" href="/mypage/coupons">
+      </Link>
+      <Link className="list-row" href="/mypage/coupons" prefetch={false}>
         <div className="left"><span className="icon"><UiIcon name="card" /></span>내 쿠폰</div>
         <span className="chevron">›</span>
-      </a>
+      </Link>
 
       <div className="menu-section-label">계정</div>
-      <a className="list-row" href="/profiles">
+      <Link className="list-row" href="/profiles" prefetch={false}>
         <div className="left"><span className="icon"><UiIcon name="users" /></span>프로필 관리</div>
         <span className="chevron">›</span>
-      </a>
-      <a className="list-row" href="/mypage/info">
+      </Link>
+      <Link className="list-row" href="/mypage/info" prefetch={false}>
         <div className="left"><span className="icon"><UiIcon name="shield" /></span>내 정보 관리</div>
         <span className="chevron">›</span>
-      </a>
+      </Link>
 
       <div className="menu-section-label">고객지원</div>
-      <a className="list-row" href="/inquiries">
+      <Link className="list-row" href="/inquiries" prefetch={false}>
         <div className="left"><span className="icon"><UiIcon name="message" /></span>1:1 문의</div>
         <span className="chevron">›</span>
-      </a>
-      <a className="list-row" href="/legal"><div className="left"><span className="icon"><UiIcon name="info" /></span>약관 및 정책</div><span className="chevron">›</span></a>
+      </Link>
+      <Link className="list-row" href="/legal" prefetch={false}><div className="left"><span className="icon"><UiIcon name="info" /></span>약관 및 정책</div><span className="chevron">›</span></Link>
 
       <div className="menu-section-label">설정</div>
-      <a className="list-row" href="/settings/theme"><div className="left"><span className="icon"><UiIcon name="palette" /></span>테마 설정</div><span className="chevron">›</span></a>
-      <a className="list-row" href="/settings/notifications"><div className="left"><span className="icon"><UiIcon name="bell" /></span>알림 설정</div><span className="chevron">›</span></a>
+      <Link className="list-row" href="/settings/theme" prefetch={false}><div className="left"><span className="icon"><UiIcon name="palette" /></span>테마 설정</div><span className="chevron">›</span></Link>
+      <Link className="list-row" href="/settings/notifications" prefetch={false}><div className="left"><span className="icon"><UiIcon name="bell" /></span>알림 설정</div><span className="chevron">›</span></Link>
       <div className="menu-section-label">비즈니스</div>
       {profile?.isPlatformAdmin && (
         <a className="list-row" href="/admin" onClick={(e) => replaceTabNavigation(e, "/admin")}>
@@ -281,10 +282,10 @@ export default function MyPage() {
       )}
       {/* UI-003: 가입 유형·기존 관리자 여부와 무관하게 모든 로그인 사용자가 새 센터를
           등록할 수 있다(정책 B) — /login이 아니라 등록 폼으로 바로 이동한다. */}
-      <a className="list-row" href="/mypage/register-center">
+      <Link className="list-row" href="/mypage/register-center" prefetch={false}>
         <div className="left"><span className="icon"><UiIcon name="building" /></span>내 센터 등록하기</div>
         <span className="chevron">›</span>
-      </a>
+      </Link>
       {/* UX 감사(A-19) — 바로 위 "내 센터 등록하기"와 같은 행 스타일로 붙어있어 오탭 위험이
           있는데, 확인 없이 즉시 로그아웃+리다이렉트됐다. */}
       <button className="list-row logout-row" onClick={async () => { if (await globalThis.appConfirm("로그아웃할까요?")) logout(); }}>

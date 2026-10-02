@@ -1,10 +1,11 @@
+import Link from "next/link";
 import { BUSINESS_INFO } from "../../../lib/businessInfo";
 
 export default function BusinessInfoPage() {
   return (
     <div className="app-shell settings-page-v2">
       <div className="back-header">
-        <a className="side" href="/legal">‹</a>
+        <Link className="side" href="/legal" prefetch={false}>‹</Link>
         <div className="title">사업자 정보</div>
         <div className="side" />
       </div>
@@ -34,7 +35,7 @@ export default function BusinessInfoPage() {
         </p>
         <p>
           다만 회원의 결제 대금 수납은 모하빗이 결제대행사(토스페이먼츠)를 통해 직접
-          처리하며, 이와 관련한 사항은 <a href="/legal/refund">환불·취소 정책</a>을 따릅니다.
+          처리하며, 이와 관련한 사항은 <Link href="/legal/refund" prefetch={false}>환불·취소 정책</Link>을 따릅니다.
         </p>
 
         <h2>사업자등록 확인</h2>

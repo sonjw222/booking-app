@@ -8,6 +8,7 @@
   - URL: /manager/staff/permissions?mc=<manager_center_id>&role=<role_id>&name=<이름>
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState, Suspense } from "react";
 import Loading from "../../../components/Loading";
 import ErrorState from "../../../components/ErrorState";
@@ -111,14 +112,14 @@ function PermInner() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/manager/staff">‹</a>
+          <Link className="side" href="/manager/staff" prefetch={false}>‹</Link>
           <div className="title">{staffName} 개인 권한</div>
           <div className="side" />
         </div>
         <ErrorState
           title={error === "잘못된 접근이에요" ? error : "권한이 없어요"}
           description={error === "잘못된 접근이에요" ? undefined : "이 화면은 오너 또는 권한 설정 권한을 가진 매니저만 접근할 수 있어요."}
-          action={<a className="primary-btn" href="/manager/staff">스태프 화면으로 이동</a>}
+          action={<Link className="primary-btn" href="/manager/staff" prefetch={false}>스태프 화면으로 이동</Link>}
         />
       </div>
     );
@@ -133,7 +134,7 @@ function PermInner() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/manager/staff">‹</a>
+        <Link className="side" href="/manager/staff" prefetch={false}>‹</Link>
         <div className="title">{staffName} 개인 권한</div>
         <div className="side" />
       </div>

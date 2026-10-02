@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
 /*
@@ -106,7 +107,7 @@ export default function RoomsPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/manager">‹</a>
+        <Link className="side" href="/manager" prefetch={false}>‹</Link>
         <div className="title">룸(장소) 관리</div>
         {canManageRooms && (
           <button className="header-action" onClick={openAdd}>+ 추가</button>

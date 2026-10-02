@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../components/SheetOverlay";
 
 /*
@@ -117,7 +118,7 @@ export default function ProfilesPage() {
   return (
     <div className="app-shell account-page-v2">
       <div className="back-header">
-        <a className="side" href="/mypage">‹</a>
+        <Link className="side" href="/mypage" prefetch={false}>‹</Link>
         <div className="title">프로필 관리</div>
         <div className="side" />
       </div>

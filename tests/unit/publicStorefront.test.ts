@@ -185,7 +185,7 @@ describe("4. 홈 footer — 사업자 정보 직접 표시", () => {
 
   it("기존 법적 링크 4개를 유지하고 '판매 상품' 링크가 추가됐다", () => {
     for (const href of ["/legal/terms", "/legal/privacy", "/legal/business", "/legal/refund"]) expect(footer).toContain(`href="${href}"`);
-    expect(footer).toContain('<a href="/products">판매 상품</a>');
+    expect(footer).toMatch(/<(a|Link) href="\/products"( prefetch=\{false\})?>판매 상품<\/(a|Link)>/);   // 2026-10-02: 내부 이동은 Link(prefetch 끔)
   });
 
   it("값을 홈에서 하드코딩하지 않는다", () => {

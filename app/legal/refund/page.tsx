@@ -1,8 +1,9 @@
+import Link from "next/link";
 export default function RefundPolicyPage() {
   return (
     <div className="app-shell settings-page-v2">
       <div className="back-header">
-        <a className="side" href="/legal">‹</a>
+        <Link className="side" href="/legal" prefetch={false}>‹</Link>
         <div className="title">환불·취소 정책</div>
         <div className="side" />
       </div>

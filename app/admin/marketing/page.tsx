@@ -10,6 +10,7 @@
     웹/네이티브 푸시(구독한 회원만)로 전달된다.
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { fetchMarketingMessages, sendMarketingMessage, type MarketingMessage } from "../../../lib/marketing";
 import { checkPlatformAdmin } from "../../../lib/admin";
@@ -61,7 +62,7 @@ export default function MarketingPage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/admin">‹</a>
+          <Link className="side" href="/admin" prefetch={false}>‹</Link>
           <div className="title">마케팅 알림</div>
           <div className="side" />
         </div>
@@ -86,7 +87,7 @@ export default function MarketingPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/admin">‹</a>
+        <Link className="side" href="/admin" prefetch={false}>‹</Link>
         <div className="title">마케팅 알림</div>
         <div className="side" />
       </div>

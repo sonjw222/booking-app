@@ -42,3 +42,30 @@ declare global {
     TossPayments?: (clientKey: string) => TossPaymentsSdk;
   }
 }
+
+// 토스 결제 SDK v2 로더 — 전역 <Script>(app/layout.tsx)를 제거하고 결제/카드등록 화면에서만 필요할 때 로드한다(첫 실행·일반 화면의 불필요한 외부 JS 다운로드/실행 제거).
+// 이미 로드돼 있으면 즉시 resolve, 로드 중인 script가 있으면 그 load를 기다리고(중복 삽입 없음), 시간 초과/실패는 reject한다.
+export const TOSS_SDK_SRC = "https://js.tosspayments.com/v2/standard";
+
+export function loadTossSdk(timeoutMs = 10000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined" || typeof document === "undefined") { reject(new Error("토스 결제 SDK를 불러오지 못했어요")); return; }
+    if (window.TossPayments) { resolve(); return; }
+    const fail = () => reject(new Error("토스 결제 SDK를 불러오지 못했어요"));
+    const timer = setTimeout(fail, timeoutMs);
+    const done = () => { clearTimeout(timer); if (window.TossPayments) resolve(); else fail(); };
+    const failNow = () => { clearTimeout(timer); fail(); };
+    const existing = document.querySelector(`script[src="${TOSS_SDK_SRC}"]`);
+    if (existing) {
+      existing.addEventListener("load", done);
+      existing.addEventListener("error", failNow);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = TOSS_SDK_SRC;
+    script.async = true;
+    script.onload = done;
+    script.onerror = failNow;
+    document.head.appendChild(script);
+  });
+}

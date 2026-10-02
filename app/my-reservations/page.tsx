@@ -6,6 +6,7 @@
   - 예약 목록 + 캘린더 바로가기
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchMyReservationHistory, type HistoryItem } from "../../lib/mypage";
 import { cancelReservation } from "../../lib/reservations";
@@ -156,11 +157,11 @@ export default function MyReservationsPage() {
       <div className="back-header">
         <div className="side" />
         <div className="title">내 예약</div>
-        <a className="side cal-export-btn" href="/mypage/calendar" aria-label="캘린더"><UiIcon name="calendar" size={27} /></a>
+        <Link className="side cal-export-btn" href="/mypage/calendar" aria-label="캘린더" prefetch={false}><UiIcon name="calendar" size={27} /></Link>
       </div>
       <nav className="reservation-top-tabs" aria-label="예약 메뉴">
-        <a href="/reservation">수업 예약</a>
-        <a href="/my-reservations" aria-current="page">내 예약</a>
+        <Link href="/reservation" prefetch={false}>수업 예약</Link>
+        <Link href="/my-reservations" aria-current="page" prefetch={false}>내 예약</Link>
       </nav>
 
       <SegmentedTabs value={filter} onChange={setFilter} label="예약 내역 종류"
@@ -169,7 +170,7 @@ export default function MyReservationsPage() {
       {loading ? <Loading /> : shown.length === 0 ? (
         <EmptyState icon="calendar" title={filter === "upcoming" ? "예정된 예약이 없어요" : "예약 내역이 없어요"}
           description={filter === "upcoming" ? "원하는 수업을 찾아 예약해보세요." : "수업을 이용하면 이곳에 기록이 쌓여요."}
-          action={filter === "upcoming" ? <a className="primary-btn" href="/reservation">수업 둘러보기</a> : undefined} />
+          action={filter === "upcoming" ? <Link className="primary-btn" href="/reservation" prefetch={false}>수업 둘러보기</Link> : undefined} />
       ) : (
         <div className="reservation-history">
           {grouped.map(([date, items], groupIndex) => (

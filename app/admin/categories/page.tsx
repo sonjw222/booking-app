@@ -5,6 +5,7 @@
   - 홈에 뜨는 종목(카테고리) 추가/삭제
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { fetchCategories, addCategory, deleteCategory, type ServiceCategory } from "../../../lib/operator";
 import { checkPlatformAdmin } from "../../../lib/admin";
@@ -65,7 +66,7 @@ export default function CategoriesPage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/admin">‹</a>
+          <Link className="side" href="/admin" prefetch={false}>‹</Link>
           <div className="title">종목 관리</div>
           <div className="side" />
         </div>
@@ -90,7 +91,7 @@ export default function CategoriesPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/admin">‹</a>
+        <Link className="side" href="/admin" prefetch={false}>‹</Link>
         <div className="title">종목 관리</div>
         <div className="side" />
       </div>

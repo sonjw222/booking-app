@@ -5,6 +5,7 @@
   - 홈 배너 추가/삭제/노출토글 (순서대로 회전)
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { fetchBanners, addBanner, toggleBanner, deleteBanner, type HomeBanner } from "../../../lib/operator";
 import { checkPlatformAdmin } from "../../../lib/admin";
@@ -71,7 +72,7 @@ export default function BannersPage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/admin">‹</a>
+          <Link className="side" href="/admin" prefetch={false}>‹</Link>
           <div className="title">배너 관리</div>
           <div className="side" />
         </div>
@@ -96,7 +97,7 @@ export default function BannersPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/admin">‹</a>
+        <Link className="side" href="/admin" prefetch={false}>‹</Link>
         <div className="title">배너 관리</div>
         <div className="side" />
       </div>

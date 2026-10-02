@@ -9,6 +9,7 @@
     최종 할인금액은 결제 확정 시점에 서버가 재계산한다 — 여기 표시는 안내용.
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import EmptyState from "../../components/EmptyState";
@@ -66,7 +67,7 @@ export default function MyCouponsPage() {
   return (
     <div className="app-shell">
       <div className="back-header">
-        <a className="side" href="/mypage">‹</a>
+        <Link className="side" href="/mypage" prefetch={false}>‹</Link>
         <div className="title">내 쿠폰</div>
         <div className="side" />
       </div>

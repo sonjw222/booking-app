@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
 /*
@@ -114,7 +115,7 @@ export default function HolidaysPage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/manager">‹</a>
+          <Link className="side" href="/manager" prefetch={false}>‹</Link>
           <div className="title">휴무일 설정</div>
           <div className="side" />
         </div>
@@ -130,7 +131,7 @@ export default function HolidaysPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/manager">‹</a>
+        <Link className="side" href="/manager" prefetch={false}>‹</Link>
         <div className="title">휴무일 설정</div>
         <div className="side" />
       </div>

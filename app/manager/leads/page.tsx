@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
 /*
@@ -110,7 +111,7 @@ export default function LeadsPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/manager">‹</a>
+        <Link className="side" href="/manager" prefetch={false}>‹</Link>
         <div className="title">상담고객 관리</div>
         <div className="side" />
       </div>

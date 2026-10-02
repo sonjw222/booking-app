@@ -6,6 +6,7 @@
   - 주문 정보 + 쿠폰 + 결제수단까지 확인 후 한 번에 결제
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { fetchCart, addToCart, removeFromCart, clearCart, updateCartSize, updateCartCount, type CartItem } from "../../lib/cart";
 import { cartItemAmount, countOptionLabel, sortedTiers } from "../../lib/selectableCount";
@@ -186,8 +187,8 @@ export default function CartPage() {
             센터에서 확인 후 발급해드려요.<br />
             결제 연동 전이라 실제 결제는 아직이에요.
           </div>
-          <a className="primary-btn" href="/mypage" style={{ margin: "20px", display: "block", width: "calc(100% - 40px)", textAlign: "center" }}>마이페이지로</a>
-          <a className="ghost-btn" href="/" style={{ margin: "0 20px", display: "block", width: "calc(100% - 40px)", textAlign: "center" }}>홈으로</a>
+          <Link className="primary-btn" href="/mypage" style={{ margin: "20px", display: "block", width: "calc(100% - 40px)", textAlign: "center" }} prefetch={false}>마이페이지로</Link>
+          <Link className="ghost-btn" href="/" style={{ margin: "0 20px", display: "block", width: "calc(100% - 40px)", textAlign: "center" }} prefetch={false}>홈으로</Link>
         </div>
       </div>
     );
@@ -215,7 +216,7 @@ export default function CartPage() {
           action={<AppButton onClick={load}>다시 시도</AppButton>} />
       ) : items.length === 0 ? (
         <EmptyState icon="cart" title="장바구니가 비어 있어요" description="센터에서 수강권이나 상품을 둘러보세요."
-          action={<a className="primary-btn" href="/search">센터 찾아보기</a>} />
+          action={<Link className="primary-btn" href="/search" prefetch={false}>센터 찾아보기</Link>} />
       ) : (
         <>
           {/* 주문 정보 */}

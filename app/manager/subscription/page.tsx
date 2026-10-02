@@ -10,6 +10,7 @@
     숨기는 것과 별개로, 직접 URL 접근도 차단).
 */
 
+import Link from "next/link";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Loading from "../../components/Loading";
@@ -177,7 +178,7 @@ function ManagerSubscriptionContent() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/manager">‹</a>
+          <Link className="side" href="/manager" prefetch={false}>‹</Link>
           <div className="title">플랫폼 구독</div>
           <div className="side" />
         </div>
@@ -191,7 +192,7 @@ function ManagerSubscriptionContent() {
   return (
     <div className="app-shell">
       <div className="back-header">
-        <a className="side" href="/manager">‹</a>
+        <Link className="side" href="/manager" prefetch={false}>‹</Link>
         <div className="title">플랫폼 구독</div>
         <div className="side" />
       </div>

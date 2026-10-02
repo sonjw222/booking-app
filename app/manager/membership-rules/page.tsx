@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
 /*
@@ -441,7 +442,7 @@ export default function MembershipRulesPage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/manager">‹</a>
+          <Link className="side" href="/manager" prefetch={false}>‹</Link>
           <div className="title">수강권 설정</div>
           <div className="side" />
         </div>
@@ -455,7 +456,7 @@ export default function MembershipRulesPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/manager">‹</a>
+        <Link className="side" href="/manager" prefetch={false}>‹</Link>
         <div className="title">수강권 설정</div>
         {canCreateProduct && (
           <button className="header-action" onClick={openCreateSheet}>+ 수강권</button>

@@ -16,6 +16,7 @@
        PAYOUTS_ENABLED 플래그로 잠가둠(기존 로직 그대로 유지).
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
@@ -93,7 +94,7 @@ export default function ManagerSettlementPage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/manager">‹</a>
+          <Link className="side" href="/manager" prefetch={false}>‹</Link>
           <div className="title">정산계좌</div>
           <div className="side" />
         </div>
@@ -107,7 +108,7 @@ export default function ManagerSettlementPage() {
   return (
     <div className="app-shell">
       <div className="back-header">
-        <a className="side" href="/manager">‹</a>
+        <Link className="side" href="/manager" prefetch={false}>‹</Link>
         <div className="title">정산계좌</div>
         <div className="side" />
       </div>

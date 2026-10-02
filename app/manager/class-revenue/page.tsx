@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
 /*
@@ -180,7 +181,7 @@ export default function ClassRevenuePage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/manager">‹</a>
+          <Link className="side" href="/manager" prefetch={false}>‹</Link>
           <div className="title">수업매출</div>
           <div className="side" />
         </div>
@@ -195,7 +196,7 @@ export default function ClassRevenuePage() {
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
       <div className="back-header">
-        <a className="side" href="/manager/sales">‹</a>
+        <Link className="side" href="/manager/sales" prefetch={false}>‹</Link>
         <div className="title">수업매출</div>
         <div className="side" />
       </div>

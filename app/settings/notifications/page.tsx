@@ -11,6 +11,7 @@
   - 문자·카카오 알림톡·푸시·이메일 발송 연동은 별도(추후, 외부 계약 필요).
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { NOTI_PREF_STORAGE_KEY, NOTI_PREF_DEFAULTS, getNotiPrefs, type NotiPrefKey } from "../../../lib/notifications";
@@ -94,7 +95,7 @@ export default function NotificationSettingsPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/mypage">‹</a>
+        <Link className="side" href="/mypage" prefetch={false}>‹</Link>
         <div className="title">알림 설정</div>
         <div className="side" />
       </div>

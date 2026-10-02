@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../components/SheetOverlay";
 
 /*
@@ -143,13 +144,13 @@ export default function NotificationsPage() {
     <div className="app-shell member-notifications">
       <div className="noti-head">
         <h1>알림</h1>
-        <a href="/settings/notifications">설정</a>
+        <Link href="/settings/notifications" prefetch={false}>설정</Link>
       </div>
 
       {list.length === 0 ? (
         <EmptyState icon="bell" title="아직 알림이 없어요"
           description="예약과 수강권 소식을 이곳에서 알려드릴게요."
-          action={<a className="ghost-btn" href="/reservation">수업 둘러보기</a>} />
+          action={<Link className="ghost-btn" href="/reservation" prefetch={false}>수업 둘러보기</Link>} />
       ) : (() => {
         const shown = list.slice(0, visibleCount);
         const groups: { heading: string; items: Notification[] }[] = [];

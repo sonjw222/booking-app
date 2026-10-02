@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../../../components/SheetOverlay";
 
 /*
@@ -180,7 +181,7 @@ export default function AlimtalkSendPage() {
     return (
       <div className="app-shell recipient-page">
         <div className="back-header">
-          <a className="side" href="/manager/alimtalk">‹</a>
+          <Link className="side" href="/manager/alimtalk" prefetch={false}>‹</Link>
           <div className="title">알림톡 보내기</div>
           <div className="side" />
         </div>
@@ -192,7 +193,7 @@ export default function AlimtalkSendPage() {
   return (
     <div className="app-shell recipient-page">
       <div className="back-header">
-        <a className="side" href="/manager/alimtalk">‹</a>
+        <Link className="side" href="/manager/alimtalk" prefetch={false}>‹</Link>
         <div className="title">알림톡 보내기</div>
         <div className="side" />
       </div>

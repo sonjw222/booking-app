@@ -19,8 +19,8 @@
     3) cancelPayment()/getPaymentStatus(): 결제창을 열기 전(주문만 만든) 단계에서
        취소하거나 상태를 조회할 때 사용.
 
-  window.TossPayments는 app/layout.tsx가 <Script src="https://js.tosspayments.com/v2/standard">로
-  전역 로드한다(npm 패키지 설치 없이 토스 공식 가이드 방식).
+  window.TossPayments는 lib/tossSdk.ts의 loadTossSdk()가 결제 화면에서만 script 태그로 온디맨드 로드한다
+  (2026-10-02: 전역 <Script> 제거 — npm 패키지 설치 없이 토스 공식 가이드 방식은 그대로).
 */
 
 import type {
@@ -33,7 +33,7 @@ import type {
 } from "./types";
 import { cancelRealPaymentApi, confirmRealPaymentApi } from "./tossPaymentApi";
 import { fetchOrderPaymentStatus } from "./mockPaymentApi";
-import "../tossSdk"; // window.TossPayments 전역 타입 선언(공용, lib/tossSdk.ts 참고)
+import { loadTossSdk } from "../tossSdk"; // window.TossPayments 전역 타입 선언 + 온디맨드 로더(공용, lib/tossSdk.ts 참고)
 
 function getClientKey(): string {
   const key = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY;
@@ -43,6 +43,10 @@ function getClientKey(): string {
 
 export class TossPaymentProvider implements PaymentProvider {
   async createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult> {
+    // SDK는 전역 로드가 아니라 결제 화면에서만 온디맨드 로드한다(checkout이 미리 loadTossSdk()로 예열) — 결제창 호출 전에 준비를 보장한다.
+    if (typeof window !== "undefined" && !window.TossPayments) {
+      try { await loadTossSdk(); } catch { /* 아래에서 동일한 안내로 처리 */ }
+    }
     if (typeof window === "undefined" || !window.TossPayments) {
       throw new Error("결제 모듈을 아직 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
     }

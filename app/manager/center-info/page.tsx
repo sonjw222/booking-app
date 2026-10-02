@@ -20,6 +20,7 @@
     권한이 없으면 그 두 필드만 추가로 비활성화한다(DB 레이어가 최종 방어선, UI는 편의).
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
@@ -190,7 +191,7 @@ export default function CenterInfoPage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/manager">‹</a>
+          <Link className="side" href="/manager" prefetch={false}>‹</Link>
           <div className="title">센터 정보</div>
           <div className="side" />
         </div>
@@ -204,7 +205,7 @@ export default function CenterInfoPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/manager">‹</a>
+        <Link className="side" href="/manager" prefetch={false}>‹</Link>
         <div className="title">센터 정보</div>
         <div className="side" />
       </div>

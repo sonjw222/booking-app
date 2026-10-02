@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../components/SheetOverlay";
 
 /*
@@ -520,7 +521,7 @@ function ReservationCalendarContent() {
             description="로그인하면 수강권을 확인하고 바로 예약할 수 있어요."
             action={<>
               <a className="primary-btn" href={loginHrefWithReturnToHere()}>로그인하고 계속하기</a>
-              <a className="ghost-btn" style={{ marginTop: 8 }} href="/">홈으로 돌아가기</a>
+              <Link className="ghost-btn" style={{ marginTop: 8 }} href="/" prefetch={false}>홈으로 돌아가기</Link>
             </>}
           />
         ) : (
@@ -529,7 +530,7 @@ function ReservationCalendarContent() {
             description={error}
             action={<>
               <button className="primary-btn" onClick={() => load()}>다시 불러오기</button>
-              <a className="ghost-btn" style={{ marginTop: 8 }} href="/">홈으로 돌아가기</a>
+              <Link className="ghost-btn" style={{ marginTop: 8 }} href="/" prefetch={false}>홈으로 돌아가기</Link>
             </>}
           />
         )}
@@ -543,8 +544,8 @@ function ReservationCalendarContent() {
 
       <div className="resv-page-head"><h1>예약</h1></div>
       <nav className="reservation-top-tabs" aria-label="예약 메뉴">
-        <a href="/reservation" aria-current="page">수업 예약</a>
-        <a href="/my-reservations">내 예약</a>
+        <Link href="/reservation" aria-current="page" prefetch={false}>수업 예약</Link>
+        <Link href="/my-reservations" prefetch={false}>내 예약</Link>
       </nav>
 
       {centerSheet && (
@@ -559,7 +560,7 @@ function ReservationCalendarContent() {
       {categoryFilter && (
         <div className="center-filter-banner">
           <span>{categoryFilter} 수업만 보는 중{categoryCenterIds && categoryCenterIds.size === 0 ? " (해당 종목 센터 없음)" : ""}</span>
-          <a href="/reservation" className="center-filter-clear">전체 보기</a>
+          <Link href="/reservation" className="center-filter-clear" prefetch={false}>전체 보기</Link>
         </div>
       )}
 

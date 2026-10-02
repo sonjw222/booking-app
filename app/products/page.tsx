@@ -14,6 +14,7 @@
     placeholder도 반복해서 넣지 않는다 — 텍스트 중심 목록.
 */
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import { fetchPublicStorefrontProducts, groupPublicProductsByCenter, type PublicStorefrontProduct } from "../../lib/center";
@@ -44,7 +45,7 @@ export default function PublicProductsPage() {
   return (
     <div className="app-shell">
       <div className="back-header">
-        <a className="side" aria-label="홈으로" href="/">‹</a>
+        <Link className="side" aria-label="홈으로" href="/" prefetch={false}>‹</Link>
         <div className="title">판매 상품</div>
         <div className="side" />
       </div>
@@ -64,7 +65,7 @@ export default function PublicProductsPage() {
           <section key={g.centerId} aria-label={`${g.centerName} 판매 상품`}>
             <div className="menu-section-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span>{g.centerName}</span>
-              <a href={`/center/${g.centerId}?buy=1`} style={{ color: "var(--accent)", fontWeight: 800 }}>센터에서 보기 ›</a>
+              <Link href={`/center/${g.centerId}?buy=1`} style={{ color: "var(--accent)", fontWeight: 800 }} prefetch={false}>센터에서 보기 ›</Link>
             </div>
             <div className="center-products">
               {g.items.map((p) => (
@@ -91,10 +92,10 @@ export default function PublicProductsPage() {
 
       <div className="home-footer" style={{ marginTop: 24 }}>
         <div className="home-footer-links">
-          <a href="/legal/terms">이용약관</a>
-          <a href="/legal/privacy">개인정보처리방침</a>
-          <a href="/legal/business">사업자 정보</a>
-          <a href="/legal/refund">환불·취소 정책</a>
+          <Link href="/legal/terms" prefetch={false}>이용약관</Link>
+          <Link href="/legal/privacy" prefetch={false}>개인정보처리방침</Link>
+          <Link href="/legal/business" prefetch={false}>사업자 정보</Link>
+          <Link href="/legal/refund" prefetch={false}>환불·취소 정책</Link>
         </div>
         <div className="home-footer-biz">
           <div>{BUSINESS_INFO.companyName} · 대표 {BUSINESS_INFO.ceoName}</div>

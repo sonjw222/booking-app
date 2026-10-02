@@ -7,6 +7,7 @@
   - 진도표 관리 권한(customer.progress) 필요
 */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
@@ -128,7 +129,7 @@ export default function ProgressCategoryPage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/manager">‹</a>
+          <Link className="side" href="/manager" prefetch={false}>‹</Link>
           <div className="title">진도표 기술 목록</div>
           <div className="side" />
         </div>
@@ -142,7 +143,7 @@ export default function ProgressCategoryPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/manager/progress/record">‹</a>
+        <Link className="side" href="/manager/progress/record" prefetch={false}>‹</Link>
         <div className="title">진도표 기술 목록</div>
         <div className="side" />
       </div>

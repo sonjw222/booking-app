@@ -8,7 +8,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fetchUnreadCount, subscribeNotifications } from "../../lib/notifications";
 import { fetchMyCenters } from "../../lib/manager";
 import {
@@ -20,6 +20,8 @@ import { replaceTabNavigation } from "../../lib/navState";
 import NotificationToaster from "./NotificationToaster";
 import UiIcon from "./UiIcon";
 import { useExpandableNavRail } from "./useExpandableNavRail";
+
+const NAV_PERM_RECHECK_MS = 60_000;
 
 export default function ManagerNav({
   initialCanSeeMembers = null, initialNavState = null,
@@ -59,7 +61,12 @@ export default function ManagerNav({
   // 동일하게 유지하면서 리로드 비용만 없앤다. 실제 데이터 접근 통제는 어차피 RLS가
   // 최종적으로 막으므로(이 탭 노출은 UX 힌트일 뿐), 마운트를 유지해도 보안 경계 자체는
   // 그대로다.
+  // 2026-10-02 성능: pathname이 바뀔 때마다 fetchMyCenters + 권한을 다시 받던 것을 "마지막 확인 후 60초가 지났을 때"로 줄인다(같은 세션에서 탭마다 같은 결과를
+  // 다시 가져오던 비용 제거). 권한 변경 반영은 유지한다: 60초 초과 시 다음 이동에서, 앱/탭이 다시 보일 때(visibilitychange)도 재확인한다. 접근 통제(RLS)는 그대로다.
+  const lastCheckRef = useRef(0);
   useEffect(() => {
+    if (lastCheckRef.current && Date.now() - lastCheckRef.current < NAV_PERM_RECHECK_MS) return;
+    lastCheckRef.current = Date.now();
     let cancelled = false;
     fetchMyCenters()
       .then((centers) => {
@@ -75,6 +82,11 @@ export default function ManagerNav({
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible" && Date.now() - lastCheckRef.current >= NAV_PERM_RECHECK_MS) lastCheckRef.current = 0; };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
 
   const liveCanSeeMembers = canSeeManagerMenu(isOwner, myPerms, "customer.member.view");
   useEffect(() => {
@@ -109,11 +121,15 @@ export default function ManagerNav({
   useEffect(() => {
     const viewport = window.visualViewport;
     if (!viewport) return;
-    const check = () => setKeyboardOpen(window.innerHeight - viewport.height > 140);
+    // 이벤트 burst(키보드 애니메이션 중 resize/scroll 연속 발생)를 프레임당 한 번으로 합치고, 값이 같으면 setState하지 않는다.
+    let raf = 0;
+    const apply = () => { raf = 0; const open = window.innerHeight - viewport.height > 140; setKeyboardOpen((prev) => (prev === open ? prev : open)); };
+    const check = () => { if (!raf) raf = requestAnimationFrame(apply); };
     viewport.addEventListener("resize", check);
     viewport.addEventListener("scroll", check);
-    check();
+    apply();
     return () => {
+      if (raf) cancelAnimationFrame(raf);
       viewport.removeEventListener("resize", check);
       viewport.removeEventListener("scroll", check);
     };
@@ -133,10 +149,10 @@ export default function ManagerNav({
         aria-expanded={expanded}
         onClick={handleRailClick}
       >
-        <a className="desktop-brand" href="/manager">
+        <Link className="desktop-brand" href="/manager" prefetch={false}>
           <span className="desktop-brand-mark">M</span>
           <span><b>모하빗</b><small>센터 관리자</small></span>
-        </a>
+        </Link>
         <div className="workspace-sidebar-scroll" ref={scrollRef}>
           <div className="desktop-nav-section">업무</div>
           <a className={`desktop-nav-item ${pathname === "/manager" ? "active" : ""}`} href="/manager" onClick={(e) => replaceTabNavigation(e, "/manager")}><UiIcon name="grid" /><span>대시보드</span></a>
@@ -145,27 +161,27 @@ export default function ManagerNav({
           <Link className={`desktop-nav-item ${is("/manager/notifications") ? "active" : ""}`} href="/manager/notifications" replace onClick={collapseAfterNavigate}>
             <UiIcon name="bell" /><span>알림</span>{unread > 0 && <span className="desktop-nav-badge">{unread > 99 ? "99+" : unread}</span>}
           </Link>
-          {canSee("pass.sales.view") && <a className={`desktop-nav-item ${is("/manager/sales") ? "active" : ""}`} href="/manager/sales"><UiIcon name="receipt" /><span>매출·결제</span></a>}
+          {canSee("pass.sales.view") && <Link className={`desktop-nav-item ${is("/manager/sales") ? "active" : ""}`} href="/manager/sales" prefetch={false}><UiIcon name="receipt" /><span>매출·결제</span></Link>}
 
           <div className="desktop-nav-section">고객 관리</div>
-          {canSee("customer.lead.view") && <a className={`desktop-nav-item ${is("/manager/leads") ? "active" : ""}`} href="/manager/leads"><UiIcon name="message" /><span>상담고객</span></a>}
-          {canSee("customer.progress") && <a className={`desktop-nav-item ${is("/manager/progress") ? "active" : ""}`} href="/manager/progress/record"><UiIcon name="edit" /><span>진도 기록</span></a>}
-          {canSee("message.alimtalk.view") && <a className={`desktop-nav-item ${is("/manager/alimtalk") ? "active" : ""}`} href="/manager/alimtalk"><UiIcon name="megaphone" /><span>알림톡</span></a>}
-          {canSee("pass.order.view") && <a className={`desktop-nav-item ${is("/manager/orders") ? "active" : ""}`} href="/manager/orders"><UiIcon name="cart" /><span>주문</span></a>}
-          {canSee("customer.member.issue_pass") && <a className={`desktop-nav-item ${is("/manager/coupons") ? "active" : ""}`} href="/manager/coupons"><UiIcon name="card" /><span>쿠폰</span></a>}
-          {canSee("board.notice.view") && <a className={`desktop-nav-item ${is("/manager/announcements") ? "active" : ""}`} href="/manager/announcements"><UiIcon name="megaphone" /><span>공지사항</span></a>}
-          {canSee("board.inquiry.view") && <a className={`desktop-nav-item ${is("/manager/inquiries") ? "active" : ""}`} href="/manager/inquiries"><UiIcon name="message" /><span>1:1 문의</span></a>}
-          {canSee("facility.review.view") && <a className={`desktop-nav-item ${is("/manager/reviews") ? "active" : ""}`} href="/manager/reviews"><UiIcon name="star" /><span>후기</span></a>}
+          {canSee("customer.lead.view") && <Link className={`desktop-nav-item ${is("/manager/leads") ? "active" : ""}`} href="/manager/leads" prefetch={false}><UiIcon name="message" /><span>상담고객</span></Link>}
+          {canSee("customer.progress") && <Link className={`desktop-nav-item ${is("/manager/progress") ? "active" : ""}`} href="/manager/progress/record" prefetch={false}><UiIcon name="edit" /><span>진도 기록</span></Link>}
+          {canSee("message.alimtalk.view") && <Link className={`desktop-nav-item ${is("/manager/alimtalk") ? "active" : ""}`} href="/manager/alimtalk" prefetch={false}><UiIcon name="megaphone" /><span>알림톡</span></Link>}
+          {canSee("pass.order.view") && <Link className={`desktop-nav-item ${is("/manager/orders") ? "active" : ""}`} href="/manager/orders" prefetch={false}><UiIcon name="cart" /><span>주문</span></Link>}
+          {canSee("customer.member.issue_pass") && <Link className={`desktop-nav-item ${is("/manager/coupons") ? "active" : ""}`} href="/manager/coupons" prefetch={false}><UiIcon name="card" /><span>쿠폰</span></Link>}
+          {canSee("board.notice.view") && <Link className={`desktop-nav-item ${is("/manager/announcements") ? "active" : ""}`} href="/manager/announcements" prefetch={false}><UiIcon name="megaphone" /><span>공지사항</span></Link>}
+          {canSee("board.inquiry.view") && <Link className={`desktop-nav-item ${is("/manager/inquiries") ? "active" : ""}`} href="/manager/inquiries" prefetch={false}><UiIcon name="message" /><span>1:1 문의</span></Link>}
+          {canSee("facility.review.view") && <Link className={`desktop-nav-item ${is("/manager/reviews") ? "active" : ""}`} href="/manager/reviews" prefetch={false}><UiIcon name="star" /><span>후기</span></Link>}
 
           <div className="desktop-nav-section">센터 설정</div>
-          {(canSee("pass.create") || canSee("pass.update")) && <a className={`desktop-nav-item ${is("/manager/membership-rules") ? "active" : ""}`} href="/manager/membership-rules"><UiIcon name="ticket" /><span>수강권</span></a>}
-          {canSee("pass.goods.view") && <a className={`desktop-nav-item ${is("/manager/goods") ? "active" : ""}`} href="/manager/goods"><UiIcon name="receipt" /><span>상품</span></a>}
-          {canSee("facility.staff.view") && <a className={`desktop-nav-item ${is("/manager/staff") ? "active" : ""}`} href="/manager/staff"><UiIcon name="shield" /><span>스태프·권한</span></a>}
-          {canSee("facility.info") && <a className={`desktop-nav-item ${is("/manager/center-info") ? "active" : ""}`} href="/manager/center-info"><UiIcon name="building" /><span>센터 정보</span></a>}
-          {canSee("facility.room") && <a className={`desktop-nav-item ${is("/manager/rooms") ? "active" : ""}`} href="/manager/rooms"><UiIcon name="building" /><span>룸 관리</span></a>}
-          {canSee("facility.operation") && <a className={`desktop-nav-item ${is("/manager/settings") ? "active" : ""}`} href="/manager/settings"><UiIcon name="settings" /><span>운영 설정</span></a>}
-          {isOwner && <a className={`desktop-nav-item ${is("/manager/subscription") ? "active" : ""}`} href="/manager/subscription"><UiIcon name="card" /><span>플랫폼 구독</span></a>}
-          {isOwner && <a className={`desktop-nav-item ${is("/manager/settlement") ? "active" : ""}`} href="/manager/settlement"><UiIcon name="bank" /><span>정산계좌</span></a>}
+          {(canSee("pass.create") || canSee("pass.update")) && <Link className={`desktop-nav-item ${is("/manager/membership-rules") ? "active" : ""}`} href="/manager/membership-rules" prefetch={false}><UiIcon name="ticket" /><span>수강권</span></Link>}
+          {canSee("pass.goods.view") && <Link className={`desktop-nav-item ${is("/manager/goods") ? "active" : ""}`} href="/manager/goods" prefetch={false}><UiIcon name="receipt" /><span>상품</span></Link>}
+          {canSee("facility.staff.view") && <Link className={`desktop-nav-item ${is("/manager/staff") ? "active" : ""}`} href="/manager/staff" prefetch={false}><UiIcon name="shield" /><span>스태프·권한</span></Link>}
+          {canSee("facility.info") && <Link className={`desktop-nav-item ${is("/manager/center-info") ? "active" : ""}`} href="/manager/center-info" prefetch={false}><UiIcon name="building" /><span>센터 정보</span></Link>}
+          {canSee("facility.room") && <Link className={`desktop-nav-item ${is("/manager/rooms") ? "active" : ""}`} href="/manager/rooms" prefetch={false}><UiIcon name="building" /><span>룸 관리</span></Link>}
+          {canSee("facility.operation") && <Link className={`desktop-nav-item ${is("/manager/settings") ? "active" : ""}`} href="/manager/settings" prefetch={false}><UiIcon name="settings" /><span>운영 설정</span></Link>}
+          {isOwner && <Link className={`desktop-nav-item ${is("/manager/subscription") ? "active" : ""}`} href="/manager/subscription" prefetch={false}><UiIcon name="card" /><span>플랫폼 구독</span></Link>}
+          {isOwner && <Link className={`desktop-nav-item ${is("/manager/settlement") ? "active" : ""}`} href="/manager/settlement" prefetch={false}><UiIcon name="bank" /><span>정산계좌</span></Link>}
         </div>
         <a className="workspace-sidebar-mode" href="/" onClick={(e) => replaceTabNavigation(e, "/")}><UiIcon name="user" /><span>회원 화면으로 전환</span></a>
       </aside>

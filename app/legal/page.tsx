@@ -1,3 +1,4 @@
+import Link from "next/link";
 /*
   약관 및 정책 — 이용약관/개인정보처리방침/사업자정보/환불·취소 정책 허브.
   전자상거래법상 사업자정보·약관은 로그인 없이도 접근 가능해야 해서 이 화면과
@@ -15,7 +16,7 @@ export default function LegalHubPage() {
   return (
     <div className="app-shell settings-page-v2">
       <div className="back-header">
-        <a className="side" href="/mypage">‹</a>
+        <Link className="side" href="/mypage" prefetch={false}>‹</Link>
         <div className="title">약관 및 정책</div>
         <div className="side" />
       </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
 /*
@@ -322,7 +323,7 @@ export default function SalesPage() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href="/manager">‹</a>
+          <Link className="side" href="/manager" prefetch={false}>‹</Link>
           <div className="title">매출 관리</div>
           <div className="side" />
         </div>
@@ -336,7 +337,7 @@ export default function SalesPage() {
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
-        <a className="side" href="/manager">‹</a>
+        <Link className="side" href="/manager" prefetch={false}>‹</Link>
         <div className="title">매출 관리</div>
         {(tab !== "sales" || canCreatePayment) && (
           <button className="header-action" onClick={() => tab === "sales" ? openSheet() : tab === "expense" ? setExpSheet(true) : openPointSheet()}>+ 등록</button>
@@ -361,9 +362,9 @@ export default function SalesPage() {
 
       {tab === "sales" && (
         <div style={{ padding: "0 20px 8px", textAlign: "right" }}>
-          <a href="/manager/class-revenue" className="menu-section-label" style={{ display: "inline-block" }}>
+          <Link href="/manager/class-revenue" className="menu-section-label" style={{ display: "inline-block" }} prefetch={false}>
             수업매출 캘린더(날짜별) 보기 ›
-          </a>
+          </Link>
         </div>
       )}
 
