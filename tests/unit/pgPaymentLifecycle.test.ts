@@ -722,6 +722,63 @@ describe("[3] 환불 진행 중 사용 차단 — SQL 계약", () => {
   });
 });
 
+describe("provider별 환불 경계 — portone은 fail closed", () => {
+  const input = { token: "good", membershipId: "m1" };
+  const noExternal = (d: ReturnType<typeof deps>) => {
+    for (const k of ["tossCancel", "tossGet", "refundBegin", "refundRelease", "dbRefund"] as const) expect(d.calls[k]).not.toHaveBeenCalled();
+  };
+  it("portone + 금액>0 → 501 portone_refund_unsupported, 토스/refundBegin/release/DB 환불 호출 0회(결제키 있든 없든)", async () => {
+    for (const paymentKey of ["pay_abcdef123456", null]) {
+      const d = deps({ refundContext: vi.fn(async () => ({ ...baseRefund, provider: "portone", paymentKey })) });
+      const r = await handleRefund(input, d);
+      expect(r.status).toBe(501);
+      expect(r.body).toMatchObject({ code: "portone_refund_unsupported" });
+      expect(String(r.body.error)).toContain("자동 환불은 아직 지원하지 않아요");
+      noExternal(d);
+      const [level, event, fields] = d.calls.log.mock.calls.find((c) => c[1] === "PG_REFUND_UNSUPPORTED_PROVIDER")!;
+      expect(level).toBe("warn");
+      expect(fields).toEqual({ provider: "portone", membershipId: "m1", orderId: "o1" });   // 결제키/비밀값 없음
+    }
+  });
+  it("portone + 금액>0은 DB-only 경로로 새지 않는다(돈은 안 돌려주고 DB만 refunded가 되는 일 없음)", async () => {
+    const d = deps({ refundContext: vi.fn(async () => ({ ...baseRefund, provider: "portone", amount: 1 })) });
+    expect((await handleRefund(input, d)).status).toBe(501);
+    expect(d.calls.dbRefund).not.toHaveBeenCalled();
+  });
+  it("portone + 0원: 돈 이동이 없으므로 DB-only 환불(allowPg=true, 토스 호출 0회) — 0원 토스 주문과 동일 정책", async () => {
+    const d = deps({ refundContext: vi.fn(async () => ({ ...baseRefund, provider: "portone", amount: 0, paymentKey: null })) });
+    const r = await handleRefund(input, d);
+    expect(r.status).toBe(200);
+    expect(d.calls.dbRefund).toHaveBeenCalledWith("m1", "uid-1", { allowPg: true, skipTimeCheck: false });
+    for (const k of ["tossCancel", "tossGet", "refundBegin", "refundRelease"] as const) expect(d.calls[k]).not.toHaveBeenCalled();
+  });
+  it("toss + 금액>0은 기존 흐름 그대로(refundBegin → 토스 취소 → DB 환불)", async () => {
+    const order: string[] = [];
+    const d = deps({
+      refundBegin: vi.fn(async () => { order.push("begin"); return { state: "locked" as const }; }),
+      tossCancel: vi.fn(async () => { order.push("toss"); return OK; }),
+      dbRefund: vi.fn(async () => { order.push("db"); return { data: { refunded: true }, error: null }; }),
+    });
+    expect((await handleRefund(input, d)).status).toBe(200);
+    expect(order).toEqual(["begin", "toss", "db"]);
+  });
+  it("direct/manual/mock/null provider는 기존 DB-only 환불(토스 호출 0회, allowPg=false)", async () => {
+    for (const provider of [null, "mock", "direct"]) {
+      const d = deps({ refundContext: vi.fn(async () => ({ ...baseRefund, provider, paymentKey: null })) });
+      expect((await handleRefund(input, d)).status).toBe(200);
+      expect(d.calls.dbRefund).toHaveBeenCalledWith("m1", "uid-1", { allowPg: false, skipTimeCheck: false });
+      for (const k of ["tossCancel", "tossGet", "refundBegin", "refundRelease"] as const) expect(d.calls[k]).not.toHaveBeenCalled();
+    }
+  });
+  it("소스 계약: needsPgCancel은 toss && amount>0, portone>0 거부가 refundBegin보다 앞, SQL 파일은 이번 커밋에서 변경하지 않는다", () => {
+    const l = read("lib/payments/server/lifecycle.ts");
+    expect(l).toContain('const needsPgCancel = ctx.provider === "toss" && ctx.amount > 0;');
+    expect(l.indexOf('ctx.provider === "portone" && ctx.amount > 0')).toBeLessThan(l.indexOf("d.refundBegin("));
+    expect(l.indexOf('ctx.provider === "portone" && ctx.amount > 0')).toBeLessThan(l.indexOf("const needsPgCancel"));
+    expect(read("lib/payments/PortOnePaymentProvider.ts")).toContain("아직 구현되지 않았어요");   // 근거: PortOne 연동 미구현
+  });
+});
+
 describe("토스 API 호출 모듈(fetch 주입 — 실제 호출 없음)", () => {
   it("승인/취소 요청 형식: Basic 인증, Idempotency-Key, 전액 취소(cancelAmount 없음), 네트워크 오류는 status 0", async () => {
     const f = vi.fn(async () => new Response(JSON.stringify({ ok: 1 }), { status: 200 }));

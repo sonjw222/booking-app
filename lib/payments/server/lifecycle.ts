@@ -245,7 +245,18 @@ export async function handleRefund(input: { token: string | null; membershipId?:
   if (ctx.status === "refunded") return { status: 409, body: { error: "이미 환불된 수강권이에요", code: "already_refunded" } };
 
   const isPgProvider = !!ctx.provider && PG_PROVIDERS.includes(ctx.provider);
-  const needsPgCancel = isPgProvider && ctx.amount > 0;
+
+  // 외부 환불 경계는 provider별로 명시한다. 현재 실제 승인 취소가 구현된 PG는 토스뿐이다.
+  // PortOne은 승인/취소 연동이 아직 없다(PortOnePaymentProvider는 구조만 있고 confirm 라우트도 toss만 허용) —
+  // 돈이 움직인 PortOne 주문(amount>0)을 토스 취소 API로 보내거나, 외부 취소 없이 DB만 refunded로 만들면 안 되므로 FAIL CLOSED:
+  // 토스 호출/환불 진행 표시(refundBegin)/DB 환불을 모두 하지 않는다(paymentKey 유무와 무관).
+  if (ctx.provider === "portone" && ctx.amount > 0) {
+    d.log("warn", "PG_REFUND_UNSUPPORTED_PROVIDER", { provider: "portone", membershipId: ctx.membershipId, orderId: ctx.orderId });
+    return { status: 501, body: { error: "해당 결제수단의 자동 환불은 아직 지원하지 않아요. 센터 또는 운영자에게 문의해주세요", code: "portone_refund_unsupported" } };
+  }
+  // 외부 취소가 필요한 환불 = 토스 && 금액>0. (portone 0원은 돈 이동이 없어 아래 DB-only 경로 — 0원 토스 주문과 동일: 환불 payment 행은 만들지 않고
+  // 쿠폰/포인트만 복원한다. allowPg=true는 브라우저 직접 호출 가드(PG 주문 거부)만 통과시키며 서버 라우트에서만 가능하다.)
+  const needsPgCancel = ctx.provider === "toss" && ctx.amount > 0;
 
   if (!needsPgCancel) {
     // direct/manual/mock(또는 0원 PG 주문): 기존 DB 환불 그대로. 0원 PG 주문만 PG 가드를 통과시킨다.
