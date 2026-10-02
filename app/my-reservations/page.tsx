@@ -17,6 +17,7 @@ import UiIcon from "../components/UiIcon";
 import SegmentedTabs from "../components/SegmentedTabs";
 import EmptyState from "../components/EmptyState";
 import { toUserMessage } from "../../lib/userError";
+import { hapticWarning } from "../../lib/nativeHaptics";
 
 const STATUS_LABEL: Record<string, string> = {
   confirmed: "예약 확정",
@@ -107,6 +108,7 @@ export default function MyReservationsPage() {
     try {
       const { deducted } = await cancelReservation(h.id);
       showToast(deducted ? "취소됐지만 마감 이후라 수강권 1회가 차감됐어요" : "예약이 취소됐어요");
+      void hapticWarning();
       await load();
     } catch (e: any) {
       showToast(toUserMessage(e, "취소하지 못했어요"));

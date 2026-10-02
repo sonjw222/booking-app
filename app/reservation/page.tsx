@@ -42,6 +42,7 @@ import AppButton from "../components/AppButton";
 import { PUBLIC_HOLIDAYS } from "../../lib/publicHolidays";
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import { toUserMessage } from "../../lib/userError";
+import { hapticSuccess } from "../../lib/nativeHaptics";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -400,6 +401,7 @@ function ReservationCalendarContent() {
       const who = profiles.find((p) => p.id === activeProfileId);
       const prefix = who && !who.isPrimary ? `${who.name} · ` : "";
       showToast(prefix + (status === "confirmed" ? "예약이 완료됐어요!" : "정원이 차서 대기 등록됐어요"));
+      if (status === "confirmed") void hapticSuccess();
       setConfirmClass(null);
       setPassesRefreshKey((k) => k + 1);
       await load({ silent: true });

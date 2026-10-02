@@ -5,6 +5,7 @@ import { ImageViewerProvider } from "./components/ImageViewer";
 import SessionWatcher from "./components/SessionWatcher";
 import AppConfirmProvider from "./components/AppConfirmProvider";
 import GlobalBottomNav from "./components/GlobalBottomNav";
+import OfflineNotice from "./components/OfflineNotice";
 import CapacitorBootstrap from "./components/CapacitorBootstrap";
 import InteractiveGuard from "./components/InteractiveGuard";
 import NavigationPolicy from "./components/NavigationPolicy";
@@ -72,6 +73,7 @@ export default function RootLayout({
         />
         {/* 토스 결제 SDK는 전역으로 로드하지 않는다(2026-10-02) — lib/tossSdk.ts loadTossSdk()가 checkout/카드등록 화면에서만 온디맨드 로드 */}
         <CapacitorBootstrap />
+        <OfflineNotice />
         <InteractiveGuard />
         <NavigationPolicy />
         <SessionWatcher />

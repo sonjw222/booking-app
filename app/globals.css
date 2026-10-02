@@ -6607,3 +6607,6 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
 .trainer-order-list li { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; padding: 4px 10px 4px 4px; border: 1px solid var(--line-strong); border-radius: 999px; font-size: 12.5px; color: var(--ink); }
 .trainer-order-list li b { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); color: var(--card-bg); font-size: 11px; }
 .trainer-order-list li span { min-width: 0; overflow-wrap: anywhere; }
+
+/* 네이티브 오프라인 안내 배너(기존 토큰만 사용, transform/opacity 없이 정적 표시) */
+.offline-notice { position:fixed; left:12px; right:12px; top:calc(env(safe-area-inset-top, 0px) + 8px); z-index:9000; padding:10px 14px; border-radius:12px; background:var(--ink); color:var(--card-bg); font-size:13px; font-weight:600; text-align:center; box-shadow:0 6px 18px rgba(0,0,0,.18); }
