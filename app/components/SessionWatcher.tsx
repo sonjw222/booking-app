@@ -26,10 +26,10 @@
   2026-08-14 — provider 조건 없이 phone만 봤던 최초 구현의 버그).
 */
 
-import { isSyntheticMemberName } from "../../lib/memberName";
+import { isSyntheticMemberName, socialCompletionNeed } from "../../lib/memberName";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import { ensureAccountForCurrentUser, completeSocialProfile } from "../../lib/authAccount";
+import { ensureAccountForCurrentUser, completeSocialProfile, completeSocialName } from "../../lib/authAccount";
 import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
 import { checkMergeableAccountByEmail, mergeViaPasswordVerification } from "../../lib/accountLinking";
 import { autoRegisterNativePushOnLogin } from "../../lib/nativePush";
@@ -54,6 +54,8 @@ export default function SessionWatcher() {
 
   const [phoneGateAccountId, setPhoneGateAccountId] = useState<string | null>(null);
   const [realName, setRealName] = useState("");
+  // 전화번호는 이미 있고 이름만 합성/미등록인 기존 소셜 회원 — 이름만 받는 gate(전화 인증을 다시 강요하지 않는다).
+  const [nameGateAccountId, setNameGateAccountId] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
   const [addressBase, setAddressBase] = useState("");
   const [addressDetail, setAddressDetail] = useState("");
@@ -137,9 +139,11 @@ export default function SessionWatcher() {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
         void ensureAccountForCurrentUser().then((account) => {
-          setPhoneGateAccountId(account && account.isSocial && !account.phone ? account.id : null);
+          const need = socialCompletionNeed(account);
+          setPhoneGateAccountId(account && need === "full" ? account.id : null);
+          setNameGateAccountId(account && need === "name" ? account.id : null);
           // 이름 칸 기본값: 소셜이 준 이름이 합성 handle(이메일 앞부분/랜덤 id)이면 비워서 사용자가 실명을 직접 입력하게 한다.
-          if (account && account.isSocial && !account.phone) setRealName(isSyntheticMemberName(account.name) ? "" : (account.name ?? ""));
+          if (account && need) setRealName(isSyntheticMemberName(account.name) ? "" : (account.name ?? ""));
           if (account?.wasCreated && !mergeDismissedRef.current) {
             void checkMergeableAccountByEmail().then((match) => {
               if (match) setMergePromptEmail(match.email);
@@ -163,6 +167,7 @@ export default function SessionWatcher() {
       }
       if (event !== "SIGNED_OUT") return;
       setPhoneGateAccountId(null);
+      setNameGateAccountId(null);
       setMergePromptEmail(null);
       if (window.location.pathname.startsWith("/login")) return;
       if (window.location.pathname.startsWith("/reset-password")) return;
@@ -175,6 +180,10 @@ export default function SessionWatcher() {
     if (!phoneGateAccountId) return;
     if (!realName.trim()) {
       setGateError("이름을 입력해주세요");
+      return;
+    }
+    if (isSyntheticMemberName(realName)) {
+      setGateError("실제 이름을 입력해주세요");
       return;
     }
     if (!phone.trim()) {
@@ -195,6 +204,25 @@ export default function SessionWatcher() {
       const address = addressDetail.trim() ? `${addressBase} ${addressDetail}`.trim() : addressBase.trim();
       await completeSocialProfile(phoneGateAccountId, phone.trim(), address || null, agreeMarketing, realName.trim());
       setPhoneGateAccountId(null);
+    } catch (e: any) {
+      setGateError(e.message ?? "저장에 실패했어요");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // 이름만 필요한 기존 소셜 회원: 대표 프로필 → accounts 순서로 저장하고 둘 다 성공해야 gate를 닫는다(실패 시 그대로 열려 있고 다음 로그인에도 다시 나타남).
+  async function handleCompleteName() {
+    if (!nameGateAccountId) return;
+    if (!realName.trim() || isSyntheticMemberName(realName)) {
+      setGateError(realName.trim() ? "실제 이름을 입력해주세요" : "이름을 입력해주세요");
+      return;
+    }
+    setSaving(true);
+    setGateError(null);
+    try {
+      await completeSocialName(nameGateAccountId, realName.trim());
+      setNameGateAccountId(null);
     } catch (e: any) {
       setGateError(e.message ?? "저장에 실패했어요");
     } finally {
@@ -264,6 +292,39 @@ export default function SessionWatcher() {
             </button>
             <button className="primary-btn" onClick={handleMergeConfirm} disabled={mergeSubmitting}>
               {mergeSubmitting ? "합치는 중..." : "계정 합치기"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (nameGateAccountId) {
+    return (
+      <div className="sheet-overlay">
+        <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet-title">이름을 입력해주세요</div>
+          <div className="perm-guide" style={{ margin: "0 0 12px" }}>
+            센터 운영자가 회원을 확인할 수 있도록 실제 이름이 필요해요. 등록된 휴대폰 번호는 그대로 유지돼요.
+          </div>
+          <input
+            className="input-field"
+            type="text"
+            aria-label="이름"
+            autoComplete="name"
+            placeholder="이름(실명)"
+            value={realName}
+            onChange={(e) => setRealName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleCompleteName()}
+            maxLength={30}
+          />
+          {gateError && <div className="auth-msg error" style={{ marginTop: 10 }}>{gateError}</div>}
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            <button className="ghost-btn" onClick={handleCancelOnboarding} disabled={saving || cancelling}>
+              {cancelling ? "로그아웃 중..." : "로그아웃"}
+            </button>
+            <button className="primary-btn" onClick={handleCompleteName} disabled={saving || cancelling}>
+              {saving ? "저장 중..." : "저장"}
             </button>
           </div>
         </div>

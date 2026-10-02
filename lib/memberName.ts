@@ -16,3 +16,17 @@ export function isSyntheticMemberName(name: string | null | undefined): boolean 
 export function displayMemberName(name: string | null | undefined): string {
   return isSyntheticMemberName(name) ? UNNAMED_MEMBER_LABEL : (name as string).trim();
 }
+
+/*
+  소셜 가입 마무리(SessionWatcher) gate 판정. 소셜 계정만 대상이며 이메일 계정에는 gate가 생기지 않는다.
+  - "full": 전화번호가 없음 → 기존 전화 인증 흐름(이름 포함)
+  - "name": 전화번호는 있지만 대표 이름(accounts.name 또는 primary profile 이름)이 합성/미등록 → 이름만 받는다(저장된 전화번호는 건드리지 않는다)
+  - null: 필요 없음
+*/
+export type SocialCompletionNeed = "full" | "name" | null;
+export function socialCompletionNeed(a: { isSocial: boolean; phone: string | null; name: string | null; profileName?: string | null } | null | undefined): SocialCompletionNeed {
+  if (!a || !a.isSocial) return null;
+  if (!a.phone) return "full";
+  if (isSyntheticMemberName(a.name) || isSyntheticMemberName(a.profileName === undefined ? a.name : a.profileName)) return "name";
+  return null;
+}

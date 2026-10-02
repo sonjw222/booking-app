@@ -59,3 +59,45 @@ test('다른 컬럼 UPDATE는 검사하지 않고(이름/정렬), rollback SQL�
     await db.exec(`update progress_categories set parent_id='${id(2)}' where id='${id(1)}'`);   // 가드 제거 후엔 순환도 통과(롤백 확인)
   } finally { await db.close(); }
 });
+
+test('동시성: 센터별 transaction-scoped advisory lock이 검증 쿼리보다 먼저 잡힌다(전역 lock 아님, 보안 설정 유지)', async () => {
+  const body = migration.replace(/--.*$/gm, '');
+  const lock = body.indexOf("pg_advisory_xact_lock(hashtextextended('progress_categories_tree:' || new.center_id::text, 0))");
+  assert.ok(lock > 0, 'xact advisory lock(center_id 기반) 필요');
+  assert.ok(lock < body.indexOf('select center_id into v_parent_center'), 'lock은 부모/조상 읽기 전에');
+  assert.ok(lock < body.indexOf('with recursive up'), 'lock은 순환/깊이 검사 전에');
+  assert.doesNotMatch(body, /pg_advisory_lock\(|pg_advisory_lock_shared|for update/i);   // session-level lock 금지
+  assert.match(body, /security definer\s+set search_path = public/);
+  assert.match(body, /revoke all on function public\.progress_categories_guard_tree\(\) from public, anon, authenticated/);
+  assert.match(body, /before insert or update of parent_id, center_id/);
+});
+
+test('migration 재실행 안전(idempotent) — 두 번 실행해도 오류 없고 트리거는 1개, 검증은 계속 동작', async () => {
+  const db = await fixture();
+  try {
+    await db.exec(migration);
+    assert.equal((await db.query(`select count(*)::int c from pg_trigger where tgname='progress_categories_guard_tree' and not tgisinternal`)).rows[0].c, 1);
+    await assert.rejects(db.exec(`update progress_categories set parent_id='${id(2)}' where id='${id(1)}'`), /순환/);
+  } finally { await db.close(); }
+});
+
+test('verify_progress_category_tree(read-only preflight): 정상 데이터는 OK, 순환/다른 센터/자기 부모/8단계는 FIX_DATA_FIRST, 데이터는 수정하지 않는다, 순환이 있어도 끝난다', async () => {
+  const verify = readFileSync(new URL('../../verify_progress_category_tree_20261003.sql', import.meta.url), 'utf8');
+  assert.doesNotMatch(verify.replace(/--.*$/gm, ''), /\b(insert|update|delete|drop|alter|create|truncate)\b/i);
+  const mk = async (rows) => {
+    const db = new PGlite();
+    await db.exec(`create table progress_categories(id uuid primary key, center_id uuid not null, parent_id uuid, name text not null default 'x');`);   // FK 없음 = 이미 깨진 데이터를 만들 수 있다
+    for (const [n, p, c] of rows) await db.exec(`insert into progress_categories(id, center_id, parent_id) values ('${id(n)}','${c ?? C1}',${p ? `'${id(p)}'` : 'null'});`);
+    return db;
+  };
+  const run = async (rows) => { const db = await mk(rows); try { const before = (await db.query('select count(*)::int c from progress_categories')).rows[0].c; const r = (await db.query(verify)).rows[0]; assert.equal((await db.query('select count(*)::int c from progress_categories')).rows[0].c, before); return r; } finally { await db.close(); } };
+  let r = await run([[1, null], [2, 1], [3, 2], [4, null, C2]]);
+  assert.deepEqual([r.verdict, r.cyclic_nodes, r.max_depth, r.cross_center_parents, r.self_parents, r.over_depth_7_nodes], ['OK', '0', 3, '0', '0', '0'].map((v, i) => (i === 0 || i === 2 ? v : Number(v))));
+  r = await run([[1, 2], [2, 1]]);                       assert.equal(r.verdict, 'FIX_DATA_FIRST'); assert.equal(Number(r.cyclic_nodes), 2);
+  r = await run([[1, 1]]);                                assert.equal(r.verdict, 'FIX_DATA_FIRST'); assert.equal(Number(r.self_parents), 1);
+  r = await run([[1, null], [2, 1, C2]]);                 assert.equal(r.verdict, 'FIX_DATA_FIRST'); assert.equal(Number(r.cross_center_parents), 1);
+  r = await run([[1, null], ...[2, 3, 4, 5, 6, 7, 8].map((n) => [n, n - 1])]);   // 8단계
+  assert.equal(r.verdict, 'FIX_DATA_FIRST'); assert.equal(Number(r.over_depth_7_nodes), 1); assert.equal(r.max_depth, 8);
+  r = await run([[1, null], [2, 1], [3, 4], [4, 3], [5, 3]]);   // 순환에 매달린 가지도 순환으로 센다
+  assert.equal(Number(r.cyclic_nodes), 3);
+});

@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 
-export type EnsuredAccount = { id: string; phone: string | null; isSocial: boolean; wasCreated: boolean; name: string | null };
+export type EnsuredAccount = { id: string; phone: string | null; isSocial: boolean; wasCreated: boolean; name: string | null; profileName?: string | null };
 
 // 소셜 로그인(카카오/네이버/애플/구글)으로 처음 로그인한 사용자는 auth.users 행만 생기고
 // 우리 앱의 accounts/profiles 행은 아무도 만들어주지 않는다 — 이메일 회원가입
@@ -138,7 +138,9 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
     if (findErr) return null; // 조회 실패 시 조용히 넘어감(RLS 등) — 이후 실제 데이터 호출에서 다시 드러남
     if (existing) {
       await ensureProfileRow(existing.id, existing.name || consumeAppleFullName() || meta.full_name || meta.name || meta.nickname || "회원");
-      return { id: existing.id, phone: existing.phone, isSocial, wasCreated: false, name: existing.name ?? null };
+      // 관리자 회원목록의 source of truth는 대표 프로필 이름 — gate 판정에 함께 쓴다(조회 실패면 undefined → accounts.name만 본다).
+      const { data: prof } = await supabase.from("profiles").select("name").eq("account_id", existing.id).eq("is_primary", true).is("deleted_at", null).limit(1);
+      return { id: existing.id, phone: existing.phone, isSocial, wasCreated: false, name: existing.name ?? null, profileName: prof && prof.length > 0 ? (prof[0].name as string | null) : undefined };
     }
   }
 
@@ -166,7 +168,7 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
   }
 
   await ensureProfileRow(account.id, name);
-  return { id: account.id, phone: account.phone, isSocial, wasCreated: true, name };
+  return { id: account.id, phone: account.phone, isSocial, wasCreated: true, name, profileName: name };
 }
 
 // 소셜 가입 완료 모달(SessionWatcher)에서 호출 — phone은 필수, address는 선택(도로명주소+
@@ -185,26 +187,42 @@ export async function completeSocialProfile(
   marketingConsent: boolean,
   name?: string
 ): Promise<void> {
-  // 2026-10-03: 가입 마무리에서 사용자가 입력/확인한 실명을 accounts와 대표 프로필에 저장한다(관리자 화면의 회원 이름 source of truth).
+  // 2026-10-03: 가입 마무리에서 사용자가 입력/확인한 실명을 대표 프로필 → accounts 순서로 저장한다(아래 saveCanonicalName).
   const realName = name?.trim();
-  const { error } = await supabase
+  if (realName) await saveCanonicalName(accountId, realName);
+  const { data, error } = await supabase
     .from("accounts")
     .update({
-      ...(realName ? { name: realName } : {}),
       phone,
       address,
       marketing_consent: marketingConsent,
       marketing_consent_at: marketingConsent ? new Date().toISOString() : null,
     })
-    .eq("id", accountId);
+    .eq("id", accountId)
+    .select("id");
   if (error) {
     if (error.code === "23505") throw new Error("이미 다른 계정에 등록된 번호예요");
     throw new Error(error.message);
   }
-  if (realName) {
-    const { error: pErr } = await supabase.from("profiles").update({ name: realName }).eq("account_id", accountId).eq("is_primary", true);
-    if (pErr) throw new Error("이름을 저장하지 못했어요: " + pErr.message);
-  }
+  if (!data || data.length === 0) throw new Error("가입 정보를 저장하지 못했어요");
+}
+
+// 전화번호는 이미 있고 이름만 합성/미등록인 기존 소셜 회원용(SessionWatcher "name" gate). phone/address/동의는 절대 건드리지 않는다.
+// 관리자 목록의 source of truth인 대표 프로필을 먼저 저장하고 accounts까지 둘 다 성공(영향 행 1개 이상)해야 완료 — 하나라도 실패하면 throw라
+// 호출부가 성공 처리하지 않고, DB에는 여전히 합성 이름이 남아 gate가 다음 로그인/재실행에서 다시 나타난다.
+export async function completeSocialName(accountId: string, name: string): Promise<void> {
+  const realName = name.trim();
+  if (!realName) throw new Error("이름을 입력해주세요");
+  await saveCanonicalName(accountId, realName);
+}
+
+async function saveCanonicalName(accountId: string, realName: string): Promise<void> {
+  const { data: pRows, error: pErr } = await supabase.from("profiles").update({ name: realName }).eq("account_id", accountId).eq("is_primary", true).select("id");
+  if (pErr) throw new Error("이름을 저장하지 못했어요: " + pErr.message);
+  if (!pRows || pRows.length === 0) throw new Error("이름을 저장하지 못했어요(대표 프로필 없음)");
+  const { data: aRows, error: aErr } = await supabase.from("accounts").update({ name: realName }).eq("id", accountId).select("id");
+  if (aErr) throw new Error("이름을 저장하지 못했어요: " + aErr.message);
+  if (!aRows || aRows.length === 0) throw new Error("이름을 저장하지 못했어요(계정 갱신 실패)");
 }
 
 // 토스페이먼츠 카드사 심사용 "심사관 전용 계정" 판별(2026-09-06,

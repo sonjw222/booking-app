@@ -93,7 +93,7 @@ describe("[6] 회원 이름 표시", () => {
     expect(w).toContain("isSyntheticMemberName(account.name)");
     expect(w).toContain("completeSocialProfile(phoneGateAccountId, phone.trim(), address || null, agreeMarketing, realName.trim())");
     const a = read("lib/authAccount.ts");
-    expect(a).toContain("...(realName ? { name: realName } : {})");
+    expect(a).toContain("if (realName) await saveCanonicalName(accountId, realName);");
     expect(a).toContain('.update({ name: realName }).eq("account_id", accountId).eq("is_primary", true)');
   });
 });
@@ -161,14 +161,15 @@ describe("[2] 수강권 예약조건 일괄 적용", () => {
     expect(s.hasFailure).toBe(true);
     expect(s.message).toContain("1개는 실패했어요");
   });
-  it("이미 같은 조건이 있으면 건너뛰고, 요일 고정 수강권은 고정 요일 밖 조건을 추가하지 않는다", async () => {
+  it("이미 같은 조건이 있으면 중복 없이 정상(already_exists), 요일 고정 수강권이 요청 요일을 다 받을 수 있으면 정상", async () => {
     const add = vi.fn(async () => {});
     const r = await applyRulesToProducts([
       T("a", { existingRules: [{ dayOfWeek: 1, startTime: "19:00", classTitle: null }] }),
-      T("b", { autoBookDays: [2] }),
+      T("b", { autoBookDays: [1, 2] }),
     ], { days: [1], startTime: "19:00", classTitle: null }, add);
-    expect(r.skipped).toEqual([{ id: "a", name: "수강권a", reason: "already_exists" }, { id: "b", name: "수강권b", reason: "locked_days" }]);
-    expect(add).not.toHaveBeenCalled();
+    expect(r.skipped).toEqual([{ id: "a", name: "수강권a", reason: "already_exists" }]);
+    expect(r.succeeded).toEqual([{ id: "b", name: "수강권b", added: 1 }]);
+    expect(add).toHaveBeenCalledTimes(1);
   });
   it("화면: 선택 모드에서만 '예약조건 일괄 설정', 기존 조건 시트 재사용, 성공 시 선택 초기화, 일부 실패 시 시트 유지, 개별 추가 경로 유지", () => {
     const p = read("app/manager/membership-rules/page.tsx");

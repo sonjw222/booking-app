@@ -6657,3 +6657,8 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
 .rule-title { color: var(--ink); overflow-wrap: anywhere; word-break: keep-all; }
 @keyframes rule-acc-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .rule-acc-panel { animation: none; } .rule-acc-chevron { transition: none; } }
+
+/* 센터 상세 헤더: 센터명(가운데, 긴 이름은 줄바꿈)과 공유 action(오른쪽 끝)을 한 row로. 이름 양옆에 같은 여백을 둬 이름이 공유 버튼 밑으로 들어가지 않는다. */
+.center-hero-namerow { position: relative; align-self: stretch; display: flex; justify-content: center; align-items: center; min-height: 44px; padding: 0 60px; box-sizing: border-box; }
+.center-hero-namerow .center-hero-name { min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
+.center-hero-share { position: absolute; right: 0; top: 50%; transform: translateY(-50%); min-height: 36px; padding: 0 12px; }

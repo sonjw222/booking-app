@@ -600,8 +600,11 @@ function CenterDetailContent() {
         {center.photoUrl
           ? <ZoomableImage className="center-hero-photo" src={centerPhotoUrl(center.photoUrl) ?? ""} />
           : <div className="center-hero-badge">{center.name.slice(0, 1)}</div>}
-        <div className="center-hero-name">{center.name}</div>
-        <button type="button" className="quiet-action" aria-label="센터 공유" onClick={handleShareCenter}>공유</button>
+        {/* 센터명(주 정보, 가운데)과 공유(보조 action, 오른쪽)를 같은 row에 둔다 — 공유 버튼이 이름 아래 왼쪽에 홀로 떨어지지 않게 */}
+        <div className="center-hero-namerow">
+          <div className="center-hero-name">{center.name}</div>
+          <button type="button" className="quiet-action center-hero-share" aria-label="센터 공유" onClick={handleShareCenter}>공유</button>
+        </div>
         {center.address && <div className="center-hero-addr"><UiIcon name="location" size={14} /> {center.address}</div>}
         {center.phone && (
           <a className="center-hero-phone" href={`tel:${center.phone}`}><UiIcon name="phone" size={14} /> {center.phone}</a>

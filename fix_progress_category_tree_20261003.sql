@@ -4,6 +4,9 @@
 -- 감사(Production 읽기 전용): FK는 parent_id → progress_categories(id)뿐이고 순환/깊이/센터 일치 검증이 없었으며, RLS(INSERT/UPDATE)는 "자기 row의 center"
 -- 권한(customer.progress)만 확인해서 다른 센터 분류를 부모로 지정하는 것도 막지 못했다. 삭제는 FK(on delete 없음)가 하위/기록이 있으면 막는 기존 동작을 유지한다.
 -- 검증: 자기 자신 부모 금지 / 같은 센터의 부모만 / 순환 금지(새 부모의 조상에 자신이 있으면 거부) / 깊이 ≤ 7(부모 깊이 + 1 + 자신의 하위 높이) / center_id 변경 금지.
+-- 동시성: 같은 센터의 구조 변경(INSERT/parent_id/center_id)은 transaction-scoped advisory lock(센터별, 커밋/롤백 시 자동 해제)으로 직렬화한다 —
+--   TX1: A.parent=B, TX2: B.parent=A가 서로 변경 전 상태만 읽고 둘 다 통과하는 순환 race를 막는다. 다른 센터끼리는 서로 막지 않는다.
+-- 재실행 안전: create or replace function + drop trigger if exists. 기존 데이터는 이 파일이 수정/삭제하지 않는다(적용 전 verify_progress_category_tree_20261003.sql로 현재 상태 점검).
 -- 이 세션에서는 production에 실행하지 않았습니다.
 -- ============================================================
 begin;
@@ -23,6 +26,8 @@ begin
     if tg_op = 'UPDATE' and new.center_id is distinct from old.center_id then
         raise exception '분류의 센터는 바꿀 수 없어요';
     end if;
+    -- 아래 검증 쿼리들이 읽기 전에 센터 단위 lock을 먼저 잡는다(read committed에서 lock 대기 후의 문장은 다른 TX의 커밋 결과를 본다).
+    perform pg_advisory_xact_lock(hashtextextended('progress_categories_tree:' || new.center_id::text, 0));
     if new.parent_id is null then
         return new;
     end if;

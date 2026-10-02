@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-10-03 — 코드 리뷰 보완 (Web + SQL 파일)
+- 소셜 가입 gate: 전화번호는 있지만 이름이 합성/미등록인 기존 소셜 회원에게 "이름만" 받는 gate 추가(전화 인증 재요구 없음, 저장된 phone 불변). 대표 프로필 → accounts 순서로 저장하고 둘 다 성공해야 완료.
+- 일괄 예약조건: 요일 고정 수강권이 요청 요일 전체를 받을 수 없으면 일부만 넣지 않고 DB write 전에 전체 차단(preflight). 이미 같은 조건이 있으면 정상(중복 생성 없음). 일괄 시트도 현재 센터 수업 목록을 새로 읽음(stale 방지).
+- 진도 7단계 SQL: 센터별 `pg_advisory_xact_lock`으로 구조 변경 직렬화(순환 race 방지). 적용 전 점검용 읽기 전용 `verify_progress_category_tree_20261003.sql` 추가. 미실행.
+- 센터 상세: 공유 버튼을 센터명과 같은 row 오른쪽으로 이동.
+
 ## 2026-10-03 — 회원 "수강권 · 상품 구매" sheet 정리 (Web)
 - 검색/필터 뒤 네모 띠: `.catalog-filter`가 카드 토큰(`--card-bg`)을 쓰는데 sheet 바탕은 `--bg`라 다크에서 별도 패널처럼 보였음 → sheet 범위에서만 `--bg`로 통일(관리자 페이지 공용 스타일은 유지). 두 chip 행은 같은 높이(36px)/padding/gap/시작 x, 좁으면 wrap.
 - 예약조건: 카드에 전부 펼치던 것을 기본 collapsed accordion(상품별 독립, aria-expanded/controls)으로 변경, 요약 1줄("예약조건 N개 · 월~일"). 월→일 정렬/요일 그룹/한 조건 한 row — `lib/ruleDisplay.ts`.

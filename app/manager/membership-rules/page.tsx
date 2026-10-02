@@ -12,7 +12,7 @@ import SheetOverlay from "../../components/SheetOverlay";
   - 수강권 설정 권한(pass.update) 필요
 */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
@@ -40,6 +40,7 @@ const WEEKDAY_NEEDS_RULES_MESSAGE = "요일 선택형 수강권은 예약조건�
 export default function MembershipRulesPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [centerId, setCenterId] = useState<string | null>(null);
+  const centerIdRef = useRef<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [rulesByProduct, setRulesByProduct] = useState<Record<string, ScheduleRule[]>>({});
   const [loading, setLoading] = useState(true);
@@ -102,6 +103,8 @@ export default function MembershipRulesPage() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // 예약조건 일괄 설정: 선택한 수강권들(시트가 열려 있는 동안 고정). 기존 "예약조건 추가" 시트를 그대로 재사용한다.
+  // 센터가 바뀌면 이전 센터 수업 목록을 즉시 버린다(늦게 도착한 이전 요청 결과도 loadClassOptions가 무시)
+  useEffect(() => { centerIdRef.current = centerId; setExistingClasses([]); }, [centerId]);
   const [bulkTargets, setBulkTargets] = useState<Product[] | null>(null);
   // UX 감사(B-8) — 수강권 상품이 100개+(이름이 UUID로 끝나 구분도 안 됨)면 검색/페이징 없이
   // 전부 렌더돼 원하는 걸 찾기 어려웠다. 이름 검색 + 20개씩 "더보기"로 완화.
@@ -415,7 +418,20 @@ export default function MembershipRulesPage() {
   // 예약조건 추가 시트 열기(카드 버튼/요일 선택형 안내에서 공용 — 새 UI를 만들지 않고 기존 시트를 재사용한다)
   async function openRuleSheet(p: Product) {
     setRuleFor(p); setRPick(""); setRDays([]); setRTime(""); setRTitle("");
-    if (centerId) { try { setExistingClasses(await fetchExistingClassOptions(centerId)); } catch { setExistingClasses([]); } }
+    await loadClassOptions();
+  }
+
+  // 단건/일괄 시트 공용: 시트를 열 때마다 현재 센터의 수업 목록을 새로 읽는다. 먼저 비워서(이전 센터/이전 시트 값 재사용 금지)
+  // 실패해도 stale 목록이 남지 않고, 읽는 동안 센터가 바뀌었으면 늦게 온 결과를 버린다.
+  async function loadClassOptions() {
+    setExistingClasses([]);
+    const cid = centerId;
+    centerIdRef.current = cid;
+    if (!cid) return;
+    try {
+      const list = await fetchExistingClassOptions(cid);
+      if (centerIdRef.current === cid) setExistingClasses(list);
+    } catch { setExistingClasses([]); }
   }
 
   async function openBulkRuleSheet() {
@@ -423,6 +439,7 @@ export default function MembershipRulesPage() {
     if (targets.length === 0) return;
     setRPick(""); setRDays([]); setRTime(""); setRTitle("");
     setBulkTargets(targets);
+    await loadClassOptions();
   }
 
   async function handleBulkAddRules() {
@@ -435,7 +452,10 @@ export default function MembershipRulesPage() {
         addRule,
       );
       const sum = bulkRuleSummary(result);
-      if (sum.hasFailure) {
+      if (result.incompatible.length > 0) {
+        // preflight 차단: DB write가 하나도 없었다. 선택/입력을 그대로 두고 사용자가 요일이나 대상을 고치게 한다.
+        setError(sum.message);
+      } else if (sum.hasFailure) {
         // 일부 실패: 성공처럼 닫지 않는다 — 시트를 유지하고 실패한 수강권만 남겨 다시 시도할 수 있게 한다
         setError(sum.message);
         const failedIds = new Set(result.failed.map((f) => f.id));
@@ -955,7 +975,7 @@ export default function MembershipRulesPage() {
         <SheetOverlay className="sheet-overlay" onClick={() => { setRuleFor(null); setBulkTargets(null); }}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{bulkTargets ? `선택한 ${bulkTargets.length}개 수강권 예약조건 일괄 설정` : `${ruleFor!.name} 조건 추가`}</div>
-            {bulkTargets && <div className="perm-guide" style={{ margin: "0 0 8px" }}>선택한 <b>{bulkTargets.length}개</b> 수강권 모두에 아래 조건이 <b>추가</b>돼요(이미 같은 조건이 있으면 건너뛰고, 요일 고정 수강권은 고정 요일만 적용돼요).</div>}
+            {bulkTargets && <div className="perm-guide" style={{ margin: "0 0 8px" }}>선택한 <b>{bulkTargets.length}개</b> 수강권 모두에 아래 조건이 <b>추가</b>돼요(이미 같은 조건이 있으면 중복 없이 그대로 두고, 요일 고정 수강권이 선택한 요일을 모두 받을 수 없으면 아무것도 적용하지 않아요).</div>}
             {ruleFor && ruleFor.weekdaySelectable && computeSelectableSchedule(rulesByProduct[ruleFor.id] ?? []).days.length === 0 && (
               <div className="perm-guide is-warning" style={{ margin: "0 0 8px" }}>
                 {WEEKDAY_NEEDS_RULES_MESSAGE} 회원이 고를 요일(과 시간)을 직접 선택해 추가해주세요.
