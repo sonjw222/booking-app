@@ -47,25 +47,44 @@ declare global {
 // 이미 로드돼 있으면 즉시 resolve, 로드 중인 script가 있으면 그 load를 기다리고(중복 삽입 없음), 시간 초과/실패는 reject한다.
 export const TOSS_SDK_SRC = "https://js.tosspayments.com/v2/standard";
 
+// 우리가 삽입한 script에만 붙는 표시 — 실패/시간 초과 시 이 script만 제거해 다음 호출이 깨끗하게 재시도할 수 있게 한다.
+const LOADER_ATTR = "data-mwhabit-toss-sdk";
+let inFlight: Promise<void> | null = null;
+
 export function loadTossSdk(timeoutMs = 10000): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (typeof window === "undefined" || typeof document === "undefined") { reject(new Error("토스 결제 SDK를 불러오지 못했어요")); return; }
-    if (window.TossPayments) { resolve(); return; }
-    const fail = () => reject(new Error("토스 결제 SDK를 불러오지 못했어요"));
-    const timer = setTimeout(fail, timeoutMs);
-    const done = () => { clearTimeout(timer); if (window.TossPayments) resolve(); else fail(); };
-    const failNow = () => { clearTimeout(timer); fail(); };
+  if (typeof window === "undefined" || typeof document === "undefined") return Promise.reject(new Error("토스 결제 SDK를 불러오지 못했어요"));
+  if (window.TossPayments) return Promise.resolve();   // 성공 후에는 다시 다운로드하지 않는다
+  if (inFlight) return inFlight;                        // 동시 호출은 같은 로드를 공유(script 중복 삽입 없음)
+  const p = new Promise<void>((resolve, reject) => {
+    let script: HTMLScriptElement | null = null;
+    let settled = false;
+    const cleanupFailed = () => { try { script?.remove(); } catch { /* 무시 */ } };
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (ok && window.TossPayments) { resolve(); return; }
+      cleanupFailed();   // error/timeout/로드됐지만 전역 없음 → 우리가 만든 script만 정리
+      reject(new Error("토스 결제 SDK를 불러오지 못했어요"));
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    // 다른 코드가 넣은(우리 표시가 없는) 같은 src script가 이미 있으면 그 load를 기다리되 제거하지 않는다.
     const existing = document.querySelector(`script[src="${TOSS_SDK_SRC}"]`);
     if (existing) {
-      existing.addEventListener("load", done);
-      existing.addEventListener("error", failNow);
+      existing.addEventListener("load", () => finish(true));
+      existing.addEventListener("error", () => finish(false));
       return;
     }
-    const script = document.createElement("script");
+    script = document.createElement("script");
     script.src = TOSS_SDK_SRC;
     script.async = true;
-    script.onload = done;
-    script.onerror = failNow;
+    script.setAttribute(LOADER_ATTR, "1");
+    script.onload = () => finish(true);
+    script.onerror = () => finish(false);
     document.head.appendChild(script);
   });
+  inFlight = p;
+  const clear = () => { if (inFlight === p) inFlight = null; };
+  p.then(clear, clear);
+  return p;
 }

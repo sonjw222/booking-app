@@ -46,7 +46,11 @@ describe("ManagerNav 권한 재조회 축소(보안 경계 변화 없음)", () =
   it("pathname마다가 아니라 60초 TTL, 앱 복귀(visibilitychange) 때 재확인", () => {
     expect(m).toContain("const NAV_PERM_RECHECK_MS = 60_000;");
     expect(m).toContain("Date.now() - lastCheckRef.current < NAV_PERM_RECHECK_MS");
-    expect(m).toContain('document.addEventListener("visibilitychange", onVisible)');
+    // 이동(pathname)과 앱/탭 복귀(visible)가 같은 recheckPermissions를 직접 호출한다(TTL 안이면 건너뜀, 조회 중이면 중복 방지)
+    expect(m).toContain("useEffect(() => { recheckPermissions(); }, [pathname, recheckPermissions]);");
+    expect(m).toContain('if (document.visibilityState === "visible") recheckPermissions();');
+    expect(m).toContain("if (inFlightRef.current) return;");
+    expect(m).not.toContain("lastCheckRef.current = 0; };");   // 예전: 값만 0으로 두고 실제 fetch는 호출하지 않던 handler
     expect(m).toContain("fetchMyEffectivePermissionKeys(");   // 조회 자체는 유지(RLS가 최종 통제)
   });
 });
@@ -61,34 +65,90 @@ describe("Toss SDK 온디맨드 로드", () => {
     // TossPaymentProvider 계약(간편결제 처리)은 그대로
     expect(read("lib/payments/TossPaymentProvider.ts")).toContain("easyPay");
   });
-  describe("loadTossSdk 동작", () => {
-    afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
+  describe("loadTossSdk 동작(재시도 복구)", () => {
+    afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.resetModules(); });
+    // 최소 가짜 DOM: head에 붙은 script 목록을 유지하고 remove()가 실제로 제거한다.
     function stub(win: Record<string, unknown>) {
-      const appended: any[] = [];
-      const doc = { querySelector: () => null, head: { appendChild: (el: any) => appended.push(el) }, createElement: () => ({}) };
+      const scripts: any[] = [];
+      const mk = () => { const el: any = { attrs: {} as Record<string, string>, setAttribute(k: string, v: string) { el.attrs[k] = v; }, remove() { const i = scripts.indexOf(el); if (i >= 0) scripts.splice(i, 1); } }; return el; };
+      const doc = { querySelector: (sel: string) => scripts.find((x) => sel.includes(x.src)) ?? null, head: { appendChild: (el: any) => { scripts.push(el); } }, createElement: () => mk() };
       vi.stubGlobal("window", win); vi.stubGlobal("document", doc);
-      return appended;
+      return scripts;
     }
-    it("이미 로드됨 → 즉시 resolve, script 삽입 없음", async () => {
-      const a = stub({ TossPayments: () => ({}) });
+    it("이미 window.TossPayments가 있으면 script를 만들지 않고 즉시 성공", async () => {
+      const sc = stub({ TossPayments: () => ({}) });
       const { loadTossSdk } = await import("../../lib/tossSdk");
       await expect(loadTossSdk()).resolves.toBeUndefined();
-      expect(a).toHaveLength(0);
+      expect(sc).toHaveLength(0);
     });
-    it("미로드 → v2 script를 한 번 삽입하고 onload에서 resolve, 실패/시간초과는 reject", async () => {
+    it("동시 2회 호출 → script 1개, load 성공 시 둘 다 resolve, 성공 후 재호출은 다운로드 없음", async () => {
       const win: Record<string, unknown> = {};
-      const a = stub(win);
+      const sc = stub(win);
       const { loadTossSdk, TOSS_SDK_SRC } = await import("../../lib/tossSdk");
-      const p = loadTossSdk(50);
-      expect(a).toHaveLength(1);
-      expect(a[0].src).toBe(TOSS_SDK_SRC);
+      const a = loadTossSdk(1000), b = loadTossSdk(1000);
+      expect(sc).toHaveLength(1);
+      expect(sc[0].src).toBe(TOSS_SDK_SRC);
+      expect(sc[0].attrs["data-mwhabit-toss-sdk"]).toBe("1");
       win.TossPayments = () => ({});
-      a[0].onload();
-      await expect(p).resolves.toBeUndefined();
-      const a2 = stub({});
-      const { loadTossSdk: again } = await import("../../lib/tossSdk");
-      await expect(again(10)).rejects.toThrow("토스 결제 SDK");
-      expect(a2.length).toBeGreaterThanOrEqual(0);
+      sc[0].onload();
+      await expect(Promise.all([a, b])).resolves.toBeDefined();
+      await loadTossSdk();
+      expect(sc).toHaveLength(1);
     });
+    it("error → reject + 실패한 script 제거, 이후 재호출은 새 script를 삽입하고 성공할 수 있다", async () => {
+      const win: Record<string, unknown> = {};
+      const sc = stub(win);
+      const { loadTossSdk } = await import("../../lib/tossSdk");
+      const p1 = loadTossSdk(1000);
+      sc[0].onerror();
+      await expect(p1).rejects.toThrow("토스 결제 SDK");
+      expect(sc).toHaveLength(0);                       // 실패 script 정리
+      const p2 = loadTossSdk(1000);
+      expect(sc).toHaveLength(1);                       // 새 script
+      win.TossPayments = () => ({});
+      sc[0].onload();
+      await expect(p2).resolves.toBeUndefined();
+    });
+    it("timeout → reject + script 정리, 이후 재호출 가능", async () => {
+      vi.useFakeTimers();
+      const win: Record<string, unknown> = {};
+      const sc = stub(win);
+      const { loadTossSdk } = await import("../../lib/tossSdk");
+      const p1 = loadTossSdk(50);
+      const assertion = expect(p1).rejects.toThrow("토스 결제 SDK");
+      await vi.advanceTimersByTimeAsync(60);
+      await assertion;
+      expect(sc).toHaveLength(0);
+      const p2 = loadTossSdk(50);
+      expect(sc).toHaveLength(1);
+      win.TossPayments = () => ({});
+      sc[0].onload();
+      await expect(p2).resolves.toBeUndefined();
+    });
+  });
+});
+
+describe("ManagerNav recheck 정책 모델(함수와 동일한 분기)", () => {
+  // recheckPermissions의 분기를 그대로 옮긴 모델: inFlight → TTL → fetch(+실패 시 TTL 초기화)
+  function make(now: () => number) {
+    const st = { last: 0, inFlight: false, fetches: 0 };
+    const recheck = () => { if (st.inFlight) return false; if (st.last && now() - st.last < 60_000) return false; st.inFlight = true; st.last = now(); st.fetches++; return true; };
+    return { st, recheck, done: () => { st.inFlight = false; } };
+  }
+  it("visible + stale → 재조회, TTL 미만 → 재조회 안 함, pathname 이동 + stale → 재조회, 조회 중 중복 호출 → 무시", () => {
+    let t = 1_000_000;
+    const m = make(() => t);
+    expect(m.recheck()).toBe(true);          // 최초
+    expect(m.recheck()).toBe(false);         // 조회 중
+    m.done();
+    t += 30_000; expect(m.recheck()).toBe(false);   // TTL 미만
+    t += 31_000; expect(m.recheck()).toBe(true);    // 60초 경과(visible 또는 pathname)
+    expect(m.st.fetches).toBe(2);
+  });
+  it("메뉴/권한 계약 유지: fetchMyEffectivePermissionKeys → setMyPerms, canSeeManagerMenu 사용", () => {
+    const m = read("app/components/ManagerNav.tsx");
+    expect(m).toContain("fetchMyEffectivePermissionKeys(active.managerCenterId, active.roleId)");
+    expect(m).toContain("setMyPerms(keys)");
+    expect(m).toContain("canSeeManagerMenu(isOwner, myPerms, permissionKey)");
   });
 });

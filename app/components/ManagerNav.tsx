@@ -8,7 +8,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchUnreadCount, subscribeNotifications } from "../../lib/notifications";
 import { fetchMyCenters } from "../../lib/manager";
 import {
@@ -64,29 +64,35 @@ export default function ManagerNav({
   // 2026-10-02 성능: pathname이 바뀔 때마다 fetchMyCenters + 권한을 다시 받던 것을 "마지막 확인 후 60초가 지났을 때"로 줄인다(같은 세션에서 탭마다 같은 결과를
   // 다시 가져오던 비용 제거). 권한 변경 반영은 유지한다: 60초 초과 시 다음 이동에서, 앱/탭이 다시 보일 때(visibilitychange)도 재확인한다. 접근 통제(RLS)는 그대로다.
   const lastCheckRef = useRef(0);
-  useEffect(() => {
+  const inFlightRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+  // 권한 재확인 단일 함수: TTL 안이거나 이미 조회 중이면 건너뛴다(동시 중복 fetch 방지). 이동(pathname)과 앱/탭 복귀(visible) 양쪽이 같은 함수를 쓴다.
+  // 결과 반영은 "아직 마운트돼 있는지"로만 막는다(예전처럼 effect cleanup으로 취소하면 이동 중 진행 중이던 조회가 버려지고 TTL 때문에 재조회도 안 된다).
+  const recheckPermissions = useCallback(() => {
+    if (inFlightRef.current) return;
     if (lastCheckRef.current && Date.now() - lastCheckRef.current < NAV_PERM_RECHECK_MS) return;
+    inFlightRef.current = true;
     lastCheckRef.current = Date.now();
-    let cancelled = false;
     fetchMyCenters()
       .then((centers) => {
-        if (cancelled || centers.length === 0) { setResolved(true); return; }
+        if (!mountedRef.current || centers.length === 0) { if (mountedRef.current) setResolved(true); return; }
         const active = centers[0];
         setIsOwner(active.isOwner);
         if (active.isOwner) { setResolved(true); return; }
         return fetchMyEffectivePermissionKeys(active.managerCenterId, active.roleId).then((keys) => {
-          if (!cancelled) { setMyPerms(keys); setResolved(true); }
+          if (mountedRef.current) { setMyPerms(keys); setResolved(true); }
         });
       })
-      .catch(() => { if (!cancelled) setResolved(true); });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+      .catch(() => { lastCheckRef.current = 0; if (mountedRef.current) setResolved(true); })   // 실패하면 다음 기회에 바로 재시도
+      .finally(() => { inFlightRef.current = false; });
+  }, []);
+  useEffect(() => { recheckPermissions(); }, [pathname, recheckPermissions]);
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === "visible" && Date.now() - lastCheckRef.current >= NAV_PERM_RECHECK_MS) lastCheckRef.current = 0; };
+    const onVisible = () => { if (document.visibilityState === "visible") recheckPermissions(); };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, []);
+  }, [recheckPermissions]);
 
   const liveCanSeeMembers = canSeeManagerMenu(isOwner, myPerms, "customer.member.view");
   useEffect(() => {
