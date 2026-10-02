@@ -9,6 +9,12 @@ BEGIN;
 drop trigger if exists orders_force_server_fields_on_insert on orders;
 drop function if exists orders_force_server_fields_on_insert();
 
+drop trigger if exists reservations_guard_pg_refund_lock on reservations;
+drop function if exists reservations_guard_pg_refund_lock();
+drop trigger if exists memberships_guard_pg_refund on memberships;
+drop function if exists memberships_guard_pg_refund();
+drop function if exists pg_refund_release(uuid, uuid);
+drop function if exists pg_refund_begin(uuid, uuid);
 drop function if exists pg_order_context(uuid, uuid);
 drop function if exists pg_refund_context(uuid, uuid);
 drop function if exists refund_membership_server(uuid, uuid, boolean, boolean);
@@ -111,7 +117,7 @@ $function$;
 grant execute on function refund_membership(uuid) to authenticated;
 
 drop function if exists _refund_membership_core(uuid, uuid, boolean, boolean);
-drop function if exists _refund_block_reason(memberships);
+drop function if exists _refund_block_reason(memberships, boolean);
 drop function if exists _account_id_for_auth(uuid);
 
 CREATE OR REPLACE FUNCTION public.confirm_test_payment(p_order_id uuid, p_provider_ref text)
@@ -149,6 +155,9 @@ end;
 $function$;
 
 grant execute on function confirm_test_payment(uuid, text) to anon, authenticated, service_role;
+
+-- 환불 진행 표시 컬럼 제거(롤백 시점에 표시가 남아 있던 수강권은 이용 가능 상태로 돌아간다)
+alter table memberships drop column if exists pg_refund_started_at;
 
 alter function _issue_membership_and_record_payment(orders, text, text) reset search_path;
 alter function cancel_real_payment(uuid) reset search_path;

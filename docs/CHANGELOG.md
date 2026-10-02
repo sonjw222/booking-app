@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-02 — PG 결제 라이프사이클 정합성 보완(SQL 파일 갱신만, 미실행 / Toss 실호출 없음)
+- confirm: 토스가 ALREADY_PROCESSED/ALREADY_CANCELED를 돌려주면 토스 실제 상태를 조회해 DB를 수렴시킨다(DONE+주문/금액 일치 → DB 확정, CANCELED → 주문 cancelled + 포인트 복원, 그 외/조회 실패 → state_unknown + 로그, 임의 승인·취소 없음).
+- 보상 취소 후 DB 주문 정리 실패는 최대 1회 재시도하고, 그래도 실패하면 `payment_compensated_db_cleanup_failed` + `PG_COMPENSATION_DB_CLEANUP_FAILED` 로그로 구분한다.
+- 환불 TOCTOU 차단: memberships.pg_refund_started_at(서버 전용 표시) + pg_refund_begin/release. 표시 중에는 횟수 차감/새 예약을 DB 트리거가 거부하고, 환불 core는 24시간 조건만 건너뛰며 "이미 사용"은 항상 확인한다.
+
 ## 2026-10-02 — 실 PG 결제 서버 라이프사이클 보완(SQL 파일만 작성, 미실행 / Toss 실호출 없음)
 - `/api/payments/cancel`: 인증 없이 service_role로 cancel_real_payment를 호출하던 문제 수정 — Bearer 로그인 검증(401), 본인 주문만(pg_order_context), pending 상태만, 발급된 주문 거부.
 - `/api/payments/confirm`: 로그인/소유권/금액·상태 검증 후 토스 승인(금액은 DB 주문 값) → confirm_real_payment. 승인 성공 후 DB 확정이 실패하면 서버가 토스 보상 취소 1회(커밋 여부 재확인, 보상 실패 시 `[PG_COMPENSATION_FAILED]` 로그와 명확한 오류).

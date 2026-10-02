@@ -56,9 +56,18 @@ export function buildDeps(admin: SupabaseClient, tossSecretKey: string): Lifecyc
       if (error) throw new Error(error.message);
       return data ?? null;
     },
+    async refundBegin(membershipId, uid) {
+      const { data, error } = await admin.rpc("pg_refund_begin", { p_membership_id: membershipId, p_auth_uid: uid });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    async refundRelease(membershipId, uid) {
+      const { data, error } = await admin.rpc("pg_refund_release", { p_membership_id: membershipId, p_auth_uid: uid });
+      return { data, error: error ? { message: error.message } : null };
+    },
     async dbRefund(membershipId, uid, opts) {
       const { data, error } = await admin.rpc("refund_membership_server", {
-        p_membership_id: membershipId, p_auth_uid: uid, p_allow_pg: opts.allowPg, p_force: opts.force,
+        p_membership_id: membershipId, p_auth_uid: uid, p_allow_pg: opts.allowPg, p_skip_time_check: opts.skipTimeCheck,
       });
       return { data, error: error ? { message: error.message } : null };
     },
