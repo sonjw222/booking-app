@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 
-export type EnsuredAccount = { id: string; phone: string | null; isSocial: boolean; wasCreated: boolean };
+export type EnsuredAccount = { id: string; phone: string | null; isSocial: boolean; wasCreated: boolean; name: string | null };
 
 // 소셜 로그인(카카오/네이버/애플/구글)으로 처음 로그인한 사용자는 auth.users 행만 생기고
 // 우리 앱의 accounts/profiles 행은 아무도 만들어주지 않는다 — 이메일 회원가입
@@ -138,7 +138,7 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
     if (findErr) return null; // 조회 실패 시 조용히 넘어감(RLS 등) — 이후 실제 데이터 호출에서 다시 드러남
     if (existing) {
       await ensureProfileRow(existing.id, existing.name || consumeAppleFullName() || meta.full_name || meta.name || meta.nickname || "회원");
-      return { id: existing.id, phone: existing.phone, isSocial, wasCreated: false };
+      return { id: existing.id, phone: existing.phone, isSocial, wasCreated: false, name: existing.name ?? null };
     }
   }
 
@@ -166,7 +166,7 @@ export async function ensureAccountForCurrentUser(): Promise<EnsuredAccount | nu
   }
 
   await ensureProfileRow(account.id, name);
-  return { id: account.id, phone: account.phone, isSocial, wasCreated: true };
+  return { id: account.id, phone: account.phone, isSocial, wasCreated: true, name };
 }
 
 // 소셜 가입 완료 모달(SessionWatcher)에서 호출 — phone은 필수, address는 선택(도로명주소+
@@ -182,11 +182,15 @@ export async function completeSocialProfile(
   accountId: string,
   phone: string,
   address: string | null,
-  marketingConsent: boolean
+  marketingConsent: boolean,
+  name?: string
 ): Promise<void> {
+  // 2026-10-03: 가입 마무리에서 사용자가 입력/확인한 실명을 accounts와 대표 프로필에 저장한다(관리자 화면의 회원 이름 source of truth).
+  const realName = name?.trim();
   const { error } = await supabase
     .from("accounts")
     .update({
+      ...(realName ? { name: realName } : {}),
       phone,
       address,
       marketing_consent: marketingConsent,
@@ -196,6 +200,10 @@ export async function completeSocialProfile(
   if (error) {
     if (error.code === "23505") throw new Error("이미 다른 계정에 등록된 번호예요");
     throw new Error(error.message);
+  }
+  if (realName) {
+    const { error: pErr } = await supabase.from("profiles").update({ name: realName }).eq("account_id", accountId).eq("is_primary", true);
+    if (pErr) throw new Error("이름을 저장하지 못했어요: " + pErr.message);
   }
 }
 

@@ -26,6 +26,7 @@
   2026-08-14 — provider 조건 없이 phone만 봤던 최초 구현의 버그).
 */
 
+import { isSyntheticMemberName } from "../../lib/memberName";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { ensureAccountForCurrentUser, completeSocialProfile } from "../../lib/authAccount";
@@ -52,6 +53,7 @@ export default function SessionWatcher() {
   }
 
   const [phoneGateAccountId, setPhoneGateAccountId] = useState<string | null>(null);
+  const [realName, setRealName] = useState("");
   const [phone, setPhone] = useState("");
   const [addressBase, setAddressBase] = useState("");
   const [addressDetail, setAddressDetail] = useState("");
@@ -136,6 +138,8 @@ export default function SessionWatcher() {
       if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
         void ensureAccountForCurrentUser().then((account) => {
           setPhoneGateAccountId(account && account.isSocial && !account.phone ? account.id : null);
+          // 이름 칸 기본값: 소셜이 준 이름이 합성 handle(이메일 앞부분/랜덤 id)이면 비워서 사용자가 실명을 직접 입력하게 한다.
+          if (account && account.isSocial && !account.phone) setRealName(isSyntheticMemberName(account.name) ? "" : (account.name ?? ""));
           if (account?.wasCreated && !mergeDismissedRef.current) {
             void checkMergeableAccountByEmail().then((match) => {
               if (match) setMergePromptEmail(match.email);
@@ -169,6 +173,10 @@ export default function SessionWatcher() {
 
   async function handleCompletePhone() {
     if (!phoneGateAccountId) return;
+    if (!realName.trim()) {
+      setGateError("이름을 입력해주세요");
+      return;
+    }
     if (!phone.trim()) {
       setGateError("휴대폰 번호를 입력해주세요");
       return;
@@ -185,7 +193,7 @@ export default function SessionWatcher() {
     setGateError(null);
     try {
       const address = addressDetail.trim() ? `${addressBase} ${addressDetail}`.trim() : addressBase.trim();
-      await completeSocialProfile(phoneGateAccountId, phone.trim(), address || null, agreeMarketing);
+      await completeSocialProfile(phoneGateAccountId, phone.trim(), address || null, agreeMarketing, realName.trim());
       setPhoneGateAccountId(null);
     } catch (e: any) {
       setGateError(e.message ?? "저장에 실패했어요");
@@ -270,8 +278,19 @@ export default function SessionWatcher() {
           <div className="sheet-title">회원가입을 마저 완료해주세요</div>
           <div className="perm-guide" style={{ margin: "0 0 12px" }}>
             소셜 계정 가입은 휴대폰 번호가 자동으로 전달되지 않아요.
-            센터 운영자가 예약자 확인 시 볼 수 있도록 입력해주세요.
+            센터 운영자가 예약자 확인 시 볼 수 있도록 이름과 번호를 입력해주세요.
           </div>
+          <input
+            className="input-field"
+            type="text"
+            aria-label="이름"
+            autoComplete="name"
+            placeholder="이름(실명)"
+            value={realName}
+            onChange={(e) => setRealName(e.target.value)}
+            maxLength={30}
+            style={{ marginBottom: 8 }}
+          />
           <div style={{ display: "flex", gap: 8 }}>
             <input
               className="input-field"

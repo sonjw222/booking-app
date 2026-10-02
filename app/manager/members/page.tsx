@@ -776,7 +776,8 @@ function MembersContent() {
                   )}
                   {!m.appLinked && <span className="mem-flag">앱 미연결</span>}
                   {m.status === "dormant" && <span className="mem-status-badge dormant">휴면</span>}
-                  {m.status === "expired" && <span className="mem-status-badge expired">만료</span>}
+                  {m.status === "expired" && m.hasPass && <span className="mem-status-badge expired">만료</span>}
+                  {m.status === "expired" && !m.hasPass && <span className="mem-status-badge expired">수강권 없음</span>}
                 </div>
                 <div className="mem-sub">
                   {m.phone ?? "번호 없음"}
