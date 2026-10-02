@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## 2026-10-03 — 코드 리뷰 보완 (Web + SQL 파일)
+- 소셜 가입 gate: 전화번호는 있지만 이름이 합성/미등록인 기존 소셜 회원에게 "이름만" 받는 gate 추가(전화 인증 재요구 없음, 저장된 phone 불변). 대표 프로필 → accounts 순서로 저장하고 둘 다 성공해야 완료.
+- 일괄 예약조건: 요일 고정 수강권이 요청 요일 전체를 받을 수 없으면 일부만 넣지 않고 DB write 전에 전체 차단(preflight). 이미 같은 조건이 있으면 정상(중복 생성 없음). 일괄 시트도 현재 센터 수업 목록을 새로 읽음(stale 방지).
+- 진도 7단계 SQL: 센터별 `pg_advisory_xact_lock`으로 구조 변경 직렬화(순환 race 방지). 적용 전 점검용 읽기 전용 `verify_progress_category_tree_20261003.sql` 추가. Production 적용 완료.
+- 센터 상세: 공유 버튼을 센터명과 같은 row 오른쪽으로 이동.
+
+## 2026-10-03 — 회원 "수강권 · 상품 구매" sheet 정리 (Web)
+- 검색/필터 뒤 네모 띠: `.catalog-filter`가 카드 토큰(`--card-bg`)을 쓰는데 sheet 바탕은 `--bg`라 다크에서 별도 패널처럼 보였음 → sheet 범위에서만 `--bg`로 통일(관리자 페이지 공용 스타일은 유지). 두 chip 행은 같은 높이(36px)/padding/gap/시작 x, 좁으면 wrap.
+- 예약조건: 카드에 전부 펼치던 것을 기본 collapsed accordion(상품별 독립, aria-expanded/controls)으로 변경, 요약 1줄("예약조건 N개 · 월~일"). 월→일 정렬/요일 그룹/한 조건 한 row — `lib/ruleDisplay.ts`.
+
+## 2026-10-03 — 출시 전 실기기 QA 후속 배치
+- Google 로그인 crash(TestFlight 1.0.2(5), `GIDSignIn.m:739`): Info.plist `CFBundleURLTypes`에 Google reversed URL scheme 영구 반영 + `GoogleSignInPlugin.swift`가 scheme 누락 시 crash 대신 `missing_url_scheme`로 reject. (Native — 다음 빌드)
+- 뒤로가기 white flash: html/body background transition(라이트→다크 페이드) 제거, 테마 스크립트를 `<head>`로 이동 + `colorScheme` 즉시 설정. (Web)
+- 수강권 관리: 선택 모드에서 "예약조건 일괄 설정"(기존 조건 시트 재사용, 요일 고정 수강권/중복 조건 건너뜀, 일부 실패 보고). (Web)
+- 진도 분류: 최대 7단계 tree + 접기/펼치기, 정렬 CSS 통일, 기록 화면 재귀 선택/경로 표시. DB 방어 트리거는 `fix_progress_category_tree_20261003.sql`(Production 적용 완료, rollback 동봉). (Web + SQL)
+- 회원 이름: 합성 handle은 "이름 미등록"으로 표시, 소셜 가입 마무리 모달에서 실명 입력 필수. (Web)
+- 회원 목록: 수강권 이력이 없는 등록 회원도 목록에 표시(등록 직후 안 보이던 문제). (Web)
+
+## 2026-10-03 — 예약 무결성 Release Blocker 수정(SQL)
+- `fix_reservation_integrity_20261003.sql`(+rollback/verify): ① 서버 자격 판정의 수업명 비교를 LIKE → 정확 일치(UI와 동일, wildcard 악용 차단) ② 'selected' 수업의 예약조건 override 제거(수업 정책 AND 예약조건 AND bound) ③ 서버에서도 product_kind='pass' 강제(goods membership 예약/차감 차단, product_id 없는 legacy는 보존) ④ reservations 직접 UPDATE를 authenticated의 member_memo 컬럼으로만 제한(+anon 쓰기 권한 회수) ⑤ 회원 예약 자격 날짜를 KST 기준으로 통일 ⑥ is_membership_eligible_for_class PUBLIC/anon 실행 회수.
+- 앱 코드 변경 없음(직접 UPDATE는 lib/mypage.ts의 member_memo 하나뿐임을 테스트로 고정). Production 적용 및 verify(APPLIED) 완료.
+
 ## 2026-10-02 — 관리자 알림: 회원 셀프 환불 완료(SQL 파일만 작성, 미실행)
 - `fix_refund_manager_notification_20261002.sql`: memberships.status→refunded commit 시 센터 active 관리자별 `refund_completed` 1건(deferred constraint trigger + 마커 PK, 알림 실패는 환불을 막지 않음). OS 푸시 코드는 새로 만들지 않았다 — 기존 send-web-push가 kind 필터 없이 pushed_at IS NULL 행을 처리하므로 기존 push pipeline이 활성이면 refund_completed도 푸시 대상이다.
 - `push_notification` 실행 권한을 public/anon/authenticated에서 회수(클라이언트 직접 호출처 없음, 호출 함수 9개는 모두 SECURITY DEFINER).

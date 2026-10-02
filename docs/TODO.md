@@ -1,5 +1,16 @@
 # TODO
 
+## 2026-10-03 출시 전 QA 후속
+
+- **P1 / 확인 필요**: 전화번호 검색이 TestFlight 1.0.2(6)에서는 되고 App Store 빌드에서는 안 되는 차이. 코드상 버전 분기 없음(server.url 동일, 클라이언트 RLS 질의). App Store 빌드 번호/사용 계정/관계(center_members 등) 확인 필요. 근본 해결은 서버측 검색 RPC(개인정보 범위 결정 필요).
+- **P2**: 기존 합성 이름 계정(예: Apple 가입)은 사용자가 이름을 입력하기 전까지 "이름 미등록"으로 표시. 신뢰할 수 있는 이름 원천이 없어 backfill 불가.
+
+## 2026-10-03 예약 무결성 follow-up
+
+- **P1**: F6 — `manager_grant_product`가 상품 예약조건에 없는 bound 요일/시간으로도 지급할 수 있다(어떤 수업에도 못 쓰는 수강권 발급 가능). 이번 blocker batch 범위 밖.
+- **P2**: `cancel_reservation` 등 다른 함수의 `current_date`(DB UTC) — 회원 예약 자격 외 경로는 이번에 통일하지 않았다.
+- **P2**: reservations의 anon/authenticated TRUNCATE/TRIGGER/REFERENCES 등 넓은 table grant 전반 감사(이번엔 anon 쓰기·authenticated UPDATE/TRUNCATE만 정리).
+
 ## 종목 아이콘 전체 세트 신규 제작
 
 - **P3 / 미완성**: 현재 컨셉을 기반으로 피겨스케이팅 / 필라테스 / 발레 / 리듬체조 / 요가 / 복싱 / 수영 / 골프 및 추가 종목 전체를 하나의 통일된 illustration system으로 처음부터 새로 제작한다. 2026-09-27 렌더링 폴리시와 분리된 후속 작업이며, 이번 변경에는 신규 그림 제작을 포함하지 않는다.

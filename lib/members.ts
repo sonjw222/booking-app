@@ -6,6 +6,7 @@
   - CSV(엑셀) 내보내기용 데이터
 */
 
+import { displayMemberName } from "./memberName";
 import { supabase } from "./supabaseClient";
 import { extensionErrorMessage } from "./membershipExpiry";
 import { getMessageService } from "./messaging";
@@ -165,7 +166,7 @@ export async function fetchMembers(centerId: string, filter: MemberFilter = {}):
     return {
       id: r.id,
       profileId: r.profile_id,
-      name: r.profiles?.name ?? "(이름 없음)",
+      name: displayMemberName(r.profiles?.name),
       phone: phoneByProfile[r.profile_id] ?? null,
       address: addressByProfile[r.profile_id] ?? null,
       gradeId: r.grade_id,
@@ -183,12 +184,13 @@ export async function fetchMembers(centerId: string, filter: MemberFilter = {}):
     };
   });
 
-  // 회원 = 수강권을 보유했거나 보유했던 사람. 수강권 이력이 없으면 제외
-  list = list.filter((m) => (m as any).hasPass);
+  // 2026-10-03: 예전에는 "수강권 이력이 없으면 목록에서 제외"해서, 관리자가 회원 추가(등록)에 성공해도 수강권을 발급하기 전까지는
+  // 센터 회원 목록에 나타나지 않았다. 등록된 center_members는 수강권이 없어도 목록에 보인다(상태 배지는 "수강권 없음").
+  // 활성/만료 상태 필터는 수강권 이력이 있는 회원만 대상으로 하고, 수강권이 없는 회원은 필터 없음/휴면 필터에서만 보인다.
 
   // 상태 필터 (파생 상태 기준)
   if (filter.status) {
-    list = list.filter((m) => m.status === filter.status);
+    list = list.filter((m) => m.status === filter.status && (m.status === "dormant" || m.hasPass));
   }
 
   // 이름/전화/주소 검색은 조인 결과라서 클라이언트에서 필터.
@@ -502,7 +504,7 @@ export async function searchAccountsForMember(
   for (const r of nameData ?? []) {
     if (seen.has((r as any).id)) continue;
     seen.add((r as any).id);
-    results.push({ profileId: (r as any).id, name: (r as any).name, phone: (r as any).accounts?.phone ?? null });
+    results.push({ profileId: (r as any).id, name: displayMemberName((r as any).name), phone: (r as any).accounts?.phone ?? null });
   }
 
   // 전화번호가 2자리 이상 숫자면 전화 검색도 수행
@@ -516,7 +518,7 @@ export async function searchAccountsForMember(
       const primary = ((a as any).profiles ?? []).find((p: any) => p.is_primary);
       if (!primary || seen.has(primary.id)) continue;
       seen.add(primary.id);
-      results.push({ profileId: primary.id, name: primary.name, phone: (a as any).phone ?? null });
+      results.push({ profileId: primary.id, name: displayMemberName(primary.name), phone: (a as any).phone ?? null });
     }
   }
 

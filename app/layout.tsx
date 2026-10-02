@@ -40,7 +40,10 @@ export default function RootLayout({
       // hydration mismatch 콘솔 에러를 내지 않도록 명시적으로 억제한다.
       suppressHydrationWarning
     >
-      <body>
+      <head>
+        {/* 2026-10-03 뒤로가기 white flash 대응(웹 첫 paint 레이어): 이 테마 스크립트를 <body> 안이 아니라 <head> 맨 앞으로 옮겨 첫 paint 이전에 data-theme와
+            documentElement.style.colorScheme을 확정한다(canvas/기본 배경이 다크일 때 흰색으로 먼저 그려지지 않게). 같은 이유로 html/body의 background transition은 제거했다
+            (globals.css) — 라이트 기본값(--bg)에서 다크로 0.2초 동안 "페이드"되며 뒤로가기/복원 직후 흰 프레임이 보였다. */}
         {/* 테마 즉시 적용(깜빡임 방지). app/settings/theme/page.tsx는 그 화면 안에서만
             data-theme를 적용했고, 다른 어떤 화면에도 이 값을 다시 적용하는 로직이 없어서
             테마 설정 화면을 벗어나는 순간(이 앱은 <Link> 대신 일반 <a href>를 써서 전체
@@ -68,9 +71,11 @@ export default function RootLayout({
             존재하는 공식 플러그인이라 이 한 번의 호출로 양쪽 다 해결된다. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("app_theme");var dark=t==="charcoal"||((!t||t==="system")&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(dark)document.documentElement.setAttribute("data-theme","charcoal");else if(t==="burgundy")document.documentElement.setAttribute("data-theme","burgundy");try{window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.WebViewTheme&&window.Capacitor.Plugins.WebViewTheme.setBackground({hex:dark?"#17181C":"#FBFBFA"});}catch(e2){}try{window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.StatusBar&&window.Capacitor.Plugins.StatusBar.setStyle({style:dark?"DARK":"LIGHT"});window.Capacitor&&window.Capacitor.getPlatform&&window.Capacitor.getPlatform()==="android"&&window.Capacitor.Plugins&&window.Capacitor.Plugins.AndroidStatusBarBackground&&window.Capacitor.Plugins.AndroidStatusBarBackground.setDark({dark:dark});}catch(e3){}}catch(e){}`,
+            __html: `try{var t=localStorage.getItem("app_theme");var dark=t==="charcoal"||((!t||t==="system")&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.style.colorScheme=dark?"dark":"light";if(dark)document.documentElement.setAttribute("data-theme","charcoal");else if(t==="burgundy")document.documentElement.setAttribute("data-theme","burgundy");try{window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.WebViewTheme&&window.Capacitor.Plugins.WebViewTheme.setBackground({hex:dark?"#17181C":"#FBFBFA"});}catch(e2){}try{window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.StatusBar&&window.Capacitor.Plugins.StatusBar.setStyle({style:dark?"DARK":"LIGHT"});window.Capacitor&&window.Capacitor.getPlatform&&window.Capacitor.getPlatform()==="android"&&window.Capacitor.Plugins&&window.Capacitor.Plugins.AndroidStatusBarBackground&&window.Capacitor.Plugins.AndroidStatusBarBackground.setDark({dark:dark});}catch(e3){}}catch(e){}`,
           }}
         />
+      </head>
+      <body>
         {/* 토스 결제 SDK는 전역으로 로드하지 않는다(2026-10-02) — lib/tossSdk.ts loadTossSdk()가 checkout/카드등록 화면에서만 온디맨드 로드 */}
         <CapacitorBootstrap />
         <OfflineNotice />

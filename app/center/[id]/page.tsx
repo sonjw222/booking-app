@@ -32,7 +32,8 @@ import {
 } from "../../../lib/reviews";
 import { reservationReturnUrl } from "../../../lib/reservationNav";
 import { extractPlainText } from "../../../lib/security";
-import { fetchRulesForProducts, ruleToText, type ScheduleRule } from "../../../lib/passes";
+import ProductRuleAccordion from "../../components/ProductRuleAccordion";
+import { fetchDisplayRulesForProducts, type ScheduleRule } from "../../../lib/passes";
 import RichTextEditor from "../../components/RichTextEditor";
 import UiIcon from "../../components/UiIcon";
 import EmptyState from "../../components/EmptyState";
@@ -98,6 +99,7 @@ function CenterDetailContent() {
   const [buySheet, setBuySheet] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(0);
   const [passRules, setPassRules] = useState<Record<string, ScheduleRule[]>>({});
+  const [rulesLoadFailed, setRulesLoadFailed] = useState(false);   // 예약조건 "조회 실패"(빈 결과와 구분)
   const [descProduct, setDescProduct] = useState<CenterProduct | null>(null);
   // 구매 sheet 검색/필터(2026-10-01) — 이미 받아 온 상품 배열을 클라이언트에서 거르기만 한다(새 API 없음).
   const [catalogFilter, setCatalogFilter] = useState<CatalogFilterState>(EMPTY_CATALOG_FILTER);
@@ -149,12 +151,12 @@ function CenterDetailContent() {
       setClasses(await fetchCenterClasses(centerId));
       const fetchedProducts = await fetchCenterProducts(centerId);
       setProducts(fetchedProducts);
-      // 회원이 정확히 무슨 요일·시간에 쓸 수 있는 수강권인지 구매 전에 알 수 있도록
-      // 표시(비로그인이면 RLS로 빈 결과만 옴 — 조용히 무시).
-      try {
-        const passIds = fetchedProducts.filter((p) => p.kind === "pass").map((p) => p.id);
-        setPassRules(await fetchRulesForProducts(passIds));
-      } catch { /* 비로그인 등 — 무시 */ }
+      // 회원이 정확히 무슨 요일·시간에 쓸 수 있는 수강권인지 구매 전에 알 수 있도록 표시한다. 로그인은 직접 조회, 비로그인/세션 만료는 공개 상품 전용 RPC.
+      // "조회 실패"와 "조건 없음"을 구분한다(실패를 빈 결과로 삼키지 않는다).
+      const passIds = fetchedProducts.filter((p) => p.kind === "pass").map((p) => p.id);
+      const shown = await fetchDisplayRulesForProducts(centerId, passIds);
+      setPassRules(shown.rules);
+      setRulesLoadFailed(shown.failed);
       try { setAllowedPasses(await fetchClassAllowedPasses(centerId)); } catch { /* 무시 */ }
       try { setReviews(await fetchReviews(centerId)); } catch { /* 무시 */ }
       try { setMyReview(await myReviewFor(centerId)); } catch { /* 무시 */ }
@@ -401,6 +403,7 @@ function CenterDetailContent() {
               <UiIcon name="cart" size={16} /> 장바구니 보기{cartItemCount > 0 ? ` (${cartItemCount})` : ""}
             </Link>
             <p className="center-buy-help">수강권을 선택하고 바로 구매하거나 장바구니에 담을 수 있어요.</p>
+            {rulesLoadFailed && <div className="rule-load-error" role="status">예약조건을 불러오지 못했어요. 새로고침하면 다시 시도해요.</div>}
             {filterProductIds && (
               <div className="class-filter-notice">
                 <span>{applyFilter ? "이 수업에 사용할 수 있는 수강권만 표시 중" : "전체 상품 표시 중"}</span>
@@ -599,8 +602,11 @@ function CenterDetailContent() {
         {center.photoUrl
           ? <ZoomableImage className="center-hero-photo" src={centerPhotoUrl(center.photoUrl) ?? ""} />
           : <div className="center-hero-badge">{center.name.slice(0, 1)}</div>}
-        <div className="center-hero-name">{center.name}</div>
-        <button type="button" className="quiet-action" aria-label="센터 공유" onClick={handleShareCenter}>공유</button>
+        {/* 센터명(주 정보, 가운데)과 공유(보조 action, 오른쪽)를 같은 row에 둔다 — 공유 버튼이 이름 아래 왼쪽에 홀로 떨어지지 않게 */}
+        <div className="center-hero-namerow">
+          <div className="center-hero-name">{center.name}</div>
+          <button type="button" className="quiet-action center-hero-share" aria-label="센터 공유" onClick={handleShareCenter}>공유</button>
+        </div>
         {center.address && <div className="center-hero-addr"><UiIcon name="location" size={14} /> {center.address}</div>}
         {center.phone && (
           <a className="center-hero-phone" href={`tel:${center.phone}`}><UiIcon name="phone" size={14} /> {center.phone}</a>
@@ -820,11 +826,6 @@ function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy 
       <button className="center-product-info" style={{ background: "none", border: "none", textAlign: "left", flex: 1, cursor: p.description ? "pointer" : "default" }} onClick={() => p.description && onDesc(p)}>
         <div className="center-product-name">{p.name}{p.description ? " ⓘ" : ""}</div>
         <div className="center-product-detail">{priceSummary(p)}</div>
-        {rules && rules.length > 0 && (
-          <div className="center-product-detail" style={{ color: "var(--brand)" }}>
-            {rules.map(ruleToText).join(" / ")}
-          </div>
-        )}
         {avail && <div className={`center-product-avail${soldOut ? " is-soldout" : ""}`}>{avail}</div>}
       </button>
       {selectable && !soldOut && (
@@ -851,6 +852,7 @@ function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy 
         {!soldOut && <AppButton variant="secondary" className="center-product-cart" disabled={blocked} onClick={() => onAddCart(p, sel)}>담기</AppButton>}
         {!soldOut && <AppButton className="center-product-buy" disabled={blocked} onClick={() => onBuy(p, sel)}>구매</AppButton>}
       </div>
+      <ProductRuleAccordion rules={rules} />
     </div>
   );
 }

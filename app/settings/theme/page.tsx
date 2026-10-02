@@ -61,6 +61,7 @@ export function isThemeOptionSelected(current: Theme, optionId: Theme): boolean 
 export function applyTheme(theme: Theme) {
   const effective = resolveEffectiveTheme(theme);
   document.documentElement.setAttribute("data-theme", effective);
+  document.documentElement.style.colorScheme = effective === "charcoal" ? "dark" : "light";   // 첫 paint 스크립트(app/layout.tsx)와 동일 — canvas 기본색 일치
   // iOS 오버스크롤 배경도 같이 맞춘다(lib/nativeTheme.ts 주석 참고) — 앱을 켜둔 채 여기서
   // 테마를 바꾸는 경우(콜드 스타트는 app/layout.tsx의 인라인 스크립트가 이미 처리)까지
   // 반영해야 다음 화면 전환 때 오버스크롤 색이 즉시 새 테마와 맞는다.

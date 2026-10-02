@@ -14,9 +14,11 @@ type Props = {
   onSelectAll: () => void;
   onClear: () => void;
   onDelete: () => void;
+  // 선택한 항목에 대한 추가 일괄 작업(예: 수강권 예약조건 일괄 설정). 선택이 0개면 비활성.
+  extraAction?: { label: string; onClick: () => void };
 };
 
-export default function BulkSelectBar({ selecting, selectedCount, totalVisible, busy, onEnter, onCancel, onSelectAll, onClear, onDelete }: Props) {
+export default function BulkSelectBar({ selecting, selectedCount, totalVisible, busy, onEnter, onCancel, onSelectAll, onClear, onDelete, extraAction }: Props) {
   if (!selecting) {
     return (
       <div className="bulk-bar idle">
@@ -32,6 +34,7 @@ export default function BulkSelectBar({ selecting, selectedCount, totalVisible, 
         <button type="button" className="quiet-action" disabled={busy} onClick={allSelected ? onClear : onSelectAll}>
           {allSelected ? "전체 해제" : "전체 선택"}
         </button>
+        {extraAction && <button type="button" className="quiet-action" disabled={busy || selectedCount === 0} onClick={extraAction.onClick}>{extraAction.label}</button>}
         <button type="button" className="quiet-action danger" disabled={busy || selectedCount === 0} onClick={onDelete}>선택 삭제</button>
         <button type="button" className="quiet-action" disabled={busy} onClick={onCancel}>취소</button>
       </div>

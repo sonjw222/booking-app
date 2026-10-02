@@ -1,5 +1,6 @@
 "use client";
 
+import { buildTree, skillGroups, type TreeNode } from "../../../../lib/progressTree";
 import Link from "next/link";
 import SheetOverlay from "../../../components/SheetOverlay";
 
@@ -17,7 +18,7 @@ import Loading from "../../../components/Loading";
 import DatePicker from "../../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../../lib/manager";
 import {
-  fetchCategories, buildCategoryTree, type CategoryNode,
+  fetchCategories,
   fetchProgressMembers, fetchMemberProgress, recordProgress, deleteProgressRecord,
   deleteProgressByDate,
   type ProgressRecord,
@@ -42,7 +43,7 @@ export default function ProgressRecordPage() {
 function ProgressRecordContent() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [centerId, setCenterId] = useState<string | null>(null);
-  const [tree, setTree] = useState<CategoryNode[]>([]);
+  const [tree, setTree] = useState<TreeNode[]>([]);
   const [members, setMembers] = useState<{ profileId: string; name: string }[]>([]);
   const searchParams = useSearchParams();
   const preProfile = searchParams.get("profile") ?? "";
@@ -95,7 +96,7 @@ function ProgressRecordContent() {
       const [cats, ms] = await Promise.all([
         fetchCategories(centerId), fetchProgressMembers(centerId),
       ]);
-      setTree(buildCategoryTree(cats));
+      setTree(buildTree(cats));
       setMembers(ms);
       if (preProfile && ms.some((m: any) => m.profileId === preProfile)) setProfileId(preProfile);
       if (ms.length > 0 && !profileId) setProfileId(ms[0].profileId);
@@ -178,6 +179,8 @@ function ProgressRecordContent() {
     (historyByDate[r.lessonDate] ??= []).push(r);
   }
 
+  const sg = skillGroups(tree);
+
   if (centers.length === 0 && !loading) {
     return (
       <div className="app-shell">
@@ -217,7 +220,7 @@ function ProgressRecordContent() {
         <Loading />
       ) : tree.length === 0 ? (
         <div className="daylist-empty" style={{ paddingTop: 40 }}>
-          먼저 기술 목록을 만들어주세요<br />
+          먼저 분류와 기술 목록을 만들어주세요<br />
           <Link href="/manager/progress" className="more-link" style={{ display: "inline-block", marginTop: 8 }} prefetch={false}>진도표 기술 목록 ›</Link>
         </div>
       ) : (
@@ -282,22 +285,21 @@ function ProgressRecordContent() {
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>가르친 기술 (여러 개 가능)</div>
             <div className="prog-rec-wrap" style={{ padding: 0, maxHeight: 240, overflowY: "auto" }}>
-              {tree.map((top) => (
-                <div key={top.id} className="prog-rec-group">
-                  <div className="prog-rec-top">{top.name}</div>
+              {sg.groups.map((g) => (
+                <div key={g.skills[0].id} className="prog-rec-group">
+                  <div className="prog-rec-top">{g.path.join(" › ")}</div>
                   <div className="prog-rec-skills">
-                    {top.children.length === 0 ? (
-                      <span className="prog-rec-empty">세부기술 없음</span>
-                    ) : (
-                      top.children.map((c) => (
-                        <button key={c.id} className={`skill-chip ${selected.has(c.id) ? "on" : ""}`} onClick={() => toggleSkill(c.id)}>
-                          {c.name}
-                        </button>
-                      ))
-                    )}
+                    {g.skills.map((c) => (
+                      <button key={c.id} className={`skill-chip ${selected.has(c.id) ? "on" : ""}`} onClick={() => toggleSkill(c.id)}>
+                        {c.name}
+                      </button>
+                    ))}
                   </div>
                 </div>
               ))}
+              {sg.groups.length === 0 && (
+                <div className="prog-rec-empty">기록할 기술이 없어요. 기술 목록에서 분류 아래에 기술을 추가해주세요.</div>
+              )}
             </div>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>메모 (선택)</div>
