@@ -220,7 +220,7 @@ function ProgressRecordContent() {
         <Loading />
       ) : tree.length === 0 ? (
         <div className="daylist-empty" style={{ paddingTop: 40 }}>
-          먼저 기술 목록을 만들어주세요<br />
+          먼저 분류와 기술 목록을 만들어주세요<br />
           <Link href="/manager/progress" className="more-link" style={{ display: "inline-block", marginTop: 8 }} prefetch={false}>진도표 기술 목록 ›</Link>
         </div>
       ) : (
@@ -297,12 +297,9 @@ function ProgressRecordContent() {
                   </div>
                 </div>
               ))}
-              {sg.emptyTops.map((top) => (
-                <div key={top.id} className="prog-rec-group">
-                  <div className="prog-rec-top">{top.name}</div>
-                  <div className="prog-rec-skills"><span className="prog-rec-empty">세부기술 없음</span></div>
-                </div>
-              ))}
+              {sg.groups.length === 0 && (
+                <div className="prog-rec-empty">기록할 기술이 없어요. 기술 목록에서 분류 아래에 기술을 추가해주세요.</div>
+              )}
             </div>
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>메모 (선택)</div>

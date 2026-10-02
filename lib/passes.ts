@@ -447,6 +447,34 @@ export async function fetchRulesForProducts(productIds: string[]): Promise<Recor
   return out;
 }
 
+// 구매 화면 표시용 예약조건(2026-10-03): 로그인 사용자는 기존 직접 조회(RLS: auth.uid() is not null), 비로그인/세션 만료/권한 오류는
+// 공개 상품 전용 RPC(fetch_public_product_schedule_rules — 공개 storefront와 같은 경계)로 센터당 1회 조회한다(N+1 없음).
+// 반환은 현재 화면에 보이는 상품(visibleProductIds)의 규칙만. failed=true는 "조회 실패"라서 "조건 없음(빈 결과)"과 구분된다.
+export async function fetchDisplayRulesForProducts(
+  centerId: string, visibleProductIds: string[],
+): Promise<{ rules: Record<string, ScheduleRule[]>; failed: boolean }> {
+  if (visibleProductIds.length === 0) return { rules: {}, failed: false };
+  const visible = new Set(visibleProductIds);
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (sessionData.session) {
+    try { return { rules: await fetchRulesForProducts(visibleProductIds), failed: false }; }
+    catch { /* 세션 만료 등 — 공개 RPC로 대체 */ }
+  }
+  const { data, error } = await supabase.rpc("fetch_public_product_schedule_rules", { p_center_id: centerId });
+  if (error) return { rules: {}, failed: true };
+  const rules: Record<string, ScheduleRule[]> = {};
+  for (const r of (data ?? []) as any[]) {
+    if (!visible.has(r.product_id)) continue;
+    (rules[r.product_id] ??= []).push({
+      id: `${r.product_id}:${r.day_of_week ?? "x"}:${r.start_time ?? "x"}:${r.class_title ?? "x"}`,
+      dayOfWeek: r.day_of_week,
+      startTime: r.start_time ? String(r.start_time).slice(0, 5) : null,
+      classTitle: r.class_title,
+    });
+  }
+  return { rules, failed: false };
+}
+
 // usable_memberships_for_classes()/usable_memberships()의 membership_schedule_rules
 // 판정 조건과 정확히 동일한 로직(fix_usable_memberships_product_kind.sql 참고) —
 // 규칙이 하나도 없으면 항상 허용, 있으면 dayOfWeek/startTime/classTitle이 전부(null이 아닌

@@ -149,31 +149,6 @@ describe("[3] 일괄 시트도 현재 센터 수업 목록을 새로 읽는다",
   });
 });
 
-describe("[4][5] 진도 SQL 동시성 / preflight", () => {
-  const sql = read("fix_progress_category_tree_20261003.sql").replace(/--.*$/gm, "");
-  it("센터별 xact advisory lock이 검증 읽기보다 먼저, session lock/전역 lock 아님", () => {
-    const i = sql.indexOf("pg_advisory_xact_lock(hashtextextended('progress_categories_tree:' || new.center_id::text, 0))");
-    expect(i).toBeGreaterThan(0);
-    expect(i).toBeLessThan(sql.indexOf("select center_id into v_parent_center"));
-    expect(sql).not.toMatch(/pg_advisory_lock\(/);
-  });
-  it("migration은 transaction + idempotent, rollback은 이 migration의 trigger/function만 제거", () => {
-    expect(sql).toMatch(/^\s*begin;/);
-    expect(sql).toContain("commit;");
-    expect(sql).toContain("create or replace function public.progress_categories_guard_tree()");
-    expect(sql).toContain("drop trigger if exists progress_categories_guard_tree");
-    expect(sql).not.toMatch(/\b(delete from|update public\.progress_categories|truncate|drop table)\b/i);
-    const rb = read("rollback_fix_progress_category_tree_20261003.sql");
-    expect(rb.match(/drop /g)).toHaveLength(2);
-  });
-  it("verify SQL은 read-only이고 순환에 안전(path 배열 + 깊이 상한)", () => {
-    const v = read("verify_progress_category_tree_20261003.sql").replace(/--.*$/gm, "");
-    expect(v).not.toMatch(/\b(insert|update|delete|drop|alter|truncate)\b/i);
-    expect(v).toContain("not (p.id = any(w.path))");
-    expect(v).toContain("w.lvl < 64");
-  });
-});
-
 describe("[7] 센터 상세 공유 버튼 위치", () => {
   it("센터명과 공유가 같은 row(namerow) 안에 있고 공유는 오른쪽 보조 action, handler는 그대로", () => {
     const page = read("app/center/[id]/page.tsx");

@@ -6662,3 +6662,13 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
 .center-hero-namerow { position: relative; align-self: stretch; display: flex; justify-content: center; align-items: center; min-height: 44px; padding: 0 60px; box-sizing: border-box; }
 .center-hero-namerow .center-hero-name { min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
 .center-hero-share { position: absolute; right: 0; top: 50%; transform: translateY(-50%); min-height: 36px; padding: 0 12px; }
+
+/* 진도 분류/기술 구분(2026-10-03): 기술 행은 chevron 없는 말단, 분류 안에 하위 분류 추가/기술 추가를 각각 한 줄씩 */
+.ptree-skill .ptree-skill-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; padding-left: 22px; }
+.ptree-add + .ptree-add { padding-top: 0; }
+.ptree-add .ptree-max { align-self: center; font-size: 12px; color: var(--ink-soft); line-height: 1.35; }
+.ptree-add .outline-action:disabled { opacity: 0.45; cursor: not-allowed; }
+.ptree-add { grid-template-columns: minmax(0, 1fr) auto; }
+.ptree-add .outline-action { padding: 0 14px; min-width: 76px; font-size: 13px; }
+.ptree-add .ptree-max { padding: 0; }
+.rule-load-error { margin: -8px 2px 12px; font-size: 12px; color: var(--ink-soft); }

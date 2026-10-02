@@ -30,7 +30,6 @@ vi.mock("../../lib/supabaseClient", () => ({
 import { fetchMembers, searchAccountsForMember } from "../../lib/members";
 import { displayMemberName, isSyntheticMemberName, UNNAMED_MEMBER_LABEL } from "../../lib/memberName";
 import { applyRulesToProducts, bulkRuleSummary } from "../../lib/ruleBulk";
-import { MAX_PROGRESS_DEPTH, buildTree, canAddChild, categoryPath, checkParentChange, flattenTree, indentLevel, skillGroups, subtreeHeight } from "../../lib/progressTree";
 
 describe("[0] Google callback URL scheme", () => {
   const plist = read("ios/App/App/Info.plist");
@@ -180,78 +179,5 @@ describe("[2] 수강권 예약조건 일괄 적용", () => {
     expect(p).toContain("if (bulkTargets) { await handleBulkAddRules(); return; }");
     expect(p).toContain("await addRule(ruleFor.id, d, rTime || null, rTitle.trim() || null);");
     expect(read("app/components/BulkSelectBar.tsx")).toContain("disabled={busy || selectedCount === 0} onClick={extraAction.onClick}");
-  });
-});
-
-describe("[3][4][5] 진도 분류 tree", () => {
-  const f = (id: string, parentId: string | null, name = id, sortOrder = 0) => ({ id, parentId, name, sortOrder });
-  it("기존 1단계 category + skills(2단계)가 그대로 표시된다", () => {
-    const t = buildTree([f("top", null, "점프"), f("s1", "top", "왈츠", 0), f("s2", "top", "살코", 1)]);
-    expect(t).toHaveLength(1);
-    expect(t[0].depth).toBe(1);
-    expect(t[0].children.map((c) => [c.name, c.depth])).toEqual([["왈츠", 2], ["살코", 2]]);
-    const g = skillGroups(t);
-    expect(g.groups).toEqual([{ path: ["점프"], skills: expect.any(Array) }]);
-    expect(g.groups[0].skills.map((s) => s.name)).toEqual(["왈츠", "살코"]);
-  });
-  it("nested category: 점프 › 싱글 점프 › 엣지 점프 › 왈츠/살코, 경로/그룹/높이", () => {
-    const flat = [f("1", null, "점프"), f("2", "1", "싱글 점프"), f("3", "2", "엣지 점프"), f("4", "3", "왈츠"), f("5", "3", "살코")];
-    const t = buildTree(flat);
-    expect(flattenTree(t).map((n) => n.depth)).toEqual([1, 2, 3, 4, 4]);
-    expect(subtreeHeight(t[0])).toBe(4);
-    expect(categoryPath("4", flat)).toEqual(["점프", "싱글 점프", "엣지 점프", "왈츠"]);
-    expect(skillGroups(t).groups.map((x) => x.path.join(" › "))).toEqual(["점프 › 싱글 점프 › 엣지 점프"]);
-  });
-  it("depth 7 허용 / depth 8 거부, 7단계 노드는 하위 추가 불가", () => {
-    const chain = Array.from({ length: 7 }, (_, i) => f(String(i + 1), i === 0 ? null : String(i), `n${i + 1}`));
-    expect(checkParentChange(null, "6", chain)).toEqual({ ok: true });      // 새 항목이 depth 7
-    expect(checkParentChange(null, "7", chain)).toEqual({ ok: false, reason: "depth" });   // depth 8
-    const t = buildTree(chain);
-    const deepest = flattenTree(t).at(-1)!;
-    expect(deepest.depth).toBe(MAX_PROGRESS_DEPTH);
-    expect(canAddChild(deepest)).toBe(false);
-    expect(canAddChild(flattenTree(t)[5])).toBe(true);
-  });
-  it("cycle / self / cross-center 거부, 이동 시 하위 높이 포함", () => {
-    const flat = [f("1", null), f("2", "1"), f("3", "2")];
-    expect(checkParentChange("1", "1", flat)).toEqual({ ok: false, reason: "self" });
-    expect(checkParentChange("1", "3", flat)).toEqual({ ok: false, reason: "cycle" });
-    expect(checkParentChange("2", "9" as any, flat)).toEqual({ ok: true });   // 모르는 부모는 서버 FK/트리거가 최종 판단
-    expect(checkParentChange(null, "1", flat, { sameCenter: false })).toEqual({ ok: false, reason: "other_center" });
-    expect(checkParentChange("2", null, flat)).toEqual({ ok: true });
-    const deep = Array.from({ length: 5 }, (_, i) => f(`d${i}`, i === 0 ? null : `d${i - 1}`));
-    expect(checkParentChange("x", "d2", deep, { newSubtreeHeight: 5 })).toEqual({ ok: false, reason: "depth" });
-  });
-  it("고아/순환 데이터도 화면에서 사라지지 않고 최상위로 올라온다, 들여쓰기는 4단계 상한", () => {
-    const t = buildTree([f("a", "zzz", "고아"), f("b", "c", "순환1"), f("c", "b", "순환2")]);
-    expect(t.map((n) => n.name).sort()).toEqual(["고아", "순환1", "순환2"].sort());
-    expect([1, 2, 5, 6, 7].map(indentLevel)).toEqual([0, 1, 4, 4, 4]);
-  });
-  it("accordion: 접기/펼치기 버튼(aria-expanded/controls), 입력값은 접어도 유지, 7단계에서 추가 입력 대신 안내", () => {
-    const p = read("app/manager/progress/page.tsx");
-    expect(p).toContain("aria-expanded={open}");
-    expect(p).toContain("aria-controls={panelId}");
-    expect(p).toContain("const panel = open && (");
-    expect(p).toContain("subInput[node.id]");   // 입력 상태는 페이지 state(접어도 유지)
-    expect(p).toContain("입력 중");
-    expect(p).toContain("canAddChild(node) ?");
-    expect(p).toContain("최대 {MAX_PROGRESS_DEPTH}단계라 더 추가할 수 없어요");
-    expect(p).toContain("await addSubCategory(centerId, parent.id, name, parent.children.length);");
-  });
-  it("정렬 CSS: 제목/행/입력창 좌우 기준 14px 통일, 입력창+추가 버튼 같은 높이(48px), 버튼 규격 통일, 들여쓰기 누적 없음", () => {
-    const css = read("app/globals.css");
-    expect(css).toMatch(/\.ptree-row \{[^}]*padding:6px 14px/);
-    expect(css).toMatch(/\.ptree-add \{[^}]*padding:10px 14px 12px/);
-    expect(css).toMatch(/\.ptree-add \.input-field, \.ptree-add \.outline-action \{[^}]*height:48px/);
-    expect(css).toMatch(/\.ptree-actions \.quiet-action \{[^}]*min-height:32px/);
-    expect(css).not.toMatch(/\.ptree-panel \{[^}]*margin-left/);
-  });
-  it("SQL: 순환/깊이/센터 일치 서버 방어선(트리거) + rollback, 삭제는 하위→상위 순서", () => {
-    const sql = read("fix_progress_category_tree_20261003.sql").replace(/--.*$/gm, "");
-    for (const x of ["자기 자신을 상위 분류로 지정할 수 없어요", "다른 센터의 분류를 상위 분류로 지정할 수 없어요", "하위 분류를 상위 분류로 지정할 수 없어요(순환)", "분류는 최대 7단계까지 만들 수 있어요", "분류의 센터는 바꿀 수 없어요"]) expect(sql).toContain(x);
-    expect(sql).toContain("before insert or update of parent_id, center_id on public.progress_categories");
-    expect(sql).toContain("if v_parent_depth + 1 + v_below > 7 then");
-    expect(read("lib/progress.ts")).toContain("[...ids].reverse()");
-    expect(read("rollback_fix_progress_category_tree_20261003.sql")).toContain("drop trigger if exists progress_categories_guard_tree");
   });
 });

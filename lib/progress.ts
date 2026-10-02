@@ -1,65 +1,77 @@
 /*
   진도표 - 카테고리(기술 목록) 관리
-  - 센터마다 계층 구조로 기술을 구성 (대분류 > 세부기술)
-  - 예) 피겨: 점프 > 왈츠점프/살코, 스핀 > 카멜스핀 ...
+  - 센터마다 분류(category, 최대 7단계)와 기술(skill)로 구성 — 기술은 분류 아래 말단이고 진도 기록은 기술에만 한다
+  - 예) 피겨: 점프 › 싱글 점프 › 엣지 점프 › 왈츠/살코, 스핀 › 카멜스핀 ...
 */
 
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
 import { MAX_PROGRESS_DEPTH, checkParentChange } from "./progressTree";
 
+import type { NodeType } from "./progressTree";
+
 export type ProgressCategory = {
   id: string;
   parentId: string | null;
   name: string;
   sortOrder: number;
+  nodeType: NodeType;
 };
 
-// 대분류 + 그 안의 세부기술 트리
-export type CategoryNode = ProgressCategory & { children: ProgressCategory[] };
-
-// 센터의 전체 카테고리 (평면)
+// 센터의 전체 항목(분류+기술, 평면). node_type 컬럼이 아직 없는 DB(SQL 미적용, 42703)에서는 옛 구조(최상위=분류, 그 아래=기술)로 읽는다 — 읽기 전용 호환일 뿐 새 화면의 의미 추론이 아니다.
 export async function fetchCategories(centerId: string): Promise<ProgressCategory[]> {
-  const { data, error } = await supabase
+  let res: { data: any[] | null; error: { code?: string; message: string } | null } = await supabase
     .from("progress_categories")
-    .select("id, parent_id, name, sort_order")
+    .select("id, parent_id, name, sort_order, node_type")
     .eq("center_id", centerId)
     .order("sort_order");
-  if (error) throw new Error("기술 목록을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((c: any) => ({
+  let legacy = false;
+  if (res.error && res.error.code === "42703") {
+    legacy = true;
+    res = await supabase.from("progress_categories").select("id, parent_id, name, sort_order").eq("center_id", centerId).order("sort_order");
+  }
+  if (res.error) throw new Error("기술 목록을 불러오지 못했어요: " + res.error.message);
+  return (res.data ?? []).map((c: any) => ({
     id: c.id, parentId: c.parent_id, name: c.name, sortOrder: c.sort_order,
+    nodeType: (legacy ? (c.parent_id ? "skill" : "category") : c.node_type) as NodeType,
   }));
 }
 
-// 2026-10-03: 분류는 최대 7단계까지 중첩된다(lib/progressTree.ts의 buildTree/checkParentChange). 아래 buildCategoryTree는 기존 2단계 화면 호환용이다.
+// 분류는 최대 7단계(기술은 깊이에 포함하지 않는다) — lib/progressTree.ts의 buildTree/checkParentChange.
 export { buildTree, MAX_PROGRESS_DEPTH } from "./progressTree";
 
-// 트리로 묶기 (대분류 → 세부기술)
-export function buildCategoryTree(cats: ProgressCategory[]): CategoryNode[] {
-  const tops = cats.filter((c) => !c.parentId);
-  return tops.map((t) => ({
-    ...t,
-    children: cats.filter((c) => c.parentId === t.id),
-  }));
-}
-
-// 대분류 추가
-export async function addTopCategory(centerId: string, name: string, sortOrder: number): Promise<void> {
-  const { error } = await supabase
-    .from("progress_categories")
-    .insert({ center_id: centerId, parent_id: null, name, sort_order: sortOrder });
+async function insertNode(row: { center_id: string; parent_id: string | null; name: string; sort_order: number; node_type: NodeType }): Promise<void> {
+  const { error } = await supabase.from("progress_categories").insert(row);
+  if (error && error.code === "42703") {
+    // SQL 미적용 DB: 옛 구조로 표현 가능한 것(최상위 분류 / 최상위 분류 아래 기술)만 node_type 없이 허용한다.
+    if (row.node_type === "category" && row.parent_id) throw new Error("하위 분류는 DB 업데이트(진도 분류 SQL) 적용 후 사용할 수 있어요");
+    const { node_type: _t, ...legacy } = row;
+    const retry = await supabase.from("progress_categories").insert(legacy);
+    if (retry.error) throw new Error("추가에 실패했어요: " + retry.error.message);
+    return;
+  }
   if (error) throw new Error("추가에 실패했어요: " + error.message);
 }
 
-// 하위 항목 추가 — 부모의 깊이를 서버(트리거)와 별개로 미리 확인한다(깊이 8 이상은 거부). 같은 센터의 분류만 부모가 될 수 있다(서버 트리거도 강제).
+// 최상위 분류 추가
+export async function addTopCategory(centerId: string, name: string, sortOrder: number): Promise<void> {
+  await insertNode({ center_id: centerId, parent_id: null, name, sort_order: sortOrder, node_type: "category" });
+}
+
+// 하위 분류 추가 — 부모의 분류 깊이를 서버(트리거)와 별개로 미리 확인한다(분류 8단계 이상은 거부).
 export async function addSubCategory(centerId: string, parentId: string, name: string, sortOrder: number): Promise<void> {
   const flat = await fetchCategories(centerId);
-  const check = checkParentChange(null, parentId, flat);
-  if (!check.ok) throw new Error(check.reason === "depth" ? `분류는 최대 ${MAX_PROGRESS_DEPTH}단계까지 만들 수 있어요` : "이 분류 아래에는 추가할 수 없어요");
-  const { error } = await supabase
-    .from("progress_categories")
-    .insert({ center_id: centerId, parent_id: parentId, name, sort_order: sortOrder });
-  if (error) throw new Error("추가에 실패했어요: " + error.message);
+  const check = checkParentChange(null, parentId, flat, { nodeType: "category" });
+  if (!check.ok) throw new Error(check.reason === "depth" ? `분류는 최대 ${MAX_PROGRESS_DEPTH}단계까지 만들 수 있어요` : check.reason === "parent_is_skill" ? "기술 아래에는 분류를 만들 수 없어요" : "이 분류 아래에는 추가할 수 없어요");
+  await insertNode({ center_id: centerId, parent_id: parentId, name, sort_order: sortOrder, node_type: "category" });
+}
+
+// 기술 추가 — 반드시 분류 아래. 분류가 7단계여도 기술은 추가할 수 있다.
+export async function addSkill(centerId: string, parentId: string, name: string, sortOrder: number): Promise<void> {
+  const flat = await fetchCategories(centerId);
+  const check = checkParentChange(null, parentId, flat, { nodeType: "skill" });
+  if (!check.ok) throw new Error(check.reason === "parent_is_skill" ? "기술 아래에는 기술을 만들 수 없어요" : "이 분류 아래에는 기술을 추가할 수 없어요");
+  await insertNode({ center_id: centerId, parent_id: parentId, name, sort_order: sortOrder, node_type: "skill" });
 }
 
 // 이름 수정
@@ -71,12 +83,12 @@ export async function renameCategory(id: string, name: string): Promise<void> {
   if (error) throw new Error("수정에 실패했어요: " + error.message);
 }
 
-// 삭제 — 하위 항목 전체(최대 7단계)를 가장 깊은 것부터 지운다. 진도 기록이 연결된 항목이 있으면 FK가 막아 삭제가 실패하고(기존 동작과 동일),
-// 일부만 지워지는 것을 피하려고 먼저 하위 전체에 기록이 있는지 확인한 뒤 시작한다.
+// 삭제 — 분류면 하위 분류/기술 전체(최대 7단계 + 기술)를 가장 깊은 것부터 지운다. 하위 전체에 진도 기록이 하나라도 있으면 아무것도 지우지 않고 거부한다
+// (기술 삭제도 같은 규칙: 기록이 있는 기술은 삭제 거부). 서버 FK(progress_records → progress_categories, on delete 없음)가 최종적으로 기록이 있는 행의 삭제를 막는다.
 export async function deleteCategory(id: string): Promise<void> {
   const ids: string[] = [id];   // 얕은 것 → 깊은 것 순으로 쌓인다
   let frontier = [id];
-  for (let level = 0; level < MAX_PROGRESS_DEPTH && frontier.length > 0; level++) {
+  for (let level = 0; level < MAX_PROGRESS_DEPTH + 1 && frontier.length > 0; level++) {   // 분류 7단계 + 그 아래 기술 1단계
     const { data, error } = await supabase.from("progress_categories").select("id").in("parent_id", frontier);
     if (error) throw new Error("삭제에 실패했어요: " + error.message);
     frontier = (data ?? []).map((r: any) => r.id as string);
