@@ -7,6 +7,7 @@
 import { supabase } from "./supabaseClient";
 import { getKstMonthUtcRange } from "./kst";
 import { getMyAccountId as getMyAccountIdBase } from "./authAccount";
+import { appendTrainerNames } from "./instructorDisplay";
 
 // ---------------- 타입 ----------------
 
@@ -247,11 +248,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     }
     for (const res of trainerChunks) {
       if (res.error) throw new Error("담당 강사를 불러오지 못했어요: " + res.error.message);
-      for (const r of res.data ?? []) {
-        const name = (r as any).name;
-        if (!name) continue;
-        (instructorNamesByClass[(r as any).class_id] ??= []).push(name);
-      }
+      appendTrainerNames(instructorNamesByClass, res.data as any);   // 서버가 정한 선택 순서(sort_order) 그대로
     }
   }
 
@@ -321,7 +318,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
       // UX 감사(A-7) — 원래는 센터명을 그대로 다시 넣어서 바로 위 .class-row-place에 이미
       // 나온 센터명이 카드에 두 번 출력됐다. classes.room_id가 있으니 실제 룸 이름을 쓴다
       // (룸 미지정이면 빈 문자열 — .class-row-meta가 조건부 렌더라 그냥 그 줄이 안 보임).
-      place: (c as any).rooms?.name ?? "",
+      place: roomNameFromEmbed((c as any).rooms),
       reserved: reservedCount[c.id] ?? 0,
       waitlisted: waitlistedCount[c.id] ?? 0,
       capacity: c.capacity,
@@ -342,9 +339,22 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   return { classes, centers, holidays };
 }
 
-// 예약 목록 카드 첫 meta line: "센터명 · 담당 강사"(없는 쪽은 구분자 없이 생략)
-export function classListMetaText(centerName?: string | null, instructorText?: string | null): string {
-  return [centerName, instructorText].filter((x): x is string => !!x && x.trim() !== "").join(" · ");
+// rooms(name) 임베드 값에서 룸 이름을 꺼낸다. classes.room_id → rooms FK는 many-to-one이라 보통 객체지만,
+// PostgREST 관계 추론/버전에 따라 배열로 올 수 있어 두 모양을 모두 처리한다(배열이면 첫 요소). 없으면 빈 문자열.
+export function roomNameFromEmbed(rooms: unknown): string {
+  const r = Array.isArray(rooms) ? rooms[0] : rooms;
+  const name = (r as { name?: unknown } | null | undefined)?.name;
+  return typeof name === "string" ? name.trim() : "";
+}
+
+// 예약 목록 카드 첫 meta line: "센터명 · 담당 강사 · 룸"(없는 항목은 구분자 없이 생략, 빈 구분자 "· ·" 없음)
+export function classListMetaText(centerName?: string | null, instructorText?: string | null, roomName?: string | null): string {
+  return [centerName, instructorText, roomName].filter((x): x is string => !!x && x.trim() !== "").map((x) => x.trim()).join(" · ");
+}
+
+// 예약 확인 시트 부제: "룸 · 날짜 시간"(룸이 없으면 앞 구분자 없이 "날짜 시간")
+export function confirmClassSubText(place: string | null | undefined, date: string, start: string): string {
+  return [place?.trim() || null, `${date} ${start}`].filter(Boolean).join(" · ");
 }
 
 // ---------------- 예약하기 ----------------

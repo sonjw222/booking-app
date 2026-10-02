@@ -162,7 +162,7 @@ describe("[10] 모든 반복 수업에 적용 — 요일별 시간 보존", () =
     const page = read("app/manager/classes/page.tsx");
     expect(page).toContain("const [applyTimeToGroup, setApplyTimeToGroup] = useState(false);");
     expect(page).toContain("time: applyTimeToGroup ? { start: form.start, end: form.end, only: orig ? { start: orig.start, end: orig.end } : undefined } : undefined");
-    expect(page).toContain("날짜·시간·수강권 정책은 수업별로 유지돼요");
+    expect(page).toContain("날짜·시간은 수업별로 유지돼요");   // 2026-10-02: 수강권 설정은 바꾼 경우 그룹 전체 적용(문구 갱신)
     expect(page).toContain("시간도 함께 변경");
   });
   it("SQL: update_class_group_safe는 description 키가 있을 때만 갱신(시그니처 불변)", () => {

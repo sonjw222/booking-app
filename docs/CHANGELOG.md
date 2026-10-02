@@ -20,6 +20,21 @@
 - 신규 `/api/payments/refund`: 브라우저의 refund_membership 직접 호출을 대체 — 실 PG 주문은 토스 취소 → DB 환불(쿠폰/포인트 복원), direct/manual/mock은 기존 DB 환불. 토스 취소 후 DB 실패는 재요청으로 이어서 마무리.
 - `fix_pg_payment_lifecycle.sql`(+rollback): 환불 core/서버 전용 함수, 브라우저 refund_membership의 PG 주문 거부, cancel_real_payment/_issue_membership_and_record_payment search_path 고정,
   confirm_test_payment(Mock)를 내부 QA 센터로 제한(회원이 mock 주문으로 결제 없이 수강권을 받던 경로 차단), 회원 INSERT 주문의 verified/status 서버 고정.
+## 2026-10-02 — 강사 setter 3종의 담당 강사 대상 서버 검증(SQL 파일 갱신만, 미실행)
+- set_class_trainers_safe / _bulk_safe / _for_group_safe가 SECURITY DEFINER로 class_trainers RLS("그 수업 센터의 active manager_centers 스태프만")를 우회하던 문제 — p_account_ids를 센터의 active 스태프로 전부 검증(일반 회원/다른 센터/비활성/없는 id/null은 전체 거부, "이 센터의 활성 스태프만 담당 강사로 지정할 수 있어요")한 뒤, 중복 제거한 검증된 배열로만 INSERT. 검증은 DELETE/INSERT보다 먼저, 플랫폼 관리자도 동일.
+
+## 2026-10-02 — 강사 bulk/group RPC 교차 센터 차단 + 요일 선택형 미설정 관리자 UX(SQL 파일 갱신만, 미실행)
+- set_class_trainers_bulk_safe / set_class_trainers_for_group_safe: 첫 수업의 센터 권한만 확인한 뒤 배열 전체를 SECURITY DEFINER로 수정하던 문제 차단 — 모든 수업 존재 + 같은 센터(group은 같은 반복 그룹, null 불가)를 DELETE/INSERT보다 먼저 검증하고 검증된 id 집합으로만 수정.
+- 요일 선택형 수강권에 요일 예약조건이 0개면 카드에 "회원이 구매할 수 없는 상태" 안내 + 예약조건 추가 버튼, 저장 직후 안내 토스트와 기존 예약조건 추가 시트를 바로 연다(요일/시간 데이터는 관리자가 직접 등록).
+
+## 2026-10-02 — 관리자/수업/회원 예약 UX 보완(SQL 파일만 작성, 미실행)
+- 상품 관리·수강권 관리: "선택" 모드로 여러 항목을 체크해 한 번에 삭제(전체 선택/해제, 확인 후 소프트 삭제 is_active=false, 같은 센터 한정 단일 UPDATE — 단건 삭제와 같은 pass.update RLS).
+- 요일/시간 선택형 수강권: 구매 화면에서 후보 0개/조회 실패/공개 목록 모델이면 조용히 숨기지 않고 안내 + 구매 차단(direct/PG 분기 전), 관리자 카드에 "예약조건 필요" 표시, 서버(orders BEFORE INSERT)가 선택을 강제.
+  Production 실제 원인: 요일 선택형으로 저장된 활성 수강권의 예약조건(요일)이 0개였다.
+- 반복 수업 "모든 반복 수업에 적용": 사용자가 바꾼 예약 가능 수강권 설정도 그룹 전체에 같은 트랜잭션으로 적용(update_class_group_safe 확장), 바꾸지 않으면 기존 그룹 설정 보존.
+- 회원 예약 카드: 센터 · 강사 · 룸을 한 줄 meta로 표시(룸 임베드 객체/배열 모두 처리, 빈 구분자 없음), 확인 시트 부제도 정리.
+- 담당 강사: 선택한 순서를 class_trainers.sort_order로 저장/조회(class_trainer_names ORDER BY), 수정 화면에 "표시 순서 미리보기".
+- SQL: `fix_manager_product_class_ux_20261002.sql` / `rollback_fix_manager_product_class_ux_20261002.sql`.
 
 ## 2026-10-02 — 주문 포인트 라이프사이클 보완(적용 전 보안/정합성 갭)
 - point_transactions "매니저 포인트 등록" INSERT 정책을 order_id/reverses_id가 null인 수기 조정으로 축소(주문 연계 차감/복원 행 위조로 unique 구조를 선점하는 경로 차단, rollback은 적용 전 정책 복원).

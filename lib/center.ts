@@ -188,6 +188,9 @@ export type CenterProduct = {
   minCount: number | null;         // 가격표/공개 RPC에서 계산된 선택 가능 횟수 범위(표시용)
   maxCount: number | null;
   minTierPrice: number | null;     // "~원부터" 표시용 최저 회차 가격
+  // 공개(비로그인) 목록에서 만든 모델이면 true — 요일/시간 선택·쿠폰 가능 여부 같은 구매용 설정이 "알 수 없음"(기본값)이다.
+  // 이 모델로는 결제를 진행하면 안 된다(checkout이 막는다).
+  publicFallback?: boolean;
 };
 
 const CENTER_PRODUCTS_SELECT_BASE = "id, name, price, product_kind, total_count, unlimited, description, sizes, auto_book_days, group_label, max_quantity, coupon_eligible";
@@ -266,8 +269,16 @@ async function fetchPublicCenterProducts(centerId: string): Promise<CenterProduc
     groupLabel: p.groupLabel, remaining: p.remaining, couponEligible: true,
     weekdaySelectable: false, timeSelectable: false,
     countSelectable: p.countSelectable, countPrices: [], minCount: p.minCount, maxCount: p.maxCount,
-    minTierPrice: p.minTierPrice,
+    minTierPrice: p.minTierPrice, publicFallback: true,
   }));
+}
+
+// 구매(checkout)용 — 공개 목록으로 대체하지 않는다. 세션이 없거나 만료돼 회원용 목록을 못 받으면 오류로 둔다
+// (공개 모델은 weekdaySelectable=false라 요일 선택형 수강권이 선택 없이 팔릴 수 있다).
+export async function fetchCenterProductsForPurchase(centerId: string): Promise<CenterProduct[]> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return fetchPublicCenterProducts(centerId);   // 표시용(결제 시점에 publicFallback으로 막힘)
+  return fetchMemberCenterProducts(centerId);
 }
 
 async function fetchMemberCenterProducts(centerId: string): Promise<CenterProduct[]> {

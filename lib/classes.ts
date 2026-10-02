@@ -7,6 +7,7 @@
 import { supabase } from "./supabaseClient";
 import type { ReservationType } from "./reservationTypes";
 import { toKstIso } from "./kst";
+import { appendTrainerNames } from "./instructorDisplay";
 
 export type ManagedClass = {
   id: string;
@@ -165,11 +166,7 @@ export async function fetchClasses(centerId: string, fromDate: string, toDate: s
     }
     for (const { data: trainerRows, error: trainerErr } of trainerChunkResults) {
       if (trainerErr) throw new Error("담당 강사를 불러오지 못했어요: " + trainerErr.message);
-      for (const r of trainerRows ?? []) {
-        const name = (r as any).name;
-        if (!name) continue;
-        (instructorNamesByClass[(r as any).class_id] ??= []).push(name);
-      }
+      appendTrainerNames(instructorNamesByClass, trainerRows as any);   // 서버가 정한 선택 순서(sort_order) 그대로
     }
   }
 
@@ -290,7 +287,8 @@ export type GroupClassRow = { id: string; start_time: string; end_time: string }
 
 // "모든 반복 수업에 적용"에서 그룹 전체에 반영할 공통 필드(사용자가 실제로 바꾼 것만 담긴다).
 // 분류 — 그룹 전체: 수업명(title, 항상) · 수업 소개 · 정원 · 룸 · 수업 상품 허용 · 취소 허용 · 취소마감 · 예약마감 · 담당 강사(별도 RPC).
-//        이 수업만: 날짜 · 시작/종료 시간(기본) · 수강권 정책/허용 수강권(class_allowed_products, pass_selection_mode) · 예약/출석.
+//        이 수업만: 날짜 · 시작/종료 시간(기본) · 예약/출석.
+//        수강권 정책/허용 수강권(class_allowed_products, pass_selection_mode)은 2026-10-02부터 "사용자가 바꾼 경우에만" 그룹 전체에 적용된다(passPolicy).
 //        recurring_group_id/center_id/id는 수정 대상이 아니다.
 // "바뀐 것만" 보내는 이유: 요일별 개별 설정(perDay 반복 등록에서 요일마다 다를 수 있는 정원/룸/취소마감)을 한 수업의 값으로
 // 통일해 버리지 않기 위해서다(시간을 덮어쓰던 QA 10과 같은 종류의 문제).
@@ -302,7 +300,23 @@ export type GroupFieldChanges = {
   allowCancel?: boolean;
   cancelDeadlineMin?: number | null;
   bookingDeadlineMin?: number | null;
+  // 2026-10-02 — 예약 가능 수강권 설정(바뀐 경우에만). 'all'이면 허용 수강권 행을 비우고 모든 수강권을 허용한다.
+  passPolicy?: PassPolicy;
 };
+
+export type PassPolicy = { mode: "all" | "selected"; productIds: string[] };
+
+// 수강권 설정이 "바뀌었는지" 판정(순수 함수 — 테스트 대상). 선택 배열의 순서/중복은 의미가 없으므로 집합으로 비교한다.
+// 'all'끼리는 허용 수강권 행이 비어 있어(전체) 항상 같은 설정이다.
+export function passPolicyChanged(orig: PassPolicy, cur: PassPolicy): boolean {
+  if (orig.mode !== cur.mode) return true;
+  if (cur.mode === "all") return false;
+  const a = new Set(orig.productIds);
+  const b = new Set(cur.productIds);
+  if (a.size !== b.size) return true;
+  for (const id of a) if (!b.has(id)) return true;
+  return false;
+}
 
 const normDesc = (s: string | null | undefined) => (s ?? "").trim();
 
@@ -334,6 +348,8 @@ export type GroupUpdateRow = {
   id: string; start_time: string; end_time: string;
   description?: string; capacity?: number; room_id?: string | null; allow_goods?: boolean; allow_cancel?: boolean;
   cancel_deadline_min?: number | null; booking_deadline_min?: number | null;
+  // 수강권 설정이 바뀐 경우에만 모든 행에 같은 값으로 실린다(서버가 같은 트랜잭션에서 수업 정책 + 허용 수강권을 교체).
+  pass_selection_mode?: "all" | "selected"; allowed_product_ids?: string[];
 };
 
 // 같은 날(KST)에 그룹 수업이 2개 이상 있으면 "한 날 여러 타임" 그룹이다.
@@ -378,6 +394,10 @@ export function buildGroupUpdates(rows: GroupClassRow[], options?: GroupUpdateOp
     if (changes.allowCancel !== undefined) u.allow_cancel = changes.allowCancel;
     if (changes.cancelDeadlineMin !== undefined) u.cancel_deadline_min = changes.cancelDeadlineMin;
     if (changes.bookingDeadlineMin !== undefined) u.booking_deadline_min = changes.bookingDeadlineMin;
+    if (changes.passPolicy !== undefined) {
+      u.pass_selection_mode = changes.passPolicy.mode;
+      u.allowed_product_ids = changes.passPolicy.mode === "selected" ? [...new Set(changes.passPolicy.productIds)] : [];
+    }
     return u;
   });
 }
@@ -712,10 +732,16 @@ export async function setClassProductsBulk(classIds: string[], productIds: strin
 
 // 특정 수업에 지정된 담당 강사 account_id 목록
 export async function fetchClassTrainers(classId: string): Promise<string[]> {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("class_trainers")
     .select("account_id")
-    .eq("class_id", classId);
+    .eq("class_id", classId)
+    .order("sort_order", { ascending: true })   // 선택한 순서(2026-10-02) — 칩 선택 상태/미리보기가 저장 순서를 그대로 복원
+    .order("id", { ascending: true });
+  if (error?.code === "42703") {
+    // fix_manager_product_class_ux_20261002.sql(sort_order) 미적용 환경 — 순서 없이라도 목록은 보여준다.
+    ({ data, error } = await supabase.from("class_trainers").select("account_id").eq("class_id", classId));
+  }
   if (error) throw new Error("담당 강사를 불러오지 못했어요: " + error.message);
   return (data ?? []).map((r: any) => r.account_id);
 }
