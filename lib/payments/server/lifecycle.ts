@@ -46,6 +46,7 @@ const stripPrefix = (m: string) => m.replace(/^.*?:\s*/, "");
 // 로그에는 paymentKey 전체를 남기지 않는다(뒤 6자리만).
 export const maskKey = (k: string) => (k.length > 6 ? `…${k.slice(-6)}` : "…");
 
+// Bearer(Supabase 로그인 세션) 경로 — 기존 계약 그대로.
 export async function handleConfirm(input: { token: string | null; paymentKey?: unknown; orderId?: unknown; amount?: unknown }, d: LifecycleDeps): Promise<Reply> {
   const { paymentKey, orderId, amount } = input;
   if (typeof paymentKey !== "string" || !paymentKey || typeof orderId !== "string" || !orderId || typeof amount !== "number") {
@@ -53,6 +54,12 @@ export async function handleConfirm(input: { token: string | null; paymentKey?: 
   }
   const uid = input.token ? await d.getAuthUid(input.token) : null;
   if (!uid) return { status: 401, body: { error: "로그인이 필요해요" } };
+  return confirmForAuthorizedUid(uid, { paymentKey, orderId, amount }, d);
+}
+
+// 인증이 끝난 uid(Bearer 검증 또는 서명된 return token 검증으로 얻은 값)로 실행하는 공통 core — 모든 결제 안전 규칙이 여기에 있다.
+export async function confirmForAuthorizedUid(uid: string, input: { paymentKey: string; orderId: string; amount: number }, d: LifecycleDeps): Promise<Reply> {
+  const { paymentKey, orderId, amount } = input;
 
   const ctx = await d.orderContext(orderId, uid);
   if (!ctx) return { status: 404, body: { error: "주문을 찾을 수 없어요" } };
@@ -225,6 +232,11 @@ export async function handleCancel(input: { token: string | null; orderId?: unkn
   if (typeof input.orderId !== "string" || !input.orderId) return { status: 400, body: { error: "orderId가 필요해요" } };
   const uid = input.token ? await d.getAuthUid(input.token) : null;
   if (!uid) return { status: 401, body: { error: "로그인이 필요해요" } };
+  return cancelForAuthorizedUid(uid, input.orderId, d);
+}
+
+export async function cancelForAuthorizedUid(uid: string, orderId: string, d: LifecycleDeps): Promise<Reply> {
+  const input = { orderId };
   const ctx = await d.orderContext(input.orderId, uid);
   if (!ctx) return { status: 404, body: { error: "주문을 찾을 수 없어요" } };
   if (!ctx.provider || !PG_PROVIDERS.includes(ctx.provider)) return { status: 400, body: { error: "실제 PG 주문만 취소할 수 있어요" } };
@@ -319,4 +331,17 @@ export async function handleRefund(input: { token: string | null; membershipId?:
     return { status: 500, body: { error: "카드 결제는 취소됐지만 환불 처리를 마치지 못했어요. 같은 요청을 다시 하면 이어서 처리돼요", code: "refund_db_failed_after_pg_cancel", dbError: r.error.message } };
   }
   return { status: 200, body: { ok: true, ...(r.data ?? {}) } };
+}
+
+// 결제 시작 시 return token 발급 가능 여부(Bearer 로그인 경로에서만 호출): 본인 + toss + pending + PG 게이트 허용.
+export async function checkReturnTokenEligibility(input: { token: string | null; orderId?: unknown }, d: LifecycleDeps): Promise<{ ok: true; uid: string; orderId: string } | { ok: false; reply: Reply }> {
+  if (typeof input.orderId !== "string" || !input.orderId) return { ok: false, reply: { status: 400, body: { error: "orderId가 필요해요" } } };
+  const uid = input.token ? await d.getAuthUid(input.token) : null;
+  if (!uid) return { ok: false, reply: { status: 401, body: { error: "로그인이 필요해요" } } };
+  const ctx = await d.orderContext(input.orderId, uid);
+  if (!ctx) return { ok: false, reply: { status: 404, body: { error: "주문을 찾을 수 없어요" } } };
+  if (ctx.provider !== "toss") return { ok: false, reply: { status: 400, body: { error: "토스 결제 주문이 아니에요" } } };
+  if (ctx.status !== "pending") return { ok: false, reply: { status: 409, body: { error: "결제를 진행할 수 없는 주문 상태예요" } } };
+  if (!(await d.gateAllows(input.orderId))) return { ok: false, reply: { status: 403, body: { error: "온라인 결제는 아직 사용할 수 없어요" } } };
+  return { ok: true, uid, orderId: ctx.orderId };
 }

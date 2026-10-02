@@ -228,11 +228,11 @@ describe("migration 구조 / rollback", () => {
 });
 
 describe("PG 실패/취소 경로(승인 전)", () => {
-  it("failUrl 페이지가 orderId로 내 pending 주문을 취소한 뒤 결제 화면으로 돌아간다", () => {
+  it("failUrl 페이지가 서명된 복귀 토큰으로 서버의 pending 주문 취소를 요청한다(외부 Safari에는 로그인 세션이 없다 — 2026-10-02 변경)", () => {
     const p = read("app/checkout/fail/page.tsx");
     expect(p).toContain('sp.get("orderId")');
-    expect(p).toContain("cancelMyPendingOrderQuietly(failedOrderId).finally(");
-    expect(p.indexOf("cancelMyPendingOrderQuietly")).toBeLessThan(p.indexOf("window.location.href"));
+    expect(p).toContain("returnCancel({ returnToken, orderId })");
+    expect(p).not.toContain("cancelMyPendingOrderQuietly");
   });
   it("정리는 status='pending' 조건부 UPDATE — 발급(done)된 주문은 건드리지 않고 실패는 조용히 무시", () => {
     const o = read("lib/orders.ts");
