@@ -534,7 +534,7 @@ export default function MembershipRulesPage() {
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
       {!loading && products.length > 0 && (
-        <div style={{ padding: "0 20px" }}>
+        <div className="membership-rules-filter" style={{ padding: "0 20px" }}>
           <CatalogSearchFilter
             query={query} onQuery={(q) => { setQuery(q); setVisibleCount(PAGE_SIZE); }}
             placeholder="수강권 검색" searchLabel="수강권 검색"

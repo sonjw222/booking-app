@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-03 — UI polish: 수강권 설정 필터 배경 / 토스트 geometry / 예약조건 펼침 (UI만, 기능·DB 변경 없음)
+- 수강권 설정 검색/그룹 필터 뒤 큰 사각 배경 제거: 화면 전용 class `membership-rules-filter`로 `.catalog-filter` 배경만 transparent(공용 컴포넌트·구매 sheet·다른 화면 불변).
+- 일시적 action toast(`.toast`/`.error-toast`/`.status-toast`) geometry 통일: min-height 44px, padding 10px 16px, radius 14px, flex 중앙 정렬(error/status는 텍스트+닫기 버튼 수직 중심), line-height 1.35, max-width 100vw-32px. 후반 slab-guard 블록을 같은 값으로 정리(상한은 유지). 위치(safe-top / manager·admin bottom 112px)와 실시간 알림 카드·네이티브 푸시 배너는 변경 없음.
+- 예약조건 펼침: `.pass-rules`의 큰 brand-soft 배경 제거 → 얇은 왼쪽 brand line + 개별 카드.
+
 ## 2026-10-03 — 소셜 로그인 이름 자동 복구/자동 입력 (Web + Edge Function, SQL/native 변경 없음)
 - 기존 소셜 계정의 합성/미등록 이름을 다음 로그인에서 자동 복구: provider가 "이번 로그인에서" 준 이름(Google native fullName·Google 웹 metadata, Apple 최초 fullName, Naver providerName)이 있고 accounts/대표 프로필 이름이 둘 다 합성일 때만 `profiles` → `accounts` 순서로 저장. 정상 모하빗 이름은 절대 덮어쓰지 않으며(한쪽만 정상이면 그 저장값으로 다른 쪽을 맞춤, 서로 다른 정상 이름은 그대로 둠) provider 이름을 매 로그인마다 동기화하지 않는다.
 - 카카오 nickname은 실명 보장이 없어 자동 저장하지 않고 이름 입력칸 prefill(suggestedName)만 — 신규 카카오 가입도 nickname을 이름으로 확정하지 않고 가입 마무리 gate에서 확인 후 저장.
