@@ -96,12 +96,14 @@ async function ensureProfileRow(accountId: string, name: string): Promise<void> 
     .from("profiles")
     .select("id")
     .eq("account_id", accountId)
+    .eq("is_primary", true)   // "살아 있는 프로필이 있는가"가 아니라 "살아 있는 대표 프로필이 있는가" — 추가 프로필(is_primary=false)만 있는 계정도 복구한다
     .is("deleted_at", null)
     .limit(1);
   if (findErr) return; // 조회 자체가 실패(RLS 등) — 이후 실제 화면에서 다시 드러남, 여기서 막지 않음
-  if (existing && existing.length > 0) return; // 이미 있음 — 정상 경로, 아무것도 안 함
+  if (existing && existing.length > 0) return; // 대표 프로필이 이미 있음 — 정상 경로, 아무것도 안 함(기존 추가 프로필은 승격/수정/삭제하지 않는다 — 자녀/가족 등 실제 다른 수강 주체일 수 있음)
   const { error: insertErr } = await supabase.from("profiles").insert({ account_id: accountId, name, is_primary: true });
-  // 23505 = unique_violation: 동시에 열린 다른 탭/effect가 먼저 만든 경우 — 정상이므로 무시.
+  // 23505 = unique_violation: 동시에 열린 다른 탭/effect가 먼저 만든 경우 — 정상이므로 무시. (주의: 2026-10-04 Production 조사 기준 profiles에는 account당 primary 1개를 강제하는 unique index가 없다 —
+  // 이 코드는 방어용일 뿐 다른 컨텍스트의 동시 insert를 DB가 막아주지는 않는다.)
   if (insertErr && insertErr.code !== "23505") {
     console.error("프로필 자동 복구 실패", insertErr);
   }
