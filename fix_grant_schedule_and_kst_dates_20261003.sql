@@ -13,6 +13,8 @@
 --   update_class_safe(정원 확대 대기 승격), reserve_with_goods(대여상품 사용기간). 효과: KST 00:00~08:59에 하루 어긋나던 문제 제거.
 --   [대기 승격 자격] cancel_reservation/update_class_safe의 대기자 승격은 membership을 (remaining>0 AND expires>=오늘)로만 검사해 NULL 만료/NULL 횟수(무제한) 수강권이 승격되지 않았고
 --   status·starts_at·현재 수업 예약조건(is_membership_eligible_for_class)은 확인하지 않았다 → 예약과 같은 자격(active / 횟수 NULL 허용 / 만료 NULL 허용 / 시작일 / 현재 수업 자격)으로 다시 검증.
+--   [membership_consumed] 대기 → 확정 승격 시 remaining_count는 차감하면서 reservations.membership_consumed는 false로 남던 모순(add_holiday_safe의 수강권 복구·휴무 알림이 consumed로 판정)을
+--   같은 성공 경로 안에서 membership_consumed = true로 맞춘다(자격 실패 시에는 waitlisted/false/횟수 그대로).
 --   cancel_reservation에는 search_path가 없어 SECURITY DEFINER인데 고정돼 있지 않았다 → SET search_path TO 'public' 추가(동작 변경 없음).
 --   ※ 결제/환불/주문 발급 함수(_issue_membership_and_record_payment, fulfill_order, _refund_membership_core)의 current_date는 이번 범위(PG/환불/정산 수정 금지)에서 제외했다 — 보고서 참고.
 -- 이 세션에서는 production에 실행하지 않았습니다. 적용 후 verify_grant_schedule_and_kst_dates_20261003.sql(읽기 전용)로 확인하세요.
@@ -359,7 +361,7 @@ begin
 
                 if found then
                     update reservations
-                    set status = 'confirmed', waitlist_order = null
+                    set status = 'confirmed', waitlist_order = null, membership_consumed = true   -- 대기→확정: 차감과 같은 성공 경로에서 consumed도 true(대기 등록 시 false)
                     where id = v_next.id;
 
                     update memberships set remaining_count = remaining_count - 1
@@ -469,7 +471,7 @@ begin
 
             if found then
                 update reservations
-                set status = 'confirmed', waitlist_order = null
+                set status = 'confirmed', waitlist_order = null, membership_consumed = true   -- 대기→확정: 차감과 같은 성공 경로에서 consumed도 true(대기 등록 시 false)
                 where id = v_next.id;
 
                 update memberships set remaining_count = remaining_count - 1

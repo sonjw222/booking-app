@@ -5,6 +5,7 @@
 - **Batch B/C**: `manager_grant_product`가 상품 예약조건에 없는 bound 요일/시간을 거부(구매 checkout 트리거와 같은 의미의 helper), 지급/취소 대기승격/정원확대 승격/대여상품 사용기간의 날짜를 KST 기준으로(`fix_grant_schedule_and_kst_dates_20261003.sql`). 결제·환불·주문 발급 함수는 범위에서 제외.
 - **Batch D**: reservations 권한 최소화 — authenticated INSERT, anon/authenticated REFERENCES·TRIGGER 회수(`fix_reservations_privileges_minimize_20261003.sql`). SELECT/DELETE(매니저 정리 정책)/member_memo UPDATE/service_role 유지.
 - **보완(같은 날)**: ① `search_member_candidates`가 센터 회원의 전화 부분검색/전체 번호를 `customer.member.phone`(또는 platform admin) 권한자에게만 허용(기존 fetch_member_phones_safe 기준) — create 권한만으로 전화번호가 노출되던 우회 수정, 입력/저장 전화번호는 `kr_phone_digits`로 같은 규칙 정규화(+82/하이픈/공백). ② 대기자 승격(cancel_reservation/update_class_safe)이 예약과 같은 자격(active·횟수 NULL 허용·만료 NULL 허용·시작일·현재 수업의 `is_membership_eligible_for_class`)으로 재검증.
+- **membership_consumed 일관성**: 대기→확정 승격(cancel_reservation/update_class_safe)이 차감은 하면서 consumed를 false로 두던 모순(휴무일 수강권 복구·휴무 알림이 이 컬럼으로 판정)을 같은 성공 경로에서 true로 수정(`fix_grant_schedule_and_kst_dates_20261003.sql`). reserve_class의 대기 insert가 컬럼 기본값(true)으로 저장되던 것을 false로 명시(`fix_waitlist_membership_consumed_20261003.sql`, 이미 적용된 integrity SQL은 수정하지 않음). 진단: `diagnose_membership_consumed_20261003.sql`(읽기 전용).
 - **Universal Link**: 코드/설정 결함 없음(수정 없음) — 진단 절차는 `docs/UNIVERSAL_LINK_DIAGNOSIS_20261003.md`.
 
 ## 2026-10-03 — 코드 리뷰 보완 (Web + SQL 파일)

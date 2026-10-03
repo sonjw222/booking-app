@@ -90,7 +90,7 @@ async function world({ apply = true } = {}) {
     create table class_allowed_products(class_id uuid, product_id uuid);
     create table class_trainers(class_id uuid, account_id uuid);
     create table center_settings(center_id uuid primary key, same_day_change_hours int, same_day_change_minutes int, deduct_on_late_cancel boolean default false, waitlist_auto_hours int default 0, waitlist_auto_minutes int default 0);
-    create table reservations(id uuid primary key default gen_random_uuid(), class_id uuid, profile_id uuid, membership_id uuid, status text, waitlist_order int, cancel_source text, created_at timestamptz default now());
+    create table reservations(id uuid primary key default gen_random_uuid(), class_id uuid, profile_id uuid, membership_id uuid, status text, waitlist_order int, cancel_source text, membership_consumed boolean not null default true, created_at timestamptz default now());
     create function calc_deadline(uuid, text, timestamptz, text) returns timestamptz language sql as $$ select null::timestamptz $$;
     ${ELIGIBLE_FN}
     insert into accounts values ('${MGR}','관리자'), ('${NOPERM}','권한없음'), ('${MEMBER_ACC}','회원'), ('${OTHER_ACC}','대기회원');
@@ -297,7 +297,7 @@ async function promotion(db, mode, spec = {}) {
   await db.exec(`insert into memberships(id, profile_id, center_id, product_id, remaining_count, expires_at, starts_at, status, bound_day_of_week, bound_start_time)
     select '${mB}','${P_WAIT}','${C1}','${prod}', ${remaining === null ? 'null' : remaining}, ${spec.expires ?? `${KST}+10`}, ${spec.starts ?? 'null'}, '${spec.status ?? 'active'}',
            ${spec.boundDow === 'other' ? `(${dowOf} + 1) % 7` : 'null'}, ${spec.boundTime === 'other' ? `((c.start_time at time zone 'Asia/Seoul')::time + interval '1 hour')::time` : 'null'} from classes c where c.id='${cls}';
-    insert into reservations(id, class_id, profile_id, membership_id, status, waitlist_order) values ('${rB}','${cls}','${P_WAIT}','${mB}','waitlisted',1);`);
+    insert into reservations(id, class_id, profile_id, membership_id, status, waitlist_order, membership_consumed) values ('${rB}','${cls}','${P_WAIT}','${mB}','waitlisted',1,false);`);
   if (spec.ruleOtherDay) await db.exec(`insert into membership_schedule_rules(product_id, day_of_week, start_time) select '${prod}', (${dowOf} + 1) % 7, null from classes c where c.id='${cls}'`);
   if (spec.ruleMatch) await db.exec(`insert into membership_schedule_rules(product_id, day_of_week, start_time) select '${prod}', ${dowOf}, (c.start_time at time zone 'Asia/Seoul')::time from classes c where c.id='${cls}'`);
   if (spec.notAllowed) await db.exec(`insert into class_allowed_products values ('${cls}','${id(4, 9999)}')`);   // selected 모드: B의 상품은 허용 목록에 없음
@@ -305,7 +305,8 @@ async function promotion(db, mode, spec = {}) {
   else await as(db, MGR, () => db.query(`select update_class_safe('${cls}', '정규반', null, (select start_time from classes where id='${cls}'), (select end_time from classes where id='${cls}'), 2, true, null, 0, null, 'group', '${spec.mode ?? 'all'}', true)`));
   const promoted = (await db.query(`select status from reservations where id='${rB}'`)).rows[0].status === 'confirmed';
   const rem = (await db.query(`select remaining_count r from memberships where id='${mB}'`)).rows[0].r;
-  return { promoted, rem };
+  const consumed = (await db.query(`select membership_consumed c from reservations where id='${rB}'`)).rows[0].c;
+  return { promoted, rem, consumed };
 }
 const PROMOTION_CASES = [
   ['1 정상 active 횟수권 → 승격(차감 5→4)', {}, true, 4],
@@ -334,6 +335,7 @@ for (const mode of ['cancel', 'update']) {
         const r = await promotion(db, mode, spec);
         assert.equal(r.promoted, promoted, label);
         assert.equal(r.rem, rem, `${label} (남은 횟수)`);
+        assert.equal(r.consumed, promoted, `${label} (membership_consumed = 승격 여부)`);
       }
     } finally { await db.close(); }
   });
