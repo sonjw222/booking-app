@@ -1,7 +1,7 @@
 # CHANGELOG
 
-## 2026-10-04 — PG/주문/환불 날짜 KST 정합성 (SQL 파일만 작성, Production 미적용)
-- `fix_pg_order_refund_kst_dates_20261004.sql`: `_issue_membership_and_record_payment`, `fulfill_order`(시작일 `current_date` → KST 오늘, days형 만료 `(now()+N days)::date` → `((now()+N days) at time zone 'Asia/Seoul')::date`), `_refund_membership_core`(환불 후 활성 수강권 판정 `expires_at >= current_date` → KST 오늘)만 변경. Production 라이브 정의 기준, 시그니처/SECURITY DEFINER/search_path/EXECUTE 권한 보존, 결제·환불·포인트·쿠폰·자동예약 로직 불변. rollback/verify(읽기 전용) 동봉.
+## 2026-10-04 — PG/주문/환불 날짜 KST 정합성 (Production 적용 완료, verify APPLIED)
+- `fix_pg_order_refund_kst_dates_20261004.sql`: `_issue_membership_and_record_payment`, `fulfill_order`(시작일 `current_date` → KST 오늘, days형 만료 `(now()+N days)::date` → `((now()+N days) at time zone 'Asia/Seoul')::date`), `_refund_membership_core`(환불 후 활성 수강권 판정 `expires_at >= current_date` → KST 오늘)만 변경. Production 라이브 정의 기준, 시그니처/SECURITY DEFINER/search_path/EXECUTE 권한 보존, 결제·환불·포인트·쿠폰·자동예약 로직 불변. rollback/verify(읽기 전용) 동봉. 2026-10-04 Production 적용 완료, `verify_pg_order_refund_kst_dates_20261004.sql` 결과 `verdict = APPLIED`(모든 `*_ok` true, `info_remaining_current_date_functions = evaluate_notification_rules`).
 
 ## 2026-10-03 — UI polish: 수강권 설정 필터 배경 / 토스트 geometry / 예약조건 펼침 (UI만, 기능·DB 변경 없음)
 - 수강권 설정 검색/그룹 필터 뒤 큰 사각 배경 제거: 화면 전용 class `membership-rules-filter`로 `.catalog-filter` 배경만 transparent(공용 컴포넌트·구매 sheet·다른 화면 불변).

@@ -2,7 +2,7 @@
 
 ## 2026-10-03 post-release follow-up 이후 남은 것
 
-- ~~**P1 / PG·환불·주문 날짜 KST 정합성**~~ — **SQL 작성 완료(2026-10-04), Production 미적용**: `fix_pg_order_refund_kst_dates_20261004.sql`(+`rollback_`/`verify_pg_order_refund_kst_dates_20261004.sql`)가 `_issue_membership_and_record_payment`/`fulfill_order`의 시작일·days형 만료와 `_refund_membership_core`의 남은 활성 수강권 판정을 KST 기준으로 정리한다(PGlite: UTC/UTC-12/UTC+14 재현 + 수정 전 정의 negative control). Production에서 SQL 적용 후 verify가 `APPLIED`인 것을 확인하면 이 항목을 최종 닫는다.
+- ~~**P1 / PG·환불·주문 날짜 KST 정합성**~~ — **완료(2026-10-04 Production 적용 완료, verify `APPLIED` 확인)**: `fix_pg_order_refund_kst_dates_20261004.sql`(+`rollback_`/`verify_pg_order_refund_kst_dates_20261004.sql`)가 `_issue_membership_and_record_payment`/`fulfill_order`의 시작일·days형 만료와 `_refund_membership_core`의 남은 활성 수강권 판정을 KST 기준으로 정리했다. Production verify: `*_kst_*_ok`/`*_behavior_preserved_ok`/보안(`all_security_definer_ok`, `all_search_path_pinned_ok`, `internal_helpers_not_executable_ok`, `fulfill_order_execute_contract_ok`)·`three_functions_exist_ok` 전부 true, `info_remaining_current_date_functions = evaluate_notification_rules`(알림 cron 함수 — 이번 범위 밖, 실행 시각이 UTC 00:00 = KST 09:00이라 날짜가 일치).
 - **P2(승인 필요)**: 이미 존재하는 reservations의 membership_consumed 모순 보정 — 2026-10-03 Production 읽기 전용 확인 기준 reservations 1건(취소), 대기/모순 0건이라 보정 대상 없음. 이후 데이터가 쌓이면 `diagnose_membership_consumed_20261003.sql`(읽기 전용)로 건수를 확인하고, 보정 UPDATE는 별도 승인 후에만.
 - **P2**: accounts "계정 조회" RLS 정책이 owner/`facility.staff.create` 권한자에게 accounts 전체 SELECT를 허용한다(스태프 초대 검색용, fix_staff_search.sql). 이번 회원 검색 RPC와는 별개이며 범위를 좁힐지 제품 결정 필요.
 - **P2**: 회원 추가 검색은 create 권한자가 전체 번호를 시도하면 그 가입자의 이름이 확인된다(번호 열거 rate limit 없음) — 필요 시 호출 빈도 제한. 센터 회원의 전화 부분검색/전체 번호는 customer.member.phone 권한자에게만 허용된다(2026-10-03 보완).
