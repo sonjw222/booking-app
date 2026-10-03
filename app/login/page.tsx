@@ -24,6 +24,7 @@ import {
   isAppleNativeSignInSupported,
   shouldShowAppleSignInButton,
 } from "../../lib/appleAuth";
+import { clearSocialNameStash } from "../../lib/socialName";
 import { signInWithGoogleNative, GoogleSignInCancelledError, isGoogleNativeSignInSupported } from "../../lib/googleAuth";
 import { stashPostLoginNext } from "../../lib/postLoginReturn";
 import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
@@ -325,6 +326,9 @@ export default function LoginPage() {
     // SessionWatcher의 소셜 가입 완료 모달(app/components/SessionWatcher.tsx)에서 약관
     // 동의를 최종적으로 받는다 — 기존 회원의 로그인은 그 모달 자체가 안 뜨므로 영향 없음.
     setMessage(null);
+    // 새 소셜 로그인 시도는 항상 깨끗한 이름 stash에서 시작한다 — 이전 시도(같은 provider 포함)가 취소/실패로 남긴 후보가 10분 동안 다음 로그인에 소비되지 않게
+    // (Apple/Google native 취소·플러그인 오류, 웹 OAuth 시작, Naver/Kakao redirect 시작 모두 이 지점 이후에 분기한다). 이름 값은 다루지 않는다.
+    clearSocialNameStash();
     setSocialLoading(provider);
     // 소셜 로그인도 "로그인 상태 유지" 설정을 그대로 따른다 — 이 탭에서 리다이렉트로
     // 나갔다가 돌아오므로, 세션이 실제로 만들어지기 전에 미리 저장해둬야 한다.

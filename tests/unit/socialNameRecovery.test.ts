@@ -251,6 +251,63 @@ describe("ensureAccountForCurrentUser — 기존 계정 자동 복구", () => {
   });
 });
 
+describe("조기 실패/취소 경로의 stale stash 제거", () => {
+  // handleSocial()이 하는 일 = 새 시도 시작 시 clearSocialNameStash() → provider 인증(취소/실패하면 새 stash 없이 종료)
+  const startAttempt = (provider: "google" | "apple", authenticate: () => void) => {
+    clearSocialNameStash();
+    try { authenticate(); } catch { /* 취소/오류 — 새 stash를 만들기 전에 종료 */ }
+  };
+  it("1. 이전 Google stash가 남은 상태에서 새 Google 로그인을 시작하면 인증 수행 전에 stash가 지워진다(취소돼도 남지 않음)", () => {
+    stashSocialName("google", "이전구글이름");
+    let sawStashDuringAuth = true;
+    startAttempt("google", () => { sawStashDuringAuth = mem.has(SOCIAL_NAME_STASH_KEY); throw new Error("canceled"); });
+    expect(sawStashDuringAuth).toBe(false);
+    expect(consumeSocialNameCandidate("google")).toBeNull();
+  });
+  it("2. 이전 Apple stash가 남은 상태에서 새 Apple 로그인을 시작해도 동일", () => {
+    stashSocialName("apple", "이전애플이름");
+    let sawStashDuringAuth = true;
+    startAttempt("apple", () => { sawStashDuringAuth = mem.has(SOCIAL_NAME_STASH_KEY); throw new Error("native plugin error"); });
+    expect(sawStashDuringAuth).toBe(false);
+    expect(consumeSocialNameCandidate("apple")).toBeNull();
+  });
+  it("같은 provider 재시도에서 취소 후 로그인이 stale 후보로 기존 합성 이름을 덮지 않는다(통합)", async () => {
+    seed(SYN, SYN); stashSocialName("google", "이전구글이름");
+    startAttempt("google", () => { throw new Error("canceled"); });          // 취소
+    await login(userOf("google"));                                            // 이후 stash 없이(예: 웹 OAuth) 로그인
+    expect(names()).toEqual({ acc: SYN, prof: SYN }); expect(writes).toHaveLength(0);
+  });
+  it("3/4. Naver·Kakao callback: provider error, code/state 누락·불일치에서도 stash를 지운다(요청 처리 전 early return 경로)", () => {
+    for (const file of ["app/login/naver-callback/page.tsx", "app/login/kakao-callback/page.tsx"]) {
+      const s = read(file);
+      const providerErr = s.slice(s.indexOf("if (providerError) {"), s.indexOf("return;", s.indexOf("if (providerError) {")));
+      expect(providerErr).toContain("clearSocialNameStash();");
+      expect(providerErr.indexOf("clearSocialNameStash();")).toBeLessThan(providerErr.indexOf("fail("));
+      const stateErr = s.slice(s.indexOf("if (!code || !state || !savedState || state !== savedState) {"), s.indexOf("return;", s.indexOf("if (!code || !state || !savedState || state !== savedState) {")));
+      expect(stateErr).toContain("clearSocialNameStash();");
+      expect(stateErr.indexOf("clearSocialNameStash();")).toBeLessThan(stateErr.indexOf("fail("));
+      expect(s.match(/clearSocialNameStash\(\)/g)!.length).toBeGreaterThanOrEqual(4);   // provider error / state / Edge Function error / verifyOtp error
+    }
+  });
+  it("handleSocial: clearSocialNameStash()가 중복 클릭 return 이후, 모든 provider 분기(naver/kakao/apple/google/web OAuth)보다 앞에 있다", () => {
+    const s = read("app/login/page.tsx");
+    const body = s.slice(s.indexOf("async function handleSocial"));
+    const clear = body.indexOf("clearSocialNameStash();");
+    expect(clear).toBeGreaterThan(body.indexOf("if (socialLoading) return;"));
+    for (const marker of ['if (provider === "naver")', 'startNaverLogin(', 'if (provider === "kakao")', 'startKakaoLogin(', 'if (provider === "apple" && isAppleNativeSignInSupported())', "signInWithAppleNative()", "signInWithGoogleNative()", "signInWithOAuth("]) {
+      const idx = body.indexOf(marker);
+      expect(idx, marker).toBeGreaterThan(clear);
+    }
+    expect(s).toContain('import { clearSocialNameStash } from "../../lib/socialName";');
+  });
+  it("성공 흐름은 그대로: native는 인증 성공 후 새 stash, Kakao autoSave=false 유지", () => {
+    expect(read("lib/googleAuth.ts")).toContain('stashSocialName("google", native.fullName, { autoSave: true })');
+    expect(read("lib/appleAuth.ts")).toContain('stashSocialName("apple", native.fullName, { autoSave: true })');
+    expect(read("app/login/kakao-callback/page.tsx")).toContain('stashSocialName("kakao", data.providerName, { autoSave: false })');
+    expect(read("app/login/naver-callback/page.tsx")).toContain('stashSocialName("naver", data.providerName, { autoSave: true })');
+  });
+});
+
 describe("동시 호출 race", () => {
   it("SIGNED_IN 핸들러와 로그인 화면이 동시에 호출해도 stash는 한 번 소비되고 두 호출 모두 복구된 이름을 본다", async () => {
     seed(SYN, SYN); stashSocialName("google", "홍길동"); currentUser = userOf("google");

@@ -29,6 +29,7 @@ export default function NaverCallbackPage() {
       const params = new URLSearchParams(window.location.search);
       const providerError = params.get("error_description") || params.get("error");
       if (providerError) {
+        clearSocialNameStash();   // provider가 취소/거부한 경우 이전 시도의 stash가 남지 않게
         fail(providerError);
         return;
       }
@@ -39,6 +40,7 @@ export default function NaverCallbackPage() {
       sessionStorage.removeItem(NAVER_OAUTH_STATE_KEY);
 
       if (!code || !state || !savedState || state !== savedState) {
+        clearSocialNameStash();   // state 누락/불일치(만료·위조) 시에도 stash 제거
         fail("로그인 요청이 만료됐거나 올바르지 않아요. 다시 시도해주세요.");
         return;
       }
