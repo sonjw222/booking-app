@@ -6685,3 +6685,7 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
 
 /* 수강권 설정 검색/그룹 필터(2026-10-03): 이 화면에서만 바깥 큰 사각 배경(.catalog-filter의 --card-bg)을 투명하게. 검색 input/chip 자체 스타일, 공용 CatalogSearchFilter, 구매 sheet/상품 화면은 그대로. */
 .membership-rules-filter .catalog-filter { background: transparent; }
+
+/* 회원 추가 시트(2026-10-04): 하단 safe-area를 확보해 결과 목록/닫기 버튼이 홈 인디케이터에 가리지 않게 */
+.member-add-sheet { padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
+.member-add-sheet .mem-detail-list { min-height: 72px; }
