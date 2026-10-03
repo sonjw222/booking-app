@@ -573,8 +573,10 @@ a { color: inherit; text-decoration: none; }
 .toast {
   position: fixed; top: max(18px, var(--safe-top)); left: 50%; transform: translateX(-50%);
   background: var(--ink); color: var(--bg); font-size: 13px; font-weight: 700;
-  padding: 11px 18px; border-radius: 999px; z-index: 100;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.25); max-width: 90%;
+  /* 일시적 action 토스트 공통 geometry(2026-10-03): 작은 rounded rectangle — 한 줄은 박스 정중앙, 긴 문장만 자연스럽게 2줄. .error-toast/.status-toast와 같은 기준. */
+  box-sizing: border-box; min-height: 44px; padding: 10px 16px; border-radius: 14px; z-index: 100;
+  display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.35;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25); max-width: calc(100vw - 32px);
 }
 
 /* Android/iOS 네이티브 푸시 — foreground 인앱 상단 배너(2026-09-21). FCM은 앱이
@@ -2215,26 +2217,27 @@ a.membership-card { text-decoration: none; display: block; }
 .error-toast {
   position: fixed; top: max(18px, var(--safe-top)); left: 50%; transform: translateX(-50%);
   background: var(--danger); color: var(--text-inverse); font-size: 13px; font-weight: 700;
-  padding: 11px 18px; border-radius: 12px; z-index: 120;
-  box-shadow: 0 8px 24px rgba(182,66,66,0.35); max-width: 90%;
-  display: flex; align-items: center; gap: 10px;
+  box-sizing: border-box; min-height: 44px; padding: 10px 16px; border-radius: 14px; z-index: 120;
+  box-shadow: 0 8px 24px rgba(182,66,66,0.35); max-width: calc(100vw - 32px);
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; line-height: 1.35;
 }
+/* 닫기 버튼은 메시지 높이를 키우지 않고(20px 고정, line-height 1, padding 0) 텍스트와 같은 수직 중심에 놓인다. */
 .error-toast button {
   background: rgba(255,255,255,0.25); border: none; color: var(--text-inverse);
-  width: 20px; height: 20px; border-radius: 50%; cursor: pointer; font-size: 13px;
-  display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+  width: 20px; height: 20px; padding: 0; line-height: 1; border-radius: 50%; cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; justify-content: center; flex: 0 0 auto; align-self: center;
 }
 /* 로그인이 필요한 에러처럼 바로 갈 곳이 있는 경우, 메시지 줄 아래에 버튼을 하나 더
    붙인다(2026-08-31 스크린샷 리포트 — 결제 화면에서 로그인 필요 에러만 뜨고 이동 수단이
    없었음). 기존 .error-toast는 다른 화면 여러 곳에서 그대로 재사용 중이라 레이아웃을
    바꾸지 않고, 이 조합 클래스에서만 줄바꿈을 허용한다. */
-.error-toast-with-action { flex-wrap: wrap; }
+.error-toast-with-action { flex-wrap: wrap; gap: 8px 10px; }
 /* .primary-btn과 같은 시각 언어(14px 라운드, 800 굵기)를 이 토스트 위에서도 그대로
    따르되, 배경/글자색만 이 토스트의 danger 톤 안에서 대비가 나오도록 반전(흰 배경 +
    danger 텍스트)했다 — 기존 반투명 칩은 앱의 다른 버튼과 스타일이 겉돌아 보였다
    (2026-08-31 사용자 피드백). */
 .error-toast-action {
-  flex: 0 0 100%; margin-top: 4px; display: block; text-align: center;
+  flex: 0 0 100%; margin-top: 0; display: block; text-align: center;
   background: var(--bg); color: var(--danger); text-decoration: none;
   padding: 11px; border-radius: 14px; font-size: 14px; font-weight: 800;
 }
@@ -2246,17 +2249,18 @@ a.membership-card { text-decoration: none; display: block; }
    새 색 체계 없음. 오류는 계속 .error-toast. */
 .status-toast {
   position: fixed; top: max(18px, var(--safe-top)); left: 50%; transform: translateX(-50%);
-  font-size: 13px; font-weight: 700; padding: 11px 18px; border-radius: 12px; z-index: 120;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12); max-width: 90%;
-  display: flex; align-items: center; gap: 10px; border: 1px solid transparent;
+  font-size: 13px; font-weight: 700; z-index: 120;
+  box-sizing: border-box; min-height: 44px; padding: 10px 16px; border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12); max-width: calc(100vw - 32px);
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; line-height: 1.35; border: 1px solid transparent;
 }
 .status-toast.is-success { background: var(--success-soft); border-color: var(--success-line); color: var(--success); }
 .status-toast.is-info { background: var(--info-soft); border-color: var(--info-line); color: var(--info); }
 .status-toast svg { flex: 0 0 auto; }
 .status-toast button {
   background: transparent; border: 1px solid currentColor; color: inherit; opacity: .7;
-  width: 20px; height: 20px; border-radius: 50%; cursor: pointer; font-size: 13px;
-  display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+  width: 20px; height: 20px; padding: 0; line-height: 1; border-radius: 50%; cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; justify-content: center; flex: 0 0 auto; align-self: center;
 }
 
 /* 구독 관리 행 — 다른 .set-row와 같은 정렬(왼쪽 label+설명, 오른쪽 버튼). 좁은 화면에서는
@@ -3601,7 +3605,7 @@ a.membership-card { text-decoration: none; display: block; }
   width: max-content;
   max-width: calc(100vw - 32px);
   min-height: 44px;
-  padding: 10px 14px;
+  padding: 10px 16px;
   border-radius: 14px;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -3732,16 +3736,21 @@ a.membership-card { text-decoration: none; display: block; }
 .manager-v3-content .error-toast,
 .manager-v3-content .status-toast,
 .admin-v3-content .error-toast {
+  /* slab 방지 상한 + 일시적 토스트 최종 geometry(위 base 규칙과 같은 값 — 후반 override가 base를 다시 바꾸지 않도록 한 곳으로 정리). 정렬(display/align/text-align)은 base 규칙이 담당한다. */
+  box-sizing: border-box;
   width: max-content !important;
   max-width: calc(100vw - 32px) !important;
   height: auto !important;
-  min-height: 42px !important;
+  min-height: 44px !important;
   max-height: 160px !important;
-  padding: 10px 14px !important;
-  border-radius: 13px !important;
+  padding: 10px 16px !important;
+  border-radius: 14px !important;
   overflow: auto !important;
   white-space: normal;
+  overflow-wrap: anywhere;
 }
+/* 버튼이 붙은 에러 토스트는 폭이 지나치게 커지지 않게(메시지 + 전체 폭 CTA) */
+.error-toast.error-toast-with-action { max-width: min(360px, calc(100vw - 32px)) !important; }
 .loading-wrap { min-height: 190px; background: transparent; }
 
 .manager-v3-content .pass-list { display:grid; gap:14px; padding:8px var(--page-gutter) 130px; }
@@ -3756,7 +3765,8 @@ a.membership-card { text-decoration: none; display: block; }
   border-radius:13px; background:var(--surface); color:var(--ink); font-weight:750;
 }
 .pass-rules-toggle b { color:var(--brand-ink); font-size:12px; }
-.pass-rules { margin:8px 0 0; padding:6px 12px; border-left:2px solid var(--brand); background:var(--brand-soft); border-radius:10px; }
+/* 예약조건 펼침: 큰 brand-soft 면 대신 얇은 왼쪽 brand line + 개별 카드(.pass-rule)로 "펼쳐져 있음"만 표시 */
+.pass-rules { margin:8px 0 0; padding:4px 0 4px 12px; border-left:2px solid var(--brand); background:transparent; border-radius:0; }
 .pass-rule { min-height:44px; }
 .goods-description { margin-top:10px; color:var(--ink-soft); font-size:13px; line-height:1.55; }
 .goods-sizes { display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
@@ -6672,3 +6682,6 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
 .ptree-add .outline-action { padding: 0 14px; min-width: 76px; font-size: 13px; }
 .ptree-add .ptree-max { padding: 0; }
 .rule-load-error { margin: -8px 2px 12px; font-size: 12px; color: var(--ink-soft); }
+
+/* 수강권 설정 검색/그룹 필터(2026-10-03): 이 화면에서만 바깥 큰 사각 배경(.catalog-filter의 --card-bg)을 투명하게. 검색 input/chip 자체 스타일, 공용 CatalogSearchFilter, 구매 sheet/상품 화면은 그대로. */
+.membership-rules-filter .catalog-filter { background: transparent; }
