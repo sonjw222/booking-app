@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabaseClient";
 import { KAKAO_OAUTH_STATE_KEY } from "../../../lib/kakaoAuth";
 import { edgeFunctionErrorMessage } from "../../../lib/edgeFunctions";
+import { clearSocialNameStash, stashSocialName } from "../../../lib/socialName";
 import Loading from "../../components/Loading";
 
 export default function KakaoCallbackPage() {
@@ -35,20 +36,25 @@ export default function KakaoCallbackPage() {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke<{ email: string; tokenHash: string }>(
+      const { data, error } = await supabase.functions.invoke<{ email: string; tokenHash: string; providerName?: string | null }>(
         "kakao-login",
         { body: { code, redirectUri: `${window.location.origin}/login/kakao-callback` } }
       );
       if (error || !data) {
+        clearSocialNameStash();
         fail(await edgeFunctionErrorMessage(error, "카카오 로그인 처리에 실패했어요"));
         return;
       }
 
+      // 이번 로그인에서 조회한 provider 이름은 verifyOtp "전에" 저장한다 — verifyOtp가 SIGNED_IN을 발생시키면 SessionWatcher가 즉시 ensureAccountForCurrentUser()를 실행할 수 있어서
+      // 그 뒤에 저장하면 race가 생긴다. 카카오 nickname은 실명 보장이 없어 이름 입력칸 prefill 전용(자동 저장 안 함). 이름이 없으면 이전 stash도 지운다. 이름 값은 로그에 남기지 않는다.
+      stashSocialName("kakao", data.providerName, { autoSave: false });
       const { error: verifyErr } = await supabase.auth.verifyOtp({
         token_hash: data.tokenHash,
         type: "email",
       });
       if (verifyErr) {
+        clearSocialNameStash();   // 실패한 로그인이 남긴 후보가 다음 로그인에 적용되지 않게
         fail(verifyErr.message);
         return;
       }

@@ -32,6 +32,7 @@
 
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { supabase } from "./supabaseClient";
+import { clearSocialNameStash, stashSocialName } from "./socialName";
 import { sha256Hex } from "./appleAuth";
 
 interface GoogleSignInNativePlugin {
@@ -123,6 +124,8 @@ export async function signInWithGoogleNative(): Promise<{ fullName?: string }> {
     throw new Error("Google 로그인 응답에서 필요한 정보를 받지 못했어요");
   }
 
+  // native fullName은 세션이 생기기 "전"에 저장(SIGNED_IN → SessionWatcher와의 race 방어, Apple과 동일). 이름이 없으면 이전 stash도 지운다 — 이름은 로그에 남기지 않는다.
+  stashSocialName("google", native.fullName, { autoSave: true });
   console.log("[googleAuth] supabase.auth.signInWithIdToken() 호출");
   const { error } = await supabase.auth.signInWithIdToken({
     provider: "google",
@@ -130,6 +133,7 @@ export async function signInWithGoogleNative(): Promise<{ fullName?: string }> {
     nonce: rawNonce,
   });
   if (error) {
+    clearSocialNameStash();
     console.error("[googleAuth] signInWithIdToken 실패", error);
     throw new Error(error.message);
   }

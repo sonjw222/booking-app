@@ -26,7 +26,7 @@
 
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { supabase } from "./supabaseClient";
-import { stashAppleFullName } from "./authAccount";
+import { clearSocialNameStash, stashSocialName } from "./socialName";
 
 interface AppleSignInNativePlugin {
   authorize(options: { hashedNonce: string }): Promise<{
@@ -130,7 +130,8 @@ export async function signInWithAppleNative(): Promise<{ fullName?: string }> {
     console.error("[appleAuth] identityToken 누락된 응답", native);
     throw new Error("Apple 로그인 응답에서 필요한 정보를 받지 못했어요");
   }
-  if (native.fullName) stashAppleFullName(native.fullName);
+  // 최초 인증 fullName은 세션이 생기기 "전"에 저장(SIGNED_IN race 방어). 이름이 없으면(이후 로그인) 이전 stash도 지운다 — 이름은 로그에 남기지 않는다.
+  stashSocialName("apple", native.fullName, { autoSave: true });
 
   console.log("[appleAuth] supabase.auth.signInWithIdToken() 호출");
   const { error } = await supabase.auth.signInWithIdToken({
@@ -139,6 +140,7 @@ export async function signInWithAppleNative(): Promise<{ fullName?: string }> {
     nonce: rawNonce,
   });
   if (error) {
+    clearSocialNameStash();   // 실패한 로그인이 남긴 후보가 다음 로그인에 적용되지 않게
     console.error("[appleAuth] signInWithIdToken 실패", error);
     throw new Error(error.message);
   }

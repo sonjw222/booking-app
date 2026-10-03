@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-10-03 — 소셜 로그인 이름 자동 복구/자동 입력 (Web + Edge Function, SQL/native 변경 없음)
+- 기존 소셜 계정의 합성/미등록 이름을 다음 로그인에서 자동 복구: provider가 "이번 로그인에서" 준 이름(Google native fullName·Google 웹 metadata, Apple 최초 fullName, Naver providerName)이 있고 accounts/대표 프로필 이름이 둘 다 합성일 때만 `profiles` → `accounts` 순서로 저장. 정상 모하빗 이름은 절대 덮어쓰지 않으며(한쪽만 정상이면 그 저장값으로 다른 쪽을 맞춤, 서로 다른 정상 이름은 그대로 둠) provider 이름을 매 로그인마다 동기화하지 않는다.
+- 카카오 nickname은 실명 보장이 없어 자동 저장하지 않고 이름 입력칸 prefill(suggestedName)만 — 신규 카카오 가입도 nickname을 이름으로 확정하지 않고 가입 마무리 gate에서 확인 후 저장.
+- `lib/socialName.ts`: Apple 전용 stash를 일반화(provider/만료 포함, sessionStorage, 한 번만 consume, placeholder 거부, 실패 시 clear). Apple/Google native는 signInWithIdToken 전, Naver/Kakao callback은 verifyOtp 전에 저장(SIGNED_IN race 방어). `ensureAccountForCurrentUser`는 동시 호출을 한 번만 실행.
+- Edge Function `naver-login`/`kakao-login`이 이번 로그인에서 조회한 이름을 `providerName`으로 반환(placeholder fallback이면 null). **배포 필요**: `naver-login`, `kakao-login` (배포 전에는 providerName이 없어 기존 동작).
+
 ## 2026-10-03 — post-release follow-ups (SQL 파일만 작성, Production 미실행)
 - **Batch A 회원 추가 검색**: client의 profiles/accounts 직접 조회 제거 → 서버 RPC `search_member_candidates(center, keyword)`(센터별 customer.member.create 권한 확인). 이 센터 회원은 이름/번호 일부, 아직 센터에 없는 가입자는 "정확한 전체 휴대폰 번호"로만(이름 + 마스킹 번호). 전역 부분일치 RPC `search_accounts_for_member`는 authenticated 실행 권한 회수. `add_member_candidate_search_20261003.sql`(+rollback/verify). 배포 순서: SQL → 웹.
 - **Batch B/C**: `manager_grant_product`가 상품 예약조건에 없는 bound 요일/시간을 거부(구매 checkout 트리거와 같은 의미의 helper), 지급/취소 대기승격/정원확대 승격/대여상품 사용기간의 날짜를 KST 기준으로(`fix_grant_schedule_and_kst_dates_20261003.sql`). 결제·환불·주문 발급 함수는 범위에서 제외.

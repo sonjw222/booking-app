@@ -93,6 +93,8 @@ Deno.serve(async (req: Request) => {
 
   const nickname: string =
     profileJson?.kakao_account?.profile?.nickname || profileJson?.properties?.nickname || "카카오 회원";
+  // 이번 로그인에서 받은 실제 nickname(없으면 null — "카카오 회원" fallback은 보내지 않는다). 실명 보장이 없어 클라이언트는 이름 입력칸 prefill에만 쓴다(자동 저장 안 함, 로그 금지).
+  const providerName: string | null = (profileJson?.kakao_account?.profile?.nickname || profileJson?.properties?.nickname || "").toString().trim() || null;
   const syntheticEmail = `kakao-${kakaoId}@${SYNTHETIC_EMAIL_DOMAIN}`;
 
   // 3) 이 카카오 계정 전용 Supabase 사용자 확보 + token_hash 발급 (naver-login과 동일한 방식)
@@ -112,5 +114,5 @@ Deno.serve(async (req: Request) => {
     return json({ error: `세션 발급에 실패했어요: ${linkErr?.message ?? "token_hash 없음"}` }, 500);
   }
 
-  return json({ email: syntheticEmail, tokenHash });
+  return json({ email: syntheticEmail, tokenHash, providerName });
 });
