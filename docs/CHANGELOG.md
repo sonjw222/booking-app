@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-04 — PG/주문/환불 날짜 KST 정합성 (Production 적용 완료, verify APPLIED)
+- `fix_pg_order_refund_kst_dates_20261004.sql`: `_issue_membership_and_record_payment`, `fulfill_order`(시작일 `current_date` → KST 오늘, days형 만료 `(now()+N days)::date` → `((now()+N days) at time zone 'Asia/Seoul')::date`), `_refund_membership_core`(환불 후 활성 수강권 판정 `expires_at >= current_date` → KST 오늘)만 변경. Production 라이브 정의 기준, 시그니처/SECURITY DEFINER/search_path/EXECUTE 권한 보존, 결제·환불·포인트·쿠폰·자동예약 로직 불변. rollback/verify(읽기 전용) 동봉. 2026-10-04 Production 적용 완료, `verify_pg_order_refund_kst_dates_20261004.sql` 결과 `verdict = APPLIED`(모든 `*_ok` true, `info_remaining_current_date_functions = evaluate_notification_rules`).
+
 ## 2026-10-03 — UI polish: 수강권 설정 필터 배경 / 토스트 geometry / 예약조건 펼침 (UI만, 기능·DB 변경 없음)
 - 수강권 설정 검색/그룹 필터 뒤 큰 사각 배경 제거: 화면 전용 class `membership-rules-filter`로 `.catalog-filter` 배경만 transparent(공용 컴포넌트·구매 sheet·다른 화면 불변).
 - 일시적 action toast(`.toast`/`.error-toast`/`.status-toast`) geometry 통일: min-height 44px, padding 10px 16px, radius 14px, flex 중앙 정렬(error/status는 텍스트+닫기 버튼 수직 중심), line-height 1.35, max-width 100vw-32px. 후반 slab-guard 블록을 같은 값으로 정리(상한은 유지). 위치(safe-top / manager·admin bottom 112px)와 실시간 알림 카드·네이티브 푸시 배너는 변경 없음.
