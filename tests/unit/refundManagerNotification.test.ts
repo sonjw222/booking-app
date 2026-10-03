@@ -62,11 +62,18 @@ describe("클라이언트/알림 표시", () => {
     expect(read("app/manager/sales/page.tsx")).toContain('new URLSearchParams(window.location.search).get("center")');
     expect(read("lib/notifications.ts")).toContain("default:\n      return null;");
   });
-  it("주문 취소 관련 클라이언트 변경은 없다(lib/orders.ts, purchases, manager/orders는 기준과 동일)", () => {
-    const { execSync } = require("node:child_process");
-    const diff = execSync("git diff e6f7f4d --name-only -- lib/orders.ts app/purchases/page.tsx app/manager/orders/page.tsx", { cwd: join(__dirname, "../.."), encoding: "utf-8" });
-    expect(diff.trim()).toBe("");
-    expect(read("lib/notifications.ts")).not.toContain("order_cancelled");
+  it("주문 취소 관련 알림 경로를 클라이언트에 새로 만들지 않았다(git history 없이 현재 코드의 정적 계약으로 검증 — lib/orders.ts, purchases, manager/orders, lib/notifications.ts)", () => {
+    const orders = read("lib/orders.ts"), purchases = read("app/purchases/page.tsx"), mgrOrders = read("app/manager/orders/page.tsx"), noti = read("lib/notifications.ts");
+    for (const [name, src] of [["lib/orders.ts", orders], ["app/purchases/page.tsx", purchases], ["app/manager/orders/page.tsx", mgrOrders]] as const) {
+      expect(src, `${name}: 알림 RPC/테이블을 직접 다루지 않는다`).not.toMatch(/push_notification|from\(["']notifications["']\)/);
+      expect(src, `${name}: 환불/주문취소 알림 kind를 만들지 않는다`).not.toMatch(/refund_completed|order_cancel(l)?ed/);
+    }
+    // 알림 kind 목록/표시/링크에 주문 취소 알림이 없다(refund_completed만 이번 환불 알림 작업의 kind)
+    expect(noti).not.toMatch(/order_cancel(l)?ed/);
+    expect([...noti.matchAll(/["']([a-z_]*order[a-z_]*)["']/g)].map((m) => m[1]).filter((k) => k !== "new_order")).toEqual([]);
+    // 클라이언트의 주문 취소는 기존대로 orders.status 갱신만 한다(pending → cancelled, 알림 생성 코드 없음)
+    expect(orders).toContain('.update({ status: "cancelled" }).eq("id", orderId).eq("status", "pending")');
+    expect(orders).not.toMatch(/\.insert\(\{[^}]*kind:/);
   });
   it("OS 푸시: 별도 코드를 추가하지 않았고, 기존 send-web-push가 kind 필터 없이 pushed_at IS NULL 행을 처리하므로 refund_completed도 기존 큐의 대상이다", () => {
     const f = read("supabase/functions/send-web-push/index.ts");

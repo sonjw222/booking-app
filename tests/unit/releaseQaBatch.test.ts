@@ -2,7 +2,6 @@
   출시 전 실기기 QA 후속 배치(2026-10-03): Google URL scheme / white flash / 회원 이름·등록 노출·검색 / 예약조건 일괄 / 진도 7단계 tree.
   실제 Client ID/URL scheme 값은 어디에도 출력하지 않는다(존재 여부와 형식만 검증).
 */
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,13 +36,27 @@ import { applyRulesToProducts, bulkRuleSummary } from "../../lib/ruleBulk";
 describe("[0] Google callback URL scheme", () => {
   const plist = read("ios/App/App/Info.plist");
   it("Info.plist CFBundleURLTypes에 Google callback scheme(com.googleusercontent.apps.*)이 있고 중복 항목이 없다 — 값은 출력하지 않는다", () => {
-    const out = execFileSync("plutil", ["-convert", "json", "-o", "-", join(__dirname, "../../ios/App/App/Info.plist")], { encoding: "utf-8" });
-    const types = JSON.parse(out).CFBundleURLTypes as { CFBundleURLSchemes: string[] }[];
-    expect(Array.isArray(types)).toBe(true);
-    const schemes = types.flatMap((t) => t.CFBundleURLSchemes);
-    const google = schemes.filter((s) => s.startsWith("com.googleusercontent.apps."));
-    expect(google.length).toBeGreaterThanOrEqual(1);
-    expect(new Set(schemes).size).toBe(schemes.length);   // 중복 없음
+    // CI(Ubuntu)에서도 돌도록 plutil(macOS 전용) 없이 Info.plist XML 문자열만 파싱한다. 실제 scheme 값은 assertion 메시지/로그에 넣지 않는다(boolean만 검사).
+    const arrayAfterKey = (xml: string, key: string): string[] => {   // `<key>K</key>` 뒤 첫 <array>…</array> 안쪽 문자열(중첩 depth 계산), 키마다 하나씩
+      const out: string[] = [];
+      const re = new RegExp(`<key>${key}</key>\\s*<array>`, "g");
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(xml))) {
+        let depth = 1; let i = m.index + m[0].length; const start = i;
+        const tok = /<array>|<\/array>/g; tok.lastIndex = i;
+        let t: RegExpExecArray | null;
+        while ((t = tok.exec(xml))) { depth += t[0] === "<array>" ? 1 : -1; if (depth === 0) { out.push(xml.slice(start, t.index)); break; } i = tok.lastIndex; }
+      }
+      return out;
+    };
+    const urlTypesBlocks = arrayAfterKey(plist, "CFBundleURLTypes");
+    expect(urlTypesBlocks).toHaveLength(1);                                                    // 1. CFBundleURLTypes 존재(4. key 중복 없음과도 연결)
+    const schemes = arrayAfterKey(urlTypesBlocks[0], "CFBundleURLSchemes")
+      .flatMap((arr) => [...arr.matchAll(/<string>([^<]*)<\/string>/g)].map((m) => m[1].trim()));
+    const google = schemes.filter((v) => v.startsWith("com.googleusercontent.apps."));
+    expect(google.length >= 1).toBe(true);                                                     // 2. Google callback scheme 1개 이상
+    expect(google.every((v) => v.length > "com.googleusercontent.apps.".length)).toBe(true);   //    접두사만 있는 빈 값 아님
+    expect(new Set(schemes).size === schemes.length).toBe(true);                               // 3. scheme 중복 없음
     expect(plist.match(/<key>CFBundleURLTypes<\/key>/g)).toHaveLength(1);
     expect(plist).toContain("<key>UIApplicationSceneManifest</key>");   // 기존 항목 보존
   });
