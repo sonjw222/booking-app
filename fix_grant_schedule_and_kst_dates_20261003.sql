@@ -11,6 +11,8 @@
 --     · 권한/센터 소속/사이즈/횟수/수량 검증은 그대로(이 함수의 기존 검사들은 변경 없음).
 -- [C] 한국 날짜 의미인데 DB TimeZone(UTC) current_date를 쓰던 예약·수강권 경로를 KST로: manager_grant_product(starts_at, days형 expires_at), cancel_reservation(대기 승격 시 수강권 만료 검사),
 --   update_class_safe(정원 확대 대기 승격), reserve_with_goods(대여상품 사용기간). 효과: KST 00:00~08:59에 하루 어긋나던 문제 제거.
+--   [대기 승격 자격] cancel_reservation/update_class_safe의 대기자 승격은 membership을 (remaining>0 AND expires>=오늘)로만 검사해 NULL 만료/NULL 횟수(무제한) 수강권이 승격되지 않았고
+--   status·starts_at·현재 수업 예약조건(is_membership_eligible_for_class)은 확인하지 않았다 → 예약과 같은 자격(active / 횟수 NULL 허용 / 만료 NULL 허용 / 시작일 / 현재 수업 자격)으로 다시 검증.
 --   cancel_reservation에는 search_path가 없어 SECURITY DEFINER인데 고정돼 있지 않았다 → SET search_path TO 'public' 추가(동작 변경 없음).
 --   ※ 결제/환불/주문 발급 함수(_issue_membership_and_record_payment, fulfill_order, _refund_membership_core)의 current_date는 이번 범위(PG/환불/정산 수정 금지)에서 제외했다 — 보고서 참고.
 -- 이 세션에서는 production에 실행하지 않았습니다. 적용 후 verify_grant_schedule_and_kst_dates_20261003.sql(읽기 전용)로 확인하세요.
@@ -345,11 +347,15 @@ begin
                 order by waitlist_order asc
                 for update
             loop
-                select * into v_next_mem from memberships
-                where id = v_next.membership_id
-                  and remaining_count > 0
-                  and expires_at >= (now() at time zone 'Asia/Seoul')::date
-                for update;
+                select * into v_next_mem from memberships m
+                 where m.id = v_next.membership_id
+                   -- [대기 승격 자격 = 예약 자격] 승격은 대기 예약이 새로 confirmed가 되는 순간이므로 reserve_class/reserve_with_membership과 같은 조건으로 다시 검증한다.
+                   and m.status = 'active'
+                   and (m.remaining_count is null or m.remaining_count > 0)        -- 횟수 무제한(NULL) 수강권 허용
+                   and (m.expires_at is null or m.expires_at >= (now() at time zone 'Asia/Seoul')::date)   -- 기간 무제한(NULL) 허용, KST 날짜 기준
+                   and (m.starts_at is null or m.starts_at <= (now() at time zone 'Asia/Seoul')::date)     -- 미래 시작 수강권 제외
+                   and is_membership_eligible_for_class(m.id, v_res.class_id)        -- 현재 수업의 예약조건/허용 상품/bound 요일·시간(대기 등록 이후 바뀐 경우 포함)
+                 for update;
 
                 if found then
                     update reservations
@@ -357,7 +363,7 @@ begin
                     where id = v_next.id;
 
                     update memberships set remaining_count = remaining_count - 1
-                    where id = v_next_mem.id;
+                    where id = v_next_mem.id and remaining_count is not null;   -- 횟수 무제한(NULL)은 그대로
 
                     v_promoted := true;
                     exit;
@@ -451,11 +457,15 @@ begin
         loop
             exit when v_confirmed_count >= p_capacity;
 
-            select * into v_next_mem from memberships
-            where id = v_next.membership_id
-              and remaining_count > 0
-              and expires_at >= (now() at time zone 'Asia/Seoul')::date
-            for update;
+            select * into v_next_mem from memberships m
+             where m.id = v_next.membership_id
+               -- [대기 승격 자격 = 예약 자격] 승격은 대기 예약이 새로 confirmed가 되는 순간이므로 reserve_class/reserve_with_membership과 같은 조건으로 다시 검증한다.
+               and m.status = 'active'
+               and (m.remaining_count is null or m.remaining_count > 0)        -- 횟수 무제한(NULL) 수강권 허용
+               and (m.expires_at is null or m.expires_at >= (now() at time zone 'Asia/Seoul')::date)   -- 기간 무제한(NULL) 허용, KST 날짜 기준
+               and (m.starts_at is null or m.starts_at <= (now() at time zone 'Asia/Seoul')::date)     -- 미래 시작 수강권 제외
+               and is_membership_eligible_for_class(m.id, p_class_id)        -- 현재 수업의 예약조건/허용 상품/bound 요일·시간(대기 등록 이후 바뀐 경우 포함)
+             for update;
 
             if found then
                 update reservations
@@ -463,7 +473,7 @@ begin
                 where id = v_next.id;
 
                 update memberships set remaining_count = remaining_count - 1
-                where id = v_next_mem.id;
+                where id = v_next_mem.id and remaining_count is not null;   -- 횟수 무제한(NULL)은 그대로
 
                 v_confirmed_count := v_confirmed_count + 1;
                 v_promoted_count := v_promoted_count + 1;

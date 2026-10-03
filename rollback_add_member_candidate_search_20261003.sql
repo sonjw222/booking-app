@@ -2,6 +2,7 @@
 -- 주의: 새 웹(search_member_candidates 호출)이 배포된 상태에서 이 rollback만 실행하면 회원 추가 검색이 "함수 없음" 오류로 실패한다 — 웹을 먼저 되돌리세요.
 begin;
 drop function if exists public.search_member_candidates(uuid, text);
+drop function if exists public.kr_phone_digits(text);
 do $$
 begin
     if to_regprocedure('public.search_accounts_for_member(text)') is not null then

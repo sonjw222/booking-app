@@ -11,6 +11,9 @@ const verify = read('verify_grant_schedule_and_kst_dates_20261003.sql').replace(
 const id = (k, n) => `${String(k).padStart(8, '0')}-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const C1 = id(1, 1), C2 = id(1, 2), MGR = id(2, 1), NOPERM = id(2, 2), MEMBER_ACC = id(2, 3), OTHER_ACC = id(2, 4);
 const P_MEMBER = id(3, 1), P_OTHER_CENTER = id(3, 2), P_WAIT = id(3, 3);
+// 대기 승격은 예약 무결성 migration이 이미 적용한 is_membership_eligible_for_class를 "재사용"한다(이 migration은 재정의하지 않음) — 그 정의를 integrity SQL에서 그대로 꺼내 설치
+const integritySql = read('fix_reservation_integrity_20261003.sql');
+const ELIGIBLE_FN = integritySql.slice(integritySql.indexOf('CREATE OR REPLACE FUNCTION public.is_membership_eligible_for_class'), integritySql.indexOf('$function$;', integritySql.indexOf('CREATE OR REPLACE FUNCTION public.is_membership_eligible_for_class')) + '$function$;'.length);
 const LIVE_ORDER_TRIGGER = String.raw`CREATE OR REPLACE FUNCTION public.orders_require_schedule_selection()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -82,14 +85,18 @@ async function world({ apply = true } = {}) {
     ${LIVE_ORDER_TRIGGER};
     create trigger t_orders_schedule before insert on orders for each row execute function orders_require_schedule_selection();
     -- cancel_reservation 용
-    create table classes(id uuid primary key default gen_random_uuid(), center_id uuid, start_time timestamptz, class_format text default 'group', allow_cancel boolean, cancel_deadline_min int);
+    create table classes(id uuid primary key default gen_random_uuid(), center_id uuid, title text default '정규반', description text, start_time timestamptz, end_time timestamptz, capacity int default 10, class_format text default 'group', status text default 'open',
+      pass_selection_mode text default 'all', allow_goods boolean default true, room_id uuid, allow_cancel boolean, cancel_deadline_min int, booking_deadline_min int);
+    create table class_allowed_products(class_id uuid, product_id uuid);
+    create table class_trainers(class_id uuid, account_id uuid);
     create table center_settings(center_id uuid primary key, same_day_change_hours int, same_day_change_minutes int, deduct_on_late_cancel boolean default false, waitlist_auto_hours int default 0, waitlist_auto_minutes int default 0);
     create table reservations(id uuid primary key default gen_random_uuid(), class_id uuid, profile_id uuid, membership_id uuid, status text, waitlist_order int, cancel_source text, created_at timestamptz default now());
     create function calc_deadline(uuid, text, timestamptz, text) returns timestamptz language sql as $$ select null::timestamptz $$;
+    ${ELIGIBLE_FN}
     insert into accounts values ('${MGR}','관리자'), ('${NOPERM}','권한없음'), ('${MEMBER_ACC}','회원'), ('${OTHER_ACC}','대기회원');
     insert into profiles values ('${P_MEMBER}','${MEMBER_ACC}'), ('${P_OTHER_CENTER}','${OTHER_ACC}'), ('${P_WAIT}','${OTHER_ACC}');
     insert into center_members values ('${C1}','${P_MEMBER}'), ('${C2}','${P_OTHER_CENTER}'), ('${C1}','${P_WAIT}');
-    insert into perms values ('${MGR}','${C1}','customer.member.issue_pass'), ('${MGR}','${C1}','pass.payment.create'), ('${NOPERM}','${C1}','customer.member.view');
+    insert into perms values ('${MGR}','${C1}','schedule.own.group.update'), ('${MGR}','${C1}','customer.member.issue_pass'), ('${MGR}','${C1}','pass.payment.create'), ('${NOPERM}','${C1}','customer.member.view');
     insert into center_settings(center_id) values ('${C1}');
   `);
   await db.exec(rollback);               // 직전 라이브 정의 설치(rollback 파일 = 수정 전 정의)
@@ -272,4 +279,108 @@ test('verify 왕복: migration → APPLIED, rollback → NOT_APPLIED, 재적용/
     assert.equal(await count(db, `select count(*)::int c from pg_proc where proname='validate_product_schedule_selection'`), 0);
     await db.exec(migration); assert.equal((await v()).verdict, 'APPLIED');
   } finally { await db.close(); }
+});
+
+
+// ---------------- 대기 승격 자격(cancel_reservation / update_class_safe 공통 계약) ----------------
+const KST = `(now() at time zone 'Asia/Seoul')::date`;
+const dowOf = `extract(dow from (c.start_time at time zone 'Asia/Seoul'))::int`;
+// 시나리오: 정원 1 수업에 A(확정) + B(대기, membership mB). cancel: A가 취소 → B 승격? / update: 정원 1→2 → B 승격?
+async function promotion(db, mode, spec = {}) {
+  await db.exec('delete from reservations; delete from memberships; delete from classes; delete from class_allowed_products; delete from membership_schedule_rules; delete from products');
+  const cls = id(6, ++seq), mA = id(5, ++seq), mB = id(5, ++seq), rA = id(7, ++seq), rB = id(7, ++seq), prod = id(4, ++seq);
+  await db.exec(`insert into classes(id, center_id, start_time, end_time, capacity, pass_selection_mode, title) values ('${cls}','${C1}', now() + interval '3 days', now() + interval '3 days 1 hour', 1, '${spec.mode ?? 'all'}', '정규반');
+    insert into products(id, center_id, name, product_kind) values ('${prod}','${C1}','p','pass');
+    insert into memberships(id, profile_id, center_id, product_id, remaining_count, expires_at, starts_at, status) values ('${mA}','${P_MEMBER}','${C1}',null,5,${KST}+10,null,'active');
+    insert into reservations(id, class_id, profile_id, membership_id, status) values ('${rA}','${cls}','${P_MEMBER}','${mA}','confirmed');`);
+  const remaining = 'remaining' in spec ? spec.remaining : 5;
+  await db.exec(`insert into memberships(id, profile_id, center_id, product_id, remaining_count, expires_at, starts_at, status, bound_day_of_week, bound_start_time)
+    select '${mB}','${P_WAIT}','${C1}','${prod}', ${remaining === null ? 'null' : remaining}, ${spec.expires ?? `${KST}+10`}, ${spec.starts ?? 'null'}, '${spec.status ?? 'active'}',
+           ${spec.boundDow === 'other' ? `(${dowOf} + 1) % 7` : 'null'}, ${spec.boundTime === 'other' ? `((c.start_time at time zone 'Asia/Seoul')::time + interval '1 hour')::time` : 'null'} from classes c where c.id='${cls}';
+    insert into reservations(id, class_id, profile_id, membership_id, status, waitlist_order) values ('${rB}','${cls}','${P_WAIT}','${mB}','waitlisted',1);`);
+  if (spec.ruleOtherDay) await db.exec(`insert into membership_schedule_rules(product_id, day_of_week, start_time) select '${prod}', (${dowOf} + 1) % 7, null from classes c where c.id='${cls}'`);
+  if (spec.ruleMatch) await db.exec(`insert into membership_schedule_rules(product_id, day_of_week, start_time) select '${prod}', ${dowOf}, (c.start_time at time zone 'Asia/Seoul')::time from classes c where c.id='${cls}'`);
+  if (spec.notAllowed) await db.exec(`insert into class_allowed_products values ('${cls}','${id(4, 9999)}')`);   // selected 모드: B의 상품은 허용 목록에 없음
+  if (mode === 'cancel') await as(db, MEMBER_ACC, () => db.query(`select cancel_reservation('${rA}')`));
+  else await as(db, MGR, () => db.query(`select update_class_safe('${cls}', '정규반', null, (select start_time from classes where id='${cls}'), (select end_time from classes where id='${cls}'), 2, true, null, 0, null, 'group', '${spec.mode ?? 'all'}', true)`));
+  const promoted = (await db.query(`select status from reservations where id='${rB}'`)).rows[0].status === 'confirmed';
+  const rem = (await db.query(`select remaining_count r from memberships where id='${mB}'`)).rows[0].r;
+  return { promoted, rem };
+}
+const PROMOTION_CASES = [
+  ['1 정상 active 횟수권 → 승격(차감 5→4)', {}, true, 4],
+  ['2 expires_at NULL → 승격', { expires: 'null' }, true, 4],
+  ['3 remaining_count NULL(횟수 무제한) → 승격, NULL 유지', { remaining: null }, true, null],
+  ['4 expires_at KST 오늘 → 승격', { expires: KST }, true, 4],
+  ['5 expires_at KST 어제 → 승격 안 됨', { expires: `(${KST} - 1)` }, false, 5],
+  ['6 starts_at KST 오늘 → 승격', { starts: KST }, true, 4],
+  ['7 starts_at KST 내일 → 승격 안 됨', { starts: `(${KST} + 1)` }, false, 5],
+  ['8 paused → 승격 안 됨', { status: 'paused' }, false, 5],
+  ['9 expired → 승격 안 됨', { status: 'expired' }, false, 5],
+  ['10 refunded → 승격 안 됨', { status: 'refunded' }, false, 5],
+  ['11 transferred → 승격 안 됨', { status: 'transferred' }, false, 5],
+  ['12 현재 수업 예약조건 불일치(규칙은 다른 요일) → 승격 안 됨', { ruleOtherDay: true }, false, 5],
+  ['12b 현재 수업과 일치하는 예약조건 → 승격', { ruleMatch: true }, true, 4],
+  ['13 class_allowed_products 불일치(selected 모드) → 승격 안 됨', { mode: 'selected', notAllowed: true }, false, 5],
+  ['14 bound 요일 불일치 → 승격 안 됨', { boundDow: 'other' }, false, 5],
+  ['14b bound 시간 불일치 → 승격 안 됨', { boundTime: 'other' }, false, 5],
+];
+
+for (const mode of ['cancel', 'update']) {
+  test(`대기 승격 자격 — ${mode === 'cancel' ? 'cancel_reservation' : 'update_class_safe'}: 예약 자격과 같은 조건(active/횟수 NULL/만료 NULL/시작일/현재 수업 자격)`, async () => {
+    const db = await world();
+    try {
+      for (const [label, spec, promoted, rem] of PROMOTION_CASES) {
+        const r = await promotion(db, mode, spec);
+        assert.equal(r.promoted, promoted, label);
+        assert.equal(r.rem, rem, `${label} (남은 횟수)`);
+      }
+    } finally { await db.close(); }
+  });
+}
+
+test('대기 승격 timezone 15: UTC / Etc/GMT+12 / Pacific/Kiritimati에서 두 경로 결과가 모두 같다(만료·시작 KST 경계 포함)', async () => {
+  const db = await world();
+  try {
+    const expected = PROMOTION_CASES.map(c => c[2]);
+    for (const tz of ['UTC', 'Etc/GMT+12', 'Pacific/Kiritimati']) {
+      await db.exec(`set time zone '${tz}'`);
+      for (const mode of ['cancel', 'update']) {
+        const got = []; for (const [, spec] of PROMOTION_CASES) got.push((await promotion(db, mode, spec)).promoted);
+        assert.deepEqual(got, expected, `${tz} ${mode}`);
+      }
+    }
+  } finally { await db.close(); }
+});
+
+test('negative control: 수정 전 정의(rollback)에서는 NULL 만료/NULL 횟수/paused/미래 시작/수업 불일치가 승격됐다 — 위 테스트가 실제로 갭을 잡는다', async () => {
+  const db = await world({ apply: false });
+  try {
+    for (const mode of ['cancel', 'update']) {
+      const nullExpiry = await promotion(db, mode, { expires: 'null' });
+      assert.equal(nullExpiry.promoted, false, `${mode}: 수정 전에는 만료 NULL이 승격되지 않았다(무기한 수강권이 영구 대기)`);
+      assert.equal((await promotion(db, mode, { remaining: null })).promoted, false, `${mode}: 수정 전 횟수 NULL 승격 불가`);
+      assert.equal((await promotion(db, mode, { status: 'paused' })).promoted, true, `${mode}: 수정 전에는 paused도 승격`);
+      assert.equal((await promotion(db, mode, { starts: `(${KST} + 1)` })).promoted, true, `${mode}: 수정 전에는 미래 시작도 승격`);
+      assert.equal((await promotion(db, mode, { ruleOtherDay: true })).promoted, true, `${mode}: 수정 전에는 현재 수업과 맞지 않아도 승격`);
+    }
+    await db.exec(migration);
+    for (const mode of ['cancel', 'update']) {
+      assert.equal((await promotion(db, mode, { expires: 'null' })).promoted, true);
+      assert.equal((await promotion(db, mode, { status: 'paused' })).promoted, false);
+    }
+  } finally { await db.close(); }
+});
+
+test('두 승격 경로가 같은 자격 계약(고정 문자열)을 쓰고, 이 migration은 is_membership_eligible_for_class를 재정의하지 않는다', () => {
+  const sql = migration.replace(/--.*$/gm, '');
+  assert.ok(!/CREATE OR REPLACE FUNCTION public\.is_membership_eligible_for_class/i.test(sql), '자격 함수는 재정의하지 않는다');
+  const contract = ["m.status = 'active'", 'm.remaining_count is null or m.remaining_count > 0', "m.expires_at is null or m.expires_at >= (now() at time zone 'Asia/Seoul')::date", "m.starts_at is null or m.starts_at <= (now() at time zone 'Asia/Seoul')::date"];
+  const cancelBlock = sql.slice(sql.indexOf('FUNCTION public.cancel_reservation'), sql.indexOf('FUNCTION public.update_class_safe'));
+  const updateBlock = sql.slice(sql.indexOf('FUNCTION public.update_class_safe'), sql.indexOf('FUNCTION public.reserve_with_goods'));
+  for (const c of contract) { assert.ok(cancelBlock.includes(c), `cancel_reservation: ${c}`); assert.ok(updateBlock.includes(c), `update_class_safe: ${c}`); }
+  assert.ok(cancelBlock.includes('is_membership_eligible_for_class(m.id, v_res.class_id)'));
+  assert.ok(updateBlock.includes('is_membership_eligible_for_class(m.id, p_class_id)'));
+  // 승격 차감은 횟수 무제한(NULL)을 그대로 둔다(reserve_with_membership과 동일)
+  assert.equal((sql.match(/where id = v_next_mem\.id and remaining_count is not null;/g) || []).length, 2);
 });
