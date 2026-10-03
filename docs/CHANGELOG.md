@@ -1,7 +1,12 @@
 # CHANGELOG
 
+## 2026-10-04 — 관리자 +회원 검색 클라이언트 안정화 (Web only, SQL/native 변경 없음)
+- 서버 `search_member_candidates`가 Production에서 정상 결과를 돌려주는 것을 직접 확인(이번 변경은 클라이언트만). +회원 시트를 `MemberAddSheet`로 분리: 최신 요청만 반영(sequence), 같은 검색의 in-flight 중복(Enter 연타) 차단, 검색 시작 시 센터/검색어 snapshot, 센터 전환 시 이전 센터 결과/응답 폐기, 오류를 시트 안에 표시(이전 결과 제거), 0건/오류/검색 전 메시지 구분.
+- 이미 등록된 회원은 "이미 이 센터에 등록된 회원이에요"로 이름·번호와 함께 명확히 표시, 대상 센터 이름을 시트에 표시, 검색 시작 시 입력칸 blur(모바일 키보드가 결과를 가리지 않게), 하단 safe-area 확보.
+
 ## 2026-10-04 — PG/주문/환불 날짜 KST 정합성 (Production 적용 완료, verify APPLIED)
 - `fix_pg_order_refund_kst_dates_20261004.sql`: `_issue_membership_and_record_payment`, `fulfill_order`(시작일 `current_date` → KST 오늘, days형 만료 `(now()+N days)::date` → `((now()+N days) at time zone 'Asia/Seoul')::date`), `_refund_membership_core`(환불 후 활성 수강권 판정 `expires_at >= current_date` → KST 오늘)만 변경. Production 라이브 정의 기준, 시그니처/SECURITY DEFINER/search_path/EXECUTE 권한 보존, 결제·환불·포인트·쿠폰·자동예약 로직 불변. rollback/verify(읽기 전용) 동봉. 2026-10-04 Production 적용 완료, `verify_pg_order_refund_kst_dates_20261004.sql` 결과 `verdict = APPLIED`(모든 `*_ok` true, `info_remaining_current_date_functions = evaluate_notification_rules`).
+
 
 ## 2026-10-03 — UI polish: 수강권 설정 필터 배경 / 토스트 geometry / 예약조건 펼침 (UI만, 기능·DB 변경 없음)
 - 수강권 설정 검색/그룹 필터 뒤 큰 사각 배경 제거: 화면 전용 class `membership-rules-filter`로 `.catalog-filter` 배경만 transparent(공용 컴포넌트·구매 sheet·다른 화면 불변).

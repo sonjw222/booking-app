@@ -206,9 +206,10 @@ describe("[Batch A] 회원 추가 검색 UI/서버 계약", () => {
     const fn = m.slice(m.indexOf("export async function searchAccountsForMember"), m.indexOf("export async function", m.indexOf("export async function searchAccountsForMember") + 10));
     expect(fn).toContain('supabase.rpc("search_member_candidates", { p_center_id: centerId, p_keyword: kw })');
     expect(fn).not.toMatch(/\.from\(|ilike/);
-    const page = read("app/manager/members/page.tsx");
-    expect(page).toContain("searchAccountsForMember(centerId, searchKw)");
-    expect(page).toContain("전체 휴대폰 번호");
-    expect(page).toContain("r.alreadyMember");
+    const sheet = read("app/components/MemberAddSheet.tsx");   // 2026-10-04: +회원 시트를 별도 컴포넌트로 분리
+    expect(sheet).toContain("searchAccountsForMember(cid, query)");
+    expect(sheet).toContain("전체 휴대폰 번호");
+    expect(sheet).toContain("r.alreadyMember");
+    expect(read("app/manager/members/page.tsx")).toContain("<MemberAddSheet key={centerId}");
   });
 });

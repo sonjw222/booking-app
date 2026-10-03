@@ -1,5 +1,6 @@
 "use client";
 
+import MemberAddSheet from "../../components/MemberAddSheet";
 import SheetOverlay from "../../components/SheetOverlay";
 
 /*
@@ -16,7 +17,7 @@ import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
   fetchMembers, fetchGrades, createGrade, deleteGrade,
   updateMemberGrade, updateMemberMemo, updateMemberAddress, updateMemberStatus, syncMembersFromReservations,
-  membersToCsv, fetchMemberDetail, searchAccountsForMember, type MemberCandidate, addMemberToCenter, sendAlimtalkToMembers, extendMembershipExpiry,
+  membersToCsv, fetchMemberDetail, addMemberToCenter, sendAlimtalkToMembers, extendMembershipExpiry,
   type CenterMember, type Grade, type MemberDetailData,
 } from "../../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
@@ -121,9 +122,6 @@ function MembersContent() {
   useEffect(() => { getMyAccountId().then(setMyAccountId).catch(() => {}); }, []);
   // 회원 추가 시트
   const [addSheet, setAddSheet] = useState(false);
-  const [searchKw, setSearchKw] = useState("");
-  const [searchResults, setSearchResults] = useState<MemberCandidate[]>([]);
-  const [searching, setSearching] = useState(false);
   const [gradeSheet, setGradeSheet] = useState(false);
   const [newGradeName, setNewGradeName] = useState("");
   const [newGradeColor, setNewGradeColor] = useState(GRADE_COLORS[0]);
@@ -166,16 +164,6 @@ function MembersContent() {
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
-  async function handleSearch() {
-    setSearching(true);
-    setError(null);
-    try {
-      if (!centerId) return;
-      setSearchResults(await searchAccountsForMember(centerId, searchKw));
-    } catch (e: any) { setError(e.message); }
-    finally { setSearching(false); }
-  }
-
   async function handleAddMember(profileId: string) {
     if (!centerId) return;
     setBusy(true);
@@ -183,7 +171,6 @@ function MembersContent() {
       await addMemberToCenter(centerId, profileId);
       showToast("회원을 등록했어요");
       setAddSheet(false);
-      setSearchKw(""); setSearchResults([]);
       await load();
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
@@ -637,7 +624,7 @@ function MembersContent() {
         <div className="title">내 회원</div>
         <div style={{ display: "flex", gap: 6 }}>
           {canCreateMember && (
-            <button className="header-action" onClick={() => { setAddSheet(true); setSearchKw(""); setSearchResults([]); }}>+회원</button>
+            <button className="header-action" onClick={() => setAddSheet(true)}>+회원</button>
           )}
           <button className="header-action" onClick={() => setGradeSheet(true)}>등급</button>
         </div>
@@ -1130,54 +1117,9 @@ function MembersContent() {
         </SheetOverlay>
       )}
 
-      {/* 회원 추가 시트 */}
-      {addSheet && (
-        <SheetOverlay className="sheet-overlay" onClick={() => setAddSheet(false)}>
-          <div className="sheet member-add-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-title">회원 추가</div>
-            <div className="perm-guide" style={{ margin: "0 0 10px" }}>
-              앱에 가입한 회원을 센터에 등록해요. 아직 등록하지 않은 가입자는 <b>전체 휴대폰 번호</b>(예: 010-1234-5678)로 찾을 수 있고,
-              이미 등록된 회원은 이름이나 번호 일부로 찾을 수 있어요. 등록해야 수강권 발급·예약 대상이 됩니다.
-            </div>
-            <div className="hol-add member-add-search" style={{ padding: 0 }}>
-              <div className="member-add-search-row">
-                <input aria-label="전체 휴대폰 번호 또는 회원 이름"
-                  className="input-field"
-                  placeholder="전체 휴대폰 번호 / 등록 회원 이름"
-                  value={searchKw}
-                  onChange={(e) => setSearchKw(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                />
-                <button className="outline-action" disabled={searching} onClick={handleSearch}>검색</button>
-              </div>
-            </div>
-
-            <div className="mem-detail-list" style={{ marginTop: 10 }}>
-              {searching ? (
-                <div className="daylist-empty" style={{ padding: 16 }}>검색 중...</div>
-              ) : searchResults.length === 0 ? (
-                <div className="daylist-empty" style={{ padding: 16 }}>
-                  {searchKw ? "검색 결과가 없어요 — 새 회원은 전체 휴대폰 번호를 입력해야 찾을 수 있어요" : "전체 휴대폰 번호로 검색해보세요"}
-                </div>
-              ) : (
-                searchResults.map((r) => (
-                  <div key={r.profileId} className="mem-detail-row">
-                    <span className="mem-detail-main">
-                      {r.name}{r.phone ? ` · ${r.phone}` : ""}
-                    </span>
-                    {r.alreadyMember
-                      ? <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>이미 등록됨</span>
-                      : <button className="outline-action compact" disabled={busy} onClick={() => handleAddMember(r.profileId)}>등록</button>}
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="add-profile-actions" style={{ marginTop: 6 }}>
-              <button className="ghost-btn" onClick={() => setAddSheet(false)}>닫기</button>
-            </div>
-          </div>
-        </SheetOverlay>
+      {/* 회원 추가 시트 — 검색 UI/stale 방어는 MemberAddSheet. key={centerId}: 센터가 바뀌면 이전 센터의 검색 상태를 버린다. */}
+      {addSheet && centerId && (
+        <MemberAddSheet key={centerId} centerId={centerId} centerName={activeCenter?.name ?? null} busy={busy} onClose={() => setAddSheet(false)} onAdd={handleAddMember} />
       )}
 
       {/* 수강권 만료일 연장 시트 — 이미 발급된 수강권 1개의 만료일만 연장(단축/무제한 변환 불가). 서버가 최종 검증 */}
