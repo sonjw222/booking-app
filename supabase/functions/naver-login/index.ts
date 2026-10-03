@@ -98,6 +98,8 @@ Deno.serve(async (req: Request) => {
   const naverId = String(profile.id);
   const naverEmail: string | null = profile.email ?? null;
   const naverName: string = profile.name || profile.nickname || "네이버 회원";
+  // 이번 로그인에서 직접 조회한 실제 이름(이름 > 닉네임). "네이버 회원" fallback이면 null — 클라이언트가 기존 합성 이름 자동 복구에만 쓴다(이름은 로그에 남기지 않는다).
+  const providerName: string | null = (profile.name || profile.nickname || "").toString().trim() || null;
   const syntheticEmail = `naver-${naverId}@${SYNTHETIC_EMAIL_DOMAIN}`;
 
   // 3) 이 네이버 계정 전용 Supabase 사용자 확보 + 클라이언트가 세션으로 바꿀 token_hash 발급.
@@ -120,5 +122,5 @@ Deno.serve(async (req: Request) => {
     return json({ error: `세션 발급에 실패했어요: ${linkErr?.message ?? "token_hash 없음"}` }, 500);
   }
 
-  return json({ email: syntheticEmail, tokenHash });
+  return json({ email: syntheticEmail, tokenHash, providerName });
 });

@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabaseClient";
 import { NAVER_OAUTH_STATE_KEY } from "../../../lib/naverAuth";
 import { edgeFunctionErrorMessage } from "../../../lib/edgeFunctions";
+import { clearSocialNameStash, stashSocialName } from "../../../lib/socialName";
 import Loading from "../../components/Loading";
 
 export default function NaverCallbackPage() {
@@ -28,6 +29,7 @@ export default function NaverCallbackPage() {
       const params = new URLSearchParams(window.location.search);
       const providerError = params.get("error_description") || params.get("error");
       if (providerError) {
+        clearSocialNameStash();   // provider가 취소/거부한 경우 이전 시도의 stash가 남지 않게
         fail(providerError);
         return;
       }
@@ -38,15 +40,17 @@ export default function NaverCallbackPage() {
       sessionStorage.removeItem(NAVER_OAUTH_STATE_KEY);
 
       if (!code || !state || !savedState || state !== savedState) {
+        clearSocialNameStash();   // state 누락/불일치(만료·위조) 시에도 stash 제거
         fail("로그인 요청이 만료됐거나 올바르지 않아요. 다시 시도해주세요.");
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke<{ email: string; tokenHash: string }>(
+      const { data, error } = await supabase.functions.invoke<{ email: string; tokenHash: string; providerName?: string | null }>(
         "naver-login",
         { body: { code, redirectUri: `${window.location.origin}/login/naver-callback` } }
       );
       if (error || !data) {
+        clearSocialNameStash();
         fail(await edgeFunctionErrorMessage(error, "네이버 로그인 처리에 실패했어요"));
         return;
       }
@@ -55,11 +59,15 @@ export default function NaverCallbackPage() {
       // token_hash and type should be provided"로 거부함 — email은 6자리 token과 짝지어
       // 쓰는 다른 조합 전용). data.email은 이제 안 쓰지만, Edge Function이 디버깅용으로
       // 계속 돌려주는 값이라 타입에는 남겨둔다.
+      // 이번 로그인에서 조회한 provider 이름은 verifyOtp "전에" 저장한다 — verifyOtp가 SIGNED_IN을 발생시키면 SessionWatcher가 즉시 ensureAccountForCurrentUser()를 실행할 수 있어서
+      // 그 뒤에 저장하면 race가 생긴다. 네이버는 신뢰 이름(기존 합성 이름 자동 복구 가능). 이름이 없으면 이전 stash도 지운다. 이름 값은 로그에 남기지 않는다.
+      stashSocialName("naver", data.providerName, { autoSave: true });
       const { error: verifyErr } = await supabase.auth.verifyOtp({
         token_hash: data.tokenHash,
         type: "email",
       });
       if (verifyErr) {
+        clearSocialNameStash();   // 실패한 로그인이 남긴 후보가 다음 로그인에 적용되지 않게
         fail(verifyErr.message);
         return;
       }
