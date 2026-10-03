@@ -480,49 +480,26 @@ export async function fetchMemberDetail(profileId: string, centerId: string): Pr
    - 이래야 결제(수강권 발급) 대상에 뜸
    ============================================================ */
 
-export async function searchAccountsForMember(
-  keyword: string
-): Promise<{ profileId: string; name: string; phone: string | null }[]> {
+export type MemberCandidate = { profileId: string; name: string; phone: string | null; alreadyMember: boolean };
+
+// 회원 추가 검색(2026-10-03 Batch A) — 서버 RPC search_member_candidates가 센터별 권한을 확인한다.
+//  · 이 센터에 이미 등록된 회원: 이름/전화번호 일부로 검색
+//  · 아직 이 센터에 없는 가입자: "정확한 전체 휴대폰 번호"로만 검색(결과는 이름 + 마스킹된 번호)
+// profiles/accounts를 client에서 직접 조회하지 않는다(관리자 계정마다 RLS 결과가 달라지고 전역 검색이 열려 있었다).
+export async function searchAccountsForMember(centerId: string, keyword: string): Promise<MemberCandidate[]> {
   const kw = keyword.trim();
   if (kw.length < 2) return [];
-
-  // 1) 이름으로 대표 프로필 검색
-  const byName = supabase
-    .from("profiles")
-    .select("id, name, is_primary, accounts(phone)")
-    .ilike("name", `%${kw}%`)
-    .eq("is_primary", true)
-    .limit(20);
-
-  // 2) 전화번호로 계정 검색 → 그 계정의 대표 프로필
-  const digits = kw.replace(/[^0-9]/g, "");
-  const results: { profileId: string; name: string; phone: string | null }[] = [];
-  const seen = new Set<string>();
-
-  const { data: nameData, error: nameErr } = await byName;
-  if (nameErr) throw new Error("검색에 실패했어요: " + nameErr.message);
-  for (const r of nameData ?? []) {
-    if (seen.has((r as any).id)) continue;
-    seen.add((r as any).id);
-    results.push({ profileId: (r as any).id, name: displayMemberName((r as any).name), phone: (r as any).accounts?.phone ?? null });
+  const { data, error } = await supabase.rpc("search_member_candidates", { p_center_id: centerId, p_keyword: kw });
+  if (error) {
+    if (error.code === "42883" || error.code === "PGRST202") throw new Error("회원 검색 기능을 사용할 수 없어요. 앱/서버 업데이트 후 다시 시도해주세요");
+    throw new Error(error.message?.includes("권한") ? error.message : "검색에 실패했어요: " + error.message);
   }
-
-  // 전화번호가 2자리 이상 숫자면 전화 검색도 수행
-  if (digits.length >= 2) {
-    const { data: acc } = await supabase
-      .from("accounts")
-      .select("id, phone, profiles(id, name, is_primary)")
-      .ilike("phone", `%${digits}%`)
-      .limit(20);
-    for (const a of acc ?? []) {
-      const primary = ((a as any).profiles ?? []).find((p: any) => p.is_primary);
-      if (!primary || seen.has(primary.id)) continue;
-      seen.add(primary.id);
-      results.push({ profileId: primary.id, name: displayMemberName(primary.name), phone: (a as any).phone ?? null });
-    }
-  }
-
-  return results;
+  return ((data ?? []) as any[]).map((r) => ({
+    profileId: r.profile_id,
+    name: displayMemberName(r.name),
+    phone: r.phone ?? null,
+    alreadyMember: !!r.already_member,
+  }));
 }
 
 // 센터에 회원으로 등록 (이미 있으면 무시)

@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-10-03 — post-release follow-ups (SQL 파일만 작성, Production 미실행)
+- **Batch A 회원 추가 검색**: client의 profiles/accounts 직접 조회 제거 → 서버 RPC `search_member_candidates(center, keyword)`(센터별 customer.member.create 권한 확인). 이 센터 회원은 이름/번호 일부, 아직 센터에 없는 가입자는 "정확한 전체 휴대폰 번호"로만(이름 + 마스킹 번호). 전역 부분일치 RPC `search_accounts_for_member`는 authenticated 실행 권한 회수. `add_member_candidate_search_20261003.sql`(+rollback/verify). 배포 순서: SQL → 웹.
+- **Batch B/C**: `manager_grant_product`가 상품 예약조건에 없는 bound 요일/시간을 거부(구매 checkout 트리거와 같은 의미의 helper), 지급/취소 대기승격/정원확대 승격/대여상품 사용기간의 날짜를 KST 기준으로(`fix_grant_schedule_and_kst_dates_20261003.sql`). 결제·환불·주문 발급 함수는 범위에서 제외.
+- **Batch D**: reservations 권한 최소화 — authenticated INSERT, anon/authenticated REFERENCES·TRIGGER 회수(`fix_reservations_privileges_minimize_20261003.sql`). SELECT/DELETE(매니저 정리 정책)/member_memo UPDATE/service_role 유지.
+- **보완(같은 날)**: ① `search_member_candidates`가 센터 회원의 전화 부분검색/전체 번호를 `customer.member.phone`(또는 platform admin) 권한자에게만 허용(기존 fetch_member_phones_safe 기준) — create 권한만으로 전화번호가 노출되던 우회 수정, 입력/저장 전화번호는 `kr_phone_digits`로 같은 규칙 정규화(+82/하이픈/공백). ② 대기자 승격(cancel_reservation/update_class_safe)이 예약과 같은 자격(active·횟수 NULL 허용·만료 NULL 허용·시작일·현재 수업의 `is_membership_eligible_for_class`)으로 재검증.
+- **membership_consumed 일관성**: 대기→확정 승격(cancel_reservation/update_class_safe)이 차감은 하면서 consumed를 false로 두던 모순(휴무일 수강권 복구·휴무 알림이 이 컬럼으로 판정)을 같은 성공 경로에서 true로 수정(`fix_grant_schedule_and_kst_dates_20261003.sql`). reserve_class의 대기 insert가 컬럼 기본값(true)으로 저장되던 것을 false로 명시(`fix_waitlist_membership_consumed_20261003.sql`, 이미 적용된 integrity SQL은 수정하지 않음). 진단: `diagnose_membership_consumed_20261003.sql`(읽기 전용).
+- **verify SQL formatting-safe(2026-10-03)**: Production 적용 후 verify가 함수 정의의 공백/줄바꿈/`public.` 접두사 차이로 false-negative를 내던 것을 수정 — `verify_waitlist_membership_consumed`, `verify_grant_schedule_and_kst_dates`, `verify_member_candidate_search`가 정의를 소문자·주석 제거·공백 제거·`public.` 제거로 정규화한 뒤 `position()`으로 의미 단위를 검사(권한/search_path는 pg_proc로 직접). migration 로직 변경 없음.
+- **Universal Link**: 코드/설정 결함 없음(수정 없음) — 진단 절차는 `docs/UNIVERSAL_LINK_DIAGNOSIS_20261003.md`.
+
 ## 2026-10-03 — 코드 리뷰 보완 (Web + SQL 파일)
 - 소셜 가입 gate: 전화번호는 있지만 이름이 합성/미등록인 기존 소셜 회원에게 "이름만" 받는 gate 추가(전화 인증 재요구 없음, 저장된 phone 불변). 대표 프로필 → accounts 순서로 저장하고 둘 다 성공해야 완료.
 - 일괄 예약조건: 요일 고정 수강권이 요청 요일 전체를 받을 수 없으면 일부만 넣지 않고 DB write 전에 전체 차단(preflight). 이미 같은 조건이 있으면 정상(중복 생성 없음). 일괄 시트도 현재 센터 수업 목록을 새로 읽음(stale 방지).

@@ -12,6 +12,9 @@ const read = (p: string) => readFileSync(join(__dirname, "../..", p), "utf-8");
 // ---- 가짜 supabase (members.ts 검색/목록)
 const calls: { table: string; ilike: [string, string][]; select: string }[] = [];
 let tables: Record<string, any[]> = {};
+const rpcCalls: [string, any][] = [];
+let rpcData: any[] = [];
+let rpcError: { code?: string; message: string } | null = null;
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
     from: (table: string) => {
@@ -24,7 +27,7 @@ vi.mock("../../lib/supabaseClient", () => ({
       };
       return chain;
     },
-    rpc: async () => ({ data: [], error: null }),
+    rpc: async (name: string, args: any) => { rpcCalls.push([name, args]); return { data: rpcData, error: rpcError }; },
   },
 }));
 import { fetchMembers, searchAccountsForMember } from "../../lib/members";
@@ -98,19 +101,21 @@ describe("[6] 회원 이름 표시", () => {
 });
 
 describe("[7][8] 회원 검색/등록/목록", () => {
-  beforeEach(() => { calls.length = 0; tables = {}; });
-  it("검색: 이름 + 전화번호(전체/하이픈/일부) — 숫자만으로 정규화해 ilike, 합성 이름은 표시 대체", async () => {
-    tables.profiles = [{ id: "p1", name: "92wr87mcz5", is_primary: true, accounts: { phone: "01026668674" } }, { id: "p2", name: "홍길동", is_primary: true, accounts: { phone: "01011112222" } }];
-    tables.accounts = [{ id: "a3", phone: "01026668674", profiles: [{ id: "p3", name: "김민수", is_primary: true }] }];
-    const r = await searchAccountsForMember("010-2666-8674");
-    const phoneCall = calls.find((c) => c.table === "accounts")!;
-    expect(phoneCall.ilike).toEqual([["phone", "%01026668674%"]]);
-    expect(r.map((x) => x.name)).toEqual([UNNAMED_MEMBER_LABEL, "홍길동", "김민수"]);
-    calls.length = 0; await searchAccountsForMember("2666");   // 일부 번호
-    expect(calls.find((c) => c.table === "accounts")!.ilike).toEqual([["phone", "%2666%"]]);
-    calls.length = 0; await searchAccountsForMember("홍길");
-    expect(calls.find((c) => c.table === "accounts")).toBeUndefined();   // 숫자가 없으면 전화 검색 안 함
-    expect(await searchAccountsForMember("가")).toEqual([]);   // 2자 미만
+  beforeEach(() => { calls.length = 0; tables = {}; rpcCalls.length = 0; rpcData = []; rpcError = null; });
+  it("검색(2026-10-03 Batch A): profiles/accounts 직접 조회 없이 서버 RPC search_member_candidates만 호출, 2글자 미만은 호출 안 함, 합성 이름은 표시 대체", async () => {
+    rpcData = [{ profile_id: "p1", name: "92wr87mcz5", phone: "010-****-8674", already_member: false }, { profile_id: "p2", name: "홍길동", phone: "01011112222", already_member: true }];
+    const r = await searchAccountsForMember("c1", "010-2666-8674");
+    expect(calls.length).toBe(0);   // 어떤 테이블도 직접 조회하지 않는다
+    expect(rpcCalls).toEqual([["search_member_candidates", { p_center_id: "c1", p_keyword: "010-2666-8674" }]]);
+    expect(r).toEqual([{ profileId: "p1", name: UNNAMED_MEMBER_LABEL, phone: "010-****-8674", alreadyMember: false }, { profileId: "p2", name: "홍길동", phone: "01011112222", alreadyMember: true }]);
+    rpcCalls.length = 0;
+    expect(await searchAccountsForMember("c1", "가")).toEqual([]);
+    expect(rpcCalls.length).toBe(0);
+    rpcError = { code: "PGRST202", message: "not found" };
+    await expect(searchAccountsForMember("c1", "홍길동")).rejects.toThrow("사용할 수 없어요");
+    rpcError = { code: "P0001", message: "회원 등록 권한이 없어요" };
+    await expect(searchAccountsForMember("c1", "홍길동")).rejects.toThrow("회원 등록 권한이 없어요");
+    rpcError = null;
   });
   it("회원 목록: 수강권이 없어도 등록된 center_members는 보이고(등록 직후 노출), 활성/만료 필터는 수강권 이력이 있는 회원만", async () => {
     tables.center_members = [
@@ -179,5 +184,18 @@ describe("[2] 수강권 예약조건 일괄 적용", () => {
     expect(p).toContain("if (bulkTargets) { await handleBulkAddRules(); return; }");
     expect(p).toContain("await addRule(ruleFor.id, d, rTime || null, rTitle.trim() || null);");
     expect(read("app/components/BulkSelectBar.tsx")).toContain("disabled={busy || selectedCount === 0} onClick={extraAction.onClick}");
+  });
+});
+
+describe("[Batch A] 회원 추가 검색 UI/서버 계약", () => {
+  it("lib: direct profiles/accounts ilike 검색 제거, centerId와 함께 RPC만", () => {
+    const m = read("lib/members.ts");
+    const fn = m.slice(m.indexOf("export async function searchAccountsForMember"), m.indexOf("export async function", m.indexOf("export async function searchAccountsForMember") + 10));
+    expect(fn).toContain('supabase.rpc("search_member_candidates", { p_center_id: centerId, p_keyword: kw })');
+    expect(fn).not.toMatch(/\.from\(|ilike/);
+    const page = read("app/manager/members/page.tsx");
+    expect(page).toContain("searchAccountsForMember(centerId, searchKw)");
+    expect(page).toContain("전체 휴대폰 번호");
+    expect(page).toContain("r.alreadyMember");
   });
 });
