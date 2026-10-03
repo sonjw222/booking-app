@@ -7,7 +7,7 @@ const { PGlite } = await import(process.env.PGLITE_MODULE ? pathToFileURL(proces
 const read = f => readFileSync(new URL('../../' + f, import.meta.url), 'utf8');
 const migration = read('fix_grant_schedule_and_kst_dates_20261003.sql');
 const rollback = read('rollback_fix_grant_schedule_and_kst_dates_20261003.sql');
-const verify = read('verify_grant_schedule_and_kst_dates_20261003.sql').replace(/--.*$/gm, '');
+const verify = read('verify_grant_schedule_and_kst_dates_20261003.sql').replace(/^\s*--.*$/gm, '');
 const id = (k, n) => `${String(k).padStart(8, '0')}-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const C1 = id(1, 1), C2 = id(1, 2), MGR = id(2, 1), NOPERM = id(2, 2), MEMBER_ACC = id(2, 3), OTHER_ACC = id(2, 4);
 const P_MEMBER = id(3, 1), P_OTHER_CENTER = id(3, 2), P_WAIT = id(3, 3);

@@ -10,7 +10,7 @@ const grantMig = read('fix_grant_schedule_and_kst_dates_20261003.sql');
 const grantRb = read('rollback_fix_grant_schedule_and_kst_dates_20261003.sql');
 const waitMig = read('fix_waitlist_membership_consumed_20261003.sql');
 const waitRb = read('rollback_fix_waitlist_membership_consumed_20261003.sql');
-const verify = read('verify_waitlist_membership_consumed_20261003.sql').replace(/--.*$/gm, '');
+const verify = read('verify_waitlist_membership_consumed_20261003.sql').replace(/^\s*--.*$/gm, '');
 const diagnose = read('diagnose_membership_consumed_20261003.sql').replace(/--.*$/gm, '');
 const fnText = (sql, name) => { const a = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`); const b = sql.indexOf('$function$;', sql.indexOf('AS $function$', a)); return sql.slice(a, b + '$function$;'.length); };
 const id = (k, n) => `${String(k).padStart(8, '0')}-0000-0000-0000-${String(n).padStart(12, '0')}`;

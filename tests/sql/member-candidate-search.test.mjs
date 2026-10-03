@@ -119,7 +119,7 @@ test('전역 부분일치 RPC(search_accounts_for_member)는 적용 후 authenti
   const db = await world();
   try {
     await assert.rejects(as(db, 'authenticated', MGR1, () => db.query(`select * from search_accounts_for_member('홍길')`)), /permission denied/);
-    const v = verify.replace(/--.*$/gm, '');
+    const v = verify.replace(/^\s*--.*$/gm, '');   // 전체 줄 주석만 제거(정규식 리터럴 '--[^\n\r]*'가 SQL 안에 있다)
     assert.doesNotMatch(v, /\b(insert\s+into|update\s+\S+\s+set|delete\s+from|drop\s|alter\s|create\s|truncate\s|grant\s|revoke\s)/i);
     assert.match(v.trim(), /^with\b/i);
     const row = async () => (await db.query(v)).rows[0];
