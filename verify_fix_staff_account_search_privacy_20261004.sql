@@ -11,8 +11,20 @@ with fn as (
            max(replace(regexp_replace(lower(pg_get_expr(polqual, polrelid)), '\s+', '', 'g'), 'public.', '')) as q,
            bool_and(polcmd = 'r') as all_select
       from pg_policy where polrelid = 'public.accounts'::regclass and polname = '계정 조회'
+), t as (
+    select c.oid, c.relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relname = 'staff_candidate_search_attempts' and c.relkind = 'r'
 ), c as (
     select
+        -- 시도 기록 테이블: 존재 / RLS / 정책 없음 / anon·authenticated 권한 없음(client 직접 접근 불가)
+        exists (select 1 from t)                                                                                            as attempts_table_exists_ok,
+        coalesce((select relrowsecurity from t), false)                                                                     as attempts_table_rls_ok,
+        coalesce((select not has_table_privilege('anon', oid, 'select,insert,update,delete') and not has_table_privilege('authenticated', oid, 'select,insert,update,delete') from t), false) as attempts_table_locked_ok,
+        coalesce((select not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'staff_candidate_search_attempts')), false) as attempts_table_no_policies_ok,
+        -- rate limit: VOLATILE + advisory lock + 한도 + 권한 확인이 시도 기록보다 먼저
+        coalesce((select p.provolatile = 'v' from pg_proc p where p.oid = (select oid from fn)), false)                     as rpc_volatile_ok,
+        coalesce((select position('pg_advisory_xact_lock' in n) > 0 and position('v_recent>=30orv_daily>=200' in n) > 0 and position('staff_candidate_search_attempts' in n) > 0 from body), false) as rpc_rate_limit_logic_ok,
+        coalesce((select position('has_permission(p_center_id,''facility.staff.create'')' in n) < position('staff_candidate_search_attempts' in n) from body), false) as rpc_permission_before_rate_limit_ok,
         -- RPC: 존재 / SECURITY DEFINER / search_path 고정 / anon·PUBLIC 실행 불가 / authenticated 실행 가능
         exists (select 1 from fn)                                                                                           as rpc_exists_ok,
         coalesce((select prosecdef from fn), false)                                                                         as rpc_security_definer_ok,
@@ -36,7 +48,8 @@ with fn as (
         exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'kr_phone_digits') as kr_phone_digits_prereq_ok
 )
 select c.*,
-       case when rpc_exists_ok and rpc_security_definer_ok and rpc_search_path_pinned_ok and rpc_anon_denied_ok and rpc_public_denied_ok and rpc_authenticated_allowed_ok
+       case when attempts_table_exists_ok and attempts_table_rls_ok and attempts_table_locked_ok and attempts_table_no_policies_ok and rpc_volatile_ok and rpc_rate_limit_logic_ok and rpc_permission_before_rate_limit_ok
+                 and rpc_exists_ok and rpc_security_definer_ok and rpc_search_path_pinned_ok and rpc_anon_denied_ok and rpc_public_denied_ok and rpc_authenticated_allowed_ok
                  and rpc_body_contract_ok and rpc_permission_before_read_ok and policy_single_select_ok and policy_global_staff_clause_removed_ok
                  and relation_self_and_linked_kept_ok and relation_managed_staff_kept_ok and relation_managed_members_kept_ok and kr_phone_digits_prereq_ok
             then 'APPLIED' else 'NOT_APPLIED' end as verdict

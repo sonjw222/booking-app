@@ -1,4 +1,4 @@
-// 격리 PostgreSQL(PGlite) — 회원 추가 정확 번호 검색 rate limit. 실행: PGLITE_MODULE=<pglite 디렉터리> node --test tests/sql/member-candidate-rate-limit.test.mjs
+// 격리 PostgreSQL(PGlite) — 회원 추가 "전체 번호 exact-search 시도" rate limit(외부 매칭 여부와 무관하게 전체 번호 시도 자체를 센다). 실행: PGLITE_MODULE=<pglite 디렉터리> node --test tests/sql/member-candidate-rate-limit.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -135,7 +135,7 @@ test('센터 회원 이름/전화 일부 검색 등 정상 검색은 제한되�
   } finally { await db.close(); }
 });
 
-test('완전한 번호가 아닌 입력/2글자 미만은 기록하지 않고, 기존 동작(마스킹·정규화·병합/비활성 제외)은 그대로', async () => {
+test('완전한 번호가 아닌 입력/2글자 미만은 기록하지 않고, 전체 번호는 결과 유무·내부/외부와 무관하게 모두 센다(이미 센터 회원인 번호 포함). 기존 동작(마스킹·정규화·병합/비활성 제외)은 그대로', async () => {
   const db = await world();
   try {
     assert.equal((await search(db, MGR1, C1, '홍길동')).length, 0);

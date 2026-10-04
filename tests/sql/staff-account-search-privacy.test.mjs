@@ -180,3 +180,89 @@ test('함수/정책 보안 계약 + 재실행 안전 + rollback(광범위 정책
     try { await d.exec(tf(migration)); assert.equal((await d.query(verify)).rows[0].verdict, 'APPLIED'); } finally { await d.close(); }
   }
 });
+
+// ---- 번호 열거 rate limit(전체 번호 exact-search 시도 단위, 서버 강제) ----
+const PH = '010-2326-5051';
+const TOO_MANY = /검색 요청이 너무 많아요/;
+const attempts = async (db, where = 'true') => (await db.query(`select count(*)::int c from staff_candidate_search_attempts where ${where}`)).rows[0].c;
+const exhaust = async (db, who = 'o1', center = C1, n = 30) => { for (let i = 0; i < n; i++) await search(db, who, center, PH); };
+
+test('rate limit 경계: 30번째까지 성공, 31번째는 generic 오류이며 기록되지 않는다(결과 유무와 무관하게 전체 번호 시도를 센다)', async () => {
+  const db = await world();
+  try {
+    for (let i = 1; i <= 30; i++) assert.equal((await search(db, 'o1', C1, i % 2 ? PH : '01077779999')).length, i % 2 ? 1 : 0, 'call ' + i);   // 결과가 없는 번호도 센다
+    assert.equal(await attempts(db), 30);
+    await assert.rejects(search(db, 'o1', C1, PH), e => TOO_MANY.test(e.message) && !/손지윤|5051/.test(e.message));
+    assert.equal(await attempts(db), 30);
+  } finally { await db.close(); }
+});
+
+test('10분 window 이후 재허용, 24시간 200회 boundary(센터를 가로질러), 25시간 후 재허용', async () => {
+  const db = await world();
+  try {
+    await exhaust(db);
+    await assert.rejects(search(db, 'o1', C1, PH), TOO_MANY);
+    await db.exec(`update staff_candidate_search_attempts set created_at = now() - interval '11 minutes'`);
+    assert.equal((await search(db, 'o1', C1, PH)).length, 1);
+    await db.exec(`delete from staff_candidate_search_attempts; insert into staff_candidate_search_attempts(caller_account_id, center_id, created_at) select '${A.O1}', '${C2}', now() - interval '2 hours' from generate_series(1, 199)`);
+    assert.equal((await search(db, 'o1', C1, PH)).length, 1);                          // 199 + 1 = 200번째는 허용
+    await assert.rejects(search(db, 'o1', C1, PH), TOO_MANY);                          // 201번째 거부
+    await db.exec(`update staff_candidate_search_attempts set created_at = now() - interval '25 hours'`);
+    assert.equal((await search(db, 'o1', C1, PH)).length, 1);
+  } finally { await db.close(); }
+});
+
+test('다른 caller 격리 + 다른 센터의 시도는 이 센터 10분 한도에 포함되지 않음', async () => {
+  const db = await world();
+  try {
+    await exhaust(db);
+    await assert.rejects(search(db, 'o1', C1, PH), TOO_MANY);
+    assert.equal((await search(db, 'o2', C2, PH)).length, 1);                          // 다른 계정/센터는 영향 없음
+    await db.exec(`delete from staff_candidate_search_attempts; insert into staff_candidate_search_attempts(caller_account_id, center_id) select '${A.O1}', '${C2}' from generate_series(1, 30)`);
+    assert.equal((await search(db, 'o1', C1, PH)).length, 1);                          // C2에서 30회 썼어도 C1은 허용
+  } finally { await db.close(); }
+});
+
+test('권한 없는 요청/anon은 시도를 소모하지 않고 한도 오류 대신 권한 오류만 낸다', async () => {
+  const db = await world();
+  try {
+    await db.exec(`insert into staff_candidate_search_attempts(caller_account_id, center_id) select '${A.NOPERM_MGR}', '${C1}' from generate_series(1, 300)`);
+    const before = await attempts(db);
+    for (const [who, center] of [['np', C1], ['o2', C1], ['o1', C2], ['stranger', C1], ['o1', null]]) await assert.rejects(search(db, who, center, PH), e => /권한/.test(e.message) && !TOO_MANY.test(e.message), `${who}/${center}`);
+    await assert.rejects(as(db, 'anon', null, () => db.query(`select * from search_staff_candidates('${C1}','${PH}')`)), /permission denied/);
+    assert.equal(await attempts(db), before);
+    // 형식이 완전하지 않은 입력은 검색하지 않으므로 세지 않는다
+    await search(db, 'o1', C1, '손지'); await search(db, 'o1', C1, '0102326'); assert.equal(await attempts(db, `caller_account_id='${A.O1}'`), 0);
+  } finally { await db.close(); }
+});
+
+test('시도 기록에는 번호/검색어가 저장되지 않고(컬럼 3개), client는 테이블에 접근할 수 없다 + advisory lock 설계', async () => {
+  const db = await world();
+  try {
+    await search(db, 'o1', C1, PH);
+    const cols = (await db.query(`select column_name from information_schema.columns where table_name='staff_candidate_search_attempts' order by 1`)).rows.map(r => r.column_name);
+    assert.deepEqual(cols, ['caller_account_id', 'center_id', 'created_at', 'id']);
+    const dump = JSON.stringify((await db.query(`select * from staff_candidate_search_attempts`)).rows);
+    assert.doesNotMatch(dump, /2326|5051|손지윤/);
+    for (const role of ['anon', 'authenticated']) await assert.rejects(as(db, role, AUTH('o1'), () => db.query('select * from staff_candidate_search_attempts')), /permission denied/);
+    await assert.rejects(as(db, 'authenticated', AUTH('o1'), () => db.query(`delete from staff_candidate_search_attempts`)), /permission denied/);
+    const def = (await db.query(`select pg_get_functiondef(oid) d, provolatile v from pg_proc where proname='search_staff_candidates'`)).rows[0];
+    assert.equal(def.v, 'v');
+    assert.match(def.d, /pg_advisory_xact_lock/);
+    assert.ok(def.d.indexOf("has_permission(p_center_id, 'facility.staff.create')") < def.d.indexOf('staff_candidate_search_attempts'));
+  } finally { await db.close(); }
+});
+
+test('rollback은 시도 테이블도 제거하고 verify는 NOT_APPLIED, 재적용하면 APPLIED(테이블 없으면 NOT_APPLIED)', async () => {
+  const db = await world();
+  try {
+    const v = async () => (await db.query(verify)).rows[0];
+    assert.equal((await v()).verdict, 'APPLIED');
+    await db.exec(`drop table staff_candidate_search_attempts`);
+    assert.equal((await v()).verdict, 'NOT_APPLIED');
+    await db.exec(migration); assert.equal((await v()).verdict, 'APPLIED');
+    await db.exec(rollback);
+    assert.equal((await db.query(`select count(*)::int c from pg_tables where tablename='staff_candidate_search_attempts'`)).rows[0].c, 0);
+    assert.equal((await v()).verdict, 'NOT_APPLIED');
+  } finally { await db.close(); }
+});

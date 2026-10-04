@@ -90,9 +90,13 @@ describe("SQL 정적 계약", () => {
     expect(rb).toContain("보안상 위험한 rollback");
     expect(rb).toContain("drop function if exists public.search_staff_candidates(uuid, text);");
   });
-  it("범위: 이 migration은 RPC 1개 + accounts 정책 1개만(다른 테이블/함수/정책 변경 없음)", () => {
+  it("범위: 이 migration은 RPC 1개 + accounts 정책 1개 + 시도 기록 테이블 1개만(다른 테이블/함수/정책 변경 없음)", () => {
     expect([...sql.matchAll(/create or replace function public\.(\w+)/g)].map((m) => m[1])).toEqual(["search_staff_candidates"]);
     expect([...sql.matchAll(/(?:create|drop) policy (?:if exists )?"([^"]+)"/g)].map((m) => m[1])).toEqual(["계정 조회", "계정 조회"]);
-    expect(sql).not.toMatch(/alter table|create table|create trigger|update public\.|delete from|insert into/);
+    // 새 테이블은 시도 기록 staff_candidate_search_attempts 하나(RLS 켜고 정책 없음). 다른 테이블 변경/트리거/기존 데이터 수정은 없다.
+    expect([...sql.matchAll(/create table (?:if not exists )?public\.(\w+)/g)].map((m) => m[1])).toEqual(["staff_candidate_search_attempts"]);
+    expect([...sql.matchAll(/alter table ([\w.]+)/g)].map((m) => m[1])).toEqual(["public.staff_candidate_search_attempts"]);
+    expect(sql).not.toMatch(/create trigger|update public\.(?!staff)|delete from public\.(?!staff_candidate_search_attempts)/);
+    expect([...sql.matchAll(/insert into ([\w.]+)/g)].map((m) => m[1])).toEqual(["public.staff_candidate_search_attempts"]);
   });
 });
