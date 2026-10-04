@@ -141,7 +141,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await asManagerA();
   for (const id of cleanupClassIds) {
-    await supabase.from("reservations").delete().eq("class_id", id);
+    await getFixtureAdminClient().from("reservations").delete().eq("class_id", id);   // authenticated DELETE 회수 → service_role 정리
     await supabase.from("classes").delete().eq("id", id);
   }
   // [2026-08-14 수정] foreignCenterId/foreignPassId는 이제 get-or-create로 재사용되는

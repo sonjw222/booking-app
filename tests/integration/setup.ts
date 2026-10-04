@@ -646,7 +646,8 @@ export async function cleanupTestClass(classId: string, reservationIds: string[]
     }
   }
   try {
-    await supabase.from("reservations").delete().eq("class_id", classId);
+    // reservations 직접 DELETE 권한은 authenticated에서 회수됨(fix_reservations_remaining_privileges_20261004) — fixture 정리는 service_role로.
+    await getFixtureAdminClient().from("reservations").delete().eq("class_id", classId);
   } catch { /* 무시 */ }
   try {
     await supabase.from("classes").delete().eq("id", classId);

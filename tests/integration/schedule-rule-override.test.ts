@@ -174,7 +174,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await asManagerA();
   for (const id of cleanupClassIds) {
-    await supabase.from("reservations").delete().eq("class_id", id);
+    await getFixtureAdminClient().from("reservations").delete().eq("class_id", id);   // authenticated DELETE 회수 → service_role 정리
     await supabase.from("classes").delete().eq("id", id);
   }
   await clearScheduleRules(passA.id);
