@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-10-04 — post-release 보안/DB 후속 (SQL 파일만 작성, Production 미실행)
+- **스태프 검색 개인정보 축소**: `search_staff_candidates(center, phone)` RPC(센터별 `facility.staff.create`, 정확한 전체 휴대폰만, 병합/비활성 제외, 최소 반환) + accounts "계정 조회" RLS에서 전역 owner/staff.create 절 제거. client `searchAccounts(centerId, phone)`가 RPC 호출. `fix_staff_account_search_privacy_20261004.sql`(+rollback/verify).
+- **회원 검색 번호 열거 rate limit**: `search_member_candidates`의 정확 번호 경로만 서버에서 제한(계정·센터 10분 30회, 계정 24시간 200회, generic 오류, 시도 테이블은 RLS+권한 전부 회수). `fix_member_candidate_search_rate_limit_20261004.sql`(+rollback/verify).
+- **reservations 남은 권한**: authenticated DELETE, anon SELECT 회수(`fix_reservations_remaining_privileges_20261004.sql`, +rollback/verify). 통합 테스트 fixture 정리는 service_role로 전환.
+- **KST 날짜**: 저장소 lineage 전수 조사 결과 수강권 판정 함수는 이미 KST — 추가 migration 없음. 라이브 확인용 읽기 전용 `verify_reservation_membership_kst_dates_20261004.sql` + 감사 테스트 추가.
+- **알림톡 템플릿 중복**: 기존 `fix_alimtalk_template_code_unique.sql`(전역 partial unique)을 재발견 — rollback과 verify(`verify_alimtalk_template_uniqueness_20261004.sql`) 추가, 23505를 친절한 메시지로 처리. 새 인덱스는 만들지 않음.
+- **QA 센터 비가시화**: `add_internal_qa_center_flag.sql` readiness 재감사 — main과 일관됨(수정 없음). 독립 verify(`verify_add_internal_qa_center_flag_20261004.sql`)와 PGlite 테스트만 추가.
+- docs/TODO.md의 stale 항목 정리(근거가 있는 것만).
+
 ## 2026-10-04 — 관리자 +회원 검색 클라이언트 안정화 (Web only, SQL/native 변경 없음)
 - 서버 `search_member_candidates`가 Production에서 정상 결과를 돌려주는 것을 직접 확인(이번 변경은 클라이언트만). +회원 시트를 `MemberAddSheet`로 분리: 최신 요청만 반영(sequence), 같은 검색의 in-flight 중복(Enter 연타) 차단, 검색 시작 시 센터/검색어 snapshot, 센터 전환 시 이전 센터 결과/응답 폐기, 오류를 시트 안에 표시(이전 결과 제거), 0건/오류/검색 전 메시지 구분.
 - 이미 등록된 회원은 "이미 이 센터에 등록된 회원이에요"로 이름·번호와 함께 명확히 표시, 대상 센터 이름을 시트에 표시, 검색 시작 시 입력칸 blur(모바일 키보드가 결과를 가리지 않게), 하단 safe-area 확보.

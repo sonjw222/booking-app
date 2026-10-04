@@ -1,23 +1,34 @@
 # TODO
 
+## 2026-10-04 post-release 보안/DB 후속 — Production 적용 대기 SQL (코드/SQL 준비 완료, 미적용)
+
+적용 권장 순서(한 번에 하나씩: 검토 → 실행 → verify → 다음). 각 파일은 독립 migration이며 rollback/verify가 짝으로 있다.
+1. `fix_staff_account_search_privacy_20261004.sql` — 웹 배포보다 먼저(웹이 먼저 나가면 스태프 검색이 "함수 없음" 오류). 선행: `add_member_candidate_search_20261003.sql`(kr_phone_digits).
+2. `fix_member_candidate_search_rate_limit_20261004.sql` — 선행: `add_member_candidate_search_20261003.sql`.
+3. `fix_reservations_privileges_minimize_20261003.sql`(미적용 시, 2026-10-03 파일) → `fix_reservations_remaining_privileges_20261004.sql`. 통합 테스트 정리 변경과 함께.
+4. (조건부) `fix_alimtalk_template_code_unique.sql` — verify가 `NOT_APPLIED`이고 중복 0일 때만.
+5. (조건부) `add_internal_qa_center_flag.sql` — QA 센터 비가시화가 필요할 때(변경 없음, `verify_add_internal_qa_center_flag_20261004.sql`로 확인). 선행: `my_center_ids_any_status`(live).
+- 진단 전용(읽기 전용): `verify_reservation_membership_kst_dates_20261004.sql`.
+- **P3**: `rooms`/`reviews`/`center_reviews`는 `using (true)` 공개 SELECT라 `is_internal` QA 센터의 행도 anon이 목록으로 조회할 수 있다(QA fixture는 이 테이블에 데이터를 만들지 않아 현재 노출 없음 — QA fixture가 rooms/reviews를 만들기 전에 정책 보강 필요).
+
 ## 2026-10-03 post-release follow-up 이후 남은 것
 
 - ~~**P1 / PG·환불·주문 날짜 KST 정합성**~~ — **완료(2026-10-04 Production 적용 완료, verify `APPLIED` 확인)**: `fix_pg_order_refund_kst_dates_20261004.sql`(+`rollback_`/`verify_pg_order_refund_kst_dates_20261004.sql`)가 `_issue_membership_and_record_payment`/`fulfill_order`의 시작일·days형 만료와 `_refund_membership_core`의 남은 활성 수강권 판정을 KST 기준으로 정리했다. Production verify: `*_kst_*_ok`/`*_behavior_preserved_ok`/보안(`all_security_definer_ok`, `all_search_path_pinned_ok`, `internal_helpers_not_executable_ok`, `fulfill_order_execute_contract_ok`)·`three_functions_exist_ok` 전부 true, `info_remaining_current_date_functions = evaluate_notification_rules`(알림 cron 함수 — 이번 범위 밖, 실행 시각이 UTC 00:00 = KST 09:00이라 날짜가 일치).
 - **P2(승인 필요)**: 이미 존재하는 reservations의 membership_consumed 모순 보정 — 2026-10-03 Production 읽기 전용 확인 기준 reservations 1건(취소), 대기/모순 0건이라 보정 대상 없음. 이후 데이터가 쌓이면 `diagnose_membership_consumed_20261003.sql`(읽기 전용)로 건수를 확인하고, 보정 UPDATE는 별도 승인 후에만.
-- **P2**: accounts "계정 조회" RLS 정책이 owner/`facility.staff.create` 권한자에게 accounts 전체 SELECT를 허용한다(스태프 초대 검색용, fix_staff_search.sql). 이번 회원 검색 RPC와는 별개이며 범위를 좁힐지 제품 결정 필요.
-- **P2**: 회원 추가 검색은 create 권한자가 전체 번호를 시도하면 그 가입자의 이름이 확인된다(번호 열거 rate limit 없음) — 필요 시 호출 빈도 제한. 센터 회원의 전화 부분검색/전체 번호는 customer.member.phone 권한자에게만 허용된다(2026-10-03 보완).
-- **P3**: reservations anon SELECT / authenticated DELETE(매니저 취소예약 정리 정책) 권한은 유지 중 — 세션 만료 시 동작 변화/통합테스트 의존 때문. 필요 시 별도 결정.
+- ~~**P2**: accounts "계정 조회" RLS 정책이 owner/`facility.staff.create` 권한자에게 accounts 전체 SELECT 허용~~ — **코드/SQL 준비 완료(2026-10-04, Production SQL 미적용)**: `fix_staff_account_search_privacy_20261004.sql`(RPC `search_staff_candidates` + 전역 절 제거). 적용 후 `verify_fix_staff_account_search_privacy_20261004.sql` `APPLIED` 확인 필요.
+- ~~**P2**: 회원 추가 검색 번호 열거 rate limit 없음~~ — **코드/SQL 준비 완료(2026-10-04, Production SQL 미적용)**: `fix_member_candidate_search_rate_limit_20261004.sql`(정확 번호 검색만 계정·센터당 10분 30회 + 계정당 24시간 200회, 서버 강제). 적용 후 `verify_member_candidate_search_rate_limit_20261004.sql` 확인 필요. 센터 회원의 전화 부분검색/전체 번호는 customer.member.phone 권한자에게만 허용(2026-10-03 보완).
+- ~~**P3**: reservations anon SELECT / authenticated DELETE 권한 유지~~ — **코드/SQL 준비 완료(2026-10-04, Production SQL 미적용)**: `fix_reservations_remaining_privileges_20261004.sql`(앱 런타임 직접 사용 없음 근거: 삭제는 SECURITY DEFINER RPC/service_role, anon 조회 경로 없음). 선행: `fix_reservations_privileges_minimize_20261003.sql`. 통합 테스트 fixture 정리는 service_role로 전환.
 
 ## 2026-10-03 출시 전 QA 후속
 
-- **P1 / 확인 필요**: 전화번호 검색이 TestFlight 1.0.2(6)에서는 되고 App Store 빌드에서는 안 되는 차이. 코드상 버전 분기 없음(server.url 동일, 클라이언트 RLS 질의). App Store 빌드 번호/사용 계정/관계(center_members 등) 확인 필요. 근본 해결은 서버측 검색 RPC(개인정보 범위 결정 필요).
+- ~~**P1 / 확인 필요**: 전화번호 검색이 TestFlight 1.0.2(6)에서는 되고 App Store 빌드에서는 안 되는 차이~~ — **해결(서버 RPC 적용)**: `search_member_candidates`가 Production에서 정상 결과를 돌려주는 것을 2026-10-04 직접 확인(CHANGELOG 2026-10-04). 클라이언트 RLS 질의 의존이 사라졌다. 실기기(App Store 빌드) 재확인은 수동 QA로 남김.
 - **P2**: 기존 합성 이름 계정(예: Apple 가입)은 사용자가 이름을 입력하기 전까지 "이름 미등록"으로 표시. 신뢰할 수 있는 이름 원천이 없어 backfill 불가.
 
 ## 2026-10-03 예약 무결성 follow-up
 
-- **P1**: F6 — `manager_grant_product`가 상품 예약조건에 없는 bound 요일/시간으로도 지급할 수 있다(어떤 수업에도 못 쓰는 수강권 발급 가능). 이번 blocker batch 범위 밖.
-- **P2**: `cancel_reservation` 등 다른 함수의 `current_date`(DB UTC) — 회원 예약 자격 외 경로는 이번에 통일하지 않았다.
-- **P2**: reservations의 anon/authenticated TRUNCATE/TRIGGER/REFERENCES 등 넓은 table grant 전반 감사(이번엔 anon 쓰기·authenticated UPDATE/TRUNCATE만 정리).
+- **P1(Production 적용 확인 필요)**: F6 — `manager_grant_product` bound 요일/시간 검증은 `fix_grant_schedule_and_kst_dates_20261003.sql`로 코드/SQL 반영됨(CHANGELOG 2026-10-03). Production 적용 여부는 `verify_grant_schedule_and_kst_dates_20261003.sql`로 확인 후 완료 처리(이 저장소만으로는 적용 증거 없음).
+- ~~**P2**: `cancel_reservation` 등 다른 함수의 `current_date`(DB UTC)~~ — **저장소 lineage 전수 조사 완료(2026-10-04)**: 수강권 유효성 판정 함수(reserve_*, usable_memberships*, cancel_reservation 대기 승격, update_class_safe 정원 확대 승격, manager_grant_product, PG/환불)의 최종 정의는 모두 KST. 남은 `current_date`는 `evaluate_notification_rules`(UTC 00:00=KST 09:00 실행이라 일치, 의도적 유지)뿐. Production 라이브 정의 확인은 `verify_reservation_membership_kst_dates_20261004.sql`(읽기 전용, 기대 verdict `CLEAN`).
+- ~~**P2**: reservations 넓은 table grant 전반 감사~~ — `fix_reservations_privileges_minimize_20261003.sql`(INSERT/REFERENCES/TRIGGER) + `fix_reservations_remaining_privileges_20261004.sql`(authenticated DELETE, anon SELECT)로 코드/SQL 준비 완료(Production 적용 대기).
 
 ## 종목 아이콘 전체 세트 신규 제작
 
@@ -114,11 +125,7 @@
   생성 완료, `status='pending'`으로 회원 화면 비노출, 관리자 연결 정상.
 - **NEXT_PUBLIC_PG_CHECKOUT_ENABLED=true** — Vercel 프로덕션 환경변수 설정 필요(Toss 카드
   심사 대부분 통과, 현대카드만 남음 — 사용자 결정에 따라 지금 켜도 됨). 아직 미확인.
-- **alimtalk_templates에 (center_id, aligo_template_code) unique 제약 없음** (2026-09-30
-  발견, 이번 배치에서는 의도적으로 schema 변경 안 함) — "알리고 템플릿 불러오기"의 중복
-  가져오기 방지는 현재 클라이언트 쪽 검사(로컬 템플릿 목록 기준)뿐이다. 동시에 두 탭에서
-  가져오기를 누르는 등 경합 상황에서는 중복 행이 생길 수 있다 — 후속 배치에서 부분 unique
-  인덱스 추가를 검토.
+- **alimtalk_templates aligo_template_code 중복 방지 — Production 적용 여부 확인 필요** (2026-10-04 재조사): 저장소에는 이미 전역 partial unique index `fix_alimtalk_template_code_unique.sql`(`idx_alimtalk_templates_aligo_code_unique`, code is not null, 센터/공통 포함 전체에서 1행 — 플랫폼 단일 알리고 계정 모델에 맞음)가 있다. 2026-09-30 TODO는 schema.sql만 보고 "제약 없음"으로 적었다. `verify_alimtalk_template_uniqueness_20261004.sql`(읽기 전용: 중복 데이터 진단 + index 정의 검증)로 확인해 `NOT_APPLIED`면 그 SQL을 적용(기존 중복이 있으면 생성이 실패하므로 verify의 `duplicate_codes`를 먼저 정리). 클라이언트는 23505를 친절한 메시지로 처리.
 - **raw 오류 한글화 범위 확대**: `lib/userError.ts`를 이번엔 인증/회원가입/센터등록/결제/
   예약에만 적용했다. `.message`를 직접 노출하는 다른 화면(프로필/쿠폰/포인트/리뷰/문의 등,
   전수 검색 시 58개 이상 파일에서 `.message` 패턴 발견)은 이번 배치 범위 밖 — 후속 배치에서
