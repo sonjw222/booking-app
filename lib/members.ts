@@ -492,7 +492,7 @@ export async function searchAccountsForMember(centerId: string, keyword: string)
   const { data, error } = await supabase.rpc("search_member_candidates", { p_center_id: centerId, p_keyword: kw });
   if (error) {
     if (error.code === "42883" || error.code === "PGRST202") throw new Error("회원 검색 기능을 사용할 수 없어요. 앱/서버 업데이트 후 다시 시도해주세요");
-    throw new Error(error.message?.includes("권한") ? error.message : "검색에 실패했어요: " + error.message);
+    throw new Error(/권한|너무 많아요/.test(error.message ?? "") ? error.message : "검색에 실패했어요: " + error.message);   // 권한/rate limit 메시지는 generic이라 그대로 보여준다
   }
   return ((data ?? []) as any[]).map((r) => ({
     profileId: r.profile_id,
