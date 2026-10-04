@@ -31,7 +31,8 @@ vi.mock("../../lib/supabaseClient", () => ({
     rpc: async (name: string) => (name === "my_account_id" ? { data: db.accounts.find((a) => a.auth_id === currentUser?.id)?.id ?? null, error: null } : { data: null, error: null }),
   },
 }));
-import { ensureAccountForCurrentUser } from "../../lib/authAccount";
+import { completeSocialName, completeSocialProfile, ensureAccountForCurrentUser } from "../../lib/authAccount";
+import { stashSocialName } from "../../lib/socialName";
 
 const user = { id: "auth-1", email: "홍@example.com", app_metadata: { provider: "google" }, user_metadata: {} };
 const seed = (profiles: Row[]) => {
@@ -89,5 +90,46 @@ describe("ensureProfileRow — 대표 프로필 존재 판정", () => {
     expect(r.name).toBe("홍길동");
     expect(db.profiles.find((p) => p.is_primary)!.name).toBe("홍길동");
     expect(db.profiles.find((p) => p.id === "p-1")!.name).toBe("자녀");
+  });
+});
+
+describe("삭제된 대표 프로필(익명화) 보호 — 이름 저장/복구는 살아 있는 대표만 갱신", () => {
+  const DELETED = { name: "삭제됨", is_primary: true, deleted_at: "2026-09-01T00:00:00Z" };
+  const deletedRow = () => db.profiles.find((p) => p.id === "p-1")!;
+  const live = () => db.profiles.filter((p) => p.is_primary && p.deleted_at === null);
+  it("소셜 이름 자동 복구(saveCanonicalName 경로): 새 live primary만 실명으로 갱신, 삭제된 primary의 name/deleted_at/is_primary는 그대로", async () => {
+    seed([DELETED]);
+    db.accounts[0].name = "92wr87mcz5";                    // 합성 이름 → 복구 대상
+    stashSocialName("google", "홍길동");
+    const r = await ensureAccountForCurrentUser();
+    expect(profileInserts()).toEqual([{ table: "profiles", account_id: "acc-1", name: "92wr87mcz5", is_primary: true }]);   // 새 live primary 생성
+    expect(live()).toHaveLength(1); expect(live()[0].name).toBe("홍길동");
+    expect(r?.nameRecovered).toBe(true);
+    expect(deletedRow()).toMatchObject({ name: "삭제됨", deleted_at: "2026-09-01T00:00:00Z", is_primary: true });   // 익명화 값 유지
+    expect(updates.filter((u) => u.table === "profiles").every((u) => u.patch.name === "홍길동")).toBe(true);
+  });
+  it("completeSocialName: live primary만 갱신하고 삭제된 primary는 건드리지 않는다", async () => {
+    seed([DELETED, { name: "대표", is_primary: true }]);
+    await completeSocialName("acc-1", "새이름");
+    expect(db.profiles.find((p) => p.id === "p-2")!.name).toBe("새이름");
+    expect(deletedRow()).toMatchObject({ name: "삭제됨", deleted_at: "2026-09-01T00:00:00Z" });
+  });
+  it("completeSocialProfile(이름 포함 가입 마무리): 마찬가지로 live primary만, accounts phone/address/동의는 의도한 값으로만 변경", async () => {
+    seed([DELETED, { name: "대표", is_primary: true }]);
+    await completeSocialProfile("acc-1", "01099998888", "서울 어딘가", false, "가입이름");
+    expect(db.profiles.find((p) => p.id === "p-2")!.name).toBe("가입이름");
+    expect(deletedRow()).toMatchObject({ name: "삭제됨", deleted_at: "2026-09-01T00:00:00Z" });
+    expect(db.accounts[0]).toMatchObject({ name: "가입이름", phone: "01099998888", address: "서울 어딘가", marketing_consent: false });
+  });
+  it("살아 있는 대표가 없고 삭제된 primary만 있을 때 completeSocialName은 삭제된 행을 쓰지 않고 실패(대표 프로필 없음)한다", async () => {
+    seed([DELETED]);
+    await expect(completeSocialName("acc-1", "새이름")).rejects.toThrow("대표 프로필 없음");
+    expect(deletedRow()).toMatchObject({ name: "삭제됨", deleted_at: "2026-09-01T00:00:00Z" });
+    expect(db.accounts[0].name).toBe("홍길동");                 // 프로필 저장이 실패하면 accounts도 건드리지 않는다
+  });
+  it("비대표 추가 프로필은 이름 저장/복구 경로에서도 수정되지 않는다", async () => {
+    seed([{ name: "자녀", is_primary: false }, { name: "대표", is_primary: true }]);
+    await completeSocialName("acc-1", "새이름");
+    expect(db.profiles.find((p) => p.id === "p-1")).toMatchObject({ name: "자녀", is_primary: false });
   });
 });

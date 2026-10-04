@@ -102,8 +102,8 @@ async function ensureProfileRow(accountId: string, name: string): Promise<void> 
   if (findErr) return; // 조회 자체가 실패(RLS 등) — 이후 실제 화면에서 다시 드러남, 여기서 막지 않음
   if (existing && existing.length > 0) return; // 대표 프로필이 이미 있음 — 정상 경로, 아무것도 안 함(기존 추가 프로필은 승격/수정/삭제하지 않는다 — 자녀/가족 등 실제 다른 수강 주체일 수 있음)
   const { error: insertErr } = await supabase.from("profiles").insert({ account_id: accountId, name, is_primary: true });
-  // 23505 = unique_violation: 동시에 열린 다른 탭/effect가 먼저 만든 경우 — 정상이므로 무시. (주의: 2026-10-04 Production 조사 기준 profiles에는 account당 primary 1개를 강제하는 unique index가 없다 —
-  // 이 코드는 방어용일 뿐 다른 컨텍스트의 동시 insert를 DB가 막아주지는 않는다.)
+  // 23505(unique_violation)는 무시한다(방어적 처리). 단 2026-10-04 Production 조사 기준 profiles에는 account당 primary 1개를 강제하는 unique index가 없다 —
+  // 그래서 "다른 탭이 primary를 먼저 만들면 23505가 난다"는 보장은 없고(pkey 같은 다른 unique 위반일 때만 발생), 다른 실행 컨텍스트의 동시 insert를 DB가 막아주지도 않는다(후속 과제).
   if (insertErr && insertErr.code !== "23505") {
     console.error("프로필 자동 복구 실패", insertErr);
   }
@@ -240,7 +240,7 @@ export async function completeSocialName(accountId: string, name: string): Promi
 }
 
 async function updatePrimaryProfileName(accountId: string, realName: string): Promise<void> {
-  const { data: pRows, error: pErr } = await supabase.from("profiles").update({ name: realName }).eq("account_id", accountId).eq("is_primary", true).select("id");
+  const { data: pRows, error: pErr } = await supabase.from("profiles").update({ name: realName }).eq("account_id", accountId).eq("is_primary", true).is("deleted_at", null).select("id");   // 살아 있는 대표만 — 삭제/익명화된 옛 primary 행은 절대 다시 쓰지 않는다
   if (pErr) throw new Error("이름을 저장하지 못했어요: " + pErr.message);
   if (!pRows || pRows.length === 0) throw new Error("이름을 저장하지 못했어요(대표 프로필 없음)");
 }
