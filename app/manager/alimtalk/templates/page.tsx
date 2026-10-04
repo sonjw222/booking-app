@@ -175,8 +175,8 @@ export default function AlimtalkTemplatesPage() {
 
   async function handleImport(remote: AligoRemoteTemplate) {
     if (!centerId || importingCode) return; // 중복 클릭 방지
-    // 클라이언트 쪽 1차 방어 — DB에는 (center_id, aligo_template_code) unique 제약이 없어
-    // (schema 확인, 2026-09-30) 이 목록 기준 확인이 사실상 유일한 중복 방지선이다.
+    // 클라이언트 쪽 1차 방어(빠른 안내용). 최종 방어선은 DB unique index(idx_alimtalk_templates_aligo_code_unique,
+    // fix_alimtalk_template_code_unique.sql — 적용 여부는 verify_alimtalk_template_uniqueness_20261004.sql로 확인). 미적용 환경에서는 이 목록 기준 확인이 유일한 방지선이다.
     if (isAligoTemplateAlreadyImported(templates, remote.templtCode)) {
       showToast("이미 등록된 템플릿이에요.");
       return;

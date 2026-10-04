@@ -84,6 +84,8 @@ export async function createAlimtalkTemplate(
     ...(input.aligoTemplateCode !== undefined ? { aligo_template_code: input.aligoTemplateCode } : {}),
     ...(input.status !== undefined ? { status: input.status } : {}),
   }).select("id").single();
+  // 23505: idx_alimtalk_templates_aligo_code_unique(fix_alimtalk_template_code_unique.sql) — 같은 알리고 템플릿 코드가 이미 다른 행(센터/공통)에 있다. 두 탭 경합 등에서도 DB가 막는다.
+  if (error?.code === "23505") throw new Error("이미 등록된 알림톡 템플릿이에요");
   if (error) throw new Error("템플릿 등록에 실패했어요: " + error.message);
   return data.id;
 }
@@ -100,6 +102,7 @@ export async function updateAlimtalkTemplate(
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.isActive !== undefined) row.is_active = patch.isActive;
   const { error } = await supabase.from("alimtalk_templates").update(row).eq("id", id);
+  if (error?.code === "23505") throw new Error("이미 다른 템플릿에서 쓰고 있는 알리고 템플릿 코드예요");
   if (error) throw new Error("템플릿 수정에 실패했어요: " + error.message);
 }
 
