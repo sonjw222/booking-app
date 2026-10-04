@@ -6,17 +6,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const read = (p: string) => readFileSync(join(__dirname, "../..", p), "utf-8");
 
 // ---- 가짜 supabase: update 호출을 기록하고 테이블별 영향 행/오류를 주입한다
-type Upd = { table: string; patch: any; eq: [string, any][] };
+type Upd = { table: string; patch: any; eq: [string, any][]; is: [string, any][] };
 const updates: Upd[] = [];
 let failTable: string | null = null;
 let zeroRowsTable: string | null = null;
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
     from: (table: string) => {
-      const rec: Upd = { table, patch: null, eq: [] };
+      const rec: Upd = { table, patch: null, eq: [], is: [] };
       const chain: any = {
         update(patch: any) { rec.patch = patch; updates.push(rec); return chain; },
         eq(c: string, v: any) { rec.eq.push([c, v]); return chain; },
+        is(c: string, v: any) { rec.is.push([c, v]); return chain; },
         select() { return chain; },
         then(res: any) {
           if (failTable === table) return Promise.resolve({ data: null, error: { message: "boom", code: "XX" } }).then(res);
@@ -53,6 +54,7 @@ describe("[1] 소셜 가입 마무리 gate", () => {
     await completeSocialName("acc1", "홍길동");
     expect(updates.map((u) => [u.table, u.patch])).toEqual([["profiles", { name: "홍길동" }], ["accounts", { name: "홍길동" }]]);
     expect(updates[0].eq).toEqual([["account_id", "acc1"], ["is_primary", true]]);
+    expect(updates[0].is).toEqual([["deleted_at", null]]);   // 살아 있는 대표만
     for (const u of updates) expect(Object.keys(u.patch)).toEqual(["name"]);
   });
   it("저장 실패(오류/0행)는 성공 처리하지 않는다 — gate가 다시 나타나도록 throw", async () => {
