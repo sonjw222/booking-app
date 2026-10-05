@@ -146,7 +146,7 @@ export async function searchAccounts(centerId: string, phone: string): Promise<S
   const { data, error } = await supabase.rpc("search_staff_candidates", { p_center_id: centerId, p_phone: phone.trim() });
   if (error) {
     if (error.code === "42883" || error.code === "PGRST202") throw new Error("스태프 검색 기능을 사용할 수 없어요. 앱/서버 업데이트 후 다시 시도해주세요");
-    throw new Error(/권한|로그인|여러 개|너무 많아요/.test(error.message ?? "") ? error.message : "계정 검색에 실패했어요: " + error.message);
+    throw new Error(/권한|로그인|너무 많아요/.test(error.message ?? "") ? error.message : "계정 검색에 실패했어요: " + error.message);
   }
   return ((data ?? []) as any[]).map((a) => ({
     id: a.account_id, name: displayMemberName(a.name), phone: a.phone ?? null,

@@ -29,6 +29,8 @@ with fn as (
         coalesce((select p.provolatile = 'v' from pg_proc p where p.oid = (select oid from fn)), false)                     as rpc_volatile_ok,
         coalesce((select position('pg_advisory_xact_lock' in n) > 0 and position('v_recent>=30orv_daily>=200' in n) > 0 and position('staff_candidate_search_attempts' in n) > 0 from body), false) as rpc_rate_limit_logic_ok,
         coalesce((select position('has_permission(p_center_id,''facility.staff.create'')' in n) < position('staff_candidate_search_attempts' in n) from body), false) as rpc_permission_before_rate_limit_ok,
+        -- 중복 활성 계정(데이터 이상)은 exception이 아니라 return(0건): exception은 같은 트랜잭션의 시도 기록 INSERT를 롤백하고 중복 존재를 외부에 알린다
+        coalesce((select position('array_length(v_ids,1)>1thenreturn;' in n) > 0 and position('raiseexception''같은번호' in n) = 0 and position('여러개' in n) = 0 from body), false) as rpc_duplicate_returns_empty_ok,
         -- RPC: 존재 / SECURITY DEFINER / search_path 고정 / anon·PUBLIC 실행 불가 / authenticated 실행 가능
         exists (select 1 from fn)                                                                                           as rpc_exists_ok,
         coalesce((select prosecdef from fn), false)                                                                         as rpc_security_definer_ok,
@@ -54,7 +56,7 @@ with fn as (
         exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'kr_phone_digits') as kr_phone_digits_prereq_ok
 )
 select c.*,
-       case when attempts_table_exists_ok and attempts_table_rls_ok and attempts_table_locked_ok and attempts_table_no_policies_ok and rpc_volatile_ok and rpc_rate_limit_logic_ok and rpc_permission_before_rate_limit_ok
+       case when rpc_duplicate_returns_empty_ok and attempts_table_exists_ok and attempts_table_rls_ok and attempts_table_locked_ok and attempts_table_no_policies_ok and rpc_volatile_ok and rpc_rate_limit_logic_ok and rpc_permission_before_rate_limit_ok
                  and rpc_exists_ok and rpc_security_definer_ok and rpc_search_path_pinned_ok and rpc_anon_denied_ok and rpc_public_denied_ok and rpc_authenticated_allowed_ok
                  and rpc_body_contract_ok and rpc_permission_before_read_ok and accounts_select_policies_exact_ok and policy_single_select_ok and policy_global_staff_clause_removed_ok
                  and relation_self_and_linked_kept_ok and relation_managed_staff_kept_ok and relation_managed_members_kept_ok and kr_phone_digits_prereq_ok

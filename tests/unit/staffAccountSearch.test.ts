@@ -77,7 +77,9 @@ describe("SQL 정적 계약", () => {
     expect(sql).toContain("a.merged_into is null");
     expect(sql).toContain("a.deactivated_at is null");
     expect(sql).toContain("left(v_digits, 3) || '-****-' || right(v_digits, 4)");
-    expect(sql).toContain("같은 번호로 가입한 계정이 여러 개예요");
+    // 중복 활성 계정은 오류 문구(존재 노출 + 시도 기록 rollback) 대신 0건 반환
+    expect(sql.replace(/--[^\n]*/g, "")).not.toContain("같은 번호로 가입한 계정이 여러 개예요");
+    expect(sql.replace(/--[^\n]*/g, "")).toMatch(/array_length\(v_ids, 1\) > 1 then\s+return;/);
     expect(sql).toContain("auth.uid() is null");
     expect(sql.slice(0, sql.indexOf("create policy"))).not.toMatch(/\bi?like\b/i);
   });

@@ -129,11 +129,40 @@ test('already_staff: 이 센터의 active/pending/suspended 스태프는 구분�
   } finally { await db.close(); }
 });
 
-test('같은 번호로 정규화되는 계정이 여럿이면 임의로 고르지 않고 거부(데이터 이상 방어)', async () => {
+test('같은 번호로 정규화되는 활성 계정이 여럿(데이터 이상)이면 임의로 고르지 않고 0건 — 오류 없이, 시도 기록은 보존되며 반복 호출은 같은 rate limit에 포함', async () => {
   const db = await world();
   try {
     await db.exec(`insert into accounts(id, auth_id, name, phone) values ('${id(2, 99)}','dup','중복','010-2326-5051')`);   // 원본 phone unique 제약은 통과하지만 정규화하면 X와 같은 번호
-    await assert.rejects(search(db, 'o1', C1, '01023265051'), /같은 번호로 가입한 계정이 여러 개예요/);
+    const n = async () => (await db.query(`select count(*)::int c from staff_candidate_search_attempts`)).rows[0].c;
+    assert.equal(await n(), 0);
+    assert.deepEqual(await search(db, 'o1', C1, '01023265051'), []);                  // 예외 없이 0건(어느 계정도 반환하지 않음)
+    assert.equal(await n(), 1);                                                        // 시도 기록이 rollback되지 않고 1회 보존
+    for (const fmt of ['010-2326-5051', '+82 10-2326-5051']) await search(db, 'o1', C1, fmt);
+    assert.equal(await n(), 3);                                                        // 형식이 달라도 같은 정규화 번호 시도로 계속 누적
+    // 한도에 포함: 30회 채운 뒤 31번째(중복 번호든 아니든)는 거부
+    await db.exec(`delete from staff_candidate_search_attempts`);
+    for (let i = 0; i < 30; i++) assert.deepEqual(await search(db, 'o1', C1, '01023265051'), []);
+    await assert.rejects(search(db, 'o1', C1, '01023265051'), /검색 요청이 너무 많아요/);
+    await assert.rejects(search(db, 'o1', C1, '01011110001'), /검색 요청이 너무 많아요/);   // 다른 번호도 같은 한도
+    assert.equal(await n(), 30);
+    // 응답으로 중복 존재가 드러나지 않는다: 중복 번호와 존재하지 않는 번호의 응답이 동일(0건·무오류)
+    await db.exec(`delete from staff_candidate_search_attempts`);
+    assert.deepEqual(await search(db, 'o1', C1, '01099998888'), await search(db, 'o1', C1, '01023265051'));
+    // 중복이 해소되면(비활성 처리) 정상 1계정 결과가 다시 나온다
+    await db.exec(`update accounts set deactivated_at = now() where id = '${id(2, 99)}'`);
+    assert.equal((await search(db, 'o1', C1, '01023265051')).length, 1);
+  } finally { await db.close(); }
+});
+
+test('회귀: 정상 1계정은 결과 1건 + 시도 1회, 0계정은 0건 + 시도 1회, 권한 없는 호출/anon은 시도를 소모하지 않는다', async () => {
+  const db = await world();
+  try {
+    const n = async () => (await db.query(`select count(*)::int c from staff_candidate_search_attempts`)).rows[0].c;
+    assert.equal((await search(db, 'o1', C1, '01023265051')).length, 1); assert.equal(await n(), 1);
+    assert.equal((await search(db, 'o1', C1, '01000000000')).length, 0); assert.equal(await n(), 2);
+    for (const [who, center] of [['np', C1], ['o2', C1], ['stranger', C1]]) await assert.rejects(search(db, who, center, '01023265051'), /스태프를 추가할 권한이 없어요/);
+    await assert.rejects(as(db, 'anon', null, () => db.query(`select * from search_staff_candidates('${C1}','01023265051')`)), /permission denied/);
+    assert.equal(await n(), 2);
   } finally { await db.close(); }
 });
 
@@ -283,5 +312,20 @@ test('verify: accounts에 다른 permissive SELECT(또는 ALL) 정책이 추가�
     assert.equal((await v()).verdict, 'APPLIED'); await db.exec(`drop policy "제한" on accounts`);
     await db.exec(`create policy "쓰기 전용" on accounts for update using (true)`);                                // UPDATE 정책은 SELECT 노출과 무관
     assert.equal((await v()).verdict, 'APPLIED');
+  } finally { await db.close(); }
+});
+
+test('verify: 중복 활성 계정에서 exception을 던지는 이전 정의로 되돌리면 NOT_APPLIED(시도 기록 rollback 회귀 감지)', async () => {
+  const db = await world();
+  try {
+    const v = async () => (await db.query(verify)).rows[0];
+    assert.equal((await v()).rpc_duplicate_returns_empty_ok, true); assert.equal((await v()).verdict, 'APPLIED');
+    const old = migration.replace(/array_length\(v_ids, 1\) > 1 then[\s\S]*?return;/, "array_length(v_ids, 1) > 1 then\n        raise exception '같은 번호로 가입한 계정이 여러 개예요. 운영자에게 문의해주세요';");
+    assert.notEqual(old, migration);
+    await db.exec(old);                                                                // 이전 동작으로 함수 재정의
+    const r = await v(); assert.equal(r.rpc_duplicate_returns_empty_ok, false); assert.equal(r.verdict, 'NOT_APPLIED');
+    await db.exec(`insert into accounts(id, auth_id, name, phone) values ('${id(2, 98)}','dup2','중복','010-2326-5051')`);
+    await assert.rejects(search(db, 'o1', C1, '01023265051'), /여러 개예요/);
+    assert.equal((await db.query(`select count(*)::int c from staff_candidate_search_attempts`)).rows[0].c, 0);   // 예외로 시도 기록이 rollback됨 — 이번 수정이 막는 문제
   } finally { await db.close(); }
 });

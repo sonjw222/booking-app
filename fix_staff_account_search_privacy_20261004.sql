@@ -7,7 +7,7 @@
 -- 해결(회원 추가 검색 search_member_candidates와 같은 원칙):
 --   1) 센터 단위 전용 RPC search_staff_candidates(p_center_id, p_phone): 요청한 센터에 대해 facility.staff.create 권한(has_permission)이 서버에서 확인돼야 하고,
 --      센터 밖 가입자는 "정확한 전체 휴대폰 번호"로만 찾는다(이름/번호 일부/이메일 조각 전역 검색 없음). 입력과 저장 phone은 kr_phone_digits로 같은 규칙 정규화(+82/하이픈/공백).
---      병합(merged_into)/비활성(deactivated_at) 계정 제외. 결과는 최소 정보(account id, 이름, 마스킹 번호, 이미 이 센터 스태프 여부/상태). 같은 번호로 계정이 둘 이상 매칭되면 임의로 하나를 고르지 않고 거부한다.
+--      병합(merged_into)/비활성(deactivated_at) 계정 제외. 결과는 최소 정보(account id, 이름, 마스킹 번호, 이미 이 센터 스태프 여부/상태). 같은 번호로 활성 계정이 둘 이상 매칭되는 데이터 이상이면 임의로 하나를 고르지 않고 0건으로 응답한다(오류로 중복 존재를 알리지 않고, 시도 기록도 rollback되지 않음).
 --   2) accounts "계정 조회"에서 위 전역 절만 제거. 유지: 본인 / 계정 연동 identity / 내가 관리하는 센터의 스태프 계정 / 내가 관리하는 센터 회원의 계정(Production 라이브 정의 그대로).
 --   3) 번호 열거(enumeration) 방어: 정확한 전체 번호 검색 "시도"(유효한 휴대폰 번호 형식의 호출) 자체를 서버에서 rate limit 한다 — (호출 계정, 센터) 10분 30회 + 계정 24시간 200회,
 --      advisory lock으로 같은 계정의 동시 호출을 직렬화, 한도 초과는 generic 오류. 권한 확인 뒤에만 카운트하므로 권한 없는 호출은 시도를 소모하지도, 한도 오류로 존재 여부를 알 수도 없다.
@@ -88,8 +88,11 @@ begin
         return;
     end if;
     if array_length(v_ids, 1) > 1 then
-        -- 정규화하면 같은 번호인 계정이 여러 개(데이터 이상): 임의 선택/숨김 없이 거부하고 운영 확인을 요청한다.
-        raise exception '같은 번호로 가입한 계정이 여러 개예요. 운영자에게 문의해주세요';
+        -- 정규화하면 같은 번호인 활성 계정이 여러 개(데이터 이상): 임의의 한 계정을 고르지 않고 0건으로 응답한다.
+        -- exception을 쓰지 않는다 — 함수가 예외로 끝나면 위에서 INSERT한 rate-limit 시도 기록도 같은 트랜잭션에서 롤백돼
+        -- "유효한 전체 번호 시도는 결과와 무관하게 센다"는 보장이 깨지고, 오류 문구가 번호 중복 계정의 존재를 외부에 알려주기도 한다.
+        -- (데이터 이상의 진단은 서버/운영 쪽에서: select kr_phone_digits(phone), count(*) from accounts where merged_into is null and deactivated_at is null group by 1 having count(*) > 1 — 이 API 응답으로는 노출하지 않는다.)
+        return;
     end if;
 
     return query
