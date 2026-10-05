@@ -266,3 +266,22 @@ test('rollback은 시도 테이블도 제거하고 verify는 NOT_APPLIED, 재적
     assert.equal((await v()).verdict, 'NOT_APPLIED');
   } finally { await db.close(); }
 });
+
+test('verify: accounts에 다른 permissive SELECT(또는 ALL) 정책이 추가되면 NOT_APPLIED — 광범위 노출 재도입 감지, 정책 제거 시 다시 APPLIED', async () => {
+  const db = await world();
+  try {
+    const v = async () => (await db.query(verify)).rows[0];
+    let r = await v(); assert.equal(r.verdict, 'APPLIED'); assert.equal(r.accounts_select_policies_exact_ok, true);
+    await db.exec(`create policy "매니저 계정 검색" on accounts for select using (true)`);                       // 광범위 second SELECT 정책
+    r = await v(); assert.equal(r.verdict, 'NOT_APPLIED'); assert.equal(r.accounts_select_policies_exact_ok, false);
+    assert.equal(r.policy_global_staff_clause_removed_ok, true);                                                  // "계정 조회" 본문 contract는 여전히 통과(별도 항목이 잡아낸 것)
+    assert.ok((await as(db, 'authenticated', AUTH('stranger'), () => db.query('select id from accounts'))).rows.length > 1);   // 실제로 노출되는 상태임을 확인
+    await db.exec(`drop policy "매니저 계정 검색" on accounts`); assert.equal((await v()).verdict, 'APPLIED');
+    await db.exec(`create policy "전체 허용" on accounts for all using (true)`);                                    // ALL 정책도 SELECT를 허용
+    assert.equal((await v()).verdict, 'NOT_APPLIED'); await db.exec(`drop policy "전체 허용" on accounts`);
+    await db.exec(`create policy "제한" on accounts as restrictive for select using (false)`);                    // restrictive는 노출을 넓히지 않으므로 허용
+    assert.equal((await v()).verdict, 'APPLIED'); await db.exec(`drop policy "제한" on accounts`);
+    await db.exec(`create policy "쓰기 전용" on accounts for update using (true)`);                                // UPDATE 정책은 SELECT 노출과 무관
+    assert.equal((await v()).verdict, 'APPLIED');
+  } finally { await db.close(); }
+});

@@ -11,6 +11,10 @@ with fn as (
            max(replace(regexp_replace(lower(pg_get_expr(polqual, polrelid)), '\s+', '', 'g'), 'public.', '')) as q,
            bool_and(polcmd = 'r') as all_select
       from pg_policy where polrelid = 'public.accounts'::regclass and polname = '계정 조회'
+), selpol as (
+    -- accounts의 SELECT를 허용하는 모든 permissive 정책(polcmd 'r' = SELECT, '*' = ALL). 다른 정책이 하나라도 추가되면 광범위 노출을 놓치지 않도록 정확히 1개("계정 조회")만 허용한다.
+    select count(*) as cnt, bool_and(polname = '계정 조회') as only_expected_name
+      from pg_policy where polrelid = 'public.accounts'::regclass and polcmd in ('r', '*') and polpermissive
 ), t as (
     select c.oid, c.relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace
      where n.nspname = 'public' and c.relname = 'staff_candidate_search_attempts' and c.relkind = 'r'
@@ -37,6 +41,8 @@ with fn as (
                          and position('kr_phone_digits(a.phone)=v_digits' in n) > 0 and position('a.merged_intoisnull' in n) > 0 and position('a.deactivated_atisnull' in n) > 0
                          and position('left(v_digits,3)||''-****-''||right(v_digits,4)' in n) > 0 and position('ilike' in n) = 0 and position('like''%' in n) = 0 from body), false) as rpc_body_contract_ok,
         coalesce((select position('has_permission(p_center_id,''facility.staff.create'')' in n) < position('returnquery' in n) from body), false) as rpc_permission_before_read_ok,
+        -- accounts SELECT 허용 정책 전체: 정확히 1개이고 이름이 "계정 조회"(다른 permissive SELECT/ALL 정책이 추가되면 NOT_APPLIED)
+        coalesce((select cnt = 1 and only_expected_name from selpol), false)                                                as accounts_select_policies_exact_ok,
         -- accounts "계정 조회": 정책 1개(select), 전역 owner/staff.create 절 제거
         coalesce((select cnt = 1 and all_select from pol), false)                                                           as policy_single_select_ok,
         coalesce((select position('facility.staff.create' in q) = 0 and position('is_owner' in q) = 0 and position('role_permissions' in q) = 0 and position('center_roles' in q) = 0 from pol), false) as policy_global_staff_clause_removed_ok,
@@ -50,7 +56,7 @@ with fn as (
 select c.*,
        case when attempts_table_exists_ok and attempts_table_rls_ok and attempts_table_locked_ok and attempts_table_no_policies_ok and rpc_volatile_ok and rpc_rate_limit_logic_ok and rpc_permission_before_rate_limit_ok
                  and rpc_exists_ok and rpc_security_definer_ok and rpc_search_path_pinned_ok and rpc_anon_denied_ok and rpc_public_denied_ok and rpc_authenticated_allowed_ok
-                 and rpc_body_contract_ok and rpc_permission_before_read_ok and policy_single_select_ok and policy_global_staff_clause_removed_ok
+                 and rpc_body_contract_ok and rpc_permission_before_read_ok and accounts_select_policies_exact_ok and policy_single_select_ok and policy_global_staff_clause_removed_ok
                  and relation_self_and_linked_kept_ok and relation_managed_staff_kept_ok and relation_managed_members_kept_ok and kr_phone_digits_prereq_ok
             then 'APPLIED' else 'NOT_APPLIED' end as verdict
 from c;
