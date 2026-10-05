@@ -2,22 +2,25 @@
 
 ## 2026-10-04 post-release 보안/DB 후속 — Production 적용 대기 SQL (코드/SQL 준비 완료, 미적용)
 
-적용 권장 순서(한 번에 하나씩: 검토 → 실행 → verify → 다음). 각 파일은 독립 migration이며 rollback/verify가 짝으로 있다.
-1. `fix_staff_account_search_privacy_20261004.sql` — 웹 배포보다 먼저(웹이 먼저 나가면 스태프 검색이 "함수 없음" 오류). 선행: `add_member_candidate_search_20261003.sql`(kr_phone_digits).
-2. `fix_member_candidate_search_rate_limit_20261004.sql` — 선행: `add_member_candidate_search_20261003.sql`.
-3. `fix_reservations_privileges_minimize_20261003.sql`(미적용 시, 2026-10-03 파일) → `fix_reservations_remaining_privileges_20261004.sql`. 통합 테스트 정리 변경과 함께.
-4. (조건부) `fix_alimtalk_template_code_unique.sql` — verify가 `NOT_APPLIED`이고 중복 0일 때만.
-5. (조건부) `add_internal_qa_center_flag.sql` — QA 센터 비가시화가 필요할 때(변경 없음, `verify_add_internal_qa_center_flag_20261004.sql`로 확인). 선행: `my_center_ids_any_status`(live).
-- 진단 전용(읽기 전용): `verify_reservation_membership_kst_dates_20261004.sql`.
-- **P3**: `rooms`/`reviews`/`center_reviews`는 `using (true)` 공개 SELECT라 `is_internal` QA 센터의 행도 anon이 목록으로 조회할 수 있다(QA fixture는 이 테이블에 데이터를 만들지 않아 현재 노출 없음 — QA fixture가 rooms/reviews를 만들기 전에 정책 보강 필요).
+이미 Production 적용 완료(재실행 금지): `fix_reservations_privileges_minimize_20261003.sql`, `fix_grant_schedule_and_kst_dates_20261003.sql`(verify `APPLIED` 확인, 사용자 확인 2026-10-05), `add_member_candidate_search_20261003.sql`, `fix_reservation_integrity_20261003.sql`, `fix_pg_order_refund_kst_dates_20261004.sql`, `add_profiles_active_primary_unique_20261004.sql` 등.
+
+적용 권장 순서(한 번에 하나씩: read-only verify → 검토 → 실행 → verify → 다음). 각 파일은 독립 migration이며 rollback/verify가 짝으로 있다.
+1. `fix_staff_account_search_privacy_20261004.sql` — 스태프 검색 RPC + accounts RLS 축소 + 전체 번호 exact-search 시도 rate limit(전용 테이블 `staff_candidate_search_attempts`). 웹 배포보다 먼저(웹이 먼저 나가면 스태프 검색이 "함수 없음" 오류). 선행: `add_member_candidate_search_20261003.sql`(적용됨).
+2. `fix_member_candidate_search_rate_limit_20261004.sql` — 회원 검색의 **전체 번호 exact-search 시도 자체**를 제한(외부 계정이 실제로 매칭됐는지와 무관). 선행: `add_member_candidate_search_20261003.sql`(적용됨). 1번과 독립(테이블 분리).
+3. `fix_reservations_remaining_privileges_20261004.sql` — authenticated DELETE / anon SELECT 회수. 실행 전 `verify_reservations_privileges_minimize_20261003.sql`로 기존 minimize 상태를 read-only 확인(그 verify는 이 migration 적용 후에는 NOT_APPLIED가 정상). 통합 테스트 정리 변경과 함께.
+4. (조건부) alimtalk 중복 방지: ① `verify_alimtalk_template_uniqueness_20261004.sql`(READ-ONLY) 먼저 → ② 이미 `APPLIED`면 아무것도 실행하지 않음 → ③ `NOT_APPLIED`이고 `duplicate_code_groups = 0`일 때만 기존 `fix_alimtalk_template_code_unique.sql` 실행 → ④ 중복이 있으면 자동 삭제/병합 없이 중단하고 `duplicate_codes`를 운영에서 정리.
+5. (조건부) QA 센터 비가시화 — 반드시 이 순서: `add_internal_qa_center_flag.sql`(verify: `verify_add_internal_qa_center_flag_20261004.sql`) → `fix_internal_qa_center_public_relations_20261004.sql`(rooms/center_reviews/reviews[센터 대상]/center_contacts/center_holidays/center_member_fields/center_settings/progress_categories/community_posts/class_trainers/class_allowed_products/membership_schedule_rules의 SELECT 정책에서 내부 센터 행 제외; verify: `verify_internal_qa_center_public_relations_20261004.sql`). 선행 helper: `my_center_ids_any_status`(live), 플랫폼 관리자 helper.
+- 진단 전용(읽기 전용): `verify_reservation_membership_kst_dates_20261004.sql`(기대 `CLEAN`).
+- 참고: 실제 Supabase 통합 테스트는 이 환경에서 실행하지 못했다(자격증명 없음) — fixture 정리 변경(service_role 전환)은 정적 검토만.
+
 
 ## 2026-10-03 post-release follow-up 이후 남은 것
 
 - ~~**P1 / PG·환불·주문 날짜 KST 정합성**~~ — **완료(2026-10-04 Production 적용 완료, verify `APPLIED` 확인)**: `fix_pg_order_refund_kst_dates_20261004.sql`(+`rollback_`/`verify_pg_order_refund_kst_dates_20261004.sql`)가 `_issue_membership_and_record_payment`/`fulfill_order`의 시작일·days형 만료와 `_refund_membership_core`의 남은 활성 수강권 판정을 KST 기준으로 정리했다. Production verify: `*_kst_*_ok`/`*_behavior_preserved_ok`/보안(`all_security_definer_ok`, `all_search_path_pinned_ok`, `internal_helpers_not_executable_ok`, `fulfill_order_execute_contract_ok`)·`three_functions_exist_ok` 전부 true, `info_remaining_current_date_functions = evaluate_notification_rules`(알림 cron 함수 — 이번 범위 밖, 실행 시각이 UTC 00:00 = KST 09:00이라 날짜가 일치).
 - **P2(승인 필요)**: 이미 존재하는 reservations의 membership_consumed 모순 보정 — 2026-10-03 Production 읽기 전용 확인 기준 reservations 1건(취소), 대기/모순 0건이라 보정 대상 없음. 이후 데이터가 쌓이면 `diagnose_membership_consumed_20261003.sql`(읽기 전용)로 건수를 확인하고, 보정 UPDATE는 별도 승인 후에만.
-- ~~**P2**: accounts "계정 조회" RLS 정책이 owner/`facility.staff.create` 권한자에게 accounts 전체 SELECT 허용~~ — **코드/SQL 준비 완료(2026-10-04, Production SQL 미적용)**: `fix_staff_account_search_privacy_20261004.sql`(RPC `search_staff_candidates` + 전역 절 제거). 적용 후 `verify_fix_staff_account_search_privacy_20261004.sql` `APPLIED` 확인 필요.
-- ~~**P2**: 회원 추가 검색 번호 열거 rate limit 없음~~ — **코드/SQL 준비 완료(2026-10-04, Production SQL 미적용)**: `fix_member_candidate_search_rate_limit_20261004.sql`(정확 번호 검색만 계정·센터당 10분 30회 + 계정당 24시간 200회, 서버 강제). 적용 후 `verify_member_candidate_search_rate_limit_20261004.sql` 확인 필요. 센터 회원의 전화 부분검색/전체 번호는 customer.member.phone 권한자에게만 허용(2026-10-03 보완).
-- ~~**P3**: reservations anon SELECT / authenticated DELETE 권한 유지~~ — **코드/SQL 준비 완료(2026-10-04, Production SQL 미적용)**: `fix_reservations_remaining_privileges_20261004.sql`(앱 런타임 직접 사용 없음 근거: 삭제는 SECURITY DEFINER RPC/service_role, anon 조회 경로 없음). 선행: `fix_reservations_privileges_minimize_20261003.sql`. 통합 테스트 fixture 정리는 service_role로 전환.
+- ~~**P2**: accounts "계정 조회" RLS 정책이 owner/`facility.staff.create` 권한자에게 accounts 전체 SELECT 허용~~ — **코드/SQL 준비 완료(2026-10-04, Production SQL 미적용)**: `fix_staff_account_search_privacy_20261004.sql`(RPC `search_staff_candidates` + 전역 절 제거 + 전체 번호 시도 rate limit). 적용 후 `verify_fix_staff_account_search_privacy_20261004.sql` `APPLIED` 확인 필요.
+- ~~**P2**: 회원 추가 검색 번호 열거 rate limit 없음~~ — **코드/SQL 준비 완료(Production SQL 미적용)**: `fix_member_candidate_search_rate_limit_20261004.sql` — 전체 번호 exact-search 시도 자체를 계정·센터당 10분 30회 + 계정당 24시간 200회로 서버 강제(외부 계정 매칭 여부와 무관하게 세어 결과 유무가 새지 않음). 스태프 검색도 같은 기준(`fix_staff_account_search_privacy_20261004.sql`에 포함). 센터 회원의 전화 부분검색/전체 번호는 customer.member.phone 권한자에게만 허용(2026-10-03 보완).
+- ~~**P3**: reservations anon SELECT / authenticated DELETE 권한 유지~~ — **코드/SQL 준비 완료(2026-10-04, Production SQL 미적용)**: `fix_reservations_remaining_privileges_20261004.sql`(앱 런타임 직접 사용 없음 근거: 삭제는 SECURITY DEFINER RPC/service_role, anon 조회 경로 없음). 선행 `fix_reservations_privileges_minimize_20261003.sql`은 Production 적용 완료. 통합 테스트 fixture 정리는 service_role로 전환.
 
 ## 2026-10-03 출시 전 QA 후속
 
@@ -26,7 +29,7 @@
 
 ## 2026-10-03 예약 무결성 follow-up
 
-- **P1(Production 적용 확인 필요)**: F6 — `manager_grant_product` bound 요일/시간 검증은 `fix_grant_schedule_and_kst_dates_20261003.sql`로 코드/SQL 반영됨(CHANGELOG 2026-10-03). Production 적용 여부는 `verify_grant_schedule_and_kst_dates_20261003.sql`로 확인 후 완료 처리(이 저장소만으로는 적용 증거 없음).
+- ~~**P1**: F6 — `manager_grant_product`가 상품 예약조건에 없는 bound 요일/시간으로도 지급할 수 있음~~ — **완료(Production 적용 완료, verify `APPLIED` 확인 — 사용자 확인 2026-10-05)**: `fix_grant_schedule_and_kst_dates_20261003.sql`. 재실행 금지.
 - ~~**P2**: `cancel_reservation` 등 다른 함수의 `current_date`(DB UTC)~~ — **저장소 lineage 전수 조사 완료(2026-10-04)**: 수강권 유효성 판정 함수(reserve_*, usable_memberships*, cancel_reservation 대기 승격, update_class_safe 정원 확대 승격, manager_grant_product, PG/환불)의 최종 정의는 모두 KST. 남은 `current_date`는 `evaluate_notification_rules`(UTC 00:00=KST 09:00 실행이라 일치, 의도적 유지)뿐. Production 라이브 정의 확인은 `verify_reservation_membership_kst_dates_20261004.sql`(읽기 전용, 기대 verdict `CLEAN`).
 - ~~**P2**: reservations 넓은 table grant 전반 감사~~ — `fix_reservations_privileges_minimize_20261003.sql`(INSERT/REFERENCES/TRIGGER) + `fix_reservations_remaining_privileges_20261004.sql`(authenticated DELETE, anon SELECT)로 코드/SQL 준비 완료(Production 적용 대기).
 
