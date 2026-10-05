@@ -16,12 +16,16 @@ with t(tbl, pol, helper) as (values
         ('membership_schedule_rules','예약조건 조회','product_rows_visible')
 ), q as (
     select t.tbl, t.helper,
-           (select count(*) from pg_policies p where p.schemaname = 'public' and p.tablename = t.tbl and p.cmd in ('SELECT', 'ALL')
-               and regexp_replace(lower(coalesce(p.qual, '')), '[\s()]+', '', 'g') in ('true', 'auth.role()=''authenticated''::text', 'auth.role()=''authenticated''', 'auth.uidisnotnull')) as trivial_left,
+           -- permissive SELECT/ALL 정책 중 "누구나/로그인 사용자 누구나" 조건. restrictive 정책은 노출을 넓히지 않으므로 세지 않는다.
+           -- 정규화: 소문자 → ::text 등 캐스트 제거 → 공백/괄호 제거. 그래서 auth.role() = 'authenticated'::text, (auth.role()='authenticated'), AUTH.ROLE( ) = 'authenticated' 가 모두 auth.role='authenticated' 로 같아진다.
+           (select count(*) from pg_policies p where p.schemaname = 'public' and p.tablename = t.tbl and p.cmd in ('SELECT', 'ALL') and p.permissive = 'PERMISSIVE'
+               and regexp_replace(regexp_replace(lower(coalesce(p.qual, '')), '::(text|character varying|varchar|uuid)', '', 'g'), '[\s()]+', '', 'g') in ('true', 'auth.role=''authenticated''', 'auth.uidisnotnull')) as trivial_left,
            (select count(*) from pg_policies p where p.schemaname = 'public' and p.tablename = t.tbl and p.cmd = 'SELECT' and p.qual ilike '%' || t.helper || '%') as helper_policies
       from t
 ), h as (
-    select p.proname, p.prosecdef, p.proconfig::text as cfg, p.oid
+    select p.proname, p.prosecdef, p.proconfig::text as cfg, p.oid,
+           -- 본문 정규화: 소문자, -- 주석 제거, 공백/괄호 제거, public. 제거
+           replace(regexp_replace(regexp_replace(lower(pg_get_functiondef(p.oid)), '--[^\n\r]*', '', 'g'), '[\s()]+', '', 'g'), 'public.', '') as n
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public' and p.proname in ('center_rows_visible', 'class_rows_visible', 'product_rows_visible')
 ), c as (
@@ -32,10 +36,22 @@ with t(tbl, pol, helper) as (values
         coalesce((select bool_and(trivial_left = 0) from q), false)                                                          as no_trivial_select_policy_left_ok,
         coalesce((select bool_and(helper_policies >= 1) from q), false)                                                      as helper_policy_present_ok,
         coalesce((select array_agg(tbl order by tbl) from q where trivial_left > 0 or helper_policies = 0), '{}'::text[])    as tables_needing_attention,
+        -- helper 본문 의미: center_rows_visible = (센터 없음 → 허용) / (centers.is_internal이 아니면 허용) / 내 회원 센터 / 내 관리 센터 / 플랫폼 관리자, class_/product_rows_visible = 부모 테이블에서 center_id를 찾아 center_rows_visible 호출
+        coalesce((select position('p_center_idisnull' in n) > 0 and position('fromcentersc' in n) > 0 and position('c.id=p_center_idandc.is_internal' in n) > 0
+                         and position('notexists' in n) > 0
+                         and position('p_center_idinselectmy_member_center_ids' in n) > 0 and position('p_center_idinselectmy_managed_center_ids' in n) > 0 and position('is_platform_admin' in n) > 0
+                         and position('p_center_idisnull' in n) < position('c.is_internal' in n) and position('c.is_internal' in n) < position('my_member_center_ids' in n)
+                         and position('my_member_center_ids' in n) < position('my_managed_center_ids' in n) and position('my_managed_center_ids' in n) < position('is_platform_admin' in n)
+                    from h where proname = 'center_rows_visible'), false)                                                    as center_helper_body_ok,
+        coalesce((select position('center_rows_visible' in n) > 0 and position('fromclassesc' in n) > 0 and position('c.id=p_class_id' in n) > 0 and position('c.center_id' in n) > 0
+                         and position('center_rows_visible' in n) < position('c.center_id' in n)
+                    from h where proname = 'class_rows_visible'), false)                                                     as class_helper_body_ok,
+        coalesce((select position('center_rows_visible' in n) > 0 and position('fromproductsp' in n) > 0 and position('p.id=p_product_id' in n) > 0 and position('p.center_id' in n) > 0
+                    from h where proname = 'product_rows_visible'), false)                                                   as product_helper_body_ok,
         -- reviews: 센터 대상 행만 규칙을 따르고 사람 대상(target_center_id is null) 행은 그대로(정책이 target_center_id 기반 helper 호출)
         coalesce((select bool_or(p.qual ilike '%center_rows_visible(target_center_id)%') from pg_policies p where p.schemaname = 'public' and p.tablename = 'reviews' and p.cmd = 'SELECT'), false) as reviews_person_target_kept_ok
 )
 select c.*,
-       case when helpers_exist_ok and helpers_secdef_pinned_ok and helpers_exec_ok and no_trivial_select_policy_left_ok and helper_policy_present_ok and reviews_person_target_kept_ok
+       case when helpers_exist_ok and helpers_secdef_pinned_ok and helpers_exec_ok and center_helper_body_ok and class_helper_body_ok and product_helper_body_ok and no_trivial_select_policy_left_ok and helper_policy_present_ok and reviews_person_target_kept_ok
             then 'APPLIED' else 'NOT_APPLIED' end as verdict
 from c;

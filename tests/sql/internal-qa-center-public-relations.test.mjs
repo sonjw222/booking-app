@@ -150,3 +150,79 @@ test('정적: migration은 SELECT 정책 12개 + helper 3개만(쓰기 정책/�
   const r = strip(rollback);
   for (const [t, [name, orig]] of Object.entries(POLICY)) assert.ok(r.includes(`create policy "${name}" on public.${t} for select using (${orig});`), t);
 });
+
+// ---- verify 강화(정규화 일치 / permissive만 / helper 본문 의미) ----
+const FN = (name, arg, body) => `create or replace function public.${name}(${arg}) returns boolean language sql stable security definer set search_path = public as $$ ${body} $$;`;
+const applied = async () => { const db = await world(); return db; };
+
+test('verify: 다른 이름으로 남은 옛 trivial SELECT 정책을 포맷(공백/괄호/대소문자/::text)과 무관하게 감지 → NOT_APPLIED', async () => {
+  const db = await world();
+  try {
+    const v = async () => (await db.query(verify)).rows[0];
+    assert.equal((await v()).verdict, 'APPLIED');
+    const variants = [
+      ["auth.role() = 'authenticated'", 'reviews'], ["(auth.role()='authenticated')", 'center_settings'], ["( ( auth.role( ) = 'authenticated' ) )", 'center_contacts'],
+      ["AUTH.ROLE() = 'authenticated'::text", 'center_holidays'], ["auth.uid() IS NOT NULL", 'progress_categories'], ["((auth.uid()) is not null)", 'center_member_fields'],
+      ["true", 'rooms'], ["(true)", 'center_reviews'], ["auth.role()::text = 'authenticated'::text", 'community_posts'],
+    ];
+    for (const [qual, t] of variants) {
+      await db.exec(`create policy "옛 정책 잔존" on ${t} for select using (${qual})`);
+      const r = await v();
+      assert.equal(r.verdict, 'NOT_APPLIED', `${t}: ${qual}`);
+      assert.ok(r.tables_needing_attention.includes(t), `${t}: ${qual} → ${r.tables_needing_attention}`);
+      assert.equal(r.no_trivial_select_policy_left_ok, false, qual);
+      await db.exec(`drop policy "옛 정책 잔존" on ${t}`);
+      assert.equal((await v()).verdict, 'APPLIED', `원복 ${t}`);
+    }
+    // permissive FOR ALL도 SELECT를 허용하므로 감지
+    await db.exec(`create policy "옛 ALL" on rooms for all using (true)`); assert.equal((await v()).verdict, 'NOT_APPLIED'); await db.exec(`drop policy "옛 ALL" on rooms`);
+    // 실제로도 OR로 새는 상태임을 확인(이 verify가 막으려는 상황)
+    await db.exec(`create policy "옛 정책 잔존" on class_trainers for select using (auth.role() = 'authenticated')`);
+    assert.ok((await labels(db, 'authenticated', STRANGER, 'class_trainers')).includes('QA'));
+    assert.equal((await v()).verdict, 'NOT_APPLIED');
+  } finally { await db.close(); }
+});
+
+test('verify: restrictive SELECT 정책과 쓰기 정책, 센터 조건이 있는 정책은 오탐하지 않는다', async () => {
+  const db = await world();
+  try {
+    const v = async () => (await db.query(verify)).rows[0];
+    await db.exec(`create policy "제한" on rooms as restrictive for select using (auth.role() = 'authenticated')`);       // restrictive는 노출을 넓히지 않음
+    await db.exec(`create policy "쓰기" on rooms for update using (true)`);
+    await db.exec(`create policy "관리자" on center_settings for select using (center_id in (select my_managed_center_ids()))`);
+    await db.exec(`create policy "로그인+센터" on reviews for select using (auth.role() = 'authenticated' and target_center_id is null)`);   // 단독 trivial이 아님
+    const r = await v(); assert.equal(r.verdict, 'APPLIED', JSON.stringify(r)); assert.deepEqual(r.tables_needing_attention, []);
+  } finally { await db.close(); }
+});
+
+test('verify: helper 본문 계약이 깨지면 NOT_APPLIED — 항상 true / is_internal·platform admin 검사 제거 / class·product 연결 제거, 재적용하면 APPLIED', async () => {
+  const db = await world();
+  try {
+    const v = async () => (await db.query(verify)).rows[0];
+    const r0 = await v(); assert.equal(r0.verdict, 'APPLIED'); assert.deepEqual([r0.center_helper_body_ok, r0.class_helper_body_ok, r0.product_helper_body_ok], [true, true, true]);
+    const tampers = [
+      ['center 항상 true', FN('center_rows_visible', 'p_center_id uuid', 'select true;'), 'center_helper_body_ok'],
+      ['center is_internal 검사 제거', FN('center_rows_visible', 'p_center_id uuid', 'select coalesce(p_center_id is null or p_center_id in (select public.my_member_center_ids()) or p_center_id in (select public.my_managed_center_ids()) or public.is_platform_admin(), false);'), 'center_helper_body_ok'],
+      ['center platform admin 제거', FN('center_rows_visible', 'p_center_id uuid', 'select coalesce(p_center_id is null or not exists (select 1 from public.centers c where c.id = p_center_id and c.is_internal) or p_center_id in (select public.my_member_center_ids()) or p_center_id in (select public.my_managed_center_ids()), false);'), 'center_helper_body_ok'],
+      ['center 회원 검사 제거', FN('center_rows_visible', 'p_center_id uuid', 'select coalesce(p_center_id is null or not exists (select 1 from public.centers c where c.id = p_center_id and c.is_internal) or p_center_id in (select public.my_managed_center_ids()) or public.is_platform_admin(), false);'), 'center_helper_body_ok'],
+      ['class 연결 제거(항상 true)', FN('class_rows_visible', 'p_class_id uuid', 'select true;'), 'class_helper_body_ok'],
+      ['class가 center helper 미호출', FN('class_rows_visible', 'p_class_id uuid', 'select exists (select 1 from public.classes c where c.id = p_class_id);'), 'class_helper_body_ok'],
+      ['product 연결 제거(항상 true)', FN('product_rows_visible', 'p_product_id uuid', 'select true;'), 'product_helper_body_ok'],
+      ['product가 products를 조회하지 않음', FN('product_rows_visible', 'p_product_id uuid', 'select public.center_rows_visible(null);'), 'product_helper_body_ok'],
+    ];
+    for (const [name, sql, flag] of tampers) {
+      await db.exec(sql);
+      const r = await v();
+      assert.equal(r[flag], false, `${name}: ${flag}`);
+      assert.equal(r.verdict, 'NOT_APPLIED', name);
+      await db.exec(migration);                                                      // 재적용(멱등)으로 복구
+      assert.equal((await v()).verdict, 'APPLIED', `복구 ${name}`);
+    }
+  } finally { await db.close(); }
+});
+
+test('verify: 단일 읽기 전용 SELECT 유지(DDL/DML/GRANT 없음)', () => {
+  const code = verify.replace(/'[^']*'/g, "''");   // 문자열 리터럴 제거 후 키워드 검사
+  assert.doesNotMatch(code, /\b(insert\s+into|update\s+\w+\s+set|delete\s+from|drop\s|alter\s|create\s|truncate\s|grant\s|revoke\s)/i);
+  assert.equal(verify.trim().split(';').filter(x => x.trim()).length, 1);
+});
