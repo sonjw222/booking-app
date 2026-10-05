@@ -177,6 +177,49 @@ describe("모바일 safe-area 레이아웃(headless Chromium, inset 시뮬레이
     }
   });
 
+  describe("관리자/운영자 중첩 shell — 바깥 chrome이 safe-area를 처리하므로 page-state 시작점을 다시 적용하지 않는다", () => {
+    const managerShell = (inner: string) => `<div class="manager-v3"><header class="manager-chrome"><div class="manager-chrome-main"><div class="app-chrome-title"><h1 id="chrome">대시보드</h1></div></div></header><main class="manager-v3-content"><div class="app-shell" id="shell">${inner}</div></main></div>`;
+    const adminShell = (inner: string) => `<div class="admin-v3"><header class="admin-chrome"><div class="app-chrome-title"><h1 id="chrome">운영자</h1></div></header><main class="admin-v3-content"><div class="app-shell" id="shell">${inner}</div></main></div>`;
+    const empty = renderToStaticMarkup(h(EmptyState, { icon: "building", title: "관리할 센터가 없어요", description: "센터를 등록해 주세요." }));
+    const err = renderToStaticMarkup(h(ErrorState, { title: "관리 화면을 불러오지 못했어요", description: "x", action: h("a", { className: "primary-btn", href: "#" }, "다시 시도") }));
+    const loading = renderToStaticMarkup(h(Loading, {}));
+    const notice = `<div class="holiday-notice page-state-top"><div class="holiday-chip">안내</div></div>`;
+    const cases: [string, (i: string) => string, string, string][] = [
+      ["manager Loading", managerShell, loading, ".loading-skeleton-title"], ["manager EmptyState", managerShell, empty, ".app-empty-icon"], ["manager ErrorState", managerShell, err, ".app-empty-icon"],
+      ["admin Loading", adminShell, loading, ".loading-skeleton-title"], ["admin EmptyState", adminShell, empty, ".app-empty-icon"], ["admin ErrorState", adminShell, err, ".app-empty-icon"],
+    ];
+    it("실제 중첩 DOM: chrome 아래 첫 콘텐츠 간격이 기존(≤ 40px)이고 top inset 0/20/47/59/62에서 달라지지 않는다(이중 safe-area 없음)", async (ctx) => {
+      if (!browser) return ctx.skip();
+      for (const [name, wrap, inner, sel] of cases) for (const [vw, vh] of [[375, 812], [430, 932], [320, 568]] as const) {
+        const gaps: number[] = [];
+        for (const inset of INSETS) {
+          await page.setViewportSize({ width: vw, height: vh });
+          await page.setContent(html(wrap(inner), inset));
+          await page.evaluate(() => scrollTo(0, 0));   // sticky chrome의 viewport 좌표와 scrollY를 섞지 않도록 맨 위에서 측정
+          const chrome = await box(".manager-chrome, .admin-chrome");
+          const first = await box(sel);
+          gaps.push(first.top - chrome.bottom);
+          expect(first.top - chrome.bottom, `${name} ${vw}x${vh} top${inset.top}: chrome과 첫 콘텐츠 사이가 과도`).toBeLessThan(70);
+          await common(vw, vh);
+        }
+        expect(Math.max(...gaps) - Math.min(...gaps), `${name} ${vw}x${vh}: top inset에 따라 간격이 변함(safe-area 이중 적용)`).toBeLessThanOrEqual(1);
+      }
+    }, 120_000);
+    it("중첩 shell의 padding/margin은 원래 값 그대로(Loading 30px, EmptyState 32px 중앙 정렬 min-height 유지, page-state-top 6px)이고 최상위 shell은 새 규칙이 적용된다", async (ctx) => {
+      if (!browser) return ctx.skip();
+      await page.setViewportSize({ width: 390, height: 844 });
+      const read = (sel: string) => page.evaluate((s) => { const cs = getComputedStyle(document.querySelector(s)!); return { pt: parseFloat(cs.paddingTop), mt: parseFloat(cs.marginTop), mh: parseFloat(cs.minHeight), jc: cs.justifyContent }; }, sel);
+      for (const wrap of [managerShell, adminShell]) {
+        await page.setContent(html(wrap(loading), { top: 59, bottom: 34 })); expect((await read(".loading-wrap")).pt).toBe(30);
+        await page.setContent(html(wrap(empty), { top: 59, bottom: 34 })); const e = await read(".app-empty-state"); expect([e.pt, e.mh, e.jc]).toEqual([32, 240, "center"]);
+        await page.setContent(html(wrap(notice), { top: 59, bottom: 34 })); expect((await read(".page-state-top")).mt).toBe(6);
+      }
+      await page.setContent(html(`<div class="app-shell">${loading}</div>`, { top: 59, bottom: 34 })); expect((await read(".loading-wrap")).pt).toBeGreaterThanOrEqual(59 + 16);
+      await page.setContent(html(`<div class="app-shell">${notice}</div>`, { top: 59, bottom: 34 })); expect((await read(".page-state-top")).mt).toBeGreaterThanOrEqual(59 + 16);
+      // 최상위 사용자 화면이 manager/admin 이름의 조상 아래에 있지 않은 한 규칙이 그대로 적용(예약/마이 비로그인 회귀 테스트가 별도로 검증)
+    });
+  });
+
   it("ErrorState도 같은 첫 화면 규칙을 따른다(헤더 없는 에러 화면)", async (ctx) => {
     if (!browser) return ctx.skip();
     await page.setViewportSize({ width: 390, height: 844 });
@@ -190,7 +233,7 @@ describe("정적 계약(Chromium 불필요)", () => {
   it("Production CSS는 env(safe-area-inset-*) 기반 토큰만 쓰고, 기기별 숫자/미디어쿼리/!important가 이 규칙에 없다", () => {
     expect(css).toMatch(/--safe-top:\s*env\(safe-area-inset-top\)/);
     expect(css).toMatch(/--page-state-top:\s*calc\(var\(--safe-top, 0px\) \+ var\(--page-top-gap\) \+ clamp\(24px, 6dvh, 56px\)\)/);
-    const block = css.slice(css.indexOf("헤더가 없는 전체 화면 상태"), css.indexOf(".app-shell > .page-state-top:first-child"));
+    const block = css.slice(css.indexOf("헤더가 없는 전체 화면 상태"), css.indexOf(".page-state-top:first-child {"));
     expect(block).not.toMatch(/!important|iphone|@media|\b(47|59|62)px/i);
     expect(css).toMatch(/\.app-shell \{ padding-bottom: max\(104px, calc\(var\(--floating-nav-clearance\) \+ 16px\)\); \}/);
   });
@@ -198,6 +241,14 @@ describe("정적 계약(Chromium 불필요)", () => {
     const src = readFileSync(path.resolve(__dirname, "../../app/mypage/page.tsx"), "utf8");
     expect(src).toContain('className="holiday-notice page-state-top"');
     expect(src).not.toMatch(/holiday-notice[^>]*marginTop/);
+  });
+  it("관리자/운영자 layout 구조 가정: chrome + .manager-v3-content/.admin-v3-content 본문, manager/admin에는 자체 loading/error 경계가 없어 .system-state-v2·route-loading은 layout 바깥(최상위)에서만 렌더된다", () => {
+    const mgr = readFileSync(path.resolve(__dirname, "../../app/manager/layout.tsx"), "utf8");
+    const adm = readFileSync(path.resolve(__dirname, "../../app/admin/layout.tsx"), "utf8");
+    expect(mgr).toMatch(/<ManagerChrome \/>[\s\S]*<main className="manager-v3-content">/);
+    expect(adm).toMatch(/<AdminChrome \/><main className="admin-v3-content">/);
+    for (const f of ["manager/loading.tsx", "manager/error.tsx", "admin/loading.tsx", "admin/error.tsx"]) expect(existsSync(path.resolve(__dirname, "../../app", f)), f).toBe(false);
+    expect(css).toMatch(/\.manager-chrome \{[^}]*padding: max\(18px,var\(--safe-top\)\)/);
   });
   it("viewport-fit=cover 유지(safe-area env 값이 채워지는 전제)", () => {
     expect(readFileSync(path.resolve(__dirname, "../../app/layout.tsx"), "utf8")).toMatch(/viewportFit:\s*"cover"/);
