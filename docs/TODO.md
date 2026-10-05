@@ -1,5 +1,9 @@
 # TODO
 
+## 2026-10-05 모바일 safe-area 실기기 확인
+- **P1 / 실기기 확인 필요**: iPhone 16 / 17 Pro Max(가능하면 작은 iPhone, Android 제스처 내비)에서 예약·마이 비로그인 화면의 상단 여백, 하단 nav 겹침, 글자 크기 확대 확인. 자동 검증(Chromium + inset 시뮬레이션)은 완료했으나 실기기 WKWebView/Capacitor 확인은 수동 QA로 남김.
+- **P3**: `daylist-empty`(인라인 paddingTop 40/60/80)를 쓰는 관리자/체크아웃 결과 화면 약 30곳은 clipping은 없지만(≥40px, 대부분 헤더 뒤) 매직 넘버라 공통 토큰으로 정리할 여지가 있다 — 이번 범위에서는 변경하지 않음.
+
 ## 2026-10-03 post-release follow-up 이후 남은 것
 
 - ~~**P1 / PG·환불·주문 날짜 KST 정합성**~~ — **완료(2026-10-04 Production 적용 완료, verify `APPLIED` 확인)**: `fix_pg_order_refund_kst_dates_20261004.sql`(+`rollback_`/`verify_pg_order_refund_kst_dates_20261004.sql`)가 `_issue_membership_and_record_payment`/`fulfill_order`의 시작일·days형 만료와 `_refund_membership_core`의 남은 활성 수강권 판정을 KST 기준으로 정리했다. Production verify: `*_kst_*_ok`/`*_behavior_preserved_ok`/보안(`all_security_definer_ok`, `all_search_path_pinned_ok`, `internal_helpers_not_executable_ok`, `fulfill_order_execute_contract_ok`)·`three_functions_exist_ok` 전부 true, `info_remaining_current_date_functions = evaluate_notification_rules`(알림 cron 함수 — 이번 범위 밖, 실행 시각이 UTC 00:00 = KST 09:00이라 날짜가 일치).

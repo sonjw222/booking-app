@@ -107,7 +107,7 @@ export default function MyPage() {
   if (error) {
     return (
       <div className="app-shell">
-        <div className="holiday-notice" style={{ marginTop: 60 }}>
+        <div className="holiday-notice page-state-top">
           <div className="holiday-chip"><span className="hc-dot" />{error}</div>
         </div>
         <div style={{ padding: 20 }}>
