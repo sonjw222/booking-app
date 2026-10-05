@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-10-05 — 모바일 safe-area 공통 레이아웃 정리 (Web CSS/React만, SQL/native/Edge Function 변경 없음)
+- 원인: 헤더가 없는 전체 화면 상태(비로그인 "로그인이 필요해요" `EmptyState`, 마이 비로그인 안내 카드, 첫 자식 로딩 스켈레톤)가 `env(safe-area-inset-top)`을 전혀 반영하지 않았다 — `.app-empty-state`는 `min-height:240px` + 상단 padding 32px(아이콘이 y≈32px에서 시작), 마이는 `margin-top:60px` 인라인 고정값. safe-area가 59~62px인 Dynamic Island iPhone에서 아이콘/카드가 상태바 영역에 겹쳐 잘리거나(16), 안 잘려도 상단에 몰려 보였다(17 Pro Max).
+- 공통 토큰 `--page-top-gap`(16px, 디자인 최소 여백)·`--page-state-top`(= safe-top + gap + clamp(24px, 6dvh, 56px))을 추가하고, `.app-shell`의 첫 자식 `EmptyState/ErrorState/Loading/.page-state-top`만 이 시작점을 쓰게 했다(헤더 뒤 상태 화면은 그대로 — safe-area 이중 적용 없음). 기기별 숫자/미디어쿼리/UA 분기 없음, 큰 화면에서도 정중앙으로 내려가지 않음.
+- 마이 비로그인: 인라인 `marginTop:60` → `page-state-top` 클래스. `.system-state-v2`(error/not-found)는 상단/하단 safe-area padding 추가. `.app-shell` 하단 여백 104px 고정 → `max(104px, nav clearance + 16px)`(제스처 바 등 큰 bottom inset에서 마지막 콘텐츠가 nav에 가리던 것 방지, 일반 기기는 기존과 동일).
+- 테스트: `tests/unit/mobileSafeAreaLayout.test.ts` — 실제 CSS/컴포넌트를 headless Chromium에서 10개 대표 viewport × 5개 inset 조합(env() 치환으로 시뮬레이션)으로 검증(수정 전 CSS는 실패 확인).
+
 ## 2026-10-04 — 관리자 +회원 검색 클라이언트 안정화 (Web only, SQL/native 변경 없음)
 - 서버 `search_member_candidates`가 Production에서 정상 결과를 돌려주는 것을 직접 확인(이번 변경은 클라이언트만). +회원 시트를 `MemberAddSheet`로 분리: 최신 요청만 반영(sequence), 같은 검색의 in-flight 중복(Enter 연타) 차단, 검색 시작 시 센터/검색어 snapshot, 센터 전환 시 이전 센터 결과/응답 폐기, 오류를 시트 안에 표시(이전 결과 제거), 0건/오류/검색 전 메시지 구분.
 - 이미 등록된 회원은 "이미 이 센터에 등록된 회원이에요"로 이름·번호와 함께 명확히 표시, 대상 센터 이름을 시트에 표시, 검색 시작 시 입력칸 blur(모바일 키보드가 결과를 가리지 않게), 하단 safe-area 확보.
