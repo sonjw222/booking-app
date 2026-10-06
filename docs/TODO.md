@@ -3905,7 +3905,7 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 - [ ] 완료되지 않은 하위 작업을 숨기지 않고 별도 TODO로 남겼다.
 
 ## 정적 감사 후속 (2026-10-07, docs/STATIC_AUDIT_20261007.md)
-- [ ] P2: `sync-test-payment-center-member.test.ts` 정리 훅 보강
+- [x] `sync-test-payment-center-member.test.ts` 세션 정리 훅 추가(bootstrap 브랜치)
 - [ ] P2: UI `e.message` 원문 노출(약 223곳) 공통 에러 변환 도입(승인 필요한 대규모 변경)
 - [ ] P3: 남은 UTC 날짜 slice(KST 새벽 위험) — safe-followups 병합 후 재감사
 - [ ] P3: `div onClick` 67곳 role/키보드 접근성 점검, `NEXT_PUBLIC_PORTONE_STORE_ID` 잔재 확인

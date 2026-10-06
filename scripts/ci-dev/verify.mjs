@@ -1,19 +1,63 @@
 #!/usr/bin/env node
-// READ-ONLY 검증: service role로 SELECT만 수행. Production이면 시작 전에 중단. 사용: npm run ci:dev:verify
+// READ-ONLY 검증(SELECT/GET만). Production이면 네트워크 호출 전에 중단. 출력은 PASS / MISSING / MISMATCH / SKIP.
+//   npm run ci:dev:verify            전체(스키마 + fixture)
+//   node scripts/ci-dev/verify.mjs --schema   스키마 단계만
+import { pathToFileURL } from "node:url";
 import { requireNonProductionOrExit, FIXTURE_ACCOUNTS } from "./requiredEnv.mjs";
-requireNonProductionOrExit(process.env);
-const base = process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/+$/, ""), key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const get = async (path) => { const r = await fetch(`${base}/rest/v1/${path}`, { headers: { apikey: key, Authorization: `Bearer ${key}` } }); return { status: r.status, body: r.ok ? await r.json() : null }; };
-const rows = [];
-const check = (name, ok, hint = "") => { rows.push({ name, ok }); console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok || !hint ? "" : "  → " + hint}`); };
+import { FIXTURE_CENTER_NAME, FIXTURE_PRODUCT_NAME, makeClient, projectRefFromUrl, scanUsage } from "./lib.mjs";
 
-const c = await get(`centers?select=id&id=eq.${encodeURIComponent(process.env.TEST_CENTER_ID)}`);
-check("TEST_CENTER_ID 센터 존재", c.body?.length === 1, "schema/seed 적용 여부 확인");
-const p = await get(`products?select=id,center_id&id=eq.${encodeURIComponent(process.env.TEST_PRODUCT_ID)}`);
-check("TEST_PRODUCT_ID 상품이 TEST_CENTER_ID 소속", p.body?.length === 1 && p.body[0].center_id === process.env.TEST_CENTER_ID);
-const ur = await fetch(`${base}/auth/v1/admin/users?per_page=1000`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
-const emails = new Set(ur.ok ? ((await ur.json()).users ?? []).map((u) => String(u.email).toLowerCase()) : []);
-for (const a of FIXTURE_ACCOUNTS) check(`fixture 계정 ${a} 존재(auth)`, emails.has(String(process.env[`TEST_${a}_EMAIL`]).toLowerCase()), "npm run ci:dev:seed 또는 수동 생성");
-const failed = rows.filter((r) => !r.ok).length;
-console.log(failed ? `\n${failed}개 실패` : "\n모두 통과");
-process.exit(failed ? 1 : 0);
+// seed가 쓰는 컬럼(없으면 스키마가 다르다는 뜻 → seed 전에 중단해야 함)
+export const SEED_COLUMNS = {
+  accounts: ["id", "auth_id", "name", "is_member", "is_manager"], profiles: ["id", "account_id", "name", "is_primary"],
+  centers: ["id", "name", "status"], products: ["id", "center_id", "name", "price", "product_kind", "pass_type", "total_count", "is_on_sale", "is_active"],
+};
+// 이름이 코드 규약으로 고정된 핵심 테이블(+테스트가 직접 쓰는 테이블은 정적 스캔으로 추가)
+export const CORE_TABLES = ["accounts", "profiles", "centers", "center_roles", "manager_centers", "center_members", "products", "memberships", "orders", "payments", "classes", "reservations", "center_settings", "notifications"];
+
+export async function verifySchema({ client, root = process.cwd(), report }) {
+  const o = await client.openapi();
+  if (!o.ok || !o.json?.definitions) { report("MISMATCH", "PostgREST OpenAPI 조회", `HTTP ${o.status} — service role 키/URL 확인`); return false; }
+  const defs = o.json.definitions, paths = Object.keys(o.json.paths ?? {});
+  const tests = scanUsage(root, ["tests/integration", "tests/e2e"]);
+  for (const t of [...new Set([...CORE_TABLES, ...tests.tables])]) report(defs[t] ? "PASS" : "MISSING", `table ${t}`, defs[t] ? "" : "schema baseline 필요");
+  for (const [t, cols] of Object.entries(SEED_COLUMNS)) if (defs[t]) for (const c of cols) if (!defs[t].properties?.[c]) report("MISMATCH", `column ${t}.${c}`, "seed가 쓰는 컬럼이 없음");
+  for (const r of tests.rpcs) report(paths.includes(`/rpc/${r}`) ? "PASS" : "MISSING", `rpc ${r}`, "테스트가 호출하는 함수");
+  report("SKIP", "RLS 활성 여부 / GRANT", "PostgREST로 조회 불가 — SQL 편집기에서 별도 확인(docs/CI_DEV_SUPABASE_SETUP.md)");
+  return true;
+}
+
+export async function verifyFixtures({ client, env, report }) {
+  const users = await client.listUsers(); const byEmail = new Map((users.json?.users ?? []).map((u) => [String(u.email).toLowerCase(), u]));
+  for (const a of FIXTURE_ACCOUNTS) {
+    const u = byEmail.get(String(env[`TEST_${a}_EMAIL`]).toLowerCase());
+    if (!u) { report("MISSING", `auth user ${a}`, "ci:dev:seed"); continue; }
+    report(u.email_confirmed_at ? "PASS" : "MISMATCH", `auth user ${a}${u.email_confirmed_at ? "" : " (이메일 미확인)"}`);
+    const acc = await client.select("accounts", `select=id&auth_id=eq.${u.id}`); const accountId = acc.json?.[0]?.id;
+    report(accountId ? "PASS" : "MISSING", `account ${a}`);
+    if (accountId) { const p = await client.select("profiles", `select=id&account_id=eq.${accountId}&is_primary=eq.true`); report(p.json?.length === 1 ? "PASS" : p.json?.length ? "MISMATCH" : "MISSING", `primary profile ${a}`); }
+  }
+  const c = await client.select("centers", `select=id,status&id=eq.${encodeURIComponent(env.TEST_CENTER_ID)}`);
+  const center = c.json?.[0];
+  report(center ? (center.status === "approved" ? "PASS" : "MISMATCH") : "MISSING", "TEST_CENTER_ID 센터" + (center && center.status !== "approved" ? ` (status=${center.status}, approved 필요)` : ""));
+  const p = await client.select("products", `select=id,center_id,price,is_active,is_on_sale,product_kind&id=eq.${encodeURIComponent(env.TEST_PRODUCT_ID)}`);
+  const prod = p.json?.[0];
+  if (!prod) report("MISSING", "TEST_PRODUCT_ID 상품");
+  else report(prod.center_id === env.TEST_CENTER_ID && prod.is_active && prod.is_on_sale && prod.product_kind === "pass" ? "PASS" : "MISMATCH", "TEST_PRODUCT_ID 상품(TEST_CENTER_ID 소속·활성·판매중·pass)");
+  report("SKIP", "매니저/스태프 센터 연결", "테스트가 직접 만들고 정리함(getOrCreateOwnedTestCenter/inviteStaff) — fixture 불필요");
+}
+
+export function makeReporter(print = console.log) {
+  const rows = [];
+  return { rows, report: (status, name, hint = "") => { rows.push({ status, name }); if (status !== "PASS" || process.env.CI_DEV_VERBOSE === "1") print(`${status.padEnd(8)} ${name}${hint ? `  → ${hint}` : ""}`); },
+    summary: () => { const n = (s) => rows.filter((r) => r.status === s).length; return `PASS ${n("PASS")} · MISSING ${n("MISSING")} · MISMATCH ${n("MISMATCH")} · SKIP ${n("SKIP")}`; }, failed: () => rows.some((r) => r.status === "MISSING" || r.status === "MISMATCH") };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  requireNonProductionOrExit(process.env, { forSeed: process.argv.includes("--schema") });
+  if (!projectRefFromUrl(process.env.NEXT_PUBLIC_SUPABASE_URL)) { console.error("ci-dev verify: URL 형식 오류"); process.exit(1); }
+  const client = makeClient(process.env), r = makeReporter();
+  await verifySchema({ client, report: r.report });
+  if (!process.argv.includes("--schema")) await verifyFixtures({ client, env: process.env, report: r.report });
+  console.log("\n" + r.summary()); console.log("(PASS 항목은 CI_DEV_VERBOSE=1 로 모두 출력)");
+  process.exit(r.failed() ? 1 : 0);
+}

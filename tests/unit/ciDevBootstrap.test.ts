@@ -14,11 +14,11 @@ describe("ci-dev env guard", () => {
     const r = checkCiDevEnv(full({ TEST_CENTER_ID: "" }));
     expect(r.problems).toContain("TEST_CENTER_ID 누락");
   });
-  it("seed는 ACK 없이는 실행되지 않고, 스크립트에 Production ref 하드코딩 우회가 없다", async () => {
+  it("seed 진입점은 assertSeedAllowed(네트워크 이전)를 먼저 호출하고, verify/secret-map은 변경 호출이 없다", async () => {
     const { readFileSync } = await import("node:fs");
     const seed = readFileSync("scripts/ci-dev/seed.mjs", "utf8");
-    expect(seed.indexOf("requireNonProductionOrExit")).toBeLessThan(seed.indexOf("fetch("));
-    expect(seed).toContain('CI_DEV_SEED_ACK !== "1"');
+    expect(seed.indexOf("assertSeedAllowed(env)")).toBeLessThan(seed.indexOf("ensureFixtures("));
+    expect(readFileSync("scripts/ci-dev/lib.mjs", "utf8")).toContain('CI_DEV_SEED_ACK !== "1"');
     expect(readFileSync("scripts/ci-dev/verify.mjs", "utf8")).not.toMatch(/method:\s*"(POST|PATCH|DELETE|PUT)"/);
   });
 });

@@ -3,7 +3,7 @@
 코드 변경 없이 `origin/main`(0be4808)을 grep으로 점검한 결과. 다른 브랜치(maintenance-refresh, safe-followups d6c098e의 KST 클라이언트 날짜 수정, manager-workflow-refresh)와 겹치지 않도록 수정은 하지 않고 목록만 남긴다. 숫자는 grep 기준 추정치이며 오탐 가능.
 
 ## 9. fixture 격리 (tests/integration, tests/e2e)
-- 통합 테스트 48개 중 `afterAll/afterEach` 정리가 있는 파일 54건 매칭(파일 수 기준 거의 전부). **정리 훅이 없는 파일: `sync-test-payment-center-member.test.ts`** → 실패 시 잔여 row 가능성(우선 확인 대상).
+- 통합 테스트 48개 중 `afterAll/afterEach` 정리가 있는 파일 54건 매칭(파일 수 기준 거의 전부). 정리 훅이 없던 유일한 파일 `sync-test-payment-center-member.test.ts`에는 `afterAll(signOutTestSession)`을 추가했다(2026-10-07 후속, bootstrap 브랜치; 상세 `docs/CI_DEV_FIXTURE_DEPENDENCIES.md`).
 - 고유 이름은 `Date.now()` 113회, `Math.random()` 19회, `randomUUID()` 12회 사용. `Math.random()`/`Date.now()` 접미사는 충돌 가능성이 낮지만 같은 ms 병렬 생성에선 중복 가능(CI는 workers 1이라 실제 위험 낮음).
 - 공유 센터(`TEST_CENTER_ID`)를 여러 파일이 쓰므로 leftover holiday/role/중복 센터가 다른 파일의 원인불명 실패를 만든다(메모리 `shared_fixture_pollution` 패턴). 새 dev 프로젝트에서도 파일 간 정리 보장이 핵심.
 - 권고(후속): 정리 훅 없는 파일 보강, 공유 센터 대신 파일별 임시 센터 사용 검토(대규모 리라이트라 이번 범위 밖).

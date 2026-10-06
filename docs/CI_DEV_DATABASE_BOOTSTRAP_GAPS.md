@@ -16,10 +16,23 @@
 6. Auth/Storage 설정, 확장(extensions), cron, Realtime publication, Edge Function 배포는 SQL 밖 설정이라 저장소에 선언이 없다.
 7. fixture(센터/상품/역할) 시드 스크립트가 Production 데이터와 무관하게 재현 가능한지 불명(`seed_data.sql`의 최신성 미검증).
 
-## 권장 경로 (사람 + 읽기 전용 확인 필요)
-1. Production에서 **읽기 전용**으로 `pg_dump --schema-only` 상당(Dashboard/CLI `db dump` 읽기)을 받아 단일 baseline을 만든다. 쓰기/적용은 dev 프로젝트에만.
-2. baseline을 dev 프로젝트에 적용 → `npm run ci:dev:verify`와 PGlite SQL 테스트(`tests/sql`)로 검증.
-3. 이후 변경만 `supabase/migrations/` 타임스탬프 파일로 전환(별도 승인된 구조 변경).
+## 후보 비교
+| 후보 | 방법 | 평가 |
+|---|---|---|
+| A. Production **스키마-only** 덤프 → dev 적용 | `supabase db dump --linked` (데이터 플래그 없음 = 스키마만) | **채택.** 실제 라이브 정의(함수 lineage 드리프트 포함)를 그대로 복제. 데이터는 가져오지 않음 |
+| B. 저장소 파일에서 baseline 조립 | 439개 SQL 순서 추정 | **기각.** 순서 정보 없음, 오래된 fix 재실행이 최신 리팩터를 되돌린 전례 2회 |
+| C. CLI 스키마 전송 | A와 같은 `db dump` + `db push`/`--db-url` | A의 실행 수단. 단 `db push`는 migrations 폴더가 없어 쓰지 않음 |
+
+## 확정 bootstrap 절차 (dev 프로젝트 생성 후, 한 단계씩 — 각 단계는 사용자 승인 후 실행)
+**주의**: 이 저장소 워크트리의 Supabase CLI는 **Production에 link되어 있다**(`--linked`는 항상 Production). dev에는 `--linked`를 쓰지 말고 `--db-url`(dev 연결 문자열)만 쓴다. 실행 전에 연결 문자열에 dev ref가 있고 Production ref(`bxntqggkfwnhcczsbqtj`)가 없는지 확인한다. 재link 금지.
+0. (사람) Docker Desktop 설치 — `supabase db dump`는 pg_dump를 컨테이너로 실행한다. 이 Mac에는 현재 Docker/psql/pg_dump가 **없다**. (대안: Docker 없이 `supabase db query --linked`의 읽기 전용 카탈로그 SELECT로 DDL을 재구성 — 더 길고 오차 위험, 비권장)
+1. **[Production READ-ONLY, 사용자 승인 필요]** 먼저 `supabase db dump --linked --schema public --dry-run`(실행 스크립트만 출력)으로 내용 확인 → 승인 시 `supabase db dump --linked --schema public -f .tmp/prod_schema_public.sql`. `--data-only`를 절대 쓰지 않는다. 파일은 `.tmp/`(gitignored)에만 저장, 커밋 금지.
+2. 덤프 검사(로컬): `INSERT INTO`/`COPY ... FROM stdin` 행 데이터가 없는지, 비밀/이메일이 없는지 grep. 있으면 중단.
+3. **[Production READ-ONLY 추가 조회, 승인 필요]** public 밖 의존성 확인: `auth.users`에 걸린 트리거(예: 가입 시 accounts 생성), `storage.buckets`/`storage.objects` 정책, 필요한 extensions, publication(realtime). 결과를 덤프 보완 SQL로 정리(데이터 아님).
+4. dev 프로젝트에 **dev 연결 문자열로만** 적용(`supabase db query --db-url <dev> -f ...` 또는 Dashboard SQL Editor). Production에는 쓰기 없음.
+5. `npm run ci:dev:verify -- --schema`로 테이블/컬럼/RPC 확인(MISSING 0이 될 때까지). RLS/GRANT는 SQL로 별도 확인(`pg_class.relrowsecurity`, `information_schema.role_table_grants` 읽기).
+6. `npm run ci:dev:bootstrap` → fixture 생성 + 전체 검증.
+7. Secrets 교체 후 PR #170 CI 확인.
 
 ## 이번 브랜치가 하지 않는 것
-통합 migration 생성, Production SQL 실행, 오래된 SQL 재실행.
+통합 migration 생성, Production SQL/덤프 실행, 오래된 SQL 재실행, dev 프로젝트 생성.

@@ -14,6 +14,8 @@
     "ci:dev:preflight": "node scripts/ci-dev/preflight.mjs",
     "ci:dev:verify": "node scripts/ci-dev/verify.mjs",
     "ci:dev:seed": "node scripts/ci-dev/seed.mjs",
+    "ci:dev:secret-map": "node scripts/ci-dev/secret-map.mjs",
+    "ci:dev:bootstrap": "node scripts/ci-dev/bootstrap.mjs",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:e2e": "playwright test",

@@ -9,11 +9,11 @@
   실제 checkout이 호출하는 lib/orders.ts/lib/payments의 진짜 함수를 그대로 재사용한다
   (payment-lifecycle.test.ts와 동일한 관례).
 */
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";
 import { createOrder } from "../../lib/orders";
 import { getPaymentService } from "../../lib/payments";
-import { TEST_CENTER_ID, TEST_PRODUCT_ID, switchToTestUser, type TestUser } from "./setup";
+import { TEST_CENTER_ID, TEST_PRODUCT_ID, signOutTestSession, switchToTestUser, type TestUser } from "./setup";
 
 type ProductRow = { id: string; name: string; price: number };
 
@@ -30,6 +30,12 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   testUser = await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
+});
+
+// 정리(2026-10-07): 형제 파일(payment-lifecycle 등)과 같이 세션만 정리한다 — 이 파일이 만든 주문/수강권/center_members 행은
+// fixture 계정(TEST_USER_A)·공유 상품 소유라 파일 단위로 안전하게 식별·삭제할 범위가 아니며(재실행해도 center_members는 멱등), 삭제하지 않는다.
+afterAll(async () => {
+  await signOutTestSession();
 });
 
 describe("SYNC-001: Mock 결제 확정 시 center_members 자동 등록", () => {
