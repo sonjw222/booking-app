@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-06 — 광고성 알림톡 팬아웃에서 탈퇴 계정 제외 (SQL 파일/테스트만, Production 적용 여부는 별도 확인)
+- `fix_marketing_consent_fanout.sql`의 `evaluate_notification_rules()` 광고성 두 분기(`expired_rebuy`, `birthday`)에 `a.deactivated_at is null` 추가 — 탈퇴 전 `marketing_consent`가 true였던 계정이 광고성 자동 발송 대상에 남던 문제. 필수 운영 알림(`count_low`, `membership_expiring`, `pause_ending`)은 변경 없음.
+- 오래된 PR #164(160+ commit 뒤처짐)를 최신 main 위에서 최소 범위로 재구현. 정적 테스트 `privacyReleaseBlockers.staticCheck.test.ts` 강화.
+- ⚠ 이 SQL 파일 전체를 Production에 재실행하기 전에 라이브 `evaluate_notification_rules` 정의를 read-only로 확인할 것(docs/TODO.md의 해당 P2 항목: 함수 정의 lineage 드리프트 위험).
+
 ## 2026-10-05 — 모바일 safe-area 공통 레이아웃 정리 (Web CSS/React만, SQL/native/Edge Function 변경 없음)
 - 원인: 헤더가 없는 전체 화면 상태(비로그인 "로그인이 필요해요" `EmptyState`, 마이 비로그인 안내 카드, 첫 자식 로딩 스켈레톤)가 `env(safe-area-inset-top)`을 전혀 반영하지 않았다 — `.app-empty-state`는 `min-height:240px` + 상단 padding 32px(아이콘이 y≈32px에서 시작), 마이는 `margin-top:60px` 인라인 고정값. safe-area가 59~62px인 Dynamic Island iPhone에서 아이콘/카드가 상태바 영역에 겹쳐 잘리거나(16), 안 잘려도 상단에 몰려 보였다(17 Pro Max).
 - 공통 토큰 `--page-top-gap`(16px, 디자인 최소 여백)·`--page-state-top`(= safe-top + gap + clamp(24px, 6dvh, 56px))을 추가하고, `.app-shell`의 첫 자식 `EmptyState/ErrorState/Loading/.page-state-top`만 이 시작점을 쓰게 했다(헤더 뒤 상태 화면은 그대로 — safe-area 이중 적용 없음). 기기별 숫자/미디어쿼리/UA 분기 없음, 큰 화면에서도 정중앙으로 내려가지 않음.
