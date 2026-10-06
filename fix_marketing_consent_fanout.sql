@@ -207,6 +207,7 @@ begin
                    and m.center_id = rule.center_id
                    and m.expires_at = current_date - rule.days_before
                    and a.marketing_consent is true
+                   and a.deactivated_at is null
             loop
                 continue when exists (
                     select 1 from messages
@@ -256,6 +257,7 @@ begin
                  where m.center_id = rule.center_id
                    and pr.birth_date is not null
                    and a.marketing_consent is true
+                   and a.deactivated_at is null
                    and extract(month from pr.birth_date) = extract(month from (now() at time zone 'Asia/Seoul'))
                    and extract(day from pr.birth_date) = extract(day from (now() at time zone 'Asia/Seoul'))
             loop
