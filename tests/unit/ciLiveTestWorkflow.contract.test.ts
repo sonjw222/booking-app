@@ -24,7 +24,8 @@ describe("live-test workflow 구조", () => {
   it("E2E는 4개 checkpoint가 needs 체인으로 순차 실행(matrix/strategy/병렬 없음), 앞 구간 실패에도 계속하되 skipped(push/fork)면 건너뜀", () => {
     expect(e2e).toHaveLength(4);
     expect(code(wf)).not.toMatch(/^\s+strategy:/m);
-    expect(code(J[e2e[0]])).not.toMatch(/^    needs:/m);
+    expect(code(J[e2e[0]])).toMatch(/^    needs: live-env-preflight\s*$/m);   // 첫 구간은 preflight(Production 아님 확인)에만 의존
+    expect(code(J[e2e[0]])).toContain("needs.live-env-preflight.result == 'success'");
     for (let i = 1; i < e2e.length; i++) {
       const b = code(J[e2e[i]]);
       expect(b, e2e[i]).toMatch(new RegExp(`^    needs: ${e2e[i - 1]}\\s*$`, "m"));
@@ -58,6 +59,15 @@ describe("live-test workflow 구조", () => {
     }
     expect(new Set(names).size).toBe(8);
   });
+  it("artifact는 report/test-results만(auth storageState·.env 제외), retention 3일 이하 — PUBLIC repo에서 trace의 bearer token 노출 기간 최소화", () => {
+    for (const id of e2e) {
+      const paths = [...code(J[id]).matchAll(/^\s+path: (.+)$/gm)].map((m) => m[1].trim());
+      expect(paths.sort(), id).toEqual(["playwright-report/", "test-results/"]);
+      for (const m of code(J[id]).matchAll(/retention-days: (\d+)/g)) expect(Number(m[1]), id).toBeLessThanOrEqual(3);
+    }
+    expect(readFileSync(path.join(root, ".gitignore"), "utf8")).toContain("/playwright/.auth/");
+    expect(code(readFileSync(path.join(root, ".github/workflows/mobile-ui-qa.yml"), "utf8"))).toMatch(/^permissions:\n  contents: read\n/m);
+  });
   it("Unit/Build는 E2E와 독립(needs/if cascade 없음)이고 Build는 secrets가 아닌 placeholder env만 쓴다", () => {
     for (const id of ["unit", "build"]) { expect(code(J[id]), id).not.toMatch(/^    needs:/m); expect(code(J[id]), id).not.toMatch(/^    if:/m); expect(J[id], id).not.toContain("secrets."); }
     expect(J.build).toContain("https://build-placeholder.supabase.co");
@@ -65,17 +75,25 @@ describe("live-test workflow 구조", () => {
   });
   it("live Supabase를 쓰는 job은 모두 한 체인에 직렬화: secrets를 쓰는 job = e2e 4개 + integration, integration은 마지막 E2E 뒤, 저장소 전역 concurrency 유지", () => {
     const live = Object.keys(J).filter((k) => J[k].includes("secrets."));
-    expect(live.sort()).toEqual([...e2e, "integration"].sort());
+    expect(live.sort()).toEqual([...e2e, "integration", "live-env-preflight"].sort());
     expect(code(J.integration)).toMatch(new RegExp(`^    needs: ${e2e[e2e.length - 1]}\\s*$`, "m"));
     expect(code(J.integration)).toContain(`!cancelled() && needs.${e2e[e2e.length - 1]}.result != 'skipped'`);
     expect(wf).toMatch(/concurrency:\n  group: shared-live-supabase-tests\n  cancel-in-progress: false/);
     expect(code(wf)).not.toMatch(/continue-on-error/);
     expect(J.integration).toContain("E2E가 실패해도 Integration은 실행한다");   // 판단 근거가 workflow에 문서화돼 있다
   });
-  it("push/fork 게이트 유지: 첫 E2E 구간만 직접 게이트(push 제외, fork PR 제외), 나머지 live job은 그 skipped를 상속", () => {
-    const first = code(J[e2e[0]]);
-    expect(first).toContain("github.event_name != 'push'");
-    expect(first).toContain("github.event.pull_request.head.repo.full_name == github.repository");
+  it("push/fork 게이트: preflight job이 직접 게이트(push 제외, fork PR 제외)하고 live job은 그 skipped/failed를 상속(한 번의 명확한 실패 + live skip)", () => {
+    const pre = code(J["live-env-preflight"]);
+    expect(pre).toContain("github.event_name != 'push'");
+    expect(pre).toContain("github.event.pull_request.head.repo.full_name == github.repository");
+    expect(pre).toContain("node scripts/ci/liveEnvPreflight.mjs");
+    expect(pre).not.toMatch(/npm ci|playwright|npm run test/);   // 네트워크/브라우저/의존성 설치 없음
+    expect(code(J[e2e[0]])).not.toContain("github.event_name != 'push'");   // 게이트 중복 없음(preflight가 담당)
+  });
+  it("최소 권한: workflow 전체 permissions는 contents: read만, pull_request_target 없음, 외부 action은 actions/* 뿐", () => {
+    expect(code(wf)).toMatch(/^permissions:\n  contents: read\n/m);
+    expect(code(wf)).not.toMatch(/pull_request_target/);
+    for (const m of code(wf).matchAll(/uses: ([^@\s]+)@/g)) expect(m[1], m[0]).toMatch(/^actions\//);
   });
   it("Production guard 입력: live job step이 NEXT_PUBLIC_SUPABASE_URL/키를 secrets에서 env로 전달(가드는 Playwright config / vitest globalSetup에서 이 값을 검사)", () => {
     for (const id of [...e2e, "integration"]) {

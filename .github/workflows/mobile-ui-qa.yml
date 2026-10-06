@@ -9,6 +9,10 @@ name: Mobile UI QA (iOS XCUITest / Android Espresso)
 on:
   workflow_dispatch:
 
+# 최소 권한(2026-10-07): repository에 쓰지 않는다.
+permissions:
+  contents: read
+
 jobs:
   android-ui-tests:
     name: Android Espresso/UI Automator (emulator)
