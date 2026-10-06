@@ -343,7 +343,7 @@ function CheckoutContent() {
     }
     // 나머지(카드/카카오페이/토스페이/계좌이체)는 실제 PG 결제창을 거친다.
     if (resolveProviderName() === "toss" && !TOSS_SUPPORTED_METHODS.includes(effectivePayMethod)) {
-      setError("지금은 카드/계좌이체만 가능해요");
+      setError("지금은 카드/카카오페이/토스페이/계좌이체만 가능해요");
       return;
     }
     setBusy(true);

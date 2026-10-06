@@ -5,12 +5,14 @@
   - PG가 꺼져 있으면 센터의 pay_methods 설정과 무관하게 항상 직접결제("direct")만 보인다 —
     센터 설정 때문에 선택지가 0개가 되거나 숨겨진 PG 수단이 기본 선택되는 일이 없게 한다.
   - PG가 켜져 있어도 센터 설정으로 걸러서 비면 직접결제로 안전하게 대체한다.
+  - 카카오페이/토스페이는 PG가 켜진 사용자(정식 오픈 또는 심사관 override)에게 센터 설정(pay_methods)대로 노출된다(HIDDEN_PAY_METHOD_IDS 비어 있음).
 */
 export const PG_PAY_METHOD_IDS = ["card", "kakao", "toss", "transfer"] as const;
 export const DIRECT_PAY_METHOD_ID = "direct";
-// 카카오페이/토스페이는 계약 활성화 전까지 사용자 UI에서만 숨긴다(2026-10-02). Toss 연동(EASY_PAY_BY_METHOD, TossPaymentProvider, 서버 lifecycle)은
-// 그대로 남아 있다 — 다시 노출하려면 이 배열에서 해당 id만 제거하면 된다. 센터 pay_methods 설정/stale 선택값과 무관하게 항상 숨긴다.
-export const HIDDEN_PAY_METHOD_IDS: readonly string[] = ["kakao", "toss"];
+// 사용자 UI에서 숨기는 결제수단 id. 2026-10-02에는 카카오페이/토스페이를 계약 활성화 전까지 숨겼으나(["kakao", "toss"]), 2026-10-07부터 다시 노출한다.
+// 숨김 메커니즘 자체(필터 + resolveSelectedPayMethod의 stale 선택값 보정)는 남겨 둔다 — 다시 숨겨야 할 때 id만 추가하면 된다.
+// PG 전역 OFF 정책(pgEnabled=false → direct만)과 센터 pay_methods 제한/direct fallback은 이 배열과 무관하게 그대로다.
+export const HIDDEN_PAY_METHOD_IDS: readonly string[] = [];
 
 export function visiblePayMethodIds(opts: { pgEnabled: boolean; allowed: string[] | null; all: string[] }): string[] {
   if (!opts.pgEnabled) return [DIRECT_PAY_METHOD_ID];

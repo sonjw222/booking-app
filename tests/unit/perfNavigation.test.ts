@@ -34,9 +34,9 @@ describe("내부 이동은 Link(prefetch 끔), 보호 대상은 full navigation 
   it("모드 전환(회원↔관리자)·onClick 이동 로직은 그대로 <a>+replaceTabNavigation", () => {
     expect(read("app/components/ManagerNav.tsx")).toContain('onClick={(e) => replaceTabNavigation(e, "/")}');
   });
-  it("Universal Link / 카카오·토스페이 비노출 / return-token 경로 보존", () => {
+  it("Universal Link / 결제수단 노출 정책(숨김 목록 비어 있음) / return-token 경로 보존", () => {
     expect(read("lib/paymentUniversalLink.ts")).toContain("resolvePaymentCallbackTarget");
-    expect(read("lib/payMethods.ts")).toContain('HIDDEN_PAY_METHOD_IDS: readonly string[] = ["kakao", "toss"]');
+    expect(read("lib/payMethods.ts")).toContain("HIDDEN_PAY_METHOD_IDS: readonly string[] = [];");
     expect(read("app/api/payments/return/confirm/route.ts")).toContain("confirmForAuthorizedUid");
   });
 });
