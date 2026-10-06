@@ -54,4 +54,43 @@ describe("managerCenterPref", () => {
       if (src.includes("setCenterId(list[0].id)")) throw new Error(`${f}: 첫 센터 하드코딩`);
     }
   });
+
+  it("같은 탭에서 계정이 바뀌어도(A 선택 후 B) A의 선택이 B에 적용되지 않고, 로그아웃(null)이면 읽기/쓰기 모두 중단", () => {
+    setPrefAccount("accA"); rememberCenterId("b");
+    setPrefAccount("accB"); expect(pickInitialCenterId(C("a", "b"))).toBe("a");
+    rememberCenterId("a"); setPrefAccount("accA"); expect(pickInitialCenterId(C("a", "b"))).toBe("b");
+    setPrefAccount(null); expect(pickInitialCenterId(C("a", "b"))).toBe("a"); rememberCenterId("a"); expect(readRememberedCenterId("accA")).toBe("b");
+  });
+  it("센터 순서가 바뀌어도 선택 id 유지, 권한이 사라진 센터면 폐기 후 첫 센터", () => {
+    setPrefAccount("acc1"); rememberCenterId("c");
+    expect(pickInitialCenterId(C("a", "b", "c"))).toBe("c"); expect(pickInitialCenterId(C("c", "a", "b"))).toBe("c");
+    expect(pickInitialCenterId(C("a", "b"))).toBe("a");
+  });
+  it("SSR(window 없음)에서도 던지지 않는다", async () => {
+    const w = globalThis.window; // @ts-expect-error jsdom window 일시 제거
+    delete globalThis.window;
+    try { const m = await import("../../lib/managerCenterPref"); expect(() => { m.rememberCenterId("a", "acc"); m.readRememberedCenterId("acc"); m.pickInitialCenterId(C("a")); }).not.toThrow(); }
+    finally { globalThis.window = w; }
+  });
+  it("모든 첫 센터 기본값이 pickInitialCenterId를 쓴다(announcements 포함), 로그아웃 시 계정 해제", () => {
+    expect(readFileSync("app/manager/announcements/page.tsx", "utf8")).toContain("centerId ?? pickInitialCenterId(cs)");
+    expect(readFileSync("app/manager/announcements/page.tsx", "utf8")).toContain("rememberCenterId(c.id); await reloadList(c.id);");
+    expect(readFileSync("app/components/SessionWatcher.tsx", "utf8")).toContain("setPrefAccount(null);");
+  });
+  it("URL ?center= 가 필요한 화면은 URL이 우선(sales), 오너 전용 화면은 기존 초기 선택 유지(settlement/subscription)", () => {
+    expect(readFileSync("app/manager/sales/page.tsx", "utf8")).toContain("list.find((c) => c.id === requestedCenter)?.id ?? pickInitialCenterId(list)!");
+    expect(readFileSync("app/manager/subscription/page.tsx", "utf8")).toContain("setCenterId(qsCenterId);");
+    expect(readFileSync("app/manager/settlement/page.tsx", "utf8")).toContain("setCenterId(list.find((c) => c.isOwner)!.id)");
+    expect(readFileSync("app/manager/staff/permissions/page.tsx", "utf8")).toContain('params.get("center")');
+  });
+  it("ManagerNav: 조회 중 센터가 바뀌면 끝난 뒤 한 번 더 재확인(pending)", () => {
+    const nav = readFileSync("app/components/ManagerNav.tsx", "utf8");
+    expect(nav).toContain("pendingRef.current = true; return;");
+    expect(nav).toContain("if (pendingRef.current && mountedRef.current)");
+  });
+  it("hydration 안전: 저장값은 effect/await 이후에만 읽는다(렌더 중 localStorage 접근 없음)", () => {
+    const src = readFileSync("lib/managerCenterPref.ts", "utf8");
+    expect(src).not.toMatch(/^const .*localStorage/m);
+    for (const f of ["orders", "members", "rooms"]) expect(readFileSync(`app/manager/${f}/page.tsx`, "utf8")).toMatch(/useState<string \| null>\(null\)/);
+  });
 });

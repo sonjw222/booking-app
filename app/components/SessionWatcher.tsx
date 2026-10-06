@@ -34,6 +34,7 @@ import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
 import { checkMergeableAccountByEmail, mergeViaPasswordVerification } from "../../lib/accountLinking";
 import { autoRegisterNativePushOnLogin } from "../../lib/nativePush";
 import AddressField from "./AddressField";
+import { setPrefAccount } from "../../lib/managerCenterPref";
 
 export default function SessionWatcher() {
   // 계정 연동(반응형, 2026-09-09) — 방금 새로 만들어진 계정(구글/애플 등 실제 이메일 provider)의
@@ -170,6 +171,7 @@ export default function SessionWatcher() {
         return;
       }
       if (event !== "SIGNED_OUT") return;
+      setPrefAccount(null);   // 마지막 선택 센터(managerCenterPref)의 계정 key 해제 — 다음 로그인 계정과 섞이지 않게
       setPhoneGateAccountId(null);
       setNameGateAccountId(null);
       setMergePromptEmail(null);

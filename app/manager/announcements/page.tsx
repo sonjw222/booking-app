@@ -20,6 +20,7 @@ import Loading from "../../components/Loading";
 import RichTextEditor from "../../components/RichTextEditor";
 import { ZoomableImage } from "../../components/ImageViewer";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { pickInitialCenterId, rememberCenterId } from "../../../lib/managerCenterPref";
 
 export default function ManagerAnnouncementsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -49,7 +50,7 @@ export default function ManagerAnnouncementsPage() {
     try {
       const cs = await fetchMyCenters();
       setCenters(cs);
-      const cid = centerId ?? cs[0]?.id ?? null;
+      const cid = centerId ?? pickInitialCenterId(cs);
       setCenterId(cid);
       if (cid) setList(await fetchCenterAnnouncements(cid));
     } catch (e: any) {
@@ -155,7 +156,7 @@ export default function ManagerAnnouncementsPage() {
           {centers.map((c) => (
             <button key={c.id}
               className={`filter-chip ${c.id === centerId ? "on" : ""}`}
-              onClick={async () => { setCenterId(c.id); await reloadList(c.id); }}>
+              onClick={async () => { setCenterId(c.id); rememberCenterId(c.id); await reloadList(c.id); }}>
               {c.name}
             </button>
           ))}

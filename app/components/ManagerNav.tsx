@@ -66,6 +66,7 @@ export default function ManagerNav({
   // 다시 가져오던 비용 제거). 권한 변경 반영은 유지한다: 60초 초과 시 다음 이동에서, 앱/탭이 다시 보일 때(visibilitychange)도 재확인한다. 접근 통제(RLS)는 그대로다.
   const lastCheckRef = useRef(0);
   const inFlightRef = useRef(false);
+  const pendingRef = useRef(false);   // 조회 중에 센터가 바뀌면 끝난 뒤 한 번 더(바뀐 센터 기준으로) 재확인
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   // 권한 재확인 단일 함수: TTL 안이거나 이미 조회 중이면 건너뛴다(동시 중복 fetch 방지). 이동(pathname)과 앱/탭 복귀(visible) 양쪽이 같은 함수를 쓴다.
@@ -86,12 +87,12 @@ export default function ManagerNav({
         });
       })
       .catch(() => { lastCheckRef.current = 0; if (mountedRef.current) setResolved(true); })   // 실패하면 다음 기회에 바로 재시도
-      .finally(() => { inFlightRef.current = false; });
+      .finally(() => { inFlightRef.current = false; if (pendingRef.current && mountedRef.current) { pendingRef.current = false; lastCheckRef.current = 0; recheckPermissions(); } });
   }, []);
   useEffect(() => { recheckPermissions(); }, [pathname, recheckPermissions]);
   // 센터를 바꾸면(managerCenterPref) TTL과 무관하게 새 센터 기준으로 메뉴 권한을 다시 계산한다.
   useEffect(() => {
-    const onCenterChanged = () => { lastCheckRef.current = 0; recheckPermissions(); };
+    const onCenterChanged = () => { lastCheckRef.current = 0; if (inFlightRef.current) { pendingRef.current = true; return; } recheckPermissions(); };
     window.addEventListener(CENTER_CHANGED_EVENT, onCenterChanged);
     return () => window.removeEventListener(CENTER_CHANGED_EVENT, onCenterChanged);
   }, [recheckPermissions]);
