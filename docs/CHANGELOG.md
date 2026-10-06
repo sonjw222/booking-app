@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-07 — CI가 Production Supabase를 가리키는 문제 감사 (docs/진단 SQL only)
+- `docs/CI_PRODUCTION_EXPOSURE_AUDIT_20261007.md` 추가: 과거 live 테스트 실행 타임라인, 증거 수준, 비밀 노출 판정(NO EVIDENCE). `diagnostics/ci_production_residue/*.sql` 6개는 SELECT 전용 진단이며 사용자 실행 대기.
+
 ## 2026-10-07 — 결제수단 노출 복구 / 문서 정리 (docs only)
 - PR #169: 카카오페이·토스페이를 PG 활성 사용자(심사관 `pg_checkout_override` 포함)에게 다시 노출(`HIDDEN_PAY_METHOD_IDS=[]`). PG 전역 OFF(`NEXT_PUBLIC_PG_CHECKOUT_ENABLED=false`)·reviewer override·센터 `pay_methods` 제한·direct fallback은 유지.
 - PR #166(security hardening), #168(광고성 팬아웃 탈퇴 계정 제외) merge 반영. Toss 심사 자료 제출 완료(답변 대기).

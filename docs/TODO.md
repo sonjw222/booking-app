@@ -3910,3 +3910,9 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 - [ ] REQUIREMENTS·DATABASE·ROUTES의 상태를 함께 갱신했다.
 - [ ] CHANGELOG에 날짜, 변경, 검증 결과를 기록했다.
 - [ ] 완료되지 않은 하위 작업을 숨기지 않고 별도 TODO로 남겼다.
+
+## CI Production 노출 후속 (2026-10-07)
+- [ ] P0: 별도 비-production Supabase 프로젝트 생성 → GitHub Secrets 교체 후 PR #170 live CI 실행 (사용자 작업)
+- [ ] P1: `diagnostics/ci_production_residue/` 6개 SQL을 순서대로 하나씩 실행해 잔여 fixture 확인(READ-ONLY)
+- [ ] P2: `mobile-ui-qa.yml`에 Production guard/preflight 추가 검토
+- [ ] P3: main 브랜치 보호 규칙, Production service role key 회전 검토
