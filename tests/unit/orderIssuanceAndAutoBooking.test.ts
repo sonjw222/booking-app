@@ -183,8 +183,8 @@ describe("[3-B] PG 비노출 — direct만", () => {
     expect(resolveSelectedPayMethod("card", ["direct"])).toBe("direct");
   });
   it("PG 켜짐(심사관/정식 오픈) → 센터 설정대로, 비면 direct 대체", () => {
-    // 2026-10-02: 카카오페이/토스페이는 UI에서만 숨김(아래 별도 describe) — 나머지는 센터 설정대로
-    expect(visiblePayMethodIds({ pgEnabled: true, allowed: null, all: ALL })).toEqual(ALL.filter((id) => id !== "kakao" && id !== "toss"));
+    // 2026-10-07: 카카오페이/토스페이도 다시 노출 — 센터 설정(pay_methods)대로
+    expect(visiblePayMethodIds({ pgEnabled: true, allowed: null, all: ALL })).toEqual(ALL);
     expect(visiblePayMethodIds({ pgEnabled: true, allowed: ["card"], all: ALL })).toEqual(["card"]);
     expect(visiblePayMethodIds({ pgEnabled: true, allowed: ["paypal"], all: ALL })).toEqual(["direct"]);
   });
@@ -258,34 +258,54 @@ describe("[3-B] 서버 게이트 — /api/payments/confirm", () => {
   });
 });
 
-describe("카카오페이/토스페이 사용자 UI 비노출(2026-10-02) — 구현은 보존", () => {
+describe("카카오페이/토스페이 사용자 UI 재노출(2026-10-07) — PG OFF·센터 제한·direct fallback 정책 유지", () => {
   const ALL5 = ["card", "kakao", "toss", "transfer", "direct"];
-  it("PG ON: 카드/계좌이체만 보이고(센터 설정이 없든, kakao/toss를 허용했든) kakao/toss는 항상 숨김", () => {
-    expect(visiblePayMethodIds({ pgEnabled: true, allowed: null, all: ALL5 })).toEqual(["card", "transfer", "direct"]);
-    expect(visiblePayMethodIds({ pgEnabled: true, allowed: ["card", "kakao", "toss", "transfer"], all: ALL5 })).toEqual(["card", "transfer"]);
+  it("CASE1/2: PG OFF면 pay_methods(null/전체 허용)와 무관하게 direct만", () => {
+    expect(visiblePayMethodIds({ pgEnabled: false, allowed: null, all: ALL5 })).toEqual(["direct"]);
+    expect(visiblePayMethodIds({ pgEnabled: false, allowed: ["card", "kakao", "toss", "transfer"], all: ALL5 })).toEqual(["direct"]);
+    expect(visiblePayMethodIds({ pgEnabled: false, allowed: ["kakao", "toss"], all: ALL5 })).toEqual(["direct"]);
+  });
+  it("CASE3: PG ON + 제한 없음(pay_methods=null, 심사 센터)이면 PAY_METHODS 순서대로 card/kakao/toss/transfer/direct 전부", () => {
+    expect(visiblePayMethodIds({ pgEnabled: true, allowed: null, all: ALL5 })).toEqual(["card", "kakao", "toss", "transfer", "direct"]);
+    expect(visiblePayMethodIds({ pgEnabled: true, allowed: [], all: ALL5 })).toEqual(ALL5);
+  });
+  it("CASE4: PG ON + 센터가 card/transfer만 허용하면 그 제한을 따른다", () => {
+    expect(visiblePayMethodIds({ pgEnabled: true, allowed: ["card", "transfer"], all: ALL5 })).toEqual(["card", "transfer"]);
     expect(visiblePayMethodIds({ pgEnabled: true, allowed: ["card"], all: ALL5 })).toEqual(["card"]);
   });
-  it("센터가 kakao/toss만 허용했거나 PG OFF면 기존 정책대로 직접결제만(선택지 0개 없음)", () => {
-    expect(visiblePayMethodIds({ pgEnabled: true, allowed: ["kakao", "toss"], all: ALL5 })).toEqual(["direct"]);
-    expect(visiblePayMethodIds({ pgEnabled: false, allowed: null, all: ALL5 })).toEqual(["direct"]);
+  it("CASE5: PG ON + 센터가 kakao/toss를 허용하면 더 이상 숨겨지지 않고 노출된다", () => {
+    expect(visiblePayMethodIds({ pgEnabled: true, allowed: ["kakao", "toss"], all: ALL5 })).toEqual(["kakao", "toss"]);
+    expect(visiblePayMethodIds({ pgEnabled: true, allowed: ["card", "kakao", "toss", "transfer"], all: ALL5 })).toEqual(["card", "kakao", "toss", "transfer"]);
   });
-  it("stale 선택값 kakao/toss는 보이는 첫 수단으로 되돌아가 결제 경로에 도달하지 않는다", () => {
+  it("CASE6: 필터 결과가 비면(알 수 없는 수단만 허용 등) 기존 direct fallback 유지", () => {
+    expect(visiblePayMethodIds({ pgEnabled: true, allowed: ["paypal"], all: ALL5 })).toEqual(["direct"]);
+    expect(visiblePayMethodIds({ pgEnabled: true, allowed: ["card"], all: ["kakao", "toss"] })).toEqual(["direct"]);
+  });
+  it("선택값 보정: kakao/toss 선택은 이제 유지되고, 보이지 않는 선택값만 첫 수단/direct로 되돌린다", () => {
     const visible = visiblePayMethodIds({ pgEnabled: true, allowed: null, all: ALL5 });
-    expect(resolveSelectedPayMethod("kakao", visible)).toBe("card");
-    expect(resolveSelectedPayMethod("toss", visible)).toBe("card");
-    expect(resolveSelectedPayMethod("transfer", visible)).toBe("transfer");
-    expect(resolveSelectedPayMethod("kakao", ["direct"])).toBe("direct");
+    expect(resolveSelectedPayMethod("kakao", visible)).toBe("kakao");
+    expect(resolveSelectedPayMethod("toss", visible)).toBe("toss");
+    expect(resolveSelectedPayMethod("paypal", visible)).toBe("card");
+    expect(resolveSelectedPayMethod("kakao", ["direct"])).toBe("direct");   // PG OFF에서는 stale kakao 선택도 direct로
   });
-  it("checkout 소스: 문구 정리 + kakao/toss 구현(지원 목록/EASY_PAY/Provider)은 그대로", () => {
+  it("checkout 소스: kakao/toss 구현(지원 목록/EASY_PAY/Provider)은 그대로, 미지원 안내 문구는 노출 수단과 일치", () => {
     const c = readFileSync(join(__dirname, "../../app/checkout/page.tsx"), "utf-8");
-    expect(c).toContain('setError("지금은 카드/계좌이체만 가능해요");');
-    expect(c).not.toContain("지금은 카드/카카오페이/토스페이/계좌이체만");
+    expect(c).toContain('setError("지금은 카드/카카오페이/토스페이/계좌이체만 가능해요");');
+    expect(c).not.toContain("지금은 카드/계좌이체만 가능해요");
     expect(c).toContain('const TOSS_SUPPORTED_METHODS = ["card", "kakao", "toss", "transfer"];');
     expect(c).toContain('kakao: "KAKAOPAY"');
     expect(c).toContain('toss: "TOSSPAY"');
     expect(c).toContain("resolveSelectedPayMethod(payMethod, visibleMethodIds)");
     const p = readFileSync(join(__dirname, "../../lib/payments/TossPaymentProvider.ts"), "utf-8");
     expect(p).toContain("easyPay");
-    expect(readFileSync(join(__dirname, "../../lib/payMethods.ts"), "utf-8")).toContain('HIDDEN_PAY_METHOD_IDS: readonly string[] = ["kakao", "toss"]');
+    expect(readFileSync(join(__dirname, "../../lib/payMethods.ts"), "utf-8")).toContain("HIDDEN_PAY_METHOD_IDS: readonly string[] = [];");
+  });
+  it("reviewer override / 전역 PG 게이트는 건드리지 않았다: checkout·cart가 pgEnabled를 기존 방식으로 계산하고 공용 함수를 쓴다", () => {
+    const c = readFileSync(join(__dirname, "../../app/checkout/page.tsx"), "utf-8");
+    const k = readFileSync(join(__dirname, "../../app/cart/page.tsx"), "utf-8");
+    expect(c).toContain("fetchMyPgCheckoutOverride()"); expect(k).toContain("fetchMyPgCheckoutOverride()");   // 심사관 accounts.pg_checkout_override 조회 경로
+    expect(c).toContain("useState(PG_CHECKOUT_ENABLED)"); expect(k).toContain("useState(PG_CHECKOUT_ENABLED)");   // 전역 게이트 기본값(OFF면 일반 사용자는 direct)
+    expect(c).toContain("pgEnabled: pgCheckoutEnabled"); expect(k).toContain("visiblePayMethodIds({ pgEnabled,");
+    expect(c).toContain("visiblePayMethodIds"); expect(k).toContain("visiblePayMethodIds");
   });
 });
