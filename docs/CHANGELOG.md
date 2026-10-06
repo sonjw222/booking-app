@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-07 — CI 병합 순서/브랜치 보호 권고, artifact 점검 보강 (docs only)
+- `docs/CI_MERGE_PLAN_AND_BRANCH_PROTECTION_20261007.md` 추가(충돌 매트릭스, 병합 순서, stacked 연결, 보호 규칙 권고). 노출 감사에 artifact 0건·서비스 롤 회전 OPTIONAL 판단 추가.
+
 ## 2026-10-07 — CI가 Production Supabase를 가리키는 문제 감사 (docs/진단 SQL only)
 - `docs/CI_PRODUCTION_EXPOSURE_AUDIT_20261007.md` 추가: 과거 live 테스트 실행 타임라인, 증거 수준, 비밀 노출 판정(NO EVIDENCE). `diagnostics/ci_production_residue/*.sql` 6개는 SELECT 전용 진단이며 사용자 실행 대기.
 

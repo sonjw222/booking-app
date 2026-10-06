@@ -24,6 +24,17 @@ CONFIRMED(로그/API로 직접 확인) · HIGHLY LIKELY(코드·시크릿 구성
 - `playwright/.auth/`(storageState)는 gitignore. 아티팩트 경로는 `playwright-report/`, `test-results/`로 한정(계약 테스트로 고정).
 - 권고(수행 안 함): 새 dev 프로젝트로 Secrets 교체 시 Production service role key를 **회전**하는 것을 검토(증거는 없지만 비용이 낮은 예방 조치). 회전은 사용자가 직접.
 
+## 5-1. 과거 artifact 점검 (2026-10-07 후속, 읽기 전용 metadata 조회)
+- `GET /repos/.../actions/artifacts` 결과: **artifact 0건**(만료된 것 포함). 즉 삭제할 artifact 없음. 저장소 기본 보존기간 설정은 90일이며, workflow가 `retention-days`를 명시해 이를 덮어쓴다(과거 14일, 현재 3일 — #170).
+- workflow 이력(`test.yml` 39개 revision 전수): artifact `path`는 **항상 `playwright-report/`와 `test-results/` 두 개뿐**이었고 `playwright/.auth/`(storageState)는 포함된 적이 없다. `.gitignore`는 E2E 도입 커밋(94e81c7)부터 `playwright/.auth/`를 제외한다. 저장소에 추적된 `.auth` 파일 0개.
+- 판정: 과거 artifact로 인한 노출 **NO EVIDENCE**(보존된 것이 없음). 메커니즘상 `trace: retain-on-failure`는 네트워크 요청(로그인 요청 본문, 헤더)을 담을 수 있어 **향후** artifact는 POTENTIAL이다 → dev 프로젝트로 교체한 뒤에는 대상이 테스트 전용 계정/키라 영향이 작다. `mobile-ui-qa.yml`의 artifact(`android-ui-test-results`, `ios-ui-test-results`)도 0건, 보존 3일로 단축.
+- 삭제 권고 artifact: 없음. (GitHub mutation은 이번에도 수행하지 않음.)
+
+## 5-2. service role key 회전 판단: **OPTIONAL** (증거 기반)
+- 근거(노출 가능성을 낮추는 사실): 협업자가 소유자 1명뿐(`collaborators` 조회), `pull_request_target` 없음·fork PR에는 Secrets 미주입, artifact 0건, 로그는 GitHub 마스킹 + 리포터 redaction, 비밀 출력 증거 없음.
+- 근거(위험을 키우는 사실): 저장소 PUBLIC, 이 키가 2개월 넘게 CI에서 사용됨, 과거에는 Production guard가 없었음(키가 테스트 코드에 쓰임).
+- 판단: 노출 증거가 없으므로 REQUIRED/RECOMMENDED가 아니다. **다만** 회전은 Production 서버 라우트(`/api/*`가 같은 service role key를 쓴다면)·Vercel 환경변수를 동시에 바꿔야 해 운영 위험이 있다. 권고: 협업자 추가, 로그/artifact 노출 증거 발견, 또는 정기 보안 점검 시점에 맞춰 사용자가 Vercel 환경변수 갱신 절차와 함께 수행. 실제 회전은 하지 않았다.
+
 ## 6. 저장소 측 하드닝 (PR #170, 미병합)
 Production guard(integration/E2E), `live-env-preflight` 잡, `permissions: contents: read`, 외부 action은 `actions/*`만, `pull_request_target` 없음, 아티팩트 보존 3일. `mobile-ui-qa.yml`은 수동(workflow_dispatch) 전용이며 live preflight가 없다 → TODO.
 
