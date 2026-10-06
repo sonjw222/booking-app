@@ -158,7 +158,7 @@ function PermInner() {
 
       <div className="perm-list">
         {tree.length === 0 ? (
-          <div className="daylist-empty" style={{ paddingTop: 20 }}>이 카테고리에 권한이 없어요</div>
+          <div className="daylist-empty daylist-empty--xs">이 카테고리에 권한이 없어요</div>
         ) : (
           tree.map((p) => {
             const all = [p, ...p.children];

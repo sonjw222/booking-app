@@ -190,7 +190,7 @@ function ProgressRecordContent() {
           <div className="title">진도 기록</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
+        <div className="daylist-empty daylist-empty--page">운영 중인 센터가 없어요</div>
       </div>
     );
   }
@@ -220,7 +220,7 @@ function ProgressRecordContent() {
       {loading ? (
         <Loading />
       ) : tree.length === 0 ? (
-        <div className="daylist-empty" style={{ paddingTop: 40 }}>
+        <div className="daylist-empty daylist-empty--md">
           먼저 분류와 기술 목록을 만들어주세요<br />
           <Link href="/manager/progress" className="more-link" style={{ display: "inline-block", marginTop: 8 }} prefetch={false}>진도표 기술 목록 ›</Link>
         </div>
@@ -245,7 +245,7 @@ function ProgressRecordContent() {
           {/* 진도 이력 (메인) */}
           <div className="menu-section-label">진도 이력</div>
           {history.length === 0 ? (
-            <div className="daylist-empty" style={{ paddingTop: 20 }}>아직 기록이 없어요</div>
+            <div className="daylist-empty daylist-empty--xs">아직 기록이 없어요</div>
           ) : (
             <div className="prog-hist">
               {Object.entries(historyByDate).map(([date, recs]) => (

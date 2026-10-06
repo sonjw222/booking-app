@@ -6732,3 +6732,16 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
   }
   .member-home .cat-grid:not(.is-expanded) > .cat-item { margin-top: var(--cat-row-gap, 18px); pointer-events: auto; }
 }
+
+/* 빈 상태(.daylist-empty) 상단 여백 변형(2026-10-06) — 화면마다 인라인 style={{ paddingTop: 20/30/40/60/80 }}로 반복되던 값을 이름 있는 변형으로 정리.
+   --page(80): 헤더 아래 "전체 화면" 빈/오류 상태(센터 없음, 결제 결과 등), --lg/md/sm/xs(60/40/30/20): 섹션·리스트 안의 빈 상태(맥락별 크기 변형).
+   값은 기존 인라인과 동일해 시각적 위치는 그대로이고, 인라인과 같은 우선순위를 유지하도록 관리자 본문(.manager-v3-content/.admin-v3-content)·시트 안(.sheet .daylist-empty) 규칙보다 뒤/높은 specificity로 적용한다.
+   헤더가 이미 safe-area를 처리한 화면에 쓰이므로 --page-state-top(최상위 헤더 없는 화면 전용)과 섞지 않는다 — safe-area 이중 적용 방지. */
+.daylist-empty--page { --empty-pad: 80px; }
+.daylist-empty--lg { --empty-pad: 60px; }
+.daylist-empty--md { --empty-pad: 40px; }
+.daylist-empty--sm { --empty-pad: 30px; }
+.daylist-empty--xs { --empty-pad: 20px; }
+.daylist-empty[class*="daylist-empty--"],
+:is(.manager-v3-content, .admin-v3-content) .sheet .daylist-empty[class*="daylist-empty--"] { padding-top: var(--empty-pad); }
+

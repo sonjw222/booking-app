@@ -88,7 +88,7 @@ export default function AdminSettlementPage() {
           <div className="title">센터 정산</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>
+        <div className="daylist-empty daylist-empty--page">
           플랫폼 운영자만 접근할 수 있는 화면이에요
         </div>
       </div>
@@ -138,7 +138,7 @@ export default function AdminSettlementPage() {
 
       {searched && (
         rows.length === 0 ? (
-          <div className="daylist-empty" style={{ paddingTop: 20 }}>이 기간에 정산할 금액이 없어요</div>
+          <div className="daylist-empty daylist-empty--xs">이 기간에 정산할 금액이 없어요</div>
         ) : (
           <div style={{ padding: "0 20px" }}>
             <div className="set-row">

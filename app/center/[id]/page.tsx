@@ -314,7 +314,7 @@ function CenterDetailContent() {
           <div className="title">센터 정보</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>센터를 찾을 수 없어요</div>
+        <div className="daylist-empty daylist-empty--page">센터를 찾을 수 없어요</div>
       </div>
     );
   }

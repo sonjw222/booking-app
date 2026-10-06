@@ -186,7 +186,7 @@ export default function ClassRevenuePage() {
           <div className="title">수업매출</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
+        <div className="daylist-empty daylist-empty--page">운영 중인 센터가 없어요</div>
       </div>
     );
   }

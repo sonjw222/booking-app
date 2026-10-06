@@ -151,7 +151,7 @@ export default function ManagerNotificationsPage() {
         <div className="header">
           <div className="title" style={{ fontSize: 20, fontWeight: 800 }}>알림</div>
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
+        <div className="daylist-empty daylist-empty--page">운영 중인 센터가 없어요</div>
       </div>
     );
   }

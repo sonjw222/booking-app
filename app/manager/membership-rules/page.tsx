@@ -497,7 +497,7 @@ export default function MembershipRulesPage() {
           <div className="title">수강권 설정</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
+        <div className="daylist-empty daylist-empty--page">운영 중인 센터가 없어요</div>
       </div>
     );
   }
@@ -549,7 +549,7 @@ export default function MembershipRulesPage() {
       {loading ? (
         <Loading />
       ) : products.length === 0 ? (
-        <div className="daylist-empty" style={{ paddingTop: 30 }}>
+        <div className="daylist-empty daylist-empty--sm">
           등록된 수강권이 없어요<br />
           <span style={{ fontSize: 12 }}>우측 상단 '+ 수강권'으로 추가하세요</span>
         </div>

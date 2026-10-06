@@ -77,7 +77,7 @@ export default function BannersPage() {
           <div className="title">배너 관리</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>
+        <div className="daylist-empty daylist-empty--page">
           플랫폼 운영자만 접근할 수 있는 화면이에요
         </div>
       </div>

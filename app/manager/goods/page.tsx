@@ -205,7 +205,7 @@ export default function GoodsPage() {
           <div className="title">상품 관리</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
+        <div className="daylist-empty daylist-empty--page">운영 중인 센터가 없어요</div>
       </div>
     );
   }
@@ -243,7 +243,7 @@ export default function GoodsPage() {
       {loading ? (
         <Loading />
       ) : products.length === 0 ? (
-        <div className="daylist-empty" style={{ paddingTop: 30 }}>
+        <div className="daylist-empty daylist-empty--sm">
           등록된 상품이 없어요<br />
           <span style={{ fontSize: 12 }}>우측 상단 &apos;+ 상품&apos;으로 추가하세요</span>
         </div>

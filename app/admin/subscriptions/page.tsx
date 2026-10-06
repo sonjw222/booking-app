@@ -136,7 +136,7 @@ export default function AdminSubscriptionsPage() {
           <div className="title">구독 현황</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>
+        <div className="daylist-empty daylist-empty--page">
           플랫폼 운영자만 접근할 수 있는 화면이에요
         </div>
       </div>
@@ -179,7 +179,7 @@ export default function AdminSubscriptionsPage() {
       </div>
 
       {rows.length === 0 ? (
-        <div className="daylist-empty" style={{ paddingTop: 40 }}>구독 정보가 있는 센터가 없어요</div>
+        <div className="daylist-empty daylist-empty--md">구독 정보가 있는 센터가 없어요</div>
       ) : (
         <div className="admin-list">
           {rows

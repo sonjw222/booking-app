@@ -238,7 +238,7 @@ export default function StaffPage() {
           <div className="title">스태프 & 권한</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
+        <div className="daylist-empty daylist-empty--page">운영 중인 센터가 없어요</div>
       </div>
     );
   }
@@ -339,12 +339,12 @@ export default function StaffPage() {
           </div>
 
           {activeRole?.isOwner ? (
-            <div className="daylist-empty" style={{ paddingTop: 30 }}>
+            <div className="daylist-empty daylist-empty--sm">
               스튜디오 오너는 모든 권한을 가져요<br />
               <span style={{ fontSize: 12 }}>권한 설정이 필요 없습니다</span>
             </div>
           ) : !activeRoleId ? (
-            <div className="daylist-empty" style={{ paddingTop: 30 }}>역할을 선택해주세요</div>
+            <div className="daylist-empty daylist-empty--sm">역할을 선택해주세요</div>
           ) : (
             <>
               {/* 카테고리 탭 */}
@@ -382,7 +382,7 @@ export default function StaffPage() {
 
               <div className="perm-list">
                 {tree.length === 0 ? (
-                  <div className="daylist-empty" style={{ paddingTop: 20 }}>이 카테고리에 권한이 없어요</div>
+                  <div className="daylist-empty daylist-empty--xs">이 카테고리에 권한이 없어요</div>
                 ) : (
                   tree.map((p) => (
                     <div key={p.key} className="perm-group">

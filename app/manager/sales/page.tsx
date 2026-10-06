@@ -331,7 +331,7 @@ export default function SalesPage() {
           <div className="title">매출 관리</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
+        <div className="daylist-empty daylist-empty--page">운영 중인 센터가 없어요</div>
       </div>
     );
   }
@@ -442,7 +442,7 @@ export default function SalesPage() {
             {rows.length > 0 && <button className="text-btn" onClick={() => setCsvSheet(true)}>엑셀 내보내기</button>}
           </div>
           {rows.length === 0 ? (
-            <div className="daylist-empty" style={{ paddingTop: 20 }}>이 기간 결제 내역이 없어요</div>
+            <div className="daylist-empty daylist-empty--xs">이 기간 결제 내역이 없어요</div>
           ) : (
             <div className="sales-list">
               {rows.map((r) => (
@@ -498,7 +498,7 @@ export default function SalesPage() {
 
           <div className="menu-section-label">지출 내역 ({expenses.length}건)</div>
           {expenses.length === 0 ? (
-            <div className="daylist-empty" style={{ paddingTop: 20 }}>이 기간 지출 내역이 없어요</div>
+            <div className="daylist-empty daylist-empty--xs">이 기간 지출 내역이 없어요</div>
           ) : (
             <div className="sales-list">
               {expenses.map((e) => (
@@ -521,7 +521,7 @@ export default function SalesPage() {
         <>
           <div className="menu-section-label">포인트 내역 ({points.length}건)</div>
           {points.length === 0 ? (
-            <div className="daylist-empty" style={{ paddingTop: 20 }}>포인트 내역이 없어요</div>
+            <div className="daylist-empty daylist-empty--xs">포인트 내역이 없어요</div>
           ) : (
             <div className="sales-list">
               {points.map((p) => (

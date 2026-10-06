@@ -99,7 +99,7 @@ export default function ManagerSettlementPage() {
           <div className="title">정산계좌</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>
+        <div className="daylist-empty daylist-empty--page">
           스튜디오 오너만 접근할 수 있는 화면이에요
         </div>
       </div>

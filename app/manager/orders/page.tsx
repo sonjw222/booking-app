@@ -134,7 +134,7 @@ export default function ManagerOrdersPage() {
       </div>
 
       {loading ? <Loading /> : shown.length === 0 ? (
-        <div className="daylist-empty" style={{ paddingTop: 40 }}>
+        <div className="daylist-empty daylist-empty--md">
           {filter === "pending" ? "확인할 주문이 없어요" : "주문 내역이 없어요"}
         </div>
       ) : (

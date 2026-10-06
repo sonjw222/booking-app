@@ -224,7 +224,7 @@ export default function CouponsPage() {
           <div className="title">쿠폰 관리</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
+        <div className="daylist-empty daylist-empty--page">운영 중인 센터가 없어요</div>
       </div>
     );
   }
@@ -257,7 +257,7 @@ export default function CouponsPage() {
       {loading ? (
         <Loading />
       ) : coupons.length === 0 ? (
-        <div className="daylist-empty" style={{ paddingTop: 30 }}>
+        <div className="daylist-empty daylist-empty--sm">
           만든 쿠폰이 없어요<br />
           <span style={{ fontSize: 12 }}>우측 상단 &apos;+ 쿠폰&apos;으로 추가하세요</span>
         </div>
@@ -421,7 +421,7 @@ export default function CouponsPage() {
             {detailLoading ? (
               <Loading />
             ) : filteredDetailRows.length === 0 ? (
-              <div className="daylist-empty" style={{ paddingTop: 20 }}>지급 내역이 없어요</div>
+              <div className="daylist-empty daylist-empty--xs">지급 내역이 없어요</div>
             ) : (
               <div style={{ marginTop: 8, maxHeight: 320, overflowY: "auto" }}>
                 {filteredDetailRows.map((r) => (

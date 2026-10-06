@@ -136,7 +136,7 @@ export default function AdminCentersPage() {
           <div className="title">센터 승인 관리</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>
+        <div className="daylist-empty daylist-empty--page">
           플랫폼 운영자만 접근할 수 있는 화면이에요
         </div>
       </div>
@@ -201,7 +201,7 @@ export default function AdminCentersPage() {
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
       {filteredCenters.length === 0 ? (
-        <div className="daylist-empty" style={{ paddingTop: 40 }}>
+        <div className="daylist-empty daylist-empty--md">
           {/* 6-4 — "필터 자체에 데이터가 없음"과 "검색어 때문에 없음"을 구분한다. */}
           {keyword.trim()
             ? `'${keyword.trim()}' 검색 결과가 없어요`

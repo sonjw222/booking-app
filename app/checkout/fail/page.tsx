@@ -41,14 +41,14 @@ function CheckoutFailContent() {
     <div className="app-shell">
       {state.kind === "working" && <Loading />}
       {state.kind === "done" && (
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>
+        <div className="daylist-empty daylist-empty--page">
           <b>결제가 취소됐어요.</b><br />
           {state.message ? <>{state.message}<br /></> : null}
           모하빗 앱으로 돌아가 다시 시도해주세요.
         </div>
       )}
       {state.kind === "error" && (
-        <div className="daylist-empty" style={{ paddingTop: 80 }} role="alert">
+        <div className="daylist-empty daylist-empty--page" role="alert">
           <b>결제 취소 상태를 확인하지 못했어요.</b><br />
           모하빗 앱으로 돌아가 구매내역을 확인해주세요.
         </div>

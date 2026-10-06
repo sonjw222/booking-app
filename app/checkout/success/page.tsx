@@ -45,13 +45,13 @@ function CheckoutSuccessContent() {
     <div className="app-shell">
       {state.kind === "working" && <Loading />}
       {state.kind === "done" && (
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>
+        <div className="daylist-empty daylist-empty--page">
           <b>결제가 완료됐어요.</b><br />
           모하빗 앱으로 돌아가면 구매내역이 자동으로 반영돼요.
         </div>
       )}
       {state.kind === "error" && (
-        <div className="daylist-empty" style={{ paddingTop: 80 }} role="alert">
+        <div className="daylist-empty daylist-empty--page" role="alert">
           <b>결제 결과를 확인하지 못했어요.</b><br />
           {state.message}
         </div>

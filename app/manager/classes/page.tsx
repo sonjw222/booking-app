@@ -1223,9 +1223,9 @@ export default function ClassManagePage() {
 
       {dayClasses.length === 0 ? (
         holidayDates.has(`${year}-${pad2(month)}-${pad2(selectedDay)}`) ? (
-          <div className="daylist-empty" style={{ paddingTop: 20 }}>휴무일이에요</div>
+          <div className="daylist-empty daylist-empty--xs">휴무일이에요</div>
         ) : assignMode ? (
-          <div className="daylist-empty" style={{ paddingTop: 20 }}>이 날 등록된 수업이 없어요.</div>
+          <div className="daylist-empty daylist-empty--xs">이 날 등록된 수업이 없어요.</div>
         ) : (
           <div className="empty-action manager-class-empty">
             <div className="empty-action-text">이 날 등록된 수업이 없어요.</div>

@@ -145,7 +145,7 @@ export default function AlimtalkRulesPage() {
           <div className="title">자동 발송 규칙</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
+        <div className="daylist-empty daylist-empty--page">운영 중인 센터가 없어요</div>
       </div>
     );
   }
@@ -172,7 +172,7 @@ export default function AlimtalkRulesPage() {
       {loading ? (
         <Loading />
       ) : rules.length === 0 ? (
-        <div className="daylist-empty" style={{ paddingTop: 60 }}>
+        <div className="daylist-empty daylist-empty--lg">
           아직 만든 자동 발송 규칙이 없어요.<br /><button className="outline-action" onClick={openNew}>새로 만들기</button>
         </div>
       ) : (

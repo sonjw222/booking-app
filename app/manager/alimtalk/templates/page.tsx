@@ -266,7 +266,7 @@ export default function AlimtalkTemplatesPage() {
           <div className="title">템플릿 관리</div>
           <div className="side" />
         </div>
-        <div className="daylist-empty" style={{ paddingTop: 80 }}>운영 중인 센터가 없어요</div>
+        <div className="daylist-empty daylist-empty--page">운영 중인 센터가 없어요</div>
       </div>
     );
   }
@@ -298,7 +298,7 @@ export default function AlimtalkTemplatesPage() {
       {loading ? (
         <Loading />
       ) : templates.length === 0 ? (
-        <div className="daylist-empty" style={{ paddingTop: 60 }}>
+        <div className="daylist-empty daylist-empty--lg">
           등록된 템플릿이 없어요.<br />
           <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
             <button className="outline-action" onClick={openImportSheet}>알리고 템플릿 불러오기</button>
