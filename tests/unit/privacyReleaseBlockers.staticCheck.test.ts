@@ -104,13 +104,16 @@ describe("fix_marketing_consent_fanout.sql — 광고성 팬아웃 수신 동의
     expect(body).not.toMatch(/marketing_consent\s*=\s*true/);
   });
 
-  it("광고성 규칙(birthday / expired_rebuy)만 marketing_consent 게이트를 갖는다", () => {
+  it("광고성 규칙(birthday / expired_rebuy)은 마케팅 동의자 중 탈퇴하지 않은 계정만 대상으로 한다", () => {
     for (const t of ["birthday", "expired_rebuy"]) {
       const branch = ruleBranch(t);
       expect(branch, `${t} 분기에 accounts 조인이 없습니다`).toMatch(
         /join accounts a on a\.id = pr\.account_id/
       );
       expect(branch, `${t} 분기에 동의 조건이 없습니다`).toMatch(/a\.marketing_consent is true/);
+      expect(branch, `${t} 분기에 탈퇴 계정 제외 조건이 없습니다`).toMatch(
+        /a\.deactivated_at is null/
+      );
       expect(branch).not.toMatch(/marketing_consent\s*=\s*true/);
     }
   });
