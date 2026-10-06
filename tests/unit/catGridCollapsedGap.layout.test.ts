@@ -78,7 +78,8 @@ describe("홈 종목 그리드 — tablet/desktop 접힌 상태", () => {
 describe("정적 계약", () => {
   it("collapsed 규칙은 @media(min-width:768px)에만, 토큰(--cat-row-gap/--cat-pad-top) 사용, DOM 순서/기기별 숫자 하드코딩 없음", () => {
     const g = readFileSync(path.join(root, "app/globals.css"), "utf8");
-    const block = g.slice(g.lastIndexOf("@media (min-width: 768px) {\n  .member-home .cat-grid:not(.is-expanded)"));
+    const start = g.lastIndexOf("@media (min-width: 768px) {\n  .member-home .cat-grid:not(.is-expanded)");
+    const block = g.slice(start, g.indexOf("\n}\n", start) + 3);   // 이 @media 블록 하나만
     expect(block).toContain("row-gap: 0;");
     expect(block).toContain("var(--cat-row-gap");
     expect(block).not.toMatch(/\b\d{2,3}px\b(?!\))/);   // 18px/8px는 var() fallback 안에서만

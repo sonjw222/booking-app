@@ -6744,4 +6744,3 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
 .daylist-empty--xs { --empty-pad: 20px; }
 .daylist-empty[class*="daylist-empty--"],
 :is(.manager-v3-content, .admin-v3-content) .sheet .daylist-empty[class*="daylist-empty--"] { padding-top: var(--empty-pad); }
-
