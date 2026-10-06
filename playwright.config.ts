@@ -17,6 +17,9 @@ export default defineConfig({
   reporter: [
     ["html", { outputFolder: "playwright-report", open: "never" }],
     ["list"],
+    // 실패 상세를 끝나는 즉시 로그에 남긴다(job이 timeout으로 cancelled돼도 원인이 남도록, 민감값은 redact) + CI에서는 GitHub annotation.
+    ["./tests/e2e/diagnosticsReporter.ts"],
+    ...(process.env.CI ? ([["github"]] as const) : []),
   ],
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
