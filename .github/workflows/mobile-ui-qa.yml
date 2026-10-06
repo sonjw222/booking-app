@@ -8,13 +8,39 @@ name: Mobile UI QA (iOS XCUITest / Android Espresso)
 # 추가하는 건 별도 작업으로 남긴다 — 지금은 workflow_dispatch로만 수동 실행.
 on:
   workflow_dispatch:
+    inputs:
+      production_qa_ack:
+        description: "이 앱은 server.url=https://mwhabit.com(Production)을 열어 Production 계정으로 로그인한다. 아래 문구를 정확히 입력해야 실행된다: I-ACK-THIS-RUNS-AGAINST-PRODUCTION"
+        required: true
+        type: string
 
 # 최소 권한(2026-10-07): repository에 쓰지 않는다.
 permissions:
   contents: read
 
+# Production 확인 가드(2026-10-07) — 분류: C(의도적 Production QA).
+# 근거: capacitor.config.ts의 server.url이 https://mwhabit.com이라 에뮬레이터/시뮬레이터가 "배포된 Production 웹앱"을 열고,
+# TEST_USER_A/TEST_MANAGER_A 계정으로 그 Production Supabase에 로그인한다. 이 workflow는 Supabase URL/키 env를 쓰지 않으므로
+# test.yml의 URL 기반 preflight로는 막을 수 없다 → qa:production과 같은 방식으로 "명시적 ACK 문구"를 요구한다(없거나 틀리면 job 실패 → 아래 job 모두 skip).
+# 개발/CI 전용 Supabase를 쓰는 QA로 바꾸려면 server.url을 dev 배포로 향하게 하는 별도 빌드가 필요하다(이 workflow의 범위 밖).
 jobs:
+  production-qa-ack:
+    name: Production QA 확인(ACK 필수)
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: ACK 문구 검사
+        env:
+          ACK: ${{ inputs.production_qa_ack }}
+        run: |
+          if [ "$ACK" != "I-ACK-THIS-RUNS-AGAINST-PRODUCTION" ]; then
+            echo "::error::mobile-ui-qa는 Production(https://mwhabit.com)을 대상으로 실행됩니다. production_qa_ack 입력에 정확한 확인 문구가 필요합니다."
+            exit 1
+          fi
+          echo "Production QA ACK 확인됨(대상: 배포된 웹앱, 테스트 계정 TEST_USER_A/TEST_MANAGER_A)."
+
   android-ui-tests:
+    needs: production-qa-ack
     name: Android Espresso/UI Automator (emulator)
     runs-on: ubuntu-latest
     # .github/workflows/test.yml과 동일한 이유(TEST_USER_A 등 공유 dev Supabase 테스트
@@ -80,10 +106,11 @@ jobs:
           path: |
             android/app/build/reports/androidTests/
             android/app/build/outputs/androidTest-results/
-          retention-days: 14
+          retention-days: 3
           if-no-files-found: ignore
 
   ios-ui-tests:
+    needs: production-qa-ack
     name: iOS XCUITest (simulator)
     # macOS 러너 필수(iOS 시뮬레이터는 macOS에서만 구동 가능) — GitHub 호스팅 러너 중
     # macos-latest는 Linux(ubuntu-latest) 대비 분당 비용이 훨씬 비싸다(GitHub 공식
@@ -138,5 +165,5 @@ jobs:
         with:
           name: ios-ui-test-results
           path: TestResults.xcresult
-          retention-days: 14
+          retention-days: 3
           if-no-files-found: ignore

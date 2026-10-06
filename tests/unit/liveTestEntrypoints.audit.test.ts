@@ -22,7 +22,8 @@ describe("live-test 진입점", () => {
     expect(scripts["test:integration"]).toContain("vitest.integration.config.ts");
     expect(scripts["test:e2e"]).toBe("playwright test");
     for (const [k, v] of Object.entries(scripts)) if (k.startsWith("qa:business:")) expect(v, k).toContain("vitest.integration.config.ts");
-    expect(scripts["test:all"]).toBe("npm run test && npm run test:integration");
+    expect(scripts["test:all"]).toMatch(/^echo "\[test:all\] unit \+ LIVE integration[^"]*" && npm run test && npm run test:integration$/);   // live 포함 경고를 먼저 출력
+    expect(scripts["test:live:integration"]).toBe(scripts["test:integration"]); expect(scripts["test:live:e2e"]).toBe(scripts["test:e2e"]);   // 이름만 live를 드러낸 별칭
     const ic = rd("vitest.integration.config.ts");
     expect(ic).toContain('globalSetup: ["tests/integration/globalSetup.ts"]'); expect(ic).toContain('setupFiles: ["tests/integration/loadEnv.ts"]');
     expect(ic).toContain('include: ["tests/integration/**/*.test.ts"]');
@@ -48,5 +49,18 @@ describe("live-test 진입점", () => {
     const onBlock = m.slice(m.indexOf("\non:"), m.indexOf("\npermissions:"));   // 트리거 블록만 검사(본문 스크립트의 'push:' 문자열과 구분)
     expect(onBlock).toMatch(/on:\n  workflow_dispatch:/); expect(onBlock).not.toMatch(/pull_request|push/);
     expect(m).toMatch(/permissions:\n  contents: read/);
+  });
+  it("E→C. mobile-ui-qa는 server.url=Production을 여는 의도적 Production QA라 ACK 입력 없이는 어떤 job도 시작되지 않는다", () => {
+    expect(rd("capacitor.config.ts")).toContain('url: "https://mwhabit.com"');
+    const m = rd(".github/workflows/mobile-ui-qa.yml");
+    expect(m).toMatch(/production_qa_ack:\n\s+description:[^\n]*\n\s+required: true/);
+    expect(m).toContain('[ "$ACK" != "I-ACK-THIS-RUNS-AGAINST-PRODUCTION" ]');
+    expect(m).toContain("ACK: ${{ inputs.production_qa_ack }}");   // 입력은 env로 전달(스크립트 인젝션 방지)
+    expect(m.match(/\n    needs: production-qa-ack/g)?.length).toBe(2);   // android + ios
+    expect(m).toMatch(/retention-days: 3/); expect(m).not.toMatch(/retention-days: 14/);
+  });
+  it("workflow 전수 목록: 이 두 개뿐이며 각각 분류가 있다(새 workflow가 생기면 이 테스트가 분류를 요구한다)", async () => {
+    const { readdirSync } = await import("node:fs");
+    expect(readdirSync(path.join(root, ".github/workflows")).sort()).toEqual(["mobile-ui-qa.yml", "test.yml"]);   // test.yml=B(비-production live, preflight+guard), mobile-ui-qa.yml=C(ACK)
   });
 });
