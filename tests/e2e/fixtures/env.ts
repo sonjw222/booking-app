@@ -6,8 +6,20 @@
 // 않는다(필요해지면 그때 추가).
 import { config } from "dotenv";
 import path from "node:path";
+import { assertIntegrationTargetIsNotProduction } from "../../integration/productionGuard";
 
 config({ path: path.resolve(process.cwd(), ".env.test.local") });
+
+// Production 차단(최우선, 2026-10-07): playwright.config.ts가 이 파일을 가장 먼저 import하므로 브라우저/webServer(npm run dev)가 시작되기 전에 실행된다.
+// integration(tests/integration/loadEnv.ts)과 같은 순수 helper를 쓴다(정책 drift 방지 — 단위 테스트가 두 진입점 모두 이 함수를 호출하는지 확인).
+assertIntegrationTargetIsNotProduction(process.env);
+// 대상 URL이 없으면 webServer(Next dev)가 로컬 .env.local(Production을 가리킬 수 있음)을 읽어 버리므로, 대상을 확인할 수 없는 상태에서는 시작하지 않는다.
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) {
+  throw new Error(
+    "E2E 대상 Supabase URL(NEXT_PUBLIC_SUPABASE_URL)이 설정되지 않아 실행을 중단합니다 — 대상이 확인되지 않으면 앱 서버가 .env.local(Production일 수 있음)을 읽을 수 있습니다. " +
+      ".env.test.local(개발/테스트 프로젝트) 또는 CI Secrets를 설정하세요."
+  );
+}
 
 const REQUIRED = [
   "NEXT_PUBLIC_SUPABASE_URL",

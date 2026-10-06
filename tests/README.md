@@ -86,11 +86,12 @@ provider 선택 로직만 검증합니다. 아무 설정 없이 바로 실행됩
 - 통합 테스트는 오직 `.env.test.local`(로컬)/Repository Secrets(CI)에 설정된
   `NEXT_PUBLIC_SUPABASE_URL`을 향해서만 실행됩니다. 앱이 실제로 쓰는 `.env.local`은 통합 테스트
   코드 어디에서도 로드하지 않습니다(완전히 별개 파일).
-- `tests/integration/loadEnv.ts`가 `PRODUCTION_SUPABASE_URL`이 설정돼 있고 그 값이
-  `NEXT_PUBLIC_SUPABASE_URL`과 같으면 **테스트 실행 자체를 즉시 에러로 중단**시킵니다. 지금은
-  운영 Supabase 프로젝트가 따로 없어 이 검사가 활성화되어 있지 않지만, 나중에 운영 프로젝트가
-  생기고 그 URL을 `PRODUCTION_SUPABASE_URL`로 등록해두면 테스트 코드를 다시 손보지 않아도
-  자동으로 보호막이 켜집니다.
+- **하드 가드(2026-10-06)**: `tests/integration/loadEnv.ts`가 dotenv 로드 직후(필수 env 검증/Supabase client/DB 접근보다 먼저)
+  `tests/integration/productionGuard.ts`를 실행합니다. 알려진 Production project ref(`bxntqggkfwnhcczsbqtj`)가
+  `NEXT_PUBLIC_SUPABASE_URL`/`SUPABASE_URL`(trailing slash·대소문자·포트·경로 변형 포함)이나 anon/service-role 키(JWT `ref` claim)에
+  보이면 **환경변수 설정 여부와 무관하게 테스트 실행 자체를 즉시 에러로 중단**합니다. `npm run test:integration`, `npm run test:all`
+  (→ test:integration), `qa:business:*`가 모두 이 가드를 거칩니다. `PRODUCTION_SUPABASE_URL`(선택)은 추가 방어선으로 유지됩니다.
+- 의도적인 Production QA runner(`npm run qa:production:*`)는 별도 가드(`QA_TARGET_PROJECT_REF` + `QA_PRODUCTION_ACK=1`)를 쓰며 이 가드의 영향을 받지 않습니다.
 - **책임 소재**: GitHub Repository Secrets에 실제로 어떤 프로젝트의 값을 넣을지는 사람이
   직접 설정하는 부분이라(GitHub UI에서만 가능), Claude/CI가 대신 확인해줄 수 없습니다. Secrets를
   등록할 때 반드시 개발용 프로젝트의 URL/키인지 확인해주세요.
