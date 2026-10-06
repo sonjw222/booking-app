@@ -4352,7 +4352,7 @@ a.membership-card { text-decoration: none; display: block; }
 .home-category-head,.home-class-head { min-height: 58px; padding: 22px var(--page-gutter) 10px; display: flex; align-items: center; justify-content: space-between; }
 .home-category-head h2,.home-class-head h2 { margin: 0; font-size: 18px; font-weight: 680; letter-spacing: -.025em; }
 .home-category-head a,.home-category-head button,.home-class-head a { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: flex-end; color: var(--brand-ink); font-size: 12.5px; font-weight: 600; background: none; border: none; font-family: inherit; cursor: pointer; }
-.member-home .cat-grid { padding: 8px var(--page-gutter) 4px; grid-template-columns: repeat(4,1fr); row-gap: 19px; }
+.member-home .cat-grid { --cat-pad-top: 8px; --cat-row-gap: 19px; padding: var(--cat-pad-top) var(--page-gutter) 4px; grid-template-columns: repeat(4,1fr); row-gap: var(--cat-row-gap); }
 .member-home .cat-item { gap: 8px; }
 .member-home .cat-icon { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 50%; background: var(--surface); color: var(--brand-ink); }
 .member-home .cat-label { max-width: 76px; min-height: 32px; color: var(--ink); font-size: 11.5px; line-height: 1.35; font-weight: 600; word-break: keep-all; }
@@ -5443,7 +5443,7 @@ textarea:focus-visible,
   .member-home .hero { margin-inline: var(--workspace-gutter); min-height: 190px; padding-inline: 30px; }
   .member-home .hero h1 { max-width: 60%; font-size: clamp(24px,3vw,34px); }
   .member-home .home-value-line,.member-home .home-category-head,.member-home .home-class-head { margin-inline: var(--workspace-gutter); }
-  .member-home .cat-grid { grid-template-columns: repeat(auto-fit,minmax(92px,1fr)); gap: 18px; padding-inline: var(--workspace-gutter); }
+  .member-home .cat-grid { --cat-row-gap: 18px; grid-template-columns: repeat(auto-fit,minmax(92px,1fr)); gap: var(--cat-row-gap); padding-inline: var(--workspace-gutter); }
   .member-home .cat-icon { width: 68px; height: 68px; }
   .member-home .home-class-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; padding-inline: var(--workspace-gutter); }
   .member-home .home-class-row { min-height: 112px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--card-bg); }
@@ -6198,7 +6198,7 @@ textarea:focus-visible,
   .member-home .home-value-line { min-height: 34px; margin-bottom: 6px; }
   .member-home .hero { min-height: 146px; height: 146px; padding: 16px; }
   .member-home .home-category-head { min-height: 46px; padding-top: 12px; padding-bottom: 4px; }
-  .member-home .cat-grid { padding-top: 2px; row-gap: 6px; }
+  .member-home .cat-grid { --cat-pad-top: 2px; --cat-row-gap: 6px; padding-top: var(--cat-pad-top); row-gap: var(--cat-row-gap); }
   .member-home .cat-icon { width: 52px; height: 52px; }
 }
 
@@ -6212,7 +6212,7 @@ textarea:focus-visible,
   .member-home .home-value-line { min-height: 30px; margin-bottom: 4px; }
   .member-home .hero { min-height: 132px; height: 132px; padding: 16px 22px; }
   .member-home .home-category-head { min-height: 42px; padding-top: 10px; padding-bottom: 4px; }
-  .member-home .cat-grid { padding-top: 2px; }
+  .member-home .cat-grid { --cat-pad-top: 2px; padding-top: var(--cat-pad-top); }
   .member-home .cat-icon { width: 52px; height: 52px; }
 }
 
@@ -6715,3 +6715,20 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
 /* 회원 추가 시트(2026-10-04): 하단 safe-area를 확보해 결과 목록/닫기 버튼이 홈 인디케이터에 가리지 않게 */
 .member-add-sheet { padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
 .member-add-sheet .mem-detail-list { min-height: 72px; }
+
+/* 홈 종목 그리드(tablet/desktop) 접힌 상태의 하단 불필요 여백 제거(2026-10-06).
+   접힌 .cat-grid는 grid-auto-rows:0으로 3행 이후를 높이 0 트랙에 접어 두는데, CSS grid의 row-gap은 0높이 트랙과 앞 행 사이에도 적용돼
+   (한 행에 들어가는 개수에 따라) 보이는 2행 아래에 row-gap만큼 빈 공간이 남았다. 숨겨진 행이 있는지 CSS로는 알 수 없으므로 row-gap 자체를 쓰지 않고
+   "행 사이 간격"을 각 아이템의 margin-top으로 옮긴다 — 0높이 트랙의 아이템 margin은 트랙 높이에 기여하지 않아 트랙 사이에 gap이 쌓이지 않는다.
+   첫 행도 margin-top을 가지므로 컨테이너 위쪽을 같은 만큼 당겨(padding 감소, 부족분은 음수 margin) 첫 행의 시각적 위치는 그대로 둔다.
+   컨테이너는 pointer-events:none, 아이템만 auto — 음수 margin으로 겹친 빈 padding 영역이 앞 요소(헤더 버튼)의 클릭을 가로채지 않게 한다.
+   mobile(<768)은 정확히 8개만 렌더(app/page.tsx displayCategories)라 숨은 행이 없어 대상이 아니다. DOM 순서/접근성 변경 없음. 간격 값은 --cat-row-gap/--cat-pad-top 토큰을 그대로 사용. */
+@media (min-width: 768px) {
+  .member-home .cat-grid:not(.is-expanded) {
+    row-gap: 0;
+    padding-top: max(0px, calc(var(--cat-pad-top, 8px) - var(--cat-row-gap, 18px)));
+    margin-top: calc(-1 * max(0px, calc(var(--cat-row-gap, 18px) - var(--cat-pad-top, 8px))));
+    pointer-events: none;
+  }
+  .member-home .cat-grid:not(.is-expanded) > .cat-item { margin-top: var(--cat-row-gap, 18px); pointer-events: auto; }
+}
