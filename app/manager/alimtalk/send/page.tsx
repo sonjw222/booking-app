@@ -24,6 +24,7 @@ import {
   ALIMTALK_AUTO_VARIABLE_NAMES, type AlimtalkTemplate,
 } from "../../../../lib/alimtalk";
 import { fetchCenterSubscription } from "../../../../lib/centerSubscription";
+import { pickInitialCenterId } from "../../../../lib/managerCenterPref";
 
 const STATUS_LABEL: Record<string, string> = {
   active: "이용중", expired: "만료", dormant: "휴면",
@@ -60,7 +61,7 @@ export default function AlimtalkSendPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(pickInitialCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();

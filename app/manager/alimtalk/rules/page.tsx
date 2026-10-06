@@ -23,6 +23,7 @@ import {
   defaultNotificationRuleDraft, SUPPORTED_TRIGGER_TYPES, TRIGGER_TYPE_LABEL, SECONDARY_CONDITION,
   type NotificationRule, type NotificationRuleDraft, type AlimtalkTemplate, type SupportedTriggerType,
 } from "../../../../lib/alimtalk";
+import { pickInitialCenterId, rememberCenterId } from "../../../../lib/managerCenterPref";
 
 function primarySummary(rule: NotificationRuleDraft): string {
   if (rule.triggerType === "count_low") return `잔여 ${rule.thresholdCount ?? "?"}회 이하`;
@@ -62,7 +63,7 @@ export default function AlimtalkRulesPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(pickInitialCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
@@ -161,7 +162,7 @@ export default function AlimtalkRulesPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>{c.name}</button>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); rememberCenterId(c.id); }}>{c.name}</button>
           ))}
         </div>
       )}

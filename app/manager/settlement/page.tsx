@@ -22,6 +22,7 @@ import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchCenterPayoutAccount, PAYOUTS_ENABLED, STATUS_LABEL, type CenterPayoutAccount } from "../../../lib/payouts";
 import { fetchCenterSettlementAccount, saveCenterSettlementAccount } from "../../../lib/settlementAccounts";
+import { rememberCenterId } from "../../../lib/managerCenterPref";
 
 export default function ManagerSettlementPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -116,7 +117,7 @@ export default function ManagerSettlementPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); rememberCenterId(c.id); }}>
               {c.name}
             </button>
           ))}

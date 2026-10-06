@@ -34,6 +34,7 @@ import { bulkDeleteConfirmMessage, bulkDeleteToast, effectiveSelection, selectAl
 import { validateGoodsForm, goodsListLabel, draftsFromTiers, type GoodsPricingMode } from "../../../lib/goodsForm";
 import { draftsToTiers, type TierDraft } from "../../../lib/selectableCount";
 import { filterCatalog, uniqueGroupLabels, catalogEmptyMessage, isFilterActive, EMPTY_CATALOG_FILTER } from "../../../lib/catalogFilter";
+import { pickInitialCenterId, rememberCenterId } from "../../../lib/managerCenterPref";
 
 // 요일 선택형 수강권은 요일이 지정된 예약조건이 1개 이상 있어야 회원이 구매할 때 요일을 고를 수 있다.
 const WEEKDAY_NEEDS_RULES_MESSAGE = "요일 선택형 수강권은 예약조건을 1개 이상 등록해야 회원이 구매할 수 있어요.";
@@ -122,7 +123,7 @@ export default function MembershipRulesPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(pickInitialCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
@@ -518,7 +519,7 @@ export default function MembershipRulesPage() {
           <div className="menu-section-label" style={{ padding: "0 20px 4px" }}>지금 보는 센터</div>
           <div className="center-switcher">
             {centers.map((c) => (
-              <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+              <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); rememberCenterId(c.id); }}>
                 {c.name}
               </button>
             ))}

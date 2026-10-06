@@ -17,6 +17,7 @@ import {
 } from "../../../lib/leads";
 import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
+import { pickInitialCenterId, rememberCenterId } from "../../../lib/managerCenterPref";
 
 const STATUS_LABEL: Record<LeadStatus, string> = {
   new: "신규", contacted: "상담중", converted: "회원전환", dropped: "이탈",
@@ -51,7 +52,7 @@ export default function LeadsPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(pickInitialCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
@@ -119,7 +120,7 @@ export default function LeadsPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>{c.name}</button>
+            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); rememberCenterId(c.id); }}>{c.name}</button>
           ))}
         </div>
       )}

@@ -21,6 +21,7 @@ import {
   type AlimtalkTemplate, type AlimtalkTemplateStatus, type AligoRemoteTemplate,
 } from "../../../../lib/alimtalk";
 import { toUserMessage } from "../../../../lib/userError";
+import { pickInitialCenterId, rememberCenterId } from "../../../../lib/managerCenterPref";
 
 const INSP_STATUS_LABEL: Record<string, string> = {
   REG: "등록(심사 전)", REQ: "심사 요청중", APR: "승인됨", REJ: "반려됨",
@@ -72,7 +73,7 @@ export default function AlimtalkTemplatesPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(pickInitialCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(toUserMessage(e, "운영 중인 센터 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")); setLoading(false); }
     })();
@@ -288,7 +289,7 @@ export default function AlimtalkTemplatesPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>{c.name}</button>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); rememberCenterId(c.id); }}>{c.name}</button>
           ))}
         </div>
       )}

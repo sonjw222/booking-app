@@ -6,6 +6,7 @@
 
 import { supabase } from "./supabaseClient";
 import { getMyAccountId as getMyAccountIdBase } from "./authAccount";
+import { setPrefAccount } from "./managerCenterPref";
 
 export type ManagedCenter = {
   id: string;
@@ -67,6 +68,7 @@ export async function fetchMyCenters(): Promise<ManagedCenter[]> {
   if (myCentersRequest) return myCentersRequest;
   myCentersRequest = (async () => {
     const accountId = await getMyAccountId();
+    setPrefAccount(accountId);   // 마지막 선택 센터 기억(managerCenterPref)의 계정 key
     const { data, error } = await supabase
       .from("manager_centers")
       .select("id, role_id, status, centers(id, name, status), center_roles(name, is_owner)")

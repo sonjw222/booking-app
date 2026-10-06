@@ -22,6 +22,7 @@ import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../lib/rol
 import { fetchDashboardSummary, won, type DashboardSummary } from "../../lib/sales";
 import EmptyState from "../components/EmptyState";
 import ErrorState from "../components/ErrorState";
+import { pickInitialCenterId, rememberCenterId } from "../../lib/managerCenterPref";
 
 type DashPeriod = "today" | "7d" | "30d";
 
@@ -120,7 +121,7 @@ export default function ManagerDashboard() {
     try {
       const list = await fetchMyCenters();
       setCenters(list);
-      if (list.length > 0) setActiveCenterId(list[0].id);
+      if (list.length > 0) setActiveCenterId(pickInitialCenterId(list));
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -222,6 +223,7 @@ export default function ManagerDashboard() {
               setRosterClass(null);
               setMemberInfo(null);
               setActiveCenterId(c.id);
+              rememberCenterId(c.id);
             }}
             aria-pressed={c.id === activeCenterId}
           >

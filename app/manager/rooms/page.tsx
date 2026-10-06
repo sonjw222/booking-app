@@ -16,6 +16,7 @@ import Loading from "../../components/Loading";
 import MapPicker from "../center-info/MapPicker";
 import MapPreview from "../../components/MapPreview";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { pickInitialCenterId, rememberCenterId } from "../../../lib/managerCenterPref";
 
 export default function RoomsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -45,7 +46,7 @@ export default function RoomsPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(pickInitialCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
@@ -117,7 +118,7 @@ export default function RoomsPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>{c.name}</button>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); rememberCenterId(c.id); }}>{c.name}</button>
           ))}
         </div>
       )}

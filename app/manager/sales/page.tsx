@@ -26,6 +26,7 @@ import {
 } from "../../../lib/sales";
 import { fetchSettings } from "../../../lib/settings";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { pickInitialCenterId, rememberCenterId } from "../../../lib/managerCenterPref";
 
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -124,7 +125,7 @@ export default function SalesPage() {
         setCenters(list);
         if (list.length > 0) {
           const requestedCenter = new URLSearchParams(window.location.search).get("center");
-          setCenterId(list.find((c) => c.id === requestedCenter)?.id ?? list[0].id);
+          setCenterId(list.find((c) => c.id === requestedCenter)?.id ?? pickInitialCenterId(list)!);
         }
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
@@ -350,7 +351,7 @@ export default function SalesPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); rememberCenterId(c.id); }}>
               {c.name}
             </button>
           ))}

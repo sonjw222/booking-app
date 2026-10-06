@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-07 — 매니저 마지막 선택 센터 기억 (코드, SQL 없음)
+- 여러 센터를 운영하는 매니저가 센터를 바꾸면 계정별(localStorage key에 account id)로 기억하고 다음 진입 시 복원. 저장 id가 현재 내 센터 목록에 없으면 버리고 첫 센터(기존 동작). `lib/managerCenterPref.ts` + `fetchMyCenters`가 계정 설정, 센터 칩을 쓰는 매니저 화면 24곳 적용.
+- `ManagerNav`는 첫 센터 대신 기억한 센터 기준으로 메뉴 권한을 계산하고, 센터 변경 이벤트에 재확인(권한은 선택 센터별로 달라질 수 있음). 권한 경계는 여전히 RLS.
+- 남은 항목: 오너 전용 화면(settlement/subscription)은 기존대로 첫 오너 센터. 서버(SSR) 쿠키 기반 nav 초기값은 센터별이 아닌 마지막 확인값(UX 힌트).
+
 ## 2026-10-06 — 광고성 알림톡 팬아웃에서 탈퇴 계정 제외 (SQL 파일/테스트만, Production 적용 여부는 별도 확인)
 - `fix_marketing_consent_fanout.sql`의 `evaluate_notification_rules()` 광고성 두 분기(`expired_rebuy`, `birthday`)에 `a.deactivated_at is null` 추가 — 탈퇴 전 `marketing_consent`가 true였던 계정이 광고성 자동 발송 대상에 남던 문제. 필수 운영 알림(`count_low`, `membership_expiring`, `pause_ending`)은 변경 없음.
 - 오래된 PR #164(160+ commit 뒤처짐)를 최신 main 위에서 최소 범위로 재구현. 정적 테스트 `privacyReleaseBlockers.staticCheck.test.ts` 강화.

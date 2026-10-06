@@ -13,6 +13,7 @@ import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchCenterOrders, updateOrderStatus, fulfillResultMessage, type Order } from "../../../lib/orders";
 import Loading from "../../components/Loading";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { pickInitialCenterId, rememberCenterId } from "../../../lib/managerCenterPref";
 
 type OrderRow = Order & { memberName: string; memberPhone: string | null };
 
@@ -38,7 +39,7 @@ export default function ManagerOrdersPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(pickInitialCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
@@ -119,7 +120,7 @@ export default function ManagerOrdersPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>{c.name}</button>
+            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); rememberCenterId(c.id); }}>{c.name}</button>
           ))}
         </div>
       )}

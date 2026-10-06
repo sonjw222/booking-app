@@ -55,6 +55,7 @@ import {
   ADMIN_REASON_CODES, ADMIN_REASON_LABELS, type AdminReasonCode,
   normalizeReasonDetail, adminBadges,
 } from "../../../lib/reservationTypes";
+import { pickInitialCenterId, rememberCenterId } from "../../../lib/managerCenterPref";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -254,8 +255,9 @@ export default function ClassManagePage() {
         const list = await fetchMyCenters();
         setCenters(list);
         if (list.length > 0) {
-          setActiveCenterId(list[0].id);
-          await loadClasses(list[0].id, year, month);
+          const initialId = pickInitialCenterId(list)!;
+          setActiveCenterId(initialId);
+          await loadClasses(initialId, year, month);
         }
       } catch (e: any) {
         setError(e.message);
@@ -1152,6 +1154,7 @@ export default function ClassManagePage() {
             onChange={async (event) => {
               const centerId = event.target.value;
               setActiveCenterId(centerId);
+              rememberCenterId(centerId);
               await loadClasses(centerId, year, month);
             }}
           >

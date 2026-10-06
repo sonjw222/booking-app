@@ -38,6 +38,7 @@ import { DAYS, type SelectableSchedule } from "../../../lib/passes";
 import AlimtalkComposer, {
   emptyAlimtalkBlocks, flattenAlimtalkBlocks, hasAlimtalkContent, type AlimtalkBlock,
 } from "../../components/AlimtalkComposer";
+import { pickInitialCenterId, rememberCenterId } from "../../../lib/managerCenterPref";
 
 const RES_STATUS: Record<string, string> = {
   confirmed: "확정", waitlisted: "대기", cancelled: "취소", attended: "출석", no_show: "노쇼",
@@ -236,7 +237,7 @@ function MembersContent() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(pickInitialCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
@@ -633,7 +634,7 @@ function MembersContent() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); rememberCenterId(c.id); }}>
               {c.name}
             </button>
           ))}

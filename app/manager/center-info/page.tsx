@@ -33,6 +33,7 @@ import { fetchCategories, type ServiceCategory } from "../../../lib/operator";
 import { ZoomableImage } from "../../components/ImageViewer";
 import UiIcon from "../../components/UiIcon";
 import { isAppSettingsSupported, openAppSettings } from "../../../lib/nativeAppSettings";
+import { pickInitialCenterId, rememberCenterId } from "../../../lib/managerCenterPref";
 
 // 구버전 평문 블록을 HTML로 변환 (줄바꿈 유지 + 태그 이스케이프)
 function escapeToHtml(text: string): string {
@@ -110,7 +111,7 @@ export default function CenterInfoPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(pickInitialCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
@@ -217,7 +218,7 @@ export default function CenterInfoPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); rememberCenterId(c.id); }}>
               {c.name}
             </button>
           ))}

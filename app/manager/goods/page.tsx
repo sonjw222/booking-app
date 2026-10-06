@@ -24,6 +24,7 @@ import { draftsToTiers, type TierDraft } from "../../../lib/selectableCount";
 import { filterCatalog, catalogEmptyMessage, EMPTY_CATALOG_FILTER } from "../../../lib/catalogFilter";
 import CountPriceEditor from "../../components/CountPriceEditor";
 import CatalogSearchFilter from "../../components/CatalogSearchFilter";
+import { pickInitialCenterId, rememberCenterId } from "../../../lib/managerCenterPref";
 
 export default function GoodsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -63,7 +64,7 @@ export default function GoodsPage() {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) setCenterId(list[0].id);
+        if (list.length > 0) setCenterId(pickInitialCenterId(list));
         else setLoading(false);
       } catch (e: any) { setError(e.message); setLoading(false); }
     })();
@@ -224,7 +225,7 @@ export default function GoodsPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); rememberCenterId(c.id); }}>
               {c.name}
             </button>
           ))}

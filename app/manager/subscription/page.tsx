@@ -23,6 +23,7 @@ import {
 } from "../../../lib/centerSubscription";
 import { fetchSubscriptionPlans, type SubscriptionPlan } from "../../../lib/operator";
 import { BUSINESS_INFO } from "../../../lib/businessInfo";
+import { rememberCenterId } from "../../../lib/managerCenterPref";
 
 // 결제/카드 등록 후속 안내의 종류 — 예전엔 성공/실패/진행중이 전부 같은 error-toast(빨간색)로
 // 보여서 "첫 결제 성공" 메시지까지 오류처럼 보였다(QA, 2026-10-01). 종류별로 스타일과
@@ -200,7 +201,7 @@ function ManagerSubscriptionContent() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => { setCenterId(c.id); rememberCenterId(c.id); }}>
               {c.name}
             </button>
           ))}

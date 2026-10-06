@@ -20,6 +20,7 @@ import { replaceTabNavigation } from "../../lib/navState";
 import NotificationToaster from "./NotificationToaster";
 import UiIcon from "./UiIcon";
 import { useExpandableNavRail } from "./useExpandableNavRail";
+import { CENTER_CHANGED_EVENT, pickInitialCenterId } from "../../lib/managerCenterPref";
 
 const NAV_PERM_RECHECK_MS = 60_000;
 
@@ -77,7 +78,7 @@ export default function ManagerNav({
     fetchMyCenters()
       .then((centers) => {
         if (!mountedRef.current || centers.length === 0) { if (mountedRef.current) setResolved(true); return; }
-        const active = centers[0];
+        const active = centers.find((c) => c.id === pickInitialCenterId(centers)) ?? centers[0];   // 마지막으로 고른 센터 기준(없거나 무효면 첫 센터)
         setIsOwner(active.isOwner);
         if (active.isOwner) { setResolved(true); return; }
         return fetchMyEffectivePermissionKeys(active.managerCenterId, active.roleId).then((keys) => {
@@ -88,6 +89,12 @@ export default function ManagerNav({
       .finally(() => { inFlightRef.current = false; });
   }, []);
   useEffect(() => { recheckPermissions(); }, [pathname, recheckPermissions]);
+  // 센터를 바꾸면(managerCenterPref) TTL과 무관하게 새 센터 기준으로 메뉴 권한을 다시 계산한다.
+  useEffect(() => {
+    const onCenterChanged = () => { lastCheckRef.current = 0; recheckPermissions(); };
+    window.addEventListener(CENTER_CHANGED_EVENT, onCenterChanged);
+    return () => window.removeEventListener(CENTER_CHANGED_EVENT, onCenterChanged);
+  }, [recheckPermissions]);
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === "visible") recheckPermissions(); };
     document.addEventListener("visibilitychange", onVisible);
