@@ -36,7 +36,7 @@ jobs:
     # 근처에 걸리게 됐다 — PR #86에서 정상 실행 2회가 연속으로 `timeout-minutes: 20`에
     # 걸려 cancelled됐음을 실측 확인(20분 15초, 20분 6초). integration job이 같은 이유로
     # 20→35로 상향된 전례(P2-27, docs/TODO.md)와 동일하게 조정.
-    timeout-minutes: 45
+    timeout-minutes: 30
     # Low-Egress Fix Batch(2026-09-11) — push(main)는 항상 직전에 병합된 PR이 pull_request로
     # 이미 이 스위트 전체를 돌린 같은 코드(merge commit이라 SHA만 다름)라, push에서 또
     # 돌리면 매 merge마다 라이브 dev Supabase에 똑같은 E2E/통합 테스트를 두 번 태우는
