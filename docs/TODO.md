@@ -154,9 +154,10 @@
   Edge Function 배포 완료. 실기기 QA에서 OTP 알림톡 실제 수신까지 확인됨.
 - **QA용 알림톡 테스트 센터(`[QA] 모하빗 알림톡 테스트 센터`)** — (2026-09-30, 사용자 확인)
   생성 완료, `status='pending'`으로 회원 화면 비노출, 관리자 연결 정상.
-- **PG 전역 활성화(`NEXT_PUBLIC_PG_CHECKOUT_ENABLED`) — 의도적으로 `false` 유지, 변경하지 않음** (2026-10-07 갱신): Toss Payments 계약/카드사 심사 자료(결제경로 PPT) 제출 완료 — **답변 대기**.
-  심사 계정만 `accounts.pg_checkout_override=true`로 PG 결제수단(카드/카카오페이/토스페이/계좌이체 + 직접결제)을 본다. PR #169로 카카오페이/토스페이 UI 노출 복구, Production 체크아웃에서 5개 수단 노출 확인(2026-10-07).
-  남은 것(외부/수동): Toss 심사 결과 대응, 실제 카드 승인 end-to-end(심사 통과 후), 일반 사용자 PG 활성화 결정. 결제경로 캡처 중 Toss 결제창(05)은 주문 생성 때문에 캡처하지 않았다. 사이트 사업자정보 "상호" 표기(현재 "모하빗")가 Toss 등록 상호(손장욱)와 같은지 확인 필요.
+- **PG 전역 활성화(`NEXT_PUBLIC_PG_CHECKOUT_ENABLED`) — 의도적으로 `false` 유지, 변경하지 않음** (2026-10-07 갱신): Toss Payments 계약/카드사 심사 자료 제출 완료 — **현재 Toss 답변 대기**.
+  - 제출 내용(사용자 확인): 심사용 계정 `toss-review@mwhabit.com`(`accounts.pg_checkout_override=true`), internal 심사용 센터(일반 사용자 비노출 확인), 심사용 상품 "모하빗 체험 수강권 10회"(200,000원/10회/90일), 카드·카카오페이·토스페이·계좌이체(+직접결제) 노출 확인(PR #169), **Toss Payments 실제 결제창까지 열어 캡처 완료(실제 승인 결제는 하지 않음, 생성된 pending 주문은 cancelled 처리 확인)**, 결제경로 PPT를 담당자에게 메일로 제출.
+  - 사업자정보: 사이트 `/legal/business`와 사업자등록증은 상호 **모하빗**으로 일치. Toss 측 기존 등록 상호는 "손장욱"이었고 "모하빗" 변경 신청 후 **Toss 쪽 반영 대기**.
+  - 남은 것(외부/수동): Toss 심사 결과 대응 및 Toss 측 상호 변경 반영 확인, 실제 카드 승인 end-to-end(심사 통과 후), 일반 사용자 PG 활성화 결정.
 - **alimtalk_templates aligo_template_code 중복 방지 — Production 적용 여부 확인 필요** (2026-10-04 재조사): 저장소에는 이미 전역 partial unique index `fix_alimtalk_template_code_unique.sql`(`idx_alimtalk_templates_aligo_code_unique`, code is not null, 센터/공통 포함 전체에서 1행 — 플랫폼 단일 알리고 계정 모델에 맞음)가 있다. 2026-09-30 TODO는 schema.sql만 보고 "제약 없음"으로 적었다. `verify_alimtalk_template_uniqueness_20261004.sql`(읽기 전용: 중복 데이터 진단 + index 정의 검증)로 확인해 `NOT_APPLIED`면 그 SQL을 적용(기존 중복이 있으면 생성이 실패하므로 verify의 `duplicate_codes`를 먼저 정리). 클라이언트는 23505를 친절한 메시지로 처리.
 - **raw 오류 한글화 범위 확대**: `lib/userError.ts`를 인증/회원가입/센터등록/결제/예약에 적용했었고, 나머지 사용자 화면(약 230곳, 프로필/쿠폰/포인트/문의/캘린더/관리자 등)은
   `fix/postlaunch-maintenance-refresh-20261007` 브랜치에서 `toUserMessage()`로 정리 + 재노출 방지 정적 테스트 추가(**PR/merge 대기** — merge 전에는 완료로 보지 않는다).
