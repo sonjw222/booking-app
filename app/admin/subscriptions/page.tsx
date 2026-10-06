@@ -21,6 +21,7 @@ import {
 import { fetchSubscriptionPlans, type SubscriptionPlan } from "../../../lib/operator";
 import { replaceTabNavigation } from "../../../lib/navState";
 
+import { toUserMessage } from "../../../lib/userError";
 const STATUS_BADGE: Record<SubscriptionStatus, string> = {
   pending_billing_setup: "s-waitlisted",
   active: "s-attended",
@@ -48,7 +49,7 @@ export default function AdminSubscriptionsPage() {
       setRows(subs);
       setPlans(planList);
     } catch (e: any) {
-      setError(e.message);
+      setError(toUserMessage(e));
     }
   }, []);
 
@@ -69,7 +70,7 @@ export default function AdminSubscriptionsPage() {
       await adminSetCenterSubscriptionPlan(row.centerId, planId);
       showToast("플랜을 변경했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusyId(null); }
   }
 
@@ -81,7 +82,7 @@ export default function AdminSubscriptionsPage() {
       await adminCancelCenterSubscription(row.centerId);
       showToast("구독을 취소했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusyId(null); }
   }
 
@@ -99,7 +100,7 @@ export default function AdminSubscriptionsPage() {
       await adminSetCenterAlimtalkAddon(row.centerId, true, price);
       showToast("알림톡 애드온을 켰어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusyId(null); }
   }
 
@@ -111,7 +112,7 @@ export default function AdminSubscriptionsPage() {
       await adminSetCenterAlimtalkAddon(row.centerId, false);
       showToast("알림톡 애드온을 껐어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusyId(null); }
   }
 
@@ -123,7 +124,7 @@ export default function AdminSubscriptionsPage() {
       await adminReactivateCenterSubscription(row.centerId);
       showToast("구독을 재개했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusyId(null); }
   }
 

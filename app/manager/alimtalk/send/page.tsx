@@ -25,6 +25,7 @@ import {
 } from "../../../../lib/alimtalk";
 import { fetchCenterSubscription } from "../../../../lib/centerSubscription";
 
+import { toUserMessage } from "../../../../lib/userError";
 const STATUS_LABEL: Record<string, string> = {
   active: "이용중", expired: "만료", dormant: "휴면",
 };
@@ -62,7 +63,7 @@ export default function AlimtalkSendPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -88,7 +89,7 @@ export default function AlimtalkSendPage() {
     setLoading(true); setError(null);
     try {
       setMembers(await fetchMembers(centerId, { gradeId: gradeFilter, status: statusFilter, keyword, searchField: "all" }));
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId, gradeFilter, statusFilter, keyword]);
 
@@ -165,7 +166,7 @@ export default function AlimtalkSendPage() {
       setBlocks(emptyAlimtalkBlocks());
       setTemplateId("");
       setManualVars({});
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setSending(false); }
   }
 

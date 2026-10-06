@@ -16,6 +16,7 @@ import { fetchMyAccountInfo, setMyMarketingConsent } from "../../../lib/mypage";
 import { createAccountLinkCode, linkAccountsByCode } from "../../../lib/accountLinking";
 import { disableNativePush } from "../../../lib/nativePush";
 
+import { toUserMessage } from "../../../lib/userError";
 const WITHDRAW_CONFIRM_PHRASE = "탈퇴합니다";
 const SYNTHETIC_EMAIL_SUFFIX = ".socialauth.invalid";
 
@@ -75,7 +76,7 @@ export default function MyInfoPage() {
     });
     fetchMyAccountInfo()
       .then((info) => { setName(info.name); setPhone(info.phone); setMarketingConsentState(info.marketingConsent); })
-      .catch((e: any) => setInfoError(e.message ?? "회원정보를 불러오지 못했어요"));
+      .catch((e: any) => setInfoError(toUserMessage(e, "회원정보를 불러오지 못했어요")));
   }, []);
 
   async function toggleMarketingConsent() {
@@ -86,7 +87,7 @@ export default function MyInfoPage() {
       await setMyMarketingConsent(next);
       setMarketingConsentState(next);
     } catch (e: any) {
-      setInfoError(e.message ?? "마케팅 동의 설정을 저장하지 못했어요");
+      setInfoError(toUserMessage(e, "마케팅 동의 설정을 저장하지 못했어요"));
     } finally {
       setMarketingBusy(false);
     }
@@ -107,7 +108,7 @@ export default function MyInfoPage() {
     const { error } = await supabase.auth.updateUser({ password });
     setSaving(false);
     if (error) {
-      setMessage({ type: "error", text: error.message });
+      setMessage({ type: "error", text: toUserMessage(error) });
       return;
     }
     setPassword("");
@@ -146,7 +147,7 @@ export default function MyInfoPage() {
       await deactivateCurrentAccount();
     } catch (e: any) {
       setWithdrawing(false);
-      setWithdrawMessage({ type: "error", text: e.message ?? "탈퇴 처리에 실패했어요" });
+      setWithdrawMessage({ type: "error", text: toUserMessage(e, "탈퇴 처리에 실패했어요") });
       return;
     }
 
@@ -161,7 +162,7 @@ export default function MyInfoPage() {
       const code = await createAccountLinkCode();
       setLinkCode(code);
     } catch (e: any) {
-      setLinkCodeMessage({ type: "error", text: e.message ?? "코드 발급에 실패했어요" });
+      setLinkCodeMessage({ type: "error", text: toUserMessage(e, "코드 발급에 실패했어요") });
     } finally {
       setCreatingCode(false);
     }
@@ -180,7 +181,7 @@ export default function MyInfoPage() {
       setLinked(true);
       setLinkMessage({ type: "ok", text: `"${result.mergedAccountName}" 계정으로 합쳐졌어요. 다시 로그인해주세요.` });
     } catch (e: any) {
-      setLinkMessage({ type: "error", text: e.message ?? "연동에 실패했어요" });
+      setLinkMessage({ type: "error", text: toUserMessage(e, "연동에 실패했어요") });
     } finally {
       setLinking(false);
     }

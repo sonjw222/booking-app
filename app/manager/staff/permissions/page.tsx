@@ -22,6 +22,7 @@ import {
   type Permission, type GrantType, type EffectiveState,
 } from "../../../../lib/roles";
 
+import { toUserMessage } from "../../../../lib/userError";
 function PermInner() {
   const params = useSearchParams();
   const mcId = params.get("mc");
@@ -70,7 +71,7 @@ function PermInner() {
       setPerms(ps);
       setRolePermKeys(new Set(rk));
       setOverrides(ov);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [mcId, roleId, centerId]);
 
@@ -95,7 +96,7 @@ function PermInner() {
         else next[key] = nextGrant;
         return next;
       });
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusyKey(null); }
   }
 

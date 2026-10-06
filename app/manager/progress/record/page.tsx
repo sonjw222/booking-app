@@ -25,6 +25,7 @@ import {
 } from "../../../../lib/progress";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../../lib/roles";
 
+import { toUserMessage } from "../../../../lib/userError";
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 }
@@ -70,7 +71,7 @@ function ProgressRecordContent() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -83,7 +84,7 @@ function ProgressRecordContent() {
     setMyPerms(null);
     fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
       .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); });
     return () => { cancelled = true; };
   }, [activeCenter]);
 
@@ -100,7 +101,7 @@ function ProgressRecordContent() {
       setMembers(ms);
       if (preProfile && ms.some((m: any) => m.profileId === preProfile)) setProfileId(preProfile);
       if (ms.length > 0 && !profileId) setProfileId(ms[0].profileId);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -109,7 +110,7 @@ function ProgressRecordContent() {
   const loadHistory = useCallback(async () => {
     if (!profileId) { setHistory([]); return; }
     try { setHistory(await fetchMemberProgress(profileId)); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
   }, [profileId]);
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
@@ -135,7 +136,7 @@ function ProgressRecordContent() {
       setNote("");
       setAddSheet(false);
       await loadHistory();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -143,7 +144,7 @@ function ProgressRecordContent() {
     if (!(await globalThis.appConfirm("이 진도 기록을 삭제할까요?"))) return;
     setBusy(true);
     try { await deleteProgressRecord(id); showToast("삭제했어요"); await loadHistory(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -152,7 +153,7 @@ function ProgressRecordContent() {
     if (!(await globalThis.appConfirm(`${fmtMD(date)} 진도 기록을 삭제할까요?`))) return;
     setBusy(true);
     try { await deleteProgressByDate(profileId, date); showToast("삭제했어요"); await loadHistory(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

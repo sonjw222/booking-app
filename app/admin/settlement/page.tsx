@@ -19,6 +19,7 @@ import { checkPlatformAdmin } from "../../../lib/admin";
 import { fetchAdminSettlementSummary, toSettlementCsv, type AdminSettlementRow } from "../../../lib/settlementAccounts";
 import { replaceTabNavigation } from "../../../lib/navState";
 
+import { toUserMessage } from "../../../lib/userError";
 // toISOString()은 UTC로 변환하므로 UTC+9(KST)에서는 자정 직후 값이 전날로 밀린다
 // (예: 9/1 00:00 KST → 8/31 15:00 UTC) — 로컬 날짜 그대로 YYYY-MM-DD로 포맷한다.
 function toLocalDateStr(d: Date): string {
@@ -60,7 +61,7 @@ export default function AdminSettlementPage() {
       setRows(await fetchAdminSettlementSummary(startDate, endDate));
       setSearched(true);
     } catch (e: any) {
-      setError(e.message);
+      setError(toUserMessage(e));
     } finally {
       setFetching(false);
     }

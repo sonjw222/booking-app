@@ -24,6 +24,7 @@ import {
   type NotificationRule, type NotificationRuleDraft, type AlimtalkTemplate, type SupportedTriggerType,
 } from "../../../../lib/alimtalk";
 
+import { toUserMessage } from "../../../../lib/userError";
 function primarySummary(rule: NotificationRuleDraft): string {
   if (rule.triggerType === "count_low") return `잔여 ${rule.thresholdCount ?? "?"}회 이하`;
   if (rule.triggerType === "expired_rebuy") return `만료 후 ${rule.daysBefore ?? "?"}일`;
@@ -64,7 +65,7 @@ export default function AlimtalkRulesPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -78,7 +79,7 @@ export default function AlimtalkRulesPage() {
       setRules(r);
       setTemplates(t);
       setProducts(p);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -118,7 +119,7 @@ export default function AlimtalkRulesPage() {
       showToast("저장했어요");
       closeSheet();
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setSaving(false); }
   }
 
@@ -132,7 +133,7 @@ export default function AlimtalkRulesPage() {
       showToast("삭제했어요");
       closeSheet();
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setSaving(false); }
   }
 

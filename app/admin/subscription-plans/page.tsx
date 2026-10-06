@@ -21,6 +21,7 @@ import {
 import { checkPlatformAdmin } from "../../../lib/admin";
 import Loading from "../../components/Loading";
 
+import { toUserMessage } from "../../../lib/userError";
 const EMPTY_FORM: SubscriptionPlanInput = {
   name: "", monthlyPrice: 0, description: "", isActive: true,
   maxRooms: null, maxStaff: null, maxMembers: null, maxProducts: null,
@@ -79,7 +80,7 @@ export default function SubscriptionPlansPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try { setPlans(await fetchSubscriptionPlans()); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, []);
 
@@ -114,7 +115,7 @@ export default function SubscriptionPlansPage() {
       setEditingId(null);
       showToast(editingId ? "플랜을 수정했어요" : "플랜을 추가했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -123,14 +124,14 @@ export default function SubscriptionPlansPage() {
     if (!ok) return;
     setBusy(true);
     try { await deleteSubscriptionPlan(p.id); showToast("플랜을 삭제했어요"); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
   async function handleSetDefault(p: SubscriptionPlan) {
     setBusy(true);
     try { await setDefaultSubscriptionPlan(p.id); showToast(`'${p.name}'을(를) 기본 플랜으로 지정했어요`); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

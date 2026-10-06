@@ -22,6 +22,7 @@ import { extractPlainText } from "../../../lib/security";
 import { ZoomableImage } from "../../components/ImageViewer";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
+import { toUserMessage } from "../../../lib/userError";
 export default function ManagerReviewsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [centerId, setCenterId] = useState<string | null>(null);
@@ -49,7 +50,7 @@ export default function ManagerReviewsPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -62,7 +63,7 @@ export default function ManagerReviewsPage() {
     setMyPerms(null);
     fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
       .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); });
     return () => { cancelled = true; };
   }, [activeCenter]);
 
@@ -81,7 +82,7 @@ export default function ManagerReviewsPage() {
         fetchReviewStats(centerId),
       ]);
       setReviews(rs); setStats(st);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId]);
   useEffect(() => { load(); }, [load]);
@@ -104,7 +105,7 @@ export default function ManagerReviewsPage() {
       showToast(plain ? "답변을 등록했어요" : "답변을 삭제했어요");
       setReplyFor(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -124,7 +125,7 @@ export default function ManagerReviewsPage() {
       await deleteReviewAsManager(r.id);
       showToast("후기를 삭제했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

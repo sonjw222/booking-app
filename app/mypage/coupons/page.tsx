@@ -15,6 +15,7 @@ import Loading from "../../components/Loading";
 import EmptyState from "../../components/EmptyState";
 import { fetchMyCoupons, type MemberCoupon } from "../../../lib/coupons";
 
+import { toUserMessage } from "../../../lib/userError";
 const STATUS_LABEL: Record<string, string> = {
   available: "사용 가능", used: "사용 완료", expired: "만료됨", revoked: "회수됨",
 };
@@ -37,7 +38,7 @@ export default function MyCouponsPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try { setCoupons(await fetchMyCoupons()); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, []);
 

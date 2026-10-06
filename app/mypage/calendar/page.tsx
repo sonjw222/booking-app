@@ -17,6 +17,7 @@ import {
   type CalReservation,
 } from "../../../lib/mypage";
 
+import { toUserMessage } from "../../../lib/userError";
 const STATUS_LABEL: Record<string, string> = {
   confirmed: "확정", waitlisted: "대기", attended: "출석", no_show: "노쇼",
 };
@@ -38,7 +39,7 @@ export default function CalendarPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try { setResv(await fetchMyReservationsForCalendar()); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -73,7 +74,7 @@ export default function CalendarPage() {
       setResv((prev) => prev.map((x) => x.id === r.id ? { ...x, memo: val } : x));
       // 실제로 저장된 뒤에만 표시한다(updateReservationMemo가 0행 갱신도 에러로 던짐).
       setSavedId(r.id);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setSavingId(null); }
   }
 
@@ -94,7 +95,7 @@ export default function CalendarPage() {
     try {
       handleCalendarResult(await addCalendarEvents([item], "default", "web"));
     } catch (e: any) {
-      setError(e?.message ?? "캘린더에 추가하지 못했어요");
+      setError(toUserMessage(e, "캘린더에 추가하지 못했어요"));
     }
   }
 

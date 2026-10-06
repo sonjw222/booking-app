@@ -17,6 +17,7 @@ import {
 import { checkPlatformAdmin } from "../../../lib/admin";
 import Loading from "../../components/Loading";
 
+import { toUserMessage } from "../../../lib/userError";
 const STATUS_TABS: { key: ReviewReportStatus; label: string }[] = [
   { key: "pending", label: "대기" },
   { key: "reviewed", label: "확인 완료" },
@@ -37,7 +38,7 @@ export default function AdminReviewReportsPage() {
   const load = useCallback(async (s: ReviewReportStatus) => {
     setLoading(true); setError(null);
     try { setReports(await fetchReviewReportsForAdmin(s)); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, []);
 
@@ -62,7 +63,7 @@ export default function AdminReviewReportsPage() {
       await resolveReviewReport(reportId, next);
       showToast(next === "reviewed" ? "확인 완료로 처리했어요" : "신고를 기각했어요");
       await load(status);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusyId(null); }
   }
 
@@ -74,7 +75,7 @@ export default function AdminReviewReportsPage() {
       await resolveReviewReport(report.id, "reviewed");
       showToast("후기를 삭제하고 신고를 처리했어요");
       await load(status);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusyId(null); }
   }
 

@@ -18,6 +18,7 @@ import {
 import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
 
+import { toUserMessage } from "../../../lib/userError";
 const STATUS_LABEL: Record<LeadStatus, string> = {
   new: "신규", contacted: "상담중", converted: "회원전환", dropped: "이탈",
 };
@@ -53,7 +54,7 @@ export default function LeadsPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -61,7 +62,7 @@ export default function LeadsPage() {
     if (!centerId) return;
     setLoading(true); setError(null);
     try { setLeads(await fetchLeads(centerId)); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId]);
   useEffect(() => { load(); }, [load]);
@@ -80,7 +81,7 @@ export default function LeadsPage() {
       else { await createLead(centerId, input); showToast("상담고객을 등록했어요"); }
       closeSheet();
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -91,7 +92,7 @@ export default function LeadsPage() {
       if (status === "converted") showToast("회원전환으로 표시했어요 — 실제 회원 등록은 회원 화면에서 진행해주세요");
       else showToast("상태를 변경했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -99,7 +100,7 @@ export default function LeadsPage() {
     if (!(await globalThis.appConfirm(`'${l.name}' 상담고객 기록을 삭제할까요?`))) return;
     setBusy(true);
     try { await deleteLead(l.id); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

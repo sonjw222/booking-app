@@ -35,6 +35,7 @@ import { checkMergeableAccountByEmail, mergeViaPasswordVerification } from "../.
 import { autoRegisterNativePushOnLogin } from "../../lib/nativePush";
 import AddressField from "./AddressField";
 
+import { toUserMessage } from "../../lib/userError";
 export default function SessionWatcher() {
   // 계정 연동(반응형, 2026-09-09) — 방금 새로 만들어진 계정(구글/애플 등 실제 이메일 provider)의
   // 이메일이 이미 다른 계정에 쓰이고 있으면, 그 계정 비밀번호 확인만으로 그 자리에서 바로
@@ -209,7 +210,7 @@ export default function SessionWatcher() {
       await completeSocialProfile(phoneGateAccountId, phone.trim(), address || null, agreeMarketing, realName.trim());
       setPhoneGateAccountId(null);
     } catch (e: any) {
-      setGateError(e.message ?? "저장에 실패했어요");
+      setGateError(toUserMessage(e, "저장에 실패했어요"));
     } finally {
       setSaving(false);
     }
@@ -228,7 +229,7 @@ export default function SessionWatcher() {
       await completeSocialName(nameGateAccountId, realName.trim());
       setNameGateAccountId(null);
     } catch (e: any) {
-      setGateError(e.message ?? "저장에 실패했어요");
+      setGateError(toUserMessage(e, "저장에 실패했어요"));
     } finally {
       setSaving(false);
     }
@@ -261,7 +262,7 @@ export default function SessionWatcher() {
       window.location.replace("/");
     } catch (e: any) {
       setMergeSubmitting(false);
-      setMergeMessage({ type: "error", text: e.message ?? "연동에 실패했어요" });
+      setMergeMessage({ type: "error", text: toUserMessage(e, "연동에 실패했어요") });
     }
   }
 

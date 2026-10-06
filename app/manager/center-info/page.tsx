@@ -34,6 +34,7 @@ import { ZoomableImage } from "../../components/ImageViewer";
 import UiIcon from "../../components/UiIcon";
 import { isAppSettingsSupported, openAppSettings } from "../../../lib/nativeAppSettings";
 
+import { toUserMessage } from "../../../lib/userError";
 // 구버전 평문 블록을 HTML로 변환 (줄바꿈 유지 + 태그 이스케이프)
 function escapeToHtml(text: string): string {
   if (!text) return "";
@@ -80,7 +81,7 @@ export default function CenterInfoPage() {
     try {
       const path = await uploadCenterPhoto(file);
       setIntroBlocks((b) => [...b, { type: "image", value: path }]);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setUploadingBlock(false); }
   }
   // 리치 텍스트 저장 (html + 검색/미리보기용 평문 value 동시 갱신)
@@ -112,7 +113,7 @@ export default function CenterInfoPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -137,7 +138,7 @@ export default function CenterInfoPage() {
       setSns(c?.sns ?? "");
       setLat(c?.latitude ?? null);
       setLng(c?.longitude ?? null);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -155,7 +156,7 @@ export default function CenterInfoPage() {
     setMyPerms(null);
     fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
       .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); });
     return () => { cancelled = true; };
   }, [activeCenter]);
 
@@ -183,7 +184,7 @@ export default function CenterInfoPage() {
         reviewPoint: parseInt(reviewPoint || "0", 10) || 0,
       });
       showToast("저장했어요");
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -275,7 +276,7 @@ export default function CenterInfoPage() {
                 const f = e.target.files?.[0]; if (!f || !centerId) return;
                 setUploadingPhoto(true);
                 try { setPhotoUrl(await uploadCenterPhoto(f)); }
-                catch (err: any) { setError(err.message); }
+                catch (err: any) { setError(toUserMessage(err)); }
                 finally { setUploadingPhoto(false); }
               }} />
             </label>

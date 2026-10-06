@@ -25,6 +25,7 @@ import { filterCatalog, catalogEmptyMessage, EMPTY_CATALOG_FILTER } from "../../
 import CountPriceEditor from "../../components/CountPriceEditor";
 import CatalogSearchFilter from "../../components/CatalogSearchFilter";
 
+import { toUserMessage } from "../../../lib/userError";
 export default function GoodsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [centerId, setCenterId] = useState<string | null>(null);
@@ -65,7 +66,7 @@ export default function GoodsPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -78,7 +79,7 @@ export default function GoodsPage() {
     setMyPerms(null);
     fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
       .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); });
     return () => { cancelled = true; };
   }, [activeCenter]);
 
@@ -93,7 +94,7 @@ export default function GoodsPage() {
     setLoading(true); setError(null);
     try {
       setProducts(await fetchProducts(centerId, "goods"));
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -139,7 +140,7 @@ export default function GoodsPage() {
       showToast(editId ? "상품을 수정했어요" : "상품을 추가했어요");
       setEditId(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -177,7 +178,7 @@ export default function GoodsPage() {
     if (!(await globalThis.appConfirm(`'${p.name}' 상품을 삭제할까요?`))) return;
     setBusy(true);
     try { await deleteProduct(p.id); showToast("삭제했어요"); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -192,7 +193,7 @@ export default function GoodsPage() {
       exitSelect();
       showToast(bulkDeleteToast(n));
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

@@ -23,6 +23,7 @@ import { fetchDashboardSummary, won, type DashboardSummary } from "../../lib/sal
 import EmptyState from "../components/EmptyState";
 import ErrorState from "../components/ErrorState";
 
+import { toUserMessage } from "../../lib/userError";
 type DashPeriod = "today" | "7d" | "30d";
 
 function kstToday(): string {
@@ -82,7 +83,7 @@ export default function ManagerDashboard() {
       if (rosterClass) setRoster(await fetchClassAttendees(rosterClass.id));
       // 예약 n/N 숫자 즉시 반영
       if (activeCenterId) setTodayClasses(await fetchTodayClasses(activeCenterId));
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setAttBusy(false); }
   }
 
@@ -95,7 +96,7 @@ export default function ManagerDashboard() {
     } catch (e: any) {
       // 실패 시 빈 명단이 "예약자 없음"으로 오인되지 않도록 시트를 닫고 상단 에러로만 알린다.
       setRosterClass(null);
-      setError(e.message);
+      setError(toUserMessage(e));
     } finally {
       setRosterLoading(false);
     }
@@ -110,7 +111,7 @@ export default function ManagerDashboard() {
     } catch (e: any) {
       // 실패 시 로딩 스피너가 무한히 남지 않도록 시트를 닫고 상단 에러로만 알린다.
       setMemberInfo(null);
-      setError(e.message);
+      setError(toUserMessage(e));
     }
   }
 
@@ -122,7 +123,7 @@ export default function ManagerDashboard() {
       setCenters(list);
       if (list.length > 0) setActiveCenterId(list[0].id);
     } catch (e: any) {
-      setError(e.message);
+      setError(toUserMessage(e));
     } finally {
       setLoading(false);
     }
@@ -139,7 +140,7 @@ export default function ManagerDashboard() {
     setTodayLoading(true);
     fetchTodayClasses(activeCenterId)
       .then((classes) => { if (!cancelled) setTodayClasses(classes); })
-      .catch((e) => { if (!cancelled) setError(e.message); })
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); })
       .finally(() => { if (!cancelled) setTodayLoading(false); });
     return () => { cancelled = true; };
   }, [activeCenterId]);
@@ -153,7 +154,7 @@ export default function ManagerDashboard() {
     const { from, to } = dashRangeFor(dashPeriod);
     fetchDashboardSummary(activeCenterId, from, to)
       .then((d) => { if (!cancelled) setDash(d); })
-      .catch((e) => { if (!cancelled) setDashError(e.message); })
+      .catch((e) => { if (!cancelled) setDashError(toUserMessage(e)); })
       .finally(() => { if (!cancelled) setDashLoading(false); });
     return () => { cancelled = true; };
   }, [activeCenterId, dashPeriod]);
@@ -168,7 +169,7 @@ export default function ManagerDashboard() {
     setMyPerms(null);
     fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
       .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); });
     return () => { cancelled = true; };
   }, [activeCenter]);
 

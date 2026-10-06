@@ -14,6 +14,7 @@ import { edgeFunctionErrorMessage } from "../../../lib/edgeFunctions";
 import { clearSocialNameStash, stashSocialName } from "../../../lib/socialName";
 import Loading from "../../components/Loading";
 
+import { toUserMessage } from "../../../lib/userError";
 export default function KakaoCallbackPage() {
   const [errorText, setErrorText] = useState<string | null>(null);
 
@@ -57,7 +58,7 @@ export default function KakaoCallbackPage() {
       });
       if (verifyErr) {
         clearSocialNameStash();   // 실패한 로그인이 남긴 후보가 다음 로그인에 적용되지 않게
-        fail(verifyErr.message);
+        fail(toUserMessage(verifyErr));
         return;
       }
 

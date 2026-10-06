@@ -15,6 +15,7 @@ import {
 } from "../../lib/inquiries";
 import { getMyAccountId } from "../../lib/authAccount";
 
+import { toUserMessage } from "../../lib/userError";
 export default function InquiryChat({
   threadId, title, onBack, canSend = true, canDeleteOthers = false,
 }: {
@@ -56,7 +57,7 @@ export default function InquiryChat({
       const ms = await fetchMessages(threadId, myAccountIdRef.current);
       setMessages(ms);
     } catch (e: any) {
-      setError("메시지를 불러오지 못했어요: " + e.message);
+      setError(`메시지를 불러오지 못했어요: ${toUserMessage(e, "잠시 후 다시 시도해 주세요.")}`);
     }
   }
 
@@ -100,7 +101,7 @@ export default function InquiryChat({
       // 1건 전송에 REST 요청이 두 번(이 reload + 실시간이 유발하던 예전 reload)
       // 나가던 중복이었다.
     } catch (e: any) {
-      setError("전송에 실패했어요: " + e.message);
+      setError(`전송에 실패했어요: ${toUserMessage(e, "잠시 후 다시 시도해 주세요.")}`);
     } finally { setSending(false); }
   }
 
@@ -114,7 +115,7 @@ export default function InquiryChat({
       // 필요는 없음.
       setMessages((prev) => prev.filter((m) => m.id !== messageId));
     } catch (e: any) {
-      setError("삭제에 실패했어요: " + e.message);
+      setError(`삭제에 실패했어요: ${toUserMessage(e, "잠시 후 다시 시도해 주세요.")}`);
     }
   }
 
@@ -125,7 +126,7 @@ export default function InquiryChat({
       const path = await uploadInquiryPhoto(file);
       setPhotos((prev) => [...prev, path]);
     } catch (e: any) {
-      setError("사진 업로드에 실패했어요: " + e.message);
+      setError(`사진 업로드에 실패했어요: ${toUserMessage(e, "잠시 후 다시 시도해 주세요.")}`);
     } finally { setUploading(false); }
   }
 

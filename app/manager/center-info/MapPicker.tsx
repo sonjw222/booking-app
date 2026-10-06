@@ -23,6 +23,7 @@ import { useEffect, useRef, useState } from "react";
 import { searchAddress, geocodeAddress, reverseGeocode, type GeocodeResult } from "../../../lib/geocoding";
 import { openDaumPostcode } from "../../../lib/daumPostcode";
 
+import { toUserMessage } from "../../../lib/userError";
 type Props = {
   initialLat: number | null;
   initialLng: number | null;
@@ -108,7 +109,7 @@ export default function MapPicker({ initialLat, initialLng, onPick, onClose }: P
         const addr = await reverseGeocode(lat, lng);
         setResolvedAddress(addr);
       });
-    }).catch((e) => setErr(e.message));
+    }).catch((e) => setErr(toUserMessage(e)));
     return () => {
       cancelled = true;
       if (mapObjRef.current) { mapObjRef.current.remove(); mapObjRef.current = null; }
@@ -124,7 +125,7 @@ export default function MapPicker({ initialLat, initialLng, onPick, onClose }: P
       if (found.length === 0) { setErr("검색 결과가 없어요. 도로명이나 건물명을 다시 확인해 주세요."); return; }
       setResults(found);
     } catch (e: any) {
-      setErr(e.message ?? "주소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+      setErr(toUserMessage(e, "주소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요."));
     } finally {
       setSearching(false);
     }
@@ -157,7 +158,7 @@ export default function MapPicker({ initialLat, initialLng, onPick, onClose }: P
       () => setDaumSearching(false)
     ).catch((e: any) => {
       setDaumSearching(false);
-      setErr(e.message ?? "주소 검색 서비스를 불러오지 못했어요.");
+      setErr(toUserMessage(e, "주소 검색 서비스를 불러오지 못했어요."));
     });
   }
 

@@ -11,6 +11,7 @@ import { fetchBanners, addBanner, toggleBanner, deleteBanner, type HomeBanner } 
 import { checkPlatformAdmin } from "../../../lib/admin";
 import Loading from "../../components/Loading";
 
+import { toUserMessage } from "../../../lib/userError";
 export default function BannersPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [banners, setBanners] = useState<HomeBanner[]>([]);
@@ -29,7 +30,7 @@ export default function BannersPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try { setBanners(await fetchBanners(false)); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => {
@@ -49,14 +50,14 @@ export default function BannersPage() {
       setTitle(""); setSubtitle(""); setEmoji(""); setLinkUrl(""); setAdding(false);
       showToast("배너를 추가했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
   async function handleToggle(b: HomeBanner) {
     setBusy(true);
     try { await toggleBanner(b.id, !b.isActive); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -64,7 +65,7 @@ export default function BannersPage() {
     if (!(await globalThis.appConfirm("이 배너를 삭제할까요?"))) return;
     setBusy(true);
     try { await deleteBanner(b.id); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

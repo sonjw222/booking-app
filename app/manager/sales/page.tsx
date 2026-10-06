@@ -27,6 +27,7 @@ import {
 import { fetchSettings } from "../../../lib/settings";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
+import { toUserMessage } from "../../../lib/userError";
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 }
@@ -127,7 +128,7 @@ export default function SalesPage() {
           setCenterId(list.find((c) => c.id === requestedCenter)?.id ?? list[0].id);
         }
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -161,7 +162,7 @@ export default function SalesPage() {
       setSummary(summarize(pay));
       setExpenses(exp);
       setPoints(pts);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId, from, to]);
 
@@ -176,7 +177,7 @@ export default function SalesPage() {
     setMyPerms(null);
     fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
       .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); });
     return () => { cancelled = true; };
   }, [activeCenter]);
 
@@ -202,7 +203,7 @@ export default function SalesPage() {
       setFProductId("");
       setFUnpaidTouched(false);
       setSheet(true);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
   }
 
   const num = (s: string) => parseInt(s.replace(/[^0-9]/g, "") || "0", 10);
@@ -249,7 +250,7 @@ export default function SalesPage() {
       setFCard(""); setFCash(""); setFTransfer(""); setFPoint(""); setFUnpaid(""); setFMemo("");
       setFSaleType("new"); setFProductId(""); setFGoodsId(""); setFUnpaidTouched(false);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -275,7 +276,7 @@ export default function SalesPage() {
       setCollectFor(null);
       setPayDetail(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setCollecting(false); }
   }
 
@@ -286,7 +287,7 @@ export default function SalesPage() {
       setMembers(ms);
       setPtProfile(ms[0]?.profileId ?? "");
       setPtSheet(true);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
   }
 
   async function handleRegisterExpense() {
@@ -297,7 +298,7 @@ export default function SalesPage() {
       showToast("지출을 등록했어요");
       setExpSheet(false); setEAmount(""); setEMemo("");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -305,7 +306,7 @@ export default function SalesPage() {
     if (!(await globalThis.appConfirm("이 지출을 삭제할까요?"))) return;
     setBusy(true);
     try { await deleteExpense(id); showToast("삭제했어요"); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -318,7 +319,7 @@ export default function SalesPage() {
       showToast(ptSign === "earn" ? "포인트를 적립했어요" : "포인트를 사용했어요");
       setPtSheet(false); setPtAmount(""); setPtReason(""); setPtSign("earn");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

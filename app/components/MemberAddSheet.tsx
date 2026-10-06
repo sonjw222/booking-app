@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { searchAccountsForMember, type MemberCandidate } from "../../lib/members";
 import SheetOverlay from "./SheetOverlay";
 
+import { toUserMessage } from "../../lib/userError";
 /*
   관리자 > 회원 > "+회원" 추가 시트(2026-10-04 분리). 검색은 서버 RPC(search_member_candidates)가 센터별 권한을 확인한다 — 여기서는 "RPC가 준 결과가 화면에서 사라지지 않게" 하는 클라이언트 방어만 한다.
   · 최신 요청만 반영(sequence ref): 늦게 끝난 이전 응답/오류가 최신 결과를 덮지 못하고, 같은 검색어의 in-flight 중복 요청(Enter 연타)은 만들지 않는다. 검색 시작 시점의 centerId/검색어를 snapshot한다.
@@ -55,7 +56,7 @@ export default function MemberAddSheet({ centerId, centerName, busy = false, onC
       requestAnimationFrame?.(() => listRef.current?.scrollIntoView?.({ block: "nearest" }));
     } catch (e: any) {
       if (seq !== seqRef.current) return;               // stale 오류가 최신 결과를 지우지 않는다
-      setResults([]); setSearchedKw(query); setError(e?.message ?? "검색에 실패했어요");
+      setResults([]); setSearchedKw(query); setError(toUserMessage(e, "검색에 실패했어요"));
     } finally {
       if (seq === seqRef.current) { setSearching(false); inflightRef.current = null; }
     }

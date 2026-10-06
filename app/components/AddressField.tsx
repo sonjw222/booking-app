@@ -11,6 +11,7 @@
 import { useState } from "react";
 import { openDaumPostcode } from "../../lib/daumPostcode";
 
+import { toUserMessage } from "../../lib/userError";
 type Props = {
   base: string;
   detail: string;
@@ -33,7 +34,7 @@ export default function AddressField({ base, detail, onChangeBase, onChangeDetai
       },
       () => setSearching(false)
     ).catch((e: any) => {
-      setError(e.message ?? "주소 검색에 실패했어요");
+      setError(toUserMessage(e, "주소 검색에 실패했어요"));
       setSearching(false);
     });
   }

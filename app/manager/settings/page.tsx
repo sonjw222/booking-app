@@ -14,6 +14,7 @@ import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../../lib/settings";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
+import { toUserMessage } from "../../../lib/userError";
 const SLOT_UNITS: { value: string; label: string }[] = [
   { value: "hour", label: "정시" },
   { value: "30min", label: "30분" },
@@ -43,7 +44,7 @@ export default function SettingsPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -56,7 +57,7 @@ export default function SettingsPage() {
     setMyPerms(null);
     fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
       .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); });
     return () => { cancelled = true; };
   }, [activeCenter]);
 
@@ -68,7 +69,7 @@ export default function SettingsPage() {
     try {
       setS(await fetchSettings(centerId));
       setDirty(false);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -87,7 +88,7 @@ export default function SettingsPage() {
       await saveSettings(centerId, s);
       showToast("설정을 저장했어요");
       setDirty(false);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

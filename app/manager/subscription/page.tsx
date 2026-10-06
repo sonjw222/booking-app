@@ -24,6 +24,7 @@ import {
 import { fetchSubscriptionPlans, type SubscriptionPlan } from "../../../lib/operator";
 import { BUSINESS_INFO } from "../../../lib/businessInfo";
 
+import { toUserMessage } from "../../../lib/userError";
 // 결제/카드 등록 후속 안내의 종류 — 예전엔 성공/실패/진행중이 전부 같은 error-toast(빨간색)로
 // 보여서 "첫 결제 성공" 메시지까지 오류처럼 보였다(QA, 2026-10-01). 종류별로 스타일과
 // 접근성 role을 나눈다: success/info는 status-toast(기존 success/info 토큰 재사용,
@@ -66,7 +67,7 @@ function ManagerSubscriptionContent() {
         setCenters(list.filter((c) => c.isOwner));
         if (list.some((c) => c.isOwner)) setCenterId(list.find((c) => c.isOwner)!.id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -87,7 +88,7 @@ function ManagerSubscriptionContent() {
           setBillingEnabled(override);
         } catch { /* 조회 실패 시 조용히 무시 — 기본값(비활성화)만 유지 */ }
       }
-    } catch (e: any) { setSubError(e.message); }
+    } catch (e: any) { setSubError(toUserMessage(e)); }
     finally { setSubLoading(false); setLoading(false); }
   }, [centerId]);
 
@@ -121,7 +122,7 @@ function ManagerSubscriptionContent() {
         setCenterId(qsCenterId);
         await loadSubscription();
       } catch (e: any) {
-        setBillingNotice({ type: "error", message: e.message ?? "카드 등록 확정에 실패했어요" });
+        setBillingNotice({ type: "error", message: toUserMessage(e, "카드 등록 확정에 실패했어요") });
       }
     })();
     // 마운트 시점 쿼리만 처리하면 됨(중복 확정 방지) — sp/loadSubscription 재실행 불필요.
@@ -136,7 +137,7 @@ function ManagerSubscriptionContent() {
       // 성공 시 토스 결제창이 successUrl/failUrl로 브라우저를 이동시키므로
       // 여기서는 별도 후처리가 필요 없음(플래그가 꺼진 지금은 이 경로 자체가 실행되지 않음).
     } catch (e: any) {
-      setSubError(e.message);
+      setSubError(toUserMessage(e));
     } finally {
       setSubBusy(false);
     }
@@ -148,7 +149,7 @@ function ManagerSubscriptionContent() {
     try {
       await centerChangeOwnSubscriptionPlan(centerId, planId);
       await loadSubscription();
-    } catch (e: any) { setSubError(e.message); }
+    } catch (e: any) { setSubError(toUserMessage(e)); }
     finally { setSubBusy(false); }
   }
 
@@ -170,7 +171,7 @@ function ManagerSubscriptionContent() {
     try {
       await centerCancelOwnSubscription(centerId);
       await loadSubscription();
-    } catch (e: any) { setSubError(e.message); }
+    } catch (e: any) { setSubError(toUserMessage(e)); }
     finally { setSubBusy(false); }
   }
 

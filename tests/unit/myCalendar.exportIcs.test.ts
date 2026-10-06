@@ -60,6 +60,6 @@ describe("예약 캘린더 화면 — 버튼이 실제 핸들러에 연결돼 �
   it("'저장'은 저장 성공 후에만 '저장됨'을 표시하고, 실패는 에러로 알린다", () => {
     expect(src).toContain('savedId === r.id ? "저장됨"');
     expect(src).toMatch(/await updateReservationMemo\(r\.id, val\);[\s\S]*setSavedId\(r\.id\)/);
-    expect(src).toContain("catch (e: any) { setError(e.message); }");
+    expect(src).toContain("catch (e: any) { setError(toUserMessage(e)); }");   // raw 오류를 그대로 노출하지 않는다(2026-10-06)
   });
 });

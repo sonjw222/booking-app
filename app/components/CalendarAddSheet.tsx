@@ -20,6 +20,7 @@ import {
 } from "../../lib/calendarAdd";
 import { pickSelected, selectAll, selectNone, toggleSelection, type CalendarEventItem } from "../../lib/calendarEvents";
 
+import { toUserMessage } from "../../lib/userError";
 const KIND_LABEL: Record<CalendarEventItem["kind"], string> = { reservation: "예약", class: "수업", holiday: "휴무일" };
 
 function dateLabel(dateKey: string): string {
@@ -48,7 +49,7 @@ export default function CalendarAddSheet({ items, subtitle, mode = "select", pla
       onDone(res);
       if (res.kind !== "cancelled") onClose(); // 취소했으면 시트를 남겨 다른 방법을 고를 수 있게
     } catch (e) {
-      onError(e instanceof Error ? e.message : "캘린더에 추가하지 못했어요");
+      onError(toUserMessage(e, "캘린더에 추가하지 못했어요"));
     } finally {
       setBusy(false);
     }

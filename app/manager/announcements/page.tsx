@@ -21,6 +21,7 @@ import RichTextEditor from "../../components/RichTextEditor";
 import { ZoomableImage } from "../../components/ImageViewer";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
+import { toUserMessage } from "../../../lib/userError";
 export default function ManagerAnnouncementsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [centerId, setCenterId] = useState<string | null>(null);
@@ -53,7 +54,7 @@ export default function ManagerAnnouncementsPage() {
       setCenterId(cid);
       if (cid) setList(await fetchCenterAnnouncements(cid));
     } catch (e: any) {
-      setError(e.message ?? "불러오지 못했어요");
+      setError(toUserMessage(e, "불러오지 못했어요"));
     } finally {
       setLoading(false);
     }
@@ -69,7 +70,7 @@ export default function ManagerAnnouncementsPage() {
     setMyPerms(null);
     fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
       .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); });
     return () => { cancelled = true; };
   }, [activeCenter]);
 
@@ -113,7 +114,7 @@ export default function ManagerAnnouncementsPage() {
       }
       setSheet(false);
       await reloadList(centerId);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -124,7 +125,7 @@ export default function ManagerAnnouncementsPage() {
       await deleteAnnouncement(id);
       showToast("공지를 삭제했어요");
       if (centerId) await reloadList(centerId);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -133,7 +134,7 @@ export default function ManagerAnnouncementsPage() {
     try {
       const path = await uploadAnnouncementPhoto(file);
       setPhotos((prev) => [...prev, path]);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setUploading(false); }
   }
 

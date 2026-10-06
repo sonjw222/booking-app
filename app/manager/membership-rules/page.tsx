@@ -35,6 +35,7 @@ import { validateGoodsForm, goodsListLabel, draftsFromTiers, type GoodsPricingMo
 import { draftsToTiers, type TierDraft } from "../../../lib/selectableCount";
 import { filterCatalog, uniqueGroupLabels, catalogEmptyMessage, isFilterActive, EMPTY_CATALOG_FILTER } from "../../../lib/catalogFilter";
 
+import { toUserMessage } from "../../../lib/userError";
 // 요일 선택형 수강권은 요일이 지정된 예약조건이 1개 이상 있어야 회원이 구매할 때 요일을 고를 수 있다.
 const WEEKDAY_NEEDS_RULES_MESSAGE = "요일 선택형 수강권은 예약조건을 1개 이상 등록해야 회원이 구매할 수 있어요.";
 
@@ -124,7 +125,7 @@ export default function MembershipRulesPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -137,7 +138,7 @@ export default function MembershipRulesPage() {
     setMyPerms(null);
     fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
       .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); });
     return () => { cancelled = true; };
   }, [activeCenter]);
 
@@ -163,7 +164,7 @@ export default function MembershipRulesPage() {
       // 다른 센터 등급은 fetchGrades(centerId)가 애초에 이 센터 것만 가져오므로(RLS도
       // 이중 방어) 섞일 일 없음.
       setGrades(await fetchGrades(centerId));
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -380,7 +381,7 @@ export default function MembershipRulesPage() {
         const fresh = (await fetchProducts(centerId, "pass")).find((x) => x.id === made.id);
         if (fresh) await openRuleSheet(fresh);
       }
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -388,7 +389,7 @@ export default function MembershipRulesPage() {
     if (!(await globalThis.appConfirm(`'${p.name}' 상품을 삭제할까요?`))) return;
     setBusy(true);
     try { await deleteProduct(p.id); showToast("삭제했어요"); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -403,7 +404,7 @@ export default function MembershipRulesPage() {
       exitSelect();
       showToast(bulkDeleteToast(n));
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -412,7 +413,7 @@ export default function MembershipRulesPage() {
     if (!(await globalThis.appConfirm(next ? `'${p.name}' 판매를 다시 시작할까요?` : `'${p.name}' 판매를 정지할까요? (기존 보유자는 영향 없어요)`))) return;
     setBusy(true);
     try { await toggleProductSale(p.id, next); showToast(next ? "판매를 재개했어요" : "판매를 정지했어요"); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -460,7 +461,7 @@ export default function MembershipRulesPage() {
         showToast(sum.message);
       }
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -477,14 +478,14 @@ export default function MembershipRulesPage() {
       setRuleFor(null);
       showToast("조건을 추가했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
   async function handleDeleteRule(id: string) {
     setBusy(true);
     try { await deleteRule(id); showToast("조건을 삭제했어요"); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

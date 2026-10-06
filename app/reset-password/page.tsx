@@ -9,6 +9,7 @@
 import { useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 
+import { toUserMessage } from "../../lib/userError";
 export default function ResetPasswordRequestPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -28,7 +29,7 @@ export default function ResetPasswordRequestPage() {
     setLoading(false);
     // 존재하지 않는 이메일이라도 같은 메시지를 보여준다 — 가입 여부를 밖으로 노출하지 않기 위함.
     if (error) {
-      setMessage({ type: "error", text: error.message });
+      setMessage({ type: "error", text: toUserMessage(error) });
       return;
     }
     setMessage({ type: "ok", text: "비밀번호 재설정 링크를 이메일로 보냈어요. 메일함을 확인해주세요." });

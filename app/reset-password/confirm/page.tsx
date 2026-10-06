@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { supabase } from "../../../lib/supabaseClient";
 
+import { toUserMessage } from "../../../lib/userError";
 export default function ResetPasswordConfirmPage() {
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
@@ -34,7 +35,7 @@ export default function ResetPasswordConfirmPage() {
     if (error) {
       const msg = error.message.includes("session")
         ? "재설정 링크가 만료됐거나 이미 사용됐어요. 다시 요청해주세요."
-        : error.message;
+        : toUserMessage(error);
       setMessage({ type: "error", text: msg });
       return;
     }

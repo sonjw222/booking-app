@@ -7,6 +7,7 @@ import { centerPhotoUrl } from "../../lib/center";
 import EmptyState from "../components/EmptyState";
 import AppButton from "../components/AppButton";
 
+import { toUserMessage } from "../../lib/userError";
 const PAGE_SIZE = 20;
 const RECENT_KEY = "mwhabit_recent_searches";
 type Scope = "all" | "classes" | "centers";
@@ -58,7 +59,7 @@ export default function SearchPage() {
       setSearched(true); setVisibleCount(PAGE_SIZE); setVisibleClassCount(PAGE_SIZE);
     } catch (cause) {
       if (current !== requestId.current) return;
-      setError(cause instanceof Error ? cause.message : "검색 결과를 불러오지 못했어요.");
+      setError(toUserMessage(cause, "검색 결과를 불러오지 못했어요."));
       setSearched(false);
     } finally {
       if (current === requestId.current) setBusy(false);

@@ -14,6 +14,7 @@ import { useRef, useState, type ChangeEvent } from "react";
 import UiIcon from "./UiIcon";
 import { uploadAlimtalkImage } from "../../lib/alimtalkImages";
 
+import { toUserMessage } from "../../lib/userError";
 export type AlimtalkBlock = { type: "text"; value: string } | { type: "image"; url: string };
 
 export function emptyAlimtalkBlocks(): AlimtalkBlock[] {
@@ -67,7 +68,7 @@ export default function AlimtalkComposer({
       // 사진 뒤에 새 텍스트 블록을 자동으로 붙여서 계속 이어 쓸 수 있게 함(텍스트→사진→텍스트)
       onChange([...blocks, { type: "image", url }, { type: "text", value: "" }]);
     } catch (err: any) {
-      alert(err.message ?? "사진 업로드에 실패했어요");
+      alert(toUserMessage(err, "사진 업로드에 실패했어요"));
     } finally {
       setUploading(false);
     }

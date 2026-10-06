@@ -20,6 +20,7 @@ import {
 } from "../../../lib/progressTree";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
+import { toUserMessage } from "../../../lib/userError";
 export default function ProgressCategoryPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [centerId, setCenterId] = useState<string | null>(null);
@@ -45,7 +46,7 @@ export default function ProgressCategoryPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -58,7 +59,7 @@ export default function ProgressCategoryPage() {
     setMyPerms(null);
     fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
       .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); });
     return () => { cancelled = true; };
   }, [activeCenter]);
 
@@ -71,7 +72,7 @@ export default function ProgressCategoryPage() {
     try {
       const cats = await fetchCategories(centerId);
       setTree(buildTree(cats));
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -85,7 +86,7 @@ export default function ProgressCategoryPage() {
       setNewTop("");
       showToast("대분류를 추가했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -100,7 +101,7 @@ export default function ProgressCategoryPage() {
       setExpanded((p) => ({ ...p, [parent.id]: true }));   // 추가한 항목이 바로 보이도록 펼친 채 유지
       showToast("하위 분류를 추가했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -115,7 +116,7 @@ export default function ProgressCategoryPage() {
       setExpanded((p) => ({ ...p, [parent.id]: true }));
       showToast("기술을 추가했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -127,7 +128,7 @@ export default function ProgressCategoryPage() {
       await renameCategory(id, name.trim());
       showToast("이름을 바꿨어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -141,7 +142,7 @@ export default function ProgressCategoryPage() {
       await deleteCategory(id);
       showToast("삭제했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

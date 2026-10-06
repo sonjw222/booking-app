@@ -12,6 +12,7 @@ import { checkPlatformAdmin } from "../../../lib/admin";
 import Loading from "../../components/Loading";
 import CategoryIcon from "../../components/categoryIcons";
 
+import { toUserMessage } from "../../../lib/userError";
 export default function CategoriesPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [cats, setCats] = useState<ServiceCategory[]>([]);
@@ -26,7 +27,7 @@ export default function CategoriesPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try { setCats(await fetchCategories()); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => {
@@ -50,7 +51,7 @@ export default function CategoriesPage() {
       setLabel("");
       showToast("종목을 추가했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -58,7 +59,7 @@ export default function CategoriesPage() {
     if (!(await globalThis.appConfirm(`'${c.label}' 종목을 삭제할까요?`))) return;
     setBusy(true);
     try { await deleteCategory(c.id); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

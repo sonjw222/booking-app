@@ -16,6 +16,7 @@ import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchHolidays, addHoliday, deleteHoliday, type Holiday } from "../../../lib/holidays";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
+import { toUserMessage } from "../../../lib/userError";
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 }
@@ -47,7 +48,7 @@ export default function HolidaysPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -60,7 +61,7 @@ export default function HolidaysPage() {
     setMyPerms(null);
     fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
       .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); });
     return () => { cancelled = true; };
   }, [activeCenter]);
 
@@ -72,7 +73,7 @@ export default function HolidaysPage() {
     if (!centerId) return;
     setLoading(true); setError(null);
     try { setHolidays(await fetchHolidays(centerId)); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -96,7 +97,7 @@ export default function HolidaysPage() {
         : "휴무일을 추가했어요";
       showToast(msg);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -107,7 +108,7 @@ export default function HolidaysPage() {
       await deleteHoliday(h.id);
       showToast("삭제했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

@@ -14,6 +14,7 @@ import EmptyState from "../../components/EmptyState";
 import { fetchMyPointHistory, type PointHistoryItem } from "../../../lib/mypage";
 import { fetchAllMyPoints, type PointBalance } from "../../../lib/reviews";
 
+import { toUserMessage } from "../../../lib/userError";
 function fmtDateHeader(d: string) {
   const dt = new Date(d + "T00:00:00+09:00");
   return new Intl.DateTimeFormat("ko-KR", {
@@ -34,7 +35,7 @@ export default function PointHistoryPage() {
       setItems(history);
       setBalances(myBalances);
     }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, []);
 

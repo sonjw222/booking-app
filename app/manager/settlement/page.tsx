@@ -23,6 +23,7 @@ import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchCenterPayoutAccount, PAYOUTS_ENABLED, STATUS_LABEL, type CenterPayoutAccount } from "../../../lib/payouts";
 import { fetchCenterSettlementAccount, saveCenterSettlementAccount } from "../../../lib/settlementAccounts";
 
+import { toUserMessage } from "../../../lib/userError";
 export default function ManagerSettlementPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
   const [centerId, setCenterId] = useState<string | null>(null);
@@ -50,7 +51,7 @@ export default function ManagerSettlementPage() {
         setCenters(list.filter((c) => c.isOwner));
         if (list.some((c) => c.isOwner)) setCenterId(list.find((c) => c.isOwner)!.id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -62,7 +63,7 @@ export default function ManagerSettlementPage() {
       setBankName(acc?.bankName ?? "");
       setAccountNumber(acc?.accountNumber ?? "");
       setAccountHolderName(acc?.accountHolderName ?? "");
-    } catch (e: any) { setManualMessage({ type: "error", text: e.message }); }
+    } catch (e: any) { setManualMessage({ type: "error", text: toUserMessage(e) }); }
     finally { setManualLoading(false); }
   }, [centerId]);
 
@@ -71,7 +72,7 @@ export default function ManagerSettlementPage() {
     setAcctLoading(true); setAcctError(null);
     try {
       setAccount(await fetchCenterPayoutAccount(centerId));
-    } catch (e: any) { setAcctError(e.message); }
+    } catch (e: any) { setAcctError(toUserMessage(e)); }
     finally { setAcctLoading(false); setLoading(false); }
   }, [centerId]);
 
@@ -84,7 +85,7 @@ export default function ManagerSettlementPage() {
       await saveCenterSettlementAccount(centerId, { bankName, accountNumber, accountHolderName });
       setManualMessage({ type: "ok", text: "정산 계좌를 저장했어요." });
     } catch (e: any) {
-      setManualMessage({ type: "error", text: e.message });
+      setManualMessage({ type: "error", text: toUserMessage(e) });
     } finally {
       setManualSaving(false);
     }

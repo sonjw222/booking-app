@@ -15,6 +15,7 @@ import {
 import { replaceTabNavigation } from "../../lib/navState";
 import UiIcon from "../components/UiIcon";
 
+import { toUserMessage } from "../../lib/userError";
 const STATUS_LABEL: Record<string, string> = {
   confirmed: "예약확정",
   waitlisted: "대기중",
@@ -63,7 +64,7 @@ export default function MyPage() {
       setProfile(data.profile);
       setMemberships(data.memberships);
     } catch (e: any) {
-      setError(e.message ?? "불러오지 못했어요");
+      setError(toUserMessage(e, "불러오지 못했어요"));
     } finally {
       setLoading(false);
     }
@@ -93,7 +94,7 @@ export default function MyPage() {
     try {
       await requestRefund(m.id);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
   }
 
   if (loading) {

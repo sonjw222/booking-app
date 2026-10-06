@@ -18,6 +18,7 @@ import { getBusinessLicenseUrl } from "../../../lib/storage";
 import { replaceTabNavigation } from "../../../lib/navState";
 import { centerMatchesKeyword } from "../../../lib/adminCenterSearch";
 
+import { toUserMessage } from "../../../lib/userError";
 type Tab = "pending" | "approved" | "rejected";
 
 const TAB_LABEL: Record<Tab, string> = {
@@ -53,7 +54,7 @@ export default function AdminCentersPage() {
     try {
       setCenters(await fetchCenters(t));
     } catch (e: any) {
-      setError(e.message);
+      setError(toUserMessage(e));
     } finally {
       setLoading(false);
     }
@@ -87,7 +88,7 @@ export default function AdminCentersPage() {
       showToast(`${c.name} 승인 완료`);
       await load(tab);
     } catch (e: any) {
-      setError(e.message);
+      setError(toUserMessage(e));
     } finally {
       setBusy(false);
     }
@@ -107,7 +108,7 @@ export default function AdminCentersPage() {
       setRejectReason("");
       await load(tab);
     } catch (e: any) {
-      setError(e.message);
+      setError(toUserMessage(e));
     } finally {
       setBusy(false);
     }
@@ -120,7 +121,7 @@ export default function AdminCentersPage() {
       showToast("대기 상태로 되돌렸어요");
       await load(tab);
     } catch (e: any) {
-      setError(e.message);
+      setError(toUserMessage(e));
     } finally {
       setBusy(false);
     }

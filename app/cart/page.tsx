@@ -24,6 +24,7 @@ import { PG_CHECKOUT_ENABLED } from "../../lib/payments";
 import { fetchMyPgCheckoutOverride } from "../../lib/authAccount";
 import { visiblePayMethodIds, resolveSelectedPayMethod } from "../../lib/payMethods";
 
+import { toUserMessage } from "../../lib/userError";
 // 카카오페이/토스페이는 로고 자산이 없어 outline 아이콘 하나로 뭉치면 구분이 안 되므로
 // --vendor-* 색 점(dot)으로, 나머지는 의미가 통하는 outline 아이콘으로 구분한다.
 const PAY_METHODS: { id: string; label: string; icon?: IconName; dot?: string }[] = [
@@ -101,7 +102,7 @@ export default function CartPage() {
   async function handleRemove(id: string) {
     setBusy(true);
     try { await removeFromCart(id); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -114,7 +115,7 @@ export default function CartPage() {
     try {
       await addToCart({ centerId: g.centerId, productId: g.productId, productName: g.productName, price: g.price });
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -123,14 +124,14 @@ export default function CartPage() {
     if (!last) return;
     setBusy(true);
     try { await removeFromCart(last); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
   async function handleRemoveGroup(ids: string[]) {
     setBusy(true);
     try { await Promise.all(ids.map((id) => removeFromCart(id))); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -140,7 +141,7 @@ export default function CartPage() {
       const price = cartItemAmount({ ...it, selectedCount: count });
       await updateCartCount(it.id, count, price);
       setItems((prev) => prev.map((x) => x.id === it.id ? { ...x, selectedCount: count, price } : x));
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -149,7 +150,7 @@ export default function CartPage() {
     try {
       await updateCartSize(it.id, size);
       setItems((prev) => prev.map((x) => x.id === it.id ? { ...x, selectedSize: size } : x));
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -173,7 +174,7 @@ export default function CartPage() {
       }
       await clearCart();
       setDone(true);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

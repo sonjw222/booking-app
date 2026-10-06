@@ -39,6 +39,7 @@ import AlimtalkComposer, {
   emptyAlimtalkBlocks, flattenAlimtalkBlocks, hasAlimtalkContent, type AlimtalkBlock,
 } from "../../components/AlimtalkComposer";
 
+import { toUserMessage } from "../../../lib/userError";
 const RES_STATUS: Record<string, string> = {
   confirmed: "확정", waitlisted: "대기", cancelled: "취소", attended: "출석", no_show: "노쇼",
 };
@@ -172,7 +173,7 @@ function MembersContent() {
       showToast("회원을 등록했어요");
       setAddSheet(false);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -192,7 +193,7 @@ function MembersContent() {
       setDetailData(await fetchMemberDetail(m.profileId, centerId));
       if (canViewMemo) setMemberMemos(await fetchMemberMemos(m.profileId));
     } catch (e: any) {
-      setError(e.message);
+      setError(toUserMessage(e));
     } finally {
       setDetailLoading(false);
     }
@@ -205,7 +206,7 @@ function MembersContent() {
       await createMemberMemo(detail.profileId, centerId, memberMemoInput.trim());
       setMemberMemoInput("");
       setMemberMemos(await fetchMemberMemos(detail.profileId));
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setMemberMemoBusy(false); }
   }
 
@@ -216,7 +217,7 @@ function MembersContent() {
       await updateMemberMemoEntry(editingMemberMemoId, editingMemberMemoContent.trim());
       setEditingMemberMemoId(null);
       setMemberMemos(await fetchMemberMemos(detail.profileId));
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setMemberMemoBusy(false); }
   }
 
@@ -227,7 +228,7 @@ function MembersContent() {
     try {
       await deleteMemberMemoEntry(memoId);
       setMemberMemos(await fetchMemberMemos(detail.profileId));
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setMemberMemoBusy(false); }
   }
 
@@ -238,7 +239,7 @@ function MembersContent() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -260,7 +261,7 @@ function MembersContent() {
       hasLoadedRef.current = true;
     } catch (e: any) {
       if (seq !== requestSeqRef.current) return;
-      setError(e.message);
+      setError(toUserMessage(e));
     } finally {
       if (seq === requestSeqRef.current) { setLoading(false); setListSearching(false); }
     }
@@ -313,7 +314,7 @@ function MembersContent() {
     setMyPerms(null);
     fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
       .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); });
     return () => { cancelled = true; };
   }, [activeCenter]);
 
@@ -357,7 +358,7 @@ function MembersContent() {
       const n = await syncMembersFromReservations(centerId);
       showToast(n > 0 ? `예약 이력에서 회원 ${n}명을 등록했어요` : "새로 등록할 회원이 없어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -370,7 +371,7 @@ function MembersContent() {
       showToast("저장했어요");
       setDetail(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -382,7 +383,7 @@ function MembersContent() {
       showToast("등급을 변경했어요");
       setDetail(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -394,7 +395,7 @@ function MembersContent() {
       showToast(status === "active" ? "활성 회원으로 전환했어요" : status === "expired" ? "만료 처리했어요" : "휴면 처리했어요");
       setDetail(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -406,7 +407,7 @@ function MembersContent() {
       setNewGradeName("");
       showToast("등급을 추가했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -417,7 +418,7 @@ function MembersContent() {
       await deleteGrade(g.id);
       showToast("등급을 삭제했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -483,7 +484,7 @@ function MembersContent() {
     try {
       // 수강권 시트에는 goods가 나오지 않고, 상품 시트에는 goods만 나온다(서버 쿼리 + 순수 필터 이중).
       setGrantProducts(await fetchGrantableProducts(centerId, kind));
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
   }
 
   function pickGrantProduct(id: string) {
@@ -533,7 +534,7 @@ function MembersContent() {
       showToast(extensionSuccessMessage(r.newExpiresAt));
       setExtendTarget(null);
       if (detail) await openDetail(detail);   // 회원 상세를 다시 불러와 새 만료일이 바로 보이게
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setExtending(false); }
   }
 
@@ -564,7 +565,7 @@ function MembersContent() {
       setGrantTarget(null);
       if (detail?.id === grantTarget.id) await openDetail(grantTarget); // 상세 시트가 열려 있으면 보유 수강권 갱신
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setGranting(false); }
   }
 
@@ -598,7 +599,7 @@ function MembersContent() {
       setAlimtalkTargets(null);
       setSelectMode(false);
       setSelectedIds(new Set());
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setSendingAlimtalk(false); }
   }
 

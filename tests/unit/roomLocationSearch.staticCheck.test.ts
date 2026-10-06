@@ -121,7 +121,7 @@ describe("H. 에러/빈 상태 메시지는 전부 한글이고 raw 오류를 �
   it("catch 블록이 e.message를 직접 노출하지 않고 폴백 한글 메시지를 우선한다", () => {
     const catches = picker.match(/catch \(e: any\) \{[\s\S]{0,120}?\}/g) ?? [];
     expect(catches.length).toBeGreaterThan(0);
-    for (const block of catches) expect(block).toMatch(/e\.message \?\?\s*"[가-힣]/);
+    for (const block of catches) expect(block).toMatch(/toUserMessage\(e,\s*"[가-힣]/);   // 한글 폴백을 가진 toUserMessage로 raw SDK 오류를 가린다(2026-10-06)
   });
 });
 

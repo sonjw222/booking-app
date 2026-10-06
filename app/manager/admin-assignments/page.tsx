@@ -14,6 +14,7 @@ import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchAdminActionLogs, type AdminActionLog, type AdminActionLogFilters } from "../../../lib/adminAssignment";
 import { RESERVATION_TYPE_LABELS, ADMIN_REASON_CODES, ADMIN_REASON_LABELS, type ReservationType, type AdminReasonCode } from "../../../lib/reservationTypes";
 
+import { toUserMessage } from "../../../lib/userError";
 const ACTION_LABELS: Record<AdminActionLog["actionType"], string> = {
   CREATE_ASSIGNMENT: "일반 직접배치",
   CREATE_FREE: "무료 추가 배치",
@@ -55,7 +56,7 @@ export default function AdminAssignmentLogPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -71,7 +72,7 @@ export default function AdminAssignmentLogPage() {
       if (capacityOnly) filters.capacityOverrideOnly = true;
       if (reasonFilter !== "all") filters.reasonCode = reasonFilter;
       setLogs(await fetchAdminActionLogs(centerId, filters));
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId, fromDate, toDate, typeFilter, actionFilter, capacityOnly, reasonFilter]);
   useEffect(() => { load(); }, [load]);

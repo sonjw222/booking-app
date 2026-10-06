@@ -39,7 +39,7 @@ describe("1. 안내 메시지 종류 구분 (success / error / info)", () => {
 
   it("confirmCenterBilling 실패(catch) → error", () => {
     const catchBlock = code.slice(code.indexOf("await confirmCenterBilling("), code.indexOf("await confirmCenterBilling(") + 500);
-    expect(catchBlock).toContain('setBillingNotice({ type: "error", message: e.message ?? "카드 등록 확정에 실패했어요" })');
+    expect(catchBlock).toContain('setBillingNotice({ type: "error", message: toUserMessage(e, "카드 등록 확정에 실패했어요") })');
   });
 
   it("처리 중 → info", () => {

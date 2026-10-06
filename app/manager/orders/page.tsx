@@ -14,6 +14,7 @@ import { fetchCenterOrders, updateOrderStatus, fulfillResultMessage, type Order 
 import Loading from "../../components/Loading";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
+import { toUserMessage } from "../../../lib/userError";
 type OrderRow = Order & { memberName: string; memberPhone: string | null };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -40,7 +41,7 @@ export default function ManagerOrdersPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -53,7 +54,7 @@ export default function ManagerOrdersPage() {
     setMyPerms(null);
     fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
       .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); });
     return () => { cancelled = true; };
   }, [activeCenter]);
 
@@ -65,7 +66,7 @@ export default function ManagerOrdersPage() {
     if (!centerId) return;
     setLoading(true); setError(null);
     try { setOrders(await fetchCenterOrders(centerId)); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId]);
   useEffect(() => { load(); }, [load]);
@@ -78,7 +79,7 @@ export default function ManagerOrdersPage() {
       // 자동예약 결과(예약 수/미배치 수/사유/오류)를 그대로 보여준다 — 실패 이유가 조용히 묻히지 않게.
       showToast(fulfillResultMessage(result));
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -88,7 +89,7 @@ export default function ManagerOrdersPage() {
     try {
       await updateOrderStatus(o.id, "cancelled");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

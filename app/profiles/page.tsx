@@ -19,6 +19,7 @@ import {
   type ProfileRow, type ProfileEdit,
 } from "../../lib/profiles";
 
+import { toUserMessage } from "../../lib/userError";
 export default function ProfilesPage() {
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,7 +51,7 @@ export default function ProfilesPage() {
     try {
       const path = await uploadAvatar(file);
       setEdit({ ...edit, avatarUrl: path });
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setUploadingAvatar(false); }
   }
 
@@ -61,7 +62,7 @@ export default function ProfilesPage() {
       await updateProfile(editing.id, edit);
       setEditing(null); setEdit(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -71,7 +72,7 @@ export default function ProfilesPage() {
     try {
       setProfiles(await fetchProfiles());
     } catch (e: any) {
-      setError(e.message);
+      setError(toUserMessage(e));
     } finally {
       setLoading(false);
     }
@@ -96,7 +97,7 @@ export default function ProfilesPage() {
       setAdding(false);
       await load();
     } catch (e: any) {
-      setError(e.message);
+      setError(toUserMessage(e));
     } finally {
       setBusy(false);
     }
@@ -109,7 +110,7 @@ export default function ProfilesPage() {
       await deleteProfile(p.id);
       await load();
     } catch (e: any) {
-      setError(e.message);
+      setError(toUserMessage(e));
     } finally {
       setBusy(false);
     }

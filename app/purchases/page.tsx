@@ -21,6 +21,7 @@ import EmptyState from "../components/EmptyState";
 import ErrorState from "../components/ErrorState";
 import BackButton from "../components/BackButton";
 
+import { toUserMessage } from "../../lib/userError";
 const STATUS_LABEL: Record<string, string> = {
   active: "이용중",
   expired: "만료",
@@ -50,7 +51,7 @@ export default function PurchasesPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try { setItems(await fetchMyPurchases()); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -68,7 +69,7 @@ export default function PurchasesPage() {
       showToast("환불 처리했어요");
       setRefundTarget(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -81,7 +82,7 @@ export default function PurchasesPage() {
       showToast("주문을 취소했어요");
       setCancelTarget(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

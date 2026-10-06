@@ -16,6 +16,7 @@ import { fetchMarketingMessages, sendMarketingMessage, type MarketingMessage } f
 import { checkPlatformAdmin } from "../../../lib/admin";
 import Loading from "../../components/Loading";
 
+import { toUserMessage } from "../../../lib/userError";
 export default function MarketingPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [messages, setMessages] = useState<MarketingMessage[]>([]);
@@ -33,7 +34,7 @@ export default function MarketingPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try { setMessages(await fetchMarketingMessages()); }
-    catch (e: any) { setError(e.message); }
+    catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => {
@@ -54,7 +55,7 @@ export default function MarketingPage() {
       setTitle(""); setBody(""); setLink(""); setComposing(false);
       showToast("발송했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

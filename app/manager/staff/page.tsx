@@ -23,6 +23,7 @@ import {
   type Permission, type Role, type Staff,
 } from "../../../lib/roles";
 
+import { toUserMessage } from "../../../lib/userError";
 type Tab = "staff" | "perm";
 
 export default function StaffPage() {
@@ -66,7 +67,7 @@ export default function StaffPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e: any) { setError(toUserMessage(e)); setLoading(false); }
     })();
   }, []);
 
@@ -81,7 +82,7 @@ export default function StaffPage() {
       // 오너가 아닌 첫 역할을 기본 선택 (오너는 모든 권한 자동 보유라 편집 불필요)
       const editable = rs.find((r) => !r.isOwner);
       if (editable && !activeRoleId) setActiveRoleId(editable.id);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId, activeRoleId]);
 
@@ -99,7 +100,7 @@ export default function StaffPage() {
     setMyPerms(null);
     fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
       .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
+      .catch((e) => { if (!cancelled) setError(toUserMessage(e)); });
     return () => { cancelled = true; };
   }, [activeCenter]);
 
@@ -119,7 +120,7 @@ export default function StaffPage() {
         const keys = await fetchRolePermissions(activeRoleId);
         setSelected(new Set(keys));
         setDirty(false);
-      } catch (e: any) { setError(e.message); }
+      } catch (e: any) { setError(toUserMessage(e)); }
     })();
   }, [activeRoleId]);
 
@@ -155,7 +156,7 @@ export default function StaffPage() {
       await saveRolePermissions(activeRoleId, Array.from(selected));
       showToast("권한을 저장했어요");
       setDirty(false);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -164,7 +165,7 @@ export default function StaffPage() {
     if (!centerId) return;
     setSearchMsg(null); setFound([]); setSearchedOnce(false);
     try { setFound(await searchAccounts(centerId, searchKw)); setSearchedOnce(true); }
-    catch (e: any) { setSearchMsg(e.message); }
+    catch (e: any) { setSearchMsg(toUserMessage(e)); }
   }
 
   async function handleInvite(accountId: string) {
@@ -175,7 +176,7 @@ export default function StaffPage() {
       showToast("스태프를 추가했어요");
       setInviteSheet(false); setSearchKw(""); setFound([]); setSearchedOnce(false); setSearchMsg(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -187,7 +188,7 @@ export default function StaffPage() {
       showToast("역할을 변경했어요");
       setStaffDetail(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -200,7 +201,7 @@ export default function StaffPage() {
       showToast("스태프를 제외했어요");
       setStaffDetail(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -212,7 +213,7 @@ export default function StaffPage() {
       setNewRoleName("");
       showToast("역할을 추가했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 
@@ -225,7 +226,7 @@ export default function StaffPage() {
       showToast("역할을 삭제했어요");
       if (activeRoleId === r.id) setActiveRoleId(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setBusy(false); }
   }
 

@@ -42,6 +42,7 @@ import AppButton from "../../components/AppButton";
 import { loginHrefWithReturnToHere } from "../../../lib/postLoginReturn";
 import { shareLink } from "../../../lib/nativeShare";
 
+import { toUserMessage } from "../../../lib/userError";
 // 수강권 대분류(group_label) 기준으로 묶는다 — 라벨 없는 상품은 맨 위에 헤더 없이,
 // 라벨 있는 상품은 처음 등장한 순서대로 그룹 헤더를 붙여 보여준다(add_product_group_label.sql).
 function groupByLabel<T extends { groupLabel: string | null; price: number }>(items: T[]): { label: string | null; items: T[] }[] {
@@ -220,7 +221,7 @@ function CenterDetailContent() {
       setRvAlign("left"); setRvFontSize(14);
       setReviews(await fetchReviews(centerId));
       setMyReview(await myReviewFor(centerId));
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setRvBusy(false); }
   }
 
@@ -242,7 +243,7 @@ function CenterDetailContent() {
       await deleteReview(myReview.id);
       setReviews(await fetchReviews(centerId));
       setMyReview(null);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
     finally { setRvBusy(false); }
   }
 
@@ -254,7 +255,7 @@ function CenterDetailContent() {
       setReportTargetId(null);
       showToast("신고가 접수됐어요. 운영팀이 확인할게요.");
     } catch (e: any) {
-      setError(e.message);
+      setError(toUserMessage(e));
       setReportTargetId(null);
     } finally { setReportBusy(false); }
   }
@@ -270,7 +271,7 @@ function CenterDetailContent() {
       });
       showToast(`'${p.name}' 장바구니에 담았어요`);
       cartCount().then(setCartItemCount);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setError(toUserMessage(e)); }
   }
 
   useEffect(() => {
@@ -517,7 +518,7 @@ function CenterDetailContent() {
                   const f = e.target.files?.[0]; if (!f) return;
                   setRvUploading(true);
                   try { const path = await uploadReviewPhoto(f); setRvPhotos((prev) => [...prev, path]); }
-                  catch (err: any) { setError(err.message); }
+                  catch (err: any) { setError(toUserMessage(err)); }
                   finally { setRvUploading(false); e.target.value = ""; }
                 }} />
               </label>
