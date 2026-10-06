@@ -9,6 +9,7 @@ import type { ReservationType } from "./reservationTypes";
 import { toKstIso } from "./kst";
 import { appendTrainerNames } from "./instructorDisplay";
 
+import { todayKstYmd } from "./membershipExpiry";
 export type ManagedClass = {
   id: string;
   title: string;
@@ -965,8 +966,8 @@ export async function fetchUnplacedPasses(centerId: string): Promise<UnplacedPas
     boundDayOfWeek: r.bound_day_of_week ?? null,
     boundStartTime: r.bound_start_time ?? null,
     // add_...sql 적용 전(옛 RPC)에는 아래 필드가 없다 — 만료일로 직접 판정해 안전하게 대체.
-    expired: r.expired ?? (!!r.expires_at && r.expires_at < new Date().toISOString().slice(0, 10)),
-    canRetry: r.can_retry ?? !(!!r.expires_at && r.expires_at < new Date().toISOString().slice(0, 10)),
+    expired: r.expired ?? (!!r.expires_at && r.expires_at < todayKstYmd()),
+    canRetry: r.can_retry ?? !(!!r.expires_at && r.expires_at < todayKstYmd()),
     reason: (r.reason_code ?? "unknown") as UnplacedReason,
     placeableCount: r.placeable_count ?? 0,
   }));

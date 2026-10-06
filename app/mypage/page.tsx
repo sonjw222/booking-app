@@ -15,6 +15,7 @@ import {
 import { replaceTabNavigation } from "../../lib/navState";
 import UiIcon from "../components/UiIcon";
 
+import { todayKstYmd } from "../../lib/membershipExpiry";
 const STATUS_LABEL: Record<string, string> = {
   confirmed: "예약확정",
   waitlisted: "대기중",
@@ -35,7 +36,7 @@ function daysLeft(dateStr: string | null): number | null {
 // 서버에서도 동일하게 막음, 이건 그 이유를 화면에 미리 알려주는 용도).
 function notYetStarted(startsAt: string | null): boolean {
   if (!startsAt) return false;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayKstYmd();
   return startsAt > today;
 }
 
