@@ -10,7 +10,9 @@
 |---|---|---|
 | `npm run test` | `tests/unit/` | ❌ 불필요 |
 | `npm run test:integration` | `tests/integration/` | ✅ 필요 (개발용 Supabase) |
-| `npm run test:all` | 위 둘을 순서대로 | ✅ (integration 단계에서) |
+| `npm run test:all` | 위 둘을 순서대로(시작 시 live 포함 경고 출력) | ✅ (integration 단계에서) |
+| `npm run test:live:integration` / `test:live:e2e` | `test:integration` / `test:e2e`와 동일(이름만 live임을 드러낸 별칭) | ✅ |
+| `npm run test:unit` | `npm test`와 동일(네트워크 없음) | ❌ |
 
 ## 단위 테스트 (`tests/unit/`)
 
