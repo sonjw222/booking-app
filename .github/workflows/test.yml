@@ -304,7 +304,10 @@ jobs:
   integration:
     name: Integration tests (live dev Supabase)
     runs-on: ubuntu-latest
-    # live dev Supabase를 쓰므로 모든 E2E 구간이 끝난 뒤(순차)에만 실행한다. E2E가 실패해도 실행(정보 수집), push/fork로 E2E가 skipped면 건너뜀.
+    # live dev Supabase를 쓰므로 모든 E2E 구간이 끝난 뒤(순차)에만 실행한다(E2E와 동시 실행 금지).
+    # 판단(2026-10-07): E2E가 실패해도 Integration은 실행한다 — Integration은 자체 self-healing 정리(공유 fixture 사전 정리)를 가지고 있고, E2E 실패와 독립된 신호
+    # (dev DB/계정은 정상인데 E2E만 깨졌는지, 환경 전체가 깨졌는지)를 주기 때문이다. E2E가 fixture를 오염시켰더라도 Integration 실패는 "환경 오염" 단서가 된다.
+    # 사용자가 workflow를 취소하면(!cancelled()) 실행하지 않고, push/fork로 E2E가 skipped면 건너뜀.
     needs: e2e-4-settings-readiness
     if: ${{ !cancelled() && needs.e2e-4-settings-readiness.result != 'skipped' }}
     # 20분으로는 통합 테스트 스위트가 계속 늘어나며 정상 실행도 종종 잘렸다(PR #66, #67

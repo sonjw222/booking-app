@@ -70,6 +70,7 @@ describe("live-test workflow 구조", () => {
     expect(code(J.integration)).toContain(`!cancelled() && needs.${e2e[e2e.length - 1]}.result != 'skipped'`);
     expect(wf).toMatch(/concurrency:\n  group: shared-live-supabase-tests\n  cancel-in-progress: false/);
     expect(code(wf)).not.toMatch(/continue-on-error/);
+    expect(J.integration).toContain("E2E가 실패해도 Integration은 실행한다");   // 판단 근거가 workflow에 문서화돼 있다
   });
   it("push/fork 게이트 유지: 첫 E2E 구간만 직접 게이트(push 제외, fork PR 제외), 나머지 live job은 그 skipped를 상속", () => {
     const first = code(J[e2e[0]]);
