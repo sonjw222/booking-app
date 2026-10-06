@@ -7,6 +7,8 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { isFullKrMobile } from "./krPhone";
+import { displayMemberName } from "./memberName";
 
 export type Permission = {
   key: string;
@@ -135,18 +137,21 @@ export async function fetchStaff(centerId: string): Promise<Staff[]> {
   }));
 }
 
-// 초대할 계정 검색 (이름 또는 전화번호)
-export async function searchAccounts(keyword: string): Promise<{ id: string; name: string; phone: string | null }[]> {
-  const kw = keyword.trim();
-  if (!kw) return [];
-  const { data, error } = await supabase
-    .from("accounts")
-    .select("id, name, phone")
-    .is("merged_into", null) // 이미 다른 계정에 합쳐진(계정 연동) 계정은 검색·초대 대상에서 제외
-    .or(`name.ilike.%${kw}%,phone.ilike.%${kw}%`)
-    .limit(10);
-  if (error) throw new Error("계정 검색에 실패했어요: " + error.message);
-  return (data ?? []).map((a: any) => ({ id: a.id, name: a.name, phone: a.phone }));
+// 초대할 계정 검색 — 서버 RPC search_staff_candidates(센터별 facility.staff.create 권한 확인). accounts를 직접 조회하거나 이름/번호 일부로 전역 검색하지 않는다(2026-10-04).
+// 센터 밖 가입자는 "정확한 전체 휴대폰 번호"로만 찾는다(하이픈/+82 입력 허용). 번호 형식이 완전하지 않으면 서버를 호출하지 않고 안내 메시지를 던진다.
+export type StaffCandidate = { id: string; name: string; phone: string | null; alreadyStaff: boolean; staffStatus: string | null };
+export const STAFF_SEARCH_NEED_FULL_PHONE = "휴대폰 번호 전체를 입력해 주세요 (예: 010-1234-5678)";
+export async function searchAccounts(centerId: string, phone: string): Promise<StaffCandidate[]> {
+  if (!isFullKrMobile(phone)) throw new Error(STAFF_SEARCH_NEED_FULL_PHONE);
+  const { data, error } = await supabase.rpc("search_staff_candidates", { p_center_id: centerId, p_phone: phone.trim() });
+  if (error) {
+    if (error.code === "42883" || error.code === "PGRST202") throw new Error("스태프 검색 기능을 사용할 수 없어요. 앱/서버 업데이트 후 다시 시도해주세요");
+    throw new Error(/권한|로그인|너무 많아요/.test(error.message ?? "") ? error.message : "계정 검색에 실패했어요: " + error.message);
+  }
+  return ((data ?? []) as any[]).map((a) => ({
+    id: a.account_id, name: displayMemberName(a.name), phone: a.phone ?? null,
+    alreadyStaff: !!a.already_staff, staffStatus: a.staff_status ?? null,
+  }));
 }
 
 // 스태프 초대 (pending 상태로 추가 → 본인이 수락하거나 오너가 바로 active)

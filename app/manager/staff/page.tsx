@@ -17,7 +17,7 @@ import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
   fetchPermissions, fetchRoles, createRole, deleteRole,
   fetchRolePermissions, saveRolePermissions,
-  fetchStaff, searchAccounts, inviteStaff, updateStaffRole, removeStaff,
+  fetchStaff, searchAccounts, type StaffCandidate, inviteStaff, updateStaffRole, removeStaff,
   buildTree, togglePermission, CATEGORY_LABEL,
   fetchMyEffectivePermissionKeys, canSeeManagerMenu,
   type Permission, type Role, type Staff,
@@ -48,7 +48,9 @@ export default function StaffPage() {
   // 시트
   const [inviteSheet, setInviteSheet] = useState(false);
   const [searchKw, setSearchKw] = useState("");
-  const [found, setFound] = useState<{ id: string; name: string; phone: string | null }[]>([]);
+  const [found, setFound] = useState<StaffCandidate[]>([]);
+  const [searchedOnce, setSearchedOnce] = useState(false);   // 검색을 실행했는지(0건 안내용)
+  const [searchMsg, setSearchMsg] = useState<string | null>(null);   // 번호 형식/검색 오류 안내(시트 안에 표시)
   const [inviteRoleId, setInviteRoleId] = useState<string>("");
   const [roleSheet, setRoleSheet] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
@@ -157,9 +159,12 @@ export default function StaffPage() {
     finally { setBusy(false); }
   }
 
+  // 스태프 후보 검색: 센터별 서버 RPC, 정확한 전체 휴대폰 번호만(이름/번호 일부 전역 검색 없음)
   async function handleSearch() {
-    try { setFound(await searchAccounts(searchKw)); }
-    catch (e: any) { setError(e.message); }
+    if (!centerId) return;
+    setSearchMsg(null); setFound([]); setSearchedOnce(false);
+    try { setFound(await searchAccounts(centerId, searchKw)); setSearchedOnce(true); }
+    catch (e: any) { setSearchMsg(e.message); }
   }
 
   async function handleInvite(accountId: string) {
@@ -168,7 +173,7 @@ export default function StaffPage() {
     try {
       await inviteStaff(centerId, accountId, inviteRoleId);
       showToast("스태프를 추가했어요");
-      setInviteSheet(false); setSearchKw(""); setFound([]);
+      setInviteSheet(false); setSearchKw(""); setFound([]); setSearchedOnce(false); setSearchMsg(null);
       await load();
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
@@ -425,18 +430,24 @@ export default function StaffPage() {
         <SheetOverlay className="sheet-overlay" onClick={() => setInviteSheet(false)}>
           <div className="sheet staff-invite-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">스태프 추가</div>
-            <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>이미 가입한 계정을 검색해서 추가해요</div>
+            <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>이미 가입한 계정을 휴대폰 번호 전체로 찾아 추가해요</div>
+            <div className="perm-guide" style={{ margin: "0 0 8px" }}>개인정보 보호를 위해 이름이나 번호 일부로는 검색되지 않아요. 가입한 분의 <b>휴대폰 번호 전체</b>(하이픈 입력 가능)를 입력해 주세요.</div>
 
             <div className="staff-search-row">
-              <input aria-label="이름 또는 전화번호"
+              <input aria-label="휴대폰 번호 전체"
                 className="input-field"
-                placeholder="이름 또는 전화번호"
+                type="tel" inputMode="tel"
+                placeholder="휴대폰 번호 전체 (010-1234-5678)"
                 value={searchKw}
                 onChange={(e) => setSearchKw(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               />
               <button className="outline-action" onClick={handleSearch}>검색</button>
             </div>
+            {searchMsg && <div className="auth-msg error" role="alert" style={{ marginTop: 8 }}>{searchMsg}</div>}
+            {searchedOnce && found.length === 0 && !searchMsg && (
+              <div className="daylist-empty" style={{ padding: 12 }}>해당 번호로 가입한 계정을 찾지 못했어요</div>
+            )}
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>역할</div>
             <div className="mem-filters" style={{ padding: 0 }}>
@@ -454,7 +465,9 @@ export default function StaffPage() {
                   {found.map((a) => (
                     <div key={a.id} className="grade-item">
                       <span className="grade-name">{a.name} <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{a.phone}</span></span>
-                      <button className="text-btn" disabled={busy} onClick={() => handleInvite(a.id)}>추가</button>
+                      {a.alreadyStaff
+                        ? <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>이미 이 센터의 스태프예요{a.staffStatus === "pending" ? " (수락 대기)" : a.staffStatus === "suspended" ? " (정지됨)" : ""}</span>
+                        : <button className="text-btn" disabled={busy} onClick={() => handleInvite(a.id)}>추가</button>}
                     </div>
                   ))}
                 </div>
