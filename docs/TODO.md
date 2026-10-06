@@ -1,5 +1,10 @@
 # TODO
 
+## 2026-10-07 CI / E2E 안정화 (branch 준비됨, PR/merge 대기)
+- **P1**: E2E는 최소 2026-09-20 이후 모든 PR run에서 30분 timeout으로 cancelled(Unit/Integration/Build도 skipped)이고 push(main)에서만 건너뛰어 green으로 보였다 — 최근 #166/#167/#169 run 로그에서 auth setup 3개는 통과, `admin/attendance`(60초 timeout) → `class-allowed-products` → `holiday-restores-classes` → `membership-schedule-rules` → `new-class-creation`이 연쇄 실패(타 센터 격리 테스트만 통과). **root cause 미확정**(로그에 에러 상세가 남지 않았고 non-production dev 자격증명이 로컬에 없어 live 재현 불가). 이 문제 때문에 CI가 사실상 E2E/Integration 게이트 역할을 못 하고 있다 — 새 CI에서 첫 실패 상세가 로그/artifact로 남도록 진단을 추가했다.
+- `fix/ci-e2e-checkpoints-production-guard-20261007`(PR/merge 대기): E2E 4구간 순차 체인 + `--max-failures=1` + 구간별 artifact + Unit/Build 독립 + Integration 직렬화 + 진단 reporter, Integration/E2E **Production hard guard**(Production project ref 감지 시 시작 전 실패). merge 후 첫 실행에서 CI Secrets가 Production을 가리키면 guard로 실패한다(의도된 동작) — GitHub Secrets가 개발/테스트 프로젝트인지 확인 필요(P0).
+- 다음 단계: merge 후 첫 CI run의 `[e2e-diag]` 로그/artifact로 첫 실패 spec의 원인을 분류(fixture 오염 / dev DB schema mismatch / auth 세션 / locator / 설정 오염 / app regression / CI 리소스).
+
 ## 2026-10-05 모바일 safe-area 실기기 확인
 - **P1 / 실기기 확인 필요**: iPhone 16 / 17 Pro Max(가능하면 작은 iPhone, Android 제스처 내비)에서 예약·마이 비로그인 화면의 상단 여백, 하단 nav 겹침, 글자 크기 확대 확인. 자동 검증(Chromium + inset 시뮬레이션)은 완료했으나 실기기 WKWebView/Capacitor 확인은 수동 QA로 남김.
 - **P3**: `daylist-empty`(인라인 paddingTop 40/60/80)를 쓰는 관리자/체크아웃 결과 화면 약 30곳은 clipping은 없지만(≥40px, 대부분 헤더 뒤) 매직 넘버라 공통 토큰으로 정리할 여지가 있다 — 이번 범위에서는 변경하지 않음.
@@ -32,7 +37,8 @@
   - KST 날짜 audit: `CLEAN` (`evaluate_notification_rules`만 설계상 허용)
 
 - **남은 작업**
-  - security-hardening 브랜치를 최신 `origin/main`과 integration branch에서 병합/전체 테스트 후 main 반영.
+  - ~~security-hardening 브랜치 main 반영~~ — **완료**: PR #166(`merge/postrelease-security-hardening-20261006`) MERGED.
+  - ~~광고성 알림톡 팬아웃 탈퇴 계정 제외~~ — **완료**: PR #168 MERGED(구 PR #164 대체) + Production `evaluate_notification_rules` live 정의에 마케팅 게이트·탈퇴 제외(2회) 적용 확인(사용자 확인) — `fix_marketing_consent_fanout.sql` 재실행 금지.
   - Production SQL은 추가 이슈가 확인되지 않는 한 더 실행하지 않는다.
 
 
@@ -148,13 +154,13 @@
   Edge Function 배포 완료. 실기기 QA에서 OTP 알림톡 실제 수신까지 확인됨.
 - **QA용 알림톡 테스트 센터(`[QA] 모하빗 알림톡 테스트 센터`)** — (2026-09-30, 사용자 확인)
   생성 완료, `status='pending'`으로 회원 화면 비노출, 관리자 연결 정상.
-- **NEXT_PUBLIC_PG_CHECKOUT_ENABLED=true** — Vercel 프로덕션 환경변수 설정 필요(Toss 카드
-  심사 대부분 통과, 현대카드만 남음 — 사용자 결정에 따라 지금 켜도 됨). 아직 미확인.
+- **PG 전역 활성화(`NEXT_PUBLIC_PG_CHECKOUT_ENABLED`) — 의도적으로 `false` 유지, 변경하지 않음** (2026-10-07 갱신): Toss Payments 계약/카드사 심사 자료(결제경로 PPT) 제출 완료 — **답변 대기**.
+  심사 계정만 `accounts.pg_checkout_override=true`로 PG 결제수단(카드/카카오페이/토스페이/계좌이체 + 직접결제)을 본다. PR #169로 카카오페이/토스페이 UI 노출 복구, Production 체크아웃에서 5개 수단 노출 확인(2026-10-07).
+  남은 것(외부/수동): Toss 심사 결과 대응, 실제 카드 승인 end-to-end(심사 통과 후), 일반 사용자 PG 활성화 결정. 결제경로 캡처 중 Toss 결제창(05)은 주문 생성 때문에 캡처하지 않았다. 사이트 사업자정보 "상호" 표기(현재 "모하빗")가 Toss 등록 상호(손장욱)와 같은지 확인 필요.
 - **alimtalk_templates aligo_template_code 중복 방지 — Production 적용 여부 확인 필요** (2026-10-04 재조사): 저장소에는 이미 전역 partial unique index `fix_alimtalk_template_code_unique.sql`(`idx_alimtalk_templates_aligo_code_unique`, code is not null, 센터/공통 포함 전체에서 1행 — 플랫폼 단일 알리고 계정 모델에 맞음)가 있다. 2026-09-30 TODO는 schema.sql만 보고 "제약 없음"으로 적었다. `verify_alimtalk_template_uniqueness_20261004.sql`(읽기 전용: 중복 데이터 진단 + index 정의 검증)로 확인해 `NOT_APPLIED`면 그 SQL을 적용(기존 중복이 있으면 생성이 실패하므로 verify의 `duplicate_codes`를 먼저 정리). 클라이언트는 23505를 친절한 메시지로 처리.
-- **raw 오류 한글화 범위 확대**: `lib/userError.ts`를 이번엔 인증/회원가입/센터등록/결제/
-  예약에만 적용했다. `.message`를 직접 노출하는 다른 화면(프로필/쿠폰/포인트/리뷰/문의 등,
-  전수 검색 시 58개 이상 파일에서 `.message` 패턴 발견)은 이번 배치 범위 밖 — 후속 배치에서
-  같은 헬퍼로 점진 확대 필요.
+- **raw 오류 한글화 범위 확대**: `lib/userError.ts`를 인증/회원가입/센터등록/결제/예약에 적용했었고, 나머지 사용자 화면(약 230곳, 프로필/쿠폰/포인트/문의/캘린더/관리자 등)은
+  `fix/postlaunch-maintenance-refresh-20261007` 브랜치에서 `toUserMessage()`로 정리 + 재노출 방지 정적 테스트 추가(**PR/merge 대기** — merge 전에는 완료로 보지 않는다).
+  결제 provider 응답·내부 failure_reason·console 로그는 의도적으로 제외.
 
 ### P1-Native-Calendar-0926. (2026-09-26, 2차 갱신) 캘린더 추가 native 실기기 확인 + 재빌드
 - iOS/Android 앱 **재빌드/재배포 필요**(CalendarEventPlugin은 native 코드). 재빌드 전 구버전 앱은 자동으로 기존 .ics 내보내기로 동작한다.

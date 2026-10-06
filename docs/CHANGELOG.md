@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-07 — 결제수단 노출 복구 / 문서 정리 (docs only)
+- PR #169: 카카오페이·토스페이를 PG 활성 사용자(심사관 `pg_checkout_override` 포함)에게 다시 노출(`HIDDEN_PAY_METHOD_IDS=[]`). PG 전역 OFF(`NEXT_PUBLIC_PG_CHECKOUT_ENABLED=false`)·reviewer override·센터 `pay_methods` 제한·direct fallback은 유지.
+- PR #166(security hardening), #168(광고성 팬아웃 탈퇴 계정 제외) merge 반영. Toss 심사 자료 제출 완료(답변 대기).
+- 이 문서 변경은 TODO stale 정리만 담는다. 아직 PR/merge 대기 중인 작업(CI E2E checkpoint + Production guard, maintenance refresh, #167 compact mode-switch label, manager unsaved-changes guard)은 merge 후 별도로 기록한다.
+
 ## 2026-10-06 — 광고성 알림톡 팬아웃에서 탈퇴 계정 제외 (SQL 파일/테스트만, Production 적용 여부는 별도 확인)
 - `fix_marketing_consent_fanout.sql`의 `evaluate_notification_rules()` 광고성 두 분기(`expired_rebuy`, `birthday`)에 `a.deactivated_at is null` 추가 — 탈퇴 전 `marketing_consent`가 true였던 계정이 광고성 자동 발송 대상에 남던 문제. 필수 운영 알림(`count_low`, `membership_expiring`, `pause_ending`)은 변경 없음.
 - 오래된 PR #164(160+ commit 뒤처짐)를 최신 main 위에서 최소 범위로 재구현. 정적 테스트 `privacyReleaseBlockers.staticCheck.test.ts` 강화.
