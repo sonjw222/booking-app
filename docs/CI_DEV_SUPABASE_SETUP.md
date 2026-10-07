@@ -44,3 +44,11 @@ dev 프로젝트: `mwhabit-ci-dev`, ref `jdglfvwdnkjnraqdxuuj`(ap-northeast-1; C
 export NEXT_PUBLIC_SUPABASE_URL=https://<dev-ref>.supabase.co CI_DEV_TARGET_PROJECT_REF=<dev-ref> CI_DEV_SEED_ACK=1 ...
 npm run ci:dev:bootstrap
 ```
+
+## dev 구축 기록 (2026-10-07, `mwhabit-ci-dev` / ref `jdglfvwdnkjnraqdxuuj`)
+- 스키마: Production **public 스키마-only** 덤프(`pg_dump --schema-only --no-owner --schema=public`, `schemaDumpCheck` 통과) → dev에만 적용. 덤프의 `CREATE SCHEMA public;`은 Supabase 기본 public과 충돌하므로 적용본에서 그 한 줄만 주석 처리. 테이블 91/91, 함수 169/169, RLS 정책 200/200 일치.
+- 이 저장소 워크트리의 CLI link는 Production을 가리킬 수 있다 → dev 명령은 항상 `--project-ref jdglfvwdnkjnraqdxuuj`(또는 `--db-url`)만 사용, `--linked` 금지, `supabase link` 변경 금지.
+- Edge Functions 3개(`send-phone-otp`, `check-signup-email`, `delete-account`)는 `supabase functions deploy <name> --project-ref <dev> --use-api`로 dev에만 배포(Docker 불필요). dev 전용 secret `PHONE_OTP_TEST_BYPASS_PREFIX=0100000`(`supabase secrets set ... --project-ref <dev>`).
+- 로컬 dev 값 파일(모두 gitignored `.tmp/`, 권한 600, **출력 금지**): `ci-dev-keys.env`(URL/anon/service role — `supabase projects api-keys --project-ref <dev> --reveal`로 받아 JWT ref가 dev인지 확인 후 저장), `ci-dev-accounts.env`(테스트 계정 4쌍 + `CI_DEV_TARGET_PROJECT_REF`), `ci-dev-secret-map.env`(ID만). 사용: `set -a; . .tmp/ci-dev-keys.env; . .tmp/ci-dev-accounts.env; set +a; CI_DEV_SEED_ACK=1 npm run ci:dev:seed`.
+- Auth 상태 확인법(읽기 전용, Dashboard 불필요): `GET <dev>/auth/v1/settings`의 `mailer_autoconfirm`(true여야 Confirm email OFF), `disable_signup`(false여야 함).
+- `storage.from("avatars")`는 테이블이 아니라 버킷: `ci:dev:verify`가 버킷을 별도 검사한다(버킷/`storage.objects` 정책은 public 덤프에 없음 → Production 구성 읽기 필요).

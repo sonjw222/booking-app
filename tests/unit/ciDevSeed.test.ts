@@ -18,6 +18,7 @@ function fakeServer({ failOn = null, schema = true } = {}) {
     if (u.pathname === "/auth/v1/admin/users" && method === "GET") return res(200, { users: db.users });
     if (u.pathname === "/auth/v1/admin/users" && method === "POST") { const x = { id: id(), email: body.email, email_confirmed_at: "now" }; db.users.push(x); return res(200, x); }
     if (u.pathname.startsWith("/auth/v1/admin/users/") && method === "PUT") return res(200, {});
+    if (u.pathname === "/storage/v1/bucket") return res(200, [{ name: "avatars" }]);
     if (u.pathname === "/rest/v1/") return res(200, { definitions: schema ? Object.fromEntries([...CORE_TABLES, "x"].map((t) => [t, { properties: Object.fromEntries((SEED_COLUMNS[t] ?? ["id"]).map((c) => [c, {}])) }])) : {}, paths: {} });
     const table = u.pathname.replace("/rest/v1/", "");
     if (method === "GET") { let rows = db[table] ?? []; for (const [k, v] of u.searchParams) { if (k === "select") continue; const m = String(v).match(/^eq\.(.*)$/); if (m) rows = rows.filter((r) => String(r[k]) === (m[1] === "true" ? "true" : m[1])); } return res(200, rows.map((r) => ({ ...r }))); }
@@ -98,6 +99,7 @@ describe("verify", () => {
     expect(s.calls.every((c) => c.startsWith("GET "))).toBe(true);
     const { readFileSync } = await import("node:fs"); for (const f of ["verify", "secret-map"]) expect(readFileSync(`scripts/ci-dev/${f}.mjs`, "utf8")).not.toMatch(/\.insert\(|createUser|updateUser|method:\s*"(POST|PUT|PATCH|DELETE)"/);
   });
+  it("스캐너는 storage.from(버킷)을 테이블로 오인하지 않고 버킷으로 분류한다", () => { const u = scanUsage(process.cwd(), ["tests/integration"]); expect(u.tables).not.toContain("avatars"); expect(u.buckets).toContain("avatars"); });
   it("정적 스캔이 테스트의 rpc/table을 찾는다", () => { const u = scanUsage(process.cwd(), ["tests/integration"]); expect(u.tables).toContain("manager_centers"); expect(u.rpcs.length).toBeGreaterThan(3); });
   it("bootstrap은 스키마 실패 시 seed 호출 이전에 중단하도록 구성돼 있다", async () => {
     const { readFileSync } = await import("node:fs"); const b = readFileSync("scripts/ci-dev/bootstrap.mjs", "utf8");

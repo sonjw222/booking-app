@@ -40,6 +40,7 @@ export function makeClient(env, fetchImpl = fetch) {
   return {
     select: (table, query) => call("GET", `${base}/rest/v1/${table}?${query}`),
     insert: (table, row) => call("POST", `${base}/rest/v1/${table}?select=id`, row, { Prefer: "return=representation" }),
+    buckets: () => call("GET", `${base}/storage/v1/bucket`),
     openapi: () => call("GET", `${base}/rest/v1/`, undefined, { Accept: "application/openapi+json" }),
     listUsers: () => call("GET", `${base}/auth/v1/admin/users?per_page=1000`),
     createUser: (email, password) => call("POST", `${base}/auth/v1/admin/users`, { email, password, email_confirm: true }),
@@ -85,10 +86,12 @@ function walk(dir, out = []) {
   return out;
 }
 export function scanUsage(root, subdirs) {
-  const tables = new Set(), rpcs = new Set();
+  const tables = new Set(), rpcs = new Set(), buckets = new Set();
   for (const d of subdirs) { let files = []; try { files = walk(path.join(root, d)); } catch { continue; }
     for (const f of files) { const src = readFileSync(f, "utf8");
-      for (const m of src.matchAll(/\.from\(\s*["'`]([a-z_][a-z0-9_]*)["'`]\s*\)/g)) tables.add(m[1]);
+      // storage.from("bucket")은 테이블이 아니라 Storage 버킷이다 — 구분해서 수집한다.
+      for (const m of src.matchAll(/\.storage\s*\.from\(\s*["'`]([A-Za-z0-9_-]+)["'`]\s*\)/g)) buckets.add(m[1]);
+      for (const m of src.matchAll(/(?<!\.storage)\.from\(\s*["'`]([a-z_][a-z0-9_]*)["'`]\s*\)/g)) tables.add(m[1]);
       for (const m of src.matchAll(/\.rpc\(\s*["'`]([a-z_][a-z0-9_]*)["'`]/g)) rpcs.add(m[1]); } }
-  return { tables: [...tables].sort(), rpcs: [...rpcs].sort() };
+  return { tables: [...tables].sort(), rpcs: [...rpcs].sort(), buckets: [...buckets].sort() };
 }

@@ -22,6 +22,9 @@ export async function verifySchema({ client, root = process.cwd(), report }) {
   for (const t of [...new Set([...CORE_TABLES, ...tests.tables])]) report(defs[t] ? "PASS" : "MISSING", `table ${t}`, defs[t] ? "" : "schema baseline 필요");
   for (const [t, cols] of Object.entries(SEED_COLUMNS)) if (defs[t]) for (const c of cols) if (!defs[t].properties?.[c]) report("MISMATCH", `column ${t}.${c}`, "seed가 쓰는 컬럼이 없음");
   for (const r of tests.rpcs) report(paths.includes(`/rpc/${r}`) ? "PASS" : "MISSING", `rpc ${r}`, "테스트가 호출하는 함수");
+  const b = await client.buckets();
+  const have = new Set(Array.isArray(b.json) ? b.json.map((x) => x.name) : []);
+  for (const name of tests.buckets) report(have.has(name) ? "PASS" : "MISSING", `storage bucket ${name}`, have.has(name) ? "" : "테스트가 쓰는 버킷 — Production 설정을 읽어 dev에 생성(설정은 DB 데이터가 아니라 구성)");
   report("SKIP", "RLS 활성 여부 / GRANT", "PostgREST로 조회 불가 — SQL 편집기에서 별도 확인(docs/CI_DEV_SUPABASE_SETUP.md)");
   return true;
 }
