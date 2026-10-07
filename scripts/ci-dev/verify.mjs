@@ -29,6 +29,13 @@ export async function verifySchema({ client, root = process.cwd(), report }) {
   return true;
 }
 
+export async function verifyCatalog({ client, report }) {
+  const perms = await client.count("permissions");
+  report(perms.n > 0 ? "PASS" : "MISSING", `catalog permissions (${perms.n ?? "?"}행)`, "참조 데이터 적재 필요(ci:dev:seed + prod-catalog.json)");
+  const plan = await client.select("subscription_plans", "select=id,is_default,is_active&is_default=eq.true&is_active=eq.true");
+  report(plan.json?.length === 1 ? "PASS" : plan.json?.length ? "MISMATCH" : "MISSING", "catalog 기본 요금제(is_default & is_active 1개)", "센터 생성 트리거/구독 테스트가 필요로 함");
+}
+
 export async function verifyFixtures({ client, env, report }) {
   const users = await client.listUsers(); const byEmail = new Map((users.json?.users ?? []).map((u) => [String(u.email).toLowerCase(), u]));
   for (const a of FIXTURE_ACCOUNTS) {
@@ -66,6 +73,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (!projectRefFromUrl(process.env.NEXT_PUBLIC_SUPABASE_URL)) { console.error("ci-dev verify: URL 형식 오류"); process.exit(1); }
   const client = makeClient(process.env), r = makeReporter();
   await verifySchema({ client, report: r.report });
+  if (!process.argv.includes("--schema")) await verifyCatalog({ client, report: r.report });
   if (!process.argv.includes("--schema")) await verifyFixtures({ client, env: process.env, report: r.report });
   console.log("\n" + r.summary()); console.log("(PASS 항목은 CI_DEV_VERBOSE=1 로 모두 출력)");
   process.exit(r.failed() ? 1 : 0);

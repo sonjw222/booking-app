@@ -5,6 +5,27 @@ import path from "node:path";
 import { KNOWN_PRODUCTION_PROJECT_REFS } from "../ci/liveEnvPreflight.mjs";
 import { checkCiDevEnv, FIXTURE_ACCOUNTS } from "./requiredEnv.mjs";
 
+// 스키마 덤프에는 없는 "참조/구성 데이터"(사용자 데이터 아님). Production에서 읽기 전용으로 export한 JSON을 받아 dev에만 멱등 적재한다.
+//  permissions: 권한 키 카탈로그(account_center_permissions/role_permissions FK 대상), subscription_plans: 기본 요금제(센터 생성 트리거가 참조),
+//  service_categories: 홈 종목 목록. Production 전용 QA 요금제(is_active=false, is_default=false)는 제외한다.
+export const CATALOG_TABLES = [["permissions", "key"], ["subscription_plans", "id"], ["service_categories", "id"]];
+export function selectCatalogRows(catalog) {
+  const plans = (catalog.subscription_plans ?? []).filter((p) => p.is_active || p.is_default);
+  return { permissions: catalog.permissions ?? [], subscription_plans: plans, service_categories: catalog.service_categories ?? [] };
+}
+export async function ensureCatalog(client, catalog, log = () => {}) {
+  const rows = selectCatalogRows(catalog);
+  for (const [table, pk] of CATALOG_TABLES) {
+    const list = rows[table];
+    if (!list.length) throw new Error(`catalog에 ${table} 행이 없음 — Production 읽기 전용 export(docs/CI_DEV_SUPABASE_SETUP.md)를 확인`);
+    const before = await client.count(table);
+    const r = await client.upsertIgnore(table, list, pk);
+    if (!r.ok) fail(`${table} 적재`, r);
+    const after = await client.count(table);
+    log(`catalog ${table}: ${before.n ?? "?"} -> ${after.n ?? "?"} (원본 ${list.length})`);
+  }
+}
+
 export const FIXTURE_CENTER_NAME = "CI Fixture Center (do not delete)";
 export const FIXTURE_PRODUCT_NAME = "CI Fixture Pass 10";
 const ACCOUNT_DISPLAY = { USER_A: "CI User A", USER_B: "CI User B", MANAGER_A: "CI Manager A", MANAGER_B: "CI Manager B" };
@@ -39,6 +60,9 @@ export function makeClient(env, fetchImpl = fetch) {
   }
   return {
     select: (table, query) => call("GET", `${base}/rest/v1/${table}?${query}`),
+    // 충돌(PK) 시 무시하는 멱등 upsert — 참조/구성 데이터 적재용
+    upsertIgnore: (table, rows, onConflict) => call("POST", `${base}/rest/v1/${table}?on_conflict=${onConflict}`, rows, { Prefer: "resolution=ignore-duplicates,return=minimal" }),
+    count: async (table) => { const r = await fetchImpl(`${base}/rest/v1/${table}?select=*`, { method: "HEAD", headers: headers({ Prefer: "count=exact", Range: "0-0" }) }); const m = (r.headers?.get?.("content-range") ?? "").match(/\/(\d+)$/); return { status: r.status, ok: r.ok, n: m ? Number(m[1]) : null }; },
     update: (table, query, patch) => call("PATCH", `${base}/rest/v1/${table}?${query}`, patch, { Prefer: "return=representation" }),
     insert: (table, row) => call("POST", `${base}/rest/v1/${table}?select=id`, row, { Prefer: "return=representation" }),
     buckets: () => call("GET", `${base}/storage/v1/bucket`),
@@ -78,6 +102,12 @@ export async function ensureFixtures(client, env, log = () => {}) {
   if (!centerId) { const i = await client.insert("centers", { name: FIXTURE_CENTER_NAME, status: "approved", is_internal: true }); if (!i.ok) fail("centers 생성", i); centerId = i.json[0].id; log("center created (internal)"); }
   else if (ce.json[0].is_internal !== true || ce.json[0].status !== "approved") { const u = await client.update("centers", `id=eq.${enc(centerId)}`, { is_internal: true, status: "approved" }); if (!u.ok) fail("centers 갱신", u); log("center reused (internal/approved 보정)"); }
   else log("center reused");
+  // 센터 생성 트리거(create_default_center_subscription)는 INSERT 시점의 기본 요금제만 연결한다 — 카탈로그 적재 전에 만든 센터 보정.
+  const sub = await client.select("center_subscriptions", `select=center_id&center_id=eq.${enc(centerId)}`);
+  if (sub.ok && !(sub.json?.length)) {
+    const plan = await client.select("subscription_plans", "select=id&is_active=eq.true&order=created_at.asc&limit=1");
+    if (plan.ok && plan.json?.[0]?.id) { const i = await client.insert("center_subscriptions", { center_id: centerId, plan_id: plan.json[0].id, status: "pending_billing_setup" }); if (!i.ok) fail("center_subscriptions 생성", i); log("center subscription linked to default plan"); }
+  }
   for (const a of ["USER_A", "USER_B"]) {
     const m = await client.select("center_members", `select=id&center_id=eq.${enc(centerId)}&profile_id=eq.${enc(ids.profiles[a])}`); if (!m.ok) fail(`center_members ${a} 조회`, m);
     if (!m.json?.length) { const i = await client.insert("center_members", { center_id: centerId, profile_id: ids.profiles[a], status: "active" }); if (!i.ok) fail(`center_members ${a} 생성`, i); log(`${a}: center member created`); }

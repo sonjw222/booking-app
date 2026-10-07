@@ -2,7 +2,7 @@
 // 오케스트레이터: preflight → 스키마 검증 → seed → 전체 검증. 스키마가 없으면 seed 전에 중단한다(root SQL 439개를 자동 실행하지 않는다).
 import { requireNonProductionOrExit } from "./requiredEnv.mjs";
 import { assertSeedAllowed, makeClient } from "./lib.mjs";
-import { makeReporter, verifyFixtures, verifySchema } from "./verify.mjs";
+import { makeReporter, verifyCatalog, verifyFixtures, verifySchema } from "./verify.mjs";
 import { runSeed } from "./seed.mjs";
 
 requireNonProductionOrExit(process.env, { forSeed: true });
@@ -15,5 +15,6 @@ console.log("2/4 schema OK");
 let seeded = process.env;
 try { const { ids, text } = await runSeed(process.env); seeded = { ...process.env, TEST_CENTER_ID: ids.TEST_CENTER_ID, TEST_PRODUCT_ID: ids.TEST_PRODUCT_ID }; console.log("3/4 seed OK\n" + text); } catch (e) { console.error("seed 중단: " + e.message); process.exit(1); }
 const f = makeReporter();
+await verifyCatalog({ client, report: f.report });
 await verifyFixtures({ client, env: seeded, report: f.report });
 console.log("4/4 " + f.summary()); process.exit(f.failed() ? 1 : 0);

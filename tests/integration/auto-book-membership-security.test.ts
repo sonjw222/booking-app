@@ -615,7 +615,7 @@ describe("SEC-114 AUTO-SEC-K~L: platform admin 허용 + fulfill_order 내부 호
 });
 
 describe("SEC-114 AUTO-SEC-M~P: 나머지 정책 회귀 커버리지(이번 배치에서 추가 — reserve_class와 동일 조건 실측)", () => {
-  it("AUTO-SEC-M: selected 모드 + class_allowed_products에 지정된 product는 membership_schedule_rules 불일치와 무관하게 자동예약된다(P1-17 override)", async () => {
+  it("AUTO-SEC-M(F2 정책): selected 모드 + class_allowed_products에 지정돼도 membership_schedule_rules 불일치면 자동예약되지 않는다(P1-17 override는 fix_reservation_integrity_20261003.sql [F2]로 제거됨)", async () => {
     await asManagerA();
     // [P2-28 수정] AUTO-SEC-F와 같은 이유(공유 센터 스캔 오염) — 격리 센터 사용.
     const isolatedCenterId = await createIsolatedOwnedCenter(managerA);
@@ -637,13 +637,12 @@ describe("SEC-114 AUTO-SEC-M~P: 나머지 정책 회귀 커버리지(이번 배�
     if (capErr) throw new Error(`class_allowed_products 지정 실패: ${capErr.message}`);
     const mem = await createAutoBookMembership(isolatedCenterId, userB.profileId, product.id, { remainingCount: 3 });
 
-    // 대조: AUTO-SEC-F와 동일한 schedule_rule 불일치 상황이지만, 여기서는 'selected' +
-    // class_allowed_products 명시 지정이 있으므로 override로 예약이 성사돼야 한다
-    // (F는 'all' 모드라 override가 없어 booked=0이 되는 것과 대비된다).
+    // [2026-10-07 정책 정렬] 예전(P1-17)에는 'selected' + 명시 지정이 schedule_rule을 우회해 booked=1이었다. 라이브 정책은 [F2]로
+    // 지정도 예약조건을 건너뛰지 않는다(AUTO-SEC-F의 'all' 모드와 같은 결과: booked=0, 잔여 변화 없음).
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).toBeNull();
-    expect((data as any).booked).toBe(1);
-    expect((await fetchMembership(mem.id)).remaining_count).toBe(2);
+    expect((data as any).booked).toBe(0);
+    expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
   });
 
   it("AUTO-SEC-N: center_settings.daily_book_limit에 이미 도달한 날짜는 자동예약을 건너뛴다", async () => {
