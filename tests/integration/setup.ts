@@ -385,6 +385,19 @@ async function resetStaleTestCenterSettings(centerId: string, centerName: string
   }
 }
 
+// 테스트 전용 센터("통합테스트센터-*")는 승인(approved) + 내부 QA(is_internal) 상태여야 한다:
+//  - reserve_class() 등이 승인되지 않은 센터를 거부("아직 승인되지 않은 센터예요"),
+//  - confirm_test_payment(mock 결제)는 내부 QA 센터에서만 허용된다.
+// 예전에는 오래 쓰던 공유 DB의 센터가 수동으로 승인돼 있어 드러나지 않았고, 새 dev 프로젝트(빈 DB)에서 처음 드러났다.
+// 운영 정책/RLS는 바꾸지 않고 "테스트가 만든 센터의 fixture 상태"만 맞춘다.
+async function ensureTestCenterIsApprovedInternal(admin: SupabaseClient, centerId: string): Promise<void> {
+  const { data, error } = await admin.from("centers").select("status, is_internal").eq("id", centerId).single();
+  if (error) throw new Error(`테스트 센터 상태 조회 실패: ${describeAdminQueryError("centers", error)}`);
+  if (data.status === "approved" && data.is_internal === true) return;
+  const { error: updErr } = await admin.from("centers").update({ status: "approved", is_internal: true }).eq("id", centerId);
+  if (updErr) throw new Error(`테스트 센터 상태 보정 실패: ${describeAdminQueryError("centers", updErr)}`);
+}
+
 export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<string> {
   const admin = getFixtureAdminClient();
 
@@ -424,6 +437,7 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
   if (candidates.length > 0) {
     const owned = candidates[0];
     const centerId = owned.centerId as string;
+    await ensureTestCenterIsApprovedInternal(admin, centerId);
     await sweepStaleTestClasses(centerId, owned.centerName);
     await resetStaleTestCenterSettings(centerId, owned.centerName);
     return centerId;
@@ -431,7 +445,7 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
 
   const { data: center, error: centerErr } = await admin
     .from("centers")
-    .insert({ name: `통합테스트센터-${manager.accountId.slice(0, 8)}`, status: "pending" })
+    .insert({ name: `통합테스트센터-${manager.accountId.slice(0, 8)}`, status: "approved", is_internal: true })
     .select("id")
     .single();
   if (centerErr || !center) throw new Error(`테스트 센터 생성 실패: ${describeAdminQueryError("centers", centerErr)}`);
