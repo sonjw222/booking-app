@@ -39,6 +39,7 @@ export function makeClient(env, fetchImpl = fetch) {
   }
   return {
     select: (table, query) => call("GET", `${base}/rest/v1/${table}?${query}`),
+    update: (table, query, patch) => call("PATCH", `${base}/rest/v1/${table}?${query}`, patch, { Prefer: "return=representation" }),
     insert: (table, row) => call("POST", `${base}/rest/v1/${table}?select=id`, row, { Prefer: "return=representation" }),
     buckets: () => call("GET", `${base}/storage/v1/bucket`),
     openapi: () => call("GET", `${base}/rest/v1/`, undefined, { Accept: "application/openapi+json" }),
@@ -69,10 +70,18 @@ export async function ensureFixtures(client, env, log = () => {}) {
     if (!profileId) { const i = await client.insert("profiles", { account_id: accountId, name: ACCOUNT_DISPLAY[a], is_primary: true }); if (!i.ok) fail(`profiles ${a} 생성`, i); profileId = i.json[0].id; log(`${a}: primary profile created`); }
     ids.accounts[a] = accountId; ids.profiles[a] = profileId;
   }
-  const ce = await client.select("centers", `select=id,status&name=eq.${enc(FIXTURE_CENTER_NAME)}`); if (!ce.ok) fail("centers 조회", ce);
+  const ce = await client.select("centers", `select=id,status,is_internal&name=eq.${enc(FIXTURE_CENTER_NAME)}`); if (!ce.ok) fail("centers 조회", ce);
   if ((ce.json?.length ?? 0) > 1) throw new Error(`fixture 센터("${FIXTURE_CENTER_NAME}")가 ${ce.json.length}개 — 수동 정리 후 재실행(자동 삭제 안 함)`);
   let centerId = ce.json?.[0]?.id;
-  if (!centerId) { const i = await client.insert("centers", { name: FIXTURE_CENTER_NAME, status: "approved" }); if (!i.ok) fail("centers 생성", i); centerId = i.json[0].id; log("center created"); } else log("center reused");
+  // is_internal=true 필수: confirm_test_payment(mock 결제)는 내부 QA 센터에서만 허용된다. 대신 internal 센터는 멤버/관리자에게만 보이므로
+  // 아래에서 USER_A/B를 center_members로 등록한다(테스트가 product를 USER_A로 먼저 읽는다).
+  if (!centerId) { const i = await client.insert("centers", { name: FIXTURE_CENTER_NAME, status: "approved", is_internal: true }); if (!i.ok) fail("centers 생성", i); centerId = i.json[0].id; log("center created (internal)"); }
+  else if (ce.json[0].is_internal !== true || ce.json[0].status !== "approved") { const u = await client.update("centers", `id=eq.${enc(centerId)}`, { is_internal: true, status: "approved" }); if (!u.ok) fail("centers 갱신", u); log("center reused (internal/approved 보정)"); }
+  else log("center reused");
+  for (const a of ["USER_A", "USER_B"]) {
+    const m = await client.select("center_members", `select=id&center_id=eq.${enc(centerId)}&profile_id=eq.${enc(ids.profiles[a])}`); if (!m.ok) fail(`center_members ${a} 조회`, m);
+    if (!m.json?.length) { const i = await client.insert("center_members", { center_id: centerId, profile_id: ids.profiles[a], status: "active" }); if (!i.ok) fail(`center_members ${a} 생성`, i); log(`${a}: center member created`); }
+  }
   const pr = await client.select("products", `select=id&center_id=eq.${enc(centerId)}&name=eq.${enc(FIXTURE_PRODUCT_NAME)}`); if (!pr.ok) fail("products 조회", pr);
   if ((pr.json?.length ?? 0) > 1) throw new Error(`fixture 상품("${FIXTURE_PRODUCT_NAME}")이 ${pr.json.length}개 — 수동 정리 후 재실행`);
   let productId = pr.json?.[0]?.id;

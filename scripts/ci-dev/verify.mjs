@@ -9,7 +9,7 @@ import { FIXTURE_CENTER_NAME, FIXTURE_PRODUCT_NAME, makeClient, projectRefFromUr
 // seed가 쓰는 컬럼(없으면 스키마가 다르다는 뜻 → seed 전에 중단해야 함)
 export const SEED_COLUMNS = {
   accounts: ["id", "auth_id", "name", "is_member", "is_manager"], profiles: ["id", "account_id", "name", "is_primary"],
-  centers: ["id", "name", "status"], products: ["id", "center_id", "name", "price", "product_kind", "pass_type", "total_count", "is_on_sale", "is_active"],
+  centers: ["id", "name", "status", "is_internal"], center_members: ["id", "center_id", "profile_id", "status"], products: ["id", "center_id", "name", "price", "product_kind", "pass_type", "total_count", "is_on_sale", "is_active"],
 };
 // 이름이 코드 규약으로 고정된 핵심 테이블(+테스트가 직접 쓰는 테이블은 정적 스캔으로 추가)
 export const CORE_TABLES = ["accounts", "profiles", "centers", "center_roles", "manager_centers", "center_members", "products", "memberships", "orders", "payments", "classes", "reservations", "center_settings", "notifications"];
@@ -39,9 +39,15 @@ export async function verifyFixtures({ client, env, report }) {
     report(accountId ? "PASS" : "MISSING", `account ${a}`);
     if (accountId) { const p = await client.select("profiles", `select=id&account_id=eq.${accountId}&is_primary=eq.true`); report(p.json?.length === 1 ? "PASS" : p.json?.length ? "MISMATCH" : "MISSING", `primary profile ${a}`); }
   }
-  const c = await client.select("centers", `select=id,status&id=eq.${encodeURIComponent(env.TEST_CENTER_ID)}`);
+  const c = await client.select("centers", `select=id,status,is_internal&id=eq.${encodeURIComponent(env.TEST_CENTER_ID)}`);
   const center = c.json?.[0];
-  report(center ? (center.status === "approved" ? "PASS" : "MISMATCH") : "MISSING", "TEST_CENTER_ID 센터" + (center && center.status !== "approved" ? ` (status=${center.status}, approved 필요)` : ""));
+  report(center ? (center.status === "approved" && center.is_internal === true ? "PASS" : "MISMATCH") : "MISSING", "TEST_CENTER_ID 센터(approved + is_internal=true: mock 결제 조건)" + (center && !(center.status === "approved" && center.is_internal === true) ? ` (status=${center.status}, is_internal=${center.is_internal})` : ""));
+  for (const a of ["USER_A", "USER_B"]) {
+    const u = byEmail.get(String(env[`TEST_${a}_EMAIL`]).toLowerCase()); const acc = u && (await client.select("accounts", `select=id&auth_id=eq.${u.id}`)).json?.[0]?.id;
+    const prof = acc && (await client.select("profiles", `select=id&account_id=eq.${acc}&is_primary=eq.true`)).json?.[0]?.id;
+    const cm = prof && (await client.select("center_members", `select=id&center_id=eq.${encodeURIComponent(env.TEST_CENTER_ID)}&profile_id=eq.${prof}`)).json;
+    report(cm?.length === 1 ? "PASS" : cm?.length ? "MISMATCH" : "MISSING", `${a} center_members(internal 센터 가시성)`);
+  }
   const p = await client.select("products", `select=id,center_id,price,is_active,is_on_sale,product_kind&id=eq.${encodeURIComponent(env.TEST_PRODUCT_ID)}`);
   const prod = p.json?.[0];
   if (!prod) report("MISSING", "TEST_PRODUCT_ID 상품");

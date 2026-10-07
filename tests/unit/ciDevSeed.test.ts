@@ -10,7 +10,7 @@ const env = (o = {}) => { const e: any = { NEXT_PUBLIC_SUPABASE_URL: DEV, CI_DEV
 
 // 최소 가짜 Supabase: auth admin + PostgREST(eq 필터, insert) + openapi
 function fakeServer({ failOn = null, schema = true } = {}) {
-  const db = { users: [], accounts: [], profiles: [], centers: [], products: [] }; const calls: string[] = []; let n = 0; const id = () => `id-${++n}`;
+  const db = { users: [], accounts: [], profiles: [], centers: [], products: [], center_members: [] }; const calls: string[] = []; let n = 0; const id = () => `id-${++n}`;
   const f = async (url: string, init: any = {}) => {
     const u = new URL(url), method = init.method ?? "GET", body = init.body ? JSON.parse(init.body) : null; calls.push(`${method} ${u.pathname}`);
     const res = (status: number, json: any) => ({ status, ok: status < 400, json: async () => json });
@@ -23,6 +23,7 @@ function fakeServer({ failOn = null, schema = true } = {}) {
     const table = u.pathname.replace("/rest/v1/", "");
     if (method === "GET") { let rows = db[table] ?? []; for (const [k, v] of u.searchParams) { if (k === "select") continue; const m = String(v).match(/^eq\.(.*)$/); if (m) rows = rows.filter((r) => String(r[k]) === (m[1] === "true" ? "true" : m[1])); } return res(200, rows.map((r) => ({ ...r }))); }
     if (method === "POST") { const row = { id: id(), ...body }; db[table].push(row); return res(201, [{ id: row.id }]); }
+    if (method === "PATCH") { const eq = [...u.searchParams].find(([k]) => k === "id"); const row = (db[table] ?? []).find((r) => `eq.${r.id}` === eq?.[1]); if (row) Object.assign(row, body); return res(200, row ? [{ id: row.id }] : []); }
     return res(404, {});
   };
   return { f, db, calls };
@@ -49,7 +50,7 @@ describe("runSeed", () => {
   it("처음 실행: 사용자 4 + accounts 4 + profiles 4 + 센터 1 + 상품 1", async () => {
     const s = fakeServer(); const { ids } = await runSeed(env(), { fetchImpl: s.f, writeMap: false, log: () => {} });
     expect([s.db.users.length, s.db.accounts.length, s.db.profiles.length, s.db.centers.length, s.db.products.length]).toEqual([4, 4, 4, 1, 1]);
-    expect(s.db.centers[0]).toMatchObject({ status: "approved" }); expect(s.db.products[0]).toMatchObject({ center_id: ids.TEST_CENTER_ID, product_kind: "pass", is_active: true, is_on_sale: true });
+    expect(s.db.centers[0]).toMatchObject({ status: "approved", is_internal: true }); expect(s.db.center_members.length).toBe(2); expect(s.db.products[0]).toMatchObject({ center_id: ids.TEST_CENTER_ID, product_kind: "pass", is_active: true, is_on_sale: true });
     expect(s.db.accounts.filter((a) => a.is_manager).length).toBe(2);
   });
   it("재실행: 중복 생성 없음, 같은 ID 반환", async () => {
@@ -62,6 +63,13 @@ describe("runSeed", () => {
     expect(s.db.users.length).toBe(4); expect(s.db.centers.length).toBe(0);
     await runSeed(env(), { fetchImpl: s.f, writeMap: false, log: () => {} });
     expect([s.db.users.length, s.db.centers.length, s.db.products.length]).toEqual([4, 1, 1]);
+  });
+  it("기존 센터가 internal이 아니면 보정(PATCH)하고 멤버를 추가한다", async () => {
+    const s = fakeServer(); await runSeed(env(), { fetchImpl: s.f, writeMap: false, log: () => {} });
+    s.db.centers[0].is_internal = false; s.db.center_members.length = 0;
+    await runSeed(env(), { fetchImpl: s.f, writeMap: false, log: () => {} });
+    expect(s.db.centers[0].is_internal).toBe(true); expect(s.db.center_members.length).toBe(2); expect(s.db.centers.length).toBe(1);
+    await runSeed(env(), { fetchImpl: s.f, writeMap: false, log: () => {} }); expect(s.db.center_members.length).toBe(2);
   });
   it("fixture 센터가 중복이면 자동 삭제하지 않고 중단", async () => {
     const s = fakeServer(); await runSeed(env(), { fetchImpl: s.f, writeMap: false, log: () => {} }); s.db.centers.push({ id: "dup", name: s.db.centers[0].name, status: "approved" });

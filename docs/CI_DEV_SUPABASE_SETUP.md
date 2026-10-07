@@ -22,7 +22,7 @@ live CI(E2E/Integration)는 **Production이 아닌 전용 Supabase 프로젝트*
 seed/bootstrap 실행 조건(셋 다 필요): ① URL/키가 Production 아님 ② `CI_DEV_TARGET_PROJECT_REF`가 URL의 project ref와 정확히 일치 ③ `CI_DEV_SEED_ACK=1`. 재실행해도 중복 생성 없음(고정 이름 marker: 센터 `CI Fixture Center (do not delete)`, 상품 `CI Fixture Pass 10`). 중간에 실패하면 다시 실행하면 이어서 진행하며, 자동 삭제/정리는 하지 않는다.
 
 ## 자동으로 만들어지는 것 vs 테스트가 스스로 만드는 것 (코드 기준)
-- seed가 만든다: Auth 사용자 4(USER_A/B, MANAGER_A/B; 이메일 확인 완료), `accounts`(is_manager는 매니저/스태프만), 대표 `profiles`, **TEST_CENTER_ID 센터(approved)**, **TEST_PRODUCT_ID 상품(pass, 10회, 10,000원, 판매중)**.
+- seed가 만든다: Auth 사용자 4(USER_A/B, MANAGER_A/B; 이메일 확인 완료), `accounts`(is_manager는 매니저/스태프만), 대표 `profiles`, **TEST_CENTER_ID 센터(approved + `is_internal=true`)**와 USER_A/B의 `center_members`, **TEST_PRODUCT_ID 상품(pass, 10회, 10,000원, 판매중)**.
 - 테스트가 직접 만들고 정리한다(fixture 불필요): 매니저 소유 센터(`getOrCreateOwnedTestCenter` → `통합테스트센터-*`와 오너 역할/`manager_centers` 연결), 스태프 초대/역할/권한 오버라이드, 수업·예약·수강권·주문·결제, center_settings 초기화. 그래서 매니저/스태프 연결과 `center_settings`는 seed에서 만들지 않는다.
 - 사람 작업으로 남지 않는 것: 센터·상품·역할 수동 생성.
 
@@ -52,3 +52,8 @@ npm run ci:dev:bootstrap
 - 로컬 dev 값 파일(모두 gitignored `.tmp/`, 권한 600, **출력 금지**): `ci-dev-keys.env`(URL/anon/service role — `supabase projects api-keys --project-ref <dev> --reveal`로 받아 JWT ref가 dev인지 확인 후 저장), `ci-dev-accounts.env`(테스트 계정 4쌍 + `CI_DEV_TARGET_PROJECT_REF`), `ci-dev-secret-map.env`(ID만). 사용: `set -a; . .tmp/ci-dev-keys.env; . .tmp/ci-dev-accounts.env; set +a; CI_DEV_SEED_ACK=1 npm run ci:dev:seed`.
 - Auth 상태 확인법(읽기 전용, Dashboard 불필요): `GET <dev>/auth/v1/settings`의 `mailer_autoconfirm`(true여야 Confirm email OFF), `disable_signup`(false여야 함).
 - `storage.from("avatars")`는 테이블이 아니라 버킷: `ci:dev:verify`가 버킷을 별도 검사한다(버킷/`storage.objects` 정책은 public 덤프에 없음 → Production 구성 읽기 필요).
+
+### 첫 dev 통합 테스트 dry-run에서 확인된 dev 요구사항 (2026-10-07)
+- **fixture 센터는 `is_internal=true` 여야 한다**: `confirm_test_payment`(mock 결제)가 내부 QA 센터에서만 허용된다("테스트 결제는 내부 QA 센터에서만 사용할 수 있어요"). internal 센터는 멤버/관리자에게만 보이므로 seed가 USER_A/B를 `center_members`로 등록한다(테스트가 USER_A로 상품을 먼저 읽는다). seed가 기존 센터도 보정한다.
+- **Auth Rate Limits(Dashboard)**: 통합 테스트 53개 파일이 계정마다 반복 로그인해 기본 한도(sign-ups/sign-ins 5분당 30회/IP)에서 "Request rate limit reached"로 대량 실패한다(그 뒤 signUp 폴백이 "User already registered"로 이어짐). dev 프로젝트의 Authentication → Rate Limits에서 sign-ups/sign-ins 한도를 크게 올려야 한다.
+- 권한 parity: dev는 신규 프로젝트 기본 권한 때문에 service_role=ALL, anon/authenticated에 REFERENCES/TRIGGER/TRUNCATE/MAINTAIN이 일부 테이블에 더 있다(DDL은 Production과 동일). `.tmp/dev-apply-storage-and-privileges.sql`(dev 전용, dev에만 있는 fixture 센터가 없으면 중단하는 안전장치 포함)이 Production 값으로 맞춘다.
