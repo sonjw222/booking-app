@@ -288,7 +288,10 @@ function CheckoutContent() {
     }
     // 공개(비로그인) 목록으로 만든 모델은 요일/시간 선택 설정을 알 수 없다 — 이 상태로 결제하지 않는다.
     if (product.publicFallback) {
-      setError("로그인 정보를 확인하지 못했어요. 다시 로그인한 뒤 시도해주세요.");
+      // 세션이 아예 없는 비로그인 방문자는 "확인 실패"가 아니라 "로그인 필요" 상태다 — 이 문구일 때만 아래 토스트가 "로그인 하러 가기" 링크(현재 checkout URL을
+      // next로 보존, lib/postLoginReturn)를 보여줘 로그인 후 같은 결제 화면으로 돌아온다(2026-08-31 로그인 복귀 기능). 세션이 있는데도 공개 모델이 온 경우만 기존 안내를 유지한다.
+      const { data: sessionData } = await supabase.auth.getSession();
+      setError(sessionData.session ? "로그인 정보를 확인하지 못했어요. 다시 로그인한 뒤 시도해주세요." : "로그인이 필요해요");
       return;
     }
     // 2026-10-01(Batch C, C-9) — 요일/시간 선택형 수강권은 고르기 전엔 결제를 막는다
