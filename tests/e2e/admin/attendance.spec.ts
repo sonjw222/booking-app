@@ -15,6 +15,7 @@ import {
 } from "../fixtures/testData";
 import { getFixtureAdminClient } from "../../integration/setup";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { gotoManagerClasses } from "../fixtures/pageHelpers";
 
 /*
   P3(출석/체크인 배치): 관리자 예약자 명단(app/manager/classes/page.tsx)의 출결 처리 실브라우저
@@ -28,7 +29,7 @@ import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
 
 async function gotoManagerClassesDay(page: Page, kstDate: string): Promise<void> {
   const [y, m, d] = kstDate.split("-").map(Number);
-  await page.goto("/manager/classes");
+  await gotoManagerClasses(page, centerAId);
   await expect(page.locator(".cal-title")).toBeVisible();
   for (let i = 0; i < 14; i++) {
     const title = (await page.locator(".cal-title").innerText()).trim();

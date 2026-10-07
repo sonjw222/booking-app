@@ -552,3 +552,15 @@ export function kstDateStr(startTimeIso: string): string {
 export function reservationDeepLink(classId: string, startTimeIso: string): string {
   return `/reservation?openClassId=${classId}&openDate=${encodeURIComponent(kstDateStr(startTimeIso))}`;
 }
+
+/*
+  테스트 센터의 공개/내부(is_internal) 상태를 명시적으로 전환한다.
+  테스트가 만든 센터는 기본이 내부 QA 센터(is_internal=true)다 — mock 결제(confirm_test_payment)가 내부 센터에서만 허용되기 때문.
+  내부 센터는 center_members/관리자에게만 보이므로, "비로그인/비회원이 센터·상품을 보는" 화면 검증은 그 스펙 동안만 공개(false)로 바꾸고
+  afterAll에서 되돌린다(is_internal만 바꾸며 status는 건드리지 않는다 — 승인 상태 변경은 플랫폼 운영자 전용 트리거가 막는다).
+  되돌리기 실패 대비: getOrCreateOwnedTestCenter가 재사용 시 is_internal=true로 다시 보정한다.
+*/
+export async function setTestCenterInternal(centerId: string, internal: boolean): Promise<void> {
+  const { error } = await getFixtureAdminClient().from("centers").update({ is_internal: internal }).eq("id", centerId);
+  if (error) throw new Error(`테스트 센터 is_internal=${internal} 전환 실패: ${error.message}`);
+}

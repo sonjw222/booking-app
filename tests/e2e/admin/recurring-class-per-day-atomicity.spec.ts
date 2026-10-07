@@ -8,6 +8,7 @@ import {
 import { getFixtureAdminClient } from "../../integration/setup";
 import { MANAGER_AUTH_FILE } from "../fixtures/authFiles";
 import { expandRecurringDates } from "../../../lib/classes";
+import { gotoManagerClasses, clickCreateClass } from "../fixtures/pageHelpers";
 
 /*
   요일별 개별 지정(perDayMode) 반복수업 생성 회귀 테스트.
@@ -57,8 +58,8 @@ test("요일별 개별 지정(perDayMode) 반복수업 등록 — RPC 1회로 �
   const uniqueTitle = `PERDAY-ATOMIC-${Date.now()}`;
   const admin = getFixtureAdminClient();
 
-  await page.goto("/manager/classes");
-  await page.locator(".fab-btn", { hasText: "수업 등록" }).click();
+  await gotoManagerClasses(page, centerAId);
+  await clickCreateClass(page);
   await expect(page.locator(".sheet-title", { hasText: "수업 등록" })).toBeVisible();
 
   await page.locator('input[placeholder="수업명"]').fill(uniqueTitle);

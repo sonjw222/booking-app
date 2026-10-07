@@ -12,7 +12,7 @@ import {
   type TestUser,
 } from "../fixtures/testData";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
-import { selectKstCalendarDay } from "../fixtures/pageHelpers";
+import { selectKstCalendarDay, gotoManagerHolidays } from "../fixtures/pageHelpers";
 
 /*
   P0-1: 휴무일을 지정하면 add_holiday_safe()가 그날 수업들을 classes.status='cancelled'로
@@ -103,7 +103,7 @@ test("휴무일 생성→회원화면 예약차단 확인→삭제→새로고�
   // 마저 눌러 끝까지 진행한다 — 이 테스트의 관심사(휴무일 삭제 시 폐강 복구)와는
   // 무관한 경합이라 강제 진행이 맞다.
   const holidayRow = () => page.locator(".hol-row", { hasText: fmtDate(holidayDate) });
-  await page.goto("/manager/holidays");
+  await gotoManagerHolidays(page, centerAId);
   await waitHolidaysReady(page);
   await page.locator('input[type="date"]').fill(holidayDate);
   await page.getByRole("button", { name: "추가" }).click();
@@ -131,7 +131,7 @@ test("휴무일 생성→회원화면 예약차단 확인→삭제→새로고�
   ).toHaveCount(0);
 
   // ④ 관리자 화면에서 방금 만든 휴무일을 실제로 삭제
-  await page.goto("/manager/holidays");
+  await gotoManagerHolidays(page, centerAId);
   await waitHolidaysReady(page);
   // handleDelete()가 appConfirm() 커스텀 확인창을 띄운다(네이티브 confirm()에서 마이그레이션됨).
   await holidayRow().getByRole("button", { name: "삭제" }).click();

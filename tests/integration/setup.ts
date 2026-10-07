@@ -435,6 +435,13 @@ async function ensureTestCenterIsInternal(admin: SupabaseClient, centerId: strin
   if (updErr) throw new Error(`테스트 센터 is_internal 보정 실패: ${describeAdminQueryError("centers", updErr)}`);
 }
 
+// 예전 형식 이름("통합테스트센터-<acct8>", id 접미사 없음)이면 센터 id 접미사를 붙여 유일하게 만든다(이름은 보호 필드가 아니다). status는 건드리지 않는다.
+async function ensureTestCenterNameIsUnique(admin: SupabaseClient, centerId: string, currentName: string, accountId: string): Promise<void> {
+  if (currentName !== `통합테스트센터-${accountId.slice(0, 8)}`) return;
+  const { error } = await admin.from("centers").update({ name: `${currentName}-${centerId.slice(0, 8)}` }).eq("id", centerId);
+  if (error) throw new Error(`테스트 센터 이름 보정 실패: ${describeAdminQueryError("centers", error)}`);
+}
+
 export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<string> {
   const admin = getFixtureAdminClient();
 
@@ -478,14 +485,18 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
     const owned = candidates[0];
     const centerId = owned.centerId as string;
     await ensureTestCenterIsInternal(admin, centerId);
+    await ensureTestCenterNameIsUnique(admin, centerId, owned.centerName, manager.accountId);
     await sweepStaleTestClasses(centerId, owned.centerName);
     await resetStaleTestCenterSettings(centerId, owned.centerName);
     return centerId;
   }
 
+  const newCenterId = crypto.randomUUID();
   const { data: center, error: centerErr } = await admin
     .from("centers")
-    .insert({ name: `통합테스트센터-${manager.accountId.slice(0, 8)}`, status: "approved", is_internal: true })
+    // 이름에 센터 자신의 id 앞 8자를 붙여 같은 매니저의 다른 테스트 센터와 이름이 절대 겹치지 않게 한다 — 관리자 UI의 센터 칩/선택기는 이름으로 구분되므로
+    // (이름이 같으면 E2E가 센터를 모호하게 골라 엉뚱한 센터의 데이터를 조작/조회한다, 2026-10-07 dev에서 확인).
+    .insert({ id: newCenterId, name: `통합테스트센터-${manager.accountId.slice(0, 8)}-${newCenterId.slice(0, 8)}`, status: "approved", is_internal: true })
     .select("id")
     .single();
   if (centerErr || !center) throw new Error(`테스트 센터 생성 실패: ${describeAdminQueryError("centers", centerErr)}`);

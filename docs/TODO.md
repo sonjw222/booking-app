@@ -3909,3 +3909,7 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 - [ ] P2: UI `e.message` 원문 노출(약 223곳) 공통 에러 변환 도입(승인 필요한 대규모 변경)
 - [ ] P3: 남은 UTC 날짜 slice(KST 새벽 위험) — safe-followups 병합 후 재감사
 - [ ] P3: `div onClick` 67곳 role/키보드 접근성 점검, `NEXT_PUBLIC_PORTONE_STORE_ID` 잔재 확인
+
+## E2E dev 안정화에서 발견한 앱 이슈 (2026-10-07) — 앱 코드는 이 브랜치에서 바꾸지 않음
+- [ ] P1: 관리자 수업 수정 시트의 `.schedule-rule-override-note`가 "직접 지정이 우선 — 예약조건과 무관하게 사용할 수 있어요"라고 안내하지만, 라이브 서버 정책([F2], fix_reservation_integrity_20261003.sql)은 지정 AND 예약조건이라 실제로는 쓸 수 없다. 문구/로직 정정 필요(app/manager/classes/page.tsx ~1648).
+- [ ] P1: 결제 화면(`app/checkout/page.tsx`)에서 비로그인 방문자가 "결제하기"를 누르면 `product.publicFallback` 가드가 "로그인 정보를 확인하지 못했어요…"만 띄우고 `로그인이 필요해요` + "로그인 하러 가기" 링크 경로를 가로챈다 → 로그인 복귀 기능(2026-08-31)이 이 경로에서 동작하지 않는다. E2E `auth/post-login-return` 결제 화면 시나리오가 이 회귀를 잡는다(현재 실패 유지).

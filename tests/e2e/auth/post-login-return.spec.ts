@@ -3,6 +3,7 @@ import {
   loadTestAccountMeta,
   getOrCreateOwnedTestCenter,
   getOrCreateTestPassProductNamed,
+  setTestCenterInternal,
   type TestUser,
 } from "../fixtures/testData";
 import { getFixtureAdminClient } from "../../integration/setup";
@@ -38,9 +39,12 @@ test.beforeAll(async () => {
   centerAId = await getOrCreateOwnedTestCenter(managerA);
   const product = await getOrCreateTestPassProductNamed(centerAId, PRODUCT_NAME);
   productId = product.id;
+  // 이 파일의 시나리오는 전부 "비로그인(비회원)"이 센터/결제 화면을 보는 경로다 — 내부 QA 센터는 비회원에게 안 보이므로 이 파일 동안만 공개로 둔다.
+  await setTestCenterInternal(centerAId, false);
 });
 
 test.afterAll(async () => {
+  await setTestCenterInternal(centerAId, true);   // 내부 QA 센터(mock 결제 허용) 기본 상태로 복구
   // "장바구니 담기" 시나리오가 실제로 성공시킨 cart_items 행 정리(다음 실행에 남지 않게)
   const admin = getFixtureAdminClient();
   await admin.from("cart_items").delete().eq("profile_id", userA.profileId).eq("product_id", productId);
