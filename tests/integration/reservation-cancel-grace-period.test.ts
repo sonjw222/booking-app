@@ -28,6 +28,7 @@ import {
   fetchMembershipRemaining,
   cleanupTestClass,
   type TestUser,
+  getFixtureAdminClient,
 } from "./setup";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../lib/settings";
 
@@ -40,7 +41,9 @@ const createdClassIds: string[] = [];
 
 async function backdateCreatedAt(reservationId: string, minutesAgo: number) {
   const ts = new Date(Date.now() - minutesAgo * 60 * 1000).toISOString();
-  const { error } = await supabase.from("reservations").update({ created_at: ts }).eq("id", reservationId);
+  // reservations의 직접 UPDATE 권한은 authenticated에서 회수됨(fix_reservations_remaining_privileges_20261004; member_memo 컬럼만 예외) —
+  // created_at 백데이트는 "경과 시간 재현용 fixture 조작"이므로 service_role로 한다(권한 경계 검증이 아님; 취소 로직 자체는 여전히 본인 세션으로 호출).
+  const { error } = await getFixtureAdminClient().from("reservations").update({ created_at: ts }).eq("id", reservationId);
   if (error) throw new Error(`created_at 백데이트 실패: ${error.message}`);
 }
 

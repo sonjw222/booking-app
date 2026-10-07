@@ -57,3 +57,12 @@ npm run ci:dev:bootstrap
 - **fixture 센터는 `is_internal=true` 여야 한다**: `confirm_test_payment`(mock 결제)가 내부 QA 센터에서만 허용된다("테스트 결제는 내부 QA 센터에서만 사용할 수 있어요"). internal 센터는 멤버/관리자에게만 보이므로 seed가 USER_A/B를 `center_members`로 등록한다(테스트가 USER_A로 상품을 먼저 읽는다). seed가 기존 센터도 보정한다.
 - **Auth Rate Limits(Dashboard)**: 통합 테스트 53개 파일이 계정마다 반복 로그인해 기본 한도(sign-ups/sign-ins 5분당 30회/IP)에서 "Request rate limit reached"로 대량 실패한다(그 뒤 signUp 폴백이 "User already registered"로 이어짐). dev 프로젝트의 Authentication → Rate Limits에서 sign-ups/sign-ins 한도를 크게 올려야 한다.
 - 권한 parity: dev는 신규 프로젝트 기본 권한 때문에 service_role=ALL, anon/authenticated에 REFERENCES/TRIGGER/TRUNCATE/MAINTAIN이 일부 테이블에 더 있다(DDL은 Production과 동일). `.tmp/dev-apply-storage-and-privileges.sql`(dev 전용, dev에만 있는 fixture 센터가 없으면 중단하는 안전장치 포함)이 Production 값으로 맞춘다.
+
+### Auth 호출 정상화 (2026-10-07) — 429의 실제 원인과 해결
+- 429 endpoint: `POST /auth/v1/token?grant_type=password`, 응답 `{"code":429,"error_code":"over_request_rate_limit","msg":"Request rate limit reached"}`. Dashboard의 sign-ups/sign-ins 한도(1000/5분)와 별개로 token endpoint에는 자체 한도(기본 150/5분 refill, burst ≈30)가 있어, 순차 실행(`fileParallelism:false`)인데도 스위트 하나가 4~5분 안에 password 로그인을 ~250회 보내 한도를 넘었다.
+- 원인(측정, 전 스위트 1회): password 로그인 시도 251회(성공 154 + 429 97), 서버 logout 135회, 실패 후 signUp 폴백 85회. `switchToTestUser`가 호출(257곳)마다 `signOut({scope:'local'})`(서버 session 폐기) + `signInWithPassword`를 했다.
+- 수정(`tests/integration/setup.ts`): 테스트 계정 세션을 OS 임시 폴더(0600, project ref별)에 캐시해 파일 간 재사용 → 유효하면 `setSession`(/token 호출 없음), 아니면 그때만 password 로그인. 로그인 전 서버 logout 제거(공유 세션을 죽이지 않음), `signOutTestSession`은 로컬 세션만 제거, 429면 signUp 폴백 없이 명확한 오류. 실제 사용자 JWT를 그대로 쓰므로 authenticated/anon 경계(RLS) 검증은 그대로다.
+- 결과(같은 스위트): password 로그인 251→36, 429 97→0, logout 135→2, signUp 폴백 85→0. (`setSession` 검증용 `GET /auth/v1/user`가 ~650회 늘었지만 별도 제한 대상이 아니다.)
+
+### Production 구성 데이터(카탈로그) 의존성 — schema-only 덤프에 없는 것
+`permissions`(권한 키 목록), `subscription_plans`(기본 요금제) 등은 스키마가 아니라 **참조 데이터**라 새 DB에서 비어 있다. `permissions`가 비면 `account_center_permissions/role_permissions` FK 위반, `subscription_plans`가 비면 센터 생성 시 기본 구독이 안 만들어지고 `subscription-plan-limits`가 "기존 기본 플랜을 찾지 못했어요"로 실패한다. 이 참조 데이터는 Production에서 읽기 전용으로 가져와(사용자 데이터 아님) dev에만 넣는다.

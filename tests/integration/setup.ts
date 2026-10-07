@@ -9,6 +9,9 @@
     테스트(본인 소유 검증)는 signOut → signIn으로 "순서대로 전환"하는 방식을 쓴다.
 */
 
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -54,6 +57,26 @@ function withAuthLock<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
+// ---- 테스트 계정 세션 캐시(파일 간 공유) -------------------------------------------------------------
+// 통합 테스트 파일은 각자 모듈 인스턴스(= 별도 supabase 싱글턴)를 가지므로, 로그인 결과를 파일 간에 재사용하려면 프로세스 밖 저장소가 필요하다.
+// 토큰은 테스트 전용 dev 계정의 것이며 OS 임시 폴더(0600)에만 쓰고 저장소에는 절대 들어가지 않는다. 대상 project ref별로 파일을 분리한다.
+const SESSION_REUSE_MIN_TTL_S = 120;
+type CachedSession = { access_token: string; refresh_token: string; expires_at: number };
+function sessionCachePath(): string {
+  const ref = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").match(/^https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? "unknown";
+  return path.join(tmpdir(), `mwhabit-integration-sessions-${ref}.json`);
+}
+function readSessionCache(): Record<string, CachedSession> {
+  try { const f = sessionCachePath(); return existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : {}; } catch { return {}; }
+}
+function writeSessionCache(key: string, session: { access_token: string; refresh_token: string; expires_at?: number }): void {
+  try {
+    const f = sessionCachePath(); const all = readSessionCache();
+    all[key] = { access_token: session.access_token, refresh_token: session.refresh_token, expires_at: session.expires_at ?? Math.floor(Date.now() / 1000) + 3000 };
+    writeFileSync(f, JSON.stringify(all), { mode: 0o600 }); chmodSync(f, 0o600);
+  } catch { /* 캐시는 최적화일 뿐 — 실패해도 다음 호출이 password 로그인으로 폴백한다 */ }
+}
+
 // 계정이 없으면 생성하고, 있으면 재사용(get-or-create).
 // 반환 후에는 supabase 싱글턴이 이 사용자로 로그인된 상태가 된다.
 export async function switchToTestUser(emailEnvName: string, passwordEnvName: string): Promise<TestUser> {
@@ -61,32 +84,42 @@ export async function switchToTestUser(emailEnvName: string, passwordEnvName: st
     const email = requireEnv(emailEnvName);
     const password = requireEnv(passwordEnvName);
 
-    // ⚠ scope: 'local' 필수 — 기본값(scope 생략 시 'global')은 이 계정의 세션을
-    // "모든 곳에서" 강제 로그아웃시킨다. 이 Node 클라이언트 하나만 정리하면 되는데,
-    // global로 호출하면 서버가 그 계정의 auth.sessions 행을 전부 지워버려 예를 들어
-    // (E2E auth.setup.ts처럼) 이 함수를 계정 A → B 순서로 두 번 호출할 때, B 차례의
-    // signOut(global)이 "이미 실제 브라우저로 로그인해 storageState까지 저장해둔 A의
-    // 세션"까지 서버에서 무효화해버린다 — 실제로 이렇게 재현됨(Playwright에서
-    // 403 session_not_found, tests/e2e/auth.setup.ts 파일 상단 히스토리 참고).
-    await supabase.auth.signOut({ scope: "local" });
-
-    const signIn = await supabase.auth.signInWithPassword({ email, password });
-    let userId: string;
-    if (signIn.error || !signIn.data.user || !signIn.data.session) {
-      const signUp = await supabase.auth.signUp({ email, password });
-      if (signUp.error) {
-        throw new Error(`테스트 계정(${email}) 준비 실패(signUp): ${signUp.error.message}`);
+    // [2026-10-07 auth 호출 정상화] 예전에는 호출마다 signOut({scope:'local'}) + signInWithPassword를 했다. signOut은 scope가 local이어도
+    // 서버의 해당 session을 폐기하고(/auth/v1/logout), 매번의 password 로그인은 /auth/v1/token?grant_type=password
+    // (기본 150회/5분, burst ≈30)를 소모해 통합 스위트 한 번에 ~250회 → 429(over_request_rate_limit)가 났다.
+    // 이제: ① 같은 계정의 유효한 세션이 있으면(프로세스·파일 간 공유 캐시) setSession으로 싱글턴에 장착하고 /token을 호출하지 않는다
+    //       ② 없거나 만료 임박/폐기됐으면 그때만 password 로그인 ③ 로그인 전 서버 logout은 하지 않는다(공유 세션을 죽이지 않음).
+    // 실제 사용자 JWT를 그대로 쓰므로 authenticated/anon 경계(RLS) 검증은 그대로다.
+    let userId: string | null = null;
+    const cacheKey = email.toLowerCase();
+    const cached = readSessionCache()[cacheKey];
+    if (cached && cached.expires_at - Date.now() / 1000 > SESSION_REUSE_MIN_TTL_S) {
+      const set = await supabase.auth.setSession({ access_token: cached.access_token, refresh_token: cached.refresh_token });
+      if (!set.error && set.data.user && set.data.session) userId = set.data.user.id;
+    }
+    if (!userId) {
+      const signIn = await supabase.auth.signInWithPassword({ email, password });
+      if (!signIn.error && signIn.data.user && signIn.data.session) {
+        userId = signIn.data.user.id;
+        writeSessionCache(cacheKey, signIn.data.session);
+      } else if (signIn.error && (signIn.error.status === 429 || (signIn.error as { code?: string }).code === "over_request_rate_limit")) {
+        // rate limit이면 signUp 폴백은 의미가 없고(같은 제한/422로 원인을 가린다) 원인만 명확히 알린다.
+        throw new Error(`테스트 계정(${email}) 로그인 실패: Auth rate limit(${(signIn.error as { code?: string }).code ?? signIn.error.status}) — 세션 캐시를 쓰는데도 발생하면 호출 패턴을 점검하세요`);
+      } else {
+        const signUp = await supabase.auth.signUp({ email, password });
+        if (signUp.error) {
+          throw new Error(`테스트 계정(${email}) 준비 실패(signUp): ${signUp.error.message}`);
+        }
+        if (!signUp.data.user || !signUp.data.session) {
+          throw new Error(
+            `테스트 계정(${email})이 생성됐지만 로그인 세션이 없습니다. Supabase Auth의 ` +
+              `"Confirm email"이 켜져 있으면 가입 직후 바로 로그인할 수 없습니다. 개발 프로젝트에서 ` +
+              `이 옵션을 끄거나, 이미 이메일 인증이 끝난 계정 정보를 ${emailEnvName}/${passwordEnvName}에 지정해주세요.`
+          );
+        }
+        userId = signUp.data.user.id;
+        writeSessionCache(cacheKey, signUp.data.session);
       }
-      if (!signUp.data.user || !signUp.data.session) {
-        throw new Error(
-          `테스트 계정(${email})이 생성됐지만 로그인 세션이 없습니다. Supabase Auth의 ` +
-            `"Confirm email"이 켜져 있으면 가입 직후 바로 로그인할 수 없습니다. 개발 프로젝트에서 ` +
-            `이 옵션을 끄거나, 이미 이메일 인증이 끝난 계정 정보를 ${emailEnvName}/${passwordEnvName}에 지정해주세요.`
-        );
-      }
-      userId = signUp.data.user.id;
-    } else {
-      userId = signIn.data.user.id;
     }
 
     // signIn/signUp 응답의 user/session 필드로 로그인 결과를 이미 검사했다(위 if문).
@@ -136,8 +169,11 @@ export async function switchToTestUser(emailEnvName: string, passwordEnvName: st
 // signIn과 겹치지 않도록 같은 잠금을 통해 실행한다(위 withAuthLock 설명 참고).
 export async function signOutTestSession(): Promise<void> {
   await withAuthLock(async () => {
-    // scope: 'local' 필수 — 이유는 switchToTestUser() 위쪽 주석 참고.
-    await supabase.auth.signOut({ scope: "local" });
+    // 서버 logout(/auth/v1/logout)은 scope가 local이어도 이 계정의 session을 폐기해, 파일 간에 공유하는 세션 캐시(위 switchToTestUser 주석)를 죽인다.
+    // 그래서 "이 Node 클라이언트의 로컬 세션만" 지운다(auth-js의 _removeSession; 없는 버전이면 기존 signOut local로 폴백).
+    const auth = supabase.auth as unknown as { _removeSession?: () => Promise<void> };
+    if (typeof auth._removeSession === "function") await auth._removeSession();
+    else await supabase.auth.signOut({ scope: "local" });
   });
 }
 
@@ -390,12 +426,13 @@ async function resetStaleTestCenterSettings(centerId: string, centerName: string
 //  - confirm_test_payment(mock 결제)는 내부 QA 센터에서만 허용된다.
 // 예전에는 오래 쓰던 공유 DB의 센터가 수동으로 승인돼 있어 드러나지 않았고, 새 dev 프로젝트(빈 DB)에서 처음 드러났다.
 // 운영 정책/RLS는 바꾸지 않고 "테스트가 만든 센터의 fixture 상태"만 맞춘다.
-async function ensureTestCenterIsApprovedInternal(admin: SupabaseClient, centerId: string): Promise<void> {
-  const { data, error } = await admin.from("centers").select("status, is_internal").eq("id", centerId).single();
+async function ensureTestCenterIsInternal(admin: SupabaseClient, centerId: string): Promise<void> {
+  const { data, error } = await admin.from("centers").select("is_internal").eq("id", centerId).single();
   if (error) throw new Error(`테스트 센터 상태 조회 실패: ${describeAdminQueryError("centers", error)}`);
-  if (data.status === "approved" && data.is_internal === true) return;
-  const { error: updErr } = await admin.from("centers").update({ status: "approved", is_internal: true }).eq("id", centerId);
-  if (updErr) throw new Error(`테스트 센터 상태 보정 실패: ${describeAdminQueryError("centers", updErr)}`);
+  if (data.is_internal === true) return;
+  // status는 건드리지 않는다(위 주석: 플랫폼 운영자 전용). is_internal만 보정한다.
+  const { error: updErr } = await admin.from("centers").update({ is_internal: true }).eq("id", centerId);
+  if (updErr) throw new Error(`테스트 센터 is_internal 보정 실패: ${describeAdminQueryError("centers", updErr)}`);
 }
 
 export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<string> {
@@ -411,7 +448,7 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
   // 뿐, 결과가 달라지지 않는다).
   const { data: rows, error: mcErr } = await admin
     .from("manager_centers")
-    .select("center_id, role_id, center_roles(is_owner), centers(id, name, created_at)")
+    .select("center_id, role_id, center_roles(is_owner), centers(id, name, created_at, status)")
     .eq("account_id", manager.accountId)
     .eq("status", "active");
   if (mcErr) throw new Error(`manager_centers 조회 실패: ${describeAdminQueryError("manager_centers", mcErr)}`);
@@ -427,8 +464,11 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
       isOwner: !!r.center_roles?.is_owner,
       centerName: String(r.centers?.name ?? ""),
       createdAt: r.centers?.created_at as string | undefined,
+      status: String(r.centers?.status ?? ""),
     }))
-    .filter((c) => c.centerId && c.isOwner && c.centerName.startsWith("통합테스트센터-"))
+    // approved만 재사용한다: 센터 status 변경은 guard_center_status_change 트리거 때문에 플랫폼 운영자만 가능(service_role도 불가)해서
+    // pending 잔여 센터를 "승인으로 고쳐 쓸" 수 없다. 새 센터는 INSERT 시 approved로 만든다(INSERT에는 이 트리거가 없다).
+    .filter((c) => c.centerId && c.isOwner && c.status === "approved" && c.centerName.startsWith("통합테스트센터-"))
     .sort((a, b) => {
       const byCreatedAt = (a.createdAt ?? "").localeCompare(b.createdAt ?? "");
       return byCreatedAt !== 0 ? byCreatedAt : (a.centerId as string).localeCompare(b.centerId as string);
@@ -437,7 +477,7 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
   if (candidates.length > 0) {
     const owned = candidates[0];
     const centerId = owned.centerId as string;
-    await ensureTestCenterIsApprovedInternal(admin, centerId);
+    await ensureTestCenterIsInternal(admin, centerId);
     await sweepStaleTestClasses(centerId, owned.centerName);
     await resetStaleTestCenterSettings(centerId, owned.centerName);
     return centerId;
