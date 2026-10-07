@@ -26,6 +26,12 @@ seed/bootstrap 실행 조건(셋 다 필요): ① URL/키가 Production 아님 �
 - 테스트가 직접 만들고 정리한다(fixture 불필요): 매니저 소유 센터(`getOrCreateOwnedTestCenter` → `통합테스트센터-*`와 오너 역할/`manager_centers` 연결), 스태프 초대/역할/권한 오버라이드, 수업·예약·수강권·주문·결제, center_settings 초기화. 그래서 매니저/스태프 연결과 `center_settings`는 seed에서 만들지 않는다.
 - 사람 작업으로 남지 않는 것: 센터·상품·역할 수동 생성.
 
+## dev 프로젝트 필수 설정 (테스트 코드 근거 — Dashboard에서 사람이 한 번 확인)
+dev 프로젝트: `mwhabit-ci-dev`, ref `jdglfvwdnkjnraqdxuuj`(ap-northeast-1; CLI `projects list`로 확인, Production `bxntqggkfwnhcczsbqtj`와 다름).
+1. **Authentication → Sign In / Providers → Email**: Email provider ON, **"Confirm email" OFF**, "Allow new users to sign up" ON. 근거: `tests/integration/auth-account-bootstrap.test.ts`(throwaway signUp)와 `tests/e2e/production-readiness/member-full-lifecycle.spec.ts`(신규 이메일 가입 후 즉시 세션)가 가입 직후 세션을 기대한다. 소셜 provider(Google/Kakao/Naver/Apple), SMS provider, redirect URL은 테스트가 쓰지 않아 불필요.
+2. **Edge Functions (E2E 4/4의 `member-full-lifecycle`만 필요)**: `send-phone-otp`, `check-signup-email`, `delete-account`를 dev 프로젝트에 배포하고 Supabase secret `PHONE_OTP_TEST_BYPASS_PREFIX=0100000`(테스트가 쓰는 번호 접두사)을 dev에만 등록한다. 이 secret은 Production에는 등록하지 않는다(함수 주석: CI/QA 전용). Aligo 등 실제 발송 키는 불필요(bypass 번호는 발송 없이 코드 반환).
+3. DB 설정: 스키마 적용 단계에서 처리(아래).
+
 ## 스키마 (Claude가 단계별 실행 — 상세: `docs/CI_DEV_DATABASE_BOOTSTRAP_GAPS.md`)
 루트 SQL 439개를 직접 실행하지 않는다. 확정 절차는 gaps 문서의 "확정 bootstrap 절차" 참고(Production 스키마-only 읽기 덤프 → dev에만 적용 → verify).
 
