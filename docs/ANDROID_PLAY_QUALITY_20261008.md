@@ -47,3 +47,9 @@ R8 경고/누락 클래스 0건(추가 `-dontwarn` 불필요). Play가 각 비�
 - 새 AAB(R8 ON)를 내부 테스트 트랙에 올린 뒤 **앱 번들 탐색기/Android vitals → 앱 품질 권장사항**에서 "DEX 코드 최적화" 카드의 Obfuscation/Optimization/Shrinking 비율과 "R8 configuration"이 채워지는지 확인(반영에 시간이 걸릴 수 있음). 비율이 25% 미만이면 mapping/usage를 근거로 규칙을 점검.
 - deobfuscation 파일(mapping)이 해당 버전에 자동 연결됐는지(출시 > 앱 번들 탐색기 > 다운로드 > 자산) 확인.
 - "더 넓은 화면" 경고는 위 2단계의 새 AAB 이후에 사라지는지 확인(그 전에는 계속 표시되는 것이 정상).
+
+## SystemBars migration 1차 (2026-10-08, branch fix/android-systembars-migration-20261008, base b20be82)
+- 변경: Android의 상태바 아이콘 색 설정을 `@capacitor/status-bar`에서 Capacitor core `SystemBars.setStyle({ style, bar: "StatusBar" })`로 옮겼다(`lib/nativeTheme.ts` 런타임 + `app/layout.tsx` 콜드 스타트 인라인 스크립트). iOS는 기존 `StatusBar.setStyle` 경로 그대로. `AndroidStatusBarBackground`(content 뒷배경) 호출, `capacitor.config.ts` StatusBar 설정, safe-area CSS, MainActivity의 EdgeToEdge/insets 처리, R8 설정은 변경하지 않았다.
+- 근거(설치된 @capacitor/core 8.5.1 확인): SystemBars는 Capacitor 8 브릿지가 항상 등록하는 core 플러그인(`Bridge.java`)이라 이미 동작 중이고(insets 리스너·safe-area CSS 변수 포함), `setStyle`은 StatusBar 플러그인의 modern 경로와 같은 `setAppearanceLightStatusBars(!dark)`를 쓴다. `bar`를 StatusBar로 한정해 내비게이션 바는 이전처럼 건드리지 않는다.
+- 이 1차만으로는 Play의 정적 경고가 사라지지 않는다: 지적된 `StatusBar.getStatusBarColorDeprecated`는 플러그인 로드 시 생성자(StatusBar.java:32)에서 호출되므로 플러그인이 Android 빌드에 들어 있는 한 남는다. 경고 제거는 **2차(별도 작업)** — Android 빌드에서만 `@capacitor/status-bar`를 제외(`capacitor.config.ts`의 `android.includePlugins` + `cap sync`) — 이후 새 AAB 분석 전까지 UNKNOWN. 2차는 1차가 실기기에서 검증된 뒤에 한다.
+- 실기기 QA(1차): Android 14/15/16 × 라이트/다크 — 홈, 로그인, 결제(checkout), 관리자 화면, 하단 내비, 키보드 열림, 상단/하단 safe-area에서 (1) 상태바 아이콘 색이 앱 테마와 대비를 이루는지(시스템 설정과 앱 테마를 서로 다르게 해서도 확인), (2) 앱 안에서 테마를 바꾸면 즉시 반영되는지, (3) 콜드 스타트 직후 첫 화면에서 색이 맞는지, (4) 상단/하단 여백·겹침이 이전과 같은지. iOS: 상태바 스타일과 오버스크롤 배경이 이전과 같은지.

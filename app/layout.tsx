@@ -68,10 +68,14 @@ export default function RootLayout({
             (Style.Default) — 폰은 라이트 모드인데 앱 안에서 차콜(다크) 테마를 고르면
             어두운 배경에 어두운 아이콘이 남아 거의 안 보이는 상태가 될 수 있었다.
             window.Capacitor.Plugins.StatusBar는 (WebViewTheme와 달리) iOS/Android 둘 다
-            존재하는 공식 플러그인이라 이 한 번의 호출로 양쪽 다 해결된다. */}
+            존재하는 공식 플러그인이라 이 한 번의 호출로 양쪽 다 해결된다.
+
+            2026-10-08 — Android는 이 호출을 Capacitor core의 SystemBars.setStyle({bar:"StatusBar"})로 바꿨다
+            (StatusBar 플러그인의 Window.get/setStatusBarColor 지원 중단 API 경고 회피, lib/nativeTheme.ts 주석 참고).
+            iOS는 기존 StatusBar 경로 그대로. lib/nativeTheme.ts의 syncNativeStatusBarStyle과 같은 결과를 내야 한다. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("app_theme");var dark=t==="charcoal"||((!t||t==="system")&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.style.colorScheme=dark?"dark":"light";if(dark)document.documentElement.setAttribute("data-theme","charcoal");else if(t==="burgundy")document.documentElement.setAttribute("data-theme","burgundy");try{window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.WebViewTheme&&window.Capacitor.Plugins.WebViewTheme.setBackground({hex:dark?"#17181C":"#FBFBFA"});}catch(e2){}try{window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.StatusBar&&window.Capacitor.Plugins.StatusBar.setStyle({style:dark?"DARK":"LIGHT"});window.Capacitor&&window.Capacitor.getPlatform&&window.Capacitor.getPlatform()==="android"&&window.Capacitor.Plugins&&window.Capacitor.Plugins.AndroidStatusBarBackground&&window.Capacitor.Plugins.AndroidStatusBarBackground.setDark({dark:dark});}catch(e3){}}catch(e){}`,
+            __html: `try{var t=localStorage.getItem("app_theme");var dark=t==="charcoal"||((!t||t==="system")&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.style.colorScheme=dark?"dark":"light";if(dark)document.documentElement.setAttribute("data-theme","charcoal");else if(t==="burgundy")document.documentElement.setAttribute("data-theme","burgundy");try{window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.WebViewTheme&&window.Capacitor.Plugins.WebViewTheme.setBackground({hex:dark?"#17181C":"#FBFBFA"});}catch(e2){}try{var cap=window.Capacitor;var pl=cap&&cap.Plugins;var st=dark?"DARK":"LIGHT";if(cap&&cap.getPlatform&&cap.getPlatform()==="android"){pl&&pl.SystemBars&&pl.SystemBars.setStyle({style:st,bar:"StatusBar"});pl&&pl.AndroidStatusBarBackground&&pl.AndroidStatusBarBackground.setDark({dark:dark});}else{pl&&pl.StatusBar&&pl.StatusBar.setStyle({style:st});}}catch(e3){}}catch(e){}`,
           }}
         />
       </head>
