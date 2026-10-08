@@ -13,6 +13,7 @@ import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../../lib/settings";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { useUnsavedChanges, confirmDiscardChanges } from "../../../lib/useUnsavedChanges";
 
 const SLOT_UNITS: { value: string; label: string }[] = [
   { value: "hour", label: "정시" },
@@ -30,6 +31,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
+  useUnsavedChanges(dirty);   // 저장하지 않은 변경이 있으면 새로고침/링크 이동/센터 전환 전에 확인(2026-10-07)
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
@@ -156,7 +158,7 @@ export default function SettingsPage() {
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
-            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={() => setCenterId(c.id)}>
+            <button aria-pressed={c.id === centerId} key={c.id} className={`center-chip ${c.id === centerId ? "on" : ""}`} onClick={async () => { if (c.id !== centerId && await confirmDiscardChanges()) setCenterId(c.id); }}>
               {c.name}
             </button>
           ))}
