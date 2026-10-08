@@ -9,8 +9,10 @@
 //   3b) 네이티브는 FCM HTTP v1 API로 보낸다(add_native_push_tokens.sql 참고 — iOS
 //       WKWebView는 VAPID 웹푸시 구독 자체를 지원하지 않아 네이티브 앱엔 이 경로가 필수)
 //   4) 만료/무효 구독·토큰(404/410, FCM UNREGISTERED 등)은 해당 행을 지운다
-//   5) 처리한 알림은 성공/실패 여부와 무관하게 pushed_at을 채운다(재시도 없음 — 최선 노력
-//      전달. 실패해도 알림함(/notifications)에는 이미 기록이 남아 있어 앱을 열면 확인 가능)
+//   5) 알림별로 결과를 판정해(_shared/pushOutcome.ts) "끝난 것"만 pushed_at을 채운다(2026-10-08):
+//      하나라도 전달됨 / 전부 되살릴 수 없는 실패(만료 토큰 등) / 보낼 대상 없음 → pushed_at 기록.
+//      일시 실패(5xx/429/네트워크)나 FCM 설정·토큰 발급 실패로 아무 기기에도 못 보냈으면 pushed_at을
+//      비워 다음 분에 재시도(알림 생성 후 30분까지, 이후 포기). 설정 누락은 응답 500 + 구조화 로그로 드러낸다.
 //
 // 2026-09-10 Privacy Emergency Fix Batch (P1-3, 이중 차단): supabase/functions/delete-account가
 // 토큰을 지우는 것과 별개로, 이 함수도 발송 직전에 accounts.deactivated_at을 확인해
@@ -50,6 +52,10 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 import { SignJWT, importPKCS8 } from "npm:jose@5.9.6";
+import {
+  classifyFcmError, classifyWebPushError, decideNotificationOutcome, summarizeBatch,
+  type DeliveryResult, type NotificationDecision,
+} from "../_shared/pushOutcome.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -61,6 +67,7 @@ const FCM_CLIENT_EMAIL = Deno.env.get("FIREBASE_CLIENT_EMAIL") ?? "";
 const FCM_PRIVATE_KEY = Deno.env.get("FIREBASE_PRIVATE_KEY") ?? "";
 
 const BATCH_SIZE = 200;
+const FETCH_TIMEOUT_MS = 10_000;   // 외부 호출(FCM/OAuth)이 멈춰 함수가 끝나지 않는 것을 방지
 const FCM_TOKEN_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 
 webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
@@ -102,6 +109,7 @@ async function getFcmAccessToken(): Promise<string | null> {
         grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
         assertion: jwt,
       }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -111,14 +119,11 @@ async function getFcmAccessToken(): Promise<string | null> {
   }
 }
 
-// FCM UNREGISTERED/NOT_FOUND(토큰이 더 이상 존재하지 않음)/INVALID_ARGUMENT(형식이 잘못된
-// 토큰 — 우리가 보내는 메시지 구조는 고정이라 이 상태가 나오면 거의 항상 토큰 자체가
-// 문제다)면 해당 native_push_tokens 행을 지운다(웹푸시의 404/410 삭제와 동일한 관례).
-const FCM_STALE_TOKEN_STATUSES = new Set(["UNREGISTERED", "NOT_FOUND", "INVALID_ARGUMENT"]);
+// FCM 응답 분류(UNREGISTERED/NOT_FOUND/INVALID_ARGUMENT → 만료 토큰 삭제, 인증 오류 → 설정 오류, 그 외 → 일시 오류)는 _shared/pushOutcome.ts.
 
 async function sendFcm(accessToken: string, token: string, platform: string, payload: {
   title: string; body: string; link: string; data?: Record<string, string>;
-}): Promise<{ ok: boolean; stale: boolean; error?: string }> {
+}): Promise<DeliveryResult> {
   // data는 FCM 요구사항상 문자열 값만 허용 — link를 항상 포함하고(기존 알림 탭 이동
   // 규칙과 동일한 키), 호출부가 추가로 넘긴 값이 있으면 합친다(link는 덮어쓰지 않음).
   const data: Record<string, string> = { ...(payload.data ?? {}), link: payload.link };
@@ -139,25 +144,28 @@ async function sendFcm(accessToken: string, token: string, platform: string, pay
     message.notification = { title: payload.title, body: payload.body };
   }
 
-  const res = await fetch(
-    `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT_ID}/messages:send`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT_ID}/messages:send`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message }),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       },
-      body: JSON.stringify({ message }),
-    },
-  );
-  if (res.ok) return { ok: true, stale: false };
+    );
+  } catch {
+    // 네트워크/타임아웃 — 배치 전체를 죽이지 않고 이 토큰만 일시 실패로 처리한다(재시도 대상).
+    return { kind: "transient", error: "network" };
+  }
+  if (res.ok) return { kind: "delivered" };
   const errBody = await res.json().catch(() => ({}));
   const status = errBody?.error?.status;
-  return {
-    ok: false,
-    stale: FCM_STALE_TOKEN_STATUSES.has(status),
-    error: typeof status === "string" ? status : `HTTP ${res.status}`,
-  };
+  return classifyFcmError(typeof status === "string" ? status : undefined, res.status);
 }
 
 Deno.serve(async (req: Request) => {
@@ -204,12 +212,12 @@ Deno.serve(async (req: Request) => {
       link,
       data: extraData,
     });
-    return json({ testSend: true, ...result });
+    return json({ testSend: true, ok: result.kind === "delivered", result: result.kind, stale: result.kind === "stale" });
   }
 
   const { data: pending, error: pendingErr } = await admin
     .from("notifications")
-    .select("id, recipient_account_id, kind, title, body, link")
+    .select("id, recipient_account_id, kind, title, body, link, created_at")
     .is("pushed_at", null)
     .order("created_at", { ascending: true })
     .limit(BATCH_SIZE);
@@ -264,20 +272,26 @@ Deno.serve(async (req: Request) => {
     nativeByAccount.set(t.account_id, list);
   }
 
-  // FCM 시크릿 미등록이면 fcmAccessToken이 null — 아래 네이티브 발송 루프가 자동으로
-  // 건너뛰어진다(웹푸시만 계속 정상 동작).
+  // FCM 시크릿 미등록이면 fcmConfigured=false, access token 발급 실패면 fcmAccessToken=null — 어느 쪽이든 "발송했다"고
+  // 기록하지 않는다: 네이티브 대상이 있는 알림은 아래에서 unavailable 결과로 모이고(재시도 대상) 응답/로그에 설정 오류로 드러난다.
   const fcmAccessToken = await getFcmAccessToken();
+  const nowMs = Date.now();
 
   let sent = 0;
   const staleSubscriptionIds = new Set<string>();
   const staleNativeTokenIds = new Set<string>();
+  const decisions: NotificationDecision[] = [];
+  const completedIds: string[] = [];
+  const configErrors = new Set<string>();
 
   for (const n of pending) {
     // 탈퇴/익명화된 계정이면 남아있는 토큰이 있어도 이번 배치에서 전부 지우고 발송은
-    // 건너뛴다(P1-3) — pushed_at은 아래에서 그대로 채워 무한 재시도되지 않게 한다.
+    // 건너뛴다(P1-3) — 보낼 대상이 없는 것과 같으므로 완료 처리해 무한 재시도되지 않게 한다.
     if (deactivatedAccountIds.has(n.recipient_account_id)) {
       for (const s of subsByAccount.get(n.recipient_account_id) ?? []) staleSubscriptionIds.add(s.id);
       for (const t of nativeByAccount.get(n.recipient_account_id) ?? []) staleNativeTokenIds.add(t.id);
+      decisions.push({ done: true, reason: "nothing_to_send" });
+      completedIds.push(n.id);
       continue;
     }
 
@@ -290,34 +304,49 @@ Deno.serve(async (req: Request) => {
       link,
       kind: n.kind,
     });
+    const results: DeliveryResult[] = [];
 
     for (const s of targets) {
       try {
         await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           payload,
+          { timeout: FETCH_TIMEOUT_MS },
         );
         sent++;
+        results.push({ kind: "delivered" });
       } catch (err) {
-        const statusCode = (err as { statusCode?: number })?.statusCode;
-        if (statusCode === 404 || statusCode === 410) {
-          staleSubscriptionIds.add(s.id);
-        }
-        // 그 외 실패(일시적 오류 등)는 재시도하지 않고 넘어간다 — 알림함에는 이미 기록됨
+        const r = classifyWebPushError((err as { statusCode?: number })?.statusCode);
+        if (r.kind === "stale") staleSubscriptionIds.add(s.id);
+        results.push(r);
       }
     }
 
-    if (fcmAccessToken) {
-      for (const t of nativeTargets) {
-        const result = await sendFcm(fcmAccessToken, t.token, t.platform, {
-          title: n.title,
-          body: n.body ?? "",
-          link,
-        });
-        if (result.ok) sent++;
-        else if (result.stale) staleNativeTokenIds.add(t.id);
+    if (nativeTargets.length > 0) {
+      if (!fcmConfigured) {
+        configErrors.add("fcm_not_configured");
+        for (let i = 0; i < nativeTargets.length; i++) results.push({ kind: "unavailable", reason: "fcm_not_configured" });
+      } else if (!fcmAccessToken) {
+        configErrors.add("fcm_token_unavailable");
+        for (let i = 0; i < nativeTargets.length; i++) results.push({ kind: "unavailable", reason: "fcm_token_unavailable" });
+      } else {
+        for (const t of nativeTargets) {
+          const r = await sendFcm(fcmAccessToken, t.token, t.platform, {
+            title: n.title,
+            body: n.body ?? "",
+            link,
+          });
+          if (r.kind === "delivered") sent++;
+          else if (r.kind === "stale") staleNativeTokenIds.add(t.id);
+          else if (r.kind === "unavailable") configErrors.add(r.reason);
+          results.push(r);
+        }
       }
     }
+
+    const decision = decideNotificationOutcome(results, nowMs - Date.parse(n.created_at));
+    decisions.push(decision);
+    if (decision.done) completedIds.push(n.id);
   }
 
   if (staleSubscriptionIds.size > 0) {
@@ -327,15 +356,36 @@ Deno.serve(async (req: Request) => {
     await admin.from("native_push_tokens").delete().in("id", [...staleNativeTokenIds]);
   }
 
-  await admin
-    .from("notifications")
-    .update({ pushed_at: new Date().toISOString() })
-    .in("id", pending.map((n) => n.id));
+  // 끝난 알림만 pushed_at을 채운다 — 재시도 대상은 비워 둬 다음 분 cron이 다시 집는다.
+  if (completedIds.length > 0) {
+    const { error: markErr } = await admin
+      .from("notifications")
+      .update({ pushed_at: new Date().toISOString() })
+      .in("id", completedIds);
+    if (markErr) {
+      console.error("[send-web-push]", JSON.stringify({ event: "mark_pushed_failed", completed: completedIds.length, code: (markErr as { code?: string }).code ?? null }));
+      return json({ error: "pushed_at 기록에 실패했어요", completed: completedIds.length }, 500);
+    }
+  }
 
-  return json({
-    processed: pending.length,
-    sent,
-    staleRemoved: staleSubscriptionIds.size,
-    staleNativeTokensRemoved: staleNativeTokenIds.size,
-  });
+  const summary = summarizeBatch(decisions, configErrors);
+  // 운영자가 Supabase Edge Function 로그에서 바로 찾을 수 있는 구조화 로그(알림/계정/토큰 값 없이 건수만).
+  if (summary.configErrors.length > 0 || summary.retryScheduled > 0 || summary.byReason.expired > 0) {
+    console.error("[send-web-push]", JSON.stringify({ event: summary.configErrors.length > 0 ? "config_error" : "delivery_issue", ...summary, sent }));
+  }
+
+  return json(
+    {
+      processed: summary.processed,
+      sent,
+      completed: summary.completed,
+      retryScheduled: summary.retryScheduled,
+      expired: summary.byReason.expired,
+      configErrors: summary.configErrors,
+      staleRemoved: staleSubscriptionIds.size,
+      staleNativeTokensRemoved: staleNativeTokenIds.size,
+    },
+    // 설정 누락(FCM 시크릿 없음/토큰 발급 실패/인증 오류)은 정상 200으로 숨기지 않는다 — cron의 net._http_response에서 바로 보인다.
+    summary.configErrors.length > 0 ? 500 : 200,
+  );
 });

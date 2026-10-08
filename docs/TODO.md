@@ -3903,3 +3903,9 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 - [ ] REQUIREMENTS·DATABASE·ROUTES의 상태를 함께 갱신했다.
 - [ ] CHANGELOG에 날짜, 변경, 검증 결과를 기록했다.
 - [ ] 완료되지 않은 하위 작업을 숨기지 않고 별도 TODO로 남겼다.
+
+## 운영 안정성 후속 (2026-10-08, 이 branch에서 처리하지 않은 것)
+- [ ] P1: `fix_alimtalk_dispatch_claim_20261008.sql` 적용 전, Production에서 `service_role`이 `messages`를 읽을 수 있는지 확인(verify SQL 3번 `has_table_privilege`). 막혀 있었다면 자동 알림톡이 그동안 발송되지 않았을 수 있다.
+- [ ] P2: 웹푸시/FCM 배치에는 선점이 없어 겹치는 실행이 같은 알림을 다시 보낼 수 있다(`pushed_at`은 처리 끝에서 기록). 재시도 행이 늘면 최대 200건 배치를 오래된 재시도 행이 채울 수 있다(30분 후 포기로 제한).
+- [ ] P2: `count_low` 알림톡이 임계값 회원에게 매일 반복 발송, OTP 실패 시 시도 횟수 소진(send-phone-otp는 별도 branch 소유).
+- [ ] P3: 오류 보고 sink를 외부 서비스(Sentry 등)에 연결 — `registerErrorReporter` 한 곳.
