@@ -5,7 +5,7 @@
 --       가입만 한 일반 사용자가 REST로 POST /rest/v1/centers {status:'approved', is_internal:...}를 보내면 운영자 승인(사업자등록증 검증)을
 --       건너뛴 센터가 공개 목록/검색에 노출될 수 있다(업체 사칭/피싱). UPDATE 쪽은 trg_guard_center_status가 막지만 INSERT 쪽에는 가드가 없었다.
 -- 수정: BEFORE INSERT 트리거로 DB가 불변식을 보장한다.
---   · JWT 없는 서버 작업(service_role, cron, SQL Editor) → 그대로 허용(테스트 fixture/QA seed가 approved/internal 센터를 만든다; 기존 관례 auth.uid() is null)
+--   · 서버 작업(service_role JWT, 또는 SQL Editor/cron처럼 요청 JWT가 없는 DB 내부 작업; anon JWT는 제외) → 그대로 허용(테스트 fixture/QA seed가 approved/internal 센터를 만든다)
 --   · 플랫폼 운영자(is_platform_admin()) → 그대로 허용
 --   · 그 외 로그인 사용자 → status는 항상 'pending', is_internal은 항상 false로 강제(값이 무엇이든 거부하지 않고 보정)
 --   anon은 INSERT 정책이 auth.uid() IS NOT NULL을 요구해 어차피 거부된다.
@@ -21,12 +21,15 @@ security definer
 set search_path = public
 as $$
 begin
-    -- 로그인 사용자 JWT가 없는 서버 작업(service_role, cron, SQL Editor)은 통과
-    if auth.uid() is null then
+    -- 서버 작업은 통과: 사용자(sub) 없는 요청 중 role이 'anon'이 아닌 것.
+    --   · service_role JWT: sub 없음 + role='service_role'
+    --   · SQL Editor / cron 등 요청 JWT 자체가 없는 DB 내부 작업: auth.jwt()가 null → role 없음
+    --   anon JWT도 sub가 없어 auth.uid()가 null이므로, uid만 보면 anon이 신뢰 경로로 들어간다 → role='anon'은 명시적으로 제외한다.
+    if auth.uid() is null and coalesce(auth.jwt() ->> 'role', '') <> 'anon' then
         return new;
     end if;
     -- 플랫폼 운영자는 통과
-    if is_platform_admin() then
+    if public.is_platform_admin() then
         return new;
     end if;
     -- 일반 로그인 사용자: 승인 상태와 내부 QA 플래그는 클라이언트가 정할 수 없다
