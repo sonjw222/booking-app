@@ -25,10 +25,11 @@ describe("send-phone-otp 남용 제한", () => {
     expect(guard).toContain("consume_phone_otp_send_attempt");
     expect(code).toContain("return json({ sent: true, devCode: code });");
   });
-  it("판정 결과 처리: ip_limit 429, global_limit 503, RPC 오류는 fail-closed(미적용 마이그레이션 코드만 fail-open)", () => {
-    expect(code).toContain('verdict === "ip_limit"'); expect(code).toContain("429");
-    expect(code).toContain('verdict === "global_limit"'); expect(code).toMatch(/limitErr\.code === "42883" \|\| limitErr\.code === "PGRST202"/);
-    expect(code).toMatch(/return json\(\{ error: "인증번호를 보내지 못했어요[^"]*" \}, 503\)/);
+  it("판정 결과 처리는 _shared/otpLimitVerdict.ts의 decideOtpLimit(fail-closed)가 맡는다(동작은 otpLimitVerdict.test.ts)", () => {
+    expect(code).toContain("decideOtpLimit(verdict, limitErr)");
+    const shared = readFileSync("supabase/functions/_shared/otpLimitVerdict.ts", "utf8");
+    expect(shared).toContain('verdict === "ip_limit"'); expect(shared).toContain('verdict === "global_limit"');
+    expect(shared).toMatch(/error\.code === "42883" \|\| error\.code === "PGRST202"/);
   });
   it("IP는 SHA-256 해시만 RPC에 보내고 평문 IP/전화번호를 로그에 남기지 않는다", () => {
     expect(code).toContain("crypto.subtle.digest(\"SHA-256\""); expect(code).toContain("p_ip_hash: await hashIp(clientIp(req))");

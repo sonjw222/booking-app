@@ -34,6 +34,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { sendViaAligo } from "../_shared/aligo.ts";
+import { decideOtpLimit } from "../_shared/otpLimitVerdict.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -137,20 +138,11 @@ Deno.serve(async (req: Request) => {
       p_ip_hourly_cap: IP_HOURLY_CAP,
       p_global_daily_cap: GLOBAL_DAILY_CAP,
     });
-    if (limitErr) {
-      // 마이그레이션 적용 전(함수 없음: 42883 / PostgREST PGRST202)에는 기존 동작 유지(fail-open + 로그) — 번호별 제한은 그대로 적용 중이다.
-      // 그 외 DB 오류는 거부한다(fail-closed, 원본 오류는 응답에 싣지 않는다).
-      if (limitErr.code === "42883" || limitErr.code === "PGRST202") {
-        console.error("[send-phone-otp] rate-limit RPC 없음 — add_phone_otp_send_limits_20261008.sql 미적용(번호별 제한만 동작)");
-      } else {
-        console.error("[send-phone-otp] rate-limit RPC 실패:", limitErr.code);
-        return json({ error: "인증번호를 보내지 못했어요. 잠시 후 다시 시도해주세요" }, 503);
-      }
-    } else if (verdict === "ip_limit") {
-      return json({ error: "요청이 너무 많아요. 잠시 후 다시 시도해주세요" }, 429);
-    } else if (verdict === "global_limit") {
-      return json({ error: "지금은 인증번호를 보낼 수 없어요. 잠시 후 다시 시도해주세요" }, 503);
-    }
+    // 판정은 순수 함수(_shared/otpLimitVerdict.ts)가 한다: ok만 진행(fail-closed), ip_limit 429, global_limit 503, null/예상 밖/기타 DB 오류 503,
+    // 마이그레이션 적용 전(함수 없음 42883/PGRST202)만 기존대로 fail-open + 로그.
+    const decision = decideOtpLimit(verdict, limitErr);
+    if (decision.log) console.error("[send-phone-otp]", decision.log);
+    if (decision.action === "reject") return json({ error: decision.error }, decision.status);
   }
 
   const { error: createErr } = await admin.rpc("create_phone_verification", { p_phone: phone, p_code: code });
