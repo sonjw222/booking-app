@@ -46,10 +46,15 @@ export function classifyWebPushError(statusCode: number | undefined): DeliveryRe
 }
 
 // FCM HTTP v1 응답 분류. status는 error.status 문자열(UNREGISTERED 등), httpStatus는 HTTP 코드.
-const FCM_STALE = new Set(["UNREGISTERED", "NOT_FOUND", "INVALID_ARGUMENT"]);
+// stale(토큰 행 삭제)은 "토큰이 더 이상 없다"가 확실한 UNREGISTERED/NOT_FOUND뿐이다.
+// INVALID_ARGUMENT는 토큰 형식 오류뿐 아니라 payload/요청 형식 오류에도 나오므로 stale로 보지 않는다 —
+// 정상 토큰을 추측으로 지우지 않는다. 같은 payload를 다시 보내도 성공하기 어려우므로 재시도 없이 permanent(행 유지).
+const FCM_STALE = new Set(["UNREGISTERED", "NOT_FOUND"]);
+const FCM_PERMANENT = new Set(["INVALID_ARGUMENT"]);
 const FCM_AUTH = new Set(["UNAUTHENTICATED", "PERMISSION_DENIED", "SENDER_ID_MISMATCH"]);
 export function classifyFcmError(status: string | undefined, httpStatus: number | undefined): DeliveryResult {
   if (status && FCM_STALE.has(status)) return { kind: "stale" };
+  if (status && FCM_PERMANENT.has(status)) return { kind: "permanent", error: status };
   if (status && FCM_AUTH.has(status)) return { kind: "unavailable", reason: "fcm_auth_failed" };
   // UNAVAILABLE / INTERNAL / QUOTA_EXCEEDED / 429 / 5xx / 알 수 없는 오류 → 재시도 가능
   return { kind: "transient", error: status ?? (httpStatus ? `HTTP ${httpStatus}` : "unknown") };
