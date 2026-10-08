@@ -35,6 +35,12 @@ async function overflowX(page: Page): Promise<number> {
   return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 }
 
+// 사이드바 레일(88px)은 :hover/:focus-within에서 244px로 확장된다. 새 페이지의 포인터 위치는 (0,0)이고, 리눅스 CI의 headless Chromium은 그 좌표의 요소에 :hover를
+// 적용해 레일이 확장된 채(244px)로 측정된다(macOS 로컬은 마우스 이동 전에는 hover가 없어 통과 — CI에서만 실패). 포인터를 레일 밖으로 옮겨 두고 측정한다.
+test.beforeEach(async ({ page }) => {
+  await page.mouse.move(700, 450);
+});
+
 test.describe("회원 데스크톱 사이드바 — breakpoint 경계 자동 검증(로그인 불필요)", () => {
   test("767→768px: 하단 네비 ↔ 사이드바 전환", async ({ page }) => {
     await page.setViewportSize({ width: 767, height: 900 });

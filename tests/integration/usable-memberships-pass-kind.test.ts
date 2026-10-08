@@ -65,7 +65,9 @@ beforeAll(async () => {
   if (findMemErr) throw new Error("goods membership 조회 실패: " + findMemErr.message);
   if (existingMem && existingMem.length > 0) {
     goodsMembershipId = existingMem[0].id;
-    const { error: refreshErr } = await supabase
+    // 만료일 변경은 로그인 사용자에게는 전용 RPC로만 허용된다(memberships_guard_expiry_update; JWT 없는 서버 작업은 통과). 이 갱신은 fixture 준비 동작이라 service_role로 한다.
+    // (예전에는 로그인한 매니저로 갱신해, 저장된 만료일과 "오늘+30일"이 다른 날 — 즉 전날 데이터를 재사용하는 첫 실행 — 에만 가드에 걸려 CI에서만 실패했다.)
+    const { error: refreshErr } = await getFixtureAdminClient()
       .from("memberships")
       .update({
         remaining_count: 1,
