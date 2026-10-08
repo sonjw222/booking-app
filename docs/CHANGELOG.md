@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-09 — send-web-push: FCM INVALID_ARGUMENT로 네이티브 토큰을 삭제하지 않음 (Edge Function 코드만, 미배포)
+- `_shared/pushOutcome.ts`: `INVALID_ARGUMENT`는 토큰 오류뿐 아니라 payload/요청 형식 오류에도 나오므로 stale(토큰 행 삭제)에서 제외하고 `permanent`(행 유지, 재시도 없음)로 분류. stale은 `UNREGISTERED`/`NOT_FOUND`만. 정상 토큰을 추측으로 지우지 않기 위함. 테스트 `tests/unit/pushOutcome.test.ts` 보강. Production 배포는 별도(미실행).
+
 ## 2026-10-08 — 출시 전 통합 branch (integration/pre-android-release-20261008, 코드/문서만)
 - CI/dev bootstrap(#170 포함)·DB/API 보안·운영 안정성·R8·SystemBars 1차·소규모 안전 branch를 한 branch로 통합. 중복(center guard standalone, #170)은 병합하지 않음. Production 적용 상태/미적용 SQL 분류는 `docs/RELEASE_INTEGRATION_20261008.md`.
 

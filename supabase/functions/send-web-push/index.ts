@@ -119,7 +119,7 @@ async function getFcmAccessToken(): Promise<string | null> {
   }
 }
 
-// FCM 응답 분류(UNREGISTERED/NOT_FOUND/INVALID_ARGUMENT → 만료 토큰 삭제, 인증 오류 → 설정 오류, 그 외 → 일시 오류)는 _shared/pushOutcome.ts.
+// FCM 응답 분류(UNREGISTERED/NOT_FOUND → 만료 토큰 삭제, INVALID_ARGUMENT → permanent(토큰 유지), 인증 오류 → 설정 오류, 그 외 → 일시 오류)는 _shared/pushOutcome.ts.
 
 async function sendFcm(accessToken: string, token: string, platform: string, payload: {
   title: string; body: string; link: string; data?: Record<string, string>;

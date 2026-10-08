@@ -3922,7 +3922,7 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 
 ## 출시 전 통합 후속 (2026-10-08, docs/RELEASE_INTEGRATION_20261008.md)
 - [ ] P1: 알림톡 claim migration Production 적용 전 코드 리뷰·verify(별도 실행), 그 뒤에 `send-alimtalk`/`send-web-push` 배포
-- [ ] P2: 알림톡 at-least-once 한계(크래시/Aligo timeout 재발송, 10분 임대 초과, 영구 실패 재시도 로그 누적), FCM 네이티브 일시 실패 미재시도·`INVALID_ARGUMENT` 토큰 삭제·푸시 선점 비원자
+- [ ] P2: 알림톡 at-least-once 한계(크래시/Aligo timeout 재발송, 10분 임대 초과, 영구 실패 재시도 로그 누적), FCM 네이티브 일시 실패 미재시도·`INVALID_ARGUMENT` 토큰 삭제(2026-10-09 수정: permanent로 분류, 토큰 유지 — 잘못된 토큰이 쌓일 수 있으니 필요하면 FCM `details.errorCode` 파싱으로 정밀화)·푸시 선점 비원자
 - [ ] P2: Android 새 AAB + 서명 release 실기기 QA(소셜 로그인, FCM, 캘린더/앱설정 plugin, cold start 상태바 색, allowBackup 병합 manifest). Play deprecated API 경고 제거는 UNKNOWN(SystemBars 2차 필요)
 - [ ] P3: center guard `search_path`에 `pg_temp` 고정 검토, OTP 클라이언트 IP 헤더 신뢰 범위, preflight deny-list → DEV allow-list, `mobile-ui-qa.yml` secret을 `env:`로 전달
 - [ ] watch: `member-full-lifecycle.spec.ts` 로컬 1회 간헐 실패(checkout "상품 정보를 찾을 수 없어요" → 재시도 시 waitlist 설정 0). 단독/전체/CI 재실행 모두 통과 — blocker 아님, 재발 시 trace 확인

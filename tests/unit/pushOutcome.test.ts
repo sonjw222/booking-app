@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   classifyFcmError, classifyWebPushError, decideNotificationOutcome, summarizeBatch, RETRY_WINDOW_MS, type DeliveryResult,
@@ -37,10 +39,33 @@ describe("오류 분류", () => {
     expect(classifyWebPushError(429).kind).toBe("transient"); expect(classifyWebPushError(503).kind).toBe("transient");
     expect(classifyWebPushError(undefined)).toEqual({ kind: "transient", error: "network" });
   });
-  it("FCM: UNREGISTERED/NOT_FOUND/INVALID_ARGUMENT=만료, 인증계열=설정오류, 그 외=일시", () => {
-    for (const s of ["UNREGISTERED", "NOT_FOUND", "INVALID_ARGUMENT"]) expect(classifyFcmError(s, 400).kind).toBe("stale");
+  it("FCM: UNREGISTERED/NOT_FOUND만 stale(토큰 삭제 대상)", () => {
+    expect(classifyFcmError("UNREGISTERED", 404)).toEqual({ kind: "stale" });
+    expect(classifyFcmError("NOT_FOUND", 404)).toEqual({ kind: "stale" });
+  });
+  it("FCM: INVALID_ARGUMENT는 stale이 아니다 — payload 오류일 수 있으므로 정상 토큰을 지우지 않고 permanent(재시도 없음)", () => {
+    expect(classifyFcmError("INVALID_ARGUMENT", 400)).toEqual({ kind: "permanent", error: "INVALID_ARGUMENT" });
+    expect(classifyFcmError("INVALID_ARGUMENT", 400).kind).not.toBe("stale");
+  });
+  it("FCM: 인증계열(UNAUTHENTICATED/PERMISSION_DENIED/SENDER_ID_MISMATCH)=unavailable", () => {
     for (const s of ["UNAUTHENTICATED", "PERMISSION_DENIED", "SENDER_ID_MISMATCH"]) expect(classifyFcmError(s, 403)).toEqual({ kind: "unavailable", reason: "fcm_auth_failed" });
+  });
+  it("FCM: 429/5xx/UNAVAILABLE/INTERNAL/QUOTA_EXCEEDED/미상=transient", () => {
     for (const s of ["UNAVAILABLE", "INTERNAL", "QUOTA_EXCEEDED", undefined]) expect(classifyFcmError(s, 503).kind).toBe("transient");
+    expect(classifyFcmError(undefined, 429)).toEqual({ kind: "transient", error: "HTTP 429" });
+  });
+  it("INVALID_ARGUMENT만 있는 알림은 done(permanent) — 매분 재시도하지 않는다", () => {
+    expect(decideNotificationOutcome([classifyFcmError("INVALID_ARGUMENT", 400)], MIN)).toEqual({ done: true, reason: "permanent" });
+  });
+  it("INVALID_ARGUMENT + delivered 혼합은 done(delivered)", () => {
+    expect(decideNotificationOutcome([classifyFcmError("INVALID_ARGUMENT", 400), D], MIN)).toEqual({ done: true, reason: "delivered" });
+  });
+  it("호출부: native_push_tokens 삭제 대상은 kind === 'stale'일 때만 추가된다(INVALID_ARGUMENT는 permanent라 제외)", () => {
+    const src = readFileSync(resolve(__dirname, "../../supabase/functions/send-web-push/index.ts"), "utf8");
+    expect(src).toMatch(/else if \(r\.kind === "stale"\) staleNativeTokenIds\.add\(t\.id\)/);
+    expect(src.match(/staleNativeTokenIds\.add\(/g)?.length).toBe(2); // 탈퇴 계정 정리 + stale 판정, 그 외 경로 없음
+    expect(readFileSync(resolve(__dirname, "../../supabase/functions/_shared/pushOutcome.ts"), "utf8"))
+      .toMatch(/const FCM_STALE = new Set\(\["UNREGISTERED", "NOT_FOUND"\]\)/);
   });
 });
 
