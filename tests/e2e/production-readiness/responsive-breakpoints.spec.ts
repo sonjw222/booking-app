@@ -35,11 +35,19 @@ async function overflowX(page: Page): Promise<number> {
   return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 }
 
-// 사이드바 레일(88px)은 :hover/:focus-within에서 244px로 확장된다. 새 페이지의 포인터 위치는 (0,0)이고, 리눅스 CI의 headless Chromium은 그 좌표의 요소에 :hover를
-// 적용해 레일이 확장된 채(244px)로 측정된다(macOS 로컬은 마우스 이동 전에는 hover가 없어 통과 — CI에서만 실패). 포인터를 레일 밖으로 옮겨 두고 측정한다.
-test.beforeEach(async ({ page }) => {
-  await page.mouse.move(700, 450);
-});
+// 사이드바 레일(88px)은 :hover/:focus-within에서 244px로 확장된다. 실패 순간 상태를 CI에서 직접 측정해 확정한 원인(2026-10-08, run 37763452426):
+// innerWidth=1279, --workspace-sidebar=88px, aria-expanded="false", focus-within=false, 그런데 nav.matches(":hover")=true(1.8초 뒤에도) → 폭 244px.
+// 리눅스 CI의 Chromium은 새 문서를 열면 포인터를 (0,0)(= 레일 안)으로 간주해 hover를 켠다. 페이지 이동 "전"에 마우스를 옮겨 둬도 소용없다(이동 후 초기화).
+// 그래서 collapsed 폭을 재기 전에: 이동 "후"에 포인터를 레일 밖으로 옮기고, :hover가 실제로 꺼질 때까지 상태로 기다린다(sleep 아님). 1279/1360 계약(collapsed/desktop)은 그대로다.
+async function parkPointerOutsideRail(page: Page, navSelector: string): Promise<void> {
+  const vp = page.viewportSize();
+  const x = Math.max(400, (vp?.width ?? 1280) - 30);
+  await page.mouse.move(x, 100);
+  await page.mouse.move(x - 10, 450);
+  await expect.poll(() => page.locator(navSelector).evaluate((n) => n.matches(":hover")), { message: `${navSelector}에 :hover가 남아 있음` }).toBe(false);
+  // :hover가 꺼진 뒤에도 width는 0.22s transition으로 줄어든다(로컬 재현에서 202px, 220px 같은 중간값이 측정됨) — 진행 중인 CSS transition이 끝나기를 기다린다.
+  await page.locator(navSelector).evaluate((n) => Promise.all(n.getAnimations().map((a) => a.finished.catch(() => undefined))).then(() => undefined));
+}
 
 test.describe("회원 데스크톱 사이드바 — breakpoint 경계 자동 검증(로그인 불필요)", () => {
   test("767→768px: 하단 네비 ↔ 사이드바 전환", async ({ page }) => {
@@ -62,27 +70,8 @@ test.describe("회원 데스크톱 사이드바 — breakpoint 경계 자동 검
       await page.goto("/");
       await expect(page.locator(".member-desktop-nav")).toBeVisible();
       await expect(page.locator(".bottom-nav")).toBeHidden();
+      await parkPointerOutsideRail(page, ".member-desktop-nav");
       const box = await page.locator(".member-desktop-nav").boundingBox();
-      // [임시 진단 — 원인 확정 후 제거] CI에서만 244px로 측정되는 원인을 상태값으로 확정한다(assertion은 그대로).
-      if ((box?.width ?? 0) >= 120) {
-        for (const delay of [0, 600, 1800]) {
-          if (delay) await page.waitForTimeout(delay === 600 ? 600 : 1200);
-          const d = await page.evaluate(() => {
-            const nav = document.querySelector(".member-desktop-nav") as HTMLElement;
-            const cs = getComputedStyle(nav);
-            const ae = document.activeElement as HTMLElement | null;
-            return {
-              innerWidth: window.innerWidth, readyState: document.readyState, boxWidth: nav.getBoundingClientRect().width, cssWidth: cs.width,
-              hover: nav.matches(":hover"), focusWithin: nav.matches(":focus-within"), ariaExpanded: nav.getAttribute("aria-expanded"),
-              active: ae ? `${ae.tagName}.${String(ae.className).slice(0, 40)}` : null, activeInNav: !!ae && nav.contains(ae),
-              mqHoverHover: matchMedia("(hover: hover)").matches, mqPointerFine: matchMedia("(pointer: fine)").matches, mqPointerCoarse: matchMedia("(pointer: coarse)").matches,
-              mqRail: matchMedia("(min-width: 768px) and (max-width: 1359px)").matches, mqDesktop: matchMedia("(min-width: 1360px)").matches,
-              varSidebar: cs.getPropertyValue("--workspace-sidebar").trim(), transition: cs.transitionProperty + " " + cs.transitionDuration, boxShadow: cs.boxShadow.slice(0, 40),
-            };
-          });
-          console.log(`[rail-diag] viewport=${width} t+${delay}ms ${JSON.stringify(d)}`);
-        }
-      }
       expect(box?.width, `${width}px에서 88px 레일 폭 유지`).toBeLessThan(120);
       expect(await overflowX(page)).toBeLessThanOrEqual(1);
     }
@@ -91,6 +80,7 @@ test.describe("회원 데스크톱 사이드바 — breakpoint 경계 자동 검
   test("1359→1360px: 사이드바가 88px 레일에서 244px 라벨 사이드바로 확장됨(hover 불필요)", async ({ page }) => {
     await page.setViewportSize({ width: 1359, height: 900 });
     await page.goto("/");
+    await parkPointerOutsideRail(page, ".member-desktop-nav");
     const railBox = await page.locator(".member-desktop-nav").boundingBox();
     expect(railBox?.width).toBeLessThan(120);
     expect(await overflowX(page)).toBeLessThanOrEqual(1);
@@ -122,6 +112,7 @@ test.describe("회원 데스크톱 사이드바 — breakpoint 경계 자동 검
     await page.goto("/");
     const nav = page.locator(".member-desktop-nav");
     await expect(nav).toBeVisible();
+    await parkPointerOutsideRail(page, ".member-desktop-nav");
     const collapsedBox = await nav.boundingBox();
     expect(collapsedBox?.width).toBeLessThan(120); // 88px 레일
 
@@ -157,6 +148,7 @@ test.describe("관리자 사이드바 — breakpoint 경계 자동 검증", () =
       await page.goto("/manager");
       await expect(page.locator(".workspace-sidebar")).toBeVisible();
       await expect(page.locator(".bottom-nav")).toBeHidden();
+      await parkPointerOutsideRail(page, ".workspace-sidebar");
       const box = await page.locator(".workspace-sidebar").boundingBox();
       expect(box?.width, `${width}px에서 88px 레일 폭 유지`).toBeLessThan(120);
       expect(await overflowX(page)).toBeLessThanOrEqual(1);
@@ -167,6 +159,7 @@ test.describe("관리자 사이드바 — breakpoint 경계 자동 검증", () =
     await page.setViewportSize({ width: 1359, height: 900 });
     await page.goto("/manager");
     await expect(page.locator(".workspace-sidebar")).toBeVisible();
+    await parkPointerOutsideRail(page, ".workspace-sidebar");
     const railBox = await page.locator(".workspace-sidebar").boundingBox();
     expect(railBox?.width).toBeLessThan(120);
     expect(await overflowX(page)).toBeLessThanOrEqual(1);
