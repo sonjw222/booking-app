@@ -33,13 +33,18 @@ Production 적용 상태는 사용자가 직접 알려준 값이 source of truth
 - Edge Function `send-phone-otp` (ec8c357 기준) — 이미 배포·smoke 완료, **재배포 금지**
 
 ### B. NOT APPLIED — 사용자 검토 후 별도 실행
-- `fix_alimtalk_dispatch_claim_20261008.sql` (+rollback/verify): `service_role`에 `messages` SELECT/UPDATE(status, sent_at, claimed_at) 부여. 적용 전 verify 3번(`has_table_privilege`)으로 현재 권한 확인. 대응 Edge Function(`send-alimtalk`, `send-web-push`)은 **SQL 적용 후** 배포(새 코드는 `messages.claimed_at`, `notification_logs.message_id` 컬럼에 의존).
+- `fix_alimtalk_dispatch_claim_20261008.sql` (+rollback/verify): `service_role`에 `messages` SELECT/UPDATE(status, sent_at, claimed_at) 부여. 적용 전 verify 3번(`has_table_privilege`)으로 현재 권한 확인. 추가로 `messages.claimed_at`, `notification_logs.message_id`/`error` 컬럼과 부분 인덱스 2개를 만든다(모두 additive·nullable). **`send-alimtalk`만 이 SQL에 의존**한다 — SQL 적용 후에 배포(먼저 배포하면 `claimed_at` 갱신이 실패해 큐 발송이 매분 실패). `send-web-push`는 SQL 의존이 없는 코드-only 배포(순서 무관). 두 함수는 어떤 workflow로도 자동 배포되지 않으며 수동 배포다.
 
 ### C. DEFERRED / DO NOT APPLY YET
 - `fix_storage_bucket_size_limits_20261008.sql`: 제안값(avatars 10MB / alimtalk-images 10MB / business-licenses 20MB)일 뿐 적용 대상 아님. Production 실측: business-licenses 1개(max 3.53MB), 나머지 버킷 객체 없음.
 
 ### D. NO SQL
 - 위 5~10번 branch 전부(코드/문서/네이티브만).
+
+## 2-1. main 병합 직후 동작 (감사 결과)
+- 앱/CI/Vercel 어디에도 migration을 자동 실행하는 코드가 없다(적용 완료 SQL 재실행 불가, size-limit SQL도 자동 실행 없음).
+- Edge Function은 자동 배포되지 않는다. pg_cron은 현재 배포된 함수를 호출하므로 수동 배포 전까지 기존 코드로 동작한다.
+- 서버 환경에 `NEXT_PUBLIC_SUPABASE_ANON_KEY`가 필요하다(billing confirm이 호출자 JWT로 기존 `is_center_owner` RPC를 호출; 없으면 500). Production에 이미 있는 함수에 의존한다.
 
 ## 3. 테스트 대상 DB
 통합/E2E는 CI/dev 프로젝트(`jdglfvwdnkjnraqdxuuj`)만 사용. DEV에는 20261008 migration이 적용돼 있지 않으므로 해당 SQL은 PGlite 테스트(`tests/sql/*.mjs`)로 검증한다.
