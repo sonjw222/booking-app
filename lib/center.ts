@@ -11,6 +11,7 @@ import { getMyAccountId } from "./authAccount";
 import { computeSelectableSchedule, type ScheduleRule, type SelectableSchedule } from "./passes";
 import type { CountTier } from "./selectableCount";
 
+import { todayKstYmd } from "./membershipExpiry";
 export type CenterDetail = {
   id: string;
   name: string;
@@ -402,7 +403,7 @@ export async function hasActivePassAtCenter(centerId: string): Promise<boolean> 
     .in("profile_id", ids)
     .eq("center_id", centerId)
     .eq("status", "active");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayKstYmd();
   return (data ?? []).some((m: any) =>
     m.products?.product_kind !== "goods" &&
     (m.remaining_count == null || m.remaining_count > 0) &&
