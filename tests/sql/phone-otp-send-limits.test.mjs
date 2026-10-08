@@ -13,10 +13,12 @@ const verify = read('verify_add_phone_otp_send_limits_20261008.sql');
 async function world() {
   const db = new PGlite();
   await db.exec(`create role anon; create role authenticated; create role service_role bypassrls; grant usage on schema public to anon, authenticated, service_role;`);
+  // Production의 public 스키마 postgres 기본 ACL(새 테이블에 API 롤 권한 자동 부여)을 재현한다 — 마이그레이션이 이를 명시적으로 회수해야 한다.
+  await db.exec(`alter default privileges in schema public grant all on tables to anon, authenticated, service_role;`);
   await db.exec(migration);
   return db;
 }
-const consume = async (db, ip, ipCap, globalCap) => (await db.query(`select consume_phone_otp_send_attempt($1, $2, $3) as v`, [ip, ipCap, globalCap])).rows[0].v;
+const consume = async (db, ip, ipCap, globalCap) => (await db.query(`select public.consume_phone_otp_send_attempt($1, $2, $3) as v`, [ip, ipCap, globalCap])).rows[0].v;
 
 test('IP별 시간당 한도: 한도까지 ok, 이후 ip_limit(기록하지 않음), 다른 IP는 영향 없음', async () => {
   const db = await world();
@@ -57,14 +59,34 @@ test('기본 인자(10/시간, 500/일)로 호출 가능', async () => {
   for (let i = 0; i < 10; i++) assert.equal((await db.query(`select consume_phone_otp_send_attempt('ipD') as v`)).rows[0].v, 'ok');
   assert.equal((await db.query(`select consume_phone_otp_send_attempt('ipD') as v`)).rows[0].v, 'ip_limit');
 });
-test('권한: anon/authenticated는 함수·테이블 접근 불가, service_role만 실행(RLS 켜짐·정책 없음)', async () => {
+test('권한: 기본 ACL이 회수돼 anon/authenticated/service_role 모두 테이블 직접 접근 불가, RPC는 service_role만', async () => {
   const db = await world();
   const p = (await db.query(`select has_function_privilege('anon', p.oid,'execute') a, has_function_privilege('authenticated', p.oid,'execute') b, has_function_privilege('service_role', p.oid,'execute') c, p.prosecdef, p.proconfig from pg_proc p where p.proname='consume_phone_otp_send_attempt'`)).rows[0];
   assert.deepEqual([p.a, p.b, p.c, p.prosecdef], [false, false, true, true]); assert.deepEqual(p.proconfig, ['search_path=""']);
-  const t = (await db.query(`select relrowsecurity from pg_class where relname='phone_otp_send_attempts'`)).rows[0];
-  assert.equal(t.relrowsecurity, true);
+  assert.equal((await db.query(`select relrowsecurity from pg_class where relname='phone_otp_send_attempts'`)).rows[0].relrowsecurity, true);
   assert.equal((await db.query(`select count(*)::int c from pg_policies where tablename='phone_otp_send_attempts'`)).rows[0].c, 0);
-  await db.exec('set role authenticated'); await assert.rejects(db.query(`select consume_phone_otp_send_attempt('x')`), /permission denied/); await assert.rejects(db.query(`select * from phone_otp_send_attempts`), /permission denied/);
+  for (const role of ['anon', 'authenticated', 'service_role']) {
+    for (const priv of ['select', 'insert', 'update', 'delete', 'truncate']) assert.equal((await db.query(`select has_table_privilege('${role}', 'public.phone_otp_send_attempts', '${priv}') ok`)).rows[0].ok, false, `${role} ${priv}`);
+  }
+  for (const role of ['anon', 'authenticated']) {
+    await db.exec(`set role ${role}`);
+    await assert.rejects(db.query(`select * from public.phone_otp_send_attempts`), /permission denied/);                              // 테이블 SELECT 불가
+    await assert.rejects(db.query(`insert into public.phone_otp_send_attempts(ip_hash) values ('x')`), /permission denied/);       // 테이블 INSERT 불가
+    await assert.rejects(db.query(`select public.consume_phone_otp_send_attempt('x')`), /permission denied/);                       // RPC 실행 불가
+    await db.exec('reset role');
+  }
+});
+test('service_role은 RPC만으로 동작한다(SECURITY DEFINER가 소유자 권한으로 select/insert/delete 수행) — 테이블 권한 없이 ok/ip_limit/global_limit', async () => {
+  const db = await world();
+  await db.exec(`insert into public.phone_otp_send_attempts(ip_hash, created_at) values ('stale', now() - interval '3 days')`);   // 소유자(SQL Editor 등) 경로
+  await db.exec('set role service_role');
+  try {
+    assert.equal((await db.query(`select public.consume_phone_otp_send_attempt('svcIp', 2, 100) v`)).rows[0].v, 'ok');
+    assert.equal((await db.query(`select public.consume_phone_otp_send_attempt('svcIp', 2, 100) v`)).rows[0].v, 'ok');
+    assert.equal((await db.query(`select public.consume_phone_otp_send_attempt('svcIp', 2, 100) v`)).rows[0].v, 'ip_limit');
+    assert.equal((await db.query(`select public.consume_phone_otp_send_attempt('otherIp', 100, 2) v`)).rows[0].v, 'global_limit');   // 전역 한도(이미 기록 2건)
+  } finally { await db.exec('reset role'); }
+  assert.equal((await db.query(`select count(*)::int c from public.phone_otp_send_attempts where ip_hash = 'stale'`)).rows[0].c, 0);   // cleanup DELETE 수행됨
 });
 test('동시 호출: 한도를 넘겨 기록되지 않는다(락)', async () => {
   const db = await world();
@@ -76,5 +98,5 @@ test('마이그레이션 멱등 + 롤백은 함수/테이블만 제거, verify�
   await db.exec(rollback);
   assert.equal((await db.query(`select count(*)::int c from pg_proc where proname='consume_phone_otp_send_attempt'`)).rows[0].c, 0);
   assert.equal((await db.query(`select count(*)::int c from pg_tables where tablename='phone_otp_send_attempts'`)).rows[0].c, 0);
-  assert.doesNotMatch(verify.replace(/^\s*--.*$/gm, ''), /\b(insert|update|delete|drop|alter|create|grant|revoke|truncate)\b/i);
+  assert.doesNotMatch(verify.replace(/^\s*--.*$/gm, '').replace(/'[^']*'/g, "''"), /\b(insert|update|delete|drop|alter|create|grant|revoke|truncate)\b/i);
 });

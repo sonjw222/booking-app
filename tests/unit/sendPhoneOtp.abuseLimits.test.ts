@@ -35,10 +35,20 @@ describe("send-phone-otp 남용 제한", () => {
     // 문자열 리터럴(메시지 문구) 밖의 식별자만 본다 — 로그 인자로 phone/IP/요청 객체/body를 넘기지 않는다.
     for (const line of code.split("\n").filter((l) => l.includes("console."))) expect(line.replace(/"[^"]*"/g, '""'), line).not.toMatch(/(?<!\.)\b(phone|clientIp|ip|req|body|code)\b/);
   });
-  it("마이그레이션은 서비스 롤 전용(API 롤 EXECUTE 회수) + rollback/verify 파일이 있다", () => {
-    const mig = readFileSync("add_phone_otp_send_limits_20261008.sql", "utf8");
-    expect(mig).toMatch(/revoke all on function consume_phone_otp_send_attempt\(text, int, int\) from anon/i);
-    expect(mig).toMatch(/grant execute on function consume_phone_otp_send_attempt\(text, int, int\) to service_role/i);
-    expect(readFileSync("rollback_add_phone_otp_send_limits_20261008.sql", "utf8")).toContain("drop table if exists phone_otp_send_attempts;");
+  it("마이그레이션은 public 명시 + 테이블 ACL 전부 회수(service_role 포함) + RPC EXECUTE는 service_role만 + rollback/verify가 최종 상태와 맞는다", () => {
+    const mig = readFileSync("add_phone_otp_send_limits_20261008.sql", "utf8").replace(/^\s*--.*$/gm, "");
+    expect(mig).toContain("create table if not exists public.phone_otp_send_attempts (");
+    expect(mig).toContain("create or replace function public.consume_phone_otp_send_attempt(");
+    expect(mig).toMatch(/on public\.phone_otp_send_attempts \(ip_hash, created_at desc\)/);
+    expect(mig).toContain("alter table public.phone_otp_send_attempts enable row level security;");
+    expect(mig).toContain("revoke all on table public.phone_otp_send_attempts from public, anon, authenticated, service_role;");
+    expect(mig).not.toMatch(/grant\s+(select|insert)[^;]*phone_otp_send_attempts/i);   // service_role은 RPC EXECUTE만(SECURITY DEFINER가 소유자 권한으로 접근)
+    expect(mig).toMatch(/security definer\s+set search_path = ''/i);
+    expect(mig).toContain("revoke all on function public.consume_phone_otp_send_attempt(text, int, int) from public, anon, authenticated;");
+    expect(mig).toContain("grant execute on function public.consume_phone_otp_send_attempt(text, int, int) to service_role;");
+    const rb = readFileSync("rollback_add_phone_otp_send_limits_20261008.sql", "utf8");
+    expect(rb).toContain("drop function if exists public.consume_phone_otp_send_attempt(text, int, int);");
+    expect(rb).toContain("drop table if exists public.phone_otp_send_attempts;");
+    expect(readFileSync("verify_add_phone_otp_send_limits_20261008.sql", "utf8")).toContain("has_table_privilege(r.rolname, 'public.phone_otp_send_attempts', 'select')");
   });
 });

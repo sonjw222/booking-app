@@ -9,25 +9,30 @@
 --       advisory lock으로 확인+기록을 원자적으로). 한도 값은 RPC 인자 기본값이라 Edge Function(OTP_IP_HOURLY_CAP / OTP_GLOBAL_DAILY_CAP 환경변수)에서 조정 가능.
 -- 반환: 'ok'(허용+기록) | 'ip_limit' | 'global_limit'(기록하지 않음). 2일 지난 기록은 호출 때 함께 정리한다.
 -- DEV 우회(PHONE_OTP_TEST_BYPASS_PREFIX 번호)는 실제 SMS를 보내지 않으므로 Edge Function이 이 RPC를 호출하지 않는다 — 한도에 영향 없음.
+-- 권한(2026-10-08 hardening): Production의 public 스키마 postgres 기본 ACL은 새 테이블에 anon/authenticated(와 service_role) 권한을 자동 부여한다.
+--       RLS를 켜고 정책이 없어도 ACL 자체가 열려 있는 상태를 피하려고 테이블 생성 직후 모든 API 롤의 권한을 명시적으로 회수한다.
+--       RPC는 SECURITY DEFINER(소유자 권한)로 이 테이블을 읽고 쓰므로 service_role에는 RPC EXECUTE만 필요하다 — 테이블 직접 권한은 주지 않는다(최소 권한).
 -- 롤백: rollback_add_phone_otp_send_limits_20261008.sql. 이 SQL은 Claude Code 세션에서 실행되지 않았다(사용자가 SQL Editor에서 직접 확인 후 실행).
 -- 배포 순서 권장: 이 SQL 먼저 → Edge Function 배포(함수는 RPC가 아직 없으면 "정의되지 않은 함수" 오류에 한해 fail-open + 로그).
 -- ============================================================
 
-create table if not exists phone_otp_send_attempts (
+create table if not exists public.phone_otp_send_attempts (
     id          uuid primary key default gen_random_uuid(),
     ip_hash     text not null,
     created_at  timestamptz not null default now()
 );
 
 create index if not exists idx_phone_otp_send_attempts_ip_created
-    on phone_otp_send_attempts (ip_hash, created_at desc);
+    on public.phone_otp_send_attempts (ip_hash, created_at desc);
 create index if not exists idx_phone_otp_send_attempts_created
-    on phone_otp_send_attempts (created_at desc);
+    on public.phone_otp_send_attempts (created_at desc);
 
-alter table phone_otp_send_attempts enable row level security;
-grant select, insert on phone_otp_send_attempts to service_role;
+alter table public.phone_otp_send_attempts enable row level security;
 
-create or replace function consume_phone_otp_send_attempt(
+-- 기본 ACL이 자동 부여한 테이블 권한 회수(정책이 없는 RLS와 별개로 ACL 자체를 닫는다). service_role도 RPC만 사용하므로 직접 권한을 두지 않는다.
+revoke all on table public.phone_otp_send_attempts from public, anon, authenticated, service_role;
+
+create or replace function public.consume_phone_otp_send_attempt(
     p_ip_hash text,
     p_ip_hourly_cap int default 10,
     p_global_daily_cap int default 500
@@ -69,7 +74,5 @@ begin
 end;
 $$;
 
-revoke all on function consume_phone_otp_send_attempt(text, int, int) from public;
-revoke all on function consume_phone_otp_send_attempt(text, int, int) from anon;
-revoke all on function consume_phone_otp_send_attempt(text, int, int) from authenticated;
-grant execute on function consume_phone_otp_send_attempt(text, int, int) to service_role;
+revoke all on function public.consume_phone_otp_send_attempt(text, int, int) from public, anon, authenticated;
+grant execute on function public.consume_phone_otp_send_attempt(text, int, int) to service_role;
