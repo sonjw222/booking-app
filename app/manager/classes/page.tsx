@@ -1600,9 +1600,9 @@ export default function ClassManagePage() {
                 ? <><b>모든 수강권</b>으로 예약 가능해요(전체 선택). 이 경우 각 수강권 자체에 걸린
                   요일/시간 예약조건(수강권 관리)은 이것과 별개로 계속 적용되고, 나중에 수강권이
                   추가돼도 자동으로 포함돼요.</>
-                : <><b>{selectedProducts.length}개</b> 수강권만 이 수업에 사용할 수 있어요. 이렇게 특정
-                  수강권을 이 수업에 직접 지정하면, 그 수강권 자체의 요일/시간 예약조건과 무관하게
-                  이 수업에서 사용할 수 있어요(직접 지정이 예약조건보다 우선).</>}
+                : <><b>{selectedProducts.length}개</b> 수강권만 이 수업에 사용할 수 있어요. 직접 지정한
+                  수강권이라도 그 수강권 자체의 요일/시간 예약조건(수강권 관리)은 이것과 별개로
+                  계속 적용돼요.</>}
             </div>
             {(() => {
               if (!form.date || !form.start || !form.title.trim() || passProducts.length === 0) return null;
@@ -1635,8 +1635,9 @@ export default function ClassManagePage() {
                 );
               }
 
-              // 특정 수강권 직접 지정 — 선택된 수강권은 예약조건과 무관하게 이 수업에서 사용
-              // 가능하다(서버 override와 동일 조건). 원래 조건이 있던 것만 골라 안내한다.
+              // 특정 수강권 직접 지정 — 직접 지정해도 수강권 자체의 예약조건은 그대로 적용된다(지정 AND 예약조건,
+              // 서버 fix_reservation_integrity_20261003.sql [F2]). 선택된 수강권 중 이 수업과 조건이 안 맞아
+              // 실제로 쓸 수 없는 것만 골라 안내한다.
               const selectedPassProducts = passProducts.filter((p) => selectedProducts.includes(p.id));
               const overridden = findScheduleExcludedProducts(
                 selectedPassProducts.map((p) => ({ id: p.id, name: p.name })),
@@ -1646,12 +1647,12 @@ export default function ClassManagePage() {
               if (overridden.length === 0) return null;
               return (
                 <div className="perm-guide is-info schedule-rule-override-note" style={{ margin: "0 0 8px" }}>
-                  <UiIcon name="info" size={13} /> 아래 <b>{overridden.length}개</b> 수강권은 원래 예약조건이 있지만, 이 수업에 직접
-                  지정했으므로 그 조건과 무관하게 사용할 수 있어요(직접 지정이 우선):
+                  <UiIcon name="info" size={13} /> 아래 <b>{overridden.length}개</b> 수강권은 이 수업에 직접 지정했지만, 수강권 자체의
+                  예약조건과 이 수업이 맞지 않아 이 수업에서는 쓸 수 없어요:
                   <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
                     {overridden.map((ex) => (
                       <li key={ex.productId} className="schedule-rule-override-item" style={{ fontSize: 12 }}>
-                        {ex.productName} — 원래 조건: {ex.rules.map(ruleToText).join(" 또는 ")}
+                        {ex.productName} — 허용 조건: {ex.rules.map(ruleToText).join(" 또는 ")}
                       </li>
                     ))}
                   </ul>
