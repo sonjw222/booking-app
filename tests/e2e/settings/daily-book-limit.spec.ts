@@ -75,7 +75,7 @@ test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회
   // beforeAll의 admin 저장만 믿지 않고 사용자가 실제로 조작하는 관리자 UI에서 OFF를
   // 저장한 직후 DB 값까지 확인한다. 공유 센터의 직전 스펙이 1회 제한을 사용했더라도
   // 이 테스트의 첫 단계가 항상 명시적인 OFF 상태에서 시작되도록 한다.
-  await gotoManagerSettings(page);
+  await gotoManagerSettings(page, centerAId);
   await toggleSettingSwitch(page, "당일 예약 허용", true);
   await toggleSettingSwitch(page, "일일 예약 횟수 제한", false);
   await saveManagerSettings(page);
@@ -132,7 +132,7 @@ test("일일예약제한 OFF→모두성공, ON+2회제한→1·2회 성공 3회
   }
 
   // ② 관리자 화면에서 실제로 ON + 하루 최대 2회로 저장
-  await gotoManagerSettings(page);
+  await gotoManagerSettings(page, centerAId);
   // 공유 센터의 다른 설정 스펙이 당일 예약을 OFF로 남겨두었더라도,
   // 이 스펙이 검증하는 일일 횟수 제한만 결과에 영향을 주도록 UI에서
   // 필요 설정을 명시적으로 다시 보장한다.

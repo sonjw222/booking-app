@@ -63,3 +63,6 @@ supabase/.temp/
 
 # Production QA 로컬 fixture 상태(센터/계정/프로필 id만, 비밀 없음)
 .qa-state/
+
+# ci:dev:seed가 쓰는 비밀 아닌 ID 매핑
+/.tmp/

@@ -3,8 +3,14 @@
 // Secrets가 이미 process.env에 직접 주입되어 있기 때문.
 import { config } from "dotenv";
 import path from "node:path";
+import { assertIntegrationTargetIsNotProduction } from "./productionGuard";
 
 config({ path: path.resolve(process.cwd(), ".env.test.local") });
+
+// Production 차단(최우선): dotenv가 값을 채운 직후, 필수 env 검증/Supabase client 생성/DB 접근보다 먼저 실행한다.
+// 알려진 Production project ref(bxntqggkfwnhcczsbqtj)를 코드에 고정해 환경변수 설정 여부와 무관하게 막는다(tests/integration/productionGuard.ts).
+// vitest.integration.config.ts의 globalSetup/setupFiles가 모두 이 파일을 먼저 로드하므로 test:integration, test:all(→ test:integration), qa:business:*가 전부 여기서 멈춘다.
+assertIntegrationTargetIsNotProduction(process.env);
 
 // lib/supabaseClient.ts는 이 값이 없으면 "supabaseUrl is required." 같은 알아보기 힘든
 // 에러를 던지므로, 여기서 먼저 검증해 명확한 안내를 준다.
@@ -27,18 +33,4 @@ if (missing.length > 0) {
   );
 }
 
-// 운영 DB 오발동 방지 가드.
-// ⚠ 현재 이 프로젝트는 Supabase 프로젝트가 하나뿐이라(별도 production 프로젝트가 아직 없음),
-//   이 검사는 지금 당장은 아무 효과가 없다(PRODUCTION_SUPABASE_URL이 설정돼 있지 않으면 통과).
-//   나중에 실제 운영 Supabase 프로젝트가 생기고 그 URL을 PRODUCTION_SUPABASE_URL로 등록해두면,
-//   그 순간부터 이 검사가 자동으로 활성화되어 test:integration이 그 프로젝트를 가리킬 때
-//   실행 자체를 막아준다 — 테스트 코드를 다시 손볼 필요가 없다.
-if (
-  process.env.PRODUCTION_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL === process.env.PRODUCTION_SUPABASE_URL
-) {
-  throw new Error(
-    "test:integration이 PRODUCTION_SUPABASE_URL과 동일한 프로젝트(NEXT_PUBLIC_SUPABASE_URL)를 " +
-      "가리키고 있습니다. 운영 DB에는 통합 테스트를 실행할 수 없습니다 — 개발용 Supabase 프로젝트로 바꿔주세요."
-  );
-}
+// (추가 방어선 PRODUCTION_SUPABASE_URL 비교는 위 assertIntegrationTargetIsNotProduction에 정규화 비교로 통합됐다.)

@@ -57,7 +57,10 @@ async function cleanupFixtureRows() {
   } else {
     await admin.from("classes").delete().eq("center_id", centerBId).eq("title", TARGET_CLASS_TITLE);
   }
-  if (childProfileId) await admin.from("profiles").delete().eq("id", childProfileId);
+  if (childProfileId) {
+    await admin.from("center_members").delete().eq("center_id", centerBId).eq("profile_id", childProfileId);
+    await admin.from("profiles").delete().eq("id", childProfileId);
+  }
 }
 
 beforeAll(async () => {
@@ -104,6 +107,10 @@ beforeAll(async () => {
     status: "active",
   });
   if (targetErr) throw new Error(`target membership 생성 실패: ${targetErr.message}`);
+  // 테스트 센터는 내부 QA 센터(is_internal=true)라 center_members가 아닌 사용자에게는 수업이 보이지 않는다(centers/classes RLS).
+  // 실제 수강권 발급(ensure_center_member)은 center_members도 만들므로 같은 상태를 fixture로 재현한다.
+  const { error: memberErr } = await admin.from("center_members").insert({ center_id: centerBId, profile_id: childProfileId, status: "active" });
+  if (memberErr && memberErr.code !== "23505") throw new Error(`center_members 생성 실패: ${memberErr.message}`);
 
   // centerB에 대상 월(YEAR-MONTH) 안의 수업을 하나 만든다 — fetchMonthData가 실제로 이
   // 센터의 수업을 가져오는지 확인할 대상.

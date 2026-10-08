@@ -5,12 +5,12 @@ import {
   createTestMembershipAdmin,
   createFutureTestClassAdmin,
   createKstSameDayFutureClassAdmin,
+  createClassOnKstDateAdmin,
   cleanupTestClassAdmin,
   fetchSettingsAdmin,
   saveSettingsAdmin,
   reservationDeepLink,
   ALWAYS_PAST_TODAY_TIME,
-  ALWAYS_FUTURE_TODAY_TIME,
   kstDateStr,
   type TestUser,
 } from "../fixtures/testData";
@@ -97,54 +97,43 @@ test("예약마감 2시간 전 — 1시간 뒤 수업은 예약 실패 (실브�
   expect(toastText).toContain("예약 마감시간이 지났어요");
 });
 
-test("운영설정 예약마감 30분(관리자 화면 저장) — 40분 전 성공, 20분 전 실패 (실브라우저 end-to-end)", async ({ page, browser }) => {
-  // 개별 수업 override(위 두 테스트)와 별개로, 운영설정 자체(그룹 수업 예약 - N일 전
-  // HH:MM)를 실제 관리자 화면에서 저장했을 때도 동일하게 동작하는지 확인한다.
+test("운영설정 예약마감(관리자 화면 저장) — 마감이 안 지난 날의 수업은 성공, 이미 지난 날의 수업은 실패 (실브라우저 end-to-end)", async ({ page, browser }) => {
+  // 운영설정 자체(그룹 수업 예약 - N일 전 HH:MM)를 실제 관리자 화면에서 저장했을 때 회원 예약이 그대로 따라가는지 확인한다.
   //
-  // ⚠ groupBookDaysBefore=0일 때 마감은 "그 날짜 안에서 고정된 절대 시각"이지 각 수업
-  // 시작시각 기준 상대값이 아니다(calc_deadline()). 그래서 "성공"/"실패" 두 경우를
-  // 하나의 마감 시각으로는 표현할 수 없고, 마감을 미래(아직 안 지남)로 저장해 성공
-  // 케이스를 확인한 뒤, 과거(이미 지남)로 다시 저장해 실패 케이스를 확인해야 한다.
+  // [2026-10-07 정책 정렬] 당일(same-day) 수업은 서버(reserve_class/reserve_with_membership의 v_is_same_day)가 이 설정 마감을 무시하고
+  // 수업 시작 시각을 마감으로 쓴다 — 그래서 "20분 뒤 수업이 마감 때문에 막힌다"는 옛 시나리오는 더 이상 성립하지 않는다. 이 스펙은 같은 설정을 한 번만
+  // 저장하고 날짜가 다른 두 수업으로 확인한다: groupBookDaysBefore=1, 시각 00:01 → 마감 = (수업 날짜 - 1일) 00:01.
+  //   · 3일 뒤(D+3) 수업: 마감 = D+2 00:01 → 아직 안 지남 → 예약 성공
+  //   · 내일(D+1) 수업:   마감 = D   00:01 → 이미 지남     → 예약 실패("예약 마감시간이 지났어요")
+  const dayFromNow = (n: number) => kstDateStr(new Date(Date.now() + n * 24 * 3600 * 1000).toISOString());
   const mgrContext = await browser.newContext({ storageState: MANAGER_AUTH_FILE });
   const mgrPage = await mgrContext.newPage();
 
-  await gotoManagerSettings(mgrPage);
-  await setDaysBeforeTime(mgrPage, "그룹 수업 예약", 0, ALWAYS_FUTURE_TODAY_TIME);
+  await gotoManagerSettings(mgrPage, centerAId);
+  await setDaysBeforeTime(mgrPage, "그룹 수업 예약", 1, ALWAYS_PAST_TODAY_TIME);
   await saveManagerSettings(mgrPage);
-  const savedOpen = await fetchSettingsAdmin(centerAId);
-  expect(savedOpen.groupBookDaysBefore).toBe(0);
+  const saved = await fetchSettingsAdmin(centerAId);
+  expect(saved.groupBookDaysBefore).toBe(1);
+  expect(saved.groupBookTime.slice(0, 5)).toBe(ALWAYS_PAST_TODAY_TIME);
+  await mgrContext.close();
 
-  const okCls = await createKstSameDayFutureClassAdmin(centerAId, {
-    title: "E2E 운영마감-40분전", preferredMinutesFromNow: 40,
-  });
+  const okCls = await createClassOnKstDateAdmin(centerAId, { title: "E2E 운영마감-성공", kstDate: dayFromNow(3), kstTime: "12:00" });
   createdClassIds.push(okCls.id);
   await page.goto(reservationDeepLink(okCls.id, okCls.startTime));
   await page.getByRole("button", { name: "예약하기" }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
   await expect(
-    page.locator(".class-row", { hasText: "E2E 운영마감-40분전" }).getByRole("button", { name: "취소" })
+    page.locator(".class-row", { hasText: "E2E 운영마감-성공" }).getByRole("button", { name: "취소" })
   ).toBeVisible();
 
-  // 이제 마감을 과거로 다시 저장 — 이 순간부터 이 센터의 모든 그룹 수업은 예약 마감이다.
-  await setDaysBeforeTime(mgrPage, "그룹 수업 예약", 0, ALWAYS_PAST_TODAY_TIME);
-  await saveManagerSettings(mgrPage);
-  const savedClosed = await fetchSettingsAdmin(centerAId);
-  expect(savedClosed.groupBookDaysBefore).toBe(0);
-  await mgrContext.close();
-
-  const failCls = await createKstSameDayFutureClassAdmin(centerAId, {
-    title: "E2E 운영마감-20분전", preferredMinutesFromNow: 20,
-  });
+  const failCls = await createClassOnKstDateAdmin(centerAId, { title: "E2E 운영마감-실패", kstDate: dayFromNow(1), kstTime: "12:00" });
   createdClassIds.push(failCls.id);
-  // ⚠ 같은 테스트 안에서 두 번째로 reservationDeepLink를 쓰면(위 okCls에 이어) openClassId
-  // 자동오픈 useEffect가 방금 만든 수업을 못 찾아 모달이 안 열리는 현상이 실측 확인됐다
-  // (원인 특정 전, booking-open-deadline.spec.ts와 동일한 일반 캘린더 탐색으로 우회 —
-  // 이 방식은 같은 달에 클러터가 많아도 안정적으로 동작함이 이미 확인됨).
+  // ⚠ 같은 테스트 안에서 두 번째로 reservationDeepLink를 쓰면 openClassId 자동오픈이 방금 만든 수업을 못 찾는 현상이 실측 확인돼 일반 캘린더 탐색으로 우회한다(booking-open-deadline.spec.ts와 동일).
   await page.goto("/reservation");
   await selectKstCalendarDay(page, kstDateStr(failCls.startTime));
-  await page.locator(".class-row", { hasText: "E2E 운영마감-20분전" }).getByRole("button", { name: "예약" }).click();
+  await page.locator(".class-row", { hasText: "E2E 운영마감-실패" }).getByRole("button", { name: "예약" }).click();
   await page.getByRole("button", { name: "예약하기" }).click();
   await expect(page.locator(".sheet-overlay")).toBeVisible();
-  const toastText2 = await waitForToastText(page);
-  expect(toastText2).toContain("예약 마감시간이 지났어요");
+  const toastText = await waitForToastText(page);
+  expect(toastText).toContain("예약 마감시간이 지났어요");
 });

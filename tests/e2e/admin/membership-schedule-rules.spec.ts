@@ -15,6 +15,7 @@ import {
 } from "../fixtures/testData";
 import { getFixtureAdminClient } from "../../integration/setup";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { gotoManagerClasses } from "../fixtures/pageHelpers";
 
 /*
   P1-15: membership_schedule_rules(수강권 자체의 요일/시간/수업명 예약조건)와 신규 수업
@@ -62,7 +63,7 @@ const createdClassIds: string[] = [];
 
 async function gotoManagerClassesDay(page: Page, kstDate: string): Promise<void> {
   const [y, m, d] = kstDate.split("-").map(Number);
-  await page.goto("/manager/classes");
+  await gotoManagerClasses(page, centerAId);
   await expect(page.locator(".cal-title")).toBeVisible();
   for (let i = 0; i < 14; i++) {
     const title = (await page.locator(".cal-title").innerText()).trim();
@@ -186,7 +187,7 @@ async function restrictClassToRestrictedPassViaUi(page: Page, uniqueTitle: strin
 // 명시적으로 지정하면(F가 다른 product로 새지 않는지는 통합 테스트가 검증) 이제
 // override로 사용 가능(D/E) + 관리자 UI가 "모든 수강권 허용"일 때의 경고(danger)와
 // "특정 수강권 지정"일 때의 override 안내(info)를 서로 다르게 보여줌(K).
-test("D+F(override)+K: 특정 수강권 직접 지정 시 schedule rule 불일치해도 사용 가능 + 관리자 UI 안내가 모드별로 다름 (실브라우저)", async ({ page, browser }) => {
+test("D+F(F2 정책): 특정 수강권 직접 지정해도 schedule rule 불일치면 회원은 그 수강권을 쓸 수 없다 (실브라우저)", async ({ page, browser }) => {
   const matchTitle = `P1-15 수업 ${Date.now()}`; // 규칙이 가리키는 "진짜" 수업명(다른 것)
   const uniqueTitle = `P1-15-OVERRIDE-${Date.now()}`; // 실제로 만들 수업명(다름 → 불일치)
   const cls = await createFutureTestClassAdmin(centerAId, { title: uniqueTitle, hoursFromNow: 151 });
@@ -212,33 +213,19 @@ test("D+F(override)+K: 특정 수강권 직접 지정 시 schedule rule 불일�
   // F: "특정 pass 지정"으로 이 pass를 명시적으로 지정한다.
   await restrictClassToRestrictedPassViaUi(page, uniqueTitle);
 
-  // K(2단계): "특정 지정" 후에는 danger 경고 대신 override 안내(info)로 바뀌어야 한다 —
-  // 관리자가 두 모드의 차이를 헷갈리지 않도록.
-  await expect(page.locator(".schedule-rule-warning")).toHaveCount(0);
-  const overrideNote = page.locator(".schedule-rule-override-note");
-  await expect(overrideNote).toBeVisible({ timeout: 10000 });
-  await expect(overrideNote).toContainText(RESTRICTED_PASS_NAME);
-
+  // [2026-10-07 정책 정렬] fix_reservation_integrity_20261003.sql([F2])로 서버는 더 이상 "직접 지정 수강권이 예약조건을 우회"하지 않는다(지정 AND 예약조건).
+  // 그런데 관리자 화면의 .schedule-rule-override-note는 여전히 "그 조건과 무관하게 사용할 수 있어요(직접 지정이 우선)"라고 안내한다(app/manager/classes/page.tsx) —
+  // 서버 정책과 어긋난 앱 문구라 이 스펙은 그 문구를 단언하지 않는다(docs/TODO.md P1: 앱 문구 정정 필요). 지정 저장 자체만 확인한다.
   await page.getByRole("button", { name: "수정하기" }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
-  // K(재확인): 재진입해도 override 안내가 그대로 보인다(danger 경고 아님).
-  await page.locator(".class-row", { hasText: uniqueTitle }).click();
-  await expect(page.locator(".sheet-title", { hasText: "수업 수정" })).toBeVisible();
-  await expect(page.locator(".schedule-rule-override-note")).toBeVisible({ timeout: 10000 });
-  await expect(page.locator(".schedule-rule-warning")).toHaveCount(0);
-  await page.locator(".sheet-overlay").click({ position: { x: 10, y: 10 } });
-
-  // D: 회원 화면에서는 이 pass가 이제 사용 가능하다(schedule rule 불일치와 무관, override).
+  // D(F2): 회원 화면에서는 이 pass가 사용 불가 — 'selected'로 이 pass만 허용했고 예약조건(요일 불일치)도 만족하지 못하므로 쓸 수 있는 수강권이 없다.
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
   await expect(memberPage.locator(".sheet-title", { hasText: "예약하시겠어요?" })).toBeVisible({ timeout: 20000 });
-  const passList = memberPage.locator(".pass-pick-list");
-  await expect(passList).toBeVisible({ timeout: 15000 });
-  await expect(passList).toContainText(RESTRICTED_PASS_NAME);
-  await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 20000 });
+  await expect(memberPage.locator(".no-pass-row")).toBeVisible({ timeout: 15000 });
+  await expect(memberPage.locator(".pass-pick-list")).toHaveCount(0);
   await memberContext.close();
 });
 
@@ -247,7 +234,7 @@ test("D+F(override)+K: 특정 수강권 직접 지정 시 schedule rule 불일�
 // "새로 산 pass라서 예외"는 없다는 것을 확인(새 정책에서는 사용 가능이 기대 동작).
 // class_allowed_products로 이 pass 하나만 허용해 다른(제한 없는) 보유 pass들이 "usable"에
 // 섞여 이 검증을 무의미하게 만들지 않도록 isolate한다.
-test("J: 방금 새로 발급된 membership도 같은 상품이 직접 지정돼 있으면 동일한 override를 받는다 (실브라우저)", async ({ page, browser }) => {
+test("J(F2 정책): 방금 새로 발급된 membership도 예약조건 불일치면 직접 지정돼 있어도 쓸 수 없다 (실브라우저)", async ({ page, browser }) => {
   const matchTitle = `P1-15 수업 ${Date.now()}`;
   const uniqueTitle = `P1-15-NEWMEM-${Date.now()}`;
   const cls = await createFutureTestClassAdmin(centerAId, { title: uniqueTitle, hoursFromNow: 152 });
@@ -291,11 +278,9 @@ test("J: 방금 새로 발급된 membership도 같은 상품이 직접 지정돼
   const memberPage = await memberContext.newPage();
   await memberPage.goto(reservationDeepLink(cls.id, cls.startTime));
   await expect(memberPage.locator(".sheet-title", { hasText: "예약하시겠어요?" })).toBeVisible({ timeout: 20000 });
-  const passList = memberPage.locator(".pass-pick-list");
-  await expect(passList).toBeVisible({ timeout: 15000 });
-  await expect(passList).toContainText(RESTRICTED_PASS_NAME);
-  await memberPage.getByRole("button", { name: "예약하기" }).click();
-  await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0, { timeout: 20000 });
+  // 새로 산 membership이라고 예약조건을 우회하는 경로는 없다(F2: 지정 AND 예약조건) — 쓸 수 있는 수강권이 없어야 한다.
+  await expect(memberPage.locator(".no-pass-row")).toBeVisible({ timeout: 15000 });
+  await expect(memberPage.locator(".pass-pick-list")).toHaveCount(0);
   await memberContext.close();
 
   // 원상복구: 이후 다른 테스트/재실행에 영향 없도록 정상(제한 없는) membership으로 되돌림

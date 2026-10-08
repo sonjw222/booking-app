@@ -35,8 +35,18 @@ async function overflowX(page: Page): Promise<number> {
   return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 }
 
-function clippingOf(el: Element) {
-  return { xClipped: el.scrollWidth > el.clientWidth + 1, yClipped: el.scrollHeight > el.clientHeight + 1 };
+// 사이드바 레일(88px)은 :hover/:focus-within에서 244px로 확장된다. 실패 순간 상태를 CI에서 직접 측정해 확정한 원인(2026-10-08, run 37763452426):
+// innerWidth=1279, --workspace-sidebar=88px, aria-expanded="false", focus-within=false, 그런데 nav.matches(":hover")=true(1.8초 뒤에도) → 폭 244px.
+// 리눅스 CI의 Chromium은 새 문서를 열면 포인터를 (0,0)(= 레일 안)으로 간주해 hover를 켠다. 페이지 이동 "전"에 마우스를 옮겨 둬도 소용없다(이동 후 초기화).
+// 그래서 collapsed 폭을 재기 전에: 이동 "후"에 포인터를 레일 밖으로 옮기고, :hover가 실제로 꺼질 때까지 상태로 기다린다(sleep 아님). 1279/1360 계약(collapsed/desktop)은 그대로다.
+async function parkPointerOutsideRail(page: Page, navSelector: string): Promise<void> {
+  const vp = page.viewportSize();
+  const x = Math.max(400, (vp?.width ?? 1280) - 30);
+  await page.mouse.move(x, 100);
+  await page.mouse.move(x - 10, 450);
+  await expect.poll(() => page.locator(navSelector).evaluate((n) => n.matches(":hover")), { message: `${navSelector}에 :hover가 남아 있음` }).toBe(false);
+  // :hover가 꺼진 뒤에도 width는 0.22s transition으로 줄어든다(로컬 재현에서 202px, 220px 같은 중간값이 측정됨) — 진행 중인 CSS transition이 끝나기를 기다린다.
+  await page.locator(navSelector).evaluate((n) => Promise.all(n.getAnimations().map((a) => a.finished.catch(() => undefined))).then(() => undefined));
 }
 
 test.describe("회원 데스크톱 사이드바 — breakpoint 경계 자동 검증(로그인 불필요)", () => {
@@ -60,6 +70,7 @@ test.describe("회원 데스크톱 사이드바 — breakpoint 경계 자동 검
       await page.goto("/");
       await expect(page.locator(".member-desktop-nav")).toBeVisible();
       await expect(page.locator(".bottom-nav")).toBeHidden();
+      await parkPointerOutsideRail(page, ".member-desktop-nav");
       const box = await page.locator(".member-desktop-nav").boundingBox();
       expect(box?.width, `${width}px에서 88px 레일 폭 유지`).toBeLessThan(120);
       expect(await overflowX(page)).toBeLessThanOrEqual(1);
@@ -69,6 +80,7 @@ test.describe("회원 데스크톱 사이드바 — breakpoint 경계 자동 검
   test("1359→1360px: 사이드바가 88px 레일에서 244px 라벨 사이드바로 확장됨(hover 불필요)", async ({ page }) => {
     await page.setViewportSize({ width: 1359, height: 900 });
     await page.goto("/");
+    await parkPointerOutsideRail(page, ".member-desktop-nav");
     const railBox = await page.locator(".member-desktop-nav").boundingBox();
     expect(railBox?.width).toBeLessThan(120);
     expect(await overflowX(page)).toBeLessThanOrEqual(1);
@@ -80,22 +92,27 @@ test.describe("회원 데스크톱 사이드바 — breakpoint 경계 자동 검
     expect(await overflowX(page)).toBeLessThanOrEqual(1);
   });
 
-  test("1360px+ 사이드바 안내 문구(.desktop-nav-note)가 자체적으로 잘리지 않음", async ({ page }) => {
+  // [2026-10-07 UI 정렬] 사이드바 안내 문구(.desktop-nav-note)는 be109d2(디자인 핸드오프)에서 컴포넌트에서 제거됐다(CSS만 남음). 이 테스트의 의도(사이드바 텍스트가
+  // 잘리지 않음)는 남아 있는 요소 — 브랜드 문구와 메뉴 라벨 — 로 검증한다.
+  async function navTextClipping(page: import("@playwright/test").Page) {
+    return page.locator(".member-desktop-nav .desktop-brand span, .member-desktop-nav .desktop-nav-item span, .member-desktop-nav .desktop-nav-section").evaluateAll(
+      (els) => els.map((el) => ({ text: (el.textContent ?? "").trim(), x: el.scrollWidth > el.clientWidth + 1, y: el.scrollHeight > el.clientHeight + 1 })).filter((r) => r.x || r.y)
+    );
+  }
+
+  test("1360px+ 사이드바 브랜드/메뉴 라벨이 잘리지 않음", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
-    const note = page.locator(".desktop-nav-note");
-    await expect(note).toBeVisible();
-    await expect(note).toHaveText("태블릿과 데스크톱에서는 더 넓은 화면으로 편하게 탐색할 수 있어요.");
-    const clipped = await note.evaluate(clippingOf);
-    expect(clipped.xClipped, "가로 방향으로 텍스트가 잘리면 안 됨").toBe(false);
-    expect(clipped.yClipped, "세로 방향으로 텍스트가 잘리면 안 됨").toBe(false);
+    await expect(page.locator(".member-desktop-nav .desktop-nav-item").first()).toBeVisible();
+    expect(await navTextClipping(page), "잘린 텍스트가 없어야 함").toEqual([]);
   });
 
-  test("768-1359px 아이콘 레일 hover 시 244px로 확장되고 안내 문구도 잘리지 않음", async ({ page }) => {
+  test("768-1359px 아이콘 레일 hover 시 244px로 확장되고 라벨도 잘리지 않음", async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 900 });
     await page.goto("/");
     const nav = page.locator(".member-desktop-nav");
     await expect(nav).toBeVisible();
+    await parkPointerOutsideRail(page, ".member-desktop-nav");
     const collapsedBox = await nav.boundingBox();
     expect(collapsedBox?.width).toBeLessThan(120); // 88px 레일
 
@@ -104,10 +121,7 @@ test.describe("회원 데스크톱 사이드바 — breakpoint 경계 자동 검
     const expandedBox = await nav.boundingBox();
     expect(expandedBox?.width).toBeGreaterThanOrEqual(240);
 
-    const note = page.locator(".desktop-nav-note");
-    const clipped = await note.evaluate(clippingOf);
-    expect(clipped.xClipped).toBe(false);
-    expect(clipped.yClipped).toBe(false);
+    expect(await navTextClipping(page), "확장된 레일에서 잘린 텍스트가 없어야 함").toEqual([]);
   });
 });
 
@@ -134,6 +148,7 @@ test.describe("관리자 사이드바 — breakpoint 경계 자동 검증", () =
       await page.goto("/manager");
       await expect(page.locator(".workspace-sidebar")).toBeVisible();
       await expect(page.locator(".bottom-nav")).toBeHidden();
+      await parkPointerOutsideRail(page, ".workspace-sidebar");
       const box = await page.locator(".workspace-sidebar").boundingBox();
       expect(box?.width, `${width}px에서 88px 레일 폭 유지`).toBeLessThan(120);
       expect(await overflowX(page)).toBeLessThanOrEqual(1);
@@ -143,12 +158,15 @@ test.describe("관리자 사이드바 — breakpoint 경계 자동 검증", () =
   test("1359→1360px: 사이드바가 88px 레일에서 244px 라벨 사이드바로 확장됨", async ({ page }) => {
     await page.setViewportSize({ width: 1359, height: 900 });
     await page.goto("/manager");
+    await expect(page.locator(".workspace-sidebar")).toBeVisible();
+    await parkPointerOutsideRail(page, ".workspace-sidebar");
     const railBox = await page.locator(".workspace-sidebar").boundingBox();
     expect(railBox?.width).toBeLessThan(120);
     expect(await overflowX(page)).toBeLessThanOrEqual(1);
 
     await page.setViewportSize({ width: 1360, height: 900 });
     await page.reload();
+    await expect(page.locator(".workspace-sidebar")).toBeVisible();   // reload 직후 하이드레이션 전에는 boundingBox()가 null일 수 있다
     const expandedBox = await page.locator(".workspace-sidebar").boundingBox();
     expect(expandedBox?.width).toBeGreaterThanOrEqual(240);
     expect(await overflowX(page)).toBeLessThanOrEqual(1);

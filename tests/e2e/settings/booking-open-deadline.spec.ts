@@ -54,7 +54,7 @@ test.beforeAll(async ({ browser }) => {
   // 관리자 화면에서 실제로 "예약 가능 기한(오픈 시점) - 그룹 수업" = 7일 전 00:00으로 저장
   const mgrContext = await browser.newContext({ storageState: MANAGER_AUTH_FILE });
   const mgrPage = await mgrContext.newPage();
-  await gotoManagerSettings(mgrPage);
+  await gotoManagerSettings(mgrPage, centerAId);
   await setDaysBeforeTime(mgrPage, "그룹 수업", 7, "00:00");
   await saveManagerSettings(mgrPage);
   await mgrContext.close();

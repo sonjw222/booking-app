@@ -10,6 +10,7 @@ import {
 } from "../fixtures/testData";
 import { getFixtureAdminClient } from "../../integration/setup";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { gotoManagerClasses } from "../fixtures/pageHelpers";
 
 /*
   담당 강사 표시 UI 수동 QA 발견사항 회귀 테스트(2026-08-12).
@@ -48,7 +49,7 @@ const createdClassIds: string[] = [];
 
 async function gotoManagerClassesDay(page: Page, kstDate: string): Promise<void> {
   const [y, m, d] = kstDate.split("-").map(Number);
-  await page.goto("/manager/classes");
+  await gotoManagerClasses(page, centerAId);
   await expect(page.locator(".cal-title")).toBeVisible();
   for (let i = 0; i < 14; i++) {
     const title = (await page.locator(".cal-title").innerText()).trim();
