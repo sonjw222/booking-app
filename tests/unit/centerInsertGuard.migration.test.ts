@@ -12,8 +12,8 @@ describe("centers INSERT guard migration (정적)", () => {
     expect(forward).toMatch(/security definer\s+set search_path = public/i);
   });
   it("JWT 없는 서버 작업과 플랫폼 운영자는 통과, 그 외는 pending/false로 강제", () => {
-    expect(forward).toContain("if auth.uid() is null then");
-    expect(forward).toContain("if is_platform_admin() then");
+    expect(forward).toContain("if auth.uid() is null and coalesce(auth.jwt() ->> 'role', '') <> 'anon' then");   // anon JWT(sub 없음)는 trusted가 아님
+    expect(forward).toContain("if public.is_platform_admin() then");
     expect(forward).toContain("new.status := 'pending';");
     expect(forward).toContain("new.is_internal := false;");
   });

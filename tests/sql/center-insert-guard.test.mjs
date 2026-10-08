@@ -18,7 +18,9 @@ async function world({ apply = true } = {}) {
     grant usage on schema public to anon, authenticated, service_role;
     create schema auth; grant usage on schema auth to anon, authenticated, service_role;
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('app.uid', true), '')::uuid $$;
-    grant execute on function auth.uid() to anon, authenticated, service_role;
+    -- Supabase auth.jwt(): 요청 JWT claims(jsonb), JWT가 없으면 null
+    create function auth.jwt() returns jsonb language sql stable as $$ select nullif(current_setting('app.jwt', true), '')::jsonb $$;
+    grant execute on function auth.uid(), auth.jwt() to anon, authenticated, service_role;
     create table accounts(id uuid primary key, is_platform_admin boolean default false);
     create function my_account_id() returns uuid language sql stable security definer as $$ select auth.uid() $$;
     create function is_platform_admin() returns boolean language sql stable security definer set search_path = public as
@@ -41,10 +43,13 @@ async function world({ apply = true } = {}) {
   return db;
 }
 // role: 'authenticated' | 'anon' | 'service_role', uid: auth.uid() 값(없으면 JWT 없음)
-async function as(db, role, uid, sql) {
+// jwtRole: JWT의 role claim('anon'|'authenticated'|'service_role'), undefined면 요청 JWT 자체가 없는 컨텍스트(auth.jwt() = null)
+async function as(db, role, uid, sql, jwtRole = role) {
+  const jwt = jwtRole ? JSON.stringify({ role: jwtRole, ...(uid ? { sub: uid } : {}) }) : '';
   await db.exec(`select set_config('app.uid', '${uid ?? ''}', false)`);
+  await db.exec(`select set_config('app.jwt', '${jwt}', false)`);
   await db.exec(`set role ${role}`);
-  try { return await db.query(sql); } finally { await db.exec('reset role'); await db.exec(`select set_config('app.uid', '', false)`); }
+  try { return await db.query(sql); } finally { await db.exec('reset role'); await db.exec(`select set_config('app.uid', '', false)`); await db.exec(`select set_config('app.jwt', '', false)`); }
 }
 
 test('1) 일반 로그인 사용자가 status=approved로 INSERT해도 저장은 pending', async () => {
@@ -75,6 +80,20 @@ test('5) 플랫폼 운영자는 approved/internal 생성 권한 유지', async (
   const db = await world();
   const r = await as(db, 'authenticated', ADMIN, `insert into centers(name, status, is_internal) values ('운영자 생성','approved',true) returning status, is_internal`);
   assert.deepEqual([r.rows[0].status, r.rows[0].is_internal], ['approved', true]);
+});
+test('5-c) anon JWT(sub 없음, role=anon)는 trusted 분기에 들어가지 않는다 — 트리거 단독으로도 pending/false 강제', async () => {
+  const db = await world();
+  // anon에게 INSERT 정책을 임시로 열어 RLS가 아니라 트리거가 막는지를 직접 확인한다(트리거 단독 방어선 검증)
+  await db.exec(`create policy "anon 임시 허용(테스트)" on centers for insert to anon with check (true)`);
+  const r = await as(db, 'anon', null, `insert into centers(name, status, is_internal) values ('익명위장','approved',true) returning status, is_internal`);
+  assert.deepEqual([r.rows[0].status, r.rows[0].is_internal], ['pending', false]);
+});
+test('5-d) service_role JWT / JWT 없는 SQL·cron 컨텍스트는 각각 기존대로 허용', async () => {
+  const db = await world();
+  const svc = await as(db, 'service_role', null, `insert into centers(name, status, is_internal) values ('svc','approved',true) returning status, is_internal`, 'service_role');
+  assert.deepEqual([svc.rows[0].status, svc.rows[0].is_internal], ['approved', true]);
+  const noJwt = await as(db, 'service_role', null, `insert into centers(name, status, is_internal) values ('cron','approved',true) returning status, is_internal`, undefined);
+  assert.deepEqual([noJwt.rows[0].status, noJwt.rows[0].is_internal], ['approved', true]);
 });
 test('5-b) anon은 여전히 INSERT 불가(RLS)', async () => {
   const db = await world();
