@@ -15,7 +15,16 @@ export type SendResult = {
   status: "sent" | "failed";
   providerMessageId?: string;
   message?: string;
+  // 재시도하면 성공할 수 있는 실패(프록시 타임아웃/네트워크/5xx/429)이면 true. 제공자가 명시적으로 거절한 경우(잘못된 번호/템플릿 등)는 false.
+  // 큐 디스패처(send-alimtalk)가 "다시 시도할지, 실패로 확정할지"를 판단하는 근거다(2026-10-08).
+  retryable?: boolean;
 };
+
+// 외부(Oracle 프록시) 호출이 멈추면 Edge Function 전체가 매달려 다음 분 cron과 겹쳐 중복 발송을 부른다 — 반드시 타임아웃을 둔다.
+export const ALIGO_TIMEOUT_MS = 10_000;
+
+// 재시도 가능한 오류(네트워크/타임아웃/HTTP 5xx·429)를 구분하는 표식.
+class AligoTransientError extends Error {}
 
 function isProxyConfigured(): boolean {
   return !!(ALIGO_PROXY_URL && ALIGO_PROXY_TOKEN);
@@ -37,23 +46,30 @@ async function callAligoProxy(
     );
   }
 
-  const res = await fetch(`${ALIGO_PROXY_URL}${path}`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${ALIGO_PROXY_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${ALIGO_PROXY_URL}${path}`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${ALIGO_PROXY_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(ALIGO_TIMEOUT_MS),
+    });
+  } catch {
+    // 타임아웃/연결 실패 — 본문이나 URL을 오류 메시지에 싣지 않는다.
+    throw new AligoTransientError("알리고 프록시에 연결하지 못했어요(시간 초과 또는 네트워크 오류)");
+  }
 
   const resJson = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    throw new Error(
-      resJson?.provider?.message ??
-        resJson?.error ??
-        `알리고 프록시 요청 실패 (HTTP ${res.status})`,
-    );
+    const message = resJson?.provider?.message ??
+      resJson?.error ??
+      `알리고 프록시 요청 실패 (HTTP ${res.status})`;
+    if (res.status >= 500 || res.status === 429) throw new AligoTransientError(message);
+    throw new Error(message);
   }
 
   return resJson?.provider ?? {};
@@ -235,6 +251,7 @@ export async function sendViaAligo(input: {
       message: err instanceof Error
         ? err.message
         : "발송 중 알 수 없는 오류",
+      retryable: err instanceof AligoTransientError,
     };
   }
 }

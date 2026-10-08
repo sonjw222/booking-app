@@ -42,6 +42,7 @@ import {
   sendViaAligo, isAligoConfigured, fetchAligoTemplateList,
   createAligoTemplate, requestAligoTemplateApproval,
 } from "../_shared/aligo.ts";
+import { dispatchQueuedMessage, type DispatchDeps, type QueuedMessage } from "../_shared/alimtalkDispatch.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -222,55 +223,71 @@ Deno.serve(async (req: Request) => {
       return json({ error: "권한이 없어요" }, 403);
     }
 
-    const { data: msg, error: msgErr } = await admin
-      .from("messages")
-      .select("id, center_id, content, target_profile_ids, status, aligo_template_code")
-      .eq("id", body.messageId)
-      .maybeSingle();
-    if (msgErr || !msg) return json({ error: "메시지를 찾을 수 없어요" }, 404);
-    if (msg.status !== "scheduled") return json({ processed: 0, skipped: "already-handled" });
+    // 2026-10-08: 발송 전 원자적 선점 + 수신자별 'sent' 로그 기반 재개 + 외부 호출 타임아웃(_shared/alimtalkDispatch.ts, aligo.ts) —
+    // 매분 cron이 겹치거나 중간에 끊겨도 같은 수신자에게 두 번 보내지 않는다. 판정 로직은 순수 모듈에서 단위 테스트된다.
+    // (service_role이 messages를 읽고 claimed_at/status/sent_at을 갱신하려면 fix_alimtalk_dispatch_claim_20261008.sql의 GRANT가 필요하다.)
+    const deps: DispatchDeps = {
+      async claim(id, nowIso, leaseCutoffIso) {
+        const { data, error } = await admin
+          .from("messages")
+          .update({ claimed_at: nowIso })
+          .eq("id", id)
+          .eq("status", "scheduled")
+          .or(`claimed_at.is.null,claimed_at.lt.${leaseCutoffIso}`)
+          .select("id, center_id, content, target_profile_ids, status, aligo_template_code, created_at");
+        if (error) throw new Error(`claim 실패: ${error.code ?? "unknown"}`);   // 메시지 본문/수신자는 오류에 싣지 않는다
+        return ((data ?? [])[0] as QueuedMessage | undefined) ?? null;
+      },
+      async isAddonEnabled(centerId) {
+        const { data } = await admin.from("center_subscriptions").select("alimtalk_addon").eq("center_id", centerId).maybeSingle();
+        return !!data?.alimtalk_addon;
+      },
+      async loadSentProfileIds(id) {
+        const { data } = await admin.from("notification_logs").select("profile_id").eq("message_id", id).eq("status", "sent");
+        return new Set((data ?? []).map((r: { profile_id: string | null }) => r.profile_id).filter((v): v is string => !!v));
+      },
+      async loadRecipients(profileIds) {
+        const { data } = await admin.from("profiles").select("id, accounts(phone)").in("id", profileIds);
+        return (data ?? []).map((p) => ({
+          id: (p as { id: string }).id,
+          phone: (p as unknown as { accounts?: { phone?: string | null } }).accounts?.phone ?? null,
+        }));
+      },
+      send: (input) => sendViaAligo(input),
+      async insertLog(entry) {
+        const { error } = await admin.from("notification_logs").insert({
+          center_id: entry.centerId,
+          profile_id: entry.profileId,
+          channel: "alimtalk",
+          cost: entry.cost,
+          status: entry.status,
+          message_id: entry.messageId,
+          ...(entry.error ? { error: entry.error } : {}),
+        });
+        if (!error) return "inserted";
+        if ((error as { code?: string }).code === "23505") return "duplicate";   // 같은 (message, profile) 'sent' 로그가 이미 있음 = 다른 실행이 보냄
+        console.error("[send-alimtalk]", JSON.stringify({ event: "log_insert_failed", messageId: entry.messageId, code: (error as { code?: string }).code ?? null }));
+        return "inserted";
+      },
+      async finalize(id, patch) {
+        const update = "release" in patch ? { claimed_at: null } : { status: patch.status, sent_at: patch.sentAtIso };
+        const { error } = await admin.from("messages").update(update).eq("id", id);
+        if (error) throw new Error(`finalize 실패: ${error.code ?? "unknown"}`);
+      },
+    };
 
-    // 알림톡 애드온을 신청하지 않은 센터는 자동 발송도 막는다(SMS 대체발송 포함 — 둘 다 같은
-    // 알리고 계정으로 나가 플랫폼에 비용이 발생함, add_center_alimtalk_addon_billing.sql).
-    // status를 'scheduled'로 남겨두면 매분 도는 dispatch-alimtalk cron이 계속 이 행을 다시
-    // 집어서 무한 재시도하므로 반드시 'failed'로 바꿔야 한다.
-    const { data: sub } = await admin
-      .from("center_subscriptions")
-      .select("alimtalk_addon")
-      .eq("center_id", msg.center_id)
-      .maybeSingle();
-    if (!sub?.alimtalk_addon) {
-      await admin.from("messages").update({ status: "failed", sent_at: new Date().toISOString() }).eq("id", msg.id);
-      return json({ processed: 0, skipped: "addon-disabled" });
+    try {
+      const result = await dispatchQueuedMessage(deps, body.messageId);
+      if (!result.claimed) return json({ processed: 0, skipped: "already-handled" });
+      if ("skipped" in result) return json({ processed: 0, skipped: result.skipped });
+      if (result.retryScheduled > 0 || result.failed > 0) {
+        console.error("[send-alimtalk]", JSON.stringify({ event: "dispatch_issue", messageId: body.messageId, sent: result.sent, failed: result.failed, retryScheduled: result.retryScheduled, finalStatus: result.finalStatus }));
+      }
+      return json({ processed: result.processed, sent: result.sent, failed: result.failed, retryScheduled: result.retryScheduled });
+    } catch (e) {
+      console.error("[send-alimtalk]", JSON.stringify({ event: "dispatch_error", messageId: body.messageId, error: e instanceof Error ? e.message : "unknown" }));
+      return json({ error: "발송 처리에 실패했어요" }, 500);
     }
-
-    const { data: profiles } = await admin
-      .from("profiles")
-      .select("id, name, accounts(phone)")
-      .in("id", msg.target_profile_ids);
-
-    let sent = 0;
-    let failed = 0;
-    for (const p of profiles ?? []) {
-      const phone = (p as unknown as { accounts?: { phone?: string | null } }).accounts?.phone;
-      if (!phone) { failed++; continue; }
-      const result = await sendViaAligo({ to: phone, content: msg.content, templateCode: msg.aligo_template_code ?? undefined });
-      await admin.from("notification_logs").insert({
-        center_id: msg.center_id,
-        profile_id: p.id,
-        channel: "alimtalk",
-        cost: result.status === "sent" ? 9 : 0, // 알림톡 건당 단가(원) — 실제 알리고 단가 확정 후 조정
-        status: result.status,
-      });
-      if (result.status === "sent") sent++; else failed++;
-    }
-
-    await admin
-      .from("messages")
-      .update({ status: failed > 0 && sent === 0 ? "failed" : "sent", sent_at: new Date().toISOString() })
-      .eq("id", msg.id);
-
-    return json({ processed: (profiles ?? []).length, sent, failed });
   }
 
   // 경로 1: 즉시 발송 — 매니저 화면에서 직접 호출
