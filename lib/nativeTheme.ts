@@ -14,7 +14,7 @@
   함 — 테마 판정 로직 자체가 어긋나면 화면이 깜빡이는 것과 같은 이유).
 */
 
-import { Capacitor, registerPlugin } from "@capacitor/core";
+import { Capacitor, registerPlugin, SystemBars, SystemBarsStyle, SystemBarType } from "@capacitor/core";
 
 interface WebViewThemeNativePlugin {
   setBackground(options: { hex: string }): Promise<void>;
@@ -48,14 +48,23 @@ export function syncNativeWebViewBackground(dark: boolean): void {
 // iOS/Android 둘 다 해결된다(Style.Dark="어두운 배경용 밝은 글자", Style.Light="밝은
 // 배경용 어두운 글자" — 공식 패키지 정의 주석 확인함, 이름이 반직관적이라 착각하기
 // 쉬움).
+// 2026-10-08 — Android는 @capacitor/status-bar 대신 Capacitor core의 SystemBars(modern API)로 상태바 아이콘 색을 정한다.
+// 이유: Google Play가 Android 15/16에서 지원 중단된 Window.get/setStatusBarColor 사용을 경고하는데, 호출 위치가
+// @capacitor/status-bar 8.0.3의 StatusBar.get/setStatusBarColorDeprecated였다(8.0.4도 Java 소스 동일 — 패치 업데이트로 해결 안 됨).
+// SystemBars는 Capacitor 8 브릿지가 항상 등록하는 core 플러그인이라(Bridge.java) 새 네이티브 구성요소가 아니고, Android에서
+// 같은 WindowInsetsControllerCompat.setAppearanceLightStatusBars(!dark)를 쓴다(SystemBarsStyle.Dark = Style.Dark와 같은 뜻:
+// 어두운 배경용 밝은 아이콘). bar를 StatusBar로 한정해 이전 동작(상태바만 변경, 내비게이션 바는 그대로)을 유지한다.
+// iOS는 기존 @capacitor/status-bar 경로를 그대로 쓴다(오버레이/safe-area 동작 변경 없음).
 export async function syncNativeStatusBarStyle(dark: boolean): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   try {
+    if (Capacitor.getPlatform() === "android") {
+      await SystemBars.setStyle({ style: dark ? SystemBarsStyle.Dark : SystemBarsStyle.Light, bar: SystemBarType.StatusBar });
+      await AndroidStatusBarBackgroundNative.setDark({ dark });
+      return;
+    }
     const { StatusBar, Style } = await import("@capacitor/status-bar");
     await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light });
-    if (Capacitor.getPlatform() === "android") {
-      await AndroidStatusBarBackgroundNative.setDark({ dark });
-    }
   } catch {
     /* 웹/미지원 플랫폼 — 화면엔 영향 없음 */
   }

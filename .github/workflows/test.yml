@@ -26,28 +26,27 @@ concurrency:
   group: shared-live-supabase-tests
   cancel-in-progress: false
 
+# 최소 권한(2026-10-07): 이 workflow의 어떤 job도 repository에 쓰지 않는다. 저장소 기본값도 read지만 명시해 둔다.
+permissions:
+  contents: read
+
 jobs:
-  e2e:
-    name: E2E tests (Playwright, live dev Supabase)
+  # ── E2E checkpoint 체인(2026-10-07) ────────────────────────────────────────────────
+  # 이전에는 한 job이 전체 Playwright suite(67 tests, workers 1)를 돌려 30분 timeout이 나면 Unit/Integration/Build가 전부 skipped되고 trace/screenshot artifact도 올라가지 못했다
+  # (#166/#167/#169에서 같은 패턴 재현). 구조:
+  #  · live dev Supabase를 쓰는 job(E2E 4구간 + Integration)은 needs 체인으로 "항상 한 번에 하나만" 순차 실행한다(같은 TEST_USER/TEST_CENTER 공유). 저장소 전체 concurrency 그룹(shared-live-supabase-tests)도 그대로.
+  #  · 각 구간은 --max-failures=1(같은 환경 문제로 수십 개가 1분씩 timeout 나는 것 방지, 재시도 1회는 유지)로 첫 실패에서 멈추고, 앞 구간이 실패해도 다음 구간은 계속 실행해(!cancelled()) 정보를 최대한 모은다.
+  #  · artifact(trace/video/report)는 retention 3일 — 이 저장소는 PUBLIC이라 artifact가 로그인한 누구에게나 내려받기 가능하고, trace의 네트워크 로그에는 테스트 계정 bearer token이 들어갈 수 있다(짧은 수명이지만 노출 기간을 최소화).
+  #  · 구간 step은 job timeout보다 짧은 step timeout을 가져 job이 강제 종료되기 전에 artifact upload(if: always())가 실행된다. 구간 이름이 artifact 이름에 들어 충돌하지 않는다.
+  #  · Unit/Build는 live DB를 쓰지 않으므로 E2E와 독립(needs 없음, fork PR에서도 실행). Build는 placeholder env만 쓴다.
+  #  · Production 차단: Playwright(tests/e2e/fixtures/env.ts)와 Integration(tests/integration/loadEnv.ts)이 같은 helper(productionGuard)로 Production project ref를 감지하면 시작 전에 hard fail.
+  #  · 모든 spec이 정확히 한 구간에 들어가는지는 tests/unit/ciLiveTestWorkflow.contract.test.ts가 정적으로 검증한다.
+  # live-env-preflight: Secrets가 Production을 가리키거나 대상 URL이 없으면 "한 번의 명확한 실패"로 끝내고 live job(E2E/Integration)은 시작하지 않는다
+  # (예전에는 5개 live job이 각각 같은 guard 오류로 실패). 네트워크/브라우저/DB 접근이 없고 npm ci도 필요 없다. 각 live job의 guard(productionGuard)는 이중 방어로 그대로 유지.
+  live-env-preflight:
+    name: Live-test target preflight (no network — Production이면 실패)
     runs-on: ubuntu-latest
-    # 멈춘(hung) job이 GitHub 기본 360분 제한까지 전역 concurrency 큐를 막는 사고가
-    # 실제로 반복됐다(2026-08-14/15, 12시간·25시간+ 멈춘 run이 뒤 대기열 전체를 정지시킴).
-    # [2026-08-23] E2E 스위트가 여러 세션이 계속 테스트를 추가하며 자라 정상 실행도 20분
-    # 근처에 걸리게 됐다 — PR #86에서 정상 실행 2회가 연속으로 `timeout-minutes: 20`에
-    # 걸려 cancelled됐음을 실측 확인(20분 15초, 20분 6초). integration job이 같은 이유로
-    # 20→35로 상향된 전례(P2-27, docs/TODO.md)와 동일하게 조정.
-    timeout-minutes: 30
-    # Low-Egress Fix Batch(2026-09-11) — push(main)는 항상 직전에 병합된 PR이 pull_request로
-    # 이미 이 스위트 전체를 돌린 같은 코드(merge commit이라 SHA만 다름)라, push에서 또
-    # 돌리면 매 merge마다 라이브 dev Supabase에 똑같은 E2E/통합 테스트를 두 번 태우는
-    # 셈이었다(9/15까지 Supabase Free Plan Egress 절약 필요, PostgREST Egress Audit
-    # 참고). push에서는 이 job(E2E, 라이브 DB 사용)을 건너뛰고 unit/build만 돈다 — PR
-    # 없이 곧장 main에 push하는 드문 경로에서도 build/typecheck는 여전히 걸리므로
-    # 검증이 완전히 사라지지는 않는다. pull_request/workflow_dispatch는 기존과 동일하게
-    # 항상 전체 스위트가 돈다.
-    #
-    # unit/integration과 마찬가지로 fork PR은 Secrets가 없어 애초에 통과할 수 없고, 있어도
-    # 노출시키면 안 되므로 막는다.
+    timeout-minutes: 5
     if: >
       github.event_name != 'push' &&
       (github.event_name != 'pull_request' ||
@@ -57,10 +56,32 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - run: node scripts/ci/liveEnvPreflight.mjs
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+  e2e-1-auth-attendance:
+    name: E2E 1/4 — auth + attendance(첫 실패 지점 우선 확인) (Playwright, live dev Supabase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # unit/integration과 마찬가지로 fork PR은 Secrets가 없어 애초에 통과할 수 없고, 있어도
+    # 노출시키면 안 되므로 막는다.
+    needs: live-env-preflight
+    # preflight가 성공(= Production 아님 확인)했을 때만 시작. push/fork면 preflight가 skipped라 함께 건너뜀.
+    if: ${{ !cancelled() && needs.live-env-preflight.result == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - name: Playwright e2e-1-auth-attendance
+        timeout-minutes: 15
+        run: npx playwright test --max-failures=1 auth\.setup\.ts tests/e2e/auth/ tests/e2e/admin/attendance\.spec
         env:
           # PG_CHECKOUT_ENABLED는 "실제 서비스 출시 전 결제 기능 잠금"용 게이트라(2026-09-04,
           # lib/payments/PaymentProviderFactory.ts) 프로덕션(Vercel)에서만 꺼둬야 하고, CI는
@@ -86,24 +107,197 @@ jobs:
           TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
           TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      # 실패 시 스크린샷/Trace/Video(test-results/)와 HTML Report(playwright-report/)를
-      # 아티팩트로 남긴다 — 성공 시에도 HTML Report는 남겨 결과를 바로 열어볼 수 있게 한다.
       - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        if: always()
         with:
-          name: playwright-report
+          name: playwright-report-auth-attendance
           path: playwright-report/
-          retention-days: 14
+          retention-days: 3
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        if: always()
         with:
-          name: playwright-test-results
+          name: playwright-test-results-auth-attendance
           path: test-results/
-          retention-days: 14
+          retention-days: 3
+          if-no-files-found: ignore
+
+  e2e-2-admin-config:
+    name: E2E 2/4 — admin 설정류(허용 상품·휴무일·예약조건·반복수업) (Playwright, live dev Supabase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: e2e-1-auth-attendance
+    # 앞 구간이 실패해도 계속(정보 수집), 앞 구간이 skipped(push/fork)면 건너뜀
+    if: ${{ !cancelled() && needs.e2e-1-auth-attendance.result != 'skipped' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Playwright e2e-2-admin-config
+        timeout-minutes: 15
+        run: npx playwright test --max-failures=1 auth\.setup\.ts tests/e2e/admin/class-allowed-products tests/e2e/admin/holiday-restores-classes tests/e2e/admin/membership-schedule-rules tests/e2e/admin/recurring-class-per-day-atomicity
+        env:
+          # PG_CHECKOUT_ENABLED는 "실제 서비스 출시 전 결제 기능 잠금"용 게이트라(2026-09-04,
+          # lib/payments/PaymentProviderFactory.ts) 프로덕션(Vercel)에서만 꺼둬야 하고, CI는
+          # 이 게이트와 무관하게 카드/카카오페이/토스페이/계좌이체(mock provider) 전체 흐름을
+          # 계속 검증해야 한다 — 꺼두면 결제수단이 직접결제로 강제 고정되며 즉시 발급되는
+          # 수강권이 없어져(직접결제는 pending) new-class-creation.spec.ts 등 "구매 직후
+          # 즉시 사용" 전제의 기존 테스트가 깨진다(실제로 이 커밋 추가 직후 CI에서 재현됨).
+          NEXT_PUBLIC_PG_CHECKOUT_ENABLED: "true"
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
+          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
+          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
+          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
+          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
+          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
+          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
+          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
+          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
+          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
+          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
+          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
+          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
+          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-admin-config
+          path: playwright-report/
+          retention-days: 3
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-test-results-admin-config
+          path: test-results/
+          retention-days: 3
+          if-no-files-found: ignore
+
+  e2e-3-class-reservation-checkout:
+    name: E2E 3/4 — 새 수업 생성 + 예약 + 결제 (Playwright, live dev Supabase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: e2e-2-admin-config
+    # 앞 구간이 실패해도 계속(정보 수집), 앞 구간이 skipped(push/fork)면 건너뜀
+    if: ${{ !cancelled() && needs.e2e-2-admin-config.result != 'skipped' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Playwright e2e-3-class-reservation-checkout
+        timeout-minutes: 15
+        run: npx playwright test --max-failures=1 auth\.setup\.ts tests/e2e/admin/new-class-creation tests/e2e/reservation/ tests/e2e/checkout/
+        env:
+          # PG_CHECKOUT_ENABLED는 "실제 서비스 출시 전 결제 기능 잠금"용 게이트라(2026-09-04,
+          # lib/payments/PaymentProviderFactory.ts) 프로덕션(Vercel)에서만 꺼둬야 하고, CI는
+          # 이 게이트와 무관하게 카드/카카오페이/토스페이/계좌이체(mock provider) 전체 흐름을
+          # 계속 검증해야 한다 — 꺼두면 결제수단이 직접결제로 강제 고정되며 즉시 발급되는
+          # 수강권이 없어져(직접결제는 pending) new-class-creation.spec.ts 등 "구매 직후
+          # 즉시 사용" 전제의 기존 테스트가 깨진다(실제로 이 커밋 추가 직후 CI에서 재현됨).
+          NEXT_PUBLIC_PG_CHECKOUT_ENABLED: "true"
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
+          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
+          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
+          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
+          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
+          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
+          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
+          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
+          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
+          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
+          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
+          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
+          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
+          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-class-reservation-checkout
+          path: playwright-report/
+          retention-days: 3
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-test-results-class-reservation-checkout
+          path: test-results/
+          retention-days: 3
+          if-no-files-found: ignore
+
+  e2e-4-settings-readiness:
+    name: E2E 4/4 — 예약 설정 + production-readiness (Playwright, live dev Supabase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: e2e-3-class-reservation-checkout
+    # 앞 구간이 실패해도 계속(정보 수집), 앞 구간이 skipped(push/fork)면 건너뜀
+    if: ${{ !cancelled() && needs.e2e-3-class-reservation-checkout.result != 'skipped' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Playwright e2e-4-settings-readiness
+        timeout-minutes: 15
+        run: npx playwright test --max-failures=1 auth\.setup\.ts tests/e2e/settings/ tests/e2e/production-readiness/
+        env:
+          # PG_CHECKOUT_ENABLED는 "실제 서비스 출시 전 결제 기능 잠금"용 게이트라(2026-09-04,
+          # lib/payments/PaymentProviderFactory.ts) 프로덕션(Vercel)에서만 꺼둬야 하고, CI는
+          # 이 게이트와 무관하게 카드/카카오페이/토스페이/계좌이체(mock provider) 전체 흐름을
+          # 계속 검증해야 한다 — 꺼두면 결제수단이 직접결제로 강제 고정되며 즉시 발급되는
+          # 수강권이 없어져(직접결제는 pending) new-class-creation.spec.ts 등 "구매 직후
+          # 즉시 사용" 전제의 기존 테스트가 깨진다(실제로 이 커밋 추가 직후 CI에서 재현됨).
+          NEXT_PUBLIC_PG_CHECKOUT_ENABLED: "true"
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
+          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
+          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
+          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
+          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
+          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
+          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
+          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
+          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
+          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
+          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
+          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
+          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
+          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-settings-readiness
+          path: playwright-report/
+          retention-days: 3
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-test-results-settings-readiness
+          path: test-results/
+          retention-days: 3
           if-no-files-found: ignore
 
   unit:
-    name: Unit tests (no Supabase needed)
+    name: Unit tests (no Supabase needed — E2E와 독립)
     runs-on: ubuntu-latest
     # e2e 이후에 실행 — e2e와 integration이 동시에 돌면 둘 다 같은 공유 테스트 계정/센터의
     # center_settings·classes를 동시에 바꿔 서로의 "저장 전/후 값" assertion을 깨뜨린다
@@ -118,8 +312,6 @@ jobs:
     # 이유 — e2e가 fork PR이라 skipped된 경우(원래 동작)까지 진행시키면 안 되기
     # 때문이다(fork는 Secrets가 없어 build 등 뒷단이 그대로 실패함, 예전엔 cascade로
     # 전부 자동 skip됐던 것 — 그 동작을 그대로 유지).
-    needs: e2e
-    if: always() && (needs.e2e.result == 'success' || (needs.e2e.result == 'skipped' && github.event_name == 'push'))
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -137,27 +329,17 @@ jobs:
   integration:
     name: Integration tests (live dev Supabase)
     runs-on: ubuntu-latest
-    needs: unit
+    # live dev Supabase를 쓰므로 모든 E2E 구간이 끝난 뒤(순차)에만 실행한다(E2E와 동시 실행 금지).
+    # 판단(2026-10-07): E2E가 실패해도 Integration은 실행한다 — Integration은 자체 self-healing 정리(공유 fixture 사전 정리)를 가지고 있고, E2E 실패와 독립된 신호
+    # (dev DB/계정은 정상인데 E2E만 깨졌는지, 환경 전체가 깨졌는지)를 주기 때문이다. E2E가 fixture를 오염시켰더라도 Integration 실패는 "환경 오염" 단서가 된다.
+    # 사용자가 workflow를 취소하면(!cancelled()) 실행하지 않고, push/fork로 E2E가 skipped면 건너뜀.
+    needs: e2e-4-settings-readiness
+    if: ${{ !cancelled() && needs.e2e-4-settings-readiness.result != 'skipped' }}
     # 20분으로는 통합 테스트 스위트가 계속 늘어나며 정상 실행도 종종 잘렸다(PR #66, #67
     # 모두 19분대에 timeout으로 cancelled — 실패가 아니라 시간 부족). timeout 자체를
     # 없애면 2026-08-14/15처럼 진짜 멈춘 job이 전역 큐를 몇 시간씩 막는 사고가 재발하므로,
     # 없애는 대신 정상 실행 기록(과거 30~34분)을 감안해 35분으로 늘린다.
     timeout-minutes: 35
-    # workflow_dispatch에서는 항상 실행.
-    # pull_request에서는 "같은 저장소 브랜치 간" PR일 때만 실행 — fork에서 온 PR은
-    # GitHub이 Secrets를 주입하지 않아 애초에 통과할 수 없고, 주입되더라도 남의 fork에
-    # 우리 Secrets를 노출시키면 안 되므로 명시적으로 막는다.
-    # 이 조건 덕분에 "feature 브랜치 → PR" 단계에서도(merge 전) 통합 테스트가 돌아
-    # PR 자체가 검증 게이트 역할을 한다 — 이전 버전은 pull_request를 전부 건너뛰어
-    # merge 이후(push to main)에야 실행됐던 문제를 수정함.
-    #
-    # Low-Egress Fix Batch — push(main)에서는 e2e와 마찬가지로 건너뛴다(라이브 DB 통합
-    # 테스트, 바로 위 e2e job의 주석과 동일한 이유 — 직전 PR의 pull_request 실행이 이미
-    # 같은 코드를 검증했음). unit은 push에서도 항상 돌므로 needs: unit 자체는 그대로 둔다.
-    if: >
-      github.event_name != 'push' &&
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -186,14 +368,9 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
   build:
-    name: Build (production, typecheck 포함)
+    name: Build (production, typecheck 포함 — placeholder env, live DB 미사용)
     runs-on: ubuntu-latest
-    # Low-Egress Fix Batch — push에서는 integration이 skipped되므로(위 job 참고),
-    # unit job과 동일한 이유(+동일한 fork-PR 예외 처리)로 "성공했거나 push라서
-    # 건너뛰어졌으면 계속 진행" 조건을 둔다. push에서도 build(typecheck 포함)는 항상
-    # 돌아야 main 직접 push 경로의 검증이 완전히 사라지지 않는다.
-    needs: integration
-    if: always() && (needs.integration.result == 'success' || (needs.integration.result == 'skipped' && github.event_name == 'push'))
+    # live DB를 쓰지 않으므로(placeholder env, 빌드/typecheck만) E2E/Integration 결과와 독립으로 항상 실행한다 — E2E 실패/timeout이 build 결과를 가리지 않게.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -204,5 +381,8 @@ jobs:
       - run: npm ci
       - run: npm run build
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: https://build-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: build-placeholder-anon-key
+          NEXT_PUBLIC_PAYMENT_PROVIDER: mock
+          NEXT_PUBLIC_BILLING_ENABLED: "false"
+          NEXT_PUBLIC_PG_CHECKOUT_ENABLED: "false"

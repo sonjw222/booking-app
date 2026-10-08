@@ -268,10 +268,10 @@ describe("계정 탈퇴 — 실제 개인정보 익명화 + auth 삭제 (P1-18)"
       // best-effort 정리 — 위 어느 단언이 실패해도(=아직 배포 전이라 old 코드가 호출돼
       // 토큰/파일이 안 지워진 경우 포함) 이 테스트가 운영 프로젝트에 fixture를 남기지 않게 한다.
       if (accountId2) {
-        await admin.from("push_subscriptions").delete().eq("account_id", accountId2).catch(() => {});
-        await admin.from("native_push_tokens").delete().eq("account_id", accountId2).catch(() => {});
-        await admin.from("profiles").delete().eq("account_id", accountId2).catch(() => {});
-        await admin.from("accounts").delete().eq("id", accountId2).catch(() => {});
+        await Promise.resolve(admin.from("push_subscriptions").delete().eq("account_id", accountId2)).catch(() => {});   // PostgrestFilterBuilder는 PromiseLike라 .catch가 없다(Promise.resolve로 감싼다)
+        await Promise.resolve(admin.from("native_push_tokens").delete().eq("account_id", accountId2)).catch(() => {});   // PostgrestFilterBuilder는 PromiseLike라 .catch가 없다(Promise.resolve로 감싼다)
+        await Promise.resolve(admin.from("profiles").delete().eq("account_id", accountId2)).catch(() => {});   // PostgrestFilterBuilder는 PromiseLike라 .catch가 없다(Promise.resolve로 감싼다)
+        await Promise.resolve(admin.from("accounts").delete().eq("id", accountId2)).catch(() => {});   // PostgrestFilterBuilder는 PromiseLike라 .catch가 없다(Promise.resolve로 감싼다)
       }
       await admin.storage.from("avatars").remove([avatarKey]).catch(() => {});
       if (authId2) await admin.auth.admin.deleteUser(authId2).catch(() => {});

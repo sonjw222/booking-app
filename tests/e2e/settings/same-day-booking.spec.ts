@@ -86,7 +86,7 @@ test("당일예약 ON→예약성공→취소→OFF저장→새로고침→다�
   await expect(reserveButton).toBeVisible();
 
   // ④ 관리자 화면에서 실제로 OFF 저장
-  await gotoManagerSettings(page);
+  await gotoManagerSettings(page, centerAId);
   await toggleSettingSwitch(page, "당일 예약 허용", false);
   await saveManagerSettings(page);
   const afterOff = await fetchSettingsAdmin(centerAId);

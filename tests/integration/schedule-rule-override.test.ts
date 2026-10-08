@@ -1,5 +1,10 @@
 /*
-  P1 신규 정책: "관리자가 수업에서 직접 지정한 수강권(class_allowed_products)은
+  [2026-10-07 정책 정렬] fix_reservation_integrity_20261003.sql([F2])이 아래 "직접 지정 수강권이 schedule_rules를 우회(override)" 정책을 **제거**했다:
+  이제 'selected'로 지정된 상품도 예약조건(membership_schedule_rules)을 건너뛰지 않는다(지정 AND 예약조건 AND 잔여/기간).
+  이 파일의 E / E-보조 / J는 예전 override 기대(사용 가능)였고, 라이브 정의(Production = dev)와 어긋나 실패했다 → 새 정책(차단)으로 갱신했다.
+  새 정책은 tests/sql/reservation-integrity.test.mjs(PGlite)도 검증한다. 아래 본문 설명 중 "override" 표현은 역사적 맥락이다.
+
+  P1 신규 정책(역사적, 위 [F2]로 대체됨): "관리자가 수업에서 직접 지정한 수강권(class_allowed_products)은
   membership_schedule_rules보다 우선한다" — RPC/DB 레벨 회귀 테스트(A~J).
 
   fix_membership_schedule_rule_override_draft_proposed.sql이 아직 Supabase에 적용되지
@@ -273,7 +278,7 @@ describe("D~F: '특정 수강권 직접 지정' — schedule_rules override(신�
     expect(res.data.status).toBe("confirmed");
   });
 
-  it("E(★핵심): schedule rule 있음 + 특정 수강권 직접 지정 + rule 불일치 → 사용 가능(override)", async () => {
+  it("E(F2 정책): schedule rule 있음 + 특정 수강권 직접 지정 + rule 불일치 → 사용 불가(지정도 예약조건을 건너뛰지 않음)", async () => {
     const cls = await createFutureTestClass(centerAId, { title: "P1override-E", hoursFromNow: 504, passSelectionMode: "selected" });
     cleanupClassIds.push(cls.id);
     const dow = kstDowFromIso(cls.startTime);
@@ -284,17 +289,17 @@ describe("D~F: '특정 수강권 직접 지정' — schedule_rules override(신�
     const mem = await createMembershipForProduct(centerAId, memberA.profileId, passA.id);
 
     await asMemberA();
-    // 목록 표시 정책도 override를 반영해야 함(목록≠실제 RPC 불일치가 없어야 함).
+    // 목록(usable_memberships_for_classes)과 실제 RPC가 같은 판정이어야 한다(둘 다 차단).
     const list = await supabase.rpc("usable_memberships_for_classes", { p_class_ids: [cls.id], p_profile_id: memberA.profileId });
     expect(list.error).toBeNull();
-    expect((list.data ?? []).some((r: any) => r.membership_id === mem.id)).toBe(true);
+    expect((list.data ?? []).some((r: any) => r.membership_id === mem.id)).toBe(false);
 
     const res = await supabase.rpc("reserve_with_membership", { p_class_id: cls.id, p_profile_id: memberA.profileId, p_membership_id: mem.id });
-    expect(res.error).toBeNull();
-    expect(res.data.status).toBe("confirmed");
+    expect(res.error).not.toBeNull();
+    expect(res.error!.message).toContain("사용할 수 없는 수강권");
   });
 
-  it("E-보조: 같은 override 조건에서 reserve_class(자동 매칭)도 통과한다", async () => {
+  it("E-보조(F2 정책): 같은 조건에서 reserve_class(자동 매칭)도 사용 가능한 수강권이 없어 거부된다", async () => {
     const cls = await createFutureTestClass(centerAId, { title: "P1override-E2", hoursFromNow: 505, passSelectionMode: "selected" });
     cleanupClassIds.push(cls.id);
     const dow = kstDowFromIso(cls.startTime);
@@ -306,8 +311,10 @@ describe("D~F: '특정 수강권 직접 지정' — schedule_rules override(신�
 
     await asMemberA();
     const res = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: memberA.profileId });
-    expect(res.error).toBeNull();
-    expect(res.data.status).toBe("confirmed");
+    expect(res.error).not.toBeNull();
+    expect(res.error!.message).toContain("사용할 수 있는 수강권이 없어요");
+    const { data: rows } = await supabase.from("reservations").select("id").eq("class_id", cls.id);
+    expect((rows ?? []).length).toBe(0);
   });
 
   it("F: schedule rule 불일치 + 다른 product(B)만 class_allowed_products에 지정 → passA는 여전히 사용 불가(override가 새지 않음)", async () => {
@@ -380,8 +387,8 @@ describe("G~I: override는 schedule_rules만 우회함 — 다른 정상 조건�
   });
 });
 
-describe("J: 새로 구매(재발급)한 membership도 동일한 override를 받는다", () => {
-  it("J: 기존 membership을 지우고 새로 발급해도, 같은 product면 override가 그대로 적용된다", async () => {
+describe("J: 새로 구매(재발급)한 membership도 동일한 예약조건 판정을 받는다(F2 정책)", () => {
+  it("J: 기존 membership을 지우고 새로 발급해도, 같은 product면 rule 불일치로 계속 차단된다(재발급이 우회 경로가 아님)", async () => {
     const cls = await createFutureTestClass(centerAId, { title: "P1override-J", hoursFromNow: 510, passSelectionMode: "selected" });
     cleanupClassIds.push(cls.id);
     const dow = kstDowFromIso(cls.startTime);
@@ -402,8 +409,8 @@ describe("J: 새로 구매(재발급)한 membership도 동일한 override를 받
 
     await asMemberA();
     const res = await supabase.rpc("reserve_with_membership", { p_class_id: cls.id, p_profile_id: memberA.profileId, p_membership_id: newMem.id });
-    expect(res.error).toBeNull();
-    expect(res.data.status).toBe("confirmed");
+    expect(res.error).not.toBeNull();
+    expect(res.error!.message).toContain("사용할 수 없는 수강권");
 
     // 다음 테스트/재실행 오염 방지 — 표준 fixture 상태로 복구
     await asManagerA();

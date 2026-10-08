@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-10-08 — 출시 전 통합 branch (integration/pre-android-release-20261008, 코드/문서만)
+- CI/dev bootstrap(#170 포함)·DB/API 보안·운영 안정성·R8·SystemBars 1차·소규모 안전 branch를 한 branch로 통합. 중복(center guard standalone, #170)은 병합하지 않음. Production 적용 상태/미적용 SQL 분류는 `docs/RELEASE_INTEGRATION_20261008.md`.
+
+## 2026-10-08 — 출시 후 운영 안정성: 오류 기록 기반 / FCM 완료 의미 / 알림톡 선점·재시도 (코드 + 새 migration 파일, 미적용)
+- 클라이언트 오류: `lib/errorReporting.ts`(구조화 레코드, 이메일/전화/JWT/토큰/query 제거, reporter 등록으로 향후 Sentry 연결, DSN 없이 동작) + `app/error.tsx`가 기록, `app/global-error.tsx` 추가.
+- `send-web-push`: 알림별 판정(`_shared/pushOutcome.ts`) — 전달됨/영구 실패/대상 없음만 `pushed_at` 기록, 일시 실패·FCM 설정 누락·토큰 발급 실패는 비워 재시도(생성 후 30분, 이후 포기). 설정 누락은 응답 500 + 구조화 로그. FCM/OAuth/웹푸시 호출 타임아웃(10초), FCM 네트워크 예외가 배치를 죽이지 않음.
+- `send-alimtalk` 큐 디스패치: 발송 전 원자적 선점(`messages.claimed_at`, 10분 임대), 수신자별 `notification_logs.message_id` + (message, profile) `sent` 유일 인덱스로 중복 방지·재개, Aligo 프록시 타임아웃과 `retryable` 구분(재시도 가능 실패는 선점만 풀어 다음 분에 남은 수신자만 재시도, 30분 창).
+- 새 migration(문제별 1개, **미적용**): `fix_alimtalk_dispatch_claim_20261008.sql`(+rollback/verify). ⚠ 같은 파일이 `service_role`의 `messages` SELECT/UPDATE(status, sent_at, claimed_at) 권한도 추가한다 — Production `service_role`에는 `messages` DELETE 권한만 있어(`fix_service_role_grants_full_audit.sql`) 큐 디스패치가 지금도 막혀 있을 가능성이 있다(런타임 확인 필요: verify SQL 3번).
+
 ## 2026-10-06 — 광고성 알림톡 팬아웃에서 탈퇴 계정 제외 (SQL 파일/테스트만, Production 적용 여부는 별도 확인)
 - `fix_marketing_consent_fanout.sql`의 `evaluate_notification_rules()` 광고성 두 분기(`expired_rebuy`, `birthday`)에 `a.deactivated_at is null` 추가 — 탈퇴 전 `marketing_consent`가 true였던 계정이 광고성 자동 발송 대상에 남던 문제. 필수 운영 알림(`count_low`, `membership_expiring`, `pause_ending`)은 변경 없음.
 - 오래된 PR #164(160+ commit 뒤처짐)를 최신 main 위에서 최소 범위로 재구현. 정적 테스트 `privacyReleaseBlockers.staticCheck.test.ts` 강화.

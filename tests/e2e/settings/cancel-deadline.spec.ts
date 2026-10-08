@@ -70,7 +70,7 @@ test.afterAll(async () => {
 
 test("취소기한 2시간 — 3시간 뒤 수업은 1시간 전이라 취소 성공 (실브라우저 end-to-end)", async ({ page, browser }) => {
   // 관리자 화면에서 실제로 "그룹 수업 취소" = 0일 전, 지금부터 2시간 뒤 시각으로 저장
-  await gotoManagerSettings(page);
+  await gotoManagerSettings(page, centerAId);
   await setDaysBeforeTime(page, "그룹 수업 취소", 0, ALWAYS_FUTURE_TODAY_TIME);
   await saveManagerSettings(page);
   const saved = await fetchSettingsAdmin(centerAId);
@@ -104,7 +104,7 @@ test("취소기한 2시간 — 1시간 뒤 수업은 이미 지나서 취소 실
   // KST 날짜 - days). 그래서 "이미 지남"을 표현하려면 지금보다 과거 시각을 써야 한다
   // (위 성공 테스트처럼 미래 시각을 쓰면 수업이 몇 시간 뒤든 항상 마감 전이라 성공한다 —
   // 실제로 이 버그로 테스트가 실패하는 게 CI에서 확인됨).
-  await gotoManagerSettings(page);
+  await gotoManagerSettings(page, centerAId);
   await setDaysBeforeTime(page, "그룹 수업 취소", 0, ALWAYS_PAST_TODAY_TIME);
   await saveManagerSettings(page);
 

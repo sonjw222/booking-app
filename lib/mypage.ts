@@ -9,6 +9,7 @@ import { refundMembershipApi } from "./payments/tossPaymentApi";
 import { getMyAccountId } from "./authAccount";
 import { disableNativePush } from "./nativePush";
 
+import { todayKstYmd } from "./membershipExpiry";
 export type Profile = { name: string; phone: string | null; isMember: boolean; isManager: boolean; isPlatformAdmin: boolean };
 
 export type Membership = {
@@ -44,7 +45,7 @@ export type MembershipDisplayTier = 0 | 1 | 2 | 3; // 0=활성, 1=시작 예정,
 // display 전용이 아닌 데이터 계층(이 파일)의 순수 함수로 둔다.
 export function classifyMembershipDisplay(
   m: Pick<Membership, "unlimited" | "remainingCount" | "expiresAt" | "startsAt" | "status">,
-  todayStr: string = new Date().toISOString().slice(0, 10),
+  todayStr: string = todayKstYmd(),
 ): { tier: MembershipDisplayTier; isExpired: boolean; isExhausted: boolean; isPending: boolean; isPaused: boolean } {
   const isExpired = !m.unlimited && m.expiresAt != null && m.expiresAt < todayStr;
   const isExhausted = !m.unlimited && m.remainingCount != null && m.remainingCount <= 0;

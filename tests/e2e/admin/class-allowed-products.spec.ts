@@ -16,6 +16,7 @@ import {
 } from "../fixtures/testData";
 import { getFixtureAdminClient } from "../../integration/setup";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { gotoManagerClasses } from "../fixtures/pageHelpers";
 
 /*
   P3: 수업별 사용 가능 수강권(class_allowed_products) 관리 UI.
@@ -52,7 +53,7 @@ const foreignCenterCleanup: { centerId: string; productId: string } = { centerId
 
 async function gotoManagerClassesDay(page: Page, kstDate: string): Promise<void> {
   const [y, m, d] = kstDate.split("-").map(Number);
-  await page.goto("/manager/classes");
+  await gotoManagerClasses(page, centerAId);
   await expect(page.locator(".cal-title")).toBeVisible();
   for (let i = 0; i < 14; i++) {
     const title = (await page.locator(".cal-title").innerText()).trim(); // "YYYY.MM"

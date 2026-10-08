@@ -3903,3 +3903,27 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 - [ ] REQUIREMENTS·DATABASE·ROUTES의 상태를 함께 갱신했다.
 - [ ] CHANGELOG에 날짜, 변경, 검증 결과를 기록했다.
 - [ ] 완료되지 않은 하위 작업을 숨기지 않고 별도 TODO로 남겼다.
+
+## 정적 감사 후속 (2026-10-07, docs/STATIC_AUDIT_20261007.md)
+- [x] `sync-test-payment-center-member.test.ts` 세션 정리 훅 추가(bootstrap 브랜치)
+- [ ] P2: UI `e.message` 원문 노출(약 223곳) 공통 에러 변환 도입(승인 필요한 대규모 변경)
+- [ ] P3: 남은 UTC 날짜 slice(KST 새벽 위험) — safe-followups 병합 후 재감사
+- [ ] P3: `div onClick` 67곳 role/키보드 접근성 점검, `NEXT_PUBLIC_PORTONE_STORE_ID` 잔재 확인
+
+## E2E dev 안정화에서 발견한 앱 이슈 (2026-10-07) — 앱 코드는 이 브랜치에서 바꾸지 않음
+- [x] (2026-10-08 통합 branch에 반영: fix/manager-class-pass-guidance-20261008) P1: 관리자 수업 수정 시트의 `.schedule-rule-override-note`가 "직접 지정이 우선 — 예약조건과 무관하게 사용할 수 있어요"라고 안내하지만, 라이브 서버 정책([F2], fix_reservation_integrity_20261003.sql)은 지정 AND 예약조건이라 실제로는 쓸 수 없다. 문구/로직 정정 필요(app/manager/classes/page.tsx ~1648).
+- [x] (2026-10-08 수정) 결제 화면(`app/checkout/page.tsx`)에서 비로그인 방문자가 "결제하기"를 누르면 `product.publicFallback` 가드가 "로그인 정보를 확인하지 못했어요…"만 띄우고 "로그인이 필요해요" + "로그인 하러 가기" 경로를 가로채던 회귀 — 가드가 세션 유무를 확인해 세션이 없으면 "로그인이 필요해요"(링크가 붙고 현재 checkout URL을 next로 보존)로 보내도록 수정. 유닛 `checkoutAnonymousLoginRequired.test.ts` + E2E `auth/post-login-return`이 보호한다.
+
+## 운영 안정성 후속 (2026-10-08, 이 branch에서 처리하지 않은 것)
+- [ ] P1: `fix_alimtalk_dispatch_claim_20261008.sql` 적용 전, Production에서 `service_role`이 `messages`를 읽을 수 있는지 확인(verify SQL 3번 `has_table_privilege`). 막혀 있었다면 자동 알림톡이 그동안 발송되지 않았을 수 있다.
+- [ ] P2: 웹푸시/FCM 배치에는 선점이 없어 겹치는 실행이 같은 알림을 다시 보낼 수 있다(`pushed_at`은 처리 끝에서 기록). 재시도 행이 늘면 최대 200건 배치를 오래된 재시도 행이 채울 수 있다(30분 후 포기로 제한).
+- [ ] P2: `count_low` 알림톡이 임계값 회원에게 매일 반복 발송, OTP 실패 시 시도 횟수 소진(send-phone-otp는 별도 branch 소유).
+- [ ] P3: 오류 보고 sink를 외부 서비스(Sentry 등)에 연결 — `registerErrorReporter` 한 곳.
+
+## 출시 전 통합 후속 (2026-10-08, docs/RELEASE_INTEGRATION_20261008.md)
+- [ ] P1: 알림톡 claim migration Production 적용 전 코드 리뷰·verify(별도 실행), 그 뒤에 `send-alimtalk`/`send-web-push` 배포
+- [ ] P2: 알림톡 at-least-once 한계(크래시/Aligo timeout 재발송, 10분 임대 초과, 영구 실패 재시도 로그 누적), FCM 네이티브 일시 실패 미재시도·`INVALID_ARGUMENT` 토큰 삭제·푸시 선점 비원자
+- [ ] P2: Android 새 AAB + 서명 release 실기기 QA(소셜 로그인, FCM, 캘린더/앱설정 plugin, cold start 상태바 색, allowBackup 병합 manifest). Play deprecated API 경고 제거는 UNKNOWN(SystemBars 2차 필요)
+- [ ] P3: center guard `search_path`에 `pg_temp` 고정 검토, OTP 클라이언트 IP 헤더 신뢰 범위, preflight deny-list → DEV allow-list, `mobile-ui-qa.yml` secret을 `env:`로 전달
+- [ ] watch: `member-full-lifecycle.spec.ts` 로컬 1회 간헐 실패(checkout "상품 정보를 찾을 수 없어요" → 재시도 시 waitlist 설정 0). 단독/전체/CI 재실행 모두 통과 — blocker 아님, 재발 시 trace 확인
+- [ ] 미병합 candidate: `fix/manager-center-persistence-20261007`, `fix/postlaunch-maintenance-refresh-20261007`(서로 `app/manager/*` 겹침), docs branch 선별 반영

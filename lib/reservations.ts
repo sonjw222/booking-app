@@ -9,6 +9,7 @@ import { getKstMonthUtcRange } from "./kst";
 import { getMyAccountId as getMyAccountIdBase } from "./authAccount";
 import { appendTrainerNames } from "./instructorDisplay";
 
+import { todayKstYmd } from "./membershipExpiry";
 // ---------------- 타입 ----------------
 
 export type CenterInfo = {
@@ -398,7 +399,7 @@ export async function fetchMyGoodsByCenter(
     .in("center_id", centerIds)
     .eq("status", "active");
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayKstYmd();
   const out: Record<string, MyGoods[]> = {};
   for (const m of (data ?? []) as any[]) {
     if (m.products?.product_kind !== "goods") continue;
@@ -558,7 +559,7 @@ export async function fetchPurchasableProductsByClass(
   if (allProductsRes.error) throw new Error("구매 가능한 수강권을 불러오지 못했어요: " + allProductsRes.error.message);
   if (ownedRes.error) throw new Error("보유 수강권을 확인하지 못했어요: " + ownedRes.error.message);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayKstYmd();
   const ownedProductIds = new Set<string>();
   for (const m of (ownedRes.data ?? []) as any[]) {
     if (!m.product_id) continue;

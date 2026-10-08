@@ -9,6 +9,7 @@
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
 
+import { todayKstYmd } from "./membershipExpiry";
 // query가 이미 status='active' && expires_at>=today로 필터링한 뒤 남는 판단은
 // remaining_count뿐이다 — null(무제한권)이거나 1 이상이면 예약에 쓸 수 있다.
 // 이 순수 predicate만 따로 export해 단위 테스트로 검증한다(NAV-001).
@@ -113,7 +114,7 @@ export async function fetchHasUsableMembership(): Promise<boolean> {
   const profileIds = (profiles ?? []).map((p: any) => p.id);
   if (profileIds.length === 0) return false;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayKstYmd();
   const { data: mems, error: memErr } = await supabase
     .from("memberships")
     .select("id, remaining_count")

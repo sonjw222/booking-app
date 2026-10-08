@@ -7,6 +7,7 @@ import {
   createFutureTestClassAdmin,
   cleanupTestClassAdmin,
   getOrCreateTestPassProductNamed,
+  setTestCenterInternal,
   createTestMembershipAdmin,
   fetchSettingsAdmin,
   saveSettingsAdmin,
@@ -94,6 +95,9 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
   const userB = loadTestAccountMeta("user-b");
   const centerId = await getOrCreateOwnedTestCenter(managerA as TestUser);
   const product = await getOrCreateTestPassProductNamed(centerId, "E2E 생애주기 테스트 수강권");
+  // 신규 가입 계정은 센터 회원이 아니라, 내부 QA 센터(is_internal)는 센터 상세/구매 화면에 보이지 않는다 — 이 스펙은 직접결제(PG 미경유)로 구매하고
+  // mock 결제를 쓰지 않으므로 이 스펙 동안만 공개로 두고 finally에서 되돌린다.
+  await setTestCenterInternal(centerId, false);
   // 대기승격 단계는 waitlist_weekly_limit=0(대기예약 미사용, 기본값)이면 아예 막힌다 —
   // 이 센터의 원래 설정을 기억해뒀다가 대기예약을 잠깐 켜고, 끝나면 원복한다.
   const originalSettings = await fetchSettingsAdmin(centerId);
@@ -334,6 +338,7 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
     });
   } finally {
     await context.close();
+    await setTestCenterInternal(centerId, true);   // 내부 QA 센터 기본 상태로 복구
     await saveSettingsAdmin(centerId, originalSettings);
     await cleanupTestClassAdmin(capacityOneClass.id);
     await cleanupTestClassAdmin(bookableClass.id);

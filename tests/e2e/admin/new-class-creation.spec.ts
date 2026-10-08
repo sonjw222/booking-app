@@ -14,6 +14,7 @@ import {
 import type { CenterSettings } from "../../../lib/settings";
 import { getFixtureAdminClient } from "../../integration/setup";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { gotoManagerClasses, clickCreateClass } from "../fixtures/pageHelpers";
 
 /*
   신규 수업 생성(관리자 UI) → 회원 예약 흐름 회귀 테스트.
@@ -153,7 +154,7 @@ async function fillAmPmTime(page: Page, rowIndex: number, hour24: number, minute
 // 타임아웃으로 실패했다: selectedDay가 다른 날짜를 가리켜 .class-row 자체가 없었음).
 async function gotoFutureDay(page: Page, dateStr: string) {
   const [ty, tm, td] = dateStr.split("-").map(Number);
-  await page.goto("/manager/classes");
+  await gotoManagerClasses(page, centerAId);
   await expect(page.locator(".cal-title")).toBeVisible();
   for (let i = 0; i < 6; i++) {
     const title = (await page.locator(".cal-title").innerText()).trim();
@@ -186,7 +187,7 @@ test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → �
   const dateStr = futureKstDateStr(90);
 
   await gotoFutureDay(page, dateStr);
-  await page.locator(".fab-btn", { hasText: "수업 등록" }).click();
+  await clickCreateClass(page);
   await expect(page.locator(".sheet-title", { hasText: "수업 등록" })).toBeVisible();
 
   await page.locator('input[placeholder="수업명"]').fill(uniqueTitle);
@@ -239,7 +240,7 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
   const dateStr = futureKstDateStr(91);
 
   await gotoFutureDay(page, dateStr);
-  await page.locator(".fab-btn", { hasText: "수업 등록" }).click();
+  await clickCreateClass(page);
   await expect(page.locator(".sheet-title", { hasText: "수업 등록" })).toBeVisible();
 
   await page.locator('input[placeholder="수업명"]').fill(uniqueTitle);
@@ -295,7 +296,7 @@ test("TEST4: 신규 수업 → 사용 가능 수강권 없음 → 그 자리에�
   const dateStr = futureKstDateStr(92);
 
   await gotoFutureDay(page, dateStr);
-  await page.locator(".fab-btn", { hasText: "수업 등록" }).click();
+  await clickCreateClass(page);
   await expect(page.locator(".sheet-title", { hasText: "수업 등록" })).toBeVisible();
 
   await page.locator('input[placeholder="수업명"]').fill(uniqueTitle);
@@ -401,7 +402,7 @@ test("TEST5: 신규 수업(모든 수강권 허용)에서도 goods는 사용 가
   const dateStr = futureKstDateStr(93);
 
   await gotoFutureDay(page, dateStr);
-  await page.locator(".fab-btn", { hasText: "수업 등록" }).click();
+  await clickCreateClass(page);
   await expect(page.locator(".sheet-title", { hasText: "수업 등록" })).toBeVisible();
 
   await page.locator('input[placeholder="수업명"]').fill(uniqueTitle);

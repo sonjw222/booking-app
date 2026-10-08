@@ -8,6 +8,7 @@
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
 
+import { todayKstYmd } from "./membershipExpiry";
 // QA Fix Batch(2026-09-18) — "내 주변 센터" 반경(km). 감사 결과 이 앱에는 센터별/회원별로
 // 설정 가능한 검색 반경 컬럼이나 화면이 없다(center_settings, app 설정 어디에도 없음 —
 // Business Scenario E2E Phase 3에서 이미 확인됨). 그래서 제품에 적합한 기본값을 여기
@@ -318,7 +319,7 @@ export async function fetchMyUpcomingClasses(): Promise<HomeClass[]> {
   if (profileIds.length === 0) return [];
 
   // 내가 활성 수강권(pass) 보유한 센터
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayKstYmd();   // KST 기준 오늘(UTC 날짜는 00:00~09:00 KST에 어제가 된다)
   const { data: mems } = await supabase
     .from("memberships")
     .select("center_id, remaining_count, expires_at, status, products(product_kind)")

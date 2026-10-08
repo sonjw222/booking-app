@@ -121,19 +121,23 @@ describe("SEC-118: 주문 금액 서버 검증", () => {
     expect(error!.message).toContain("주문 금액이 상품 가격과 일치하지 않아요");
   });
 
-  it("서버가 신뢰하는 쿠폰(WELCOME=5000원)을 정확히 반영한 금액이면 승인된다", async () => {
-    const expected = Math.max(0, product.price - 5000);
+  it("레거시 하드코딩 쿠폰(WELCOME)은 더 이상 서버가 신뢰하지 않는다 — 할인 주장은 거부된다", async () => {
+    // [2026-10-07 정책 정렬] 예전에는 WELCOME=5000원이 서버에 하드코딩돼 이 테스트가 "승인"을 기대했다. 현재 라이브 confirm_test_payment/주문 검증 함수에는
+    // 하드코딩 쿠폰이 없고(add_membership_visibility_and_coupons.sql 이후 member_coupons 기반 — 정상 쿠폰 흐름은
+    // scenarios/membership-visibility-coupons.test.ts가 검증한다) tests/unit/orderIssuanceAndAutoBooking.test.ts가 "WELCOME/FIGURE10 없음"을 고정한다.
+    const claimed = Math.max(0, product.price - 5000);
     const orderId = await createOrder({
       centerId: TEST_CENTER_ID, productId: product.id, productName: product.name,
-      amount: expected, payMethod: "card", provider: "mock",
+      amount: claimed, payMethod: "card", provider: "mock",
       couponCode: "WELCOME", discountAmount: 5000,
     });
 
     const { data, error } = await supabase.rpc("confirm_test_payment", {
-      p_order_id: orderId, p_provider_ref: "real-coupon",
+      p_order_id: orderId, p_provider_ref: "legacy-coupon",
     });
-    expect(error).toBeNull();
-    expect((data as any).amount).toBe(expected);
+    expect(data).toBeNull();
+    expect(error).not.toBeNull();
+    expect(error!.message).toContain("주문 금액이 상품 가격과 일치하지 않아요");
   });
 
   it("실제로 use_points()를 호출하지 않고 points_used만 주장하면 거부된다", async () => {

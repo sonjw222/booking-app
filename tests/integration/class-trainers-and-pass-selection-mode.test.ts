@@ -241,7 +241,7 @@ describe("updateClassGroup() + setClassTrainersForGroup(): 반복 그룹 '모든
 
     // 관리자 UI의 "모든 반복 수업에 적용" 토글이 실제로 호출하는 것과 동일한 두 함수를
     // 그대로 순서대로 호출한다.
-    const groupIds = await updateClassGroup(groupId, "그룹강사적용-수정", s1, e1, 10);
+    const groupIds = await updateClassGroup(groupId, "그룹강사적용-수정", 10)   // 시그니처: (groupId, title, capacity, options?) — 시간 변경이 필요하면 options.time;
     expect(groupIds.sort()).toEqual([id1, id2].sort());
     await setClassTrainersForGroup(groupIds, [managerA.accountId]);
 
