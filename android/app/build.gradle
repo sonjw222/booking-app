@@ -53,8 +53,11 @@ android {
     }
     buildTypes {
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Play Console "DEX 코드 최적화가 기준점 미만"(2027-02부터 DEX>10MB 앱은 난독화/최적화/축소 각 25% 이상 필요, 현재 DEX 11.3MB·난독화 1%) 대응:
+            // R8을 켠다. proguard-android.txt는 최적화가 꺼진 규칙이라 optimize 버전을 쓴다. 규칙은 proguard-rules.pro의 "좁은" keep만 추가한다(광범위 keep 금지).
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             if (mwhabitKeystoreFile != null) {
                 signingConfig signingConfigs.release
             }
