@@ -62,8 +62,11 @@ function fakeCenterSubscriptionsQuery() {
   return builder;
 }
 
+// 2026-10-08: 라우트가 호출자 인증 + 센터 오너 확인을 먼저 한다 — 이 파일의 관심사(claim/재등록/경합)는 "오너가 인증된 요청"을 전제로 한다.
 vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({
+    auth: { getUser: async (t: string) => (t === "owner-token" ? { data: { user: { id: "uid-owner" } }, error: null } : { data: { user: null }, error: { message: "bad" } }) },
+    rpc: async (name: string) => (name === "is_center_owner" ? { data: true, error: null } : { data: null, error: null }),
     from(table: string) {
       if (table === "center_subscriptions") return fakeCenterSubscriptionsQuery();
       if (table === "center_subscription_charges") return { insert: (p: any) => { charges.push(p); return Promise.resolve({ data: null, error: null }); } };
@@ -92,7 +95,7 @@ function mockToss(issueOk: boolean, chargeOk: boolean) {
 function confirmRequest(body: Record<string, unknown>) {
   return import("../../app/api/billing/confirm/route").then(({ POST }) =>
     POST(new Request("http://localhost/api/billing/confirm", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer owner-token" }, body: JSON.stringify(body),
     }))
   );
 }

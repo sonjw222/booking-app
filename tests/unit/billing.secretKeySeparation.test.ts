@@ -10,7 +10,12 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@supabase/supabase-js", () => ({
-  createClient: () => { throw new Error("키 검사 단계에서는 DB에 접근하면 안 돼요"); },
+  // 인증(auth/rpc)은 허용하되 테이블 접근은 키 검사 전에 일어나면 안 된다(2026-10-08: confirm 라우트가 호출자 인증을 먼저 한다).
+  createClient: () => ({
+    auth: { getUser: async () => ({ data: { user: { id: "uid-owner" } }, error: null }) },
+    rpc: async () => ({ data: true, error: null }),
+    from: () => { throw new Error("키 검사 단계에서는 DB 테이블에 접근하면 안 돼요"); },
+  }),
 }));
 
 const read = (p: string) => readFileSync(join(__dirname, "../..", p), "utf-8");
@@ -27,7 +32,7 @@ describe("센터 자동결제 route — TOSS_BILLING_SECRET_KEY만 쓴다", () =
     vi.stubEnv("TOSS_SECRET_KEY", "checkout-key-only");
     vi.stubEnv("TOSS_BILLING_SECRET_KEY", "");
     const { POST } = await import("../../app/api/billing/confirm/route");
-    const res = await POST(new Request("http://localhost/api/billing/confirm", { method: "POST", body: JSON.stringify({ authKey: "a", customerKey: "center-c1", centerId: "c1" }) }));
+    const res = await POST(new Request("http://localhost/api/billing/confirm", { method: "POST", headers: { Authorization: "Bearer owner-token" }, body: JSON.stringify({ authKey: "a", customerKey: "center-c1", centerId: "c1" }) }));
     expect(res.status).toBe(500);
     expect((await res.json()).error).toBe(BILLING_MSG);
   });

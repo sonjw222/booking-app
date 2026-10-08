@@ -9,8 +9,11 @@
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- 보안 감사(2026-10-08): allowBackup을 끈다. 백업 규칙(fullBackupContent/dataExtractionRules)이 없어 true면 앱 데이터 전체 — WebView localStorage에 있는 Supabase
+         세션 토큰 포함 — 가 클라우드 백업/기기 이전에 실린다. 이 앱은 호스팅된 사이트(server.url)를 띄우고 실제 데이터는 전부 서버에 있어 로컬 백업이 필요 없다
+         (재설치/새 기기에서는 다시 로그인하면 된다). -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

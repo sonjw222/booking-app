@@ -100,7 +100,7 @@ describe("[2] Billing OFF — Toss 시크릿 없이 안전", () => {
   afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.doUnmock("@supabase/supabase-js"); });
 
   const cronReq = () => new Request("http://localhost/api/billing/charge-due", { method: "POST", headers: { "x-cron-secret": "unit-test-placeholder-cron-secret" } });
-  const confirmReq = () => new Request("http://localhost/api/billing/confirm", { method: "POST", body: JSON.stringify({ authKey: "a", customerKey: "center-c1", centerId: "c1" }) });
+  const confirmReq = () => new Request("http://localhost/api/billing/confirm", { method: "POST", headers: { Authorization: "Bearer owner-token" }, body: JSON.stringify({ authKey: "a", customerKey: "center-c1", centerId: "c1" }) });
   function trackDb(reviewOverride: boolean) {
     const calls = { createClient: 0, from: [] as string[] };
     vi.doMock("@supabase/supabase-js", () => ({
@@ -110,7 +110,12 @@ describe("[2] Billing OFF — Toss 시크릿 없이 안전", () => {
           select: () => chain, eq: () => chain, update: () => chain, in: () => chain, lte: () => chain, or: () => chain,
           maybeSingle: async () => ({ data: { billing_review_override: reviewOverride }, error: null }),
         };
-        return { from: (t: string) => { calls.from.push(t); return chain; } };
+        return {
+          // 2026-10-08: confirm 라우트는 호출자 인증 + 오너 확인을 먼저 한다(테이블 접근이 아니라 auth/rpc)
+          auth: { getUser: async () => ({ data: { user: { id: "uid-owner" } }, error: null }) },
+          rpc: async () => ({ data: true, error: null }),
+          from: (t: string) => { calls.from.push(t); return chain; },
+        };
       },
     }));
     return calls;
@@ -181,6 +186,7 @@ describe("[2] Billing OFF — Toss 시크릿 없이 안전", () => {
   it("confirm: flag true + secret 없음 → 서버 설정 오류", async () => {
     vi.stubEnv("NEXT_PUBLIC_BILLING_ENABLED", "true");
     vi.stubEnv("TOSS_BILLING_SECRET_KEY", "");
+    trackDb(false);   // 호출자 인증/오너 확인(auth/rpc)용 가짜 클라이언트
     const { POST } = await import("../../app/api/billing/confirm/route");
     const res = await POST(confirmReq());
     expect(res.status).toBe(500);
