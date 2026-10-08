@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-08 — 출시 전 통합 branch (integration/pre-android-release-20261008, 코드/문서만)
+- CI/dev bootstrap(#170 포함)·DB/API 보안·운영 안정성·R8·SystemBars 1차·소규모 안전 branch를 한 branch로 통합. 중복(center guard standalone, #170)은 병합하지 않음. Production 적용 상태/미적용 SQL 분류는 `docs/RELEASE_INTEGRATION_20261008.md`.
+
 ## 2026-10-08 — 출시 후 운영 안정성: 오류 기록 기반 / FCM 완료 의미 / 알림톡 선점·재시도 (코드 + 새 migration 파일, 미적용)
 - 클라이언트 오류: `lib/errorReporting.ts`(구조화 레코드, 이메일/전화/JWT/토큰/query 제거, reporter 등록으로 향후 Sentry 연결, DSN 없이 동작) + `app/error.tsx`가 기록, `app/global-error.tsx` 추가.
 - `send-web-push`: 알림별 판정(`_shared/pushOutcome.ts`) — 전달됨/영구 실패/대상 없음만 `pushed_at` 기록, 일시 실패·FCM 설정 누락·토큰 발급 실패는 비워 재시도(생성 후 30분, 이후 포기). 설정 누락은 응답 500 + 구조화 로그. FCM/OAuth/웹푸시 호출 타임아웃(10초), FCM 네트워크 예외가 배치를 죽이지 않음.
