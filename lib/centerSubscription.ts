@@ -247,9 +247,12 @@ export async function requestCenterBillingAuth(centerId: string, enabled: boolea
 export async function confirmCenterBilling(
   authKey: string, customerKey: string, centerId: string
 ): Promise<{ status: SubscriptionStatus; nextBillingDate: string }> {
+  // 서버는 로그인 세션(Bearer)과 센터 오너 여부를 확인한다(app/api/billing/confirm) — centerId만으로는 권한이 없다.
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
   const res = await fetch("/api/billing/confirm", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify({ authKey, customerKey, centerId }),
   });
   const data = await res.json();

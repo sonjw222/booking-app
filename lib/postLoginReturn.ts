@@ -10,22 +10,45 @@
   실제 이동을 처리하면 다섯 갈래를 전부 따로 손댈 필요가 없다. sessionStorage는 이 리다이렉트
   체인(동일 탭, 동일 출처) 내내 유지된다.
 
-  보안: next는 반드시 "/"로 시작하는 내부 상대경로만 허용한다(오픈 리다이렉트 방지 —
-  "/login?next=https://evil.com" 같은 외부 주소로 유도되지 않도록).
+  보안: next는 sanitizeNextPath()를 통과한 같은 출처 내부 경로만 허용한다(오픈 리다이렉트 방지 —
+  "/login?next=https://evil.com", "//evil.com", "/\\evil.com", 인코딩/제어문자 변형 포함). 저장 시점과 이동 직전 두 번 검사한다.
 */
 
 const KEY = "post_login_next";
 
-export function stashPostLoginNext(next: string | null | undefined): void {
-  if (next && next.startsWith("/") && !next.startsWith("//")) {
-    sessionStorage.setItem(KEY, next);
+// 로그인 후 이동 대상으로 허용하는 "같은 출처의 내부 경로"인지 검사한다(2026-10-08 보안 감사 P2 — 예전에는 startsWith("/") && !startsWith("//")만 봐서
+// "/\\evil.com", "/\t/evil.com" 같은 값이 브라우저의 URL 정규화(백슬래시→슬래시, 탭/개행 제거)로 외부 호스트가 됐다).
+// 통과하면 그 문자열 그대로, 아니면 null. 정상: "/checkout?center=..&product=..", "/reservation?openClassId=..". 차단: "//x", "/\\x", "https://x", 인코딩/제어문자 변형.
+const MAX_NEXT_LENGTH = 2000;
+const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
+export function sanitizeNextPath(next: string | null | undefined): string | null {
+  if (typeof next !== "string" || next.length === 0 || next.length > MAX_NEXT_LENGTH) return null;
+  if (CONTROL_CHARS.test(next) || next.includes("\\")) return null;          // 탭/개행/제어문자·백슬래시는 브라우저가 슬래시/무시로 바꿔 외부 호스트를 만든다
+  if (!next.startsWith("/") || next.startsWith("//")) return null;              // 절대 URL, 프로토콜 상대 URL 차단
+  // 인코딩 변형: 최대 2번 디코드해 보고 그 결과가 외부/프로토콜 상대/백슬래시/제어문자가 되면 거부(예: "/%2F%2Fevil.com", "/%5Cevil.com", "/%252F%252Fevil.com")
+  let decoded = next;
+  for (let i = 0; i < 2; i++) {
+    try { decoded = decodeURIComponent(decoded); } catch { return null; }
+    if (CONTROL_CHARS.test(decoded) || decoded.includes("\\") || decoded.startsWith("//") || !decoded.startsWith("/")) return null;
   }
+  // 최종 확인: 실제 URL 파서로 해석해도 같은 출처의 경로여야 한다.
+  try {
+    const base = "https://app.invalid";
+    const u = new URL(next, base);
+    if (u.origin !== base || !u.pathname.startsWith("/")) return null;
+  } catch { return null; }
+  return next;
+}
+
+export function stashPostLoginNext(next: string | null | undefined): void {
+  const safe = sanitizeNextPath(next);
+  if (safe) sessionStorage.setItem(KEY, safe);
 }
 
 export function consumePostLoginNext(): string | null {
   const v = sessionStorage.getItem(KEY);
   if (v) sessionStorage.removeItem(KEY);
-  return v;
+  return sanitizeNextPath(v);   // 저장된 값도 이동 직전에 다시 검증한다(방어적 이중 확인)
 }
 
 // 현재 화면(경로+쿼리)을 /login?next=... 링크에 그대로 쓰기 위한 헬퍼.

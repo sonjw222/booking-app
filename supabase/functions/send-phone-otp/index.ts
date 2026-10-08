@@ -6,6 +6,9 @@
 // 보안 경계다:
 //   - 같은 번호로 재전송은 60초에 한 번만
 //   - 같은 번호로 1시간에 5번까지만
+//   - 같은 클라이언트(IP 해시)에서 1시간에 10번까지만, 프로젝트 전체 24시간 500번까지만 (2026-10-08 보안 감사 P2 —
+//     서로 다른 번호를 순회해 SMS 비용을 소모시키는 남용 방지. DB RPC consume_phone_otp_send_attempt가 원자적으로 판정,
+//     add_phone_otp_send_limits_20261008.sql). PHONE_OTP_TEST_BYPASS_PREFIX 번호는 실제 발송이 없어 이 한도를 소비하지 않는다.
 //   (시도 횟수 제한 자체는 add_phone_verification.sql의 verify_phone_otp()가 담당)
 //
 // 흐름: 속도 제한 통과 → 6자리 코드 생성 → create_phone_verification(phone, code) RPC로
@@ -39,6 +42,13 @@ const TEST_BYPASS_PREFIX = Deno.env.get("PHONE_OTP_TEST_BYPASS_PREFIX") ?? "";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 const HOURLY_SEND_CAP = 5;
+// IP/전역 한도 기본값(선택 환경변수로 조정: OTP_IP_HOURLY_CAP, OTP_GLOBAL_DAILY_CAP). NAT 뒤의 가족/센터 와이파이를 고려해 IP 한도는 번호별 한도의 2배로 둔다.
+function envInt(name: string, fallback: number): number {
+  const n = Number.parseInt(Deno.env.get(name) ?? "", 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+const IP_HOURLY_CAP = envInt("OTP_IP_HOURLY_CAP", 10);
+const GLOBAL_DAILY_CAP = envInt("OTP_GLOBAL_DAILY_CAP", 500);
 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -51,6 +61,22 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
   });
+}
+
+// 클라이언트 IP는 평문으로 저장하지 않는다(SHA-256 해시만) — check-signup-email과 같은 방식.
+async function hashIp(ip: string): Promise<string> {
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ip));
+  return Array.from(new Uint8Array(bytes)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+// 우선순위: cf-connecting-ip → x-real-ip → x-forwarded-for 첫 값 → "unknown"(판별 불가 클라이언트는 같은 버킷을 공유해 더 쉽게 제한에 걸릴 뿐 관대해지지 않는다)
+function clientIp(req: Request): string {
+  const cf = req.headers.get("cf-connecting-ip");
+  if (cf) return cf.trim();
+  const real = req.headers.get("x-real-ip");
+  if (real) return real.trim();
+  const forwarded = req.headers.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0].trim();
+  return "unknown";
 }
 
 function generateCode(): string {
@@ -103,6 +129,29 @@ Deno.serve(async (req: Request) => {
 
   const code = generateCode();
   const isTestBypass = !!TEST_BYPASS_PREFIX && phone.startsWith(TEST_BYPASS_PREFIX);
+
+  // IP/전역 한도(번호별 확인을 통과한 뒤, 코드 저장·발송 전에 원자적으로 소비). 실제 SMS를 보내지 않는 DEV 우회 번호는 건너뛴다.
+  if (!isTestBypass) {
+    const { data: verdict, error: limitErr } = await admin.rpc("consume_phone_otp_send_attempt", {
+      p_ip_hash: await hashIp(clientIp(req)),
+      p_ip_hourly_cap: IP_HOURLY_CAP,
+      p_global_daily_cap: GLOBAL_DAILY_CAP,
+    });
+    if (limitErr) {
+      // 마이그레이션 적용 전(함수 없음: 42883 / PostgREST PGRST202)에는 기존 동작 유지(fail-open + 로그) — 번호별 제한은 그대로 적용 중이다.
+      // 그 외 DB 오류는 거부한다(fail-closed, 원본 오류는 응답에 싣지 않는다).
+      if (limitErr.code === "42883" || limitErr.code === "PGRST202") {
+        console.error("[send-phone-otp] rate-limit RPC 없음 — add_phone_otp_send_limits_20261008.sql 미적용(번호별 제한만 동작)");
+      } else {
+        console.error("[send-phone-otp] rate-limit RPC 실패:", limitErr.code);
+        return json({ error: "인증번호를 보내지 못했어요. 잠시 후 다시 시도해주세요" }, 503);
+      }
+    } else if (verdict === "ip_limit") {
+      return json({ error: "요청이 너무 많아요. 잠시 후 다시 시도해주세요" }, 429);
+    } else if (verdict === "global_limit") {
+      return json({ error: "지금은 인증번호를 보낼 수 없어요. 잠시 후 다시 시도해주세요" }, 503);
+    }
+  }
 
   const { error: createErr } = await admin.rpc("create_phone_verification", { p_phone: phone, p_code: code });
   if (createErr) return json({ error: createErr.message }, 500);

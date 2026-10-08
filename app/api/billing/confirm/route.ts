@@ -20,12 +20,15 @@
 */
 
 import { createClient } from "@supabase/supabase-js";
+import { bearerToken } from "../../../../lib/payments/server/deps";
+import { authorizeBillingConfirm, buildBillingAuthDeps } from "../../../../lib/payments/server/billingAuth";
 
 // 센터 플랫폼 구독(자동결제) 전용 시크릿 키 — 일반 회원 결제(app/api/payments/*)가 쓰는
 // TOSS_SECRET_KEY와 분리한다(토스 자동결제 계약 키가 별도라서). 회원 결제 쪽은 그대로.
 const TOSS_BILLING_SECRET_KEY = process.env.TOSS_BILLING_SECRET_KEY;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 // 토스페이먼츠 카드사 코드 enum(docs.tosspayments.com/reference/codes, 2026-09 확인) —
 // billing/authorizations/issue 응답의 card.issuerCode는 카드사명이 아니라 이 2자리
@@ -62,6 +65,14 @@ export async function POST(request: Request) {
   if (!authKey || !customerKey || !centerId) {
     return json({ error: "authKey/customerKey/centerId가 모두 필요해요" }, 400);
   }
+
+  // 호출자 인증 + 센터 오너 확인(2026-10-08 보안 감사 P2) — 게이트/Toss/DB claim보다 먼저. body의 centerId만으로는 권한을 인정하지 않는다.
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_ANON_KEY) {
+    return json({ error: "결제 서버 설정이 없어요(SUPABASE)" }, 500);
+  }
+  const authAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+  const authz = await authorizeBillingConfirm(bearerToken(request), centerId, buildBillingAuthDeps(authAdmin, SUPABASE_URL, SUPABASE_ANON_KEY));
+  if (!authz.ok) return json({ error: authz.error, code: authz.code }, authz.status);
 
   // 서버 게이트(2026-10-01): 전역 스위치가 꺼져 있으면 UI가 숨겨져 있어도 이 URL을 직접 호출해 카드 등록/
   // 최초 결제가 진행되지 않게 Toss 시크릿 확인·Toss 호출보다 먼저 403으로 막는다. 예외는 운영자가 지정한
