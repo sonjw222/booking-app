@@ -3927,3 +3927,11 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 - [ ] P3: center guard `search_path`에 `pg_temp` 고정 검토, OTP 클라이언트 IP 헤더 신뢰 범위, preflight deny-list → DEV allow-list, `mobile-ui-qa.yml` secret을 `env:`로 전달
 - [ ] watch: `member-full-lifecycle.spec.ts` 로컬 1회 간헐 실패(checkout "상품 정보를 찾을 수 없어요" → 재시도 시 waitlist 설정 0). 단독/전체/CI 재실행 모두 통과 — blocker 아님, 재발 시 trace 확인
 - [ ] 미병합 candidate: `fix/manager-center-persistence-20261007`, `fix/postlaunch-maintenance-refresh-20261007`(서로 `app/manager/*` 겹침), docs branch 선별 반영
+
+## 성능 Sprint 후속 (2026-10-10, docs/PERF_SPRINT_20261010.md)
+- [ ] P0: PR #175 병합 후 성능 PR(Batch A~F)을 한 번에 하나씩 CI 검증·병합(순서는 추적표 문서)
+- [ ] P1: Production PostgREST max-rows(Settings → API) 확인, 가장 큰 센터의 center_members/memberships 행 수 확인(회원 1,000행 상한 실제 영향 판단)
+- [ ] P2: 회원 서버 검색 RPC(SQL 필요, 대형 센터 요청 수 감소), 수업+상품 연결 트랜잭션 RPC(PERF-015), 인덱스 후보 Production pg_indexes 확인
+- [ ] P2: Batch G(플랫폼 관리자) — PR #173 병합 후 admin/centers 탭 재확인 제거·페이지네이션
+- [ ] P3: 실기기(iOS/Android) cold/warm start·스플래시·복귀 측정, Profiler로 예약/수업 화면 리렌더 측정, SessionWatcher 모달 import dynamic 분리, 회원 목록 가상화
+- [ ] P3: lib/accountLinking.ts 연동 성공 후 invalidateMyAccountIdCache() 호출, lib/reservations.ts getMyAccountId의 auth.getUser 왕복 정리
