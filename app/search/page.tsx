@@ -29,6 +29,9 @@ export default function SearchPage() {
   const [locationError, setLocationError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
   const requestId = useRef(0);
+  // PERF-005 — 검색어 선택(selectTerm)은 즉시 검색하는데 kw 변경 때문에 debounce 타이머가 같은
+  // 검색어로 350ms 뒤 한 번 더 요청하던 중복을 막는다. 직접 입력으로 검색어가 바뀌면 해제.
+  const immediateTerm = useRef<string | null>(null);
 
   useEffect(() => {
     try {
@@ -68,16 +71,20 @@ export default function SearchPage() {
   useEffect(() => {
     const query = kw.trim();
     if (query.length < 2) {
+      immediateTerm.current = null;
       requestId.current++;
       setSearched(false); setBusy(false); setError(null);
       return;
     }
+    if (immediateTerm.current === query) { immediateTerm.current = null; return; }
+    immediateTerm.current = null;
     const timer = window.setTimeout(() => { void runSearch(query); }, 350);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kw]);
 
   function selectTerm(term: string) {
+    immediateTerm.current = term.trim();
     setKw(term);
     void runSearch(term, true);
   }

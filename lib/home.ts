@@ -67,14 +67,25 @@ export type NextReservation = {
   status: "confirmed" | "waitlisted";
 };
 
-// 홈은 전체 예약 이력 대신 앞으로의 첫 예약 한 건만 읽는다.
-export async function fetchNextReservation(): Promise<NextReservation | null> {
+// PERF-001 — 내 계정의 활성 프로필 id 목록(my_account_id RPC + profiles 조회 = 왕복 2회).
+// 홈의 "다음 예약"과 "지금 예약 가능"이 각자 같은 조회를 반복하던 것을, 홈 로딩 단위에서
+// 이 함수의 Promise를 한 번만 만들어 두 함수에 넘겨 공유할 수 있게 분리했다. 모듈 전역에
+// 저장하지 않는다(호출자가 자기 화면 수명 동안만 들고 있음 — 다른 사용자 세션 재사용 방지).
+// 비로그인이면 빈 배열, profiles 조회 오류는 throw(기존 fetchNextReservation 동작 유지).
+export async function fetchMyProfileIds(): Promise<string[]> {
   const accountId = await getMyAccountId();
-  if (!accountId) return null;
+  if (!accountId) return [];
   const { data: profiles, error: profileError } = await supabase
     .from("profiles").select("id").eq("account_id", accountId).is("deleted_at", null);
   if (profileError) throw profileError;
-  const ids = (profiles ?? []).map((profile) => profile.id);
+  return (profiles ?? []).map((profile: { id: string }) => profile.id);
+}
+
+// 홈은 전체 예약 이력 대신 앞으로의 첫 예약 한 건만 읽는다.
+export async function fetchNextReservation(
+  profileIdsPromise?: Promise<string[]>,
+): Promise<NextReservation | null> {
+  const ids = await (profileIdsPromise ?? fetchMyProfileIds());
   if (ids.length === 0) return null;
 
   const { data, error } = await supabase
@@ -247,17 +258,22 @@ export async function searchHome(keyword: string): Promise<{ centers: SearchCent
   // 라벨 자체가 키워드를 포함하는 종목을 구한 뒤(이 테이블은 작아 상한 문제 없음),
   // 그 라벨 전체 목록과 categories 배열이 하나라도 겹치는지(overlaps)를 서버에서
   // 필터링한다 — 기존 클라이언트 매칭과 동일한 결과를 내면서 서버 쪽에서 실행된다.
-  const { data: cats, error: catLabelError } = await supabase.from("service_categories").select("label");
-  if (catLabelError) throw new Error("검색에 실패했어요: " + catLabelError.message);
-  const categories = (cats ?? [])
-    .map((c: any) => c.label)
-    .filter((label: string) => label.includes(kw));
-
+  // PERF-005 — 이름 매칭 쿼리는 종목 라벨 결과를 쓰지 않으므로 라벨 조회와 동시에 시작한다
+  // (검색 1회당 직렬 왕복 3단계 → 2단계). 오류 판정 순서(라벨 → 이름 → 종목)는 그대로.
   const nameQuery = supabase
     .from("centers")
     .select("id, name, categories, intro, photo_url, latitude, longitude")
     .eq("status", "approved")
     .ilike("name", `%${kw}%`);
+  const [{ data: cats, error: catLabelError }, nameResult] = await Promise.all([
+    supabase.from("service_categories").select("label"),
+    nameQuery,
+  ]);
+  if (catLabelError) throw new Error("검색에 실패했어요: " + catLabelError.message);
+  const categories = (cats ?? [])
+    .map((c: any) => c.label)
+    .filter((label: string) => label.includes(kw));
+
   const categoryQuery = categories.length > 0
     ? supabase
         .from("centers")
@@ -266,10 +282,7 @@ export async function searchHome(keyword: string): Promise<{ centers: SearchCent
         .overlaps("categories", categories)
     : null;
 
-  const [nameResult, categoryResult] = await Promise.all([
-    nameQuery,
-    categoryQuery ?? Promise.resolve({ data: [] as any[], error: null }),
-  ]);
+  const categoryResult = await (categoryQuery ?? Promise.resolve({ data: [] as any[], error: null }));
   if (nameResult.error) throw new Error("검색에 실패했어요: " + nameResult.error.message);
   if (categoryResult.error) throw new Error("검색에 실패했어요: " + categoryResult.error.message);
 
@@ -310,12 +323,16 @@ export async function fetchCentersByCategory(category: string): Promise<SearchCe
    지금 예약 가능 - 일주일 내 내 수강권으로 예약 가능한 수업
    ============================================================ */
 
-export async function fetchMyUpcomingClasses(): Promise<HomeClass[]> {
-  const accountId = await getMyAccountId();
-  if (!accountId) return [];   // 비로그인 → 빈 목록 (일반 추천으로 대체)
-
-  const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", accountId).is("deleted_at", null);
-  const profileIds = (profs ?? []).map((p: any) => p.id);
+export async function fetchMyUpcomingClasses(
+  profileIdsPromise?: Promise<string[]>,
+): Promise<HomeClass[]> {
+  // 비로그인/프로필 없음/profiles 조회 오류 → 빈 목록 (일반 추천으로 대체; 기존 동작 유지)
+  let profileIds: string[] = [];
+  try {
+    profileIds = await (profileIdsPromise ?? fetchMyProfileIds());
+  } catch {
+    return [];
+  }
   if (profileIds.length === 0) return [];
 
   // 내가 활성 수강권(pass) 보유한 센터
