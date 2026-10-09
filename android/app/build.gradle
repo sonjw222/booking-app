@@ -7,8 +7,8 @@ android {
         applicationId "com.mwhabit.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 6
+        versionName "1.0.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // Automated QA Foundation Batch(2026-09-18) — tests/e2e(Playwright)와 완전히
         // 같은 이름의 기존 테스트 전용 계정 env var를 그대로 재사용한다(.env.test.local.example,
