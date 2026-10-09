@@ -6,6 +6,25 @@ import { getFixtureAdminClient } from "../../integration/setup";
   헬퍼(testData.ts)와 분리해둔다.
 */
 
+// 데스크톱(768~1359px, hover 가능한 포인터)에서는 좌측 레일(.member-desktop-nav / .workspace-sidebar)이 포인터가 올라가면
+// 88px → 244px로 "겹쳐서" 펼쳐진다(app/globals.css, app/workspace.css). Playwright의 포인터는 마지막 클릭 위치에 남아 있으므로
+// (새 context는 (0,0) 근처), 레일 위에 포인터가 있는 채로 달력의 맨 왼쪽 열(일요일, x≈150~210)을 클릭하면 펼쳐진 레일이 그 칸을 덮어
+// "<a/div> from <aside> subtree intercepts pointer events"로 60초 timeout이 난다 — 클릭하려는 날짜가 일요일이면 날짜에 따라 결정적으로 실패한다
+// (2026-10-11/18이 일요일일 때 CI에서 관측, 로컬 재현 확인). 클릭 전에 포인터를 레일 밖(우측 가장자리)으로 치우고, 레일이 있으면
+// :hover가 꺼질 때까지(폭 transition 0.22s는 Playwright 액션 가능성 검사가 기다린다) 확인한다. 임의 sleep/force 클릭은 쓰지 않는다.
+export async function parkPointerOutsideRail(page: Page): Promise<void> {
+  const vp = page.viewportSize();
+  const x = Math.max(400, (vp?.width ?? 1280) - 30);
+  await page.mouse.move(x, 100);
+  await page.mouse.move(x - 10, 450);
+  await expect
+    .poll(
+      () => page.evaluate(() => Array.from(document.querySelectorAll(".member-desktop-nav, .workspace-sidebar")).some((n) => n.matches(":hover"))),
+      { message: "좌측 레일에 :hover가 남아 있음" },
+    )
+    .toBe(false);
+}
+
 // app/reservation/page.tsx의 "오늘" 기본 선택(new Date().getDate() 등)은 브라우저의
 // 로컬(시스템) 타임존을 쓴다 — 이 CI 러너는 UTC라서, KST 자정~오전 9시 사이에는 화면이
 // "어제"를 기본으로 보여준다(실측 확인: 스크린샷에서 실행 시각이 KST 08/04 새벽인데도
@@ -13,6 +32,7 @@ import { getFixtureAdminClient } from "../../integration/setup";
 // 않기로 했으므로, 테스트 쪽에서 캘린더를 실제 사용자처럼 클릭해 원하는 KST 날짜로
 // 명시적으로 이동한다(임의 대기 없이, ‹/› 버튼과 날짜 셀 클릭만 사용).
 export async function selectKstCalendarDay(page: Page, kstDate: string): Promise<void> {
+  await parkPointerOutsideRail(page);
   const [yearStr, monthStr, dayStr] = kstDate.split("-");
   const targetYear = Number(yearStr);
   const targetMonth = Number(monthStr);
