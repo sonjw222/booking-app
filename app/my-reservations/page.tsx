@@ -18,6 +18,7 @@ import SegmentedTabs from "../components/SegmentedTabs";
 import EmptyState from "../components/EmptyState";
 import { toUserMessage } from "../../lib/userError";
 import { hapticWarning } from "../../lib/nativeHaptics";
+import { useResumeRefresh } from "../../lib/useResumeRefresh";
 
 const STATUS_LABEL: Record<string, string> = {
   confirmed: "예약 확정",
@@ -89,15 +90,18 @@ export default function MyReservationsPage() {
     setTimeout(() => setToast(null), 2500);
   }
 
-  const load = useCallback(async () => {
-    setLoading(true); setError(null);
+  const load = useCallback(async (opts?: { background?: boolean }) => {
+    // background(PERF-013 앱 복귀 재조회): 스피너/에러 화면 전환 없이 조용히 데이터만 교체
+    if (!opts?.background) { setLoading(true); setError(null); }
     try {
       const data = await fetchMyReservationHistory();
       setHistory(data);
-    } catch (e: any) { setError(toUserMessage(e, "불러오지 못했어요")); }
-    finally { setLoading(false); }
+    } catch (e: any) { if (!opts?.background) setError(toUserMessage(e, "불러오지 못했어요")); }
+    finally { if (!opts?.background) setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  // PERF-013: 5분 이상 백그라운드였다가 돌아오면 내 예약 목록만 조용히 재조회
+  useResumeRefresh(() => load({ background: true }));
 
   // UX 감사(A-4) 대응 — 예전엔 이 화면 카드가 읽기 전용이라 취소하려면 /reservation으로
   // 가서 같은 날짜를 다시 찾아야 했다(app/reservation/page.tsx의 handleCancel과 동일 RPC 재사용).

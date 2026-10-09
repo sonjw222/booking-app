@@ -13,6 +13,7 @@ import {
   classifyMembershipDisplay, type Profile, type Membership, type RepurchaseAvailability,
 } from "../../lib/mypage";
 import { replaceTabNavigation } from "../../lib/navState";
+import { useResumeRefresh } from "../../lib/useResumeRefresh";
 import UiIcon from "../components/UiIcon";
 
 import { todayKstYmd } from "../../lib/membershipExpiry";
@@ -56,17 +57,17 @@ export default function MyPage() {
   const [toast, setToast] = useState<string | null>(null);
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const load = useCallback(async (opts?: { background?: boolean }) => {
+    // background(PERF-013 앱 복귀 재조회): 스피너/에러 화면 전환 없이 조용히 수강권 잔액만 교체
+    if (!opts?.background) { setLoading(true); setError(null); }
     try {
       const data = await fetchMyPage();
       setProfile(data.profile);
       setMemberships(data.memberships);
     } catch (e: any) {
-      setError(e.message ?? "불러오지 못했어요");
+      if (!opts?.background) setError(e.message ?? "불러오지 못했어요");
     } finally {
-      setLoading(false);
+      if (!opts?.background) setLoading(false);
     }
   }, []);
 
@@ -86,6 +87,8 @@ export default function MyPage() {
   useEffect(() => {
     load();
   }, [load]);
+  // PERF-013: 5분 이상 백그라운드였다가 돌아오면 수강권 잔액을 조용히 재조회
+  useResumeRefresh(() => load({ background: true }));
 
   async function handleRefund(m: Membership) {
     const elig = refundEligibility(m);
