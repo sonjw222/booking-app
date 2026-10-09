@@ -7,6 +7,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { supabase } from "./supabaseClient";
+import { invalidateMyAccountIdCache } from "./authAccount";
 
 // A(남을 계정)로 로그인한 상태에서 호출 — 10분 유효 코드 발급(이미 유효한 코드가 있으면 재사용)
 export async function createAccountLinkCode(): Promise<string> {
@@ -20,6 +21,8 @@ export async function createAccountLinkCode(): Promise<string> {
 export async function linkAccountsByCode(code: string): Promise<{ mergedAccountName: string }> {
   const { data, error } = await supabase.rpc("link_accounts_by_code", { p_code: code });
   if (error) throw new Error(error.message);
+  // 병합 성공 직후 my_account_id가 바뀐다(B 데이터가 A로 재배정) — 인증 이벤트가 없어 getMyAccountId의 짧은 캐시를 직접 폐기한다.
+  invalidateMyAccountIdCache();
   return data as { mergedAccountName: string };
 }
 
