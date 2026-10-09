@@ -8,6 +8,7 @@
 
 import { displayMemberName } from "./memberName";
 import { supabase } from "./supabaseClient";
+import { fetchAllPages, fetchByIdChunks } from "./memberList";
 import { extensionErrorMessage } from "./membershipExpiry";
 import { getMessageService } from "./messaging";
 import {
@@ -75,94 +76,90 @@ export async function deleteGrade(gradeId: string): Promise<void> {
   if (error) throw new Error("등급 삭제에 실패했어요: " + error.message);
 }
 
-// 센터 회원 목록
-export async function fetchMembers(centerId: string, filter: MemberFilter = {}): Promise<CenterMember[]> {
-  let q = supabase
-    .from("center_members")
-    .select(`
+// 센터 회원 목록 — 네트워크 조회 부분(등급 필터만 서버에서 적용). 상태·키워드 필터는 filterMembers가 맡는다.
+// PERF-030~033: PostgREST 1000행 상한/.in() URL 길이 때문에 center_members·memberships는 range 페이지네이션(안정 정렬 키
+// + count 검증), profile id 대상 조회는 150개 청크로 나눈다. 세 후속 조회는 서로 독립이라 병렬(직렬 단계 4 → 2).
+export async function fetchMemberBase(centerId: string, filter: Pick<MemberFilter, "gradeId"> = {}): Promise<CenterMember[]> {
+  // egress 감사(2026-09-15)에서 넣었던 limit(2000)은 2000명 초과 센터에서 뒷 회원을 조용히 누락시키므로 제거하고
+  // 전량 페이지네이션으로 바꿨다(서버 검색 RPC가 생기면 그쪽이 egress 해법 — docs/TODO 참고).
+  // 정렬 키: registered_at 단독이면 동률 행이 페이지 경계에서 중복/누락되므로 id를 보조 키로 둔다.
+  const rows = await fetchAllPages<any>(
+    (from, to, wantCount) => {
+      let q = supabase
+        .from("center_members")
+        .select(`
       id, profile_id, grade_id, registered_at, last_attended_at,
       app_linked, memo, status,
-      profiles(name),
+      profiles(name, accounts(address)),
       member_grades(name, color)
-    `)
-    .eq("center_id", centerId);
+    `, wantCount ? { count: "exact" } : undefined)
+        .eq("center_id", centerId);
+      if (filter.gradeId) q = q.eq("grade_id", filter.gradeId);
+      return q.order("registered_at", { ascending: false }).order("id", { ascending: false }).range(from, to);
+    },
+    { key: (r) => r.id, errorLabel: "회원 목록을 불러오지 못했어요" },
+  );
+  const profileIds = Array.from(new Set<string>(rows.map((r: any) => r.profile_id)));
 
-  if (filter.gradeId) q = q.eq("grade_id", filter.gradeId);
-
-  // egress 감사(2026-09-15) — status/keyword 검색이 조인·RPC 결과 기준이라 클라이언트에서
-  // 필터링되는 구조상(바로 아래 주석 참고) 이 쿼리 자체엔 상한이 없었다 — 센터가 오래
-  // 운영될수록(회원 = 수강권을 한 번이라도 보유한 전체 이력) 계속 커지는 전체 조회였다.
-  // 화면이 최근 등록순으로 이미 정렬해 보여주므로, 실사용 범위를 크게 웃도는 안전판만
-  // 추가한다 — 지금까지 이 상한에 걸릴 만큼 회원이 많은 센터는 없어 동작은 그대로다.
-  const { data, error } = await q.order("registered_at", { ascending: false }).limit(2000);
-  if (error) throw new Error("회원 목록을 불러오지 못했어요: " + error.message);
-
-  const rows = data ?? [];
-  const profileIds = rows.map((r: any) => r.profile_id);
-
-  // 주소는 accounts에 있음 (profiles → accounts). 전화번호는 여기서 같이 select하지
+  // 주소는 accounts에 있음 (center_members → profiles → accounts 임베드). 전화번호는 여기서 같이 select하지
   // 않고 customer.member.phone 권한을 서버에서 확인하는 별도 RPC로만 받아온다 —
-  // 권한 없는 스태프에게는 응답 자체에 전화번호가 담기지 않는다.
+  // 권한 없는 스태프에게는 응답 자체에 전화번호가 담기지 않는다(권한 없음은 오류가 아니라 null 값으로 내려온다).
   const phoneByProfile: Record<string, string | null> = {};
   const addressByProfile: Record<string, string | null> = {};
-  if (profileIds.length > 0) {
-    const { data: profs } = await supabase
-      .from("profiles")
-      .select("id, accounts(address)")
-      .in("id", profileIds);
-    for (const p of profs ?? []) {
-      addressByProfile[(p as any).id] = (p as any).accounts?.address ?? null;
-    }
-    const { data: phones } = await supabase.rpc("fetch_member_phones_safe", {
-      p_profile_ids: profileIds, p_center_id: centerId,
-    });
-    for (const row of phones ?? []) {
-      phoneByProfile[(row as any).profile_id] = (row as any).account_phone ?? null;
-    }
-  }
+  for (const r of rows) addressByProfile[r.profile_id] = r.profiles?.accounts?.address ?? null;
 
-  // 수강권 전체 조회 → 회원 분류 계산 (수강권 보유자만 회원)
+  // 수강권 전체 조회 → 회원 분류 계산. 오류를 무시하면 수강권이 없는 것으로 오인돼 전원이 "만료"로 보이므로 반드시 던진다.
   const nowIso = new Date().toISOString();
   const passByProfile: Record<string, { name: string; remaining: number | null; expires: string }> = {};
   const passStateByProfile: Record<string, { hasUsable: boolean; hasAny: boolean }> = {};
-  if (profileIds.length > 0) {
-    const { data: passes } = await supabase
-      .from("memberships")
-      .select("profile_id, product_name, remaining_count, expires_at, pass_type, status")
-      .eq("center_id", centerId)
-      .in("profile_id", profileIds)
-      .order("expires_at", { ascending: true });
-    for (const m of passes ?? []) {
-      const pid = (m as any).profile_id;
-      const st = passStateByProfile[pid] ??= { hasUsable: false, hasAny: false };
-      st.hasAny = true;
-      // 사용 가능한 수강권인지: status active + (기간권이면 만료 전 / 횟수권이면 잔여>0)
-      const active = (m as any).status === "active";
-      const notExpired = !(m as any).expires_at || (m as any).expires_at >= nowIso.slice(0, 10);
-      const remaining = (m as any).remaining_count;
-      const hasCount = remaining == null || remaining > 0;
-      if (active && notExpired && hasCount) st.hasUsable = true;
-      // 대표 표시용 수강권 (사용가능한 것 우선, 없으면 첫 번째)
-      if (!passByProfile[pid] || (active && notExpired && hasCount)) {
-        if (!passByProfile[pid] || (active && notExpired && hasCount)) {
-          passByProfile[pid] = {
-            name: (m as any).product_name,
-            remaining: (m as any).remaining_count,
-            expires: (m as any).expires_at,
-          };
-        }
-      }
+
+  const [phoneRows, passRows] = await Promise.all([
+    fetchByIdChunks<any>(profileIds, async (chunk) => {
+      const { data, error } = await supabase.rpc("fetch_member_phones_safe", { p_profile_ids: chunk, p_center_id: centerId });
+      if (error) throw new Error("회원 연락처를 불러오지 못했어요: " + error.message);
+      return (data ?? []) as any[];
+    }),
+    fetchByIdChunks<any>(profileIds, (chunk) => fetchAllPages<any>(
+      (from, to, wantCount) => supabase
+        .from("memberships")
+        .select("id, profile_id, product_name, remaining_count, expires_at, pass_type, status", wantCount ? { count: "exact" } : undefined)
+        .eq("center_id", centerId)
+        .in("profile_id", chunk)
+        .order("expires_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+      { key: (m) => m.id ?? `${m.profile_id}|${m.expires_at}|${m.product_name}`, errorLabel: "수강권을 불러오지 못했어요", concurrency: 3 },
+    )),
+  ]);
+  for (const row of phoneRows) phoneByProfile[row.profile_id] = row.account_phone ?? null;
+  for (const m of passRows) {
+    const pid = (m as any).profile_id;
+    const st = passStateByProfile[pid] ??= { hasUsable: false, hasAny: false };
+    st.hasAny = true;
+    // 사용 가능한 수강권인지: status active + (기간권이면 만료 전 / 횟수권이면 잔여>0)
+    const active = (m as any).status === "active";
+    const notExpired = !(m as any).expires_at || (m as any).expires_at >= nowIso.slice(0, 10);
+    const remaining = (m as any).remaining_count;
+    const hasCount = remaining == null || remaining > 0;
+    if (active && notExpired && hasCount) st.hasUsable = true;
+    // 대표 표시용 수강권 (사용가능한 것 우선, 없으면 첫 번째)
+    if (!passByProfile[pid] || (active && notExpired && hasCount)) {
+      passByProfile[pid] = {
+        name: (m as any).product_name,
+        remaining: (m as any).remaining_count,
+        expires: (m as any).expires_at,
+      };
     }
   }
 
-  let list: CenterMember[] = rows.map((r: any) => {
+  return rows.map((r: any) => {
     const st = passStateByProfile[r.profile_id];
     // 상태 계산: 수동 휴면(dormant) 우선 > 사용가능 수강권 있으면 이용중 > 수강권 있으나 소진/만료면 만료
     let derived: "active" | "expired" | "dormant";
     if (r.status === "dormant") derived = "dormant";
     else if (st?.hasUsable) derived = "active";
     else if (st?.hasAny) derived = "expired";
-    else derived = "expired"; // 수강권 없음 (아래에서 걸러짐)
+    else derived = "expired"; // 수강권 없음 (필터에서 hasPass로 구분)
     return {
       id: r.id,
       profileId: r.profile_id,
@@ -183,6 +180,11 @@ export async function fetchMembers(centerId: string, filter: MemberFilter = {}):
       expiresAt: passByProfile[r.profile_id]?.expires ?? null,
     };
   });
+}
+
+// 이미 불러온 목록에 상태/키워드/검색필드 필터를 적용(순수 함수, 네트워크 없음).
+export function filterMembers(base: CenterMember[], filter: MemberFilter = {}): CenterMember[] {
+  let list = base;
 
   // 2026-10-03: 예전에는 "수강권 이력이 없으면 목록에서 제외"해서, 관리자가 회원 추가(등록)에 성공해도 수강권을 발급하기 전까지는
   // 센터 회원 목록에 나타나지 않았다. 등록된 center_members는 수강권이 없어도 목록에 보인다(상태 배지는 "수강권 없음").
@@ -215,6 +217,12 @@ export async function fetchMembers(centerId: string, filter: MemberFilter = {}):
     }));
   }
   return list;
+}
+
+
+// 센터 회원 목록 (기존 호출부 호환: 조회 + 필터)
+export async function fetchMembers(centerId: string, filter: MemberFilter = {}): Promise<CenterMember[]> {
+  return filterMembers(await fetchMemberBase(centerId, { gradeId: filter.gradeId }), filter);
 }
 
 // 회원 등급 변경
