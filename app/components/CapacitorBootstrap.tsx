@@ -31,6 +31,9 @@ import { Capacitor } from "@capacitor/core";
 import { rootNavState } from "../../lib/navState";
 import { resolvePaymentCallbackTarget, shouldCheckLaunchUrl } from "../../lib/paymentUniversalLink";
 
+// 하이드레이션 이후 window load를 기다리는 최대 시간. 이 시간이 지나면 load와 무관하게 스플래시를 내린다.
+const SPLASH_MAX_WAIT_MS = 8000;
+
 export default function CapacitorBootstrap() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -88,6 +91,8 @@ export default function CapacitorBootstrap() {
         await hideSplash();
       } else {
         window.addEventListener("load", () => { void hideSplash(); }, { once: true });
+        // PERF-058 상한 폴백 — 느린 이미지/폰트 하나 때문에 load 이벤트가 끝없이 지연돼도 스플래시가 영원히 남지 않게 한다(hide는 멱등).
+        window.setTimeout(() => { void hideSplash(); }, SPLASH_MAX_WAIT_MS);
       }
 
       registerNativePushTapHandler((link) => {
