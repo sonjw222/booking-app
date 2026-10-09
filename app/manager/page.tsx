@@ -79,9 +79,13 @@ export default function ManagerDashboard() {
     setAttBusy(true);
     try {
       await setAttendance(a.reservationId, status);
-      if (rosterClass) setRoster(await fetchClassAttendees(rosterClass.id));
-      // 예약 n/N 숫자 즉시 반영
-      if (activeCenterId) setTodayClasses(await fetchTodayClasses(activeCenterId));
+      // 명단과 예약 n/N 숫자를 병렬로 다시 조회(서로 독립)
+      const [nextRoster, nextToday] = await Promise.all([
+        rosterClass ? fetchClassAttendees(rosterClass.id) : Promise.resolve(null),
+        activeCenterId ? fetchTodayClasses(activeCenterId) : Promise.resolve(null),
+      ]);
+      if (nextRoster) setRoster(nextRoster);
+      if (nextToday) setTodayClasses(nextToday);
     } catch (e: any) { setError(e.message); }
     finally { setAttBusy(false); }
   }
