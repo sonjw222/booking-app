@@ -315,7 +315,13 @@ export async function fetchPayments(
   fromDate: string,
   toDate: string
 ): Promise<PaymentRow[]> {
-  const { data, error } = await supabase
+  // PERF-042: PostgREST 기본 max-rows(보통 1000)에 걸려 기간 결제가 1000건을 넘으면 요약이 조용히 잘릴 수 있어
+  // (서버 설정은 NOT VERIFIED) .range() 페이지 반복으로 전부 가져온다. 1000건 이하이면 요청 1회로 기존과 동일.
+  // 페이지 사이 순서가 흔들리지 않도록 동률 보조 정렬(id)을 추가했다.
+  const PAGE_SIZE = 1000;
+  const data: any[] = [];
+  for (let start = 0; ; start += PAGE_SIZE) {
+  const { data: page, error } = await supabase
     .from("payments")
     .select(`
       id, sale_type, card_amount, cash_amount, transfer_amount, point_amount, direct_amount,
@@ -343,10 +349,15 @@ export async function fetchPayments(
     //     붙어 있어 문제없었다(하한만 짝이 안 맞았음).
     .gte("paid_at", fromDate + "T00:00:00+09:00")
     .lte("paid_at", toDate + "T23:59:59+09:00")
-    .order("paid_at", { ascending: false });
+    .order("paid_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(start, start + PAGE_SIZE - 1);
   if (error) throw new Error("매출 내역을 불러오지 못했어요: " + error.message);
+  data.push(...(page ?? []));
+  if (!page || page.length < PAGE_SIZE) break;
+  }
 
-  return (data ?? []).map((r: any) => ({
+  return data.map((r: any) => ({
     id: r.id,
     profileName: r.profiles?.name ?? "(회원)",
     saleType: r.sale_type,

@@ -18,11 +18,12 @@ import UiIcon from "../../components/UiIcon";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
   fetchProducts, createProduct, updateProduct, deleteProduct, deleteProducts, toggleProductSale,
-  fetchRules, addRule, deleteRule, ruleToText, won, DAYS, computeSelectableSchedule,
+  fetchRulesMapForProducts, addRule, deleteRule, ruleToText, won, DAYS, computeSelectableSchedule,
   type Product, type ScheduleRule, type ProductVisibility,
 } from "../../../lib/passes";
 import { fetchExistingClassOptions, type ExistingClassOption } from "../../../lib/classes";
 import { loadClassOptionsGuarded } from "../../../lib/classOptionsLoader";
+import { fetchVisibilityMemberLabels } from "../../../lib/visibilityMemberLabels";
 import { fetchGrades, fetchMembers, type Grade, type CenterMember } from "../../../lib/members";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 import ExpiryOptionField, { type ExpiryOptionValue } from "../../components/ExpiryOptionField";
@@ -149,20 +150,23 @@ export default function MembershipRulesPage() {
   const canCreateProduct = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "pass.create");
   const canToggleSale = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "pass.sale_toggle");
 
+  // 이 센터의 목록을 이미 한 번 불러왔으면(수정/추가/삭제/토글 후 갱신) 전체 로딩 화면으로 바꾸지 않고 목록을 유지한 채
+  // 조용히 다시 불러온다(스크롤/시트 위치 유지). 조회 범위는 동일하게 전체 재조회라 발급/잔액 데이터와 무관하다.
+  const loadedCenterRef = useRef<string | null>(null);
   const load = useCallback(async () => {
     if (!centerId) return;
-    setLoading(true); setError(null);
+    if (loadedCenterRef.current !== centerId) setLoading(true);
+    setError(null);
     try {
-      const prods = await fetchProducts(centerId);
-      setProducts(prods);
-      // 각 상품의 조건 로드
-      const map: Record<string, ScheduleRule[]> = {};
-      await Promise.all(prods.map(async (p) => { map[p.id] = await fetchRules(p.id); }));
-      setRulesByProduct(map);
+      // 상품 + 등급은 서로 독립이라 병렬, 예약조건은 상품 id가 필요해 그 뒤 1회 일괄 조회(상품 수만큼의 N+1 제거).
       // MWHABIT Membership Visibility Batch — 공개범위 "특정 등급" 체크박스용 등급 목록.
-      // 다른 센터 등급은 fetchGrades(centerId)가 애초에 이 센터 것만 가져오므로(RLS도
-      // 이중 방어) 섞일 일 없음.
-      setGrades(await fetchGrades(centerId));
+      // 다른 센터 등급은 fetchGrades(centerId)가 애초에 이 센터 것만 가져오므로(RLS도 이중 방어) 섞일 일 없음.
+      const [prods, gradeList] = await Promise.all([fetchProducts(centerId), fetchGrades(centerId)]);
+      const map = await fetchRulesMapForProducts(prods.map((p) => p.id));
+      setProducts(prods);
+      setRulesByProduct(map);
+      setGrades(gradeList);
+      loadedCenterRef.current = centerId;
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   }, [centerId]);
@@ -239,12 +243,8 @@ export default function MembershipRulesPage() {
     setPVisGradeIds(p.visibility.gradeIds);
     setPVisMemberIds(p.visibility.memberIds);
     if (p.visibility.type === "selected_members" && p.visibility.memberIds.length > 0 && centerId) {
-      const all = await fetchMembers(centerId);
-      const labels: Record<string, string> = {};
-      for (const cm of all) {
-        if (p.visibility.memberIds.includes(cm.id)) labels[cm.id] = `${cm.name}${cm.phone ? " " + cm.phone : ""}`;
-      }
-      setPVisMemberLabels(labels);
+      // PERF-043: 회원 전체 목록 대신 선택된 id의 이름/전화만 조회
+      setPVisMemberLabels(await fetchVisibilityMemberLabels(centerId, p.visibility.memberIds));
     } else {
       setPVisMemberLabels({});
     }
