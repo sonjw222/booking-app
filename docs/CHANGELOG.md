@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-10 — /reservation 색인 방지 누락 보완 (PR #183 후속, 웹 코드만, SQL 없음)
+- `lib/siteMeta.ts`의 비공개 경로 목록에 `/reservation`을 추가(기존엔 `/my-reservations`만 있었음) → `X-Robots-Tag: noindex, nofollow` 헤더와 robots.txt disallow 적용.
+- `app/robots.ts`: 순수 접두사 대신 세그먼트 단위 규칙(`/경로$`, `/경로/`, `/경로?`)으로 변경 — `/reservation-guide` 같은 무관한 경로가 접두사 매칭으로 막히지 않게 함. 기존 비공개 경로는 같은 방식으로 계속 차단.
+- 테스트 `tests/unit/startupsCompanyVerification.test.ts`에 robots 매칭(허용/차단 경로 목록)과 헤더 규칙 케이스 추가.
+
 ## 2026-10-10 — Claude Startups 기업 검증 개선: 공개 문의 이메일 통일, /about, 검색 접근성 (웹 코드만, SQL 없음)
 - 공개 고객 문의 이메일을 `contact@mwhabit.com`으로 통일(`lib/businessInfo.ts` `BUSINESS_INFO.email` 단일 출처, `/account-deletion`도 이 값 사용). 신청·관리용 계정은 앱 코드에 없다. 법적 사업자 정보(상호·대표자·등록번호·주소·통신판매업 신고번호·고객센터)는 변경 없음.
 - `/about`(신규, 서버 렌더링·비로그인): 서비스 소개(실제 제공 기능만), 운영 주체(등록 상호 모하빗 / 서비스 브랜드 MWHABIT), 영문 소개, 확인된 App Store 링크(Apple 공개 조회로 확인한 등록 URL), Organization JSON-LD(확인된 사실만). 사업자 상세는 `/legal/business`로만 연결.
