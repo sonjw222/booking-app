@@ -3927,3 +3927,10 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 - [ ] P3: center guard `search_path`에 `pg_temp` 고정 검토, OTP 클라이언트 IP 헤더 신뢰 범위, preflight deny-list → DEV allow-list, `mobile-ui-qa.yml` secret을 `env:`로 전달
 - [ ] watch: `member-full-lifecycle.spec.ts` 로컬 1회 간헐 실패(checkout "상품 정보를 찾을 수 없어요" → 재시도 시 waitlist 설정 0). 단독/전체/CI 재실행 모두 통과 — blocker 아님, 재발 시 trace 확인
 - [ ] 미병합 candidate: `fix/manager-center-persistence-20261007`, `fix/postlaunch-maintenance-refresh-20261007`(서로 `app/manager/*` 겹침), docs branch 선별 반영
+
+## centers 민감 컬럼 차단 적용 절차 (2026-10-09, fix/centers-sensitive-column-privileges-20261009)
+- [x] P0: SQL 1(`add_admin_list_centers_rpc_20261009.sql`) Production 적용 및 권한 검증 완료(사용자 보고 2026-10-09: owner=postgres, security_definer, owner_bypass_rls, anon 실행 불가, authenticated 실행 가능, PUBLIC grant 없음) — 재실행 불필요
+- [ ] P0: 관리자 앱 코드(RPC 호출) 배포 → /admin/centers 목록·승인·반려 확인 → 사용자 확인
+- [ ] P0: SQL 2(`fix_centers_sensitive_column_privileges_20261009.sql`) 사용자 실행 → verify + anon REST 확인(`select=business_number` 401)
+- [ ] P2: 센터 오너가 자기 센터의 `reject_reason`을 볼 필요가 생기면 별도 RPC 추가(현재 UI 없음). `business-licenses` 업로드 정책에 경로 제한이 없는 점 별도 검토
+- [ ] P3: DEV(CI) 프로젝트에도 SQL 1/2를 사용자가 적용해야 DEV에서 관리자 승인 화면 E2E를 돌릴 수 있다(현재 해당 E2E 없음)

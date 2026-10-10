@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-10-09 — centers 민감 컬럼(business_number/business_license_url/reject_reason) 익명·일반 조회 차단 (코드 + 새 migration 파일; SQL 1은 Production 적용됨, SQL 2는 앱 배포 후 적용 예정)
+- 원인: anon/authenticated가 centers 전체 SELECT 권한을 갖고 있어 RLS(행 단위)를 통과하는 공개 센터의 사업자번호/등록증 경로가 조회됐다.
+- `lib/admin.ts` `fetchCenters`: centers 직접 select 대신 플랫폼 관리자 전용 RPC `admin_list_centers(p_status)`로 전환(반환 구조 `PendingCenter` 동일).
+- 새 migration(SQL 1/2 분리, 각각 rollback/verify 포함, **Production 미적용**): `add_admin_list_centers_rpc_20261009.sql`(SECURITY DEFINER, `is_platform_admin()` 서버 검증, EXECUTE는 authenticated만) → (앱 배포 후) `fix_centers_sensitive_column_privileges_20261009.sql`(테이블 SELECT 회수 + 민감 3개를 뺀 컬럼 단위 grant). 적용 순서: SQL 1 → 앱 배포 → SQL 2.
+- 테스트: `tests/sql/centers-sensitive-column-privileges.test.mjs`(PGlite 18개), `tests/unit/admin.fetchCenters.rpc.test.ts`, `tests/unit/centersSensitiveColumns.staticCheck.test.ts`.
+- 앞으로 centers에 컬럼을 추가할 때는 공개해도 되는 컬럼에 한해 `grant select (새컬럼) on public.centers to anon, authenticated;`를 같은 migration에 포함해야 클라이언트가 읽을 수 있다(SQL 2 적용 후).
+
 ## 2026-10-09 — send-web-push: FCM INVALID_ARGUMENT로 네이티브 토큰을 삭제하지 않음 (Edge Function 코드만, 미배포)
 - `_shared/pushOutcome.ts`: `INVALID_ARGUMENT`는 토큰 오류뿐 아니라 payload/요청 형식 오류에도 나오므로 stale(토큰 행 삭제)에서 제외하고 `permanent`(행 유지, 재시도 없음)로 분류. stale은 `UNREGISTERED`/`NOT_FOUND`만. 정상 토큰을 추측으로 지우지 않기 위함. 테스트 `tests/unit/pushOutcome.test.ts` 보강. Production 배포는 별도(미실행).
 
