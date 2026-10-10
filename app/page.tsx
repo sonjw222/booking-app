@@ -8,7 +8,7 @@
 
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
-import { fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, fetchNextReservation, type HomeCenter, type HomeClass, type NextReservation } from "../lib/home";
+import { fetchMyProfileIds, fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, fetchNextReservation, type HomeCenter, type HomeClass, type NextReservation } from "../lib/home";
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
 import { fetchMyCenters } from "../lib/manager";
 import { supabase } from "../lib/supabaseClient";
@@ -168,6 +168,15 @@ export default function Home() {
   );
   const visibleClasses = useMemo(() => myUpcoming.length > 0 ? myUpcoming : classes, [classes, myUpcoming]);
 
+  // PERF-001 — 홈 마운트 한 번 동안만 유지되는 ref(모듈 전역 아님)라 다른 사용자 세션
+  // 데이터가 재사용되지 않는다. "다음 예약"과 "지금 예약 가능"이 같은 프로필 id 조회
+  // (RPC + profiles)를 한 번만 하도록 Promise를 공유한다.
+  const profileIdsRef = useRef<Promise<string[]> | null>(null);
+  function getProfileIds(): Promise<string[]> {
+    if (!profileIdsRef.current) profileIdsRef.current = fetchMyProfileIds();
+    return profileIdsRef.current;
+  }
+
   useEffect(() => {
     // 소셜 로그인 콜백 실패(사용자가 provider 동의 화면에서 취소, provider가 접근 거부 등)는
     // Supabase가 성공 시 세션 토큰을 싣는 것과 같은 방식으로 이 페이지의 URL 해시에
@@ -205,7 +214,7 @@ export default function Home() {
       // 주석 참고) 여기 한 곳에서만 원래 화면으로 이어서 보낸다. 실제로 로그인된 경우에만
       // (user 존재) 이동한다 — 세션 없이 next만 남아있는 경우는 그대로 홈에 둔다.
       if (user) {
-        fetchNextReservation().then(setNextReservation).catch(() => {});
+        fetchNextReservation(getProfileIds()).then(setNextReservation).catch(() => {});
         const next = consumePostLoginNext();
         if (next) { window.location.replace(next); return; }
         // 관리자 모드 진입 버튼(오른쪽 위) 노출 여부 — ACL-005와 동일하게 active
@@ -252,7 +261,7 @@ export default function Home() {
         // Promise.all이 끝난 "뒤"에 따로 시작돼 불필요하게 순차적이었다(서로 결과를
         // 참조하지 않는데도 네트워크 왕복 하나가 그냥 더 얹힌 셈) — 동시에 시작해두고
         // 마지막에만 기다린다. 비로그인 실패는 기존처럼 여기서 조용히 삼킨다.
-        const upcomingPromise = fetchMyUpcomingClasses().catch(() => null);
+        const upcomingPromise = fetchMyUpcomingClasses(getProfileIds()).catch(() => null);
         const [cs, cl, bn, ct] = await Promise.all([
           fetchHomeCenters(lat, lng), fetchHomeClasses(), fetchBanners(true), fetchCategories(),
         ]);

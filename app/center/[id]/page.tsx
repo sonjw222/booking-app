@@ -15,7 +15,7 @@ import Loading from "../../components/Loading";
 import { useParams, useSearchParams } from "next/navigation";
 import {
   fetchCenterDetail, fetchCenterClasses, centerPhotoUrl,
-  fetchCenterProducts, hasActivePassAtCenter, requestPurchase, fetchClassAllowedPasses,
+  settle, unwrap, fetchCenterProducts, hasActivePassAtCenter, requestPurchase, fetchClassAllowedPasses,
   type CenterDetail, type CenterClass, type CenterProduct,
 } from "../../../lib/center";
 import { ZoomableImage } from "../../components/ImageViewer";
@@ -145,22 +145,39 @@ function CenterDetailContent() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const c = await fetchCenterDetail(centerId);
-      if (!c) { setNotFound(true); setLoading(false); return; }
-      setCenter(c);
-      setClasses(await fetchCenterClasses(centerId));
-      const fetchedProducts = await fetchCenterProducts(centerId);
+      // PERF-003 — 의존 관계: 상품(products) → 예약조건(rules)만 직렬(passIds 필요).
+      // 나머지(상세/수업/상품체인/허용수강권/후기/내후기/보유이용권)는 서로 입력을 쓰지 않아
+      // 전부 먼저 시작해 두고, 아래에서 기존과 같은 순서·같은 오류 처리로 결과만 기다린다.
+      // 필수(상세/수업/상품/조건)는 실패 시 기존처럼 notFound, 선택(허용수강권/후기/내후기/
+      // 보유이용권)은 실패해도 조용히 무시. 먼저 끝난 요청의 거부가 처리 안 된 채 남지 않게
+      // settle()로 감싼다.
+      const detailP = settle(fetchCenterDetail(centerId));
+      const classesP = settle(fetchCenterClasses(centerId));
+      const productsP = settle((async () => {
+        const fetchedProducts = await fetchCenterProducts(centerId);
+        // 회원이 정확히 무슨 요일·시간에 쓸 수 있는 수강권인지 구매 전에 알 수 있도록 표시한다. 로그인은 직접 조회, 비로그인/세션 만료는 공개 상품 전용 RPC.
+        // "조회 실패"와 "조건 없음"을 구분한다(실패를 빈 결과로 삼키지 않는다).
+        const passIds = fetchedProducts.filter((p) => p.kind === "pass").map((p) => p.id);
+        const shown = await fetchDisplayRulesForProducts(centerId, passIds);
+        return { fetchedProducts, shown };
+      })());
+      const allowedP = settle(fetchClassAllowedPasses(centerId));
+      const reviewsP = settle(fetchReviews(centerId));
+      const myReviewP = settle(myReviewFor(centerId));
+      const hasPassP = settle(hasActivePassAtCenter(centerId));
+
+      const detail = unwrap(await detailP);
+      if (!detail) { setNotFound(true); setLoading(false); return; }
+      setCenter(detail);
+      setClasses(unwrap(await classesP));
+      const { fetchedProducts, shown } = unwrap(await productsP);
       setProducts(fetchedProducts);
-      // 회원이 정확히 무슨 요일·시간에 쓸 수 있는 수강권인지 구매 전에 알 수 있도록 표시한다. 로그인은 직접 조회, 비로그인/세션 만료는 공개 상품 전용 RPC.
-      // "조회 실패"와 "조건 없음"을 구분한다(실패를 빈 결과로 삼키지 않는다).
-      const passIds = fetchedProducts.filter((p) => p.kind === "pass").map((p) => p.id);
-      const shown = await fetchDisplayRulesForProducts(centerId, passIds);
       setPassRules(shown.rules);
       setRulesLoadFailed(shown.failed);
-      try { setAllowedPasses(await fetchClassAllowedPasses(centerId)); } catch { /* 무시 */ }
-      try { setReviews(await fetchReviews(centerId)); } catch { /* 무시 */ }
-      try { setMyReview(await myReviewFor(centerId)); } catch { /* 무시 */ }
-      try { setHasPass(await hasActivePassAtCenter(centerId)); } catch { /* 비로그인 */ }
+      const allowed = await allowedP; if (allowed.ok) setAllowedPasses(allowed.value);
+      const rv = await reviewsP; if (rv.ok) setReviews(rv.value);
+      const mine = await myReviewP; if (mine.ok) setMyReview(mine.value);
+      const pass = await hasPassP; if (pass.ok) setHasPass(pass.value);
     } catch {
       setNotFound(true);
     } finally {

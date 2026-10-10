@@ -464,3 +464,15 @@ export async function fetchClassAllowedPasses(centerId: string): Promise<Record<
   for (const t of Object.keys(byTitle)) out[t] = Array.from(byTitle[t]);
   return out;
 }
+
+// PERF-003 — 센터 상세가 독립 요청을 미리 동시에 시작해 두고 기존 순서대로 결과만 기다릴 때 쓰는
+// 헬퍼. 거부를 값으로 바꿔 두면 먼저 끝난 요청의 실패가 "처리 안 된 거부"로 남지 않고,
+// 필수 요청은 unwrap()으로 원래처럼 throw, 선택 요청은 ok 여부만 보고 무시할 수 있다.
+export type Settled<T> = { ok: true; value: T } | { ok: false; error: unknown };
+export function settle<T>(p: Promise<T>): Promise<Settled<T>> {
+  return p.then((value) => ({ ok: true as const, value }), (error: unknown) => ({ ok: false as const, error }));
+}
+export function unwrap<T>(r: Settled<T>): T {
+  if (r.ok) return r.value;
+  throw r.error;
+}
