@@ -33,6 +33,7 @@ export const PRIVATE_PATH_PREFIXES = [
   "/manager",
   "/admin",
   "/mypage",
+  "/reservation",
   "/my-reservations",
   "/purchases",
   "/checkout",

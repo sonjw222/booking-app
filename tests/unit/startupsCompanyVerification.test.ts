@@ -100,14 +100,33 @@ describe("공개 스토어 링크 — 확인된 것만", () => {
 });
 
 describe("robots / sitemap / 메타데이터", () => {
-  it("robots.txt: 공개 허용, 비공개 경로 disallow, sitemap 위치 선언", async () => {
+  it("robots.txt: 공개 허용, 비공개 경로를 세그먼트 단위로 disallow(중복 없음), sitemap 위치 선언", async () => {
     const { default: robots } = await import("../../app/robots");
     const r = robots();
     const rule = (Array.isArray(r.rules) ? r.rules[0] : r.rules) as { allow?: string; disallow?: string[] };
     expect(rule.allow).toBe("/");
-    for (const p of ["/manager", "/admin", "/mypage", "/checkout", "/login", "/api"]) expect(rule.disallow).toContain(p);
+    for (const p of ["/manager", "/admin", "/mypage", "/checkout", "/login", "/api", "/reservation", "/my-reservations"]) {
+      for (const f of [`${p}$`, `${p}/`, `${p}?`]) expect(rule.disallow, f).toContain(f);
+    }
     expect(new Set(rule.disallow).size).toBe(rule.disallow?.length);   // 중복 항목 없음
     expect(r.sitemap).toBe("https://mwhabit.com/sitemap.xml");
+  });
+  it("robots 매칭(RFC 9309 최장 일치): /reservation 및 하위·쿼리는 차단, /reservation-guide 등 무관한 경로와 공개 경로는 허용", async () => {
+    const { default: robots } = await import("../../app/robots");
+    const rule = (Array.isArray(robots().rules) ? robots().rules[0] : robots().rules) as { allow?: string; disallow?: string[] };
+    // `$`로 끝나는 패턴은 정확히 일치, 아니면 접두사 일치. 더 긴 패턴이 이기고 길이가 같으면 allow가 이긴다.
+    const matches = (pat: string, path: string) => (pat.endsWith("$") ? path === pat.slice(0, -1) : path.startsWith(pat));
+    const blocked = (path: string) => {
+      const d = Math.max(-1, ...(rule.disallow ?? []).filter((p) => matches(p, path)).map((p) => p.length));
+      const a = matches(rule.allow ?? "", path) ? (rule.allow ?? "").length : -1;
+      return d > a;
+    };
+    for (const path of ["/reservation", "/reservation/", "/reservation/2026-10-11", "/reservation?date=2026-10-11", "/my-reservations", "/my-reservations/abc", "/manager", "/manager/classes", "/admin/centers", "/mypage/info", "/checkout/success", "/login", "/login/kakao-callback", "/api/billing/confirm", "/settings/theme", "/cart"]) {
+      expect(blocked(path), `차단돼야 함: ${path}`).toBe(true);
+    }
+    for (const path of ["/reservation-guide", "/reservations", "/reservationx", "/managerial", "/administration", "/cartoon", "/loginx", "/apix", "/", "/about", "/legal", "/legal/business", "/account-deletion", "/search", "/products", "/category/yoga", "/center/abc"]) {
+      expect(blocked(path), `허용돼야 함: ${path}`).toBe(false);
+    }
   });
   it("sitemap: 공개 정적 페이지만(모두 실제 존재하는 라우트), 비공개·동적 경로 없음, https://mwhabit.com 기준", async () => {
     const { default: sitemap } = await import("../../app/sitemap");
@@ -144,8 +163,8 @@ describe("색인 방지 — 비공개 경로에 X-Robots-Tag: noindex", () => {
     const cfg = (await import("../../next.config")).default;
     const rules = await (cfg.headers as () => Promise<{ source: string; headers: { key: string; value: string }[] }[]>)();
     const noindex = (src: string) => rules.some((r) => r.source === src && r.headers.some((h) => h.key === "X-Robots-Tag" && /noindex/.test(h.value)));
-    for (const p of ["/manager", "/manager/:path*", "/admin", "/admin/:path*", "/mypage/:path*", "/checkout/:path*", "/login", "/api/:path*"]) expect(noindex(p), p).toBe(true);
-    for (const p of ["/about", "/legal", "/legal/:path*", "/account-deletion", "/"]) expect(noindex(p), `공개 경로 ${p}는 noindex 아님`).toBe(false);
+    for (const p of ["/manager", "/manager/:path*", "/admin", "/admin/:path*", "/mypage/:path*", "/checkout/:path*", "/login", "/api/:path*", "/reservation", "/reservation/:path*", "/my-reservations", "/my-reservations/:path*"]) expect(noindex(p), p).toBe(true);
+    for (const p of ["/about", "/legal", "/legal/:path*", "/account-deletion", "/", "/search", "/reservation-guide"]) expect(noindex(p), `공개 경로 ${p}는 noindex 아님`).toBe(false);
     expect(rules.some((r) => r.source === "/checkout/success" && r.headers.some((h) => h.key === "Referrer-Policy" && h.value === "no-referrer"))).toBe(true);
   });
 });
