@@ -107,31 +107,40 @@ function fmtDateTime(iso: string) {
   return KST_DT.format(new Date(iso)).replace(/^(\d{4})\. (\d{2})\. (\d{2})\. (\d{2}:\d{2})$/, "$1-$2-$3 $4");
 }
 
-async function getMyContext(): Promise<{ accountId: string; profileId: string; name: string; phone: string | null; isMember: boolean; isManager: boolean; isPlatformAdmin: boolean }> {
-  const accountId = await getMyAccountId();
+async function getMyContext(knownAccountId?: string): Promise<{ accountId: string; profileId: string; name: string; phone: string | null; isMember: boolean; isManager: boolean; isPlatformAdmin: boolean }> {
+  const accountId = knownAccountId ?? await getMyAccountId();
   if (!accountId) throw new Error("로그인이 필요해요");
-  const { data: acc, error: accErr } = await supabase
-    .from("accounts").select("id, name, phone, is_member, is_platform_admin")
-    .eq("id", accountId).single();
+  // PERF-012: accounts / manager_centers count / profiles 세 조회는 모두 accountId만 있으면
+  // 되는 서로 독립 요청이라 병렬로 보낸다(예전엔 3단 직렬). 에러 판정 순서(계정 → 프로필)는
+  // 그대로 유지한다. manager_centers.account_id == accounts.id == accountId 이므로 acc.id를
+  // 기다릴 필요가 없다.
+  const [accRes, countRes, profRes] = await Promise.all([
+    supabase
+      .from("accounts").select("id, name, phone, is_member, is_platform_admin")
+      .eq("id", accountId).single(),
+    supabase
+      .from("manager_centers")
+      .select("id", { count: "exact", head: true })
+      .eq("account_id", accountId)
+      .eq("status", "active"),
+    // 대표 프로필 우선, 없으면 가장 먼저 만든 프로필 사용
+    // (대표 프로필이 없거나 2개 이상이면 single() 이 실패하므로 방어)
+    supabase
+      .from("profiles").select("id, is_primary, created_at")
+      .eq("account_id", accountId)
+      .is("deleted_at", null)
+      .order("is_primary", { ascending: false })
+      .order("created_at", { ascending: true })
+      .limit(1),
+  ]);
+  const { data: acc, error: accErr } = accRes;
   if (accErr || !acc) throw new Error("계정 정보를 찾을 수 없어요");
   // ACL-005: "관리자 모드로 전환" 노출 조건은 /manager 진입 조건(lib/manager.ts의
   // getMyAccountId())과 반드시 같은 기준을 써야 한다 — accounts.is_manager 플래그가
   // 아니라 실제 active manager_centers 소속 존재 여부로 판단한다.
-  const { count: managerCenterCount } = await supabase
-    .from("manager_centers")
-    .select("id", { count: "exact", head: true })
-    .eq("account_id", acc.id)
-    .eq("status", "active");
+  const managerCenterCount = countRes.count;
   const isManager = (managerCenterCount ?? 0) > 0;
-  // 대표 프로필 우선, 없으면 가장 먼저 만든 프로필 사용
-  // (대표 프로필이 없거나 2개 이상이면 single() 이 실패하므로 방어)
-  const { data: profs, error: profErr } = await supabase
-    .from("profiles").select("id, is_primary, created_at")
-    .eq("account_id", acc.id)
-    .is("deleted_at", null)
-    .order("is_primary", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1);
+  const { data: profs, error: profErr } = profRes;
   const prof = profs?.[0];
   if (profErr) throw new Error("프로필을 불러오지 못했어요: " + profErr.message);
   if (!prof) throw new Error("프로필이 없어요. 관리자에게 문의하거나 다시 가입해주세요.");
@@ -165,15 +174,21 @@ export async function setMyMarketingConsent(consent: boolean): Promise<void> {
 }
 
 export async function fetchMyPage() {
-  const me = await getMyContext();
-
-  // 내 모든 프로필 (대표 + 자녀 등 추가 프로필)
-  const { data: profRows } = await supabase
-    .from("profiles")
-    .select("id, name, nickname, label, is_primary")
-    .eq("account_id", me.accountId)
-    .is("deleted_at", null)
-    .order("is_primary", { ascending: false });
+  // PERF-012: 계정 id를 한 번만 구한 뒤, getMyContext(accounts/manager_centers/대표 프로필)와
+  // "내 모든 프로필" 목록 조회를 병렬로 보낸다(예전엔 getMyContext 완료 후 직렬).
+  // getMyContext가 실패하면 그 에러가 그대로 던져진다(프로필 목록 쪽은 에러를 던지지 않음).
+  const accountId = await getMyAccountId();
+  if (!accountId) throw new Error("로그인이 필요해요");
+  const [me, { data: profRows }] = await Promise.all([
+    getMyContext(accountId),
+    // 내 모든 프로필 (대표 + 자녀 등 추가 프로필)
+    supabase
+      .from("profiles")
+      .select("id, name, nickname, label, is_primary")
+      .eq("account_id", accountId)
+      .is("deleted_at", null)
+      .order("is_primary", { ascending: false }),
+  ]);
   const profiles = profRows ?? [];
   const profileIds = profiles.map((p: any) => p.id);
   const hasMultiple = profiles.length > 1;

@@ -61,9 +61,13 @@ function toTimeStr(iso: string) {
 // 이 함수로 한 번만 조회한 뒤 두 함수에 넘기면, 매번 중복으로 auth.getUser()+accounts 조회를
 // 반복하지 않아도 됨 (예약 화면 성능 개선 — app/reservation/page.tsx의 load() 참고).
 export async function getMyAccountId(): Promise<string> {
-  const { data: authData } = await supabase.auth.getUser();
+  // PERF-010: auth.getUser()와 my_account_id() RPC는 서로 입력이 필요 없는 독립 요청이라
+  // 병렬로 보낸다(예전엔 직렬 2왕복). 판정 순서(미로그인 → 계정 없음)는 그대로다.
+  const [{ data: authData }, accountId] = await Promise.all([
+    supabase.auth.getUser(),
+    getMyAccountIdBase(),
+  ]);
   if (!authData.user) throw new Error("로그인이 필요해요");
-  const accountId = await getMyAccountIdBase();
   if (!accountId) throw new Error("계정 정보를 찾을 수 없어요");
   return accountId;
 }
@@ -137,6 +141,13 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   // 없게 하고, 혹시라도 한 회원이 아주 많은 센터의 수강권을 보유해 그마저 넘는 경우까지
   // 대비해 .range()로 페이지 단위 반복 조회한다.
   const membershipCenterIds = Array.from(myMembershipCenters);
+  // PERF-010: center_settings 조회는 membershipCenterIds만 있으면 되고 수업 조회 결과와
+  // 무관하므로 수업 조회와 병렬로 먼저 시작한다(아래에서 수업 조회가 끝난 뒤 await — 에러 순서 유지).
+  const settingsPromise = membershipCenterIds.length > 0
+    ? (async () => await supabase
+        .from("center_settings").select("center_id, show_all_classes").in("center_id", membershipCenterIds))()
+    : null;
+  settingsPromise?.catch(() => { /* 수업 조회가 먼저 throw하면 이 결과는 쓰이지 않음 — unhandled rejection 방지 */ });
   const classRows: any[] = [];
   if (membershipCenterIds.length > 0) {
     const PAGE_SIZE = 1000;
@@ -164,8 +175,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   // RPC로 위임 — 클라이언트에서 판정 로직을 다시 구현하면 예전에 겪은 auto_book_membership vs
   // reserve_class 드리프트가 재발할 위험이 있어 반드시 서버 함수를 그대로 재사용한다.
   if (membershipCenterIds.length > 0) {
-    const { data: settingsRows, error: settingsErr } = await supabase
-      .from("center_settings").select("center_id, show_all_classes").in("center_id", membershipCenterIds);
+    const { data: settingsRows, error: settingsErr } = await settingsPromise!;
     if (settingsErr) throw new Error("운영 설정을 불러오지 못했어요: " + settingsErr.message);
     const restrictedCenterIds = new Set(
       (settingsRows ?? []).filter((s: any) => s.show_all_classes === false).map((s: any) => s.center_id)
@@ -186,6 +196,34 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
       }
     }
   }
+
+  // PERF-010: 센터 색상(member_center_colors) / 센터 운영설정(show_group_*_count) / 휴무일은
+  // 수업 id·예약 집계 결과와 무관(filteredClassRows가 확정된 이 시점의 센터 id와 계정 id,
+  // 월 범위만 필요)해서, 아래 예약 인원·내 예약·강사 조회와 병렬로 먼저 시작한다
+  // (예전엔 그 뒤에 3개를 각각 직렬로 await). 이 세 쿼리는 원래도 에러를 검사하지 않고
+  // 빈 값으로 폴백했으므로 에러 처리 동작은 동일하다.
+  const earlyCenterMap = new Map<string, true>();
+  for (const c of filteredClassRows) {
+    const center = (c as any).centers;
+    if (center) earlyCenterMap.set(center.id, true);
+  }
+  const colorRowsPromise = (async () => await supabase
+    .from("member_center_colors")
+    .select("center_id, color")
+    .eq("account_id", account.id))();
+  const settingsRowsPromise = earlyCenterMap.size > 0
+    ? (async () => await supabase
+        .from("center_settings")
+        .select("center_id, show_group_reserved_count, show_group_waitlist_count")
+        .in("center_id", Array.from(earlyCenterMap.keys())))()
+    : null;
+  const holRowsPromise = (async () => await supabase
+    .from("center_holidays")
+    .select("center_id, holiday_date, reason")
+    .gte("holiday_date", monthStartDateOnly)
+    .lt("holiday_date", nextMonthDateOnly))();
+  // 아래에서 수업 관련 조회가 먼저 throw하면 이 결과는 쓰이지 않는다 — unhandled rejection 방지
+  colorRowsPromise.catch(() => {}); settingsRowsPromise?.catch(() => {}); holRowsPromise.catch(() => {});
 
   const classIds = filteredClassRows.map((c) => c.id);
 
@@ -261,10 +299,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   }
 
   // 통합 캘린더 색상: 센터별 색상은 계정 단위 설정 (프로필 단위 아님)
-  const { data: colorRows } = await supabase
-    .from("member_center_colors")
-    .select("center_id, color")
-    .eq("account_id", account.id);
+  const { data: colorRows } = await colorRowsPromise;
   const colorByCenter: Record<string, string> = {};
   for (const r of colorRows ?? []) colorByCenter[r.center_id] = r.color;
 
@@ -278,11 +313,8 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   // 운영설정 "회원에게 예약/대기 인원 표시" — 센터마다 다를 수 있어 등장한 센터들만 조회
   const showReservedCountByCenter: Record<string, boolean> = {};
   const showWaitlistCountByCenter: Record<string, boolean> = {};
-  if (centerMap.size > 0) {
-    const { data: settingsRows } = await supabase
-      .from("center_settings")
-      .select("center_id, show_group_reserved_count, show_group_waitlist_count")
-      .in("center_id", Array.from(centerMap.keys()));
+  if (settingsRowsPromise) {
+    const { data: settingsRows } = await settingsRowsPromise;
     for (const s of settingsRows ?? []) {
       showReservedCountByCenter[(s as any).center_id] = (s as any).show_group_reserved_count ?? true;
       showWaitlistCountByCenter[(s as any).center_id] = (s as any).show_group_waitlist_count ?? true;
@@ -290,11 +322,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   }
 
   // 휴무일
-  const { data: holRows } = await supabase
-    .from("center_holidays")
-    .select("center_id, holiday_date, reason")
-    .gte("holiday_date", monthStartDateOnly)
-    .lt("holiday_date", nextMonthDateOnly);
+  const { data: holRows } = await holRowsPromise;
   const holidays: CenterHoliday[] = (holRows ?? []).map((h) => ({
     centerId: h.center_id,
     date: h.holiday_date,
