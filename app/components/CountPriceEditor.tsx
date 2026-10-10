@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { TierDraft } from "../../lib/selectableCount";
+import { patchTierRow } from "../../lib/tierRows";
 import { fillDraftsFromUnit, MAX_TIER_COUNT, maxTierCount, resizeTierDrafts } from "../../lib/goodsForm";
 
 /*
@@ -11,6 +12,24 @@ import { fillDraftsFromUnit, MAX_TIER_COUNT, maxTierCount, resizeTierDrafts } fr
   - 행마다 [☑ N회] [가격]: 체크 해제한 회차는 판매하지 않는다(가격표에 저장되지 않음 → 회원 선택지에 안 나옴).
   - "기준 1회 가격 → 기본 가격 채우기"는 편의 기능일 뿐(현재 행 수만큼 unit×count), 저장되는 값은 행별 입력값이다.
 */
+// 행 단위 memo(PERF-041): 최대 100행이라 한 글자 입력마다 전체 행이 리렌더되던 것을, 바뀐 행만 리렌더하도록 분리.
+// patchTierRow가 바뀌지 않은 행의 참조를 유지하고 콜백은 안정적이라 memo가 실제로 건너뛴다.
+const TierRow = memo(function TierRow({
+  row, disabled, onEnabled, onPrice,
+}: { row: TierDraft; disabled?: boolean; onEnabled: (count: number, enabled: boolean) => void; onPrice: (count: number, price: string) => void }) {
+  const r = row;
+  return (
+    <label className={`count-price-row ${r.enabled ? "" : "off"}`}>
+      <input type="checkbox" aria-label={`${r.count}회 판매`} checked={r.enabled} disabled={disabled}
+        onChange={(e) => onEnabled(r.count, e.target.checked)} />
+      <span className="count-price-count">{r.count}회</span>
+      <input aria-label={`${r.count}회 가격`} inputMode="numeric" className="input-field" placeholder="가격(원)"
+        value={r.price} disabled={disabled || !r.enabled}
+        onChange={(e) => onPrice(r.count, e.target.value.replace(/[^0-9]/g, ""))} />
+    </label>
+  );
+});
+
 export default function CountPriceEditor({
   rows, onChange, disabled,
 }: { rows: TierDraft[]; onChange: (rows: TierDraft[]) => void; disabled?: boolean }) {
@@ -23,8 +42,14 @@ export default function CountPriceEditor({
   // 다른 상품을 열거나 값이 외부에서 바뀌면 입력창을 실제 행 수에 맞춘다(입력 중에는 건드리지 않음).
   useEffect(() => { if (!editingMax) setMaxText(String(rowMax)); }, [rowMax, editingMax]);
 
-  const setRow = (count: number, patch: Partial<TierDraft>) =>
-    onChange(rows.map((r) => (r.count === count ? { ...r, ...patch } : r)));
+  // 행 콜백은 최신 rows/onChange를 ref로 읽어 참조가 고정된다(행 memo 전제).
+  const rowsRef = useRef(rows);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { rowsRef.current = rows; onChangeRef.current = onChange; });
+  const onRowEnabled = useCallback((count: number, enabled: boolean) =>
+    onChangeRef.current(patchTierRow(rowsRef.current, count, { enabled })), []);
+  const onRowPrice = useCallback((count: number, price: string) =>
+    onChangeRef.current(patchTierRow(rowsRef.current, count, { price })), []);
   const unitNum = Number(unit.replace(/[^0-9]/g, ""));
 
   function changeMax(text: string) {
@@ -67,14 +92,7 @@ export default function CountPriceEditor({
       </div>
       <div className="count-price-rows">
         {rows.map((r) => (
-          <label key={r.count} className={`count-price-row ${r.enabled ? "" : "off"}`}>
-            <input type="checkbox" aria-label={`${r.count}회 판매`} checked={r.enabled} disabled={disabled}
-              onChange={(e) => setRow(r.count, { enabled: e.target.checked })} />
-            <span className="count-price-count">{r.count}회</span>
-            <input aria-label={`${r.count}회 가격`} inputMode="numeric" className="input-field" placeholder="가격(원)"
-              value={r.price} disabled={disabled || !r.enabled}
-              onChange={(e) => setRow(r.count, { price: e.target.value.replace(/[^0-9]/g, "") })} />
-          </label>
+          <TierRow key={r.count} row={r} disabled={disabled} onEnabled={onRowEnabled} onPrice={onRowPrice} />
         ))}
       </div>
       <div className="perm-guide" style={{ margin: "6px 0 0" }}>

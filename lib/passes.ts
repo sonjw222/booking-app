@@ -447,6 +447,15 @@ export async function fetchRulesForProducts(productIds: string[]): Promise<Recor
   return out;
 }
 
+// PERF-040: 상품마다 fetchRules(id)를 N번 부르던 것을 fetchRulesForProducts 1회로 대체. 결과는 기존
+// `{ [productId]: await fetchRules(productId) }`와 동일 — 규칙이 없는 상품도 빈 배열 키를 가진다.
+export async function fetchRulesMapForProducts(productIds: string[]): Promise<Record<string, ScheduleRule[]>> {
+  const grouped = await fetchRulesForProducts(productIds);
+  const out: Record<string, ScheduleRule[]> = {};
+  for (const id of productIds) out[id] = grouped[id] ?? [];
+  return out;
+}
+
 // 구매 화면 표시용 예약조건(2026-10-03): 로그인 사용자는 기존 직접 조회(RLS: auth.uid() is not null), 비로그인/세션 만료/권한 오류는
 // 공개 상품 전용 RPC(fetch_public_product_schedule_rules — 공개 storefront와 같은 경계)로 센터당 1회 조회한다(N+1 없음).
 // 반환은 현재 화면에 보이는 상품(visibleProductIds)의 규칙만. failed=true는 "조회 실패"라서 "조건 없음(빈 결과)"과 구분된다.

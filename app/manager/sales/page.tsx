@@ -11,7 +11,7 @@ import SheetOverlay from "../../components/SheetOverlay";
   - "+ 결제 등록" 시트: 회원·매출구분·분할결제·미수금·담당강사
 */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Loading from "../../components/Loading";
 import DatePicker from "../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
@@ -152,20 +152,39 @@ export default function SalesPage() {
     if (!centerId) return;
     setLoading(true); setError(null);
     try {
-      const [pay, exp, pts] = await Promise.all([
+      // PERF-042: 포인트 이력은 기간과 무관한 센터 전체 이력(누적 잔액 계산)이라 기간 변경마다 다시 받지 않는다.
+      // 아래 포인트 탭 effect가 탭 진입 시 한 번, 그리고 등록/결제 변경 후(pointsVersion)에만 다시 불러온다.
+      const [pay, exp] = await Promise.all([
         fetchPayments(centerId, from, to),
         fetchExpenses(centerId, from, to),
-        fetchPoints(centerId),
       ]);
       setRows(pay);
       setSummary(summarize(pay));
       setExpenses(exp);
-      setPoints(pts);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   }, [centerId, from, to]);
 
   useEffect(() => { load(); }, [load]);
+
+  // 포인트 탭 지연 로드: (센터, pointsVersion) 조합당 한 번만 조회. 결제/지출/포인트 변경 후에는 reload()가 버전을 올려
+  // 잔액이 오래된 값으로 남지 않게 한다(탭이 열려 있으면 즉시, 아니면 다음 진입 시).
+  const [pointsVersion, setPointsVersion] = useState(0);
+  const [pointsLoading, setPointsLoading] = useState(true);   // 첫 진입 전에는 "내역 없음"이 깜빡이지 않게 로딩 상태로 시작
+  const pointsLoadedKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (tab !== "point" || !centerId) return;
+    const key = `${centerId}:${pointsVersion}`;
+    if (pointsLoadedKey.current === key) return;
+    let cancelled = false;
+    setPointsLoading(true);
+    fetchPoints(centerId)
+      .then((pts) => { if (!cancelled) { setPoints(pts); pointsLoadedKey.current = key; } })
+      .catch((e) => { if (!cancelled) setError(e.message); })
+      .finally(() => { if (!cancelled) setPointsLoading(false); });
+    return () => { cancelled = true; };
+  }, [tab, centerId, pointsVersion]);
+  async function reload() { setPointsVersion((v) => v + 1); await load(); }
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
@@ -248,7 +267,7 @@ export default function SalesPage() {
       // 폼 초기화
       setFCard(""); setFCash(""); setFTransfer(""); setFPoint(""); setFUnpaid(""); setFMemo("");
       setFSaleType("new"); setFProductId(""); setFGoodsId(""); setFUnpaidTouched(false);
-      await load();
+      await reload();
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
   }
@@ -274,7 +293,7 @@ export default function SalesPage() {
       showToast("미수금을 회수 처리했어요");
       setCollectFor(null);
       setPayDetail(null);
-      await load();
+      await reload();
     } catch (e: any) { setError(e.message); }
     finally { setCollecting(false); }
   }
@@ -296,7 +315,7 @@ export default function SalesPage() {
       await registerExpense({ centerId, category: eCategory, amount: num(eAmount), spentAt: eDate, memo: eMemo || undefined });
       showToast("지출을 등록했어요");
       setExpSheet(false); setEAmount(""); setEMemo("");
-      await load();
+      await reload();
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
   }
@@ -304,7 +323,7 @@ export default function SalesPage() {
   async function handleDeleteExpense(id: string) {
     if (!(await globalThis.appConfirm("이 지출을 삭제할까요?"))) return;
     setBusy(true);
-    try { await deleteExpense(id); showToast("삭제했어요"); await load(); }
+    try { await deleteExpense(id); showToast("삭제했어요"); await reload(); }
     catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
   }
@@ -317,7 +336,7 @@ export default function SalesPage() {
       await registerPoint({ centerId, profileId: ptProfile, amount: signed, reason: ptReason || undefined });
       showToast(ptSign === "earn" ? "포인트를 적립했어요" : "포인트를 사용했어요");
       setPtSheet(false); setPtAmount(""); setPtReason(""); setPtSign("earn");
-      await load();
+      await reload();
     } catch (e: any) { setError(e.message); }
     finally { setBusy(false); }
   }
@@ -519,7 +538,9 @@ export default function SalesPage() {
         /* ---------- 포인트 탭 ---------- */
         <>
           <div className="menu-section-label">포인트 내역 ({points.length}건)</div>
-          {points.length === 0 ? (
+          {pointsLoading ? (
+            <Loading />
+          ) : points.length === 0 ? (
             <div className="daylist-empty" style={{ paddingTop: 20 }}>포인트 내역이 없어요</div>
           ) : (
             <div className="sales-list">

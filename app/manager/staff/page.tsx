@@ -80,10 +80,11 @@ export default function StaffPage() {
       setRoles(rs); setStaff(st); setPerms(ps);
       // 오너가 아닌 첫 역할을 기본 선택 (오너는 모든 권한 자동 보유라 편집 불필요)
       const editable = rs.find((r) => !r.isOwner);
-      if (editable && !activeRoleId) setActiveRoleId(editable.id);
+      // PERF-044: activeRoleId를 deps에 두면 첫 로드 직후 load가 재생성되어 역할/스태프/권한 3요청이 한 번 더 나갔다 → 함수형 갱신으로 의존 제거
+      if (editable) setActiveRoleId((prev) => prev ?? editable.id);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
-  }, [centerId, activeRoleId]);
+  }, [centerId]);
 
   useEffect(() => { load(); }, [load]);
 
