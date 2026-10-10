@@ -3928,9 +3928,20 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 - [ ] watch: `member-full-lifecycle.spec.ts` 로컬 1회 간헐 실패(checkout "상품 정보를 찾을 수 없어요" → 재시도 시 waitlist 설정 0). 단독/전체/CI 재실행 모두 통과 — blocker 아님, 재발 시 trace 확인
 - [ ] 미병합 candidate: `fix/manager-center-persistence-20261007`, `fix/postlaunch-maintenance-refresh-20261007`(서로 `app/manager/*` 겹침), docs branch 선별 반영
 
-## centers 민감 컬럼 차단 적용 절차 (2026-10-09, fix/centers-sensitive-column-privileges-20261009)
-- [x] P0: SQL 1(`add_admin_list_centers_rpc_20261009.sql`) Production 적용 및 권한 검증 완료(사용자 보고 2026-10-09: owner=postgres, security_definer, owner_bypass_rls, anon 실행 불가, authenticated 실행 가능, PUBLIC grant 없음) — 재실행 불필요
-- [ ] P0: 관리자 앱 코드(RPC 호출) 배포 → /admin/centers 목록·승인·반려 확인 → 사용자 확인
-- [ ] P0: SQL 2(`fix_centers_sensitive_column_privileges_20261009.sql`) 사용자 실행 → verify + anon REST 확인(`select=business_number` 401)
+## 성능 Sprint 후속 (2026-10-10, docs/PERF_SPRINT_20261010.md)
+- [x] (2026-10-10 완료) PR #175 → #176~#181(Batch F,A,B,C,D,E) 순차 병합. **성능 Sprint 완료 시점 main = aa1a605**(이후 #173 → 02425ff, #174 → 9592b50 병합으로 main이 더 앞서 있음)
+- [x] (2026-10-10 완료) PR #173(centers 민감 컬럼 RPC) 병합 02425ff, PR #174(Android 1.0.1 설정) 병합 9592b50 — 둘 다 최신 main 기준 합성 CI 전부 성공 후 병합
+- [ ] P1: Production PostgREST max-rows(Settings → API) 확인, 가장 큰 센터의 center_members/memberships 행 수 확인(회원 1,000행 상한 실제 영향 판단)
+- [ ] P2: 회원 서버 검색 RPC(SQL 필요, 대형 센터 요청 수 감소), 수업+상품 연결 트랜잭션 RPC(PERF-015), 인덱스 후보 Production pg_indexes 확인
+- [ ] P2: Batch G(플랫폼 관리자) — **착수 조건 충족**(#173 병합·SQL 2 적용·관리자 화면 확인 완료), 사용자 별도 승인 대기: admin/centers 탭 재확인 제거·페이지네이션(app/admin/centers/page.tsx, lib/admin.ts)
+- [ ] P3: 실기기(iOS/Android) cold/warm start·스플래시·복귀 측정, Profiler로 예약/수업 화면 리렌더 측정, SessionWatcher 모달 import dynamic 분리, 회원 목록 가상화
+- [ ] P3: lib/reservations.ts getMyAccountId의 auth.getUser 왕복 정리 (accountLinking 캐시 무효화는 #176에서 반영 완료)
+- [ ] P1: 실제 속도(ms) 개선 측정(실기기·Profiler·Production Web Vitals) 필요. 웹 배포: main aa1a605·02425ff·9592b50 모두 Vercel Production 배포 기록 success(GitHub Deployments), 02425ff는 라이브 `/admin/centers` 번들에서 새 RPC 호출 확인
+- [ ] 정리 대상(승인 후 삭제): 원격 임시 검증 브랜치 verify/pr173-on-main-aa1a605, verify/pr174-on-main-aa1a605 (병합 완료로 용도 종료)
+
+## centers 민감 컬럼 차단 적용 절차 (2026-10-09~10, PR #173)
+- [x] P0: SQL 1(`add_admin_list_centers_rpc_20261009.sql`) Production 적용 및 권한 검증 완료(사용자 보고 2026-10-09)
+- [x] P0: 관리자 앱 코드(RPC 호출) 배포 완료(02425ff) → /admin/centers 대기·승인·반려 탭과 기능 정상(사용자 확인 2026-10-10)
+- [x] P0: SQL 2(`fix_centers_sensitive_column_privileges_20261009.sql`) **Production 적용 성공**(사용자 보고 2026-10-10): 민감 3컬럼 anon/authenticated SELECT false, 공개 19컬럼 정상, 테이블 SELECT 제거, UPDATE·service_role 유지, 허용 목록 밖 열린 컬럼 0행, 회원 홈·센터 검색·상세·예약 정상 — 재실행 불필요
 - [ ] P2: 센터 오너가 자기 센터의 `reject_reason`을 볼 필요가 생기면 별도 RPC 추가(현재 UI 없음). `business-licenses` 업로드 정책에 경로 제한이 없는 점 별도 검토
-- [ ] P3: DEV(CI) 프로젝트에도 SQL 1/2를 사용자가 적용해야 DEV에서 관리자 승인 화면 E2E를 돌릴 수 있다(현재 해당 E2E 없음)
+- [ ] P3: DEV(CI) 프로젝트에도 SQL 1/2를 사용자가 적용해야 DEV에서 관리자 승인 화면 E2E를 돌릴 수 있다(현재 해당 E2E 없음). centers에 컬럼을 추가하면 공개 허용 컬럼에 한해 `grant select (새컬럼) on public.centers to anon, authenticated;`를 같은 migration에 포함
