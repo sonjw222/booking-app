@@ -1,7 +1,7 @@
 # CHANGELOG
 
-## 2026-10-10 — 성능 최적화 Sprint (코드는 Batch별 미병합 브랜치, 추적표 docs/PERF_SPRINT_20261010.md)
-- 회원: 센터 상세 직렬 7→2단, 홈 중복 조회 제거, 예약/마이페이지 병렬화, 5분 이상 복귀 시 선택 재조회. 관리자: 수업 중복 로드·월 이동 재조회 제거와 stale 응답 가드, 회원 목록 1,000행 상한 누락 수정(전량 페이지네이션), 규칙 N+1·가격표 행 memo·포인트 이력 지연 로드. 공통: 계정 조회 in-flight 공유, 알림 구독 공유, 스플래시 8초 폴백. SQL 없음.
+## 2026-10-10 — 성능 최적화 Sprint (Batch A~F를 PR #176~#181로 병합, 최종 main aa1a605; 추적표 docs/PERF_SPRINT_20261010.md)
+- 회원: 센터 상세 직렬 7→2단, 홈 중복 조회 제거, 예약/마이페이지 병렬화, 5분 이상 복귀 시 선택 재조회. 관리자: 수업 중복 로드·월 이동 재조회 제거와 stale 응답 가드, 회원 목록 1,000행 상한 누락 수정(전량 페이지네이션), 규칙 N+1·가격표 행 memo·포인트 이력 지연 로드. 공통: 계정 조회 in-flight 공유, 알림 구독 공유, 스플래시 8초 폴백. SQL 없음. 최신 main 검증: unit 2,197 / integration 346 / E2E 1~4 통과. 실제 속도(ms) 개선은 미측정(요청 수·직렬 단계는 코드 구조 기준).
 
 ## 2026-10-09 — send-web-push: FCM INVALID_ARGUMENT로 네이티브 토큰을 삭제하지 않음 (Edge Function 코드만, 미배포)
 - `_shared/pushOutcome.ts`: `INVALID_ARGUMENT`는 토큰 오류뿐 아니라 payload/요청 형식 오류에도 나오므로 stale(토큰 행 삭제)에서 제외하고 `permanent`(행 유지, 재시도 없음)로 분류. stale은 `UNREGISTERED`/`NOT_FOUND`만. 정상 토큰을 추측으로 지우지 않기 위함. 테스트 `tests/unit/pushOutcome.test.ts` 보강. Production 배포는 별도(미실행).

@@ -1,18 +1,19 @@
 # 성능 최적화 Sprint (2026-10-10) — 추적표 / 병합 순서 / 한계
 
-기준 main `f3828a9`. 구현은 Batch별 브랜치(아래)에 있고 **모두 미병합**이다. 이 문서는 docs 전용 브랜치에 있다.
+구현 기준 main `f3828a9`. **Batch A~F는 PR #176~#181로 모두 병합 완료**(최종 main `aa1a605`, 2026-10-10). 이 문서는 docs 전용 브랜치(PR)에 있다. Batch G(플랫폼 관리자)는 PR #173 병합 후 착수(보류).
 태그: MEASURED(실측) / CODE-INFERRED(코드 구조) / NOT VERIFIED. 요청 수·직렬 단계 수치는 별도 표기가 없으면 CODE-INFERRED(실제 ms 개선은 NOT VERIFIED).
 
-## Batch → 브랜치
-| Batch | 브랜치 | 커밋 | 영역 |
-|---|---|---|---|
-| A | perf/member-home-center-20261010 | f943ea1 | 회원 홈·검색·센터 상세 |
-| B | perf/member-reservation-20261010 | 4b19fed | 회원 예약·내 예약·마이페이지 |
-| C | perf/manager-classes-calendar-20261010 | a99881c | 센터 관리자 수업·캘린더·홈 |
-| D | perf/manager-members-20261010 | 19b3455 | 센터 관리자 회원(1,000행 상한) |
-| E | perf/manager-products-sales-20261010 | bde5ac8 | 상품·이용권·매출·기타 관리자 화면 |
-| F | perf/shared-auth-realtime-bundle-20261010 | 4ee0c18 | 공통 인증·알림·스플래시 |
-| G | (미착수) | – | 플랫폼 관리자 — PR #173 병합 후 |
+## Batch → PR / 병합
+| Batch | 브랜치 | PR | 병합 직전 HEAD (= CI 성공 SHA) | 병합 커밋 | 영역 |
+|---|---|---|---|---|---|
+| F | perf/shared-auth-realtime-bundle-20261010 | #176 | 757d5f7 | 799dee4 | 공통 인증·알림·스플래시 |
+| A | perf/member-home-center-20261010 | #177 | f943ea1 | fad2ad0 | 회원 홈·검색·센터 상세 |
+| B | perf/member-reservation-20261010 | #178 | c96ff8f | ca2d10d | 회원 예약·내 예약·마이페이지 (+불안정 테스트 수정) |
+| C | perf/manager-classes-calendar-20261010 | #179 | a99881c | 0ae0f95 | 센터 관리자 수업·캘린더·홈 |
+| D | perf/manager-members-20261010 | #180 | 19b3455 | d0f6d5a | 센터 관리자 회원(1,000행 상한) |
+| E | perf/manager-products-sales-20261010 | #181 | bde5ac8 | aa1a605 | 상품·이용권·매출·기타 관리자 화면 |
+| G | (미착수) | – | – | – | 플랫폼 관리자 — PR #173 병합 후 |
+병합은 모두 merge commit, 한 번에 하나씩(HEAD 고정), 병합 후 main CI(Build·Unit) 성공 확인 후 다음 진행. 선행으로 PR #175(E2E 사이드바 일요일 칸 클릭 수정)가 `411d831`로 병합됨.
 
 ## PERF 추적표
 | ID | 항목 | 영역 | Batch | 상태 | 근거/변경 요약 |
@@ -57,23 +58,29 @@
 | 056 | CSS | 공통 | F | NEEDS-MEASUREMENT | 안전한 삭제 근거 없음 |
 | 057 | 장시간 사용 | 공통 | F | 일부 IMPLEMENTED | 토스트 타이머 cleanup, 채널 정리 |
 | 058 | 스플래시 상한 | 공통 | F | IMPLEMENTED(웹 코드만) | 8초 폴백. 네이티브 자체 타임아웃은 별도 승인(빌드 필요) |
-| 060 | admin 탭 전환 시 관리자 재확인 | 플랫폼 | G | DEFERRED-DEPENDENCY | PR #173(app/admin/centers, lib/admin.ts) 병합 후 |
+| 060 | admin 탭 전환 시 관리자 재확인 | 플랫폼 | G | DEFERRED-DEPENDENCY | PR #173(app/admin/centers, lib/admin.ts) 병합 후 착수 |
 | 061 | 플랫폼 센터 목록 페이지네이션 | 플랫폼 | G | DEFERRED-DEPENDENCY | 동일 |
 | 062 | 나머지 /admin 라우트 조사 | 플랫폼 | G | NEEDS-MEASUREMENT | 9개 라우트 중 centers만 분석됨 |
 | 070 | DB 인덱스 후보 | DB | – | NEEDS-SQL | 저장소에 create index 없음 ≠ 누락. Production pg_indexes 확인 필요 |
 | 071 | 기준선/실측(Web Vitals, 실기기) | 공통 | – | NOT VERIFIED | 실기기/Profiler 없음 |
 | 072 | Production TTFB 변동 | 공통 | – | NOT VERIFIED | 단일 표본 3.95s 후 0.54s |
 
-## 통합 검증 (모든 Batch 병합 시, 로컬)
-충돌 없음(6개 브랜치 변경 파일 겹침 0). unit 184 files / 2,195 통과, Production build 통과, CI/dev Integration 346/346, E2E 체크포인트 1~4 = 18 / 13 / 17(+1 skip) / 27 통과. 번들: 대부분 라우트 +1.5~4.8KB(MEASURED, 압축 해제 firstLoad).
-단, 로컬 E2E는 CI와 달리 포인터가 좌측 레일 위에 있지 않아 **사이드바 일요일 칸 문제(PR #175)**를 재현하지 못한다 — 아래 병합 순서의 #175를 먼저 병합해야 CI에서 안전하다.
+## 최종 검증 (병합 후 최신 main `aa1a605`, 로컬, CI/dev Supabase)
+- Unit 185 files / **2,197 통과**, Production build 통과, Integration **346/346**, E2E 체크포인트 1~4 = 18 / 13 / 17(+1 skip: mock 결제에서 실제 토스 게이트웨이 테스트) / 27 통과.
+- 각 PR은 병합 전 최신 main과 합친 상태의 unit·타입체크를 로컬 재확인. 번들: 대부분 라우트 +1.5~4.8KB(MEASURED, 압축 해제 firstLoad) — 코드 추가분이며 감소 없음.
+- **실제 속도(ms) 개선은 미측정(NOT VERIFIED)** — 요청 수·직렬 단계 개선은 코드 구조 기준(CODE-INFERRED).
+- 웹 배포: GitHub Deployments API상 `aa1a605`의 Production 배포 기록이 success(Vercel 연동). 도메인이 해당 SHA를 서빙하는지는 직접 확인하지 않음 → **자동 배포 여부/서빙 SHA는 확정 전**으로 취급.
+- 특별 검증: Batch F 계정 연동 캐시 무효화(757d5f7) 포함, Batch B 불안정 테스트 수정(c96ff8f) 포함·main 반영, Batch D는 주소가 있는 DEV 테스트 데이터에서 임베드와 기존 조회가 일치(3행, 불일치 0, 임시 주소 원복).
+- 병합 중 관찰된 CI 불안정: #179 첫 Unit 실패(= #178이 고친 memberReservationUi doMock 경합), #180 첫 Integration 실패(sec009 RLS 테스트 20초 timeout, 변경 모듈과 무관한 DEV 지연으로 판단, 재실행·누적 통합 검증 통과).
 
-## 권장 병합 순서
-1. PR #175(E2E 캘린더/사이드바) — 이후 PR의 CI 안정화
-2. PR #173(centers 민감 컬럼; SQL 2는 별도 사용자 실행), PR #174(Android 설정)
-3. Batch F → A → B (공통 인증 변경을 먼저), 이후 C, D, E (파일 겹침 없음, 순서 자유)
-4. Batch G(플랫폼 관리자) — #173 병합 후
-CI는 같은 동시성 그룹이라 PR을 한 번에 하나씩 열어 순차 검증(대기 중 실행은 최신 것으로 대체됨).
+## 병합 순서 (완료 / 남은 것)
+1. 완료: #175 → #176(F) → #177(A) → #178(B) → #179(C) → #180(D) → #181(E).
+2. 남음(미병합): PR #173(centers 민감 컬럼 RPC; **SQL 2는 사용자가 앱 배포 후 별도 실행**), PR #174(Android 1.0.1 설정). 둘 다 최신 main `aa1a605`와 충돌 없음. PR 코드는 수정하지 않고 'main + PR HEAD' 병합 커밋을 임시 브랜치(verify/pr173-on-main-aa1a605, verify/pr174-on-main-aa1a605)에 만들어 workflow_dispatch로 순차 검증(GitHub Re-run은 이전 병합 ref를 쓰므로 제외):
+   - #173: run 38029035749, head `b1af630`(부모 main `aa1a605` + PR HEAD `264443c`) — Preflight/Build/Unit/E2E 1~4/Integration **전부 성공**.
+   - #174: run 38030795178, head `b96d076`(부모 main `aa1a605` + PR HEAD `981cde3`) — **전부 성공**.
+   - 이전 PR CI 실패(E2E 일요일 칸 클릭)는 #175 반영으로 해소된 것으로 확인. 병합은 사용자 승인 대기.
+3. Batch G(플랫폼 관리자: `/admin/centers` 탭 전환 시 관리자 재확인 제거, 센터 목록 페이지네이션): **#173 병합 + 관리자 화면 검증 후 착수**(같은 파일 `app/admin/centers/page.tsx`, `lib/admin.ts` 의존).
+CI는 같은 동시성 그룹이라 PR/검증을 한 번에 하나씩 순차로(대기 중 실행은 최신 것으로 대체됨).
 
 ## SQL
 이번 Sprint에서 실행한 SQL 없음. 필요 후보: 회원 서버 검색 RPC, 수업+상품 연결 트랜잭션 RPC, 인덱스 후보(classes(center_id,start_time), memberships(profile_id,status), reservations(profile_id), profiles(account_id), manager_centers(account_id)) — Production 확인 후 별도 migration.

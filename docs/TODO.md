@@ -3929,9 +3929,11 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 - [ ] 미병합 candidate: `fix/manager-center-persistence-20261007`, `fix/postlaunch-maintenance-refresh-20261007`(서로 `app/manager/*` 겹침), docs branch 선별 반영
 
 ## 성능 Sprint 후속 (2026-10-10, docs/PERF_SPRINT_20261010.md)
-- [ ] P0: PR #175 병합 후 성능 PR(Batch A~F)을 한 번에 하나씩 CI 검증·병합(순서는 추적표 문서)
+- [x] (2026-10-10 완료) PR #175 → #176~#181(Batch F,A,B,C,D,E) 순차 병합, 최종 main aa1a605 (docs/PERF_SPRINT_20261010.md)
+- [ ] P0: PR #173(centers 민감 컬럼, SQL 2는 앱 배포 후 사용자 실행)·#174(Android 1.0.1) — 최신 main aa1a605 기준 CI 재검증 완료(둘 다 전부 성공), 사용자 병합 승인 대기
 - [ ] P1: Production PostgREST max-rows(Settings → API) 확인, 가장 큰 센터의 center_members/memberships 행 수 확인(회원 1,000행 상한 실제 영향 판단)
 - [ ] P2: 회원 서버 검색 RPC(SQL 필요, 대형 센터 요청 수 감소), 수업+상품 연결 트랜잭션 RPC(PERF-015), 인덱스 후보 Production pg_indexes 확인
-- [ ] P2: Batch G(플랫폼 관리자) — PR #173 병합 후 admin/centers 탭 재확인 제거·페이지네이션
+- [ ] P2: Batch G(플랫폼 관리자) — **PR #173 병합 + 관리자 화면 검증 후** admin/centers 탭 재확인 제거·페이지네이션(app/admin/centers/page.tsx, lib/admin.ts)
 - [ ] P3: 실기기(iOS/Android) cold/warm start·스플래시·복귀 측정, Profiler로 예약/수업 화면 리렌더 측정, SessionWatcher 모달 import dynamic 분리, 회원 목록 가상화
 - [ ] P3: lib/accountLinking.ts 연동 성공 후 invalidateMyAccountIdCache() 호출, lib/reservations.ts getMyAccountId의 auth.getUser 왕복 정리
+- [ ] P1: 웹 자동 배포 확인 — main aa1a605의 Vercel Production 배포 기록은 success이나 도메인 서빙 SHA는 미확인. 실제 속도(ms) 개선 측정(실기기·Profiler·Production Web Vitals) 필요
