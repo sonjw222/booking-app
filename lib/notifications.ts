@@ -196,29 +196,85 @@ export async function setNotificationPinned(id: string, pinned: boolean): Promis
   - 내 계정으로 새 알림이 insert 되면 콜백 호출 → 팝업 표시
   - 반환된 unsubscribe()를 컴포넌트 언마운트 시 호출
 */
+// PERF-051: 회원 홈·NotificationToaster·ManagerNav가 각각 구독하면 채널과 my_account_id 조회가 중복되므로,
+// 같은 계정의 구독은 채널 1개를 공유하고 리스너만 fan-out 한다. 마지막 리스너가 해제되면 채널을 제거한다.
+// 로그인/로그아웃(SIGNED_IN/SIGNED_OUT) 시에는 계정이 바뀌었는지 다시 확인해 채널을 새 계정 필터로 교체한다.
+type NotiHub = {
+  accountId: string | null;
+  channel: ReturnType<typeof supabase.channel> | null;
+  listeners: Set<(n: Notification) => void>;
+  seq: number;
+};
+let notiHub: NotiHub | null = null;
+let notiAuthListenerRegistered = false;
+
+function openHubChannel(hub: NotiHub, accountId: string) {
+  const uniq = Math.random().toString(36).slice(2);
+  hub.accountId = accountId;
+  hub.channel = supabase
+    .channel(`noti-${accountId}-${uniq}`)
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "notifications", filter: `recipient_account_id=eq.${accountId}` },
+      (payload) => {
+        const n = mapRow(payload.new);
+        for (const fn of Array.from(hub.listeners)) {
+          try { fn(n); } catch { /* 한 리스너의 오류가 다른 리스너 전달을 막지 않게 */ }
+        }
+      }
+    )
+    .subscribe();
+}
+
+function closeHubChannel(hub: NotiHub) {
+  if (hub.channel) { supabase.removeChannel(hub.channel); hub.channel = null; }
+  hub.accountId = null;
+}
+
+async function refreshHubAccount() {
+  const hub = notiHub;
+  if (!hub) return;
+  const seq = ++hub.seq;
+  const accountId = await getMyAccountId();
+  if (notiHub !== hub || hub.seq !== seq || hub.listeners.size === 0) return; // 그 사이 더 새 확인이 시작됐거나 구독자가 모두 사라짐
+  if (accountId === hub.accountId) return;
+  closeHubChannel(hub);
+  if (accountId) openHubChannel(hub, accountId);
+}
+
+function registerNotiAuthListener() {
+  if (notiAuthListenerRegistered || typeof window === "undefined") return;
+  if (typeof supabase.auth?.onAuthStateChange !== "function") return;
+  notiAuthListenerRegistered = true;
+  supabase.auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_IN" || event === "SIGNED_OUT") void refreshHubAccount();
+  });
+}
+
 export async function subscribeNotifications(
   onNew: (n: Notification) => void
 ): Promise<() => void> {
   const accountId = await getMyAccountId();
   if (!accountId) return () => {};
 
-  // 채널 이름을 매번 고유하게 (여러 컴포넌트에서 동시에 구독해도 충돌 안 나게)
-  const uniq = Math.random().toString(36).slice(2);
-  const channel = supabase
-    .channel(`noti-${accountId}-${uniq}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "notifications",
-        filter: `recipient_account_id=eq.${accountId}`,
-      },
-      (payload) => {
-        onNew(mapRow(payload.new));
-      }
-    )
-    .subscribe();
+  if (!notiHub) notiHub = { accountId: null, channel: null, listeners: new Set(), seq: 0 };
+  const hub = notiHub;
+  if (hub.accountId !== accountId) {
+    // 첫 구독자이거나 계정이 바뀐 경우 — 기존 채널(있다면)을 닫고 새 계정 필터로 연다. 기존 리스너는 유지(다음 계정 알림을 받게 됨)
+    closeHubChannel(hub);
+    openHubChannel(hub, accountId);
+  }
+  hub.listeners.add(onNew);
+  registerNotiAuthListener();
 
-  return () => { supabase.removeChannel(channel); };
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    hub.listeners.delete(onNew);
+    if (hub.listeners.size === 0) {
+      closeHubChannel(hub);
+      if (notiHub === hub) notiHub = null;
+    }
+  };
 }

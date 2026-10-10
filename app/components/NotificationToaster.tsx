@@ -20,6 +20,7 @@ export default function NotificationToaster() {
   useEffect(() => {
     let unsub: (() => void) | null = null;
     let mounted = true;
+    const timers = new Set<ReturnType<typeof setTimeout>>();
 
     subscribeNotifications((n) => {
       if (!mounted) return;
@@ -29,12 +30,14 @@ export default function NotificationToaster() {
       if (prefKey && !getNotiPrefs()[prefKey]) return;
       setPopups((prev) => [n, ...prev].slice(0, 3));
       // 5초 후 자동 제거
-      setTimeout(() => {
+      const timer = setTimeout(() => {
+        timers.delete(timer);
         setPopups((prev) => prev.filter((p) => p.id !== n.id));
       }, 5000);
-    }).then((fn) => { unsub = fn; });
+      timers.add(timer);
+    }).then((fn) => { if (mounted) unsub = fn; else fn(); }).catch(() => {}); // 구독 완료 전 언마운트 시 즉시 해제(PERF-052)
 
-    return () => { mounted = false; if (unsub) unsub(); };
+    return () => { mounted = false; if (unsub) unsub(); timers.forEach(clearTimeout); timers.clear(); };
   }, []);
 
   if (popups.length === 0) return null;
