@@ -40,37 +40,35 @@ export async function checkPlatformAdmin(): Promise<boolean> {
   return data?.is_platform_admin ?? false;
 }
 
-// 센터 목록 (상태별)
+// RPC admin_list_centers(add_admin_list_centers_rpc_20261009.sql)가 돌려주는 행 — 서버가 플랫폼 관리자 자격을 확인한다.
+type AdminCenterRow = {
+  id: string; name: string; address: string | null; phone: string | null;
+  business_number: string | null; business_license_url: string | null;
+  status: PendingCenter["status"]; reject_reason: string | null; created_at: string;
+  owner_name: string | null; owner_phone: string | null;
+};
+
+// 센터 목록 (상태별) — business_number/business_license_url/reject_reason은 centers 테이블 직접 SELECT가 막혀 있어
+// (fix_centers_sensitive_column_privileges_20261009.sql) 관리자 전용 RPC로만 읽는다.
 export async function fetchCenters(status: "pending" | "approved" | "rejected"): Promise<PendingCenter[]> {
-  const { data, error } = await supabase
-    .from("centers")
-    .select(`
-      id, name, address, phone, business_number, business_license_url,
-      status, reject_reason, created_at,
-      manager_centers(accounts(name, phone))
-    `)
-    .eq("status", status)
-    .order("created_at", { ascending: false });
+  const { data, error } = await supabase.rpc("admin_list_centers", { p_status: status });
 
   if (error) throw new Error("센터 목록을 불러오지 못했어요: " + error.message);
 
-  return (data ?? []).map((c: any) => {
+  return ((data ?? []) as AdminCenterRow[]).map((c) => ({
+    id: c.id,
+    name: c.name,
+    address: c.address,
+    phone: c.phone,
+    businessNumber: c.business_number,
+    businessLicenseUrl: c.business_license_url,
+    status: c.status,
+    rejectReason: c.reject_reason,
+    createdAt: KST.format(new Date(c.created_at)),
     // 이 센터의 첫 매니저(= 개설한 오너)를 대표자로 표시
-    const owner = c.manager_centers?.[0]?.accounts ?? null;
-    return {
-      id: c.id,
-      name: c.name,
-      address: c.address,
-      phone: c.phone,
-      businessNumber: c.business_number,
-      businessLicenseUrl: c.business_license_url,
-      status: c.status,
-      rejectReason: c.reject_reason,
-      createdAt: KST.format(new Date(c.created_at)),
-      ownerName: owner?.name ?? null,
-      ownerPhone: owner?.phone ?? null,
-    };
-  });
+    ownerName: c.owner_name ?? null,
+    ownerPhone: c.owner_phone ?? null,
+  }));
 }
 
 // 승인
