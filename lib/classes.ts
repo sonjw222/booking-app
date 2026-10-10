@@ -101,21 +101,60 @@ export async function checkScheduleConflicts(
   });
   if (overlapping.length === 0) return [];
 
+  // 겹치는 수업이 여럿이어도 강사 조회는 1회(class_trainers .in) — 경고 용도라 실패는 무시한다.
+  let trainersByClass: Record<string, string[]> = {};
+  if (trainerIds.length > 0) {
+    try { trainersByClass = await fetchClassTrainersBatch(overlapping.map((c) => c.id)); } catch { /* 경고 전용 */ }
+  }
   const out: ScheduleConflict[] = [];
   for (const c of overlapping) {
     if (roomId && c.roomId === roomId) {
       out.push({ classId: c.id, title: c.title, start: c.start, end: c.end, kind: "room" });
     }
-    if (trainerIds.length > 0) {
-      try {
-        const ids = await fetchClassTrainers(c.id);
-        if (ids.some((id) => trainerIds.includes(id))) {
-          out.push({ classId: c.id, title: c.title, start: c.start, end: c.end, kind: "trainer" });
-        }
-      } catch { /* 경고 용도라 실패해도 무시 — 저장 자체를 막지 않음 */ }
+    if (trainerIds.length > 0 && (trainersByClass[c.id] ?? []).some((id) => trainerIds.includes(id))) {
+      out.push({ classId: c.id, title: c.title, start: c.start, end: c.end, kind: "trainer" });
     }
   }
   return out;
+}
+
+// 여러 수업의 담당 강사 account_id를 한 번에 조회 (수업별 N회 조회 대체).
+export async function fetchClassTrainersBatch(classIds: string[]): Promise<Record<string, string[]>> {
+  const out: Record<string, string[]> = {};
+  if (classIds.length === 0) return out;
+  const { data, error } = await supabase
+    .from("class_trainers")
+    .select("class_id, account_id")
+    .in("class_id", classIds);
+  if (error) throw new Error("담당 강사를 불러오지 못했어요: " + error.message);
+  for (const r of (data ?? []) as { class_id: string; account_id: string }[]) {
+    (out[r.class_id] ??= []).push(r.account_id);
+  }
+  return out;
+}
+
+// 월 이동/센터 전환 등 연속 요청에서 "가장 마지막에 시작한 요청"만 반영하기 위한 가드.
+export function createLatestGuard() {
+  let seq = 0;
+  return {
+    next(): number { return ++seq; },
+    isLatest(token: number): boolean { return token === seq; },
+    invalidate(): void { seq++; },
+  };
+}
+
+// 캘린더 렌더용 순수 집계 — 날짜(일)별 수업 수, 선택일 수업(시작시간 순). 입력 O(n).
+export function countClassesByDay(classes: { date: string }[]): Record<number, number> {
+  const out: Record<number, number> = {};
+  for (const c of classes) {
+    const day = parseInt(c.date.slice(8, 10), 10);
+    out[day] = (out[day] ?? 0) + 1;
+  }
+  return out;
+}
+
+export function classesOnDate<T extends { date: string; start: string }>(classes: T[], dateKey: string): T[] {
+  return classes.filter((c) => c.date === dateKey).sort((a, b) => a.start.localeCompare(b.start));
 }
 
 export async function fetchClasses(centerId: string, fromDate: string, toDate: string): Promise<ManagedClass[]> {

@@ -10,7 +10,7 @@ import SheetOverlay from "../../components/SheetOverlay";
   - 매니저 RLS 정책 필요 (reservation_functions.sql)
 */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Loading from "../../components/Loading";
 import DatePicker from "../../components/DatePicker";
 import MonthPicker from "../../components/MonthPicker";
@@ -38,6 +38,7 @@ import {
   fetchUnplacedPasses, retryAutoBook, unplacedReasonText, type UnplacedPass,
   type ManagedClass, type ClassInput, type ClassAttendee,
   isValidClassTimeRange, checkScheduleConflicts, type ScheduleConflict,
+  createLatestGuard, countClassesByDay, classesOnDate,
 } from "../../../lib/classes";
 import { fetchStaff, fetchMyEffectivePermissionKeys, canSeeManagerMenu, type Staff } from "../../../lib/roles";
 import { fetchClassMemos, createClassMemo, updateClassMemo, deleteClassMemo, type ScheduleMemo } from "../../../lib/scheduleMemos";
@@ -143,6 +144,7 @@ export default function ClassManagePage() {
   const [roster, setRoster] = useState<ClassAttendee[]>([]);
   const [rosterLoading, setRosterLoading] = useState(false);
   const [attBusy, setAttBusy] = useState(false);
+  const attBusyRef = useRef(false); // 같은 틱 이중 클릭 방지(state는 다음 렌더 전까지 반영 안 됨)
   // 스케줄 복사
   const [copySheet, setCopySheet] = useState(false);
   const [copyFrom, setCopyFrom] = useState("");
@@ -227,60 +229,115 @@ export default function ClassManagePage() {
   useEffect(() => {
     if (!formOpen || !activeCenterId || !form.date || !form.start || !form.end) { setScheduleConflicts([]); return; }
     let cancelled = false;
-    checkScheduleConflicts(activeCenterId, form.date, form.start, form.end, {
-      roomId: form.roomId, trainerAccountIds: selectedTrainers, excludeClassId: editId ?? undefined,
-    }).then((cs) => { if (!cancelled) setScheduleConflicts(cs); })
-      .catch(() => { if (!cancelled) setScheduleConflicts([]); });
-    return () => { cancelled = true; };
+    // 입력(시간/룸/강사 칩) 변경마다 즉시 조회하지 않도록 디바운스 — 경고 전용이라 저장 시 서버 검증은 그대로.
+    const timer = setTimeout(() => {
+      checkScheduleConflicts(activeCenterId, form.date, form.start, form.end, {
+        roomId: form.roomId, trainerAccountIds: selectedTrainers, excludeClassId: editId ?? undefined,
+      }).then((cs) => { if (!cancelled) setScheduleConflicts(cs); })
+        .catch(() => { if (!cancelled) setScheduleConflicts([]); });
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [formOpen, activeCenterId, form.date, form.start, form.end, form.roomId, selectedTrainers, editId]);
 
+  // 요청 가드 — 월 이동/센터 전환을 빠르게 반복해도 가장 마지막 요청 결과만 반영한다.
+  const monthGuardRef = useRef(createLatestGuard());
+  const centerGuardRef = useRef(createLatestGuard());
+  const activeCenterRef = useRef<string | null>(null);
+  activeCenterRef.current = activeCenterId;
+
+  // 월 단위(수업 목록) + 저장 후 갱신이 필요한 센터 단위 값(휴무일/룸/미배치 이용권)을 병렬로 조회.
+  // 저장 동작 후 호출부(loadClasses(activeCenterId, year, month))는 그대로 사용한다.
   const loadClasses = useCallback(async (centerId: string, y: number, m: number) => {
+    const token = monthGuardRef.current.next();
+    const stale = () => !monthGuardRef.current.isLatest(token) || activeCenterRef.current !== centerId;
     setError(null);
     try {
       const from = `${y}-${String(m).padStart(2, "0")}-01`;
       const to = `${y}-${String(m).padStart(2, "0")}-${new Date(y, m, 0).getDate()}`;
-      setClasses(await fetchClasses(centerId, from, to));
-      setHolidayDates(await fetchCenterHolidayDates(centerId));
-      try { setRooms(await fetchRooms(centerId)); } catch { /* 무시 */ }
-      try { setUnplaced(await fetchUnplacedPasses(centerId)); } catch { setUnplaced([]); }
+      const [cls, holidays, roomList, unplacedList] = await Promise.all([
+        fetchClasses(centerId, from, to),
+        fetchCenterHolidayDates(centerId),
+        fetchRooms(centerId).catch(() => null),
+        fetchUnplacedPasses(centerId).catch(() => []),
+      ]);
+      if (stale()) return;
+      setClasses(cls);
+      setHolidayDates(holidays);
+      if (roomList) setRooms(roomList);
+      setUnplaced(unplacedList);
     } catch (e: any) {
-      setError(e.message);
+      if (!stale()) setError(e.message);
     }
   }, []);
+
+  // 월 이동 전용 — 수업 목록만 다시 조회 (상품/규칙/스태프/휴무일/룸은 센터 단위라 월과 무관)
+  const loadMonthClasses = useCallback(async (centerId: string, y: number, m: number) => {
+    const token = monthGuardRef.current.next();
+    const stale = () => !monthGuardRef.current.isLatest(token) || activeCenterRef.current !== centerId;
+    setError(null);
+    try {
+      const from = `${y}-${String(m).padStart(2, "0")}-01`;
+      const to = `${y}-${String(m).padStart(2, "0")}-${new Date(y, m, 0).getDate()}`;
+      const cls = await fetchClasses(centerId, from, to);
+      if (!stale()) setClasses(cls);
+    } catch (e: any) {
+      if (!stale()) setError(e.message);
+    }
+  }, []);
+
+  // 센터 전환 직후 이전 센터 데이터가 남아 쓰기 동작에 쓰이지 않도록 센터 단위 상태를 즉시 비운다.
+  function resetCenterScopedData() {
+    monthGuardRef.current.invalidate();
+    centerGuardRef.current.invalidate();
+    setClasses([]);
+    setHolidayDates(new Set());
+    setRooms([]);
+    setUnplaced([]);
+    setPassProducts([]);
+    setRulesByProduct({});
+    setStaffList([]);
+  }
 
   useEffect(() => {
     (async () => {
       try {
         const list = await fetchMyCenters();
         setCenters(list);
-        if (list.length > 0) {
-          setActiveCenterId(list[0].id);
-          await loadClasses(list[0].id, year, month);
-        }
+        // 수업 조회는 아래 [activeCenterId] / [year, month] effect가 담당(중복 조회 방지)
+        if (list.length > 0) setActiveCenterId(list[0].id);
       } catch (e: any) {
         setError(e.message);
       } finally {
         setLoading(false);
       }
     })();
-  }, [loadClasses]);
+  }, []);
 
-  // 달이 바뀌면 다시 로드
+  // 달이 바뀌면 수업 목록만 다시 로드
   useEffect(() => {
-    if (activeCenterId) {
-      loadClasses(activeCenterId, year, month);
-      fetchProducts(activeCenterId, "pass")
-        .then((list) => {
-          setPassProducts(list);
-          return fetchRulesForProducts(list.map((p) => p.id));
-        })
-        .then((rules) => setRulesByProduct(rules))
-        .catch(() => { /* 무시 */ });
-      fetchStaff(activeCenterId)
-        .then((list) => setStaffList(list.filter((s) => s.status === "active")))
-        .catch(() => { /* 무시 */ });
-    }
-  }, [year, month, activeCenterId, loadClasses]);
+    if (activeCenterId) loadMonthClasses(activeCenterId, year, month);
+  }, [year, month, activeCenterId, loadMonthClasses]);
+
+  // 센터가 바뀔 때만 센터 단위 데이터(휴무일/룸/미배치/상품/규칙/스태프) 조회
+  useEffect(() => {
+    if (!activeCenterId) return;
+    const centerId = activeCenterId;
+    const token = centerGuardRef.current.next();
+    const fresh = () => centerGuardRef.current.isLatest(token);
+    fetchCenterHolidayDates(centerId).then((h) => { if (fresh()) setHolidayDates(h); }).catch(() => { /* 무시 */ });
+    fetchRooms(centerId).then((r) => { if (fresh()) setRooms(r); }).catch(() => { /* 무시 */ });
+    fetchUnplacedPasses(centerId).then((u) => { if (fresh()) setUnplaced(u); }).catch(() => { if (fresh()) setUnplaced([]); });
+    fetchProducts(centerId, "pass")
+      .then((list) => {
+        if (fresh()) setPassProducts(list);
+        return fetchRulesForProducts(list.map((p) => p.id));
+      })
+      .then((rules) => { if (fresh()) setRulesByProduct(rules); })
+      .catch(() => { /* 무시 */ });
+    fetchStaff(centerId)
+      .then((list) => { if (fresh()) setStaffList(list.filter((s) => s.status === "active")); })
+      .catch(() => { /* 무시 */ });
+  }, [activeCenterId]);
 
   // 2026-10-01(B-1/B-2) — 예약/취소 마감을 비워두면 운영설정 기본값이 적용되는데, 화면에는
   // 그 기본값이 뭔지 전혀 안 보여서 "0일 0시간 0분"처럼 보이는 빈 입력칸만 있었다(실제로는
@@ -645,6 +702,7 @@ export default function ClassManagePage() {
 
   // 출결 처리 (출석/결석/노쇼/예약취소) — 취소는 되돌릴 수 없음
   async function handleAttendance(a: ClassAttendee, status: "attended" | "no_show" | "confirmed" | "cancelled") {
+    if (attBusyRef.current) return;
     if (a.status === "cancelled") {
       setError("이미 취소된 예약이라 출결 상태를 바꿀 수 없어요");
       return;
@@ -657,13 +715,15 @@ export default function ClassManagePage() {
         `정말 취소하시겠어요?`
       );
       if (!ok) return;
+      if (attBusyRef.current) return; // 확인창이 떠 있는 동안 다른 처리가 시작된 경우
     }
+    attBusyRef.current = true;
     setAttBusy(true);
     try {
       await setAttendance(a.reservationId, status);
       if (rosterClass) setRoster(await fetchClassAttendees(rosterClass.id));
     } catch (e: any) { setError(e.message); }
-    finally { setAttBusy(false); }
+    finally { attBusyRef.current = false; setAttBusy(false); }
   }
 
   async function openMemberInfo(a: ClassAttendee) {    setMemberInfo({ name: a.name, profileId: a.profileId, data: null });
@@ -1023,6 +1083,10 @@ export default function ClassManagePage() {
     }
   }
 
+  const selectedKey = `${year}-${String(month).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
+  const hasClassByDay = useMemo(() => countClassesByDay(classes), [classes]);
+  const dayClasses = useMemo(() => classesOnDate(classes, selectedKey), [classes, selectedKey]);
+
   if (loading) {
     return <div className="app-shell"><Loading /></div>;
   }
@@ -1040,7 +1104,6 @@ export default function ClassManagePage() {
     }
     return countClasses(expandRecurringDates(repFrom, repTo, repDays).length, 1 + extraSlots.length);
   })();
-  const selectedKey = `${year}-${pad2(month)}-${pad2(selectedDay)}`;
   /*
     "내 캘린더에 추가"(2026-09-26) — 회원 예약 캘린더와 같은 공용 시트/서비스(CalendarAddSheet,
     lib/calendarAdd.ts, lib/calendarEvents.ts). 지금 화면에 표시 중인 달(year/month)과 지금 선택된
@@ -1073,15 +1136,6 @@ export default function ClassManagePage() {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const hasClassByDay: Record<number, number> = {};
-  for (const c of classes) {
-    const day = parseInt(c.date.slice(8, 10), 10);
-    hasClassByDay[day] = (hasClassByDay[day] ?? 0) + 1;
-  }
-
-  const dayClasses = classes
-    .filter((c) => c.date === selectedKey)
-    .sort((a, b) => a.start.localeCompare(b.start));
 
   return (
     <div className="app-shell manager-classes-v2" style={{ paddingBottom: 170 }}>
@@ -1149,10 +1203,12 @@ export default function ClassManagePage() {
           <select
             aria-label="센터 선택"
             value={activeCenterId ?? ""}
-            onChange={async (event) => {
+            onChange={(event) => {
               const centerId = event.target.value;
-              setActiveCenterId(centerId);
-              await loadClasses(centerId, year, month);
+              if (centerId === activeCenterId) return;
+              resetCenterScopedData();
+              activeCenterRef.current = centerId;
+              setActiveCenterId(centerId); // 수업/센터 데이터 조회는 effect가 담당
             }}
           >
             {centers.map((center) => <option key={center.id} value={center.id}>{center.name}</option>)}
