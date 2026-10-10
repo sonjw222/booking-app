@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { BUSINESS_INFO } from "../../../lib/businessInfo";
+
+export const metadata: Metadata = {
+  title: "사업자 정보",
+  description: "모하빗(MWHABIT) 운영 사업자 정보 — 상호, 대표자, 사업자등록번호, 통신판매업 신고번호, 고객센터.",
+  alternates: { canonical: "/legal/business" },
+};
 
 export default function BusinessInfoPage() {
   return (
@@ -13,8 +20,8 @@ export default function BusinessInfoPage() {
       <div className="legal-page">
         <table>
           <tbody>
-            <tr><th>서비스명</th><td>{BUSINESS_INFO.serviceName}</td></tr>
-            <tr><th>상호</th><td>{BUSINESS_INFO.companyName}</td></tr>
+            <tr><th>서비스명</th><td>{BUSINESS_INFO.serviceName} ({BUSINESS_INFO.brandNameEn})</td></tr>
+            <tr><th>상호</th><td>{BUSINESS_INFO.companyName} (서비스 브랜드: {BUSINESS_INFO.brandNameEn})</td></tr>
             <tr><th>대표자</th><td>{BUSINESS_INFO.ceoName}</td></tr>
             <tr><th>사업자등록번호</th><td>{BUSINESS_INFO.businessRegNo}</td></tr>
             <tr><th>통신판매업 신고번호</th><td>{BUSINESS_INFO.mailOrderRegNo}</td></tr>

@@ -9,10 +9,12 @@
 */
 
 import type { Metadata } from "next";
+import { BUSINESS_INFO } from "../../lib/businessInfo";
 
 export const metadata: Metadata = {
   title: "모하빗 계정 및 데이터 삭제",
   description: "모하빗(MWHABIT) 계정 및 데이터 삭제 방법 안내",
+  alternates: { canonical: "/account-deletion" },
 };
 
 export default function AccountDeletionPage() {
@@ -54,7 +56,7 @@ export default function AccountDeletionPage() {
           없다면, 아래 이메일로 삭제를 요청할 수 있습니다.
         </p>
         <div className="perm-guide">
-          <div>이메일: <b>contact@mwhabit.com</b></div>
+          <div>이메일: <b>{BUSINESS_INFO.email}</b></div>
           <div>제목 예시: <b>[모하빗 계정 삭제 요청]</b></div>
         </div>
         <p>
@@ -123,7 +125,7 @@ export default function AccountDeletionPage() {
           계정 삭제 또는 개인정보 처리와 관련해 궁금한 점이 있다면 아래로 문의해 주세요.
         </p>
         <div className="perm-guide">
-          <div>이메일: <b>contact@mwhabit.com</b></div>
+          <div>이메일: <b>{BUSINESS_INFO.email}</b></div>
         </div>
       </div>
     </div>

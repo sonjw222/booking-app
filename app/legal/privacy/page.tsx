@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+export const metadata: Metadata = {
+  title: "개인정보처리방침",
+  description: "모하빗(MWHABIT)의 개인정보 처리방침.",
+  alternates: { canonical: "/legal/privacy" },
+};
+
 export default function PrivacyPolicyPage() {
   return (
     <div className="app-shell settings-page-v2">

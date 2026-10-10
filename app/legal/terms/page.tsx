@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+export const metadata: Metadata = {
+  title: "이용약관",
+  description: "모하빗(MWHABIT) 서비스 이용약관.",
+  alternates: { canonical: "/legal/terms" },
+};
+
 export default function TermsPage() {
   return (
     <div className="app-shell settings-page-v2">

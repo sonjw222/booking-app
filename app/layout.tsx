@@ -9,10 +9,25 @@ import OfflineNotice from "./components/OfflineNotice";
 import CapacitorBootstrap from "./components/CapacitorBootstrap";
 import InteractiveGuard from "./components/InteractiveGuard";
 import NavigationPolicy from "./components/NavigationPolicy";
+import { SITE_URL } from "../lib/siteMeta";
 
 export const metadata: Metadata = {
-  title: "모하빗",
-  description: "센터(스튜디오·체육관) 수업 예약과 회원 관리를 위한 모하빗",
+  metadataBase: new URL(SITE_URL),
+  // 페이지가 title을 지정하면 "<페이지> | 모하빗", 없으면 "모하빗". 영문 브랜드명은 설명과 OG 사이트명에 병기한다.
+  title: { default: "모하빗", template: "%s | 모하빗" },
+  description: "모하빗(MWHABIT) — 스포츠·취미 클래스 탐색·예약과 센터 수업·회원 관리 서비스",
+  applicationName: "모하빗",
+  openGraph: {
+    type: "website",
+    siteName: "모하빗 (MWHABIT)",
+    locale: "ko_KR",
+    url: "/",
+    title: "모하빗 (MWHABIT)",
+    description: "스포츠·취미 클래스 탐색·예약과 센터 수업·회원 관리 서비스",
+  },
+  twitter: { card: "summary", title: "모하빗 (MWHABIT)", description: "스포츠·취미 클래스 탐색·예약과 센터 수업·회원 관리 서비스" },
+  // 각 페이지의 canonical은 해당 페이지 URL 자신(상대경로 "./"는 metadataBase 기준으로 페이지별로 해석된다). 정적 공개 페이지는 자체 canonical을 지정한다.
+  alternates: { canonical: "./" },
 };
 
 export const viewport: Viewport = {

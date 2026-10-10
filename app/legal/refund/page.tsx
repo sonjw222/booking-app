@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+export const metadata: Metadata = {
+  title: "환불·취소 정책",
+  description: "모하빗(MWHABIT)의 수강권·상품 환불 및 예약 취소 정책.",
+  alternates: { canonical: "/legal/refund" },
+};
+
 export default function RefundPolicyPage() {
   return (
     <div className="app-shell settings-page-v2">

@@ -3945,3 +3945,10 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 - [x] P0: SQL 2(`fix_centers_sensitive_column_privileges_20261009.sql`) **Production 적용 성공**(사용자 보고 2026-10-10): 민감 3컬럼 anon/authenticated SELECT false, 공개 19컬럼 정상, 테이블 SELECT 제거, UPDATE·service_role 유지, 허용 목록 밖 열린 컬럼 0행, 회원 홈·센터 검색·상세·예약 정상 — 재실행 불필요
 - [ ] P2: 센터 오너가 자기 센터의 `reject_reason`을 볼 필요가 생기면 별도 RPC 추가(현재 UI 없음). `business-licenses` 업로드 정책에 경로 제한이 없는 점 별도 검토
 - [ ] P3: DEV(CI) 프로젝트에도 SQL 1/2를 사용자가 적용해야 DEV에서 관리자 승인 화면 E2E를 돌릴 수 있다(현재 해당 E2E 없음). centers에 컬럼을 추가하면 공개 허용 컬럼에 한해 `grant select (새컬럼) on public.centers to anon, authenticated;`를 같은 migration에 포함
+
+## Claude Startups 재신청 준비 (2026-10-10, improve/startups-company-verification-20261010)
+- [ ] P0(사용자): 사업자등록증 기준 정보 확인 — 개업일, 업태/종목(저장소에 없음, 임의 추가 금지), 신청서의 설립일 기준
+- [ ] P1(사용자): App Store 판매자명이 `mohabit`(소문자)로 표시됨(Apple 공개 조회) — 상호 "모하빗"/브랜드 MWHABIT와 철자가 달라 심사자가 혼동할 수 있음. App Store Connect/Apple Developer 계정의 판매자명 변경 가능 여부 확인(코드로 변경 불가)
+- [ ] P1(사용자): Google Play 공개되면 `lib/siteMeta.ts` `STORE_LINKS.googlePlay`에 공식 URL 추가
+- [ ] P2: Search Console·네이버 서치어드바이저에 사이트 등록 + sitemap 제출(운영 작업)
+- [ ] P2: 고객센터가 개인 휴대폰 번호·운영시간 미표기, 사업장 주소 표기 정책(홈 푸터 제외/`/legal/business` 노출)·법적 문서 시행일 불일치는 이번 범위 밖(법적 내용 변경은 등록 정보 확인 후)
