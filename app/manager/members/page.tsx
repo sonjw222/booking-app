@@ -15,7 +15,7 @@ import Loading from "../../components/Loading";
 import { useSearchParams } from "next/navigation";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
-  fetchMembers, fetchGrades, createGrade, deleteGrade,
+  fetchMemberBase, filterMembers, fetchGrades, createGrade, deleteGrade,
   updateMemberGrade, updateMemberMemo, updateMemberAddress, updateMemberStatus, syncMembersFromReservations,
   membersToCsv, fetchMemberDetail, addMemberToCenter, sendAlimtalkToMembers, extendMembershipExpiry,
   type CenterMember, type Grade, type MemberDetailData,
@@ -93,6 +93,10 @@ function MembersContent() {
   // "가장 마지막으로 시작한 요청"의 결과만 반영한다(이전 검색어의 응답이 최신 검색어
   // 결과를 덮어쓰지 않게).
   const requestSeqRef = useRef(0);
+  // PERF-031: 상태/키워드/검색필드는 이미 받은 목록을 클라이언트에서 거르는 필터라(lib/members.ts filterMembers) 키 입력마다
+  // 전체를 다시 조회할 필요가 없다. 서버에서 받은 목록(센터+등급 기준)을 보관하고, 필터만 바뀌면 이 목록을 다시 거른다.
+  // 등록/수정/삭제 같은 변경 뒤에는 기존처럼 load()가 항상 새로 조회한다.
+  const baseRef = useRef<{ key: string; list: CenterMember[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -242,6 +246,17 @@ function MembersContent() {
     })();
   }, []);
 
+  const filtersRef = useRef<{ status: string | null; keyword: string; searchField: "all" | "name" | "phone" | "address" }>(
+    { status: null, keyword: "", searchField: "all" });
+  filtersRef.current = { status: statusFilter, keyword, searchField };
+
+  // 네트워크 없이 보관 중인 목록만 다시 거른다. 보관본이 현재 센터/등급과 다르면(로딩 중) 아무것도 안 한다 — load()가 끝나며 적용.
+  const refilter = useCallback(() => {
+    const b = baseRef.current;
+    if (!b || b.key !== `${centerId}|${gradeFilter ?? ""}`) return;
+    setMembers(filterMembers(b.list, filtersRef.current));
+  }, [centerId, gradeFilter]);
+
   const load = useCallback(async () => {
     if (!centerId) return;
     const seq = ++requestSeqRef.current;
@@ -249,14 +264,16 @@ function MembersContent() {
     if (isFirstLoad) setLoading(true); else setListSearching(true);
     setError(null);
     try {
-      const [ms, gs] = await Promise.all([
-        fetchMembers(centerId, { gradeId: gradeFilter, status: statusFilter, keyword, searchField }),
+      const [base, gs] = await Promise.all([
+        fetchMemberBase(centerId, { gradeId: gradeFilter }),
         fetchGrades(centerId),
       ]);
       // 이 요청이 시작된 뒤 더 최신 요청이 이미 시작됐다면(빠른 연속 검색) 이 결과는
       // stale이므로 버린다 — 화면엔 항상 "가장 최근에 시작한" 검색 결과만 반영된다.
       if (seq !== requestSeqRef.current) return;
-      setMembers(ms); setGrades(gs);
+      baseRef.current = { key: `${centerId}|${gradeFilter ?? ""}`, list: base };
+      // 조회 도중 바뀐 상태/검색어도 반영되도록 "지금" 필터를 적용한다.
+      setMembers(filterMembers(base, filtersRef.current)); setGrades(gs);
       hasLoadedRef.current = true;
     } catch (e: any) {
       if (seq !== requestSeqRef.current) return;
@@ -264,7 +281,7 @@ function MembersContent() {
     } finally {
       if (seq === requestSeqRef.current) { setLoading(false); setListSearching(false); }
     }
-  }, [centerId, gradeFilter, statusFilter, keyword, searchField]);
+  }, [centerId, gradeFilter]);
 
   // 알림톡 애드온 미신청 센터는 서버(send-alimtalk)가 발송을 거부하므로, 필터 갱신마다
   // 다시 부르지 않게 centerId가 바뀔 때만 따로 확인한다(위 load()와 분리).
@@ -293,13 +310,20 @@ function MembersContent() {
     if (!centerId) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [centerId, gradeFilter, statusFilter, searchField]);
+  }, [centerId, gradeFilter]);
+
+  // 상태/검색필드 변경은 즉시 반영하되 재조회 없이 로컬 필터만 다시 적용한다.
+  useEffect(() => {
+    if (!centerId) return;
+    refilter();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, searchField]);
 
   // 타이핑(keyword)만 짧게 디바운스 — 첫 마운트 때는 위 effect가 이미 처리하므로 건너뛴다.
   const keywordMounted = useRef(false);
   useEffect(() => {
     if (!keywordMounted.current) { keywordMounted.current = true; return; }
-    const t = setTimeout(() => { load(); }, 180);
+    const t = setTimeout(() => { refilter(); }, 180);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyword]);

@@ -20,7 +20,7 @@ vi.mock("../../lib/supabaseClient", () => ({
       const rec = { table, ilike: [] as [string, string][], select: "" };
       const chain: any = {
         select(s: string) { rec.select = s; return chain; },
-        eq() { return chain; }, in() { return chain; }, order() { return chain; }, limit() { return chain; }, is() { return chain; },
+        eq() { return chain; }, in() { return chain; }, order() { return chain; }, limit() { return chain; }, range() { return chain; }, is() { return chain; },
         ilike(c: string, v: string) { rec.ilike.push([c, v]); return chain; },
         then(res: any) { calls.push(rec); return Promise.resolve({ data: tables[table] ?? [], error: null }).then(res); },
       };
