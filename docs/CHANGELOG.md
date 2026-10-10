@@ -1,7 +1,19 @@
 # CHANGELOG
 
+## 2026-10-10 — PR #173(centers 민감 컬럼)·#174(Android 1.0.1 설정) 병합 / 성능 Sprint 문서
+- main 순서: Sprint 완료 `aa1a605` → #173 `02425ff` → #174 `9592b50`. Android는 versionCode 6 / versionName 1.0.1 설정만 반영(Google Play에 이미 제출된 AAB와 일치, 새 AAB 제출 없음).
+
+<<<<<<< HEAD
 ## 2026-10-10 — 성능 최적화 Sprint (Batch A~F를 PR #176~#181로 병합, 최종 main aa1a605; 추적표 docs/PERF_SPRINT_20261010.md)
 - 회원: 센터 상세 직렬 7→2단, 홈 중복 조회 제거, 예약/마이페이지 병렬화, 5분 이상 복귀 시 선택 재조회. 관리자: 수업 중복 로드·월 이동 재조회 제거와 stale 응답 가드, 회원 목록 1,000행 상한 누락 수정(전량 페이지네이션), 규칙 N+1·가격표 행 memo·포인트 이력 지연 로드. 공통: 계정 조회 in-flight 공유, 알림 구독 공유, 스플래시 8초 폴백. SQL 없음. 최신 main 검증: unit 2,197 / integration 346 / E2E 1~4 통과. 실제 속도(ms) 개선은 미측정(요청 수·직렬 단계는 코드 구조 기준).
+=======
+## 2026-10-09 — centers 민감 컬럼(business_number/business_license_url/reject_reason) 익명·일반 조회 차단 (PR #173 `02425ff` 병합; SQL 1·SQL 2 모두 Production 적용·검증 완료 — 2026-10-10 사용자 확인)
+- 원인: anon/authenticated가 centers 전체 SELECT 권한을 갖고 있어 RLS(행 단위)를 통과하는 공개 센터의 사업자번호/등록증 경로가 조회됐다.
+- `lib/admin.ts` `fetchCenters`: centers 직접 select 대신 플랫폼 관리자 전용 RPC `admin_list_centers(p_status)`로 전환(반환 구조 `PendingCenter` 동일).
+- 새 migration(SQL 1/2 분리, 각각 rollback/verify 포함, **Production 미적용**): `add_admin_list_centers_rpc_20261009.sql`(SECURITY DEFINER, `is_platform_admin()` 서버 검증, EXECUTE는 authenticated만) → (앱 배포 후) `fix_centers_sensitive_column_privileges_20261009.sql`(테이블 SELECT 회수 + 민감 3개를 뺀 컬럼 단위 grant). 적용 순서: SQL 1 → 앱 배포 → SQL 2.
+- 테스트: `tests/sql/centers-sensitive-column-privileges.test.mjs`(PGlite 18개), `tests/unit/admin.fetchCenters.rpc.test.ts`, `tests/unit/centersSensitiveColumns.staticCheck.test.ts`.
+- 앞으로 centers에 컬럼을 추가할 때는 공개해도 되는 컬럼에 한해 `grant select (새컬럼) on public.centers to anon, authenticated;`를 같은 migration에 포함해야 클라이언트가 읽을 수 있다(SQL 2 적용 후).
+>>>>>>> origin/main
 
 ## 2026-10-09 — send-web-push: FCM INVALID_ARGUMENT로 네이티브 토큰을 삭제하지 않음 (Edge Function 코드만, 미배포)
 - `_shared/pushOutcome.ts`: `INVALID_ARGUMENT`는 토큰 오류뿐 아니라 payload/요청 형식 오류에도 나오므로 stale(토큰 행 삭제)에서 제외하고 `permanent`(행 유지, 재시도 없음)로 분류. stale은 `UNREGISTERED`/`NOT_FOUND`만. 정상 토큰을 추측으로 지우지 않기 위함. 테스트 `tests/unit/pushOutcome.test.ts` 보강. Production 배포는 별도(미실행).
