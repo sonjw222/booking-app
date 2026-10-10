@@ -8,6 +8,9 @@
 
 export const BUSINESS_INFO = {
   serviceName: "모하빗",
+  // 영문 서비스 브랜드명. 사업자등록증상 상호는 한글 "모하빗"이며, 영문명은 별도 법인명/등록 상호가 아니라
+  // 같은 서비스의 영문 표기다(화면에서 "서비스 브랜드"로만 표기).
+  brandNameEn: "MWHABIT",
   // 상호(사업자등록증상 상호) — 2026-10-01 "손장욱"(대표자 이름)에서 "모하빗"으로 정정.
   // 상호와 대표자를 혼동하지 말 것: 상호=모하빗, 대표자=손장욱, 서비스명=모하빗.
   companyName: "모하빗",
@@ -15,7 +18,8 @@ export const BUSINESS_INFO = {
   businessRegNo: "589-77-00451",
   address: "경기도 성남시 분당구 중앙공원로 20, 420동 702호",
   customerServicePhone: "010-6505-8700",
-  email: "sonjw222@naver.com",
+  // 공개 고객 문의 이메일(회사 도메인). 신청·관리용 계정과는 별개이며 여기에 쓰지 않는다. 계정 삭제 안내(/account-deletion)도 이 값을 쓴다.
+  email: "contact@mwhabit.com",
   // 2026-09-11 확정값(사용자 제공).
   mailOrderRegNo: "제2026-성남분당B-0866호",
 } as const;

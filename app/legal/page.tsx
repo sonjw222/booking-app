@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 /*
   약관 및 정책 — 이용약관/개인정보처리방침/사업자정보/환불·취소 정책 허브.
@@ -11,6 +12,12 @@ const ITEMS = [
   { href: "/legal/business", label: "사업자 정보" },
   { href: "/legal/refund", label: "환불·취소 정책" },
 ];
+
+export const metadata: Metadata = {
+  title: "약관 및 정책",
+  description: "모하빗(MWHABIT)의 이용약관, 개인정보처리방침, 사업자 정보, 환불·취소 정책 모음.",
+  alternates: { canonical: "/legal" },
+};
 
 export default function LegalHubPage() {
   return (
