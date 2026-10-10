@@ -115,7 +115,7 @@ export default function ManagerNav({
 
     subscribeNotifications(() => {
       if (mounted) setUnread((prev) => prev + 1);
-    }).then((fn) => { unsub = fn; });
+    }).then((fn) => { if (mounted) unsub = fn; else fn(); }).catch(() => {}); // 구독 완료 전에 언마운트되면 도착 즉시 해제(PERF-052)
 
     return () => { mounted = false; if (unsub) unsub(); };
   }, []);

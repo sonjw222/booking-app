@@ -96,14 +96,19 @@ describe("[C] 예약/취소 직후 잔여횟수를 다시 조회한다", () => {
 describe("[D] reserveWithGoods — 수강권 지정 + 대여상품", () => {
   let rpcArgs: { name: string; args: any }[];
   let rpcError: { code: string; message: string } | null;
+  // 테스트 안에서 같은 모듈을 vi.doMock으로 다시 모킹하면 doMock 등록이 비동기라 부하가 큰 환경에서 먼저 등록한 factory가 이기는 경합이 생긴다
+  // (전체 suite 동시 실행 시 'expected confirmed to be waitlisted' 간헐 실패 재현). 한 번만 모킹하고 응답은 변수로 바꾼다.
+  let rpcOverride: { data: unknown; error: null } | null;
   beforeEach(() => {
     vi.resetModules();
     rpcArgs = [];
     rpcError = null;
+    rpcOverride = null;
     vi.doMock("../../lib/supabaseClient", () => ({
       supabase: {
         rpc: (name: string, args: any) => {
           rpcArgs.push({ name, args });
+          if (rpcOverride) return Promise.resolve(rpcOverride);
           if (name === "reserve_with_goods" && rpcError) return Promise.resolve({ data: null, error: rpcError });
           return Promise.resolve({ data: { status: "confirmed", reservation_id: "r1", goods_status: "deducted" }, error: null });
         },
@@ -119,9 +124,7 @@ describe("[D] reserveWithGoods — 수강권 지정 + 대여상품", () => {
   });
 
   it("대기예약 상태를 그대로 반환한다", async () => {
-    vi.doMock("../../lib/supabaseClient", () => ({
-      supabase: { rpc: () => Promise.resolve({ data: { status: "waitlisted" }, error: null }) },
-    }));
+    rpcOverride = { data: { status: "waitlisted" }, error: null };
     const { reserveWithGoods } = await import("../../lib/reservations");
     await expect(reserveWithGoods("c1", "p1", null, "g1")).resolves.toBe("waitlisted");
   });

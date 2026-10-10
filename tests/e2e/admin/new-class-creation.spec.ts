@@ -14,7 +14,7 @@ import {
 import type { CenterSettings } from "../../../lib/settings";
 import { getFixtureAdminClient } from "../../integration/setup";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
-import { gotoManagerClasses, clickCreateClass } from "../fixtures/pageHelpers";
+import { gotoManagerClasses, clickCreateClass, parkPointerOutsideRail } from "../fixtures/pageHelpers";
 
 /*
   신규 수업 생성(관리자 UI) → 회원 예약 흐름 회귀 테스트.
@@ -156,6 +156,7 @@ async function gotoFutureDay(page: Page, dateStr: string) {
   const [ty, tm, td] = dateStr.split("-").map(Number);
   await gotoManagerClasses(page, centerAId);
   await expect(page.locator(".cal-title")).toBeVisible();
+  await parkPointerOutsideRail(page);   // 펼쳐진 좌측 레일이 맨 왼쪽(일요일) 날짜 칸을 덮는 것 방지(pageHelpers 주석 참고)
   for (let i = 0; i < 6; i++) {
     const title = (await page.locator(".cal-title").innerText()).trim();
     const [cy, cm] = title.split(".").map(Number);

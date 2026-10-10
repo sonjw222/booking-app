@@ -33,6 +33,7 @@ import {
   type BookingProfile,
 } from "../../lib/reservations";
 import { toKstIso } from "../../lib/kst";
+import { useResumeRefresh } from "../../lib/useResumeRefresh";
 import { formatInstructorNames } from "../../lib/instructorDisplay";
 import UiIcon from "../components/UiIcon";
 import EmptyState from "../components/EmptyState";
@@ -181,9 +182,10 @@ function ReservationCalendarContent() {
   // true가 되면 렌더 자체가 <Loading/> 하나로 완전히 대체되기 때문 — silent 모드에서는
   // loading을 건드리지 않아 기존 화면을 유지한 채로 데이터만 새로고침한다(쿼리 로직 자체는
   // 그대로, 새 데이터가 도착하면 그때 한 번에 교체).
-  const load = useCallback(async (opts?: { silent?: boolean }) => {
+  const load = useCallback(async (opts?: { silent?: boolean; background?: boolean }) => {
+    // background(앱 복귀 시 조용한 재조회, PERF-013): 로딩 표시도, 실패 시 전체 에러 화면 전환도 하지 않는다.
     if (!opts?.silent) setLoading(true);
-    setError(null);
+    if (!opts?.background) setError(null);
     try {
       // 계정 조회는 한 번만: fetchMonthData/fetchMyProfiles가 각자 auth.getUser()+accounts를
       // 중복 조회하지 않도록 미리 구한 accountId를 넘겨서 두 요청을 병렬로 처리
@@ -199,7 +201,7 @@ function ReservationCalendarContent() {
       setProfiles(profs);
       setActiveProfileId((prev) => prev ?? profs.find((p) => p.isPrimary)?.id ?? profs[0]?.id ?? null);
     } catch (e: any) {
-      setError(toUserMessage(e, "데이터를 불러오지 못했어요"));
+      if (!opts?.background) setError(toUserMessage(e, "데이터를 불러오지 못했어요"));
     } finally {
       setLoading(false);
     }
@@ -208,6 +210,14 @@ function ReservationCalendarContent() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // PERF-013: 5분 이상 백그라운드였다가 돌아오면 수업/정원/내 예약 + 사용 가능 수강권 잔액을
+  // 조용히 다시 조회한다(passesRefreshKey 증가 → 수강권/상품 effect 재실행). 예약 확정은
+  // 어차피 서버 RPC가 최신 값으로 판정한다.
+  useResumeRefresh(() => {
+    setPassesRefreshKey((prev) => prev + 1);
+    return load({ silent: true, background: true });
+  });
 
   // 결제 완료 후 "아까 그 수업 예약하러 가기"로 돌아온 경우: 해당 수업 모달 자동 오픈
   const autoOpenDone = useRef(false);

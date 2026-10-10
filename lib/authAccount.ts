@@ -67,10 +67,62 @@ export function isSocialProvider(user: {
 // 다른 계정에 합쳐진 경우에도 이 함수 하나만 고치면 전체 앱이 병합된 계정으로 정확히
 // resolve된다(2026-09-09, 계정 연동 기능). 새로 코드를 짤 때는 이 함수를 쓰고, accounts를
 // `.eq("auth_id", ...)`로 직접 조회하는 패턴은 추가하지 않는다.
-export async function getMyAccountId(): Promise<string | null> {
+//
+// PERF-050: 같은 화면 로드에서 이 함수가 SessionWatcher/알림 구독/페이지 데이터 로더 등에서 겹쳐 호출되므로
+// (1) 같은 세션(auth user id)의 진행 중 요청은 하나로 공유하고, (2) 성공한 non-null 결과만 아주 짧게(MY_ACCOUNT_ID_TTL_MS) 재사용한다.
+// null/오류는 절대 캐시하지 않는다(계정 생성 직후 재조회가 새 값을 봐야 함). 세션 user id가 다르거나 onAuthStateChange(어떤 이벤트든)
+// 가 오면 즉시 폐기한다. 권한(isPlatformAdmin 등)은 이 함수의 결과로 판단하지 않고 서버 RPC/RLS가 그대로 판단한다.
+export const MY_ACCOUNT_ID_TTL_MS = 2000;
+type AccountIdEntry = { uid: string; promise: Promise<string | null>; doneAt: number | null; value: string | null };
+let accountIdEntry: AccountIdEntry | null = null;
+let accountIdGeneration = 0;
+let accountIdListenerRegistered = false;
+
+export function invalidateMyAccountIdCache(): void {
+  accountIdGeneration += 1;
+  accountIdEntry = null;
+}
+
+function registerAccountIdInvalidation(): void {
+  if (accountIdListenerRegistered || typeof window === "undefined") return;
+  if (typeof supabase.auth?.onAuthStateChange !== "function") return;
+  accountIdListenerRegistered = true;
+  supabase.auth.onAuthStateChange(() => { invalidateMyAccountIdCache(); });
+}
+
+async function fetchMyAccountIdOnce(): Promise<string | null> {
   const { data, error } = await supabase.rpc("my_account_id");
   if (error) return null;
   return (data as string | null) ?? null;
+}
+
+async function currentSessionUserId(): Promise<string | null> {
+  try {
+    if (typeof supabase.auth?.getSession !== "function") return null;
+    const { data } = await supabase.auth.getSession(); // 로컬 저장소 읽기(네트워크 아님, 만료 임박 시에만 토큰 갱신)
+    return data?.session?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getMyAccountId(): Promise<string | null> {
+  const uid = await currentSessionUserId();
+  if (!uid) return fetchMyAccountIdOnce(); // 세션 확인 불가/없음 — 기존과 동일하게 매번 서버에 물어본다(캐시 없음)
+  registerAccountIdInvalidation();
+  const now = Date.now();
+  const entry = accountIdEntry;
+  if (entry && entry.uid === uid && (entry.doneAt === null || (entry.value !== null && now - entry.doneAt < MY_ACCOUNT_ID_TTL_MS))) {
+    return entry.promise;
+  }
+  const generation = accountIdGeneration;
+  const next: AccountIdEntry = { uid, promise: Promise.resolve(null), doneAt: null, value: null };
+  next.promise = fetchMyAccountIdOnce().then(
+    (value) => { next.doneAt = Date.now(); next.value = value; if (value === null && accountIdEntry === next) accountIdEntry = null; return value; },
+    (err) => { if (accountIdEntry === next) accountIdEntry = null; throw err; },
+  );
+  if (generation === accountIdGeneration) accountIdEntry = next;
+  return next.promise;
 }
 
 // 실기기 QA(2026-09-14, 4차) — Apple 네이티브 신규 가입 실기기 테스트에서

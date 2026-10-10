@@ -15,7 +15,7 @@ import {
 } from "../fixtures/testData";
 import { getFixtureAdminClient } from "../../integration/setup";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
-import { gotoManagerClasses } from "../fixtures/pageHelpers";
+import { gotoManagerClasses, parkPointerOutsideRail } from "../fixtures/pageHelpers";
 
 /*
   P1-15: membership_schedule_rules(수강권 자체의 요일/시간/수업명 예약조건)와 신규 수업
@@ -65,6 +65,7 @@ async function gotoManagerClassesDay(page: Page, kstDate: string): Promise<void>
   const [y, m, d] = kstDate.split("-").map(Number);
   await gotoManagerClasses(page, centerAId);
   await expect(page.locator(".cal-title")).toBeVisible();
+  await parkPointerOutsideRail(page);   // 펼쳐진 좌측 레일이 맨 왼쪽(일요일) 날짜 칸을 덮는 것 방지(pageHelpers 주석 참고)
   for (let i = 0; i < 14; i++) {
     const title = (await page.locator(".cal-title").innerText()).trim();
     const [ty, tm] = title.split(".").map(Number);
