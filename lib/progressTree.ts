@@ -44,8 +44,6 @@ export function flattenTree(nodes: TreeNode[]): TreeNode[] {
   return nodes.flatMap((n) => [n, ...flattenTree(n.children)]);
 }
 
-export const isCategory = (n: Pick<FlatCategory, "nodeType">): boolean => n.nodeType === "category";
-
 // 이 노드를 루트로 한 부분 트리의 "분류" 높이(자기 자신이 분류면 1, 기술은 0)
 export function categoryHeight(node: TreeNode): number {
   if (node.nodeType !== "category") return 0;
@@ -91,13 +89,6 @@ export function checkParentChange(
     if (depth + height > MAX_PROGRESS_DEPTH) return { ok: false, reason: "depth" };
   }
   return { ok: true };
-}
-
-export function categoryPath(id: string, flat: FlatCategory[]): string[] {
-  const byId = new Map(flat.map((c) => [c.id, c]));
-  const out: string[] = []; let cur = byId.get(id); const seen = new Set<string>();
-  while (cur && !seen.has(cur.id) && out.length < MAX_PROGRESS_DEPTH + 2) { out.unshift(cur.name); seen.add(cur.id); cur = cur.parentId ? byId.get(cur.parentId) : undefined; }
-  return out;
 }
 
 // 기록 화면에서 선택할 수 있는 것 = node_type='skill'만. 그룹 제목은 소속 분류의 경로. 기술이 없는 분류는 어떤 형태로도 기술처럼 보이지 않는다(그룹을 만들지 않는다).

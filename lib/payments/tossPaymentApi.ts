@@ -16,12 +16,6 @@ async function authHeaders(): Promise<Record<string, string>> {
   };
 }
 
-export type ConfirmRealPaymentResult = {
-  already_done: boolean;
-  membership_id?: string;
-  amount?: number;
-};
-
 export async function confirmRealPaymentApi(
   paymentKey: string,
   orderId: string,
