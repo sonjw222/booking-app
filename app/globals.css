@@ -3303,6 +3303,8 @@ a.membership-card { text-decoration: none; display: block; }
   box-shadow: var(--shadow-float);
 }
 .app-date-popover.open-up { top: auto; bottom: calc(100% + 8px); }
+/* 포털로 떠 있는 팝오버(DatePicker): 좌표는 JS(computePopoverPosition)가 inline으로 지정한다. 부모 overflow에 잘리지 않는다. */
+.app-date-popover.is-floating { position: fixed; bottom: auto; }
 .app-date-head { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; margin-bottom: 10px; text-align: center; }
 .app-date-head button,
 .app-date-grid button {
@@ -3378,7 +3380,8 @@ a.membership-card { text-decoration: none; display: block; }
   background: var(--surface);
   font-size: 14px;
 }
-.manager-classes-v2 .sheet .app-date-popover {
+.manager-classes-v2 .sheet .app-date-popover,
+.manager-classes-v2 [data-sheet-overlay] > .app-date-popover {
   width: min(326px, calc(100vw - 44px));
   padding: 16px;
   border: 1px solid var(--line);
@@ -3386,11 +3389,16 @@ a.membership-card { text-decoration: none; display: block; }
   background: var(--bg);
   box-shadow: 0 18px 46px rgba(20,20,20,.15);
 }
-.manager-classes-v2 .sheet .app-date-head { margin-bottom: 6px; }
-.manager-classes-v2 .sheet .app-date-head strong { font-size: 16px; font-weight: 780; }
-.manager-classes-v2 .sheet .app-date-grid { gap: 3px; }
-.manager-classes-v2 .sheet .app-date-grid button { min-height: 38px; font-size: 13px; }
-.manager-classes-v2 .sheet .app-date-grid button.today:not(.on) {
+.manager-classes-v2 .sheet .app-date-head,
+.manager-classes-v2 [data-sheet-overlay] > .app-date-popover .app-date-head { margin-bottom: 6px; }
+.manager-classes-v2 .sheet .app-date-head strong,
+.manager-classes-v2 [data-sheet-overlay] > .app-date-popover .app-date-head strong { font-size: 16px; font-weight: 780; }
+.manager-classes-v2 .sheet .app-date-grid,
+.manager-classes-v2 [data-sheet-overlay] > .app-date-popover .app-date-grid { gap: 3px; }
+.manager-classes-v2 .sheet .app-date-grid button,
+.manager-classes-v2 [data-sheet-overlay] > .app-date-popover .app-date-grid button { min-height: 38px; font-size: 13px; }
+.manager-classes-v2 .sheet .app-date-grid button.today:not(.on),
+.manager-classes-v2 [data-sheet-overlay] > .app-date-popover .app-date-grid button.today:not(.on) {
   color: var(--brand-ink);
   background: var(--brand-soft);
   box-shadow: none;
