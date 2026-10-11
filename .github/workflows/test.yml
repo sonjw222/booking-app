@@ -296,6 +296,32 @@ jobs:
           retention-days: 3
           if-no-files-found: ignore
 
+  sql:
+    name: SQL regression tests (isolated PGlite, no network DB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:sql
+
+  lint:
+    name: Lint (no new diagnostics; existing debt recorded)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
   unit:
     name: Unit tests (no Supabase needed — E2E와 독립)
     runs-on: ubuntu-latest
