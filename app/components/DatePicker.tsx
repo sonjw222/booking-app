@@ -19,6 +19,7 @@ export default function DatePicker({ value, onChange, label }: { value: string; 
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<PopoverPosition | null>(null);
   const [host, setHost] = useState<Element | null>(null);
+  const [compactSheet, setCompactSheet] = useState(false);
   const [year, setYear] = useState(initial.getFullYear());
   const [month, setMonth] = useState(initial.getMonth());
   const root = useRef<HTMLDivElement>(null);
@@ -31,9 +32,9 @@ export default function DatePicker({ value, onChange, label }: { value: string; 
     return [...Array(leading).fill(null), ...Array.from({ length: count }, (_, index) => index + 1)];
   }, [year, month]);
 
-  // 팝오버는 부모(.sheet 등 overflow 컨테이너)에 잘리지 않도록 포털로 렌더링한다. 시트 안이면 같은 SheetOverlay의
-  // 자식으로 넣어 포커스 트랩/ESC/닫기 동작과 React 이벤트 전파(.sheet의 stopPropagation)를 그대로 유지하고,
-  // 시트 밖이면 body에 붙인다. 위치는 트리거 기준 fixed 좌표로 계산한다.
+  // 팝오버는 항상 document.body로 포털해 부모 .sheet / .sheet-overlay(overflow:hidden) 등 어떤 조상에도 잘리지 않게 한다.
+  // 위치는 트리거 기준 fixed 좌표(레이아웃 뷰포트)로 계산하고, React 이벤트는 포털을 통해 기존처럼 .sheet의
+  // stopPropagation까지 전파되므로 시트 닫힘 동작은 그대로다. SheetOverlay의 포커스 트랩은 data-overlay-portal로 예외 처리한다.
   useEffect(() => {
     if (!open) return;
     const close = (event: PointerEvent) => {
@@ -57,9 +58,9 @@ export default function DatePicker({ value, onChange, label }: { value: string; 
     const anchor = trigger.current, panel = popover.current;
     if (!anchor || !panel) return;
     const rect = anchor.getBoundingClientRect();
-    const vv = window.visualViewport;
+    // position:fixed는 레이아웃 뷰포트 기준이므로 visualViewport(키보드/확대로 줄어듦)가 아니라 layout viewport로 계산한다.
     setPos(computePopoverPosition(rect, { width: panel.offsetWidth, height: panel.scrollHeight + (panel.offsetHeight - panel.clientHeight) },
-      { width: window.innerWidth, height: vv ? Math.min(vv.height, window.innerHeight) : window.innerHeight }));
+      { width: document.documentElement.clientWidth || window.innerWidth, height: window.innerHeight }));
   }
 
   // 열릴 때, 월이 바뀌어 높이(5~6주)가 달라질 때 다시 계산한다(페인트 전에).
@@ -70,11 +71,9 @@ export default function DatePicker({ value, onChange, label }: { value: string; 
     const handler = () => reposition();
     window.addEventListener("resize", handler);
     window.addEventListener("scroll", handler, true);
-    window.visualViewport?.addEventListener("resize", handler);
     return () => {
       window.removeEventListener("resize", handler);
       window.removeEventListener("scroll", handler, true);
-      window.visualViewport?.removeEventListener("resize", handler);
     };
   }, [open]);
 
@@ -95,6 +94,16 @@ export default function DatePicker({ value, onChange, label }: { value: string; 
     return () => { cancelAnimationFrame(raf); window.clearTimeout(timer); };
   }, [open, !!pos]);
 
+  // body에 포털된 팝오버는 SheetOverlay의 Tab 순환 밖이므로, 팝오버 안에서 Tab이 순환하도록 직접 처리한다(ESC로 닫기/날짜 선택으로 빠져나옴).
+  function trapTab(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Tab") return;
+    const items = [...event.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled)")];
+    const first = items[0], last = items.at(-1);
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
+
   function move(delta: number) {
     const next = new Date(year, month + delta, 1);
     setYear(next.getFullYear());
@@ -104,7 +113,10 @@ export default function DatePicker({ value, onChange, label }: { value: string; 
   function toggle() {
     if (!open) {
       setPos(null);
-      setHost(root.current?.closest("[data-sheet-overlay]") ?? document.body);
+      // 어떤 조상(overflow/transform/contain/오버레이)도 팝오버에 관여하지 못하도록 항상 body로 포털한다.
+      setHost(document.body);
+      // 수업 시트(.manager-classes-v2 .sheet) 전용 크기 스타일은 body로 나가면 조상 선택자가 안 맞으므로 변형 클래스로 전달한다.
+      setCompactSheet(!!root.current?.closest(".manager-classes-v2 .sheet"));
     }
     setOpen((current) => !current);
   }
@@ -123,7 +135,8 @@ export default function DatePicker({ value, onChange, label }: { value: string; 
       <UiIcon name="calendar" size={17} />
       <span>{value ? `${value.replaceAll("-", ". ")}.` : "날짜 선택"}</span>
     </button>
-    {open && host && createPortal(<div ref={popover} className="app-date-popover is-floating" role="dialog" aria-label={label ?? "날짜 선택"} data-placement={pos?.placement}
+    {open && host && createPortal(<div ref={popover} className={`app-date-popover is-floating${compactSheet ? " in-classes-sheet" : ""}`} role="dialog" aria-label={label ?? "날짜 선택"} data-placement={pos?.placement} data-overlay-portal=""
+      onKeyDown={trapTab}
       style={pos ? { top: pos.top, left: pos.left, ...(pos.maxHeight ? { maxHeight: pos.maxHeight, overflowY: "auto" as const } : {}) } : { top: 0, left: 0, visibility: "hidden" }}>
       <div className="app-date-head">
         <button type="button" onClick={() => move(-1)} aria-label="이전 달">‹</button>

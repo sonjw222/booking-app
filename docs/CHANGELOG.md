@@ -7,6 +7,7 @@
 - 동작 변경: ESC는 캘린더가 열려 있으면 캘린더만 닫고(capture), 시트는 닫지 않는다. 열릴 때 선택일(없으면 오늘)로 포커스 이동, 스크롤/리사이즈 때 위치 재계산.
 - 같은 컴포넌트를 쓰는 9곳(수업·휴무일·매출·정산·구매 등)이 함께 적용된다. `MonthPicker`는 이번 범위에서 제외(후속).
 - 테스트 `tests/unit/popoverPosition.test.ts`(위치 계산 6건 + 구조 계약 6건) 추가.
+- (재수정, 같은 PR) 사용자 Preview에서 하단 잘림이 보고되어 구조를 더 단단히 했다: 팝오버를 **항상 `document.body`로 포털**(`.sheet-overlay`의 `overflow:hidden` 등 어떤 조상도 관여 불가), 위치는 **레이아웃 뷰포트**(`documentElement.clientWidth`/`innerHeight`) 기준으로만 계산(`visualViewport`로 높이를 줄이던 경로 제거 → 일반 화면에서 내부 스크롤 경로 없음), `SheetOverlay` 포커스 트랩은 `data-overlay-portal` 팝오버를 예외 처리하고 팝오버 안에서 Tab 순환. `manager-classes-v2` 시트 스타일은 `.in-classes-sheet` 변형 클래스로 유지. 실제 `/manager/progress/record` 페이지(Supabase 모킹)로 Chromium·WebKit·기기 프로필 96개 시나리오 + 스크린샷 픽셀 검증(날짜 31개 숫자가 실제로 그려짐) 통과. 단, 수정 전(PR #187 초판) 코드는 로컬/배포 Preview 모두에서 재현되지 않아 사용자 화면의 정확한 원인은 미확정.
 
 ## 2026-10-11 — 코드베이스 정비: 미사용 CSS/export 제거 (동작·API·DB·UI 변경 없음, SQL 없음)
 - `app/globals.css`·`app/workspace.css`에서 필수 클래스가 코드 어디에도 참조되지 않는 규칙 146개 삭제(postcss 파싱으로 선택자 전체가 죽은 클래스를 요구할 때만; 동적 접두사 클래스·리치텍스트 `style-*`는 제외). CSS 265,637 → 252,909 B(gzip 44,672 → 42,183 B). 단위 2223/2223, 빌드 통과.

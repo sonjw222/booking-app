@@ -58,20 +58,33 @@ describe("computePopoverPosition", () => {
   });
 });
 
-// 구조 계약: 팝오버가 부모 .sheet의 overflow에 잘리지 않도록 포털 + fixed 좌표를 쓴다.
+// 구조 계약: 팝오버는 어떤 조상(.sheet, .sheet-overlay의 overflow:hidden 등)에도 잘리지 않도록 body로 포털 + fixed 좌표를 쓴다.
 describe("DatePicker overlay contract", () => {
   const src = readFileSync(join(__dirname, "../../app/components/DatePicker.tsx"), "utf-8");
   const css = readFileSync(join(__dirname, "../../app/globals.css"), "utf-8");
+  const overlay = readFileSync(join(__dirname, "../../app/components/SheetOverlay.tsx"), "utf-8");
 
-  it("createPortal로 렌더링하고 시트 안이면 같은 SheetOverlay의 자식으로 넣는다", () => {
+  it("항상 document.body로 createPortal 한다(조상 overflow/오버레이에 의존하지 않음)", () => {
     expect(src).toMatch(/createPortal\(/);
-    expect(src).toContain('closest("[data-sheet-overlay]")');
+    expect(src).toContain("setHost(document.body)");
+    expect(src).not.toContain('closest("[data-sheet-overlay]")');
   });
 
   it("fixed 팝오버 클래스가 있고 absolute 부모 기준 좌표를 쓰지 않는다", () => {
     expect(css).toMatch(/\.app-date-popover\.is-floating\s*\{[^}]*position:\s*fixed/);
     expect(src).toContain("app-date-popover is-floating");
     expect(src).not.toContain("open-up");
+  });
+
+  it("레이아웃 뷰포트 기준으로 계산하고 visualViewport로 높이를 줄이지 않는다", () => {
+    expect(src).toContain("document.documentElement.clientWidth");
+    expect(src).not.toContain("window.visualViewport");
+  });
+
+  it("body 포털 팝오버는 SheetOverlay 포커스 트랩에서 예외 처리되고 팝오버 안에서 Tab이 순환한다", () => {
+    expect(src).toContain('data-overlay-portal=""');
+    expect(overlay).toContain('closest("[data-overlay-portal]")');
+    expect(src).toContain("trapTab");
   });
 
   it("바깥 클릭은 팝오버(포털)와 트리거 영역을 모두 안쪽으로 본다", () => {
@@ -89,7 +102,9 @@ describe("DatePicker overlay contract", () => {
     expect(src).toMatch(/addEventListener\("scroll", handler, true\)/);
   });
 
-  it("manager-classes-v2 시트 전용 팝오버 스타일이 포털 팝오버에도 적용된다", () => {
-    expect(css).toContain(".manager-classes-v2 [data-sheet-overlay] > .app-date-popover");
+  it("manager-classes-v2 시트 전용 스타일은 body 포털 팝오버에도 변형 클래스로 적용된다", () => {
+    expect(src).toContain('closest(".manager-classes-v2 .sheet")');
+    expect(css).toContain(".app-date-popover.in-classes-sheet");
+    expect(css).not.toContain("[data-sheet-overlay] > .app-date-popover");
   });
 });

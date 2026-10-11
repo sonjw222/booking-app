@@ -78,6 +78,8 @@ export default function SheetOverlay({ children, className = "sheet-overlay", sw
       }
     };
     const onFocus = (event: FocusEvent) => {
+      // body로 포털된 팝오버(DatePicker 등, data-overlay-portal)는 시트의 일부로 보고 포커스를 되돌리지 않는다.
+      if (event.target instanceof Element && event.target.closest("[data-overlay-portal]")) return;
       if (isTop() && event.target instanceof Node && !overlay.contains(event.target)) overlay.focus({ preventScroll: true });
     };
     const viewport = window.visualViewport;
