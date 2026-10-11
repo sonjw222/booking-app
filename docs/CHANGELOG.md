@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-11 — 코드베이스 정비: 미사용 CSS/export 제거 (동작·API·DB·UI 변경 없음, SQL 없음)
+- `app/globals.css`·`app/workspace.css`에서 필수 클래스가 코드 어디에도 참조되지 않는 규칙 146개 삭제(postcss 파싱으로 선택자 전체가 죽은 클래스를 요구할 때만; 동적 접두사 클래스·리치텍스트 `style-*`는 제외). CSS 265,637 → 252,909 B(gzip 44,672 → 42,183 B). 단위 2223/2223, 빌드 통과.
+- 참조 0건 export 6개 삭제: `downloadIcs`, `fetchPointBalances`, `isCategory`, `categoryPath`, `PG_PAY_METHOD_IDS`, `ConfirmRealPaymentResult`.
+- 보존(조사 결과 MEDIUM 이상): SQL 466개, 번호형 docs, manifest/아이콘, `lib/cancelDeadline.ts`, `tests/sql`, edge function 전부.
+
 ## 2026-10-10 — /reservation 색인 방지 누락 보완 (PR #183 후속, 웹 코드만, SQL 없음)
 - `lib/siteMeta.ts`의 비공개 경로 목록에 `/reservation`을 추가(기존엔 `/my-reservations`만 있었음) → `X-Robots-Tag: noindex, nofollow` 헤더와 robots.txt disallow 적용.
 - `app/robots.ts`: 순수 접두사 대신 세그먼트 단위 규칙(`/경로$`, `/경로/`, `/경로?`)으로 변경 — `/reservation-guide` 같은 무관한 경로가 접두사 매칭으로 막히지 않게 함. 기존 비공개 경로는 같은 방식으로 계속 차단.
