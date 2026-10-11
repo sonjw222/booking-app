@@ -7,16 +7,15 @@
   - is_platform_admin = true 인 계정만 접근 가능
 */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
 import {
-  checkPlatformAdmin, fetchCenters, approveCenter, rejectCenter, resetToPending,
-  type PendingCenter,
+  checkPlatformAdmin, fetchCenterPage, approveCenter, rejectCenter, resetToPending,
+  type PendingCenter, type CenterCursor,
 } from "../../../lib/admin";
 import { getBusinessLicenseUrl } from "../../../lib/storage";
 import { replaceTabNavigation } from "../../../lib/navState";
-import { centerMatchesKeyword } from "../../../lib/adminCenterSearch";
 
 type Tab = "pending" | "approved" | "rejected";
 
@@ -38,24 +37,25 @@ export default function AdminCentersPage() {
   // 방금 고른 상태 탭은 그대로 유지된다(요구사항: "검색어=지워도 상태 filter 유지,
   // 상태 변경해도 검색어 유지").
   const requestId = useRef(0);
-  const [visibleCount, setVisibleCount] = useState(30);
+  const [nextCursor, setNextCursor] = useState<CenterCursor | null>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [keyword, setKeyword] = useState("");
-  const filteredCenters = useMemo(
-    () => centers.filter((c) => centerMatchesKeyword(c, keyword)),
-    [centers, keyword]
-  );
 
   // 반려 사유 입력 시트
   const [rejectTarget, setRejectTarget] = useState<PendingCenter | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
-  const load = useCallback(async (t: Tab) => {
+  const load = useCallback(async (t: Tab, search = "", cursor: CenterCursor | null = null) => {
     const request = ++requestId.current;
     setLoading(true);
+    if (!cursor) setNextCursor(null);
     setError(null);
     try {
-      const result = await fetchCenters(t);
-      if (request === requestId.current) setCenters(result);
+      const result = await fetchCenterPage(t, search, cursor);
+      if (request === requestId.current) {
+        setCenters(previous => cursor ? [...previous, ...result.centers] : result.centers);
+        setNextCursor(result.nextCursor);
+      }
     } catch (e: any) {
       if (request === requestId.current) setError(e.message);
     } finally {
@@ -70,7 +70,7 @@ export default function AdminCentersPage() {
       if (admin) await load("pending");
       else setLoading(false);
     })().catch(() => { setIsAdmin(false); setLoading(false); });
-    return () => { ++requestId.current; };
+    return () => { ++requestId.current; if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [load]);
 
   function showToast(msg: string) {
@@ -90,7 +90,7 @@ export default function AdminCentersPage() {
     try {
       await approveCenter(c.id);
       showToast(`${c.name} 승인 완료`);
-      await load(tab);
+      await load(tab, keyword);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -110,7 +110,7 @@ export default function AdminCentersPage() {
       showToast(`${rejectTarget.name} 반려 처리`);
       setRejectTarget(null);
       setRejectReason("");
-      await load(tab);
+      await load(tab, keyword);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -123,7 +123,7 @@ export default function AdminCentersPage() {
     try {
       await resetToPending(c.id);
       showToast("대기 상태로 되돌렸어요");
-      await load(tab);
+      await load(tab, keyword);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -147,7 +147,7 @@ export default function AdminCentersPage() {
     );
   }
 
-  if (isAdmin === null || loading) {
+  if (isAdmin === null) {
     return (
       <div className="app-shell">
         <Loading />
@@ -167,22 +167,27 @@ export default function AdminCentersPage() {
       <div className="section-title" style={{ paddingTop: 14 }}>센터 승인 관리</div>
 
       {/* 릴리스 폴리시 배치 8차(2026-09-18), 6-1/6-3 — 검색창을 제목 아래, 상태 탭
-          위에 배치(권장 레이아웃). 입력 즉시 반영(client-side filter라 debounce/버튼
-          자체가 불필요), 기존 다른 검색 input과 동일하게 .input-field 재사용. */}
+          위에 배치(권장 레이아웃). 입력 후 300ms 대기하여 검색, 기존 다른 검색 input과 동일하게 .input-field 재사용. */}
       <div className="admin-center-search">
         <UiIcon name="search" size={16} />
         <input
           className="input-field"
           placeholder="센터명, 대표자, 주소, 전화번호로 검색"
           value={keyword}
-          onChange={(e) => { setKeyword(e.target.value); setVisibleCount(30); }}
+          maxLength={200}
+          onChange={(e) => {
+            const value = e.target.value; setKeyword(value);
+            ++requestId.current; setNextCursor(null);
+            if (searchTimer.current) clearTimeout(searchTimer.current);
+            searchTimer.current = setTimeout(() => { void load(tab, value); }, 300);
+          }}
         />
         {keyword && (
           <button
             type="button"
             className="admin-center-search-clear"
             aria-label="검색어 지우기"
-            onClick={() => { setKeyword(""); setVisibleCount(30); }}
+            onClick={() => { if (searchTimer.current) clearTimeout(searchTimer.current); setKeyword(""); void load(tab); }}
           >
             <UiIcon name="close" size={14} />
           </button>
@@ -195,7 +200,7 @@ export default function AdminCentersPage() {
           <button
             key={t}
             className={`center-chip ${t === tab ? "on" : ""}`}
-            onClick={() => { if (t !== tab) { setTab(t); setVisibleCount(30); void load(t); } }}
+            onClick={() => { if (t !== tab) { if (searchTimer.current) clearTimeout(searchTimer.current); setTab(t); void load(t, keyword); } }}
           >
             {TAB_LABEL[t]}
           </button>
@@ -204,7 +209,8 @@ export default function AdminCentersPage() {
 
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
 
-      {filteredCenters.length === 0 ? (
+      {loading && <div role="status">센터 목록을 불러오는 중이에요</div>}
+      {!loading && centers.length === 0 ? (
         <div className="daylist-empty" style={{ paddingTop: 40 }}>
           {/* 6-4 — "필터 자체에 데이터가 없음"과 "검색어 때문에 없음"을 구분한다. */}
           {keyword.trim()
@@ -213,7 +219,7 @@ export default function AdminCentersPage() {
         </div>
       ) : (
         <div className="admin-list">
-          {filteredCenters.slice(0, visibleCount).map((c) => (
+          {centers.map((c) => (
             <div key={c.id} className="admin-card">
               <div className="admin-card-head">
                 <div className="admin-center-name">{c.name}</div>
@@ -253,7 +259,7 @@ export default function AdminCentersPage() {
               </div>
             </div>
           ))}
-          {visibleCount < filteredCenters.length && <button type="button" className="ghost-btn" onClick={() => setVisibleCount((count) => count + 30)}>센터 더 보기 ({filteredCenters.length - visibleCount}개 남음)</button>}
+          {nextCursor && <button type="button" className="ghost-btn" disabled={loading} onClick={() => { void load(tab, keyword, nextCursor); }}>센터 더 보기</button>}
         </div>
       )}
 

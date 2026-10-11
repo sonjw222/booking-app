@@ -4,13 +4,7 @@
 */
 import type { PendingCenter } from "./admin";
 
-// 릴리스 폴리시 배치 8차(2026-09-18), 6번 — 센터 검색. fetchCenters(status)가 이미 그
-// 탭(상태)의 센터 전체를 한 번에 불러오므로(페이지네이션 없음, 운영자 화면이라 규모가
-// 작음) server round-trip 없이 client-side filtering으로 처리한다(디바운스/이전 결과
-// 유지/전체 skeleton 재표시 같은 고민 자체가 필요 없음 — 이미 로드된 배열을 그냥
-// 걸러서 보여줄 뿐이라 매 keystroke가 사실상 공짜).
-// normalize: 대소문자 무시(사업자번호/전화 등 영문 포함 가능성 대비), 앞뒤 공백 제거,
-// 전화번호는 "-" 유무 차이를 흡수하려고 숫자만 남긴 버전도 같이 비교한다.
+// 호환 조회의 검색 및 SQL 검색과의 의미 비교용 helper. 전화/사업자번호는 구분 기호를 제거한다.
 export function normalizeSearchText(s: string): string {
   return s.trim().toLowerCase();
 }

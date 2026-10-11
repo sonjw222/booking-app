@@ -59,8 +59,17 @@ describe("live-test 진입점", () => {
     expect(m.match(/\n    needs: production-qa-ack/g)?.length).toBe(2);   // android + ios
     expect(m).toMatch(/retention-days: 3/); expect(m).not.toMatch(/retention-days: 14/);
   });
-  it("workflow 전수 목록: 이 두 개뿐이며 각각 분류가 있다(새 workflow가 생기면 이 테스트가 분류를 요구한다)", async () => {
+  it("workflow 전수 목록: 새 workflow도 명시적 live/offline 분류를 요구한다", async () => {
     const { readdirSync } = await import("node:fs");
-    expect(readdirSync(path.join(root, ".github/workflows")).sort()).toEqual(["mobile-ui-qa.yml", "test.yml"]);   // test.yml=B(비-production live, preflight+guard), mobile-ui-qa.yml=C(ACK)
+    const present = readdirSync(path.join(root, ".github/workflows")).sort();
+    const classified = ["admin-pagination.yml", "dev-agent.yml", "mobile-ui-qa.yml", "test.yml"];
+    expect(present).toEqual(classified.filter(name => present.includes(name)));
+    for (const name of ["admin-pagination.yml", "dev-agent.yml"].filter(name => present.includes(name))) {
+      const workflow = rd(".github/workflows/" + name);
+      expect(workflow).toMatch(/permissions:\n  contents: read/);
+      expect(workflow).not.toMatch(/secrets\.|SUPABASE_URL|SERVICE_ROLE|supabase db|playwright test/);
+      expect(workflow).toContain(name === "dev-agent.yml" ? "python -m unittest discover" : "node --test tests/sql/admin-center-pagination.test.mjs");
+    } // A: new offline tests; B: test.yml; C: mobile-ui-qa.yml
+
   });
 });

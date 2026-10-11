@@ -1,0 +1,22 @@
+name: Admin pagination offline SQL
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261011113106_admin_center_page_draft.sql'
+      - 'tests/sql/admin-center-pagination.test.mjs'
+      - '.github/workflows/admin-pagination.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pagination-sql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node --test tests/sql/admin-center-pagination.test.mjs
