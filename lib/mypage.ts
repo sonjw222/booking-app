@@ -537,11 +537,6 @@ export function downloadIcsString(ics: string, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// (기존 호환) 예약 배열 → ICS 다운로드
-export function downloadIcs(items: CalReservation[], filename = "내예약.ics") {
-  downloadIcsString(reservationsToIcs(items), filename);
-}
-
 export type IcsExportResult = "shared" | "downloaded" | "cancelled";
 
 /*

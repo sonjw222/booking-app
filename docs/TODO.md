@@ -1,5 +1,13 @@
 # TODO
 
+## 2026-10-11 코드베이스 정비 후속 (조사만 하고 이번에 처리하지 않음)
+- **P2**: `tests/sql/*.test.mjs` 24개(PGlite)가 CI에 연결되어 있지 않고 `@electric-sql/pglite`도 package.json에 없다 — 수동 실행뿐. CI 연결 검토.
+- **P2**: `eslint.config.*` 부재로 `npm run lint` 실패 — lint 설정 복구 작업 필요.
+- **P3**: `tsc --noUnusedLocals`가 app/lib에서 지역 미사용 심볼 약 20건을 보고(예: `app/mypage/page.tsx` `STATUS_LABEL`, `app/reservation/page.tsx` `passSheet`). `handleDelete`/`canDeletePayment`는 권한 UI 누락 흔적일 수 있어 의도 확인 후 정리.
+- **P3**: `lib/appleAuth.ts`·`lib/googleAuth.ts`·`app/login/page.tsx`의 진단용 console.log, `lib/supabaseClient.ts:47-52` 예시 주석 — 실기기 로그인 진단 수단이라 확인 후 정리.
+- **P3**: `public/manifest.webmanifest`는 미연결이고 아이콘 경로(`../icons/*.webp`)가 존재하지 않음 — 연결 또는 삭제 결정 필요.
+- **P3**: 중복 헬퍼(`clientIp`/`hashIp` 2개 edge function, `tossAuthHeader` 2개 route, `todayStr` 5곳) 통합 후보 — 결제/인증 경로라 별도 승인 필요.
+
 ## 2026-10-05 모바일 safe-area 실기기 확인
 - **P1 / 실기기 확인 필요**: iPhone 16 / 17 Pro Max(가능하면 작은 iPhone, Android 제스처 내비)에서 예약·마이 비로그인 화면의 상단 여백, 하단 nav 겹침, 글자 크기 확대 확인. 자동 검증(Chromium + inset 시뮬레이션)은 완료했으나 실기기 WKWebView/Capacitor 확인은 수동 QA로 남김.
 - **P3**: `daylist-empty`(인라인 paddingTop 40/60/80)를 쓰는 관리자/체크아웃 결과 화면 약 30곳은 clipping은 없지만(≥40px, 대부분 헤더 뒤) 매직 넘버라 공통 토큰으로 정리할 여지가 있다 — 이번 범위에서는 변경하지 않음.

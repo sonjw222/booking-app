@@ -7,7 +7,6 @@
   - PG가 켜져 있어도 센터 설정으로 걸러서 비면 직접결제로 안전하게 대체한다.
   - 카카오페이/토스페이는 PG가 켜진 사용자(정식 오픈 또는 심사관 override)에게 센터 설정(pay_methods)대로 노출된다(HIDDEN_PAY_METHOD_IDS 비어 있음).
 */
-export const PG_PAY_METHOD_IDS = ["card", "kakao", "toss", "transfer"] as const;
 export const DIRECT_PAY_METHOD_ID = "direct";
 // 사용자 UI에서 숨기는 결제수단 id. 2026-10-02에는 카카오페이/토스페이를 계약 활성화 전까지 숨겼으나(["kakao", "toss"]), 2026-10-07부터 다시 노출한다.
 // 숨김 메커니즘 자체(필터 + resolveSelectedPayMethod의 stale 선택값 보정)는 남겨 둔다 — 다시 숨겨야 할 때 id만 추가하면 된다.

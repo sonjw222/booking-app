@@ -156,8 +156,6 @@
   :is(.manager-v3-content,.admin-v3-content) :is(.noti-time,.noti-state,.grade-badge,.mem-status-badge,.mem-flag) { font-size: 12px; line-height: 1.5; }
   :is(.manager-v3-content,.admin-v3-content) .noti-title-row { flex-wrap: wrap; }
   :is(.manager-v3-content,.admin-v3-content) .noti-row-wrap:not(.removing) { max-height: none; }
-  :is(.manager-v3-content,.admin-v3-content) .admin-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-  :is(.manager-v3-content,.admin-v3-content) .admin-filters > .input-field { flex: 1 1 180px; width: auto; margin: 0; }
   :is(.manager-v3-content,.admin-v3-content) .date-range { grid-template-columns: repeat(2,minmax(0,260px)); }
   :is(.manager-v3-content,.admin-v3-content) .sheet .daylist-empty { min-height: 0; padding-block: 32px; }
   :is(.manager-v3-content,.admin-v3-content) :is(.admin-card,.pass-card,.order-row,.room-card,.mgr-review,.announce-item) { border-radius: var(--work-radius); }

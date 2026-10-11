@@ -564,22 +564,6 @@ export async function fetchPoints(centerId: string): Promise<PointRow[]> {
   return asc.reverse();
 }
 
-// 회원별 포인트 잔액 (센터 내)
-export async function fetchPointBalances(centerId: string): Promise<{ profileId: string; name: string; balance: number }[]> {
-  const { data, error } = await supabase
-    .from("point_transactions")
-    .select("profile_id, amount, profiles(name)")
-    .eq("center_id", centerId);
-  if (error) throw new Error("포인트 잔액을 불러오지 못했어요: " + error.message);
-  const map: Record<string, { name: string; balance: number }> = {};
-  for (const r of data ?? []) {
-    const pid = (r as any).profile_id;
-    if (!map[pid]) map[pid] = { name: (r as any).profiles?.name ?? "(회원)", balance: 0 };
-    map[pid].balance += (r as any).amount;
-  }
-  return Object.entries(map).map(([profileId, v]) => ({ profileId, name: v.name, balance: v.balance }));
-}
-
 // 운영설정 "미수금 자동입력" 계산식(상품가 - 입력된 결제수단 합계, 0 미만이면 0) — 순수
 // 함수로 분리해 단위 테스트로 검증한다.
 export function computeAutoUnpaid(productPrice: number, paidAmount: number): number {
