@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-10-11 — 진도 기록 팝업 날짜 캘린더 잘림 수정 (웹 코드만, SQL 없음)
+- 원인: `DatePicker`의 팝오버가 `.app-date-picker` 안에서 `position:absolute`로 그려져 `.sheet`(`overflow-y:auto`, 진도 기록은 `.prog-add-sheet`)의 클리핑 영역에 갇혔다. 하네스 실측: 수정 전 날짜 31개 중 모바일 10개 / 태블릿·데스크톱 28개가 클릭 불가.
+- 수정(`app/components/DatePicker.tsx`, `lib/popoverPosition.ts`, `app/globals.css`): 팝오버를 `createPortal`로 렌더링(시트 안이면 같은 `SheetOverlay`의 자식, 아니면 body)하고 트리거 기준 `fixed` 좌표를 순수 함수 `computePopoverPosition`으로 계산(아래 → 위 → 뷰포트 안으로 밀기, 뷰포트보다 크면 내부 스크롤). 캘린더 크기(310×308)·디자인·시트 크기는 그대로. 부모 `overflow`는 건드리지 않았고 z-index도 기존 값 유지.
+- 같은 오버레이의 자식이라 `SheetOverlay`의 포커스 트랩·React 이벤트 전파(`.sheet`의 stopPropagation)가 유지된다. 바깥 클릭 판정은 트리거와 팝오버 둘 다 안쪽으로 본다. `manager-classes-v2` 시트 전용 스타일은 `[data-sheet-overlay] > .app-date-popover` 선택자로 포털 이후에도 적용(326px/패딩 16px 등 실측 동일).
+- 동작 변경: ESC는 캘린더가 열려 있으면 캘린더만 닫고(capture), 시트는 닫지 않는다. 열릴 때 선택일(없으면 오늘)로 포커스 이동, 스크롤/리사이즈 때 위치 재계산.
+- 같은 컴포넌트를 쓰는 9곳(수업·휴무일·매출·정산·구매 등)이 함께 적용된다. `MonthPicker`는 이번 범위에서 제외(후속).
+- 테스트 `tests/unit/popoverPosition.test.ts`(위치 계산 6건 + 구조 계약 6건) 추가.
+- (재수정, 같은 PR) 사용자 Preview에서 하단 잘림이 보고되어 구조를 더 단단히 했다: 팝오버를 **항상 `document.body`로 포털**(`.sheet-overlay`의 `overflow:hidden` 등 어떤 조상도 관여 불가), 위치는 **레이아웃 뷰포트**(`documentElement.clientWidth`/`innerHeight`) 기준으로만 계산(`visualViewport`로 높이를 줄이던 경로 제거 → 일반 화면에서 내부 스크롤 경로 없음), `SheetOverlay` 포커스 트랩은 `data-overlay-portal` 팝오버를 예외 처리하고 팝오버 안에서 Tab 순환. `manager-classes-v2` 시트 스타일은 `.in-classes-sheet` 변형 클래스로 유지. 실제 `/manager/progress/record` 페이지(Supabase 모킹)로 Chromium·WebKit·기기 프로필 96개 시나리오 + 스크린샷 픽셀 검증(날짜 31개 숫자가 실제로 그려짐) 통과. 단, 수정 전(PR #187 초판) 코드는 로컬/배포 Preview 모두에서 재현되지 않아 사용자 화면의 정확한 원인은 미확정.
+
 ## 2026-10-11 — 코드베이스 정비: 미사용 CSS/export 제거 (동작·API·DB·UI 변경 없음, SQL 없음)
 - `app/globals.css`·`app/workspace.css`에서 필수 클래스가 코드 어디에도 참조되지 않는 규칙 146개 삭제(postcss 파싱으로 선택자 전체가 죽은 클래스를 요구할 때만; 동적 접두사 클래스·리치텍스트 `style-*`는 제외). CSS 265,637 → 252,909 B(gzip 44,672 → 42,183 B). 단위 2223/2223, 빌드 통과.
 - 참조 0건 export 6개 삭제: `downloadIcs`, `fetchPointBalances`, `isCategory`, `categoryPath`, `PG_PAY_METHOD_IDS`, `ConfirmRealPaymentResult`.

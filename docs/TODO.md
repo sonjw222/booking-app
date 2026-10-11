@@ -1,5 +1,9 @@
 # TODO
 
+## 2026-10-11 날짜 선택 팝오버 후속 (진도 기록 캘린더 수정 PR 범위 밖)
+- **P2**: `MonthPicker`는 아직 `position:absolute` 팝오버라 `.sheet` 안에서 같은 방식으로 잘릴 수 있다 — `DatePicker`와 같은 포털/`computePopoverPosition` 적용 검토(영향 화면 목록 확인 후).
+- **P3**: 실기기(iOS/Android) 확인과 키보드 화살표 이동(날짜 그리드)은 미구현/미검증.
+
 ## 2026-10-11 코드베이스 정비 후속 (조사만 하고 이번에 처리하지 않음)
 - **P2**: `tests/sql/*.test.mjs` 24개(PGlite)가 CI에 연결되어 있지 않고 `@electric-sql/pglite`도 package.json에 없다 — 수동 실행뿐. CI 연결 검토.
 - **P2**: `eslint.config.*` 부재로 `npm run lint` 실패 — lint 설정 복구 작업 필요.
