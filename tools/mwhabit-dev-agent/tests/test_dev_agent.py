@@ -495,7 +495,7 @@ class TestSafetyMisc(Base):
         self.assertEqual(orchestrator.run_once(Config(), shell)["outcome"], "disabled")
         self.assertEqual(shell.calls, [])
         self.assertFalse(Config().enabled); self.assertFalse(Config().publish_enabled)
-        self.assertFalse(load_config(Path(__file__).resolve().parents[1] / "dev_agent.config.json").enabled)
+        self.assertFalse(load_config(self.env.root / "missing-config.json").enabled)
 
     def test_kill_switch(self):
         self.env.kill.write_text("")
