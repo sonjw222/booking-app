@@ -4388,7 +4388,7 @@ a.membership-card { text-decoration: none; display: block; }
      겹쳐 보이는 버그가 있었다(2026-08-31 스크린샷 리포트) — top만 0으로 되돌림. */
   min-height: 30px; padding: 10px 8px; margin: 0 -8px -10px 0;
   border: 1px solid var(--line-strong); border-radius: 8px; background: none;
-  color: var(--ink-soft); font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
+  color: var(--ink); font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
 }
 .member-my-reservations .hist-cancel-btn:disabled { opacity: .5; cursor: default; }
 
