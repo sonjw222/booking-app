@@ -393,6 +393,46 @@ jobs:
           TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
+  acl-fixture-repeat:
+    name: ACL fixture isolated and combined repeat (dev only)
+    runs-on: ubuntu-latest
+    needs: integration
+    if: ${{ !cancelled() && github.head_ref == 'test/acl-fixture-restore-20261012' && needs.integration.result == 'success' }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Repeat isolated and combined fixture checks three times
+        shell: bash
+        run: |
+          for iteration in 1 2 3; do
+            npx vitest run --config vitest.integration.config.ts tests/integration/acl-003-permission-read.test.ts
+            npx vitest run --config vitest.integration.config.ts tests/integration/admin-assignment-security.test.ts
+            npx vitest run --config vitest.integration.config.ts tests/integration/acl-003-permission-read.test.ts tests/integration/admin-assignment-security.test.ts
+          done
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
+          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
+          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
+          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
+          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
+          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
+          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
+          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
+          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
+          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
+          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
+          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
+          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
+          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
   build:
     name: Build (production, typecheck 포함 — placeholder env, live DB 미사용)
     runs-on: ubuntu-latest
