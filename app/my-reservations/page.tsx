@@ -106,7 +106,7 @@ export default function MyReservationsPage() {
       setHistory(data);
       setError(null);
       setLoading(false);
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (!mountedRef.current || seq !== requestSeqRef.current) return;
       if (!opts?.background || !hasLoadedRef.current) {
         setHistory([]);
@@ -117,8 +117,9 @@ export default function MyReservationsPage() {
   }, []);
   useEffect(() => {
     mountedRef.current = true;
-    load();
-    return () => { mountedRef.current = false; };
+    let disposed = false;
+    queueMicrotask(() => { if (!disposed) void load(); });
+    return () => { disposed = true; mountedRef.current = false; };
   }, [load]);
   // PERF-013: 5분 이상 백그라운드였다가 돌아오면 내 예약 목록만 조용히 재조회
   useResumeRefresh(() => load({ background: true }));
@@ -134,7 +135,7 @@ export default function MyReservationsPage() {
       showToast(deducted ? "취소됐지만 마감 이후라 수강권 1회가 차감됐어요" : "예약이 취소됐어요");
       void hapticWarning();
       await load();
-    } catch (e: any) {
+    } catch (e: unknown) {
       showToast(toUserMessage(e, "취소하지 못했어요"));
     } finally {
       setBusyId(null);
