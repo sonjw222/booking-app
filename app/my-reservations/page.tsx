@@ -7,7 +7,7 @@
 */
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchMyReservationHistory, type HistoryItem } from "../../lib/mypage";
 import { cancelReservation } from "../../lib/reservations";
 import Loading from "../components/Loading";
@@ -90,16 +90,37 @@ export default function MyReservationsPage() {
     setTimeout(() => setToast(null), 2500);
   }
 
+  const mountedRef = useRef(true);
+  const requestSeqRef = useRef(0);
+  const hasLoadedRef = useRef(false);
   const load = useCallback(async (opts?: { background?: boolean }) => {
-    // background(PERF-013 앱 복귀 재조회): 스피너/에러 화면 전환 없이 조용히 데이터만 교체
+    // background(PERF-013 앱 복귀 재조회): 스피너 전환 없이 조용히 데이터만 교체
+    // (아직 한 번도 불러오지 못한 상태에서 실패하면 빈 목록으로 두지 않고 오류 화면을 보여준다)
+    const seq = ++requestSeqRef.current;
     if (!opts?.background) { setLoading(true); setError(null); }
     try {
       const data = await fetchMyReservationHistory();
+      // 화면 이탈 후이거나 더 새로운 요청이 있으면 오래된 응답은 버린다
+      if (!mountedRef.current || seq !== requestSeqRef.current) return;
+      hasLoadedRef.current = true;
       setHistory(data);
-    } catch (e: any) { if (!opts?.background) setError(toUserMessage(e, "불러오지 못했어요")); }
-    finally { if (!opts?.background) setLoading(false); }
+      setError(null);
+      setLoading(false);
+    } catch (e: unknown) {
+      if (!mountedRef.current || seq !== requestSeqRef.current) return;
+      if (!opts?.background || !hasLoadedRef.current) {
+        setHistory([]);
+        setError(toUserMessage(e, "불러오지 못했어요"));
+      }
+      setLoading(false);
+    }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    mountedRef.current = true;
+    let disposed = false;
+    queueMicrotask(() => { if (!disposed) void load(); });
+    return () => { disposed = true; mountedRef.current = false; };
+  }, [load]);
   // PERF-013: 5분 이상 백그라운드였다가 돌아오면 내 예약 목록만 조용히 재조회
   useResumeRefresh(() => load({ background: true }));
 
@@ -114,7 +135,7 @@ export default function MyReservationsPage() {
       showToast(deducted ? "취소됐지만 마감 이후라 수강권 1회가 차감됐어요" : "예약이 취소됐어요");
       void hapticWarning();
       await load();
-    } catch (e: any) {
+    } catch (e: unknown) {
       showToast(toUserMessage(e, "취소하지 못했어요"));
     } finally {
       setBusyId(null);
@@ -157,7 +178,6 @@ export default function MyReservationsPage() {
 
   return (
     <div className="app-shell member-my-reservations">
-      {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
       {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
@@ -173,7 +193,12 @@ export default function MyReservationsPage() {
       <SegmentedTabs value={filter} onChange={setFilter} label="예약 내역 종류"
         items={[{ value: "upcoming", label: "예정된 예약" },{ value: "past", label: "지난 예약" },{ value: "all", label: "전체" }]} />
 
-      {loading ? <Loading /> : shown.length === 0 ? (
+      {loading ? <Loading /> : error ? (
+        <div role="alert" className="my-reservations-error">
+          <EmptyState icon="calendar" title="예약 내역을 불러오지 못했어요" description={error}
+            action={<button type="button" className="primary-btn" onClick={() => load()}>다시 시도</button>} />
+        </div>
+      ) : shown.length === 0 ? (
         <EmptyState icon="calendar" title={filter === "upcoming" ? "예정된 예약이 없어요" : "예약 내역이 없어요"}
           description={filter === "upcoming" ? "원하는 수업을 찾아 예약해보세요." : "수업을 이용하면 이곳에 기록이 쌓여요."}
           action={filter === "upcoming" ? <Link className="primary-btn" href="/reservation" prefetch={false}>수업 둘러보기</Link> : undefined} />
