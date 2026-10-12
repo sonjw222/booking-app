@@ -75,9 +75,13 @@ describe("live-test workflow 구조", () => {
   });
   it("live Supabase를 쓰는 job은 모두 한 체인에 직렬화: secrets를 쓰는 job = e2e 4개 + integration, integration은 마지막 E2E 뒤, 저장소 전역 concurrency 유지", () => {
     const live = Object.keys(J).filter((k) => J[k].includes("secrets."));
-    expect(live.sort()).toEqual([...e2e, "integration", "live-env-preflight"].sort());
+    expect(live.sort()).toEqual([...e2e, "integration", "live-env-preflight", "acl-fixture-repeat"].sort());
     expect(code(J.integration)).toMatch(new RegExp(`^    needs: ${e2e[e2e.length - 1]}\\s*$`, "m"));
     expect(code(J.integration)).toContain(`!cancelled() && needs.${e2e[e2e.length - 1]}.result != 'skipped'`);
+    expect(code(J["acl-fixture-repeat"])).toMatch(/^    needs: integration\s*$/m);
+    expect(code(J["acl-fixture-repeat"])).toContain("needs.integration.result == 'success'");
+    expect(code(J["acl-fixture-repeat"])).toContain("github.head_ref == 'test/acl-fixture-restore-20261012'");
+    expect(J["acl-fixture-repeat"]).toContain("for iteration in 1 2 3");
     expect(wf).toMatch(/concurrency:\n  group: shared-live-supabase-tests\n  cancel-in-progress: false/);
     expect(code(wf)).not.toMatch(/continue-on-error/);
     expect(J.integration).toContain("E2E가 실패해도 Integration은 실행한다");   // 판단 근거가 workflow에 문서화돼 있다
@@ -96,7 +100,7 @@ describe("live-test workflow 구조", () => {
     for (const m of code(wf).matchAll(/uses: ([^@\s]+)@/g)) expect(m[1], m[0]).toMatch(/^actions\//);
   });
   it("Production guard 입력: live job step이 NEXT_PUBLIC_SUPABASE_URL/키를 secrets에서 env로 전달(가드는 Playwright config / vitest globalSetup에서 이 값을 검사)", () => {
-    for (const id of [...e2e, "integration"]) {
+    for (const id of [...e2e, "integration", "acl-fixture-repeat"]) {
       for (const k of ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"]) expect(J[id], `${id} ${k}`).toContain(`${k}: \${{ secrets.${k} }}`);
     }
     expect(readFileSync(path.join(root, "tests/e2e/fixtures/env.ts"), "utf8")).toContain("assertIntegrationTargetIsNotProduction(process.env);");
