@@ -1,4 +1,5 @@
 "use client";
+import { fetchCancellationNotice } from "../../lib/cancelPreview";
 
 /*
   내 예약 (하단 네비 탭)
@@ -133,9 +134,10 @@ export default function MyReservationsPage() {
   // 가서 같은 날짜를 다시 찾아야 했다(app/reservation/page.tsx의 handleCancel과 동일 RPC 재사용).
   async function handleCancel(h: HistoryItem) {
     if (busyId) return;
-    if (!(await globalThis.appConfirm("이 수업 예약을 취소할까요?"))) return;
     setBusyId(h.id);
     try {
+      const notice = await fetchCancellationNotice(h.id);
+      if (!(await globalThis.appConfirm(`${h.title} 예약을 취소할까요?\n${notice}\n최종 취소 조건은 서버에서 다시 확인해요.`))) return;
       const { deducted } = await cancelReservation(h.id);
       showToast(deducted ? "취소됐지만 마감 이후라 수강권 1회가 차감됐어요" : "예약이 취소됐어요");
       void hapticWarning();
