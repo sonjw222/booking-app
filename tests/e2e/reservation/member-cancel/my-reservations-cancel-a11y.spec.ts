@@ -279,9 +279,15 @@ for (const width of WIDTHS) {
           expect(btn.r).toBeLessThanOrEqual(width);
           expect(btnTop, "배지와 취소 버튼 세로 겹침").toBeGreaterThanOrEqual(badge.bt - 0.5);
           // 제목 텍스트가 오른쪽 영역을 침범하지 않는다.
-          const titleRight = await r.locator(".hist-main").evaluate((el) => el.getBoundingClientRect().right);
-          const rightLeft = await r.locator(".hist-right").evaluate((el) => el.getBoundingClientRect().left);
-          expect(titleRight, "제목 영역과 우측 버튼 영역 겹침").toBeLessThanOrEqual(rightLeft + 0.5);
+          const regions = await r.evaluate((el) => {
+            const title = el.querySelector(".hist-main")!.getBoundingClientRect();
+            const actions = el.querySelector(".hist-right")!.getBoundingClientRect();
+            // Narrow layouts put actions below the title; overlap requires intersection on BOTH axes.
+            return { horizontal: Math.min(title.right, actions.right) - Math.max(title.left, actions.left),
+              vertical: Math.min(title.bottom, actions.bottom) - Math.max(title.top, actions.top) };
+          });
+          expect(regions.horizontal <= 0.5 || regions.vertical <= 0.5,
+            "제목 영역과 버튼 영역이 가로·세로 모두 겹치면 안 됨").toBe(true);
         }
       });
 
