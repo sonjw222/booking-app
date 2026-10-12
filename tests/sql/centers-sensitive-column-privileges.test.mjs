@@ -75,9 +75,10 @@ async function world({ s1 = true, s2 = true } = {}) {
   return db;
 }
 async function as(db, role, uid, sql, preface) {
+  const { rows: [{ search_path: originalSearchPath }] } = await db.query("show search_path");
   await db.exec(`select set_config('app.uid', '${uid ?? ''}', false)`);
   await db.exec(`set role ${role}`);
-  try { if (preface) await db.exec(preface); return await db.query(sql); } finally { await db.exec('reset search_path'); await db.exec('reset role'); await db.exec(`select set_config('app.uid', '', false)`); }
+  try { if (preface) await db.exec(preface); return await db.query(sql); } finally { await db.query("select set_config('search_path', $1, false)", [originalSearchPath]); await db.exec('reset role'); await db.exec(`select set_config('app.uid', '', false)`); }
 }
 const denied = /permission denied/i;
 

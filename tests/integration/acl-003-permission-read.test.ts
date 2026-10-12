@@ -24,13 +24,14 @@
     일으켰다(TEST-002). 이번 버전은 이 파일이 "이번 실행에서 새로 만든 것"만 정확히 추적해
     afterAll에서 역순으로 정리한다 — 실행 전부터 이미 있던 데이터(예: 과거 오염이 아직
     정리되지 않은 경우)는 건드리지 않는다(그 경우는 cleanup_acl003_test_fixture_proposed.sql로
-    별도 정리). 정리는 테스트 성공/실패와 무관하게 항상 시도되고, 실패하면 조용히 무시하지
+    별도 정리). 이미 있던 권한 예외는 테스트 전 grant_type을 저장하고 원래 값으로 복원한다. 정리는 테스트 성공/실패와 무관하게 항상 시도되고, 실패하면 조용히 무시하지
     않고 명확한 오류로 모아 던진다.
 
   필요한 환경변수(.env.test.local, 없으면 requireEnv가 안내):
     TEST_MANAGER_A_EMAIL/PASSWORD, TEST_MANAGER_B_EMAIL/PASSWORD
     (둘 다 admin-assignment-security.test.ts와 공유 — 이 파일 전용 계정 없음)
 */
+import { temporaryOverrides } from "../helpers/temporaryOverrides";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";
 import { switchToTestUser, getOrCreateOwnedTestCenter, type TestUser } from "./setup";
@@ -53,8 +54,8 @@ let staffManagerCenterId: string; // centerA에서 managerB(비오너 스태프)
 // 여기 기록되지 않고, 따라서 afterAll에서도 지우지 않는다(요구사항: 사전 존재 데이터 보존).
 let createdRoleId: string | null = null;
 let createdStaffManagerCenterId: string | null = null;
-let createdOwnerOverride = false;
-let createdStaffOverride = false;
+const overrides = temporaryOverrides<"allow" | "deny" | null>(readOverride,
+  (id, value) => setStaffOverride(id, OVERRIDE_KEY, value));
 
 async function getOrCreateNoPermRole(centerId: string): Promise<{ id: string; created: boolean }> {
   const roles = await fetchRoles(centerId);
@@ -91,15 +92,15 @@ async function managerCenterIdFor(centerId: string, accountId: string): Promise<
   return (data as { id: string }).id;
 }
 
-async function overrideExists(managerCenterId: string, key: string): Promise<boolean> {
+async function readOverride(managerCenterId: string): Promise<"allow" | "deny" | null> {
   const { data, error } = await supabase
     .from("account_center_permissions")
-    .select("id")
+    .select("grant_type")
     .eq("manager_center_id", managerCenterId)
-    .eq("permission_key", key)
+    .eq("permission_key", OVERRIDE_KEY)
     .maybeSingle();
   if (error) throw new Error("개인 권한 예외 확인 실패: " + error.message);
-  return !!data;
+  return data?.grant_type ?? null;
 }
 
 beforeAll(async () => {
@@ -120,13 +121,8 @@ beforeAll(async () => {
   staffManagerCenterId = await managerCenterIdFor(centerAId, managerB.accountId);
   if (invited) createdStaffManagerCenterId = staffManagerCenterId;
 
-  const ownerOverrideAlready = await overrideExists(ownerManagerCenterId, OVERRIDE_KEY);
-  await setStaffOverride(ownerManagerCenterId, OVERRIDE_KEY, "allow");
-  if (!ownerOverrideAlready) createdOwnerOverride = true;
-
-  const staffOverrideAlready = await overrideExists(staffManagerCenterId, OVERRIDE_KEY);
-  await setStaffOverride(staffManagerCenterId, OVERRIDE_KEY, "allow");
-  if (!staffOverrideAlready) createdStaffOverride = true;
+  await overrides.set(ownerManagerCenterId, "allow");
+  await overrides.set(staffManagerCenterId, "allow");
 }, 30000);
 
 // vitest는 이 안의 테스트가 실패해도 afterAll을 항상 실행한다 — 성공/실패와 무관하게 정리됨.
@@ -139,20 +135,8 @@ afterAll(async () => {
   // 역순으로 정리: override(자식) → manager_centers → role(부모).
   // manager_centers.role_id는 center_roles를 ON DELETE 절 없이 참조하므로(=RESTRICT),
   // role을 먼저 지우면 FK 위반으로 실패한다 — 반드시 manager_centers보다 나중에 지운다.
-  if (createdStaffOverride && staffManagerCenterId) {
-    try {
-      await setStaffOverride(staffManagerCenterId, OVERRIDE_KEY, null);
-    } catch (e: any) {
-      errors.push(`staff override 정리 실패(manager_center=${staffManagerCenterId}): ${e.message}`);
-    }
-  }
-  if (createdOwnerOverride && ownerManagerCenterId) {
-    try {
-      await setStaffOverride(ownerManagerCenterId, OVERRIDE_KEY, null);
-    } catch (e: any) {
-      errors.push(`owner override 정리 실패(manager_center=${ownerManagerCenterId}): ${e.message}`);
-    }
-  }
+  try { await overrides.restore(); }
+  catch (error) { errors.push(String(error)); }
   if (createdStaffManagerCenterId) {
     try {
       await removeStaff(createdStaffManagerCenterId);

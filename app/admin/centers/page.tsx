@@ -7,7 +7,7 @@
   - is_platform_admin = true 인 계정만 접근 가능
 */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
 import {
@@ -37,6 +37,8 @@ export default function AdminCentersPage() {
   // 6번 — 검색어는 탭(상태)과 독립적인 state라 탭을 바꿔도 유지되고, 검색어를 지워도
   // 방금 고른 상태 탭은 그대로 유지된다(요구사항: "검색어=지워도 상태 filter 유지,
   // 상태 변경해도 검색어 유지").
+  const requestId = useRef(0);
+  const [visibleCount, setVisibleCount] = useState(30);
   const [keyword, setKeyword] = useState("");
   const filteredCenters = useMemo(
     () => centers.filter((c) => centerMatchesKeyword(c, keyword)),
@@ -48,14 +50,16 @@ export default function AdminCentersPage() {
   const [rejectReason, setRejectReason] = useState("");
 
   const load = useCallback(async (t: Tab) => {
+    const request = ++requestId.current;
     setLoading(true);
     setError(null);
     try {
-      setCenters(await fetchCenters(t));
+      const result = await fetchCenters(t);
+      if (request === requestId.current) setCenters(result);
     } catch (e: any) {
-      setError(e.message);
+      if (request === requestId.current) setError(e.message);
     } finally {
-      setLoading(false);
+      if (request === requestId.current) setLoading(false);
     }
   }, []);
 
@@ -63,10 +67,11 @@ export default function AdminCentersPage() {
     (async () => {
       const admin = await checkPlatformAdmin();
       setIsAdmin(admin);
-      if (admin) await load(tab);
+      if (admin) await load("pending");
       else setLoading(false);
-    })();
-  }, [tab, load]);
+    })().catch(() => { setIsAdmin(false); setLoading(false); });
+    return () => { ++requestId.current; };
+  }, [load]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -170,14 +175,14 @@ export default function AdminCentersPage() {
           className="input-field"
           placeholder="센터명, 대표자, 주소, 전화번호로 검색"
           value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
+          onChange={(e) => { setKeyword(e.target.value); setVisibleCount(30); }}
         />
         {keyword && (
           <button
             type="button"
             className="admin-center-search-clear"
             aria-label="검색어 지우기"
-            onClick={() => setKeyword("")}
+            onClick={() => { setKeyword(""); setVisibleCount(30); }}
           >
             <UiIcon name="close" size={14} />
           </button>
@@ -190,7 +195,7 @@ export default function AdminCentersPage() {
           <button
             key={t}
             className={`center-chip ${t === tab ? "on" : ""}`}
-            onClick={() => setTab(t)}
+            onClick={() => { if (t !== tab) { setTab(t); setVisibleCount(30); void load(t); } }}
           >
             {TAB_LABEL[t]}
           </button>
@@ -208,7 +213,7 @@ export default function AdminCentersPage() {
         </div>
       ) : (
         <div className="admin-list">
-          {filteredCenters.map((c) => (
+          {filteredCenters.slice(0, visibleCount).map((c) => (
             <div key={c.id} className="admin-card">
               <div className="admin-card-head">
                 <div className="admin-center-name">{c.name}</div>
@@ -248,6 +253,7 @@ export default function AdminCentersPage() {
               </div>
             </div>
           ))}
+          {visibleCount < filteredCenters.length && <button type="button" className="ghost-btn" onClick={() => setVisibleCount((count) => count + 30)}>센터 더 보기 ({filteredCenters.length - visibleCount}개 남음)</button>}
         </div>
       )}
 
