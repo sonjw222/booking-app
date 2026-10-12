@@ -85,10 +85,15 @@ export default function MyReservationsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   function showToast(msg: string) {
+    if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 2500);
+    toastTimerRef.current = setTimeout(() => { setToast(null); toastTimerRef.current = null; }, 2500);
   }
+  useEffect(() => () => {
+    if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
+  }, []);
 
   const mountedRef = useRef(true);
   const requestSeqRef = useRef(0);
@@ -178,7 +183,7 @@ export default function MyReservationsPage() {
 
   return (
     <div className="app-shell member-my-reservations">
-      {toast && <div className="toast">{toast}</div>}
+      {toast && <div className="toast" role="status" aria-live="polite" aria-atomic="true">{toast}</div>}
 
       <div className="back-header">
         <div className="side" />
@@ -232,6 +237,8 @@ export default function MyReservationsPage() {
                         <button
                           type="button"
                           className="hist-cancel-btn"
+                          aria-label={`${h.title} 예약 취소`}
+                          style={{ minWidth: 44, minHeight: 44 }}
                           disabled={busyId === h.id}
                           onClick={() => handleCancel(h)}
                         >
