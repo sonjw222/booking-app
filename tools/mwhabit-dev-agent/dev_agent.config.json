@@ -1,0 +1,6 @@
+{
+  "enabled": false,
+  "publish_enabled": false,
+  "git_host_path": "/Users/sonjw/Documents/mwhabit-automation/git-host",
+  "node_modules_source": "/Users/sonjw/Documents/mwhabit-automation/git-host/node_modules"
+}
