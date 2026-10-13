@@ -1,0 +1,19 @@
+name: Dev agent offline regression
+on:
+  pull_request:
+    paths:
+      - 'tools/mwhabit-dev-agent/**'
+      - '.github/workflows/dev-agent.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: python -m unittest discover -s tools/mwhabit-dev-agent/tests
