@@ -1,4 +1,5 @@
 "use client";
+import { fetchCancellationNotice } from "../../lib/cancelPreview";
 
 import Link from "next/link";
 import SheetOverlay from "../components/SheetOverlay";
@@ -432,9 +433,10 @@ function ReservationCalendarContent() {
     // 판단하고 결과 메시지("이 수업은 예약 취소가 불가능해요" 등)를 그대로 보여준다.
     // UX 감사(A-10) — 예약 취소만 브라우저 기본 confirm()을 써서 앱 밖으로 튕긴 느낌을 줬다.
     // 다른 파괴적 동작(프로필 삭제·주문 취소)과 동일한 인앱 확인 모달로 통일.
-    if (!(await globalThis.appConfirm("이 수업 예약을 취소할까요?"))) return;
     setBusyClassId(cls.id);
     try {
+      const notice = await fetchCancellationNotice(mine.reservationId);
+      if (!(await globalThis.appConfirm(`${cls.title} 예약을 취소할까요?\n${notice}\n최종 취소 조건은 서버에서 다시 확인해요.`))) return;
       const { deducted } = await cancelReservation(mine.reservationId);
       showToast(deducted ? "취소됐지만 마감 이후라 수강권 1회가 차감됐어요" : "예약이 취소됐어요");
       setPassesRefreshKey((k) => k + 1);
