@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "node scripts/lint/check.mjs",
     "test": "vitest run --config vitest.config.ts",
     "ci:dev:preflight": "node scripts/ci-dev/preflight.mjs",
     "ci:dev:verify": "node scripts/ci-dev/verify.mjs",
@@ -22,7 +22,7 @@
     "test:live:integration": "vitest run --config vitest.integration.config.ts",
     "test:live:e2e": "playwright test",
     "test:e2e:report": "playwright show-report playwright-report",
-    "test:all": "echo \"[test:all] unit + LIVE integration — 비-production Supabase 필요(Production이면 guard가 중단). unit만 원하면 npm run test:unit\" && npm run test && npm run test:integration",
+    "test:all": "echo \"[test:all] unit + LIVE integration \u2014 \ube44-production Supabase \ud544\uc694(Production\uc774\uba74 guard\uac00 \uc911\ub2e8). unit\ub9cc \uc6d0\ud558\uba74 npm run test:unit\" && npm run test && npm run test:integration",
     "qa:business:p0": "vitest run --config vitest.integration.config.ts -t \"SCN-P0\" tests/integration/scenarios",
     "qa:business:p0p1": "vitest run --config vitest.integration.config.ts -t \"SCN-P0|SCN-P1\" tests/integration/scenarios",
     "qa:business:all": "vitest run --config vitest.integration.config.ts tests/integration/scenarios",
@@ -32,7 +32,9 @@
     "qa:production:coupon": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/coupon-order-issue.qa.test.ts",
     "qa:production:points": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/order-points.qa.test.ts",
     "qa:production:pg-refund-lock": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/pg-refund-lock.qa.test.ts",
-    "qa:production:membership-expiry": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/membership-expiry.qa.test.ts"
+    "qa:production:membership-expiry": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/membership-expiry.qa.test.ts",
+    "test:sql": "node --test --test-concurrency=1 tests/sql/*.test.mjs",
+    "lint:strict": "eslint"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",
