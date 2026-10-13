@@ -6,6 +6,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { centerMatchesKeyword } from "./adminCenterSearch";
 import { getMyAccountId } from "./authAccount";
 
 export type PendingCenter = {
@@ -55,7 +56,11 @@ export async function fetchCenters(status: "pending" | "approved" | "rejected"):
 
   if (error) throw new Error("센터 목록을 불러오지 못했어요: " + error.message);
 
-  return ((data ?? []) as AdminCenterRow[]).map((c) => ({
+  return ((data ?? []) as AdminCenterRow[]).map(mapCenter);
+}
+
+function mapCenter(c: AdminCenterRow): PendingCenter {
+  return {
     id: c.id,
     name: c.name,
     address: c.address,
@@ -68,7 +73,29 @@ export async function fetchCenters(status: "pending" | "approved" | "rejected"):
     // 이 센터의 첫 매니저(= 개설한 오너)를 대표자로 표시
     ownerName: c.owner_name ?? null,
     ownerPhone: c.owner_phone ?? null,
-  }));
+  };
+}
+
+
+export type CenterCursor = { createdAt: string; id: string };
+export type CenterPage = { centers: PendingCenter[]; nextCursor: CenterCursor | null };
+// Default off: the additive RPC needs separate SQL approval before enabling this build-time flag.
+export async function fetchCenterPage(status: PendingCenter["status"], keyword = "", cursor: CenterCursor | null = null): Promise<CenterPage> {
+  const server = process.env.NEXT_PUBLIC_ADMIN_CENTER_PAGINATION === "true";
+  const { data, error } = await supabase.rpc(server ? "admin_list_centers_page" : "admin_list_centers", server ? {
+    p_status: status, p_keyword: keyword, p_limit: 30,
+    p_before_created_at: cursor?.createdAt ?? null, p_before_id: cursor?.id ?? null,
+  } : { p_status: status });
+  if (error) throw new Error("센터 목록을 불러오지 못했어요: " + error.message);
+  let rows = (data ?? []) as AdminCenterRow[];
+  if (!server) {
+    rows = rows.filter(c => centerMatchesKeyword(mapCenter(c), keyword))
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id.localeCompare(a.id))
+      .filter(c => !cursor || Date.parse(c.created_at) < Date.parse(cursor.createdAt) || (Date.parse(c.created_at) === Date.parse(cursor.createdAt) && c.id < cursor.id));
+  }
+  const page = rows.slice(0, 30);
+  const last = page[page.length - 1];
+  return { centers: page.map(mapCenter), nextCursor: rows.length > 30 && last ? { createdAt: last.created_at, id: last.id } : null };
 }
 
 // 승인
