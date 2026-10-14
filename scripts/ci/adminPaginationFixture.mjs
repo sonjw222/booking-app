@@ -29,6 +29,8 @@ if (process.argv[2] === 'prepare') {
       if (restored.is_platform_admin !== account.is_platform_admin) throw Error('Privilege restoration mismatch');
     } catch (e) { failures.push(e); }
     try {
+      check(await admin.from('center_roles').delete().in('center_id', ids));
+      check(await admin.from('center_subscriptions').delete().in('center_id', ids));
       check(await admin.from('centers').delete().in('id', ids));
       const remaining = check(await admin.from('centers').select('id').in('id', ids));
       if (remaining.length) throw Error('Fixture center cleanup incomplete');
