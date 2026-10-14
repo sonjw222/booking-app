@@ -281,6 +281,74 @@ jobs:
           TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
           TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Prepare isolated admin pagination DEV fixture
+        run: node scripts/ci/adminPaginationFixture.mjs prepare
+        env:
+          NEXT_PUBLIC_PG_CHECKOUT_ENABLED: "true"
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
+          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
+          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
+          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
+          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
+          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
+          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
+          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
+          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
+          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
+          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
+          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
+          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
+          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Admin pagination 8 scenarios (ON, existing manager B)
+        timeout-minutes: 12
+        run: npx playwright test tests/e2e/production-readiness/admin-center-pagination.spec.ts --grep "커서 페이지네이션"
+        env:
+          NEXT_PUBLIC_PG_CHECKOUT_ENABLED: "true"
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
+          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
+          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
+          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
+          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
+          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
+          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
+          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
+          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
+          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
+          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
+          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
+          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
+          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RUN_ADMIN_PAGINATION: "1"
+          E2E_ADMIN_CENTER_PAGINATION_FLAG: "on"
+          NEXT_PUBLIC_ADMIN_CENTER_PAGINATION: "true"
+      - name: Restore admin privilege and remove isolated centers
+        if: always()
+        run: node scripts/ci/adminPaginationFixture.mjs cleanup
+        env:
+          NEXT_PUBLIC_PG_CHECKOUT_ENABLED: "true"
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
+          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
+          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
+          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
+          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
+          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
+          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
+          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
+          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
+          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
+          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
+          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
+          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
+          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:

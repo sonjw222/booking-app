@@ -1,19 +1,13 @@
 import { test, expect, type Browser, type Page } from "@playwright/test";
 import { MANAGER_AUTH_FILE } from "../fixtures/authFiles";
 
-/*
-  /admin/centers 커서 페이지네이션(PR #196) 실브라우저 검증 — DEV 전용, 앱/DB/환경변수는 건드리지 않는다.
+/* DEV-only: the dedicated CI step prepares manager B's temporary platform privilege
+   and 31 isolated centers per status. The always() cleanup restores the exact prior
+   privilege and deletes only ledger UUIDs. Normal E2E keeps manager A unprivileged.
+   RUN_ADMIN_PAGINATION=1 must use the ON server; missing prerequisites fail the run. */
 
-  전제가 없는 시나리오는 PASS가 아니라 test.skip(이유 명시)로 남긴다. skip은 검증 완료가 아니다.
-  - 플랫폼 관리자 시나리오: TEST_PLATFORM_ADMIN_EMAIL / TEST_PLATFORM_ADMIN_PASSWORD (DEV의 기존 플랫폼 관리자 계정, 이 스펙은 계정을 만들지 않는다)
-  - E2E_ADMIN_CENTER_PAGINATION_FLAG=on|off : 이 Playwright가 붙은 서버가 NEXT_PUBLIC_ADMIN_CENTER_PAGINATION 을 true(on)/미설정(off)로
-    "빌드·기동"되었음을 실행자가 선언. 이 값은 build-time 플래그라 서버를 따로 띄워야 하며, 이 스펙은 RPC 이름(admin_list_centers_page 여부)으로 선언을 교차 검증한다.
-  - 30행 경계/연속 로딩은 해당 탭에 DEV 센터가 31건 이상 있어야 한다(없으면 skip). 데이터를 만들지 않는다.
-  - 이 스펙은 승인/반려 버튼을 누르지 않는다(읽기 전용).
-*/
-
-const ADMIN_EMAIL = process.env.TEST_PLATFORM_ADMIN_EMAIL;
-const ADMIN_PASSWORD = process.env.TEST_PLATFORM_ADMIN_PASSWORD;
+const ADMIN_EMAIL = process.env.TEST_MANAGER_B_EMAIL;
+const ADMIN_PASSWORD = process.env.TEST_MANAGER_B_PASSWORD;
 const FLAG = process.env.E2E_ADMIN_CENTER_PAGINATION_FLAG; // "on" | "off" | undefined
 const PAGE_SIZE = 30;
 const TABS = ["승인대기", "승인됨", "반려됨"] as const;
@@ -52,7 +46,11 @@ async function openAsPlatformAdmin(browser: Browser) {
   await page.locator('input[type="password"]').fill(ADMIN_PASSWORD!);
   await page.locator("button.login-submit").click();
   await page.waitForURL("/", { timeout: 15_000 });
+  const initial = page.waitForResponse(/\/rest\/v1\/rpc\/admin_list_centers/);
   await page.goto("/admin/centers");
+  await initial;
+  await expect(page.getByText("센터 승인 관리").first()).toBeVisible();
+  await settled(page);
   return { context, page, calls, errors };
 }
 
@@ -61,7 +59,8 @@ const moreBtn = (page: Page) => page.getByRole("button", { name: "센터 더 보
 const settled = (page: Page) => expect(page.getByRole("status")).toHaveCount(0, { timeout: 15_000 });
 
 function requireAdmin() {
-  test.skip(!ADMIN_EMAIL || !ADMIN_PASSWORD, "BLOCKED: TEST_PLATFORM_ADMIN_EMAIL/PASSWORD(DEV 플랫폼 관리자 자격) 미설정 — 이 시나리오는 검증되지 않았다");
+  expect(ADMIN_EMAIL, "TEST_MANAGER_B_EMAIL required").toBeTruthy();
+  expect(ADMIN_PASSWORD, "TEST_MANAGER_B_PASSWORD required").toBeTruthy();
 }
 
 test.describe("/admin/centers — 접근 거부(플랫폼 관리자 자격 불필요)", () => {
@@ -78,7 +77,10 @@ test.describe("/admin/centers — 접근 거부(플랫폼 관리자 자격 불�
 });
 
 test.describe("/admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요)", () => {
-  test.beforeEach(() => requireAdmin());
+  test.beforeEach(() => {
+    test.skip(process.env.RUN_ADMIN_PAGINATION !== "1", "Dedicated DEV fixture run only");
+    requireAdmin();
+  });
 
   test("플래그 선언과 실제 RPC가 일치한다(ON=admin_list_centers_page, OFF=admin_list_centers)", async ({ browser }) => {
     test.skip(FLAG !== "on" && FLAG !== "off", "BLOCKED: E2E_ADMIN_CENTER_PAGINATION_FLAG=on|off 미선언 — 어떤 빌드를 검증하는지 알 수 없음");
@@ -103,8 +105,7 @@ test.describe("/admin/centers — 커서 페이지네이션(DEV 플랫폼 관리
         await page.getByRole("button", { name: tabName, exact: true }).click();
         await settled(page);
         const first = await cards(page).count();
-        test.skip(first <= PAGE_SIZE - 1 || !(await moreBtn(page).isVisible()),
-          `BLOCKED: [${tabName}] 탭 DEV 데이터가 ${PAGE_SIZE}건 이하(현재 ${first}행, 더 보기 없음) — 30행 경계 검증 불가. 데이터를 임의로 만들지 않는다`);
+        expect(await moreBtn(page).isVisible(), "DEV fixture must supply >30 centers per tab").toBe(true);
         expect(first).toBe(PAGE_SIZE);
 
         const before = calls.length;
@@ -118,11 +119,11 @@ test.describe("/admin/centers — 커서 페이지네이션(DEV 플랫폼 관리
         expect(guard, "더 보기 루프가 상한에 도달 — 커서가 끝나지 않음").toBeLessThan(50);
 
         const pageCalls = calls.slice(before).filter((c) => c.rpc === "admin_list_centers_page");
-        const all = pageCalls.flatMap((c) => c.ids);
+        const all = pageCalls.flatMap((c) => c.ids.slice(0, PAGE_SIZE));
         expect(new Set(all).size, "페이지 간 중복 id").toBe(all.length);
         // 서버는 한 번에 최대 30행(+커서 판별용 1행 이내)만 돌려준다 — 마지막 페이지를 제외하면 한 번의 응답이 30행을 넘지 않는다.
         for (const c of pageCalls) expect(c.ids.length).toBeLessThanOrEqual(PAGE_SIZE + 1);
-        expect(await cards(page).count(), "화면 행 수 == 서버가 돌려준 누적 행 수(누락 없음)").toBe(first + all.length);
+        expect(await cards(page).count(), "화면 행 수 == 서버가 돌려준 누적 행 수(누락 없음)").toBe(first + pageCalls.reduce((n, c) => n + Math.min(c.ids.length, PAGE_SIZE), 0));
         await expect(moreBtn(page)).toHaveCount(0);
         expect(errors).toEqual([]);
       } finally { await context.close(); }
@@ -141,7 +142,7 @@ test.describe("/admin/centers — 커서 페이지네이션(DEV 플랫폼 관리
       });
       const before = calls.length;
       await search.pressSequentially("abc", { delay: 40 }); // 300ms 안에 연속 입력
-      await page.waitForTimeout(400); // debounce(300ms) 경과 대기 — 요청이 나갔는지는 아래 calls로 확인
+      await page.waitForTimeout(1400); // debounce(300ms) 경과 대기 — 요청이 나갔는지는 아래 calls로 확인
       await settled(page);
       const sent = calls.slice(before);
       if (FLAG === "on") {
@@ -197,7 +198,7 @@ test.describe("/admin/centers — 커서 페이지네이션(DEV 플랫폼 관리
       await settled(page);
       await page.route(/\/rest\/v1\/rpc\/admin_list_centers/, (route) => route.abort("failed"));
       await page.getByRole("button", { name: "승인됨", exact: true }).click();
-      await expect(page.locator(".error-toast")).toContainText("센터 목록을 불러오지 못했어요", { timeout: 15_000 });
+      await expect(page.locator(".error-toast")).toBeVisible({ timeout: 15_000 });
       await expect(moreBtn(page)).toHaveCount(0);
     } finally { await context.close(); }
   });

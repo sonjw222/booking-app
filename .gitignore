@@ -66,3 +66,5 @@ supabase/.temp/
 
 # ci:dev:seed가 쓰는 비밀 아닌 ID 매핑
 /.tmp/
+
+.admin-pagination-fixture.json
