@@ -671,7 +671,9 @@ export async function createTestMembership(
     return { id: data.id, remainingCount: data.remaining_count };
   }
 
-  const { data, error } = await supabase
+  // Fixture setup must not depend on the signed-in member having issuance rights.
+  const fixtureAdmin = getFixtureAdminClient();
+  const { data, error } = await fixtureAdmin
     .from("memberships")
     .insert({
       profile_id: profileId,
