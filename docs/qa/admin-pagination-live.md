@@ -1,9 +1,19 @@
-# 관리자 페이지네이션 실제 DEV 검증
+# 관리자 페이지네이션 DEV 검증 (읽기 전용 수동 실행)
 
-기존 GitHub TEST_MANAGER_B_EMAIL/PASSWORD를 Node fixture와 브라우저 로그인에 재사용한다. 별도 관리자 Secret은 필요 없다. manager A의 비관리자 접근 거부 검증은 유지한다.
+**CI는 이 검증을 실행하지 않는다.** 이전 시도(PR #229)의 자동 fixture(관리자 권한 임시 승격, 상태별 31개씩 센터 93개 생성·삭제)는 DB 쓰기·권한 변경이라 제거했고, `tests/unit/adminPaginationCiSafety.test.ts`가 재유입을 정적으로 막는다.
 
-전용 E2E 4 후속 단계에서 승인된 DEV project jdglfvwdnkjnraqdxuuj만 허용한다. B의 기존 is_platform_admin 값을 저장한 뒤 임시 true로 변경하고 상태별 임시 센터 31개(총 93개)를 생성한다. 실행 전 UUID ledger를 기록한다. CI always() 정리는 준비 단계가 부분 실패해도 원래 권한을 복구하고 ledger UUID만 삭제한다. 두 정리 작업을 모두 시도하고 재조회로 확인하며, 실패하면 CI를 실패시킨다. 강제 runner 종료 시 ledger 복구가 필요할 수 있다.
+## 전제 (없으면 BLOCKED — skip·기대값 완화 금지)
+- DEV Supabase(Production은 `assertIntegrationTargetIsNotProduction`이 차단).
+- DEV에 **이미 존재하는** 플랫폼 관리자 계정 `TEST_PLATFORM_ADMIN_EMAIL` / `TEST_PLATFORM_ADMIN_PASSWORD`(`.env.test.local`). 이 도구는 계정·권한을 만들거나 바꾸지 않는다.
+- 승인대기·승인됨·반려됨 각각에 **기존** 센터 31건 이상(데이터를 만들지 않는다).
+- ON 검증: DEV에 `admin_list_centers_page` RPC가 이미 적용되어 있어야 함(SQL 실행은 이 작업의 범위 밖, 사용자 승인 사항).
 
-전용 ON 서버에서 8개 시나리오를 실행한다. 필수 계정·페이지 경계 데이터 누락은 성공으로 건너뛰지 않고 실패한다. 기본 E2E의 선택적 skip과 전용 실행의 실제 통과 여부를 구분한다. OFF 모드 회귀는 기존 기본 경로에서 검증하며 이 8개 전용 실행은 ON 모드다.
+## 실행 (로컬, 사람이)
+```
+npm run test:e2e:admin-pagination
+```
+`scripts/e2e/adminPaginationReadonly.mjs`가 ON(`NEXT_PUBLIC_ADMIN_CENTER_PAGINATION=true`)과 OFF(`=false`)를 **서로 다른 env의 별도 dev 서버 프로세스**로 순차 실행한다. 이 모드(`RUN_ADMIN_PAGINATION=1`)에서는 `playwright.config.ts`가 `reuseExistingServer`를 끄므로 :3000에 다른 플래그 서버가 떠 있으면 재사용하지 않고 기동 실패한다. 사전 빌드는 필요 없다(webServer=`npm run dev`, NEXT_PUBLIC_*는 서버 시작 시 주입). 또한 첫 테스트가 화면의 실제 RPC 이름(ON=`admin_list_centers_page`, OFF=`admin_list_centers`)이 선언한 플래그와 일치하는지 검사한다.
 
-SQL 필요: NO. 마이그레이션/RLS/운영 DB SQL 변경 없음. 기존 DEV admin_list_centers_page RPC 필요. 임시 권한·센터 데이터 변경은 fixture REST 호출이며 운영에서는 실행 불가.
+로그인은 Supabase Auth 세션을 만든다(auth 내부 `last_sign_in_at` 등 갱신은 불가피). 업무 데이터 쓰기는 없다: 승인/반려 클릭 없음, 네트워크 오류 테스트는 요청을 abort만 한다.
+
+SQL 필요: NO.

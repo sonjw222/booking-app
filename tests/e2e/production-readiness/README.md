@@ -22,13 +22,11 @@ CI의 4번째 E2E checkpoint(`tests/e2e/settings/` + 이 폴더)가 실행하는
 skip은 검증 완료가 아니다. 결과 보고 시 PASS / SKIP(BLOCKED) 수를 구분한다.
 
 ### 플래그 ON/OFF는 서버를 따로 띄운다
-`NEXT_PUBLIC_ADMIN_CENTER_PAGINATION`은 build-time 값이다. 한 서버에서 바꿀 수 없다.
-1. OFF 비교: 플래그 미설정으로 DEV 서버 기동 → `E2E_ADMIN_CENTER_PAGINATION_FLAG=off` 로 실행.
-2. ON: `NEXT_PUBLIC_ADMIN_CENTER_PAGINATION=true`로 DEV 서버를 재기동/별도 빌드(`admin_list_centers_page` RPC SQL이 DEV에 적용되어 있어야 함) → `E2E_ADMIN_CENTER_PAGINATION_FLAG=on` 로 실행.
+`NEXT_PUBLIC_ADMIN_CENTER_PAGINATION`은 서버 시작 시 주입되는 값이다(webServer=`npm run dev`라 사전 빌드는 불필요). 한 서버에서 바꿀 수 없으므로 `npm run test:e2e:admin-pagination`이 ON/OFF를 별도 env의 별도 서버 프로세스로 순차 실행하고, 이 모드에서는 서버 재사용이 꺼진다. 상세·전제는 `docs/qa/admin-pagination-live.md`. CI는 이 spec의 관리자 시나리오를 실행하지 않는다(DB 쓰기 fixture 제거됨).
 운영 환경·플래그는 변경하지 않는다. 가드(`assertIntegrationTargetIsNotProduction`)가 Production 대상을 차단한다.
 
-### 실행 명령(Mac, DEV `.env.test.local` 기준)
+### 실행 명령(DEV `.env.test.local` 기준, 수동)
 ```
-npx playwright test auth\.setup\.ts tests/e2e/production-readiness/admin-center-pagination
+npm run test:e2e:admin-pagination
 ```
-오프라인 확인: `npx tsc --noEmit`, `npx vitest run tests/unit/ciLiveTestWorkflow.contract.test.ts`.
+오프라인 확인: `npx tsc --noEmit`, `npx vitest run tests/unit/ciLiveTestWorkflow.contract.test.ts tests/unit/adminPaginationCiSafety.test.ts`.

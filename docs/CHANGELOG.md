@@ -4,6 +4,7 @@
 - 원인: `app/admin/centers/page.tsx`의 `load()`는 커서 없는 재조회에서도 `centers`를 비우지 않아, 탭 전환 요청이 진행 중이거나 실패하면 이전 탭(승인대기)의 카드와 승인/반려 버튼이 새 탭 아래에 남았다(jsdom 모킹으로 재현).
 - 수정: 탭 클릭 시 `setCenters([])` 후 재조회. 검색·승인/반려 후 재조회는 같은 탭이라 기존 목록을 유지한다.
 - 테스트: `tests/unit/adminCenters.tabSwitchStale.test.ts`(실패 후 잔존, 응답 전 잔존, 빠른 탭 전환 역전 응답).
+- CI 안전화: PR #229의 DB 쓰기 경로(`scripts/ci/adminPaginationFixture.mjs`: 관리자 권한 임시 승격 + 센터 93개 생성/삭제, `test.yml`의 prepare/ON/cleanup 단계)를 제거하고 `tests/unit/adminPaginationCiSafety.test.ts`로 재유입을 정적 차단. ON/OFF 검증은 읽기 전용 수동 러너 `npm run test:e2e:admin-pagination`(별도 서버 프로세스, 전용 모드에서 서버 재사용 off)로 분리. spec 계정은 기존 `TEST_PLATFORM_ADMIN_*`. Playwright `webServer`는 `npm run dev`라 사전 빌드는 불필요.
 
 
 ## 2026-10-11 — 진도 기록 팝업 날짜 캘린더 잘림 수정 (웹 코드만, SQL 없음)

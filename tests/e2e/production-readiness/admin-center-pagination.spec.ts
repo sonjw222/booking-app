@@ -1,13 +1,13 @@
 import { test, expect, type Browser, type Page } from "@playwright/test";
 import { MANAGER_AUTH_FILE } from "../fixtures/authFiles";
 
-/* DEV-only: the dedicated CI step prepares manager B's temporary platform privilege
-   and 31 isolated centers per status. The always() cleanup restores the exact prior
-   privilege and deletes only ledger UUIDs. Normal E2E keeps manager A unprivileged.
-   RUN_ADMIN_PAGINATION=1 must use the ON server; missing prerequisites fail the run. */
+/* 읽기 전용. DEV의 기존 플랫폼 관리자(TEST_PLATFORM_ADMIN_*)와 이미 존재하는 센터 데이터만 쓴다.
+   이 스펙도, CI도 권한 승격·센터 생성/삭제를 하지 않는다. RUN_ADMIN_PAGINATION=1(수동 러너
+   scripts/e2e/adminPaginationReadonly.mjs가 설정)일 때만 실행되며, 전제(계정·상태별 31건 이상
+   데이터)가 없으면 skip이 아니라 실패한다. 기본 E2E 실행에서는 이 describe가 skip된다. */
 
-const ADMIN_EMAIL = process.env.TEST_MANAGER_B_EMAIL;
-const ADMIN_PASSWORD = process.env.TEST_MANAGER_B_PASSWORD;
+const ADMIN_EMAIL = process.env.TEST_PLATFORM_ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.TEST_PLATFORM_ADMIN_PASSWORD;
 const FLAG = process.env.E2E_ADMIN_CENTER_PAGINATION_FLAG; // "on" | "off" | undefined
 const PAGE_SIZE = 30;
 const TABS = ["승인대기", "승인됨", "반려됨"] as const;
@@ -59,8 +59,8 @@ const moreBtn = (page: Page) => page.getByRole("button", { name: "센터 더 보
 const settled = (page: Page) => expect(page.getByRole("status")).toHaveCount(0, { timeout: 15_000 });
 
 function requireAdmin() {
-  expect(ADMIN_EMAIL, "TEST_MANAGER_B_EMAIL required").toBeTruthy();
-  expect(ADMIN_PASSWORD, "TEST_MANAGER_B_PASSWORD required").toBeTruthy();
+  expect(ADMIN_EMAIL, "TEST_PLATFORM_ADMIN_EMAIL required").toBeTruthy();
+  expect(ADMIN_PASSWORD, "TEST_PLATFORM_ADMIN_PASSWORD required").toBeTruthy();
 }
 
 test.describe("/admin/centers — 접근 거부(플랫폼 관리자 자격 불필요)", () => {
@@ -199,6 +199,9 @@ test.describe("/admin/centers — 커서 페이지네이션(DEV 플랫폼 관리
       await page.route(/\/rest\/v1\/rpc\/admin_list_centers/, (route) => route.abort("failed"));
       await page.getByRole("button", { name: "승인됨", exact: true }).click();
       await expect(page.locator(".error-toast")).toBeVisible({ timeout: 15_000 });
+      // 이전 탭(승인대기)의 카드·승인/반려 버튼이 실패한 새 탭 아래에 남으면 안 된다.
+      await expect(cards(page)).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "승인", exact: true })).toHaveCount(0);
       await expect(moreBtn(page)).toHaveCount(0);
     } finally { await context.close(); }
   });

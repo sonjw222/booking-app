@@ -48,7 +48,9 @@ export default defineConfig({
     // 빌드를 검증하므로, E2E는 기동 속도가 더 빠른 dev 서버로 충분하다.
     command: "npm run dev",
     url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
+    // 관리자 페이지네이션 ON/OFF 전용 실행(RUN_ADMIN_PAGINATION=1)은 서버를 절대 재사용하지 않는다 —
+    // 다른 플래그로 떠 있는 :3000 서버를 재사용하면 ON/OFF가 같은 빌드를 검증하게 된다(포트가 쓰이면 기동 실패).
+    reuseExistingServer: !process.env.CI && process.env.RUN_ADMIN_PAGINATION !== "1",
     timeout: 120_000,
   },
 });

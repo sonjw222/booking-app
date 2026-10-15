@@ -13,6 +13,8 @@
 - **P3**: 중복 헬퍼(`clientIp`/`hashIp` 2개 edge function, `tossAuthHeader` 2개 route, `todayStr` 5곳) 통합 후보 — 결제/인증 경로라 별도 승인 필요.
 
 ## 2026-10-05 모바일 safe-area 실기기 확인
+- **P1 / 관리자 페이지네이션 실 DEV 검증 미실행**: PR #229의 8개 시나리오(플래그 선언·탭 3종 30행 경계·검색 debounce·빈 결과·탭 전환·네트워크 오류)는 플랫폼 관리자 계정 + 상태별 31건 이상 DEV 데이터가 필요해 로컬에서 BLOCKED. 사람이 `npm run test:e2e:admin-pagination`(읽기 전용, 기존 DEV 관리자·데이터 필요)으로 확인할 것. CI 자동 실행은 제거됨.
+- **P2 / 기존 CI의 service-role 권한 토글**: `integration` job의 `subscription-plan-limits`, `sec009-batch-a2-rls`, `auto-book-membership-security`, `accounts-privilege-escalation` 등은 DEV에서 `is_platform_admin`을 service role로 임시 변경 후 복원한다(이번 PR 이전부터 존재, try/finally 복원). 유지/격리 여부는 사용자 결정 필요.
 - **P1 / 실기기 확인 필요**: iPhone 16 / 17 Pro Max(가능하면 작은 iPhone, Android 제스처 내비)에서 예약·마이 비로그인 화면의 상단 여백, 하단 nav 겹침, 글자 크기 확대 확인. 자동 검증(Chromium + inset 시뮬레이션)은 완료했으나 실기기 WKWebView/Capacitor 확인은 수동 QA로 남김.
 - **P3**: `daylist-empty`(인라인 paddingTop 40/60/80)를 쓰는 관리자/체크아웃 결과 화면 약 30곳은 clipping은 없지만(≥40px, 대부분 헤더 뒤) 매직 넘버라 공통 토큰으로 정리할 여지가 있다 — 이번 범위에서는 변경하지 않음.
 
