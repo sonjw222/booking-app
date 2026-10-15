@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-10-16 — PR #229 안전성 보완: 검색 중 이전 카드 잔존 수정, 페이지네이션 E2E 검증 강화, 수강권 정리 소유권 검증 (웹 코드·테스트, SQL 없음)
+- 앱: `app/admin/centers/page.tsx` — 검색어 입력 시(debounce 300ms 대기·로딩 중)와 검색어 지우기 시 이전 결과의 카드·승인/반려 버튼이 남던 문제를 `setCenters([])`+`setLoading(true)`로 수정(탭 전환과 같은 방식, `requestId` 가드·더 보기 동작 불변). 카드에 `data-center-id` 속성 추가(E2E가 화면 id와 서버 응답 id를 비교).
+- 오프라인 테스트: `adminCenters.searchStale.test.ts`(검색 잔존 4건 — 수정 전 실패 확인, 응답 순서 역전은 "A 요청 보류 → B 완료 → A 뒤늦게 전달"로 검색·탭 각각, 더 보기 회귀), `adminPaginationVerify.test.ts`(검증 규칙 + 실제 화면·가짜 RPC 서버로 상태 3×0/30/31/61건), `adminPaginationSummary.test.ts`.
+- `admin-center-pagination.spec.ts`: 첫 페이지 30개를 검증에서 빠뜨리던 문제 수정, 전 페이지 id 중복·누락·커서 연속성·30/31 경계·DOM↔서버 비교(`tests/e2e/fixtures/adminPaginationVerify.ts`), 단순 지연 대신 실제 요청 보류로 순서 역전 검증. 데이터가 31건 이하라 경계를 못 본 탭과 계정 없음은 `BLOCKED:` skip(PASS 아님). 수동 러너가 PASS/FAIL/BLOCKED/SKIP을 집계하고 PASS가 아니면 종료 코드 2.
+- `new-class-creation.spec.ts`: 기존 `cleanupBuyProductMemberships`(userA·상품의 모든 수강권과 결제를 삭제, 예약은 미삭제로 `reservations_membership_id_fkey` 위반 가능)를 제거. 실행별 UUID가 들어간 수업과 시작 시점 스냅샷에 없던 수강권만 지우고(`ownedMembershipCleanup.ts`) 그 밖의 참조가 있으면 거부. 기존 수강권이 있으면 TEST4는 BLOCKED. 실제 DEV/운영 DB 실행 없음.
+
 ## 2026-10-15 — 공유 DEV 쓰기 live job 실행 차단 (workflow 변경, 테스트 파일·SQL 변경 없음)
 - `test.yml`: live E2E 4구간·Integration·acl-fixture-repeat·preflight 7개 job의 `if`를 각각 `false &&`로 시작하게 바꿔 pull_request/push/workflow_dispatch 어디서도 실행 불가(ACK 입력 제거). 일반 CI(unit/lint/sql/build)는 유지. 이 live 검증은 격리 테스트 DB 전까지 BLOCKED(PASS 아님).
 - 정적 회귀 테스트 `tests/unit/ciSharedDevWriteGate.test.ts`: `if` 식을 모든 이벤트/입력/needs 조합으로 평가. 한계와 재활성화 절차는 `docs/qa/ci-dev-write-audit.md` §7·§8.

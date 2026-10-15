@@ -1,5 +1,10 @@
 # TODO
 
+## 2026-10-16 PR #229 후속 (이번에 실행하지 못한 것)
+- P1: 관리자 페이지네이션 실서버 E2E(ON/OFF, 상태별 31건 이상 데이터·플랫폼 관리자 계정·`admin_list_centers_page` RPC가 있는 DEV 필요) — 신규 검증은 오프라인 테스트로만 확인했고 실제 Chromium 실행은 BLOCKED.
+- P1: `new-class-creation.spec.ts`의 TEST4는 userA가 이미 TEST4 상품 수강권을 가지면 BLOCKED(자동 삭제하지 않음). 과거 실행 잔여 수강권은 DEV 정리 SQL을 별도 승인 후 사람이 실행해야 함.
+- P2: 격리 테스트 DB 전까지 live CI 7개는 `false &&`로 차단 상태 유지.
+
 ## 2026-10-11 날짜 선택 팝오버 후속 (진도 기록 캘린더 수정 PR 범위 밖)
 - **P2**: `MonthPicker`는 아직 `position:absolute` 팝오버라 `.sheet` 안에서 같은 방식으로 잘릴 수 있다 — `DatePicker`와 같은 포털/`computePopoverPosition` 적용 검토(영향 화면 목록 확인 후).
 - **P3**: 실기기(iOS/Android) 확인과 키보드 화살표 이동(날짜 그리드)은 미구현/미검증.

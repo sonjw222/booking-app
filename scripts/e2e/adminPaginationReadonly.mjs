@@ -3,17 +3,31 @@
 // - ON/OFF를 서로 다른 env의 별도 dev 서버 프로세스로 순차 실행한다(playwright.config.ts가 이 모드에서 서버 재사용을 끈다).
 // - 사용: node scripts/e2e/adminPaginationReadonly.mjs   (.env.test.local 또는 환경변수에 DEV 대상 + TEST_PLATFORM_ADMIN_* 필요)
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { classifyReport, formatSummary } from "./adminPaginationSummary.mjs";
 
 const missing = ["TEST_PLATFORM_ADMIN_EMAIL", "TEST_PLATFORM_ADMIN_PASSWORD"].filter((n) => !process.env[n]);
 // .env.test.local 값은 playwright.config.ts가 로드하므로 여기서는 셸 env만 확인하고, 없으면 spec이 명시적으로 실패한다.
 if (missing.length) console.warn(`[admin-pagination] 셸 env에 ${missing.join(", ")} 없음 — .env.test.local에 없으면 spec이 실패합니다(skip 아님).`);
 
 const spec = "tests/e2e/production-readiness/admin-center-pagination.spec.ts";
+const outDir = mkdtempSync(join(tmpdir(), "admin-pagination-"));
+let incomplete = false;
 for (const [flag, value] of [["on", "true"], ["off", "false"]]) {
   console.log(`\n[admin-pagination] ${flag.toUpperCase()} 서버 실행 (NEXT_PUBLIC_ADMIN_CENTER_PAGINATION=${value})`);
-  const r = spawnSync("npx", ["playwright", "test", "--project=chromium", "--no-deps", spec, "--grep", "커서 페이지네이션"], {
+  const jsonFile = join(outDir, `${flag}.json`);
+  const r = spawnSync("npx", ["playwright", "test", "--project=chromium", "--no-deps", spec, "--grep", "커서 페이지네이션", "--reporter=list,json"], {
     stdio: "inherit",
-    env: { ...process.env, RUN_ADMIN_PAGINATION: "1", E2E_ADMIN_CENTER_PAGINATION_FLAG: flag, NEXT_PUBLIC_ADMIN_CENTER_PAGINATION: value },
+    env: { ...process.env, PLAYWRIGHT_JSON_OUTPUT_NAME: jsonFile, RUN_ADMIN_PAGINATION: "1", E2E_ADMIN_CENTER_PAGINATION_FLAG: flag, NEXT_PUBLIC_ADMIN_CENTER_PAGINATION: value },
   });
   if (r.status !== 0) { console.error(`[admin-pagination] ${flag.toUpperCase()} 실행 실패(status=${r.status})`); process.exit(r.status ?? 1); }
+  try {
+    const c = classifyReport(JSON.parse(readFileSync(jsonFile, "utf8")));
+    console.log(formatSummary(flag.toUpperCase(), c));
+    if (c.overall !== "PASS") incomplete = true;
+  } catch (e) { console.error(`[admin-pagination] ${flag.toUpperCase()} 결과 요약 실패: ${e.message}`); incomplete = true; }
 }
+// BLOCKED/SKIP이 하나라도 있으면 종료 코드 2 — 종료 코드 0(=전부 PASS)으로 오해되지 않게 한다.
+if (incomplete) { console.error("\n[admin-pagination] 완료 아님(INCOMPLETE): PASS가 아닌 항목이 있습니다."); process.exit(2); }

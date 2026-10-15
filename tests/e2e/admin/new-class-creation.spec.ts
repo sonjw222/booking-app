@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { test, expect, type Page } from "@playwright/test";
 import {
   loadTestAccountMeta,
@@ -14,6 +15,7 @@ import {
 import type { CenterSettings } from "../../../lib/settings";
 import { getFixtureAdminClient } from "../../integration/setup";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
+import { makeSupabaseStore, ownsClass, runOwnedMembershipCleanup, type OwnershipContext } from "../fixtures/ownedMembershipCleanup";
 import { gotoManagerClasses, clickCreateClass, parkPointerOutsideRail } from "../fixtures/pageHelpers";
 
 /*
@@ -81,32 +83,43 @@ let buyProductId: string;
 const BUY_PRODUCT_NAME = "TEST4 신규구매전용패스";
 const GOODS_PRODUCT_NAME = "E2E 테스트 대여품 상품"; // getOrCreateTestGoodsProduct의 고정 이름
 const createdClassIds: string[] = [];
+// 실행별 UUID — 이 실행이 만든 수업은 제목에 RUN_SHORT가 들어가고, 정리는 그 소유권을 확인한 것만 건드린다.
+const RUN_ID = randomUUID();
+const RUN_SHORT = RUN_ID.slice(0, 8);
+const RUN_STARTED_AT_MS = Date.now();
+let preexistingBuyMembershipIds = new Set<string>(); // 실행 시작 시점에 이미 있던 (userA, TEST4 상품) 수강권 — 절대 지우지 않는다
 
-// TEST4가 실제로 구매를 완료하면 membership뿐 아니라 그 구매의 payments 행도 함께
-// 생긴다(checkout → createOrder → confirmPayment) — payments.membership_id가 FK라
-// membership만 지우면 FK violation으로 조용히 실패한다(실측 확인: 첫 실행은 성공했지만
-// 그 memberships delete가 FK로 막혀 있었고, 다음 실행이 beforeAll에서 똑같이 실패해
-// "이미 보유한 상품"이 돼버려 TEST4의 전제 자체가 깨졌다 — 실제 앱 버그 아니라 이
-// cleanup 헬퍼 자체의 FK 순서 누락이었음). payments → memberships 순서로 지운다.
-async function cleanupBuyProductMemberships(profileId: string, productId: string): Promise<void> {
+/* TEST4 정리 — 예전 cleanupBuyProductMemberships는 (userA, TEST4 상품)의 membership을 전부 찾아 payments → memberships를 지웠다.
+   그 방식은 (1) 이 실행 이전부터 있던 수강권과 그 결제 내역까지 지울 수 있었고, (2) reservations를 지우지 않아
+   그 수강권으로 예약된 행이 남으면 reservations_membership_id_fkey 위반이 났다.
+   지금은 시작 시점 스냅샷에 없던(=이 실행의 구매로 생긴) 수강권만, 이 실행이 만든 수업의 예약·그 결제와 함께 지운다
+   (ownedMembershipCleanup.ts). 그 밖의 참조가 있으면 지우지 않고 실패로 알린다. 기존 수강권은 건드리지 않는다. */
+function ownershipContext(): OwnershipContext {
+  return { runId: RUN_ID, profileId: userA.profileId, productId: buyProductId, preexistingMembershipIds: preexistingBuyMembershipIds, ownedClassIds: new Set(createdClassIds), runStartedAtMs: RUN_STARTED_AT_MS };
+}
+
+// 이 실행의 수업만 정리한다(제목의 RUN_SHORT + 테스트 센터 확인). 소유를 확인하지 못하면 건드리지 않는다.
+async function cleanupOwnedClasses(): Promise<string[]> {
   const admin = getFixtureAdminClient();
-  const { data: mems, error: findErr } = await admin
-    .from("memberships").select("id").eq("profile_id", profileId).eq("product_id", productId);
-  if (findErr) throw new Error(`TEST4 membership 조회 실패: ${findErr.message}`);
-  const memIds = (mems ?? []).map((m) => m.id);
-  if (memIds.length === 0) return;
-  const { error: payErr } = await admin.from("payments").delete().in("membership_id", memIds);
-  if (payErr) throw new Error(`TEST4 payments 정리 실패: ${payErr.message}`);
-  const { error: memErr } = await admin.from("memberships").delete().in("id", memIds);
-  if (memErr) throw new Error(`TEST4 memberships 정리 실패: ${memErr.message}`);
+  const notOwned: string[] = [];
+  for (const id of createdClassIds) {
+    const { data } = await admin.from("classes").select("id, title, center_id").eq("id", id).maybeSingle();
+    if (!data) continue; // 이미 없음
+    if (!ownsClass(data, { runShort: RUN_SHORT, centerId: centerAId })) { notOwned.push(id); continue; }
+    await cleanupTestClassAdmin(id);
+  }
+  return notOwned;
 }
 
 test.afterAll(async () => {
-  for (const id of createdClassIds) await cleanupTestClassAdmin(id);
+  const notOwned = await cleanupOwnedClasses();
   if (originalSettings) await saveSettingsAdmin(centerAId, originalSettings);
-  // 다음 실행에서도 "아직 안 가진 상품"이라는 전제가 성립하도록 매번 정리한다(P2-20에서
-  // 겪은 것과 같은 종류의 테스트 데이터 누적을 여기서 반복하지 않기 위함).
-  if (buyProductId) await cleanupBuyProductMemberships(userA.profileId, buyProductId);
+  if (buyProductId) {
+    const result = await runOwnedMembershipCleanup(makeSupabaseStore(getFixtureAdminClient()), ownershipContext());
+    if (result.refused.length || notOwned.length) {
+      throw new Error(`TEST4 정리 거부(소유 미증명 — 아무 것도 삭제하지 않음): ${JSON.stringify({ refused: result.refused, notOwnedClassIds: notOwned })}`);
+    }
+  }
 });
 
 test.beforeAll(async () => {
@@ -125,12 +138,15 @@ test.beforeAll(async () => {
     dailyBookLimitEnabled: false,
   });
 
-  // TEST4 전용 — userA가 아직 안 가진 상품이어야 "구매 전 사용 가능한 수강권 없음"이
-  // 성립한다. 이전 실행이 afterAll을 못 돌렸을 경우를 대비해 시작 시점에도 자기치유
-  // 정리를 한 번 더 한다(product 자체는 get-or-create라 재사용, membership+payments만 정리).
+  // TEST4 전용 — userA가 아직 안 가진 상품이어야 "구매 전 사용 가능한 수강권 없음"이 성립한다.
+  // 이전에는 여기서 (userA, 상품)의 수강권을 전부 지웠지만, 이제는 아무 것도 지우지 않고 스냅샷만 만든다(읽기 전용).
+  // 이미 가진 수강권이 있으면 TEST4는 BLOCKED로 건너뛴다(삭제로 "치유"하지 않음 — 소유를 증명할 수 없다).
   const buyProduct = await getOrCreateTestPassProductNamed(centerAId, BUY_PRODUCT_NAME);
   buyProductId = buyProduct.id;
-  await cleanupBuyProductMemberships(userA.profileId, buyProductId);
+  const { data: existingMems, error: snapErr } = await getFixtureAdminClient()
+    .from("memberships").select("id").eq("profile_id", userA.profileId).eq("product_id", buyProductId);
+  if (snapErr) throw new Error(`TEST4 수강권 스냅샷 조회 실패: ${snapErr.message}`);
+  preexistingBuyMembershipIds = new Set((existingMems ?? []).map((m) => m.id as string));
 
   // TEST5 전용 — goods가 pass 목록에 절대 안 보이는지 검증하려면 실제로 goods를 보유해야
   // "안 보임"이 의미 있는 확인이 된다(get-or-create + self-healing, 기존 패턴 재사용).
@@ -184,7 +200,7 @@ async function findClassByTitle(title: string) {
 }
 
 test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → 회원 기존 pass 표시 → 예약 성공 (실브라우저)", async ({ page, browser }) => {
-  const uniqueTitle = `NEWCLASS-ALL-${Date.now()}`;
+  const uniqueTitle = `NEWCLASS-ALL-${RUN_SHORT}-${Date.now()}`;
   const dateStr = futureKstDateStr(90);
 
   await gotoFutureDay(page, dateStr);
@@ -237,7 +253,7 @@ test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → �
 });
 
 test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 → 해당 pass만 표시 → 예약 성공 (실브라우저)", async ({ page, browser }) => {
-  const uniqueTitle = `NEWCLASS-SPECIFIC-${Date.now()}`;
+  const uniqueTitle = `NEWCLASS-SPECIFIC-${RUN_SHORT}-${Date.now()}`;
   const dateStr = futureKstDateStr(91);
 
   await gotoFutureDay(page, dateStr);
@@ -293,7 +309,8 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
 });
 
 test("TEST4: 신규 수업 → 사용 가능 수강권 없음 → 그 자리에서 구매 → 새로고침 포함 즉시 사용 가능 → 예약 성공 (실브라우저)", async ({ page, browser }) => {
-  const uniqueTitle = `NEWCLASS-BUY-${Date.now()}`;
+  test.skip(preexistingBuyMembershipIds.size > 0, `BLOCKED: userA가 이미 TEST4 상품 수강권 ${preexistingBuyMembershipIds.size}개를 보유 — "구매 전 사용 가능 수강권 없음" 전제가 깨져 실행 불가(자동 삭제하지 않음, PASS 아님)`);
+  const uniqueTitle = `NEWCLASS-BUY-${RUN_SHORT}-${Date.now()}`;
   const dateStr = futureKstDateStr(92);
 
   await gotoFutureDay(page, dateStr);
@@ -399,7 +416,7 @@ test("TEST4: 신규 수업 → 사용 가능 수강권 없음 → 그 자리에�
 });
 
 test("TEST5: 신규 수업(모든 수강권 허용)에서도 goods는 사용 가능한 수강권 목록에 절대 안 보임 (실브라우저)", async ({ page, browser }) => {
-  const uniqueTitle = `NEWCLASS-GOODSCHK-${Date.now()}`;
+  const uniqueTitle = `NEWCLASS-GOODSCHK-${RUN_SHORT}-${Date.now()}`;
   const dateStr = futureKstDateStr(93);
 
   await gotoFutureDay(page, dateStr);
@@ -435,7 +452,7 @@ test("TEST5: 신규 수업(모든 수강권 허용)에서도 goods는 사용 가
 });
 
 test("TEST6(대조군): 기존 방식(admin client 직접 insert)으로 만든 수업도 계속 정상 예약 가능 (실브라우저)", async ({ browser }) => {
-  const cls = await createFutureTestClassAdmin(centerAId, { title: `NEWCLASS-CONTROL-${Date.now()}`, hoursFromNow: 32 });
+  const cls = await createFutureTestClassAdmin(centerAId, { title: `NEWCLASS-CONTROL-${RUN_SHORT}-${Date.now()}`, hoursFromNow: 32 });
   createdClassIds.push(cls.id);
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
