@@ -200,7 +200,7 @@ export default function AdminCentersPage() {
           <button
             key={t}
             className={`center-chip ${t === tab ? "on" : ""}`}
-            onClick={() => { if (t !== tab) { if (searchTimer.current) clearTimeout(searchTimer.current); setTab(t); void load(t, keyword); } }}
+            onClick={() => { if (t !== tab) { if (searchTimer.current) clearTimeout(searchTimer.current); setTab(t); setCenters([]); void load(t, keyword); } }}
           >
             {TAB_LABEL[t]}
           </button>

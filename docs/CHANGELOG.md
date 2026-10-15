@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-10-15 — 관리자 센터 탭 전환 시 이전 탭 카드 잔존 수정 (웹 코드·테스트, SQL 없음)
+- 원인: `app/admin/centers/page.tsx`의 `load()`는 커서 없는 재조회에서도 `centers`를 비우지 않아, 탭 전환 요청이 진행 중이거나 실패하면 이전 탭(승인대기)의 카드와 승인/반려 버튼이 새 탭 아래에 남았다(jsdom 모킹으로 재현).
+- 수정: 탭 클릭 시 `setCenters([])` 후 재조회. 검색·승인/반려 후 재조회는 같은 탭이라 기존 목록을 유지한다.
+- 테스트: `tests/unit/adminCenters.tabSwitchStale.test.ts`(실패 후 잔존, 응답 전 잔존, 빠른 탭 전환 역전 응답).
+
+
 ## 2026-10-11 — 진도 기록 팝업 날짜 캘린더 잘림 수정 (웹 코드만, SQL 없음)
 - 원인: `DatePicker`의 팝오버가 `.app-date-picker` 안에서 `position:absolute`로 그려져 `.sheet`(`overflow-y:auto`, 진도 기록은 `.prog-add-sheet`)의 클리핑 영역에 갇혔다. 하네스 실측: 수정 전 날짜 31개 중 모바일 10개 / 태블릿·데스크톱 28개가 클릭 불가.
 - 수정(`app/components/DatePicker.tsx`, `lib/popoverPosition.ts`, `app/globals.css`): 팝오버를 `createPortal`로 렌더링(시트 안이면 같은 `SheetOverlay`의 자식, 아니면 body)하고 트리거 기준 `fixed` 좌표를 순수 함수 `computePopoverPosition`으로 계산(아래 → 위 → 뷰포트 안으로 밀기, 뷰포트보다 크면 내부 스크롤). 캘린더 크기(310×308)·디자인·시트 크기는 그대로. 부모 `overflow`는 건드리지 않았고 z-index도 기존 값 유지.
