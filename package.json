@@ -19,6 +19,7 @@
     "test:unit": "vitest run --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:e2e": "playwright test",
+    "test:integration:privileged": "vitest run --config vitest.integration.privileged.config.ts",
     "test:live:integration": "vitest run --config vitest.integration.config.ts",
     "test:live:e2e": "playwright test",
     "test:e2e:admin-pagination": "node scripts/e2e/adminPaginationReadonly.mjs",
