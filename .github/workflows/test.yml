@@ -47,7 +47,12 @@ jobs:
     name: Live-test target preflight (no network — Production이면 실패)
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # BLOCKED(2026-10-15): live job 7개(이 job, e2e-1~4, integration, acl-fixture-repeat)는 격리 테스트 DB가 준비되기 전까지 어떤 이벤트(pull_request/push/workflow_dispatch)에서도,
+    # 어떤 입력으로도 실행되지 않는다 — 각 job의 if가 독립적으로 `false &&`로 시작한다(needs 사슬에 의존하지 않음, always()로 우회 불가).
+    # 재활성화는 격리 DB 준비 후 이 `false &&`를 지우는 리뷰된 변경으로만 한다(docs/qa/ci-dev-write-audit.md §8).
+    # 아래 push/fork 조건은 원래 계약(tests/unit/ciLiveTestWorkflow.contract.test.ts)의 이중 방어로 유지한다.
     if: >
+      false &&
       github.event_name != 'push' &&
       (github.event_name != 'pull_request' ||
        github.event.pull_request.head.repo.full_name == github.repository)
@@ -70,7 +75,7 @@ jobs:
     # 노출시키면 안 되므로 막는다.
     needs: live-env-preflight
     # preflight가 성공(= Production 아님 확인)했을 때만 시작. push/fork면 preflight가 skipped라 함께 건너뜀.
-    if: ${{ !cancelled() && needs.live-env-preflight.result == 'success' }}
+    if: ${{ false && (!cancelled() && needs.live-env-preflight.result == 'success') }}  # BLOCKED: 공유 DEV 쓰기 — 격리 테스트 DB 전까지 실행 불가
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -128,7 +133,7 @@ jobs:
     timeout-minutes: 20
     needs: e2e-1-auth-attendance
     # 앞 구간이 실패해도 계속(정보 수집), 앞 구간이 skipped(push/fork)면 건너뜀
-    if: ${{ !cancelled() && needs.e2e-1-auth-attendance.result != 'skipped' }}
+    if: ${{ false && (!cancelled() && needs.e2e-1-auth-attendance.result != 'skipped') }}  # BLOCKED: 공유 DEV 쓰기 — 격리 테스트 DB 전까지 실행 불가
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -186,7 +191,7 @@ jobs:
     timeout-minutes: 20
     needs: e2e-2-admin-config
     # 앞 구간이 실패해도 계속(정보 수집), 앞 구간이 skipped(push/fork)면 건너뜀
-    if: ${{ !cancelled() && needs.e2e-2-admin-config.result != 'skipped' }}
+    if: ${{ false && (!cancelled() && needs.e2e-2-admin-config.result != 'skipped') }}  # BLOCKED: 공유 DEV 쓰기 — 격리 테스트 DB 전까지 실행 불가
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -244,7 +249,7 @@ jobs:
     timeout-minutes: 20
     needs: e2e-3-class-reservation-checkout
     # 앞 구간이 실패해도 계속(정보 수집), 앞 구간이 skipped(push/fork)면 건너뜀
-    if: ${{ !cancelled() && needs.e2e-3-class-reservation-checkout.result != 'skipped' }}
+    if: ${{ false && (!cancelled() && needs.e2e-3-class-reservation-checkout.result != 'skipped') }}  # BLOCKED: 공유 DEV 쓰기 — 격리 테스트 DB 전까지 실행 불가
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -360,7 +365,7 @@ jobs:
     # (dev DB/계정은 정상인데 E2E만 깨졌는지, 환경 전체가 깨졌는지)를 주기 때문이다. E2E가 fixture를 오염시켰더라도 Integration 실패는 "환경 오염" 단서가 된다.
     # 사용자가 workflow를 취소하면(!cancelled()) 실행하지 않고, push/fork로 E2E가 skipped면 건너뜀.
     needs: e2e-4-settings-readiness
-    if: ${{ !cancelled() && needs.e2e-4-settings-readiness.result != 'skipped' }}
+    if: ${{ false && (!cancelled() && needs.e2e-4-settings-readiness.result != 'skipped') }}  # BLOCKED: 공유 DEV 쓰기 — 격리 테스트 DB 전까지 실행 불가
     # 20분으로는 통합 테스트 스위트가 계속 늘어나며 정상 실행도 종종 잘렸다(PR #66, #67
     # 모두 19분대에 timeout으로 cancelled — 실패가 아니라 시간 부족). timeout 자체를
     # 없애면 2026-08-14/15처럼 진짜 멈춘 job이 전역 큐를 몇 시간씩 막는 사고가 재발하므로,
@@ -397,7 +402,7 @@ jobs:
     name: ACL fixture isolated and combined repeat (dev only)
     runs-on: ubuntu-latest
     needs: integration
-    if: ${{ !cancelled() && github.head_ref == 'test/acl-fixture-restore-20261012' && needs.integration.result == 'success' }}
+    if: ${{ false && (!cancelled() && github.head_ref == 'test/acl-fixture-restore-20261012' && needs.integration.result == 'success') }}  # BLOCKED: 공유 DEV 쓰기 — 격리 테스트 DB 전까지 실행 불가
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4

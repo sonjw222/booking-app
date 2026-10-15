@@ -47,3 +47,17 @@
 
 ## 6. 변경이 필요한 workflow (승인 후)
 `test.yml`만 해당: (1) `pull_request` 트리거에서 live E2E/Integration 분리 또는 격리 DB secrets로 교체, (2) 격리 DB 생성/폐기 job, (3) 필요시 `workflow_dispatch` 전용 live job. 그 외 workflow 변경 없음. **이번 작업에서는 `test.yml`을 변경하지 않았다.**
+
+## 7. 적용 상태 (workflow 차단, 2026-10-15)
+- `test.yml`의 live job **7개**(`live-env-preflight`, `e2e-1-auth-attendance`, `e2e-2-admin-config`, `e2e-3-class-reservation-checkout`, `e2e-4-settings-readiness`, `integration`, `acl-fixture-repeat`)는 각자 `if`가 `false &&`로 시작한다. **pull_request·push·workflow_dispatch 어떤 이벤트에서도, 어떤 입력으로도 실행되지 않는다**(needs 사슬·ACK·`always()`에 의존하지 않음). ACK 입력은 제거했다 — 문구만으로는 아무것도 켜지지 않는다.
+- 일반 PR/dispatch에서 계속 실행: `unit`, `lint`, `sql`(PGlite), `build`(placeholder env). DB·secrets 접근 없음.
+- 정적 테스트 `tests/unit/ciSharedDevWriteGate.test.ts`가 live job 7개의 `if` 식을 이벤트·ACK·fork·브랜치·취소 여부·needs 결과의 768개 조합으로 평가해 true가 없음을 확인하고, 안전 job이 계속 실행됨을 확인한다. 차단을 일부러 제거하는 7가지 변형(false 제거 ×3, dispatch+ACK 대체, always() 우회, ACK 입력 재도입, 안전 job 게이트)에서 모두 실패함을 오프라인 복사본으로 확인했다.
+- **재활성화**: 격리 DB 준비 후 `false &&`를 지우는 리뷰된 변경 + 위 테스트의 의도적 갱신. 그 전에는 Integration 53개·E2E 전체는 **일반 CI에서 실행되지 않으며 PASS로 보고되지 않는다(BLOCKED)**.
+- **남은 한계**: workflow 밖의 경로 — 로컬에서 `.env.test.local`이 공유 DEV를 가리킨 채 `npm run test:integration`/`test:e2e`를 실행하면 §2의 쓰기가 그대로 발생한다(`productionGuard`는 Production만 차단). 테스트 코드와 helper(`deleteExistingClassesByTitle` 등)는 변경하지 않았다.
+
+## 8. 격리 테스트 DB 전제 조건 (문서화만 — 생성하지 않음)
+1. 공유 DEV·운영과 다른 Supabase 프로젝트(또는 Branching 브랜치). URL/키는 별도 secrets(`ISOLATED_*`)로만 주입, `productionGuard`의 알려진 Production ref 차단 + 격리 프로젝트 ref allow-list.
+2. **스키마 baseline 확정**: 현재 `supabase/migrations` 1개 + 루트 SQL 약 440개(`add_*/fix_*/verify_*/cleanup_*`)로 적용 순서가 정의되어 있지 않다. 필요: (a) 현재 DEV 스키마 덤프를 baseline 마이그레이션으로 고정하거나 (b) 루트 SQL의 적용 순서 매니페스트 작성, (c) RLS·함수 권한(GRANT)·`delete_test_center_cascade` 등 RPC 포함 여부 검증, (d) 참조 카탈로그(`ci:dev:seed` 대상) 적재.
+3. seed로 테스트 계정(USER_A/B, MANAGER_A/B, STAFF_A/B)·센터·상품을 **새로 생성**(공유 계정 재사용 금지). 플랫폼 관리자 계정도 격리 DB 안에서만 생성 → `test:integration:privileged`와 관리자 E2E를 여기서 자동 실행 가능.
+4. job 종료 시 프로젝트/브랜치 폐기(또는 초기화)로 취소·timeout 잔여 문제 제거. 동시 실행 직렬화(concurrency) 유지.
+5. 비용·권한: 프로젝트 생성 비용, GitHub Secrets 등록, Supabase 관리 토큰(자동 생성/폐기용)은 사용자 승인 필요.

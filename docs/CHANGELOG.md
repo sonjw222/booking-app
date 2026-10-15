@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-10-15 — 공유 DEV 쓰기 live job 실행 차단 (workflow 변경, 테스트 파일·SQL 변경 없음)
+- `test.yml`: live E2E 4구간·Integration·acl-fixture-repeat·preflight 7개 job의 `if`를 각각 `false &&`로 시작하게 바꿔 pull_request/push/workflow_dispatch 어디서도 실행 불가(ACK 입력 제거). 일반 CI(unit/lint/sql/build)는 유지. 이 live 검증은 격리 테스트 DB 전까지 BLOCKED(PASS 아님).
+- 정적 회귀 테스트 `tests/unit/ciSharedDevWriteGate.test.ts`: `if` 식을 모든 이벤트/입력/needs 조합으로 평가. 한계와 재활성화 절차는 `docs/qa/ci-dev-write-audit.md` §7·§8.
+
 ## 2026-10-15 — 관리자 센터 탭 전환 시 이전 탭 카드 잔존 수정 (웹 코드·테스트, SQL 없음)
 - 원인: `app/admin/centers/page.tsx`의 `load()`는 커서 없는 재조회에서도 `centers`를 비우지 않아, 탭 전환 요청이 진행 중이거나 실패하면 이전 탭(승인대기)의 카드와 승인/반려 버튼이 새 탭 아래에 남았다(jsdom 모킹으로 재현).
 - 수정: 탭 클릭 시 `setCenters([])` 후 재조회. 검색·승인/반려 후 재조회는 같은 탭이라 기존 목록을 유지한다.
