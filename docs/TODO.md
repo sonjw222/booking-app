@@ -1,5 +1,10 @@
 # TODO
 
+## 2026-10-16 NICEPAY 카드사 심사 준비
+- P0: NICEPAY 심사 — 공개 /products의 "테스트"(100원)·"P3 타센터-격리테스트" 상품 비공개 처리(운영자), 계약 후 MID/KEY·기술지원 질문(docs/payments/NICEPAY_REVIEW_PREPARATION.md §7) 확인.
+- P1: NICEPAY 활성화 전 SQL 승인 필요 — orders.payment_provider 'nicepay' 허용, 선점(claim) 상태, pg_order_context/confirm_real_payment/정산 뷰 provider 확장. 정기결제는 호스팅 카드등록 UI 확인 전까지 BLOCKED(카드정보 직접 수집 금지).
+- P2: 공개 상품 RPC에 이용기간(valid_days) 노출(SQL, 승인 후). 약관·환불·개인정보 처리위탁의 PG사 표기는 계약 확정 후 갱신.
+
 ## 2026-10-11 날짜 선택 팝오버 후속 (진도 기록 캘린더 수정 PR 범위 밖)
 - **P2**: `MonthPicker`는 아직 `position:absolute` 팝오버라 `.sheet` 안에서 같은 방식으로 잘릴 수 있다 — `DatePicker`와 같은 포털/`computePopoverPosition` 적용 검토(영향 화면 목록 확인 후).
 - **P3**: 실기기(iOS/Android) 확인과 키보드 화살표 이동(날짜 그리드)은 미구현/미검증.

@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-16 — NICEPAY 카드사 심사 준비 Batch 1 (비결제 UI + 오프라인 서버 모듈, SQL 없음)
+- 심사 체크리스트·단건/정기결제 설계·기술지원 질문 정리: `docs/payments/NICEPAY_REVIEW_PREPARATION.md`.
+- `/products` 상단에 구매 전 안내(이용기간 확인 위치·결제수단·환불·취소 정책/사업자 정보 링크) 추가. 사업장 주소·PG사명 미표기.
+- `lib/payments/server/nicepay/*`(서명·허용 URL·로그 redact·승인/망취소/취소·라이프사이클·웹훅 분류)와 `NicepayPaymentProvider`(비활성) 추가. 어떤 라우트·팩토리에도 연결하지 않음, 키 로딩/카드정보 수집 없음. 오프라인 테스트 포함.
+
 ## 2026-10-11 — 진도 기록 팝업 날짜 캘린더 잘림 수정 (웹 코드만, SQL 없음)
 - 원인: `DatePicker`의 팝오버가 `.app-date-picker` 안에서 `position:absolute`로 그려져 `.sheet`(`overflow-y:auto`, 진도 기록은 `.prog-add-sheet`)의 클리핑 영역에 갇혔다. 하네스 실측: 수정 전 날짜 31개 중 모바일 10개 / 태블릿·데스크톱 28개가 클릭 불가.
 - 수정(`app/components/DatePicker.tsx`, `lib/popoverPosition.ts`, `app/globals.css`): 팝오버를 `createPortal`로 렌더링(시트 안이면 같은 `SheetOverlay`의 자식, 아니면 body)하고 트리거 기준 `fixed` 좌표를 순수 함수 `computePopoverPosition`으로 계산(아래 → 위 → 뷰포트 안으로 밀기, 뷰포트보다 크면 내부 스크롤). 캘린더 크기(310×308)·디자인·시트 크기는 그대로. 부모 `overflow`는 건드리지 않았고 z-index도 기존 값 유지.
