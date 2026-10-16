@@ -15,7 +15,8 @@ import {
 import type { CenterSettings } from "../../../lib/settings";
 import { getFixtureAdminClient } from "../../integration/setup";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
-import { makeSupabaseStore, ownsClass, runOwnedMembershipCleanup, type OwnershipContext } from "../fixtures/ownedMembershipCleanup";
+import { makeSupabaseStore, ownsClass, prepareOwnedMembershipCleanup, executeOwnedMembershipCleanup, type OwnershipContext } from "../fixtures/ownedMembershipCleanup";
+import { assertIsolatedTestDb } from "../fixtures/isolatedTestDbGuard";
 import { gotoManagerClasses, clickCreateClass, parkPointerOutsideRail } from "../fixtures/pageHelpers";
 
 /*
@@ -87,6 +88,7 @@ const createdClassIds: string[] = [];
 const RUN_ID = randomUUID();
 const RUN_SHORT = RUN_ID.slice(0, 8);
 const RUN_STARTED_AT_MS = Date.now();
+let isolatedDbConfirmed = false;
 let preexistingBuyMembershipIds = new Set<string>(); // 실행 시작 시점에 이미 있던 (userA, TEST4 상품) 수강권 — 절대 지우지 않는다
 
 /* TEST4 정리 — 예전 cleanupBuyProductMemberships는 (userA, TEST4 상품)의 membership을 전부 찾아 payments → memberships를 지웠다.
@@ -112,17 +114,24 @@ async function cleanupOwnedClasses(): Promise<string[]> {
 }
 
 test.afterAll(async () => {
+  // 격리 DB 확인이 안 되면(공유 DEV/Production) 어떤 삭제도 하지 않는다 — beforeAll이 건너뛰어도 afterAll은 실행되므로 여기서도 막는다.
+  if (!isolatedDbConfirmed) return;
+  assertIsolatedTestDb(process.env);
+  // 순서가 중요하다: ① 소유 증명(read-only, 이 실행의 예약이 남아 있을 때) → ② 이 실행의 수업 삭제 → ③ 설정 복원 → ④ 증명된 수강권만 삭제.
+  const store = makeSupabaseStore(getFixtureAdminClient());
+  const plan = buyProductId ? await prepareOwnedMembershipCleanup(store, ownershipContext()) : null;
   const notOwned = await cleanupOwnedClasses();
   if (originalSettings) await saveSettingsAdmin(centerAId, originalSettings);
-  if (buyProductId) {
-    const result = await runOwnedMembershipCleanup(makeSupabaseStore(getFixtureAdminClient()), ownershipContext());
-    if (result.refused.length || notOwned.length) {
-      throw new Error(`TEST4 정리 거부(소유 미증명 — 아무 것도 삭제하지 않음): ${JSON.stringify({ refused: result.refused, notOwnedClassIds: notOwned })}`);
-    }
+  if (plan) await executeOwnedMembershipCleanup(store, plan, ownershipContext());
+  if (plan?.refused.length || notOwned.length) {
+    throw new Error(`TEST4 정리 거부(소유 미증명 — 수강권·결제는 삭제하지 않음): ${JSON.stringify({ refused: plan?.refused, notOwnedClassIds: notOwned })}`);
   }
 });
 
 test.beforeAll(async () => {
+  // 파괴적 테스트(수업·수강권·결제·설정을 만들고 지운다) — 격리 테스트 DB가 확인되지 않으면 어떤 DB 접근도 하기 전에 BLOCKED로 건너뛴다.
+  try { assertIsolatedTestDb(process.env); isolatedDbConfirmed = true; }
+  catch (e) { test.skip(true, `BLOCKED: ${(e as Error).message.split("\n")[0]}`); }
   managerA = loadTestAccountMeta("manager-a");
   userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
