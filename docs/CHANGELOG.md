@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-16 (4) — Batch 3: 결제 DB 안전성 보강 초안 (검토용 SQL, 미실행)
+- 신규 SQL(미적용): `fix_refund_block_all_pg_providers_20261016.sql`(일반 환불 PG 차단을 허용 목록으로 — NICEPAY 환불 우회 차단), `add_nicepay_provider_support_20261016.sql`(provider CHECK에 nicepay, status `approving`, 서버 전용 pg_* 컬럼·보호 트리거, claim/release/review/confirm RPC). 각 rollback/verify 포함.
+- 코드: 환불 라우트가 외부 취소 미구현 PG(nicepay 등) 금액>0을 501로 fail-closed, NICEPAY lifecycle에 claim id fencing, `nicepayDbDeps` 어댑터(미연결).
+- 테스트: PGlite 10개(`tests/sql/nicepay-provider-support.test.mjs`), 단위 3개 추가. 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md`.
+
 ## 2026-10-16 (3) — Batch 2: Mock 결제 운영 차단 + NICEPAY 서버 모듈 재검증 + 공개 테스트 상품 분석 (SQL 없음)
 - Factory: 운영 빌드에서는 `NEXT_PUBLIC_ALLOW_MOCK_PAYMENT=true`를 따로 켜지 않으면 빈 값/알 수 없는 값/mock이 모두 `disabled`(Mock 불가). nicepay는 어떤 환경에서도 mock으로 폴백하지 않음. 개발/테스트의 기존 mock 기본값은 유지. ⚠ 배포 영향: Vercel Preview/Production에서 mock이 필요하면 `NEXT_PUBLIC_ALLOW_MOCK_PAYMENT=true`가 필요(환경변수는 이번에 변경하지 않음). 직접결제는 영향 없음.
 - NICEPAY lifecycle: PG 게이트(`gateAllows`) 확인 추가, 결과 불명·망취소 실패 시 `markReview`로 운영자 확인 대기 표시. 테스트 43개. 검증 매트릭스·복구 절차: `docs/payments/NICEPAY_SERVER_MODULE_VERIFICATION.md`.

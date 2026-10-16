@@ -1,0 +1,11 @@
+-- 읽기 전용 검증 (적용 후) — 모두 true여야 한다.
+select
+  (select pg_get_constraintdef(oid) like '%nicepay%' and pg_get_constraintdef(oid) like '%toss%' and pg_get_constraintdef(oid) like '%portone%' and pg_get_constraintdef(oid) like '%mock%' from pg_constraint where conname = 'orders_payment_provider_check')   as orders_provider_check_must_be_true,
+  (select pg_get_constraintdef(oid) like '%nicepay%' and pg_get_constraintdef(oid) like '%toss%' and pg_get_constraintdef(oid) like '%portone%' and pg_get_constraintdef(oid) like '%mock%' from pg_constraint where conname = 'payments_payment_provider_check') as payments_provider_check_must_be_true,
+  (select pg_get_constraintdef(oid) like '%approving%' and pg_get_constraintdef(oid) like '%pending%' and pg_get_constraintdef(oid) like '%paid%' and pg_get_constraintdef(oid) like '%cancelled%' and pg_get_constraintdef(oid) like '%done%' from pg_constraint where conname = 'orders_status_check') as status_check_must_be_true,
+  (select count(*) = 5 from information_schema.columns where table_name = 'orders' and column_name in ('pg_claim_id','pg_claimed_at','pg_tid','pg_review_reason','pg_review_at')) as columns_must_be_true,
+  (select count(*) = 1 from pg_trigger where tgname = 'orders_guard_pg_state' and not tgisinternal)                                                                                     as guard_trigger_must_be_true,
+  (select count(*) = 7 from pg_proc where proname in ('confirm_nicepay_payment','nicepay_order_context','nicepay_claim_order','nicepay_release_order','nicepay_mark_review','nicepay_expire_stale_claims','nicepay_resolve_review') and prosecdef) as rpcs_secdef_must_be_true,
+  (select bool_and(not has_function_privilege('authenticated', p.oid, 'execute') and not has_function_privilege('anon', p.oid, 'execute') and has_function_privilege('service_role', p.oid, 'execute'))
+     from pg_proc p where p.proname in ('confirm_nicepay_payment','nicepay_order_context','nicepay_claim_order','nicepay_release_order','nicepay_mark_review','nicepay_expire_stale_claims','nicepay_resolve_review'))        as rpcs_service_role_only_must_be_true,
+  (select pg_get_functiondef('public.confirm_real_payment(uuid,text,integer)'::regprocedure) not like '%nicepay%')                                                                         as confirm_real_payment_untouched_must_be_true;

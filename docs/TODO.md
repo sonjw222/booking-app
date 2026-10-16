@@ -1,6 +1,7 @@
 # TODO
 
 ## 2026-10-16 NICEPAY 카드사 심사 준비
+- P0: 검토용 SQL 2종(`fix_refund_block_all_pg_providers_20261016.sql` → `add_nicepay_provider_support_20261016.sql`) 승인·적용 순서는 `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §6. 적용 전 사전 확인 쿼리 실행, `create_order_secure` 라이브 정의 확인 후 provider 허용 패치 별도 작성.
 - P0: PG 전환 승인 대기 항목은 `docs/payments/PG_MIGRATION_TOSS_TO_NICEPAY.md` §7 — SQL(provider 'nicepay'·claim·복귀토큰 일반화), 법적 문구 교체, 홈 푸터 주소, 통신판매중개자/수납 구조, 레거시 Toss 제거(대기 주문 0건 확인 후).
 - P0: NICEPAY 심사 — 공개 /products의 "테스트"(100원)·"P3 타센터-격리테스트" 상품 비공개 처리(운영자), 계약 후 MID/KEY·기술지원 질문(docs/payments/NICEPAY_REVIEW_PREPARATION.md §7) 확인.
 - P1: NICEPAY 활성화 전 SQL 승인 필요 — orders.payment_provider 'nicepay' 허용, 선점(claim) 상태, pg_order_context/confirm_real_payment/정산 뷰 provider 확장. 정기결제는 호스팅 카드등록 UI 확인 전까지 BLOCKED(카드정보 직접 수집 금지).

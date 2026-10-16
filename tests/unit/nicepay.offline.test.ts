@@ -59,7 +59,7 @@ type Fake = NicepayDeps & {
   setApprove(r: Record<string, unknown>): void; setNetOk(v: boolean): void; setThrow(v: boolean): void;
   claim: ReturnType<typeof vi.fn>; release: ReturnType<typeof vi.fn>; dbConfirm: ReturnType<typeof vi.fn>; review: ReturnType<typeof vi.fn>;
 };
-function fakeDeps(over: { ctx?: NicepayOrderCtx | null; claimOrder?: () => Promise<boolean>; dbConfirm?: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>; orderContext?: () => Promise<NicepayOrderCtx | null>; gateAllows?: () => Promise<boolean> } = {}): Fake {
+function fakeDeps(over: { ctx?: NicepayOrderCtx | null; claimOrder?: () => Promise<string | null>; dbConfirm?: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>; orderContext?: () => Promise<NicepayOrderCtx | null>; gateAllows?: () => Promise<boolean> } = {}): Fake {
   const logs: string[] = [];
   const calls: Fake["calls"] = [];
   let approveResp: Record<string, unknown> = {}; let netOk = true; let approveThrows = false;
@@ -70,7 +70,7 @@ function fakeDeps(over: { ctx?: NicepayOrderCtx | null; claimOrder?: () => Promi
   };
   const fetchImpl: NicepayFetch = async (url, init) => { calls.push({ url, body: new URLSearchParams(init.body) }); return { ok: true, status: 200, async json() { return respond(url); } }; };
   const ctx = over.ctx === undefined ? { orderId: ORDER, status: "pending", amount: AMT, provider: "nicepay" } : over.ctx;
-  const claim = vi.fn(over.claimOrder ?? (async () => true));
+  const claim = vi.fn(over.claimOrder ?? (async () => "claim-1"));
   const release = vi.fn(async () => {});
   const review = vi.fn(async () => {});
   const dbConfirm = vi.fn(over.dbConfirm ?? (async () => ({ data: { membershipId: "m1" }, error: null })));
@@ -95,7 +95,7 @@ describe("handleNicepayAuthReturn — 정상/멱등", () => {
     expect(d.calls[0].body.get("Amt")).toBe("12000"); expect(d.calls[0].body.get("CharSet")).toBe("utf-8");
     expect(d.calls[0].body.get("SignData")).toBe(nicepaySign.approveRequest({ authToken: TOKEN, mid: MID, amt: "12000", ediDate: "20261016120000" }, KEY));
     expect(JSON.stringify([...d.calls[0].body])).not.toContain(KEY);
-    expect(d.dbConfirm).toHaveBeenCalledWith(ORDER, TID, AMT);
+    expect(d.dbConfirm).toHaveBeenCalledWith(ORDER, "claim-1", TID, AMT); expect(d.release).not.toHaveBeenCalled();
   });
   it("이미 done이면 승인 호출 없이 멱등 성공", async () => {
     const d = fakeDeps({ ctx: { orderId: ORDER, status: "done", amount: AMT, provider: "nicepay" } }); const r = await handleNicepayAuthReturn(authInput(), d);
@@ -106,7 +106,7 @@ describe("handleNicepayAuthReturn — 정상/멱등", () => {
     expect(r.status).toBe(403); expect(d.calls).toHaveLength(0); expect(d.claim).not.toHaveBeenCalled(); expect(d.dbConfirm).not.toHaveBeenCalled();
   });
   it("동시 중복 확정: 선점 실패 시 승인 호출 없음", async () => {
-    const d = fakeDeps({ claimOrder: async () => false }); const r = await handleNicepayAuthReturn(authInput(), d);
+    const d = fakeDeps({ claimOrder: async () => null }); const r = await handleNicepayAuthReturn(authInput(), d);
     expect(r.status).toBe(409); expect(d.calls).toHaveLength(0); expect(d.dbConfirm).not.toHaveBeenCalled();
   });
 });
@@ -151,11 +151,11 @@ describe("handleNicepayAuthReturn — 승인 이후 실패는 망취소", () => 
   });
   it("DB 확정 실패 + 상태 재조회 실패 → 자동 취소하지 않고 운영 알림", async () => {
     let n = 0; const d = fakeDeps({ dbConfirm: async () => ({ data: null, error: { message: "x" } }), orderContext: async () => { if (n++ === 0) return { orderId: ORDER, status: "pending", amount: AMT, provider: "nicepay" }; throw new Error("db down"); } });
-    const r = await handleNicepayAuthReturn(authInput(), d); expect(r.body.code).toBe("confirm_state_unknown"); expect(netCalls(d)).toHaveLength(0); expect(d.review).toHaveBeenCalledWith(ORDER, "confirm_state_unknown"); expect(d.logs.join("\n")).toContain("PG_NICEPAY_CONFIRM_STATE_UNKNOWN");
+    const r = await handleNicepayAuthReturn(authInput(), d); expect(r.body.code).toBe("confirm_state_unknown"); expect(netCalls(d)).toHaveLength(0); expect(d.review).toHaveBeenCalledWith(ORDER, "claim-1", "confirm_state_unknown"); expect(d.logs.join("\n")).toContain("PG_NICEPAY_CONFIRM_STATE_UNKNOWN");
   });
   it("망취소마저 실패 → 주문을 pending으로 풀지 않고(재승인 방지) 운영 알림", async () => {
     const d = fakeDeps(); d.setApprove(goodApprove({ Moid: "other" })); d.setNetOk(false); const r = await handleNicepayAuthReturn(authInput(), d);
-    expect(r.body.code).toBe("compensation_failed"); expect(d.release).not.toHaveBeenCalled(); expect(d.review).toHaveBeenCalledWith(ORDER, "netcancel_failed"); expect(d.logs.join("\n")).toContain("PG_NICEPAY_NETCANCEL_FAILED");
+    expect(r.body.code).toBe("compensation_failed"); expect(d.release).not.toHaveBeenCalled(); expect(d.review).toHaveBeenCalledWith(ORDER, "claim-1", "netcancel_failed"); expect(d.logs.join("\n")).toContain("PG_NICEPAY_NETCANCEL_FAILED");
   });
   it("모든 로그에 토큰·키·서명·카드/구매자 정보가 없다", async () => {
     const d = fakeDeps(); d.setApprove(goodApprove({ Moid: "other", CardNo: "123456******9999", BuyerEmail: "x@y.z" })); await handleNicepayAuthReturn(authInput(), d);

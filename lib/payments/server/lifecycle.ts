@@ -256,7 +256,8 @@ export async function handleRefund(input: { token: string | null; membershipId?:
   if (!ctx) return { status: 404, body: { error: "수강권을 찾을 수 없어요" } };
   if (ctx.status === "refunded") return { status: 409, body: { error: "이미 환불된 수강권이에요", code: "already_refunded" } };
 
-  const isPgProvider = !!ctx.provider && PG_PROVIDERS.includes(ctx.provider);
+  // 직접결제(null)와 Mock만 PG가 아니다. 그 밖의 모든 provider(toss/portone/nicepay/미래 값)는 PG로 취급해 DB 일반 환불 가드를 기본 차단 상태로 둔다.
+  const isPgProvider = !!ctx.provider && ctx.provider !== "mock";
 
   // 외부 환불 경계는 provider별로 명시한다. 현재 실제 승인 취소가 구현된 PG는 토스뿐이다.
   // PortOne은 승인/취소 연동이 아직 없다(PortOnePaymentProvider는 구조만 있고 confirm 라우트도 toss만 허용) —
@@ -265,6 +266,11 @@ export async function handleRefund(input: { token: string | null; membershipId?:
   if (ctx.provider === "portone" && ctx.amount > 0) {
     d.log("warn", "PG_REFUND_UNSUPPORTED_PROVIDER", { provider: "portone", membershipId: ctx.membershipId, orderId: ctx.orderId });
     return { status: 501, body: { error: "해당 결제수단의 자동 환불은 아직 지원하지 않아요. 센터 또는 운영자에게 문의해주세요", code: "portone_refund_unsupported" } };
+  }
+  // fail-closed(2026-10-16): 외부 취소가 구현되지 않은 모든 PG(예: nicepay — 환불 API 연동 전)의 금액>0 환불은 DB만 refunded로 만들지 않는다.
+  if (!!ctx.provider && ctx.provider !== "mock" && ctx.provider !== "toss" && ctx.provider !== "portone" && ctx.amount > 0) {
+    d.log("warn", "PG_REFUND_UNSUPPORTED_PROVIDER", { provider: ctx.provider, membershipId: ctx.membershipId, orderId: ctx.orderId });
+    return { status: 501, body: { error: "해당 결제수단의 자동 환불은 아직 지원하지 않아요. 센터 또는 운영자에게 문의해주세요", code: "refund_unsupported_provider" } };
   }
   // 외부 취소가 필요한 환불 = 토스 && 금액>0. (portone 0원은 돈 이동이 없어 아래 DB-only 경로 — 0원 토스 주문과 동일: 환불 payment 행은 만들지 않고
   // 쿠폰/포인트만 복원한다. allowPg=true는 브라우저 직접 호출 가드(PG 주문 거부)만 통과시키며 서버 라우트에서만 가능하다.)

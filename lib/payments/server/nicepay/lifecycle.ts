@@ -26,13 +26,13 @@ export type NicepayDeps = {
   orderContext(orderId: string): Promise<NicepayOrderCtx | null>;
   /** PG 게이트(PG_CHECKOUT_ENABLED 또는 심사용 override 계정). false면 NICEPAY를 호출하지 않는다 — Toss lifecycle의 gateAllows와 같은 규칙. */
   gateAllows(orderId: string): Promise<boolean>;
-  /** pending → approving 원자적 선점. 이미 다른 요청이 선점했거나 pending이 아니면 false. */
-  claimOrder(orderId: string): Promise<boolean>;
+  /** pending → approving 원자적 선점(DB nicepay_claim_order). 성공하면 이 선점의 claimId(이후 모든 호출의 fencing 값), 이미 선점됐거나 pending이 아니면 null. */
+  claimOrder(orderId: string): Promise<string | null>;
   /** 승인 실패/보상 후 approving → pending 복귀(재시도 허용) */
-  releaseOrder(orderId: string): Promise<void>;
+  releaseOrder(orderId: string, claimId: string): Promise<void>;
   /** 결과 불명/보상 실패 주문을 운영자 확인 대기로 표시(주문은 approving으로 유지해 재승인을 막는다). 로그만이 아닌 영속 표시 — 복구 절차는 docs/payments/NICEPAY_SERVER_MODULE_VERIFICATION.md */
-  markReview(orderId: string, reason: "netcancel_failed" | "confirm_state_unknown"): Promise<void>;
-  dbConfirm(orderId: string, tid: string, amount: number): Promise<DbResult>;
+  markReview(orderId: string, claimId: string, reason: "netcancel_failed" | "confirm_state_unknown"): Promise<void>;
+  dbConfirm(orderId: string, claimId: string, tid: string, amount: number): Promise<DbResult>;
   log(level: "info" | "warn" | "error", event: string, fields: Record<string, unknown>): void;
 };
 export type Reply = { status: number; body: Record<string, unknown> };
@@ -67,7 +67,8 @@ export async function handleNicepayAuthReturn(input: NicepayAuthResult, d: Nicep
     return { status: 400, body: { error: "결제 서버 주소가 올바르지 않아요", code: "url_rejected" } };
   }
   const nextAppUrl = input.NextAppURL, netCancelUrl = input.NetCancelURL;
-  if (!(await d.claimOrder(ctx.orderId))) return { status: 409, body: { error: "이미 결제를 처리하고 있어요", code: "in_progress" } };
+  const claimId = await d.claimOrder(ctx.orderId);
+  if (!claimId) return { status: 409, body: { error: "이미 결제를 처리하고 있어요", code: "in_progress" } };
 
   const netCancel = async (cause: string): Promise<boolean> => {
     const r = await nicepayNetCancel(d.fetchImpl, creds, { netCancelUrl, tid, authToken, amount: ctx.amount, now: d.now() });
@@ -77,9 +78,9 @@ export async function handleNicepayAuthReturn(input: NicepayAuthResult, d: Nicep
   };
   const failAfterApprove = async (cause: string, body: Reply["body"], status = 409): Promise<Reply> => {
     const ok = await netCancel(cause);
-    if (ok) { await d.releaseOrder(ctx.orderId); return { status, body }; }
+    if (ok) { await d.releaseOrder(ctx.orderId, claimId); return { status, body }; }
     // 취소 실패 — 돈이 승인된 채일 수 있다. 주문은 approving으로 두어 재승인을 막고 운영자 확인 대기로 표시한다(성공/실패를 임의로 확정하지 않는다).
-    await d.markReview(ctx.orderId, "netcancel_failed").catch(() => d.log("error", "PG_NICEPAY_MARK_REVIEW_FAILED", { moid: maskId(moid) }));
+    await d.markReview(ctx.orderId, claimId, "netcancel_failed").catch(() => d.log("error", "PG_NICEPAY_MARK_REVIEW_FAILED", { moid: maskId(moid) }));
     return { status: 500, body: { error: "결제 처리 중 문제가 생겼어요. 운영자에게 문의해주세요", code: "compensation_failed" } };
   };
 
@@ -91,13 +92,13 @@ export async function handleNicepayAuthReturn(input: NicepayAuthResult, d: Nicep
       d.log("error", "PG_NICEPAY_APPROVE_UNKNOWN", { moid: maskId(moid), reason: approved.code });
       return failAfterApprove("approve_unknown", { error: "결제 승인 결과를 확인하지 못했어요. 다시 시도해주세요", code: "approve_unknown" }, 502);
     }
-    await d.releaseOrder(ctx.orderId);
+    await d.releaseOrder(ctx.orderId, claimId);
     return { status: 400, body: { error: "결제 승인에 실패했어요", code: "approve_failed" } };
   }
   const r = approved.data;
   if (r.ResultCode !== NICEPAY_APPROVE_OK_CARD) {
     d.log("warn", "PG_NICEPAY_APPROVE_REJECTED", redactNicepayForLog(r));
-    await d.releaseOrder(ctx.orderId);
+    await d.releaseOrder(ctx.orderId, claimId);
     return { status: 400, body: { error: "결제 승인에 실패했어요", code: "approve_failed" } };
   }
   // 2) 승인 응답 검증 — 하나라도 어긋나면 승인된 돈을 되돌린다
@@ -108,14 +109,14 @@ export async function handleNicepayAuthReturn(input: NicepayAuthResult, d: Nicep
     return failAfterApprove("approve_mismatch", { error: "결제 승인 응답이 주문과 일치하지 않아요", code: "approve_mismatch" });
   }
   // 3) DB 확정
-  const res = await d.dbConfirm(ctx.orderId, respTid, ctx.amount);
+  const res = await d.dbConfirm(ctx.orderId, claimId, respTid, ctx.amount);
   if (!res.error) return { status: 200, body: { ok: true, ...(res.data ?? {}) } };
   let after: NicepayOrderCtx | null = null;
   try { after = await d.orderContext(moid); } catch { after = null; }
   if (after?.status === "done") return { status: 200, body: { ok: true, already_done: true } };
   if (!after) {
     d.log("error", "PG_NICEPAY_CONFIRM_STATE_UNKNOWN", { moid: maskId(moid), tid: maskId(tid), dbError: res.error.message });
-    await d.markReview(ctx.orderId, "confirm_state_unknown").catch(() => d.log("error", "PG_NICEPAY_MARK_REVIEW_FAILED", { moid: maskId(moid) }));
+    await d.markReview(ctx.orderId, claimId, "confirm_state_unknown").catch(() => d.log("error", "PG_NICEPAY_MARK_REVIEW_FAILED", { moid: maskId(moid) }));
     return { status: 500, body: { error: "결제는 승인됐지만 확정 상태를 확인하지 못했어요. 운영자에게 문의해주세요", code: "confirm_state_unknown" } };
   }
   return failAfterApprove("db_confirm_failed", { error: "결제 확정에 실패해 승인을 취소했어요", code: "db_confirm_failed" }, 500);
