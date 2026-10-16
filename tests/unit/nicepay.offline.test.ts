@@ -58,8 +58,9 @@ type Fake = NicepayDeps & {
   logs: string[]; calls: { url: string; body: URLSearchParams }[];
   setApprove(r: Record<string, unknown>): void; setNetOk(v: boolean): void; setThrow(v: boolean): void;
   claim: ReturnType<typeof vi.fn>; release: ReturnType<typeof vi.fn>; dbConfirm: ReturnType<typeof vi.fn>; review: ReturnType<typeof vi.fn>;
+  recApproval: ReturnType<typeof vi.fn>; recCancel: ReturnType<typeof vi.fn>;
 };
-function fakeDeps(over: { ctx?: NicepayOrderCtx | null; claimOrder?: () => Promise<string | null>; dbConfirm?: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>; orderContext?: () => Promise<NicepayOrderCtx | null>; gateAllows?: () => Promise<boolean> } = {}): Fake {
+function fakeDeps(over: { recordVerifiedApproval?: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>; recordPgCancel?: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>; releaseResult?: boolean; ctx?: NicepayOrderCtx | null; claimOrder?: () => Promise<string | null>; dbConfirm?: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>; orderContext?: () => Promise<NicepayOrderCtx | null>; gateAllows?: () => Promise<boolean> } = {}): Fake {
   const logs: string[] = [];
   const calls: Fake["calls"] = [];
   let approveResp: Record<string, unknown> = {}; let netOk = true; let approveThrows = false;
@@ -71,15 +72,17 @@ function fakeDeps(over: { ctx?: NicepayOrderCtx | null; claimOrder?: () => Promi
   const fetchImpl: NicepayFetch = async (url, init) => { calls.push({ url, body: new URLSearchParams(init.body) }); return { ok: true, status: 200, async json() { return respond(url); } }; };
   const ctx = over.ctx === undefined ? { orderId: ORDER, status: "pending", amount: AMT, provider: "nicepay" } : over.ctx;
   const claim = vi.fn(over.claimOrder ?? (async () => "claim-1"));
-  const release = vi.fn(async (_o: string, _c: string, _b: string) => {});
+  const release = vi.fn(async (_o: string, _c: string, _b: string) => over.releaseResult ?? true);
+  const recApproval = vi.fn(over.recordVerifiedApproval ?? (async () => ({ data: { already_recorded: false }, error: null })));
+  const recCancel = vi.fn(over.recordPgCancel ?? (async () => ({ data: { already_recorded: false }, error: null })));
   const review = vi.fn(async () => {});
   const dbConfirm = vi.fn(over.dbConfirm ?? (async () => ({ data: { membershipId: "m1" }, error: null })));
   const d: Fake = {
     creds: { mid: MID, merchantKey: KEY }, fetchImpl, now: () => new Date("2026-10-16T03:00:00Z"),
-    orderContext: over.orderContext ?? (async () => ctx), gateAllows: over.gateAllows ?? (async () => true), claimOrder: claim, releaseOrder: release, markReview: review, dbConfirm,
+    orderContext: over.orderContext ?? (async () => ctx), gateAllows: over.gateAllows ?? (async () => true), claimOrder: claim, releaseOrder: release, markReview: review, dbConfirm, recordVerifiedApproval: recApproval, recordPgCancel: recCancel,
     log: (l, e, f) => { logs.push(`${l} ${e} ${JSON.stringify(f)}`); },
     logs, calls, setApprove: (r) => { approveResp = r; }, setNetOk: (v) => { netOk = v; }, setThrow: (v) => { approveThrows = v; },
-    claim, release, review,
+    claim, release, review, recApproval, recCancel,
   };
   d.setApprove(goodApprove());
   return d;
@@ -192,6 +195,37 @@ describe("결과 불명 처리 — 성공/실패를 임의로 확정하지 않�
   it("재시도 시 이미 approving(선점됨)이면 새 승인·망취소 모두 하지 않는다", async () => {
     const d = fakeDeps({ ctx: { orderId: ORDER, status: "approving", amount: AMT, provider: "nicepay" } }); const r = await handleNicepayAuthReturn(authInput(), d);
     expect(r.status).toBe(409); expect(d.calls).toHaveLength(0);
+  });
+});
+
+describe("서버 검증 승인 기록 / PG 취소 기록 (증빙 문자열만으로 발급·복귀 불가)", () => {
+  it("정상: 승인 응답 검증 → recordVerifiedApproval(64자 요약값) → dbConfirm 순서", async () => {
+    const order: string[] = []; const d = fakeDeps({ recordVerifiedApproval: async () => { order.push("approval"); return { data: {}, error: null }; }, dbConfirm: async () => { order.push("confirm"); return { data: {}, error: null }; } });
+    const r = await handleNicepayAuthReturn(authInput(), d);
+    expect(r.status).toBe(200); expect(order).toEqual(["approval", "confirm"]);
+    expect(d.recApproval).toHaveBeenCalledWith(ORDER, "claim-1", TID, AMT, expect.stringMatching(/^[0-9a-f]{64}$/));
+  });
+  it("승인 응답 검증 실패(서명 등)면 승인 기록·확정을 하지 않고 망취소 → 승인 기록이 없으니 취소 기록 없이 복귀", async () => {
+    const d = fakeDeps(); d.setApprove(goodApprove({ Signature: "f".repeat(64) })); await handleNicepayAuthReturn(authInput(), d);
+    expect(d.recApproval).not.toHaveBeenCalled(); expect(d.dbConfirm).not.toHaveBeenCalled(); expect(d.recCancel).not.toHaveBeenCalled(); expect(d.release).toHaveBeenCalledWith(ORDER, "claim-1", "netcancel_confirmed");
+  });
+  it("승인 기록 실패 → DB 확정 안 함, 상태 재조회 후 망취소(승인 기록이 없으니 취소 기록 없이 복귀)", async () => {
+    const d = fakeDeps({ recordVerifiedApproval: async () => ({ data: null, error: { message: "db down" } }) }); const r = await handleNicepayAuthReturn(authInput(), d);
+    expect(r.status).toBe(500); expect(d.dbConfirm).not.toHaveBeenCalled(); expect(d.calls.filter((c) => c.url === NET)).toHaveLength(1);
+    expect(d.recCancel).not.toHaveBeenCalled(); expect(d.release).toHaveBeenCalledWith(ORDER, "claim-1", "netcancel_confirmed");
+  });
+  it("승인 기록 후 DB 확정 실패 → 망취소 성공 시 취소 기록(recordPgCancel)을 먼저 남기고 그 다음에 복귀", async () => {
+    const order: string[] = []; const d = fakeDeps({ dbConfirm: async () => ({ data: null, error: { message: "boom" } }), recordPgCancel: async () => { order.push("cancel-record"); return { data: {}, error: null }; } });
+    d.release.mockImplementation(async () => { order.push("release"); return true; });
+    const r = await handleNicepayAuthReturn(authInput(), d);
+    expect(r.status).toBe(500); expect(order).toEqual(["cancel-record", "release"]);
+    expect(d.recCancel).toHaveBeenCalledWith(ORDER, TID, expect.stringMatching(/^NC-/), AMT, expect.stringMatching(/^[0-9a-f]{64}$/));
+  });
+  it("취소 기록 실패 또는 DB가 복귀를 거부하면 풀지 않고 운영자 확인 대기", async () => {
+    const a = fakeDeps({ dbConfirm: async () => ({ data: null, error: { message: "boom" } }), recordPgCancel: async () => ({ data: null, error: { message: "x" } }) });
+    expect((await handleNicepayAuthReturn(authInput(), a)).body.code).toBe("compensation_failed"); expect(a.release).not.toHaveBeenCalled(); expect(a.review).toHaveBeenCalledWith(ORDER, "claim-1", "netcancel_failed");
+    const b = fakeDeps({ dbConfirm: async () => ({ data: null, error: { message: "boom" } }), releaseResult: false });
+    expect((await handleNicepayAuthReturn(authInput(), b)).body.code).toBe("compensation_failed"); expect(b.review).toHaveBeenCalledWith(ORDER, "claim-1", "netcancel_failed");
   });
 });
 

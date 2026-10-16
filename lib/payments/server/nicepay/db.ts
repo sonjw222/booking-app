@@ -6,7 +6,7 @@
 import type { NicepayDeps } from "./lifecycle";
 
 export type RpcLike = { rpc(fn: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: { message: string } | null }> };
-type DbPart = Pick<NicepayDeps, "orderContext" | "claimOrder" | "releaseOrder" | "markReview" | "dbConfirm">;
+type DbPart = Pick<NicepayDeps, "orderContext" | "claimOrder" | "releaseOrder" | "markReview" | "dbConfirm" | "recordVerifiedApproval" | "recordPgCancel">;
 
 export function nicepayDbDeps(admin: RpcLike): DbPart {
   return {
@@ -21,12 +21,21 @@ export function nicepayDbDeps(admin: RpcLike): DbPart {
       return typeof data === "string" && data ? data : null;
     },
     async releaseOrder(orderId, claimId, basis) {
-      const { error } = await admin.rpc("nicepay_release_order", { p_order_id: orderId, p_claim_id: claimId, p_basis: basis });
+      const { data, error } = await admin.rpc("nicepay_release_order", { p_order_id: orderId, p_claim_id: claimId, p_basis: basis });
       if (error) throw new Error(error.message);
+      return data === true;
     },
     async markReview(orderId, claimId, reason) {
       const { error } = await admin.rpc("nicepay_mark_review", { p_order_id: orderId, p_claim_id: claimId, p_reason: reason });
       if (error) throw new Error(error.message);
+    },
+    async recordVerifiedApproval(orderId, claimId, tid, amount, digest) {
+      const { data, error } = await admin.rpc("nicepay_record_verified_approval", { p_order_id: orderId, p_claim_id: claimId, p_tid: tid, p_amount: amount, p_response_digest: digest });
+      return { data: (data as Record<string, unknown> | null) ?? null, error: error ? { message: error.message } : null };
+    },
+    async recordPgCancel(orderId, pgTid, cancelTid, amount, digest) {
+      const { data, error } = await admin.rpc("nicepay_record_pg_cancel", { p_order_id: orderId, p_pg_tid: pgTid, p_cancel_tid: cancelTid, p_cancel_amount: amount, p_source: "api_response", p_actor: "system", p_approver: null, p_response_digest: digest });
+      return { data: (data as Record<string, unknown> | null) ?? null, error: error ? { message: error.message } : null };
     },
     async dbConfirm(orderId, claimId, tid, amount) {
       const { data, error } = await admin.rpc("confirm_nicepay_payment", { p_order_id: orderId, p_claim_id: claimId, p_tid: tid, p_amount: amount });

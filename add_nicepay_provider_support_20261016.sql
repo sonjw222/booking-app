@@ -182,6 +182,7 @@ create table if not exists nicepay_review_actions (
     evidence_type   text not null,
     evidence_ref    text,
     actor           text not null check (length(btrim(actor)) >= 2),
+    approver        text,
     note            text,
     tid             text,
     status_before   text,
@@ -208,16 +209,52 @@ create trigger nicepay_review_actions_append_only
     before update or delete on nicepay_review_actions
     for each row execute function nicepay_review_actions_append_only();
 
--- [5-2] 실제 PG 승인 취소 확인 기록(추가 전용): NICEPAY 환불은 이 기록이 있어야 내부 환불이 가능하다([6-4]).
+-- [5-2] 서버가 검증한 PG 승인 기록(추가 전용): NICEPAY 수강권 발급(확정)과 수동 확정은 이 기록이 있어야만 가능하다.
+--   운영자가 입력한 증빙 문자열만으로는 수강권을 발급할 수 없게 하는 핵심 장치. 기록은 서버 라우트가 NICEPAY 승인 응답의 서명·MID·금액·Moid·TID를 모두 검증한 직후에만 남긴다.
+--   response_digest = 검증한 응답 필드(TID, Moid, Amt, MID, ResultCode, AuthDate)의 sha256(원문/개인정보는 저장하지 않음).
+create table if not exists nicepay_pg_approvals (
+    id              bigint generated always as identity primary key,
+    order_id        uuid not null references orders(id) on delete restrict,
+    claim_id        uuid not null,
+    tid             text not null unique check (length(btrim(tid)) >= 4),
+    amount          integer not null check (amount > 0),
+    response_digest text not null check (response_digest ~ '^[0-9a-f]{64}$'),
+    created_at      timestamptz not null default now()
+);
+create index if not exists nicepay_pg_approvals_order_idx on nicepay_pg_approvals (order_id, claim_id);
+alter table nicepay_pg_approvals enable row level security;
+revoke all on table nicepay_pg_approvals from public, anon, authenticated;
+create or replace function nicepay_pg_approvals_append_only()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    raise exception '승인 기록은 수정하거나 삭제할 수 없어요' using errcode = '42501';
+end;
+$$;
+revoke all on function nicepay_pg_approvals_append_only() from public, anon, authenticated;
+drop trigger if exists nicepay_pg_approvals_append_only on nicepay_pg_approvals;
+create trigger nicepay_pg_approvals_append_only
+    before update or delete on nicepay_pg_approvals
+    for each row execute function nicepay_pg_approvals_append_only();
+
+-- [5-3] 실제 PG 승인 취소 확인 기록(추가 전용): NICEPAY 환불·재시도(release)는 서버가 검증한 승인(위 기록)에 대한 이 기록이 있어야 가능하다([6-4]).
+--   (order_id, pg_tid)당 1건. api_response = 서버가 취소/망취소 응답을 검증(digest 필수), admin_console = 운영자 확인(2인 승인 필수).
 create table if not exists nicepay_pg_cancels (
     id              bigint generated always as identity primary key,
-    order_id        uuid not null unique references orders(id) on delete restrict,
-    pg_tid          text not null,
+    order_id        uuid not null references orders(id) on delete restrict,
+    pg_tid          text not null references nicepay_pg_approvals(tid) on delete restrict,
     cancel_tid      text not null unique check (length(btrim(cancel_tid)) >= 4),
     cancel_amount   integer not null check (cancel_amount > 0),
     source          text not null check (source in ('api_response', 'admin_console')),
     actor           text not null check (length(btrim(actor)) >= 2),
-    created_at      timestamptz not null default now()
+    approver        text check (approver is null or (length(btrim(approver)) >= 2 and btrim(approver) <> btrim(actor))),
+    response_digest text check (response_digest is null or response_digest ~ '^[0-9a-f]{64}$'),
+    created_at      timestamptz not null default now(),
+    unique (order_id, pg_tid),
+    check ((source = 'admin_console' and approver is not null) or (source = 'api_response' and response_digest is not null))
 );
 alter table nicepay_pg_cancels enable row level security;
 revoke all on table nicepay_pg_cancels from public, anon, authenticated;
@@ -236,6 +273,11 @@ drop trigger if exists nicepay_pg_cancels_append_only on nicepay_pg_cancels;
 create trigger nicepay_pg_cancels_append_only
     before update or delete on nicepay_pg_cancels
     for each row execute function nicepay_pg_cancels_append_only();
+
+-- 식별 시퀀스는 클라이언트 롤이 건드릴 수 없게 회수(Supabase 기본 권한 대비)
+revoke all on sequence nicepay_review_actions_id_seq from public, anon, authenticated;
+revoke all on sequence nicepay_pg_approvals_id_seq from public, anon, authenticated;
+revoke all on sequence nicepay_pg_cancels_id_seq from public, anon, authenticated;
 
 -- [6] 제자리 패치 4건 -----------------------------------------------------------
 -- 모든 패치는 줄바꿈(CRLF/LF)·들여쓰기에 민감하지 않은 정규식으로 위치를 찾고, 위치가 정확히 1곳이 아니면(예상과 다른 함수 구조) 예외로 전체 트랜잭션을 중단한다.
@@ -336,7 +378,7 @@ begin
         '\1' || v_nl || '    -- nicepay_pg_cancel_guard begin' || v_nl
         || '    if v_order_id is not null and v_amount > 0' || v_nl
         || '       and exists (select 1 from orders o where o.id = v_order_id and o.payment_provider = ''nicepay'')' || v_nl
-        || '       and not exists (select 1 from nicepay_pg_cancels c where c.order_id = v_order_id and c.cancel_amount = v_amount) then' || v_nl
+        || '       and not exists (select 1 from nicepay_pg_cancels c join orders o2 on o2.id = c.order_id and o2.pg_tid = c.pg_tid where c.order_id = v_order_id and c.cancel_amount = v_amount) then' || v_nl
         || '        raise exception ''NICEPAY 결제는 PG 승인 취소가 확인된 뒤에만 환불할 수 있어요'';' || v_nl
         || '    end if;' || v_nl || '    -- nicepay_pg_cancel_guard end');
     execute v_def;
@@ -380,33 +422,6 @@ begin
     returning pg_claim_id into v_claim;
     perform set_config('app.nicepay_write', '', true);
     return v_claim;
-end;
-$$;
-
--- 서버 라우트 전용 자동 복귀: 승인이 확정 거절됐거나(approve_rejected) 망취소 성공이 확인된(netcancel_confirmed) 뒤에만. 근거를 감사 기록에 남긴다.
-create or replace function nicepay_release_order(p_order_id uuid, p_claim_id uuid, p_basis text)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-    v_n int;
-begin
-    if p_basis is null or p_basis not in ('approve_rejected', 'netcancel_confirmed') then
-        raise exception '복귀 근거가 올바르지 않아요';
-    end if;
-    perform set_config('app.nicepay_write', 'on', true);
-    update orders
-       set status = 'pending', pg_claim_id = null, pg_claimed_at = null
-     where id = p_order_id and status = 'approving' and pg_claim_id = p_claim_id and pg_tid is null and pg_review_at is null;
-    get diagnostics v_n = row_count;
-    perform set_config('app.nicepay_write', '', true);
-    if v_n = 1 then
-        insert into nicepay_review_actions(order_id, claim_id, action, evidence_type, actor, status_before, status_after)
-        values (p_order_id, p_claim_id, 'release', p_basis, 'system', 'approving', 'pending');
-    end if;
-    return v_n = 1;
 end;
 $$;
 
@@ -460,11 +475,69 @@ begin
 end;
 $$;
 
--- 운영자 수동 해소. NICEPAY 가맹점관리자 등에서 "실제 PG 상태"를 확인한 증거 없이는 풀 수 없다.
---   release : p_evidence_type in ('netcancel_confirmed','not_approved_confirmed')              → pending (재시도 허용)
---   cancel  : p_evidence_type in ('netcancel_confirmed','not_approved_confirmed','pg_cancel_confirmed') → cancelled (포인트는 기존 취소 트리거가 복원)
---   p_evidence_ref(예: 망취소/취소 거래번호, 관리자 화면 확인 번호) 4자 이상, p_actor(운영자 식별) 2자 이상 필수. 거래번호가 이미 기록된 주문은 풀 수 없다.
-create or replace function nicepay_resolve_review(p_order_id uuid, p_action text, p_evidence_type text, p_evidence_ref text, p_actor text, p_note text default null)
+-- 서버가 검증한 NICEPAY 승인 응답을 기록한다(승인 응답의 서명·MID·금액·Moid·TID 검증을 마친 직후, DB 확정 전에 호출).
+create or replace function nicepay_record_verified_approval(p_order_id uuid, p_claim_id uuid, p_tid text, p_amount integer, p_response_digest text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v orders;
+    a nicepay_pg_approvals;
+begin
+    if p_tid is null or length(btrim(p_tid)) < 4 or length(p_tid) > 64 then raise exception '거래번호가 올바르지 않아요'; end if;
+    if p_response_digest is null or p_response_digest !~ '^[0-9a-f]{64}$' then raise exception '승인 응답 요약값이 올바르지 않아요'; end if;
+    select * into v from orders where id = p_order_id for update;
+    if not found then raise exception '주문을 찾을 수 없어요'; end if;
+    if v.payment_provider is distinct from 'nicepay' then raise exception 'NICEPAY 주문이 아니에요'; end if;
+    if v.status <> 'approving' or v.pg_claim_id is distinct from p_claim_id then raise exception '승인 선점이 일치하지 않아요'; end if;
+    if v.amount is distinct from p_amount then raise exception '결제 금액이 주문 금액과 일치하지 않아요'; end if;
+    select * into a from nicepay_pg_approvals where tid = p_tid;
+    if found then
+        if a.order_id = p_order_id and a.claim_id = p_claim_id and a.amount = p_amount then return json_build_object('already_recorded', true); end if;
+        raise exception '이미 다른 주문/선점에 기록된 거래번호예요';
+    end if;
+    insert into nicepay_pg_approvals(order_id, claim_id, tid, amount, response_digest) values (p_order_id, p_claim_id, p_tid, p_amount, p_response_digest);
+    return json_build_object('already_recorded', false);
+end;
+$$;
+
+-- 서버 라우트 전용 자동 복귀. 승인이 확정 거절됐거나(approve_rejected) 망취소 성공이 확인된(netcancel_confirmed) 뒤에만.
+-- 이 선점에 대해 서버가 검증한 승인 기록이 있으면(= PG에서 돈이 승인됐던 거래) 그 거래의 PG 취소 확인 기록이 있어야만 복귀한다(없으면 false → 호출자는 검토 대기로 표시).
+create or replace function nicepay_release_order(p_order_id uuid, p_claim_id uuid, p_basis text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_n int;
+begin
+    if p_basis is null or p_basis not in ('approve_rejected', 'netcancel_confirmed') then
+        raise exception '복귀 근거가 올바르지 않아요';
+    end if;
+    if exists (select 1 from nicepay_pg_approvals a where a.order_id = p_order_id and a.claim_id = p_claim_id
+                 and not exists (select 1 from nicepay_pg_cancels c where c.order_id = a.order_id and c.pg_tid = a.tid)) then
+        return false;
+    end if;
+    perform set_config('app.nicepay_write', 'on', true);
+    update orders
+       set status = 'pending', pg_claim_id = null, pg_claimed_at = null
+     where id = p_order_id and status = 'approving' and pg_claim_id = p_claim_id and pg_tid is null and pg_review_at is null;
+    get diagnostics v_n = row_count;
+    perform set_config('app.nicepay_write', '', true);
+    if v_n = 1 then
+        insert into nicepay_review_actions(order_id, claim_id, action, evidence_type, actor, status_before, status_after)
+        values (p_order_id, p_claim_id, 'release', p_basis, 'system', 'approving', 'pending');
+    end if;
+    return v_n = 1;
+end;
+$$;
+
+-- 운영자 수동 해소(2인 승인). 증빙 문자열만으로는 아무 것도 발급/환불되지 않는다: 이 함수는 주문을 pending/cancelled로만 되돌릴 수 있고(수강권·환불 없음),
+-- 서버가 검증한 승인 기록이 있는 주문은 그 거래의 PG 취소 확인 기록이 있어야만 풀 수 있다.
+create or replace function nicepay_resolve_review(p_order_id uuid, p_action text, p_evidence_type text, p_evidence_ref text, p_actor text, p_approver text, p_note text default null)
 returns json
 language plpgsql
 security definer
@@ -486,6 +559,9 @@ begin
     if p_actor is null or length(btrim(p_actor)) < 2 then
         raise exception '처리자를 입력해주세요';
     end if;
+    if p_approver is null or length(btrim(p_approver)) < 2 or btrim(p_approver) = btrim(p_actor) then
+        raise exception '처리자와 다른 승인자가 필요해요(2인 승인)';
+    end if;
     select * into v from orders where id = p_order_id for update;
     if not found then raise exception '주문을 찾을 수 없어요'; end if;
     if v.payment_provider is distinct from 'nicepay' or v.status <> 'approving' or v.pg_review_at is null then
@@ -494,8 +570,12 @@ begin
     if v.pg_tid is not null then
         raise exception '거래번호가 기록된 주문은 수동으로 풀 수 없어요';
     end if;
-    insert into nicepay_review_actions(order_id, claim_id, action, evidence_type, evidence_ref, actor, note, status_before, status_after)
-    values (p_order_id, v.pg_claim_id, 'resolve_' || p_action, p_evidence_type, btrim(p_evidence_ref), btrim(p_actor), p_note,
+    if exists (select 1 from nicepay_pg_approvals a where a.order_id = p_order_id and a.claim_id = v.pg_claim_id
+                 and not exists (select 1 from nicepay_pg_cancels c where c.order_id = a.order_id and c.pg_tid = a.tid)) then
+        raise exception '서버가 검증한 PG 승인이 있는 주문은 PG 취소 확인 기록 뒤에만 풀 수 있어요';
+    end if;
+    insert into nicepay_review_actions(order_id, claim_id, action, evidence_type, evidence_ref, actor, approver, note, status_before, status_after)
+    values (p_order_id, v.pg_claim_id, 'resolve_' || p_action, p_evidence_type, btrim(p_evidence_ref), btrim(p_actor), btrim(p_approver), p_note,
             'approving', case p_action when 'release' then 'pending' else 'cancelled' end);
     perform set_config('app.nicepay_write', 'on', true);
     update orders
@@ -507,8 +587,9 @@ begin
 end;
 $$;
 
--- NICEPAY 결제 확정. 서버가 승인 응답 검증(서명/MID/금액/Moid/TID)을 끝낸 뒤에만 호출해야 한다.
--- 검토 대기(pg_review_at) 주문은 이 함수를 직접 호출할 수 없고 nicepay_confirm_reviewed(증거·감사 기록)를 거쳐야 한다.
+-- NICEPAY 결제 확정. 서버가 승인 응답 검증을 끝내고 nicepay_record_verified_approval 로 기록한 뒤에만 호출해야 한다.
+-- 서버가 검증한 승인 기록(주문·선점·TID·금액 일치)이 없으면 확정할 수 없다 — 호출자가 임의의 TID/금액을 넘겨도 수강권이 발급되지 않는다.
+-- 검토 대기(pg_review_at) 주문은 이 함수를 직접 호출할 수 없고 nicepay_confirm_reviewed(증거·2인 승인·감사 기록)를 거쳐야 한다.
 create or replace function confirm_nicepay_payment(p_order_id uuid, p_claim_id uuid, p_tid text, p_amount integer)
 returns json
 language plpgsql
@@ -550,6 +631,9 @@ begin
     if v_order.amount is distinct from p_amount then
         raise exception '결제 금액이 주문 금액과 일치하지 않아요';
     end if;
+    if not exists (select 1 from nicepay_pg_approvals a where a.order_id = p_order_id and a.claim_id = p_claim_id and a.tid = p_tid and a.amount = p_amount) then
+        raise exception '서버가 검증한 PG 승인 기록이 없어요';
+    end if;
 
     perform set_config('app.nicepay_write', 'on', true);
     update orders set pg_tid = p_tid where id = p_order_id;   -- 유일 인덱스: 다른 주문이 쓴 거래번호면 여기서 실패(확정 전에 롤백)
@@ -569,8 +653,8 @@ begin
 end;
 $$;
 
--- 운영자 수동 확정: NICEPAY 가맹점관리자에서 "승인됨"을 확인한 경우(승인 TID 확인). 선점 id는 DB에서 읽고 증거와 함께 감사 기록을 남긴다.
-create or replace function nicepay_confirm_reviewed(p_order_id uuid, p_tid text, p_amount integer, p_evidence_ref text, p_actor text, p_note text default null)
+-- 운영자 수동 확정(2인 승인): 서버가 검증한 승인 기록(해당 선점·TID·금액)이 있는 검토 대기 주문에서만. 증빙 문자열만으로는 확정되지 않는다.
+create or replace function nicepay_confirm_reviewed(p_order_id uuid, p_tid text, p_amount integer, p_evidence_ref text, p_actor text, p_approver text, p_note text default null)
 returns json
 language plpgsql
 security definer
@@ -586,13 +670,19 @@ begin
     if p_actor is null or length(btrim(p_actor)) < 2 then
         raise exception '처리자를 입력해주세요';
     end if;
+    if p_approver is null or length(btrim(p_approver)) < 2 or btrim(p_approver) = btrim(p_actor) then
+        raise exception '처리자와 다른 승인자가 필요해요(2인 승인)';
+    end if;
     select * into v from orders where id = p_order_id for update;
     if not found then raise exception '주문을 찾을 수 없어요'; end if;
     if v.payment_provider is distinct from 'nicepay' or v.status <> 'approving' or v.pg_review_at is null then
         raise exception '검토 대기 중인 NICEPAY 주문이 아니에요';
     end if;
-    insert into nicepay_review_actions(order_id, claim_id, action, evidence_type, evidence_ref, actor, note, tid, status_before, status_after)
-    values (p_order_id, v.pg_claim_id, 'resolve_confirm', 'pg_approved_confirmed', btrim(p_evidence_ref), btrim(p_actor), p_note, p_tid, 'approving', 'done');
+    if not exists (select 1 from nicepay_pg_approvals a where a.order_id = p_order_id and a.claim_id = v.pg_claim_id and a.tid = p_tid and a.amount = p_amount) then
+        raise exception '서버가 검증한 PG 승인 기록이 없는 거래는 수동 확정할 수 없어요';
+    end if;
+    insert into nicepay_review_actions(order_id, claim_id, action, evidence_type, evidence_ref, actor, approver, note, tid, status_before, status_after)
+    values (p_order_id, v.pg_claim_id, 'resolve_confirm', 'pg_approved_confirmed', btrim(p_evidence_ref), btrim(p_actor), btrim(p_approver), p_note, p_tid, 'approving', 'done');
     perform set_config('app.nicepay_review_ok', 'on', true);
     v_res := confirm_nicepay_payment(p_order_id, v.pg_claim_id, p_tid, p_amount);
     perform set_config('app.nicepay_review_ok', '', true);
@@ -600,9 +690,11 @@ begin
 end;
 $$;
 
--- 실제 NICEPAY 승인 취소 확인 기록(전액). api_response = 서버가 NICEPAY 취소 API 응답(2001/2211)과 응답 서명을 검증한 경우, admin_console = 운영자가 관리자 화면에서 확인한 경우.
--- 이 기록이 있어야만 환불 core가 NICEPAY 결제 환불을 진행한다. 기록은 변경·삭제 불가이며 주문당 1건, 취소 거래번호 유일.
-create or replace function nicepay_record_pg_cancel(p_order_id uuid, p_cancel_tid text, p_cancel_amount integer, p_source text, p_actor text)
+-- 실제 NICEPAY 승인 취소(또는 망취소) 확인 기록(전액). 서버가 검증한 승인 기록(p_pg_tid)에 대해서만 남길 수 있다.
+--   api_response  : 서버가 취소/망취소 응답을 검증(p_response_digest 필수)
+--   admin_console : 운영자가 관리자 화면에서 확인(처리자와 다른 승인자 p_approver 필수 — 2인 승인)
+-- 대상 주문은 (a) 승인 완료(done)되고 pg_tid가 이 거래이거나, (b) 검토 대기/선점 중(approving)이고 승인 기록의 선점이 현재 선점인 주문.
+create or replace function nicepay_record_pg_cancel(p_order_id uuid, p_pg_tid text, p_cancel_tid text, p_cancel_amount integer, p_source text, p_actor text, p_approver text default null, p_response_digest text default null)
 returns json
 language plpgsql
 security definer
@@ -610,46 +702,61 @@ set search_path = public
 as $$
 declare
     v orders;
+    a nicepay_pg_approvals;
     r nicepay_pg_cancels;
 begin
     if p_source is null or p_source not in ('api_response', 'admin_console') then raise exception '취소 확인 출처가 올바르지 않아요'; end if;
     if p_cancel_tid is null or length(btrim(p_cancel_tid)) < 4 then raise exception '취소 거래번호를 입력해주세요'; end if;
     if p_actor is null or length(btrim(p_actor)) < 2 then raise exception '처리자를 입력해주세요'; end if;
+    if p_source = 'admin_console' and (p_approver is null or length(btrim(p_approver)) < 2 or btrim(p_approver) = btrim(p_actor)) then
+        raise exception '처리자와 다른 승인자가 필요해요(2인 승인)';
+    end if;
+    if p_source = 'api_response' and (p_response_digest is null or p_response_digest !~ '^[0-9a-f]{64}$') then
+        raise exception '취소 응답 요약값이 필요해요';
+    end if;
     select * into v from orders where id = p_order_id for update;
     if not found then raise exception '주문을 찾을 수 없어요'; end if;
-    if v.payment_provider is distinct from 'nicepay' or v.status <> 'done' or v.pg_tid is null then raise exception '승인 완료된 NICEPAY 주문이 아니에요'; end if;
-    if p_cancel_amount is distinct from v.amount then raise exception '전액 취소만 기록할 수 있어요'; end if;
-    if btrim(p_cancel_tid) = v.pg_tid then raise exception '취소 거래번호가 승인 거래번호와 같아요'; end if;
-    select * into r from nicepay_pg_cancels where order_id = p_order_id;
+    if v.payment_provider is distinct from 'nicepay' then raise exception 'NICEPAY 주문이 아니에요'; end if;
+    select * into a from nicepay_pg_approvals where tid = p_pg_tid and order_id = p_order_id;
+    if not found then raise exception '서버가 검증한 PG 승인 기록이 없는 거래예요'; end if;
+    if not ((v.status = 'done' and v.pg_tid = a.tid) or (v.status = 'approving' and v.pg_claim_id = a.claim_id)) then
+        raise exception '취소 확인을 기록할 수 없는 주문 상태예요';
+    end if;
+    if p_cancel_amount is distinct from a.amount then raise exception '전액 취소만 기록할 수 있어요'; end if;
+    if btrim(p_cancel_tid) = a.tid then raise exception '취소 거래번호가 승인 거래번호와 같아요'; end if;
+    select * into r from nicepay_pg_cancels where order_id = p_order_id and pg_tid = a.tid;
     if found then
         if r.cancel_tid = btrim(p_cancel_tid) then return json_build_object('already_recorded', true); end if;
         raise exception '이미 다른 취소 거래가 기록된 주문이에요';
     end if;
-    insert into nicepay_pg_cancels(order_id, pg_tid, cancel_tid, cancel_amount, source, actor)
-    values (p_order_id, v.pg_tid, btrim(p_cancel_tid), p_cancel_amount, p_source, btrim(p_actor));
+    insert into nicepay_pg_cancels(order_id, pg_tid, cancel_tid, cancel_amount, source, actor, approver, response_digest)
+    values (p_order_id, a.tid, btrim(p_cancel_tid), p_cancel_amount, p_source, btrim(p_actor), nullif(btrim(coalesce(p_approver, '')), ''), p_response_digest);
     return json_build_object('already_recorded', false);
 end;
 $$;
 
 revoke all on function nicepay_order_context(uuid) from public, anon, authenticated;
 revoke all on function nicepay_claim_order(uuid) from public, anon, authenticated;
+revoke all on function nicepay_record_verified_approval(uuid, uuid, text, integer, text) from public, anon, authenticated;
 revoke all on function nicepay_release_order(uuid, uuid, text) from public, anon, authenticated;
 revoke all on function nicepay_mark_review(uuid, uuid, text) from public, anon, authenticated;
 revoke all on function nicepay_expire_stale_claims(interval) from public, anon, authenticated;
-revoke all on function nicepay_resolve_review(uuid, text, text, text, text, text) from public, anon, authenticated;
+revoke all on function nicepay_resolve_review(uuid, text, text, text, text, text, text) from public, anon, authenticated;
 revoke all on function confirm_nicepay_payment(uuid, uuid, text, integer) from public, anon, authenticated;
-revoke all on function nicepay_confirm_reviewed(uuid, text, integer, text, text, text) from public, anon, authenticated;
-revoke all on function nicepay_record_pg_cancel(uuid, text, integer, text, text) from public, anon, authenticated;
+revoke all on function nicepay_confirm_reviewed(uuid, text, integer, text, text, text, text) from public, anon, authenticated;
+revoke all on function nicepay_record_pg_cancel(uuid, text, text, integer, text, text, text, text) from public, anon, authenticated;
 grant execute on function nicepay_order_context(uuid) to service_role;
 grant execute on function nicepay_claim_order(uuid) to service_role;
+grant execute on function nicepay_record_verified_approval(uuid, uuid, text, integer, text) to service_role;
 grant execute on function nicepay_release_order(uuid, uuid, text) to service_role;
 grant execute on function nicepay_mark_review(uuid, uuid, text) to service_role;
 grant execute on function nicepay_expire_stale_claims(interval) to service_role;
-grant execute on function nicepay_resolve_review(uuid, text, text, text, text, text) to service_role;
+grant execute on function nicepay_resolve_review(uuid, text, text, text, text, text, text) to service_role;
 grant execute on function confirm_nicepay_payment(uuid, uuid, text, integer) to service_role;
-grant execute on function nicepay_confirm_reviewed(uuid, text, integer, text, text, text) to service_role;
-grant execute on function nicepay_record_pg_cancel(uuid, text, integer, text, text) to service_role;
+grant execute on function nicepay_confirm_reviewed(uuid, text, integer, text, text, text, text) to service_role;
+grant execute on function nicepay_record_pg_cancel(uuid, text, text, integer, text, text, text, text) to service_role;
 grant select, insert on table nicepay_review_actions to service_role;
+grant select, insert on table nicepay_pg_approvals to service_role;
 grant select, insert on table nicepay_pg_cancels to service_role;
 
 commit;

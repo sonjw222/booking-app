@@ -15,6 +15,7 @@
 import { nicepaySign, signatureMatches, parseAmt } from "./signature";
 import { nicepayApprove, nicepayNetCancel, type NicepayCreds, type NicepayFetch } from "./api";
 import { redactNicepayForLog, maskId } from "./redact";
+import { responseDigest } from "./digest";
 import { isAllowedNicepayUrl, NICEPAY_APPROVE_OK_CARD, NICEPAY_AUTH_OK, type NicepayAuthResult } from "./types";
 
 export type NicepayOrderCtx = { orderId: string; status: string; amount: number; provider: string | null };
@@ -29,7 +30,11 @@ export type NicepayDeps = {
   /** pending → approving 원자적 선점(DB nicepay_claim_order). 성공하면 이 선점의 claimId(이후 모든 호출의 fencing 값), 이미 선점됐거나 pending이 아니면 null. */
   claimOrder(orderId: string): Promise<string | null>;
   /** 승인이 확정 거절됐거나(approve_rejected) 망취소 성공이 확인된(netcancel_confirmed) 뒤에만 approving → pending 복귀(재시도 허용). 근거는 DB 감사 기록에 남는다 */
-  releaseOrder(orderId: string, claimId: string, basis: "approve_rejected" | "netcancel_confirmed"): Promise<void>;
+  releaseOrder(orderId: string, claimId: string, basis: "approve_rejected" | "netcancel_confirmed"): Promise<boolean>;
+  /** 서버가 승인 응답(서명·MID·금액·Moid·TID)을 모두 검증한 직후, DB 확정 전에 기록한다. DB는 이 기록이 없으면 수강권을 발급하지 않는다(운영자 입력 증빙만으로 발급 불가). */
+  recordVerifiedApproval(orderId: string, claimId: string, tid: string, amount: number, digest: string): Promise<DbResult>;
+  /** 승인이 기록된 거래를 망취소/취소한 결과(서버가 검증한 응답)를 기록한다. 기록이 있어야 DB가 그 선점의 복귀(release)·환불을 허용한다. */
+  recordPgCancel(orderId: string, pgTid: string, cancelTid: string, amount: number, digest: string): Promise<DbResult>;
   /** 결과 불명/보상 실패 주문을 운영자 확인 대기로 표시(주문은 approving으로 유지해 재승인을 막는다). 로그만이 아닌 영속 표시 — 복구 절차는 docs/payments/NICEPAY_SERVER_MODULE_VERIFICATION.md */
   markReview(orderId: string, claimId: string, reason: "netcancel_failed" | "confirm_state_unknown"): Promise<void>;
   dbConfirm(orderId: string, claimId: string, tid: string, amount: number): Promise<DbResult>;
@@ -70,18 +75,30 @@ export async function handleNicepayAuthReturn(input: NicepayAuthResult, d: Nicep
   const claimId = await d.claimOrder(ctx.orderId);
   if (!claimId) return { status: 409, body: { error: "이미 결제를 처리하고 있어요", code: "in_progress" } };
 
-  const netCancel = async (cause: string): Promise<boolean> => {
+  let approvedTid: string | null = null;   // 서버가 검증·기록한 승인의 TID (없으면 PG에서 돈이 승인됐다고 서버가 확인한 적이 없음)
+  const netCancel = async (cause: string): Promise<{ ok: boolean; cancelTid?: string; digest?: string }> => {
     const r = await nicepayNetCancel(d.fetchImpl, creds, { netCancelUrl, tid, authToken, amount: ctx.amount, now: d.now() });
-    if (!r.ok) d.log("error", "PG_NICEPAY_NETCANCEL_FAILED", { moid: maskId(moid), tid: maskId(tid), cause, reason: r.message });
-    else d.log("warn", "PG_NICEPAY_NETCANCELED", { moid: maskId(moid), tid: maskId(tid), cause });
-    return r.ok;
+    if (!r.ok) { d.log("error", "PG_NICEPAY_NETCANCEL_FAILED", { moid: maskId(moid), tid: maskId(tid), cause, reason: r.message }); return { ok: false }; }
+    d.log("warn", "PG_NICEPAY_NETCANCELED", { moid: maskId(moid), tid: maskId(tid), cause });
+    const rt = typeof r.data.TID === "string" ? r.data.TID : "";
+    const cancelTid = rt && rt !== tid ? rt : `NC-${tid}`;   // 망취소 응답에 별도 거래번호가 없으면 승인 거래번호 기반 식별자(규격 확인 필요: BLOCKED)
+    return { ok: true, cancelTid, digest: responseDigest([cancelTid, tid, ctx.amount, r.data.ResultCode, r.data.CancelDate]) };
+  };
+  const reviewReply = async (reason: "netcancel_failed" | "confirm_state_unknown"): Promise<Reply> => {
+    // 취소/복귀를 확정할 수 없다 — 돈이 승인된 채일 수 있다. 주문은 approving으로 두어 재승인을 막고 운영자 확인 대기로 표시한다(성공/실패를 임의로 확정하지 않는다).
+    await d.markReview(ctx.orderId, claimId, reason).catch(() => d.log("error", "PG_NICEPAY_MARK_REVIEW_FAILED", { moid: maskId(moid) }));
+    return { status: 500, body: { error: "결제 처리 중 문제가 생겼어요. 운영자에게 문의해주세요", code: "compensation_failed" } };
   };
   const failAfterApprove = async (cause: string, body: Reply["body"], status = 409): Promise<Reply> => {
-    const ok = await netCancel(cause);
-    if (ok) { await d.releaseOrder(ctx.orderId, claimId, "netcancel_confirmed"); return { status, body }; }
-    // 취소 실패 — 돈이 승인된 채일 수 있다. 주문은 approving으로 두어 재승인을 막고 운영자 확인 대기로 표시한다(성공/실패를 임의로 확정하지 않는다).
-    await d.markReview(ctx.orderId, claimId, "netcancel_failed").catch(() => d.log("error", "PG_NICEPAY_MARK_REVIEW_FAILED", { moid: maskId(moid) }));
-    return { status: 500, body: { error: "결제 처리 중 문제가 생겼어요. 운영자에게 문의해주세요", code: "compensation_failed" } };
+    const nc = await netCancel(cause);
+    if (!nc.ok) return reviewReply("netcancel_failed");
+    if (approvedTid) {   // 서버가 승인을 검증·기록했던 거래: 망취소 확인을 기록해야 DB가 복귀를 허용한다
+      const cr = await d.recordPgCancel(ctx.orderId, approvedTid, nc.cancelTid ?? `NC-${approvedTid}`, ctx.amount, nc.digest ?? "").catch((e: unknown) => ({ data: null, error: { message: e instanceof Error ? e.message : "record failed" } }));
+      if (cr.error) { d.log("error", "PG_NICEPAY_RECORD_CANCEL_FAILED", { moid: maskId(moid), reason: cr.error.message }); return reviewReply("netcancel_failed"); }
+    }
+    const released = await d.releaseOrder(ctx.orderId, claimId, "netcancel_confirmed");
+    if (!released) return reviewReply("netcancel_failed");
+    return { status, body };
   };
 
   // 1) 승인(돈이 움직이는 시점) — 금액은 DB 주문 금액
@@ -108,8 +125,10 @@ export async function handleNicepayAuthReturn(input: NicepayAuthResult, d: Nicep
     d.log("error", "PG_NICEPAY_APPROVE_MISMATCH", { moid: maskId(moid), signature: sigOk, tid: respTid === tid, moidMatches: r.Moid === ctx.orderId, amount: respAmt === ctx.amount });
     return failAfterApprove("approve_mismatch", { error: "결제 승인 응답이 주문과 일치하지 않아요", code: "approve_mismatch" });
   }
-  // 3) DB 확정
-  const res = await d.dbConfirm(ctx.orderId, claimId, respTid, ctx.amount);
+  // 3) 서버가 검증한 승인 기록 → DB 확정
+  const digest = responseDigest([respTid, r.Moid, respAmt, r.MID, r.ResultCode, r.AuthDate]);
+  let res = await d.recordVerifiedApproval(ctx.orderId, claimId, respTid, ctx.amount, digest);
+  if (!res.error) { approvedTid = respTid; res = await d.dbConfirm(ctx.orderId, claimId, respTid, ctx.amount); }
   if (!res.error) return { status: 200, body: { ok: true, ...(res.data ?? {}) } };
   let after: NicepayOrderCtx | null = null;
   try { after = await d.orderContext(moid); } catch { after = null; }

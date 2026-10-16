@@ -7,15 +7,17 @@ begin
     if exists (select 1 from orders where payment_provider = 'nicepay' or status = 'approving' or pg_tid is not null or pg_claim_id is not null or pg_review_at is not null)
        or exists (select 1 from payments where payment_provider = 'nicepay')
        or (to_regclass('public.nicepay_review_actions') is not null and exists (select 1 from nicepay_review_actions))
-       or (to_regclass('public.nicepay_pg_cancels') is not null and exists (select 1 from nicepay_pg_cancels)) then
+       or (to_regclass('public.nicepay_pg_cancels') is not null and exists (select 1 from nicepay_pg_cancels))
+       or (to_regclass('public.nicepay_pg_approvals') is not null and exists (select 1 from nicepay_pg_approvals)) then
         raise exception 'nicepay 관련 주문/결제/감사 데이터가 있어 롤백하지 않습니다(먼저 운영자가 정리/확인하세요)';
     end if;
 end $$;
 
-drop function if exists nicepay_record_pg_cancel(uuid, text, integer, text, text);
-drop function if exists nicepay_confirm_reviewed(uuid, text, integer, text, text, text);
+drop function if exists nicepay_record_pg_cancel(uuid, text, text, integer, text, text, text, text);
+drop function if exists nicepay_confirm_reviewed(uuid, text, integer, text, text, text, text);
+drop function if exists nicepay_record_verified_approval(uuid, uuid, text, integer, text);
 drop function if exists confirm_nicepay_payment(uuid, uuid, text, integer);
-drop function if exists nicepay_resolve_review(uuid, text, text, text, text, text);
+drop function if exists nicepay_resolve_review(uuid, text, text, text, text, text, text);
 drop function if exists nicepay_expire_stale_claims(interval);
 drop function if exists nicepay_mark_review(uuid, uuid, text);
 drop function if exists nicepay_release_order(uuid, uuid, text);
@@ -23,6 +25,8 @@ drop function if exists nicepay_claim_order(uuid);
 drop function if exists nicepay_order_context(uuid);
 drop table if exists nicepay_pg_cancels;
 drop function if exists nicepay_pg_cancels_append_only();
+drop table if exists nicepay_pg_approvals;
+drop function if exists nicepay_pg_approvals_append_only();
 drop table if exists nicepay_review_actions;
 drop function if exists nicepay_review_actions_append_only();
 drop trigger if exists orders_guard_pg_state on orders;

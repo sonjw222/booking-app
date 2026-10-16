@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-16 (7) — Batch 3 최종 SQL 안전 검증: 서버 검증 승인 기록 게이트 · 2인 승인 · PG 취소 확인 연동 (검토용 SQL, 미실행)
+- 증빙 문자열만으로 수강권 발급/내부 환불/재결제 유도가 가능하던 경로를 차단: `nicepay_pg_approvals`(서버 검증 승인 기록, 추가 전용)가 없으면 확정·수동 확정 불가, `nicepay_pg_cancels`는 승인 기록의 TID에 대해서만(+ 2인 승인 또는 응답 요약값), 수동 해소·수동 확정은 처리자≠승인자.
+- `nicepay_release_order`는 승인 기록이 있던 선점이면 취소 확인 기록 뒤에만 복귀. 앱 lifecycle: 승인 검증 후 `recordVerifiedApproval` → 확정, 망취소 성공 시 `recordPgCancel` → release.
+- PGlite 49개(기존 Toss 완료 주문 3건 보호, 정순서 적용·역순 롤백 원문 복원, 순서 뒤바뀜 감지, 정적 권한 검토). 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §10.
+
 ## 2026-10-16 (6) — Batch 3 운영 호환성 보완 #2: CRLF/주석없는 운영 정의 대응 · create_order_secure · NICEPAY 환불은 PG 취소 확인 후 (검토용 SQL, 미실행)
 - `add_nicepay_provider_support_20261016.sql`: 제자리 패치 위치를 줄바꿈·주석 무관 정규식 + "정확히 1곳" 검증으로 교체(fulfill_order는 cancelled 차단 코드 기준), 환불 core 패치 추가(NICEPAY는 `nicepay_pg_cancels` 기록 전 내부 환불 불가), `nicepay_record_pg_cancel`, 롤백은 원문 그대로 복원.
 - 신규 SQL(미실행): `fix_create_order_secure_allow_nicepay_20261016.sql`(+rollback), 읽기 전용 `preflight_nicepay_patch_targets_20261016.sql`.

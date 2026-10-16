@@ -151,3 +151,64 @@ create_order_secure 패치(정의 확인 후) · NICEPAY ReturnURL/웹훅 라우
 
 ### 9-6. 한계 (정직하게)
 - 이 저장소에는 **운영 함수의 실제 정의 텍스트가 없다**(특히 CRLF 판 `_issue_membership_and_record_payment`, 주석 없는 `fulfill_order`, `create_order_secure`). 오프라인 테스트는 저장소 정의를 변환(CRLF화, 주석 제거)한 형태와, `create_order_secure`는 **가정한 형태 3종**으로 검증했다. 실제 운영 텍스트와의 일치는 `preflight` 로 적용 직전에 확인한다 — 불일치하면 SQL이 스스로 중단하므로 데이터·함수가 망가질 위험은 없지만, 적용이 막힐 수는 있다.
+
+## 10. Batch 3 최종 SQL 안전 검증 (운영 DB 읽기 전용 실측 PASS 반영)
+
+운영 DB 읽기 전용 실측(사용자 제공): `fulfill_order` done/cancelled 수정 위치 각 1곳, 발급 helper 수정 위치 각 1곳, `create_order_secure` provider 목록 1곳, 정산 요약 1곳, 환불 core 차단 위치 1곳 — 모두 PASS. 운영에는 NICEPAY 주문·approving 주문·NICEPAY 전용 테이블/RPC가 아직 없고, 기존 Toss 완료 주문 3건이 있다.
+
+### 10-1. 정적 검토에서 발견한 보안 문제와 수정
+| # | 문제 | 위험 | 수정 |
+|---|---|---|---|
+| 1 | `confirm_nicepay_payment`/`nicepay_confirm_reviewed`가 호출자가 넘긴 TID·금액을 그대로 신뢰 | **증빙 문자열(임의 TID)만으로 수강권 발급 가능**(서비스 롤 오남용·운영 도구 실수) | 신규 `nicepay_pg_approvals`(추가 전용): 서버가 승인 응답(서명·MID·금액·Moid·TID)을 검증한 직후 `nicepay_record_verified_approval`로만 기록. 확정·수동 확정은 **기록의 (주문, 선점, TID, 금액)이 모두 일치해야** 가능. 응답이 유실돼 승인 기록이 없는 거래는 수동 확정 자체가 불가(PG에서 취소 후 release/cancel로만 정리) |
+| 2 | `nicepay_record_pg_cancel`이 아무 TID/증빙 문자열로 취소 확인을 기록 가능 | **증빙만으로 내부 환불 가능**(PG에는 돈이 남은 채 수강권만 환불) | 서버가 검증한 승인 기록의 TID에 대해서만 기록 가능, `api_response`는 응답 요약값(sha256) 필수, `admin_console`은 **처리자≠승인자(2인 승인)** 필수. 환불 core는 `orders.pg_tid`와 일치하는 취소 기록이 있어야 진행 |
+| 3 | 수동 release/cancel이 증빙 문자열만으로 가능 | PG에서 이미 승인된 거래를 풀어 **재결제 유도 → 이중 청구** | 승인 기록이 있는 선점은 PG 취소 확인 기록이 있어야만 release/cancel 가능. 모든 수동 해소는 2인 승인·증거 유형 제한(감사 기록에 승인자 저장) |
+| 4 | 자동 `nicepay_release_order`가 승인 기록이 있던 선점도 풀 수 있음 | 망취소 확인 없이 복귀 | 승인 기록이 있고 취소 확인 기록이 없으면 `false`(앱은 검토 대기로 표시). 앱 lifecycle이 망취소 성공 응답을 기록한 뒤에만 release |
+| 5 | 취소 기록이 주문당 1건(unique order_id) | 재시도(취소 후 재결제)된 주문의 두 번째 거래를 기록 못 함 | 유일 키를 (order_id, pg_tid)로, 환불 core는 확정된 TID(orders.pg_tid)와 대조 |
+| 6 | 새 테이블의 식별 시퀀스 권한 | Supabase 기본 권한으로 클라이언트 롤이 시퀀스에 닿을 수 있음 | 시퀀스 3개 `revoke all ... from public, anon, authenticated` |
+
+### 10-2. SECURITY DEFINER / 권한 경계 (PGlite V·H 테스트로 고정)
+- 새/교체 함수 15개 모두 `SECURITY DEFINER` + `set search_path = public`, `revoke all ... from public, anon, authenticated`. RPC 10개만 `service_role`에 `grant execute`(트리거/보조 함수는 아무에게도 grant 안 함).
+- 새 테이블 3개(감사·승인·취소 확인): RLS 활성(정책 없음), 클라이언트 롤 권한 회수, `service_role`은 select/insert만(update/delete 없음), 추가 전용 트리거로 슈퍼유저도 수정·삭제 불가.
+- 지원 SQL에는 `delete from`/`truncate`/`drop table`이 없고, `execute`는 `pg_get_functiondef` 제자리 패치 4곳뿐(호출자 입력 동적 SQL 없음). 롤백의 `drop table`은 데이터 보호 가드(raise exception) 뒤에만.
+- 한 트랜잭션(begin…commit): 위치 불일치·검증 실패 시 CHECK/컬럼/트리거 포함 전부 롤백.
+
+### 10-3. 외부 PG 검증 의존성 분석
+| 동작 | DB가 검증하는 것 | 서버(앱)가 반드시 검증해야 하는 것 (DB는 검증 불가) | 현재 상태 |
+|---|---|---|---|
+| 승인 | provider·상태·선점·금액·TID 유일·**서버 검증 승인 기록 일치**·결제 기록 provider/TID/금액 | 승인 응답 서명(`sha256(TID+MID+Amt+Key)`)·MID·Moid·금액, NextAppURL 허용 호스트 | 코드 구현·테스트 PASS(라우트 미연결) |
+| 망취소 | 승인 기록이 있으면 취소 기록 없이는 release 불가 | 망취소 응답 코드 2001, 거래번호 | 구현 PASS / 응답 규격 일부 BLOCKED |
+| 승인 후 취소(환불) | 서버 검증 승인에 대한 취소 기록(2인 승인 또는 응답 요약값)이 있어야 내부 환불 | **취소 응답 서명(`sha256(TID+MID+CancelAmt+Key)`) 검증**·코드 2001/2211 | **BLOCKED**: 서명 검증 코드는 아직 없음(함수 `cancelResponse`는 있음). 활성화 전 필수 |
+| 거래 조회 | — | 결과 불명 시 PG 상태 재조회 | **BLOCKED**(공식 조회 API 미확인) |
+| 웹훅 | — | 문서상 서명 없음 → 힌트 전용 | 상태 변경 없음(분류만) |
+→ **DB 계층은 "서버가 검증했다는 기록"을 추가 전용으로 강제**하지만, 그 기록 자체의 진위는 서버 코드가 보장해야 한다. 서비스 롤 키가 유출되면 기록을 위조할 수 있다(가장 큰 잔여 위험, 키 관리/접근 통제 영역).
+
+### 10-4. "스키마만 준비"와 "결제 활성화"의 분리
+| 단계 | 상태 | 동작 |
+|---|---|---|
+| **A. 스키마만 적용** (SQL 3개 적용, 앱 코드는 현재 상태) | 지금 목표 | 앱은 NICEPAY 주문을 만들지 않는다(Factory `nicepay`는 비활성, checkout은 `NICEPAY_CHECKOUT_ACTIVATED=false`로 주문 생성 전 차단). 기존 Toss/PortOne/Mock/직접결제 동작·기록은 변하지 않음(PGlite C·C2·U1: 적용 전후 Toss 완료 3건 데이터 동일, 환불 경로 동일). DB상 클라이언트가 `payment_provider='nicepay'` 주문을 직접 INSERT할 수는 있으나 **휴면 주문**이다: 서버 전용 RPC 없이는 approving/paid/done 불가, `fulfill_order` 거부, 승인 기록 없이는 확정 불가, 회원이 pending→cancelled만 가능 |
+| **B. 코드 준비** (라우트·운영 도구 구현, 플래그 OFF) | 미착수 | 아래 10-5 BLOCKED 항목 |
+| **C. 활성화** | 계약·MID/KEY·카드사 심사 후 | `NICEPAY_CHECKOUT_ACTIVATED` 해제(리뷰된 코드 변경) + 환경변수 + `PG_CHECKOUT_ENABLED` 정책 결정 |
+
+### 10-5. NICEPAY 결제 활성화 전 반드시 보완할 코드 (PASS / BLOCKED)
+| 항목 | 상태 |
+|---|---|
+| 서명 계산·비교, 허용 URL, 로그 redact, 승인/망취소 호출 모듈 | **PASS**(오프라인) |
+| 라이프사이클(게이트·선점 fencing·승인 기록·확정·보상·검토 대기) + DB 어댑터 | **PASS**(오프라인, 라우트 미연결) |
+| Mock/disabled fail-closed, 직접결제 fallback, `handleRefund` NICEPAY 501 | **PASS** |
+| ReturnURL 수신 라우트(+deps 조립: creds·fetch·`gateAllows`·로그) | **BLOCKED** |
+| 결제창 호출용 SignData 서버 발급 엔드포인트, 결제창 SDK 연동(goPay), 앱(Capacitor) 복귀 | **BLOCKED**(MID/KEY·SDK 규격) |
+| 웹훅 수신 라우트(힌트 전용 분류 → 검토 큐) | **BLOCKED** |
+| 취소 API 연동 + **취소 응답 서명 검증 코드** + `handleRefund` NICEPAY 분기(취소→검증→`nicepay_record_pg_cancel`→`refund_membership_server`) | **BLOCKED** |
+| 운영자 도구(`resolve_review`/`confirm_reviewed`/`record_pg_cancel(admin_console)`): **처리자·승인자를 인증된 서로 다른 관리자 계정에서 가져오는 구현**(DB는 문자열만 받음) | **BLOCKED** |
+| stale claim 만료 크론 + 검토 큐 알림 | **BLOCKED** |
+| 복귀 토큰 라우트의 provider 일반화(현재 `toss` 전제) | **BLOCKED** |
+| 거래 조회 API 기반 자동 복구 | **BLOCKED**(공식 규격 미확인) |
+| `PG_CHECKOUT_ENABLED`/심사용 override 정책, 약관·환불·개인정보 문구 PG명 교체 | **BLOCKED**(승인 필요) |
+
+### 10-6. 권장 적용 순서 (최종)
+0. 읽기 전용: `preflight_nicepay_patch_targets_20261016.sql` — 모든 `*_ok` true
+1. `fix_refund_block_all_pg_providers_20261016.sql`
+2. `add_nicepay_provider_support_20261016.sql`
+3. `fix_create_order_secure_allow_nicepay_20261016.sql`
+4. 읽기 전용: `verify_fix_refund_block_all_pg_providers_20261016.sql`, `verify_add_nicepay_provider_support_20261016.sql` — 모두 true
+롤백(역순): `rollback_fix_create_order_secure_allow_nicepay_20261016.sql` → `rollback_add_nicepay_provider_support_20261016.sql` → `rollback_fix_refund_block_all_pg_providers_20261016.sql`. 롤백은 nicepay 주문/승인·취소·감사 기록이 하나라도 있으면 중단(데이터·증거 보호).
