@@ -292,12 +292,10 @@ describe("카카오페이/토스페이 사용자 UI 재노출(2026-10-07) — PG
     const c = readFileSync(join(__dirname, "../../app/checkout/page.tsx"), "utf-8");
     expect(c).toContain('setError("지금은 카드/카카오페이/토스페이/계좌이체만 가능해요");');
     expect(c).not.toContain("지금은 카드/계좌이체만 가능해요");
-    expect(c).toContain('const TOSS_SUPPORTED_METHODS = ["card", "kakao", "toss", "transfer"];');
+    expect(c).toContain('const PG_SUPPORTED_METHODS = ["card", "kakao", "toss", "transfer"];');
     expect(c).toContain('kakao: "KAKAOPAY"');
     expect(c).toContain('toss: "TOSSPAY"');
     expect(c).toContain("resolveSelectedPayMethod(payMethod, visibleMethodIds)");
-    const p = readFileSync(join(__dirname, "../../lib/payments/TossPaymentProvider.ts"), "utf-8");
-    expect(p).toContain("easyPay");
     expect(readFileSync(join(__dirname, "../../lib/payMethods.ts"), "utf-8")).toContain("HIDDEN_PAY_METHOD_IDS: readonly string[] = [];");
   });
   it("reviewer override / 전역 PG 게이트는 건드리지 않았다: checkout·cart가 pgEnabled를 기존 방식으로 계산하고 공용 함수를 쓴다", () => {

@@ -1,6 +1,7 @@
 # TODO
 
 ## 2026-10-16 NICEPAY 카드사 심사 준비
+- P0: PG 전환 승인 대기 항목은 `docs/payments/PG_MIGRATION_TOSS_TO_NICEPAY.md` §7 — SQL(provider 'nicepay'·claim·복귀토큰 일반화), 법적 문구 교체, 홈 푸터 주소, 통신판매중개자/수납 구조, 레거시 Toss 제거(대기 주문 0건 확인 후).
 - P0: NICEPAY 심사 — 공개 /products의 "테스트"(100원)·"P3 타센터-격리테스트" 상품 비공개 처리(운영자), 계약 후 MID/KEY·기술지원 질문(docs/payments/NICEPAY_REVIEW_PREPARATION.md §7) 확인.
 - P1: NICEPAY 활성화 전 SQL 승인 필요 — orders.payment_provider 'nicepay' 허용, 선점(claim) 상태, pg_order_context/confirm_real_payment/정산 뷰 provider 확장. 정기결제는 호스팅 카드등록 UI 확인 전까지 BLOCKED(카드정보 직접 수집 금지).
 - P2: 공개 상품 RPC에 이용기간(valid_days) 노출(SQL, 승인 후). 약관·환불·개인정보 처리위탁의 PG사 표기는 계약 확정 후 갱신.

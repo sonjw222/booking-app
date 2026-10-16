@@ -2,7 +2,7 @@
   Payment Adapter Pattern - 공용 타입 + Provider 인터페이스
 
   이 파일만 보고도 Provider를 하나 새로 만들 수 있어야 한다.
-  PaymentService/Checkout은 이 인터페이스만 알고, 구체 구현(Mock/Toss/PortOne)은 모른다(DIP).
+  PaymentService/Checkout은 이 인터페이스만 알고, 구체 구현(Mock/NICEPAY)은 모른다(DIP).
 */
 
 // 결제 상태. 운영 PG 전환 후에도 동일한 상태값을 그대로 쓸 수 있도록 orders.status와 맞춰둠
@@ -60,7 +60,7 @@ export type PaymentStatusResult = {
 };
 
 // Checkout/Reservation/Order 쪽 비즈니스 로직은 이 인터페이스만 참조한다.
-// Toss/PortOne으로 교체해도 이 계약(메서드 4개)은 그대로 유지된다.
+// NICEPAY로 교체해도 이 계약(메서드 4개)은 그대로 유지된다.
 export interface PaymentProvider {
   createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult>;
   // amount: 실제 PG(토스 등)는 결제창 successUrl 리다이렉트로 돌아온 금액을 서버가 다시

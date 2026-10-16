@@ -56,14 +56,11 @@ describe("ManagerNav 권한 재조회 축소(보안 경계 변화 없음)", () =
 });
 
 describe("Toss SDK 온디맨드 로드", () => {
-  it("RootLayout은 토스 SDK를 로드하지 않고, checkout/Provider/빌링만 loadTossSdk를 쓴다", () => {
+  it("RootLayout·checkout은 토스 SDK를 로드하지 않고(PG는 NICEPAY 확정), 레거시 빌링만 loadTossSdk를 쓴다", () => {
     const layout = read("app/layout.tsx");
     expect(layout).not.toMatch(/tosspayments|next\/script/);
-    expect(read("app/checkout/page.tsx")).toContain("void loadTossSdk()");
-    expect(read("lib/payments/TossPaymentProvider.ts")).toContain("await loadTossSdk()");
+    expect(read("app/checkout/page.tsx")).not.toContain("loadTossSdk");
     expect(read("lib/centerSubscription.ts")).toContain('import { loadTossSdk } from "./tossSdk"');
-    // TossPaymentProvider 계약(간편결제 처리)은 그대로
-    expect(read("lib/payments/TossPaymentProvider.ts")).toContain("easyPay");
   });
   describe("loadTossSdk 동작(재시도 복구)", () => {
     afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.resetModules(); });

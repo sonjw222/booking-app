@@ -775,7 +775,7 @@ describe("provider별 환불 경계 — portone은 fail closed", () => {
     expect(l).toContain('const needsPgCancel = ctx.provider === "toss" && ctx.amount > 0;');
     expect(l.indexOf('ctx.provider === "portone" && ctx.amount > 0')).toBeLessThan(l.indexOf("d.refundBegin("));
     expect(l.indexOf('ctx.provider === "portone" && ctx.amount > 0')).toBeLessThan(l.indexOf("const needsPgCancel"));
-    expect(read("lib/payments/PortOnePaymentProvider.ts")).toContain("아직 구현되지 않았어요");   // 근거: PortOne 연동 미구현
+    expect(() => read("lib/payments/PortOnePaymentProvider.ts")).toThrow();   // PortOne 클라이언트 Provider는 제거됨(서버의 portone 환불 거부는 과거 데이터 방어로 유지)
   });
 });
 
@@ -826,7 +826,7 @@ describe("라우트/클라이언트 계약", () => {
     expect(api).not.toMatch(/SECRET|secret/);
   });
   it("토스 시크릿은 서버 모듈에서만 쓰이고 NEXT_PUBLIC_ 접두사/클라이언트 코드에 없다", () => {
-    for (const f of ["lib/payments/tossPaymentApi.ts", "lib/payments/TossPaymentProvider.ts", "app/checkout/page.tsx", "app/checkout/success/page.tsx"]) {
+    for (const f of ["lib/payments/tossPaymentApi.ts", "app/checkout/page.tsx", "app/checkout/success/page.tsx"]) {
       expect(read(f)).not.toContain("TOSS_SECRET_KEY");
     }
     expect(read("lib/payments/server/toss.ts")).not.toContain("process.env");

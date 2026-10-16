@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2026-10-16 (3) — Batch 2: Mock 결제 운영 차단 + NICEPAY 서버 모듈 재검증 + 공개 테스트 상품 분석 (SQL 없음)
+- Factory: 운영 빌드에서는 `NEXT_PUBLIC_ALLOW_MOCK_PAYMENT=true`를 따로 켜지 않으면 빈 값/알 수 없는 값/mock이 모두 `disabled`(Mock 불가). nicepay는 어떤 환경에서도 mock으로 폴백하지 않음. 개발/테스트의 기존 mock 기본값은 유지. ⚠ 배포 영향: Vercel Preview/Production에서 mock이 필요하면 `NEXT_PUBLIC_ALLOW_MOCK_PAYMENT=true`가 필요(환경변수는 이번에 변경하지 않음). 직접결제는 영향 없음.
+- NICEPAY lifecycle: PG 게이트(`gateAllows`) 확인 추가, 결과 불명·망취소 실패 시 `markReview`로 운영자 확인 대기 표시. 테스트 43개. 검증 매트릭스·복구 절차: `docs/payments/NICEPAY_SERVER_MODULE_VERIFICATION.md`.
+- 공개 상품 분석·비공개 전환안·이용기간 SQL 설계안: `docs/payments/PUBLIC_PRODUCTS_REVIEW_20261016.md`.
+
+## 2026-10-16 (2) — PG를 NICEPAY로 확정: 신규 결제에서 Toss/PortOne 제외 + 레거시 격리 (SQL 없음, 실제 PG 비활성)
+- `PaymentProviderFactory`: `mock｜nicepay｜disabled`. 환경변수 toss/portone → `DisabledPaymentProvider`(전 호출 거부), nicepay → 비활성 Provider + 코드 잠금 `NICEPAY_CHECKOUT_ACTIVATED=false`. checkout은 주문 생성 전에 PG 진입 불가 시 중단(직접결제 fallback 유지).
+- 삭제: `TossPaymentProvider`/`PortOnePaymentProvider`와 테스트, 미사용 클라이언트 래퍼. 과거 Toss 거래 조회·취소·환불 서버 경로(`app/api/payments/*`, `lib/payments/server/*`)와 빌링·지급대행 코드는 보존(정적 테스트로 고정).
+- `server/nicepay/billing.ts`: 비활성 정기결제 규칙/타입(카드정보 필드 없음). 법적 문구·분류·전환 계획: `docs/payments/PG_MIGRATION_TOSS_TO_NICEPAY.md`.
+
 ## 2026-10-16 — NICEPAY 카드사 심사 준비 Batch 1 (비결제 UI + 오프라인 서버 모듈, SQL 없음)
 - 심사 체크리스트·단건/정기결제 설계·기술지원 질문 정리: `docs/payments/NICEPAY_REVIEW_PREPARATION.md`.
 - `/products` 상단에 구매 전 안내(이용기간 확인 위치·결제수단·환불·취소 정책/사업자 정보 링크) 추가. 사업장 주소·PG사명 미표기.

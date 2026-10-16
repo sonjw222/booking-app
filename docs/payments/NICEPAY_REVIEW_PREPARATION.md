@@ -1,5 +1,7 @@
 # NICEPAY PG 카드사 심사 준비 (Batch 1) — 2026-10-16
 
+> **갱신(2026-10-16, 사용자 결정): PG는 NICEPAY로 확정, Toss/PortOne은 신규 결제에서 제외.** 이 문서의 "기존 Toss/PortOne 구조 유지" 전제는 `PG_MIGRATION_TOSS_TO_NICEPAY.md`로 대체됨(분류·레거시 보존·법적 문구·빌링 전환). 체크리스트(§1)와 단건 설계(§4)는 그대로 유효.
+
 범위: PG MID/KEY 없이 가능한 점검·설계·오프라인 코드. **실제 NICEPAY 호출, DB 변경, 기능 플래그 변경, 카드정보 수집은 없음.**
 근거: 저장소 코드(main `5f1cb2d`) + 공식 문서 `developers.nicepay.co.kr`(인증결제 `/docs/pg/auth/*`, 결제통보 `/docs/pg/add/noti`, 비인증 `/docs/pg/non-auth/*`) 2026-10-16 열람 + `https://mwhabit.com/products` 읽기 전용 열람.
 ⚠ 문서의 필드·공식은 열람 시점 기준이며 계약 후 기술지원 확인이 필요하다(아래 §5).

@@ -10,7 +10,7 @@ import { redactNicepayForLog } from "../../lib/payments/server/nicepay/redact";
 import { ediDateOf, nicepayApprove, nicepayCancel, nicepayNetCancel, type NicepayFetch } from "../../lib/payments/server/nicepay/api";
 import { handleNicepayAuthReturn, classifyNicepayWebhook, type NicepayDeps, type NicepayOrderCtx } from "../../lib/payments/server/nicepay/lifecycle";
 import { NicepayPaymentProvider } from "../../lib/payments/NicepayPaymentProvider";
-import { resolveProviderName } from "../../lib/payments/PaymentProviderFactory";
+import { resolveProviderName, isOnlinePgCheckoutAvailable } from "../../lib/payments/PaymentProviderFactory";
 
 const MID = "nicepay00m", KEY = "TEST_MERCHANT_KEY_NOT_REAL", TOKEN = "AUTHTOKEN_TEST_1234567890", TID = "nicepay00m01012610161200000001", ORDER = "order-1", AMT = 12000;
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -57,9 +57,9 @@ describe("로그 redact — 개인정보·키·토큰·서명 제거", () => {
 type Fake = NicepayDeps & {
   logs: string[]; calls: { url: string; body: URLSearchParams }[];
   setApprove(r: Record<string, unknown>): void; setNetOk(v: boolean): void; setThrow(v: boolean): void;
-  claim: ReturnType<typeof vi.fn>; release: ReturnType<typeof vi.fn>; dbConfirm: ReturnType<typeof vi.fn>;
+  claim: ReturnType<typeof vi.fn>; release: ReturnType<typeof vi.fn>; dbConfirm: ReturnType<typeof vi.fn>; review: ReturnType<typeof vi.fn>;
 };
-function fakeDeps(over: { ctx?: NicepayOrderCtx | null; claimOrder?: () => Promise<boolean>; dbConfirm?: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>; orderContext?: () => Promise<NicepayOrderCtx | null> } = {}): Fake {
+function fakeDeps(over: { ctx?: NicepayOrderCtx | null; claimOrder?: () => Promise<boolean>; dbConfirm?: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>; orderContext?: () => Promise<NicepayOrderCtx | null>; gateAllows?: () => Promise<boolean> } = {}): Fake {
   const logs: string[] = [];
   const calls: Fake["calls"] = [];
   let approveResp: Record<string, unknown> = {}; let netOk = true; let approveThrows = false;
@@ -72,13 +72,14 @@ function fakeDeps(over: { ctx?: NicepayOrderCtx | null; claimOrder?: () => Promi
   const ctx = over.ctx === undefined ? { orderId: ORDER, status: "pending", amount: AMT, provider: "nicepay" } : over.ctx;
   const claim = vi.fn(over.claimOrder ?? (async () => true));
   const release = vi.fn(async () => {});
+  const review = vi.fn(async () => {});
   const dbConfirm = vi.fn(over.dbConfirm ?? (async () => ({ data: { membershipId: "m1" }, error: null })));
   const d: Fake = {
     creds: { mid: MID, merchantKey: KEY }, fetchImpl, now: () => new Date("2026-10-16T03:00:00Z"),
-    orderContext: over.orderContext ?? (async () => ctx), claimOrder: claim, releaseOrder: release, dbConfirm,
+    orderContext: over.orderContext ?? (async () => ctx), gateAllows: over.gateAllows ?? (async () => true), claimOrder: claim, releaseOrder: release, markReview: review, dbConfirm,
     log: (l, e, f) => { logs.push(`${l} ${e} ${JSON.stringify(f)}`); },
     logs, calls, setApprove: (r) => { approveResp = r; }, setNetOk: (v) => { netOk = v; }, setThrow: (v) => { approveThrows = v; },
-    claim, release,
+    claim, release, review,
   };
   d.setApprove(goodApprove());
   return d;
@@ -99,6 +100,10 @@ describe("handleNicepayAuthReturn — 정상/멱등", () => {
   it("이미 done이면 승인 호출 없이 멱등 성공", async () => {
     const d = fakeDeps({ ctx: { orderId: ORDER, status: "done", amount: AMT, provider: "nicepay" } }); const r = await handleNicepayAuthReturn(authInput(), d);
     expect(r.body.already_done).toBe(true); expect(d.calls).toHaveLength(0); expect(d.dbConfirm).not.toHaveBeenCalled();
+  });
+  it("PG 게이트 OFF면 NICEPAY 승인 호출·선점 없이 403", async () => {
+    const d = fakeDeps({ gateAllows: async () => false }); const r = await handleNicepayAuthReturn(authInput(), d);
+    expect(r.status).toBe(403); expect(d.calls).toHaveLength(0); expect(d.claim).not.toHaveBeenCalled(); expect(d.dbConfirm).not.toHaveBeenCalled();
   });
   it("동시 중복 확정: 선점 실패 시 승인 호출 없음", async () => {
     const d = fakeDeps({ claimOrder: async () => false }); const r = await handleNicepayAuthReturn(authInput(), d);
@@ -146,15 +151,47 @@ describe("handleNicepayAuthReturn — 승인 이후 실패는 망취소", () => 
   });
   it("DB 확정 실패 + 상태 재조회 실패 → 자동 취소하지 않고 운영 알림", async () => {
     let n = 0; const d = fakeDeps({ dbConfirm: async () => ({ data: null, error: { message: "x" } }), orderContext: async () => { if (n++ === 0) return { orderId: ORDER, status: "pending", amount: AMT, provider: "nicepay" }; throw new Error("db down"); } });
-    const r = await handleNicepayAuthReturn(authInput(), d); expect(r.body.code).toBe("confirm_state_unknown"); expect(netCalls(d)).toHaveLength(0); expect(d.logs.join("\n")).toContain("PG_NICEPAY_CONFIRM_STATE_UNKNOWN");
+    const r = await handleNicepayAuthReturn(authInput(), d); expect(r.body.code).toBe("confirm_state_unknown"); expect(netCalls(d)).toHaveLength(0); expect(d.review).toHaveBeenCalledWith(ORDER, "confirm_state_unknown"); expect(d.logs.join("\n")).toContain("PG_NICEPAY_CONFIRM_STATE_UNKNOWN");
   });
   it("망취소마저 실패 → 주문을 pending으로 풀지 않고(재승인 방지) 운영 알림", async () => {
     const d = fakeDeps(); d.setApprove(goodApprove({ Moid: "other" })); d.setNetOk(false); const r = await handleNicepayAuthReturn(authInput(), d);
-    expect(r.body.code).toBe("compensation_failed"); expect(d.release).not.toHaveBeenCalled(); expect(d.logs.join("\n")).toContain("PG_NICEPAY_NETCANCEL_FAILED");
+    expect(r.body.code).toBe("compensation_failed"); expect(d.release).not.toHaveBeenCalled(); expect(d.review).toHaveBeenCalledWith(ORDER, "netcancel_failed"); expect(d.logs.join("\n")).toContain("PG_NICEPAY_NETCANCEL_FAILED");
   });
   it("모든 로그에 토큰·키·서명·카드/구매자 정보가 없다", async () => {
     const d = fakeDeps(); d.setApprove(goodApprove({ Moid: "other", CardNo: "123456******9999", BuyerEmail: "x@y.z" })); await handleNicepayAuthReturn(authInput(), d);
     const all = d.logs.join("\n"); for (const secret of [TOKEN, KEY, "123456******9999", "x@y.z", TID, nicepaySign.authResult({ authToken: TOKEN, mid: MID, amt: "12000" }, KEY)]) expect(all).not.toContain(secret);
+  });
+});
+
+describe("결과 불명 처리 — 성공/실패를 임의로 확정하지 않는다", () => {
+  it("2xx인데 승인 응답 본문을 해석할 수 없으면 승인 성공으로도 실패 확정으로도 처리하지 않고 망취소 → 성공 시에만 pending 복귀", async () => {
+    const calls: string[] = []; const d = fakeDeps();
+    d.fetchImpl = async (url) => { calls.push(url); return { ok: true, status: 200, async json() { if (url === APP) throw new Error("garbled"); return { ResultCode: "2001" }; } }; };
+    const r = await handleNicepayAuthReturn(authInput(), d);
+    expect(r.status).toBe(502); expect(calls).toEqual([APP, NET]); expect(d.release).toHaveBeenCalled(); expect(d.dbConfirm).not.toHaveBeenCalled();
+  });
+  it("승인 5xx도 결과 불명 → 망취소", async () => {
+    const calls: string[] = []; const d = fakeDeps();
+    d.fetchImpl = async (url) => { calls.push(url); return url === APP ? { ok: false, status: 503, async json() { return {}; } } : { ok: true, status: 200, async json() { return { ResultCode: "2001" }; } }; };
+    await handleNicepayAuthReturn(authInput(), d); expect(calls).toEqual([APP, NET]);
+  });
+  it("승인 4xx(확정 거절)는 망취소하지 않는다", async () => {
+    const calls: string[] = []; const d = fakeDeps();
+    d.fetchImpl = async (url) => { calls.push(url); return { ok: false, status: 400, async json() { return {}; } }; };
+    const r = await handleNicepayAuthReturn(authInput(), d); expect(r.status).toBe(400); expect(calls).toEqual([APP]);
+  });
+  it("결과 불명 + 망취소 실패 → 영속 표시(markReview)·approving 유지로 재승인 불가, 응답은 운영자 문의", async () => {
+    const d = fakeDeps(); d.setThrow(true); d.setNetOk(false);
+    const r = await handleNicepayAuthReturn(authInput(), d);
+    expect(r.body.code).toBe("compensation_failed"); expect(d.review).toHaveBeenCalledTimes(1); expect(d.release).not.toHaveBeenCalled();
+  });
+  it("망취소는 요청마다 1회만(중복 취소 요청 없음)", async () => {
+    const d = fakeDeps(); d.setApprove(goodApprove({ Moid: "other" })); await handleNicepayAuthReturn(authInput(), d);
+    expect(d.calls.filter((c) => c.url === NET)).toHaveLength(1);
+  });
+  it("재시도 시 이미 approving(선점됨)이면 새 승인·망취소 모두 하지 않는다", async () => {
+    const d = fakeDeps({ ctx: { orderId: ORDER, status: "approving", amount: AMT, provider: "nicepay" } }); const r = await handleNicepayAuthReturn(authInput(), d);
+    expect(r.status).toBe(409); expect(d.calls).toHaveLength(0);
   });
 });
 
@@ -191,18 +228,18 @@ describe("웹훅은 힌트 전용 — 상태를 바꾸지 않고 분류만", () 
 });
 
 describe("비활성 보장 / 카드정보 미수집 (정적)", () => {
-  it("NicepayPaymentProvider는 모든 메서드가 throw, 팩토리는 nicepay를 선택하지 않는다", async () => {
+  it("NicepayPaymentProvider는 모든 메서드가 throw, 팩토리는 nicepay를 선택해도 결제창 진입이 잠겨 있다", async () => {
     const p = new NicepayPaymentProvider();
     await expect(p.createPayment({ orderId: "o", amount: 1 })).rejects.toThrow(/활성화되지 않았/);
     await expect(p.confirmPayment("k", "o")).rejects.toThrow(); await expect(p.cancelPayment("o")).rejects.toThrow(); await expect(p.getPaymentStatus("o")).rejects.toThrow();
     const prev = process.env.NEXT_PUBLIC_PAYMENT_PROVIDER; process.env.NEXT_PUBLIC_PAYMENT_PROVIDER = "nicepay";
-    try { expect(resolveProviderName()).toBe("mock"); } finally { if (prev === undefined) delete process.env.NEXT_PUBLIC_PAYMENT_PROVIDER; else process.env.NEXT_PUBLIC_PAYMENT_PROVIDER = prev; }
+    try { expect(resolveProviderName()).toBe("nicepay"); expect(isOnlinePgCheckoutAvailable()).toBe(false); } finally { if (prev === undefined) delete process.env.NEXT_PUBLIC_PAYMENT_PROVIDER; else process.env.NEXT_PUBLIC_PAYMENT_PROVIDER = prev; }
   });
   const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => { const p = path.join(dir, n); return statSync(p).isDirectory() ? (n === "node_modules" ? [] : walk(p)) : /\.(ts|tsx)$/.test(p) ? [p] : []; });
-  it("app/ 라우트·페이지 어디도 nicepay 모듈을 import하지 않는다(연결 금지)", () => {
-    const offenders = walk("app").filter((f) => /from\s+["'][^"']*nicepay/i.test(readFileSync(f, "utf8")));
-    expect(offenders).toEqual([]);
-    expect(walk("lib").filter((f) => !f.includes(`${path.sep}nicepay${path.sep}`) && !f.endsWith("NicepayPaymentProvider.ts")).filter((f) => /from\s+["'][^"']*nicepay/i.test(readFileSync(f, "utf8")))).toEqual([]);
+  it("서버 NICEPAY 모듈(lib/payments/server/nicepay)은 app/ 라우트에 연결되지 않았다(연결 금지) — 클라이언트 Provider만 팩토리에 연결", () => {
+    expect(walk("app").filter((f) => /from\s+["'][^"']*server\/nicepay/i.test(readFileSync(f, "utf8")))).toEqual([]);
+    expect(walk("lib").filter((f) => !f.includes(`${path.sep}nicepay${path.sep}`)).filter((f) => /from\s+["'][^"']*server\/nicepay/i.test(readFileSync(f, "utf8")))).toEqual([]);
+    expect(walk("app").filter((f) => /from\s+["'][^"']*NicepayPaymentProvider/.test(readFileSync(f, "utf8")))).toEqual([]);
   });
   it("카드번호·유효기간·생년월일/사업자번호·비밀번호 수집/전송 필드가 코드에 없다", () => {
     const re = /\b(CardPw|ExpYear|ExpMonth|IDNo|EncData)\b|CardNo\s*[=:]/;
