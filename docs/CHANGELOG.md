@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-10-16 (5) — Batch 3 보완: 상태 전이 트리거 확장 · payments.payment_provider 기록 · 감사 기록 (검토용 SQL, 미실행)
+- `add_nicepay_provider_support_20261016.sql` 보완: `orders_guard_status_transition()` 확장(기존 4전이 유지, approving·NICEPAY paid/done은 서버 표시 필요), 발급 helper·정산 요약·`fulfill_order` 제자리 패치(위치 불일치 시 전체 중단), 추가 전용 감사 테이블 `nicepay_review_actions`, 수동 해소는 증거·처리자 필수, 검토 대기 주문 수동 확정 전용 함수. rollback/verify 동기화.
+- PGlite 테스트를 실제 트리거·실제 helper 기반으로 재작성(20개). 코드: `releaseOrder`에 근거 인자 추가. 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §8.
+
 ## 2026-10-16 (4) — Batch 3: 결제 DB 안전성 보강 초안 (검토용 SQL, 미실행)
 - 신규 SQL(미적용): `fix_refund_block_all_pg_providers_20261016.sql`(일반 환불 PG 차단을 허용 목록으로 — NICEPAY 환불 우회 차단), `add_nicepay_provider_support_20261016.sql`(provider CHECK에 nicepay, status `approving`, 서버 전용 pg_* 컬럼·보호 트리거, claim/release/review/confirm RPC). 각 rollback/verify 포함.
 - 코드: 환불 라우트가 외부 취소 미구현 PG(nicepay 등) 금액>0을 501로 fail-closed, NICEPAY lifecycle에 claim id fencing, `nicepayDbDeps` 어댑터(미연결).

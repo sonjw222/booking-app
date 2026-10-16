@@ -71,7 +71,7 @@ function fakeDeps(over: { ctx?: NicepayOrderCtx | null; claimOrder?: () => Promi
   const fetchImpl: NicepayFetch = async (url, init) => { calls.push({ url, body: new URLSearchParams(init.body) }); return { ok: true, status: 200, async json() { return respond(url); } }; };
   const ctx = over.ctx === undefined ? { orderId: ORDER, status: "pending", amount: AMT, provider: "nicepay" } : over.ctx;
   const claim = vi.fn(over.claimOrder ?? (async () => "claim-1"));
-  const release = vi.fn(async () => {});
+  const release = vi.fn(async (_o: string, _c: string, _b: string) => {});
   const review = vi.fn(async () => {});
   const dbConfirm = vi.fn(over.dbConfirm ?? (async () => ({ data: { membershipId: "m1" }, error: null })));
   const d: Fake = {
@@ -133,11 +133,11 @@ describe("handleNicepayAuthReturn — 승인 이후 실패는 망취소", () => 
   const netCalls = (d: Fake) => d.calls.filter((c) => c.url === NET);
   it("승인 응답 네트워크 오류 → 망취소(응답 유실 가정)", async () => {
     const d = fakeDeps(); d.setThrow(true); const r = await handleNicepayAuthReturn(authInput(), d);
-    expect(r.status).toBe(502); expect(netCalls(d)).toHaveLength(1); expect(netCalls(d)[0].body.get("NetCancel")).toBe("1"); expect(d.release).toHaveBeenCalled(); expect(d.dbConfirm).not.toHaveBeenCalled();
+    expect(r.status).toBe(502); expect(netCalls(d)).toHaveLength(1); expect(netCalls(d)[0].body.get("NetCancel")).toBe("1"); expect(d.release).toHaveBeenCalledWith(ORDER, "claim-1", "netcancel_confirmed"); expect(d.dbConfirm).not.toHaveBeenCalled();
   });
   it("승인 거절 코드 → 돈 이동 없음: 망취소 안 함, 주문 pending 복귀", async () => {
     const d = fakeDeps(); d.setApprove(goodApprove({ ResultCode: "3011" })); const r = await handleNicepayAuthReturn(authInput(), d);
-    expect(r.status).toBe(400); expect(netCalls(d)).toHaveLength(0); expect(d.release).toHaveBeenCalled(); expect(d.dbConfirm).not.toHaveBeenCalled();
+    expect(r.status).toBe(400); expect(netCalls(d)).toHaveLength(0); expect(d.release).toHaveBeenCalledWith(ORDER, "claim-1", "approve_rejected"); expect(d.dbConfirm).not.toHaveBeenCalled();
   });
   for (const [name, resp] of [["응답 서명 불일치", { Signature: "f".repeat(64) }], ["응답 금액 불일치", { Amt: "1", Signature: nicepaySign.approveResponse({ tid: TID, mid: MID, amt: "1" }, KEY) }], ["응답 주문번호 불일치", { Moid: "other" }], ["응답 TID 불일치", { TID: "other", Signature: nicepaySign.approveResponse({ tid: "other", mid: MID, amt: String(AMT) }, KEY) }]] as const)
     it(`${name} → DB 확정 없이 망취소`, async () => { const d = fakeDeps(); d.setApprove(goodApprove(resp)); const r = await handleNicepayAuthReturn(authInput(), d); expect(r.status).toBe(409); expect(netCalls(d)).toHaveLength(1); expect(d.dbConfirm).not.toHaveBeenCalled(); });

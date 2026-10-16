@@ -1,5 +1,7 @@
 # NICEPAY 도입 전 결제 DB 안전성 보강 설계 (Batch 3) — 2026-10-16
 
+> **Batch 3 보완판(운영 DB 실측 반영)은 §8이 최신이다.** §4의 RPC 목록·§6의 영향 표 중 §8과 다른 부분(RPC 8개, `nicepay_release_order` 근거 인자, `nicepay_resolve_review` 증거 인자, 상태 전이 트리거 확장, 제자리 패치 3건, 감사 테이블)은 §8이 우선한다.
+
 SQL은 **검토용 초안이며 DEV/Production에 실행하지 않았다.** 근거: 운영 DB 읽기 전용 조사 결과(사용자 제공) + 저장소의 최신 라이브 계보 정의. 오프라인 검증: `tests/sql/nicepay-provider-support.test.mjs`(PGlite 10개), `tests/unit/nicepay.*.test.ts`, `pgPaymentLifecycle.test.ts`.
 
 ## 1. 확인된 사실과 대응
@@ -51,7 +53,7 @@ pending ──claim(service)──▶ approving ──confirm_nicepay_payment─
 |---|---|---|---|
 | 0 | (읽기 전용) 아래 사전 확인 | 없음 | — |
 | 1 | `fix_refund_block_all_pg_providers_20261016.sql` | `_refund_membership_core` 1개 함수 재정의(조건 한 줄). 데이터 변경 없음 | `rollback_fix_refund_block_all_pg_providers_20261016.sql` |
-| 2 | `add_nicepay_provider_support_20261016.sql` | CHECK 3개 재생성(기존 행 모두 통과해야 함), orders 컬럼 5개·인덱스 2개·트리거 1개·RPC 7개 추가. 데이터 변경 없음. 테이블 락 짧음 | `rollback_add_nicepay_provider_support_20261016.sql` (nicepay/approving/pg_* 데이터가 있으면 중단) |
+| 2 | `add_nicepay_provider_support_20261016.sql` | CHECK 3개 재생성, orders 컬럼 5개·인덱스 2개·보호 트리거 1개, 상태 전이 트리거 함수 교체, 감사 테이블 1개, RPC 8개, 제자리 패치 3건(§8). 데이터 변경 없음. 테이블 락 짧음 | `rollback_add_nicepay_provider_support_20261016.sql` (nicepay/approving/pg_* 데이터가 있으면 중단) |
 | 3 | `verify_*` 두 파일 | 읽기 전용 | — |
 사전 확인(읽기 전용):
 ```sql
@@ -64,3 +66,54 @@ select proname, prosecdef, proconfig from pg_proc where proname in ('_refund_mem
 
 ## 7. 남은 작업 (이번 범위 밖)
 create_order_secure 패치(정의 확인 후) · NICEPAY ReturnURL/웹훅 라우트와 `nicepayDbDeps` 연결 · `NICEPAY_CHECKOUT_ACTIVATED` 해제 · stale claim 크론 · 정산 뷰(`fix_admin_settlement_summary_use_payment_provider.sql`)의 provider 목록에 nicepay 포함 · 복귀 토큰 라우트의 provider 일반화 · 환불 API(nicepay 취소) 연동 후 `handleRefund`에 NICEPAY 분기.
+
+## 8. Batch 3 보완 (운영 DB 실측: 상태 전이 트리거 · payments.payment_provider)
+
+### 8-1. 발견과 대응
+| 발견 | 영향 | 대응 |
+|---|---|---|
+| `orders_guard_status_transition()`이 pending→paid/done/cancelled, paid→done/cancelled만 허용 | 초안 SQL의 `approving` 전이(claim/release/resolve/confirm)가 **라이브에서는 전부 실패**. 초안 PGlite 테스트는 이 트리거를 설치하지 않아 놓쳤다 | 트리거 함수 확장(트리거 자체는 그대로). PGlite 월드에 **실제 트리거**를 설치해 재검증(E1은 확장 전 트리거로 되돌리면 같은 RPC가 실패함을 재현) |
+| `_issue_membership_and_record_payment()`가 `payments.payment_provider`를 기록하지 않음 | NICEPAY 결제 행 provider 누락 → 정산 요약(`in ('toss','portone')`)에서 누락 가능 | 제자리 패치: NICEPAY 주문만 `'nicepay'` 기록, 그 외는 지금처럼 NULL. 확정 함수가 결제 행의 provider/TID/금액/건수를 사후 검증 |
+| 정산 요약이 toss/portone만 포함 | NICEPAY 수납액이 센터 정산에서 빠짐 | 제자리 패치로 `'nicepay'` 포함 |
+| `fulfill_order()`가 provider를 보지 않음 | 매니저가 PG 승인 전 NICEPAY 주문을 발급 가능 | 제자리 패치: NICEPAY 주문 거부(이미 done이면 기존 멱등 응답) |
+| 매니저/회원 UPDATE로 `pending→paid/done` 가능(기존 전이 허용) | NICEPAY 주문이 PG 없이 paid/done이 될 수 있음 | 트리거 확장: NICEPAY 주문의 paid/done 전이는 서버 함수 표시 없이는 불가(회원 `pending→cancelled`는 유지) |
+
+### 8-2. 상태 전이 규칙 (확장 후)
+- **그대로**: 같은 상태 통과 · cancelled/done 종료 · pending→paid/done/cancelled · paid→done/cancelled (toss/portone/mock/직접결제 NULL). PGlite E2가 4개 provider × 7개 전이를 실제 트리거로 검증.
+- **추가(표시 `app.nicepay_write='on'` + `provider='nicepay'`일 때만)**: pending→approving, approving→pending, approving→cancelled, approving→paid(`pg_tid`·`pg_claim_id` 필수), paid→done. `approving→done` 직접 전이 불가.
+- **표시 없이 가능한 NICEPAY 전이는 `pending→cancelled` 하나**(기존 회원 본인 취소/매니저 취소 유지).
+- 표시는 8개 `SECURITY DEFINER` 함수만 트랜잭션 로컬로 세우고(`set_config(..., true)`) 함수 끝에서 해제한다. 로그인 사용자 차단은 별도 트리거(`orders_guard_pg_state`, `auth.uid()` 있으면 pg_* 컬럼·approving 진입/이탈·nicepay provider 변경 불가)가 담당 — 이중 방어.
+
+### 8-3. Provider 저장/검증
+- 기록: NICEPAY 주문 → `payments.payment_provider='nicepay'`, `pg_transaction_id=TID`, `total_amount=주문 금액`. 다른 provider는 INSERT 열을 비워 **기존과 바이트 단위로 동일**(PGlite C: 적용 전/후 toss·portone 결제 행 deepEqual, provider NULL).
+- 검증: `confirm_nicepay_payment`가 확정 직후 `sale_type='new'` 결제가 정확히 1건이고 provider/TID/금액이 주문과 일치하는지 확인, 아니면 **전체 롤백(수강권 없음)**(G2: helper 패치를 되돌린 상태에서 확정하면 실패하고 아무것도 남지 않음).
+- 과거 데이터는 수정하지 않는다. 참고(발견): 과거 Toss 결제도 helper가 provider를 기록하지 않았다면 `payments.payment_provider`가 NULL이라 **정산 요약(`in ('toss','portone')`)에 잡히지 않았을 수 있다** — 이는 기존 동작이며 이번 변경 범위 밖이다. 확인 쿼리(읽기 전용): `select payment_provider, count(*) from payments where pg_transaction_id is not null and pg_transaction_id not like 'mock_%' group by 1;` 백필이 필요하면 별도 승인.
+- 매출 통계(`payment_provider is distinct from 'mock'`)는 nicepay를 실매출로 포함, 환불 행은 기존처럼 provider NULL(PGlite G5).
+
+### 8-4. 수동 복구 증거·감사
+- `nicepay_review_actions`: 추가 전용(UPDATE/DELETE 트리거로 superuser도 불가), RLS 활성+정책 없음+클라이언트 권한 회수, service_role만 insert/select.
+- 자동 경로도 기록: 복귀(`release`: 근거 `approve_rejected`/`netcancel_confirmed`), 검토 표시(`mark_review`: 사유), 만료 표시.
+- 수동 해소 `nicepay_resolve_review(order, action, evidence_type, evidence_ref, actor, note)`: **증거 유형·번호(4자+)·처리자(2자+) 없으면 거부**. release는 `netcancel_confirmed`/`not_approved_confirmed`만, cancel은 + `pg_cancel_confirmed`. 거래번호가 기록된 주문은 풀 수 없다(승인된 거래는 확정 경로로만).
+- 수동 확정 `nicepay_confirm_reviewed`: 승인 확인 증거와 함께만 가능. 검토 대기 주문은 `confirm_nicepay_payment` 직접 호출이 막혀 있다. 실패한 시도는 감사 행도 롤백.
+- **한계(정직하게)**: 증거 번호가 사실인지는 DB가 검증할 수 없다. DB가 보장하는 것은 "증거 없이는 못 풀고, 누가·언제·무엇을 근거로 했는지가 변경 불가로 남는다"까지다. `actor`는 운영 도구가 넘기는 문자열이라 위조 가능성은 운영 도구 권한 관리에 달려 있다.
+
+### 8-5. 추가 보안 검토 결과
+| 항목 | 결과 |
+|---|---|
+| 결과 불명 시 중복 승인 | PASS: 검토 대기 주문은 claim/재선점 불가(F1), 자동 복귀 불가 |
+| 실제 PG 취소 확인 전 수동 release/cancel | PASS(증거 필수, 단 증거 진위는 운영 책임) |
+| TID 중복 사용 | PASS: 유일 인덱스, 다른 거래로 덮어쓰기 거부(G1) |
+| PG 결제 완료 전 수강권 발급 | PASS: fulfill_order 거부, 직접 UPDATE로 paid/done 불가, 확정은 approving+claim 일치 필요(G1·G4·E3) |
+| 오래된 claim 임의 승인 | PASS: 재선점 후 이전 claim 확정/해제 불가(F1·G1) |
+| 기존 Toss 완료 거래 환불 | PASS: 일반 환불 차단·서버 경로 환불 동일(C2) |
+
+### 8-6. 적용 전제 (PASS / BLOCKED)
+| 전제 | 상태 |
+|---|---|
+| 저장소 SQL이 라이브 계보와 일치함을 앱이 아닌 DB가 스스로 확인 | **PASS(설계)**: 제자리 패치는 위치가 정확히 1곳이 아니면 전체 중단(PGlite I), 상태 전이 트리거는 사전 점검 DO 블록이 `허용되지 않는 주문 상태 변경이에요` 포함 여부 확인 |
+| 라이브 `orders_guard_status_transition` 정의가 이 저장소의 4전이 정의와 같다 | **PASS(사용자 실측 일치)** — 단 정확한 텍스트 일치는 적용 시 사전 점검이 재확인 |
+| 라이브 `_issue_membership_and_record_payment` / `fulfill_order` 본문이 저장소 KST판과 일치 | **BLOCKED(적용 시점 확인)**: 불일치하면 SQL이 스스로 중단. 사전에 읽기 전용 `pg_get_functiondef` 비교 권장 |
+| 라이브 `admin_center_settlement_summary` 존재 및 패턴 일치 | **BLOCKED(미확인)**: 없으면 건너뛰고, 있는데 패턴이 다르면 중단 |
+| CHECK 제약 이름(`orders_payment_provider_check` 등)이 라이브와 같다 | **PASS(사용자 실측)** |
+| `create_order_secure` 정의 | **BLOCKED**: 저장소에 없음. 이 SQL과 독립, 별도 패치 필요(§3) |
+| 실제 NICEPAY 연동/라우트 | **BLOCKED**(계약·MID/KEY) — 이 SQL은 연동 없이도 안전(함수는 호출되기 전까지 휴면) |

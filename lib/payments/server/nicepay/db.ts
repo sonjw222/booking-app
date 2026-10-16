@@ -20,8 +20,8 @@ export function nicepayDbDeps(admin: RpcLike): DbPart {
       if (error) throw new Error(error.message);
       return typeof data === "string" && data ? data : null;
     },
-    async releaseOrder(orderId, claimId) {
-      const { error } = await admin.rpc("nicepay_release_order", { p_order_id: orderId, p_claim_id: claimId });
+    async releaseOrder(orderId, claimId, basis) {
+      const { error } = await admin.rpc("nicepay_release_order", { p_order_id: orderId, p_claim_id: claimId, p_basis: basis });
       if (error) throw new Error(error.message);
     },
     async markReview(orderId, claimId, reason) {

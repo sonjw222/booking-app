@@ -10,7 +10,7 @@ describe("nicepayDbDeps ↔ add_nicepay_provider_support_20261016.sql", () => {
     const calls: { fn: string; args: Record<string, unknown> }[] = [];
     const admin = { rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => { calls.push({ fn, args }); return { data: fn === "nicepay_claim_order" ? "claim-1" : null, error: null }; }) };
     const d = nicepayDbDeps(admin);
-    await d.orderContext("o"); expect(await d.claimOrder("o")).toBe("claim-1"); await d.releaseOrder("o", "c"); await d.markReview("o", "c", "netcancel_failed"); await d.dbConfirm("o", "c", "t", 1000);
+    await d.orderContext("o"); expect(await d.claimOrder("o")).toBe("claim-1"); await d.releaseOrder("o", "c", "netcancel_confirmed"); await d.markReview("o", "c", "netcancel_failed"); await d.dbConfirm("o", "c", "t", 1000);
     expect(calls.map((c) => c.fn)).toEqual(["nicepay_order_context", "nicepay_claim_order", "nicepay_release_order", "nicepay_mark_review", "confirm_nicepay_payment"]);
     for (const c of calls) {
       const def = sql.slice(sql.indexOf(`function ${c.fn}(`), sql.indexOf("$$;", sql.indexOf(`function ${c.fn}(`)));
@@ -26,7 +26,7 @@ describe("nicepayDbDeps ↔ add_nicepay_provider_support_20261016.sql", () => {
   });
   it("SQL 초안: 모든 새 RPC는 service_role에만 grant, confirm_real_payment/cancel_real_payment는 수정하지 않는다", () => {
     const code = sql.replace(/^\s*--.*$/gm, "");
-    for (const f of ["nicepay_order_context", "nicepay_claim_order", "nicepay_release_order", "nicepay_mark_review", "nicepay_expire_stale_claims", "nicepay_resolve_review", "confirm_nicepay_payment"]) {
+    for (const f of ["nicepay_order_context", "nicepay_claim_order", "nicepay_release_order", "nicepay_mark_review", "nicepay_expire_stale_claims", "nicepay_resolve_review", "nicepay_confirm_reviewed", "confirm_nicepay_payment"]) {
       expect(code, f).toMatch(new RegExp(`grant execute on function ${f}\\([^)]*\\) to service_role;`));
       expect(code, f).toMatch(new RegExp(`revoke all on function ${f}\\([^)]*\\) from public, anon, authenticated;`));
     }
