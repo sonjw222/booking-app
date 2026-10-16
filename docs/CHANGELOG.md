@@ -6,6 +6,13 @@
 - `admin-center-pagination.spec.ts`: 첫 페이지 30개를 검증에서 빠뜨리던 문제 수정, 전 페이지 id 중복·누락·커서 연속성·30/31 경계·DOM↔서버 비교(`tests/e2e/fixtures/adminPaginationVerify.ts`), 단순 지연 대신 실제 요청 보류로 순서 역전 검증. 데이터가 31건 이하라 경계를 못 본 탭과 계정 없음은 `BLOCKED:` skip(PASS 아님). 수동 러너가 PASS/FAIL/BLOCKED/SKIP을 집계하고 PASS가 아니면 종료 코드 2.
 - `new-class-creation.spec.ts`: 기존 `cleanupBuyProductMemberships`(userA·상품의 모든 수강권과 결제를 삭제, 예약은 미삭제로 `reservations_membership_id_fkey` 위반 가능)를 제거. 실행별 UUID가 들어간 수업과 시작 시점 스냅샷에 없던 수강권만 지우고(`ownedMembershipCleanup.ts`) 그 밖의 참조가 있으면 거부. 기존 수강권이 있으면 TEST4는 BLOCKED. 실제 DEV/운영 DB 실행 없음.
 
+## 2026-10-16 (3) — E2E 전체 DB 쓰기 경로에 격리 DB 가드 확대 + 공유 DEV·Production 고정 거부 (테스트 코드만, SQL 없음)
+- 감사: `getFixtureAdminClient()`(서비스 롤) 사용 spec 10개와 `switchToTestUser()`(계정이 없으면 signUp·accounts/profiles INSERT, auth.setup이 호출)가 공유 DEV에 쓸 수 있었음.
+- `tests/integration/setup.ts`: `getFixtureAdminClient`(캐시 재사용 포함)·signUp·accounts/profiles INSERT 직전에 E2E 훅 호출. 훅이 설치되지 않은 integration 프로세스는 동작 변화 없음.
+- 신규 `tests/e2e/fixtures/installWriteGate.ts`(env.ts·testData.ts가 import → config를 로드하는 메인/워커 모두 설치), 신규 `tests/e2e/globalSetup.ts`(기본 거부: 격리 DB 미확인이면 읽기 전용 페이지네이션 러너 외 모든 E2E 실행 전 중단, `--list` 영향 없음).
+- `isolatedTestDbGuard.ts`: Production·공유 DEV ref를 선언/ACK/`SHARED_DEV_PROJECT_REFS`와 무관하게 URL·선언·키 어디서든 거부(`ALWAYS_DENIED_PROJECT_REFS`).
+- `tests/unit/e2eWriteGate.test.ts` 29개 추가(우회 시도, 두 ref 직접 입력, 훅 동작, 정적 진입점 검사).
+
 ## 2026-10-16 (2) — 수강권 cleanup 소유 증명 강화 + 파괴적 E2E 격리 DB 가드 (테스트 코드만, SQL 없음)
 - `ownedMembershipCleanup.ts`: "시작 시점에 없었다"만으로 삭제하지 않는다. 새 수강권이 정확히 1개이고, 이 실행의 UUID 수업에서 한 예약이 그 수강권을 쓴 증거가 있으며, 참조 예약·결제가 전부 이 실행·이 프로필 것이고, 참조 테이블을 모두 조회할 수 있고 0건일 때만 삭제. 하나라도 못 증명하면 아무 것도 지우지 않음(부분 삭제 없음, 조회 불가도 거부 — DB FK에 의존하지 않음). 계획(읽기 전용)을 수업 삭제 전에 세우고, 모든 DELETE에 수업/프로필/상품 조건을 다시 건다.
 - 신규 `isolatedTestDbGuard.ts`: `new-class-creation.spec.ts`(수업·수강권·결제·설정을 만들고 지움)는 `ISOLATED_TEST_DB_PROJECT_REF` 선언 + 확인 문구 + URL/키 ref 일치 + Production/공유 DEV 목록 비포함일 때만 실행. 아니면 어떤 DB 접근 전에 `BLOCKED:`로 건너뛰고 afterAll도 아무 것도 지우지 않는다. `makeSupabaseStore`도 같은 가드를 통과해야 만들어진다. 오프라인 테스트 30개(`ownedMembershipCleanup.test.ts`).

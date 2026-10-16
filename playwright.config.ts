@@ -9,6 +9,8 @@ import "./tests/e2e/fixtures/env"; // .env.test.local 로드 + 필수 env 존재
 // - Chromium 하나만 사용한다(Firefox/WebKit/모바일은 아직 추가하지 않음).
 export default defineConfig({
   testDir: "./tests/e2e",
+  // 격리 DB가 확인되지 않으면(읽기 전용 관리자 페이지네이션 러너 제외) 첫 테스트·setup 프로젝트 전에 중단한다. `--list`에서는 실행되지 않는다.
+  globalSetup: "./tests/e2e/globalSetup.ts",
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,

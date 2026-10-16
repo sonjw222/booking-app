@@ -26,6 +26,14 @@ export function requireEnv(name: string): string {
   return value;
 }
 
+
+// E2E(Playwright) 전용 쓰기 차단 훅. tests/e2e/fixtures/installWriteGate.ts가 설치하며, 설치되지 않은 integration 프로세스에서는 아무 일도 하지 않는다(기존 동작 유지).
+// 설치된 경우 "서비스 롤 client 생성/재사용"과 "테스트 계정 signUp·accounts/profiles INSERT" 직전에 호출되어, 격리 DB가 아니면 DB 접속 전에 예외로 중단한다.
+function assertFixtureWriteAllowed(action: string): void {
+  const gate = (globalThis as Record<symbol, unknown>)[Symbol.for("mwhabit.fixtureWriteGate")];
+  if (typeof gate === "function") (gate as (action: string) => void)(action);
+}
+
 export const TEST_CENTER_ID = requireEnv("TEST_CENTER_ID");
 export const TEST_PRODUCT_ID = requireEnv("TEST_PRODUCT_ID");
 
@@ -106,6 +114,7 @@ export async function switchToTestUser(emailEnvName: string, passwordEnvName: st
         // rate limit이면 signUp 폴백은 의미가 없고(같은 제한/422로 원인을 가린다) 원인만 명확히 알린다.
         throw new Error(`테스트 계정(${email}) 로그인 실패: Auth rate limit(${(signIn.error as { code?: string }).code ?? signIn.error.status}) — 세션 캐시를 쓰는데도 발생하면 호출 패턴을 점검하세요`);
       } else {
+        assertFixtureWriteAllowed("테스트 계정 signUp");
         const signUp = await supabase.auth.signUp({ email, password });
         if (signUp.error) {
           throw new Error(`테스트 계정(${email}) 준비 실패(signUp): ${signUp.error.message}`);
@@ -133,6 +142,7 @@ export async function switchToTestUser(emailEnvName: string, passwordEnvName: st
     if (accountRes.error) throw new Error(`accounts 조회 실패: ${accountRes.error.message}`);
     let account = accountRes.data as AccountRow | null;
     if (!account) {
+      assertFixtureWriteAllowed("accounts INSERT");
       const inserted = await supabase
         .from("accounts")
         .insert({ auth_id: userId, name: "통합테스트계정", is_member: true })
@@ -152,6 +162,7 @@ export async function switchToTestUser(emailEnvName: string, passwordEnvName: st
     if (profileRes.error) throw new Error(`profiles 조회 실패: ${profileRes.error.message}`);
     let profile = profileRes.data as ProfileRow | null;
     if (!profile) {
+      assertFixtureWriteAllowed("profiles INSERT");
       const inserted = await supabase
         .from("profiles")
         .insert({ account_id: account.id, name: "통합테스트", is_primary: true })
@@ -281,6 +292,7 @@ function decodeJwtRoleClaim(token: string): string | null {
 // SUPABASE_SERVICE_ROLE_KEY가 없는 파일(예: 기존 결제 통합 테스트)은 이 함수를 아예 호출하지
 // 않으므로 영향받지 않는다 — setup.ts 최상단에서 미리 requireEnv하지 않는 이유.
 export function getFixtureAdminClient(): SupabaseClient {
+  assertFixtureWriteAllowed("서비스 롤 admin client"); // 캐시된 client가 있어도 매번 확인한다(가드 통과 전 생성분 재사용 금지)
   if (adminClient) return adminClient;
   const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
   const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
