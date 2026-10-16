@@ -8,7 +8,7 @@
 -- 프로필 선택·상품 검증·포인트 차감·금액 검증·주문 생성 로직은 건드리지 않는다. 시그니처/SECURITY DEFINER/search_path/권한 불변(create or replace).
 --
 -- 선행: add_nicepay_provider_support_20261016.sql (orders.payment_provider CHECK에 nicepay가 있어야 한다 — 없으면 중단).
--- 순서: fix_refund_block_all_pg_providers_20261016.sql → add_nicepay_provider_support_20261016.sql → 이 파일.
+-- 순서: fix_refund_pg_origin_guard_20261017.sql → add_nicepay_provider_support_20261016.sql → 이 파일.
 -- 롤백: rollback_fix_create_order_secure_allow_nicepay_20261016.sql. 사전 확인(읽기 전용): preflight_nicepay_patch_targets_20261016.sql.
 -- ============================================================
 begin;

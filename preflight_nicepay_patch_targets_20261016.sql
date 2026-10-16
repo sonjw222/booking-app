@@ -16,6 +16,9 @@ select
   (select d ~ '-- fulfill_nicepay_guard begin' or ((select count(*) from regexp_matches(d, 'status\s*=\s*''done''\s+then\s+return\s+json_build_object\(\s*''already_done''\s*,\s*true\s*\)\s*;\s*end\s+if;', 'g')) = 1
                                                    and (select count(*) from regexp_matches(d, 'if\s+v_order\.status\s*=\s*''cancelled''\s+then\s+raise\s+exception\s+''취소된 주문은 발급할 수 없어요''\s*;\s*end\s+if;', 'g')) = 1
                                                    and d ~ 'v_order\s+orders') from f)                                                                                        as fulfill_patch_ok,
+  (select d ~ '-- pg_unknown_origin_guard begin' or ((select count(*) from regexp_matches(d, 'raise\s+exception\s+''카드/간편결제로 결제한 수강권은 앱의 환불 요청 기능으로 환불해주세요''\s*;\s*end\s+if;', 'g')) = 1
+                                                      and ((select count(*) from regexp_matches(d, 'o\.payment_provider\s+in\s*\(\s*''toss''\s*,\s*''portone''\s*\)', 'g')) = 1 or d ~ 'o\.payment_provider is not null and o\.payment_provider <> ''mock''')
+                                                      and d ~ 'v_mem' and d ~ 'p_allow_pg') from c)                                                                   as refund_origin_patch_ok,
   (select d ~ '-- nicepay_pg_cancel_guard begin' or ((select count(*) from regexp_matches(d, 'raise\s+exception\s+''카드/간편결제로 결제한 수강권은 앱의 환불 요청 기능으로 환불해주세요''\s*;\s*end\s+if;', 'g')) = 1
                                                       and d ~ 'v_order_id' and d ~ 'v_amount') from c)                                                                       as refund_core_patch_ok,
   (select d ~ '허용되지 않는 주문 상태 변경이에요'

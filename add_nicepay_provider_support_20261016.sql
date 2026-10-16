@@ -1,8 +1,8 @@
 -- ============================================================
 -- NICEPAY provider 지원 DB 기반(2026-10-16, Batch 3 보완판) — 검토용 초안, DEV/Production 미실행.
 --
--- 선행: fix_refund_block_all_pg_providers_20261016.sql (nicepay 주문이 생기기 전에 일반 환불 차단이 허용 목록이어야 한다).
--- 순서: ① fix_refund_block_all_pg_providers_20261016.sql → ② 이 파일 → ③ verify_* (읽기 전용).
+-- 선행: fix_refund_pg_origin_guard_20261017.sql (nicepay 주문이 생기기 전에 일반 환불 차단이 허용 목록이어야 한다. 이 파일과 같은 제자리 패치 방식이라 적용 순서는 바뀌어도 가드가 지워지지 않는다).
+-- 순서: ① fix_refund_pg_origin_guard_20261017.sql → ② 이 파일 → ③ verify_* (읽기 전용).
 -- 롤백: rollback_add_nicepay_provider_support_20261016.sql.
 --
 -- [Batch 3 보완 — 운영 DB 실측 반영]

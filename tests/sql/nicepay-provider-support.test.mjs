@@ -8,103 +8,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 const { PGlite } = await import(process.env.PGLITE_MODULE ? pathToFileURL(process.env.PGLITE_MODULE + '/dist/index.js').href : '@electric-sql/pglite');
-const read = f => readFileSync(new URL('../../' + f, import.meta.url), 'utf8');
-const slice = (src, start, endMarker) => { const a = src.search(start); assert.ok(a >= 0, `start not found: ${start}`); const b = src.indexOf(endMarker, a); assert.ok(b > a, `end not found: ${endMarker}`); return src.slice(a, b + endMarker.length); };
-const lifecycle = read('fix_pg_payment_lifecycle.sql');
-const kst = read('fix_pg_order_refund_kst_dates_20261004.sql');
-const issuance = read('fix_order_issuance_and_auto_booking.sql');
-const confirmReal = read('add_confirm_real_payment.sql');
-const pointLife = read('fix_order_point_lifecycle.sql');
-const settlementSrc = read('fix_admin_settlement_summary_use_payment_provider.sql');
-const refundFix = read('fix_refund_block_all_pg_providers_20261016.sql');
-const refundRollback = read('rollback_fix_refund_block_all_pg_providers_20261016.sql');
-const cosFix = read('fix_create_order_secure_allow_nicepay_20261016.sql');
-const cosRollback = read('rollback_fix_create_order_secure_allow_nicepay_20261016.sql');
-const preflight = stripCommentsEarly(read('preflight_nicepay_patch_targets_20261016.sql'));
-function stripCommentsEarly(x) { return x.replace(/^\s*--.*$/gm, ''); }
-const support = read('add_nicepay_provider_support_20261016.sql');
-const supportRollback = read('rollback_add_nicepay_provider_support_20261016.sql');
-const stripComments = s => s.replace(/^\s*--.*$/gm, '');
+import * as W from './helpers/nicepayWorld.mjs';
+const { read, slice, lifecycle, kst, issuance, confirmReal, pointLife, settlementSrc, refundFix, refundRollback, cosFix, cosRollback, preflight, support, supportRollback, stripComments, id, C1, CI, P1, ACC, AUTH, MGR, PROD, liveHelper, liveFulfill, liveCore, liveForceInsert, liveStatusGuard, liveRestoreTrigger, liveRefundWrappers, liveAccountFor, liveConfirmReal, liveCancelReal, liveConfirmTest, liveSettlement, toCrlf, dropNewComment } = W;
 
-const id = (k, n) => `${String(k).padStart(8, '0')}-0000-0000-0000-${String(n).padStart(12, '0')}`;
-const C1 = id(1, 1), CI = id(1, 2), P1 = id(2, 1), ACC = id(3, 1), AUTH = id(3, 9), MGR = id(3, 2), PROD = id(4, 1);
-
-const liveHelper = slice(kst, /CREATE OR REPLACE FUNCTION public\._issue_membership_and_record_payment/, '$function$;');
-const liveFulfill = slice(kst, /CREATE OR REPLACE FUNCTION public\.fulfill_order/, '$function$;');
-const liveCore = slice(kst, /CREATE OR REPLACE FUNCTION public\._refund_membership_core/, '$function$;');
-const liveForceInsert = slice(lifecycle, /create or replace function orders_force_server_fields_on_insert\(\)/, 'execute function orders_force_server_fields_on_insert();');
-const liveStatusGuard = slice(pointLife, /create or replace function orders_guard_status_transition\(\)/, 'execute function orders_guard_status_transition();');
-const liveRestoreTrigger = slice(pointLife, /create or replace function orders_restore_points_on_cancel\(\)/, 'execute function orders_restore_points_on_cancel();');
-const liveRefundWrappers = slice(lifecycle, /create or replace function refund_membership\(p_membership_id uuid\)/, 'grant execute on function refund_membership_server(uuid, uuid, boolean, boolean) to service_role;');
-const liveAccountFor = slice(lifecycle, /create or replace function _account_id_for_auth/, 'revoke all on function _account_id_for_auth(uuid) from public, anon, authenticated;');
-const liveConfirmReal = slice(issuance, /create or replace function public\.confirm_real_payment/, '$function$;');
-const liveCancelReal = slice(confirmReal, /create or replace function cancel_real_payment/, '$$;');
-const liveConfirmTest = slice(lifecycle, /CREATE OR REPLACE FUNCTION public\.confirm_test_payment/, '$function$;');
-const liveSettlement = slice(settlementSrc, /create or replace function admin_center_settlement_summary/, '\n$$;');
-
-// 운영 정의 형태 재현: CRLF 줄바꿈, '[NEW 2026-10-02]' 주석 없음(운영 fulfill_order). 저장소 정의를 변환해 설치한다.
-const toCrlf = t => t.replace(/\r?\n/g, '\r\n');
-const dropNewComment = t => t.replace(/^[ \t]*-- \[NEW 2026-10-02\][^\n]*\n/m, '');
 async function world({ refundFixApplied = true, supportApplied = true, crlf = false, noComment = false } = {}) {
-  const shape = t => { let x = t; if (noComment) x = dropNewComment(x); if (crlf) x = toCrlf(x); return x; };
   const db = new PGlite();
-  await db.exec(`
-    create role anon; create role authenticated; create role service_role bypassrls;
-    grant usage on schema public to anon, authenticated, service_role;
-    create schema auth;
-    create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('app.uid', true), '')::uuid $$;
-    create function my_account_id() returns uuid language sql stable as $$ select nullif(current_setting('app.account_id', true), '')::uuid $$;
-    create table perms(account_id uuid, center_id uuid, perm text);
-    create function has_permission(c uuid, p text) returns boolean language sql stable as $$ select exists (select 1 from perms where account_id = my_account_id() and center_id = c and perm = p) $$;
-    create function is_platform_admin() returns boolean language sql stable as $$ select coalesce(current_setting('app.platform_admin', true), '') = 'on' $$;
-    create table accounts(id uuid primary key, auth_id uuid, merged_into uuid);
-    create table account_auth_identities(account_id uuid, auth_id uuid);
-    create table profiles(id uuid primary key, account_id uuid);
-    create function my_profile_ids() returns setof uuid language sql stable as $$ select id from profiles where account_id = my_account_id() $$;
-    create table centers(id uuid primary key, name text default 'c', is_internal boolean not null default false);
-    create table center_settlement_accounts(center_id uuid, bank_name text, account_number text, account_holder_name text);
-    create table products(id uuid primary key, center_id uuid, name text, purchase_count_selectable boolean default false, unlimited_pass boolean default false, total_count int default 10,
-      expiry_mode text default 'none', expiry_date date, expiry_days int, rolling_month_cutoff_day int default 15, rolling_month_allow_early_use boolean default false);
-    create table orders(id uuid primary key default gen_random_uuid(), profile_id uuid, center_id uuid, product_id uuid, product_name text, amount int default 10000, selected_count int,
-      selected_day_of_week int, selected_start_time time, selected_size text, auto_book boolean, member_coupon_id uuid,
-      status text default 'pending' constraint orders_status_check check (status in ('pending','paid','cancelled','done')),
-      paid_at timestamptz, verified boolean default true, pay_method text default 'card',
-      payment_provider text constraint orders_payment_provider_check check (payment_provider is null or payment_provider in ('mock','toss','portone')));
-    create table memberships(id uuid primary key default gen_random_uuid(), profile_id uuid, center_id uuid, product_id uuid, product_name text, pass_type text, total_count int, remaining_count int,
-      expires_at date, starts_at date, status text default 'active', bound_day_of_week int, bound_start_time time, selected_size text, auto_book_requested boolean, pg_refund_started_at timestamptz);
-    create table payments(id uuid primary key default gen_random_uuid(), center_id uuid, profile_id uuid, membership_id uuid, order_id uuid, sale_type text, revenue_category text,
-      card_amount int, cash_amount int, transfer_amount int, point_amount int, direct_amount int, total_amount int, unpaid_amount int, pg_transaction_id text, paid_at timestamptz, status text, memo text,
-      payment_provider text constraint payments_payment_provider_check check (payment_provider is null or payment_provider in ('mock','toss','portone')));
-    create table member_coupons(id uuid primary key, status text, used_at timestamptz, order_id uuid);
-    create table center_members(center_id uuid, profile_id uuid, status text default 'active');
-    create table restored_points(order_id uuid, reason text);
-    create function _refund_block_reason(m memberships, b boolean default false) returns text language sql as $$ select null::text $$;
-    create function _restore_order_points(o uuid, r text) returns void language sql as $$ insert into restored_points values (o, r) $$;
-    create function ensure_center_member(uuid, uuid) returns void language sql as $$ select 1 $$;
-    create function member_can_purchase_product(uuid, uuid) returns boolean language sql as $$ select true $$;
-    create function _order_expected_amount(o orders, b boolean) returns int language sql as $$ select o.amount $$;
-    create function _order_auto_book(uuid, boolean) returns jsonb language sql as $$ select '{}'::jsonb $$;
-    insert into centers values ('${C1}', 'c1', false), ('${CI}', 'ci', true);
-    insert into accounts values ('${ACC}', '${AUTH}', null);
-    insert into profiles values ('${P1}', '${ACC}');
-    insert into products(id, center_id, name) values ('${PROD}', '${C1}', 'p');
-    insert into perms values ('${MGR}', '${C1}', 'pass.payment.create'), ('${MGR}', '${CI}', 'pass.payment.create');
-    insert into center_settlement_accounts values ('${C1}', 'bank', '123', 'holder');
-    ${liveAccountFor}
-    ${liveForceInsert}
-    ${liveStatusGuard}
-    ${liveRestoreTrigger}
-    ${shape(liveHelper)}
-    ${shape(liveFulfill)}
-    ${liveRefundWrappers}
-    ${liveConfirmReal}
-    ${liveCancelReal}
-    ${liveConfirmTest}
-    ${shape(liveSettlement)}
-    revoke all on function public._issue_membership_and_record_payment(orders, text, text) from public, anon, authenticated, service_role;
-  `);
-  await db.exec(shape(liveCore));
-  await db.exec(`revoke all on function public._refund_membership_core(uuid, uuid, boolean, boolean) from public, anon, authenticated, service_role;`);
+  await db.exec(W.baseWorldSql({ crlf, noComment }));
+  await db.exec(W.coreInstallSql({ crlf, noComment }));
   if (refundFixApplied) await db.exec(refundFix);   // 적용 순서: ① 환불 차단 수정 → ② NICEPAY 지원(환불 core 패치 포함)
   if (supportApplied) await db.exec(support);
   return db;
@@ -125,7 +35,7 @@ async function paidMembership(db, provider, { amount = 10000 } = {}) {   // 환�
   const mid = id(6, Math.floor(Math.random() * 1e9));
   if (provider === 'nicepay') await db.exec(`update orders set pg_tid = 'NP-${oid.slice(-9)}', pg_claim_id = gen_random_uuid() where id='${oid}'; insert into nicepay_pg_approvals(order_id, claim_id, tid, amount, response_digest) select id, pg_claim_id, pg_tid, greatest(${amount}, 1), '${'a'.repeat(64)}' from orders where id='${oid}';`);
   await db.exec(`insert into memberships(id, profile_id, center_id, product_id, product_name, total_count, remaining_count) values ('${mid}','${P1}','${C1}','${PROD}','p',10,10);
-    insert into payments(center_id, profile_id, membership_id, order_id, sale_type, total_amount, pg_transaction_id, paid_at, status) values ('${C1}','${P1}','${mid}','${oid}','new',${amount},'tid-${mid.slice(-6)}',now(),'paid');`);
+    insert into payments(center_id, profile_id, membership_id, order_id, sale_type, total_amount, pg_transaction_id, paid_at, status) values ('${C1}','${P1}','${mid}','${oid}','new',${amount},${provider === 'mock' ? `'mock_${mid.slice(-6)}'` : provider ? `'tid-${mid.slice(-6)}'` : 'null'},now(),'paid');`);
   return { oid, mid };
 }
 const DIG = 'a'.repeat(64);
@@ -569,7 +479,7 @@ test('I. 제자리 패치 안전성: 정의가 예상과 다르면 중단하고 
 test('J. verify SQL 전부 true / 롤백은 nicepay 데이터·감사 기록이 있으면 중단, 없으면 원본(라이브) 정의로 정확히 복원', async () => {
   const db = await world();
   try {
-    const v1 = (await db.query(stripComments(read('verify_fix_refund_block_all_pg_providers_20261016.sql')))).rows[0];
+    const v1 = (await db.query(stripComments(read('verify_fix_refund_pg_origin_guard_20261017.sql')))).rows[0];
     assert.ok(Object.values(v1).every(x => x === true), JSON.stringify(v1));
     const v2 = (await db.query(stripComments(read('verify_add_nicepay_provider_support_20261016.sql')))).rows[0];
     assert.ok(Object.values(v2).every(x => x === true), JSON.stringify(v2));
@@ -947,15 +857,25 @@ test('U2. 적용 순서/역순 롤백: 정순서 적용 → 역순 롤백이 전
     assert.equal(after.trigger.replace(/\s+/g, ' '), before.trigger.replace(/\s+/g, ' '));
     assert.equal(after.core.replace(/\s+/g, ' '), before.core.replace(/\s+/g, ' '), 'core(환불 수정 롤백 포함) 공백 무관 동일');
   } finally { await db.close(); }
-  // 잘못된 순서: support 뒤에 환불 수정을 적용하면 취소 확인 가드가 사라지고 verify가 false로 잡는다
-  const bad = await world({ supportApplied: true, refundFixApplied: false });
+  // 순서 독립: 이번 환불 패치는 현재 정의를 제자리 패치하므로 support 뒤에 적용해도 NICEPAY 취소 확인 가드가 지워지지 않는다(이전의 함수 통째 교체 방식과의 차이)
+  const swapped = await world({ supportApplied: true, refundFixApplied: false });
   try {
-    await bad.exec(refundFix);
-    const v = (await bad.query(stripComments(read('verify_add_nicepay_provider_support_20261016.sql')))).rows[0];
-    assert.equal(v.refund_core_requires_pg_cancel_must_be_true, false);
-    await bad.exec(support);   // support 재실행으로 복구(멱등)
-    assert.equal((await bad.query(stripComments(read('verify_add_nicepay_provider_support_20261016.sql')))).rows[0].refund_core_requires_pg_cancel_must_be_true, true);
-  } finally { await bad.close(); }
+    await swapped.exec(refundFix);
+    const v = (await swapped.query(stripComments(read('verify_add_nicepay_provider_support_20261016.sql')))).rows[0];
+    assert.equal(v.refund_core_requires_pg_cancel_must_be_true, true);
+    const v2 = (await swapped.query(stripComments(read('verify_fix_refund_pg_origin_guard_20261017.sql')))).rows[0];
+    assert.ok(Object.values(v2).every(x => x === true), JSON.stringify(v2));
+    const [a1, a2] = [await defOf(swapped, SIGS.core), null];
+    await swapped.exec(refundFix);   // 멱등
+    assert.equal(await defOf(swapped, SIGS.core), a1);
+    const fwd = await world();       // 정순서 결과와 동일한 최종 정의
+    try {
+      const b1 = await defOf(fwd, SIGS.core);
+      const base = d => stripBlock(stripBlock(d, 'nicepay_pg_cancel_guard'), 'pg_unknown_origin_guard');
+      assert.equal(base(b1), base(a1), '순서가 달라도 가드 블록을 뺀 나머지 정의는 같다');
+      for (const d of [a1, b1]) for (const m of ['nicepay_pg_cancel_guard', 'pg_unknown_origin_guard']) assert.equal((d.match(new RegExp(`-- ${m} begin`, 'g')) ?? []).length, 1, `${m} 블록은 정확히 1개`);
+    } finally { await fwd.close(); }
+  } finally { await swapped.close(); }
 });
 
 test('V. 정적 SQL 검토: 모든 새 함수가 SECURITY DEFINER + search_path 고정 + 클라이언트 권한 회수, 롤백은 DROP TABLE을 데이터 보호 가드 뒤에서만, DELETE/TRUNCATE 없음', async () => {
@@ -1060,4 +980,138 @@ test('X3. 승인 기록 저장도 같은 잠금 순서: release가 먼저 끝났
     assert.equal((await q1(db, `select status from orders where id='${o}'`)).status, 'done');
     const t = await mkOrder(db, 'toss', { amount: 5000 }); assert.equal((await q1(db, `select confirm_real_payment('${t}', 'pk', 5000) r`)).r.already_done, false);
   } finally { await db.close(); }
+});
+
+// ================================================================ 결제 기록 정합성: order_id 연결 없는 PG 결제의 일반 환불 우회 ====
+// 운영 실측: Toss 완료 주문 3건 / 연결된 결제 기록 2건 / 32만 원 주문 1건은 payments.order_id 없음 / 같은 회원·센터·상품의 수강권·환불 기록 존재.
+const memOf = async (db, oid) => (await q1(db, `select membership_id m from payments where order_id='${oid}'`)).m;
+async function prodLike(db, { pgKeyOnUnlinked = true } = {}) {
+  const linked = [];
+  for (const amt of [100000, 200000]) { const o = await mkOrder(db, 'toss', { amount: amt }); await db.query(`select confirm_real_payment('${o}', 'pk_${amt}', ${amt})`); linked.push({ oid: o, mid: await memOf(db, o), amt }); }
+  // 32만 원 Toss 완료 주문: 결제 행이 order_id 없이 존재
+  const orphan = await mkOrder(db, 'toss', { amount: 320000, status: 'done' });
+  const m3 = id(6, 3200);
+  await db.exec(`insert into memberships(id, profile_id, center_id, product_id, product_name, total_count, remaining_count) values ('${m3}','${P1}','${C1}','${PROD}','p',10,10);
+    insert into payments(center_id, profile_id, membership_id, order_id, sale_type, total_amount, pg_transaction_id, paid_at, status) values ('${C1}','${P1}','${m3}',null,'new',320000,${pgKeyOnUnlinked ? "'tosskey_320k'" : 'null'},now(),'paid');`);
+  // 같은 회원·센터·상품의 과거 수강권 + 환불 기록
+  const m0 = id(6, 3199);
+  await db.exec(`insert into memberships(id, profile_id, center_id, product_id, product_name, total_count, remaining_count, status) values ('${m0}','${P1}','${C1}','${PROD}','p',10,0,'refunded');
+    insert into payments(center_id, profile_id, membership_id, sale_type, total_amount, paid_at, status) values ('${C1}','${P1}','${m0}','new',320000,now() - interval '30 days','paid'), ('${C1}','${P1}','${m0}','refund',-320000,now() - interval '29 days','paid');`);
+  return { linked, orphan, m3, m0 };
+}
+const memberRefund = (db, mid) => asUser(db, () => db.query(`select refund_membership('${mid}') r`));
+
+for (const pgKey of [true, false]) {
+  test(`Y1. order_id 없는 Toss 결제(${pgKey ? 'pg_transaction_id 있음' : '키도 없음 — 고아 PG 주문 신호만'}): 수정 전 회원 일반 환불로 우회 가능(재현), 수정 후 차단, 서버 경로·연결된 Toss·정산·데이터는 그대로`, async () => {
+    const before = await world({ supportApplied: false, refundFixApplied: false });
+    try {
+      const f = await prodLike(before, { pgKeyOnUnlinked: pgKey });
+      const r = await memberRefund(before, f.m3);
+      assert.equal(r.rows[0].r.refunded, true, '수정 전: 연결 없는 PG 결제 건이 PG 취소 없이 DB에서만 환불된다(우회)');
+    } finally { await before.close(); }
+
+    const db = await world({ supportApplied: false, refundFixApplied: false });
+    try {
+      const f = await prodLike(db, { pgKeyOnUnlinked: pgKey });
+      const snap = async () => JSON.stringify([(await db.query(`select * from orders order by id`)).rows, (await db.query(`select * from payments order by id`)).rows, (await db.query(`select * from memberships order by id`)).rows]);
+      const dataBefore = await snap();
+      await db.exec(refundFix);
+      assert.equal(await snap(), dataBefore, '패치는 데이터를 1바이트도 바꾸지 않는다(자동 연결·백필 없음)');
+      assert.equal(await count(db, 'payments', `membership_id='${f.m3}' and order_id is null and total_amount = 320000`), 1, '32만 원 결제의 order_id는 NULL 그대로');
+      // 차단: 회원 일반 환불
+      await rejects(memberRefund(db, f.m3), /PG 결제 출처를 확인할 수 없는 수강권/);
+      assert.equal((await q1(db, `select status from memberships where id='${f.m3}'`)).status, 'active');
+      assert.equal(await count(db, 'payments', `membership_id='${f.m3}' and sale_type='refund'`), 0);
+      // 연결된 Toss 2건도 일반 환불 차단(기존), 서버 경로(allow_pg=true)는 둘 다 가능(운영자/서버가 PG 취소 후 마무리)
+      for (const l of f.linked) await rejects(memberRefund(db, l.mid), /환불 요청 기능/);
+      assert.deepEqual((await db.query(`select refund_membership_server('${f.m3}','${AUTH}', true, false) r`)).rows[0].r, { refunded: true, amount: 320000 });
+      assert.equal((await db.query(`select refund_membership_server('${f.linked[0].mid}','${AUTH}', true, false) r`)).rows[0].r.refunded, true);
+      // 정산 호환: 기존 payments 행(provider NULL)은 정산 대상이 아니던 기존 동작 그대로, 패치로 변하지 않음
+      await db.exec(`select set_config('app.platform_admin','on',false)`);
+      const sum = await q1(db, `select coalesce(sum(total_amount),0)::int t from admin_center_settlement_summary(current_date - 1, current_date + 1)`);
+      assert.equal(sum.t, 0, '기존 동작과 동일(정산은 payments.payment_provider 기준 — 이 패치는 건드리지 않음)');
+    } finally { await db.close(); }
+  });
+}
+
+test('Y2. 정상 직접결제·Mock·수기 결제 환불은 유지, 연결 없는 PG 주문과 무관한 수강권(다른 상품/회원)도 유지', async () => {
+  const db = await world();
+  try {
+    // 고아 PG 주문이 있는 상황(다른 상품 ↔ 같은 상품)
+    const PROD2 = id(4, 2); await db.exec(`insert into products(id, center_id, name) values ('${PROD2}', '${C1}', 'p2')`);
+    const orphan = await mkOrder(db, 'toss', { amount: 77000, status: 'done' });   // PROD(상품 1)의 고아 PG 완료 주문
+    const mk = async (provider, { product = PROD, key } = {}) => {
+      const oid = id(5, Math.floor(Math.random() * 1e9)); const mid = id(6, Math.floor(Math.random() * 1e9));
+      await db.exec(`insert into orders(id, profile_id, center_id, product_id, product_name, amount, status, payment_provider) values ('${oid}','${P1}','${C1}','${product}','p',10000,'done',${provider ? `'${provider}'` : 'null'});
+        insert into memberships(id, profile_id, center_id, product_id, product_name, total_count, remaining_count) values ('${mid}','${P1}','${C1}','${product}','p',10,10);
+        insert into payments(center_id, profile_id, membership_id, order_id, sale_type, total_amount, pg_transaction_id, paid_at, status) values ('${C1}','${P1}','${mid}','${oid}','new',10000,${key ? `'${key}'` : 'null'},now(),'paid');`);
+      return mid;
+    };
+    // 같은 상품 수강권은 고아 PG 주문 때문에 보수적으로 차단, 다른 상품은 정상 환불
+    await rejects(memberRefund(db, await mk(null)), /PG 결제 출처를 확인할 수 없는 수강권/);
+    await rejects(memberRefund(db, await mk('mock', { key: 'mock_x1' })), /PG 결제 출처를 확인할 수 없는 수강권/);
+    for (const [p, key] of [[null, null], ['mock', 'mock_abc']]) assert.equal((await memberRefund(db, await mk(p, { product: PROD2, key }))).rows[0].r.refunded, true, `${p}: 다른 상품은 정상 환불`);
+    // 고아 PG 주문이 없으면(= 정상 상태) 같은 상품이라도 직접결제/Mock/수기 환불 유지
+    await db.exec(`delete from orders where id='${orphan}'`);
+    for (const [p, key] of [[null, null], ['mock', 'mock_abc']]) assert.equal((await memberRefund(db, await mk(p, { key }))).rows[0].r.refunded, true, `${p}: 정상 환불`);
+    const manual = id(6, 4242);   // 수기 입력 결제(주문·PG 키 없음)
+    await db.exec(`insert into memberships(id, profile_id, center_id, product_id, product_name, total_count, remaining_count) values ('${manual}','${P1}','${C1}','${PROD}','p',10,10);
+      insert into payments(center_id, profile_id, membership_id, sale_type, total_amount, paid_at, status) values ('${C1}','${P1}','${manual}','new',50000,now(),'paid');`);
+    assert.equal((await memberRefund(db, manual)).rows[0].r.refunded, true, '수기 결제 환불 유지');
+    // 환불 행(refund)에 남은 PG 흔적은 신호가 아니다: 이미 환불된 건과 새 수강권이 섞여도 영향 없음
+    const old = id(6, 4243);
+    await db.exec(`insert into memberships(id, profile_id, center_id, product_id, product_name, total_count, remaining_count) values ('${old}','${P1}','${C1}','${PROD}','p',10,10);
+      insert into payments(center_id, profile_id, membership_id, sale_type, total_amount, pg_transaction_id, paid_at, status) values ('${C1}','${P1}','${old}','new',10000,null,now(),'paid'), ('${C1}','${P1}','${old}','refund',-1,'x_refund_key',now(),'paid');`);
+    assert.equal((await memberRefund(db, old)).rows[0].r.refunded, true);
+  } finally { await db.close(); }
+});
+
+test('Y3. 가장 최근 결제 행만 보던 허점: PG 결제 뒤에 order_id 없는 수기/후속 결제 행이 더 최근에 있어도, 주문 삭제로 order_id가 NULL이 돼도 일반 환불 차단', async () => {
+  const before = await world({ supportApplied: false, refundFixApplied: false });
+  try {
+    const o = await mkOrder(before, 'toss', { amount: 9000 }); await before.query(`select confirm_real_payment('${o}', 'pk_y3', 9000)`);
+    const mid = await memOf(before, o);
+    await before.exec(`insert into payments(center_id, profile_id, membership_id, sale_type, total_amount, paid_at, status) values ('${C1}','${P1}','${mid}','new',1000,now() + interval '1 minute','paid');`);
+    assert.equal((await memberRefund(before, mid)).rows[0].r.refunded, true, '수정 전: 후속 수기 결제 행이 최신이면 PG 가드를 건너뛴다(우회)');
+  } finally { await before.close(); }
+  const db = await world();
+  try {
+    const o = await mkOrder(db, 'toss', { amount: 9000 }); await db.query(`select confirm_real_payment('${o}', 'pk_y3', 9000)`);
+    const mid = await memOf(db, o);
+    await db.exec(`insert into payments(center_id, profile_id, membership_id, sale_type, total_amount, paid_at, status) values ('${C1}','${P1}','${mid}','new',1000,now() + interval '1 minute','paid');`);
+    await rejects(memberRefund(db, mid), /환불 요청 기능|PG 결제 출처를 확인할 수 없는 수강권/);
+    // 주문 연결이 SET NULL 로 끊긴 경우(pg_transaction_id는 남음)
+    const o2 = await mkOrder(db, 'toss', { amount: 8000 }); await db.query(`select confirm_real_payment('${o2}', 'pk_y3b', 8000)`);
+    const mid2 = await memOf(db, o2);
+    await db.exec(`update payments set order_id = null where membership_id = '${mid2}'`);
+    await db.exec(`update orders set status = 'done' where id = '${o2}'`);
+    await rejects(memberRefund(db, mid2), /PG 결제 출처를 확인할 수 없는 수강권/);
+    assert.equal((await db.query(`select refund_membership_server('${mid2}','${AUTH}', true, false) r`)).rows[0].r.refunded, true, '서버 경로는 그대로');
+  } finally { await db.close(); }
+});
+
+test('Y4. 롤백은 현재 정의 위에서 패치만 제거: 환불 core를 원문 그대로 복원(사이에 다른 패치가 있어도 보존), 패치는 멱등', async () => {
+  for (const opts of [{}, { crlf: true }]) {
+    const db = await world({ supportApplied: false, refundFixApplied: false, ...opts });
+    try {
+      const orig = await defOf(db, SIGS.core);
+      await db.exec(refundFix); await db.exec(refundFix);
+      const patched = await defOf(db, SIGS.core);
+      assert.equal((patched.match(/-- pg_unknown_origin_guard begin/g) ?? []).length, 1, '멱등');
+      assert.ok(/\/\*was:/.test(patched) && /payment_provider is not null and o\.payment_provider <> 'mock'/.test(patched));
+      await db.exec(support);   // 사이에 다른 패치(NICEPAY 취소 확인 가드)가 들어가도
+      await db.exec(refundRollback);
+      const after = await defOf(db, SIGS.core);
+      assert.equal(stripBlock(after, 'nicepay_pg_cancel_guard'), orig, `${JSON.stringify(opts)}: 우리 패치만 제거되고 원문(옛 'toss','portone' 조건 포함)으로 복원`);
+      assert.ok(/-- nicepay_pg_cancel_guard begin/.test(after), '다른 패치는 보존');
+    } finally { await db.close(); }
+  }
+  // 예상과 다른 구조면 중단(아무것도 바뀌지 않음)
+  const drift = await world({ supportApplied: false, refundFixApplied: false });
+  try {
+    await drift.exec(liveCore.replace("o.payment_provider in ('toss', 'portone')", "o.payment_provider in ('toss', 'portone', 'x')"));
+    const before = await defOf(drift, SIGS.core);
+    await rejects(drift.exec(refundFix), /PG 판별 조건이 예상과 달라요/); await drift.exec('rollback');
+    assert.equal(await defOf(drift, SIGS.core), before);
+  } finally { await drift.close(); }
 });

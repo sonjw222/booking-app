@@ -1,5 +1,7 @@
 # NICEPAY 도입 전 결제 DB 안전성 보강 설계 (Batch 3) — 2026-10-16
 
+> **2026-10-17 갱신(§12)**: `fix_refund_block_all_pg_providers_20261016.sql`(함수 통째 교체)은 **폐기**되고 `fix_refund_pg_origin_guard_20261017.sql`(운영 현재 정의 제자리 패치 + order_id 없는 PG 결제 차단)로 대체됐다. 이 문서의 이전 절에서 옛 파일명이 나오면 새 파일명으로 읽는다.
+
 > **Batch 3 보완판(운영 DB 실측 반영)은 §8이 최신이다.** §4의 RPC 목록·§6의 영향 표 중 §8과 다른 부분(RPC 8개, `nicepay_release_order` 근거 인자, `nicepay_resolve_review` 증거 인자, 상태 전이 트리거 확장, 제자리 패치 3건, 감사 테이블)은 §8이 우선한다.
 
 SQL은 **검토용 초안이며 DEV/Production에 실행하지 않았다.** 근거: 운영 DB 읽기 전용 조사 결과(사용자 제공) + 저장소의 최신 라이브 계보 정의. 오프라인 검증: `tests/sql/nicepay-provider-support.test.mjs`(PGlite 10개), `tests/unit/nicepay.*.test.ts`, `pgPaymentLifecycle.test.ts`.
@@ -235,3 +237,30 @@ commit;
 -- 세션 B가 풀리며 반환값 확인: 기대값 f(false). 확인: select status from orders where id='<O>';  → approving
 ```
 이전 구현에서는 B가 승인 기록을 못 본 채 `t`를 반환하고 상태가 pending으로 바뀐다.
+
+## 12. 결제 기록 정합성 QA (2026-10-17) — order_id 없는 PG 결제를 통한 일반 환불 우회
+
+### 12-1. 운영 실측과 원인
+Toss 완료 주문 3건 / 연결된 결제 기록 2건 / **32만 원 완료 주문 1건은 `payments.order_id` 연결 없음** / 같은 회원·센터·상품의 수강권·환불 기록 존재(사용자 읽기 전용 조사).
+- `payments.order_id`는 nullable이고 `references orders(id) on delete set null`(add_membership_visibility_and_coupons.sql). 컬럼이 생기기 전(2026-09-18 이전) 결제, 주문 삭제로 SET NULL 된 행, 수기 입력 행은 order_id가 없다.
+- `_refund_membership_core`는 **가장 최근 payments 행 하나**의 order_id로 주문 provider를 찾아 PG 여부를 판단한다. order_id가 NULL이면 `v_order_id is not null and exists(...)`가 거짓 → **회원이 `refund_membership` RPC로 PG 결제 건을 Toss 취소 없이 DB에서만 환불**(돈은 그대로)할 수 있다. 우회 경로는 세 가지: ① 연결 없는 과거 PG 결제 ② PG 결제 뒤에 더 최근의 수기/후속 결제 행이 있는 수강권 ③ 주문 삭제로 연결이 끊긴 결제. 기존 `toss,portone` 목록·초기 NICEPAY 가드도 같은 허점을 공유했다.
+- 서버 환불 라우트도 `pg_refund_context`가 provider를 못 찾으면(null) 직접결제로 간주해 DB 환불 경로로 보낸다 — 같은 DB 가드에 막히지만, 앱 계층에서도 provider 불명은 직접결제로 취급되는 점을 인지해야 한다.
+
+### 12-2. 최소 변경 설계 (`fix_refund_pg_origin_guard_20261017.sql`)
+- **운영 현재 정의 기준 제자리 패치**(함수 통째 덮어쓰기 금지): `pg_get_functiondef`로 현재 정의를 읽어 일반환불 차단 위치가 정확히 1곳일 때만 수정, 아니면 중단. 옛 `in ('toss','portone')` 조건은 `/*was:…*/` 주석으로 보존해 롤백이 원문 그대로 복원. 이미 허용 목록이면 그 부분은 건너뜀. 다른 패치(NICEPAY 취소 확인 가드 등)와 **적용 순서 무관**(PGlite U2, 실제 PostgreSQL G6).
+- **PG 판별을 허용 목록으로**: payment_provider가 NULL(직접결제)도 `mock`도 아니면 PG.
+- **출처 불명확 차단**(회원 경로 `p_allow_pg=false`만): (a) 수강권의 결제 행 중 **하나라도** PG 주문과 연결 (b) 매출 행의 `payment_provider`가 PG이거나 `pg_transaction_id`가 있음(`mock_` 접두 제외, 환불 행 제외) (c) 같은 회원·센터·상품에 **결제 행이 하나도 연결되지 않은 PG 완료 주문(고아 PG 주문)**이 존재.
+- **유지**: 정상 직접결제(NULL)·Mock(`mock_`)·수기 입력 결제 환불, 다른 상품/회원 수강권 환불, 서버 경로(`p_allow_pg=true`) 환불, 기존 Toss 서버 환불, 정산·매출 집계.
+- **금지 준수**: 주문 자동 연결·과거 결제 추정 백필·데이터 변경 없음(테스트 Y1이 패치 전후 orders/payments/memberships를 직렬화 비교해 불변 확인). 불명확하면 **차단만** 하고, 연결/환불 처리는 운영자가 PG 콘솔에서 확인한 뒤 서버 경로로 한다.
+- 알려진 보수성(트레이드오프): (c)는 고아 PG 주문이 있는 동안 **같은 회원·센터·상품의 다른 수강권**(직접결제 포함)의 앱 내 환불도 막는다(Y2). 오탐 가능성보다 PG 우회 차단을 우선했고, 해당 건은 서버 경로/운영자 처리 가능.
+
+### 12-3. 운영자 조치 절차 (실행 금지 — 참고)
+1. 읽기 전용 진단 `diagnose_pg_payment_linkage_20261017.sql` 실행 → 고아 PG 주문, order_id 없는 PG 흔적 결제, 같은 회원·센터·상품의 수강권/환불 후보를 표시(연결하지 않음).
+2. 32만 원 건: Toss 콘솔에서 해당 결제(paymentKey)의 상태 확인(승인/취소).
+3. 고객 환불이 필요하면 Toss 콘솔에서 취소 후 서버 경로 `refund_membership_server(수강권, auth_uid, true, true)`로 DB 환불 마무리(운영 도구/승인된 SQL). 연결 정보 보정(payments.order_id 갱신)이 필요하면 별도 승인된 감사 SQL로 건별 수동 처리 — 이번 작업은 하지 않음.
+
+### 12-4. 실제 PostgreSQL 2세션 동시성 테스트 (격리 환경)
+- 환경: 로컬 Colima(Docker) 위 `postgres:16-alpine` 컨테이너, `127.0.0.1:55432`에만 바인딩, 임의 비밀번호, 실행마다 새 DB(`qa_nicepay_*`) 생성·삭제. 운영/공유 DEV 접속 불가(스크립트가 loopback 이외 호스트를 거부).
+- 스크립트: `tests/sql/real-pg/nicepay-real-pg.mjs`(기본 `npm run test:sql`에는 포함되지 않음). 같은 SQL 월드를 PGlite 테스트와 공유(`tests/sql/helpers/nicepayWorld.mjs`).
+- 결과 17/17 PASS: R1 release↔승인 기록 저장 경합(신규 구현 거부) + **R1-neg 구 구현은 같은 경합에서 승인된 선점을 풀어버림(음성 대조)**, R2 반대 방향, R3 동시 claim 20회, R4 동시 확정, R5 TID 동시 재사용, R6 동시 환불, R7 동시 취소 기록, R8~R10 확정/검토/수동 해소 경합, G1~G6 Toss 회귀·운영 형태 재현·preflight/verify·롤백 보호·정순서 적용/역순 롤백 원문 복원·적용 순서 독립.
+- 한계: PostgreSQL 16.15에서 검증(Supabase는 15/17일 수 있음 — 사용한 기능은 모두 PG13+ 표준). 실제 Supabase 환경(PostgREST, 권한 기본값)은 포함되지 않음.
