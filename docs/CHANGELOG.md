@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-16 (6) — Batch 3 운영 호환성 보완 #2: CRLF/주석없는 운영 정의 대응 · create_order_secure · NICEPAY 환불은 PG 취소 확인 후 (검토용 SQL, 미실행)
+- `add_nicepay_provider_support_20261016.sql`: 제자리 패치 위치를 줄바꿈·주석 무관 정규식 + "정확히 1곳" 검증으로 교체(fulfill_order는 cancelled 차단 코드 기준), 환불 core 패치 추가(NICEPAY는 `nicepay_pg_cancels` 기록 전 내부 환불 불가), `nicepay_record_pg_cancel`, 롤백은 원문 그대로 복원.
+- 신규 SQL(미실행): `fix_create_order_secure_allow_nicepay_20261016.sql`(+rollback), 읽기 전용 `preflight_nicepay_patch_targets_20261016.sql`.
+- PGlite 44개(CRLF/LF × 주석 유무, create_order_secure 가정 형태 3종, 구조 불일치 중단, 롤백 정확 복원). 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §9.
+
 ## 2026-10-16 (5) — Batch 3 보완: 상태 전이 트리거 확장 · payments.payment_provider 기록 · 감사 기록 (검토용 SQL, 미실행)
 - `add_nicepay_provider_support_20261016.sql` 보완: `orders_guard_status_transition()` 확장(기존 4전이 유지, approving·NICEPAY paid/done은 서버 표시 필요), 발급 helper·정산 요약·`fulfill_order` 제자리 패치(위치 불일치 시 전체 중단), 추가 전용 감사 테이블 `nicepay_review_actions`, 수동 해소는 증거·처리자 필수, 검토 대기 주문 수동 확정 전용 함수. rollback/verify 동기화.
 - PGlite 테스트를 실제 트리거·실제 helper 기반으로 재작성(20개). 코드: `releaseOrder`에 근거 인자 추가. 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §8.

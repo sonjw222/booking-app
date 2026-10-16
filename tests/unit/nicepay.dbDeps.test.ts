@@ -26,11 +26,11 @@ describe("nicepayDbDeps ↔ add_nicepay_provider_support_20261016.sql", () => {
   });
   it("SQL 초안: 모든 새 RPC는 service_role에만 grant, confirm_real_payment/cancel_real_payment는 수정하지 않는다", () => {
     const code = sql.replace(/^\s*--.*$/gm, "");
-    for (const f of ["nicepay_order_context", "nicepay_claim_order", "nicepay_release_order", "nicepay_mark_review", "nicepay_expire_stale_claims", "nicepay_resolve_review", "nicepay_confirm_reviewed", "confirm_nicepay_payment"]) {
+    for (const f of ["nicepay_order_context", "nicepay_claim_order", "nicepay_release_order", "nicepay_mark_review", "nicepay_expire_stale_claims", "nicepay_resolve_review", "nicepay_confirm_reviewed", "nicepay_record_pg_cancel", "confirm_nicepay_payment"]) {
       expect(code, f).toMatch(new RegExp(`grant execute on function ${f}\\([^)]*\\) to service_role;`));
       expect(code, f).toMatch(new RegExp(`revoke all on function ${f}\\([^)]*\\) from public, anon, authenticated;`));
     }
-    expect(code).not.toMatch(/function confirm_real_payment|function cancel_real_payment|function _issue_membership_and_record_payment/);
+    expect(code).not.toMatch(/function confirm_real_payment|function cancel_real_payment|function _issue_membership_and_record_payment|function fulfill_order|function _refund_membership_core/);   // 기존 함수는 pg_get_functiondef 제자리 패치로만 수정
     expect(code).not.toMatch(/drop table|truncate|delete from|update orders set payment_provider/i);
   });
 });

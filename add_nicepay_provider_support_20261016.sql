@@ -12,6 +12,8 @@
 --    (toss/portone/mock/직접결제 기록은 지금과 똑같이 NULL, 과거 데이터는 일절 수정하지 않는다).
 --  · admin_center_settlement_summary()는 payment_provider in ('toss','portone')만 정산 대상으로 본다 → 'nicepay' 포함(제자리 패치).
 --  · fulfill_order()(센터 직접결제 수동 발급)는 provider를 보지 않아 매니저가 결제 전 NICEPAY 주문을 발급할 수 있다 → NICEPAY 주문 거부(제자리 패치).
+--  · [운영 실측 반영] 운영 fulfill_order에는 '[NEW 2026-10-02]' 주석이 없고 운영 함수 정의에는 CRLF가 있다 → 모든 패치 위치를 줄바꿈·들여쓰기에 둔감한 정규식 + '정확히 1곳' 검증으로 교체.
+--  · NICEPAY 환불은 실제 PG 취소 확인 기록(nicepay_pg_cancels) 없이는 내부 환불 불가([5-2], [6-4]).
 --
 -- 제자리 패치 방식: 이 파일은 라이브 함수 정의를 통째로 덮어쓰지 않는다. pg_get_functiondef()로 현재 정의를 읽어 정확히 1곳만 문자열 치환하고,
 --   예상 위치를 찾지 못하거나 2곳 이상이면(= 라이브가 저장소 계보와 다름) 예외로 중단해 아무것도 바꾸지 않는다. 이미 패치돼 있으면 건너뛴다(멱등).
@@ -34,17 +36,16 @@
 -- ============================================================
 begin;
 
--- [0] 사전 점검: 라이브 정의가 예상(저장소 계보)과 같은지. 다르면 아무것도 바꾸지 않고 중단.
+-- [0] 사전 점검: 라이브 상태 전이 트리거가 예상(기존 4전이)과 같은지. 다르면 아무것도 바꾸지 않고 중단. (공백·줄바꿈(CRLF/LF) 차이는 정규식으로 허용)
 do $$
 declare
     v_def text;
 begin
     select pg_get_functiondef('public.orders_guard_status_transition()'::regprocedure) into v_def;
-    if v_def not like '%허용되지 않는 주문 상태 변경이에요%' then
-        raise exception '라이브 orders_guard_status_transition 정의가 예상과 달라요 — 중단';
-    end if;
-    if v_def like '%approving%' then
-        raise notice 'orders_guard_status_transition 이 이미 approving을 포함 — 확장 단계 건너뜀 여부는 [3]에서 판단';
+    if v_def !~ '허용되지 않는 주문 상태 변경이에요'
+       or v_def !~ 'old\.status\s*=\s*''pending''\s+and\s+new\.status\s+in\s*\(\s*''paid''\s*,\s*''done''\s*,\s*''cancelled''\s*\)'
+       or v_def !~ 'old\.status\s*=\s*''paid''\s+and\s+new\.status\s+in\s*\(\s*''done''\s*,\s*''cancelled''\s*\)' then
+        raise exception '라이브 orders_guard_status_transition 정의가 예상(pending→paid/done/cancelled, paid→done/cancelled)과 달라요 — 중단';
     end if;
 end $$;
 
@@ -207,66 +208,138 @@ create trigger nicepay_review_actions_append_only
     before update or delete on nicepay_review_actions
     for each row execute function nicepay_review_actions_append_only();
 
--- [6] 제자리 패치 -----------------------------------------------------------
+-- [5-2] 실제 PG 승인 취소 확인 기록(추가 전용): NICEPAY 환불은 이 기록이 있어야 내부 환불이 가능하다([6-4]).
+create table if not exists nicepay_pg_cancels (
+    id              bigint generated always as identity primary key,
+    order_id        uuid not null unique references orders(id) on delete restrict,
+    pg_tid          text not null,
+    cancel_tid      text not null unique check (length(btrim(cancel_tid)) >= 4),
+    cancel_amount   integer not null check (cancel_amount > 0),
+    source          text not null check (source in ('api_response', 'admin_console')),
+    actor           text not null check (length(btrim(actor)) >= 2),
+    created_at      timestamptz not null default now()
+);
+alter table nicepay_pg_cancels enable row level security;
+revoke all on table nicepay_pg_cancels from public, anon, authenticated;
+create or replace function nicepay_pg_cancels_append_only()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    raise exception '취소 확인 기록은 수정하거나 삭제할 수 없어요' using errcode = '42501';
+end;
+$$;
+revoke all on function nicepay_pg_cancels_append_only() from public, anon, authenticated;
+drop trigger if exists nicepay_pg_cancels_append_only on nicepay_pg_cancels;
+create trigger nicepay_pg_cancels_append_only
+    before update or delete on nicepay_pg_cancels
+    for each row execute function nicepay_pg_cancels_append_only();
+
+-- [6] 제자리 패치 4건 -----------------------------------------------------------
+-- 모든 패치는 줄바꿈(CRLF/LF)·들여쓰기에 민감하지 않은 정규식으로 위치를 찾고, 위치가 정확히 1곳이 아니면(예상과 다른 함수 구조) 예외로 전체 트랜잭션을 중단한다.
+-- 삽입한 코드는 정확히 되돌릴 수 있게 표지 주석(begin/end)으로 감싸거나 역치환 가능한 형태로 넣는다(롤백 SQL이 원문 그대로 복원).
 -- 6-1) 발급 helper: NICEPAY 주문의 payments 행에 payment_provider='nicepay' 기록(그 밖의 모든 주문은 지금처럼 컬럼을 비워 NULL 유지)
 do $$
 declare
-    v_def text; v_new text;
-    a1 text := E'total_amount, unpaid_amount, pg_transaction_id, paid_at, status, memo\n    ) values (';
-    b1 text := E'total_amount, unpaid_amount, pg_transaction_id, paid_at, status, memo, payment_provider\n    ) values (';
-    a2 text := E'        p_memo\n    );';
-    b2 text := E'        p_memo,\n        case when p_order.payment_provider = ''nicepay'' then ''nicepay'' else null end\n    );';
+    v_def text; v_n1 int; v_n2 int;
+    p1 text := '(pg_transaction_id,\s*paid_at,\s*status,\s*memo)(\s*\)\s*values\s*\()';
+    p2 text := '(p_memo)(\s*\)\s*;)';
 begin
     select pg_get_functiondef('public._issue_membership_and_record_payment(orders,text,text)'::regprocedure) into v_def;
-    if v_def like '%case when p_order.payment_provider = ''nicepay'' then ''nicepay'' else null end%' then
+    if v_def ~ 'case when p_order\.payment_provider = ''nicepay''' then
         raise notice '_issue_membership_and_record_payment: 이미 패치됨 — 건너뜀';
-    else
-        if (length(v_def) - length(replace(v_def, a1, ''))) / length(a1) <> 1 or (length(v_def) - length(replace(v_def, a2, ''))) / length(a2) <> 1 then
-            raise exception '_issue_membership_and_record_payment 정의가 예상과 달라요(패치 위치 불일치) — 중단';
-        end if;
-        v_new := replace(replace(v_def, a1, b1), a2, b2);
-        execute v_new;
+        return;
     end if;
+    select count(*) into v_n1 from regexp_matches(v_def, p1, 'g');
+    select count(*) into v_n2 from regexp_matches(v_def, p2, 'g');
+    if v_n1 <> 1 or v_n2 <> 1 or v_def !~* 'insert\s+into\s+payments' then
+        raise exception '_issue_membership_and_record_payment 정의가 예상과 달라요(패치 위치 %/% — 각 1곳이어야 함) — 중단', v_n1, v_n2;
+    end if;
+    v_def := regexp_replace(v_def, p1, '\1, payment_provider\2');
+    v_def := regexp_replace(v_def, p2, '\1, case when p_order.payment_provider = ''nicepay'' then ''nicepay'' else null end\2');
+    execute v_def;
 end $$;
 
 -- 6-2) 정산 요약: nicepay 결제도 대표(플랫폼) 가맹점 수납 건이므로 정산 대상에 포함. 함수가 없으면 건너뜀(라이브에 미적용일 수 있음).
 do $$
 declare
-    v_def text;
-    a text := 'p.payment_provider in (''toss'', ''portone'')';
-    b text := 'p.payment_provider in (''toss'', ''portone'', ''nicepay'')';
+    v_def text; v_n int;
+    p text := '(p\.payment_provider\s+in\s*\(\s*''toss''\s*,\s*''portone'')(\s*\))';
 begin
     if to_regprocedure('public.admin_center_settlement_summary(date,date)') is null then
         raise notice 'admin_center_settlement_summary 없음 — 건너뜀';
         return;
     end if;
     select pg_get_functiondef('public.admin_center_settlement_summary(date,date)'::regprocedure) into v_def;
-    if v_def like '%''portone'', ''nicepay''%' then
+    if v_def ~ '''portone''\s*,\s*''nicepay''' then
         raise notice 'admin_center_settlement_summary: 이미 패치됨 — 건너뜀';
-    else
-        if (length(v_def) - length(replace(v_def, a, ''))) / length(a) <> 1 then
-            raise exception 'admin_center_settlement_summary 정의가 예상과 달라요(패치 위치 불일치) — 중단';
-        end if;
-        execute replace(v_def, a, b);
+        return;
     end if;
+    select count(*) into v_n from regexp_matches(v_def, p, 'g');
+    if v_n <> 1 then
+        raise exception 'admin_center_settlement_summary 정의가 예상과 달라요(패치 위치 % — 1곳이어야 함) — 중단', v_n;
+    end if;
+    execute regexp_replace(v_def, p, '\1, ''nicepay''\2');
 end $$;
 
--- 6-3) 센터 직접결제 수동 발급(fulfill_order): PG 승인 전 NICEPAY 주문은 발급 불가(이미 done이면 기존처럼 멱등 응답)
+-- 6-3) 센터 직접결제 수동 발급(fulfill_order): PG 승인 전 NICEPAY 주문은 발급 불가.
+--   운영 정의 기준 위치: "if v_order.status = 'cancelled' then raise exception '취소된 주문은 발급할 수 없어요'; end if;" 바로 뒤(주석 유무와 무관).
+--   done 멱등 처리(이 블록보다 앞)와 cancelled 차단은 그대로이며, 정확히 한 위치에만 표지 주석으로 감싼 블록을 추가한다.
 do $$
 declare
-    v_def text;
-    a text := E'    -- [NEW 2026-10-02] 취소된 주문은 다시 발급할 수 없다';
-    b text := E'    if v_order.payment_provider = ''nicepay'' then\n        raise exception ''NICEPAY 결제 주문은 PG 승인으로만 발급할 수 있어요'';\n    end if;\n\n' || E'    -- [NEW 2026-10-02] 취소된 주문은 다시 발급할 수 없다';
+    v_def text; v_nl text; v_nd int; v_nc int;
+    pd text := 'status\s*=\s*''done''\s+then\s+return\s+json_build_object\(\s*''already_done''\s*,\s*true\s*\)\s*;\s*end\s+if;';
+    pc text := '(if\s+v_order\.status\s*=\s*''cancelled''\s+then\s+raise\s+exception\s+''취소된 주문은 발급할 수 없어요''\s*;\s*end\s+if;)';
 begin
     select pg_get_functiondef('public.fulfill_order(uuid)'::regprocedure) into v_def;
-    if v_def like '%NICEPAY 결제 주문은 PG 승인으로만 발급할 수 있어요%' then
+    if v_def like '%-- fulfill_nicepay_guard begin%' then
         raise notice 'fulfill_order: 이미 패치됨 — 건너뜀';
-    else
-        if (length(v_def) - length(replace(v_def, a, ''))) / length(a) <> 1 then
-            raise exception 'fulfill_order 정의가 예상과 달라요(패치 위치 불일치) — 중단';
-        end if;
-        execute replace(v_def, a, b);
+        return;
     end if;
+    select count(*) into v_nd from regexp_matches(v_def, pd, 'g');
+    select count(*) into v_nc from regexp_matches(v_def, pc, 'g');
+    if v_nd <> 1 or v_nc <> 1 or v_def !~ 'v_order\s+orders' then
+        raise exception 'fulfill_order 정의가 예상과 달라요(done 처리 %곳 / cancelled 차단 %곳 — 각 1곳이어야 함) — 중단', v_nd, v_nc;
+    end if;
+    if strpos(v_def, (regexp_match(v_def, pd))[1]) > strpos(v_def, (regexp_match(v_def, pc))[1]) then
+        raise exception 'fulfill_order: done 멱등 처리가 cancelled 차단보다 뒤에 있어요 — 중단';
+    end if;
+    v_nl := case when position(chr(13) || chr(10) in v_def) > 0 then chr(13) || chr(10) else chr(10) end;
+    v_def := regexp_replace(v_def, pc,
+        '\1' || v_nl || '    -- fulfill_nicepay_guard begin' || v_nl
+        || '    if v_order.payment_provider = ''nicepay'' then' || v_nl
+        || '        raise exception ''NICEPAY 결제 주문은 PG 승인으로만 발급할 수 있어요'';' || v_nl
+        || '    end if;' || v_nl || '    -- fulfill_nicepay_guard end');
+    execute v_def;
+end $$;
+
+-- 6-4) 환불 core: NICEPAY 결제(금액>0)는 "실제 PG 승인 취소 확인 기록(nicepay_pg_cancels)"이 있어야만 내부 환불 가능 — p_allow_pg=true인 서버 경로도 동일.
+--   기존 PG 일반환불 차단(허용 목록) 바로 뒤에 표지 주석 블록을 1곳 추가. 다른 provider·0원 주문은 영향 없음.
+do $$
+declare
+    v_def text; v_n int; v_nl text;
+    p text := '(raise\s+exception\s+''카드/간편결제로 결제한 수강권은 앱의 환불 요청 기능으로 환불해주세요''\s*;\s*end\s+if;)';
+begin
+    select pg_get_functiondef('public._refund_membership_core(uuid,uuid,boolean,boolean)'::regprocedure) into v_def;
+    if v_def like '%-- nicepay_pg_cancel_guard begin%' then
+        raise notice '_refund_membership_core: 이미 패치됨 — 건너뜀';
+        return;
+    end if;
+    select count(*) into v_n from regexp_matches(v_def, p, 'g');
+    if v_n <> 1 or v_def !~ 'v_order_id' or v_def !~ 'v_amount' then
+        raise exception '_refund_membership_core 정의가 예상과 달라요(패치 위치 % — 1곳이어야 함) — 중단', v_n;
+    end if;
+    v_nl := case when position(chr(13) || chr(10) in v_def) > 0 then chr(13) || chr(10) else chr(10) end;
+    v_def := regexp_replace(v_def, p,
+        '\1' || v_nl || '    -- nicepay_pg_cancel_guard begin' || v_nl
+        || '    if v_order_id is not null and v_amount > 0' || v_nl
+        || '       and exists (select 1 from orders o where o.id = v_order_id and o.payment_provider = ''nicepay'')' || v_nl
+        || '       and not exists (select 1 from nicepay_pg_cancels c where c.order_id = v_order_id and c.cancel_amount = v_amount) then' || v_nl
+        || '        raise exception ''NICEPAY 결제는 PG 승인 취소가 확인된 뒤에만 환불할 수 있어요'';' || v_nl
+        || '    end if;' || v_nl || '    -- nicepay_pg_cancel_guard end');
+    execute v_def;
 end $$;
 
 -- [7] 서버 RPC (service_role 전용). 상태를 바꾸는 함수는 트랜잭션 로컬 표시 app.nicepay_write 를 세워 [3] 트리거를 통과한다.
@@ -527,6 +600,37 @@ begin
 end;
 $$;
 
+-- 실제 NICEPAY 승인 취소 확인 기록(전액). api_response = 서버가 NICEPAY 취소 API 응답(2001/2211)과 응답 서명을 검증한 경우, admin_console = 운영자가 관리자 화면에서 확인한 경우.
+-- 이 기록이 있어야만 환불 core가 NICEPAY 결제 환불을 진행한다. 기록은 변경·삭제 불가이며 주문당 1건, 취소 거래번호 유일.
+create or replace function nicepay_record_pg_cancel(p_order_id uuid, p_cancel_tid text, p_cancel_amount integer, p_source text, p_actor text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v orders;
+    r nicepay_pg_cancels;
+begin
+    if p_source is null or p_source not in ('api_response', 'admin_console') then raise exception '취소 확인 출처가 올바르지 않아요'; end if;
+    if p_cancel_tid is null or length(btrim(p_cancel_tid)) < 4 then raise exception '취소 거래번호를 입력해주세요'; end if;
+    if p_actor is null or length(btrim(p_actor)) < 2 then raise exception '처리자를 입력해주세요'; end if;
+    select * into v from orders where id = p_order_id for update;
+    if not found then raise exception '주문을 찾을 수 없어요'; end if;
+    if v.payment_provider is distinct from 'nicepay' or v.status <> 'done' or v.pg_tid is null then raise exception '승인 완료된 NICEPAY 주문이 아니에요'; end if;
+    if p_cancel_amount is distinct from v.amount then raise exception '전액 취소만 기록할 수 있어요'; end if;
+    if btrim(p_cancel_tid) = v.pg_tid then raise exception '취소 거래번호가 승인 거래번호와 같아요'; end if;
+    select * into r from nicepay_pg_cancels where order_id = p_order_id;
+    if found then
+        if r.cancel_tid = btrim(p_cancel_tid) then return json_build_object('already_recorded', true); end if;
+        raise exception '이미 다른 취소 거래가 기록된 주문이에요';
+    end if;
+    insert into nicepay_pg_cancels(order_id, pg_tid, cancel_tid, cancel_amount, source, actor)
+    values (p_order_id, v.pg_tid, btrim(p_cancel_tid), p_cancel_amount, p_source, btrim(p_actor));
+    return json_build_object('already_recorded', false);
+end;
+$$;
+
 revoke all on function nicepay_order_context(uuid) from public, anon, authenticated;
 revoke all on function nicepay_claim_order(uuid) from public, anon, authenticated;
 revoke all on function nicepay_release_order(uuid, uuid, text) from public, anon, authenticated;
@@ -535,6 +639,7 @@ revoke all on function nicepay_expire_stale_claims(interval) from public, anon, 
 revoke all on function nicepay_resolve_review(uuid, text, text, text, text, text) from public, anon, authenticated;
 revoke all on function confirm_nicepay_payment(uuid, uuid, text, integer) from public, anon, authenticated;
 revoke all on function nicepay_confirm_reviewed(uuid, text, integer, text, text, text) from public, anon, authenticated;
+revoke all on function nicepay_record_pg_cancel(uuid, text, integer, text, text) from public, anon, authenticated;
 grant execute on function nicepay_order_context(uuid) to service_role;
 grant execute on function nicepay_claim_order(uuid) to service_role;
 grant execute on function nicepay_release_order(uuid, uuid, text) to service_role;
@@ -543,6 +648,8 @@ grant execute on function nicepay_expire_stale_claims(interval) to service_role;
 grant execute on function nicepay_resolve_review(uuid, text, text, text, text, text) to service_role;
 grant execute on function confirm_nicepay_payment(uuid, uuid, text, integer) to service_role;
 grant execute on function nicepay_confirm_reviewed(uuid, text, integer, text, text, text) to service_role;
+grant execute on function nicepay_record_pg_cancel(uuid, text, integer, text, text) to service_role;
 grant select, insert on table nicepay_review_actions to service_role;
+grant select, insert on table nicepay_pg_cancels to service_role;
 
 commit;

@@ -117,3 +117,37 @@ create_order_secure 패치(정의 확인 후) · NICEPAY ReturnURL/웹훅 라우
 | CHECK 제약 이름(`orders_payment_provider_check` 등)이 라이브와 같다 | **PASS(사용자 실측)** |
 | `create_order_secure` 정의 | **BLOCKED**: 저장소에 없음. 이 SQL과 독립, 별도 패치 필요(§3) |
 | 실제 NICEPAY 연동/라우트 | **BLOCKED**(계약·MID/KEY) — 이 SQL은 연동 없이도 안전(함수는 호출되기 전까지 휴면) |
+
+## 9. Batch 3 운영 호환성 보완 (운영 DB 읽기 전용 실측 반영 #2)
+
+### 9-1. 실측 → 대응
+| 실측 | 문제 | 대응 |
+|---|---|---|
+| 운영 `fulfill_order()`에 `[NEW 2026-10-02]` 주석이 **없음** (cancelled 차단 코드는 있음) | 문자열 치환 위치 불일치 → SQL 중단 | 위치를 **코드 구조**로 지정: done 멱등 처리 → `if v_order.status = 'cancelled' then raise exception '취소된 주문은 발급할 수 없어요'; end if;` 바로 뒤 1곳. 주석 유무·들여쓰기 무관(정규식), done이 cancelled보다 앞인지도 검증 |
+| 운영 `_issue_membership_and_record_payment()` 정의에 **CRLF** | LF 기반 치환 실패 위험 | 모든 치환을 `\s+` 정규식으로 교체, 삽입 줄바꿈은 대상 정의의 줄바꿈(CRLF/LF)에 맞춤. INSERT 열 목록 끝 `memo` 와 값 목록 끝 `p_memo` 가 **각각 정확히 1곳**일 때만 패치 |
+| `create_order_secure(uuid,text,text,integer,boolean,text)` 허용 provider = mock, toss, portone | NICEPAY 주문 생성 불가 | 별도 최소 SQL `fix_create_order_secure_allow_nicepay_20261016.sql`: 목록 `'mock','toss','portone'` 가 정확히 1곳일 때 `'nicepay'`만 추가 |
+
+### 9-2. 안전 장치 (예상과 다른 구조는 모두 중단)
+- 패치 위치 개수가 1이 아니면 `raise exception` → 트랜잭션 전체 롤백(CHECK/컬럼/트리거 포함). 이미 패치된 함수는 건너뛰는 멱등 구조.
+- 삽입 코드는 표지 주석(`-- fulfill_nicepay_guard begin/end`, `-- nicepay_pg_cancel_guard begin/end`) 또는 정확히 역치환 가능한 조각이라 롤백이 **원문 그대로** 복원한다(PGlite P: LF/CRLF × 주석 유무 4형태에서 적용 전 5개 함수 정의 == 롤백 후).
+- **읽기 전용 사전 점검**: `preflight_nicepay_patch_targets_20261016.sql` — 같은 정규식으로 운영 정의의 패치 위치를 미리 센다. 모두 true여야 적용이 중단 없이 끝난다. (이 점검은 DDL/DML이 없다.)
+- 상태 전이 트리거 사전 점검도 정규식(CRLF/공백 무관)으로 기존 4전이를 확인.
+
+### 9-3. NICEPAY 환불은 실제 PG 취소 확인 후에만
+- 신규 `nicepay_pg_cancels`(추가 전용, RLS, service_role만) + `nicepay_record_pg_cancel(order, cancel_tid, amount, source, actor)`: 승인 완료된 NICEPAY 주문의 **전액 취소**만 기록(출처 `api_response`=서버가 취소 API 응답·서명 검증, `admin_console`=운영자 확인). 주문당 1건, 취소 거래번호 유일, 승인 거래번호와 같으면 거부.
+- `_refund_membership_core` 패치: NICEPAY && 금액>0 이면 취소 확인 기록이 없을 때 **서버 경로(`p_allow_pg=true`, 시간 조건 생략 포함)도 거부**. 회원 일반 환불은 기존 허용 목록으로 항상 차단. 0원 주문·다른 provider는 영향 없음.
+- 앱 서버(`handleRefund`)는 NICEPAY 취소 API 연동 전까지 금액>0을 501로 거부(변경 없음). 연동 후 순서: 취소 API → 응답 서명 검증 → `nicepay_record_pg_cancel` → `refund_membership_server`.
+
+### 9-4. ⚠ 적용 순서 주의
+`fix_refund_block_all_pg_providers_20261016.sql` 은 `_refund_membership_core` 를 **통째로 교체**한다. 따라서 반드시 `add_nicepay_provider_support_20261016.sql` **보다 먼저** 적용해야 한다. 순서가 뒤바뀌면 NICEPAY 취소 확인 가드가 지워진다(`verify_add_nicepay_provider_support_20261016.sql` 의 `refund_core_requires_pg_cancel_must_be_true` 가 false로 잡는다). 이미 support가 적용된 뒤 환불 수정 파일을 다시 실행해야 한다면 support 파일을 한 번 더 실행하면 가드가 복구된다(멱등).
+
+### 9-5. SQL 적용 순서 (최종)
+0. (읽기 전용) `preflight_nicepay_patch_targets_20261016.sql` — 모든 `*_ok` true 확인
+1. `fix_refund_block_all_pg_providers_20261016.sql`
+2. `add_nicepay_provider_support_20261016.sql`
+3. `fix_create_order_secure_allow_nicepay_20261016.sql`
+4. (읽기 전용) `verify_fix_refund_block_all_pg_providers_20261016.sql`, `verify_add_nicepay_provider_support_20261016.sql`
+롤백은 역순: `rollback_fix_create_order_secure_allow_nicepay_20261016.sql` → `rollback_add_nicepay_provider_support_20261016.sql` → `rollback_fix_refund_block_all_pg_providers_20261016.sql`.
+
+### 9-6. 한계 (정직하게)
+- 이 저장소에는 **운영 함수의 실제 정의 텍스트가 없다**(특히 CRLF 판 `_issue_membership_and_record_payment`, 주석 없는 `fulfill_order`, `create_order_secure`). 오프라인 테스트는 저장소 정의를 변환(CRLF화, 주석 제거)한 형태와, `create_order_secure`는 **가정한 형태 3종**으로 검증했다. 실제 운영 텍스트와의 일치는 `preflight` 로 적용 직전에 확인한다 — 불일치하면 SQL이 스스로 중단하므로 데이터·함수가 망가질 위험은 없지만, 적용이 막힐 수는 있다.

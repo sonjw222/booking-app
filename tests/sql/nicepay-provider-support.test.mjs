@@ -18,6 +18,10 @@ const pointLife = read('fix_order_point_lifecycle.sql');
 const settlementSrc = read('fix_admin_settlement_summary_use_payment_provider.sql');
 const refundFix = read('fix_refund_block_all_pg_providers_20261016.sql');
 const refundRollback = read('rollback_fix_refund_block_all_pg_providers_20261016.sql');
+const cosFix = read('fix_create_order_secure_allow_nicepay_20261016.sql');
+const cosRollback = read('rollback_fix_create_order_secure_allow_nicepay_20261016.sql');
+const preflight = stripCommentsEarly(read('preflight_nicepay_patch_targets_20261016.sql'));
+function stripCommentsEarly(x) { return x.replace(/^\s*--.*$/gm, ''); }
 const support = read('add_nicepay_provider_support_20261016.sql');
 const supportRollback = read('rollback_add_nicepay_provider_support_20261016.sql');
 const stripComments = s => s.replace(/^\s*--.*$/gm, '');
@@ -38,7 +42,11 @@ const liveCancelReal = slice(confirmReal, /create or replace function cancel_rea
 const liveConfirmTest = slice(lifecycle, /CREATE OR REPLACE FUNCTION public\.confirm_test_payment/, '$function$;');
 const liveSettlement = slice(settlementSrc, /create or replace function admin_center_settlement_summary/, '\n$$;');
 
-async function world({ refundFixApplied = true, supportApplied = true } = {}) {
+// 운영 정의 형태 재현: CRLF 줄바꿈, '[NEW 2026-10-02]' 주석 없음(운영 fulfill_order). 저장소 정의를 변환해 설치한다.
+const toCrlf = t => t.replace(/\r?\n/g, '\r\n');
+const dropNewComment = t => t.replace(/^[ \t]*-- \[NEW 2026-10-02\][^\n]*\n/m, '');
+async function world({ refundFixApplied = true, supportApplied = true, crlf = false, noComment = false } = {}) {
+  const shape = t => { let x = t; if (noComment) x = dropNewComment(x); if (crlf) x = toCrlf(x); return x; };
   const db = new PGlite();
   await db.exec(`
     create role anon; create role authenticated; create role service_role bypassrls;
@@ -86,19 +94,19 @@ async function world({ refundFixApplied = true, supportApplied = true } = {}) {
     ${liveForceInsert}
     ${liveStatusGuard}
     ${liveRestoreTrigger}
-    ${liveHelper}
-    ${liveFulfill}
+    ${shape(liveHelper)}
+    ${shape(liveFulfill)}
     ${liveRefundWrappers}
     ${liveConfirmReal}
     ${liveCancelReal}
     ${liveConfirmTest}
-    ${liveSettlement}
+    ${shape(liveSettlement)}
     revoke all on function public._issue_membership_and_record_payment(orders, text, text) from public, anon, authenticated, service_role;
   `);
-  await db.exec(liveCore);
+  await db.exec(shape(liveCore));
   await db.exec(`revoke all on function public._refund_membership_core(uuid, uuid, boolean, boolean) from public, anon, authenticated, service_role;`);
+  if (refundFixApplied) await db.exec(refundFix);   // 적용 순서: ① 환불 차단 수정 → ② NICEPAY 지원(환불 core 패치 포함)
   if (supportApplied) await db.exec(support);
-  if (refundFixApplied) await db.exec(refundFix);
   return db;
 }
 const asUser = async (db, fn) => { await db.exec(`select set_config('app.uid','${AUTH}',false), set_config('app.account_id','${ACC}',false);`); try { return await fn(); } finally { await db.exec(`select set_config('app.uid','',false), set_config('app.account_id','',false);`); } };
@@ -115,16 +123,20 @@ const asServer = (db, sql) => db.exec(sql);   // service_role 대리: app.uid �
 async function paidMembership(db, provider, { amount = 10000 } = {}) {   // 환불 시나리오용: 완료 주문 + 수강권 + 매출을 직접 구성
   const oid = await mkOrder(db, provider, { amount, status: 'done' });
   const mid = id(6, Math.floor(Math.random() * 1e9));
+  if (provider === 'nicepay') await db.exec(`update orders set pg_tid = 'NP-${oid.slice(-9)}' where id='${oid}'`);
   await db.exec(`insert into memberships(id, profile_id, center_id, product_id, product_name, total_count, remaining_count) values ('${mid}','${P1}','${C1}','${PROD}','p',10,10);
     insert into payments(center_id, profile_id, membership_id, order_id, sale_type, total_amount, pg_transaction_id, paid_at, status) values ('${C1}','${P1}','${mid}','${oid}','new',${amount},'tid-${mid.slice(-6)}',now(),'paid');`);
   return { oid, mid };
 }
+const recordCancel = (db, oid, amount = 10000, tid = 'CXL-' + oid.slice(-8)) => db.query(`select nicepay_record_pg_cancel('${oid}', '${tid}', ${amount}, 'api_response', 'system') r`);
 const claim = async (db, oid) => (await q1(db, `select nicepay_claim_order('${oid}') c`)).c;
 
 // ---------------------------------------------------------------- 환불(A) ----
 test('A. 일반 환불: 수정 전 라이브 정의는 nicepay를 막지 못한다(우회 재현), 수정 후에는 모든 PG 값을 막고 NULL/mock은 유지', async () => {
   const before = await world({ refundFixApplied: false });
   try {
+    await before.exec(liveCore);   // 수정 전(라이브) 환불 core 재설치 — 허용 목록 수정도, NICEPAY 취소 확인 가드도 없는 상태
+    await before.exec(`revoke all on function public._refund_membership_core(uuid, uuid, boolean, boolean) from public, anon, authenticated, service_role;`);
     const n = await paidMembership(before, 'nicepay');
     const r = await asUser(before, () => before.query(`select refund_membership('${n.mid}') r`));
     assert.equal(r.rows[0].r.refunded, true, '수정 전: nicepay 결제 건이 PG 취소 없이 DB에서만 환불된다(= 우회 위험)');
@@ -150,7 +162,12 @@ test('A2. 서버 경로(refund_membership_server, p_allow_pg=true)는 PG 건도 
   const db = await world();
   try {
     for (const p of ['nicepay', 'toss']) {
-      const { mid } = await paidMembership(db, p);
+      const { oid, mid } = await paidMembership(db, p);
+      if (p === 'nicepay') {   // 실제 PG 취소 확인 기록 전에는 서버 경로(allow_pg=true)도 내부 환불 불가
+        await rejects(db.query(`select refund_membership_server('${mid}','${AUTH}', true, false)`), /PG 승인 취소가 확인된 뒤에만/);
+        assert.equal((await q1(db, `select status from memberships where id='${mid}'`)).status, 'active');
+        await recordCancel(db, oid);
+      }
       assert.equal((await db.query(`select refund_membership_server('${mid}','${AUTH}', true, false) r`)).rows[0].r.refunded, true, p);
       const { mid: m2 } = await paidMembership(db, p);
       await rejects(db.query(`select refund_membership_server('${m2}','${AUTH}', false, false)`), /환불 요청 기능/);
@@ -479,16 +496,19 @@ test('G5. 정산/매출 호환: 정산 요약은 nicepay 결제도 포함(toss/p
     assert.equal(real.s, 1000 + 200 + 30 + 4, '매출 통계 조건(mock 제외)은 nicepay를 실매출로 포함');
     // 환불 호환: nicepay 결제 환불 행(서버 경로)은 기존 환불 정책과 같은 형태(sale_type=refund, 음수)
     const { rows: [m] } = await db.query(`select membership_id from payments where pg_transaction_id = 'T-1000'`);
+    const nOid = (await q1(db, `select order_id o from payments where pg_transaction_id = 'T-1000'`)).o;
+    await rejects(db.query(`select refund_membership_server('${m.membership_id}','${AUTH}', true, false)`), /PG 승인 취소가 확인된 뒤에만/);
+    await recordCancel(db, nOid, 1000);
     await db.query(`select refund_membership_server('${m.membership_id}','${AUTH}', true, false)`);
     assert.equal(await count(db, 'payments', `membership_id='${m.membership_id}' and sale_type='refund' and total_amount=-1000`), 1);
   } finally { await db.close(); }
 });
 
 // ---------------------------------------------------------------- 권한(H) / 적용·롤백·멱등(I, J) ----
-test('H. 권한: 새 RPC 8개는 service_role 전용·SECURITY DEFINER·search_path 고정, 감사 테이블은 RLS+클라이언트 접근 불가', async () => {
+test('H. 권한: 새 RPC 9개는 service_role 전용·SECURITY DEFINER·search_path 고정, 감사 테이블은 RLS+클라이언트 접근 불가', async () => {
   const db = await world();
   try {
-    const fns = ['confirm_nicepay_payment(uuid,uuid,text,integer)', 'nicepay_confirm_reviewed(uuid,text,integer,text,text,text)', 'nicepay_order_context(uuid)', 'nicepay_claim_order(uuid)', 'nicepay_release_order(uuid,uuid,text)', 'nicepay_mark_review(uuid,uuid,text)', 'nicepay_expire_stale_claims(interval)', 'nicepay_resolve_review(uuid,text,text,text,text,text)'];
+    const fns = ['nicepay_record_pg_cancel(uuid,text,integer,text,text)', 'confirm_nicepay_payment(uuid,uuid,text,integer)', 'nicepay_confirm_reviewed(uuid,text,integer,text,text,text)', 'nicepay_order_context(uuid)', 'nicepay_claim_order(uuid)', 'nicepay_release_order(uuid,uuid,text)', 'nicepay_mark_review(uuid,uuid,text)', 'nicepay_expire_stale_claims(interval)', 'nicepay_resolve_review(uuid,text,text,text,text,text)'];
     for (const f of fns) {
       const r = await q1(db, `select has_function_privilege('anon','${f}','execute') a, has_function_privilege('authenticated','${f}','execute') u, has_function_privilege('service_role','${f}','execute') s, (select prosecdef and 'search_path=public' = any(proconfig) from pg_proc where oid='${f}'::regprocedure) d`);
       assert.deepEqual(r, { a: false, u: false, s: true, d: true }, f);
@@ -505,7 +525,7 @@ test('I. 제자리 패치 안전성: 정의가 예상과 다르면 중단하고 
   const drift = await world({ supportApplied: false, refundFixApplied: false });
   try {
     await drift.exec(liveHelper.replace('p_memo\n    );', 'p_memo /* drift */\n    );'));
-    await rejects(drift.exec(support), /패치 위치 불일치/);
+    await rejects(drift.exec(support), /패치 위치/);
     await drift.exec('rollback');
     await rejects(mkOrder(drift, 'nicepay'), /orders_payment_provider_check/);
     assert.equal(await count(drift, 'pg_proc', "proname like 'nicepay_%'"), 0);
@@ -514,7 +534,7 @@ test('I. 제자리 패치 안전성: 정의가 예상과 다르면 중단하고 
   const drift2 = await world({ supportApplied: false, refundFixApplied: false });
   try {
     await drift2.exec(`create or replace function orders_guard_status_transition() returns trigger language plpgsql as $$ begin return new; end $$;`);
-    await rejects(drift2.exec(support), /예상과 달라요/);
+    await rejects(drift2.exec(support), /orders_guard_status_transition 정의가 예상/);
     await drift2.exec('rollback');
   } finally { await drift2.close(); }
   // 3) 멱등
@@ -557,4 +577,253 @@ test('J. verify SQL 전부 true / 롤백은 nicepay 데이터·감사 기록이 
     await db.exec(refundRollback);
     assert.ok(/in \('toss', 'portone'\)/.test((await q1(db, `select pg_get_functiondef('public._refund_membership_core(uuid,uuid,boolean,boolean)'::regprocedure) d`)).d));
   } finally { await db.close(); }
+});
+
+// ================================================================ 운영 DB 호환성 보완(CRLF / 주석 없는 fulfill_order / create_order_secure / PG 취소 확인) ====
+const defOf = async (db, sig) => (await q1(db, `select pg_get_functiondef('${sig}'::regprocedure) d`)).d;
+const SIGS = { helper: 'public._issue_membership_and_record_payment(orders,text,text)', fulfill: 'public.fulfill_order(uuid)', core: 'public._refund_membership_core(uuid,uuid,boolean,boolean)',
+  trigger: 'public.orders_guard_status_transition()', settlement: 'public.admin_center_settlement_summary(date,date)' };
+const snapshotDefs = async db => Object.fromEntries(await Promise.all(Object.entries(SIGS).map(async ([k, v]) => [k, await defOf(db, v)])));
+const SHAPES = [['LF+주석(저장소)', {}], ['LF+주석없음', { noComment: true }], ['CRLF+주석', { crlf: true }], ['CRLF+주석없음(운영 형태)', { crlf: true, noComment: true }]];
+const stripBlock = (d, name) => d.replace(new RegExp(`\\r?\\n[ \\t]*-- ${name} begin[\\s\\S]*?-- ${name} end`), '');
+
+test('K1. NICEPAY 환불: 실제 PG 취소 확인 기록 전에는 서버 경로(allow_pg=true)도 내부 환불 불가, 기록 후 가능, 다른 provider·0원은 영향 없음', async () => {
+  const db = await world();
+  try {
+    const n = await paidMembership(db, 'nicepay');
+    await asUser(db, () => rejects(db.query(`select refund_membership('${n.mid}')`), /환불 요청 기능/));                                   // 회원 일반 환불은 계속 차단
+    await rejects(db.query(`select refund_membership_server('${n.mid}','${AUTH}', true, false)`), /PG 승인 취소가 확인된 뒤에만/);       // 서버 경로도 취소 확인 전 차단
+    await rejects(db.query(`select refund_membership_server('${n.mid}','${AUTH}', true, true)`), /PG 승인 취소가 확인된 뒤에만/);        // 시간 조건 생략 경로도 동일
+    assert.equal((await q1(db, `select status from memberships where id='${n.mid}'`)).status, 'active');
+    assert.equal(await count(db, 'payments', `membership_id='${n.mid}' and sale_type='refund'`), 0);
+    // 취소 확인 기록 규칙
+    const rec = (oid, tid, amt, src = 'api_response', actor = 'system') => db.query(`select nicepay_record_pg_cancel('${oid}', ${tid ? `'${tid}'` : 'null'}, ${amt}, '${src}', '${actor}') r`);
+    await rejects(rec(n.oid, 'CXL-0001', 10000, 'guess'), /출처/);
+    await rejects(rec(n.oid, 'x', 10000), /취소 거래번호/);
+    await rejects(rec(n.oid, 'CXL-0001', 10000, 'api_response', 'a'), /처리자/);
+    await rejects(rec(n.oid, 'CXL-0001', 5000), /전액 취소만/);
+    const pgTid = (await q1(db, `select pg_tid t from orders where id='${n.oid}'`)).t;
+    await rejects(rec(n.oid, pgTid, 10000), /승인 거래번호와 같아요/);
+    await rejects(rec(await mkOrder(db, 'nicepay'), 'CXL-0002', 10000), /승인 완료된 NICEPAY 주문이 아니에요/);   // 승인 안 된 주문
+    await rejects(rec(await mkOrder(db, 'toss', { status: 'done' }), 'CXL-0003', 10000), /승인 완료된 NICEPAY 주문이 아니에요/);
+    assert.equal((await rec(n.oid, 'CXL-0001', 10000, 'admin_console', 'op-kim')).rows[0].r.already_recorded, false);
+    assert.equal((await rec(n.oid, 'CXL-0001', 10000)).rows[0].r.already_recorded, true, '멱등');
+    await rejects(rec(n.oid, 'CXL-OTHER', 10000), /이미 다른 취소 거래/);
+    const n2 = await paidMembership(db, 'nicepay');
+    await rejects(rec(n2.oid, 'CXL-0001', 10000), /duplicate key|nicepay_pg_cancels_cancel_tid_key/);                                     // 취소 거래번호 재사용 불가
+    await rejects(db.exec(`update nicepay_pg_cancels set actor='x1'`), /수정하거나 삭제할 수 없어요/);
+    await rejects(db.exec(`delete from nicepay_pg_cancels`), /수정하거나 삭제할 수 없어요/);
+    // 기록 후: 회원 일반 환불은 여전히 차단, 서버 경로는 가능
+    await asUser(db, () => rejects(db.query(`select refund_membership('${n.mid}')`), /환불 요청 기능/));
+    assert.deepEqual((await db.query(`select refund_membership_server('${n.mid}','${AUTH}', true, false) r`)).rows[0].r, { refunded: true, amount: 10000 });
+    // 다른 provider는 취소 확인 기록과 무관하게 기존대로(서버 경로)
+    for (const p of ['toss', 'portone']) { const x = await paidMembership(db, p); assert.equal((await db.query(`select refund_membership_server('${x.mid}','${AUTH}', true, false) r`)).rows[0].r.refunded, true, p); }
+    // 0원 NICEPAY 주문은 돈 이동이 없어 취소 확인 불필요(서버 경로)
+    const z = await paidMembership(db, 'nicepay', { amount: 0 });
+    assert.equal((await db.query(`select refund_membership_server('${z.mid}','${AUTH}', true, false) r`)).rows[0].r.refunded, true);
+    // 클라이언트 접근 불가
+    await db.exec('set role authenticated');
+    try { await rejects(db.query(`select * from nicepay_pg_cancels`), /permission denied/); await rejects(db.query(`select nicepay_record_pg_cancel('${n.oid}','CXL-9999',10000,'api_response','system')`), /permission denied/); } finally { await db.exec('reset role'); }
+  } finally { await db.close(); }
+});
+
+for (const [label, opts] of SHAPES) {
+  test(`L. fulfill_order 패치 [${label}]: 정확히 한 위치만 추가, 본문 전후 비교(삽입분 제거 시 원문과 동일), done 멱등/cancelled 차단 유지, NICEPAY만 차단`, async () => {
+    const db = await world({ supportApplied: false, refundFixApplied: false, ...opts });
+    try {
+      const before = await defOf(db, SIGS.fulfill);
+      assert.equal(/\[NEW 2026-10-02\]/.test(before), !opts.noComment, '형태 재현 확인(주석 유무)');
+      assert.equal(before.includes('\r\n'), !!opts.crlf, '형태 재현 확인(CRLF)');
+      await db.exec(support);
+      const after = await defOf(db, SIGS.fulfill);
+      assert.equal((after.match(/-- fulfill_nicepay_guard begin/g) ?? []).length, 1, '패치는 정확히 한 위치');
+      assert.equal(stripBlock(after, 'fulfill_nicepay_guard'), before, '삽입분만 제거하면 수정 전 본문과 한 글자도 다르지 않다');
+      const block = after.slice(after.indexOf('-- fulfill_nicepay_guard begin'), after.indexOf('-- fulfill_nicepay_guard end'));
+      if (opts.crlf) assert.ok(block.includes('\r\n') && !/(?<!\r)\n/.test(block), 'CRLF 본문에는 CRLF로 삽입');
+      // 삽입 위치: done 멱등 처리와 cancelled 차단이 모두 블록보다 앞
+      assert.ok(after.search(/status\s*=\s*'done'\s+then\s+return/) < after.indexOf('-- fulfill_nicepay_guard begin'));
+      assert.ok(after.search(/취소된 주문은 발급할 수 없어요/) < after.indexOf('-- fulfill_nicepay_guard begin'));
+      // 동작
+      const n = await mkOrder(db, 'nicepay'); await asManager(db, () => rejects(db.query(`select fulfill_order('${n}')`), /PG 승인으로만 발급/));
+      const c = await mkOrder(db, 'toss', { status: 'cancelled' }); await asManager(db, () => rejects(db.query(`select fulfill_order('${c}')`), /취소된 주문은 발급할 수 없어요/));
+      for (const p of [null, 'toss', 'portone', 'mock']) { const o = await mkOrder(db, p); assert.equal((await asManager(db, () => db.query(`select fulfill_order('${o}') r`))).rows[0].r.already_done, false, `${p}`); const again = await asManager(db, () => db.query(`select fulfill_order('${o}') r`)); assert.equal(again.rows[0].r.already_done, true, `${p} 멱등`); }
+      const nd = await mkOrder(db, 'nicepay'); const cl = await claim(db, nd); await db.query(`select confirm_nicepay_payment('${nd}', '${cl}', 'TID-L', 10000)`);
+      assert.equal((await asManager(db, () => db.query(`select fulfill_order('${nd}') r`))).rows[0].r.already_done, true, 'NICEPAY 완료 주문도 done 멱등');
+    } finally { await db.close(); }
+  });
+}
+
+test('L2. fulfill_order 예상과 다른 구조면 전체 트랜잭션 중단(아무것도 바뀌지 않음)', async () => {
+  const drifts = {
+    'cancelled 차단 없음': t => t.replace(/if v_order\.status = 'cancelled' then\s+raise exception '취소된 주문은 발급할 수 없어요';\s+end if;/, ''),
+    'cancelled 차단 2곳': t => t.replace(/(if v_order\.status = 'cancelled' then\s+raise exception '취소된 주문은 발급할 수 없어요';\s+end if;)/, '$1\n    $1'),
+    'done 멱등 없음': t => t.replace(/if v_order\.status = 'done' then\s+return json_build_object\('already_done', true\);\s+end if;/, ''),
+    'done 멱등이 cancelled 뒤': t => { const done = t.match(/if v_order\.status = 'done' then\s+return json_build_object\('already_done', true\);\s+end if;/)[0]; const canc = t.match(/if v_order\.status = 'cancelled' then\s+raise exception '취소된 주문은 발급할 수 없어요';\s+end if;/)[0]; return t.replace(done, '').replace(canc, canc + '\n    ' + done); },
+  };
+  for (const [name, f] of Object.entries(drifts)) {
+    const db = await world({ supportApplied: false, refundFixApplied: false });
+    try {
+      await db.exec(f(liveFulfill)); const before = await snapshotDefs(db);
+      await rejects(db.exec(support), /fulfill_order/); await db.exec('rollback');
+      assert.deepEqual(await snapshotDefs(db), before, `${name}: 아무 함수도 바뀌지 않음`);
+      await rejects(mkOrder(db, 'nicepay'), /orders_payment_provider_check/);   // CHECK 변경도 롤백
+      assert.equal(await count(db, 'pg_proc', "proname like 'nicepay_%'"), 0, name);
+    } finally { await db.close(); }
+  }
+});
+
+for (const [label, opts] of SHAPES.filter(x => x[1].crlf !== undefined)) {
+  test(`M. 발급 helper 패치 [${label}]: CRLF/LF 모두 치환 성공, 삽입분 제거 시 원문 동일, NICEPAY만 provider 기록(그 외 NULL 유지)`, async () => {
+    const db = await world({ supportApplied: false, refundFixApplied: false, ...opts });
+    try {
+      const before = await defOf(db, SIGS.helper);
+      assert.equal(before.includes('\r\n'), !!opts.crlf);
+      await db.exec(support);
+      const after = await defOf(db, SIGS.helper);
+      assert.equal((after.match(/case when p_order\.payment_provider = 'nicepay'/g) ?? []).length, 1);
+      assert.equal(after.replace(/(pg_transaction_id,\s*paid_at,\s*status,\s*memo), payment_provider/, '$1').replace(/(p_memo), case when p_order\.payment_provider = 'nicepay' then 'nicepay' else null end/, '$1'), before, '정확히 두 조각만 추가');
+      for (const p of ['toss', 'portone']) { const o = await mkOrder(db, p, { amount: 3000 }); await db.query(`select confirm_real_payment('${o}', 'pk', 3000)`); assert.equal((await q1(db, `select payment_provider p from payments where order_id='${o}'`)).p, null, `${p} 기존 기록 방식 유지`); }
+      const m = await mkOrder(db, 'mock', { center: CI }); await asUser(db, () => db.query(`select confirm_test_payment('${m}', 'r')`)); assert.equal((await q1(db, `select payment_provider p from payments where order_id='${m}'`)).p, null);
+      const d = await mkOrder(db, null); await asManager(db, () => db.query(`select fulfill_order('${d}')`)); assert.equal((await q1(db, `select payment_provider p from payments where order_id='${d}'`)).p, null);
+      const n = await mkOrder(db, 'nicepay', { amount: 4000 }); const c = await claim(db, n); await db.query(`select confirm_nicepay_payment('${n}', '${c}', 'TID-M', 4000)`);
+      assert.deepEqual(await q1(db, `select payment_provider, pg_transaction_id from payments where order_id='${n}'`), { payment_provider: 'nicepay', pg_transaction_id: 'TID-M' });
+    } finally { await db.close(); }
+  });
+}
+
+test('M2. 발급 helper 예상과 다른 구조(INSERT 열 목록 다름 / p_memo 위치 0곳·2곳)면 중단', async () => {
+  const drifts = {
+    '열 목록 변형': t => t.replace('pg_transaction_id, paid_at, status, memo', 'pg_transaction_id, status, paid_at, memo'),
+    'p_memo 위치 없음': t => t.replace(/p_memo(\s*)\)(\s*);/, "p_memo || ''$1)$2;"),
+    'p_memo 2곳': t => t.replace(/\n(\s*)return \(jsonb_build_object/, '\n$1perform (p_memo);\n$1return (jsonb_build_object'),
+  };
+  for (const [name, f] of Object.entries(drifts)) {
+    const db = await world({ supportApplied: false, refundFixApplied: false });
+    try {
+      const drifted = f(liveHelper); assert.notEqual(drifted, liveHelper, `${name}: 변형이 실제로 적용됨`); await db.exec(drifted);
+      const before = await snapshotDefs(db);
+      await rejects(db.exec(support), /_issue_membership_and_record_payment/); await db.exec('rollback');
+      assert.deepEqual(await snapshotDefs(db), before, name);
+    } finally { await db.close(); }
+  }
+});
+
+for (const [label, opts] of [['LF', {}], ['CRLF', { crlf: true }]]) {
+  test(`N. 환불 core 패치 [${label}]: 허용 목록 수정 전 CRLF 정의에서도 1곳 패치, 삽입분 제거 시 원문 동일, 취소 확인 전 NICEPAY 환불 불가`, async () => {
+    const db = await world({ supportApplied: false, refundFixApplied: false, ...opts });
+    try {
+      const before = await defOf(db, SIGS.core);
+      await db.exec(support);
+      const after = await defOf(db, SIGS.core);
+      assert.equal((after.match(/-- nicepay_pg_cancel_guard begin/g) ?? []).length, 1);
+      assert.equal(stripBlock(after, 'nicepay_pg_cancel_guard'), before);
+      assert.ok(after.search(/앱의 환불 요청 기능으로 환불해주세요/) < after.indexOf('-- nicepay_pg_cancel_guard begin'), '기존 PG 일반환불 차단 뒤에 위치');
+      const n = await paidMembership(db, 'nicepay');
+      await rejects(db.query(`select refund_membership_server('${n.mid}','${AUTH}', true, false)`), /PG 승인 취소가 확인된 뒤에만/);
+      await recordCancel(db, n.oid);
+      assert.equal((await db.query(`select refund_membership_server('${n.mid}','${AUTH}', true, false) r`)).rows[0].r.refunded, true);
+    } finally { await db.close(); }
+  });
+}
+
+test('N2. 환불 core 예상과 다른 구조(일반환불 차단 문구 없음)면 중단', async () => {
+  const db = await world({ supportApplied: false, refundFixApplied: false });
+  try {
+    await db.exec(liveCore.replace(/raise exception '카드\/간편결제로 결제한 수강권은 앱의 환불 요청 기능으로 환불해주세요';/, "raise exception 'x';"));
+    const before = await snapshotDefs(db);
+    await rejects(db.exec(support), /_refund_membership_core/); await db.exec('rollback');
+    assert.deepEqual(await snapshotDefs(db), before);
+  } finally { await db.close(); }
+});
+
+for (const [label, opts] of SHAPES) {
+  test(`P. 롤백 정확 복원 [${label}]: 적용 전 5개 함수 정의가 롤백 후 한 글자도 다르지 않다`, async () => {
+    const db = await world({ supportApplied: false, refundFixApplied: false, ...opts });
+    try {
+      const before = await snapshotDefs(db);
+      await db.exec(support);
+      const applied = await snapshotDefs(db);
+      assert.notDeepEqual(applied, before);
+      await db.exec(supportRollback);
+      const after = await snapshotDefs(db);
+      for (const k of ['helper', 'fulfill', 'core', 'settlement']) assert.equal(after[k], before[k], `${k} 복원`);
+      assert.equal(after.trigger.replace(/\s+/g, ' '), before.trigger.replace(/\s+/g, ' '), 'trigger 복원(공백 무관)');
+      // 복원 후 기존 Toss 발급·환불은 그대로
+      const o = await mkOrder(db, 'toss', { amount: 6000 }); await db.query(`select confirm_real_payment('${o}', 'pk', 6000)`);
+      const mid = (await q1(db, `select membership_id m from payments where order_id='${o}'`)).m;
+      assert.equal((await db.query(`select refund_membership_server('${mid}','${AUTH}', true, false) r`)).rows[0].r.refunded, true);
+    } finally { await db.close(); }
+  });
+}
+
+// ---- create_order_secure (정의가 저장소에 없음 → 가정한 형태로 패치 로직을 검증. 실제 운영 정의는 preflight로 사전 확인) ----
+const cos = (listExpr, nl = '\n') => `create or replace function public.create_order_secure(a uuid, b text, c text, d integer, e boolean, p_provider text) returns uuid language plpgsql security definer set search_path = public as $$
+declare v uuid;
+begin
+  ${listExpr}
+  insert into orders(profile_id, center_id, product_id, product_name, amount, auto_book, payment_provider) values ('${P1}','${C1}','${PROD}','p', d, e, p_provider) returning id into v;
+  return v;
+end $$;`.replace(/\n/g, nl);
+const COS_SHAPES = {
+  'IN 목록': nl => cos("if p_provider is not null and p_provider not in ('mock', 'toss', 'portone') then raise exception 'invalid provider'; end if;", nl),
+  'ARRAY 목록(공백 없음)': nl => cos("if p_provider is not null and not (p_provider = any(array['mock','toss','portone'])) then raise exception 'invalid provider'; end if;", nl),
+  '줄바꿈이 낀 목록': nl => cos("if p_provider is not null and p_provider not in (\n    'mock',\n    'toss',\n    'portone') then raise exception 'invalid provider'; end if;", nl),
+};
+for (const [name, mk] of Object.entries(COS_SHAPES)) for (const nl of ['\n', '\r\n']) {
+  test(`O. create_order_secure 패치 [${name}${nl === '\r\n' ? ' CRLF' : ''}]: 목록 1곳에만 nicepay 추가, 나머지 로직 불변, 롤백 정확 복원`, async () => {
+    const db = await world();   // support 적용 상태(CHECK에 nicepay 있음)
+    try {
+      await db.exec(mk(nl));
+      const before = await defOf(db, 'public.create_order_secure(uuid,text,text,integer,boolean,text)');
+      await rejects(db.query(`select create_order_secure('${id(7, 1)}','a','b',1000,false,'nicepay')`), /invalid provider/);
+      await db.exec(cosFix);
+      const after = await defOf(db, 'public.create_order_secure(uuid,text,text,integer,boolean,text)');
+      assert.equal(after.replace(/(\x27mock\x27\s*,\s*\x27toss\x27\s*,\s*\x27portone\x27), \x27nicepay\x27/, '$1'), before, '목록에 nicepay 한 단어만 추가');
+      assert.ok(await q1(db, `select create_order_secure('${id(7, 1)}','a','b',1000,false,'nicepay') o`));
+      assert.equal(await count(db, 'orders', "payment_provider = 'nicepay' and amount = 1000"), 1);
+      for (const p of ['mock', 'toss', 'portone', null]) await db.query(`select create_order_secure('${id(7, 1)}','a','b',1000,false,${p ? `'${p}'` : 'null'})`);
+      await rejects(db.query(`select create_order_secure('${id(7, 1)}','a','b',1000,false,'stripe')`), /invalid provider/);
+      await db.exec(cosFix);   // 멱등
+      assert.equal(await defOf(db, 'public.create_order_secure(uuid,text,text,integer,boolean,text)'), after);
+      await db.exec(`delete from orders where payment_provider = 'nicepay'`);
+      await db.exec(cosRollback);
+      assert.equal(await defOf(db, 'public.create_order_secure(uuid,text,text,integer,boolean,text)'), before, '롤백 후 원문 동일');
+    } finally { await db.close(); }
+  });
+}
+
+test('O2. create_order_secure 예상과 다른 구조(목록 없음/2곳/함수 없음/NICEPAY 지원 SQL 미적용)면 중단', async () => {
+  const cases = {
+    '목록 없음': cos("if p_provider is not null and length(p_provider) > 20 then raise exception 'invalid provider'; end if;"),
+    '목록 2곳': cos("if p_provider not in ('mock','toss','portone') then raise exception 'x'; end if; if p_provider not in ('mock', 'toss', 'portone') then raise exception 'y'; end if;"),
+  };
+  for (const [name, def] of Object.entries(cases)) {
+    const db = await world();
+    try { await db.exec(def); const before = await defOf(db, 'public.create_order_secure(uuid,text,text,integer,boolean,text)'); await rejects(db.exec(cosFix), /create_order_secure/); await db.exec('rollback'); assert.equal(await defOf(db, 'public.create_order_secure(uuid,text,text,integer,boolean,text)'), before, name); } finally { await db.close(); }
+  }
+  const none = await world();
+  try { await rejects(none.exec(cosFix), /create_order_secure\(uuid,text,text,integer,boolean,text\) 가 없어요/); await none.exec('rollback'); } finally { await none.close(); }
+  const noSupport = await world({ supportApplied: false });
+  try { await noSupport.exec(COS_SHAPES['IN 목록']('\n')); await rejects(noSupport.exec(cosFix), /add_nicepay_provider_support_20261016\.sql 을 먼저/); await noSupport.exec('rollback'); } finally { await noSupport.close(); }
+});
+
+test('Q. 읽기 전용 사전 점검(preflight)이 운영 형태(CRLF+주석없음)에서 모두 true, 예상과 다른 구조에서는 false, 적용 후에도 true', async () => {
+  const okCols = r => Object.entries(r).filter(([k]) => k.endsWith('_ok') || k.endsWith('_ok_or_absent')).map(([k, v]) => [k, v]);
+  const db = await world({ supportApplied: false, refundFixApplied: false, crlf: true, noComment: true });
+  try {
+    await db.exec(COS_SHAPES['IN 목록']('\r\n'));
+    const r = (await db.query(preflight)).rows[0];
+    assert.equal(r.info_helper_has_crlf, true); assert.equal(r.info_fulfill_has_crlf, true);
+    for (const [k, v] of okCols(r)) assert.equal(v, true, k);
+    // 읽기 전용: 함수/데이터가 바뀌지 않았다
+    assert.equal(await count(db, 'pg_proc', "proname like 'nicepay_%'"), 0);
+    await db.exec(support); await db.exec(cosFix);
+    for (const [k, v] of okCols((await db.query(preflight)).rows[0])) assert.equal(v, true, `적용 후 ${k}`);
+  } finally { await db.close(); }
+  const bad = await world({ supportApplied: false, refundFixApplied: false });
+  try {
+    await bad.exec(liveFulfill.replace(/if v_order\.status = 'cancelled' then\s+raise exception '취소된 주문은 발급할 수 없어요';\s+end if;/, ''));
+    const r = (await bad.query(preflight)).rows[0];
+    assert.equal(r.fulfill_patch_ok, false); assert.notEqual(r.create_order_secure_patch_ok, true);
+  } finally { await bad.close(); }
 });
