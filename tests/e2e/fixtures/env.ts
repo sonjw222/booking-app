@@ -7,6 +7,7 @@
 import { config } from "dotenv";
 import path from "node:path";
 import { assertIntegrationTargetIsNotProduction } from "../../integration/productionGuard";
+import "./installWriteGate"; // DB 쓰기 경로(admin client·계정 생성) 직전 격리 DB 가드 훅 — 메인/워커 프로세스 모두 config 로드 시 설치
 
 config({ path: path.resolve(process.cwd(), ".env.test.local") });
 
