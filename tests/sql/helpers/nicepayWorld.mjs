@@ -11,6 +11,8 @@ export const confirmReal = read('add_confirm_real_payment.sql');
 export const pointLife = read('fix_order_point_lifecycle.sql');
 export const settlementSrc = read('fix_admin_settlement_summary_use_payment_provider.sql');
 export const refundFix = read('fix_refund_pg_origin_guard_20261017.sql');
+export const serverFix = read('fix_refund_server_path_fail_closed_20261017.sql');
+export const serverRollback = read('rollback_fix_refund_server_path_fail_closed_20261017.sql');
 export const refundRollback = read('rollback_fix_refund_pg_origin_guard_20261017.sql');
 export const cosFix = read('fix_create_order_secure_allow_nicepay_20261016.sql');
 export const cosRollback = read('rollback_fix_create_order_secure_allow_nicepay_20261016.sql');
@@ -30,6 +32,8 @@ export const liveForceInsert = slice(lifecycle, /create or replace function orde
 export const liveStatusGuard = slice(pointLife, /create or replace function orders_guard_status_transition\(\)/, 'execute function orders_guard_status_transition();');
 export const liveRestoreTrigger = slice(pointLife, /create or replace function orders_restore_points_on_cancel\(\)/, 'execute function orders_restore_points_on_cancel();');
 export const liveRefundWrappers = slice(lifecycle, /create or replace function refund_membership\(p_membership_id uuid\)/, 'grant execute on function refund_membership_server(uuid, uuid, boolean, boolean) to service_role;');
+export const liveRefundContext = slice(lifecycle, /create or replace function pg_refund_context\(p_membership_id uuid, p_auth_uid uuid\)/, 'grant execute on function pg_refund_context(uuid, uuid) to service_role;');
+export const liveRefundBegin = slice(lifecycle, /create or replace function pg_refund_begin\(p_membership_id uuid, p_auth_uid uuid\)/, 'grant execute on function pg_refund_begin(uuid, uuid) to service_role;');
 export const liveAccountFor = slice(lifecycle, /create or replace function _account_id_for_auth/, 'revoke all on function _account_id_for_auth(uuid) from public, anon, authenticated;');
 export const liveConfirmReal = slice(issuance, /create or replace function public\.confirm_real_payment/, '$function$;');
 export const liveCancelReal = slice(confirmReal, /create or replace function cancel_real_payment/, '$$;');
@@ -96,6 +100,8 @@ export function baseWorldSql(opts = {}) {
     ${shape(liveHelper)}
     ${shape(liveFulfill)}
     ${liveRefundWrappers}
+    ${liveRefundContext}
+    ${liveRefundBegin}
     ${liveConfirmReal}
     ${liveCancelReal}
     ${liveConfirmTest}

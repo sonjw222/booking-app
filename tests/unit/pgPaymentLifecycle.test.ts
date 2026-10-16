@@ -771,7 +771,7 @@ describe("provider별 환불 경계 — portone은 fail closed", () => {
     }
   });
   it("nicepay/알 수 없는 PG + 금액>0 → 501 refund_unsupported_provider, 토스/refundBegin/DB 환불 호출 0회 (NICEPAY 환불 우회 차단, 앱 서버 계층)", async () => {
-    for (const provider of ["nicepay", "direct", "future-pg"]) {
+    for (const provider of ["nicepay", "direct", "future-pg", "unknown_pg"]) {   // unknown_pg = pg_refund_context가 출처 불명확 PG 결제에 돌려주는 값
       const d = deps({ refundContext: vi.fn(async () => ({ ...baseRefund, provider, paymentKey: "pk_x" })) });
       const r = await handleRefund(input, d);
       expect(r.status).toBe(501); expect(r.body).toMatchObject({ code: "refund_unsupported_provider" });

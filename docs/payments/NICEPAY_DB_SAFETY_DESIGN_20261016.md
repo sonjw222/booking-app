@@ -264,3 +264,34 @@ Toss 완료 주문 3건 / 연결된 결제 기록 2건 / **32만 원 완료 주�
 - 스크립트: `tests/sql/real-pg/nicepay-real-pg.mjs`(기본 `npm run test:sql`에는 포함되지 않음). 같은 SQL 월드를 PGlite 테스트와 공유(`tests/sql/helpers/nicepayWorld.mjs`).
 - 결과 17/17 PASS: R1 release↔승인 기록 저장 경합(신규 구현 거부) + **R1-neg 구 구현은 같은 경합에서 승인된 선점을 풀어버림(음성 대조)**, R2 반대 방향, R3 동시 claim 20회, R4 동시 확정, R5 TID 동시 재사용, R6 동시 환불, R7 동시 취소 기록, R8~R10 확정/검토/수동 해소 경합, G1~G6 Toss 회귀·운영 형태 재현·preflight/verify·롤백 보호·정순서 적용/역순 롤백 원문 복원·적용 순서 독립.
 - 한계: PostgreSQL 16.15에서 검증(Supabase는 15/17일 수 있음 — 사용한 기능은 모두 PG13+ 표준). 실제 Supabase 환경(PostgREST, 권한 기본값)은 포함되지 않음.
+
+## 13. 서버 환불 경로(p_allow_pg=true) fail-closed 보완 (2026-10-17)
+
+**전제(운영 적용 완료)**: `fix_refund_pg_origin_guard_20261017.sql`(허용 목록 + 회원 경로 출처 불명확 차단).
+
+### 13-1. 발견한 문제
+| # | 문제 | 영향 |
+|---|---|---|
+| A | NICEPAY 취소 확인 가드(`add_nicepay_provider_support` [6-4] v1)가 `v_order_id is not null and v_amount > 0`에 의존 — 이 값은 **가장 최근 payments 행** 기준 | 최근 행이 후속 수기 결제이거나 order_id가 NULL이면 `refund_membership_server`(p_allow_pg=true)가 PG 취소 확인 없이 NICEPAY 결제를 내부 환불(재현: 테스트 Z1) |
+| B | 출처 불명확 PG 결제의 서버 경로는 아무 표시 없이 통과(회원 경로만 차단) | 서버 라우트 버그/운영 SQL 오남용 시 연결 없는 Toss 결제도 `allow_pg=true` 단독 호출로 환불(재현: Z2) |
+| C | `pg_refund_context`가 최신 행의 order_id로만 provider/결제키/금액을 판단 | 최신 행이 수기 결제거나 order_id가 NULL이면 provider=null(직접결제)로 오판, 결제키·금액도 수기 행 것을 반환(재현: Z3) |
+
+### 13-2. 수정 (현재 운영 정의 기준 제자리 패치, 파일 분리)
+1. **`add_nicepay_provider_support_20261016.sql` [6-4] → v2** (NICEPAY 도입 시점에 적용되는 파일): 이 수강권의 **모든** 매출 행 중 NICEPAY 원거래(`payments.payment_provider='nicepay'` 또는 연결 주문이 nicepay)를 찾아, 그 거래번호(`payments.pg_transaction_id`/`orders.pg_tid`)·금액에 대한 `nicepay_pg_cancels` 기록이 없으면 거부 — `p_allow_pg` 무관, 최근 행·order_id 무관. 구버전(v1) 블록이 있으면 제거 후 교체(업그레이드 경로).
+2. **신규 `fix_refund_server_path_fail_closed_20261017.sql`** (선행: 출처 가드 — 없으면 중단):
+   - core: 출처 불명확 PG 결제(PG 주문 연결 없음 + PG 흔적/고아 PG 주문, **금액>0**)는 서버 경로에서도 `memberships.pg_refund_started_at`(pg_refund_begin 표시)이 있어야 환불. NICEPAY 행은 더 강한 증거(취소 확인 기록)로 막으므로 이 규칙에서 제외. 연결된 Toss/PortOne은 기존 서버 흐름 그대로(begin → PG 취소 → 환불, 'begin이 blocked였는데 Toss가 이미 취소된' 복구 흐름 포함).
+   - `pg_refund_context`: PG 원거래 행(주문 연결·payments.payment_provider·결제키로 식별)을 우선해 provider/결제키/금액 반환, 식별되지만 provider를 알 수 없으면 `unknown_pg`, 고아 PG 주문만 있어도 `unknown_pg`. 직접결제/Mock/정상 Toss 출력은 변하지 않음(테스트 Z3가 패치 전후 비교). 앱 서버 `handleRefund`는 알 수 없는 PG의 금액>0 환불을 501로 거부(기존 코드, 테스트에 `unknown_pg` 추가).
+- 한계(정직하게): DB는 Toss 취소가 실제로 일어났는지 증명할 수 없다. 연결된 Toss/PortOne은 서버 라우트의 순서(begin → 취소 → 환불)와 그 단위 테스트에, 출처 불명확 건은 "begin 표시 + 운영자가 PG 콘솔에서 취소 확인"에 의존한다. NICEPAY만 DB가 취소 확인 기록(2인 승인 또는 서명 검증 응답 요약값)을 강제한다.
+
+### 13-3. 적용 전제와 순서 (운영 기준)
+| 단계 | 파일 | 전제 | 상태 |
+|---|---|---|---|
+| 0 | `preflight_nicepay_patch_targets_20261016.sql`(읽기 전용) | — | `refund_server_path_patch_ok`, `refund_context_patch_ok` 포함 모두 true |
+| 1 | `fix_refund_server_path_fail_closed_20261017.sql` | **출처 가드 적용 완료(운영 PASS)**, `pg_refund_context` 정의가 저장소 계보와 일치(preflight) | **독립 적용 가능** — NICEPAY 지원 없이도 출처 불명확 서버 경로/컨텍스트가 개선됨 |
+| 2 | `add_nicepay_provider_support_20261016.sql` | 1번과 순서 무관 | NICEPAY 도입 시 |
+| 3 | `fix_create_order_secure_allow_nicepay_20261016.sql` | 2번 선행 | NICEPAY 도입 시 |
+| 4 | 각 verify | — | 모두 true |
+롤백: 3 → 2 → 1 역순(`rollback_*`). 1번 롤백은 표지 주석과 `/*pg_origin_context*/` 선언만 제거해 원문 복원.
+
+### 13-4. 실제 PostgreSQL 16 격리 검증
+`tests/sql/real-pg/nicepay-real-pg.mjs` 20/20 PASS — 신규 R11(NICEPAY 서버 환불 ↔ 취소 확인 기록 경합, 최근 행 order_id NULL), R12(출처 불명확 Toss 서버 환불 ↔ pg_refund_begin 경합 + 동시 환불 중 1건만), G7(pg_refund_context), G2 갱신(서버 경로 begin 필요), G5(전체 체인 적용 후 역순 롤백이 core·context·helper·fulfill·settlement·create_order_secure를 원문 복원).

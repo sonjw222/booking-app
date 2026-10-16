@@ -358,27 +358,35 @@ begin
 end $$;
 
 -- 6-4) 환불 core: NICEPAY 결제(금액>0)는 "실제 PG 승인 취소 확인 기록(nicepay_pg_cancels)"이 있어야만 내부 환불 가능 — p_allow_pg=true인 서버 경로도 동일.
---   기존 PG 일반환불 차단(허용 목록) 바로 뒤에 표지 주석 블록을 1곳 추가. 다른 provider·0원 주문은 영향 없음.
+--   v2(2026-10-17): 가장 최근 payments 행(v_order_id/v_amount)에 의존하지 않는다. 이 수강권의 **모든** 매출 행 중 NICEPAY 원거래
+--   (payments.payment_provider='nicepay' 이거나 연결된 주문이 nicepay)를 찾아, 그 거래번호(payments.pg_transaction_id 또는 orders.pg_tid)와 금액에 대한
+--   취소 확인 기록이 없으면 거부한다. → 최근 행이 후속 수기 결제이거나 order_id 가 NULL 이어도 우회되지 않는다.
+--   v1 블록(`-- nicepay_pg_cancel_guard begin` 만 있는 구버전)이 이미 있으면 제거하고 v2로 교체한다.
 do $$
 declare
     v_def text; v_n int; v_nl text;
     p text := '(raise\s+exception\s+''카드/간편결제로 결제한 수강권은 앱의 환불 요청 기능으로 환불해주세요''\s*;\s*end\s+if;)';
 begin
     select pg_get_functiondef('public._refund_membership_core(uuid,uuid,boolean,boolean)'::regprocedure) into v_def;
-    if v_def like '%-- nicepay_pg_cancel_guard begin%' then
-        raise notice '_refund_membership_core: 이미 패치됨 — 건너뜀';
+    if v_def like '%-- nicepay_pg_cancel_guard begin (v2)%' then
+        raise notice '_refund_membership_core: 이미 v2 패치됨 — 건너뜀';
         return;
     end if;
+    if v_def ~ '-- nicepay_pg_cancel_guard begin(?! \(v2\))' then
+        v_def := regexp_replace(v_def, '\r?\n[ \t]*-- nicepay_pg_cancel_guard begin(?! \(v2\)).*?-- nicepay_pg_cancel_guard end', '', 's');
+    end if;
     select count(*) into v_n from regexp_matches(v_def, p, 'g');
-    if v_n <> 1 or v_def !~ 'v_order_id' or v_def !~ 'v_amount' then
+    if v_n <> 1 or v_def !~ 'v_mem' then
         raise exception '_refund_membership_core 정의가 예상과 달라요(패치 위치 % — 1곳이어야 함) — 중단', v_n;
     end if;
     v_nl := case when position(chr(13) || chr(10) in v_def) > 0 then chr(13) || chr(10) else chr(10) end;
     v_def := regexp_replace(v_def, p,
-        '\1' || v_nl || '    -- nicepay_pg_cancel_guard begin' || v_nl
-        || '    if v_order_id is not null and v_amount > 0' || v_nl
-        || '       and exists (select 1 from orders o where o.id = v_order_id and o.payment_provider = ''nicepay'')' || v_nl
-        || '       and not exists (select 1 from nicepay_pg_cancels c join orders o2 on o2.id = c.order_id and o2.pg_tid = c.pg_tid where c.order_id = v_order_id and c.cancel_amount = v_amount) then' || v_nl
+        '\1' || v_nl || '    -- nicepay_pg_cancel_guard begin (v2)' || v_nl
+        || '    if exists (select 1 from payments pn left join orders onp on onp.id = pn.order_id' || v_nl
+        || '                where pn.membership_id = v_mem.id and pn.sale_type is distinct from ''refund'' and pn.total_amount > 0' || v_nl
+        || '                  and (pn.payment_provider = ''nicepay'' or onp.payment_provider = ''nicepay'')' || v_nl
+        || '                  and not exists (select 1 from nicepay_pg_cancels c' || v_nl
+        || '                                   where c.pg_tid = coalesce(pn.pg_transaction_id, onp.pg_tid) and c.cancel_amount = pn.total_amount)) then' || v_nl
         || '        raise exception ''NICEPAY 결제는 PG 승인 취소가 확인된 뒤에만 환불할 수 있어요'';' || v_nl
         || '    end if;' || v_nl || '    -- nicepay_pg_cancel_guard end');
     execute v_def;

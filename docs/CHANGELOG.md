@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-17 (2) — 서버 환불 경로 fail-closed 보완 + pg_refund_context 출처 판별 (검토용 SQL, 미실행)
+- 신규 `fix_refund_server_path_fail_closed_20261017.sql`(+rollback/verify): 출처 불명확 PG 결제는 서버 경로(p_allow_pg=true)도 환불 진행 표시 필요, `pg_refund_context`는 PG 원거래 행 기준·`unknown_pg` 반환. 운영 현재 정의 제자리 패치(선행: 출처 가드).
+- `add_nicepay_provider_support_20261016.sql` [6-4] v2: NICEPAY 취소 확인 가드가 최근 결제 행/order_id에 의존하지 않음(모든 매출 행 검사), v1→v2 업그레이드.
+- 테스트: PGlite 63개(Z1~Z5), 실제 PostgreSQL 16 20개(R11·R12·G7 추가). 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §13.
+
 ## 2026-10-17 — 결제 기록 정합성 QA: order_id 없는 PG 결제의 일반 환불 우회 차단 + 실제 PostgreSQL 2세션 검증 (검토용 SQL, 미실행)
 - 신규 `fix_refund_pg_origin_guard_20261017.sql`(+rollback/verify, 읽기 전용 `diagnose_pg_payment_linkage_20261017.sql`): 운영 현재 환불 함수를 제자리 패치(통째 덮어쓰기 금지), PG 판별 허용 목록 + 출처 불명확(연결 없는 PG 결제) 수강권 일반 환불 차단. 자동 연결·백필·데이터 변경 없음. `fix_refund_block_all_pg_providers_20261016.sql` 세트는 폐기.
 - 테스트: PGlite 57개(운영 형태 Toss 3건 재현·우회 재현→차단·데이터 불변), 실제 PostgreSQL 16 2세션 17개(`tests/sql/real-pg/nicepay-real-pg.mjs`, 격리 Docker). 공용 월드 `tests/sql/helpers/nicepayWorld.mjs`.

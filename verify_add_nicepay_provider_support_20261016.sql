@@ -15,7 +15,7 @@ select
   (select not has_table_privilege('authenticated', 'public.nicepay_review_actions', 'select') and not has_table_privilege('anon', 'public.nicepay_review_actions', 'select') from (select 1) x) as audit_no_client_access_must_be_true,
   (select pg_get_functiondef('public._issue_membership_and_record_payment(orders,text,text)'::regprocedure) like '%case when p_order.payment_provider = ''nicepay'' then ''nicepay'' else null end%') as helper_records_nicepay_provider_must_be_true,
   (select pg_get_functiondef('public.fulfill_order(uuid)'::regprocedure) like '%-- fulfill_nicepay_guard begin%' and pg_get_functiondef('public.fulfill_order(uuid)'::regprocedure) like '%NICEPAY 결제 주문은 PG 승인으로만 발급할 수 있어요%') as fulfill_order_rejects_nicepay_must_be_true,
-  (select pg_get_functiondef('public._refund_membership_core(uuid,uuid,boolean,boolean)'::regprocedure) like '%-- nicepay_pg_cancel_guard begin%') as refund_core_requires_pg_cancel_must_be_true,
+  (select pg_get_functiondef('public._refund_membership_core(uuid,uuid,boolean,boolean)'::regprocedure) like '%-- nicepay_pg_cancel_guard begin (v2)%') as refund_core_requires_pg_cancel_must_be_true,
   (select relrowsecurity from pg_class where oid = 'public.nicepay_pg_cancels'::regclass) as pg_cancels_rls_must_be_true,
   (select relrowsecurity from pg_class where oid = 'public.nicepay_pg_approvals'::regclass) as pg_approvals_rls_must_be_true,
   (select count(*) = 1 from pg_trigger where tgrelid = 'public.nicepay_pg_approvals'::regclass and tgname = 'nicepay_pg_approvals_append_only' and not tgisinternal) as pg_approvals_append_only_must_be_true,
