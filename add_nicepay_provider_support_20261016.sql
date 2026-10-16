@@ -504,6 +504,8 @@ end;
 $$;
 
 -- 서버 라우트 전용 자동 복귀. 승인이 확정 거절됐거나(approve_rejected) 망취소 성공이 확인된(netcancel_confirmed) 뒤에만.
+-- 동시성: 승인 기록 저장(nicepay_record_verified_approval)·확정·수동 해소와 같은 순서로 **주문 행을 먼저 FOR UPDATE로 잠근 뒤** 현재 상태(claim_id·status 등)를 다시 검증하고,
+--   같은 트랜잭션에서 승인·취소 기록을 확인한다. (잠그기 전에 기록을 조회하면, 조회 직후 다른 트랜잭션이 승인 기록을 커밋해도 이 함수가 그 기록을 못 본 채 선점을 풀 수 있다.)
 -- 이 선점에 대해 서버가 검증한 승인 기록이 있으면(= PG에서 돈이 승인됐던 거래) 그 거래의 PG 취소 확인 기록이 있어야만 복귀한다(없으면 false → 호출자는 검토 대기로 표시).
 create or replace function nicepay_release_order(p_order_id uuid, p_claim_id uuid, p_basis text)
 returns boolean
@@ -512,24 +514,36 @@ security definer
 set search_path = public
 as $$
 declare
-    v_n int;
+    v     orders;
+    v_n   int;
 begin
     if p_basis is null or p_basis not in ('approve_rejected', 'netcancel_confirmed') then
         raise exception '복귀 근거가 올바르지 않아요';
     end if;
-    if exists (select 1 from nicepay_pg_approvals a where a.order_id = p_order_id and a.claim_id = p_claim_id
+    -- 1) 주문 행 잠금 (이후의 모든 판단은 잠금 획득 뒤의 최신 커밋 상태 기준)
+    select * into v from orders where id = p_order_id for update;
+    if not found then
+        return false;
+    end if;
+    -- 2) 잠금 후 재검증: NICEPAY 주문 / 승인 중 / 같은 선점 / 거래번호 미기록 / 운영자 확인 대기 아님
+    if v.payment_provider is distinct from 'nicepay' or v.status <> 'approving' or v.pg_claim_id is distinct from p_claim_id
+       or v.pg_tid is not null or v.pg_review_at is not null then
+        return false;
+    end if;
+    -- 3) 같은 트랜잭션에서 승인·취소 기록 재확인: 취소가 확인되지 않은 승인 기록이 있으면 거부
+    if exists (select 1 from nicepay_pg_approvals a where a.order_id = v.id and a.claim_id = p_claim_id
                  and not exists (select 1 from nicepay_pg_cancels c where c.order_id = a.order_id and c.pg_tid = a.tid)) then
         return false;
     end if;
     perform set_config('app.nicepay_write', 'on', true);
     update orders
        set status = 'pending', pg_claim_id = null, pg_claimed_at = null
-     where id = p_order_id and status = 'approving' and pg_claim_id = p_claim_id and pg_tid is null and pg_review_at is null;
+     where id = v.id and status = 'approving' and pg_claim_id = p_claim_id and pg_tid is null and pg_review_at is null;
     get diagnostics v_n = row_count;
     perform set_config('app.nicepay_write', '', true);
     if v_n = 1 then
         insert into nicepay_review_actions(order_id, claim_id, action, evidence_type, actor, status_before, status_after)
-        values (p_order_id, p_claim_id, 'release', p_basis, 'system', 'approving', 'pending');
+        values (v.id, p_claim_id, 'release', p_basis, 'system', 'approving', 'pending');
     end if;
     return v_n = 1;
 end;

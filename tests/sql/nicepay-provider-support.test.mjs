@@ -976,3 +976,88 @@ test('V. 정적 SQL 검토: 모든 새 함수가 SECURITY DEFINER + search_path 
   // SECURITY DEFINER 안에서 호출자 입력으로 동적 SQL을 만들지 않는다
   assert.equal((code.match(/(?<!grant\s)\bexecute\b(?!\s+function)/gi) ?? []).length, (code.match(/execute v_def;|execute regexp_replace\([^;]*;/g) ?? []).length, 'execute는 pg_get_functiondef 제자리 패치 4+1곳뿐(호출자 입력 동적 SQL 없음)');
 });
+
+// ================================================================ 동시성: release와 승인 기록 저장 ====
+// PGlite는 단일 세션이라 두 트랜잭션의 실제 인터리빙은 재현할 수 없다. 대신 (1) 경합을 막는 핵심 불변식 — "승인·취소 기록을 읽는 모든 함수는 주문 행을 먼저 FOR UPDATE로 잠근다" —
+// 을 함수 정의에서 기계적으로 검사하고(구 구현은 이 검사에 걸림), (2) 잠금 후 재검증·같은 트랜잭션 재확인의 결과를 행동으로 검증한다. 실제 2세션 절차는 docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md §11.
+const lockOrderFirst = def => {
+  const full = def.replace(/--[^\n]*/g, '');
+  const body = full.slice(Math.max(0, full.search(/\bbegin\b/i)));   // declare 절의 타입 선언(r nicepay_pg_cancels)은 읽기가 아니므로 제외
+  const lock = body.search(/for\s+update/i);
+  const refs = ['nicepay_pg_approvals', 'nicepay_pg_cancels'].map(t => body.indexOf(t)).filter(i => i >= 0);
+  return lock >= 0 && refs.length > 0 && lock < Math.min(...refs);
+};
+const OLD_RELEASE_DEF = `create or replace function nicepay_release_order(p_order_id uuid, p_claim_id uuid, p_basis text) returns boolean language plpgsql security definer set search_path = public as $$
+declare v_n int;
+begin
+  if exists (select 1 from nicepay_pg_approvals a where a.order_id = p_order_id and a.claim_id = p_claim_id and not exists (select 1 from nicepay_pg_cancels c where c.order_id = a.order_id and c.pg_tid = a.tid)) then return false; end if;
+  update orders set status = 'pending' where id = p_order_id and status = 'approving' and pg_claim_id = p_claim_id;
+  get diagnostics v_n = row_count; return v_n = 1;
+end; $$;`;
+
+test('X1. 잠금 순서 불변식: 승인·취소 기록을 읽는 모든 NICEPAY 함수는 주문 행 FOR UPDATE가 기록 조회보다 앞 (구 release 구현은 위반)', async () => {
+  const db = await world();
+  try {
+    const fns = ['nicepay_release_order(uuid,uuid,text)', 'nicepay_resolve_review(uuid,text,text,text,text,text,text)', 'confirm_nicepay_payment(uuid,uuid,text,integer)',
+      'nicepay_confirm_reviewed(uuid,text,integer,text,text,text,text)', 'nicepay_record_pg_cancel(uuid,text,text,integer,text,text,text,text)', 'nicepay_record_verified_approval(uuid,uuid,text,integer,text)'];
+    for (const f of fns) assert.equal(lockOrderFirst(await defOf(db, `public.${f}`)), true, `${f}: 주문 행 잠금이 기록 조회보다 먼저`);
+    assert.equal(lockOrderFirst(OLD_RELEASE_DEF), false, '구 구현(조회 → 갱신)은 검사에 걸린다(경합 창 존재)');
+    // 잠금 대상은 orders 행이어야 한다(다른 테이블 FOR UPDATE로 대체 불가)
+    const rel = (await defOf(db, 'public.nicepay_release_order(uuid,uuid,text)')).replace(/--[^\n]*/g, '');
+    assert.match(rel, /from orders where id = p_order_id for update/i);
+    // 적용 후 verify의 해당 검사도 true
+    const v = (await db.query(stripComments(read('verify_add_nicepay_provider_support_20261016.sql')))).rows[0];
+    assert.equal(v.release_locks_order_before_reading_approvals_must_be_true, true);
+  } finally { await db.close(); }
+});
+
+test('X2. release: 잠금 후 claim/status 재검증 + 같은 트랜잭션에서 승인·취소 기록 재확인 — 승인 기록 저장 직후(같은 트랜잭션/직전 커밋)에는 항상 거부', async () => {
+  const db = await world();
+  try {
+    const rel = (oid, cl, basis = 'netcancel_confirmed') => q1(db, `select nicepay_release_order('${oid}', '${cl}', '${basis}') r`);
+    const o = await mkOrder(db, 'nicepay'); const c = await claim(db, o);
+    // 같은 트랜잭션 안에서 승인 기록 저장 → release: 방금 쓴 기록이 보여 거부(구 구현의 "조회 → 갱신" 사이에 끼어든 승인 기록을 놓치는 문제가 없다)
+    await db.exec('begin');
+    await approve(db, o, c, 'TID-X1', 10000);
+    assert.equal((await rel(o, c)).r, false);
+    await db.exec('commit');
+    assert.deepEqual(await q1(db, `select status, pg_claim_id = '${c}' same from orders where id='${o}'`), { status: 'approving', same: true });
+    assert.equal(await count(db, 'nicepay_review_actions', `order_id='${o}' and action='release'`), 0, '거부된 release는 감사 행/상태 변경 없음');
+    // 커밋 이후에도 동일, 취소 확인 기록 뒤에는 복귀 가능
+    assert.equal((await rel(o, c)).r, false);
+    await db.query(`select nicepay_record_pg_cancel('${o}', 'TID-X1', 'NC-X1-0001', 10000, 'api_response', 'system', null, '${DIG}')`);
+    assert.equal((await rel(o, c)).r, true);
+    assert.equal(await count(db, 'nicepay_review_actions', `order_id='${o}' and action='release'`), 1);
+    // 잠금 후 재검증: 존재하지 않는 주문 / 이미 풀린 주문(상태 pending) / 다른 claim / 다른 provider / 완료 주문 / 검토 대기 / 거래번호 기록됨 → 전부 false(예외 없음)
+    assert.equal((await rel(id(9, 9), c)).r, false);
+    assert.equal((await rel(o, c)).r, false, '이미 pending');
+    const c2 = await claim(db, o);
+    assert.equal((await rel(o, c)).r, false, '이전 claim');
+    for (const p of ['toss', 'mock', null]) assert.equal((await rel(await mkOrder(db, p), c2)).r, false, `${p}`);
+    const dn = await mkOrder(db, 'nicepay'); const cd = await claim(db, dn); await approve(db, dn, cd, 'TID-X2', 10000); await db.query(`select confirm_nicepay_payment('${dn}', '${cd}', 'TID-X2', 10000)`);
+    assert.equal((await rel(dn, cd)).r, false, '완료 주문');
+    const rv = await mkOrder(db, 'nicepay'); const cr = await claim(db, rv); await db.query(`select nicepay_mark_review('${rv}', '${cr}', 'stale_claim')`);
+    assert.equal((await rel(rv, cr)).r, false, '검토 대기');
+    // 이전 선점(c)의 승인 기록은 새 선점(c2)의 release를 막지 않는다(선점별 판단), 새 선점에 승인 기록이 생기면 막는다
+    assert.equal((await rel(o, c2)).r, true);
+    const c3 = await claim(db, o); await approve(db, o, c3, 'TID-X3', 10000);
+    assert.equal((await rel(o, c3)).r, false);
+    assert.equal((await rel(o, c3, 'approve_rejected')).r, false, '근거 종류와 무관하게 거부');
+    await rejects(db.query(`select nicepay_release_order('${o}', '${c3}', 'because')`), /복귀 근거/);
+  } finally { await db.close(); }
+});
+
+test('X3. 승인 기록 저장도 같은 잠금 순서: release가 먼저 끝났다면 승인 기록 저장은 선점 불일치로 거부(경합의 반대 방향도 안전)', async () => {
+  const db = await world();
+  try {
+    const o = await mkOrder(db, 'nicepay'); const c = await claim(db, o);
+    assert.equal((await q1(db, `select nicepay_release_order('${o}', '${c}', 'approve_rejected') r`)).r, true);   // 승인 기록 없음 → 복귀
+    await rejects(approve(db, o, c, 'TID-X4', 10000), /승인 선점이 일치하지 않아요/);                            // 풀린 선점으로는 승인 기록 불가
+    assert.equal(await count(db, 'nicepay_pg_approvals', `order_id='${o}'`), 0);
+    assert.equal((await q1(db, `select status from orders where id='${o}'`)).status, 'pending');
+    // 기존 로직 유지: 정상 승인 흐름과 Toss 확정은 영향 없음
+    const c2 = await claim(db, o); await approve(db, o, c2, 'TID-X5', 10000); await db.query(`select confirm_nicepay_payment('${o}', '${c2}', 'TID-X5', 10000)`);
+    assert.equal((await q1(db, `select status from orders where id='${o}'`)).status, 'done');
+    const t = await mkOrder(db, 'toss', { amount: 5000 }); assert.equal((await q1(db, `select confirm_real_payment('${t}', 'pk', 5000) r`)).r.already_done, false);
+  } finally { await db.close(); }
+});

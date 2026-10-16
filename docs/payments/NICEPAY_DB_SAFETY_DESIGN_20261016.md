@@ -212,3 +212,26 @@ create_order_secure 패치(정의 확인 후) · NICEPAY ReturnURL/웹훅 라우
 3. `fix_create_order_secure_allow_nicepay_20261016.sql`
 4. 읽기 전용: `verify_fix_refund_block_all_pg_providers_20261016.sql`, `verify_add_nicepay_provider_support_20261016.sql` — 모두 true
 롤백(역순): `rollback_fix_create_order_secure_allow_nicepay_20261016.sql` → `rollback_add_nicepay_provider_support_20261016.sql` → `rollback_fix_refund_block_all_pg_providers_20261016.sql`. 롤백은 nicepay 주문/승인·취소·감사 기록이 하나라도 있으면 중단(데이터·증거 보호).
+
+## 11. `nicepay_release_order` 동시성 수정 (2026-10-16)
+
+**발견**: 이전 `nicepay_release_order`는 승인 기록(`nicepay_pg_approvals`)을 먼저 조회한 뒤 `update orders`를 했다. READ COMMITTED에서 조회(기록 없음) 직후 다른 트랜잭션이 승인 기록을 저장·커밋하면, 이 함수의 `update`는 행 잠금 대기 후 그대로 진행해 **서버가 검증한 승인이 있는 선점을 취소 확인 없이 풀 수 있었다**(재결제 → 이중 청구 위험).
+
+**수정**: ① 주문 행을 `FOR UPDATE`로 **먼저** 잠금(승인 기록 저장·확정·수동 해소·취소 기록 함수와 같은 잠금 순서 → 교착 없음) ② 잠금 후 provider/상태/claim_id/거래번호/검토 대기를 **재검증**, 하나라도 다르면 `false` ③ 같은 트랜잭션에서 승인·취소 기록 재확인, 취소가 확인되지 않은 승인 기록이 있으면 `false` ④ 그 뒤에만 갱신. 반대 방향(release가 먼저 끝난 뒤 승인 기록 저장)은 `nicepay_record_verified_approval`이 선점 불일치로 거부.
+다른 함수 점검: `record_verified_approval`·`record_pg_cancel`·`resolve_review`·`confirm_nicepay_payment`·`confirm_reviewed`는 이미 주문 행을 먼저 잠근다(불변식 테스트 X1로 고정). `claim_order`/`mark_review`/`expire_stale_claims`는 기록 테이블을 읽지 않는 단일 `update`.
+
+**검증 한계(정직하게)**: PGlite는 단일 세션이라 두 트랜잭션의 실제 인터리빙을 오프라인 테스트로 재현할 수 없다. 오프라인으로는 ⓐ 잠금 순서 불변식(구 구현은 검사에 걸림) ⓑ 같은 트랜잭션 내 승인 기록 직후 release 거부, 잠금 후 재검증 결과를 확인했다. **실제 2세션 경합 검증은 일회용 Postgres(로컬/브랜치 DB, 운영·공유 DEV 아님)에서 아래 절차로 적용 후 1회 확인**을 권장한다.
+
+2세션 절차(psql 두 창, 모두 일회용 DB):
+```
+-- 준비: nicepay 주문 O를 claim(C 획득, status=approving), 서버 라이트 role로 진행
+-- 세션 A
+begin;
+select nicepay_record_verified_approval('<O>', '<C>', 'TID-RACE-1', <금액>, repeat('a', 64));   -- 주문 행 잠금 보유, 아직 커밋 안 함
+-- 세션 B (A가 열려 있는 동안)
+select nicepay_release_order('<O>', '<C>', 'netcancel_confirmed');                              -- 주문 행 잠금 대기(블록)
+-- 세션 A
+commit;
+-- 세션 B가 풀리며 반환값 확인: 기대값 f(false). 확인: select status from orders where id='<O>';  → approving
+```
+이전 구현에서는 B가 승인 기록을 못 본 채 `t`를 반환하고 상태가 pending으로 바뀐다.

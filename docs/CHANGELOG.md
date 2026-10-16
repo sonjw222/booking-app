@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-10-16 (8) — NICEPAY SQL 동시성 보완: `nicepay_release_order` 주문 행 잠금 선행 (검토용 SQL, 미실행)
+- 승인 기록 조회가 주문 행 잠금보다 먼저여서, 조회 직후 커밋된 승인 기록을 놓치고 서버 검증 승인이 있는 선점을 취소 확인 없이 풀 수 있던 경합을 수정: 주문 행 `FOR UPDATE` 선행 → 잠금 후 provider/상태/claim/거래번호/검토 대기 재검증 → 같은 트랜잭션에서 승인·취소 기록 재확인 → 갱신.
+- 잠금 순서 불변식 테스트(X1: 승인·취소 기록을 읽는 6개 함수), release 재검증·승인 직후 거부(X2), 반대 방향(X3). verify에 잠금 순서 검사 추가. 2세션 수동 검증 절차: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §11.
+
 ## 2026-10-16 (7) — Batch 3 최종 SQL 안전 검증: 서버 검증 승인 기록 게이트 · 2인 승인 · PG 취소 확인 연동 (검토용 SQL, 미실행)
 - 증빙 문자열만으로 수강권 발급/내부 환불/재결제 유도가 가능하던 경로를 차단: `nicepay_pg_approvals`(서버 검증 승인 기록, 추가 전용)가 없으면 확정·수동 확정 불가, `nicepay_pg_cancels`는 승인 기록의 TID에 대해서만(+ 2인 승인 또는 응답 요약값), 수동 해소·수동 확정은 처리자≠승인자.
 - `nicepay_release_order`는 승인 기록이 있던 선점이면 취소 확인 기록 뒤에만 복귀. 앱 lifecycle: 승인 검증 후 `recordVerifiedApproval` → 확정, 망취소 성공 시 `recordPgCancel` → release.
