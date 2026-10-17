@@ -350,3 +350,11 @@ Toss 완료 주문 3건 / 연결된 결제 기록 2건 / **32만 원 완료 주�
 
 ### 15-4. 적용 순서(운영)
 preflight → `fix_orders_insert_role_guard` → **`add_nicepay_checkout_gate`(신규)** → `add_nicepay_provider_support` → `fix_create_order_secure_allow_nicepay` → verify들. 롤백은 역순(지원 롤백 → 게이트 롤백).
+
+## 16. 승인 선점(claim)의 DB 게이트 (2026-10-17, v8)
+**문제**: `nicepay_checkout_gate.mode='off'`는 신규 주문 INSERT만 막는다. 이미 만들어진 NICEPAY 대기 주문, 또는 mode를 되돌린 뒤에는 `nicepay_claim_order`(승인 선점)가 게이트를 보지 않아 앱 잠금(서버 코드)만이 PG 승인 호출을 막았다.
+**수정**: `nicepay_claim_order`가 선점 전에 `nicepay_checkout_mode()`를 검사한다 — off: null(선점 거부, PG 승인 호출 전 단계) / reviewer: 주문 소유 프로필의 계정이 `pg_checkout_override`일 때만 / public: 허용.
+**진행 중 거래는 off 전환 후에도 마무리된다**: 게이트는 선점 단계 한 곳에서만 본다. 이미 `approving`인 주문의 승인 기록·확정·PG 취소 기록·release·검토 표시·수동 해소·환불은 모드를 보지 않는다(`verify_fix_nicepay_claim_gate`가 이 함수들에 게이트 참조가 없음을 확인). off로 복귀한 주문의 *새* 선점만 거부된다.
+**앱 선검사**: `runtime.ts nicepayGate`가 같은 모드를 읽어(off/알 수 없음/RPC 오류=거부, reviewer=심사 계정, public=공개 플래그 또는 심사 계정) 사용자에게 403(gate_off)을 주고, DB가 최종 방어선이다.
+**운영 호환(게이트는 이미 적용됨)**: 게이트 SQL은 변경하지 않는다. `add_nicepay_provider_support`(미적용)의 `nicepay_claim_order` 정의에 검사가 **처음부터 포함**되어 있고, 별도 `fix_nicepay_claim_gate_20261017.sql`은 "지원 SQL이 이미 적용된 DB"(v7 ZIP으로 먼저 적용한 경우)의 정의를 제자리 패치한다 — 지원 SQL 미적용이면 무동작, 이미 포함이면 건너뜀(두 경로의 최종 정의는 한 글자도 다르지 않음, 테스트로 확인).
+**적용 순서(운영)**: preflight → (게이트·롤 가드는 적용 완료) → `add_nicepay_provider_support`(새 버전) → (선택·무동작 가능) `fix_nicepay_claim_gate` → `fix_create_order_secure_allow_nicepay` → verify. 롤백은 역순.

@@ -29,14 +29,22 @@ export function getActiveNicepayConfig(env: Record<string, string | undefined> =
 }
 
 const log: NicepayDeps["log"] = (level, event, fields) => (level === "error" ? console.error : level === "warn" ? console.warn : console.info)(`[${event}]`, JSON.stringify(fields));
-// 결제창(심사/출시 노출) 게이트: NICEPAY 활성(config) 위에서, 일반 회원은 NEXT_PUBLIC_PG_CHECKOUT_ENABLED==="true" 일 때만, 그 외에는 심사용 계정 override 만 통과한다.
-// override 계정이라도 위 config 활성 조건을 우회하지 못한다(getActiveNicepayConfig가 먼저 호출된다).
+// 결제창(심사/출시 노출) 게이트: NICEPAY 활성(config) 위에서 DB 게이트(nicepay_checkout_gate.mode)와 노출 정책을 함께 본다.
+//   DB 모드 off → 거부 / reviewer → 심사용 계정(accounts.pg_checkout_override)만 / public → 일반 회원은 NEXT_PUBLIC_PG_CHECKOUT_ENABLED==="true" 일 때, 그 외에는 심사용 계정 override 만 통과.
+//   모드를 읽지 못하면(RPC 오류·함수 없음·알 수 없는 값) 거부(fail-closed). override 계정이라도 config 활성 조건을 우회하지 못한다(getActiveNicepayConfig가 먼저 호출된다).
+//   DB 쪽에도 같은 검사가 있다(nicepay_claim_order, orders INSERT 트리거) — 이 함수는 앱 쪽 선검사(사용자에게 명확한 403)이고 DB가 최종 방어선이다.
 export function nicepayGate(admin: SupabaseClient) {
   return async (orderId: string): Promise<boolean> => {
+    const { data: mode, error } = await admin.rpc("nicepay_checkout_mode");
+    if (error || (mode !== "public" && mode !== "reviewer")) return false;
+    const isReviewer = async () => {
+      const { data } = await admin.from("orders").select("profiles(accounts(pg_checkout_override))").eq("id", orderId).maybeSingle();
+      const prof = (data as { profiles?: { accounts?: { pg_checkout_override?: boolean } | null } | null } | null)?.profiles;
+      return !!prof?.accounts?.pg_checkout_override;
+    };
+    if (mode === "reviewer") return isReviewer();
     if (process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED === "true") return true;
-    const { data } = await admin.from("orders").select("profiles(accounts(pg_checkout_override))").eq("id", orderId).maybeSingle();
-    const prof = (data as { profiles?: { accounts?: { pg_checkout_override?: boolean } | null } | null } | null)?.profiles;
-    return !!prof?.accounts?.pg_checkout_override;
+    return isReviewer();
   };
 }
 

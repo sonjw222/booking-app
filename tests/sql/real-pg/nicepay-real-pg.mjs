@@ -67,6 +67,7 @@ try {
   await base.query(W.roleGuardFix);
   await base.query(COS_DEF);
   await base.query(W.cosFix);
+  await base.query(`update nicepay_checkout_gate set mode = 'public' where id`);   // 기본 월드는 게이트 public(선점 필요) — 게이트 테스트(R17~R20)가 각자 바꾸고 되돌린다
   const COS_EXISTS = true;
 
   const mkOrder = async (c, provider, { amount = 10000, status = 'pending', center = C1 } = {}) => {
@@ -349,7 +350,7 @@ try {
     await S.query(`insert into orders(id, profile_id, center_id, product_id, product_name, amount, status, verified, payment_provider) values ($1,$2,$3,$4,'p',100,'done',true,'mock')`, [sid, P1, C1, PROD]);
     await S.query('reset role');
     assert.deepEqual(Object.values(await q1(base, `select status, verified from orders where id=$1`, [sid])), ['done', true]);
-    await base.query(`drop policy p_ins_open on orders; alter table orders disable row level security; update nicepay_checkout_gate set mode = 'off' where id;`);
+    await base.query(`drop policy p_ins_open on orders; alter table orders disable row level security; update nicepay_checkout_gate set mode = 'public' where id;`);
     void o;
   });
 
@@ -377,21 +378,72 @@ try {
     await U.query('reset role');
     const SR = await newSession(); await SR.query('set role service_role'); await SR.query(ins, [P1, C1, PROD, 'nicepay']); await SR.query('reset role');   // 서버 생성은 유지
     assert.equal(Number((await q1(base, `select count(*)::int c from orders where payment_provider='nicepay' and status='pending' and verified is false`)).c) >= 1, true);
+    await base.query(`update nicepay_checkout_gate set mode = 'public' where id`);
   });
 
   await t('R19. 게이트 토글 경합: 켜기(미커밋) 중 클라이언트 주문은 아직 막혀 있고(대기 없음), 커밋 뒤에는 허용, 끄면 즉시 다시 차단 — 감사 기록 순서대로', async () => {
     const [A, B] = [await newSession(), await newSession()];
     const ins = `insert into orders(profile_id, center_id, product_id, product_name, amount, payment_provider) values ('${P1}','${C1}','${PROD}','p',1000,'nicepay')`;
+    await base.query(`update nicepay_checkout_gate set mode = 'off' where id`);   // 기본 월드는 public 이므로 먼저 off 에서 시작
     await B.query(`select set_config('app.uid',$1,false)`, [AUTH]); await B.query('set role authenticated');
     await A.query('begin'); await A.query(`update nicepay_checkout_gate set mode = 'public' where id`);
-    await assert.rejects(B.query(ins), /아직 사용할 수 없어요/);      // A 미커밋: B는 이전 값(false)을 본다 — 열려 있다고 착각하지 않는다
-    await A.query('commit');
+    try { await assert.rejects(B.query(ins), /아직 사용할 수 없어요/); }      // A 미커밋: B는 이전 값(off)을 본다 — 열려 있다고 착각하지 않는다
+    finally { await A.query('commit'); }
     await B.query(ins);                                                // 커밋 후 허용
     await base.query(`update nicepay_checkout_gate set mode = 'off' where id`);
     await assert.rejects(B.query(ins), /아직 사용할 수 없어요/);
     await B.query('reset role');
     const rows = (await base.query(`select mode from nicepay_checkout_gate_audit order by id`)).rows.map(r => r.mode);
     assert.deepEqual(rows.slice(-2), ['public', 'off']);
+    await base.query(`update nicepay_checkout_gate set mode = 'public' where id`);
+  });
+
+
+  // ================= 승인 선점(claim) DB 게이트 (v8) =================
+  await t('R20. claim 게이트 상태 전이·경합: off=선점 거부(PG 승인 전), reviewer=심사 계정만, public=허용 / 모드 토글(미커밋) 중 선점은 커밋된 값 기준 / 이미 선점·승인된 거래는 off 뒤에도 확정·취소 기록·release·환불 가능 / 동시 선점은 1건', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const set = m => base.query(`update nicepay_checkout_gate set mode = $1 where id`, [m]);
+    // 1) 모드별 선점
+    await set('off');
+    const o1 = await mkOrder(base, 'nicepay');
+    assert.equal(await claim(base, o1), null);
+    assert.equal((await q1(base, `select status from orders where id=$1`, [o1])).status, 'pending');
+    await set('reviewer');
+    assert.equal(await claim(base, o1), null);
+    await base.query(`update accounts set pg_checkout_override = true where id = $1`, [ACC]);
+    const c1 = await claim(base, o1); assert.ok(c1);
+    await base.query(`select nicepay_release_order($1,$2,'approve_rejected')`, [o1, c1]);
+    await base.query(`update accounts set pg_checkout_override = false where id = $1`, [ACC]);
+    await set('public');
+    // 2) 토글 경합: A가 off로 바꾸는 중(미커밋) → B 선점은 이전 값(public)을 보고 허용(미커밋 값은 보이지 않는다), 커밋 뒤 새 선점은 거부
+    const o2 = await mkOrder(base, 'nicepay'), o3 = await mkOrder(base, 'nicepay');
+    await A.query('begin'); await A.query(`update nicepay_checkout_gate set mode = 'off' where id`);
+    let c2; try { c2 = (await q1(B, `select nicepay_claim_order($1) c`, [o2])).c; assert.ok(c2, '미커밋 off 는 보이지 않는다'); } finally { await A.query('commit'); }
+    assert.equal((await q1(B, `select nicepay_claim_order($1) c`, [o3])).c, null, '커밋된 off 는 즉시 적용');
+    // 3) off 이후에도 진행 중 거래(o2)는 승인 기록 → 확정 → 취소 기록 → 환불까지 마무리
+    await base.query(`select nicepay_record_verified_approval($1,$2,'TID-R20',10000,$3)`, [o2, c2, DIG]);
+    assert.equal((await q1(base, `select confirm_nicepay_payment($1,$2,'TID-R20',10000) r`, [o2, c2])).r.already_done, false);
+    await base.query(`select nicepay_record_pg_cancel($1,'TID-R20','CXL-R20-0001',10000,'api_response','system',null,$2)`, [o2, DIG]);
+    const mid = (await q1(base, `select membership_id m from payments where order_id=$1 and sale_type='new'`, [o2])).m;
+    assert.deepEqual((await q1(base, `select refund_membership_server($1,$2,true,false) r`, [mid, AUTH])).r, { refunded: true, amount: 10000 });
+    // 4) 승인 기록 후 DB 확정 못 한 거래: off 상태에서도 PG 취소 기록 뒤 release 가능, 그러나 복귀한 주문의 새 선점은 거부
+    await set('public');
+    const o4 = await mkOrder(base, 'nicepay'); const c4 = await claim(base, o4);
+    await base.query(`select nicepay_record_verified_approval($1,$2,'TID-R20B',10000,$3)`, [o4, c4, DIG]);
+    await set('off');
+    assert.equal((await q1(base, `select nicepay_release_order($1,$2,'netcancel_confirmed') r`, [o4, c4])).r, false, 'PG 취소 기록 없이는 못 푼다(게이트와 무관한 기존 규칙)');
+    await base.query(`select nicepay_record_pg_cancel($1,'TID-R20B','CXL-R20-0002',10000,'api_response','system',null,$2)`, [o4, DIG]);
+    assert.equal((await q1(base, `select nicepay_release_order($1,$2,'netcancel_confirmed') r`, [o4, c4])).r, true);
+    assert.equal(await claim(base, o4), null);
+    // 5) public 에서 동시 선점 20회: 매번 정확히 1세션
+    await set('public');
+    const S = [await newSession(), await newSession(), await newSession()];
+    for (let i = 0; i < 5; i++) {
+      const o = await mkOrder(base, 'nicepay');
+      const r = await Promise.all(S.map(s => s.query(`select nicepay_claim_order($1) c`, [o]).then(x => x.rows[0].c)));
+      assert.equal(r.filter(Boolean).length, 1, JSON.stringify(r));
+    }
+    await set('public');
   });
 
   // ================= 실제 PostgreSQL 회귀 =================

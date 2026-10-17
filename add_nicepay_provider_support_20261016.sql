@@ -35,7 +35,7 @@
 -- 락: ADD CONSTRAINT가 orders/payments 전체 검증 동안 짧게 테이블 락을 잡는다(점검 시간대 권장).
 -- ============================================================
 begin;
--- 선행: add_nicepay_checkout_gate_20261017.sql (주문 생성 DB 게이트) — 아래 [0]이 확인한다.
+-- 선행: add_nicepay_checkout_gate_20261017.sql (주문 생성 DB 게이트) — 아래 [0]이 확인한다. nicepay_claim_order 도 같은 게이트(mode)를 본다(2026-10-17 v8).
 
 -- [0] 사전 점검: 라이브 상태 전이 트리거가 예상(기존 4전이)과 같은지. 다르면 아무것도 바꾸지 않고 중단. (공백·줄바꿈(CRLF/LF) 차이는 정규식으로 허용)
 do $$
@@ -427,8 +427,18 @@ security definer
 set search_path = public
 as $$
 declare
-    v_claim uuid;
+    v_claim uuid; /*claim_gate*/ v_mode text;
 begin
+    -- nicepay_claim_gate begin
+    -- DB 게이트: 신규 승인 선점은 모드가 허용할 때만. off=거부 / reviewer=심사 계정(accounts.pg_checkout_override) 주문만 / public=허용. 거부는 null(= 선점 못 함, PG 승인 호출 없음).
+    -- 이미 approving 인 주문의 이후 단계(승인 기록·확정·취소 기록·release·검토·수동 해소·환불)는 이 게이트를 보지 않는다 → off 전환 후에도 진행 중 거래는 안전하게 마무리된다.
+    v_mode := nicepay_checkout_mode();
+    if v_mode is distinct from 'public' and not (v_mode = 'reviewer' and exists (
+           select 1 from orders go join profiles gp on gp.id = go.profile_id join accounts ga on ga.id = gp.account_id
+            where go.id = p_order_id and ga.pg_checkout_override)) then
+        return null;
+    end if;
+    -- nicepay_claim_gate end
     perform set_config('app.nicepay_write', 'on', true);
     update orders
        set status = 'approving', pg_claim_id = gen_random_uuid(), pg_claimed_at = now()

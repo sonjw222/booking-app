@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-10-17 (7) — NICEPAY 승인 선점(claim) DB 게이트 (검토용 SQL, 미실행)
+- `add_nicepay_provider_support`의 `nicepay_claim_order`가 DB 게이트(off/reviewer/public)를 검사(신규 승인 선점만). 진행 중 거래의 확정·취소 기록·release·검토·환불은 off 뒤에도 가능. 운영에 적용된 게이트와 호환.
+- 신규 `fix_nicepay_claim_gate_20261017.sql`(+rollback/verify): 지원 SQL이 이미 적용된 DB용 제자리 패치(미적용이면 무동작, 멱등). preflight에 `claim_gate_patch_ok_or_absent`.
+- 앱 `nicepayGate`가 같은 DB 모드를 선검사(RPC 오류/알 수 없는 값=거부).
+- 테스트: PGlite 84(CG1~CG4), 실제 PostgreSQL 28(R20: 모드 전이·토글 경합·off 후 마무리·동시 선점), 단위(nicepay.gate.runtime).
+
 ## 2026-10-17 (6) — NICEPAY 주문 생성 DB 게이트 (검토용 SQL, 미실행)
 - 신규 `add_nicepay_checkout_gate_20261017.sql`(+rollback/verify): 클라이언트의 provider='nicepay' 주문 생성을 DB 모드(off/reviewer/public)로 제어. 직접 INSERT·create_order_secure(RPC 포인트 처리 포함) 모두 fail-closed, 기본 off. 변경은 감사 기록.
 - `add_nicepay_provider_support`·`fix_create_order_secure_allow_nicepay`는 게이트 선행 확인, preflight에 info 컬럼.

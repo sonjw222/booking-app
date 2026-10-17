@@ -118,3 +118,5 @@
 2. 일반 공개(NEXT_PUBLIC_PG_CHECKOUT_ENABLED=true와 함께): `mode = 'public'`
 3. 긴급 중단: `mode = 'off'` (신규 주문 생성 즉시 차단, 감사 기록 `nicepay_checkout_gate_audit`)
 QA 체크리스트 추가: off 상태에서 anon/authenticated의 NICEPAY 직접 INSERT·`create_order_secure('nicepay')`가 모두 거부되는지(+ 포인트 차감 롤백), reviewer 모드에서 일반 회원 거부·심사 계정 허용을 샌드박스 DB에서 확인.
+
+추가(v8): DB 모드는 **주문 생성뿐 아니라 승인 선점(claim)** 도 제어한다. `off`로 돌리면 새 승인은 시작되지 않고, 이미 선점된 거래의 취소·환불·복구는 그대로 진행된다. QA 체크리스트에 추가: mode=off 에서 `nicepay_claim_order` 거부, reviewer 에서 일반 회원 거부·심사 계정 허용, 선점 후 off 로 바꿔도 확정/취소 기록/release/환불이 끝까지 가능한지 샌드박스 DB에서 확인.

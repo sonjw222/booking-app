@@ -27,6 +27,7 @@ describe.skipIf(!enabled)("NICEPAY TS 라이프사이클 ↔ 실제 PostgreSQL",
     await c.query(W.baseWorldSql({}).replace("create role anon; create role authenticated; create role service_role bypassrls;", ""));
     await c.query(W.coreInstallSql({}));
     for (const f of ["refundFix", "gateFix", "support", "serverFix", "amountFix", "roleGuardFix"]) await c.query(W[f]);
+    await c.query("update nicepay_checkout_gate set mode = 'public' where id");   // 승인 선점(claim)은 DB 게이트가 열려 있어야 한다(이 테스트는 결제 흐름 자체를 본다)
   }, 120_000);
   afterAll(async () => { try { await c?.end(); } catch { /* 정리 */ } try { await admin?.query(`drop database if exists ${dbName} with (force)`); await admin?.end(); } catch { /* 정리 */ } });
 
