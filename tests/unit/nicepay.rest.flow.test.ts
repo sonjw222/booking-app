@@ -79,20 +79,42 @@ describe("위변조 · 잘못된 입력 — 승인 호출 자체가 일어나지
 });
 
 describe("장애 복구 — 불명확한 거래는 임의로 확정하지 않는다", () => {
-  it("승인 요청 중 네트워크 끊김(PG는 승인함) → 망취소로 정리 → pending 복귀, PG 거래 cancelled", async () => {
+  it("승인 요청 중 네트워크 끊김(PG는 이미 승인함) → 망취소 전에 조회: paid+금액 일치면 취소하지 않고 구매를 이어서 확정", async () => {
     const { db, pg, d } = setup(); pg.faults.approve = "timeout_after";
     const r = await handleNicepayRestAuthReturn(authFor(pg), d);
-    expect(r.body.code).toBe("approve_unknown"); expect(pg.count("netcancel")).toBe(1);
-    expect([...pg.txs.values()][0].status).toBe("cancelled"); expect(db.orders.get(ORDER)!.status).toBe("pending"); expect(db.memberships).toHaveLength(0);
+    expect(r.status).toBe(200); expect(pg.count("lookup")).toBe(1); expect(pg.count("netcancel")).toBe(0); expect(pg.count("cancel")).toBe(0);
+    expect([...pg.txs.values()][0].status).toBe("paid"); expect(db.orders.get(ORDER)!.status).toBe("done"); expect(db.memberships).toHaveLength(1); expect(db.approvals).toHaveLength(1);
   });
-  it("승인 응답 5xx/해석 불가도 같은 처리", async () => {
+  it("승인 요청이 PG에 닿기 전에 끊김(돈 안 움직임) → 조회로 미승인 확인 → 망취소 없이 pending 복귀", async () => {
+    const { db, pg, d } = setup(); pg.faults.approve = "timeout_before";
+    const r = await handleNicepayRestAuthReturn(authFor(pg), d);
+    expect(r.body.code).toBe("approve_unknown"); expect(pg.count("lookup")).toBe(1); expect(pg.count("netcancel")).toBe(0);
+    expect(db.orders.get(ORDER)!.status).toBe("pending"); expect(db.memberships).toHaveLength(0);
+  });
+  it("승인 응답 5xx/해석 불가(PG는 승인함)도 조회로 확인해 구매 확정, 망취소 없음", async () => {
     for (const f of ["http500_after", "unreadable"] as const) {
       const { db, pg, d } = setup(); pg.faults.approve = f;
-      expect((await handleNicepayRestAuthReturn(authFor(pg), d)).body.code).toBe("approve_unknown"); expect(db.orders.get(ORDER)!.status).toBe("pending");
+      expect((await handleNicepayRestAuthReturn(authFor(pg), d)).status).toBe(200); expect(pg.count("netcancel")).toBe(0); expect(db.orders.get(ORDER)!.status).toBe("done");
     }
   });
+  it("승인 결과 불명 + 조회도 실패/서명 불일치 → 그때서야 망취소, 망취소 뒤 재조회로 확인되면 pending 복귀", async () => {
+    for (const lookupFault of ["fail", "bad_signature"] as const) {
+      const { db, pg, d } = setup(); pg.faults = { approve: "timeout_after" };
+      // 첫 조회(망취소 전)만 실패시키고, 망취소 뒤 재조회는 정상 응답이도록 호출 횟수로 제어
+      const orig = pg.faults; let n = 0; const realFetch = pg.fetch.bind(pg);
+      d.fetchImpl = (async (url: string, init: Parameters<typeof realFetch>[1]) => { if (url.includes("?ediDate") && init.method === "GET" && n++ === 0) pg.faults = { ...orig, lookup: lookupFault }; else pg.faults = orig; return realFetch(url, init); }) as typeof d.fetchImpl;
+      const r = await handleNicepayRestAuthReturn(authFor(pg), d);
+      expect(r.body.code).toBe("approve_unknown"); expect(pg.count("netcancel")).toBe(1); expect(pg.count("lookup")).toBe(2);
+      expect([...pg.txs.values()][0].status).toBe("cancelled"); expect(db.orders.get(ORDER)!.status).toBe("pending"); expect(db.memberships).toHaveLength(0);
+    }
+  });
+  it("망취소는 성공 응답이어도 재조회를 신뢰할 수 없으면 release하지 않고 운영자 확인", async () => {
+    const { db, pg, d } = setup(); pg.faults = { approve: "timeout_after", lookup: "bad_signature" };
+    const r = await handleNicepayRestAuthReturn(authFor(pg), d);
+    expect(r.body.code).toBe("compensation_failed"); expect(pg.count("netcancel")).toBe(1); expect(db.orders.get(ORDER)!.status).toBe("approving"); expect(db.reviews).toEqual([{ orderId: ORDER, reason: "netcancel_failed" }]);
+  });
   it("망취소 실패 → 주문은 approving 유지 + 운영자 확인(review) 표시, 재승인/성공 처리 없음", async () => {
-    const { db, pg, d } = setup(); pg.faults = { approve: "timeout_after", netcancel: "fail" };
+    const { db, pg, d } = setup(); pg.faults = { approve: "timeout_after", lookup: "fail", netcancel: "fail" };
     const r = await handleNicepayRestAuthReturn(authFor(pg), d);
     expect(r.body.code).toBe("compensation_failed"); expect(db.orders.get(ORDER)!.status).toBe("approving"); expect(db.reviews).toEqual([{ orderId: ORDER, reason: "netcancel_failed" }]);
     pg.faults = {}; expect((await handleNicepayRestAuthReturn(authFor(pg), d)).status).toBe(409);   // 선점 중이라 새 승인 불가

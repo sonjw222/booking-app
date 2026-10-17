@@ -62,9 +62,18 @@ describe.skipIf(!enabled)("NICEPAY TS 라이프사이클 ↔ 실제 PostgreSQL",
     expect([a.status, b.status].sort()).toEqual([200, 409]); expect(pg.count("approve")).toBe(1);
     expect(await n(`select count(*)::int n from memberships m join payments p on p.membership_id=m.id where p.order_id=$1`, [oid])).toBe(1);
   });
-  it("승인 응답 유실(PG는 승인) → 망취소 → 실제 DB가 release 허용(승인 기록 없음) → pending 복귀, 수강권 없음, 감사 기록 남음", async () => {
+  it("승인 응답 유실(PG는 승인) → 망취소 전에 조회로 paid 확인 → 취소 없이 실제 DB가 구매 확정(done, 결제 1건, 승인 기록)", async () => {
     const pg = new FakePg(), oid = await newOrder(); pg.faults.approve = "timeout_after";
+    expect((await handleNicepayRestAuthReturn(pg.authorize(oid, 12000), depsFor(pg))).status).toBe(200);
+    expect(pg.count("lookup")).toBe(1); expect(pg.count("netcancel")).toBe(0);
+    expect((await one(`select status from orders where id=$1`, [oid])).status).toBe("done");
+    expect(await n(`select count(*)::int n from payments where order_id=$1`, [oid])).toBe(1);
+    expect(await n(`select count(*)::int n from nicepay_pg_approvals where order_id=$1`, [oid])).toBe(1);
+  });
+  it("승인 요청이 PG에 닿기 전 실패(돈 안 움직임) → 조회로 미승인 확인 → 망취소 없이 실제 DB release 허용(승인 기록 없음) → pending 복귀, 감사 기록 남음", async () => {
+    const pg = new FakePg(), oid = await newOrder(); pg.faults.approve = "timeout_before";   // 돈이 움직이지 않음
     expect((await handleNicepayRestAuthReturn(pg.authorize(oid, 12000), depsFor(pg))).body.code).toBe("approve_unknown");
+    expect(pg.count("netcancel")).toBe(0);
     expect((await one(`select status from orders where id=$1`, [oid])).status).toBe("pending");
     expect(await n(`select count(*)::int n from payments where order_id=$1`, [oid])).toBe(0);
     expect(await n(`select count(*)::int n from nicepay_review_actions where order_id=$1 and action='release'`, [oid])).toBe(1);
@@ -73,7 +82,7 @@ describe.skipIf(!enabled)("NICEPAY TS 라이프사이클 ↔ 실제 PostgreSQL",
     const pg = new FakePg(), oid = await newOrder(); pg.faults.approve = "bad_signature";
     expect((await handleNicepayRestAuthReturn(pg.authorize(oid, 12000), depsFor(pg))).body.code).toBe("approve_mismatch");
     expect((await one(`select status from orders where id=$1`, [oid])).status).toBe("pending");
-    const pg2 = new FakePg(), oid2 = await newOrder(); pg2.faults = { approve: "timeout_after", netcancel: "fail" };
+    const pg2 = new FakePg(), oid2 = await newOrder(); pg2.faults = { approve: "timeout_after", lookup: "fail", netcancel: "fail" };
     expect((await handleNicepayRestAuthReturn(pg2.authorize(oid2, 12000), depsFor(pg2))).body.code).toBe("compensation_failed");
     expect(await one(`select status, pg_review_reason, pg_review_at is not null as flagged from orders where id=$1`, [oid2])).toEqual({ status: "approving", pg_review_reason: "netcancel_failed", flagged: true });
     pg2.faults = {}; expect((await handleNicepayRestAuthReturn(pg2.authorize(oid2, 12000), depsFor(pg2))).status).toBe(409);

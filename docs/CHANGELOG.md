@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-10-17 (5) — NICEPAY REST: 승인 결과 불명 시 망취소 전 상태 조회 (독립 검증에서 발견)
+- `restLifecycle.ts`: 승인 요청의 결과를 모를 때(타임아웃/5xx/해석 불가) 곧바로 망취소하던 것을, 먼저 거래 조회(서명·tid·orderId 검증)로 판단하도록 변경 — paid+금액 일치: 취소 없이 구매 확정 이어가기, ready/failed/expired: 망취소 없이 복귀, cancelled: 복귀, 그 외/조회 불가: 망취소. 망취소 응답은 서명 규격이 없어 그 응답만 믿지 않고 재조회로 paid가 아님을 확인한 경우에만 release(아니면 운영자 확인).
+- 테스트: `nicepay.rest.flow.test.ts` 시나리오 갱신/추가(조회 우선, 조회 실패 시 망취소, 망취소 후 재조회 불신 → review).
+
 ## 2026-10-17 (4) — NICEPAY 계약 전 구현 Batch (비활성, SQL 미실행)
 - 공식 규격 분석(`docs/payments/NICEPAY_SPEC_ANALYSIS_20261017.md`): REST(v1)·v3(MID) 두 계열 구분 — 키 유형 확정 전이라 `config.ts`의 `NICEPAY_API_FAMILY`로 분기, 추측한 파라미터를 운영용으로 확정하지 않음.
 - 서버: `lib/payments/server/nicepay/{config,rest,restLifecycle,refund,recovery,flow,runtime}.ts` + 라우트 `app/api/payments/nicepay/{prepare,return,status,abandon,webhook}` + 결과 화면 `app/checkout/nicepay/result` + 클라이언트 Provider(`NicepayPaymentProvider`, `nicepayClientApi`). 활성 조건 4중 잠금(코드 상수·서버 플래그·계열·키) — 하나라도 아니면 모든 경로 503/501 fail-closed.

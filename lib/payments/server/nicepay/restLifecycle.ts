@@ -79,10 +79,15 @@ export async function handleNicepayRestAuthReturn(input: RestAuthResult, d: Rest
     await d.markReview(ctx.orderId, claimId, reason).catch(() => d.log("error", "PG_NICEPAY_MARK_REVIEW_FAILED", { orderId: maskId(orderId) }));
     return { status: 500, body: { error: "결제 처리 중 문제가 생겼어요. 운영자에게 문의해주세요", code: "compensation_failed" } };
   };
-  // 승인 결과를 모를 때(또는 승인 응답이 신뢰 불가) — 망취소.
+  // 승인 결과를 모를 때(또는 승인 응답이 신뢰 불가) — 망취소. 망취소 응답은 문서에 서명 공식이 없어 그 응답만으로 "취소됨"을 확정하지 않는다:
+  // 망취소 뒤 서명 검증된 조회로 거래가 승인(paid) 상태가 아님을 확인한 경우에만 release, paid가 남았거나 조회를 신뢰할 수 없으면 review(운영자 확인).
   const netCancelAndRelease = async (cause: string, body: Reply["body"], status: number): Promise<Reply> => {
     const r = await restNetCancel(d.fetchImpl, creds, { orderId: ctx.orderId, now: d.now() });
     if (!r.ok || r.data.resultCode !== REST_OK) { d.log("error", "PG_NICEPAY_NETCANCEL_FAILED", { orderId: maskId(orderId), cause, reason: r.ok ? s(r.data.resultCode) : r.message }); return review("netcancel_failed"); }
+    const after = await restLookup(d.fetchImpl, creds, { tid, now: d.now() });
+    const ad = after.ok ? after.data : null;
+    const trusted = !!ad && ad.resultCode === REST_OK && verifyRestResponse(ad, creds, { tid, orderId: ctx.orderId });
+    if (!trusted || ad!.status === "paid" || ad!.status === "partialCancelled") { d.log("error", "PG_NICEPAY_NETCANCEL_NOT_VERIFIED", { orderId: maskId(orderId), cause, lookup: trusted ? s(ad!.status) : "untrusted" }); return review("netcancel_failed"); }
     d.log("warn", "PG_NICEPAY_NETCANCELED", { orderId: maskId(orderId), cause });
     return releaseAfter(status, body);
   };
@@ -99,11 +104,46 @@ export async function handleNicepayRestAuthReturn(input: RestAuthResult, d: Rest
     return releaseAfter(status, body);
   };
 
+  // 3) 서버가 검증한 승인 기록 → DB 확정 (승인 응답 또는 서명 검증된 조회 응답 r 기준)
+  const finishApproved = async (r: RestResponse): Promise<Reply> => {
+    const digest = responseDigest([tid, ctx.orderId, ctx.amount, creds.clientId, r.resultCode, r.paidAt]);
+    let res = await d.recordVerifiedApproval(ctx.orderId, claimId, tid, ctx.amount, digest);
+    if (!res.error) { approvedTid = tid; res = await d.dbConfirm(ctx.orderId, claimId, tid, ctx.amount); }
+    if (!res.error) return { status: 200, body: { ok: true, ...(res.data ?? {}) } };
+    let after: NicepayOrderCtx | null = null;
+    try { after = await d.orderContext(orderId); } catch { after = null; }
+    if (after?.status === "done") return { status: 200, body: { ok: true, already_done: true } };
+    if (!after) {
+      d.log("error", "PG_NICEPAY_CONFIRM_STATE_UNKNOWN", { orderId: maskId(orderId), tid: maskId(tid), dbError: res.error.message });
+      await d.markReview(ctx.orderId, claimId, "confirm_state_unknown").catch(() => d.log("error", "PG_NICEPAY_MARK_REVIEW_FAILED", { orderId: maskId(orderId) }));
+      return { status: 500, body: { error: "결제는 승인됐지만 확정 상태를 확인하지 못했어요. 운영자에게 문의해주세요", code: "confirm_state_unknown" } };
+    }
+    if (!approvedTid) {
+      // 승인 기록 자체가 실패 — 서버가 승인을 DB에 남기지 못했다. 승인은 이미 일어났으므로 netcancel이 아니라 일반 취소 경로로 정리하되, DB에는 취소 기록 대상(승인 기록)이 없다 → 운영자 확인.
+      return review("netcancel_failed");
+    }
+    return cancelVerifiedApproval("db_confirm_failed", { error: "결제 확정에 실패해 승인을 취소했어요", code: "db_confirm_failed" }, 500);
+  };
+
   // 1) 승인(돈이 움직이는 시점) — 금액은 DB 주문 금액
   const approved = await restApprove(d.fetchImpl, creds, { tid, amount: ctx.amount, now: d.now() });
   if (!approved.ok) {
     if (approved.status === 0 || approved.status >= 500) {
       d.log("error", "PG_NICEPAY_APPROVE_UNKNOWN", { orderId: maskId(orderId), reason: approved.code });
+      // 승인 결과를 모른다 → 망취소 전에 먼저 거래 상태를 조회한다(서명·tid·orderId 검증).
+      //   paid + 금액 일치 : 승인은 실제로 성공 — 취소하지 않고 이 조회 결과를 승인 응답으로 삼아 DB 확정을 이어간다.
+      //   ready/failed/expired : 돈이 움직이지 않았다 — 망취소 없이 release.  cancelled : 이미 취소됨 — release.
+      //   그 밖(금액 불일치 paid, 부분취소, 조회 실패/서명 불일치) : 기존대로 망취소 후 재확인.
+      const look = await restLookup(d.fetchImpl, creds, { tid, now: d.now() });
+      const ld = look.ok ? look.data : null;
+      if (ld && ld.resultCode === REST_OK && verifyRestResponse(ld, creds, { tid, orderId: ctx.orderId })) {
+        if (ld.status === "paid" && parseRestAmount(ld.amount) === ctx.amount) return finishApproved(ld);
+        if (ld.status === "ready" || ld.status === "failed" || ld.status === "expired") {
+          d.log("warn", "PG_NICEPAY_APPROVE_UNKNOWN_NOT_PAID", { orderId: maskId(orderId), pgStatus: s(ld.status) });
+          return (await d.releaseOrder(ctx.orderId, claimId, "approve_rejected")) ? { status: 502, body: { error: "결제 승인 결과를 확인하지 못했어요. 다시 시도해주세요", code: "approve_unknown" } } : review("netcancel_failed");
+        }
+        if (ld.status === "cancelled") return releaseAfter(502, { error: "결제 승인 결과를 확인하지 못했어요. 다시 시도해주세요", code: "approve_unknown" });
+      }
       return netCancelAndRelease("approve_unknown", { error: "결제 승인 결과를 확인하지 못했어요. 다시 시도해주세요", code: "approve_unknown" }, 502);
     }
     await d.releaseOrder(ctx.orderId, claimId, "approve_rejected");
@@ -120,24 +160,7 @@ export async function handleNicepayRestAuthReturn(input: RestAuthResult, d: Rest
     d.log("error", "PG_NICEPAY_APPROVE_MISMATCH", { orderId: maskId(orderId), status: s(r.status) });
     return netCancelAndRelease("approve_mismatch", { error: "결제 승인 응답이 주문과 일치하지 않아요", code: "approve_mismatch" }, 409);
   }
-  // 3) 서버가 검증한 승인 기록 → DB 확정
-  const digest = responseDigest([tid, ctx.orderId, ctx.amount, creds.clientId, r.resultCode, r.paidAt]);
-  let res = await d.recordVerifiedApproval(ctx.orderId, claimId, tid, ctx.amount, digest);
-  if (!res.error) { approvedTid = tid; res = await d.dbConfirm(ctx.orderId, claimId, tid, ctx.amount); }
-  if (!res.error) return { status: 200, body: { ok: true, ...(res.data ?? {}) } };
-  let after: NicepayOrderCtx | null = null;
-  try { after = await d.orderContext(orderId); } catch { after = null; }
-  if (after?.status === "done") return { status: 200, body: { ok: true, already_done: true } };
-  if (!after) {
-    d.log("error", "PG_NICEPAY_CONFIRM_STATE_UNKNOWN", { orderId: maskId(orderId), tid: maskId(tid), dbError: res.error.message });
-    await d.markReview(ctx.orderId, claimId, "confirm_state_unknown").catch(() => d.log("error", "PG_NICEPAY_MARK_REVIEW_FAILED", { orderId: maskId(orderId) }));
-    return { status: 500, body: { error: "결제는 승인됐지만 확정 상태를 확인하지 못했어요. 운영자에게 문의해주세요", code: "confirm_state_unknown" } };
-  }
-  if (!approvedTid) {
-    // 승인 기록 자체가 실패 — 서버가 승인을 DB에 남기지 못했다. 승인은 이미 일어났으므로 netcancel이 아니라 일반 취소 경로로 정리하되, DB에는 취소 기록 대상(승인 기록)이 없다 → 운영자 확인.
-    return review("netcancel_failed");
-  }
-  return cancelVerifiedApproval("db_confirm_failed", { error: "결제 확정에 실패해 승인을 취소했어요", code: "db_confirm_failed" }, 500);
+  return finishApproved(r);
 }
 
 /* 웹훅(결제통보): 문서상 signature(= sha256(tid + amount + ediDate + SecretKey))가 있다 → 서명을 검증하되, 웹훅만으로 주문을 확정/취소하지는 않는다(분류 전용, 상태 변경은 조회 재확인 후).
