@@ -22,7 +22,7 @@ export const CLASSES = [
 function tableOf(url: URL): string { return url.pathname.replace(/^\/rest\/v1\//, "").split("/")[0]; }
 const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(body) });
 
-export type MockOpts = { loggedIn?: boolean; hasPass?: boolean; failCenters?: boolean; noReviews?: boolean; reviewsFail?: boolean };
+export type MockOpts = { manyCenters?: boolean; loggedIn?: boolean; hasPass?: boolean; failCenters?: boolean; noReviews?: boolean; reviewsFail?: boolean };
 export const requests: string[] = [];
 
 export async function mockSupabase(page: Page, opts: MockOpts = {}) {
@@ -45,7 +45,9 @@ export async function mockSupabase(page: Page, opts: MockOpts = {}) {
     if (t === "centers") {
       if (opts.failCenters) return json(route, { message: "boom" }, 500);
       const idEq = q.get("id")?.replace("eq.", "");
-      let rows: Record<string, unknown>[] = [...CENTERS];
+      let rows: Record<string, unknown>[] = opts.manyCenters
+        ? Array.from({ length: 24 }, (_, i) => ({ ...CENTERS[i % CENTERS.length], id: `c-${i}`, name: `센터 ${String(i).padStart(2, "0")}`, created_at: new Date(Date.now() - i * 1000).toISOString() }))
+        : [...CENTERS];
       if (idEq) rows = rows.filter((c) => c.id === idEq).map((c) => ({ ...c, phone: null, sns: null, intro_blocks: [], pay_methods: null, review_point: 1000, status: "approved" }));
       return json(route, wrap(rows));
     }

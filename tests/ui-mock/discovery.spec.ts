@@ -118,6 +118,25 @@ test.describe("종목별 센터 목록 — 필터·정렬·상태 유지", () =>
     await expect(page.getByRole("button", { name: /거리 10km/ })).toBeVisible();
   });
 
+  test("긴 목록에서 스크롤한 뒤 센터 상세 → 뒤로가기(화면 버튼/브라우저) → 스크롤 위치 복원, 새로 연 목록은 맨 위", async ({ page }) => {
+    await mockSupabase(page, { manyCenters: true });
+    await page.goto("/category/%EC%9A%94%EA%B0%80");
+    await expect(page.locator(".cat-center-card")).toHaveCount(24);
+    await page.evaluate(() => window.scrollTo(0, 900));
+    await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBeGreaterThan(800);
+    await page.locator(".cat-center-card").nth(6).click();
+    await expect(page).toHaveURL(/\/center\//);
+    await page.getByRole("button", { name: "뒤로가기" }).click();
+    await expect(page).toHaveURL(/\/category\//);
+    await expect(page.locator(".cat-center-card")).toHaveCount(24);
+    await expect.poll(() => page.evaluate(() => Math.round(window.scrollY)), { timeout: 5000 }).toBeGreaterThan(700);
+    // 새로 연 목록(홈 → 종목)은 복원하지 않는다
+    await page.goto("/");
+    await page.goto("/category/%EC%9A%94%EA%B0%80");
+    await expect(page.locator(".cat-center-card")).toHaveCount(24);
+    expect(await page.evaluate(() => Math.round(window.scrollY))).toBeLessThan(50);
+  });
+
   test("센터 상세 직접 URL 진입 → 뒤로가기는 홈(폴백), 앱 밖으로 나가지 않는다", async ({ page }) => {
     await mockSupabase(page);
     await page.goto("/center/c-near");
