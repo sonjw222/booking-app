@@ -270,16 +270,25 @@ describe("비활성 보장 / 카드정보 미수집 (정적)", () => {
     try { expect(resolveProviderName()).toBe("nicepay"); expect(isOnlinePgCheckoutAvailable()).toBe(false); } finally { if (prev === undefined) delete process.env.NEXT_PUBLIC_PAYMENT_PROVIDER; else process.env.NEXT_PUBLIC_PAYMENT_PROVIDER = prev; }
   });
   const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => { const p = path.join(dir, n); return statSync(p).isDirectory() ? (n === "node_modules" ? [] : walk(p)) : /\.(ts|tsx)$/.test(p) ? [p] : []; });
-  it("서버 NICEPAY 모듈(lib/payments/server/nicepay)은 app/ 라우트에 연결되지 않았다(연결 금지) — 클라이언트 Provider만 팩토리에 연결", () => {
-    expect(walk("app").filter((f) => /from\s+["'][^"']*server\/nicepay/i.test(readFileSync(f, "utf8")))).toEqual([]);
-    expect(walk("lib").filter((f) => !f.includes(`${path.sep}nicepay${path.sep}`)).filter((f) => /from\s+["'][^"']*server\/nicepay/i.test(readFileSync(f, "utf8")))).toEqual([]);
+  it("서버 NICEPAY 모듈은 허용된 진입점에서만 import된다: app/api/payments/nicepay/** 라우트와 lib/payments/server/deps.ts(환불 핸들러 주입) 뿐 — 그 밖의 app/lib 파일은 import 금지, 클라이언트 번들(app 페이지/컴포넌트)은 서버 모듈을 절대 import하지 않는다", () => {
+    const importsServerNicepay = (f: string) => /from\s+["'][^"']*server\/nicepay|from\s+["']\.\/nicepay\//i.test(readFileSync(f, "utf8"));
+    const norm = (f: string) => f.split(path.sep).join("/");
+    const appHits = walk("app").filter(importsServerNicepay).map(norm);
+    expect(appHits.filter((f) => !f.startsWith("app/api/payments/nicepay/"))).toEqual([]);
+    const libHits = walk("lib").filter((f) => !norm(f).startsWith("lib/payments/server/nicepay/")).filter(importsServerNicepay).map(norm);
+    expect(libHits).toEqual(["lib/payments/server/deps.ts"]);
     expect(walk("app").filter((f) => /from\s+["'][^"']*NicepayPaymentProvider/.test(readFileSync(f, "utf8")))).toEqual([]);
+    // 클라이언트(use client) 파일은 서버 모듈(키/서명)을 가져오지 않는다
+    expect(walk("app").concat(walk("lib")).filter((f) => /^"use client"/.test(readFileSync(f, "utf8")) && importsServerNicepay(f))).toEqual([]);
   });
   it("카드번호·유효기간·생년월일/사업자번호·비밀번호 수집/전송 필드가 코드에 없다", () => {
     const re = /\b(CardPw|ExpYear|ExpMonth|IDNo|EncData)\b|CardNo\s*[=:]/;
     expect(walk("app").concat(walk("lib")).filter((f) => re.test(readFileSync(f, "utf8")))).toEqual([]);
   });
-  it("NICEPAY 키는 코드에서 환경변수로 읽지 않는다(이번 범위: 키 로딩 코드 없음)", () => {
-    expect(walk("lib").concat(walk("app")).filter((f) => /process\.env\.NICEPAY|NICEPAY_(MID|MERCHANT|KEY|SECRET)/.test(readFileSync(f, "utf8")))).toEqual([]);
+  it("NICEPAY 키/설정 환경변수는 lib/payments/server/nicepay/config.ts 한 곳에서만 읽는다(라우트·클라이언트·다른 모듈에서 직접 읽지 않음), NEXT_PUBLIC_에는 NICEPAY 비밀이 없다", () => {
+    const norm = (f: string) => f.split(path.sep).join("/");
+    const hits = walk("lib").concat(walk("app")).filter((f) => /process\.env\.NICEPAY|NICEPAY_(MID|MERCHANT|KEY|SECRET|CLIENT)/.test(readFileSync(f, "utf8"))).map(norm);
+    expect(hits).toEqual(["lib/payments/server/nicepay/config.ts"]);
+    expect(walk("lib").concat(walk("app")).filter((f) => /NEXT_PUBLIC_NICEPAY/.test(readFileSync(f, "utf8")))).toEqual([]);
   });
 });

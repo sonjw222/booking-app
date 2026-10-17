@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-10-17 (4) — NICEPAY 계약 전 구현 Batch (비활성, SQL 미실행)
+- 공식 규격 분석(`docs/payments/NICEPAY_SPEC_ANALYSIS_20261017.md`): REST(v1)·v3(MID) 두 계열 구분 — 키 유형 확정 전이라 `config.ts`의 `NICEPAY_API_FAMILY`로 분기, 추측한 파라미터를 운영용으로 확정하지 않음.
+- 서버: `lib/payments/server/nicepay/{config,rest,restLifecycle,refund,recovery,flow,runtime}.ts` + 라우트 `app/api/payments/nicepay/{prepare,return,status,abandon,webhook}` + 결과 화면 `app/checkout/nicepay/result` + 클라이언트 Provider(`NicepayPaymentProvider`, `nicepayClientApi`). 활성 조건 4중 잠금(코드 상수·서버 플래그·계열·키) — 하나라도 아니면 모든 경로 503/501 fail-closed.
+- 환불: NICEPAY는 서버가 PG 취소를 서명 검증된 응답/조회로 확인·기록한 뒤에만 내부 환불(`handleRefund` → `nicepayRefund` 주입, 없으면 501). 결과 불명은 임의 확정 없이 환불 표시 유지.
+- 도메인 분리: `lib/payments/domains.ts`(회원 수강권 ↔ 센터 구독료 주문번호 교차 차단), 구독 설계 문서 `NICEPAY_SUBSCRIPTION_DOMAIN_20261017.md`.
+- SQL(검토용, 미실행): `fix_orders_insert_role_guard_20261017.sql`(+rollback/verify) — orders INSERT 서버 전용 필드 보정이 anon/authenticated 롤에도 적용. preflight에 `orders_insert_guard_patch_ok` 추가.
+- 테스트: vitest NICEPAY 신규 62건(REST 흐름·장애 복구·환불·설정 게이트·도메인), 실제 PostgreSQL 16 ↔ TS 라이프사이클 9건, PGlite SQL 74건, 실제 PG SQL 25건(권한 diff R16, 롤/RLS R17 포함).
+
 ## 2026-10-17 (3) — 환불 금액 정합성 + orders_guard_pg_state anon 우회 경계 (검토용 SQL, 미실행)
 - 신규 `fix_refund_amount_integrity_20261017.sql`(+rollback/verify): 환불 금액·복원 주문을 최근 행이 아닌 PG 원거래 행 기준으로(원거래 2개 이상/이미 환불 행이면 거부, 컨텍스트는 unknown_pg). 직접결제·Mock·정상 Toss 흐름 불변. 운영 현재 정의 제자리 패치(선행: 출처 가드, 서버 경로 패치).
 - `add_nicepay_provider_support_20261016.sql` [4]: `orders_guard_pg_state`가 auth.uid() NULL 이어도 anon/authenticated 롤은 서버로 보지 않음. preflight에 `refund_amount_patch_ok` 추가.

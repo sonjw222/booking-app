@@ -10,6 +10,10 @@
 - P2: `orders_force_server_fields_on_insert`(운영 적용됨)는 `auth.uid() is not null` 일 때만 verified/status 를 보정 → anon 롤 INSERT 는 RLS(`my_profile_ids()`)에만 의존. `orders_guard_pg_state` 와 같이 role 설정(anon/authenticated)을 함께 보는 방어 계층 추가 검토(별도 SQL, 영향 범위 확인 필요).
 - P1: `fix_refund_amount_integrity_20261017.sql` 운영 적용 후 `verify_*`의 대조 쿼리(과거 환불 합계 ≠ 원거래 금액)를 실행해 결과가 있으면 PG 콘솔 취소 금액과 개별 대조.
 
+- P0: NICEPAY 계약 후 확인 질문·환경변수·운영 전 QA 체크리스트·이어서 실행할 프롬프트는 `docs/payments/NICEPAY_CONTRACT_HANDOFF_20261017.md`. 활성화(코드 상수 `NICEPAY_CHECKOUT_ACTIVATED`)는 샌드박스 E2E 통과 후 별도 승인.
+- P1: SQL 적용 대기(검토용): `fix_orders_insert_role_guard_20261017.sql`(독립 적용 가능) → `add_nicepay_provider_support_20261016.sql` → `fix_create_order_secure_allow_nicepay_20261016.sql`.
+- P2: 센터 구독료를 앱(iOS/Android) 안에서 결제 CTA로 노출하는 것은 App Store/Google Play 정책 검토 전까지 금지(웹 전용 권장) — `NICEPAY_SUBSCRIPTION_DOMAIN_20261017.md` §4.
+
 ## 2026-10-11 날짜 선택 팝오버 후속 (진도 기록 캘린더 수정 PR 범위 밖)
 - **P2**: `MonthPicker`는 아직 `position:absolute` 팝오버라 `.sheet` 안에서 같은 방식으로 잘릴 수 있다 — `DatePicker`와 같은 포털/`computePopoverPosition` 적용 검토(영향 화면 목록 확인 후).
 - **P3**: 실기기(iOS/Android) 확인과 키보드 화살표 이동(날짜 그리드)은 미구현/미검증.

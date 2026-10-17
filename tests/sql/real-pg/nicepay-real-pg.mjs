@@ -63,6 +63,7 @@ try {
   await base.query(W.support);
   await base.query(W.serverFix);
   await base.query(W.amountFix);
+  await base.query(W.roleGuardFix);
   await base.query(COS_DEF);
   await base.query(W.cosFix);
   const COS_EXISTS = true;
@@ -304,6 +305,51 @@ try {
     await S3.query('reset role');
   });
 
+
+  // ================= 보안 전수 점검 (2026-10-17) =================
+  await t('R16. 권한 diff: NICEPAY/환불 패치 체인 적용 전후로 anon/authenticated 가 실행·접근 가능한 함수/테이블/시퀀스가 하나도 늘지 않는다 + 모든 새 SECURITY DEFINER 함수는 search_path 고정', async () => {
+    const c = await freshDb();
+    const snap = async () => ({
+      fns: (await c.query(`select p.oid::regprocedure::text f from pg_proc p where p.pronamespace = 'public'::regnamespace and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute')) order by 1`)).rows.map(r => r.f),
+      tabs: (await c.query(`select c.relname t, string_agg(distinct pr.p, ',' order by pr.p) p from pg_class c cross join (values ('select'),('insert'),('update'),('delete'),('truncate'),('references'),('trigger')) pr(p) where c.relnamespace = 'public'::regnamespace and c.relkind in ('r','p','S') and (has_table_privilege('anon', c.oid, pr.p) or has_table_privilege('authenticated', c.oid, pr.p)) group by 1 order by 1`)).rows.map(r => `${r.t}:${r.p}`),
+    });
+    const before = await snap();
+    await c.query(COS_DEF);
+    await c.query(W.refundFix); await c.query(W.serverFix); await c.query(W.amountFix); await c.query(W.roleGuardFix); await c.query(W.support); await c.query(W.cosFix);
+    const after = await snap();
+    const newFns = after.fns.filter(f => !before.fns.includes(f)).filter(f => !/^create_order_secure/.test(f));   // create_order_secure 는 기존 회원용 RPC(가정 정의) — 이 점검은 NICEPAY 신규 객체가 대상
+    assert.deepEqual(newFns, [], '새로 클라이언트가 실행 가능해진 함수');
+    assert.deepEqual(after.tabs.filter(x => !before.tabs.includes(x)), [], '새로 클라이언트가 접근 가능해진 테이블/시퀀스 권한');
+    const bad = (await c.query(`select p.oid::regprocedure::text f from pg_proc p where p.pronamespace = 'public'::regnamespace and (p.proname like 'nicepay%' or p.proname = 'confirm_nicepay_payment' or p.proname in ('orders_guard_pg_state','orders_force_server_fields_on_insert','pg_refund_context','pg_refund_begin','_refund_membership_core'))
+        and not (p.prosecdef and exists (select 1 from unnest(p.proconfig) cfg where cfg = 'search_path=public'))`)).rows;
+    assert.deepEqual(bad, [], 'SECURITY DEFINER + search_path 고정이 아닌 함수');
+    const rls = (await c.query(`select c.relname from pg_class c where c.relname in ('nicepay_review_actions','nicepay_pg_approvals','nicepay_pg_cancels') and not c.relrowsecurity`)).rows;
+    assert.deepEqual(rls, [], 'RLS 미적용 신규 테이블');
+    const pol = (await c.query(`select polname from pg_policy where polrelid in ('nicepay_review_actions'::regclass, 'nicepay_pg_approvals'::regclass, 'nicepay_pg_cancels'::regclass)`)).rows;
+    assert.deepEqual(pol, [], '신규 서버 전용 테이블에 클라이언트 정책이 없다');
+  });
+
+  await t('R17. 실제 롤 + 운영형 RLS 정책: anon/authenticated 는 INSERT 로 서버 전용 필드를 심을 수 없고(권한·RLS가 넓어져도 보정), 서버 롤은 영향 없다', async () => {
+    const o = await mkOrder(base, 'nicepay');   // 기존 주문
+    await base.query(`grant select, insert, update on orders to anon, authenticated, service_role; grant select on profiles, accounts, perms to anon, authenticated;
+      alter table orders enable row level security; drop policy if exists p_ins_open on orders; create policy p_ins_open on orders for insert with check (true);`);   // 일부러 넓힌 정책(잘못 열린 상황 가정)
+    const S = await newSession();
+    for (const role of ['anon', 'authenticated']) {
+      await S.query(`set role ${role}`);
+      const nid = id(5, 990000 + (role === 'anon' ? 1 : 2));
+      await S.query(`insert into orders(id, profile_id, center_id, product_id, product_name, amount, status, verified, paid_at, pg_tid, payment_provider) values ($1,$2,$3,$4,'p',100,'done',true,now(),'HACK','nicepay')`, [nid, P1, C1, PROD]);
+      await S.query('reset role');
+      const r = await q1(base, `select status, verified, paid_at, pg_tid from orders where id=$1`, [nid]);
+      assert.deepEqual([r.status, r.verified, r.paid_at, r.pg_tid], ['pending', false, null, null], `${role}: 서버 전용 필드 보정`);
+    }
+    await S.query('set role service_role');
+    const sid = id(5, 990003);
+    await S.query(`insert into orders(id, profile_id, center_id, product_id, product_name, amount, status, verified, payment_provider) values ($1,$2,$3,$4,'p',100,'done',true,'mock')`, [sid, P1, C1, PROD]);
+    await S.query('reset role');
+    assert.deepEqual(Object.values(await q1(base, `select status, verified from orders where id=$1`, [sid])), ['done', true]);
+    await base.query(`drop policy p_ins_open on orders; alter table orders disable row level security;`);
+    void o;
+  });
   // ================= 실제 PostgreSQL 회귀 =================
   await t('G1. 기존 Toss: 발급(confirm_real_payment) 멱등, 회원 일반 환불 차단, 서버 경로 환불 가능, 정산 요약 동작', async () => {
     const o = await mkOrder(base, 'toss', { amount: 33000 });
@@ -363,14 +409,14 @@ try {
   await t('G5. 새 DB에서 정순서 적용 → 역순 롤백이 실제 PostgreSQL에서도 함수 정의를 원문 그대로 복원(트리거·core는 공백 무관), 기존 Toss 흐름 유지', async () => {
     const c = await freshDb();
     await c.query(COS_DEF);
-    const snapAll = async () => ({ ctx: (await q1(c, `select pg_get_functiondef('public.pg_refund_context(uuid,uuid)'::regprocedure) d`)).d, ...(await snapOriginal(c)), cos: (await q1(c, `select pg_get_functiondef('public.create_order_secure(uuid,text,text,integer,boolean,text)'::regprocedure) d`)).d });
+    const snapAll = async () => ({ force: (await q1(c, `select pg_get_functiondef('public.orders_force_server_fields_on_insert()'::regprocedure) d`)).d, ctx: (await q1(c, `select pg_get_functiondef('public.pg_refund_context(uuid,uuid)'::regprocedure) d`)).d, ...(await snapOriginal(c)), cos: (await q1(c, `select pg_get_functiondef('public.create_order_secure(uuid,text,text,integer,boolean,text)'::regprocedure) d`)).d });
     const orig = await snapAll();
-    await c.query(W.refundFix); await c.query(W.serverFix); await c.query(W.amountFix); await c.query(W.support); await c.query(W.cosFix);
+    await c.query(W.refundFix); await c.query(W.serverFix); await c.query(W.amountFix); await c.query(W.roleGuardFix); await c.query(W.support); await c.query(W.cosFix);
     const applied = await snapAll();
     assert.notDeepEqual(applied, orig);
-    await c.query(W.cosRollback); await c.query(W.supportRollback); await c.query(W.amountRollback); await c.query(W.serverRollback); await c.query(W.refundRollback);
+    await c.query(W.cosRollback); await c.query(W.supportRollback); await c.query(W.roleGuardRollback); await c.query(W.amountRollback); await c.query(W.serverRollback); await c.query(W.refundRollback);
     const after = await snapAll();
-    for (const k of ['helper', 'fulfill', 'settlement', 'cos', 'ctx']) assert.equal(after[k], orig[k], `${k} 원문 복원`);
+    for (const k of ['helper', 'fulfill', 'settlement', 'cos', 'ctx', 'force']) assert.equal(after[k], orig[k], `${k} 원문 복원`);
     const norm = x => x.replace(/\s+/g, ' ');
     assert.equal(norm(after.trigger), norm(orig.trigger)); assert.equal(norm(after.core), norm(orig.core));
     const o = await mkOrder(c, 'toss', { amount: 4000 }); assert.equal((await q1(c, `select confirm_real_payment($1,'pk_g5',4000) r`, [o])).r.already_done, false);

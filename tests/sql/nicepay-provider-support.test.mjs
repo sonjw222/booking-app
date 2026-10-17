@@ -9,9 +9,9 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 const { PGlite } = await import(process.env.PGLITE_MODULE ? pathToFileURL(process.env.PGLITE_MODULE + '/dist/index.js').href : '@electric-sql/pglite');
 import * as W from './helpers/nicepayWorld.mjs';
-const { amountFix, amountRollback, serverFix, serverRollback, read, slice, lifecycle, kst, issuance, confirmReal, pointLife, settlementSrc, refundFix, refundRollback, cosFix, cosRollback, preflight, support, supportRollback, stripComments, id, C1, CI, P1, ACC, AUTH, MGR, PROD, liveHelper, liveFulfill, liveCore, liveForceInsert, liveStatusGuard, liveRestoreTrigger, liveRefundWrappers, liveRefundContext, liveAccountFor, liveConfirmReal, liveCancelReal, liveConfirmTest, liveSettlement, toCrlf, dropNewComment } = W;
+const { roleGuardFix, roleGuardRollback, amountFix, amountRollback, serverFix, serverRollback, read, slice, lifecycle, kst, issuance, confirmReal, pointLife, settlementSrc, refundFix, refundRollback, cosFix, cosRollback, preflight, support, supportRollback, stripComments, id, C1, CI, P1, ACC, AUTH, MGR, PROD, liveHelper, liveFulfill, liveCore, liveForceInsert, liveStatusGuard, liveRestoreTrigger, liveRefundWrappers, liveRefundContext, liveAccountFor, liveConfirmReal, liveCancelReal, liveConfirmTest, liveSettlement, toCrlf, dropNewComment } = W;
 
-async function world({ refundFixApplied = true, supportApplied = true, serverFixApplied = true, amountFixApplied = true, crlf = false, noComment = false } = {}) {
+async function world({ refundFixApplied = true, supportApplied = true, serverFixApplied = true, amountFixApplied = true, roleGuardApplied = true, crlf = false, noComment = false } = {}) {
   const db = new PGlite();
   await db.exec(W.baseWorldSql({ crlf, noComment }));
   await db.exec(W.coreInstallSql({ crlf, noComment }));
@@ -19,6 +19,7 @@ async function world({ refundFixApplied = true, supportApplied = true, serverFix
   if (supportApplied) await db.exec(support);
   if (serverFixApplied && refundFixApplied) await db.exec(serverFix);   // 서버 경로 fail-closed (선행: 출처 가드)
   if (amountFixApplied && serverFixApplied && refundFixApplied) await db.exec(amountFix);   // 환불 금액 정합성 (선행: 위 둘)
+  if (roleGuardApplied) await db.exec(roleGuardFix);   // orders INSERT 보정의 anon/authenticated 롤 경계(독립)
   return db;
 }
 const asUser = async (db, fn) => { await db.exec(`select set_config('app.uid','${AUTH}',false), set_config('app.account_id','${ACC}',false);`); try { return await fn(); } finally { await db.exec(`select set_config('app.uid','',false), set_config('app.account_id','',false);`); } };
@@ -1447,5 +1448,65 @@ test('Y7. 실제 RLS 정책(주문 본인/매니저 정책과 같은 형태) 아
       await rejects(db.exec(`insert into orders(profile_id, center_id, product_id, product_name, amount, status) values ('${P1}','${C1}','${PROD}','p',100,'done')`), /row-level security/);
     } finally { await db.exec('reset role'); }
     assert.equal((await q1(db, `select pg_tid from orders where id='${oid}'`)).pg_tid, null);
+  } finally { await db.close(); }
+});
+
+// ---------------------------------------------------------------- orders INSERT 롤 경계(Y8~Y9) ----
+test('Y8. orders INSERT 보정: 패치 전에는 anon(uid NULL)이 서버 전용 필드를 심을 수 있다(권한·RLS가 열려 있다고 가정) → 패치 후에는 anon/authenticated 모두 보정, service_role/소유자 세션은 그대로', async () => {
+  for (const [applied, anonStatus] of [[false, 'done'], [true, 'pending']]) {
+    const db = await world({ roleGuardApplied: applied });
+    try {
+      await db.exec(`grant select, insert, update on orders to anon, authenticated, service_role;`);
+      const ins = (id, extra = '') => `insert into orders(id, profile_id, center_id, product_id, product_name, amount, status, verified, paid_at${extra}) values ('${id}','${P1}','${C1}','${PROD}','p',100,'done',true,now())`;
+      await db.exec('set role anon'); try { await db.exec(ins(id(5, 880001))); } finally { await db.exec('reset role'); }
+      const a = await q1(db, `select status, verified, paid_at from orders where id='${id(5, 880001)}'`);
+      assert.equal(a.status, anonStatus, applied ? 'anon INSERT 보정됨' : '패치 전: anon이 status=done 을 심는다(재현)');
+      if (applied) { assert.equal(a.verified, false); assert.equal(a.paid_at, null); }
+      // authenticated(uid 있음/없음 모두)
+      for (const [n, withUid] of [[2, true], [3, false]]) {
+        const run = async () => { await db.exec('set role authenticated'); try { await db.exec(ins(id(5, 880000 + n))); } finally { await db.exec('reset role'); } };
+        if (withUid) await asUser(db, run); else await run();
+        const r = await q1(db, `select status, verified from orders where id='${id(5, 880000 + n)}'`);
+        if (applied || withUid) { assert.equal(r.status, 'pending'); assert.equal(r.verified, false); }
+      }
+      // 서버 작업은 그대로: service_role / 롤 미설정 소유자
+      await db.exec('set role service_role'); try { await db.exec(ins(id(5, 880010))); } finally { await db.exec('reset role'); }
+      await db.exec(ins(id(5, 880011)));
+      for (const n of [880010, 880011]) { const r = await q1(db, `select status, verified from orders where id='${id(5, n)}'`); assert.deepEqual([r.status, r.verified], ['done', true], `서버 경로 ${n} 불변`); }
+    } finally { await db.close(); }
+  }
+});
+
+for (const opts of [{}, { crlf: true }]) {
+  test(`Y9. orders INSERT 롤 경계 패치 [${JSON.stringify(opts)}]: 멱등, 롤백은 원문 그대로 복원`, async () => {
+    const db = await world({ roleGuardApplied: false, ...opts });
+    try {
+      if (opts.crlf) await db.exec(toCrlf(liveForceInsert));   // 운영 정의 형태(CRLF) 재현
+      const sig = 'public.orders_force_server_fields_on_insert()';
+      const orig = await defOf(db, sig);
+      await db.exec(roleGuardFix); await db.exec(roleGuardFix);
+      const patched = await defOf(db, sig);
+      assert.equal((patched.match(/insert_role_guard/g) ?? []).length, 1);
+      await db.exec(roleGuardRollback);
+      assert.equal(await defOf(db, sig), orig, '원문 복원(CRLF 포함)');
+    } finally { await db.close(); }
+  });
+}
+
+test('Y9b. orders INSERT 롤 경계 패치: RLS를 켠 월드에서 verify 전부 true, 롤백 원문 복원, 구조 불일치 시 중단', async () => {
+  const db = await world({ roleGuardApplied: false });
+  try {
+    await db.exec('alter table orders enable row level security;');
+    const sig = 'public.orders_force_server_fields_on_insert()';
+    const orig = await defOf(db, sig);
+    await db.exec(roleGuardFix);
+    const v = (await db.query(stripComments(read('verify_fix_orders_insert_role_guard_20261017.sql')))).rows[0];
+    assert.ok(Object.values(v).every(x => x === true), JSON.stringify(v));
+    await db.exec(roleGuardRollback);
+    assert.equal(await defOf(db, sig), orig, '원문 복원');
+    await db.exec(`create or replace function public.orders_force_server_fields_on_insert() returns trigger language plpgsql security definer set search_path = public as $$ begin return new; end $$;`);
+    const before = await defOf(db, sig);
+    await rejects(db.exec(roleGuardFix), /예상과 달라요/); await db.exec('rollback');
+    assert.equal(await defOf(db, sig), before, '중단 시 변경 없음');
   } finally { await db.close(); }
 });
