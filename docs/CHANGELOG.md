@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-10-17 — Discovery UX polish (종목별 센터 필터·정렬, 수업 상세, 하단 내비, 뒤로가기)
+- 종목별 센터 목록: 검색어·거리(1/3/5/10/20km)·정렬(추천/거리/평점/이름) 단일 상태 모델(`lib/centerDiscovery.ts`, URL 쿼리 q/r/s), 필터·정렬 시트(`CenterFilterSheet`), 위치 거부 시 안내/재시도/위치 없이 보기, 평점·거리·지역은 실제 데이터만(이름 오른쪽, 모바일은 아래 줄). 평점은 `center_reviews` 클라이언트 집계(DB 변경 없음).
+- 센터 상세: 하단 CTA 위계(수강권 없으면 구매가 Primary, 있으면 예약이 Primary), 공유 버튼 gutter, 뒤로가기는 BackButton(앱 내 이력 추적 `lib/appHistory.ts`) — 종목 목록으로 복귀하며 필터·스크롤 복원(`lib/listScroll.ts`), 검색 결과도 복원.
+- 수업 탭 → 수업 상세 라우트(`/center/[id]/class/[classId]`) → 예약하기/수강권 구매하기(기존 URL 계약 유지).
+- 수강권 없는 회원의 예약하기: 중앙 Dialog(`ConfirmDialog` icon prop 추가). 서버 검증 변경 없음.
+- 하단 내비: 선택 탭 네이비 pill + 아래→위 점진 블러 레이어, 홈 헤더 문구 "모하빗", 검색 화면 상단 여백.
+- 테스트: `tests/unit/centerDiscovery.test.ts`, 목(mock) 네트워크 Playwright(`playwright.mock.config.ts`, `tests/ui-mock/*`).
+
 ## 2026-10-11 — 진도 기록 팝업 날짜 캘린더 잘림 수정 (웹 코드만, SQL 없음)
 - 원인: `DatePicker`의 팝오버가 `.app-date-picker` 안에서 `position:absolute`로 그려져 `.sheet`(`overflow-y:auto`, 진도 기록은 `.prog-add-sheet`)의 클리핑 영역에 갇혔다. 하네스 실측: 수정 전 날짜 31개 중 모바일 10개 / 태블릿·데스크톱 28개가 클릭 불가.
 - 수정(`app/components/DatePicker.tsx`, `lib/popoverPosition.ts`, `app/globals.css`): 팝오버를 `createPortal`로 렌더링(시트 안이면 같은 `SheetOverlay`의 자식, 아니면 body)하고 트리거 기준 `fixed` 좌표를 순수 함수 `computePopoverPosition`으로 계산(아래 → 위 → 뷰포트 안으로 밀기, 뷰포트보다 크면 내부 스크롤). 캘린더 크기(310×308)·디자인·시트 크기는 그대로. 부모 `overflow`는 건드리지 않았고 z-index도 기존 값 유지.
