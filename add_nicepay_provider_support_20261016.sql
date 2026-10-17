@@ -22,7 +22,7 @@
 --  [1] orders / payments 의 payment_provider CHECK에 'nicepay' 추가('mock','toss','portone' 유지)
 --  [2] orders.status CHECK에 'approving' 추가 + 서버 전용 컬럼 5개(pg_claim_id, pg_claimed_at, pg_tid(유일), pg_review_reason, pg_review_at)
 --  [3] 상태 전이 트리거 확장: approving 진입/이탈과 NICEPAY 주문의 paid/done 전이는 NICEPAY 서버 함수(트랜잭션 로컬 표시 app.nicepay_write) 안에서만 가능
---  [4] 트리거 orders_guard_pg_state: 로그인 사용자는 pg_* 컬럼·approving 진입/이탈·NICEPAY 주문의 provider 변경 불가
+--  [4] 트리거 orders_guard_pg_state: 로그인 사용자와 anon 롤은 pg_* 컬럼·approving 진입/이탈·NICEPAY 주문의 provider 변경 불가(auth.uid() null 이어도 anon/authenticated 롤이면 서버로 보지 않음)
 --  [5] 감사 테이블 nicepay_review_actions(추가 전용, service_role만 접근) — 모든 선점 해제/검토 표시/수동 해소/수동 확정을 증거와 함께 기록
 --  [6] 제자리 패치 3건(발급 helper의 payments.payment_provider, 정산 요약, fulfill_order의 NICEPAY 거부)
 --  [7] service_role 전용 RPC 8개
@@ -143,7 +143,9 @@ set search_path = public
 as $$
 begin
     -- service_role/서버 작업은 JWT sub가 없어(auth.uid() null) 통과한다 — 기존 orders_force_server_fields_on_insert와 같은 규칙.
-    if auth.uid() is null then
+    -- 단, anon/authenticated 역할(PostgREST가 SET ROLE 한 클라이언트 롤)은 JWT sub가 없어도(= anon) 서버가 아니다 → 우회 불가.
+    --   (SECURITY DEFINER 안에서도 `role` 설정값은 호출 세션의 롤을 유지한다. 서버 작업은 service_role 또는 role 미설정 소유자 세션이다.)
+    if auth.uid() is null and coalesce(nullif(current_setting('role', true), ''), 'none') not in ('anon', 'authenticated') then
         return new;
     end if;
     if tg_op = 'INSERT' then

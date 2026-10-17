@@ -295,3 +295,30 @@ Toss 완료 주문 3건 / 연결된 결제 기록 2건 / **32만 원 완료 주�
 
 ### 13-4. 실제 PostgreSQL 16 격리 검증
 `tests/sql/real-pg/nicepay-real-pg.mjs` 20/20 PASS — 신규 R11(NICEPAY 서버 환불 ↔ 취소 확인 기록 경합, 최근 행 order_id NULL), R12(출처 불명확 Toss 서버 환불 ↔ pg_refund_begin 경합 + 동시 환불 중 1건만), G7(pg_refund_context), G2 갱신(서버 경로 begin 필요), G5(전체 체인 적용 후 역순 롤백이 core·context·helper·fulfill·settlement·create_order_secure를 원문 복원).
+
+## 14. 환불 금액 정합성 + 서버 전용 주문 상태 경계 (2026-10-17)
+
+**전제(운영 적용 완료)**: `fix_refund_pg_origin_guard_20261017.sql`, `fix_refund_server_path_fail_closed_20261017.sql`(사후 검증 7개 PASS).
+
+### 14-1. 발견한 문제
+| # | 문제 | 영향(재현) |
+|---|---|---|
+| D | `pg_refund_context`는 PG 원거래 행 기준으로 결제키·금액을 돌려주는데 `_refund_membership_core`는 **가장 최근 payments 행**의 금액·order_id 를 환불 금액/쿠폰·포인트 복원 대상으로 쓴다 | NICEPAY(또는 Toss) 원거래 30,000원 뒤에 수기 5,000원 행이 생기면 PG는 30,000원 취소, 내부 환불 기록은 -5,000원(테스트 Y1 패치 전 재현). 최신 행 order_id 가 NULL 이면 쿠폰·포인트 복원도 누락(Y2) |
+| E | `orders_guard_pg_state`가 `auth.uid() is null` 이면 무조건 통과 | anon 롤도 JWT sub 가 없어 auth.uid() 가 NULL — 어떤 이유로든 anon 에게 orders UPDATE 권한+RLS 허용이 생기면 pg_tid/claim/review/approving/provider 를 바꿀 수 있다(Y6 음성 대조로 재현). 현재 RLS 정책(`my_profile_ids()`/`has_permission()` 기반)은 anon 에게 0행이라 **이미 막혀 있었으나 방어 계층이 없었음** |
+
+### 14-2. 수정
+1. **신규 `fix_refund_amount_integrity_20261017.sql`**(선행: 출처 가드 + 서버 경로 패치, 없으면 중단. 현재 운영 정의 제자리 패치, 멱등):
+   - core: PG 원거래 행(금액>0, 환불 행 제외, 주문 연결·payment_provider·결제키 중 하나로 식별)이 있으면 `v_amount`/`v_order_id`를 그 행 값으로 → 내부 환불 기록 금액 = PG 원거래 금액 = (NICEPAY) 취소 확인 기록 `cancel_amount`(가드 v2가 `cancel_amount = 원거래 금액`을 요구하므로 세 값이 같다). 원거래가 2개 이상이거나 이미 환불 행이 있는 PG 수강권은 금액을 확정할 수 없어 거부(fail-closed). 직접결제·Mock 은 기존 계산 그대로.
+   - `pg_refund_context`: 같은 사유면 `unknown_pg` → 앱이 **PG 취소 호출 전에** 501 로 거부(PG는 취소됐는데 DB가 거부하는 상황 방지).
+   - 환불 행 INSERT 형태·쿠폰/포인트 복원·정산은 변경 없음(환불 행은 계속 order_id 없이 기록되므로 정산 합계 불변). NICEPAY 환불 행과 취소 확인 기록의 연결은 금액 일치(위)와 `verify_*`의 대조 쿼리로 확인.
+2. **`add_nicepay_provider_support_20261016.sql` [4]**(아직 운영 미적용 파일이라 제자리 수정): 트리거 우회 조건을 `auth.uid() is null and current_setting('role')` 가 anon/authenticated 가 아닐 때로 좁힘. 서버(service_role, 롤 미설정 소유자 세션)는 그대로 통과. (참고: `orders_force_server_fields_on_insert`(운영 적용 완료)도 `auth.uid() is not null` 일 때만 보정하므로 anon INSERT 는 비슷한 경계가 있다 — RLS 로 막혀 있음, TODO 참고.)
+3. `preflight`에 `refund_amount_patch_ok` 추가.
+
+### 14-3. 적용 순서 (운영)
+0 `preflight`(읽기 전용; `refund_amount_patch_ok`는 서버 경로 패치 적용 상태에서 true) → 1 `fix_refund_amount_integrity_20261017.sql` → 2 `add_nicepay_provider_support_20261016.sql`(순서 무관) → 3 `fix_create_order_secure_allow_nicepay_20261016.sql` → 4 verify들.
+롤백(역순): `rollback_fix_create_order_secure_allow_nicepay` → `rollback_add_nicepay_provider_support` → `rollback_fix_refund_amount_integrity` → (필요 시) `rollback_fix_refund_server_path_fail_closed`.
+
+### 14-4. 한계
+- DB는 PG 취소가 실제로 일어났음을 증명할 수 없다. NICEPAY만 취소 확인 기록을 강제하며, Toss/PortOne 은 서버 라우트 순서(begin → 취소 → 환불)에 의존한다.
+- 과거에 이미 환불된 건은 바꾸지 않는다. `verify_fix_refund_amount_integrity_20261017.sql` 두 번째 쿼리(읽기 전용)로 "환불 합계 ≠ 원거래 금액" 건을 점검할 수 있다.
+- 실제 Supabase(PostgREST 의 `role` 설정, 기본 권한)는 이번 격리 검증에 포함되지 않았다 — 적용 후 anon 키로 orders PATCH 가 0행/거부인지 확인 권장.

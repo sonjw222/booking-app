@@ -7,6 +7,9 @@
 - P1: NICEPAY 활성화 전 SQL 승인 필요 — orders.payment_provider 'nicepay' 허용, 선점(claim) 상태, pg_order_context/confirm_real_payment/정산 뷰 provider 확장. 정기결제는 호스팅 카드등록 UI 확인 전까지 BLOCKED(카드정보 직접 수집 금지).
 - P2: 공개 상품 RPC에 이용기간(valid_days) 노출(SQL, 승인 후). 약관·환불·개인정보 처리위탁의 PG사 표기는 계약 확정 후 갱신.
 
+- P2: `orders_force_server_fields_on_insert`(운영 적용됨)는 `auth.uid() is not null` 일 때만 verified/status 를 보정 → anon 롤 INSERT 는 RLS(`my_profile_ids()`)에만 의존. `orders_guard_pg_state` 와 같이 role 설정(anon/authenticated)을 함께 보는 방어 계층 추가 검토(별도 SQL, 영향 범위 확인 필요).
+- P1: `fix_refund_amount_integrity_20261017.sql` 운영 적용 후 `verify_*`의 대조 쿼리(과거 환불 합계 ≠ 원거래 금액)를 실행해 결과가 있으면 PG 콘솔 취소 금액과 개별 대조.
+
 ## 2026-10-11 날짜 선택 팝오버 후속 (진도 기록 캘린더 수정 PR 범위 밖)
 - **P2**: `MonthPicker`는 아직 `position:absolute` 팝오버라 `.sheet` 안에서 같은 방식으로 잘릴 수 있다 — `DatePicker`와 같은 포털/`computePopoverPosition` 적용 검토(영향 화면 목록 확인 후).
 - **P3**: 실기기(iOS/Android) 확인과 키보드 화살표 이동(날짜 그리드)은 미구현/미검증.

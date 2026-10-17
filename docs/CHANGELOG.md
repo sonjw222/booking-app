@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-17 (3) — 환불 금액 정합성 + orders_guard_pg_state anon 우회 경계 (검토용 SQL, 미실행)
+- 신규 `fix_refund_amount_integrity_20261017.sql`(+rollback/verify): 환불 금액·복원 주문을 최근 행이 아닌 PG 원거래 행 기준으로(원거래 2개 이상/이미 환불 행이면 거부, 컨텍스트는 unknown_pg). 직접결제·Mock·정상 Toss 흐름 불변. 운영 현재 정의 제자리 패치(선행: 출처 가드, 서버 경로 패치).
+- `add_nicepay_provider_support_20261016.sql` [4]: `orders_guard_pg_state`가 auth.uid() NULL 이어도 anon/authenticated 롤은 서버로 보지 않음. preflight에 `refund_amount_patch_ok` 추가.
+- 테스트: PGlite 70개(Y1~Y7), 실제 PostgreSQL 16 23개(R13~R15: 동시성·실제 롤/RLS). 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §14.
+
 ## 2026-10-17 (2) — 서버 환불 경로 fail-closed 보완 + pg_refund_context 출처 판별 (검토용 SQL, 미실행)
 - 신규 `fix_refund_server_path_fail_closed_20261017.sql`(+rollback/verify): 출처 불명확 PG 결제는 서버 경로(p_allow_pg=true)도 환불 진행 표시 필요, `pg_refund_context`는 PG 원거래 행 기준·`unknown_pg` 반환. 운영 현재 정의 제자리 패치(선행: 출처 가드).
 - `add_nicepay_provider_support_20261016.sql` [6-4] v2: NICEPAY 취소 확인 가드가 최근 결제 행/order_id에 의존하지 않음(모든 매출 행 검사), v1→v2 업그레이드.
