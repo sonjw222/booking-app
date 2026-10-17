@@ -9,13 +9,14 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 const { PGlite } = await import(process.env.PGLITE_MODULE ? pathToFileURL(process.env.PGLITE_MODULE + '/dist/index.js').href : '@electric-sql/pglite');
 import * as W from './helpers/nicepayWorld.mjs';
-const { roleGuardFix, roleGuardRollback, amountFix, amountRollback, serverFix, serverRollback, read, slice, lifecycle, kst, issuance, confirmReal, pointLife, settlementSrc, refundFix, refundRollback, cosFix, cosRollback, preflight, support, supportRollback, stripComments, id, C1, CI, P1, ACC, AUTH, MGR, PROD, liveHelper, liveFulfill, liveCore, liveForceInsert, liveStatusGuard, liveRestoreTrigger, liveRefundWrappers, liveRefundContext, liveAccountFor, liveConfirmReal, liveCancelReal, liveConfirmTest, liveSettlement, toCrlf, dropNewComment } = W;
+const { gateFix, gateRollback, gateVerify, roleGuardFix, roleGuardRollback, amountFix, amountRollback, serverFix, serverRollback, read, slice, lifecycle, kst, issuance, confirmReal, pointLife, settlementSrc, refundFix, refundRollback, cosFix, cosRollback, preflight, support, supportRollback, stripComments, id, C1, CI, P1, ACC, AUTH, MGR, PROD, liveHelper, liveFulfill, liveCore, liveForceInsert, liveStatusGuard, liveRestoreTrigger, liveRefundWrappers, liveRefundContext, liveAccountFor, liveConfirmReal, liveCancelReal, liveConfirmTest, liveSettlement, toCrlf, dropNewComment } = W;
 
-async function world({ refundFixApplied = true, supportApplied = true, serverFixApplied = true, amountFixApplied = true, roleGuardApplied = true, crlf = false, noComment = false } = {}) {
+async function world({ refundFixApplied = true, supportApplied = true, serverFixApplied = true, amountFixApplied = true, roleGuardApplied = true, gateApplied = true, crlf = false, noComment = false } = {}) {
   const db = new PGlite();
   await db.exec(W.baseWorldSql({ crlf, noComment }));
   await db.exec(W.coreInstallSql({ crlf, noComment }));
   if (refundFixApplied) await db.exec(refundFix);   // 적용 순서: ① 환불 차단 수정 → ② NICEPAY 지원(환불 core 패치 포함)
+  if (gateApplied) await db.exec(gateFix);   // NICEPAY 주문 생성 DB 게이트 — support/create_order_secure 보다 먼저(없으면 둘 다 중단)
   if (supportApplied) await db.exec(support);
   if (serverFixApplied && refundFixApplied) await db.exec(serverFix);   // 서버 경로 fail-closed (선행: 출처 가드)
   if (amountFixApplied && serverFixApplied && refundFixApplied) await db.exec(amountFix);   // 환불 금액 정합성 (선행: 위 둘)
@@ -230,6 +231,7 @@ test('E3. NICEPAY 주문 전이: 표시 없이는 pending→cancelled만(회원 
 test('E4. 일반 로그인 사용자 경계: approving 진입/이탈, pg_* 변경, nicepay provider 변경, 위조 INSERT 모두 불가. RPC는 service_role만', async () => {
   const db = await world();
   try {
+    await db.exec("update nicepay_checkout_gate set mode = 'public' where id");   // 이 테스트는 "게이트가 열린 뒤에도" 위조 필드가 지워지는지 본다(게이트 자체는 GT 테스트)
     const oid = id(5, 4242);
     await asUser(db, () => db.exec(`insert into orders(id, profile_id, center_id, product_id, product_name, amount, status, payment_provider, pg_tid, pg_claim_id, pg_review_at)
       values ('${oid}','${P1}','${C1}','${PROD}','p',1000,'approving','nicepay','forged-tid', gen_random_uuid(), now())`));
@@ -459,7 +461,7 @@ test('I. 제자리 패치 안전성: 정의가 예상과 다르면 중단하고 
     await rejects(drift.exec(support), /패치 위치/);
     await drift.exec('rollback');
     await rejects(mkOrder(drift, 'nicepay'), /orders_payment_provider_check/);
-    assert.equal(await count(drift, 'pg_proc', "proname like 'nicepay_%'"), 0);
+    assert.equal(await count(drift, 'pg_proc', "proname like 'nicepay_%' and proname not like 'nicepay_checkout%'"), 0);
   } finally { await drift.close(); }
   // 2) 상태 전이 트리거가 예상과 다르면 중단
   const drift2 = await world({ supportApplied: false, refundFixApplied: false });
@@ -494,7 +496,7 @@ test('J. verify SQL 전부 true / 롤백은 nicepay 데이터·감사 기록이 
     await db.exec(supportRollback);
     await rejects(mkOrder(db, 'nicepay'), /orders_payment_provider_check/);
     await rejects(mkOrder(db, 'mock', { status: 'approving' }), /orders_status_check/);
-    assert.equal(await count(db, 'pg_proc', "proname like 'nicepay_%' or proname = 'confirm_nicepay_payment'"), 0);
+    assert.equal(await count(db, 'pg_proc', "proname like 'nicepay_%' and proname not like 'nicepay_checkout%' or proname = 'confirm_nicepay_payment'"), 0);
     assert.equal(await count(db, 'pg_class', "relname = 'nicepay_review_actions'"), 0);
     // 복원 확인: 상태 전이 트리거는 원본과 같은 허용 전이, helper/fulfill/정산은 패치 이전
     const sg = (await q1(db, `select pg_get_functiondef('public.orders_guard_status_transition()'::regprocedure) d`)).d;
@@ -600,7 +602,7 @@ test('L2. fulfill_order 예상과 다른 구조면 전체 트랜잭션 중단(�
       await rejects(db.exec(support), /fulfill_order/); await db.exec('rollback');
       assert.deepEqual(await snapshotDefs(db), before, `${name}: 아무 함수도 바뀌지 않음`);
       await rejects(mkOrder(db, 'nicepay'), /orders_payment_provider_check/);   // CHECK 변경도 롤백
-      assert.equal(await count(db, 'pg_proc', "proname like 'nicepay_%'"), 0, name);
+      assert.equal(await count(db, 'pg_proc', "proname like 'nicepay_%' and proname not like 'nicepay_checkout%'"), 0, name);
     } finally { await db.close(); }
   }
 });
@@ -755,7 +757,7 @@ test('Q. 읽기 전용 사전 점검(preflight)이 운영 형태(CRLF+주석없�
     await db.exec(serverFix);
     assert.equal((await db.query(preflight)).rows[0].refund_amount_patch_ok, true, '서버 경로 패치 후 true');
     // 읽기 전용: 함수/데이터가 바뀌지 않았다
-    assert.equal(await count(db, 'pg_proc', "proname like 'nicepay_%'"), 0);
+    assert.equal(await count(db, 'pg_proc', "proname like 'nicepay_%' and proname not like 'nicepay_checkout%'"), 0);
     await db.exec(support); await db.exec(cosFix);
     for (const [k, v] of okCols((await db.query(preflight)).rows[0])) assert.equal(v, true, `적용 후 ${k}`);
   } finally { await db.close(); }
@@ -1509,4 +1511,153 @@ test('Y9b. orders INSERT 롤 경계 패치: RLS를 켠 월드에서 verify 전�
     await rejects(db.exec(roleGuardFix), /예상과 달라요/); await db.exec('rollback');
     assert.equal(await defOf(db, sig), before, '중단 시 변경 없음');
   } finally { await db.close(); }
+});
+
+// ---------------------------------------------------------------- 주문 생성 DB 게이트(GT) ----
+const insertNicepayAs = async (db, role, uid, id_ = id(5, Math.floor(Math.random() * 1e9))) => {
+  await db.exec(`select set_config('app.uid','${uid}',false)`);
+  if (role) await db.exec(`set role ${role}`);
+  try {
+    await db.exec(`insert into orders(id, profile_id, center_id, product_id, product_name, amount, status, verified, payment_provider) values ('${id_}','${P1}','${C1}','${PROD}','p',1000,'done',true,'nicepay')`);
+  } finally { if (role) await db.exec('reset role'); await db.exec(`select set_config('app.uid','',false)`); }
+  return id_;
+};
+const GATE_MSG = /NICEPAY 결제는 아직 사용할 수 없어요/;
+
+test('GT1. 게이트가 꺼져 있으면(기본) 클라이언트는 NICEPAY 주문을 어떤 경로로도 못 만든다(로그인 사용자/anon/authenticated). 다른 provider·서버 생성은 그대로', async () => {
+  const db = await world();
+  try {
+    assert.equal((await q1(db, 'select mode from nicepay_checkout_gate')).mode, 'off');
+    await db.exec('grant select, insert on orders to anon, authenticated, service_role;');
+    await rejects(insertNicepayAs(db, null, AUTH), GATE_MSG);             // 로그인 사용자(auth.uid 있음)
+    await rejects(insertNicepayAs(db, 'authenticated', AUTH), GATE_MSG);  // PostgREST authenticated 롤
+    await rejects(insertNicepayAs(db, 'authenticated', ''), GATE_MSG);    // sub 없는 authenticated
+    await rejects(insertNicepayAs(db, 'anon', ''), GATE_MSG);             // anon
+    assert.equal(await count(db, 'orders', "payment_provider = 'nicepay'"), 0);
+    // 서버(service_role / 롤 미설정 소유자)의 생성은 막지 않는다 — 서버는 앱의 4중 잠금이 담당
+    await insertNicepayAs(db, 'service_role', '');
+    await insertNicepayAs(db, null, '');
+    assert.equal(await count(db, 'orders', "payment_provider = 'nicepay'"), 2);
+    // 기존 provider(mock/toss/portone/직접결제 NULL) 클라이언트 생성은 영향 없음
+    for (const p of ['mock', 'toss', 'portone', null]) {
+      await db.exec(`select set_config('app.uid','${AUTH}',false)`); await db.exec('set role authenticated');
+      try { await db.exec(`insert into orders(profile_id, center_id, product_id, product_name, amount, payment_provider) values ('${P1}','${C1}','${PROD}','p',1000,${p ? `'${p}'` : 'null'})`); }
+      finally { await db.exec('reset role'); await db.exec(`select set_config('app.uid','',false)`); }
+    }
+    assert.equal(await count(db, 'orders', "payment_provider is distinct from 'nicepay'"), 4);
+  } finally { await db.close(); }
+});
+
+test('GT2. 게이트를 켜면 클라이언트 NICEPAY 주문 생성은 허용(서버 필드는 pending/verified=false로 고정), 다시 끄면 즉시 차단, 변경은 감사 기록에 남는다', async () => {
+  const db = await world();
+  try {
+    await db.exec('grant select, insert on orders to authenticated;');
+    await db.exec("update nicepay_checkout_gate set mode = 'public', updated_at = now() where id");
+    const oid = await insertNicepayAs(db, 'authenticated', AUTH);
+    assert.deepEqual(await q1(db, `select status, verified, payment_provider from orders where id='${oid}'`), { status: 'pending', verified: false, payment_provider: 'nicepay' });
+    await db.exec("update nicepay_checkout_gate set mode = 'off' where id");
+    await rejects(insertNicepayAs(db, 'authenticated', AUTH), GATE_MSG);
+    assert.deepEqual((await db.query('select mode from nicepay_checkout_gate_audit order by id')).rows.map(r => r.mode), ['off', 'public', 'off']);   // 시드, 켜짐, 꺼짐
+    // 이미 만들어진 주문은 게이트와 무관하게 남는다(삭제/변경 없음)
+    assert.equal(await count(db, 'orders', `id='${oid}'`), 1);
+  } finally { await db.close(); }
+});
+
+test('GT3. create_order_secure 류 RPC(SECURITY DEFINER): 게이트가 꺼지면 포인트 차감·쿠폰 처리까지 같은 트랜잭션으로 전부 롤백된다(NICEPAY만), 다른 provider는 정상', async () => {
+  const db = await world();
+  try {
+    await db.exec(`create table pts(bal int); insert into pts values (100);
+      create function public.cos_stub(p_provider text) returns uuid language plpgsql security definer set search_path = public as $$
+      declare v uuid; begin
+        update pts set bal = bal - 10;                                    -- 포인트 차감(주문 INSERT 이전 부수효과)
+        insert into orders(profile_id, center_id, product_id, product_name, amount, payment_provider) values ('${P1}','${C1}','${PROD}','p',1000,p_provider) returning id into v;
+        return v; end $$;
+      grant execute on function public.cos_stub(text) to authenticated;
+      grant usage on schema public to authenticated;`);
+    const call = async (provider) => { await db.exec(`select set_config('app.uid','${AUTH}',false)`); await db.exec('set role authenticated'); try { return await db.query(`select cos_stub(${provider ? `'${provider}'` : 'null'})`); } finally { await db.exec('reset role'); await db.exec(`select set_config('app.uid','',false)`); } };
+    await rejects(call('nicepay'), GATE_MSG);
+    assert.equal((await q1(db, 'select bal from pts')).bal, 100, '거부된 NICEPAY 주문은 포인트 차감도 남기지 않는다');
+    assert.equal(await count(db, 'orders', "payment_provider = 'nicepay'"), 0);
+    await call('mock'); await call('toss'); await call(null);
+    assert.equal((await q1(db, 'select bal from pts')).bal, 70);
+    await db.exec("update nicepay_checkout_gate set mode = 'public' where id");
+    await call('nicepay');
+    assert.equal((await q1(db, 'select bal from pts')).bal, 60);
+  } finally { await db.close(); }
+});
+
+test('GT4. 게이트 테이블/함수 보호: anon·authenticated는 읽기/쓰기 불가, service_role은 읽기만, 행 삭제·감사 기록 수정/삭제 불가, 재적용은 값을 보존(멱등)', async () => {
+  const db = await world();
+  try {
+    for (const role of ['anon', 'authenticated']) {
+      await db.exec(`set role ${role}`);
+      try {
+        await rejects(db.query('select * from nicepay_checkout_gate'), /permission denied/);
+        await rejects(db.exec("update nicepay_checkout_gate set mode = 'public'"), /permission denied/);
+        await rejects(db.query('select * from nicepay_checkout_gate_audit'), /permission denied/);
+        await rejects(db.query('select nicepay_checkout_mode()'), /permission denied/);
+      } finally { await db.exec('reset role'); }
+    }
+    await db.exec('set role service_role');
+    try { assert.equal((await q1(db, 'select mode from nicepay_checkout_gate')).mode, 'off'); await rejects(db.exec("update nicepay_checkout_gate set mode = 'public'"), /permission denied/); }
+    finally { await db.exec('reset role'); }
+    await rejects(db.exec('delete from nicepay_checkout_gate'), /삭제/);
+    await rejects(db.exec("update nicepay_checkout_gate_audit set mode = 'public'"), /수정|삭제/);
+    await rejects(db.exec('delete from nicepay_checkout_gate_audit'), /수정|삭제/);
+    await db.exec("update nicepay_checkout_gate set mode = 'public' where id");
+    await db.exec(gateFix); await db.exec(gateFix);
+    assert.equal((await q1(db, 'select mode from nicepay_checkout_gate')).mode, 'public', '재적용이 켜진 게이트를 끄지 않는다');
+    const v = (await db.query(stripComments(gateVerify))).rows[0];
+    for (const [k, val] of Object.entries(v)) if (k.endsWith('must_be_true')) assert.equal(val, true, k);
+    assert.equal(v.info_gate_mode_off_before_activation, false);   // 이 시점엔 public으로 켜 둔 상태
+  } finally { await db.close(); }
+});
+
+test('GT5. 순서 보호: 게이트 없이는 NICEPAY 지원/ create_order_secure 패치가 중단, 롤백은 지원 SQL이 남아 있으면·켜짐/감사 이력이 있으면 중단, 깨끗하면 완전 제거', async () => {
+  const noGate = await world({ gateApplied: false, supportApplied: false });
+  try {
+    await rejects(noGate.exec(support), /주문 생성 게이트가 없어요/); await noGate.exec('rollback');
+    assert.equal(await count(noGate, 'pg_proc', "proname = 'nicepay_claim_order'"), 0, '중단되면 아무것도 설치되지 않는다');
+    const cos = noGate; await cos.exec(`create or replace function public.create_order_secure(uuid, text, text, integer, boolean, text) returns uuid language plpgsql security definer set search_path = public as $$ begin if $6 not in ('mock','toss','portone') then raise exception 'x'; end if; return gen_random_uuid(); end $$;`);
+    await rejects(cos.exec(cosFix), /주문 생성 게이트가 없어요/); await cos.exec('rollback');
+  } finally { await noGate.close(); }
+  const db = await world({ supportApplied: false });
+  try {
+    await db.exec(support);
+    await rejects(db.exec(gateRollback), /nicepay provider를 허용 중/); await db.exec('rollback');
+    await db.exec(supportRollback);
+    await db.exec("update nicepay_checkout_gate set mode = 'public' where id");
+    await rejects(db.exec(gateRollback), /켜져 있거나\(mode ≠ off\) 감사 기록|켜져 있거나.*감사 기록/); await db.exec('rollback');
+    await db.exec("update nicepay_checkout_gate set mode = 'off' where id");
+    await rejects(db.exec(gateRollback), /켜져 있거나\(mode ≠ off\) 감사 기록|켜져 있거나.*감사 기록/); await db.exec('rollback');   // 변경 이력(시드 이상) 보존
+  } finally { await db.close(); }
+  const pristine = await world({ supportApplied: false });
+  try {
+    await pristine.exec(gateRollback);
+    assert.equal(await count(pristine, 'pg_proc', "proname in ('nicepay_checkout_mode','orders_guard_nicepay_create')"), 0);
+    assert.equal(await count(pristine, 'pg_trigger', "tgname = 'orders_guard_nicepay_create'"), 0);
+    await pristine.exec(gateFix);   // 다시 적용 가능
+    assert.equal(await count(pristine, 'pg_trigger', "tgname = 'orders_guard_nicepay_create'"), 1);
+  } finally { await pristine.close(); }
+});
+
+test('GT6. reviewer 모드: 심사 계정(accounts.pg_checkout_override)의 프로필만 NICEPAY 주문 생성 가능, 일반 회원·anon·남의 프로필 불가, public으로 올리면 모두 허용(앱 노출 정책과 일치)', async () => {
+  const db = await world();
+  try {
+    await db.exec('grant select, insert on orders to anon, authenticated; grant select on profiles, accounts to authenticated;');
+    await db.exec("update nicepay_checkout_gate set mode = 'reviewer' where id");
+    await rejects(insertNicepayAs(db, 'authenticated', AUTH), GATE_MSG);                     // 일반 회원(override=false)
+    await db.exec(`update accounts set pg_checkout_override = true where id = '${ACC}'`);
+    const oid = await insertNicepayAs(db, 'authenticated', AUTH);                            // 심사 계정
+    assert.deepEqual(await q1(db, `select status, verified, payment_provider from orders where id='${oid}'`), { status: 'pending', verified: false, payment_provider: 'nicepay' });
+  } finally { await db.close(); }
+  const db2 = await world();
+  try {
+    await db2.exec('grant select, insert on orders to authenticated; grant select on profiles, accounts to authenticated;');
+    await db2.exec("update nicepay_checkout_gate set mode = 'public' where id");
+    await insertNicepayAs(db2, 'authenticated', AUTH);                                        // override 없이도 public이면 허용
+    await db2.exec("update nicepay_checkout_gate set mode = 'off' where id");
+    await db2.exec(`update accounts set pg_checkout_override = true where id = '${ACC}'`);
+    await rejects(insertNicepayAs(db2, 'authenticated', AUTH), GATE_MSG);                     // off이면 심사 계정도 불가
+  } finally { await db2.close(); }
 });

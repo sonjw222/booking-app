@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-17 (6) — NICEPAY 주문 생성 DB 게이트 (검토용 SQL, 미실행)
+- 신규 `add_nicepay_checkout_gate_20261017.sql`(+rollback/verify): 클라이언트의 provider='nicepay' 주문 생성을 DB 모드(off/reviewer/public)로 제어. 직접 INSERT·create_order_secure(RPC 포인트 처리 포함) 모두 fail-closed, 기본 off. 변경은 감사 기록.
+- `add_nicepay_provider_support`·`fix_create_order_secure_allow_nicepay`는 게이트 선행 확인, preflight에 info 컬럼.
+- 테스트: PGlite 80개(GT1~GT6), 실제 PostgreSQL 27개(R18·R19). 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §15.
+
 ## 2026-10-17 (5) — NICEPAY REST: 승인 결과 불명 시 망취소 전 상태 조회 (독립 검증에서 발견)
 - `restLifecycle.ts`: 승인 요청의 결과를 모를 때(타임아웃/5xx/해석 불가) 곧바로 망취소하던 것을, 먼저 거래 조회(서명·tid·orderId 검증)로 판단하도록 변경 — paid+금액 일치: 취소 없이 구매 확정 이어가기, ready/failed/expired: 망취소 없이 복귀, cancelled: 복귀, 그 외/조회 불가: 망취소. 망취소 응답은 서명 규격이 없어 그 응답만 믿지 않고 재조회로 paid가 아님을 확인한 경우에만 release(아니면 운영자 확인).
 - 테스트: `nicepay.rest.flow.test.ts` 시나리오 갱신/추가(조회 우선, 조회 실패 시 망취소, 망취소 후 재조회 불신 → review).

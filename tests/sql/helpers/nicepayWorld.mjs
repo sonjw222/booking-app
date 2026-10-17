@@ -15,6 +15,9 @@ export const serverFix = read('fix_refund_server_path_fail_closed_20261017.sql')
 export const serverRollback = read('rollback_fix_refund_server_path_fail_closed_20261017.sql');
 export const roleGuardFix = read('fix_orders_insert_role_guard_20261017.sql');
 export const roleGuardRollback = read('rollback_fix_orders_insert_role_guard_20261017.sql');
+export const gateFix = read('add_nicepay_checkout_gate_20261017.sql');
+export const gateRollback = read('rollback_add_nicepay_checkout_gate_20261017.sql');
+export const gateVerify = read('verify_add_nicepay_checkout_gate_20261017.sql');
 export const amountFix = read('fix_refund_amount_integrity_20261017.sql');
 export const amountRollback = read('rollback_fix_refund_amount_integrity_20261017.sql');
 export const refundRollback = read('rollback_fix_refund_pg_origin_guard_20261017.sql');
@@ -64,7 +67,7 @@ export function baseWorldSql(opts = {}) {
     create table perms(account_id uuid, center_id uuid, perm text);
     create function has_permission(c uuid, p text) returns boolean language sql stable as $$ select exists (select 1 from perms where account_id = my_account_id() and center_id = c and perm = p) $$;
     create function is_platform_admin() returns boolean language sql stable as $$ select coalesce(current_setting('app.platform_admin', true), '') = 'on' $$;
-    create table accounts(id uuid primary key, auth_id uuid, merged_into uuid);
+    create table accounts(id uuid primary key, auth_id uuid, merged_into uuid, pg_checkout_override boolean not null default false);
     create table account_auth_identities(account_id uuid, auth_id uuid);
     create table profiles(id uuid primary key, account_id uuid);
     create function my_profile_ids() returns setof uuid language sql stable as $$ select id from profiles where account_id = my_account_id() $$;

@@ -26,7 +26,7 @@ describe.skipIf(!enabled)("NICEPAY TS 라이프사이클 ↔ 실제 PostgreSQL",
     await c.query(`do $$ begin if not exists (select 1 from pg_roles where rolname='anon') then create role anon; end if; if not exists (select 1 from pg_roles where rolname='authenticated') then create role authenticated; end if; if not exists (select 1 from pg_roles where rolname='service_role') then create role service_role bypassrls; end if; end $$;`);
     await c.query(W.baseWorldSql({}).replace("create role anon; create role authenticated; create role service_role bypassrls;", ""));
     await c.query(W.coreInstallSql({}));
-    for (const f of ["refundFix", "support", "serverFix", "amountFix", "roleGuardFix"]) await c.query(W[f]);
+    for (const f of ["refundFix", "gateFix", "support", "serverFix", "amountFix", "roleGuardFix"]) await c.query(W[f]);
   }, 120_000);
   afterAll(async () => { try { await c?.end(); } catch { /* 정리 */ } try { await admin?.query(`drop database if exists ${dbName} with (force)`); await admin?.end(); } catch { /* 정리 */ } });
 

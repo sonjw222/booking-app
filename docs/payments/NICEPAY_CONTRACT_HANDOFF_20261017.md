@@ -110,3 +110,11 @@
 금지: 운영/DEV SQL 실행, 운영 환경변수 변경, 운영 결제, Push/PR/병합(요청 전), A10TION 100원 상품 변경.
 최종 보고: 변경 파일, 커밋 SHA, SQL 필요 여부/경로/순서/전문, 롤백, 검증 방법, 테스트 결과, BLOCKED 항목.
 ```
+
+
+## 부록 — DB 주문 생성 게이트(5번째 잠금) 활성화 절차 (2026-10-17 추가)
+`add_nicepay_checkout_gate_20261017.sql` 적용 후 `nicepay_checkout_gate.mode`는 `off`다. 결제 활성화 때 **앱 잠금 4개를 준비한 뒤** 소유자 SQL로 단계적으로 올린다(앱 노출보다 넓지 않게):
+1. 심사/내부 테스트: `update nicepay_checkout_gate set mode = 'reviewer', updated_at = now() where id;` (accounts.pg_checkout_override 계정만 NICEPAY 주문 생성)
+2. 일반 공개(NEXT_PUBLIC_PG_CHECKOUT_ENABLED=true와 함께): `mode = 'public'`
+3. 긴급 중단: `mode = 'off'` (신규 주문 생성 즉시 차단, 감사 기록 `nicepay_checkout_gate_audit`)
+QA 체크리스트 추가: off 상태에서 anon/authenticated의 NICEPAY 직접 INSERT·`create_order_secure('nicepay')`가 모두 거부되는지(+ 포인트 차감 롤백), reviewer 모드에서 일반 회원 거부·심사 계정 허용을 샌드박스 DB에서 확인.

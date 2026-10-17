@@ -35,12 +35,17 @@
 -- 락: ADD CONSTRAINT가 orders/payments 전체 검증 동안 짧게 테이블 락을 잡는다(점검 시간대 권장).
 -- ============================================================
 begin;
+-- 선행: add_nicepay_checkout_gate_20261017.sql (주문 생성 DB 게이트) — 아래 [0]이 확인한다.
 
 -- [0] 사전 점검: 라이브 상태 전이 트리거가 예상(기존 4전이)과 같은지. 다르면 아무것도 바꾸지 않고 중단. (공백·줄바꿈(CRLF/LF) 차이는 정규식으로 허용)
 do $$
 declare
     v_def text;
 begin
+    if to_regprocedure('public.nicepay_checkout_mode()') is null
+       or not exists (select 1 from pg_trigger where tgname = 'orders_guard_nicepay_create' and tgrelid = 'public.orders'::regclass and not tgisinternal) then
+        raise exception 'NICEPAY 주문 생성 게이트가 없어요 — add_nicepay_checkout_gate_20261017.sql 을 먼저 적용하세요(없으면 클라이언트가 결제 비활성 상태에서도 NICEPAY 대기 주문을 만들 수 있게 됨)';
+    end if;
     select pg_get_functiondef('public.orders_guard_status_transition()'::regprocedure) into v_def;
     if v_def !~ '허용되지 않는 주문 상태 변경이에요'
        or v_def !~ 'old\.status\s*=\s*''pending''\s+and\s+new\.status\s+in\s*\(\s*''paid''\s*,\s*''done''\s*,\s*''cancelled''\s*\)'

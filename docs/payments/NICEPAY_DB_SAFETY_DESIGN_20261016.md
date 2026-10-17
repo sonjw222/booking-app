@@ -322,3 +322,31 @@ Toss 완료 주문 3건 / 연결된 결제 기록 2건 / **32만 원 완료 주�
 - DB는 PG 취소가 실제로 일어났음을 증명할 수 없다. NICEPAY만 취소 확인 기록을 강제하며, Toss/PortOne 은 서버 라우트 순서(begin → 취소 → 환불)에 의존한다.
 - 과거에 이미 환불된 건은 바꾸지 않는다. `verify_fix_refund_amount_integrity_20261017.sql` 두 번째 쿼리(읽기 전용)로 "환불 합계 ≠ 원거래 금액" 건을 점검할 수 있다.
 - 실제 Supabase(PostgREST 의 `role` 설정, 기본 권한)는 이번 격리 검증에 포함되지 않았다 — 적용 후 anon 키로 orders PATCH 가 0행/거부인지 확인 권장.
+
+## 15. 주문 생성 보안 점검과 DB 게이트 (2026-10-17)
+
+### 15-1. 분석
+| 경로 | 현재 상태 | 위험 |
+|---|---|---|
+| orders INSERT RLS("주문 본인 생성": 본인 프로필 + `member_can_purchase_product`) — 앱 `lib/orders.ts createOrder`가 직접 INSERT | provider 값을 제한하지 않는다. `orders_force_server_fields_on_insert`/`orders_guard_pg_state`는 status·verified·pg_* 만 고정 | `add_nicepay_provider_support`가 CHECK에 'nicepay'를 허용하는 **순간부터** 로그인 회원이 결제 비활성 상태에서도 NICEPAY 대기 주문을 만들 수 있다 |
+| `create_order_secure(uuid,text,text,integer,boolean,text)` — authenticated 실행 가능, **정의는 라이브 전용(저장소에 없음)** | `fix_create_order_secure_allow_nicepay`가 허용 목록에 nicepay 추가 | RPC로도 동일. RPC 본문이 INSERT 전에 포인트/쿠폰을 처리하는지는 저장소에서 확인 불가(운영 읽기 전용 확인 필요) → 본문에 의존하지 않는 방어가 필요 |
+| 결과 | 앱의 4중 잠금(코드 상수·NICEPAY_CHECKOUT_ENABLED·API_FAMILY·자격증명)은 **서버 코드**의 잠금이라 DB 입구를 막지 못함 | 비활성 중 쌓인 NICEPAY 대기 주문이 포인트·쿠폰을 점유한 채 남고, 활성화 순간 승인 가능한 주문이 된다 |
+
+### 15-2. 설계 (`add_nicepay_checkout_gate_20261017.sql`, 새 객체만 추가)
+- `nicepay_checkout_gate.mode ∈ off(기본) | reviewer | public` — 클라이언트 롤은 읽기/쓰기 불가, service_role은 읽기만, 변경은 소유자(SQL Editor)만, 모든 변경은 추가 전용 감사 테이블.
+- `orders` BEFORE INSERT 트리거: **클라이언트 요청**(auth.uid() 있음 또는 요청 롤 anon/authenticated)이 provider='nicepay' 주문을 만들 때 — off: 거부 / reviewer: `accounts.pg_checkout_override`(관리자만 설정 가능)인 프로필만 / public: 허용. 트리거는 RLS 직접 INSERT와 `create_order_secure`(SECURITY DEFINER여도 `role` 설정값은 호출 롤 유지)를 모두 덮고, RPC가 INSERT 전에 포인트·쿠폰을 처리했어도 같은 트랜잭션이라 전부 롤백된다(PGlite·실제 PostgreSQL 테스트로 확인).
+- 서버(service_role/롤 미설정 소유자)의 주문 생성은 막지 않는다. mock/toss/portone/직접결제는 provider가 nicepay가 아니라 영향 없음.
+- `add_nicepay_provider_support`·`fix_create_order_secure_allow_nicepay`는 게이트가 없으면 스스로 중단(순서 강제). 게이트 롤백은 지원 SQL이 남아 있거나 mode≠off/변경 이력이 있으면 중단.
+
+### 15-3. 5중 잠금의 일치
+| 잠금 | 위치 | 의미 |
+|---|---|---|
+| 1 코드 상수 `NICEPAY_CHECKOUT_ACTIVATED` | 앱 | 리뷰된 코드 변경으로만 켠다 |
+| 2 `NICEPAY_CHECKOUT_ENABLED=true` | 서버 환경변수 | 배포 설정 |
+| 3 `NICEPAY_API_FAMILY` 명시 | 서버 환경변수 | 계약 계열 확정 |
+| 4 계열 자격증명 + 반환 URL + 토큰 시크릿 | 서버 환경변수 | 불완전하면 거부 |
+| 5 `nicepay_checkout_gate.mode` | **DB** | 클라이언트 주문 생성 입구 |
+노출 정책 대응: 앱의 `NEXT_PUBLIC_PG_CHECKOUT_ENABLED="true"`(일반 공개) ↔ DB `public`, 그 외 + 심사 계정 override ↔ DB `reviewer`. **DB 모드가 앱 노출보다 넓지 않게** 맞추고, 활성화 순서는 ① 1~4 준비 ② 심사 오픈 시 `reviewer` ③ 일반 공개 시 `public`, 중단은 즉시 `off`. (게이트는 신규 주문 생성만 막는다. 진행 중 승인은 앱 잠금이 담당 — 필요하면 `nicepay_claim_order`에 같은 모드 확인을 추가하는 후속 검토.)
+
+### 15-4. 적용 순서(운영)
+preflight → `fix_orders_insert_role_guard` → **`add_nicepay_checkout_gate`(신규)** → `add_nicepay_provider_support` → `fix_create_order_secure_allow_nicepay` → verify들. 롤백은 역순(지원 롤백 → 게이트 롤백).
