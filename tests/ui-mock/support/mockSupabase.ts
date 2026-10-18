@@ -25,7 +25,7 @@ export const CLASSES = [
 function tableOf(url: URL): string { return url.pathname.replace(/^\/rest\/v1\//, "").split("/")[0]; }
 const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(body) });
 
-export type MockOpts = { longAddress?: boolean; manyCenters?: boolean; withNextReservation?: boolean; loggedIn?: boolean; hasPass?: boolean; failCenters?: boolean; noReviews?: boolean; reviewsFail?: boolean };
+export type MockOpts = { emptyAllowed?: boolean; allowedFail?: boolean; longAddress?: boolean; manyCenters?: boolean; withNextReservation?: boolean; loggedIn?: boolean; hasPass?: boolean; failCenters?: boolean; noReviews?: boolean; reviewsFail?: boolean };
 export const requests: string[] = [];
 
 export async function mockSupabase(page: Page, opts: MockOpts = {}) {
@@ -39,6 +39,8 @@ export async function mockSupabase(page: Page, opts: MockOpts = {}) {
     if (url.pathname.startsWith("/rest/v1/rpc/")) {
       const fn = url.pathname.split("/").pop();
       if (fn === "my_account_id") return json(route, opts.loggedIn ? "acc-1" : null);
+      // 운영 권한 재현: class_trainer_names(uuid[]) 는 anon 에 EXECUTE 가 없다(권한 오류). 로그인하면 배정 강사를 돌려준다.
+      if (fn === "class_trainer_names") return opts.loggedIn ? json(route, [{ class_id: "cls-1", name: "김하늘", sort_order: 1 }, { class_id: "cls-1", name: "이가람", sort_order: 2 }]) : json(route, { code: "42501", message: "permission denied for function class_trainer_names" }, 403);
       return json(route, []);
     }
     const t = tableOf(url);
@@ -65,7 +67,12 @@ export async function mockSupabase(page: Page, opts: MockOpts = {}) {
       return json(route, rows);
     }
     if (t === "class_reservation_counts") return json(route, CLASSES.map((c) => ({ class_id: c.id, confirmed_count: c.id === "cls-1" ? 4 : c.id === "cls-5" ? 2 : 0 })));
-    if (t === "class_allowed_products") return json(route, [{ class_id: "cls-1", products: { name: "하타 10회권" } }, { class_id: "cls-1", products: { name: "기간제 1개월" } }]);
+    // 운영 RLS 재현: class_allowed_products SELECT = auth.uid() IS NOT NULL AND class_rows_visible(class_id) → 비로그인은 오류가 아니라 "빈 배열"
+    if (t === "class_allowed_products") {
+      if (opts.allowedFail) return json(route, { message: "boom" }, 500);
+      if (!opts.loggedIn || opts.emptyAllowed) return json(route, []);
+      return json(route, [{ class_id: "cls-1", products: { name: "하타 10회권" } }, { class_id: "cls-1", products: { name: "기간제 1개월" } }]);
+    }
     if (t === "profiles") return json(route, opts.loggedIn ? [{ id: "p1" }] : []);
     if (t === "memberships") return json(route, opts.loggedIn && opts.hasPass ? [{ id: "m1", remaining_count: 5, expires_at: "2099-01-01", status: "active", products: { product_kind: "pass" } }] : []);
     return json(route, wrap([]));

@@ -9,7 +9,9 @@ export async function fetchCenterRatings(centerIds: readonly string[]): Promise<
   for (let i = 0; i < centerIds.length; i += CHUNK) {
     const chunk = centerIds.slice(i, i + CHUNK);
     for (let from = 0; ; from += PAGE) {
-      const { data, error } = await supabase.from("center_reviews").select("center_id, rating").in("center_id", chunk).range(from, from + PAGE - 1);
+      const { data, error } = await supabase.from("center_reviews").select("center_id, rating").in("center_id", chunk)
+        .order("id", { ascending: true })   // 안정적인 고유 정렬 — 정렬 없는 range 는 페이지 사이에 행이 중복·누락될 수 있다
+        .range(from, from + PAGE - 1);
       if (error) throw new Error("평점을 불러오지 못했어요: " + error.message);
       rows.push(...((data ?? []) as { center_id: string; rating: number }[]));
       if (!data || data.length < PAGE) break;

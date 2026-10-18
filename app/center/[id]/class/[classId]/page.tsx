@@ -85,7 +85,10 @@ export default function ClassDetailPage() {
   const bookability = classBookability(detail);
   const spots = remainingSpots(detail.capacity, detail.reserved);
   const deadline = formatBookingDeadline(detail.bookingDeadlineMin);
-  const instructors = formatInstructorNames(detail.instructorNames);
+  // 강사: 조회가 막히거나 실패한 경우 "강사 없음"으로 보이지 않게 이유를 말한다(없음이 확인된 경우에만 행을 만들지 않는다).
+  const instructors = detail.trainers.kind === "list" ? formatInstructorNames(detail.trainers.names)
+    : detail.trainers.kind === "login_required" ? "로그인 후 확인할 수 있어요"
+    : detail.trainers.kind === "unavailable" ? "불러오지 못했어요" : null;
   const canReserve = bookability === "open";
   const notice = bookability === "cancelled" ? "폐강된 수업이에요" : bookability === "past" ? "이미 시작했거나 지난 수업이에요" : bookability === "closed" ? "예약이 마감된 수업이에요" : null;
   const reserveHref = reservationReturnUrl({ classId: detail.id, date: detail.date, center: centerId });
@@ -96,7 +99,7 @@ export default function ClassDetailPage() {
     { label: "일정", value: formatClassWhen(detail.startIso, detail.endIso) },
     { label: "장소", value: detail.place },
     { label: "담당 강사", value: instructors },
-    { label: "정원", value: `${detail.capacity}명${canReserve ? ` · ${spots > 0 ? `${spots}자리 남음` : "정원 마감(대기 가능)"}` : ""}` },
+    { label: "정원", value: `${detail.capacity}명${canReserve && detail.reservedKnown ? ` · ${spots > 0 ? `${spots}자리 남음` : "정원 마감(대기 가능)"}` : ""}` },
     { label: "예약 마감", value: deadline },
   ].filter((r) => r.value);
 
@@ -125,12 +128,13 @@ export default function ClassDetailPage() {
 
         <section className="class-detail-section" aria-labelledby="cd-cond">
           <h2 id="cd-cond">참여 조건</h2>
-          <div className="class-detail-chips">
-            {detail.passSelectionMode === "selected" && detail.allowedPassNames.length > 0
-              ? detail.allowedPassNames.map((n) => <span key={n} className="class-pass-chip">{n}</span>)
-              : <span className="class-pass-chip all">모든 수강권 가능</span>}
-          </div>
-          <p className="class-detail-hint">이 센터의 수강권으로 예약할 수 있어요. 예약 가능 여부는 예약할 때 다시 확인돼요.</p>
+          {/* "모든 수강권 가능"은 수업이 실제로 all 모드일 때만. 지정(selected) 수업의 목록을 읽을 수 없으면(비로그인 RLS, 조회 실패, 빈 결과) 절대 모두 가능이라고 말하지 않는다. */}
+          {detail.allowedPasses.kind === "all" && <div className="class-detail-chips"><span className="class-pass-chip all">모든 수강권 가능</span></div>}
+          {detail.allowedPasses.kind === "list" && <div className="class-detail-chips">{detail.allowedPasses.names.map((n) => <span key={n} className="class-pass-chip">{n}</span>)}</div>}
+          {detail.allowedPasses.kind === "login_required" && <p className="class-detail-hint" data-testid="allowed-passes-note">이용 가능한 수강권은 로그인 후 확인해 주세요.</p>}
+          {detail.allowedPasses.kind === "unavailable" && <p className="class-detail-hint" data-testid="allowed-passes-note">이용 가능한 수강권 정보를 불러오지 못했어요. 예약할 때 다시 확인돼요.</p>}
+          {detail.allowedPasses.kind === "unknown_empty" && <p className="class-detail-hint" data-testid="allowed-passes-note">이 수업에 지정된 수강권을 확인할 수 없어요. 예약할 때 확인돼요.</p>}
+          <p className="class-detail-hint">예약 가능 여부(수강권·정원·마감)는 예약할 때 서버에서 다시 확인돼요.</p>
         </section>
 
         {sessions.length > 0 && (

@@ -22,11 +22,27 @@ export type ClassDetail = {
   place: string | null;  // 룸 이름 > 장소 텍스트
   capacity: number;
   reserved: number;
-  instructorNames: string[];
+  /** 강사: 조회 결과가 "없음"인지 "권한 없음/실패로 모름"인지 구분한다. */
+  trainers: TrainersInfo;
   passSelectionMode: "all" | "selected";
-  allowedPassNames: string[];
+  /** 이용 가능한 수강권 — 모드 all 일 때만 "모든 수강권 가능". selected 인데 목록을 확인할 수 없으면 절대 "모두 가능"으로 표시하지 않는다. */
+  allowedPasses: AllowedPasses;
   bookingDeadlineMin: number | null;
+  /** 예약 인원 집계를 읽었는지(실패하면 잔여 자리를 말하지 않는다) */
+  reservedKnown: boolean;
 };
+
+export type AllowedPasses =
+  | { kind: "all" }
+  | { kind: "list"; names: string[] }
+  | { kind: "login_required" }      // 비로그인: 운영 RLS(class_allowed_products)가 anon 에게 행을 숨긴다 — 비어 보여도 "없음"이 아니다
+  | { kind: "unavailable" }         // 조회 오류
+  | { kind: "unknown_empty" };      // 로그인했는데 selected 모드인데도 읽힌 목록이 비어 있음 — 확인 불가(모두 가능이라고 말하지 않는다)
+export type TrainersInfo =
+  | { kind: "list"; names: string[] }
+  | { kind: "none" }                // RPC 가 정상 응답했고 배정 강사가 없음
+  | { kind: "login_required" }      // 비로그인: class_trainer_names 는 anon 에 EXECUTE 없음(권한 오류)
+  | { kind: "unavailable" };
 
 export type UpcomingSession = { id: string; date: string; whenText: string; reserved: number; capacity: number };
 
@@ -82,18 +98,34 @@ export async function fetchCenterClassDetail(centerId: string, classId: string):
   if (!center || center.status !== "approved") return null;
   const room = one(row.rooms);
 
+  // 로그인 여부(로컬 세션 확인, 네트워크 없음) — 비로그인은 운영 RLS/권한 때문에 일부 값이 "비어 보이거나 호출 불가"가 정상이다.
+  const { data: sessionData } = await supabase.auth.getSession();
+  const loggedIn = !!sessionData.session;
+  const selected = row.pass_selection_mode === "selected";
   const [countRes, trainerRes, passRes] = await Promise.all([
     supabase.from("class_reservation_counts").select("class_id, confirmed_count").eq("class_id", classId),
     supabase.rpc("class_trainer_names", { p_class_ids: [classId] }),
-    row.pass_selection_mode === "selected"
+    selected
       ? supabase.from("class_allowed_products").select("products(name)").eq("class_id", classId)
       : Promise.resolve({ data: [] as { products: Embedded<{ name: string | null }> }[], error: null }),
   ]);
-  const trainers: Record<string, string[]> = {};
-  if (!trainerRes.error) appendTrainerNames(trainers, trainerRes.data as { class_id: string; name?: string | null }[] | null);   // 강사/수강권/인원은 보조 정보 — 실패해도 수업 상세는 보여준다
-  const allowed = !passRes.error
-    ? Array.from(new Set(((passRes.data ?? []) as unknown as { products: Embedded<{ name: string | null }> }[]).map((l) => one(l.products)?.name).filter((n): n is string => !!n)))
-    : [];
+  // 강사: 오류(권한/네트워크)를 "강사 없음"으로 단정하지 않는다.
+  let trainers: TrainersInfo;
+  if (trainerRes.error) trainers = loggedIn ? { kind: "unavailable" } : { kind: "login_required" };
+  else {
+    const map: Record<string, string[]> = {};
+    appendTrainerNames(map, trainerRes.data as { class_id: string; name?: string | null }[] | null);
+    trainers = (map[classId] ?? []).length > 0 ? { kind: "list", names: map[classId] } : { kind: "none" };
+  }
+  // 허용 수강권
+  let allowedPasses: AllowedPasses;
+  if (!selected) allowedPasses = { kind: "all" };
+  else if (!loggedIn) allowedPasses = { kind: "login_required" };      // RLS 가 행을 숨기므로 빈 결과는 "없음"이 아니다
+  else if (passRes.error) allowedPasses = { kind: "unavailable" };
+  else {
+    const names = Array.from(new Set(((passRes.data ?? []) as unknown as { products: Embedded<{ name: string | null }> }[]).map((l) => one(l.products)?.name).filter((n): n is string => !!n)));
+    allowedPasses = names.length > 0 ? { kind: "list", names } : { kind: "unknown_empty" };
+  }
 
   return {
     id: row.id, centerId: row.center_id, centerName: center.name, centerCategories: center.categories ?? [],
@@ -104,9 +136,8 @@ export async function fetchCenterClassDetail(centerId: string, classId: string):
     place: (room?.name?.trim() || row.place?.trim() || null),
     capacity: row.capacity,
     reserved: (countRes.data?.[0] as { confirmed_count?: number } | undefined)?.confirmed_count ?? 0,
-    instructorNames: trainers[classId] ?? [],
-    passSelectionMode: row.pass_selection_mode === "selected" ? "selected" : "all",
-    allowedPassNames: allowed,
+    reservedKnown: !countRes.error,
+    trainers, passSelectionMode: selected ? "selected" : "all", allowedPasses,
     bookingDeadlineMin: row.booking_deadline_min ?? null,
   };
 }

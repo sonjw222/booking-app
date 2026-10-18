@@ -20,6 +20,6 @@ case "${1:-}" in
     [ -f /tmp/qa-ui-proxy.pid ] && kill "$(cat /tmp/qa-ui-proxy.pid)" 2>/dev/null || true
     docker rm -f qa-ui-pg qa-ui-rest >/dev/null 2>&1 || true
     docker network rm qa-ui-net >/dev/null 2>&1 || true ;;
-  token) node -e 'const c=require("crypto");const b=o=>Buffer.from(JSON.stringify(o)).toString("base64url");const h=b({alg:"HS256",typ:"JWT"}),p=b({role:"anon",iss:"qa",exp:4102444800});console.log(h+"."+p+"."+c.createHmac("sha256",process.argv[1]).update(h+"."+p).digest("base64url"))' "$SECRET" ;;
+  token) node -e 'const c=require("crypto");const b=o=>Buffer.from(JSON.stringify(o)).toString("base64url");const role=process.argv[2]||"anon",sub=process.argv[3];const h=b({alg:"HS256",typ:"JWT"}),p=b({role,iss:"qa",exp:4102444800,...(sub?{sub,aud:"authenticated"}:{})});console.log(h+"."+p+"."+c.createHmac("sha256",process.argv[1]).update(h+"."+p).digest("base64url"))' "$SECRET" "${2:-anon}" "${3:-}" ;;
   *) echo "usage: run.sh up|down|token"; exit 1 ;;
 esac

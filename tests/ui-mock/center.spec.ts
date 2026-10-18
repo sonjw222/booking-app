@@ -83,7 +83,7 @@ test.describe("수업 상세", () => {
     await expect(facts).toContainText("10명");
     await expect(facts).toContainText("6자리 남음");
     await expect(facts).toContainText("수업 시작 1시간 전까지 예약");
-    await expect(facts.locator("dt", { hasText: "담당 강사" })).toHaveCount(0);
+    await expect(facts).toContainText("김하늘, 이가람");   // 로그인: class_trainer_names RPC 허용
     await expect(page.getByText("호흡과 정렬에 집중하는")).toBeVisible();
     await expect(page.locator(".class-detail-chips")).toContainText("하타 10회권");
     await expect(page.getByRole("link", { name: /다른 일정|7|월|화|수|목|금|토|일/ }).first()).toBeVisible();   // 같은 수업의 다른 일정(cls-2)

@@ -235,3 +235,44 @@ test.describe("요구사항 8·9 — CTA/공유/팝업 접근성", () => {
     await expect(page.getByRole("alertdialog")).toHaveCount(0);
   });
 });
+
+test.describe("요구사항 6 — 수업 상세의 운영 권한 차이(비로그인/로그인)", () => {
+  const ALL = "모든 수강권 가능";
+  test("비로그인 + 지정(selected) 수업: RLS 로 허용 목록이 비어 보여도 '모든 수강권 가능'이라고 말하지 않고 로그인 안내, 강사 RPC 권한 오류는 '없음'이 아니라 로그인 안내", async ({ page }) => {
+    await mockSupabase(page, { loggedIn: false });
+    await page.goto("/center/c-near/class/cls-1");
+    await expect(page.getByRole("heading", { level: 1, name: "아침 하타 요가" })).toBeVisible();
+    await expect(page.getByTestId("allowed-passes-note")).toHaveText("이용 가능한 수강권은 로그인 후 확인해 주세요.");
+    await expect(page.locator(".class-detail-v2")).not.toContainText(ALL);
+    await expect(page.locator(".class-detail-chips .class-pass-chip")).toHaveCount(0);
+    await expect(page.locator(".class-detail-facts")).toContainText("담당 강사");
+    await expect(page.locator(".class-detail-facts")).toContainText("로그인 후 확인할 수 있어요");
+    await expect(page.locator(".class-detail-facts")).toContainText("10명 · 6자리 남음");     // 공개 정보(정원/예약 인원)는 그대로
+    await expect(page.getByText("호흡과 정렬에 집중하는")).toBeVisible();
+  });
+  test("로그인 + 지정 수업: 허용 수강권 칩과 강사 표시", async ({ page }) => {
+    await mockSupabase(page, { loggedIn: true });
+    await page.goto("/center/c-near/class/cls-1");
+    await expect(page.locator(".class-detail-chips")).toContainText("하타 10회권");
+    await expect(page.locator(".class-detail-v2")).not.toContainText(ALL);
+    await expect(page.locator(".class-detail-facts")).toContainText("김하늘, 이가람");
+    await expect(page.getByTestId("allowed-passes-note")).toHaveCount(0);
+  });
+  test("로그인 + 지정 수업인데 읽힌 목록이 비어 있음 / 조회 오류: 모두 가능이라고 하지 않고 확인 불가·불러오지 못함을 구분해 안내", async ({ page }) => {
+    await mockSupabase(page, { loggedIn: true, emptyAllowed: true });
+    await page.goto("/center/c-near/class/cls-1");
+    await expect(page.getByTestId("allowed-passes-note")).toContainText("지정된 수강권을 확인할 수 없어요");
+    await expect(page.locator(".class-detail-v2")).not.toContainText(ALL);
+    await mockSupabase(page, { loggedIn: true, allowedFail: true });
+    await page.goto("/center/c-near/class/cls-1");
+    await expect(page.getByTestId("allowed-passes-note")).toContainText("불러오지 못했어요");
+    await expect(page.locator(".class-detail-v2")).not.toContainText(ALL);
+  });
+  test("전체(all) 수업은 로그인 여부와 관계없이 '모든 수강권 가능'", async ({ page }) => {
+    for (const loggedIn of [false, true]) {
+      await mockSupabase(page, { loggedIn });
+      await page.goto("/center/c-near/class/cls-2");
+      await expect(page.locator(".class-detail-chips")).toContainText(ALL);
+    }
+  });
+});
