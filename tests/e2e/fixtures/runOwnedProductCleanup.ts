@@ -187,3 +187,8 @@ export function makeSupabaseStore(admin: AdminLike): CleanupStore {
     },
   };
 }
+
+/** 수업 소유권(#229의 ownsClass를 통합): 제목에 이 실행의 RUN_SHORT가 있고 이 테스트 센터의 수업일 때만 정리 대상. */
+export function ownsClass(row: { id: string; title: string; center_id: string }, ctx: { runShort: string; centerId: string }): boolean {
+  return row.center_id === ctx.centerId && row.title.includes(ctx.runShort);
+}

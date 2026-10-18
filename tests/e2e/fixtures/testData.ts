@@ -22,6 +22,7 @@
   다시 로그인하는 코드는 e2e 스위트 어디에도 없다), 이 파일의 loadTestAccountMeta()가
   그 값을 읽어 재사용한다.
 */
+import "./installWriteGate"; // 이 모듈을 쓰는 어떤 spec도 훅 없이 admin client를 얻지 못하게 한다(env.ts와 중복 설치는 무해)
 import fs from "node:fs";
 import path from "node:path";
 import { getFixtureAdminClient, switchToTestUser, getOrCreateOwnedTestCenter, kstSafeSameDayFutureTime, type TestUser } from "../../integration/setup";

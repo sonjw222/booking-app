@@ -106,4 +106,56 @@ describe("격리 PostgreSQL — 실제 FK", () => {
     await store.deleteMemberships([M1], OTHER, PROD);
     expect(await count(db, "memberships")).toBe(1);
   });
+
+  it("동시 실행: 두 실행(A·B)이 각자 새 상품을 쓰므로 한쪽 정리가 다른 쪽 상품·수강권·예약을 건드리지 않는다", async () => {
+    const db = await world();
+    const PROD_B = U(40), M_B = U(41), K_B = U(12);
+    await db.exec(`insert into products(id, center_id, name) values ('${PROD_B}','${CENTER}','TEST4 신규구매전용패스 ff99ee88');
+      insert into classes values ('${K_B}','${CENTER}','NEWCLASS-BUY-ff99ee88-1');
+      insert into memberships(id, profile_id, product_id) values ('${M1}','${USER_A}','${PROD}'), ('${M_B}','${USER_A}','${PROD_B}');
+      insert into reservations(class_id, profile_id, membership_id) values ('${K_OWN}','${USER_A}','${M1}'), ('${K_B}','${USER_A}','${M_B}');
+      insert into payments(membership_id, profile_id) values ('${M1}','${USER_A}'), ('${M_B}','${USER_A}')`);
+    const store = sqlStore(db);
+    const ctxA = ctx();
+    const planA = await prepareRunOwnedCleanup(store, ctxA);   // 실행 A만 정리
+    expect(planA.refused).toEqual([]);
+    await executeRunOwnedCleanup(store, planA, ctxA);
+    // B의 데이터는 그대로
+    const left = await db.query<{ id: string }>(`select id from memberships`);
+    expect(left.rows.map((r) => r.id)).toEqual([M_B]);
+    expect([await count(db, "reservations"), await count(db, "payments")]).toEqual([1, 1]);
+    // B도 자기 것만 정리된다
+    const ctxB: RunContext = { runShort: "ff99ee88", profileId: USER_A, centerId: CENTER, productId: PROD_B, ownedClassIds: new Set([K_B]), runStartedAtMs: Date.now() - 5_000 };
+    const planB = await prepareRunOwnedCleanup(store, ctxB);
+    expect(planB.refused).toEqual([]);
+    await executeRunOwnedCleanup(store, planB, ctxB);
+    expect([await count(db, "memberships"), await count(db, "reservations"), await count(db, "payments")]).toEqual([0, 0, 0]);
+  });
+
+  it("재시도·반복 실행: 같은 정리를 다시 실행해도(이미 정리됨) 오류 없이 아무 것도 지우지 않고, 앞 실행 잔여물이 있어도 새 실행은 새 상품만 본다", async () => {
+    const db = await world();
+    await db.exec(`insert into memberships(id, profile_id, product_id, created_at) values ('${M_OLD}','${USER_A}','${OLD_PROD}', now() - interval '1 day');
+      insert into reservations(class_id, profile_id, membership_id) values ('${K_STALE}','${USER_A}','${M_OLD}')`);   // 앞 실행(재시도 전)이 남긴 잔여물
+    const store = sqlStore(db);
+    for (let i = 0; i < 3; i++) {                                    // 새 상품에는 수강권이 없는 상태로 반복
+      const plan = await prepareRunOwnedCleanup(store, ctx());
+      expect(plan.refused).toEqual([]);
+      await executeRunOwnedCleanup(store, plan, ctx());
+    }
+    expect([await count(db, "memberships"), await count(db, "reservations")]).toEqual([1, 1]);   // 잔여물 보존
+    const again = await prepareRunOwnedCleanup(store, ctx());         // 상품이 이미 사라진 뒤
+    expect(again).toMatchObject({ deleteProduct: false, refused: [] });
+  });
+
+  it("소유 위조: 이름에 RUN_SHORT가 있어도 다른 센터 상품이거나 다른 프로필·이전 시각 수강권이면 거부한다", async () => {
+    const db = await world();
+    const FOREIGN_CENTER = U(99);
+    await db.exec(`update products set center_id='${FOREIGN_CENTER}' where id='${PROD}';
+      insert into memberships(id, profile_id, product_id) values ('${M1}','${OTHER}','${PROD}')`);
+    const store = sqlStore(db);
+    const plan = await prepareRunOwnedCleanup(store, ctx());
+    expect(plan.refused.length).toBeGreaterThanOrEqual(2);          // 센터 불일치 + 다른 프로필
+    await executeRunOwnedCleanup(store, plan, ctx());
+    expect([await count(db, "memberships"), await count(db, "products")]).toEqual([1, 2]);
+  });
 });

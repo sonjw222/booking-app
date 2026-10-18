@@ -15,7 +15,8 @@ import {
 import type { CenterSettings } from "../../../lib/settings";
 import { getFixtureAdminClient } from "../../integration/setup";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
-import { makeSupabaseStore, prepareRunOwnedCleanup, executeRunOwnedCleanup, type RunContext } from "../fixtures/runOwnedProductCleanup";
+import { makeSupabaseStore, ownsClass, prepareRunOwnedCleanup, executeRunOwnedCleanup, type RunContext } from "../fixtures/runOwnedProductCleanup";
+import { assertIsolatedTestDb } from "../fixtures/isolatedTestDbGuard";
 import { gotoManagerClasses, clickCreateClass, parkPointerOutsideRail } from "../fixtures/pageHelpers";
 
 /*
@@ -80,13 +81,14 @@ let userA: TestUser;
 let centerAId: string;
 let originalSettings: CenterSettings;
 let buyProductId: string;
-// 실행마다 새 상품을 만든다(이름에 RUN_SHORT) — 이전 실행·다른 테스트·실제 데이터가 이 상품의 수강권을 가질 수 없으므로
-// beforeAll에서 아무 것도 지우지 않아도 "아직 안 가진 상품" 전제가 성립한다(과거 잔여물은 건드리지 않는다).
+// 실행별 UUID — 이 실행이 만든 수업은 제목에, 구매 테스트 상품은 이름에 RUN_SHORT가 들어간다.
+// 실행마다 새 상품을 만들어 이전 실행·다른 테스트·실제 데이터가 이 상품의 수강권을 가질 수 없게 한다(시작 시 아무 것도 지우지 않는다).
 const RUN_SHORT = randomUUID().slice(0, 8);
 const RUN_STARTED_AT_MS = Date.now();
 const BUY_PRODUCT_NAME = `TEST4 신규구매전용패스 ${RUN_SHORT}`;
 const GOODS_PRODUCT_NAME = "E2E 테스트 대여품 상품"; // getOrCreateTestGoodsProduct의 고정 이름
 const createdClassIds: string[] = [];
+let isolatedDbConfirmed = false;
 
 /* TEST4 정리 — 이 실행이 만든 것만, 소유를 증명한 경우에만 지운다(runOwnedProductCleanup.ts).
    예전 cleanupBuyProductMemberships는 (userA, 고정 이름 상품)의 수강권을 전부 지웠고 reservations는 지우지 않아,
@@ -95,17 +97,38 @@ function runContext(): RunContext {
   return { runShort: RUN_SHORT, profileId: userA.profileId, centerId: centerAId, productId: buyProductId, ownedClassIds: new Set(createdClassIds), runStartedAtMs: RUN_STARTED_AT_MS };
 }
 
+// 이 실행의 수업만 정리한다(제목의 RUN_SHORT + 테스트 센터 확인). 소유를 확인하지 못하면 건드리지 않는다.
+async function cleanupOwnedClasses(): Promise<string[]> {
+  const admin = getFixtureAdminClient();
+  const notOwned: string[] = [];
+  for (const id of createdClassIds) {
+    const { data } = await admin.from("classes").select("id, title, center_id").eq("id", id).maybeSingle();
+    if (!data) continue; // 이미 없음
+    if (!ownsClass(data, { runShort: RUN_SHORT, centerId: centerAId })) { notOwned.push(id); continue; }
+    await cleanupTestClassAdmin(id);
+  }
+  return notOwned;
+}
+
 test.afterAll(async () => {
+  // 격리 DB 확인이 안 되면(공유 DEV/Production) 어떤 삭제도 하지 않는다 — beforeAll이 건너뛰어도 afterAll은 실행되므로 여기서도 막는다.
+  if (!isolatedDbConfirmed) return;
+  assertIsolatedTestDb(process.env);
   // 순서: ① 소유 증명(읽기 전용 — 이 실행의 예약이 남아 있을 때) → ② 이 실행의 수업 삭제 → ③ 설정 복원 → ④ 증명된 데이터만 삭제.
   const store = makeSupabaseStore(getFixtureAdminClient());
   const plan = buyProductId ? await prepareRunOwnedCleanup(store, runContext()) : null;
-  for (const id of createdClassIds) await cleanupTestClassAdmin(id);
+  const notOwned = await cleanupOwnedClasses();
   if (originalSettings) await saveSettingsAdmin(centerAId, originalSettings);
   if (plan) await executeRunOwnedCleanup(store, plan, runContext());
-  if (plan?.refused.length) throw new Error(`TEST4 정리 거부(소유 미증명 — 수강권·결제·상품을 삭제하지 않음): ${JSON.stringify(plan.refused)}`);
+  if (plan?.refused.length || notOwned.length) {
+    throw new Error(`TEST4 정리 거부(소유 미증명 — 수강권·결제·상품을 삭제하지 않음): ${JSON.stringify({ refused: plan?.refused, notOwnedClassIds: notOwned })}`);
+  }
 });
 
 test.beforeAll(async () => {
+  // 파괴적 테스트(수업·수강권·결제·설정을 만들고 지운다) — 격리 테스트 DB가 확인되지 않으면 어떤 DB 접근도 하기 전에 BLOCKED로 건너뛴다.
+  try { assertIsolatedTestDb(process.env); isolatedDbConfirmed = true; }
+  catch (e) { test.skip(true, `BLOCKED: ${(e as Error).message.split("\n")[0]}`); }
   managerA = loadTestAccountMeta("manager-a");
   userA = loadTestAccountMeta("user-a");
   centerAId = await getOrCreateOwnedTestCenter(managerA);
@@ -177,7 +200,7 @@ async function findClassByTitle(title: string) {
 }
 
 test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → 회원 기존 pass 표시 → 예약 성공 (실브라우저)", async ({ page, browser }) => {
-  const uniqueTitle = `NEWCLASS-ALL-${Date.now()}`;
+  const uniqueTitle = `NEWCLASS-ALL-${RUN_SHORT}-${Date.now()}`;
   const dateStr = futureKstDateStr(90);
 
   await gotoFutureDay(page, dateStr);
@@ -230,7 +253,7 @@ test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → �
 });
 
 test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 → 해당 pass만 표시 → 예약 성공 (실브라우저)", async ({ page, browser }) => {
-  const uniqueTitle = `NEWCLASS-SPECIFIC-${Date.now()}`;
+  const uniqueTitle = `NEWCLASS-SPECIFIC-${RUN_SHORT}-${Date.now()}`;
   const dateStr = futureKstDateStr(91);
 
   await gotoFutureDay(page, dateStr);
@@ -286,7 +309,12 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
 });
 
 test("TEST4: 신규 수업 → 사용 가능 수강권 없음 → 그 자리에서 구매 → 새로고침 포함 즉시 사용 가능 → 예약 성공 (실브라우저)", async ({ page, browser }) => {
-  const uniqueTitle = `NEWCLASS-BUY-${Date.now()}`;
+  // 이 실행 전용 새 상품이라 보통 0개 — 0이 아니면 전제가 깨진 것이므로 삭제로 "치유"하지 않고 BLOCKED로 건너뛴다(PASS 아님).
+  const { count: ownedBefore, error: ownedErr } = await getFixtureAdminClient()
+    .from("memberships").select("id", { count: "exact", head: true }).eq("profile_id", userA.profileId).eq("product_id", buyProductId);
+  if (ownedErr) throw new Error(`TEST4 사전 보유 확인 실패: ${ownedErr.message}`);
+  test.skip((ownedBefore ?? 0) > 0, `BLOCKED: userA가 이 실행 전용 TEST4 상품 수강권을 이미 ${ownedBefore}개 보유 — "구매 전 사용 가능 수강권 없음" 전제가 깨져 실행 불가(자동 삭제하지 않음, PASS 아님)`);
+  const uniqueTitle = `NEWCLASS-BUY-${RUN_SHORT}-${Date.now()}`;
   const dateStr = futureKstDateStr(92);
 
   await gotoFutureDay(page, dateStr);
@@ -392,7 +420,7 @@ test("TEST4: 신규 수업 → 사용 가능 수강권 없음 → 그 자리에�
 });
 
 test("TEST5: 신규 수업(모든 수강권 허용)에서도 goods는 사용 가능한 수강권 목록에 절대 안 보임 (실브라우저)", async ({ page, browser }) => {
-  const uniqueTitle = `NEWCLASS-GOODSCHK-${Date.now()}`;
+  const uniqueTitle = `NEWCLASS-GOODSCHK-${RUN_SHORT}-${Date.now()}`;
   const dateStr = futureKstDateStr(93);
 
   await gotoFutureDay(page, dateStr);
@@ -428,7 +456,7 @@ test("TEST5: 신규 수업(모든 수강권 허용)에서도 goods는 사용 가
 });
 
 test("TEST6(대조군): 기존 방식(admin client 직접 insert)으로 만든 수업도 계속 정상 예약 가능 (실브라우저)", async ({ browser }) => {
-  const cls = await createFutureTestClassAdmin(centerAId, { title: `NEWCLASS-CONTROL-${Date.now()}`, hoursFromNow: 32 });
+  const cls = await createFutureTestClassAdmin(centerAId, { title: `NEWCLASS-CONTROL-${RUN_SHORT}-${Date.now()}`, hoursFromNow: 32 });
   createdClassIds.push(cls.id);
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
