@@ -21,6 +21,10 @@
 - 하단 내비: 선택 탭 네이비 pill + 아래→위 점진 블러 레이어, 홈 헤더 문구 "모하빗", 검색 화면 상단 여백.
 - 테스트: `tests/unit/centerDiscovery.test.ts`, 목(mock) 네트워크 Playwright(`playwright.mock.config.ts`, `tests/ui-mock/*`).
 
+## 2026-10-18 — E2E 3/4 TEST4 정리 로직 안정화(테스트 전용)
+- **원인**: `new-class-creation.spec.ts`의 `cleanupBuyProductMemberships`가 (테스트 회원, 고정 이름 상품)의 수강권을 payments → memberships 순으로만 지웠다. 그 수강권을 쓴 예약이 남아 있으면 `reservations_membership_id_fkey` 위반으로 `beforeAll`(브라우저 실행 전)에서 실패했고, 고정 이름 상품이라 과거 실행 잔여물이 계속 걸렸다. 프로필·상품이 같다는 이유만으로 "내 것"이라 보고 지우는 것도 문제였다.
+- **수정**: 실행마다 이름에 실행 ID(RUN_SHORT)가 든 새 상품을 만들어 과거 잔여물과 겹치지 않게 하고(시작 시 아무 것도 삭제하지 않음), 종료 시 소유를 증명한 경우에만(상품 이름·수강권 프로필/생성 시각·예약은 이 실행의 수업·결제 프로필/시각·그 밖의 참조 0건) reservations → payments → memberships → product 순으로 삭제한다. 하나라도 증명하지 못하면 아무 것도 지우지 않고 실패로 알린다. 새 모듈 `tests/e2e/fixtures/runOwnedProductCleanup.ts`, 단위·격리 PostgreSQL(PGlite, 실제 FK) 테스트 추가. 앱 코드·SQL·RLS 변경 없음.
+
 ## 2026-10-11 — 진도 기록 팝업 날짜 캘린더 잘림 수정 (웹 코드만, SQL 없음)
 - 원인: `DatePicker`의 팝오버가 `.app-date-picker` 안에서 `position:absolute`로 그려져 `.sheet`(`overflow-y:auto`, 진도 기록은 `.prog-add-sheet`)의 클리핑 영역에 갇혔다. 하네스 실측: 수정 전 날짜 31개 중 모바일 10개 / 태블릿·데스크톱 28개가 클릭 불가.
 - 수정(`app/components/DatePicker.tsx`, `lib/popoverPosition.ts`, `app/globals.css`): 팝오버를 `createPortal`로 렌더링(시트 안이면 같은 `SheetOverlay`의 자식, 아니면 body)하고 트리거 기준 `fixed` 좌표를 순수 함수 `computePopoverPosition`으로 계산(아래 → 위 → 뷰포트 안으로 밀기, 뷰포트보다 크면 내부 스크롤). 캘린더 크기(310×308)·디자인·시트 크기는 그대로. 부모 `overflow`는 건드리지 않았고 z-index도 기존 값 유지.
