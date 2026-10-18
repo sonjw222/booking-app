@@ -14,7 +14,10 @@ test.describe("종목별 센터 목록 — 필터·정렬·상태 유지", () =>
     expect((await names(page))[0]).toContain("하늘 요가");
     await expect(page.getByRole("button", { name: /거리 전체/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /정렬: 추천순/ })).toBeVisible();
-    await expect(page.getByRole("link", { name: /검색 조건/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /검색 조건/ })).toHaveCount(0);          // 더 이상 검색 화면으로 가는 링크가 아니다
+    await page.getByRole("button", { name: /검색 조건/ }).click();                          // 필터·정렬 시트가 열린다(화면 이동 없음)
+    await expect(page.getByRole("radio", { name: "5km" })).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe("/category/%EC%9A%94%EA%B0%80");
   });
 
   test("거리 5km 선택 → 즉시 갱신 · URL 반영 · 좌표 없는 센터 제외 안내, 새로고침해도 유지", async ({ page }) => {
@@ -22,7 +25,7 @@ test.describe("종목별 센터 목록 — 필터·정렬·상태 유지", () =>
     await page.goto("/category/%EC%9A%94%EA%B0%80");
     await page.getByRole("button", { name: /거리 전체/ }).click();
     await page.getByRole("radio", { name: "5km" }).click();
-    await page.getByRole("button", { name: /곳 보기/ }).click();
+    await page.getByRole("button", { name: /^적용/ }).click();
     await expect(page).toHaveURL(/r=5/);
     await expect(page.locator(".cat-center-card")).toHaveCount(2);
     await expect(page.getByText(/위치 정보가 등록되지 않은 센터 1곳/)).toBeVisible();
@@ -158,7 +161,7 @@ test.describe("위치 권한 거부", () => {
     await page.getByRole("button", { name: /거리 전체/ }).click();
     await page.getByRole("radio", { name: "3km" }).click();
     await expect(page.getByText(/위치 권한이 꺼져 있어/).first()).toBeVisible();
-    await page.getByRole("button", { name: /곳 보기/ }).click();
+    await page.getByRole("button", { name: /^적용/ }).click();
     await expect(page.locator(".cat-center-card")).toHaveCount(4);                 // 거리 조건 미적용 + 전체 표시
     await expect(page.getByText(/지금은 전체 센터를 보여드려요/)).toBeVisible();
     await page.getByRole("button", { name: "위치 없이 보기" }).click();

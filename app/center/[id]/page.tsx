@@ -815,9 +815,9 @@ function CenterDetailContent() {
         open={needPassDialog}
         title="수강권이 필요해요"
         icon="ticket"
-        description={"이 센터에서 사용할 수 있는 수강권이 없어요.\n먼저 수강권을 구매한 후 예약해 주세요."}
+        description="이 센터의 수강권을 먼저 구매해주세요."
         confirmLabel="수강권 구매하기"
-        cancelLabel="취소"
+        cancelLabel="닫기"
         onCancel={() => setNeedPassDialog(false)}
         onConfirm={() => { setNeedPassDialog(false); setBuySheet(true); }}
       />

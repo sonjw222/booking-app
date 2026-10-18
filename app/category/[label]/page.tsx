@@ -124,6 +124,10 @@ function CategoryContent() {
         <main className="category-results-v3">
           <div className="category-results-head">
             <div><b>{label} 센터</b><span>{result.rows.length}곳</span></div>
+            {/* 예전에는 검색 화면으로 이동하던 "검색 조건" — 이제 이 목록의 필터·정렬 시트를 연다(종목 유지, 화면 이동 없음). */}
+            <button type="button" className="category-conditions-btn" aria-haspopup="dialog" onClick={() => setSheetOpen(true)}>
+              <UiIcon name="sliders" size={18} />검색 조건{filterCount > 0 && <span className="category-conditions-count" aria-label={`적용된 조건 ${filterCount}개`}>{filterCount}</span>}
+            </button>
           </div>
 
           <div className="category-toolbar">

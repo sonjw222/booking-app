@@ -34,15 +34,14 @@ test.describe("센터 상세 — CTA · 공유 · 수업 탭", () => {
     const dialog = page.getByRole("alertdialog");
     await expect(dialog).toHaveCount(1);
     await expect(dialog.getByRole("heading", { name: "수강권이 필요해요" })).toBeVisible();
-    await expect(dialog).toContainText("이 센터에서 사용할 수 있는 수강권이 없어요.");
-    await expect(dialog).toContainText("먼저 수강권을 구매한 후 예약해 주세요.");
+    await expect(dialog).toContainText("이 센터의 수강권을 먼저 구매해주세요.");
     await expect(page.locator(".error-toast")).toHaveCount(0);                 // 상단 작은 토스트 대신
     const box = await dialog.boundingBox(); const vp = page.viewportSize()!;
     expect(Math.abs((box!.x + box!.width / 2) - vp.width / 2)).toBeLessThan(2);       // 가로 중앙
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
     await reserve.click();
-    await dialog.getByRole("button", { name: "취소" }).click();
+    await dialog.getByRole("button", { name: "닫기" }).click();
     await expect(dialog).toHaveCount(0);
     await reserve.click();
     await dialog.getByRole("button", { name: "수강권 구매하기" }).click();
@@ -131,6 +130,7 @@ test.describe("수업 상세", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.getByRole("button", { name: "뒤로가기" }).click();            // 새로고침 뒤: 문서 referrer 기반 → 센터 상세
     await expect(page).toHaveURL(/\/center\/c-near$/);
+    await page.waitForLoadState("networkidle");
     await page.goto("/center/c-near/class/nope");
     await expect(page.getByText("수업을 찾을 수 없어요")).toBeVisible();
   });
@@ -140,9 +140,9 @@ test.describe("홈 헤더 · 검색 · 하단 내비", () => {
   test("홈 최상단 문구는 '모하빗' (기존 문구 없음), 알림/로그인 버튼 정렬 유지", async ({ page }) => {
     await mockSupabase(page, { loggedIn: false });
     await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1, name: "모하빗" })).toBeVisible();
+    await expect(page.locator(".home-heading-row .location")).toHaveText("모하빗");
     await expect(page.getByText("오늘은 어떤 움직임을 찾나요")).toHaveCount(0);
-    const h = (await page.locator("h1.location").boundingBox())!; const l = (await page.getByRole("link", { name: "로그인" }).first().boundingBox())!;
+    const h = (await page.locator(".home-heading-row .location").boundingBox())!; const l = (await page.getByRole("link", { name: "로그인" }).first().boundingBox())!;
     expect(Math.abs((h.y + h.height / 2) - (l.y + l.height / 2))).toBeLessThan(24);
   });
 

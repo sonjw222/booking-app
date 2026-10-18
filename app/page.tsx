@@ -286,7 +286,7 @@ export default function Home() {
         {/* 헤더 */}
         <div className="header">
           <div className="header-row home-heading-row">
-            <h1 className="location">모하빗</h1>
+            <div className="location">모하빗</div>
             <div className="header-icons">
               {loggedIn === false && (
                 <a className="login-link" href="/login">로그인</a>

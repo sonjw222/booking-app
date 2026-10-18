@@ -3,7 +3,7 @@
 /*
   종목별 센터 목록의 필터·정렬 시트 (거리 범위 + 정렬)
   - 모바일: 하단 시트(SheetOverlay 공용: 포커스 트랩/ESC/배경 탭/드래그 닫기), 넓은 화면: 같은 시트가 가운데 카드로 표시된다(CSS).
-  - 선택은 즉시 목록에 반영된다(별도 적용 버튼 없음). 위치가 필요한 항목은 위치 상태에 따라 안내/재시도/위치 없이 보기를 제공한다.
+  - 선택은 즉시 목록에 반영되고, [적용]은 시트를 닫아 결과를 확인한다. 위치가 필요한 항목은 위치 상태에 따라 안내/재시도/위치 없이 보기를 제공한다.
 */
 import SheetOverlay from "./SheetOverlay";
 import UiIcon from "./UiIcon";
@@ -89,7 +89,7 @@ export default function CenterFilterSheet(p: Props) {
 
         <div className="cf-actions">
           <button type="button" className="ghost-btn" onClick={p.onReset}>초기화</button>
-          <button type="button" className="primary-btn" onClick={p.onClose}>{p.resultCount}곳 보기</button>
+          <button type="button" className="primary-btn" onClick={p.onClose} aria-label={`적용, 결과 ${p.resultCount}곳`}>적용</button>
         </div>
       </div>
     </SheetOverlay>

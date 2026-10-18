@@ -8,6 +8,7 @@ export const CENTERS = [
   { id: "c-far", name: "나무 요가 아카데미 — 매우 긴 센터 이름이 들어가도 레이아웃이 깨지지 않아야 합니다 한국어 센터명 테스트", categories: ["요가"], intro: null, address: "경기 고양시 덕양구 1", photo_url: null, latitude: 37.643, longitude: 126.978, created_at: "2026-10-03T00:00:00Z" },
   { id: "c-nocoord", name: "다온 요가", categories: ["요가"], intro: "위치 정보 없는 센터", address: null, photo_url: null, latitude: null, longitude: null, created_at: "2026-10-02T00:00:00Z" },
 ];
+export const LONG_ADDR_CENTER = { id: "c-longaddr", name: "긴주소센터", categories: ["요가"], intro: null, address: "경상북도울릉군울릉읍도동리독도이사부길가나다라마바사아자차카타파하긴주소 1", photo_url: null, latitude: 37.57, longitude: 126.98, created_at: "2026-10-02T12:00:00Z" };
 export const REVIEWS = [
   { center_id: "c-near", rating: 5 }, { center_id: "c-near", rating: 4 },
   { center_id: "c-far", rating: 5 }, { center_id: "c-far", rating: 5 }, { center_id: "c-far", rating: 4 },
@@ -16,13 +17,15 @@ const future = (days: number, hour = 19) => { const d = new Date(Date.now() + da
 export const CLASSES = [
   { id: "cls-1", center_id: "c-near", title: "아침 하타 요가", description: "호흡과 정렬에 집중하는 기본 하타 요가 수업이에요.\n초보자도 편하게 참여할 수 있어요.", class_format: "group", place: null, start_time: future(2, 7), end_time: future(2, 8), capacity: 10, status: "open", booking_deadline_min: 60, pass_selection_mode: "selected", rooms: { name: "A룸" }, centers: { name: "하늘 요가 스튜디오", categories: ["요가"], status: "approved" } },
   { id: "cls-2", center_id: "c-near", title: "아침 하타 요가", description: null, class_format: "group", place: null, start_time: future(9, 7), end_time: future(9, 8), capacity: 10, status: "open", booking_deadline_min: 60, pass_selection_mode: "all", rooms: null, centers: { name: "하늘 요가 스튜디오", categories: ["요가"], status: "approved" } },
+  { id: "cls-4", center_id: "c-near", title: "폐강된 수업", description: "폐강", class_format: "group", place: null, start_time: future(4, 10), end_time: future(4, 11), capacity: 10, status: "cancelled", booking_deadline_min: null, pass_selection_mode: "all", rooms: null, centers: { name: "하늘 요가 스튜디오", categories: ["요가"], status: "approved" } },
+  { id: "cls-5", center_id: "c-near", title: "정원 마감 수업", description: null, class_format: "group", place: null, start_time: future(5, 12), end_time: future(5, 13), capacity: 2, status: "open", booking_deadline_min: null, pass_selection_mode: "all", rooms: null, centers: { name: "하늘 요가 스튜디오", categories: ["요가"], status: "approved" } },
   { id: "cls-3", center_id: "c-near", title: "저녁 빈야사", description: null, class_format: "private", place: "2층 스튜디오", start_time: future(3, 19), end_time: future(3, 20), capacity: 1, status: "open", booking_deadline_min: null, pass_selection_mode: "all", rooms: null, centers: { name: "하늘 요가 스튜디오", categories: ["요가"], status: "approved" } },
 ];
 
 function tableOf(url: URL): string { return url.pathname.replace(/^\/rest\/v1\//, "").split("/")[0]; }
 const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(body) });
 
-export type MockOpts = { manyCenters?: boolean; loggedIn?: boolean; hasPass?: boolean; failCenters?: boolean; noReviews?: boolean; reviewsFail?: boolean };
+export type MockOpts = { longAddress?: boolean; manyCenters?: boolean; withNextReservation?: boolean; loggedIn?: boolean; hasPass?: boolean; failCenters?: boolean; noReviews?: boolean; reviewsFail?: boolean };
 export const requests: string[] = [];
 
 export async function mockSupabase(page: Page, opts: MockOpts = {}) {
@@ -47,20 +50,21 @@ export async function mockSupabase(page: Page, opts: MockOpts = {}) {
       const idEq = q.get("id")?.replace("eq.", "");
       let rows: Record<string, unknown>[] = opts.manyCenters
         ? Array.from({ length: 24 }, (_, i) => ({ ...CENTERS[i % CENTERS.length], id: `c-${i}`, name: `센터 ${String(i).padStart(2, "0")}`, created_at: new Date(Date.now() - i * 1000).toISOString() }))
-        : [...CENTERS];
+        : [...CENTERS, ...(opts.longAddress ? [LONG_ADDR_CENTER] : [])];
       if (idEq) rows = rows.filter((c) => c.id === idEq).map((c) => ({ ...c, phone: null, sns: null, intro_blocks: [], pay_methods: null, review_point: 1000, status: "approved" }));
       return json(route, wrap(rows));
     }
     if (t === "center_reviews") { if (opts.reviewsFail) return json(route, { message: "boom" }, 500); return json(route, opts.noReviews ? [] : REVIEWS); }
     if (t === "classes") {
       const idEq = q.get("id")?.replace("eq.", "");
-      if (idEq) { const row = CLASSES.find((c) => c.id === idEq); return json(route, wrap(row ? [row] : [])); }
+      const centerEq = q.get("center_id")?.replace("eq.", "");
+      if (idEq) { const row = CLASSES.find((c) => c.id === idEq && (!centerEq || c.center_id === centerEq)); return json(route, wrap(row ? [row] : [])); }
       const title = q.get("title")?.replace("eq.", "");
-      let rows = CLASSES.filter((c) => c.center_id === (q.get("center_id")?.replace("eq.", "") ?? c.center_id));
+      let rows = CLASSES.filter((c) => c.center_id === (q.get("center_id")?.replace("eq.", "") ?? c.center_id) && (q.get("status") ? c.status === q.get("status")!.replace("eq.", "") : true));
       if (title) rows = rows.filter((c) => c.title === title);
       return json(route, rows);
     }
-    if (t === "class_reservation_counts") return json(route, CLASSES.map((c) => ({ class_id: c.id, confirmed_count: c.id === "cls-1" ? 4 : 0 })));
+    if (t === "class_reservation_counts") return json(route, CLASSES.map((c) => ({ class_id: c.id, confirmed_count: c.id === "cls-1" ? 4 : c.id === "cls-5" ? 2 : 0 })));
     if (t === "class_allowed_products") return json(route, [{ class_id: "cls-1", products: { name: "하타 10회권" } }, { class_id: "cls-1", products: { name: "기간제 1개월" } }]);
     if (t === "profiles") return json(route, opts.loggedIn ? [{ id: "p1" }] : []);
     if (t === "memberships") return json(route, opts.loggedIn && opts.hasPass ? [{ id: "m1", remaining_count: 5, expires_at: "2099-01-01", status: "active", products: { product_kind: "pass" } }] : []);
