@@ -17,7 +17,7 @@ const css = cssRaw.replace(/\/\*[\s\S]*?\*\//g, "");
 
 describe("센터 상세 화면 구조 — back button / hero(사진 또는 placeholder 배지) / 탭", () => {
   it("뒤로가기 버튼(.side)과 .center-hero가 둘 다 존재한다", () => {
-    expect(page).toContain('<a className="side" aria-label="뒤로가기" href={backHref}>‹</a>');
+    expect(page).toContain("<BackButton fallbackHref={backHref} preferFallback={!!(reserveClassId && reserveDate)} />");
     expect(page).toContain('<div className="center-hero">');
   });
 

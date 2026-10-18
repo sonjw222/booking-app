@@ -7,6 +7,11 @@ import "./tests/e2e/fixtures/env"; // .env.test.local 로드 + 필수 env 존재
 //   동시에 로그인/로그아웃하면 서로 꼬일 수 있음 — tests/integration/setup.ts의 authMutex와
 //   같은 문제).
 // - Chromium 하나만 사용한다(Firefox/WebKit/모바일은 아직 추가하지 않음).
+// RUN_ADMIN_PAGINATION=1은 globalSetup의 격리 DB 기본 거부를 "읽기 전용 관리자 페이지네이션 러너"에 한해 면제한다.
+// 환경변수만으로 다른 스펙(UI가 예약·결제·설정을 쓰는 것들)이 공유 DEV에서 실행되지 않도록, 이 모드에서는 그 스펙 하나만 선택되게 고정한다.
+const ADMIN_PAGINATION_ONLY = process.env.RUN_ADMIN_PAGINATION === "1";
+const ADMIN_PAGINATION_SPEC = /production-readiness[\\/]admin-center-pagination\.spec\.ts$/;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   // 격리 DB가 확인되지 않으면(읽기 전용 관리자 페이지네이션 러너 제외) 첫 테스트·setup 프로젝트 전에 중단한다. `--list`에서는 실행되지 않는다.
@@ -43,6 +48,7 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["setup"],
       testIgnore: /auth\.setup\.ts/,
+      ...(ADMIN_PAGINATION_ONLY ? { testMatch: ADMIN_PAGINATION_SPEC } : {}),
     },
   ],
   webServer: {

@@ -15,9 +15,12 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { updateRootNavState } from "../../lib/navState";
 import { setEdgeSwipeEnabled } from "../../lib/edgeSwipe";
+import { trackAppHistory } from "../../lib/appHistory";
 
 export default function NavigationPolicy() {
   const pathname = usePathname();
+
+  useEffect(() => { trackAppHistory(pathname); }, [pathname]);
 
   useEffect(() => {
     const isRoot = updateRootNavState(pathname);

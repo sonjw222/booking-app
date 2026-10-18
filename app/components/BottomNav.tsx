@@ -83,6 +83,8 @@ export default function BottomNav() {
           Next.js <Link>의 replace prop은 router.replace()를 써서 history.replaceState로
           이동한다(pushState와 달리 WKWebView 뒤로가기 목록에 새 항목을 안 남김) — 탭
           5개 전부 동일하게 적용. */}
+      {/* 내비게이션 뒤쪽의 점진 블러(아래 → 위로 사라짐). 클릭을 가로채지 않는 장식 레이어(pointer-events:none, aria-hidden). */}
+      <div className={`bottom-nav-fade ${keyboardOpen ? "keyboard-hidden" : ""}`} aria-hidden="true" />
       <nav className={`bottom-nav ${keyboardOpen ? "keyboard-hidden" : ""}`} aria-label="회원 주요 메뉴">
         <Link className={`nav-item ${is("/") ? "active" : ""}`} href="/" replace aria-current={is("/") ? "page" : undefined}>
           <div className="nav-icon"><UiIcon name="home" /></div>홈

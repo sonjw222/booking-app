@@ -38,6 +38,7 @@ import RichTextEditor from "../../components/RichTextEditor";
 import UiIcon from "../../components/UiIcon";
 import EmptyState from "../../components/EmptyState";
 import BackButton from "../../components/BackButton";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import AppButton from "../../components/AppButton";
 import { loginHrefWithReturnToHere } from "../../../lib/postLoginReturn";
 import { shareLink } from "../../../lib/nativeShare";
@@ -97,6 +98,8 @@ function CenterDetailContent() {
   const [allowedPasses, setAllowedPasses] = useState<Record<string, string[]>>({});
   const [hasPass, setHasPass] = useState(false);
   const [buySheet, setBuySheet] = useState(false);
+  // 수강권이 없는 회원이 예약하기를 눌렀을 때의 안내 다이얼로그(클라이언트 안내일 뿐 — 실제 예약 가능 여부는 서버가 다시 검증한다).
+  const [needPassDialog, setNeedPassDialog] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(0);
   const [passRules, setPassRules] = useState<Record<string, ScheduleRule[]>>({});
   const [rulesLoadFailed, setRulesLoadFailed] = useState(false);   // 예약조건 "조회 실패"(빈 결과와 구분)
@@ -197,10 +200,9 @@ function CenterDetailContent() {
   function won(n: number) { return n.toLocaleString("ko-KR") + "원"; }
 
   function handleReserveClick() {
-    // 수강권 없으면 구매 안내
+    // 수강권 없으면 구매 안내 다이얼로그(이미 열려 있으면 다시 열지 않는다)
     if (!hasPass) {
-      setError("이 센터의 수강권이 없어요. 먼저 수강권을 구매해주세요.");
-      setBuySheet(true);
+      setNeedPassDialog(true);
       return;
     }
     window.location.href = `/reservation?center=${centerId}`;
@@ -609,7 +611,7 @@ function CenterDetailContent() {
       )}
 
       <div className="back-header center-detail-head">
-        <a className="side" aria-label="뒤로가기" href={backHref}>‹</a>
+        <BackButton fallbackHref={backHref} preferFallback={!!(reserveClassId && reserveDate)} />
         <div className="title">센터</div>
         <div className="side" />
       </div>
@@ -719,7 +721,7 @@ function CenterDetailContent() {
             const full = c.reserved >= c.capacity;
             const passes = allowedPasses[c.title];
             return (
-              <button key={c.id} className="center-class-row" onClick={handleReserveClick}>
+              <Link key={c.id} className="center-class-row" href={`/center/${centerId}/class/${c.id}`} prefetch={false}>
                 <div className="center-class-main">
                   <div className="center-class-title">{c.title}</div>
                   <div className="center-class-when">가장 빠른 일정 · {c.startText}</div>
@@ -732,7 +734,7 @@ function CenterDetailContent() {
                 <div className={`center-class-cap ${full ? "full" : ""}`}>
                   {full ? "대기" : `${c.reserved}/${c.capacity}`}
                 </div>
-              </button>
+              </Link>
             );
           })}
         </div>
@@ -804,9 +806,21 @@ function CenterDetailContent() {
 
       {/* 하단 고정 바: 예약하기 + 구매하기 */}
       <div className="center-bottom-bar">
-        <button className="center-bar-btn buy" onClick={() => setBuySheet(true)}>수강권 구매</button>
-        <button className="center-bar-btn reserve" onClick={handleReserveClick}>예약하기</button>
+        {/* 버튼 위계: 지금 해야 할 일이 주(Primary, 네이비), 다른 하나는 보조(Secondary, 테두리). 수강권이 없으면 구매가, 있으면 예약이 주 동작이다. */}
+        <button type="button" className={`center-bar-btn buy ${hasPass ? "secondary" : "primary"}`} onClick={() => setBuySheet(true)}>수강권 구매하기</button>
+        <button type="button" className={`center-bar-btn reserve ${hasPass ? "primary" : "secondary"}`} onClick={handleReserveClick}>예약하기</button>
       </div>
+
+      <ConfirmDialog
+        open={needPassDialog}
+        title="수강권이 필요해요"
+        icon="ticket"
+        description="이 센터의 수강권을 먼저 구매해주세요."
+        confirmLabel="수강권 구매하기"
+        cancelLabel="닫기"
+        onCancel={() => setNeedPassDialog(false)}
+        onConfirm={() => { setNeedPassDialog(false); setBuySheet(true); }}
+      />
     </div>
   );
 }

@@ -15,7 +15,7 @@ import {
 import type { CenterSettings } from "../../../lib/settings";
 import { getFixtureAdminClient } from "../../integration/setup";
 import { MANAGER_AUTH_FILE, MEMBER_AUTH_FILE } from "../fixtures/authFiles";
-import { makeSupabaseStore, ownsClass, prepareOwnedMembershipCleanup, executeOwnedMembershipCleanup, type OwnershipContext } from "../fixtures/ownedMembershipCleanup";
+import { makeSupabaseStore, ownsClass, prepareRunOwnedCleanup, executeRunOwnedCleanup, type RunContext } from "../fixtures/runOwnedProductCleanup";
 import { assertIsolatedTestDb } from "../fixtures/isolatedTestDbGuard";
 import { gotoManagerClasses, clickCreateClass, parkPointerOutsideRail } from "../fixtures/pageHelpers";
 
@@ -81,23 +81,20 @@ let userA: TestUser;
 let centerAId: string;
 let originalSettings: CenterSettings;
 let buyProductId: string;
-const BUY_PRODUCT_NAME = "TEST4 신규구매전용패스";
+// 실행별 UUID — 이 실행이 만든 수업은 제목에, 구매 테스트 상품은 이름에 RUN_SHORT가 들어간다.
+// 실행마다 새 상품을 만들어 이전 실행·다른 테스트·실제 데이터가 이 상품의 수강권을 가질 수 없게 한다(시작 시 아무 것도 지우지 않는다).
+const RUN_SHORT = randomUUID().slice(0, 8);
+const RUN_STARTED_AT_MS = Date.now();
+const BUY_PRODUCT_NAME = `TEST4 신규구매전용패스 ${RUN_SHORT}`;
 const GOODS_PRODUCT_NAME = "E2E 테스트 대여품 상품"; // getOrCreateTestGoodsProduct의 고정 이름
 const createdClassIds: string[] = [];
-// 실행별 UUID — 이 실행이 만든 수업은 제목에 RUN_SHORT가 들어가고, 정리는 그 소유권을 확인한 것만 건드린다.
-const RUN_ID = randomUUID();
-const RUN_SHORT = RUN_ID.slice(0, 8);
-const RUN_STARTED_AT_MS = Date.now();
 let isolatedDbConfirmed = false;
-let preexistingBuyMembershipIds = new Set<string>(); // 실행 시작 시점에 이미 있던 (userA, TEST4 상품) 수강권 — 절대 지우지 않는다
 
-/* TEST4 정리 — 예전 cleanupBuyProductMemberships는 (userA, TEST4 상품)의 membership을 전부 찾아 payments → memberships를 지웠다.
-   그 방식은 (1) 이 실행 이전부터 있던 수강권과 그 결제 내역까지 지울 수 있었고, (2) reservations를 지우지 않아
-   그 수강권으로 예약된 행이 남으면 reservations_membership_id_fkey 위반이 났다.
-   지금은 시작 시점 스냅샷에 없던(=이 실행의 구매로 생긴) 수강권만, 이 실행이 만든 수업의 예약·그 결제와 함께 지운다
-   (ownedMembershipCleanup.ts). 그 밖의 참조가 있으면 지우지 않고 실패로 알린다. 기존 수강권은 건드리지 않는다. */
-function ownershipContext(): OwnershipContext {
-  return { runId: RUN_ID, profileId: userA.profileId, productId: buyProductId, preexistingMembershipIds: preexistingBuyMembershipIds, ownedClassIds: new Set(createdClassIds), runStartedAtMs: RUN_STARTED_AT_MS };
+/* TEST4 정리 — 이 실행이 만든 것만, 소유를 증명한 경우에만 지운다(runOwnedProductCleanup.ts).
+   예전 cleanupBuyProductMemberships는 (userA, 고정 이름 상품)의 수강권을 전부 지웠고 reservations는 지우지 않아,
+   그 수강권을 쓴 예약이 남으면 reservations_membership_id_fkey 위반으로 beforeAll에서 실패했다(CI E2E 3/4). */
+function runContext(): RunContext {
+  return { runShort: RUN_SHORT, profileId: userA.profileId, centerId: centerAId, productId: buyProductId, ownedClassIds: new Set(createdClassIds), runStartedAtMs: RUN_STARTED_AT_MS };
 }
 
 // 이 실행의 수업만 정리한다(제목의 RUN_SHORT + 테스트 센터 확인). 소유를 확인하지 못하면 건드리지 않는다.
@@ -117,14 +114,14 @@ test.afterAll(async () => {
   // 격리 DB 확인이 안 되면(공유 DEV/Production) 어떤 삭제도 하지 않는다 — beforeAll이 건너뛰어도 afterAll은 실행되므로 여기서도 막는다.
   if (!isolatedDbConfirmed) return;
   assertIsolatedTestDb(process.env);
-  // 순서가 중요하다: ① 소유 증명(read-only, 이 실행의 예약이 남아 있을 때) → ② 이 실행의 수업 삭제 → ③ 설정 복원 → ④ 증명된 수강권만 삭제.
+  // 순서: ① 소유 증명(읽기 전용 — 이 실행의 예약이 남아 있을 때) → ② 이 실행의 수업 삭제 → ③ 설정 복원 → ④ 증명된 데이터만 삭제.
   const store = makeSupabaseStore(getFixtureAdminClient());
-  const plan = buyProductId ? await prepareOwnedMembershipCleanup(store, ownershipContext()) : null;
+  const plan = buyProductId ? await prepareRunOwnedCleanup(store, runContext()) : null;
   const notOwned = await cleanupOwnedClasses();
   if (originalSettings) await saveSettingsAdmin(centerAId, originalSettings);
-  if (plan) await executeOwnedMembershipCleanup(store, plan, ownershipContext());
+  if (plan) await executeRunOwnedCleanup(store, plan, runContext());
   if (plan?.refused.length || notOwned.length) {
-    throw new Error(`TEST4 정리 거부(소유 미증명 — 수강권·결제는 삭제하지 않음): ${JSON.stringify({ refused: plan?.refused, notOwnedClassIds: notOwned })}`);
+    throw new Error(`TEST4 정리 거부(소유 미증명 — 수강권·결제·상품을 삭제하지 않음): ${JSON.stringify({ refused: plan?.refused, notOwnedClassIds: notOwned })}`);
   }
 });
 
@@ -147,15 +144,9 @@ test.beforeAll(async () => {
     dailyBookLimitEnabled: false,
   });
 
-  // TEST4 전용 — userA가 아직 안 가진 상품이어야 "구매 전 사용 가능한 수강권 없음"이 성립한다.
-  // 이전에는 여기서 (userA, 상품)의 수강권을 전부 지웠지만, 이제는 아무 것도 지우지 않고 스냅샷만 만든다(읽기 전용).
-  // 이미 가진 수강권이 있으면 TEST4는 BLOCKED로 건너뛴다(삭제로 "치유"하지 않음 — 소유를 증명할 수 없다).
+  // TEST4 전용 — 이 실행 전용 새 상품(이름에 RUN_SHORT)이라 userA는 아직 갖고 있지 않다. 아무 것도 지우지 않는다.
   const buyProduct = await getOrCreateTestPassProductNamed(centerAId, BUY_PRODUCT_NAME);
   buyProductId = buyProduct.id;
-  const { data: existingMems, error: snapErr } = await getFixtureAdminClient()
-    .from("memberships").select("id").eq("profile_id", userA.profileId).eq("product_id", buyProductId);
-  if (snapErr) throw new Error(`TEST4 수강권 스냅샷 조회 실패: ${snapErr.message}`);
-  preexistingBuyMembershipIds = new Set((existingMems ?? []).map((m) => m.id as string));
 
   // TEST5 전용 — goods가 pass 목록에 절대 안 보이는지 검증하려면 실제로 goods를 보유해야
   // "안 보임"이 의미 있는 확인이 된다(get-or-create + self-healing, 기존 패턴 재사용).
@@ -318,7 +309,11 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
 });
 
 test("TEST4: 신규 수업 → 사용 가능 수강권 없음 → 그 자리에서 구매 → 새로고침 포함 즉시 사용 가능 → 예약 성공 (실브라우저)", async ({ page, browser }) => {
-  test.skip(preexistingBuyMembershipIds.size > 0, `BLOCKED: userA가 이미 TEST4 상품 수강권 ${preexistingBuyMembershipIds.size}개를 보유 — "구매 전 사용 가능 수강권 없음" 전제가 깨져 실행 불가(자동 삭제하지 않음, PASS 아님)`);
+  // 이 실행 전용 새 상품이라 보통 0개 — 0이 아니면 전제가 깨진 것이므로 삭제로 "치유"하지 않고 BLOCKED로 건너뛴다(PASS 아님).
+  const { count: ownedBefore, error: ownedErr } = await getFixtureAdminClient()
+    .from("memberships").select("id", { count: "exact", head: true }).eq("profile_id", userA.profileId).eq("product_id", buyProductId);
+  if (ownedErr) throw new Error(`TEST4 사전 보유 확인 실패: ${ownedErr.message}`);
+  test.skip((ownedBefore ?? 0) > 0, `BLOCKED: userA가 이 실행 전용 TEST4 상품 수강권을 이미 ${ownedBefore}개 보유 — "구매 전 사용 가능 수강권 없음" 전제가 깨져 실행 불가(자동 삭제하지 않음, PASS 아님)`);
   const uniqueTitle = `NEWCLASS-BUY-${RUN_SHORT}-${Date.now()}`;
   const dateStr = futureKstDateStr(92);
 

@@ -121,6 +121,28 @@ describe("모든 E2E 쓰기 진입점이 훅을 거친다(정적)", () => {
   });
   it("admin 쓰기를 하는 spec은 모두 env.ts 훅이 설치되는 playwright.config 아래에서만 실행된다(별도 playwright 설정 없음)", () => {
     const configs = readdirSync(".").filter((n) => /^playwright.*\.config\.[cm]?[jt]s$/.test(n));
-    expect(configs).toEqual(["playwright.config.ts"]);
+    // #230(UX)이 추가한 두 설정은 공유 DEV를 쓰지 않는 UI 검증 전용이다 — 허용 목록에 명시하고, 아래 테스트가 그 전제(e2e 스펙 미실행·실제 Supabase 미접속)를 확인한다.
+    expect(configs.sort()).toEqual(["playwright.config.ts", "playwright.mock.config.ts", "playwright.real.config.ts"]);
+  });
+  it("UI 전용 설정(mock/real)은 tests/e2e를 실행하지 않고 실제 Supabase 프로젝트를 가리키지 않는다(가짜 ref 또는 로컬 127.0.0.1만)", () => {
+    for (const [file, dir] of [["playwright.mock.config.ts", "./tests/ui-mock"], ["playwright.real.config.ts", "./tests/ui-real"]] as const) {
+      const cfg = readFileSync(file, "utf8");
+      expect(cfg).toContain(`testDir: "${dir}"`);
+      expect(cfg).not.toContain("tests/e2e");
+      for (const m of cfg.matchAll(/https?:\/\/([a-z0-9.-]+)/gi)) {
+        const host = m[1].toLowerCase();
+        if (host.endsWith(".supabase.co")) expect(host).toBe("abcdefghij0123456789.supabase.co");
+      }
+      for (const ref of ALWAYS_DENIED_PROJECT_REFS) expect(cfg).not.toContain(ref);
+    }
+  });
+});
+
+describe("RUN_ADMIN_PAGINATION 면제는 페이지네이션 스펙 하나로 고정된다 (환경변수만으로 다른 스펙 실행 불가)", () => {
+  const cfg = readFileSync("playwright.config.ts", "utf8");
+  it("면제 모드에서는 chromium 프로젝트 testMatch가 admin-center-pagination.spec.ts뿐이다", () => {
+    expect(cfg).toContain('process.env.RUN_ADMIN_PAGINATION === "1"');
+    expect(cfg).toMatch(/ADMIN_PAGINATION_ONLY \? \{ testMatch: ADMIN_PAGINATION_SPEC \}/);
+    expect(cfg).toMatch(/admin-center-pagination\\\.spec\\\.ts\$/);
   });
 });

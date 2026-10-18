@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-18 — PR #229 최신 main(#230·#231) 통합 (테스트·CI 전용)
+- `new-class-creation.spec.ts` 충돌 해결: #231의 실행별 새 상품 + `runOwnedProductCleanup.ts`(소유 증명 후 삭제)를 정리 로직으로 유지하고, #229의 격리 DB 가드(BLOCKED 건너뛰기)·실행 UUID 수업 제목·`ownsClass` 수업 소유 확인을 결합했다. 수강권 정리 안전성이 더 약한 #229의 `ownedMembershipCleanup.ts`(고정 상품 + 스냅샷)는 같은 목적을 중복해 제거했고, 가드·정적 안전 테스트는 `tests/unit/e2eIsolationGuard.test.ts`로 보존했다. 앱 코드·SQL 변경 없음.
+
 ## 2026-10-16 — PR #229 안전성 보완: 검색 중 이전 카드 잔존 수정, 페이지네이션 E2E 검증 강화, 수강권 정리 소유권 검증 (웹 코드·테스트, SQL 없음)
 - 앱: `app/admin/centers/page.tsx` — 검색어 입력 시(debounce 300ms 대기·로딩 중)와 검색어 지우기 시 이전 결과의 카드·승인/반려 버튼이 남던 문제를 `setCenters([])`+`setLoading(true)`로 수정(탭 전환과 같은 방식, `requestId` 가드·더 보기 동작 불변). 카드에 `data-center-id` 속성 추가(E2E가 화면 id와 서버 응답 id를 비교).
 - 오프라인 테스트: `adminCenters.searchStale.test.ts`(검색 잔존 4건 — 수정 전 실패 확인, 응답 순서 역전은 "A 요청 보류 → B 완료 → A 뒤늦게 전달"로 검색·탭 각각, 더 보기 회귀), `adminPaginationVerify.test.ts`(검증 규칙 + 실제 화면·가짜 RPC 서버로 상태 3×0/30/31/61건), `adminPaginationSummary.test.ts`.
@@ -27,6 +30,31 @@
 - 테스트: `tests/unit/adminCenters.tabSwitchStale.test.ts`(실패 후 잔존, 응답 전 잔존, 빠른 탭 전환 역전 응답).
 - CI 안전화: PR #229의 DB 쓰기 경로(`scripts/ci/adminPaginationFixture.mjs`: 관리자 권한 임시 승격 + 센터 93개 생성/삭제, `test.yml`의 prepare/ON/cleanup 단계)를 제거하고 `tests/unit/adminPaginationCiSafety.test.ts`로 재유입을 정적 차단. ON/OFF 검증은 읽기 전용 수동 러너 `npm run test:e2e:admin-pagination`(별도 서버 프로세스, 전용 모드에서 서버 재사용 off)로 분리. spec 계정은 기존 `TEST_PLATFORM_ADMIN_*`. Playwright `webServer`는 `npm run dev`라 사전 빌드는 불필요.
 
+
+## 2026-10-18 (2) — 독립 리뷰 후속 보완
+- 수업 상세: 지정(selected) 수업의 허용 수강권 목록을 읽을 수 없으면(비로그인 RLS가 행을 숨김, 조회 실패, 빈 결과) "모든 수강권 가능"으로 표시하지 않는다 — 비로그인은 "이용 가능한 수강권은 로그인 후 확인해 주세요.", 실패/확인 불가는 각각 구분 안내. "모든 수강권 가능"은 all 모드일 때만. 강사 RPC(anon 실행 불가)는 오류를 "강사 없음"으로 단정하지 않고 로그인 안내. 예약 인원 집계 실패 시 잔여 자리는 말하지 않는다.
+- 후기 집계: 1,000행 페이지 조회에 `order=id` 고유 정렬 추가(페이지 간 중복·누락 방지).
+- 다크 모드 주 CTA에 기존 토큰(--accent) 경계선 추가(채움 대비 2.99:1 → 경계 포함 3:1 이상).
+- QA: 격리 PostgREST 스키마를 운영 권한 모델(auth.uid()·class_allowed_products RLS, class_trainer_names anon 실행 불가)로 재현, 센터 상세 공개 RPC 보강(이전 스크린샷의 "센터를 찾을 수 없어요"는 QA 스키마에 센터 상세가 쓰는 공개 RPC가 없어서 — 제품 코드 문제 아님), 프로덕션 빌드로 스크린샷 재촬영, 촬영 전 센터명·공유·구매·예약 단언.
+
+## 2026-10-18 — UX 요구사항 대조 보완
+- 새로고침 뒤 뒤로가기가 홈으로 튀던 결함 수정: `lib/appHistory.ts`가 같은 탭(sessionStorage)에 직전 앱 내 화면을 기록(같은 경로 재로드만 인정, 다른 경로 직접 진입은 새로 시작).
+- 종목 목록 "검색 조건" 버튼 복원(검색 화면 이동 없이 필터·정렬 시트를 연다), 시트 확인 버튼을 "적용"으로, 적용된 조건 수 표시.
+- 수강권 미보유 팝업 문구/버튼을 요청 문구로 정렬("이 센터의 수강권을 먼저 구매해주세요." / 닫기). 홈 브랜드명은 제목 태그가 아닌 일반 요소(페이지 h1 중복 방지).
+- 긴 주소/보조 정보 줄바꿈·넘침 방지, 넓은 화면에서 보조 정보가 줄바꿈되지 않도록 고정.
+- 검증 추가: 격리 실데이터(Docker PostgreSQL + PostgREST) 브라우저 테스트 `tests/ui-real/`(후기 2,500건 집계·거리·수업 상세 임베드/RPC), 반응형 폭 5종·위치 실패 유형·내비 블러/키보드/z-index·뒤로가기 경로별 mock 테스트.
+
+## 2026-10-17 — Discovery UX polish (종목별 센터 필터·정렬, 수업 상세, 하단 내비, 뒤로가기)
+- 종목별 센터 목록: 검색어·거리(1/3/5/10/20km)·정렬(추천/거리/평점/이름) 단일 상태 모델(`lib/centerDiscovery.ts`, URL 쿼리 q/r/s), 필터·정렬 시트(`CenterFilterSheet`), 위치 거부 시 안내/재시도/위치 없이 보기, 평점·거리·지역은 실제 데이터만(이름 오른쪽, 모바일은 아래 줄). 평점은 `center_reviews` 클라이언트 집계(DB 변경 없음).
+- 센터 상세: 하단 CTA 위계(수강권 없으면 구매가 Primary, 있으면 예약이 Primary), 공유 버튼 gutter, 뒤로가기는 BackButton(앱 내 이력 추적 `lib/appHistory.ts`) — 종목 목록으로 복귀하며 필터·스크롤 복원(`lib/listScroll.ts`), 검색 결과도 복원.
+- 수업 탭 → 수업 상세 라우트(`/center/[id]/class/[classId]`) → 예약하기/수강권 구매하기(기존 URL 계약 유지).
+- 수강권 없는 회원의 예약하기: 중앙 Dialog(`ConfirmDialog` icon prop 추가). 서버 검증 변경 없음.
+- 하단 내비: 선택 탭 네이비 pill + 아래→위 점진 블러 레이어, 홈 헤더 문구 "모하빗", 검색 화면 상단 여백.
+- 테스트: `tests/unit/centerDiscovery.test.ts`, 목(mock) 네트워크 Playwright(`playwright.mock.config.ts`, `tests/ui-mock/*`).
+
+## 2026-10-18 — E2E 3/4 TEST4 정리 로직 안정화(테스트 전용)
+- **원인**: `new-class-creation.spec.ts`의 `cleanupBuyProductMemberships`가 (테스트 회원, 고정 이름 상품)의 수강권을 payments → memberships 순으로만 지웠다. 그 수강권을 쓴 예약이 남아 있으면 `reservations_membership_id_fkey` 위반으로 `beforeAll`(브라우저 실행 전)에서 실패했고, 고정 이름 상품이라 과거 실행 잔여물이 계속 걸렸다. 프로필·상품이 같다는 이유만으로 "내 것"이라 보고 지우는 것도 문제였다.
+- **수정**: 실행마다 이름에 실행 ID(RUN_SHORT)가 든 새 상품을 만들어 과거 잔여물과 겹치지 않게 하고(시작 시 아무 것도 삭제하지 않음), 종료 시 소유를 증명한 경우에만(상품 이름·수강권 프로필/생성 시각·예약은 이 실행의 수업·결제 프로필/시각·그 밖의 참조 0건) reservations → payments → memberships → product 순으로 삭제한다. 하나라도 증명하지 못하면 아무 것도 지우지 않고 실패로 알린다. 새 모듈 `tests/e2e/fixtures/runOwnedProductCleanup.ts`, 단위·격리 PostgreSQL(PGlite, 실제 FK) 테스트 추가. 앱 코드·SQL·RLS 변경 없음.
 
 ## 2026-10-11 — 진도 기록 팝업 날짜 캘린더 잘림 수정 (웹 코드만, SQL 없음)
 - 원인: `DatePicker`의 팝오버가 `.app-date-picker` 안에서 `position:absolute`로 그려져 `.sheet`(`overflow-y:auto`, 진도 기록은 `.prog-add-sheet`)의 클리핑 영역에 갇혔다. 하네스 실측: 수정 전 날짜 31개 중 모바일 10개 / 태블릿·데스크톱 28개가 클릭 불가.

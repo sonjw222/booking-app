@@ -199,6 +199,7 @@ export type SearchCenter = {
   name: string;
   categories: string[];
   intro: string | null;
+  address?: string | null;
   photoUrl: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -307,13 +308,14 @@ export async function searchHome(keyword: string): Promise<{ centers: SearchCent
 export async function fetchCentersByCategory(category: string): Promise<SearchCenter[]> {
   const { data, error } = await supabase
     .from("centers")
-    .select("id, name, categories, intro, photo_url, latitude, longitude")
+    .select("id, name, categories, intro, address, photo_url, latitude, longitude")
     .eq("status", "approved")
-    .contains("categories", [category]);
+    .contains("categories", [category])
+    .order("created_at", { ascending: false });   // 추천순(기본)을 새로고침해도 같은 순서로 고정
   if (error) throw new Error("센터를 불러오지 못했어요: " + error.message);
   return (data ?? []).map((c: any) => ({
     id: c.id, name: c.name, categories: c.categories ?? [],
-    intro: c.intro, photoUrl: c.photo_url,
+    intro: c.intro, address: c.address ?? null, photoUrl: c.photo_url,
     latitude: typeof c.latitude === "number" ? c.latitude : null,
     longitude: typeof c.longitude === "number" ? c.longitude : null,
   }));

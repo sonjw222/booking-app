@@ -7,6 +7,11 @@
 - P1: `new-class-creation.spec.ts`의 TEST4는 userA가 이미 TEST4 상품 수강권을 가지면 BLOCKED(자동 삭제하지 않음). 과거 실행 잔여 수강권은 DEV 정리 SQL을 별도 승인 후 사람이 실행해야 함.
 - P2: 격리 테스트 DB 전까지 live CI 7개는 `false &&`로 차단 상태 유지.
 
+## 2026-10-17 Discovery UX 후속
+- P2: 평점 집계는 클라이언트(center_reviews 행 조회)다. 후기가 많아지면 센터별 평균/건수를 반환하는 읽기 전용 RPC/뷰(예: `center_rating_summary(center_ids uuid[])`)로 이전(SQL 제안만, 미작성).
+- P3: 즐겨찾기 기능은 코드에 없어 "즐겨찾기에서 센터 진입" 뒤로가기는 대상이 없음(기능 추가 시 BackButton 이력 규칙 그대로 적용).
+- P3: iOS/Android 실기기에서 하단 내비 블러 레이어 성능·safe-area·키보드 동작 수동 QA.
+
 ## 2026-10-11 날짜 선택 팝오버 후속 (진도 기록 캘린더 수정 PR 범위 밖)
 - **P2**: `MonthPicker`는 아직 `position:absolute` 팝오버라 `.sheet` 안에서 같은 방식으로 잘릴 수 있다 — `DatePicker`와 같은 포털/`computePopoverPosition` 적용 검토(영향 화면 목록 확인 후).
 - **P3**: 실기기(iOS/Android) 확인과 키보드 화살표 이동(날짜 그리드)은 미구현/미검증.
