@@ -49,6 +49,13 @@ export default function SearchPage() {
     } catch { /* 잘못된 저장값은 무시 */ }
   }, []);
 
+  // 하이드레이션이 끝나기 전에(느린 기기·느린 네트워크) 사용자가 입력창에 이미 글자를 쳤다면, React 상태에는 반영되지 않아 검색이 시작되지 않고 입력만 남는다.
+  // 마운트 시 DOM의 현재 값을 한 번 읽어 상태로 가져온다(빈 값이면 아무것도 하지 않는다).
+  useEffect(() => {
+    const typed = (document.getElementById("discovery-search") as HTMLInputElement | null)?.value ?? "";
+    if (typed) void Promise.resolve().then(() => setKw((prev) => prev || typed));
+  }, []);
+
   const restoredState = useRef(false);
   useEffect(() => {
     // 뒤로가기(popstate)로 돌아온 경우에만 복원한다. 처음 여는 찾기 탭은 항상 빈 검색창.

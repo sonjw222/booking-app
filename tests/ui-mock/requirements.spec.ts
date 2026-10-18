@@ -79,9 +79,9 @@ test.describe("요구사항 5 — 필터 시트 UI", () => {
     await sheet.getByRole("radio", { name: "10km" }).click();
     await sheet.getByRole("button", { name: /^적용/ }).click();
     await expect(sheet).toHaveCount(0);
+    await expect(page).toHaveURL(/r=10/);                                    // 새로고침 전에 URL에 반영됐는지 먼저 확인(반영 전에 새로고침하면 상태를 잃는 것이 정상)
     await page.reload();
-    await page.waitForLoadState("networkidle");   // 하이드레이션/조회 완료 전 단언으로 생기던 간헐 실패(느린 dev 서버·태블릿) 방지
-    await expect(page.getByRole("button", { name: /거리 10km/ })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("button", { name: /거리 10km/ })).toBeVisible();
     await page.getByRole("button", { name: /검색 조건/ }).click(); await page.keyboard.press("Escape");
     await expect(page.locator(".center-filter-sheet")).toHaveCount(0);
     if (test.info().project.name !== "mobile-webkit") await expect(page.getByRole("button", { name: /검색 조건/ })).toBeFocused();   // 포커스 복귀 (Safari/WebKit은 버튼 클릭 시 포커스가 가지 않는 것이 기본 동작이라 복귀할 대상이 없다)
@@ -165,7 +165,6 @@ test.describe("요구사항 7 — 뒤로가기 경로별", () => {
   test("검색 결과 → 센터 → 뒤로가기: 검색 화면과 검색어 복원", async ({ page }) => {
     await mockSupabase(page);
     await page.goto("/search");
-    await page.waitForLoadState("networkidle");   // 하이드레이션 전에 입력하면 검색이 시작되지 않는 WebKit 간헐 실패 방지
     await page.locator("#discovery-search").fill("요가");
     await expect(page.locator(".search-center-row").first()).toBeVisible();
     await page.locator(".search-center-row").first().click();

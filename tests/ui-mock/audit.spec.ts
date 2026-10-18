@@ -9,7 +9,6 @@ const isMobile = (name: string) => name.startsWith("mobile");
 
 async function search(page: Page, term: string) {
   await page.goto("/search");
-  await page.waitForLoadState("networkidle");   // 하이드레이션 전에 입력하면 검색이 시작되지 않는 WebKit 간헐 실패 방지
   await page.locator("#discovery-search").fill(term);
   await expect(page.locator(".search-class-row").first()).toBeVisible();
 }
@@ -48,7 +47,6 @@ test.describe("A·UX-01/05 — 탐색 상태와 뒤로가기", () => {
     await context.setGeolocation({ latitude: 37.5745, longitude: 126.978 });
     await mockSupabase(page, { manyCenters: true });
     await page.goto("/search");
-    await page.waitForLoadState("networkidle");   // 하이드레이션 전에 입력하면 검색이 시작되지 않는 WebKit 간헐 실패 방지
     await page.locator("#discovery-search").fill("센터");
     await expect(page.locator(".search-center-row").first()).toBeVisible();
     await page.getByRole("button", { name: /내 주변/ }).click();
@@ -65,6 +63,17 @@ test.describe("A·UX-01/05 — 탐색 상태와 뒤로가기", () => {
     await page.goto("/center/c-near/class/cls-1");
     await page.getByRole("button", { name: "뒤로가기" }).click();
     await expect(page).toHaveURL(/\/center\/c-near$/);
+  });
+});
+
+test.describe("A·하이드레이션 전 입력", () => {
+  test("자바스크립트가 늦게 로드돼도 먼저 친 검색어로 검색이 시작된다(입력만 남고 결과가 없던 간헐 실패의 원인 재현·방지)", async ({ page, browserName }) => {
+    test.skip(browserName !== "chromium", "라우트 지연 재현은 Chromium에서");
+    await mockSupabase(page);
+    await page.route("**/_next/static/**/*.js", async (route) => { await new Promise((r) => setTimeout(r, 1500)); await route.continue(); });   // 하이드레이션을 늦춘다
+    await page.goto("/search", { waitUntil: "domcontentloaded" });
+    await page.locator("#discovery-search").fill("요가");                      // 하이드레이션 전에 입력
+    await expect(page.locator(".search-class-row").first()).toBeVisible({ timeout: 30_000 });
   });
 });
 
