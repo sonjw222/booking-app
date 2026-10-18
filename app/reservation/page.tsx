@@ -45,6 +45,7 @@ import { PUBLIC_HOLIDAYS } from "../../lib/publicHolidays";
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import { toUserMessage } from "../../lib/userError";
 import { hapticSuccess } from "../../lib/nativeHaptics";
+import { fetchCenterContext, resolveClassCenter, emptyDayReason, EMPTY_COPY, type CenterContext } from "../../lib/reservationCenter";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -149,6 +150,12 @@ function ReservationCalendarContent() {
   const [reservationError, setReservationError] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<BookingProfile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  // 수업 상세에서 고른 프로필(?profile=)을 기본 선택으로 존중한다(유효한 내 프로필일 때만).
+  const profileParamRef = useRef(searchParams.get("profile"));
+  // URL이 가리킨 센터(?center=)가 "이번 달 수업이 있는 센터" 목록에 없을 때의 센터 맥락(이름·보유 수강권·이용 불가 사유).
+  const [centerCtx, setCenterCtx] = useState<CenterContext | null>(null);
+  // ?openClassId= 수업이 예약 달력에 없을 때(수강권 없는 센터의 수업 등) — 수업 상세로 안내하거나, 접근할 수 없는 수업임을 알린다.
+  const [openClassMissing, setOpenClassMissing] = useState(false);
 
   const cells = useMemo(() => buildCalendarGrid(year, month), [year, month]);
   const selectedKey = dateKey(year, month, selectedDay);
@@ -200,7 +207,7 @@ function ReservationCalendarContent() {
       setHolidays(data.holidays);
       // 프로필 목록 (예약 주체 선택용). 대표 프로필을 기본 선택
       setProfiles(profs);
-      setActiveProfileId((prev) => prev ?? profs.find((p) => p.isPrimary)?.id ?? profs[0]?.id ?? null);
+      setActiveProfileId((prev) => prev ?? profs.find((p) => p.id === profileParamRef.current)?.id ?? profs.find((p) => p.isPrimary)?.id ?? profs[0]?.id ?? null);
     } catch (e: any) {
       if (!opts?.background) setError(toUserMessage(e, "데이터를 불러오지 못했어요"));
     } finally {
@@ -240,8 +247,30 @@ function ReservationCalendarContent() {
     if (target) {
       autoOpenDone.current = true;
       handleReserve(target);
+      return;
     }
+    // 달력에 없는 수업: 이 화면은 "활성 수강권이 있는 센터의 수업"만 불러온다. 그래서 수강권이 없는 센터의 수업 링크는 예전에 빈 달력으로 끝났다(UX-04).
+    // 공개 수업 상세로 보내 수업 내용과 다음 행동(로그인·수강권 보기)을 보여준다. 이미 한 번 보냈는데 다시 돌아왔다면(루프 방지) 이유만 알린다.
+    autoOpenDone.current = true;
+    void (async () => {
+      const centerOfClass = await resolveClassCenter(openClassId);
+      if (!centerOfClass) { setOpenClassMissing(true); return; }
+      let already = false;
+      try { already = sessionStorage.getItem("mwhabit_resv_redirected") === openClassId; sessionStorage.setItem("mwhabit_resv_redirected", openClassId); } catch { /* 사생활 모드 */ }
+      if (already) { setOpenClassMissing(true); return; }
+      router.replace(`/center/${centerOfClass}/class/${openClassId}`);
+    })();
   }, [loading, classes, activeProfileId, searchParams, year, month]);
+
+  // URL이 가리킨 센터가 이번 달 수업 센터 목록에 없으면 그 센터의 이름·보유 수강권을 따로(읽기 전용) 조회한다(UX-15).
+  const centerParam = searchParams.get("center");
+  const centerInList = !!centerParam && centers.some((c) => c.id === centerParam);
+  useEffect(() => {
+    if (loading || !centerParam || centerInList || profiles.length === 0) return;
+    let alive = true;
+    void fetchCenterContext(centerParam, profiles).then((ctx) => { if (alive) setCenterCtx(ctx); });
+    return () => { alive = false; };
+  }, [loading, centerParam, centerInList, profiles]);
 
   // 결제 완료 후 자동으로 돌아온 경우(?purchased=1): 짧은 완료 안내 토스트 표시
   // 지금 이 시스템은 결제 즉시 수강권이 발급되지 않고(매니저 수동 승인 후 발급) 관계로,
@@ -478,9 +507,14 @@ function ReservationCalendarContent() {
   const publicHoliday = PUBLIC_HOLIDAYS[selectedKey];
   const centerHolidays = holidays.filter((h) => h.date === selectedKey);
   const effectiveCenter = centerPick ?? centerFilter;
+  const ctxCenterName = centerCtx?.state === "ok" && centerCtx.center.id === effectiveCenter ? centerCtx.center.name : null;
   const effectiveCenterName = effectiveCenter
-    ? (centers.find((c) => c.id === effectiveCenter)?.name ?? "센터")
+    ? (centers.find((c) => c.id === effectiveCenter)?.name ?? ctxCenterName ?? "센터")
     : "전체 센터";
+  // 센터 선택 시트에는 "수업이 있는 센터"에 더해, URL로 들어온 그 센터 하나만(읽을 수 있을 때) 보태 선택 상태를 보이게 한다(전체 센터를 임의로 노출하지 않는다).
+  const sheetCenters = ctxCenterName && centerCtx?.state === "ok" && !centers.some((c) => c.id === centerCtx.center.id)
+    ? [...centers, { id: centerCtx.center.id, name: centerCtx.center.name, categories: [], color: "var(--accent)" }]
+    : centers;
   const inTimeRange = (start: string) => {
     const hour = Number(start.split(":")[0]);
     if (timeFilter === "morning") return hour < 12;
@@ -515,6 +549,13 @@ function ReservationCalendarContent() {
     ).filter(([, count]) => count > 1).map(([key]) => key)
   );
   const confirmGoods = confirmClass ? (goodsByCenter[confirmClass.centerId] ?? []) : [];
+  const inScope = (c: ClassInfo) => (!effectiveCenter || c.centerId === effectiveCenter) && (!categoryCenterIds || categoryCenterIds.has(c.centerId));
+  const emptyReason = emptyDayReason({
+    holiday: centerHolidays.length > 0,
+    centerUnavailable: !!centerParam && !centerInList && centerCtx?.state === "unavailable" && effectiveCenter === centerParam,
+    monthClassesInScope: classes.filter(inScope).length,
+    dayClassesInScope: classes.filter((c) => c.date === selectedKey && inScope(c)).length,
+  });
 
   if (loading) {
     return (
@@ -564,7 +605,7 @@ function ReservationCalendarContent() {
 
       {centerSheet && (
         <CenterSelectSheet
-          centers={centers}
+          centers={sheetCenters}
           selectedId={effectiveCenter}
           onSelect={(id) => { setCenterPick(id); setCenterSheet(false); }}
           onClose={() => setCenterSheet(false)}
@@ -575,6 +616,45 @@ function ReservationCalendarContent() {
         <div className="center-filter-banner">
           <span>{categoryFilter} 수업만 보는 중{categoryCenterIds && categoryCenterIds.size === 0 ? " (해당 종목 센터 없음)" : ""}</span>
           <Link href="/reservation" className="center-filter-clear" prefetch={false}>전체 보기</Link>
+        </div>
+      )}
+
+      {openClassMissing && (
+        <div className="center-filter-banner" role="status" data-testid="resv-class-missing">
+          <span>요청한 수업을 열 수 없어요. 삭제됐거나 접근할 수 없는 수업일 수 있어요.</span>
+          <Link href="/search" className="center-filter-clear" prefetch={false}>다른 수업 찾기</Link>
+        </div>
+      )}
+      {centerParam && !centerInList && centerCtx?.state === "ok" && (
+        <section className="resv-center-context" aria-label={`${centerCtx.center.name} 내 수강권`} data-testid="resv-center-passes">
+          <div className="resv-center-context-head">
+            <b>{centerCtx.center.name}</b>
+            <Link href={`/center/${centerCtx.center.id}`} prefetch={false}>센터 보기 ›</Link>
+          </div>
+          {centerCtx.passes.length === 0 ? (
+            <p>이 센터의 사용 가능한 수강권이 없어요. 센터에서 수강권을 구매하면 바로 예약할 수 있어요.</p>
+          ) : (
+            <ul>
+              {centerCtx.passes.map((m) => (
+                <li key={m.id}>
+                  <span>{m.profileName && <em>{m.profileName}</em>}{m.productName}</span>
+                  <b>{m.remaining == null ? "횟수 무제한" : `${m.remaining}회 남음`} · {m.expiresAt ? `~${m.expiresAt.slice(5).replace("-", "/")}` : "기간 무제한"}</b>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+      {centerParam && !centerInList && centerCtx?.state === "unavailable" && (
+        <div className="center-filter-banner" role="status" data-testid="resv-center-unavailable">
+          <span>{EMPTY_COPY.center_unavailable.text}</span>
+          <Link href="/inquiries" className="center-filter-clear" prefetch={false}>문의하기</Link>
+        </div>
+      )}
+      {centerParam && !centerInList && centerCtx?.state === "error" && (
+        <div className="center-filter-banner" role="status" data-testid="resv-center-error">
+          <span>센터 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</span>
+          <button type="button" className="center-filter-clear" onClick={() => { setCenterCtx(null); load({ silent: true }); }}>다시 시도</button>
         </div>
       )}
 
@@ -713,8 +793,19 @@ function ReservationCalendarContent() {
 
       <div className="daylist">
         {dayClasses.length === 0 ? (
-          <div className="daylist-empty">
-            {centerHolidays.length > 0 ? "선택한 센터는 휴무일이에요" : "이 날은 예약 가능한 수업이 없어요"}
+          <div className="daylist-empty" data-testid="resv-empty" data-reason={emptyReason}>
+            {EMPTY_COPY[emptyReason].text}
+            {emptyReason === "center_no_classes" && effectiveCenter && (
+              <div className="daylist-empty-actions">
+                <button type="button" className="ghost-btn" onClick={goNextMonth}>다음 달 보기</button>
+                <Link className="ghost-btn" href={`/center/${effectiveCenter}`} prefetch={false}>센터 보기</Link>
+              </div>
+            )}
+            {emptyReason === "filtered" && (
+              <div className="daylist-empty-actions">
+                <button type="button" className="ghost-btn" onClick={() => { setTimeFilter("all"); setAvailableOnly(false); }}>조건 해제</button>
+              </div>
+            )}
           </div>
         ) : (
           dayClasses.map((cls, index) => {

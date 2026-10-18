@@ -26,6 +26,7 @@ import { fetchMyPgCheckoutOverride } from "../../lib/authAccount";
 import { toUserMessage } from "../../lib/userError";
 import { fetchApplicableCoupons, previewDiscount, type MemberCoupon } from "../../lib/coupons";
 import { visiblePayMethodIds, resolveSelectedPayMethod } from "../../lib/payMethods";
+import { checkoutCopy, DIRECT_ORDER_GUIDE } from "../../lib/checkoutCopy";
 import { computeBaseAmount, countOptionLabel, isCountSelectable, sortedTiers } from "../../lib/selectableCount";
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import UiIcon, { type IconName } from "../components/UiIcon";
@@ -533,6 +534,8 @@ function CheckoutContent() {
     );
   }
 
+  const copy = checkoutCopy(effectivePayMethodUi, won(finalTotal));
+
   return (
     <div className="app-shell commerce-page checkout-page-v2">
       {error && (
@@ -771,7 +774,7 @@ function CheckoutContent() {
       )}
       {effectivePayMethodUi === "direct" && (
         <div className="perm-guide" style={{ margin: "10px 20px" }}>
-          결제 없이 주문만 접수돼요. 센터에서 결제를 확인하면 이용권이 발급돼요.
+          {DIRECT_ORDER_GUIDE}
         </div>
       )}
 
@@ -789,7 +792,7 @@ function CheckoutContent() {
         </div>
       )}
       <div className="checkout-total">
-        <span>총 결제 금액</span>
+        <span>{copy.totalLabel}</span>
         <b>{won(finalTotal)}</b>
       </div>
       {scheduleState.required && scheduleState.blocked && scheduleState.message && (
@@ -805,10 +808,10 @@ function CheckoutContent() {
         </div>
       )}
       <button className="primary-btn checkout-pay-btn" disabled={busy || pgUnresolved || (scheduleState.required && ["loading", "load_failed", "no_options", "no_times"].includes(scheduleState.reason))} onClick={handlePay}>
-        {busy ? "처리 중..." : pgUnresolved ? "결제 결과 확인 중" : `${won(finalTotal)} 결제하기`}
+        {busy ? copy.busyButton : pgUnresolved ? "결제 결과 확인 중" : copy.button}
       </button>
       <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "var(--text-dim)" }}>
-        결제 시 <a href="/legal/refund" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>환불 정책</a>과{" "}
+        {copy.consent} <a href="/legal/refund" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>환불 정책</a>과{" "}
         <a href="/legal/terms" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>이용약관</a>에 동의하는 것으로 간주돼요.
       </div>
       <div style={{ height: 30 }} />

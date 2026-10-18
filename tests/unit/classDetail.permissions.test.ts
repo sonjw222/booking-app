@@ -23,7 +23,7 @@ beforeEach(() => { opts = { session: true, mode: "selected" }; });
 describe("허용 수강권", () => {
   it("all 모드만 '모든 수강권 가능'(all)", async () => { opts = { session: false, mode: "all" }; expect((await get()).allowedPasses).toEqual({ kind: "all" }); opts.session = true; expect((await get()).allowedPasses).toEqual({ kind: "all" }); });
   it("selected + 비로그인: 빈 배열이어도(RLS) login_required — 모두 가능으로 보지 않는다", async () => { opts = { session: false, mode: "selected", allowed: { data: [], error: null } }; expect((await get()).allowedPasses).toEqual({ kind: "login_required" }); });
-  it("selected + 로그인 + 목록: list(중복 제거)", async () => { opts.allowed = { data: [{ products: { name: "A" } }, { products: [{ name: "B" }] }, { products: { name: "A" } }], error: null }; expect((await get()).allowedPasses).toEqual({ kind: "list", names: ["A", "B"] }); });
+  it("selected + 로그인 + 목록: list(중복 제거)", async () => { opts.allowed = { data: [{ products: { id: "pa", name: "A" } }, { products: [{ id: "pb", name: "B" }] }, { products: { id: "pa", name: "A" } }], error: null }; expect((await get()).allowedPasses).toEqual({ kind: "list", names: ["A", "B"], productIds: ["pa", "pb"] }); });
   it("selected + 로그인 + 빈 목록: unknown_empty(확인 불가), 조회 오류: unavailable", async () => {
     opts.allowed = { data: [], error: null }; expect((await get()).allowedPasses).toEqual({ kind: "unknown_empty" });
     opts.allowed = { data: null, error: { message: "boom" } }; expect((await get()).allowedPasses).toEqual({ kind: "unavailable" });

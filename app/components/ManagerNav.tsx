@@ -155,41 +155,41 @@ export default function ManagerNav({
         aria-expanded={expanded}
         onClick={handleRailClick}
       >
-        <Link className="desktop-brand" href="/manager" prefetch={false}>
+        <Link className="desktop-brand" href="/manager" prefetch={false} aria-label="모하빗 센터 관리자 홈">
           <span className="desktop-brand-mark">M</span>
           <span><b>모하빗</b><small>센터 관리자</small></span>
         </Link>
         <div className="workspace-sidebar-scroll" ref={scrollRef}>
           <div className="desktop-nav-section">업무</div>
-          <a className={`desktop-nav-item ${pathname === "/manager" ? "active" : ""}`} href="/manager" onClick={(e) => replaceTabNavigation(e, "/manager")}><UiIcon name="grid" /><span>대시보드</span></a>
-          <Link className={`desktop-nav-item ${is("/manager/classes") ? "active" : ""}`} href="/manager/classes" replace onClick={collapseAfterNavigate}><UiIcon name="calendar" /><span>수업·예약</span></Link>
-          {canSeeMembers && <Link className={`desktop-nav-item ${is("/manager/members") ? "active" : ""}`} href="/manager/members" replace onClick={collapseAfterNavigate}><UiIcon name="users" /><span>회원</span></Link>}
-          <Link className={`desktop-nav-item ${is("/manager/notifications") ? "active" : ""}`} href="/manager/notifications" replace onClick={collapseAfterNavigate}>
+          <a className={`desktop-nav-item ${pathname === "/manager" ? "active" : ""}`} href="/manager" onClick={(e) => replaceTabNavigation(e, "/manager")} aria-label="대시보드"><UiIcon name="grid" /><span>대시보드</span></a>
+          <Link className={`desktop-nav-item ${is("/manager/classes") ? "active" : ""}`} href="/manager/classes" replace onClick={collapseAfterNavigate} aria-label="수업·예약"><UiIcon name="calendar" /><span>수업·예약</span></Link>
+          {canSeeMembers && <Link className={`desktop-nav-item ${is("/manager/members") ? "active" : ""}`} href="/manager/members" replace onClick={collapseAfterNavigate} aria-label="회원"><UiIcon name="users" /><span>회원</span></Link>}
+          <Link className={`desktop-nav-item ${is("/manager/notifications") ? "active" : ""}`} href="/manager/notifications" replace onClick={collapseAfterNavigate} aria-label={unread > 0 ? `알림, 읽지 않은 알림 ${unread}개` : "알림"}>
             <UiIcon name="bell" /><span>알림</span>{unread > 0 && <span className="desktop-nav-badge">{unread > 99 ? "99+" : unread}</span>}
           </Link>
-          {canSee("pass.sales.view") && <Link className={`desktop-nav-item ${is("/manager/sales") ? "active" : ""}`} href="/manager/sales" prefetch={false}><UiIcon name="receipt" /><span>매출·결제</span></Link>}
+          {canSee("pass.sales.view") && <Link className={`desktop-nav-item ${is("/manager/sales") ? "active" : ""}`} href="/manager/sales" prefetch={false} aria-label="매출·결제"><UiIcon name="receipt" /><span>매출·결제</span></Link>}
 
           <div className="desktop-nav-section">고객 관리</div>
-          {canSee("customer.lead.view") && <Link className={`desktop-nav-item ${is("/manager/leads") ? "active" : ""}`} href="/manager/leads" prefetch={false}><UiIcon name="message" /><span>상담고객</span></Link>}
-          {canSee("customer.progress") && <Link className={`desktop-nav-item ${is("/manager/progress") ? "active" : ""}`} href="/manager/progress/record" prefetch={false}><UiIcon name="edit" /><span>진도 기록</span></Link>}
-          {canSee("message.alimtalk.view") && <Link className={`desktop-nav-item ${is("/manager/alimtalk") ? "active" : ""}`} href="/manager/alimtalk" prefetch={false}><UiIcon name="megaphone" /><span>알림톡</span></Link>}
-          {canSee("pass.order.view") && <Link className={`desktop-nav-item ${is("/manager/orders") ? "active" : ""}`} href="/manager/orders" prefetch={false}><UiIcon name="cart" /><span>주문</span></Link>}
-          {canSee("customer.member.issue_pass") && <Link className={`desktop-nav-item ${is("/manager/coupons") ? "active" : ""}`} href="/manager/coupons" prefetch={false}><UiIcon name="card" /><span>쿠폰</span></Link>}
-          {canSee("board.notice.view") && <Link className={`desktop-nav-item ${is("/manager/announcements") ? "active" : ""}`} href="/manager/announcements" prefetch={false}><UiIcon name="megaphone" /><span>공지사항</span></Link>}
-          {canSee("board.inquiry.view") && <Link className={`desktop-nav-item ${is("/manager/inquiries") ? "active" : ""}`} href="/manager/inquiries" prefetch={false}><UiIcon name="message" /><span>1:1 문의</span></Link>}
-          {canSee("facility.review.view") && <Link className={`desktop-nav-item ${is("/manager/reviews") ? "active" : ""}`} href="/manager/reviews" prefetch={false}><UiIcon name="star" /><span>후기</span></Link>}
+          {canSee("customer.lead.view") && <Link className={`desktop-nav-item ${is("/manager/leads") ? "active" : ""}`} href="/manager/leads" prefetch={false} aria-label="상담고객"><UiIcon name="message" /><span>상담고객</span></Link>}
+          {canSee("customer.progress") && <Link className={`desktop-nav-item ${is("/manager/progress") ? "active" : ""}`} href="/manager/progress/record" prefetch={false} aria-label="진도 기록"><UiIcon name="edit" /><span>진도 기록</span></Link>}
+          {canSee("message.alimtalk.view") && <Link className={`desktop-nav-item ${is("/manager/alimtalk") ? "active" : ""}`} href="/manager/alimtalk" prefetch={false} aria-label="알림톡"><UiIcon name="megaphone" /><span>알림톡</span></Link>}
+          {canSee("pass.order.view") && <Link className={`desktop-nav-item ${is("/manager/orders") ? "active" : ""}`} href="/manager/orders" prefetch={false} aria-label="주문"><UiIcon name="cart" /><span>주문</span></Link>}
+          {canSee("customer.member.issue_pass") && <Link className={`desktop-nav-item ${is("/manager/coupons") ? "active" : ""}`} href="/manager/coupons" prefetch={false} aria-label="쿠폰"><UiIcon name="card" /><span>쿠폰</span></Link>}
+          {canSee("board.notice.view") && <Link className={`desktop-nav-item ${is("/manager/announcements") ? "active" : ""}`} href="/manager/announcements" prefetch={false} aria-label="공지사항"><UiIcon name="megaphone" /><span>공지사항</span></Link>}
+          {canSee("board.inquiry.view") && <Link className={`desktop-nav-item ${is("/manager/inquiries") ? "active" : ""}`} href="/manager/inquiries" prefetch={false} aria-label="1:1 문의"><UiIcon name="message" /><span>1:1 문의</span></Link>}
+          {canSee("facility.review.view") && <Link className={`desktop-nav-item ${is("/manager/reviews") ? "active" : ""}`} href="/manager/reviews" prefetch={false} aria-label="후기"><UiIcon name="star" /><span>후기</span></Link>}
 
           <div className="desktop-nav-section">센터 설정</div>
-          {(canSee("pass.create") || canSee("pass.update")) && <Link className={`desktop-nav-item ${is("/manager/membership-rules") ? "active" : ""}`} href="/manager/membership-rules" prefetch={false}><UiIcon name="ticket" /><span>수강권</span></Link>}
-          {canSee("pass.goods.view") && <Link className={`desktop-nav-item ${is("/manager/goods") ? "active" : ""}`} href="/manager/goods" prefetch={false}><UiIcon name="receipt" /><span>상품</span></Link>}
-          {canSee("facility.staff.view") && <Link className={`desktop-nav-item ${is("/manager/staff") ? "active" : ""}`} href="/manager/staff" prefetch={false}><UiIcon name="shield" /><span>스태프·권한</span></Link>}
-          {canSee("facility.info") && <Link className={`desktop-nav-item ${is("/manager/center-info") ? "active" : ""}`} href="/manager/center-info" prefetch={false}><UiIcon name="building" /><span>센터 정보</span></Link>}
-          {canSee("facility.room") && <Link className={`desktop-nav-item ${is("/manager/rooms") ? "active" : ""}`} href="/manager/rooms" prefetch={false}><UiIcon name="building" /><span>룸 관리</span></Link>}
-          {canSee("facility.operation") && <Link className={`desktop-nav-item ${is("/manager/settings") ? "active" : ""}`} href="/manager/settings" prefetch={false}><UiIcon name="settings" /><span>운영 설정</span></Link>}
-          {isOwner && <Link className={`desktop-nav-item ${is("/manager/subscription") ? "active" : ""}`} href="/manager/subscription" prefetch={false}><UiIcon name="card" /><span>플랫폼 구독</span></Link>}
-          {isOwner && <Link className={`desktop-nav-item ${is("/manager/settlement") ? "active" : ""}`} href="/manager/settlement" prefetch={false}><UiIcon name="bank" /><span>정산계좌</span></Link>}
+          {(canSee("pass.create") || canSee("pass.update")) && <Link className={`desktop-nav-item ${is("/manager/membership-rules") ? "active" : ""}`} href="/manager/membership-rules" prefetch={false} aria-label="수강권"><UiIcon name="ticket" /><span>수강권</span></Link>}
+          {canSee("pass.goods.view") && <Link className={`desktop-nav-item ${is("/manager/goods") ? "active" : ""}`} href="/manager/goods" prefetch={false} aria-label="상품"><UiIcon name="receipt" /><span>상품</span></Link>}
+          {canSee("facility.staff.view") && <Link className={`desktop-nav-item ${is("/manager/staff") ? "active" : ""}`} href="/manager/staff" prefetch={false} aria-label="스태프·권한"><UiIcon name="shield" /><span>스태프·권한</span></Link>}
+          {canSee("facility.info") && <Link className={`desktop-nav-item ${is("/manager/center-info") ? "active" : ""}`} href="/manager/center-info" prefetch={false} aria-label="센터 정보"><UiIcon name="building" /><span>센터 정보</span></Link>}
+          {canSee("facility.room") && <Link className={`desktop-nav-item ${is("/manager/rooms") ? "active" : ""}`} href="/manager/rooms" prefetch={false} aria-label="룸 관리"><UiIcon name="building" /><span>룸 관리</span></Link>}
+          {canSee("facility.operation") && <Link className={`desktop-nav-item ${is("/manager/settings") ? "active" : ""}`} href="/manager/settings" prefetch={false} aria-label="운영 설정"><UiIcon name="settings" /><span>운영 설정</span></Link>}
+          {isOwner && <Link className={`desktop-nav-item ${is("/manager/subscription") ? "active" : ""}`} href="/manager/subscription" prefetch={false} aria-label="플랫폼 구독"><UiIcon name="card" /><span>플랫폼 구독</span></Link>}
+          {isOwner && <Link className={`desktop-nav-item ${is("/manager/settlement") ? "active" : ""}`} href="/manager/settlement" prefetch={false} aria-label="정산계좌"><UiIcon name="bank" /><span>정산계좌</span></Link>}
         </div>
-        <a className="workspace-sidebar-mode" href="/" onClick={(e) => replaceTabNavigation(e, "/")}><UiIcon name="user" /><span>회원 화면으로 전환</span></a>
+        <a className="workspace-sidebar-mode" href="/" aria-label="회원 화면으로 전환" onClick={(e) => replaceTabNavigation(e, "/")}><UiIcon name="user" /><span>회원 화면으로 전환</span></a>
       </aside>
       {/* 릴리스 폴리시 배치 6차(2026-09-15) — BottomNav와 동일한 이유로 replace(주석은
           BottomNav.tsx 참고). */}

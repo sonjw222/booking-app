@@ -10,6 +10,7 @@
     RLS 정책만 "본인 소유 + 아직 미발급"으로 다르게 좁혀져 있다.)
 */
 
+import { FREE_GRANT_LABEL } from "../../lib/membershipOrigin";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { fetchMyPurchases, updateOrderStatus, type PurchaseItem } from "../../lib/orders";
@@ -164,7 +165,7 @@ export default function PurchasesPage() {
               <div className="purchase-meta">
                 {/* UX 감사(A-20) — 0원 상품은 금액 자체가 안 보여 "무료"인지 "누락"인지
                     구분이 안 됐다. amount===0도 명시적으로 표시. */}
-                {it.amount > 0 ? <>{won(it.amount)} · </> : it.amount === 0 && <>무료 · </>}
+                {it.origin === "free_grant" ? <>{FREE_GRANT_LABEL} · </> : it.amount > 0 ? <>{won(it.amount)} · </> : it.amountKnown && it.amount === 0 ? <>무료 · </> : null}
                 {it.purchasedAt}
                 {it.totalCount != null && (
                   it.membershipId

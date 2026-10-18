@@ -786,13 +786,13 @@ function MembersContent() {
                       {m.gradeName}
                     </span>
                   )}
-                  {!m.appLinked && <span className="mem-flag">앱 미연결</span>}
+                  {!m.appLinked && <span className="mem-flag">앱 계정 미연결</span>}
                   {m.status === "dormant" && <span className="mem-status-badge dormant">휴면</span>}
                   {m.status === "expired" && m.hasPass && <span className="mem-status-badge expired">만료</span>}
                   {m.status === "expired" && !m.hasPass && <span className="mem-status-badge expired">수강권 없음</span>}
                 </div>
                 <div className="mem-sub">
-                  {m.phone ?? "번호 없음"}
+                  {m.phone ?? "전화번호 없음"}
                   {m.passName && ` · ${m.passName}`}
                   {m.remainingCount != null && ` (${m.remainingCount}회)`}
                 </div>
@@ -903,10 +903,10 @@ function MembersContent() {
 
             {detailTab === "info" && (
               <>
-                <div className="admin-row"><span className="k">전화</span><span className="v">{detail.phone ?? "-"}</span></div>
+                <div className="admin-row"><span className="k">전화</span><span className="v">{detail.phone ?? "전화번호 없음"}</span></div>
                 <div className="admin-row"><span className="k">등록일</span><span className="v">{detail.registeredAt}</span></div>
                 <div className="admin-row"><span className="k">최근출석</span><span className="v">{detail.lastAttendedAt ?? "-"}</span></div>
-                <div className="admin-row"><span className="k">앱연결</span><span className="v">{detail.appLinked ? "연결됨" : "미연결"}</span></div>
+                <div className="admin-row"><span className="k">앱연결</span><span className="v">{detail.appLinked ? "앱 계정 연결됨" : "앱 계정 미연결"}</span></div>
 
                 <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>등급</div>
                 <div className="mem-filters" style={{ padding: 0 }}>

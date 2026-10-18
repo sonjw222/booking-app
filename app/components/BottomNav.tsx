@@ -52,16 +52,16 @@ export default function BottomNav() {
           <span><b>모하빗</b><small>나에게 맞는 움직임</small></span>
         </Link>
         <div className="desktop-nav-section">둘러보기</div>
-        <Link className={`desktop-nav-item ${is("/") ? "active" : ""}`} href="/" replace aria-current={is("/") ? "page" : undefined}>
+        <Link className={`desktop-nav-item ${is("/") ? "active" : ""}`} href="/" replace aria-label="홈" aria-current={is("/") ? "page" : undefined}>
           <UiIcon name="home" /><span>홈</span>
         </Link>
-        <Link className={`desktop-nav-item ${isDiscovery ? "active" : ""}`} href="/search" replace aria-current={isDiscovery ? "page" : undefined}>
+        <Link className={`desktop-nav-item ${isDiscovery ? "active" : ""}`} href="/search" replace aria-label="찾기" aria-current={isDiscovery ? "page" : undefined}>
           <UiIcon name="search" /><span>찾기</span>
         </Link>
-        <Link className={`desktop-nav-item ${isReservation ? "active" : ""}`} href="/reservation" replace aria-current={isReservation ? "page" : undefined}>
+        <Link className={`desktop-nav-item ${isReservation ? "active" : ""}`} href="/reservation" replace aria-label="예약" aria-current={isReservation ? "page" : undefined}>
           <UiIcon name="calendar" /><span>예약</span>
         </Link>
-        <Link className={`desktop-nav-item ${isMypage ? "active" : ""}`} href="/mypage" replace aria-current={isMypage ? "page" : undefined}>
+        <Link className={`desktop-nav-item ${isMypage ? "active" : ""}`} href="/mypage" replace aria-label="마이" aria-current={isMypage ? "page" : undefined}>
           <UiIcon name="user" /><span>마이</span>
         </Link>
         <div className="desktop-nav-spacer" />

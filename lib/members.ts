@@ -34,6 +34,8 @@ export type CenterMember = {
   registeredAt: string;
   lastAttendedAt: string | null;
   appLinked: boolean;
+  /** 앱 계정 연결 여부와 전화번호 등록 여부는 별개다(UX-14) — 번호가 없어도 앱 계정에 연결된 회원이 있다. */
+  phoneRegistered: boolean;
   memo: string | null;
   status: "active" | "expired" | "dormant";
   hasPass: boolean;
@@ -42,6 +44,15 @@ export type CenterMember = {
   remainingCount: number | null;
   expiresAt: string | null;
 };
+
+/* 앱 계정 연결 여부(UX-14).
+   center_members.app_linked는 행을 만든 경로가 켜 주는 저장 플래그라(add_refund_and_membership.sql의 ensure_center_member / addMemberToCenter만 true로 쓴다)
+   다른 경로로 등록된 회원은 실제로 앱 계정이 연결돼 있어도 false로 남는다 — 이 플래그만 보면 "앱 미연결"로 잘못 표시된다.
+   데이터 모델상 profiles.account_id는 NOT NULL(accounts 참조)이고 모든 프로필은 앱 계정(accounts.auth_id) 소유라, 센터 회원의 프로필이 계정을 가리키면 연결된 것이다.
+   이름·전화번호가 같다는 이유로 다른 계정을 연결하는 일은 하지 않는다(이 함수는 읽기 전용 판정이다). */
+export function deriveAppLinked(input: { storedFlag: boolean | null | undefined; profileAccountId: string | null | undefined }): boolean {
+  return !!input.profileAccountId || input.storedFlag === true;
+}
 
 export type MemberFilter = {
   gradeId?: string | null;      // null이면 전체
@@ -90,7 +101,7 @@ export async function fetchMemberBase(centerId: string, filter: Pick<MemberFilte
         .select(`
       id, profile_id, grade_id, registered_at, last_attended_at,
       app_linked, memo, status,
-      profiles(name, accounts(address)),
+      profiles(name, account_id, accounts(address)),
       member_grades(name, color)
     `, wantCount ? { count: "exact" } : undefined)
         .eq("center_id", centerId);
@@ -171,7 +182,8 @@ export async function fetchMemberBase(centerId: string, filter: Pick<MemberFilte
       gradeColor: r.member_grades?.color ?? null,
       registeredAt: r.registered_at,
       lastAttendedAt: r.last_attended_at,
-      appLinked: r.app_linked,
+      appLinked: deriveAppLinked({ storedFlag: r.app_linked, profileAccountId: r.profiles?.account_id ?? null }),
+      phoneRegistered: !!phoneByProfile[r.profile_id],
       memo: r.memo,
       status: derived,
       hasPass: !!st?.hasAny,

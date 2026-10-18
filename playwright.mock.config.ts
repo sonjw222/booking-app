@@ -19,7 +19,7 @@ export default defineConfig({
     { name: "tablet-chromium", use: { ...devices["iPad (gen 7)"], browserName: "chromium" } },
   ],
   webServer: {
-    command: `npx next dev -p ${PORT}`,
+    command: process.env.UI_MOCK_PROD === "1" ? `npx next start -p ${PORT}` : `npx next dev -p ${PORT}`,   // UI_MOCK_PROD=1: 먼저 같은 env로 next build 한 프로덕션 서버(개발용 오버레이 없는 스크린샷 증빙)
     url: `http://localhost:${PORT}`,
     reuseExistingServer: true,
     timeout: 180_000,

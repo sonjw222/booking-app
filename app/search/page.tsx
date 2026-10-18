@@ -7,13 +7,15 @@ import { centerPhotoUrl } from "../../lib/center";
 import EmptyState from "../components/EmptyState";
 import AppButton from "../components/AppButton";
 import { consumeListScroll, rememberListScroll } from "../../lib/listScroll";
+import { fetchCenterRatings } from "../../lib/centerRatings";
+import { summarizeAddress, type CenterRating } from "../../lib/centerDiscovery";
+import { computeSearchView, SEARCH_EMPTY_COPY, type Scope } from "../../lib/searchView";
 
 const PAGE_SIZE = 20;
 const RECENT_KEY = "mwhabit_recent_searches";
 // 검색 결과에서 센터/수업으로 들어갔다가 뒤로가기로 돌아오면 검색어·범위·필터·스크롤을 그대로 복원한다(같은 탭 세션 안에서만).
 const STATE_KEY = "mwhabit_search_state";
 const SCROLL_KEY = "search";
-type Scope = "all" | "classes" | "centers";
 
 export default function SearchPage() {
   const [kw, setKw] = useState("");
@@ -33,6 +35,9 @@ export default function SearchPage() {
   const [locationError, setLocationError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
   const requestId = useRef(0);
+  // UX-07 — 센터 카드의 평점·후기 수(실제 center_reviews 집계). 조회 실패는 "후기 없음"이 아니므로 값을 비워 둔다.
+  const [ratings, setRatings] = useState<Record<string, CenterRating>>({});
+  const [ratingsLoaded, setRatingsLoaded] = useState(false);
   // PERF-005 — 검색어 선택(selectTerm)은 즉시 검색하는데 kw 변경 때문에 debounce 타이머가 같은
   // 검색어로 350ms 뒤 한 번 더 요청하던 중복을 막는다. 직접 입력으로 검색어가 바뀌면 해제.
   const immediateTerm = useRef<string | null>(null);
@@ -52,7 +57,7 @@ export default function SearchPage() {
     const y = consumeListScroll(SCROLL_KEY);
     if (y == null) { try { sessionStorage.removeItem(STATE_KEY); } catch { /* 무시 */ } return; }
     try {
-      const saved = JSON.parse(sessionStorage.getItem(STATE_KEY) ?? "null") as { kw?: string; scope?: Scope; todayOnly?: boolean } | null;
+      const saved = JSON.parse(sessionStorage.getItem(STATE_KEY) ?? "null") as { kw?: string; scope?: Scope; todayOnly?: boolean; nearOnly?: boolean; position?: { lat: number; lng: number } | null; visibleCount?: number; visibleClassCount?: number } | null;
       if (saved && typeof saved.kw === "string" && saved.kw.trim().length >= 2) {
         immediateTerm.current = saved.kw.trim();
         const restoredKw = saved.kw;
@@ -61,8 +66,14 @@ export default function SearchPage() {
           setKw(restoredKw);
           if (saved.scope === "classes" || saved.scope === "centers" || saved.scope === "all") setScope(saved.scope);
           if (saved.todayOnly === true) setTodayOnly(true);
-          return runSearch(restoredKw);
-        }).then(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+          // 내 주변 조건과 그때의 위치를 그대로 복원한다(권한을 다시 묻지 않는다 — 이미 허용돼 얻은 좌표만 같은 탭에서 재사용).
+          if (saved.nearOnly === true && saved.position && Number.isFinite(saved.position.lat) && Number.isFinite(saved.position.lng)) { setPosition(saved.position); setNearOnly(true); }
+          return runSearch(restoredKw).then(() => {
+            // 더보기로 펼친 개수까지 복원해야 스크롤 위치가 같은 항목을 가리킨다(runSearch가 개수를 초기화한 뒤에 적용).
+            if (typeof saved.visibleCount === "number" && saved.visibleCount > PAGE_SIZE) setVisibleCount(Math.min(saved.visibleCount, 500));
+            if (typeof saved.visibleClassCount === "number" && saved.visibleClassCount > PAGE_SIZE) setVisibleClassCount(Math.min(saved.visibleClassCount, 500));
+          });
+        }).then(() => requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y))));
       }
     } catch { /* 잘못된 저장값은 무시 */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,7 +81,7 @@ export default function SearchPage() {
 
   function rememberSearchState() {
     rememberListScroll(SCROLL_KEY);
-    try { sessionStorage.setItem(STATE_KEY, JSON.stringify({ kw, scope, todayOnly })); } catch { /* 사생활 모드 */ }
+    try { sessionStorage.setItem(STATE_KEY, JSON.stringify({ kw, scope, todayOnly, nearOnly, position: nearOnly ? position : null, visibleCount, visibleClassCount })); } catch { /* 사생활 모드 */ }
   }
 
   async function runSearch(term: string, remember = false) {
@@ -116,6 +127,16 @@ export default function SearchPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kw]);
 
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (centers.length === 0) { if (alive) { setRatings({}); setRatingsLoaded(false); } return; }
+      try { const r = await fetchCenterRatings(centers.slice(0, 100).map((c) => c.id)); if (alive) { setRatings(r); setRatingsLoaded(true); } }
+      catch { if (alive) { setRatings({}); setRatingsLoaded(false); } }
+    })();
+    return () => { alive = false; };
+  }, [centers]);
+
   function selectTerm(term: string) {
     immediateTerm.current = term.trim();
     setKw(term);
@@ -137,10 +158,9 @@ export default function SearchPage() {
   const todayParts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
   const todayPart = (type: string) => todayParts.find((item) => item.type === type)?.value ?? "";
   const today = `${todayPart("year")}-${todayPart("month")}-${todayPart("day")}`;
-  const withinNearby = (lat: number | null, lng: number | null) =>
-    !nearOnly || !position || (lat != null && lng != null && haversineKm(position.lat, position.lng, lat, lng) <= NEARBY_RADIUS_KM);
-  const filteredClasses = classes.filter((cls) => (!todayOnly || cls.date === today) && withinNearby(cls.latitude, cls.longitude));
-  const filteredCenters = centers.filter((c) => withinNearby(c.latitude, c.longitude)).sort((a, b) => {
+  const view = computeSearchView({ classes, centers, categories, scope, todayOnly, nearOnly, today, position, radiusKm: NEARBY_RADIUS_KM, distanceKm: haversineKm });
+  const filteredClasses = view.classes;
+  const filteredCenters = [...view.centers].sort((a, b) => {
     if (!position) return 0;
     const aDistance = a.latitude != null && a.longitude != null ? haversineKm(position.lat, position.lng, a.latitude, a.longitude) : Infinity;
     const bDistance = b.latitude != null && b.longitude != null ? haversineKm(position.lat, position.lng, b.latitude, b.longitude) : Infinity;
@@ -149,9 +169,7 @@ export default function SearchPage() {
 
   const showClasses = scope !== "centers";
   const showCenters = scope !== "classes";
-  const noResults = (scope !== "all" || categories.length === 0) &&
-    (scope === "classes" || filteredCenters.length === 0) &&
-    (scope === "centers" || filteredClasses.length === 0);
+  const noResults = view.empty !== "none";
 
   return (
     <div className="app-shell discovery-page-v2">
@@ -182,7 +200,11 @@ export default function SearchPage() {
           {([["all", "전체"], ["classes", "수업"], ["centers", "센터"]] as const).map(([value, label]) =>
             <button key={value} type="button" aria-pressed={scope === value} className={scope === value ? "on" : ""} onClick={() => setScope(value)}>{label}</button>)}
         </div>
-        {noResults ? <EmptyState icon="search" title="검색 결과가 없어요" description="더 짧은 이름이나 다른 종목으로 검색해보세요." /> : <>
+        {noResults ? <EmptyState icon="search" title={SEARCH_EMPTY_COPY[view.empty as Exclude<typeof view.empty, "none">].title} description={SEARCH_EMPTY_COPY[view.empty as Exclude<typeof view.empty, "none">].description}
+          action={view.empty === "today_filter" || view.empty === "both_filters" || view.empty === "near_filter" ? <div className="empty-actions">
+            {(view.empty === "today_filter" || view.empty === "both_filters") && todayOnly && <button type="button" className="ghost-btn" onClick={() => setTodayOnly(false)}>오늘 조건 해제</button>}
+            {(view.empty === "near_filter" || view.empty === "both_filters") && nearOnly && <button type="button" className="ghost-btn" onClick={() => setNearOnly(false)}>주변 조건 해제</button>}
+          </div> : undefined} /> : <>
           {scope === "all" && categories.length > 0 && <section className="search-category-results" aria-label="종목 검색 결과">
             <h2 className="menu-section-label">종목</h2>
             <div className="search-category-grid">{categories.map((cat) => <Link key={cat} className="list-row" href={`/category/${encodeURIComponent(cat)}`} prefetch={false} onClick={rememberSearchState}>
@@ -192,8 +214,8 @@ export default function SearchPage() {
           {showClasses && <section aria-label="수업 검색 결과">
             <h2 className="menu-section-label">수업 {filteredClasses.length > 0 ? `(${filteredClasses.length}${classes.length === 100 ? "+" : ""})` : ""}</h2>
             {filteredClasses.length === 0 ? <p className="discovery-section-empty">조건에 맞는 예정 수업이 없어요.</p> :
-              <><div className="search-class-grid">{filteredClasses.slice(0, visibleClassCount).map((cls) => <Link key={cls.id} className="search-class-row" href={`/reservation?openClassId=${encodeURIComponent(cls.id)}&openDate=${cls.date}`} prefetch={false} onClick={rememberSearchState}>
-                <span className="search-class-time">{cls.startText}</span><strong>{cls.title}</strong><span>{cls.centerName}</span><b>예약 보기 <span aria-hidden="true">›</span></b>
+              <><div className="search-class-grid">{filteredClasses.slice(0, visibleClassCount).map((cls) => <Link key={cls.id} className="search-class-row" href={`/center/${cls.centerId}/class/${cls.id}`} prefetch={false} onClick={rememberSearchState}>
+                <span className="search-class-time">{cls.startText}</span><strong>{cls.title}</strong><span>{cls.centerName}</span><b>수업 보기 <span aria-hidden="true">›</span></b>
               </Link>)}</div>
               {filteredClasses.length > visibleClassCount && <button type="button" className="discovery-more" onClick={() => setVisibleClassCount((count) => count + PAGE_SIZE)}>수업 더보기 ({filteredClasses.length - visibleClassCount}개 남음)</button>}</>}
           </section>}
@@ -205,7 +227,17 @@ export default function SearchPage() {
                   <div className="search-center-badge" aria-hidden="true">{c.name.slice(0, 1)}</div>}
                 <div className="search-center-info"><div className="search-center-name">{c.name}</div>
                   {c.categories.length > 0 && <div className="search-center-cat">{c.categories.join(" · ")}</div>}
-                  {position && c.latitude != null && c.longitude != null && <div className="search-center-distance">{haversineKm(position.lat, position.lng, c.latitude, c.longitude).toFixed(1)}km</div>}
+                  {(() => {
+                    const rating = ratings[c.id];
+                    const area = summarizeAddress(c.address);
+                    const hasCoord = c.latitude != null && c.longitude != null;
+                    return <div className="search-center-meta">
+                      {rating ? <span className="cat-meta-rating" aria-label={`평점 ${rating.average.toFixed(1)}점, 후기 ${rating.count}개`}><b aria-hidden="true">★</b> {rating.average.toFixed(1)}<small>({rating.count})</small></span>
+                        : ratingsLoaded ? <span className="search-center-missing">아직 후기 없음</span> : null}
+                      {area ? <span>{area}</span> : <span className="search-center-missing">위치 미등록</span>}
+                      {position && hasCoord && <span className="search-center-distance">{haversineKm(position.lat, position.lng, c.latitude as number, c.longitude as number).toFixed(1)}km</span>}
+                    </div>;
+                  })()}
                   {c.intro && <div className="search-center-intro">{c.intro}</div>}
                 </div><span className="chevron" aria-hidden="true">›</span>
               </Link>)}</div>
