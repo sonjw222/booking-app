@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## 2026-10-18 (2) — 독립 리뷰 후속 보완
+- 수업 상세: 지정(selected) 수업의 허용 수강권 목록을 읽을 수 없으면(비로그인 RLS가 행을 숨김, 조회 실패, 빈 결과) "모든 수강권 가능"으로 표시하지 않는다 — 비로그인은 "이용 가능한 수강권은 로그인 후 확인해 주세요.", 실패/확인 불가는 각각 구분 안내. "모든 수강권 가능"은 all 모드일 때만. 강사 RPC(anon 실행 불가)는 오류를 "강사 없음"으로 단정하지 않고 로그인 안내. 예약 인원 집계 실패 시 잔여 자리는 말하지 않는다.
+- 후기 집계: 1,000행 페이지 조회에 `order=id` 고유 정렬 추가(페이지 간 중복·누락 방지).
+- 다크 모드 주 CTA에 기존 토큰(--accent) 경계선 추가(채움 대비 2.99:1 → 경계 포함 3:1 이상).
+- QA: 격리 PostgREST 스키마를 운영 권한 모델(auth.uid()·class_allowed_products RLS, class_trainer_names anon 실행 불가)로 재현, 센터 상세 공개 RPC 보강(이전 스크린샷의 "센터를 찾을 수 없어요"는 QA 스키마에 센터 상세가 쓰는 공개 RPC가 없어서 — 제품 코드 문제 아님), 프로덕션 빌드로 스크린샷 재촬영, 촬영 전 센터명·공유·구매·예약 단언.
+
+## 2026-10-18 — UX 요구사항 대조 보완
+- 새로고침 뒤 뒤로가기가 홈으로 튀던 결함 수정: `lib/appHistory.ts`가 같은 탭(sessionStorage)에 직전 앱 내 화면을 기록(같은 경로 재로드만 인정, 다른 경로 직접 진입은 새로 시작).
+- 종목 목록 "검색 조건" 버튼 복원(검색 화면 이동 없이 필터·정렬 시트를 연다), 시트 확인 버튼을 "적용"으로, 적용된 조건 수 표시.
+- 수강권 미보유 팝업 문구/버튼을 요청 문구로 정렬("이 센터의 수강권을 먼저 구매해주세요." / 닫기). 홈 브랜드명은 제목 태그가 아닌 일반 요소(페이지 h1 중복 방지).
+- 긴 주소/보조 정보 줄바꿈·넘침 방지, 넓은 화면에서 보조 정보가 줄바꿈되지 않도록 고정.
+- 검증 추가: 격리 실데이터(Docker PostgreSQL + PostgREST) 브라우저 테스트 `tests/ui-real/`(후기 2,500건 집계·거리·수업 상세 임베드/RPC), 반응형 폭 5종·위치 실패 유형·내비 블러/키보드/z-index·뒤로가기 경로별 mock 테스트.
+
+## 2026-10-17 — Discovery UX polish (종목별 센터 필터·정렬, 수업 상세, 하단 내비, 뒤로가기)
+- 종목별 센터 목록: 검색어·거리(1/3/5/10/20km)·정렬(추천/거리/평점/이름) 단일 상태 모델(`lib/centerDiscovery.ts`, URL 쿼리 q/r/s), 필터·정렬 시트(`CenterFilterSheet`), 위치 거부 시 안내/재시도/위치 없이 보기, 평점·거리·지역은 실제 데이터만(이름 오른쪽, 모바일은 아래 줄). 평점은 `center_reviews` 클라이언트 집계(DB 변경 없음).
+- 센터 상세: 하단 CTA 위계(수강권 없으면 구매가 Primary, 있으면 예약이 Primary), 공유 버튼 gutter, 뒤로가기는 BackButton(앱 내 이력 추적 `lib/appHistory.ts`) — 종목 목록으로 복귀하며 필터·스크롤 복원(`lib/listScroll.ts`), 검색 결과도 복원.
+- 수업 탭 → 수업 상세 라우트(`/center/[id]/class/[classId]`) → 예약하기/수강권 구매하기(기존 URL 계약 유지).
+- 수강권 없는 회원의 예약하기: 중앙 Dialog(`ConfirmDialog` icon prop 추가). 서버 검증 변경 없음.
+- 하단 내비: 선택 탭 네이비 pill + 아래→위 점진 블러 레이어, 홈 헤더 문구 "모하빗", 검색 화면 상단 여백.
+- 테스트: `tests/unit/centerDiscovery.test.ts`, 목(mock) 네트워크 Playwright(`playwright.mock.config.ts`, `tests/ui-mock/*`).
+
 ## 2026-10-18 — E2E 3/4 TEST4 정리 로직 안정화(테스트 전용)
 - **원인**: `new-class-creation.spec.ts`의 `cleanupBuyProductMemberships`가 (테스트 회원, 고정 이름 상품)의 수강권을 payments → memberships 순으로만 지웠다. 그 수강권을 쓴 예약이 남아 있으면 `reservations_membership_id_fkey` 위반으로 `beforeAll`(브라우저 실행 전)에서 실패했고, 고정 이름 상품이라 과거 실행 잔여물이 계속 걸렸다. 프로필·상품이 같다는 이유만으로 "내 것"이라 보고 지우는 것도 문제였다.
 - **수정**: 실행마다 이름에 실행 ID(RUN_SHORT)가 든 새 상품을 만들어 과거 잔여물과 겹치지 않게 하고(시작 시 아무 것도 삭제하지 않음), 종료 시 소유를 증명한 경우에만(상품 이름·수강권 프로필/생성 시각·예약은 이 실행의 수업·결제 프로필/시각·그 밖의 참조 0건) reservations → payments → memberships → product 순으로 삭제한다. 하나라도 증명하지 못하면 아무 것도 지우지 않고 실패로 알린다. 새 모듈 `tests/e2e/fixtures/runOwnedProductCleanup.ts`, 단위·격리 PostgreSQL(PGlite, 실제 FK) 테스트 추가. 앱 코드·SQL·RLS 변경 없음.

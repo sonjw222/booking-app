@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
-import UiIcon from "./UiIcon";
+import UiIcon, { type IconName } from "./UiIcon";
 
 type Props = {
   open: boolean;
@@ -10,12 +10,13 @@ type Props = {
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
+  icon?: IconName;   // 기본: danger면 alert, 아니면 check
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 };
 
-export default function ConfirmDialog({ open, title, description, confirmLabel = "확인", cancelLabel = "취소", danger = false, busy = false, onConfirm, onCancel }: Props) {
+export default function ConfirmDialog({ open, title, description, confirmLabel = "확인", cancelLabel = "취소", danger = false, icon, busy = false, onConfirm, onCancel }: Props) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const sheetRef = useRef<HTMLElement>(null);
   const id = useId();
@@ -56,7 +57,7 @@ export default function ConfirmDialog({ open, title, description, confirmLabel =
     if (event.target === event.currentTarget && !busy) onCancel();
   }}>
     <section ref={sheetRef} tabIndex={-1} className="confirm-sheet" role="alertdialog" aria-modal="true" aria-busy={busy} aria-labelledby={`${id}-title`} aria-describedby={description ? `${id}-description` : undefined}>
-      <div className={`confirm-symbol ${danger ? "danger" : ""}`}><UiIcon name={danger ? "alert" : "check"} size={22} /></div>
+      <div className={`confirm-symbol ${danger ? "danger" : ""}`}><UiIcon name={icon ?? (danger ? "alert" : "check")} size={22} /></div>
       <h2 id={`${id}-title`}>{title}</h2>
       {description && <p id={`${id}-description`}>{description}</p>}
       <div className="confirm-actions">

@@ -6,9 +6,13 @@ import { searchHome, searchClasses, haversineKm, NEARBY_RADIUS_KM, type SearchCe
 import { centerPhotoUrl } from "../../lib/center";
 import EmptyState from "../components/EmptyState";
 import AppButton from "../components/AppButton";
+import { consumeListScroll, rememberListScroll } from "../../lib/listScroll";
 
 const PAGE_SIZE = 20;
 const RECENT_KEY = "mwhabit_recent_searches";
+// 검색 결과에서 센터/수업으로 들어갔다가 뒤로가기로 돌아오면 검색어·범위·필터·스크롤을 그대로 복원한다(같은 탭 세션 안에서만).
+const STATE_KEY = "mwhabit_search_state";
+const SCROLL_KEY = "search";
 type Scope = "all" | "classes" | "centers";
 
 export default function SearchPage() {
@@ -39,6 +43,35 @@ export default function SearchPage() {
       if (Array.isArray(saved)) setRecent(saved.filter((x): x is string => typeof x === "string").slice(0, 5));
     } catch { /* 잘못된 저장값은 무시 */ }
   }, []);
+
+  const restoredState = useRef(false);
+  useEffect(() => {
+    // 뒤로가기(popstate)로 돌아온 경우에만 복원한다. 처음 여는 찾기 탭은 항상 빈 검색창.
+    if (restoredState.current) return;
+    restoredState.current = true;
+    const y = consumeListScroll(SCROLL_KEY);
+    if (y == null) { try { sessionStorage.removeItem(STATE_KEY); } catch { /* 무시 */ } return; }
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(STATE_KEY) ?? "null") as { kw?: string; scope?: Scope; todayOnly?: boolean } | null;
+      if (saved && typeof saved.kw === "string" && saved.kw.trim().length >= 2) {
+        immediateTerm.current = saved.kw.trim();
+        const restoredKw = saved.kw;
+        // 마운트 직후 한 번만 하는 복원 — effect 본문에서 동기 setState를 하지 않도록 마이크로태스크로 미룬다.
+        void Promise.resolve().then(() => {
+          setKw(restoredKw);
+          if (saved.scope === "classes" || saved.scope === "centers" || saved.scope === "all") setScope(saved.scope);
+          if (saved.todayOnly === true) setTodayOnly(true);
+          return runSearch(restoredKw);
+        }).then(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+      }
+    } catch { /* 잘못된 저장값은 무시 */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function rememberSearchState() {
+    rememberListScroll(SCROLL_KEY);
+    try { sessionStorage.setItem(STATE_KEY, JSON.stringify({ kw, scope, todayOnly })); } catch { /* 사생활 모드 */ }
+  }
 
   async function runSearch(term: string, remember = false) {
     const query = term.trim();
@@ -152,14 +185,14 @@ export default function SearchPage() {
         {noResults ? <EmptyState icon="search" title="검색 결과가 없어요" description="더 짧은 이름이나 다른 종목으로 검색해보세요." /> : <>
           {scope === "all" && categories.length > 0 && <section className="search-category-results" aria-label="종목 검색 결과">
             <h2 className="menu-section-label">종목</h2>
-            <div className="search-category-grid">{categories.map((cat) => <Link key={cat} className="list-row" href={`/category/${encodeURIComponent(cat)}`} prefetch={false}>
+            <div className="search-category-grid">{categories.map((cat) => <Link key={cat} className="list-row" href={`/category/${encodeURIComponent(cat)}`} prefetch={false} onClick={rememberSearchState}>
               <div className="left">{cat}</div><span className="chevron" aria-hidden="true">›</span>
             </Link>)}</div>
           </section>}
           {showClasses && <section aria-label="수업 검색 결과">
             <h2 className="menu-section-label">수업 {filteredClasses.length > 0 ? `(${filteredClasses.length}${classes.length === 100 ? "+" : ""})` : ""}</h2>
             {filteredClasses.length === 0 ? <p className="discovery-section-empty">조건에 맞는 예정 수업이 없어요.</p> :
-              <><div className="search-class-grid">{filteredClasses.slice(0, visibleClassCount).map((cls) => <Link key={cls.id} className="search-class-row" href={`/reservation?openClassId=${encodeURIComponent(cls.id)}&openDate=${cls.date}`} prefetch={false}>
+              <><div className="search-class-grid">{filteredClasses.slice(0, visibleClassCount).map((cls) => <Link key={cls.id} className="search-class-row" href={`/reservation?openClassId=${encodeURIComponent(cls.id)}&openDate=${cls.date}`} prefetch={false} onClick={rememberSearchState}>
                 <span className="search-class-time">{cls.startText}</span><strong>{cls.title}</strong><span>{cls.centerName}</span><b>예약 보기 <span aria-hidden="true">›</span></b>
               </Link>)}</div>
               {filteredClasses.length > visibleClassCount && <button type="button" className="discovery-more" onClick={() => setVisibleClassCount((count) => count + PAGE_SIZE)}>수업 더보기 ({filteredClasses.length - visibleClassCount}개 남음)</button>}</>}
@@ -167,7 +200,7 @@ export default function SearchPage() {
           {showCenters && <section aria-label="센터 검색 결과">
             <h2 className="menu-section-label">센터 {filteredCenters.length > 0 ? `(${filteredCenters.length})` : ""}</h2>
             {filteredCenters.length === 0 ? <p className="discovery-section-empty">조건에 맞는 센터가 없어요.</p> : <>
-              <div className="search-center-grid">{filteredCenters.slice(0, visibleCount).map((c) => <Link key={c.id} className="search-center-row" href={`/center/${c.id}`} prefetch={false}>
+              <div className="search-center-grid">{filteredCenters.slice(0, visibleCount).map((c) => <Link key={c.id} className="search-center-row" href={`/center/${c.id}`} prefetch={false} onClick={rememberSearchState}>
                 {c.photoUrl ? <img className="search-center-photo" loading="lazy" decoding="async" src={centerPhotoUrl(c.photoUrl) ?? ""} alt="" /> :
                   <div className="search-center-badge" aria-hidden="true">{c.name.slice(0, 1)}</div>}
                 <div className="search-center-info"><div className="search-center-name">{c.name}</div>
