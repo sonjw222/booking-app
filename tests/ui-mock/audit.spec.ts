@@ -1,6 +1,6 @@
 /* UX 감사 후속(UX-01~16) — 네트워크 목(mock) 기반. 실제 Supabase/결제에 접속하지 않는다. */
 import { test, expect, type Page } from "@playwright/test";
-import { mockSupabase, CLASSES } from "./support/mockSupabase";
+import { mockSupabase, CLASSES, FAR_CLASS } from "./support/mockSupabase";
 
 const kstDate = (iso: string) => new Date(iso).toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
 const cls1 = CLASSES.find((c) => c.id === "cls-1")!;
@@ -152,6 +152,13 @@ test.describe("B·UX-02/03/04 — 공개 수업 상세와 예약 진입", () => 
     await page.goto(openUrl());
     await expect(page).toHaveURL(/\/center\/c-near\/class\/cls-1$/);
     await expect(page.getByRole("heading", { level: 1, name: "아침 하타 요가" })).toBeVisible();
+  });
+
+  test("수강권 있는 회원이 다른 달의 수업 딥링크로 들어와도 수업 상세로 튕기지 않고 예약 확인 시트가 열린다(달 이동 중 목록이 아직 이전 달일 때의 오판 방지)", async ({ page }) => {
+    await mockSupabase(page, { loggedIn: true, hasPass: true, farClass: true });
+    await page.goto(`/reservation?openClassId=cls-far&openDate=${kstDate(FAR_CLASS.start_time)}&center=c-near`);
+    await expect(page.locator(".sheet-title", { hasText: "예약하시겠어요?" })).toBeVisible({ timeout: 20_000 });
+    await expect(page).toHaveURL(/\/reservation/);
   });
 
   test("접근할 수 없거나 없는 수업의 딥링크는 명시적으로 안내", async ({ page }) => {

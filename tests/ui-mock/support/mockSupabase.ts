@@ -13,6 +13,7 @@ export const REVIEWS = [
   { center_id: "c-near", rating: 5 }, { center_id: "c-near", rating: 4 },
   { center_id: "c-far", rating: 5 }, { center_id: "c-far", rating: 5 }, { center_id: "c-far", rating: 4 },
 ];
+export const FAR_CLASS_DAYS = 75;
 const future = (days: number, hour = 19) => { const d = new Date(Date.now() + days * 86400_000); d.setUTCHours(hour - 9, 0, 0, 0); return d.toISOString(); };
 export const CLASSES = [
   { id: "cls-1", center_id: "c-near", title: "아침 하타 요가", description: "호흡과 정렬에 집중하는 기본 하타 요가 수업이에요.\n초보자도 편하게 참여할 수 있어요.", class_format: "group", place: null, start_time: future(2, 7), end_time: future(2, 8), capacity: 10, status: "open", booking_deadline_min: 60, pass_selection_mode: "selected", rooms: { name: "A룸" }, centers: { name: "하늘 요가 스튜디오", categories: ["요가"], status: "approved" } },
@@ -22,10 +23,12 @@ export const CLASSES = [
   { id: "cls-3", center_id: "c-near", title: "저녁 빈야사", description: null, class_format: "private", place: "2층 스튜디오", start_time: future(3, 19), end_time: future(3, 20), capacity: 1, status: "open", booking_deadline_min: null, pass_selection_mode: "all", rooms: null, centers: { name: "하늘 요가 스튜디오", categories: ["요가"], status: "approved" } },
 ];
 
+export const FAR_CLASS = { id: "cls-far", center_id: "c-near", title: "먼 달의 수업", description: null, class_format: "group", place: null, start_time: future(FAR_CLASS_DAYS, 10), end_time: future(FAR_CLASS_DAYS, 11), capacity: 10, status: "open", booking_deadline_min: null, pass_selection_mode: "all", rooms: null, centers: { name: "하늘 요가 스튜디오", categories: ["요가"], status: "approved" } };
+
 function tableOf(url: URL): string { return url.pathname.replace(/^\/rest\/v1\//, "").split("/")[0]; }
 const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(body) });
 
-export type MockOpts = { checkoutProduct?: boolean; twoProfiles?: boolean; usableNone?: boolean; usableOnlyP2?: boolean; exhaustedPass?: boolean; emptyCenterPass?: boolean; payments?: { membership_id: string; sale_type: string; total_amount: number }[]; emptyAllowed?: boolean; allowedFail?: boolean; longAddress?: boolean; manyCenters?: boolean; withNextReservation?: boolean; loggedIn?: boolean; hasPass?: boolean; failCenters?: boolean; noReviews?: boolean; reviewsFail?: boolean };
+export type MockOpts = { farClass?: boolean; checkoutProduct?: boolean; twoProfiles?: boolean; usableNone?: boolean; usableOnlyP2?: boolean; exhaustedPass?: boolean; emptyCenterPass?: boolean; payments?: { membership_id: string; sale_type: string; total_amount: number }[]; emptyAllowed?: boolean; allowedFail?: boolean; longAddress?: boolean; manyCenters?: boolean; withNextReservation?: boolean; loggedIn?: boolean; hasPass?: boolean; failCenters?: boolean; noReviews?: boolean; reviewsFail?: boolean };
 export const requests: string[] = [];
 
 export async function mockSupabase(page: Page, opts: MockOpts = {}) {
@@ -70,9 +73,14 @@ export async function mockSupabase(page: Page, opts: MockOpts = {}) {
     if (t === "classes") {
       const idEq = q.get("id")?.replace("eq.", "");
       const centerEq = q.get("center_id")?.replace("eq.", "");
-      if (idEq) { const row = CLASSES.find((c) => c.id === idEq && (!centerEq || c.center_id === centerEq)); return json(route, wrap(row ? [row] : [])); }
+      const ALL = opts.farClass ? [...CLASSES, FAR_CLASS] : CLASSES;
+      if (idEq) { const row = ALL.find((c) => c.id === idEq && (!centerEq || c.center_id === centerEq)); return json(route, wrap(row ? [row] : [])); }
       const inCenters = q.get("center_id")?.startsWith("in.(") ? q.get("center_id")!.slice(4, -1).split(",") : null;
-      if (inCenters) return json(route, CLASSES.filter((c) => inCenters.includes(c.center_id)).map((c) => ({ ...c, allow_goods: false, allow_cancel: true, room_id: null, centers: { id: c.center_id, name: c.centers.name, categories: c.centers.categories } })));
+      // 월 조회(예약 화면)는 start_time 범위(gte/lt)를 실제로 적용한다 — 다른 달로 이동하는 동안 목록이 그 달 수업만 갖는 실제 동작을 재현.
+      const bounds = q.getAll("start_time");
+      const gte = bounds.find((b) => b.startsWith("gte."))?.slice(4), lt = bounds.find((b) => b.startsWith("lt."))?.slice(3);
+      const inRange = (iso: string) => (!gte || iso >= new Date(gte).toISOString()) && (!lt || iso < new Date(lt).toISOString());
+      if (inCenters) return json(route, ALL.filter((c) => inCenters.includes(c.center_id) && inRange(c.start_time)).map((c) => ({ ...c, allow_goods: false, allow_cancel: true, room_id: null, centers: { id: c.center_id, name: c.centers.name, categories: c.centers.categories } })));
       if (q.get("title")?.startsWith("ilike.")) {   // 검색: lib/home.ts searchClasses — 승인 센터의 시작 전 수업(centers!inner)
         const kw = q.get("title")!.slice(6).replaceAll("%", "");
         return json(route, CLASSES.filter((c) => c.title.includes(kw) && new Date(c.start_time).getTime() > Date.now())

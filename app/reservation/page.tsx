@@ -118,6 +118,8 @@ function ReservationCalendarContent() {
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState<number>(now.getDate());
   const [classes, setClasses] = useState<ClassInfo[]>([]);
+  // classes가 어느 달 데이터인지. 달을 옮기는 도중에는 year/month만 먼저 바뀌고 classes는 아직 이전 달이라, 이 값이 현재 달과 같을 때만 "목록에 없음"을 판단한다.
+  const [loadedMonth, setLoadedMonth] = useState<string | null>(null);
   const [centers, setCenters] = useState<CenterInfo[]>([]);
   const [centerPick, setCenterPick] = useState<string | null>(null); // 로컬 센터 필터
   const [centerSheet, setCenterSheet] = useState(false);
@@ -203,6 +205,7 @@ function ReservationCalendarContent() {
         fetchMyProfiles(accountId),
       ]);
       setClasses(data.classes);
+      setLoadedMonth(`${year}-${month}`);
       setCenters(data.centers);
       setHolidays(data.holidays);
       // 프로필 목록 (예약 주체 선택용). 대표 프로필을 기본 선택
@@ -243,6 +246,7 @@ function ReservationCalendarContent() {
       if (y !== year || m !== month) { setYear(y); setMonth(m); return; } // 달 바뀌면 재로드 후 다시 시도
       setSelectedDay(d);
     }
+    if (loadedMonth !== `${year}-${month}`) return;   // 이 달 데이터가 아직 안 왔다 — 이전 달 목록으로 판단하지 않는다(재로드 후 다시 시도)
     const target = classes.find((c) => c.id === openClassId);
     if (target) {
       autoOpenDone.current = true;
@@ -260,7 +264,7 @@ function ReservationCalendarContent() {
       if (already) { setOpenClassMissing(true); return; }
       router.replace(`/center/${centerOfClass}/class/${openClassId}`);
     })();
-  }, [loading, classes, activeProfileId, searchParams, year, month]);
+  }, [loading, classes, activeProfileId, searchParams, year, month, loadedMonth]);
 
   // URL이 가리킨 센터가 이번 달 수업 센터 목록에 없으면 그 센터의 이름·보유 수강권을 따로(읽기 전용) 조회한다(UX-15).
   const centerParam = searchParams.get("center");
