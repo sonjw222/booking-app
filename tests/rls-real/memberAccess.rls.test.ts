@@ -3,6 +3,7 @@
    - 실행: tests/rls-real/run.sh up && npm run test:rls-real   (Docker/Colima 필요, 운영·공유 DEV 접속 없음)
    한계: 운영 DB의 "실제" 정책·GRANT가 아니라 저장소 SQL을 적용한 재구성이다(어떤 draft 마이그레이션이 운영에 적용됐는지는 이 저장소만으로 알 수 없다). */
 import { createHmac } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
@@ -36,6 +37,8 @@ vi.mock("../../lib/supabaseClient", () => ({
     },
   },
 }));
+// 시드/상태 준비 전용(권한 검증이 아니다) — 로컬 격리 DB 컨테이너에만 접속한다.
+const sql = (q: string) => execFileSync("docker", ["exec", "qa-rls-pg", "psql", "-U", "postgres", "-d", "qa", "-tAc", q], { encoding: "utf8" }).trim();
 const as = (sub: string | null) => { current = { client: clientFor(sub), sub }; return current.client; };
 
 import { fetchMembershipOrigins } from "../../lib/membershipOrigin";
@@ -183,5 +186,58 @@ d("격리 PostgREST(실제 RLS) — UX 감사 후속", () => {
     expect(cancelTwice.error).not.toBeNull();
     expect(await remaining()).toBe(3);
     expect(((await as(U.A).from("reservations").select("status").eq("id", reservationId)).data as { status: string }[])[0].status).toBe("cancelled");
+  });
+  it("프로필 공유 정책(add_shared_passes 기준 — fix_usable_memberships_shared.sql): 가족 프로필로도 예약되고 UI 판정과 서버 판정이 같다", async () => {
+    const a = as(U.A);
+    const remaining = async () => ((await a.from("memberships").select("remaining_count").eq("id", grantedMembershipId)).data as { remaining_count: number }[])[0].remaining_count;
+    const before = await remaining();
+    // UI 판정: 가족 프로필(pA2)도 usable
+    const view = await fetchViewerClassState(ID.centerPub, ID.clsAll);
+    if (view.kind !== "member") throw new Error("member여야 한다");
+    expect(view.profiles.find((p) => p.profile.id === ID.pA2)?.status).toBe("usable");
+    // 서버 판정: 같은 수강권으로 가족 프로필 예약 성공, 1회 차감
+    const ok = await a.rpc("reserve_with_membership", { p_class_id: ID.clsAll, p_profile_id: ID.pA2, p_membership_id: grantedMembershipId });
+    expect(ok.error).toBeNull();
+    expect(await remaining()).toBe(before - 1);
+    const res = await a.from("reservations").select("id, profile_id, status").eq("class_id", ID.clsAll).eq("profile_id", ID.pA2).in("status", ["confirmed", "waitlisted"]);
+    expect(res.data).toHaveLength(1);
+    const cancel = await a.rpc("cancel_reservation", { p_reservation_id: (res.data as { id: string }[])[0].id });
+    expect(cancel.error).toBeNull();
+    expect(await remaining()).toBe(before);
+  });
+
+  it("허용되지 않은 사용은 서버가 거부하고 횟수를 차감하지 않는다: 타 계정 프로필·타 계정 수강권", async () => {
+    const a = as(U.A);
+    const remaining = async () => ((await a.from("memberships").select("remaining_count").eq("id", grantedMembershipId)).data as { remaining_count: number }[])[0].remaining_count;
+    const before = await remaining();
+    // A가 B의 프로필로 자기 수강권을 쓰려는 경우
+    const spoofProfile = await a.rpc("reserve_with_membership", { p_class_id: ID.clsAll, p_profile_id: ID.pB1, p_membership_id: grantedMembershipId });
+    expect(spoofProfile.error).not.toBeNull();
+    // B가 A의 수강권을 쓰려는 경우(본인 프로필로)
+    const stolen = await as(U.B).rpc("reserve_with_membership", { p_class_id: ID.clsAll, p_profile_id: ID.pB1, p_membership_id: grantedMembershipId });
+    expect(stolen.error).not.toBeNull();
+    // A가 B의 수강권을 쓰려는 경우
+    const theirs = await as(U.A).rpc("reserve_with_membership", { p_class_id: ID.clsAll, p_profile_id: ID.pA1, p_membership_id: ID.memB });
+    expect(theirs.error).not.toBeNull();
+    expect(await remaining()).toBe(before);
+    expect(sql(`select remaining_count from memberships where id='${ID.memB}'`)).toBe("10");
+    expect(sql(`select count(*) from reservations where class_id='${ID.clsAll}' and status in ('confirmed','waitlisted')`)).toBe("0");   // 실패한 예약이 남지 않음
+  });
+
+  it("[현재 동작 기록] 옛 귀속 컬럼(bound_profile_id)이 채워진 수강권: 예약 목록(usable)과 서버 예약 판정이 일치하는지", async () => {
+    sql(`update memberships set bound_profile_id='${ID.pA1}' where id='${grantedMembershipId}'`);
+    try {
+      const a = as(U.A);
+      const usable = await a.rpc("usable_memberships_for_classes", { p_class_ids: [ID.clsAll], p_profile_id: ID.pA2 });
+      const listedForFamily = (usable.data as { membership_id: string }[]).some((r) => r.membership_id === grantedMembershipId);
+      const book = await a.rpc("reserve_with_membership", { p_class_id: ID.clsAll, p_profile_id: ID.pA2, p_membership_id: grantedMembershipId });
+      // 목록에 보이는 것과 서버가 허용하는 것이 같아야 한다(목록 O → 예약 성공, 목록 X → 예약 거부)
+      expect(book.error === null).toBe(listedForFamily);
+      if (book.error === null) {
+        const rid = (await a.from("reservations").select("id").eq("class_id", ID.clsAll).eq("profile_id", ID.pA2).in("status", ["confirmed"])).data as { id: string }[];
+        await a.rpc("cancel_reservation", { p_reservation_id: rid[0].id });
+      }
+      console.log(`[bound_profile_id 채워진 수강권] 가족 프로필: 목록=${listedForFamily ? "표시" : "숨김"}, 서버=${book.error ? "거부" : "허용"}`);
+    } finally { sql(`update memberships set bound_profile_id=null where id='${grantedMembershipId}'`); }
   });
 });

@@ -12,6 +12,9 @@
 - **검색(UX-07·08)**: 센터 카드에 평점·후기 수·지역(없으면 '아직 후기 없음'/'위치 미등록'). 결과 없음을 검색어/오늘 필터/주변 필터로 구분해 해제 버튼 제공.
 - **검색 입력(하이드레이션 전 입력)**: 자바스크립트가 늦게 로드되는 기기에서 먼저 친 검색어가 React 상태에 반영되지 않아 입력만 남고 검색이 시작되지 않던 문제(간헐적인 WebKit 테스트 실패의 실제 원인) — 마운트 시 입력창 값을 상태로 가져온다. 재현 테스트(스크립트 로드 지연)가 수정 전에는 실패한다.
 - **격리 RLS 검증 인프라**: `tests/rls-real/run.sh up && npm run test:rls-real` — 저장소 SQL(schema + 마이그레이션)로 로컬 PostgreSQL 16 + PostgREST를 만들고 일반 회원/관리자 JWT로 `usable_memberships_for_classes`·`payments`·공개 상세 비노출·무료 지급→예약→1회 차감→취소→복구(동시 중복 클릭 포함)를 검증한다. 운영/공유 DEV 접속 없음.
+- **프로필 공유 정책 검증**: 서버 정책은 계정 단위 공유(fix_usable_memberships_shared.sql, 옛 `bound_profile_id`는 목록·예약 모두 무시)이며 화면 판정과 일치한다. 타 계정 프로필/수강권 사용은 서버가 거부하고 횟수를 차감하지 않는다(`tests/rls-real`).
+- **관리자 회원 화면(UX-14) 브라우저 검증**: `playwright.rlsui.config.ts` + `tests/rls-real/manager-members.ui.spec.ts` — 격리 PostgREST의 실제 데이터(번호 없는 연결 회원·가족 프로필·번호 있는 회원)와, 응답 조작(mock)으로 만든 '계정 없는 회원' 상태를 구분해 목록·상세 문구 일치를 확인.
+- **실제 DEV E2E가 잡은 것**: 직접결제 E2E의 옛 문구 단언(`결제 없이 주문만 접수돼요`)을 UX-11 문구로 갱신, 다른 달 딥링크 오판 회귀 수정.
 - 테스트: 단위(`auditUxLogic`, `memberAppLinked(.fetch)`), Playwright mock(`audit.spec.ts`) 등. 서버 쪽 환불 허용(0원 수강권 자가 환불)은 이번 범위에서 바꾸지 않았다(TODO 참고).
 
 ## 2026-10-18 (2) — 독립 리뷰 후속 보완

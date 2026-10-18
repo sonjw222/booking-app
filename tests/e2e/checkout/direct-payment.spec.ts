@@ -48,7 +48,11 @@ test("직접결제를 고르면 PG 없이 주문만 접수되고, 이용권은 �
   await expect(page.locator(".checkout-pay-btn")).toBeVisible({ timeout: 15000 });
 
   await page.locator(".pay-method", { hasText: "직접결제" }).click();
-  await expect(page.locator(".perm-guide", { hasText: "결제 없이 주문만 접수돼요" })).toBeVisible();
+  // UX-11: 직접결제는 결제가 아니라 주문 접수다 — 안내·금액 라벨·버튼이 같은 말을 한다.
+  await expect(page.locator(".perm-guide", { hasText: "이 버튼은 주문만 접수하고 결제는 하지 않아요" })).toBeVisible();
+  await expect(page.locator(".checkout-total", { hasText: "센터에서 결제할 금액" })).toBeVisible();
+  await expect(page.locator(".checkout-pay-btn")).toContainText("주문 접수하기");
+  await expect(page.locator(".checkout-pay-btn")).not.toContainText("결제하기");
 
   await page.locator(".checkout-pay-btn").click();
   await expect(page.locator(".checkout-done-title", { hasText: "주문이 접수됐어요" })).toBeVisible({ timeout: 15000 });
