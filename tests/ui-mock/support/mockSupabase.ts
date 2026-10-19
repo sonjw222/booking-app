@@ -13,6 +13,7 @@ export const REVIEWS = [
   { center_id: "c-near", rating: 5 }, { center_id: "c-near", rating: 4 },
   { center_id: "c-far", rating: 5 }, { center_id: "c-far", rating: 5 }, { center_id: "c-far", rating: 4 },
 ];
+export const FAR_CLASS_DAYS = 75;
 const future = (days: number, hour = 19) => { const d = new Date(Date.now() + days * 86400_000); d.setUTCHours(hour - 9, 0, 0, 0); return d.toISOString(); };
 export const CLASSES = [
   { id: "cls-1", center_id: "c-near", title: "아침 하타 요가", description: "호흡과 정렬에 집중하는 기본 하타 요가 수업이에요.\n초보자도 편하게 참여할 수 있어요.", class_format: "group", place: null, start_time: future(2, 7), end_time: future(2, 8), capacity: 10, status: "open", booking_deadline_min: 60, pass_selection_mode: "selected", rooms: { name: "A룸" }, centers: { name: "하늘 요가 스튜디오", categories: ["요가"], status: "approved" } },
@@ -22,10 +23,12 @@ export const CLASSES = [
   { id: "cls-3", center_id: "c-near", title: "저녁 빈야사", description: null, class_format: "private", place: "2층 스튜디오", start_time: future(3, 19), end_time: future(3, 20), capacity: 1, status: "open", booking_deadline_min: null, pass_selection_mode: "all", rooms: null, centers: { name: "하늘 요가 스튜디오", categories: ["요가"], status: "approved" } },
 ];
 
+export const FAR_CLASS = { id: "cls-far", center_id: "c-near", title: "먼 달의 수업", description: null, class_format: "group", place: null, start_time: future(FAR_CLASS_DAYS, 10), end_time: future(FAR_CLASS_DAYS, 11), capacity: 10, status: "open", booking_deadline_min: null, pass_selection_mode: "all", rooms: null, centers: { name: "하늘 요가 스튜디오", categories: ["요가"], status: "approved" } };
+
 function tableOf(url: URL): string { return url.pathname.replace(/^\/rest\/v1\//, "").split("/")[0]; }
 const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(body) });
 
-export type MockOpts = { emptyAllowed?: boolean; allowedFail?: boolean; longAddress?: boolean; manyCenters?: boolean; withNextReservation?: boolean; loggedIn?: boolean; hasPass?: boolean; failCenters?: boolean; noReviews?: boolean; reviewsFail?: boolean };
+export type MockOpts = { farClass?: boolean; checkoutProduct?: boolean; twoProfiles?: boolean; usableNone?: boolean; usableOnlyP2?: boolean; exhaustedPass?: boolean; emptyCenterPass?: boolean; payments?: { membership_id: string; sale_type: string; total_amount: number }[]; emptyAllowed?: boolean; allowedFail?: boolean; longAddress?: boolean; manyCenters?: boolean; withNextReservation?: boolean; loggedIn?: boolean; hasPass?: boolean; failCenters?: boolean; noReviews?: boolean; reviewsFail?: boolean };
 export const requests: string[] = [];
 
 export async function mockSupabase(page: Page, opts: MockOpts = {}) {
@@ -41,6 +44,14 @@ export async function mockSupabase(page: Page, opts: MockOpts = {}) {
       if (fn === "my_account_id") return json(route, opts.loggedIn ? "acc-1" : null);
       // 운영 권한 재현: class_trainer_names(uuid[]) 는 anon 에 EXECUTE 가 없다(권한 오류). 로그인하면 배정 강사를 돌려준다.
       if (fn === "class_trainer_names") return opts.loggedIn ? json(route, [{ class_id: "cls-1", name: "김하늘", sort_order: 1 }, { class_id: "cls-1", name: "이가람", sort_order: 2 }]) : json(route, { code: "42501", message: "permission denied for function class_trainer_names" }, 403);
+      if (fn === "fetch_purchasable_products" || fn === "fetch_public_storefront_products") {
+        return json(route, opts.checkoutProduct ? [{ id: "prod-long", center_id: "c-near", center_name: "하늘 요가 스튜디오", name: "[QA] 매우 긴 이름의 프리미엄 스케줄링 수강권 12주 과정 (평일 오전반)", price: 160000, product_kind: "pass", total_count: 2, unlimited: false, description: null, sizes: [], auto_book_days: null, group_label: null, max_quantity: null, coupon_eligible: false, weekday_selectable: false, time_selectable: false, purchase_count_selectable: false }] : []);
+      }
+      if (fn === "usable_memberships_for_classes") {
+        const body = req.postDataJSON() as { p_class_ids?: string[]; p_profile_id?: string } | null;
+        const ok = !!opts.loggedIn && !!opts.hasPass && !opts.usableNone && !opts.exhaustedPass && (!opts.usableOnlyP2 || body?.p_profile_id === "p2");
+        return json(route, ok ? (body?.p_class_ids ?? []).map((id) => ({ class_id: id, membership_id: "m1", product_name: "하타 10회권", remaining_count: 5, expires_at: "2099-01-01", owner_profile: "회원A", is_mine: true, issued_at: null })) : []);
+      }
       return json(route, []);
     }
     const t = tableOf(url);
@@ -50,6 +61,8 @@ export async function mockSupabase(page: Page, opts: MockOpts = {}) {
     if (t === "centers") {
       if (opts.failCenters) return json(route, { message: "boom" }, 500);
       const idEq = q.get("id")?.replace("eq.", "");
+      // 승인된 센터인데 등록된 수업이 하나도 없는 센터(예약 화면의 센터 맥락 검증용). 그 밖의 알 수 없는 id는 RLS처럼 "읽히지 않음".
+      if (idEq === "c-empty-center") return json(route, wrap([{ id: "c-empty-center", name: "수업 준비 중 스튜디오", categories: ["요가"], status: "approved" }]));
       let rows: Record<string, unknown>[] = opts.manyCenters
         ? Array.from({ length: 24 }, (_, i) => ({ ...CENTERS[i % CENTERS.length], id: `c-${i}`, name: `센터 ${String(i).padStart(2, "0")}`, created_at: new Date(Date.now() - i * 1000).toISOString() }))
         : [...CENTERS, ...(opts.longAddress ? [LONG_ADDR_CENTER] : [])];
@@ -60,7 +73,19 @@ export async function mockSupabase(page: Page, opts: MockOpts = {}) {
     if (t === "classes") {
       const idEq = q.get("id")?.replace("eq.", "");
       const centerEq = q.get("center_id")?.replace("eq.", "");
-      if (idEq) { const row = CLASSES.find((c) => c.id === idEq && (!centerEq || c.center_id === centerEq)); return json(route, wrap(row ? [row] : [])); }
+      const ALL = opts.farClass ? [...CLASSES, FAR_CLASS] : CLASSES;
+      if (idEq) { const row = ALL.find((c) => c.id === idEq && (!centerEq || c.center_id === centerEq)); return json(route, wrap(row ? [row] : [])); }
+      const inCenters = q.get("center_id")?.startsWith("in.(") ? q.get("center_id")!.slice(4, -1).split(",") : null;
+      // 월 조회(예약 화면)는 start_time 범위(gte/lt)를 실제로 적용한다 — 다른 달로 이동하는 동안 목록이 그 달 수업만 갖는 실제 동작을 재현.
+      const bounds = q.getAll("start_time");
+      const gte = bounds.find((b) => b.startsWith("gte."))?.slice(4), lt = bounds.find((b) => b.startsWith("lt."))?.slice(3);
+      const inRange = (iso: string) => (!gte || iso >= new Date(gte).toISOString()) && (!lt || iso < new Date(lt).toISOString());
+      if (inCenters) return json(route, ALL.filter((c) => inCenters.includes(c.center_id) && inRange(c.start_time)).map((c) => ({ ...c, allow_goods: false, allow_cancel: true, room_id: null, centers: { id: c.center_id, name: c.centers.name, categories: c.centers.categories } })));
+      if (q.get("title")?.startsWith("ilike.")) {   // 검색: lib/home.ts searchClasses — 승인 센터의 시작 전 수업(centers!inner)
+        const kw = q.get("title")!.slice(6).replaceAll("%", "");
+        return json(route, CLASSES.filter((c) => c.title.includes(kw) && new Date(c.start_time).getTime() > Date.now())
+          .map((c) => ({ ...c, centers: { name: c.centers.name, status: "approved", latitude: 37.5745, longitude: 126.978 } })));
+      }
       const title = q.get("title")?.replace("eq.", "");
       let rows = CLASSES.filter((c) => c.center_id === (q.get("center_id")?.replace("eq.", "") ?? c.center_id) && (q.get("status") ? c.status === q.get("status")!.replace("eq.", "") : true));
       if (title) rows = rows.filter((c) => c.title === title);
@@ -73,8 +98,18 @@ export async function mockSupabase(page: Page, opts: MockOpts = {}) {
       if (!opts.loggedIn || opts.emptyAllowed) return json(route, []);
       return json(route, [{ class_id: "cls-1", products: { name: "하타 10회권" } }, { class_id: "cls-1", products: { name: "기간제 1개월" } }]);
     }
-    if (t === "profiles") return json(route, opts.loggedIn ? [{ id: "p1" }] : []);
-    if (t === "memberships") return json(route, opts.loggedIn && opts.hasPass ? [{ id: "m1", remaining_count: 5, expires_at: "2099-01-01", status: "active", products: { product_kind: "pass" } }] : []);
+    if (t === "profiles") return json(route, opts.loggedIn ? [{ id: "p1", name: "회원A", label: null, is_primary: true, account_id: "acc-1" }, ...(opts.twoProfiles ? [{ id: "p2", name: "가족B", label: "자녀", is_primary: false, account_id: "acc-1" }] : [])] : []);
+    if (t === "accounts") return json(route, wrap([{ id: "acc-1", name: "회원A", phone: null, is_member: true, is_manager: false, is_platform_admin: false, marketing_consent: false }]));
+    if (t === "payments") return json(route, opts.payments ?? []);
+    if (t === "memberships") {
+      if (!opts.loggedIn) return json(route, []);
+      const rows: Record<string, unknown>[] = [];
+      const recent = new Date(Date.now() - 2 * 3600_000).toISOString();
+      if (opts.hasPass) rows.push({ id: "m1", profile_id: "p1", bound_profile_id: null, center_id: "c-near", product_id: "prod-1", product_name: "하타 5회권", total_count: 5, remaining_count: opts.exhaustedPass ? 0 : 5, expires_at: "2099-01-01", starts_at: "2026-01-01", created_at: recent, status: "active", centers: { name: "하늘 요가 스튜디오" }, products: { product_kind: "pass", unlimited: false } });
+      if (opts.emptyCenterPass) rows.push({ id: "m-free", profile_id: "p1", bound_profile_id: null, center_id: "c-empty-center", product_id: "prod-free", product_name: "[QA] UX 검증용 무료 3회권", total_count: 3, remaining_count: 3, expires_at: null, starts_at: "2026-01-01", created_at: recent, status: "active", centers: { name: "수업 준비 중 스튜디오" }, products: { product_kind: "pass", unlimited: false } });
+      const centerEq = q.get("center_id")?.replace("eq.", "");
+      return json(route, centerEq ? rows.filter((r) => r.center_id === centerEq) : rows);
+    }
     return json(route, wrap([]));
   });
   if (opts.loggedIn) {

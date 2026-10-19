@@ -5,6 +5,8 @@ import { arrivedByHistoryBack } from "./appHistory";
 
 const PREFIX = "mwhabit_list_scroll:";
 const MAX_AGE_MS = 30 * 60 * 1000;
+// popstate 이후 목록이 마운트될 때까지 허용하는 시간. 느린 기기·느린 네트워크에서 목록 화면 로딩이 3초를 넘기면 복원이 조용히 사라지던 문제(WebKit에서 간헐 재현)를 막는다.
+const ARRIVAL_WINDOW_MS = 10_000;
 
 export function rememberListScroll(key: string): void {
   try { sessionStorage.setItem(PREFIX + key, JSON.stringify({ y: Math.max(0, Math.round(window.scrollY)), at: Date.now() })); } catch { /* 사생활 모드 */ }
@@ -14,7 +16,7 @@ export function consumeListScroll(key: string): number | null {
   try {
     const raw = sessionStorage.getItem(PREFIX + key);
     sessionStorage.removeItem(PREFIX + key);
-    if (!raw || !arrivedByHistoryBack(3000)) return null;
+    if (!raw || !arrivedByHistoryBack(ARRIVAL_WINDOW_MS)) return null;
     const parsed = JSON.parse(raw) as { y?: unknown; at?: unknown };
     if (typeof parsed.y !== "number" || typeof parsed.at !== "number" || Date.now() - parsed.at > MAX_AGE_MS) return null;
     return parsed.y;

@@ -7,6 +7,7 @@
 
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
+import { fetchMembershipOrigins, FREE_GRANT_REFUND_NOTE, type MembershipOrigin } from "./membershipOrigin";
 
 export type Order = {
   id: string;
@@ -261,6 +262,8 @@ export type PurchaseItem = {
   refundReason: string;
   cancellable: boolean;       // P1-2: 아직 미발급 주문을 회원이 직접 취소할 수 있는지
   kind: "pass" | "goods";
+  origin: MembershipOrigin;   // 무료 지급 / 유료 구매 / 알 수 없음(payments 기준). 주문을 못 찾은 것(amountKnown=false)과 무료는 다르다.
+  amountKnown: boolean;       // amount가 실제 주문/결제에서 온 값인지
 };
 
 const KST_DT_FULL = new Intl.DateTimeFormat("ko-KR", {
@@ -293,6 +296,7 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
   if (ordsErr?.code === "42703") ({ data: ords } = (await runOrd(ordCols)) as any);
 
   const out: PurchaseItem[] = [];
+  const origins = await fetchMembershipOrigins((mems ?? []).map((m: { id: string }) => m.id));
 
   for (const m of mems ?? []) {
     const created = (m as any).created_at;
@@ -302,9 +306,11 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
     const used = total != null && remain != null && remain !== total;
     const st = (m as any).status;
 
+    const origin = origins[(m as { id: string }).id] ?? "unknown";
     let refundable = false;
     let reason = "";
     if (st === "refunded") reason = "환불 완료";
+    else if (origin === "free_grant") reason = FREE_GRANT_REFUND_NOTE;
     else if (hours > 24) reason = "환불은 결제 후 24시간이 지나 센터에 직접 문의해주세요.";
     else if (used) reason = "이미 사용한 수강권은 센터에 직접 문의해주세요.";
     else { refundable = true; reason = ""; }
@@ -322,6 +328,8 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
       centerName: (m as any).centers?.name ?? "센터",
       productName: (m as any).product_name,
       amount: matched ? (matched as any).amount : 0,
+      amountKnown: !!matched,
+      origin,
       status: st,
       purchasedAt: KST_DT_FULL.format(new Date(created)),
       createdAtIso: created,
@@ -359,6 +367,8 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
       refundReason: cancellable ? "" : "취소된 주문이에요",
       cancellable,
       kind: "pass",
+      origin: "unknown",
+      amountKnown: true,
     });
   }
 

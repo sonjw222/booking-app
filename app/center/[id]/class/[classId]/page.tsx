@@ -12,10 +12,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  classBookability, fetchCenterClassDetail, fetchUpcomingSessions, formatBookingDeadline, formatClassWhen, remainingSpots,
+  classBookability, fetchCenterClassDetail, fetchUpcomingSessions, formatBookingDeadline, formatCancelPolicy, formatClassWhen, remainingSpots,
   type ClassDetail, type UpcomingSession,
 } from "../../../../../lib/classDetail";
-import { hasActivePassAtCenter } from "../../../../../lib/center";
+import { BLOCKED_COPY, decideClassAction, fetchViewerClassState, type ViewerState } from "../../../../../lib/classViewer";
 import { formatInstructorNames } from "../../../../../lib/instructorDisplay";
 import { reservationReturnUrl } from "../../../../../lib/reservationNav";
 import Loading from "../../../../components/Loading";
@@ -32,7 +32,8 @@ export default function ClassDetailPage() {
   const classId = String(params.classId);
   const [detail, setDetail] = useState<ClassDetail | null>(null);
   const [sessions, setSessions] = useState<UpcomingSession[]>([]);
-  const [hasPass, setHasPass] = useState(false);
+  const [viewer, setViewer] = useState<ViewerState | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [needPassDialog, setNeedPassDialog] = useState(false);
@@ -47,10 +48,13 @@ export default function ClassDetailPage() {
         setDetail(d);
         if (d) {
           // 보조 정보 — 실패해도 상세는 보여준다.
-          const [s, p] = await Promise.allSettled([fetchUpcomingSessions(centerId, d.title, d.id), hasActivePassAtCenter(centerId)]);
+          const [s, v] = await Promise.allSettled([fetchUpcomingSessions(centerId, d.title, d.id), fetchViewerClassState(centerId, d.id)]);
           if (!alive) return;
           setSessions(s.status === "fulfilled" ? s.value : []);
-          setHasPass(p.status === "fulfilled" ? p.value : false);
+          const state = v.status === "fulfilled" ? v.value : ({ kind: "error" } as ViewerState);
+          setViewer(state);
+          // 기본 프로필: 사용 가능한 수강권이 있는 첫 프로필(대표 프로필 우선), 없으면 대표 프로필.
+          if (state.kind === "member") setProfileId((state.profiles.find((p) => p.status === "usable") ?? state.profiles[0])?.profile.id ?? null);
         }
       } catch { if (alive) setError(true); }
       finally { if (alive) setLoading(false); }
@@ -91,8 +95,17 @@ export default function ClassDetailPage() {
     : detail.trainers.kind === "unavailable" ? "불러오지 못했어요" : null;
   const canReserve = bookability === "open";
   const notice = bookability === "cancelled" ? "폐강된 수업이에요" : bookability === "past" ? "이미 시작했거나 지난 수업이에요" : bookability === "closed" ? "예약이 마감된 수업이에요" : null;
-  const reserveHref = reservationReturnUrl({ classId: detail.id, date: detail.date, center: centerId });
-  const buyHref = `${centerHref}?buy=1&reserveClassId=${encodeURIComponent(detail.id)}&reserveDate=${encodeURIComponent(detail.date)}&reserveCenter=${encodeURIComponent(centerId)}`;
+  const members = viewer?.kind === "member" ? viewer.profiles : [];
+  const action = decideClassAction(bookability, viewer, profileId);
+  const curProfile = members.find((p) => p.profile.id === profileId) ?? members[0] ?? null;
+  const reserveBase = reservationReturnUrl({ classId: detail.id, date: detail.date, center: centerId });
+  const reserveHref = members.length > 1 && curProfile ? `${reserveBase}&profile=${encodeURIComponent(curProfile.profile.id)}` : reserveBase;
+  // 이 수업에 쓸 수 있는 상품만 먼저 보여 달라고 센터 구매 시트에 넘긴다(지정 수강권 수업일 때). 전체 보기는 시트 안에서 가능.
+  const allowedIds = detail.allowedPasses.kind === "list" ? detail.allowedPasses.productIds : [];
+  const buyHref = `${centerHref}?buy=1&reserveClassId=${encodeURIComponent(detail.id)}&reserveDate=${encodeURIComponent(detail.date)}&reserveCenter=${encodeURIComponent(centerId)}${allowedIds.length > 0 ? `&productIds=${allowedIds.map(encodeURIComponent).join(",")}` : ""}`;
+  const loginHref = `/login?next=${encodeURIComponent(`${centerHref}/class/${detail.id}`)}`;
+  const blocked = action.kind === "blocked" ? BLOCKED_COPY[action.reason] : null;
+  const allowedNote = detail.allowedPasses.kind === "list" ? ` 이 수업에 쓸 수 있는 수강권: ${detail.allowedPasses.names.join(", ")}.` : "";
 
   const rows: { label: string; value: React.ReactNode }[] = [
     { label: "종목", value: detail.centerCategories.length > 0 ? detail.centerCategories.join(" · ") : null },
@@ -101,6 +114,7 @@ export default function ClassDetailPage() {
     { label: "담당 강사", value: instructors },
     { label: "정원", value: `${detail.capacity}명${canReserve && detail.reservedKnown ? ` · ${spots > 0 ? `${spots}자리 남음` : "정원 마감(대기 가능)"}` : ""}` },
     { label: "예약 마감", value: deadline },
+    { label: "취소 조건", value: formatCancelPolicy(detail) },
   ].filter((r) => r.value);
 
   return (
@@ -137,6 +151,38 @@ export default function ClassDetailPage() {
           <p className="class-detail-hint">예약 가능 여부(수강권·정원·마감)는 예약할 때 서버에서 다시 확인돼요.</p>
         </section>
 
+        {/* 내 수강권 — 수업 정보(공개)와 별개로, 로그인 회원에게만 이 수업을 쓸 수 있는지 알려준다. */}
+        {viewer?.kind === "anon" && (
+          <section className="class-detail-section" aria-labelledby="cd-me">
+            <h2 id="cd-me">예약하려면</h2>
+            <p className="class-detail-hint" data-testid="viewer-note">로그인하면 내 수강권으로 이 수업을 예약할 수 있어요. 수업 내용은 로그인 없이 볼 수 있어요.</p>
+          </section>
+        )}
+        {members.length > 0 && curProfile && (
+          <section className="class-detail-section" aria-labelledby="cd-me">
+            <h2 id="cd-me">내 수강권</h2>
+            {members.length > 1 && (
+              <div className="class-detail-chips" role="group" aria-label="예약할 프로필">
+                {members.map((p) => (
+                  <button key={p.profile.id} type="button" aria-pressed={p.profile.id === curProfile.profile.id}
+                    className={`class-pass-chip ${p.profile.id === curProfile.profile.id ? "all" : ""}`} onClick={() => setProfileId(p.profile.id)}>
+                    {p.profile.name}{p.profile.label ? ` · ${p.profile.label}` : ""}
+                  </button>
+                ))}
+              </div>
+            )}
+            {curProfile.status === "usable" ? (
+              <ul className="class-detail-sessions" data-testid="usable-passes">
+                {curProfile.usable.map((m) => (
+                  <li key={m.membershipId}><span>{m.productName}</span><b>{m.remainingCount == null ? "횟수 무제한" : `${m.remainingCount}회 남음`}{m.expiresAt ? ` · ~${m.expiresAt.slice(5).replace("-", "/")}` : " · 기간 무제한"}</b></li>
+                ))}
+              </ul>
+            ) : (
+              <p className="class-detail-hint" data-testid="viewer-note">{BLOCKED_COPY[curProfile.status as keyof typeof BLOCKED_COPY].description}</p>
+            )}
+          </section>
+        )}
+
         {sessions.length > 0 && (
           <section className="class-detail-section" aria-labelledby="cd-more">
             <h2 id="cd-more">같은 수업의 다른 일정</h2>
@@ -152,20 +198,35 @@ export default function ClassDetailPage() {
       </main>
 
       <div className="center-bottom-bar class-detail-bar">
-        <Link className={`center-bar-btn buy ${hasPass ? "secondary" : "primary"}`} href={buyHref} prefetch={false}>수강권 구매하기</Link>
-        {canReserve
-          ? (hasPass
-              ? <Link className="center-bar-btn reserve primary" href={reserveHref} prefetch={false}>예약하기</Link>
-              : <button type="button" className="center-bar-btn reserve secondary" onClick={() => setNeedPassDialog(true)}>예약하기</button>)
-          : <button type="button" className="center-bar-btn reserve secondary" disabled>예약하기</button>}
+        {action.kind === "reserve" || action.kind === "check_at_reserve" ? (
+          <>
+            <Link className="center-bar-btn buy secondary" href={buyHref} prefetch={false}>수강권 구매하기</Link>
+            <Link className="center-bar-btn reserve primary" href={reserveHref} prefetch={false}>예약하기</Link>
+          </>
+        ) : action.kind === "login" ? (
+          <>
+            <Link className="center-bar-btn buy secondary" href={buyHref} prefetch={false}>수강권 보기</Link>
+            <Link className="center-bar-btn reserve primary" href={loginHref} prefetch={false}>로그인하고 예약</Link>
+          </>
+        ) : action.kind === "blocked" ? (
+          <>
+            <Link className="center-bar-btn buy primary" href={buyHref} prefetch={false}>사용 가능한 수강권 보기</Link>
+            <button type="button" className="center-bar-btn reserve secondary" onClick={() => setNeedPassDialog(true)}>예약하기</button>
+          </>
+        ) : (
+          <>
+            <Link className="center-bar-btn buy secondary" href={buyHref} prefetch={false}>수강권 구매하기</Link>
+            <button type="button" className="center-bar-btn reserve secondary" disabled>예약하기</button>
+          </>
+        )}
       </div>
 
       <ConfirmDialog
-        open={needPassDialog}
-        title="수강권이 필요해요"
+        open={needPassDialog && !!blocked}
+        title={blocked?.title ?? ""}
         icon="ticket"
-        description="이 센터의 수강권을 먼저 구매해주세요."
-        confirmLabel="수강권 구매하기"
+        description={`${blocked?.description ?? ""}${allowedNote}`}
+        confirmLabel="사용 가능한 수강권 보기"
         cancelLabel="닫기"
         onCancel={() => setNeedPassDialog(false)}
         onConfirm={() => { setNeedPassDialog(false); router.push(buyHref); }}

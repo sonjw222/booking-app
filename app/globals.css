@@ -2309,9 +2309,16 @@ a.membership-card { text-decoration: none; display: block; }
 /* 결제 화면 */
 .checkout-order { margin: 0 20px; padding: 16px; background: var(--surface); border-radius: 14px; }
 .checkout-order-center { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; }
-.checkout-order-row { display: flex; justify-content: space-between; align-items: center; }
-.checkout-order-name { font-size: 15px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px; }
-.checkout-order-price { font-size: 15px; font-weight: 800; color: var(--text); }
+.checkout-order-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.checkout-order-name { font-size: 15px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
+.checkout-order-name .product-kind-tag { flex: none; white-space: nowrap; }
+.checkout-order-price { font-size: 15px; font-weight: 800; color: var(--text); flex: none; white-space: nowrap; }
+/* UX-12 — 좁은 화면: 상품명(배지 포함)은 자연스럽게 줄바꿈하고 금액+"원"은 한 덩어리로 아래 줄에 둔다. */
+@media (max-width: 480px) {
+  .checkout-order-row { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .checkout-order-name { align-items: flex-start; }
+  .checkout-order-price { align-self: flex-end; }
+}
 .checkout-order-detail { font-size: 12.5px; color: var(--text-dim); margin-top: 6px; }
 .pay-methods { display: flex; flex-direction: column; gap: 8px; padding: 0 var(--page-gutter); }
 .pay-method { display: flex; align-items: center; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); cursor: pointer; font-size: 14px; color: var(--text); font-weight: 600; }
@@ -2521,7 +2528,8 @@ a.membership-card { text-decoration: none; display: block; }
 .cart-qty-count { font-size: 13.5px; font-weight: 700; color: var(--text); min-width: 28px; text-align: center; }
 
 /* 수강권 환불 버튼 */
-.membership-refund { margin-top: 10px; width: 100%; background: rgba(255,255,255,0.15); color: var(--text-inverse); border: 1px solid rgba(255,255,255,0.4); border-radius: 8px; padding: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }
+/* 카드 배경이 밝아진 뒤에도 읽히도록 반전 글자색 대신 테마 토큰을 쓴다(라이트 모드에서 글자가 거의 보이지 않던 문제). 터치 영역 44px. */
+.membership-refund { margin-top: 10px; width: 100%; min-height: 44px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .membership-card.goods .membership-refund { background: var(--surface); color: var(--accent); border-color: var(--line); }
 
 /* 예약자 명단 - 출결 처리 */
@@ -6635,3 +6643,25 @@ a.center-bar-btn { display: flex; align-items: center; justify-content: center; 
 
 /* 다크 모드 주 CTA: 채움(--action-bg)과 페이지 배경의 명도 대비가 3:1에 약간 못 미쳐(≈2.99) 기존 토큰 --accent 로 경계선을 더해 버튼 경계를 분명히 한다(새 색 없음). */
 [data-theme="charcoal"] .center-detail-v2 .center-bar-btn.primary { border-color: var(--accent); }
+
+/* UX-16 — 무료 지급 수강권 표시(금전 환불 대상이 아님을 이름 옆에서 바로 알린다). 기존 토큰만 사용. */
+.membership-origin-tag { display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text-dim); font-size: 11px; font-weight: 700; line-height: 1.6; vertical-align: middle; white-space: nowrap; }
+
+/* UX-15 — 예약 화면: URL로 들어온 센터의 이름·보유 수강권 요약, 빈 상태의 다음 행동. 기존 토큰만 사용. */
+.resv-center-context { margin: 8px 20px 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--card-bg); }
+.resv-center-context-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.resv-center-context-head b { font-size: 15px; color: var(--text); overflow-wrap: anywhere; }
+.resv-center-context-head a { flex: none; font-size: 13px; font-weight: 700; color: var(--accent); }
+.resv-center-context p { margin: 0; font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+.resv-center-context ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.resv-center-context li { display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: var(--text); overflow-wrap: anywhere; }
+.resv-center-context li em { font-style: normal; margin-right: 6px; padding: 1px 7px; border-radius: 999px; background: var(--surface); color: var(--text-dim); font-size: 11px; font-weight: 700; }
+.resv-center-context li b { font-size: 12px; font-weight: 700; color: var(--text-dim); }
+.daylist-empty-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+.daylist-empty-actions .ghost-btn { width: auto; min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; }
+.empty-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.empty-actions .ghost-btn { width: auto; min-height: 44px; padding: 0 16px; }
+
+/* UX-07 — 검색 결과 센터 카드의 비교 정보(평점·지역·거리). 값이 없으면 "아직 후기 없음/위치 미등록"을 정직하게 표시. */
+.search-center-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 2px; font-size: 12px; color: var(--text-dim); }
+.search-center-meta .search-center-missing { color: var(--text-dim); opacity: .85; }

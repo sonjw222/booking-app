@@ -28,13 +28,16 @@ export type ClassDetail = {
   /** 이용 가능한 수강권 — 모드 all 일 때만 "모든 수강권 가능". selected 인데 목록을 확인할 수 없으면 절대 "모두 가능"으로 표시하지 않는다. */
   allowedPasses: AllowedPasses;
   bookingDeadlineMin: number | null;
+  /** 취소 조건(수업 설정 값만) — 센터 기본값을 추측하지 않는다. allowCancel=false면 예약 후 취소 불가. */
+  allowCancel: boolean;
+  cancelDeadlineMin: number | null;
   /** 예약 인원 집계를 읽었는지(실패하면 잔여 자리를 말하지 않는다) */
   reservedKnown: boolean;
 };
 
 export type AllowedPasses =
   | { kind: "all" }
-  | { kind: "list"; names: string[] }
+  | { kind: "list"; names: string[]; productIds: string[] }
   | { kind: "login_required" }      // 비로그인: 운영 RLS(class_allowed_products)가 anon 에게 행을 숨긴다 — 비어 보여도 "없음"이 아니다
   | { kind: "unavailable" }         // 조회 오류
   | { kind: "unknown_empty" };      // 로그인했는데 selected 모드인데도 읽힌 목록이 비어 있음 — 확인 불가(모두 가능이라고 말하지 않는다)
@@ -64,6 +67,15 @@ export function formatBookingDeadline(min: number | null | undefined): string | 
   return `수업 시작 ${min}분 전까지 예약`;
 }
 
+/** 취소 조건 문구 — 수업에 설정된 값만 말한다. 값이 없으면 null(센터 기본 정책은 예약 후 취소 화면에서 서버가 안내). */
+export function formatCancelPolicy(d: { allowCancel: boolean; cancelDeadlineMin: number | null }): string | null {
+  if (!d.allowCancel) return "예약 후에는 취소할 수 없는 수업이에요";
+  const min = d.cancelDeadlineMin;
+  if (!min || min <= 0) return null;
+  const base = formatBookingDeadline(min);
+  return base ? base.replace("까지 예약", "까지 취소 가능") : null;
+}
+
 export function remainingSpots(capacity: number, reserved: number): number { return Math.max(0, capacity - reserved); }
 
 /** 이 수업을 지금 예약 대상으로 열 수 있는지 — 안내용 판단일 뿐 최종 판정은 서버. */
@@ -79,6 +91,7 @@ type ClassRow = {
   id: string; center_id: string; title: string; description: string | null; class_format: string | null; place: string | null;
   start_time: string; end_time: string; capacity: number; status: ClassDetail["status"] | null; booking_deadline_min: number | null;
   pass_selection_mode: string | null;
+  allow_cancel: boolean | null; cancel_deadline_min: number | null;
   rooms: Embedded<{ name: string | null }>;
   centers: Embedded<{ name: string; categories: string[] | null; status: string }>;
 };
@@ -87,7 +100,7 @@ const one = <T,>(v: Embedded<T>): T | null => (Array.isArray(v) ? (v[0] ?? null)
 export async function fetchCenterClassDetail(centerId: string, classId: string): Promise<ClassDetail | null> {
   const { data, error } = await supabase
     .from("classes")
-    .select("id, center_id, title, description, class_format, place, start_time, end_time, capacity, status, booking_deadline_min, pass_selection_mode, rooms(name), centers(name, categories, status)")
+    .select("id, center_id, title, description, class_format, place, start_time, end_time, capacity, status, booking_deadline_min, pass_selection_mode, allow_cancel, cancel_deadline_min, rooms(name), centers(name, categories, status)")
     .eq("id", classId)
     .eq("center_id", centerId)
     .maybeSingle();
@@ -106,8 +119,8 @@ export async function fetchCenterClassDetail(centerId: string, classId: string):
     supabase.from("class_reservation_counts").select("class_id, confirmed_count").eq("class_id", classId),
     supabase.rpc("class_trainer_names", { p_class_ids: [classId] }),
     selected
-      ? supabase.from("class_allowed_products").select("products(name)").eq("class_id", classId)
-      : Promise.resolve({ data: [] as { products: Embedded<{ name: string | null }> }[], error: null }),
+      ? supabase.from("class_allowed_products").select("products(id, name)").eq("class_id", classId)
+      : Promise.resolve({ data: [] as { products: Embedded<{ id: string; name: string | null }> }[], error: null }),
   ]);
   // 강사: 오류(권한/네트워크)를 "강사 없음"으로 단정하지 않는다.
   let trainers: TrainersInfo;
@@ -123,8 +136,11 @@ export async function fetchCenterClassDetail(centerId: string, classId: string):
   else if (!loggedIn) allowedPasses = { kind: "login_required" };      // RLS 가 행을 숨기므로 빈 결과는 "없음"이 아니다
   else if (passRes.error) allowedPasses = { kind: "unavailable" };
   else {
-    const names = Array.from(new Set(((passRes.data ?? []) as unknown as { products: Embedded<{ name: string | null }> }[]).map((l) => one(l.products)?.name).filter((n): n is string => !!n)));
-    allowedPasses = names.length > 0 ? { kind: "list", names } : { kind: "unknown_empty" };
+    const products = ((passRes.data ?? []) as unknown as { products: Embedded<{ id: string; name: string | null }> }[])
+      .map((l) => one(l.products)).filter((p): p is { id: string; name: string | null } => !!p && !!p.name);
+    const names = Array.from(new Set(products.map((p) => p.name as string)));
+    const productIds = Array.from(new Set(products.map((p) => p.id)));
+    allowedPasses = names.length > 0 ? { kind: "list", names, productIds } : { kind: "unknown_empty" };
   }
 
   return {
@@ -139,6 +155,8 @@ export async function fetchCenterClassDetail(centerId: string, classId: string):
     reservedKnown: !countRes.error,
     trainers, passSelectionMode: selected ? "selected" : "all", allowedPasses,
     bookingDeadlineMin: row.booking_deadline_min ?? null,
+    allowCancel: row.allow_cancel !== false,
+    cancelDeadlineMin: row.cancel_deadline_min ?? null,
   };
 }
 

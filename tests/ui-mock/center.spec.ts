@@ -115,8 +115,8 @@ test.describe("수업 상세", () => {
     await page.goto("/center/c-near/class/cls-1");
     await page.getByRole("button", { name: "예약하기" }).click();
     const dialog = page.getByRole("alertdialog");
-    await expect(dialog.getByRole("heading", { name: "수강권이 필요해요" })).toBeVisible();
-    await dialog.getByRole("button", { name: "수강권 구매하기" }).click();
+    await expect(dialog.getByRole("heading", { name: "이 수업은 수강권이 필요해요" })).toBeVisible();
+    await dialog.getByRole("button", { name: "사용 가능한 수강권 보기" }).click();
     await expect(page).toHaveURL(/\/center\/c-near\?buy=1&reserveClassId=cls-1&reserveDate=\d{4}-\d{2}-\d{2}&reserveCenter=c-near/);
   });
 

@@ -6,6 +6,7 @@
 import { calendarEventsToIcs, reservationToEvent } from "./calendarEvents";
 import { supabase } from "./supabaseClient";
 import { refundMembershipApi } from "./payments/tossPaymentApi";
+import { fetchMembershipOrigins, type MembershipOrigin } from "./membershipOrigin";
 import { getMyAccountId } from "./authAccount";
 import { disableNativePush } from "./nativePush";
 
@@ -32,6 +33,8 @@ export type Membership = {
   // 기존 컬럼을 처음으로 화면까지 가져온 것). refunded는 이 목록 쿼리 자체가 이미
   // .neq("status","refunded")로 제외하므로 여기 값으로는 절대 안 옴.
   status: string;
+  /** 무료 지급 / 유료 구매 / 알 수 없음 — payments 기록 기준(lib/membershipOrigin.ts). 무료 지급에는 금전 환불 버튼을 보이지 않는다. */
+  origin: MembershipOrigin;
 };
 
 export type MembershipDisplayTier = 0 | 1 | 2 | 3; // 0=활성, 1=시작 예정, 2=정지중(사용 가능), 3=만료/소진(항상 마지막)
@@ -230,6 +233,7 @@ export async function fetchMyPage() {
     }
   }
   const nowIso = new Date().toISOString();
+  const origins = await fetchMembershipOrigins(memIds);
 
   const memberships: Membership[] = (memRows ?? [])
     .filter((m: any) => {
@@ -255,8 +259,10 @@ export async function fetchMyPage() {
       expiresAt: m.expires_at,
       startsAt: m.starts_at ?? null,
       createdAt: m.created_at,
-      profileName: m.bound_profile_id ? (profileLabel[m.bound_profile_id] ?? "") : "",
+      // 지급 대상 프로필: 예약에 묶인 프로필이 있으면 그 프로필, 없으면 수강권 소유 프로필(프로필이 하나뿐이면 "").
+      profileName: profileLabel[m.bound_profile_id ?? m.profile_id] ?? "",
       status: m.status,
+      origin: origins[m.id] ?? "unknown",
     }));
 
   const profile: Profile = { name: me.name, phone: me.phone, isMember: me.isMember, isManager: me.isManager, isPlatformAdmin: me.isPlatformAdmin };

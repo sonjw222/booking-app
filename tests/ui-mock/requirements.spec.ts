@@ -79,6 +79,7 @@ test.describe("요구사항 5 — 필터 시트 UI", () => {
     await sheet.getByRole("radio", { name: "10km" }).click();
     await sheet.getByRole("button", { name: /^적용/ }).click();
     await expect(sheet).toHaveCount(0);
+    await expect(page).toHaveURL(/r=10/);                                    // 새로고침 전에 URL에 반영됐는지 먼저 확인(반영 전에 새로고침하면 상태를 잃는 것이 정상)
     await page.reload();
     await expect(page.getByRole("button", { name: /거리 10km/ })).toBeVisible();
     await page.getByRole("button", { name: /검색 조건/ }).click(); await page.keyboard.press("Escape");
@@ -148,13 +149,15 @@ test.describe("요구사항 6 — 수업 상세 상태", () => {
     await page.goto("/center/c-far/class/cls-1");                                  // 센터-수업 불일치
     await expect(page.getByText("수업을 찾을 수 없어요")).toBeVisible();
   });
-  test("비로그인: 상세는 보이고 예약하기는 안내 Dialog(기존 '수강권 없음' 경로), 구매하기 링크는 이 수업 복귀 정보 포함", async ({ page }) => {
+  test("비로그인: 상세는 보이고 CTA는 '로그인하고 예약'(같은 수업으로 복귀), 수강권 보기 링크는 이 수업 복귀 정보 포함", async ({ page }) => {
     await mockSupabase(page, { loggedIn: false });
     await page.goto("/center/c-near/class/cls-1");
     await expect(page.getByRole("heading", { level: 1, name: "아침 하타 요가" })).toBeVisible();
-    await page.getByRole("button", { name: "예약하기" }).click();
-    await expect(page.getByRole("alertdialog").getByRole("heading", { name: "수강권이 필요해요" })).toBeVisible();
-    expect(await page.getByRole("link", { name: "수강권 구매하기" }).getAttribute("href")).toContain("reserveClassId=cls-1");
+    await expect(page.getByTestId("viewer-note")).toContainText("수업 내용은 로그인 없이 볼 수 있어요");
+    const login = page.getByRole("link", { name: "로그인하고 예약" });
+    await expect(login).toBeVisible();
+    expect(decodeURIComponent((await login.getAttribute("href"))!)).toBe("/login?next=/center/c-near/class/cls-1");
+    expect(await page.getByRole("link", { name: "수강권 보기" }).getAttribute("href")).toContain("reserveClassId=cls-1");
   });
 });
 

@@ -35,21 +35,21 @@ export default function AdminNav() {
       aria-expanded={expanded}
       onClick={handleRailClick}
     >
-      <Link className="desktop-brand" href="/admin" prefetch={false}>
+      <Link className="desktop-brand" href="/admin" prefetch={false} aria-label="모하빗 플랫폼 운영 홈">
         <span className="desktop-brand-mark"><UiIcon name="shield" size={20} /></span>
         <span><b>모하빗</b><small>플랫폼 운영</small></span>
       </Link>
       <div className="workspace-sidebar-scroll" ref={scrollRef}>
         <div className="desktop-nav-section">운영 관리</div>
         {ITEMS.map((item) => (
-          <a key={item.href} className={`desktop-nav-item ${active(item.href) ? "active" : ""}`} href={item.href}
+          <a key={item.href} className={`desktop-nav-item ${active(item.href) ? "active" : ""}`} href={item.href} aria-label={item.label}
             aria-current={active(item.href) ? "page" : undefined}
             onClick={item.href === "/admin" ? (e) => replaceTabNavigation(e, "/admin") : () => collapseAfterNavigate()}>
             <UiIcon name={item.icon} /><span>{item.label}</span>
           </a>
         ))}
       </div>
-      <a className="workspace-sidebar-mode" href="/" onClick={(e) => replaceTabNavigation(e, "/")}><UiIcon name="user" /><span>회원 화면으로 전환</span></a>
+      <a className="workspace-sidebar-mode" href="/" aria-label="회원 화면으로 전환" onClick={(e) => replaceTabNavigation(e, "/")}><UiIcon name="user" /><span>회원 화면으로 전환</span></a>
     </aside>
   );
 }

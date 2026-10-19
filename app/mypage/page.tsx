@@ -5,6 +5,7 @@
   - 프로필, 수강권(잔여횟수/유효기간 프로그레스바), 예약내역, 로그아웃
 */
 
+import { FREE_GRANT_LABEL, FREE_GRANT_REFUND_NOTE } from "../../lib/membershipOrigin";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../components/Loading";
@@ -91,6 +92,7 @@ export default function MyPage() {
   useResumeRefresh(() => load({ background: true }));
 
   async function handleRefund(m: Membership) {
+    if (m.origin === "free_grant") { showToast(FREE_GRANT_REFUND_NOTE); return; }
     const elig = refundEligibility(m);
     if (!elig.ok) { showToast(elig.reason); return; }
     if (!(await globalThis.appConfirm(`'${m.productName}'을(를) 환불할까요?\n(결제 24시간 이내·미사용만 가능)`))) return;
@@ -160,6 +162,7 @@ export default function MyPage() {
             <CardTag key={m.id} className={`membership-card ${isGoods ? "goods" : ""} ${ended ? "is-expired" : ""}`} {...(ended ? {} : { href: `/reservation?center=${m.centerId}` })}>
               <div className="name">
                 {m.profileName && <span className="profile-tag">{m.profileName}</span>}
+                {m.origin === "free_grant" && <span className="membership-origin-tag">{FREE_GRANT_LABEL}</span>}
                 {m.centerName} · {m.productName}
               </div>
               <div className="count">
@@ -192,7 +195,7 @@ export default function MyPage() {
               {ended && !avail?.productPurchasable && avail?.centerActive && (
                 <Link className="membership-cta" href="/inquiries" prefetch={false}>센터 문의하기 ›</Link>
               )}
-              {refundEligibility(m).ok && (
+              {m.origin !== "free_grant" && refundEligibility(m).ok && (
                 <button className="membership-refund" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRefund(m); }}>
                   환불하기 (24시간 이내·미사용)
                 </button>
