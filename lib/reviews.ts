@@ -91,9 +91,7 @@ export async function myReviewFor(centerId: string): Promise<Review | null> {
   } catch { return null; }
 }
 
-// 후기 작성 (포인트 자동 적립). 수정도 이 함수를 다시 호출하는 방식이라
-// (센터 상세 화면에서 기존 리뷰 삭제 후 재작성) 신규/수정 경로가 하나로
-// 합쳐져 있고, sanitize도 이 한 곳에만 적용하면 된다.
+// 후기 작성 (포인트 자동 적립 — 통합 원장). 수정은 updateMyReview 를 쓴다(같은 행 수정, 보상 없음).
 export async function writeReview(centerId: string, rating: number, content: string, photos?: string[]): Promise<number> {
   const profileId = await myProfileId();
   const { data, error } = await supabase.rpc("write_review", {
@@ -103,6 +101,16 @@ export async function writeReview(centerId: string, rating: number, content: str
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
   return (data as any)?.point ?? 0;
+}
+
+// 후기 수정(F13): 같은 행을 수정한다 — 후기 ID·관리자 답변·작성일·보상 이력을 보존하고 보상을 다시 지급하지 않는다.
+// 예전에는 기존 후기를 삭제하고 write_review 를 다시 호출해 답변이 사라지고 보상이 중복됐다.
+export async function updateMyReview(reviewId: string, rating: number, content: string, photos?: string[]): Promise<void> {
+  const { error } = await supabase.rpc("update_my_review", {
+    p_review_id: reviewId, p_rating: rating, p_content: sanitizeRichText(content),
+    p_photos: photos && photos.length > 0 ? photos : null,
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
 }
 
 export async function deleteReview(reviewId: string): Promise<void> {

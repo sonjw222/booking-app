@@ -27,7 +27,7 @@ import {
 } from "../../../lib/catalogFilter";
 import CatalogSearchFilter from "../../components/CatalogSearchFilter";
 import {
-  fetchReviews, myReviewFor, writeReview, deleteReview, uploadReviewPhoto, reviewPhotoUrl, type Review,
+  fetchReviews, myReviewFor, writeReview, updateMyReview, deleteReview, uploadReviewPhoto, reviewPhotoUrl, type Review,
   reportReview, REVIEW_REPORT_REASON_LABELS, type ReviewReportReason,
 } from "../../../lib/reviews";
 import { reservationReturnUrl } from "../../../lib/reservationNav";
@@ -231,9 +231,10 @@ function CenterDetailContent() {
     if (!extractPlainText(rvContent)) { setError("후기 내용을 입력해주세요"); return; }
     setRvBusy(true);
     try {
-      if (rvEditing && myReview) await deleteReview(myReview.id);
-      const pt = await writeReview(centerId, rvRating, rvContent, rvPhotos);
-      showToast(rvEditing ? "후기를 수정했어요" : (pt > 0 ? `후기 등록 완료! ${pt.toLocaleString("ko-KR")}P 적립됐어요` : "후기를 등록했어요"));
+      let pt = 0;
+      if (rvEditing && myReview) await updateMyReview(myReview.id, rvRating, rvContent, rvPhotos);   // 같은 행 수정 — ID·답변·보상 보존
+      else pt = await writeReview(centerId, rvRating, rvContent, rvPhotos);
+      showToast(rvEditing ? "후기를 수정했어요 (포인트는 처음 등록할 때만 적립돼요)" : (pt > 0 ? `후기 등록 완료! ${pt.toLocaleString("ko-KR")}P 적립됐어요` : "후기를 등록했어요"));
       setReviewSheet(false);
       setRvContent(""); setRvRating(5); setRvPhotos([]); setRvEditing(false);
       setRvAlign("left"); setRvFontSize(14);
