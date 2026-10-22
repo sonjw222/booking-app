@@ -860,7 +860,7 @@ function ReservationCalendarContent() {
                       <span className="class-pass-chip all skeleton-shimmer">수강권 확인 중...</span>
                     ) : passNames.length > 0 ? (
                       <span className="class-pass-chip">
-                        내 수강권으로 예약 가능{passNames.length > 1 ? ` · ${passNames.length}개` : ""}
+                        내 수강권에 맞는 수업{passNames.length > 1 ? ` · ${passNames.length}개` : ""}
                       </span>
                     ) : (
                       <span className="class-pass-chip all">사용 가능한 수강권 없음</span>
@@ -1025,6 +1025,11 @@ function ReservationCalendarContent() {
               </section>
             )}
 
+            {/* F10: 목록의 "내 수강권에 맞는 수업"은 수강권 조건만 본 것이다. 예약 오픈 시각·당일 예약·마감 시각 같은 센터 운영 조건은
+                서버가 예약 시점에 판정하므로, 거절되면 아래 오류 문구로 이유를 안내한다. */}
+            <div className="perm-guide" style={{ margin: "8px 0 0" }}>
+              수강권 조건만 확인한 상태예요. 예약 오픈 시각·당일 예약·마감 시각 등 센터 운영 조건은 예약할 때 최종 확인돼요.
+            </div>
             {reservationError && <div className="booking-inline-error" role="alert">{reservationError}<span>수강권이나 수업 상태를 확인한 뒤 다시 시도해주세요.</span></div>}
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => setConfirmClass(null)}>취소</button>
