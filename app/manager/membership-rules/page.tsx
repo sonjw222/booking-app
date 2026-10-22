@@ -1037,8 +1037,9 @@ export default function MembershipRulesPage() {
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>시작 시간 (비우면 모든 시간)</div>
             <input type="time" className="input-field" value={rTime} onChange={(e) => setRTime(e.target.value)} />
 
-            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>수업명 포함 (비우면 모든 수업)</div>
-            <input aria-label="수업명 포함 조건" className="input-field" placeholder="예: 안무반" value={rTitle} onChange={(e) => setRTitle(e.target.value)} />
+            <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>수업명 정확히 일치 (비우면 모든 수업)</div>
+            {/* F14: 운영 서버는 수업명이 "정확히 일치"할 때만 허용한다(부분 포함 아님). 정책은 그대로 두고 라벨만 실제 동작에 맞춘다. */}
+            <input aria-label="수업명 정확히 일치 조건" className="input-field" placeholder="수업명 전체를 똑같이 입력 (예: 안무반)" value={rTitle} onChange={(e) => setRTitle(e.target.value)} />
 
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => { setRuleFor(null); setBulkTargets(null); }}>취소</button>
