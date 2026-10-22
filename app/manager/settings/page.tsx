@@ -12,6 +12,7 @@ import SegmentedTabs from "../../components/SegmentedTabs";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../../lib/settings";
+import { toggleLimit, isValidLimit, MAX_LIMIT, type LimitKey } from "../../../lib/limitSettings";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 import { useUnsavedChanges, confirmDiscardChanges } from "../../../lib/useUnsavedChanges";
 
@@ -82,6 +83,12 @@ export default function SettingsPage() {
     setDirty(true);
   }
 
+  // 일일 예약/프라이빗 동시 제한 토글: ON이면 유효한 숫자(기본 1)를 실제 상태에 넣는다 — 화면 표시값과 저장값이 같아야 한다(F06/F12).
+  function upLimitToggle(key: LimitKey, on: boolean) {
+    setS((prev) => (prev ? toggleLimit(prev, key, on) : prev));
+    setDirty(true);
+  }
+
   async function handleSave() {
     if (!centerId || !s) return;
     setBusy(true);
@@ -118,6 +125,22 @@ export default function SettingsPage() {
   //     지정하면 이 휴리스틱과 무관하게 숫자 키패드가 확정적으로 뜬다. pattern="[0-9]*"는
   //     이 조합을 신뢰성 있게 만드는 iOS 권장 보완 속성(type=number에서는 표준상 무시되지만
   //     해가 없다). value/onChange 파싱 로직은 그대로 — 검증 규칙을 바꾸지 않는다.
+  // 제한 숫자 입력: 빈 값은 빈 값으로 두고(0으로 바꾸지 않음) 1~MAX 밖이면 오류로 표시한다. 저장 시에도 같은 규칙으로 막는다.
+  const limitInput = (key: LimitKey, label: string) => {
+    const val = s ? s[key] : null;
+    const invalid = !isValidLimit(val);
+    return (
+      <>
+        <input
+          type="number" inputMode="numeric" min={1} max={MAX_LIMIT} step={1} className="set-num" style={{ width: 60 }}
+          aria-label={label} aria-invalid={invalid} value={val ?? ""}
+          onChange={(e) => up(key, e.target.value === "" ? null : parseInt(e.target.value, 10))}
+        />
+        {invalid && <span className="set-soon-note" role="alert" style={{ marginLeft: 8, color: "var(--danger)" }}>1~{MAX_LIMIT} 사이로 입력해 주세요</span>}
+      </>
+    );
+  };
+
   const numInput = (val: number, onCh: (n: number) => void, w = 60, disabled = false) => (
     <input
       type="number" inputMode="numeric" pattern="[0-9]*" min={0} className="set-num" style={{ width: w }}
@@ -266,12 +289,12 @@ export default function SettingsPage() {
           <div className="set-section-title">일일 예약 가능 횟수</div>
           <div className="set-row">
             <div className="set-label">일일 예약 횟수 제한</div>
-            {toggle("일일 예약 횟수 제한", s.dailyBookLimitEnabled, (b) => up("dailyBookLimitEnabled", b))}
+            {toggle("일일 예약 횟수 제한", s.dailyBookLimitEnabled, (b) => upLimitToggle("dailyBookLimit", b))}
           </div>
           {s.dailyBookLimitEnabled && (
             <div className="set-row">
               <div className="set-label">하루 최대</div>
-              <div className="set-inline">{numInput(s.dailyBookLimit ?? 1, (n) => up("dailyBookLimit", n))}회</div>
+              <div className="set-inline">{limitInput("dailyBookLimit", "하루 최대 예약 횟수")}회</div>
             </div>
           )}
 
@@ -300,12 +323,12 @@ export default function SettingsPage() {
           <div className="set-section-title">프라이빗 동시 수업 최대 개수</div>
           <div className="set-row">
             <div className="set-label">같은 시간대 최대 개수 제한</div>
-            {toggle("프라이빗 동시 수업 제한", s.privateMaxConcurrentEnabled, (b) => up("privateMaxConcurrentEnabled", b))}
+            {toggle("프라이빗 동시 수업 제한", s.privateMaxConcurrentEnabled, (b) => upLimitToggle("privateMaxConcurrent", b))}
           </div>
           {s.privateMaxConcurrentEnabled && (
             <div className="set-row">
               <div className="set-label">최대</div>
-              <div className="set-inline">{numInput(s.privateMaxConcurrent ?? 1, (n) => up("privateMaxConcurrent", n))}개</div>
+              <div className="set-inline">{limitInput("privateMaxConcurrent", "같은 시간대 프라이빗 최대 개수")}개</div>
             </div>
           )}
 

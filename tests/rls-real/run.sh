@@ -19,7 +19,7 @@ case "${1:-}" in
     for f in fix_profile_delete_soft_delete.sql add_admin_assignment.sql fix_reservation_cancel_source_column_draft_proposed.sql add_weekday_time_fixed_memberships.sql add_product_expiry_options.sql add_rolling_month_product_expiry.sql fix_customer_member_pass_detail_full_wiring.sql \
              add_payments_service_sale_type.sql add_manager_grant_product_rpc.sql fix_grant_schedule_and_kst_dates_20261003.sql add_class_cancel_lock.sql fix_calc_deadline_open_kind_draft_proposed.sql fix_reservation_integrity_20261003.sql add_membership_visibility_and_coupons.sql add_product_extras.sql \
              fix_centers_manager_centers_recursion_draft_proposed.sql add_product_group_label.sql add_product_sale_limit.sql add_selectable_count_pricing.sql \
-             add_public_storefront_products.sql add_internal_qa_center_flag.sql add_profile_fields.sql add_customer_memo_feature.sql add_customer_member_phone_masking.sql fix_customer_member_phone_masking_center_scope.sql; do
+             add_public_storefront_products.sql add_internal_qa_center_flag.sql fix_center_limit_settings_normalize_20261022.sql add_profile_fields.sql add_customer_memo_feature.sql add_customer_member_phone_masking.sql fix_customer_member_phone_masking_center_scope.sql; do
       docker exec -i qa-rls-pg psql -U postgres -d qa < "$ROOT/$f" >/dev/null 2>&1 || true
     done
     docker exec -i qa-rls-pg psql -v ON_ERROR_STOP=1 -U postgres -d qa < 10_seed.sql >/dev/null

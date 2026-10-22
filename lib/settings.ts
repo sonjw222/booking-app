@@ -4,6 +4,7 @@
   - 행이 없으면 기본값으로 새로 만들어 편집
 */
 
+import { validateLimits, limitErrorMessage } from "./limitSettings";
 import { supabase } from "./supabaseClient";
 
 // DB 컬럼과 1:1 매핑되는 설정 타입 (카멜케이스)
@@ -178,8 +179,11 @@ export async function fetchSettings(centerId: string): Promise<CenterSettings> {
 
 // 설정 저장 (있으면 갱신, 없으면 삽입 = upsert)
 export async function saveSettings(centerId: string, s: CenterSettings): Promise<void> {
+  // ON인데 숫자가 비었거나 잘못된 제한 설정은 저장하지 않는다 — 화면 표시값과 저장값이 어긋나(F06/F12) 조용히 무제한이 되던 경로 차단.
+  const invalid = validateLimits(s);
+  if (invalid) throw new Error(invalid);
   const { error } = await supabase
     .from("center_settings")
     .upsert(settingsToRow(centerId, s), { onConflict: "center_id" });
-  if (error) throw new Error("설정 저장에 실패했어요: " + error.message);
+  if (error) throw new Error(limitErrorMessage(error.message) ?? "설정 저장에 실패했어요: " + error.message);
 }
