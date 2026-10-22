@@ -177,6 +177,8 @@ export default function MyPage() {
               <div className="expire">
                 {pending
                   ? <span className="is-error-text">{m.startsAt}부터 사용 가능해요</span>
+                  : !isGoods && isExhausted && !isExpired
+                    ? <span className="is-error-text">모두 사용했어요{m.expiresAt ? ` · ${m.expiresAt}까지 기간은 남아 있어요` : ""}</span>
                   : left == null
                     ? "기간 무제한"
                     : <>{m.expiresAt}까지 · {left > 0 ? `${left}일 남음` : <span className="is-error-text">만료됨</span>}</>}

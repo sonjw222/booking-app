@@ -926,7 +926,7 @@ function ReservationCalendarContent() {
 
             {!confirmClass.allowCancel && (
               <div className="perm-guide is-error" style={{ margin: "0 0 10px" }}>
-                <UiIcon name="alert" size={13} /> 해당 수업은 예약 취소가 불가능한 수업입니다. 예약하시겠습니까?
+                <UiIcon name="alert" size={13} /> 해당 수업은 예약 취소가 불가능한 수업이에요. 단, 예약 직후 10분 이내에는 취소할 수 있어요. 예약하시겠어요?
               </div>
             )}
 
