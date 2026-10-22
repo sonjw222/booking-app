@@ -151,6 +151,9 @@ export default function ClassManagePage() {
   const [copyTo, setCopyTo] = useState("");
   const [copyBusy, setCopyBusy] = useState(false);
   const [copyMode, setCopyMode] = useState<"weekday" | "date">("weekday");
+  // F09: 원본 목록 조회 상태. 열자마자 조회하고, 로딩/빈 목록/오류를 구분해 보여준다. 늦게 도착한 이전 조회 결과는 버린다.
+  const [copySourceState, setCopySourceState] = useState<"idle" | "loading" | "loaded" | "error">("idle");
+  const copyLoadSeq = useRef(0);
   const [copyGroups, setCopyGroups] = useState<CopyGroup[]>([]);
   const [copyDateItems, setCopyDateItems] = useState<CopyDateItem[]>([]);
   const [copySelected, setCopySelected] = useState<Set<string>>(new Set());
@@ -620,25 +623,35 @@ export default function ClassManagePage() {
     setCopyFrom(cur); setCopyTo(nxt);
     setCopyGroups([]); setCopyDateItems([]); setCopySelected(new Set());
     setCopyPlan(null); setCopyView("list"); setCopyMode("weekday");
+    setCopySourceState("idle");
     setCopySheet(true);
+    void loadCopySource(cur, "weekday");   // F09: 열자마자 원본 달 목록을 불러온다(예전엔 달/방식 버튼을 눌러야만 조회)
   }
 
   // 원본 달을 고르면 수업 목록 불러오기
   async function loadCopySource(month: string, mode: "weekday" | "date") {
     if (!activeCenterId || !month) return;
-    setCopyBusy(true); setCopyPlan(null);
+    const seq = ++copyLoadSeq.current;
+    setCopyBusy(true); setCopyPlan(null); setCopySourceState("loading");
     try {
       if (mode === "weekday") {
         const gs = await fetchCopyGroups(activeCenterId, month);
+        if (seq !== copyLoadSeq.current) return;
         setCopyGroups(gs);
         setCopySelected(new Set(gs.map((g) => g.key)));   // 기본 전체선택
       } else {
         const its = await fetchCopyDateItems(activeCenterId, month);
+        if (seq !== copyLoadSeq.current) return;
         setCopyDateItems(its);
         setCopySelected(new Set(its.map((i) => i.key)));
       }
-    } catch (e: any) { setError(e.message); }
-    finally { setCopyBusy(false); }
+      setCopySourceState("loaded");
+    } catch (e) {
+      if (seq !== copyLoadSeq.current) return;
+      setCopyGroups([]); setCopyDateItems([]); setCopySelected(new Set());
+      setCopySourceState("error"); setError(e instanceof Error ? e.message : String(e));
+    }
+    finally { if (seq === copyLoadSeq.current) setCopyBusy(false); }
   }
 
   function toggleCopyItem(key: string) {
@@ -2177,6 +2190,11 @@ export default function ClassManagePage() {
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>붙여넣을 달 (대상)</div>
             <MonthPicker value={copyTo} label="붙여넣을 달" onChange={(value) => { setCopyTo(value); setCopyPlan(null); }} />
 
+            {copySourceState === "loading" && <div className="perm-guide skeleton-shimmer" style={{ margin: "12px 0 0" }}>원본 달의 수업을 불러오는 중...</div>}
+            {copySourceState === "error" && <div className="perm-guide is-error" style={{ margin: "12px 0 0" }}>원본 달의 수업을 불러오지 못했어요. 달을 다시 선택해 주세요.</div>}
+            {copySourceState === "loaded" && (copyMode === "weekday" ? copyGroups.length === 0 : copyDateItems.length === 0) && (
+              <div className="perm-guide" style={{ margin: "12px 0 0" }}>선택한 달에 복사할 수업이 없어요.</div>
+            )}
             {/* 수업 선택 */}
             {(copyMode === "weekday" ? copyGroups.length > 0 : copyDateItems.length > 0) && (
               <>
