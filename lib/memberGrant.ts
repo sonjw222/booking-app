@@ -73,6 +73,19 @@ export function grantBlockReason(input: {
   return null;
 }
 
+export type GrantPayMethod = "card" | "cash" | "transfer" | "service";
+
+// F11: 가격과 결제방법은 항상 짝이 맞아야 한다(0원 ⇒ 서비스, 1원 이상 ⇒ 서비스 아님). 상품을 처음 고를 때 0원 기본가가 들어와도
+// 화면은 "서비스(무상 지급)"로 보이는데 내부 결제방법은 "card"로 남아 지급이 거절되던 문제를 이 한 함수로 막는다.
+// 가격이 비었거나 숫자가 아니면 현재 방법을 그대로 둔다(검증은 grantBlockReason 이 한다).
+export function normalizeGrantMethod(price: string | number | null | undefined, current: GrantPayMethod): GrantPayMethod {
+  if (price === null || price === undefined || String(price).trim() === "") return current;
+  const n = Number(price);
+  if (!Number.isFinite(n) || n < 0) return current;
+  if (n === 0) return "service";
+  return current === "service" ? "card" : current;
+}
+
 export function grantSheetTitle(memberName: string, kind: GrantKind): string {
   return `${memberName}님에게 ${kind === "goods" ? "상품" : "수강권"} 지급`;
 }

@@ -28,7 +28,7 @@ import {
 import { fetchCenterSubscription } from "../../../lib/centerSubscription";
 import { fetchGrantableProducts, grantProductToMember, won, type GrantInput, type SaleProduct } from "../../../lib/sales";
 import { countOptionLabel, priceSummary, tierPriceFor } from "../../../lib/selectableCount";
-import { defaultGrantPrice, grantBlockReason, grantCountOptions, grantSheetTitle, holdingLabel, productNeedsSize, suggestGrantSize, type GrantKind } from "../../../lib/memberGrant";
+import { defaultGrantPrice, grantBlockReason, grantCountOptions, grantSheetTitle, holdingLabel, normalizeGrantMethod, productNeedsSize, suggestGrantSize, type GrantKind } from "../../../lib/memberGrant";
 import {
   EXPIRY_PERMISSION_KEY, MAX_REASON_LENGTH, QUICK_EXTEND_DAYS, extensionConfirmMessage, extensionSuccessMessage, formatDotDate, isExtendablePass, previewExtension,
   type ExtendMode,
@@ -518,8 +518,8 @@ function MembersContent() {
     setGrantCount(firstCount);
     const dp = defaultGrantPrice(p, firstCount);
     setGrantPrice(p && dp != null ? String(dp) : "");
-    // 가격이 있는 상품을 새로 고르면 "서비스"로 남아있던 결제방법을 실수로 유지하지 않게 초기화
-    if (p && (dp ?? 0) > 0 && grantMethod === "service") setGrantMethod("card");
+    // 가격과 결제방법은 항상 짝을 맞춘다(0원 ⇒ 서비스, 유료 ⇒ 서비스 아님) — F11
+    setGrantMethod(normalizeGrantMethod(p && dp != null ? dp : "", grantMethod));
     // 2026-10-01(Batch C, C-10) — 상품을 바꾸면 이전 상품의 요일/시간 선택은 무효이므로 초기화.
     setGrantScheduleDay(null); setGrantScheduleTime(null);
     // 프로필 신발 사이즈가 상품 sizes 중 하나면 기본 선택으로 제안(관리자가 확인·변경 가능)
@@ -565,8 +565,7 @@ function MembersContent() {
     if (!centerId || !grantTarget || !grantProductId) return;
     const price = Number(grantPrice);
     if (!Number.isFinite(price) || price < 0) { setError("가격을 숫자로 입력해주세요"); return; }
-    if (price === 0 && grantMethod !== "service") { setError("가격이 0원이면 결제방법은 '서비스'여야 해요"); return; }
-    if (price > 0 && grantMethod === "service") { setError("가격이 있으면 '서비스'로는 지급할 수 없어요 — 결제방법을 골라주세요"); return; }
+    const method = normalizeGrantMethod(price, grantMethod);   // F11: 화면에 보이는 방법과 서버로 가는 방법이 달라지지 않게 제출 직전에도 맞춘다
     const product = grantProducts.find((p) => p.id === grantProductId);
     if (!product) return;
     // 2026-10-01(Batch C, C-10) — 구매 화면(app/checkout)과 동일하게 선택 없이는 발급을 막는다.
@@ -576,7 +575,7 @@ function MembersContent() {
     try {
       await grantProductToMember({
         centerId, profileId: grantTarget.profileId, productId: product.id, productName: product.name,
-        price, payMethod: grantMethod, memo: grantMemo.trim() || undefined,
+        price, payMethod: method, memo: grantMemo.trim() || undefined,
         paidAt: new Date().toISOString(),
         boundDayOfWeek: product.kind !== "goods" && product.weekdaySelectable ? grantScheduleDay : undefined,
         boundStartTime: product.kind !== "goods" && product.weekdaySelectable && product.timeSelectable ? grantScheduleTime : undefined,
@@ -1252,7 +1251,7 @@ function MembersContent() {
                       const dpPrev = defaultGrantPrice(sel, grantCount);
                       if (grantPrice === "" || Number(grantPrice) === dpPrev) {
                         const next = defaultGrantPrice(sel, n);
-                        if (next != null) setGrantPrice(String(next));
+                        if (next != null) { setGrantPrice(String(next)); setGrantMethod((cur) => normalizeGrantMethod(next, cur)); }
                       }
                     }}>
                     {choices.map((n) => <option key={n} value={n}>{countOptionLabel({ count: n, price: tierPriceFor(sel!, n) ?? 0 })}</option>)}
@@ -1285,9 +1284,7 @@ function MembersContent() {
               placeholder="0원이면 서비스로 지급" value={grantPrice} disabled={granting}
               onChange={(e) => {
                 setGrantPrice(e.target.value);
-                const n = Number(e.target.value);
-                if (n === 0) setGrantMethod("service");
-                else if (grantMethod === "service") setGrantMethod("card");
+                setGrantMethod((cur) => normalizeGrantMethod(e.target.value, cur));
               }}
             />
 
