@@ -540,6 +540,8 @@ function ReservationCalendarContent() {
   );
   // 예약 확인 모달에 표시할 수강권/상품 목록 (배치 조회 결과에서 파생 — 별도 조회 없음)
   const passList = confirmClass ? (usablePassesByClass[confirmClass.id] ?? []) : [];
+  // F07: 이 날짜는 수강권 발급일(memberships.issued_at, date)이다. 구매 내역의 시각은 주문/수강권 생성 시각(created_at, KST)이라
+  // 기준이 달라 날짜가 어긋날 수 있고, 무료 지급 수강권은 "구매"가 아니므로 "발급"으로 표기한다.
   // UX 감사(A-8) — 이름·만료일이 완전히 같은 수강권이 여러 개면(실제 재현됨) 구매일이 없으면
   // 어느 걸 고르는지 구분이 안 됐다. 목록 전체에 항상 구매일을 붙이면 평소엔 불필요한 정보라,
   // 실제로 이름+만료일이 겹치는 항목이 있을 때만 그 항목들에 구매일을 보여준다.
@@ -937,7 +939,7 @@ function ReservationCalendarContent() {
                         <span className="pass-pick-sub">
                           {passPickSubLabel(m)}
                           {passDupKeys.has(`${m.productName}::${m.expiresAt}`) && m.issuedAt && (
-                            <> · {m.issuedAt.slice(5).replace("-", "/")} 구매</>
+                            <> · {m.issuedAt.slice(5).replace("-", "/")} 발급</>
                           )}
                           {!m.isMine && m.ownerProfile && <> · {m.ownerProfile} 보유</>}
                         </span>
@@ -947,9 +949,9 @@ function ReservationCalendarContent() {
                   ))}
                 </div>
                 <div className="perm-guide" style={{ margin: "6px 0 0" }}>
-                  수강권 하나는 <b>한 프로필만</b> 사용할 수 있어요.
-                  아직 사용하지 않은 수강권은 어느 프로필이든 쓸 수 있지만,
-                  한 번 사용하면 그 프로필 전용이 돼요.
+                  수강권은 <b>계정 단위로 함께 사용</b>해요.
+                  같은 계정의 프로필이라면 누구든 이 수강권으로 예약할 수 있고,
+                  남은 횟수와 기간은 모두 함께 차감돼요.
                 </div>
               </>
             ) : (
