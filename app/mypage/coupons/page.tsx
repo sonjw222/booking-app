@@ -9,6 +9,7 @@
     최종 할인금액은 결제 확정 시점에 서버가 재계산한다 — 여기 표시는 안내용.
 */
 
+import ErrorState from "../../components/ErrorState";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
@@ -72,10 +73,10 @@ export default function MyCouponsPage() {
         <div className="side" />
       </div>
 
-      {error && <div className="auth-msg error" style={{ margin: "8px 20px" }}>{error}</div>}
-
       {loading ? (
         <Loading />
+      ) : error ? (
+        <ErrorState title="쿠폰을 불러오지 못했어요" description="잠시 후 다시 시도해 주세요." action={<button type="button" className="primary-btn" onClick={() => void load()}>다시 시도</button>} />
       ) : coupons.length === 0 ? (
         <EmptyState icon="card" title="보유한 쿠폰이 없어요" description="센터에서 쿠폰을 지급하면 여기에 표시돼요." />
       ) : (

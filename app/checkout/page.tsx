@@ -193,7 +193,7 @@ function CheckoutContent() {
   useEffect(() => {
     if (!product || !product.couponEligible) { setApplicableCoupons([]); return; }
     let mounted = true;
-    fetchApplicableCoupons(product.id, baseAmount)
+    fetchApplicableCoupons(product.id, baseAmount, centerId)
       .then((list) => { if (mounted) setApplicableCoupons(list); })
       .catch(() => { if (mounted) setApplicableCoupons([]); });
     return () => { mounted = false; };
