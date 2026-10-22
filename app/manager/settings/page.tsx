@@ -318,6 +318,10 @@ export default function SettingsPage() {
               <button aria-pressed={s.privateSlotUnit === u.value} key={u.value} className={`filter-chip ${s.privateSlotUnit === u.value ? "on" : ""}`} onClick={() => up("privateSlotUnit", u.value)}>{u.label}</button>
             ))}
           </div>
+          {/* F04: 이 값은 현재 예약·수업 생성 어디에서도 시간을 제한하지 않는다(정책 미정 — 적용 범위는 별도 결정 대기). 동작을 오해하지 않도록 안내만 한다. */}
+          <div className="perm-guide" style={{ margin: "0 20px 8px" }}>
+            지금은 프라이빗 수업을 만들 때 참고하는 기본 단위예요. 이미 만든 수업의 시작 시각이나 회원 예약을 이 단위로 제한하지는 않아요.
+          </div>
 
           {/* 09. 동시 최대 */}
           <div className="set-section-title">프라이빗 동시 수업 최대 개수</div>
