@@ -897,7 +897,7 @@ function ReservationCalendarContent() {
       {confirmClass && (
         <SheetOverlay className="sheet-overlay" onClick={() => setConfirmClass(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-title">예약하시겠어요?</div>
+            <div className="sheet-title">{confirmClass.reserved >= confirmClass.capacity ? "대기 신청하시겠어요?" : "예약하시겠어요?"}</div>
 
             <section className="booking-confirm-section booking-confirm-class">
               <div className="booking-confirm-kicker">선택한 수업</div>
@@ -914,6 +914,15 @@ function ReservationCalendarContent() {
                 )}
               </div>
             </section>
+
+            {confirmClass.reserved >= confirmClass.capacity && (
+              // F03: 정원이 찬 수업은 대기로 등록된다. 대기 등록 시점에는 수강권이 차감되지 않고(membership_consumed=false),
+              // 자리가 나서 확정(승격)될 때 차감된다. 서버 동작을 그대로 안내할 뿐 조건을 바꾸지 않는다.
+              <div className="perm-guide" style={{ margin: "0 0 10px" }}>
+                <UiIcon name="alert" size={13} /> 정원이 차서 <b>대기로 등록</b>돼요. 지금은 수강권이 차감되지 않고,
+                자리가 나서 예약이 확정될 때 차감돼요. 확정 여부는 알림과 예약 내역에서 확인할 수 있어요.
+              </div>
+            )}
 
             {!confirmClass.allowCancel && (
               <div className="perm-guide is-error" style={{ margin: "0 0 10px" }}>
@@ -1020,7 +1029,7 @@ function ReservationCalendarContent() {
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => setConfirmClass(null)}>취소</button>
               <button className="primary-btn" disabled={busyClassId === confirmClass.id} onClick={doReserve}>
-                {busyClassId === confirmClass.id ? "예약 중..." : "예약하기"}
+                {busyClassId === confirmClass.id ? (confirmClass.reserved >= confirmClass.capacity ? "신청 중..." : "예약 중...") : (confirmClass.reserved >= confirmClass.capacity ? "대기 신청하기" : "예약하기")}
               </button>
             </div>
           </div>
