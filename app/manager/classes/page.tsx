@@ -45,6 +45,7 @@ import { fetchClassMemos, createClassMemo, updateClassMemo, deleteClassMemo, typ
 import { getMyAccountId } from "../../../lib/authAccount";
 import { addSlot, allSlots, countClasses, removeSlot, updateSlot, validateSlots, MAX_TIME_SLOTS, type TimeSlot } from "../../../lib/classTimeSlots";
 import { formatMonthDayWeekday } from "../../../lib/kst";
+import { futureAttendanceMessage, isClassNotStarted } from "../../../lib/attendanceGuard";
 import { fetchMemberDetail, type MemberDetailData } from "../../../lib/members";
 import { fetchSettings, type CenterSettings } from "../../../lib/settings";
 import {
@@ -729,6 +730,12 @@ export default function ClassManagePage() {
       );
       if (!ok) return;
       if (attBusyRef.current) return; // 확인창이 떠 있는 동안 다른 처리가 시작된 경우
+    }
+    // 아직 시작하지 않은 수업에 출석/노쇼를 찍는 건 오탭일 가능성이 커서 한 번 더 확인한다(서버 규칙은 그대로).
+    if ((status === "attended" || status === "no_show") && rosterClass && a.status !== status && isClassNotStarted(rosterClass.date, rosterClass.start)) {
+      const ok = await globalThis.appConfirm(futureAttendanceMessage(a.name, status));
+      if (!ok) return;
+      if (attBusyRef.current) return;
     }
     attBusyRef.current = true;
     setAttBusy(true);

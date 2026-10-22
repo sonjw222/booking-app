@@ -1116,6 +1116,8 @@ function MembersContent() {
           <div className="sheet csv-export-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">엑셀 내보내기</div>
             <div className="sheet-lead">필요한 회원 정보만 선택해서 내보낼 수 있어요.</div>
+            {/* 수강권·잔여횟수·만료일 열은 회원 1명당 대표 수강권 1개(사용 가능한 것 우선)만 담는다. 보유 수강권이 여러 개여도 한 줄에는 하나만 나온다. */}
+            <div className="perm-guide" style={{ margin: "0 0 10px" }}>수강권 · 잔여횟수 · 만료일은 회원마다 <b>대표 수강권 1개</b>(사용 가능한 수강권 우선)만 담겨요. 여러 개를 보유한 회원의 전체 내역은 회원 상세에서 확인하세요.</div>
 
             <div className="csv-cols">
               {CSV_COLUMNS.filter((c) => c.key !== "phone" || canViewPhone).map((c) => (
