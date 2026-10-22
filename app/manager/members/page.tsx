@@ -851,7 +851,7 @@ function MembersContent() {
                         {(showAllPasses ? passes : passes.slice(0, 3)).map((p) => (
                           <div key={p.id} className="mem-pass-chip mem-pass-chip-row">
                             <span className="mem-pass-chip-text">
-                              {p.name}{p.remaining != null ? ` · ${p.remaining}회` : ""} <span className="mem-pass-exp">~{p.expiresAt ?? "무제한"}</span>
+                              {p.name}{p.unlimited ? " · 무제한" : p.remaining != null ? ` · ${p.remaining}회` : ""} <span className="mem-pass-exp">~{p.expiresAt ?? "무제한"}</span>
                             </span>
                             {/* 만료일이 있는 수강권만(무제한/상품 제외) + 전용 권한이 있을 때만 */}
                             {canExtendExpiry && isExtendablePass(p) && (
@@ -883,7 +883,7 @@ function MembersContent() {
                       <div className="mem-pass-summary">
                         {(showAllGoods ? goods : goods.slice(0, 3)).map((p) => (
                           <div key={p.id} className="mem-pass-chip goods">
-                            {holdingLabel({ name: p.name, remaining: p.remaining, selectedSize: p.selectedSize })} <span className="mem-pass-exp">~{p.expiresAt ?? "무제한"}</span>
+                            {holdingLabel({ name: p.name, remaining: p.unlimited ? null : p.remaining, selectedSize: p.selectedSize })} <span className="mem-pass-exp">~{p.expiresAt ?? "무제한"}</span>
                           </div>
                         ))}
                       </div>

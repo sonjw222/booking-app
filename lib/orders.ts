@@ -7,6 +7,8 @@
 
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
+import { countKind, usageState, type CountKind, type UsageState } from "./membershipStatus";
+import { todayKstYmd } from "./membershipExpiry";
 import { fetchMembershipOrigins, FREE_GRANT_REFUND_NOTE, type MembershipOrigin } from "./membershipOrigin";
 
 export type Order = {
@@ -261,6 +263,8 @@ export type PurchaseItem = {
   refundable: boolean;
   refundReason: string;
   cancellable: boolean;       // P1-2: 아직 미발급 주문을 회원이 직접 취소할 수 있는지
+  usage: UsageState | null;   // F15: 수강권 이용 상태(만료일·잔여·시작일 반영). 미발급 주문은 null — 이때는 status(주문 상태)를 그대로 쓴다.
+  countKind: CountKind | null;
   kind: "pass" | "goods";
   origin: MembershipOrigin;   // 무료 지급 / 유료 구매 / 알 수 없음(payments 기준). 주문을 못 찾은 것(amountKnown=false)과 무료는 다르다.
   amountKnown: boolean;       // amount가 실제 주문/결제에서 온 값인지
@@ -282,7 +286,7 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
   if (profileIds.length === 0) return [];
 
   // 발급된 수강권 (환불 가능 판단 대상)
-  const memCols = "id, center_id, product_id, product_name, total_count, remaining_count, status, created_at, centers(name), products(product_kind)";
+  const memCols = "id, center_id, product_id, product_name, total_count, remaining_count, expires_at, starts_at, status, created_at, centers(name), products(product_kind, unlimited, unlimited_pass)";
   const runMem = (cols: string) => supabase.from("memberships").select(cols)
     .in("profile_id", profileIds).order("created_at", { ascending: false }).limit(100);
   let { data: mems, error: memsErr } = (await runMem(`${memCols}, selected_size`)) as any;
@@ -305,6 +309,8 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
     const remain = (m as any).remaining_count;
     const used = total != null && remain != null && remain !== total;
     const st = (m as any).status;
+    const prod = (m as { products?: { product_kind?: string; unlimited?: boolean; unlimited_pass?: boolean } | null }).products;
+    const countInput = { productKind: prod?.product_kind, unlimitedPass: prod?.unlimited_pass, unlimitedGoods: prod?.unlimited, totalCount: total, remainingCount: remain };
 
     const origin = origins[(m as { id: string }).id] ?? "unknown";
     let refundable = false;
@@ -338,6 +344,8 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
       refundable, refundReason: reason,
       cancellable: false, // 이미 발급됨 — 취소가 아니라 환불(refundable) 경로
       kind: ((m as any).products?.product_kind === "goods" ? "goods" : "pass"),
+      usage: usageState({ ...countInput, status: st, expiresAt: (m as { expires_at?: string | null }).expires_at, startsAt: (m as { starts_at?: string | null }).starts_at }, todayKstYmd()),
+      countKind: countKind(countInput),
     });
   }
 
@@ -367,6 +375,8 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
       refundReason: cancellable ? "" : "취소된 주문이에요",
       cancellable,
       kind: "pass",
+      usage: null,
+      countKind: null,
       origin: "unknown",
       amountKnown: true,
     });

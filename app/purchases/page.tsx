@@ -21,6 +21,7 @@ import DatePicker from "../components/DatePicker";
 import EmptyState from "../components/EmptyState";
 import ErrorState from "../components/ErrorState";
 import BackButton from "../components/BackButton";
+import { USAGE_LABEL } from "../../lib/membershipStatus";
 
 const STATUS_LABEL: Record<string, string> = {
   active: "이용중",
@@ -159,7 +160,7 @@ export default function PurchasesPage() {
               <div className="purchase-content">
               <div className="purchase-head">
                 <span className="purchase-center">{it.centerName}</span>
-                <span className={`purchase-status s-${it.status}`}>{STATUS_LABEL[it.status] ?? it.status}</span>
+                <span className={`purchase-status s-${it.usage ?? it.status}`}>{it.usage ? USAGE_LABEL[it.usage] : (STATUS_LABEL[it.status] ?? it.status)}</span>
               </div>
               <div className="purchase-name">{it.productName}</div>
               <div className="purchase-meta">
@@ -167,7 +168,9 @@ export default function PurchasesPage() {
                     구분이 안 됐다. amount===0도 명시적으로 표시. */}
                 {it.origin === "free_grant" ? <>{FREE_GRANT_LABEL} · </> : it.amount > 0 ? <>{won(it.amount)} · </> : it.amountKnown && it.amount === 0 ? <>무료 · </> : null}
                 {it.purchasedAt}
-                {it.totalCount != null && (
+                {it.membershipId && it.countKind === "unlimited" ? <> · 무제한</>
+                  : it.membershipId && it.countKind === "unknown" ? <> · 횟수 정보 없음</>
+                  : it.totalCount != null && (
                   it.membershipId
                     ? <> · {it.remainingCount ?? 0}/{it.totalCount}회 남음</>
                     : <> · {it.totalCount}회 구매 신청</>   // 미발급 주문(횟수 선택형): 고른 횟수 표시

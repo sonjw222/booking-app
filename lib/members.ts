@@ -381,7 +381,7 @@ export type MemberDetailData = {
   reservations: { id: string; title: string; date: string; status: string }[];
   progress: { id: string; skill: string; date: string; note: string | null }[];
   payments: { id: string; amount: number; unpaid: number; saleType: string; date: string }[];
-  activePasses: { id: string; name: string; remaining: number | null; expiresAt: string | null; kind: string; selectedSize: string | null }[];
+  activePasses: { id: string; name: string; remaining: number | null; unlimited: boolean; expiresAt: string | null; kind: string; selectedSize: string | null }[];
   // 회원이 마이페이지에서 입력한 정보
   profileInfo: {
     birthDate: string | null; gender: string | null;
@@ -445,10 +445,14 @@ export async function fetchMemberDetail(profileId: string, centerId: string): Pr
   // 각 수강권의 종류(수강권/상품) 파악
   const prodIds = Array.from(new Set((mem ?? []).map((m: any) => m.product_id).filter(Boolean)));
   const kindById: Record<string, string> = {};
+  const unlimitedById: Record<string, boolean> = {};   // F17: 수강권=unlimited_pass, 상품=unlimited
   if (prodIds.length > 0) {
     const { data: prods } = await supabase
-      .from("products").select("id, product_kind").in("id", prodIds);
-    for (const p of prods ?? []) kindById[(p as any).id] = (p as any).product_kind ?? "pass";
+      .from("products").select("id, product_kind, unlimited, unlimited_pass").in("id", prodIds);
+    for (const p of (prods ?? []) as { id: string; product_kind: string | null; unlimited: boolean | null; unlimited_pass: boolean | null }[]) {
+      kindById[p.id] = p.product_kind ?? "pass";
+      unlimitedById[p.id] = p.product_kind === "goods" ? !!p.unlimited : !!p.unlimited_pass;
+    }
   }
 
   const fmt = (iso: string) => KST_MD2.format(new Date(iso));
@@ -477,6 +481,7 @@ export async function fetchMemberDetail(profileId: string, centerId: string): Pr
       id: m.id,
       name: m.product_name,
       remaining: m.remaining_count,
+      unlimited: m.product_id ? !!unlimitedById[m.product_id] : false,
       expiresAt: m.expires_at,
       kind: m.product_id ? (kindById[m.product_id] ?? "pass") : "pass",
       selectedSize: m.selected_size ?? null,

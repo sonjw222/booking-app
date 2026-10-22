@@ -4,6 +4,7 @@
 */
 
 import { calendarEventsToIcs, reservationToEvent } from "./calendarEvents";
+import { countKind, type CountKind } from "./membershipStatus";
 import { supabase } from "./supabaseClient";
 import { refundMembershipApi } from "./payments/tossPaymentApi";
 import { fetchMembershipOrigins, type MembershipOrigin } from "./membershipOrigin";
@@ -19,6 +20,7 @@ export type Membership = {
   productId: string | null;
   kind: "pass" | "goods";
   unlimited: boolean;
+  countKind: CountKind;   // "unlimited" | "limited" | "unknown"(횟수 정보 없음)
   centerName: string;
   productName: string;
   totalCount: number;
@@ -209,7 +211,7 @@ export async function fetchMyPage() {
   // 수강권 + 상품 (모든 프로필)
   const { data: memRows, error: memErr } = await supabase
     .from("memberships")
-    .select("id, profile_id, bound_profile_id, center_id, product_id, product_name, total_count, remaining_count, expires_at, starts_at, created_at, status, centers(name), products(product_kind, unlimited)")
+    .select("id, profile_id, bound_profile_id, center_id, product_id, product_name, total_count, remaining_count, expires_at, starts_at, created_at, status, centers(name), products(product_kind, unlimited, unlimited_pass)")
     .in("profile_id", profileIds)
     .neq("status", "refunded")
     .order("expires_at", { ascending: true });
@@ -235,10 +237,11 @@ export async function fetchMyPage() {
   const nowIso = new Date().toISOString();
   const origins = await fetchMembershipOrigins(memIds);
 
+  // F17: 수강권은 unlimited_pass, 대여 상품은 unlimited 로 무제한을 판정한다(lib/membershipStatus).
+  const kindOf = (m: { products?: { product_kind?: string | null; unlimited?: boolean | null; unlimited_pass?: boolean | null } | null; total_count: number | null; remaining_count: number | null }): CountKind => countKind({ productKind: m.products?.product_kind, unlimitedPass: m.products?.unlimited_pass, unlimitedGoods: m.products?.unlimited, totalCount: m.total_count, remainingCount: m.remaining_count });
   const memberships: Membership[] = (memRows ?? [])
     .filter((m: any) => {
-      const unlimited = m.products?.unlimited ?? false;
-      if (unlimited) return true;
+      if (kindOf(m) === "unlimited") return true;
       const remain = m.remaining_count;
       if (remain == null || remain > 0) return true;   // 아직 횟수 남음 → 표시
       // 0회 소진: 마지막 예약 수업이 아직 안 지났으면 표시
@@ -251,7 +254,8 @@ export async function fetchMyPage() {
       centerId: m.center_id,
       productId: m.product_id ?? null,
       kind: m.products?.product_kind === "goods" ? "goods" : "pass",
-      unlimited: m.products?.unlimited ?? false,
+      unlimited: kindOf(m) === "unlimited",
+      countKind: kindOf(m),
       centerName: m.centers?.name ?? "",
       productName: m.product_name,
       totalCount: m.total_count,

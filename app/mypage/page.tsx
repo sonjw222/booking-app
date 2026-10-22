@@ -18,6 +18,7 @@ import { useResumeRefresh } from "../../lib/useResumeRefresh";
 import UiIcon from "../components/UiIcon";
 
 import { todayKstYmd } from "../../lib/membershipExpiry";
+import { remainingPercent } from "../../lib/membershipStatus";
 const STATUS_LABEL: Record<string, string> = {
   confirmed: "예약확정",
   waitlisted: "대기중",
@@ -154,7 +155,7 @@ export default function MyPage() {
           // item 8 — 만료/소진 카드는 progress bar도 "다 썼음"으로 보이게(횟수가 남아 있어도
           // 기간 만료면 pct가 그대로 높게 나와 "아직 쓸 수 있어 보이는" 착시가 생겼다).
           // 과하게 흐리게(회색 처리)는 하지 않는다 — 요청사항.
-          const pct = ended ? 100 : m.totalCount > 0 ? (m.remainingCount / m.totalCount) * 100 : 0;
+          const pct = ended ? 100 : (remainingPercent({ productKind: m.kind, unlimitedPass: m.unlimited, unlimitedGoods: m.unlimited, totalCount: m.totalCount, remainingCount: m.remainingCount }) ?? 0);
           const left = daysLeft(m.expiresAt);
           const avail = repurchase[m.id];
           const CardTag = ended ? "div" : "a";
@@ -166,9 +167,9 @@ export default function MyPage() {
                 {m.centerName} · {m.productName}
               </div>
               <div className="count">
-                {m.unlimited ? "무제한" : <>{m.remainingCount}회 <span>/ {m.totalCount}회 남음</span></>}
+                {m.countKind === "unlimited" ? "무제한" : m.countKind === "unknown" ? <span>횟수 정보 없음</span> : <>{m.remainingCount}회 <span>/ {m.totalCount}회 남음</span></>}
               </div>
-              {!m.unlimited && (
+              {m.countKind === "limited" && (
                 <div className="progress-track">
                   <div className="progress-fill" style={{ width: `${pct}%` }} />
                 </div>
