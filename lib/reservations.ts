@@ -157,7 +157,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data: page, error: clsErr } = await supabase
         .from("classes")
-        .select("id, center_id, title, description, start_time, end_time, capacity, allow_goods, allow_cancel, class_format, room_id, booking_deadline_min, centers(id, name, categories), rooms(name)")
+        .select("id, center_id, title, description, start_time, end_time, capacity, allow_goods, allow_cancel, class_format, room_id, centers(id, name, categories), rooms(name), booking_deadline_min")
         .in("center_id", membershipCenterIds)
         .gte("start_time", startUtcIso)
         .lt("start_time", endUtcIso)
