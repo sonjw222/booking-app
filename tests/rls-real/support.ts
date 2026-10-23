@@ -34,3 +34,9 @@ export function ensureExtraStaff() {
   sql(`insert into manager_centers(account_id,center_id,role_id,status) values ('d4000000-0000-0000-0000-0000000000d4','${ID.centerPub}','d6000000-0000-0000-0000-0000000000d6','active') on conflict do nothing`);
   sql(`insert into manager_centers(account_id,center_id,role_id,status) select 'd5000000-0000-0000-0000-0000000000d5','${ID.centerPriv}',(select id from center_roles where center_id='${ID.centerPriv}' and is_owner limit 1),'active' on conflict do nothing`);
 }
+
+/** 테스트 파일이 끝날 때 공용 상태를 시드 상태로 되돌린다(Vitest 는 파일 순서를 보장하지 않는다). 시드에는 center_members/알림이 없다. */
+export function cleanupSharedState() {
+  sql(`delete from notifications where center_id='${ID.centerPub}' or center_id='${ID.centerPriv}'`);
+  sql(`delete from center_members where center_id in ('${ID.centerPub}','${ID.centerPriv}')`);
+}

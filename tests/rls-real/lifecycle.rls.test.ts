@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { bookingHint } from "../../lib/bookingHints";
-import { clientFor, ensureExtraStaff, ID, sql, U, U2 } from "./support";
+import { clientFor, ensureExtraStaff, ID, sql, U, U2, cleanupSharedState } from "./support";
 
 const applySql = (f: string) => execFileSync("docker", ["exec", "-i", "qa-rls-pg", "psql", "-U", "postgres", "-d", "qa", "-v", "ON_ERROR_STOP=1"], { input: fs.readFileSync(path.resolve(__dirname, "../..", f), "utf8"), encoding: "utf8" });
 const A = () => clientFor(U.A), B = () => clientFor(U.B), OWNER = () => clientFor(U.M), STAFF = () => clientFor(U2.S);
@@ -29,6 +29,7 @@ afterAll(() => {
   sql(`delete from orders where product_id in ('${P.pass}','${P.goods}')`);
   sql(`delete from products where id in ('${P.pass}','${P.goods}')`);
   sql(`update center_settings set waitlist_weekly_limit=0, allow_same_day_booking=true where center_id='${ID.centerPub}'`);
+  cleanupSharedState();
 });
 
 const order = (c: ReturnType<typeof clientFor>, profile: string, product: string, name: string, amount: number) =>

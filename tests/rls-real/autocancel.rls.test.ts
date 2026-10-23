@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { clientFor, ensureExtraStaff, ID, sql, U } from "./support";
+import { clientFor, ensureExtraStaff, ID, sql, U, cleanupSharedState } from "./support";
 
 const ROOT = path.resolve(__dirname, "../..");
 const apply = (file: string, text?: string) => execFileSync("docker", ["exec", "-i", "qa-rls-pg", "psql", "-U", "postgres", "-d", "qa", "-v", "ON_ERROR_STOP=1"], { input: text ?? fs.readFileSync(path.resolve(ROOT, file), "utf8"), encoding: "utf8" });
@@ -40,6 +40,7 @@ afterAll(() => {
   sql(`delete from reservations where class_id in ('${CLS}','d9000000-0000-0000-0000-0000000000da')`); sql(`delete from classes where id in ('${CLS}','d9000000-0000-0000-0000-0000000000da')`);
   sql(`delete from memberships where id in ('${MEM.a}','${MEM.b}')`);
   sql(`update center_settings set autocancel_enabled=false where center_id='${ID.centerPub}'`);
+  cleanupSharedState();
 });   // 다른 테스트 파일에 상태를 남기지 않는다
 
 describe("자동 폐강 알림 — 수정 전(재현)", () => {

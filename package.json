@@ -35,7 +35,8 @@
     "qa:production:membership-expiry": "vitest run --config vitest.qa-production.config.ts tests/qa/scenarios/membership-expiry.qa.test.ts",
     "test:rls-real": "vitest run --config vitest.rls.config.ts",
     "test:sql": "node --test --test-concurrency=1 tests/sql/*.test.mjs",
-    "lint:strict": "eslint"
+    "lint:strict": "eslint",
+    "test:rls-real:fresh": "bash tests/rls-real/run.sh down && bash tests/rls-real/run.sh up && vitest run --config vitest.rls.config.ts"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",

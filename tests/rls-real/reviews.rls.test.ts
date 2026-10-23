@@ -19,6 +19,7 @@ const reset = () => { sql(`delete from point_transactions where profile_id='${ID
 const write = (rating = 5, content = "좋아요", photos: string[] | null = null) => member().rpc("write_review", { p_center_id: ID.centerPub, p_profile_id: ID.pB1, p_rating: rating, p_content: content, p_photos: photos });
 
 describe("F13 — 수정 전(재현)", () => {
+  it("재실행·순서 독립: 통합 원장 적용 전(저장소의 옛 정의) 상태로 시작", () => { execFileSync("docker", ["exec", "-i", "qa-rls-pg", "psql", "-U", "postgres", "-d", "qa", "-v", "ON_ERROR_STOP=1"], { input: fs.readFileSync(path.resolve(__dirname, "../../rollback_fix_write_review_unified_ledger_20261022.sql"), "utf8"), encoding: "utf8" }); });
   it("사진 인자가 있는 write_review 는 옛 장부에 적립하고 통합 원장(회원이 보는 잔액)은 0 — 수정(삭제 후 재작성)은 보상을 중복 지급한다", async () => {
     reset();
     const first = await write(5, "처음", ["reviews/a.jpg"]);
