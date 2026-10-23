@@ -22,6 +22,10 @@ case "${1:-}" in
              add_public_storefront_products.sql add_internal_qa_center_flag.sql add_reviews_points.sql fix_center_reviews.sql add_review_reply.sql add_point_ledger_unification.sql fix_center_limit_settings_normalize_20261022.sql add_profile_fields.sql add_customer_memo_feature.sql add_customer_member_phone_masking.sql fix_customer_member_phone_masking_center_scope.sql add_member_dormant.sql add_membership_expiry_extension.sql add_payments_unpaid_link.sql add_notifications.sql add_notification_triggers.sql; do
       docker exec -i qa-rls-pg psql -U postgres -d qa < "$ROOT/$f" >/dev/null 2>&1 || true
     done
+    docker exec -i qa-rls-pg psql -v ON_ERROR_STOP=1 -U postgres -d qa < 05_shims.sql >/dev/null
+    for f in add_class_goods_option.sql add_reservation_goods_usage.sql add_auto_booking.sql add_unplaced_passes.sql add_payment_test_provider.sql add_direct_payment.sql add_confirm_real_payment.sql fix_pg_payment_lifecycle.sql fix_order_issuance_and_auto_booking.sql; do
+      docker exec -i qa-rls-pg psql -U postgres -d qa < "$ROOT/$f" >/dev/null 2>&1 || true
+    done
     docker exec -i qa-rls-pg psql -v ON_ERROR_STOP=1 -U postgres -d qa < 10_seed.sql >/dev/null
     docker run -d --name qa-rls-rest --network qa-rls-net -p 127.0.0.1:3203:3000 -e PGRST_DB_URI="postgres://authenticator:qa_authenticator@qa-rls-pg:5432/qa" -e PGRST_DB_SCHEMAS=public -e PGRST_DB_ANON_ROLE=anon -e PGRST_JWT_SECRET="qa-secret-qa-secret-qa-secret-1234567890" postgrest/postgrest:v12.2.3 >/dev/null
     for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:3203/ && break; sleep 1; done
