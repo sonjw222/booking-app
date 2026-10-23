@@ -4,7 +4,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { clientFor, ensureExtraStaff, ID, sql, U, U2 } from "./support";
 
 const FIX = path.resolve(__dirname, "../../fix_member_dormant_restore_idempotent_20261023.sql");
@@ -29,6 +29,8 @@ function reset(dormantDaysAgo: number | null) {
 const exp = () => Object.fromEntries(Object.entries(MS).map(([k, id]) => [k, sql(`select expires_at from memberships where id='${id}'`)]));
 const addDays = (d: string, n: number) => new Date(Date.parse(d) + n * 86400000).toISOString().slice(0, 10);
 const cm = () => sql(`select status||'|'||coalesce(dormant_since::text,'')  from center_members where id='${CM}'`);
+
+afterAll(() => { sql(`delete from memberships where id in ('${Object.values(MS).join("','")}')`); sql(`delete from center_members where id='${CM}'`); });   // 다른 테스트 파일에 상태를 남기지 않는다
 
 describe("F19 — 수정 전(재현)", () => {
   it("운영 원본 정의(롤백 파일)로 시작", () => { apply(ROLLBACK); });

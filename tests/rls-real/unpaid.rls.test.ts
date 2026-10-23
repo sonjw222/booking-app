@@ -4,7 +4,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { clientFor, ensureExtraStaff, ID, sql, U, U2 } from "./support";
 
 const FIX = path.resolve(__dirname, "../../fix_collect_unpaid_overcollect_20261023.sql");
@@ -13,7 +13,9 @@ const apply = (file: string) => execFileSync("docker", ["exec", "-i", "qa-rls-pg
 const owner = () => clientFor(U.M);
 const collect = (c: ReturnType<typeof clientFor>, id: string, a: { card?: number | null; cash?: number | null; transfer?: number | null; point?: number | null }) =>
   c.rpc("collect_unpaid_payment", { p_original_payment_id: id, p_card_amount: a.card ?? 0, p_cash_amount: a.cash ?? 0, p_transfer_amount: a.transfer ?? 0, p_point_amount: a.point ?? 0, p_paid_at: new Date().toISOString(), p_memo: "qa" });
-const newUnpaid = (unpaid: number, center = ID.centerPub) => sql(`insert into payments(profile_id,center_id,sale_type,total_amount,unpaid_amount,status) values ('${ID.pB1}','${center}','new',${5000 - unpaid},${unpaid},'paid') returning id`).split("\n")[0];
+const created: string[] = [];
+const newUnpaid = (unpaid: number, center = ID.centerPub) => { const id = sql(`insert into payments(profile_id,center_id,sale_type,total_amount,unpaid_amount,status) values ('${ID.pB1}','${center}','new',${5000 - unpaid},${unpaid},'paid') returning id`).split("\n")[0]; created.push(id); return id; };
+afterAll(() => { if (created.length) { const ids = created.map((i) => `'${i}'`).join(","); sql(`delete from payments where linked_unpaid_payment_id in (${ids})`); sql(`delete from payments where id in (${ids})`); } });   // 다른 테스트 파일에 상태를 남기지 않는다
 const unpaidOf = (id: string) => Number(sql(`select unpaid_amount from payments where id='${id}'`));
 const collectedOf = (id: string) => Number(sql(`select coalesce(sum(total_amount),0) from payments where linked_unpaid_payment_id='${id}'`));
 const rowsOf = (id: string) => Number(sql(`select count(*) from payments where linked_unpaid_payment_id='${id}'`));

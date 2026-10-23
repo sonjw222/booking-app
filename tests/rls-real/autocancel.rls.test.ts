@@ -5,7 +5,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { clientFor, ensureExtraStaff, ID, sql, U } from "./support";
 
 const ROOT = path.resolve(__dirname, "../..");
@@ -34,6 +34,13 @@ function seed() {
 const sweep = () => JSON.parse(sql("select run_autocancel_sweep()"));
 const count = (kind: string, account: string) => Number(sql(`select count(*) from notifications where kind='${kind}' and recipient_account_id='${account}' and center_id='${ID.centerPub}'`));
 const remaining = () => sql(`select string_agg(remaining_count::text, ',' order by id) from memberships where id in ('${MEM.a}','${MEM.b}')`);
+
+afterAll(() => {
+  sql(`delete from notifications where center_id='${ID.centerPub}'`);
+  sql(`delete from reservations where class_id in ('${CLS}','d9000000-0000-0000-0000-0000000000da')`); sql(`delete from classes where id in ('${CLS}','d9000000-0000-0000-0000-0000000000da')`);
+  sql(`delete from memberships where id in ('${MEM.a}','${MEM.b}')`);
+  sql(`update center_settings set autocancel_enabled=false where center_id='${ID.centerPub}'`);
+});   // 다른 테스트 파일에 상태를 남기지 않는다
 
 describe("자동 폐강 알림 — 수정 전(재현)", () => {
   it("준비: 스윕 함수·알림 트리거를 저장소 정의로 구성(원본 상태)", () => {

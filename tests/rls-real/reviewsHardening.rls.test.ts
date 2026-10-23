@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { clientFor, ensureExtraStaff, ID, sql, U, U2 } from "./support";
 
 const apply = (f: string) => execFileSync("docker", ["exec", "-i", "qa-rls-pg", "psql", "-U", "postgres", "-d", "qa", "-v", "ON_ERROR_STOP=1"], { input: fs.readFileSync(path.resolve(__dirname, "../..", f), "utf8"), encoding: "utf8" });
@@ -17,6 +17,8 @@ function fresh() {
   sql(`delete from center_reviews where profile_id='${ID.pB1}' and center_id='${ID.centerPub}'`);
   sql(`insert into center_reviews(center_id,profile_id,rating,content) values ('${ID.centerPub}','${ID.pB1}',4,'원문')`);
 }
+
+afterAll(() => { sql(`delete from point_transactions where profile_id='${ID.pB1}' and center_id='${ID.centerPub}'`); sql(`delete from center_reviews where profile_id='${ID.pB1}' and center_id='${ID.centerPub}'`); });
 
 describe("후기 직접 쓰기 — 수정 전(재현)", () => {
   it("준비: 기존 grant 상태로 복원 + 보조 마이그레이션", async () => {
