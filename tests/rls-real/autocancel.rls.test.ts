@@ -16,11 +16,11 @@ const MEM = { a: "d9100000-0000-0000-0000-0000000000a1", b: "d9100000-0000-0000-
 const RES = { a: "d9200000-0000-0000-0000-0000000000a1", b: "d9200000-0000-0000-0000-0000000000b1", w: "d9200000-0000-0000-0000-0000000000c1" };
 
 function loadSweepFunction() {
-  const src = fs.readFileSync(path.resolve(ROOT, "add_autocancel_scheduler.sql"), "utf8");
-  const start = src.indexOf("create or replace function run_autocancel_sweep()");
-  const end = src.indexOf("$$;", start) + 3;
-  return "alter table center_settings add column if not exists autocancel_enabled boolean not null default false;\n" + src.slice(start, end);
+  return "alter table center_settings add column if not exists autocancel_enabled boolean not null default false;\n"
+    + fs.readFileSync(path.resolve(ROOT,"tests/rls-real/fixtures/production_autocancel_20261023.sql"),"utf8")
+    + "\nrevoke execute on function run_autocancel_sweep() from public,anon,authenticated; grant execute on function run_autocancel_sweep() to service_role; notify pgrst,'reload schema';\n";
 }
+
 function seed() {
   sql(`delete from notifications where center_id='${ID.centerPub}'`);
   sql(`delete from reservations where class_id='${CLS}' or membership_id in ('${MEM.a}','${MEM.b}')`); sql(`delete from classes where id='${CLS}'`);
@@ -89,7 +89,22 @@ describe("자동 폐강 알림 — 수정 후", () => {
     expect(count("reservation_canceled", ACC.M)).toBe(1);
   });
 
+  it("운영 HOLIDAY 분기의 전용 알림은 유지되고, 같은 트랜잭션의 스윕 다음 일반 취소도 정상 알림", () => {
+    seed();
+    const normal="d9000000-0000-0000-0000-0000000000db", rr="d9200000-0000-0000-0000-0000000000db";
+    sql(`insert into classes(id,center_id,title,start_time,end_time,capacity,status,pass_selection_mode) values ('${normal}','${ID.centerPub}','[QA] 휴무 보존',now()+interval '10 days',now()+interval '10 days 1 hour',5,'open','all') on conflict do nothing`);
+    sql(`insert into reservations(id,class_id,profile_id,membership_id,status) values ('${rr}','${normal}','${ID.pA1}','${MEM.a}','confirmed')`);
+    sql(`begin; select run_autocancel_sweep(); update reservations set status='cancelled',cancel_source='HOLIDAY' where id='${rr}'; commit;`);
+    expect(count("admin_cancelled",ACC.A)).toBe(1);
+    expect(count("reservation_canceled",ACC.A)).toBe(1);
+    expect(sql(`select title from notifications where recipient_account_id='${ACC.A}' and kind='reservation_canceled' and center_id='${ID.centerPub}'`)).toMatch(/휴무/);
+    sql(`delete from reservations where id='${rr}'`); sql(`delete from classes where id='${normal}'`);
+  });
+
   it("스윕은 일반 사용자·익명이 호출할 수 없다", async () => {
+    expect(sql(`select has_function_privilege('authenticated','public.run_autocancel_sweep()','execute')`)).toBe("f");
+    expect(sql(`select has_function_privilege('anon','public.run_autocancel_sweep()','execute')`)).toBe("f");
+    expect(sql(`select has_function_privilege('service_role','public.run_autocancel_sweep()','execute')`)).toBe("t");
     expect((await clientFor(U.M).rpc("run_autocancel_sweep")).error).not.toBeNull();
     expect((await clientFor(null).rpc("run_autocancel_sweep")).error).not.toBeNull();
   });

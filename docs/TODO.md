@@ -3985,3 +3985,9 @@ Privacy 배치 #1/#2/#6/#7과 함께 조사됐으나, 법적/서비스 보유기
 - [ ] P1(사용자): Google Play 공개되면 `lib/siteMeta.ts` `STORE_LINKS.googlePlay`에 공식 URL 추가
 - [ ] P2: Search Console·네이버 서치어드바이저에 사이트 등록 + sitemap 제출(운영 작업)
 - [ ] P2: 고객센터가 개인 휴대폰 번호·운영시간 미표기, 사업장 주소 표기 정책(홈 푸터 제외/`/legal/business` 노출)·법적 문서 시행일 불일치는 이번 범위 밖(법적 내용 변경은 등록 정보 확인 후)
+
+
+### 2026-10-23 Codex 정정
+- 후기 답변 권한 키가 없다는 가정 철회: 운영 facility.review.reply 유지.
+- F21 운영 기해결, 새 SQL 적용 불필요. booking_deadline_min 운영 nullable/default NULL 확인.
+- 후속5개 SQL 운영 적용 및 사후 메타데이터 검증 완료. 앱 배포·실기기·운영 cron/외부 푸시 검증은 별개.

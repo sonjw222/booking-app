@@ -23,11 +23,11 @@ begin
 
     -- pg_get_functiondef 는 키워드를 대문자로 정규화하므로 모든 매칭은 대소문자 무시('i')다.
     if v_trg not like '%-- sys-cancel-dedupe%' then
-        select count(*) into v_n from regexp_matches(v_trg, 'if v_account is not null then(\s+)perform push_notification\((\s+)v_account, ''reservation_canceled''', 'gi');
+        select count(*) into v_n from regexp_matches(v_trg, '(elsif\s+new\.status\s*=\s*''cancelled''\s+then\s+)if\s+v_account\s+is\s+not\s+null\s+then', 'gi');
         if v_n <> 1 then raise exception 'trg_notify_reservation_update: 치환 대상이 정확히 1곳이어야 해요(현재 %곳)', v_n; end if;
         v_trg := regexp_replace(v_trg,
-            'if v_account is not null then(\s+)perform push_notification\((\s+)v_account, ''reservation_canceled''',
-            'if v_account is not null and coalesce(current_setting(''app.system_class_cancel'', true), '''') <> ''on'' then -- sys-cancel-dedupe' || E'\\1' || 'perform push_notification(' || E'\\2' || 'v_account, ''reservation_canceled''',
+            '(elsif\s+new\.status\s*=\s*''cancelled''\s+then\s+)if\s+v_account\s+is\s+not\s+null\s+then',
+            E'\\1' || 'if v_account is not null and coalesce(current_setting(''app.system_class_cancel'', true), '''') <> ''on'' then -- sys-cancel-dedupe',
             'i');
         execute v_trg;
     end if;

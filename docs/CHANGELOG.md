@@ -6781,3 +6781,15 @@ ACL-003 SQL 수정 초안 정적 검토 4건) = 총 29건. React 컴포넌트 �
 ## 참고
 - 위 "커밋 이전" 항목은 상대적 순서 추정치이며, 정확한 완료일이 필요하면 SQL을 실제로 Supabase에 적용한 시점을 팀 내에서 별도로 기록해야 합니다.
 - 앞으로는 [DEVELOPMENT_RULES.md](./DEVELOPMENT_RULES.md)의 "기능별 작은 커밋" 규칙에 따라 Git 커밋 로그 자체가 신뢰할 수 있는 변경 이력이 되도록 합니다.
+
+
+## Codex SQL 검토·운영 적용 (2026-10-23 후속)
+
+- migration lifecycle_audit_followup_20261023: 후기 직접 쓰기 보호, 미수금 초과 회수, 휴면 회차 중복 처리 방지, 예약 한도 경쟁, 자동폐강 알림의 5개 패치를 운영에 적용했다. 앱 push/PR/merge/배포는 하지 않았다.
+- 적용 전 원본 95건 재실행 통과. 오늘 운영 함수 정의를 설치한 별도 로컬 DB에서 미수/휴면/경쟁30건, 운영 답변 권한8건, 휴무 포함 알림9건 통과. 실제 적용 묶음 적용·재적용·롤백·재적용도 통과. 격리는 PostgreSQL16, 운영은17.6이며 운영 전체 스키마 복제는 아니다.
+- 운영 reply_review는 facility.review.reply 권한을 검사하고 권한 키도 존재했다. 원안의 모든 활성 직원 허용 변경은 적용하지 않았다. 원래 본문을 보존하고 search_path/EXECUTE만 보완했다.
+- 운영 알림 트리거에는 HOLIDAY 분기가 있어 원안 정규식이 일치하지 않았다. 취소 분기의 회원 알림 가드만 수정해 휴무 문구·직원 알림을 보존했다.
+- F21은 운영에서 이미 NULL 만료·KST·시작일·수업 자격을 검사하고 있어 미적용. 원본 cancel_reservation 해시도 그대로다. 후속 SQL/verify는 qualified m.expires_at와 KST 가드를 인식하도록 보완했다.
+- classes.booking_deadline_min 운영 메타데이터는 nullable/default NULL이다. NOT NULL default0이라는 가정에 대한 확인 필요 항목은 해소됐다.
+- 적용 후 함수/권한/마커와 마이그레이션 기록 확인. RLS 정책은 바뀌지 않았다. 운영 sweep/cron/푸시/새 결제·예약 자료는 실행·생성하지 않았다.
+- 상세 근거/백업/롤백: /Users/sonjw/Documents/Codex/2026-10-17/mwhabit-ux-ui-audit/outputs/sql-followup-20261023/

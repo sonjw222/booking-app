@@ -1,6 +1,6 @@
 # 생애주기 감사 — 추가 SQL 인계 (Codex 검토·적용용)
 
-- 기준 브랜치 `fix/lifecycle-audit-fixes-20261022`. 아래 SQL은 **전부 미적용**이다. 직접 적용하지 않았고 push·PR·배포도 없다.
+- 기준 브랜치 `fix/lifecycle-audit-fixes-20261022`. 아래 SQL의 현재 적용 상태는 문서 말미의 **Codex SQL 검토·운영 적용**을 우선한다(5개 적용, F21 운영 기해결). 직접 적용하지 않았고 push·PR·배포도 없다.
 - 이미 운영 적용된 4개 파일(`add_my_member_coupons_rpc_20261022.sql`, `fix_center_limit_settings_normalize_20261022.sql`, `fix_write_review_unified_ledger_20261022.sql`, `fix_period_revenue_remainder_20261022.sql`)은 수정하지 않았다. sha256이 `apply-manifest.json`과 일치한다. 아래는 모두 **별도 후속 SQL**이다.
 - 모든 SQL은 `pg_get_functiondef`를 읽어 정확히 한 군데씩 치환하거나(0건/2건 이상이면 중단) 새 함수를 추가한다. 운영 정의가 저장소와 달라도 통째로 덮어쓰지 않는다. 마커가 있으면 재실행은 변화 없음.
 - 검증은 격리 DB(`npm run test:rls-real:fresh`: Docker PostgreSQL 16 + PostgREST, 실제 JWT)에서 적용 → 재적용 → 롤백 → 재적용까지 실행했다. 운영 정의와의 차이 감지는 적용 직전 Codex가 `verify_*` 와 정의 백업으로 확인해야 한다.
@@ -22,7 +22,7 @@
 ### 1. `fix_center_reviews_write_hardening_20261023.sql`
 - 결함: 정책 "센터후기 본인 수정"에 `WITH CHECK`·컬럼 제한이 없어 작성자가 자기 후기의 `reply/replied_at/hidden/center_id/profile_id`를 PATCH로 바꿀 수 있었고(격리 재현), 센터 직원은 정책 "센터후기 매니저 답변"으로 회원의 `rating/content`까지 직접 고칠 수 있었다. INSERT도 컬럼 제한이 없어 `reply/hidden`을 채워 작성 가능.
 - 변경: `authenticated/anon/public`의 UPDATE 전부 회수(테이블+컬럼), INSERT는 `center_id,profile_id,rating,content,photos` 5컬럼만 허용, `reply_review`는 본문 유지 + `search_path=public` + `anon/public` EXECUTE 회수. SELECT/DELETE/RLS 정책은 그대로.
-- 정책 영향: 답변 권한 모델 불변(센터 활성 직원 전원). 전용 권한 키 도입은 별도 결정.
+- 정책 영향: 운영의 facility.review.reply 검사 유지. 센터 활성 직원 전원이라는 검토 전 가정은 정정됨.
 - 롤백: 기본 권한(authenticated/anon INSERT·UPDATE) 복원 — 적용 직전 실제 ACL 백업이 우선.
 - 검증: 수정 전 위조 가능 재현 → 후 작성자·직원·오너·타 센터 오너·타 회원·익명의 직접 PATCH 전부 거절·행 불변, 직접 INSERT에서 reply/hidden 거절, 정상 경로(write_review / update_my_review(답글·id 보존) / reply_review) 유지, 무권한 reply 거절, 권한 상태 쿼리.
 
@@ -53,7 +53,7 @@
 - 변경: 스윕이 트랜잭션 로컬 플래그 `app.system_class_cancel='on'`을 켜고 트리거가 그동안 **회원에게 가는** `reservation_canceled`만 건너뜀. 직원 알림·일반 취소 알림 불변.
 - 주의: 운영 cron·스윕·외부 푸시는 실행/변경하지 않았다. 운영 중복 수신을 확인한 것이 아니라 격리 재현이다.
 
-## 해시 (이 문서 작성 시점의 작업 트리)
+## 해시 (Claude f6f6324 검토 전 기록 — Codex 보완 전 참고값)
 - `84926ee061e3ec39…` fix_center_reviews_write_hardening_20261023.sql
 - `1124b41985f19f0b…` rollback_fix_center_reviews_write_hardening_20261023.sql
 - `2866cc7acd81fdb3…` verify_fix_center_reviews_write_hardening_20261023.sql
@@ -73,3 +73,15 @@
 - `4cf23234bd30d478…` rollback_fix_autocancel_duplicate_notification_20261023.sql
 - `fcb528acc4f487c8…` verify_fix_autocancel_duplicate_notification_20261023.sql
 (전체 sha256은 `shasum -a 256 <파일>`로 확인. 위 접두 16자리만 기록)
+
+
+## Codex SQL 검토·운영 적용 (2026-10-23 후속)
+
+- migration lifecycle_audit_followup_20261023: 후기 직접 쓰기 보호, 미수금 초과 회수, 휴면 회차 중복 처리 방지, 예약 한도 경쟁, 자동폐강 알림의 5개 패치를 운영에 적용했다. 앱 push/PR/merge/배포는 하지 않았다.
+- 적용 전 원본 95건 재실행 통과. 오늘 운영 함수 정의를 설치한 별도 로컬 DB에서 미수/휴면/경쟁30건, 운영 답변 권한8건, 휴무 포함 알림9건 통과. 실제 적용 묶음 적용·재적용·롤백·재적용도 통과. 격리는 PostgreSQL16, 운영은17.6이며 운영 전체 스키마 복제는 아니다.
+- 운영 reply_review는 facility.review.reply 권한을 검사하고 권한 키도 존재했다. 원안의 모든 활성 직원 허용 변경은 적용하지 않았다. 원래 본문을 보존하고 search_path/EXECUTE만 보완했다.
+- 운영 알림 트리거에는 HOLIDAY 분기가 있어 원안 정규식이 일치하지 않았다. 취소 분기의 회원 알림 가드만 수정해 휴무 문구·직원 알림을 보존했다.
+- F21은 운영에서 이미 NULL 만료·KST·시작일·수업 자격을 검사하고 있어 미적용. 원본 cancel_reservation 해시도 그대로다. 후속 SQL/verify는 qualified m.expires_at와 KST 가드를 인식하도록 보완했다.
+- classes.booking_deadline_min 운영 메타데이터는 nullable/default NULL이다. NOT NULL default0이라는 가정에 대한 확인 필요 항목은 해소됐다.
+- 적용 후 함수/권한/마커와 마이그레이션 기록 확인. RLS 정책은 바뀌지 않았다. 운영 sweep/cron/푸시/새 결제·예약 자료는 실행·생성하지 않았다.
+- 상세 근거/백업/롤백: /Users/sonjw/Documents/Codex/2026-10-17/mwhabit-ux-ui-audit/outputs/sql-followup-20261023/

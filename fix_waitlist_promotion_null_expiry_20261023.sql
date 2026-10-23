@@ -8,6 +8,7 @@
 -- 수정: 그 한 조건만 `and (expires_at is null or expires_at >= current_date)` 로 바꾼다(승격 순서·차감·알림·그 밖의 조건 불변).
 --      pg_get_functiondef 결과를 정확히 한 군데만 치환한다(0건/2건 이상이면 중단). 이미 가드가 있으면 아무것도 하지 않는다.
 -- 호환: 앱 코드 변경 없음. 정책 영향: 만료일 없는 수강권도 만료일 있는 수강권과 똑같이 승격 대상이 된다(예약 때는 이미 그렇게 쓸 수 있었음).
+-- Codex 운영 확인: 운영 함수는 이미 m.expires_at IS NULL 및 KST 날짜·시작일·자격 조건을 검사하므로 추가 적용하지 않았다.
 -- 참고: current_date 는 DB 시간대 기준이고 예약 함수는 KST 날짜를 쓴다(자정 부근 경계 차이) — 이번 수정 범위 밖(별도 기록).
 
 do $patch$
@@ -16,7 +17,7 @@ declare
     v_n   integer;
 begin
     v_def := pg_get_functiondef('public.cancel_reservation(uuid)'::regprocedure);
-    if v_def ~* 'expires_at\s+is\s+null\s+or\s+expires_at\s*>=\s*current_date' then
+    if v_def ~* '(?:m\.)?expires_at\s+is\s+null\s+or\s+(?:m\.)?expires_at\s*>=' then
         return;   -- 이미 적용됨
     end if;
     select count(*) into v_n from regexp_matches(v_def, 'and\s+expires_at\s*>=\s*current_date', 'gi');
