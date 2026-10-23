@@ -1,4 +1,6 @@
 "use client";
+import { bookingHint } from "../../lib/bookingHints";
+import { todayKstYmd } from "../../lib/membershipExpiry";
 import { fetchCancellationNotice } from "../../lib/cancelPreview";
 
 import Link from "next/link";
@@ -825,6 +827,7 @@ function ReservationCalendarContent() {
             // 별도로 차단 — UI는 보조 수단일 뿐 서버가 최종 방어선).
             const hasStarted = new Date(toKstIso(cls.date, cls.start)).getTime() <= Date.now();
             const passNames = usableProductNames(cls.id);
+            const hint = bookingHint({ full, classFormat: cls.classFormat, waitlistWeeklyLimit: cls.waitlistWeeklyLimit, allowSameDayBooking: cls.allowSameDayBooking, bookingDeadlineMin: cls.bookingDeadlineMin, classDate: cls.date, todayKst: todayKstYmd() });
             const instructorText = formatInstructorNames(cls.instructorNames);
             const hour = Number(cls.start.split(":")[0]);
             const period = hour < 12 ? "오전" : hour < 18 ? "오후" : "저녁";
@@ -875,6 +878,9 @@ function ReservationCalendarContent() {
                     </AppButton>
                   ) : hasStarted ? (
                     <div className="mini-btn-note">수업이 시작되었습니다.</div>
+                  ) : hint ? (
+                    // F10: 서버가 같은 설정값으로 거절하는 경우(대기 OFF·프라이빗 마감·당일 예약 OFF)는 누르게 하지 않고 이유를 보여 준다.
+                    <div className="mini-btn-note" role="note">{hint.label}</div>
                   ) : (
                     <AppButton
                       className={`mini-btn ${full ? "wait" : ""}`}
