@@ -268,4 +268,3 @@ begin
     return coalesce(result, '[]'::json);
 end;
 $function$;
-
