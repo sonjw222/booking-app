@@ -282,6 +282,8 @@ export default function SalesPage() {
     if (!collectFor) return;
     const collected = num(cCard) + num(cCash) + num(cTransfer) + num(cPoint);
     if (collected === 0) { setError("받은 금액을 입력해주세요"); return; }
+    // 서버(collect_unpaid_payment)가 최종으로 막지만, 입력 직후 이유를 바로 알려준다. 이 화면의 잔액은 오래됐을 수 있어 서버 판정이 우선한다.
+    if (collected > collectFor.unpaidAmount) { setError(`받은 금액이 남은 미수금(${won(collectFor.unpaidAmount)})보다 커요`); return; }
     setCollecting(true);
     try {
       await collectUnpaidPayment({

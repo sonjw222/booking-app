@@ -288,6 +288,13 @@ export async function extendMembershipExpiry(input: {
 export async function updateMemberStatus(
   memberId: string, status: "active" | "expired" | "dormant"
 ): Promise<void> {
+  // F19: 상태 변경·휴면 일수 연장·휴면 회차 소비를 서버가 한 트랜잭션으로 처리한다(같은 회차 중복 요청이 만료일을 두 번 늘리지 못함).
+  // SQL 미적용 환경(함수 없음)에서만 아래 예전 두 단계 경로로 폴백한다.
+  const { error: rpcErr } = await supabase.rpc("set_center_member_status", { p_center_member_id: memberId, p_status: status });
+  if (!rpcErr) return;
+  const rpcMissing = rpcErr.code === "PGRST202" || rpcErr.code === "42883" || /Could not find the function/i.test(rpcErr.message ?? "");
+  if (!rpcMissing) throw new Error("회원 상태 변경에 실패했어요: " + rpcErr.message);
+
   // 현재 회원 정보 (dormant_since, center_id, profile_id)
   const { data: cm } = await supabase
     .from("center_members")

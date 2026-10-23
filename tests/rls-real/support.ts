@@ -24,3 +24,13 @@ export const kstDay = (offsetDays: number, hour: number, minute = 0) => {
   const d = new Date(Date.now() + offsetDays * 86400_000); const ymd = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(d);
   return new Date(`${ymd}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+09:00`).toISOString();
 };
+
+/** 후속 SQL 테스트용 직원 계정(시드 준비 전용). S: centerPub 의 권한 없는 직원 역할, T: centerPriv 의 오너(다른 센터). 이미 있으면 그대로 둔다. */
+export const U2 = { S: "44444444-4444-4444-4444-444444444444", T: "55555555-5555-5555-5555-555555555555" };
+export function ensureExtraStaff() {
+  sql(`insert into auth.users(id,email) values ('${U2.S}','s@test.invalid'),('${U2.T}','t@test.invalid') on conflict do nothing`);
+  sql(`insert into accounts(id,auth_id,name) values ('d4000000-0000-0000-0000-0000000000d4','${U2.S}','권한없는직원'),('d5000000-0000-0000-0000-0000000000d5','${U2.T}','타센터오너') on conflict do nothing`);
+  sql(`insert into center_roles(id,center_id,name) values ('d6000000-0000-0000-0000-0000000000d6','${ID.centerPub}','QA 권한없음') on conflict do nothing`);
+  sql(`insert into manager_centers(account_id,center_id,role_id,status) values ('d4000000-0000-0000-0000-0000000000d4','${ID.centerPub}','d6000000-0000-0000-0000-0000000000d6','active') on conflict do nothing`);
+  sql(`insert into manager_centers(account_id,center_id,role_id,status) select 'd5000000-0000-0000-0000-0000000000d5','${ID.centerPriv}',(select id from center_roles where center_id='${ID.centerPriv}' and is_owner limit 1),'active' on conflict do nothing`);
+}
