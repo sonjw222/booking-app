@@ -1,12 +1,11 @@
 # TODO
 
-## 2026-10-22 생애주기 감사 수정 후속
-- **P1(승인 필요)**: 4개 SQL(`*_20261022.sql`)을 운영/DEV에 적용하기 전 순서·롤백 확인 후 별도 승인. 앱 배포는 SQL 선적용 후.
-- **P1(정책)**: F04 프라이빗 슬롯 범위, F13 삭제 후 재작성 보상, F06/F12 ON+NULL 레거시 행 처리, `center_reviews.reply` 직접 UPDATE 권한 축소(`harden_center_reviews_update_columns_20261022.sql`).
-- **P2**: 운영 `reserve_with_membership` 의 수업명 조건이 정확 일치인지 확인(저장소 draft는 한 곳이 부분 포함 `like`).
-- **P2**: 공개 홈 QA 데이터 노출 대상 목록(읽기 전용 조회 승인 필요) → 판매중지/비공개는 센터 관리자 작업.
-- **P2**: 통합 회귀 E2E(주문→취소 복구, 대기 승격, 취소 마감, 만료/연장 등)와 서로 다른 계정 동시 경쟁 검증은 격리 Supabase 프로젝트 또는 승인된 DEV 필요.
-- **P3**: 회원용 진도 화면 없음(확장 항목). 일정 복사 창·예약 대기 시트용 mock 테스트 추가.
+## 2026-10-23 생애주기 감사 수정 후속
+- **P0(Codex 검토·적용 대기)**: 추가 SQL 6개(`docs/LIFECYCLE_AUDIT_SQL_HANDOFF_20261023.md`) — 특히 후기 직접 쓰기 하드닝(보안), F18 초과 회수, F19 중복 연장. 적용 전 운영 정의 백업·`verify_`·타 클라이언트의 `center_reviews` 직접 UPDATE 여부 확인.
+- **P1(운영 정의 확인)**: 운영 `cancel_reservation` 승격 조건이 기간 무제한(NULL) 수강권을 건너뛰는지(F21), `classes.booking_deadline_min`이 NOT NULL default 0인지(당일 예약 OFF 적용 범위), 운영에 `orders.verified` 컬럼과 마이그레이션 출처.
+- **P1(정책)**: F04 프라이빗 슬롯 범위, 후기 삭제 후 재작성 보상, 레거시 포인트 이관(실행 금지 제안 파일만 있음), 후기 답변 전용 권한 키, F18 멱등 키·과거 초과 회수 정리, 쓰이지 않는 4인자 `write_review` overload 정리, F19 "이미 휴면이면 시작 시각 유지" 의도 확인.
+- **P2**: 가족 프로필 쿠폰 범위, 후기 작성/사진 UI의 격리 브라우저 검증, 지연 응답 주입 테스트(일정 복사), 실기기·WebKit 확인, `cancel_reservation`의 `current_date` vs KST 경계, 운영 cron·외부 푸시 경로(미실행).
+- **P3**: 회원용 진도 화면(기능 확장), 공개 노출 정리는 필요 없음(익명 조회 0행 확인됨 — Codex).
 
 ## 2026-10-19 UX 감사 후속(UX-01~16) 남은 항목
 - **P2(정책 결정 필요)**: 서버 `refund_membership`/`_refund_membership_core`(fix_pg_payment_lifecycle.sql)는 결제 금액 0인 무료 지급 수강권도 24시간 이내·미사용이면 `status='refunded'`로 바꾼다(환불 결제 행은 만들지 않음, 금전 이동 없음). 이번에는 화면에서만 '무료 지급'·환불 버튼 숨김을 적용했다. 서버에서도 무료 지급 환불(자가 반납)을 막을지는 정책 결정 후 별도 SQL(in-place 패치 + rollback/verify)로 제안 — 아직 SQL 작성·적용 안 함.

@@ -1,12 +1,12 @@
 # CHANGELOG
 
-## 2026-10-22 — 생애주기 감사 수정(F01–F17 + 추가, 로컬 브랜치 `fix/lifecycle-audit-fixes-20261022`, SQL은 모두 미적용)
-- **SQL(적용 전·승인 필요)**: 제한 설정 정규화 트리거(F06·F12), `write_review` 통합 원장 + `update_my_review`(F13), `my_member_coupons()`(F01·F05), 기간제 매출 나머지 배분(F16). 각 파일에 rollback/verify 동봉. 앱은 RPC가 없으면 오류를 표시하므로 SQL 선적용 필요.
-- **표시 통일(F15·F17)**: `lib/membershipStatus` — 무제한/횟수/정보없음, 만료·소진·예정 상태를 한 기준으로 마이·구매 내역·관리자 상세에 적용(서버 예약 판정 불변).
-- **문구/안내(F02·F03·F04·F07·F08·F10·F14)**, **일정 복사 초기 조회(F09)**, **0원 지급 결제방법 정규화(F11)**.
-- **사이드바(로그아웃 미동작 원인)**: `:focus-within` 확장 → `:has(:focus-visible)`. 링크 이동 뒤에도 레일이 콘텐츠를 덮던 문제.
-- **관리자**: 미래 수업 출석/노쇼 확인, CSV 대표 수강권 안내, 공지 수정·회원전환 문구.
-- 상세·상태: `docs/LIFECYCLE_AUDIT_FIX_CHECKLIST_20261022.md`.
+## 2026-10-22~23 — 생애주기 감사 수정(F01–F20 + 신규 발견, 로컬 브랜치 `fix/lifecycle-audit-fixes-20261022`, push·배포 없음)
+- **운영 적용 완료(Codex, migration `lifecycle_audit_base_f01_f06_f12_f13_f16_20261023`)**: `add_my_member_coupons_rpc_20261022.sql`, `fix_center_limit_settings_normalize_20261022.sql`, `fix_write_review_unified_ledger_20261022.sql`, `fix_period_revenue_remainder_20261022.sql`. 앱 코드는 아직 미배포(쿠폰/후기 수정은 RPC 존재를 전제하므로 앱 배포는 SQL 적용 후라 순서 문제 없음).
+- **신규 후속 SQL(전부 미적용, 롤백·verify 동봉, 상세 `docs/LIFECYCLE_AUDIT_SQL_HANDOFF_20261023.md`)**: 후기 직접 쓰기 권한 하드닝(reply 위조 차단, 이전 제안 대체), F18 미수금 초과 회수 차단, F19 휴면 복구 회차 소비+원자 RPC, F21 대기 승격의 기간 무제한 수강권 누락, F06·F12 한도 동시성 advisory lock, 자동 폐강 회원 알림 중복 제거.
+- **앱 변경**: 무제한/만료/소진 표시 통일(`lib/membershipStatus`), 대기 신청 전용 문구·차감 시점, 서버와 같은 설정값으로 거절되는 경우(대기 불가·프라이빗 마감·당일 예약 OFF) 카드 안내, 일정 복사 첫 진입 조회, 0원 지급 결제방법 정규화, 휴무 폐강 문구, 미래 수업 출석 확인, 운영 설정 읽기 전용 화면(F20), 휴면 상태 변경은 새 RPC 우선(없으면 폴백), 미수금 회수 화면 보조 검사, 정기권 매출 라벨을 서버 필드 의미에 맞게 정정.
+- **로그아웃 확인창**: 원인은 확인창이 아니라 `:focus-within`이 링크 클릭 뒤에도 사이드바를 펼쳐 로그아웃 행을 덮던 것 → `:has(:focus-visible)`.
+- **정정**: 이전 기록의 "대기 OFF 컬럼 없음"(`waitlist_weekly_limit` 있음), "정기권(구매일 전액 모드)" 표기(서버 `periodPassRevenue`는 usage_split 분배분도 담음), "공개 QA 노출 확정"(익명 조회 0행)을 바로잡았다.
+- **검증 환경**: 격리 DB 구성에 주문 라이프사이클·알림·매출·직접결제 마이그레이션을 추가하고 `npm run test:rls-real:fresh`로 신선한 DB에서 실행(파일 간 상태 격리). 격리 브라우저 스펙(`playwright.rlsui.config.ts`, 실제 JWT)을 추가. 상세·한계: `docs/LIFECYCLE_AUDIT_FIX_CHECKLIST_20261022.md`.
 
 ## 2026-10-19 — UX/UI 감사 후속(UX-01~16, 웹 코드만, SQL 없음)
 - **탐색 상태(UX-01·05)**: 검색 결과의 수업 링크가 예약 화면이 아니라 공개 수업 상세(`/center/[id]/class/[id]`)로 간다. 검색 복원에 '내 주변'·위치·더보기 개수를 추가하고, 목록 복원 허용 시간을 3초→10초로 늘렸다(느린 기기에서 조용히 복원이 사라지던 문제).

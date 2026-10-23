@@ -117,4 +117,13 @@ describe("F13 — 마이그레이션 적용 후", () => {
     expect(unified()).toBe(2000);
     reset();
   });
+
+  it("4인자 write_review 는 5인자(p_photos 기본값 null)와 인자 모양이 겹쳐 REST 로도 SQL 로도 호출할 수 없다(PGRST203 / 42725) — 프론트가 쓰는 경로는 5인자뿐이며, 모호한 호출은 보상·후기를 만들지 않는다", async () => {
+    reset();
+    const ambiguous = await member().rpc("write_review", { p_center_id: ID.centerPub, p_profile_id: ID.pB1, p_rating: 4, p_content: "사진 인자 없음" });
+    expect(ambiguous.error?.code).toBe("PGRST203");
+    expect(unified()).toBe(0);
+    expect(sql(`select count(*) from center_reviews where profile_id='${ID.pB1}' and center_id='${ID.centerPub}'`)).toBe("0");
+    expect(() => sql(`begin; set local role authenticated; select write_review('${ID.centerPub}'::uuid,'${ID.pB1}'::uuid,4,'x'::text); rollback;`)).toThrow(/not unique|42725/);
+  });
 });
