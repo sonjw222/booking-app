@@ -131,3 +131,20 @@ test('멱등·중단 안전: 두 번 적용해도 같다 / 예상과 다른 정�
   await assert.rejects(odd.exec(migration), /F16 패치 중단/);
   await odd.close();
 });
+
+test('추가 이용: 이용 횟수가 늘면 분배가 다시 계산되고 매번 합계가 결제금액과 같다 / usage_split 에서는 정기권 전액 행이 없다', async () => {
+  const db = await world({ patched: true });
+  const m = id(seq++);
+  await db.exec(`insert into memberships values('${m}','${C}','${PROD_PERIOD}','period',null);
+                 insert into payments values('${m}','${C}','${PROF}',1000,null,'new','2026-10-01 00:00+09');`);
+  const days = [];
+  for (let n = 1; n <= 6; n++) {                                                 // 1회, 2회, … 6회 이용으로 늘려 가며 매번 합계 확인
+    const cid = id(seq++); const day = dayCursor++; days.push(`2026-10-${String(day).padStart(2, '0')}`);
+    await db.exec(`insert into classes values('${cid}','active','2026-10-${String(day).padStart(2, '0')} 10:00+09','수업 ${n}',null);
+                   insert into reservations(membership_id,profile_id,class_id,status) values('${m}','${PROF}','${cid}','attended');`);
+    assert.equal(await sumDetail(db, days), 1000, `${n}회 이용 시 합계`);
+    assert.equal(sumDaily(await daily(db, days[0], days[days.length - 1])), 1000, `${n}회 이용 시 일별 요약 합계`);
+  }
+  for (const d of days) for (const r of await detail(db, d)) assert.equal(r.type, 'class');   // usage_split: 구매일 전액('period_pass') 행 없음
+  await db.close();
+});
