@@ -278,7 +278,8 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
         const bRow = bPage.locator(".class-row", { hasText: "E2E 생애주기 대기승격 테스트" });
         await expect(bRow).toBeVisible({ timeout: 15_000 });
         await bRow.getByRole("button", { name: "대기" }).click();
-        await bPage.getByRole("button", { name: "예약하기" }).click();
+        await expect(bPage.locator(".sheet-title")).toHaveText("대기 신청하시겠어요?");
+        await bPage.getByRole("button", { name: "대기 신청하기", exact: true }).click({ timeout: 15_000 });
         await expect(bPage.locator(".toast")).toContainText("대기 등록됐어요", { timeout: 10_000 });
         await expect(bRow.locator(".booked-tag", { hasText: "대기중" })).toBeVisible({ timeout: 10_000 });
 
@@ -337,10 +338,19 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
       await expect(page).toHaveURL(/\/login/);
     });
   } finally {
-    await context.close();
-    await setTestCenterInternal(centerId, true);   // 내부 QA 센터 기본 상태로 복구
-    await saveSettingsAdmin(centerId, originalSettings);
-    await cleanupTestClassAdmin(capacityOneClass.id);
-    await cleanupTestClassAdmin(bookableClass.id);
+    // 타임아웃 때 context.close가 실패해도 공유 DEV의 설정·수업·throwaway 계정 정리는 각각 시도한다.
+    const cleanupErrors: unknown[] = [];
+    const cleanupSteps = [
+      () => context.close(),
+      () => setTestCenterInternal(centerId, true),
+      () => saveSettingsAdmin(centerId, originalSettings),
+      () => cleanupTestClassAdmin(capacityOneClass.id),
+      () => cleanupTestClassAdmin(bookableClass.id),
+      () => cleanupThrowawayAccountIfExists(email, password),
+    ];
+    for (const cleanup of cleanupSteps) {
+      try { await cleanup(); } catch (error) { cleanupErrors.push(error); }
+    }
+    if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, "생애주기 테스트 정리 중 오류가 발생했어요");
   }
 });

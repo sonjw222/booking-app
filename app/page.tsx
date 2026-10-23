@@ -371,7 +371,7 @@ export default function Home() {
             확인되면(loggedIn === false) 숨긴다. */}
         {loggedIn !== false && (
           <>
-            <div className="home-class-head"><h2>{myUpcoming.length > 0 ? "내 수강권으로 예약 가능" : "곧 시작하는 클래스"}</h2><Link href="/reservation" prefetch={false}>전체보기 ›</Link></div>
+            <div className="home-class-head"><h2>{myUpcoming.length > 0 ? "내 수강권에 맞는 수업" : "곧 시작하는 클래스"}</h2><Link href="/reservation" prefetch={false}>전체보기 ›</Link></div>
             {visibleClasses.length === 0 ? (
               <div className="daylist-empty" style={{ padding: "12px 20px 30px" }}>
                 {loading ? "불러오는 중..." : "예약 가능한 수업이 없어요"}

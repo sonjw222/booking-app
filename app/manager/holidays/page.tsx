@@ -92,7 +92,7 @@ export default function HolidaysPage() {
       setReason("");
       setConfirmHoliday(null);
       const msg = result.deletedClasses > 0
-        ? `휴무일 지정 완료 (수업 ${result.deletedClasses}개 삭제${result.cancelledReservations > 0 ? `, 예약 ${result.cancelledReservations}건 취소` : ""})`
+        ? `휴무일 지정 완료 (수업 ${result.deletedClasses}개 폐강${result.cancelledReservations > 0 ? `, 예약 ${result.cancelledReservations}건 취소` : ""})`
         : "휴무일을 추가했어요";
       showToast(msg);
       await load();
@@ -185,7 +185,7 @@ export default function HolidaysPage() {
           })}
         </div>
       )}
-      {/* 예약자 있는 수업 삭제 확인 */}
+      {/* 예약자 있는 수업 폐강 확인(F08: 실제 동작은 삭제가 아니라 폐강 보존) */}
       {confirmHoliday && (
         <SheetOverlay className="sheet-overlay" swipeDismiss={false} onClick={() => setConfirmHoliday(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
@@ -193,13 +193,14 @@ export default function HolidaysPage() {
             <div className="perm-guide" style={{ margin: "0 0 14px" }}>
               {date}에 수업 <b>{confirmHoliday.classCount}개</b>가 있고,
               그중 <b>{confirmHoliday.reservationCount}건</b>의 예약이 있어요.<br /><br />
-              계속하면 <b>예약이 모두 취소되고 수업이 삭제</b>돼요. 반복수업이면 이 날짜만 삭제돼요.
+              계속하면 <b>예약이 모두 취소되고 수업은 폐강 처리</b>돼요(수업 기록은 삭제되지 않고 폐강 상태로 남아요).
+              반복수업이면 이 날짜만 폐강돼요. 휴무일을 삭제하면 폐강된 수업은 다시 예약 가능 상태로 돌아가요.
               취소된 회원에게는 별도로 안내해주세요.
             </div>
             <div className="del-options">
               <button className="del-opt danger" disabled={busy} onClick={() => handleAdd(true)}>
                 <div className="del-opt-title">예약 취소하고 휴무일 지정</div>
-                <div className="del-opt-sub">수업 {confirmHoliday.classCount}개 삭제 · 예약 {confirmHoliday.reservationCount}건 취소</div>
+                <div className="del-opt-sub">수업 {confirmHoliday.classCount}개 폐강 · 예약 {confirmHoliday.reservationCount}건 취소</div>
               </button>
               <button className="ghost-btn" style={{ width: "100%", marginTop: 10 }} onClick={() => setConfirmHoliday(null)}>취소</button>
             </div>

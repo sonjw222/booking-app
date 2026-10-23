@@ -1,4 +1,6 @@
 "use client";
+import { bookingHint } from "../../lib/bookingHints";
+import { todayKstYmd } from "../../lib/membershipExpiry";
 import { fetchCancellationNotice } from "../../lib/cancelPreview";
 
 import Link from "next/link";
@@ -540,6 +542,8 @@ function ReservationCalendarContent() {
   );
   // 예약 확인 모달에 표시할 수강권/상품 목록 (배치 조회 결과에서 파생 — 별도 조회 없음)
   const passList = confirmClass ? (usablePassesByClass[confirmClass.id] ?? []) : [];
+  // F07: 이 날짜는 수강권 발급일(memberships.issued_at, date)이다. 구매 내역의 시각은 주문/수강권 생성 시각(created_at, KST)이라
+  // 기준이 달라 날짜가 어긋날 수 있고, 무료 지급 수강권은 "구매"가 아니므로 "발급"으로 표기한다.
   // UX 감사(A-8) — 이름·만료일이 완전히 같은 수강권이 여러 개면(실제 재현됨) 구매일이 없으면
   // 어느 걸 고르는지 구분이 안 됐다. 목록 전체에 항상 구매일을 붙이면 평소엔 불필요한 정보라,
   // 실제로 이름+만료일이 겹치는 항목이 있을 때만 그 항목들에 구매일을 보여준다.
@@ -823,6 +827,7 @@ function ReservationCalendarContent() {
             // 별도로 차단 — UI는 보조 수단일 뿐 서버가 최종 방어선).
             const hasStarted = new Date(toKstIso(cls.date, cls.start)).getTime() <= Date.now();
             const passNames = usableProductNames(cls.id);
+            const hint = bookingHint({ full, classFormat: cls.classFormat, waitlistWeeklyLimit: cls.waitlistWeeklyLimit, allowSameDayBooking: cls.allowSameDayBooking, bookingDeadlineMin: cls.bookingDeadlineMin, classDate: cls.date, todayKst: todayKstYmd() });
             const instructorText = formatInstructorNames(cls.instructorNames);
             const hour = Number(cls.start.split(":")[0]);
             const period = hour < 12 ? "오전" : hour < 18 ? "오후" : "저녁";
@@ -858,7 +863,7 @@ function ReservationCalendarContent() {
                       <span className="class-pass-chip all skeleton-shimmer">수강권 확인 중...</span>
                     ) : passNames.length > 0 ? (
                       <span className="class-pass-chip">
-                        내 수강권으로 예약 가능{passNames.length > 1 ? ` · ${passNames.length}개` : ""}
+                        내 수강권에 맞는 수업{passNames.length > 1 ? ` · ${passNames.length}개` : ""}
                       </span>
                     ) : (
                       <span className="class-pass-chip all">사용 가능한 수강권 없음</span>
@@ -873,6 +878,9 @@ function ReservationCalendarContent() {
                     </AppButton>
                   ) : hasStarted ? (
                     <div className="mini-btn-note">수업이 시작되었습니다.</div>
+                  ) : hint ? (
+                    // F10: 서버가 같은 설정값으로 거절하는 경우(대기 OFF·프라이빗 마감·당일 예약 OFF)는 누르게 하지 않고 이유를 보여 준다.
+                    <div className="mini-btn-note" role="note">{hint.label}</div>
                   ) : (
                     <AppButton
                       className={`mini-btn ${full ? "wait" : ""}`}
@@ -895,7 +903,7 @@ function ReservationCalendarContent() {
       {confirmClass && (
         <SheetOverlay className="sheet-overlay" onClick={() => setConfirmClass(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-title">예약하시겠어요?</div>
+            <div className="sheet-title">{confirmClass.reserved >= confirmClass.capacity ? "대기 신청하시겠어요?" : "예약하시겠어요?"}</div>
 
             <section className="booking-confirm-section booking-confirm-class">
               <div className="booking-confirm-kicker">선택한 수업</div>
@@ -913,9 +921,18 @@ function ReservationCalendarContent() {
               </div>
             </section>
 
+            {confirmClass.reserved >= confirmClass.capacity && (
+              // F03: 정원이 찬 수업은 대기로 등록된다. 대기 등록 시점에는 수강권이 차감되지 않고(membership_consumed=false),
+              // 자리가 나서 확정(승격)될 때 차감된다. 서버 동작을 그대로 안내할 뿐 조건을 바꾸지 않는다.
+              <div className="perm-guide" style={{ margin: "0 0 10px" }}>
+                <UiIcon name="alert" size={13} /> 정원이 차서 <b>대기로 등록</b>돼요. 지금은 수강권이 차감되지 않고,
+                자리가 나서 예약이 확정될 때 차감돼요. 확정 여부는 알림과 예약 내역에서 확인할 수 있어요.
+              </div>
+            )}
+
             {!confirmClass.allowCancel && (
               <div className="perm-guide is-error" style={{ margin: "0 0 10px" }}>
-                <UiIcon name="alert" size={13} /> 해당 수업은 예약 취소가 불가능한 수업입니다. 예약하시겠습니까?
+                <UiIcon name="alert" size={13} /> 해당 수업은 예약 취소가 불가능한 수업이에요. 단, 예약 직후 10분 이내에는 취소할 수 있어요. 예약하시겠어요?
               </div>
             )}
 
@@ -937,7 +954,7 @@ function ReservationCalendarContent() {
                         <span className="pass-pick-sub">
                           {passPickSubLabel(m)}
                           {passDupKeys.has(`${m.productName}::${m.expiresAt}`) && m.issuedAt && (
-                            <> · {m.issuedAt.slice(5).replace("-", "/")} 구매</>
+                            <> · {m.issuedAt.slice(5).replace("-", "/")} 발급</>
                           )}
                           {!m.isMine && m.ownerProfile && <> · {m.ownerProfile} 보유</>}
                         </span>
@@ -947,9 +964,9 @@ function ReservationCalendarContent() {
                   ))}
                 </div>
                 <div className="perm-guide" style={{ margin: "6px 0 0" }}>
-                  수강권 하나는 <b>한 프로필만</b> 사용할 수 있어요.
-                  아직 사용하지 않은 수강권은 어느 프로필이든 쓸 수 있지만,
-                  한 번 사용하면 그 프로필 전용이 돼요.
+                  수강권은 <b>계정 단위로 함께 사용</b>해요.
+                  같은 계정의 프로필이라면 누구든 이 수강권으로 예약할 수 있고,
+                  남은 횟수와 기간은 모두 함께 차감돼요.
                 </div>
               </>
             ) : (
@@ -1014,11 +1031,16 @@ function ReservationCalendarContent() {
               </section>
             )}
 
+            {/* F10: 목록의 "내 수강권에 맞는 수업"은 수강권 조건만 본 것이다. 예약 오픈 시각·당일 예약·마감 시각 같은 센터 운영 조건은
+                서버가 예약 시점에 판정하므로, 거절되면 아래 오류 문구로 이유를 안내한다. */}
+            <div className="perm-guide" style={{ margin: "8px 0 0" }}>
+              수강권 조건만 확인한 상태예요. 예약 오픈 시각·당일 예약·마감 시각 등 센터 운영 조건은 예약할 때 최종 확인돼요.
+            </div>
             {reservationError && <div className="booking-inline-error" role="alert">{reservationError}<span>수강권이나 수업 상태를 확인한 뒤 다시 시도해주세요.</span></div>}
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => setConfirmClass(null)}>취소</button>
               <button className="primary-btn" disabled={busyClassId === confirmClass.id} onClick={doReserve}>
-                {busyClassId === confirmClass.id ? "예약 중..." : "예약하기"}
+                {busyClassId === confirmClass.id ? (confirmClass.reserved >= confirmClass.capacity ? "신청 중..." : "예약 중...") : (confirmClass.reserved >= confirmClass.capacity ? "대기 신청하기" : "예약하기")}
               </button>
             </div>
           </div>

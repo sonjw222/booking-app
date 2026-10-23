@@ -44,7 +44,12 @@ export type MemberCoupon = {
   status: MemberCouponStatus;
   issuedAt: string;
   usedAt: string | null;
+  validFrom: string | null;
   validUntil: string | null;
+  centerId: string;
+  centerName: string;
+  /** appliesTo="selected"일 때 적용 대상 수강권 id(서버 함수 my_member_coupons 가 내 쿠폰 것만 돌려준다) */
+  productIds: string[];
 };
 
 // ---------------- 매니저: 쿠폰 정의 ----------------
@@ -175,61 +180,51 @@ export async function fetchIssuedMemberCoupons(couponId: string): Promise<Issued
 
 // ---------------- 회원: 내 쿠폰 ----------------
 
-// "내 쿠폰 조회" RLS(member_coupons for select, center_member_id in my profiles' rows)가
-// 다른 회원 쿠폰을 원천적으로 안 보여준다 — 이 함수는 그 위에 얇게 얹혀 있을 뿐.
+// 내게 지급된 쿠폰 — 서버 함수 my_member_coupons()(내 center_members 의 member_coupons 와 그 정의·적용 상품만 반환).
+// 예전에는 member_coupons 에 coupons(...)를 임베드했는데 회원은 coupons 를 읽을 수 없어 임베드가 null 이 되고 앱이 그 행을 걸러내
+// 지급된 쿠폰이 "없는 것처럼" 보였다(감사 F01). 정상 빈 목록과 권한·네트워크 오류는 구분한다: 오류는 던진다.
 export async function fetchMyCoupons(): Promise<MemberCoupon[]> {
-  const { data, error } = await supabase
-    .from("member_coupons")
-    .select("id, status, issued_at, used_at, coupons(id, name, discount_type, discount_value, max_discount_amount, minimum_order_amount, applies_to, valid_until)")
-    .order("issued_at", { ascending: false });
-  if (error) throw new Error("내 쿠폰을 불러오지 못했어요: " + error.message);
-  return (data ?? [])
-    .filter((r: any) => r.coupons) // 쿠폰 정의가 삭제된 고아 행 방어(현재 스키마상 cascade라 이론상 없음)
-    .map((r: any) => ({
-      id: r.id,
-      couponId: r.coupons.id,
-      couponName: r.coupons.name,
-      discountType: r.coupons.discount_type,
-      discountValue: r.coupons.discount_value,
-      maxDiscountAmount: r.coupons.max_discount_amount,
-      minimumOrderAmount: r.coupons.minimum_order_amount,
-      appliesTo: r.coupons.applies_to,
-      status: r.status,
-      issuedAt: r.issued_at,
-      usedAt: r.used_at,
-      validUntil: r.coupons.valid_until,
-    }));
+  const { data, error } = await supabase.rpc("my_member_coupons");
+  if (error) {
+    const missing = error.code === "PGRST202" || error.code === "42883" || /Could not find the function/i.test(error.message ?? "");
+    throw new Error(missing ? "쿠폰 조회 기능을 아직 사용할 수 없어요. 앱/서버 업데이트 후 다시 시도해 주세요." : "내 쿠폰을 불러오지 못했어요: " + error.message);
+  }
+  return ((data ?? []) as MyCouponRow[]).map(rowToMemberCoupon);
 }
 
-// 특정 상품 구매 화면에서 "실제로 지금 쓸 수 있는" 쿠폰만 골라준다(available + 유효기간
-// + 최소결제금액 + 적용대상). 서버 재검증(요청 16번)과는 별개의 UX 편의 필터 — 여기서
-// 뭘 보여주든 최종 자격/금액은 결제 확정 RPC가 다시 계산한다.
-export async function fetchApplicableCoupons(productId: string, productPrice: number): Promise<MemberCoupon[]> {
+type MyCouponRow = {
+  id: string; status: MemberCouponStatus; issued_at: string; used_at: string | null; coupon_id: string; name: string;
+  center_id: string; center_name: string | null; discount_type: DiscountType; discount_value: number; max_discount_amount: number | null;
+  minimum_order_amount: number | null; applies_to: CouponAppliesTo; valid_from: string | null; valid_until: string | null; product_ids: string[] | null;
+};
+export function rowToMemberCoupon(r: MyCouponRow): MemberCoupon {
+  return {
+    id: r.id, couponId: r.coupon_id, couponName: r.name, discountType: r.discount_type, discountValue: r.discount_value,
+    maxDiscountAmount: r.max_discount_amount, minimumOrderAmount: r.minimum_order_amount, appliesTo: r.applies_to,
+    status: r.status, issuedAt: r.issued_at, usedAt: r.used_at, validFrom: r.valid_from, validUntil: r.valid_until,
+    centerId: r.center_id, centerName: r.center_name ?? "센터", productIds: r.product_ids ?? [],
+  };
+}
+
+export type CouponIneligibleReason = "not_available" | "other_center" | "not_started" | "expired" | "min_amount" | "other_product";
+
+/** 이 쿠폰을 이 상품·이 센터에서 지금 쓸 수 있는지. 서버 _order_expected_amount 의 자격 검사와 같은 조건이다
+ *  (본인 소유·센터 일치·available·시작/종료 시각·적용 상품·최소 금액). 판정은 UX 편의이고 최종 판단은 항상 서버다(F05). */
+export function evaluateCoupon(c: MemberCoupon, ctx: { productId: string; price: number; centerId: string; now?: Date }): { ok: true } | { ok: false; reason: CouponIneligibleReason } {
+  const now = ctx.now ?? new Date();
+  if (c.status !== "available") return { ok: false, reason: "not_available" };
+  if (c.centerId !== ctx.centerId) return { ok: false, reason: "other_center" };
+  if (c.validFrom && now < new Date(c.validFrom)) return { ok: false, reason: "not_started" };
+  if (c.validUntil && now > new Date(c.validUntil)) return { ok: false, reason: "expired" };
+  if (c.appliesTo === "selected" && !c.productIds.includes(ctx.productId)) return { ok: false, reason: "other_product" };
+  if (c.minimumOrderAmount != null && ctx.price < c.minimumOrderAmount) return { ok: false, reason: "min_amount" };
+  return { ok: true };
+}
+
+// 특정 상품 구매 화면에서 "실제로 지금 쓸 수 있는" 쿠폰만 골라준다. 서버 재검증과는 별개의 UX 편의 필터 — 최종 자격/금액은 결제 확정 RPC가 다시 계산한다.
+export async function fetchApplicableCoupons(productId: string, productPrice: number, centerId: string): Promise<MemberCoupon[]> {
   const all = await fetchMyCoupons();
-  const now = new Date();
-  const candidates = all.filter((c) =>
-    c.status === "available" &&
-    (!c.validUntil || new Date(c.validUntil) >= now) &&
-    (c.minimumOrderAmount == null || productPrice >= c.minimumOrderAmount)
-  );
-
-  const selectedCandidates = candidates.filter((c) => c.appliesTo === "selected");
-  const allowedProductIdsByCoupon: Record<string, string[]> = {};
-  if (selectedCandidates.length > 0) {
-    const { data, error } = await supabase
-      .from("coupon_products")
-      .select("coupon_id, product_id")
-      .in("coupon_id", selectedCandidates.map((c) => c.couponId));
-    if (error) throw new Error("쿠폰 적용 대상을 불러오지 못했어요: " + error.message);
-    for (const row of data ?? []) {
-      const cid = (row as any).coupon_id;
-      (allowedProductIdsByCoupon[cid] ??= []).push((row as any).product_id);
-    }
-  }
-
-  return candidates.filter(
-    (c) => c.appliesTo === "all" || (allowedProductIdsByCoupon[c.couponId] ?? []).includes(productId)
-  );
+  return all.filter((c) => evaluateCoupon(c, { productId, price: productPrice, centerId }).ok);
 }
 
 // 클라이언트 미리보기용 할인 계산(서버와 동일한 공식 — 최종 확정 금액은 항상 서버가

@@ -133,3 +133,16 @@ export async function fetchMembershipSessionEditData(
   }
   return { totalCount, paidTotal, amounts };
 }
+
+// F16: 기간제·무제한 수강권 매출 표시 방식(center_settings.unlimited_pass_revenue_mode)에 따른 "구분별" 줄 이름.
+// 서버 일별 요약(class_revenue_daily_summary)의 필드 의미(2026-10-22 운영 정의로 확인):
+//   classRevenue       = 횟수제(count) 수강권의 회차 귀속 매출 — 모드와 무관
+//   periodPassRevenue  = 기간제·무제한 수강권 매출 — usage_split 이면 "이용한 수업 횟수로 나눈 몫"(수업 날짜에 귀속), purchase_date_full 이면 "구매일에 전액"
+// 예전 화면은 이 필드를 모드와 무관하게 "정기권(구매일 전액 모드)"로 표시해, usage_split 인데도 구매일 전액으로 오해하게 했다.
+export type UnlimitedRevenueMode = "usage_split" | "purchase_date_full";
+export function revenueBreakdownLabels(mode: UnlimitedRevenueMode | null | undefined): { classLabel: string; periodLabel: string; note: string } {
+  if (mode === "purchase_date_full") {
+    return { classLabel: "수업(횟수제)", periodLabel: "정기권(구매일 전액)", note: "정기권·무제한 수강권은 결제한 날 하루에 전액이 표시돼요. 횟수제 수강권은 이용한 수업 날짜에 회차별로 나눠 표시돼요." };
+  }
+  return { classLabel: "수업(횟수제)", periodLabel: "정기권(이용 횟수로 분배)", note: "정기권·무제한 수강권은 결제금액을 이용한 수업 횟수로 나눠 각 수업 날짜에 표시돼요(이용이 늘면 자동으로 다시 계산돼요). 횟수제 수강권은 회차별로 표시돼요." };
+}

@@ -124,10 +124,18 @@ test("관리자: 예약자 출석 → 결석(노쇼) → 되돌리기, 취소된
 
   // 출석 처리
   await rosterItem.getByRole("button", { name: "출석" }).click();
+  const futureConfirm = page.locator(".confirm-sheet");
+  await expect(futureConfirm).toContainText("아직 시작하지 않은 수업이에요");
+  await futureConfirm.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(rosterItem.locator(".hist-status")).toHaveText("확정");
+  await rosterItem.getByRole("button", { name: "출석" }).click();
+  await futureConfirm.getByRole("button", { name: "확인", exact: true }).click();
   await expect(rosterItem.locator(".hist-status")).toHaveText("출석");
 
   // 결석(노쇼) 처리 — 라벨이 실제 동작(no_show)과 일치하는지 확인(이번에 고친 버그).
   await rosterItem.getByRole("button", { name: "결석(노쇼)" }).click();
+  await expect(futureConfirm).toContainText("아직 시작하지 않은 수업이에요");
+  await futureConfirm.getByRole("button", { name: "확인", exact: true }).click();
   await expect(rosterItem.locator(".hist-status")).toHaveText("노쇼");
 
   // 되돌리기(confirmed로 리셋)
@@ -218,5 +226,8 @@ test("관리자: 프라이빗 수업에서도 출석/결석 처리가 동일하�
 
   const rosterItem = page.locator(".roster-item").first();
   await rosterItem.getByRole("button", { name: "출석" }).click();
+  const futureConfirm = page.locator(".confirm-sheet");
+  await expect(futureConfirm).toContainText("아직 시작하지 않은 수업이에요");
+  await futureConfirm.getByRole("button", { name: "확인", exact: true }).click();
   await expect(rosterItem.locator(".hist-status")).toHaveText("출석");
 });

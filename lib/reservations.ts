@@ -35,6 +35,9 @@ export type ClassInfo = {
   allowCancel: boolean; // false면 예약 취소 불가(특강 등) — 예약 전 확인 문구 표시용
   classFormat: "group" | "private"; // CLASS-001 D-2: 회원 앱에 프라이빗 배지 표시용
   showReservedCount: boolean; // 운영설정 "회원에게 예약 인원 표시"(show_group_reserved_count)
+  waitlistWeeklyLimit: number | null; // 운영설정 "한 주 대기 가능 횟수"(0이면 대기 불가). 설정을 읽지 못하면 null(모름)
+  allowSameDayBooking: boolean | null; // 운영설정 "당일 예약 허용". 모름이면 null
+  bookingDeadlineMin: number | null; // 수업 개별 예약마감(있으면 당일 예약 토글을 건너뜀)
   showWaitlistCount: boolean; // 운영설정 "회원에게 대기 인원 표시"(show_group_waitlist_count)
   instructorNames: string[]; // 담당 강사 이름 목록(class_trainers). 미지정이면 빈 배열
   // 프로필별 내 예약 상태. key = profileId
@@ -154,7 +157,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data: page, error: clsErr } = await supabase
         .from("classes")
-        .select("id, center_id, title, description, start_time, end_time, capacity, allow_goods, allow_cancel, class_format, room_id, centers(id, name, categories), rooms(name)")
+        .select("id, center_id, title, description, start_time, end_time, capacity, allow_goods, allow_cancel, class_format, room_id, centers(id, name, categories), rooms(name), booking_deadline_min")
         .in("center_id", membershipCenterIds)
         .gte("start_time", startUtcIso)
         .lt("start_time", endUtcIso)
@@ -214,7 +217,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   const settingsRowsPromise = earlyCenterMap.size > 0
     ? (async () => await supabase
         .from("center_settings")
-        .select("center_id, show_group_reserved_count, show_group_waitlist_count")
+        .select("center_id, show_group_reserved_count, show_group_waitlist_count, waitlist_weekly_limit, allow_same_day_booking")
         .in("center_id", Array.from(earlyCenterMap.keys())))()
     : null;
   const holRowsPromise = (async () => await supabase
@@ -313,11 +316,16 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   // 운영설정 "회원에게 예약/대기 인원 표시" — 센터마다 다를 수 있어 등장한 센터들만 조회
   const showReservedCountByCenter: Record<string, boolean> = {};
   const showWaitlistCountByCenter: Record<string, boolean> = {};
+  const waitlistLimitByCenter: Record<string, number | null> = {};
+  const sameDayByCenter: Record<string, boolean | null> = {};
   if (settingsRowsPromise) {
     const { data: settingsRows } = await settingsRowsPromise;
     for (const s of settingsRows ?? []) {
       showReservedCountByCenter[(s as any).center_id] = (s as any).show_group_reserved_count ?? true;
       showWaitlistCountByCenter[(s as any).center_id] = (s as any).show_group_waitlist_count ?? true;
+      const row = s as { center_id: string; waitlist_weekly_limit?: number | null; allow_same_day_booking?: boolean | null };
+      waitlistLimitByCenter[row.center_id] = row.waitlist_weekly_limit ?? null;
+      sameDayByCenter[row.center_id] = row.allow_same_day_booking ?? null;
     }
   }
 
@@ -357,6 +365,9 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
       // 설정 행이 없으면 DEFAULT_SETTINGS.showGroupReservedCount(true)와 동일하게 기본 표시
       showReservedCount: showReservedCountByCenter[c.center_id] ?? true,
       showWaitlistCount: showWaitlistCountByCenter[c.center_id] ?? true,
+      waitlistWeeklyLimit: waitlistLimitByCenter[c.center_id] ?? null,
+      allowSameDayBooking: sameDayByCenter[c.center_id] ?? null,
+      bookingDeadlineMin: (c as { booking_deadline_min?: number | null }).booking_deadline_min ?? null,
       instructorNames: instructorNamesByClass[c.id] ?? [],
       myByProfile: myProfileIds.reduce((acc, pid) => {
         const r = myByClassProfile[`${c.id}:${pid}`];

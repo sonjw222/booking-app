@@ -137,7 +137,8 @@ test("대기 등록도 하루 한도에 포함된다 (실브라우저)", async (
 
   // 정원이 찼으므로 목록 버튼은 "예약"이 아니라 "대기"로 표시된다.
   await page.locator(".class-row", { hasText: "E2E 한도대기 정원마감" }).getByRole("button", { name: "대기" }).click();
-  await page.getByRole("button", { name: "예약하기" }).click();
+  await expect(page.locator(".sheet-title")).toHaveText("대기 신청하시겠어요?");
+  await page.getByRole("button", { name: "대기 신청하기", exact: true }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
   const waitlistedRow = page.locator(".class-row", { hasText: "E2E 한도대기 정원마감" });
   await expect(waitlistedRow.getByText("대기중")).toBeVisible();

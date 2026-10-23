@@ -209,6 +209,10 @@ export default function ManagerAnnouncementsPage() {
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{editingId ? "공지 수정" : "새 공지"}</div>
 
+            {editingId && (
+              // 수정은 공지 본문만 바꾼다. 등록 때 이미 보낸 알림(알림함의 제목·내용)은 그대로 남는다.
+              <div className="perm-guide" style={{ margin: "0 0 10px" }}>공지를 수정해도 <b>이미 보낸 알림의 제목·내용은 바뀌지 않아요.</b> 회원이 공지를 열면 수정된 내용이 보여요.</div>
+            )}
             <div className="menu-section-label" style={{ padding: "4px 0 6px" }}>제목</div>
             <input className="input-field" placeholder="공지 제목"
               value={title} onChange={(e) => setTitle(e.target.value)} />

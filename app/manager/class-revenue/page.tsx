@@ -18,10 +18,11 @@ import DatePicker from "../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { won } from "../../../lib/sales";
 import {
-  fetchClassRevenueDaily, fetchClassRevenueForDate, groupClassRevenueRows,
+  fetchClassRevenueDaily, fetchClassRevenueForDate, groupClassRevenueRows, revenueBreakdownLabels, type UnlimitedRevenueMode,
   fetchMembershipSessionEditData, setMembershipSessionAmounts,
   type ClassRevenueDaily, type ClassRevenueGroup,
 } from "../../../lib/classRevenue";
+import { fetchSettings } from "../../../lib/settings";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 
 function todayStr() {
@@ -66,6 +67,7 @@ export default function ClassRevenuePage() {
   const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
+  const [revenueModeFor, setRevenueModeFor] = useState<{ centerId: string; mode: UnlimitedRevenueMode } | null>(null);   // 센터 설정의 정기권 매출 표시 방식(없으면 기본 usage_split 문구)
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -92,6 +94,14 @@ export default function ClassRevenuePage() {
       .catch((e) => { if (!cancelled) setError(e.message); });
     return () => { cancelled = true; };
   }, [activeCenter]);
+
+  useEffect(() => {
+    if (!centerId) return;
+    let cancelled = false;
+    fetchSettings(centerId).then((st) => { if (!cancelled) setRevenueModeFor({ centerId, mode: st.unlimitedPassRevenueMode as UnlimitedRevenueMode }); }).catch(() => { /* 문구만 기본값으로 */ });
+    return () => { cancelled = true; };
+  }, [centerId]);
+  const revenueLabels = revenueBreakdownLabels(revenueModeFor?.centerId === centerId ? revenueModeFor.mode : null);   // 다른 센터의 값은 쓰지 않는다
 
   const canEditSessionAmounts = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "pass.payment.update");
 
@@ -229,9 +239,10 @@ export default function ClassRevenuePage() {
             </div>
           </div>
           <div className="menu-section-label">구분별</div>
+          <div className="perm-guide" style={{ margin: "0 20px 8px" }}>{revenueLabels.note}</div>
           <div className="sales-breakdown">
-            <div className="sales-bd-item"><span className="bd-label">수업(횟수제·정기권 이용분)</span><span className="bd-value">{won(periodByType.classRevenue)}</span></div>
-            <div className="sales-bd-item"><span className="bd-label">정기권(구매일 전액 모드)</span><span className="bd-value">{won(periodByType.periodPassRevenue)}</span></div>
+            <div className="sales-bd-item"><span className="bd-label">{revenueLabels.classLabel}</span><span className="bd-value">{won(periodByType.classRevenue)}</span></div>
+            <div className="sales-bd-item"><span className="bd-label">{revenueLabels.periodLabel}</span><span className="bd-value">{won(periodByType.periodPassRevenue)}</span></div>
             <div className="sales-bd-item"><span className="bd-label">상품</span><span className="bd-value">{won(periodByType.goodsRevenue)}</span></div>
             <div className="sales-bd-item"><span className="bd-label">환불</span><span className="bd-value">{won(periodByType.refundAmount)}</span></div>
           </div>

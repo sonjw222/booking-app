@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-10-22~23 — 생애주기 감사 수정(F01–F20 + 신규 발견, 로컬 브랜치 `fix/lifecycle-audit-fixes-20261022`, push·배포 없음)
+- **운영 적용 완료(Codex, migration `lifecycle_audit_base_f01_f06_f12_f13_f16_20261023`)**: `add_my_member_coupons_rpc_20261022.sql`, `fix_center_limit_settings_normalize_20261022.sql`, `fix_write_review_unified_ledger_20261022.sql`, `fix_period_revenue_remainder_20261022.sql`. 앱 코드는 아직 미배포(쿠폰/후기 수정은 RPC 존재를 전제하므로 앱 배포는 SQL 적용 후라 순서 문제 없음).
+- **신규 후속 SQL(전부 미적용, 롤백·verify 동봉, 상세 `docs/LIFECYCLE_AUDIT_SQL_HANDOFF_20261023.md`)**: 후기 직접 쓰기 권한 하드닝(reply 위조 차단, 이전 제안 대체), F18 미수금 초과 회수 차단, F19 휴면 복구 회차 소비+원자 RPC, F21 대기 승격의 기간 무제한 수강권 누락, F06·F12 한도 동시성 advisory lock, 자동 폐강 회원 알림 중복 제거.
+- **앱 변경**: 무제한/만료/소진 표시 통일(`lib/membershipStatus`), 대기 신청 전용 문구·차감 시점, 서버와 같은 설정값으로 거절되는 경우(대기 불가·프라이빗 마감·당일 예약 OFF) 카드 안내, 일정 복사 첫 진입 조회, 0원 지급 결제방법 정규화, 휴무 폐강 문구, 미래 수업 출석 확인, 운영 설정 읽기 전용 화면(F20), 휴면 상태 변경은 새 RPC 우선(없으면 폴백), 미수금 회수 화면 보조 검사, 정기권 매출 라벨을 서버 필드 의미에 맞게 정정.
+- **로그아웃 확인창**: 원인은 확인창이 아니라 `:focus-within`이 링크 클릭 뒤에도 사이드바를 펼쳐 로그아웃 행을 덮던 것 → `:has(:focus-visible)`.
+- **정정**: 이전 기록의 "대기 OFF 컬럼 없음"(`waitlist_weekly_limit` 있음), "정기권(구매일 전액 모드)" 표기(서버 `periodPassRevenue`는 usage_split 분배분도 담음), "공개 QA 노출 확정"(익명 조회 0행)을 바로잡았다.
+- **검증 환경**: 격리 DB 구성에 주문 라이프사이클·알림·매출·직접결제 마이그레이션을 추가하고 `npm run test:rls-real:fresh`로 신선한 DB에서 실행(파일 간 상태 격리). 격리 브라우저 스펙(`playwright.rlsui.config.ts`, 실제 JWT)을 추가. 상세·한계: `docs/LIFECYCLE_AUDIT_FIX_CHECKLIST_20261022.md`.
+
 ## 2026-10-19 — UX/UI 감사 후속(UX-01~16, 웹 코드만, SQL 없음)
 - **탐색 상태(UX-01·05)**: 검색 결과의 수업 링크가 예약 화면이 아니라 공개 수업 상세(`/center/[id]/class/[id]`)로 간다. 검색 복원에 '내 주변'·위치·더보기 개수를 추가하고, 목록 복원 허용 시간을 3초→10초로 늘렸다(느린 기기에서 조용히 복원이 사라지던 문제).
 - **공개 수업 상세·예약 진입(UX-02·03·04)**: 상세는 로그인·수강권과 무관하게 열람(취소 조건 행 추가). CTA는 상태별로 갈린다 — 비로그인 '로그인하고 예약'(로그인 후 같은 수업으로 복귀), 수강권 없음/조건 불일치/만료·소진은 이유별 안내 + '사용 가능한 수강권 보기'(지정 수강권 수업이면 해당 상품만 먼저), 유효 수강권은 프로필별 판정(`usable_memberships_for_classes`)과 예약 단계 연결. `/reservation?openClassId=`가 수강권 없는 센터의 수업이면 빈 달력 대신 수업 상세로 보내고, 접근 불가 수업은 명시적으로 안내.
@@ -6773,3 +6781,15 @@ ACL-003 SQL 수정 초안 정적 검토 4건) = 총 29건. React 컴포넌트 �
 ## 참고
 - 위 "커밋 이전" 항목은 상대적 순서 추정치이며, 정확한 완료일이 필요하면 SQL을 실제로 Supabase에 적용한 시점을 팀 내에서 별도로 기록해야 합니다.
 - 앞으로는 [DEVELOPMENT_RULES.md](./DEVELOPMENT_RULES.md)의 "기능별 작은 커밋" 규칙에 따라 Git 커밋 로그 자체가 신뢰할 수 있는 변경 이력이 되도록 합니다.
+
+
+## Codex SQL 검토·운영 적용 (2026-10-23 후속)
+
+- migration lifecycle_audit_followup_20261023: 후기 직접 쓰기 보호, 미수금 초과 회수, 휴면 회차 중복 처리 방지, 예약 한도 경쟁, 자동폐강 알림의 5개 패치를 운영에 적용했다. 앱 push/PR/merge/배포는 하지 않았다.
+- 적용 전 원본 95건 재실행 통과. 오늘 운영 함수 정의를 설치한 별도 로컬 DB에서 미수/휴면/경쟁30건, 운영 답변 권한8건, 휴무 포함 알림9건 통과. 실제 적용 묶음 적용·재적용·롤백·재적용도 통과. 격리는 PostgreSQL16, 운영은17.6이며 운영 전체 스키마 복제는 아니다.
+- 운영 reply_review는 facility.review.reply 권한을 검사하고 권한 키도 존재했다. 원안의 모든 활성 직원 허용 변경은 적용하지 않았다. 원래 본문을 보존하고 search_path/EXECUTE만 보완했다.
+- 운영 알림 트리거에는 HOLIDAY 분기가 있어 원안 정규식이 일치하지 않았다. 취소 분기의 회원 알림 가드만 수정해 휴무 문구·직원 알림을 보존했다.
+- F21은 운영에서 이미 NULL 만료·KST·시작일·수업 자격을 검사하고 있어 미적용. 원본 cancel_reservation 해시도 그대로다. 후속 SQL/verify는 qualified m.expires_at와 KST 가드를 인식하도록 보완했다.
+- classes.booking_deadline_min 운영 메타데이터는 nullable/default NULL이다. NOT NULL default0이라는 가정에 대한 확인 필요 항목은 해소됐다.
+- 적용 후 함수/권한/마커와 마이그레이션 기록 확인. RLS 정책은 바뀌지 않았다. 운영 sweep/cron/푸시/새 결제·예약 자료는 실행·생성하지 않았다.
+- 상세 근거/백업/롤백: /Users/sonjw/Documents/Codex/2026-10-17/mwhabit-ux-ui-audit/outputs/sql-followup-20261023/

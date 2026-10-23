@@ -116,6 +116,10 @@ export default function LeadsPage() {
         <div className="side" />
       </div>
 
+      <div className="perm-guide" style={{ margin: "8px 20px" }}>
+        “회원전환”은 상담 상태 표시만 바꿔요. 앱 계정과 자동으로 연결되거나 수강권이 생기지는 않아요. 실제 등록은 회원 화면에서 진행해 주세요.
+      </div>
+
       {centers.length > 1 && (
         <div className="center-switcher">
           {centers.map((c) => (
@@ -157,7 +161,7 @@ export default function LeadsPage() {
                     <button className="room-edit" disabled={busy} onClick={() => handleStatus(l, "contacted")}>상담중으로</button>
                   )}
                   {l.status === "contacted" && (
-                    <button className="room-edit" disabled={busy} onClick={() => handleStatus(l, "converted")}>회원전환으로</button>
+                    <button className="room-edit" disabled={busy} onClick={() => handleStatus(l, "converted")}>회원전환으로 표시</button>
                   )}
                   {(l.status === "new" || l.status === "contacted") && (
                     <button className="room-edit" disabled={busy} onClick={() => handleStatus(l, "dropped")}>이탈로</button>
