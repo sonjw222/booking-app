@@ -64,6 +64,8 @@ export default function SettingsPage() {
   }, [activeCenter]);
 
   const canSave = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "facility.operation");
+  // F20: 권한 확인이 끝나기 전에는 편집 불가로 취급한다(편집 가능했다가 잠기는 깜빡임 방지). 서버가 저장을 막는 것과 별개로 화면도 읽기 전용으로 일관되게 보인다.
+  const permsLoading = !!activeCenter && !activeCenter.isOwner && myPerms === null;
 
   const load = useCallback(async () => {
     if (!centerId) return;
@@ -79,12 +81,14 @@ export default function SettingsPage() {
 
   // 설정값 갱신 헬퍼
   function up<K extends keyof CenterSettings>(key: K, val: CenterSettings[K]) {
+    if (!canSave) return;   // 읽기 전용: 입력이 비활성이어도 값 변경·미저장 경고가 생기지 않게 이중 방어
     setS((prev) => (prev ? { ...prev, [key]: val } : prev));
     setDirty(true);
   }
 
   // 일일 예약/프라이빗 동시 제한 토글: ON이면 유효한 숫자(기본 1)를 실제 상태에 넣는다 — 화면 표시값과 저장값이 같아야 한다(F06/F12).
   function upLimitToggle(key: LimitKey, on: boolean) {
+    if (!canSave) return;
     setS((prev) => (prev ? toggleLimit(prev, key, on) : prev));
     setDirty(true);
   }
@@ -174,8 +178,11 @@ export default function SettingsPage() {
         <div className="side" />
       </div>
 
-      {!loading && activeCenter && !canSave && (
-        <div className="error-toast">운영 설정을 변경할 권한이 없어요 — 오너에게 문의하세요.</div>
+      {!loading && activeCenter && permsLoading && (
+        <div className="perm-guide" role="status" style={{ margin: "8px 20px" }}>권한을 확인하는 중이에요…</div>
+      )}
+      {!loading && activeCenter && !permsLoading && !canSave && (
+        <div className="perm-guide is-error" role="status" style={{ margin: "8px 20px" }}>운영 설정을 변경할 권한이 없어요. 현재 설정은 읽기 전용으로만 볼 수 있어요 — 변경은 오너에게 문의하세요.</div>
       )}
 
       {centers.length > 1 && (
@@ -194,6 +201,7 @@ export default function SettingsPage() {
         <Loading />
       ) : (
         <div className="settings-wrap">
+          <fieldset className="settings-fieldset" disabled={!canSave} aria-readonly={!canSave}>
           {/* 01. 예약·취소 가능 시간 */}
           <div className="set-section-title">예약·취소 가능 시간</div>
           <div className="set-row col">
@@ -387,8 +395,9 @@ export default function SettingsPage() {
             {toggle("수강권으로 볼 수 없는 수업 표시", s.showAllClasses, (b) => up("showAllClasses", b), true)}
           </div>
 
+          </fieldset>
           <div style={{ padding: "20px 20px 40px" }}>
-            {!dirty && !busy ? <span className="save-status" role="status">저장됨</span> : <button
+            {!canSave ? <span className="save-status" role="status">읽기 전용</span> : !dirty && !busy ? <span className="save-status" role="status">저장됨</span> : <button
               className="primary-btn"
               disabled={busy || !dirty || !canSave}
               onClick={handleSave}

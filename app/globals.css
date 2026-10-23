@@ -1544,6 +1544,8 @@ button.side { background: transparent; border: 0; padding: 0; color: var(--ink);
    ============================================================ */
 
 .settings-wrap { padding-bottom: 20px; }
+.settings-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.settings-fieldset:disabled .switch { opacity: .55; }
 
 /* /manager/subscription(토스 빌링 심사 화면)의 "플랜 변경" select.
    [2026-09-14 1차 수정] .settings-wrap select.input-field로 appearance:none +
