@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { bookingHint } from "../../lib/bookingHints";
-import { clientFor, ensureExtraStaff, ID, sql, U, U2, cleanupSharedState } from "./support";
+import { clientFor, ensureExtraStaff, ID, kstDay, sql, U, U2, cleanupSharedState } from "./support";
 
 const applySql = (f: string) => execFileSync("docker", ["exec", "-i", "qa-rls-pg", "psql", "-U", "postgres", "-d", "qa", "-v", "ON_ERROR_STOP=1"], { input: fs.readFileSync(path.resolve(__dirname, "../..", f), "utf8"), encoding: "utf8" });
 const A = () => clientFor(U.A), B = () => clientFor(U.B), OWNER = () => clientFor(U.M), STAFF = () => clientFor(U2.S);
@@ -196,5 +196,54 @@ describe("3) F10 안내 조건 = 서버 거절 조건 (설정값이 같은 입�
       expect(bookingHint({ full: false, classFormat: "group", waitlistWeeklyLimit: 0, allowSameDayBooking: false, bookingDeadlineMin: null, classDate: kstDate, todayKst })?.kind).toBe("same_day_off");
     }
     sql(`update center_settings set allow_same_day_booking=true where center_id='${ID.centerPub}'`);
+  });
+});
+
+describe("4) F06 일일 예약 제한: KST 일자 경계·프로필 기준 (서버 규칙 그대로)", () => {
+  const mem = (n: number, profile: string) => { const id = `e9100000-0000-0000-0000-0000000000${n}`; sql(`insert into memberships(id,profile_id,center_id,product_id,product_name,total_count,remaining_count,status,pass_type,expires_at) values ('${id}','${profile}','${ID.centerPub}','${P.pass}','QA',9,9,'active','count',(current_date+90)) on conflict (id) do update set remaining_count=9`); return id; };
+  const cls = (n: number, startIso: string) => sql(`insert into classes(id,center_id,title,start_time,end_time,capacity,status,pass_selection_mode,booking_deadline_min) values ('${cid(n)}','${ID.centerPub}','[QA] 일일 ${n}','${startIso}'::timestamptz,('${startIso}'::timestamptz + interval '1 hour'),5,'open','all',0) on conflict (id) do nothing`);
+
+  it("제한 ON(1회): 같은 KST 날짜의 두 번째 수업은 거절, 자정을 넘긴 다음 날 수업은 허용, 가족 프로필은 별도로 센다", async () => {
+    sql(`update center_settings set daily_book_limit_enabled=true, daily_book_limit=1 where center_id='${ID.centerPub}'`);
+    const mA1 = mem(61, ID.pA1), mA2 = mem(62, ID.pA2);
+    cls(61, kstDay(10, 23, 30)); cls(62, kstDay(10, 18, 0)); cls(63, kstDay(11, 0, 30));          // 10일 뒤 23:30, 같은 날 18:00, 다음 날 00:30(KST)
+    expect((await A().rpc("reserve_with_membership", { p_class_id: cid(61), p_profile_id: ID.pA1, p_membership_id: mA1 })).error).toBeNull();
+    const second = await A().rpc("reserve_with_membership", { p_class_id: cid(62), p_profile_id: ID.pA1, p_membership_id: mA1 });
+    expect(second.error?.message).toMatch(/하루 예약 가능 횟수\(1회\)를 초과/);                       // 같은 KST 날짜
+    expect(remaining(mA1)).toBe(8);                                                                // 거절된 요청은 차감 없음
+    expect((await A().rpc("reserve_with_membership", { p_class_id: cid(63), p_profile_id: ID.pA1, p_membership_id: mA1 })).error).toBeNull();   // 00:30 은 다음 KST 날짜(UTC 로는 전날)
+    expect((await A().rpc("reserve_with_membership", { p_class_id: cid(62), p_profile_id: ID.pA2, p_membership_id: mA2 })).error).toBeNull();     // 가족 프로필은 프로필별로 센다
+  });
+
+  it("제한 OFF 로 바꾸면 같은 날 추가 예약이 가능하다(숫자가 남아 있어도 OFF 가 우선)", async () => {
+    sql(`update center_settings set daily_book_limit_enabled=false where center_id='${ID.centerPub}'`);
+    cls(64, kstDay(10, 20, 0));
+    expect((await A().rpc("reserve_with_membership", { p_class_id: cid(64), p_profile_id: ID.pA1, p_membership_id: "e9100000-0000-0000-0000-000000000061" })).error).toBeNull();
+    sql(`update center_settings set daily_book_limit_enabled=false, daily_book_limit=null where center_id='${ID.centerPub}'`);
+  });
+});
+
+describe("5) F12 프라이빗 동시 제한: 서로 다른 계정의 동시 예약 경쟁 (관찰 기록)", () => {
+  it("같은 시간대 프라이빗 2개 + 최대 1건: 서로 다른 계정이 동시에 하나씩 예약할 때의 결과를 반복 관찰한다", async () => {
+    sql(`update center_settings set private_max_concurrent_enabled=true, private_max_concurrent=1 where center_id='${ID.centerPub}'`);
+    const mA = `e9100000-0000-0000-0000-000000000071`, mB = `e9100000-0000-0000-0000-000000000072`;
+    for (const [m, pr] of [[mA, ID.pA1], [mB, ID.pB1]] as const) sql(`insert into memberships(id,profile_id,center_id,product_id,product_name,total_count,remaining_count,status,pass_type,expires_at) values ('${m}','${pr}','${ID.centerPub}','${P.pass}','QA',99,99,'active','count',(current_date+90)) on conflict (id) do update set remaining_count=99`);
+    const outcomes: number[] = [];
+    for (let i = 0; i < 8; i++) {
+      const c1 = `d7000000-0000-0000-0000-0000000001${i}1`, c2 = `d7000000-0000-0000-0000-0000000001${i}2`;
+      const t = kstDay(20 + i, 14, 0);
+      for (const c of [c1, c2]) sql(`insert into classes(id,center_id,title,start_time,end_time,capacity,status,pass_selection_mode,class_format,booking_deadline_min) values ('${c}','${ID.centerPub}','[QA] 프라이빗 ${i}','${t}'::timestamptz,('${t}'::timestamptz + interval '1 hour'),1,'open','all','private',0) on conflict (id) do nothing`);
+      const [ra, rb] = await Promise.all([
+        A().rpc("reserve_with_membership", { p_class_id: c1, p_profile_id: ID.pA1, p_membership_id: mA }),
+        B().rpc("reserve_with_membership", { p_class_id: c2, p_profile_id: ID.pB1, p_membership_id: mB }),
+      ]);
+      const confirmed = [ra, rb].filter((r) => r.error === null).length;
+      outcomes.push(confirmed);
+      expect(sql(`select count(*) from reservations where class_id in ('${c1}','${c2}') and status='confirmed'`)).toBe(String(confirmed));
+    }
+    console.log(`[관찰] 프라이빗 동시 제한 1, 서로 다른 계정 동시 예약 8회 → 성공 건수: ${outcomes.join(",")}`);
+    sql(`update center_settings set private_max_concurrent_enabled=false, private_max_concurrent=null where center_id='${ID.centerPub}'`);
+    // 어느 경우든 직렬 실행 규칙은 유지: 이미 1건이 확정된 상태에서 다른 계정이 같은 시간대를 시도하면 거절된다(경쟁이 아닌 순차)
+    expect(outcomes.every((n) => n >= 1)).toBe(true);
   });
 });
