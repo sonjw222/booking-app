@@ -242,7 +242,7 @@ export default function ClassRevenuePage() {
           <div className="perm-guide" style={{ margin: "0 20px 8px" }}>{revenueLabels.note}</div>
           <div className="sales-breakdown">
             <div className="sales-bd-item"><span className="bd-label">{revenueLabels.classLabel}</span><span className="bd-value">{won(periodByType.classRevenue)}</span></div>
-            {revenueLabels.periodLabel && <div className="sales-bd-item"><span className="bd-label">{revenueLabels.periodLabel}</span><span className="bd-value">{won(periodByType.periodPassRevenue)}</span></div>}
+            <div className="sales-bd-item"><span className="bd-label">{revenueLabels.periodLabel}</span><span className="bd-value">{won(periodByType.periodPassRevenue)}</span></div>
             <div className="sales-bd-item"><span className="bd-label">상품</span><span className="bd-value">{won(periodByType.goodsRevenue)}</span></div>
             <div className="sales-bd-item"><span className="bd-label">환불</span><span className="bd-value">{won(periodByType.refundAmount)}</span></div>
           </div>
