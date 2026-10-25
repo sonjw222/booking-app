@@ -6,6 +6,11 @@
 - **P2(결정)**: privileged 테스트(공유 계정 승격·전역 요금제 변경)를 일반 CI 에서 뺀 커버리지 공백을 어떻게 메울지 — 격리 Supabase 프로젝트/브랜치가 생기면 거기서 자동 실행.
 - **P2(결정)**: #229 의 `isolatedTestDbGuard`/`installWriteGate`(격리 DB 선언 없으면 destructive E2E 거부)는 격리 프로젝트가 생길 때 재도입 후보. `tests/e2e/fixtures/ownedMembershipCleanup`(수강권 소유 증명 삭제)도 같은 시점에 평가.
 
+## 2026-10-25 시각 QA 후속
+- **P3**: 실기기(iOS/Android) 소프트 키보드·safe-area, Safari/Firefox, 200% 확대, 매우 긴 다국어 문자열은 미검증(Chromium + 뷰포트 조절만).
+- **P3**: V07 열 수는 본문 폭 실측(ResizeObserver) 기반 — 종목이 크게 늘어 3줄 이상이 되는 경우의 "전체 종목" 접기 UX는 기존 CSS 2줄 클램프 그대로(확인 필요).
+- **P3**: 관리자 `.filter-chip.on` 전역 색은 `--on-action` 으로 통일했지만, 관리자 범위 override(밑줄형 칩 등)는 그대로 — 새 선택 칩을 만들 때 `--action-bg` 와 `--on-action` 을 짝으로 쓸 것.
+
 ## 2026-10-23 생애주기 감사 수정 후속
 - **P0(Codex 검토·적용 대기)**: 추가 SQL 6개(`docs/LIFECYCLE_AUDIT_SQL_HANDOFF_20261023.md`) — 특히 후기 직접 쓰기 하드닝(보안), F18 초과 회수, F19 중복 연장. 적용 전 운영 정의 백업·`verify_`·타 클라이언트의 `center_reviews` 직접 UPDATE 여부 확인.
 - **P1(운영 정의 확인)**: 운영 `cancel_reservation` 승격 조건이 기간 무제한(NULL) 수강권을 건너뛰는지(F21), `classes.booking_deadline_min`이 NOT NULL default 0인지(당일 예약 OFF 적용 범위), 운영에 `orders.verified` 컬럼과 마이그레이션 출처.
