@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-25 — 브라우저 QA 워커 문서 현행화(문서만)
+- `docs/BROWSER_QA_WORKER.md`: PR #222 의 설계 문서가 "구현 없음"을 전제하던 것을 로컬 `agent/qa_agent`·`notify/qa_monitor.py` 실제 코드·56개 단위 테스트(2026-10-25 실행, 56 passed)·설정 상태(enabled=false, publish_enabled=false)로 현행화하고 #221 완료 조건 대조표를 추가. 설치·실행·ntfy 수신은 검증하지 않았고 #221 은 완료가 아님.
+
 ## 2026-10-22~23 — 생애주기 감사 수정(F01–F20 + 신규 발견, 로컬 브랜치 `fix/lifecycle-audit-fixes-20261022`, push·배포 없음)
 - **운영 적용 완료(Codex, migration `lifecycle_audit_base_f01_f06_f12_f13_f16_20261023`)**: `add_my_member_coupons_rpc_20261022.sql`, `fix_center_limit_settings_normalize_20261022.sql`, `fix_write_review_unified_ledger_20261022.sql`, `fix_period_revenue_remainder_20261022.sql`. 앱 코드는 아직 미배포(쿠폰/후기 수정은 RPC 존재를 전제하므로 앱 배포는 SQL 적용 후라 순서 문제 없음).
 - **신규 후속 SQL(전부 미적용, 롤백·verify 동봉, 상세 `docs/LIFECYCLE_AUDIT_SQL_HANDOFF_20261023.md`)**: 후기 직접 쓰기 권한 하드닝(reply 위조 차단, 이전 제안 대체), F18 미수금 초과 회수 차단, F19 휴면 복구 회차 소비+원자 RPC, F21 대기 승격의 기간 무제한 수강권 누락, F06·F12 한도 동시성 advisory lock, 자동 폐강 회원 알림 중복 제거.
