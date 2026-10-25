@@ -3,6 +3,17 @@
 ## 2026-10-25 — 브라우저 QA 워커 문서 현행화(문서만)
 - `docs/BROWSER_QA_WORKER.md`: PR #222 의 설계 문서가 "구현 없음"을 전제하던 것을 로컬 `agent/qa_agent`·`notify/qa_monitor.py` 실제 코드·56개 단위 테스트(2026-10-25 실행, 56 passed)·설정 상태(enabled=false, publish_enabled=false)로 현행화하고 #221 완료 조건 대조표를 추가. 설치·실행·ntfy 수신은 검증하지 않았고 #221 은 완료가 아님.
 
+## 2026-10-25 — 시각 QA V01–V07 수정(웹 CSS/React만, SQL 없음)
+- **V01** 라이트 마이 수강권 카드의 프로필 배지: 중립 카드 위에서 흰 글자+반투명 흰 배경이라 안 보이던 것을 `--surface-strong`/`--ink`/`--line` 짝으로(마이 카드 범위만).
+- **V02** 다크 구매 내역 선택 필터: `.filter-chip.on` 이 `--action-bg` 위에 `--bg`(어두운 색)를 써 대비 2.99:1 → 새 토큰 `--on-action`(#FFF, 5.94:1). 같은 짝을 쓰던 10개 규칙(booked-tag·skill-chip·perm-tab·profile-tag.sm 등)도 같은 토큰으로 정리.
+- **V03** 라이트 관리자 매출 요약 라벨: 흰색 `!important` 고정을 `--ink-soft` 로(`/manager/sales`, `/manager/class-revenue`). 매출 계산 불변.
+- **V04** 모바일 정산계좌 gutter: 768px 미만에서 패널 padding 0 이던 것을 페이지 gutter 로(데스크톱 패널 유지).
+- **V05** 일정 복사 시트: 본문만 스크롤하고 취소/복사하기는 항상 보이는 footer(목록 독립 스크롤 제거). 복사 로직 불변.
+- **V06** `/manager/subscription` 제목 "플랫폼 구독"(다른 누락 경로 없음 확인).
+- **V07** 데스크톱 홈 종목 8+1 고립: 본문 폭을 실측해 줄 수는 유지하고 줄마다 고르게(9개→5+4, `lib/categoryGrid`). 모바일 8개/전체 종목 정책 불변.
+- **신규 발견**: 오류 배너 `.auth-msg`(width:100% + 인라인 좌우 margin)가 모바일에서 20px 가로 넘침 → `width:auto; align-self:stretch`. (격리 DB 에 없는 테이블 오류 상태에서 `/manager/announcements` 로 확인)
+- 검증: `tests/rls-real/visualQa.ui.spec.ts`(계산된 대비·위치·스크롤 구조), `visualSweep.ui.spec.ts`(30개 경로×2테마×5폭 가로 넘침·콘솔 오류, 767→768 전환). 전/후 스크린샷 `docs/qa/visual-qa-20261025/`.
+
 ## 2026-10-22~23 — 생애주기 감사 수정(F01–F20 + 신규 발견, 로컬 브랜치 `fix/lifecycle-audit-fixes-20261022`, push·배포 없음)
 - **운영 적용 완료(Codex, migration `lifecycle_audit_base_f01_f06_f12_f13_f16_20261023`)**: `add_my_member_coupons_rpc_20261022.sql`, `fix_center_limit_settings_normalize_20261022.sql`, `fix_write_review_unified_ledger_20261022.sql`, `fix_period_revenue_remainder_20261022.sql`. 앱 코드는 아직 미배포(쿠폰/후기 수정은 RPC 존재를 전제하므로 앱 배포는 SQL 적용 후라 순서 문제 없음).
 - **신규 후속 SQL(전부 미적용, 롤백·verify 동봉, 상세 `docs/LIFECYCLE_AUDIT_SQL_HANDOFF_20261023.md`)**: 후기 직접 쓰기 권한 하드닝(reply 위조 차단, 이전 제안 대체), F18 미수금 초과 회수 차단, F19 휴면 복구 회차 소비+원자 RPC, F21 대기 승격의 기간 무제한 수강권 누락, F06·F12 한도 동시성 advisory lock, 자동 폐강 회원 알림 중복 제거.

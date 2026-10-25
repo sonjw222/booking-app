@@ -12,6 +12,7 @@
   --line-strong: #C9C9C5;
   --accent: #0A2446;
   --action-bg: #0A2446;
+  --on-action: #FFFFFF;      /* --action-bg 위의 글자색(테마와 무관하게 짝으로 쓴다) */
   --accent-soft: #E7ECF3;
   /* Background > Card (13_Design_System.md). 토큰이 없어서 카드/입력/시트 표면이
      globals.css 전역에 #fff로 하드코딩돼 있었고, 그 탓에 다크 모드에서 흰 카드 위에
@@ -118,6 +119,7 @@
   --line: #34353C;
   --accent: #8BAED0;
   --action-bg: #32669F;
+  --on-action: #FFFFFF;
   --accent-soft: #1C2E42;
   --mint: #3FD39A;
   --mint-soft: #163A30;
@@ -399,7 +401,7 @@ a { color: inherit; text-decoration: none; }
   text-align: center; padding: 36px 0; font-size: 13.5px; color: var(--ink-soft); font-weight: 600;
 }
 
-.booked-tag { font-size: 10.5px; font-weight: 800; color: var(--bg); background: var(--action-bg); padding: 2px 7px; border-radius: 999px; margin-left: 6px; }
+.booked-tag { font-size: 10.5px; font-weight: 800; color: var(--on-action); background: var(--action-bg); padding: 2px 7px; border-radius: 999px; margin-left: 6px; }
 .booked-tag.private-tag { background: var(--private); } /* CLASS-001 D-2: 프라이빗 수업 배지 */
 
 .class-row {
@@ -498,7 +500,8 @@ a { color: inherit; text-decoration: none; }
 .forgot-pw-link:hover { color: var(--accent); }
 
 .auth-msg {
-  width: 100%; font-size: 12.5px; font-weight: 700; padding: 10px 12px;
+  /* width:100% + 인라인 좌우 margin(오류 배너 14곳) 이면 모바일에서 20px 가로 넘침 → auto + stretch 로 margin 을 뺀 폭을 쓴다(시각 QA 스윕에서 발견). */
+  box-sizing: border-box; width: auto; align-self: stretch; font-size: 12.5px; font-weight: 700; padding: 10px 12px;
   border-radius: 10px; margin-bottom: 10px; line-height: 1.45;
 }
 .auth-msg.error { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line); }
@@ -582,7 +585,7 @@ a { color: inherit; text-decoration: none; }
 .profile-block { display: flex; align-items: center; gap: 14px; padding: 20px; }
 .avatar {
   width: 64px; height: 64px; border-radius: 50%; background: var(--action-bg);
-  display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--bg); font-weight: 800;
+  display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--on-action); font-weight: 800;
 }
 .profile-name { font-size: 17px; font-weight: 800; margin-bottom: 3px; }
 .profile-edit { font-size: 12.5px; color: var(--ink-soft); font-weight: 700; }
@@ -943,7 +946,7 @@ button.side { background: transparent; border: 0; padding: 0; color: var(--ink);
   padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
   background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
 }
-.skill-chip.on { background: var(--action-bg); border-color: var(--accent); color: var(--bg); }
+.skill-chip.on { background: var(--action-bg); border-color: var(--accent); color: var(--on-action); }
 
 
 
@@ -1073,7 +1076,7 @@ button.side { background: transparent; border: 0; padding: 0; color: var(--ink);
 .filter-chip.on {
   background: var(--action-bg);
   border-color: var(--accent);
-  color: var(--bg);
+  color: var(--on-action);
 }
 
 .grade-dot {
@@ -1215,7 +1218,7 @@ button.side { background: transparent; border: 0; padding: 0; color: var(--ink);
 .perm-tab.on {
   background: var(--action-bg);
   border-color: var(--accent);
-  color: var(--bg);
+  color: var(--on-action);
 }
 
 .perm-actions {
@@ -1337,7 +1340,7 @@ button.side { background: transparent; border: 0; padding: 0; color: var(--ink);
 }
 .profile-tag.sm {
   background: var(--action-bg);
-  color: var(--bg);
+  color: var(--on-action);
   font-size: 10.5px;
   padding: 1px 6px;
 }
@@ -1437,7 +1440,7 @@ button.side { background: transparent; border: 0; padding: 0; color: var(--ink);
   padding: 18px;
   border-radius: 16px;
   background: var(--action-bg);
-  color: var(--bg);
+  color: var(--on-action);
 }
 .sales-big { display: block; }
 .sales-big-label { font-size: 12.5px; opacity: 0.85; }
@@ -1774,7 +1777,7 @@ button.side { background: transparent; border: 0; padding: 0; color: var(--ink);
   border: 1px solid var(--line); background: var(--surface);
   color: var(--text); font-size: 13px; cursor: pointer;
 }
-.skill-chip.on { background: var(--action-bg); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+.skill-chip.on { background: var(--action-bg); border-color: var(--accent); color: var(--on-action); font-weight: 600; }
 
 .prog-hist { padding: 0 var(--page-gutter) 20px; }
 .prog-hist-day { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
@@ -2938,7 +2941,7 @@ a.membership-card { text-decoration: none; display: block; }
 }
 .announce-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .announce-pin {
-  font-size: 10.5px; font-weight: 800; color: var(--bg); background: var(--action-bg);
+  font-size: 10.5px; font-weight: 800; color: var(--on-action); background: var(--action-bg);
   padding: 2px 7px; border-radius: 999px; flex: 0 0 auto;
 }
 .announce-title { font-size: 15px; font-weight: 800; color: var(--text); flex: 1; min-width: 0; }
@@ -4901,6 +4904,8 @@ textarea:focus-visible,
 .mypage-shell .membership-card .progress-track { background: var(--surface-strong); }
 .mypage-shell .membership-card .progress-fill { background: var(--ink); }
 .mypage-shell .membership-card.goods .progress-fill { background: var(--brand); }
+/* 마이 카드는 중립 배경(--card-bg)이라 기본 .profile-tag 의 반투명 흰 배경+흰 글자가 라이트에서 보이지 않았다 → 카드 위에서 읽히는 한 쌍으로 */
+.mypage-shell .membership-card .profile-tag { background: var(--surface-strong); color: var(--ink); border: 1px solid var(--line); }
 .mypage-shell .membership-cta {
   margin-top: 14px;
   padding: 11px 13px;
@@ -5007,7 +5012,7 @@ textarea:focus-visible,
 /* Sales: consistent vertical rhythm and number alignment. */
 .manager-v3-content .sales-summary { padding: 24px; border-radius: 22px; }
 .manager-v3-content .sales-big { display: grid; gap: 8px; }
-.manager-v3-content .sales-big-label { font-size: 12px; color: rgba(255,255,255,.72) !important; }
+.manager-v3-content .sales-big-label { font-size: 12px; color: var(--ink-soft) !important; }   /* 요약 카드는 .manager-v3-content 에서 --card-bg 위에 --ink 로 그린다(흰 글자 고정은 라이트에서 사라짐) */
 .manager-v3-content .sales-big-value { font-size: clamp(30px,8vw,38px); line-height: 1.08; letter-spacing: -.04em; }
 .manager-v3-content .profit-line { margin-top: 20px; padding-top: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid rgba(255,255,255,.24); }
 .manager-v3-content .profit-line > span { min-width: 0; font-size: 13px; }
@@ -6394,7 +6399,7 @@ input, textarea, select, [contenteditable=""], [contenteditable="true"] {
   min-height: 40px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px;
   background: var(--surface); color: var(--text-dim); font-size: 12.5px; font-weight: 650; white-space: nowrap;
 }
-.manager-v3-content .catalog-chips .filter-chip.on { background: var(--action-bg); border-color: var(--accent); color: var(--bg); }
+.manager-v3-content .catalog-chips .filter-chip.on { background: var(--action-bg); border-color: var(--accent); color: var(--on-action); }
 
 /* 회원 상세 보유 수강권 — 연장 버튼(전용 권한이 있을 때만) */
 .mem-pass-chip-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
@@ -6669,3 +6674,9 @@ a.center-bar-btn { display: flex; align-items: center; justify-content: center; 
 /* UX-07 — 검색 결과 센터 카드의 비교 정보(평점·지역·거리). 값이 없으면 "아직 후기 없음/위치 미등록"을 정직하게 표시. */
 .search-center-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 2px; font-size: 12px; color: var(--text-dim); }
 .search-center-meta .search-center-missing { color: var(--text-dim); opacity: .85; }
+
+/* V05: 일정 복사 시트 — 본문 한 곳만 스크롤, 취소/복사하기 footer 는 항상 접근 가능 */
+.sheet.copy-sheet { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+.copy-sheet .copy-sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: 8px; }
+.copy-sheet .copy-select-list, .copy-sheet .copy-preview { max-height: none; overflow: visible; }
+.copy-sheet .copy-sheet-footer { flex: 0 0 auto; margin: 0; padding: 12px 0 max(16px, env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--line); }
