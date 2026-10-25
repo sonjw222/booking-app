@@ -10,5 +10,5 @@ export default defineConfig({
   use: { baseURL: `http://localhost:${PORT}` },
   projects: [{ name: "desktop-chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } }, { name: "mobile-chromium", use: { ...devices["Pixel 7"] } }],
   webServer: { command: process.env.UI_RLS_PROD === "1" ? `npx next start -p ${PORT}` : `npx next dev -p ${PORT}`, url: `http://localhost:${PORT}`, reuseExistingServer: true, timeout: 180_000,
-    env: { NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:3211", NEXT_PUBLIC_SUPABASE_ANON_KEY: ANON } },
+    env: { NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:3211", NEXT_PUBLIC_SUPABASE_ANON_KEY: ANON, ...(process.env.NEXT_PUBLIC_ADMIN_CENTER_PAGINATION ? { NEXT_PUBLIC_ADMIN_CENTER_PAGINATION: process.env.NEXT_PUBLIC_ADMIN_CENTER_PAGINATION } : {}) } },
 });

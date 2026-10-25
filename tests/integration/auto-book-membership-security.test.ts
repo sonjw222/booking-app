@@ -24,6 +24,7 @@
   기대값 자체가 이 canonical 설계와 양립하지 않는다.
 */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { itPrivileged } from "./privilegedGate"; // 공유 계정 임시 승격 테스트는 수동 스위트에서만 실행
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "../../lib/supabaseClient";
 import {
@@ -532,7 +533,7 @@ describe("SEC-114 AUTO-SEC-I~J: 정상 동작 정확성", () => {
 });
 
 describe("SEC-114 AUTO-SEC-K~L: platform admin 허용 + fulfill_order 내부 호출 회귀 (다른 세션의 A안 테스트에서 이식)", () => {
-  it("AUTO-SEC-K: platform admin은 centerA와 아무 매니저 관계가 없어도 허용된다", async () => {
+  itPrivileged("AUTO-SEC-K: platform admin은 centerA와 아무 매니저 관계가 없어도 허용된다", async () => {
     await asUserB(); // userB는 centerA/centerB 어디에도 manager_centers 행이 없다
     const product = await createAutoBookProduct(centerAId, "SEC-114-K", [0, 1, 2, 3, 4, 5, 6]);
     const cls = await createClassOnDow(centerAId, new Date().getDay(), { title: "AUTO-SEC-K" });

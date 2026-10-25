@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-10-25 — 관리자 센터 페이지네이션 회귀·테스트 통합(#228/#229/#232 유효분), 앱 변경은 잔상 수정만
+- **앱**: `/admin/centers` 검색·탭 전환·검색어 지우기 동안 이전 결과의 카드(승인/반려 버튼 포함)가 남지 않게 비우고 로딩을 보인다(응답 역전은 기존 requestId 가드). 카드에 `data-center-id`. SQL·RPC·플래그 기본값(OFF) 불변.
+- **테스트**: jsdom 단위 2건(검색/탭 역전·잔상), mock UI `adminCenters.spec.ts`, 순수 검증 규칙 `adminPaginationVerify`(30/31 경계·중복·누락·커서 연속성), **격리 PostgreSQL+PostgREST+실제 JWT 브라우저 검증**(`tests/rls-real/adminPagination.ui.spec.ts`: 플래그 ON/OFF 각각 승인대기 31·승인됨 30·반려됨 61, 동률 created_at, 검색, 응답 지연 조작(mock), 접근 거부) + RPC 권한·입력 경계 `adminCenterPage.rls.test.ts`.
+- **수동 DEV 러너**(`npm run test:e2e:admin-pagination`): 기존 플랫폼 관리자·기존 데이터만 읽는 모드(RUN_ADMIN_PAGINATION=1). 데이터 생성/권한 승격 없음, 전제 부족은 BLOCKED.
+- **권한 변경 테스트 분리**: 공유 계정의 `is_platform_admin` 임시 승격·전역 기본 요금제 변경(`subscription-plan-limits` 등)은 일반 CI 에서 제외/SKIP, 수동 스위트 `npm run test:integration:privileged`(ACK+읽기 전용 사전검사)로만. 커버리지 공백은 문서화.
+- **채택하지 않음**: #229/#232 의 `false &&` 로 live job 7개 전체 차단과 `isolatedTestDbGuard`/`installWriteGate`(격리 DB 선언 없으면 모든 destructive E2E 거부) — 격리 Supabase 프로젝트 없이 적용하면 일반 CI 의 live 검증이 전부 꺼져 "초록"이 통합 검증을 뜻하지 않게 된다. 근거·현황: `docs/qa/ci-dev-write-audit.md` §7.
+
 ## 2026-10-22~23 — 생애주기 감사 수정(F01–F20 + 신규 발견, 로컬 브랜치 `fix/lifecycle-audit-fixes-20261022`, push·배포 없음)
 - **운영 적용 완료(Codex, migration `lifecycle_audit_base_f01_f06_f12_f13_f16_20261023`)**: `add_my_member_coupons_rpc_20261022.sql`, `fix_center_limit_settings_normalize_20261022.sql`, `fix_write_review_unified_ledger_20261022.sql`, `fix_period_revenue_remainder_20261022.sql`. 앱 코드는 아직 미배포(쿠폰/후기 수정은 RPC 존재를 전제하므로 앱 배포는 SQL 적용 후라 순서 문제 없음).
 - **신규 후속 SQL(전부 미적용, 롤백·verify 동봉, 상세 `docs/LIFECYCLE_AUDIT_SQL_HANDOFF_20261023.md`)**: 후기 직접 쓰기 권한 하드닝(reply 위조 차단, 이전 제안 대체), F18 미수금 초과 회수 차단, F19 휴면 복구 회차 소비+원자 RPC, F21 대기 승격의 기간 무제한 수강권 누락, F06·F12 한도 동시성 advisory lock, 자동 폐강 회원 알림 중복 제거.

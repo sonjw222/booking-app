@@ -26,6 +26,7 @@ function newRunId(): string {
 describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이브 DB 검증", () => {
   let centerAId: string;
   let centerBId: string;
+  let publicVisibilityCenterId: string | undefined;
   let memberAAccountId: string;
   let memberAProfileId: string;
   let memberBAccountId: string;
@@ -80,6 +81,10 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
     }
     if (pendingCouponIds.length > 0) await admin.from("coupons").delete().in("id", pendingCouponIds);
     if (pendingOrderIds.length > 0) await admin.from("orders").delete().in("id", pendingOrderIds);
+    if (publicVisibilityCenterId) {
+      const { error } = await admin.rpc("delete_test_center_cascade", { p_center_id: publicVisibilityCenterId });
+      if (error) throw new Error(`Public visibility fixture cleanup failed: ${error.message}`);
+    }
   }, 60000);
 
   // ---------------- fixture helpers ----------------
@@ -197,19 +202,27 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
   // §24-1/2/3: 공개범위 3종
   // ============================================================
   it("[24-1] 전체 공개 상품 — 누구나 조회/구매 가능", async () => {
-    const productId = await makeProduct(centerAId, 10000, { type: "all" });
+    // "Anyone" visibility needs a public fixture, not an internal QA center.
+    const admin = getFixtureAdminClient();
+    const { data: publicCenter, error: createError } = await admin.from("centers")
+      .insert({ name: `통합테스트센터-public-visibility-${newRunId()}`, status: "approved", is_internal: false })
+      .select("id").single();
+    if (createError || !publicCenter) throw new Error(`Public visibility fixture failed: ${createError?.message}`);
+    const publicCenterId = publicCenter.id as string;
+    publicVisibilityCenterId = publicCenterId;
+    const productId = await makeProduct(publicCenterId, 10000, { type: "all" });
     await runScenario("SCN-VIS-01", ["memberA"], async (assertions) => {
       await loginMemberA();
       const canBuy = await supabase.rpc("member_can_purchase_product", { p_product_id: productId, p_profile_id: memberAProfileId });
       assertions.push({ name: "전체 공개 상품은 구매 자격 있음(RPC)", passed: canBuy.data === true, detail: JSON.stringify(canBuy) });
       expect(canBuy.data).toBe(true);
 
-      const purchasable = await supabase.rpc("fetch_purchasable_products", { p_center_id: centerAId });
+      const purchasable = await supabase.rpc("fetch_purchasable_products", { p_center_id: publicCenterId });
       const ids = (purchasable.data ?? []).map((p: any) => p.id);
       assertions.push({ name: "구매 가능 목록에도 포함됨", passed: ids.includes(productId) });
       expect(ids).toContain(productId);
 
-      const orderRes = await createOrderAs(memberAProfileId, centerAId, productId, "QA-전체공개", 10000);
+      const orderRes = await createOrderAs(memberAProfileId, publicCenterId, productId, "QA-전체공개", 10000);
       assertions.push({ name: "주문 생성 성공", passed: !orderRes.error, detail: orderRes.error?.message });
       expect(orderRes.error).toBeNull();
       if (orderRes.data) pendingOrderIds.push((orderRes.data as any).id);
