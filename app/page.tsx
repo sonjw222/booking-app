@@ -6,6 +6,7 @@
   - 카테고리·클래스·센터·하단 네비를 실제 라우트로 연결
 */
 
+import { balancedCategoryColumns } from "../lib/categoryGrid";
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
 import { fetchMyProfileIds, fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingClasses, fetchNextReservation, type HomeCenter, type HomeClass, type NextReservation } from "../lib/home";
@@ -142,6 +143,25 @@ export default function Home() {
     if (isMobileViewport) return allCategories.slice(0, MOBILE_COLLAPSED_COUNT);
     return allCategories;
   }, [allCategories, showAllCategories, isMobileViewport]);
+
+  // V07: 데스크톱(768px+)에서 종목 수가 한 줄 최대 칸 수를 조금만 넘으면(예: 8칸에 9개) 마지막 한 개가 둘째 줄에 혼자 남았다 →
+  // 본문 폭을 실측해 줄 수는 유지하고 줄마다 고르게 나눈다(lib/categoryGrid). 모바일은 4열·기본 8개 정책 그대로라 적용하지 않는다.
+  const [desktopCatCols, setDesktopCatCols] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (isMobileViewport) return;   // 모바일에서는 값을 쓰지 않는다(렌더에서 !isMobileViewport 일 때만 적용)
+    const el = catGridRef.current;
+    if (!el) return;
+    function measure() {
+      if (!el) return;
+      const cs = getComputedStyle(el);
+      const inner = el.clientWidth - parseFloat(cs.paddingLeft || "0") - parseFloat(cs.paddingRight || "0");
+      setDesktopCatCols(balancedCategoryColumns(allCategories.length, inner));
+    }
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isMobileViewport, allCategories.length]);
 
   const [collapsedHasOverflow, setCollapsedHasOverflow] = useState(true);
   useLayoutEffect(() => {
@@ -320,7 +340,7 @@ export default function Home() {
             </button>
           )}
         </div>
-        <div className={`cat-grid ${showAllCategories ? "is-expanded" : ""}`} ref={catGridRef}>
+        <div className={`cat-grid ${showAllCategories ? "is-expanded" : ""}`} ref={catGridRef} style={!isMobileViewport && desktopCatCols ? { gridTemplateColumns: `repeat(${desktopCatCols}, minmax(0, 1fr))` } : undefined}>
           {displayCategories.map((cat) => (
             <Link className="cat-item" key={cat.label} href={`/category/${encodeURIComponent(cat.label)}`} prefetch={false}>
               <div className="cat-icon">

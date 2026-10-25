@@ -368,3 +368,9 @@ input[type="radio"] { accent-color: var(--accent); width: 20px; height: 20px; fl
 .back-header > button.side { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border: 0; border-radius: 50%; background: transparent; color: var(--ink); font-size: 26px; cursor: pointer; }
 
 .center-detail-v2 .center-detail-head > a.side { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,.48); color: #fff; }
+
+/* V04: 정산계좌 모바일 — 데스크톱은 .workspace-form-panel 이 여백을 만들지만 768px 미만에서는 패널 padding 이 0 이라 안내·입력·저장 버튼이 화면 끝에 붙었다.
+   주변 관리자 화면과 같은 페이지 gutter 를 쓴다(데스크톱 규칙은 min-width:768px 쪽에 그대로). */
+@media (max-width: 767px) {
+  .manager-v3-content .settlement-workspace { padding: 0 var(--page-gutter) 24px; }
+}
