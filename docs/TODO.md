@@ -1,5 +1,11 @@
 # TODO
 
+## 2026-10-25 관리자 페이지네이션/CI 후속
+- **P1(승인 필요)**: `NEXT_PUBLIC_ADMIN_CENTER_PAGINATION=true` 운영 활성화는 별도 승인. 이슈 #221 기록(2026-10-13)에 따르면 운영 Supabase 에는 `admin_list_centers_page` RPC 가 이미 존재하고 플래그는 OFF — 이 작업에서 운영 DB 를 다시 조회하지 않았으므로 현재 적용 상태는 재확인 필요(SQL: `supabase/migrations/20261011113106_admin_center_page_draft.sql`).
+- **P1(환경)**: 실제 DEV Supabase 의 플랫폼 관리자 실브라우저 ON/OFF 검증은 전제(기존 플랫폼 관리자 계정·상태별 31건 이상 기존 센터)가 없어 미실행 — 격리 PostgreSQL 검증으로 대체했고 DEV 검증이 아니다.
+- **P2(결정)**: privileged 테스트(공유 계정 승격·전역 요금제 변경)를 일반 CI 에서 뺀 커버리지 공백을 어떻게 메울지 — 격리 Supabase 프로젝트/브랜치가 생기면 거기서 자동 실행.
+- **P2(결정)**: #229 의 `isolatedTestDbGuard`/`installWriteGate`(격리 DB 선언 없으면 destructive E2E 거부)는 격리 프로젝트가 생길 때 재도입 후보. `tests/e2e/fixtures/ownedMembershipCleanup`(수강권 소유 증명 삭제)도 같은 시점에 평가.
+
 ## 2026-10-25 시각 QA 후속
 - **P3**: 실기기(iOS/Android) 소프트 키보드·safe-area, Safari/Firefox, 200% 확대, 매우 긴 다국어 문자열은 미검증(Chromium + 뷰포트 조절만).
 - **P3**: V07 열 수는 본문 폭 실측(ResizeObserver) 기반 — 종목이 크게 늘어 3줄 이상이 되는 경우의 "전체 종목" 접기 UX는 기존 CSS 2줄 클램프 그대로(확인 필요).

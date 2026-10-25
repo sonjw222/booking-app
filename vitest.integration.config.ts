@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 // 통합 테스트(tests/integration) 전용 설정.
 // 실제 개발용 Supabase 프로젝트에 실제 RPC를 호출하므로:
@@ -8,6 +8,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["tests/integration/**/*.test.ts"],
+    // 전역 기본 요금제(subscription_plans.is_default)를 바꾸고 공유 계정을 임시 승격하는 파일은 일반 CI에서 제외 —
+    // 수동 스위트(vitest.integration.privileged.config.ts)에서만 실행한다. 파일 내용은 그대로 보존된다.
+    exclude: [...configDefaults.exclude, "tests/integration/subscription-plan-limits.test.ts"],
     environment: "node",
     globalSetup: ["tests/integration/globalSetup.ts"],
     setupFiles: ["tests/integration/loadEnv.ts"],

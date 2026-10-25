@@ -4,6 +4,7 @@ import {
   getOrCreateOwnedTestCenter,
   createFutureTestClassAdmin,
   cleanupTestClassAdmin,
+  deleteExistingClassesByTitle,
   kstDateStr,
   getOrCreateTestPassProductNamed,
   getOrCreateTestGoodsProduct,
@@ -290,6 +291,8 @@ test("관리자: 전체 선택(전체 허용으로 전환) → 회원 화면에 
 
 test("프라이빗 수업에서도 예약 가능 수강권 선택이 동일하게 동작한다 (실브라우저)", async ({ page, browser }) => {
   const admin = getFixtureAdminClient();
+  // 이전 실행이 취소/강제 종료돼 같은 제목의 수업이 남아 있으면(afterAll 이 못 돌았을 때) 이 테스트가 `.class-row` 2개로 strict mode 위반이 된다 — 다른 수업 생성 헬퍼처럼 같은 센터·같은 제목의 잔여를 먼저 정리한다.
+  await deleteExistingClassesByTitle(centerAId, "P3 프라이빗수업-특정1개");
   const start = new Date(Date.now() + 33 * 3600 * 1000);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
   const { data: privateCls, error } = await admin
