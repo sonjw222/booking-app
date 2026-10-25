@@ -7,6 +7,11 @@ import "./tests/e2e/fixtures/env"; // .env.test.local 로드 + 필수 env 존재
 //   동시에 로그인/로그아웃하면 서로 꼬일 수 있음 — tests/integration/setup.ts의 authMutex와
 //   같은 문제).
 // - Chromium 하나만 사용한다(Firefox/WebKit/모바일은 아직 추가하지 않음).
+// RUN_ADMIN_PAGINATION=1 은 수동 "읽기 전용 관리자 페이지네이션 러너"(scripts/e2e/adminPaginationReadonly.mjs) 전용 모드다 — 그 스펙 하나만 선택되게 고정해
+// 환경변수만으로 다른 스펙(UI가 예약·결제·설정을 쓰는 것들)이 이 모드에서 실행되지 않게 한다. 일반 CI(RUN_ADMIN_PAGINATION 없음)의 구간 구성은 그대로다.
+const ADMIN_PAGINATION_ONLY = process.env.RUN_ADMIN_PAGINATION === "1";
+const ADMIN_PAGINATION_SPEC = /production-readiness[\\/]admin-center-pagination\.spec\.ts$/;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
@@ -41,6 +46,7 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["setup"],
       testIgnore: /auth\.setup\.ts/,
+      ...(ADMIN_PAGINATION_ONLY ? { testMatch: ADMIN_PAGINATION_SPEC } : {}),
     },
   ],
   webServer: {
@@ -48,7 +54,8 @@ export default defineConfig({
     // 빌드를 검증하므로, E2E는 기동 속도가 더 빠른 dev 서버로 충분하다.
     command: "npm run dev",
     url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
+    // ON/OFF 전용 실행(RUN_ADMIN_PAGINATION=1)은 서버를 재사용하지 않는다 — 다른 플래그로 떠 있는 :3000 서버를 재사용하면 ON/OFF 가 같은 빌드를 검증하게 된다.
+    reuseExistingServer: !process.env.CI && process.env.RUN_ADMIN_PAGINATION !== "1",
     timeout: 120_000,
   },
 });

@@ -178,6 +178,8 @@ export default function AdminCentersPage() {
           onChange={(e) => {
             const value = e.target.value; setKeyword(value);
             ++requestId.current; setNextCursor(null);
+            // 이전 검색 결과의 카드·승인/반려 버튼이 debounce/로딩 동안 남지 않게 비우고, 빈 결과 문구 대신 로딩을 보인다.
+            setCenters([]); setLoading(true);
             if (searchTimer.current) clearTimeout(searchTimer.current);
             searchTimer.current = setTimeout(() => { void load(tab, value); }, 300);
           }}
@@ -187,7 +189,7 @@ export default function AdminCentersPage() {
             type="button"
             className="admin-center-search-clear"
             aria-label="검색어 지우기"
-            onClick={() => { if (searchTimer.current) clearTimeout(searchTimer.current); setKeyword(""); void load(tab); }}
+            onClick={() => { if (searchTimer.current) clearTimeout(searchTimer.current); setKeyword(""); setCenters([]); void load(tab); }}
           >
             <UiIcon name="close" size={14} />
           </button>
@@ -200,7 +202,7 @@ export default function AdminCentersPage() {
           <button
             key={t}
             className={`center-chip ${t === tab ? "on" : ""}`}
-            onClick={() => { if (t !== tab) { if (searchTimer.current) clearTimeout(searchTimer.current); setTab(t); void load(t, keyword); } }}
+            onClick={() => { if (t !== tab) { if (searchTimer.current) clearTimeout(searchTimer.current); setTab(t); setCenters([]); void load(t, keyword); } }}
           >
             {TAB_LABEL[t]}
           </button>
@@ -220,7 +222,7 @@ export default function AdminCentersPage() {
       ) : (
         <div className="admin-list">
           {centers.map((c) => (
-            <div key={c.id} className="admin-card">
+            <div key={c.id} className="admin-card" data-center-id={c.id}>
               <div className="admin-card-head">
                 <div className="admin-center-name">{c.name}</div>
                 <span className={`hist-status s-${c.status === "approved" ? "attended" : c.status === "rejected" ? "cancelled" : "waitlisted"}`}>

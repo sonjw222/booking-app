@@ -3,6 +3,13 @@
 ## 2026-10-25 — 브라우저 QA 워커 문서 현행화(문서만)
 - `docs/BROWSER_QA_WORKER.md`: PR #222 의 설계 문서가 "구현 없음"을 전제하던 것을 로컬 `agent/qa_agent`·`notify/qa_monitor.py` 실제 코드·56개 단위 테스트(2026-10-25 실행, 56 passed)·설정 상태(enabled=false, publish_enabled=false)로 현행화하고 #221 완료 조건 대조표를 추가. 설치·실행·ntfy 수신은 검증하지 않았고 #221 은 완료가 아님.
 
+## 2026-10-25 — 관리자 센터 페이지네이션 회귀·테스트 통합(#228/#229/#232 유효분), 앱 변경은 잔상 수정만
+- **앱**: `/admin/centers` 검색·탭 전환·검색어 지우기 동안 이전 결과의 카드(승인/반려 버튼 포함)가 남지 않게 비우고 로딩을 보인다(응답 역전은 기존 requestId 가드). 카드에 `data-center-id`. SQL·RPC·플래그 기본값(OFF) 불변.
+- **테스트**: jsdom 단위 2건(검색/탭 역전·잔상), mock UI `adminCenters.spec.ts`, 순수 검증 규칙 `adminPaginationVerify`(30/31 경계·중복·누락·커서 연속성), **격리 PostgreSQL+PostgREST+실제 JWT 브라우저 검증**(`tests/rls-real/adminPagination.ui.spec.ts`: 플래그 ON/OFF 각각 승인대기 31·승인됨 30·반려됨 61, 동률 created_at, 검색, 응답 지연 조작(mock), 접근 거부) + RPC 권한·입력 경계 `adminCenterPage.rls.test.ts`.
+- **수동 DEV 러너**(`npm run test:e2e:admin-pagination`): 기존 플랫폼 관리자·기존 데이터만 읽는 모드(RUN_ADMIN_PAGINATION=1). 데이터 생성/권한 승격 없음, 전제 부족은 BLOCKED.
+- **권한 변경 테스트 분리**: 공유 계정의 `is_platform_admin` 임시 승격·전역 기본 요금제 변경(`subscription-plan-limits` 등)은 일반 CI 에서 제외/SKIP, 수동 스위트 `npm run test:integration:privileged`(ACK+읽기 전용 사전검사)로만. 커버리지 공백은 문서화.
+- **채택하지 않음**: #229/#232 의 `false &&` 로 live job 7개 전체 차단과 `isolatedTestDbGuard`/`installWriteGate`(격리 DB 선언 없으면 모든 destructive E2E 거부) — 격리 Supabase 프로젝트 없이 적용하면 일반 CI 의 live 검증이 전부 꺼져 "초록"이 통합 검증을 뜻하지 않게 된다. 근거·현황: `docs/qa/ci-dev-write-audit.md` §7.
+
 ## 2026-10-25 — 시각 QA V01–V07 수정(웹 CSS/React만, SQL 없음)
 - **V01** 라이트 마이 수강권 카드의 프로필 배지: 중립 카드 위에서 흰 글자+반투명 흰 배경이라 안 보이던 것을 `--surface-strong`/`--ink`/`--line` 짝으로(마이 카드 범위만).
 - **V02** 다크 구매 내역 선택 필터: `.filter-chip.on` 이 `--action-bg` 위에 `--bg`(어두운 색)를 써 대비 2.99:1 → 새 토큰 `--on-action`(#FFF, 5.94:1). 같은 짝을 쓰던 10개 규칙(booked-tag·skill-chip·perm-tab·profile-tag.sm 등)도 같은 토큰으로 정리.

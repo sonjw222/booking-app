@@ -19,6 +19,7 @@
   SEC-009 Batch A1과 동일 패턴 — 새 GitHub Secrets 없음).
 */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { itPrivileged } from "./privilegedGate"; // 공유 계정 임시 승격 테스트는 수동 스위트에서만 실행
 import { supabase } from "../../lib/supabaseClient";
 import { switchToTestUser, getOrCreateOwnedTestCenter, getFixtureAdminClient, type TestUser } from "./setup";
 import { createRole, fetchRoles, inviteStaff, removeStaff, deleteRole, setStaffOverride } from "../../lib/roles";
@@ -182,7 +183,7 @@ describe("contracts — SELECT만 정책, 본인/권한 보유 스태프만 조�
     expect(data ?? []).toHaveLength(1);
   });
 
-  it("플랫폼 운영자는 무관한 센터의 계약서도 조회할 수 있다", async () => {
+  itPrivileged("플랫폼 운영자는 무관한 센터의 계약서도 조회할 수 있다", async () => {
     const admin = getFixtureAdminClient();
     await switchToTestUser(MANAGER_B.email, MANAGER_B.password); // centerA 권한 0개 상태 그대로
     const { error: flagErr } = await admin.from("accounts").update({ is_platform_admin: true }).eq("id", managerB.accountId);
@@ -254,7 +255,7 @@ describe("notification_logs — SELECT만 정책 (message.sms.view/message.push.
     expect(push.data ?? []).toHaveLength(1);
   });
 
-  it("플랫폼 운영자는 무관한 센터의 발송기록도 조회할 수 있다", async () => {
+  itPrivileged("플랫폼 운영자는 무관한 센터의 발송기록도 조회할 수 있다", async () => {
     const admin = getFixtureAdminClient();
     await switchToTestUser(MANAGER_B.email, MANAGER_B.password);
     const { error: flagErr } = await admin.from("accounts").update({ is_platform_admin: true }).eq("id", managerB.accountId);
