@@ -2171,8 +2171,10 @@ export default function ClassManagePage() {
       {/* 스케줄 복사 */}
       {copySheet && (
         <SheetOverlay className="sheet-overlay" onClick={() => setCopySheet(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet copy-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">스케줄 복사</div>
+            {/* V05: 본문만 스크롤하고 취소/복사하기는 항상 보이는 footer 로 둔다(예전엔 목록과 시트가 따로 스크롤해 작은 화면에서 버튼을 찾기 어려웠다). */}
+            <div className="copy-sheet-body">
 
             {/* 복사 방식 */}
             <div className="mem-filters" style={{ padding: 0 }}>
@@ -2279,7 +2281,8 @@ export default function ClassManagePage() {
               </>
             )}
 
-            <div className="add-profile-actions" style={{ marginTop: 14 }}>
+            </div>
+            <div className="add-profile-actions copy-sheet-footer">
               <button className="ghost-btn" onClick={() => setCopySheet(false)}>취소</button>
               <button className="primary-btn" disabled={copyBusy || !copyPlan || copyPlan.length === 0} onClick={handleCopy}>
                 복사하기
