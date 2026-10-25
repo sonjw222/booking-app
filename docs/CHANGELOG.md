@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-25 — 브라우저 QA 워커 문서 현행화(문서만)
+- `docs/BROWSER_QA_WORKER.md`: PR #222 의 설계 문서가 "구현 없음"을 전제하던 것을 로컬 `agent/qa_agent`·`notify/qa_monitor.py` 실제 코드·56개 단위 테스트(2026-10-25 실행, 56 passed)·설정 상태(enabled=false, publish_enabled=false)로 현행화하고 #221 완료 조건 대조표를 추가. 설치·실행·ntfy 수신은 검증하지 않았고 #221 은 완료가 아님.
+
 ## 2026-10-25 — 관리자 센터 페이지네이션 회귀·테스트 통합(#228/#229/#232 유효분), 앱 변경은 잔상 수정만
 - **앱**: `/admin/centers` 검색·탭 전환·검색어 지우기 동안 이전 결과의 카드(승인/반려 버튼 포함)가 남지 않게 비우고 로딩을 보인다(응답 역전은 기존 requestId 가드). 카드에 `data-center-id`. SQL·RPC·플래그 기본값(OFF) 불변.
 - **테스트**: jsdom 단위 2건(검색/탭 역전·잔상), mock UI `adminCenters.spec.ts`, 순수 검증 규칙 `adminPaginationVerify`(30/31 경계·중복·누락·커서 연속성), **격리 PostgreSQL+PostgREST+실제 JWT 브라우저 검증**(`tests/rls-real/adminPagination.ui.spec.ts`: 플래그 ON/OFF 각각 승인대기 31·승인됨 30·반려됨 61, 동률 created_at, 검색, 응답 지연 조작(mock), 접근 거부) + RPC 권한·입력 경계 `adminCenterPage.rls.test.ts`.
