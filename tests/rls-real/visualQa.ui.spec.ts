@@ -122,6 +122,8 @@ for (const [tn, theme] of THEMES) {
       expect(b!.x, `${w}px 입력 왼쪽 여백`).toBeGreaterThanOrEqual(14);
       expect(w - (b!.x + b!.width), `${w}px 입력 오른쪽 여백`).toBeGreaterThanOrEqual(14);
       expect(save!.x + save!.width, `${w}px 저장 버튼`).toBeLessThanOrEqual(w - 14 + 1);
+      const heading = await page.locator(".workspace-form-panel .menu-section-label").first().boundingBox();
+      expect(Math.abs(heading!.x - b!.x), `${w}px 섹션 제목과 입력의 왼쪽 정렬`).toBeLessThanOrEqual(1);
       expect(await noOverflow(page)).toBe(true);
       if (w === 390) await shot(page, `V04-settlement-390-${tn}`);
     }

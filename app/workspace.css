@@ -373,4 +373,5 @@ input[type="radio"] { accent-color: var(--accent); width: 20px; height: 20px; fl
    주변 관리자 화면과 같은 페이지 gutter 를 쓴다(데스크톱 규칙은 min-width:768px 쪽에 그대로). */
 @media (max-width: 767px) {
   .manager-v3-content .settlement-workspace { padding: 0 var(--page-gutter) 24px; }
+  .manager-v3-content .settlement-workspace .workspace-form-panel .menu-section-label { padding-inline: 0; }   /* 섹션 제목을 라벨·입력과 같은 왼쪽 선에 맞춘다(공통 .menu-section-label 의 20px padding 이중 적용 방지) */
 }
