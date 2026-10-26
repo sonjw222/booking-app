@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { URL_, jwt, sql, ID } from "./support";
 import {
-  createOwnedClass, cleanupOwnedClass, memoryOwnershipStore, fileOwnershipStore, summarizeLedger, runScopedTitle, planManualCleanup, readManifest, orphanedClassIds,
+  createOwnedClass, cleanupOwnedClass, adoptUiCreatedClass, memoryOwnershipStore, fileOwnershipStore, summarizeLedger, runScopedTitle, planManualCleanup, readManifest, orphanedClassIds,
   type OwnedCtx, type OwnershipStore,
 } from "../e2e/fixtures/ownedClassCleanup";
 
@@ -101,6 +101,18 @@ describe("Q01 정리: 이 실행이 만든 것만", () => {
   it("수업 생성 이전에 만들어진 예약(다른 실행 소유 가능성)은 blocked", async () => {
     const c = ctxFor(); const mine = await track(c, tag()); addRes(mine.id, OUR_PROFILE, "2020-01-01T00:00:00Z");
     expect((await cleanupOwnedClass(c, mine.id)).status).toBe("blocked"); expect(resCount(mine.id)).toBe(1);
+  });
+  it("이 실행의 fixture 가 만들며 등록한 예약은 과거 시각이어도 정리되고, 등록 안 된 같은 조건 예약은 여전히 blocked", async () => {
+    const c = ctxFor(); const mine = await track(c, tag());
+    const reg = addRes(mine.id, OUR_PROFILE, "2020-01-01T00:00:00Z"); c.store.registerReservation(reg, mine.id);
+    expect((await cleanupOwnedClass(c, mine.id)).status).toBe("deleted"); expect(exists(mine.id)).toBe(false);
+    const c2 = ctxFor(); const other = await track(c2, tag()); addRes(other.id, OUR_PROFILE, "2020-01-01T00:00:00Z");
+    expect((await cleanupOwnedClass(c2, other.id)).status).toBe("blocked"); expect(resCount(other.id)).toBe(1);
+  });
+  it("다른 실행이 등록한 예약은 이 실행의 증거가 아니다(실행별 store 분리)", async () => {
+    const a = ctxFor(); const b = ctxFor(); const mine = await track(a, tag());
+    const rid = addRes(mine.id, OTHER_PROFILE); b.store.registerReservation(rid, mine.id);
+    expect((await cleanupOwnedClass(a, mine.id)).status).toBe("blocked"); expect(resCount(mine.id)).toBe(1);
   });
   it("관리자 조작 기록(admin_action_logs) 참조가 있으면 blocked — 감사 로그를 지우지 않는다", async () => {
     const c = ctxFor(); const mine = await track(c, tag()); const rid = addRes(mine.id);
@@ -211,5 +223,22 @@ describe("Q01 추적: 생성 직후 실패·등록 실패·병렬·수동 정리
     const all = await Promise.all(rest.map((c, i) => cleanupOwnedClass(c, made[i + 1].id)));
     expect(all.every((r) => r.status === "deleted")).toBe(true);
     made.forEach((m) => expect(exists(m.id)).toBe(false));
+  });
+});
+
+describe("Q01 UI 가 만든 수업의 소유 등록(adopt)", () => {
+  it("스펙이 입력한 제목·센터와 일치하고 실행 시작 이후 생성된 행만 등록되어 정리된다", async () => {
+    const t = tag(); const c = ctxFor(); const id = foreignRow(t);
+    const r = await c.admin.from("classes").select("id, center_id, title, created_at").eq("id", id).single();
+    adoptUiCreatedClass(c, r.data as any, { centerId: CENTER, title: t }, new Date(Date.now() - 60_000).toISOString());
+    expect((await cleanupOwnedClass(c, id)).status).toBe("deleted"); expect(exists(id)).toBe(false);
+  });
+  it("실행 시작 이전에 만들어진 행·다른 제목/센터는 등록을 거부하고 삭제도 blocked", async () => {
+    const t = tag(); const c = ctxFor(); const id = foreignRow(t);
+    const r = (await c.admin.from("classes").select("id, center_id, title, created_at").eq("id", id).single()).data as any;
+    expect(() => adoptUiCreatedClass(c, r, { centerId: CENTER, title: t }, new Date(Date.now() + 3600_000).toISOString())).toThrow(/먼저 생성/);
+    expect(() => adoptUiCreatedClass(c, r, { centerId: CENTER, title: t + "x" }, new Date(0).toISOString())).toThrow(/다름/);
+    expect(() => adoptUiCreatedClass(c, r, { centerId: OTHER_CENTER, title: t }, new Date(0).toISOString())).toThrow(/다름/);
+    expect((await cleanupOwnedClass(c, id)).status).toBe("blocked"); expect(exists(id)).toBe(true);
   });
 });

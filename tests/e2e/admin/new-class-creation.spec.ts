@@ -5,6 +5,7 @@ import {
   getOrCreateOwnedTestCenter,
   createFutureTestClassAdmin,
   cleanupTestClassAdmin,
+  adoptUiCreatedClassAdmin,
   reservationDeepLink,
   fetchSettingsAdmin,
   saveSettingsAdmin,
@@ -168,11 +169,12 @@ async function findClassByTitle(title: string) {
   const admin = getFixtureAdminClient();
   const { data, error } = await admin
     .from("classes")
-    .select("id, title, start_time, end_time")
+    .select("id, center_id, title, created_at, start_time, end_time")
     .eq("center_id", centerAId)
     .eq("title", title)
     .single();
   if (error || !data) throw new Error(`방금 만든 class를 못 찾음: ${error?.message}`);
+  await adoptUiCreatedClassAdmin(data, { centerId: centerAId, title }); // 이 실행이 UI 로 만든 행임을 증명 후 정리 대상으로 등록
   return data;
 }
 

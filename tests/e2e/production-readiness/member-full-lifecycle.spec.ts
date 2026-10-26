@@ -344,9 +344,10 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
       () => context.close(),
       () => setTestCenterInternal(centerId, true),
       () => saveSettingsAdmin(centerId, originalSettings),
+      // throwaway 계정(그 프로필의 예약 포함)을 먼저 정리해야 수업 정리가 "테스트 계정이 아닌 프로필의 예약"으로 막히지 않는다.
+      () => cleanupThrowawayAccountIfExists(email, password),
       () => cleanupTestClassAdmin(capacityOneClass.id),
       () => cleanupTestClassAdmin(bookableClass.id),
-      () => cleanupThrowawayAccountIfExists(email, password),
     ];
     for (const cleanup of cleanupSteps) {
       try { await cleanup(); } catch (error) { cleanupErrors.push(error); }

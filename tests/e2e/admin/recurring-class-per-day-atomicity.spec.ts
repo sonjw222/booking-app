@@ -3,6 +3,7 @@ import {
   loadTestAccountMeta,
   getOrCreateOwnedTestCenter,
   cleanupTestClassAdmin,
+  adoptUiCreatedClassAdmin,
   type TestUser,
 } from "../fixtures/testData";
 import { getFixtureAdminClient } from "../../integration/setup";
@@ -108,12 +109,12 @@ test("요일별 개별 지정(perDayMode) 반복수업 등록 — RPC 1회로 �
   // 단 한 번의 RPC 호출로 두 요일 전부가 정확한 값으로 반영됐는지 admin client로 직접 확인
   const { data: rows, error } = await admin
     .from("classes")
-    .select("id, start_time, end_time, capacity, recurring_group_id")
+    .select("id, center_id, title, created_at, start_time, end_time, capacity, recurring_group_id")
     .eq("center_id", centerAId)
     .eq("title", uniqueTitle);
   if (error) throw new Error(`생성된 반복수업 조회 실패: ${error.message}`);
   const created = rows ?? [];
-  created.forEach((r) => createdClassIds.push(r.id));
+  for (const r of created) { await adoptUiCreatedClassAdmin(r, { centerId: centerAId, title: uniqueTitle }); createdClassIds.push(r.id); } // 이 실행이 UI 로 만든 행임을 증명한 뒤에만 정리 대상으로 등록
 
   expect(created.length).toBe(expectedDatesA.length + expectedDatesB.length);
   // 전부 같은 recurring_group_id로 묶여야 함(요일이 달라도 하나의 등록으로 생성됐으므로)

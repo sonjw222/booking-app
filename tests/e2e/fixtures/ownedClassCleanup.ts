@@ -33,23 +33,30 @@ export interface OwnershipStore {
   register(entry: OwnedClassEntry): void;
   get(classId: string): OwnedClassEntry | undefined;
   recordResult(r: CleanupResult): void;
+  /** 이 실행의 fixture 헬퍼가 만든 예약 id(과거 시각으로 만든 예약도 이 실행 것임을 증명). */
+  registerReservation(reservationId: string, classId: string): void;
+  hasReservation(reservationId: string): boolean;
 }
 
 export function memoryOwnershipStore(): OwnershipStore & { results: CleanupResult[]; entries: Map<string, OwnedClassEntry> } {
   const entries = new Map<string, OwnedClassEntry>();
   const results: CleanupResult[] = [];
-  return { results, entries, register: (e) => { entries.set(e.classId, e); }, get: (id) => entries.get(id), recordResult: (r) => { results.push(r); } };
+  const resv = new Set<string>();
+  return { results, entries, register: (e) => { entries.set(e.classId, e); }, get: (id) => entries.get(id), recordResult: (r) => { results.push(r); }, registerReservation: (id) => { resv.add(id); }, hasReservation: (id) => resv.has(id) };
 }
 
 /** JSON Lines — 한 줄씩 append 라 워커가 여러 개여도 줄이 섞이지 않는다. */
 export function fileOwnershipStore(dir: string, runId: string): OwnershipStore {
   const manifest = path.join(dir, `owned-classes-${runId}.jsonl`);
   const ledger = path.join(dir, `owned-classes-${runId}.results.jsonl`);
+  const resvFile = path.join(dir, `owned-reservations-${runId}.jsonl`);
   const read = <T,>(f: string): T[] => (fs.existsSync(f) ? fs.readFileSync(f, "utf-8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as T) : []);
   return {
     register(e) { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(manifest, JSON.stringify(e) + "\n"); },
     get: (id) => read<OwnedClassEntry>(manifest).find((e) => e.classId === id),
     recordResult(r) { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(ledger, JSON.stringify(r) + "\n"); },
+    registerReservation(reservationId, classId) { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(resvFile, JSON.stringify({ reservationId, classId }) + "\n"); },
+    hasReservation: (id) => read<{ reservationId: string }>(resvFile).some((r) => r.reservationId === id),
   };
 }
 export const readManifest = (dir: string, runId: string): OwnedClassEntry[] => {
@@ -133,6 +140,22 @@ export function registerOwnedClass(ctx: OwnedCtx, created: { id: string; created
   ctx.store.register({ classId: created.id, centerId, title, runId: ctx.runId, rowCreatedAt: created.created_at, registeredAt: new Date().toISOString() });
 }
 
+/**
+ * 앱 UI 가 만든 수업(스펙이 UI 로 등록한 뒤 DB 에서 찾은 행)을 소유로 등록한다. 제목만으로는 소유가 아니므로 모두 증명돼야 한다:
+ * 스펙이 이 실행에서 UI 에 입력한 정확한 제목·센터와 일치 + 행의 created_at 이 이 실행 시작(runStartedAt) 이후. 증명 못 하면 throw(등록 안 함).
+ */
+export function adoptUiCreatedClass(
+  ctx: OwnedCtx,
+  row: { id: string; center_id: string; title: string; created_at: string },
+  expected: { centerId: string; title: string },
+  runStartedAt: string
+): void {
+  const skew = ctx.skewMs ?? SKEW;
+  if (row.center_id !== expected.centerId || row.title !== expected.title) throw new Error(`UI 가 만든 수업 ${row.id} 의 센터/제목이 스펙이 입력한 값과 다름 — 소유로 등록하지 않음`);
+  if (!(Date.parse(row.created_at) >= Date.parse(runStartedAt) - skew)) throw new Error(`수업 ${row.id} 가 이 실행 시작보다 먼저 생성됨 — 소유로 등록하지 않음`);
+  registerOwnedClass(ctx, row, expected.centerId, expected.title);
+}
+
 /** 절대 throw 하지 않는다 — 결과를 반환하고 원장에 남긴다. */
 export async function cleanupOwnedClass(ctx: OwnedCtx, classId: string): Promise<CleanupResult> {
   const done = (status: CleanupStatus, reason?: string, deletedReservationIds: string[] = []): CleanupResult => {
@@ -155,7 +178,8 @@ export async function cleanupOwnedClass(ctx: OwnedCtx, classId: string): Promise
     const reservations = (resv ?? []) as { id: string; profile_id: string; created_at: string }[];
     const skew = ctx.skewMs ?? SKEW;
     const since = Date.parse(entry.registeredAt) - skew;
-    const foreign = reservations.filter((r) => !ctx.testProfileIds.includes(r.profile_id) || !(Date.parse(r.created_at) >= since));
+    // 예약의 소유 증거: (a) 이 실행의 fixture 헬퍼가 만들며 등록한 예약(과거 시각으로 만든 것 포함), 또는 (b) 테스트 계정 프로필의 예약이며 수업 등록 이후 생성(브라우저로 한 예약).
+    const foreign = reservations.filter((r) => !ctx.store.hasReservation(r.id) && (!ctx.testProfileIds.includes(r.profile_id) || !(Date.parse(r.created_at) >= since)));
     if (foreign.length) return done("blocked", `이 실행의 테스트 계정이 만든 예약이 아님(다른 프로필이거나 수업 생성 이전) ${foreign.length}건: ${foreign.map((f) => f.id).join(",")}`);
 
     // 감사 로그(admin_action_logs.class_id / reservation_id)는 FK NO ACTION — 사람의 조작 기록이므로 지우지 않고,
@@ -171,7 +195,7 @@ export async function cleanupOwnedClass(ctx: OwnedCtx, classId: string): Promise
 
     const deletedReservationIds: string[] = [];
     if (resIds.length) {
-      const { error } = await ctx.admin.from("reservations").delete().in("id", resIds).eq("class_id", classId).in("profile_id", ctx.testProfileIds);
+      const { error } = await ctx.admin.from("reservations").delete().in("id", resIds).eq("class_id", classId);
       if (error) return done("failed", msg("예약 삭제 실패 — 수업은 그대로 둠(예약 일부가 지워졌을 수 있음)", error));
       deletedReservationIds.push(...resIds);
     }

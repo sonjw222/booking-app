@@ -25,7 +25,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { createOwnedClass, cleanupOwnedClass, fileOwnershipStore, runScopedTitle, type OwnedCtx } from "./ownedClassCleanup";
+import { createOwnedClass, cleanupOwnedClass, adoptUiCreatedClass, fileOwnershipStore, runScopedTitle, type OwnedCtx } from "./ownedClassCleanup";
 import { getFixtureAdminClient, switchToTestUser, getOrCreateOwnedTestCenter, kstSafeSameDayFutureTime, type TestUser } from "../../integration/setup";
 import { rowToSettings, settingsToRow, DEFAULT_SETTINGS, type CenterSettings } from "../../../lib/settings";
 
@@ -55,6 +55,11 @@ async function testProfileIds(admin: ReturnType<typeof getFixtureAdminClient>): 
 export async function getOwnedCtx(): Promise<OwnedCtx> {
   const admin = getFixtureAdminClient();
   return { admin, store: fileOwnershipStore(OWN_DIR, E2E_RUN_ID), runId: E2E_RUN_ID, testProfileIds: await testProfileIds(admin) };
+}
+
+// 앱 UI 로 만든 수업을 DB 에서 찾은 뒤 소유 등록(증명: 입력한 정확한 제목·센터 + 이 실행 시작 이후 생성). 이후 cleanupTestClassAdmin(id) 가 정리할 수 있다.
+export async function adoptUiCreatedClassAdmin(row: { id: string; center_id: string; title: string; created_at: string }, expected: { centerId: string; title: string }): Promise<void> {
+  adoptUiCreatedClass(await getOwnedCtx(), row, expected, process.env.E2E_RUN_STARTED_AT ?? "");
 }
 
 const scopedTitleEnabled = (opt?: boolean) => opt ?? process.env.E2E_RUN_SCOPED_TITLES === "1";
@@ -528,6 +533,12 @@ export async function insertConfirmedReservationAdmin(
     .select("id")
     .single();
   if (error || !data) throw new Error(`E2E 테스트 예약 생성 실패: ${error?.message ?? "no data"}`);
+  // 이 실행의 fixture 가 만든 예약임을 즉시 기록한다(과거 시각으로 만든 예약도 수업 정리 때 이 실행 것으로 증명되도록). 기록에 실패하면 방금 만든 예약만 되돌린다.
+  try { fileOwnershipStore(OWN_DIR, E2E_RUN_ID).registerReservation(data.id, classId); }
+  catch (e) {
+    await admin.from("reservations").delete().eq("id", data.id).eq("class_id", classId);
+    throw new Error(`예약 소유 기록 실패 — 방금 만든 예약을 되돌림: ${(e as Error).message}`);
+  }
   return { id: data.id };
 }
 
