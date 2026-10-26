@@ -6,6 +6,7 @@ import {
   getOrCreateOwnedTestCenter,
   createFutureTestClassAdmin,
   cleanupTestClassAdmin,
+  adoptThrowawayAccountAdmin,
   getOrCreateTestPassProductNamed,
   setTestCenterInternal,
   createTestMembershipAdmin,
@@ -114,11 +115,13 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
     title: "E2E 생애주기 대기승격 테스트",
     hoursFromNow: 200,
     capacity: 1,
+    scopedTitle: true, // 실행별 제목 — 이전 실행이 남긴 같은 기본 제목의 수업과 충돌·모호함이 없다(반환된 title 로만 찾는다)
   });
   const bookableClass = await createFutureTestClassAdmin(centerId, {
     title: "E2E 생애주기 예약 테스트",
     hoursFromNow: 220,
     capacity: 8,
+    scopedTitle: true,
   });
 
   try {
@@ -195,6 +198,8 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
       const admin = getFixtureAdminClient();
       const { data: account, error: accErr } = await admin.from("accounts").select("id").eq("phone", phone).single();
       if (accErr || !account) throw new Error(`E2E 생애주기 테스트 계정 조회 실패: ${accErr?.message ?? "no data"}`);
+      // 이 실행이 UI 로 가입시킨 계정임을 증명(스펙이 만든 이메일·실행별 전화번호 일치 + 이 실행 시작 이후 생성)한 뒤 소유로 등록 — 탈퇴로 익명화돼도 이 계정의 프로필 예약은 수업 정리에서 이 실행 것으로 인정된다.
+      await adoptThrowawayAccountAdmin({ accountId: account.id, expectedEmail: email, expectedPhone: phone });
       const { data: profile, error: profErr } = await admin
         .from("profiles").select("id").eq("account_id", account.id).eq("is_primary", true).single();
       if (profErr || !profile) throw new Error(`E2E 생애주기 테스트 대표 프로필 조회 실패: ${profErr?.message ?? "no data"}`);
@@ -217,7 +222,7 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
       // 프로필이 2개 이상이라 프로필 선택 칩이 보여야 한다
       await expect(page.locator(".profile-picker")).toBeVisible({ timeout: 15_000 });
 
-      const classRow = page.locator(".class-row", { hasText: "E2E 생애주기 예약 테스트" });
+      const classRow = page.locator(".class-row", { hasText: bookableClass.title });
       await expect(classRow).toBeVisible({ timeout: 15_000 });
       await classRow.getByRole("button", { name: "예약" }).click();
       await page.getByRole("button", { name: "예약하기" }).click();
@@ -239,7 +244,7 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
     await test.step("취소: 두 프로필 예약을 각각 취소하면 공유 수강권이 환급되고 알림함에 남는다", async () => {
       // .toast는 2.5초 뒤 스스로 사라지는 데다 연속으로 여러 번 뜨면 타이밍이 겹치기 쉬워서,
       // 여기서는 fleeting text 대신 구조적 결과(그 프로필의 "취소" 버튼이 "예약"으로 돌아오는지)로 확인한다.
-      const classRow = page.locator(".class-row", { hasText: "E2E 생애주기 예약 테스트" });
+      const classRow = page.locator(".class-row", { hasText: bookableClass.title });
       // 지금은 대표 프로필이 선택된 상태(직전 단계 마지막) — 대표 것부터 취소
       await classRow.getByRole("button", { name: "취소" }).click();
       await page.locator(".confirm-sheet").getByRole("button", { name: "확인" }).click();
@@ -262,7 +267,7 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
       const waitlistDate = kstDateStr(capacityOneClass.startTime);
       await page.goto("/reservation");
       await selectKstCalendarDay(page, waitlistDate);
-      const classRow = page.locator(".class-row", { hasText: "E2E 생애주기 대기승격 테스트" });
+      const classRow = page.locator(".class-row", { hasText: capacityOneClass.title });
       await expect(classRow).toBeVisible({ timeout: 15_000 });
       await classRow.getByRole("button", { name: "예약" }).click();
       await page.getByRole("button", { name: "예약하기" }).click();
@@ -275,7 +280,7 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
       try {
         await bPage.goto("/reservation");
         await selectKstCalendarDay(bPage, waitlistDate);
-        const bRow = bPage.locator(".class-row", { hasText: "E2E 생애주기 대기승격 테스트" });
+        const bRow = bPage.locator(".class-row", { hasText: capacityOneClass.title });
         await expect(bRow).toBeVisible({ timeout: 15_000 });
         await bRow.getByRole("button", { name: "대기" }).click();
         await expect(bPage.locator(".sheet-title")).toHaveText("대기 신청하시겠어요?");
@@ -291,7 +296,7 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
         // reload()는 달력 선택 상태(React state)를 초기화하므로 날짜를 다시 선택해야 한다.
         await bPage.reload();
         await selectKstCalendarDay(bPage, waitlistDate);
-        const bRowAfter = bPage.locator(".class-row", { hasText: "E2E 생애주기 대기승격 테스트" });
+        const bRowAfter = bPage.locator(".class-row", { hasText: capacityOneClass.title });
         await expect(bRowAfter.locator(".booked-tag", { hasText: "대기중" })).toHaveCount(0, { timeout: 15_000 });
         await expect(bRowAfter.getByRole("button", { name: "취소" })).toBeVisible({ timeout: 10_000 });
 
@@ -344,9 +349,10 @@ test("신규 계정 회원 생애주기: 가입→로그인→다중프로필→
       () => context.close(),
       () => setTestCenterInternal(centerId, true),
       () => saveSettingsAdmin(centerId, originalSettings),
+      // throwaway 계정(그 프로필의 예약 포함)을 먼저 정리해야 수업 정리가 "테스트 계정이 아닌 프로필의 예약"으로 막히지 않는다.
+      () => cleanupThrowawayAccountIfExists(email, password),
       () => cleanupTestClassAdmin(capacityOneClass.id),
       () => cleanupTestClassAdmin(bookableClass.id),
-      () => cleanupThrowawayAccountIfExists(email, password),
     ];
     for (const cleanup of cleanupSteps) {
       try { await cleanup(); } catch (error) { cleanupErrors.push(error); }

@@ -727,10 +727,15 @@ export async function cleanupTestClass(classId: string, reservationIds: string[]
 // 누적된 것을 실측 확인했다(docs/TODO.md P1-14). admin(service_role)은 RLS를 우회하므로
 // 예약 상태와 무관하게 확실히 지운다 — 테스트가 끝난 뒤 non-terminal 상태로 남을 수 있는
 // 예약을 만드는 파일은 cleanupTestClass 대신 이 함수를 쓴다.
-export async function cleanupTestClassAdmin(classId: string): Promise<void> {
+// id 기반(호출한 테스트가 직접 만든 수업 id)이며 오류를 무시하지 않는다(Q01): 예약 삭제가 실패하면 수업은 지우지 않고,
+// 실패는 console.error 로 남기며 false 를 돌려준다. 호출부(afterEach)는 뒤따르는 수강권 정리를 계속해야 하므로 throw 하지 않는다.
+export async function cleanupTestClassAdmin(classId: string): Promise<boolean> {
   const admin = getFixtureAdminClient();
-  await admin.from("reservations").delete().eq("class_id", classId);
-  await admin.from("classes").delete().eq("id", classId);
+  const { error: rErr } = await admin.from("reservations").delete().eq("class_id", classId);
+  if (rErr) { console.error(`[integration cleanup] 수업 ${classId} 예약 정리 실패(수업은 지우지 않음): ${rErr.message}`); return false; }
+  const { error: cErr } = await admin.from("classes").delete().eq("id", classId);
+  if (cErr) { console.error(`[integration cleanup] 수업 ${classId} 정리 실패: ${cErr.message}`); return false; }
+  return true;
 }
 
 // KST(Asia/Seoul) 기준 캘린더 날짜 문자열("YYYY-MM-DD")로 변환. 여러 통합 테스트 파일이

@@ -4,7 +4,7 @@ import {
   getOrCreateOwnedTestCenter,
   createFutureTestClassAdmin,
   cleanupTestClassAdmin,
-  deleteExistingClassesByTitle,
+  createOwnedClassAdmin,
   kstDateStr,
   getOrCreateTestPassProductNamed,
   getOrCreateTestGoodsProduct,
@@ -291,21 +291,18 @@ test("관리자: 전체 선택(전체 허용으로 전환) → 회원 화면에 
 
 test("프라이빗 수업에서도 예약 가능 수강권 선택이 동일하게 동작한다 (실브라우저)", async ({ page, browser }) => {
   const admin = getFixtureAdminClient();
-  // 이전 실행이 취소/강제 종료돼 같은 제목의 수업이 남아 있으면(afterAll 이 못 돌았을 때) 이 테스트가 `.class-row` 2개로 strict mode 위반이 된다 — 다른 수업 생성 헬퍼처럼 같은 센터·같은 제목의 잔여를 먼저 정리한다.
-  await deleteExistingClassesByTitle(centerAId, "P3 프라이빗수업-특정1개");
+  // 같은 센터·제목의 다른 실행/사람이 만든 행은 건드리지 않는다 — 실행별 제목으로 만들고(충돌 없음) 이 실행이 만든 id 만 정리한다(Q01).
   const start = new Date(Date.now() + 33 * 3600 * 1000);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
-  const { data: privateCls, error } = await admin
-    .from("classes")
-    .insert({ center_id: centerAId, title: "P3 프라이빗수업-특정1개", start_time: start.toISOString(), end_time: end.toISOString(), capacity: 1, class_format: "private" })
-    .select("id, start_time")
-    .single();
-  if (error || !privateCls) throw new Error(`프라이빗 테스트 수업 생성 실패: ${error?.message ?? "no data"}`);
+  const privateCls = await createOwnedClassAdmin(
+    { center_id: centerAId, title: "P3 프라이빗수업-특정1개", start_time: start.toISOString(), end_time: end.toISOString(), capacity: 1, class_format: "private" },
+    { scopedTitle: true }
+  );
   createdClassIds.push(privateCls.id);
-  const kstDate = kstDateStr(privateCls.start_time);
+  const kstDate = kstDateStr(privateCls.startTime);
 
   await gotoManagerClassesDay(page, kstDate);
-  await page.locator(".class-row", { hasText: "P3 프라이빗수업-특정1개" }).click();
+  await page.locator(".class-row", { hasText: privateCls.title }).click();
   await expect(page.locator(".filter-chip", { hasText: "프라이빗(1:1)" })).toHaveClass(/on/);
   // 프라이빗 수업에서도 예약 가능 수강권 섹션이 그대로 있고 pass만 나온다(goods 없음).
   await expect(page.locator(".daylist-empty", { hasText: "등록된 수강권이 없어요" })).toHaveCount(0);
@@ -319,7 +316,7 @@ test("프라이빗 수업에서도 예약 가능 수강권 선택이 동일하�
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
-  await memberPage.goto(reservationDeepLink(privateCls.id, privateCls.start_time));
+  await memberPage.goto(reservationDeepLink(privateCls.id, privateCls.startTime));
   const passList = memberPage.locator(".pass-pick-list");
   await expect(passList).toBeVisible({ timeout: 25_000 });
   await expect(passList).toContainText("P3 패스A");
@@ -327,7 +324,7 @@ test("프라이빗 수업에서도 예약 가능 수강권 선택이 동일하�
   await memberPage.getByRole("button", { name: "예약하기" }).click();
   await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
   await expect(
-    memberPage.locator(".class-row", { hasText: "P3 프라이빗수업-특정1개" }).getByRole("button", { name: "취소" })
+    memberPage.locator(".class-row", { hasText: privateCls.title }).getByRole("button", { name: "취소" })
   ).toBeVisible();
   await memberContext.close();
 });

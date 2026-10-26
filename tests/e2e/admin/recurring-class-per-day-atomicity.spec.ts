@@ -3,6 +3,9 @@ import {
   loadTestAccountMeta,
   getOrCreateOwnedTestCenter,
   cleanupTestClassAdmin,
+  adoptUiCreatedClassesAdmin,
+  watchUiClassCreation,
+  E2E_RUN_ID,
   type TestUser,
 } from "../fixtures/testData";
 import { getFixtureAdminClient } from "../../integration/setup";
@@ -55,7 +58,8 @@ test("요일별 개별 지정(perDayMode) 반복수업 등록 — RPC 1회로 �
   const toDate = kstDateStrFromNow(163); // 2주 범위 — 서로 다른 두 요일이 각 2회씩 나옴
   const dowA = kstDow(fromDate);
   const dowB = kstDow(kstDateStrFromNow(151)); // fromDate 다음날 — dowA와 항상 다름
-  const uniqueTitle = `PERDAY-ATOMIC-${Date.now()}`;
+  const uniqueTitle = `PERDAY-ATOMIC-${E2E_RUN_ID}-${Date.now()}`; // 실행 UUID 포함 — 소유 등록의 근거(다른 실행이 같은 제목을 만들 수 없음)
+  const watch = watchUiClassCreation(page);
   const admin = getFixtureAdminClient();
 
   await gotoManagerClasses(page, centerAId);
@@ -108,12 +112,15 @@ test("요일별 개별 지정(perDayMode) 반복수업 등록 — RPC 1회로 �
   // 단 한 번의 RPC 호출로 두 요일 전부가 정확한 값으로 반영됐는지 admin client로 직접 확인
   const { data: rows, error } = await admin
     .from("classes")
-    .select("id, start_time, end_time, capacity, recurring_group_id")
+    .select("id, center_id, title, created_at, start_time, end_time, capacity, recurring_group_id")
     .eq("center_id", centerAId)
     .eq("title", uniqueTitle);
   if (error) throw new Error(`생성된 반복수업 조회 실패: ${error.message}`);
   const created = rows ?? [];
-  created.forEach((r) => createdClassIds.push(r.id));
+  // UI 생성 응답(RPC 반환 id 전체)과 연결된 행만 소유로 등록한다. 응답에 없는 같은 제목 행이 있으면 등록하지 않고 에러.
+  const responseIds = await watch.settled();
+  createdClassIds.push(...responseIds); // 등록 검증이 실패해도 정리 시도는 소유 증명(blocked)에 맡긴다
+  await adoptUiCreatedClassesAdmin({ createdIds: responseIds, centerId: centerAId, title: uniqueTitle });
 
   expect(created.length).toBe(expectedDatesA.length + expectedDatesB.length);
   // 전부 같은 recurring_group_id로 묶여야 함(요일이 달라도 하나의 등록으로 생성됐으므로)

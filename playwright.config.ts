@@ -1,5 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 import "./tests/e2e/fixtures/env"; // .env.test.local 로드 + 필수 env 존재만 확인(로그인용 계정)
+
+// 이 Playwright 실행의 식별자 — 메인 프로세스에서 한 번 정해 워커가 환경변수로 상속한다(수업 소유 manifest 키, Q01).
+process.env.E2E_RUN_ID ||= randomUUID();
+process.env.E2E_RUN_STARTED_AT ||= new Date().toISOString(); // UI 가 만든 수업의 소유 증명(이 시각 이후 생성)에 쓴다
 
 // E2E(Playwright) 설정.
 // - 실제 개발용 Supabase에 실제 테스트 계정으로 로그인해 브라우저를 조작하므로, 통합 테스트와
@@ -14,6 +19,7 @@ const ADMIN_PAGINATION_SPEC = /production-readiness[\\/]admin-center-pagination\
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  globalTeardown: "./tests/e2e/ownedClassTeardown.ts",
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,

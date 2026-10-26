@@ -1,5 +1,10 @@
 # TODO
 
+## 2026-10-26 Q01 후속(E2E 수업 정리)
+- **P2** 나머지 17개 E2E 스펙의 고정 제목을 실행별 제목으로 단계 전환: 생성 헬퍼가 이미 `title` 을 반환하므로 스펙의 `hasText: "리터럴"` 을 반환된 `cls.title` 로 바꾼 뒤 CI 에 `E2E_RUN_SCOPED_TITLES=1` 을 켠다(현재는 고정 제목 + 충돌 시 BLOCKED). 공유 DEV 에서 CI 취소로 남은 고정 제목 행은 자동 삭제되지 않으므로 다음 실행이 BLOCKED 될 수 있다 — 소유 증명 가능한 manifest 가 러너에 남지 않는 CI 에서는 #240 격리 DB 이전이 근본 해결이다.
+- **P3** `cleanupTodaysReservationsForProfile` 은 전용 테스트 프로필의 오늘 예약만 지운다(범위 문서화만, 변경 없음).
+- **P3** 통합 테스트(`tests/integration`)의 수업 정리는 호출 테스트가 만든 id 기반이다 — manifest/소유 대조는 적용하지 않음(공유 DEV 라이브 검증 없이 바꾸지 않음).
+
 ## 2026-10-25 관리자 페이지네이션/CI 후속
 - **P1(승인 필요)**: `NEXT_PUBLIC_ADMIN_CENTER_PAGINATION=true` 운영 활성화는 별도 승인. 이슈 #221 기록(2026-10-13)에 따르면 운영 Supabase 에는 `admin_list_centers_page` RPC 가 이미 존재하고 플래그는 OFF — 이 작업에서 운영 DB 를 다시 조회하지 않았으므로 현재 적용 상태는 재확인 필요(SQL: `supabase/migrations/20261011113106_admin_center_page_draft.sql`).
 - **P1(환경)**: 실제 DEV Supabase 의 플랫폼 관리자 실브라우저 ON/OFF 검증은 전제(기존 플랫폼 관리자 계정·상태별 31건 이상 기존 센터)가 없어 미실행 — 격리 PostgreSQL 검증으로 대체했고 DEV 검증이 아니다.
