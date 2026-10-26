@@ -39,7 +39,7 @@
 ## 5. repo 쪽에서 끝낸 준비
 1. **격리 대상 가드** `scripts/ci/isolatedTargetGuard.mjs`(+ `tests/unit/isolatedTargetGuard.test.ts` 8건): 어떤 쓰기보다 먼저 env 만 검사 — Production ref/도메인 차단, 공유 DEV(고정 ref + CI 의 `NEXT_PUBLIC_SUPABASE_URL`)는 격리로 선언 불가, URL ref = 선언 ref = 키 JWT ref 불일치 차단, 필수 값 누락은 `BLOCKED`, 로컬 대체는 `PARTIAL`. 비밀 값 미출력.
 2. **CI 게이트 job `isolated-env-gate`**: `ISOLATED_*` 시크릿이 없으면 Step Summary 에 **BLOCKED** 를 남기고 warning 으로 끝난다(전환 완료 아님, live job 은 그대로 공유 DEV). 설정이 있는데 위험하면 FAILED. 공유 DEV 비밀을 읽지 않음을 `ciLiveTestWorkflow.contract.test.ts` 로 고정.
-3. 기존 live 검증은 **끄지 않았다**(`false &&`·skip 전환 없음). Q01(수업 소유 정리, 별도 PR)·#231/#234(상품 소유 정리)로 live 잔여 위험을 줄였으나 격리 이전을 대체하지 않는다.
+3. 기존 live 검증은 **끄지 않았다**(`false &&`·skip 전환 없음). Q01(수업 소유 정리, #241 병합)·#231/#234(상품 소유 정리)로 live 잔여 위험을 줄였으나 격리 이전을 대체하지 않는다.
 
 ## 6. 전환 완료의 증거 (모두 필요)
 1. 격리 환경에서 필수 E2E 4구간 + Integration 이 **실제로 실행**되고 의도치 않은 skip 0 (조건부 skip 과 환경 부재 skip 을 구분해 보고).
