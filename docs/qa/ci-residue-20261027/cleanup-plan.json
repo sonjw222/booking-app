@@ -1,6 +1,446 @@
 {
- "generatedAt": "2026-10-26T15:21:43.806Z",
- "target": "shared DEV (mwhabit-ci-dev)",
+ "version": 2,
+ "wording": "approvalCandidate = 정황 근거가 있는 일회성 정리 승인 후보. 소유 증명이 아니다(ownershipProven=false).",
+ "allowedProfiles": [
+  {
+   "profileId": "a82c3e21-cb94-43c2-9edc-2ef50d469f13",
+   "accountId": "2439f3f9-0345-4290-aee9-2bf0ef0d81b7",
+   "basis": "test-account:USER_A",
+   "evidence": {
+    "authId": "58492544-852e-437d-a206-589d925f4d6b",
+    "profilePrimary": true,
+    "profileCreatedAt": "2026-10-07T06:00:15.131822+00:00",
+    "note": "계정 번호가 CI 테스트 이메일로 확인된 auth 사용자의 계정과 같음"
+   }
+  },
+  {
+   "profileId": "34482e8c-553a-47e5-9589-0f28d954f403",
+   "accountId": "398338d5-dc94-4326-97a9-61be2c9b91df",
+   "basis": "test-account:USER_B",
+   "evidence": {
+    "authId": "ca4073c7-7187-4101-9b45-a6d912e3b664",
+    "profilePrimary": true,
+    "profileCreatedAt": "2026-10-07T06:00:15.731213+00:00",
+    "note": "계정 번호가 CI 테스트 이메일로 확인된 auth 사용자의 계정과 같음"
+   }
+  },
+  {
+   "profileId": "5c69226d-c9a6-40d7-945d-946c966d838e",
+   "accountId": "398338d5-dc94-4326-97a9-61be2c9b91df",
+   "basis": "test-account:USER_B",
+   "evidence": {
+    "authId": "ca4073c7-7187-4101-9b45-a6d912e3b664",
+    "profilePrimary": false,
+    "profileCreatedAt": "2026-10-26T09:23:48.470595+00:00",
+    "note": "계정 번호가 CI 테스트 이메일로 확인된 auth 사용자의 계정과 같음"
+   }
+  },
+  {
+   "profileId": "c327725d-9734-4d34-ad08-5e6a08c54908",
+   "accountId": "4e9cb225-6c0d-4e60-a491-d4622fc12b2b",
+   "basis": "anonymized-throwaway(auth-user-deleted)",
+   "evidence": {
+    "authIdRecorded": "5502c2dc-fd00-4621-968e-8c081e393132",
+    "authUserExists": false,
+    "accountCreatedAt": "2026-10-26T09:25:23.041603+00:00",
+    "accountCreatedWithinResidueWindow": true,
+    "accountIsManager": false,
+    "accountIsPlatformAdmin": false,
+    "profileCreatedAt": "2026-10-26T09:25:26.177765+00:00",
+    "profileDeletedAt": "2026-10-26T09:26:06.889+00:00",
+    "reservationsOnlyOnLifecycleClasses": true,
+    "strength": "weak-circumstantial",
+    "note": "탈퇴로 auth 사용자가 삭제돼 TEST_USER_A 플러스 별칭 여부를 확인할 수 없음. 표시 이름 '탈퇴한 회원'은 판정에 쓰지 않았고(고유번호만), 위 사실들만 근거"
+   }
+  },
+  {
+   "profileId": "1cfd331b-a55c-4530-b6ce-b00475b173e5",
+   "accountId": "4e9cb225-6c0d-4e60-a491-d4622fc12b2b",
+   "basis": "anonymized-throwaway(auth-user-deleted)",
+   "evidence": {
+    "authIdRecorded": "5502c2dc-fd00-4621-968e-8c081e393132",
+    "authUserExists": false,
+    "accountCreatedAt": "2026-10-26T09:25:23.041603+00:00",
+    "accountCreatedWithinResidueWindow": true,
+    "accountIsManager": false,
+    "accountIsPlatformAdmin": false,
+    "profileCreatedAt": "2026-10-26T09:25:23.240689+00:00",
+    "profileDeletedAt": null,
+    "reservationsOnlyOnLifecycleClasses": true,
+    "strength": "weak-circumstantial",
+    "note": "탈퇴로 auth 사용자가 삭제돼 TEST_USER_A 플러스 별칭 여부를 확인할 수 없음. 표시 이름 '탈퇴한 회원'은 판정에 쓰지 않았고(고유번호만), 위 사실들만 근거"
+   }
+  }
+ ],
+ "classes": [
+  {
+   "id": "09089778-0438-4c9c-af6f-576e81d6c43e",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "E2E 취소기한-실패",
+   "createdAt": "2026-10-26T09:27:29.885384+00:00",
+   "rowSha256": "b39ffebd47cb5de15d5b9e1da05df958b924b2052383c51aa69a7701cb190dd8"
+  },
+  {
+   "id": "156ca29c-bfaf-46a5-94a1-039bf2a685f6",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-SPECIFIC-1793006468708",
+   "createdAt": "2026-10-26T09:21:14.361231+00:00",
+   "rowSha256": "b0d23717dcc846316fd648abb7c20cc93e82890f92b42c23d24f2c5715b2c381"
+  },
+  {
+   "id": "34a5d298-27e5-4ba9-9dcd-68e4c8bd0baa",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "E2E 대기인원표시 1793006627598",
+   "createdAt": "2026-10-26T09:23:47.895161+00:00",
+   "rowSha256": "38bc50fcd55e188a4ceb59039d53144d5f900c9b8984d2e059e2e2ff5221e84c"
+  },
+  {
+   "id": "44920648-1629-4787-898e-fd9e34197653",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793006386909",
+   "createdAt": "2026-10-26T09:19:52.433782+00:00",
+   "rowSha256": "0a292765d0821e5ef2bb90e6c3ae267f070c743f91ede5cfe612a1827e6daf0a"
+  },
+  {
+   "id": "547526ae-c808-42ee-9c62-43b4fd1ea20e",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-BUY-1793006483165",
+   "createdAt": "2026-10-26T09:21:28.081812+00:00",
+   "rowSha256": "a0bb5c8bfae3f7a7f64ba2e0f6978dfbe0a08bfe2d73fe23a68153941ddd101a"
+  },
+  {
+   "id": "650538db-f67d-4348-a3b3-a55520b9f7ab",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "E2E-210 요가 클래스",
+   "createdAt": "2026-10-26T09:24:03.696656+00:00",
+   "rowSha256": "eac0979b3e6391343daa775f08ba9861bfad0949d8522c8101554d4aa977b991"
+  },
+  {
+   "id": "65baba3c-075f-4771-b41e-d07736f5a3fb",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-GOODSCHK-1793008541828",
+   "createdAt": "2026-10-26T09:55:50.6545+00:00",
+   "rowSha256": "247319c65c75493826aa3014fa61bafaa7cef67c09a1bdfa279246e313816a65"
+  },
+  {
+   "id": "66b75631-17a5-4af2-857f-98cca0e661e3",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793008370370",
+   "createdAt": "2026-10-26T09:52:56.053626+00:00",
+   "rowSha256": "f0aee03794d088a0a3fd2e034fe75cf84484261469068f22ded1c096e7333335"
+  },
+  {
+   "id": "7c63e12b-d77c-4f7b-85de-8286d8b9dae5",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793008370370",
+   "createdAt": "2026-10-26T09:52:56.053626+00:00",
+   "rowSha256": "ce790054ce4ace1ce7dacee4c825256bed51b107b31f87675f33db5cb07a0039"
+  },
+  {
+   "id": "7ca951ef-bd8f-49f2-85d4-bcb35b447561",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-BUY-1793008506281",
+   "createdAt": "2026-10-26T09:55:13.278695+00:00",
+   "rowSha256": "70440469a9197b1f048e34a2553b2742af61c6138a8833dce67e260748675809"
+  },
+  {
+   "id": "800205db-d28d-4737-9eed-edab6a407fdd",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-GOODSCHK-1793006507779",
+   "createdAt": "2026-10-26T09:21:53.029457+00:00",
+   "rowSha256": "5544579d1ba46d13e72772fdcd74ade62f3b40424e3ce66b72a5eea1be5da60e"
+  },
+  {
+   "id": "85800a8a-6b99-4670-bb25-bba645464100",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "E2E 생애주기 대기승격 테스트",
+   "createdAt": "2026-10-26T09:25:16.881769+00:00",
+   "rowSha256": "08da362ba2227fbec11de6e427ce1a6a689d82c9e4c16827d83268ac6f493f3a"
+  },
+  {
+   "id": "94a54728-8db7-4e74-9901-54ba4a3fccff",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-SPECIFIC-1793008477860",
+   "createdAt": "2026-10-26T09:54:47.03877+00:00",
+   "rowSha256": "e3b5d252c214018bb92011e001682ca9b57889fad6c163e9861e541f926ecdb4"
+  },
+  {
+   "id": "95250034-8f0d-4538-b0a3-440635ac8677",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793006386909",
+   "createdAt": "2026-10-26T09:19:52.433782+00:00",
+   "rowSha256": "5dfa7902db662c4df786eed9a9b24f365bd2fa409a4946a7335b2aef9699da5a"
+  },
+  {
+   "id": "9994a6dd-1b2c-4456-b329-be398e50b743",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793008370370",
+   "createdAt": "2026-10-26T09:52:56.053626+00:00",
+   "rowSha256": "98784a5f69c73d85ea4f2f111a8de01768df7c4825f557b429ff738efc2f7d69"
+  },
+  {
+   "id": "99dcd917-94f9-4755-a288-c2962d214bc2",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-ALL-1793008450246",
+   "createdAt": "2026-10-26T09:54:21.001526+00:00",
+   "rowSha256": "6bceee968194b8250c3b42d5ee7864ccf30b65a562b7c46a36c7cc20ab3c735a"
+  },
+  {
+   "id": "a9fd581d-57cb-41da-ae67-41dfc84d32d8",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793006386909",
+   "createdAt": "2026-10-26T09:19:52.433782+00:00",
+   "rowSha256": "be2f99383b2a4539663d9f8f531df6e2c4aaf9bd3e35dfcaee851fbccb659c9b"
+  },
+  {
+   "id": "adc1c555-1fbf-446a-bc55-080dec9cf732",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "E2E 생애주기 예약 테스트",
+   "createdAt": "2026-10-26T09:25:17.202056+00:00",
+   "rowSha256": "2466b485adc45661c9604c90c7b43bd866b383a04fa604f8c1226d48a0b35f70"
+  },
+  {
+   "id": "c74dbdc6-dbd4-4a3f-bc39-0e93d4591568",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-ALL-1793006451909",
+   "createdAt": "2026-10-26T09:20:58.033425+00:00",
+   "rowSha256": "eaab93631a31484109a11aa663ca8b84980b4ffe8a87e919912f5dbeb0413904"
+  },
+  {
+   "id": "cfcb7946-a9d5-405e-a689-14ebdd05de80",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "E2E 취소기한-성공",
+   "createdAt": "2026-10-26T09:27:21.288402+00:00",
+   "rowSha256": "e74a75cfacc0cb33289170508151aa6033ddeb5346dabd413480005aee1728dd"
+  },
+  {
+   "id": "dbad9f95-f19b-4130-8c10-13c68ba38d5c",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793006386909",
+   "createdAt": "2026-10-26T09:19:52.433782+00:00",
+   "rowSha256": "d8888a86033dcdf891be84f852cd519e238297f21fae581cd41d7a77dc71eaf7"
+  },
+  {
+   "id": "ec9a4dbe-8354-437b-bb71-e3c55c287d70",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793008370370",
+   "createdAt": "2026-10-26T09:52:56.053626+00:00",
+   "rowSha256": "5189a7d62a2d5d46d31c20ac7c0a5bc7273cdc45388aac0c33bcef728027d12c"
+  },
+  {
+   "id": "f8fcf95c-857a-41af-8bed-f4c39d22e8a6",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "P3 출결-대기",
+   "createdAt": "2026-10-26T09:15:11.801687+00:00",
+   "rowSha256": "0da254a2fabe5d2d64b910309719d6708f14a337d902ed1d1afcb1a532d286f9"
+  }
+ ],
+ "reservations": [
+  {
+   "id": "026b06ab-f015-4506-9c8c-311beaa79d90",
+   "classId": "156ca29c-bfaf-46a5-94a1-039bf2a685f6",
+   "profileId": "a82c3e21-cb94-43c2-9edc-2ef50d469f13",
+   "membershipId": "f6de9bcb-1096-4b56-800e-01b7b205f1c9",
+   "status": "confirmed",
+   "createdAt": "2026-10-26T09:21:20.65904+00:00",
+   "rowSha256": "0a584844cd5d88337f3210f652773531b5804a3e71f4f05bf52bad5843c27973"
+  },
+  {
+   "id": "1fdfe3e9-eff1-4ad2-a45e-a95a85dbf5f8",
+   "classId": "650538db-f67d-4348-a3b3-a55520b9f7ab",
+   "profileId": "a82c3e21-cb94-43c2-9edc-2ef50d469f13",
+   "membershipId": "8d8345c8-c3a4-479c-8af7-f06dc1cf6afb",
+   "status": "confirmed",
+   "createdAt": "2026-10-26T09:13:03.824+00:00",
+   "rowSha256": "a0e3defb5e04f0e6450b5dab252774e1f5b2a16dd107f401576a667b270c00a5"
+  },
+  {
+   "id": "35a6566d-abd7-4507-812e-371cd6ec34ff",
+   "classId": "c74dbdc6-dbd4-4a3f-bc39-0e93d4591568",
+   "profileId": "a82c3e21-cb94-43c2-9edc-2ef50d469f13",
+   "membershipId": "45e2132e-cee8-4149-9b77-7b623d6059c1",
+   "status": "confirmed",
+   "createdAt": "2026-10-26T09:21:06.088908+00:00",
+   "rowSha256": "d2ed53f65dff97fc689fe0f321c999568abe0e4282833910229a360db828cb23"
+  },
+  {
+   "id": "489467a8-7b43-49de-a973-420fb4bc13ac",
+   "classId": "85800a8a-6b99-4670-bb25-bba645464100",
+   "profileId": "1cfd331b-a55c-4530-b6ce-b00475b173e5",
+   "membershipId": "8def846a-cf2f-408a-a8db-d5bd932e2c9c",
+   "status": "cancelled",
+   "createdAt": "2026-10-26T09:25:49.770754+00:00",
+   "rowSha256": "9149b383b67d6f7cc850544cd99001f066780b5f4283d4bfbe859bf66f318859"
+  },
+  {
+   "id": "58319282-c1a5-479b-b235-f955b095d7e1",
+   "classId": "85800a8a-6b99-4670-bb25-bba645464100",
+   "profileId": "34482e8c-553a-47e5-9589-0f28d954f403",
+   "membershipId": "8a486a69-8932-4f8a-bdb8-869e5316edf0",
+   "status": "cancelled",
+   "createdAt": "2026-10-26T09:25:54.320824+00:00",
+   "rowSha256": "c2de9223461ea852fcce4d7566765760bab0b5c68cc29fc645f81025fb245273"
+  },
+  {
+   "id": "8781d425-aa5e-4735-9c15-02b0d8318538",
+   "classId": "adc1c555-1fbf-446a-bc55-080dec9cf732",
+   "profileId": "1cfd331b-a55c-4530-b6ce-b00475b173e5",
+   "membershipId": "8def846a-cf2f-408a-a8db-d5bd932e2c9c",
+   "status": "cancelled",
+   "createdAt": "2026-10-26T09:25:37.840517+00:00",
+   "rowSha256": "02edce9d202f63da092f6701a8a448f5fc1f90eef2da9401527714786fbad89f"
+  },
+  {
+   "id": "87d24d5f-38e3-49c3-b380-d244c976e848",
+   "classId": "adc1c555-1fbf-446a-bc55-080dec9cf732",
+   "profileId": "c327725d-9734-4d34-ad08-5e6a08c54908",
+   "membershipId": "8def846a-cf2f-408a-a8db-d5bd932e2c9c",
+   "status": "cancelled",
+   "createdAt": "2026-10-26T09:25:39.174165+00:00",
+   "rowSha256": "a060abc741ec49f8afb6433953197f6127ed57386d2a481cf8d25a0a622f06b9"
+  },
+  {
+   "id": "a133e81f-3e6f-412c-8823-66f6028988cf",
+   "classId": "f8fcf95c-857a-41af-8bed-f4c39d22e8a6",
+   "profileId": "a82c3e21-cb94-43c2-9edc-2ef50d469f13",
+   "membershipId": "45e2132e-cee8-4149-9b77-7b623d6059c1",
+   "status": "confirmed",
+   "createdAt": "2026-10-26T09:15:15.448587+00:00",
+   "rowSha256": "f27c592831fc549f81b1b49bbdad2c6a220c1e34ff34ec197dfa1ab48055be77"
+  },
+  {
+   "id": "ac54fe37-b487-4978-b2d0-003358a7c10e",
+   "classId": "34a5d298-27e5-4ba9-9dcd-68e4c8bd0baa",
+   "profileId": "5c69226d-c9a6-40d7-945d-946c966d838e",
+   "membershipId": null,
+   "status": "waitlisted",
+   "createdAt": "2026-10-26T09:23:48.689428+00:00",
+   "rowSha256": "04a89473d2371ae827e501a255646aeffffbd000771038a3f4788543174d34b9"
+  },
+  {
+   "id": "bcb2c937-434f-487f-a252-a7734ea97c7d",
+   "classId": "94a54728-8db7-4e74-9901-54ba4a3fccff",
+   "profileId": "a82c3e21-cb94-43c2-9edc-2ef50d469f13",
+   "membershipId": "f6de9bcb-1096-4b56-800e-01b7b205f1c9",
+   "status": "confirmed",
+   "createdAt": "2026-10-26T09:55:01.704828+00:00",
+   "rowSha256": "78b2a05879f6e1765d117602c911570bc3e7904cf82ae7426b5ed9ab97cacb67"
+  },
+  {
+   "id": "ca965307-faa0-4081-bdac-ca9887e86e81",
+   "classId": "99dcd917-94f9-4755-a288-c2962d214bc2",
+   "profileId": "a82c3e21-cb94-43c2-9edc-2ef50d469f13",
+   "membershipId": "450b5a91-1605-49f9-a5df-465b06eab104",
+   "status": "confirmed",
+   "createdAt": "2026-10-26T09:54:34.750381+00:00",
+   "rowSha256": "76b3a153ff4b623db372b9d8be61b9056e1a82f4da511100c287f3f6a6e81209"
+  },
+  {
+   "id": "df7b44e1-dca4-4d1f-8cc0-8bdb4b535d28",
+   "classId": "cfcb7946-a9d5-405e-a689-14ebdd05de80",
+   "profileId": "a82c3e21-cb94-43c2-9edc-2ef50d469f13",
+   "membershipId": "8d8345c8-c3a4-479c-8af7-f06dc1cf6afb",
+   "status": "cancelled",
+   "createdAt": "2026-10-26T09:16:21.367+00:00",
+   "rowSha256": "806b2cafb72be601f48b4ebeaaf37c235a89583d3bbba54c9853a9e03da9b564"
+  }
+ ],
+ "children": {
+  "class_allowed_products": [
+   {
+    "id": "9737c2c1-7213-4257-89dd-7596e16e449a",
+    "rowSha256": "3454cc1f9fef413047c0265da4e7adab3e30346e8bac03dfd21b041fa74904a6"
+   },
+   {
+    "id": "ade80d35-1734-470f-bdfb-b41f8bad75b5",
+    "rowSha256": "3addc61cb8d617a9bde83d73b43c3313aa2d988df1deba2e2d97f47ffeeca91d"
+   }
+  ],
+  "class_trainers": [],
+  "schedule_memos": [],
+  "reservation_goods_usages": []
+ },
+ "linkedMemberships": [
+  {
+   "id": "450b5a91-1605-49f9-a5df-465b06eab104",
+   "profile_id": "a82c3e21-cb94-43c2-9edc-2ef50d469f13",
+   "status": "active",
+   "remaining_count": 0,
+   "total_count": 5
+  },
+  {
+   "id": "45e2132e-cee8-4149-9b77-7b623d6059c1",
+   "profile_id": "a82c3e21-cb94-43c2-9edc-2ef50d469f13",
+   "status": "active",
+   "remaining_count": 5,
+   "total_count": 5
+  },
+  {
+   "id": "8a486a69-8932-4f8a-bdb8-869e5316edf0",
+   "profile_id": "34482e8c-553a-47e5-9589-0f28d954f403",
+   "status": "active",
+   "remaining_count": 0,
+   "total_count": 5
+  },
+  {
+   "id": "8d8345c8-c3a4-479c-8af7-f06dc1cf6afb",
+   "profile_id": "a82c3e21-cb94-43c2-9edc-2ef50d469f13",
+   "status": "active",
+   "remaining_count": 6,
+   "total_count": 10
+  },
+  {
+   "id": "8def846a-cf2f-408a-a8db-d5bd932e2c9c",
+   "profile_id": "1cfd331b-a55c-4530-b6ce-b00475b173e5",
+   "status": "refunded",
+   "remaining_count": 0,
+   "total_count": 5
+  },
+  {
+   "id": "f6de9bcb-1096-4b56-800e-01b7b205f1c9",
+   "profile_id": "b5a3c5c3-1006-4009-9520-7f6953bbcc6a",
+   "status": "active",
+   "remaining_count": 3,
+   "total_count": 5
+  }
+ ],
+ "auditRefs": {
+  "class_id": 0,
+  "reservation_id": 0
+ },
+ "generatedAt": "2026-10-26T15:37:09.330Z",
+ "target": {
+  "host": "jdglfvwdnkjnraqdxuuj.supabase.co",
+  "note": "공유 DEV(mwhabit-ci-dev)"
+ },
+ "approvalCandidate": true,
+ "ownershipProven": false,
+ "evidenceKind": "circumstantial",
+ "testAccounts": [
+  {
+   "label": "USER_A",
+   "authId": "58492544-852e-437d-a206-589d925f4d6b",
+   "accountId": "2439f3f9-0345-4290-aee9-2bf0ef0d81b7"
+  },
+  {
+   "label": "USER_B",
+   "authId": "ca4073c7-7187-4101-9b45-a6d912e3b664",
+   "accountId": "398338d5-dc94-4326-97a9-61be2c9b91df"
+  },
+  {
+   "label": "MANAGER_A",
+   "authId": "a8fc7f98-71e5-4e94-a06b-ee8fc66b07a4",
+   "accountId": "911920c9-746d-4998-9e51-804aafd2821f"
+  },
+  {
+   "label": "MANAGER_B",
+   "authId": "bab4d9ce-47f9-4015-846d-eb7d55fe8238",
+   "accountId": "93fb2c10-d866-47ce-843b-e7cd03d2c583"
+  }
+ ],
+ "testAccountsSource": "PLAN_CI_ACCOUNTS_FILE(ci-dev-accounts.env, seed 가 만든 CI fixture 계정) — 이 이메일이 현재 GitHub Secrets 값과 같은지는 확인 불가",
+ "unknownProfiles": [],
+ "unknownReferencingColumns": [],
  "referencingColumns": {
   "classes": [
    [
@@ -35,764 +475,596 @@
    ]
   ]
  },
- "allQueriesOk": true,
- "allEligible": true,
- "plan": [
+ "classEvidence": [
   {
    "classId": "09089778-0438-4c9c-af6f-576e81d6c43e",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "E2E 취소기한-실패",
-   "createdAt": "2026-10-26T09:27:29.885384+00:00",
-   "status": "open",
-   "reservationCount": 0,
-   "reservationIds": [],
-   "reservationProfileKinds": [],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 0,
-    "schedule_memos.class_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 4/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:24:19Z~2026-10-26T09:29:40Z) 안",
-    "제목 패턴이 tests/e2e/settings/cancel-deadline.spec.ts 의 고정 제목/생성 패턴과 일치"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 4/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 4/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 4/4 ",
+     "kind": "mention"
+    }
    ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 0,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": null
   },
   {
    "classId": "156ca29c-bfaf-46a5-94a1-039bf2a685f6",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "NEWCLASS-SPECIFIC-1793006468708",
-   "createdAt": "2026-10-26T09:21:14.361231+00:00",
-   "status": "open",
-   "reservationCount": 1,
-   "reservationIds": [
-    "026b06ab-f015-4506-9c8c-311beaa79d90"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    }
    ],
-   "reservationProfileKinds": [
-    "CI User A"
-   ],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 1,
-    "reservations.class_id": 1,
-    "schedule_memos.class_id": 0,
-    "admin_action_logs.reservation_id": 0,
-    "reservation_goods_usages.reservation_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:19:59Z~2026-10-26T09:24:17Z) 안",
-    "제목의 Date.now() 값(1793006468708)과 생성 시각 차 5.7초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
-   ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 1,
-    "class": 1,
-    "cascadeChildren": [
-     "class_allowed_products.class_id:1"
-    ]
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 5.653
   },
   {
    "classId": "34a5d298-27e5-4ba9-9dcd-68e4c8bd0baa",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "E2E 대기인원표시 1793006627598",
-   "createdAt": "2026-10-26T09:23:47.895161+00:00",
-   "status": "open",
-   "reservationCount": 1,
-   "reservationIds": [
-    "ac54fe37-b487-4978-b2d0-003358a7c10e"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    }
    ],
-   "reservationProfileKinds": [
-    "E2E 대기인원 임시"
-   ],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 1,
-    "schedule_memos.class_id": 0,
-    "admin_action_logs.reservation_id": 0,
-    "reservation_goods_usages.reservation_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:19:59Z~2026-10-26T09:24:17Z) 안",
-    "제목의 Date.now() 값(1793006627598)과 생성 시각 차 0.3초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/reservation/group-waitlist-count-display.spec.ts 의 고정 제목/생성 패턴과 일치"
-   ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 1,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 0.297
   },
   {
    "classId": "44920648-1629-4787-898e-fd9e34197653",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "PERDAY-ATOMIC-1793006386909",
-   "createdAt": "2026-10-26T09:19:52.433782+00:00",
-   "status": "open",
-   "reservationCount": 0,
-   "reservationIds": [],
-   "reservationProfileKinds": [],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 0,
-    "schedule_memos.class_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:16:23Z~2026-10-26T09:19:58Z) 안",
-    "제목의 Date.now() 값(1793006386909)과 생성 시각 차 5.5초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 2/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 2/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 2/4 ",
+     "kind": "mention"
+    }
    ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 0,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 5.524
   },
   {
    "classId": "547526ae-c808-42ee-9c62-43b4fd1ea20e",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "NEWCLASS-BUY-1793006483165",
-   "createdAt": "2026-10-26T09:21:28.081812+00:00",
-   "status": "open",
-   "reservationCount": 0,
-   "reservationIds": [],
-   "reservationProfileKinds": [],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 0,
-    "schedule_memos.class_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:19:59Z~2026-10-26T09:24:17Z) 안",
-    "제목의 Date.now() 값(1793006483165)과 생성 시각 차 4.9초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    }
    ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 0,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 4.916
   },
   {
    "classId": "650538db-f67d-4348-a3b3-a55520b9f7ab",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "E2E-210 요가 클래스",
-   "createdAt": "2026-10-26T09:24:03.696656+00:00",
-   "status": "open",
-   "reservationCount": 1,
-   "reservationIds": [
-    "1fdfe3e9-eff1-4ad2-a45e-a95a85dbf5f8"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "create-blocked-by-residue"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "create-blocked-by-residue"
+    }
    ],
-   "reservationProfileKinds": [
-    "CI User A"
-   ],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 1,
-    "schedule_memos.class_id": 0,
-    "admin_action_logs.reservation_id": 0,
-    "reservation_goods_usages.reservation_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 3/4 \" job 로그에 이 id 가 16회 등장(cleanup-blocked/create-blocked-by-residue/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:19:59Z~2026-10-26T09:24:17Z) 안",
-    "제목 패턴이 tests/e2e/reservation/member-cancel/my-reservations-cancel-a11y.spec.ts 의 고정 제목/생성 패턴과 일치"
-   ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 1,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 10
+   "titleEpochDeltaSec": null
   },
   {
    "classId": "65baba3c-075f-4771-b41e-d07736f5a3fb",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "NEWCLASS-GOODSCHK-1793008541828",
-   "createdAt": "2026-10-26T09:55:50.6545+00:00",
-   "status": "open",
-   "reservationCount": 0,
-   "reservationIds": [],
-   "reservationProfileKinds": [],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 0,
-    "schedule_memos.class_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40300257985(7693998) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:53:02Z~2026-10-26T09:59:00Z) 안",
-    "제목의 Date.now() 값(1793008541828)과 생성 시각 차 8.8초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 3/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    }
    ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 0,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 8.826
   },
   {
    "classId": "66b75631-17a5-4af2-857f-98cca0e661e3",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "PERDAY-ATOMIC-1793008370370",
-   "createdAt": "2026-10-26T09:52:56.053626+00:00",
-   "status": "open",
-   "reservationCount": 0,
-   "reservationIds": [],
-   "reservationProfileKinds": [],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 0,
-    "schedule_memos.class_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40300257985(7693998) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:49:30Z~2026-10-26T09:53:00Z) 안",
-    "제목의 Date.now() 값(1793008370370)과 생성 시각 차 5.7초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 2/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 2/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 2/4 ",
+     "kind": "mention"
+    }
    ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 0,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 5.683
   },
   {
    "classId": "7c63e12b-d77c-4f7b-85de-8286d8b9dae5",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "PERDAY-ATOMIC-1793008370370",
-   "createdAt": "2026-10-26T09:52:56.053626+00:00",
-   "status": "open",
-   "reservationCount": 0,
-   "reservationIds": [],
-   "reservationProfileKinds": [],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 0,
-    "schedule_memos.class_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40300257985(7693998) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:49:30Z~2026-10-26T09:53:00Z) 안",
-    "제목의 Date.now() 값(1793008370370)과 생성 시각 차 5.7초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 2/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 2/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 2/4 ",
+     "kind": "mention"
+    }
    ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 0,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 5.683
   },
   {
    "classId": "7ca951ef-bd8f-49f2-85d4-bcb35b447561",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "NEWCLASS-BUY-1793008506281",
-   "createdAt": "2026-10-26T09:55:13.278695+00:00",
-   "status": "open",
-   "reservationCount": 0,
-   "reservationIds": [],
-   "reservationProfileKinds": [],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 0,
-    "schedule_memos.class_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40300257985(7693998) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:53:02Z~2026-10-26T09:59:00Z) 안",
-    "제목의 Date.now() 값(1793008506281)과 생성 시각 차 7.0초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 3/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    }
    ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 0,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 6.997
   },
   {
    "classId": "800205db-d28d-4737-9eed-edab6a407fdd",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "NEWCLASS-GOODSCHK-1793006507779",
-   "createdAt": "2026-10-26T09:21:53.029457+00:00",
-   "status": "open",
-   "reservationCount": 0,
-   "reservationIds": [],
-   "reservationProfileKinds": [],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 0,
-    "schedule_memos.class_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:19:59Z~2026-10-26T09:24:17Z) 안",
-    "제목의 Date.now() 값(1793006507779)과 생성 시각 차 5.3초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    }
    ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 0,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 5.25
   },
   {
    "classId": "85800a8a-6b99-4670-bb25-bba645464100",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "E2E 생애주기 대기승격 테스트",
-   "createdAt": "2026-10-26T09:25:16.881769+00:00",
-   "status": "open",
-   "reservationCount": 2,
-   "reservationIds": [
-    "489467a8-7b43-49de-a973-420fb4bc13ac",
-    "58319282-c1a5-479b-b235-f955b095d7e1"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 4/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 4/4 ",
+     "kind": "teardown-unresolved"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 4/4 ",
+     "kind": "mention"
+    }
    ],
-   "reservationProfileKinds": [
-    "탈퇴한 회원",
-    "CI User B"
-   ],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 2,
-    "schedule_memos.class_id": 0,
-    "admin_action_logs.reservation_id": 0,
-    "reservation_goods_usages.reservation_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 4/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/teardown-unresolved/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:24:19Z~2026-10-26T09:29:40Z) 안",
-    "제목 패턴이 tests/e2e/production-readiness/member-full-lifecycle.spec.ts 의 고정 제목/생성 패턴과 일치"
-   ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 2,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 5
+   "titleEpochDeltaSec": null
   },
   {
    "classId": "94a54728-8db7-4e74-9901-54ba4a3fccff",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "NEWCLASS-SPECIFIC-1793008477860",
-   "createdAt": "2026-10-26T09:54:47.03877+00:00",
-   "status": "open",
-   "reservationCount": 1,
-   "reservationIds": [
-    "bcb2c937-434f-487f-a252-a7734ea97c7d"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 3/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    }
    ],
-   "reservationProfileKinds": [
-    "CI User A"
-   ],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 1,
-    "reservations.class_id": 1,
-    "schedule_memos.class_id": 0,
-    "admin_action_logs.reservation_id": 0,
-    "reservation_goods_usages.reservation_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40300257985(7693998) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:53:02Z~2026-10-26T09:59:00Z) 안",
-    "제목의 Date.now() 값(1793008477860)과 생성 시각 차 9.2초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
-   ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 1,
-    "class": 1,
-    "cascadeChildren": [
-     "class_allowed_products.class_id:1"
-    ]
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 9.178
   },
   {
    "classId": "95250034-8f0d-4538-b0a3-440635ac8677",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "PERDAY-ATOMIC-1793006386909",
-   "createdAt": "2026-10-26T09:19:52.433782+00:00",
-   "status": "open",
-   "reservationCount": 0,
-   "reservationIds": [],
-   "reservationProfileKinds": [],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 0,
-    "schedule_memos.class_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/teardown-unresolved/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:16:23Z~2026-10-26T09:19:58Z) 안",
-    "제목의 Date.now() 값(1793006386909)과 생성 시각 차 5.5초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 2/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 2/4 ",
+     "kind": "teardown-unresolved"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 2/4 ",
+     "kind": "mention"
+    }
    ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 0,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 5.524
   },
   {
    "classId": "9994a6dd-1b2c-4456-b329-be398e50b743",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "PERDAY-ATOMIC-1793008370370",
-   "createdAt": "2026-10-26T09:52:56.053626+00:00",
-   "status": "open",
-   "reservationCount": 0,
-   "reservationIds": [],
-   "reservationProfileKinds": [],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 0,
-    "schedule_memos.class_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40300257985(7693998) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/teardown-unresolved/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:49:30Z~2026-10-26T09:53:00Z) 안",
-    "제목의 Date.now() 값(1793008370370)과 생성 시각 차 5.7초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 2/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 2/4 ",
+     "kind": "teardown-unresolved"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 2/4 ",
+     "kind": "mention"
+    }
    ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 0,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 5.683
   },
   {
    "classId": "99dcd917-94f9-4755-a288-c2962d214bc2",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "NEWCLASS-ALL-1793008450246",
-   "createdAt": "2026-10-26T09:54:21.001526+00:00",
-   "status": "open",
-   "reservationCount": 1,
-   "reservationIds": [
-    "ca965307-faa0-4081-bdac-ca9887e86e81"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 3/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 3/4 ",
+     "kind": "teardown-unresolved"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    }
    ],
-   "reservationProfileKinds": [
-    "CI User A"
-   ],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 1,
-    "schedule_memos.class_id": 0,
-    "admin_action_logs.reservation_id": 0,
-    "reservation_goods_usages.reservation_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40300257985(7693998) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/teardown-unresolved/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:53:02Z~2026-10-26T09:59:00Z) 안",
-    "제목의 Date.now() 값(1793008450246)과 생성 시각 차 10.8초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
-   ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 1,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 10.755
   },
   {
    "classId": "a9fd581d-57cb-41da-ae67-41dfc84d32d8",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "PERDAY-ATOMIC-1793006386909",
-   "createdAt": "2026-10-26T09:19:52.433782+00:00",
-   "status": "open",
-   "reservationCount": 0,
-   "reservationIds": [],
-   "reservationProfileKinds": [],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 0,
-    "schedule_memos.class_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:16:23Z~2026-10-26T09:19:58Z) 안",
-    "제목의 Date.now() 값(1793006386909)과 생성 시각 차 5.5초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 2/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 2/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 2/4 ",
+     "kind": "mention"
+    }
    ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 0,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 5.524
   },
   {
    "classId": "adc1c555-1fbf-446a-bc55-080dec9cf732",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "E2E 생애주기 예약 테스트",
-   "createdAt": "2026-10-26T09:25:17.202056+00:00",
-   "status": "open",
-   "reservationCount": 2,
-   "reservationIds": [
-    "8781d425-aa5e-4735-9c15-02b0d8318538",
-    "87d24d5f-38e3-49c3-b380-d244c976e848"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 4/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 4/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 4/4 ",
+     "kind": "mention"
+    }
    ],
-   "reservationProfileKinds": [
-    "탈퇴한 회원"
-   ],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 2,
-    "schedule_memos.class_id": 0,
-    "admin_action_logs.reservation_id": 0,
-    "reservation_goods_usages.reservation_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 4/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:24:19Z~2026-10-26T09:29:40Z) 안",
-    "제목 패턴이 tests/e2e/production-readiness/member-full-lifecycle.spec.ts 의 고정 제목/생성 패턴과 일치"
-   ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 2,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": null
   },
   {
    "classId": "c74dbdc6-dbd4-4a3f-bc39-0e93d4591568",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "NEWCLASS-ALL-1793006451909",
-   "createdAt": "2026-10-26T09:20:58.033425+00:00",
-   "status": "open",
-   "reservationCount": 1,
-   "reservationIds": [
-    "35a6566d-abd7-4507-812e-371cd6ec34ff"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "teardown-unresolved"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 3/4 ",
+     "kind": "mention"
+    }
    ],
-   "reservationProfileKinds": [
-    "CI User A"
-   ],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 1,
-    "schedule_memos.class_id": 0,
-    "admin_action_logs.reservation_id": 0,
-    "reservation_goods_usages.reservation_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/teardown-unresolved/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:19:59Z~2026-10-26T09:24:17Z) 안",
-    "제목의 Date.now() 값(1793006451909)과 생성 시각 차 6.1초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
-   ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 1,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 6.124
   },
   {
    "classId": "cfcb7946-a9d5-405e-a689-14ebdd05de80",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "E2E 취소기한-성공",
-   "createdAt": "2026-10-26T09:27:21.288402+00:00",
-   "status": "open",
-   "reservationCount": 1,
-   "reservationIds": [
-    "df7b44e1-dca4-4d1f-8cc0-8bdb4b535d28"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 4/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 4/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 4/4 ",
+     "kind": "mention"
+    }
    ],
-   "reservationProfileKinds": [
-    "CI User A"
-   ],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 1,
-    "schedule_memos.class_id": 0,
-    "admin_action_logs.reservation_id": 0,
-    "reservation_goods_usages.reservation_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 4/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:24:19Z~2026-10-26T09:29:40Z) 안",
-    "제목 패턴이 tests/e2e/settings/cancel-deadline.spec.ts 의 고정 제목/생성 패턴과 일치"
-   ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 1,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": null
   },
   {
    "classId": "dbad9f95-f19b-4130-8c10-13c68ba38d5c",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "PERDAY-ATOMIC-1793006386909",
-   "createdAt": "2026-10-26T09:19:52.433782+00:00",
-   "status": "open",
-   "reservationCount": 0,
-   "reservationIds": [],
-   "reservationProfileKinds": [],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 0,
-    "schedule_memos.class_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:16:23Z~2026-10-26T09:19:58Z) 안",
-    "제목의 Date.now() 값(1793006386909)과 생성 시각 차 5.5초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 2/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 2/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 2/4 ",
+     "kind": "mention"
+    }
    ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 0,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 5.524
   },
   {
    "classId": "ec9a4dbe-8354-437b-bb71-e3c55c287d70",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "PERDAY-ATOMIC-1793008370370",
-   "createdAt": "2026-10-26T09:52:56.053626+00:00",
-   "status": "open",
-   "reservationCount": 0,
-   "reservationIds": [],
-   "reservationProfileKinds": [],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 0,
-    "schedule_memos.class_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40300257985(7693998) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:49:30Z~2026-10-26T09:53:00Z) 안",
-    "제목의 Date.now() 값(1793008370370)과 생성 시각 차 5.7초 — 같은 spec 프로세스가 입력한 제목",
-    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 2/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 2/4 ",
+     "kind": "mention"
+    },
+    {
+     "run": 40300257985,
+     "sha": "7693998",
+     "job": "E2E 2/4 ",
+     "kind": "mention"
+    }
    ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 0,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 0
+   "titleEpochDeltaSec": 5.683
   },
   {
    "classId": "f8fcf95c-857a-41af-8bed-f4c39d22e8a6",
-   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
-   "title": "P3 출결-대기",
-   "createdAt": "2026-10-26T09:15:11.801687+00:00",
-   "status": "open",
-   "reservationCount": 1,
-   "reservationIds": [
-    "a133e81f-3e6f-412c-8823-66f6028988cf"
+   "ciLogJobWindowHit": true,
+   "ciLogMentions": [
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 1/4 ",
+     "kind": "cleanup-blocked"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 1/4 ",
+     "kind": "teardown-unresolved"
+    },
+    {
+     "run": 40297920813,
+     "sha": "b571b24",
+     "job": "E2E 1/4 ",
+     "kind": "mention"
+    }
    ],
-   "reservationProfileKinds": [
-    "CI User A"
-   ],
-   "referenceCounts": {
-    "admin_action_logs.class_id": 0,
-    "class_trainers.class_id": 0,
-    "class_allowed_products.class_id": 0,
-    "reservations.class_id": 1,
-    "schedule_memos.class_id": 0,
-    "admin_action_logs.reservation_id": 0,
-    "reservation_goods_usages.reservation_id": 0
-   },
-   "referenceQueriesAllOk": true,
-   "ownershipEvidence": [
-    "CI 로그: run 40297920813(b571b24) 의 \"E2E 1/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/teardown-unresolved/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:13:56Z~2026-10-26T09:16:21Z) 안",
-    "제목 패턴이 tests/e2e/admin/attendance.spec.ts 의 고정 제목/생성 패턴과 일치"
-   ],
-   "eligibleForDeletion": true,
-   "expectedDeletion": {
-    "reservations": 1,
-    "class": 1,
-    "cascadeChildren": []
-   },
-   "traceFileHits": 5
+   "titleEpochDeltaSec": null
   }
  ],
+ "informational": {
+  "notificationsReferencingReservations": 18,
+  "note": "알림은 FK 가 없어 삭제하지 않는다(정보용). 예약 재삽입(복원)은 notify_reservation_insert 트리거로 새 알림을 만든다."
+ },
+ "sideEffects": [
+  "예약 DELETE: BEFORE DELETE 트리거 reservation_goods_restore_on_delete — 차감된 대여 사용 기록(reservation_goods_usages.status='deducted')이 있으면 대여 수강권 remaining_count 를 +1 한다. 이 계획의 대여 사용 기록 수: 0",
+  "예약 DELETE 는 pass 수강권 remaining_count 를 돌려주지 않는다(직접 삭제, 환불 아님). 연결 수강권 상태는 linkedMemberships 로 기록·대조한다.",
+  "수업 DELETE: 이 저장소 SQL 에서 classes 에 걸린 트리거를 찾지 못함(공유 DEV 의 pg_trigger 는 PostgREST 로 조회 불가 — 미확인). CASCADE 자식: class_allowed_products, class_trainers, schedule_memos.",
+  "예약 INSERT(복원): AFTER INSERT 트리거 notify_reservation_insert 가 회원·센터 매니저에게 notifications 행을 만든다(웹푸시는 별도 pg_net/Edge Function 경로 가능 — 공유 DEV 에서는 미확인). BEFORE INSERT 트리거 reservations_guard_pg_refund_lock 이 환불 진행 중 수강권이면 삽입을 거부할 수 있다."
+ ],
  "evidenceLimits": [
-  "Playwright trace/report 는 실패한 테스트에만 남는다(retain-on-failure). 통과한 테스트가 만든 수업(20건)의 생성 RPC 응답은 어떤 아티팩트에도 없어 '생성 응답 id' 근거를 제시할 수 없다.",
-  "trace 에 id 가 나오는 3건(650538db, 85800a8a, f8fcf95c)은 '이전 실행 잔여와 충돌해 BLOCKED 된 오류 메시지'로만 나온다(생성 응답 아님).",
-  "이 잔여를 만든 두 CI 실행은 제목/manifest 에 실행 UUID 를 쓰기 전의 코드였고, manifest 는 러너와 함께 사라졌다. 따라서 실행 UUID 근거는 없다. 대신 (a) 같은 job 로그에 id 가 등장, (b) 생성 시각이 그 job 실행 구간 안, (c) 제목의 Date.now() 값(해당되는 경우)과 생성 시각 일치, (d) 예약은 테스트 프로필뿐·감사 로그 참조 0 으로 판단했다 — 이는 '증명'이 아니라 정황 증거이며 사람의 승인이 필요하다."
+  "과거 생성 응답과 실행 식별자(UUID)는 사라졌고 복구할 수 없다(통과한 테스트는 trace 를 남기지 않고, 당시 코드는 제목에 실행 UUID 를 쓰지 않았고, manifest 는 러너와 함께 사라짐). 이 사실을 그대로 인정한다.",
+  "따라서 이 계획은 소유권을 증명하지 않는다. 근거는 같은 CI job 로그에 id 등장 + 생성 시각이 그 job 구간 안 + 제목의 Date.now() 일치 + 예약 프로필이 확인된 테스트 계정/익명화된 throwaway 계정이라는 정황이다.",
+  "삭제는 사람이 이 정황 근거를 보고 '일회성 정리'를 승인한 뒤에만 한다."
  ]
 }
