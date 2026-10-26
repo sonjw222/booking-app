@@ -26,7 +26,7 @@ import fs from "node:fs";
 import type { Page } from "@playwright/test";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { createOwnedClass, createOwnedReservation, cleanupOwnedClass, adoptUiCreatedClasses, fileOwnershipStore, runScopedTitle, type OwnedCtx } from "./ownedClassCleanup";
+import { createOwnedClass, createOwnedReservation, adoptThrowawayAccount, cleanupOwnedClass, adoptUiCreatedClasses, fileOwnershipStore, runScopedTitle, type OwnedCtx } from "./ownedClassCleanup";
 import { getFixtureAdminClient, switchToTestUser, getOrCreateOwnedTestCenter, kstSafeSameDayFutureTime, type TestUser } from "../../integration/setup";
 import { rowToSettings, settingsToRow, DEFAULT_SETTINGS, type CenterSettings } from "../../../lib/settings";
 
@@ -55,7 +55,25 @@ async function testProfileIds(admin: ReturnType<typeof getFixtureAdminClient>): 
 
 export async function getOwnedCtx(): Promise<OwnedCtx> {
   const admin = getFixtureAdminClient();
-  return { admin, store: fileOwnershipStore(OWN_DIR, E2E_RUN_ID), runId: E2E_RUN_ID, testProfileIds: await testProfileIds(admin) };
+  const store = fileOwnershipStore(OWN_DIR, E2E_RUN_ID);
+  const ids = new Set(await testProfileIds(admin));
+  // 이 실행의 스펙이 가입시키고 증명(adoptThrowawayAccountAdmin)한 throwaway 계정의 프로필(탈퇴로 익명화된 것 포함)도 이 실행의 프로필이다.
+  const owned = store.listAccounts().filter((a) => a.runId === E2E_RUN_ID).map((a) => a.accountId);
+  if (owned.length) {
+    const { data, error } = await admin.from("profiles").select("id").in("account_id", owned);
+    if (!error) for (const r of (data ?? []) as { id: string }[]) ids.add(r.id);
+  }
+  return { admin, store, runId: E2E_RUN_ID, testProfileIds: [...ids] };
+}
+
+// UI 가입으로 만들어진 throwaway 계정을 소유로 등록한다. 증명: 스펙이 만든 실행별 이메일 == auth 이메일, 실행별 전화번호 == accounts.phone, 이 실행 시작 이후 생성, 관리자 아님.
+export async function adoptThrowawayAccountAdmin(input: { accountId: string; expectedEmail: string; expectedPhone: string }): Promise<void> {
+  const ctx = await getOwnedCtx();
+  const { data: account, error } = await ctx.admin.from("accounts").select("id, auth_id, phone, created_at, is_manager, is_platform_admin").eq("id", input.accountId).single();
+  if (error || !account) throw new Error(`throwaway 계정 조회 실패(등록하지 않음): ${error?.message ?? "no data"}`);
+  const au = account.auth_id ? await (ctx.admin as unknown as { auth: { admin: { getUserById: (id: string) => Promise<{ data: { user: { email?: string } | null }; error: { message: string } | null }> } } }).auth.admin.getUserById(account.auth_id) : null;
+  if (au?.error) throw new Error(`auth 사용자 조회 실패(등록하지 않음): ${au.error.message}`);
+  adoptThrowawayAccount(ctx, { account, authEmail: au?.data.user?.email, expectedEmail: input.expectedEmail, expectedPhone: input.expectedPhone }, process.env.E2E_RUN_STARTED_AT ?? "");
 }
 
 // 앱 UI(수업 등록 시트)가 호출하는 생성 RPC 의 "성공 응답에 실린 수업 id"만 수집한다(create_class_safe: uuid, create_recurring_classes_safe: uuid[]).

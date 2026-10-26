@@ -36,14 +36,18 @@ export interface OwnershipStore {
   /** 이 실행의 fixture 가 "생성 성공 응답"으로 받은 예약(과거 시각으로 만든 예약도 이 실행 것임을 증명). createOwnedReservation 만 호출한다. */
   registerReservation(entry: OwnedReservationEntry): void;
   getReservation(reservationId: string): OwnedReservationEntry | undefined;
+  /** 이 실행의 스펙이 UI 로 가입시킨 throwaway 계정(증명된 것만). 그 계정의 프로필(탈퇴 후 익명화된 것 포함)의 예약을 이 실행 것으로 인정한다. */
+  registerAccount(entry: OwnedAccountEntry): void;
+  listAccounts(): OwnedAccountEntry[];
 }
+export type OwnedAccountEntry = { accountId: string; authId: string; runId: string; accountCreatedAt: string };
 export type OwnedReservationEntry = { reservationId: string; classId: string; profileId: string; createdAt: string; runId: string };
 
 export function memoryOwnershipStore(): OwnershipStore & { results: CleanupResult[]; entries: Map<string, OwnedClassEntry> } {
   const entries = new Map<string, OwnedClassEntry>();
   const results: CleanupResult[] = [];
-  const resv = new Map<string, OwnedReservationEntry>();
-  return { results, entries, register: (e) => { entries.set(e.classId, e); }, get: (id) => entries.get(id), recordResult: (r) => { results.push(r); }, registerReservation: (e) => { resv.set(e.reservationId, e); }, getReservation: (id) => resv.get(id) };
+  const resv = new Map<string, OwnedReservationEntry>(); const accts: OwnedAccountEntry[] = [];
+  return { results, entries, register: (e) => { entries.set(e.classId, e); }, get: (id) => entries.get(id), recordResult: (r) => { results.push(r); }, registerReservation: (e) => { resv.set(e.reservationId, e); }, getReservation: (id) => resv.get(id), registerAccount: (e) => { accts.push(e); }, listAccounts: () => accts };
 }
 
 /** JSON Lines — 한 줄씩 append 라 워커가 여러 개여도 줄이 섞이지 않는다. */
@@ -51,6 +55,7 @@ export function fileOwnershipStore(dir: string, runId: string): OwnershipStore {
   const manifest = path.join(dir, `owned-classes-${runId}.jsonl`);
   const ledger = path.join(dir, `owned-classes-${runId}.results.jsonl`);
   const resvFile = path.join(dir, `owned-reservations-${runId}.jsonl`);
+  const acctFile = path.join(dir, `owned-accounts-${runId}.jsonl`);
   const read = <T,>(f: string): T[] => (fs.existsSync(f) ? fs.readFileSync(f, "utf-8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as T) : []);
   return {
     register(e) { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(manifest, JSON.stringify(e) + "\n"); },
@@ -58,6 +63,8 @@ export function fileOwnershipStore(dir: string, runId: string): OwnershipStore {
     recordResult(r) { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(ledger, JSON.stringify(r) + "\n"); },
     registerReservation(e) { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(resvFile, JSON.stringify(e) + "\n"); },
     getReservation: (id) => read<OwnedReservationEntry>(resvFile).find((r) => r.reservationId === id),
+    registerAccount(e) { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(acctFile, JSON.stringify(e) + "\n"); },
+    listAccounts: () => read<OwnedAccountEntry>(acctFile),
   };
 }
 export const readManifest = (dir: string, runId: string): OwnedClassEntry[] => {
@@ -139,6 +146,27 @@ export async function createOwnedClass(
 /** raw insert 로 수업을 만든 스펙용 — insert 결과(id, created_at)로 생성 직후 등록한다. */
 export function registerOwnedClass(ctx: OwnedCtx, created: { id: string; created_at: string }, centerId: string, title: string): void {
   ctx.store.register({ classId: created.id, centerId, title, runId: ctx.runId, rowCreatedAt: created.created_at, registeredAt: new Date().toISOString() });
+}
+
+/**
+ * 스펙이 UI 로 가입시킨 throwaway 계정을 이 실행의 소유로 등록한다. 모두 증명돼야 한다:
+ *  1) 스펙이 이 실행에서 만든(실행별 고유) 이메일과 그 계정의 auth 사용자 이메일이 정확히 같다,
+ *  2) 스펙이 가입 화면에 입력한 실행별 고유 전화번호와 accounts.phone 이 같다,
+ *  3) 계정이 이 실행 시작 이후에 만들어졌고, 관리자 계정이 아니다.
+ * authEmail 은 호출자가 admin auth API(getUserById)로 조회해 넘긴다(이 모듈은 auth 를 직접 부르지 않는다).
+ */
+export function adoptThrowawayAccount(
+  ctx: OwnedCtx,
+  input: { account: { id: string; auth_id: string | null; phone: string | null; created_at: string; is_manager?: boolean | null; is_platform_admin?: boolean | null }; authEmail: string | null | undefined; expectedEmail: string; expectedPhone: string },
+  runStartedAt: string
+): void {
+  const { account, authEmail, expectedEmail, expectedPhone } = input; const skew = ctx.skewMs ?? SKEW;
+  if (!account.auth_id) throw new Error("계정에 auth 사용자가 없어 소유를 증명할 수 없음 — 등록하지 않음");
+  if (!authEmail || authEmail.toLowerCase() !== expectedEmail.toLowerCase()) throw new Error("계정의 auth 이메일이 스펙이 만든 이메일과 다름 — 등록하지 않음");
+  if (!expectedPhone || account.phone !== expectedPhone) throw new Error("계정 전화번호가 스펙이 입력한 실행별 값과 다름 — 등록하지 않음");
+  if (!(Date.parse(runStartedAt) > 0) || !(Date.parse(account.created_at) >= Date.parse(runStartedAt) - skew)) throw new Error("계정이 이 실행 시작 이후에 만들어졌음을 증명할 수 없음 — 등록하지 않음");
+  if (account.is_manager || account.is_platform_admin) throw new Error("관리자 권한이 있는 계정은 등록하지 않음");
+  ctx.store.registerAccount({ accountId: account.id, authId: account.auth_id, runId: ctx.runId, accountCreatedAt: account.created_at });
 }
 
 /**

@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { URL_, jwt, sql, ID } from "./support";
 import {
-  createOwnedClass, createOwnedReservation, cleanupOwnedClass, adoptUiCreatedClasses, memoryOwnershipStore, fileOwnershipStore, summarizeLedger, runScopedTitle, planManualCleanup, readManifest, orphanedClassIds,
+  createOwnedClass, createOwnedReservation, cleanupOwnedClass, adoptUiCreatedClasses, adoptThrowawayAccount, memoryOwnershipStore, fileOwnershipStore, summarizeLedger, runScopedTitle, planManualCleanup, readManifest, orphanedClassIds,
   type OwnedCtx, type OwnershipStore,
 } from "../e2e/fixtures/ownedClassCleanup";
 
@@ -29,7 +29,7 @@ function adminWithFaults(faults: Fault[] = []) {
 }
 
 const CENTER = ID.centerPub, OTHER_CENTER = ID.centerPriv;
-const OUR_PROFILE = ID.pA1, OTHER_PROFILE = ID.pB1;
+const OUR_PROFILE = ID.pA1, OTHER_PROFILE = ID.pB1, C1_PROFILE = "c1000000-0000-0000-0000-0000000000c1";
 const future = (h: number) => new Date(Date.now() + h * 3600_000).toISOString();
 const row = (title: string, center = CENTER, h = 30) => ({ center_id: center, title, start_time: future(h), end_time: future(h + 1), capacity: 5 });
 const exists = (id: string) => sql(`select count(*) from classes where id='${id}'`) === "1";
@@ -280,5 +280,32 @@ describe("Q01 UI 가 만든 수업의 소유 등록(adopt) — 실행 UUID 제�
     const t = `${tag()}-${c.runId}`; const [id] = uiRow(t);
     await expect(adoptUiCreatedClasses(c, { createdIds: [id], centerId: CENTER, title: t }, START())).rejects.toThrow(/조회 실패/);
     expect(c.store.get(id)).toBeUndefined();
+  });
+});
+
+describe("Q01 throwaway 계정(UI 가입) 소유 등록 — 스펙이 만든 이메일·실행별 전화번호·생성 시각으로 증명", () => {
+  const START = () => new Date(Date.now() - 60_000).toISOString();
+  const acct = (o: Record<string, unknown> = {}) => ({ id: randomUUID(), auth_id: randomUUID(), phone: "01000001234", created_at: new Date().toISOString(), is_manager: false, is_platform_admin: false, ...o });
+  const base = (a = acct()) => ({ account: a, authEmail: "user+e2elifecycle@example.test", expectedEmail: "User+E2ELifecycle@example.test", expectedPhone: "01000001234" });
+  it("이메일(대소문자 무시)·전화번호가 일치하고 실행 시작 이후 생성된 계정만 등록된다", () => {
+    const c = ctxFor(); adoptThrowawayAccount(c, base(), START()); expect(c.store.listAccounts()).toHaveLength(1);
+  });
+  it("이메일/전화번호 불일치·실행 이전 계정·auth 없음·관리자 계정은 등록 거부", () => {
+    const c = ctxFor();
+    expect(() => adoptThrowawayAccount(c, { ...base(), authEmail: "other@example.test" }, START())).toThrow(/이메일/);
+    expect(() => adoptThrowawayAccount(c, { ...base(), expectedPhone: "01099999999" }, START())).toThrow(/전화번호/);
+    expect(() => adoptThrowawayAccount(c, base(acct({ created_at: "2020-01-01T00:00:00Z" })), START())).toThrow(/시작 이후/);
+    expect(() => adoptThrowawayAccount(c, base(acct({ auth_id: null })), START())).toThrow(/auth/);
+    expect(() => adoptThrowawayAccount(c, base(acct({ is_manager: true })), START())).toThrow(/관리자/);
+    expect(() => adoptThrowawayAccount(c, { ...base(), authEmail: undefined }, START())).toThrow(/이메일/);
+    expect(() => adoptThrowawayAccount(c, base(), "")).toThrow(/시작 이후/);
+    expect(c.store.listAccounts()).toHaveLength(0);
+  });
+  it("등록된 throwaway 계정의 (익명화된) 프로필 예약이 있는 수업은 정리되고, 등록 안 된 계정의 프로필 예약은 여전히 blocked", async () => {
+    // C1 프로필을 throwaway 로 취급(격리 DB 시험): 등록되면 testProfileIds 에 포함돼 정리, 아니면 blocked
+    const c1 = ctxFor({ testProfileIds: [OUR_PROFILE, C1_PROFILE] }); const m1 = await track(c1, tag()); addRes(m1.id, C1_PROFILE);
+    expect((await cleanupOwnedClass(c1, m1.id)).status).toBe("deleted");
+    const c2 = ctxFor({ testProfileIds: [OUR_PROFILE] }); const m2 = await track(c2, tag()); addRes(m2.id, C1_PROFILE);
+    expect((await cleanupOwnedClass(c2, m2.id)).status).toBe("blocked"); expect(resCount(m2.id)).toBe(1);
   });
 });
