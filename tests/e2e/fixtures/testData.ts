@@ -24,23 +24,41 @@
 */
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { createOwnedClass, cleanupOwnedClass, fileOwnershipStore, runScopedTitle, type OwnedCtx } from "./ownedClassCleanup";
 import { getFixtureAdminClient, switchToTestUser, getOrCreateOwnedTestCenter, kstSafeSameDayFutureTime, type TestUser } from "../../integration/setup";
 import { rowToSettings, settingsToRow, DEFAULT_SETTINGS, type CenterSettings } from "../../../lib/settings";
 
 export { switchToTestUser, getOrCreateOwnedTestCenter, kstSafeSameDayFutureTime, type TestUser };
 
-// 같은 제목의 이전 실행 잔여 행(있다면 그 예약까지)을 지운다 — CI가 실행 도중
-// concurrency로 취소되면 afterAll이 못 돌아 이전 실행이 만든 같은 제목의 수업이
-// 그대로 남는데(실제로 재현됨: 회원 화면에서 같은 제목 행이 여러 개 나와 Playwright의
-// strict mode violation로 이어짐), "이 제목은 이 센터에 항상 하나만" 원칙으로 생성 전에
-// 매번 정리해 재실행/재시도에도 정확히 1건만 남긴다.
-export async function deleteExistingClassesByTitle(centerId: string, title: string): Promise<void> {
-  const admin = getFixtureAdminClient();
-  const { data: existing } = await admin.from("classes").select("id").eq("center_id", centerId).eq("title", title);
-  const ids = (existing ?? []).map((r: any) => r.id as string);
-  if (ids.length === 0) return;
-  await admin.from("reservations").delete().in("class_id", ids);
-  await admin.from("classes").delete().in("id", ids);
+// ---------------- 수업 소유권(Q01) ----------------
+// 수업은 반드시 이 실행이 만든 것으로 증명될 때만 지운다(ownedClassCleanup.ts). 제목·센터만으로는 지우지 않는다.
+// 같은 센터·제목의 "증명되지 않은" 기존 행이 있으면 지우지 않고 BLOCKED 로 실패한다. E2E_RUN_SCOPED_TITLES=1 이거나
+// 헬퍼에 scopedTitle: true 를 주면 제목에 실행 식별자가 붙어 충돌 자체가 없다 — 이때 스펙은 반환된 title 을 써야 한다.
+const OWN_DIR = path.resolve(process.cwd(), "playwright/.auth");
+export const E2E_RUN_ID = process.env.E2E_RUN_ID ?? (process.env.E2E_RUN_ID = randomUUID());
+
+function testProfileIds(): string[] {
+  const ids: string[] = [];
+  for (const n of ["manager-a", "user-a", "user-b"] as const) {
+    try { ids.push(loadTestAccountMeta(n).profileId); } catch { /* 해당 계정 meta 없음 — 그 프로필의 예약은 '우리 것'으로 인정하지 않는다(안전 쪽) */ }
+  }
+  return ids;
+}
+
+export function getOwnedCtx(): OwnedCtx {
+  return { admin: getFixtureAdminClient(), store: fileOwnershipStore(OWN_DIR, E2E_RUN_ID), runId: E2E_RUN_ID, testProfileIds: testProfileIds() };
+}
+
+const useScopedTitle = (opt?: boolean) => opt ?? process.env.E2E_RUN_SCOPED_TITLES === "1";
+
+// raw insert 가 필요한 스펙(class_format 등 추가 컬럼)용 — 생성+소유 등록을 한 번에.
+export async function createOwnedClassAdmin(
+  row: Record<string, unknown> & { center_id: string; title: string },
+  opts?: { scopedTitle?: boolean }
+): Promise<{ id: string; startTime: string; title: string }> {
+  const title = useScopedTitle(opts?.scopedTitle) ? runScopedTitle(row.title, E2E_RUN_ID) : row.title;
+  return createOwnedClass(getOwnedCtx(), { ...row, title });
 }
 
 // ---------------- managerA/userA accountId/profileId 저장·조회 ----------------
@@ -69,51 +87,28 @@ export function loadTestAccountMeta(name: "manager-a" | "user-a" | "user-b"): Te
 // 컬럼). 취소 마감 검증은 운영설정(groupCancelDaysBefore/Time)으로 해야 한다.
 export async function createFutureTestClassAdmin(
   centerId: string,
-  opts: { title: string; hoursFromNow: number; bookingDeadlineMin?: number | null; capacity?: number }
-): Promise<{ id: string; startTime: string }> {
-  const admin = getFixtureAdminClient();
-  await deleteExistingClassesByTitle(centerId, opts.title);
+  opts: { title: string; hoursFromNow: number; bookingDeadlineMin?: number | null; capacity?: number; scopedTitle?: boolean }
+): Promise<{ id: string; startTime: string; title: string }> {
   const start = new Date(Date.now() + opts.hoursFromNow * 3600 * 1000);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
-  const { data, error } = await admin
-    .from("classes")
-    .insert({
-      center_id: centerId,
-      title: opts.title,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      capacity: opts.capacity ?? 8,
-      booking_deadline_min: opts.bookingDeadlineMin ?? null,
-    })
-    .select("id, start_time")
-    .single();
-  if (error || !data) throw new Error(`E2E 테스트 수업 생성 실패: ${error?.message ?? "no data"}`);
-  return { id: data.id, startTime: data.start_time };
+  return createOwnedClassAdmin(
+    { center_id: centerId, title: opts.title, start_time: start.toISOString(), end_time: end.toISOString(), capacity: opts.capacity ?? 8, booking_deadline_min: opts.bookingDeadlineMin ?? null },
+    { scopedTitle: opts.scopedTitle }
+  );
 }
 
 // 당일예약 시나리오 전용 — KST 자정 경계를 안전하게 피한다(kstSafeSameDayFutureTime 재사용).
 export async function createKstSameDayFutureClassAdmin(
   centerId: string,
-  opts?: { capacity?: number; title?: string; preferredMinutesFromNow?: number }
-): Promise<{ id: string; startTime: string }> {
-  const admin = getFixtureAdminClient();
+  opts?: { capacity?: number; title?: string; preferredMinutesFromNow?: number; scopedTitle?: boolean }
+): Promise<{ id: string; startTime: string; title: string }> {
   const title = opts?.title ?? "E2E 당일 테스트 수업";
-  await deleteExistingClassesByTitle(centerId, title);
   const start = kstSafeSameDayFutureTime(opts?.preferredMinutesFromNow ?? 180);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
-  const { data, error } = await admin
-    .from("classes")
-    .insert({
-      center_id: centerId,
-      title,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      capacity: opts?.capacity ?? 8,
-    })
-    .select("id, start_time")
-    .single();
-  if (error || !data) throw new Error(`E2E 테스트 수업 생성 실패: ${error?.message ?? "no data"}`);
-  return { id: data.id, startTime: data.start_time };
+  return createOwnedClassAdmin(
+    { center_id: centerId, title, start_time: start.toISOString(), end_time: end.toISOString(), capacity: opts?.capacity ?? 8 },
+    { scopedTitle: opts?.scopedTitle }
+  );
 }
 
 // 이미 계산해 둔 KST 날짜(예: 다른 수업에서 파생된 날짜)에 정확히 맞춰 수업을 만든다 —
@@ -124,31 +119,21 @@ export async function createKstSameDayFutureClassAdmin(
 // 날짜에 생기는 문제가 있었다). 절대 날짜를 명시하면 이 문제 자체가 사라진다.
 export async function createClassOnKstDateAdmin(
   centerId: string,
-  opts: { title: string; kstDate: string; kstTime?: string; capacity?: number }
-): Promise<{ id: string; startTime: string }> {
-  const admin = getFixtureAdminClient();
-  await deleteExistingClassesByTitle(centerId, opts.title);
+  opts: { title: string; kstDate: string; kstTime?: string; capacity?: number; scopedTitle?: boolean }
+): Promise<{ id: string; startTime: string; title: string }> {
   const start = new Date(`${opts.kstDate}T${opts.kstTime ?? "10:00"}:00+09:00`);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
-  const { data, error } = await admin
-    .from("classes")
-    .insert({
-      center_id: centerId,
-      title: opts.title,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      capacity: opts.capacity ?? 8,
-    })
-    .select("id, start_time")
-    .single();
-  if (error || !data) throw new Error(`E2E 테스트 수업 생성 실패: ${error?.message ?? "no data"}`);
-  return { id: data.id, startTime: data.start_time };
+  return createOwnedClassAdmin(
+    { center_id: centerId, title: opts.title, start_time: start.toISOString(), end_time: end.toISOString(), capacity: opts.capacity ?? 8 },
+    { scopedTitle: opts.scopedTitle }
+  );
 }
 
+// 이 실행이 만든 것으로 증명된 수업만 지운다. 절대 throw 하지 않는다(원래 테스트 실패가 정리 오류에 가려지지 않도록) —
+// blocked/failed 는 원장에 남고 전역 teardown(ownedClassTeardown.ts)이 실행을 실패시킨다.
 export async function cleanupTestClassAdmin(classId: string): Promise<void> {
-  const admin = getFixtureAdminClient();
-  await admin.from("reservations").delete().eq("class_id", classId);
-  await admin.from("classes").delete().eq("id", classId);
+  const r = await cleanupOwnedClass(getOwnedCtx(), classId);
+  if (r.status === "blocked" || r.status === "failed") console.error(`[E2E cleanup] 수업 ${classId} ${r.status}: ${r.reason}`);
 }
 
 // 일일 예약 횟수 제한처럼 "오늘(KST) 확정+대기 예약 수"를 직접 세는 검증은, 이 센터를

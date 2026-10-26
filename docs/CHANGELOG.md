@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-10-26 — Q01: E2E 수업 정리를 "소유 증명" 기반으로(테스트 코드만, 앱·SQL 변경 없음)
+- **문제**: `deleteExistingClassesByTitle` 이 "같은 센터+같은 제목"이면 누구 것이든 수업과 예약을 지웠고(소유 확인·오류 확인 없음), 생성 헬퍼 3종과 2개 스펙이 호출했다. 제목·센터·시간대는 소유 증거가 아니다.
+- **수정**: `tests/e2e/fixtures/ownedClassCleanup.ts` — 실행별 manifest(`playwright/.auth/owned-classes-<RUN_ID>.jsonl`)는 삭제 *후보 목록*일 뿐이고, 삭제 직전에 생성 기록(runId·센터·제목·DB `created_at`)을 실제 행과 대조하며, 예약(테스트 계정 프로필·수업 생성 이후)과 `admin_action_logs` 참조(FK NO ACTION, 감사 기록)를 조회해 증명될 때만 지운다. 조회 실패·소유 불명·다른 프로필/다른 실행 예약·감사 로그 참조는 삭제하지 않고 blocked/failed 로 원장에 남긴다. cleanup 은 throw 하지 않아 원래 테스트 실패를 가리지 않고, 전역 teardown(`ownedClassTeardown.ts`)이 미해결 blocked/failed 를 실행 실패로 만든다.
+- **생성**: 같은 센터·제목에 증명 안 된 기존 행이 있으면 지우지 않고 BLOCKED. 생성 직후 manifest 등록, 등록 실패 시 방금 만든 행만 조건부로 되돌리고 그것도 실패하면 orphan id 를 에러에 싣는다. 헬퍼가 `title`(실제 저장 제목)을 반환하고 `scopedTitle`/`E2E_RUN_SCOPED_TITLES=1` 이면 제목에 실행 식별자가 붙는다. 이번에는 `attendance`·`class-allowed-products` 의 raw insert 2곳만 실행별 제목으로 전환(나머지 스펙 단계적 전환은 TODO).
+- **수동 정리**: `node scripts/e2e/cleanupOwnedClasses.ts <manifest> [--execute]` — 기본 dry-run, 대상은 환경변수로 명시, 증명 안 되면 삭제 안 함.
+- **통합 테스트 헬퍼**: `tests/integration/setup.ts` 의 `cleanupTestClassAdmin` 이 오류를 확인한다(예약 삭제 실패 시 수업 유지, 실패는 console.error + false 반환 — afterEach 의 후속 정리를 막지 않으려 throw 하지 않음).
+- **검증**: 격리 PostgreSQL+PostgREST 에서 `tests/rls-real/ownedClassCleanup.rls.test.ts` 23건(소유권·다른 센터/실행 보존·다른 프로필 예약·감사 로그·조회/삭제 실패 주입·멱등 재시도·병렬 6실행·등록 실패·수동 정리 계획). 가드 제거(변이) 시 3건이 실제로 실패함을 확인. 운영·공유 DEV 에서 삭제 시험 없음.
+
 ## 2026-10-25 — 브라우저 QA 워커 문서 현행화(문서만)
 - `docs/BROWSER_QA_WORKER.md`: PR #222 의 설계 문서가 "구현 없음"을 전제하던 것을 로컬 `agent/qa_agent`·`notify/qa_monitor.py` 실제 코드·56개 단위 테스트(2026-10-25 실행, 56 passed)·설정 상태(enabled=false, publish_enabled=false)로 현행화하고 #221 완료 조건 대조표를 추가. 설치·실행·ntfy 수신은 검증하지 않았고 #221 은 완료가 아님.
 

@@ -4,7 +4,7 @@ import {
   getOrCreateOwnedTestCenter,
   createFutureTestClassAdmin,
   cleanupTestClassAdmin,
-  deleteExistingClassesByTitle,
+  createOwnedClassAdmin,
   kstDateStr,
   getOrCreateTestPassProduct,
   createTestMembershipAdmin,
@@ -197,31 +197,25 @@ test("관리자: 대기(waitlisted) 예약은 출석/결석 버튼이 보이지 
 
 test("관리자: 프라이빗 수업에서도 출석/결석 처리가 동일하게 동작한다 (실브라우저)", async ({ page, browser }) => {
   const admin = getFixtureAdminClient();
-  // CI가 실행 도중 concurrency로 취소되면(다음 push가 cancel-in-progress로 이전 실행을
-  // 죽임) afterAll이 못 돌아 이 제목의 수업(+ 걸려 있던 예약)이 그대로 남는다(실제로
-  // 재현됨: 회원 화면에 같은 제목 행이 2개가 돼 .class-row-roster-btn이 Playwright strict mode
-  // violation로 실패). createFutureTestClassAdmin과 동일한 관례로 생성 전 정리한다.
-  await deleteExistingClassesByTitle(centerAId, "P3 출결-프라이빗");
+  // 같은 센터·제목의 다른 실행/사람이 만든 행은 건드리지 않는다 — 실행별 제목으로 만들고(충돌 없음) 이 실행이 만든 id 만 정리한다(Q01).
   const start = new Date(Date.now() + 42 * 3600 * 1000);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
-  const { data: privateCls, error } = await admin
-    .from("classes")
-    .insert({ center_id: centerAId, title: "P3 출결-프라이빗", start_time: start.toISOString(), end_time: end.toISOString(), capacity: 1, class_format: "private" })
-    .select("id, start_time")
-    .single();
-  if (error || !privateCls) throw new Error(`프라이빗 테스트 수업 생성 실패: ${error?.message ?? "no data"}`);
+  const privateCls = await createOwnedClassAdmin(
+    { center_id: centerAId, title: "P3 출결-프라이빗", start_time: start.toISOString(), end_time: end.toISOString(), capacity: 1, class_format: "private" },
+    { scopedTitle: true }
+  );
   createdClassIds.push(privateCls.id);
-  const kstDate = kstDateStr(privateCls.start_time);
+  const kstDate = kstDateStr(privateCls.startTime);
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
   const memberPage = await memberContext.newPage();
-  await memberPage.goto(reservationDeepLink(privateCls.id, privateCls.start_time));
+  await memberPage.goto(reservationDeepLink(privateCls.id, privateCls.startTime));
   await memberPage.getByRole("button", { name: "예약하기" }).click();
   await expect(memberPage.locator(".sheet-overlay")).toHaveCount(0);
   await memberContext.close();
 
   await gotoManagerClassesDay(page, kstDate);
-  await page.locator(".class-row", { hasText: "P3 출결-프라이빗" }).locator(".class-row-roster-btn").click();
+  await page.locator(".class-row", { hasText: privateCls.title }).locator(".class-row-roster-btn").click();
   await expect(page.locator(".sheet-title", { hasText: "예약자" })).toBeVisible();
 
   const rosterItem = page.locator(".roster-item").first();
