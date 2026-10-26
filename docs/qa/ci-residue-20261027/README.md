@@ -1,6 +1,6 @@
 # 공유 DEV CI 잔여 수업 23건 — 정리 검토 자료 v2
 
-**상태: 공유 DEV 에서 아무것도 삭제하지 않았고, 삭제·복원 스크립트도 공유 DEV 에 대해 한 번도 실행하지 않았다.**
+**상태(2026-10-27 갱신): 사람이 계획 해시 `0bbd2f61…`의 일회성 정리를 승인했고, 그 범위(수업 23·예약 12·상품 연결 2)만 `purge.mjs --execute` 로 삭제 완료.** 이 승인은 다른 데이터·다른 계획으로 확대되지 않는다(해시 고정).
 스크립트의 동작은 격리 PostgreSQL+PostgREST 에서만 검증했다(`tests/rls-real/ciResidueCleanup.rls.test.ts`, 오프라인 CLI 안전장치는 `tests/unit/ciResidueCli.test.ts`).
 
 | 파일 | 내용 |
@@ -45,3 +45,8 @@
 2. 실행: `PURGE_ACK=0bbd2f613ddd PURGE_ENV_FILE=… node scripts/ci-residue/purge.mjs --execute --backup-dir <저장소 밖>`
 3. 중간 실패: `… purge.mjs --resume --backup-dir <같은 디렉터리>` (journal·백업 대조 통과 시에만). 복원: `… restore.mjs <backup.json> [--execute --accept-notification-side-effects]`
 - 계획 해시(고정): `0bbd2f613ddd22b2aae3c97937996b009d672bfcf06360d475d3d01dfa84cc85`. 계획을 다시 생성하면 해시가 바뀌므로 `scripts/ci-residue/pinned.mjs` 갱신과 재검토가 필요하다.
+
+## 실행 기록(2026-10-27)
+- 실행 전: 계획 해시 == 고정값, CI 진행/대기 0건, dry-run 대조 불일치 0건. 백업·journal 은 저장소 밖(권한 700)에 보관했고 저장소에 포함하지 않는다.
+- journal 단계: backup:done → reservations:started → reservations:done → classes:started → classes:done. 오류·중단·권한 거절 없음, 자동 복원 없음.
+- 사후 별도 조회: 수업 0/23, 예약 0/12, 상품 연결 0/2 남음. 연결 수강권 6개의 상태·잔여 횟수·프로필 모두 계획과 동일. 예약을 가리키는 기존 알림 18건 유지, 감사 참조 0.
