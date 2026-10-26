@@ -7,6 +7,12 @@
 - **수동 정리**: `node scripts/e2e/cleanupOwnedClasses.ts <manifest> [--execute]` — 기본 dry-run, 대상은 환경변수로 명시, 증명 안 되면 삭제 안 함.
 - **통합 테스트 헬퍼**: `tests/integration/setup.ts` 의 `cleanupTestClassAdmin` 이 오류를 확인한다(예약 삭제 실패 시 수업 유지, 실패는 console.error + false 반환 — afterEach 의 후속 정리를 막지 않으려 throw 하지 않음).
 - **검증**: 격리 PostgreSQL+PostgREST 에서 `tests/rls-real/ownedClassCleanup.rls.test.ts` 23건(소유권·다른 센터/실행 보존·다른 프로필 예약·감사 로그·조회/삭제 실패 주입·멱등 재시도·병렬 6실행·등록 실패·수동 정리 계획). 가드 제거(변이) 시 3건이 실제로 실패함을 확인. 운영·공유 DEV 에서 삭제 시험 없음.
+## 2026-10-26 — Q02: 시각 스윕 오류 집계 정정(테스트 코드·문서만, 앱 변경 없음)
+- **정정**: 2026-10-25 보고의 "격리 스윕 콘솔 error 0" 은 raw 0 이 아니라 **필터된 값**이었다(`ENV_NOISE` 가 `Failed to load resource` 전체·경로에 `/rest/v1/`·`/rpc/` 가 든 모든 것·모든 WebSocket 메시지를 제외). 당시 raw 로그는 보관하지 않아 그때의 raw 값은 **알 수 없다**(추정하지 않음). 운영 브라우저 확인(`check.mjs`)의 콘솔 error 0 은 필터 없는 raw 콘솔 error 수였으나 HTTP 오류·requestfailed 는 별도로 세지 않았다.
+- **현재 측정(2026-10-26, 같은 코드, 격리 DB, 데스크톱 Chromium, 테마당)**: 회원 스윕 raw 50(console 35·requestfailed 15) = 전부 알려진 격리환경(Realtime WebSocket 404 ×35, 화면 전환 중 HEAD 취소 ×15), 예상 밖 0. 관리자 스윕 raw 475(console 180·http 70·requestfailed 225) = 전부 알려진 격리환경(격리 DB 에 없는 테이블·컬럼·RPC 의 400/404 ×70(+콘솔 쌍 ×70), WebSocket ×110, 화면 전환 HEAD 취소 ×225), 예상 밖 0.
+- **변경**: `tests/rls-real/errorCollector.ts` — console error·pageerror·HTTP ≥400(PostgREST 오류 코드 포함)·requestfailed 를 가리지 않고 raw 로 기록(JWT·Bearer·이메일·토큰/필터 쿼리 마스킹)하고 `knownEnvErrors.ts` 의 규칙(종류·상태·PostgREST 코드·경로·원인을 모두 고정)에 맞는 것만 "알려진 격리환경"으로 따로 센다. 나머지는 예상 밖으로 실패. 일반 문자열/RPC 라는 이유만으로는 무시하지 않으며, 대상이 바뀌면(상태·코드·경로) 자동으로 예상 밖이 된다.
+- **정상 vs 오류 화면 분리**: 정상 시나리오는 고정 600ms 대신 로딩 표시가 사라지고 네트워크가 잠잠해질 때까지 기다리며(끝나지 않으면 실패), 오류 문구("불러오지 못했")가 보이면 실패한다. 단 격리 DB 한계로 오류 화면이 나오는 관리자 6개 경로(`/manager`, announcements, rooms, inquiries, subscription, settlement)는 **레이아웃만 검증되고 정상 데이터 흐름은 미검증**으로 보고에 따로 표시한다. 의도한 오류 화면(공개 상품 RPC 500 주입, 2테마×4폭)은 주입한 오류와 그 결과 앱 로그만 허용하고 다른 오류가 하나라도 더 나면 실패한다.
+- **검증**: 단위 6건(`tests/unit/visualSweepErrors.test.ts`) + 브라우저 3건(`errorCollector.ui.spec.ts`: API 500·403·스크립트/이미지 로드 실패·pageerror 가 규칙 없이 전부 잡힘, 비슷한 경로/상태는 통과 못 함, 끝나지 않는 로딩·오류 문구 검출, 정상 빈 상태 통과) + 스윕 8건 통과.
 
 ## 2026-10-25 — 브라우저 QA 워커 문서 현행화(문서만)
 - `docs/BROWSER_QA_WORKER.md`: PR #222 의 설계 문서가 "구현 없음"을 전제하던 것을 로컬 `agent/qa_agent`·`notify/qa_monitor.py` 실제 코드·56개 단위 테스트(2026-10-25 실행, 56 passed)·설정 상태(enabled=false, publish_enabled=false)로 현행화하고 #221 완료 조건 대조표를 추가. 설치·실행·ntfy 수신은 검증하지 않았고 #221 은 완료가 아님.

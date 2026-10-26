@@ -4,6 +4,10 @@
 - **P2** 나머지 17개 E2E 스펙의 고정 제목을 실행별 제목으로 단계 전환: 생성 헬퍼가 이미 `title` 을 반환하므로 스펙의 `hasText: "리터럴"` 을 반환된 `cls.title` 로 바꾼 뒤 CI 에 `E2E_RUN_SCOPED_TITLES=1` 을 켠다(현재는 고정 제목 + 충돌 시 BLOCKED). 공유 DEV 에서 CI 취소로 남은 고정 제목 행은 자동 삭제되지 않으므로 다음 실행이 BLOCKED 될 수 있다 — 소유 증명 가능한 manifest 가 러너에 남지 않는 CI 에서는 #240 격리 DB 이전이 근본 해결이다.
 - **P3** `cleanupTodaysReservationsForProfile` 은 전용 테스트 프로필의 오늘 예약만 지운다(범위 문서화만, 변경 없음).
 - **P3** 통합 테스트(`tests/integration`)의 수업 정리는 호출 테스트가 만든 id 기반이다 — manifest/소유 대조는 적용하지 않음(공유 DEV 라이브 검증 없이 바꾸지 않음).
+## 2026-10-26 Q02 후속(시각 스윕 오류 집계)
+- **P2** 격리 DB(`tests/rls-real/run.sh up`)가 운영 스키마 일부만 적용해 관리자 6개 경로가 오류 화면으로만 검증된다(`knownEnvErrors.ts` 의 `LAYOUT_ONLY_PATHS`). 누락 객체(center_announcements·subscription_plans·center_settlement_accounts·center_payout_accounts·center_subscriptions·inquiry_threads 계열·manager_dashboard_summary RPC, rooms.memo·progress_categories.node_type 컬럼)를 격리 DB 에 적용하면 정상 데이터 흐름까지 검증할 수 있고 해당 규칙을 지울 수 있다(#240 격리 Supabase 환경 준비와 함께).
+- **P2** 앱: `lib/orders.ts` `fetchMyPurchases` 가 memberships/orders 조회 오류(42703 외)를 무시해 API 500 에도 "구매 내역이 없어요" 빈 상태가 보인다(오류 화면 `구매 내역을 불러오지 못했어요` 에 도달 불가). 이번 범위(테스트 오류 집계)에서는 고치지 않음.
+- **P3** 스윕은 데스크톱 Chromium 만 확인했다(모바일 프로젝트 `mobile-chromium` 미실행).
 
 ## 2026-10-25 관리자 페이지네이션/CI 후속
 - **P1(승인 필요)**: `NEXT_PUBLIC_ADMIN_CENTER_PAGINATION=true` 운영 활성화는 별도 승인. 이슈 #221 기록(2026-10-13)에 따르면 운영 Supabase 에는 `admin_list_centers_page` RPC 가 이미 존재하고 플래그는 OFF — 이 작업에서 운영 DB 를 다시 조회하지 않았으므로 현재 적용 상태는 재확인 필요(SQL: `supabase/migrations/20261011113106_admin_center_page_draft.sql`).
