@@ -1,0 +1,798 @@
+{
+ "generatedAt": "2026-10-26T15:21:43.806Z",
+ "target": "shared DEV (mwhabit-ci-dev)",
+ "referencingColumns": {
+  "classes": [
+   [
+    "admin_action_logs",
+    "class_id"
+   ],
+   [
+    "class_trainers",
+    "class_id"
+   ],
+   [
+    "class_allowed_products",
+    "class_id"
+   ],
+   [
+    "reservations",
+    "class_id"
+   ],
+   [
+    "schedule_memos",
+    "class_id"
+   ]
+  ],
+  "reservations": [
+   [
+    "admin_action_logs",
+    "reservation_id"
+   ],
+   [
+    "reservation_goods_usages",
+    "reservation_id"
+   ]
+  ]
+ },
+ "allQueriesOk": true,
+ "allEligible": true,
+ "plan": [
+  {
+   "classId": "09089778-0438-4c9c-af6f-576e81d6c43e",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "E2E 취소기한-실패",
+   "createdAt": "2026-10-26T09:27:29.885384+00:00",
+   "status": "open",
+   "reservationCount": 0,
+   "reservationIds": [],
+   "reservationProfileKinds": [],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 0,
+    "schedule_memos.class_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 4/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:24:19Z~2026-10-26T09:29:40Z) 안",
+    "제목 패턴이 tests/e2e/settings/cancel-deadline.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 0,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "156ca29c-bfaf-46a5-94a1-039bf2a685f6",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-SPECIFIC-1793006468708",
+   "createdAt": "2026-10-26T09:21:14.361231+00:00",
+   "status": "open",
+   "reservationCount": 1,
+   "reservationIds": [
+    "026b06ab-f015-4506-9c8c-311beaa79d90"
+   ],
+   "reservationProfileKinds": [
+    "CI User A"
+   ],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 1,
+    "reservations.class_id": 1,
+    "schedule_memos.class_id": 0,
+    "admin_action_logs.reservation_id": 0,
+    "reservation_goods_usages.reservation_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:19:59Z~2026-10-26T09:24:17Z) 안",
+    "제목의 Date.now() 값(1793006468708)과 생성 시각 차 5.7초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 1,
+    "class": 1,
+    "cascadeChildren": [
+     "class_allowed_products.class_id:1"
+    ]
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "34a5d298-27e5-4ba9-9dcd-68e4c8bd0baa",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "E2E 대기인원표시 1793006627598",
+   "createdAt": "2026-10-26T09:23:47.895161+00:00",
+   "status": "open",
+   "reservationCount": 1,
+   "reservationIds": [
+    "ac54fe37-b487-4978-b2d0-003358a7c10e"
+   ],
+   "reservationProfileKinds": [
+    "E2E 대기인원 임시"
+   ],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 1,
+    "schedule_memos.class_id": 0,
+    "admin_action_logs.reservation_id": 0,
+    "reservation_goods_usages.reservation_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:19:59Z~2026-10-26T09:24:17Z) 안",
+    "제목의 Date.now() 값(1793006627598)과 생성 시각 차 0.3초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/reservation/group-waitlist-count-display.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 1,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "44920648-1629-4787-898e-fd9e34197653",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793006386909",
+   "createdAt": "2026-10-26T09:19:52.433782+00:00",
+   "status": "open",
+   "reservationCount": 0,
+   "reservationIds": [],
+   "reservationProfileKinds": [],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 0,
+    "schedule_memos.class_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:16:23Z~2026-10-26T09:19:58Z) 안",
+    "제목의 Date.now() 값(1793006386909)과 생성 시각 차 5.5초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 0,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "547526ae-c808-42ee-9c62-43b4fd1ea20e",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-BUY-1793006483165",
+   "createdAt": "2026-10-26T09:21:28.081812+00:00",
+   "status": "open",
+   "reservationCount": 0,
+   "reservationIds": [],
+   "reservationProfileKinds": [],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 0,
+    "schedule_memos.class_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:19:59Z~2026-10-26T09:24:17Z) 안",
+    "제목의 Date.now() 값(1793006483165)과 생성 시각 차 4.9초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 0,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "650538db-f67d-4348-a3b3-a55520b9f7ab",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "E2E-210 요가 클래스",
+   "createdAt": "2026-10-26T09:24:03.696656+00:00",
+   "status": "open",
+   "reservationCount": 1,
+   "reservationIds": [
+    "1fdfe3e9-eff1-4ad2-a45e-a95a85dbf5f8"
+   ],
+   "reservationProfileKinds": [
+    "CI User A"
+   ],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 1,
+    "schedule_memos.class_id": 0,
+    "admin_action_logs.reservation_id": 0,
+    "reservation_goods_usages.reservation_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 3/4 \" job 로그에 이 id 가 16회 등장(cleanup-blocked/create-blocked-by-residue/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:19:59Z~2026-10-26T09:24:17Z) 안",
+    "제목 패턴이 tests/e2e/reservation/member-cancel/my-reservations-cancel-a11y.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 1,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 10
+  },
+  {
+   "classId": "65baba3c-075f-4771-b41e-d07736f5a3fb",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-GOODSCHK-1793008541828",
+   "createdAt": "2026-10-26T09:55:50.6545+00:00",
+   "status": "open",
+   "reservationCount": 0,
+   "reservationIds": [],
+   "reservationProfileKinds": [],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 0,
+    "schedule_memos.class_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40300257985(7693998) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:53:02Z~2026-10-26T09:59:00Z) 안",
+    "제목의 Date.now() 값(1793008541828)과 생성 시각 차 8.8초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 0,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "66b75631-17a5-4af2-857f-98cca0e661e3",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793008370370",
+   "createdAt": "2026-10-26T09:52:56.053626+00:00",
+   "status": "open",
+   "reservationCount": 0,
+   "reservationIds": [],
+   "reservationProfileKinds": [],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 0,
+    "schedule_memos.class_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40300257985(7693998) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:49:30Z~2026-10-26T09:53:00Z) 안",
+    "제목의 Date.now() 값(1793008370370)과 생성 시각 차 5.7초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 0,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "7c63e12b-d77c-4f7b-85de-8286d8b9dae5",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793008370370",
+   "createdAt": "2026-10-26T09:52:56.053626+00:00",
+   "status": "open",
+   "reservationCount": 0,
+   "reservationIds": [],
+   "reservationProfileKinds": [],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 0,
+    "schedule_memos.class_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40300257985(7693998) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:49:30Z~2026-10-26T09:53:00Z) 안",
+    "제목의 Date.now() 값(1793008370370)과 생성 시각 차 5.7초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 0,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "7ca951ef-bd8f-49f2-85d4-bcb35b447561",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-BUY-1793008506281",
+   "createdAt": "2026-10-26T09:55:13.278695+00:00",
+   "status": "open",
+   "reservationCount": 0,
+   "reservationIds": [],
+   "reservationProfileKinds": [],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 0,
+    "schedule_memos.class_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40300257985(7693998) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:53:02Z~2026-10-26T09:59:00Z) 안",
+    "제목의 Date.now() 값(1793008506281)과 생성 시각 차 7.0초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 0,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "800205db-d28d-4737-9eed-edab6a407fdd",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-GOODSCHK-1793006507779",
+   "createdAt": "2026-10-26T09:21:53.029457+00:00",
+   "status": "open",
+   "reservationCount": 0,
+   "reservationIds": [],
+   "reservationProfileKinds": [],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 0,
+    "schedule_memos.class_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:19:59Z~2026-10-26T09:24:17Z) 안",
+    "제목의 Date.now() 값(1793006507779)과 생성 시각 차 5.3초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 0,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "85800a8a-6b99-4670-bb25-bba645464100",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "E2E 생애주기 대기승격 테스트",
+   "createdAt": "2026-10-26T09:25:16.881769+00:00",
+   "status": "open",
+   "reservationCount": 2,
+   "reservationIds": [
+    "489467a8-7b43-49de-a973-420fb4bc13ac",
+    "58319282-c1a5-479b-b235-f955b095d7e1"
+   ],
+   "reservationProfileKinds": [
+    "탈퇴한 회원",
+    "CI User B"
+   ],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 2,
+    "schedule_memos.class_id": 0,
+    "admin_action_logs.reservation_id": 0,
+    "reservation_goods_usages.reservation_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 4/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/teardown-unresolved/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:24:19Z~2026-10-26T09:29:40Z) 안",
+    "제목 패턴이 tests/e2e/production-readiness/member-full-lifecycle.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 2,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 5
+  },
+  {
+   "classId": "94a54728-8db7-4e74-9901-54ba4a3fccff",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-SPECIFIC-1793008477860",
+   "createdAt": "2026-10-26T09:54:47.03877+00:00",
+   "status": "open",
+   "reservationCount": 1,
+   "reservationIds": [
+    "bcb2c937-434f-487f-a252-a7734ea97c7d"
+   ],
+   "reservationProfileKinds": [
+    "CI User A"
+   ],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 1,
+    "reservations.class_id": 1,
+    "schedule_memos.class_id": 0,
+    "admin_action_logs.reservation_id": 0,
+    "reservation_goods_usages.reservation_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40300257985(7693998) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:53:02Z~2026-10-26T09:59:00Z) 안",
+    "제목의 Date.now() 값(1793008477860)과 생성 시각 차 9.2초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 1,
+    "class": 1,
+    "cascadeChildren": [
+     "class_allowed_products.class_id:1"
+    ]
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "95250034-8f0d-4538-b0a3-440635ac8677",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793006386909",
+   "createdAt": "2026-10-26T09:19:52.433782+00:00",
+   "status": "open",
+   "reservationCount": 0,
+   "reservationIds": [],
+   "reservationProfileKinds": [],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 0,
+    "schedule_memos.class_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/teardown-unresolved/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:16:23Z~2026-10-26T09:19:58Z) 안",
+    "제목의 Date.now() 값(1793006386909)과 생성 시각 차 5.5초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 0,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "9994a6dd-1b2c-4456-b329-be398e50b743",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793008370370",
+   "createdAt": "2026-10-26T09:52:56.053626+00:00",
+   "status": "open",
+   "reservationCount": 0,
+   "reservationIds": [],
+   "reservationProfileKinds": [],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 0,
+    "schedule_memos.class_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40300257985(7693998) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/teardown-unresolved/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:49:30Z~2026-10-26T09:53:00Z) 안",
+    "제목의 Date.now() 값(1793008370370)과 생성 시각 차 5.7초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 0,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "99dcd917-94f9-4755-a288-c2962d214bc2",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-ALL-1793008450246",
+   "createdAt": "2026-10-26T09:54:21.001526+00:00",
+   "status": "open",
+   "reservationCount": 1,
+   "reservationIds": [
+    "ca965307-faa0-4081-bdac-ca9887e86e81"
+   ],
+   "reservationProfileKinds": [
+    "CI User A"
+   ],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 1,
+    "schedule_memos.class_id": 0,
+    "admin_action_logs.reservation_id": 0,
+    "reservation_goods_usages.reservation_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40300257985(7693998) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/teardown-unresolved/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:53:02Z~2026-10-26T09:59:00Z) 안",
+    "제목의 Date.now() 값(1793008450246)과 생성 시각 차 10.8초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 1,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "a9fd581d-57cb-41da-ae67-41dfc84d32d8",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793006386909",
+   "createdAt": "2026-10-26T09:19:52.433782+00:00",
+   "status": "open",
+   "reservationCount": 0,
+   "reservationIds": [],
+   "reservationProfileKinds": [],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 0,
+    "schedule_memos.class_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:16:23Z~2026-10-26T09:19:58Z) 안",
+    "제목의 Date.now() 값(1793006386909)과 생성 시각 차 5.5초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 0,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "adc1c555-1fbf-446a-bc55-080dec9cf732",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "E2E 생애주기 예약 테스트",
+   "createdAt": "2026-10-26T09:25:17.202056+00:00",
+   "status": "open",
+   "reservationCount": 2,
+   "reservationIds": [
+    "8781d425-aa5e-4735-9c15-02b0d8318538",
+    "87d24d5f-38e3-49c3-b380-d244c976e848"
+   ],
+   "reservationProfileKinds": [
+    "탈퇴한 회원"
+   ],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 2,
+    "schedule_memos.class_id": 0,
+    "admin_action_logs.reservation_id": 0,
+    "reservation_goods_usages.reservation_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 4/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:24:19Z~2026-10-26T09:29:40Z) 안",
+    "제목 패턴이 tests/e2e/production-readiness/member-full-lifecycle.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 2,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "c74dbdc6-dbd4-4a3f-bc39-0e93d4591568",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "NEWCLASS-ALL-1793006451909",
+   "createdAt": "2026-10-26T09:20:58.033425+00:00",
+   "status": "open",
+   "reservationCount": 1,
+   "reservationIds": [
+    "35a6566d-abd7-4507-812e-371cd6ec34ff"
+   ],
+   "reservationProfileKinds": [
+    "CI User A"
+   ],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 1,
+    "schedule_memos.class_id": 0,
+    "admin_action_logs.reservation_id": 0,
+    "reservation_goods_usages.reservation_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 3/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/teardown-unresolved/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:19:59Z~2026-10-26T09:24:17Z) 안",
+    "제목의 Date.now() 값(1793006451909)과 생성 시각 차 6.1초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/new-class-creation.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 1,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "cfcb7946-a9d5-405e-a689-14ebdd05de80",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "E2E 취소기한-성공",
+   "createdAt": "2026-10-26T09:27:21.288402+00:00",
+   "status": "open",
+   "reservationCount": 1,
+   "reservationIds": [
+    "df7b44e1-dca4-4d1f-8cc0-8bdb4b535d28"
+   ],
+   "reservationProfileKinds": [
+    "CI User A"
+   ],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 1,
+    "schedule_memos.class_id": 0,
+    "admin_action_logs.reservation_id": 0,
+    "reservation_goods_usages.reservation_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 4/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:24:19Z~2026-10-26T09:29:40Z) 안",
+    "제목 패턴이 tests/e2e/settings/cancel-deadline.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 1,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "dbad9f95-f19b-4130-8c10-13c68ba38d5c",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793006386909",
+   "createdAt": "2026-10-26T09:19:52.433782+00:00",
+   "status": "open",
+   "reservationCount": 0,
+   "reservationIds": [],
+   "reservationProfileKinds": [],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 0,
+    "schedule_memos.class_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:16:23Z~2026-10-26T09:19:58Z) 안",
+    "제목의 Date.now() 값(1793006386909)과 생성 시각 차 5.5초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 0,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "ec9a4dbe-8354-437b-bb71-e3c55c287d70",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "PERDAY-ATOMIC-1793008370370",
+   "createdAt": "2026-10-26T09:52:56.053626+00:00",
+   "status": "open",
+   "reservationCount": 0,
+   "reservationIds": [],
+   "reservationProfileKinds": [],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 0,
+    "schedule_memos.class_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40300257985(7693998) 의 \"E2E 2/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:49:30Z~2026-10-26T09:53:00Z) 안",
+    "제목의 Date.now() 값(1793008370370)과 생성 시각 차 5.7초 — 같은 spec 프로세스가 입력한 제목",
+    "제목 패턴이 tests/e2e/admin/recurring-class-per-day-atomicity.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 0,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 0
+  },
+  {
+   "classId": "f8fcf95c-857a-41af-8bed-f4c39d22e8a6",
+   "centerId": "fb689293-c977-4684-9601-42e837f196fa",
+   "title": "P3 출결-대기",
+   "createdAt": "2026-10-26T09:15:11.801687+00:00",
+   "status": "open",
+   "reservationCount": 1,
+   "reservationIds": [
+    "a133e81f-3e6f-412c-8823-66f6028988cf"
+   ],
+   "reservationProfileKinds": [
+    "CI User A"
+   ],
+   "referenceCounts": {
+    "admin_action_logs.class_id": 0,
+    "class_trainers.class_id": 0,
+    "class_allowed_products.class_id": 0,
+    "reservations.class_id": 1,
+    "schedule_memos.class_id": 0,
+    "admin_action_logs.reservation_id": 0,
+    "reservation_goods_usages.reservation_id": 0
+   },
+   "referenceQueriesAllOk": true,
+   "ownershipEvidence": [
+    "CI 로그: run 40297920813(b571b24) 의 \"E2E 1/4 \" job 로그에 이 id 가 4회 등장(cleanup-blocked/teardown-unresolved/mention), 생성 시각이 그 job 실행 구간(2026-10-26T09:13:56Z~2026-10-26T09:16:21Z) 안",
+    "제목 패턴이 tests/e2e/admin/attendance.spec.ts 의 고정 제목/생성 패턴과 일치"
+   ],
+   "eligibleForDeletion": true,
+   "expectedDeletion": {
+    "reservations": 1,
+    "class": 1,
+    "cascadeChildren": []
+   },
+   "traceFileHits": 5
+  }
+ ],
+ "evidenceLimits": [
+  "Playwright trace/report 는 실패한 테스트에만 남는다(retain-on-failure). 통과한 테스트가 만든 수업(20건)의 생성 RPC 응답은 어떤 아티팩트에도 없어 '생성 응답 id' 근거를 제시할 수 없다.",
+  "trace 에 id 가 나오는 3건(650538db, 85800a8a, f8fcf95c)은 '이전 실행 잔여와 충돌해 BLOCKED 된 오류 메시지'로만 나온다(생성 응답 아님).",
+  "이 잔여를 만든 두 CI 실행은 제목/manifest 에 실행 UUID 를 쓰기 전의 코드였고, manifest 는 러너와 함께 사라졌다. 따라서 실행 UUID 근거는 없다. 대신 (a) 같은 job 로그에 id 가 등장, (b) 생성 시각이 그 job 실행 구간 안, (c) 제목의 Date.now() 값(해당되는 경우)과 생성 시각 일치, (d) 예약은 테스트 프로필뿐·감사 로그 참조 0 으로 판단했다 — 이는 '증명'이 아니라 정황 증거이며 사람의 승인이 필요하다."
+ ]
+}
