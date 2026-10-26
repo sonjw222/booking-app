@@ -9,7 +9,7 @@ import * as pinnedModule from "../../scripts/ci-residue/pinned.mjs";
 const { sha256, stable } = coreModule as any; const { PINNED_PLAN_SHA256, DEFAULT_PLAN } = pinnedModule as any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 // CLI 를 실제로 실행하되, 모든 경우가 네트워크 접속 "전에" 중단되는 입력만 쓴다(공유 DEV 접속 없음).
-const run = (script: string, args: string[], env: Record<string, string>) => spawnSync("node", ["--no-warnings", `scripts/ci-residue/${script}`, ...args], { env: { PATH: process.env.PATH ?? "", ...env }, encoding: "utf8" as const, timeout: 20000 });
+const run = (script: string, args: string[], env: Record<string, string>) => spawnSync("node", ["--no-warnings", `scripts/ci-residue/${script}`, ...args], { env: { PATH: process.env.PATH ?? "", ...env } as NodeJS.ProcessEnv, encoding: "utf8" as const, timeout: 20000 });
 const envFile = (url: string) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), "ci-cli-")); const f = path.join(d, "env"); fs.writeFileSync(f, `NEXT_PUBLIC_SUPABASE_URL=${url}\nSUPABASE_SERVICE_ROLE_KEY=not-a-real-key\n`); return f; };
 
 describe("ci-residue CLI(오프라인 안전장치)", () => {
