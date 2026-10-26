@@ -38,27 +38,34 @@ export { switchToTestUser, getOrCreateOwnedTestCenter, kstSafeSameDayFutureTime,
 const OWN_DIR = path.resolve(process.cwd(), "playwright/.auth");
 export const E2E_RUN_ID = process.env.E2E_RUN_ID ?? (process.env.E2E_RUN_ID = randomUUID());
 
-function testProfileIds(): string[] {
-  const ids: string[] = [];
+// "이 실행의 테스트 계정 프로필" = 전용 테스트 계정(manager-a/user-a/user-b)에 속한 모든 프로필(스펙이 계정 아래 만든 비-primary 프로필 포함).
+// 계정 id 는 auth.setup 이 저장한 meta 에서 오며, 그 밖의 계정(실제 회원 등)의 프로필은 포함되지 않는다. 조회가 실패하면 meta 의 대표 profileId 만 쓴다(더 엄격한 쪽).
+async function testProfileIds(admin: ReturnType<typeof getFixtureAdminClient>): Promise<string[]> {
+  const accountIds: string[] = []; const ids = new Set<string>();
   for (const n of ["manager-a", "user-a", "user-b"] as const) {
-    try { ids.push(loadTestAccountMeta(n).profileId); } catch { /* 해당 계정 meta 없음 — 그 프로필의 예약은 '우리 것'으로 인정하지 않는다(안전 쪽) */ }
+    try { const m = loadTestAccountMeta(n); accountIds.push(m.accountId); ids.add(m.profileId); } catch { /* 해당 계정 meta 없음 — 그 계정의 프로필은 인정하지 않는다(안전 쪽) */ }
   }
-  return ids;
+  if (accountIds.length) {
+    const { data, error } = await admin.from("profiles").select("id").in("account_id", accountIds);
+    if (!error) for (const r of (data ?? []) as { id: string }[]) ids.add(r.id);
+  }
+  return [...ids];
 }
 
-export function getOwnedCtx(): OwnedCtx {
-  return { admin: getFixtureAdminClient(), store: fileOwnershipStore(OWN_DIR, E2E_RUN_ID), runId: E2E_RUN_ID, testProfileIds: testProfileIds() };
+export async function getOwnedCtx(): Promise<OwnedCtx> {
+  const admin = getFixtureAdminClient();
+  return { admin, store: fileOwnershipStore(OWN_DIR, E2E_RUN_ID), runId: E2E_RUN_ID, testProfileIds: await testProfileIds(admin) };
 }
 
-const useScopedTitle = (opt?: boolean) => opt ?? process.env.E2E_RUN_SCOPED_TITLES === "1";
+const scopedTitleEnabled = (opt?: boolean) => opt ?? process.env.E2E_RUN_SCOPED_TITLES === "1";
 
 // raw insert 가 필요한 스펙(class_format 등 추가 컬럼)용 — 생성+소유 등록을 한 번에.
 export async function createOwnedClassAdmin(
   row: Record<string, unknown> & { center_id: string; title: string },
   opts?: { scopedTitle?: boolean }
 ): Promise<{ id: string; startTime: string; title: string }> {
-  const title = useScopedTitle(opts?.scopedTitle) ? runScopedTitle(row.title, E2E_RUN_ID) : row.title;
-  return createOwnedClass(getOwnedCtx(), { ...row, title });
+  const title = scopedTitleEnabled(opts?.scopedTitle) ? runScopedTitle(row.title, E2E_RUN_ID) : row.title;
+  return createOwnedClass(await getOwnedCtx(), { ...row, title });
 }
 
 // ---------------- managerA/userA accountId/profileId 저장·조회 ----------------
@@ -132,7 +139,7 @@ export async function createClassOnKstDateAdmin(
 // 이 실행이 만든 것으로 증명된 수업만 지운다. 절대 throw 하지 않는다(원래 테스트 실패가 정리 오류에 가려지지 않도록) —
 // blocked/failed 는 원장에 남고 전역 teardown(ownedClassTeardown.ts)이 실행을 실패시킨다.
 export async function cleanupTestClassAdmin(classId: string): Promise<void> {
-  const r = await cleanupOwnedClass(getOwnedCtx(), classId);
+  const r = await cleanupOwnedClass(await getOwnedCtx(), classId);
   if (r.status === "blocked" || r.status === "failed") console.error(`[E2E cleanup] 수업 ${classId} ${r.status}: ${r.reason}`);
 }
 
