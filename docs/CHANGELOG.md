@@ -13,6 +13,10 @@
 - **변경**: `tests/rls-real/errorCollector.ts` — console error·pageerror·HTTP ≥400(PostgREST 오류 코드 포함)·requestfailed 를 가리지 않고 raw 로 기록(JWT·Bearer·이메일·토큰/필터 쿼리 마스킹)하고 `knownEnvErrors.ts` 의 규칙(종류·상태·PostgREST 코드·경로·원인을 모두 고정)에 맞는 것만 "알려진 격리환경"으로 따로 센다. 나머지는 예상 밖으로 실패. 일반 문자열/RPC 라는 이유만으로는 무시하지 않으며, 대상이 바뀌면(상태·코드·경로) 자동으로 예상 밖이 된다.
 - **정상 vs 오류 화면 분리**: 정상 시나리오는 고정 600ms 대신 로딩 표시가 사라지고 네트워크가 잠잠해질 때까지 기다리며(끝나지 않으면 실패), 오류 문구("불러오지 못했")가 보이면 실패한다. 단 격리 DB 한계로 오류 화면이 나오는 관리자 6개 경로(`/manager`, announcements, rooms, inquiries, subscription, settlement)는 **레이아웃만 검증되고 정상 데이터 흐름은 미검증**으로 보고에 따로 표시한다. 의도한 오류 화면(공개 상품 RPC 500 주입, 2테마×4폭)은 주입한 오류와 그 결과 앱 로그만 허용하고 다른 오류가 하나라도 더 나면 실패한다.
 - **검증**: 단위 6건(`tests/unit/visualSweepErrors.test.ts`) + 브라우저 3건(`errorCollector.ui.spec.ts`: API 500·403·스크립트/이미지 로드 실패·pageerror 가 규칙 없이 전부 잡힘, 비슷한 경로/상태는 통과 못 함, 끝나지 않는 로딩·오류 문구 검출, 정상 빈 상태 통과) + 스윕 8건 통과(데스크톱·모바일 Chromium 프로젝트 각각).
+## 2026-10-26 — #240 CI 격리 이전 준비(전환 미완료·BLOCKED, 앱·SQL 변경 없음)
+- 현황 조사(`docs/CI_ISOLATION_240.md`): PR push 는 같은 저장소 head 에서 공유 DEV(`mwhabit-ci-dev`)에 service role 로 쓰는 live job 5개를 실제로 시작한다. Supabase 프로젝트는 Production 과 공유 DEV 둘뿐(브랜치 없음), `ISOLATED_*` 시크릿 없음 → **격리 환경이 없어 전환 불가**.
+- 추가: `scripts/ci/isolatedTargetGuard.mjs`(Production·공유 DEV 는 격리로 선언 불가, URL/ref/키 불일치·누락은 쓰기 전에 차단, 로컬 대체는 PARTIAL) + 단위 8건, CI 게이트 job `isolated-env-gate`(설정 없으면 BLOCKED 표시 후 종료, 공유 DEV 비밀 미사용 — contract test 로 고정). 기존 live 검증은 끄지 않음.
+- 로컬 PostgreSQL+PostgREST 는 Auth/Storage/Realtime/Edge Functions 가 없어 live E2E/Integration 을 대체하지 못한다(부분 대체로만 보고).
 
 ## 2026-10-25 — 브라우저 QA 워커 문서 현행화(문서만)
 - `docs/BROWSER_QA_WORKER.md`: PR #222 의 설계 문서가 "구현 없음"을 전제하던 것을 로컬 `agent/qa_agent`·`notify/qa_monitor.py` 실제 코드·56개 단위 테스트(2026-10-25 실행, 56 passed)·설정 상태(enabled=false, publish_enabled=false)로 현행화하고 #221 완료 조건 대조표를 추가. 설치·실행·ntfy 수신은 검증하지 않았고 #221 은 완료가 아님.

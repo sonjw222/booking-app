@@ -8,6 +8,8 @@
 - **P2** 격리 DB(`tests/rls-real/run.sh up`)가 운영 스키마 일부만 적용해 관리자 6개 경로가 오류 화면으로만 검증된다(`knownEnvErrors.ts` 의 `LAYOUT_ONLY_PATHS`). 누락 객체(center_announcements·subscription_plans·center_settlement_accounts·center_payout_accounts·center_subscriptions·inquiry_threads 계열·manager_dashboard_summary RPC, rooms.memo·progress_categories.node_type 컬럼)를 격리 DB 에 적용하면 정상 데이터 흐름까지 검증할 수 있고 해당 규칙을 지울 수 있다(#240 격리 Supabase 환경 준비와 함께).
 - **P2** 앱: `lib/orders.ts` `fetchMyPurchases` 가 memberships/orders 조회 오류(42703 외)를 무시해 API 500 에도 "구매 내역이 없어요" 빈 상태가 보인다(오류 화면 `구매 내역을 불러오지 못했어요` 에 도달 불가). 이번 범위(테스트 오류 집계)에서는 고치지 않음.
 - **P3(해소, 2026-10-27)** 스윕을 데스크톱·모바일 Chromium 프로젝트 모두에서 실행해 각각 통과(수집기 3 + 스윕 8). 스윕이 폭을 직접 지정하므로 모바일 프로젝트의 추가분은 터치/UA 에뮬레이션 정도다. 실기기·실제 Supabase(Auth/Realtime 포함) 환경은 여전히 미검증.
+## 2026-10-26 #240 CI 격리 이전 (BLOCKED — 외부 준비 필요)
+- **P1** 격리 Supabase 프로젝트/브랜치·스키마 baseline·`ISOLATED_*` 시크릿 준비 후 live job 시크릿 전환(상세 항목·등록 위치: `docs/CI_ISOLATION_240.md` §7). 완료 증거 기준은 §6. 전환 완료 전에는 #240 을 닫지 않는다.
 
 ## 2026-10-25 관리자 페이지네이션/CI 후속
 - **P1(승인 필요)**: `NEXT_PUBLIC_ADMIN_CENTER_PAGINATION=true` 운영 활성화는 별도 승인. 이슈 #221 기록(2026-10-13)에 따르면 운영 Supabase 에는 `admin_list_centers_page` RPC 가 이미 존재하고 플래그는 OFF — 이 작업에서 운영 DB 를 다시 조회하지 않았으므로 현재 적용 상태는 재확인 필요(SQL: `supabase/migrations/20261011113106_admin_center_page_draft.sql`).

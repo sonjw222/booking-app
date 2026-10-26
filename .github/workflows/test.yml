@@ -296,6 +296,27 @@ jobs:
           retention-days: 3
           if-no-files-found: ignore
 
+  # 격리 환경 게이트(#240, 2026-10-26): live E2E/Integration 을 공유 DEV 가 아닌 격리 Supabase 로 옮길 준비가 됐는지 "환경변수만" 검사한다(네트워크·DB·checkout 없이 공유 DEV 비밀 미사용).
+  # ISOLATED_* 시크릿이 없으면 BLOCKED 로 표시(Step Summary + warning)하고 끝난다 — 이것은 전환 완료가 아니며 live job 은 계속 공유 DEV 에서 돈다.
+  # 설정이 있는데 Production/공유 DEV 이거나 URL·ref·키가 서로 어긋나면 FAILED(실패). 이 job 의 통과는 live 검증 통과를 뜻하지 않는다.
+  isolated-env-gate:
+    name: Isolated-env gate (#240) — BLOCKED unless an isolated Supabase is configured (no network)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name != 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/ci/isolatedTargetGuard.mjs
+        env:
+          ISOLATED_GATE_ALLOW_BLOCKED: "1"
+          ISOLATED_SUPABASE_URL: ${{ secrets.ISOLATED_SUPABASE_URL }}
+          ISOLATED_SUPABASE_PROJECT_REF: ${{ secrets.ISOLATED_SUPABASE_PROJECT_REF }}
+          ISOLATED_SUPABASE_ANON_KEY: ${{ secrets.ISOLATED_SUPABASE_ANON_KEY }}
+          ISOLATED_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ISOLATED_SUPABASE_SERVICE_ROLE_KEY }}
+
   sql:
     name: SQL regression tests (isolated PGlite, no network DB)
     runs-on: ubuntu-latest
