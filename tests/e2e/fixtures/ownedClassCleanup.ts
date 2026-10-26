@@ -33,16 +33,17 @@ export interface OwnershipStore {
   register(entry: OwnedClassEntry): void;
   get(classId: string): OwnedClassEntry | undefined;
   recordResult(r: CleanupResult): void;
-  /** 이 실행의 fixture 헬퍼가 만든 예약 id(과거 시각으로 만든 예약도 이 실행 것임을 증명). */
-  registerReservation(reservationId: string, classId: string): void;
-  hasReservation(reservationId: string): boolean;
+  /** 이 실행의 fixture 가 "생성 성공 응답"으로 받은 예약(과거 시각으로 만든 예약도 이 실행 것임을 증명). createOwnedReservation 만 호출한다. */
+  registerReservation(entry: OwnedReservationEntry): void;
+  getReservation(reservationId: string): OwnedReservationEntry | undefined;
 }
+export type OwnedReservationEntry = { reservationId: string; classId: string; profileId: string; createdAt: string; runId: string };
 
 export function memoryOwnershipStore(): OwnershipStore & { results: CleanupResult[]; entries: Map<string, OwnedClassEntry> } {
   const entries = new Map<string, OwnedClassEntry>();
   const results: CleanupResult[] = [];
-  const resv = new Set<string>();
-  return { results, entries, register: (e) => { entries.set(e.classId, e); }, get: (id) => entries.get(id), recordResult: (r) => { results.push(r); }, registerReservation: (id) => { resv.add(id); }, hasReservation: (id) => resv.has(id) };
+  const resv = new Map<string, OwnedReservationEntry>();
+  return { results, entries, register: (e) => { entries.set(e.classId, e); }, get: (id) => entries.get(id), recordResult: (r) => { results.push(r); }, registerReservation: (e) => { resv.set(e.reservationId, e); }, getReservation: (id) => resv.get(id) };
 }
 
 /** JSON Lines — 한 줄씩 append 라 워커가 여러 개여도 줄이 섞이지 않는다. */
@@ -55,8 +56,8 @@ export function fileOwnershipStore(dir: string, runId: string): OwnershipStore {
     register(e) { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(manifest, JSON.stringify(e) + "\n"); },
     get: (id) => read<OwnedClassEntry>(manifest).find((e) => e.classId === id),
     recordResult(r) { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(ledger, JSON.stringify(r) + "\n"); },
-    registerReservation(reservationId, classId) { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(resvFile, JSON.stringify({ reservationId, classId }) + "\n"); },
-    hasReservation: (id) => read<{ reservationId: string }>(resvFile).some((r) => r.reservationId === id),
+    registerReservation(e) { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(resvFile, JSON.stringify(e) + "\n"); },
+    getReservation: (id) => read<OwnedReservationEntry>(resvFile).find((r) => r.reservationId === id),
   };
 }
 export const readManifest = (dir: string, runId: string): OwnedClassEntry[] => {
@@ -141,19 +142,64 @@ export function registerOwnedClass(ctx: OwnedCtx, created: { id: string; created
 }
 
 /**
- * 앱 UI 가 만든 수업(스펙이 UI 로 등록한 뒤 DB 에서 찾은 행)을 소유로 등록한다. 제목만으로는 소유가 아니므로 모두 증명돼야 한다:
- * 스펙이 이 실행에서 UI 에 입력한 정확한 제목·센터와 일치 + 행의 created_at 이 이 실행 시작(runStartedAt) 이후. 증명 못 하면 throw(등록 안 함).
+ * fixture 가 직접 예약을 만들 때의 유일한 등록 경로. 이 실행이 만든 수업(manifest)에만 만들 수 있고, INSERT 의 "성공 응답" 행(id·class_id·profile_id·created_at)을
+ * 요청과 대조한 뒤 그 값을 기록한다. 임의의 기존 예약 id 를 등록할 수 없으며, 정리 때 DB 행이 이 기록과 정확히 같아야 한다.
+ * 기록에 실패하면 방금 만든(id 를 아는) 예약만 조건부로 되돌린다.
  */
-export function adoptUiCreatedClass(
+export async function createOwnedReservation(
   ctx: OwnedCtx,
-  row: { id: string; center_id: string; title: string; created_at: string },
-  expected: { centerId: string; title: string },
+  req: { classId: string; profileId: string; membershipId?: string | null; createdAtIso?: string }
+): Promise<{ id: string }> {
+  const owned = ctx.store.get(req.classId);
+  if (!owned || owned.runId !== ctx.runId) throw new Error(`수업 ${req.classId} 은(는) 이 실행이 만든 수업이 아님 — 예약을 소유로 만들 수 없음`);
+  const { data, error } = await ctx.admin.from("reservations")
+    .insert({ class_id: req.classId, profile_id: req.profileId, membership_id: req.membershipId ?? null, status: "confirmed", created_at: req.createdAtIso ?? new Date().toISOString() })
+    .select("id, class_id, profile_id, created_at").single();
+  if (error || !data) throw new Error(`E2E 테스트 예약 생성 실패: ${error?.message ?? "no data"}`);
+  const mismatch = data.class_id !== req.classId || data.profile_id !== req.profileId;
+  try {
+    if (mismatch) throw new Error("생성 응답이 요청(수업/프로필)과 다름");
+    ctx.store.registerReservation({ reservationId: data.id, classId: req.classId, profileId: req.profileId, createdAt: data.created_at, runId: ctx.runId });
+  } catch (e) {
+    const { error: undo } = await ctx.admin.from("reservations").delete().eq("id", data.id).eq("class_id", data.class_id).eq("profile_id", data.profile_id).eq("created_at", data.created_at);
+    throw new Error(`예약 소유 기록 실패 — 방금 만든 예약(${data.id})을 ${undo ? `되돌리지 못함(사람이 확인): ${undo.message}` : "되돌림"}: ${(e as Error).message}`);
+  }
+  return { id: data.id };
+}
+
+/**
+ * 앱 UI 가 만든 수업을 소유로 등록한다. 센터·제목·생성 시각만으로는 채택하지 않는다 — 모두 필요하다:
+ *  1) 제목에 이 실행의 UUID(ctx.runId 전체)가 들어 있다(다른 실행이 같은 제목을 만들 수 없음),
+ *  2) 등록 대상은 UI 의 "생성 응답(RPC 반환 id)"에 있던 id 뿐이다(createdIds — 반복 생성은 반환된 전체 id),
+ *  3) 각 id 의 DB 행이 센터·제목과 일치하고 이 실행 시작 이후에 생성됐다.
+ * 같은 센터·제목의 DB 행 중 응답 id 에 없는 것(예상 밖 행)은 등록하지 않고 에러로 알린다(응답 id 쪽 검증된 행은 먼저 등록해 정리 가능).
+ */
+export async function adoptUiCreatedClasses(
+  ctx: OwnedCtx,
+  input: { createdIds: string[]; centerId: string; title: string },
   runStartedAt: string
-): void {
+): Promise<string[]> {
   const skew = ctx.skewMs ?? SKEW;
-  if (row.center_id !== expected.centerId || row.title !== expected.title) throw new Error(`UI 가 만든 수업 ${row.id} 의 센터/제목이 스펙이 입력한 값과 다름 — 소유로 등록하지 않음`);
-  if (!(Date.parse(row.created_at) >= Date.parse(runStartedAt) - skew)) throw new Error(`수업 ${row.id} 가 이 실행 시작보다 먼저 생성됨 — 소유로 등록하지 않음`);
-  registerOwnedClass(ctx, row, expected.centerId, expected.title);
+  const ids = [...new Set(input.createdIds)];
+  if (!input.title.includes(ctx.runId)) throw new Error(`제목에 이 실행의 UUID 가 없음 — UI 생성 수업을 소유로 등록하지 않음 ("${input.title.slice(0, 40)}…")`);
+  if (!ids.length) throw new Error("UI 생성 응답에서 받은 수업 id 가 없음 — 소유를 증명할 수 없어 등록하지 않음");
+  if (!(Date.parse(runStartedAt) > 0)) throw new Error("실행 시작 시각(E2E_RUN_STARTED_AT)이 없음 — 등록하지 않음");
+  const { data, error } = await ctx.admin.from("classes").select("id, center_id, title, created_at").eq("center_id", input.centerId).eq("title", input.title);
+  if (error) throw new Error(`UI 생성 수업 조회 실패(등록하지 않음): ${error.message}`);
+  const rows = (data ?? []) as { id: string; center_id: string; title: string; created_at: string }[];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const bad: string[] = [];
+  for (const id of ids) {
+    const r = byId.get(id);
+    if (!r) { bad.push(`${id}: 응답에는 있으나 센터·제목이 일치하는 DB 행이 없음`); continue; }
+    if (!(Date.parse(r.created_at) >= Date.parse(runStartedAt) - skew)) { bad.push(`${id}: 이 실행 시작보다 먼저 생성됨`); continue; }
+    registerOwnedClass(ctx, r, input.centerId, input.title);
+  }
+  const extras = rows.filter((r) => !ids.includes(r.id)).map((r) => r.id);
+  if (bad.length || extras.length) {
+    throw new Error(`UI 생성 수업 등록 불완전 — ${bad.length ? `검증 실패: ${bad.join("; ")}. ` : ""}${extras.length ? `응답에 없는 같은 센터·제목 행 ${extras.length}건은 등록하지 않음(${extras.join(",")})` : ""}`);
+  }
+  return ids;
 }
 
 /** 절대 throw 하지 않는다 — 결과를 반환하고 원장에 남긴다. */
@@ -179,7 +225,11 @@ export async function cleanupOwnedClass(ctx: OwnedCtx, classId: string): Promise
     const skew = ctx.skewMs ?? SKEW;
     const since = Date.parse(entry.registeredAt) - skew;
     // 예약의 소유 증거: (a) 이 실행의 fixture 헬퍼가 만들며 등록한 예약(과거 시각으로 만든 것 포함), 또는 (b) 테스트 계정 프로필의 예약이며 수업 등록 이후 생성(브라우저로 한 예약).
-    const foreign = reservations.filter((r) => !ctx.store.hasReservation(r.id) && (!ctx.testProfileIds.includes(r.profile_id) || !(Date.parse(r.created_at) >= since)));
+    const provenByCreation = (r: { id: string; profile_id: string; created_at: string }) => {
+      const e = ctx.store.getReservation(r.id);
+      return !!e && e.runId === ctx.runId && e.classId === classId && e.profileId === r.profile_id && e.createdAt === r.created_at;
+    };
+    const foreign = reservations.filter((r) => !provenByCreation(r) && (!ctx.testProfileIds.includes(r.profile_id) || !(Date.parse(r.created_at) >= since)));
     if (foreign.length) return done("blocked", `이 실행의 테스트 계정이 만든 예약이 아님(다른 프로필이거나 수업 생성 이전) ${foreign.length}건: ${foreign.map((f) => f.id).join(",")}`);
 
     // 감사 로그(admin_action_logs.class_id / reservation_id)는 FK NO ACTION — 사람의 조작 기록이므로 지우지 않고,

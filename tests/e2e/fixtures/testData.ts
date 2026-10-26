@@ -23,9 +23,10 @@
   그 값을 읽어 재사용한다.
 */
 import fs from "node:fs";
+import type { Page } from "@playwright/test";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { createOwnedClass, cleanupOwnedClass, adoptUiCreatedClass, fileOwnershipStore, runScopedTitle, type OwnedCtx } from "./ownedClassCleanup";
+import { createOwnedClass, createOwnedReservation, cleanupOwnedClass, adoptUiCreatedClasses, fileOwnershipStore, runScopedTitle, type OwnedCtx } from "./ownedClassCleanup";
 import { getFixtureAdminClient, switchToTestUser, getOrCreateOwnedTestCenter, kstSafeSameDayFutureTime, type TestUser } from "../../integration/setup";
 import { rowToSettings, settingsToRow, DEFAULT_SETTINGS, type CenterSettings } from "../../../lib/settings";
 
@@ -57,9 +58,19 @@ export async function getOwnedCtx(): Promise<OwnedCtx> {
   return { admin, store: fileOwnershipStore(OWN_DIR, E2E_RUN_ID), runId: E2E_RUN_ID, testProfileIds: await testProfileIds(admin) };
 }
 
-// 앱 UI 로 만든 수업을 DB 에서 찾은 뒤 소유 등록(증명: 입력한 정확한 제목·센터 + 이 실행 시작 이후 생성). 이후 cleanupTestClassAdmin(id) 가 정리할 수 있다.
-export async function adoptUiCreatedClassAdmin(row: { id: string; center_id: string; title: string; created_at: string }, expected: { centerId: string; title: string }): Promise<void> {
-  adoptUiCreatedClass(await getOwnedCtx(), row, expected, process.env.E2E_RUN_STARTED_AT ?? "");
+// 앱 UI(수업 등록 시트)가 호출하는 생성 RPC 의 "성공 응답에 실린 수업 id"만 수집한다(create_class_safe: uuid, create_recurring_classes_safe: uuid[]).
+// 이 id 들만 adoptUiCreatedClassesAdmin 으로 소유 등록할 수 있다 — 센터·제목·시각으로 DB 에서 찾은 행은 채택하지 않는다.
+export function watchUiClassCreation(page: Page) {
+  const ids: string[] = []; const pending: Promise<void>[] = [];
+  page.on("response", (r) => {
+    if (r.request().method() !== "POST" || r.status() >= 300) return;
+    if (!/\/rest\/v1\/rpc\/(create_class_safe|create_recurring_classes_safe)(\?|$)/.test(r.url())) return;
+    pending.push(r.json().then((j) => { for (const x of Array.isArray(j) ? j : [j]) if (typeof x === "string") ids.push(x); }).catch(() => undefined));
+  });
+  return { settled: async () => { await Promise.all(pending.splice(0)); return [...new Set(ids)]; } };
+}
+export async function adoptUiCreatedClassesAdmin(input: { createdIds: string[]; centerId: string; title: string }): Promise<string[]> {
+  return adoptUiCreatedClasses(await getOwnedCtx(), input, process.env.E2E_RUN_STARTED_AT ?? "");
 }
 
 const scopedTitleEnabled = (opt?: boolean) => opt ?? process.env.E2E_RUN_SCOPED_TITLES === "1";
@@ -520,26 +531,8 @@ export async function insertConfirmedReservationAdmin(
   profileId: string,
   opts?: { membershipId?: string | null; createdAtIso?: string }
 ): Promise<{ id: string }> {
-  const admin = getFixtureAdminClient();
-  const { data, error } = await admin
-    .from("reservations")
-    .insert({
-      class_id: classId,
-      profile_id: profileId,
-      membership_id: opts?.membershipId ?? null,
-      status: "confirmed",
-      created_at: opts?.createdAtIso ?? new Date().toISOString(),
-    })
-    .select("id")
-    .single();
-  if (error || !data) throw new Error(`E2E 테스트 예약 생성 실패: ${error?.message ?? "no data"}`);
-  // 이 실행의 fixture 가 만든 예약임을 즉시 기록한다(과거 시각으로 만든 예약도 수업 정리 때 이 실행 것으로 증명되도록). 기록에 실패하면 방금 만든 예약만 되돌린다.
-  try { fileOwnershipStore(OWN_DIR, E2E_RUN_ID).registerReservation(data.id, classId); }
-  catch (e) {
-    await admin.from("reservations").delete().eq("id", data.id).eq("class_id", classId);
-    throw new Error(`예약 소유 기록 실패 — 방금 만든 예약을 되돌림: ${(e as Error).message}`);
-  }
-  return { id: data.id };
+  // 이 실행이 만든 수업에만 만들 수 있고, 생성 성공 응답으로 소유를 기록한다(과거 시각으로 만든 예약도 정리 때 이 실행 것으로 증명).
+  return createOwnedReservation(await getOwnedCtx(), { classId, profileId, membershipId: opts?.membershipId ?? null, createdAtIso: opts?.createdAtIso });
 }
 
 const KST_DATE = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });

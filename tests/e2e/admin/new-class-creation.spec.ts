@@ -5,7 +5,9 @@ import {
   getOrCreateOwnedTestCenter,
   createFutureTestClassAdmin,
   cleanupTestClassAdmin,
-  adoptUiCreatedClassAdmin,
+  adoptUiCreatedClassesAdmin,
+  watchUiClassCreation,
+  E2E_RUN_ID,
   reservationDeepLink,
   fetchSettingsAdmin,
   saveSettingsAdmin,
@@ -165,21 +167,25 @@ function futureKstDateStr(daysFromNow: number): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(future);
 }
 
-async function findClassByTitle(title: string) {
+async function findClassByTitle(title: string, watch: ReturnType<typeof watchUiClassCreation>) {
+  const responseIds = await watch.settled(); // UI 생성 응답이 돌려준 id — 이 id 로만 행을 가져오고 소유 등록한다
+  if (responseIds.length !== 1) throw new Error(`UI 생성 응답의 수업 id 가 1개가 아님(${responseIds.length}개) — 등록하지 않음`);
+  await adoptUiCreatedClassesAdmin({ createdIds: responseIds, centerId: centerAId, title });
   const admin = getFixtureAdminClient();
   const { data, error } = await admin
     .from("classes")
     .select("id, center_id, title, created_at, start_time, end_time")
+    .eq("id", responseIds[0])
     .eq("center_id", centerAId)
     .eq("title", title)
     .single();
   if (error || !data) throw new Error(`방금 만든 class를 못 찾음: ${error?.message}`);
-  await adoptUiCreatedClassAdmin(data, { centerId: centerAId, title }); // 이 실행이 UI 로 만든 행임을 증명 후 정리 대상으로 등록
   return data;
 }
 
 test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → 회원 기존 pass 표시 → 예약 성공 (실브라우저)", async ({ page, browser }) => {
-  const uniqueTitle = `NEWCLASS-ALL-${Date.now()}`;
+  const uniqueTitle = `NEWCLASS-ALL-${E2E_RUN_ID}-${Date.now()}`; // 실행 UUID 포함
+  const watch = watchUiClassCreation(page);
   const dateStr = futureKstDateStr(90);
 
   await gotoFutureDay(page, dateStr);
@@ -195,7 +201,7 @@ test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → �
   await page.getByRole("button", { name: "등록하기", exact: true }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
-  const newClass = await findClassByTitle(uniqueTitle);
+  const newClass = await findClassByTitle(uniqueTitle, watch);
   createdClassIds.push(newClass.id);
 
   // class_allowed_products 저장 상태는 admin(service_role) client가 이 테이블 GRANT가
@@ -232,7 +238,8 @@ test("TEST1: 관리자 UI로 신규 수업(모든 수강권 허용) 생성 → �
 });
 
 test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 → 해당 pass만 표시 → 예약 성공 (실브라우저)", async ({ page, browser }) => {
-  const uniqueTitle = `NEWCLASS-SPECIFIC-${Date.now()}`;
+  const uniqueTitle = `NEWCLASS-SPECIFIC-${E2E_RUN_ID}-${Date.now()}`; // 실행 UUID 포함
+  const watch = watchUiClassCreation(page);
   const dateStr = futureKstDateStr(91);
 
   await gotoFutureDay(page, dateStr);
@@ -256,7 +263,7 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
   await page.getByRole("button", { name: "등록하기", exact: true }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
-  const newClass = await findClassByTitle(uniqueTitle);
+  const newClass = await findClassByTitle(uniqueTitle, watch);
   createdClassIds.push(newClass.id);
 
   // class_allowed_products 저장 상태는 UI 재진입으로 확인한다(TEST1과 동일한 이유 —
@@ -288,7 +295,8 @@ test("TEST2: 관리자 UI로 신규 수업(특정 pass 1개만 허용) 생성 �
 });
 
 test("TEST4: 신규 수업 → 사용 가능 수강권 없음 → 그 자리에서 구매 → 새로고침 포함 즉시 사용 가능 → 예약 성공 (실브라우저)", async ({ page, browser }) => {
-  const uniqueTitle = `NEWCLASS-BUY-${Date.now()}`;
+  const uniqueTitle = `NEWCLASS-BUY-${E2E_RUN_ID}-${Date.now()}`; // 실행 UUID 포함
+  const watch = watchUiClassCreation(page);
   const dateStr = futureKstDateStr(92);
 
   await gotoFutureDay(page, dateStr);
@@ -313,7 +321,7 @@ test("TEST4: 신규 수업 → 사용 가능 수강권 없음 → 그 자리에�
   await page.getByRole("button", { name: "등록하기", exact: true }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
-  const newClass = await findClassByTitle(uniqueTitle);
+  const newClass = await findClassByTitle(uniqueTitle, watch);
   createdClassIds.push(newClass.id);
 
   // class_allowed_products 확인(TEST1/TEST2와 동일한 UI 재진입 패턴 — 파일 상단 주석 참고)
@@ -394,7 +402,8 @@ test("TEST4: 신규 수업 → 사용 가능 수강권 없음 → 그 자리에�
 });
 
 test("TEST5: 신규 수업(모든 수강권 허용)에서도 goods는 사용 가능한 수강권 목록에 절대 안 보임 (실브라우저)", async ({ page, browser }) => {
-  const uniqueTitle = `NEWCLASS-GOODSCHK-${Date.now()}`;
+  const uniqueTitle = `NEWCLASS-GOODSCHK-${E2E_RUN_ID}-${Date.now()}`; // 실행 UUID 포함
+  const watch = watchUiClassCreation(page);
   const dateStr = futureKstDateStr(93);
 
   await gotoFutureDay(page, dateStr);
@@ -411,7 +420,7 @@ test("TEST5: 신규 수업(모든 수강권 허용)에서도 goods는 사용 가
   await page.getByRole("button", { name: "등록하기", exact: true }).click();
   await expect(page.locator(".sheet-overlay")).toHaveCount(0);
 
-  const newClass = await findClassByTitle(uniqueTitle);
+  const newClass = await findClassByTitle(uniqueTitle, watch);
   createdClassIds.push(newClass.id);
 
   const memberContext = await browser.newContext({ storageState: MEMBER_AUTH_FILE });
