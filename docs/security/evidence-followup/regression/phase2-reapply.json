@@ -1,0 +1,381 @@
+{
+ "failures": 0,
+ "results": [
+  {
+   "id": "A1",
+   "name": "정상 가입(앱 페이로드)",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A1b",
+   "name": "정상 가입 계정의 특권 값은 모두 기본값(false/false/null)",
+   "expected": "false/false/null",
+   "actual": "false/false/null",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A2",
+   "name": "특권 컬럼을 false/null 로 명시한 가입",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A3",
+   "name": "기존 계정의 일반 정보 갱신(이름·주소·마케팅 동의)",
+   "expected": "UPDATED",
+   "actual": "UPDATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A4",
+   "name": "기존 계정 upsert(일반 갱신)",
+   "expected": "UPDATED",
+   "actual": "UPDATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A5",
+   "name": "정상 계정 연동(create_account_link_code → link_accounts_by_code)",
+   "expected": "LINKED",
+   "actual": "LINKED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A5b",
+   "name": "연동 후 합쳐진 계정의 merged_into 가 코드 발급 계정",
+   "expected": "7444b91d-a7af-468d-99b0-08e338483b37",
+   "actual": "7444b91d-a7af-468d-99b0-08e338483b37",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "B-is_platform_admin",
+   "name": "서버(service_role)가 is_platform_admin 지정해 생성",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "B-pg_checkout_override",
+   "name": "서버(service_role)가 pg_checkout_override 지정해 생성",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "B-merged_into",
+   "name": "서버(service_role)가 merged_into 지정해 생성",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "B-sql",
+   "name": "SQL Editor(postgres, auth.uid() is null)가 특권 값으로 생성",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-ins-is_platform_admin",
+   "name": "직접 INSERT 로 is_platform_admin 지정",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-ins-row-is_platform_admin",
+   "name": "거부 후 계정 행이 없다",
+   "expected": "none",
+   "actual": "none",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-upsert-is_platform_admin",
+   "name": "신규 upsert 로 is_platform_admin 지정",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "이 값은 운영자만 변경할 수 있어요"
+  },
+  {
+   "id": "C-upsert-row-is_platform_admin",
+   "name": "거부 후 계정 행이 없다",
+   "expected": "none",
+   "actual": "none",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-del-is_platform_admin",
+   "name": "본인 계정 삭제(사전 조건)",
+   "expected": "1",
+   "actual": "1",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-recreate-is_platform_admin",
+   "name": "삭제 후 is_platform_admin 지정 재생성",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-recreate-ok-is_platform_admin",
+   "name": "삭제 후 정상 재생성은 가능",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-update-is_platform_admin",
+   "name": "기존 계정이 is_platform_admin 를 UPDATE (기존 가드 유지)",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "이 값은 운영자만 변경할 수 있어요"
+  },
+  {
+   "id": "C-upsert-existing-is_platform_admin",
+   "name": "기존 행 ON CONFLICT DO UPDATE 로 is_platform_admin",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "이 값은 운영자만 변경할 수 있어요"
+  },
+  {
+   "id": "C-existing-unchanged-is_platform_admin",
+   "name": "시도 후 값 불변",
+   "expected": "false/false/null",
+   "actual": "false/false/null",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-ins-pg_checkout_override",
+   "name": "직접 INSERT 로 pg_checkout_override 지정",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-ins-row-pg_checkout_override",
+   "name": "거부 후 계정 행이 없다",
+   "expected": "none",
+   "actual": "none",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-upsert-pg_checkout_override",
+   "name": "신규 upsert 로 pg_checkout_override 지정",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "이 값은 운영자만 변경할 수 있어요"
+  },
+  {
+   "id": "C-upsert-row-pg_checkout_override",
+   "name": "거부 후 계정 행이 없다",
+   "expected": "none",
+   "actual": "none",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-del-pg_checkout_override",
+   "name": "본인 계정 삭제(사전 조건)",
+   "expected": "1",
+   "actual": "1",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-recreate-pg_checkout_override",
+   "name": "삭제 후 pg_checkout_override 지정 재생성",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-recreate-ok-pg_checkout_override",
+   "name": "삭제 후 정상 재생성은 가능",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-update-pg_checkout_override",
+   "name": "기존 계정이 pg_checkout_override 를 UPDATE (기존 가드 유지)",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "이 값은 운영자만 변경할 수 있어요"
+  },
+  {
+   "id": "C-upsert-existing-pg_checkout_override",
+   "name": "기존 행 ON CONFLICT DO UPDATE 로 pg_checkout_override",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "이 값은 운영자만 변경할 수 있어요"
+  },
+  {
+   "id": "C-existing-unchanged-pg_checkout_override",
+   "name": "시도 후 값 불변",
+   "expected": "false/false/null",
+   "actual": "false/false/null",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-ins-merged_into",
+   "name": "직접 INSERT 로 merged_into 지정",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-ins-row-merged_into",
+   "name": "거부 후 계정 행이 없다",
+   "expected": "none",
+   "actual": "none",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-upsert-merged_into",
+   "name": "신규 upsert 로 merged_into 지정",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "merged_into는 계정 연동 절차(link_accounts_by_code)를 통해서만 변경할 수 있어요"
+  },
+  {
+   "id": "C-upsert-row-merged_into",
+   "name": "거부 후 계정 행이 없다",
+   "expected": "none",
+   "actual": "none",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-del-merged_into",
+   "name": "본인 계정 삭제(사전 조건)",
+   "expected": "1",
+   "actual": "1",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-recreate-merged_into",
+   "name": "삭제 후 merged_into 지정 재생성",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-recreate-ok-merged_into",
+   "name": "삭제 후 정상 재생성은 가능",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-update-merged_into",
+   "name": "기존 계정이 merged_into 를 UPDATE (기존 가드 유지)",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "merged_into는 계정 연동 절차(link_accounts_by_code)를 통해서만 변경할 수 있어요"
+  },
+  {
+   "id": "C-upsert-existing-merged_into",
+   "name": "기존 행 ON CONFLICT DO UPDATE 로 merged_into",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "merged_into는 계정 연동 절차(link_accounts_by_code)를 통해서만 변경할 수 있어요"
+  },
+  {
+   "id": "C-existing-unchanged-merged_into",
+   "name": "시도 후 값 불변",
+   "expected": "false/false/null",
+   "actual": "false/false/null",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-effect-admin",
+   "name": "시도 후 is_platform_admin() RPC 는 false",
+   "expected": "false",
+   "actual": "false",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C-effect-merge",
+   "name": "시도 후 my_account_id() 는 피해자 계정이 아니다",
+   "expected": "false",
+   "actual": "false",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D1",
+   "name": "psql: INSERT(기본값)",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D2",
+   "name": "psql: INSERT(is_platform_admin=true)",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D3",
+   "name": "psql: INSERT(pg_checkout_override=true)",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D4",
+   "name": "psql: INSERT(merged_into=다른 계정)",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  }
+ ]
+}

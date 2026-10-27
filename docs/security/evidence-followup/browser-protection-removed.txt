@@ -1,0 +1,15 @@
+PASS U0 브라우저 가입 절차(이메일→휴대폰 OTP→동의→가입) 완료 — 기대  / 실제 
+PASS U1 UI 가입으로 계정 행이 만들어졌다 — 기대 exists / 실제 exists
+PASS U2 특권 값은 기본값(false/false/null) — 기대 false/false/null / 실제 false/false/null
+PASS U3 휴대폰 인증을 거친 번호가 저장됨(RLS 의 휴대폰 인증 조건 통과) — 기대 01000001156 / 실제 01000001156
+PASS U4 UI 가 보낸 accounts INSERT 본문에는 특권 컬럼이 없다 — 기대 0 / 실제 0 · INSERT 요청 1건
+PASS U5 가입 세션 토큰을 확보 — 기대 yes / 실제 yes
+PASS U6-is_platform_admin 가입한 세션이 is_platform_admin UPDATE — 기대 DENIED / 실제 DENIED · 이 값은 운영자만 변경할 수 있어요
+PASS U6-pg_checkout_override 가입한 세션이 pg_checkout_override UPDATE — 기대 DENIED / 실제 DENIED · 이 값은 운영자만 변경할 수 있어요
+PASS U6-merged_into 가입한 세션이 merged_into UPDATE — 기대 DENIED / 실제 DENIED · merged_into는 계정 연동 절차(link_accounts_by_code)를 통해서만
+PASS U10 세션의 is_platform_admin() 는 false — 기대 false / 실제 false
+FAIL X-is_platform_admin 변조 가입 요청(is_platform_admin 주입): 인증 사용자는 생기되 특권 계정 행은 만들어지지 않는다 — 기대 NO-ACCOUNT / 실제 PRIVILEGED:{"a":true,"o":false,"m":false}
+FAIL X-pg_checkout_override 변조 가입 요청(pg_checkout_override 주입): 인증 사용자는 생기되 특권 계정 행은 만들어지지 않는다 — 기대 NO-ACCOUNT / 실제 PRIVILEGED:{"a":false,"o":true,"m":false}
+FAIL X-merged_into 변조 가입 요청(merged_into 주입): 인증 사용자는 생기되 특권 계정 행은 만들어지지 않는다 — 기대 NO-ACCOUNT / 실제 PRIVILEGED:{"a":false,"o":false,"m":true}
+
+10/13 PASS, 3 FAIL

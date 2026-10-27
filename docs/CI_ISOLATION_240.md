@@ -23,6 +23,9 @@ live E2E 4구간과 Integration 이 공유 DEV(`mwhabit-ci-dev`)와 GitHub Secre
 | `scripts/isolated/extractCatalogSeed.mjs` · `verifyBaselineParity.mjs` · `dumpBaseline.md` | 카탈로그 시드 생성 / 공유 DEV 와 구조·권한 대조(개발자 도구) / baseline 재생성 절차 |
 | `.github/workflows/test.yml` | live job 6개(E2E 4, Integration, ACL 반복)가 위 action 을 쓴다. **workflow 에 `secrets.` 참조가 0개**(contract test 로 고정) |
 
+### 운영 전용 SQL 을 격리 스택에 반영하는 규칙 (2026-10-30)
+baseline 은 **공유 DEV** 덤프라서, 운영에만 먼저 적용한 보안·스키마 수정은 baseline 에 없다. 그대로 두면 CI·로컬의 새 스택이 운영보다 약한 상태로 뜬다(실제로 accounts INSERT 보호가 이 상태였다 — `docs/security/ACCOUNTS_INSERT_PRIVILEGE_20261030.md` §7). 그런 SQL 은 `isolated-supabase/supabase/migrations/` 에 baseline **뒤** 순번의 멱등 migration 으로 추가하고(루트 SQL 과 동일 본문·begin/commit 제외), 동일성 시험을 둔다. `verifyBaselineParity.mjs` 의 `KNOWN_ISOLATED_ONLY` 에 "의도적 추가"로 등록하고, DEV 에도 반영돼 baseline 을 다시 덤프하면 목록에서 지운다. 운영 DB 에는 이 migration 을 실행하지 않는다.
+
 ### 데이터·권한 원칙
 - baseline = 공유 DEV `public` 스키마의 **스키마-only 덤프**(행 데이터 0, JWT·이메일·URL·ref 0 — 단위 테스트가 위생을 고정) + Storage 정책 7개 + 로컬 이미지의 기본 권한 초기화. 공유 DEV·운영의 **회원/센터/결제 데이터는 복사하지 않았다**.
 - 카탈로그(permissions 121 · subscription_plans 1 · service_categories 9)는 **저장소 루트 SQL 의 INSERT 문장에서 생성**했다. 공유 DEV 와는 권한 키 *이름*만 대조해 집합이 같음을 확인했다.

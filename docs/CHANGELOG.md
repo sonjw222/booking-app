@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-30 — 보안 후속: 운영 적용 기록 + 격리 스택에 accounts INSERT 보호 자동 설치
+- **문서**: `docs/security/ACCOUNTS_INSERT_PRIVILEGE_20261030.md` 에 운영 적용 기록(병합 SHA·배포·CI·SQL 해시·적용 시각·적용 후 검증)과 "현재 상태 의심 항목 없음 / 과거 악용 여부 확인 불가"의 구분을 추가.
+- **격리 환경 구성 변경**: PR #245 병합 후 새로 만든 격리 스택에 보호가 없음을 확인(검증 24/47) → `isolated-supabase/supabase/migrations/20261030000000_accounts_insert_privileged_columns.sql` 추가(루트 SQL 과 동일 본문), 동일성 시험·parity 도구 허용 목록·환경 구축 문서 반영. 운영 DB·운영 마이그레이션 이력은 변경 없음.
 ## 2026-10-30 — 보안: accounts INSERT 시점 특권 컬럼(is_platform_admin·pg_checkout_override·merged_into) 우회 차단
 - **문제**: 특권 컬럼 보호 트리거가 모두 UPDATE 전용이라, 신규 가입 INSERT 에 값을 끼워 넣으면 플랫폼 관리자 권한·토스 심사 우회·다른 계정 사칭(merged_into)이 가능했다(로컬 재현, 운영 동일 구성 읽기 전용 확인).
 - **수정**: `fix_accounts_insert_privileged_columns_20261030.sql` — BEFORE INSERT 트리거 1개(서버·SQL Editor·정상 가입·계정 연동은 통과). 기존 행·정책·트리거 불변, 이미 만들어진 비정상 값은 복구하지 않음(운영 읽기 전용 점검 결과 의심 항목 없음).

@@ -19,8 +19,8 @@ describe("격리 Supabase baseline 위생(공유 DEV/운영 데이터가 섞이�
     expect(baseline).not.toMatch(/bxntqggkfwnhcczsbqtj|jdglfvwdnkjnraqdxuuj/);
     expect(baseline).toMatch(/^-- 격리 환경 baseline: .*스키마-only/m);
   });
-  it("마이그레이션 순서: 기본 권한 초기화 → public baseline → Storage 정책(파일명 순서가 곧 적용 순서)", () => {
-    expect(migrations).toEqual(["20261026235900_reset_default_privileges.sql", "20261027000000_baseline_public_schema.sql", "20261027000001_baseline_storage_policies.sql"]);
+  it("마이그레이션 순서: 기본 권한 초기화 → public baseline → Storage 정책 → 운영 보안 수정(accounts INSERT 보호, PR #245)(파일명 순서가 곧 적용 순서)", () => {
+    expect(migrations).toEqual(["20261026235900_reset_default_privileges.sql", "20261027000000_baseline_public_schema.sql", "20261027000001_baseline_storage_policies.sql", "20261030000000_accounts_insert_privileged_columns.sql"]);
     expect(read("migrations/20261026235900_reset_default_privileges.sql")).toMatch(/revoke all on functions from anon, authenticated, service_role/);
   });
   it("카탈로그 시드는 저장소 루트 SQL 에서 재생성한 결과와 같다(드리프트 방지) — 운영/공유 DEV 접속 없음", () => {

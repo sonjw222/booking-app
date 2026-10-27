@@ -1,5 +1,8 @@
 # TODO
 
+## 2026-10-30 격리 스택 ↔ 운영 보안 수정 동기화
+- **P2**: 운영에만 적용한 SQL 이 격리 스택(baseline=공유 DEV)에 빠지는 일이 없도록, 운영 SQL 적용 절차에 "격리 migration 추가 + 동일성 시험" 단계를 포함(`docs/CI_ISOLATION_240.md`). 공유 DEV 에도 이 보호를 적용할지는 별도 결정.
+- **P3**: baseline 재덤프 시 `KNOWN_ISOLATED_ONLY`(verifyBaselineParity) 정리.
 ## 2026-10-30 accounts INSERT 보안 수정 후속
 - **P2**: `accounts` 의 다른 컬럼(`is_manager`·`is_member`·`deactivated_at` 등)도 가입 시점에 임의 지정 가능 — 현재 권한 판정에 쓰이지 않는 것으로 보이나 컬럼별 위험 검토 필요(이번 수정은 특권 3개만).
 - **P2**: 권한 컬럼 보호를 "새 컬럼을 추가할 때 INSERT·UPDATE 모두 막는다"는 규칙으로 DEVELOPMENT_RULES 에 반영.
