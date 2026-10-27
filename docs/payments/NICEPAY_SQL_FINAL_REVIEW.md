@@ -145,7 +145,7 @@
 - NICEPAY 쪽 사항(MID·키 계열·심사 전용 센터 허용·샌드박스)은 SQL 과 무관하며 회신 대기 중.
 
 ## 8. 범위 밖 선행 보안 발견(최우선 확인 — 이번 SQL 에는 포함하지 않음, 별도 결정 필요)
-위 INSERT 검증 중 **같은 원인의 기존 취약점**을 확인했다. `accounts` 의 기존 보호 트리거 4개(`is_platform_admin`·`pg_checkout_override`·`merged_into`·`phone_verified`)가 전부 **UPDATE 전용**이라, 계정 행이 아직 없는 인증 사용자가 가입(INSERT) 시점에 권한 컬럼을 직접 지정할 수 있다.
+위 INSERT 검증 중 **같은 원인의 기존 취약점**을 확인했다. `accounts` 의 **관리자 권한 보호 트리거 3개**(`trg_accounts_is_platform_admin_admin_only`·`trg_accounts_pg_checkout_override_admin_only`·`trg_accounts_merged_into_via_linking_only`)가 전부 **UPDATE 전용**이라, 계정 행이 아직 없는 인증 사용자가 가입(INSERT) 시점에 권한 컬럼을 직접 지정할 수 있다. (정정: 이전 표현의 `phone_verified` 는 컬럼이 아니라 `trg_accounts_phone_verified` 트리거(함수 `enforce_phone_verified_before_change`)를 가리킨 것인데, 이 트리거는 관리자 권한과 무관한 **전화번호 인증 보호**다 — 이미 있는 행의 `phone` 이 바뀔 때 최근 휴대폰 인증을 요구하는 UPDATE 트리거이며, INSERT 시점의 전화번호 인증은 "본인 계정 생성" RLS 정책의 `phone IS NULL OR _is_phone_recently_verified(phone)` 조건이 담당한다. 두 보호는 별개다. 이 취약점은 별도 보안 PR 로 분리돼 처리됐다.)
 - 로컬 재현(실제 인증·REST): 가입 시 `is_platform_admin=true` → `is_platform_admin()=true`(**플랫폼 관리자 권한 획득**), `pg_checkout_override=true` → 생성됨, `merged_into=<다른 계정 id>` → `my_account_id()` 가 다른 계정 id 를 반환(**계정 사칭**).
 - 운영은 같은 구성임을 읽기 전용으로 확인(INSERT 트리거 없음, "본인 계정 생성" 정책 동일, authenticated 전체 컬럼 INSERT 가능). 운영에서 실제 악용 시험은 하지 않았다(쓰기 금지).
 - 초안(로컬 검증 완료·운영 미실행): `fix_accounts_insert_privileged_columns_20261030.sql`(+`rollback_…`, `verify_…`) — BEFORE INSERT 트리거 1개로 세 컬럼 거부(서버·SQL Editor·플랫폼 관리자 통과, merged_into 는 연동 절차 예외 유지). 적용 후 정상 가입 26/26 유지·세 항목 DENIED(`accounts-flag-guard-WITH-privileged-insert-draft.json`).
