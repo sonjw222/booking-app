@@ -1,5 +1,11 @@
 # TODO
 
+## 2026-10-28 운영 반영 전 점검 후속
+- **P0(결정)**: 심사관 플래그 방식(재사용 vs 별도 `nicepay_review_access`)과 기존 "토스 심사 계정"(override=true) 처리 — 결정 전 운영 계정 권한 변경 금지.
+- **P0(운영 확인)**: P0 preflight(`preflight_nicepay_review_center_isolation_20261028.sql`)로 운영 함수 정의 해시 대조 후에만 분리 SQL 적용.
+- **P1**: NICEPAY 키 계열 확인(rest_v1/v3_mid) — v3_mid 면 결제창(`goPay`) 구현 필요. 준비 브랜치 병합 시 `tests/unit/productsPurchaseGuide.test.ts` 주소 단언 갱신(주소 공개 승인과 함께).
+- **P1**: 준비 브랜치 `NICEPAY_CONTRACT_HANDOFF_20261017.md` §5 SQL 순서 정정(게이트·환불 패치 누락).
+- **P2**: 분리 정책의 대규모 데이터 성능, 실기기·Safari/Firefox 미검증.
 ## 2026-10-28 NICEPAY 심사 전용 센터 후속
 - **P0(승인)**: `add_nicepay_review_center_isolation_20261028.sql` 운영 실행 → verify → (별도 승인) 시드 → 심사관 지정. 순서·롤백은 `docs/payments/NICEPAY_REVIEW_CENTER_20261028.md`.
 - **P0(결정)**: 심사 상품 가격·서비스 내용, 심사관 계정이 운영 역할을 겸하는지(별도 계정 권장), 심사 종료 후 처리.

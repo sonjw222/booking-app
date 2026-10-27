@@ -3,7 +3,8 @@
 import { createRequire } from "node:module"; import fs from "node:fs";
 const require = createRequire(process.cwd() + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
-const env = Object.fromEntries(fs.readFileSync(process.env.ISO_ENV_FILE, "utf8").trim().split("\n").map((l) => { const i = l.indexOf("="); return [l.slice(0, i), l.slice(i + 1)]; }));
+import { loadIsolatedEnv } from "./assertIsolated.mjs";
+const env = loadIsolatedEnv(process.env.ISO_ENV_FILE);   // 어떤 네트워크 요청보다 먼저: 일회용 로컬 스택이 아니면 여기서 throw
 const svc = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const OP = (await svc.from("centers").select("id").eq("name", "[QA] 심사 시험 스튜디오").single()).data.id;
 const mk = async (e, p) => { const c = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false } }); await c.auth.signInWithPassword({ email: e, password: p }); return c; };

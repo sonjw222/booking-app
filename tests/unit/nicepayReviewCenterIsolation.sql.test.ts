@@ -24,8 +24,22 @@ describe("NICEPAY 심사 센터 분리 SQL — 정적 계약(실제 격리 Postg
     expect(nonComment(apply)).not.toMatch(/drop policy if exists "(승인된 센터 조회|승인된 센터 수업 조회|상품 조회)"/);
   });
   it("구매·예약·수강권 발급 경로는 테이블 트리거로 막는다(SECURITY DEFINER RPC 우회 방지), 서버(auth.uid() null)는 통과", () => {
-    for (const t of ["orders", "memberships", "reservations"]) expect(apply).toContain(`trg_${t}_nicepay_review_guard`);
+    for (const t of ["orders", "memberships", "cart_items", "purchase_requests"]) expect(apply).toContain(`'${t}'`);
+    expect(apply).toContain("trg_%s_nicepay_review_guard"); expect(apply).toContain("trg_%s_nicepay_review_guard_upd");
+    expect(apply).toContain("trg_reservations_nicepay_review_guard"); expect(apply).toContain("trg_reservations_nicepay_review_guard_upd");
     expect(apply).toMatch(/if auth\.uid\(\) is null then return new; end if;/);
+  });
+  it("클라이언트가 보낸 center_id 만 믿지 않는다 — 상품의 실제 센터·수업 센터·수강권 센터도 검사하고, UPDATE 는 바뀔 때만 검사", () => {
+    expect(apply).toMatch(/select p\.center_id into v_c from products p where p\.id = \(v_row->>'product_id'\)::uuid/);
+    expect(apply).toMatch(/select c\.center_id into v_c from classes c/); expect(apply).toMatch(/select m\.center_id into v_c from memberships m/);
+    expect(apply).toMatch(/foreach v_c in array v_centers loop/);
+    expect(apply.match(/when \(old\.center_id is distinct from new\.center_id or old\.product_id is distinct from new\.product_id\)/g)).toHaveLength(1);
+    expect(apply).toMatch(/update of class_id, membership_id on reservations/);
+  });
+  it("기존 예약 사후 처리: 내 예약이 걸린 수업만 읽는 예외(수업만, 센터·상품 예외 없음)", () => {
+    expect(apply).toContain("nicepay_class_has_my_reservation"); expect(apply).toContain('create policy "nicepay_own_reservation_class" on classes for select');
+    const policies = nonComment(apply).split("\n").filter((l) => /^create policy/.test(l.trim()));
+    expect(policies.filter((l) => l.includes("nicepay_class_has_my_reservation") && !/ on classes /.test(l))).toEqual([]);
   });
   it("목록 RPC 3개에 같은 판정이 들어가고 기존 is_internal 조건은 유지된다", () => {
     expect(apply.match(/nicepay_review_center_allowed\((c\.id|p\.center_id)\)\s+--/g)?.length).toBeGreaterThanOrEqual(3);
@@ -39,7 +53,10 @@ describe("NICEPAY 심사 센터 분리 SQL — 정적 계약(실제 격리 Postg
   it("preflight 가 전제 객체 부재 시 중단한다", () => { expect(apply).toMatch(/raise exception 'NICEPAY 심사 분리: 전제 함수가 없습니다/); });
   it("롤백: 정책·트리거·신규 함수 삭제 + 이전 정의 복원, 컬럼/데이터는 남긴다", () => {
     expect(nonComment(rollback)).not.toMatch(/drop\s+column|drop\s+table|delete\s+from/i);
-    expect(rollback).toContain('drop policy if exists "nicepay_review_isolation" on centers');
+    expect(rollback).toContain('drop policy if exists "nicepay_review_isolation" on centers'); expect(rollback).toContain('drop policy if exists "nicepay_own_reservation_class" on classes');
+    expect(rollback).toContain("롤백 중단"); expect(rollback).toMatch(/status = 'approved' and not is_internal/);
+    expect(rollback).toContain("created_by:add_nicepay_review_center_isolation_20261028"); expect(apply).toContain("_nicepay_periods_existed");
+    expect(rollback).toContain("nicepay_class_has_my_reservation");
     expect(rollback).toMatch(/or public\.is_platform_admin\(\),\s*false\);/);
   });
   it("시드: 분리 SQL 미적용이면 중단, 임의 주소·사업자번호 없음, 심사 환경임을 밝힘, 멱등", () => {

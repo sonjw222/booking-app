@@ -21,6 +21,9 @@
 -- ============================================================
 BEGIN;
 
+-- 롤백이 이전 상태를 정확히 복원하도록, 기간 RPC 가 이 파일 적용 전에 있었는지 기록한다(없었으면 이 파일이 만든 것 → 롤백 시 삭제).
+create temp table _nicepay_periods_existed on commit drop as select to_regprocedure('fetch_public_storefront_product_periods(uuid)') is not null as existed;
+
 -- preflight: 전제 객체가 없으면 중단(부분 적용 방지)
 do $$
 begin
@@ -94,32 +97,58 @@ $$;
 drop policy if exists "nicepay_review_isolation" on centers;
 create policy "nicepay_review_isolation" on centers as restrictive for select using (nicepay_review_center_allowed(id));
 drop policy if exists "nicepay_review_isolation" on classes;
-create policy "nicepay_review_isolation" on classes as restrictive for select using (nicepay_review_center_allowed(center_id));
+-- 수업은 예외 1가지: 내 프로필의 예약이 이미 걸린 수업은 센터가 숨겨져도 읽을 수 있다(심사관이 되기 전에 만든 기존 예약을 내 예약 화면에서 보고 취소할 수 있게 — 사후 처리 보존).
+-- 센터·상품 목록/구매에는 영향 없음(센터·상품 정책은 예외 없음, 새 예약은 INSERT 트리거가 막는다).
+create or replace function nicepay_class_has_my_reservation(p_class_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+    select exists (select 1 from reservations r where r.class_id = p_class_id and r.profile_id in (select my_profile_ids()));
+$$;
+revoke all on function nicepay_class_has_my_reservation(uuid) from public;
+grant execute on function nicepay_class_has_my_reservation(uuid) to anon, authenticated, service_role;
+create policy "nicepay_review_isolation" on classes as restrictive for select using (nicepay_review_center_allowed(center_id) or nicepay_class_has_my_reservation(id));
+-- 기존 허용 정책("승인된 센터 수업 조회")은 centers 를 서브쿼리로 읽는데 그 centers 가 심사관에게 숨겨지므로, 내 예약이 걸린 수업만 읽는 허용 정책을 추가한다(내 예약만 — 다른 수업은 그대로 숨김).
+drop policy if exists "nicepay_own_reservation_class" on classes;
+create policy "nicepay_own_reservation_class" on classes for select using (nicepay_class_has_my_reservation(id));
 drop policy if exists "nicepay_review_isolation" on products;
 create policy "nicepay_review_isolation" on products as restrictive for select using (nicepay_review_center_allowed(center_id));
 
--- 구매·예약·수강권 발급 경로(RPC 는 SECURITY DEFINER 라 RLS 를 우회하므로 테이블 트리거로 막는다). auth.uid() is null(서버/service_role)은 통과.
+-- 구매·예약·수강권 발급 경로(RPC 는 SECURITY DEFINER 라 RLS 를 우회하고, orders INSERT 정책은 클라이언트가 보낸 center_id 와 product_id 의 일치를 보지 않는다).
+-- 그래서 행이 가리키는 "모든" 센터(행의 center_id + 상품의 실제 센터 + 수업의 센터 + 수강권의 센터)가 호출자에게 허용된 센터인지 테이블 트리거로 확인한다.
+-- 클라이언트가 보낸 center_id 만 믿지 않는다. auth.uid() is null(서버/service_role)은 통과. UPDATE 는 해당 컬럼이 실제로 바뀔 때만 검사한다.
 create or replace function nicepay_review_guard_center()
 returns trigger language plpgsql security definer set search_path = public as $$
-declare v_center uuid;
+declare v_centers uuid[] := '{}'; v_c uuid; v_row jsonb := to_jsonb(new);
 begin
   if auth.uid() is null then return new; end if;
   if tg_table_name = 'reservations' then
-    select c.center_id into v_center from classes c where c.id = new.class_id;
+    select c.center_id into v_c from classes c where c.id = (v_row->>'class_id')::uuid;
+    if v_c is not null then v_centers := v_centers || v_c; end if;
+    select m.center_id into v_c from memberships m where m.id = (v_row->>'membership_id')::uuid;
+    if v_c is not null then v_centers := v_centers || v_c; end if;
   else
-    v_center := new.center_id;
+    if (v_row->>'center_id') is not null then v_centers := v_centers || (v_row->>'center_id')::uuid; end if;
+    select p.center_id into v_c from products p where p.id = (v_row->>'product_id')::uuid;
+    if v_c is not null then v_centers := v_centers || v_c; end if;
   end if;
-  if v_center is not null and not nicepay_review_center_allowed(v_center) then
-    raise exception '이 센터의 상품·수업은 이용할 수 없어요';
-  end if;
+  foreach v_c in array v_centers loop
+    if not nicepay_review_center_allowed(v_c) then raise exception '이 센터의 상품·수업은 이용할 수 없어요'; end if;
+  end loop;
   return new;
 end $$;
-drop trigger if exists trg_orders_nicepay_review_guard on orders;
-create trigger trg_orders_nicepay_review_guard before insert on orders for each row execute function nicepay_review_guard_center();
-drop trigger if exists trg_memberships_nicepay_review_guard on memberships;
-create trigger trg_memberships_nicepay_review_guard before insert on memberships for each row execute function nicepay_review_guard_center();
-drop trigger if exists trg_reservations_nicepay_review_guard on reservations;
-create trigger trg_reservations_nicepay_review_guard before insert on reservations for each row execute function nicepay_review_guard_center();
+do $$
+declare t text; ins text := 'trg_%s_nicepay_review_guard'; upd text := 'trg_%s_nicepay_review_guard_upd';
+begin
+  foreach t in array array['orders','memberships','cart_items','purchase_requests'] loop
+    execute format('drop trigger if exists %I on %I', format(ins, t), t);
+    execute format('create trigger %I before insert on %I for each row execute function nicepay_review_guard_center()', format(ins, t), t);
+    execute format('drop trigger if exists %I on %I', format(upd, t), t);
+    execute format('create trigger %I before update of center_id, product_id on %I for each row when (old.center_id is distinct from new.center_id or old.product_id is distinct from new.product_id) execute function nicepay_review_guard_center()', format(upd, t), t);
+  end loop;
+  execute 'drop trigger if exists trg_reservations_nicepay_review_guard on reservations';
+  execute 'create trigger trg_reservations_nicepay_review_guard before insert on reservations for each row execute function nicepay_review_guard_center()';
+  execute 'drop trigger if exists trg_reservations_nicepay_review_guard_upd on reservations';
+  execute 'create trigger trg_reservations_nicepay_review_guard_upd before update of class_id, membership_id on reservations for each row when (old.class_id is distinct from new.class_id or old.membership_id is distinct from new.membership_id) execute function nicepay_review_guard_center()';
+end $$;
 
 -- 목록 RPC 3개(SECURITY DEFINER — RLS 우회). 현재 정의 + nicepay_review_center_allowed 조건만 추가.
 CREATE OR REPLACE FUNCTION public.fetch_public_storefront_products(p_center_id uuid DEFAULT NULL::uuid)
@@ -254,5 +283,10 @@ as $$
 $$;
 revoke all on function fetch_public_storefront_product_periods(uuid) from public;
 grant execute on function fetch_public_storefront_product_periods(uuid) to anon, authenticated;
+do $$ begin
+  if not (select existed from _nicepay_periods_existed) then
+    comment on function fetch_public_storefront_product_periods(uuid) is 'created_by:add_nicepay_review_center_isolation_20261028 (rollback 시 삭제)';
+  end if;
+end $$;
 
 COMMIT;

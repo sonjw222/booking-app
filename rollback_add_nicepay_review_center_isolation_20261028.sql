@@ -1,12 +1,30 @@
 -- add_nicepay_review_center_isolation_20261028.sql 되돌리기: 정책·트리거·신규 함수 삭제, 함수 4개를 이전 정의로 복원. centers.is_nicepay_review 컬럼과 심사 센터 데이터는 남긴다(데이터 보존).
--- 주의: 되돌리면 심사 센터가 일반 회원에게도 보인다 — 심사 센터 데이터를 만든 상태라면 먼저 해당 센터를 비공개(status 변경 또는 삭제는 별도 승인)로 두고 실행.
+-- ⚠ 안전장치: 롤백하면 분리 규칙이 사라져 심사 센터·상품·수업이 일반 회원에게 보일 수 있다. 일반 공개 가능 상태(승인된 비내부 심사 센터)가 하나라도 있으면 이 스크립트는 아무것도 바꾸지 않고 중단한다.
+--   먼저 심사 센터를 비공개로 돌린다. 센터 하나만 닫으면 그 센터의 상품·수업 직접 조회까지 같이 막힌다(기존 "상품 조회"/"승인된 센터 수업 조회" 정책이 승인된 비내부 센터만 허용).
+--   방법 ① SQL Editor: update centers set is_internal = true where is_nicepay_review;   -- 심사 센터 행만. 기존 운영 센터 변경 없음(is_internal 은 별도 보호 트리거가 없다)
+--   방법 ② 플랫폼 관리자 계정으로 센터 승인 상태를 되돌림(status 는 guard_center_status_change 트리거가 플랫폼 관리자만 변경 허용 — SQL Editor 의 postgres 로는 변경 불가).
+--   그 뒤 이 스크립트를 실행한다. (심사 센터 데이터는 삭제하지 않는다.)
+-- 복원 규칙(기간 RPC): 분리 SQL 이 그 함수를 새로 만들었다면(함수 주석 표식) 삭제, 분리 SQL 적용 전부터 있었다면 add_public_storefront_product_periods_20261027.sql 정의로 복원.
 BEGIN;
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_schema='public' and table_name='centers' and column_name='is_nicepay_review')
+     and exists (select 1 from centers where is_nicepay_review and status = 'approved' and not is_internal) then
+    raise exception '롤백 중단: 일반 사용자에게 공개될 수 있는 심사 센터가 있어요. 먼저 update centers set is_internal = true where is_nicepay_review; 를 실행하세요(또는 플랫폼 관리자가 센터 승인 상태를 되돌리세요).';
+  end if;
+end $$;
 drop policy if exists "nicepay_review_isolation" on centers;
 drop policy if exists "nicepay_review_isolation" on classes;
+drop policy if exists "nicepay_own_reservation_class" on classes;
 drop policy if exists "nicepay_review_isolation" on products;
-drop trigger if exists trg_orders_nicepay_review_guard on orders;
-drop trigger if exists trg_memberships_nicepay_review_guard on memberships;
-drop trigger if exists trg_reservations_nicepay_review_guard on reservations;
+do $$
+declare t text;
+begin
+  foreach t in array array['orders','memberships','cart_items','purchase_requests','reservations'] loop
+    execute format('drop trigger if exists %I on %I', format('trg_%s_nicepay_review_guard', t), t);
+    execute format('drop trigger if exists %I on %I', format('trg_%s_nicepay_review_guard_upd', t), t);
+  end loop;
+end $$;
 drop trigger if exists trg_centers_nicepay_review_admin_only on centers;
 create or replace function public.center_rows_visible(p_center_id uuid)
  returns boolean language sql stable security definer set search_path to 'public' as $$
@@ -113,10 +131,13 @@ $function$;
 revoke all on function public.fetch_purchasable_products(uuid) from public, anon;
 grant execute on function public.fetch_purchasable_products(uuid) to authenticated, service_role;
 
--- periods 함수는 add_public_storefront_product_periods_20261027.sql 의 정의로 복원(그 파일을 적용하지 않았다면 이 함수는 없던 것이므로 삭제)
+-- 기간 RPC: 분리 SQL 이 만든 것이면 삭제, 이전부터 있었으면 이전 정의로 복원
 do $do$ begin
   if to_regprocedure('fetch_public_storefront_product_periods(uuid)') is not null then
-    execute $f$create or replace function fetch_public_storefront_product_periods(p_center_id uuid default null)
+    if coalesce(obj_description('fetch_public_storefront_product_periods(uuid)'::regprocedure, 'pg_proc'), '') like 'created_by:add_nicepay_review_center_isolation_20261028%' then
+      drop function fetch_public_storefront_product_periods(uuid);
+    else
+      execute $f$create or replace function fetch_public_storefront_product_periods(p_center_id uuid default null)
 returns table (
     product_id uuid,
     expiry_mode text,
@@ -149,8 +170,10 @@ as $$
       and (p_center_id is null or p.center_id = p_center_id)
     limit 500;
 $$;$f$;
+    end if;
   end if;
 end $do$;
+drop function if exists nicepay_class_has_my_reservation(uuid);
 drop function if exists nicepay_review_guard_center();
 drop function if exists enforce_center_nicepay_review_admin_only();
 drop function if exists nicepay_review_center_allowed(uuid);

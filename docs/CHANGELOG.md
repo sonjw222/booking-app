@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-10-28 — NICEPAY 심사 환경 운영 반영 전 점검: 센터 불일치 우회 수정·롤백 안전장치·검증 스크립트 보호(로컬 격리 검증만, 운영 미적용)
+- **결함 수정**: 상품 id 와 센터 id 를 어긋나게 넣은 직접 REST 주문/장바구니/구매신청이 분리 규칙을 우회하던 문제 — 트리거가 행의 center_id 뿐 아니라 상품·수업·수강권의 실제 센터를 모두 검사, UPDATE 경로도 검사. 기존 예약이 걸린 수업은 심사관도 읽을 수 있게(사후 처리 보존).
+- **롤백**: 공개 가능한 심사 센터가 있으면 중단, 기간 RPC 는 이전 존재 여부에 따라 삭제/복원. preflight SQL 추가.
+- **검증 스크립트**: 모두 네트워크 요청 전에 일회용 로컬 스택인지 검사(잘못된 환경 요청 0건 회귀 시험). 상세: `docs/payments/NICEPAY_PREPRODUCTION_REVIEW_20261028.md`, `NICEPAY_SQL_RUNBOOK_20261028.md`.
 ## 2026-10-28 — NICEPAY 심사 전용 센터 분리(SQL 초안 + 검증 스크립트, 로컬 격리 DB 검증만·운영 미적용)
 - 심사 센터(`centers.is_nicepay_review`)는 심사관(`accounts.pg_checkout_override`)에게만, 심사관에게는 심사 센터만 보이도록 서버에서 분리(restrictive RLS·목록 RPC·구매/예약/수강권 INSERT 트리거). 앱 코드 변경 없음, 기존 데이터 행 변경 없음. 상세·SQL 순서·결과: `docs/payments/NICEPAY_REVIEW_CENTER_20261028.md`.
 ## 2026-10-27 — NICEPAY 카드사 심사 홈페이지 보완(코드·문서·SQL 초안, 미배포·SQL 미실행)

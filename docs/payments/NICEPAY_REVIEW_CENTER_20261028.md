@@ -21,9 +21,9 @@
 3. `verify_add_nicepay_review_center_isolation_20261028.sql` — 읽기 전용.
 4. (별도 승인, 데이터 생성) `seed_nicepay_review_center_20261028.sql` — 분리 SQL 미적용이면 중단하는 가드 포함.
 5. 심사관 지정: `update accounts set pg_checkout_override = true where auth_id = (select id from auth.users where email = '<심사관 이메일>');` — SQL Editor 로만(별도 승인).
-- 롤백: `rollback_add_nicepay_review_center_isolation_20261028.sql`(정의 복원·정책/트리거/함수 삭제, 컬럼·데이터 보존). **심사 센터 데이터를 만든 뒤 롤백하면 그 센터가 일반 회원에게 보이므로 먼저 비공개 처리 필요.**
+- 롤백: `rollback_add_nicepay_review_center_isolation_20261028.sql`(정의 복원·정책/트리거/함수 삭제, 컬럼·데이터 보존). **공개 가능한 심사 센터(승인·비내부)가 있으면 롤백이 아무것도 바꾸지 않고 중단한다.** 먼저 `update centers set is_internal = true where is_nicepay_review;`(또는 플랫폼 관리자가 승인 상태 변경 — `status` 는 SQL Editor 의 postgres 로 변경 불가) 후 실행. 기간 RPC 는 분리 SQL 이 만든 것이면 삭제, 이전부터 있었으면 이전 정의로 복원.
 
-**차단 지점(화면 숨김이 아니라 서버)**: ① centers/classes/products SELECT restrictive 정책, ② `center_rows_visible`(휴무일·리뷰·룸·설정 등 9개 테이블 정책 + class/product_rows_visible 이 따라옴), ③ 공개/회원 상품 목록 RPC + 기간 RPC, ④ orders/memberships/reservations INSERT 트리거(SECURITY DEFINER RPC 우회 방지; 서버/service_role 은 통과). 앱 코드 변경 없음.
+**차단 지점(화면 숨김이 아니라 서버)**: ① centers/classes/products SELECT restrictive 정책(수업만 예외: 내 예약이 걸린 수업은 읽기 허용 — 기존 예약 사후 처리 보존), ② `center_rows_visible`(휴무일·리뷰·룸·설정 등 9개 테이블 정책 + class/product_rows_visible 이 따라옴), ③ 공개/회원 상품 목록 RPC + 기간 RPC, ④ orders/memberships/cart_items/purchase_requests/reservations 의 INSERT 및 센터·상품·수업·수강권 컬럼 변경 UPDATE 트리거 — **클라이언트가 보낸 center_id 만 믿지 않고 상품의 실제 센터·수업의 센터·수강권의 센터 모두를 검사**(SECURITY DEFINER RPC 우회 방지; 서버/service_role 은 통과). 앱 코드 변경 없음. (2026-10-28 후속 점검에서 center_id/상품 불일치 직접 REST 주문 결함을 재현해 수정 — `NICEPAY_PREPRODUCTION_REVIEW_20261028.md` §5)
 
 ## 3. 로컬 검증 결과(격리 Postgres, 실제 로그인)
 권한 매트릭스 `docs/qa/nicepay-review-center-20261028/evidence/permission-matrix-{before,after}-isolation.json`(적용 전에는 전원에게 심사 센터가 노출됨 = 분리 필요성 입증).
@@ -37,7 +37,7 @@
 | 플랫폼 관리자 | 전체 | 가능 | 가능 | 둘 다 | - | - | - | - |
 - 기존 데이터 보존: 적용 전후 운영 센터 2·상품 11·주문 8·수강권 2·예약 2·수업 1 의 행 수와 내용 해시가 동일(`evidence/existing-data-snapshot-...txt`). 심사관·일반 회원의 기존 수강권/주문/예약 이력은 그대로 조회됨.
 - 적용→롤백→재적용→재적용(멱등) 모두 오류 없음. 매니저의 심사 센터 생성·회원의 스스로 심사관 지정 거부 확인, 매니저의 플래그 변경은 트리거가 거부(RLS 우회 경로로 확인).
-- 브라우저(390/1440 × 라이트/다크, 비회원/일반/심사관, 검색·홈·직접 URL·구매 시트·결제 화면): `qa-results.json`. 검색은 심사관=심사 센터만, 일반/비회원=운영 센터만. 페이지 오류 0, 수평 스크롤 0.
+- 브라우저(390/1440 × 라이트/다크, 비회원/일반/심사관, 검색·홈·카테고리·내 예약·구매 내역·직접 URL·구매 시트·결제 화면): `qa-results.json`. 검색은 심사관=심사 센터만, 일반/비회원=운영 센터만. 페이지 오류 0, 수평 스크롤 0.
 - 결제 비활성 유지: 일반 회원 결제 화면은 "직접결제"만. 심사관만 카드 등 노출(기존 구조). 결제 버튼은 누르지 않음.
 
 ## 4. 심사 센터·상품 설계(제안 — 값은 사용자 확정 필요)
@@ -56,7 +56,7 @@
 - 통합 충돌: 준비 브랜치와 코드 파일은 자동 병합, `docs/CHANGELOG.md`·`docs/TODO.md` 만 충돌(양쪽 유지로 해결). 준비 브랜치는 Toss/PortOne 신규 결제를 제거하는 큰 변경이라 이번 작업에서 병합하지 않았다(별도 승인).
 
 ## 6. 재현(로컬 격리 스택, 운영 아님)
-`supabase start --workdir isolated-supabase …` → `node scripts/isolated/bootstrapEphemeral.mjs --out <env>` → SQL 적용(위 순서) → `ISO_ENV_FILE=<env> node scripts/isolated/nicepayReview/{permissionMatrix,reservationGuard,flagTamper}.mjs`.
+`supabase start --workdir isolated-supabase …` → `node scripts/isolated/bootstrapEphemeral.mjs --out <env>` → SQL 적용(위 순서) → `ISO_ENV_FILE=<env> scripts/isolated/nicepayReview/setupLocal.sh` 후 `node scripts/isolated/nicepayReview/{permissionMatrix,reservationGuard,flagTamper,mismatchedCenterRepro,rollbackScenarios,browserHistoryCategory}.mjs` — 모든 스크립트는 네트워크 요청 전에 일회용 로컬 스택인지 검사한다(`assertIsolated.mjs`)..
 
 ## 7. 남은 정책 결정(임의 확정하지 않음)
 1. 심사관 계정이 **운영 센터의 회원/매니저/플랫폼 관리자 역할을 겸하면** 어떻게 할지(현재: 매니저·플랫폼 관리자 센터는 예외로 보임, 회원 관계만인 운영 센터는 숨김). 가능하면 심사 전용 별도 계정 권장. 지정 대상 `sonjw222@naver.com` 이 운영 계정인지 운영 DB 에서 확인되지 않음(조회 권한 없음).

@@ -5,7 +5,8 @@ select
   to_regprocedure('nicepay_review_center_allowed(uuid)') is not null as fn_allowed,
   to_regprocedure('nicepay_is_reviewer()') is not null as fn_reviewer,
   (select count(*) from pg_policies where policyname='nicepay_review_isolation') as restrictive_policies_must_be_3,
-  (select count(*) from pg_trigger where tgname like '%nicepay_review%' and not tgisinternal) as triggers_must_be_4,
+  (select count(*) from pg_policies where policyname='nicepay_own_reservation_class') as own_reservation_policy_must_be_1,
+  (select count(*) from pg_trigger where tgname like '%nicepay_review%' and not tgisinternal) as triggers_must_be_11,
   has_function_privilege('public','nicepay_review_center_allowed(uuid)','execute') as public_exec_must_be_false;
 -- 2) 기존 센터 보존: 아래 두 값은 적용 전후 같아야 한다(적용 전에 먼저 기록).
 select (select count(*) from centers where not is_nicepay_review) as existing_centers,
