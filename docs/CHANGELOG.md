@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-10-30 — 보안: accounts INSERT 시점 특권 컬럼(is_platform_admin·pg_checkout_override·merged_into) 우회 차단
+- **문제**: 특권 컬럼 보호 트리거가 모두 UPDATE 전용이라, 신규 가입 INSERT 에 값을 끼워 넣으면 플랫폼 관리자 권한·토스 심사 우회·다른 계정 사칭(merged_into)이 가능했다(로컬 재현, 운영 동일 구성 읽기 전용 확인).
+- **수정**: `fix_accounts_insert_privileged_columns_20261030.sql` — BEFORE INSERT 트리거 1개(서버·SQL Editor·정상 가입·계정 연동은 통과). 기존 행·정책·트리거 불변, 이미 만들어진 비정상 값은 복구하지 않음(운영 읽기 전용 점검 결과 의심 항목 없음).
+- **검증**: PGlite 회귀(CI Unit)·일회용 Supabase 실제 인증·REST 47/47·브라우저 가입(OTP 포함)·변조 가입 시도 차단·보호 제거 시 검증 실패 확인. 상세 `docs/security/ACCOUNTS_INSERT_PRIVILEGE_20261030.md`.
 ## 2026-10-27 — #240 live CI 를 일회용 Supabase 스택으로 격리(PR #244, 원격 CI 통과·원격 취소 검증 완료)
 - **변경**: live E2E 4구간·Integration·ACL 반복 job 이 공유 DEV·GitHub Secrets 대신 각자 러너 안의 일회용 로컬 Supabase 스택(`isolated-supabase/`, Auth·PostgREST·Storage·Realtime·Edge Functions)만 쓴다. workflow 의 `secrets.` 참조 0개, 가드가 OK(kind=ephemeral-local-stack)가 아니면 테스트가 시작되지 않고 job 이 실패한다(공유 DEV 대체 경로 없음). E2E 구간은 needs 체인·전역 큐 없이 병렬.
 - **baseline**: 공유 DEV `public` 스키마-only 덤프(데이터 0) + Storage 정책 + 기본 권한 초기화 migration + 저장소 SQL 에서 생성한 카탈로그 시드. 공유 DEV 와 구조·권한 대조 차이 0(함수 171·릴레이션 94·정책 200·컬럼 850·트리거 36·Storage). 공유 DEV/운영 데이터 복사 없음.

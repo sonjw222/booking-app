@@ -1,5 +1,9 @@
 # TODO
 
+## 2026-10-30 accounts INSERT 보안 수정 후속
+- **P2**: `accounts` 의 다른 컬럼(`is_manager`·`is_member`·`deactivated_at` 등)도 가입 시점에 임의 지정 가능 — 현재 권한 판정에 쓰이지 않는 것으로 보이나 컬럼별 위험 검토 필요(이번 수정은 특권 3개만).
+- **P2**: 권한 컬럼 보호를 "새 컬럼을 추가할 때 INSERT·UPDATE 모두 막는다"는 규칙으로 DEVELOPMENT_RULES 에 반영.
+- **P3**: auth 사용자가 없는 계정 3개(탈퇴 표시 1·QA 시험 2) 정리 여부 판단.
 ## 2026-10-26 Q01 후속(E2E 수업 정리)
 - **P2** 나머지 17개 E2E 스펙의 고정 제목을 실행별 제목으로 단계 전환: 생성 헬퍼가 이미 `title` 을 반환하므로 스펙의 `hasText: "리터럴"` 을 반환된 `cls.title` 로 바꾼 뒤 CI 에 `E2E_RUN_SCOPED_TITLES=1` 을 켠다(현재는 고정 제목 + 충돌 시 BLOCKED). 공유 DEV 에서 CI 취소로 남은 고정 제목 행은 자동 삭제되지 않으므로 다음 실행이 BLOCKED 될 수 있다 — 소유 증명 가능한 manifest 가 러너에 남지 않는 CI 에서는 #240 격리 DB 이전이 근본 해결이다.
 - **P3** `cleanupTodaysReservationsForProfile` 은 전용 테스트 프로필의 오늘 예약만 지운다(범위 문서화만, 변경 없음).
