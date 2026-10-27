@@ -1,4 +1,4 @@
-# NICEPAY SQL 실행 런북 (2026-10-29 개정 2 — 운영 읽기 전용 Preflight 반영) — 실행하지 않음, 승인 후에만
+# NICEPAY SQL 실행 런북 (2026-10-30 개정 3 — accounts 보호 INSERT 확장 반영) — 실행하지 않음, 승인 후에만
 
 운영 Supabase `bxntqggkfwnhcczsbqtj` 는 **읽기 전용으로만** 조회했다(마이그레이션 이력 11건 본문 대조·스키마 존재 확인). 이 문서의 SQL 은 모두 미실행이다. 전문은 아래에 있다(경로는 저장소 루트).
 
@@ -116,19 +116,22 @@ begin
   end if;
 end $$;
 
--- NICEPAY 심사관 전용 권한(토스 심사용 pg_checkout_override 와 별개). 운영자만 변경 가능(본인이 스스로 켤 수 없음) — SQL Editor(auth.uid() is null) 또는 플랫폼 관리자만.
+-- NICEPAY 심사관 전용 권한(토스 심사용 pg_checkout_override 와 별개). 운영자만 지정 가능(본인이 스스로 켤 수 없음) — SQL Editor(auth.uid() is null)·서버(service_role)·플랫폼 관리자만.
+-- ⚠ INSERT 도 막는다: "본인 계정 생성" RLS 정책은 auth_id = auth.uid() 만 보고 컬럼 값을 보지 않으므로, UPDATE 만 막으면 가입 시점에 `nicepay_review_access = true` 로 계정을 만들어 우회할 수 있다.
+--   정상 가입(앱 가입 화면은 이 컬럼을 보내지 않아 기본값 false)은 그대로 통과한다. upsert(INSERT … ON CONFLICT DO UPDATE)는 INSERT·UPDATE 트리거를 모두 거치므로 같은 기준이다.
 alter table accounts add column if not exists nicepay_review_access boolean not null default false;
 comment on column accounts.nicepay_review_access is 'NICEPAY 카드사 심사관 전용 권한. true 이면 심사 센터만 보이고 NICEPAY 결제 게이트를 통과한다. pg_checkout_override(토스 심사용)와 독립.';
 create or replace function enforce_nicepay_review_access_admin_only()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  if new.nicepay_review_access is distinct from old.nicepay_review_access then
+  if (tg_op = 'INSERT' and new.nicepay_review_access)
+     or (tg_op = 'UPDATE' and new.nicepay_review_access is distinct from old.nicepay_review_access) then
     if auth.uid() is not null and not is_platform_admin() then raise exception '이 값은 운영자만 변경할 수 있어요'; end if;
   end if;
   return new;
 end $$;
 drop trigger if exists trg_accounts_nicepay_review_access_admin_only on accounts;
-create trigger trg_accounts_nicepay_review_access_admin_only before update on accounts
+create trigger trg_accounts_nicepay_review_access_admin_only before insert or update on accounts
   for each row execute function enforce_nicepay_review_access_admin_only();
 
 alter table centers add column if not exists is_nicepay_review boolean not null default false;
@@ -442,7 +445,7 @@ select (select count(*) from centers where is_nicepay_review) as review_centers,
 --   방법 ① SQL Editor: update centers set is_internal = true where is_nicepay_review;   -- 심사 센터 행만. 기존 운영 센터 변경 없음(is_internal 은 별도 보호 트리거가 없다)
 --   방법 ② 플랫폼 관리자 계정으로 센터 승인 상태를 되돌림(status 는 guard_center_status_change 트리거가 플랫폼 관리자만 변경 허용 — SQL Editor 의 postgres 로는 변경 불가).
 --   그 뒤 이 스크립트를 실행한다. (심사 센터 데이터는 삭제하지 않는다.)
--- 남기는 것: accounts.nicepay_review_access 컬럼·보호 트리거(값이 있을 수 있어 데이터 보존. 완전 제거는 별도 승인), centers.is_nicepay_review 컬럼.
+-- 남기는 것: accounts.nicepay_review_access 컬럼·보호 트리거(INSERT·UPDATE 모두 보호, 값이 있을 수 있어 데이터 보존. 완전 제거는 별도 승인), centers.is_nicepay_review 컬럼.
 -- 복원 규칙(기간 RPC): 분리 SQL 이 그 함수를 새로 만들었다면(함수 주석 표식) 삭제, 분리 SQL 적용 전부터 있었다면 add_public_storefront_product_periods_20261027.sql 정의로 복원.
 BEGIN;
 do $$
@@ -823,3 +826,7 @@ select
     has_function_privilege('anon', 'fetch_public_storefront_product_periods(uuid)', 'execute') as anon_can_execute,
     has_function_privilege('authenticated', 'fetch_public_storefront_product_periods(uuid)', 'execute') as authenticated_can_execute;
 ```
+
+
+## 별도 보안 초안(NICEPAY 와 독립 · 미실행) — accounts INSERT 특권 컬럼 보호
+파일: `fix_accounts_insert_privileged_columns_20261030.sql`(+`rollback_…`, `verify_…`). 가입 시점에 `is_platform_admin`·`pg_checkout_override`·`merged_into` 를 지정하는 우회를 막는다. 상세·재현 결과: `docs/payments/NICEPAY_SQL_FINAL_REVIEW.md` §8. 적용 여부·시점은 별도 결정(권장: NICEPAY 와 무관하게 우선 검토).

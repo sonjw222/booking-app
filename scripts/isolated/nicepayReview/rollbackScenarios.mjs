@@ -12,6 +12,8 @@ const rev = (await svc.from("centers").select("id").eq("is_nicepay_review", true
 const reads = async () => { const out = {}; for (const [n, e, p] of [["비회원"], ["일반회원A", env.TEST_USER_A_EMAIL, env.TEST_USER_A_PASSWORD], ["심사관B", env.TEST_USER_B_EMAIL, env.TEST_USER_B_PASSWORD]]) { const c = await as(e, p); out[n] = { centers: (await c.from("centers").select("id").eq("id", rev)).data.length, products: (await c.from("products").select("id").eq("center_id", rev)).data.length, classes: (await c.from("classes").select("id").eq("center_id", rev)).data.length }; } return out; };
 const periodsDef = () => sql("select md5(pg_get_functiondef('fetch_public_storefront_product_periods(uuid)'::regprocedure))").out;
 
+// 전제: S2/S3 는 "기간 RPC 가 이전부터 있던" 경우를 시험하므로 먼저 P1(선행 기간 RPC)을 보장한다(S4 가 "없던" 경우를 따로 시험)
+sql(null, PER);
 // 시나리오 1: 심사 센터가 공개 가능(approved, 비내부) 상태면 롤백이 아무것도 바꾸지 않고 중단
 sql("update centers set is_internal=false, status='approved' where id='" + rev + "'");
 const before = sql("select count(*) from pg_policies where policyname='nicepay_review_isolation'").out;

@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-10-30 — NICEPAY 전용 권한 보호를 INSERT 까지 확장 + 최종 검토 문서 증거 교체 (로컬 검증만, 운영 미적용)
+- `accounts.nicepay_review_access` 보호 트리거를 `BEFORE INSERT OR UPDATE` 로 확장: 가입(INSERT)·upsert·삭제 후 재생성 시점에 true 지정을 거부(서버·SQL Editor·플랫폼 관리자는 통과). 실제 인증·REST 26/26, 수정 전 15/25(결함 재현).
+- 범위 밖 선행 취약점 발견: 기존 권한 컬럼(`is_platform_admin`·`pg_checkout_override`·`merged_into`)도 가입 시점에 지정 가능(로컬 재현, 운영 동일 구성 읽기 전용 확인). 별도 초안 `fix_accounts_insert_privileged_columns_20261030.sql`(미실행).
+- `NICEPAY_SQL_FINAL_REVIEW.md` 의 미치환 자리표시자를 실제 검증 결과·영구 증거 파일(`docs/qa/nicepay-sql-final-review-20261030/`)로 교체, SQL 원문·해시 갱신.
 ## 2026-10-29 — NICEPAY 운영 반영 전 최종 Preflight(운영은 SELECT 만, SQL 미실행)
 - 운영 읽기 전용 결과: P0 함수 정의 해시 3/3 일치, P0b 7/7 true → P2 적용 BLOCKED 아님. 상세 `docs/payments/NICEPAY_PREFLIGHT_20261029.md`.
 - 검증 SQL 정정(로컬): 컬럼 1→2, 트리거 오탐(운영의 기존 `nicepay_review_actions_append_only`)·정확한 이름 12개, 함수 7·RPC 3·PUBLIC 실행 불가 확인으로 확장. 롤백 시나리오 시험도 같은 이름 기준으로 수정(11/11).

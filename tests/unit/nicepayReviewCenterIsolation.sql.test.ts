@@ -101,4 +101,17 @@ describe("NICEPAY 심사 센터 분리 SQL — 정적 계약(실제 격리 Postg
     expect(new Set(fns).size).toBe(7);
     for (const f of new Set(fns)) expect(verify).toContain(`'${f}'`);
   });
+
+  it("전용 권한 보호는 UPDATE 뿐 아니라 INSERT(가입·upsert·삭제 후 재생성)에도 걸린다 — 서버/SQL Editor(auth.uid() is null)·플랫폼 관리자는 통과", () => {
+    expect(apply).toMatch(/create trigger trg_accounts_nicepay_review_access_admin_only before insert or update on accounts/);
+    expect(apply).toMatch(/tg_op = 'INSERT' and new\.nicepay_review_access/); expect(apply).toMatch(/tg_op = 'UPDATE' and new\.nicepay_review_access is distinct from old\.nicepay_review_access/);
+    expect(apply).toMatch(/if auth\.uid\(\) is not null and not is_platform_admin\(\) then raise exception/);
+  });
+  it("별도 보안 초안(accounts INSERT 특권 컬럼 보호): BEFORE INSERT 트리거 1개, 세 컬럼 거부, 서버·관리자 통과, 기존 행·트리거 불변, P2 에 포함되지 않음", () => {
+    const d = read("fix_accounts_insert_privileged_columns_20261030.sql"); const code = nonComment(d);
+    expect(code).toMatch(/create trigger trg_accounts_insert_privileged_columns before insert on accounts/);
+    expect(code).toMatch(/new\.is_platform_admin or new\.pg_checkout_override/); expect(code).toMatch(/new\.merged_into is not null/); expect(code).toMatch(/app\.allow_merged_into_change/);
+    expect(code).toMatch(/auth\.uid\(\) is not null and not is_platform_admin\(\)/); expect(code).not.toMatch(/\b(update|delete|truncate)\b|drop (table|column)/i);
+    expect(apply).not.toContain("enforce_accounts_insert_privileged_columns");
+  });
 });

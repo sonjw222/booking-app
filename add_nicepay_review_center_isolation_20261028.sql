@@ -38,19 +38,22 @@ begin
   end if;
 end $$;
 
--- NICEPAY 심사관 전용 권한(토스 심사용 pg_checkout_override 와 별개). 운영자만 변경 가능(본인이 스스로 켤 수 없음) — SQL Editor(auth.uid() is null) 또는 플랫폼 관리자만.
+-- NICEPAY 심사관 전용 권한(토스 심사용 pg_checkout_override 와 별개). 운영자만 지정 가능(본인이 스스로 켤 수 없음) — SQL Editor(auth.uid() is null)·서버(service_role)·플랫폼 관리자만.
+-- ⚠ INSERT 도 막는다: "본인 계정 생성" RLS 정책은 auth_id = auth.uid() 만 보고 컬럼 값을 보지 않으므로, UPDATE 만 막으면 가입 시점에 `nicepay_review_access = true` 로 계정을 만들어 우회할 수 있다.
+--   정상 가입(앱 가입 화면은 이 컬럼을 보내지 않아 기본값 false)은 그대로 통과한다. upsert(INSERT … ON CONFLICT DO UPDATE)는 INSERT·UPDATE 트리거를 모두 거치므로 같은 기준이다.
 alter table accounts add column if not exists nicepay_review_access boolean not null default false;
 comment on column accounts.nicepay_review_access is 'NICEPAY 카드사 심사관 전용 권한. true 이면 심사 센터만 보이고 NICEPAY 결제 게이트를 통과한다. pg_checkout_override(토스 심사용)와 독립.';
 create or replace function enforce_nicepay_review_access_admin_only()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  if new.nicepay_review_access is distinct from old.nicepay_review_access then
+  if (tg_op = 'INSERT' and new.nicepay_review_access)
+     or (tg_op = 'UPDATE' and new.nicepay_review_access is distinct from old.nicepay_review_access) then
     if auth.uid() is not null and not is_platform_admin() then raise exception '이 값은 운영자만 변경할 수 있어요'; end if;
   end if;
   return new;
 end $$;
 drop trigger if exists trg_accounts_nicepay_review_access_admin_only on accounts;
-create trigger trg_accounts_nicepay_review_access_admin_only before update on accounts
+create trigger trg_accounts_nicepay_review_access_admin_only before insert or update on accounts
   for each row execute function enforce_nicepay_review_access_admin_only();
 
 alter table centers add column if not exists is_nicepay_review boolean not null default false;

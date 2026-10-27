@@ -21,7 +21,7 @@ const bad: Record<string, Record<string, string>> = {
   "임의 외부 주소": { ...base, NEXT_PUBLIC_SUPABASE_URL: "http://example.com:54421", NEXT_PUBLIC_SUPABASE_ANON_KEY: demoAnon, SUPABASE_SERVICE_ROLE_KEY: demoSvc },
   "주소 없음": { ...base, NEXT_PUBLIC_SUPABASE_ANON_KEY: demoAnon, SUPABASE_SERVICE_ROLE_KEY: demoSvc },
 };
-const scripts = ["permissionMatrix.mjs", "reservationGuard.mjs", "flagTamper.mjs", "rollbackScenarios.mjs", "mismatchedCenterRepro.mjs", "browserHistoryCategory.mjs", "browserPersonas.mjs", "gateMatrix.mjs", "setupExtraPersonas.mjs"];
+const scripts = ["permissionMatrix.mjs", "reservationGuard.mjs", "flagTamper.mjs", "rollbackScenarios.mjs", "mismatchedCenterRepro.mjs", "browserHistoryCategory.mjs", "browserPersonas.mjs", "gateMatrix.mjs", "setupExtraPersonas.mjs", "accountsFlagGuard.mjs"];
 
 describe("nicepayReview 검증 스크립트 — 일회용 로컬 스택이 아니면 네트워크 요청 0건으로 중단", () => {
   it("올바른 로컬 데모 환경은 통과, 나쁜 환경은 모두 throw(값 미출력)", () => {
