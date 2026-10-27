@@ -1,0 +1,834 @@
+[
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "anon",
+  "page": "home",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "anon",
+  "page": "search",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "anon",
+  "page": "direct-review-center",
+  "shown": false,
+  "notFound": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "anon",
+  "page": "direct-op-center",
+  "shown": true,
+  "notFound": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "anon",
+  "page": "review-buy-sheet",
+  "products": [],
+  "period": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "anon",
+  "page": "public-products",
+  "seesReview": false,
+  "seesOp": true,
+  "overflow": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "home",
+  "seesReview": false,
+  "seesOp": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "search",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "direct-review-center",
+  "shown": false,
+  "notFound": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "direct-op-center",
+  "shown": true,
+  "notFound": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "checkout-review",
+  "methods": [],
+  "period": 0,
+  "blocked": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "checkout-op",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "period": 1,
+  "blocked": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "public-products",
+  "seesReview": false,
+  "seesOp": true,
+  "overflow": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "home",
+  "seesReview": true,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "search",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "direct-review-center",
+  "shown": true,
+  "notFound": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "direct-op-center",
+  "shown": false,
+  "notFound": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "review-buy-sheet",
+  "products": [
+   "1회 수업",
+   "4주 수업",
+   "3개월 수업"
+  ],
+  "period": 3,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "checkout-review",
+  "methods": [
+   "신용/체크카드",
+   "카카오페이",
+   "토스페이",
+   "계좌이체",
+   "직접결제 (센터에서 결제)"
+  ],
+  "period": 1,
+  "blocked": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "checkout-op",
+  "methods": [],
+  "period": 0,
+  "blocked": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "public-products",
+  "seesReview": true,
+  "seesOp": false,
+  "overflow": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "anon",
+  "page": "home",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "anon",
+  "page": "search",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "anon",
+  "page": "direct-review-center",
+  "shown": false,
+  "notFound": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "anon",
+  "page": "direct-op-center",
+  "shown": true,
+  "notFound": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "anon",
+  "page": "review-buy-sheet",
+  "products": [],
+  "period": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "anon",
+  "page": "public-products",
+  "seesReview": false,
+  "seesOp": true,
+  "overflow": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "home",
+  "seesReview": false,
+  "seesOp": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "search",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "direct-review-center",
+  "shown": false,
+  "notFound": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "direct-op-center",
+  "shown": true,
+  "notFound": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "checkout-review",
+  "methods": [],
+  "period": 0,
+  "blocked": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "checkout-op",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "period": 1,
+  "blocked": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "public-products",
+  "seesReview": false,
+  "seesOp": true,
+  "overflow": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "home",
+  "seesReview": true,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "search",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "direct-review-center",
+  "shown": true,
+  "notFound": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "direct-op-center",
+  "shown": false,
+  "notFound": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "review-buy-sheet",
+  "products": [
+   "1회 수업",
+   "4주 수업",
+   "3개월 수업"
+  ],
+  "period": 3,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "checkout-review",
+  "methods": [
+   "신용/체크카드",
+   "카카오페이",
+   "토스페이",
+   "계좌이체",
+   "직접결제 (센터에서 결제)"
+  ],
+  "period": 1,
+  "blocked": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "checkout-op",
+  "methods": [],
+  "period": 0,
+  "blocked": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "public-products",
+  "seesReview": true,
+  "seesOp": false,
+  "overflow": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "anon",
+  "page": "home",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "anon",
+  "page": "search",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "anon",
+  "page": "direct-review-center",
+  "shown": false,
+  "notFound": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "anon",
+  "page": "direct-op-center",
+  "shown": true,
+  "notFound": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "anon",
+  "page": "review-buy-sheet",
+  "products": [],
+  "period": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "anon",
+  "page": "public-products",
+  "seesReview": false,
+  "seesOp": true,
+  "overflow": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "home",
+  "seesReview": false,
+  "seesOp": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "search",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "direct-review-center",
+  "shown": false,
+  "notFound": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "direct-op-center",
+  "shown": true,
+  "notFound": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "checkout-review",
+  "methods": [],
+  "period": 0,
+  "blocked": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "checkout-op",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "period": 1,
+  "blocked": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "public-products",
+  "seesReview": false,
+  "seesOp": true,
+  "overflow": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "home",
+  "seesReview": true,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "search",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "direct-review-center",
+  "shown": true,
+  "notFound": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "direct-op-center",
+  "shown": false,
+  "notFound": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "review-buy-sheet",
+  "products": [
+   "1회 수업",
+   "4주 수업",
+   "3개월 수업"
+  ],
+  "period": 3,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "checkout-review",
+  "methods": [
+   "신용/체크카드",
+   "카카오페이",
+   "토스페이",
+   "계좌이체",
+   "직접결제 (센터에서 결제)"
+  ],
+  "period": 1,
+  "blocked": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "checkout-op",
+  "methods": [],
+  "period": 0,
+  "blocked": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "public-products",
+  "seesReview": true,
+  "seesOp": false,
+  "overflow": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "anon",
+  "page": "home",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "anon",
+  "page": "search",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "anon",
+  "page": "direct-review-center",
+  "shown": false,
+  "notFound": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "anon",
+  "page": "direct-op-center",
+  "shown": true,
+  "notFound": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "anon",
+  "page": "review-buy-sheet",
+  "products": [],
+  "period": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "anon",
+  "page": "public-products",
+  "seesReview": false,
+  "seesOp": true,
+  "overflow": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "home",
+  "seesReview": false,
+  "seesOp": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "search",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "direct-review-center",
+  "shown": false,
+  "notFound": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "direct-op-center",
+  "shown": true,
+  "notFound": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "checkout-review",
+  "methods": [],
+  "period": 0,
+  "blocked": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "checkout-op",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "period": 1,
+  "blocked": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "public-products",
+  "seesReview": false,
+  "seesOp": true,
+  "overflow": 0,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "home",
+  "seesReview": true,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "search",
+  "seesReview": false,
+  "seesOp": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "direct-review-center",
+  "shown": true,
+  "notFound": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "direct-op-center",
+  "shown": false,
+  "notFound": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "review-buy-sheet",
+  "products": [
+   "1회 수업",
+   "4주 수업",
+   "3개월 수업"
+  ],
+  "period": 3,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "checkout-review",
+  "methods": [
+   "신용/체크카드",
+   "카카오페이",
+   "토스페이",
+   "계좌이체",
+   "직접결제 (센터에서 결제)"
+  ],
+  "period": 1,
+  "blocked": false,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "checkout-op",
+  "methods": [],
+  "period": 0,
+  "blocked": true,
+  "pageErrors": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "public-products",
+  "seesReview": true,
+  "seesOp": false,
+  "overflow": 0,
+  "pageErrors": 0
+ }
+]

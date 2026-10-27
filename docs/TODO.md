@@ -1,5 +1,9 @@
 # TODO
 
+## 2026-10-28 NICEPAY 심사 전용 센터 후속
+- **P0(승인)**: `add_nicepay_review_center_isolation_20261028.sql` 운영 실행 → verify → (별도 승인) 시드 → 심사관 지정. 순서·롤백은 `docs/payments/NICEPAY_REVIEW_CENTER_20261028.md`.
+- **P0(결정)**: 심사 상품 가격·서비스 내용, 심사관 계정이 운영 역할을 겸하는지(별도 계정 권장), 심사 종료 후 처리.
+- **P1**: NICEPAY 결제창 실호출 검증 — MID/키 발급 + 준비 브랜치 병합 + 게이트 SQL + 코드 상수 활성화 후(현재 BLOCKED).
 ## 2026-10-27 NICEPAY 심사 홈페이지 보완 후속
 - **P0(승인)**: 푸터 사업장 주소 공개 배포 — 자택 주소 여부·사업자등록증 일치 확인 후 승인.
 - **P1**: `add_public_storefront_product_periods_20261027.sql` 운영 실행(검증·롤백 파일 동봉) — 실행 전에는 비로그인 상품 목록에 상품별 날짜 대신 공통 안내.

@@ -1,0 +1,155 @@
+{
+ "anon": {
+  "centersList": [
+   "[QA] 심사 시험 스튜디오"
+  ],
+  "directReviewCenter": false,
+  "directOpCenter": true,
+  "revProductsDirect": 0,
+  "opProductsDirect": 10,
+  "revClassesDirect": 0,
+  "opClassesDirect": 1,
+  "publicRpcCenters": [
+   "[QA] 심사 시험 스튜디오"
+  ],
+  "publicRpcRevById": 0,
+  "periodsRev": 0,
+  "periodsOp": 10
+ },
+ "일반회원(A)": {
+  "centersList": [
+   "CI Fixture Center (do not delete)",
+   "[QA] 심사 시험 스튜디오"
+  ],
+  "directReviewCenter": false,
+  "directOpCenter": true,
+  "revProductsDirect": 0,
+  "opProductsDirect": 10,
+  "revClassesDirect": 0,
+  "opClassesDirect": 1,
+  "publicRpcCenters": [
+   "[QA] 심사 시험 스튜디오"
+  ],
+  "publicRpcRevById": 0,
+  "periodsRev": 0,
+  "periodsOp": 10,
+  "purchasableRev": 0,
+  "purchasableOp": 10,
+  "orderRev": "DENY: 이 센터의 상품·수업은 이용할 수 없어요",
+  "orderOp": "OK",
+  "reserveRev": "ERR: 이 수업에 사용할 수 있는 수강권이 없어요 (잔여횟수/기간/예약조건을 확인해주세요)",
+  "reserveOp": "ERR: 이미 예약(또는 대기)한 수업이에요",
+  "myMemberships": 1,
+  "myOrders": 3,
+  "myReservations": 1
+ },
+ "심사관(B)": {
+  "centersList": [
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "directReviewCenter": true,
+  "directOpCenter": false,
+  "revProductsDirect": 3,
+  "opProductsDirect": 0,
+  "revClassesDirect": 1,
+  "opClassesDirect": 0,
+  "publicRpcCenters": [
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "publicRpcRevById": 3,
+  "periodsRev": 3,
+  "periodsOp": 0,
+  "purchasableRev": 3,
+  "purchasableOp": 0,
+  "orderRev": "OK",
+  "orderOp": "DENY: 이 센터의 상품·수업은 이용할 수 없어요",
+  "reserveRev": "ERR: 이 수업에 사용할 수 있는 수강권이 없어요 (잔여횟수/기간/예약조건을 확인해주세요)",
+  "reserveOp": "ERR: 이미 예약(또는 대기)한 수업이에요",
+  "myMemberships": 1,
+  "myOrders": 3,
+  "myReservations": 1
+ },
+ "운영센터 매니저(MA)": {
+  "centersList": [
+   "[QA] 심사 시험 스튜디오"
+  ],
+  "directReviewCenter": false,
+  "directOpCenter": true,
+  "revProductsDirect": 0,
+  "opProductsDirect": 10,
+  "revClassesDirect": 0,
+  "opClassesDirect": 1,
+  "publicRpcCenters": [
+   "[QA] 심사 시험 스튜디오"
+  ],
+  "publicRpcRevById": 0,
+  "periodsRev": 0,
+  "periodsOp": 10,
+  "purchasableRev": 0,
+  "purchasableOp": 10,
+  "orderRev": "DENY: 이 센터의 상품·수업은 이용할 수 없어요",
+  "orderOp": "OK",
+  "reserveRev": "ERR: 로그인이 필요하거나 프로필을 찾을 수 없어요",
+  "reserveOp": "ERR: 로그인이 필요하거나 프로필을 찾을 수 없어요",
+  "myMemberships": 0,
+  "myOrders": 7,
+  "myReservations": 2
+ },
+ "심사센터 매니저(MB)": {
+  "centersList": [
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "directReviewCenter": true,
+  "directOpCenter": true,
+  "revProductsDirect": 3,
+  "opProductsDirect": 10,
+  "revClassesDirect": 1,
+  "opClassesDirect": 1,
+  "publicRpcCenters": [
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "publicRpcRevById": 3,
+  "periodsRev": 3,
+  "periodsOp": 10,
+  "purchasableRev": 3,
+  "purchasableOp": 10,
+  "orderRev": "OK",
+  "orderOp": "OK",
+  "reserveRev": "ERR: 이 수업에 사용할 수 있는 수강권이 없어요 (잔여횟수/기간/예약조건을 확인해주세요)",
+  "reserveOp": "ERR: 이 수업에 사용할 수 있는 수강권이 없어요 (잔여횟수/기간/예약조건을 확인해주세요)",
+  "myMemberships": 0,
+  "myOrders": 8,
+  "myReservations": 0
+ },
+ "플랫폼 관리자": {
+  "centersList": [
+   "CI Fixture Center (do not delete)",
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "directReviewCenter": true,
+  "directOpCenter": true,
+  "revProductsDirect": 3,
+  "opProductsDirect": 10,
+  "revClassesDirect": 1,
+  "opClassesDirect": 1,
+  "publicRpcCenters": [
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "publicRpcRevById": 3,
+  "periodsRev": 3,
+  "periodsOp": 10,
+  "purchasableRev": 3,
+  "purchasableOp": 10,
+  "orderRev": "DENY: 프로필을 찾을 수 없어요. 프로필 관리에서 프로필을 만들어주세요.",
+  "orderOp": "DENY: 프로필을 찾을 수 없어요. 프로필 관리에서 프로필을 만들어주세요.",
+  "reserveRev": "ERR: 로그인이 필요하거나 프로필을 찾을 수 없어요",
+  "reserveOp": "ERR: 로그인이 필요하거나 프로필을 찾을 수 없어요",
+  "myMemberships": 2,
+  "myOrders": 13,
+  "myReservations": 2
+ }
+}

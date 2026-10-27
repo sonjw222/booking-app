@@ -1,5 +1,7 @@
 # CHANGELOG
 
+## 2026-10-28 — NICEPAY 심사 전용 센터 분리(SQL 초안 + 검증 스크립트, 로컬 격리 DB 검증만·운영 미적용)
+- 심사 센터(`centers.is_nicepay_review`)는 심사관(`accounts.pg_checkout_override`)에게만, 심사관에게는 심사 센터만 보이도록 서버에서 분리(restrictive RLS·목록 RPC·구매/예약/수강권 INSERT 트리거). 앱 코드 변경 없음, 기존 데이터 행 변경 없음. 상세·SQL 순서·결과: `docs/payments/NICEPAY_REVIEW_CENTER_20261028.md`.
 ## 2026-10-27 — NICEPAY 카드사 심사 홈페이지 보완(코드·문서·SQL 초안, 미배포·SQL 미실행)
 - 홈·공개 상품 푸터에 `BUSINESS_INFO.address`(사업장 소재지) 추가 — 자택 주소이므로 공개 배포는 사용자 승인 후.
 - 상품 상세·구매 시트·결제 화면에 사전예약기간/서비스 제공기간 표시(`lib/servicePeriod.ts`, 서버 규칙과 PGlite 대조). 만료 정보가 없으면 날짜를 만들지 않음. 공개 목록 상품별 날짜는 신규 RPC SQL 실행 후 표시.

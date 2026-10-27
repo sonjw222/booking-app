@@ -1,0 +1,164 @@
+{
+ "anon": {
+  "centersList": [
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "directReviewCenter": true,
+  "directOpCenter": true,
+  "revProductsDirect": 3,
+  "opProductsDirect": 10,
+  "revClassesDirect": 1,
+  "opClassesDirect": 1,
+  "publicRpcCenters": [
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "publicRpcRevById": 3,
+  "periodsRev": 3,
+  "periodsOp": 10
+ },
+ "일반회원(A)": {
+  "centersList": [
+   "CI Fixture Center (do not delete)",
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "directReviewCenter": true,
+  "directOpCenter": true,
+  "revProductsDirect": 3,
+  "opProductsDirect": 10,
+  "revClassesDirect": 1,
+  "opClassesDirect": 1,
+  "publicRpcCenters": [
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "publicRpcRevById": 3,
+  "periodsRev": 3,
+  "periodsOp": 10,
+  "purchasableRev": 3,
+  "purchasableOp": 10,
+  "orderRev": "OK",
+  "orderOp": "OK",
+  "reserveRev": "ERR: 이 수업에 사용할 수 있는 수강권이 없어요 (잔여횟수/기간/예약조건을 확인해주세요)",
+  "reserveOp": "OK",
+  "myMemberships": 1,
+  "myOrders": 2,
+  "myReservations": 1
+ },
+ "심사관(B)": {
+  "centersList": [
+   "CI Fixture Center (do not delete)",
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "directReviewCenter": true,
+  "directOpCenter": true,
+  "revProductsDirect": 3,
+  "opProductsDirect": 10,
+  "revClassesDirect": 1,
+  "opClassesDirect": 1,
+  "publicRpcCenters": [
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "publicRpcRevById": 3,
+  "periodsRev": 3,
+  "periodsOp": 10,
+  "purchasableRev": 3,
+  "purchasableOp": 10,
+  "orderRev": "OK",
+  "orderOp": "OK",
+  "reserveRev": "ERR: 이 수업에 사용할 수 있는 수강권이 없어요 (잔여횟수/기간/예약조건을 확인해주세요)",
+  "reserveOp": "OK",
+  "myMemberships": 1,
+  "myOrders": 2,
+  "myReservations": 1
+ },
+ "운영센터 매니저(MA)": {
+  "centersList": [
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "directReviewCenter": true,
+  "directOpCenter": true,
+  "revProductsDirect": 3,
+  "opProductsDirect": 10,
+  "revClassesDirect": 1,
+  "opClassesDirect": 1,
+  "publicRpcCenters": [
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "publicRpcRevById": 3,
+  "periodsRev": 3,
+  "periodsOp": 10,
+  "purchasableRev": 3,
+  "purchasableOp": 10,
+  "orderRev": "OK",
+  "orderOp": "OK",
+  "reserveRev": "ERR: 로그인이 필요하거나 프로필을 찾을 수 없어요",
+  "reserveOp": "ERR: 로그인이 필요하거나 프로필을 찾을 수 없어요",
+  "myMemberships": 0,
+  "myOrders": 4,
+  "myReservations": 2
+ },
+ "심사센터 매니저(MB)": {
+  "centersList": [
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "directReviewCenter": true,
+  "directOpCenter": true,
+  "revProductsDirect": 3,
+  "opProductsDirect": 10,
+  "revClassesDirect": 1,
+  "opClassesDirect": 1,
+  "publicRpcCenters": [
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "publicRpcRevById": 3,
+  "periodsRev": 3,
+  "periodsOp": 10,
+  "purchasableRev": 3,
+  "purchasableOp": 10,
+  "orderRev": "OK",
+  "orderOp": "OK",
+  "reserveRev": "ERR: 이 수업에 사용할 수 있는 수강권이 없어요 (잔여횟수/기간/예약조건을 확인해주세요)",
+  "reserveOp": "ERR: 이 수업에 사용할 수 있는 수강권이 없어요 (잔여횟수/기간/예약조건을 확인해주세요)",
+  "myMemberships": 0,
+  "myOrders": 5,
+  "myReservations": 0
+ },
+ "플랫폼 관리자": {
+  "centersList": [
+   "CI Fixture Center (do not delete)",
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "directReviewCenter": true,
+  "directOpCenter": true,
+  "revProductsDirect": 3,
+  "opProductsDirect": 10,
+  "revClassesDirect": 1,
+  "opClassesDirect": 1,
+  "publicRpcCenters": [
+   "[QA] 심사 시험 스튜디오",
+   "[심사 전용] MWHABIT NICEPAY 카드사 심사 환경"
+  ],
+  "publicRpcRevById": 3,
+  "periodsRev": 3,
+  "periodsOp": 10,
+  "purchasableRev": 3,
+  "purchasableOp": 10,
+  "orderRev": "DENY: 프로필을 찾을 수 없어요. 프로필 관리에서 프로필을 만들어주세요.",
+  "orderOp": "DENY: 프로필을 찾을 수 없어요. 프로필 관리에서 프로필을 만들어주세요.",
+  "reserveRev": "ERR: 로그인이 필요하거나 프로필을 찾을 수 없어요",
+  "reserveOp": "ERR: 로그인이 필요하거나 프로필을 찾을 수 없어요",
+  "myMemberships": 2,
+  "myOrders": 8,
+  "myReservations": 2
+ }
+}
