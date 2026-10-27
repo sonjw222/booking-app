@@ -1,0 +1,28 @@
+name: Isolated Supabase (ephemeral local stack)
+description: >
+  live E2E/Integration 이 쓰는 일회용 Supabase 전체 스택(Auth·PostgREST·Storage·Realtime·Edge Functions)을 이 job 의 러너 안에서 띄운다.
+  공유 DEV·Production·어떤 GitHub Secrets 도 쓰지 않는다. 가드(isolatedTargetGuard)가 OK(kind=ephemeral-local-stack)가 아니면 이후 단계(테스트)는 시작되지 않는다 — BLOCKED/PARTIAL/FAILED 에서 공유 DEV 로 대체하는 경로는 없다.
+runs:
+  using: composite
+  steps:
+    - uses: supabase/setup-cli@v1
+      with:
+        version: 2.116.0
+    - name: Start the isolated Supabase stack (baseline migrations + catalog seed + Edge Functions)
+      shell: bash
+      run: supabase start --workdir isolated-supabase --exclude studio,imgproxy,vector,logflare,supavisor,postgres-meta
+    - name: Export the stack's connection values (ISOLATED_*)
+      shell: bash
+      run: node scripts/isolated/stackEnv.mjs >> "$GITHUB_ENV"
+    - name: Isolated target guard (must be OK before any test starts)
+      shell: bash
+      run: node scripts/ci/isolatedTargetGuard.mjs
+    - name: Create run-owned test fixtures and export the test environment
+      shell: bash
+      run: |
+        node scripts/isolated/bootstrapEphemeral.mjs --out "$RUNNER_TEMP/isolated.env"
+        while IFS='=' read -r key value; do
+          case "$key" in *PASSWORD|SUPABASE_SERVICE_ROLE_KEY) echo "::add-mask::$value";; esac
+          echo "$key=$value" >> "$GITHUB_ENV"
+        done < "$RUNNER_TEMP/isolated.env"
+        rm -f "$RUNNER_TEMP/isolated.env"

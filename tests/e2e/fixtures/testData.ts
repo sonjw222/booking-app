@@ -27,10 +27,34 @@ import type { Page } from "@playwright/test";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createOwnedClass, createOwnedReservation, adoptThrowawayAccount, cleanupOwnedClass, adoptUiCreatedClasses, fileOwnershipStore, runScopedTitle, type OwnedCtx } from "./ownedClassCleanup";
-import { getFixtureAdminClient, switchToTestUser, getOrCreateOwnedTestCenter, kstSafeSameDayFutureTime, type TestUser } from "../../integration/setup";
+import { getFixtureAdminClient, switchToTestUser, getOrCreateOwnedTestCenter as integrationGetOrCreateOwnedTestCenter, kstSafeSameDayFutureTime, type TestUser } from "../../integration/setup";
 import { rowToSettings, settingsToRow, DEFAULT_SETTINGS, type CenterSettings } from "../../../lib/settings";
 
-export { switchToTestUser, getOrCreateOwnedTestCenter, kstSafeSameDayFutureTime, type TestUser };
+export { switchToTestUser, kstSafeSameDayFutureTime, type TestUser };
+
+/*
+  E2E 용 소유 테스트 센터. 테스트 센터는 내부 QA 센터(is_internal=true)라 center_members 가 아닌 회원에게는 센터·수업이 보이지 않는다(classes/centers RLS).
+  실제 수강권 발급(ensure_center_member)은 center_members 도 만들지만 이 fixture 는 수강권을 admin 으로 직접 넣는다 — 예전 공유 DEV 에서는 이전 실행·이전 구간이 남긴 center_members 가
+  우연히 이 전제를 채워 줬을 뿐이다. 일회용 격리 스택은 매번 비어 있으므로(#240) 전제를 명시적으로 만든다: 이 실행의 회원 계정(user-a/user-b)을 센터 회원으로 등록한다(멱등, 직접 upsert).
+*/
+export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<string> {
+  const centerId = await integrationGetOrCreateOwnedTestCenter(manager);
+  const admin = getFixtureAdminClient();
+  // 취소/예약 화면은 center_settings 행이 있다고 가정한다(없으면 "취소 조건을 확인하지 못했어요"). 이 fixture 는 센터를 직접 insert 해 그 행을 만들지 않는다 —
+  // 예전 공유 DEV 에서는 이전 실행이 남긴 행이 있었고, 새 센터를 만드는 일회용 스택에서는 먼저 도는 스펙(lifecycle 등)이 이 전제에 걸렸다. 없을 때만 기본값으로 만든다(멱등).
+  const { error: csErr } = await admin.from("center_settings").upsert({ center_id: centerId }, { onConflict: "center_id", ignoreDuplicates: true });
+  if (csErr) throw new Error(`테스트 센터 설정 행 생성 실패: ${csErr.message}`);
+  for (const name of ["user-a", "user-b"] as const) {
+    let meta: TestUser; try { meta = loadTestAccountMeta(name); } catch { continue; }   // auth.setup 이전(meta 없음)이면 건너뜀
+    // ensure_center_member 와 같은 행(active·앱 연동)을 직접 만든다 — 그 함수는 service_role 전용 내부 헬퍼라 앱/테스트가 rpc 로 부르지 않는 계약이다(storageBucketLimits.compat.test.ts). 이미 있으면 건드리지 않는다.
+    const { error } = await admin.from("center_members").upsert(
+      { center_id: centerId, profile_id: meta.profileId, status: "active", registered_at: new Date().toISOString(), app_linked: true },
+      { onConflict: "center_id,profile_id", ignoreDuplicates: true }
+    );
+    if (error) throw new Error(`테스트 회원(${name})의 센터 회원 등록 실패: ${error.message}`);
+  }
+  return centerId;
+}
 
 // ---------------- 수업 소유권(Q01) ----------------
 // 수업은 반드시 이 실행이 만든 것으로 증명될 때만 지운다(ownedClassCleanup.ts). 제목·센터만으로는 지우지 않는다.

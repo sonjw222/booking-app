@@ -133,3 +133,34 @@ describe("격리 대상 가드 — 실제 CLI 종료 코드(자격증명·네트
     const f2 = tmpSummary(); expect(cli({ ...ALLOW }, f2).status).toBe(0); expect(fs.readFileSync(f2, "utf8")).toContain("BLOCKED");
   });
 });
+
+describe("격리 대상 가드 — ephemeral-local-stack(일회용 로컬 Supabase 전체 스택)", () => {
+  const demo = (role: string, extra: object = {}) => `${Buffer.from('{"alg":"HS256"}').toString("base64url")}.${Buffer.from(JSON.stringify({ iss: "supabase-demo", role, exp: 1983812996, ...extra })).toString("base64url")}.sig`;
+  const good = () => ({ ISOLATED_KIND: "ephemeral-local-stack", ISOLATED_SUPABASE_URL: "http://127.0.0.1:54421", ISOLATED_SUPABASE_PROJECT_REF: "local:mwhabit-isolated", ISOLATED_SUPABASE_ANON_KEY: demo("anon"), ISOLATED_SUPABASE_SERVICE_ROLE_KEY: demo("service_role") });
+  it("정확한 로컬 URL·스택 id·데모 키가 모두 맞을 때만 OK(kind 표시)", () => {
+    const r = checkIsolatedTarget(good()); expect(r.status).toBe("OK"); expect(r.kind).toBe("ephemeral-local-stack");
+    expect(checkIsolatedTarget({ ...good(), ISOLATED_SUPABASE_URL: "http://localhost:54421/" }).status).toBe("OK");
+  });
+  it("kind 없이는 같은 값이어도 로컬 URL 은 PARTIAL 로 남는다(전체 통합으로 보고 금지)", () => {
+    const { ISOLATED_KIND, ...rest } = good(); void ISOLATED_KIND;
+    expect(checkIsolatedTarget({ ...rest, ISOLATED_SUPABASE_PROJECT_REF: "abcdefghij0123456789", ISOLATED_SUPABASE_ANON_KEY: jwt("abcdefghij0123456789"), ISOLATED_SUPABASE_SERVICE_ROLE_KEY: jwt("abcdefghij0123456789") }).status).toBe("PARTIAL");
+  });
+  const BAD: Array<[string, Record<string, string>]> = [
+    ["호스팅 프로젝트 URL", { ISOLATED_SUPABASE_URL: `https://${ISO}.supabase.co` }], ["https 로컬", { ISOLATED_SUPABASE_URL: "https://127.0.0.1:54421" }], ["경로 포함", { ISOLATED_SUPABASE_URL: "http://127.0.0.1:54421/rest/v1" }],
+    ["사용자정보 로컬", { ISOLATED_SUPABASE_URL: "http://u:p@127.0.0.1:54421" }], ["원격 호스트", { ISOLATED_SUPABASE_URL: "http://10.0.0.5:54421" }],
+    ["다른 스택 id", { ISOLATED_SUPABASE_PROJECT_REF: "local:other" }], ["호스팅 ref 선언", { ISOLATED_SUPABASE_PROJECT_REF: ISO }],
+    ["호스팅 프로젝트 키(ref 클레임)", { ISOLATED_SUPABASE_SERVICE_ROLE_KEY: jwt(ISO) }], ["Production 키", { ISOLATED_SUPABASE_SERVICE_ROLE_KEY: jwt(PROD) }], ["공유 DEV 키", { ISOLATED_SUPABASE_ANON_KEY: jwt(SHARED) }],
+    ["데모가 아닌 iss", { ISOLATED_SUPABASE_ANON_KEY: demo("anon", { iss: "https://x.supabase.co/auth/v1" }) }], ["role 불일치(anon 자리에 service_role)", { ISOLATED_SUPABASE_ANON_KEY: demo("service_role") }],
+    ["JWT 아님", { ISOLATED_SUPABASE_SERVICE_ROLE_KEY: "nope" }], ["알 수 없는 kind", { ISOLATED_KIND: "something-else" }],
+  ];
+  for (const [name, over] of BAD) it(`FAILED(${name})`, () => expect(checkIsolatedTarget({ ...good(), ...over }).status).toBe("FAILED"));
+  it("kind 만 있고 값이 없으면 BLOCKED, 위험한 값 하나만 있어도 FAILED", () => {
+    expect(checkIsolatedTarget({ ISOLATED_KIND: "ephemeral-local-stack" }).status).toBe("BLOCKED");
+    expect(checkIsolatedTarget({ ISOLATED_KIND: "ephemeral-local-stack", ISOLATED_SUPABASE_URL: `https://${PROD}.supabase.co` }).status).toBe("FAILED");
+  });
+  const cli = (env: Record<string, string>) => spawnSync("node", ["--no-warnings", "scripts/ci/isolatedTargetGuard.mjs"], { env: { PATH: process.env.PATH ?? "", ...env } as unknown as NodeJS.ProcessEnv, encoding: "utf8" as const, timeout: 15000 });
+  it("실제 CLI: OK 는 종료 0 + kind 출력, 호스팅 키는 ALLOW_BLOCKED=1 이어도 1, 키 값은 출력되지 않는다", () => {
+    const ok = cli(good()); expect(ok.status).toBe(0); expect(ok.stdout).toContain("kind=ephemeral-local-stack"); expect(ok.stdout).toContain("호스팅 프로젝트가 아니다"); expect(ok.stdout + ok.stderr).not.toContain(demo("anon"));
+    const bad = cli({ ...good(), ISOLATED_GATE_ALLOW_BLOCKED: "1", ISOLATED_SUPABASE_SERVICE_ROLE_KEY: jwt(ISO) }); expect(bad.status).toBe(1); expect(bad.stdout).toContain("FAILED");
+  });
+});
