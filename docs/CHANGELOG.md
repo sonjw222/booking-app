@@ -1,10 +1,10 @@
 # CHANGELOG
 
-## 2026-10-27 — #240 live CI 를 일회용 Supabase 스택으로 격리(별도 PR, 원격 CI 검증 대기)
+## 2026-10-27 — #240 live CI 를 일회용 Supabase 스택으로 격리(PR #244, 원격 CI 통과·원격 취소 검증 완료)
 - **변경**: live E2E 4구간·Integration·ACL 반복 job 이 공유 DEV·GitHub Secrets 대신 각자 러너 안의 일회용 로컬 Supabase 스택(`isolated-supabase/`, Auth·PostgREST·Storage·Realtime·Edge Functions)만 쓴다. workflow 의 `secrets.` 참조 0개, 가드가 OK(kind=ephemeral-local-stack)가 아니면 테스트가 시작되지 않고 job 이 실패한다(공유 DEV 대체 경로 없음). E2E 구간은 needs 체인·전역 큐 없이 병렬.
 - **baseline**: 공유 DEV `public` 스키마-only 덤프(데이터 0) + Storage 정책 + 기본 권한 초기화 migration + 저장소 SQL 에서 생성한 카탈로그 시드. 공유 DEV 와 구조·권한 대조 차이 0(함수 171·릴레이션 94·정책 200·컬럼 850·트리거 36·Storage). 공유 DEV/운영 데이터 복사 없음.
 - **테스트 코드**: 공유 DEV 의 누적 상태가 가려 주던 전제를 명시적으로 만들었다 — E2E `getOrCreateOwnedTestCenter` 래퍼가 user-a/b 센터 회원 등록·`center_settings` 기본 행, `new-class-creation.spec` 가 pass 수강권을 직접 생성. 가드에 kind=`ephemeral-local-stack`(로컬 데모 키만 허용, 호스팅 키 거부)을 추가. `isolated-env-gate`(#243)와 `live-env-preflight` 삭제.
-- **검증(로컬, 원격 CI 아님)**: 격리 스택에서 workflow 명령 그대로 E2E 1~4·Integration 실행(수치는 `docs/CI_ISOLATION_240.md` §8). 호스팅 Supabase 프로젝트가 아니라 CLI 로컬 스택이라는 한계는 같은 문서 §4.
+- **검증**: 로컬(격리 스택에서 workflow 명령 그대로 E2E 1~4·Integration) + 원격 CI(run 40482669365 통과, 공유 DEV CI 와 통과·skip 수 동일) + 원격 취소 시나리오(run 40489588546, cancelled 로 별도 기록; 정리 단계 실행·스택 종료 로그 확인). 수치는 `docs/CI_ISOLATION_240.md` §8. 호스팅 Supabase 프로젝트가 아니라 CLI 로컬 스택이라는 한계는 같은 문서 §4.
 
 ## 2026-10-26 — Q01: E2E 수업 정리를 "소유 증명" 기반으로(테스트 코드만, 앱·SQL 변경 없음)
 - **문제**: `deleteExistingClassesByTitle` 이 "같은 센터+같은 제목"이면 누구 것이든 수업과 예약을 지웠고(소유 확인·오류 확인 없음), 생성 헬퍼 3종과 2개 스펙이 호출했다. 제목·센터·시간대는 소유 증거가 아니다.

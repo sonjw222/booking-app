@@ -1,6 +1,6 @@
 # #240 CI 격리 이전 — 구현·검증 현황 (2026-10-27)
 
-**상태: 구현 완료·로컬 실검증 완료, 원격 CI 검증 대기(별도 PR, 병합 전).** #240 은 원격 CI 에서 격리 실행이 통과하고 병합·정리까지 확인되기 전에는 닫지 않는다.
+**상태: 구현 완료 · 로컬 실검증 완료 · 원격 CI 통과(PR #244, run 40482669365) · 원격 취소 시나리오 검증 완료(run 40489588546, 취소된 실행으로 따로 기록).** 병합과 병합 후 확인이 끝나기 전에는 #240 을 닫지 않는다.
 
 ## 1. 무엇을 바꿨나 (한 줄)
 live E2E 4구간과 Integration 이 공유 DEV(`mwhabit-ci-dev`)와 GitHub Secrets 대신, **각 job 이 자기 러너 안에 띄우는 일회용 Supabase 전체 스택**(`isolated-supabase/`, Auth·PostgREST·Storage·Realtime·Edge Functions)만 쓰도록 바꿨다.
@@ -57,15 +57,18 @@ live E2E 4구간과 Integration 이 공유 DEV(`mwhabit-ci-dev`)와 GitHub Secre
 - **정상 종료·실패·취소 모두**: 스택은 job 의 `if: always()` 단계가 내리고(데이터 볼륨 삭제), 러너 자체가 일회용이다. 취소로 단계가 못 돌아도 VM 이 폐기돼 공유 자원에 남는 것이 없다(공유 DEV/운영에 쓰는 경로가 없음).
 - **실행 간 충돌**: 실행마다 스택이 따로라 공유 데이터가 없다(E2E 4구간·Integration 이 병렬로 돈다).
 - **소유권 없는 데이터 보존**: 같은 스택 안에서의 안전장치는 Q01 의 실행 소유 증명 정리(#241)가 그대로 담당한다(미증명 같은 제목·다른 프로필 예약은 삭제하지 않고 BLOCKED/FAILED). E2E 로컬 실행에서 teardown "미해결 0" 을 확인했다.
-- **원격 러너에서의 취소 시나리오는 미검증**(GitHub 취소를 일부러 일으키지 않음).
+- **원격 취소 시나리오(실측, 2026-10-27)**: 이 브랜치(HEAD `efa1997`)의 `workflow_dispatch` 실행 40489588546 을 스택 기동·fixture 생성(`fixture 준비 완료` 로그) 이후, E2E 3/4 job 이 Playwright 단계에 들어간 시점에 `gh run cancel` 로 취소했다(이 실행만; 같은 커밋의 PR 검증 실행·다른 사람의 실행은 건드리지 않음).
+  - 결과: run `cancelled`, E2E 3/4 job `cancelled`, `Playwright e2e-3…` 단계 `cancelled`(로그 `The operation was canceled.`), 그 뒤 **`Stop the isolated stack (always; nothing persists)` 단계가 실행되어 `success`**, 로그에 `Stopped supabase local development setup.`.
+  - 이 실행은 **정상 CI 통과로 세지 않는다**(cancelled). 취소 전에 이미 끝난 다른 job 들은 success 였지만 그 수치도 정상 CI 근거로 쓰지 않는다.
+  - **확인할 수 없는 것**: 스택 종료 뒤 컨테이너·볼륨이 실제로 비었는지는 원격 러너에서 직접 관찰할 수 없다(로컬에서는 같은 명령 뒤 컨테이너·볼륨 0 을 확인했다). 러너 VM 폐기는 GitHub 의 동작이며 여기서 관찰한 사실이 아니다.
 
 ## 8. 완료 기준 체크
 | 기준 | 상태 |
 |---|---|
-| 필수 E2E 4 + Integration 이 격리 환경에서 실제 실행(의도치 않은 skip 0) | 로컬: 실행 완료(아래 최종 표). **원격 CI: 대기** |
+| 필수 E2E 4 + Integration 이 격리 환경에서 실제 실행(의도치 않은 skip 0) | 로컬 실행 완료(아래 표) + **원격 CI 통과**(run 40482669365: E2E 18/13/49/28 passed, Integration 328 passed, skip 은 기존 5/9/3 그대로, 실패 0) |
 | 운영·공유 DEV 로의 쓰기 0 | 설정으로 증명: workflow·action 에 `secrets.` 0, 공유 DEV/운영 ref 문자열 0, 테스트 전 가드(ephemeral kind 만 OK). 실행 기록: 대상 호스트 `127.0.0.1:54421` |
-| fixture 생성·실행 소유 정리·실패/취소 복구 | 로컬 확인(§7). 원격 취소는 미검증 |
-| 현재 필수 체크와 비교 후 전환 | 이전 공유 DEV CI(run 40447976252)와 같은 skip 수·통과 수를 로컬에서 재현. 원격 비교는 PR CI 로 |
+| fixture 생성·실행 소유 정리·실패/취소 복구 | 로컬 확인(§7) + 원격: 각 E2E job teardown "미해결 0"(3/14/79/25건), **원격 취소 시 정리 단계 실행·스택 종료 로그 확인**(§7, 취소된 실행으로 별도 기록) |
+| 현재 필수 체크와 비교 후 전환 | 이전 공유 DEV CI(run 40447976252)와 원격 격리 CI(run 40482669365)의 통과·skip 수 동일 |
 | 공유 DEV 잔여(수업 2·예약 4·임시 계정 1) | 삭제하지 않음(승인 범위 밖) — 정리가 필요하면 별도 승인 |
 
 ### 최종 로컬 실행 표
@@ -79,7 +82,9 @@ live E2E 4구간과 Integration 이 공유 DEV(`mwhabit-ci-dev`)와 GitHub Secre
 - 비교 기준(이전 공유 DEV CI run 40447976252): E2E 18 / 13 / 49+5skip / 28+9skip — **통과·skip 수가 같다.** E2E 수업 정리 건수도 같다.
 - "did not run" 0 (fail-fast 로 중단된 구간 없음). 모든 실행의 대상 호스트는 `127.0.0.1:54421`(가드 OK, kind=ephemeral-local-stack).
 - **복구 확인(로컬)**: 실행 도중 SIGKILL → 스택은 `supabase stop --no-backup` 후 컨테이너·볼륨 0, 재기동한 스택은 accounts/centers/classes/reservations/auth.users 0건(카탈로그 시드만 존재).
-- 아직 안 한 것: **원격 GitHub 러너에서의 실행**(이 PR 의 CI), 원격에서의 취소 시나리오, 호스팅 Supabase 프로젝트에서의 실행.
+- 아직 안 한 것·한계: **호스팅 Supabase 프로젝트에서의 실행**(실행한 것은 일회용 로컬 Supabase 전체 스택이다), 원격 러너에서 종료 후 컨테이너·볼륨 상태의 직접 관찰.
+- 이어지는 제한(이번 전환의 결과가 아니라 기존 사항): Integration 파일 간 순서 의존 1건(`docs/TODO.md`), 기존 skip(E2E3 5 · E2E4 9 · Integration 3).
+- 실행 대상 근거 표현: 전체 로그에는 Build job 의 placeholder URL(`build-placeholder.supabase.co`)이 있다(live 아님). 그래서 "`.supabase.co` 문자열이 없다"가 아니라, **live job 의 실행 대상은 가드 기록(`isolated-target-guard: OK (kind=ephemeral-local-stack)`)과 접속 주소 `http://127.0.0.1:54421`**, 그리고 workflow·action 의 `secrets.` 0개 · 공유 DEV/운영 ref 문자열 0개로 설명한다.
 
 ## 9. 사람이 해야 할 일 (최소)
 1. 이 PR 의 CI 결과를 확인하고 병합 여부 결정.
