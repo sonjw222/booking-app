@@ -1,0 +1,7 @@
+BEGIN
+CREATE FUNCTION
+NOTICE:  trigger "trg_accounts_insert_privileged_columns" for relation "accounts" does not exist, skipping
+ERROR:  division by zero
+DROP TRIGGER
+CREATE TRIGGER
+ROLLBACK

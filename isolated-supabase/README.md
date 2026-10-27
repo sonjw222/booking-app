@@ -7,6 +7,7 @@ CI 에서는 live E2E/Integration job 마다 러너 안에 하나씩 만들어�
 |---|---|---|
 | 설정 | `supabase/config.toml` | project_id `mwhabit-isolated`, 포트 5442x(다른 로컬 Supabase 와 충돌 방지), 이메일 확인 OFF·가입 허용(공유 DEV 요구사항과 동일), Auth 레이트리밋 상향, 버킷 3개, Edge 비밀 `PHONE_OTP_TEST_BYPASS_PREFIX=0100000` |
 | 권한 초기화 | `supabase/migrations/20261026235900_reset_default_privileges.sql` | 로컬 이미지의 public 기본 권한(anon/authenticated 자동 부여)을 걷어내 baseline 의 객체별 ACL 이 그대로 재현되게 한다 |
+| 운영 보안 수정(baseline 뒤) | `supabase/migrations/20261030000000_accounts_insert_privileged_columns.sql` | **운영에 SQL 로 직접 적용된 보안 수정을 격리 스택에도 설치**한다(accounts INSERT 특권 컬럼 보호, PR #245). baseline 은 공유 DEV 덤프라 이 수정이 없으므로, 운영에만 적용한 SQL 은 이런 migration 으로 격리 스택에도 반영해야 새 스택이 운영보다 약해지지 않는다. 루트 `fix_accounts_insert_privileged_columns_20261030.sql` 과 본문이 같아야 하며 `tests/unit/accountsInsertGuard.migrationParity.test.ts` 가 고정한다 |
 | baseline | `supabase/migrations/20261027000000_baseline_public_schema.sql` | 공유 DEV `public` 스키마의 **스키마-only 덤프**(2026-10-27, 데이터 없음: INSERT/COPY 0건, JWT·이메일·URL·ref 0건 확인). 생성 방법: `scripts/isolated/dumpBaseline.md` |
 | Storage 정책 | `supabase/migrations/20261027000001_baseline_storage_policies.sql` | `storage.objects` 정책 7개(구조만 읽기 전용으로 확인해 재작성) |
 | 카탈로그 시드 | `supabase/seed.sql` | permissions 121 · subscription_plans 1 · service_categories 9 — **저장소 루트 SQL 의 INSERT 문장에서 생성**(`scripts/isolated/extractCatalogSeed.mjs`). 공유 DEV/운영 데이터를 복사하지 않았고, 권한 키 이름 집합이 공유 DEV 와 동일함을 이름만 대조해 확인했다 |

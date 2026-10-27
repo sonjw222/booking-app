@@ -8,6 +8,8 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs"; import os from "node:os"; import path from "node:path";
 const DEV_REF = "jdglfvwdnkjnraqdxuuj";
+// 격리 스택에만 있는 "의도적 추가"(운영에는 적용됐지만 공유 DEV baseline 에는 아직 없는 보안 수정). 차이 계산에서 제외하고 따로 출력한다. DEV 에도 적용돼 baseline 을 다시 덤프하면 이 목록에서 지운다.
+const KNOWN_ISOLATED_ONLY = [{ query: "functions", match: "enforce_accounts_insert_privileged_columns", why: "accounts INSERT 특권 컬럼 보호(PR #245, 운영 적용) — isolated-supabase/supabase/migrations/20261030000000_accounts_insert_privileged_columns.sql" }];
 const QUERIES = {
   functions: "select p.oid::regprocedure::text as sig, coalesce(p.proacl, acldefault('f', p.proowner))::text as acl, p.prosecdef as secdef from pg_proc p where p.pronamespace='public'::regnamespace order by 1",
   relations: "select c.relname, c.relkind::text as kind, coalesce(c.relacl, (case when c.relkind='S' then acldefault('s', c.relowner) else acldefault('r', c.relowner) end))::text as acl, c.relrowsecurity as rls, c.relforcerowsecurity as force_rls from pg_class c where c.relnamespace='public'::regnamespace and c.relkind in ('r','v','m','S','p') order by 1",
@@ -23,7 +25,10 @@ const norm = (rows) => rows.map((r) => JSON.stringify(Object.fromEntries(Object.
 let diffs = 0;
 for (const [name, sql] of Object.entries(QUERIES)) {
   const a = new Set(norm(dev(sql))), b = new Set(norm(local(sql)));
-  const onlyDev = [...a].filter((x) => !b.has(x)), onlyLocal = [...b].filter((x) => !a.has(x));
+  const known = KNOWN_ISOLATED_ONLY.filter((k) => k.query === name);
+  const onlyDev = [...a].filter((x) => !b.has(x)), onlyLocalAll = [...b].filter((x) => !a.has(x));
+  const onlyLocal = onlyLocalAll.filter((x) => !known.some((k) => x.includes(k.match)));
+  for (const k of known) { const n = onlyLocalAll.length - onlyLocal.length; if (n) console.log(`   (알려진 의도적 추가 ${n}건 제외: ${k.why})`); }
   diffs += onlyDev.length + onlyLocal.length;
   console.log(`${name}: DEV ${a.size} · 격리 ${b.size} · DEV 에만 ${onlyDev.length} · 격리에만 ${onlyLocal.length}`);
   for (const x of onlyDev.slice(0, 5)) console.log("   DEV  : " + x.slice(0, 220));

@@ -40,3 +40,32 @@
 - 최근 30일 신규 계정 20개 중 특권 값이 있는 계정은 위 토스 심사 계정 1개(정상).
 - auth 사용자가 없는 계정 3개: 탈퇴 표시 1(`탈퇴한 회원`)·QA 시험 계정 2 — 모두 특권 값 없음(정리 여부는 별도 판단).
 **의심 항목: 없음.** 다만 이 점검은 현재 상태 스냅샷이다(과거에 올렸다가 되돌린 값은 알 수 없음).
+
+## 6. 운영 적용 기록 (PR #245)
+자격증명·개인정보는 기록하지 않는다. 시각은 UTC 이며(KST = +9h), 아래 "실행 기록"은 이 작업을 수행한 세션의 도구 호출 기록에서 확인한 값이다.
+| 항목 | 값 |
+|---|---|
+| PR / HEAD | #245 / `b046c327690043f050f2493adc016de400a23e79`(필수 CI 전부 통과 — E2E 3/4 는 러너에서 DB 컨테이너가 뜨지 않은 인프라 실패 후 같은 HEAD 의 해당 job 재실행으로 통과) |
+| 병합 SHA | `4009495e56540df0d19f4dc289b54407b6a06119`(squash, 병합 2026-10-27 16:22:36Z) |
+| Production 배포 | `7364089428` — SHA 가 병합 SHA 와 일치, 상태 success(2026-10-27 16:23:35Z) |
+| main CI | run `40540296619`(push) — 병합 SHA 기준 success(16:22:38Z ~ 16:27:07Z; live job 은 push 에서 건너뛰는 설계) |
+| **적용 SQL** | `fix_accounts_insert_privileged_columns_20261030.sql` SHA-256 `b8c77b4bbe669690e29d88f27cbd487d9b8dd975f63b5cc6995bae3929f619af`(PR HEAD 의 파일과 동일함을 적용 직전에 대조) |
+| 적용 방법 | 운영 프로젝트에 Supabase CLI(`db query --linked -f`)로 파일 전체를 **한 번의 요청(BEGIN…COMMIT)** 으로 실행. 오류 없음. 롤백 SQL 은 실행하지 않았다 |
+| **실제 적용 시각** | 실행 기록상 호출 **2026-10-27 16:21:35Z**, 응답 **16:21:45Z**(KST 2026-10-28 01:21). DB 에는 트리거 생성 시각이 남지 않아 DB 로는 확인할 수 없고, 마이그레이션 이력 테이블에도 기록하지 않았다(직접 SQL 실행). 병합(16:22:36Z) **약 1분 전**에 적용됐다 |
+적용 직전 확인(읽기 전용): 대상 DB(`postgres`, PostgreSQL 17.6)·`accounts` 22행 지문 기록, `accounts` 트리거 4개(새 트리거·함수 없음), 기존 함수 6개 해시 — 4개는 격리 기준선과 동일, `enforce_pg_checkout_override_admin_only`·`my_account_id` 2개는 운영에 CR(줄바꿈) 문자가 있어 `md5(prosrc)` 가 달랐으나 CR 제거 후 해시와 본문이 기준선과 동일(기능 차이 아님).
+적용 후 검증(읽기 전용):
+- `verify_fix_accounts_insert_privileged_columns_20261030.sql`: `insert_trigger_enabled_before_row_insert=true`, `function_secdef_pinned_trigger=true`, `existing_update_guards_still_enabled=true`, `accounts_trigger_count_info=5`(4 → 5).
+- 새 함수 `md5(prosrc)` = `13c5fd946908975ba880ce3c8b3058aa` — 검증에 쓴 격리 DB 의 값과 일치(SECURITY DEFINER, `search_path=public`, 소유자 postgres).
+- 기존 함수 6개 해시 적용 전과 동일, `accounts` 22행 지문 동일(행 변경 없음), 정책 4개·테이블 권한 불변.
+- 적용 후 재확인(2026-10-27 17:47Z): 위 검증 값 동일, 플랫폼 관리자 1·토스 override 1·`merged_into` 0.
+- 운영에서 권한 탈취를 재현하지 않았다(재현은 격리 스택에서만).
+
+### 기존 상태 점검 결과의 해석 (§5 와 함께 읽는다)
+- **"현재 상태에서 의심 항목을 발견하지 못함"**: 2026-10-27 점검 시점의 스냅샷에서 비정상 특권·계정 연결이 없었다(플랫폼 관리자 1 = 오너 계정, 토스 override 1 = 기록된 토스 심사 계정, `merged_into` 0, 연동 요청/이력 0).
+- **"과거 악용 여부는 확인 불가"**: 이 취약점이 열려 있던 기간 동안 값이 올려졌다가 되돌려졌거나, 특권 계정이 만들어져 삭제됐거나, 특권을 이용한 데이터 접근이 있었는지는 이 점검으로 알 수 없다. 운영에는 accounts 컬럼 변경 감사 로그가 없어(감사 대상 아님) 과거를 재구성할 수 없다. 이 SQL 은 앞으로의 우회를 막을 뿐 과거를 복구하거나 증명하지 않는다.
+
+## 7. 새 환경(일회용 격리 스택)에서의 누락 방지 (후속 PR)
+- **누락 확인**: PR #245 병합 직후의 main 으로 새로 만든 격리 스택에는 이 보호가 **설치되지 않았다**(새 트리거·함수 0, 검증 24/47 통과·23 실패). 격리 스택은 공유 DEV 스키마 덤프(baseline)에서 만들어지고, 이 보호는 운영에 SQL 로 직접 적용돼 baseline 에 없기 때문이다. 그러면 CI·로컬의 새 스택이 운영보다 약한 보호로 뜨고 같은 우회 회귀를 어떤 시험도 잡지 못한다.
+- **조치**: `isolated-supabase/supabase/migrations/20261030000000_accounts_insert_privileged_columns.sql` 추가(루트 SQL 과 같은 본문, begin/commit 만 제외, 멱등 — baseline 을 다시 덤프해도 안전). `tests/unit/accountsInsertGuard.migrationParity.test.ts` 가 두 파일의 동일성과 migration 존재를 고정한다. `scripts/isolated/verifyBaselineParity.mjs` 는 이 의도적 추가를 "알려진 차이"로 분리해 출력한다. 환경 구축 문서(`isolated-supabase/README.md`, `docs/CI_ISOLATION_240.md`)에 절차를 반영했다. **운영 DB 에는 SQL 을 다시 실행하지 않았고 운영 마이그레이션 이력도 바꾸지 않았다.**
+- **검증(새 스택 — `supabase db reset` 으로 migration 만으로 구축)**: 보호가 수동 SQL 없이 자동 설치됨(활성, BEFORE·행 단위·INSERT). 검증 47/47 통과(정상 가입·정상 계정 연동 포함, 세 특권 컬럼의 직접 INSERT·upsert·삭제 후 재생성 차단). 보호 제거 시 검증 실패(24/47) → migration 파일로 복원 후 47/47. 회귀 하니스·브라우저 가입(OTP)·변조 가입 시도 차단 모두 기대대로(보호 제거 시 브라우저 시험 3건 실패·종료 코드 1, 복원 후 13/13).
+- **운영과의 동일성**: 새 스택의 트리거 정의 문자열이 운영과 글자 그대로 같고, 함수 `pg_get_functiondef` 해시(`d56ce810f4e22a531087e56d0160fbc9`)·`md5(prosrc)`(`13c5fd94…`)·SECURITY DEFINER·`search_path`·반환형이 운영과 같다. 즉 같은 보호 동작을 제공한다.
