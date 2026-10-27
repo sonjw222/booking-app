@@ -75,7 +75,13 @@ describe("live-test workflow 구조", () => {
   });
   it("live Supabase를 쓰는 job은 모두 한 체인에 직렬화: secrets를 쓰는 job = e2e 4개 + integration, integration은 마지막 E2E 뒤, 저장소 전역 concurrency 유지", () => {
     const live = Object.keys(J).filter((k) => J[k].includes("secrets."));
-    expect(live.sort()).toEqual([...e2e, "integration", "live-env-preflight", "acl-fixture-repeat"].sort());
+    expect(live.sort()).toEqual([...e2e, "integration", "live-env-preflight", "acl-fixture-repeat", "isolated-env-gate"].sort());
+    // 격리 게이트는 ISOLATED_* 시크릿만 읽고(공유 DEV 비밀·TEST_* 계정 금지), live 체인에 끼지 않으며 네트워크/DB 를 쓰지 않는다.
+    const secretNames = [...J["isolated-env-gate"].matchAll(/secrets\.([A-Z0-9_]+)/g)].map((m) => m[1]);
+    expect(secretNames.length).toBeGreaterThan(0);
+    expect(secretNames.every((n) => n.startsWith("ISOLATED_SUPABASE_"))).toBe(true);
+    expect(code(J["isolated-env-gate"])).not.toMatch(/^    needs:/m);
+    expect(code(J["isolated-env-gate"])).not.toMatch(/npm ci|playwright|supabase /);
     expect(code(J.integration)).toMatch(new RegExp(`^    needs: ${e2e[e2e.length - 1]}\\s*$`, "m"));
     expect(code(J.integration)).toContain(`!cancelled() && needs.${e2e[e2e.length - 1]}.result != 'skipped'`);
     expect(code(J["acl-fixture-repeat"])).toMatch(/^    needs: integration\s*$/m);
