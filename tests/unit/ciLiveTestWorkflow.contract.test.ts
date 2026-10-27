@@ -1,6 +1,6 @@
 /*
-  CI live-test workflow 정적 contract(실제 CI/네트워크 실행 없음): E2E checkpoint 순차 체인, spec 정확히 한 구간, fail-fast, artifact always upload,
-  Unit/Build 독립(cascade skip 방지), Integration live-test serialization, fork/push 게이트, Production guard 입력(env) 전달을 검증한다.
+  CI live-test workflow 정적 contract(실제 CI/네트워크 실행 없음): live E2E/Integration 이 일회용 격리 Supabase 스택만 쓰고(Secrets·공유 DEV·Production 경로 없음, 가드 OK 전에는 테스트 미시작),
+  spec 정확히 한 구간, fail-fast, artifact always upload, Unit/Build 독립(cascade skip 방지), fork/push 게이트, 외부 action 허용 목록을 검증한다.
 */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -13,6 +13,8 @@ const heads = [...jobsBody.matchAll(/^  ([a-z0-9-]+):\s*$/gm)];
 const J: Record<string, string> = {};
 heads.forEach((m, i) => { J[m[1]] = jobsBody.slice(m.index!, i + 1 < heads.length ? heads[i + 1].index : undefined); });
 const code = (b: string) => b.replace(/^\s*#.*$/gm, "");
+const action = readFileSync(path.join(root, ".github/actions/isolated-supabase/action.yml"), "utf8");
+const LIVE = ["e2e-1-auth-attendance", "e2e-2-admin-config", "e2e-3-class-reservation-checkout", "e2e-4-settings-readiness", "integration", "acl-fixture-repeat"];
 const e2e = Object.keys(J).filter((k) => k.startsWith("e2e-"));
 const walk = (d: string): string[] => readdirSync(d).flatMap((n) => { const p = path.join(d, n); return statSync(p).isDirectory() ? walk(p) : [p]; });
 const specs = walk(path.join(root, "tests/e2e")).filter((f) => f.endsWith(".spec.ts")).map((f) => path.relative(root, f).split(path.sep).join("/"));
@@ -21,16 +23,10 @@ const filters = (b: string) => pwLine(b).split("npx playwright test ")[1].trim()
 const num = (b: string, re: RegExp) => Number(code(b).match(re)![1]);
 
 describe("live-test workflow 구조", () => {
-  it("E2E는 4개 checkpoint가 needs 체인으로 순차 실행(matrix/strategy/병렬 없음), 앞 구간 실패에도 계속하되 skipped(push/fork)면 건너뜀", () => {
+  it("E2E 는 4개 checkpoint 독립 job(실행마다 자기 격리 스택이라 needs 체인·matrix 없음)이고 모두 격리 스택 action 을 쓴다", () => {
     expect(e2e).toHaveLength(4);
     expect(code(wf)).not.toMatch(/^\s+strategy:/m);
-    expect(code(J[e2e[0]])).toMatch(/^    needs: live-env-preflight\s*$/m);   // 첫 구간은 preflight(Production 아님 확인)에만 의존
-    expect(code(J[e2e[0]])).toContain("needs.live-env-preflight.result == 'success'");
-    for (let i = 1; i < e2e.length; i++) {
-      const b = code(J[e2e[i]]);
-      expect(b, e2e[i]).toMatch(new RegExp(`^    needs: ${e2e[i - 1]}\\s*$`, "m"));
-      expect(b, e2e[i]).toContain(`!cancelled() && needs.${e2e[i - 1]}.result != 'skipped'`);
-    }
+    for (const id of e2e) { expect(code(J[id]), id).not.toMatch(/^    needs:/m); expect(code(J[id]), id).toContain("uses: ./.github/actions/isolated-supabase"); }
   });
   it("모든 E2E spec이 정확히 한 checkpoint에 포함된다(누락/중복 없음) — 새 spec은 구간 배정 전까지 이 테스트가 실패", () => {
     expect(specs.length).toBeGreaterThan(20);
@@ -73,42 +69,51 @@ describe("live-test workflow 구조", () => {
     expect(J.build).toContain("https://build-placeholder.supabase.co");
     expect(J.build).toContain('NEXT_PUBLIC_PG_CHECKOUT_ENABLED: "false"');
   });
-  it("live Supabase를 쓰는 job은 모두 한 체인에 직렬화: secrets를 쓰는 job = e2e 4개 + integration, integration은 마지막 E2E 뒤, 저장소 전역 concurrency 유지", () => {
-    const live = Object.keys(J).filter((k) => J[k].includes("secrets."));
-    expect(live.sort()).toEqual([...e2e, "integration", "live-env-preflight", "acl-fixture-repeat", "isolated-env-gate"].sort());
-    // 격리 게이트는 ISOLATED_* 시크릿만 읽고(공유 DEV 비밀·TEST_* 계정 금지), live 체인에 끼지 않으며 네트워크/DB 를 쓰지 않는다.
-    const secretNames = [...J["isolated-env-gate"].matchAll(/secrets\.([A-Z0-9_]+)/g)].map((m) => m[1]);
-    expect(secretNames.length).toBeGreaterThan(0);
-    expect(secretNames.every((n) => n.startsWith("ISOLATED_SUPABASE_"))).toBe(true);
-    expect(code(J["isolated-env-gate"])).not.toMatch(/^    needs:/m);
-    expect(code(J["isolated-env-gate"])).not.toMatch(/npm ci|playwright|supabase /);
-    expect(code(J.integration)).toMatch(new RegExp(`^    needs: ${e2e[e2e.length - 1]}\\s*$`, "m"));
-    expect(code(J.integration)).toContain(`!cancelled() && needs.${e2e[e2e.length - 1]}.result != 'skipped'`);
+  it("격리: 이 workflow 와 격리 action 은 GitHub Secrets 를 전혀 읽지 않는다 → 공유 DEV·Production·호스팅 프로젝트로 가는 경로가 없다", () => {
+    expect(code(wf)).not.toContain("secrets.");
+    expect(code(action)).not.toContain("secrets.");
+    for (const id of LIVE) expect(code(J[id]), id).not.toMatch(/NEXT_PUBLIC_SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY|TEST_(USER|MANAGER|STAFF)_[AB]_/);   // live job 의 대상은 스택이 내보낸 값(GITHUB_ENV)으로만 정해진다(Build 의 placeholder URL 은 live 가 아님)
+    for (const bad of ["jdglfvwdnkjnraqdxuuj", "bxntqggkfwnhcczsbqtj"]) { expect(wf).not.toContain(bad); expect(action).not.toContain(bad); }
+    expect(code(wf)).not.toMatch(/live-env-preflight|shared-live-supabase-tests/);
+  });
+  it("live job(E2E 4 + Integration + ACL 반복)은 가드 OK 이전에 어떤 테스트도 시작하지 않는다: 격리 스택 단계가 npm ci/테스트보다 앞, 실패는 skip 이 아니라 job 실패", () => {
+    for (const id of LIVE) {
+      const b = code(J[id]); const iso = b.indexOf("uses: ./.github/actions/isolated-supabase");
+      expect(iso, id).toBeGreaterThan(-1);
+      for (const marker of ["npm ci", "npx playwright", "npm run test:integration", "npx vitest"]) { const at = b.indexOf(marker); if (at >= 0) expect(at, `${id}: ${marker} 가 격리 스택보다 앞`).toBeGreaterThan(iso); }
+      expect(b, id).not.toMatch(/continue-on-error|\|\| true/);
+      expect(b, id).toMatch(/name: Stop the isolated stack[^\n]*\n\s+if: always\(\)\n\s+run: supabase stop --no-backup --workdir isolated-supabase/);   // 어떤 결과든 스택을 내린다(남는 데이터 없음)
+    }
+    // action: 스택 기동 → 값 내보내기 → 가드 → fixture 순서, 가드는 ALLOW_BLOCKED 없이(BLOCKED/PARTIAL/FAILED 면 즉시 실패)
+    const order = ["supabase start --workdir isolated-supabase", "scripts/isolated/stackEnv.mjs", "scripts/ci/isolatedTargetGuard.mjs", "scripts/isolated/bootstrapEphemeral.mjs"].map((m) => code(action).indexOf(m));
+    expect(order.every((i) => i >= 0)).toBe(true); expect([...order].sort((x, y) => x - y)).toEqual(order);
+    expect(code(action)).not.toContain("ISOLATED_GATE_ALLOW_BLOCKED");
+    expect(code(action)).toContain("version: 2.116.0");   // CLI 버전 고정
+  });
+  it("공유 DEV 로 자동 대체하는 경로가 없다: 시크릿 fallback 식(||, secrets.*, vars.*)·대상 URL 직접 지정 없음, 격리 환경은 가드 통과 시에만 만들어진다", () => {
+    expect(code(wf)).not.toMatch(/\$\{\{[^}]*\|\|[^}]*(secrets|vars)\./);
+    expect(code(wf)).not.toMatch(/vars\./); expect(code(action)).not.toMatch(/vars\./);
+    const guard = readFileSync(path.join(root, "scripts/isolated/bootstrapEphemeral.mjs"), "utf8");
+    expect(guard).toContain('g.status !== "OK" || g.kind !== "ephemeral-local-stack"');   // fixture 단계도 가드를 한 번 더 확인
+  });
+  it("실행 조건 유지: live job 은 push 제외·fork PR 제외(같은 저장소 PR·수동 실행), Integration/E2E 가 서로 기다리지 않는다", () => {
+    for (const id of LIVE.filter((x) => x !== "acl-fixture-repeat")) {
+      expect(code(J[id]), id).toContain("github.event_name != 'push'");
+      expect(code(J[id]), id).toContain("github.event.pull_request.head.repo.full_name == github.repository");
+    }
     expect(code(J["acl-fixture-repeat"])).toMatch(/^    needs: integration\s*$/m);
-    expect(code(J["acl-fixture-repeat"])).toContain("needs.integration.result == 'success'");
     expect(code(J["acl-fixture-repeat"])).toContain("github.head_ref == 'test/acl-fixture-restore-20261012'");
     expect(J["acl-fixture-repeat"]).toContain("for iteration in 1 2 3");
-    expect(wf).toMatch(/concurrency:\n  group: shared-live-supabase-tests\n  cancel-in-progress: false/);
-    expect(code(wf)).not.toMatch(/continue-on-error/);
-    expect(J.integration).toContain("E2E가 실패해도 Integration은 실행한다");   // 판단 근거가 workflow에 문서화돼 있다
+    expect(code(wf)).toMatch(/concurrency:\n  group: test-\$\{\{ github\.event\.pull_request\.number \|\| github\.ref \}\}\n  cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
   });
-  it("push/fork 게이트: preflight job이 직접 게이트(push 제외, fork PR 제외)하고 live job은 그 skipped/failed를 상속(한 번의 명확한 실패 + live skip)", () => {
-    const pre = code(J["live-env-preflight"]);
-    expect(pre).toContain("github.event_name != 'push'");
-    expect(pre).toContain("github.event.pull_request.head.repo.full_name == github.repository");
-    expect(pre).toContain("node scripts/ci/liveEnvPreflight.mjs");
-    expect(pre).not.toMatch(/npm ci|playwright|npm run test/);   // 네트워크/브라우저/의존성 설치 없음
-    expect(code(J[e2e[0]])).not.toContain("github.event_name != 'push'");   // 게이트 중복 없음(preflight가 담당)
-  });
-  it("최소 권한: workflow 전체 permissions는 contents: read만, pull_request_target 없음, 외부 action은 actions/* 뿐", () => {
+  it("최소 권한·외부 action 허용 목록: permissions contents: read, pull_request_target 없음, 외부 action 은 actions/* 와 로컬 action, 그리고 격리 action 안의 supabase/setup-cli 뿐", () => {
     expect(code(wf)).toMatch(/^permissions:\n  contents: read\n/m);
     expect(code(wf)).not.toMatch(/pull_request_target/);
     for (const m of code(wf).matchAll(/uses: ([^@\s]+)@/g)) expect(m[1], m[0]).toMatch(/^actions\//);
+    for (const m of code(wf).matchAll(/uses: (\.\/[^\s]+)/g)) expect(m[1]).toBe("./.github/actions/isolated-supabase");
+    const ext = [...code(action).matchAll(/uses: ([^@\s]+)@/g)].map((m) => m[1]); expect(ext).toEqual(["supabase/setup-cli"]);
   });
-  it("Production guard 입력: live job step이 NEXT_PUBLIC_SUPABASE_URL/키를 secrets에서 env로 전달(가드는 Playwright config / vitest globalSetup에서 이 값을 검사)", () => {
-    for (const id of [...e2e, "integration", "acl-fixture-repeat"]) {
-      for (const k of ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"]) expect(J[id], `${id} ${k}`).toContain(`${k}: \${{ secrets.${k} }}`);
-    }
+  it("Production guard(테스트 코드)는 이중 방어로 유지: Playwright/Integration 이 시작 전에 Production 대상을 거부한다", () => {
     expect(readFileSync(path.join(root, "tests/e2e/fixtures/env.ts"), "utf8")).toContain("assertIntegrationTargetIsNotProduction(process.env);");
     expect(readFileSync(path.join(root, "tests/integration/loadEnv.ts"), "utf8")).toContain("assertIntegrationTargetIsNotProduction(process.env);");
   });

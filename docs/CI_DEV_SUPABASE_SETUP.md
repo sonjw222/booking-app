@@ -1,5 +1,9 @@
 # CI/dev Supabase 프로젝트 준비 가이드
 
+> **2026-10-27 갱신(#240):** live CI(E2E/Integration)는 더 이상 이 공유 DEV 프로젝트(`mwhabit-ci-dev`)나 GitHub Secrets 를 쓰지 않는다. 각 job 이 자기 러너 안에 일회용 Supabase 스택을 띄운다(`isolated-supabase/`, `docs/CI_ISOLATION_240.md`).
+> 이 문서와 `ci:dev:*` 스크립트는 공유 DEV 를 수동 점검·참조용으로 계속 쓸 때만 유효하다. 아래 "필수 GitHub Secrets"는 CI 에서 더 이상 읽히지 않는다(정리 여부는 사람이 결정).
+
+
 live CI(E2E/Integration)는 **Production이 아닌 전용 Supabase 프로젝트**에서만 돈다. Production guard(`tests/integration/productionGuard.ts`, `scripts/ci/liveEnvPreflight.mjs`)는 약화하지 않는다.
 **repo 쪽 준비는 끝났지만, dev 프로젝트는 아직 존재하지 않는다.** 사람이 해야 하는 일은 아래 ① 프로젝트 생성 ② 값 전달 ③ GitHub Secrets 교체 ④ merge 승인뿐이고, 나머지(스키마 적용 보조·fixture 생성·검증)는 Claude가 명령으로 한다.
 

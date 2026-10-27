@@ -13,6 +13,7 @@ import {
   saveSettingsAdmin,
   getOrCreateTestPassProductNamed,
   createTestGoodsMembershipAdmin,
+  createTestMembershipAdmin,
   type TestUser,
 } from "../fixtures/testData";
 import type { CenterSettings } from "../../../lib/settings";
@@ -127,6 +128,10 @@ test.beforeAll(async () => {
   // TEST4 전용 — 이 실행 전용 새 상품(이름에 RUN_SHORT)이라 userA는 아직 갖고 있지 않다. 아무 것도 지우지 않는다.
   const buyProduct = await getOrCreateTestPassProductNamed(centerAId, BUY_PRODUCT_NAME);
   buyProductId = buyProduct.id;
+
+  // TEST1/2/5/6 의 전제("회원 기존 pass 표시") — userA 가 이 센터의 pass 수강권을 이미 갖고 있어야 한다. 예전 공유 DEV 에서는 앞 구간(attendance 등)·이전 실행이 남긴
+  // 수강권이 우연히 이 전제를 채웠다. 일회용 격리 스택(#240)은 비어 있으므로 이 파일이 전제를 직접 만든다(멱등: 이미 있으면 갱신).
+  await createTestMembershipAdmin(centerAId, userA.profileId, { remainingCount: 10 });
 
   // TEST5 전용 — goods가 pass 목록에 절대 안 보이는지 검증하려면 실제로 goods를 보유해야
   // "안 보임"이 의미 있는 확인이 된다(get-or-create + self-healing, 기존 패턴 재사용).

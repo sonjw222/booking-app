@@ -8,6 +8,13 @@
 - **P2** 격리 DB(`tests/rls-real/run.sh up`)가 운영 스키마 일부만 적용해 관리자 6개 경로가 오류 화면으로만 검증된다(`knownEnvErrors.ts` 의 `LAYOUT_ONLY_PATHS`). 누락 객체(center_announcements·subscription_plans·center_settlement_accounts·center_payout_accounts·center_subscriptions·inquiry_threads 계열·manager_dashboard_summary RPC, rooms.memo·progress_categories.node_type 컬럼)를 격리 DB 에 적용하면 정상 데이터 흐름까지 검증할 수 있고 해당 규칙을 지울 수 있다(#240 격리 Supabase 환경 준비와 함께).
 - **P2** 앱: `lib/orders.ts` `fetchMyPurchases` 가 memberships/orders 조회 오류(42703 외)를 무시해 API 500 에도 "구매 내역이 없어요" 빈 상태가 보인다(오류 화면 `구매 내역을 불러오지 못했어요` 에 도달 불가). 이번 범위(테스트 오류 집계)에서는 고치지 않음.
 - **P3(해소, 2026-10-27)** 스윕을 데스크톱·모바일 Chromium 프로젝트 모두에서 실행해 각각 통과(수집기 3 + 스윕 8). 스윕이 폭을 직접 지정하므로 모바일 프로젝트의 추가분은 터치/UA 에뮬레이션 정도다. 실기기·실제 Supabase(Auth/Realtime 포함) 환경은 여전히 미검증.
+## 2026-10-27 #240 격리 전환 후속
+- **P1** PR #244 병합 후 main 에서 `workflow_dispatch` 로 일회용 스택 live 실행을 한 번 더 확인한 뒤 #240 을 닫는다(원격 CI·취소 검증은 완료).
+- **P2** Integration 파일 간 순서 의존: vitest 결과 캐시로 파일 순서가 바뀌면 `manager-set-attendance-membership-integrity.test.ts` 가 앞 파일 상태에 영향을 받아 실패했다(단독 실행은 통과, cold 순서는 통과). 오염 원인 파일을 특정해 각 파일이 스스로 정리/전제를 만들게 해야 한다.
+- **P2** `ALLOW_PRIVILEGED_DEV_TESTS` 로 막혀 있는 Integration 3건(공유 계정 승격·전역 요금제 변경)은 이제 일회용 스택에서 안전하게 돌릴 수 있다 — 별도 job 으로 실행할지 검토.
+- **P3** 병합 후 CI 에서 쓰지 않는 공유 DEV Secrets 13개 정리·키 회전 여부 결정(사람). 공유 DEV 잔여(수업 2·예약 4·임시 계정 1)는 정리 승인 대기.
+- **P3** 호스팅 격리 프로젝트가 필요해지면 가드 kind=`hosted-project` + `ISOLATED_*` 4개로 전환(현재 불필요).
+
 ## 2026-10-26 #240 CI 격리 이전 (BLOCKED — 외부 준비 필요)
 - **P1** 격리 Supabase 프로젝트/브랜치·스키마 baseline·`ISOLATED_*` 시크릿 준비 후 live job 시크릿 전환(상세 항목·등록 위치: `docs/CI_ISOLATION_240.md` §7). 완료 증거 기준은 §6. 전환 완료 전에는 #240 을 닫지 않는다.
 

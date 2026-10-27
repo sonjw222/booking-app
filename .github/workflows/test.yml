@@ -1,82 +1,48 @@
 name: Test
 
 on:
-  # push는 main만 대상으로 한다(merge 이후 최종 확인용). 어떤 브랜치든 열려 있는 PR이 있으면
-  # pull_request 이벤트가 이미 그 브랜치를 검증하므로, push.branches를 "**"로 두면 같은 커밋에
-  # 대해 push + pull_request 두 워크플로가 동시에 실행된다 — 둘 다 같은 실제 개발용 Supabase에
-  # 같은 TEST_USER_A 등 공유 테스트 계정/데이터로 접근하므로, 두 실행이 겹치면 한쪽이 만든
-  # membership을 다른 쪽의 "생성 전/후 개수" assertion이 우연히 관측해 실패하는 식의 진짜
-  # 데이터 경합이 생길 수 있다(TEST-001 조사에서 실제로 재현됨). PR 없이 로컬에서 곧장 main에
-  # push하는 경우는 드물고, 그 경우엔 push 실행만 돈다.
+  # push는 main만 대상으로 한다(merge 이후 최종 확인용). 열려 있는 PR 이 있으면 pull_request 이벤트가 이미 그 브랜치를 검증하므로 push.branches 를 "**"로 두지 않는다
+  # (같은 커밋에 push + pull_request 두 실행이 생겨 CI 시간만 중복된다). live E2E/Integration 은 실행마다 자기 러너 안의 일회용 Supabase 스택을 쓰므로(공유 DEV·Secrets 없음)
+  # 서로의 데이터에 영향을 주지 않는다.
   push:
     branches: ["main"]
   pull_request:
   workflow_dispatch:
 
-# 저장소 전체(브랜치/PR 무관)에서 이 워크플로우를 단 하나만 동시에 돌게 한다.
-# 통합 테스트가 여러 브랜치/세션에서 동시에 실행돼도 전부 같은 공유 개발용 Supabase의
-# 같은 테스트 계정/센터에 접근하므로, 서로 다른 브랜치 간 실행이 겹쳐도 서로의 데이터
-# 변경을 관측해 flaky해지는 문제가 실제로 반복 재현됐다(2026-08-14, 여러 세션이 동시에
-# CI를 트리거하며 관측). group을 고정 문자열로 둬서 브랜치/PR과 무관하게 전역 큐 하나로
-# 묶고, cancel-in-progress는 false로 둔다 — 다른 브랜치의 정상 진행 중인 실행을 내
-# push가 취소시키면 안 되므로(취소 대신 대기). 같은 브랜치/PR에 짧게 여러 번 push한
-# 경우의 "최신 것만 남기기"는 더 이상 이 그룹에서 자동으로 되지 않지만, 이건 전역
-# 순차 실행이라는 목표와 상충해 감수한다(필요하면 각자 gh run cancel로 직접 정리).
+# 같은 PR/브랜치의 이전 실행은 새 push 가 오면 취소한다(최신 HEAD 만 검증). live 테스트는 실행마다 독립된 일회용 Supabase 스택을 쓰므로 서로 다른 PR 의 실행을 직렬화할 필요가 없다 —
+# 예전의 전역 큐(shared-live-supabase-tests)는 모든 실행이 하나뿐인 공유 DEV 를 쓰던 때의 보호 장치였다.
 concurrency:
-  group: shared-live-supabase-tests
-  cancel-in-progress: false
+  group: test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # 최소 권한(2026-10-07): 이 workflow의 어떤 job도 repository에 쓰지 않는다. 저장소 기본값도 read지만 명시해 둔다.
 permissions:
   contents: read
 
 jobs:
-  # ── E2E checkpoint 체인(2026-10-07) ────────────────────────────────────────────────
-  # 이전에는 한 job이 전체 Playwright suite(67 tests, workers 1)를 돌려 30분 timeout이 나면 Unit/Integration/Build가 전부 skipped되고 trace/screenshot artifact도 올라가지 못했다
-  # (#166/#167/#169에서 같은 패턴 재현). 구조:
-  #  · live dev Supabase를 쓰는 job(E2E 4구간 + Integration)은 needs 체인으로 "항상 한 번에 하나만" 순차 실행한다(같은 TEST_USER/TEST_CENTER 공유). 저장소 전체 concurrency 그룹(shared-live-supabase-tests)도 그대로.
-  #  · 각 구간은 --max-failures=1(같은 환경 문제로 수십 개가 1분씩 timeout 나는 것 방지, 재시도 1회는 유지)로 첫 실패에서 멈추고, 앞 구간이 실패해도 다음 구간은 계속 실행해(!cancelled()) 정보를 최대한 모은다.
-  #  · artifact(trace/video/report)는 retention 3일 — 이 저장소는 PUBLIC이라 artifact가 로그인한 누구에게나 내려받기 가능하고, trace의 네트워크 로그에는 테스트 계정 bearer token이 들어갈 수 있다(짧은 수명이지만 노출 기간을 최소화).
-  #  · 구간 step은 job timeout보다 짧은 step timeout을 가져 job이 강제 종료되기 전에 artifact upload(if: always())가 실행된다. 구간 이름이 artifact 이름에 들어 충돌하지 않는다.
-  #  · Unit/Build는 live DB를 쓰지 않으므로 E2E와 독립(needs 없음, fork PR에서도 실행). Build는 placeholder env만 쓴다.
-  #  · Production 차단: Playwright(tests/e2e/fixtures/env.ts)와 Integration(tests/integration/loadEnv.ts)이 같은 helper(productionGuard)로 Production project ref를 감지하면 시작 전에 hard fail.
+  # ── live 테스트의 격리(#240) ────────────────────────────────────────────────────────
+  # E2E 4구간과 Integration 은 각각 자기 러너 안에서 일회용 Supabase 전체 스택(Auth·PostgREST·Storage·Realtime·Edge Functions)을 띄운다(.github/actions/isolated-supabase).
+  #  · 이 workflow 의 어떤 job 도 GitHub Secrets 를 읽지 않는다 → 공유 DEV·Production 으로 가는 경로가 없다(tests/unit/ciLiveTestWorkflow.contract.test.ts 가 정적으로 고정).
+  #  · 가드(scripts/ci/isolatedTargetGuard.mjs)가 OK(kind=ephemeral-local-stack)가 아니면 테스트 단계는 시작되지 않고 job 은 실패한다. 설정이 없다는 이유로 skip 하거나 통과시키지 않는다.
+  #  · baseline 은 공유 DEV public 스키마의 스키마-only 덤프(+ Storage 정책·카탈로그 시드, 데이터 복사 없음)이고, 테스트 계정·센터·상품은 실행마다 새로 만든 뒤 job 이 끝나면 스택째 사라진다.
+  #  · 각 구간은 --max-failures=1(같은 환경 문제로 수십 개가 1분씩 timeout 나는 것 방지, 재시도 1회는 유지)로 첫 실패에서 멈춘다. 구간끼리 데이터를 공유하지 않으므로 needs 체인 없이 병렬로 돈다.
+  #  · artifact(trace/video/report)는 retention 3일 — 이 저장소는 PUBLIC이라 artifact가 로그인한 누구에게나 내려받기 가능하다. 구간 step은 job timeout보다 짧은 step timeout을 가져 artifact upload(if: always())가 실행된다.
   #  · 모든 spec이 정확히 한 구간에 들어가는지는 tests/unit/ciLiveTestWorkflow.contract.test.ts가 정적으로 검증한다.
-  # live-env-preflight: Secrets가 Production을 가리키거나 대상 URL이 없으면 "한 번의 명확한 실패"로 끝내고 live job(E2E/Integration)은 시작하지 않는다
-  # (예전에는 5개 live job이 각각 같은 guard 오류로 실패). 네트워크/브라우저/DB 접근이 없고 npm ci도 필요 없다. 각 live job의 guard(productionGuard)는 이중 방어로 그대로 유지.
-  live-env-preflight:
-    name: Live-test target preflight (no network — Production이면 실패)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    if: >
-      github.event_name != 'push' &&
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository)
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: node scripts/ci/liveEnvPreflight.mjs
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-
+  #  · 이 스택은 호스팅 Supabase 프로젝트가 아니라 CLI 가 띄우는 로컬 스택이다(같은 GoTrue/PostgREST/Storage/Realtime/Edge Runtime 이미지). 호스팅 환경 고유 차이는 docs/CI_ISOLATION_240.md 참고.
   e2e-1-auth-attendance:
-    name: E2E 1/4 — auth + attendance(첫 실패 지점 우선 확인) (Playwright, live dev Supabase)
+    name: E2E 1/4 — auth + attendance(첫 실패 지점 우선 확인) (Playwright, isolated Supabase stack)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # unit/integration과 마찬가지로 fork PR은 Secrets가 없어 애초에 통과할 수 없고, 있어도
-    # 노출시키면 안 되므로 막는다.
-    needs: live-env-preflight
-    # preflight가 성공(= Production 아님 확인)했을 때만 시작. push/fork면 preflight가 skipped라 함께 건너뜀.
-    if: ${{ !cancelled() && needs.live-env-preflight.result == 'success' }}
+    # 기존 실행 조건 유지: push 제외, fork PR 제외(같은 저장소 PR·수동 실행만). 이제 Secrets 가 필요 없어 fork 도 안전하지만 실행 범위를 넓히지 않는다.
+    if: ${{ github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - name: Isolated Supabase (ephemeral local stack — no shared DEV, no secrets)
+        uses: ./.github/actions/isolated-supabase
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Playwright e2e-1-auth-attendance
@@ -90,23 +56,6 @@ jobs:
           # 수강권이 없어져(직접결제는 pending) new-class-creation.spec.ts 등 "구매 직후
           # 즉시 사용" 전제의 기존 테스트가 깨진다(실제로 이 커밋 추가 직후 CI에서 재현됨).
           NEXT_PUBLIC_PG_CHECKOUT_ENABLED: "true"
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
-          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
-          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
-          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
-          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
-          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
-          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
-          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
-          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
-          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
-          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
-          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
-          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
-          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -121,20 +70,24 @@ jobs:
           path: test-results/
           retention-days: 3
           if-no-files-found: ignore
+      - name: Stop the isolated stack (always; nothing persists)
+        if: always()
+        run: supabase stop --no-backup --workdir isolated-supabase
 
   e2e-2-admin-config:
-    name: E2E 2/4 — admin 설정류(허용 상품·휴무일·예약조건·반복수업) (Playwright, live dev Supabase)
+    name: E2E 2/4 — admin 설정류(허용 상품·휴무일·예약조건·반복수업) (Playwright, isolated Supabase stack)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: e2e-1-auth-attendance
-    # 앞 구간이 실패해도 계속(정보 수집), 앞 구간이 skipped(push/fork)면 건너뜀
-    if: ${{ !cancelled() && needs.e2e-1-auth-attendance.result != 'skipped' }}
+    # 기존 실행 조건 유지(push·fork PR 제외)
+    if: ${{ github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - name: Isolated Supabase (ephemeral local stack — no shared DEV, no secrets)
+        uses: ./.github/actions/isolated-supabase
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Playwright e2e-2-admin-config
@@ -148,23 +101,6 @@ jobs:
           # 수강권이 없어져(직접결제는 pending) new-class-creation.spec.ts 등 "구매 직후
           # 즉시 사용" 전제의 기존 테스트가 깨진다(실제로 이 커밋 추가 직후 CI에서 재현됨).
           NEXT_PUBLIC_PG_CHECKOUT_ENABLED: "true"
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
-          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
-          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
-          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
-          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
-          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
-          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
-          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
-          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
-          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
-          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
-          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
-          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
-          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -179,20 +115,24 @@ jobs:
           path: test-results/
           retention-days: 3
           if-no-files-found: ignore
+      - name: Stop the isolated stack (always; nothing persists)
+        if: always()
+        run: supabase stop --no-backup --workdir isolated-supabase
 
   e2e-3-class-reservation-checkout:
-    name: E2E 3/4 — 새 수업 생성 + 예약 + 결제 (Playwright, live dev Supabase)
+    name: E2E 3/4 — 새 수업 생성 + 예약 + 결제 (Playwright, isolated Supabase stack)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: e2e-2-admin-config
-    # 앞 구간이 실패해도 계속(정보 수집), 앞 구간이 skipped(push/fork)면 건너뜀
-    if: ${{ !cancelled() && needs.e2e-2-admin-config.result != 'skipped' }}
+    # 기존 실행 조건 유지(push·fork PR 제외)
+    if: ${{ github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - name: Isolated Supabase (ephemeral local stack — no shared DEV, no secrets)
+        uses: ./.github/actions/isolated-supabase
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Playwright e2e-3-class-reservation-checkout
@@ -206,23 +146,6 @@ jobs:
           # 수강권이 없어져(직접결제는 pending) new-class-creation.spec.ts 등 "구매 직후
           # 즉시 사용" 전제의 기존 테스트가 깨진다(실제로 이 커밋 추가 직후 CI에서 재현됨).
           NEXT_PUBLIC_PG_CHECKOUT_ENABLED: "true"
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
-          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
-          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
-          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
-          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
-          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
-          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
-          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
-          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
-          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
-          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
-          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
-          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
-          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -237,20 +160,24 @@ jobs:
           path: test-results/
           retention-days: 3
           if-no-files-found: ignore
+      - name: Stop the isolated stack (always; nothing persists)
+        if: always()
+        run: supabase stop --no-backup --workdir isolated-supabase
 
   e2e-4-settings-readiness:
-    name: E2E 4/4 — 예약 설정 + production-readiness (Playwright, live dev Supabase)
+    name: E2E 4/4 — 예약 설정 + production-readiness (Playwright, isolated Supabase stack)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: e2e-3-class-reservation-checkout
-    # 앞 구간이 실패해도 계속(정보 수집), 앞 구간이 skipped(push/fork)면 건너뜀
-    if: ${{ !cancelled() && needs.e2e-3-class-reservation-checkout.result != 'skipped' }}
+    # 기존 실행 조건 유지(push·fork PR 제외)
+    if: ${{ github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - name: Isolated Supabase (ephemeral local stack — no shared DEV, no secrets)
+        uses: ./.github/actions/isolated-supabase
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Playwright e2e-4-settings-readiness
@@ -264,23 +191,6 @@ jobs:
           # 수강권이 없어져(직접결제는 pending) new-class-creation.spec.ts 등 "구매 직후
           # 즉시 사용" 전제의 기존 테스트가 깨진다(실제로 이 커밋 추가 직후 CI에서 재현됨).
           NEXT_PUBLIC_PG_CHECKOUT_ENABLED: "true"
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
-          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
-          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
-          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
-          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
-          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
-          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
-          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
-          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
-          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
-          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
-          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
-          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
-          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -295,29 +205,9 @@ jobs:
           path: test-results/
           retention-days: 3
           if-no-files-found: ignore
-
-  # 격리 환경 게이트(#240): live E2E/Integration 을 공유 DEV 가 아닌 격리 Supabase 로 옮길 준비가 됐는지 "환경변수만" 검사한다.
-  # 이 job 은 GitHub 의 actions/checkout·setup-node 를 실행하지만 Supabase API·DB 를 호출하지 않고(가드 스크립트에 접속 코드 없음) 공유 DEV 비밀도 읽지 않는다.
-  # 판정: ISOLATED_* 가 전부 없거나 안전한 값만 일부 있으면 BLOCKED(Step Summary + warning, 통과 표시) — 전환 완료가 아니며 live job 은 계속 공유 DEV 에서 돈다.
-  #       입력된 값 중 하나라도 Production/공유 DEV 대상이거나 잘못된 URL(HTTP·사용자정보·포트·경로·쿼리·fragment)·프로젝트 불일치면 다른 값이 없어도 FAILED — ISOLATED_GATE_ALLOW_BLOCKED=1 은 BLOCKED 에만 적용되고 FAILED 는 반드시 실패한다.
-  # 이 job 의 통과는 live 검증 통과도, 격리 전환 완료도 뜻하지 않는다.
-  isolated-env-gate:
-    name: Isolated-env gate (#240) — BLOCKED unless an isolated Supabase is configured (no Supabase API/DB calls)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    if: github.event_name != 'push'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: node scripts/ci/isolatedTargetGuard.mjs
-        env:
-          ISOLATED_GATE_ALLOW_BLOCKED: "1"
-          ISOLATED_SUPABASE_URL: ${{ secrets.ISOLATED_SUPABASE_URL }}
-          ISOLATED_SUPABASE_PROJECT_REF: ${{ secrets.ISOLATED_SUPABASE_PROJECT_REF }}
-          ISOLATED_SUPABASE_ANON_KEY: ${{ secrets.ISOLATED_SUPABASE_ANON_KEY }}
-          ISOLATED_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ISOLATED_SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Stop the isolated stack (always; nothing persists)
+        if: always()
+        run: supabase stop --no-backup --workdir isolated-supabase
 
   sql:
     name: SQL regression tests (isolated PGlite, no network DB)
@@ -376,17 +266,12 @@ jobs:
       - run: npm run test
 
   integration:
-    name: Integration tests (live dev Supabase)
+    name: Integration tests (isolated Supabase stack)
     runs-on: ubuntu-latest
-    # live dev Supabase를 쓰므로 모든 E2E 구간이 끝난 뒤(순차)에만 실행한다(E2E와 동시 실행 금지).
-    # 판단(2026-10-07): E2E가 실패해도 Integration은 실행한다 — Integration은 자체 self-healing 정리(공유 fixture 사전 정리)를 가지고 있고, E2E 실패와 독립된 신호
-    # (dev DB/계정은 정상인데 E2E만 깨졌는지, 환경 전체가 깨졌는지)를 주기 때문이다. E2E가 fixture를 오염시켰더라도 Integration 실패는 "환경 오염" 단서가 된다.
-    # 사용자가 workflow를 취소하면(!cancelled()) 실행하지 않고, push/fork로 E2E가 skipped면 건너뜀.
-    needs: e2e-4-settings-readiness
-    if: ${{ !cancelled() && needs.e2e-4-settings-readiness.result != 'skipped' }}
+    if: ${{ github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     # 20분으로는 통합 테스트 스위트가 계속 늘어나며 정상 실행도 종종 잘렸다(PR #66, #67
     # 모두 19분대에 timeout으로 cancelled — 실패가 아니라 시간 부족). timeout 자체를
-    # 없애면 2026-08-14/15처럼 진짜 멈춘 job이 전역 큐를 몇 시간씩 막는 사고가 재발하므로,
+    # 없애면 진짜 멈춘 job이 runner 를 오래 붙잡는 사고가 재발하므로,
     # 없애는 대신 정상 실행 기록(과거 30~34분)을 감안해 35분으로 늘린다.
     timeout-minutes: 35
     steps:
@@ -395,26 +280,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Isolated Supabase (ephemeral local stack — no shared DEV, no secrets)
+        uses: ./.github/actions/isolated-supabase
       - run: npm ci
       - run: npm run test:integration
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
-          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
-          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
-          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
-          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
-          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
-          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
-          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
-          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
-          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
-          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
-          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
-          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
-          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Stop the isolated stack (always; nothing persists)
+        if: always()
+        run: supabase stop --no-backup --workdir isolated-supabase
 
   acl-fixture-repeat:
     name: ACL fixture isolated and combined repeat (dev only)
@@ -428,6 +300,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Isolated Supabase (ephemeral local stack — no shared DEV, no secrets)
+        uses: ./.github/actions/isolated-supabase
       - run: npm ci
       - name: Repeat isolated and combined fixture checks three times
         shell: bash
@@ -437,24 +311,9 @@ jobs:
             npx vitest run --config vitest.integration.config.ts tests/integration/admin-assignment-security.test.ts
             npx vitest run --config vitest.integration.config.ts tests/integration/acl-003-permission-read.test.ts tests/integration/admin-assignment-security.test.ts
           done
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
-          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
-          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
-          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
-          TEST_CENTER_ID: ${{ secrets.TEST_CENTER_ID }}
-          TEST_PRODUCT_ID: ${{ secrets.TEST_PRODUCT_ID }}
-          TEST_MANAGER_A_EMAIL: ${{ secrets.TEST_MANAGER_A_EMAIL }}
-          TEST_MANAGER_A_PASSWORD: ${{ secrets.TEST_MANAGER_A_PASSWORD }}
-          TEST_MANAGER_B_EMAIL: ${{ secrets.TEST_MANAGER_B_EMAIL }}
-          TEST_MANAGER_B_PASSWORD: ${{ secrets.TEST_MANAGER_B_PASSWORD }}
-          TEST_STAFF_A_EMAIL: ${{ secrets.TEST_STAFF_A_EMAIL }}
-          TEST_STAFF_A_PASSWORD: ${{ secrets.TEST_STAFF_A_PASSWORD }}
-          TEST_STAFF_B_EMAIL: ${{ secrets.TEST_STAFF_B_EMAIL }}
-          TEST_STAFF_B_PASSWORD: ${{ secrets.TEST_STAFF_B_PASSWORD }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Stop the isolated stack (always; nothing persists)
+        if: always()
+        run: supabase stop --no-backup --workdir isolated-supabase
 
   build:
     name: Build (production, typecheck 포함 — placeholder env, live DB 미사용)
