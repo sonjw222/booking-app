@@ -3,9 +3,9 @@ import { nicepayGate } from "../../lib/payments/server/nicepay/runtime";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /* 앱 쪽 선검사(nicepayGate): DB 게이트 모드 + 노출 정책. 가짜 admin 클라이언트만 쓴다(네트워크 없음). */
-const admin = (mode: unknown, opts: { rpcError?: boolean; override?: boolean } = {}) => ({
+const admin = (mode: unknown, opts: { rpcError?: boolean; override?: boolean; tossOverride?: boolean } = {}) => ({
   rpc: async () => (opts.rpcError ? { data: null, error: { message: "function does not exist" } } : { data: mode, error: null }),
-  from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { profiles: { accounts: { pg_checkout_override: !!opts.override } } } }) }) }) }),
+  from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { profiles: { accounts: { nicepay_review_access: !!opts.override, pg_checkout_override: !!opts.tossOverride } } } }) }) }) }),
 }) as unknown as SupabaseClient;
 
 const ENV = process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED;
@@ -20,6 +20,12 @@ describe("nicepayGate — DB 모드와 노출 정책의 일치", () => {
     process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED = "true";
     expect(await nicepayGate(admin("reviewer", { override: true }))("o1")).toBe(true);
     expect(await nicepayGate(admin("reviewer", { override: false }))("o1")).toBe(false);
+  });
+  it("B안: 토스 심사 계정(pg_checkout_override 만 true)은 NICEPAY 게이트를 통과하지 못한다 — reviewer·public(공개 플래그 꺼짐) 모두", async () => {
+    process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED = "false";
+    expect(await nicepayGate(admin("reviewer", { override: false, tossOverride: true }))("o1")).toBe(false);
+    expect(await nicepayGate(admin("public", { override: false, tossOverride: true }))("o1")).toBe(false);
+    expect(await nicepayGate(admin("reviewer", { override: true, tossOverride: false }))("o1")).toBe(true);
   });
   it("public: 공개 플래그가 켜져 있으면 일반 회원 통과, 꺼져 있으면 심사 계정만", async () => {
     process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED = "true";

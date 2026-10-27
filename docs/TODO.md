@@ -1,5 +1,11 @@
 # TODO
 
+## 2026-10-29 B안·v3 후속
+- **P0(승인)**: 운영 SQL 순서 — P0 preflight → (P1) → P2 분리 → P2b 게이트 패치 → P3 시드·심사관 지정(`NICEPAY_SQL_RUNBOOK_20261028.md`). 해시 불일치 시 중단.
+- **P0(확인)**: `fix_refund_pg_origin_guard_20261017` 운영 정의 확인(이력 없음), 운영 함수 정의 해시 대조(이번엔 BLOCKED).
+- **P1(NICEPAY)**: 키 계열(`mwhabit01m` 이 v3 계약인지), 샌드박스, 한글 상품명(EUC-KR) 처리, WebView(`WapUrl`·`IspCancelUrl`) 필요 여부, 심사 전용 센터·상품 허용 서면 확인.
+- **P1**: 내부 센터 상품 UUID 직접 주문(RPC) 가능 여부 운영 확인(로컬 DEV 기준선에서 가능), 카테고리·홈 화면 스크린샷 재수집.
+- **P2**: 세션 복원 직후 상품 목록이 공개 모델로 대체되는 레이스(체크아웃 "로그인이 필요해요") 조사.
 ## 2026-10-28 운영 반영 전 점검 후속
 - **P0(결정)**: 심사관 플래그 방식(재사용 vs 별도 `nicepay_review_access`)과 기존 "토스 심사 계정"(override=true) 처리 — 결정 전 운영 계정 권한 변경 금지.
 - **P0(운영 확인)**: P0 preflight(`preflight_nicepay_review_center_isolation_20261028.sql`)로 운영 함수 정의 해시 대조 후에만 분리 SQL 적용.

@@ -17,11 +17,11 @@ const { data: accs } = await svc.from("accounts").select("id,auth_id").eq("auth_
 if (!accs?.length) await svc.from("accounts").insert({ auth_id: adminId, name: "CI Admin" });
 await svc.from("accounts").update({ is_platform_admin: true }).eq("auth_id", adminId);
 const { data: centers } = await svc.from("centers").select("id,name,is_nicepay_review");
-const REV = centers.find((c) => c.is_nicepay_review), OP = centers.find((c) => c.name === "[QA] 심사 시험 스튜디오");
+const REV = centers.find((c) => c.is_nicepay_review), OP = centers.find((c) => c.name === "[QA] 심사 시험 스튜디오"), TOSS = centers.find((c) => c.name.startsWith("[토스 심사용]"));
 const { data: prods } = await svc.from("products").select("id,center_id,name");
-const revProd = prods.find((p) => p.center_id === REV.id && p.name.includes("1회")), opProd = prods.find((p) => p.name === "[QA] 8회권 · 30일");
+const revProd = prods.find((p) => p.center_id === REV.id && p.name.includes("1회")), opProd = prods.find((p) => p.name === "[QA] 8회권 · 30일"), tossProd = TOSS ? prods.find((p) => p.center_id === TOSS.id) : null;
 const { data: cls } = await svc.from("classes").select("id,center_id"); const revCls = cls.find((c) => c.center_id === REV.id), opCls = cls.find((c) => c.center_id === OP.id);
-const personas = { anon: null, "일반회원(A)": [env.TEST_USER_A_EMAIL, env.TEST_USER_A_PASSWORD], "심사관(B)": [env.TEST_USER_B_EMAIL, env.TEST_USER_B_PASSWORD], "운영센터 매니저(MA)": [env.TEST_MANAGER_A_EMAIL, env.TEST_MANAGER_A_PASSWORD], "심사센터 매니저(MB)": [env.TEST_MANAGER_B_EMAIL, env.TEST_MANAGER_B_PASSWORD], "플랫폼 관리자": [adminEmail, adminPw] };
+const personas = { anon: null, "일반회원(A)": [env.TEST_USER_A_EMAIL, env.TEST_USER_A_PASSWORD], "심사관(B)": [env.TEST_USER_B_EMAIL, env.TEST_USER_B_PASSWORD], "운영센터 매니저(MA)": [env.TEST_MANAGER_A_EMAIL, env.TEST_MANAGER_A_PASSWORD], "심사센터 매니저(MB)": [env.TEST_MANAGER_B_EMAIL, env.TEST_MANAGER_B_PASSWORD], "플랫폼 관리자": [adminEmail, adminPw], ...(env.TOSS_REVIEWER_EMAIL ? { "토스 심사관(T)": [env.TOSS_REVIEWER_EMAIL, env.TOSS_REVIEWER_PASSWORD], "NICEPAY 심사관·토스센터 매니저·is_member=false(S)": [env.SONJW_LIKE_EMAIL, env.SONJW_LIKE_PASSWORD] } : {}) };
 const out = {};
 for (const [name, cred] of Object.entries(personas)) {
   const c = createClient(url, anon, { auth: { persistSession: false } });
@@ -30,6 +30,7 @@ for (const [name, cred] of Object.entries(personas)) {
   const { data: cs } = await c.from("centers").select("id,name"); r.centersList = (cs ?? []).map((x) => x.name).filter((n) => /심사|CI Fixture/.test(n) || true).sort();
   r.directReviewCenter = !!(await c.from("centers").select("id").eq("id", REV.id).maybeSingle()).data;
   r.directOpCenter = !!(await c.from("centers").select("id").eq("id", OP.id).maybeSingle()).data;
+  r.directTossCenter = TOSS ? !!(await c.from("centers").select("id").eq("id", TOSS.id).maybeSingle()).data : null; r.tossProductsDirect = TOSS ? ((await c.from("products").select("id").eq("center_id", TOSS.id)).data ?? []).length : null;
   r.revProductsDirect = ((await c.from("products").select("id").eq("center_id", REV.id)).data ?? []).length;
   r.opProductsDirect = ((await c.from("products").select("id").eq("center_id", OP.id)).data ?? []).length;
   r.revClassesDirect = ((await c.from("classes").select("id").eq("center_id", REV.id)).data ?? []).length;
@@ -37,7 +38,9 @@ for (const [name, cred] of Object.entries(personas)) {
   const pub = (await c.rpc("fetch_public_storefront_products", {})).data ?? []; r.publicRpcCenters = [...new Set(pub.map((p) => p.center_name))].sort(); r.publicRpcRevById = ((await c.rpc("fetch_public_storefront_products", { p_center_id: REV.id })).data ?? []).length;
   const per = (await c.rpc("fetch_public_storefront_product_periods", {})).data ?? []; r.periodsRev = per.filter((p) => prods.find((x) => x.id === p.product_id)?.center_id === REV.id).length; r.periodsOp = per.filter((p) => prods.find((x) => x.id === p.product_id)?.center_id === OP.id).length;
   if (cred) { r.purchasableRev = ((await c.rpc("fetch_purchasable_products", { p_center_id: REV.id })).data ?? []).length; r.purchasableOp = ((await c.rpc("fetch_purchasable_products", { p_center_id: OP.id })).data ?? []).length;
-    const o1 = await c.rpc("create_order_secure", { p_product_id: revProd.id, p_pay_method: "direct", p_selected_size: null, p_point_used: 0, p_auto_book: false, p_provider: null }); r.orderRev = o1.error ? "DENY: " + o1.error.message.slice(0, 50) : "OK";
+    const o1 = await c.rpc("create_order_secure", { p_product_id: revProd.id, p_pay_method: "direct", p_selected_size: null, p_point_used: 0, p_auto_book: false, p_provider: null }); r.purchasableToss = TOSS ? ((await c.rpc("fetch_purchasable_products", { p_center_id: TOSS.id })).data ?? []).length : null;
+    if (tossProd) { const o3 = await c.rpc("create_order_secure", { p_product_id: tossProd.id, p_pay_method: "direct", p_selected_size: null, p_point_used: 0, p_auto_book: false, p_provider: null }); r.orderToss = o3.error ? "DENY: " + o3.error.message.slice(0, 50) : "OK"; }
+    r.orderRev = o1.error ? "DENY: " + o1.error.message.slice(0, 50) : "OK";
     const o2 = await c.rpc("create_order_secure", { p_product_id: opProd.id, p_pay_method: "direct", p_selected_size: null, p_point_used: 0, p_auto_book: false, p_provider: null }); r.orderOp = o2.error ? "DENY: " + o2.error.message.slice(0, 50) : "OK";
     const { data: pid } = await c.from("profiles").select("id").limit(1);
     const p = pid?.[0]?.id;

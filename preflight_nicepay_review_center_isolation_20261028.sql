@@ -22,3 +22,11 @@ select tablename, policyname, pg_get_expr(q.polqual, q.polrelid) as using_expr f
 select (select count(*) from accounts where pg_checkout_override and deactivated_at is null) as reviewer_accounts_now,
        (select string_agg(name, ' | ') from accounts where pg_checkout_override and deactivated_at is null) as reviewer_names,
        (select count(*) from centers) as centers_total, (select count(*) from centers where is_internal) as centers_internal;
+-- NICEPAY 결제 DB 기반 적용 상태(운영 이력상 2026-10-17 적용): 모두 true 여야 하고, 게이트 mode 는 off 여야 안전하다.
+select to_regprocedure('public.nicepay_checkout_mode()') is not null as gate_fn,
+       to_regprocedure('public.nicepay_claim_order(uuid)') is not null as claim_fn,
+       to_regprocedure('public.orders_guard_nicepay_create()') is not null as gate_trigger_fn,
+       to_regclass('public.nicepay_checkout_gate') is not null as gate_table,
+       (select mode from nicepay_checkout_gate where id) as gate_mode_now,
+       position('pg_checkout_override' in pg_get_functiondef('public.orders_guard_nicepay_create()'::regprocedure)) > 0 as gate_uses_toss_flag_now,
+       position('pg_checkout_override' in pg_get_functiondef('public.nicepay_claim_order(uuid)'::regprocedure)) > 0 as claim_uses_toss_flag_now;

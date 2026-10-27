@@ -1,0 +1,50 @@
+{
+ "anon": {
+  "category": {
+   "review": false,
+   "op": true,
+   "toss": false
+  }
+ },
+ "A": {
+  "category": {
+   "review": false,
+   "op": true,
+   "toss": false
+  }
+ },
+ "T": {
+  "category": {
+   "review": false,
+   "op": true,
+   "toss": true
+  }
+ },
+ "B": {
+  "category": {
+   "review": true,
+   "op": false,
+   "toss": false
+  },
+  "cardClick": {
+   "buttonLabel": "4,000원 결제하기",
+   "message": "온라인 결제는 준비 중이에요. 지금은 센터에서 직접 결제만 가능해요.\n×"
+  }
+ },
+ "S": {
+  "category": {
+   "review": true,
+   "op": false,
+   "toss": false
+  },
+  "cardClick": {
+   "buttonLabel": "4,000원 결제하기",
+   "message": "온라인 결제는 준비 중이에요. 지금은 센터에서 직접 결제만 가능해요.\n×"
+  },
+  "directButton": "주문 접수하기 · 4,000원",
+  "afterDirect": {
+   "url": "/checkout?center=275138e9-f53f-4455-8600-836ef9d6e434&product=07988953-b645-4441-91ef-62d2fc9be30a",
+   "text": "로그인이 필요해요 × 로그인 하러 가기 ‹ 결제 주문 상품 1개 [심사 전용] MWHABIT NICEPAY 카드사 심사 환경 수강권 [심사용] 4주 수업 이용권 4,000원 사전예약기간 (결제일 ~ 이용 시작일) 없"
+  }
+ }
+}

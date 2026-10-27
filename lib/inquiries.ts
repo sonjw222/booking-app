@@ -5,6 +5,7 @@
   - 실시간: inquiry_messages 구독
 */
 
+import { nicepayDiscoveryOnlyReviewCenters } from "./nicepayReviewScope";
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
 
@@ -65,6 +66,7 @@ async function myProfileIds(): Promise<string[]> {
 // 승인된 센터 검색 (문의할 센터를 자유롭게 고를 때)
 export async function searchCentersForInquiry(keyword: string): Promise<SelectableCenter[]> {
   let q = supabase.from("centers").select("id, name").eq("status", "approved").limit(20);
+  if (await nicepayDiscoveryOnlyReviewCenters()) q = q.eq("is_nicepay_review", true);   // NICEPAY 심사관: 탐색에는 심사 센터만
   if (keyword.trim()) q = q.ilike("name", `%${keyword.trim()}%`);
   const { data } = await q;
   return (data ?? []).map((c: any) => ({ id: c.id, name: c.name }));

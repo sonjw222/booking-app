@@ -1,5 +1,5 @@
 -- 로컬 격리 DB 전용 페르소나 설정
-update accounts set pg_checkout_override = true where auth_id = (select id from auth.users where email = :'ub');
+update accounts set nicepay_review_access = true where auth_id = (select id from auth.users where email = :'ub');   -- B안: NICEPAY 심사관은 전용 권한만(토스 심사용 pg_checkout_override 는 건드리지 않는다)
 insert into manager_centers(account_id, center_id, status) select (select id from accounts where auth_id=(select id from auth.users where email=:'ma')), id, 'active' from centers where name='[QA] 심사 시험 스튜디오';
 insert into manager_centers(account_id, center_id, status) select (select id from accounts where auth_id=(select id from auth.users where email=:'mb')), id, 'active' from centers where is_nicepay_review;
 -- 운영 센터 회원 이력: 일반 회원 A, 심사관 B 모두 운영 센터에 기존 수강권·주문·예약 이력을 둔다(보존 확인용)

@@ -22,7 +22,7 @@ import Loading from "../components/Loading";
 import { reservationReturnUrl } from "../../lib/reservationNav";
 import { getPaymentService, resolveProviderName, isOnlinePgCheckoutAvailable, PG_CHECKOUT_ENABLED, type PaymentScenario } from "../../lib/payments";
 import { supabase } from "../../lib/supabaseClient";
-import { fetchMyPgCheckoutOverride } from "../../lib/authAccount";
+import { fetchMyPgCheckoutOverride, fetchMyNicepayReviewAccess } from "../../lib/authAccount";
 import { toUserMessage } from "../../lib/userError";
 import { fetchApplicableCoupons, previewDiscount, type MemberCoupon } from "../../lib/coupons";
 import { visiblePayMethodIds, resolveSelectedPayMethod } from "../../lib/payMethods";
@@ -148,7 +148,8 @@ function CheckoutContent() {
         // 전역 게이트가 꺼져 있을 때만 굳이 계정을 조회한다 — 이미 켜져 있으면(정식 오픈
         // 이후) 매 결제마다 불필요한 조회를 늘릴 이유가 없다.
         try {
-          const override = await fetchMyPgCheckoutOverride();
+          // PG 가 NICEPAY 이면 NICEPAY 심사관 전용 권한(nicepay_review_access)만 본다 — 토스 심사 계정(pg_checkout_override)은 NICEPAY 결제를 열 수 없다.
+          const override = resolveProviderName() === "nicepay" ? await fetchMyNicepayReviewAccess() : await fetchMyPgCheckoutOverride();
           if (override) {
             setPgCheckoutEnabled(true);
             setPayMethod("card");

@@ -15,8 +15,9 @@ describe("NICEPAY 심사 센터 분리 SQL — 정적 계약(실제 격리 Postg
     expect(sql).not.toMatch(/^\s*update\s/im);
     expect(sql).toMatch(/^BEGIN;/m); expect(sql).toMatch(/^COMMIT;/m);
   });
-  it("심사관 판정은 인증 사용자의 계정(my_account_id)과 pg_checkout_override 만 — 이메일 문자열을 쓰지 않는다", () => {
-    expect(apply).toMatch(/pg_checkout_override from accounts a where a\.id = my_account_id\(\)/);
+  it("B안: 심사관 판정은 인증 사용자의 계정(my_account_id)과 전용 권한 nicepay_review_access 만 — 토스용 pg_checkout_override·이메일 문자열을 쓰지 않는다", () => {
+    expect(apply).toMatch(/nicepay_review_access from accounts a where a\.id = my_account_id\(\)/);
+    expect(nonComment(apply).replace(/comment on [^;]*;/g, "")).not.toContain("pg_checkout_override");   // 주석·COMMENT 문구 제외, 실행 코드에는 없다
     expect(nonComment(apply)).not.toMatch(/@|email/i);
   });
   it("기존 허용 정책을 대체하지 않고 restrictive 정책 3개(centers/classes/products)로 겹친다", () => {
@@ -42,7 +43,7 @@ describe("NICEPAY 심사 센터 분리 SQL — 정적 계약(실제 격리 Postg
     expect(policies.filter((l) => l.includes("nicepay_class_has_my_reservation") && !/ on classes /.test(l))).toEqual([]);
   });
   it("목록 RPC 3개에 같은 판정이 들어가고 기존 is_internal 조건은 유지된다", () => {
-    expect(apply.match(/nicepay_review_center_allowed\((c\.id|p\.center_id)\)\s+--/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(apply.match(/nicepay_review_center_member_allowed\((c\.id|p\.center_id)\)\s+--/g)?.length).toBeGreaterThanOrEqual(3);   // 회원용 판정(매니저 예외 없음)
     expect(apply).toContain("and not c.is_internal");
     expect(apply).toMatch(/revoke all on function public\.fetch_purchasable_products\(uuid\) from public, anon;/);
   });
@@ -71,4 +72,23 @@ describe("NICEPAY 심사 센터 분리 SQL — 정적 계약(실제 격리 Postg
     expect(seed).toContain("'days'");
   });
   it("verify 는 읽기 전용(시뮬레이션은 주석 + ROLLBACK)", () => { expect(nonComment(verify)).not.toMatch(/insert|update|delete|drop|alter|create/i); });
+
+  it("B안 전용 권한: 컬럼·운영자 전용 보호 트리거, 회원용 판정은 심사관에게 매니저 예외를 주지 않는다", () => {
+    expect(apply).toContain("add column if not exists nicepay_review_access boolean not null default false");
+    expect(apply).toContain("enforce_nicepay_review_access_admin_only");
+    expect(apply).toMatch(/when nicepay_is_reviewer\(\) then exists \(select 1 from centers c where c\.id = p_center_id and c\.is_nicepay_review\)/);
+  });
+  it("게이트 패치: 운영 적용 함수 2개의 심사관 판별만 전용 권한으로 제자리 치환(통째 덮어쓰기 금지·멱등·역치환 롤백)", () => {
+    const gate = read("fix_nicepay_gate_reviewer_flag_20261029.sql"); const gateRb = read("rollback_fix_nicepay_gate_reviewer_flag_20261029.sql");
+    expect(gate).toContain("orders_guard_nicepay_create"); expect(gate).toContain("nicepay_claim_order");
+    expect(gate).toMatch(/replace\(v_def, 'pg_checkout_override', 'nicepay_review_access'\)/); expect(gate).toContain("이미 전용 권한으로 바뀜 — 건너뜀");
+    expect(gate).toContain("accounts.nicepay_review_access 가 없어요"); expect(nonComment(gate)).not.toMatch(/drop |delete |truncate/i);
+    expect(gateRb).toMatch(/replace\(v_def, 'nicepay_review_access', 'pg_checkout_override'\)/);
+  });
+  it("종료 절차: 권한 해제·게이트 off·센터 비공개·대기 주문 정리, 기존 센터/토스 계정/결제 기록은 건드리지 않는다", () => {
+    const close = nonComment(read("close_nicepay_review_20261029.sql"));
+    expect(close).toMatch(/update accounts set nicepay_review_access = false/); expect(close).toMatch(/update nicepay_checkout_gate set mode = 'off'/);
+    expect(close).toMatch(/update centers set is_internal = true where is_nicepay_review/); expect(close).toMatch(/status = 'pending' and center_id in \(select id from centers where is_nicepay_review\)/);
+    expect(close).not.toMatch(/pg_checkout_override\s*=|delete\s+from|drop\s|truncate/i);
+  });
 });

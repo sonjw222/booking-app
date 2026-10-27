@@ -3,12 +3,13 @@
 --
 -- 목적: NICEPAY 심사 전용 센터·수강권을 만들어도
 --   · 일반 회원/비회원에게는 그 센터·수업·상품이 어떤 경로로도 보이지 않고(목록·직접 URL·RPC·구매·예약),
---   · 심사관 계정(accounts.pg_checkout_override = true — 기존 심사관 권한)에게는 심사 센터만 보이고 기존 운영 센터는 보이지 않게 한다.
+--   · NICEPAY 심사관 계정(accounts.nicepay_review_access = true — 신규 전용 권한. 기존 토스 심사용 pg_checkout_override 와 완전히 별개)에게는 심사 센터만 보이고 기존 운영 센터는 보이지 않게 한다.
+--     기존 토스 심사 계정(pg_checkout_override)은 이 SQL 로 아무 영향도 받지 않는다.
 --   기존 센터·상품·주문·수강권·예약 데이터는 읽기/수정/삭제하지 않는다(행 변경 0). 새 컬럼 1개 + 함수 + 정책 + 트리거 + 기존 함수 4개 정의 교체.
 --
 -- 적용 순서(전제): ① (선택) add_public_storefront_product_periods_20261027.sql — 이 파일이 같은 함수를 조건 추가 버전으로 다시 만들므로 ①이 없어도 안전하다
 --                   ② 이 파일  ③ (별도 승인, 데이터 생성) seed_nicepay_review_center_20261028.sql
--- 전제 객체: accounts.pg_checkout_override(add_pg_checkout_reviewer_override.sql), centers.is_internal(add_internal_qa_center_flag.sql),
+-- 전제 객체: centers.is_internal(add_internal_qa_center_flag.sql),
 --           my_account_id()/my_managed_center_ids()/is_platform_admin()/center_rows_visible()/product_rows_visible() — 운영에 없으면 아래 preflight 가 실패한다.
 -- 되돌리기: rollback_add_nicepay_review_center_isolation_20261028.sql (기존 정의로 복원, 새 객체 삭제 — 컬럼은 데이터 보존을 위해 남긴다)
 -- 확인(읽기 전용): verify_add_nicepay_review_center_isolation_20261028.sql
@@ -32,16 +33,28 @@ begin
      or to_regprocedure('fetch_public_storefront_products(uuid)') is null or to_regprocedure('fetch_purchasable_products(uuid)') is null then
     raise exception 'NICEPAY 심사 분리: 전제 함수가 없습니다(운영 정의 확인 필요)';
   end if;
-  if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='accounts' and column_name='pg_checkout_override') then
-    raise exception 'NICEPAY 심사 분리: accounts.pg_checkout_override 가 없습니다';
-  end if;
   if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='centers' and column_name='is_internal') then
     raise exception 'NICEPAY 심사 분리: centers.is_internal 이 없습니다';
   end if;
 end $$;
 
+-- NICEPAY 심사관 전용 권한(토스 심사용 pg_checkout_override 와 별개). 운영자만 변경 가능(본인이 스스로 켤 수 없음) — SQL Editor(auth.uid() is null) 또는 플랫폼 관리자만.
+alter table accounts add column if not exists nicepay_review_access boolean not null default false;
+comment on column accounts.nicepay_review_access is 'NICEPAY 카드사 심사관 전용 권한. true 이면 심사 센터만 보이고 NICEPAY 결제 게이트를 통과한다. pg_checkout_override(토스 심사용)와 독립.';
+create or replace function enforce_nicepay_review_access_admin_only()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.nicepay_review_access is distinct from old.nicepay_review_access then
+    if auth.uid() is not null and not is_platform_admin() then raise exception '이 값은 운영자만 변경할 수 있어요'; end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_accounts_nicepay_review_access_admin_only on accounts;
+create trigger trg_accounts_nicepay_review_access_admin_only before update on accounts
+  for each row execute function enforce_nicepay_review_access_admin_only();
+
 alter table centers add column if not exists is_nicepay_review boolean not null default false;
-comment on column centers.is_nicepay_review is 'NICEPAY 카드사 심사 전용 센터. true 이면 심사관 계정(accounts.pg_checkout_override)과 해당 센터 매니저/플랫폼 관리자에게만 보인다.';
+comment on column centers.is_nicepay_review is 'NICEPAY 카드사 심사 전용 센터. true 이면 NICEPAY 심사관 계정(accounts.nicepay_review_access)과 해당 센터 매니저/플랫폼 관리자에게만 보인다.';
 
 -- 이 값은 운영자(플랫폼 관리자)/SQL Editor(auth.uid() is null)만 바꿀 수 있다 — 센터 매니저가 자기 센터를 심사 센터로 바꾸거나 심사 센터를 만들 수 없다.
 create or replace function enforce_center_nicepay_review_admin_only()
@@ -61,7 +74,7 @@ create trigger trg_centers_nicepay_review_admin_only before insert or update on 
 -- 심사관 판정: 인증된 사용자(auth.uid())의 계정에 대해서만. 이메일 문자열은 쓰지 않는다. 비로그인은 false.
 create or replace function nicepay_is_reviewer()
 returns boolean language sql stable security definer set search_path = public as $$
-    select coalesce((select a.pg_checkout_override from accounts a where a.id = my_account_id() and a.deactivated_at is null), false);
+    select coalesce((select a.nicepay_review_access from accounts a where a.id = my_account_id() and a.deactivated_at is null), false);
 $$;
 revoke all on function nicepay_is_reviewer() from public;
 grant execute on function nicepay_is_reviewer() to anon, authenticated, service_role;
@@ -78,6 +91,20 @@ returns boolean language sql stable security definer set search_path = public as
 $$;
 revoke all on function nicepay_review_center_allowed(uuid) from public;
 grant execute on function nicepay_review_center_allowed(uuid) to anon, authenticated, service_role;
+
+-- 회원용(탐색 목록 RPC·구매·예약·주문) 접근 판정. 읽기 가시성(nicepay_review_center_allowed)과 달리 NICEPAY 심사관에게는 "매니저 예외"를 주지 않는다 —
+-- 심사관이 기존 토스 심사 센터의 매니저여도 그 센터는 관리 화면에서만 쓰고, 상품 목록·구매·예약은 심사 센터에서만 가능하다. 플랫폼 관리자는 예외.
+create or replace function nicepay_review_center_member_allowed(p_center_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+    select case
+        when p_center_id is null then true
+        when is_platform_admin() then true
+        when nicepay_is_reviewer() then exists (select 1 from centers c where c.id = p_center_id and c.is_nicepay_review)
+        else nicepay_review_center_allowed(p_center_id)
+    end;
+$$;
+revoke all on function nicepay_review_center_member_allowed(uuid) from public;
+grant execute on function nicepay_review_center_member_allowed(uuid) to anon, authenticated, service_role;
 
 -- center_rows_visible 에 같은 기준을 AND 로 추가 → 이 함수를 쓰는 정책(휴무일·리뷰·커뮤니티·룸·상담채널·설정·센터항목·센터후기·진도카테고리)과 class_rows_visible/product_rows_visible 이 한 번에 따라온다.
 create or replace function public.center_rows_visible(p_center_id uuid)
@@ -131,7 +158,7 @@ begin
     if v_c is not null then v_centers := v_centers || v_c; end if;
   end if;
   foreach v_c in array v_centers loop
-    if not nicepay_review_center_allowed(v_c) then raise exception '이 센터의 상품·수업은 이용할 수 없어요'; end if;
+    if not nicepay_review_center_member_allowed(v_c) then raise exception '이 센터의 상품·수업은 이용할 수 없어요'; end if;
   end loop;
   return new;
 end $$;
@@ -188,7 +215,7 @@ AS $function$
     join centers c on c.id = p.center_id
     where c.status = 'approved'
       and not c.is_internal   -- QA/내부 센터는 공개 목록에 절대 나오지 않는다
-      and nicepay_review_center_allowed(c.id)   -- [NICEPAY 심사 분리] 심사 센터는 심사관에게만, 심사관에게는 심사 센터만
+      and nicepay_review_center_member_allowed(c.id)   -- [NICEPAY 심사 분리] 심사 센터는 심사관에게만, 심사관에게는 심사 센터만
       and p.is_active
       and p.is_on_sale
       and p.visibility_type = 'all'
@@ -210,7 +237,7 @@ CREATE OR REPLACE FUNCTION public.fetch_purchasable_products(p_center_id uuid)
 AS $function$
     select p.* from products p
     where p.center_id = p_center_id
-      and nicepay_review_center_allowed(p.center_id)   -- [NICEPAY 심사 분리]
+      and nicepay_review_center_member_allowed(p.center_id)   -- [NICEPAY 심사 분리]
       -- QA/내부 센터(centers.is_internal)는 그 센터의 회원/관리자만 상품을 조회할 수 있다(UUID를 알아도 일반 계정은 빈 목록)
       and (
         not exists (select 1 from centers c where c.id = p.center_id and c.is_internal)
@@ -277,7 +304,7 @@ as $$
       and p.visibility_type = 'all'
       and (not coalesce(p.purchase_count_selectable, false)
            or exists (select 1 from product_count_prices t where t.product_id = p.id))
-      and nicepay_review_center_allowed(c.id)   -- [NICEPAY 심사 분리]
+      and nicepay_review_center_member_allowed(c.id)   -- [NICEPAY 심사 분리]
       and (p_center_id is null or p.center_id = p_center_id)
     limit 500;
 $$;

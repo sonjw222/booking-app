@@ -1,0 +1,2162 @@
+[
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "anon",
+  "page": "home",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "anon",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "anon",
+  "page": "search",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "anon",
+  "page": "public-products",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "anon",
+  "page": "center-review",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "anon",
+  "page": "center-op",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "anon",
+  "page": "center-toss",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "home",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "search",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "public-products",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "center-review",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "center-op",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "center-toss",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "checkout-review",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "checkout-op",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "checkout-toss",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "manager-home",
+  "entered": false,
+  "text": "관리 홈 회원 화면 관리 화면을 불러오지 못했어요 매니저 권한이 없는 계정이에요 다시 시도 수업 1 알림 더보기",
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "T",
+  "page": "home",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "T",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "T",
+  "page": "search",
+  "review": false,
+  "op": true,
+  "toss": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "T",
+  "page": "public-products",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "T",
+  "page": "center-review",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "T",
+  "page": "center-op",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "T",
+  "page": "center-toss",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "T",
+  "page": "checkout-review",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "T",
+  "page": "checkout-op",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "T",
+  "page": "checkout-toss",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "T",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "T",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "home",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "search",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "public-products",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "center-review",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "center-op",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "center-toss",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "checkout-review",
+  "methods": [
+   "신용/체크카드",
+   "카카오페이",
+   "토스페이",
+   "계좌이체",
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "checkout-op",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "checkout-toss",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "S",
+  "page": "home",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "S",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "S",
+  "page": "search",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "S",
+  "page": "public-products",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "S",
+  "page": "center-review",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "S",
+  "page": "center-op",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "S",
+  "page": "center-toss",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "S",
+  "page": "checkout-review",
+  "methods": [
+   "신용/체크카드",
+   "카카오페이",
+   "토스페이",
+   "계좌이체",
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "S",
+  "page": "checkout-op",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "S",
+  "page": "checkout-toss",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "S",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "S",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "S",
+  "page": "manager-home",
+  "entered": true,
+  "text": "관리 홈 회원 화면 [토스 심사용] 로컬 시험 센터 매니저 오늘 할 일 10월 27일 (화) 수업 관리 › 오늘 수업 0 예약 인원 0 마감 수",
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "anon",
+  "page": "home",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "anon",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "anon",
+  "page": "search",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "anon",
+  "page": "public-products",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "anon",
+  "page": "center-review",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "anon",
+  "page": "center-op",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "anon",
+  "page": "center-toss",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "home",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "search",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "public-products",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "center-review",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "center-op",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "center-toss",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "checkout-review",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "checkout-op",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "checkout-toss",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "manager-home",
+  "entered": false,
+  "text": "관리 홈 회원 화면 관리 화면을 불러오지 못했어요 매니저 권한이 없는 계정이에요 다시 시도 수업 1 알림 더보기",
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "T",
+  "page": "home",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "T",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "T",
+  "page": "search",
+  "review": false,
+  "op": true,
+  "toss": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "T",
+  "page": "public-products",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "T",
+  "page": "center-review",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "T",
+  "page": "center-op",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "T",
+  "page": "center-toss",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "T",
+  "page": "checkout-review",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "T",
+  "page": "checkout-op",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "T",
+  "page": "checkout-toss",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "T",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "T",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "home",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "search",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "public-products",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "center-review",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "center-op",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "center-toss",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "checkout-review",
+  "methods": [
+   "신용/체크카드",
+   "카카오페이",
+   "토스페이",
+   "계좌이체",
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "checkout-op",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "checkout-toss",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "S",
+  "page": "home",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "S",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "S",
+  "page": "search",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "S",
+  "page": "public-products",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "S",
+  "page": "center-review",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "S",
+  "page": "center-op",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "S",
+  "page": "center-toss",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "S",
+  "page": "checkout-review",
+  "methods": [
+   "신용/체크카드",
+   "카카오페이",
+   "토스페이",
+   "계좌이체",
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "S",
+  "page": "checkout-op",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "S",
+  "page": "checkout-toss",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "S",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "S",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "S",
+  "page": "manager-home",
+  "entered": true,
+  "text": "관리 홈 회원 화면 [토스 심사용] 로컬 시험 센터 매니저 오늘 할 일 10월 27일 (화) 수업 관리 › 오늘 수업 0 예약 인원 0 마감 수",
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "anon",
+  "page": "home",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "anon",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "anon",
+  "page": "search",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "anon",
+  "page": "public-products",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "anon",
+  "page": "center-review",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "anon",
+  "page": "center-op",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "anon",
+  "page": "center-toss",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "home",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "search",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "public-products",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "center-review",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "center-op",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "center-toss",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "checkout-review",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "checkout-op",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "checkout-toss",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "manager-home",
+  "entered": false,
+  "text": "관리 홈 회원 화면 관리 화면을 불러오지 못했어요 매니저 권한이 없는 계정이에요 다시 시도 M 모하빗 센터 관리자 업무 대시보드 수업·예약 알림",
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "T",
+  "page": "home",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "T",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "T",
+  "page": "search",
+  "review": false,
+  "op": true,
+  "toss": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "T",
+  "page": "public-products",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "T",
+  "page": "center-review",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "T",
+  "page": "center-op",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "T",
+  "page": "center-toss",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "T",
+  "page": "checkout-review",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "T",
+  "page": "checkout-op",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "T",
+  "page": "checkout-toss",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "T",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "T",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "home",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "search",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "public-products",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "center-review",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "center-op",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "center-toss",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "checkout-review",
+  "methods": [
+   "신용/체크카드",
+   "카카오페이",
+   "토스페이",
+   "계좌이체",
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "checkout-op",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "checkout-toss",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "S",
+  "page": "home",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "S",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "S",
+  "page": "search",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "S",
+  "page": "public-products",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "S",
+  "page": "center-review",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "S",
+  "page": "center-op",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "S",
+  "page": "center-toss",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "S",
+  "page": "checkout-review",
+  "methods": [
+   "신용/체크카드",
+   "카카오페이",
+   "토스페이",
+   "계좌이체",
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "S",
+  "page": "checkout-op",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "S",
+  "page": "checkout-toss",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "S",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "S",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "S",
+  "page": "manager-home",
+  "entered": true,
+  "text": "관리 홈 회원 화면 [토스 심사용] 로컬 시험 센터 매니저 오늘 할 일 10월 27일 (화) 수업 관리 › 오늘 수업 0 예약 인원 0 마감 수",
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "anon",
+  "page": "home",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "anon",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "anon",
+  "page": "search",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "anon",
+  "page": "public-products",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "anon",
+  "page": "center-review",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "anon",
+  "page": "center-op",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "anon",
+  "page": "center-toss",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "home",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "search",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "public-products",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "center-review",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "center-op",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "center-toss",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "checkout-review",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "checkout-op",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "checkout-toss",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "manager-home",
+  "entered": false,
+  "text": "관리 홈 회원 화면 관리 화면을 불러오지 못했어요 매니저 권한이 없는 계정이에요 다시 시도 M 모하빗 센터 관리자 업무 대시보드 수업·예약 알림",
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "T",
+  "page": "home",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "T",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "T",
+  "page": "search",
+  "review": false,
+  "op": true,
+  "toss": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "T",
+  "page": "public-products",
+  "review": false,
+  "op": true,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "T",
+  "page": "center-review",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "T",
+  "page": "center-op",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "T",
+  "page": "center-toss",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "T",
+  "page": "checkout-review",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "T",
+  "page": "checkout-op",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "T",
+  "page": "checkout-toss",
+  "methods": [
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "T",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "T",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "home",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "search",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "public-products",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "center-review",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "center-op",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "center-toss",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "checkout-review",
+  "methods": [
+   "신용/체크카드",
+   "카카오페이",
+   "토스페이",
+   "계좌이체",
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "checkout-op",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "checkout-toss",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "S",
+  "page": "home",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "S",
+  "page": "category",
+  "review": false,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "S",
+  "page": "search",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "S",
+  "page": "public-products",
+  "review": true,
+  "op": false,
+  "toss": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "S",
+  "page": "center-review",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "S",
+  "page": "center-op",
+  "shown": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "S",
+  "page": "center-toss",
+  "shown": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "S",
+  "page": "checkout-review",
+  "methods": [
+   "신용/체크카드",
+   "카카오페이",
+   "토스페이",
+   "계좌이체",
+   "직접결제 (센터에서 결제)"
+  ],
+  "hasPeriod": true,
+  "blocked": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "S",
+  "page": "checkout-op",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "S",
+  "page": "checkout-toss",
+  "methods": [],
+  "hasPeriod": false,
+  "blocked": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "S",
+  "page": "my-reservations",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "S",
+  "page": "purchases",
+  "ok": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "S",
+  "page": "manager-home",
+  "entered": true,
+  "text": "관리 홈 회원 화면 [토스 심사용] 로컬 시험 센터 매니저 오늘 할 일 10월 27일 (화) 수업 관리 › 오늘 수업 0 예약 인원 0 마감 수",
+  "errs": 0
+ }
+]

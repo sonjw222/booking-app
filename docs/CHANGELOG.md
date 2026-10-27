@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-29 — NICEPAY 심사 전용 권한 분리(B안)·v3 결제창 준비·종료 절차(로컬 격리 검증만, 운영 미적용)
+- `accounts.nicepay_review_access`(신규, 운영자 전용)로 NICEPAY 심사관을 분리 — 기존 `pg_checkout_override`(토스)는 무변경. 센터 분리·NICEPAY 결제 게이트·결제수단 노출이 전용 권한만 본다. 토스 심사 계정이 실제 센터에서 NICEPAY 주문을 만들 수 있던 구멍(운영 적용 게이트 함수)을 막는 패치 SQL 추가.
+- 탐색은 심사 센터만(앱), 관리 화면은 기존 매니저 권한 유지. v3(MID) 결제창 모듈 `lib/payments/nicepayV3Window.ts`(goPay, 승인 분리, 키 비노출). 심사 종료 SQL. 운영 이력 대조 결과·SQL 순서: `docs/payments/NICEPAY_B_PLAN_20261029.md`, `NICEPAY_SQL_RUNBOOK_20261028.md`.
 ## 2026-10-28 — NICEPAY 심사 환경 운영 반영 전 점검: 센터 불일치 우회 수정·롤백 안전장치·검증 스크립트 보호(로컬 격리 검증만, 운영 미적용)
 - **결함 수정**: 상품 id 와 센터 id 를 어긋나게 넣은 직접 REST 주문/장바구니/구매신청이 분리 규칙을 우회하던 문제 — 트리거가 행의 center_id 뿐 아니라 상품·수업·수강권의 실제 센터를 모두 검사, UPDATE 경로도 검사. 기존 예약이 걸린 수업은 심사관도 읽을 수 있게(사후 처리 보존).
 - **롤백**: 공개 가능한 심사 센터가 있으면 중단, 기간 RPC 는 이전 존재 여부에 따라 삭제/복원. preflight SQL 추가.

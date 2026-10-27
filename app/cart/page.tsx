@@ -20,8 +20,8 @@ import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import EmptyState from "../components/EmptyState";
 import ErrorState from "../components/ErrorState";
 import AppButton from "../components/AppButton";
-import { PG_CHECKOUT_ENABLED } from "../../lib/payments";
-import { fetchMyPgCheckoutOverride } from "../../lib/authAccount";
+import { PG_CHECKOUT_ENABLED, resolveProviderName } from "../../lib/payments";
+import { fetchMyPgCheckoutOverride, fetchMyNicepayReviewAccess } from "../../lib/authAccount";
 import { visiblePayMethodIds, resolveSelectedPayMethod } from "../../lib/payMethods";
 
 // 카카오페이/토스페이는 로고 자산이 없어 outline 아이콘 하나로 뭉치면 구분이 안 되므로
@@ -57,7 +57,7 @@ export default function CartPage() {
       const list = await fetchCart();
       setItems(list);
       if (!PG_CHECKOUT_ENABLED) {
-        try { if (await fetchMyPgCheckoutOverride()) { setPgEnabled(true); setPayMethod("card"); } } catch { /* 심사관 계정이 아니면 무시 */ }
+        try { if (await (resolveProviderName() === "nicepay" ? fetchMyNicepayReviewAccess() : fetchMyPgCheckoutOverride())) { setPgEnabled(true); setPayMethod("card"); } } catch { /* 심사관 계정이 아니면 무시 */ }
       }
       try {
         const profs = await fetchProfiles();

@@ -38,9 +38,9 @@ export function nicepayGate(admin: SupabaseClient) {
     const { data: mode, error } = await admin.rpc("nicepay_checkout_mode");
     if (error || (mode !== "public" && mode !== "reviewer")) return false;
     const isReviewer = async () => {
-      const { data } = await admin.from("orders").select("profiles(accounts(pg_checkout_override))").eq("id", orderId).maybeSingle();
-      const prof = (data as { profiles?: { accounts?: { pg_checkout_override?: boolean } | null } | null } | null)?.profiles;
-      return !!prof?.accounts?.pg_checkout_override;
+      const { data } = await admin.from("orders").select("profiles(accounts(nicepay_review_access))").eq("id", orderId).maybeSingle();
+      const prof = (data as { profiles?: { accounts?: { nicepay_review_access?: boolean } | null } | null } | null)?.profiles;
+      return !!prof?.accounts?.nicepay_review_access;
     };
     if (mode === "reviewer") return isReviewer();
     if (process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED === "true") return true;
