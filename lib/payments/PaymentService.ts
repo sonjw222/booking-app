@@ -1,6 +1,6 @@
 /*
   PaymentService - Checkout이 실제로 호출하는 단일 진입점.
-  구체 Provider(Mock/Toss/PortOne)를 절대 직접 참조하지 않고, 생성자로 주입받은
+  구체 Provider(Mock/NICEPAY)를 절대 직접 참조하지 않고, 생성자로 주입받은
   PaymentProvider 인터페이스로만 접근한다(DIP).
 */
 

@@ -65,6 +65,19 @@
 - P2: 평점 집계는 클라이언트(center_reviews 행 조회)다. 후기가 많아지면 센터별 평균/건수를 반환하는 읽기 전용 RPC/뷰(예: `center_rating_summary(center_ids uuid[])`)로 이전(SQL 제안만, 미작성).
 - P3: 즐겨찾기 기능은 코드에 없어 "즐겨찾기에서 센터 진입" 뒤로가기는 대상이 없음(기능 추가 시 BackButton 이력 규칙 그대로 적용).
 - P3: iOS/Android 실기기에서 하단 내비 블러 레이어 성능·safe-area·키보드 동작 수동 QA.
+## 2026-10-16 NICEPAY 카드사 심사 준비
+- P0: 검토용 SQL 2종(`fix_refund_block_all_pg_providers_20261016.sql` → `add_nicepay_provider_support_20261016.sql`) 승인·적용 순서는 `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §6. 적용 전 사전 확인 쿼리 실행, `create_order_secure` 라이브 정의 확인 후 provider 허용 패치 별도 작성.
+- P0: PG 전환 승인 대기 항목은 `docs/payments/PG_MIGRATION_TOSS_TO_NICEPAY.md` §7 — SQL(provider 'nicepay'·claim·복귀토큰 일반화), 법적 문구 교체, 홈 푸터 주소, 통신판매중개자/수납 구조, 레거시 Toss 제거(대기 주문 0건 확인 후).
+- P0: NICEPAY 심사 — 공개 /products의 "테스트"(100원)·"P3 타센터-격리테스트" 상품 비공개 처리(운영자), 계약 후 MID/KEY·기술지원 질문(docs/payments/NICEPAY_REVIEW_PREPARATION.md §7) 확인.
+- P1: NICEPAY 활성화 전 SQL 승인 필요 — orders.payment_provider 'nicepay' 허용, 선점(claim) 상태, pg_order_context/confirm_real_payment/정산 뷰 provider 확장. 정기결제는 호스팅 카드등록 UI 확인 전까지 BLOCKED(카드정보 직접 수집 금지).
+- P2: 공개 상품 RPC에 이용기간(valid_days) 노출(SQL, 승인 후). 약관·환불·개인정보 처리위탁의 PG사 표기는 계약 확정 후 갱신.
+
+- P2: `orders_force_server_fields_on_insert`(운영 적용됨)는 `auth.uid() is not null` 일 때만 verified/status 를 보정 → anon 롤 INSERT 는 RLS(`my_profile_ids()`)에만 의존. `orders_guard_pg_state` 와 같이 role 설정(anon/authenticated)을 함께 보는 방어 계층 추가 검토(별도 SQL, 영향 범위 확인 필요).
+- P1: `fix_refund_amount_integrity_20261017.sql` 운영 적용 후 `verify_*`의 대조 쿼리(과거 환불 합계 ≠ 원거래 금액)를 실행해 결과가 있으면 PG 콘솔 취소 금액과 개별 대조.
+
+- P0: NICEPAY 계약 후 확인 질문·환경변수·운영 전 QA 체크리스트·이어서 실행할 프롬프트는 `docs/payments/NICEPAY_CONTRACT_HANDOFF_20261017.md`. 활성화(코드 상수 `NICEPAY_CHECKOUT_ACTIVATED`)는 샌드박스 E2E 통과 후 별도 승인.
+- P1: SQL 적용 대기(검토용): `fix_orders_insert_role_guard_20261017.sql`(독립 적용 가능) → `add_nicepay_provider_support_20261016.sql` → `fix_create_order_secure_allow_nicepay_20261016.sql`.
+- P2: 센터 구독료를 앱(iOS/Android) 안에서 결제 CTA로 노출하는 것은 App Store/Google Play 정책 검토 전까지 금지(웹 전용 권장) — `NICEPAY_SUBSCRIPTION_DOMAIN_20261017.md` §4.
 
 ## 2026-10-11 날짜 선택 팝오버 후속 (진도 기록 캘린더 수정 PR 범위 밖)
 - **P2**: `MonthPicker`는 아직 `position:absolute` 팝오버라 `.sheet` 안에서 같은 방식으로 잘릴 수 있다 — `DatePicker`와 같은 포털/`computePopoverPosition` 적용 검토(영향 화면 목록 확인 후).

@@ -27,12 +27,12 @@ describe("PG_CHECKOUT_ENABLED — 환경변수 하나로 켜고 끄는 구조", 
   });
 
   it("앱에 카드사(현대카드 등) 선택 UI를 새로 만들지 않는다 — PAY_METHODS는 결제수단(카드/카카오페이/토스페이/계좌이체/직접결제)만 나열한다", () => {
-    const methodsBlock = checkout.slice(checkout.indexOf("const PAY_METHODS"), checkout.indexOf("const TOSS_SUPPORTED_METHODS"));
+    const methodsBlock = checkout.slice(checkout.indexOf("const PAY_METHODS"), checkout.indexOf("const PG_SUPPORTED_METHODS"));
     expect(methodsBlock).not.toMatch(/현대카드|삼성카드|신한카드|카드사/);
   });
 
   it("카드 결제 선택 시에만 자연스러운 준비중 안내가 있다(카드사를 특정하지 않음)", () => {
-    const idx = checkout.indexOf('effectivePayMethodUi === "card" && resolveProviderName() === "toss"');
+    const idx = checkout.indexOf('effectivePayMethodUi === "card" && resolveProviderName() === "nicepay"');
     expect(idx).toBeGreaterThan(-1);
     const block = checkout.slice(idx, idx + 500);
     expect(block).not.toMatch(/현대카드/);

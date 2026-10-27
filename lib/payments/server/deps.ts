@@ -5,6 +5,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { tossCancelPayment, tossConfirmPayment, tossGetPayment } from "./toss";
 import type { LifecycleDeps } from "./lifecycle";
+import { buildNicepayRefund } from "./nicepay/runtime";
 
 const NO_SECRET = { ok: false as const, status: 500, code: "NO_SECRET", message: "결제 서버 설정이 없어요(TOSS_SECRET_KEY)" };
 
@@ -22,7 +23,7 @@ export function createAdminClient(): SupabaseClient | null {
 }
 
 export function buildDeps(admin: SupabaseClient, tossSecretKey: string): LifecycleDeps {
-  return {
+  const deps: LifecycleDeps = {
     async getAuthUid(token) {
       const { data, error } = await admin.auth.getUser(token);
       return error || !data?.user ? null : data.user.id;
@@ -76,4 +77,7 @@ export function buildDeps(admin: SupabaseClient, tossSecretKey: string): Lifecyc
       (level === "error" ? console.error : level === "warn" ? console.warn : console.info)(`[${event}]`, JSON.stringify(fields));
     },
   };
+  // NICEPAY 환불 핸들러: 서버 설정이 완전하고 활성일 때만 붙는다(아니면 handleRefund가 NICEPAY 환불을 501로 막는다).
+  deps.nicepayRefund = buildNicepayRefund(admin, deps);
+  return deps;
 }

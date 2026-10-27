@@ -37,6 +37,8 @@ export type LifecycleDeps = {
   refundRelease(membershipId: string, uid: string): Promise<DbResult>;
   // skipTimeCheck: 24시간 조건만 건너뜀(토스 취소가 이미 확정된 뒤 마무리용). "이미 사용함" 조건은 어떤 경우에도 건너뛰지 않는다.
   dbRefund(membershipId: string, uid: string, opts: { allowPg: boolean; skipTimeCheck: boolean }): Promise<DbResult>;
+  /** NICEPAY 환불(서버 설정이 완전하고 활성일 때만 주입 — 없으면 NICEPAY 환불은 501로 fail-closed). 구현: nicepay/refund.ts handleNicepayRefund */
+  nicepayRefund?: (ctx: RefundCtx, uid: string) => Promise<Reply>;
   log(level: "info" | "warn" | "error", event: string, fields: Record<string, unknown>): void;
 };
 export type Reply = { status: number; body: Record<string, unknown> };
@@ -256,7 +258,8 @@ export async function handleRefund(input: { token: string | null; membershipId?:
   if (!ctx) return { status: 404, body: { error: "수강권을 찾을 수 없어요" } };
   if (ctx.status === "refunded") return { status: 409, body: { error: "이미 환불된 수강권이에요", code: "already_refunded" } };
 
-  const isPgProvider = !!ctx.provider && PG_PROVIDERS.includes(ctx.provider);
+  // 직접결제(null)와 Mock만 PG가 아니다. 그 밖의 모든 provider(toss/portone/nicepay/미래 값)는 PG로 취급해 DB 일반 환불 가드를 기본 차단 상태로 둔다.
+  const isPgProvider = !!ctx.provider && ctx.provider !== "mock";
 
   // 외부 환불 경계는 provider별로 명시한다. 현재 실제 승인 취소가 구현된 PG는 토스뿐이다.
   // PortOne은 승인/취소 연동이 아직 없다(PortOnePaymentProvider는 구조만 있고 confirm 라우트도 toss만 허용) —
@@ -265,6 +268,13 @@ export async function handleRefund(input: { token: string | null; membershipId?:
   if (ctx.provider === "portone" && ctx.amount > 0) {
     d.log("warn", "PG_REFUND_UNSUPPORTED_PROVIDER", { provider: "portone", membershipId: ctx.membershipId, orderId: ctx.orderId });
     return { status: 501, body: { error: "해당 결제수단의 자동 환불은 아직 지원하지 않아요. 센터 또는 운영자에게 문의해주세요", code: "portone_refund_unsupported" } };
+  }
+  // NICEPAY(금액>0): 서버가 NICEPAY 취소를 확인·기록한 뒤에만 환불한다. 주입된 핸들러가 없으면(미활성/설정 불완전) 아래 fail-closed 501.
+  if (ctx.provider === "nicepay" && ctx.amount > 0 && d.nicepayRefund) return d.nicepayRefund(ctx, uid);
+  // fail-closed(2026-10-16): 외부 취소가 구현되지 않은/활성이 아닌 모든 PG(예: nicepay — 설정 전)의 금액>0 환불은 DB만 refunded로 만들지 않는다.
+  if (!!ctx.provider && ctx.provider !== "mock" && ctx.provider !== "toss" && ctx.provider !== "portone" && ctx.amount > 0) {
+    d.log("warn", "PG_REFUND_UNSUPPORTED_PROVIDER", { provider: ctx.provider, membershipId: ctx.membershipId, orderId: ctx.orderId });
+    return { status: 501, body: { error: "해당 결제수단의 자동 환불은 아직 지원하지 않아요. 센터 또는 운영자에게 문의해주세요", code: "refund_unsupported_provider" } };
   }
   // 외부 취소가 필요한 환불 = 토스 && 금액>0. (portone 0원은 돈 이동이 없어 아래 DB-only 경로 — 0원 토스 주문과 동일: 환불 payment 행은 만들지 않고
   // 쿠폰/포인트만 복원한다. allowPg=true는 브라우저 직접 호출 가드(PG 주문 거부)만 통과시키며 서버 라우트에서만 가능하다.)
@@ -340,7 +350,8 @@ export async function checkReturnTokenEligibility(input: { token: string | null;
   if (!uid) return { ok: false, reply: { status: 401, body: { error: "로그인이 필요해요" } } };
   const ctx = await d.orderContext(input.orderId, uid);
   if (!ctx) return { ok: false, reply: { status: 404, body: { error: "주문을 찾을 수 없어요" } } };
-  if (ctx.provider !== "toss") return { ok: false, reply: { status: 400, body: { error: "토스 결제 주문이 아니에요" } } };
+  // 복귀 토큰은 "이 uid의 이 주문" 권한만 담는다. NICEPAY 주문에도 발급할 수 있지만 NICEPAY 결제 진행 자체는 prepare/return 라우트가 활성 조건·게이트를 따로 강제한다.
+  if (ctx.provider !== "toss" && ctx.provider !== "nicepay") return { ok: false, reply: { status: 400, body: { error: "토스 결제 주문이 아니에요" } } };
   if (ctx.status !== "pending") return { ok: false, reply: { status: 409, body: { error: "결제를 진행할 수 없는 주문 상태예요" } } };
   if (!(await d.gateAllows(input.orderId))) return { ok: false, reply: { status: 403, body: { error: "온라인 결제는 아직 사용할 수 없어요" } } };
   return { ok: true, uid, orderId: ctx.orderId };

@@ -1351,7 +1351,7 @@ function MembersContent() {
 
             {Number(grantPrice) > 0 && (
               <div className="perm-guide" style={{ margin: "0 0 10px" }}>
-                센터에서 직접 받은 금액을 기록하는 거예요. 온라인 결제(Toss)는 실행되지 않아요.
+                센터에서 직접 받은 금액을 기록하는 거예요. 온라인 결제(PG)는 실행되지 않아요.
               </div>
             )}
 

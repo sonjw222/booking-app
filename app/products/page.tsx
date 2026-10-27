@@ -56,6 +56,18 @@ export default function PublicProductsPage() {
       </div>
       <div style={{ margin: "0 20px 8px" }}><ServicePeriodGenericNote /></div>
 
+      {/* 카드사/PG 심사 대비 비결제 안내(2026-10-16): 이용기간·환불 조건·판매자 정보로 가는 길을 상품 목록 바로 위에 둔다.
+          특정 PG·결제수단을 단정하지 않는다(결제수단은 구매 화면이 실제 활성 수단만 보여준다). 사업장 주소는 여기에 넣지 않는다(사용자 결정). */}
+      <div className="perm-guide" style={{ margin: "0 20px 8px" }} data-testid="products-purchase-guide">
+        <strong>구매 전 확인하세요</strong>
+        <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+          <li>이용기간·사용 조건은 상품마다 달라요. 센터 화면의 상품 상세에서 확인할 수 있어요.</li>
+          <li>결제수단은 구매 화면에서 안내돼요.</li>
+          <li>환불·취소는 <Link href="/legal/refund" prefetch={false} style={{ textDecoration: "underline" }}>환불·취소 정책</Link>을 따라요.</li>
+          <li>모하빗은 통신판매중개자예요. 판매자 정보는 <Link href="/legal/business" prefetch={false} style={{ textDecoration: "underline" }}>사업자 정보</Link>에서 확인할 수 있어요.</li>
+        </ul>
+      </div>
+
       {error ? (
         <div className="daylist-empty">{error}</div>
       ) : products === null ? (

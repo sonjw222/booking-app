@@ -104,6 +104,81 @@
 ## 2026-10-18 — E2E 3/4 TEST4 정리 로직 안정화(테스트 전용)
 - **원인**: `new-class-creation.spec.ts`의 `cleanupBuyProductMemberships`가 (테스트 회원, 고정 이름 상품)의 수강권을 payments → memberships 순으로만 지웠다. 그 수강권을 쓴 예약이 남아 있으면 `reservations_membership_id_fkey` 위반으로 `beforeAll`(브라우저 실행 전)에서 실패했고, 고정 이름 상품이라 과거 실행 잔여물이 계속 걸렸다. 프로필·상품이 같다는 이유만으로 "내 것"이라 보고 지우는 것도 문제였다.
 - **수정**: 실행마다 이름에 실행 ID(RUN_SHORT)가 든 새 상품을 만들어 과거 잔여물과 겹치지 않게 하고(시작 시 아무 것도 삭제하지 않음), 종료 시 소유를 증명한 경우에만(상품 이름·수강권 프로필/생성 시각·예약은 이 실행의 수업·결제 프로필/시각·그 밖의 참조 0건) reservations → payments → memberships → product 순으로 삭제한다. 하나라도 증명하지 못하면 아무 것도 지우지 않고 실패로 알린다. 새 모듈 `tests/e2e/fixtures/runOwnedProductCleanup.ts`, 단위·격리 PostgreSQL(PGlite, 실제 FK) 테스트 추가. 앱 코드·SQL·RLS 변경 없음.
+## 2026-10-17 (7) — NICEPAY 승인 선점(claim) DB 게이트 (검토용 SQL, 미실행)
+- `add_nicepay_provider_support`의 `nicepay_claim_order`가 DB 게이트(off/reviewer/public)를 검사(신규 승인 선점만). 진행 중 거래의 확정·취소 기록·release·검토·환불은 off 뒤에도 가능. 운영에 적용된 게이트와 호환.
+- 신규 `fix_nicepay_claim_gate_20261017.sql`(+rollback/verify): 지원 SQL이 이미 적용된 DB용 제자리 패치(미적용이면 무동작, 멱등). preflight에 `claim_gate_patch_ok_or_absent`.
+- 앱 `nicepayGate`가 같은 DB 모드를 선검사(RPC 오류/알 수 없는 값=거부).
+- 테스트: PGlite 84(CG1~CG4), 실제 PostgreSQL 28(R20: 모드 전이·토글 경합·off 후 마무리·동시 선점), 단위(nicepay.gate.runtime).
+
+## 2026-10-17 (6) — NICEPAY 주문 생성 DB 게이트 (검토용 SQL, 미실행)
+- 신규 `add_nicepay_checkout_gate_20261017.sql`(+rollback/verify): 클라이언트의 provider='nicepay' 주문 생성을 DB 모드(off/reviewer/public)로 제어. 직접 INSERT·create_order_secure(RPC 포인트 처리 포함) 모두 fail-closed, 기본 off. 변경은 감사 기록.
+- `add_nicepay_provider_support`·`fix_create_order_secure_allow_nicepay`는 게이트 선행 확인, preflight에 info 컬럼.
+- 테스트: PGlite 80개(GT1~GT6), 실제 PostgreSQL 27개(R18·R19). 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §15.
+
+## 2026-10-17 (5) — NICEPAY REST: 승인 결과 불명 시 망취소 전 상태 조회 (독립 검증에서 발견)
+- `restLifecycle.ts`: 승인 요청의 결과를 모를 때(타임아웃/5xx/해석 불가) 곧바로 망취소하던 것을, 먼저 거래 조회(서명·tid·orderId 검증)로 판단하도록 변경 — paid+금액 일치: 취소 없이 구매 확정 이어가기, ready/failed/expired: 망취소 없이 복귀, cancelled: 복귀, 그 외/조회 불가: 망취소. 망취소 응답은 서명 규격이 없어 그 응답만 믿지 않고 재조회로 paid가 아님을 확인한 경우에만 release(아니면 운영자 확인).
+- 테스트: `nicepay.rest.flow.test.ts` 시나리오 갱신/추가(조회 우선, 조회 실패 시 망취소, 망취소 후 재조회 불신 → review).
+
+## 2026-10-17 (4) — NICEPAY 계약 전 구현 Batch (비활성, SQL 미실행)
+- 공식 규격 분석(`docs/payments/NICEPAY_SPEC_ANALYSIS_20261017.md`): REST(v1)·v3(MID) 두 계열 구분 — 키 유형 확정 전이라 `config.ts`의 `NICEPAY_API_FAMILY`로 분기, 추측한 파라미터를 운영용으로 확정하지 않음.
+- 서버: `lib/payments/server/nicepay/{config,rest,restLifecycle,refund,recovery,flow,runtime}.ts` + 라우트 `app/api/payments/nicepay/{prepare,return,status,abandon,webhook}` + 결과 화면 `app/checkout/nicepay/result` + 클라이언트 Provider(`NicepayPaymentProvider`, `nicepayClientApi`). 활성 조건 4중 잠금(코드 상수·서버 플래그·계열·키) — 하나라도 아니면 모든 경로 503/501 fail-closed.
+- 환불: NICEPAY는 서버가 PG 취소를 서명 검증된 응답/조회로 확인·기록한 뒤에만 내부 환불(`handleRefund` → `nicepayRefund` 주입, 없으면 501). 결과 불명은 임의 확정 없이 환불 표시 유지.
+- 도메인 분리: `lib/payments/domains.ts`(회원 수강권 ↔ 센터 구독료 주문번호 교차 차단), 구독 설계 문서 `NICEPAY_SUBSCRIPTION_DOMAIN_20261017.md`.
+- SQL(검토용, 미실행): `fix_orders_insert_role_guard_20261017.sql`(+rollback/verify) — orders INSERT 서버 전용 필드 보정이 anon/authenticated 롤에도 적용. preflight에 `orders_insert_guard_patch_ok` 추가.
+- 테스트: vitest NICEPAY 신규 62건(REST 흐름·장애 복구·환불·설정 게이트·도메인), 실제 PostgreSQL 16 ↔ TS 라이프사이클 9건, PGlite SQL 74건, 실제 PG SQL 25건(권한 diff R16, 롤/RLS R17 포함).
+
+## 2026-10-17 (3) — 환불 금액 정합성 + orders_guard_pg_state anon 우회 경계 (검토용 SQL, 미실행)
+- 신규 `fix_refund_amount_integrity_20261017.sql`(+rollback/verify): 환불 금액·복원 주문을 최근 행이 아닌 PG 원거래 행 기준으로(원거래 2개 이상/이미 환불 행이면 거부, 컨텍스트는 unknown_pg). 직접결제·Mock·정상 Toss 흐름 불변. 운영 현재 정의 제자리 패치(선행: 출처 가드, 서버 경로 패치).
+- `add_nicepay_provider_support_20261016.sql` [4]: `orders_guard_pg_state`가 auth.uid() NULL 이어도 anon/authenticated 롤은 서버로 보지 않음. preflight에 `refund_amount_patch_ok` 추가.
+- 테스트: PGlite 70개(Y1~Y7), 실제 PostgreSQL 16 23개(R13~R15: 동시성·실제 롤/RLS). 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §14.
+
+## 2026-10-17 (2) — 서버 환불 경로 fail-closed 보완 + pg_refund_context 출처 판별 (검토용 SQL, 미실행)
+- 신규 `fix_refund_server_path_fail_closed_20261017.sql`(+rollback/verify): 출처 불명확 PG 결제는 서버 경로(p_allow_pg=true)도 환불 진행 표시 필요, `pg_refund_context`는 PG 원거래 행 기준·`unknown_pg` 반환. 운영 현재 정의 제자리 패치(선행: 출처 가드).
+- `add_nicepay_provider_support_20261016.sql` [6-4] v2: NICEPAY 취소 확인 가드가 최근 결제 행/order_id에 의존하지 않음(모든 매출 행 검사), v1→v2 업그레이드.
+- 테스트: PGlite 63개(Z1~Z5), 실제 PostgreSQL 16 20개(R11·R12·G7 추가). 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §13.
+
+## 2026-10-17 — 결제 기록 정합성 QA: order_id 없는 PG 결제의 일반 환불 우회 차단 + 실제 PostgreSQL 2세션 검증 (검토용 SQL, 미실행)
+- 신규 `fix_refund_pg_origin_guard_20261017.sql`(+rollback/verify, 읽기 전용 `diagnose_pg_payment_linkage_20261017.sql`): 운영 현재 환불 함수를 제자리 패치(통째 덮어쓰기 금지), PG 판별 허용 목록 + 출처 불명확(연결 없는 PG 결제) 수강권 일반 환불 차단. 자동 연결·백필·데이터 변경 없음. `fix_refund_block_all_pg_providers_20261016.sql` 세트는 폐기.
+- 테스트: PGlite 57개(운영 형태 Toss 3건 재현·우회 재현→차단·데이터 불변), 실제 PostgreSQL 16 2세션 17개(`tests/sql/real-pg/nicepay-real-pg.mjs`, 격리 Docker). 공용 월드 `tests/sql/helpers/nicepayWorld.mjs`.
+- 설계·운영자 절차: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §12.
+
+## 2026-10-16 (8) — NICEPAY SQL 동시성 보완: `nicepay_release_order` 주문 행 잠금 선행 (검토용 SQL, 미실행)
+- 승인 기록 조회가 주문 행 잠금보다 먼저여서, 조회 직후 커밋된 승인 기록을 놓치고 서버 검증 승인이 있는 선점을 취소 확인 없이 풀 수 있던 경합을 수정: 주문 행 `FOR UPDATE` 선행 → 잠금 후 provider/상태/claim/거래번호/검토 대기 재검증 → 같은 트랜잭션에서 승인·취소 기록 재확인 → 갱신.
+- 잠금 순서 불변식 테스트(X1: 승인·취소 기록을 읽는 6개 함수), release 재검증·승인 직후 거부(X2), 반대 방향(X3). verify에 잠금 순서 검사 추가. 2세션 수동 검증 절차: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §11.
+
+## 2026-10-16 (7) — Batch 3 최종 SQL 안전 검증: 서버 검증 승인 기록 게이트 · 2인 승인 · PG 취소 확인 연동 (검토용 SQL, 미실행)
+- 증빙 문자열만으로 수강권 발급/내부 환불/재결제 유도가 가능하던 경로를 차단: `nicepay_pg_approvals`(서버 검증 승인 기록, 추가 전용)가 없으면 확정·수동 확정 불가, `nicepay_pg_cancels`는 승인 기록의 TID에 대해서만(+ 2인 승인 또는 응답 요약값), 수동 해소·수동 확정은 처리자≠승인자.
+- `nicepay_release_order`는 승인 기록이 있던 선점이면 취소 확인 기록 뒤에만 복귀. 앱 lifecycle: 승인 검증 후 `recordVerifiedApproval` → 확정, 망취소 성공 시 `recordPgCancel` → release.
+- PGlite 49개(기존 Toss 완료 주문 3건 보호, 정순서 적용·역순 롤백 원문 복원, 순서 뒤바뀜 감지, 정적 권한 검토). 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §10.
+
+## 2026-10-16 (6) — Batch 3 운영 호환성 보완 #2: CRLF/주석없는 운영 정의 대응 · create_order_secure · NICEPAY 환불은 PG 취소 확인 후 (검토용 SQL, 미실행)
+- `add_nicepay_provider_support_20261016.sql`: 제자리 패치 위치를 줄바꿈·주석 무관 정규식 + "정확히 1곳" 검증으로 교체(fulfill_order는 cancelled 차단 코드 기준), 환불 core 패치 추가(NICEPAY는 `nicepay_pg_cancels` 기록 전 내부 환불 불가), `nicepay_record_pg_cancel`, 롤백은 원문 그대로 복원.
+- 신규 SQL(미실행): `fix_create_order_secure_allow_nicepay_20261016.sql`(+rollback), 읽기 전용 `preflight_nicepay_patch_targets_20261016.sql`.
+- PGlite 44개(CRLF/LF × 주석 유무, create_order_secure 가정 형태 3종, 구조 불일치 중단, 롤백 정확 복원). 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §9.
+
+## 2026-10-16 (5) — Batch 3 보완: 상태 전이 트리거 확장 · payments.payment_provider 기록 · 감사 기록 (검토용 SQL, 미실행)
+- `add_nicepay_provider_support_20261016.sql` 보완: `orders_guard_status_transition()` 확장(기존 4전이 유지, approving·NICEPAY paid/done은 서버 표시 필요), 발급 helper·정산 요약·`fulfill_order` 제자리 패치(위치 불일치 시 전체 중단), 추가 전용 감사 테이블 `nicepay_review_actions`, 수동 해소는 증거·처리자 필수, 검토 대기 주문 수동 확정 전용 함수. rollback/verify 동기화.
+- PGlite 테스트를 실제 트리거·실제 helper 기반으로 재작성(20개). 코드: `releaseOrder`에 근거 인자 추가. 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §8.
+
+## 2026-10-16 (4) — Batch 3: 결제 DB 안전성 보강 초안 (검토용 SQL, 미실행)
+- 신규 SQL(미적용): `fix_refund_block_all_pg_providers_20261016.sql`(일반 환불 PG 차단을 허용 목록으로 — NICEPAY 환불 우회 차단), `add_nicepay_provider_support_20261016.sql`(provider CHECK에 nicepay, status `approving`, 서버 전용 pg_* 컬럼·보호 트리거, claim/release/review/confirm RPC). 각 rollback/verify 포함.
+- 코드: 환불 라우트가 외부 취소 미구현 PG(nicepay 등) 금액>0을 501로 fail-closed, NICEPAY lifecycle에 claim id fencing, `nicepayDbDeps` 어댑터(미연결).
+- 테스트: PGlite 10개(`tests/sql/nicepay-provider-support.test.mjs`), 단위 3개 추가. 설계: `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md`.
+
+## 2026-10-16 (3) — Batch 2: Mock 결제 운영 차단 + NICEPAY 서버 모듈 재검증 + 공개 테스트 상품 분석 (SQL 없음)
+- Factory: 운영 빌드에서는 `NEXT_PUBLIC_ALLOW_MOCK_PAYMENT=true`를 따로 켜지 않으면 빈 값/알 수 없는 값/mock이 모두 `disabled`(Mock 불가). nicepay는 어떤 환경에서도 mock으로 폴백하지 않음. 개발/테스트의 기존 mock 기본값은 유지. ⚠ 배포 영향: Vercel Preview/Production에서 mock이 필요하면 `NEXT_PUBLIC_ALLOW_MOCK_PAYMENT=true`가 필요(환경변수는 이번에 변경하지 않음). 직접결제는 영향 없음.
+- NICEPAY lifecycle: PG 게이트(`gateAllows`) 확인 추가, 결과 불명·망취소 실패 시 `markReview`로 운영자 확인 대기 표시. 테스트 43개. 검증 매트릭스·복구 절차: `docs/payments/NICEPAY_SERVER_MODULE_VERIFICATION.md`.
+- 공개 상품 분석·비공개 전환안·이용기간 SQL 설계안: `docs/payments/PUBLIC_PRODUCTS_REVIEW_20261016.md`.
+
+## 2026-10-16 (2) — PG를 NICEPAY로 확정: 신규 결제에서 Toss/PortOne 제외 + 레거시 격리 (SQL 없음, 실제 PG 비활성)
+- `PaymentProviderFactory`: `mock｜nicepay｜disabled`. 환경변수 toss/portone → `DisabledPaymentProvider`(전 호출 거부), nicepay → 비활성 Provider + 코드 잠금 `NICEPAY_CHECKOUT_ACTIVATED=false`. checkout은 주문 생성 전에 PG 진입 불가 시 중단(직접결제 fallback 유지).
+- 삭제: `TossPaymentProvider`/`PortOnePaymentProvider`와 테스트, 미사용 클라이언트 래퍼. 과거 Toss 거래 조회·취소·환불 서버 경로(`app/api/payments/*`, `lib/payments/server/*`)와 빌링·지급대행 코드는 보존(정적 테스트로 고정).
+- `server/nicepay/billing.ts`: 비활성 정기결제 규칙/타입(카드정보 필드 없음). 법적 문구·분류·전환 계획: `docs/payments/PG_MIGRATION_TOSS_TO_NICEPAY.md`.
+
+## 2026-10-16 — NICEPAY 카드사 심사 준비 Batch 1 (비결제 UI + 오프라인 서버 모듈, SQL 없음)
+- 심사 체크리스트·단건/정기결제 설계·기술지원 질문 정리: `docs/payments/NICEPAY_REVIEW_PREPARATION.md`.
+- `/products` 상단에 구매 전 안내(이용기간 확인 위치·결제수단·환불·취소 정책/사업자 정보 링크) 추가. 사업장 주소·PG사명 미표기.
+- `lib/payments/server/nicepay/*`(서명·허용 URL·로그 redact·승인/망취소/취소·라이프사이클·웹훅 분류)와 `NicepayPaymentProvider`(비활성) 추가. 어떤 라우트·팩토리에도 연결하지 않음, 키 로딩/카드정보 수집 없음. 오프라인 테스트 포함.
 
 ## 2026-10-11 — 진도 기록 팝업 날짜 캘린더 잘림 수정 (웹 코드만, SQL 없음)
 - 원인: `DatePicker`의 팝오버가 `.app-date-picker` 안에서 `position:absolute`로 그려져 `.sheet`(`overflow-y:auto`, 진도 기록은 `.prog-add-sheet`)의 클리핑 영역에 갇혔다. 하네스 실측: 수정 전 날짜 31개 중 모바일 10개 / 태블릿·데스크톱 28개가 클릭 불가.
