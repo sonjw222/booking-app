@@ -105,7 +105,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (status === "OK") { console.log(`${line} (kind=${kind}) — 격리 대상 확인됨(값은 출력하지 않음).${kind === "ephemeral-local-stack" ? " 일회용 로컬 Supabase 스택이며 호스팅 프로젝트가 아니다." : ""}`); process.exit(0); }
   console.log(line); for (const p of problems) console.log(`  - ${p}`);
   if (process.env.GITHUB_STEP_SUMMARY) {
-    try { (await import("node:fs")).appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### 격리 환경 게이트(#240): **${status}**\n${problems.map((p) => `- ${p}`).join("\n")}\n\n이 상태에서는 격리 전환이 완료된 것이 아니며, live E2E/Integration 은 계속 공유 DEV 에서 실행됩니다.\n`); } catch { /* 요약 기록 실패는 판정에 영향 없음 */ }
+    try { (await import("node:fs")).appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### 격리 환경 게이트(#240): **${status}**\n${problems.map((p) => `- ${p}`).join("\n")}\n\n가드 판정이 OK 가 아니므로 이 실행의 fixture 생성과 live 테스트를 시작하지 않습니다. 공유 DEV·운영·다른 환경으로 대체하지 않습니다.\n`); } catch { /* 요약 기록 실패는 판정에 영향 없음 */ }
   }
   // ISOLATED_GATE_ALLOW_BLOCKED=1 은 BLOCKED(미구성)만 통과시킨다. FAILED 는 어떤 경우에도 실패 종료, PARTIAL 은 전체 게이트 미통과(3).
   if (status === "BLOCKED" && process.env.ISOLATED_GATE_ALLOW_BLOCKED === "1") { console.log("::warning::격리 환경 미구성(BLOCKED) — 전환 미완료"); process.exit(0); }

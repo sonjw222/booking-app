@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
-  공유 DEV CI 잔여 수업 정리 — 검토용. 작성만 되었고 공유 DEV 에서 실행된 적이 없다(격리 DB 회귀만 통과: tests/rls-real/ciResidueCleanup.rls.test.ts).
+  공유 DEV CI 잔여 수업 정리. 격리 DB 회귀를 통과했고(tests/rls-real/ciResidueCleanup.rls.test.ts), 사람이 승인한 일회성 정리(계획 해시 0bbd2f61…, 수업 23·예약 12·상품 연결 2)로 2026-10-27 공유 DEV 에서 한 번 실행됐다. 다른 계획·데이터에는 쓰지 않는다(해시 고정).
   범위: 승인된 계획(cleanup-plan.json, 해시 고정)에 적힌 수업·예약·연결 데이터로만 동작한다. id 를 인자로 받지 않는다.
   모드: (기본) dry-run — 읽기만. --execute: PURGE_ACK=<계획 해시 앞 12자리> + --backup-dir 필요. --resume: 이전 실행 journal·검증된 백업과 현재 상태를 대조한 뒤에만 수업 삭제를 이어서 한다.
   환경: PURGE_ENV_FILE=<NEXT_PUBLIC_SUPABASE_URL 과 SUPABASE_SERVICE_ROLE_KEY 가 든 파일>. 키는 출력하지 않는다. 대상은 정확한 https://<공유 DEV ref>.supabase.co 호스트여야 한다.

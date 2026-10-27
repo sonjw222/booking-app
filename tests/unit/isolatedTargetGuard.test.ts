@@ -131,6 +131,12 @@ describe("격리 대상 가드 — 실제 CLI 종료 코드(자격증명·네트
     const f = tmpSummary(); expect(cli({ ...ALLOW, ISOLATED_SUPABASE_URL: `https://${PROD}.supabase.co` }, f).status).toBe(1);
     expect(fs.readFileSync(f, "utf8")).toContain("FAILED");
     const f2 = tmpSummary(); expect(cli({ ...ALLOW }, f2).status).toBe(0); expect(fs.readFileSync(f2, "utf8")).toContain("BLOCKED");
+    // Step Summary 안내: 가드 미통과면 fixture 생성과 live 테스트를 시작하지 않는다 — 예전 문구("계속 공유 DEV 에서 실행")가 남아 있으면 안 된다.
+    for (const summary of [fs.readFileSync(f, "utf8"), fs.readFileSync(f2, "utf8")]) {
+      expect(summary).toContain("fixture 생성과 live 테스트를 시작하지 않습니다");
+      expect(summary).toContain("공유 DEV·운영·다른 환경으로 대체하지 않습니다");
+      expect(summary).not.toMatch(/계속 공유 DEV|공유 DEV 에서 실행/);
+    }
   });
 });
 
