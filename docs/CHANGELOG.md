@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-29 — NICEPAY 운영 반영 전 최종 Preflight(운영은 SELECT 만, SQL 미실행)
+- 운영 읽기 전용 결과: P0 함수 정의 해시 3/3 일치, P0b 7/7 true → P2 적용 BLOCKED 아님. 상세 `docs/payments/NICEPAY_PREFLIGHT_20261029.md`.
+- 검증 SQL 정정(로컬): 컬럼 1→2, 트리거 오탐(운영의 기존 `nicepay_review_actions_append_only`)·정확한 이름 12개, 함수 7·RPC 3·PUBLIC 실행 불가 확인으로 확장. 롤백 시나리오 시험도 같은 이름 기준으로 수정(11/11).
 ## 2026-10-29 — NICEPAY 심사 전용 권한 분리(B안)·v3 결제창 준비·종료 절차(로컬 격리 검증만, 운영 미적용)
 - `accounts.nicepay_review_access`(신규, 운영자 전용)로 NICEPAY 심사관을 분리 — 기존 `pg_checkout_override`(토스)는 무변경. 센터 분리·NICEPAY 결제 게이트·결제수단 노출이 전용 권한만 본다. 토스 심사 계정이 실제 센터에서 NICEPAY 주문을 만들 수 있던 구멍(운영 적용 게이트 함수)을 막는 패치 SQL 추가.
 - 탐색은 심사 센터만(앱), 관리 화면은 기존 매니저 권한 유지. v3(MID) 결제창 모듈 `lib/payments/nicepayV3Window.ts`(goPay, 승인 분리, 키 비노출). 심사 종료 SQL. 운영 이력 대조 결과·SQL 순서: `docs/payments/NICEPAY_B_PLAN_20261029.md`, `NICEPAY_SQL_RUNBOOK_20261028.md`.

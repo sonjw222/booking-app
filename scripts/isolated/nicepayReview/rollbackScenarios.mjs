@@ -24,7 +24,7 @@ const r2 = sql(null, RB);
 rec("S2 pending 으로 비공개 후 롤백 성공", r2.ok, r2.out.slice(0, 80));
 const rd = await reads(); const allZero = Object.values(rd).every((v) => v.centers === 0 && v.products === 0 && v.classes === 0);
 rec("S2 분리 정책이 없는 상태에서도 pending 센터의 센터·상품·수업 직접 조회 0행(비회원/일반/심사관)", allZero, JSON.stringify(rd));
-rec("S2 롤백 후 정책/트리거/함수 제거", sql("select (select count(*) from pg_policies where policyname='nicepay_review_isolation')||'/'||(select count(*) from pg_trigger where tgname like '%nicepay_review%' and not tgisinternal)||'/'||(to_regprocedure('nicepay_review_center_allowed(uuid)') is null)").out === "0/0/true");
+rec("S2 롤백 후 정책/트리거/함수 제거(데이터 보존용 accounts 보호 트리거 1개만 남음)", sql("select (select count(*) from pg_policies where policyname in ('nicepay_review_isolation','nicepay_own_reservation_class'))||'/'||(select count(*) from pg_trigger where not tgisinternal and tgname ~ '^trg_(centers|accounts|orders|memberships|cart_items|purchase_requests|reservations)_nicepay_review_')||'/'||(to_regprocedure('nicepay_review_center_allowed(uuid)') is null)||'/'||(to_regprocedure('nicepay_review_center_member_allowed(uuid)') is null)").out === "0/1/true/true");
 rec("S2 기간 RPC 는 이전부터 있었으므로 삭제되지 않고 이전 정의로 복원", sql("select to_regprocedure('fetch_public_storefront_product_periods(uuid)') is not null").out === "t" && !/nicepay_review_center_allowed/.test(sql("select pg_get_functiondef('fetch_public_storefront_product_periods(uuid)'::regprocedure)").out));
 // 변형: 센터 승인 상태(status)만 pending 으로 바꿔도 같은 결과(로컬에서만 status 보호 트리거를 잠시 끄고 재현 — 운영에서는 플랫폼 관리자 계정으로 변경)
 sql("alter table centers disable trigger trg_guard_center_status; update centers set is_internal=false, status='pending' where id='" + rev + "'; alter table centers enable trigger trg_guard_center_status");

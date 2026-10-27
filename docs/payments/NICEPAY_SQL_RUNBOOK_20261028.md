@@ -1,4 +1,4 @@
-# NICEPAY SQL 실행 런북 (2026-10-29 개정) — 실행하지 않음, 승인 후에만
+# NICEPAY SQL 실행 런북 (2026-10-29 개정 2 — 운영 읽기 전용 Preflight 반영) — 실행하지 않음, 승인 후에만
 
 운영 Supabase `bxntqggkfwnhcczsbqtj` 는 **읽기 전용으로만** 조회했다(마이그레이션 이력 11건 본문 대조·스키마 존재 확인). 이 문서의 SQL 은 모두 미실행이다. 전문은 아래에 있다(경로는 저장소 루트).
 
@@ -12,13 +12,13 @@
 | add_nicepay_provider_support_20261016(_v8) | 20261017151331 | 동일(v8 = 저장소 파일) | **이미 적용됨** |
 | fix_create_order_secure_allow_nicepay_20261016(_v8) | 20261017151429 | 동일 | **이미 적용됨** |
 | diag_nicepay_v8_rollback_only / diag_create_order_nicepay_v8_rollback | 20261017151255 / 20261017151426 | 롤백 전용 진단(저장소 외) | 이력만 있음(NICEPAY 기능 변경 아님) |
-| fix_refund_pg_origin_guard_20261017 | **이력 없음**(운영 이력은 10/13 이후만 존재) | 후속 마이그레이션(server_path)이 이 패치를 전제로 하므로 적용됐을 가능성이 높음 | **이력은 없지만 정의 추가 확인 필요**(`verify_fix_refund_pg_origin_guard_20261017.sql`) |
+| fix_refund_pg_origin_guard_20261017 | **이력 없음**(운영 이력은 10/13 이후만 존재) | 후속 마이그레이션(server_path)이 이 패치를 전제로 하므로 적용됐을 가능성이 높음 | **이력은 없지만 운영 정의에 적용돼 있음(P0b PASS)** |
 | fix_nicepay_claim_gate_20261017 | 이력 없음 | v8 provider_support 가 같은 검사(`nicepay_checkout_mode()`)를 이미 포함 | **불필요**(건너뜀) |
 | preflight_nicepay_patch_targets_20261016 | 읽기 전용 | - | 필요 시 읽기 전용 실행 |
 | add_public_storefront_product_periods_20261027 | 없음(운영에 `fetch_public_storefront_product_periods` 없음) | - | **아직 적용되지 않음**(선택) |
 | add_nicepay_review_center_isolation_20261028 | 없음(`centers.is_nicepay_review` 없음) | - | **아직 적용되지 않음** |
 | (신규) fix_nicepay_gate_reviewer_flag_20261029 | 없음 | 운영에 적용된 두 함수가 토스용 `pg_checkout_override` 로 심사관 판별 | **B안으로 인해 수정 필요** |
-- 정의 해시(P0) 대조: 운영 함수 정의를 SQL 로 직접 읽을 수단(SQL 실행 채널·스키마 dump)이 이 환경에 없어(dump 용 Docker 이미지 추출 실패) **대조하지 못했다 = BLOCKED**. 대신 이력 본문 일치로 NICEPAY 6건은 확인했고, 분리 SQL 이 통째로 다시 만드는 3개 함수(`center_rows_visible`, `fetch_public_storefront_products`, `fetch_purchasable_products`)는 P0 로 사용자가 확인해야 한다. **해시가 기대값과 다르면 실행하지 말고 결과를 보내 차이를 먼저 비교한다.**
+- 정의 해시(P0) 대조: **PASS** — 운영에서 읽기 전용(SELECT)으로 실행한 결과 `center_rows_visible`·`fetch_public_storefront_products`·`fetch_purchasable_products` 의 정의 해시 3개가 기대값과 모두 일치. P0b(`verify_fix_refund_pg_origin_guard_20261017`) 7개 항목 전부 true → PASS. 상세: `docs/payments/NICEPAY_PREFLIGHT_20261029.md`.
 - 운영 실측(읽기 전용): 게이트 mode=`off`, NICEPAY 테이블 5개·RPC 11개 존재, `accounts.nicepay_review_access`·`centers.is_nicepay_review` 없음, `accounts.pg_checkout_override` 있음.
 
 ## 실제로 실행이 필요한 SQL(순서)
@@ -402,19 +402,27 @@ COMMIT;
 -- 읽기 전용 확인(SQL Editor/postgres 로 실행 — 변경 없음). 역할별 가시성은 아래 "역할 시뮬레이션"으로 확인한다.
 -- 1) 객체
 select
-  (select count(*) from information_schema.columns where table_name='centers' and column_name='is_nicepay_review') as column_must_be_1,
-  to_regprocedure('nicepay_review_center_allowed(uuid)') is not null as fn_allowed,
-  to_regprocedure('nicepay_is_reviewer()') is not null as fn_reviewer,
+  (select count(*) from information_schema.columns where table_schema='public'
+     and ((table_name='centers' and column_name='is_nicepay_review') or (table_name='accounts' and column_name='nicepay_review_access'))) as columns_must_be_2,
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname='public'
+     and p.proname in ('nicepay_is_reviewer','nicepay_review_center_allowed','nicepay_review_center_member_allowed','nicepay_class_has_my_reservation','nicepay_review_guard_center','enforce_center_nicepay_review_admin_only','enforce_nicepay_review_access_admin_only')) as new_functions_must_be_7,
   (select count(*) from pg_policies where policyname='nicepay_review_isolation') as restrictive_policies_must_be_3,
   (select count(*) from pg_policies where policyname='nicepay_own_reservation_class') as own_reservation_policy_must_be_1,
-  (select count(*) from pg_trigger where tgname like '%nicepay_review%' and not tgisinternal) as triggers_must_be_11,
-  has_function_privilege('public','nicepay_review_center_allowed(uuid)','execute') as public_exec_must_be_false;
+  (select count(*) from pg_trigger where not tgisinternal and tgname ~ '^trg_(centers|accounts|orders|memberships|cart_items|purchase_requests|reservations)_nicepay_review_') as triggers_must_be_12,
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname='public'
+     and p.proname in ('fetch_public_storefront_products','fetch_purchasable_products','fetch_public_storefront_product_periods')
+     and position('nicepay_review_center_member_allowed' in pg_get_functiondef(p.oid)) > 0) as list_rpcs_replaced_must_be_3,
+  position('nicepay_review_center_allowed' in pg_get_functiondef('public.center_rows_visible(uuid)'::regprocedure)) > 0 as center_rows_visible_replaced_must_be_true,
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname='public'
+     and p.proname in ('nicepay_is_reviewer','nicepay_review_center_allowed','nicepay_review_center_member_allowed','nicepay_class_has_my_reservation')
+     and has_function_privilege('public', p.oid, 'execute')) as helpers_executable_by_public_must_be_0;
 -- 2) 기존 센터 보존: 아래 두 값은 적용 전후 같아야 한다(적용 전에 먼저 기록).
 select (select count(*) from centers where not is_nicepay_review) as existing_centers,
        (select count(*) from products p join centers c on c.id=p.center_id where not c.is_nicepay_review) as existing_products;
 -- 3) 심사 센터/심사관 현황(심사관 수는 의도한 1명인지 확인)
 select (select count(*) from centers where is_nicepay_review) as review_centers,
-       (select count(*) from accounts where pg_checkout_override and deactivated_at is null) as reviewer_accounts;
+       (select count(*) from accounts where nicepay_review_access and deactivated_at is null) as nicepay_reviewer_accounts,
+       (select count(*) from accounts where pg_checkout_override and deactivated_at is null) as toss_override_accounts_unchanged;
 -- 4) 역할 시뮬레이션(트랜잭션 안에서만, 마지막에 ROLLBACK). <일반회원_auth_id>/<심사관_auth_id> 를 실제 값으로 바꿔 실행.
 -- begin;
 --   set local role authenticated; select set_config('request.jwt.claims', json_build_object('sub','<일반회원_auth_id>','role','authenticated')::text, true);

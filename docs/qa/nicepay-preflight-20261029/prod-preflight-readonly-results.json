@@ -1,0 +1,114 @@
+{
+ "preflight_nicepay_review_center_isolation_20261028.sql": [
+  {
+   "stmt": 1,
+   "rc": 0,
+   "err": "Initialising login role...",
+   "rows": [
+    {
+     "actual_md5": "2be0d75899571b973f43d213713053e3",
+     "expected_md5": "2be0d75899571b973f43d213713053e3",
+     "matches": true,
+     "object": "center_rows_visible"
+    },
+    {
+     "actual_md5": "fda8e1821f997e9879c757187ab35a84",
+     "expected_md5": "fda8e1821f997e9879c757187ab35a84",
+     "matches": true,
+     "object": "fetch_public_storefront_products"
+    },
+    {
+     "actual_md5": "675be9c77818e1eb61552fc483e51b18",
+     "expected_md5": "675be9c77818e1eb61552fc483e51b18",
+     "matches": true,
+     "object": "fetch_purchasable_products"
+    }
+   ]
+  },
+  {
+   "stmt": 2,
+   "rc": 0,
+   "err": "Initialising login role...",
+   "rows": [
+    {
+     "is_internal_col": true,
+     "is_platform_admin": true,
+     "my_account_id": true,
+     "my_managed_center_ids": true,
+     "not_yet_applied": true,
+     "periods_rpc_exists_now": false,
+     "pg_checkout_override_col": true
+    }
+   ]
+  },
+  {
+   "stmt": 3,
+   "rc": 0,
+   "err": "Initialising login role...",
+   "rows": [
+    {
+     "policyname": "승인된 센터 조회",
+     "tablename": "centers",
+     "using_expr": "(((status = 'approved'::text) AND ((NOT is_internal) OR (id IN ( SELECT my_member_center_ids() AS my_member_center_ids)))) OR (id IN ( SELECT my_managed_center_ids() AS my_managed_center_ids)) OR (id IN ( SELECT my_center_ids_any_status() AS my_center_ids_any_status)) OR is_platform_admin())"
+    },
+    {
+     "policyname": "승인된 센터 수업 조회",
+     "tablename": "classes",
+     "using_expr": "((center_id IN ( SELECT c.id\n   FROM centers c\n  WHERE ((c.status = 'approved'::text) AND ((NOT c.is_internal) OR (c.id IN ( SELECT my_member_center_ids() AS my_member_center_ids)))))) OR (center_id IN ( SELECT my_managed_center_ids() AS my_managed_center_ids)))"
+    },
+    {
+     "policyname": "상품 조회",
+     "tablename": "products",
+     "using_expr": "((center_id IN ( SELECT c.id\n   FROM centers c\n  WHERE ((c.status = 'approved'::text) AND ((NOT c.is_internal) OR (c.id IN ( SELECT my_member_center_ids() AS my_member_center_ids)))))) OR (center_id IN ( SELECT my_managed_center_ids() AS my_managed_center_ids)))"
+    }
+   ]
+  },
+  {
+   "stmt": 4,
+   "rc": 0,
+   "err": "Initialising login role...",
+   "rows": [
+    {
+     "centers_internal": 4,
+     "centers_total": 7,
+     "reviewer_accounts_now": 1,
+     "reviewer_names": "토스 심사 계정"
+    }
+   ]
+  },
+  {
+   "stmt": 5,
+   "rc": 0,
+   "err": "Initialising login role...",
+   "rows": [
+    {
+     "claim_fn": true,
+     "claim_uses_toss_flag_now": true,
+     "gate_fn": true,
+     "gate_mode_now": "off",
+     "gate_table": true,
+     "gate_trigger_fn": true,
+     "gate_uses_toss_flag_now": true
+    }
+   ]
+  }
+ ],
+ "verify_fix_refund_pg_origin_guard_20261017.sql": [
+  {
+   "stmt": 1,
+   "rc": 0,
+   "err": "Initialising login role...",
+   "rows": [
+    {
+     "allowlist_present_must_be_true": true,
+     "helper_not_callable_by_authenticated_must_be_true": true,
+     "helper_not_callable_by_service_role_must_be_true": true,
+     "old_denylist_active_must_be_false_inverted_true": true,
+     "search_path_pinned_must_be_true": true,
+     "security_definer_must_be_true": true,
+     "unknown_origin_guard_present_must_be_true": true
+    }
+   ]
+  }
+ ]
+}

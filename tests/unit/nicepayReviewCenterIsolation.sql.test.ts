@@ -91,4 +91,14 @@ describe("NICEPAY 심사 센터 분리 SQL — 정적 계약(실제 격리 Postg
     expect(close).toMatch(/update centers set is_internal = true where is_nicepay_review/); expect(close).toMatch(/status = 'pending' and center_id in \(select id from centers where is_nicepay_review\)/);
     expect(close).not.toMatch(/pg_checkout_override\s*=|delete\s+from|drop\s|truncate/i);
   });
+
+  it("검증 SQL 은 P2 가 실제로 만드는 것과 일치: 컬럼 2·함수 7·정책 3+1·트리거 12(정확한 이름), 운영의 기존 nicepay_review_actions_* 트리거를 세지 않는다", () => {
+    expect(verify).toContain("columns_must_be_2"); expect(verify).toContain("new_functions_must_be_7"); expect(verify).toContain("triggers_must_be_12");
+    expect(verify).not.toMatch(/tgname like '%nicepay_review%'/);
+    const cols = [...apply.matchAll(/add column if not exists (\w+)/g)].map((m) => m[1]).filter((c) => c.startsWith("is_nicepay") || c.startsWith("nicepay_"));
+    expect(cols.sort()).toEqual(["is_nicepay_review", "nicepay_review_access"]);
+    const fns = [...apply.matchAll(/^create or replace function (nicepay_\w+|enforce_\w*nicepay\w+)\(/gm)].map((m) => m[1]);
+    expect(new Set(fns).size).toBe(7);
+    for (const f of new Set(fns)) expect(verify).toContain(`'${f}'`);
+  });
 });
