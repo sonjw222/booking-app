@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-10-27 — NICEPAY 카드사 심사 홈페이지 보완(코드·문서·SQL 초안, 미배포·SQL 미실행)
+- 홈·공개 상품 푸터에 `BUSINESS_INFO.address`(사업장 소재지) 추가 — 자택 주소이므로 공개 배포는 사용자 승인 후.
+- 상품 상세·구매 시트·결제 화면에 사전예약기간/서비스 제공기간 표시(`lib/servicePeriod.ts`, 서버 규칙과 PGlite 대조). 만료 정보가 없으면 날짜를 만들지 않음. 공개 목록 상품별 날짜는 신규 RPC SQL 실행 후 표시.
+- 결제 비활성 정책·결제/예약 검증·DB 스키마 변경 없음. 법적 문구는 제안서만(`docs/payments/`).
 ## 2026-10-27 — #240 live CI 를 일회용 Supabase 스택으로 격리(PR #244, 원격 CI 통과·원격 취소 검증 완료)
 - **변경**: live E2E 4구간·Integration·ACL 반복 job 이 공유 DEV·GitHub Secrets 대신 각자 러너 안의 일회용 로컬 Supabase 스택(`isolated-supabase/`, Auth·PostgREST·Storage·Realtime·Edge Functions)만 쓴다. workflow 의 `secrets.` 참조 0개, 가드가 OK(kind=ephemeral-local-stack)가 아니면 테스트가 시작되지 않고 job 이 실패한다(공유 DEV 대체 경로 없음). E2E 구간은 needs 체인·전역 큐 없이 병렬.
 - **baseline**: 공유 DEV `public` 스키마-only 덤프(데이터 0) + Storage 정책 + 기본 권한 초기화 migration + 저장소 SQL 에서 생성한 카탈로그 시드. 공유 DEV 와 구조·권한 대조 차이 0(함수 171·릴레이션 94·정책 200·컬럼 850·트리거 36·Storage). 공유 DEV/운영 데이터 복사 없음.

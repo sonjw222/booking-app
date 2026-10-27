@@ -17,6 +17,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import Loading from "../components/Loading";
+import ServicePeriodNotice, { ServicePeriodGenericNote } from "../components/ServicePeriodNotice";
 import { fetchPublicStorefrontProducts, groupPublicProductsByCenter, type PublicStorefrontProduct } from "../../lib/center";
 import { BUSINESS_INFO } from "../../lib/businessInfo";
 import { toUserMessage } from "../../lib/userError";
@@ -53,6 +54,7 @@ export default function PublicProductsPage() {
       <div className="perm-guide" style={{ margin: "0 20px 8px" }}>
         센터별로 판매 중인 수강권과 상품이에요. 구매는 센터 화면에서 로그인 후 진행돼요.
       </div>
+      <div style={{ margin: "0 20px 8px" }}><ServicePeriodGenericNote /></div>
 
       {error ? (
         <div className="daylist-empty">{error}</div>
@@ -82,6 +84,8 @@ export default function PublicProductsPage() {
                       <div className={`center-product-avail${p.remaining != null && p.remaining <= 0 ? " is-soldout" : ""}`}>{availabilityLabel(p.remaining)}</div>
                     )}
                     {p.description && <div className="center-product-detail products-desc">{p.description}</div>}
+                    {/* 이용기간(사전예약기간·서비스 제공기간): 공개 기간 RPC 가 있을 때만 상품별 날짜, 없으면 아무것도 안 그림(아래 공통 안내) */}
+                    <ServicePeriodNotice source={p.periodSource} variant="compact" />
                   </div>
                 </div>
               ))}
@@ -101,6 +105,7 @@ export default function PublicProductsPage() {
           <div>{BUSINESS_INFO.companyName} · 대표 {BUSINESS_INFO.ceoName}</div>
           <div>사업자등록번호 {BUSINESS_INFO.businessRegNo}</div>
           <div>통신판매업 신고번호 {BUSINESS_INFO.mailOrderRegNo}</div>
+          <div>사업장 소재지 {BUSINESS_INFO.address}</div>
           <div>고객센터 {BUSINESS_INFO.customerServicePhone}</div>
         </div>
       </div>

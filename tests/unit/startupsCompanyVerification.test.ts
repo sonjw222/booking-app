@@ -38,10 +38,10 @@ describe("공개 문의 이메일 — 단일 출처 BUSINESS_INFO.email", () => 
       .toEqual(["모하빗", "모하빗", "손장욱", "589-77-00451", "제2026-성남분당B-0866호", "경기도 성남시 분당구 중앙공원로 20, 420동 702호", "010-6505-8700"]);
     expect(b.brandNameEn).toBe("MWHABIT");
   });
-  it("홈 푸터는 이메일/주소를 새로 노출하지 않는다(기존 정책 유지)", () => {
+  it("홈 푸터는 이메일을 노출하지 않는다(주소는 2026-10-27 NICEPAY 심사 요청으로 단일 출처 BUSINESS_INFO.address 만 노출)", () => {
     const home = read("app/page.tsx");
     expect(home).not.toContain("BUSINESS_INFO.email");
-    expect(home).not.toContain("BUSINESS_INFO.address");
+    expect(home).toContain("BUSINESS_INFO.address");
   });
 });
 

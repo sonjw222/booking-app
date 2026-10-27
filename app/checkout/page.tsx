@@ -7,6 +7,7 @@
   - 결제 수단 연동 전이므로 "결제하기" 시 주문 생성(pending) 후 완료 안내
 */
 
+import ServicePeriodNotice from "../components/ServicePeriodNotice";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { fetchCenterDetail, fetchCenterProductsForPurchase, fetchPurchaseScheduleOptions, type CenterProduct } from "../../lib/center";
@@ -580,6 +581,8 @@ function CheckoutContent() {
             </label>
           </div>
         )}
+        {/* 이용기간(사전예약기간·서비스 제공기간): 결제일(오늘, KST) 기준으로 서버 규칙 그대로 계산. 알 수 없으면 날짜를 만들지 않고 공통 안내만 */}
+        <ServicePeriodNotice source={product.periodSource} />
         {product.description && (
           <div className="checkout-order-desc">{product.description}</div>
         )}
