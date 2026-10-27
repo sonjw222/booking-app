@@ -18,7 +18,7 @@
 | acl-fixture-repeat | 공유 DEV | 동일 | 특정 브랜치 전용 | — | 조건부(`github.head_ref == 'test/acl-fixture-restore-20261012'`) |
 | sql | 로컬 PGlite | 없음 | 없음 | — | 없음 |
 | unit / lint / build | 없음(placeholder env) | 없음 | 없음 | — | 없음 |
-| **isolated-env-gate (신규)** | 없음(env 검사) | `ISOLATED_*` 시크릿만(공유 DEV 비밀 사용 금지 — contract test 로 고정) | 없음 | — | 없음 |
+| **isolated-env-gate (신규)** | 없음(env 검사; GitHub checkout/setup-node 는 실행, Supabase API·DB 호출 없음) | `ISOLATED_*` 시크릿만(공유 DEV 비밀 사용 금지 — contract test 로 고정) | 없음 | — | 없음 |
 - 별도 워크플로: `admin-pagination.yml`(오프라인 SQL), `dev-agent.yml`(실행 안 함), `mobile-ui-qa.yml`(수동·ACK 필요, TEST_* 시크릿 사용 — Production QA 용도, 이번 범위 밖).
 
 ## 3. 이미 있는 환경 (값은 기록하지 않음)
@@ -37,13 +37,17 @@
 - 따라서 **로컬에서 일부가 통과해도 "전체 Supabase 통합 검증"으로 보고하지 않는다.** 가드는 로컬 URL 을 `PARTIAL` 로 판정해 전체 게이트를 통과시키지 않는다.
 
 ## 5. repo 쪽에서 끝낸 준비
-1. **격리 대상 가드** `scripts/ci/isolatedTargetGuard.mjs`(+ `tests/unit/isolatedTargetGuard.test.ts` 8건): 어떤 쓰기보다 먼저 env 만 검사 — Production ref/도메인 차단, 공유 DEV(고정 ref + CI 의 `NEXT_PUBLIC_SUPABASE_URL`)는 격리로 선언 불가, URL ref = 선언 ref = 키 JWT ref 불일치 차단, 필수 값 누락은 `BLOCKED`, 로컬 대체는 `PARTIAL`. 비밀 값 미출력.
-2. **CI 게이트 job `isolated-env-gate`**: `ISOLATED_*` 시크릿이 없으면 Step Summary 에 **BLOCKED** 를 남기고 warning 으로 끝난다(전환 완료 아님, live job 은 그대로 공유 DEV). 설정이 있는데 위험하면 FAILED. 공유 DEV 비밀을 읽지 않음을 `ciLiveTestWorkflow.contract.test.ts` 로 고정.
+1. **격리 대상 가드** `scripts/ci/isolatedTargetGuard.mjs`(단위 + 실제 CLI 종료 코드 회귀): 어떤 쓰기보다 먼저 env 만 검사한다(Supabase API·DB 호출 코드 없음). **입력된 값의 위험·오류를 누락 검사보다 먼저** 평가한다 —
+   - FAILED: Production·공유 DEV(고정 ref + CI 의 `NEXT_PUBLIC_SUPABASE_URL`) 대상, 잘못된 URL(정상적인 `https://<20자 ref>.supabase.co` 기본 주소만 허용: HTTP·사용자정보·포트·루트 외 경로·쿼리·fragment·공백 거부), JWT 아닌 키, URL·선언 ref·키 ref 불일치 — **다른 필수값이 없어도** FAILED.
+   - BLOCKED: 위험은 없는데 설정이 전부 없거나 안전한 값만 일부 있음.
+   - PARTIAL: 로컬 대체 URL(별도 처리 유지; Auth/Storage/Realtime/Edge 없음 — 전체 통합 검증으로 보고 금지).
+   - OK: 안전한 값이 모두 갖춰짐. 비밀 값은 출력하지 않는다.
+2. **CI 게이트 job `isolated-env-gate`**: GitHub 의 `actions/checkout`·`setup-node` 는 실행하지만 **Supabase API·DB 를 호출하지 않는다**(공유 DEV 비밀도 읽지 않음 — contract test 로 고정). `ISOLATED_*` 가 없으면 Step Summary 에 **BLOCKED** 를 남기고 warning 과 함께 통과로 표시된다 — **이 통과는 격리 전환 완료도 live 검증 통과도 아니다.** `ISOLATED_GATE_ALLOW_BLOCKED=1` 은 BLOCKED 에만 적용되고, **FAILED 는 항상 실패 종료**, PARTIAL 은 종료 3.
 3. 기존 live 검증은 **끄지 않았다**(`false &&`·skip 전환 없음). Q01(수업 소유 정리, #241 병합)·#231/#234(상품 소유 정리)로 live 잔여 위험을 줄였으나 격리 이전을 대체하지 않는다.
 
 ## 6. 전환 완료의 증거 (모두 필요)
 1. 격리 환경에서 필수 E2E 4구간 + Integration 이 **실제로 실행**되고 의도치 않은 skip 0 (조건부 skip 과 환경 부재 skip 을 구분해 보고).
-2. 운영/공유 DEV 로의 쓰기 0 (가드가 OK 일 때만 실행, 네트워크 쓰기 전 차단).
+2. 운영/공유 DEV 로의 쓰기 0 (가드가 OK 일 때만 실행; 가드는 Supabase 호출·쓰기 전에 env 만 보고 차단).
 3. 자체 fixture(계정·권한·센터·상품) 생성과 실행 소유 정리 확인, 실패·취소 후 복구 확인. 공유 계정 프로모션·전역 기본 요금제 변경 재도입 금지.
 4. 현재 필수 체크와 격리 job 결과를 같은 PR 에서 비교한 뒤에만 전환.
 

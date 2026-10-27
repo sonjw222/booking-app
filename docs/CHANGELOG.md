@@ -15,7 +15,7 @@
 - **검증**: 단위 6건(`tests/unit/visualSweepErrors.test.ts`) + 브라우저 3건(`errorCollector.ui.spec.ts`: API 500·403·스크립트/이미지 로드 실패·pageerror 가 규칙 없이 전부 잡힘, 비슷한 경로/상태는 통과 못 함, 끝나지 않는 로딩·오류 문구 검출, 정상 빈 상태 통과) + 스윕 8건 통과(데스크톱·모바일 Chromium 프로젝트 각각).
 ## 2026-10-26 — #240 CI 격리 이전 준비(전환 미완료·BLOCKED, 앱·SQL 변경 없음)
 - 현황 조사(`docs/CI_ISOLATION_240.md`): PR push 는 같은 저장소 head 에서 공유 DEV(`mwhabit-ci-dev`)에 service role 로 쓰는 live job 5개를 실제로 시작한다. Supabase 프로젝트는 Production 과 공유 DEV 둘뿐(브랜치 없음), `ISOLATED_*` 시크릿 없음 → **격리 환경이 없어 전환 불가**.
-- 추가: `scripts/ci/isolatedTargetGuard.mjs`(Production·공유 DEV 는 격리로 선언 불가, URL/ref/키 불일치·누락은 쓰기 전에 차단, 로컬 대체는 PARTIAL) + 단위 8건, CI 게이트 job `isolated-env-gate`(설정 없으면 BLOCKED 표시 후 종료, 공유 DEV 비밀 미사용 — contract test 로 고정). 기존 live 검증은 끄지 않음.
+- 추가: `scripts/ci/isolatedTargetGuard.mjs`(Production·공유 DEV 는 격리로 선언 불가, URL/ref/키 불일치·누락은 쓰기 전에 차단, 로컬 대체는 PARTIAL) + 단위·실제 CLI 종료 코드 회귀(입력된 위험·오류를 누락 검사보다 먼저 평가: 위험하면 FAILED, 비어 있거나 안전한 일부만 있으면 BLOCKED, 엄격한 HTTPS 기본 주소만 허용), CI 게이트 job `isolated-env-gate`(GitHub checkout/setup 은 실행하지만 Supabase API·DB 호출 없음; 설정 없으면 BLOCKED 표시 후 통과 표시 — 전환 완료 아님; FAILED 는 항상 실패 — 공유 DEV 비밀 미사용, contract test 로 고정). 기존 live 검증은 끄지 않음.
 - 로컬 PostgreSQL+PostgREST 는 Auth/Storage/Realtime/Edge Functions 가 없어 live E2E/Integration 을 대체하지 못한다(부분 대체로만 보고).
 
 ## 2026-10-25 — 브라우저 QA 워커 문서 현행화(문서만)
