@@ -9,6 +9,7 @@ select p.proname,
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'public' and p.proname in ('orders_guard_nicepay_create', 'nicepay_claim_order') order by 1;
 select to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)') is not null as helper_exists,
+       (select position('is_on_sale' in pg_get_functiondef(to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)'))) > 0 and position('is_internal' in pg_get_functiondef(to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)'))) > 0 and position('p_product_id is not null' in pg_get_functiondef(to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)'))) > 0) as helper_requires_approved_center_and_on_sale_product,
        not has_function_privilege('public', to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)')::oid, 'execute') as helper_not_executable_by_public,
        not has_function_privilege('authenticated', to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)')::oid, 'execute') as helper_not_executable_by_authenticated,
        (select mode from nicepay_checkout_gate where id) as gate_mode_info;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 const read = (f: string) => readFileSync(path.resolve(__dirname, "../..", f), "utf8");
 const apply = read("add_nicepay_review_center_isolation_20261028.sql");
 const rollback = read("rollback_add_nicepay_review_center_isolation_20261028.sql");
@@ -113,11 +114,31 @@ describe("NICEPAY 심사 센터 분리 SQL — 정적 계약(실제 격리 Postg
     expect(apply).toMatch(/if nicepay_is_client_request\(\) and not is_platform_admin\(\) then/);
     expect(apply).toMatch(/create or replace function nicepay_is_client_request\(\)[\s\S]*auth\.uid\(\) is not null or coalesce\(nullif\(current_setting\('role', true\), ''\), 'none'\) in \('anon', 'authenticated'\)/);
   });
-  it("별도 보안 초안(accounts INSERT 특권 컬럼 보호): BEFORE INSERT 트리거 1개, 세 컬럼 거부, 서버·관리자 통과, 기존 행·트리거 불변, P2 에 포함되지 않음", () => {
+  it("accounts INSERT 특권 컬럼 보호는 PR #245 로 운영 적용 완료 — 저장소 파일은 적용본(SHA-256 고정)과 같고 P2 에 포함되지 않는다", () => {
     const d = read("fix_accounts_insert_privileged_columns_20261030.sql"); const code = nonComment(d);
+    expect(createHash("sha256").update(d).digest("hex")).toBe("b8c77b4bbe669690e29d88f27cbd487d9b8dd975f63b5cc6995bae3929f619af");
     expect(code).toMatch(/create trigger trg_accounts_insert_privileged_columns before insert on accounts/);
-    expect(code).toMatch(/new\.is_platform_admin or new\.pg_checkout_override/); expect(code).toMatch(/new\.merged_into is not null/); expect(code).toMatch(/app\.allow_merged_into_change/);
-    expect(code).toMatch(/auth\.uid\(\) is not null and not is_platform_admin\(\)/); expect(code).not.toMatch(/\b(update|delete|truncate)\b|drop (table|column)/i);
+    expect(code).toMatch(/if auth\.uid\(\) is null then return new; end if;/); expect(code).toMatch(/new\.is_platform_admin or new\.pg_checkout_override/); expect(code).toMatch(/app\.allow_merged_into_change/);
+    expect(code).not.toMatch(/\b(update|delete|truncate)\b|drop (table|column)/i);
     expect(apply).not.toContain("enforce_accounts_insert_privileged_columns");
+    expect(read("scripts/isolated/nicepayReview/setupLocal.sh")).toContain("fix_accounts_insert_privileged_columns_20261030.sql");
+    for (const f of ["docs/payments/NICEPAY_SQL_RUNBOOK_20261028.md", "docs/payments/NICEPAY_SQL_FINAL_REVIEW.md"]) expect(read(f)).toMatch(/이미 운영 적용|운영 적용 완료|이미 적용됨/);
+  });
+  it("P2 롤백은 남겨 두는 accounts 보호 트리거가 의존하는 함수(nicepay_is_client_request, enforce_nicepay_review_access_admin_only)를 지우지 않는다", () => {
+    const code = nonComment(rollback);
+    expect(code).not.toMatch(/drop function[^;]*nicepay_is_client_request/i); expect(code).not.toMatch(/drop function[^;]*enforce_nicepay_review_access_admin_only/i);
+    expect(code).not.toMatch(/drop trigger[^;]*trg_accounts_nicepay_review_access_admin_only/i);
+    // 남기는 트리거가 부르는 함수가 P2 에 실제로 존재한다 + 롤백이 지우는 함수들 중 어느 것도 그 트리거가 부르지 않는다
+    expect(apply).toMatch(/create trigger trg_accounts_nicepay_review_access_admin_only[\s\S]*execute function enforce_nicepay_review_access_admin_only\(\)/);
+    const body = apply.slice(apply.indexOf("create or replace function enforce_nicepay_review_access_admin_only"), apply.indexOf("create trigger trg_accounts_nicepay_review_access_admin_only"));
+    const called = [...body.matchAll(/\b(nicepay_\w+|is_platform_admin)\(/g)].map((m) => m[1]).filter((n) => n !== "is_platform_admin");
+    for (const fn of new Set(called)) expect(code, `롤백이 보호 트리거의 의존 함수 ${fn} 를 삭제`).not.toMatch(new RegExp(`drop function[^;]*\\b${fn}\\(`, "i"));
+  });
+  it("P2b 심사 대상 판정: 승인·비내부 심사 센터 + 판매 중 상품(NULL 상품 제외), 롤백은 approving 주문이 있으면 중단", () => {
+    const gate = nonComment(read("fix_nicepay_gate_reviewer_flag_20261029.sql")); const gateRb = nonComment(read("rollback_fix_nicepay_gate_reviewer_flag_20261029.sql"));
+    expect(gate).toMatch(/p_center_id is not null and p_product_id is not null/); expect(gate).toMatch(/c\.is_nicepay_review and c\.status = 'approved' and not c\.is_internal/);
+    expect(gate).toMatch(/pr\.center_id = p_center_id and pr\.is_active and pr\.is_on_sale/);
+    expect(gateRb).toMatch(/payment_provider = 'nicepay' and status = 'approving'/); expect(gateRb).toContain("승인 선점 상태(approving)");
+    expect(gateRb.indexOf("v_inflight")).toBeLessThan(gateRb.indexOf("execute v_new"));
   });
 });

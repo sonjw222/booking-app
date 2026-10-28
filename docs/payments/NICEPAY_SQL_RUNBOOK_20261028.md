@@ -16,6 +16,7 @@
 | fix_nicepay_claim_gate_20261017 | 이력 없음 | v8 provider_support 가 같은 검사(`nicepay_checkout_mode()`)를 이미 포함 | **불필요**(건너뜀) |
 | preflight_nicepay_patch_targets_20261016 | 읽기 전용 | - | 필요 시 읽기 전용 실행 |
 | add_public_storefront_product_periods_20261027 | 없음(운영에 `fetch_public_storefront_product_periods` 없음) | - | **아직 적용되지 않음**(선택) |
+| fix_accounts_insert_privileged_columns_20261030 | PR #245 로 운영 적용(2026-10-27) | `trg_accounts_insert_privileged_columns` 존재, 함수 해시 `d56ce810…` | **이미 적용됨 — 다시 실행하지 않음** |
 | add_nicepay_review_center_isolation_20261028 | 없음(`centers.is_nicepay_review` 없음) | - | **아직 적용되지 않음** |
 | (신규) fix_nicepay_gate_reviewer_flag_20261029 | 없음 | 운영에 적용된 두 함수가 토스용 `pg_checkout_override` 로 심사관 판별 | **B안으로 인해 수정 필요** |
 - 정의 해시(P0) 대조: **PASS** — 운영에서 읽기 전용(SELECT)으로 실행한 결과 `center_rows_visible`·`fetch_public_storefront_products`·`fetch_purchasable_products` 의 정의 해시 3개가 기대값과 모두 일치. P0b(`verify_fix_refund_pg_origin_guard_20261017`) 7개 항목 전부 true → PASS. 상세: `docs/payments/NICEPAY_PREFLIGHT_20261029.md`.
@@ -28,14 +29,14 @@
 | P0b | `verify_fix_refund_pg_origin_guard_20261017.sql`(읽기 전용) | 이력 없는 환불 가드 패치의 실제 적용 확인 | 파일 기대값 | - |
 | P1(선택) | `add_public_storefront_product_periods_20261027.sql` | 공개 기간 RPC | 같은 파일 말미 | `rollback_add_public_storefront_product_periods_20261027.sql` |
 | P2 | `add_nicepay_review_center_isolation_20261028.sql` | 센터 분리 + **전용 권한 컬럼** | `verify_add_nicepay_review_center_isolation_20261028.sql` | `rollback_add_nicepay_review_center_isolation_20261028.sql`(P2b 가 남아 있거나 공개 가능한 심사 센터가 있으면 중단) |
-| P2b | `fix_nicepay_gate_reviewer_flag_20261029.sql` | 운영 적용된 게이트 함수 2개의 심사관 판별을 "전용 권한 + 주문의 실제 센터·상품이 심사 대상"으로(정의 해시가 예상과 다르면 중단) | `verify_fix_nicepay_gate_reviewer_flag_20261029.sql` | `rollback_fix_nicepay_gate_reviewer_flag_20261029.sql`(게이트 mode 가 off 가 아니면 중단) |
+| P2b | `fix_nicepay_gate_reviewer_flag_20261029.sql` | 운영 적용된 게이트 함수 2개의 심사관 판별을 "전용 권한 + 주문의 실제 센터·상품이 심사 대상(승인·비내부 심사 센터의 판매 중 상품, 상품 NULL 제외)"으로(정의 해시가 예상과 다르면 중단) | `verify_fix_nicepay_gate_reviewer_flag_20261029.sql` | `rollback_fix_nicepay_gate_reviewer_flag_20261029.sql`(게이트 mode 가 off 가 아니거나 승인 선점 중(approving) NICEPAY 주문이 있으면 중단) |
 | P3(별도 승인) | `seed_nicepay_review_center_20261028.sql` | 심사 센터 1·상품 3(값 확정 필요) | verify 의 review_centers=1 | 데이터 보존(삭제는 별도 승인) |
 | P3(별도 승인) | `update accounts set nicepay_review_access = true where auth_id = (select id from auth.users where email = 'sonjw222@naver.com');` | 심사관 지정 | verify 의 reviewer_accounts=1 | `= false` |
 | 심사 종료 | `close_nicepay_review_20261029.sql` | 권한 해제·게이트 off·센터 비공개·대기 주문 정리 | 파일 말미 확인 쿼리 | - |
 **이미 적용돼 다시 실행하지 않는 SQL**: 준비 브랜치의 `fix_refund_server_path_fail_closed`·`fix_refund_amount_integrity`·`fix_orders_insert_role_guard`·`add_nicepay_checkout_gate`·`add_nicepay_provider_support`·`fix_create_order_secure_allow_nicepay`(위 표). 로컬 격리 DB 에서는 이 6개 + `fix_refund_pg_origin_guard` 를 이 순서로 적용한 뒤 P2·P2b 를 검증했다.
 - **의존관계**: P2b 는 P2 의 `accounts.nicepay_review_access` 가 먼저 있어야 하고(없으면 중단), 운영에 이미 있는 게이트(`add_nicepay_checkout_gate`)·`add_nicepay_provider_support`(v8)가 있어야 한다. P2 는 `pg_checkout_override` 에 의존하지 않는다(B안). 게이트 mode 가 `off`(현재) 이면 P2b 는 동작 차이가 없다.
 - **실행 시점 점검**: P2 는 시작 시 3개 함수(`center_rows_visible`·`fetch_public_storefront_products`·`fetch_purchasable_products`)의 현재 정의 해시가 "적용 전 운영 정의" 또는 "이 파일 적용본" 중 하나가 아니면 아무것도 바꾸지 않고 중단한다. P2b 도 대상 2개 함수의 해시가 적용 전/적용본이 아니면 중단하고, 치환 위치가 정확히 1곳이 아니거나 치환 결과 해시가 기대값과 다르면 트랜잭션 전체가 롤백된다.
-- **롤백 순서(역순)**: ① `close_…`(권한 해제·게이트 off·센터 비공개) → ② P2b 롤백(게이트 mode 가 off 일 때만) → ③ P2 롤백(P2b 가 남아 있으면 중단). 심사 종료 SQL 은 선점·거래·검토 흔적이 전혀 없는 대기(pending) 주문만 취소하고, 결제 진행 중(approving)·결제 완료 주문은 건드리지 않는다.
+- **롤백 순서(역순)**: ① `close_…`(권한 해제·게이트 off·센터 비공개) → ② P2b 롤백(게이트 mode 가 off 일 때만) → ③ P2 롤백(P2b 가 남아 있으면 중단; accounts 보호 트리거와 그 의존 함수 `enforce_nicepay_review_access_admin_only`·`nicepay_is_client_request` 는 데이터 보존을 위해 남긴다). 심사 종료 SQL 은 선점·거래·검토 흔적이 전혀 없는 대기(pending) 주문만 취소하고, 결제 진행 중(approving)·결제 완료 주문은 건드리지 않는다.
 
 심사관 지정은 반드시 P2 → P2b 이후에 한다(P2b 이전에 켜면 게이트가 토스 계정 기준이라 NICEPAY 심사관이 결제 게이트를 통과하지 못한다).
 
@@ -482,7 +483,7 @@ select (select count(*) from centers where is_nicepay_review) as review_centers,
 --   방법 ① SQL Editor: update centers set is_internal = true where is_nicepay_review;   -- 심사 센터 행만. 기존 운영 센터 변경 없음(is_internal 은 별도 보호 트리거가 없다)
 --   방법 ② 플랫폼 관리자 계정으로 센터 승인 상태를 되돌림(status 는 guard_center_status_change 트리거가 플랫폼 관리자만 변경 허용 — SQL Editor 의 postgres 로는 변경 불가).
 --   그 뒤 이 스크립트를 실행한다. (심사 센터 데이터는 삭제하지 않는다.)
--- 남기는 것: accounts.nicepay_review_access 컬럼·보호 트리거(INSERT·UPDATE 모두 보호, 값이 있을 수 있어 데이터 보존. 완전 제거는 별도 승인), centers.is_nicepay_review 컬럼.
+-- 남기는 것: accounts.nicepay_review_access 컬럼·보호 트리거(INSERT·UPDATE 모두 보호, 값이 있을 수 있어 데이터 보존. 완전 제거는 별도 승인)와 그 트리거가 의존하는 함수 2개(enforce_nicepay_review_access_admin_only, nicepay_is_client_request), centers.is_nicepay_review 컬럼.
 -- 복원 규칙(기간 RPC): 분리 SQL 이 그 함수를 새로 만들었다면(함수 주석 표식) 삭제, 분리 SQL 적용 전부터 있었다면 add_public_storefront_product_periods_20261027.sql 정의로 복원.
 BEGIN;
 do $$
@@ -657,7 +658,7 @@ $$;$f$;
   end if;
 end $do$;
 drop function if exists nicepay_class_has_my_reservation(uuid);
-drop function if exists nicepay_is_client_request();
+-- nicepay_is_client_request() 는 삭제하지 않는다: 남기는 accounts 보호 트리거(enforce_nicepay_review_access_admin_only)가 호출한다. 지우면 롤백 뒤 권한 컬럼을 건드리는 모든 INSERT/UPDATE(관리자·서버·SQL Editor 포함)가 "function does not exist" 로 실패한다.
 drop function if exists nicepay_review_guard_center();
 drop function if exists enforce_center_nicepay_review_admin_only();
 drop function if exists nicepay_review_center_member_allowed(uuid);
@@ -676,7 +677,7 @@ COMMIT;
 --   · nicepay_claim_order(uuid)      — 20261017151331_add_nicepay_provider_support_20261016_v8 (승인 선점)
 -- 변경(두 함수 모두, 문자열 치환 2곳씩 — 다른 로직은 바꾸지 않는다):
 --   ① 판별 권한: pg_checkout_override → nicepay_review_access (토스 심사 계정이 NICEPAY 주문을 만들 수 없게)
---   ② 대상 검증: reviewer 모드에서는 "주문의 실제 센터와 상품이 심사 센터(centers.is_nicepay_review)인지"도 확인한다(nicepay_order_is_review_target).
+--   ② 대상 검증: reviewer 모드에서는 "주문의 실제 센터와 상품이 심사 대상인지"도 확인한다(nicepay_order_is_review_target: 승인·비내부 심사 센터 + 그 센터의 판매 중 상품, 상품 NULL 은 제외).
 --      권한만 보면 심사관 계정이 운영 센터 주문으로도 NICEPAY 결제 게이트를 통과할 수 있다(센터 분리 SQL 의 트리거가 없거나 서버(service_role) 경로로 만든 주문이면 막는 곳이 없다).
 --   public/off 모드, 과거 결제 처리(이미 approving 인 주문의 승인 기록·확정·취소·release·환불), service_role 의 주문 생성 경로는 바뀌지 않는다.
 -- 안전장치(덮어쓰기 방지): 대상 두 함수의 "현재 정의 해시"가 ⓐ 적용 전 운영 정의(2026-10-29 읽기 전용 조회 값) 또는 ⓑ 이 파일을 적용한 결과 정의와 정확히 같을 때만 진행한다.
@@ -699,12 +700,15 @@ begin
     if to_regprocedure('public.nicepay_checkout_mode()') is null then
         raise exception 'nicepay_checkout_mode() 가 없어요 — NICEPAY 게이트 SQL 이 적용돼 있어야 해요';
     end if;
-    -- 대상 판정 helper(심사 센터이고, 상품이 있으면 그 센터의 상품). 이 함수는 두 게이트 함수(소유자 권한)만 호출한다.
+    -- 대상 판정 helper — reviewer 모드 전용. 모두 만족해야 "심사 대상 주문"이다:
+    --   · 센터가 심사 센터이고 승인(approved)·비내부 상태(심사관에게 실제로 열려 있는 센터. 닫힌/비승인 센터의 대기 주문은 선점 불가)
+    --   · 상품이 있고(NULL 상품 주문은 서버가 계산한 금액이 없어 심사 결제 대상이 아니다 — 앱은 항상 product_id 를 보낸다), 그 센터의 상품이며, 판매 중(is_active·is_on_sale: create_order_secure 와 member_can_purchase_product 의 구매 조건과 동일)
+    -- 이 함수는 두 게이트 함수(소유자 권한)만 호출한다. public/off 모드와 이미 approving 인 주문의 후속 처리는 이 함수를 쓰지 않는다.
     create or replace function public.nicepay_order_is_review_target(p_center_id uuid, p_product_id uuid)
     returns boolean language sql stable security definer set search_path = public as $f$
-        select p_center_id is not null
-           and exists (select 1 from centers c where c.id = p_center_id and c.is_nicepay_review)
-           and (p_product_id is null or exists (select 1 from products pr where pr.id = p_product_id and pr.center_id = p_center_id));
+        select p_center_id is not null and p_product_id is not null
+           and exists (select 1 from centers c where c.id = p_center_id and c.is_nicepay_review and c.status = 'approved' and not c.is_internal)
+           and exists (select 1 from products pr where pr.id = p_product_id and pr.center_id = p_center_id and pr.is_active and pr.is_on_sale);
     $f$;
     revoke all on function public.nicepay_order_is_review_target(uuid, uuid) from public, anon, authenticated;
 
@@ -752,6 +756,7 @@ select p.proname,
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'public' and p.proname in ('orders_guard_nicepay_create', 'nicepay_claim_order') order by 1;
 select to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)') is not null as helper_exists,
+       (select position('is_on_sale' in pg_get_functiondef(to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)'))) > 0 and position('is_internal' in pg_get_functiondef(to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)'))) > 0 and position('p_product_id is not null' in pg_get_functiondef(to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)'))) > 0) as helper_requires_approved_center_and_on_sale_product,
        not has_function_privilege('public', to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)')::oid, 'execute') as helper_not_executable_by_public,
        not has_function_privilege('authenticated', to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)')::oid, 'execute') as helper_not_executable_by_authenticated,
        (select mode from nicepay_checkout_gate where id) as gate_mode_info;
@@ -762,16 +767,22 @@ select to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)') is no
 -- fix_nicepay_gate_reviewer_flag_20261029.sql 되돌리기: 두 게이트 함수를 적용 전 운영 정의로 복원하고 helper 를 삭제한다.
 -- ⚠ 안전장치: 게이트 mode 가 'off' 가 아니면 오류로 중단한다(reviewer/public 모드에서 판별 로직을 되돌리면 진행 중인 심사 결제의 승인 선점 판정이 도중에 바뀐다).
 --   먼저 mode 를 off 로 닫고(close_nicepay_review_20261029.sql 또는 update nicepay_checkout_gate set mode='off'), 진행 중(approving) 거래가 없는지 확인한 뒤 실행한다.
+-- ⚠ 진행 중 거래 안전장치: payment_provider='nicepay' 이고 status='approving'(승인 선점 후 미해소) 주문이 하나라도 있으면 아무것도 바꾸지 않고 중단한다.
 -- ⚠ 되돌리면 토스 심사 계정(pg_checkout_override)이 mode='reviewer' 에서 NICEPAY 주문을 만들 수 있게 되고, 심사 센터 소속 검증이 사라진다(mode 가 off 인 동안은 영향 없음).
 -- 복원 결과 정의 해시가 적용 전 운영 정의와 다르면(또는 현재 정의가 이 파일 적용본이 아니면) 아무것도 바꾸지 않고 중단한다.
 begin;
 do $$
 declare
-    r record; v_def text; v_new text; v_h text; v_mode text;
+    r record; v_def text; v_new text; v_h text; v_mode text; v_inflight int;
 begin
     select mode into v_mode from nicepay_checkout_gate where id;
     if v_mode is distinct from 'off' then
         raise exception '롤백 중단: NICEPAY 게이트 mode 가 off 가 아니에요(현재 %). 먼저 mode 를 off 로 닫고 진행 중 거래가 없는지 확인하세요.', coalesce(v_mode, 'NULL');
+    end if;
+    -- 진행 중(승인 선점 후 결과 미확정) NICEPAY 거래가 하나라도 있으면 중단: approving 주문은 아직 승인/취소/release 중 하나로 해소되지 않았다.
+    select count(*) into v_inflight from orders where payment_provider = 'nicepay' and status = 'approving';
+    if v_inflight > 0 then
+        raise exception '롤백 중단: 승인 선점 상태(approving)의 NICEPAY 주문이 %건 있어요. 승인 확정·취소·release 로 모두 해소된 뒤 다시 실행하세요.', v_inflight;
     end if;
     for r in
         select * from (values
@@ -946,5 +957,5 @@ select
 ```
 
 
-## 별도 보안 초안(NICEPAY 와 독립 · 미실행) — accounts INSERT 특권 컬럼 보호
-파일: `fix_accounts_insert_privileged_columns_20261030.sql`(+`rollback_…`, `verify_…`). 가입 시점에 `is_platform_admin`·`pg_checkout_override`·`merged_into` 를 지정하는 우회를 막는다. 상세·재현 결과: `docs/payments/NICEPAY_SQL_FINAL_REVIEW.md` §8. 적용 여부·시점은 별도 결정(권장: NICEPAY 와 무관하게 우선 검토).
+## 참고: accounts INSERT 특권 컬럼 보호 — **이미 운영 적용됨(PR #245), 실행하지 않는다**
+`trg_accounts_insert_privileged_columns` 가 운영에 존재한다(읽기 전용 확인: 트리거 1개, 함수 정의 md5 `d56ce810f4e22a531087e56d0160fbc9`; 적용 SQL SHA-256 `b8c77b4b…19af`, 2026-10-27 적용). 저장소의 `fix_accounts_insert_privileged_columns_20261030.sql`(+`rollback_…`, `verify_…`)은 적용본과 같은 내용이며, 위 실행 순서(P0~P3)에는 포함되지 않는다. 상세: `docs/payments/NICEPAY_SQL_FINAL_REVIEW.md` §8.

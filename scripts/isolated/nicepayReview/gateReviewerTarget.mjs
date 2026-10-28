@@ -14,6 +14,8 @@ const { data: prods } = await svc.from("products").select("id,center_id,name"); 
 const setMode = (m) => psql(`update nicepay_checkout_gate set mode='${m}', updated_at=now() where id`);
 const nic = (who, center, product) => ({ center_id: center, profile_id: who.profile, product_id: product, product_name: "x", amount: 1000, pay_method: "card", payment_provider: "nicepay" });
 const tryIns = async (who, center, product) => { const r = await who.c.from("orders").insert(nic(who, center, product)).select("id").single(); if (!r.error) await svc.from("orders").delete().eq("id", r.data.id); return r.error ? "DENIED" : "CREATED"; };
+// 시험이 만든 NICEPAY 주문 정리(로컬 전용): append-only 감사 테이블(nicepay_review_actions)이 주문을 참조하므로 복제 롤(트리거·FK 우회)로 지운다.
+const cleanOrders = (ids) => psql(`begin; set local session_replication_role = replica; delete from nicepay_review_actions where order_id in (${ids.map((i) => `'${i}'`).join(",")}); delete from orders where id in (${ids.map((i) => `'${i}'`).join(",")}); commit;`);
 const original = psql("select mode from nicepay_checkout_gate");
 try {
   psql("drop trigger if exists trg_orders_nicepay_review_guard on orders");   // P2 의 방어를 빼고 게이트(P2b) 단독 동작을 본다
@@ -33,6 +35,30 @@ try {
   expectEq("K1", "reviewer 승인 선점: 심사관 + 심사 센터 주문", "CLAIMED", await claim(sBr.data.id));
   expectEq("K2", "reviewer 승인 선점: 심사관이지만 운영 센터 대기 주문(새로 막히는 경로)", "NULL", await claim(sBo.data.id));
   expectEq("K3", "reviewer 승인 선점: 일반 회원 대기 주문", "NULL", await claim(sAo.data.id));
+  // ── 심사 대상 조건: 상품 NULL · 판매 중지 상품 · 닫힌/비승인 센터 (reviewer 모드) ──
+  const mkRaw = async (row) => (await svc.from("orders").insert(row).select("id").single());
+  expectEq("N1", "reviewer: 심사관이 상품 NULL 로 심사 센터 NICEPAY 주문 직접 생성(서버 계산 금액 없음)", "DENIED", await tryIns(B, REV, null));
+  const nBr = await mkRaw(nic(B, REV, null)); expectEq("N2", "reviewer: 서버가 만든 상품 NULL 대기 주문의 승인 선점", "NULL", nBr.error ? "ERR" : await claim(nBr.data.id));
+  const d1 = await mk(B, REV, revProd);                                  // 판매 중일 때 만든 대기 주문
+  psql(`update products set is_on_sale=false where id='${revProd}'`);
+  expectEq("P1", "reviewer: 판매 중지된 심사 상품 주문 직접 생성", "DENIED", await tryIns(B, REV, revProd));
+  expectEq("P2", "reviewer: 판매 중지 전에 만든 대기 주문의 승인 선점", "NULL", await claim(d1.data.id));
+  psql(`update products set is_on_sale=true, is_active=false where id='${revProd}'`);
+  expectEq("P3", "reviewer: 비활성(is_active=false) 심사 상품 주문 직접 생성", "DENIED", await tryIns(B, REV, revProd));
+  expectEq("P4", "reviewer: 비활성 상품 대기 주문의 승인 선점", "NULL", await claim(d1.data.id));
+  psql(`update products set is_active=true where id='${revProd}'`);
+  expectEq("P5", "reviewer: 상품을 다시 판매 중으로 되돌리면 같은 대기 주문 승인 선점 가능(영구 차단 아님)", "CLAIMED", await claim(d1.data.id));
+  await svc.rpc("nicepay_release_order", { p_order_id: d1.data.id, p_claim_id: (await svc.from("orders").select("pg_claim_id").eq("id", d1.data.id).single()).data.pg_claim_id, p_basis: "approve_rejected" });
+  psql(`update centers set is_internal=true where id='${REV}'`);
+  expectEq("C1", "reviewer: 비공개(is_internal) 로 닫힌 심사 센터 주문 직접 생성", "DENIED", await tryIns(B, REV, revProd));
+  expectEq("C2", "reviewer: 닫힌 심사 센터의 대기 주문 승인 선점", "NULL", await claim(d1.data.id));
+  psql(`update centers set is_internal=false where id='${REV}'`);
+  psql(`alter table centers disable trigger trg_guard_center_status; update centers set status='pending' where id='${REV}'; alter table centers enable trigger trg_guard_center_status`);
+  expectEq("C3", "reviewer: 비승인(pending) 심사 센터의 대기 주문 승인 선점", "NULL", await claim(d1.data.id));
+  psql(`alter table centers disable trigger trg_guard_center_status; update centers set status='approved' where id='${REV}'; alter table centers enable trigger trg_guard_center_status`);
+  expectEq("C4", "reviewer: 센터를 승인·공개로 되돌리면 정상 주문 승인 선점 가능", "CLAIMED", await claim(d1.data.id));
+  const c4 = (await svc.from("orders").select("pg_claim_id").eq("id", d1.data.id).single()).data.pg_claim_id; await svc.rpc("nicepay_release_order", { p_order_id: d1.data.id, p_claim_id: c4, p_basis: "approve_rejected" });
+  cleanOrders([nBr.data.id, d1.data.id].filter(Boolean));
   // 이미 approving 인 주문의 후속 처리는 게이트와 무관하게 마무리된다(off 로 전환한 뒤에도) — release 로 확인
   const { data: claimed } = await svc.from("orders").select("pg_claim_id,status").eq("id", sBr.data.id).single(); setMode("off");
   const rel = await svc.rpc("nicepay_release_order", { p_order_id: sBr.data.id, p_claim_id: claimed.pg_claim_id, p_basis: "approve_rejected" });
@@ -43,7 +69,7 @@ try {
   expectEq("G8", "public: 일반 회원 주문 생성(기존 동작 유지)", "CREATED", await tryIns(A, OP, opProd));
   expectEq("K6", "public: 일반 회원 대기 주문 승인 선점(기존 동작 유지)", "CLAIMED", await claim(sAo.data.id));
   expectEq("K7", "public: 심사관의 운영 센터 대기 주문도 public 에서는 선점 가능(public 은 대상 제한 없음 — 기존 동작)", "CLAIMED", await claim(sBo.data.id));
-  await svc.from("orders").delete().in("id", [sBr.data.id, sBo.data.id, sAo.data.id]);
-} finally { setMode(original); psql(null, "add_nicepay_review_center_isolation_20261028.sql"); }   // 모드 원복 + P2 트리거 복구(멱등 재적용)
+  cleanOrders([sBr.data.id, sBo.data.id, sAo.data.id]);
+} finally { try { psql(`update products set is_on_sale=true, is_active=true where id in (select id from products where center_id in (select id from centers where is_nicepay_review))`); psql(`update centers set is_internal=false where is_nicepay_review`); } catch {} setMode(original); psql(null, "add_nicepay_review_center_isolation_20261028.sql"); }   // 모드 원복 + P2 트리거 복구(멱등 재적용)
 expectEq("Z1", "시험 종료 후 모드 원복 및 P2 주문 방어 트리거 복구", `${original}/1`, `${psql("select mode from nicepay_checkout_gate")}/${psql("select count(*) from pg_trigger where tgname='trg_orders_nicepay_review_guard'")}`);
 console.log(`\n${results.filter((x) => x.pass).length}/${results.length} PASS, ${failures} FAIL`); if (process.argv[2]) fs.writeFileSync(process.argv[2], JSON.stringify({ failures, results }, null, 1)); process.exit(failures ? 1 : 0);

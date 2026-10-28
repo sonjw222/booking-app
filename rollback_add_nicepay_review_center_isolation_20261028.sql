@@ -4,7 +4,7 @@
 --   방법 ① SQL Editor: update centers set is_internal = true where is_nicepay_review;   -- 심사 센터 행만. 기존 운영 센터 변경 없음(is_internal 은 별도 보호 트리거가 없다)
 --   방법 ② 플랫폼 관리자 계정으로 센터 승인 상태를 되돌림(status 는 guard_center_status_change 트리거가 플랫폼 관리자만 변경 허용 — SQL Editor 의 postgres 로는 변경 불가).
 --   그 뒤 이 스크립트를 실행한다. (심사 센터 데이터는 삭제하지 않는다.)
--- 남기는 것: accounts.nicepay_review_access 컬럼·보호 트리거(INSERT·UPDATE 모두 보호, 값이 있을 수 있어 데이터 보존. 완전 제거는 별도 승인), centers.is_nicepay_review 컬럼.
+-- 남기는 것: accounts.nicepay_review_access 컬럼·보호 트리거(INSERT·UPDATE 모두 보호, 값이 있을 수 있어 데이터 보존. 완전 제거는 별도 승인)와 그 트리거가 의존하는 함수 2개(enforce_nicepay_review_access_admin_only, nicepay_is_client_request), centers.is_nicepay_review 컬럼.
 -- 복원 규칙(기간 RPC): 분리 SQL 이 그 함수를 새로 만들었다면(함수 주석 표식) 삭제, 분리 SQL 적용 전부터 있었다면 add_public_storefront_product_periods_20261027.sql 정의로 복원.
 BEGIN;
 do $$
@@ -179,7 +179,7 @@ $$;$f$;
   end if;
 end $do$;
 drop function if exists nicepay_class_has_my_reservation(uuid);
-drop function if exists nicepay_is_client_request();
+-- nicepay_is_client_request() 는 삭제하지 않는다: 남기는 accounts 보호 트리거(enforce_nicepay_review_access_admin_only)가 호출한다. 지우면 롤백 뒤 권한 컬럼을 건드리는 모든 INSERT/UPDATE(관리자·서버·SQL Editor 포함)가 "function does not exist" 로 실패한다.
 drop function if exists nicepay_review_guard_center();
 drop function if exists enforce_center_nicepay_review_admin_only();
 drop function if exists nicepay_review_center_member_allowed(uuid);

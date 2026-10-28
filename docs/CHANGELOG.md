@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-30 — NICEPAY P2 롤백 결함·P2b 심사 대상 조건·P2b 롤백 안전·운영 현황 정정 (로컬 수정·검증만, 운영·공유 DEV 미실행)
+- **P2 롤백 결함 수정**: 롤백이 남기는 accounts 보호 트리거가 호출하는 `nicepay_is_client_request()` 를 삭제해 롤백 뒤 권한 컬럼 변경이 모두 "function does not exist" 로 실패 → 함수 유지(수정 전 20/26 → 26/26). 롤백 시험이 놓친 이유와 새 시험(S2d·R4b·R4c·post-rollback accountsFlagGuard)은 `NICEPAY_SQL_FINAL_REVIEW.md` 머리말.
+- P2b `nicepay_order_is_review_target`: 상품 NULL 제외 + 승인·비내부 심사 센터 + 판매 중 상품만 대상. 수정 전 21/28 → 28/28.
+- P2b 롤백: 승인 선점 중(approving) NICEPAY 주문이 있으면 중단(mode=off 에 추가).
+- 운영 현황 정정: `trg_accounts_insert_privileged_columns` 는 PR #245 로 운영 적용 완료(읽기 전용 재확인, 함수 해시 일치). 브랜치의 다른 초안 파일을 적용본으로 교체하고 중복 적용 안내·TODO 항목 제거. 로컬 격리 DB(`setupLocal.sh`)도 운영과 같게 이 트리거를 먼저 적용.
 ## 2026-10-30 — NICEPAY P2·P2b SQL 독립 리뷰 지적사항 반영 (로컬 수정·검증만, 운영·공유 DEV 미실행)
 - P2 `nicepay_review_guard_center()`: 센터↔상품(주문·수강권·장바구니·구매신청), 수업↔수강권 센터(예약) **일치 검사** 추가 — 운영 센터끼리 ID 를 섞어도 거부(NULL 허용 흐름은 비교 제외). 기존 제약으로는 보장되지 않음을 확인(FK/CHECK 없음, 매니저 RPC 는 수강권을 id 로만 조회). 수정 전 13/19(6건 결함 재현) → 수정 후 19/19.
 - P2b: `reviewer` 모드에서 전용 권한뿐 아니라 **주문의 실제 센터·상품이 심사 대상**인지 확인(`nicepay_order_is_review_target`), `nicepay_claim_order` 도 동일. off/public·서버(service_role)·진행 중(approving) 주문 처리 유지. 17/17.

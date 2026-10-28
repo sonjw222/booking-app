@@ -17,7 +17,7 @@ q "update centers set is_internal=true where is_nicepay_review" >/dev/null 2>&1
 PQ < rollback_fix_nicepay_gate_reviewer_flag_20261029.sql >/dev/null 2>&1; PQ < rollback_add_nicepay_review_center_isolation_20261028.sql >/dev/null 2>&1
 q "drop trigger if exists trg_accounts_nicepay_review_access_admin_only on accounts" >/dev/null 2>&1   # 데이터 보존용으로 남는 보호 트리거도 지워 완전한 "적용 전" 상태에서 시작
 q "alter table accounts drop column if exists nicepay_review_access" >/dev/null 2>&1   # 로컬 시험용: "P2 적용 전(컬럼 없음)" 상태를 만든다(롤백은 데이터 보존을 위해 컬럼을 남기므로)
-BASE=$(snap); R0=$(resid); echo "[기준] 기존 함수 5개 정의 해시 기록. 잔여물(컬럼/함수/트리거/정책) = $R0 — 컬럼 1(is_nicepay_review: 롤백이 데이터 보존용으로 남김)·함수 1(accounts 보호 함수: 같은 이유로 남김)이 기준값"
+BASE=$(snap); R0=$(resid); echo "[기준] 기존 함수 5개 정의 해시 기록. 잔여물(컬럼/함수/트리거/정책) = $R0 — 컬럼 1(is_nicepay_review: 롤백이 데이터 보존용으로 남김)·함수 2(accounts 보호 트리거가 의존하는 enforce_nicepay_review_access_admin_only·nicepay_is_client_request: 같은 이유로 남김)가 기준값"
 python3 - "$TMP" <<'PY'
 import sys
 s=open('add_nicepay_review_center_isolation_20261028.sql').read(); T=sys.argv[1]+'/'
@@ -51,6 +51,11 @@ PQ < close_nicepay_review_20261029.sql 2>&1 | grep -E "^(BEGIN|UPDATE|COMMIT)" |
 echo "[R2b] 닫은 뒤 익명 직접 조회: $(anon) (기대 0/0/0), 기존 데이터 지문 변화 없음: $([ "$X0" = "$(q "$DATA")" ] && echo YES || echo NO)"
 echo "[R3] P2b 롤백 오류 $(PQ < rollback_fix_nicepay_gate_reviewer_flag_20261029.sql 2>&1 | grep -c ERROR)건 → 게이트 함수 $(PQ < verify_fix_nicepay_gate_reviewer_flag_20261029.sql | tr '\n' ' ')(옛 플래그 복원: 새 플래그 f / 옛 플래그 t)"
 echo "[R4] P2 롤백 오류 $(PQ < rollback_add_nicepay_review_center_isolation_20261028.sql 2>&1 | grep -c ERROR)건 → 정책/보호트리거(정확한 이름)/신규 함수 잔여 $(q "select (select count(*) from pg_policies where policyname in ('nicepay_review_isolation','nicepay_own_reservation_class'))||'/'||(select count(*) from pg_trigger where not tgisinternal and tgname ~ '^trg_(centers|accounts|orders|memberships|cart_items|purchase_requests|reservations)_nicepay_review_')||'/'||(select count(*) from pg_proc where proname like 'nicepay_review_center_%' or proname='nicepay_is_reviewer')") (기대 0/1/0 — accounts 보호 트리거만 데이터 보존용으로 남음)"
+echo "[R4b] P2 롤백 뒤 남은 P2 함수(보호 트리거가 의존하는 것만 남아야 함): $(q "select string_agg(proname, ',' order by proname) from pg_proc where proname in ('nicepay_is_reviewer','nicepay_review_center_allowed','nicepay_review_center_member_allowed','nicepay_class_has_my_reservation','nicepay_review_guard_center','enforce_center_nicepay_review_admin_only','enforce_nicepay_review_access_admin_only','nicepay_is_client_request')") (기대 enforce_nicepay_review_access_admin_only,nicepay_is_client_request)"
+UID_=$(q "select auth_id from accounts where auth_id is not null limit 1")
+CL="set_config('request.jwt.claims','{\"sub\":\"$UID_\",\"role\":\"authenticated\"}',true)"
+r4c() { PQ -v ON_ERROR_STOP=1 -c "begin; $1; rollback;" >/dev/null 2>$TMP/r4c.err && echo "허용" || echo "거부($(grep -o 'ERROR:.*' $TMP/r4c.err | head -1 | cut -c1-70))"; }
+echo "[R4c] P2 롤백 뒤 계정 보호(트리거 유지 확인): 일반 계정이 본인 심사 권한을 true 로 UPDATE → $(r4c "set local role authenticated; select $CL; update accounts set nicepay_review_access = true where auth_id = '$UID_'") (기대 거부: 이 값은 운영자만 변경할 수 있어요) / 일반 계정의 평소 UPDATE(권한 값 불변) → $(r4c "set local role authenticated; select $CL; update accounts set name = name where auth_id = '$UID_'") (기대 허용) / SQL Editor(postgres) 의 권한 부여·해제 → $(r4c "update accounts set nicepay_review_access = true where auth_id = '$UID_'; update accounts set nicepay_review_access = false where auth_id = '$UID_'") (기대 허용)"
 echo "[R5] 롤백 후 익명 직접 조회: $(anon) (기대 0/0/0 — 센터가 닫혀 있어 분리 정책 없이도 비공개), 기존 데이터 지문 동일: $([ "$X0" = "$(q "$DATA")" ] && echo YES || echo NO)"
 q "update centers set is_internal=false where is_nicepay_review" >/dev/null
 echo "[R6] (대조) 분리 SQL 없이 공개 가능한 심사 센터를 두면 익명 직접 조회: $(anon) ← 롤백 안전장치가 막으려는 위험 상태"
