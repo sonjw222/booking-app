@@ -326,10 +326,10 @@ export default function CouponsPage() {
             <input aria-label="최소 결제 금액" inputMode="numeric" className="input-field" placeholder="예: 100000" value={cMinOrder} onChange={(e) => setCMinOrder(e.target.value)} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>사용 시작일 (선택)</div>
-            <input type="date" className="input-field" value={cValidFrom} onChange={(e) => setCValidFrom(e.target.value)} />
+            <input type="date" aria-label="사용 시작일" className="input-field" value={cValidFrom} onChange={(e) => setCValidFrom(e.target.value)} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>사용 종료일 (선택)</div>
-            <input type="date" className="input-field" value={cValidUntil} onChange={(e) => setCValidUntil(e.target.value)} />
+            <input type="date" aria-label="사용 종료일" className="input-field" value={cValidUntil} onChange={(e) => setCValidUntil(e.target.value)} />
 
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>적용 대상</div>
             <div style={{ display: "flex", gap: 12 }}>

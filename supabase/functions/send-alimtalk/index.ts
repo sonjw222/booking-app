@@ -110,7 +110,12 @@ async function isAuthorizedCaller(authHeader: string | null, centerId: string): 
     .eq("center_id", centerId)
     .eq("status", "active")
     .maybeSingle();
-  return !!mc;
+  if (!mc) return false;
+  // 센터 소속만으로는 부족하다: 화면 메뉴(app/manager/alimtalk)는 message.alimtalk.view 로 가려져 있는데, 서버가 소속만 보면 권한이 없는 직원이
+  // 함수를 직접 호출해 알림톡/SMS(유료 발송)를 보낼 수 있었다(관리자 QA #239, 격리 브라우저 재현). 호출자 본인의 JWT 로 has_permission 을 확인한다
+  // (오너 역할은 이 권한을 가진다 — add_alimtalk_integration.sql). 플랫폼 운영자·service_role(cron)은 위에서 이미 통과했다.
+  const { data: allowed } = await userClient.rpc("has_permission", { p_center_id: centerId, p_permission: "message.alimtalk.view" });
+  return allowed === true;
 }
 
 // "공통"(플랫폼 전체) 템플릿 생성/신청은 센터가 없어 위 isAuthorizedCaller로 판정할 수
