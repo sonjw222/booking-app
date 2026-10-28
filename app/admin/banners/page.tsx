@@ -119,7 +119,7 @@ export default function BannersPage() {
                   {b.linkUrl && <div className="banner-admin-link">→ {b.linkUrl}</div>}
                 </div>
                 <div className="banner-admin-actions">
-                  <button className={`switch ${b.isActive ? "on" : ""}`} onClick={() => handleToggle(b)}>
+                  <button role="switch" aria-checked={b.isActive} aria-label={`배너 노출: ${b.title}`} className={`switch ${b.isActive ? "on" : ""}`} onClick={() => handleToggle(b)}>
                     <span className="knob" />
                   </button>
                   <button className="profile-del" disabled={busy} onClick={() => handleDelete(b)}>삭제</button>

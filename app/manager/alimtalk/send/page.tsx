@@ -16,7 +16,8 @@ import AlimtalkComposer, {
   emptyAlimtalkBlocks, flattenAlimtalkBlocks, hasAlimtalkContent, type AlimtalkBlock,
 } from "../../../components/AlimtalkComposer";
 import { fetchMyCenters, type ManagedCenter } from "../../../../lib/manager";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../../lib/roles";
+import { useCenterPermissionGate } from "../../../../lib/permissionGate";
+import PermissionGateShell from "../../../components/PermissionGateShell";
 import {
   fetchMembers, fetchGrades, sendAlimtalkToMembers, type CenterMember, type Grade,
 } from "../../../../lib/members";
@@ -49,8 +50,6 @@ export default function AlimtalkSendPage() {
   // 전부 채우기 전에는 발송 버튼을 막는다(A-6, 원문 그대로 발송 금지).
   const [manualVars, setManualVars] = useState<Record<string, string>>({});
   const [addonEnabled, setAddonEnabled] = useState(true); // 확인 전까지는 막지 않음(로딩 중 깜빡임 방지)
-  // 발송 화면도 알림톡 메뉴와 같은 권한(message.alimtalk.view)이 필요하다(관리자 QA #239). 권한 확인 전(null)에는 막지 않고, 확인 후 없으면 안내만 보여준다.
-  const [permState, setPermState] = useState<{ centerId: string; keys: Set<string> | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,19 +84,9 @@ export default function AlimtalkSendPage() {
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
 
-  useEffect(() => {
-    const c = centers.find((x) => x.id === centerId);
-    if (!c || c.isOwner) return;
-    let cancelled = false;
-    fetchMyEffectivePermissionKeys(c.managerCenterId, c.roleId)
-      .then((keys) => { if (!cancelled) setPermState({ centerId: c.id, keys }); })
-      .catch(() => { if (!cancelled) setPermState({ centerId: c.id, keys: null }); });
-    return () => { cancelled = true; };
-  }, [centers, centerId]);
-  const activeCenterForPerm = centers.find((x) => x.id === centerId);
-  const canSend: boolean | null = !activeCenterForPerm ? null
-    : activeCenterForPerm.isOwner ? true
-    : permState?.centerId === activeCenterForPerm.id ? canSeeManagerMenu(false, permState.keys, "message.alimtalk.view") : null;
+  // 발송 화면도 알림톡 메뉴와 같은 권한(message.alimtalk.view). 확인 중·확인 실패는 허용이 아니다(fail-closed).
+  const gateRaw = useCenterPermissionGate(centers, centerId, "message.alimtalk.view");
+  const gate = centers.length === 0 && !loading ? "denied" : gateRaw;
 
   // 등급/상태 필터 + 검색(콤마로 여러 명 동시 검색 가능, lib/members.ts의 fetchMembers 참고)
   const loadMembers = useCallback(async () => {
@@ -206,6 +195,7 @@ export default function AlimtalkSendPage() {
       </div>
     );
   }
+  if (gate !== "allowed") return <PermissionGateShell title="알림톡 보내기" backHref="/manager/alimtalk" state={gate} what="알림톡 보내기" centers={centers} centerId={centerId} onSelectCenter={setCenterId} error={error} />;
 
   return (
     <div className="app-shell recipient-page">
@@ -227,17 +217,13 @@ export default function AlimtalkSendPage() {
 
       {error && <div className="daylist-empty" style={{ margin: "0 20px 10px" }}>{error}</div>}
 
-      {canSend === false && (
-        <div className="daylist-empty" style={{ margin: "0 20px 10px" }}>알림톡을 보낼 권한이 없어요. 센터 오너에게 알림톡 관리 권한을 요청하세요.</div>
-      )}
-
       {!loading && !addonEnabled && (
         <div className="daylist-empty" style={{ margin: "0 20px 10px" }}>
           이 센터는 카카오 알림톡/SMS 발송 애드온을 신청하지 않아 발송할 수 없어요. 플랫폼 운영자에게 문의해주세요.
         </div>
       )}
 
-      {addonEnabled && canSend !== false && (
+      {addonEnabled && (
         <>
           <div className="recipient-search">
             <label htmlFor="recipient-search">발송 대상 검색</label>
@@ -297,7 +283,7 @@ export default function AlimtalkSendPage() {
         </>
       )}
 
-      {addonEnabled && canSend !== false && <div className="recipient-sticky-action">
+      {addonEnabled && <div className="recipient-sticky-action">
         <button className="primary-btn" disabled={selectedIds.size === 0 || loading} onClick={() => setComposerOpen(true)}>
           {selectedIds.size}명에게 알림톡 보내기
         </button>

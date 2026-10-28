@@ -193,7 +193,7 @@ export default function SubscriptionPlansPage() {
 
           <div className="set-row">
             <div className="set-label">신규 센터에 후보로 보이기</div>
-            <button className={`switch ${form.isActive ? "on" : ""}`} onClick={() => setForm({ ...form, isActive: !form.isActive })}>
+            <button role="switch" aria-checked={form.isActive} aria-label="신규 센터에 후보로 보이기" className={`switch ${form.isActive ? "on" : ""}`} onClick={() => setForm({ ...form, isActive: !form.isActive })}>
               <span className="knob" />
             </button>
           </div>

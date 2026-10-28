@@ -17,6 +17,8 @@ import SheetOverlay from "../../../components/SheetOverlay";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../../lib/manager";
+import { useCenterPermissionGate } from "../../../../lib/permissionGate";
+import PermissionGateShell from "../../../components/PermissionGateShell";
 import { fetchProducts, type Product } from "../../../../lib/passes";
 import {
   fetchNotificationRules, saveNotificationRule, deleteNotificationRule, fetchAlimtalkTemplates,
@@ -56,6 +58,8 @@ export default function AlimtalkRulesPage() {
   const [draft, setDraft] = useState<NotificationRuleDraft | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
+  const gateRaw = useCenterPermissionGate(centers, centerId, "message.alimtalk.view");
+  const gate = centers.length === 0 && !loading ? "denied" : gateRaw;   // 메뉴와 같은 권한(message.alimtalk.view). 확인 중·실패는 허용이 아니다
 
   useEffect(() => {
     (async () => {
@@ -148,6 +152,8 @@ export default function AlimtalkRulesPage() {
       </div>
     );
   }
+
+  if (gate !== "allowed") return <PermissionGateShell title="자동 발송 규칙" backHref="/manager/alimtalk" state={gate} what="자동 발송 규칙" centers={centers} centerId={centerId} onSelectCenter={setCenterId} error={error} />;
 
   return (
     <div className="app-shell">
