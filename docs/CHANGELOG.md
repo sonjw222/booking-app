@@ -4,6 +4,11 @@
 - `feat/nicepay-main-integration-20261031`: origin/main(f0df513) + NICEPAY 통합 브랜치 병합(문서 충돌만 해소). 결과·충돌 분석·결함 7건 수정: `docs/payments/NICEPAY_MAIN_INTEGRATION_20261031.md`.
 - 수정: 복귀 토큰 게이트의 토스 규칙 → NICEPAY 게이트, 결과 화면 invalid 오표시, 서버 거절 시 즉시 실패 안내, NICEPAY 결제수단 카드 전용, returnUrl EUC-KR 해석, 앱 게이트의 심사 대상 소속 선검사, sandbox 전용 localhost 복귀 주소.
 - 격리 Chromium QA 23건 PASS(모의 SDK·모의 승인 서버, 외부 호출 0): `scripts/isolated/nicepayQa/run.sh`.
+## 2026-10-30 — 관리자 QA #238/#239: 격리 실브라우저 QA 매트릭스 + 결함 3건 수정 (운영·공유 DEV 미변경)
+- #238: 공유 DEV 읽기 전용 재확인(센터 8·플랫폼 관리자 0 → 실환경 QA BLOCKED). 격리 스택 + 같은 러너로 ON 9/OFF 5 PASS(OFF 의 4 는 ON 전용 BLOCKED, 정상). 이슈는 실환경 QA 전까지 열어 둔다.
+- #239: `tests/admin-qa/`(수동 실행, `scripts/isolated/adminQa/run.sh`) Chromium 54건 PASS — 오너 전 액션, 제한 직원 UI·서버 거부, 플랫폼 관리자 /admin/*, 접근성·키보드, 모바일 폭 에뮬레이션. 환불은 관리자 UI 미제공(N/A), 실기기는 BLOCKED. 결과 `docs/qa/admin-qa-238-239-20261030/`.
+- 수정: ① `send-alimtalk` 이 알림톡 권한(message.alimtalk.view) 없이도 센터 소속만으로 발송 허용 → 권한 검사 추가(+회원 목록·발송 화면 숨김). **Edge Function 배포는 별도 승인.** ② 수업 등록 시트 등 폼 컨트롤 접근 가능한 이름(스위치 role/aria, AM/PM select, 쿠폰 날짜, 공지 제목). ③ 수강권 지급 직후 회원 상세 상태 칩 갱신.
+
 ## 2026-10-30 — 보안 후속: 운영 적용 기록 + 격리 스택에 accounts INSERT 보호 자동 설치
 - **문서**: `docs/security/ACCOUNTS_INSERT_PRIVILEGE_20261030.md` 에 운영 적용 기록(병합 SHA·배포·CI·SQL 해시·적용 시각·적용 후 검증)과 "현재 상태 의심 항목 없음 / 과거 악용 여부 확인 불가"의 구분을 추가.
 - **격리 환경 구성 변경**: PR #245 병합 후 새로 만든 격리 스택에 보호가 없음을 확인(검증 24/47) → `isolated-supabase/supabase/migrations/20261030000000_accounts_insert_privileged_columns.sql` 추가(루트 SQL 과 동일 본문), 동일성 시험·parity 도구 허용 목록·환경 구축 문서 반영. 운영 DB·운영 마이그레이션 이력은 변경 없음.

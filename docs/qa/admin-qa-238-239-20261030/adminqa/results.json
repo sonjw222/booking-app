@@ -1,0 +1,2436 @@
+{
+  "config": {
+    "argv": [
+      "/Users/sonjw/.nvm/versions/node/v24.19.0/bin/node",
+      "/Users/sonjw/Documents/mwhabit-automation/worktrees/qa-admin-238-239/node_modules/.bin/playwright",
+      "test",
+      "-c",
+      "playwright.adminqa.config.ts"
+    ],
+    "configFile": "/Users/sonjw/Documents/mwhabit-automation/worktrees/qa-admin-238-239/playwright.adminqa.config.ts",
+    "rootDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/qa-admin-238-239/tests/admin-qa",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/qa-admin-238-239/docs/qa/admin-qa-238-239-20261030/adminqa/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/qa-admin-238-239/tests/admin-qa",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 90000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "docs/qa/admin-qa-238-239-20261030/adminqa/results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "01-classes.spec.ts",
+      "file": "01-classes.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[오너] 수업 생성 — 등록 폼 → 목록 반영 + DB 행",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1132,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:12:58.761Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bb82f166e6f27c70f284-5c9665e05379e75d3673",
+          "file": "01-classes.spec.ts",
+          "line": 15,
+          "column": 5
+        },
+        {
+          "title": "[오너] 수업 수정 — 제목 변경 저장 → DB 반영",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 970,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:00.897Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bb82f166e6f27c70f284-0d6b8ec973510f6654ef",
+          "file": "01-classes.spec.ts",
+          "line": 29,
+          "column": 5
+        },
+        {
+          "title": "[오너] 일정 복사 — 이번 달 수업을 다음 달로 복사 실행 → 복사본 DB 행",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1075,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:01.878Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bb82f166e6f27c70f284-1f0755197c4627f1f7ce",
+          "file": "01-classes.spec.ts",
+          "line": 43,
+          "column": 5
+        },
+        {
+          "title": "[오너] 수업 삭제 — 행의 삭제 → 확인 → DB 에서 사라짐",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 916,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:02.957Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bb82f166e6f27c70f284-891f4953399b68e0f399",
+          "file": "01-classes.spec.ts",
+          "line": 60,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "02-members-passes.spec.ts",
+      "file": "02-members-passes.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[오너] 수강권 지급 — 회원 상세 → 지급하기 → 수강권·결제(서비스) 기록",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "지급 3초 뒤 목록 행=\"CI User A 01012345678 · QA 10회권 (10회) ›\" chips=[\"등급 전체\",\"상태 전체\",\"없음\",\"활성\"]"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4124,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:03.911Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "지급 3초 뒤 목록 행=\"CI User A 01012345678 · QA 10회권 (10회) ›\" chips=[\"등급 전체\",\"상태 전체\",\"없음\",\"활성\"]"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c997e317cf476bdb112c-19749805844bb77acc67",
+          "file": "02-members-passes.spec.ts",
+          "line": 22,
+          "column": 5
+        },
+        {
+          "title": "[오너] 지급 직후 상태 일관성 — 새로고침 뒤 회원 목록 '수강권 없음'/상태 칩이 지급 결과와 일치",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "center_members.status=active; chips on=[\"등급 전체\",\"상태 전체\",\"없음\",\"활성\"]"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1141,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:08.114Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "center_members.status=active; chips on=[\"등급 전체\",\"상태 전체\",\"없음\",\"활성\"]"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c997e317cf476bdb112c-fa4733edc9fe390dd557",
+          "file": "02-members-passes.spec.ts",
+          "line": 44,
+          "column": 5
+        },
+        {
+          "title": "[오너] 수강권 연장 — 연장 버튼 → +30일 → 만료일 변경 저장 → DB 반영",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1127,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:09.259Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c997e317cf476bdb112c-8fd88f5ab3faee3381c5",
+          "file": "02-members-passes.spec.ts",
+          "line": 53,
+          "column": 5
+        },
+        {
+          "title": "[오너] 상품(대여품) 지급 — '+ 상품 지급' → 선택 → 지급하기 → 상품 수강권 행",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1098,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:10.390Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c997e317cf476bdb112c-ed5bc83ec3fd4b3017ce",
+          "file": "02-members-passes.spec.ts",
+          "line": 68,
+          "column": 5
+        },
+        {
+          "title": "[오너] 환불 — 관리자 화면에는 수강권 환불 처리 컨트롤이 없다(회원 본인 환불/PG API 경로) → 해당 없음(N/A) 기록",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "matrix",
+                  "description": "N/A: 회원 상세·결제 탭의 환불 버튼 0개 — 관리자 수동 환불 UI 미제공(docs/23_Admin_Feature_Audit.md E: 부분 환불 UI 없음). 실결제 환불(PG)은 금지 범위라 실행하지 않음"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 952,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:11.492Z",
+                  "annotations": [
+                    {
+                      "type": "matrix",
+                      "description": "N/A: 회원 상세·결제 탭의 환불 버튼 0개 — 관리자 수동 환불 UI 미제공(docs/23_Admin_Feature_Audit.md E: 부분 환불 UI 없음). 실결제 환불(PG)은 금지 범위라 실행하지 않음"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c997e317cf476bdb112c-976e14b961240af750ff",
+          "file": "02-members-passes.spec.ts",
+          "line": 83,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "03-orders.spec.ts",
+      "file": "03-orders.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[오너] 주문 발급 — '확정 · 발급' → 계속하기 → 주문 처리 완료 + 수강권·매출 반영",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "발급된 주문 status=done verified=false"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 963,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:12.483Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "발급된 주문 status=done verified=false"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3b513bd58e8afd71547e-061da867f89358734b5f",
+          "file": "03-orders.spec.ts",
+          "line": 14,
+          "column": 5
+        },
+        {
+          "title": "[오너] 주문 취소 — 남은 대기 주문 '취소' → 확인 → 주문 cancelled, 수강권 미발급",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1109,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:13.552Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "3b513bd58e8afd71547e-1edbe7e332d2ec5bcb2f",
+          "file": "03-orders.spec.ts",
+          "line": 31,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "04-coupons-notices-reviews.spec.ts",
+      "file": "04-coupons-notices-reviews.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[오너] 쿠폰 생성 — 정액 5,000원 → 쿠폰 생성 → 목록 + DB",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1077,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:14.692Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "41495341dba51573f462-16f570e8aaf9a5e1d89a",
+          "file": "04-coupons-notices-reviews.spec.ts",
+          "line": 11,
+          "column": 5
+        },
+        {
+          "title": "[오너] 쿠폰 지급 — 쿠폰 카드에서 회원 선택 → 지급 → member_coupons 행",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1175,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:15.836Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "41495341dba51573f462-23b293cf2ad82264638d",
+          "file": "04-coupons-notices-reviews.spec.ts",
+          "line": 24,
+          "column": 5
+        },
+        {
+          "title": "[오너] 공지 작성 — 제목·내용 → 등록하고 알림 보내기 → 목록 + DB",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 995,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:17.019Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "41495341dba51573f462-20f786242ca3678e7a3b",
+          "file": "04-coupons-notices-reviews.spec.ts",
+          "line": 41,
+          "column": 5
+        },
+        {
+          "title": "[오너] 공지 수정 — 제목 변경 저장 → DB 반영",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 900,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:18.018Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "41495341dba51573f462-413151a016e188cd23dc",
+          "file": "04-coupons-notices-reviews.spec.ts",
+          "line": 56,
+          "column": 5
+        },
+        {
+          "title": "[오너] 후기 답변 — 후기 행 답변 입력 → 저장 → reply/replied_at",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 997,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:18.923Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "41495341dba51573f462-ff423d1da34398ec53db",
+          "file": "04-coupons-notices-reviews.spec.ts",
+          "line": 65,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "05-alimtalk-staff.spec.ts",
+      "file": "05-alimtalk-staff.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[오너] 알림톡 발송 UI — 수신자 선택 → 템플릿 → 발송(send-alimtalk 요청은 모킹, 외부 호출 0건)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "send-alimtalk 가로챈 요청 0건(mock 제공자면 0건), 외부 호스트 요청 0건"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1345,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:19.955Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "send-alimtalk 가로챈 요청 0건(mock 제공자면 0건), 외부 호스트 요청 0건"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "00a8c7979c9214a4e974-cb5cb73dbbbb295df740",
+          "file": "05-alimtalk-staff.spec.ts",
+          "line": 10,
+          "column": 5
+        },
+        {
+          "title": "[오너] 역할별 권한 변경 — 'QA 변경 대상' 역할에 룸 조회 권한 부여 → role_permissions 행",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1243,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:21.368Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "00a8c7979c9214a4e974-e1e9b3c7ed62f3750601",
+          "file": "05-alimtalk-staff.spec.ts",
+          "line": 34,
+          "column": 5
+        },
+        {
+          "title": "[오너] 직원 역할 변경 — 직원 상세에서 'QA 조회 전용' 역할 지정 → manager_centers.role_id 반영(원복 포함)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 988,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:22.617Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "00a8c7979c9214a4e974-b6d258e1cdaad78d7a8f",
+          "file": "05-alimtalk-staff.spec.ts",
+          "line": 50,
+          "column": 5
+        },
+        {
+          "title": "[오너] 알림톡 서버 권한 — 오너 JWT 는 send-alimtalk 권한 검사를 통과(외부 알리고 미연동이라 502 까지만 진행)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1241,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:23.611Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "00a8c7979c9214a4e974-78b3b051e70e5e3a07a2",
+          "file": "05-alimtalk-staff.spec.ts",
+          "line": 66,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "06-restricted-staff.spec.ts",
+      "file": "06-restricted-staff.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[제한직원] 메뉴 노출 — 사이드 메뉴에 권한 없는 쓰기성 메뉴가 없다(매출·알림톡·쿠폰·운영설정 등)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "제한직원 메뉴: [\"M\",\"3\",\"수업\",\"회원\",\"3알림\",\"더보기\"]"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 34,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:24.892Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "제한직원 메뉴: [\"M\",\"3\",\"수업\",\"회원\",\"3알림\",\"더보기\"]"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "398b91edfdb4689cc885-b9a0debf0a6e4f43ac2a",
+          "file": "06-restricted-staff.spec.ts",
+          "line": 12,
+          "column": 5
+        },
+        {
+          "title": "[제한직원] 주문 화면 — 조회만 가능, '확정 · 발급'/'취소' 컨트롤 없음 + 서버가 발급 RPC 도 거부",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1122,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:26.509Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "398b91edfdb4689cc885-b75ceb934a458cfec7ce",
+          "file": "06-restricted-staff.spec.ts",
+          "line": 21,
+          "column": 5
+        },
+        {
+          "title": "[제한직원] 수업 등록 — UI 버튼은 보이지만 저장은 서버가 거부(DB 행 없음)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3471,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:27.635Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "398b91edfdb4689cc885-3a8a4837927b9c2eec72",
+          "file": "06-restricted-staff.spec.ts",
+          "line": 34,
+          "column": 5
+        },
+        {
+          "title": "[제한직원] 공지·쿠폰 — 쓰기 컨트롤 없음 + 서버 거부",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1100,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:31.112Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "398b91edfdb4689cc885-5659b5366c00b3372afb",
+          "file": "06-restricted-staff.spec.ts",
+          "line": 49,
+          "column": 5
+        },
+        {
+          "title": "[제한직원] 후기 — 답변·삭제 컨트롤 없음 + 서버가 답변 UPDATE 거부",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "답변 버튼 0개, 삭제 버튼 0개(권한: facility.review.view 만)"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 883,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:32.217Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "답변 버튼 0개, 삭제 버튼 0개(권한: facility.review.view 만)"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "398b91edfdb4689cc885-696c3e112d9ae8131f9d",
+          "file": "06-restricted-staff.spec.ts",
+          "line": 61,
+          "column": 5
+        },
+        {
+          "title": "[제한직원] 직원·권한 — 역할 변경/권한 편집 컨트롤 없음 + 서버가 역할 지정·권한 부여 거부",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "직원 상세의 역할 변경 버튼 0개"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 889,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:33.105Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "직원 상세의 역할 변경 버튼 0개"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "398b91edfdb4689cc885-772e2576f3d5c8fd197c",
+          "file": "06-restricted-staff.spec.ts",
+          "line": 76,
+          "column": 5
+        },
+        {
+          "title": "[제한직원] 알림톡 — 발송 권한(message.alimtalk.view)이 없으면 화면·회원 목록 진입점·서버(send-alimtalk) 모두 거부",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "matrix",
+                  "description": "제한직원(알림톡 권한 없음)의 send-alimtalk 직접 호출 → HTTP 403 {\"error\":\"알림톡을 보낼 권한이 없어요\"}"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2068,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:34.001Z",
+                  "annotations": [
+                    {
+                      "type": "matrix",
+                      "description": "제한직원(알림톡 권한 없음)의 send-alimtalk 직접 호출 → HTTP 403 {\"error\":\"알림톡을 보낼 권한이 없어요\"}"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "398b91edfdb4689cc885-653dbfd412a91a21bbcf",
+          "file": "06-restricted-staff.spec.ts",
+          "line": 91,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "07-restricted-server-denials.spec.ts",
+      "file": "07-restricted-server-denials.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[제한직원] 대조군 — 허용된 조회(회원·상품·주문·후기·직원)는 성공",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 32,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:36.117Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "718bd61b53e90a5ffcdb-0d8d7d6f7cb6a6ff2482",
+          "file": "07-restricted-server-denials.spec.ts",
+          "line": 10,
+          "column": 5
+        },
+        {
+          "title": "[제한직원] 서버 거부 — 운영 설정 변경(facility.operation 없음)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "HTTP 200 []"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:37.201Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "HTTP 200 []"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "718bd61b53e90a5ffcdb-1f538d3a4d371eb893d9",
+          "file": "07-restricted-server-denials.spec.ts",
+          "line": 36,
+          "column": 7
+        },
+        {
+          "title": "[제한직원] 서버 거부 — 센터 정보 변경(facility.info 없음)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "HTTP 200 []"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 15,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:37.222Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "HTTP 200 []"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "718bd61b53e90a5ffcdb-13127a4c39078f774d33",
+          "file": "07-restricted-server-denials.spec.ts",
+          "line": 36,
+          "column": 7
+        },
+        {
+          "title": "[제한직원] 서버 거부 — 룸 추가(facility.room.manage 없음)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "HTTP 403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"rooms\\\"\"}"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:37.242Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "HTTP 403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"rooms\\\"\"}"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "718bd61b53e90a5ffcdb-4ed775363b72e0000f72",
+          "file": "07-restricted-server-denials.spec.ts",
+          "line": 36,
+          "column": 7
+        },
+        {
+          "title": "[제한직원] 서버 거부 — 회원 등록(customer.member.create 없음)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "HTTP 403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"center_members\\\"\"}"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:37.254Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "HTTP 403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"center_members\\\"\"}"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "718bd61b53e90a5ffcdb-afc5c0902120a3b0c9e3",
+          "file": "07-restricted-server-denials.spec.ts",
+          "line": 36,
+          "column": 7
+        },
+        {
+          "title": "[제한직원] 서버 거부 — 결제 등록(pass.payment.create 없음)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "HTTP 403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"payments\\\"\"}"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:37.273Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "HTTP 403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"payments\\\"\"}"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "718bd61b53e90a5ffcdb-d74b9ed22d26e5c5acf8",
+          "file": "07-restricted-server-denials.spec.ts",
+          "line": 36,
+          "column": 7
+        },
+        {
+          "title": "[제한직원] 서버 거부 — 수강권 상품 수정(pass.update 없음)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "HTTP 200 []"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 19,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:37.286Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "HTTP 200 []"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "718bd61b53e90a5ffcdb-d6ca8162ce4884e5fc45",
+          "file": "07-restricted-server-denials.spec.ts",
+          "line": 36,
+          "column": 7
+        },
+        {
+          "title": "[제한직원] 서버 거부 — 상품 판매 정지(pass.sale_toggle 없음)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "HTTP 200 []"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:37.309Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "HTTP 200 []"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "718bd61b53e90a5ffcdb-78390651d5eec4ddab7c",
+          "file": "07-restricted-server-denials.spec.ts",
+          "line": 36,
+          "column": 7
+        },
+        {
+          "title": "[제한직원] 서버 거부 — 수강권 지급 RPC(customer.member.issue_pass 없음)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "HTTP 400 {\"code\":\"P0001\",\"details\":null,\"hint\":null,\"message\":\"수강권/상품을 지급할 권한이 없어요\"}"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:37.323Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "HTTP 400 {\"code\":\"P0001\",\"details\":null,\"hint\":null,\"message\":\"수강권/상품을 지급할 권한이 없어요\"}"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "718bd61b53e90a5ffcdb-ae88f69316924dffa99a",
+          "file": "07-restricted-server-denials.spec.ts",
+          "line": 36,
+          "column": 7
+        },
+        {
+          "title": "[제한직원] 서버 거부 — 수강권 만료일 연장 RPC(pass_expiry.update 없음)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "observed",
+                  "description": "HTTP 400 {\"code\":\"P0001\",\"details\":null,\"hint\":null,\"message\":\"수강권 만료일을 연장할 권한이 없어요\"}"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:37.341Z",
+                  "annotations": [
+                    {
+                      "type": "observed",
+                      "description": "HTTP 400 {\"code\":\"P0001\",\"details\":null,\"hint\":null,\"message\":\"수강권 만료일을 연장할 권한이 없어요\"}"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "718bd61b53e90a5ffcdb-3d6e4fd0fd8fdfbdecec",
+          "file": "07-restricted-server-denials.spec.ts",
+          "line": 36,
+          "column": 7
+        },
+        {
+          "title": "[제한직원] 정리 확인 — 무단 시도로 생긴 행이 없다",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:37.359Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "718bd61b53e90a5ffcdb-963d8da0c79dbdd1cc8b",
+          "file": "07-restricted-server-denials.spec.ts",
+          "line": 45,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "08-platform-admin.spec.ts",
+      "file": "08-platform-admin.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "플랫폼 관리자",
+          "file": "08-platform-admin.spec.ts",
+          "line": 9,
+          "column": 6,
+          "specs": [
+            {
+              "title": "[플랫폼 관리자] /admin — 로드·제목 표시·페이지 오류 없음(읽기 전용)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 938,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T09:13:37.415Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "de88696f59b6766e0ee4-0a7f6fddbd07b6812d34",
+              "file": "08-platform-admin.spec.ts",
+              "line": 14,
+              "column": 9
+            },
+            {
+              "title": "[플랫폼 관리자] /admin/centers — 로드·제목 표시·페이지 오류 없음(읽기 전용)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 754,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T09:13:39.003Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "de88696f59b6766e0ee4-e1360e67806ff036adae",
+              "file": "08-platform-admin.spec.ts",
+              "line": 14,
+              "column": 9
+            },
+            {
+              "title": "[플랫폼 관리자] /admin/banners — 로드·제목 표시·페이지 오류 없음(읽기 전용)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 759,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T09:13:39.762Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "de88696f59b6766e0ee4-f29155e48c4ded103bb9",
+              "file": "08-platform-admin.spec.ts",
+              "line": 14,
+              "column": 9
+            },
+            {
+              "title": "[플랫폼 관리자] /admin/categories — 로드·제목 표시·페이지 오류 없음(읽기 전용)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 762,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T09:13:40.526Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "de88696f59b6766e0ee4-8ee911306d4c7dcb121f",
+              "file": "08-platform-admin.spec.ts",
+              "line": 14,
+              "column": 9
+            },
+            {
+              "title": "[플랫폼 관리자] /admin/marketing — 로드·제목 표시·페이지 오류 없음(읽기 전용)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 759,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T09:13:41.293Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "de88696f59b6766e0ee4-89dbb371615138cc2c24",
+              "file": "08-platform-admin.spec.ts",
+              "line": 14,
+              "column": 9
+            },
+            {
+              "title": "[플랫폼 관리자] /admin/reviews — 로드·제목 표시·페이지 오류 없음(읽기 전용)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 723,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T09:13:42.057Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "de88696f59b6766e0ee4-3f4c949b6c5959cf3b68",
+              "file": "08-platform-admin.spec.ts",
+              "line": 14,
+              "column": 9
+            },
+            {
+              "title": "[플랫폼 관리자] /admin/settlement — 로드·제목 표시·페이지 오류 없음(읽기 전용)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 765,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T09:13:42.784Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "de88696f59b6766e0ee4-f2f06b96bcf11eedb980",
+              "file": "08-platform-admin.spec.ts",
+              "line": 14,
+              "column": 9
+            },
+            {
+              "title": "[플랫폼 관리자] /admin/subscription-plans — 로드·제목 표시·페이지 오류 없음(읽기 전용)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 731,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T09:13:43.557Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "de88696f59b6766e0ee4-69bba0e7f3e402edd306",
+              "file": "08-platform-admin.spec.ts",
+              "line": 14,
+              "column": 9
+            },
+            {
+              "title": "[플랫폼 관리자] /admin/subscriptions — 로드·제목 표시·페이지 오류 없음(읽기 전용)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 790,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T09:13:44.293Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "de88696f59b6766e0ee4-1c18f2531cde3e154ac8",
+              "file": "08-platform-admin.spec.ts",
+              "line": 14,
+              "column": 9
+            }
+          ]
+        },
+        {
+          "title": "비운영자 접근 거부",
+          "file": "08-platform-admin.spec.ts",
+          "line": 24,
+          "column": 6,
+          "specs": [
+            {
+              "title": "[센터 오너] /admin/centers·/admin/settlement — 접근 거부 안내, 목록·데이터 없음",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1613,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T09:13:45.126Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "de88696f59b6766e0ee4-acf5bedb837f1a0dc1ad",
+              "file": "08-platform-admin.spec.ts",
+              "line": 26,
+              "column": 9
+            },
+            {
+              "title": "[일반 회원] /admin/centers·/admin/settlement — 접근 거부 안내, 목록·데이터 없음",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 90000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2227,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T09:13:46.743Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "de88696f59b6766e0ee4-30511cc202a43bb2b2bc",
+              "file": "08-platform-admin.spec.ts",
+              "line": 26,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "09-a11y-keyboard.spec.ts",
+      "file": "09-a11y-keyboard.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[접근성] 로그인 화면 — 키보드(Tab/Enter)만으로 로그인",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "a11y",
+                  "description": "로그인: 이름 없는 조작 요소 0개 []"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1222,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:48.977Z",
+                  "annotations": [
+                    {
+                      "type": "a11y",
+                      "description": "로그인: 이름 없는 조작 요소 0개 []"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "0485847e6c74ccf7e188-273311cb811c9bb2280c",
+          "file": "09-a11y-keyboard.spec.ts",
+          "line": 36,
+          "column": 5
+        },
+        {
+          "title": "[접근성] 수업 등록 시트 — 이름 없는 조작 요소 없음 + 키보드로 입력·Escape 로 닫기",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "a11y",
+                  "description": "수업 등록 시트: 이름 없는 조작 요소 0개 []"
+                },
+                {
+                  "type": "a11y",
+                  "description": "Escape 로 시트 닫힘: true"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 963,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:50.265Z",
+                  "annotations": [
+                    {
+                      "type": "a11y",
+                      "description": "수업 등록 시트: 이름 없는 조작 요소 0개 []"
+                    },
+                    {
+                      "type": "a11y",
+                      "description": "Escape 로 시트 닫힘: true"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "0485847e6c74ccf7e188-315d9c22a4619f2fd566",
+          "file": "09-a11y-keyboard.spec.ts",
+          "line": 46,
+          "column": 5
+        },
+        {
+          "title": "[접근성] 역할별 권한 편집 — 권한 체크박스가 이름(레이블)을 가진다",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "a11y",
+                  "description": "역할별 권한: 이름 없는 조작 요소 0개 []"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 878,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:51.232Z",
+                  "annotations": [
+                    {
+                      "type": "a11y",
+                      "description": "역할별 권한: 이름 없는 조작 요소 0개 []"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "0485847e6c74ccf7e188-626ab333522b6ba3398e",
+          "file": "09-a11y-keyboard.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "[접근성] 공지 작성·쿠폰 생성·회원 수강권 지급 시트 — 이름 없는 조작 요소 점검",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "a11y",
+                  "description": "공지 작성 시트: 이름 없는 조작 요소 0개 []"
+                },
+                {
+                  "type": "a11y",
+                  "description": "쿠폰 생성 시트: 이름 없는 조작 요소 0개 []"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1662,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:52.114Z",
+                  "annotations": [
+                    {
+                      "type": "a11y",
+                      "description": "공지 작성 시트: 이름 없는 조작 요소 0개 []"
+                    },
+                    {
+                      "type": "a11y",
+                      "description": "쿠폰 생성 시트: 이름 없는 조작 요소 0개 []"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "0485847e6c74ccf7e188-80608dd1c9897658f2a9",
+          "file": "09-a11y-keyboard.spec.ts",
+          "line": 68,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "10-mobile-emulation.spec.ts",
+      "file": "10-mobile-emulation.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[오너] 모바일 폭 에뮬레이션 — 관리자 주요 화면 가로 넘침 없음·페이지 오류 없음",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "matrix",
+                  "description": "실기기(iOS/Android) 관리자 폼 확인은 이 환경에서 수행 불가 → BLOCKED(에뮬레이션만 통과)"
+                }
+              ],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10162,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:13:53.816Z",
+                  "annotations": [
+                    {
+                      "type": "matrix",
+                      "description": "실기기(iOS/Android) 관리자 폼 확인은 이 환경에서 수행 불가 → BLOCKED(에뮬레이션만 통과)"
+                    }
+                  ],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "863e23f776a78186c974-74ba262357267584c897",
+          "file": "10-mobile-emulation.spec.ts",
+          "line": 5,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "11-send-alimtalk-edge.spec.ts",
+      "file": "11-send-alimtalk-edge.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[제한직원] 유효한 JWT 로 직접 호출 → 정확히 403, 외부 발송 제공자(스텁) 호출 0건",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 170,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:14:03.984Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6a8b36bd1e4c34aebfd7-39dd48c0dcd0f0b3ad8d",
+          "file": "11-send-alimtalk-edge.spec.ts",
+          "line": 46,
+          "column": 5
+        },
+        {
+          "title": "[익명 키] 로그인 사용자가 아닌 JWT → 401(권한 차단 403 과 구분), 스텁 0건",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:14:04.163Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6a8b36bd1e4c34aebfd7-94b5b385f2d9fb0c29d6",
+          "file": "11-send-alimtalk-edge.spec.ts",
+          "line": 56,
+          "column": 5
+        },
+        {
+          "title": "[오너] 권한 조회 오류(has_permission 실행 불가) → fail-closed 500, 스텁 0건 — 끝나면 권한 원복",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 405,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:14:04.174Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6a8b36bd1e4c34aebfd7-8c9564a0794e787403a7",
+          "file": "11-send-alimtalk-edge.spec.ts",
+          "line": 62,
+          "column": 5
+        },
+        {
+          "title": "[오너] 정상 권한 → 200 + 스텁이 SMS 요청 정확히 1건(대체 서버로만 전달)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 123,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:14:04.582Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6a8b36bd1e4c34aebfd7-50970e8a5218e1aa1f05",
+          "file": "11-send-alimtalk-edge.spec.ts",
+          "line": 78,
+          "column": 5
+        },
+        {
+          "title": "[service_role] 내부 호출 경로 유지 → 200 + 스텁 1건",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T09:14:04.709Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6a8b36bd1e4c34aebfd7-ba1cdef7f24bce785509",
+          "file": "11-send-alimtalk-edge.spec.ts",
+          "line": 88,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-28T09:12:58.548Z",
+    "duration": 66302.006,
+    "expected": 59,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

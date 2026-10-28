@@ -1,0 +1,52 @@
+
+> booking-app@0.1.0 test:e2e:admin-pagination
+> node scripts/e2e/adminPaginationReadonly.mjs
+
+
+[admin-pagination] ON 서버 실행 (NEXT_PUBLIC_ADMIN_CENTER_PAGINATION=true)
+◇ injected env (0) from .env.test.local // tip: ◈ encrypted .env [www.dotenvx.com]
+
+Running 9 tests using 1 worker
+
+◇ injected env (0) from .env.test.local // tip: ⌁ auth for agents [www.vestauth.com]
+  ✓  1 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:100:7 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › 플래그 선언과 실제 RPC가 일치한다(ON=admin_list_centers_page, OFF=admin_list_centers) (900ms)
+  ✓  2 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:117:9 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › [승인대기] 첫 페이지 30개 포함 전 페이지의 서버 응답 id와 화면 DOM id가 일치(중복·누락 없음, 30/31 경계) (757ms)
+  ✓  3 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:117:9 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › [승인됨] 첫 페이지 30개 포함 전 페이지의 서버 응답 id와 화면 DOM id가 일치(중복·누락 없음, 30/31 경계) (858ms)
+  ✓  4 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:117:9 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › [반려됨] 첫 페이지 30개 포함 전 페이지의 서버 응답 id와 화면 DOM id가 일치(중복·누락 없음, 30/31 경계) (943ms)
+  ✓  5 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:153:7 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › 검색 debounce: 빠른 키 입력은 마지막 검색어 1회만 요청한다 (1.1s)
+  ✓  6 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:178:7 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › 응답 순서 역전: A 요청 보류 → B 완료 → A 뒤늦게 전달해도 화면에는 B 결과만 남는다 (2.4s)
+  ✓  7 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:212:7 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › 검색 결과 없음: 검색어가 포함된 빈 목록 문구, 지우면 상태 탭 목록 복구 (1.5s)
+  ✓  8 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:229:7 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › 상태 탭 전환 시 검색어는 유지되고 목록은 해당 상태로 다시 로드된다 (1.6s)
+  ✓  9 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:246:7 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › 네트워크 오류: RPC 실패 시 오류 메시지를 보여 주고 목록은 비운다(크래시 없음) (663ms)
+[E2E teardown] 수업 정리 0건: 미해결 0
+
+  9 passed (12.1s)
+[admin-pagination] ON 요약: PASS 9 / FAIL 0 / BLOCKED 0 / SKIP 0 → PASS
+
+[admin-pagination] OFF 서버 실행 (NEXT_PUBLIC_ADMIN_CENTER_PAGINATION=false)
+◇ injected env (0) from .env.test.local // tip: ⌘ suppress logs { quiet: true }
+
+Running 9 tests using 1 worker
+
+◇ injected env (0) from .env.test.local // tip: ⌘ enable debugging { debug: true }
+  ✓  1 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:100:7 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › 플래그 선언과 실제 RPC가 일치한다(ON=admin_list_centers_page, OFF=admin_list_centers) (760ms)
+  -  2 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:117:9 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › [승인대기] 첫 페이지 30개 포함 전 페이지의 서버 응답 id와 화면 DOM id가 일치(중복·누락 없음, 30/31 경계)
+  -  3 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:117:9 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › [승인됨] 첫 페이지 30개 포함 전 페이지의 서버 응답 id와 화면 DOM id가 일치(중복·누락 없음, 30/31 경계)
+  -  4 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:117:9 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › [반려됨] 첫 페이지 30개 포함 전 페이지의 서버 응답 id와 화면 DOM id가 일치(중복·누락 없음, 30/31 경계)
+  ✓  5 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:153:7 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › 검색 debounce: 빠른 키 입력은 마지막 검색어 1회만 요청한다 (1.1s)
+  -  6 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:178:7 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › 응답 순서 역전: A 요청 보류 → B 완료 → A 뒤늦게 전달해도 화면에는 B 결과만 남는다
+  ✓  7 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:212:7 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › 검색 결과 없음: 검색어가 포함된 빈 목록 문구, 지우면 상태 탭 목록 복구 (1.5s)
+  ✓  8 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:229:7 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › 상태 탭 전환 시 검색어는 유지되고 목록은 해당 상태로 다시 로드된다 (1.6s)
+  ✓  9 [chromium] › tests/e2e/production-readiness/admin-center-pagination.spec.ts:246:7 › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › 네트워크 오류: RPC 실패 시 오류 메시지를 보여 주고 목록은 비운다(크래시 없음) (644ms)
+[E2E teardown] 수업 정리 0건: 미해결 0
+
+  4 skipped
+  5 passed (7.0s)
+[admin-pagination] OFF 요약: PASS 5 / FAIL 0 / BLOCKED 4 / SKIP 0 → INCOMPLETE
+  - BLOCKED: production-readiness/admin-center-pagination.spec.ts › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › [승인대기] 첫 페이지 30개 포함 전 페이지의 서버 응답 id와 화면 DOM id가 일치(중복·누락 없음, 30/31 경계) (BLOCKED: 커서 페이지네이션은 플래그 ON 빌드(E2E_ADMIN_CENTER_PAGINATION_FLAG=on)에서만 검증한다)
+  - BLOCKED: production-readiness/admin-center-pagination.spec.ts › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › [승인됨] 첫 페이지 30개 포함 전 페이지의 서버 응답 id와 화면 DOM id가 일치(중복·누락 없음, 30/31 경계) (BLOCKED: 커서 페이지네이션은 플래그 ON 빌드(E2E_ADMIN_CENTER_PAGINATION_FLAG=on)에서만 검증한다)
+  - BLOCKED: production-readiness/admin-center-pagination.spec.ts › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › [반려됨] 첫 페이지 30개 포함 전 페이지의 서버 응답 id와 화면 DOM id가 일치(중복·누락 없음, 30/31 경계) (BLOCKED: 커서 페이지네이션은 플래그 ON 빌드(E2E_ADMIN_CENTER_PAGINATION_FLAG=on)에서만 검증한다)
+  - BLOCKED: production-readiness/admin-center-pagination.spec.ts › /admin/centers — 커서 페이지네이션(DEV 플랫폼 관리자 필요) › 응답 순서 역전: A 요청 보류 → B 완료 → A 뒤늦게 전달해도 화면에는 B 결과만 남는다 (BLOCKED: 검색어(p_keyword) 요청을 구분하려면 플래그 ON 빌드가 필요함)
+  ※ BLOCKED/SKIP은 PASS가 아닙니다. 전제(관리자 계정·상태별 31건 이상 데이터·ON용 RPC)를 갖춘 뒤 다시 실행해야 완료입니다.
+
+[admin-pagination] 완료 아님(INCOMPLETE): PASS가 아닌 항목이 있습니다.

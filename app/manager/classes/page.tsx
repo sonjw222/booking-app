@@ -1398,7 +1398,7 @@ export default function ClassManagePage() {
             {!editId && (
               <div className="set-row" style={{ padding: "10px 0", borderBottom: "none" }}>
                 <div className="set-label">매주 반복 등록</div>
-                <button className={`switch ${repeat ? "on" : ""}`} onClick={() => setRepeat(!repeat)}>
+                <button className={`switch ${repeat ? "on" : ""}`} role="switch" aria-checked={repeat} aria-label="매주 반복 등록" onClick={() => setRepeat(!repeat)}>
                   <span className="knob" />
                 </button>
               </div>
@@ -1429,7 +1429,7 @@ export default function ClassManagePage() {
                   <>
                     <div className="set-row" style={{ padding: "10px 0 4px" }}>
                       <div className="set-label">요일별로 다르게</div>
-                      <button className={`switch ${perDayMode ? "on" : ""}`} onClick={() => setPerDayMode((v) => !v)}>
+                      <button className={`switch ${perDayMode ? "on" : ""}`} role="switch" aria-checked={perDayMode} aria-label="요일별로 다르게" onClick={() => setPerDayMode((v) => !v)}>
                         <span className="knob" />
                       </button>
                     </div>
@@ -1519,11 +1519,11 @@ export default function ClassManagePage() {
               <div className="menu-section-label" style={{ padding: "14px 0 6px" }}>시간</div>
               <div className="ampm-time-row">
                 <span className="ampm-time-label">시작</span>
-                <AmPmTimeInput value={form.start} onChange={(v) => setForm({ ...form, start: v })} />
+                <AmPmTimeInput label="시작" value={form.start} onChange={(v) => setForm({ ...form, start: v })} />
               </div>
               <div className="ampm-time-row">
                 <span className="ampm-time-label">종료</span>
-                <AmPmTimeInput value={form.end} onChange={(v) => setForm({ ...form, end: v })} />
+                <AmPmTimeInput label="종료" value={form.end} onChange={(v) => setForm({ ...form, end: v })} />
               </div>
               {/* 같은 날 여러 타임(새 수업 등록 전용): 시간 추가 → 같은 수업명/설정으로 타임마다 수업이 만들어진다.
                   요일별로 다르게 모드에서는 각 요일 카드 안에서 추가한다. 수정 화면에서는 보이지 않는다. */}
@@ -1624,7 +1624,7 @@ export default function ClassManagePage() {
 
             <div className="set-row" style={{ padding: "12px 0", borderBottom: "none" }}>
               <div className="set-label">예약 취소 완전 불가<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>특강 등 — 켜면 회원이 예약을 스스로 취소할 수 없어요(관리자 취소/노쇼 처리는 그대로 가능)</span></div>
-              <button className={`switch ${!form.allowCancel ? "on" : ""}`} onClick={() => setForm({ ...form, allowCancel: !form.allowCancel })}>
+              <button className={`switch ${!form.allowCancel ? "on" : ""}`} role="switch" aria-checked={!form.allowCancel} aria-label="예약 취소 완전 불가" onClick={() => setForm({ ...form, allowCancel: !form.allowCancel })}>
                 <span className="knob" />
               </button>
             </div>
@@ -1661,7 +1661,7 @@ export default function ClassManagePage() {
             {/* 상품 사용 허용 */}
             <div className="set-row" style={{ padding: "12px 0", borderBottom: "none" }}>
               <div className="set-label">보유 상품 사용 허용<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>회원이 예약 시 대여 상품 등을 함께 쓸 수 있어요</span></div>
-              <button className={`switch ${form.allowGoods ? "on" : ""}`} onClick={() => setForm({ ...form, allowGoods: !form.allowGoods })}>
+              <button className={`switch ${form.allowGoods ? "on" : ""}`} role="switch" aria-checked={form.allowGoods} aria-label="보유 상품 사용 허용" onClick={() => setForm({ ...form, allowGoods: !form.allowGoods })}>
                 <span className="knob" />
               </button>
             </div>
@@ -1922,7 +1922,7 @@ export default function ClassManagePage() {
             {editId && editGroupId && (
               <div className="set-row" style={{ padding: "10px 0", borderBottom: "none" }}>
                 <div className="set-label">모든 반복 수업에 적용<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>수업명·소개·정원·룸·담당 강사와 변경한 수강권 설정이 반복 수업 전체에 적용돼요. 날짜·시간은 수업별로 유지돼요.</span></div>
-                <button className={`switch ${applyToGroup ? "on" : ""}`} onClick={() => { setApplyToGroup(!applyToGroup); if (applyToGroup) setApplyTimeToGroup(false); }}>
+                <button className={`switch ${applyToGroup ? "on" : ""}`} role="switch" aria-checked={applyToGroup} aria-label="모든 반복 수업에 적용" onClick={() => { setApplyToGroup(!applyToGroup); if (applyToGroup) setApplyTimeToGroup(false); }}>
                   <span className="knob" />
                 </button>
               </div>
@@ -1930,7 +1930,7 @@ export default function ClassManagePage() {
             {editId && editGroupId && applyToGroup && (
               <div className="set-row" style={{ padding: "4px 0 10px", borderBottom: "none" }}>
                 <div className="set-label">시간도 함께 변경<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>켜면 모든 반복 수업의 시작·종료 시간이 위에 입력한 시간으로 바뀌어요. 요일마다 시간이 다르면 꺼두세요.</span></div>
-                <button className={`switch ${applyTimeToGroup ? "on" : ""}`} aria-pressed={applyTimeToGroup} onClick={() => setApplyTimeToGroup(!applyTimeToGroup)}>
+                <button className={`switch ${applyTimeToGroup ? "on" : ""}`} role="switch" aria-checked={applyTimeToGroup} aria-label="시간도 함께 변경" onClick={() => setApplyTimeToGroup(!applyTimeToGroup)}>
                   <span className="knob" />
                 </button>
               </div>
@@ -2094,7 +2094,7 @@ export default function ClassManagePage() {
                 {bookMemId && (
                   <div className="set-row" style={{ padding: "12px 0 4px" }}>
                     <div className="set-label">횟수 차감하기</div>
-                    <button className={`switch ${bookDeduct ? "on" : ""}`} onClick={() => setBookDeduct((v) => !v)}>
+                    <button className={`switch ${bookDeduct ? "on" : ""}`} role="switch" aria-checked={bookDeduct} aria-label="횟수 차감하기" onClick={() => setBookDeduct((v) => !v)}>
                       <span className="knob" />
                     </button>
                   </div>

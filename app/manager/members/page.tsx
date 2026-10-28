@@ -346,6 +346,8 @@ function MembersContent() {
   }
   // 정보 탭(메모/주소/등급/상태 저장)은 모두 customer.member.update RLS 하나로 묶여있다.
   const canUpdateMember = canDo("customer.member.update");
+  // 알림톡 발송 진입점은 알림톡 메뉴와 같은 권한(message.alimtalk.view)이 있을 때만 보인다. 서버(send-alimtalk)도 같은 권한을 확인한다(관리자 QA #239).
+  const canSendAlimtalk = canDo("message.alimtalk.view");
   const canCreateMember = canDo("customer.member.create");
   // 수강권 발급(customer.member.issue_pass)과 결제 등록(pass.payment.create) 둘 다 필요 —
   // memberships/payments insert RLS가 각각 이 두 키를 요구한다(fix_membership_rls.sql,
@@ -587,6 +589,9 @@ function MembersContent() {
       setGrantTarget(null);
       if (detail?.id === grantTarget.id) await openDetail(grantTarget); // 상세 시트가 열려 있으면 보유 수강권 갱신
       await load();
+      // 지급 직후 서버가 회원 상태를 '이용중'으로 바꾸므로, 열려 있는 상세 시트의 회원 상태 칩도 새 목록 값으로 갱신한다
+      // (관리자 QA #239: 갱신하지 않으면 지급 전 '만료'가 그대로 표시돼 새로고침 전까지 실제 상태와 어긋났다).
+      if (detail?.id === grantTarget.id) { const fresh = baseRef.current?.list.find((x) => x.id === grantTarget.id); if (fresh) setDetail(fresh); }
     } catch (e: any) { setError(e.message); }
     finally { setGranting(false); }
   }
@@ -712,9 +717,11 @@ function MembersContent() {
         <span className="mem-count">전체 {members.length}명{listSearching && <span className="mem-searching"> · 검색 중…</span>}</span>
         <div className="mem-tools member-toolbar-actions">
           <button className="quiet-action" disabled={busy} onClick={handleSync} title="예약 이력은 있지만 아직 회원 목록에 없는 사람을 찾아 등록해요">예약자 동기화</button>
-          <button className={`quiet-action ${selectMode ? "on" : ""}`} onClick={toggleSelectMode}>
-            {selectMode ? "선택 취소" : "알림톡 발송"}
-          </button>
+          {canSendAlimtalk && (
+            <button className={`quiet-action ${selectMode ? "on" : ""}`} onClick={toggleSelectMode}>
+              {selectMode ? "선택 취소" : "알림톡 발송"}
+            </button>
+          )}
           {canExportMembers && (
             <button className="quiet-action" onClick={() => setCsvSheet(true)}>엑셀 내보내기</button>
           )}
@@ -816,7 +823,7 @@ function MembersContent() {
             <div className="sheet-title mem-detail-title">
               <span>{detail.name}</span>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                <button className="outline-action compact" onClick={() => openAlimtalkForOne(detail)}>알림톡 보내기</button>
+                {canSendAlimtalk && <button className="outline-action compact" onClick={() => openAlimtalkForOne(detail)}>알림톡 보내기</button>}
               </div>
             </div>
             {detailLoading && <Loading />}
