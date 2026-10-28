@@ -1,5 +1,8 @@
 # TODO
 
+## 2026-10-31 NICEPAY 최종 병합 준비
+- **P1(승인)**: 심사 센터 이름·상품·가격 확정 → `seed_nicepay_review_center_20261031_proposed.sql`; 심사 전용 별도 계정 지정 → `assign_nicepay_reviewer_20261031_proposed.sql`(둘 다 미실행).
+- **P2**: `tests/admin-qa/11-send-alimtalk-edge` 는 알리고 스텁이 걸린 별도 스택(`scripts/isolated/adminQa/secondStack.sh`)에서만 통과 — 병합 결과에서는 별도 스택으로 재확인 필요.
 ## 2026-10-31 NICEPAY 통합 후속
 - **P0(승인)**: 통합 브랜치 push·PR·배포 전 사용자 검토(코드 상수 `NICEPAY_CHECKOUT_ACTIVATED` 는 false 유지). 운영 반영 순서·승인 항목: `docs/payments/NICEPAY_MAIN_INTEGRATION_20261031.md`.
 - **P1(BLOCKED)**: 실제 NICEPAY 결제창(실제 SDK·모바일 실기기)·실제 MID 로 인증 응답 필드·승인 응답 규격·12자리 Amt 패딩 확인(키 사용 승인 후).

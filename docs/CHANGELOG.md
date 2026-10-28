@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-31 — NICEPAY 최종 병합 준비: origin/main(8b9430e, PR #247 포함) 병합·레거시 PG 어댑터 보존·P3 운영 스키마 사전 검토 (로컬, 운영 쓰기 없음)
+- 브랜치 `feat/nicepay-final-merge-prep-20261031`: 통합 브랜치 + origin/main 병합(충돌은 .gitignore·CHANGELOG·TODO 뿐, #247 파일 모두 유지). Toss/PortOne 클라이언트 어댑터·`tossPaymentApi`·테스트를 main 본으로 복원하고 `LEGACY_PG_CHECKOUT_ACTIVATED=false` 잠금(toss/portone/미지원 값은 disabled, mock 폴백 없음). 오래된 QA 스크린샷 약 16MB 제거.
+- P3: 운영 스키마 읽기 전용 대조(`docs/payments/NICEPAY_P3_PREREVIEW_20261031.md`), 제안 시드·심사관 지정 SQL(미실행).
 ## 2026-10-31 — NICEPAY v3 결제창 통합(최신 main 기준)·격리 브라우저 QA (로컬, 운영·실제 PG 호출 없음)
 - `feat/nicepay-main-integration-20261031`: origin/main(f0df513) + NICEPAY 통합 브랜치 병합(문서 충돌만 해소). 결과·충돌 분석·결함 7건 수정: `docs/payments/NICEPAY_MAIN_INTEGRATION_20261031.md`.
 - 수정: 복귀 토큰 게이트의 토스 규칙 → NICEPAY 게이트, 결과 화면 invalid 오표시, 서버 거절 시 즉시 실패 안내, NICEPAY 결제수단 카드 전용, returnUrl EUC-KR 해석, 앱 게이트의 심사 대상 소속 선검사, sandbox 전용 localhost 복귀 주소.
