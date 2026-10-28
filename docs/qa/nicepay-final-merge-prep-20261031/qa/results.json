@@ -1,0 +1,869 @@
+{
+  "config": {
+    "argv": [
+      "/Users/sonjw/.nvm/versions/node/v24.19.0/bin/node",
+      "/Users/sonjw/Documents/mwhabit-automation/worktrees/nicepay-final-merge-prep-20261031/node_modules/.bin/playwright",
+      "test",
+      "-c",
+      "playwright.nicepayqa.config.ts"
+    ],
+    "configFile": "/Users/sonjw/Documents/mwhabit-automation/worktrees/nicepay-final-merge-prep-20261031/playwright.nicepayqa.config.ts",
+    "rootDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/nicepay-final-merge-prep-20261031/tests/nicepay-qa",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/nicepay-final-merge-prep-20261031/docs/qa/nicepay-final-merge-prep-20261031/qa/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/nicepay-final-merge-prep-20261031/tests/nicepay-qa",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.spec\\.ts$/"
+        ],
+        "timeout": 90000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "docs/qa/nicepay-final-merge-prep-20261031/qa/results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "nicepayV3.spec.ts",
+      "file": "nicepayV3.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[게이트 off] NICEPAY 심사관 B — 결제창·SDK 호출 없음, 주문 미생성(심사관도 거부)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2390,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:40:47.965Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-de2d637548a7f28608cf",
+          "file": "nicepayV3.spec.ts",
+          "line": 14,
+          "column": 5
+        },
+        {
+          "title": "[게이트 reviewer] 일반 회원 A·토스 심사관 T — 심사 센터 상품은 보이지 않고, 운영 센터 결제수단에 카드 미노출(직접결제만), NICEPAY 주문 없음",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4855,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:40:51.004Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-5d138edd812caacdf803",
+          "file": "nicepayV3.spec.ts",
+          "line": 25,
+          "column": 5
+        },
+        {
+          "title": "[게이트 reviewer] 심사관 B — 심사 상품 결제 성공: 서버 승인 후에만 수강권 발급(1건), 외부 호출 0건",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2114,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:40:55.862Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-9c314c4e7481db14ae7c",
+          "file": "nicepayV3.spec.ts",
+          "line": 41,
+          "column": 5
+        },
+        {
+          "title": "[v3 결제창 파라미터] goPay 호출 form — MID·금액·주문번호·CARD·ReturnURL(rt)·euc-kr, 비밀값 필드 없음",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1373,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:40:57.981Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-831f2167289a46d674fb",
+          "file": "nicepayV3.spec.ts",
+          "line": 67,
+          "column": 5
+        },
+        {
+          "title": "[닫기/취소] 결제창을 인증 전에 닫으면 주문 취소(승인 호출 없음) → 같은 화면에서 재시도 성공",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3776,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:40:59.357Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-516f390b179476cf94c6",
+          "file": "nicepayV3.spec.ts",
+          "line": 78,
+          "column": 5
+        },
+        {
+          "title": "[실패] 인증 실패(AuthResultCode≠0000) — 승인 API 호출 없음, 수강권 미발급, 결과 화면은 실패 안내",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1519,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:03.135Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-f0e6d2bd5585f9bff507",
+          "file": "nicepayV3.spec.ts",
+          "line": 92,
+          "column": 7
+        },
+        {
+          "title": "[실패] 인증결과 서명 위변조 — 승인 API 호출 없음, 수강권 미발급, 결과 화면은 실패 안내",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1520,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:04.657Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-ce478ba31565e2a37d73",
+          "file": "nicepayV3.spec.ts",
+          "line": 92,
+          "column": 7
+        },
+        {
+          "title": "[실패] 인증결과 금액 불일치(서명은 변조 금액 기준) — 승인 API 호출 없음, 수강권 미발급, 결과 화면은 실패 안내",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1501,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:06.180Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-5c0252c67f7c70c8405e",
+          "file": "nicepayV3.spec.ts",
+          "line": 92,
+          "column": 7
+        },
+        {
+          "title": "[실패] 인증결과 NextAppURL 이 허용되지 않은 외부 호스트 — 승인 API 호출 없음, 수강권 미발급, 결과 화면은 실패 안내",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1535,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:07.684Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-a666aafeb79303e293e6",
+          "file": "nicepayV3.spec.ts",
+          "line": 92,
+          "column": 7
+        },
+        {
+          "title": "[인증 성공 후 승인 실패] 승인 거절(3011) — 수강권 미발급·주문 재시도 가능(pending 복귀)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1534,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:09.222Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-282759dfda12b4cdf23e",
+          "file": "nicepayV3.spec.ts",
+          "line": 104,
+          "column": 7
+        },
+        {
+          "title": "[인증 성공 후 승인 실패] 승인 응답 서명 불일치 — 망취소 호출·수강권 미발급·주문 재시도 가능(pending 복귀)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1577,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:10.758Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-47fe26dba75dc447d2f0",
+          "file": "nicepayV3.spec.ts",
+          "line": 104,
+          "column": 7
+        },
+        {
+          "title": "[인증 성공 후 승인 실패] 승인 응답 금액 불일치 — 망취소 호출·수강권 미발급·주문 재시도 가능(pending 복귀)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1563,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:12.338Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-bce5c2c1ab75e2a3f732",
+          "file": "nicepayV3.spec.ts",
+          "line": 104,
+          "column": 7
+        },
+        {
+          "title": "[인증 성공 후 승인 실패] 승인 응답 주문번호 불일치 — 망취소 호출·수강권 미발급·주문 재시도 가능(pending 복귀)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1565,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:13.904Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-6db5b20949da3a7822a6",
+          "file": "nicepayV3.spec.ts",
+          "line": 104,
+          "column": 7
+        },
+        {
+          "title": "[인증 성공 후 승인 실패] 승인 응답 없음(네트워크 오류) — 망취소 호출·수강권 미발급·주문 재시도 가능(pending 복귀)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1564,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:15.472Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-705167d2381bbef5385c",
+          "file": "nicepayV3.spec.ts",
+          "line": 104,
+          "column": 7
+        },
+        {
+          "title": "[인증 성공 후 승인 실패] 승인 5xx — 망취소 호출·수강권 미발급·주문 재시도 가능(pending 복귀)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1560,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:17.039Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-9e1ba4cac2a8b0421f9a",
+          "file": "nicepayV3.spec.ts",
+          "line": 104,
+          "column": 7
+        },
+        {
+          "title": "[중복·새로고침] 같은 인증 결과를 다시 POST 해도 승인 1회·수강권 1개, 결과 화면 새로고침은 같은 결과",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2250,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:18.602Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-3ee583ac28f405a350a5",
+          "file": "nicepayV3.spec.ts",
+          "line": 117,
+          "column": 5
+        },
+        {
+          "title": "[모바일 폭·WebView UA] 심사관 B — 모바일 환경에서도 결제창 호출→서버 승인→결과 화면 완료(수강권 1개), 가로 넘침 없음",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1572,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:20.855Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-b3c88fa28b997695d6c5",
+          "file": "nicepayV3.spec.ts",
+          "line": 140,
+          "column": 5
+        },
+        {
+          "title": "[동시 중복] 같은 인증 결과가 동시에 3번 도착해도 승인 1회·수강권 1개(원자적 선점)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1506,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:22.431Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-0caf0b8cd5c8b6216a59",
+          "file": "nicepayV3.spec.ts",
+          "line": 150,
+          "column": 5
+        },
+        {
+          "title": "[위변조] 복귀 토큰 없음/다른 값으로 return 라우트 POST — 승인 호출 없이 invalid 로 되돌림",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 118,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:23.939Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-887921ce4e6e6e162361",
+          "file": "nicepayV3.spec.ts",
+          "line": 165,
+          "column": 5
+        },
+        {
+          "title": "[SDK 로드 실패] 결제창 스크립트가 로드되지 않으면 오류 안내 + 생성된 대기 주문 정리, 승인 호출 없음",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1248,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:24.060Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-2d477ff860ef91bf1664",
+          "file": "nicepayV3.spec.ts",
+          "line": 176,
+          "column": 5
+        },
+        {
+          "title": "[게이트 public] 일반 회원 A — NICEPAY 게이트가 public 이어도 PG_CHECKOUT_ENABLED 미설정이면 카드 미노출, 직접결제는 정상 주문 생성",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1222,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:25.311Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-20d39cd1c3ae7cfd3cc1",
+          "file": "nicepayV3.spec.ts",
+          "line": 185,
+          "column": 5
+        },
+        {
+          "title": "[심사 대상 소속] NICEPAY 심사관 B — 운영 센터 상품은 보이지 않고(심사 센터만 접근), 주문·결제창 호출이 불가",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1140,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:26.537Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-43db34ffed0d0b465ed4",
+          "file": "nicepayV3.spec.ts",
+          "line": 197,
+          "column": 5
+        },
+        {
+          "title": "[홈 푸터·상품 기간] 비로그인 홈 푸터에 사업자 정보(주소 포함)가 표시되고, 심사 상품에 사전예약·서비스 제공기간이 날짜로 표시된다",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3870,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T10:41:27.680Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8d386ae51267838a469-e74dc6a659e4bfa65f8a",
+          "file": "nicepayV3.spec.ts",
+          "line": 205,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-28T10:40:47.734Z",
+    "duration": 43940.326,
+    "expected": 23,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

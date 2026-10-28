@@ -788,7 +788,7 @@ describe("provider별 환불 경계 — portone은 fail closed", () => {
     expect(l).toContain('const needsPgCancel = ctx.provider === "toss" && ctx.amount > 0;');
     expect(l.indexOf('ctx.provider === "portone" && ctx.amount > 0')).toBeLessThan(l.indexOf("d.refundBegin("));
     expect(l.indexOf('ctx.provider === "portone" && ctx.amount > 0')).toBeLessThan(l.indexOf("const needsPgCancel"));
-    expect(() => read("lib/payments/PortOnePaymentProvider.ts")).toThrow();   // PortOne 클라이언트 Provider는 제거됨(서버의 portone 환불 거부는 과거 데이터 방어로 유지)
+    expect(read("lib/payments/PortOnePaymentProvider.ts")).toContain("class PortOnePaymentProvider");   // 레거시 클라이언트 Provider 는 보존(신규 결제로는 선택 불가 — tests/unit/legacyPgAdapters.test.ts). 서버의 portone 환불 거부도 과거 데이터 방어로 유지
   });
 });
 
