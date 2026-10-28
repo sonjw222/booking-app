@@ -68,3 +68,6 @@ supabase/.temp/
 /.tmp/
 /test-results-nicepayqa/
 /test-results-adminqa/
+/docs/qa/nicepay-main-integration-20261031/qa/dev-server.log
+/docs/qa/nicepay-main-integration-20261031/qa/control.json
+/docs/qa/nicepay-main-integration-20261031/qa/artifacts/
