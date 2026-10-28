@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-10-30 — NICEPAY 심사 종료 후 내부 센터 노출 예외 수정: P2 롤백 노출 증가 검사 (로컬 수정·검증만, 운영·공유 DEV 미실행)
+- 문제: 기존 센터 조회 정책이 내부 센터도 `center_members` 등록 회원에게 허용 → 심사 센터에 일반 회원이 있으면 P2 롤백 뒤 심사 센터·상품·수업이 노출(로컬 재현 0/0/0/0/0 → 1/3/1/3/0).
+- `rollback_add_nicepay_review_center_isolation_20261028.sql`: 정책 제거 전후 계정별(관계 보유 계정·매니저·최근 30·anon) 실제 가시성(센터/상품/수업/구매 RPC/공개 RPC)을 측정해 늘면 전체 롤백·중단. 회원 데이터는 변경하지 않음. 수정 전 11/11(결함 재현) → 수정 후 22/22.
+- `close_nicepay_review_20261029.sql`: 순서 정리(게이트 off → approving 알림 → 권한 해제 → 센터 비공개 → 대기 주문 정리 → 회원 관계 확인). 신규 읽기 전용 `check_nicepay_review_rollback_readiness_20261030.sql`.
 ## 2026-10-30 — NICEPAY P2 롤백 결함·P2b 심사 대상 조건·P2b 롤백 안전·운영 현황 정정 (로컬 수정·검증만, 운영·공유 DEV 미실행)
 - **P2 롤백 결함 수정**: 롤백이 남기는 accounts 보호 트리거가 호출하는 `nicepay_is_client_request()` 를 삭제해 롤백 뒤 권한 컬럼 변경이 모두 "function does not exist" 로 실패 → 함수 유지(수정 전 20/26 → 26/26). 롤백 시험이 놓친 이유와 새 시험(S2d·R4b·R4c·post-rollback accountsFlagGuard)은 `NICEPAY_SQL_FINAL_REVIEW.md` 머리말.
 - P2b `nicepay_order_is_review_target`: 상품 NULL 제외 + 승인·비내부 심사 센터 + 판매 중 상품만 대상. 수정 전 21/28 → 28/28.

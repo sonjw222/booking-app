@@ -4,6 +4,7 @@
 --   방법 ① SQL Editor: update centers set is_internal = true where is_nicepay_review;   -- 심사 센터 행만. 기존 운영 센터 변경 없음(is_internal 은 별도 보호 트리거가 없다)
 --   방법 ② 플랫폼 관리자 계정으로 센터 승인 상태를 되돌림(status 는 guard_center_status_change 트리거가 플랫폼 관리자만 변경 허용 — SQL Editor 의 postgres 로는 변경 불가).
 --   그 뒤 이 스크립트를 실행한다. (심사 센터 데이터는 삭제하지 않는다.)
+-- ⚠ 추가 안전장치(2026-10-30): 정책 제거 전후로 실제 인증 컨텍스트(계정별 JWT)의 심사 센터·상품·수업 가시성을 측정해, 일반 회원 관계(center_members 등) 때문에 노출이 늘어나는 계정이 하나라도 있으면 전체 롤백한다. 관계 데이터는 자동 삭제·수정하지 않는다.
 -- 남기는 것: accounts.nicepay_review_access 컬럼·보호 트리거(INSERT·UPDATE 모두 보호, 값이 있을 수 있어 데이터 보존. 완전 제거는 별도 승인)와 그 트리거가 의존하는 함수 2개(enforce_nicepay_review_access_admin_only, nicepay_is_client_request), centers.is_nicepay_review 컬럼.
 -- 복원 규칙(기간 RPC): 분리 SQL 이 그 함수를 새로 만들었다면(함수 주석 표식) 삭제, 분리 SQL 적용 전부터 있었다면 add_public_storefront_product_periods_20261027.sql 정의로 복원.
 BEGIN;
@@ -17,6 +18,49 @@ begin
      and exists (select 1 from centers where is_nicepay_review and status = 'approved' and not is_internal) then
     raise exception '롤백 중단: 일반 사용자에게 공개될 수 있는 심사 센터가 있어요. 먼저 update centers set is_internal = true where is_nicepay_review; 를 실행하세요(또는 플랫폼 관리자가 센터 승인 상태를 되돌리세요).';
   end if;
+end $$;
+-- ─ 노출 증가 검사 ①(정책을 지우기 "전" 기준값): 기존 센터 조회 정책은 "내부 센터라도 그 센터에 등록된 회원(center_members)·활성/비활성 매니저"에게 센터·상품·수업 조회를 허용한다.
+--   그래서 심사 센터를 is_internal=true 로 닫아도, 심사 센터에 등록된 일반 회원이 남아 있으면 P2 분리 정책을 지우는 순간 그 회원에게 심사 센터가 보이게 된다.
+--   실제 인증 컨텍스트(set local role + JWT sub)로 각 계정이 보는 심사 센터·상품·수업·구매 RPC 건수를 지금(정책 적용 중) 기록하고, 맨 끝(정책 제거 후)에 다시 측정해 "늘어난 계정"이 있으면 전체를 롤백한다.
+--   대상 계정: 심사 센터에 회원 등록(center_members)·수강권·주문·장바구니·구매신청·예약이 있는 계정 + 심사 센터 매니저 + 최근 계정 30개(그 밖의 우회 경로 감시) + 비로그인(anon). 아무것도 삭제·수정하지 않는다.
+do $$
+declare v_ids uuid[]; r record;
+begin
+  select coalesce(array_agg(id), '{}') into v_ids from centers where is_nicepay_review;
+  create temp table _nicepay_rb_probe(who text, auth_id uuid, sig text) on commit drop;   -- 이 트랜잭션 안에서만 존재(COMMIT/ROLLBACK 시 자동 삭제)
+  create or replace function pg_temp.nicepay_rb_probe(p_auth uuid, p_ids uuid[]) returns text language plpgsql as $f$
+  declare c int; p int; cl int; rp int; rs int;
+  begin
+    perform set_config('request.jwt.claims', case when p_auth is null then '' else json_build_object('sub', p_auth, 'role', 'authenticated')::text end, true);
+    execute case when p_auth is null then 'set local role anon' else 'set local role authenticated' end;
+    select count(*) into c from public.centers where id = any(p_ids);
+    select count(*) into p from public.products where center_id = any(p_ids);
+    select count(*) into cl from public.classes where center_id = any(p_ids);
+    begin select count(*) into rp from unnest(p_ids) u(cid), lateral public.fetch_purchasable_products(u.cid) f;
+    exception when insufficient_privilege then rp := 0; end;   -- 실행 권한이 없는 역할(anon 등)은 노출 0
+    begin select count(*) into rs from unnest(p_ids) u(cid), lateral public.fetch_public_storefront_products(u.cid) f;
+    exception when insufficient_privilege then rs := 0; end;
+    execute 'reset role'; perform set_config('request.jwt.claims', '', true);
+    return c || '/' || p || '/' || cl || '/' || rp || '/' || rs;
+  exception when others then
+    begin execute 'reset role'; exception when others then null; end;
+    raise exception '롤백 중단: 노출 여부를 확인하지 못했어요(%): % — 안전을 위해 아무것도 바꾸지 않습니다.', coalesce(p_auth::text, 'anon'), sqlerrm;
+  end $f$;
+  insert into _nicepay_rb_probe values ('anon', null, pg_temp.nicepay_rb_probe(null, v_ids));
+  for r in
+    select distinct a.auth_id from accounts a where a.auth_id is not null and (
+      a.id in (select p.account_id from profiles p where p.id in (
+          select profile_id from center_members where center_id = any(v_ids)
+          union select profile_id from memberships where center_id = any(v_ids)
+          union select profile_id from orders where center_id = any(v_ids)
+          union select profile_id from cart_items where center_id = any(v_ids)
+          union select profile_id from purchase_requests where center_id = any(v_ids)
+          union select rs.profile_id from reservations rs join classes cl on cl.id = rs.class_id where cl.center_id = any(v_ids)))
+      or a.id in (select account_id from manager_centers where center_id = any(v_ids))
+      or a.id in (select id from accounts order by created_at desc limit 30))
+  loop
+    insert into _nicepay_rb_probe values (r.auth_id::text, r.auth_id, pg_temp.nicepay_rb_probe(r.auth_id, v_ids));
+  end loop;
 end $$;
 drop policy if exists "nicepay_review_isolation" on centers;
 drop policy if exists "nicepay_review_isolation" on classes;
@@ -185,4 +229,22 @@ drop function if exists enforce_center_nicepay_review_admin_only();
 drop function if exists nicepay_review_center_member_allowed(uuid);
 drop function if exists nicepay_review_center_allowed(uuid);
 drop function if exists nicepay_is_reviewer();
+-- ─ 노출 증가 검사 ②(정책·함수 제거 "후"): 앞에서 기록한 계정별 건수와 비교해 하나라도 늘었으면 예외 → 이 파일의 모든 변경이 롤백된다(회원·프로필·주문·수강권·예약은 건드리지 않는다).
+do $$
+declare v_ids uuid[]; r record; v_new text; b int[]; a int[]; v_msg text := ''; v_n int := 0; v_rel int;
+begin
+  select coalesce(array_agg(id), '{}') into v_ids from centers where is_nicepay_review;
+  for r in select * from _nicepay_rb_probe loop
+    v_new := pg_temp.nicepay_rb_probe(r.auth_id, v_ids);
+    b := string_to_array(r.sig, '/')::int[]; a := string_to_array(v_new, '/')::int[];
+    if exists (select 1 from generate_subscripts(a, 1) i where a[i] > b[i]) then
+      v_n := v_n + 1; if v_n <= 5 then v_msg := v_msg || format(' [%s 센터/상품/수업/구매RPC/공개RPC %s → %s]', left(r.who, 8), r.sig, v_new); end if;
+    end if;
+  end loop;
+  if v_n > 0 then
+    select count(*) into v_rel from center_members where center_id = any(v_ids);
+    raise exception '롤백 중단: 이 롤백을 적용하면 심사 센터·상품·수업이 계정 %개에게 새로 보이게 돼요(심사 센터 회원 등록 %건 등).%  기존 센터 조회 정책이 "내부 센터라도 등록된 회원에게 조회 허용"이라서예요. 회원·프로필·주문·수강권·예약은 삭제·수정하지 않았고 P2 분리 정책도 그대로 유지돼요. 해결: 심사 센터의 회원 관계를 승인된 절차로 정리하거나, P2 분리 정책을 그대로 두세요(권장 — 롤백하지 않아도 일반 사용자에게는 보이지 않습니다).', v_n, v_rel, v_msg;
+  end if;
+  drop function pg_temp.nicepay_rb_probe(uuid, uuid[]);
+end $$;
 COMMIT;

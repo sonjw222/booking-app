@@ -2,6 +2,8 @@
 
 ## 2026-10-30 accounts INSERT 보호
 - **P1(보안·후속)**: 기존 운영 트리거(`is_platform_admin`·`pg_checkout_override`·`merged_into` 보호, accounts INSERT 보호 PR #245)가 `auth.uid() is null` 을 서버 판정에 쓴다. PostgREST 로는 RLS 때문에 도달할 수 없으나 `nicepay_is_client_request()` 같은 판정으로 보강할지 검토(이번 범위 밖).
+- **P1(승인)**: 심사 종료 후 P2 롤백이 필요한데 심사 센터에 일반 회원 관계(`center_members` 등)가 남아 있으면 롤백이 중단된다. 관계 정리 절차(어떤 데이터를 어떻게 정리할지)는 사용자 승인 후 정한다 — 기본 권장은 P2 를 유지.
+- **P2**: 운영 SQL Editor 에서 롤백 SQL 의 `set local role authenticated/anon` 가능 여부(불가 시 롤백이 안전하게 중단됨)를 적용 시점에 확인.
 - **P1**: P2·P2b 의 "적용본" 정의 해시 상수는 로컬 PostgreSQL 17 에서 측정 — 운영(17.6)에서 다르면 SQL 이 중단(안전). 운영 적용 직전 P0 로 확인하고 필요하면 상수 재측정.
 - **P1**: 브라우저 가입 화면(전화 OTP 포함) 자체의 권한 컬럼 거부 시험.
 ## 2026-10-29 Preflight 후속

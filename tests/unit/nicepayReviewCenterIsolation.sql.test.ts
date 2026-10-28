@@ -134,6 +134,26 @@ describe("NICEPAY 심사 센터 분리 SQL — 정적 계약(실제 격리 Postg
     const called = [...body.matchAll(/\b(nicepay_\w+|is_platform_admin)\(/g)].map((m) => m[1]).filter((n) => n !== "is_platform_admin");
     for (const fn of new Set(called)) expect(code, `롤백이 보호 트리거의 의존 함수 ${fn} 를 삭제`).not.toMatch(new RegExp(`drop function[^;]*\\b${fn}\\(`, "i"));
   });
+  it("P2 롤백: 정책 제거 전후로 계정별 실제 가시성을 측정해 노출이 늘면 전체 롤백(회원 데이터는 건드리지 않음)", () => {
+    const code = nonComment(rollback);
+    expect(code).toContain("_nicepay_rb_probe"); expect(code).toMatch(/set local role authenticated/); expect(code).toMatch(/set local role anon/);
+    expect(code).toMatch(/json_build_object\('sub', p_auth, 'role', 'authenticated'\)/);
+    for (const rel of ["center_members", "memberships", "orders", "cart_items", "purchase_requests", "reservations", "manager_centers"]) expect(code, rel).toContain(rel);
+    expect(code).toContain("fetch_purchasable_products"); expect(code).toContain("fetch_public_storefront_products");
+    expect(code).toContain("새로 보이게 돼요"); expect(code).toContain("삭제·수정하지 않았고");
+    // 첫 측정은 정책 제거 전, 비교는 COMMIT 직전
+    expect(code.indexOf("insert into _nicepay_rb_probe")).toBeLessThan(code.indexOf('drop policy if exists "nicepay_review_isolation" on centers'));
+    expect(code.lastIndexOf("a[i] > b[i]")).toBeGreaterThan(code.indexOf("drop function if exists nicepay_is_reviewer"));
+    expect(code).not.toMatch(/delete\s+from\s+(center_members|profiles|accounts|orders|memberships|reservations)|update\s+(center_members|profiles|orders|memberships|reservations)\b/i);
+    expect(code).not.toMatch(/drop function[^;]*nicepay_is_client_request/i);
+  });
+  it("심사 종료 SQL: 게이트 off 가 가장 먼저, approving 확인(알림), 권한 해제, 센터 비공개, 대기 주문 정리, 노출 관계 확인 순서", () => {
+    const c = nonComment(read("close_nicepay_review_20261029.sql"));
+    const order = ["update nicepay_checkout_gate set mode = 'off'", "status = 'approving'", "update accounts set nicepay_review_access = false", "update centers set is_internal = true", "update orders set status = 'cancelled'", "review_center_member_rows_block_p2_rollback_if_nonzero"].map((k) => c.indexOf(k));
+    expect(order.every((i) => i >= 0)).toBe(true); expect([...order].sort((a, b) => a - b)).toEqual(order);
+    const ready = read("check_nicepay_review_rollback_readiness_20261030.sql"); expect(nonComment(ready)).not.toMatch(/\b(insert|update|delete|drop|alter|create|truncate)\b/i);
+    expect(ready).toContain("center_member_rows_must_be_0"); expect(ready).toContain("in_flight_approving_orders_must_be_0");
+  });
   it("P2b 심사 대상 판정: 승인·비내부 심사 센터 + 판매 중 상품(NULL 상품 제외), 롤백은 approving 주문이 있으면 중단", () => {
     const gate = nonComment(read("fix_nicepay_gate_reviewer_flag_20261029.sql")); const gateRb = nonComment(read("rollback_fix_nicepay_gate_reviewer_flag_20261029.sql"));
     expect(gate).toMatch(/p_center_id is not null and p_product_id is not null/); expect(gate).toMatch(/c\.is_nicepay_review and c\.status = 'approved' and not c\.is_internal/);

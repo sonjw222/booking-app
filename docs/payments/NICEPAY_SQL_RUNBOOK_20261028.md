@@ -32,11 +32,12 @@
 | P2b | `fix_nicepay_gate_reviewer_flag_20261029.sql` | 운영 적용된 게이트 함수 2개의 심사관 판별을 "전용 권한 + 주문의 실제 센터·상품이 심사 대상(승인·비내부 심사 센터의 판매 중 상품, 상품 NULL 제외)"으로(정의 해시가 예상과 다르면 중단) | `verify_fix_nicepay_gate_reviewer_flag_20261029.sql` | `rollback_fix_nicepay_gate_reviewer_flag_20261029.sql`(게이트 mode 가 off 가 아니거나 승인 선점 중(approving) NICEPAY 주문이 있으면 중단) |
 | P3(별도 승인) | `seed_nicepay_review_center_20261028.sql` | 심사 센터 1·상품 3(값 확정 필요) | verify 의 review_centers=1 | 데이터 보존(삭제는 별도 승인) |
 | P3(별도 승인) | `update accounts set nicepay_review_access = true where auth_id = (select id from auth.users where email = 'sonjw222@naver.com');` | 심사관 지정 | verify 의 reviewer_accounts=1 | `= false` |
-| 심사 종료 | `close_nicepay_review_20261029.sql` | 권한 해제·게이트 off·센터 비공개·대기 주문 정리 | 파일 말미 확인 쿼리 | - |
+| 심사 종료 | `close_nicepay_review_20261029.sql` | 게이트 off → approving 확인(알림) → 권한 해제 → 센터 비공개 → 흔적 없는 대기 주문 정리 → 일반 회원 노출 관계 확인 | 파일 말미 확인 쿼리(`review_center_member_rows_block_p2_rollback_if_nonzero`) | - |
+| 롤백 준비 확인 | `check_nicepay_review_rollback_readiness_20261030.sql`(읽기 전용) | 심사 센터의 회원 관계·진행 중 승인·P2b 잔존 여부 | 모두 기대값 | - |
 **이미 적용돼 다시 실행하지 않는 SQL**: 준비 브랜치의 `fix_refund_server_path_fail_closed`·`fix_refund_amount_integrity`·`fix_orders_insert_role_guard`·`add_nicepay_checkout_gate`·`add_nicepay_provider_support`·`fix_create_order_secure_allow_nicepay`(위 표). 로컬 격리 DB 에서는 이 6개 + `fix_refund_pg_origin_guard` 를 이 순서로 적용한 뒤 P2·P2b 를 검증했다.
 - **의존관계**: P2b 는 P2 의 `accounts.nicepay_review_access` 가 먼저 있어야 하고(없으면 중단), 운영에 이미 있는 게이트(`add_nicepay_checkout_gate`)·`add_nicepay_provider_support`(v8)가 있어야 한다. P2 는 `pg_checkout_override` 에 의존하지 않는다(B안). 게이트 mode 가 `off`(현재) 이면 P2b 는 동작 차이가 없다.
 - **실행 시점 점검**: P2 는 시작 시 3개 함수(`center_rows_visible`·`fetch_public_storefront_products`·`fetch_purchasable_products`)의 현재 정의 해시가 "적용 전 운영 정의" 또는 "이 파일 적용본" 중 하나가 아니면 아무것도 바꾸지 않고 중단한다. P2b 도 대상 2개 함수의 해시가 적용 전/적용본이 아니면 중단하고, 치환 위치가 정확히 1곳이 아니거나 치환 결과 해시가 기대값과 다르면 트랜잭션 전체가 롤백된다.
-- **롤백 순서(역순)**: ① `close_…`(권한 해제·게이트 off·센터 비공개) → ② P2b 롤백(게이트 mode 가 off 일 때만) → ③ P2 롤백(P2b 가 남아 있으면 중단; accounts 보호 트리거와 그 의존 함수 `enforce_nicepay_review_access_admin_only`·`nicepay_is_client_request` 는 데이터 보존을 위해 남긴다). 심사 종료 SQL 은 선점·거래·검토 흔적이 전혀 없는 대기(pending) 주문만 취소하고, 결제 진행 중(approving)·결제 완료 주문은 건드리지 않는다.
+- **롤백 순서(역순)**: ① `close_…`(권한 해제·게이트 off·센터 비공개) → ② P2b 롤백(게이트 mode 가 off 일 때만) → ③ P2 롤백(P2b 가 남아 있거나 **심사 센터에 등록된 일반 회원 등 때문에 롤백 후 심사 센터가 새로 보이게 되는 계정이 하나라도 있으면 전체 롤백하고 중단** — 회원·프로필·주문·수강권·예약은 삭제·수정하지 않는다. 그 경우 P2 를 그대로 두는 것을 권장; accounts 보호 트리거와 그 의존 함수 `enforce_nicepay_review_access_admin_only`·`nicepay_is_client_request` 는 데이터 보존을 위해 남긴다). 심사 종료 SQL 은 선점·거래·검토 흔적이 전혀 없는 대기(pending) 주문만 취소하고, 결제 진행 중(approving)·결제 완료 주문은 건드리지 않는다.
 
 심사관 지정은 반드시 P2 → P2b 이후에 한다(P2b 이전에 켜면 게이트가 토스 계정 기준이라 NICEPAY 심사관이 결제 게이트를 통과하지 못한다).
 
@@ -483,6 +484,7 @@ select (select count(*) from centers where is_nicepay_review) as review_centers,
 --   방법 ① SQL Editor: update centers set is_internal = true where is_nicepay_review;   -- 심사 센터 행만. 기존 운영 센터 변경 없음(is_internal 은 별도 보호 트리거가 없다)
 --   방법 ② 플랫폼 관리자 계정으로 센터 승인 상태를 되돌림(status 는 guard_center_status_change 트리거가 플랫폼 관리자만 변경 허용 — SQL Editor 의 postgres 로는 변경 불가).
 --   그 뒤 이 스크립트를 실행한다. (심사 센터 데이터는 삭제하지 않는다.)
+-- ⚠ 추가 안전장치(2026-10-30): 정책 제거 전후로 실제 인증 컨텍스트(계정별 JWT)의 심사 센터·상품·수업 가시성을 측정해, 일반 회원 관계(center_members 등) 때문에 노출이 늘어나는 계정이 하나라도 있으면 전체 롤백한다. 관계 데이터는 자동 삭제·수정하지 않는다.
 -- 남기는 것: accounts.nicepay_review_access 컬럼·보호 트리거(INSERT·UPDATE 모두 보호, 값이 있을 수 있어 데이터 보존. 완전 제거는 별도 승인)와 그 트리거가 의존하는 함수 2개(enforce_nicepay_review_access_admin_only, nicepay_is_client_request), centers.is_nicepay_review 컬럼.
 -- 복원 규칙(기간 RPC): 분리 SQL 이 그 함수를 새로 만들었다면(함수 주석 표식) 삭제, 분리 SQL 적용 전부터 있었다면 add_public_storefront_product_periods_20261027.sql 정의로 복원.
 BEGIN;
@@ -496,6 +498,49 @@ begin
      and exists (select 1 from centers where is_nicepay_review and status = 'approved' and not is_internal) then
     raise exception '롤백 중단: 일반 사용자에게 공개될 수 있는 심사 센터가 있어요. 먼저 update centers set is_internal = true where is_nicepay_review; 를 실행하세요(또는 플랫폼 관리자가 센터 승인 상태를 되돌리세요).';
   end if;
+end $$;
+-- ─ 노출 증가 검사 ①(정책을 지우기 "전" 기준값): 기존 센터 조회 정책은 "내부 센터라도 그 센터에 등록된 회원(center_members)·활성/비활성 매니저"에게 센터·상품·수업 조회를 허용한다.
+--   그래서 심사 센터를 is_internal=true 로 닫아도, 심사 센터에 등록된 일반 회원이 남아 있으면 P2 분리 정책을 지우는 순간 그 회원에게 심사 센터가 보이게 된다.
+--   실제 인증 컨텍스트(set local role + JWT sub)로 각 계정이 보는 심사 센터·상품·수업·구매 RPC 건수를 지금(정책 적용 중) 기록하고, 맨 끝(정책 제거 후)에 다시 측정해 "늘어난 계정"이 있으면 전체를 롤백한다.
+--   대상 계정: 심사 센터에 회원 등록(center_members)·수강권·주문·장바구니·구매신청·예약이 있는 계정 + 심사 센터 매니저 + 최근 계정 30개(그 밖의 우회 경로 감시) + 비로그인(anon). 아무것도 삭제·수정하지 않는다.
+do $$
+declare v_ids uuid[]; r record;
+begin
+  select coalesce(array_agg(id), '{}') into v_ids from centers where is_nicepay_review;
+  create temp table _nicepay_rb_probe(who text, auth_id uuid, sig text) on commit drop;   -- 이 트랜잭션 안에서만 존재(COMMIT/ROLLBACK 시 자동 삭제)
+  create or replace function pg_temp.nicepay_rb_probe(p_auth uuid, p_ids uuid[]) returns text language plpgsql as $f$
+  declare c int; p int; cl int; rp int; rs int;
+  begin
+    perform set_config('request.jwt.claims', case when p_auth is null then '' else json_build_object('sub', p_auth, 'role', 'authenticated')::text end, true);
+    execute case when p_auth is null then 'set local role anon' else 'set local role authenticated' end;
+    select count(*) into c from public.centers where id = any(p_ids);
+    select count(*) into p from public.products where center_id = any(p_ids);
+    select count(*) into cl from public.classes where center_id = any(p_ids);
+    begin select count(*) into rp from unnest(p_ids) u(cid), lateral public.fetch_purchasable_products(u.cid) f;
+    exception when insufficient_privilege then rp := 0; end;   -- 실행 권한이 없는 역할(anon 등)은 노출 0
+    begin select count(*) into rs from unnest(p_ids) u(cid), lateral public.fetch_public_storefront_products(u.cid) f;
+    exception when insufficient_privilege then rs := 0; end;
+    execute 'reset role'; perform set_config('request.jwt.claims', '', true);
+    return c || '/' || p || '/' || cl || '/' || rp || '/' || rs;
+  exception when others then
+    begin execute 'reset role'; exception when others then null; end;
+    raise exception '롤백 중단: 노출 여부를 확인하지 못했어요(%): % — 안전을 위해 아무것도 바꾸지 않습니다.', coalesce(p_auth::text, 'anon'), sqlerrm;
+  end $f$;
+  insert into _nicepay_rb_probe values ('anon', null, pg_temp.nicepay_rb_probe(null, v_ids));
+  for r in
+    select distinct a.auth_id from accounts a where a.auth_id is not null and (
+      a.id in (select p.account_id from profiles p where p.id in (
+          select profile_id from center_members where center_id = any(v_ids)
+          union select profile_id from memberships where center_id = any(v_ids)
+          union select profile_id from orders where center_id = any(v_ids)
+          union select profile_id from cart_items where center_id = any(v_ids)
+          union select profile_id from purchase_requests where center_id = any(v_ids)
+          union select rs.profile_id from reservations rs join classes cl on cl.id = rs.class_id where cl.center_id = any(v_ids)))
+      or a.id in (select account_id from manager_centers where center_id = any(v_ids))
+      or a.id in (select id from accounts order by created_at desc limit 30))
+  loop
+    insert into _nicepay_rb_probe values (r.auth_id::text, r.auth_id, pg_temp.nicepay_rb_probe(r.auth_id, v_ids));
+  end loop;
 end $$;
 drop policy if exists "nicepay_review_isolation" on centers;
 drop policy if exists "nicepay_review_isolation" on classes;
@@ -664,6 +709,24 @@ drop function if exists enforce_center_nicepay_review_admin_only();
 drop function if exists nicepay_review_center_member_allowed(uuid);
 drop function if exists nicepay_review_center_allowed(uuid);
 drop function if exists nicepay_is_reviewer();
+-- ─ 노출 증가 검사 ②(정책·함수 제거 "후"): 앞에서 기록한 계정별 건수와 비교해 하나라도 늘었으면 예외 → 이 파일의 모든 변경이 롤백된다(회원·프로필·주문·수강권·예약은 건드리지 않는다).
+do $$
+declare v_ids uuid[]; r record; v_new text; b int[]; a int[]; v_msg text := ''; v_n int := 0; v_rel int;
+begin
+  select coalesce(array_agg(id), '{}') into v_ids from centers where is_nicepay_review;
+  for r in select * from _nicepay_rb_probe loop
+    v_new := pg_temp.nicepay_rb_probe(r.auth_id, v_ids);
+    b := string_to_array(r.sig, '/')::int[]; a := string_to_array(v_new, '/')::int[];
+    if exists (select 1 from generate_subscripts(a, 1) i where a[i] > b[i]) then
+      v_n := v_n + 1; if v_n <= 5 then v_msg := v_msg || format(' [%s 센터/상품/수업/구매RPC/공개RPC %s → %s]', left(r.who, 8), r.sig, v_new); end if;
+    end if;
+  end loop;
+  if v_n > 0 then
+    select count(*) into v_rel from center_members where center_id = any(v_ids);
+    raise exception '롤백 중단: 이 롤백을 적용하면 심사 센터·상품·수업이 계정 %개에게 새로 보이게 돼요(심사 센터 회원 등록 %건 등).%  기존 센터 조회 정책이 "내부 센터라도 등록된 회원에게 조회 허용"이라서예요. 회원·프로필·주문·수강권·예약은 삭제·수정하지 않았고 P2 분리 정책도 그대로 유지돼요. 해결: 심사 센터의 회원 관계를 승인된 절차로 정리하거나, P2 분리 정책을 그대로 두세요(권장 — 롤백하지 않아도 일반 사용자에게는 보이지 않습니다).', v_n, v_rel, v_msg;
+  end if;
+  drop function pg_temp.nicepay_rb_probe(uuid, uuid[]);
+end $$;
 COMMIT;
 ```
 
@@ -857,20 +920,24 @@ COMMIT;
 -- NICEPAY 심사 종료 절차(2026-10-29) — 검토용 초안, 운영 미실행. 심사가 끝나면 SQL Editor 에서 위에서 아래로 실행한다.
 -- 목적: 심사관 전용 권한을 해제하고, NICEPAY 결제 게이트를 닫고, 심사 센터를 일반 회원에게 보이지 않게 닫는다. 데이터는 삭제하지 않는다.
 -- 순서가 중요하다: 센터를 먼저 닫은 뒤에만 분리 SQL 을 롤백할 수 있다(롤백 스크립트는 공개 가능한 심사 센터가 있으면 중단한다).
--- 이 파일이 바꾸는 것: ① 심사관 권한 해제 ② 게이트 off ③ 심사 센터 비공개(is_internal=true — centers.status 는 플랫폼 관리자만 바꿀 수 있어 SQL Editor 로는 못 바꿈) ④ 남은 대기 주문 취소.
+-- 이 파일이 바꾸는 것(실행 순서): ① 게이트 off ② 진행 중 승인(approving) 확인(알림만) ③ 심사관 권한 해제 ④ 심사 센터 비공개(is_internal=true — centers.status 는 플랫폼 관리자만 바꿀 수 있어 SQL Editor 로는 못 바꿈) ⑤ 남은 대기 주문 취소 ⑥ 일반 회원 노출 관계 확인(파일 끝 확인 쿼리).
+-- 한 트랜잭션이라 중간에 실패하면 게이트·권한·센터·주문이 모두 원래대로 돌아온다. 반복 실행해도 안전하다(이미 닫힌 상태면 0건 갱신).
+-- ⚠ 심사 센터에 일반 회원 관계(center_members 등)가 남아 있으면, 센터를 닫아도 P2 분리 정책을 롤백하는 순간 그 회원에게 심사 센터가 보인다(기존 센터 조회 정책: 내부 센터도 등록 회원에게 허용). 그 경우 P2 롤백 SQL 이 스스로 중단한다. 관계 데이터는 이 파일이 지우지 않는다.
 -- 바꾸지 않는 것: 기존 운영 센터·상품·주문·수강권·예약, 토스 심사 계정(pg_checkout_override), 심사 중 생긴 주문·수강권·결제 기록(보존 — 환불은 기존 환불 절차).
 -- ============================================================
 begin;
--- ① 심사관 전용 권한 해제 (이 컬럼은 NICEPAY 전용 — 토스 심사 계정의 pg_checkout_override 는 건드리지 않는다)
-update accounts set nicepay_review_access = false where nicepay_review_access;
--- ② NICEPAY 결제 게이트 닫기(신규 주문 생성·승인 선점 거부. 진행 중 거래의 마무리·취소·환불은 계속 가능)
+-- ① NICEPAY 결제 게이트 닫기(신규 주문 생성·승인 선점 거부. 진행 중 거래의 마무리·취소·환불은 계속 가능) — 가장 먼저 닫아 이후 단계 동안 새 승인 선점이 시작되지 않게 한다
 update nicepay_checkout_gate set mode = 'off', updated_at = now() where id;
--- ③ 심사 센터 비공개: 일반 회원·비회원·옛 심사관 누구에게도 보이지 않는다(센터 하나를 닫으면 상품·수업 직접 조회도 막힌다)
+-- ② 진행 중 승인 확인(알림만, 중단하지 않음): approving 주문은 승인/취소/release 로 해소돼야 하며 이 파일은 건드리지 않는다. 남아 있으면 P2b 롤백도 중단된다.
+do $$ declare n int; begin select count(*) into n from orders where payment_provider = 'nicepay' and status = 'approving'; if n > 0 then raise notice '진행 중(approving) NICEPAY 주문 %건 — 해소(승인 확정·취소·release)된 뒤에 P2b/P2 롤백을 진행하세요.', n; end if; end $$;
+-- ③ 심사관 전용 권한 해제 (이 컬럼은 NICEPAY 전용 — 토스 심사 계정의 pg_checkout_override 는 건드리지 않는다)
+update accounts set nicepay_review_access = false where nicepay_review_access;
+-- ④ 심사 센터 비공개: 일반 회원·비회원·옛 심사관 누구에게도 보이지 않는다(센터 하나를 닫으면 상품·수업 직접 조회도 막힌다)
 update centers set is_internal = true where is_nicepay_review;
--- ④ 심사 센터의 미결제 대기 주문 정리. 진행 중인 결제·승인 선점에는 영향을 주지 않는다:
+-- ⑤ 심사 센터의 미결제 대기 주문 정리. 진행 중인 결제·승인 선점에는 영향을 주지 않는다:
 --    · NICEPAY 승인 선점(nicepay_claim_order)은 주문을 pending → approving 으로 바꾸고, 승인 결과 불명 검토(pg_review_at)·PG 거래번호(pg_tid)도 approving 상태에 붙는다.
 --      아래 조건은 status = 'pending' 이고 선점·거래·검토 흔적(pg_claim_id·pg_tid·pg_review_at)이 전혀 없는 주문만 고른다 → approving/paid/done 은 건드리지 않는다.
---    · ② 에서 게이트를 이미 off 로 닫았으므로 새 승인 선점은 시작되지 않는다. 같은 행을 동시에 선점하려는 트랜잭션과는 행 잠금으로 직렬화되고, 선점이 먼저면 이 UPDATE 의 status 조건이 다시 평가돼 건너뛴다.
+--    · ① 에서 게이트를 이미 off 로 닫았으므로 새 승인 선점은 시작되지 않는다. 같은 행을 동시에 선점하려는 트랜잭션과는 행 잠금으로 직렬화되고, 선점이 먼저면 이 UPDATE 의 status 조건이 다시 평가돼 건너뛴다.
 --    · 직접결제(direct) 대기 주문은 센터 확인 전 주문이라 같이 정리된다(결제 완료·확인된 주문은 status 가 달라 제외).
 update orders set status = 'cancelled'
  where status = 'pending' and pg_claim_id is null and pg_tid is null and pg_review_at is null
@@ -887,6 +954,37 @@ select
   (select count(*) from accounts where pg_checkout_override)                                     as toss_override_accounts_unchanged;
 -- 심사 중 생긴 결제 기록(참고): 환불·보존 판단용
 select o.status, count(*) from orders o join centers c on c.id = o.center_id where c.is_nicepay_review group by 1 order by 1;
+-- ⑥ 일반 회원 노출 관계(읽기 전용): 0 이 아니면 P2 분리 정책 롤백이 차단된다(권장: 롤백하지 않고 P2 를 그대로 둔다. 롤백이 필요하면 관계 정리 방법을 먼저 승인받는다).
+select
+  (select count(*) from center_members cm join centers c on c.id = cm.center_id where c.is_nicepay_review) as review_center_member_rows_block_p2_rollback_if_nonzero,
+  (select count(*) from memberships m join centers c on c.id = m.center_id where c.is_nicepay_review) as review_center_memberships_info,
+  (select count(*) from manager_centers mc join centers c on c.id = mc.center_id where c.is_nicepay_review) as review_center_manager_rows_info_intended_access;
+```
+
+## 롤백 준비 확인(읽기 전용) — `check_nicepay_review_rollback_readiness_20261030.sql`
+```sql
+-- ============================================================
+-- NICEPAY P2 롤백 준비 상태 확인(읽기 전용 · 2026-10-30) — 변경 없음. SQL Editor 에서 close_nicepay_review_20261029.sql 실행 뒤, rollback_add_nicepay_review_center_isolation_20261028.sql 실행 전에 본다.
+-- 목적: 심사 센터에 일반 회원 관계가 남아 있어 P2 분리 정책을 지우면 그 회원에게 심사 센터가 보이게 되는지 미리 확인한다.
+--   (실제 가시성 측정은 롤백 SQL 이 직접 하고, 늘어난 계정이 있으면 스스로 중단한다. 이 파일은 그 이유를 미리 보여 주는 용도.)
+-- 판정: ① 이 값들이 모두 0 이면 롤백이 노출을 늘리지 않을 가능성이 높다. ② 0 이 아니면 회원·프로필·주문·수강권·예약을 지우지 말고, P2 를 그대로 두는 것을 권장한다(일반 사용자에게는 이미 보이지 않는다).
+-- ============================================================
+select
+  (select count(*) from centers where is_nicepay_review and not is_internal and status = 'approved')                           as publicly_visible_review_centers_must_be_0,
+  (select count(*) from center_members cm join centers c on c.id = cm.center_id where c.is_nicepay_review)                       as center_member_rows_must_be_0,
+  (select count(*) from memberships m join centers c on c.id = m.center_id where c.is_nicepay_review)                            as memberships_info,
+  (select count(*) from orders o join centers c on c.id = o.center_id where c.is_nicepay_review)                                 as orders_info,
+  (select count(*) from cart_items x join centers c on c.id = x.center_id where c.is_nicepay_review)                             as cart_items_info,
+  (select count(*) from purchase_requests x join centers c on c.id = x.center_id where c.is_nicepay_review)                      as purchase_requests_info,
+  (select count(*) from reservations r join classes cl on cl.id = r.class_id join centers c on c.id = cl.center_id where c.is_nicepay_review) as reservations_info,
+  (select count(*) from manager_centers mc join centers c on c.id = mc.center_id where c.is_nicepay_review)                      as manager_rows_info_intended_access,
+  (select count(*) from orders where payment_provider = 'nicepay' and status = 'approving')                                       as in_flight_approving_orders_must_be_0,
+  (select mode from nicepay_checkout_gate where id)                                                                               as gate_mode_must_be_off,
+  to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)') is not null                                                  as p2b_still_applied_rollback_p2b_first;
+-- 롤백을 막을 수 있는 계정(식별자만): 심사 센터에 회원 등록이 있는 계정
+select cm.center_id, p.account_id, cm.profile_id, cm.registered_at
+  from center_members cm join centers c on c.id = cm.center_id and c.is_nicepay_review join profiles p on p.id = cm.profile_id
+ order by cm.registered_at limit 50;
 ```
 
 ## P1 선행 기간 RPC(`026175a`) — `add_public_storefront_product_periods_20261027.sql`
