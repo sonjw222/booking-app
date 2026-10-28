@@ -12,6 +12,6 @@ export default defineConfig({
   expect: { timeout: 12_000 },
   outputDir: process.env.ADMINQA_OUT ? `${process.env.ADMINQA_OUT}/artifacts` : "test-results-adminqa",
   reporter: [["list"], ["json", { outputFile: process.env.ADMINQA_OUT ? `${process.env.ADMINQA_OUT}/results.json` : "test-results-adminqa/results.json" }]],
-  use: { baseURL: "http://localhost:3000", trace: "retain-on-failure", screenshot: "only-on-failure", video: "off", viewport: { width: 1280, height: 900 } },
+  use: { baseURL: process.env.ADMINQA_BASE_URL ?? "http://localhost:3000", trace: "retain-on-failure", screenshot: "only-on-failure", video: "off", viewport: { width: 1280, height: 900 } },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 900 } } }],
 });

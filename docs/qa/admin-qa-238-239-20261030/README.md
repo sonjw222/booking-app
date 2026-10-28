@@ -15,11 +15,12 @@
 
 격리 fixture 는 `scripts/isolated/adminQa/seedAdminPagination.mjs`(격리 가드 통과 시에만 실행). **이슈 #238 은 닫을 수 없다**: 실환경(공유 DEV 또는 승인 대상) 플랫폼 관리자 로그인 QA 가 남아 있다.
 
-## #239 — 관리자 전 액션·역할별 실브라우저 QA 매트릭스: **PASS(범위 내 54/54), 일부 항목은 BLOCKED/N/A**
+## #239 — 관리자 전 액션·역할별 실브라우저 QA 매트릭스: **PASS(범위 내 59/59 = 브라우저 54 + Edge 5), 일부 항목은 BLOCKED/N/A**
 
 - 실제 **Chromium**(Playwright 1.62, Desktop Chrome 1280×900, 모바일 폭 에뮬레이션 1건)로 로컬 격리 스택(Auth·PostgREST·Edge Functions)에 대해 실행. 두 번 연속 실행 모두 54/54(플레이크 없음).
 - 전체 표(자동 생성): `adminqa/MATRIX_AUTO.md`, 원본 결과 `adminqa/results.json`, 스크린샷 `adminqa/screenshots/`(69장), 실행 로그 `adminqa/run-1.log`.
-- 실행: `ISO_ENV_FILE=<env> scripts/isolated/adminQa/run.sh`(앱 서버는 격리 env 로 `npm run dev`). 스펙은 `tests/admin-qa/`(기본 CI 의 `tests/e2e` 밖 — 수동 실행).
+- 실행: `ISO_ENV_FILE=<env> scripts/isolated/adminQa/run.sh`(앱 서버는 격리 env 로 `PORT=<포트> npm run dev`, `ADMINQA_BASE_URL` 로 지정). 스펙은 `tests/admin-qa/`(기본 CI 의 `tests/e2e` 밖 — 수동 실행).
+- **별도 로컬 스택**: `scripts/isolated/adminQa/secondStack.sh up|down|env` — project_id `mwhabit-adminqa`, 포트 +100, Edge 비밀 `ALIGO_PROXY_URL` 을 로컬 대체 서버(`host.docker.internal:54999`)로 지정. 다른 작업의 `mwhabit-isolated` 스택과 충돌하지 않으며 그 스택은 건드리지 않는다. `11-send-alimtalk-edge.spec.ts` 는 이 스택의 실제 edge-runtime 으로 검증한다(응답 가로채기 없음).
 
 | 역할 | 액션 | 결과 |
 |---|---|---|
@@ -45,7 +46,7 @@
 
 | # | 결함 | 재현(수정 전) | 수정 | 재검증 |
 |---|---|---|---|---|
-| F1 | **권한 없는 직원이 알림톡/SMS(유료 발송)를 직접 호출로 보낼 수 있음** — `send-alimtalk` 이 "센터 활성 매니저" 만 확인(메뉴만 `message.alimtalk.view` 로 가림) | 제한 직원 JWT 로 `send-alimtalk` 호출 → 403 이 아니라 **HTTP 502 "알리고 프록시가 아직 연동되지 않았어요"**(= 권한 검사 통과, 연동돼 있으면 실제 발송). 회원 목록의 '알림톡 발송' 버튼과 발송 화면도 권한 없이 노출 | `supabase/functions/send-alimtalk/index.ts` `isAuthorizedCaller`: 호출자 JWT 로 `has_permission(centerId,'message.alimtalk.view')` 확인(플랫폼 관리자·service_role 은 기존대로 통과). 회원 목록 버튼·발송 화면도 같은 권한으로 숨김/안내 | 제한 직원 403·UI 진입점 없음, 오너는 권한 검사 통과(502 까지만). `tests/unit/sendAlimtalkPermission.test.ts` 정적 회귀 + `06`·`05` 스펙 |
+| F1 | **권한 없는 직원이 알림톡/SMS(유료 발송)를 직접 호출로 보낼 수 있음** — `send-alimtalk` 이 "센터 활성 매니저"만 확인(메뉴만 `message.alimtalk.view` 로 가림) | 제한 직원 JWT 로 호출 → 403 이 아니라 **HTTP 502 "알리고 프록시가 아직 연동되지 않았어요"**(권한 검사 통과, 연동돼 있으면 실제 발송). 강화 시험에서 권한 검사를 제거하면 로컬 대체 서버가 실제 SMS 요청 1건을 받고 200 | 판정을 순수 모듈 `supabase/functions/_shared/alimtalkAuthz.ts` 로 분리(헤더 없음·무효 JWT 401 / 비소속·권한 없음 403 / 권한 조회 오류 500 fail-closed / service_role·플랫폼 운영자 통과), 즉시 발송은 권한·애드온 확인 뒤에만 제공자 호출. `index.ts` 상단의 오래된 "센터 소속만 확인" 설명 정정. 회원 목록·발송 화면 진입점도 같은 권한으로 숨김 | **기본 CI(vitest) 12건**(`tests/unit/sendAlimtalkPermission.test.ts`) + **실제 Edge Function 5건**(`tests/admin-qa/11-send-alimtalk-edge.spec.ts`) |
 | F2 | 관리자 폼 접근성: 이름 없는 조작 요소 — 수업 등록 시트의 스위치 7종·오전/오후/시/분 select 6개, 쿠폰 날짜 입력 2개, 공지 제목(placeholder 만) | `09-a11y` 수정 전 실행: 수업 등록 시트 10개·쿠폰 2개·공지 1개 검출 | 스위치에 `role="switch"`·`aria-checked`·`aria-label`, `AmPmTimeInput` 에 `label`(시작/종료) 기반 `aria-label`, 쿠폰 날짜·공지 제목 `aria-label` | `09-a11y-keyboard` 통과(0개) |
 | F3 | 회원 상세 시트의 '회원 상태' 칩이 수강권 지급 직후 지급 전 값('만료')으로 남음(새로고침해야 '활성') | `02` 수정 전 관찰: 지급 3초 뒤 상세 칩 `만료`, DB `center_members.status=active` | `app/manager/members/page.tsx` handleGrant: 목록 재로딩 뒤 열려 있는 상세의 회원 객체를 새 목록 값으로 교체 | `02` 에 '활성'·'만료 아님' 단언 추가, 통과 |
 

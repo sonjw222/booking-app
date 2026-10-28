@@ -8,5 +8,5 @@ node -e "import('./scripts/isolated/adminQa/assertIsolated.mjs').then(m=>{m.load
 set -a; . "$ISO_ENV_FILE"; set +a
 export ADMINQA_OUT="${ADMINQA_OUT:-docs/qa/admin-qa-238-239-20261030/adminqa}"
 mkdir -p "$ADMINQA_OUT"; rm -rf test-results-adminqa/.auth
-curl -sf -o /dev/null http://localhost:3000/login || { echo "앱 서버(localhost:3000, 격리 env)가 떠 있어야 해요: npm run dev"; exit 1; }
+[ -n "${ADMINQA_NO_APP:-}" ] || curl -sf -o /dev/null "${ADMINQA_BASE_URL:-http://localhost:3000}/login" || { echo "앱 서버(${ADMINQA_BASE_URL:-http://localhost:3000}, 격리 env)가 떠 있어야 해요: PORT=<포트> npm run dev"; exit 1; }
 npx playwright test -c playwright.adminqa.config.ts "$@"

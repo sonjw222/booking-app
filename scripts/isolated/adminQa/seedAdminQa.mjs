@@ -5,7 +5,7 @@ import fs from "node:fs"; import crypto from "node:crypto"; import { execFileSyn
 import { createRequire } from "node:module"; const require = createRequire(process.cwd() + "/package.json"); const { createClient } = require("@supabase/supabase-js");
 import { loadIsolatedEnv } from "./assertIsolated.mjs";
 const file = process.env.ISO_ENV_FILE; const env = loadIsolatedEnv(file);
-const psql = (sql) => execFileSync("docker", ["exec", "-i", "supabase_db_mwhabit-isolated", "psql", "-U", "postgres", "-At", "-v", "ON_ERROR_STOP=1", "-c", sql], { encoding: "utf8" }).trim();
+const psql = (sql) => execFileSync("docker", ["exec", "-i", (process.env.ISO_DB_CONTAINER ?? "supabase_db_mwhabit-isolated"), "psql", "-U", "postgres", "-At", "-v", "ON_ERROR_STOP=1", "-c", sql], { encoding: "utf8" }).trim();
 const svc = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const must = (r, what) => { if (r.error) throw new Error(`${what}: ${r.error.message}`); return r.data; };
 const pwd = () => crypto.randomBytes(14).toString("base64url") + "Aa1!";
