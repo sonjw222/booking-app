@@ -11,6 +11,8 @@ import type { PaymentProvider, PaymentScenario } from "./types";
 import { MockPaymentProvider } from "./MockPaymentProvider";
 import { NicepayPaymentProvider } from "./NicepayPaymentProvider";
 import { DisabledPaymentProvider } from "./DisabledPaymentProvider";
+import { TossPaymentProvider } from "./TossPaymentProvider";
+import { PortOnePaymentProvider } from "./PortOnePaymentProvider";
 
 /*
   PG 사업자 확정(2026-10-16, 사용자 결정): 신규 PG는 NICEPAY 하나뿐이다. Toss/PortOne은 신규 결제에 선택되지 않는다.
@@ -52,6 +54,14 @@ export function isOnlinePgCheckoutAvailable(): boolean {
 export const PG_CHECKOUT_ENABLED = process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED === "true";
 
 // mockScenarioOverride: Mock일 때만 의미 있음(예: checkout의 ?mockScenario= 쿼리로 재빌드 없이 success/failed/cancelled를 즉시 바꿔 QA하기 위함)
+// 레거시 PG 어댑터(Toss/PortOne) 보존: 클래스와 과거 거래 처리 경로는 그대로 두되, 신규 결제로는 어떤 환경변수로도 선택되지 않는다(resolveProviderName 이 toss/portone 을 "disabled" 로 만든다).
+// 다시 쓰려면 이 상수를 true 로 바꾸는 리뷰된 코드 변경(+ 체크아웃의 해당 분기 복원)이 필요하다. 상수가 false 인 동안 getLegacyProvider 는 항상 Disabled(전부 거부)를 돌려준다 — mock 으로 떨어지지 않는다.
+export const LEGACY_PG_CHECKOUT_ACTIVATED: boolean = false;
+export function getLegacyProvider(name: "toss" | "portone"): PaymentProvider {
+  if (!LEGACY_PG_CHECKOUT_ACTIVATED) return new DisabledPaymentProvider();
+  return name === "toss" ? new TossPaymentProvider() : new PortOnePaymentProvider();
+}
+
 export function getPaymentProvider(mockScenarioOverride?: PaymentScenario): PaymentProvider {
   switch (resolveProviderName()) {
     case "nicepay":
