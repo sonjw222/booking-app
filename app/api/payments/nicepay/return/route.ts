@@ -2,6 +2,7 @@
 import { bearerToken, createAdminClient } from "../../../../../lib/payments/server/deps";
 import { buildFlowDeps, getActiveNicepayConfig } from "../../../../../lib/payments/server/nicepay/runtime";
 import { handleReturnPost } from "../../../../../lib/payments/server/nicepay/flow";
+import { readNicepayForm } from "../../../../../lib/payments/server/nicepay/formBody";
 
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
 
@@ -18,11 +19,7 @@ function setup() {
 export async function POST(request: Request) {
   const s = setup(); if ("error" in s) return s.error;
   const rt = new URL(request.url).searchParams.get("rt");
-  let form: Record<string, unknown> = {};
-  try {
-    const fd = await request.formData();
-    fd.forEach((v, k) => { if (typeof v === "string") form[k] = v; });
-  } catch { form = {}; }
+  const form: Record<string, unknown> = await readNicepayForm(request);   // EUC-KR/UTF-8 모두 처리(첫 값만 사용)
   const { location } = await handleReturnPost(form, rt, s.deps);
   return new Response(null, { status: 303, headers: { Location: location, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
 }

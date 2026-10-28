@@ -42,9 +42,25 @@ export function nicepayGate(admin: SupabaseClient) {
       const prof = (data as { profiles?: { accounts?: { nicepay_review_access?: boolean } | null } | null } | null)?.profiles;
       return !!prof?.accounts?.nicepay_review_access;
     };
-    if (mode === "reviewer") return isReviewer();
+    // 심사관 경로: 전용 권한(nicepay_review_access)뿐 아니라 "주문의 실제 센터·상품이 승인·공개된 심사 센터의 판매 중 상품"인지도 확인한다(DB 보조 함수 nicepay_order_is_review_target — P2b 와 같은 판정).
+    // 권한만 보면 심사관 계정이 운영 센터 주문으로 결제창을 열 수 있다. 판정 오류(함수 없음 등)는 거부(fail-closed). DB 트리거·nicepay_claim_order 가 최종 방어선이고 이것은 앱 쪽 선검사다.
+    const isReviewTarget = async () => {
+      const { data: o } = await admin.from("orders").select("center_id, product_id").eq("id", orderId).maybeSingle();
+      const ord = o as { center_id?: string | null; product_id?: string | null } | null;
+      if (!ord?.center_id || !ord.product_id) return false;
+      // DB 보조 함수(nicepay_order_is_review_target)는 소유자(게이트 함수)만 실행할 수 있어 service_role 이 호출하지 못한다 → 같은 조건을 테이블 조회로 확인한다(조회 오류는 거부).
+      const [{ data: c, error: ce }, { data: p, error: pe }] = await Promise.all([
+        admin.from("centers").select("is_nicepay_review, status, is_internal").eq("id", ord.center_id).maybeSingle(),
+        admin.from("products").select("center_id, is_active, is_on_sale").eq("id", ord.product_id).maybeSingle(),
+      ]);
+      if (ce || pe || !c || !p) return false;
+      const ctr = c as { is_nicepay_review?: boolean; status?: string; is_internal?: boolean }; const prd = p as { center_id?: string; is_active?: boolean; is_on_sale?: boolean };
+      return ctr.is_nicepay_review === true && ctr.status === "approved" && ctr.is_internal === false && prd.center_id === ord.center_id && prd.is_active === true && prd.is_on_sale === true;
+    };
+    const reviewerOk = async () => (await isReviewer()) && (await isReviewTarget());
+    if (mode === "reviewer") return reviewerOk();
     if (process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED === "true") return true;
-    return isReviewer();
+    return reviewerOk();
   };
 }
 

@@ -1,0 +1,173 @@
+
+> booking-app@0.1.0 dev
+> next dev -p 3100
+
+▲ Next.js 16.2.10 (Turbopack)
+- Local:         http://localhost:3100
+- Network:       http://172.30.1.98:3100
+✓ Ready in 154ms
+
+ GET /login 200 in 162ms (next.js: 63ms, application-code: 99ms)
+ GET /login 200 in 16ms (next.js: 950µs, application-code: 15ms)
+ GET /login 200 in 17ms (next.js: 959µs, application-code: 16ms)
+ GET / 200 in 56ms (next.js: 10ms, application-code: 46ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 45ms (next.js: 7ms, application-code: 38ms)
+[browser] [toUserMessage] Error: 주문 생성에 실패했어요: NICEPAY 결제는 아직 사용할 수 없어요
+    at createOrder (lib/orders.ts:110:29)
+    at async handlePay (app/checkout/page.tsx:369:23)
+  108 |     ({ data, error } = await supabase.from("orders").insert(withoutWeekday).select("id")....
+  109 |   }
+> 110 |   if (error || !data) throw new Error("주문 생성에 실패했어요: " + (error?.message ?? "no...
+      |                             ^
+  111 |   return data.id;
+  112 | }
+  113 | (lib/userError.ts:66:11)
+ GET /login 200 in 22ms (next.js: 913µs, application-code: 21ms)
+ GET / 200 in 40ms (next.js: 927µs, application-code: 39ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 31ms (next.js: 765µs, application-code: 30ms)
+ GET /checkout?center=2c6501a5-c5bb-4caf-b4b0-3ee2152fd044&product=32cafda2-21f0-4a3a-9a3c-6115fe175822 200 in 32ms (next.js: 917µs, application-code: 31ms)
+ GET /login 200 in 17ms (next.js: 1004µs, application-code: 16ms)
+ GET / 200 in 39ms (next.js: 953µs, application-code: 38ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 24ms (next.js: 708µs, application-code: 24ms)
+ GET /checkout?center=2c6501a5-c5bb-4caf-b4b0-3ee2152fd044&product=32cafda2-21f0-4a3a-9a3c-6115fe175822 200 in 25ms (next.js: 1143µs, application-code: 24ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 24ms (next.js: 716µs, application-code: 23ms)
+ POST /api/payments/return-token 200 in 78ms (next.js: 31ms, application-code: 47ms)
+ POST /api/payments/nicepay/prepare 200 in 45ms (next.js: 10ms, application-code: 35ms)
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 43ms (next.js: 10ms, application-code: 33ms)
+ GET /checkout/nicepay/result?orderId=a3239d95-e600-402e-8ce4-d465c1ea2f99&rt=<redacted> 200 in 41ms (next.js: 7ms, application-code: 34ms)
+ POST /api/payments/nicepay/status 200 in 24ms (next.js: 15ms, application-code: 9ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 31ms (next.js: 726µs, application-code: 30ms)
+ POST /api/payments/return-token 200 in 45ms (next.js: 1128µs, application-code: 44ms)
+ POST /api/payments/nicepay/prepare 200 in 35ms (next.js: 669µs, application-code: 35ms)
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 30ms (next.js: 642µs, application-code: 29ms)
+ GET /checkout/nicepay/result?orderId=81da0942-a966-4d11-aaa9-dd03dddbbf0b&rt=<redacted> 200 in 35ms (next.js: 1208µs, application-code: 34ms)
+ POST /api/payments/nicepay/status 200 in 11ms (next.js: 1070µs, application-code: 10ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 24ms (next.js: 659µs, application-code: 24ms)
+ POST /api/payments/return-token 200 in 47ms (next.js: 915µs, application-code: 46ms)
+ POST /api/payments/nicepay/prepare 200 in 37ms (next.js: 1410µs, application-code: 35ms)
+ POST /api/payments/nicepay/abandon 200 in 61ms (next.js: 25ms, application-code: 35ms)
+ POST /api/payments/return-token 200 in 39ms (next.js: 727µs, application-code: 38ms)
+ POST /api/payments/nicepay/prepare 200 in 33ms (next.js: 702µs, application-code: 32ms)
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 31ms (next.js: 743µs, application-code: 30ms)
+ GET /checkout/nicepay/result?orderId=814512c6-f610-424a-9907-f826c9fd171c&rt=<redacted> 200 in 27ms (next.js: 931µs, application-code: 26ms)
+ POST /api/payments/nicepay/status 200 in 13ms (next.js: 1077µs, application-code: 12ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 25ms (next.js: 769µs, application-code: 24ms)
+ POST /api/payments/return-token 200 in 40ms (next.js: 1184µs, application-code: 38ms)
+ POST /api/payments/nicepay/prepare 200 in 33ms (next.js: 693µs, application-code: 32ms)
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 10ms (next.js: 1224µs, application-code: 9ms)
+ GET /checkout/nicepay/result?orderId=b2aab0d6-cc26-43fa-8de8-81214da0c07c&rt=<redacted>&failed=1 200 in 28ms (next.js: 707µs, application-code: 27ms)
+ POST /api/payments/nicepay/status 200 in 12ms (next.js: 1129µs, application-code: 11ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 25ms (next.js: 754µs, application-code: 24ms)
+ POST /api/payments/return-token 200 in 40ms (next.js: 928µs, application-code: 39ms)
+ POST /api/payments/nicepay/prepare 200 in 36ms (next.js: 782µs, application-code: 36ms)
+[PG_NICEPAY_SIGNATURE_MISMATCH] {"stage":"auth","moid":"…c6cc65"}
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 6ms (next.js: 716µs, application-code: 5ms)
+ GET /checkout/nicepay/result?orderId=4836e9c6-9117-4627-a7f0-70d5fec6cc65&rt=<redacted>&failed=1 200 in 39ms (next.js: 813µs, application-code: 39ms)
+ POST /api/payments/nicepay/status 200 in 11ms (next.js: 840µs, application-code: 10ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 24ms (next.js: 688µs, application-code: 23ms)
+ POST /api/payments/return-token 200 in 39ms (next.js: 811µs, application-code: 38ms)
+ POST /api/payments/nicepay/prepare 200 in 32ms (next.js: 765µs, application-code: 31ms)
+[PG_NICEPAY_AMOUNT_MISMATCH] {"stage":"auth","moid":"…fee84d"}
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 8ms (next.js: 758µs, application-code: 7ms)
+ GET /checkout/nicepay/result?orderId=cf22a226-d4ad-4fee-a380-52e62dfee84d&rt=<redacted>&failed=1 200 in 26ms (next.js: 693µs, application-code: 25ms)
+ POST /api/payments/nicepay/status 200 in 12ms (next.js: 1231µs, application-code: 10ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 24ms (next.js: 674µs, application-code: 23ms)
+ POST /api/payments/return-token 200 in 44ms (next.js: 919µs, application-code: 43ms)
+ POST /api/payments/nicepay/prepare 200 in 41ms (next.js: 951µs, application-code: 40ms)
+[PG_NICEPAY_URL_REJECTED] {"moid":"…edd020"}
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 18ms (next.js: 726µs, application-code: 17ms)
+ GET /checkout/nicepay/result?orderId=c6ea18e3-e3d3-491e-8d15-f15b21edd020&rt=<redacted>&failed=1 200 in 26ms (next.js: 655µs, application-code: 26ms)
+ POST /api/payments/nicepay/status 200 in 10ms (next.js: 1170µs, application-code: 8ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 23ms (next.js: 712µs, application-code: 22ms)
+ POST /api/payments/return-token 200 in 40ms (next.js: 917µs, application-code: 39ms)
+ POST /api/payments/nicepay/prepare 200 in 40ms (next.js: 821µs, application-code: 40ms)
+[PG_NICEPAY_APPROVE_REJECTED] {"ResultCode":"3011","ResultMsg":"한도초과"}
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 24ms (next.js: 644µs, application-code: 23ms)
+ GET /checkout/nicepay/result?orderId=578dc1b8-aad8-4a76-a703-7481a1e1f259&rt=<redacted>&failed=1 200 in 27ms (next.js: 646µs, application-code: 26ms)
+ POST /api/payments/nicepay/status 200 in 12ms (next.js: 966µs, application-code: 11ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 24ms (next.js: 692µs, application-code: 23ms)
+ POST /api/payments/return-token 200 in 41ms (next.js: 945µs, application-code: 40ms)
+ POST /api/payments/nicepay/prepare 200 in 34ms (next.js: 688µs, application-code: 33ms)
+[PG_NICEPAY_APPROVE_MISMATCH] {"moid":"…d6d2b9","signature":false,"tid":true,"moidMatches":true,"amount":true}
+[PG_NICEPAY_NETCANCELED] {"moid":"…d6d2b9","tid":"…245787","cause":"approve_mismatch"}
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 26ms (next.js: 790µs, application-code: 25ms)
+ GET /checkout/nicepay/result?orderId=0e3c549e-5d87-4bb4-8f31-f07a28d6d2b9&rt=<redacted>&failed=1 200 in 27ms (next.js: 638µs, application-code: 26ms)
+ POST /api/payments/nicepay/status 200 in 9ms (next.js: 921µs, application-code: 8ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 25ms (next.js: 736µs, application-code: 24ms)
+ POST /api/payments/return-token 200 in 38ms (next.js: 909µs, application-code: 38ms)
+ POST /api/payments/nicepay/prepare 200 in 32ms (next.js: 578µs, application-code: 31ms)
+[PG_NICEPAY_APPROVE_MISMATCH] {"moid":"…fc971b","signature":true,"tid":true,"moidMatches":true,"amount":false}
+[PG_NICEPAY_NETCANCELED] {"moid":"…fc971b","tid":"…247309","cause":"approve_mismatch"}
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 26ms (next.js: 766µs, application-code: 25ms)
+ GET /checkout/nicepay/result?orderId=24377df7-6c76-4d21-9dc9-a847e7fc971b&rt=<redacted>&failed=1 200 in 27ms (next.js: 727µs, application-code: 26ms)
+ POST /api/payments/nicepay/status 200 in 15ms (next.js: 834µs, application-code: 14ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 32ms (next.js: 706µs, application-code: 32ms)
+ POST /api/payments/return-token 200 in 36ms (next.js: 802µs, application-code: 36ms)
+ POST /api/payments/nicepay/prepare 200 in 31ms (next.js: 726µs, application-code: 31ms)
+[PG_NICEPAY_APPROVE_MISMATCH] {"moid":"…2d56e2","signature":true,"tid":true,"moidMatches":false,"amount":true}
+[PG_NICEPAY_NETCANCELED] {"moid":"…2d56e2","tid":"…248807","cause":"approve_mismatch"}
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 25ms (next.js: 535µs, application-code: 24ms)
+ GET /checkout/nicepay/result?orderId=f494dfbe-edc0-49fa-b1b1-627cb62d56e2&rt=<redacted>&failed=1 200 in 27ms (next.js: 852µs, application-code: 26ms)
+ POST /api/payments/nicepay/status 200 in 10ms (next.js: 1180µs, application-code: 9ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 25ms (next.js: 739µs, application-code: 24ms)
+ POST /api/payments/return-token 200 in 39ms (next.js: 899µs, application-code: 38ms)
+ POST /api/payments/nicepay/prepare 200 in 31ms (next.js: 649µs, application-code: 30ms)
+[PG_NICEPAY_APPROVE_UNKNOWN] {"moid":"…0ed3b3","reason":"NETWORK_ERROR"}
+[PG_NICEPAY_NETCANCELED] {"moid":"…0ed3b3","tid":"…250322","cause":"approve_unknown"}
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 29ms (next.js: 566µs, application-code: 28ms)
+ GET /checkout/nicepay/result?orderId=0f18b650-34f9-412a-abc0-5099f80ed3b3&rt=<redacted>&failed=1 200 in 27ms (next.js: 671µs, application-code: 26ms)
+ POST /api/payments/nicepay/status 200 in 12ms (next.js: 1352µs, application-code: 10ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 24ms (next.js: 688µs, application-code: 24ms)
+ POST /api/payments/return-token 200 in 38ms (next.js: 764µs, application-code: 37ms)
+ POST /api/payments/nicepay/prepare 200 in 29ms (next.js: 649µs, application-code: 29ms)
+[PG_NICEPAY_APPROVE_UNKNOWN] {"moid":"…bf3ccd","reason":null}
+[PG_NICEPAY_NETCANCELED] {"moid":"…bf3ccd","tid":"…251819","cause":"approve_unknown"}
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 26ms (next.js: 897µs, application-code: 25ms)
+ GET /checkout/nicepay/result?orderId=f8827de0-3a8a-439f-8e0e-d36db7bf3ccd&rt=<redacted>&failed=1 200 in 26ms (next.js: 669µs, application-code: 26ms)
+ POST /api/payments/nicepay/status 200 in 9ms (next.js: 707µs, application-code: 9ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 25ms (next.js: 699µs, application-code: 24ms)
+ POST /api/payments/return-token 200 in 44ms (next.js: 1075µs, application-code: 43ms)
+ POST /api/payments/nicepay/prepare 200 in 35ms (next.js: 787µs, application-code: 34ms)
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 38ms (next.js: 693µs, application-code: 37ms)
+ GET /checkout/nicepay/result?orderId=bfa3b4e4-627d-4550-b836-746ab2a8faf5&rt=<redacted> 200 in 28ms (next.js: 827µs, application-code: 28ms)
+ POST /api/payments/nicepay/status 200 in 9ms (next.js: 968µs, application-code: 8ms)
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 7ms (next.js: 657µs, application-code: 7ms)
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 7ms (next.js: 514µs, application-code: 6ms)
+ GET /checkout/nicepay/result 200 in 25ms (next.js: 806µs, application-code: 24ms)
+ GET /checkout/nicepay/result?orderId=bfa3b4e4-627d-4550-b836-746ab2a8faf5&rt=<redacted> 200 in 27ms (next.js: 801µs, application-code: 26ms)
+ POST /api/payments/nicepay/status 200 in 9ms (next.js: 673µs, application-code: 8ms)
+ GET /checkout/nicepay/result?orderId=bfa3b4e4-627d-4550-b836-746ab2a8faf5 200 in 29ms (next.js: 1003µs, application-code: 28ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 25ms (next.js: 768µs, application-code: 25ms)
+ POST /api/payments/return-token 200 in 42ms (next.js: 765µs, application-code: 42ms)
+ POST /api/payments/nicepay/prepare 200 in 31ms (next.js: 661µs, application-code: 31ms)
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 29ms (next.js: 722µs, application-code: 29ms)
+ GET /checkout/nicepay/result?orderId=22e6286d-dcf2-4b12-99dc-55d32554ae44&rt=<redacted> 200 in 31ms (next.js: 646µs, application-code: 31ms)
+ POST /api/payments/nicepay/status 200 in 9ms (next.js: 600µs, application-code: 8ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 25ms (next.js: 680µs, application-code: 25ms)
+ POST /api/payments/return-token 200 in 39ms (next.js: 922µs, application-code: 38ms)
+ POST /api/payments/nicepay/prepare 200 in 37ms (next.js: 752µs, application-code: 36ms)
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 29ms (next.js: 807µs, application-code: 28ms)
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 29ms (next.js: 3ms, application-code: 25ms)
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 37ms (next.js: 857µs, application-code: 36ms)
+ POST /api/payments/nicepay/return 303 in 1720µs (next.js: 561µs, application-code: 1159µs)
+[PG_NICEPAY_RETURN_TOKEN_REJECTED] {"reason":"bad_signature","orderId":"…000000"}
+ POST /api/payments/nicepay/return?rt=<redacted> 303 in 1465µs (next.js: 395µs, application-code: 1070µs)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 27ms (next.js: 724µs, application-code: 26ms)
+ POST /api/payments/return-token 200 in 43ms (next.js: 956µs, application-code: 42ms)
+ POST /api/payments/nicepay/prepare 200 in 38ms (next.js: 737µs, application-code: 37ms)
+[browser] [toUserMessage] Error: 결제창을 불러오지 못했어요
+    at el.onerror (lib/payments/NicepayPaymentProvider.ts:25:60)
+  23 | ...ocument.createElement("script");
+  24 | ...; el.async = true;
+> 25 | ...() => resolve(); el.onerror = () => reject(new Error("결제창을 불러오지 못했어요"));
+     |                                               ^
+  26 | ...d.appendChild(el);
+  27 | ...
+  28 | ... (lib/userError.ts:66:11)
+ GET /checkout?center=2c6501a5-c5bb-4caf-b4b0-3ee2152fd044&product=32cafda2-21f0-4a3a-9a3c-6115fe175822 200 in 25ms (next.js: 660µs, application-code: 25ms)
+ GET /checkout?center=2c6501a5-c5bb-4caf-b4b0-3ee2152fd044&product=32cafda2-21f0-4a3a-9a3c-6115fe175822 200 in 25ms (next.js: 660µs, application-code: 24ms)
+ GET / 200 in 29ms (next.js: 1409µs, application-code: 28ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=95eb3354-b755-4a0d-9c6e-1f7127e40da6 200 in 25ms (next.js: 734µs, application-code: 25ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=d1278bd0-2742-49bf-95cd-bab291280bc6 200 in 28ms (next.js: 1051µs, application-code: 27ms)
+ GET /checkout?center=cc3b08ce-73cd-418d-a844-ce1b5d90d9d7&product=db0ff2c6-122d-472e-a217-6ec827c4a704 200 in 25ms (next.js: 757µs, application-code: 25ms)
+[?25h

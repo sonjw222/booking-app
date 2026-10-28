@@ -28,7 +28,8 @@ function toView(r: StatusResult, authFailed: boolean): View {
 function Content() {
   const sp = useSearchParams();
   const [view, setView] = useState<View>({ kind: "working" });
-  const invalid = sp.get("invalid") === "1" || !sp.get("orderId") || !sp.get("rt");   // 렌더 중 파생 — effect 안에서 동기 setState 하지 않는다
+  // 첫 렌더의 쿼리로 한 번만 판정한다. scrubCallbackUrl() 이 주소창의 토큰을 지우면 searchParams 가 바뀌는데, 그때 다시 파생하면 정상 결과 옆에 "확인 정보가 올바르지 않거나 만료됐어요" 가 잘못 뜬다(통합 QA 에서 발견).
+  const [invalid] = useState(() => sp.get("invalid") === "1" || !sp.get("orderId") || !sp.get("rt"));
   useEffect(() => {
     const orderId = sp.get("orderId"), rt = sp.get("rt"), authFailed = sp.get("failed") === "1";
     scrubCallbackUrl();

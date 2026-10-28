@@ -3,10 +3,19 @@ import { nicepayGate } from "../../lib/payments/server/nicepay/runtime";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /* 앱 쪽 선검사(nicepayGate): DB 게이트 모드 + 노출 정책. 가짜 admin 클라이언트만 쓴다(네트워크 없음). */
-const admin = (mode: unknown, opts: { rpcError?: boolean; override?: boolean; tossOverride?: boolean } = {}) => ({
-  rpc: async () => (opts.rpcError ? { data: null, error: { message: "function does not exist" } } : { data: mode, error: null }),
-  from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { profiles: { accounts: { nicepay_review_access: !!opts.override, pg_checkout_override: !!opts.tossOverride } } } }) }) }) }),
-}) as unknown as SupabaseClient;
+type Opts = { rpcError?: boolean; override?: boolean; tossOverride?: boolean; target?: "ok" | "notReviewCenter" | "internal" | "notApproved" | "offSale" | "inactive" | "otherCenterProduct" | "lookupError" };
+const admin = (mode: unknown, opts: Opts = {}) => {
+  const t = opts.target ?? "ok";
+  const rows: Record<string, unknown> = {
+    orders: { center_id: "c1", product_id: "p1", profiles: { accounts: { nicepay_review_access: !!opts.override, pg_checkout_override: !!opts.tossOverride } } },
+    centers: { is_nicepay_review: t !== "notReviewCenter", status: t === "notApproved" ? "pending" : "approved", is_internal: t === "internal" },
+    products: { center_id: t === "otherCenterProduct" ? "c2" : "c1", is_active: t !== "inactive", is_on_sale: t !== "offSale" },
+  };
+  return {
+    rpc: async () => (opts.rpcError ? { data: null, error: { message: "function does not exist" } } : { data: mode, error: null }),
+    from: (table: string) => ({ select: () => ({ eq: () => ({ maybeSingle: async () => (t === "lookupError" && table !== "orders" ? { data: null, error: { message: "boom" } } : { data: rows[table], error: null }) }) }) }),
+  } as unknown as SupabaseClient;
+};
 
 const ENV = process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED;
 afterEach(() => { if (ENV === undefined) delete process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED; else process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED = ENV; });
@@ -33,5 +42,17 @@ describe("nicepayGate — DB 모드와 노출 정책의 일치", () => {
     process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED = "false";
     expect(await nicepayGate(admin("public", { override: false }))("o1")).toBe(false);
     expect(await nicepayGate(admin("public", { override: true }))("o1")).toBe(true);
+  });
+  it("심사관이어도 주문의 센터·상품이 심사 대상(승인·공개 심사 센터의 판매 중 상품)이 아니면 거부 — 비심사 센터·내부·비승인·판매 중지·비활성·다른 센터 상품·조회 오류 모두, reviewer 모드와 public(공개 플래그 꺼짐) 모두", async () => {
+    for (const flag of ["false", "true"]) {
+      process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED = flag;
+      for (const target of ["notReviewCenter", "internal", "notApproved", "offSale", "inactive", "otherCenterProduct", "lookupError"] as const)
+        expect(await nicepayGate(admin("reviewer", { override: true, target }))("o1"), `reviewer/${flag}/${target}`).toBe(false);
+      expect(await nicepayGate(admin("reviewer", { override: true, target: "ok" }))("o1")).toBe(true);
+    }
+    process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED = "false";
+    expect(await nicepayGate(admin("public", { override: true, target: "offSale" }))("o1")).toBe(false);
+    process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED = "true";
+    expect(await nicepayGate(admin("public", { override: false, target: "offSale" }))("o1")).toBe(true);   // 공개 모드는 대상 제한 없음(기존 동작) — 일반 회원 공개는 별도 승인 사항
   });
 });

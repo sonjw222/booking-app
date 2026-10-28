@@ -26,3 +26,11 @@ export function visiblePayMethodIds(opts: { pgEnabled: boolean; allowed: string[
 export function resolveSelectedPayMethod(selected: string, visible: string[]): string {
   return visible.includes(selected) ? selected : (visible[0] ?? DIRECT_PAY_METHOD_ID);
 }
+
+/* NICEPAY v3 결제창은 카드(PayMethod=CARD)만 연동·검증한다(서버 승인 SQL/검증이 카드 3001 만 허용). 카카오페이·토스페이·계좌이체는 계약 범위 확인 전까지 NICEPAY 일 때 노출하지 않는다.
+   직접결제(direct)는 PG 와 무관하므로 항상 유지. provider 가 nicepay 가 아니면 목록을 바꾸지 않는다. */
+export const NICEPAY_ONLINE_METHOD_IDS: readonly string[] = ["card"];
+export function methodsForProvider(all: string[], provider: string): string[] {
+  if (provider !== "nicepay") return all;
+  return all.filter((id) => id === DIRECT_PAY_METHOD_ID || NICEPAY_ONLINE_METHOD_IDS.includes(id));
+}

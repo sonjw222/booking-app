@@ -1,5 +1,10 @@
 # TODO
 
+## 2026-10-31 NICEPAY 통합 후속
+- **P0(승인)**: 통합 브랜치 push·PR·배포 전 사용자 검토(코드 상수 `NICEPAY_CHECKOUT_ACTIVATED` 는 false 유지). 운영 반영 순서·승인 항목: `docs/payments/NICEPAY_MAIN_INTEGRATION_20261031.md`.
+- **P1(BLOCKED)**: 실제 NICEPAY 결제창(실제 SDK·모바일 실기기)·실제 MID 로 인증 응답 필드·승인 응답 규격·12자리 Amt 패딩 확인(키 사용 승인 후).
+- **P1(승인)**: 심사 센터 상품 가격·기간·표시명 확정, P3 시드·심사관 권한 지정 SQL 실행 승인.
+- **P2**: 홈 푸터 사업자 주소 공개 배포 승인(배포 = 공개).
 ## 2026-10-30 격리 스택 ↔ 운영 보안 수정 동기화
 - **P2**: 운영에만 적용한 SQL 이 격리 스택(baseline=공유 DEV)에 빠지는 일이 없도록, 운영 SQL 적용 절차에 "격리 migration 추가 + 동일성 시험" 단계를 포함(`docs/CI_ISOLATION_240.md`). 공유 DEV 에도 이 보호를 적용할지는 별도 결정.
 - **P3**: baseline 재덤프 시 `KNOWN_ISOLATED_ONLY`(verifyBaselineParity) 정리.

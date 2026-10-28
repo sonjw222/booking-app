@@ -22,7 +22,7 @@ import ErrorState from "../components/ErrorState";
 import AppButton from "../components/AppButton";
 import { PG_CHECKOUT_ENABLED, resolveProviderName } from "../../lib/payments";
 import { fetchMyPgCheckoutOverride, fetchMyNicepayReviewAccess } from "../../lib/authAccount";
-import { visiblePayMethodIds, resolveSelectedPayMethod } from "../../lib/payMethods";
+import { visiblePayMethodIds, resolveSelectedPayMethod, methodsForProvider } from "../../lib/payMethods";
 
 // 카카오페이/토스페이는 로고 자산이 없어 outline 아이콘 하나로 뭉치면 구분이 안 되므로
 // --vendor-* 색 점(dot)으로, 나머지는 의미가 통하는 outline 아이콘으로 구분한다.
@@ -77,7 +77,7 @@ export default function CartPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const visibleMethodIds = visiblePayMethodIds({ pgEnabled, allowed: allowedPay, all: PAY_METHODS.map((m) => m.id) });
+  const visibleMethodIds = visiblePayMethodIds({ pgEnabled, allowed: allowedPay, all: methodsForProvider(PAY_METHODS.map((m) => m.id), resolveProviderName()) });
   const effectivePayMethod = resolveSelectedPayMethod(payMethod, visibleMethodIds);
   // 횟수 선택형 row 금액 = 1회가×선택 횟수(표시용 — 주문 생성 시 서버가 다시 확정), 그 외는 row 금액 그대로
   const itemAmount = (i: CartItem) => cartItemAmount(i);

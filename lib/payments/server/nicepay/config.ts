@@ -31,7 +31,9 @@ export function loadNicepayConfig(env: Env = process.env, opts: { codeFlag?: boo
   if (family !== "rest_v1" && family !== "v3_mid") missing.push("NICEPAY_API_FAMILY");
   const envName: NicepayEnvName = env.NICEPAY_ENV === "production" ? "production" : "sandbox";
   if (env.NICEPAY_ENV !== "production" && env.NICEPAY_ENV !== "sandbox") missing.push("NICEPAY_ENV");
-  if (!present(env.NICEPAY_RETURN_BASE_URL) || !/^https:\/\/[^/\s]+$/.test(env.NICEPAY_RETURN_BASE_URL!.trim().replace(/\/+$/, ""))) missing.push("NICEPAY_RETURN_BASE_URL");
+  // 복귀 주소는 https 만 허용한다. 예외: 로컬 개발·격리 브라우저 QA 용 http://localhost[:port] — sandbox 환경에서만(production 에서는 localhost 도 거부).
+  const baseOk = (v: string) => /^https:\/\/[^/\s]+$/.test(v) || (envName === "sandbox" && /^http:\/\/localhost(:\d{2,5})?$/.test(v));
+  if (!present(env.NICEPAY_RETURN_BASE_URL) || !baseOk(env.NICEPAY_RETURN_BASE_URL!.trim().replace(/\/+$/, ""))) missing.push("NICEPAY_RETURN_BASE_URL");
   if (!present(env.PAYMENT_RETURN_TOKEN_SECRET)) missing.push("PAYMENT_RETURN_TOKEN_SECRET");
   if (family === "rest_v1") { if (!present(env.NICEPAY_CLIENT_ID)) missing.push("NICEPAY_CLIENT_ID"); if (!present(env.NICEPAY_SECRET_KEY)) missing.push("NICEPAY_SECRET_KEY"); }
   if (family === "v3_mid") { if (!present(env.NICEPAY_MID)) missing.push("NICEPAY_MID"); if (!present(env.NICEPAY_MERCHANT_KEY)) missing.push("NICEPAY_MERCHANT_KEY"); }

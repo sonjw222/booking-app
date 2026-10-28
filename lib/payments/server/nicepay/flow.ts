@@ -88,13 +88,14 @@ export async function handleReturnPost(form: Record<string, unknown>, rt: string
     await d.cancelPendingOrder(orderId).catch(() => false);
     return where("&failed=1");
   }
+  let rejected = false;   // 서버가 이 인증 결과를 명확히 거절했다(서명/금액/MID 불일치·승인 거절 등) — 결과 화면이 오래 기다리지 않고 바로 실패 안내를 보이게 한다. 진행 중(in_progress)·예외(상태 불명)는 계속 확인한다.
   try {
-    if (family === "rest_v1" && d.rest) await handleNicepayRestAuthReturn(form, d.rest);
-    else if (family === "v3_mid" && d.v3) await handleNicepayAuthReturn(form, d.v3);
+    const rep = family === "rest_v1" && d.rest ? await handleNicepayRestAuthReturn(form, d.rest) : family === "v3_mid" && d.v3 ? await handleNicepayAuthReturn(form, d.v3) : null;
+    if (rep && rep.status >= 400 && (rep.body as { code?: unknown }).code !== "in_progress") rejected = true;
   } catch (e) {
     d.log("error", "PG_NICEPAY_RETURN_HANDLER_THROW", { orderId: maskId(orderId), error: e instanceof Error ? e.message.slice(0, 120) : "unknown" });
   }
-  return where();
+  return where(rejected ? "&failed=1" : "");
 }
 
 export async function handleStatus(input: { token: string | null; returnToken?: unknown; orderId?: unknown }, d: FlowDeps): Promise<Reply> {

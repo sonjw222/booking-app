@@ -5,7 +5,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { tossCancelPayment, tossConfirmPayment, tossGetPayment } from "./toss";
 import type { LifecycleDeps } from "./lifecycle";
-import { buildNicepayRefund } from "./nicepay/runtime";
+import { buildNicepayRefund, nicepayGate } from "./nicepay/runtime";
 
 const NO_SECRET = { ok: false as const, status: 500, code: "NO_SECRET", message: "결제 서버 설정이 없어요(TOSS_SECRET_KEY)" };
 
@@ -36,6 +36,10 @@ export function buildDeps(admin: SupabaseClient, tossSecretKey: string): Lifecyc
     // PG 게이트(2026-10-01): NEXT_PUBLIC_PG_CHECKOUT_ENABLED가 정확히 "true"가 아니면 일반 주문은 온라인 결제 승인을 거치지 않는다.
     // 예외는 심사관 전용 계정(accounts.pg_checkout_override)이 만든 주문뿐. 토스 호출보다 먼저 판정한다.
     async gateAllows(orderId) {
+      // NICEPAY 주문은 토스 심사 계정(pg_checkout_override)이 아니라 NICEPAY 전용 게이트(DB mode + nicepay_review_access + 심사 센터 소속)로만 판정한다.
+      // (이전에는 복귀 토큰 발급(/api/payments/return-token)이 이 토스 규칙을 그대로 써서, NICEPAY 심사관이 거부되고 토스 심사 계정이 통과하는 어긋남이 있었다 — 통합 QA 에서 발견)
+      const { data: kind } = await admin.from("orders").select("payment_provider").eq("id", orderId).maybeSingle();
+      if ((kind as { payment_provider?: string } | null)?.payment_provider === "nicepay") return nicepayGate(admin)(orderId);
       if (process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED === "true") return true;
       const { data: ord } = await admin.from("orders").select("profiles(accounts(pg_checkout_override))").eq("id", orderId).maybeSingle();
       return !!(ord as any)?.profiles?.accounts?.pg_checkout_override;

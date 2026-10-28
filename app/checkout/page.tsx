@@ -25,7 +25,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { fetchMyPgCheckoutOverride, fetchMyNicepayReviewAccess } from "../../lib/authAccount";
 import { toUserMessage } from "../../lib/userError";
 import { fetchApplicableCoupons, previewDiscount, type MemberCoupon } from "../../lib/coupons";
-import { visiblePayMethodIds, resolveSelectedPayMethod } from "../../lib/payMethods";
+import { visiblePayMethodIds, resolveSelectedPayMethod, methodsForProvider, NICEPAY_ONLINE_METHOD_IDS } from "../../lib/payMethods";
 import { checkoutCopy, DIRECT_ORDER_GUIDE } from "../../lib/checkoutCopy";
 import { computeBaseAmount, countOptionLabel, isCountSelectable, sortedTiers } from "../../lib/selectableCount";
 import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
@@ -269,7 +269,7 @@ function CheckoutContent() {
   const autoBookRequested = showAutoBook && autoBook;
   // 화면에 보이는 결제수단(PG 게이트 + 센터 pay_methods + direct 안전 대체)
   const visibleMethodIds = visiblePayMethodIds({
-    pgEnabled: pgCheckoutEnabled, allowed: allowedPay, all: PAY_METHODS.map((m) => m.id),
+    pgEnabled: pgCheckoutEnabled, allowed: allowedPay, all: methodsForProvider(PAY_METHODS.map((m) => m.id), resolveProviderName()),
   });
 
   const effectivePayMethodUi = resolveSelectedPayMethod(payMethod, visibleMethodIds);
@@ -347,7 +347,7 @@ function CheckoutContent() {
       return;
     }
     // 나머지(카드/카카오페이/토스페이/계좌이체)는 실제 PG 결제창을 거친다.
-    if (!PG_SUPPORTED_METHODS.includes(effectivePayMethod)) {
+    if (!PG_SUPPORTED_METHODS.includes(effectivePayMethod) || (resolveProviderName() === "nicepay" && !NICEPAY_ONLINE_METHOD_IDS.includes(effectivePayMethod))) {
       setError("지금은 카드/카카오페이/토스페이/계좌이체만 가능해요");
       return;
     }

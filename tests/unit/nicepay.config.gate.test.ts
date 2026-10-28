@@ -64,4 +64,11 @@ describe("비활성 결제 차단 — 모든 NICEPAY 라우트는 503, PG/DB 호
     const { buildNicepayRefund } = await import("../../lib/payments/server/nicepay/runtime");
     expect(buildNicepayRefund({} as never, { refundBegin: async () => ({ state: "locked" }), refundRelease: async () => ({ data: null, error: null }), dbRefund: async () => ({ data: null, error: null }) }, REST_ENV)).toBeUndefined();
   });
+  it("복귀 주소: http://localhost 는 sandbox 에서만 허용(production·다른 http 호스트는 거부)", () => {
+    const base = { ...V3_ENV, NICEPAY_ENV: "sandbox", NICEPAY_RETURN_BASE_URL: "http://localhost:3000" };
+    expect(loadNicepayConfig(base, { codeFlag: true }).ok).toBe(true);
+    expect(loadNicepayConfig({ ...base, NICEPAY_ENV: "production" }, { codeFlag: true }).ok).toBe(false);
+    expect(loadNicepayConfig({ ...base, NICEPAY_RETURN_BASE_URL: "http://127.0.0.1:3000" }, { codeFlag: true }).ok).toBe(false);
+    expect(loadNicepayConfig({ ...base, NICEPAY_RETURN_BASE_URL: "http://evil.test" }, { codeFlag: true }).ok).toBe(false);
+  });
 });
