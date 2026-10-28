@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-31 — 관리자 QA 후속 #248: switch 접근성 전수 + 알림톡·매출 화면 권한 게이트 (SQL·서버 정책 변경 없음)
+- 이름 없는 `button.switch` 전수(role/aria-checked/aria-label), 정적 테스트로 재발 방지.
+- `/manager/alimtalk/*`(`message.alimtalk.view`)·`/manager/sales`(`pass.sales.view`) 직접 접근 시 권한 없음 안내. 권한 조회 중·실패는 허용이 아님(fail-closed). 권한 키·서버 정책 불변.
+- #239 범위 대조·정책 메모(`docs/ADMIN_POLICY_NOTES_20261031.md`), 근거 `docs/qa/admin-followup-248-20261031/`.
+
 ## 2026-10-30 — 관리자 QA #238/#239: 격리 실브라우저 QA 매트릭스 + 결함 3건 수정 (운영·공유 DEV 미변경)
 - #238: 공유 DEV 읽기 전용 재확인(센터 8·플랫폼 관리자 0 → 실환경 QA BLOCKED). 격리 스택 + 같은 러너로 ON 9/OFF 5 PASS(OFF 의 4 는 ON 전용 BLOCKED, 정상). 이슈는 실환경 QA 전까지 열어 둔다.
 - #239: `tests/admin-qa/`(수동 실행, `scripts/isolated/adminQa/run.sh`) Chromium 54건 PASS — 오너 전 액션, 제한 직원 UI·서버 거부, 플랫폼 관리자 /admin/*, 접근성·키보드, 모바일 폭 에뮬레이션. 환불은 관리자 UI 미제공(N/A), 실기기는 BLOCKED. 결과 `docs/qa/admin-qa-238-239-20261030/`.

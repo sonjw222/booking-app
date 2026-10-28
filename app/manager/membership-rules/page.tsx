@@ -737,7 +737,7 @@ export default function MembershipRulesPage() {
                 <input aria-label="가격" inputMode="numeric" className="input-field" placeholder="0" value={pPrice} onChange={(e) => setPPrice(e.target.value)} />
                 <div className="set-row" style={{ padding: "12px 0 6px", borderBottom: "none" }}>
                   <div className="set-label">횟수 제한 없음 (무제한)</div>
-                  <button className={`switch ${pUnlimited ? "on" : ""}`} onClick={() => setPUnlimited(!pUnlimited)}>
+                  <button role="switch" aria-checked={pUnlimited} aria-label="횟수 제한 없음 (무제한)" className={`switch ${pUnlimited ? "on" : ""}`} onClick={() => setPUnlimited(!pUnlimited)}>
                     <span className="knob" />
                   </button>
                 </div>
@@ -756,7 +756,7 @@ export default function MembershipRulesPage() {
                 자체를 몇 개까지만 판매할지(예: 정원 10명짜리 특강이면 10개) 설정 */}
             <div className="set-row" style={{ padding: "12px 0 6px", borderBottom: "none" }}>
               <div className="set-label">판매 수량 제한<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>특강 등 — 정한 개수만큼 팔리면 자동으로 판매가 멈춰요</span></div>
-              <button className={`switch ${pLimitSale ? "on" : ""}`} onClick={() => setPLimitSale(!pLimitSale)}>
+              <button role="switch" aria-checked={pLimitSale} aria-label="판매 수량 제한" className={`switch ${pLimitSale ? "on" : ""}`} onClick={() => setPLimitSale(!pLimitSale)}>
                 <span className="knob" />
               </button>
             </div>
@@ -785,7 +785,7 @@ export default function MembershipRulesPage() {
                 다시 강제한다(UI에서만 막는 게 아님). */}
             <div className="set-row" style={{ padding: "12px 0 6px", borderBottom: "none" }}>
               <div className="set-label">쿠폰 적용 가능<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>끄면 이 상품엔 어떤 쿠폰도 적용할 수 없어요</span></div>
-              <button className={`switch ${pCouponEligible ? "on" : ""}`} onClick={() => setPCouponEligible(!pCouponEligible)}>
+              <button role="switch" aria-checked={pCouponEligible} aria-label="쿠폰 적용 가능" className={`switch ${pCouponEligible ? "on" : ""}`} onClick={() => setPCouponEligible(!pCouponEligible)}>
                 <span className="knob" />
               </button>
             </div>
@@ -926,14 +926,14 @@ export default function MembershipRulesPage() {
             <div className="menu-section-label" style={{ padding: "12px 0 6px" }}>구매 시 요일/시간 선택</div>
             <div className="set-row" style={{ padding: "6px 0", borderBottom: "none" }}>
               <div className="set-label">구매할 때 수강 요일 선택<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>회원이 구매할 때 이 수강권으로 이용할 요일을 선택해요.</span></div>
-              <button className={`switch ${pWeekdaySelectable ? "on" : ""}`} onClick={() => setPWeekdaySelectable(!pWeekdaySelectable)}>
+              <button role="switch" aria-checked={pWeekdaySelectable} aria-label="구매할 때 수강 요일 선택" className={`switch ${pWeekdaySelectable ? "on" : ""}`} onClick={() => setPWeekdaySelectable(!pWeekdaySelectable)}>
                 <span className="knob" />
               </button>
             </div>
             {pWeekdaySelectable && (
               <div className="set-row" style={{ padding: "6px 0", borderBottom: "none" }}>
                 <div className="set-label">시간도 함께 선택<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>요일을 고른 뒤 이용할 수업 시간까지 선택해요.</span></div>
-                <button className={`switch ${pTimeSelectable ? "on" : ""}`} onClick={() => setPTimeSelectable(!pTimeSelectable)}>
+                <button role="switch" aria-checked={pTimeSelectable} aria-label="시간도 함께 선택" className={`switch ${pTimeSelectable ? "on" : ""}`} onClick={() => setPTimeSelectable(!pTimeSelectable)}>
                   <span className="knob" />
                 </button>
               </div>

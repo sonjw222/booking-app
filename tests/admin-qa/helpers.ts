@@ -17,9 +17,10 @@ export const need = (n: string): string => { const v = process.env[n]; if (!v) t
 export const QA_CENTER_ID = () => need("QA_CENTER_ID");
 export function db(): SupabaseClient { return createClient(url, need("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } }); }
 
-export type Role = "owner" | "limited" | "member" | "platform";
+export type Role = "owner" | "allowed" | "limited" | "member" | "platform";
 const CREDS: Record<Role, () => [string, string]> = {
   owner: () => [need("TEST_MANAGER_A_EMAIL"), need("TEST_MANAGER_A_PASSWORD")],
+  allowed: () => [need("QA_ALLOWED_EMAIL"), need("QA_ALLOWED_PASSWORD")],
   limited: () => [need("QA_LIMITED_EMAIL"), need("QA_LIMITED_PASSWORD")],
   member: () => [need("TEST_USER_A_EMAIL"), need("TEST_USER_A_PASSWORD")],
   platform: () => [need("TEST_PLATFORM_ADMIN_EMAIL"), need("TEST_PLATFORM_ADMIN_PASSWORD")],

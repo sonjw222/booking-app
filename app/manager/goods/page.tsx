@@ -328,7 +328,7 @@ export default function GoodsPage() {
 
                 <div className="set-row" style={{ padding: "14px 0 6px", borderBottom: "none" }}>
                   <div className="set-label">횟수 제한 없음 (무제한)</div>
-                  <button className={`switch ${unlimited ? "on" : ""}`} onClick={() => setUnlimited(!unlimited)}>
+                  <button role="switch" aria-checked={unlimited} aria-label="횟수 제한 없음 (무제한)" className={`switch ${unlimited ? "on" : ""}`} onClick={() => setUnlimited(!unlimited)}>
                     <span className="knob" />
                   </button>
                 </div>
@@ -351,7 +351,7 @@ export default function GoodsPage() {
                 다시 강제한다. */}
             <div className="set-row" style={{ padding: "12px 0 6px", borderBottom: "none" }}>
               <div className="set-label">쿠폰 적용 가능<br /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>끄면 이 상품엔 어떤 쿠폰도 적용할 수 없어요</span></div>
-              <button className={`switch ${pCouponEligible ? "on" : ""}`} onClick={() => setPCouponEligible(!pCouponEligible)}>
+              <button role="switch" aria-checked={pCouponEligible} aria-label="쿠폰 적용 가능" className={`switch ${pCouponEligible ? "on" : ""}`} onClick={() => setPCouponEligible(!pCouponEligible)}>
                 <span className="knob" />
               </button>
             </div>

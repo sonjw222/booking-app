@@ -31,6 +31,7 @@ export default function ExpiryOptionField({
       <div className="set-row" style={{ padding: "14px 0 6px", borderBottom: "none" }}>
         <div className="set-label">기간 지나면 자동 만료</div>
         <button
+          role="switch" aria-checked={mode !== "none"} aria-label="기간 지나면 자동 만료"
           className={`switch ${mode !== "none" ? "on" : ""}`}
           disabled={disabled}
           onClick={() => onChange({ mode: mode === "none" ? "days" : "none", days, date, cutoffDay, allowEarlyUse })}
@@ -73,6 +74,7 @@ export default function ExpiryOptionField({
               <div className="set-row" style={{ padding: "10px 0 0", borderBottom: "none" }}>
                 <div className="set-label">구매 즉시 사용 허용</div>
                 <button
+                  role="switch" aria-checked={allowEarlyUse} aria-label="구매 즉시 사용 허용"
                   className={`switch ${allowEarlyUse ? "on" : ""}`}
                   disabled={disabled}
                   onClick={() => onChange({ mode, days, date, cutoffDay, allowEarlyUse: !allowEarlyUse })}

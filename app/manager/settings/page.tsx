@@ -229,7 +229,7 @@ export default function SettingsPage() {
           <div className="set-section-title">당일 예약</div>
           <div className="set-row">
             <div className="set-label">당일 예약 허용</div>
-            <button className={`switch ${s.allowSameDayBooking ? "on" : ""}`} onClick={() => up("allowSameDayBooking", !s.allowSameDayBooking)}>
+            <button role="switch" aria-checked={s.allowSameDayBooking} aria-label="당일 예약 허용" className={`switch ${s.allowSameDayBooking ? "on" : ""}`} onClick={() => up("allowSameDayBooking", !s.allowSameDayBooking)}>
               <span className="knob" />
             </button>
           </div>
