@@ -4,7 +4,7 @@ import { loadIsolatedEnv } from "./assertIsolated.mjs";
 import { createRequire } from "node:module"; const require = createRequire(process.cwd() + "/package.json"); const { createClient } = require("@supabase/supabase-js");
 const env = loadIsolatedEnv(process.env.ISO_ENV_FILE);
 const sql = (q, file) => { try { return { ok: true, out: execFileSync("docker", ["exec", "-i", "supabase_db_mwhabit-isolated", "psql", "-U", "postgres", "-At", "-v", "ON_ERROR_STOP=1", ...(file ? [] : ["-c", q])], { input: file ? fs.readFileSync(file) : undefined, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim() }; } catch (e) { return { ok: false, out: String(e.stderr || e.message).trim().split("\n").filter((l) => !/NOTICE/.test(l)).slice(-2).join(" | ") }; } };
-const APPLY = "add_nicepay_review_center_isolation_20261028.sql", RB = "rollback_add_nicepay_review_center_isolation_20261028.sql", PER = "add_public_storefront_product_periods_20261027.sql";
+const APPLY = "add_nicepay_review_center_isolation_20261028.sql", RB = "rollback_add_nicepay_review_center_isolation_20261028.sql", PER = "add_public_storefront_product_periods_20261027.sql", RB2B = "rollback_fix_nicepay_gate_reviewer_flag_20261029.sql", AP2B = "fix_nicepay_gate_reviewer_flag_20261029.sql";
 const res = []; const rec = (name, pass, detail) => { res.push({ name, pass, detail }); console.log((pass ? "PASS " : "FAIL ") + name + (detail ? " — " + detail : "")); };
 const svc = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const as = async (e, p) => { const c = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false } }); if (e) await c.auth.signInWithPassword({ email: e, password: p }); return c; };
@@ -14,6 +14,15 @@ const periodsDef = () => sql("select md5(pg_get_functiondef('fetch_public_storef
 
 // 전제: S2/S3 는 "기간 RPC 가 이전부터 있던" 경우를 시험하므로 먼저 P1(선행 기간 RPC)을 보장한다(S4 가 "없던" 경우를 따로 시험)
 sql(null, PER);
+// 시나리오 0: P2b 가 적용돼 있으면 P2 롤백은 아무것도 바꾸지 않고 중단(롤백은 역순: P2b → P2). 이어서 P2b 롤백은 게이트가 off 일 때만 성공한다.
+sql("update centers set is_internal=true where id='" + rev + "'"); sql("select 1");
+{ if (sql("select to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)') is not null").out !== "t") sql(null, AP2B);
+  const polBefore = sql("select count(*) from pg_policies where policyname='nicepay_review_isolation'").out; const r0 = sql(null, RB);
+  rec("S0 P2b 적용 상태에서 P2 롤백은 중단 + 변경 없음", !r0.ok && /P2b/.test(r0.out) && sql("select count(*) from pg_policies where policyname='nicepay_review_isolation'").out === polBefore, r0.out.slice(0, 80));
+  sql("update nicepay_checkout_gate set mode='reviewer' where id"); const gb = sql("select md5(pg_get_functiondef('public.nicepay_claim_order(uuid)'::regprocedure))").out; const r0b = sql(null, RB2B);
+  rec("S0b 게이트 mode 가 reviewer 면 P2b 롤백 중단 + 함수 변경 없음", !r0b.ok && /off 가 아니에요/.test(r0b.out) && sql("select md5(pg_get_functiondef('public.nicepay_claim_order(uuid)'::regprocedure))").out === gb, r0b.out.slice(0, 80));
+  sql("update nicepay_checkout_gate set mode='off' where id"); const r0c = sql(null, RB2B);
+  rec("S0c mode=off 에서 P2b 롤백 성공 + 도우미 함수 제거", r0c.ok && sql("select to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)') is null").out === "t", r0c.out.slice(0, 80)); }
 // 시나리오 1: 심사 센터가 공개 가능(approved, 비내부) 상태면 롤백이 아무것도 바꾸지 않고 중단
 sql("update centers set is_internal=false, status='approved' where id='" + rev + "'");
 const before = sql("select count(*) from pg_policies where policyname='nicepay_review_isolation'").out;

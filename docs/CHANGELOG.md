@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-10-30 — NICEPAY P2·P2b SQL 독립 리뷰 지적사항 반영 (로컬 수정·검증만, 운영·공유 DEV 미실행)
+- P2 `nicepay_review_guard_center()`: 센터↔상품(주문·수강권·장바구니·구매신청), 수업↔수강권 센터(예약) **일치 검사** 추가 — 운영 센터끼리 ID 를 섞어도 거부(NULL 허용 흐름은 비교 제외). 기존 제약으로는 보장되지 않음을 확인(FK/CHECK 없음, 매니저 RPC 는 수강권을 id 로만 조회). 수정 전 13/19(6건 결함 재현) → 수정 후 19/19.
+- P2b: `reviewer` 모드에서 전용 권한뿐 아니라 **주문의 실제 센터·상품이 심사 대상**인지 확인(`nicepay_order_is_review_target`), `nicepay_claim_order` 도 동일. off/public·서버(service_role)·진행 중(approving) 주문 처리 유지. 17/17.
+- 롤백 안전: P2b 롤백은 게이트 mode ≠ off 면 중단, P2 롤백은 P2b 가 남아 있으면 중단. 심사 종료 SQL 의 대기 주문 취소는 선점·거래·검토 흔적이 없는 pending 만.
+- 실행 시점 점검: P2 는 3개 함수, P2b 는 2개 함수의 정의 해시를 확인해 예상과 다르면 덮어쓰지 않고 중단. 운영자 전용 플래그 트리거는 `nicepay_is_client_request()` 로 클라이언트 요청을 판정(JWT sub 없는 authenticated/anon 도 거부).
+- 증거 `docs/qa/nicepay-p2-review-fix-20261030/`, 문서 `NICEPAY_SQL_FINAL_REVIEW.md`·`NICEPAY_SQL_RUNBOOK_20261028.md` 갱신.
 ## 2026-10-30 — NICEPAY 전용 권한 보호를 INSERT 까지 확장 + 최종 검토 문서 증거 교체 (로컬 검증만, 운영 미적용)
 - `accounts.nicepay_review_access` 보호 트리거를 `BEFORE INSERT OR UPDATE` 로 확장: 가입(INSERT)·upsert·삭제 후 재생성 시점에 true 지정을 거부(서버·SQL Editor·플랫폼 관리자는 통과). 실제 인증·REST 26/26, 수정 전 15/25(결함 재현).
 - 범위 밖 선행 취약점 발견: 기존 권한 컬럼(`is_platform_admin`·`pg_checkout_override`·`merged_into`)도 가입 시점에 지정 가능(로컬 재현, 운영 동일 구성 읽기 전용 확인). 별도 초안 `fix_accounts_insert_privileged_columns_20261030.sql`(미실행).

@@ -9,6 +9,10 @@
 BEGIN;
 do $$
 begin
+  -- 역순 롤백 강제: P2b(게이트 함수 패치)가 적용돼 있으면 먼저 rollback_fix_nicepay_gate_reviewer_flag_20261029.sql 을 실행해야 한다(P2b 는 P2 의 컬럼에 의존).
+  if to_regprocedure('public.nicepay_order_is_review_target(uuid,uuid)') is not null then
+    raise exception '롤백 중단: P2b(NICEPAY 게이트 판별 패치)가 아직 적용돼 있어요. 먼저 rollback_fix_nicepay_gate_reviewer_flag_20261029.sql 을 실행하세요.';
+  end if;
   if exists (select 1 from information_schema.columns where table_schema='public' and table_name='centers' and column_name='is_nicepay_review')
      and exists (select 1 from centers where is_nicepay_review and status = 'approved' and not is_internal) then
     raise exception '롤백 중단: 일반 사용자에게 공개될 수 있는 심사 센터가 있어요. 먼저 update centers set is_internal = true where is_nicepay_review; 를 실행하세요(또는 플랫폼 관리자가 센터 승인 상태를 되돌리세요).';
@@ -175,6 +179,7 @@ $$;$f$;
   end if;
 end $do$;
 drop function if exists nicepay_class_has_my_reservation(uuid);
+drop function if exists nicepay_is_client_request();
 drop function if exists nicepay_review_guard_center();
 drop function if exists enforce_center_nicepay_review_admin_only();
 drop function if exists nicepay_review_center_member_allowed(uuid);

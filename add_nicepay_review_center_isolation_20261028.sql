@@ -5,7 +5,7 @@
 --   · 일반 회원/비회원에게는 그 센터·수업·상품이 어떤 경로로도 보이지 않고(목록·직접 URL·RPC·구매·예약),
 --   · NICEPAY 심사관 계정(accounts.nicepay_review_access = true — 신규 전용 권한. 기존 토스 심사용 pg_checkout_override 와 완전히 별개)에게는 심사 센터만 보이고 기존 운영 센터는 보이지 않게 한다.
 --     기존 토스 심사 계정(pg_checkout_override)은 이 SQL 로 아무 영향도 받지 않는다.
---   기존 센터·상품·주문·수강권·예약 데이터는 읽기/수정/삭제하지 않는다(행 변경 0). 새 컬럼 2개(centers.is_nicepay_review, accounts.nicepay_review_access) + 함수 7개 + 정책 4개 + 트리거 12개 + 기존 함수 3~4개 정의 교체(center_rows_visible, 목록 RPC 2개, 선택적 기간 RPC).
+--   기존 센터·상품·주문·수강권·예약 데이터는 읽기/수정/삭제하지 않는다(행 변경 0). 새 컬럼 2개(centers.is_nicepay_review, accounts.nicepay_review_access) + 함수 8개 + 정책 4개 + 트리거 12개 + 기존 함수 3~4개 정의 교체(center_rows_visible, 목록 RPC 2개, 선택적 기간 RPC).
 --
 -- 적용 순서(전제): ① (선택) add_public_storefront_product_periods_20261027.sql — 이 파일이 같은 함수를 조건 추가 버전으로 다시 만들므로 ①이 없어도 안전하다
 --                   ② 이 파일  ③ (별도 승인, 데이터 생성) seed_nicepay_review_center_20261028.sql
@@ -25,7 +25,7 @@ BEGIN;
 -- 롤백이 이전 상태를 정확히 복원하도록, 기간 RPC 가 이 파일 적용 전에 있었는지 기록한다(없었으면 이 파일이 만든 것 → 롤백 시 삭제).
 create temp table _nicepay_periods_existed on commit drop as select to_regprocedure('fetch_public_storefront_product_periods(uuid)') is not null as existed;
 
--- preflight: 전제 객체가 없으면 중단(부분 적용 방지)
+-- preflight 1: 전제 객체가 없으면 중단(부분 적용 방지)
 do $$
 begin
   if to_regprocedure('my_account_id()') is null or to_regprocedure('my_managed_center_ids()') is null
@@ -38,6 +38,33 @@ begin
   end if;
 end $$;
 
+-- preflight 2: 이 파일이 "통째로 다시 만드는" 기존 함수 3개의 현재 정의가 예상(적용 전 운영 정의 또는 이 파일을 이미 적용한 정의)과 정확히 같은지 확인한다.
+--   다르면 운영에서 따로 바뀐 내용을 덮어쓸 수 있으므로 아무것도 바꾸지 않고 중단한다(사전 점검 P0 와 같은 기준을 실행 시점에도 강제).
+--   기대값: 적용 전 = 2026-10-29 운영 읽기 전용 조회 값, 적용 후 = 이 파일을 격리 DB 에 적용해 측정한 값.
+do $$
+declare
+  r record;
+begin
+  for r in
+    select * from (values
+      ('public.center_rows_visible(uuid)', '2be0d75899571b973f43d213713053e3', 'bbbf4e8ea2ce9aac72df0ceddee36243'),
+      ('public.fetch_public_storefront_products(uuid)', 'fda8e1821f997e9879c757187ab35a84', 'b40c8da87ee36e7cfd6d3e2cb1880d4c'),
+      ('public.fetch_purchasable_products(uuid)', '675be9c77818e1eb61552fc483e51b18', '04286c619a7edb2e2becd98b70394f42')
+    ) as t(sig, pre_md5, post_md5)
+  loop
+    if md5(pg_get_functiondef(to_regprocedure(r.sig))) not in (r.pre_md5, r.post_md5) then
+      raise exception 'NICEPAY 심사 분리: % 의 현재 정의가 예상과 달라요(해시 %) — 덮어쓰지 않고 중단합니다. 운영 정의 차이를 먼저 확인하세요.', r.sig, md5(pg_get_functiondef(to_regprocedure(r.sig)));
+    end if;
+  end loop;
+end $$;
+
+-- 클라이언트(앱) 요청인지 판별: JWT 에 사용자(sub)가 있거나, 요청 롤이 anon/authenticated 이면 클라이언트다. 서버(service_role)·SQL Editor(postgres)·cron 은 아니다.
+--   auth.uid() is null 만으로 "서버"로 보면, sub 없는 anon/authenticated 요청이 보호 트리거를 통과할 수 있다(RLS 가 먼저 막지만 방어를 겹친다).
+create or replace function nicepay_is_client_request()
+returns boolean language sql stable set search_path = public as $$
+    select auth.uid() is not null or coalesce(nullif(current_setting('role', true), ''), 'none') in ('anon', 'authenticated');
+$$;
+
 -- NICEPAY 심사관 전용 권한(토스 심사용 pg_checkout_override 와 별개). 운영자만 지정 가능(본인이 스스로 켤 수 없음) — SQL Editor(auth.uid() is null)·서버(service_role)·플랫폼 관리자만.
 -- ⚠ INSERT 도 막는다: "본인 계정 생성" RLS 정책은 auth_id = auth.uid() 만 보고 컬럼 값을 보지 않으므로, UPDATE 만 막으면 가입 시점에 `nicepay_review_access = true` 로 계정을 만들어 우회할 수 있다.
 --   정상 가입(앱 가입 화면은 이 컬럼을 보내지 않아 기본값 false)은 그대로 통과한다. upsert(INSERT … ON CONFLICT DO UPDATE)는 INSERT·UPDATE 트리거를 모두 거치므로 같은 기준이다.
@@ -48,7 +75,7 @@ returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if (tg_op = 'INSERT' and new.nicepay_review_access)
      or (tg_op = 'UPDATE' and new.nicepay_review_access is distinct from old.nicepay_review_access) then
-    if auth.uid() is not null and not is_platform_admin() then raise exception '이 값은 운영자만 변경할 수 있어요'; end if;
+    if nicepay_is_client_request() and not is_platform_admin() then raise exception '이 값은 운영자만 변경할 수 있어요'; end if;
   end if;
   return new;
 end $$;
@@ -64,7 +91,7 @@ create or replace function enforce_center_nicepay_review_admin_only()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if (tg_op = 'INSERT' and new.is_nicepay_review) or (tg_op = 'UPDATE' and new.is_nicepay_review is distinct from old.is_nicepay_review) then
-    if auth.uid() is not null and not is_platform_admin() then
+    if nicepay_is_client_request() and not is_platform_admin() then
       raise exception '이 값은 운영자만 변경할 수 있어요';
     end if;
   end if;
@@ -143,26 +170,29 @@ drop policy if exists "nicepay_review_isolation" on products;
 create policy "nicepay_review_isolation" on products as restrictive for select using (nicepay_review_center_allowed(center_id));
 
 -- 구매·예약·수강권 발급 경로(RPC 는 SECURITY DEFINER 라 RLS 를 우회하고, orders INSERT 정책은 클라이언트가 보낸 center_id 와 product_id 의 일치를 보지 않는다).
--- 그래서 행이 가리키는 "모든" 센터(행의 center_id + 상품의 실제 센터 + 수업의 센터 + 수강권의 센터)가 호출자에게 허용된 센터인지 테이블 트리거로 확인한다.
--- 클라이언트가 보낸 center_id 만 믿지 않는다. auth.uid() is null(서버/service_role)은 통과. UPDATE 는 해당 컬럼이 실제로 바뀔 때만 검사한다.
+-- 그래서 행이 가리키는 "모든" 센터(행의 center_id + 상품의 실제 센터 + 수업의 센터 + 수강권의 센터)가 (1) 서로 일치하고 (2) 호출자에게 허용된 센터인지 테이블 트리거로 확인한다.
+--  · 일치 검사의 근거: orders/memberships/cart_items/purchase_requests 에는 center_id ↔ product_id 소속을 묶는 FK·CHECK·트리거가 없다(FK 는 각각 따로). 발급 함수(_issue_membership_and_record_payment)는
+--    주문의 center_id 를 그대로 수강권·결제에 복사하므로, 불일치 주문은 다른 센터 상품 조건으로 한 센터 소속 수강권·매출을 만든다. 운영 데이터는 불일치 0건(주문 22·수강권 24·장바구니 0·구매신청 0).
+--  · reservations: 클라이언트는 INSERT 권한이 없고 reserve_class/reserve_with_membership 은 수강권 센터 = 수업 센터를 요구하지만, 매니저 RPC(admin_assign_reservation·manager_book_member)는 수강권을 id 로만 찾아
+--    수업 센터와 비교하지 않는다 → 같은 일치 검사를 둔다(운영 예약 19건 불일치 0).
+--  · NULL 은 일치 검사에서 제외한다(주문의 product_id null·수강권의 수동 발급 product_id null·예약의 membership_id null 같은 기존 정상 흐름 보존).
+-- 클라이언트가 보낸 center_id 만 믿지 않는다. 서버(service_role)·SQL Editor·cron(nicepay_is_client_request() 가 false)은 통과. UPDATE 는 해당 컬럼이 실제로 바뀔 때만 검사한다.
 create or replace function nicepay_review_guard_center()
 returns trigger language plpgsql security definer set search_path = public as $$
-declare v_centers uuid[] := '{}'; v_c uuid; v_row jsonb := to_jsonb(new);
+declare v_a uuid; v_b uuid; v_row jsonb := to_jsonb(new);
 begin
-  if auth.uid() is null then return new; end if;
+  if not nicepay_is_client_request() then return new; end if;
   if tg_table_name = 'reservations' then
-    select c.center_id into v_c from classes c where c.id = (v_row->>'class_id')::uuid;
-    if v_c is not null then v_centers := v_centers || v_c; end if;
-    select m.center_id into v_c from memberships m where m.id = (v_row->>'membership_id')::uuid;
-    if v_c is not null then v_centers := v_centers || v_c; end if;
+    select c.center_id into v_a from classes c where c.id = (v_row->>'class_id')::uuid;           -- 수업의 센터
+    select m.center_id into v_b from memberships m where m.id = (v_row->>'membership_id')::uuid;  -- 수강권의 센터
+    if v_a is not null and v_b is not null and v_a <> v_b then raise exception '수업과 수강권의 센터가 일치하지 않아요'; end if;
   else
-    if (v_row->>'center_id') is not null then v_centers := v_centers || (v_row->>'center_id')::uuid; end if;
-    select p.center_id into v_c from products p where p.id = (v_row->>'product_id')::uuid;
-    if v_c is not null then v_centers := v_centers || v_c; end if;
+    v_a := nullif(v_row->>'center_id', '')::uuid;                                                  -- 행이 주장하는 센터
+    select p.center_id into v_b from products p where p.id = (v_row->>'product_id')::uuid;        -- 상품의 실제 센터
+    if v_a is not null and v_b is not null and v_a <> v_b then raise exception '센터와 상품이 일치하지 않아요'; end if;
   end if;
-  foreach v_c in array v_centers loop
-    if not nicepay_review_center_member_allowed(v_c) then raise exception '이 센터의 상품·수업은 이용할 수 없어요'; end if;
-  end loop;
+  if v_a is not null and not nicepay_review_center_member_allowed(v_a) then raise exception '이 센터의 상품·수업은 이용할 수 없어요'; end if;
+  if v_b is not null and not nicepay_review_center_member_allowed(v_b) then raise exception '이 센터의 상품·수업은 이용할 수 없어요'; end if;
   return new;
 end $$;
 do $$

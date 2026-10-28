@@ -1,0 +1,157 @@
+{
+ "failures": 6,
+ "results": [
+  {
+   "id": "O1",
+   "name": "정상 주문(센터=상품 센터)",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "O2",
+   "name": "정상 주문(create_order_secure RPC)",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "O3",
+   "name": "운영 센터 간 불일치(center=센터1, product=센터2 상품)",
+   "expected": "DENIED",
+   "actual": "CREATED",
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "O4",
+   "name": "운영 센터 간 불일치(center=센터2, product=센터1 상품)",
+   "expected": "DENIED",
+   "actual": "CREATED",
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "O5",
+   "name": "product_id 가 NULL 인 주문은 기존대로 허용(NULL 은 일치 검사 제외)",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "O6",
+   "name": "서버(service_role) 경로는 이 검사를 받지 않는다(기존 서버 처리 유지)",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "O7",
+   "name": "본인 대기 주문 취소(UPDATE status)는 정상",
+   "expected": "UPDATED",
+   "actual": "UPDATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C1",
+   "name": "정상 장바구니",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C2",
+   "name": "장바구니 불일치",
+   "expected": "DENIED",
+   "actual": "CREATED",
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "P1",
+   "name": "정상 구매신청",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "P2",
+   "name": "구매신청 불일치",
+   "expected": "DENIED",
+   "actual": "CREATED",
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "P3",
+   "name": "구매신청 product_id NULL 은 허용",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "M1",
+   "name": "수강권 정상(센터=상품 센터)",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "M2",
+   "name": "수강권 불일치(center=센터1, product=센터2 상품)",
+   "expected": "DENIED",
+   "actual": "CREATED",
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "M3",
+   "name": "수동 발급처럼 product_id NULL 은 허용",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R1",
+   "name": "매니저가 같은 센터 수강권으로 예약(정상)",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R2",
+   "name": "매니저가 다른 센터 수강권으로 예약 시도(수업 센터 ≠ 수강권 센터)",
+   "expected": "DENIED",
+   "actual": "CREATED",
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "R3",
+   "name": "수강권 없이(membership_id NULL) 예약은 기존대로 허용",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R4",
+   "name": "회원 본인의 예약 취소는 정상",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  }
+ ]
+}

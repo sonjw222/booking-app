@@ -24,16 +24,18 @@ describe("NICEPAY 심사 센터 분리 SQL — 정적 계약(실제 격리 Postg
     expect(apply.match(/as restrictive for select/g)).toHaveLength(3);
     expect(nonComment(apply)).not.toMatch(/drop policy if exists "(승인된 센터 조회|승인된 센터 수업 조회|상품 조회)"/);
   });
-  it("구매·예약·수강권 발급 경로는 테이블 트리거로 막는다(SECURITY DEFINER RPC 우회 방지), 서버(auth.uid() null)는 통과", () => {
+  it("구매·예약·수강권 발급 경로는 테이블 트리거로 막는다(SECURITY DEFINER RPC 우회 방지), 서버(클라이언트 요청이 아닌 경로)는 통과", () => {
     for (const t of ["orders", "memberships", "cart_items", "purchase_requests"]) expect(apply).toContain(`'${t}'`);
     expect(apply).toContain("trg_%s_nicepay_review_guard"); expect(apply).toContain("trg_%s_nicepay_review_guard_upd");
     expect(apply).toContain("trg_reservations_nicepay_review_guard"); expect(apply).toContain("trg_reservations_nicepay_review_guard_upd");
-    expect(apply).toMatch(/if auth\.uid\(\) is null then return new; end if;/);
+    expect(apply).toMatch(/if not nicepay_is_client_request\(\) then return new; end if;/);
   });
   it("클라이언트가 보낸 center_id 만 믿지 않는다 — 상품의 실제 센터·수업 센터·수강권 센터도 검사하고, UPDATE 는 바뀔 때만 검사", () => {
-    expect(apply).toMatch(/select p\.center_id into v_c from products p where p\.id = \(v_row->>'product_id'\)::uuid/);
-    expect(apply).toMatch(/select c\.center_id into v_c from classes c/); expect(apply).toMatch(/select m\.center_id into v_c from memberships m/);
-    expect(apply).toMatch(/foreach v_c in array v_centers loop/);
+    expect(apply).toMatch(/select p\.center_id into v_b from products p where p\.id = \(v_row->>'product_id'\)::uuid/);
+    expect(apply).toMatch(/select c\.center_id into v_a from classes c/); expect(apply).toMatch(/select m\.center_id into v_b from memberships m/);
+    // 센터↔상품, 수업↔수강권 센터 일치 검사(둘 다 non-null 일 때만 — NULL 을 허용하는 기존 흐름 유지)
+    expect(apply).toContain("센터와 상품이 일치하지 않아요"); expect(apply).toContain("수업과 수강권의 센터가 일치하지 않아요");
+    expect(apply).toMatch(/v_a is not null and v_b is not null and v_a <> v_b/);
     expect(apply.match(/when \(old\.center_id is distinct from new\.center_id or old\.product_id is distinct from new\.product_id\)/g)).toHaveLength(1);
     expect(apply).toMatch(/update of class_id, membership_id on reservations/);
   });
@@ -81,31 +83,35 @@ describe("NICEPAY 심사 센터 분리 SQL — 정적 계약(실제 격리 Postg
   it("게이트 패치: 운영 적용 함수 2개의 심사관 판별만 전용 권한으로 제자리 치환(통째 덮어쓰기 금지·멱등·역치환 롤백)", () => {
     const gate = read("fix_nicepay_gate_reviewer_flag_20261029.sql"); const gateRb = read("rollback_fix_nicepay_gate_reviewer_flag_20261029.sql");
     expect(gate).toContain("orders_guard_nicepay_create"); expect(gate).toContain("nicepay_claim_order");
-    expect(gate).toMatch(/replace\(v_def, 'pg_checkout_override', 'nicepay_review_access'\)/); expect(gate).toContain("이미 전용 권한으로 바뀜 — 건너뜀");
+    expect(gate).toContain("nicepay_order_is_review_target(new.center_id, new.product_id)"); expect(gate).toContain("nicepay_order_is_review_target(go.center_id, go.product_id)");
+    expect(gate).toContain("의 현재 정의가 예상"); expect(gate).toContain("덮어쓰지 않고 중단합니다"); expect(gate).toContain("b2f340d8d41fc2428e26c7cde3aaafd4"); expect(gate).toContain("4cb7d4ece28db732bd5886088c034609"); expect(gate).toContain("721bef6e27646547535cfe7b05393f88"); expect(gate).toContain("d7145831da2f416612818d2e4fe5d5fc");
+    expect(gate).toContain("건너뜀");
     expect(gate).toContain("accounts.nicepay_review_access 가 없어요"); expect(nonComment(gate)).not.toMatch(/drop |delete |truncate/i);
-    expect(gateRb).toMatch(/replace\(v_def, 'nicepay_review_access', 'pg_checkout_override'\)/);
+    expect(gateRb).toContain("mode 가 off 가 아니에요"); expect(gateRb).toContain("drop function if exists public.nicepay_order_is_review_target");
+    expect(gateRb).toContain("b2f340d8d41fc2428e26c7cde3aaafd4");
   });
   it("종료 절차: 권한 해제·게이트 off·센터 비공개·대기 주문 정리, 기존 센터/토스 계정/결제 기록은 건드리지 않는다", () => {
     const close = nonComment(read("close_nicepay_review_20261029.sql"));
     expect(close).toMatch(/update accounts set nicepay_review_access = false/); expect(close).toMatch(/update nicepay_checkout_gate set mode = 'off'/);
-    expect(close).toMatch(/update centers set is_internal = true where is_nicepay_review/); expect(close).toMatch(/status = 'pending' and center_id in \(select id from centers where is_nicepay_review\)/);
+    expect(close).toMatch(/update centers set is_internal = true where is_nicepay_review/); expect(close).toMatch(/status = 'pending' and pg_claim_id is null and pg_tid is null and pg_review_at is null\s+and center_id in \(select id from centers where is_nicepay_review\)|status = 'pending' and pg_claim_id is null and pg_tid is null and pg_review_at is null/);
     expect(close).not.toMatch(/pg_checkout_override\s*=|delete\s+from|drop\s|truncate/i);
   });
 
-  it("검증 SQL 은 P2 가 실제로 만드는 것과 일치: 컬럼 2·함수 7·정책 3+1·트리거 12(정확한 이름), 운영의 기존 nicepay_review_actions_* 트리거를 세지 않는다", () => {
-    expect(verify).toContain("columns_must_be_2"); expect(verify).toContain("new_functions_must_be_7"); expect(verify).toContain("triggers_must_be_12");
+  it("검증 SQL 은 P2 가 실제로 만드는 것과 일치: 컬럼 2·함수 8·정책 3+1·트리거 12(정확한 이름), 운영의 기존 nicepay_review_actions_* 트리거를 세지 않는다", () => {
+    expect(verify).toContain("columns_must_be_2"); expect(verify).toContain("new_functions_must_be_8"); expect(verify).toContain("triggers_must_be_12");
     expect(verify).not.toMatch(/tgname like '%nicepay_review%'/);
     const cols = [...apply.matchAll(/add column if not exists (\w+)/g)].map((m) => m[1]).filter((c) => c.startsWith("is_nicepay") || c.startsWith("nicepay_"));
     expect(cols.sort()).toEqual(["is_nicepay_review", "nicepay_review_access"]);
     const fns = [...apply.matchAll(/^create or replace function (nicepay_\w+|enforce_\w*nicepay\w+)\(/gm)].map((m) => m[1]);
-    expect(new Set(fns).size).toBe(7);
+    expect(new Set(fns).size).toBe(8);
     for (const f of new Set(fns)) expect(verify).toContain(`'${f}'`);
   });
 
-  it("전용 권한 보호는 UPDATE 뿐 아니라 INSERT(가입·upsert·삭제 후 재생성)에도 걸린다 — 서버/SQL Editor(auth.uid() is null)·플랫폼 관리자는 통과", () => {
+  it("전용 권한 보호는 UPDATE 뿐 아니라 INSERT(가입·upsert·삭제 후 재생성)에도 걸린다 — 서버/SQL Editor(클라이언트 요청이 아닌 경로)·플랫폼 관리자는 통과", () => {
     expect(apply).toMatch(/create trigger trg_accounts_nicepay_review_access_admin_only before insert or update on accounts/);
     expect(apply).toMatch(/tg_op = 'INSERT' and new\.nicepay_review_access/); expect(apply).toMatch(/tg_op = 'UPDATE' and new\.nicepay_review_access is distinct from old\.nicepay_review_access/);
-    expect(apply).toMatch(/if auth\.uid\(\) is not null and not is_platform_admin\(\) then raise exception/);
+    expect(apply).toMatch(/if nicepay_is_client_request\(\) and not is_platform_admin\(\) then/);
+    expect(apply).toMatch(/create or replace function nicepay_is_client_request\(\)[\s\S]*auth\.uid\(\) is not null or coalesce\(nullif\(current_setting\('role', true\), ''\), 'none'\) in \('anon', 'authenticated'\)/);
   });
   it("별도 보안 초안(accounts INSERT 특권 컬럼 보호): BEFORE INSERT 트리거 1개, 세 컬럼 거부, 서버·관리자 통과, 기존 행·트리거 불변, P2 에 포함되지 않음", () => {
     const d = read("fix_accounts_insert_privileged_columns_20261030.sql"); const code = nonComment(d);

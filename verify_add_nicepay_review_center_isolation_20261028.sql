@@ -4,7 +4,7 @@ select
   (select count(*) from information_schema.columns where table_schema='public'
      and ((table_name='centers' and column_name='is_nicepay_review') or (table_name='accounts' and column_name='nicepay_review_access'))) as columns_must_be_2,
   (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname='public'
-     and p.proname in ('nicepay_is_reviewer','nicepay_review_center_allowed','nicepay_review_center_member_allowed','nicepay_class_has_my_reservation','nicepay_review_guard_center','enforce_center_nicepay_review_admin_only','enforce_nicepay_review_access_admin_only')) as new_functions_must_be_7,
+     and p.proname in ('nicepay_is_reviewer','nicepay_review_center_allowed','nicepay_review_center_member_allowed','nicepay_class_has_my_reservation','nicepay_review_guard_center','enforce_center_nicepay_review_admin_only','enforce_nicepay_review_access_admin_only','nicepay_is_client_request')) as new_functions_must_be_8,
   (select count(*) from pg_policies where policyname='nicepay_review_isolation') as restrictive_policies_must_be_3,
   (select count(*) from pg_policies where policyname='nicepay_own_reservation_class') as own_reservation_policy_must_be_1,
   (select count(*) from pg_trigger where not tgisinternal and tgname ~ '^trg_(centers|accounts|orders|memberships|cart_items|purchase_requests|reservations)_nicepay_review_') as triggers_must_be_12,
@@ -12,6 +12,7 @@ select
      and p.proname in ('fetch_public_storefront_products','fetch_purchasable_products','fetch_public_storefront_product_periods')
      and position('nicepay_review_center_member_allowed' in pg_get_functiondef(p.oid)) > 0) as list_rpcs_replaced_must_be_3,
   position('nicepay_review_center_allowed' in pg_get_functiondef('public.center_rows_visible(uuid)'::regprocedure)) > 0 as center_rows_visible_replaced_must_be_true,
+  (md5(pg_get_functiondef('public.center_rows_visible(uuid)'::regprocedure)) = 'bbbf4e8ea2ce9aac72df0ceddee36243' and md5(pg_get_functiondef('public.fetch_public_storefront_products(uuid)'::regprocedure)) = 'b40c8da87ee36e7cfd6d3e2cb1880d4c' and md5(pg_get_functiondef('public.fetch_purchasable_products(uuid)'::regprocedure)) = '04286c619a7edb2e2becd98b70394f42') as replaced_definitions_match_expected_must_be_true,
   (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname='public'
      and p.proname in ('nicepay_is_reviewer','nicepay_review_center_allowed','nicepay_review_center_member_allowed','nicepay_class_has_my_reservation')
      and has_function_privilege('public', p.oid, 'execute')) as helpers_executable_by_public_must_be_0;

@@ -2,6 +2,8 @@
 
 ## 2026-10-30 accounts INSERT 보호
 - **P0(보안·결정)**: `fix_accounts_insert_privileged_columns_20261030.sql` 적용 여부 — 가입만으로 플랫폼 관리자 권한·계정 사칭이 가능한 구성(로컬 재현, 운영 동일 구성 확인). NICEPAY 일정과 무관하게 우선 검토.
+- **P1(보안·후속)**: 기존 운영 트리거(`is_platform_admin`·`pg_checkout_override`·`merged_into` 보호, accounts INSERT 보호 PR #245)가 `auth.uid() is null` 을 서버 판정에 쓴다. PostgREST 로는 RLS 때문에 도달할 수 없으나 `nicepay_is_client_request()` 같은 판정으로 보강할지 검토(이번 범위 밖).
+- **P1**: P2·P2b 의 "적용본" 정의 해시 상수는 로컬 PostgreSQL 17 에서 측정 — 운영(17.6)에서 다르면 SQL 이 중단(안전). 운영 적용 직전 P0 로 확인하고 필요하면 상수 재측정.
 - **P1**: 브라우저 가입 화면(전화 OTP 포함) 자체의 권한 컬럼 거부 시험.
 ## 2026-10-29 Preflight 후속
 - **P0(승인)**: P2 → P2b 운영 적용 승인(해시·P0b 통과). 적용 직후 `verify_…`(컬럼 2·함수 7·정책 3+1·트리거 12) 확인.

@@ -30,3 +30,8 @@ select to_regprocedure('public.nicepay_checkout_mode()') is not null as gate_fn,
        (select mode from nicepay_checkout_gate where id) as gate_mode_now,
        position('pg_checkout_override' in pg_get_functiondef('public.orders_guard_nicepay_create()'::regprocedure)) > 0 as gate_uses_toss_flag_now,
        position('pg_checkout_override' in pg_get_functiondef('public.nicepay_claim_order(uuid)'::regprocedure)) > 0 as claim_uses_toss_flag_now;
+-- P2b 대상 게이트 함수 2개의 정의 해시(적용 전 기대값과 정확히 같아야 한다 — 다르면 P2b 는 덮어쓰지 않고 중단한다). P2b 적용 후에는 verify_fix_nicepay_gate_reviewer_flag 를 본다.
+select 'orders_guard_nicepay_create' as object, md5(pg_get_functiondef('public.orders_guard_nicepay_create()'::regprocedure)) as actual_md5, 'b2f340d8d41fc2428e26c7cde3aaafd4' as expected_md5,
+       md5(pg_get_functiondef('public.orders_guard_nicepay_create()'::regprocedure)) = 'b2f340d8d41fc2428e26c7cde3aaafd4' as matches
+union all select 'nicepay_claim_order', md5(pg_get_functiondef('public.nicepay_claim_order(uuid)'::regprocedure)), '4cb7d4ece28db732bd5886088c034609',
+       md5(pg_get_functiondef('public.nicepay_claim_order(uuid)'::regprocedure)) = '4cb7d4ece28db732bd5886088c034609';
