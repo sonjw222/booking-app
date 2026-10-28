@@ -7,6 +7,37 @@
 - **P2**: `accounts` 의 다른 컬럼(`is_manager`·`is_member`·`deactivated_at` 등)도 가입 시점에 임의 지정 가능 — 현재 권한 판정에 쓰이지 않는 것으로 보이나 컬럼별 위험 검토 필요(이번 수정은 특권 3개만).
 - **P2**: 권한 컬럼 보호를 "새 컬럼을 추가할 때 INSERT·UPDATE 모두 막는다"는 규칙으로 DEVELOPMENT_RULES 에 반영.
 - **P3**: auth 사용자가 없는 계정 3개(탈퇴 표시 1·QA 시험 2) 정리 여부 판단.
+## 2026-10-30 accounts INSERT 보호
+- **P1(보안·후속)**: 기존 운영 트리거(`is_platform_admin`·`pg_checkout_override`·`merged_into` 보호, accounts INSERT 보호 PR #245)가 `auth.uid() is null` 을 서버 판정에 쓴다. PostgREST 로는 RLS 때문에 도달할 수 없으나 `nicepay_is_client_request()` 같은 판정으로 보강할지 검토(이번 범위 밖).
+- **P1(승인)**: 심사 종료 후 P2 롤백이 필요한데 심사 센터에 일반 회원 관계(`center_members` 등)가 남아 있으면 롤백이 중단된다. 관계 정리 절차(어떤 데이터를 어떻게 정리할지)는 사용자 승인 후 정한다 — 기본 권장은 P2 를 유지.
+- **P2**: 운영 SQL Editor 에서 롤백 SQL 의 `set local role authenticated/anon` 가능 여부(불가 시 롤백이 안전하게 중단됨)를 적용 시점에 확인.
+- **P1**: P2·P2b 의 "적용본" 정의 해시 상수는 로컬 PostgreSQL 17 에서 측정 — 운영(17.6)에서 다르면 SQL 이 중단(안전). 운영 적용 직전 P0 로 확인하고 필요하면 상수 재측정.
+- **P1**: 브라우저 가입 화면(전화 OTP 포함) 자체의 권한 컬럼 거부 시험.
+## 2026-10-29 Preflight 후속
+- **P0(승인)**: P2 → P2b 운영 적용 승인(해시·P0b 통과). 적용 직후 `verify_…`(컬럼 2·함수 7·정책 3+1·트리거 12) 확인.
+- **P1**: Vercel 환경변수 상태 확인(이 환경에서는 접근 불가), NICEPAY 키 수령 후 샌드박스.
+## 2026-10-29 B안·v3 후속
+- **P0(승인)**: 운영 SQL 순서 — P0 preflight → (P1) → P2 분리 → P2b 게이트 패치 → P3 시드·심사관 지정(`NICEPAY_SQL_RUNBOOK_20261028.md`). 해시 불일치 시 중단.
+- **P0(확인)**: `fix_refund_pg_origin_guard_20261017` 운영 정의 확인(이력 없음), 운영 함수 정의 해시 대조(이번엔 BLOCKED).
+- **P1(NICEPAY)**: 키 계열(`mwhabit01m` 이 v3 계약인지), 샌드박스, 한글 상품명(EUC-KR) 처리, WebView(`WapUrl`·`IspCancelUrl`) 필요 여부, 심사 전용 센터·상품 허용 서면 확인.
+- **P1**: 내부 센터 상품 UUID 직접 주문(RPC) 가능 여부 운영 확인(로컬 DEV 기준선에서 가능), 카테고리·홈 화면 스크린샷 재수집.
+- **P2**: 세션 복원 직후 상품 목록이 공개 모델로 대체되는 레이스(체크아웃 "로그인이 필요해요") 조사.
+## 2026-10-28 운영 반영 전 점검 후속
+- **P0(결정)**: 심사관 플래그 방식(재사용 vs 별도 `nicepay_review_access`)과 기존 "토스 심사 계정"(override=true) 처리 — 결정 전 운영 계정 권한 변경 금지.
+- **P0(운영 확인)**: P0 preflight(`preflight_nicepay_review_center_isolation_20261028.sql`)로 운영 함수 정의 해시 대조 후에만 분리 SQL 적용.
+- **P1**: NICEPAY 키 계열 확인(rest_v1/v3_mid) — v3_mid 면 결제창(`goPay`) 구현 필요. 준비 브랜치 병합 시 `tests/unit/productsPurchaseGuide.test.ts` 주소 단언 갱신(주소 공개 승인과 함께).
+- **P1**: 준비 브랜치 `NICEPAY_CONTRACT_HANDOFF_20261017.md` §5 SQL 순서 정정(게이트·환불 패치 누락).
+- **P2**: 분리 정책의 대규모 데이터 성능, 실기기·Safari/Firefox 미검증.
+## 2026-10-28 NICEPAY 심사 전용 센터 후속
+- **P0(승인)**: `add_nicepay_review_center_isolation_20261028.sql` 운영 실행 → verify → (별도 승인) 시드 → 심사관 지정. 순서·롤백은 `docs/payments/NICEPAY_REVIEW_CENTER_20261028.md`.
+- **P0(결정)**: 심사 상품 가격·서비스 내용, 심사관 계정이 운영 역할을 겸하는지(별도 계정 권장), 심사 종료 후 처리.
+- **P1**: NICEPAY 결제창 실호출 검증 — MID/키 발급 + 준비 브랜치 병합 + 게이트 SQL + 코드 상수 활성화 후(현재 BLOCKED).
+## 2026-10-27 NICEPAY 심사 홈페이지 보완 후속
+- **P0(승인)**: 푸터 사업장 주소 공개 배포 — 자택 주소 여부·사업자등록증 일치 확인 후 승인.
+- **P1**: `add_public_storefront_product_periods_20261027.sql` 운영 실행(검증·롤백 파일 동봉) — 실행 전에는 비로그인 상품 목록에 상품별 날짜 대신 공통 안내.
+- **P1(데이터)**: 운영 공개 상품 `테스트`(만료일 없음), `원데이안무반`(만료일 2026-10-09 과거인데 판매중) 정리 여부 결정. 10/28·10/30 고정 만료 상품 갱신.
+- **P1(법적)**: `/legal/*` PG 서술(토스페이먼츠) 단계 A 문구 적용 승인, 활성화 시 NICEPAY 정식 상호 반영.
+- **P2**: NICEPAY 준비 브랜치와 병합 시 `docs/CHANGELOG.md`·`docs/TODO.md` 충돌 해결, 심사관 계정은 NICEPAY 에 별도 전달.
 ## 2026-10-26 Q01 후속(E2E 수업 정리)
 - **P2** 나머지 17개 E2E 스펙의 고정 제목을 실행별 제목으로 단계 전환: 생성 헬퍼가 이미 `title` 을 반환하므로 스펙의 `hasText: "리터럴"` 을 반환된 `cls.title` 로 바꾼 뒤 CI 에 `E2E_RUN_SCOPED_TITLES=1` 을 켠다(현재는 고정 제목 + 충돌 시 BLOCKED). 공유 DEV 에서 CI 취소로 남은 고정 제목 행은 자동 삭제되지 않으므로 다음 실행이 BLOCKED 될 수 있다 — 소유 증명 가능한 manifest 가 러너에 남지 않는 CI 에서는 #240 격리 DB 이전이 근본 해결이다.
 - **P3** `cleanupTodaysReservationsForProfile` 은 전용 테스트 프로필의 오늘 예약만 지운다(범위 문서화만, 변경 없음).
@@ -56,6 +87,19 @@
 - P2: 평점 집계는 클라이언트(center_reviews 행 조회)다. 후기가 많아지면 센터별 평균/건수를 반환하는 읽기 전용 RPC/뷰(예: `center_rating_summary(center_ids uuid[])`)로 이전(SQL 제안만, 미작성).
 - P3: 즐겨찾기 기능은 코드에 없어 "즐겨찾기에서 센터 진입" 뒤로가기는 대상이 없음(기능 추가 시 BackButton 이력 규칙 그대로 적용).
 - P3: iOS/Android 실기기에서 하단 내비 블러 레이어 성능·safe-area·키보드 동작 수동 QA.
+## 2026-10-16 NICEPAY 카드사 심사 준비
+- P0: 검토용 SQL 2종(`fix_refund_block_all_pg_providers_20261016.sql` → `add_nicepay_provider_support_20261016.sql`) 승인·적용 순서는 `docs/payments/NICEPAY_DB_SAFETY_DESIGN_20261016.md` §6. 적용 전 사전 확인 쿼리 실행, `create_order_secure` 라이브 정의 확인 후 provider 허용 패치 별도 작성.
+- P0: PG 전환 승인 대기 항목은 `docs/payments/PG_MIGRATION_TOSS_TO_NICEPAY.md` §7 — SQL(provider 'nicepay'·claim·복귀토큰 일반화), 법적 문구 교체, 홈 푸터 주소, 통신판매중개자/수납 구조, 레거시 Toss 제거(대기 주문 0건 확인 후).
+- P0: NICEPAY 심사 — 공개 /products의 "테스트"(100원)·"P3 타센터-격리테스트" 상품 비공개 처리(운영자), 계약 후 MID/KEY·기술지원 질문(docs/payments/NICEPAY_REVIEW_PREPARATION.md §7) 확인.
+- P1: NICEPAY 활성화 전 SQL 승인 필요 — orders.payment_provider 'nicepay' 허용, 선점(claim) 상태, pg_order_context/confirm_real_payment/정산 뷰 provider 확장. 정기결제는 호스팅 카드등록 UI 확인 전까지 BLOCKED(카드정보 직접 수집 금지).
+- P2: 공개 상품 RPC에 이용기간(valid_days) 노출(SQL, 승인 후). 약관·환불·개인정보 처리위탁의 PG사 표기는 계약 확정 후 갱신.
+
+- P2: `orders_force_server_fields_on_insert`(운영 적용됨)는 `auth.uid() is not null` 일 때만 verified/status 를 보정 → anon 롤 INSERT 는 RLS(`my_profile_ids()`)에만 의존. `orders_guard_pg_state` 와 같이 role 설정(anon/authenticated)을 함께 보는 방어 계층 추가 검토(별도 SQL, 영향 범위 확인 필요).
+- P1: `fix_refund_amount_integrity_20261017.sql` 운영 적용 후 `verify_*`의 대조 쿼리(과거 환불 합계 ≠ 원거래 금액)를 실행해 결과가 있으면 PG 콘솔 취소 금액과 개별 대조.
+
+- P0: NICEPAY 계약 후 확인 질문·환경변수·운영 전 QA 체크리스트·이어서 실행할 프롬프트는 `docs/payments/NICEPAY_CONTRACT_HANDOFF_20261017.md`. 활성화(코드 상수 `NICEPAY_CHECKOUT_ACTIVATED`)는 샌드박스 E2E 통과 후 별도 승인.
+- P1: SQL 적용 대기(검토용): `fix_orders_insert_role_guard_20261017.sql`(독립 적용 가능) → `add_nicepay_provider_support_20261016.sql` → `fix_create_order_secure_allow_nicepay_20261016.sql`.
+- P2: 센터 구독료를 앱(iOS/Android) 안에서 결제 CTA로 노출하는 것은 App Store/Google Play 정책 검토 전까지 금지(웹 전용 권장) — `NICEPAY_SUBSCRIPTION_DOMAIN_20261017.md` §4.
 
 ## 2026-10-11 날짜 선택 팝오버 후속 (진도 기록 캘린더 수정 PR 범위 밖)
 - **P2**: `MonthPicker`는 아직 `position:absolute` 팝오버라 `.sheet` 안에서 같은 방식으로 잘릴 수 있다 — `DatePicker`와 같은 포털/`computePopoverPosition` 적용 검토(영향 화면 목록 확인 후).

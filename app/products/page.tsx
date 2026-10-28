@@ -17,6 +17,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import Loading from "../components/Loading";
+import ServicePeriodNotice, { ServicePeriodGenericNote } from "../components/ServicePeriodNotice";
 import { fetchPublicStorefrontProducts, groupPublicProductsByCenter, type PublicStorefrontProduct } from "../../lib/center";
 import { BUSINESS_INFO } from "../../lib/businessInfo";
 import { toUserMessage } from "../../lib/userError";
@@ -53,6 +54,19 @@ export default function PublicProductsPage() {
       <div className="perm-guide" style={{ margin: "0 20px 8px" }}>
         센터별로 판매 중인 수강권과 상품이에요. 구매는 센터 화면에서 로그인 후 진행돼요.
       </div>
+      <div style={{ margin: "0 20px 8px" }}><ServicePeriodGenericNote /></div>
+
+      {/* 카드사/PG 심사 대비 비결제 안내(2026-10-16): 이용기간·환불 조건·판매자 정보로 가는 길을 상품 목록 바로 위에 둔다.
+          특정 PG·결제수단을 단정하지 않는다(결제수단은 구매 화면이 실제 활성 수단만 보여준다). 사업장 주소는 여기에 넣지 않는다(사용자 결정). */}
+      <div className="perm-guide" style={{ margin: "0 20px 8px" }} data-testid="products-purchase-guide">
+        <strong>구매 전 확인하세요</strong>
+        <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+          <li>이용기간·사용 조건은 상품마다 달라요. 센터 화면의 상품 상세에서 확인할 수 있어요.</li>
+          <li>결제수단은 구매 화면에서 안내돼요.</li>
+          <li>환불·취소는 <Link href="/legal/refund" prefetch={false} style={{ textDecoration: "underline" }}>환불·취소 정책</Link>을 따라요.</li>
+          <li>모하빗은 통신판매중개자예요. 판매자 정보는 <Link href="/legal/business" prefetch={false} style={{ textDecoration: "underline" }}>사업자 정보</Link>에서 확인할 수 있어요.</li>
+        </ul>
+      </div>
 
       {error ? (
         <div className="daylist-empty">{error}</div>
@@ -82,6 +96,8 @@ export default function PublicProductsPage() {
                       <div className={`center-product-avail${p.remaining != null && p.remaining <= 0 ? " is-soldout" : ""}`}>{availabilityLabel(p.remaining)}</div>
                     )}
                     {p.description && <div className="center-product-detail products-desc">{p.description}</div>}
+                    {/* 이용기간(사전예약기간·서비스 제공기간): 공개 기간 RPC 가 있을 때만 상품별 날짜, 없으면 아무것도 안 그림(아래 공통 안내) */}
+                    <ServicePeriodNotice source={p.periodSource} variant="compact" />
                   </div>
                 </div>
               ))}
@@ -101,6 +117,7 @@ export default function PublicProductsPage() {
           <div>{BUSINESS_INFO.companyName} · 대표 {BUSINESS_INFO.ceoName}</div>
           <div>사업자등록번호 {BUSINESS_INFO.businessRegNo}</div>
           <div>통신판매업 신고번호 {BUSINESS_INFO.mailOrderRegNo}</div>
+          <div>사업장 소재지 {BUSINESS_INFO.address}</div>
           <div>고객센터 {BUSINESS_INFO.customerServicePhone}</div>
         </div>
       </div>

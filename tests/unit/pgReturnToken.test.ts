@@ -189,7 +189,7 @@ describe("클라이언트 계약", () => {
       expect(read(f)).not.toMatch(/refresh_token|[?&]access_token=|searchParams\.set\(["'](access|refresh)|returnQuery\.set\(["'](access|refresh)/);
     }
     expect(checkout).toContain('returnQuery.set("returnToken", await requestReturnToken(orderId));');
-    expect(checkout).toContain('if (providerName === "toss")');
+    expect(checkout).toContain('if (providerName === "nicepay")');
   });
   it("토큰 발급 실패 시 결제창을 열지 않고 기존 pending 정리 경로(catch → cancelMyPendingOrderQuietly)를 탄다", () => {
     expect(checkout.indexOf("requestReturnToken(orderId)")).toBeLessThan(checkout.indexOf("paymentService.createPayment"));
@@ -219,7 +219,7 @@ describe("후속 보완 — marker 시점 / busy 복구 / fail·success UX", () 
   const checkout = read("app/checkout/page.tsx");
   const fail = read("app/checkout/fail/page.tsx");
   const success = read("app/checkout/success/page.tsx");
-  it("marker 저장은 토큰 발급 성공 직후, createPayment 호출보다 앞(토스 provider에만), redirected 분기에서는 저장하지 않는다", () => {
+  it("marker 저장은 토큰 발급 성공 직후, createPayment 호출보다 앞(nicepay provider에만), redirected 분기에서는 저장하지 않는다", () => {
     const tok = checkout.indexOf("await requestReturnToken(orderId)");
     const save = checkout.indexOf("savePendingPgOrder(orderId);");
     const pay = checkout.indexOf("paymentService.createPayment(");
@@ -227,8 +227,8 @@ describe("후속 보완 — marker 시점 / busy 복구 / fail·success UX", () 
     expect(tok).toBeLessThan(save);
     expect(save).toBeLessThan(pay);
     expect((checkout.match(/savePendingPgOrder\(orderId\)/g) ?? []).length).toBe(1);
-    const block = checkout.slice(checkout.lastIndexOf('if (providerName === "toss")', save), save);
-    expect(block).toContain('providerName === "toss"');
+    const block = checkout.slice(checkout.lastIndexOf('if (providerName === "nicepay")', save), save);
+    expect(block).toContain('providerName === "nicepay"');
   });
   it("토큰 발급 실패/ createPayment reject → catch가 pending 주문 정리 + marker clear (marker는 발급 성공 뒤에만 저장되므로 발급 실패 시 생성 안 됨)", () => {
     expect(checkout).toContain("await cancelMyPendingOrderQuietly(pgOrderIdForCleanup);\n      clearPendingPgOrder();");

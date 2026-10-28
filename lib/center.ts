@@ -6,6 +6,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import type { PeriodSource } from "./servicePeriod";
 import { sanitizeRichText } from "./security";
 import { getMyAccountId } from "./authAccount";
 import { computeSelectableSchedule, type ScheduleRule, type SelectableSchedule } from "./passes";
@@ -192,12 +193,18 @@ export type CenterProduct = {
   // 공개(비로그인) 목록에서 만든 모델이면 true — 요일/시간 선택·쿠폰 가능 여부 같은 구매용 설정이 "알 수 없음"(기본값)이다.
   // 이 모델로는 결제를 진행하면 안 된다(checkout이 막는다).
   publicFallback?: boolean;
+  // 수강권 이용기간 원본(products.expiry_*). 회원용 목록(fetch_purchasable_products = select p.*)에서만 채워지고, 공개 목록은 기간 RPC 가 있을 때만 채워진다.
+  // null/undefined 면 "알 수 없음" — 화면은 날짜를 만들어 내지 않고 공통 안내만 보인다(lib/servicePeriod.ts).
+  periodSource?: PeriodSource | null;
 };
 
 const CENTER_PRODUCTS_SELECT_BASE = "id, name, price, product_kind, total_count, unlimited, description, sizes, auto_book_days, group_label, max_quantity, coupon_eligible";
 const CENTER_PRODUCTS_SELECT_WEEKDAY = `${CENTER_PRODUCTS_SELECT_BASE}, weekday_selectable, time_selectable`;
 // 구매 횟수 선택형 컬럼까지 포함(가장 먼저 시도, 컬럼이 없는 환경은 42703으로 순서대로 폴백)
 const CENTER_PRODUCTS_SELECT_FULL = `${CENTER_PRODUCTS_SELECT_WEEKDAY}, purchase_count_selectable`;
+// 이용기간 원본 컬럼 — fetch_purchasable_products() 가 select p.* 라 이미 반환하는 값이고 SQL 변경이 필요 없다. 컬럼이 없는 환경(42703)이면 아래 단계적 폴백이 이 컬럼을 뺀다.
+const CENTER_PRODUCTS_SELECT_PERIOD = "expiry_mode, expiry_days, expiry_date, rolling_month_cutoff_day, rolling_month_allow_early_use";
+const CENTER_PRODUCTS_SELECT_FULL_PERIOD = `${CENTER_PRODUCTS_SELECT_FULL}, ${CENTER_PRODUCTS_SELECT_PERIOD}`;
 
 // 2026-10-01 — 토스페이먼츠 전자결제 심사 대응. 비로그인 사용자는 fetch_purchasable_products()를
 // 호출할 권한이 없어(일부러 anon revoke — 회원 등급/지정 회원 전용 상품이 새지 않게) 센터
@@ -224,7 +231,31 @@ export type PublicStorefrontProduct = {
   unlimited: boolean; unlimitedPass: boolean; groupLabel: string | null;
   remaining: number | null; // null=수량 제한 없음, 0=매진
   countSelectable: boolean; minCount: number | null; maxCount: number | null; minTierPrice: number | null;
+  periodSource?: PeriodSource | null;   // fetch_public_storefront_product_periods(검토용 SQL) 적용 시에만 채워진다
 };
+
+// products 행(회원용 RPC) → 이용기간 원본. expiry_mode 가 없으면 null(알 수 없음 — 날짜를 추측하지 않는다).
+export function periodSourceFromRow(row: unknown): PeriodSource | null {
+  const p = row as { expiry_mode?: PeriodSource["expiryMode"]; expiry_days?: number | null; expiry_date?: string | null; rolling_month_cutoff_day?: number | null; rolling_month_allow_early_use?: boolean | null } | null | undefined;
+  if (!p || !p.expiry_mode) return null;
+  return {
+    expiryMode: p.expiry_mode, expiryDays: p.expiry_days ?? null, expiryDate: p.expiry_date ?? null,
+    rollingMonthCutoffDay: p.rolling_month_cutoff_day ?? null, rollingMonthAllowEarlyUse: p.rolling_month_allow_early_use ?? null,
+  };
+}
+
+// 공개 상품 이용기간(검토용 add_public_storefront_product_periods_20261027.sql — 추가 전용 RPC). 함수가 아직 없거나 실패하면 조용히 빈 맵 → 화면은 공통 안내만 보인다.
+async function fetchPublicProductPeriods(centerId?: string | null): Promise<Map<string, PeriodSource>> {
+  const map = new Map<string, PeriodSource>();
+  try {
+    const { data, error } = await supabase.rpc("fetch_public_storefront_product_periods", centerId ? { p_center_id: centerId } : {});
+    if (error) return map;
+    for (const r of (data ?? []) as Array<{ product_id?: string }>) {
+      const src = periodSourceFromRow(r); if (src && r.product_id) map.set(r.product_id, src);
+    }
+  } catch { /* 기간 안내는 보조 정보 — 실패해도 상품 목록은 그대로 */ }
+  return map;
+}
 
 // 비로그인 포함 누구나 호출 가능한 공개 판매상품(add_public_storefront_products.sql).
 // centerId를 생략하면 승인된 모든 센터의 공개 상품(/products 페이지용).
@@ -234,7 +265,9 @@ export async function fetchPublicStorefrontProducts(centerId?: string | null): P
     centerId ? { p_center_id: centerId } : {}
   );
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
+  const periods = await fetchPublicProductPeriods(centerId);
   return ((data ?? []) as any[]).map((p) => ({
+    periodSource: periods.get(p.id) ?? null,
     id: p.id, centerId: p.center_id, centerName: p.center_name, name: p.name, price: p.price,
     kind: p.product_kind === "goods" ? "goods" : "pass",
     description: p.description ?? null, totalCount: p.total_count ?? null,
@@ -270,7 +303,7 @@ async function fetchPublicCenterProducts(centerId: string): Promise<CenterProduc
     groupLabel: p.groupLabel, remaining: p.remaining, couponEligible: true,
     weekdaySelectable: false, timeSelectable: false,
     countSelectable: p.countSelectable, countPrices: [], minCount: p.minCount, maxCount: p.maxCount,
-    minTierPrice: p.minTierPrice, publicFallback: true,
+    minTierPrice: p.minTierPrice, publicFallback: true, periodSource: p.periodSource ?? null,
   }));
 }
 
@@ -294,9 +327,12 @@ async function fetchMemberCenterProducts(centerId: string): Promise<CenterProduc
   // time_fixed_memberships.sql이 만드는 두 새 컬럼도 RPC 자체는 자동으로 포함한다 —
   // 이 select() 프로젝션 문자열만 바뀌면 된다. 컬럼이 아직 없는 환경(42703)에서도
   // 구매 화면 전체가 깨지지 않도록 방어(lib/rooms.ts, lib/passes.ts와 동일 패턴).
-  const first = await supabase
+  const withPeriod = await supabase
     .rpc("fetch_purchasable_products", { p_center_id: centerId })
-    .select(CENTER_PRODUCTS_SELECT_FULL);
+    .select(CENTER_PRODUCTS_SELECT_FULL_PERIOD);
+  const first = withPeriod.error?.code === "42703"
+    ? await supabase.rpc("fetch_purchasable_products", { p_center_id: centerId }).select(CENTER_PRODUCTS_SELECT_FULL)
+    : withPeriod;
   let data: any[] | null = first.data as any;
   let error = first.error;
   if (error?.code === "42703") {
@@ -355,6 +391,7 @@ async function fetchMemberCenterProducts(centerId: string): Promise<CenterProduc
         kind: p.product_kind === "goods" ? "goods" : "pass",
         totalCount: p.total_count, unlimited: p.unlimited ?? false,
         validDays: null,
+        periodSource: periodSourceFromRow(p),
         description: p.description ?? null,
         sizes: p.sizes ?? null,
         autoBookDays: p.auto_book_days ?? null,

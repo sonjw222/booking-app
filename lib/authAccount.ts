@@ -323,3 +323,22 @@ export async function fetchMyPgCheckoutOverride(): Promise<boolean> {
     .maybeSingle();
   return !!data?.pg_checkout_override;
 }
+
+// NICEPAY 카드사 심사관 전용 권한(2026-10-29, add_nicepay_review_center_isolation_20261028.sql 의 accounts.nicepay_review_access).
+// 토스 심사용 pg_checkout_override 와 별개다 — NICEPAY 심사 센터 노출·NICEPAY 결제 게이트·결제수단 노출은 이 값만 본다.
+// 운영자만 바꿀 수 있고(트리거 보호) 본인이 켤 수 없다. 컬럼이 아직 없는 환경(SQL 미적용)·비로그인·조회 실패는 안전하게 false.
+// 컬럼 부재(42703)면 이 세션에서는 다시 묻지 않는다(불필요한 400 반복 방지). 계정이 바뀌면 캐시를 버린다.
+let nicepayAccessCache: { accountId: string; value: boolean; at: number } | null = null;
+let nicepayAccessColumnMissing = false;
+export function resetNicepayReviewAccessCache() { nicepayAccessCache = null; nicepayAccessColumnMissing = false; }
+export async function fetchMyNicepayReviewAccess(): Promise<boolean> {
+  if (nicepayAccessColumnMissing) return false;
+  const accountId = await getMyAccountId();
+  if (!accountId) return false;
+  if (nicepayAccessCache && nicepayAccessCache.accountId === accountId && Date.now() - nicepayAccessCache.at < 5 * 60_000) return nicepayAccessCache.value;
+  const { data, error } = await supabase.from("accounts").select("nicepay_review_access").eq("id", accountId).maybeSingle();
+  if (error) { if ((error as { code?: string }).code === "42703") nicepayAccessColumnMissing = true; return false; }
+  const value = !!(data as { nicepay_review_access?: boolean } | null)?.nicepay_review_access;
+  nicepayAccessCache = { accountId, value, at: Date.now() };
+  return value;
+}

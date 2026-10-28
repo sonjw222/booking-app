@@ -1,0 +1,229 @@
+{
+ "failures": 7,
+ "results": [
+  {
+   "id": "G1",
+   "name": "reviewer: NICEPAY 심사관 + 심사 센터 + 심사 상품 주문 생성",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "G2",
+   "name": "reviewer: NICEPAY 심사관이 운영 센터·운영 상품으로 NICEPAY 주문(권한만 있고 대상이 심사 센터가 아님)",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "G3",
+   "name": "reviewer: 심사 센터라고 주장하지만 상품은 운영 상품(센터·상품 불일치)",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "G4",
+   "name": "reviewer: 운영 센터라고 주장하지만 상품은 심사 상품",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "G5",
+   "name": "reviewer: 토스 심사 계정(pg_checkout_override 만)은 어떤 조합도 거부",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "G6",
+   "name": "reviewer: 일반 회원은 거부",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "S1",
+   "name": "서버(service_role)가 NICEPAY 대기 주문 생성(reviewer 모드) — 기존 서버 경로 유지",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "K1",
+   "name": "reviewer 승인 선점: 심사관 + 심사 센터 주문",
+   "expected": "CLAIMED",
+   "actual": "CLAIMED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "K2",
+   "name": "reviewer 승인 선점: 심사관이지만 운영 센터 대기 주문(새로 막히는 경로)",
+   "expected": "NULL",
+   "actual": "NULL",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "K3",
+   "name": "reviewer 승인 선점: 일반 회원 대기 주문",
+   "expected": "NULL",
+   "actual": "NULL",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "N1",
+   "name": "reviewer: 심사관이 상품 NULL 로 심사 센터 NICEPAY 주문 직접 생성(서버 계산 금액 없음)",
+   "expected": "DENIED",
+   "actual": "CREATED",
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "N2",
+   "name": "reviewer: 서버가 만든 상품 NULL 대기 주문의 승인 선점",
+   "expected": "NULL",
+   "actual": "CLAIMED",
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "P1",
+   "name": "reviewer: 판매 중지된 심사 상품 주문 직접 생성",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "P2",
+   "name": "reviewer: 판매 중지 전에 만든 대기 주문의 승인 선점",
+   "expected": "NULL",
+   "actual": "CLAIMED",
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "P3",
+   "name": "reviewer: 비활성(is_active=false) 심사 상품 주문 직접 생성",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "P4",
+   "name": "reviewer: 비활성 상품 대기 주문의 승인 선점",
+   "expected": "NULL",
+   "actual": "NULL",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "P5",
+   "name": "reviewer: 상품을 다시 판매 중으로 되돌리면 같은 대기 주문 승인 선점 가능(영구 차단 아님)",
+   "expected": "CLAIMED",
+   "actual": "NULL",
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "C1",
+   "name": "reviewer: 비공개(is_internal) 로 닫힌 심사 센터 주문 직접 생성",
+   "expected": "DENIED",
+   "actual": "CREATED",
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "C2",
+   "name": "reviewer: 닫힌 심사 센터의 대기 주문 승인 선점",
+   "expected": "NULL",
+   "actual": "CLAIMED",
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "C3",
+   "name": "reviewer: 비승인(pending) 심사 센터의 대기 주문 승인 선점",
+   "expected": "NULL",
+   "actual": "NULL",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C4",
+   "name": "reviewer: 센터를 승인·공개로 되돌리면 정상 주문 승인 선점 가능",
+   "expected": "CLAIMED",
+   "actual": "NULL",
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "K4",
+   "name": "off 로 닫은 뒤에도 진행 중(approving) 주문의 release 는 가능(과거 결제 처리 유지)",
+   "expected": "released",
+   "actual": "released",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "K5",
+   "name": "off: 새 승인 선점은 모두 거부",
+   "expected": "NULL",
+   "actual": "NULL",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "G7",
+   "name": "off: 클라이언트 NICEPAY 주문 생성은 모두 거부(심사관 포함)",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "G8",
+   "name": "public: 일반 회원 주문 생성(기존 동작 유지)",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "K6",
+   "name": "public: 일반 회원 대기 주문 승인 선점(기존 동작 유지)",
+   "expected": "CLAIMED",
+   "actual": "CLAIMED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "K7",
+   "name": "public: 심사관의 운영 센터 대기 주문도 public 에서는 선점 가능(public 은 대상 제한 없음 — 기존 동작)",
+   "expected": "CLAIMED",
+   "actual": "CLAIMED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "Z1",
+   "name": "시험 종료 후 모드 원복 및 P2 주문 방어 트리거 복구",
+   "expected": "off/1",
+   "actual": "off/1",
+   "pass": true,
+   "extra": ""
+  }
+ ]
+}

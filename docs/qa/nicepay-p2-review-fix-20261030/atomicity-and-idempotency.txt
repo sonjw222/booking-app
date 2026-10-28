@@ -1,0 +1,24 @@
+=== 1. 원자성·멱등 (psql 을 ON_ERROR_STOP 없이 실행 — 편집기처럼 끝까지 흘려보내는 방식) ===
+[기준] 기존 함수 5개 정의 해시 기록. 잔여물(컬럼/함수/트리거/정책) = 1/1/0/0 — 컬럼 1(is_nicepay_review: 롤백이 데이터 보존용으로 남김)·함수 1(accounts 보호 함수: 같은 이유로 남김)이 기준값
+[T1 P2 실패 주입:mid] ERROR 13회 → 잔여물 1/1/0/0 / 기준(1/1/0/0)과 동일: YES / 기존 함수 정의 해시 동일: YES
+[T1 P2 실패 주입:late] ERROR 1회 → 잔여물 1/1/0/0 / 기준(1/1/0/0)과 동일: YES / 기존 함수 정의 해시 동일: YES
+[T2 P2b 를 P2 없이 실행] nicepay_review_access 가 없어요 — add_nicepay_review_center_isolation_20261028.sql 을 → 기존 함수 정의 해시 동일: YES
+[T3 P2 정상 적용] ERROR 0회, 잔여물 2/8/12/4 (기대 2/8/12/4)
+[T3 검증 SQL 1번 쿼리]
+   columns_must_be_2|2
+   new_functions_must_be_8|8
+   restrictive_policies_must_be_3|3
+   own_reservation_policy_must_be_1|1
+   triggers_must_be_12|12
+   list_rpcs_replaced_must_be_3|3
+   center_rows_visible_replaced_must_be_true|t
+   replaced_definitions_match_expected_must_be_true|t
+[T4 P2b 두 번째 함수 실패 주입] 가 없어요 — NICEPAY 게이트/지원 SQL 이 적용돼 있어야 해요 → 첫 번째 함수까지 원복(정의 해시 동일): YES
+[T5 P2b 정상] ERROR 0회
+   nicepay_claim_order|t|t|f|t
+   orders_guard_nicepay_create|t|t|f|t
+   t|t|t|off
+[T6 재적용(멱등)] P2 재실행 후 P2b 재실행: 2개 함수 '건너뜀', 정의 변화 없음: YES, 잔여물 2/8/12/4 (기대 2/8/12/4)
+[T7 검증 실패 조건 시연] 트리거 1개를 일부러 지우면:
+   triggers_must_be_12|11
+   (P2 재적용으로 복구) triggers_must_be_12|12

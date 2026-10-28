@@ -1,0 +1,8 @@
+-- 읽기 전용 검증 (적용 후, add_nicepay_provider_support 적용 뒤) — 모두 true 여야 한다.
+select
+  (select d like '%-- nicepay_claim_gate begin%' and d like '%-- nicepay_claim_gate end%' and d like '%nicepay_checkout_mode()%' from (select pg_get_functiondef('public.nicepay_claim_order(uuid)'::regprocedure) d) x) as claim_gate_present_must_be_true,
+  (select prosecdef and 'search_path=public' = any (proconfig) from pg_proc where oid = 'public.nicepay_claim_order(uuid)'::regprocedure)                                                                          as claim_secdef_pinned_must_be_true,
+  (select not has_function_privilege('anon', 'public.nicepay_claim_order(uuid)', 'execute') and not has_function_privilege('authenticated', 'public.nicepay_claim_order(uuid)', 'execute') and has_function_privilege('service_role', 'public.nicepay_claim_order(uuid)', 'execute')) as claim_service_role_only_must_be_true,
+  (select d not like '%nicepay_checkout_mode()%' from (select pg_get_functiondef('public.nicepay_release_order(uuid,uuid,text)'::regprocedure) d) x)                                                                    as release_ungated_must_be_true,
+  (select d not like '%nicepay_checkout_mode()%' from (select pg_get_functiondef('public.nicepay_record_pg_cancel(uuid,text,text,integer,text,text,text,text)'::regprocedure) d) x)                                        as cancel_record_ungated_must_be_true,
+  (select d not like '%nicepay_checkout_mode()%' from (select pg_get_functiondef('public.confirm_nicepay_payment(uuid,uuid,text,integer)'::regprocedure) d) x)                                                           as confirm_ungated_must_be_true;

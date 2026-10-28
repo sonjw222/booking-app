@@ -1,0 +1,20 @@
+PASS S0 P2b 적용 상태에서 P2 롤백은 중단 + 변경 없음 — ERROR:  롤백 중단: P2b(NICEPAY 게이트 판별 패치)가 아직 적용돼 있어요. 먼저 rollback_fix_nicepay_gate_
+PASS S0b 게이트 mode 가 reviewer 면 P2b 롤백 중단 + 함수 변경 없음 — ERROR:  롤백 중단: NICEPAY 게이트 mode 가 off 가 아니에요(현재 reviewer). 먼저 mode 를 off 로 닫고 진행
+PASS S0d approving 주문이 있으면(mode=off 여도) P2b 롤백 중단 + 함수 변경 없음 — ERROR:  롤백 중단: 승인 선점 상태(approving)의 NICEPAY 주문이 1건 있어요. 승인 확정·취소·release 로 모두 해소된 뒤 다시 실행하
+PASS S0c mode=off 에서 P2b 롤백 성공 + 도우미 함수 제거 — BEGIN
+PASS S1 공개 가능 상태에서 롤백 중단 + 변경 없음 — ERROR:  롤백 중단: 일반 사용자에게 공개될 수 있는 심사 센터가 있어요. 먼저 update centers set is_internal =
+PASS S2 pending 으로 비공개 후 롤백 성공 — BEGIN
+PASS S2 분리 정책이 없는 상태에서도 pending 센터의 센터·상품·수업 직접 조회 0행(비회원/일반/심사관) — {"비회원":{"centers":0,"products":0,"classes":0},"일반회원A":{"centers":0,"products":0,"classes":0},"심사관B":{"
+PASS S2 롤백 후 정책/트리거/함수 제거(데이터 보존용 accounts 보호 트리거 1개만 남음)
+PASS S2d 롤백 뒤 accounts 보호 트리거 의존 함수 유지(enforce_…, nicepay_is_client_request) — true/true
+PASS S2d 롤백 뒤 SQL Editor(postgres)의 권한 부여·해제 정상 — BEGIN
+PASS S2d 롤백 뒤 일반 계정의 본인 권한 true 변경은 '운영자만' 메시지로 거부(함수 없음 오류가 아님) — ERROR:  이 값은 운영자만 변경할 수 있어요 | CONTEXT:  PL/pgSQL function enforce_nicepay_review
+PASS S2d 롤백 뒤 일반 계정의 평소 UPDATE 정상 — BEGIN
+PASS S2 기간 RPC 는 이전부터 있었으므로 삭제되지 않고 이전 정의로 복원
+PASS S2b status=pending(비내부)만으로도 센터·상품·수업 직접 조회 0행 — {"비회원":{"centers":0,"products":0,"classes":0},"일반회원A":{"centers":0,"products":0,"classes":0},"심사관B":{"centers":0,"pro
+PASS S2c(대조) 롤백 후 approved·비내부로 되돌리면 심사 센터가 일반 사용자에게 노출됨 — 롤백 안전장치가 필요한 이유 — {"비회원":{"centers":1,"products":3,"classes":1},"일반회원A":{"centers":1,"products":3,"classes":1},
+PASS S3 이전부터 있던 기간 RPC 는 분리 SQL 이 표식을 붙이지 않음
+PASS S3 적용→롤백 뒤 기간 RPC 정의가 처음과 동일
+PASS S4 기간 RPC 없이 적용하면 분리 SQL 이 만들고 표식을 남김
+PASS S4 롤백 시 분리 SQL 이 만든 기간 RPC 는 삭제
+19/19 PASS

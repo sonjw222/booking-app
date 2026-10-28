@@ -1,0 +1,12 @@
+=== 2. 데이터 불변·롤백 순서·심사 종료 ===
+[D1] 센터·상품·수업·주문·수강권·예약·계정·매니저 관계 지문 P2+P2b 적용 전 76bbe641bedee6473262de7707084fea / 후 76bbe641bedee6473262de7707084fea → 불변: YES
+[A1] 시드 후(공개 상태) 익명 직접 조회(센터/상품/수업): 0/0/0 (기대 0/0/0 — 분리 정책 적용 중)
+[R1] 공개 가능한 심사 센터가 있을 때 P2 롤백: 롤백 중단: P2b(NICEPAY 게이트 판별 패치)가 아직 적용돼 있어요. 먼저 rollback_fix_n → 정책 잔존 3 (기대 3)
+[R2 심사 종료 SQL 출력] BEGIN UPDATE 0 UPDATE 1 UPDATE 1 UPDATE 0 COMMIT 
+[R2b] 닫은 뒤 익명 직접 조회: 0/0/0 (기대 0/0/0), 기존 데이터 지문 변화 없음: YES
+[R3] P2b 롤백 오류 0건 → 게이트 함수 nicepay_claim_order|f|f|t|f orders_guard_nicepay_create|f|f|t|f f||||off (옛 플래그 복원: 새 플래그 f / 옛 플래그 t)
+[R4] P2 롤백 오류 0건 → 정책/보호트리거(정확한 이름)/신규 함수 잔여 0/1/0 (기대 0/1/0 — accounts 보호 트리거만 데이터 보존용으로 남음)
+[R4b] P2 롤백 뒤 남은 P2 함수(보호 트리거가 의존하는 것만 남아야 함): enforce_nicepay_review_access_admin_only,nicepay_is_client_request (기대 enforce_nicepay_review_access_admin_only,nicepay_is_client_request)
+[R4c] P2 롤백 뒤 계정 보호(트리거 유지 확인): 일반 계정이 본인 심사 권한을 true 로 UPDATE → 거부(ERROR:  이 값은 운영자만 변경할 수 있어요) (기대 거부: 이 값은 운영자만 변경할 수 있어요) / 일반 계정의 평소 UPDATE(권한 값 불변) → 허용 (기대 허용) / SQL Editor(postgres) 의 권한 부여·해제 → 허용 (기대 허용)
+[R5] 롤백 후 익명 직접 조회: 0/0/0 (기대 0/0/0 — 센터가 닫혀 있어 분리 정책 없이도 비공개), 기존 데이터 지문 동일: YES
+[R6] (대조) 분리 SQL 없이 공개 가능한 심사 센터를 두면 익명 직접 조회: 1/3/1 ← 롤백 안전장치가 막으려는 위험 상태

@@ -1,0 +1,263 @@
+{
+ "label": "초안(특권 컬럼 INSERT 보호) 추가 적용",
+ "results": [
+  {
+   "id": "R1",
+   "group": "실제 인증·REST",
+   "name": "정상 가입(앱 페이로드, 권한 컬럼 미지정)",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R1b",
+   "group": "실제 인증·REST",
+   "name": "정상 가입 계정의 권한 값은 false",
+   "expected": "false",
+   "actual": "false",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R2",
+   "group": "실제 인증·REST",
+   "name": "가입 시 nicepay_review_access=true 지정",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "이 값은 운영자만 변경할 수 있어요"
+  },
+  {
+   "id": "R2b",
+   "group": "실제 인증·REST",
+   "name": "거부 후 계정 행이 남지 않음",
+   "expected": "none",
+   "actual": "none",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R3",
+   "group": "실제 인증·REST",
+   "name": "가입 시 nicepay_review_access=false 명시",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R4",
+   "group": "실제 인증·REST",
+   "name": "기존 계정이 본인 권한을 true 로 수정",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "이 값은 운영자만 변경할 수 있어요"
+  },
+  {
+   "id": "R4b",
+   "group": "실제 인증·REST",
+   "name": "수정 시도 후 값은 false 유지",
+   "expected": "false",
+   "actual": "false",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R5",
+   "group": "실제 인증·REST",
+   "name": "upsert(신규, true)",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "이 값은 운영자만 변경할 수 있어요"
+  },
+  {
+   "id": "R5b",
+   "group": "실제 인증·REST",
+   "name": "거부 후 계정 행 없음",
+   "expected": "none",
+   "actual": "none",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R6",
+   "group": "실제 인증·REST",
+   "name": "upsert(기존 행, ON CONFLICT DO UPDATE 로 true)",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "이 값은 운영자만 변경할 수 있어요"
+  },
+  {
+   "id": "R6b",
+   "group": "실제 인증·REST",
+   "name": "값은 false 유지",
+   "expected": "false",
+   "actual": "false",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R6c",
+   "group": "실제 인증·REST",
+   "name": "upsert(기존 행, 권한은 false — 일반 갱신)",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R7",
+   "group": "실제 인증·REST",
+   "name": "본인 계정 삭제 후 true 로 재생성",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "삭제행 1건 이 값은 운영자만 변경할 수 있어요"
+  },
+  {
+   "id": "R7b",
+   "group": "실제 인증·REST",
+   "name": "삭제 후 정상(false) 재생성",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R8",
+   "group": "운영자·서버",
+   "name": "플랫폼 관리자가 본인 계정 권한 부여(REST — 승인된 운영자 분기)",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R8b",
+   "group": "운영자·서버",
+   "name": "값이 true 로 반영",
+   "expected": "true",
+   "actual": "true",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R8c",
+   "group": "운영자·서버",
+   "name": "플랫폼 관리자가 권한 해제",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R8d",
+   "group": "운영자·서버",
+   "name": "플랫폼 관리자가 다른 계정을 REST 로 수정 — 기존 RLS(본인 계정 수정)가 0행 처리(이번 변경과 무관, 부여는 SQL Editor·서버 경로)",
+   "expected": "0ROWS",
+   "actual": "0ROWS",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R9",
+   "group": "운영자·서버",
+   "name": "서버(service_role)가 true 로 계정 생성",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R9b",
+   "group": "운영자·서버",
+   "name": "서버가 권한 해제",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R10",
+   "group": "운영자·서버",
+   "name": "SQL Editor(postgres, auth.uid() is null) 경로로 부여",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R11",
+   "group": "기존 보호",
+   "name": "본인이 pg_checkout_override(토스) 를 true 로 UPDATE",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "이 값은 운영자만 변경할 수 있어요"
+  },
+  {
+   "id": "R12",
+   "group": "기존 보호",
+   "name": "본인이 is_platform_admin 을 true 로 UPDATE",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": "이 값은 운영자만 변경할 수 있어요"
+  },
+  {
+   "id": "D1",
+   "group": "DB 최소 재현",
+   "name": "authenticated 역할 + JWT sub 로 INSERT(true)",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D2",
+   "group": "DB 최소 재현",
+   "name": "같은 조건으로 INSERT(false)",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D3",
+   "group": "DB 최소 재현",
+   "name": "같은 조건으로 INSERT(기본값, 컬럼 생략)",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "INFO-merged_into",
+   "group": "참고(범위 밖)",
+   "name": "가입 시 merged_into=다른 계정 id",
+   "actual": "DENIED",
+   "extra": "",
+   "pass": null
+  },
+  {
+   "id": "INFO-pg_checkout_override",
+   "group": "참고(범위 밖)",
+   "name": "가입 시 pg_checkout_override=true 지정",
+   "actual": "DENIED",
+   "extra": "",
+   "pass": null
+  },
+  {
+   "id": "INFO-is_platform_admin",
+   "group": "참고(범위 밖)",
+   "name": "가입 시 is_platform_admin=true 지정",
+   "actual": "DENIED",
+   "extra": "",
+   "pass": null
+  }
+ ]
+}

@@ -1,0 +1,246 @@
+[
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "anon",
+  "page": "category",
+  "seesReview": false,
+  "seesOp": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "category",
+  "seesReview": false,
+  "seesOp": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "my-reservations",
+  "shownOpReservation": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "A",
+  "page": "purchases",
+  "shownOpHistory": true,
+  "shownReviewOrder": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "category",
+  "seesReview": true,
+  "seesOp": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "my-reservations",
+  "shownOpReservation": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "light",
+  "who": "B",
+  "page": "purchases",
+  "shownOpHistory": true,
+  "shownReviewOrder": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "anon",
+  "page": "category",
+  "seesReview": false,
+  "seesOp": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "category",
+  "seesReview": false,
+  "seesOp": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "my-reservations",
+  "shownOpReservation": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "A",
+  "page": "purchases",
+  "shownOpHistory": true,
+  "shownReviewOrder": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "category",
+  "seesReview": true,
+  "seesOp": false,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "my-reservations",
+  "shownOpReservation": true,
+  "errs": 0
+ },
+ {
+  "vn": "m390",
+  "tn": "dark",
+  "who": "B",
+  "page": "purchases",
+  "shownOpHistory": true,
+  "shownReviewOrder": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "anon",
+  "page": "category",
+  "seesReview": false,
+  "seesOp": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "category",
+  "seesReview": false,
+  "seesOp": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "my-reservations",
+  "shownOpReservation": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "A",
+  "page": "purchases",
+  "shownOpHistory": true,
+  "shownReviewOrder": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "category",
+  "seesReview": true,
+  "seesOp": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "my-reservations",
+  "shownOpReservation": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "light",
+  "who": "B",
+  "page": "purchases",
+  "shownOpHistory": true,
+  "shownReviewOrder": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "anon",
+  "page": "category",
+  "seesReview": false,
+  "seesOp": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "category",
+  "seesReview": false,
+  "seesOp": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "my-reservations",
+  "shownOpReservation": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "A",
+  "page": "purchases",
+  "shownOpHistory": true,
+  "shownReviewOrder": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "category",
+  "seesReview": true,
+  "seesOp": false,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "my-reservations",
+  "shownOpReservation": true,
+  "errs": 0
+ },
+ {
+  "vn": "d1440",
+  "tn": "dark",
+  "who": "B",
+  "page": "purchases",
+  "shownOpHistory": true,
+  "shownReviewOrder": true,
+  "errs": 0
+ }
+]

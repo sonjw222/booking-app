@@ -7,6 +7,7 @@
   - 결제 수단 연동 전이므로 "결제하기" 시 주문 생성(pending) 후 완료 안내
 */
 
+import ServicePeriodNotice from "../components/ServicePeriodNotice";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { fetchCenterDetail, fetchCenterProductsForPurchase, fetchPurchaseScheduleOptions, type CenterProduct } from "../../lib/center";
@@ -14,15 +15,14 @@ import { purchaseScheduleState } from "../../lib/purchaseSchedule";
 import { DAYS, type SelectableSchedule } from "../../lib/passes";
 import { cancelMyPendingOrderQuietly, createOrder } from "../../lib/orders";
 import { requestReturnToken } from "../../lib/payments/tossPaymentApi";
-import { loadTossSdk } from "../../lib/tossSdk";
 import { clearPendingPgOrder, readPendingPgOrder, savePendingPgOrder } from "../../lib/payments/returnApi";
 import { fetchProfiles, type ProfileRow } from "../../lib/profiles";
 import { fetchMyPoints, usePoints } from "../../lib/reviews";
 import Loading from "../components/Loading";
 import { reservationReturnUrl } from "../../lib/reservationNav";
-import { getPaymentService, resolveProviderName, PG_CHECKOUT_ENABLED, type PaymentScenario } from "../../lib/payments";
+import { getPaymentService, resolveProviderName, isOnlinePgCheckoutAvailable, PG_CHECKOUT_ENABLED, type PaymentScenario } from "../../lib/payments";
 import { supabase } from "../../lib/supabaseClient";
-import { fetchMyPgCheckoutOverride } from "../../lib/authAccount";
+import { fetchMyPgCheckoutOverride, fetchMyNicepayReviewAccess } from "../../lib/authAccount";
 import { toUserMessage } from "../../lib/userError";
 import { fetchApplicableCoupons, previewDiscount, type MemberCoupon } from "../../lib/coupons";
 import { visiblePayMethodIds, resolveSelectedPayMethod } from "../../lib/payMethods";
@@ -43,10 +43,11 @@ const PAY_METHODS: { id: string; label: string; icon?: IconName; dot?: string }[
   { id: "direct", label: "직접결제 (센터에서 결제)", icon: "handshake" },
 ];
 
-// 토스 결제창을 거치는 결제수단(카드/카카오페이/토스페이/계좌이체). "direct"(직접결제)는
+// PG 결제창을 거치는 결제수단(카드/카카오페이/토스페이/계좌이체). "direct"(직접결제)는
 // PG를 아예 거치지 않는 별도 흐름이라 이 목록과 무관하게 handlePay()에서 먼저 분기한다.
-const TOSS_SUPPORTED_METHODS = ["card", "kakao", "toss", "transfer"];
-// payMethod → 토스 간편결제 ENUM 코드. "card"는 일반 카드결제라 매핑 없음(undefined).
+// ⚠ PG는 NICEPAY로 확정(2026-10-16). 카카오페이/토스페이 간편결제를 NICEPAY가 지원하는지는 기술지원 확인 전까지 미정이다.
+const PG_SUPPORTED_METHODS = ["card", "kakao", "toss", "transfer"];
+// payMethod → 간편결제 구분 코드(Toss PG 규격 값을 그대로 둔 것 — NICEPAY 규격으로의 매핑은 연동 시 교체). "card"는 일반 카드결제라 매핑 없음(undefined).
 const EASY_PAY_BY_METHOD: Record<string, "KAKAOPAY" | "TOSSPAY" | undefined> = {
   kakao: "KAKAOPAY",
   toss: "TOSSPAY",
@@ -147,7 +148,8 @@ function CheckoutContent() {
         // 전역 게이트가 꺼져 있을 때만 굳이 계정을 조회한다 — 이미 켜져 있으면(정식 오픈
         // 이후) 매 결제마다 불필요한 조회를 늘릴 이유가 없다.
         try {
-          const override = await fetchMyPgCheckoutOverride();
+          // PG 가 NICEPAY 이면 NICEPAY 심사관 전용 권한(nicepay_review_access)만 본다 — 토스 심사 계정(pg_checkout_override)은 NICEPAY 결제를 열 수 없다.
+          const override = resolveProviderName() === "nicepay" ? await fetchMyNicepayReviewAccess() : await fetchMyPgCheckoutOverride();
           if (override) {
             setPgCheckoutEnabled(true);
             setPayMethod("card");
@@ -182,7 +184,6 @@ function CheckoutContent() {
   }, [centerId, productId]);
   useEffect(() => { load(); }, [load]);
   // 토스 SDK는 이 화면에서만 로드한다(전역 로드 제거). 결제 버튼을 누르기 전에 미리 받아 두고, 실패해도 createPayment가 다시 시도/안내한다.
-  useEffect(() => { if (resolveProviderName() === "toss") void loadTossSdk().catch(() => {}); }, []);
 
   // 이 상품에 지금 실제로 쓸 수 있는 회원 쿠폰만 조회(요청 15번 "쿠폰 선택 UI는 usable
   // 쿠폰이 있을 때만"). 비로그인/쿠폰 없음이면 조용히 빈 목록 — 화면 자체는 그대로 진행.
@@ -346,8 +347,17 @@ function CheckoutContent() {
       return;
     }
     // 나머지(카드/카카오페이/토스페이/계좌이체)는 실제 PG 결제창을 거친다.
-    if (resolveProviderName() === "toss" && !TOSS_SUPPORTED_METHODS.includes(effectivePayMethod)) {
+    if (!PG_SUPPORTED_METHODS.includes(effectivePayMethod)) {
       setError("지금은 카드/카카오페이/토스페이/계좌이체만 가능해요");
+      return;
+    }
+    // fail-closed: 주문(포인트 차감 포함)을 만들기 전에 중단한다.
+    //   · disabled(은퇴한 PG 설정 / Mock이 허용되지 않은 환경) → 항상 중단
+    //   · nicepay → 계약·서버 승인 연동 후 NICEPAY_CHECKOUT_ACTIVATED가 켜지기 전까지 중단
+    //   · mock(개발/테스트 또는 명시 허용 환경) → 테스트 결제로 진행
+    const gateName = resolveProviderName();
+    if (gateName === "disabled" || (gateName === "nicepay" && !isOnlinePgCheckoutAvailable())) {
+      setError("온라인 결제는 준비 중이에요. 지금은 센터에서 직접 결제만 가능해요.");
       return;
     }
     setBusy(true);
@@ -368,7 +378,7 @@ function CheckoutContent() {
         profileId: selectedProfileId || undefined,
         selectedDayOfWeek: product.weekdaySelectable ? selectedScheduleDay : undefined,
         selectedStartTime: product.weekdaySelectable && product.timeSelectable ? selectedScheduleTime : undefined,
-        provider: providerName, // Payment Adapter Pattern: env(NEXT_PUBLIC_PAYMENT_PROVIDER)로 전환
+        provider: providerName === "nicepay" ? "nicepay" : "mock", // Payment Adapter Pattern: env(NEXT_PUBLIC_PAYMENT_PROVIDER)로 전환(disabled는 위에서 이미 중단됨)
       });
       pgOrderIdForCleanup = orderId;
       // [SEC-118] 주문을 먼저 만들고 그 id로 포인트를 사용한다 — 서버가 나중에 확정 시점에
@@ -383,7 +393,7 @@ function CheckoutContent() {
       const returnQuery = new URLSearchParams(window.location.search);
       // 토스 결제창은 외부 Safari에서 열릴 수 있어(iOS 앱) 복귀 콜백이 앱의 로그인 세션을 공유하지 않는다 — Supabase 토큰 대신
       // 서버가 발급한 "이 주문 전용 복귀 토큰"만 URL에 싣는다. 발급 실패 시 결제창을 열지 않고(catch가 방금 만든 pending 주문을 정리) 오류를 보여준다.
-      if (providerName === "toss") {
+      if (providerName === "nicepay") {
         returnQuery.set("returnToken", await requestReturnToken(orderId));   // 실패하면 throw → marker 저장 없이 catch가 pending 주문 정리
         // 정상 결제창 진입에서는 createPayment()가 이 WebView로 돌아오지 않을 수 있으므로 marker는 결제창을 열기 "직전"에 저장한다.
         savePendingPgOrder(orderId);
@@ -580,6 +590,8 @@ function CheckoutContent() {
             </label>
           </div>
         )}
+        {/* 이용기간(사전예약기간·서비스 제공기간): 결제일(오늘, KST) 기준으로 서버 규칙 그대로 계산. 알 수 없으면 날짜를 만들지 않고 공통 안내만 */}
+        <ServicePeriodNotice source={product.periodSource} />
         {product.description && (
           <div className="checkout-order-desc">{product.description}</div>
         )}
@@ -764,8 +776,8 @@ function CheckoutContent() {
         <div className="perm-guide" style={{ margin: "10px 20px" }}>
           실제 PG(카드 등) 연동은 준비 중이라, 지금은 테스트 결제(Mock)로 처리돼요.
         </div>
-      ) : effectivePayMethodUi === "card" && resolveProviderName() === "toss" && (
-        // 실기기 QA(2026-09-29) — 카드사별 결제 가능 여부는 토스 결제창(PG)이 직접 제어한다
+      ) : effectivePayMethodUi === "card" && resolveProviderName() === "nicepay" && (
+        // 실기기 QA(2026-09-29) — 카드사별 결제 가능 여부는 PG 결제창이 직접 제어한다
         // (이 앱이 카드사 목록 UI를 따로 구현하지 않음). 일부 카드사(예: 카드사 심사 진행 중)는
         // 결제창에서 바로 확인되므로, 앱에서는 과도하게 구체적인 안내 대신 자연스러운 문구만.
         <div className="perm-guide" style={{ margin: "10px 20px" }}>

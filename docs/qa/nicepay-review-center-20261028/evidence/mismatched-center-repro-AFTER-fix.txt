@@ -1,0 +1,12 @@
+{
+ "A→심사상품 (center=심사, 정직)": "DENY: 이 센터의 상품·수업은 이용할 수 없어요",
+ "A→심사상품 (center=운영으로 위장)": "DENY: 이 센터의 상품·수업은 이용할 수 없어요",
+ "B(심사관)→운영상품 (center=운영, 정직)": "DENY: 이 센터의 상품·수업은 이용할 수 없어요",
+ "B(심사관)→운영상품 (center=심사로 위장)": "DENY: 이 센터의 상품·수업은 이용할 수 없어요",
+ "A cart→심사상품 (center=운영 위장)": "DENY: 이 센터의 상품·수업은 이용할 수 없어요",
+ "A purchase_requests→심사상품 (center=운영 위장)": "DENY: 이 센터의 상품·수업은 이용할 수 없어요",
+ "A purchase_requests→심사상품 (center=심사)": "DENY: 이 센터의 상품·수업은 이용할 수 없어요",
+ "운영 매니저(MA) 수강권 발급: center=운영, product=심사 상품": "DENY: 이 센터의 상품·수업은 이용할 수 없어요",
+ "A 예약을 심사 수업으로 이동(UPDATE class_id)": "DENY: permission denied for table reservations",
+ "A 취소 UPDATE 에 product/center 바꿔치기": "DENY: 주문의 상품/횟수/금액 정보는 변경할 수 없어요"
+}

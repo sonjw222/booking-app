@@ -1,0 +1,26 @@
+[
+ {
+  "mode": "reviewer",
+  "who": "일반회원(A)",
+  "심사상품": "DENY(NICEPAY 결제는 아직 사용할 수 없어요)",
+  "운영상품": "DENY(NICEPAY 결제는 아직 사용할 수 없어요)"
+ },
+ {
+  "mode": "reviewer",
+  "who": "토스 심사관(T, override만)",
+  "심사상품": "DENY(이 센터의 상품·수업은 이용할 수 없어요)",
+  "운영상품": "ORDER_CREATED"
+ },
+ {
+  "mode": "reviewer",
+  "who": "NICEPAY 심사관(B, 전용 권한만)",
+  "심사상품": "DENY(NICEPAY 결제는 아직 사용할 수 없어요)",
+  "운영상품": "DENY(NICEPAY 결제는 아직 사용할 수 없어요)"
+ },
+ {
+  "mode": "reviewer",
+  "who": "NICEPAY 심사관+토스센터 매니저+is_member=false(S)",
+  "심사상품": "DENY(NICEPAY 결제는 아직 사용할 수 없어요)",
+  "운영상품": "DENY(NICEPAY 결제는 아직 사용할 수 없어요)"
+ }
+]
