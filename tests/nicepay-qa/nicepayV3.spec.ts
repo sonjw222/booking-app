@@ -203,11 +203,11 @@ test("[심사 대상 소속] NICEPAY 심사관 B — 운영 센터 상품은 보
 });
 
 test("[홈 푸터·상품 기간] 비로그인 홈 푸터에 사업자 정보(주소 포함)가 표시되고, 심사 상품에 사전예약·서비스 제공기간이 날짜로 표시된다", async ({ browser }) => {
-  const { BUSINESS_INFO } = await import("../../lib/businessInfo");
+  const { BUSINESS_INFO } = await import("../../lib/businessInfo"); const { BUSINESS_ADDRESS } = await import("../../lib/businessAddress");
   const ctx = await browser.newContext(); const page = await ctx.newPage();
-  await page.goto(`${BASE}/`); await page.waitForLoadState("networkidle");
+  await page.goto(`${BASE}/`); await page.waitForLoadState("networkidle"); await expect(page.getByTestId("business-address")).toBeVisible({ timeout: 15_000 });   // 플래그를 켠 QA 서버에서만 표시(기본 꺼짐)
   const footer = (await page.locator(".home-footer").innerText()).replace(/\s+/g, " ");
-  expect(footer.includes(BUSINESS_INFO.address), "홈 푸터에 사업자 주소가 표시된다(값은 출력하지 않음)").toBe(true);
+  expect(footer.includes(BUSINESS_ADDRESS), "홈 푸터에 사업자 주소가 표시된다(값은 출력하지 않음)").toBe(true);
   expect(footer.includes(BUSINESS_INFO.businessRegNo) && footer.includes(BUSINESS_INFO.companyName)).toBe(true);
   await ctx.close();
   const b = await openAs(browser, "B"); setGate("reviewer");

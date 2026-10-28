@@ -19,6 +19,7 @@ import { useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import ServicePeriodNotice, { ServicePeriodGenericNote } from "../components/ServicePeriodNotice";
 import { fetchPublicStorefrontProducts, groupPublicProductsByCenter, type PublicStorefrontProduct } from "../../lib/center";
+import BusinessAddressLine from "../components/BusinessAddressLine";
 import { BUSINESS_INFO } from "../../lib/businessInfo";
 import { toUserMessage } from "../../lib/userError";
 import { availabilityLabel, isCountSelectable, priceSummary } from "../../lib/selectableCount";
@@ -117,7 +118,7 @@ export default function PublicProductsPage() {
           <div>{BUSINESS_INFO.companyName} · 대표 {BUSINESS_INFO.ceoName}</div>
           <div>사업자등록번호 {BUSINESS_INFO.businessRegNo}</div>
           <div>통신판매업 신고번호 {BUSINESS_INFO.mailOrderRegNo}</div>
-          <div>사업장 소재지 {BUSINESS_INFO.address}</div>
+          <BusinessAddressLine />
           <div>고객센터 {BUSINESS_INFO.customerServicePhone}</div>
         </div>
       </div>

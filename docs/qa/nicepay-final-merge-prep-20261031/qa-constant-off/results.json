@@ -1,0 +1,225 @@
+{
+  "config": {
+    "argv": [
+      "/Users/sonjw/.nvm/versions/node/v24.19.0/bin/node",
+      "/Users/sonjw/Documents/mwhabit-automation/worktrees/nicepay-final-merge-prep-20261031/node_modules/.bin/playwright",
+      "test",
+      "-c",
+      "playwright.nicepayqa.config.ts",
+      "--grep",
+      "코드 상수 false"
+    ],
+    "configFile": "/Users/sonjw/Documents/mwhabit-automation/worktrees/nicepay-final-merge-prep-20261031/playwright.nicepayqa.config.ts",
+    "rootDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/nicepay-final-merge-prep-20261031/tests/nicepay-qa",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/nicepay-final-merge-prep-20261031/docs/qa/nicepay-final-merge-prep-20261031/qa-constant-off/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/nicepay-final-merge-prep-20261031/tests/nicepay-qa",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.spec\\.ts$/"
+        ],
+        "timeout": 90000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "docs/qa/nicepay-final-merge-prep-20261031/qa-constant-off/results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "paymentOff.spec.ts",
+      "file": "paymentOff.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[코드 상수 false · 게이트 off] NICEPAY 심사관 B — 환경변수가 모두 켜져 있어도 결제창·주문·승인 없음",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1622,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T15:27:45.921Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2a65b5403c574d285598-9be0b933773188bb1a9e",
+          "file": "paymentOff.spec.ts",
+          "line": 9,
+          "column": 7
+        },
+        {
+          "title": "[코드 상수 false · 게이트 reviewer] NICEPAY 심사관 B — 환경변수가 모두 켜져 있어도 결제창·주문·승인 없음",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1117,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T15:27:47.713Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2a65b5403c574d285598-87bc64c2b519b62fb331",
+          "file": "paymentOff.spec.ts",
+          "line": 9,
+          "column": 7
+        },
+        {
+          "title": "[코드 상수 false · 게이트 public] NICEPAY 심사관 B — 환경변수가 모두 켜져 있어도 결제창·주문·승인 없음",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1093,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T15:27:48.833Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2a65b5403c574d285598-dcce0969e71b0fc5ce4d",
+          "file": "paymentOff.spec.ts",
+          "line": 9,
+          "column": 7
+        },
+        {
+          "title": "[코드 상수 false · 게이트 public] 일반 회원 A — 카드 미노출(직접결제만), NICEPAY 주문 없음, 직접결제는 정상 주문",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1150,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-28T15:27:49.929Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2a65b5403c574d285598-7ca6397c8f42cd608146",
+          "file": "paymentOff.spec.ts",
+          "line": 19,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-28T15:27:45.710Z",
+    "duration": 5430.434,
+    "expected": 4,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

@@ -13,6 +13,7 @@ import { fetchMyProfileIds, fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingC
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
 import { fetchMyCenters } from "../lib/manager";
 import { supabase } from "../lib/supabaseClient";
+import BusinessAddressLine from "./components/BusinessAddressLine";
 import { BUSINESS_INFO } from "../lib/businessInfo";
 import { consumePostLoginNext } from "../lib/postLoginReturn";
 import { replaceTabNavigation } from "../lib/navState";
@@ -438,7 +439,7 @@ export default function Home() {
             <div>{BUSINESS_INFO.companyName} · 대표 {BUSINESS_INFO.ceoName}</div>
             <div>사업자등록번호 {BUSINESS_INFO.businessRegNo}</div>
             <div>통신판매업 신고번호 {BUSINESS_INFO.mailOrderRegNo}</div>
-            <div>사업장 소재지 {BUSINESS_INFO.address}</div>
+            <BusinessAddressLine />
             <div>고객센터 {BUSINESS_INFO.customerServicePhone}</div>
           </div>
         </div>

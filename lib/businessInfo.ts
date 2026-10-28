@@ -6,6 +6,8 @@
   한 곳에서만 관리한다.
 */
 
+// ⚠ 사업장 소재지(address)는 일부러 이 객체에 넣지 않는다: 이 객체는 홈·공개 화면(클라이언트 번들)이 통째로 import 하므로, 거기에 주소가 있으면 푸터 표시가 꺼져 있어도 번들에 주소 문자열이 실린다.
+//   주소는 아래 BUSINESS_ADDRESS(별도 export)로만 쓰고, 공개 푸터는 환경변수 플래그가 켜졌을 때만 참조한다.
 export const BUSINESS_INFO = {
   serviceName: "모하빗",
   // 영문 서비스 브랜드명. 사업자등록증상 상호는 한글 "모하빗"이며, 영문명은 별도 법인명/등록 상호가 아니라
@@ -16,7 +18,6 @@ export const BUSINESS_INFO = {
   companyName: "모하빗",
   ceoName: "손장욱",
   businessRegNo: "589-77-00451",
-  address: "경기도 성남시 분당구 중앙공원로 20, 420동 702호",
   customerServicePhone: "010-6505-8700",
   // 공개 고객 문의 이메일(회사 도메인). 신청·관리용 계정과는 별개이며 여기에 쓰지 않는다. 계정 삭제 안내(/account-deletion)도 이 값을 쓴다.
   email: "contact@mwhabit.com",

@@ -178,8 +178,8 @@ describe("4. 홈 footer — 사업자 정보 직접 표시", () => {
     expect(footer).toContain("고객센터 {BUSINESS_INFO.customerServicePhone}");
   });
 
-  it("이메일은 홈 footer에 노출하지 않는다. 주소는 2026-10-27 NICEPAY 심사 요청으로 단일 출처(BUSINESS_INFO.address)로만 노출(공개 배포는 사용자 승인 후)", () => {
-    expect(footer).toContain("BUSINESS_INFO.address");
+  it("이메일은 홈 footer에 노출하지 않는다. 주소는 NICEPAY 심사 요청으로 환경변수 플래그(기본 꺼짐)가 켜진 빌드에서만 <BusinessAddressLine /> 로 표시(공개 배포는 사용자 승인 후)", () => {
+    expect(footer).toContain("<BusinessAddressLine />");
     expect(footer).not.toContain("BUSINESS_INFO.email");
   });
 

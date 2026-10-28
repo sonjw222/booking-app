@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-31 — 홈·공개 상품 하단 사업장 소재지를 환경변수 플래그(기본 꺼짐)로 제한 + 결제 비활성 매트릭스 (로컬)
+- 새로 노출되는 곳은 홈 푸터·`/products` 푸터뿐(기존 공개 범위는 `/legal/business`·관리자 구독 화면). 이제 `NEXT_PUBLIC_SHOW_BUSINESS_ADDRESS_IN_FOOTER=true` 일 때만 서버 라우트(`/api/public/business-address`)에서 받아 표시하며, 꺼진 빌드(기본·Preview·Production)의 홈·상품 번들·HTML 에는 주소가 없다(빌드 산출물로 확인). 주소 값은 `lib/businessAddress.ts` 로 분리했다.
+- 결제 비활성 3중 잠금 검증 추가: 코드 상수·DB 게이트·PG 결제수단 OFF(+레거시 PG 상수) — 환경변수 없는 Preview 빌드 포함(`tests/unit/nicepay.paymentOff.matrix.test.ts`, 브라우저 `NPQA_CONSTANT_OFF=1`).
 ## 2026-10-31 — NICEPAY 최종 병합 준비: origin/main(8b9430e, PR #247 포함) 병합·레거시 PG 어댑터 보존·P3 운영 스키마 사전 검토 (로컬, 운영 쓰기 없음)
 - 브랜치 `feat/nicepay-final-merge-prep-20261031`: 통합 브랜치 + origin/main 병합(충돌은 .gitignore·CHANGELOG·TODO 뿐, #247 파일 모두 유지). Toss/PortOne 클라이언트 어댑터·`tossPaymentApi`·테스트를 main 본으로 복원하고 `LEGACY_PG_CHECKOUT_ACTIVATED=false` 잠금(toss/portone/미지원 값은 disabled, mock 폴백 없음). 오래된 QA 스크린샷 약 16MB 제거.
 - P3: 운영 스키마 읽기 전용 대조(`docs/payments/NICEPAY_P3_PREREVIEW_20261031.md`), 제안 시드·심사관 지정 SQL(미실행).

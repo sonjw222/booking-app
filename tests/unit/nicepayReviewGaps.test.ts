@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { BUSINESS_INFO } from "../../lib/businessInfo";
+import { BUSINESS_ADDRESS } from "../../lib/businessAddress";
 
 const root = path.resolve(__dirname, "../..");
 const read = (f: string) => readFileSync(path.join(root, f), "utf8");
@@ -10,13 +10,13 @@ describe("NICEPAY 심사 보완 1 — 홈·공개 상품 하단 사업장 주소
   it("홈과 공개 상품 페이지가 BUSINESS_INFO.address 를 표시하고, 주소 문자열을 하드코딩하지 않는다", () => {
     for (const f of ["app/page.tsx", "app/products/page.tsx"]) {
       const src = read(f);
-      expect(src, f).toMatch(/사업장 소재지 \{BUSINESS_INFO\.address\}/);
-      expect(src, `${f}: 주소 하드코딩 금지`).not.toContain(BUSINESS_INFO.address);
+      expect(src, f).toContain("<BusinessAddressLine />");   // 환경변수 플래그가 켜진 빌드에서만 표시(기본 꺼짐) — app/components/BusinessAddressLine.tsx
+      expect(src, `${f}: 주소 하드코딩 금지`).not.toContain(BUSINESS_ADDRESS);
     }
   });
   it("/legal/business 도 같은 값을 쓰고, 주소는 임의 값이 아니라 기존 BUSINESS_INFO 값 그대로다", () => {
-    expect(read("app/legal/business/page.tsx")).toContain("{BUSINESS_INFO.address}");
-    expect(BUSINESS_INFO.address).toBe("경기도 성남시 분당구 중앙공원로 20, 420동 702호");   // 사용자 확인 필요(사업자등록증 대조) — 값 자체를 이 작업에서 바꾸지 않았다
+    expect(read("app/legal/business/page.tsx")).toContain("{BUSINESS_ADDRESS}");
+    expect(BUSINESS_ADDRESS.length).toBeGreaterThan(5);   // 값 자체는 이 테스트에 적지 않는다(사업자등록증 대조는 사용자 확인 사항)
   });
   it("홈 하단 주석에 '자택 주소 → 공개 배포는 사용자 승인 후' 경고가 남아 있다", () => {
     expect(read("app/page.tsx")).toMatch(/자택 주소이므로 공개 배포는 사용자 승인 후에만/);

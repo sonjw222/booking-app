@@ -23,6 +23,7 @@ import {
 } from "../../../lib/centerSubscription";
 import { fetchSubscriptionPlans, type SubscriptionPlan } from "../../../lib/operator";
 import { BUSINESS_INFO } from "../../../lib/businessInfo";
+import { BUSINESS_ADDRESS } from "../../../lib/businessAddress";
 
 // 결제/카드 등록 후속 안내의 종류 — 예전엔 성공/실패/진행중이 전부 같은 error-toast(빨간색)로
 // 보여서 "첫 결제 성공" 메시지까지 오류처럼 보였다(QA, 2026-10-01). 종류별로 스타일과
@@ -405,7 +406,7 @@ function ManagerSubscriptionContent() {
           <div className="set-row col" style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--line)", fontSize: 12, color: "var(--text-dim)", lineHeight: 1.8 }}>
             <div>{BUSINESS_INFO.serviceName} · 상호 {BUSINESS_INFO.companyName} · 대표 {BUSINESS_INFO.ceoName}</div>
             <div>사업자등록번호 {BUSINESS_INFO.businessRegNo} · 통신판매업 신고번호 {BUSINESS_INFO.mailOrderRegNo}</div>
-            <div>{BUSINESS_INFO.address}</div>
+            <div>{BUSINESS_ADDRESS}</div>
             <div>고객센터 {BUSINESS_INFO.customerServicePhone} · {BUSINESS_INFO.email}</div>
             <div><a href="/legal/business" target="_blank" rel="noopener noreferrer">사업자 정보 전체보기</a></div>
           </div>

@@ -34,14 +34,15 @@ describe("공개 문의 이메일 — 단일 출처 BUSINESS_INFO.email", () => 
   });
   it("법적 사업자 정보는 변경되지 않았다(상호/대표자/등록번호/주소/통신판매업/고객센터)", async () => {
     const { BUSINESS_INFO: b } = await import("../../lib/businessInfo");
-    expect([b.companyName, b.serviceName, b.ceoName, b.businessRegNo, b.mailOrderRegNo, b.address, b.customerServicePhone])
+    const { BUSINESS_ADDRESS } = await import("../../lib/businessAddress");
+    expect([b.companyName, b.serviceName, b.ceoName, b.businessRegNo, b.mailOrderRegNo, BUSINESS_ADDRESS, b.customerServicePhone])
       .toEqual(["모하빗", "모하빗", "손장욱", "589-77-00451", "제2026-성남분당B-0866호", "경기도 성남시 분당구 중앙공원로 20, 420동 702호", "010-6505-8700"]);
     expect(b.brandNameEn).toBe("MWHABIT");
   });
   it("홈 푸터는 이메일을 노출하지 않는다(주소는 2026-10-27 NICEPAY 심사 요청으로 단일 출처 BUSINESS_INFO.address 만 노출)", () => {
     const home = read("app/page.tsx");
     expect(home).not.toContain("BUSINESS_INFO.email");
-    expect(home).toContain("BUSINESS_INFO.address");
+    expect(home).toContain("<BusinessAddressLine />");
   });
 });
 

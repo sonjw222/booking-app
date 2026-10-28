@@ -18,9 +18,15 @@ export NICEPAY_QA_CONTROL="$NPQA_OUT/control.json" NICEPAY_QA_LOG="$NPQA_OUT/nic
 # 로컬 전용 가짜 자격(무작위, 커밋·출력 금지)
 export NICEPAY_MID="QA$(head -c 6 /dev/urandom | xxd -p | cut -c1-8)m" NICEPAY_MERCHANT_KEY="$(head -c 24 /dev/urandom | xxd -p)" PAYMENT_RETURN_TOKEN_SECRET="$(head -c 24 /dev/urandom | xxd -p)"
 export NEXT_PUBLIC_PAYMENT_PROVIDER=nicepay NICEPAY_CHECKOUT_ENABLED=true NICEPAY_API_FAMILY=v3_mid NICEPAY_ENV=sandbox NICEPAY_RETURN_BASE_URL=http://localhost:3100
+export NEXT_PUBLIC_SHOW_BUSINESS_ADDRESS_IN_FOOTER=true   # 심사 요구(홈 하단 주소)를 "플래그를 켰을 때" 충족하는지 검증 — 배포 기본값은 꺼짐
 unset NEXT_PUBLIC_PG_CHECKOUT_ENABLED   # 일반 회원 결제를 열지 않는다
-sed -i.bak 's/export const NICEPAY_CHECKOUT_ACTIVATED: boolean = false;/export const NICEPAY_CHECKOUT_ACTIVATED: boolean = true;/' $FACT && rm -f $FACT.bak
-grep -q "NICEPAY_CHECKOUT_ACTIVATED: boolean = true" $FACT || { echo "활성 상수 전환 실패"; exit 1; }
+if [ -z "${NPQA_CONSTANT_OFF:-}" ]; then
+  sed -i.bak 's/export const NICEPAY_CHECKOUT_ACTIVATED: boolean = false;/export const NICEPAY_CHECKOUT_ACTIVATED: boolean = true;/' $FACT && rm -f $FACT.bak
+  grep -q "NICEPAY_CHECKOUT_ACTIVATED: boolean = true" $FACT || { echo "활성 상수 전환 실패"; exit 1; }
+else
+  echo "NPQA_CONSTANT_OFF=1 — 코드 상수를 바꾸지 않는다(결제 비활성 검증: 환경변수·게이트가 모두 켜져도 코드 상수가 false 면 결제창이 열리지 않아야 한다)"
+  grep -q "NICEPAY_CHECKOUT_ACTIVATED: boolean = false" $FACT || { echo "상수가 false 가 아니에요"; exit 1; }
+fi
 NODE_OPTIONS="--require $PWD/tests/nicepay-qa/mockNicepayFetch.cjs" npm run dev -- -p 3100 > "$NPQA_OUT/dev-server.log" 2>&1 & DEV_PID=$!
 for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3100/login && break; sleep 2; done
 curl -sf -o /dev/null http://localhost:3100/login || { echo "앱 서버 기동 실패"; exit 1; }
