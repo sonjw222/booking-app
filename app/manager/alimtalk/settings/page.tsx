@@ -19,12 +19,22 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "../../../../lib/supabaseClient";
+import PermissionGateShell from "../../../components/PermissionGateShell";
+import { fetchMyCenters, type ManagedCenter } from "../../../../lib/manager";
+import { useAnyCenterPermissionGate } from "../../../../lib/permissionGate";
 
 export default function AlimtalkSettingsPage() {
   const [connected, setConnected] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [centers, setCenters] = useState<ManagedCenter[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  useEffect(() => { fetchMyCenters().then(setCenters).catch(() => setLoadError("센터 정보를 불러오지 못했어요")).finally(() => setLoaded(true)); }, []);
+  const gateRaw = useAnyCenterPermissionGate(centers, loaded, "message.alimtalk.view");   // 알림톡 메뉴와 같은 권한. 확인 중·실패는 허용이 아니다
+  const gate = loadError ? "error" : gateRaw;
 
   useEffect(() => {
+    if (gate !== "allowed") return;
     (async () => {
       const { data, error } = await supabase.functions.invoke<{ connected: boolean }>("send-alimtalk", {
         body: { action: "status" },
@@ -32,8 +42,9 @@ export default function AlimtalkSettingsPage() {
       if (error || !data) { setError("연동 상태를 확인하지 못했어요"); return; }
       setConnected(data.connected);
     })();
-  }, []);
+  }, [gate]);
 
+  if (gate !== "allowed") return <PermissionGateShell title="발신 설정" backHref="/manager/alimtalk" state={gate} what="발신 설정" />;
   return (
     <div className="app-shell">
       <div className="back-header">

@@ -693,7 +693,7 @@ function CheckoutContent() {
                   결제 확인 후 가까운 날짜부터 남은 횟수만큼 예약해드려요. 수강권 만료일 이후 수업은 예약하지 않아요.
                 </span>
               </div>
-              <button className={`switch ${autoBook ? "on" : ""}`} onClick={() => setAutoBook((v) => !v)}>
+              <button role="switch" aria-checked={autoBook} aria-label="수업 자동 예약" className={`switch ${autoBook ? "on" : ""}`} onClick={() => setAutoBook((v) => !v)}>
                 <span className="knob" />
               </button>
             </div>

@@ -26,6 +26,8 @@ import {
 } from "../../../lib/sales";
 import { fetchSettings } from "../../../lib/settings";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { useCenterPermissionGate } from "../../../lib/permissionGate";
+import PermissionGateShell from "../../components/PermissionGateShell";
 
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -202,6 +204,8 @@ export default function SalesPage() {
   function canDo(key: string): boolean {
     return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);
   }
+  // 매출 화면은 메뉴(app/manager/page.tsx)와 같은 pass.sales.view 가 있어야 열린다. 없으면 서버가 가린 0원 화면 대신 안내를 보여 준다. 확인 중·실패는 허용이 아니다.
+  const salesGate = useCenterPermissionGate(centers, centerId, "pass.sales.view");
   const canCreatePayment = canDo("pass.payment.create");
   const canDeletePayment = canDo("pass.payment.delete");
   // registerPayment는 수강권/상품을 고르면 memberships에도 insert하므로(발급),
@@ -355,6 +359,8 @@ export default function SalesPage() {
       </div>
     );
   }
+
+  if (salesGate !== "allowed") return <PermissionGateShell title="매출·결제" backHref="/manager" state={salesGate} what="매출·결제" centers={centers} centerId={centerId} onSelectCenter={setCenterId} error={error} />;
 
   return (
     <div className="app-shell">

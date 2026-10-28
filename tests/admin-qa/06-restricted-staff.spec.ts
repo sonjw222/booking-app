@@ -91,7 +91,7 @@ test("[제한직원] 직원·권한 — 역할 변경/권한 편집 컨트롤 �
 test("[제한직원] 알림톡 — 발송 권한(message.alimtalk.view)이 없으면 화면·회원 목록 진입점·서버(send-alimtalk) 모두 거부", async () => {
   await gotoQaCenter(page, "/manager/alimtalk/send");
   await shot(page, "06-limited-alimtalk-send");
-  await expect(page.getByText("알림톡을 보낼 권한이 없어요")).toBeVisible();   // 화면도 같은 권한으로 막힌다
+  await expect(page.getByText(/알림톡 보내기 화면을 볼 권한이 없어요/)).toBeVisible();   // 화면도 같은 권한으로 막힌다
   await gotoQaCenter(page, "/manager/members");
   await expect(page.getByRole("button", { name: "알림톡 발송" })).toHaveCount(0);   // 회원 목록의 알림톡 진입점도 숨김
   const token = await sessionToken(page);

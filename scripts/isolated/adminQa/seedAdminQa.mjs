@@ -22,8 +22,11 @@ const mkRole = async (name, keys) => { const r = must(await svc.from("center_rol
   if (keys.length) must(await svc.from("role_permissions").insert(keys.map((k) => ({ role_id: r.id, permission_key: k }))), "role perms"); return r.id; };
 const limitedKeys = ["customer.member.view", "schedule.other.group.view", "board.notice.view", "pass.goods.view", "pass.order.view", "facility.review.view", "facility.staff.view"];
 const limitedRole = await mkRole("QA 조회 전용", limitedKeys); const targetRole = await mkRole("QA 변경 대상", ["customer.member.view"]);
+const allowedRole = await mkRole("QA 알림톡·매출 허용", ["message.alimtalk.view", "pass.sales.view", "customer.member.view"]);
 const limited = await acct("ci-qa-limited@isolated.test", "QA 제한직원", { is_manager: true });
 const target = await acct("ci-qa-target@isolated.test", "QA 변경대상직원", { is_manager: true });
+const allowed = await acct("ci-qa-allowed@isolated.test", "QA 허용직원", { is_manager: true });
+must(await svc.from("manager_centers").insert({ account_id: allowed.id, center_id: center.id, role_id: allowedRole, status: "active" }), "allowed link");
 must(await svc.from("manager_centers").insert({ account_id: limited.id, center_id: center.id, role_id: limitedRole, status: "active" }), "limited link");
 must(await svc.from("manager_centers").insert({ account_id: target.id, center_id: center.id, role_id: targetRole, status: "active" }), "target link");
 // 회원(TEST_USER_A): 센터 회원 등록
@@ -37,5 +40,5 @@ psql(`update center_subscriptions set alimtalk_addon = true where center_id = '$
 psql(`insert into alimtalk_templates(center_id, aligo_template_code, title, content, variables, status, is_active) values ('${center.id}', 'TQA0001', 'QA 안내', '#{name}님 QA 안내입니다.', '{name}', 'approved', true)`);
 psql(`update profiles set phone = '01012345678' where id = '${prof.id}'`);
 psql(`alter table accounts disable trigger trg_accounts_phone_verified; update accounts set phone = '01012345678' where id = '${ua.id}'; alter table accounts enable trigger trg_accounts_phone_verified`);
-fs.appendFileSync(file, `\nQA_CENTER_ID=${center.id}\nQA_PRODUCT_ID=${prod.id}\nQA_MEMBER_PROFILE_ID=${prof.id}\nQA_LIMITED_EMAIL=${limited.email}\nQA_LIMITED_PASSWORD=${limited.password}\nQA_TARGET_EMAIL=${target.email}\nQA_TARGET_PASSWORD=${target.password}\nQA_TARGET_ACCOUNT_ID=${target.id}\nQA_TARGET_ROLE_ID=${targetRole}\n`);
+fs.appendFileSync(file, `\nQA_CENTER_ID=${center.id}\nQA_PRODUCT_ID=${prod.id}\nQA_MEMBER_PROFILE_ID=${prof.id}\nQA_LIMITED_EMAIL=${limited.email}\nQA_LIMITED_PASSWORD=${limited.password}\nQA_ALLOWED_EMAIL=${allowed.email}\nQA_ALLOWED_PASSWORD=${allowed.password}\nQA_TARGET_EMAIL=${target.email}\nQA_TARGET_PASSWORD=${target.password}\nQA_TARGET_ACCOUNT_ID=${target.id}\nQA_TARGET_ROLE_ID=${targetRole}\n`);
 console.log("seed OK", JSON.stringify({ center: center.id.slice(0, 8), product: prod.id.slice(0, 8) }));

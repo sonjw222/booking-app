@@ -12,6 +12,8 @@ import SheetOverlay from "../../../components/SheetOverlay";
 import { useRef, useCallback, useEffect, useState } from "react";
 import Loading from "../../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../../lib/manager";
+import { useCenterPermissionGate } from "../../../../lib/permissionGate";
+import PermissionGateShell from "../../../components/PermissionGateShell";
 import { checkPlatformAdmin } from "../../../../lib/admin";
 import {
   fetchAlimtalkTemplates, createAlimtalkTemplate, updateAlimtalkTemplate, deleteAlimtalkTemplate,
@@ -66,6 +68,8 @@ export default function AlimtalkTemplatesPage() {
   const [refreshingStatus, setRefreshingStatus] = useState(false);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
+  const gateRaw = useCenterPermissionGate(centers, centerId, "message.alimtalk.view");
+  const gate = centers.length === 0 && !loading ? "denied" : gateRaw;   // 메뉴와 같은 권한. 확인 중·실패는 허용이 아니다
 
   useEffect(() => {
     (async () => {
@@ -270,6 +274,8 @@ export default function AlimtalkTemplatesPage() {
       </div>
     );
   }
+
+  if (gate !== "allowed") return <PermissionGateShell title="템플릿 관리" backHref="/manager/alimtalk" state={gate} what="템플릿 관리" centers={centers} centerId={centerId} onSelectCenter={setCenterId} error={error} />;
 
   return (
     <div className="app-shell">

@@ -8,8 +8,9 @@
 - **P1(BLOCKED)**: 실제 NICEPAY 결제창(실제 SDK·모바일 실기기)·실제 MID 로 인증 응답 필드·승인 응답 규격·12자리 Amt 패딩 확인(키 사용 승인 후).
 - **P1(승인)**: 심사 센터 상품 가격·기간·표시명 확정, P3 시드·심사관 권한 지정 SQL 실행 승인.
 - **P2**: 홈 푸터 사업자 주소 공개 배포 승인(배포 = 공개).
+- **P1(결정)**: 관리자 화면에 수강권 환불 처리 UI 가 필요한지(현재 회원 본인/PG 경로만, #248) · 프라이빗 시간 단위·후기 재작성 보상 정책(`docs/ADMIN_POLICY_NOTES_20261031.md`).
+- **P2**: 실기기(iOS/Android) 관리자 폼 확인(#248), #238 실환경(플랫폼 관리자+상태별 31건).
 - **P1(배포 승인)**: `supabase functions deploy send-alimtalk` — 알림톡 권한(message.alimtalk.view) 검사 반영(관리자 QA #239 수정). 배포 전에는 운영에서 권한 없는 직원이 직접 호출로 유료 발송 가능.
-- **P2**: 이름 없는 `button.switch` 패턴(운영 설정·상품·알림 설정 등 ~20곳)에 role="switch"/aria-label 일괄 적용, `/manager/alimtalk/*` 하위 화면(규칙·템플릿·설정)·`/manager/sales` 의 권한 없음 안내(서버는 이미 차단).
 - **P1(QA)**: #238 실환경 확인 — 플랫폼 관리자 계정·상태별 31건 이상 센터가 갖춰진 승인 대상에서 `npm run test:e2e:admin-pagination`. #239 실기기(iOS/Android) 관리자 폼 확인.
 ## 2026-10-30 격리 스택 ↔ 운영 보안 수정 동기화
 - **P2**: 운영에만 적용한 SQL 이 격리 스택(baseline=공유 DEV)에 빠지는 일이 없도록, 운영 SQL 적용 절차에 "격리 migration 추가 + 동일성 시험" 단계를 포함(`docs/CI_ISOLATION_240.md`). 공유 DEV 에도 이 보호를 적용할지는 별도 결정.
