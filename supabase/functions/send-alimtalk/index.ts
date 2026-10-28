@@ -18,10 +18,10 @@
 //      { action:"list_templates", centerId } 로 호출. 알리고 계정에 등록된 템플릿 목록을
 //      그대로 반환(승인상태/코드를 수동으로 옮겨 적지 않게, 2026-09-08).
 //
-// 인증: Authorization 헤더의 JWT가 실제 로그인 사용자(경로 1)면 그 계정이 대상 센터의 활성
-//   매니저인지 확인(add_alimtalk_integration.sql의 RLS와 동일하게 센터소속 여부만 확인 —
-//   화면단 메뉴 노출은 message.alimtalk.view 권한으로 이미 가려져 있음). service_role 키(경로 2,
-//   dispatch-alimtalk cron만 앎)면 내부 호출로 신뢰한다.
+// 인증(2026-10-30 개정, 관리자 QA #239): 판정 로직은 ../_shared/alimtalkAuthz.ts(순수 함수, vitest 로 직접 시험). Authorization 헤더의 JWT 가 실제 로그인 사용자면
+//   ① JWT 유효(만료·위조는 401) ② 계정 존재 ③ 플랫폼 운영자이거나 대상 센터의 활성 매니저 ④ 호출자 본인 JWT 로 message.alimtalk.view 권한 보유(없으면 403, 권한 조회 오류는 500 — fail-closed)
+//   를 모두 만족해야 한다. 예전에는 "센터 소속"만 확인해 메뉴만 가려 둔 직원이 직접 호출로 유료 발송을 할 수 있었다. 어느 단계든 못 넘으면 알리고 프록시는 호출되지 않는다.
+//   service_role 키(경로 2, dispatch-alimtalk cron 만 앎)면 내부 호출로 신뢰한다.
 //
 // 필요한 Edge Function 환경변수(`supabase secrets set`으로 등록, 코드/DB에 저장 안 함):
 //   ALIGO_PROXY_URL                    — Oracle 고정-IP Aligo 프록시 URL
@@ -33,7 +33,7 @@
 //
 // 알리고 실발송 로직(sendViaAligo)은 ../_shared/aligo.ts로 옮겨졌다 — send-phone-otp(휴대폰
 // 인증번호 발송, 2026-09-05)도 같은 로직을 쓰기 때문(로그인 전 호출이라 이 함수의
-// isAuthorizedCaller 권한 모델과는 다른 별도 함수로 분리, Aligo 호출 부분만 공유).
+// alimtalkAuthz 권한 모델과는 다른 별도 함수로 분리, Aligo 호출 부분만 공유).
 //
 // 배포: `supabase functions deploy send-alimtalk`
 
@@ -43,6 +43,7 @@ import {
   createAligoTemplate, requestAligoTemplateApproval,
 } from "../_shared/aligo.ts";
 import { dispatchQueuedMessage, type DispatchDeps, type QueuedMessage } from "../_shared/alimtalkDispatch.ts";
+import { authorizeAlimtalkCaller, handleImmediateSend, ALIMTALK_PERMISSION, type AuthzDeps } from "../_shared/alimtalkAuthz.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -86,34 +87,36 @@ async function resolveAccountId(admin: ReturnType<typeof createClient>, authUser
   return mergedAccount ?? null;
 }
 
-// 호출자가 실제 로그인 사용자면 대상 센터의 활성 매니저인지 확인. service_role 호출(cron)이면 통과.
-async function isAuthorizedCaller(authHeader: string | null, centerId: string): Promise<boolean> {
-  if (!authHeader) return false;
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (token === SERVICE_ROLE_KEY) return true; // dispatch-alimtalk cron (신뢰된 내부 호출)
-
-  const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: authData } = await userClient.auth.getUser();
-  if (!authData?.user) return false;
-
+// 권한 판정 의존성(실제 Supabase 클라이언트 연결). 판정 규칙 자체는 ../_shared/alimtalkAuthz.ts.
+function authzDeps(): AuthzDeps {
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-  const account = await resolveAccountId(admin, authData.user.id);
-  if (!account) return false;
-  if (account.is_platform_admin) return true;
-
-  const { data: mc } = await admin
-    .from("manager_centers")
-    .select("id")
-    .eq("account_id", account.id)
-    .eq("center_id", centerId)
-    .eq("status", "active")
-    .maybeSingle();
-  return !!mc;
+  return {
+    serviceRoleKey: SERVICE_ROLE_KEY,
+    async getUserId(authHeader) {
+      const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
+      const { data } = await userClient.auth.getUser();
+      return data?.user?.id ?? null;
+    },
+    resolveAccount: (userId) => resolveAccountId(admin, userId),
+    async isActiveManager(accountId, centerId) {
+      const { data: mc } = await admin.from("manager_centers").select("id").eq("account_id", accountId).eq("center_id", centerId).eq("status", "active").maybeSingle();
+      return !!mc;
+    },
+    async hasPermission(authHeader, centerId, permissionKey) {
+      const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
+      const { data, error } = await userClient.rpc("has_permission", { p_center_id: centerId, p_permission: permissionKey });
+      return error ? null : data === true;
+    },
+  };
 }
 
-// "공통"(플랫폼 전체) 템플릿 생성/신청은 센터가 없어 위 isAuthorizedCaller로 판정할 수
+// 거부면 응답(401/403/500), 통과면 null. 권한 키는 ALIMTALK_PERMISSION(message.alimtalk.view).
+async function denyUnlessAuthorized(authHeader: string | null, centerId: string): Promise<Response | null> {
+  const r = await authorizeAlimtalkCaller(authzDeps(), authHeader, centerId);
+  return r.ok ? null : json({ error: r.message, permission: r.status === 403 ? ALIMTALK_PERMISSION : undefined }, r.status);
+}
+
+// "공통"(플랫폼 전체) 템플릿 생성/신청은 센터가 없어 위 denyUnlessAuthorized로 판정할 수
 // 없다 — 플랫폼 운영자만 허용.
 async function isPlatformAdminCaller(authHeader: string | null): Promise<boolean> {
   if (!authHeader) return false;
@@ -163,9 +166,7 @@ Deno.serve(async (req: Request) => {
   // (여러 센터 템플릿이 섞여 나와도 매니저가 이름으로 알아보고 고르는 방식).
   if (body.action === "list_templates") {
     if (!body.centerId) return json({ error: "centerId가 필요해요" }, 400);
-    if (!(await isAuthorizedCaller(req.headers.get("Authorization"), body.centerId))) {
-      return json({ error: "이 센터에 대한 권한이 없어요" }, 403);
-    }
+    { const denied = await denyUnlessAuthorized(req.headers.get("Authorization"), body.centerId); if (denied) return denied; }
     try {
       const list = await fetchAligoTemplateList();
       return json({ templates: list });
@@ -182,9 +183,7 @@ Deno.serve(async (req: Request) => {
     if (!body.title || !body.content) return json({ error: "title, content가 필요해요" }, 400);
     let prefix = "[공통]";
     if (body.centerId) {
-      if (!(await isAuthorizedCaller(req.headers.get("Authorization"), body.centerId))) {
-        return json({ error: "이 센터에 대한 권한이 없어요" }, 403);
-      }
+      { const denied = await denyUnlessAuthorized(req.headers.get("Authorization"), body.centerId); if (denied) return denied; }
       const { data: center } = await admin.from("centers").select("name").eq("id", body.centerId).maybeSingle();
       prefix = `[${center?.name ?? "센터"}]`;
     } else if (!(await isPlatformAdminCaller(req.headers.get("Authorization")))) {
@@ -202,9 +201,7 @@ Deno.serve(async (req: Request) => {
   if (body.action === "request_template_approval") {
     if (!body.tplCode) return json({ error: "tplCode가 필요해요" }, 400);
     if (body.centerId) {
-      if (!(await isAuthorizedCaller(req.headers.get("Authorization"), body.centerId))) {
-        return json({ error: "이 센터에 대한 권한이 없어요" }, 403);
-      }
+      { const denied = await denyUnlessAuthorized(req.headers.get("Authorization"), body.centerId); if (denied) return denied; }
     } else if (!(await isPlatformAdminCaller(req.headers.get("Authorization")))) {
       return json({ error: "공통 템플릿은 플랫폼 운영자만 신청할 수 있어요" }, 403);
     }
@@ -218,10 +215,7 @@ Deno.serve(async (req: Request) => {
 
   // 경로 2: 큐 디스패치(dispatch-alimtalk cron) — messages 행을 읽어 대상 전원 발송
   if (body.messageId) {
-    if (!(await isAuthorizedCaller(req.headers.get("Authorization"), ""))) {
-      // messageId 경로는 항상 service_role(cron)로만 호출되므로 centerId 없이도 판정 가능
-      return json({ error: "권한이 없어요" }, 403);
-    }
+    { const denied = await denyUnlessAuthorized(req.headers.get("Authorization"), ""); if (denied) return denied; }
 
     // 2026-10-08: 발송 전 원자적 선점 + 수신자별 'sent' 로그 기반 재개 + 외부 호출 타임아웃(_shared/alimtalkDispatch.ts, aligo.ts) —
     // 매분 cron이 겹치거나 중간에 끊겨도 같은 수신자에게 두 번 보내지 않는다. 판정 로직은 순수 모듈에서 단위 테스트된다.
@@ -290,29 +284,14 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // 경로 1: 즉시 발송 — 매니저 화면에서 직접 호출
-  if (!body.to || !body.content || !body.centerId) {
-    return json({ error: "to, content, centerId가 필요해요" }, 400);
-  }
-  if (!(await isAuthorizedCaller(req.headers.get("Authorization"), body.centerId))) {
-    return json({ error: "이 센터에 대한 발송 권한이 없어요" }, 403);
-  }
-
-  // 알림톡 애드온 미신청 센터는 SMS 대체발송도 막는다(경로 2와 동일한 이유).
-  const { data: sub } = await admin
-    .from("center_subscriptions")
-    .select("alimtalk_addon")
-    .eq("center_id", body.centerId)
-    .maybeSingle();
-  if (!sub?.alimtalk_addon) {
-    return json({ status: "failed", message: "이 센터는 카카오 알림톡/SMS 발송 애드온을 신청하지 않았어요" }, 402);
-  }
-
-  const result = await sendViaAligo({
-    to: body.to,
-    content: body.content,
-    templateCode: body.templateCode,
-    templateVariables: body.templateVariables,
-  });
-  return json(result, result.status === "sent" ? 200 : 502);
+  // 경로 1: 즉시 발송 — 매니저 화면에서 직접 호출. 권한 판정·애드온 확인·발송 순서는 ../_shared/alimtalkAuthz.ts(handleImmediateSend)가 고정한다.
+  const outcome = await handleImmediateSend({
+    authz: authzDeps(),
+    async isAddonEnabled(centerId) {
+      const { data: sub } = await admin.from("center_subscriptions").select("alimtalk_addon").eq("center_id", centerId).maybeSingle();
+      return !!sub?.alimtalk_addon;
+    },
+    send: (input) => sendViaAligo(input),
+  }, body, req.headers.get("Authorization"));
+  return json(outcome.body, outcome.status);
 });

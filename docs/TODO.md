@@ -1,5 +1,8 @@
 # TODO
 
+- **P1(배포 승인)**: `supabase functions deploy send-alimtalk` — 알림톡 권한(message.alimtalk.view) 검사 반영(관리자 QA #239 수정). 배포 전에는 운영에서 권한 없는 직원이 직접 호출로 유료 발송 가능.
+- **P2**: 이름 없는 `button.switch` 패턴(운영 설정·상품·알림 설정 등 ~20곳)에 role="switch"/aria-label 일괄 적용, `/manager/alimtalk/*` 하위 화면(규칙·템플릿·설정)·`/manager/sales` 의 권한 없음 안내(서버는 이미 차단).
+- **P1(QA)**: #238 실환경 확인 — 플랫폼 관리자 계정·상태별 31건 이상 센터가 갖춰진 승인 대상에서 `npm run test:e2e:admin-pagination`. #239 실기기(iOS/Android) 관리자 폼 확인.
 ## 2026-10-30 격리 스택 ↔ 운영 보안 수정 동기화
 - **P2**: 운영에만 적용한 SQL 이 격리 스택(baseline=공유 DEV)에 빠지는 일이 없도록, 운영 SQL 적용 절차에 "격리 migration 추가 + 동일성 시험" 단계를 포함(`docs/CI_ISOLATION_240.md`). 공유 DEV 에도 이 보호를 적용할지는 별도 결정.
 - **P3**: baseline 재덤프 시 `KNOWN_ISOLATED_ONLY`(verifyBaselineParity) 정리.

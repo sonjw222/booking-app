@@ -36,17 +36,22 @@ export default function AmPmTimeInput({
   value,
   onChange,
   disabled,
+  label,
 }: {
   value: string;
   onChange: (next: string) => void;
   disabled?: boolean;
+  /** 접근 가능한 이름의 접두(예: "시작"/"종료") — 스크린리더가 어떤 시각의 오전·오후/시/분인지 알 수 있게 한다. */
+  label?: string;
 }) {
+  const nm = (part: string) => (label ? `${label} ${part}` : part);
   const { period, hour12, minute } = parse24h(value);
 
   return (
     <div className="ampm-time-input">
       <select
         className="input-field ampm-select"
+        aria-label={nm("오전/오후")}
         value={period}
         disabled={disabled}
         onChange={(e) => onChange(to24h(e.target.value as "AM" | "PM", hour12, minute))}
@@ -56,6 +61,7 @@ export default function AmPmTimeInput({
       </select>
       <select
         className="input-field ampm-select"
+        aria-label={nm("시")}
         value={hour12}
         disabled={disabled}
         onChange={(e) => onChange(to24h(period, parseInt(e.target.value, 10), minute))}
@@ -66,6 +72,7 @@ export default function AmPmTimeInput({
       </select>
       <select
         className="input-field ampm-select"
+        aria-label={nm("분")}
         value={minute}
         disabled={disabled}
         onChange={(e) => onChange(to24h(period, hour12, parseInt(e.target.value, 10)))}
