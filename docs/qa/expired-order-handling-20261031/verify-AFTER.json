@@ -1,0 +1,635 @@
+{
+ "failures": 0,
+ "results": [
+  {
+   "id": "R1",
+   "name": "회귀: 만료 아닌 상품 주문 fulfill_order(확정·발급) 정상",
+   "expected": null,
+   "actual": null,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R2",
+   "name": "회귀: 만료 아닌 주문은 발급 후 done, 결제 1건·수강권 1건(만료일 = 상품 규칙)",
+   "expected": [
+    "done",
+    1
+   ],
+   "actual": [
+    "done",
+    1
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R3",
+   "name": "회귀: 만료 아닌 주문 일반 취소(UPDATE) 정상",
+   "expected": "cancelled",
+   "actual": "cancelled",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "R4",
+   "name": "만료 상품이 아닌 주문은 새 기능으로 처리 거부(일반 흐름 사용 안내)",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "U1",
+   "name": "수납 여부 불명: 주문이 pending 그대로이고 처리 기록·수강권·결제가 없다",
+   "expected": [
+    "pending",
+    0,
+    0
+   ],
+   "actual": [
+    "pending",
+    0,
+    0
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "B1",
+   "name": "우회 차단: 만료 상품 pending 주문을 fulfill_order 로 직접 발급하면 거부",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "B2",
+   "name": "우회 차단: 거부 후에도 주문 pending·수강권/결제 없음",
+   "expected": [
+    "pending",
+    0
+   ],
+   "actual": [
+    "pending",
+    0
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "P1",
+   "name": "일반 회원은 처리 RPC 호출 불가(권한 오류)",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "P2",
+   "name": "타 센터 관리자(심사 센터 매니저)는 처리 불가",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "P3",
+   "name": "같은 센터지만 주문 조회 권한만 있는 직원은 처리 불가",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "P4",
+   "name": "비로그인(anon)은 함수 실행 자체가 거부",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "P5",
+   "name": "권한 오류 후에도 주문 pending·처리 기록 없음",
+   "expected": [
+    "pending",
+    0
+   ],
+   "actual": [
+    "pending",
+    0
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "P6",
+   "name": "처리 사유 없음 거부",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "P7",
+   "name": "알 수 없는 처리 방식 거부",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C1",
+   "name": "미수납 취소: 성공, 주문 cancelled",
+   "expected": [
+    "cancelled",
+    null
+   ],
+   "actual": [
+    "cancelled",
+    null
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C2",
+   "name": "미수납 취소: 수강권·결제(매출) 없음",
+   "expected": [
+    0,
+    0
+   ],
+   "actual": [
+    0,
+    0
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C3",
+   "name": "미수납 취소: 기존 규칙대로 사용 포인트 복원(+1000 reverses)",
+   "expected": 1,
+   "actual": 1,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C4",
+   "name": "미수납 취소: 처리 이력(종류·사유·처리자·처리일) 기록",
+   "expected": [
+    "unpaid_cancelled",
+    "입금 내역 없음",
+    true,
+    true
+   ],
+   "actual": [
+    "unpaid_cancelled",
+    "입금 내역 없음",
+    true,
+    true
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C5",
+   "name": "중복 클릭: 같은 주문 재처리는 거부, 이력 1건 유지",
+   "expected": [
+    true,
+    1
+   ],
+   "actual": [
+    true,
+    1
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "C6",
+   "name": "취소된 주문은 이후 fulfill_order 로도 발급 불가",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "F1",
+   "name": "환불 예정: 수납 금액이 주문 금액과 다르면 거부(전액 확인 필요)",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "F2",
+   "name": "환불 예정: 수납 정보(금액·일자·수단) 누락 거부",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "F3",
+   "name": "환불 예정: 미래 수납일 거부",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "F4",
+   "name": "환불 예정 기록 성공",
+   "expected": null,
+   "actual": null,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "F5",
+   "name": "환불 예정: 주문은 pending 유지, 수강권·결제(매출) 없음 — 환불 전에 완료로 기록하지 않음",
+   "expected": [
+    "pending",
+    0,
+    "refund_planned"
+   ],
+   "actual": [
+    "pending",
+    0,
+    "refund_planned"
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "F6",
+   "name": "환불 예정 주문은 fulfill_order 로 발급 불가",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "F7",
+   "name": "환불 예정 주문에 다른 처리(취소·기간 조정) 재시도 거부",
+   "expected": [
+    true,
+    true
+   ],
+   "actual": [
+    true,
+    true
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "F8",
+   "name": "환불 완료 확인: 환불일이 수납일보다 빠르면 거부",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "F9",
+   "name": "환불 완료 확인은 일반 회원·타 센터 관리자 불가",
+   "expected": [
+    true,
+    true
+   ],
+   "actual": [
+    true,
+    true
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "F10",
+   "name": "환불 완료 확인 성공 → 주문 cancelled, 이력 refund_completed",
+   "expected": [
+    null,
+    "cancelled",
+    "refund_completed"
+   ],
+   "actual": [
+    null,
+    "cancelled",
+    "refund_completed"
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "F11",
+   "name": "환불 경로는 결제·환불 장부(payments)에 행을 만들지 않는다(중복 기록 없음)",
+   "expected": 0,
+   "actual": 0,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "F12",
+   "name": "환불 완료 재클릭 거부",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "F13",
+   "name": "환불 예정 없이 환불 완료 처리 거부(환불 안 된 채 완료 기록 불가)",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A1",
+   "name": "기간 조정: 새 만료일이 오늘이거나 과거면 거부(오늘 이후만)",
+   "expected": [
+    true,
+    true
+   ],
+   "actual": [
+    true,
+    true
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A2",
+   "name": "기간 조정: 거부 후에도 주문 pending·수강권/결제 없음",
+   "expected": [
+    "pending",
+    0
+   ],
+   "actual": [
+    "pending",
+    0
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A3",
+   "name": "기간 조정: 수납 금액 불일치 거부",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A4",
+   "name": "기간 조정 성공(수납 확인·발급·기간 조정·매출 반영 한 번에)",
+   "expected": [
+    null,
+    "done"
+   ],
+   "actual": [
+    null,
+    "done"
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A5",
+   "name": "기간 조정: 결제(매출) 1건 — 금액 80000, 직접결제 구분, paid",
+   "expected": [
+    1,
+    80000,
+    80000,
+    "paid"
+   ],
+   "actual": [
+    1,
+    80000,
+    80000,
+    "paid"
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A6",
+   "name": "기간 조정: 이 주문의 수강권 1건에만 새 만료일 적용",
+   "expected": [
+    "2026-11-28",
+    "e8882940-85b9-45ea-8b40-7c3b2f17f4d4",
+    8
+   ],
+   "actual": [
+    "2026-11-28",
+    "e8882940-85b9-45ea-8b40-7c3b2f17f4d4",
+    8
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A7",
+   "name": "기간 조정: 상품의 expiry_date 는 바뀌지 않음",
+   "expected": "2026-10-28",
+   "actual": "2026-10-28",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A8",
+   "name": "기간 조정: 처리 이력 기록(수납 수단·금액·새 만료일·수강권 연결)",
+   "expected": [
+    "period_adjusted",
+    "cash",
+    80000,
+    "2026-11-28",
+    "31d0502e-bd19-4caf-9ce5-353fad40474c"
+   ],
+   "actual": [
+    "period_adjusted",
+    "cash",
+    80000,
+    "2026-11-28",
+    "31d0502e-bd19-4caf-9ce5-353fad40474c"
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A9",
+   "name": "기간 조정: 결제 메모에 수납 확인 정보",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A10",
+   "name": "중복 클릭/재처리: 두 번째 호출 거부, 결제·수강권 중복 없음",
+   "expected": [
+    true,
+    1
+   ],
+   "actual": [
+    true,
+    1
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A11",
+   "name": "처리 후 fulfill_order 직접 호출은 멱등(already_done), 중복 매출 없음",
+   "expected": [
+    true,
+    1
+   ],
+   "actual": [
+    true,
+    1
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A12",
+   "name": "상품 원래 만료일을 쓰는 다른 주문 발급 경로(새 주문 신규 생성)는 계속 차단(PR #251)",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "K1",
+   "name": "동시 3건 처리 요청: 정확히 1건만 성공, 나머지는 거부",
+   "expected": 1,
+   "actual": 1,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "K2",
+   "name": "동시 처리 후 상태 일관: done 이면 결제·수강권 정확히 1건, cancelled 면 0건, 이력 1건",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "K3",
+   "name": "동시 처리 후 이력 1건",
+   "expected": 1,
+   "actual": 1,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "T1",
+   "name": "원자성: 중간(이력 INSERT) 실패 시 오류 반환",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "T2",
+   "name": "원자성: 주문 pending 유지, 결제·수강권·이력 모두 없음(전부 롤백)",
+   "expected": [
+    "pending",
+    0,
+    0,
+    0
+   ],
+   "actual": [
+    "pending",
+    0,
+    0,
+    0
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "T3",
+   "name": "원자성: 롤백 뒤에도 만료 주문은 직접 발급 불가(임시 설정이 남지 않음)",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "S1",
+   "name": "처리 이력 조회: 오너 가능(여러 건)",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "S2",
+   "name": "처리 이력 조회: 일반 회원·타 센터 관리자는 0건",
+   "expected": [
+    0,
+    0
+   ],
+   "actual": [
+    0,
+    0
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "S3",
+   "name": "처리 이력 직접 쓰기(INSERT/UPDATE/DELETE) 모두 거부",
+   "expected": [
+    true,
+    true,
+    true
+   ],
+   "actual": [
+    true,
+    true,
+    true
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "G1",
+   "name": "PG 결제 주문(토스)은 이 기능으로 처리 불가(PG 경로 영향 없음)",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "G2",
+   "name": "NICEPAY 게이트·승인 함수·PG 발급 함수 정의 해시 불변",
+   "expected": "721bef6e27646547535cfe7b05393f88d7145831da2f416612818d2e4fe5d5fc215e7e5301436944ab3d90360519a4df",
+   "actual": "721bef6e27646547535cfe7b05393f88d7145831da2f416612818d2e4fe5d5fc215e7e5301436944ab3d90360519a4df",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "G3",
+   "name": "NICEPAY 게이트 mode 는 off 그대로",
+   "expected": "off",
+   "actual": "off",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "G4",
+   "name": "fulfill_order 의 NICEPAY 가드 블록 유지",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  }
+ ]
+}

@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-31 — 만료 상품 기존 pending 주문 처리 기능 (로컬 구현·검증, 운영 SQL 미실행)
+- `/manager/orders` 에서 판매 기간이 지난 상품의 대기 주문을 ‘미수납 확인→취소 / 수납 확인→환불(환불 예정→환불 완료 확인) / 수납 확인→이용기간 조정(해당 수강권 1건만) / 수납 불명→대기 유지’로 처리. 서버 RPC `manager_resolve_expired_order`(원자적, `pass.payment.create` 권한 재사용)와 이력 테이블 `order_expiry_resolutions`, `fulfill_order` 제자리 패치(만료 상품 직접 발급 우회 차단)는 제안 SQL `add_expired_order_resolution_20261031.sql` 세트로만 제공(운영·공유 DEV 미적용). 환불 경로는 payments 행을 만들지 않는다(가짜 매출·원장 중복 없음). 설계·절차: `docs/EXPIRED_ORDER_RESOLUTION_20261031.md`.
+
 ## 2026-10-31 — 만료 상품 자동 노출 종료·신규 구매 차단 (로컬 구현·검증, 운영 SQL 미실행)
 - 고정 만료일(`expiry_mode='date'`, KST)이 지난 상품을 비회원·회원 목록에서 제외하고 신규 주문을 거부(제안 SQL 세트 `*_fix_expired_fixed_date_products_20261031.sql`). 오늘·미래·days·rolling_month·none 불변, 데이터 불변(조회 시점 계산). `member_can_purchase_product` 는 결제 확정·발급 의존이라 변경하지 않음. 클라이언트 방어선·날짜 롤오버(`useKstToday`). 상세 `docs/EXPIRED_PRODUCT_HIDE_20261031.md`.
 

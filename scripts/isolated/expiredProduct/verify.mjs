@@ -40,8 +40,10 @@ try {
   const own = await svc.from("memberships").insert({ center_id: OP, profile_id: profA, product_id: P.y, product_name: N("어제"), pass_type: "count", total_count: 5, remaining_count: 5 }).select("id").single();
   const myOrders = await A.from("orders").select("id,status").eq("id", pend.data.id); eq("H1", "만료 상품의 기존 pending 주문이 회원 주문 내역에 그대로 보임", 1, myOrders.data?.length);
   const myMs = await A.from("memberships").select("id").eq("id", own.data.id); eq("H2", "만료 상품으로 이미 받은 수강권이 그대로 보임", 1, myMs.data?.length);
-  const ful = await MA.rpc("fulfill_order", { p_order_id: pend.data.id }); eq("H3", "기존 pending 주문 확정(fulfill_order)은 만료와 무관하게 오류 없이 처리됨(발급 사고 방지)", null, ful.error?.message ?? null);
-  eq("H4", "확정 후 주문 상태 변경·수강권 발급", true, ((await svc.from("orders").select("status").eq("id", pend.data.id).single()).data.status !== "pending") && (await svc.from("memberships").select("id").eq("profile_id", profA).eq("product_id", P.y)).data.length >= 2);
+  const ful = await MA.rpc("fulfill_order", { p_order_id: pend.data.id }); eq("H3", "만료 상품의 기존 pending 주문을 fulfill_order 로 직접 확정하면 거부됨(처음부터 만료된 수강권 방지 — add_expired_order_resolution_20261031.sql 적용 상태). 이 SQL 이 없으면 기존처럼 처리됨", true, ful.error == null || /판매 기간이 지난 상품의 주문/.test(ful.error.message));
+  { const rejected = ful.error != null && /판매 기간이 지난 상품의 주문/.test(ful.error.message); const stat = (await svc.from("orders").select("status").eq("id", pend.data.id).single()).data.status; const mships = (await svc.from("memberships").select("id").eq("profile_id", profA).eq("product_id", P.y)).data.length;
+    // add_expired_order_resolution_20261031.sql 적용 상태: 직접 확정은 거부되고 주문은 pending·수강권 추가 없음. 미적용 상태(PR #251 단독): 기존처럼 발급됨.
+    eq("H4", "확정 후 상태: (SQL 적용) 거부 → pending 유지·수강권 추가 없음 / (미적용) 발급 완료", true, rejected ? stat === "pending" && mships === 1 : stat !== "pending" && mships >= 2); }
   // 관리자 수정 가능
   const upd = await MA.from("products").update({ expiry_date: kst(5) }).eq("id", P.y).select("id"); eq("M1", "관리자가 만료 상품의 만료일을 수정할 수 있음(RLS 유지)", 1, upd.data?.length);
   eq("M2", "수정 후(미래 만료일) 목록에 다시 노출", true, mine((await anonC.rpc("fetch_public_storefront_products", { p_center_id: OP })).data).includes("어제"));
