@@ -1,0 +1,136 @@
+{
+ "label": "수정 전 롤백 SQL(d0432f8)",
+ "failures": 0,
+ "results": [
+  {
+   "id": "M0",
+   "name": "종료 전(P2 적용·센터 공개) 역할별 심사 센터 가시성 센터/상품/수업/구매RPC/공개RPC",
+   "actual": "{\"비회원(anon)\":\"0/0/0/0/0\",\"일반회원A\":\"0/0/0/0/0\",\"NICEPAY 심사관B\":\"1/3/1/3/3\",\"토스 심사관T\":\"0/0/0/0/0\",\"심사 센터 매니저\":\"1/3/1/3/3\",\"운영 센터 매니저\":\"0/0/0/0/0\",\"토스센터 매니저S(is_member=false)\":\"1/3/1/3/3\",\"플랫폼 관리자\":\"1/3/1/3/3\"}",
+   "pass": null,
+   "extra": ""
+  },
+  {
+   "id": "A0",
+   "name": "종료 전: 심사관B·심사 센터 매니저·관리자는 보이고, 일반회원/토스 심사관/운영 매니저/비회원은 0",
+   "expected": "true",
+   "actual": "true",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A1",
+   "name": "심사 종료 SQL 실행",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": "BEGIN\nUPDATE 2\nUPDATE 1\nUPDATE 1\nUPDATE 0\nCOMMIT\n0|off|0|0|0|1"
+  },
+  {
+   "id": "A1b",
+   "name": "심사 종료 SQL 중복 실행(멱등)",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "M1",
+   "name": "종료 후(P2 적용) 역할별 가시성",
+   "actual": "{\"비회원(anon)\":\"0/0/0/0/0\",\"일반회원A\":\"0/0/0/0/0\",\"NICEPAY 심사관B\":\"0/0/0/0/0\",\"토스 심사관T\":\"0/0/0/0/0\",\"심사 센터 매니저\":\"1/3/1/3/0\",\"운영 센터 매니저\":\"0/0/0/0/0\",\"토스센터 매니저S(is_member=false)\":\"0/0/0/0/0\",\"플랫폼 관리자\":\"1/0/0/0/0\"}",
+   "pass": null,
+   "extra": ""
+  },
+  {
+   "id": "A2",
+   "name": "종료 후: 일반 계층(비회원/일반/토스/운영매니저/심사관 해제)은 0, 심사 센터 매니저·관리자만 보임(의도)",
+   "expected": "true",
+   "actual": "true",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A3",
+   "name": "P2b 롤백 성공",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": "BEGIN\nDO\nDROP FUNCTION\nCOMMIT"
+  },
+  {
+   "id": "A4",
+   "name": "회원 등록 없음: P2 롤백 성공",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": "ION\nDROP FUNCTION\nDROP FUNCTION\nDROP FUNCTION\nDROP FUNCTION\nDROP FUNCTION\nCOMMIT"
+  },
+  {
+   "id": "M2",
+   "name": "롤백 후 역할별 가시성",
+   "actual": "{\"비회원(anon)\":\"0/0/0/0/0\",\"일반회원A\":\"0/0/0/0/0\",\"NICEPAY 심사관B\":\"0/0/0/0/0\",\"토스 심사관T\":\"0/0/0/0/0\",\"심사 센터 매니저\":\"1/3/1/3/0\",\"운영 센터 매니저\":\"0/0/0/0/0\",\"토스센터 매니저S(is_member=false)\":\"0/0/0/0/0\",\"플랫폼 관리자\":\"1/0/0/0/0\"}",
+   "pass": null,
+   "extra": ""
+  },
+  {
+   "id": "A5",
+   "name": "롤백 후에도 일반 계층에게 심사 센터가 보이지 않음",
+   "expected": "true",
+   "actual": "true",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "A6",
+   "name": "P2 롤백 중복 실행(멱등)",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": "OP FUNCTION\nDROP FUNCTION\nDROP FUNCTION\nDROP FUNCTION\nCOMMIT"
+  },
+  {
+   "id": "A7",
+   "name": "운영 센터 데이터 지문(회원·주문·수강권·예약·운영 센터/상품)이 종료·롤백 전후 동일",
+   "expected": "e060f5882e5307d48f22507965a66485",
+   "actual": "e060f5882e5307d48f22507965a66485",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "B0",
+   "name": "일반회원A 의 심사 센터 관계 center_members/memberships",
+   "actual": "1/1",
+   "pass": null,
+   "extra": ""
+  },
+  {
+   "id": "B1",
+   "name": "종료 후(P2 적용) 가시성 — 회원 관계가 있어도 분리 정책이 막고 있음",
+   "actual": "{\"비회원(anon)\":\"0/0/0/0/0\",\"일반회원A\":\"0/0/0/0/0\",\"NICEPAY 심사관B\":\"0/0/0/0/0\",\"토스 심사관T\":\"0/0/0/0/0\",\"심사 센터 매니저\":\"1/3/1/3/0\",\"운영 센터 매니저\":\"0/0/0/0/0\",\"토스센터 매니저S(is_member=false)\":\"0/0/0/0/0\",\"플랫폼 관리자\":\"1/0/0/0/0\"}",
+   "pass": null,
+   "extra": ""
+  },
+  {
+   "id": "B2",
+   "name": "종료 후 P2 적용 중에는 일반회원A 에게도 0 (정책이 숨김)",
+   "expected": "0/0/0/0/0",
+   "actual": "0/0/0/0/0",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "B3",
+   "name": "수정 전 롤백 SQL 결과",
+   "actual": "성공(정책 제거됨)",
+   "pass": null,
+   "extra": "EATE FUNCTION\nREVOKE\nGRANT\nDO\nDROP FUNCTION\nDROP FUNCTION\nDROP FUNCTION\nDROP FUNCTION\nDROP FUNCTION\nDROP FUNCTION\nCOMMIT"
+  },
+  {
+   "id": "B4",
+   "name": "[결함 재현] 롤백 뒤 일반회원A 에게 심사 센터가 노출됨",
+   "expected": "true",
+   "actual": "true",
+   "pass": true,
+   "extra": "1/3/1/3/0"
+  }
+ ]
+}

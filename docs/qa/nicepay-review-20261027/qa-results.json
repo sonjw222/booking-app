@@ -1,0 +1,946 @@
+[
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "light",
+  "page": "home",
+  "hasAddress": false,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "light",
+  "page": "public-products",
+  "hasAddress": false,
+  "generic": 0,
+  "perProduct": 0,
+  "products": 10,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "light",
+  "page": "center-buysheet-loggedout",
+  "generic": 0,
+  "perProduct": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "light",
+  "page": "center-buysheet-member",
+  "perProduct": 0,
+  "generic": 0,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "light",
+  "page": "checkout-none",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "light",
+  "page": "checkout-days30",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "light",
+  "page": "checkout-over1y",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "light",
+  "page": "checkout-date",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "light",
+  "page": "checkout-rolling",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "light",
+  "page": "checkout-selectable",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "light",
+  "page": "desc-sheet",
+  "period": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "light",
+  "page": "checkout-reviewer",
+  "cardVisible": true,
+  "directVisible": true,
+  "pageErrors": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "home",
+  "hasAddress": false,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "public-products",
+  "hasAddress": false,
+  "generic": 0,
+  "perProduct": 0,
+  "products": 10,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "center-buysheet-loggedout",
+  "generic": 0,
+  "perProduct": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "center-buysheet-member",
+  "perProduct": 0,
+  "generic": 0,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "checkout-none",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "checkout-days30",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "checkout-over1y",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "checkout-date",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "checkout-rolling",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "checkout-selectable",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "desc-sheet",
+  "period": 0
+ },
+ {
+  "variant": "before",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "checkout-reviewer",
+  "cardVisible": true,
+  "directVisible": true,
+  "pageErrors": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "home",
+  "hasAddress": false,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "public-products",
+  "hasAddress": false,
+  "generic": 0,
+  "perProduct": 0,
+  "products": 10,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "center-buysheet-loggedout",
+  "generic": 0,
+  "perProduct": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "center-buysheet-member",
+  "perProduct": 0,
+  "generic": 0,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "checkout-none",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "checkout-days30",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "checkout-over1y",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "checkout-date",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "checkout-rolling",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "checkout-selectable",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "desc-sheet",
+  "period": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "checkout-reviewer",
+  "cardVisible": true,
+  "directVisible": true,
+  "pageErrors": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "home",
+  "hasAddress": false,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "public-products",
+  "hasAddress": false,
+  "generic": 0,
+  "perProduct": 0,
+  "products": 10,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "center-buysheet-loggedout",
+  "generic": 0,
+  "perProduct": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "center-buysheet-member",
+  "perProduct": 0,
+  "generic": 0,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "checkout-none",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "checkout-days30",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "checkout-over1y",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "checkout-date",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "checkout-rolling",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "checkout-selectable",
+  "prebooking": null,
+  "service": null,
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "desc-sheet",
+  "period": 0
+ },
+ {
+  "variant": "before",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "checkout-reviewer",
+  "cardVisible": true,
+  "directVisible": true,
+  "pageErrors": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "light",
+  "page": "home",
+  "hasAddress": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "light",
+  "page": "public-products",
+  "hasAddress": true,
+  "generic": 1,
+  "perProduct": 0,
+  "products": 10,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "light",
+  "page": "center-buysheet-loggedout",
+  "generic": 1,
+  "perProduct": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "light",
+  "page": "center-buysheet-member",
+  "perProduct": 10,
+  "generic": 0,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "light",
+  "page": "checkout-none",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일부터 · 만료일 없음(별도 이용 종료일이 없는 상품)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "light",
+  "page": "checkout-days30",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2026년 11월 26일 (결제일로부터 30일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "light",
+  "page": "checkout-over1y",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2027년 12월 1일 (결제일로부터 400일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "light",
+  "page": "checkout-date",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2027년 6월 30일 (상품에 지정된 만료일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "light",
+  "page": "checkout-rolling",
+  "prebooking": "결제일(2026년 10월 27일) ~ 이용 시작 전날(2026년 10월 31일) · 5일",
+  "service": "2026년 11월 1일 ~ 2026년 11월 30일 (매월 갱신형)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "light",
+  "page": "checkout-selectable",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2026년 12월 26일 (결제일로부터 60일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "light",
+  "page": "desc-sheet",
+  "period": 11
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "light",
+  "page": "checkout-reviewer",
+  "cardVisible": true,
+  "directVisible": true,
+  "pageErrors": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "home",
+  "hasAddress": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "public-products",
+  "hasAddress": true,
+  "generic": 1,
+  "perProduct": 0,
+  "products": 10,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "center-buysheet-loggedout",
+  "generic": 1,
+  "perProduct": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "center-buysheet-member",
+  "perProduct": 10,
+  "generic": 0,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "checkout-none",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일부터 · 만료일 없음(별도 이용 종료일이 없는 상품)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "checkout-days30",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2026년 11월 26일 (결제일로부터 30일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "checkout-over1y",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2027년 12월 1일 (결제일로부터 400일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "checkout-date",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2027년 6월 30일 (상품에 지정된 만료일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "checkout-rolling",
+  "prebooking": "결제일(2026년 10월 27일) ~ 이용 시작 전날(2026년 10월 31일) · 5일",
+  "service": "2026년 11월 1일 ~ 2026년 11월 30일 (매월 갱신형)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "checkout-selectable",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2026년 12월 26일 (결제일로부터 60일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "desc-sheet",
+  "period": 11
+ },
+ {
+  "variant": "after",
+  "vp": "m390",
+  "theme": "dark",
+  "page": "checkout-reviewer",
+  "cardVisible": true,
+  "directVisible": true,
+  "pageErrors": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "home",
+  "hasAddress": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "public-products",
+  "hasAddress": true,
+  "generic": 1,
+  "perProduct": 0,
+  "products": 10,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "center-buysheet-loggedout",
+  "generic": 1,
+  "perProduct": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "center-buysheet-member",
+  "perProduct": 10,
+  "generic": 0,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "checkout-none",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일부터 · 만료일 없음(별도 이용 종료일이 없는 상품)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "checkout-days30",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2026년 11월 26일 (결제일로부터 30일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "checkout-over1y",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2027년 12월 1일 (결제일로부터 400일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "checkout-date",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2027년 6월 30일 (상품에 지정된 만료일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "checkout-rolling",
+  "prebooking": "결제일(2026년 10월 27일) ~ 이용 시작 전날(2026년 10월 31일) · 5일",
+  "service": "2026년 11월 1일 ~ 2026년 11월 30일 (매월 갱신형)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "checkout-selectable",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2026년 12월 26일 (결제일로부터 60일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "desc-sheet",
+  "period": 11
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "light",
+  "page": "checkout-reviewer",
+  "cardVisible": true,
+  "directVisible": true,
+  "pageErrors": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "home",
+  "hasAddress": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "public-products",
+  "hasAddress": true,
+  "generic": 1,
+  "perProduct": 0,
+  "products": 10,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "center-buysheet-loggedout",
+  "generic": 1,
+  "perProduct": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "center-buysheet-member",
+  "perProduct": 10,
+  "generic": 0,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "checkout-none",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일부터 · 만료일 없음(별도 이용 종료일이 없는 상품)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "checkout-days30",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2026년 11월 26일 (결제일로부터 30일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "checkout-over1y",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2027년 12월 1일 (결제일로부터 400일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "checkout-date",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2027년 6월 30일 (상품에 지정된 만료일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "checkout-rolling",
+  "prebooking": "결제일(2026년 10월 27일) ~ 이용 시작 전날(2026년 10월 31일) · 5일",
+  "service": "2026년 11월 1일 ~ 2026년 11월 30일 (매월 갱신형)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "checkout-selectable",
+  "prebooking": "없음 — 결제 완료일(2026년 10월 27일)부터 바로 이용해요",
+  "service": "2026년 10월 27일 ~ 2026년 12월 26일 (결제일로부터 60일)",
+  "cardVisible": true,
+  "directVisible": true,
+  "overflow": 0
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "desc-sheet",
+  "period": 11
+ },
+ {
+  "variant": "after",
+  "vp": "d1440",
+  "theme": "dark",
+  "page": "checkout-reviewer",
+  "cardVisible": true,
+  "directVisible": true,
+  "pageErrors": 0
+ }
+]

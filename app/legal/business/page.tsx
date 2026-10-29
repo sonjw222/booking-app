@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BUSINESS_INFO } from "../../../lib/businessInfo";
+import { BUSINESS_ADDRESS } from "../../../lib/businessAddress";
 
 export const metadata: Metadata = {
   title: "사업자 정보",
@@ -25,7 +26,7 @@ export default function BusinessInfoPage() {
             <tr><th>대표자</th><td>{BUSINESS_INFO.ceoName}</td></tr>
             <tr><th>사업자등록번호</th><td>{BUSINESS_INFO.businessRegNo}</td></tr>
             <tr><th>통신판매업 신고번호</th><td>{BUSINESS_INFO.mailOrderRegNo}</td></tr>
-            <tr><th>사업장 소재지</th><td>{BUSINESS_INFO.address}</td></tr>
+            <tr><th>사업장 소재지</th><td>{BUSINESS_ADDRESS}</td></tr>
             <tr><th>고객센터</th><td>{BUSINESS_INFO.customerServicePhone}</td></tr>
             <tr><th>이메일</th><td>{BUSINESS_INFO.email}</td></tr>
             <tr><th>호스팅 서비스</th><td>Vercel Inc. / Supabase Inc.</td></tr>

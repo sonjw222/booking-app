@@ -28,13 +28,13 @@ export type Order = {
 };
 
 // 회원: 주문 생성 (결제 화면에서 "결제하기" 시)
-// provider: Payment Adapter가 이 주문을 처리할 provider("mock"/"toss"/"portone"). 생략 시 null
+// provider: Payment Adapter가 이 주문을 처리할 provider("mock"/"nicepay"; 과거 주문은 DB에 toss/portone이 남아 있을 수 있으나 신규 주문은 만들지 않는다 — "toss"는 과거 거래 호환(레거시 confirm/환불 테스트) 전용이며 checkout/cart는 넘기지 않는다). 생략 시 null
 //   (레거시 경로 — 매니저가 /manager/orders에서 수동 확인). 기존 호출부(app/cart/page.tsx 등)는
 //   그대로 두어도 동작에 영향 없는 선택적 필드라 하위 호환됨.
 export async function createOrder(input: {
   centerId: string; productId: string; productName: string; amount: number; payMethod?: string;
   selectedSize?: string; couponCode?: string; discountAmount?: number; autoBook?: boolean;
-  provider?: "mock" | "toss" | "portone"; pointsUsed?: number;
+  provider?: "mock" | "nicepay" | "toss"; pointsUsed?: number;
   // 가족(다중 프로필) 계정에서 "이 구매는 누구 앞으로"를 고를 수 있게 함(2026-09-06,
   // 스튜디오 오너/회원 UX 감사) — 생략하면 기존처럼 대표 프로필로 자동 배정(하위 호환).
   profileId?: string;

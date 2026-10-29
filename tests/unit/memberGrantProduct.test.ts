@@ -131,9 +131,9 @@ describe("회원 상세 UX — 수강권/상품 섹션 분리", () => {
     expect(read("app/manager/classes/page.tsx")).not.toContain("manager_grant_product");
     expect(read("app/manager/classes/page.tsx")).not.toContain("openGrant");
   });
-  it("0원 지급 안내와 센터 직접 결제 안내(Toss 미실행) 문구", () => {
+  it("0원 지급 안내와 센터 직접 결제 안내(PG 미실행) 문구", () => {
     expect(page).toContain("무상 지급은 매출 0원으로 기록돼요");
-    expect(page).toContain("온라인 결제(Toss)는 실행되지 않아요");
+    expect(page).toContain("온라인 결제(PG)는 실행되지 않아요");
     expect(page).toContain("서비스(무상 지급)");
   });
   it("/manager/goods는 상품 카탈로그 관리 역할 그대로(지급 UI 없음)", () => {

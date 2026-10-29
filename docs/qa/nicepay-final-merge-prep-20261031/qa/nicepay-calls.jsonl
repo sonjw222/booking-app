@@ -1,0 +1,17 @@
+{"t":1793184057383,"kind":"APPROVE","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"cf25c577-43f2-40a6-a6da-d131c2ba0240"}
+{"t":1793184059113,"kind":"APPROVE","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"ecd446c5-70a1-426f-a809-f5a6faad10e6"}
+{"t":1793184062737,"kind":"APPROVE","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"60068a90-c4ba-4396-bf6e-0bede50e72d0"}
+{"t":1793184070385,"kind":"APPROVE","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"3739c471-d7c8-422a-927f-77d972cf1ace"}
+{"t":1793184071938,"kind":"APPROVE","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"091bc490-6e4f-4b07-b862-6278525e9070"}
+{"t":1793184071939,"kind":"NETCANCEL","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"091bc490-6e4f-4b07-b862-6278525e9070"}
+{"t":1793184073503,"kind":"APPROVE","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"2a067075-4715-45bf-a108-27b752706ae0"}
+{"t":1793184073503,"kind":"NETCANCEL","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"2a067075-4715-45bf-a108-27b752706ae0"}
+{"t":1793184075050,"kind":"APPROVE","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"052e2b23-c740-45be-8255-e81a87f0f0db"}
+{"t":1793184075050,"kind":"NETCANCEL","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"052e2b23-c740-45be-8255-e81a87f0f0db"}
+{"t":1793184076623,"kind":"APPROVE","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"3538d47e-a506-477d-924b-ff9578b9deae"}
+{"t":1793184076624,"kind":"NETCANCEL","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"3538d47e-a506-477d-924b-ff9578b9deae"}
+{"t":1793184078195,"kind":"APPROVE","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"c6f506ee-1c3a-49e5-b99a-430a5bd64aff"}
+{"t":1793184078195,"kind":"NETCANCEL","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"c6f506ee-1c3a-49e5-b99a-430a5bd64aff"}
+{"t":1793184079782,"kind":"APPROVE","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"63d01f74-6c09-42cc-8e8e-1ac26ae7f9ac"}
+{"t":1793184082038,"kind":"APPROVE","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"24c3a7a9-2b0f-4ebb-b6ea-b69bc69aa869"}
+{"t":1793184083638,"kind":"APPROVE","host":"webapi.nicepay.co.kr","mid":true,"amt":"1000","hasTid":true,"moid":"a56c74dd-f642-4bfe-b254-ac7795098fbb"}

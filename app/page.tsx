@@ -13,6 +13,7 @@ import { fetchMyProfileIds, fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingC
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
 import { fetchMyCenters } from "../lib/manager";
 import { supabase } from "../lib/supabaseClient";
+import BusinessAddressLine from "./components/BusinessAddressLine";
 import { BUSINESS_INFO } from "../lib/businessInfo";
 import { consumePostLoginNext } from "../lib/postLoginReturn";
 import { replaceTabNavigation } from "../lib/navState";
@@ -421,14 +422,11 @@ export default function Home() {
           </>
         )}
 
-        {/* 전자상거래법상 사업자정보는 로그인 없이도 항상 볼 수 있어야 해서 홈 화면에
-            링크는 남겨두되(비회원도 접근 가능), 주소까지 통째로 펼쳐 보여주던 블록은 없앤다
-            — 사업장 주소는 /legal/business에서만 확인(2026-09-04, 사용자 결정: 사업자 주소가
-            자택이라 홈 화면에 상시 노출하는 걸 원치 않음, 이 정책 유지).
-            2026-10-01 — 토스페이먼츠 전자결제 심사 안내("홈페이지 하단에 상호명을 넣어주세요")
-            대응으로 상호·대표자·사업자등록번호·통신판매업 신고번호·고객센터만 한 블록으로
-            직접 표시한다(주소/이메일 제외). 값은 lib/businessInfo.ts 단일 출처 — 여기서
-            하드코딩하지 않는다. */}
+        {/* 전자상거래법상 사업자정보는 로그인 없이도 항상 볼 수 있어야 한다. 값은 lib/businessInfo.ts 단일 출처 — 여기서 하드코딩하지 않는다.
+            · 2026-09-04 — 당시 사용자 결정: 사업장 주소가 자택이라 홈 화면에 상시 노출하지 않고 /legal/business 에서만 확인하게 했다.
+            · 2026-10-01 — 토스페이먼츠 심사 안내("홈페이지 하단에 상호명")에 맞춰 상호·대표자·사업자등록번호·통신판매업 신고번호·고객센터만 표시(주소/이메일 제외).
+            · 2026-10-27 — NICEPAY 카드사 심사 사전 보완 요청("홈페이지 하단에 사업자등록증상 주소 표시")으로 사업장 소재지를 하단 사업자정보에 추가했다.
+              ⚠ 이 주소는 자택 주소이므로 공개 배포는 사용자 승인 후에만 한다(미승인 상태에서는 push/배포 금지 — 이 변경은 로컬 커밋 상태). 주소 값 자체는 사업자등록증과 일치하는지 사용자 확인이 필요하다. */}
         <div className="home-footer">
           <div className="home-footer-links">
             <Link href="/products" prefetch={false}>판매 상품</Link>
@@ -441,6 +439,7 @@ export default function Home() {
             <div>{BUSINESS_INFO.companyName} · 대표 {BUSINESS_INFO.ceoName}</div>
             <div>사업자등록번호 {BUSINESS_INFO.businessRegNo}</div>
             <div>통신판매업 신고번호 {BUSINESS_INFO.mailOrderRegNo}</div>
+            <BusinessAddressLine />
             <div>고객센터 {BUSINESS_INFO.customerServicePhone}</div>
           </div>
         </div>

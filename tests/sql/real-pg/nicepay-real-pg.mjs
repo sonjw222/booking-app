@@ -1,0 +1,534 @@
+// 실제 PostgreSQL 2세션 동시성 + 회귀 테스트 (오프라인·격리 환경 전용, 기본 테스트 스위트(`npm run test:sql`)에는 포함되지 않음).
+// 목적: PGlite(단일 세션)로는 재현할 수 없는 "행 잠금 대기/커밋 후 재평가"를 실제 PostgreSQL에서 검증한다.
+// 안전장치: 접속 대상이 loopback(127.0.0.1/localhost/::1)이 아니면 즉시 종료한다. 테스트는 매 실행마다 새 DB(qa_nicepay_<난수>)를 만들고 끝나면 지운다. 운영/공유 DEV 접속 불가.
+// 준비: docker run -d --name nicepay-qa-pg -e POSTGRES_PASSWORD=<임의> -p 127.0.0.1:55432:5432 postgres:16-alpine ; npm i --no-save pg
+// 실행: REAL_PG_URL=postgres://postgres:<임의>@127.0.0.1:55432/postgres node tests/sql/real-pg/nicepay-real-pg.mjs
+import assert from 'node:assert/strict';
+import * as W from '../helpers/nicepayWorld.mjs';
+
+const URL_ = process.env.REAL_PG_URL;
+if (!URL_) { console.log('SKIP: REAL_PG_URL 미설정 (격리 로컬 PostgreSQL에서만 실행)'); process.exit(0); }
+const u = new URL(URL_);
+if (!['127.0.0.1', 'localhost', '::1', '[::1]'].includes(u.hostname)) { console.error(`REFUSED: loopback 이외 호스트(${u.hostname})에는 접속하지 않습니다`); process.exit(2); }
+const { default: pg } = await import('pg');
+const { id, C1, CI, P1, ACC, AUTH, MGR, PROD } = W;
+
+const DB = `qa_nicepay_${Math.random().toString(36).slice(2, 10)}`;
+const adminUrl = URL_;
+const dbUrl = (() => { const x = new URL(URL_); x.pathname = '/' + DB; return x.toString(); })();
+const connect = async url => { const c = new pg.Client({ connectionString: url }); await c.connect(); return c; };
+const COS_DEF = `create or replace function public.create_order_secure(a uuid, b text, c text, d integer, e boolean, p_provider text) returns uuid language plpgsql security definer set search_path = public as $$
+declare v uuid;
+begin
+  if p_provider is not null and p_provider not in ('mock', 'toss', 'portone') then raise exception 'invalid provider'; end if;
+  insert into orders(profile_id, center_id, product_id, product_name, amount, auto_book, payment_provider) values ('${P1}','${C1}','${PROD}','p', d, e, p_provider) returning id into v;
+  return v;
+end $$;`;
+const extraDbs = [];
+const freshDb = async () => {
+  const name = `qa_nicepay_${Math.random().toString(36).slice(2, 10)}`;
+  await admin.query(`create database ${name}`); extraDbs.push(name);
+  const x = new URL(URL_); x.pathname = '/' + name; const c = await connect(x.toString()); sessions.push(c);
+  await c.query(W.baseWorldSql({}).replace('create role anon; create role authenticated; create role service_role bypassrls;', ''));
+  await c.query(W.coreInstallSql({}));
+  return c;
+};
+const results = []; let failed = 0;
+const rec = (name, ok, detail = '') => { results.push({ name, ok, detail }); if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); };
+const t = async (name, fn) => { try { await fn(); rec(name, true); } catch (e) { rec(name, false, String(e.message).split('\n')[0]); } };
+
+const admin = await connect(adminUrl);
+await admin.query(`create database ${DB}`);
+const base = await connect(dbUrl);
+const sessions = [base];
+const newSession = async () => { const c = await connect(dbUrl); sessions.push(c); return c; };
+const q1 = async (c, sql, params) => (await c.query(sql, params)).rows[0];
+const asService = c => c;   // JWT 없음(auth.uid() null) = service_role 대리 (슈퍼유저 세션이지만 앱 서버 경로와 동일하게 auth.uid()가 없다)
+
+try {
+  // ---- 월드 설치: 롤은 클러스터 단위라 이미 있으면 건너뜀. 나머지는 PGlite 테스트와 동일한 SQL.
+  await base.query(`do $$ begin
+      if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon; end if;
+      if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated; end if;
+      if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role bypassrls; end if;
+    end $$;`);
+  const worldSql = W.baseWorldSql({}).replace('create role anon; create role authenticated; create role service_role bypassrls;', '');
+  await base.query(worldSql);
+  await base.query(W.coreInstallSql({}));
+  const snapOriginal = async c => Object.fromEntries(await Promise.all(Object.entries({
+    helper: 'public._issue_membership_and_record_payment(orders,text,text)', fulfill: 'public.fulfill_order(uuid)', core: 'public._refund_membership_core(uuid,uuid,boolean,boolean)',
+    trigger: 'public.orders_guard_status_transition()', settlement: 'public.admin_center_settlement_summary(date,date)' }).map(async ([k, v]) => [k, (await q1(c, `select pg_get_functiondef('${v}'::regprocedure) d`)).d])));
+  const original = await snapOriginal(base);
+  await base.query(W.refundFix);
+  await base.query(W.gateFix);
+  await base.query(W.support);
+  await base.query(W.serverFix);
+  await base.query(W.amountFix);
+  await base.query(W.roleGuardFix);
+  await base.query(COS_DEF);
+  await base.query(W.cosFix);
+  await base.query(`update nicepay_checkout_gate set mode = 'public' where id`);   // 기본 월드는 게이트 public(선점 필요) — 게이트 테스트(R17~R20)가 각자 바꾸고 되돌린다
+  const COS_EXISTS = true;
+
+  const mkOrder = async (c, provider, { amount = 10000, status = 'pending', center = C1 } = {}) => {
+    const oid = id(5, Math.floor(Math.random() * 1e9));
+    await c.query(`insert into orders(id, profile_id, center_id, product_id, product_name, amount, status, payment_provider) values ($1,$2,$3,$4,'p',$5,$6,$7)`, [oid, P1, center, PROD, amount, status, provider]);
+    return oid;
+  };
+  const claim = async (c, oid) => (await q1(c, `select nicepay_claim_order($1) c`, [oid])).c;
+  const DIG = 'a'.repeat(64);
+  const approve = (c, oid, cl, tid, amt) => c.query(`select nicepay_record_verified_approval($1,$2,$3,$4,$5)`, [oid, cl, tid, amt, DIG]);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const pendingAfter = async (p, ms = 500) => { let done = false; p.then(() => { done = true; }, () => { done = true; }); await sleep(ms); return !done; };
+
+  // ================= 동시성 =================
+  await t('R1. release ↔ 승인 기록 저장 경합(신규 구현): A가 승인 기록 저장(미커밋, 행 잠금) 중 B의 release는 대기하고, A 커밋 뒤 false — 승인된 선점이 풀리지 않는다', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const o = await mkOrder(base, 'nicepay'); const c = await claim(base, o);
+    await A.query('begin'); await approve(A, o, c, 'TID-R1', 10000);
+    const bp = B.query(`select nicepay_release_order($1,$2,'netcancel_confirmed') r`, [o, c]);
+    assert.equal(await pendingAfter(bp), true, 'B가 A의 행 잠금 때문에 대기해야 한다');
+    await A.query('commit');
+    assert.equal((await bp).rows[0].r, false, 'A 커밋 후 B는 승인 기록을 보고 거부');
+    assert.equal((await q1(base, `select status from orders where id=$1`, [o])).status, 'approving');
+    assert.equal(Number((await q1(base, `select count(*)::int c from nicepay_review_actions where order_id=$1 and action='release'`, [o])).c), 0);
+  });
+
+  await t('R1-neg. 같은 경합을 구 구현(승인 기록 조회 → 갱신)에 적용하면 승인된 선점이 풀린다 — 테스트가 결함을 실제로 잡는다(음성 대조)', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    await base.query(`create or replace function nicepay_release_order_legacy(p_order_id uuid, p_claim_id uuid, p_basis text) returns boolean language plpgsql security definer set search_path = public as $$
+      declare v_n int;
+      begin
+        if exists (select 1 from nicepay_pg_approvals a where a.order_id = p_order_id and a.claim_id = p_claim_id and not exists (select 1 from nicepay_pg_cancels c where c.order_id = a.order_id and c.pg_tid = a.tid)) then return false; end if;
+        perform set_config('app.nicepay_write','on',true);
+        update orders set status = 'pending', pg_claim_id = null, pg_claimed_at = null where id = p_order_id and status = 'approving' and pg_claim_id = p_claim_id and pg_tid is null and pg_review_at is null;
+        get diagnostics v_n = row_count; perform set_config('app.nicepay_write','',true); return v_n = 1;
+      end; $$;`);
+    const o = await mkOrder(base, 'nicepay'); const c = await claim(base, o);
+    await A.query('begin'); await approve(A, o, c, 'TID-R1N', 10000);
+    const bp = B.query(`select nicepay_release_order_legacy($1,$2,'netcancel_confirmed') r`, [o, c]);
+    assert.equal(await pendingAfter(bp), true);
+    await A.query('commit');
+    const r = (await bp).rows[0].r;
+    const st = (await q1(base, `select status from orders where id=$1`, [o])).status;
+    const appr = Number((await q1(base, `select count(*)::int c from nicepay_pg_approvals where order_id=$1`, [o])).c);
+    assert.deepEqual([r, st, appr], [true, 'pending', 1], '구 구현: 승인 기록이 있는데도 pending으로 풀림(= 이중 청구 위험)');
+    await base.query('drop function nicepay_release_order_legacy(uuid, uuid, text)');
+  });
+
+  await t('R2. 반대 방향: A의 release(행 잠금 보유)와 B의 승인 기록 저장 — B는 대기 후 "승인 선점이 일치하지 않아요"로 거부, 승인 기록 없음', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const o = await mkOrder(base, 'nicepay'); const c = await claim(base, o);
+    await A.query('begin'); assert.equal((await q1(A, `select nicepay_release_order($1,$2,'approve_rejected') r`, [o, c])).r, true);
+    const bp = approve(B, o, c, 'TID-R2', 10000).then(() => 'ok', e => e.message);
+    assert.equal(await pendingAfter(bp), true);
+    await A.query('commit');
+    assert.match(await bp, /승인 선점이 일치하지 않아요/);
+    assert.equal(Number((await q1(base, `select count(*)::int c from nicepay_pg_approvals where order_id=$1`, [o])).c), 0);
+  });
+
+  await t('R3. 동시 선점(claim) 20회: 매번 정확히 1개 세션만 claim id를 얻는다', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    for (let i = 0; i < 20; i++) {
+      const o = await mkOrder(base, 'nicepay');
+      const [x, y] = await Promise.all([A.query(`select nicepay_claim_order($1) c`, [o]), B.query(`select nicepay_claim_order($1) c`, [o])]);
+      const got = [x.rows[0].c, y.rows[0].c].filter(Boolean);
+      assert.equal(got.length, 1, `반복 ${i}: 선점 성공 ${got.length}건`);
+    }
+  });
+
+  await t('R4. 동시 확정(같은 주문·같은 TID) 2세션: 수강권·결제 각 1건, 한쪽은 already_done', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const o = await mkOrder(base, 'nicepay', { amount: 12000 }); const c = await claim(base, o); await approve(base, o, c, 'TID-R4', 12000);
+    const [x, y] = await Promise.all([A.query(`select confirm_nicepay_payment($1,$2,'TID-R4',12000) r`, [o, c]), B.query(`select confirm_nicepay_payment($1,$2,'TID-R4',12000) r`, [o, c])]);
+    const dones = [x.rows[0].r.already_done, y.rows[0].r.already_done].sort();
+    assert.deepEqual(dones, [false, true]);
+    assert.equal(Number((await q1(base, `select count(*)::int c from payments where order_id=$1 and sale_type='new'`, [o])).c), 1);
+    assert.equal(Number((await q1(base, `select count(*)::int c from memberships where id in (select membership_id from payments where order_id=$1)`, [o])).c), 1);
+  });
+
+  await t('R5. 서로 다른 두 주문이 같은 TID를 동시에 승인 기록: 정확히 1건만 성공(TID 재사용 불가)', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const o1 = await mkOrder(base, 'nicepay'), o2 = await mkOrder(base, 'nicepay'); const c1 = await claim(base, o1), c2 = await claim(base, o2);
+    const res = await Promise.all([approve(A, o1, c1, 'TID-R5', 10000).then(() => 'ok', e => 'err'), approve(B, o2, c2, 'TID-R5', 10000).then(() => 'ok', e => 'err')]);
+    assert.deepEqual(res.slice().sort(), ['err', 'ok']);
+    assert.equal(Number((await q1(base, `select count(*)::int c from nicepay_pg_approvals where tid='TID-R5'`)).c), 1);
+  });
+
+  await t('R6. 동시 환불(같은 수강권) 2세션: 정확히 1건만 환불, 환불 매출 행 1개', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const o = await mkOrder(base, 'toss', { amount: 7000 }); await base.query(`select confirm_real_payment($1,'pk_r6',7000)`, [o]);
+    const mid = (await q1(base, `select membership_id m from payments where order_id=$1`, [o])).m;
+    const run = c => c.query(`select refund_membership_server($1,$2,true,false) r`, [mid, AUTH]).then(() => 'ok', e => e.message);
+    const res = await Promise.all([run(A), run(B)]);
+    assert.equal(res.filter(x => x === 'ok').length, 1, JSON.stringify(res));
+    assert.match(res.find(x => x !== 'ok'), /이미 환불/);
+    assert.equal(Number((await q1(base, `select count(*)::int c from payments where membership_id=$1 and sale_type='refund'`, [mid])).c), 1);
+  });
+
+  await t('R7. 동시 PG 취소 확인 기록(같은 주문·같은 취소 TID): 두 호출 모두 성공하되 기록은 1건(한쪽 already_recorded)', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const o = await mkOrder(base, 'nicepay'); const c = await claim(base, o); await approve(base, o, c, 'TID-R7', 10000); await base.query(`select confirm_nicepay_payment($1,$2,'TID-R7',10000)`, [o, c]);
+    const rc = s => s.query(`select nicepay_record_pg_cancel($1,'TID-R7','CXL-R7-0001',10000,'api_response','system',null,$2) r`, [o, DIG]);
+    const [x, y] = await Promise.all([rc(A), rc(B)]);
+    assert.deepEqual([x.rows[0].r.already_recorded, y.rows[0].r.already_recorded].sort(), [false, true]);
+    assert.equal(Number((await q1(base, `select count(*)::int c from nicepay_pg_cancels where order_id=$1`, [o])).c), 1);
+  });
+
+  await t('R8. 확정(미커밋) 중 release: B는 대기 후 false(이미 done) — 완료된 주문은 풀리지 않는다', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const o = await mkOrder(base, 'nicepay'); const c = await claim(base, o); await approve(base, o, c, 'TID-R8', 10000);
+    await A.query('begin'); await A.query(`select confirm_nicepay_payment($1,$2,'TID-R8',10000)`, [o, c]);
+    const bp = B.query(`select nicepay_release_order($1,$2,'netcancel_confirmed') r`, [o, c]);
+    assert.equal(await pendingAfter(bp), true);
+    await A.query('commit');
+    assert.equal((await bp).rows[0].r, false);
+    assert.equal((await q1(base, `select status from orders where id=$1`, [o])).status, 'done');
+  });
+
+  await t('R9. 검토 표시(mark_review, 미커밋)와 release 경합: release는 대기 후 false(검토 대기 주문은 자동 복귀 불가)', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const o = await mkOrder(base, 'nicepay'); const c = await claim(base, o);
+    await A.query('begin'); await A.query(`select nicepay_mark_review($1,$2,'netcancel_failed')`, [o, c]);
+    const bp = B.query(`select nicepay_release_order($1,$2,'netcancel_confirmed') r`, [o, c]);
+    assert.equal(await pendingAfter(bp), true);
+    await A.query('commit');
+    assert.equal((await bp).rows[0].r, false);
+    assert.equal((await q1(base, `select status from orders where id=$1`, [o])).status, 'approving');
+  });
+
+  await t('R10. 수동 확정(미커밋)과 수동 해소 경합: 해소는 대기 후 "검토 대기 중인 NICEPAY 주문이 아니에요"로 거부, 수강권 1개', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const o = await mkOrder(base, 'nicepay', { amount: 5000 }); const c = await claim(base, o); await approve(base, o, c, 'TID-R10', 5000);
+    await base.query(`select nicepay_mark_review($1,$2,'confirm_state_unknown')`, [o, c]);
+    await A.query('begin'); await A.query(`select nicepay_confirm_reviewed($1,'TID-R10',5000,'ADMIN-10','op-kim','op-park','memo')`, [o]);
+    const bp = B.query(`select nicepay_resolve_review($1,'release','not_approved_confirmed','ADMIN-11','op-lee','op-park',null)`, [o]).then(() => 'ok', e => e.message);
+    assert.equal(await pendingAfter(bp), true);
+    await A.query('commit');
+    assert.match(await bp, /검토 대기 중인 NICEPAY 주문이 아니에요/);
+    assert.equal(Number((await q1(base, `select count(*)::int c from payments where order_id=$1 and sale_type='new'`, [o])).c), 1);
+  });
+
+
+  // ================= 서버 환불 경로 fail-closed (2026-10-17) =================
+  await t('R11. NICEPAY 서버 환불 ↔ PG 취소 확인 기록 경합: 기록(미커밋) 중 서버 환불은 fail-closed 거부, 커밋 뒤 재시도는 성공 (최근 결제 행 order_id NULL 포함)', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const o = await mkOrder(base, 'nicepay'); const c = await claim(base, o); await approve(base, o, c, 'TID-R11', 10000); await base.query(`select confirm_nicepay_payment($1,$2,'TID-R11',10000)`, [o, c]);
+    const mid = (await q1(base, `select membership_id m from payments where order_id=$1`, [o])).m;
+    await base.query(`insert into payments(center_id, profile_id, membership_id, sale_type, total_amount, paid_at, status) values ($1,$2,$3,'new',1000,now() + interval '1 minute','paid')`, [C1, P1, mid]);   // 최근 행 order_id NULL
+    await A.query('begin'); await A.query(`select nicepay_record_pg_cancel($1,'TID-R11','CXL-R11-0001',10000,'api_response','system',null,$2)`, [o, DIG]);
+    const bad = await B.query(`select refund_membership_server($1,$2,true,false)`, [mid, AUTH]).then(() => 'ok', e => e.message);
+    assert.match(bad, /NICEPAY 결제는 PG 승인 취소가 확인된 뒤에만/, 'A 미커밋: B는 취소 확인을 볼 수 없어 거부(fail-closed)');
+    await A.query('commit');
+    assert.equal((await q1(B, `select refund_membership_server($1,$2,true,false) r`, [mid, AUTH])).r.refunded, true);
+    assert.equal(Number((await q1(base, `select count(*)::int c from payments where membership_id=$1 and sale_type='refund'`, [mid])).c), 1);
+  });
+
+  await t('R12. 출처 불명확 Toss 서버 환불 ↔ pg_refund_begin 경합: begin(미커밋) 중 환불은 표시를 볼 수 없어 거부, 커밋 뒤 성공, 동시 환불 2건 중 1건만', async () => {
+    const [A, B, C] = [await newSession(), await newSession(), await newSession()];
+    const m = id(6, 9912);
+    await base.query(`insert into memberships(id, profile_id, center_id, product_id, product_name, total_count, remaining_count) values ($1,$2,$3,$4,'p',10,10)`, [m, P1, C1, PROD]);
+    await base.query(`insert into payments(center_id, profile_id, membership_id, sale_type, total_amount, pg_transaction_id, paid_at, status) values ($1,$2,$3,'new',320000,'tosskey_r12',now(),'paid')`, [C1, P1, m]);
+    await A.query('begin'); assert.equal((await q1(A, `select pg_refund_begin($1,$2) r`, [m, AUTH])).r.state, 'locked');
+    const bp = B.query(`select refund_membership_server($1,$2,true,false)`, [m, AUTH]).then(() => 'ok', e => e.message);   // memberships 행 잠금 대기 후 판단
+    await sleep(400);
+    await A.query('commit');
+    const res = await Promise.all([bp, C.query(`select refund_membership_server($1,$2,true,false)`, [m, AUTH]).then(() => 'ok', e => e.message)]);
+    assert.equal(res.filter(x => x === 'ok').length, 1, JSON.stringify(res));
+    assert.equal(Number((await q1(base, `select count(*)::int c from payments where membership_id=$1 and sale_type='refund'`, [m])).c), 1);
+  });
+
+  await t('G7. pg_refund_context 실제 PostgreSQL: 후속 수기 결제가 있어도 Toss 원거래 기준, 연결 없는 PG는 unknown_pg, 직접결제는 provider null', async () => {
+    const o = await mkOrder(base, 'toss', { amount: 9100 }); await base.query(`select confirm_real_payment($1,'pk_g7',9100)`, [o]);
+    const mid = (await q1(base, `select membership_id m from payments where order_id=$1`, [o])).m;
+    await base.query(`insert into payments(center_id, profile_id, membership_id, sale_type, total_amount, paid_at, status) values ($1,$2,$3,'new',1000,now() + interval '1 minute','paid')`, [C1, P1, mid]);
+    const c1 = (await q1(base, `select pg_refund_context($1,$2) c`, [mid, AUTH])).c;
+    assert.deepEqual([c1.provider, c1.paymentKey, c1.amount], ['toss', 'pk_g7', 9100]);
+    const m2 = id(6, 9913);
+    await base.query(`insert into memberships(id, profile_id, center_id, product_id, product_name, total_count, remaining_count) values ($1,$2,$3,$4,'p',10,10)`, [m2, P1, C1, PROD]);
+    await base.query(`insert into payments(center_id, profile_id, membership_id, sale_type, total_amount, pg_transaction_id, paid_at, status) values ($1,$2,$3,'new',777,'tosskey_g7',now(),'paid')`, [C1, P1, m2]);
+    const c2 = (await q1(base, `select pg_refund_context($1,$2) c`, [m2, AUTH])).c;
+    assert.deepEqual([c2.provider, c2.paymentKey], ['unknown_pg', 'tosskey_g7']);
+  });
+
+
+  // ================= 환불 금액 정합성 + 서버 전용 상태 경계 (2026-10-17) =================
+  await t('R13. NICEPAY 서버 환불 중 후속 수기 결제 행이 동시에 들어와도(미커밋/커밋) 환불 금액 = PG 원거래 금액 = 취소 확인 금액', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const o = await mkOrder(base, 'nicepay', { amount: 30000 }); const c = await claim(base, o); await approve(base, o, c, 'TID-R13', 30000); await base.query(`select confirm_nicepay_payment($1,$2,'TID-R13',30000)`, [o, c]);
+    const mid = (await q1(base, `select membership_id m from payments where order_id=$1`, [o])).m;
+    await base.query(`select nicepay_record_pg_cancel($1,'TID-R13','CXL-R13-0001',30000,'api_response','system',null,$2)`, [o, DIG]);
+    await A.query('begin'); await A.query(`insert into payments(center_id, profile_id, membership_id, sale_type, total_amount, paid_at, status) values ($1,$2,$3,'new',5000,now() + interval '1 minute','paid')`, [C1, P1, mid]);
+    const r = (await q1(B, `select refund_membership_server($1,$2,true,false) r`, [mid, AUTH])).r;   // A 미커밋: 잠금 대기 없이 진행, 후속 행을 보지 못해도 금액은 원거래 기준
+    assert.deepEqual(r, { refunded: true, amount: 30000 });
+    await A.query('commit');
+    const rows = (await base.query(`select total_amount from payments where membership_id=$1 and sale_type='refund'`, [mid])).rows;
+    assert.deepEqual(rows.map(x => x.total_amount), [-30000]);
+    assert.equal(-rows[0].total_amount, (await q1(base, `select cancel_amount from nicepay_pg_cancels where order_id=$1`, [o])).cancel_amount, '환불 기록 = 취소 확인 기록');
+    await assert.rejects(base.query(`select refund_membership_server($1,$2,true,false)`, [mid, AUTH]), /이미 환불된 수강권/);
+  });
+
+  await t('R14. 후속 수기 결제가 있는 Toss 수강권을 동시에 두 번 환불해도 환불 행은 1개, 금액은 PG 원거래 금액', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const o = await mkOrder(base, 'toss', { amount: 18000 }); await base.query(`select confirm_real_payment($1,'pk_r14',18000)`, [o]);
+    const mid = (await q1(base, `select membership_id m from payments where order_id=$1`, [o])).m;
+    await base.query(`insert into payments(center_id, profile_id, membership_id, sale_type, total_amount, paid_at, status) values ($1,$2,$3,'new',2500,now() + interval '1 minute','paid')`, [C1, P1, mid]);
+    await base.query(`select pg_refund_begin($1,$2)`, [mid, AUTH]);
+    const res = await Promise.all([A, B].map(s => s.query(`select refund_membership_server($1,$2,true,false) r`, [mid, AUTH]).then(r => r.rows[0].r, e => e.message)));
+    assert.equal(res.filter(x => x && x.refunded === true && x.amount === 18000).length, 1, JSON.stringify(res));
+    assert.equal(res.filter(x => typeof x === 'string' && /이미 환불된/.test(x)).length, 1, JSON.stringify(res));
+    assert.deepEqual((await base.query(`select total_amount from payments where membership_id=$1 and sale_type='refund'`, [mid])).rows.map(x => x.total_amount), [-18000]);
+  });
+
+  await t('R15. 실제 롤(anon/authenticated/service_role)·RLS: auth.uid() 가 NULL 인 anon 도 서버 전용 주문 상태를 못 바꾼다(RLS 가 열려 있다고 가정해도), service_role 은 NICEPAY RPC 로 정상 동작', async () => {
+    const o = await mkOrder(base, 'nicepay');
+    await base.query(`grant select, insert, update on orders to anon, authenticated, service_role; grant select on profiles, accounts, perms to anon, authenticated;`);
+    const attempts = [`update orders set pg_tid='HACK' where id=$1`, `update orders set pg_claim_id=gen_random_uuid() where id=$1`, `update orders set pg_review_reason='stale_claim', pg_review_at=now() where id=$1`,
+      `update orders set payment_provider='toss' where id=$1`, `update orders set status='approving' where id=$1`];
+    for (const role of ['anon', 'authenticated']) {
+      const S = await newSession();
+      await S.query(`set role ${role}`);
+      for (const a of attempts) await assert.rejects(S.query(a, [o]), /서버에서만|바꿀 수 없어요|서버 승인 처리로만/, `${role}: ${a}`);
+      await S.query('reset role');
+    }
+    assert.deepEqual(await q1(base, `select pg_tid, pg_claim_id, pg_review_reason, payment_provider, status from orders where id=$1`, [o]), { pg_tid: null, pg_claim_id: null, pg_review_reason: null, payment_provider: 'nicepay', status: 'pending' });
+    // RLS 가 정상(기본 정책 형태)이면 anon 은 아예 0행
+    await base.query(`alter table orders enable row level security; drop policy if exists y_sel on orders; drop policy if exists y_upd on orders;
+      create policy y_sel on orders for select using (profile_id in (select my_profile_ids()));
+      create policy y_upd on orders for update using (has_permission(center_id, 'pass.payment.create') or is_platform_admin());`);
+    const S2 = await newSession(); await S2.query('set role anon');
+    assert.equal((await S2.query(`update orders set pg_tid='HACK' where id=$1 returning id`, [o])).rowCount, 0);
+    assert.equal((await S2.query(`select 1 from orders where id=$1`, [o])).rowCount, 0);
+    await S2.query('reset role');
+    await base.query(`alter table orders disable row level security;`);
+    // service_role(bypassrls) 서버 경로: claim 성공
+    const S3 = await newSession(); await S3.query('set role service_role');
+    assert.ok((await q1(S3, `select nicepay_claim_order($1) c`, [o])).c);
+    await S3.query('reset role');
+  });
+
+
+  // ================= 보안 전수 점검 (2026-10-17) =================
+  await t('R16. 권한 diff: NICEPAY/환불 패치 체인 적용 전후로 anon/authenticated 가 실행·접근 가능한 함수/테이블/시퀀스가 하나도 늘지 않는다 + 모든 새 SECURITY DEFINER 함수는 search_path 고정', async () => {
+    const c = await freshDb();
+    const snap = async () => ({
+      fns: (await c.query(`select p.oid::regprocedure::text f from pg_proc p where p.pronamespace = 'public'::regnamespace and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute')) order by 1`)).rows.map(r => r.f),
+      tabs: (await c.query(`select c.relname t, string_agg(distinct pr.p, ',' order by pr.p) p from pg_class c cross join (values ('select'),('insert'),('update'),('delete'),('truncate'),('references'),('trigger')) pr(p) where c.relnamespace = 'public'::regnamespace and c.relkind in ('r','p','S') and (has_table_privilege('anon', c.oid, pr.p) or has_table_privilege('authenticated', c.oid, pr.p)) group by 1 order by 1`)).rows.map(r => `${r.t}:${r.p}`),
+    });
+    const before = await snap();
+    await c.query(COS_DEF);
+    await c.query(W.refundFix); await c.query(W.serverFix); await c.query(W.amountFix); await c.query(W.roleGuardFix); await c.query(W.gateFix); await c.query(W.support); await c.query(W.cosFix);
+    const after = await snap();
+    const newFns = after.fns.filter(f => !before.fns.includes(f)).filter(f => !/^create_order_secure/.test(f));   // create_order_secure 는 기존 회원용 RPC(가정 정의) — 이 점검은 NICEPAY 신규 객체가 대상
+    assert.deepEqual(newFns, [], '새로 클라이언트가 실행 가능해진 함수');
+    assert.deepEqual(after.tabs.filter(x => !before.tabs.includes(x)), [], '새로 클라이언트가 접근 가능해진 테이블/시퀀스 권한');
+    const bad = (await c.query(`select p.oid::regprocedure::text f from pg_proc p where p.pronamespace = 'public'::regnamespace and (p.proname like 'nicepay%' or p.proname = 'confirm_nicepay_payment' or p.proname in ('orders_guard_pg_state','orders_force_server_fields_on_insert','pg_refund_context','pg_refund_begin','_refund_membership_core'))
+        and not (p.prosecdef and exists (select 1 from unnest(p.proconfig) cfg where cfg = 'search_path=public'))`)).rows;
+    assert.deepEqual(bad, [], 'SECURITY DEFINER + search_path 고정이 아닌 함수');
+    const rls = (await c.query(`select c.relname from pg_class c where c.relname in ('nicepay_review_actions','nicepay_pg_approvals','nicepay_pg_cancels') and not c.relrowsecurity`)).rows;
+    assert.deepEqual(rls, [], 'RLS 미적용 신규 테이블');
+    const pol = (await c.query(`select polname from pg_policy where polrelid in ('nicepay_review_actions'::regclass, 'nicepay_pg_approvals'::regclass, 'nicepay_pg_cancels'::regclass)`)).rows;
+    assert.deepEqual(pol, [], '신규 서버 전용 테이블에 클라이언트 정책이 없다');
+  });
+
+  await t('R17. 실제 롤 + 운영형 RLS 정책: anon/authenticated 는 INSERT 로 서버 전용 필드를 심을 수 없고(권한·RLS가 넓어져도 보정), 서버 롤은 영향 없다', async () => {
+    await base.query(`update nicepay_checkout_gate set mode = 'public' where id`);   // 이 테스트는 게이트가 열린 뒤에도 서버 전용 필드가 지워지는지 본다
+    const o = await mkOrder(base, 'nicepay');   // 기존 주문
+    await base.query(`grant select, insert, update on orders to anon, authenticated, service_role; grant select on profiles, accounts, perms to anon, authenticated;
+      alter table orders enable row level security; drop policy if exists p_ins_open on orders; create policy p_ins_open on orders for insert with check (true);`);   // 일부러 넓힌 정책(잘못 열린 상황 가정)
+    const S = await newSession();
+    for (const role of ['anon', 'authenticated']) {
+      await S.query(`set role ${role}`);
+      const nid = id(5, 990000 + (role === 'anon' ? 1 : 2));
+      await S.query(`insert into orders(id, profile_id, center_id, product_id, product_name, amount, status, verified, paid_at, pg_tid, payment_provider) values ($1,$2,$3,$4,'p',100,'done',true,now(),'HACK','nicepay')`, [nid, P1, C1, PROD]);
+      await S.query('reset role');
+      const r = await q1(base, `select status, verified, paid_at, pg_tid from orders where id=$1`, [nid]);
+      assert.deepEqual([r.status, r.verified, r.paid_at, r.pg_tid], ['pending', false, null, null], `${role}: 서버 전용 필드 보정`);
+    }
+    await S.query('set role service_role');
+    const sid = id(5, 990003);
+    await S.query(`insert into orders(id, profile_id, center_id, product_id, product_name, amount, status, verified, payment_provider) values ($1,$2,$3,$4,'p',100,'done',true,'mock')`, [sid, P1, C1, PROD]);
+    await S.query('reset role');
+    assert.deepEqual(Object.values(await q1(base, `select status, verified from orders where id=$1`, [sid])), ['done', true]);
+    await base.query(`drop policy p_ins_open on orders; alter table orders disable row level security; update nicepay_checkout_gate set mode = 'public' where id;`);
+    void o;
+  });
+
+  // ================= 주문 생성 DB 게이트 (2026-10-17) =================
+  await t('R18. 실제 롤(anon/authenticated/service_role): 게이트가 꺼져 있으면 클라이언트 NICEPAY 주문 생성 불가(직접 INSERT·SECURITY DEFINER RPC 모두), 포인트 차감도 롤백, 다른 provider·서버 생성은 정상', async () => {
+    await base.query(`grant select, insert on orders to anon, authenticated, service_role; grant usage on schema public to authenticated;
+      create table if not exists r16_pts(bal int); delete from r16_pts; insert into r16_pts values (100);
+      create or replace function public.r16_cos(p_provider text) returns uuid language plpgsql security definer set search_path = public as $$
+      declare v uuid; begin update r16_pts set bal = bal - 10;
+        insert into orders(profile_id, center_id, product_id, product_name, amount, payment_provider) values ('${P1}','${C1}','${PROD}','p',1000,p_provider) returning id into v; return v; end $$;
+      grant execute on function public.r16_cos(text) to authenticated;`);
+    await base.query(`update nicepay_checkout_gate set mode = 'off' where id`);
+    assert.equal((await q1(base, `select mode from nicepay_checkout_gate`)).mode, 'off');
+    const ins = `insert into orders(profile_id, center_id, product_id, product_name, amount, status, verified, payment_provider) values ($1,$2,$3,'p',1000,'done',true,$4)`;
+    for (const [role, uid] of [['anon', ''], ['authenticated', AUTH], ['authenticated', '']]) {
+      const S = await newSession(); await S.query(`select set_config('app.uid',$1,false)`, [uid]); await S.query(`set role ${role}`);
+      await assert.rejects(S.query(ins, [P1, C1, PROD, 'nicepay']), /NICEPAY 결제는 아직 사용할 수 없어요/, `${role}/${uid ? 'uid' : 'nouid'}`);
+      await S.query('reset role');
+    }
+    const U = await newSession(); await U.query(`select set_config('app.uid',$1,false)`, [AUTH]); await U.query('set role authenticated');
+    await assert.rejects(U.query(`select r16_cos('nicepay')`), /아직 사용할 수 없어요/);
+    assert.equal((await q1(base, `select bal from r16_pts`)).bal, 100, '포인트 차감 롤백');
+    for (const p of ['mock', 'toss', 'portone']) await U.query(`select r16_cos($1)`, [p]);
+    assert.equal((await q1(base, `select bal from r16_pts`)).bal, 70);
+    await U.query('reset role');
+    const SR = await newSession(); await SR.query('set role service_role'); await SR.query(ins, [P1, C1, PROD, 'nicepay']); await SR.query('reset role');   // 서버 생성은 유지
+    assert.equal(Number((await q1(base, `select count(*)::int c from orders where payment_provider='nicepay' and status='pending' and verified is false`)).c) >= 1, true);
+    await base.query(`update nicepay_checkout_gate set mode = 'public' where id`);
+  });
+
+  await t('R19. 게이트 토글 경합: 켜기(미커밋) 중 클라이언트 주문은 아직 막혀 있고(대기 없음), 커밋 뒤에는 허용, 끄면 즉시 다시 차단 — 감사 기록 순서대로', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const ins = `insert into orders(profile_id, center_id, product_id, product_name, amount, payment_provider) values ('${P1}','${C1}','${PROD}','p',1000,'nicepay')`;
+    await base.query(`update nicepay_checkout_gate set mode = 'off' where id`);   // 기본 월드는 public 이므로 먼저 off 에서 시작
+    await B.query(`select set_config('app.uid',$1,false)`, [AUTH]); await B.query('set role authenticated');
+    await A.query('begin'); await A.query(`update nicepay_checkout_gate set mode = 'public' where id`);
+    try { await assert.rejects(B.query(ins), /아직 사용할 수 없어요/); }      // A 미커밋: B는 이전 값(off)을 본다 — 열려 있다고 착각하지 않는다
+    finally { await A.query('commit'); }
+    await B.query(ins);                                                // 커밋 후 허용
+    await base.query(`update nicepay_checkout_gate set mode = 'off' where id`);
+    await assert.rejects(B.query(ins), /아직 사용할 수 없어요/);
+    await B.query('reset role');
+    const rows = (await base.query(`select mode from nicepay_checkout_gate_audit order by id`)).rows.map(r => r.mode);
+    assert.deepEqual(rows.slice(-2), ['public', 'off']);
+    await base.query(`update nicepay_checkout_gate set mode = 'public' where id`);
+  });
+
+
+  // ================= 승인 선점(claim) DB 게이트 (v8) =================
+  await t('R20. claim 게이트 상태 전이·경합: off=선점 거부(PG 승인 전), reviewer=심사 계정만, public=허용 / 모드 토글(미커밋) 중 선점은 커밋된 값 기준 / 이미 선점·승인된 거래는 off 뒤에도 확정·취소 기록·release·환불 가능 / 동시 선점은 1건', async () => {
+    const [A, B] = [await newSession(), await newSession()];
+    const set = m => base.query(`update nicepay_checkout_gate set mode = $1 where id`, [m]);
+    // 1) 모드별 선점
+    await set('off');
+    const o1 = await mkOrder(base, 'nicepay');
+    assert.equal(await claim(base, o1), null);
+    assert.equal((await q1(base, `select status from orders where id=$1`, [o1])).status, 'pending');
+    await set('reviewer');
+    assert.equal(await claim(base, o1), null);
+    await base.query(`update accounts set pg_checkout_override = true where id = $1`, [ACC]);
+    const c1 = await claim(base, o1); assert.ok(c1);
+    await base.query(`select nicepay_release_order($1,$2,'approve_rejected')`, [o1, c1]);
+    await base.query(`update accounts set pg_checkout_override = false where id = $1`, [ACC]);
+    await set('public');
+    // 2) 토글 경합: A가 off로 바꾸는 중(미커밋) → B 선점은 이전 값(public)을 보고 허용(미커밋 값은 보이지 않는다), 커밋 뒤 새 선점은 거부
+    const o2 = await mkOrder(base, 'nicepay'), o3 = await mkOrder(base, 'nicepay');
+    await A.query('begin'); await A.query(`update nicepay_checkout_gate set mode = 'off' where id`);
+    let c2; try { c2 = (await q1(B, `select nicepay_claim_order($1) c`, [o2])).c; assert.ok(c2, '미커밋 off 는 보이지 않는다'); } finally { await A.query('commit'); }
+    assert.equal((await q1(B, `select nicepay_claim_order($1) c`, [o3])).c, null, '커밋된 off 는 즉시 적용');
+    // 3) off 이후에도 진행 중 거래(o2)는 승인 기록 → 확정 → 취소 기록 → 환불까지 마무리
+    await base.query(`select nicepay_record_verified_approval($1,$2,'TID-R20',10000,$3)`, [o2, c2, DIG]);
+    assert.equal((await q1(base, `select confirm_nicepay_payment($1,$2,'TID-R20',10000) r`, [o2, c2])).r.already_done, false);
+    await base.query(`select nicepay_record_pg_cancel($1,'TID-R20','CXL-R20-0001',10000,'api_response','system',null,$2)`, [o2, DIG]);
+    const mid = (await q1(base, `select membership_id m from payments where order_id=$1 and sale_type='new'`, [o2])).m;
+    assert.deepEqual((await q1(base, `select refund_membership_server($1,$2,true,false) r`, [mid, AUTH])).r, { refunded: true, amount: 10000 });
+    // 4) 승인 기록 후 DB 확정 못 한 거래: off 상태에서도 PG 취소 기록 뒤 release 가능, 그러나 복귀한 주문의 새 선점은 거부
+    await set('public');
+    const o4 = await mkOrder(base, 'nicepay'); const c4 = await claim(base, o4);
+    await base.query(`select nicepay_record_verified_approval($1,$2,'TID-R20B',10000,$3)`, [o4, c4, DIG]);
+    await set('off');
+    assert.equal((await q1(base, `select nicepay_release_order($1,$2,'netcancel_confirmed') r`, [o4, c4])).r, false, 'PG 취소 기록 없이는 못 푼다(게이트와 무관한 기존 규칙)');
+    await base.query(`select nicepay_record_pg_cancel($1,'TID-R20B','CXL-R20-0002',10000,'api_response','system',null,$2)`, [o4, DIG]);
+    assert.equal((await q1(base, `select nicepay_release_order($1,$2,'netcancel_confirmed') r`, [o4, c4])).r, true);
+    assert.equal(await claim(base, o4), null);
+    // 5) public 에서 동시 선점 20회: 매번 정확히 1세션
+    await set('public');
+    const S = [await newSession(), await newSession(), await newSession()];
+    for (let i = 0; i < 5; i++) {
+      const o = await mkOrder(base, 'nicepay');
+      const r = await Promise.all(S.map(s => s.query(`select nicepay_claim_order($1) c`, [o]).then(x => x.rows[0].c)));
+      assert.equal(r.filter(Boolean).length, 1, JSON.stringify(r));
+    }
+    await set('public');
+  });
+
+  // ================= 실제 PostgreSQL 회귀 =================
+  await t('G1. 기존 Toss: 발급(confirm_real_payment) 멱등, 회원 일반 환불 차단, 서버 경로 환불 가능, 정산 요약 동작', async () => {
+    const o = await mkOrder(base, 'toss', { amount: 33000 });
+    assert.equal((await q1(base, `select confirm_real_payment($1,'pk_g1',33000) r`, [o])).r.already_done, false);
+    assert.equal((await q1(base, `select confirm_real_payment($1,'pk_g1',33000) r`, [o])).r.already_done, true);
+    const mid = (await q1(base, `select membership_id m from payments where order_id=$1`, [o])).m;
+    const U = await newSession(); await U.query(`select set_config('app.uid',$1,false), set_config('app.account_id',$2,false)`, [AUTH, ACC]);
+    await assert.rejects(U.query(`select refund_membership($1)`, [mid]), /환불 요청 기능/);
+    assert.deepEqual((await q1(base, `select refund_membership_server($1,$2,true,false) r`, [mid, AUTH])).r, { refunded: true, amount: 33000 });
+    await base.query(`select set_config('app.platform_admin','on',false)`);
+    await base.query(`select * from admin_center_settlement_summary(current_date - 1, current_date + 1)`);
+    await base.query(`select set_config('app.platform_admin','',false)`);
+  });
+
+  await t('G2. 운영 형태 재현(Toss 완료 3건 중 32만 원 건은 결제 order_id 없음): 일반 환불 차단, 데이터 불변, 서버 경로 가능, 정상 직접결제는 환불', async () => {
+    const mk = async amt => { const o = await mkOrder(base, 'toss', { amount: amt }); await base.query(`select confirm_real_payment($1,$2,$3)`, [o, `pk_${amt}`, amt]); return (await q1(base, `select membership_id m from payments where order_id=$1`, [o])).m; };
+    const m1 = await mk(111000), m2 = await mk(222000);
+    const orphan = await mkOrder(base, 'toss', { amount: 320000, status: 'done' }); const m3 = id(6, 9320);
+    await base.query(`insert into memberships(id, profile_id, center_id, product_id, product_name, total_count, remaining_count) values ($1,$2,$3,$4,'p',10,10)`, [m3, P1, C1, PROD]);
+    await base.query(`insert into payments(center_id, profile_id, membership_id, order_id, sale_type, total_amount, paid_at, status) values ($1,$2,$3,null,'new',320000,now(),'paid')`, [C1, P1, m3]);
+    const snap = async () => JSON.stringify([(await base.query('select * from orders order by id')).rows, (await base.query('select * from payments order by id')).rows]);
+    const before = await snap();
+    const U = await newSession(); await U.query(`select set_config('app.uid',$1,false), set_config('app.account_id',$2,false)`, [AUTH, ACC]);
+    await assert.rejects(U.query(`select refund_membership($1)`, [m3]), /PG 결제 출처를 확인할 수 없는 수강권/);
+    for (const m of [m1, m2]) await assert.rejects(U.query(`select refund_membership($1)`, [m]), /환불 요청 기능/);
+    assert.equal(await snap(), before, '차단 시 데이터 불변');
+    assert.equal(Number((await q1(base, `select count(*)::int c from payments where membership_id=$1 and order_id is null`, [m3])).c), 1, '자동 연결 없음');
+    await assert.rejects(base.query(`select refund_membership_server($1,$2,true,false)`, [m3, AUTH]), /pg_refund_begin/);   // 서버 경로도 환불 진행 표시 필요(fail-closed)
+    assert.equal((await q1(base, `select pg_refund_begin($1,$2) r`, [m3, AUTH])).r.state, 'locked');
+    assert.equal((await q1(base, `select refund_membership_server($1,$2,true,false) r`, [m3, AUTH])).r.refunded, true);
+    // 다른 상품의 정상 직접결제 환불(고아 주문과 무관)
+    const PROD2 = id(4, 2); await base.query(`insert into products(id, center_id, name) values ($1,$2,'p2') on conflict do nothing`, [PROD2, C1]);
+    const dm = id(6, 9321); await base.query(`insert into memberships(id, profile_id, center_id, product_id, product_name, total_count, remaining_count) values ($1,$2,$3,$4,'p2',10,10)`, [dm, P1, C1, PROD2]);
+    await base.query(`insert into payments(center_id, profile_id, membership_id, sale_type, total_amount, paid_at, status) values ($1,$2,$3,'new',50000,now(),'paid')`, [C1, P1, dm]);
+    assert.equal((await q1(U, `select refund_membership($1) r`, [dm])).r.refunded, true);
+    void orphan;
+  });
+
+  await t('G3. 적용 후 preflight(이미 패치됨 포함)·verify SQL이 실제 PostgreSQL에서 전부 true', async () => {
+    await base.query(`select 1`);
+    const pf = (await base.query(W.stripComments(W.preflight))).rows[0];
+    for (const [k, v] of Object.entries(pf)) if (k.endsWith('_ok') || k.endsWith('_ok_or_absent')) assert.equal(v, true, k);
+    for (const f of ['verify_fix_refund_pg_origin_guard_20261017.sql', 'verify_fix_refund_server_path_fail_closed_20261017.sql', 'verify_add_nicepay_provider_support_20261016.sql']) {
+      const r = (await base.query(W.stripComments(W.read(f)))).rows[0];
+      assert.ok(Object.values(r).every(x => x === true), `${f}: ${JSON.stringify(r)}`);
+    }
+  });
+
+  await t('G4. 롤백 보호: nicepay 데이터가 있으면 롤백이 중단되고 아무것도 바뀌지 않는다', async () => {
+    const before = await snapOriginal(base);
+    await assert.rejects(base.query(W.supportRollback), /롤백하지 않습니다/);
+    await base.query('rollback');   // 스크립트가 begin 안에서 중단되어 트랜잭션이 열려 있다
+    const after = await snapOriginal(base);
+    assert.deepEqual(after, before);
+  });
+
+  await t('G5. 새 DB에서 정순서 적용 → 역순 롤백이 실제 PostgreSQL에서도 함수 정의를 원문 그대로 복원(트리거·core는 공백 무관), 기존 Toss 흐름 유지', async () => {
+    const c = await freshDb();
+    await c.query(COS_DEF);
+    const snapAll = async () => ({ force: (await q1(c, `select pg_get_functiondef('public.orders_force_server_fields_on_insert()'::regprocedure) d`)).d, ctx: (await q1(c, `select pg_get_functiondef('public.pg_refund_context(uuid,uuid)'::regprocedure) d`)).d, ...(await snapOriginal(c)), cos: (await q1(c, `select pg_get_functiondef('public.create_order_secure(uuid,text,text,integer,boolean,text)'::regprocedure) d`)).d });
+    const orig = await snapAll();
+    await c.query(W.refundFix); await c.query(W.serverFix); await c.query(W.amountFix); await c.query(W.roleGuardFix); await c.query(W.gateFix); await c.query(W.support); await c.query(W.cosFix);
+    const applied = await snapAll();
+    assert.notDeepEqual(applied, orig);
+    await c.query(W.cosRollback); await c.query(W.supportRollback); await c.query(W.gateRollback); await c.query(W.roleGuardRollback); await c.query(W.amountRollback); await c.query(W.serverRollback); await c.query(W.refundRollback);
+    const after = await snapAll();
+    for (const k of ['helper', 'fulfill', 'settlement', 'cos', 'ctx', 'force']) assert.equal(after[k], orig[k], `${k} 원문 복원`);
+    const norm = x => x.replace(/\s+/g, ' ');
+    assert.equal(norm(after.trigger), norm(orig.trigger)); assert.equal(norm(after.core), norm(orig.core));
+    const o = await mkOrder(c, 'toss', { amount: 4000 }); assert.equal((await q1(c, `select confirm_real_payment($1,'pk_g5',4000) r`, [o])).r.already_done, false);
+  });
+
+  await t('G6. 순서 독립: support를 먼저, 환불 패치를 나중에 적용해도 두 가드가 모두 남는다(함수 통째 교체 없음)', async () => {
+    const c = await freshDb();
+    await c.query(W.gateFix); await c.query(W.support); await c.query(W.refundFix); await c.query(W.serverFix); await c.query(W.amountFix);
+    const d = (await q1(c, `select pg_get_functiondef('public._refund_membership_core(uuid,uuid,boolean,boolean)'::regprocedure) d`)).d;
+    assert.ok(d.includes('-- nicepay_pg_cancel_guard begin (v2)') && d.includes('-- pg_unknown_origin_guard begin') && d.includes('-- pg_server_path_guard begin') && d.includes('-- pg_refund_amount begin'));
+  });
+  void COS_EXISTS;
+} finally {
+  for (const c of sessions) { try { await c.end(); } catch {} }
+  for (const n of [DB, ...extraDbs]) { try { await admin.query(`drop database if exists ${n} with (force)`); } catch (e) { console.error('DB 정리 실패:', e.message); } }
+  await admin.end();
+}
+console.log(`\n실제 PostgreSQL 테스트: PASS ${results.filter(r => r.ok).length} / FAIL ${failed} / 총 ${results.length}`);
+process.exit(failed ? 1 : 0);

@@ -69,7 +69,7 @@ describe("2. fetchCenterProducts — 비로그인은 공개 RPC, 로그인은 �
   it("비로그인: 공개 RPC만 호출하고 회원 RPC는 호출하지 않는다", async () => {
     const { fetchCenterProducts } = await import("../../lib/center");
     const products = await fetchCenterProducts("c1");
-    expect(rpcCalls).toEqual(["fetch_public_storefront_products"]);
+    expect(rpcCalls.filter((n) => n !== "fetch_public_storefront_product_periods")).toEqual(["fetch_public_storefront_products"]);   // 기간 RPC 는 추가 전용·실패 무시
     expect(products).toHaveLength(1);
     expect(products[0]).toMatchObject({ id: "p1", name: "10회권", price: 100000, kind: "pass", totalCount: 10, couponEligible: true, sizes: null });
   });
@@ -87,7 +87,7 @@ describe("2. fetchCenterProducts — 비로그인은 공개 RPC, 로그인은 �
     memberError = { code: "42501", message: "permission denied for function fetch_purchasable_products" };
     const { fetchCenterProducts } = await import("../../lib/center");
     const products = await fetchCenterProducts("c1");
-    expect(rpcCalls).toEqual(["fetch_purchasable_products", "fetch_public_storefront_products"]);
+    expect(rpcCalls.filter((n) => n !== "fetch_public_storefront_product_periods")).toEqual(["fetch_purchasable_products", "fetch_public_storefront_products"]);
     expect(products[0].name).toBe("10회권");
   });
 
@@ -178,8 +178,8 @@ describe("4. 홈 footer — 사업자 정보 직접 표시", () => {
     expect(footer).toContain("고객센터 {BUSINESS_INFO.customerServicePhone}");
   });
 
-  it("주소/이메일은 홈 footer에 노출하지 않는다(자택 주소 최소 노출 정책 유지)", () => {
-    expect(footer).not.toContain("BUSINESS_INFO.address");
+  it("이메일은 홈 footer에 노출하지 않는다. 주소는 NICEPAY 심사 요청으로 환경변수 플래그(기본 꺼짐)가 켜진 빌드에서만 <BusinessAddressLine /> 로 표시(공개 배포는 사용자 승인 후)", () => {
+    expect(footer).toContain("<BusinessAddressLine />");
     expect(footer).not.toContain("BUSINESS_INFO.email");
   });
 

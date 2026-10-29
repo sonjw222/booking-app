@@ -40,6 +40,7 @@ import EmptyState from "../../components/EmptyState";
 import BackButton from "../../components/BackButton";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import AppButton from "../../components/AppButton";
+import ServicePeriodNotice, { ServicePeriodGenericNote } from "../../components/ServicePeriodNotice";
 import { loginHrefWithReturnToHere } from "../../../lib/postLoginReturn";
 import { shareLink } from "../../../lib/nativeShare";
 
@@ -423,6 +424,8 @@ function CenterDetailContent() {
               <UiIcon name="cart" size={16} /> 장바구니 보기{cartItemCount > 0 ? ` (${cartItemCount})` : ""}
             </Link>
             <p className="center-buy-help">수강권을 선택하고 바로 구매하거나 장바구니에 담을 수 있어요.</p>
+            {/* 이용기간 안내: 상품별 날짜를 알 수 없는 상품(비로그인 공개 목록 등)이 하나라도 있으면 공통 안내를 한 번 보인다 */}
+            {visibleProducts.some((p) => !p.periodSource) && <ServicePeriodGenericNote />}
             {rulesLoadFailed && <div className="rule-load-error" role="status">예약조건을 불러오지 못했어요. 새로고침하면 다시 시도해요.</div>}
             {filterProductIds && (
               <div className="class-filter-notice">
@@ -603,6 +606,7 @@ function CenterDetailContent() {
             {descProduct.sizes && descProduct.sizes.length > 0 && (
               <div className="perm-guide" style={{ margin: "10px 0 0" }}>사이즈: {descProduct.sizes.join(", ")}</div>
             )}
+            <ServicePeriodNotice source={descProduct.periodSource} />
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => setDescProduct(null)}>닫기</button>
               <button className="primary-btn" onClick={() => { const p = descProduct; setDescProduct(null); handlePurchase(p); }}>구매하기</button>
@@ -884,6 +888,7 @@ function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy 
         {!soldOut && <AppButton variant="secondary" className="center-product-cart" disabled={blocked} onClick={() => onAddCart(p, sel)}>담기</AppButton>}
         {!soldOut && <AppButton className="center-product-buy" disabled={blocked} onClick={() => onBuy(p, sel)}>구매</AppButton>}
       </div>
+      {p.periodSource && <div className="center-product-period"><ServicePeriodNotice source={p.periodSource} variant="compact" /></div>}
       <ProductRuleAccordion rules={rules} />
     </div>
   );
