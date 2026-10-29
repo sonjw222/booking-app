@@ -35,6 +35,8 @@ begin
         end if;
     end if;
 end $$;
+drop trigger if exists orders_guard_expired_resolution on public.orders;
+drop function if exists public.orders_guard_expired_resolution();
 drop function if exists public.manager_resolve_expired_order(uuid, text, text, integer, date, text, date, date);
 do $$
 begin

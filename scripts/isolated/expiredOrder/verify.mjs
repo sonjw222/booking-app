@@ -134,7 +134,42 @@ try {
     eq("T1", "원자성: 중간(이력 INSERT) 실패 시 오류 반환", true, has(rf, /EXO 시험용 강제 실패/));
     eq("T2", "원자성: 주문 pending 유지, 결제·수강권·이력 모두 없음(전부 롤백)", ["pending", 0, 0, 0], [await st(oAtomic), await msCount(oAtomic), (await svc.from("memberships").select("id", { count: "exact", head: true }).eq("profile_id", profA).eq("product_id", PX.id).eq("expires_at", await kst(15))).count, await count("order_expiry_resolutions", "order_id", oAtomic)]);
     eq("T3", "원자성: 롤백 뒤에도 만료 주문은 직접 발급 불가(임시 설정이 남지 않음)", true, has(await MA.rpc("fulfill_order", { p_order_id: oAtomic }), /판매 기간이 지난 상품의 주문/));
-  } finally { psql("drop trigger if exists exo_fail_trg on public.order_expiry_resolutions; drop function if exists public.exo_fail()"); }
+  
+  // ── D. 일반 취소/상태 변경 경로 우회 차단(환불 예정 주문을 환불 완료 확인 전에 닫을 수 없다) — REST PATCH(JWT) 로 직접 시험 ──
+  const patch = (cl, id, status) => cl.from("orders").update({ status }).eq("id", id).select("status");
+  const dRef = await order(PX); created.push(dRef);
+  eq("D0", "준비: 환불 예정 기록", null, msg(await rpc(MA, dRef, "refund_plan", await recv())));
+  const rM = await patch(MA, dRef, "cancelled");
+  eq("D1", "관리자 REST PATCH pending→cancelled 거부(환불 예정 주문)", ["pending", true], [await st(dRef), !!rM.error || !(rM.data?.length)]);
+  const dRef2 = await order(PX); created.push(dRef2); await rpc(MA, dRef2, "refund_plan", await recv());
+  const rU = await patch(A, dRef2, "cancelled");
+  eq("D2", "회원 본인 취소(REST PATCH) 거부(환불 예정 주문)", ["pending", true], [await st(dRef2), !!rU.error || !(rU.data?.length)]);
+  for (const to of ["done", "paid"]) { const r = await patch(MA, dRef, to); eq(`D3-${to}`, `관리자 REST PATCH →${to} 거부(환불 예정 주문)`, "pending", await st(dRef), msg(r) ?? ""); }
+  eq("D4", "환불 예정 주문을 fulfill_order 로 발급 거부", true, has(await MA.rpc("fulfill_order", { p_order_id: dRef }), /발급할 수 없어요|판매 기간이 지난 상품의 주문/));
+  eq("D5", "환불 예정 주문을 미수납 취소 RPC 로 닫을 수 없다(중복 처리 거부)", true, has(await rpc(MA, dRef, "unpaid_cancel"), /이미 처리가 기록된/));
+  eq("D6", "거부 시도 후에도 환불 예정 상태·결제 없음", ["pending", "refund_planned", 0], [await st(dRef), (await svc.from("order_expiry_resolutions").select("resolution").eq("order_id", dRef).single()).data?.resolution, await msCount(dRef)]);
+  const e7 = msg(await rpc(MA, dRef, "refund_complete"));
+  eq("D7", "전용 RPC refund_complete 만 환불 예정 주문을 취소한다", [null, "cancelled", "refund_completed"], [e7, await st(dRef), (await svc.from("order_expiry_resolutions").select("resolution").eq("order_id", dRef).single()).data?.resolution]);
+  await patch(A, dRef, "pending");
+  eq("D7b", "refund_complete 이후 REST 로 되살릴 수 없다", "cancelled", await st(dRef));
+  eq("D7c", "환불 예정 주문(회원 시도 대상)도 refund_complete 로 정리", [null, "cancelled"], [msg(await rpc(MA, dRef2, "refund_complete")), await st(dRef2)]);
+  // 만료 상품 주문(기록 없음)의 REST 직접 발급 우회: PATCH done/paid 거부 — 일반 발급 차단 유지
+  const dExp = await order(PX); created.push(dExp);
+  for (const to of ["done", "paid"]) { const r = await patch(MA, dExp, to); eq(`D8-${to}`, `만료 상품 주문 REST PATCH →${to} 거부(확정·발급 우회)`, "pending", await st(dExp), msg(r) ?? ""); }
+  // 미수납 취소는 전용 RPC 로 정상, 취소 후 재개 불가
+  const e9 = msg(await rpc(MA, dExp, "unpaid_cancel"));
+  eq("D9", "미수납 취소는 전용 RPC 로 동작(취소·결제 없음·이력 1건)", [null, "cancelled", 0, 1], [e9, await st(dExp), await msCount(dExp), await count("order_expiry_resolutions", "order_id", dExp)]);
+  await patch(MA, dExp, "pending");
+  eq("D10", "취소된 주문을 REST 로 되살릴 수 없다", "cancelled", await st(dExp));
+  // 일반 상품 주문의 기존 취소·발급·회원 자가 취소는 그대로
+  const dN1 = await order(PD), dN2 = await order(PD), dN3 = await order(PD);
+  eq("D11", "일반 상품: 관리자 REST 취소 정상", "cancelled", (await patch(MA, dN1, "cancelled")).data?.[0]?.status);
+  eq("D12", "일반 상품: 회원 본인 취소 정상", "cancelled", (await patch(A, dN2, "cancelled")).data?.[0]?.status);
+  const e13 = msg(await MA.rpc("fulfill_order", { p_order_id: dN3 }));
+  eq("D13", "일반 상품: 확정·발급 정상(done·결제 1건)", [null, "done", 1], [e13, await st(dN3), await msCount(dN3)]);
+  // 만료 상품 주문 + 포인트 사용: 환불 예정→환불 완료 시 포인트 복원(기존 트리거)은 RPC 안에서 그대로 동작
+  eq("D14", "RPC 경유 취소의 포인트 복원 경로가 트리거 가드에 막히지 않는다(unpaid_cancel 이미 C 단계에서 확인, 여기서는 refund_complete 상태 전이 성공)", "cancelled", await st(dRef));
+} finally { psql("drop trigger if exists exo_fail_trg on public.order_expiry_resolutions; drop function if exists public.exo_fail()"); }
 
   // ── 조회·쓰기 권한(RLS) ──
   eq("S1", "처리 이력 조회: 오너 가능(여러 건)", true, ((await MA.from("order_expiry_resolutions").select("order_id")).data ?? []).length >= 3);

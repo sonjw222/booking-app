@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-31 — 만료 상품 주문 처리 보강: 일반 취소/상태 변경 경로 우회 차단 (로컬, 운영 SQL 미실행)
+- 재현: 환불 예정(refund_planned) 주문을 관리자·회원이 REST PATCH(`orders` UPDATE 정책)로 pending→cancelled 로 닫을 수 있었고, 만료 상품 pending 주문을 REST 로 done 처리해 ‘확정·발급’ 차단을 우회할 수 있었음. `add_expired_order_resolution_20261031.sql` 에 트리거 `orders_guard_expired_resolution`(처리 기록 주문은 전용 RPC 밖에서 상태 변경 불가, 만료 상품 직접결제 주문의 paid/done 변경 차단)을 추가. fulfill_order 해시 불변.
+
 ## 2026-10-31 — 만료 상품 기존 pending 주문 처리 기능 (로컬 구현·검증, 운영 SQL 미실행)
 - `/manager/orders` 에서 판매 기간이 지난 상품의 대기 주문을 ‘미수납 확인→취소 / 수납 확인→환불(환불 예정→환불 완료 확인) / 수납 확인→이용기간 조정(해당 수강권 1건만) / 수납 불명→대기 유지’로 처리. 서버 RPC `manager_resolve_expired_order`(원자적, `pass.payment.create` 권한 재사용)와 이력 테이블 `order_expiry_resolutions`, `fulfill_order` 제자리 패치(만료 상품 직접 발급 우회 차단)는 제안 SQL `add_expired_order_resolution_20261031.sql` 세트로만 제공(운영·공유 DEV 미적용). 환불 경로는 payments 행을 만들지 않는다(가짜 매출·원장 중복 없음). 설계·절차: `docs/EXPIRED_ORDER_RESOLUTION_20261031.md`.
 

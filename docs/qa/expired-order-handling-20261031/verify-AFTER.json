@@ -420,12 +420,12 @@
    "name": "기간 조정: 이 주문의 수강권 1건에만 새 만료일 적용",
    "expected": [
     "2026-11-28",
-    "e8882940-85b9-45ea-8b40-7c3b2f17f4d4",
+    "5378045f-cc39-4476-b3f3-6a926c49286e",
     8
    ],
    "actual": [
     "2026-11-28",
-    "e8882940-85b9-45ea-8b40-7c3b2f17f4d4",
+    "5378045f-cc39-4476-b3f3-6a926c49286e",
     8
    ],
    "pass": true,
@@ -447,14 +447,14 @@
     "cash",
     80000,
     "2026-11-28",
-    "31d0502e-bd19-4caf-9ce5-353fad40474c"
+    "616274f1-8752-461f-b3ac-ff987be6d7fd"
    ],
    "actual": [
     "period_adjusted",
     "cash",
     80000,
     "2026-11-28",
-    "31d0502e-bd19-4caf-9ce5-353fad40474c"
+    "616274f1-8752-461f-b3ac-ff987be6d7fd"
    ],
    "pass": true,
    "extra": ""
@@ -558,6 +558,210 @@
    "name": "원자성: 롤백 뒤에도 만료 주문은 직접 발급 불가(임시 설정이 남지 않음)",
    "expected": true,
    "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D0",
+   "name": "준비: 환불 예정 기록",
+   "expected": null,
+   "actual": null,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D1",
+   "name": "관리자 REST PATCH pending→cancelled 거부(환불 예정 주문)",
+   "expected": [
+    "pending",
+    true
+   ],
+   "actual": [
+    "pending",
+    true
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D2",
+   "name": "회원 본인 취소(REST PATCH) 거부(환불 예정 주문)",
+   "expected": [
+    "pending",
+    true
+   ],
+   "actual": [
+    "pending",
+    true
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D3-done",
+   "name": "관리자 REST PATCH →done 거부(환불 예정 주문)",
+   "expected": "pending",
+   "actual": "pending",
+   "pass": true,
+   "extra": "만료 상품 주문 처리가 기록된 주문이에요. 주문 관리의 \"만료 상품 주문 처리\"에서 처리해주세요(일반 취소·상태 변경 불가)."
+  },
+  {
+   "id": "D3-paid",
+   "name": "관리자 REST PATCH →paid 거부(환불 예정 주문)",
+   "expected": "pending",
+   "actual": "pending",
+   "pass": true,
+   "extra": "만료 상품 주문 처리가 기록된 주문이에요. 주문 관리의 \"만료 상품 주문 처리\"에서 처리해주세요(일반 취소·상태 변경 불가)."
+  },
+  {
+   "id": "D4",
+   "name": "환불 예정 주문을 fulfill_order 로 발급 거부",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D5",
+   "name": "환불 예정 주문을 미수납 취소 RPC 로 닫을 수 없다(중복 처리 거부)",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D6",
+   "name": "거부 시도 후에도 환불 예정 상태·결제 없음",
+   "expected": [
+    "pending",
+    "refund_planned",
+    0
+   ],
+   "actual": [
+    "pending",
+    "refund_planned",
+    0
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D7",
+   "name": "전용 RPC refund_complete 만 환불 예정 주문을 취소한다",
+   "expected": [
+    null,
+    "cancelled",
+    "refund_completed"
+   ],
+   "actual": [
+    null,
+    "cancelled",
+    "refund_completed"
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D7b",
+   "name": "refund_complete 이후 REST 로 되살릴 수 없다",
+   "expected": "cancelled",
+   "actual": "cancelled",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D7c",
+   "name": "환불 예정 주문(회원 시도 대상)도 refund_complete 로 정리",
+   "expected": [
+    null,
+    "cancelled"
+   ],
+   "actual": [
+    null,
+    "cancelled"
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D8-done",
+   "name": "만료 상품 주문 REST PATCH →done 거부(확정·발급 우회)",
+   "expected": "pending",
+   "actual": "pending",
+   "pass": true,
+   "extra": "판매 기간이 지난 상품의 주문이에요. 주문 관리의 \"만료 상품 주문 처리\"에서 수납 여부를 확인해 처리해주세요."
+  },
+  {
+   "id": "D8-paid",
+   "name": "만료 상품 주문 REST PATCH →paid 거부(확정·발급 우회)",
+   "expected": "pending",
+   "actual": "pending",
+   "pass": true,
+   "extra": "판매 기간이 지난 상품의 주문이에요. 주문 관리의 \"만료 상품 주문 처리\"에서 수납 여부를 확인해 처리해주세요."
+  },
+  {
+   "id": "D9",
+   "name": "미수납 취소는 전용 RPC 로 동작(취소·결제 없음·이력 1건)",
+   "expected": [
+    null,
+    "cancelled",
+    0,
+    1
+   ],
+   "actual": [
+    null,
+    "cancelled",
+    0,
+    1
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D10",
+   "name": "취소된 주문을 REST 로 되살릴 수 없다",
+   "expected": "cancelled",
+   "actual": "cancelled",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D11",
+   "name": "일반 상품: 관리자 REST 취소 정상",
+   "expected": "cancelled",
+   "actual": "cancelled",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D12",
+   "name": "일반 상품: 회원 본인 취소 정상",
+   "expected": "cancelled",
+   "actual": "cancelled",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D13",
+   "name": "일반 상품: 확정·발급 정상(done·결제 1건)",
+   "expected": [
+    null,
+    "done",
+    1
+   ],
+   "actual": [
+    null,
+    "done",
+    1
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "D14",
+   "name": "RPC 경유 취소의 포인트 복원 경로가 트리거 가드에 막히지 않는다(unpaid_cancel 이미 C 단계에서 확인, 여기서는 refund_complete 상태 전이 성공)",
+   "expected": "cancelled",
+   "actual": "cancelled",
    "pass": true,
    "extra": ""
   },

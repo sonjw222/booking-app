@@ -121,11 +121,35 @@ test('만료 상품 주문 처리 RPC: 미수납 취소·환불 예정/완료·�
   } finally { await db.close(); }
 });
 
+test('상태 변경 가드 트리거: 환불 예정 주문을 일반 UPDATE(REST 취소 경로)로 닫을 수 없고, 만료 주문 paid/done 우회 차단, 일반 주문·RPC 는 정상', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(schema); await seed(db); await db.exec(`select set_config('test.uid', '${ACC_ADMIN}', false)`);
+    const R = await rec(db);
+    const upd = (oid, st) => err(db.query(`update orders set status = '${st}' where id = '${oid}'`));
+    const oRef = await order(db, 51, 1); await call(db, oRef, 'refund_plan', R.recv);
+    assert.match(await upd(oRef, 'cancelled'), /만료 상품 주문 처리가 기록된 주문/);          // 관리자 UPDATE 정책·회원 자가 취소 정책이 허용하는 일반 경로
+    for (const st of ['done', 'paid']) assert.match(await upd(oRef, st), /만료 상품 주문 처리가 기록된 주문/);
+    assert.equal(await status(db, oRef), 'pending');
+    await db.query(`select manager_resolve_expired_order('${oRef}','refund_complete','환불 완료')`);   // RPC 안의 전이만 허용
+    assert.equal(await status(db, oRef), 'cancelled');
+    const oExp = await order(db, 52, 1);                                                           // 기록 없는 만료 상품 주문
+    for (const st of ['done', 'paid']) assert.match(await upd(oExp, st), /판매 기간이 지난 상품의 주문/);
+    assert.equal(await status(db, oExp), 'pending');
+    await call(db, oExp, 'unpaid_cancel'); assert.equal(await status(db, oExp), 'cancelled');        // 미수납 취소는 RPC 로 정상
+    const oN = await order(db, 53, 3), oN2 = await order(db, 54, 3), oPg = await order(db, 55, 1, `payment_provider='nicepay'`);
+    assert.equal(await upd(oN, 'cancelled'), null); assert.equal(await upd(oN2, 'done'), null);        // 일반 상품 기존 취소·확정 불변
+    assert.equal(await upd(oPg, 'paid'), null);                                                    // PG 주문 승인 경로는 이 가드가 건드리지 않음
+    const oCancelExpired = await order(db, 56, 1); assert.equal(await upd(oCancelExpired, 'cancelled'), null);   // 기록 없는 만료 주문의 일반 취소(회원 자가 취소 등)는 기존대로
+  } finally { await db.close(); }
+});
+
 test('SQL 계약: 롤백 파일은 환불 예정 주문이 있으면 중단하고 처리 이력은 보존, fulfill_order 패치는 해시·치환 위치 가드를 가진다', () => {
   const RB = readFileSync(new URL('../../rollback_add_expired_order_resolution_20261031.sql', import.meta.url), 'utf8');
   assert.match(RB, /롤백 중단: 환불 예정으로 기록된 주문이/); assert.match(RB, /order_expiry_resolutions 에 처리 이력이 있어 테이블은 남겼어요/);
   assert.match(SQL, /삽입 위치 ①이 1곳이 아니에요/); assert.match(SQL, /삽입 위치 ②가 1곳이 아니에요/); assert.match(SQL, /패치 결과 해시가 기대값과 달라요 — 트랜잭션 전체를 롤백/);
   assert.match(SQL, /has_permission\(v_order\.center_id, 'pass\.payment\.create'\) or is_platform_admin\(\)/);   // 기존 fulfill_order 와 같은 권한 키(확대 없음)
+  assert.match(SQL, /create trigger orders_guard_expired_resolution before update of status on public\.orders/); assert.match(RB, /drop trigger if exists orders_guard_expired_resolution/);
   assert.doesNotMatch(SQL, /update\s+products|delete\s+from\s+(orders|memberships|payments)/i);                 // 상품·기존 데이터 직접 변경 없음
   assert.match(SQL, /grant execute on function public\.manager_resolve_expired_order\([^)]*\) to authenticated, service_role/);
   assert.match(SQL, /revoke all on function public\.manager_resolve_expired_order\([^)]*\) from public, anon/);
