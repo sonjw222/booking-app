@@ -71,3 +71,4 @@ supabase/.temp/
 /docs/qa/nicepay-main-integration-20261031/qa/dev-server.log
 /docs/qa/nicepay-main-integration-20261031/qa/control.json
 /docs/qa/nicepay-main-integration-20261031/qa/artifacts/
+/test-results-expiredqa/

@@ -6,7 +6,7 @@
 */
 
 import { supabase } from "./supabaseClient";
-import type { PeriodSource } from "./servicePeriod";
+import { isFixedExpiryPassed, type PeriodSource } from "./servicePeriod";
 import { sanitizeRichText } from "./security";
 import { getMyAccountId } from "./authAccount";
 import { computeSelectableSchedule, type ScheduleRule, type SelectableSchedule } from "./passes";
@@ -295,7 +295,8 @@ export function groupPublicProductsByCenter(products: PublicStorefrontProduct[])
 // 공개 RPC가 일부러 반환하지 않는 항목은 안전한 기본값 — 어차피 구매는 로그인 후
 // 회원용 경로(sizes 등 전체 필드)로 진행된다.
 async function fetchPublicCenterProducts(centerId: string): Promise<CenterProduct[]> {
-  const rows = await fetchPublicStorefrontProducts(centerId);
+  // 서버(fetch_public_storefront_products)가 고정 만료일이 지난 상품을 이미 뺀다 — SQL 미적용·오래된 응답 대비 방어선(같은 규칙).
+  const rows = (await fetchPublicStorefrontProducts(centerId)).filter((p) => !isFixedExpiryPassed(p.periodSource));
   return rows.map((p) => ({
     id: p.id, name: p.name, price: p.price, kind: p.kind,
     totalCount: p.totalCount, unlimited: p.unlimited,
@@ -384,6 +385,7 @@ async function fetchMemberCenterProducts(centerId: string): Promise<CenterProduc
 
   return rows
     .filter((p: any) => !p.purchase_count_selectable || (tiersByProduct[p.id]?.length ?? 0) > 0)
+    .filter((p) => !isFixedExpiryPassed(periodSourceFromRow(p)))   // 고정 만료일이 지난 상품은 구매 목록에서 제외(서버 fetch_purchasable_products 와 같은 규칙, 방어선)
     .map((p: any) => {
       const tiers = tiersByProduct[p.id] ?? [];
       return {
