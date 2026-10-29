@@ -95,6 +95,11 @@ export function computeServicePeriod(src: PeriodSource | null | undefined, payDa
   }
 }
 
+/** 고정 만료일(expiry_mode='date')이 "오늘(KST)"보다 이전이면 true — 서버(fixed_expiry_passed)와 같은 규칙. 오늘·미래·다른 만료 방식·정보 없음은 false(구매 가능으로 둔다 — 서버가 최종 판정). */
+export function isFixedExpiryPassed(src: PeriodSource | null | undefined, today: string = kstToday()): boolean {
+  return !!src && src.expiryMode === "date" && isDate(src.expiryDate) && src.expiryDate < today;
+}
+
 export type NicepayLimitFlag = "ok" | "unknown" | "open_ended" | "service_over_1y" | "prebooking_over_60d";
 export const NICEPAY_MAX_PREBOOKING_DAYS = 60;
 
@@ -115,6 +120,7 @@ export type PeriodText = { prebooking: string; service: string; note: string | n
 /** 고객에게 보여 줄 문구. 계산 기준일은 결제일(오늘)이다. */
 export function describeServicePeriod(p: ServicePeriod): PeriodText | null {
   if (!p.known || !p.startDate) return null;
+  if (p.mode === "date" && p.endDate && p.endDate < p.startDate) return null;   // 이미 지난 고정 만료일 — 종료일이 시작일보다 앞서는 기간을 만들어 보이지 않는다(상품은 목록에서 제외된다)
   const prebooking = p.preBookingDays === 0
     ? `없음 — 결제 완료일(${ko(p.payDate)})부터 바로 이용해요`
     : `결제일(${ko(p.payDate)}) ~ 이용 시작 전날(${ko(addDays(p.startDate, -1))}) · ${p.preBookingDays}일`;

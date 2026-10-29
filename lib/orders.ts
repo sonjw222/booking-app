@@ -107,6 +107,8 @@ export async function createOrder(input: {
     const { selected_day_of_week, selected_start_time, selected_count, ...withoutWeekday } = row;
     ({ data, error } = await supabase.from("orders").insert(withoutWeekday).select("id").single());
   }
+  // RLS 위반(42501)은 구매 자격이 없는 경우다 — 판매 기간(고정 만료일)이 지났거나 판매가 중지된 상품, 공개 범위 밖 상품. 서버 정책 메시지 대신 안내 문구를 쓴다.
+  if (error?.code === "42501") throw new Error("구매할 수 없는 상품이에요. 판매 기간이 지났거나 판매가 중지된 상품일 수 있어요.");
   if (error || !data) throw new Error("주문 생성에 실패했어요: " + (error?.message ?? "no data"));
   return data.id;
 }

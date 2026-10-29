@@ -1,5 +1,6 @@
 # TODO
 
+- **P0(승인)**: 만료 상품 자동 숨김 SQL(`preflight_/fix_/verify_/rollback_fix_expired_fixed_date_products_20261031.sql`) 운영 적용 — preflight → fix → verify 순서, 앱 배포는 순서 무관. 만료일 뒤 확정되는 기존 pending 주문의 발급은 막지 않는다(이미 만료된 수강권이 발급됨 — 정책 확인 필요).
 ## 2026-10-31 NICEPAY 최종 병합 준비
 - **P1(승인)**: 심사 센터 이름·상품·가격 확정 → `seed_nicepay_review_center_20261031_proposed.sql`; 심사 전용 별도 계정 지정 → `assign_nicepay_reviewer_20261031_proposed.sql`(둘 다 미실행).
 - **P2**: `tests/admin-qa/11-send-alimtalk-edge` 는 알리고 스텁이 걸린 별도 스택(`scripts/isolated/adminQa/secondStack.sh`)에서만 통과 — 병합 결과에서는 별도 스택으로 재확인 필요.

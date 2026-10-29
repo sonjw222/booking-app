@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-31 — 만료 상품 자동 노출 종료·신규 구매 차단 (로컬 구현·검증, 운영 SQL 미실행)
+- 고정 만료일(`expiry_mode='date'`, KST)이 지난 상품을 비회원·회원 목록에서 제외하고 신규 주문을 거부(제안 SQL 세트 `*_fix_expired_fixed_date_products_20261031.sql`). 오늘·미래·days·rolling_month·none 불변, 데이터 불변(조회 시점 계산). `member_can_purchase_product` 는 결제 확정·발급 의존이라 변경하지 않음. 클라이언트 방어선·날짜 롤오버(`useKstToday`). 상세 `docs/EXPIRED_PRODUCT_HIDE_20261031.md`.
+
 ## 2026-10-31 — 홈·공개 상품 하단 사업장 소재지를 환경변수 플래그(기본 꺼짐)로 제한 + 결제 비활성 매트릭스 (로컬)
 - 새로 노출되는 곳은 홈 푸터·`/products` 푸터뿐(기존 공개 범위는 `/legal/business`·관리자 구독 화면). 이제 `NEXT_PUBLIC_SHOW_BUSINESS_ADDRESS_IN_FOOTER=true` 일 때만 서버 라우트(`/api/public/business-address`)에서 받아 표시하며, 꺼진 빌드(기본·Preview·Production)의 홈·상품 번들·HTML 에는 주소가 없다(빌드 산출물로 확인). 주소 값은 `lib/businessAddress.ts` 로 분리했다.
 - 결제 비활성 3중 잠금 검증 추가: 코드 상수·DB 게이트·PG 결제수단 OFF(+레거시 PG 상수) — 환경변수 없는 Preview 빌드 포함(`tests/unit/nicepay.paymentOff.matrix.test.ts`, 브라우저 `NPQA_CONSTANT_OFF=1`).

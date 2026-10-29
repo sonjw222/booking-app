@@ -1,0 +1,443 @@
+{
+  "config": {
+    "argv": [
+      "/Users/sonjw/.nvm/versions/node/v24.19.0/bin/node",
+      "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-product-hide-20261031/node_modules/.bin/playwright",
+      "test",
+      "-c",
+      "playwright.expiredqa.config.ts"
+    ],
+    "configFile": "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-product-hide-20261031/playwright.expiredqa.config.ts",
+    "rootDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-product-hide-20261031/tests/expired-product-qa",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-product-hide-20261031/docs/qa/expired-product-hide-20261031/browser/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "desktop",
+        "name": "desktop",
+        "testDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-product-hide-20261031/tests/expired-product-qa",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 90000
+      },
+      {
+        "outputDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-product-hide-20261031/docs/qa/expired-product-hide-20261031/browser/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "mobile",
+        "name": "mobile",
+        "testDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-product-hide-20261031/tests/expired-product-qa",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 90000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "docs/qa/expired-product-hide-20261031/browser/results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "expired-hide.spec.ts",
+      "file": "expired-hide.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "[비회원] /products — 어제 만료 상품은 보이지 않고 오늘·내일·일수 상품은 보인다",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "desktop",
+              "projectName": "desktop",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1173,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T04:54:52.009Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39aba25635ee388f93c2-7ee88bd40df9ac663dfe",
+          "file": "expired-hide.spec.ts",
+          "line": 37,
+          "column": 5
+        },
+        {
+          "title": "[비회원] 센터 구매 시트 — 어제 만료 숨김, 이용기간이 거꾸로 표시되지 않음",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "desktop",
+              "projectName": "desktop",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1339,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T04:54:53.535Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39aba25635ee388f93c2-45afc16995e24c566653",
+          "file": "expired-hide.spec.ts",
+          "line": 43,
+          "column": 5
+        },
+        {
+          "title": "[로그인 회원] 구매 목록 — 어제 만료 숨김, 직접결제 주문 접수 가능(내일 만료 상품) + 카드·온라인 PG 미노출",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "desktop",
+              "projectName": "desktop",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1931,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T04:54:54.877Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39aba25635ee388f93c2-5b3bf585a39e12758a78",
+          "file": "expired-hide.spec.ts",
+          "line": 50,
+          "column": 5
+        },
+        {
+          "title": "[로그인 회원] 만료 상품 직접 URL — 결제 화면이 상품을 찾지 못하고 주문이 생기지 않는다",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "desktop",
+              "projectName": "desktop",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1165,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T04:54:56.811Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39aba25635ee388f93c2-25f1877b236351f23818",
+          "file": "expired-hide.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "[날짜 롤오버] 화면을 연 채 KST 자정이 지나면 오늘 만료 상품이 새로고침 없이 사라진다",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "desktop",
+              "projectName": "desktop",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 873,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T04:54:57.981Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39aba25635ee388f93c2-31da84d32dd08ccc9721",
+          "file": "expired-hide.spec.ts",
+          "line": 66,
+          "column": 5
+        },
+        {
+          "title": "[비회원] /products — 어제 만료 상품은 보이지 않고 오늘·내일·일수 상품은 보인다",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 796,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T04:54:59.080Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39aba25635ee388f93c2-561c7e9de5ac81d0fb38",
+          "file": "expired-hide.spec.ts",
+          "line": 37,
+          "column": 5
+        },
+        {
+          "title": "[비회원] 센터 구매 시트 — 어제 만료 숨김, 이용기간이 거꾸로 표시되지 않음",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 898,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T04:55:00.053Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39aba25635ee388f93c2-0da30d287fc28855641a",
+          "file": "expired-hide.spec.ts",
+          "line": 43,
+          "column": 5
+        },
+        {
+          "title": "[로그인 회원] 구매 목록 — 어제 만료 숨김, 직접결제 주문 접수 가능(내일 만료 상품) + 카드·온라인 PG 미노출",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1425,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T04:55:00.954Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39aba25635ee388f93c2-93520426fe73f4a49f97",
+          "file": "expired-hide.spec.ts",
+          "line": 50,
+          "column": 5
+        },
+        {
+          "title": "[로그인 회원] 만료 상품 직접 URL — 결제 화면이 상품을 찾지 못하고 주문이 생기지 않는다",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1082,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T04:55:02.382Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39aba25635ee388f93c2-103fe28b355288562d3c",
+          "file": "expired-hide.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "[날짜 롤오버] 화면을 연 채 KST 자정이 지나면 오늘 만료 상품이 새로고침 없이 사라진다",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 846,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T04:55:03.469Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "39aba25635ee388f93c2-94479620e1d46c0c7a3b",
+          "file": "expired-hide.spec.ts",
+          "line": 66,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-29T04:54:51.797Z",
+    "duration": 12592.522,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

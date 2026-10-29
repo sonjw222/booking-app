@@ -41,6 +41,8 @@ import BackButton from "../../components/BackButton";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import AppButton from "../../components/AppButton";
 import ServicePeriodNotice, { ServicePeriodGenericNote } from "../../components/ServicePeriodNotice";
+import { isFixedExpiryPassed } from "../../../lib/servicePeriod";
+import { useKstToday } from "../../../lib/useKstToday";
 import { loginHrefWithReturnToHere } from "../../../lib/postLoginReturn";
 import { shareLink } from "../../../lib/nativeShare";
 
@@ -96,6 +98,7 @@ function CenterDetailContent() {
   const [center, setCenter] = useState<CenterDetail | null>(null);
   const [classes, setClasses] = useState<CenterClass[]>([]);
   const [products, setProducts] = useState<CenterProduct[]>([]);
+  const kstTodayStr = useKstToday();   // 화면을 열어 둔 채 KST 자정이 지나면 갱신 — 고정 만료일이 지난 상품이 새로고침 없이 사라진다
   const [allowedPasses, setAllowedPasses] = useState<Record<string, string[]>>({});
   const [hasPass, setHasPass] = useState(false);
   const [buySheet, setBuySheet] = useState(false);
@@ -299,9 +302,10 @@ function CenterDetailContent() {
   }, [buySheet]);
 
   // 구매 sheet 목록: (수업 지정 필터) → 종류/그룹/검색 필터. 기존 정렬 순서는 그대로 두고 항목만 제거한다.
+  const purchasableProducts = useMemo(() => products.filter((p) => !isFixedExpiryPassed(p.periodSource, kstTodayStr)), [products, kstTodayStr]);
   const classScopedProducts = useMemo(
-    () => (filterProductIds && !showAllProducts ? products.filter((p) => filterProductIds.has(p.id)) : products),
-    [products, filterProductIds, showAllProducts],
+    () => (filterProductIds && !showAllProducts ? purchasableProducts.filter((p) => filterProductIds.has(p.id)) : purchasableProducts),
+    [purchasableProducts, filterProductIds, showAllProducts],
   );
   const groupLabels = useMemo(() => uniqueGroupLabels(classScopedProducts), [classScopedProducts]);
   const effectiveCatalogFilter = useMemo<CatalogFilterState>(

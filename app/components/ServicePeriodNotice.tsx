@@ -7,10 +7,14 @@
   variant: "block"(상세/결제 화면, 정보 없을 때 공통 안내 표시) · "compact"(목록 행, 정보 없으면 아무것도 안 그림 — 페이지 단위 공통 안내가 따로 있음)
 */
 import { useMemo } from "react";
-import { computeServicePeriod, describeServicePeriod, kstToday, PERIOD_GENERIC_NOTICE, type PeriodSource } from "../../lib/servicePeriod";
+import { computeServicePeriod, describeServicePeriod, isFixedExpiryPassed, kstToday, PERIOD_GENERIC_NOTICE, type PeriodSource } from "../../lib/servicePeriod";
 
 export default function ServicePeriodNotice({ source, variant = "block" }: { source: PeriodSource | null | undefined; variant?: "block" | "compact" }) {
   const text = useMemo(() => describeServicePeriod(computeServicePeriod(source, kstToday())), [source]);
+  // 이미 지난 고정 만료일 — 시작일이 종료일보다 늦는 기간을 만들지 않고 구매 불가 안내만 보인다(이런 상품은 목록·구매 화면에서 제외되므로 방어용)
+  if (isFixedExpiryPassed(source)) {
+    return <div className="service-period is-generic" role="note" data-testid="service-period-expired">판매 기간이 지난 상품이라 구매할 수 없어요.</div>;
+  }
   if (!text) {
     return variant === "compact" ? null : <div className="service-period is-generic" role="note" data-testid="service-period-generic">{PERIOD_GENERIC_NOTICE}</div>;
   }

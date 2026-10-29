@@ -18,6 +18,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import Loading from "../components/Loading";
 import ServicePeriodNotice, { ServicePeriodGenericNote } from "../components/ServicePeriodNotice";
+import { isFixedExpiryPassed } from "../../lib/servicePeriod";
+import { useKstToday } from "../../lib/useKstToday";
 import { fetchPublicStorefrontProducts, groupPublicProductsByCenter, type PublicStorefrontProduct } from "../../lib/center";
 import BusinessAddressLine from "../components/BusinessAddressLine";
 import { BUSINESS_INFO } from "../../lib/businessInfo";
@@ -42,7 +44,9 @@ export default function PublicProductsPage() {
       .catch((e) => setError(toUserMessage(e, "상품을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")));
   }, []);
 
-  const groups = products ? groupPublicProductsByCenter(products) : [];
+  const kstTodayStr = useKstToday();   // KST 자정이 지나면 갱신 — 고정 만료일이 지난 상품이 새로고침 없이 사라진다
+  const activeProducts = products ? products.filter((p) => !isFixedExpiryPassed(p.periodSource, kstTodayStr)) : null;
+  const groups = activeProducts ? groupPublicProductsByCenter(activeProducts) : [];
 
   return (
     <div className="app-shell">

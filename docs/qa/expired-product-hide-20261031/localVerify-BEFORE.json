@@ -1,0 +1,284 @@
+{
+ "fails": 7,
+ "results": [
+  {
+   "id": "L1",
+   "name": "비로그인 공개 목록: 어제 만료만 제외, 오늘·내일·30/60/90·무기한 유지",
+   "expected": [
+    "30일",
+    "60일",
+    "90일",
+    "내일",
+    "무기한",
+    "오늘"
+   ],
+   "actual": [
+    "30일",
+    "60일",
+    "90일",
+    "내일",
+    "무기한",
+    "어제",
+    "오늘"
+   ],
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "L2",
+   "name": "비로그인 기간 RPC: 어제 제외, 오늘·내일 포함",
+   "expected": [
+    false,
+    true,
+    true
+   ],
+   "actual": [
+    true,
+    true,
+    true
+   ],
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "L3",
+   "name": "비로그인 전체 목록(센터 미지정)에도 어제 만료 없음",
+   "expected": false,
+   "actual": true,
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "L4",
+   "name": "로그인 회원 구매 목록: 어제 만료만 제외",
+   "expected": [
+    "30일",
+    "60일",
+    "90일",
+    "내일",
+    "무기한",
+    "오늘"
+   ],
+   "actual": [
+    "30일",
+    "60일",
+    "90일",
+    "내일",
+    "무기한",
+    "어제",
+    "오늘"
+   ],
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "L5",
+   "name": "관리자(매니저) 상품 관리 조회: 만료 상품도 그대로 보임",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "O1",
+   "name": "직접 INSERT: 어제 만료 상품 신규 주문 거부(RLS)",
+   "expected": "DENIED(42501)",
+   "actual": "CREATED",
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "O2-t",
+   "name": "직접 INSERT: t 상품 신규 주문 허용",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "O2-n",
+   "name": "직접 INSERT: n 상품 신규 주문 허용",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "O2-d30",
+   "name": "직접 INSERT: d30 상품 신규 주문 허용",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "O2-d60",
+   "name": "직접 INSERT: d60 상품 신규 주문 허용",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "O2-d90",
+   "name": "직접 INSERT: d90 상품 신규 주문 허용",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "O2-none",
+   "name": "직접 INSERT: none 상품 신규 주문 허용",
+   "expected": "CREATED",
+   "actual": "CREATED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "O3",
+   "name": "create_order_secure: 어제 만료 직접 호출 거부(만료 메시지)",
+   "expected": true,
+   "actual": false,
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "O4",
+   "name": "create_order_secure: 오늘·내일 만료 허용",
+   "expected": [
+    "CREATED",
+    "CREATED"
+   ],
+   "actual": [
+    "CREATED",
+    "CREATED"
+   ],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "H1",
+   "name": "만료 상품의 기존 pending 주문이 회원 주문 내역에 그대로 보임",
+   "expected": 1,
+   "actual": 1,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "H2",
+   "name": "만료 상품으로 이미 받은 수강권이 그대로 보임",
+   "expected": 1,
+   "actual": 1,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "H3",
+   "name": "기존 pending 주문 확정(fulfill_order)은 만료와 무관하게 오류 없이 처리됨(발급 사고 방지)",
+   "expected": null,
+   "actual": null,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "H4",
+   "name": "확정 후 주문 상태 변경·수강권 발급",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "M1",
+   "name": "관리자가 만료 상품의 만료일을 수정할 수 있음(RLS 유지)",
+   "expected": 1,
+   "actual": 1,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "M2",
+   "name": "수정 후(미래 만료일) 목록에 다시 노출",
+   "expected": true,
+   "actual": true,
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "N1",
+   "name": "심사관 B: 심사 센터 상품은 보이되 어제 만료는 제외",
+   "expected": [
+    "심사오늘"
+   ],
+   "actual": [
+    "심사어제",
+    "심사오늘"
+   ],
+   "pass": false,
+   "extra": ""
+  },
+  {
+   "id": "N2",
+   "name": "일반 회원 A: 심사 센터 상품 0건(격리 유지)",
+   "expected": [],
+   "actual": [],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "N3",
+   "name": "심사관 B: 운영 센터 상품 0건(격리 유지)",
+   "expected": [],
+   "actual": [],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "N4",
+   "name": "비로그인 공개 목록에 심사 센터 상품 없음",
+   "expected": [],
+   "actual": [],
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "N5",
+   "name": "일반 회원 A 는 심사 센터 상품 직접 주문 거부",
+   "expected": "DENIED",
+   "actual": "DENIED",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "N6",
+   "name": "NICEPAY 게이트 off(결제 OFF 유지)",
+   "expected": "off",
+   "actual": "off",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "S1",
+   "name": "member_can_purchase_product 는 운영 정의 그대로(해시 d0233bd0…)",
+   "expected": "d0233bd03772ad129db6acc90f7e0dba",
+   "actual": "d0233bd03772ad129db6acc90f7e0dba",
+   "pass": true,
+   "extra": ""
+  },
+  {
+   "id": "S2",
+   "name": "상품 데이터는 자동으로 바뀌지 않음(어제 만료 상품 is_on_sale·is_active 유지)",
+   "expected": [
+    true,
+    true
+   ],
+   "actual": [
+    true,
+    true
+   ],
+   "pass": true,
+   "extra": ""
+  }
+ ]
+}

@@ -1,0 +1,6 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  1 failed | 51 passed (52)
+      Tests  1 failed | 327 passed | 3 skipped (331)
+로컬 격리 스택(운영과 같은 NICEPAY P2/P2b·환불 가드 SQL 적용 상태 + 이번 SQL 적용) 실행: 331건 중 330 통과, 1 실패([24-17] 셀프 환불 쿠폰 복원).
+[24-17] 은 이번 SQL 을 롤백한 상태에서도 똑같이 실패한다(원인: 로컬에 적용된 fix_refund_pg_origin_guard — "PG 결제 출처를 확인할 수 없는 수강권은 앱에서 환불할 수 없어요"). CI 의 기준 스택에는 그 SQL 이 없어 통과 — 이번 변경과 무관.
+첫 실행(29건 실패)은 로컬 페르소나(TEST_USER_B)가 NICEPAY 심사관으로 지정돼 있어 P2 가드("이 센터의 상품·수업은 이용할 수 없어요")가 fixture 를 막은 것 — 심사 권한 해제 후 재실행.

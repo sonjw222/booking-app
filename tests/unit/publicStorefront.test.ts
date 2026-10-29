@@ -211,7 +211,7 @@ describe("5. 공개 /products 페이지", () => {
   });
 
   it("그룹은 groupPublicProductsByCenter 결과만 그려 빈 센터를 렌더하지 않고, 이미지/내부 용어를 쓰지 않는다", () => {
-    expect(page).toContain("groupPublicProductsByCenter(products)");
+    expect(page).toContain("groupPublicProductsByCenter(activeProducts)");   // 만료 상품을 거른 목록(2026-10-31)
     expect(page).not.toMatch(/<img|Image\b|placeholder/i);
     expect(page).not.toMatch(/QA|테스트|토스 심사|review/i);
   });
