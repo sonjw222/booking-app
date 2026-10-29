@@ -1,5 +1,7 @@
 # TODO
 
+- **P0(승인)**: 만료 상품 기존 주문 처리 SQL(`preflight_/add_/verify_/rollback_add_expired_order_resolution_20261031.sql`) — PR #251 SQL 적용·검증 뒤에만 실행. 운영 pending 주문 2건(80,000원)은 이 기능 적용 후 관리자가 실제 수납 확인을 거쳐 처리(그 전에는 변경 금지). 절차: `docs/EXPIRED_ORDER_RESOLUTION_20261031.md`.
+- **P2**: 환불 경로는 payments(refund) 행을 만들지 않는다 — 환불 매출 차감이 필요한 정책이면 별도 결정. 기간 조정 매출의 `paid_at` 은 처리 시점(수납일은 이력에만).
 - **P0(승인)**: 만료 상품 자동 숨김 SQL(`preflight_/fix_/verify_/rollback_fix_expired_fixed_date_products_20261031.sql`) 운영 적용 — preflight → fix → verify 순서, 앱 배포는 순서 무관. 만료일 뒤 확정되는 기존 pending 주문의 발급은 막지 않는다(이미 만료된 수강권이 발급됨 — 정책 확인 필요).
 ## 2026-10-31 NICEPAY 최종 병합 준비
 - **P1(승인)**: 심사 센터 이름·상품·가격 확정 → `seed_nicepay_review_center_20261031_proposed.sql`; 심사 전용 별도 계정 지정 → `assign_nicepay_reviewer_20261031_proposed.sql`(둘 다 미실행).

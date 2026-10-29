@@ -66,7 +66,9 @@ describe("클라이언트/알림 표시", () => {
     const orders = read("lib/orders.ts"), purchases = read("app/purchases/page.tsx"), mgrOrders = read("app/manager/orders/page.tsx"), noti = read("lib/notifications.ts");
     for (const [name, src] of [["lib/orders.ts", orders], ["app/purchases/page.tsx", purchases], ["app/manager/orders/page.tsx", mgrOrders]] as const) {
       expect(src, `${name}: 알림 RPC/테이블을 직접 다루지 않는다`).not.toMatch(/push_notification|from\(["']notifications["']\)/);
-      expect(src, `${name}: 환불/주문취소 알림 kind를 만들지 않는다`).not.toMatch(/refund_completed|order_cancel(l)?ed/);
+      // 만료 상품 주문 처리(order_expiry_resolutions)의 처리 결과 값 "refund_completed"/컬럼 refund_completed_at 은 알림 kind 가 아니다 → 그 타입 선언만 제외하고 검사
+      const scan = src.replace(/export type ExpiredOrderResolutionKind = [^;]+;/, "").replace(/refund_completed_at/g, "");
+      expect(scan, `${name}: 환불/주문취소 알림 kind를 만들지 않는다`).not.toMatch(/refund_completed|order_cancel(l)?ed/);
     }
     // 알림 kind 목록/표시/링크에 주문 취소 알림이 없다(refund_completed만 이번 환불 알림 작업의 kind)
     expect(noti).not.toMatch(/order_cancel(l)?ed/);

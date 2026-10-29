@@ -5,6 +5,7 @@
   - 매니저가 주문 확인/완료 처리
 */
 
+import { isFixedExpiryPassed, kstToday } from "./servicePeriod";
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
 import { countKind, usageState, type CountKind, type UsageState } from "./membershipStatus";
@@ -215,6 +216,75 @@ export async function updateOrderStatus(
   if (!data || data.length === 0) {
     throw new Error("이미 처리됐거나 취소할 수 없는 상태의 주문이에요. 새로고침 후 다시 확인해주세요.");
   }
+}
+
+/* ============================================================
+   만료 상품 기존 pending 직접결제 주문 처리 (add_expired_order_resolution_20261031.sql)
+   - 상품의 고정 만료일(expiry_mode='date')이 지난 뒤에도 남아 있는 pending 주문은 그대로 "확정·발급"하면 처음부터 만료된 수강권이 된다.
+   - 센터 관리자가 실제 수납 여부를 확인해 처리한다: 미수납 → 취소 / 수납 → 환불(외부에서 환불 후 완료 확인) 또는 이용기간 조정 발급 / 불명 → 대기 유지.
+   - 판정·실제 처리는 서버(RPC manager_resolve_expired_order, fulfill_order 가드)가 한다. 아래는 화면 표시용 보조 함수다.
+   ============================================================ */
+export type ExpiredOrderResolutionKind = "unpaid_cancelled" | "refund_planned" | "refund_completed" | "period_adjusted";
+export type ExpiredOrderAction = "unpaid_cancel" | "refund_plan" | "refund_complete" | "adjust_period";
+export type ExpiredOrderResolution = {
+  orderId: string; resolution: ExpiredOrderResolutionKind; reason: string;
+  receivedAmount: number | null; receivedAt: string | null; receivedMethod: string | null;
+  newExpiresOn: string | null; handledAt: string; refundCompletedAt: string | null; refundNote: string | null;
+};
+export const RECEIVED_METHOD_LABEL: Record<string, string> = { cash: "현금", transfer: "계좌이체", card: "카드(센터 단말)", other: "기타" };
+
+/** 주문 화면에서 쓰는 만료 상품 주문 상태(순수 함수 — 테스트 대상). pending/paid 주문만 해당한다. */
+export type ExpiredOrderUiState = "normal" | "needs_confirmation" | "refund_planned" | "resolved";
+export function expiredOrderUiState(
+  o: { status: string; productId: string | null }, expiryByProduct: Record<string, { expiryMode: string | null; expiryDate: string | null }>,
+  resolution: ExpiredOrderResolution | undefined, today: string = kstToday(),
+): ExpiredOrderUiState {
+  if (resolution?.resolution === "refund_planned") return o.status === "pending" || o.status === "paid" ? "refund_planned" : "resolved";
+  if (resolution) return "resolved";
+  if (o.status !== "pending" && o.status !== "paid") return "normal";
+  const e = o.productId ? expiryByProduct[o.productId] : undefined;
+  return e && isFixedExpiryPassed({ expiryMode: e.expiryMode as never, expiryDate: e.expiryDate }, today) ? "needs_confirmation" : "normal";
+}
+
+/** 센터 상품의 만료 정보(주문의 상품이 고정 만료일을 지났는지 화면에서 표시하기 위한 읽기 전용 조회). */
+export async function fetchCenterProductExpiryMap(centerId: string): Promise<Record<string, { expiryMode: string | null; expiryDate: string | null }>> {
+  const { data, error } = await supabase.from("products").select("id, expiry_mode, expiry_date").eq("center_id", centerId).eq("expiry_mode", "date");
+  if (error) throw new Error("상품 만료 정보를 불러오지 못했어요: " + error.message);
+  type Row = { id: string; expiry_mode: string | null; expiry_date: string | null };
+  return Object.fromEntries(((data ?? []) as Row[]).map((p) => [p.id, { expiryMode: p.expiry_mode ?? null, expiryDate: p.expiry_date ?? null }]));
+}
+
+/** 처리 이력 조회. 서버 SQL 이 아직 적용되지 않은 환경(테이블 없음)은 serverReady=false 로 알려 화면이 처리 버튼을 막는다. */
+export async function fetchExpiredOrderResolutions(centerId: string): Promise<{ serverReady: boolean; byOrder: Record<string, ExpiredOrderResolution> }> {
+  const { data, error } = await supabase.from("order_expiry_resolutions")
+    .select("order_id, resolution, reason, received_amount, received_at, received_method, new_expires_on, handled_at, refund_completed_at, refund_note").eq("center_id", centerId);
+  if (error) {
+    if (error.code === "42P01" || error.code === "PGRST205" || /order_expiry_resolutions/.test(error.message)) return { serverReady: false, byOrder: {} };
+    throw new Error("만료 상품 주문 처리 이력을 불러오지 못했어요: " + error.message);
+  }
+  const byOrder: Record<string, ExpiredOrderResolution> = {};
+  type ResRow = { order_id: string; resolution: ExpiredOrderResolutionKind; reason: string; received_amount: number | null; received_at: string | null; received_method: string | null; new_expires_on: string | null; handled_at: string; refund_completed_at: string | null; refund_note: string | null };
+  for (const r of (data ?? []) as unknown as ResRow[]) byOrder[r.order_id] = {
+    orderId: r.order_id, resolution: r.resolution, reason: r.reason, receivedAmount: r.received_amount ?? null, receivedAt: r.received_at ?? null,
+    receivedMethod: r.received_method ?? null, newExpiresOn: r.new_expires_on ?? null, handledAt: r.handled_at, refundCompletedAt: r.refund_completed_at ?? null, refundNote: r.refund_note ?? null,
+  };
+  return { serverReady: true, byOrder };
+}
+
+export type ResolveExpiredOrderInput = {
+  orderId: string; action: ExpiredOrderAction; reason: string;
+  receivedAmount?: number; receivedAt?: string; receivedMethod?: string; newExpiresOn?: string; refundedAt?: string;
+};
+/** 관리자 처리(서버 RPC). 어느 단계든 실패하면 서버가 전부 롤백하고 오류 문구를 돌려준다. */
+export async function resolveExpiredOrder(i: ResolveExpiredOrderInput): Promise<{ orderStatus: string; resolution: string; membershipId: string | null }> {
+  const { data, error } = await supabase.rpc("manager_resolve_expired_order", {
+    p_order_id: i.orderId, p_action: i.action, p_reason: i.reason,
+    p_received_amount: i.receivedAmount ?? null, p_received_at: i.receivedAt ?? null, p_received_method: i.receivedMethod ?? null,
+    p_new_expires_on: i.newExpiresOn ?? null, p_refunded_at: i.refundedAt ?? null,
+  });
+  if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
+  const d = (data ?? {}) as { order_status?: string; resolution?: string; membership_id?: string | null };
+  return { orderStatus: d.order_status ?? "", resolution: d.resolution ?? "", membershipId: d.membership_id ?? null };
 }
 
 // 결제가 승인되기 "전에" 끝난 흐름(토스 failUrl 복귀, 결제창 즉시 닫힘, 직접결제 포인트 차감 실패 등)에서 방금 만든
