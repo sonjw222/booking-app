@@ -1,0 +1,12 @@
+{
+ "uiOrder": "pending/direct 생성됨(실제 UI 경로)",
+ "listHidden": "만료 상품이 센터 구매 목록에서 사라짐, 정상 상품은 표시",
+ "newOrderBlocked": "UI·직접 URL·REST INSERT 모두 차단 (error=new row violates row-level security policy for table \"orders)",
+ "managerWarning": "만료 주문 5건 경고+처리 버튼, 일반 발급 버튼 없음; 정상 주문은 기존 버튼",
+ "unknown": "pending 유지, 수강권·이력 변화 없음",
+ "unpaidCancel": "cancelled(1cb9ab5e), 결제 0, 이력 unpaid_cancelled",
+ "refund": "환불 예정 pending+이력 → 환불 완료 cancelled+기록, 결제/매출 0",
+ "adjust": "done, 결제 1건, 수강권 만료일 2026-12-14, 상품 만료일 불변",
+ "bypass": "fulfill_order 거부(판매 기간이 지난 상품의 주문이에요. 주문 관리의 \"만료 상품 주문 처리\"에서 수납 여부를), 직접 UPDATE(status/amount) 불변",
+ "normal": "일반 상품 주문은 기존 확정·발급 흐름으로 done, 이력 0"
+}

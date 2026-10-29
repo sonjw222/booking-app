@@ -1,0 +1,376 @@
+{
+  "config": {
+    "argv": [
+      "/Users/sonjw/.nvm/versions/node/v24.19.0/bin/node",
+      "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-order-prod-qa-20261030/node_modules/.bin/playwright",
+      "test",
+      "-c",
+      "playwright.expiredorderqa.config.ts",
+      "--project=mobile"
+    ],
+    "configFile": "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-order-prod-qa-20261030/playwright.expiredorderqa.config.ts",
+    "rootDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-order-prod-qa-20261030/tests/expired-order-qa",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-order-prod-qa-20261030/docs/qa/expired-order-production-qa-20261030/isolated-run/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "desktop",
+        "name": "desktop",
+        "testDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-order-prod-qa-20261030/tests/expired-order-qa",
+        "testIgnore": [],
+        "testMatch": [
+          "/member-to-manager\\.spec\\.ts/"
+        ],
+        "timeout": 180000
+      },
+      {
+        "outputDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-order-prod-qa-20261030/docs/qa/expired-order-production-qa-20261030/isolated-run/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "mobile",
+        "name": "mobile",
+        "testDir": "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-order-prod-qa-20261030/tests/expired-order-qa",
+        "testIgnore": [],
+        "testMatch": [
+          "/member-to-manager\\.spec\\.ts/"
+        ],
+        "timeout": 180000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/Users/sonjw/Documents/mwhabit-automation/worktrees/expired-order-prod-qa-20261030/docs/qa/expired-order-production-qa-20261030/isolated-run/results-e2e.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "member-to-manager.spec.ts",
+      "file": "member-to-manager.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "M1 회원: 로그인 → 센터 상품 목록 → 구매(직접결제) → pending 주문 생성",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3551,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T15:51:33.132Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "31640c4822fa8f39dbb4-cd01262d6a51df007108",
+          "file": "member-to-manager.spec.ts",
+          "line": 53,
+          "column": 5
+        },
+        {
+          "title": "M2 만료 후: 주문은 pending 유지 · 회원 목록에서 상품 사라짐 · 신규 주문 차단",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5634,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T15:51:36.946Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "31640c4822fa8f39dbb4-ad99111c6025e7070b52",
+          "file": "member-to-manager.spec.ts",
+          "line": 72,
+          "column": 5
+        },
+        {
+          "title": "T1 관리자: 센터 홈 · 주문 목록 · 만료 경고 · 처리 버튼 · 일반 발급 버튼 없음",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3759,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T15:51:42.584Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "31640c4822fa8f39dbb4-90becbfe8751286091a2",
+          "file": "member-to-manager.spec.ts",
+          "line": 112,
+          "column": 5
+        },
+        {
+          "title": "T2 수납 여부 모름 → 닫기만: pending 유지, 변경 없음",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1627,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T15:51:46.346Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "31640c4822fa8f39dbb4-0b5cd9541f2750123bff",
+          "file": "member-to-manager.spec.ts",
+          "line": 124,
+          "column": 5
+        },
+        {
+          "title": "T3 미수납 확인 → 주문 취소 → cancelled",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2701,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T15:51:47.977Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "31640c4822fa8f39dbb4-70e35c243a998e0db7ed",
+          "file": "member-to-manager.spec.ts",
+          "line": 133,
+          "column": 5
+        },
+        {
+          "title": "T4 수납 확인 + 환불: 환불 예정(pending·이력) → 환불 완료 → cancelled + 기록",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4103,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T15:51:50.681Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "31640c4822fa8f39dbb4-d95dfa318b9bc12d5222",
+          "file": "member-to-manager.spec.ts",
+          "line": 145,
+          "column": 5
+        },
+        {
+          "title": "T5 수납 확인 + 이용기간 조정 → 새 만료일 수강권 발급",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2914,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T15:51:54.788Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "31640c4822fa8f39dbb4-aa3c916c82277279342f",
+          "file": "member-to-manager.spec.ts",
+          "line": 164,
+          "column": 5
+        },
+        {
+          "title": "T6 우회 차단: 일반 발급 RPC·주문 직접 수정·미수납 위장 모두 서버 거부, 정상 상품 주문은 일반 흐름",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2576,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-29T15:51:57.706Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "31640c4822fa8f39dbb4-b51927b7b5afab43aa21",
+          "file": "member-to-manager.spec.ts",
+          "line": 180,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-29T15:51:32.930Z",
+    "duration": 27438.706,
+    "expected": 8,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

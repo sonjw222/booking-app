@@ -1,0 +1,38 @@
+{
+ "desktop": {
+  "productsExpiredVisible": 1,
+  "productsText": true,
+  "a10": {
+   "원데이안무반": false,
+   "4주완성": false,
+   "스케줄링 수강권": false,
+   "요일고정 수강권": false,
+   "원데이 클래스": false,
+   "비밀할인": false,
+   "문예지님": false,
+   "신규등록 이벤트": false,
+   "피겨화 대여": true,
+   "파티 수강권": true
+  },
+  "a10NegativePeriod": "n/a",
+  "qaCenterText": "‹ 센터 정보 센터를 찾을 수 없어요 M 모하빗 나에게 맞는 움직임 둘러보기 홈 찾기 예약 마이"
+ },
+ "mobile": {
+  "productsExpiredVisible": 1,
+  "productsText": true,
+  "a10": {
+   "원데이안무반": false,
+   "4주완성": false,
+   "스케줄링 수강권": false,
+   "요일고정 수강권": false,
+   "원데이 클래스": false,
+   "비밀할인": false,
+   "문예지님": false,
+   "신규등록 이벤트": false,
+   "피겨화 대여": true,
+   "파티 수강권": true
+  },
+  "a10NegativePeriod": "n/a",
+  "qaCenterText": "‹ 센터 정보 센터를 찾을 수 없어요 홈 찾기 예약 마이"
+ }
+}
