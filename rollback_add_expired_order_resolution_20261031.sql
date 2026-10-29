@@ -11,13 +11,13 @@ begin
     end if;
     v_def := pg_get_functiondef('public.fulfill_order(uuid)'::regprocedure); v_h := md5(v_def);
     if v_h = 'b675acdd9c48bba4b4a80891cbba0a76' then raise notice 'fulfill_order: 이미 적용 전 정의 — 건너뜀';
-    elsif v_h <> '18c4bb13b1b1f812b6dbef882f0ce068' then raise exception 'fulfill_order 현재 정의가 이 파일 적용본이 아니에요(해시 %) — 덮어쓰지 않고 중단합니다', v_h;
+    elsif v_h <> '935b66bebdd126ef7d36a80237036924' then raise exception 'fulfill_order 현재 정의가 이 파일 적용본이 아니에요(해시 %) — 덮어쓰지 않고 중단합니다', v_h;
     else
         v_new := replace(v_def, chr(10) ||
 '    -- expired_order_guard begin (2026-10-31)' || chr(10) ||
 '    if v_order.product_id is not null' || chr(10) ||
 '       and coalesce((select fixed_expiry_passed(p.expiry_mode, p.expiry_date) from products p where p.id = v_order.product_id), false)' || chr(10) ||
-'       and coalesce(current_setting(''app.expired_order_resolution'', true), '''') <> p_order_id::text then' || chr(10) ||
+'       and not exists (select 1 from order_expiry_authz a where a.txid = txid_current() and a.order_id = p_order_id) then' || chr(10) ||
 '        raise exception ''판매 기간이 지난 상품의 주문이에요. 주문 관리의 "만료 상품 주문 처리"에서 수납 여부를 확인해 처리해주세요.'';' || chr(10) ||
 '    end if;' || chr(10) ||
 '    if exists (select 1 from order_expiry_resolutions r where r.order_id = p_order_id) then' || chr(10) ||
@@ -25,8 +25,8 @@ begin
 '    end if;' || chr(10) ||
 '    -- expired_order_guard end', '');
         v_new := replace(v_new,
-'if coalesce(current_setting(''app.expired_order_resolution'', true), '''') = p_order_id::text then' || chr(10) ||
-'        v_expires := nullif(current_setting(''app.expired_order_new_expiry'', true), '''')::date;   -- 만료 상품 주문 처리(이용기간 조정): 이 주문의 수강권에만 적용' || chr(10) ||
+'if exists (select 1 from order_expiry_authz a where a.txid = txid_current() and a.order_id = p_order_id) then' || chr(10) ||
+'        v_expires := (select a.new_expires_on from order_expiry_authz a where a.txid = txid_current() and a.order_id = p_order_id limit 1);   -- 만료 상품 주문 처리(이용기간 조정): 이 주문의 수강권에만 적용' || chr(10) ||
 '    end if;' || chr(10) ||
 '    insert into memberships (', 'insert into memberships (');
         execute v_new;
@@ -37,7 +37,9 @@ begin
 end $$;
 drop trigger if exists orders_guard_expired_resolution on public.orders;
 drop function if exists public.orders_guard_expired_resolution();
+drop function if exists public._order_expiry_protected(uuid, uuid);
 drop function if exists public.manager_resolve_expired_order(uuid, text, text, integer, date, text, date, date);
+drop table if exists public.order_expiry_authz;
 do $$
 begin
     if to_regclass('public.order_expiry_resolutions') is not null then

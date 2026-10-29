@@ -33,7 +33,7 @@ describe("정적 계약", () => {
   it("SQL: 같은 권한 키 사용, 해시 가드, 직접 상품/주문 삭제 없음", () => {
     const s = read("add_expired_order_resolution_20261031.sql");
     expect(s).toContain("b675acdd9c48bba4b4a80891cbba0a76");
-    expect(s).toContain("18c4bb13b1b1f812b6dbef882f0ce068");
+    expect(s).toContain("935b66bebdd126ef7d36a80237036924");
     expect(s).toContain("pass.payment.create");
     expect(s).toMatch(/enable row level security/i);
     expect(s).not.toMatch(/drop\s+table|truncate/i);

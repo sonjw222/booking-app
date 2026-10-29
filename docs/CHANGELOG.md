@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-10-31 — 만료 상품 주문 처리 최종 우회 점검: 정체성 컬럼 변경·일반 취소·내부 설정 위조 차단 (로컬, 운영 SQL 미실행)
+- 재현: `authenticated` 에 orders 전 컬럼 UPDATE 권한이 있어 payment_provider/pay_method 를 바꾼 뒤(또는 한 PATCH 로) done 처리, 기록 없는 만료 주문의 관리자·회원 일반 취소가 가능했음. 트리거 `orders_guard_expired_resolution` 을 클라이언트 직접 UPDATE(authenticated/anon) 전용 가드로 재설계 — 대기 주문의 제공자·결제수단·상품·금액 잠금 + 만료/처리 기록 주문의 모든 상태 변경 차단(OLD 기준). 세션 설정(GUC) 인증을 폐지하고 내부 인증 테이블 `order_expiry_authz`(txid 범위, 클라이언트 접근 불가)로 대체 → fulfill_order 적용 후 해시 `935b66be…`.
+
 ## 2026-10-31 — 만료 상품 주문 처리 보강: 일반 취소/상태 변경 경로 우회 차단 (로컬, 운영 SQL 미실행)
 - 재현: 환불 예정(refund_planned) 주문을 관리자·회원이 REST PATCH(`orders` UPDATE 정책)로 pending→cancelled 로 닫을 수 있었고, 만료 상품 pending 주문을 REST 로 done 처리해 ‘확정·발급’ 차단을 우회할 수 있었음. `add_expired_order_resolution_20261031.sql` 에 트리거 `orders_guard_expired_resolution`(처리 기록 주문은 전용 RPC 밖에서 상태 변경 불가, 만료 상품 직접결제 주문의 paid/done 변경 차단)을 추가. fulfill_order 해시 불변.
 

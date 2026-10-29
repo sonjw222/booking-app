@@ -22,20 +22,21 @@ create table centers(id uuid primary key, name text); create table accounts(id u
 create table products(id uuid primary key, center_id uuid, name text, expiry_mode text, expiry_date date);
 create table memberships(id uuid primary key default gen_random_uuid(), profile_id uuid, center_id uuid, product_id uuid, expires_at date);
 create table payments(id uuid primary key default gen_random_uuid(), order_id uuid, membership_id uuid, total_amount int, memo text);
-create table orders(id uuid primary key default gen_random_uuid(), center_id uuid not null, profile_id uuid not null, product_id uuid, amount int, pay_method text default 'direct', payment_provider text, status text default 'pending', created_at timestamptz default now());
+create table orders(id uuid primary key default gen_random_uuid(), center_id uuid not null, profile_id uuid not null, product_id uuid, product_name text, pg_tid text, pg_claim_id uuid, amount int, pay_method text default 'direct', payment_provider text, status text default 'pending', created_at timestamptz default now());
 create table perms(account_id uuid, center_id uuid, key text);
 create function my_account_id() returns uuid language sql stable as $$ select id from accounts where auth_id = auth.uid() $$;
 create function has_permission(p_center uuid, p_key text) returns boolean language sql stable as $$ select exists (select 1 from perms where account_id = my_account_id() and center_id = p_center and key = p_key) $$;
 create function is_platform_admin() returns boolean language sql stable as $$ select false $$;
 create function my_managed_center_ids() returns setof uuid language sql stable as $$ select center_id from perms where account_id = my_account_id() $$;
 ${helper}
+grant usage on schema public to authenticated, anon; grant select, update on orders to authenticated, anon, service_role; grant select on products, perms, accounts to authenticated, anon;
 -- fulfill_order 스텁: 운영 fulfill_order 가 하는 일 중 RPC 계약에 필요한 부분(수강권·결제 생성, GUC 로 지정된 만료일, done 처리, 멱등)
 create function fulfill_order(p_order_id uuid) returns json language plpgsql security definer as $$
 declare o orders; mid uuid; exp date; begin
   select * into o from orders where id = p_order_id for update;
   if o.status = 'done' then return json_build_object('already_done', true); end if;
   select expiry_date into exp from products where id = o.product_id;
-  if coalesce(current_setting('app.expired_order_resolution', true), '') = p_order_id::text then exp := nullif(current_setting('app.expired_order_new_expiry', true), '')::date; end if;
+  if exists (select 1 from order_expiry_authz a where a.txid = txid_current() and a.order_id = p_order_id) then exp := (select new_expires_on from order_expiry_authz a where a.txid = txid_current() and a.order_id = p_order_id limit 1); end if;
   insert into memberships(profile_id, center_id, product_id, expires_at) values (o.profile_id, o.center_id, o.product_id, exp) returning id into mid;
   insert into payments(order_id, membership_id, total_amount, memo) values (p_order_id, mid, o.amount, '앱 주문 자동 발급');
   update orders set status = 'done' where id = p_order_id;
@@ -121,35 +122,54 @@ test('만료 상품 주문 처리 RPC: 미수납 취소·환불 예정/완료·�
   } finally { await db.close(); }
 });
 
-test('상태 변경 가드 트리거: 환불 예정 주문을 일반 UPDATE(REST 취소 경로)로 닫을 수 없고, 만료 주문 paid/done 우회 차단, 일반 주문·RPC 는 정상', async () => {
+test('클라이언트 UPDATE 가드: 환불 예정·만료 주문의 일반 취소/확정/제공자·결제수단·상품 변경 우회 차단, 일반 주문·서버 경로 정상, 내부 인증 위조 불가', async () => {
   const db = new PGlite();
   try {
     await db.exec(schema); await seed(db); await db.exec(`select set_config('test.uid', '${ACC_ADMIN}', false)`);
     const R = await rec(db);
-    const upd = (oid, st) => err(db.query(`update orders set status = '${st}' where id = '${oid}'`));
+    const client = async (sql) => { await db.exec('set role authenticated'); try { return await err(db.query(sql)); } finally { await db.exec('reset role'); } };
+    const upd = (oid, set) => client(`update orders set ${set} where id = '${oid}'`);
+    const pass = (e) => assert.equal(e, null);
     const oRef = await order(db, 51, 1); await call(db, oRef, 'refund_plan', R.recv);
-    assert.match(await upd(oRef, 'cancelled'), /만료 상품 주문 처리가 기록된 주문/);          // 관리자 UPDATE 정책·회원 자가 취소 정책이 허용하는 일반 경로
-    for (const st of ['done', 'paid']) assert.match(await upd(oRef, st), /만료 상품 주문 처리가 기록된 주문/);
+    for (const st of ['cancelled', 'done', 'paid']) assert.match(await upd(oRef, `status = '${st}'`), /판매 기간이 지난 상품의 주문/);
+    assert.match(await upd(oRef, `payment_provider = 'mock', status = 'done'`), /바꿀 수 없어요/);
     assert.equal(await status(db, oRef), 'pending');
-    await db.query(`select manager_resolve_expired_order('${oRef}','refund_complete','환불 완료')`);   // RPC 안의 전이만 허용
+    await db.query(`select manager_resolve_expired_order('${oRef}','refund_complete','환불 완료')`);   // RPC(definer, 실행 역할=소유자)는 가드 대상이 아님
     assert.equal(await status(db, oRef), 'cancelled');
-    const oExp = await order(db, 52, 1);                                                           // 기록 없는 만료 상품 주문
-    for (const st of ['done', 'paid']) assert.match(await upd(oExp, st), /판매 기간이 지난 상품의 주문/);
+    const oExp = await order(db, 52, 1);                                                             // 기록 없는 만료 직접결제 주문
+    for (const set of [`status = 'done'`, `status = 'paid'`, `status = 'cancelled'`, `payment_provider = 'mock'`, `payment_provider = 'mock', status = 'done'`, `pay_method = 'card'`, `product_id = '${id(3)}'`, `product_name = 'x'`, `amount = 1`, `product_id = '${id(3)}', status = 'done'`, `center_id = '${C2}'`])
+      assert.ok(await upd(oExp, set), `거부돼야 함: ${set}`);
     assert.equal(await status(db, oExp), 'pending');
-    await call(db, oExp, 'unpaid_cancel'); assert.equal(await status(db, oExp), 'cancelled');        // 미수납 취소는 RPC 로 정상
-    const oN = await order(db, 53, 3), oN2 = await order(db, 54, 3), oPg = await order(db, 55, 1, `payment_provider='nicepay'`);
-    assert.equal(await upd(oN, 'cancelled'), null); assert.equal(await upd(oN2, 'done'), null);        // 일반 상품 기존 취소·확정 불변
-    assert.equal(await upd(oPg, 'paid'), null);                                                    // PG 주문 승인 경로는 이 가드가 건드리지 않음
-    const oCancelExpired = await order(db, 56, 1); assert.equal(await upd(oCancelExpired, 'cancelled'), null);   // 기록 없는 만료 주문의 일반 취소(회원 자가 취소 등)는 기존대로
+    assert.deepEqual((await db.query(`select payment_provider, pay_method, product_id from orders where id='${oExp}'`)).rows[0], { payment_provider: null, pay_method: 'direct', product_id: id(1) });
+    await call(db, oExp, 'unpaid_cancel'); assert.equal(await status(db, oExp), 'cancelled');         // 미수납 취소는 RPC 로만 정상
+    // 일반(만료 아님) 상품 주문: 취소·확정 기존대로, 정체성 컬럼은 대기 주문에서 잠금
+    const oN = await order(db, 53, 3), oN2 = await order(db, 54, 3), oN3 = await order(db, 56, 3);
+    pass(await upd(oN, `status = 'cancelled'`)); pass(await upd(oN2, `status = 'done'`));
+    assert.match(await upd(oN3, `payment_provider = 'mock'`), /바꿀 수 없어요/);
+    // 서버(service_role / 소유자) 경로: PG 승인 이력이 있는 주문 취소 등은 이 가드의 대상이 아님
+    const oPg = await order(db, 55, 1, `payment_provider='nicepay'`);
+    await db.exec(`set role service_role`); try { await db.query(`update orders set status = 'cancelled' where id = '${oPg}'`); } finally { await db.exec('reset role'); }
+    assert.equal(await status(db, oPg), 'cancelled');
+    // 위조 불가: 클라이언트는 인증 테이블을 읽거나 쓸 수 없고, 세션 설정만으로 가드를 통과할 수 없다
+    const oF = await order(db, 57, 1);
+    assert.match(await client(`insert into order_expiry_authz(txid, order_id) values (txid_current(), '${oF}')`), /permission denied/);
+    assert.match(await client(`select * from order_expiry_authz`), /permission denied/);
+    await db.exec(`select set_config('app.expired_order_resolution', '${oF}', false), set_config('app.expired_order_new_expiry', '2099-01-01', false)`);
+    assert.ok(await upd(oF, `status = 'done'`));   // 설정값을 위조해도 PATCH 는 막힘(fulfill_order 가드는 격리 스택 F3 에서 검증)
+    assert.equal(await status(db, oF), 'pending');
+    await db.exec(`select set_config('app.expired_order_resolution', '', false)`);
+    // 기간 조정 발급 후 인증 행이 남지 않는다
+    const oA = await order(db, 58, 1); await call(db, oA, 'adjust_period', R.adj);
+    assert.equal((await db.query(`select count(*)::int c from order_expiry_authz`)).rows[0].c, 0);
+    assert.equal(await status(db, oA), 'done');
   } finally { await db.close(); }
 });
-
 test('SQL 계약: 롤백 파일은 환불 예정 주문이 있으면 중단하고 처리 이력은 보존, fulfill_order 패치는 해시·치환 위치 가드를 가진다', () => {
   const RB = readFileSync(new URL('../../rollback_add_expired_order_resolution_20261031.sql', import.meta.url), 'utf8');
   assert.match(RB, /롤백 중단: 환불 예정으로 기록된 주문이/); assert.match(RB, /order_expiry_resolutions 에 처리 이력이 있어 테이블은 남겼어요/);
   assert.match(SQL, /삽입 위치 ①이 1곳이 아니에요/); assert.match(SQL, /삽입 위치 ②가 1곳이 아니에요/); assert.match(SQL, /패치 결과 해시가 기대값과 달라요 — 트랜잭션 전체를 롤백/);
   assert.match(SQL, /has_permission\(v_order\.center_id, 'pass\.payment\.create'\) or is_platform_admin\(\)/);   // 기존 fulfill_order 와 같은 권한 키(확대 없음)
-  assert.match(SQL, /create trigger orders_guard_expired_resolution before update of status on public\.orders/); assert.match(RB, /drop trigger if exists orders_guard_expired_resolution/);
+  assert.match(SQL, /create trigger orders_guard_expired_resolution before update on public\.orders/); assert.doesNotMatch(SQL, /current_setting\('app\.expired|set_config\('app\.expired/); assert.match(RB, /drop trigger if exists orders_guard_expired_resolution/);
   assert.doesNotMatch(SQL, /update\s+products|delete\s+from\s+(orders|memberships|payments)/i);                 // 상품·기존 데이터 직접 변경 없음
   assert.match(SQL, /grant execute on function public\.manager_resolve_expired_order\([^)]*\) to authenticated, service_role/);
   assert.match(SQL, /revoke all on function public\.manager_resolve_expired_order\([^)]*\) from public, anon/);

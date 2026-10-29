@@ -169,6 +169,51 @@ try {
   eq("D13", "일반 상품: 확정·발급 정상(done·결제 1건)", [null, "done", 1], [e13, await st(dN3), await msCount(dN3)]);
   // 만료 상품 주문 + 포인트 사용: 환불 예정→환불 완료 시 포인트 복원(기존 트리거)은 RPC 안에서 그대로 동작
   eq("D14", "RPC 경유 취소의 포인트 복원 경로가 트리거 가드에 막히지 않는다(unpaid_cancel 이미 C 단계에서 확인, 여기서는 refund_complete 상태 전이 성공)", "cancelled", await st(dRef));
+
+  // ── E. 우회 심층 점검: 결제수단/제공자/상품 정보를 바꾼 뒤 상태 변경, 단일 PATCH 결합, 회원·관리자 JWT, 기록 없는 만료 주문의 일반 취소, 내부 설정 위조 ──
+  const row = async (id) => (await svc.from("orders").select("status,payment_provider,pay_method,product_id,amount,product_name").eq("id", id).single()).data;
+  const upd = (cl, id, obj) => cl.from("orders").update(obj).eq("id", id).select("status");
+  const intact = async (id) => { const r = await row(id); return [r.status, r.payment_provider, r.pay_method, r.product_id, r.amount]; };
+  const base = [ "pending", null, "direct", PX.id, 80000 ];
+  const eO = async () => { const id = await order(PX); created.push(id); return id; };
+  { const id = await eO(); await upd(MA, id, { payment_provider: "mock" }); await upd(MA, id, { status: "done" });
+    eq("E1", "관리자: payment_provider null→mock 후 status=done 거부(주문 원래 정체성 기준)", base, await intact(id)); }
+  { const id = await eO(); await upd(MA, id, { payment_provider: "mock", status: "done" });
+    eq("E2", "관리자: payment_provider+status 를 한 PATCH 로 거부", base, await intact(id)); }
+  { const id = await eO(); await upd(MA, id, { payment_provider: "mock", status: "cancelled" });
+    eq("E2b", "관리자: payment_provider+cancelled 한 PATCH 거부(만료 직접결제 주문은 일반 취소 불가)", base, await intact(id)); }
+  { const id = await eO(); await upd(MA, id, { pay_method: "card" }); await upd(MA, id, { status: "done" });
+    eq("E3", "관리자: pay_method 변경 후 status=done 거부", base, await intact(id)); }
+  { const id = await eO(); await upd(MA, id, { product_id: PD.id, product_name: "변조", amount: 1 }); await upd(MA, id, { status: "done" }); await upd(MA, id, { status: "paid" });
+    eq("E4", "관리자: product_id/product_name/amount 변경 후 status 변경 거부", base, await intact(id)); }
+  { const id = await eO(); await upd(MA, id, { status: "cancelled" });
+    eq("E5", "관리자: 처리 기록 없는 만료 직접결제 주문의 일반 취소 거부(정책: 수납 확인 전 일반 취소 불가)", base, await intact(id)); }
+  { const id = await eO(); await upd(A, id, { status: "cancelled" });
+    eq("E6", "회원 JWT: 처리 기록 없는 만료 주문 자가 취소 거부", base, await intact(id)); }
+  { const id = await eO(); await upd(A, id, { payment_provider: "mock", pay_method: "card", status: "cancelled" });
+    eq("E7", "회원 JWT: 제공자·결제수단을 바꾸며 취소 시도 거부", base, await intact(id)); }
+  { const id = await eO(); await upd(A, id, { product_id: PD.id, status: "cancelled" });
+    eq("E8", "회원 JWT: 상품을 바꾸며 취소 시도 거부", base, await intact(id)); }
+  { const id = await order(PD); created.push(id); await upd(MA, id, { payment_provider: "mock" }); const r = await row(id);
+    eq("E9", "일반(만료 아님) pending 주문의 제공자 변경도 클라이언트로는 불가(정체성 컬럼 잠금)", null, r.payment_provider); }
+  { const id = await order(PD); created.push(id); eq("E10", "일반 상품 주문의 취소(관리자)·확정은 그대로", "cancelled", (await upd(MA, id, { status: "cancelled" })).data?.[0]?.status);
+    const id2 = await order(PD); created.push(id2); eq("E10b", "일반 상품 주문 확정·발급 그대로", null, msg(await MA.rpc("fulfill_order", { p_order_id: id2 }))); }
+  { // 이미 PG 처리 중(claim 이력)인 주문은 이 가드의 대상이 아님 — 서비스 롤로 만든 승인 대기 NICEPAY 주문의 서버 취소 경로는 불변
+    const id = await order(PX, { payment_provider: "nicepay", pay_method: "card" }); created.push(id);
+    const r = await svc.from("orders").update({ status: "cancelled" }).eq("id", id).eq("status", "pending").eq("payment_provider", "nicepay").select("status");
+    eq("E11", "서버(service_role) NICEPAY 취소 경로 불변", "cancelled", r.data?.[0]?.status); }
+  // 내부 설정 위조 가능성: PostgREST 로 set_config 호출/헤더 주입/RPC 사전 설정 모두 불가
+  { const f = async (path, init) => (await fetch(url + path, { ...init, headers: { apikey: anon, Authorization: "Bearer " + (await MA.auth.getSession()).data.session.access_token, "Content-Type": "application/json", ...(init?.headers ?? {}) } })).status;
+    const s1 = await f("/rest/v1/rpc/set_config", { method: "POST", body: JSON.stringify({ setting_name: "app.expired_order_resolution", new_value: "x", is_local: true }) });
+    eq("F1", "PostgREST 로 set_config RPC 호출 불가(노출 안 됨)", true, [404, 401, 403].includes(s1), `status=${s1}`);
+    const id = await eO();
+    const s2 = await f(`/rest/v1/orders?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ status: "done" }), headers: { "app.expired_order_resolution": id, "x-app-expired-order-resolution": id, Prefer: "return=representation" } });
+    eq("F2", "헤더로 내부 설정을 주입해도 PATCH 우회 불가", base, await intact(id), `status=${s2}`);
+    const s3 = await MA.rpc("fulfill_order", { p_order_id: id });
+    eq("F3", "설정 위조 시도 후에도 fulfill_order 직접 발급 거부", true, has(s3, /판매 기간이 지난 상품의 주문/));
+    const bad = await MA.from("order_expiry_authz").insert({ txid: 1, order_id: id }); const bad2 = await MA.from("order_expiry_authz").select("*");
+    eq("F4", "내부 인증 테이블은 클라이언트가 쓰거나 읽을 수 없다", [true, true], [!!bad.error, !!bad2.error || !(bad2.data?.length)]);
+    const bad3 = await svc.from("order_expiry_authz").select("*"); eq("F5", "정상 처리 후 내부 인증 행이 남지 않는다", 0, bad3.data?.length ?? -1); }
 } finally { psql("drop trigger if exists exo_fail_trg on public.order_expiry_resolutions; drop function if exists public.exo_fail()"); }
 
   // ── 조회·쓰기 권한(RLS) ──

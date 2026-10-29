@@ -6,7 +6,9 @@ select
   to_regprocedure('public.manager_resolve_expired_order(uuid,text,text,integer,date,text,date,date)') is null              as rpc_not_yet_created_must_be_true,
   to_regprocedure('public.has_permission(uuid,text)') is not null and to_regprocedure('public.my_account_id()') is not null as helpers_exist_must_be_true,
   (select count(*) from pg_trigger where tgrelid = 'public.orders'::regclass and tgname in ('orders_guard_status_transition','orders_restore_points_on_cancel') and not tgisinternal) as order_triggers_must_be_2,
-  (select count(*) from pg_trigger where tgrelid = 'public.orders'::regclass and tgname = 'orders_guard_expired_resolution') = 0 as status_guard_not_yet_created_must_be_true;
+  (select count(*) from pg_trigger where tgrelid = 'public.orders'::regclass and tgname = 'orders_guard_expired_resolution') = 0 as status_guard_not_yet_created_must_be_true,
+  to_regclass('public.order_expiry_authz') is null as authz_table_not_yet_created_must_be_true,
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = '_order_expiry_protected') = 0 as protected_helper_not_yet_created_must_be_true;
 -- 참고(대상 규모): 만료된 고정 만료일 상품의 pending 주문 — 이 기능으로 처리할 대상
 select substr(o.id::text, 1, 8) as order_prefix, o.status, o.pay_method, o.payment_provider, o.amount, to_char(o.created_at at time zone 'Asia/Seoul', 'YYYY-MM-DD') as created_kst,
        p.expiry_date, o.points_used, (o.member_coupon_id is not null) as has_coupon
