@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-30 — 만료 주문 처리 E2E 격리 CI 추가·QA 증빙 정리 (PR #253 QA 보완, 운영 SQL 미실행)
+- 신규 workflow `.github/workflows/expired-order-qa.yml`: `tests/expired-order-qa/member-to-manager.spec.ts`(desktop+mobile 16 tests)를 러너 안의 일회용 Supabase 스택에서만 자동 실행. Secrets·공유 DEV·운영·실제 PG/알림 자격증명 없음, 앱 서버 :3021(기본 :3000 과 분리), 별도 러너·concurrency 그룹이라 기존 test.yml 과 무관. 운영과 같은 함수 정의 상태는 `scripts/isolated/expiredOrder/applyProdParity.sh` 가 러너의 로컬 컨테이너에만 적용.
+- spec 이 새 스택에서도 돌도록 센터 매니저 행을 없으면 생성(기존엔 사전 시드 가정). playwright 설정에 로컬 Supabase·실결제 자격증명 가드와 CI 전용 webServer 추가. 계약 테스트 `tests/unit/expiredOrderQaWorkflow.contract.test.ts` 추가, workflow 분류 목록(`liveTestEntrypoints.audit`)에 등록.
+- QA 증빙: `isolated-run/screenshots` 50장(본문 `screenshots/`와 바이트 동일·미참조) 삭제, 상품 목록 전/후 스크린샷(02/06)을 같은 기준 행으로 재촬영해 만료 상품 행의 존재/부재가 보이게 개선.
+
 ## 2026-10-31 — 만료 상품 주문 처리 최종 우회 점검: 정체성 컬럼 변경·일반 취소·내부 설정 위조 차단 (로컬, 운영 SQL 미실행)
 - 재현: `authenticated` 에 orders 전 컬럼 UPDATE 권한이 있어 payment_provider/pay_method 를 바꾼 뒤(또는 한 PATCH 로) done 처리, 기록 없는 만료 주문의 관리자·회원 일반 취소가 가능했음. 트리거 `orders_guard_expired_resolution` 을 클라이언트 직접 UPDATE(authenticated/anon) 전용 가드로 재설계 — 대기 주문의 제공자·결제수단·상품·금액 잠금 + 만료/처리 기록 주문의 모든 상태 변경 차단(OLD 기준). 세션 설정(GUC) 인증을 폐지하고 내부 인증 테이블 `order_expiry_authz`(txid 범위, 클라이언트 접근 불가)로 대체 → fulfill_order 적용 후 해시 `935b66be…`.
 

@@ -62,14 +62,19 @@ describe("live-test 진입점", () => {
   it("workflow 전수 목록: 새 workflow도 명시적 live/offline 분류를 요구한다", async () => {
     const { readdirSync } = await import("node:fs");
     const present = readdirSync(path.join(root, ".github/workflows")).sort();
-    const classified = ["admin-pagination.yml", "dev-agent.yml", "mobile-ui-qa.yml", "test.yml"];
+    const classified = ["admin-pagination.yml", "dev-agent.yml", "expired-order-qa.yml", "mobile-ui-qa.yml", "test.yml"];
     expect(present).toEqual(classified.filter(name => present.includes(name)));
     for (const name of ["admin-pagination.yml", "dev-agent.yml"].filter(name => present.includes(name))) {
       const workflow = rd(".github/workflows/" + name);
       expect(workflow).toMatch(/permissions:\n  contents: read/);
       expect(workflow).not.toMatch(/secrets\.|SUPABASE_URL|SERVICE_ROLE|supabase db|playwright test/);
       expect(workflow).toContain(name === "dev-agent.yml" ? "python -m unittest discover" : "node --test tests/sql/admin-center-pagination.test.mjs");
-    } // A: new offline tests; B: test.yml; C: mobile-ui-qa.yml
+    } // A: new offline tests; B: test.yml; C: mobile-ui-qa.yml; D: expired-order-qa.yml(격리 스택 전용 — 계약은 expiredOrderQaWorkflow.contract.test.ts 가 고정)
+    if (present.includes("expired-order-qa.yml")) {
+      const w = rd(".github/workflows/expired-order-qa.yml");
+      expect(w).toContain("uses: ./.github/actions/isolated-supabase");   // D 는 일회용 스택 action 을 쓰는 live 분류
+      expect(w).not.toMatch(/secrets\.|SERVICE_ROLE|supabase (link|db push|db query)/);
+    }
 
   });
 });

@@ -20,6 +20,8 @@ const kst = (d = 0) => psql(`select to_char((now() at time zone 'Asia/Seoul')::d
 const tag = crypto.randomBytes(2).toString("hex"); const nm = (s: string) => `EXQA${tag}${s}`;
 const shotDir = path.join(process.env.EXPIREDORDER_OUT ?? "test-results-expiredorderqa", "screenshots");
 const shot = async (page: Page, n: string, step: string, project: string, full = false) => { fs.mkdirSync(shotDir, { recursive: true }); await page.screenshot({ path: path.join(shotDir, `${n}-isolated-${step}-${project}.png`), fullPage: full }); };
+// 상품 목록 스크린샷 전/후 비교용: 같은 기준 행(정상 상품)을 화면 가운데로 스크롤해 만료 상품 행이 바로 위에 있는지(전) / 없는지(후)가 한눈에 보이게 한다. 화면 요소를 바꾸지 않고 스크롤만 한다.
+const focusProductList = async (page: Page) => { const anchor = page.locator(".center-product-row").filter({ hasText: nm("정상") }); await anchor.evaluate((el) => el.scrollIntoView({ block: "center" })); await page.waitForTimeout(400); await expect(anchor).toBeInViewport(); };
 const confirmDialog = async (page: Page) => { const b = page.getByRole("button", { name: /^(계속하기|확인)$/ }).last(); await b.waitFor({ state: "visible", timeout: 10_000 }); await b.click(); };
 test.describe.configure({ mode: "serial" });
 let OP = "", PROFILE = ""; const prod: Record<string, string> = {}; const ord: Record<string, string> = {}; const results: Record<string, string> = {};
@@ -37,8 +39,10 @@ test.beforeAll(async () => {
   OP = (await svc.from("centers").select("id").eq("name", "[QA] 심사 시험 스튜디오").single()).data!.id;
   PROFILE = psql(`select p.id from profiles p join accounts a on a.id = p.account_id where a.auth_id = (select id from auth.users where email = '${need("TEST_USER_A_EMAIL")}') limit 1`);
   if (!PROFILE) throw new Error("회원 프로필 없음");
-  // 매니저 A 를 격리 센터 오너로(격리 DB 한정)
-  psql(`update manager_centers set role_id = (select id from center_roles where center_id = '${OP}' and is_owner limit 1) where center_id = '${OP}' and account_id = (select a.id from accounts a where a.auth_id = (select id from auth.users where email = '${need("TEST_MANAGER_A_EMAIL")}'))`);
+  // 매니저 A 를 격리 센터 오너로(격리 DB 한정). 새 일회용 스택(CI)에는 이 센터에 매니저 행이 아직 없으므로 없으면 만들고, 있으면 오너 역할·active 로 맞춘다.
+  const mgrAcct = `(select a.id from accounts a where a.auth_id = (select id from auth.users where email = '${need("TEST_MANAGER_A_EMAIL")}'))`, ownerRole = `(select id from center_roles where center_id = '${OP}' and is_owner limit 1)`;
+  psql(`update manager_centers set role_id = ${ownerRole}, status = 'active' where center_id = '${OP}' and account_id = ${mgrAcct}`);
+  psql(`insert into manager_centers(account_id, center_id, role_id, status) select ${mgrAcct}, '${OP}', ${ownerRole}, 'active' where ${mgrAcct} is not null and not exists (select 1 from manager_centers where center_id = '${OP}' and account_id = ${mgrAcct})`);
   for (const [k, off] of [["만료", 1], ["정상", 30]] as const) {   // 만료 상품은 내일까지 판매 중으로 시작 — 회원이 UI 로 주문한 뒤 만료일을 어제로 바꾼다
     const r = await svc.from("products").insert({ center_id: OP, name: nm(k), price: 80000, product_kind: "pass", pass_type: "count", total_count: 5, is_active: true, is_on_sale: true, visibility_type: "all", expiry_mode: "date", expiry_date: kst(off) }).select("id").single();
     if (r.error) throw new Error(r.error.message); prod[k] = r.data.id;
@@ -55,7 +59,7 @@ test("M1 회원: 로그인 → 센터 상품 목록 → 구매(직접결제) →
   await login(page, need("TEST_USER_A_EMAIL"), need("TEST_USER_A_PASSWORD")); await shot(page, "01", "member-after-login", p);
   await page.goto(`/center/${OP}?buy=1`); await page.waitForLoadState("networkidle");
   const row = page.locator(".center-product-row").filter({ hasText: nm("만료") });
-  await expect(row).toBeVisible({ timeout: 20_000 }); await shot(page, "02", "member-center-product-list", p);
+  await expect(row).toBeVisible({ timeout: 20_000 }); await focusProductList(page); await expect(row).toBeInViewport(); await shot(page, "02", "member-center-product-list-before-expiry", p);
   await row.getByRole("button", { name: "구매" }).click();
   await page.waitForURL(/\/checkout/, { timeout: 20_000 }); await page.waitForLoadState("networkidle");
   await expect(page.getByText(nm("만료")).first()).toBeVisible(); await shot(page, "03", "member-checkout-product-detail", p, true);
@@ -79,7 +83,7 @@ test("M2 만료 후: 주문은 pending 유지 · 회원 목록에서 상품 사�
   await page.goto(`/center/${OP}?buy=1`); await page.waitForLoadState("networkidle");
   await expect(page.locator(".center-product-row").filter({ hasText: nm("정상") })).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(".center-product-row").filter({ hasText: nm("만료") })).toHaveCount(0);
-  await shot(page, "06", "member-expired-product-gone", p);
+  await focusProductList(page); await shot(page, "06", "member-expired-product-gone-after-expiry", p);
   results.listHidden = "만료 상품이 센터 구매 목록에서 사라짐, 정상 상품은 표시";
   // 직접 URL 로 결제 화면에 들어가 주문 시도 → 신규 주문이 생기면 안 된다
   const cnt = async () => (await svc.from("orders").select("id", { count: "exact", head: true }).eq("product_id", prod["만료"])).count ?? 0;

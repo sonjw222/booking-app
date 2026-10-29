@@ -1,0 +1,107 @@
+{
+ "note": "GitHub Actions expired-order-qa.yml 과 같은 단계를 로컬 일회용 스택에서 재현한 실행(db reset → 가드 → fixture → applyProdParity.sh → playwright :3021, CI=1). 운영/공유 DEV 미접속.",
+ "stats": {
+  "expected": 16,
+  "unexpected": 0,
+  "skipped": 0,
+  "flaky": 0
+ },
+ "tests": [
+  {
+   "project": "desktop",
+   "title": "M1 회원: 로그인 → 센터 상품 목록 → 구매(직접결제) → pending 주문 생성",
+   "status": "passed",
+   "duration_ms": 3877
+  },
+  {
+   "project": "desktop",
+   "title": "M2 만료 후: 주문은 pending 유지 · 회원 목록에서 상품 사라짐 · 신규 주문 차단",
+   "status": "passed",
+   "duration_ms": 5760
+  },
+  {
+   "project": "desktop",
+   "title": "T1 관리자: 센터 홈 · 주문 목록 · 만료 경고 · 처리 버튼 · 일반 발급 버튼 없음",
+   "status": "passed",
+   "duration_ms": 3899
+  },
+  {
+   "project": "desktop",
+   "title": "T2 수납 여부 모름 → 닫기만: pending 유지, 변경 없음",
+   "status": "passed",
+   "duration_ms": 1515
+  },
+  {
+   "project": "desktop",
+   "title": "T3 미수납 확인 → 주문 취소 → cancelled",
+   "status": "passed",
+   "duration_ms": 2250
+  },
+  {
+   "project": "desktop",
+   "title": "T4 수납 확인 + 환불: 환불 예정(pending·이력) → 환불 완료 → cancelled + 기록",
+   "status": "passed",
+   "duration_ms": 3362
+  },
+  {
+   "project": "desktop",
+   "title": "T5 수납 확인 + 이용기간 조정 → 새 만료일 수강권 발급",
+   "status": "passed",
+   "duration_ms": 2865
+  },
+  {
+   "project": "desktop",
+   "title": "T6 우회 차단: 일반 발급 RPC·주문 직접 수정·미수납 위장 모두 서버 거부, 정상 상품 주문은 일반 흐름",
+   "status": "passed",
+   "duration_ms": 2258
+  },
+  {
+   "project": "mobile",
+   "title": "M1 회원: 로그인 → 센터 상품 목록 → 구매(직접결제) → pending 주문 생성",
+   "status": "passed",
+   "duration_ms": 3792
+  },
+  {
+   "project": "mobile",
+   "title": "M2 만료 후: 주문은 pending 유지 · 회원 목록에서 상품 사라짐 · 신규 주문 차단",
+   "status": "passed",
+   "duration_ms": 6022
+  },
+  {
+   "project": "mobile",
+   "title": "T1 관리자: 센터 홈 · 주문 목록 · 만료 경고 · 처리 버튼 · 일반 발급 버튼 없음",
+   "status": "passed",
+   "duration_ms": 3761
+  },
+  {
+   "project": "mobile",
+   "title": "T2 수납 여부 모름 → 닫기만: pending 유지, 변경 없음",
+   "status": "passed",
+   "duration_ms": 1619
+  },
+  {
+   "project": "mobile",
+   "title": "T3 미수납 확인 → 주문 취소 → cancelled",
+   "status": "passed",
+   "duration_ms": 2762
+  },
+  {
+   "project": "mobile",
+   "title": "T4 수납 확인 + 환불: 환불 예정(pending·이력) → 환불 완료 → cancelled + 기록",
+   "status": "passed",
+   "duration_ms": 4190
+  },
+  {
+   "project": "mobile",
+   "title": "T5 수납 확인 + 이용기간 조정 → 새 만료일 수강권 발급",
+   "status": "passed",
+   "duration_ms": 2865
+  },
+  {
+   "project": "mobile",
+   "title": "T6 우회 차단: 일반 발급 RPC·주문 직접 수정·미수납 위장 모두 서버 거부, 정상 상품 주문은 일반 흐름",
+   "status": "passed",
+   "duration_ms": 2279
+  }
+ ]
+}

@@ -1,0 +1,71 @@
+name: Expired order QA (isolated)
+# 만료 상품 주문 처리 E2E(tests/expired-order-qa/member-to-manager.spec.ts, 회원 주문 생성 → 센터 관리자 처리, desktop+mobile 16 tests)를
+# 이 job 의 러너 안에 만든 일회용 Supabase 스택에서만 자동 실행한다. 공유 DEV·Production·호스팅 프로젝트·GitHub Secrets·실제 PG/알림 자격증명을 쓰지 않는다.
+#  · 기존 test.yml 의 E2E 4구간·Integration 과 별도 workflow/별도 러너/별도 concurrency 그룹이라 서로 영향이 없다(앱 서버 포트도 :3021 로 기본 :3000 과 다르다).
+#  · 일회용 스택 가드(isolatedTargetGuard)가 OK(kind=ephemeral-local-stack)가 아니면 이후 단계는 시작되지 않는다. 설정이 없다고 skip 하거나 다른 DB 로 대체하지 않는다.
+#  · 운영에 이미 적용된 SQL 과 같은 정의 상태를 만들기 위해 scripts/isolated/expiredOrder/applyProdParity.sh 가 "러너 안의 로컬 컨테이너"에만 SQL 을 적용한다(운영·DEV 로 가는 경로 없음).
+#  · artifact 는 스크린샷·결과 JSON 만 올린다(trace/video 는 올리지 않는다 — 이 저장소는 PUBLIC 이고 trace 에는 일회용 시험 계정 입력값이 남는다). retention 3일.
+on:
+  pull_request:
+    paths:
+      - 'tests/expired-order-qa/**'
+      - 'playwright.expiredorderqa.config.ts'
+      - 'scripts/isolated/expiredOrder/**'
+      - 'scripts/isolated/nicepayReview/localOperatingCenterSeed.sql'
+      - 'add_expired_order_resolution_20261031.sql'
+      - 'fix_expired_fixed_date_products_20261031.sql'
+      - 'app/manager/orders/**'
+      - 'app/center/**'
+      - 'app/checkout/**'
+      - 'lib/orders.ts'
+      - 'lib/center.ts'
+      - 'lib/servicePeriod.ts'
+      - '.github/workflows/expired-order-qa.yml'
+  workflow_dispatch:
+concurrency:
+  group: expired-order-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  expired-order-qa:
+    name: Expired order QA — member → manager E2E (Playwright, isolated Supabase stack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # 기존 live job 과 같은 실행 조건: push 제외, fork PR 제외(같은 저장소 PR·수동 실행만).
+    if: ${{ github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Isolated Supabase (ephemeral local stack — no shared DEV, no secrets)
+        uses: ./.github/actions/isolated-supabase
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Match production function definitions on the ephemeral stack (local container only)
+        run: bash scripts/isolated/expiredOrder/applyProdParity.sh
+      - name: Playwright expired-order member-to-manager (desktop + mobile)
+        timeout-minutes: 20
+        run: npx playwright test --config playwright.expiredorderqa.config.ts
+        env:
+          EXPIREDORDER_START_SERVER: "1"
+          EXPIREDORDER_OUT: ${{ runner.temp }}/expired-order-qa
+      - name: Collect evidence (screenshots + result JSON only)
+        if: always()
+        run: |
+          mkdir -p expired-order-qa-evidence
+          src="$RUNNER_TEMP/expired-order-qa"
+          if [ -d "$src/screenshots" ]; then cp -r "$src/screenshots" expired-order-qa-evidence/; fi
+          for f in "$src"/*.json; do if [ -f "$f" ]; then cp "$f" expired-order-qa-evidence/; fi; done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: expired-order-qa-evidence
+          path: expired-order-qa-evidence/
+          retention-days: 3
+          if-no-files-found: ignore
+      - name: Stop the isolated stack (always; nothing persists)
+        if: always()
+        run: supabase stop --no-backup --workdir isolated-supabase
