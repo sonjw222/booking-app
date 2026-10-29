@@ -1,0 +1,14 @@
+{
+  "rows": [
+    {
+      "fulfill_md5": "935b66bebdd126ef7d36a80237036924",
+      "qa_center": "pending/false",
+      "qa_products": 2,
+      "res_rows": 0,
+      "rpc": 1,
+      "tbl_authz": 1,
+      "tbl_res": 1,
+      "trg": 1
+    }
+  ],
+}
