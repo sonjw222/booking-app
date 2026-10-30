@@ -17,7 +17,7 @@ export default function RefundPolicyPage() {
       </div>
 
       <div className="legal-page">
-        <div className="legal-updated">시행일: 2026년 9월 2일</div>
+        <div className="legal-updated">시행일: 2026년 11월 9일</div>
 
         <h2>1. 발급 전 주문(결제 대기 중) 취소</h2>
         <p>
