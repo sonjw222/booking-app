@@ -17,7 +17,7 @@ export default function TermsPage() {
       </div>
 
       <div className="legal-page">
-        <div className="legal-updated">시행일: 2026년 9월 2일</div>
+        <div className="legal-updated">시행일: 2026년 11월 9일</div>
 
         <h2>제1조 (목적)</h2>
         <p>
@@ -121,7 +121,7 @@ export default function TermsPage() {
         </p>
 
         <h2>부칙</h2>
-        <p>이 약관은 2026년 9월 2일부터 시행합니다.</p>
+        <p>이 약관은 2026년 11월 9일부터 시행합니다.</p>
       </div>
     </div>
   );
