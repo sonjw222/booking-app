@@ -23,6 +23,12 @@ describe("법적 고지 — PG 표기(단일 출처)", () => {
   it("실제 구현에 없는 결제수단(카카오페이·토스페이)을 현재 제공 수단으로 단정하지 않는다", () => {
     for (const [name, src] of Object.entries(pages)) expect(src, name).not.toMatch(/카카오페이|토스페이(?!먼츠)/);
   });
+  it("제4조의 결제대금 수납 책임은 결제 조항 제9조를 참조한다", () => {
+    expect(pages.terms).toContain("대금 수납을 직접 처리하며(제9조)");
+    expect(pages.terms).not.toContain("대금 수납을 직접 처리하며(제12조)");
+    expect(pages.terms).toContain("제9조 (결제)");
+    expect(pages.terms).toContain("제12조 (분쟁해결 및 준거법)");
+  });
   it("약관 제9조: 온라인 결제는 현재 PG 로 수납·구매 화면의 수단만·과거 거래의 취소·환불은 계속 처리, 정산 구조는 유지", () => {
     expect(pages.terms).toContain("결제대행사({PAYMENT_GATEWAY_NAMES.current})");
     expect(pages.terms).toContain("구매\n          화면에 표시되는");
