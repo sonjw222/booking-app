@@ -18,8 +18,8 @@ export default function PrivacyPolicyPage() {
 
       <div className="legal-page">
         <div className="legal-updated">
-          공지일: 2026년 9월 20일<br />
-          시행일: 2026년 9월 27일
+          공지일: 2026년 10월 30일<br />
+          시행일: 2026년 11월 9일
         </div>
 
         <p>
