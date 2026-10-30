@@ -28,8 +28,8 @@ describe("레거시 PG(Toss/PortOne) 어댑터 보존 — 다시 켜지지 않�
     const nodeEnv = process.env.NODE_ENV; (process.env as Record<string, string>).NODE_ENV = "production";
     try { expect(resolveProviderName()).toBe("disabled"); process.env.NEXT_PUBLIC_PAYMENT_PROVIDER = "nicepay"; expect(getPaymentProvider()).toBeInstanceOf(NicepayPaymentProvider); } finally { (process.env as Record<string, string>).NODE_ENV = nodeEnv as string; }
   });
-  it("레거시 활성 상수와 NICEPAY 활성 상수는 모두 false, 상수가 false 인 동안 getLegacyProvider 는 항상 Disabled", () => {
-    expect(LEGACY_PG_CHECKOUT_ACTIVATED).toBe(false); expect(NICEPAY_CHECKOUT_ACTIVATED).toBe(false);
+  it("레거시는 영구 비활성, NICEPAY 코드는 심사 준비 상태여도 레거시를 열지 않는다", () => {
+    expect(LEGACY_PG_CHECKOUT_ACTIVATED).toBe(false); expect(NICEPAY_CHECKOUT_ACTIVATED).toBe(true);
     expect(getLegacyProvider("toss")).toBeInstanceOf(DisabledPaymentProvider); expect(getLegacyProvider("portone")).toBeInstanceOf(DisabledPaymentProvider);
   });
   it("체크아웃은 레거시 어댑터를 직접 참조하지 않는다(신규 결제 경로에 토스/포트원이 없음)", () => {

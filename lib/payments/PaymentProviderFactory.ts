@@ -41,8 +41,11 @@ export function resolveProviderName(): PaymentProviderName {
   return "mock";
 }
 
-// 코드 수준 이중 잠금: 환경변수를 nicepay로 바꿔도 이 상수를 true로 바꾸는 리뷰된 코드 변경(계약·SQL·서버 승인 라우트 완료 후) 없이는 결제창을 열지 않는다.
-export const NICEPAY_CHECKOUT_ACTIVATED: boolean = false;
+// NICEPAY 심사관 전용 결제 검증용 *코드 준비 단계*. 이 브랜치는 병합/운영 배포 전용 승인을 받기 전까지 main 에 반영하지 않는다.
+// 이 상수만 true 여도 결제는 불가: 서버 NICEPAY_CHECKOUT_ENABLED + 유효 키·RETURN URL + DB gate=reviewer 및 심사관·심사상품 확인이 모두 필요하다.
+// 일반 회원 UI는 NEXT_PUBLIC_PG_CHECKOUT_ENABLED=false 를 유지해야 하며 서버 DB gate 는 mode='reviewer' 만 허용한다.
+// PG 준비 여부와 무관하게 이전 Toss/PortOne 신규 결제는 비활성이다.
+export const NICEPAY_CHECKOUT_ACTIVATED: boolean = true;
 
 // 실제 PG 결제창으로 진행해도 되는 상태인지. mock은 PG가 아니므로 false.
 export function isOnlinePgCheckoutAvailable(): boolean {

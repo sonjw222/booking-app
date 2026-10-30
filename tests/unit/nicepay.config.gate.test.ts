@@ -9,10 +9,11 @@ const REST_ENV = { NICEPAY_CHECKOUT_ENABLED: "true", NICEPAY_API_FAMILY: "rest_v
 const V3_ENV = { NICEPAY_CHECKOUT_ENABLED: "true", NICEPAY_API_FAMILY: "v3_mid", NICEPAY_ENV: "production", NICEPAY_MID: "m", NICEPAY_MERCHANT_KEY: "k", NICEPAY_RETURN_BASE_URL: "https://app.example.test/", PAYMENT_RETURN_TOKEN_SECRET: "s" };
 
 describe("활성 조건 — 4가지가 모두 참이어야만 활성", () => {
-  it("코드 상수가 꺼져 있으면 환경변수가 전부 맞아도 비활성(환경변수로는 켤 수 없다)", () => {
-    expect(NICEPAY_CHECKOUT_ACTIVATED).toBe(false);
-    expect(loadNicepayConfig(REST_ENV)).toEqual({ ok: false, reason: "code_flag_off", missing: [] });
-    expect(getActiveNicepayConfig(REST_ENV).active).toBe(false);
+  it("코드가 심사 전용으로 준비돼도 서버 스위치가 꺼지면 비활성(503, 외부 호출 전 중단)", () => {
+    expect(NICEPAY_CHECKOUT_ACTIVATED).toBe(true);
+    const disabled = { ...REST_ENV, NICEPAY_CHECKOUT_ENABLED: "false" };
+    expect(loadNicepayConfig(disabled)).toEqual({ ok: false, reason: "disabled", missing: [] });
+    expect(getActiveNicepayConfig(disabled).active).toBe(false);
   });
   it("서버 활성 변수(NICEPAY_CHECKOUT_ENABLED)는 정확히 'true'일 때만", () => {
     for (const v of [undefined, "", "1", "TRUE", "yes", "false"]) expect(loadNicepayConfig({ ...REST_ENV, NICEPAY_CHECKOUT_ENABLED: v }, { codeFlag: true })).toMatchObject({ ok: false, reason: "disabled" });
@@ -37,13 +38,17 @@ describe("활성 조건 — 4가지가 모두 참이어야만 활성", () => {
     if (p.ok && p.config.family === "rest_v1") expect(p.config.apiBase).toBe("https://api.nicepay.co.kr");
     const v = loadNicepayConfig(V3_ENV, { codeFlag: true }); expect(v.ok && v.config.returnBaseUrl).toBe("https://app.example.test");
   });
-  it("클라이언트 팩토리: NEXT_PUBLIC_PAYMENT_PROVIDER=nicepay여도 결제창 진입은 코드 상수로 잠겨 있다", () => {
+  it("클라이언트 팩토리는 nicepay 를 선택할 수 있지만 서버 환경 및 DB 승인 없이 결제 성공을 뜻하지 않는다", () => {
     const prev = process.env.NEXT_PUBLIC_PAYMENT_PROVIDER; process.env.NEXT_PUBLIC_PAYMENT_PROVIDER = "nicepay";
-    try { expect(resolveProviderName()).toBe("nicepay"); expect(isOnlinePgCheckoutAvailable()).toBe(false); } finally { if (prev === undefined) delete process.env.NEXT_PUBLIC_PAYMENT_PROVIDER; else process.env.NEXT_PUBLIC_PAYMENT_PROVIDER = prev; }
+    try {
+      expect(resolveProviderName()).toBe("nicepay");
+      expect(isOnlinePgCheckoutAvailable()).toBe(true);
+      expect(getActiveNicepayConfig({ ...REST_ENV, NICEPAY_CHECKOUT_ENABLED: "false" }).active).toBe(false);
+    } finally { if (prev === undefined) delete process.env.NEXT_PUBLIC_PAYMENT_PROVIDER; else process.env.NEXT_PUBLIC_PAYMENT_PROVIDER = prev; }
   });
 });
 
-describe("비활성 결제 차단 — 모든 NICEPAY 라우트는 503, PG/DB 호출 없음", () => {
+describe("서버 설정이 비어 있는 경우 비활성 결제 차단 — NICEPAY 라우트 503, PG 호출 없음", () => {
   const post = (path: string, body: unknown, headers: Record<string, string> = {}, form = false) => new Request(`http://localhost${path}`, { method: "POST", headers: form ? headers : { "Content-Type": "application/json", ...headers }, body: form ? (body as FormData) : JSON.stringify(body) });
   it.each([
     ["prepare", () => import("../../app/api/payments/nicepay/prepare/route")],
@@ -62,7 +67,7 @@ describe("비활성 결제 차단 — 모든 NICEPAY 라우트는 503, PG/DB 호
   });
   it("승인 후 취소/환불 경로: 핸들러가 주입되지 않으면 NICEPAY 환불은 501 — buildDeps는 비활성에서 nicepayRefund를 붙이지 않는다", async () => {
     const { buildNicepayRefund } = await import("../../lib/payments/server/nicepay/runtime");
-    expect(buildNicepayRefund({} as never, { refundBegin: async () => ({ state: "locked" }), refundRelease: async () => ({ data: null, error: null }), dbRefund: async () => ({ data: null, error: null }) }, REST_ENV)).toBeUndefined();
+    expect(buildNicepayRefund({} as never, { refundBegin: async () => ({ state: "locked" }), refundRelease: async () => ({ data: null, error: null }), dbRefund: async () => ({ data: null, error: null }) }, { ...REST_ENV, NICEPAY_CHECKOUT_ENABLED: "false" })).toBeUndefined();
   });
   it("복귀 주소: http://localhost 는 sandbox 에서만 허용(production·다른 http 호스트는 거부)", () => {
     const base = { ...V3_ENV, NICEPAY_ENV: "sandbox", NICEPAY_RETURN_BASE_URL: "http://localhost:3000" };
