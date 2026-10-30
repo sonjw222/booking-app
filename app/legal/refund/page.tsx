@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PAYMENT_GATEWAY_NAMES } from "../../../lib/paymentGatewayNotice";
 export const metadata: Metadata = {
   title: "환불·취소 정책",
   description: "모하빗(MWHABIT)의 수강권·상품 환불 및 예약 취소 정책.",
@@ -16,7 +17,7 @@ export default function RefundPolicyPage() {
       </div>
 
       <div className="legal-page">
-        <div className="legal-updated">시행일: 2026년 9월 2일</div>
+        <div className="legal-updated">시행일: 2026년 11월 9일</div>
 
         <h2>1. 발급 전 주문(결제 대기 중) 취소</h2>
         <p>
@@ -30,7 +31,7 @@ export default function RefundPolicyPage() {
           <li>수강권이 발급(결제 확정)된 시점으로부터 24시간 이내일 것</li>
           <li>발급된 수강권을 한 번도 사용하지 않았을 것(횟수제 수강권은 잔여 횟수가 전혀
             차감되지 않은 상태). 무제한 횟수·무제한 기간 수강권은 사용 이력을 앱에서 자동
-            확인하기 어려워 24시간 이내 신청 시에만 환불이 가능합니다.</li>
+            확인하기 어려워 24시간 이내 신청 건에 한해 이 항의 앱 내 무조건 전액환불 혜택을 제공합니다.</li>
         </ul>
         <p>
           위 조건(24시간·미사용)은 회원 편의를 위해 모하빗이 자체적으로 제공하는
@@ -64,8 +65,9 @@ export default function RefundPolicyPage() {
 
         <h2>4. 결제수단별 환불 처리</h2>
         <p>
-          신용카드·카카오페이·토스페이로 결제한 건은 결제대행사(토스페이먼츠)를 통해 승인
-          취소되고, 계좌이체로 결제한 건은 등록하신 계좌로 재입금하는 방식으로 환불됩니다.
+          신용카드 등 온라인 결제 수단으로 결제한 건은 결제 당시의 결제대행사
+          (현재 {PAYMENT_GATEWAY_NAMES.current}, 과거 {PAYMENT_GATEWAY_NAMES.legacy}로 결제된 건은 {PAYMENT_GATEWAY_NAMES.legacy})를
+          통해 승인 취소되고, 계좌이체로 결제한 건은 등록하신 계좌로 재입금하는 방식으로 환불됩니다.
           결제수단별 정책에 따라 실제 환불까지 영업일 기준 며칠 소요될 수 있습니다. 센터 현장
           결제 건만 회사를 거치지 않으므로 해당 센터와 별도로 협의합니다.
         </p>

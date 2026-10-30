@@ -13,6 +13,6 @@ PSQL < fix_accounts_insert_privileged_columns_20261030.sql >/dev/null   # PR #24
 PSQL < add_public_storefront_product_periods_20261027.sql >/dev/null
 PSQL < add_nicepay_review_center_isolation_20261028.sql >/dev/null
 PSQL < fix_nicepay_gate_reviewer_flag_20261029.sql >/dev/null
-PSQL < seed_nicepay_review_center_20261028.sql
+PSQL < seed_nicepay_review_center_20261031_proposed.sql   # 운영 P3 에 실행할 재검토본(심사용 이름·소개)을 그대로 시험한다
 PSQL -v ub="$TEST_USER_B_EMAIL" -v ua="$TEST_USER_A_EMAIL" -v ma="$TEST_MANAGER_A_EMAIL" -v mb="$TEST_MANAGER_B_EMAIL" < scripts/isolated/nicepayReview/localPersonas.sql
 echo "setupLocal OK"

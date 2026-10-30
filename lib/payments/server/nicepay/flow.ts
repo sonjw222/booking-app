@@ -10,6 +10,7 @@
 import { mintReturnToken, verifyReturnToken } from "../returnToken";
 import { nicepaySign } from "./signature";
 import { ediDateOf } from "./api";
+import { toNicepayGoodsName } from "./goodsName";
 import { handleNicepayRestAuthReturn, classifyRestWebhook, type RestDeps } from "./restLifecycle";
 import { handleNicepayAuthReturn, classifyNicepayWebhook, type NicepayDeps } from "./lifecycle";
 import type { NicepayConfig } from "./config";
@@ -49,7 +50,7 @@ async function uidFrom(input: { token?: string | null; returnToken?: unknown; or
   return null;
 }
 
-const goodsNameOf = (raw: unknown) => (typeof raw === "string" && raw.trim() ? Array.from(raw.trim()).slice(0, 20).join("") : "모하빗 수강권");   // 표시용(최대 40바이트 이내로 짧게). 금액/상품 결정에 쓰지 않는다
+const goodsNameOf = (raw: unknown) => toNicepayGoodsName(raw);   // 표시용: EUC-KR 로 표현 가능한 문자만, 최대 40바이트(공식 문서). 금액/상품 결정에 쓰지 않는다
 
 export async function handlePrepare(input: { token: string | null; orderId?: unknown; orderName?: unknown }, d: FlowDeps, now: Date = new Date()): Promise<Reply> {
   if (!isMemberPassMoid(input.orderId)) return { status: 400, body: { error: "orderId가 올바르지 않아요" } };   // 회원 수강권 주문(UUID)만 — 구독 결제 주문번호는 이 도메인에 들어오지 못한다

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PAYMENT_GATEWAY_NAMES } from "../../../lib/paymentGatewayNotice";
 export const metadata: Metadata = {
   title: "개인정보처리방침",
   description: "모하빗(MWHABIT)의 개인정보 처리방침.",
@@ -17,8 +18,8 @@ export default function PrivacyPolicyPage() {
 
       <div className="legal-page">
         <div className="legal-updated">
-          공지일: 2026년 9월 20일<br />
-          시행일: 2026년 9월 27일
+          공지일: 2026년 10월 30일<br />
+          시행일: 2026년 11월 9일
         </div>
 
         <p>
@@ -45,8 +46,8 @@ export default function PrivacyPolicyPage() {
           <li><strong>결제 관련 안내</strong>: 현재 일반 회원용 온라인 PG 결제는 비활성화되어
             있으며, 센터 직접결제 신청 및 관리자 수동 결제 기록을 처리합니다. 이 과정에서
             회사는 카드 원문 번호를 입력받거나 저장하지 않습니다. 향후 온라인 PG 결제를
-            활성화하는 경우 결제 승인에 필요한 정보는 결제대행사로 전달되고 결제수단 원본
-            정보는 결제대행사가 보관·관리합니다.</li>
+            활성화하는 경우 결제 승인에 필요한 정보는 결제대행사({PAYMENT_GATEWAY_NAMES.current})로 전달되고
+            결제수단 원본 정보는 결제대행사가 보관·관리합니다.</li>
           <li><strong>센터(사업자) 회원가입 시</strong>: 상호, 대표자명, 사업자등록번호,
             사업자등록증 사본, 사업장 주소, 연락처</li>
         </ul>
@@ -144,7 +145,8 @@ export default function PrivacyPolicyPage() {
         <p>회사는 서비스 제공을 위해 다음과 같이 개인정보 처리업무를 위탁하고 있습니다.</p>
         <table>
           <tbody>
-            <tr><th>토스페이먼츠</th><td>온라인 PG 결제 기능 활성화 시 결제 승인·취소 처리</td></tr>
+            <tr><th>{PAYMENT_GATEWAY_NAMES.current}</th><td>온라인 PG(신용카드) 결제 기능 활성화 시 결제 승인·취소 처리</td></tr>
+            <tr><th>{PAYMENT_GATEWAY_NAMES.legacy}</th><td>과거 {PAYMENT_GATEWAY_NAMES.legacy}로 결제된 거래의 조회·취소·환불 처리</td></tr>
             <tr><th>Supabase Inc.</th><td>회원 데이터베이스 저장, 인증, 파일(사진 등) 저장</td></tr>
             <tr><th>Vercel Inc.</th><td>서비스(웹/앱) 호스팅</td></tr>
             <tr><th>Cloudflare, Inc.</th><td>웹사이트 실제 사용자 모니터링(RUM), 성능 측정 및 품질 분석</td></tr>

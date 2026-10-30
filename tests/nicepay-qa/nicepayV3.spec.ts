@@ -211,7 +211,7 @@ test("[홈 푸터·상품 기간] 비로그인 홈 푸터에 사업자 정보(�
   expect(footer.includes(BUSINESS_INFO.businessRegNo) && footer.includes(BUSINESS_INFO.companyName)).toBe(true);
   await ctx.close();
   const b = await openAs(browser, "B"); setGate("reviewer");
-  for (const n of ["1회", "4주", "3개월"]) {
+  for (const n of ["1회", "5회", "10회"]) {
     await gotoCheckout(b.page, reviewProduct(n));
     await expect(b.page.getByText("사전예약기간").first()).toBeVisible(); await expect(b.page.getByText("서비스 제공기간").first()).toBeVisible(); await expect(b.page.getByTestId("service-period-prebooking")).toBeVisible();
     const sp = (await b.page.getByTestId("service-period-service").innerText()).replace(/\s+/g, " ");

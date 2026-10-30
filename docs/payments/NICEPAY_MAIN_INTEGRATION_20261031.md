@@ -1,5 +1,7 @@
 # NICEPAY v3 결제창 통합 — 최신 main 기준 통합·격리 브라우저 QA (2026-10-31, 로컬)
 
+> **최신 상태 안내(2026-10-30)**: §6 의 심사 상품 값(1,000/4,000/10,000원, 7/28/90일)은 제안 개정본(`seed_nicepay_review_center_20261031_proposed.sql`: 15,000/60,000/110,000원, 30/60/90일, 이름 "N회 이용권 (심사용)")으로 대체됨. 최신: `NICEPAY_CARD_REVIEW_FINAL_20261030.md`.
+
 브랜치 `feat/nicepay-main-integration-20261031` = `origin/main`(f0df513, 배포 중인 SHA) + `feat/nicepay-review-integrated-20261029`(b555415) 병합 + 통합 QA 에서 발견한 수정. **운영·공유 DEV 변경, 실제 NICEPAY 호출, 결제 활성화, push/PR/병합은 하지 않았다.**
 
 ## 1. 충돌 분석(통합 전)

@@ -1,5 +1,10 @@
 # TODO
 
+- **P0(승인·콘텐츠)**: 카드사 심사 전 `/products` 에 **실제 판매 수강권** 등록(10/31 이후 공개 상품은 "테스트" 1건뿐 — 숨기면 목록이 빔) + "테스트"(100원) 비공개(센터 화면 "판매 정지" 또는 `hide_public_test_product_20261030_proposed.sql`). 상세: `docs/payments/NICEPAY_CARD_REVIEW_FINAL_20261030.md` §4.
+- **P0(승인)**: 법적 고지 변경 반영의 시행일·공지 절차 결정(약관 제3조 7일 전 공지; 시행일 미변경). NICEPAY 정식 상호·위탁 범위·보유기간 확인 후 `lib/paymentGatewayNotice.ts`·처리위탁 표 구체화.
+- **P1(승인)**: P3 실행 — 이름·가격·기간 확정 → 심사 전용 계정 이메일 확정 → `preflight_nicepay_review_p3_20261030.sql` → seed → assign → `verify_nicepay_review_p3_20261030.sql`(종료: `close_nicepay_review_20261029.sql`).
+- **P1(BLOCKED)**: Vercel 환경변수(Preview/Production)의 NICEPAY 항목 존재 여부 — 이 환경에 Vercel CLI 없음. `vercel env pull` 파일에 `node scripts/ci/nicepayEnvPresence.mjs --env-file <파일>`. 요청 Amt 12자리 패딩·허용 호스트(dc1/dc2/pg/webapi)·앱 WebView(`WapUrl`/`IspCancelUrl`)는 MID 발급 후 NICEPAY 기술지원 확인.
+- **P2**: `/legal/business` 는 사업장 소재지를 플래그와 무관하게 항상 표시(기존) — 공개 범위를 다시 정할지 결정.
 - **P2**: `expired-order-qa.yml` 의 GitHub Actions 실제 실행 결과는 push 후 첫 PR 실행에서 확인(로컬은 같은 단계를 재현해 16/16 통과). `tests/expired-order-qa/expired-order.spec.ts`(12 tests, `playwright.expiredorder.config.ts`)는 아직 CI 에 없음 — 필요하면 같은 workflow 에 추가.
 - **P3**: `applyProdParity.sh` 는 NICEPAY P2/P2b 등 "운영에 이미 적용된 SQL" 목록에 의존한다. 운영 정의가 더 바뀌면(해시 가드가 중단시킴) 이 목록·`prodParity_fulfill_order.sql` 을 같이 갱신해야 함.
 - **P0(승인)**: 만료 상품 기존 주문 처리 SQL(`preflight_/add_/verify_/rollback_add_expired_order_resolution_20261031.sql`) — PR #251 SQL 적용·검증 뒤에만 실행. 운영 pending 주문 2건(80,000원)은 이 기능 적용 후 관리자가 실제 수납 확인을 거쳐 처리(그 전에는 변경 금지). 절차: `docs/EXPIRED_ORDER_RESOLUTION_20261031.md`.
