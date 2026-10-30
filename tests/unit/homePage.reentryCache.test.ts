@@ -1,16 +1,6 @@
 /*
-  릴리스 폴리시 배치 7차(2026-09-17) — 성능 조사: Next.js App Router는 레이아웃(BottomNav
-  등)은 탭 전환 사이 유지하지만 페이지 컴포넌트(app/page.tsx의 Home())는 다른 탭에
-  갔다가 돌아올 때마다 매번 새로 마운트한다 — 그래서 홈 재진입마다 센터/클래스/배너/
-  카테고리 목록이 잠깐 비었다가 다시 채워지는 게 보였다("탭 진입 시 순간적으로 다시
-  그려지는 느낌"). 또한 위치 권한을 매번 getCurrentPosition()으로 다시 기다리느라
-  (최대 4초 타임아웃) 재진입마다 데이터 fetch 자체가 늦게 시작됐다.
-
-  이 테스트는 컴포넌트 렌더링 도구가 없는 이 프로젝트의 기존 관례(순수 함수/소스 구조
-  고정)를 따라, homeDataCache/lastKnownPosition 캐시 구조와 그 사용 방식이 소스에
-  그대로 있는지 고정한다 — 데이터 정확성(매번 새로 fetch)은 그대로 유지하면서 재진입
-  시 마지막 결과를 먼저 보여주는 것과, 위치 fetch가 더 이상 데이터 fetch를 막지
-  않는다는 것을 확인한다.
+  홈 재진입 목록 캐시와 사용자 선택형 내 주변 20km 검색 조건에 대한 구조 회귀 테스트.
+  홈은 GPS를 자동 요청하거나 반경으로 센터를 제외하지 않고, 검색 버튼에서만 요청한다.
 */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -39,20 +29,33 @@ describe("app/page.tsx — 홈 재진입 캐시(homeDataCache)", () => {
   });
 });
 
-describe("app/page.tsx — 위치 캐시(lastKnownPosition)가 데이터 fetch 시작을 막지 않는다", () => {
-  it("마지막으로 구한 위치가 있으면 getCurrentPosition을 기다리지 않고 바로 쓴다", () => {
-    expect(source).toContain("let lat: number | undefined = lastKnownPosition?.lat;");
-    expect(source).toContain("let lng: number | undefined = lastKnownPosition?.lng;");
+describe("app/page.tsx — 홈의 위치 필터는 자동 적용하지 않는다", () => {
+  it("홈에서는 GPS 위치를 자동 요청하지 않는다", () => {
+    expect(source).not.toContain("navigator.geolocation.getCurrentPosition(");
+    expect(source).not.toContain("lastKnownPosition");
   });
 
-  it("위치를 구하면 다음 재진입을 위해 lastKnownPosition을 갱신한다", () => {
-    expect(source).toContain("lastKnownPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };");
+  it("홈 센터 목록은 거리 제한 없는 기본 조회를 사용한다", () => {
+    expect(source).toContain("fetchHomeCenters(), fetchHomeClasses()");
+    expect(source).not.toMatch(/fetchHomeCenters\(lat\s*,\s*lng\)/);
   });
 
-  it("캐시된 위치가 없을 때만 새 위치를 기다린 뒤 fetch를 시작한다(최초 진입 기존 동작 유지)", () => {
-    const idx = source.indexOf("if (lat == null || lng == null) {");
-    expect(idx).toBeGreaterThan(-1);
-    const after = source.slice(idx, idx + 150);
-    expect(after).toContain("await freshPositionPromise");
+  it("NICEPAY 전용 바로가기는 심사관에게만 노출한다", () => {
+    expect(source).toContain("isNicepayReviewer && centers.length > 0");
+    expect(source).toContain('aria-label="NICEPAY 심사 전용 센터"');
+  });
+});
+
+describe("app/search/page.tsx — 20km 반경은 사용자 선택 필터", () => {
+  const searchSource = readFileSync(join(__dirname, "../../app/search/page.tsx"), "utf-8");
+
+  it("내 주변 필터는 기본 OFF로 시작한다", () => {
+    expect(searchSource).toContain("const [nearOnly, setNearOnly] = useState(false)");
+  });
+
+  it("사용자가 주변 필터를 누를 때 위치 요청이 시작된다", () => {
+    expect(searchSource).toContain("function toggleNearby()");
+    expect(searchSource).toContain("navigator.geolocation.getCurrentPosition(");
+    expect(searchSource).toContain('onClick={toggleNearby}');
   });
 });
