@@ -11,6 +11,7 @@ const ITEMS = [
   { href: "/legal/privacy", label: "개인정보처리방침" },
   { href: "/legal/business", label: "사업자 정보" },
   { href: "/legal/refund", label: "환불·취소 정책" },
+  { href: "/legal/notices/nicepay-20261030", label: "공지: 온라인 결제대행사 도입 및 정책 변경 안내" },
 ];
 
 export const metadata: Metadata = {
