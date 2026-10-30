@@ -13,6 +13,7 @@ import type { RestFetch } from "./rest";
 import type { NicepayFetch } from "./api";
 import type { RefundCtx, Reply } from "../lifecycle";
 import type { FlowDeps } from "./flow";
+import { guardFetch } from "./qaAuthOnly";
 
 export type NotActive = { active: false; status: 503; body: { error: string; code: "nicepay_not_active" } };
 export const NOT_ACTIVE_REPLY: NotActive = { active: false, status: 503, body: { error: "온라인 결제는 아직 사용할 수 없어요", code: "nicepay_not_active" } };
@@ -68,7 +69,8 @@ export function buildRestDeps(admin: SupabaseClient, c: Extract<NicepayConfig, {
   return { creds: { clientId: c.clientId, secretKey: c.secretKey, apiBase: c.apiBase }, fetchImpl, now: () => new Date(), gateAllows: nicepayGate(admin), log, ...nicepayDbDeps(admin) };
 }
 export function buildV3Deps(admin: SupabaseClient, c: Extract<NicepayConfig, { family: "v3_mid" }>, fetchImpl: NicepayFetch = globalThis.fetch as unknown as NicepayFetch): NicepayDeps {
-  return { creds: { mid: c.mid, merchantKey: c.merchantKey }, fetchImpl, now: () => new Date(), gateAllows: nicepayGate(admin), log, ...nicepayDbDeps(admin) };
+  // QA 인증만 모드: NICEPAY 호스트로 나가는 모든 fetch 를 네트워크 전에 차단(승인·망취소·취소·환불). 승인 경로 자체도 lifecycle 에서 승인 전에 멈춘다(이중 방어).
+  return { creds: { mid: c.mid, merchantKey: c.merchantKey }, qaAuthOnly: c.qaAuthOnly === true, fetchImpl: guardFetch(fetchImpl, c.qaAuthOnly, (host) => log("error", "PG_NICEPAY_QA_BLOCKED_CALL", { host })), now: () => new Date(), gateAllows: nicepayGate(admin), log, ...nicepayDbDeps(admin) };
 }
 
 /** 회원 소유 확인(주문): pg_order_context(uid) — 소유가 아니면 null. */
@@ -90,7 +92,7 @@ export function buildNicepayRefund(
   const now = () => new Date();
   const port = c.family === "rest_v1"
     ? restRefundPort({ clientId: c.clientId, secretKey: c.secretKey, apiBase: c.apiBase }, globalThis.fetch as unknown as RestFetch, now, log)
-    : v3RefundPort({ mid: c.mid, merchantKey: c.merchantKey }, globalThis.fetch as unknown as NicepayFetch, now);
+    : v3RefundPort({ mid: c.mid, merchantKey: c.merchantKey }, guardFetch(globalThis.fetch as unknown as NicepayFetch, c.qaAuthOnly, (host) => log("error", "PG_NICEPAY_QA_BLOCKED_CALL", { host })), now);
   const db = nicepayDbDeps(admin);
   return (ctx, uid) => handleNicepayRefund(ctx, uid, {
     port,

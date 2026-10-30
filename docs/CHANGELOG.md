@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-10-30 — NICEPAY v3 테스트 결제창 격리 QA(auth-only) 환경 (`qa/nicepay-auth-only-20261030`, SQL·운영 변경 없음)
+- 공용 테스트 MID(`nicepay00m`) 또는 `NICEPAY_QA_AUTH_ONLY=true` 이면 서버가 인증 결과 검증 뒤 승인 API 를 호출하지 않고 주문을 정리(`qaAuthOnly.ts`, lifecycle/flow/result 화면). 운영 MID·운영 Supabase·production 환경·일반회원 결제 ON 이면 NICEPAY 설정 거부, 서버 fetch 는 NICEPAY 호스트로 나가지 못하게 차단(`guardFetch`).
+- 사전 점검 `scripts/qa/nicepayAuthOnlyPreflight.mjs`, 실제 결제창 로컬 러너 `scripts/isolated/nicepayQa/realWindow.sh`(키 미보유 시 BLOCKED), 격리 QA `tests/nicepay-qa/authOnly.spec.ts`(11)·단위 19건. 문서 `docs/payments/NICEPAY_AUTH_ONLY_QA_20261030.md`. 실제 외부 결제창은 테스트 MerchantKey 가 없어 BLOCKED.
+
 ## 2026-10-30 — 만료 주문 처리 E2E 격리 CI 추가·QA 증빙 정리 (PR #253 QA 보완, 운영 SQL 미실행)
 - 신규 workflow `.github/workflows/expired-order-qa.yml`: `tests/expired-order-qa/member-to-manager.spec.ts`(desktop+mobile 16 tests)를 러너 안의 일회용 Supabase 스택에서만 자동 실행. Secrets·공유 DEV·운영·실제 PG/알림 자격증명 없음, 앱 서버 :3021(기본 :3000 과 분리), 별도 러너·concurrency 그룹이라 기존 test.yml 과 무관. 운영과 같은 함수 정의 상태는 `scripts/isolated/expiredOrder/applyProdParity.sh` 가 러너의 로컬 컨테이너에만 적용.
 - spec 이 새 스택에서도 돌도록 센터 매니저 행을 없으면 생성(기존엔 사전 시드 가정). playwright 설정에 로컬 Supabase·실결제 자격증명 가드와 CI 전용 webServer 추가. 계약 테스트 `tests/unit/expiredOrderQaWorkflow.contract.test.ts` 추가, workflow 분류 목록(`liveTestEntrypoints.audit`)에 등록.
