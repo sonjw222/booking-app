@@ -49,10 +49,12 @@ describe("법적 고지 — PG 표기(단일 출처)", () => {
     expect(pages.privacy).toContain("현재 일반 회원용 온라인 PG 결제는 비활성화되어");
     expect(pages.privacy).toContain("카드 원문 번호를 입력받거나 저장하지 않습니다");
   });
-  it("시행일은 이 변경에서 바꾸지 않는다(법적 시행·공지 절차는 사용자 결정)", () => {
-    expect(pages.terms).toContain("시행일: 2026년 9월 2일");
-    expect(pages.refund).toContain("시행일: 2026년 9월 2일");
-    expect(pages.privacy).toContain("시행일: 2026년 9월 27일");
+  it("사전 공지 후 정책 시행일은 2026-11-09이고 개인정보 공지일은 2026-10-30이다(PR #256 선배포)", () => {
+    expect(pages.terms).toContain("시행일: 2026년 11월 9일");
+    expect(pages.terms).toContain("이 약관은 2026년 11월 9일부터 시행합니다.");
+    expect(pages.refund).toContain("시행일: 2026년 11월 9일");
+    expect(pages.privacy).toContain("공지일: 2026년 10월 30일");
+    expect(pages.privacy).toContain("시행일: 2026년 11월 9일");
   });
   // 소스 문자열이 아니라 "렌더된 문장"을 본다 — JSX 줄바꿈 때문에 표현식 옆 공백이 사라지는 문제("(현재NICEPAY")를 막는다.
   it("렌더된 문장: 표현식 주변 공백·조사가 자연스럽다(공백 누락 없음)", async () => {
