@@ -25,9 +25,9 @@ describe("expiredOrderUiState", () => {
 });
 
 describe("정적 계약", () => {
-  it("NICEPAY·기존 PG 결제는 계속 꺼져 있다", () => {
+  it("NICEPAY 심사 준비 상수는 true, 기존 Toss/PortOne 은 신규 결제 잠금 유지", () => {
     const f = read("lib/payments/PaymentProviderFactory.ts");
-    expect(f).toMatch(/NICEPAY_CHECKOUT_ACTIVATED: boolean = false/);
+    expect(f).toMatch(/NICEPAY_CHECKOUT_ACTIVATED: boolean = true/);
     expect(f).toMatch(/LEGACY_PG_CHECKOUT_ACTIVATED: boolean = false/);
   });
   it("SQL: 같은 권한 키 사용, 해시 가드, 직접 상품/주문 삭제 없음", () => {

@@ -26,13 +26,12 @@ describe("getPaymentProvider", () => {
     expect(getPaymentProvider()).toBeInstanceOf(MockPaymentProvider);
   });
 
-  it("NEXT_PUBLIC_PAYMENT_PROVIDER=nicepay이면 NicepayPaymentProvider(비활성, 모든 호출 거부)를 반환한다", async () => {
+  it("NEXT_PUBLIC_PAYMENT_PROVIDER=nicepay이면 NicepayPaymentProvider를 선택하지만 서버·DB 별도 게이트가 결제를 제한한다", () => {
     process.env.NEXT_PUBLIC_PAYMENT_PROVIDER = "nicepay";
     const p = getPaymentProvider();
     expect(p).toBeInstanceOf(NicepayPaymentProvider);
-    await expect(p.createPayment({ orderId: "o", amount: 1000 })).rejects.toThrow();
-    expect(NICEPAY_CHECKOUT_ACTIVATED).toBe(false);
-    expect(isOnlinePgCheckoutAvailable()).toBe(false);   // 환경변수를 nicepay로 바꿔도 코드 잠금이 열리기 전에는 결제창 진입 불가
+    expect(NICEPAY_CHECKOUT_ACTIVATED).toBe(true);
+    expect(isOnlinePgCheckoutAvailable()).toBe(true); // 실제 결제 승인 조건이 아님: 서버 및 DB 게이트는 별개
   });
 
   it("과거 값 toss/portone은 (개발 환경에서도) mock으로 떨어지지 않고 DisabledPaymentProvider(fail-closed)가 된다", async () => {

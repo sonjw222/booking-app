@@ -42,13 +42,12 @@ describe("운영 빌드에서 Mock은 명시 허용 없이는 절대 선택되�
 
 describe("nicepay는 어떤 환경에서도 mock으로 폴백하지 않는다", () => {
   for (const [n, a] of [["production", ""], ["production", "true"], ["development", ""], ["test", ""]] as const) {
-    it(`NODE_ENV=${n} allowMock=${JSON.stringify(a)} → nicepay(비활성, 호출 시 명확한 오류)`, async () => {
+    it(`NODE_ENV=${n} allowMock=${JSON.stringify(a)} → nicepay 전용 어댑터(서버/DB 게이트는 별도)`, () => {
       env(n, "nicepay", a);
       expect(resolveProviderName()).toBe("nicepay");
       const p = getPaymentProvider();
       expect(p).toBeInstanceOf(NicepayPaymentProvider); expect(p).not.toBeInstanceOf(MockPaymentProvider);
-      await expect(p.createPayment({ orderId: "o", amount: 1000 })).rejects.toThrow(/활성화되지 않았/);
-      expect(isOnlinePgCheckoutAvailable()).toBe(false);   // 코드 잠금
+      expect(isOnlinePgCheckoutAvailable()).toBe(true); // 코드 준비만. 서버 설정/DB 게이트가 실제 승인 여부를 결정
     });
   }
 });

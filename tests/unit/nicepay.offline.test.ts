@@ -261,13 +261,12 @@ describe("웹훅은 힌트 전용 — 상태를 바꾸지 않고 분류만", () 
   });
 });
 
-describe("비활성 보장 / 카드정보 미수집 (정적)", () => {
-  it("NicepayPaymentProvider는 모든 메서드가 throw, 팩토리는 nicepay를 선택해도 결제창 진입이 잠겨 있다", async () => {
+describe("심사 준비 상태 / 카드정보 미수집 (정적)", () => {
+  it("NICEPAY 전용 어댑터를 선택해도 일반회원 노출·실제 승인 여부는 서버 및 DB 게이트가 결정한다", () => {
     const p = new NicepayPaymentProvider();
-    await expect(p.createPayment({ orderId: "o", amount: 1 })).rejects.toThrow(/활성화되지 않았/);
-    await expect(p.confirmPayment("k", "o")).rejects.toThrow(); await expect(p.cancelPayment("o")).rejects.toThrow(); await expect(p.getPaymentStatus("o")).rejects.toThrow();
+    expect(p).toBeInstanceOf(NicepayPaymentProvider);
     const prev = process.env.NEXT_PUBLIC_PAYMENT_PROVIDER; process.env.NEXT_PUBLIC_PAYMENT_PROVIDER = "nicepay";
-    try { expect(resolveProviderName()).toBe("nicepay"); expect(isOnlinePgCheckoutAvailable()).toBe(false); } finally { if (prev === undefined) delete process.env.NEXT_PUBLIC_PAYMENT_PROVIDER; else process.env.NEXT_PUBLIC_PAYMENT_PROVIDER = prev; }
+    try { expect(resolveProviderName()).toBe("nicepay"); expect(isOnlinePgCheckoutAvailable()).toBe(true); } finally { if (prev === undefined) delete process.env.NEXT_PUBLIC_PAYMENT_PROVIDER; else process.env.NEXT_PUBLIC_PAYMENT_PROVIDER = prev; }
   });
   const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => { const p = path.join(dir, n); return statSync(p).isDirectory() ? (n === "node_modules" ? [] : walk(p)) : /\.(ts|tsx)$/.test(p) ? [p] : []; });
   it("서버 NICEPAY 모듈은 허용된 진입점에서만 import된다: app/api/payments/nicepay/** 라우트와 lib/payments/server/deps.ts(환불 핸들러 주입) 뿐 — 그 밖의 app/lib 파일은 import 금지, 클라이언트 번들(app 페이지/컴포넌트)은 서버 모듈을 절대 import하지 않는다", () => {
