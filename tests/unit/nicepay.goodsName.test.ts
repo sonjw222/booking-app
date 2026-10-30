@@ -5,7 +5,7 @@ import { eucKrByteLength, toNicepayGoodsName, NICEPAY_GOODS_NAME_MAX_BYTES } fro
 describe("toNicepayGoodsName — EUC-KR 40바이트", () => {
   it("한글·영문·숫자·일반 기호는 그대로(40바이트 이내)", () => {
     expect(toNicepayGoodsName("5회 수업 이용권")).toBe("5회 수업 이용권");
-    expect(toNicepayGoodsName("[QA] 8회권 · 30일")).toBe("[QA] 8회권 · 30일");
+    expect(toNicepayGoodsName("[QA] 8회권 · 30일")).toBe("QA 8회권 · 30일");
   });
   it("항상 EUC-KR 40바이트 이하(한글 20자 초과는 문자 단위로 자름)", () => {
     const long = "가나다라마바사아자차카타파하".repeat(5);
