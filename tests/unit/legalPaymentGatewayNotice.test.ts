@@ -42,6 +42,11 @@ describe("법적 고지 — PG 표기(단일 출처)", () => {
     expect(pages.refund).toContain("승인 취소되고, 계좌이체로 결제한 건은 등록하신");
     expect(pages.refund).toContain("영업일 기준 며칠 소요될 수 있습니다");
   });
+  it("무제한 수강권의 24시간 기준은 앱 자체 전액환불 혜택만 제한한다", () => {
+    expect(pages.refund).toContain("앱 내 무조건 전액환불 혜택");
+    expect(pages.refund).toContain("법정 청약철회 기간(7일)");
+    expect(pages.refund).not.toContain("24시간 이내 신청 시에만 환불이 가능합니다");
+  });
   it("처리위탁 표: NICEPAY(활성화 시)와 토스페이먼츠(과거 거래) 두 행, 정식 상호·보유기간은 단정하지 않는다", () => {
     expect(pages.privacy).toMatch(/<th>\{PAYMENT_GATEWAY_NAMES\.current\}<\/th><td>[^<]*활성화 시[^<]*<\/td>/);
     expect(pages.privacy).toMatch(/<th>\{PAYMENT_GATEWAY_NAMES\.legacy\}<\/th><td>[^<]*과거[^<]*<\/td>/);
