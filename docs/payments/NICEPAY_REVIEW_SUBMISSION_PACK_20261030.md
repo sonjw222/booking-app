@@ -9,7 +9,7 @@
 | --- | --- | --- | --- |
 | 서비스 홈 | https://mwhabit.com/ | 운영 도메인 READY, **홈 하단 사업장 소재지 실표시 PASS(2026-10-30 사용자 아이폰 확인)** | 상호·대표·사업자번호·통신판매 신고번호·문의처의 등록증·신고증과의 일치 여부는 추가 대조. 개인 주소 원문은 이 문서에 복제하지 않음 |
 | 사업자 정보 | https://mwhabit.com/legal/business | **상호·대표자·사업자등록번호·통신판매업 신고번호 일치 PASS**(2026-10-31 사용자 직접 확인) | 대금 수납 PG 명칭은 현재 운영에서 Toss 문구 → PR #254에서 NICEPAY로 변경 예정. 연락처 등 기타 정보의 정확성까지 대조 완료로 간주하지 않음 |
-| 이용약관 | https://mwhabit.com/legal/terms | 기존 정책 운영, PR #254는 미병합 | PG 결제 관련 문구·시행일 최종 대조 |
+| 이용약관 | https://mwhabit.com/legal/terms | **운영 페이지 표시 PASS(2026-10-31 사용자 아이폰 확인)**, PR #254 미병합 | 제4조 `(제12조)`가 실제 결제 조항 `(제9조)`를 잘못 참조. 통신판매중개자의 법정 책임·수납/정산 구조 및 제3조 불리한 개정 30일 공지 의무 검토 필요. 상세: `NICEPAY_TERMS_REVIEW_20261031.md` |
 | 개인정보처리방침 | https://mwhabit.com/legal/privacy | **운영 페이지 표시 PASS (2026-10-31 사용자 아이폰 확인)**, PR #254는 미병합 | NICEPAY·과거 토스 처리위탁 구분은 Draft에 준비. 정확한 계약 법인명과 위탁업무는 NICEPAY 영업팀 답변/계약 확인 전 미확정 |
 | 환불·취소정책 | https://mwhabit.com/legal/refund | **운영 페이지 표시 PASS(2026-10-31 사용자 아이폰 확인)**; 법적/심사 문구 적합성은 별도 검토 중 | PR #254에 신규 NICEPAY/과거 Toss 구분 준비. 무제한 수강권 '24시간에만 환불' 오해 소지와 법정 환급 기한 표현 보완 권고. 상세: `NICEPAY_REFUND_POLICY_REVIEW_20261031.md` |
 | NICEPAY 정책 변경 사전 공지 | https://mwhabit.com/legal/notices/nicepay-20261030 | **운영 게시 확인됨(2026-10-30)** — PR #256 병합 후 Production READY, 사용자가 아이폰에서 페이지 표시 직접 확인 | 안내문에 공지일 2026-10-30, 예정일 2026-11-09. 추후 본문 정책은 별도 검증/승인 후 반영 |
@@ -56,6 +56,7 @@
 - [x] NICEPAY 사전 공지 운영 페이지 표시(사용자 2026-10-30 확인)
 - [x] 환불·취소정책 운영 페이지 접근·표시 확인(사용자 2026-10-31 확인). **최종 법적 적정성과 카드사 심사 적합성은 미확정**
 - [x] 개인정보처리방침 운영 페이지 접근·표시 확인(사용자 2026-10-31 확인). **수탁자 법인명·계약 범위 검증은 미완료**
+- [x] 이용약관 운영 페이지 접근·표시 확인(사용자 2026-10-31 확인). **제4조 조항 참조 오류, 법정 책임/고지기간/수납 구조 검토는 미완료**
 - [x] 카드 수단 선택 및 운영 서버 OFF 차단(사용자 실기기 보고)
 - [x] 홈 푸터 **사업장 소재지 실제 표시 확인**(2026-10-30 사용자 아이폰)
 - [x] 사업자정보 페이지의 **상호·대표자·사업자등록번호·통신판매업 신고번호**가 등록증·신고증과 일치함을 사용자가 2026-10-31 직접 확인
@@ -78,5 +79,5 @@
 - 작업: 문서-only. GitHub Draft PR #260에 포함. PR #254/259 및 `main`에는 손대지 않음.
 - SQL 실행 필요: **NO**. SQL 파일 경로: 없음. 실행 순서: 해당 없음. Supabase 직접 실행할 변경 SQL 전문: 없음. 실행 후 확인: GitHub PR 문서 diff 및 CI.
 - Vercel 운영 환경변수/DB/상품/실제 NICEPAY 외부 요청: 변경 없음/0건.
-- NotebookLM 업로드용: 이 파일 + `NICEPAY_LIVE_REVIEW_READINESS_20261030.md` + `NICEPAY_NATIVE_WEBVIEW_PREFLIGHT_20261030.md` + `NICEPAY_REFUND_POLICY_REVIEW_20261031.md`.
+- NotebookLM 업로드용: 이 파일 + `NICEPAY_LIVE_REVIEW_READINESS_20261030 + `NICEPAY_TERMS_REVIEW_20261031.md`.md` + `NICEPAY_NATIVE_WEBVIEW_PREFLIGHT_20261030.md` + `NICEPAY_REFUND_POLICY_REVIEW_20261031.md`.
 - Graphify: DB 스키마·앱 결제 흐름의 실제 변경이 없으므로 이번 문서 작업에서는 갱신 불필요.
