@@ -11,7 +11,7 @@
 | 사업자 정보 | https://mwhabit.com/legal/business | **상호·대표자·사업자등록번호·통신판매업 신고번호 일치 PASS**(2026-10-31 사용자 직접 확인) | 대금 수납 PG 명칭은 현재 운영에서 Toss 문구 → PR #254에서 NICEPAY로 변경 예정. 연락처 등 기타 정보의 정확성까지 대조 완료로 간주하지 않음 |
 | 이용약관 | https://mwhabit.com/legal/terms | 기존 정책 운영, PR #254는 미병합 | PG 결제 관련 문구·시행일 최종 대조 |
 | 개인정보처리방침 | https://mwhabit.com/legal/privacy | 기존 정책 운영, PR #254는 미병합 | NICEPAY 위탁업체 법인명/위탁 범위/항목/보존 기간은 계약·영업 회신과 대조 |
-| 환불·취소정책 | https://mwhabit.com/legal/refund | 기존 정책 운영, PR #254는 미병합 | 신규 NICEPAY 거래/과거 Toss 거래 구분은 PR #254에 준비 중, 법적 권리는 축소하지 않음 |
+| 환불·취소정책 | https://mwhabit.com/legal/refund | **운영 페이지 표시 PASS(2026-10-31 사용자 아이폰 확인)**; 법적/심사 문구 적합성은 별도 검토 중 | PR #254에 신규 NICEPAY/과거 Toss 구분 준비. 무제한 수강권 '24시간에만 환불' 오해 소지와 법정 환급 기한 표현 보완 권고. 상세: `NICEPAY_REFUND_POLICY_REVIEW_20261031.md` |
 | NICEPAY 정책 변경 사전 공지 | https://mwhabit.com/legal/notices/nicepay-20261030 | **운영 게시 확인됨(2026-10-30)** — PR #256 병합 후 Production READY, 사용자가 아이폰에서 페이지 표시 직접 확인 | 안내문에 공지일 2026-10-30, 예정일 2026-11-09. 추후 본문 정책은 별도 검증/승인 후 반영 |
 | 판매 상품 목록 | https://mwhabit.com/products | 사용자 아이폰 화면으로 공개 목록 확인 | 표시되는 A10TION 피겨팀의 수강권은 **외부 실센터 소유**. 모하빗 운영자에게 해당 센터 관리 권한 없음. 상품 수정·판매 중단하지 않음. NICEPAY에 일반 공개 상품 필요 여부 회신 대기 |
 | NICEPAY 심사관 계정 | 운영에 별도 1개 존재, 비밀번호 문서화 금지 | 심사관 로그인/전용 센터 접근 검증됨(사용자 iPhone QA) | 계정 정보는 NICEPAY가 지정한 **안전한 공식 제출 방식으로만** 전송 |
@@ -54,6 +54,7 @@
 - [x] 웹사이트 도메인·기초 기능 동작
 - [x] 심사관 계정 로그인 및 전용 센터·수강권 3종 표시(사용자 실기기 보고)
 - [x] NICEPAY 사전 공지 운영 페이지 표시(사용자 2026-10-30 확인)
+- [x] 환불·취소정책 운영 페이지 접근·표시 확인(사용자 2026-10-31 확인). **최종 법적 적정성과 카드사 심사 적합성은 미확정**
 - [x] 카드 수단 선택 및 운영 서버 OFF 차단(사용자 실기기 보고)
 - [x] 홈 푸터 **사업장 소재지 실제 표시 확인**(2026-10-30 사용자 아이폰)
 - [x] 사업자정보 페이지의 **상호·대표자·사업자등록번호·통신판매업 신고번호**가 등록증·신고증과 일치함을 사용자가 2026-10-31 직접 확인
@@ -76,5 +77,5 @@
 - 작업: 문서-only. GitHub Draft PR #260에 포함. PR #254/259 및 `main`에는 손대지 않음.
 - SQL 실행 필요: **NO**. SQL 파일 경로: 없음. 실행 순서: 해당 없음. Supabase 직접 실행할 변경 SQL 전문: 없음. 실행 후 확인: GitHub PR 문서 diff 및 CI.
 - Vercel 운영 환경변수/DB/상품/실제 NICEPAY 외부 요청: 변경 없음/0건.
-- NotebookLM 업로드용: 이 파일 + `NICEPAY_LIVE_REVIEW_READINESS_20261030.md` + `NICEPAY_NATIVE_WEBVIEW_PREFLIGHT_20261030.md`.
+- NotebookLM 업로드용: 이 파일 + `NICEPAY_LIVE_REVIEW_READINESS_20261030.md` + `NICEPAY_NATIVE_WEBVIEW_PREFLIGHT_20261030.md` + `NICEPAY_REFUND_POLICY_REVIEW_20261031.md`.
 - Graphify: DB 스키마·앱 결제 흐름의 실제 변경이 없으므로 이번 문서 작업에서는 갱신 불필요.
