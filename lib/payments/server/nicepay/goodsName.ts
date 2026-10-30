@@ -30,6 +30,7 @@ export function toNicepayGoodsName(raw: unknown, fallback = "모하빗 수강권
   const ks = ksx1001Chars();
   const clean = (typeof raw === "string" ? raw : "").normalize("NFC")
     .replace(/[<>"'&\\]/g, " ")
+    .replace(/[\[\]]/g, " ")  // NICEPAY: 대괄호는 별도 문의 대상이므로 사용하지 않음
     .replace(/\s+/g, " ").trim();
   let out = "", bytes = 0;
   for (const ch0 of clean) {
