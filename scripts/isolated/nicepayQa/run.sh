@@ -18,7 +18,7 @@ export NICEPAY_QA_CONTROL="$NPQA_OUT/control.json" NICEPAY_QA_LOG="$NPQA_OUT/nic
 # 로컬 전용 가짜 자격(무작위, 커밋·출력 금지)
 export NICEPAY_MID="QA$(head -c 6 /dev/urandom | xxd -p | cut -c1-8)m" NICEPAY_MERCHANT_KEY="$(head -c 24 /dev/urandom | xxd -p)" PAYMENT_RETURN_TOKEN_SECRET="$(head -c 24 /dev/urandom | xxd -p)"
 export NEXT_PUBLIC_PAYMENT_PROVIDER=nicepay NICEPAY_CHECKOUT_ENABLED=true NICEPAY_API_FAMILY=v3_mid NICEPAY_ENV=sandbox NICEPAY_RETURN_BASE_URL=http://localhost:3100
-export NEXT_PUBLIC_SHOW_BUSINESS_ADDRESS_IN_FOOTER=true   # 심사 요구(홈 하단 주소)를 "플래그를 켰을 때" 충족하는지 검증 — 배포 기본값은 꺼짐
+export NEXT_PUBLIC_SHOW_BUSINESS_ADDRESS_IN_FOOTER="${NPQA_ADDRESS_FLAG:-true}"   # 기본 true: 심사 요구(홈 하단 주소)를 "플래그를 켰을 때" 충족하는지 검증(스크린샷 없음). NPQA_ADDRESS_FLAG=false 는 실제 배포 기본값(꺼짐) — 주소가 화면에 찍히면 안 되는 스크린샷 QA 는 이쪽으로 실행
 unset NEXT_PUBLIC_PG_CHECKOUT_ENABLED   # 일반 회원 결제를 열지 않는다
 if [ -z "${NPQA_CONSTANT_OFF:-}" ]; then
   sed -i.bak 's/export const NICEPAY_CHECKOUT_ACTIVATED: boolean = false;/export const NICEPAY_CHECKOUT_ACTIVATED: boolean = true;/' $FACT && rm -f $FACT.bak

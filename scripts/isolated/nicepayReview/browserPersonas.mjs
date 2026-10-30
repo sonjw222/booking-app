@@ -14,7 +14,7 @@ for (const [vn, vp] of Object.entries(VPS)) for (const [tn, tk] of Object.entrie
   const T = async () => (await page.locator("body").innerText()).replace(/\s+/g, " ");
   const go = async (u) => { await page.goto(base + u, { waitUntil: "networkidle" }); await page.waitForTimeout(1800); };
   const shot = (n) => page.screenshot({ path: path.join(OUT, `${vn}-${tn}-${who}-${n}.png`), fullPage: true });
-  const seen = (t) => ({ review: t.includes("NICEPAY 카드사 심사 환경"), op: t.includes("심사 시험 스튜디오"), toss: t.includes("로컬 시험 센터") });
+  const seen = (t) => ({ review: t.includes("NICEPAY 카드사 심사용"), op: t.includes("심사 시험 스튜디오"), toss: t.includes("로컬 시험 센터") });
   const rec = (pg, extra) => res.push({ vn, tn, who, page: pg, ...extra, errs: errs.length });
   await go("/"); rec("home", seen(await T())); await shot("home");
   await go("/category/" + encodeURIComponent("피겨스케이팅")); rec("category", seen(await T())); await shot("category");

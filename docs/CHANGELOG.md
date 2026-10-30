@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-10-30 — NICEPAY 카드사 심사 최종 준비 Batch 1 (로컬 커밋, 운영 SQL·결제 활성화·주소 공개 없음)
+- 법적 고지(`/legal/terms` 제9조·`/legal/refund` 4항·`/legal/privacy` 위탁 표·`/legal/business`)를 실제 구현에 맞춤: 신규 온라인 PG=NICEPAY(활성화 시), 과거 토스페이먼츠 거래의 취소·환불 지원 유지, 현재 제공하지 않는 카카오페이·토스페이 열거 제거. PG 이름은 `lib/paymentGatewayNotice.ts` 단일 출처. NICEPAY 정식 상호·위탁 범위·보유기간은 계약 확인 전이라 단정하지 않음, 시행일 미변경(사용자 결정). 렌더 문장 테스트로 JSX 공백 누락 방지.
+- NICEPAY v3 `GoodsName`(공식 문서: 최대 40byte·euc-kr)을 EUC-KR 표현 가능 문자만·40byte 이내로 정리(`lib/payments/server/nicepay/goodsName.ts`) — 이모지 등이 form 에서 `&#NNNN;` 로 바뀌어 깨지거나 길이를 넘기던 문제 방지.
+- 심사 센터 시드 재검토: 상품명 "N회 이용권 (심사용)"·소개/설명에 "실제 수업·서비스 제공 없음" 명시(가격 15,000/60,000/110,000원·30/60/90일 유지). 심사관 지정 SQL 가드 보강(placeholder·계정 1개·중복·심사 센터 존재). 승인용 SQL 세트: `preflight_nicepay_review_p3_20261030.sql`·`verify_nicepay_review_p3_20261030.sql`, 공개 "테스트" 상품 비공개 제안 `preflight_/hide_public_test_product_20261030*.sql`(미실행).
+- `scripts/ci/nicepayEnvPresence.mjs`: NICEPAY 환경변수 존재 여부만 점검(값 비출력). 격리 브라우저 QA(`tests/nicepay-qa/cardReviewScreens.spec.ts`)에 카드사 심사 화면(데스크톱/모바일 라이트)·심사관 결제 화면 진입 모의 검증 추가, 주소 플래그 OFF 로 실행하는 `NPQA_ADDRESS_FLAG` 옵션.
+- 문서: `docs/payments/NICEPAY_CARD_REVIEW_FINAL_20261030.md`(최신 대조·승인 계획), NotebookLM 요약 `NICEPAY_CARD_REVIEW_NOTEBOOKLM_20261030.md`.
+
 ## 2026-10-30 — 만료 주문 처리 E2E 격리 CI 추가·QA 증빙 정리 (PR #253 QA 보완, 운영 SQL 미실행)
 - 신규 workflow `.github/workflows/expired-order-qa.yml`: `tests/expired-order-qa/member-to-manager.spec.ts`(desktop+mobile 16 tests)를 러너 안의 일회용 Supabase 스택에서만 자동 실행. Secrets·공유 DEV·운영·실제 PG/알림 자격증명 없음, 앱 서버 :3021(기본 :3000 과 분리), 별도 러너·concurrency 그룹이라 기존 test.yml 과 무관. 운영과 같은 함수 정의 상태는 `scripts/isolated/expiredOrder/applyProdParity.sh` 가 러너의 로컬 컨테이너에만 적용.
 - spec 이 새 스택에서도 돌도록 센터 매니저 행을 없으면 생성(기존엔 사전 시드 가정). playwright 설정에 로컬 Supabase·실결제 자격증명 가드와 CI 전용 webServer 추가. 계약 테스트 `tests/unit/expiredOrderQaWorkflow.contract.test.ts` 추가, workflow 분류 목록(`liveTestEntrypoints.audit`)에 등록.

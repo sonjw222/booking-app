@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PAYMENT_GATEWAY_NAMES } from "../../../lib/paymentGatewayNotice";
 export const metadata: Metadata = {
   title: "환불·취소 정책",
   description: "모하빗(MWHABIT)의 수강권·상품 환불 및 예약 취소 정책.",
@@ -64,8 +65,9 @@ export default function RefundPolicyPage() {
 
         <h2>4. 결제수단별 환불 처리</h2>
         <p>
-          신용카드·카카오페이·토스페이로 결제한 건은 결제대행사(토스페이먼츠)를 통해 승인
-          취소되고, 계좌이체로 결제한 건은 등록하신 계좌로 재입금하는 방식으로 환불됩니다.
+          신용카드 등 온라인 결제 수단으로 결제한 건은 결제 당시의 결제대행사
+          (현재 {PAYMENT_GATEWAY_NAMES.current}, 과거 {PAYMENT_GATEWAY_NAMES.legacy}로 결제된 건은 {PAYMENT_GATEWAY_NAMES.legacy})를
+          통해 승인 취소되고, 계좌이체로 결제한 건은 등록하신 계좌로 재입금하는 방식으로 환불됩니다.
           결제수단별 정책에 따라 실제 환불까지 영업일 기준 며칠 소요될 수 있습니다. 센터 현장
           결제 건만 회사를 거치지 않으므로 해당 센터와 별도로 협의합니다.
         </p>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BUSINESS_INFO } from "../../../lib/businessInfo";
 import { BUSINESS_ADDRESS } from "../../../lib/businessAddress";
+import { PAYMENT_GATEWAY_NAMES } from "../../../lib/paymentGatewayNotice";
 
 export const metadata: Metadata = {
   title: "사업자 정보",
@@ -42,8 +43,9 @@ export default function BusinessInfoPage() {
           아님을 고지합니다.
         </p>
         <p>
-          다만 회원의 결제 대금 수납은 모하빗이 결제대행사(토스페이먼츠)를 통해 직접
-          처리하며, 이와 관련한 사항은 <Link href="/legal/refund" prefetch={false}>환불·취소 정책</Link>을 따릅니다.
+          다만 회원의 온라인 결제 대금 수납은 모하빗이 결제대행사({PAYMENT_GATEWAY_NAMES.current})를 통해 직접
+          처리하며(온라인 결제 수단은 서비스 준비 상황에 따라 제공되고, 과거 {PAYMENT_GATEWAY_NAMES.legacy}로 결제된
+          건의 취소·환불은 해당 결제대행사를 통해 처리), 이와 관련한 사항은 <Link href="/legal/refund" prefetch={false}>환불·취소 정책</Link>을 따릅니다.
         </p>
 
         <h2>사업자등록 확인</h2>

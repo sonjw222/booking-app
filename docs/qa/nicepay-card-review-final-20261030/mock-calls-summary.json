@@ -1,0 +1,7 @@
+{
+ "mock_nicepay_server_calls_by_kind_run1": {
+  "APPROVE": 12,
+  "NETCANCEL": 5
+ },
+ "note": "모의 서버(로컬 fetch 가로채기)에서 센 호출 수 — 실제 NICEPAY 호출 아님"
+}
