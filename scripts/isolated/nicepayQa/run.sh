@@ -17,6 +17,8 @@ export NPQA_OUT="${NPQA_OUT:-docs/qa/nicepay-main-integration-20261031/qa}"; mkd
 export NICEPAY_QA_CONTROL="$NPQA_OUT/control.json" NICEPAY_QA_LOG="$NPQA_OUT/nicepay-calls.jsonl"; echo '{}' > "$NICEPAY_QA_CONTROL"; : > "$NICEPAY_QA_LOG"
 # 로컬 전용 가짜 자격(무작위, 커밋·출력 금지)
 export NICEPAY_MID="QA$(head -c 6 /dev/urandom | xxd -p | cut -c1-8)m" NICEPAY_MERCHANT_KEY="$(head -c 24 /dev/urandom | xxd -p)" PAYMENT_RETURN_TOKEN_SECRET="$(head -c 24 /dev/urandom | xxd -p)"
+# 인증만(auth-only) QA: NPQA_AUTH_ONLY=1 이면 공용 테스트 MID 이름(nicepay00m)과 auth-only 플래그를 쓴다 — 키는 위의 무작위 가짜 값(실제 키 아님). 서버는 승인·망취소·취소·환불 호출을 모두 차단하고 승인 없이 주문을 정리한다(qaAuthOnly.ts).
+if [ "${NPQA_AUTH_ONLY:-}" = "1" ]; then export NICEPAY_MID=nicepay00m NICEPAY_QA_AUTH_ONLY=true; else unset NICEPAY_QA_AUTH_ONLY; fi
 export NEXT_PUBLIC_PAYMENT_PROVIDER=nicepay NICEPAY_CHECKOUT_ENABLED=true NICEPAY_API_FAMILY=v3_mid NICEPAY_ENV=sandbox NICEPAY_RETURN_BASE_URL=http://localhost:3100
 export NEXT_PUBLIC_SHOW_BUSINESS_ADDRESS_IN_FOOTER=true   # 심사 요구(홈 하단 주소)를 "플래그를 켰을 때" 충족하는지 검증 — 배포 기본값은 꺼짐
 unset NEXT_PUBLIC_PG_CHECKOUT_ENABLED   # 일반 회원 결제를 열지 않는다

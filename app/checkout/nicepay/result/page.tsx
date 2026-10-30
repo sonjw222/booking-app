@@ -29,6 +29,8 @@ function Content() {
   const sp = useSearchParams();
   const [view, setView] = useState<View>({ kind: "working" });
   // 첫 렌더의 쿼리로 한 번만 판정한다. scrubCallbackUrl() 이 주소창의 토큰을 지우면 searchParams 가 바뀌는데, 그때 다시 파생하면 정상 결과 옆에 "확인 정보가 올바르지 않거나 만료됐어요" 가 잘못 뜬다(통합 QA 에서 발견).
+  // QA 인증만 모드(서버가 승인하지 않고 멈춤): 결제는 완료되지 않았고 청구도 없다 — 항상 이 안내만 보이고 "완료"는 어떤 경우에도 보이지 않는다.
+  const [qaAuthOnly] = useState(() => sp.get("qa") === "auth_only");
   const [invalid] = useState(() => sp.get("invalid") === "1" || !sp.get("orderId") || !sp.get("rt"));
   useEffect(() => {
     const orderId = sp.get("orderId"), rt = sp.get("rt"), authFailed = sp.get("failed") === "1";
@@ -45,11 +47,12 @@ function Content() {
   }, []);
   return (
     <div className="app-shell">
-      {!invalid && view.kind === "working" && <Loading />}
-      {view.kind === "done" && <div className="daylist-empty" style={{ paddingTop: 80 }}><b>결제가 완료됐어요.</b><br />모하빗 앱으로 돌아가면 구매내역이 자동으로 반영돼요.</div>}
-      {view.kind === "review" && <div className="daylist-empty" style={{ paddingTop: 80 }} role="alert"><b>결제 확인이 필요해요.</b><br />카드 승인 결과를 운영자가 확인하고 있어요. 다시 결제하지 말고 센터 또는 운영자에게 문의해주세요.</div>}
-      {view.kind === "failed" && <div className="daylist-empty" style={{ paddingTop: 80 }} role="alert"><b>결제가 완료되지 않았어요.</b><br />{view.message}</div>}
-      {invalid && <div className="daylist-empty" style={{ paddingTop: 80 }} role="alert"><b>결제 확인 정보가 올바르지 않거나 만료됐어요.</b><br />모하빗 앱에서 구매내역을 확인해주세요.</div>}
+      {qaAuthOnly && <div className="daylist-empty" style={{ paddingTop: 80 }} role="status" data-testid="qa-auth-only-notice"><b>QA 테스트: 승인하지 않았어요.</b><br />결제창 인증 결과만 확인했고 카드 승인은 요청하지 않았어요. 결제는 완료되지 않았고 청구되지 않아요.</div>}
+      {!qaAuthOnly && !invalid && view.kind === "working" && <Loading />}
+      {!qaAuthOnly && view.kind === "done" && <div className="daylist-empty" style={{ paddingTop: 80 }}><b>결제가 완료됐어요.</b><br />모하빗 앱으로 돌아가면 구매내역이 자동으로 반영돼요.</div>}
+      {!qaAuthOnly && view.kind === "review" && <div className="daylist-empty" style={{ paddingTop: 80 }} role="alert"><b>결제 확인이 필요해요.</b><br />카드 승인 결과를 운영자가 확인하고 있어요. 다시 결제하지 말고 센터 또는 운영자에게 문의해주세요.</div>}
+      {!qaAuthOnly && view.kind === "failed" && <div className="daylist-empty" style={{ paddingTop: 80 }} role="alert"><b>결제가 완료되지 않았어요.</b><br />{view.message}</div>}
+      {!qaAuthOnly && invalid && <div className="daylist-empty" style={{ paddingTop: 80 }} role="alert"><b>결제 확인 정보가 올바르지 않거나 만료됐어요.</b><br />모하빗 앱에서 구매내역을 확인해주세요.</div>}
     </div>
   );
 }
