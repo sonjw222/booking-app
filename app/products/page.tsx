@@ -117,6 +117,7 @@ export default function PublicProductsPage() {
           <Link href="/legal/privacy" prefetch={false}>개인정보처리방침</Link>
           <Link href="/legal/business" prefetch={false}>사업자 정보</Link>
           <Link href="/legal/refund" prefetch={false}>환불·취소 정책</Link>
+          <Link href="/legal/notices/nicepay-20261030" prefetch={false}>NICEPAY 정책 변경 사전 안내</Link>
         </div>
         <div className="home-footer-biz">
           <div>{BUSINESS_INFO.companyName} · 대표 {BUSINESS_INFO.ceoName}</div>
