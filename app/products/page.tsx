@@ -69,7 +69,7 @@ export default function PublicProductsPage() {
           <li>이용기간·사용 조건은 상품마다 달라요. 센터 화면의 상품 상세에서 확인할 수 있어요.</li>
           <li>결제수단은 구매 화면에서 안내돼요.</li>
           <li>환불·취소는 <Link href="/legal/refund" prefetch={false} style={{ textDecoration: "underline" }}>환불·취소 정책</Link>을 따라요.</li>
-          <li>모하빗은 통신판매중개자예요. 판매자 정보는 <Link href="/legal/business" prefetch={false} style={{ textDecoration: "underline" }}>사업자 정보</Link>에서 확인할 수 있어요.</li>
+          <li>모하빗은 통신판매중개자예요. <Link href="/legal/business" prefetch={false} style={{ textDecoration: "underline" }}>모하빗 운영 사업자 정보</Link>는 플랫폼의 정보예요. 실제 수업·상품을 제공하는 입점 센터 정보는 해당 상품의 <strong>센터에서 보기</strong>에서 확인해주세요.</li>
         </ul>
       </div>
 
