@@ -5,6 +5,7 @@
   결제창: REST(v1) 계열만 구현(JS SDK AUTHNICE.requestPay, 문서 기준). v3(MID) 계열 결제창(nicepay-pgweb.js goPay)은 nicepayV3Window.ts 가 담당한다(구현됨, MID/키 없이는 실제 호출 미검증).
 */
 import { supabase } from "../supabaseClient";
+import { getNicepayAppClient } from "./nicepayAppClient";
 import { NICEPAY_CHECKOUT_ACTIVATED } from "./PaymentProviderFactory";
 import { abandonNicepayOrder, fetchNicepayStatus, pollNicepayStatus, prepareNicepay } from "./nicepayClientApi";
 import { NICEPAY_V3_SDK_URL, openNicepayV3Window, validateNicepayV3Params } from "./nicepayV3Window";
@@ -33,11 +34,12 @@ export class NicepayPaymentProvider implements PaymentProvider {
     if (!NICEPAY_CHECKOUT_ACTIVATED) throw new Error(NOT_ACTIVE);
     const token = await bearer();
     if (!token) throw new Error("로그인이 필요해요");
-    const prep = await prepareNicepay({ orderId: input.orderId, orderName: input.orderName, bearer: token });
+    const appClient = getNicepayAppClient();   // 앱(Capacitor iOS/Android)일 때만 ios/android — 서버가 설정으로 승인한 경우에만 WapUrl/IspCancelUrl 을 내려 준다
+    const prep = await prepareNicepay({ orderId: input.orderId, orderName: input.orderName, bearer: token, client: appClient });
     if (!prep.ok) throw new Error(typeof prep.data.error === "string" ? prep.data.error : "결제를 시작하지 못했어요");
     if (prep.data.family === "v3_mid") {
       // v3(MID/MerchantKey): 서버가 만든 SignData 로 goPay() 결제창만 연다. 서버 파라미터의 주문번호·금액이 화면 주문과 다르면 열지 않는다. 승인은 서버 ReturnURL 이 한다.
-      const v = validateNicepayV3Params(prep.data.params, { orderId: input.orderId, amount: input.amount }, window.location.origin);
+      const v = validateNicepayV3Params(prep.data.params, { orderId: input.orderId, amount: input.amount }, window.location.origin, { nativeApp: appClient !== null });
       if (!v.ok) throw new Error(v.reason);
       await loadSdk(NICEPAY_V3_SDK_URL);
       openNicepayV3Window(v.params, { doc: document, win: window, onClosedBeforeSubmit: () => { void abandonNicepayOrder({ orderId: input.orderId, bearer: token }); } });

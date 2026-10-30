@@ -3,6 +3,10 @@
 ## 2026-10-30 — NICEPAY v3 테스트 결제창 격리 QA(auth-only) 환경 (`qa/nicepay-auth-only-20261030`, SQL·운영 변경 없음)
 - 공용 테스트 MID(`nicepay00m`) 또는 `NICEPAY_QA_AUTH_ONLY=true` 이면 서버가 인증 결과 검증 뒤 승인 API 를 호출하지 않고 주문을 정리(`qaAuthOnly.ts`, lifecycle/flow/result 화면). 운영 MID·운영 Supabase·production 환경·일반회원 결제 ON 이면 NICEPAY 설정 거부, 서버 fetch 는 NICEPAY 호스트로 나가지 못하게 차단(`guardFetch`).
 - 사전 점검 `scripts/qa/nicepayAuthOnlyPreflight.mjs`, 실제 결제창 로컬 러너 `scripts/isolated/nicepayQa/realWindow.sh`(키 미보유 시 BLOCKED), 격리 QA `tests/nicepay-qa/authOnly.spec.ts`(11)·단위 19건. 문서 `docs/payments/NICEPAY_AUTH_ONLY_QA_20261030.md`. 실제 외부 결제창은 테스트 MerchantKey 가 없어 BLOCKED.
+## 2026-10-30 — NICEPAY v3 모바일 앱(WebView) 결제 복귀 구현 — Issue #255 (로컬 커밋, 결제 OFF·앱 복귀 설정 OFF 기본, 운영 SQL 미실행)
+- 공식 문서(결제창 `WapUrl`/`IspCancelUrl`, APP WebView 연동) 기준으로 서버·웹·iOS·Android 구현: 서버 설정이 켜진 앱 요청에만 `WapUrl`/`IspCancelUrl`(서버 scheme + DB 주문 UUID) 전송, 클라이언트는 어느 앱인지 힌트만, 웹 브라우저·설정 OFF(기본)에는 필드 없음(기존 흐름 유지). 앱 복귀는 결제 성공이 아니며 결과 화면이 서버(DB `done`)만 믿는다(rt 없이 로그인 세션, `cancel=1` 은 본인 pending 만 취소).
+- iOS: 기존 Google URL scheme 유지 + 제안 복귀 scheme, `LSApplicationQueriesSchemes` 29개, `NicepayAppBridgePlugin`(카드사 앱 호출·미설치 안내·결제 문맥 임의 scheme 차단), SceneDelegate 는 Google → NICEPAY → Capacitor 순서. Android: `queries` 24개, deep link 1개, `intent://`·`market://` 허용 패키지 검증(component/selector/flags/extras 제거), MainActivity 복귀 처리. ATS·cleartext·와일드카드 허용 없음.
+- 검증: vitest(앱 복귀 17·네이티브 동일성 11 등), Swift 순수 로직 검사, Android JUnit 9 + `assembleDebug`, `xcodebuild`(iOS 시뮬레이터, 코드서명 없음) 성공, 격리 브라우저 QA(앱 모의). 실기기 카드사 인증·복귀는 BLOCKED. scheme·값 형식·카드사 도메인은 NICEPAY 확인 전 미확정. 문서 `docs/payments/NICEPAY_NATIVE_WEBVIEW_RETURN_20261030.md`.
 
 ## 2026-10-30 — 만료 주문 처리 E2E 격리 CI 추가·QA 증빙 정리 (PR #253 QA 보완, 운영 SQL 미실행)
 - 신규 workflow `.github/workflows/expired-order-qa.yml`: `tests/expired-order-qa/member-to-manager.spec.ts`(desktop+mobile 16 tests)를 러너 안의 일회용 Supabase 스택에서만 자동 실행. Secrets·공유 DEV·운영·실제 PG/알림 자격증명 없음, 앱 서버 :3021(기본 :3000 과 분리), 별도 러너·concurrency 그룹이라 기존 test.yml 과 무관. 운영과 같은 함수 정의 상태는 `scripts/isolated/expiredOrder/applyProdParity.sh` 가 러너의 로컬 컨테이너에만 적용.

@@ -21,6 +21,8 @@ export NICEPAY_MID="QA$(head -c 6 /dev/urandom | xxd -p | cut -c1-8)m" NICEPAY_M
 if [ "${NPQA_AUTH_ONLY:-}" = "1" ]; then export NICEPAY_MID=nicepay00m NICEPAY_QA_AUTH_ONLY=true; else unset NICEPAY_QA_AUTH_ONLY; fi
 export NEXT_PUBLIC_PAYMENT_PROVIDER=nicepay NICEPAY_CHECKOUT_ENABLED=true NICEPAY_API_FAMILY=v3_mid NICEPAY_ENV=sandbox NICEPAY_RETURN_BASE_URL=http://localhost:3100
 export NEXT_PUBLIC_SHOW_BUSINESS_ADDRESS_IN_FOOTER=true   # 심사 요구(홈 하단 주소)를 "플래그를 켰을 때" 충족하는지 검증 — 배포 기본값은 꺼짐
+# 앱(WebView) 결제 복귀 QA(#255): NPQA_APP_RETURN=1 이면 서버 설정(제안 scheme)을 켠다 — 기본은 꺼짐(운영과 같은 상태). 로컬 QA 서버에만 적용되며 운영 환경변수는 건드리지 않는다.
+if [ "${NPQA_APP_RETURN:-}" = "1" ]; then export NICEPAY_APP_RETURN_ENABLED=true NICEPAY_APP_RETURN_SCHEME=mwhabitnicepay; else unset NICEPAY_APP_RETURN_ENABLED NICEPAY_APP_RETURN_SCHEME; fi
 unset NEXT_PUBLIC_PG_CHECKOUT_ENABLED   # 일반 회원 결제를 열지 않는다
 if [ -z "${NPQA_CONSTANT_OFF:-}" ]; then
   sed -i.bak 's/export const NICEPAY_CHECKOUT_ACTIVATED: boolean = false;/export const NICEPAY_CHECKOUT_ACTIVATED: boolean = true;/' $FACT && rm -f $FACT.bak

@@ -51,6 +51,9 @@ const config: CapacitorConfig = {
       "appleid.apple.com",
       "*.apple.com",
       "bxntqggkfwnhcczsbqtj.supabase.co",
+      // NICEPAY v3 결제창(pg-web.nicepay.co.kr SDK·web.nicepay.co.kr 결제 페이지) — 앱(WebView) 안에서 결제창을 열기 위한 목록(2026-10-30, #255). 이 목록에 없으면 Capacitor 가 결제창 이동을 바깥 브라우저로 넘긴다.
+      // 결제는 코드 상수·DB 게이트 OFF 라 지금은 이 호스트로 이동하는 일이 없다. 카드사 인증 페이지 도메인은 NICEPAY 확인 전이라 추가하지 않았다(와일드카드 "*" 금지) — docs/payments/NICEPAY_NATIVE_WEBVIEW_RETURN_20261030.md BLOCKED.
+      "*.nicepay.co.kr",
     ],
   },
   ios: {
