@@ -13,6 +13,7 @@ import { fetchMyProfileIds, fetchHomeCenters, fetchHomeClasses, fetchMyUpcomingC
 import { fetchBanners, fetchCategories, type HomeBanner, type ServiceCategory } from "../lib/operator";
 import { fetchMyCenters } from "../lib/manager";
 import { supabase } from "../lib/supabaseClient";
+import { fetchMyNicepayReviewAccess } from "../lib/authAccount";
 import BusinessAddressLine from "./components/BusinessAddressLine";
 import { BUSINESS_INFO } from "../lib/businessInfo";
 import { consumePostLoginNext } from "../lib/postLoginReturn";
@@ -36,22 +37,9 @@ const CATEGORIES = [
   { icon: "golf" as IconName, image: "/icons/categories/golf.png", label: "골프" },
 ];
 
-// 릴리스 폴리시 배치 7차(2026-09-17) — 성능 조사: 이 앱은 Next.js App Router라 레이아웃
-// (BottomNav 등)은 탭 전환 사이 유지되지만, 페이지 컴포넌트 자체(이 Home())는 다른 탭에
-// 갔다가 돌아올 때마다 매번 새로 마운트된다(App Router의 기본 동작, 버그 아님) — 그래서
-// "예약" 탭에 갔다가 "홈"으로 돌아올 때마다 아래 두 useEffect가 처음부터 다시 실행돼
-// 센터/클래스/배너/카테고리 목록이 잠깐 비었다가 다시 채워지는 게 매번 보였다("탭
-// 진입 시 순간적으로 다시 그려지는 느낌"의 실제 원인 중 하나). 두 개의 모듈 레벨 캐시로
-// 데이터 정확성은 그대로 유지하면서(항상 새로 fetch해서 갱신함) 재진입 시에만 마지막
-// 결과를 즉시 먼저 보여준다:
-//  1) homeDataCache — 센터/클래스/배너/카테고리 목록. TTL 안에서 재진입하면 그 값을
-//     먼저 화면에 채운 뒤, 그래도 항상 백그라운드로 새로 fetch해서 최신화한다.
-//  2) lastKnownPosition — GPS 위치. 매번 navigator.geolocation.getCurrentPosition()을
-//     기다리면(최대 4초 타임아웃) 센터 목록 fetch 자체가 그만큼 늦게 "시작"됐다(lat/lng를
-//     구하고 나서야 Promise.all을 시작하는 구조라 매 재진입마다 최대 4초를 그냥 날렸을
-//     수 있음) — 마지막으로 구한 위치가 있으면 그걸 즉시 써서 fetch를 바로 시작하고,
-//     최신 위치는 백그라운드로만 갱신해 다음 재진입 때 반영한다. 권한 프롬프트 자체는
-//     최초 1회만 뜨는 브라우저 표준 동작이라 이 캐시와 무관.
+// 홈 탭 재진입 시 빈 목록 깜빡임을 방지하기 위한 짧은 데이터 캐시.
+// 항상 새 데이터를 조회하며, 이 캐시가 인증/심사센터 접근 권한을 결정하지 않는다.
+// GPS 위치는 홈에서 자동 수집하지 않고, 검색의 '내 주변 20km' 필터를 켠 경우에만 사용한다.
 let homeDataCache: {
   centers: HomeCenter[];
   classes: HomeClass[];
@@ -60,7 +48,6 @@ let homeDataCache: {
   at: number;
 } | null = null;
 const HOME_CACHE_TTL_MS = 30_000;
-let lastKnownPosition: { lat: number; lng: number } | null = null;
 
 export default function Home() {
   const [centers, setCenters] = useState<HomeCenter[]>([]);
@@ -79,6 +66,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [isManager, setIsManager] = useState(false);
+  const [isNicepayReviewer, setIsNicepayReviewer] = useState(false);
   useEffect(() => {
     let mounted = true;
     let unsubscribe: (() => void) | null = null;
@@ -258,24 +246,8 @@ export default function Home() {
     }
 
     (async () => {
-      // 위치 권한 시도 (거부해도 그냥 최신순). 마지막으로 구했던 위치가 있으면 그걸
-      // 즉시 써서 센터 fetch를 바로 시작하고(매 재진입마다 최대 4초 기다리지 않음),
-      // 최신 위치는 아래에서 백그라운드로만 다시 구해 다음 재진입에 반영한다.
-      let lat: number | undefined = lastKnownPosition?.lat;
-      let lng: number | undefined = lastKnownPosition?.lng;
-      const freshPositionPromise = new Promise<GeolocationPosition>((res, rej) => {
-        if (!navigator.geolocation) return rej();
-        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 4000 });
-      })
-        .then((pos) => {
-          lastKnownPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          return lastKnownPosition;
-        })
-        .catch(() => null); // 위치 거부/실패 → 최신순(또는 캐시된 마지막 위치)
-      if (lat == null || lng == null) {
-        const fresh = await freshPositionPromise;
-        if (fresh) { lat = fresh.lat; lng = fresh.lng; }
-      }
+      // 홈은 전국 센터를 기본 조회한다. 20km 조건은 검색 페이지에서 사용자가
+      // '내 주변 20km' 버튼을 눌렀을 때만 적용하므로 홈 진입 시 GPS를 요청하지 않는다.
 
       try {
         // 릴리스 폴리시 배치(2026-09-14, 3차) — fetchMyUpcomingClasses()가 원래 위 4개
@@ -283,13 +255,15 @@ export default function Home() {
         // 참조하지 않는데도 네트워크 왕복 하나가 그냥 더 얹힌 셈) — 동시에 시작해두고
         // 마지막에만 기다린다. 비로그인 실패는 기존처럼 여기서 조용히 삼킨다.
         const upcomingPromise = fetchMyUpcomingClasses(getProfileIds()).catch(() => null);
-        const [cs, cl, bn, ct] = await Promise.all([
-          fetchHomeCenters(lat, lng), fetchHomeClasses(), fetchBanners(true), fetchCategories(),
+        const [cs, cl, bn, ct, reviewer] = await Promise.all([
+          fetchHomeCenters(), fetchHomeClasses(), fetchBanners(true), fetchCategories(),
+          fetchMyNicepayReviewAccess(),
         ]);
         setCenters(cs);
         setClasses(cl);
         setBanners(bn);
         setCatList(ct);
+        setIsNicepayReviewer(reviewer);
         homeDataCache = { centers: cs, classes: cl, banners: bn, categories: ct, at: Date.now() };
         const upcoming = await upcomingPromise;
         if (upcoming) setMyUpcoming(upcoming);
@@ -384,6 +358,26 @@ export default function Home() {
         )}
 
         </section>
+
+        {/* 전용 심사관에게만 표시. 센터 ID는 조회 결과를 사용하고, 실제 접근은 서버 RLS로 다시 제한한다. */}
+        {isNicepayReviewer && centers.length > 0 && (
+          <section aria-label="NICEPAY 심사 전용 센터">
+            <div className="home-class-head"><h2>심사 전용 센터</h2></div>
+            <div className="home-class-list">
+              {centers.map((c) => (
+                <Link key={c.id} className="home-class-row" href={`/center/${c.id}`} prefetch={false}>
+                  <div className="home-class-photo photo-fallback" aria-hidden="true">
+                    <UiIcon name="calendar" size={26} />
+                  </div>
+                  <div className="home-class-copy">
+                    <strong>{c.name}</strong>
+                    <small>심사용 수강권 및 결제 과정 확인</small>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* 비회원(로그인 안 한 상태)에게는 "곧 시작하는 클래스"/"내 수강권으로 예약
             가능"을 아예 숨긴다(2026-09-04, 사용자 결정) — 종목 둘러보기·센터 정보·내 주변
