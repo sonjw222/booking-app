@@ -21,7 +21,7 @@
 
 ## 3. 실제 결제창 확인 방법 (사용자가 직접)
 권장: **로컬 개발 서버 + 로컬 격리 Supabase + 실제 SDK** (`scripts/isolated/nicepayQa/realWindow.sh`).
-1. 로컬 격리 스택 준비(`supabase start --workdir isolated-supabase` → `scripts/isolated/bootstrapEphemeral.mjs` → `nicepayReview/setupLocal.sh` → `setupExtraPersonas.mjs`) 후 `ISO_ENV_FILE=<env>` 지정.
+1. 로컬 격리 스택 준비: `bash scripts/isolated/nicepayQa/prepareLocalStack.sh` (Docker 필요. 로컬 일회용 Supabase 시작 → fixture 구성 → 환경 파일 `~/.nicepay-qa/iso.env`(Git 밖, 권한 600) 생성). 정리: `supabase stop --no-backup --workdir isolated-supabase`.
 2. `ISO_ENV_FILE=<env> scripts/isolated/nicepayQa/realWindow.sh` — MerchantKey 를 프롬프트에 입력(화면 에코 없음, 파일·로그에 남지 않음). 키가 없으면 실행하지 않음(BLOCKED, 종료 코드 2).
 3. http://localhost:3100 에서 심사관 계정으로 로그인 → 심사 센터 → 수강권 → 카드 → 결제하기 → 결제창 확인 → 닫기(또는 테스트 카드 인증). **승인·청구는 일어나지 않고** 주문은 정리됩니다.
 4. 확인할 것: 결제창이 열림, 금액·상품명 일치, 닫으면 주문 `cancelled`, 인증 완료 시 "QA 테스트: 승인하지 않았어요" 화면.
