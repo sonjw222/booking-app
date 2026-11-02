@@ -63,8 +63,9 @@ describe("설정 loadNicepayConfig — 앱 복귀는 명시 설정일 때만", (
     expect(appReturnOf({ NICEPAY_APP_RETURN_ENABLED: "true", NICEPAY_APP_RETURN_SCHEME: "kakaotalk" })).toBeUndefined();
     expect(appReturnOf({ NICEPAY_APP_RETURN_ENABLED: "true", NICEPAY_APP_RETURN_SCHEME: SCHEME })).toEqual({ scheme: SCHEME });
   });
-  it("코드 상수가 꺼져 있으면(기본) 앱 복귀 설정이 있어도 설정 자체가 비활성", () => {
-    expect(loadNicepayConfig({ ...base, NICEPAY_APP_RETURN_ENABLED: "true", NICEPAY_APP_RETURN_SCHEME: SCHEME }).ok).toBe(false);
+  it("코드 상수 또는 서버 스위치(NICEPAY_CHECKOUT_ENABLED)가 꺼져 있으면 앱 복귀 설정이 있어도 설정 자체가 비활성", () => {
+    expect(loadNicepayConfig({ ...base, NICEPAY_APP_RETURN_ENABLED: "true", NICEPAY_APP_RETURN_SCHEME: SCHEME }, { codeFlag: false }).ok).toBe(false);
+    expect(loadNicepayConfig({ ...base, NICEPAY_CHECKOUT_ENABLED: "false", NICEPAY_APP_RETURN_ENABLED: "true", NICEPAY_APP_RETURN_SCHEME: SCHEME }, { codeFlag: true }).ok).toBe(false);
   });
 });
 

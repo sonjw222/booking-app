@@ -1,5 +1,8 @@
 # TODO
 
+- **P1(BLOCKED)**: NICEPAY 인증→ReturnURL 실제 복귀·iOS/Android 런타임 QA — NICEPAY 공식 테스트 인증 수단·WapUrl/IspCancelUrl 형식 확인 후, 비운영 HTTPS 테스트 서버(앱은 운영 server.url 을 쓰므로 별도 설정 필요) + 카드사 앱 설치 기기에서. `docs/payments/NICEPAY_BATCH2_AUTH_RETURN_QA_20261102.md` §5~6.
+- **P2**: `qa/nicepay-native-return-20261102` 병합 시 기본 저장소의 미완료 네이티브 수정(Info.plist·pbxproj·build.gradle)과 충돌 가능 — 병합 전 검토.
+
 - **P1(BLOCKED)**: NICEPAY auth-only QA — 테스트 MerchantKey 로 실제 결제창 표시·닫기 확인(`docs/payments/NICEPAY_AUTH_ONLY_QA_20261030.md` §3~4). `nicepay00m` 키 발급 방식·localhost ReturnURL 허용 여부 NICEPAY 확인. Preview 용 비운영 테스트 DB(심사 센터·게이트 포함) 지정 필요.
 
 - **P0(승인·BLOCKED)**: NICEPAY 기술지원 확인 — WapUrl/IspCancelUrl 값 형식(`scheme://nicepay/wap?orderId=`)·가맹점 scheme 확정(제안 `mwhabitnicepay`, 스토어 제출 후 변경 불가)·카드사 인증 페이지 도메인(`allowNavigation`)·앱 호출 목록 최신본. 확정 후 `NICEPAY_APP_RETURN_ENABLED/SCHEME` 운영 설정 + 네이티브 재빌드·스토어 제출(`docs/payments/NICEPAY_NATIVE_WEBVIEW_RETURN_20261030.md`).

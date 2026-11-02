@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-11-02 — NICEPAY Batch 2: 인증 복귀·앱(WebView) 결합 QA (로컬 `qa/nicepay-native-return-20261102`, SQL·운영 변경 없음)
+- #255 네이티브 구현을 auth-only QA 브랜치 위로 통합(충돌 4건 해결), 앱+auth-only 결합 시험 `authOnlyApp.spec.ts`(5) 추가, #258 이후 낡은 단위 시험 1건 갱신. iOS xcodebuild·Android assembleDebug·JUnit·Swift 검사 통과. 실제 카드 인증·실기기는 BLOCKED. 문서 `docs/payments/NICEPAY_BATCH2_AUTH_RETURN_QA_20261102.md`.
+
 ## 2026-10-30 — NICEPAY v3 테스트 결제창 격리 QA(auth-only) 환경 (`qa/nicepay-auth-only-20261030`, SQL·운영 변경 없음)
 - 공용 테스트 MID(`nicepay00m`) 또는 `NICEPAY_QA_AUTH_ONLY=true` 이면 서버가 인증 결과 검증 뒤 승인 API 를 호출하지 않고 주문을 정리(`qaAuthOnly.ts`, lifecycle/flow/result 화면). 운영 MID·운영 Supabase·production 환경·일반회원 결제 ON 이면 NICEPAY 설정 거부, 서버 fetch 는 NICEPAY 호스트로 나가지 못하게 차단(`guardFetch`).
 - 사전 점검 `scripts/qa/nicepayAuthOnlyPreflight.mjs`, 실제 결제창 로컬 러너 `scripts/isolated/nicepayQa/realWindow.sh`(키 미보유 시 BLOCKED), 격리 QA `tests/nicepay-qa/authOnly.spec.ts`(11)·단위 19건. 문서 `docs/payments/NICEPAY_AUTH_ONLY_QA_20261030.md`. 실제 외부 결제창은 테스트 MerchantKey 가 없어 BLOCKED.
