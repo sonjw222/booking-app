@@ -17,8 +17,8 @@ function setup() {
 
 export async function POST(request: Request) {
   const s = setup(); if ("error" in s) return s.error;
-  let body: { orderId?: unknown; orderName?: unknown };
+  let body: { orderId?: unknown; orderName?: unknown; client?: unknown };
   try { body = await request.json(); } catch { return json({ error: "요청 형식이 올바르지 않아요" }, 400); }
-  const r = await handlePrepare({ token: bearerToken(request), orderId: body.orderId, orderName: body.orderName }, s.deps);
+  const r = await handlePrepare({ token: bearerToken(request), orderId: body.orderId, orderName: body.orderName, client: body.client }, s.deps);
   return json(r.body, r.status);
 }

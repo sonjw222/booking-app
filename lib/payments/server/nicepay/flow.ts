@@ -15,6 +15,7 @@ import { handleNicepayAuthReturn, classifyNicepayWebhook, type NicepayDeps } fro
 import type { NicepayConfig } from "./config";
 import { maskId } from "./redact";
 import { isMemberPassMoid } from "../../domains";
+import { buildAppReturnUrls, parseAppClient } from "../../nicepayAppReturn";
 
 export type Reply = { status: number; body: Record<string, unknown> };
 export type OrderView = { orderId: string; status: string; amount: number; provider: string | null };
@@ -51,7 +52,7 @@ async function uidFrom(input: { token?: string | null; returnToken?: unknown; or
 
 const goodsNameOf = (raw: unknown) => (typeof raw === "string" && raw.trim() ? Array.from(raw.trim()).slice(0, 20).join("") : "모하빗 수강권");   // 표시용(최대 40바이트 이내로 짧게). 금액/상품 결정에 쓰지 않는다
 
-export async function handlePrepare(input: { token: string | null; orderId?: unknown; orderName?: unknown }, d: FlowDeps, now: Date = new Date()): Promise<Reply> {
+export async function handlePrepare(input: { token: string | null; orderId?: unknown; orderName?: unknown; client?: unknown }, d: FlowDeps, now: Date = new Date()): Promise<Reply> {
   if (!isMemberPassMoid(input.orderId)) return { status: 400, body: { error: "orderId가 올바르지 않아요" } };   // 회원 수강권 주문(UUID)만 — 구독 결제 주문번호는 이 도메인에 들어오지 못한다
   const uid = input.token ? await d.getAuthUid(input.token) : null;
   if (!uid) return { status: 401, body: { error: "로그인이 필요해요" } };
@@ -68,7 +69,10 @@ export async function handlePrepare(input: { token: string | null; orderId?: unk
     return { status: 200, body: { ok: true, family: "rest_v1", sdkUrl: c.sdkUrl, resultUrl, params: { clientId: c.clientId, method: "card", orderId: ctx.orderId, amount: ctx.amount, goodsName: goodsNameOf(input.orderName), returnUrl } } };
   }
   const ediDate = ediDateOf(now), amt = String(ctx.amount);
-  return { status: 200, body: { ok: true, family: "v3_mid", resultUrl, params: { MID: c.mid, Moid: ctx.orderId, Amt: amt, GoodsName: goodsNameOf(input.orderName), EdiDate: ediDate, SignData: nicepaySign.payRequest({ ediDate, mid: c.mid, amt }, c.merchantKey), ReturnURL: returnUrl, PayMethod: "CARD", CharSet: "utf-8" } } };
+  // 앱(WebView) 결제: 서버 설정(appReturn)이 켜져 있고 클라이언트가 ios/android 앱이라고 알릴 때만 WapUrl/IspCancelUrl 을 싣는다. 클라이언트 값은 "어느 앱인지" 힌트일 뿐 — URL 은 서버 설정의 scheme + DB 주문 UUID 로만 만든다.
+  const appReturnUrls = c.appReturn && parseAppClient(input.client) ? buildAppReturnUrls(c.appReturn.scheme, ctx.orderId) : null;
+  const appReturnParams = appReturnUrls ?? {};
+  return { status: 200, body: { ok: true, family: "v3_mid", resultUrl, params: { MID: c.mid, Moid: ctx.orderId, Amt: amt, GoodsName: goodsNameOf(input.orderName), EdiDate: ediDate, SignData: nicepaySign.payRequest({ ediDate, mid: c.mid, amt }, c.merchantKey), ReturnURL: returnUrl, PayMethod: "CARD", CharSet: "utf-8", ...appReturnParams } } };
 }
 
 /** NICEPAY → returnUrl POST. 항상 결과 화면 경로를 돌려준다(상태는 쿼리에 싣지 않는다 — 결과 화면이 status로 DB 진실을 읽는다). */

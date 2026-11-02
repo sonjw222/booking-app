@@ -10,6 +10,7 @@
 */
 import { NICEPAY_CHECKOUT_ACTIVATED } from "../../PaymentProviderFactory";
 import { evaluateQaAuthOnly } from "./qaAuthOnly";
+import { isValidAppReturnScheme } from "../../nicepayAppReturn";
 
 export type NicepayFamily = "rest_v1" | "v3_mid";
 export type NicepayEnvName = "sandbox" | "production";
@@ -17,7 +18,9 @@ export type NicepayConfig =
   | { family: "rest_v1"; clientId: string; secretKey: string; env: NicepayEnvName; apiBase: string; sdkUrl: string; returnBaseUrl: string }
   | { family: "v3_mid"; mid: string; merchantKey: string; env: NicepayEnvName; returnBaseUrl: string;
       /** 격리 QA 인증만(auth-only) 모드 — 승인·망취소·취소·환불 호출 차단(qaAuthOnly.ts). 공용 테스트 MID(nicepay00m)이거나 NICEPAY_QA_AUTH_ONLY=true 이면 항상 true. */
-      qaAuthOnly?: true };
+      qaAuthOnly?: true;
+      /** 앱(WebView) 결제 복귀 — NICEPAY 확인·사용자 승인 전에는 undefined(WapUrl/IspCancelUrl 미전송). NICEPAY_APP_RETURN_ENABLED==="true" + 유효한 NICEPAY_APP_RETURN_SCHEME 일 때만 생긴다. */
+      appReturn?: { scheme: string } };
 
 export type ConfigResult = { ok: true; config: NicepayConfig } | { ok: false; reason: "code_flag_off" | "disabled" | "incomplete" | "qa_unsafe"; missing: string[] };
 
@@ -49,7 +52,10 @@ export function loadNicepayConfig(env: Env = process.env, opts: { codeFlag?: boo
     const h = REST_HOSTS[envName];
     return { ok: true, config: { family, clientId: env.NICEPAY_CLIENT_ID!.trim(), secretKey: env.NICEPAY_SECRET_KEY!.trim(), env: envName, apiBase: h.api, sdkUrl: h.sdk, returnBaseUrl } };
   }
-  return { ok: true, config: { family: "v3_mid", mid: env.NICEPAY_MID!.trim(), merchantKey: env.NICEPAY_MERCHANT_KEY!.trim(), env: envName, returnBaseUrl, ...(qa.requested ? { qaAuthOnly: true as const } : {}) } };
+  // 앱 복귀(선택): 둘 다 맞을 때만 켠다. 값이 이상하면 조용히 꺼 둔다(결제 자체는 막지 않는다 — 앱 복귀 없이도 기존 웹 결제 흐름은 그대로).
+  const scheme = (env.NICEPAY_APP_RETURN_SCHEME ?? "").trim();
+  const appReturn = env.NICEPAY_APP_RETURN_ENABLED === "true" && isValidAppReturnScheme(scheme) ? { scheme } : undefined;
+  return { ok: true, config: { family: "v3_mid", mid: env.NICEPAY_MID!.trim(), merchantKey: env.NICEPAY_MERCHANT_KEY!.trim(), env: envName, returnBaseUrl, ...(appReturn ? { appReturn } : {}), ...(qa.requested ? { qaAuthOnly: true as const } : {}) } };
 }
 
 /** 응답/로그에 내려도 되는 설정 상태(값 없음) */
