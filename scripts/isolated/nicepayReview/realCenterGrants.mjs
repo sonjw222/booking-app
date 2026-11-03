@@ -93,6 +93,50 @@ rec("R3", "운영 센터 매니저MA·플랫폼 규칙: 운영 센터는 기존�
 rec("R4", "심사 센터 매니저MB: 심사 센터 관리 가시성 유지", 1, (await view(U.MB.c, REV)).center);
 rec("R5", "심사관 겸 매니저 S: 실제 센터는 허용이 없으므로 안 보임(구매 규칙은 매니저 예외 없음)", "0", String((await view(U.S.c, REAL)).purchasable));
 
+
+// ── 6. 조회 전용 권한의 유지: UPDATE·기존 주문/예약 상태 변경·서버 RPC (can_purchase=false) ──
+psql(grantSql(false));
+const realP = P("[로컬] 11월 4주완성 수강권"), realP2 = P("[로컬] 11월 스케줄링 수강권"), opP = prods.find((p) => p.center_id === OP);
+const svcOrder = async (extra = {}) => (await svc.from("orders").insert({ center_id: REAL, profile_id: U.B.profile, product_id: realP.id, product_name: realP.name, amount: realP.price, pay_method: "direct", ...extra }).select("id").single());
+const o6 = await svcOrder(); rec("U0", "서버(service_role)는 허용 여부와 무관하게 주문 생성 가능(서버 경로 불변)", "CREATED", o6.error ? "DENIED" : "CREATED", o6.error?.message);
+const oid = o6.data?.id; const col = (t, id, c) => psql(`select ${c} from ${t} where id='${id}'`);
+const upd = async (table, id, patch) => { const r = await U.B.c.from(table).update(patch).eq("id", id).select("id"); return r.error ? guardMsg(r.error) : (r.data?.length ? "UPDATED" : "NOROW"); };
+rec("U1", "조회 전용: 기존 주문의 상품을 다른 상품으로 바꾸는 UPDATE 는 거부(또는 행 없음)이고 DB 값 불변", `${realP.id}|true`, `${col("orders", oid, "product_id")}|${["GUARD", "NOROW"].includes(await upd("orders", oid, { product_id: realP2.id })) || col("orders", oid, "product_id") === realP.id}`);
+rec("U2", "조회 전용: 기존 주문의 센터를 다른 운영 센터로 바꾸는 UPDATE 거부, DB 값 불변", `${REAL}`, (await upd("orders", oid, { center_id: OP, product_id: opP.id }), col("orders", oid, "center_id")));
+const cancelRes = await upd("orders", oid, { status: "cancelled" });
+rec("U3", "조회 전용: 기존(사전에 있던) 주문의 상태 변경은 센터 가드가 막지 않는다(사후 처리 보존 — 가드 메시지가 아님)", "true", String(cancelRes !== "GUARD"), `결과 ${cancelRes}`);
+const ci = await svc.from("cart_items").insert({ profile_id: U.B.profile, center_id: REAL, product_id: realP.id, product_name: realP.name }).select("id").single();
+rec("U4", "조회 전용: 장바구니 항목의 상품을 바꾸는 UPDATE 거부, DB 값 불변", `${realP.id}`, (await upd("cart_items", ci.data.id, { product_id: realP2.id }), col("cart_items", ci.data.id, "product_id")));
+const clsId = psql(`select id from classes where center_id='${REAL}' limit 1`);
+const mem = await svc.from("memberships").insert({ profile_id: U.B.profile, center_id: REAL, product_name: "[로컬] 시험 수강권", pass_type: "count", total_count: 4, remaining_count: 4 }).select("id").single();
+const rs1 = await U.B.c.rpc("reserve_class", { p_class_id: clsId, p_profile_id: U.B.profile });
+rec("U5", "조회 전용: reserve_class RPC 거부(센터 가드)", "GUARD", rs1.error ? guardMsg(rs1.error) : "CREATED", rs1.error?.message);
+const rs2 = await U.B.c.rpc("reserve_with_membership", { p_class_id: clsId, p_profile_id: U.B.profile, p_membership_id: mem.data.id });
+rec("U6", "조회 전용: reserve_with_membership RPC(수강권이 이미 있어도) 거부", "GUARD", rs2.error ? guardMsg(rs2.error) : "CREATED", rs2.error?.message);
+const resv = await svc.from("reservations").insert({ class_id: clsId, profile_id: U.B.profile, membership_id: mem.data.id, status: "confirmed" }).select("id").single();
+rec("U7", "서버(service_role)의 예약 생성은 가능(서버 경로 불변)", "CREATED", resv.error ? "DENIED" : "CREATED", resv.error?.message);
+const cr = resv.data ? await U.B.c.rpc("cancel_reservation", { p_reservation_id: resv.data.id }) : { error: { message: "no reservation" } };
+rec("U8", "조회 전용: 사전에 있던 예약의 본인 취소는 센터 가드가 막지 않는다(사후 처리 보존)", "true", String(!(cr.error && /이용할 수 없어요/.test(cr.error.message))), cr.error?.message ?? "ok");
+const cleanup = () => psql(`begin; set local session_replication_role = replica; delete from reservations where profile_id='${U.B.profile}' and class_id='${clsId}'; delete from memberships where id='${mem.data.id}'; delete from cart_items where id='${ci.data.id}'; delete from orders where id='${oid}'; commit;`);
+cleanup();
+
+// ── 7. 센터 상태 변화 시 허용 즉시 무효 (승인 취소·내부 전환) — 사용자·관리자 동작 불변 ──
+psql(grantSql(true));
+const setCenter = (sql) => psql(`begin; set local session_replication_role = replica; ${sql}; commit;`);
+const baseA = brief(await view(U.A.c, REAL)), baseMA = (await view(U.MA.c, OP)).center;
+rec("I0", "허용(구매 포함) 상태: 심사관B 가 보고 구매 가능", "1|true", `${(await view(U.B.c, REAL)).center}|${guardMsg((await U.B.c.from("orders").insert(ord(U.B)).select("id").single()).error) === "CREATED"}`);
+await svc.from("orders").delete().eq("profile_id", U.B.profile).eq("center_id", REAL);
+setCenter(`update centers set status='pending' where id='${REAL}'`);
+rec("I1", "센터 승인 취소(pending) → 허용 즉시 무효: B 가 못 봄, my_ids 비어 있음", "0/0/0/0/0/0|", `${brief(await view(U.B.c, REAL))}|${await myIds(U.B.c)}`);
+rec("I1b", "승인 취소 중 B 의 구매 시도는 거부(서비스 계정 외 주문 불가)", "DENIED", (await U.B.c.from("orders").insert(ord(U.B)).select("id").single()).error ? "DENIED" : "CREATED");
+setCenter(`update centers set status='approved' where id='${REAL}'`);
+rec("I2", "다시 승인되면 허용 행이 그대로 되살아남", "1|REAL:true", `${(await view(U.B.c, REAL)).center}|${await myIds(U.B.c)}`);
+setCenter(`update centers set is_internal=true where id='${REAL}'`);
+rec("I3", "내부 센터로 전환 → 허용 즉시 무효", "0/0/0/0/0/0|", `${brief(await view(U.B.c, REAL))}|${await myIds(U.B.c)}`);
+setCenter(`update centers set is_internal=false where id='${REAL}'`);
+rec("I4", "내부 전환을 되돌리면 되살아남", "1", String((await view(U.B.c, REAL)).center));
+rec("I5", "그 동안 일반회원 A·운영 매니저 MA 의 가시성은 원래 값과 같음(허용 목록 영향 없음)", `${baseA}|${baseMA}`, `${brief(await view(U.A.c, REAL))}|${(await view(U.MA.c, OP)).center}`);
+
 // ── 5. 허용 해제·권한 회수 ──
 clearGrants(); rec("X1", "허용 삭제 후 심사관B 에게 실제 센터가 다시 숨겨짐", "0/0/0/0/0/0", brief(await view(U.B.c, REAL)));
 psql(grantSql(false)); psql(`update accounts set nicepay_review_access=false where id='${accB}'`);

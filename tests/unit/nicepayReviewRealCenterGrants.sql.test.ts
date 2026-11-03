@@ -7,7 +7,7 @@ const rollback = read("rollback_add_nicepay_review_real_center_grants_20261103.s
 const verify = read("verify_add_nicepay_review_real_center_grants_20261103.sql");
 const p2 = read("add_nicepay_review_center_isolation_20261028.sql");
 const nonComment = (s: string) => s.split("\n").filter((l) => !l.trim().startsWith("--")).join("\n");
-const fn = (s: string, name: string) => (new RegExp(`create or replace function ${name}\\(.*?\\n(?:\\$\\$;|end \\$\\$;)\\n`, "s").exec(s) ?? [""])[0];
+const fn = (s: string, name: string) => (new RegExp(`create or replace function ${name}\\(.*?(?:\\n\\$\\$;|\\nend \\$\\$;)\\n`, "s").exec(s) ?? [""])[0];   // 가장 가까운 종결 표식까지(다음 함수까지 삼키지 않는다)
 
 describe("NICEPAY 실제 센터 허용 목록 SQL — 정적 계약(실제 격리 Postgres 동작은 scripts/isolated/nicepayReview/realCenterGrants.mjs 41건)", () => {
   it("데이터 변경이 없다: 기존 테이블 UPDATE/DELETE/INSERT/TRUNCATE/DROP TABLE 없음, 새 테이블만 만든다, 단일 트랜잭션", () => {
@@ -49,6 +49,19 @@ describe("NICEPAY 실제 센터 허용 목록 SQL — 정적 계약(실제 격�
     for (const n of ["nicepay_review_center_allowed", "nicepay_review_center_member_allowed", "nicepay_review_guard_center"]) expect(fn(rollback, n)).toBe(fn(p2, n));
     expect(rollback).toMatch(/drop table if exists nicepay_review_center_grants/); expect(rollback).toMatch(/롤백 중단: 허용 목록에 행이 있어요/);
     expect(nonComment(rollback)).not.toMatch(/\bupdate\s+\w+\s+set\b|delete\s+from\s+(?!nicepay_review_center_grants)/i);
+  });
+  it("롤백은 정확히 3개 함수만 복원한다 — 목록 RPC·주문 정책(만료 상품 숨김 SQL 이 바꾼 것)을 되돌리지 않는다", () => {
+    expect(rollback.match(/create or replace function /gi)).toHaveLength(3);
+    expect(nonComment(rollback)).not.toMatch(/fetch_public_storefront|fetch_purchasable_products|create_order_secure|create policy|alter policy/i);
+    for (const n of ["nicepay_review_center_allowed", "nicepay_review_center_member_allowed", "nicepay_review_guard_center"]) expect(fn(rollback, n).split("\n").length).toBeLessThan(25);
+  });
+  it("preflight 는 문자열 포함이 아니라 pg_get_functiondef MD5 전체 비교(적용 전 운영 값·적용본), 운영 기준 해시를 포함", () => {
+    expect(apply).toMatch(/md5\(pg_get_functiondef\(to_regprocedure\(r\.sig\)\)\)/);
+    for (const h of ["636cb33ff0feaf95244ef0c41c3eb923", "a3a299f743087d104ebf41948e464d94", "0e8dc90f9da6cb921225657ba6ae4fb4"]) { expect(apply).toContain(h); expect(rollback).toContain(h); }
+    expect(apply).not.toMatch(/@@POST_|not like/);   // 자리표시자·문자열 포함 검사 없음
+  });
+  it("허용 판정은 판정 시점에 센터가 승인·비내부·비심사 센터인지 다시 확인한다(승인 취소·내부 전환 시 즉시 무효)", () => {
+    for (const n of ["nicepay_review_center_granted", "nicepay_review_center_purchase_granted"]) expect(fn(apply, n)).toMatch(/c\.status = 'approved' and not c\.is_internal and not c\.is_nicepay_review/);
   });
   it("verify 는 읽기 전용", () => { expect(nonComment(verify)).not.toMatch(/\b(insert|update|delete|drop|alter|create|truncate)\b/i); });
 });

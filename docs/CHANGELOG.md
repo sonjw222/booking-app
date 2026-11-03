@@ -15,6 +15,9 @@
 - 심사관에게만 보이는 홈 섹션: 제목·aria-label "심사 전용 센터" → "수강권 및 결제 확인 센터", 부제 "심사용 수강권 및 결제 과정 확인" → "테스트 센터 · 수강권 및 결제 과정 확인". 노출 조건(`fetchMyNicepayReviewAccess`)·접근 제어·결제 플래그·상품 데이터는 변경 없음.
 - 운영 DB 센터·상품 문구는 `fix_nicepay_review_wording_20261105.sql` 로 이미 승인 후 적용 완료 — 이 변경에 SQL 은 없고 재실행하지 않는다.
 - 회귀 테스트: 이용자 화면 코드의 '심사용' 계열 문구 재유입 방지(`nicepayReviewWording.test.ts`), 홈 렌더(심사관/일반 회원/비로그인/빈 목록, `nicepayHomeReviewSection.render.test.ts`).
+## 2026-11-03 — 실제 센터 허용 목록 SQL 2차 보완 (로컬, 운영 SQL 미실행)
+- preflight 를 함수 정의 MD5 전체 비교(운영 기준값)로 강화, 허용 센터가 승인 취소·내부 전환되면 허용 즉시 무효, 조회 전용 UI(구매·담기·예약 버튼 숨김·결제 화면 비활성), 롤백이 목록 RPC 를 되돌리던 결함 수정(함수 3개만 복원), 생애주기 시험 30건·접근 시험 57건·브라우저 6건 추가.
+
 ## 2026-11-03 — NICEPAY 심사관에게 실제 센터(A10TION) 상품을 보여 주는 허용 목록 (로컬 `feat/nicepay-real-products-review-20261103`, 운영 SQL 미실행)
 - 신규 `add_nicepay_review_real_center_grants_20261103.sql`(+rollback·verify·읽기 전용 점검 SQL): 심사관 계정↔실제 센터 허용 목록(`nicepay_review_center_grants`, 기본 조회 전용·`can_purchase` 별도), 가시성·구매 가드 함수 교체. 카드 결제 게이트는 불변(허용 센터 카드 결제 불가). 앱: `nicepayDiscoveryScope()`/`narrowToReviewCenters()`(허용 센터 id 는 DB RPC 로 중앙 관리, SQL 전 배포 안전), 홈 심사관 섹션 문구. 격리 DB 41건·브라우저 5건·기존 회귀 통과. 문서 `docs/payments/NICEPAY_REAL_CENTER_REVIEW_20261103.md`.
 

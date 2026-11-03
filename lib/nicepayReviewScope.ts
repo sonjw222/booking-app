@@ -9,7 +9,8 @@
 import { supabase } from "./supabaseClient";
 import { fetchMyNicepayReviewAccess } from "./authAccount";
 
-export type ReviewScope = { extraCenterIds: string[] };
+/** extraCenterIds: 탐색에 추가로 보일 허용 센터 / viewOnlyCenterIds: 그중 조회 전용(can_purchase=false)인 센터 — UI 가 구매 버튼을 숨기는 데 쓴다. */
+export type ReviewScope = { extraCenterIds: string[]; viewOnlyCenterIds: string[] };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** 심사관이면 탐색 범위(허용 센터 id 포함), 아니면 null(기존 동작). 조회 실패는 null/빈 목록으로 안전하게 처리한다. */
@@ -19,10 +20,10 @@ export async function nicepayDiscoveryScope(): Promise<ReviewScope | null> {
   if (!reviewer) return null;
   try {
     const { data, error } = await supabase.rpc("nicepay_my_review_center_ids");
-    if (error || !Array.isArray(data)) return { extraCenterIds: [] };
-    const ids = (data as Array<{ center_id?: unknown }>).map((r) => r.center_id).filter((v): v is string => typeof v === "string" && UUID.test(v));
-    return { extraCenterIds: [...new Set(ids)] };
-  } catch { return { extraCenterIds: [] }; }
+    if (error || !Array.isArray(data)) return { extraCenterIds: [], viewOnlyCenterIds: [] };
+    const rows = (data as Array<{ center_id?: unknown; can_purchase?: unknown }>).filter((r): r is { center_id: string; can_purchase?: unknown } => typeof r.center_id === "string" && UUID.test(r.center_id));
+    return { extraCenterIds: [...new Set(rows.map((r) => r.center_id))], viewOnlyCenterIds: [...new Set(rows.filter((r) => r.can_purchase !== true).map((r) => r.center_id))] };
+  } catch { return { extraCenterIds: [], viewOnlyCenterIds: [] }; }
 }
 
 /** @deprecated 호환용 — 심사관 여부만 필요할 때. 새 코드는 nicepayDiscoveryScope() 를 쓴다. */
@@ -42,4 +43,14 @@ export function narrowToReviewCenters<Q extends Narrowable<Q>>(q: Q, scope: Revi
   if (scope.extraCenterIds.length === 0) return q.eq(referencedTable ? `${referencedTable}.is_nicepay_review` : "is_nicepay_review", true);
   const filter = `is_nicepay_review.eq.true,id.in.(${scope.extraCenterIds.join(",")})`;
   return referencedTable ? q.or(filter, { referencedTable }) : q.or(filter);
+}
+
+/**
+ * 이 센터가 "조회 전용 허용"(심사관이 상품을 확인만 하는 실제 센터)인가. true 이면 UI 는 구매·담기·예약 버튼을 보이지 않는다.
+ * 서버가 같은 규칙으로 구매를 거부하므로(nicepay_review_guard_center) 이 값은 안내용이다 — 조회 실패는 false(기존 화면).
+ */
+export async function fetchNicepayViewOnlyCenter(centerId: string): Promise<boolean> {
+  if (!UUID.test(centerId)) return false;
+  const scope = await nicepayDiscoveryScope();
+  return !!scope && scope.viewOnlyCenterIds.includes(centerId);
 }

@@ -33,6 +33,7 @@ import UiIcon, { type IconName } from "../components/UiIcon";
 import ErrorState from "../components/ErrorState";
 import { hapticSuccess } from "../../lib/nativeHaptics";
 import NicepayReviewWindow, { type ReviewWindowStatus } from "../components/NicepayReviewWindow";
+import { fetchNicepayViewOnlyCenter } from "../../lib/nicepayReviewScope";
 
 // 카카오페이/토스페이는 로고 자산이 없어 outline 아이콘 하나로 뭉치면 구분이 안 되므로
 // --vendor-* 색 점(dot)으로, 나머지는 의미가 통하는 outline 아이콘으로 구분한다.
@@ -66,6 +67,9 @@ function CheckoutContent() {
   const sp = useSearchParams();
   const centerId = sp.get("center") ?? "";
   const productId = sp.get("product") ?? "";
+  // NICEPAY 심사관의 "조회 전용" 실제 센터 — 직접 URL 로 들어와도 결제·주문 접수 버튼을 쓸 수 없게 하고 이유를 안내한다(서버도 같은 규칙으로 거부).
+  const [viewOnly, setViewOnly] = useState(false);
+  useEffect(() => { let on = true; fetchNicepayViewOnlyCenter(centerId).then((v) => { if (on) setViewOnly(v); }).catch(() => {}); return () => { on = false; }; }, [centerId]);
   // 예약창 → 수강권 구매하기로 넘어온 경우, 구매 후 바로 예약할 수업 정보
   const reserveClassId = sp.get("reserveClassId");
   const reserveDate = sp.get("reserveDate");
@@ -283,7 +287,7 @@ function CheckoutContent() {
   const scheduleState = purchaseScheduleState(product, scheduleOptions, scheduleOptionsFailed, selectedScheduleDay, selectedScheduleTime);
 
   async function handlePay() {
-    if (!product) return;
+    if (!product || viewOnly) return;
     // 선택형: 가격표에 없는 횟수는 결제를 진행하지 않는다(서버도 같은 기준으로 주문 생성을 거부한다).
     if (countSelectable && computeBaseAmount(product, selectedCount) == null) {
       setError("구매할 횟수를 선택해주세요");
@@ -832,8 +836,9 @@ function CheckoutContent() {
           </div>
         </div>
       )}
-      <button className="primary-btn checkout-pay-btn" disabled={busy || pgUnresolved || reviewCardLock || (scheduleState.required && ["loading", "load_failed", "no_options", "no_times"].includes(scheduleState.reason))} onClick={handlePay}>
-        {busy ? copy.busyButton : pgUnresolved ? "결제 결과 확인 중" : reviewCardLock ? "카드 결제는 ‘결제창 확인’으로만 가능해요" : copy.button}
+      {viewOnly && <div data-testid="view-only-notice" role="status" style={{ margin: "12px 0", padding: "12px 14px", borderRadius: 12, background: "var(--card-bg)", border: "1px solid var(--line)", fontSize: 13, color: "var(--text-dim)" }}>심사 확인용으로 상품 정보를 조회만 할 수 있어요. 이 센터의 상품은 이 화면에서 구매할 수 없어요.</div>}
+      <button className="primary-btn checkout-pay-btn" disabled={busy || pgUnresolved || reviewCardLock || (scheduleState.required && ["loading", "load_failed", "no_options", "no_times"].includes(scheduleState.reason)) || viewOnly} onClick={handlePay}>
+        {viewOnly ? "조회 전용 — 구매할 수 없어요" : busy ? copy.busyButton : pgUnresolved ? "결제 결과 확인 중" : reviewCardLock ? "카드 결제는 ‘결제창 확인’으로만 가능해요" : copy.button}
       </button>
       <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "var(--text-dim)" }}>
         {copy.consent} <a href="/legal/refund" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>환불 정책</a>과{" "}

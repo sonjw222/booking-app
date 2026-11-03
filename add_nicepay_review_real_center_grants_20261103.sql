@@ -18,30 +18,35 @@
 --   · 일반 회원/비회원/매니저/플랫폼 관리자/토스 심사관의 가시성과 구매 규칙, 기존 심사 센터 규칙, is_internal 규칙.
 --   · 만료 상품 숨김(fix_expired_fixed_date_products_20261031.sql)과 적용 순서 무관 — 이 파일은 그 RPC 를 다시 만들지 않는다.
 --
--- 적용 전제: add_nicepay_review_center_isolation_20261028.sql(P2) 적용 완료. 없으면 아래 preflight 가 중단한다.
+-- 적용 전제: add_nicepay_review_center_isolation_20261028.sql(P2) 적용 완료. 교체 대상 함수 3개의 정의 MD5 가 (운영 적용 전 값 | 이 파일 적용본)과 다르면 preflight 가 중단한다.
 -- 적용 후 데이터 지정은 이 파일에 없다(권한 부여는 별도 INSERT — 파일 하단 주석 예시, 사용자 승인 후).
 -- 되돌리기: rollback_add_nicepay_review_real_center_grants_20261103.sql (함수 정의를 P2 정의로 복원, 새 객체 삭제). 확인: verify_add_nicepay_review_real_center_grants_20261103.sql
 -- ============================================================
 BEGIN;
 
--- preflight: P2 객체가 있어야 하고, 이 파일이 교체할 함수 정의가 "P2 정의 또는 이 파일 적용본" 이어야 한다(운영에서 따로 바뀌었으면 덮어쓰지 않고 중단).
+-- preflight: 이 파일이 교체할 함수 3개의 "현재 정의"가 (적용 전 운영 정의) 또는 (이 파일 적용본)과 MD5 로 정확히 같을 때만 진행한다.
+--   문자열 포함 여부가 아니라 pg_get_functiondef 전체 해시 비교다. 운영에서 따로 바뀌었으면 아무것도 바꾸지 않고 중단한다(재실행은 적용본 해시를 허용 → 멱등).
+--   적용 전 기준값 = 2026-11-03 운영 읽기 전용 조회 MD5(로컬 격리 DB 에 P2 를 적용해 측정한 값과 동일함을 확인).
 do $$
-declare v_allowed text; v_member text; v_guard text;
+declare r record; v_h text;
 begin
-  if to_regprocedure('public.nicepay_review_center_allowed(uuid)') is null or to_regprocedure('public.nicepay_review_center_member_allowed(uuid)') is null
-     or to_regprocedure('public.nicepay_review_guard_center()') is null or to_regprocedure('public.nicepay_is_reviewer()') is null
-     or to_regprocedure('public.my_account_id()') is null or to_regprocedure('public.my_managed_center_ids()') is null or to_regprocedure('public.is_platform_admin()') is null then
+  if to_regprocedure('public.nicepay_is_reviewer()') is null or to_regprocedure('public.my_account_id()') is null
+     or to_regprocedure('public.my_managed_center_ids()') is null or to_regprocedure('public.is_platform_admin()') is null
+     or to_regprocedure('public.nicepay_is_client_request()') is null then
     raise exception 'NICEPAY 실제 센터 허용: P2(add_nicepay_review_center_isolation_20261028.sql) 객체가 없습니다 — 먼저 적용하세요';
   end if;
-  v_allowed := pg_get_functiondef(to_regprocedure('public.nicepay_review_center_allowed(uuid)'));
-  v_member  := pg_get_functiondef(to_regprocedure('public.nicepay_review_center_member_allowed(uuid)'));
-  v_guard   := pg_get_functiondef(to_regprocedure('public.nicepay_review_guard_center()'));
-  -- P2 정의의 핵심 표식(심사 센터 + nicepay_is_reviewer 분기)이 없으면 운영에서 따로 바뀐 것 → 중단. 이 파일 적용본(grants 참조)도 통과(재실행 멱등).
-  if v_allowed not like '%is_nicepay_review%' or v_allowed not like '%nicepay_is_reviewer()%'
-     or v_member not like '%is_nicepay_review%' or v_member not like '%nicepay_is_reviewer()%'
-     or v_guard not like '%nicepay_review_center_member_allowed%' and v_guard not like '%nicepay_review_center_purchase_allowed%' then
-    raise exception 'NICEPAY 실제 센터 허용: 교체 대상 함수의 현재 정의가 예상과 달라요 — 덮어쓰지 않고 중단합니다(운영 정의 확인 필요)';
-  end if;
+  for r in select * from (values
+      ('public.nicepay_review_center_allowed(uuid)', '636cb33ff0feaf95244ef0c41c3eb923', '078ffecea883196dd869512aa1cbc938'),
+      ('public.nicepay_review_center_member_allowed(uuid)', 'a3a299f743087d104ebf41948e464d94', '030f304bb08fbc2efb67e8ecbc40669f'),
+      ('public.nicepay_review_guard_center()', '0e8dc90f9da6cb921225657ba6ae4fb4', '7b5c7ca9333d0e7a90fdc559690ab07e')
+    ) as t(sig, pre_md5, post_md5)
+  loop
+    if to_regprocedure(r.sig) is null then raise exception 'NICEPAY 실제 센터 허용: % 가 없어요 — P2 가 적용돼 있어야 해요', r.sig; end if;
+    v_h := md5(pg_get_functiondef(to_regprocedure(r.sig)));
+    if v_h <> r.pre_md5 and v_h <> r.post_md5 then
+      raise exception 'NICEPAY 실제 센터 허용: % 의 현재 정의가 예상(적용 전 운영 정의/이 파일 적용본)과 달라요(해시 %) — 덮어쓰지 않고 중단합니다. 운영 정의 차이를 먼저 확인하세요.', r.sig, v_h;
+    end if;
+  end loop;
 end $$;
 
 -- 1) 심사관 계정 ↔ 허용 센터
@@ -73,14 +78,22 @@ end $$;
 drop trigger if exists trg_nicepay_review_center_grant_valid on nicepay_review_center_grants;
 create trigger trg_nicepay_review_center_grant_valid before insert or update on nicepay_review_center_grants for each row execute function enforce_nicepay_review_center_grant_valid();
 
--- 호출자(심사관)에게 허용된 센터인지 / 구매까지 허용됐는지. 심사관 권한이 꺼지면(또는 계정이 비활성) 허용 목록도 효력이 없다.
+-- 호출자(심사관)에게 허용된 센터인지 / 구매까지 허용됐는지. 효력 조건(전부 "판정 시점"에 다시 확인 — 허용 행이 남아 있어도 아래가 깨지면 즉시 무효):
+--   · 심사관 권한이 켜져 있고 계정이 활성(nicepay_is_reviewer)
+--   · 센터가 지금도 승인(status='approved')이고 내부 센터가 아니며 심사 센터가 아님 — 센터가 승인 취소·내부 전환되면 조회·구매 허용이 즉시 사라진다(다시 승인되면 허용 행이 그대로 되살아남).
 create or replace function nicepay_review_center_granted(p_center_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
-    select nicepay_is_reviewer() and exists (select 1 from nicepay_review_center_grants g where g.account_id = my_account_id() and g.center_id = p_center_id);
+    select nicepay_is_reviewer() and exists (
+        select 1 from nicepay_review_center_grants g join centers c on c.id = g.center_id
+        where g.account_id = my_account_id() and g.center_id = p_center_id
+          and c.status = 'approved' and not c.is_internal and not c.is_nicepay_review);
 $$;
 create or replace function nicepay_review_center_purchase_granted(p_center_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
-    select nicepay_is_reviewer() and exists (select 1 from nicepay_review_center_grants g where g.account_id = my_account_id() and g.center_id = p_center_id and g.can_purchase);
+    select nicepay_is_reviewer() and exists (
+        select 1 from nicepay_review_center_grants g join centers c on c.id = g.center_id
+        where g.account_id = my_account_id() and g.center_id = p_center_id and g.can_purchase
+          and c.status = 'approved' and not c.is_internal and not c.is_nicepay_review);
 $$;
 revoke all on function nicepay_review_center_granted(uuid) from public;
 revoke all on function nicepay_review_center_purchase_granted(uuid) from public;
@@ -147,7 +160,7 @@ returns table (center_id uuid, can_purchase boolean)
 language sql stable security definer set search_path = public as $$
     select g.center_id, g.can_purchase from nicepay_review_center_grants g
     where nicepay_is_reviewer() and g.account_id = my_account_id()
-      and exists (select 1 from centers c where c.id = g.center_id and c.status = 'approved' and not c.is_internal);
+      and exists (select 1 from centers c where c.id = g.center_id and c.status = 'approved' and not c.is_internal and not c.is_nicepay_review);
 $$;
 revoke all on function nicepay_my_review_center_ids() from public;
 grant execute on function nicepay_my_review_center_ids() to authenticated, service_role;

@@ -34,22 +34,43 @@ test("[조회 허용] 심사관B: 홈에 실제 센터 노출, /products 에 11�
   const body = await page.locator("body").innerText();
   for (const price of ["80,000원", "320,000원"]) expect(body, price).toContain(price);   // 가격 표시가 DB 값과 일치(단일 320,000 · 선택형 최저 80,000)
   expect(body).toContain("횟수");   // 횟수 선택 UI
+  // 조회 전용: 상품명·가격·이용조건은 보이고, 구매·담기·장바구니·예약 버튼과 "구매 가능" 안내는 없다
+  await expect(page.getByTestId("view-only-notice")).toBeVisible();
+  await expect(page.locator(".center-product-buy")).toHaveCount(0); await expect(page.locator(".center-product-cart")).toHaveCount(0);
+  await expect(page.locator(".cart-link-btn")).toHaveCount(0); expect(body).not.toContain("바로 구매하거나 장바구니에 담을 수 있어요"); expect(body).toContain("수강권 · 상품 안내");
+  await expect(page.locator(".center-product-period").first()).toBeVisible();   // 이용기간 안내는 그대로
+  await page.locator(".sheet-close-btn").click();
+  await expect(page.getByRole("button", { name: "수강권 안내 보기" })).toBeVisible(); await expect(page.getByRole("button", { name: "수강권 구매하기" })).toHaveCount(0); await expect(page.getByRole("button", { name: "예약하기" })).toHaveCount(0);
   await shot(page, "real-center-2-center-page"); await ctx.close();
 });
 
-test("[조회 허용] 구매 시도는 막히고 주문이 만들어지지 않는다(결제 아님 — 카드 승인 호출 0)", async ({ browser }) => {
+test("[조회 허용] 직접 URL 로 결제 화면에 들어와도 안내만 보이고 결제 버튼이 비활성 — 주문이 만들어지지 않는다(결제 아님)", async ({ browser }) => {
   const { ctx, page } = await openAs(browser, "B", "close"); const before = realOrders();
   const pid = psql(`select id from products where name='${ACTIVE[2]}'`);
   await gotoCheckout(page, pid, centerId(REAL_NAME));
-  const direct = page.getByText("직접결제").first(); if (await direct.isVisible().catch(() => false)) await direct.click();
-  const pay = page.locator(".checkout-pay-btn").first(); await expect(pay).toBeVisible({ timeout: 20_000 }); await pay.click();
-  await page.waitForTimeout(2500);
+  await expect(page.getByTestId("view-only-notice")).toBeVisible({ timeout: 20_000 });
+  const pay = page.locator(".checkout-pay-btn").first(); await expect(pay).toBeDisabled(); await expect(pay).toContainText("조회 전용");
+  await pay.click({ force: true }).catch(() => {}); await page.waitForTimeout(1500);
   expect(realOrders()).toBe(before);   // 주문 행 0 증가
-  await shot(page, "real-center-3-view-only-purchase-blocked"); await ctx.close();
+  await expect(page.getByText("320,000원").first()).toBeVisible();   // 가격·이용조건은 그대로 확인 가능
+  await shot(page, "real-center-3-view-only-checkout"); await ctx.close();
 });
 
-test("[일반 회원] 홈·상품 목록이 기존과 동일: 실제 센터·운영 센터는 보이고 심사 센터는 안 보임", async ({ browser }) => {
+test("[구매 허용] can_purchase=true 이면 구매·담기 버튼과 예약 버튼이 보이고 결제 화면 버튼이 활성", async ({ browser }) => {
+  grant(true); const { ctx, page } = await openAs(browser, "B", "close");
+  await page.goto(`${BASE}/center/${centerId(REAL_NAME)}?buy=1`); await page.waitForLoadState("networkidle");
+  await expect(page.locator(".center-product-buy").first()).toBeVisible({ timeout: 20_000 }); await expect(page.getByTestId("view-only-notice")).toHaveCount(0);
+  await page.locator(".sheet-close-btn").click(); await expect(page.getByRole("button", { name: "예약하기" })).toBeVisible();
+  const pid = psql(`select id from products where name='${ACTIVE[2]}'`); await gotoCheckout(page, pid, centerId(REAL_NAME));
+  await expect(page.getByTestId("view-only-notice")).toHaveCount(0); await expect(page.locator(".checkout-pay-btn").first()).toBeEnabled({ timeout: 20_000 });
+  await ctx.close();
+});
+
+test("[일반 회원] 홈·상품 목록·센터 화면이 기존과 동일: 구매 버튼 보임, 안내 문구 없음, 심사 센터는 안 보임", async ({ browser }) => {
   grant(true); const { ctx, page } = await openAs(browser, "A", "close");
+  await page.goto(`${BASE}/center/${centerId(REAL_NAME)}?buy=1`); await page.waitForLoadState("networkidle");
+  await expect(page.locator(".center-product-buy").first()).toBeVisible({ timeout: 20_000 }); await expect(page.locator(".center-product-cart").first()).toBeVisible(); await expect(page.getByTestId("view-only-notice")).toHaveCount(0);
+  expect(await page.locator("body").innerText()).toContain("수강권 · 상품 구매");
   await page.goto(`${BASE}/products`); await page.waitForLoadState("networkidle");
   for (const n of ACTIVE) await expect(page.getByText(n).first()).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(EXPIRED)).toHaveCount(0); await expect(page.getByText("MWHABIT NICEPAY 카드사 심사 환경")).toHaveCount(0);
