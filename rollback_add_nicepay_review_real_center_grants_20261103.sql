@@ -1,15 +1,35 @@
 -- add_nicepay_review_real_center_grants_20261103.sql 되돌리기: 함수 3개를 P2(add_nicepay_review_center_isolation_20261028.sql) 정의로 복원하고, 이 파일이 만든 객체를 삭제한다.
--- ⚠ 허용 목록 테이블(nicepay_review_center_grants)은 지정 이력이 들어 있을 수 있어 행이 있으면 기본적으로 중단한다(데이터 보존). 지워도 좋다고 판단하면 먼저
---   delete from nicepay_review_center_grants;  를 사용자가 직접 실행한 뒤 이 스크립트를 다시 실행한다. (기존 센터·상품·주문 데이터는 이 롤백이 건드리지 않는다.)
+-- 안전장치(전부 한 트랜잭션 — 하나라도 어긋나면 아무것도 바뀌지 않는다):
+--   ① 시작 시: 복원할 함수 3개의 "현재 정의 MD5"가 (이 파일 적용본) 또는 (이미 복원된 적용 전 원본)과 같아야 한다. 운영에서 따로 바뀌었으면 변경 없이 중단.
+--   ② 허용 행이 있으면 중단(데이터 보존). 중단 메시지에 현재 허용 행(계정·센터)을 보여 준다. 전체 삭제는 권장하지 않는다 — 아래 "개별 해제"로 계정·센터를 지정해 해제한 뒤 다시 실행한다.
+--   ③ 복원 직후: 함수 3개의 MD5 가 적용 전 운영 정의(2026-11-03 읽기 전용 조회 값)와 다르면 EXCEPTION → 트랜잭션 전체 취소(함수 복원·테이블 삭제 모두 되돌아감).
+-- 개별 해제(허용 행 확인 → 특정 계정·센터만 삭제):
+--   select g.account_id, g.center_id, c.name as center_name, g.can_purchase from nicepay_review_center_grants g join centers c on c.id = g.center_id;
+--   delete from nicepay_review_center_grants where account_id = '<심사관 account id>' and center_id = '<센터 UUID>';   -- 한 행씩, 지정한 계정·센터만
+--   (기존 센터·상품·주문 데이터는 이 롤백이 건드리지 않는다.)
 -- 롤백 순서: 이 파일 → (필요하면) rollback_add_nicepay_review_center_isolation_20261028.sql. 반대로 P2 를 먼저 롤백하면 이 파일의 함수가 의존 대상을 잃는다.
 BEGIN;
 do $$
-declare v_n bigint;
+declare r record; v_n bigint; v_h text; v_rows text;
 begin
+  -- ① 현재 정의 검증(복원 전, 아무것도 바꾸기 전)
+  for r in select * from (values
+      ('public.nicepay_review_center_allowed(uuid)',        '636cb33ff0feaf95244ef0c41c3eb923', '078ffecea883196dd869512aa1cbc938'),
+      ('public.nicepay_review_center_member_allowed(uuid)', 'a3a299f743087d104ebf41948e464d94', '030f304bb08fbc2efb67e8ecbc40669f'),
+      ('public.nicepay_review_guard_center()',              '0e8dc90f9da6cb921225657ba6ae4fb4', '7b5c7ca9333d0e7a90fdc559690ab07e')) as t(sig, pre_md5, post_md5)
+  loop
+    if to_regprocedure(r.sig) is null then raise exception '롤백 중단: % 가 없어요 — 변경 없이 중단합니다', r.sig; end if;
+    v_h := md5(pg_get_functiondef(to_regprocedure(r.sig)));
+    if v_h <> r.pre_md5 and v_h <> r.post_md5 then
+      raise exception '롤백 중단: % 의 현재 정의가 예상(이 파일 적용본/이미 복원된 원본)과 달라요(해시 %) — 변경 없이 중단합니다. 운영 정의 차이를 먼저 확인하세요.', r.sig, v_h;
+    end if;
+  end loop;
+  -- ② 허용 행 확인
   if to_regclass('public.nicepay_review_center_grants') is not null then
     execute 'select count(*) from nicepay_review_center_grants' into v_n;   -- 테이블이 없을 때(재실행)도 안전하도록 동적 SQL
     if v_n > 0 then
-      raise exception '롤백 중단: 허용 목록에 행이 있어요(% 건). 내용을 확인하고 필요 없으면 delete from nicepay_review_center_grants; 를 먼저 실행하세요.', v_n;
+      execute 'select string_agg(g.account_id::text || '' / '' || g.center_id::text, '', '' order by g.created_at) from nicepay_review_center_grants g' into v_rows;
+      raise exception '롤백 중단: 허용 목록에 행이 있어요(% 건: 계정 / 센터 = %). 필요 없는 행을 계정·센터를 지정해 개별 삭제(delete … where account_id = … and center_id = …)한 뒤 다시 실행하세요.', v_n, v_rows;
     end if;
   end if;
 end $$;
@@ -61,7 +81,7 @@ drop function if exists nicepay_review_center_granted(uuid);
 drop table if exists nicepay_review_center_grants;   -- 테이블과 함께 트리거도 삭제된다(테이블이 이미 없어도 재실행 가능)
 drop function if exists enforce_nicepay_review_center_grant_valid();
 
--- 복원 확인: 복원한 함수 3개의 정의 MD5 가 "적용 전 운영 정의"(2026-11-03 운영 읽기 전용 조회 값)와 같아야 한다. 다르면 경고만 낸다(롤백 자체는 막지 않음 — 급한 복구를 막지 않기 위해).
+-- ③ 복원 확인: 복원한 함수 3개의 정의 MD5 가 "적용 전 운영 정의"와 정확히 같아야 한다. 다르면 EXCEPTION — 이 트랜잭션 전체가 취소된다(함수 복원·테이블 삭제 포함, 롤백 이전 상태 그대로).
 do $$
 declare r record;
 begin
@@ -70,7 +90,9 @@ begin
       ('public.nicepay_review_center_member_allowed(uuid)', 'a3a299f743087d104ebf41948e464d94'),
       ('public.nicepay_review_guard_center()',              '0e8dc90f9da6cb921225657ba6ae4fb4')) as t(sig, pre_md5)
   loop
-    if md5(pg_get_functiondef(to_regprocedure(r.sig))) <> r.pre_md5 then raise warning '롤백 복원 확인: % 의 정의가 적용 전 운영 값과 달라요(해시 %) — 확인이 필요해요', r.sig, md5(pg_get_functiondef(to_regprocedure(r.sig))); end if;
+    if md5(pg_get_functiondef(to_regprocedure(r.sig))) <> r.pre_md5 then
+      raise exception '롤백 취소: 복원한 % 의 정의가 적용 전 운영 값과 달라요(해시 %) — 트랜잭션 전체를 취소합니다(아무것도 바뀌지 않음)', r.sig, md5(pg_get_functiondef(to_regprocedure(r.sig)));
+    end if;
   end loop;
 end $$;
 COMMIT;

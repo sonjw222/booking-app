@@ -49,10 +49,21 @@
    where u.email = '<NICEPAY 심사관 계정 이메일>' and a.nicepay_review_access;
    ```
    (대상 이메일이 틀리면 0행 — 삽입 후 `select count(*) from nicepay_review_center_grants` 로 1 확인.)
-6. 심사 종료 후: `delete from nicepay_review_center_grants where account_id = '<id>' and center_id = '8965e09c-0d2b-44c6-ab26-40a85507f8b5';`
+6. 심사 종료 후 해제(계정·센터를 지정, 전체 삭제 금지): `delete from nicepay_review_center_grants where account_id = '<심사관 account id>' and center_id = '8965e09c-0d2b-44c6-ab26-40a85507f8b5';`
 
 ## 5. 롤백
-`rollback_add_nicepay_review_real_center_grants_20261103.sql` — 허용 행이 있으면 중단(먼저 `delete from nicepay_review_center_grants;`), 함수 3개를 P2 정의로 복원, 새 객체 삭제. 순서: 이 롤백 → (필요 시) P2 롤백. 센터·상품·주문 데이터는 건드리지 않는다.
+`rollback_add_nicepay_review_real_center_grants_20261103.sql` — **한 트랜잭션, 하나라도 어긋나면 아무것도 바뀌지 않는다.**
+1. 시작 시 복원할 함수 3개의 현재 정의 MD5 가 (이 파일 적용본) 또는 (이미 복원된 적용 전 원본)과 같아야 한다 — 운영에서 따로 바뀌었으면 변경 없이 중단.
+2. 허용 행이 있으면 중단한다(메시지에 계정/센터 목록 표시). **전체 삭제(`delete … ;`)는 권장하지 않는다.** 아래처럼 계정·센터를 지정해 한 행씩 해제한 뒤 다시 실행한다.
+   ```sql
+   -- 현재 허용 행 확인
+   select g.account_id, g.center_id, c.name as center_name, g.can_purchase from nicepay_review_center_grants g join centers c on c.id = g.center_id;
+   -- 특정 계정·센터만 해제(한 행씩)
+   delete from nicepay_review_center_grants where account_id = '<심사관 account id>' and center_id = '<센터 UUID>';
+   ```
+3. 함수 3개를 P2 정의로 복원하고 새 객체를 삭제한다.
+4. 복원 직후 3개 함수의 MD5 가 적용 전 운영 정의와 다르면 **EXCEPTION → 트랜잭션 전체 취소**(복원·삭제가 모두 되돌아가 롤백 이전 상태 유지).
+순서: 이 롤백 → (필요 시) P2 롤백. 재실행 가능(이미 복원된 원본 해시 허용). 센터·상품·주문 데이터는 건드리지 않는다.
 
 ## 6. 기존 심사용 상품 처리 권고(이번에는 변경 없음)
 `[심사 전용] 모하빗 스튜디오…`의 "1회/5회/10회 이용권 (심사용)" 15,000/60,000/110,000원은 NICEPAY 가 지적한 "실제 판매와 다른 상품"이다. 권고: ① A10TION 허용 확인과 NICEPAY 회신 후, ② 심사관 허용 센터를 A10TION 만으로 두고 ③ 심사 센터는 **삭제하지 않고** 먼저 `close_nicepay_review_20261029.sql`(권한 해제·게이트 off·비공개)로 닫는 순서가 안전하다(이 SQL 은 데이터 삭제 없음). 이후 필요하면 `is_on_sale=false` 로 판매 중지. 위 절차 전에는 유지(카드 결제 시험 경로가 이 센터에만 열려 있다).

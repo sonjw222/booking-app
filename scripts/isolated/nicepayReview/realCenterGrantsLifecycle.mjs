@@ -59,7 +59,7 @@ psql(`update accounts set nicepay_review_access=true where id='${accB}'`); rec("
 
 // 4. 롤백: 행이 있으면 중단
 const hApplied = hashes(); const rb1 = runFile(RB);
-rec("L4", "허용 행이 있으면 롤백 중단(데이터 보존)", "ABORT", rb1.ok ? "RAN" : /롤백 중단: 허용 목록에 행이 있어요/.test(rb1.out) ? "ABORT" : "OTHER", rb1.out.slice(0, 80));
+rec("L4", "허용 행이 있으면 롤백 중단(데이터 보존, 계정/센터 목록 표시)", "ABORT", rb1.ok ? "RAN" : /롤백 중단: 허용 목록에 행이 있어요/.test(rb1.out) && rb1.out.includes(accB) ? "ABORT" : "OTHER", rb1.out.slice(0, 80));
 rec("L4b", "중단 시 아무것도 바뀌지 않음(정의 그대로, 허용 유효)", `${hApplied}|1`, `${hashes()}|${(await cell(C.B, CEN.REAL)).split("/")[0]}`);
 clear(); const rb2 = runFile(RB); rec("L4c", "행 삭제 후 롤백 성공(복원 경고 없음)", true, rb2.ok && !/롤백 복원 확인/.test(rb2.out), rb2.out.slice(-100));
 rec("L4h", "롤백도 목록 RPC·주문 생성 함수 정의를 바꾸지 않는다(만료 상품 숨김 보존)", rpc0, RPC_H()); rec("L4d", "롤백 후 함수 정의 MD5 가 운영 기준값(적용 전)과 같다", PRE_H, hashes());
@@ -75,7 +75,9 @@ rec("L5d", "허용 삭제 후 스냅샷이 적용 전과 동일", "", diff(snap0
 // 6. 변조 감지: 교체 대상 함수가 운영 정의와 달라졌다면 적용이 중단돼야 한다
 psql("create or replace function public.nicepay_review_center_allowed(p_center_id uuid) returns boolean language sql stable security definer set search_path=public as $$ select true $$");
 const ap4 = runFile(SQL); rec("L6", "함수 정의가 예상과 다르면 preflight 가 적용을 중단", "ABORT", ap4.ok ? "RAN" : /현재 정의가 예상.*달라요/.test(ap4.out) ? "ABORT" : "OTHER", ap4.out.slice(0, 90));
-const rb4 = runFile(RB); rec("L6b", "변조된 상태에서도 롤백은 P2 정의로 정확히 복원", PRE_H, rb4.ok ? hashes() : "ROLLBACK_FAILED");
+const hT = hashes(); const rb4 = runFile(RB); rec("L6b", "변조된 정의에서는 롤백이 변경 없이 중단(복원하지 않음)", "ABORT|same", `${rb4.ok ? "RAN" : /롤백 중단: .* 현재 정의가 예상/.test(rb4.out) ? "ABORT" : "OTHER"}|${hashes() === hT ? "same" : "changed"}`);
+psql("create or replace function public.nicepay_review_center_allowed(p_center_id uuid) returns boolean language sql stable security definer set search_path=public as $$ select true $$");   // 운영자가 변조를 되돌리는 대신 수동 복구했다고 가정: 적용본 정의를 다시 만들기 위해 P2 정의로 되돌린 뒤 재적용
+psql(fs.readFileSync("add_nicepay_review_center_isolation_20261028.sql","utf8").match(/create or replace function nicepay_review_center_allowed\(.*?\n\$\$;\n/s)[0]);
 const ap5 = runFile(SQL); rec("L6c", "복원 후 다시 적용 성공(최종 상태: 적용됨)", true, ap5.ok); rec("L6d", "최종 정의 = 첫 적용본", h1, hashes());
 
 fs.writeFileSync(OUT ?? "real-center-grants-lifecycle.json", JSON.stringify({ at: new Date().toISOString(), failures, results }, null, 2));
