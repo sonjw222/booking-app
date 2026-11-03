@@ -1,0 +1,35 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const rpc = vi.fn(); const access = vi.fn();
+vi.mock("../../lib/supabaseClient", () => ({ supabase: { rpc: (...a: unknown[]) => rpc(...a) } }));
+vi.mock("../../lib/authAccount", () => ({ fetchMyNicepayReviewAccess: () => access() }));
+import { nicepayDiscoveryScope, narrowToReviewCenters } from "../../lib/nicepayReviewScope";
+
+const ID1 = "8965e09c-0d2b-44c6-ab26-40a85507f8b5", ID2 = "11111111-1111-4111-8111-111111111111";
+beforeEach(() => { rpc.mockReset(); access.mockReset(); });
+type Call = [string, ...unknown[]];
+const builder = () => { const calls: Call[] = []; const q = { eq: (...a: unknown[]) => { calls.push(["eq", ...a]); return q; }, or: (...a: unknown[]) => { calls.push(["or", ...a]); return q; } }; return { q, calls }; };
+
+describe("nicepayDiscoveryScope — 심사관 탐색 범위", () => {
+  it("심사관이 아니면 null(기존 쿼리 그대로), RPC 를 호출하지 않는다", async () => { access.mockResolvedValue(false); expect(await nicepayDiscoveryScope()).toBeNull(); expect(rpc).not.toHaveBeenCalled(); });
+  it("권한 조회가 실패하면 null(기존 동작)", async () => { access.mockRejectedValue(new Error("x")); expect(await nicepayDiscoveryScope()).toBeNull(); });
+  it("심사관: DB 의 허용 센터 id 만 사용(UUID 형식 검증·중복 제거)", async () => {
+    access.mockResolvedValue(true); rpc.mockResolvedValue({ data: [{ center_id: ID1, can_purchase: false }, { center_id: ID1 }, { center_id: "x); drop table" }, { center_id: ID2 }], error: null });
+    expect(await nicepayDiscoveryScope()).toEqual({ extraCenterIds: [ID1, ID2] });
+  });
+  it("RPC 가 없거나(SQL 미적용) 오류면 허용 센터 없음 = 기존 동작(심사 센터만)", async () => {
+    access.mockResolvedValue(true); rpc.mockResolvedValue({ data: null, error: { code: "42883" } }); expect(await nicepayDiscoveryScope()).toEqual({ extraCenterIds: [] });
+    rpc.mockRejectedValue(new Error("net")); expect(await nicepayDiscoveryScope()).toEqual({ extraCenterIds: [] });
+  });
+});
+
+describe("narrowToReviewCenters — 쿼리 좁히기", () => {
+  it("허용 센터가 없으면 기존과 같은 eq(is_nicepay_review) (직접·임베드 모두)", () => {
+    let b = builder(); narrowToReviewCenters(b.q, { extraCenterIds: [] }); expect(b.calls).toEqual([["eq", "is_nicepay_review", true]]);
+    b = builder(); narrowToReviewCenters(b.q, { extraCenterIds: [] }, "centers"); expect(b.calls).toEqual([["eq", "centers.is_nicepay_review", true]]);
+  });
+  it("허용 센터가 있으면 (심사 센터 OR id ∈ 허용) — 전체 해제가 아니라 목록만 추가", () => {
+    let b = builder(); narrowToReviewCenters(b.q, { extraCenterIds: [ID1] }); expect(b.calls).toEqual([["or", `is_nicepay_review.eq.true,id.in.(${ID1})`]]);
+    b = builder(); narrowToReviewCenters(b.q, { extraCenterIds: [ID1, ID2] }, "centers"); expect(b.calls).toEqual([["or", `is_nicepay_review.eq.true,id.in.(${ID1},${ID2})`, { referencedTable: "centers" }]]);
+  });
+});

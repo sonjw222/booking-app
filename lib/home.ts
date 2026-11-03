@@ -5,7 +5,7 @@
   로그인 없이도 볼 수 있어야 하므로 공개 조회만 사용
 */
 
-import { nicepayDiscoveryOnlyReviewCenters } from "./nicepayReviewScope";
+import { nicepayDiscoveryScope, narrowToReviewCenters } from "./nicepayReviewScope";
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
 
@@ -116,12 +116,12 @@ const KST_DT = new Intl.DateTimeFormat("ko-KR", {
 
 // 승인된 센터
 export async function fetchHomeCenters(userLat?: number, userLng?: number): Promise<HomeCenter[]> {
-  const onlyReview = await nicepayDiscoveryOnlyReviewCenters();   // NICEPAY 심사관: 탐색에는 심사 센터만
+  const onlyReview = await nicepayDiscoveryScope();   // NICEPAY 심사관: 탐색에는 심사 센터만
   let hq = supabase
     .from("centers")
     .select("id, name, categories, latitude, longitude")
     .eq("status", "approved");
-  if (onlyReview) hq = hq.eq("is_nicepay_review", true);
+  if (onlyReview) hq = narrowToReviewCenters(hq, onlyReview);
   const { data, error } = await hq
     .order("created_at", { ascending: false })
     .limit(30);
@@ -160,13 +160,13 @@ export async function fetchHomeCenters(userLat?: number, userLng?: number): Prom
 // 지금 이후 예약 가능한 수업 (가까운 순 몇 개)
 export async function fetchHomeClasses(): Promise<HomeClass[]> {
   const nowIso = new Date().toISOString();
-  const onlyReview = await nicepayDiscoveryOnlyReviewCenters();
+  const onlyReview = await nicepayDiscoveryScope();
   let cq = supabase
     .from("classes")
     .select("id, title, center_id, start_time, capacity, centers!inner(name, status)")
     .eq("status", "open")
     .eq("centers.status", "approved");
-  if (onlyReview) cq = cq.eq("centers.is_nicepay_review", true);
+  if (onlyReview) cq = narrowToReviewCenters(cq, onlyReview, "centers");
   const { data, error } = await cq
     .gte("start_time", nowIso)
     .order("start_time", { ascending: true })
@@ -227,11 +227,11 @@ export type SearchClass = {
 export async function searchClasses(keyword: string): Promise<SearchClass[]> {
   const kw = keyword.trim();
   if (kw.length < 2) return [];
-  const onlyReview = await nicepayDiscoveryOnlyReviewCenters();
+  const onlyReview = await nicepayDiscoveryScope();
   let sq = supabase.from("classes")
     .select("id, title, center_id, start_time, centers!inner(name, status, latitude, longitude)")
     .eq("centers.status", "approved");
-  if (onlyReview) sq = sq.eq("centers.is_nicepay_review", true);
+  if (onlyReview) sq = narrowToReviewCenters(sq, onlyReview, "centers");
   const { data, error } = await sq
     .ilike("title", `%${kw}%`)
     .gte("start_time", new Date().toISOString())
@@ -271,13 +271,13 @@ export async function searchHome(keyword: string): Promise<{ centers: SearchCent
   // 필터링한다 — 기존 클라이언트 매칭과 동일한 결과를 내면서 서버 쪽에서 실행된다.
   // PERF-005 — 이름 매칭 쿼리는 종목 라벨 결과를 쓰지 않으므로 라벨 조회와 동시에 시작한다
   // (검색 1회당 직렬 왕복 3단계 → 2단계). 오류 판정 순서(라벨 → 이름 → 종목)는 그대로.
-  const onlyReview = await nicepayDiscoveryOnlyReviewCenters();
+  const onlyReview = await nicepayDiscoveryScope();
   let nameQuery = supabase
     .from("centers")
     .select("id, name, categories, intro, photo_url, latitude, longitude")
     .eq("status", "approved")
     .ilike("name", `%${kw}%`);
-  if (onlyReview) nameQuery = nameQuery.eq("is_nicepay_review", true);
+  if (onlyReview) nameQuery = narrowToReviewCenters(nameQuery, onlyReview);
   const [{ data: cats, error: catLabelError }, nameResult] = await Promise.all([
     supabase.from("service_categories").select("label"),
     nameQuery,
@@ -294,7 +294,7 @@ export async function searchHome(keyword: string): Promise<{ centers: SearchCent
         .eq("status", "approved")
         .overlaps("categories", categories)
     : null;
-  if (onlyReview && categoryQuery) categoryQuery = categoryQuery.eq("is_nicepay_review", true);
+  if (onlyReview && categoryQuery) categoryQuery = narrowToReviewCenters(categoryQuery, onlyReview);
 
   const categoryResult = await (categoryQuery ?? Promise.resolve({ data: [] as any[], error: null }));
   if (nameResult.error) throw new Error("검색에 실패했어요: " + nameResult.error.message);
@@ -319,13 +319,13 @@ export async function searchHome(keyword: string): Promise<{ centers: SearchCent
 
 // 특정 종목의 센터 목록
 export async function fetchCentersByCategory(category: string): Promise<SearchCenter[]> {
-  const onlyReview = await nicepayDiscoveryOnlyReviewCenters();
+  const onlyReview = await nicepayDiscoveryScope();
   let kq = supabase
     .from("centers")
     .select("id, name, categories, intro, address, photo_url, latitude, longitude")
     .eq("status", "approved")
     .contains("categories", [category]);
-  if (onlyReview) kq = kq.eq("is_nicepay_review", true);
+  if (onlyReview) kq = narrowToReviewCenters(kq, onlyReview);
   const { data, error } = await kq
     .order("created_at", { ascending: false });   // 추천순(기본)을 새로고침해도 같은 순서로 고정
   if (error) throw new Error("센터를 불러오지 못했어요: " + error.message);
