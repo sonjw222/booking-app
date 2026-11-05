@@ -32,7 +32,7 @@ import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import UiIcon, { type IconName } from "../components/UiIcon";
 import ErrorState from "../components/ErrorState";
 import { hapticSuccess } from "../../lib/nativeHaptics";
-import NicepayReviewWindow from "../components/NicepayReviewWindow";
+import NicepayReviewWindow, { type ReviewWindowStatus } from "../components/NicepayReviewWindow";
 
 // 카카오페이/토스페이는 로고 자산이 없어 outline 아이콘 하나로 뭉치면 구분이 안 되므로
 // --vendor-* 색 점(dot)으로, 나머지는 의미가 통하는 outline 아이콘으로 구분한다.
@@ -128,6 +128,8 @@ function CheckoutContent() {
   const [usePoint, setUsePoint] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // 지정 NICEPAY 심사 계정(테스트 결제창 카드가 보이는 계정)이면 카드 결제의 실제 결제 버튼은 쓰지 않는다 — 권한 확인 중·허용·확인 실패 모두 실제 결제 경로(주문 생성·PG 준비)로 fallback 하지 않는다.
+  const [reviewWindowStatus, setReviewWindowStatus] = useState<ReviewWindowStatus>("hidden");
   // 앱 복귀 후 PG 주문 상태 확인 중 / 확인 기간이 지나도 pending인 상태(결제 버튼 비활성 + 안내)
   const [pgChecking, setPgChecking] = useState(false);
   const [pgUnresolved, setPgUnresolved] = useState(false);
@@ -306,6 +308,11 @@ function CheckoutContent() {
     // 숨겨진 PG 수단이 선택된 채 결제가 진행되는 일이 없도록 화면에 보이는 수단으로 한 번 더 보정한다.
     const effectivePayMethod = resolveSelectedPayMethod(payMethod, visibleMethodIds);
     if (effectivePayMethod !== payMethod) setPayMethod(effectivePayMethod);
+    // 지정 심사 계정의 카드 결제는 "카드 결제창 확인" 카드로만 진행한다 — 주문 생성·PG 준비를 하지 않고, 권한 확인 중/실패에도 실제 결제로 넘어가지 않는다.
+    if (effectivePayMethod !== "direct" && reviewWindowStatus !== "hidden") {
+      setError("심사 계정은 위의 ‘카드 결제창 확인’으로만 확인할 수 있어요. 실제 결제와 주문은 진행되지 않아요.");
+      return;
+    }
     // "direct"(직접결제, 센터에서 결제)는 PG 자체를 거치지 않는다 — 실제 PG 연동 전
     // 이 앱의 원래 흐름과 동일하게 주문만 pending으로 만들고, 매니저가 결제를 확인한 뒤
     // 기존 "미발급 주문" 화면(fulfill_order)에서 수동으로 발급한다.
@@ -546,6 +553,7 @@ function CheckoutContent() {
   }
 
   const copy = checkoutCopy(effectivePayMethodUi, won(finalTotal));
+  const reviewCardLock = reviewWindowStatus !== "hidden" && effectivePayMethodUi !== "direct";
 
   return (
     <div className="app-shell commerce-page checkout-page-v2">
@@ -753,7 +761,7 @@ function CheckoutContent() {
         </>
       )}
 
-      <NicepayReviewWindow key={productId} productId={productId} />
+      <NicepayReviewWindow key={productId} productId={productId} onStatusChange={setReviewWindowStatus} />
       {/* 결제 수단 */}
       <div className="menu-section-label commerce-label">결제 수단</div>
       <div className="pay-methods">
@@ -821,8 +829,8 @@ function CheckoutContent() {
           </div>
         </div>
       )}
-      <button className="primary-btn checkout-pay-btn" disabled={busy || pgUnresolved || (scheduleState.required && ["loading", "load_failed", "no_options", "no_times"].includes(scheduleState.reason))} onClick={handlePay}>
-        {busy ? copy.busyButton : pgUnresolved ? "결제 결과 확인 중" : copy.button}
+      <button className="primary-btn checkout-pay-btn" disabled={busy || pgUnresolved || reviewCardLock || (scheduleState.required && ["loading", "load_failed", "no_options", "no_times"].includes(scheduleState.reason))} onClick={handlePay}>
+        {busy ? copy.busyButton : pgUnresolved ? "결제 결과 확인 중" : reviewCardLock ? "카드 결제는 ‘결제창 확인’으로만 가능해요" : copy.button}
       </button>
       <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "var(--text-dim)" }}>
         {copy.consent} <a href="/legal/refund" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>환불 정책</a>과{" "}

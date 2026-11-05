@@ -1,0 +1,114 @@
+// @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+const h = vi.hoisted(() => ({ token: "jwt", callback: null as null | (() => void), open: vi.fn(), fetch: vi.fn(), cleanup: vi.fn(), params: { MID: "nicepay00m", Moid: "33333333-3333-4333-8333-333333333333", Amt: "15000", GoodsName: "상품", EdiDate: "20261105140000", SignData: "a".repeat(64), ReturnURL: "https://mwhabit.com/api/payments/nicepay/review-window/return?rt=fake", PayMethod: "CARD", CharSet: "utf-8" } }));
+vi.mock("../../lib/supabaseClient", () => ({ supabase: { auth: { getSession: async () => ({ data: { session: h.token ? { access_token: h.token, user: { email: h.token === "jwt" ? "niceqa@mwhabit.com" : "other@test.invalid" } } : null } }), onAuthStateChange: (f: () => void) => { h.callback = f; return { data: { subscription: { unsubscribe: vi.fn() } } }; } } } }));
+vi.mock("../../lib/payments/nicepayV3Window", () => ({ NICEPAY_V3_SDK_URL: "https://pg-web.nicepay.co.kr/v3/common/js/nicepay-pgweb.js", openNicepayV3Window: h.open }));
+vi.mock("../../lib/payments/reviewWindowClient", () => ({ validateReviewWindowParams: (p: unknown) => p }));
+import NicepayReviewWindow, { type ReviewWindowStatus } from "../../app/components/NicepayReviewWindow";
+let root: Root, host: HTMLDivElement;
+const response = (body: unknown) => ({ ok: true, json: async () => body });
+const PID = "33333333-3333-4333-8333-333333333333";
+const actionOf = (init: RequestInit) => JSON.parse(String(init.body)).action as string;
+beforeEach(() => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); vi.clearAllMocks(); h.token = "jwt"; h.callback = null; h.open.mockReturnValue(h.cleanup);
+  h.fetch.mockImplementation(async (_u: string, init: RequestInit) => response(actionOf(init) === "check" ? { allowed: true } : { allowed: true, params: h.params }));
+  vi.stubGlobal("fetch", h.fetch); (window as unknown as { goPay: () => void }).goPay = () => {};
+  host = document.createElement("div"); document.body.append(host); root = createRoot(host);
+});
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); });
+async function render(onStatusChange?: (s: ReviewWindowStatus) => void) { await act(async () => root.render(createElement(NicepayReviewWindow, { productId: PID, onStatusChange }))); }
+const mainButton = () => host.querySelector("button") as HTMLButtonElement;
+async function click(b = mainButton()) { await act(async () => b.dispatchEvent(new MouseEvent("click", { bubbles: true }))); }
+function setVisibility(v: "hidden" | "visible") { Object.defineProperty(document, "visibilityState", { configurable: true, value: v }); document.dispatchEvent(new Event("visibilitychange")); }
+
+describe("권한 상태 전달 — 지정 계정은 확인 중·실패에도 실제 결제로 넘어가지 않는다", () => {
+  it("지정 계정: checking → allowed 를 알린다", async () => {
+    const seen: ReviewWindowStatus[] = []; await render((s) => seen.push(s));
+    expect(seen).toContain("checking"); expect(seen[seen.length - 1]).toBe("allowed");
+  });
+  it("확인 응답이 거부되면 denied(버튼 없음, 실제 결제 불가 안내)", async () => {
+    h.fetch.mockImplementation(async () => response({ allowed: false }));
+    const seen: ReviewWindowStatus[] = []; await render((s) => seen.push(s));
+    expect(seen[seen.length - 1]).toBe("denied"); expect(host.querySelector("button")).toBeNull(); expect(host.textContent).toContain("실제 결제는 진행되지 않아요");
+  });
+  it("확인 요청이 실패(네트워크 오류)해도 denied — hidden 으로 돌아가 실제 결제가 열리지 않는다", async () => {
+    h.fetch.mockImplementation(async () => { throw new Error("network"); });
+    const seen: ReviewWindowStatus[] = []; await render((s) => seen.push(s));
+    expect(seen[seen.length - 1]).toBe("denied");
+  });
+  it("지정 계정이 아니면 hidden 만 유지하고 요청하지 않는다", async () => {
+    h.token = "other"; const seen: ReviewWindowStatus[] = []; await render((s) => seen.push(s));
+    expect(seen.every((s) => s === "hidden")).toBe(true); expect(h.fetch).not.toHaveBeenCalled(); expect(host.innerHTML).toBe("");
+  });
+  it("로그인 변경 시 hidden 으로 되돌린다", async () => {
+    const seen: ReviewWindowStatus[] = []; await render((s) => seen.push(s)); h.token = "other";
+    await act(async () => { h.callback!(); }); expect(seen[seen.length - 1]).toBe("hidden"); expect(host.querySelector("button")).toBeNull();
+  });
+});
+
+describe("창 상태 복구 — 타이머로 성공 처리하지 않는다", () => {
+  it("열림 → 앱/탭이 숨겨졌다 돌아오면 복귀 안내와 함께 다시 누를 수 있다(성공 표시 없음)", async () => {
+    await render(); await click(); expect(h.open).toHaveBeenCalledTimes(1);
+    expect(mainButton().disabled).toBe(true); expect(mainButton().textContent).toContain("열려 있어요");
+    await act(async () => setVisibility("hidden")); await act(async () => setVisibility("visible"));
+    expect(host.textContent).toContain("돌아왔어요"); expect(host.textContent).toContain("생성되지 않았습니다"); expect(host.textContent).not.toMatch(/완료|성공/);
+    expect(h.cleanup).toHaveBeenCalled(); expect(mainButton().disabled).toBe(false);
+    expect(h.open).toHaveBeenCalledTimes(1);   // 복구만 하고 자동으로 다시 열지 않는다
+  });
+  it("숨김 없이 보이기만 한 이벤트로는 복구하지 않는다(창이 같은 화면 위에 열려 있는 PC)", async () => {
+    await render(); await click(); await act(async () => setVisibility("visible"));
+    expect(mainButton().disabled).toBe(true);
+  });
+  it("bfcache 복귀(pageshow persisted)에서도 복구한다", async () => {
+    await render(); await click();
+    await act(async () => { const e = new Event("pageshow") as PageTransitionEvent; Object.defineProperty(e, "persisted", { value: true }); window.dispatchEvent(e); });
+    expect(host.textContent).toContain("돌아왔어요"); expect(mainButton().disabled).toBe(false);
+  });
+  it("열림 상태에서 '상태 초기화' 버튼으로 수동 복구할 수 있다", async () => {
+    await render(); await click(); const reset = host.querySelectorAll("button")[1] as HTMLButtonElement; expect(reset.textContent).toContain("상태 초기화");
+    await click(reset); expect(mainButton().disabled).toBe(false); expect(host.textContent).toContain("초기화했어요");
+  });
+  it("서명 발급 응답이 비정상이면 오류를 보이고(숨기지 않음) '다시 시도'로 복구한다", async () => {
+    let n = 0; h.fetch.mockImplementation(async (_u: string, init: RequestInit) => response(actionOf(init) === "check" ? { allowed: true } : (++n === 1 ? { allowed: true } : { allowed: true, params: h.params })));
+    await render(); await click();
+    expect(h.open).not.toHaveBeenCalled(); expect(host.querySelector("[role=alert]")?.textContent).toContain("확인할 수 없어요"); expect(mainButton().textContent).toContain("다시 시도"); expect(mainButton().disabled).toBe(false);
+    await click(); expect(h.open).toHaveBeenCalledTimes(1);
+  });
+  it("창 열기가 예외를 던져도 오류로 복구된다(준비 중에 갇히지 않음)", async () => {
+    h.open.mockImplementationOnce(() => { throw new Error("결제창을 불러오지 못했어요"); });
+    await render(); await click(); expect(host.querySelector("[role=alert]")?.textContent).toContain("결제창을 불러오지 못했어요"); expect(mainButton().disabled).toBe(false);
+  });
+  it("닫기 콜백은 닫음 안내로 복구한다(주문·이용권 없음)", async () => {
+    await render(); await click(); await act(async () => h.open.mock.calls[0][1].onClosedBeforeSubmit());
+    expect(host.textContent).toContain("주문과 이용권을 생성하지 않았습니다"); expect(mainButton().disabled).toBe(false);
+  });
+  it("준비 중 더블 클릭은 서명 발급 요청을 1번만 보낸다", async () => {
+    await render(); const b = mainButton();
+    await act(async () => { b.dispatchEvent(new MouseEvent("click", { bubbles: true })); b.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    expect(h.fetch.mock.calls.filter((c: unknown[]) => actionOf(c[1] as RequestInit) === "open")).toHaveLength(1); expect(h.open).toHaveBeenCalledTimes(1);
+  });
+  it("테스트 경로는 review-window 경로만 호출한다(주문·승인 경로 없음)", async () => {
+    await render(); await click(); await act(async () => h.open.mock.calls[0][1].onClosedBeforeSubmit());
+    expect(h.fetch.mock.calls.every((c: unknown[]) => c[0] === "/api/payments/nicepay/review-window")).toBe(true);
+  });
+});
+
+describe("결제 화면 — 테스트 CTA 와 실제 결제 CTA 충돌 방지(정적 계약)", () => {
+  const src = readFileSync(join(__dirname, "../../app/checkout/page.tsx"), "utf-8");
+  it("상태를 받아 실제 결제 버튼을 잠근다(직접결제는 제외)", () => {
+    expect(src).toContain("onStatusChange={setReviewWindowStatus}");
+    expect(src).toContain('const reviewCardLock = reviewWindowStatus !== "hidden" && effectivePayMethodUi !== "direct";');
+    expect(src).toMatch(/disabled=\{busy \|\| pgUnresolved \|\| reviewCardLock/);
+  });
+  it("handlePay 는 주문 생성(createOrder)·PG 준비보다 먼저 지정 계정의 카드 결제를 막는다", () => {
+    const guard = src.indexOf('effectivePayMethod !== "direct" && reviewWindowStatus !== "hidden"');
+    expect(guard).toBeGreaterThan(0);
+    expect(guard).toBeLessThan(src.indexOf("await createOrder({", guard));
+    expect(guard).toBeLessThan(src.indexOf("requestReturnToken(orderId)"));
+    const direct = src.indexOf('if (effectivePayMethod === "direct") {', guard); expect(direct).toBeGreaterThan(guard);   // 직접결제 분기는 가드 뒤에서 그대로 유지
+  });
+});

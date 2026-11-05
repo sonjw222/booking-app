@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-11-05 — 기존 앱 NICEPAY 결제창 확인 UI·버튼 충돌·로딩 복구 수정 (로컬 `fix/nicepay-review-window-ui-20261105`, 운영 미반영)
+- UI: 테스트 영역을 주문 상품 카드와 같은 여백·테두리·라운드의 안내 카드로 정리하고 버튼은 AppButton 사용(정의 없던 `secondary-btn`/`menu-section` 제거). 준비 중/열림/닫음/복귀/오류/확인 중/사용 불가 상태를 구분.
+- 충돌: 지정 심사 계정이 카드 결제를 고르면 하단 실제 결제 버튼을 잠그고 handlePay 도 주문 생성 전에 중단 — 권한 확인 중·허용·확인 실패 모두 실제 결제 경로로 fallback 하지 않는다(직접결제·일반 회원은 그대로).
+- 복구: goPay 후 닫기 콜백이 없어도 앱/탭 복귀(visibility)·bfcache(pageshow)·수동 "상태 초기화"로 준비 중에서 빠져나온다(성공 처리 아님). 서명 발급 응답 오류·창 열기 예외는 오류 문구 + "다시 시도".
+- 서버 route·HMAC·MID·승인 관련 코드는 변경 없음. 승인·망취소·환불 호출 0회.
+
 ## 2026-10-30 — 만료 주문 처리 E2E 격리 CI 추가·QA 증빙 정리 (PR #253 QA 보완, 운영 SQL 미실행)
 - 신규 workflow `.github/workflows/expired-order-qa.yml`: `tests/expired-order-qa/member-to-manager.spec.ts`(desktop+mobile 16 tests)를 러너 안의 일회용 Supabase 스택에서만 자동 실행. Secrets·공유 DEV·운영·실제 PG/알림 자격증명 없음, 앱 서버 :3021(기본 :3000 과 분리), 별도 러너·concurrency 그룹이라 기존 test.yml 과 무관. 운영과 같은 함수 정의 상태는 `scripts/isolated/expiredOrder/applyProdParity.sh` 가 러너의 로컬 컨테이너에만 적용.
 - spec 이 새 스택에서도 돌도록 센터 매니저 행을 없으면 생성(기존엔 사전 시드 가정). playwright 설정에 로컬 Supabase·실결제 자격증명 가드와 CI 전용 webServer 추가. 계약 테스트 `tests/unit/expiredOrderQaWorkflow.contract.test.ts` 추가, workflow 분류 목록(`liveTestEntrypoints.audit`)에 등록.
