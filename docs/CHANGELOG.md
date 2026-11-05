@@ -11,6 +11,10 @@
 - 충돌: 지정 심사 계정이 카드 결제를 고르면 하단 실제 결제 버튼을 잠그고 handlePay 도 주문 생성 전에 중단 — 권한 확인 중·허용·확인 실패 모두 실제 결제 경로로 fallback 하지 않는다(직접결제·일반 회원은 그대로).
 - 복구: goPay 후 닫기 콜백이 없어도 앱/탭 복귀(visibility)·bfcache(pageshow)·수동 "상태 초기화"로 준비 중에서 빠져나온다(성공 처리 아님). 서명 발급 응답 오류·창 열기 예외는 오류 문구 + "다시 시도".
 - 서버 route·HMAC·MID·승인 관련 코드는 변경 없음. 승인·망취소·환불 호출 0회.
+## 2026-11-06 — 홈 NICEPAY 심사관 전용 섹션 문구 정리 (로컬 `fix/nicepay-home-wording-20261106`, 운영 미배포)
+- 심사관에게만 보이는 홈 섹션: 제목·aria-label "심사 전용 센터" → "수강권 및 결제 확인 센터", 부제 "심사용 수강권 및 결제 과정 확인" → "테스트 센터 · 수강권 및 결제 과정 확인". 노출 조건(`fetchMyNicepayReviewAccess`)·접근 제어·결제 플래그·상품 데이터는 변경 없음.
+- 운영 DB 센터·상품 문구는 `fix_nicepay_review_wording_20261105.sql` 로 이미 승인 후 적용 완료 — 이 변경에 SQL 은 없고 재실행하지 않는다.
+- 회귀 테스트: 이용자 화면 코드의 '심사용' 계열 문구 재유입 방지(`nicepayReviewWording.test.ts`), 홈 렌더(심사관/일반 회원/비로그인/빈 목록, `nicepayHomeReviewSection.render.test.ts`).
 
 ## 2026-10-30 — 만료 주문 처리 E2E 격리 CI 추가·QA 증빙 정리 (PR #253 QA 보완, 운영 SQL 미실행)
 - 신규 workflow `.github/workflows/expired-order-qa.yml`: `tests/expired-order-qa/member-to-manager.spec.ts`(desktop+mobile 16 tests)를 러너 안의 일회용 Supabase 스택에서만 자동 실행. Secrets·공유 DEV·운영·실제 PG/알림 자격증명 없음, 앱 서버 :3021(기본 :3000 과 분리), 별도 러너·concurrency 그룹이라 기존 test.yml 과 무관. 운영과 같은 함수 정의 상태는 `scripts/isolated/expiredOrder/applyProdParity.sh` 가 러너의 로컬 컨테이너에만 적용.
