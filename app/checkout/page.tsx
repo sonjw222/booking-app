@@ -32,6 +32,7 @@ import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import UiIcon, { type IconName } from "../components/UiIcon";
 import ErrorState from "../components/ErrorState";
 import { hapticSuccess } from "../../lib/nativeHaptics";
+import NicepayReviewWindow from "../components/NicepayReviewWindow";
 
 // 카카오페이/토스페이는 로고 자산이 없어 outline 아이콘 하나로 뭉치면 구분이 안 되므로
 // --vendor-* 색 점(dot)으로, 나머지는 의미가 통하는 outline 아이콘으로 구분한다.
@@ -752,6 +753,7 @@ function CheckoutContent() {
         </>
       )}
 
+      <NicepayReviewWindow key={productId} productId={productId} />
       {/* 결제 수단 */}
       <div className="menu-section-label commerce-label">결제 수단</div>
       <div className="pay-methods">
