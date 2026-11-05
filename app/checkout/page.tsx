@@ -129,7 +129,10 @@ function CheckoutContent() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   // 지정 NICEPAY 심사 계정(테스트 결제창 카드가 보이는 계정)이면 카드 결제의 실제 결제 버튼은 쓰지 않는다 — 권한 확인 중·허용·확인 실패 모두 실제 결제 경로(주문 생성·PG 준비)로 fallback 하지 않는다.
-  const [reviewWindowStatus, setReviewWindowStatus] = useState<ReviewWindowStatus>("hidden");
+  // 초기값 "resolving"(계정 판별 중) — 세션 확인이 끝나 일반 회원("hidden")으로 확정되기 전에는 카드 결제를 열지 않는다. ref 는 클릭 시점에 최신 값을 동기적으로 읽기 위한 것.
+  const [reviewWindowStatus, setReviewWindowStatus] = useState<ReviewWindowStatus>("resolving");
+  const reviewStatusRef = useRef<ReviewWindowStatus>("resolving");
+  const onReviewWindowStatus = useCallback((s: ReviewWindowStatus) => { reviewStatusRef.current = s; setReviewWindowStatus(s); }, []);
   // 앱 복귀 후 PG 주문 상태 확인 중 / 확인 기간이 지나도 pending인 상태(결제 버튼 비활성 + 안내)
   const [pgChecking, setPgChecking] = useState(false);
   const [pgUnresolved, setPgUnresolved] = useState(false);
@@ -309,7 +312,7 @@ function CheckoutContent() {
     const effectivePayMethod = resolveSelectedPayMethod(payMethod, visibleMethodIds);
     if (effectivePayMethod !== payMethod) setPayMethod(effectivePayMethod);
     // 지정 심사 계정의 카드 결제는 "카드 결제창 확인" 카드로만 진행한다 — 주문 생성·PG 준비를 하지 않고, 권한 확인 중/실패에도 실제 결제로 넘어가지 않는다.
-    if (effectivePayMethod !== "direct" && reviewWindowStatus !== "hidden") {
+    if (effectivePayMethod !== "direct" && reviewStatusRef.current !== "hidden") {
       setError("심사 계정은 위의 ‘카드 결제창 확인’으로만 확인할 수 있어요. 실제 결제와 주문은 진행되지 않아요.");
       return;
     }
@@ -761,7 +764,7 @@ function CheckoutContent() {
         </>
       )}
 
-      <NicepayReviewWindow key={productId} productId={productId} onStatusChange={setReviewWindowStatus} />
+      <NicepayReviewWindow key={productId} productId={productId} onStatusChange={onReviewWindowStatus} />
       {/* 결제 수단 */}
       <div className="menu-section-label commerce-label">결제 수단</div>
       <div className="pay-methods">

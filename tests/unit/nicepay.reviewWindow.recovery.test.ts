@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-const h = vi.hoisted(() => ({ token: "jwt", callback: null as null | (() => void), open: vi.fn(), fetch: vi.fn(), cleanup: vi.fn(), params: { MID: "nicepay00m", Moid: "33333333-3333-4333-8333-333333333333", Amt: "15000", GoodsName: "상품", EdiDate: "20261105140000", SignData: "a".repeat(64), ReturnURL: "https://mwhabit.com/api/payments/nicepay/review-window/return?rt=fake", PayMethod: "CARD", CharSet: "utf-8" } }));
-vi.mock("../../lib/supabaseClient", () => ({ supabase: { auth: { getSession: async () => ({ data: { session: h.token ? { access_token: h.token, user: { email: h.token === "jwt" ? "niceqa@mwhabit.com" : "other@test.invalid" } } : null } }), onAuthStateChange: (f: () => void) => { h.callback = f; return { data: { subscription: { unsubscribe: vi.fn() } } }; } } } }));
+const h = vi.hoisted(() => ({ session: { wait: null as null | Promise<void>, fail: false }, token: "jwt", callback: null as null | (() => void), open: vi.fn(), fetch: vi.fn(), cleanup: vi.fn(), params: { MID: "nicepay00m", Moid: "33333333-3333-4333-8333-333333333333", Amt: "15000", GoodsName: "상품", EdiDate: "20261105140000", SignData: "a".repeat(64), ReturnURL: "https://mwhabit.com/api/payments/nicepay/review-window/return?rt=fake", PayMethod: "CARD", CharSet: "utf-8" } }));
+vi.mock("../../lib/supabaseClient", () => ({ supabase: { auth: { getSession: async () => { if (h.session.fail) throw new Error("session"); if (h.session.wait) await h.session.wait; return { data: { session: h.token ? { access_token: h.token, user: { email: h.token === "jwt" ? "niceqa@mwhabit.com" : "other@test.invalid" } } : null } }; }, onAuthStateChange: (f: () => void) => { h.callback = f; return { data: { subscription: { unsubscribe: vi.fn() } } }; } } } }));
 vi.mock("../../lib/payments/nicepayV3Window", () => ({ NICEPAY_V3_SDK_URL: "https://pg-web.nicepay.co.kr/v3/common/js/nicepay-pgweb.js", openNicepayV3Window: h.open }));
 vi.mock("../../lib/payments/reviewWindowClient", () => ({ validateReviewWindowParams: (p: unknown) => p }));
 import NicepayReviewWindow, { type ReviewWindowStatus } from "../../app/components/NicepayReviewWindow";
@@ -14,7 +14,7 @@ const response = (body: unknown) => ({ ok: true, json: async () => body });
 const PID = "33333333-3333-4333-8333-333333333333";
 const actionOf = (init: RequestInit) => JSON.parse(String(init.body)).action as string;
 beforeEach(() => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); vi.clearAllMocks(); h.token = "jwt"; h.callback = null; h.open.mockReturnValue(h.cleanup);
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); vi.clearAllMocks(); h.token = "jwt"; h.callback = null; h.session.wait = null; h.session.fail = false; h.open.mockReturnValue(h.cleanup);
   h.fetch.mockImplementation(async (_u: string, init: RequestInit) => response(actionOf(init) === "check" ? { allowed: true } : { allowed: true, params: h.params }));
   vi.stubGlobal("fetch", h.fetch); (window as unknown as { goPay: () => void }).goPay = () => {};
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
@@ -40,9 +40,20 @@ describe("권한 상태 전달 — 지정 계정은 확인 중·실패에도 실
     const seen: ReviewWindowStatus[] = []; await render((s) => seen.push(s));
     expect(seen[seen.length - 1]).toBe("denied");
   });
-  it("지정 계정이 아니면 hidden 만 유지하고 요청하지 않는다", async () => {
+  it("지정 계정이 아니면 판별 중(resolving) 뒤에 hidden 으로 확정하고 요청하지 않는다", async () => {
     h.token = "other"; const seen: ReviewWindowStatus[] = []; await render((s) => seen.push(s));
-    expect(seen.every((s) => s === "hidden")).toBe(true); expect(h.fetch).not.toHaveBeenCalled(); expect(host.innerHTML).toBe("");
+    expect(seen[0]).toBe("resolving"); expect(seen[seen.length - 1]).toBe("hidden"); expect(seen).not.toContain("checking"); expect(h.fetch).not.toHaveBeenCalled(); expect(host.innerHTML).toBe("");
+  });
+  it("세션 조회가 끝나기 전에는 hidden 이 아니라 resolving 만 알린다(일반 회원과 구분)", async () => {
+    let release!: () => void; const gate = new Promise<void>((r) => { release = r; }); h.session.wait = gate;
+    const seen: ReviewWindowStatus[] = []; await render((s) => seen.push(s));
+    expect(seen.length).toBeGreaterThan(0); expect(seen.every((x) => x === "resolving")).toBe(true);
+    await act(async () => { release(); await gate; });
+    expect(seen[seen.length - 1]).toBe("allowed");
+  });
+  it("세션 조회가 실패하면 일반 회원으로 보지 않고 denied 로 잠근다", async () => {
+    h.session.fail = true; const seen: ReviewWindowStatus[] = []; await render((s) => seen.push(s));
+    expect(seen[seen.length - 1]).toBe("denied"); expect(seen).not.toContain("hidden");
   });
   it("로그인 변경 시 hidden 으로 되돌린다", async () => {
     const seen: ReviewWindowStatus[] = []; await render((s) => seen.push(s)); h.token = "other";
@@ -100,12 +111,13 @@ describe("창 상태 복구 — 타이머로 성공 처리하지 않는다", () 
 describe("결제 화면 — 테스트 CTA 와 실제 결제 CTA 충돌 방지(정적 계약)", () => {
   const src = readFileSync(join(__dirname, "../../app/checkout/page.tsx"), "utf-8");
   it("상태를 받아 실제 결제 버튼을 잠근다(직접결제는 제외)", () => {
-    expect(src).toContain("onStatusChange={setReviewWindowStatus}");
+    expect(src).toContain("onStatusChange={onReviewWindowStatus}");
+    expect(src).toContain('useState<ReviewWindowStatus>("resolving")');   // 초기값은 판별 중 — hidden 으로 시작하지 않는다
     expect(src).toContain('const reviewCardLock = reviewWindowStatus !== "hidden" && effectivePayMethodUi !== "direct";');
     expect(src).toMatch(/disabled=\{busy \|\| pgUnresolved \|\| reviewCardLock/);
   });
   it("handlePay 는 주문 생성(createOrder)·PG 준비보다 먼저 지정 계정의 카드 결제를 막는다", () => {
-    const guard = src.indexOf('effectivePayMethod !== "direct" && reviewWindowStatus !== "hidden"');
+    const guard = src.indexOf('effectivePayMethod !== "direct" && reviewStatusRef.current !== "hidden"');
     expect(guard).toBeGreaterThan(0);
     expect(guard).toBeLessThan(src.indexOf("await createOrder({", guard));
     expect(guard).toBeLessThan(src.indexOf("requestReturnToken(orderId)"));

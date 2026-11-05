@@ -19,3 +19,13 @@
 - 로컬 모의: vitest 전체 2968 통과(신규 16: 상태 전달·확인 실패·복구·재시도·더블클릭·경로 한정·CTA 잠금 정적 계약), `npm run build`(더미 env) 성공.
 - 실제 외부: NICEPAY SDK URL 로드(HTTP 200, `goPay` 정의 확인)만 수행. 실제 `goPay` 호출/결제창은 열지 않음(공용 테스트 MerchantKey 가 이 환경에 없음, 승인 API 호출 0회).
 - 화면: `review_window_ui/` 의 iPhone 폭(390px) 렌더 — 전/후, 상태별, 다크, 큰 글자. 실기기 iOS 확인은 미실시.
+
+## 보완 (커밋 e522248 검토 반영, 2026-11-05)
+1. **계정 판별 중 구간** — 이전: 컴포넌트·부모 초기값이 `hidden` 이라 `sessionNow()` 가 끝나기 전에는 일반 회원과 구분되지 않아 실제 카드 결제 버튼이 열려 있었다. 수정: `ReviewWindowStatus` 에 `resolving` 추가(초기값·인증 변경 직후), 지정 계정이 아님이 확정돼야 `hidden`. checkout 초기값도 `resolving`, 잠금은 비-direct 에만 적용, handlePay 는 ref 로 최신 상태를 읽어 `createOrder` 이전에 중단. 세션 조회 실패는 `denied`.
+   테스트: 실제 `app/checkout/page.tsx` 를 jsdom 렌더(`nicepay.checkout.reviewResolving.test.ts`) — getSession 지연 중 버튼 disabled·클릭해도 createOrder/prepare/createPayment 없음, 지정 계정 확정 후에도 잠김, 일반 회원 확정 시 활성화·정상 접수, 세션 실패 시 잠김, 직접결제 유지. 초기값·마운트 알림을 일부러 제거하면 실패하는 것을 확인(변이 검증).
+2. **요청 제한 시간·취소** — 12초 AbortController(check/open), 준비 중 "준비 취소" 버튼, 시도별 id 로 늦은 응답·오류 무시(`nicepay.reviewWindow.attempts.test.ts`: 타임아웃 복구, check 타임아웃→denied, 취소 후 늦은 응답, 취소→재시도→이전 응답, 이전 시도의 늦은 오류, 이전 창 닫기 콜백, 더블 클릭).
+3. **창 열기 시도 식별자** — `openNicepayV3Window` 가 시도 id·타이머 id·소유권 확인을 갖는다. 테스트는 mock 없이 실제 helper(`nicepay.v3.window.attempts.test.ts`, jsdom + fake timers): 첫 창 닫기 → 초기화 → 새 창 열기 → 이전 콜백 시점 경과 후에도 새 창(form·전역 핸들러) 유지, 이전 cleanup 이 새 핸들러를 지우지 않음, 정리된 시도의 submit 무시, goPay 예외 정리.
+
+### 미검증 (명확히)
+- **기존 App Store 바이너리에서 실제 NICEPAY 결제창이 열리는지는 검증하지 못했다.** 원인 분석상 모바일 `goPay` 는 `target=_top` 으로 NICEPAY 도메인에 form 을 제출하고, 기존 바이너리의 Capacitor `allowNavigation` 에 NICEPAY 도메인이 없어 이동이 앱 밖(시스템 브라우저)으로 나가거나 막힐 수 있다. 실기기·실제 외부 창은 확인하지 않았고(공용 테스트 MerchantKey 없음), 이 보완은 그 경우에도 화면이 "준비 중"에 갇히지 않게 하는 복구·잠금 로직이다. 네이티브 업데이트가 필요한 항목은 위 "네이티브" 절 참고.
+- 검증: vitest 전체 2990 통과, `npm run build`(더미 env) 성공. 승인·망취소·환불 API 호출 0회, 카드 인증 없음.

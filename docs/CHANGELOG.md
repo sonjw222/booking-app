@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-11-05 — 결제창 확인 UI 보완 3건 (커밋 e522248 검토 반영, 로컬 `fix/nicepay-review-window-ui-20261105`, 운영 미반영)
+- 계정 판별 중(resolving) 상태 추가: 초기값·인증 변경 직후는 hidden 이 아니라 resolving — checkout 은 세션 확인이 끝나 일반 회원(hidden)으로 확정되기 전에는 카드(비-direct) 실제 결제 버튼을 잠그고 handlePay 는 주문 생성 전에 중단(ref 로 클릭 시점 최신값). 세션 조회 실패는 denied(잠금). 직접결제는 그대로.
+- review-window 요청(check/open)에 12초 제한 시간(AbortController)과 "준비 취소" 버튼. 열기 시도마다 식별자·abort 를 두어 초기화·취소·재시도 뒤에 늦게 도착한 이전 응답/오류가 goPay 호출이나 새 상태 덮어쓰기를 하지 못한다.
+- `nicepayV3Window.ts`: 열기 시도별 id, 닫기 유예 타이머를 정리 시 취소, 전역 핸들러(nicepaySubmit/nicepayClose)는 소유자만 삭제, 정리된 시도의 submit 무시, 새 창 열기 시 이전 시도 폐기.
+- 서버 route·HMAC·MID·게이트·결제 비활성화는 변경 없음. 승인·망취소·환불 호출 0회.
+
 ## 2026-11-05 — 기존 앱 NICEPAY 결제창 확인 UI·버튼 충돌·로딩 복구 수정 (로컬 `fix/nicepay-review-window-ui-20261105`, 운영 미반영)
 - UI: 테스트 영역을 주문 상품 카드와 같은 여백·테두리·라운드의 안내 카드로 정리하고 버튼은 AppButton 사용(정의 없던 `secondary-btn`/`menu-section` 제거). 준비 중/열림/닫음/복귀/오류/확인 중/사용 불가 상태를 구분.
 - 충돌: 지정 심사 계정이 카드 결제를 고르면 하단 실제 결제 버튼을 잠그고 handlePay 도 주문 생성 전에 중단 — 권한 확인 중·허용·확인 실패 모두 실제 결제 경로로 fallback 하지 않는다(직접결제·일반 회원은 그대로).
