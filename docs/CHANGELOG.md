@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-11-07 — 심사 경로 격리 브라우저 QA 27/27 PASS + 결함 2건 수정 (`integration/nicepay-review-path-20261106`, 운영 미반영)
+- `/products` 전체 상품 목록: 허용 센터가 있는 심사관에게는 허용 센터 상품만(별도 심사 센터 테스트 상품 제외). 인증창 대상 판정이 심사 센터 행 존재에 의존하지 않도록 분리.
+- QA 도구: `scripts/qa/reviewPath/{stack.sh,httpsProxy.mjs}`, `tests/qa/reviewPath/browserQa.mjs`(운영 연결 없는 세 번째 격리 스택·실제 Chromium). `setupLocal.sh`/`setupRealCenter.sh` 는 `ISO_DB_CONTAINER` 로 컨테이너 이름을 바꿀 수 있다(기본값 불변). 결과: `docs/qa/nicepay-review-path-20261106/`.
+
 ## 2026-11-06 — NICEPAY 심사 경로: 실제 센터 상품 조회 + 카드 결제창 확인 (통합 브랜치 `integration/nicepay-review-path-20261106`, 운영 미반영)
 - 인증창 확인(review-window) 대상을 심사 센터 상품 외에 **심사관에게 허용된 실제 센터 상품**(`nicepay_review_center_grants` 행·승인된 비내부 센터·판매 중 미만료 상품)으로 확장(시도 토큰에 센터 포함, 반환 시 같은 센터로 재검증). 승인·주문·이용권 없음, 허용 테이블이 없으면 기존 동작.
 - 허용 센터가 있으면 심사관 탐색(홈·검색 등)은 그 센터만 보임(별도 심사 센터 제외). 조회 전용 센터 상품 행에 "결제 화면 · 카드 결제창 확인" 진입 추가.

@@ -23,13 +23,13 @@ async function readTarget(admin: SupabaseClient, uid: string, productId: string)
     admin.from("centers").select("is_nicepay_review,is_internal,status").eq("id", REVIEW_CENTER).maybeSingle(),
     admin.from("products").select("id,center_id,name,price,is_active,is_on_sale,expiry_mode,expiry_date").eq("id", productId).maybeSingle(),
   ]);
-  if (ue || ce || pe || !account || !center || !product) return null;
+  if (ue || ce || pe || !account || !product) return null;   // 심사 센터 행(center)은 아래 (a) 분기에서만 필요 — 허용된 실제 센터 상품 판정이 심사 센터 존재 여부에 의존하지 않게 한다
   if (account.nicepay_review_access !== true || account.is_member !== true || account.deactivated_at || account.merged_into) return null;
   if (product.id !== productId || product.is_active !== true || product.is_on_sale !== true) return null;
   const amount = Number(product.price);
   if (!Number.isSafeInteger(amount) || amount <= 0 || typeof product.name !== "string") return null;
   if (product.center_id === REVIEW_CENTER) {
-    if (center.is_nicepay_review !== true || center.is_internal !== false || center.status !== "approved") return null;
+    if (!center || center.is_nicepay_review !== true || center.is_internal !== false || center.status !== "approved") return null;
     return { productId, name: product.name, amount };
   }
   // (b) 허용된 실제 센터

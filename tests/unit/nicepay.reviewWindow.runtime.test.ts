@@ -59,6 +59,12 @@ describe("허용된 실제 센터 상품 — 인증창 확인 대상", () => {
     expect(await f.port.target(REVIEW_UID, REAL_PRODUCT)).toEqual({ productId: REAL_PRODUCT, name: "11월 수강권", amount: 80000, centerId: REAL_CENTER });
     expect(f.eqLog).toContainEqual(["nicepay_review_center_grants", "account_id", ACC_ID]); expect(f.eqLog).toContainEqual(["nicepay_review_center_grants", "center_id", REAL_CENTER]);
   });
+  it("심사 센터 행이 없는 환경에서도 허용된 실제 센터 상품은 대상이다(심사 센터 존재에 의존하지 않음), 심사 센터 상품은 그 행이 없으면 거부", async () => {
+    const f = realFixture({ centers_review: null });
+    expect(await f.port.target(REVIEW_UID, REAL_PRODUCT)).toMatchObject({ centerId: REAL_CENTER });
+    (f.rows.products as Record<string, unknown>).center_id = REVIEW_CENTER;
+    expect(await f.port.target(REVIEW_UID, REAL_PRODUCT)).toBeNull();
+  });
   it("허용 행이 없거나 허용 테이블이 없으면(SQL 적용 전) 거부 — 기존 심사 센터 동작만 유지", async () => {
     expect(await realFixture({ nicepay_review_center_grants: null }).port.target(REVIEW_UID, REAL_PRODUCT)).toBeNull();
     expect(await realFixture({ nicepay_review_center_grants: "throw" }).port.target(REVIEW_UID, REAL_PRODUCT)).toBeNull();

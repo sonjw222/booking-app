@@ -3,7 +3,7 @@
 # 순서: 만료 상품 숨김(운영 적용 예정 SQL — 로컬을 같은 조건으로) → 허용 목록 SQL → 시험 데이터. 사용: ISO_ENV_FILE=… scripts/isolated/nicepayReview/setupRealCenter.sh
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
-PSQL() { docker exec -i supabase_db_mwhabit-isolated psql -U postgres -v ON_ERROR_STOP=1 -q "$@"; }
+PSQL() { docker exec -i "${ISO_DB_CONTAINER:-supabase_db_mwhabit-isolated}" psql -U postgres -v ON_ERROR_STOP=1 -q "$@"; }
 : "${ISO_ENV_FILE:?ISO_ENV_FILE 필요}"
 [ "${SKIP_EXPIRED_SQL:-}" = "1" ] || PSQL < fix_expired_fixed_date_products_20261031.sql >/dev/null
 PSQL < add_nicepay_review_real_center_grants_20261103.sql >/dev/null
