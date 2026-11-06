@@ -20,6 +20,7 @@ import {
 } from "../../../lib/center";
 import { ZoomableImage } from "../../components/ImageViewer";
 import { addToCart, cartCount } from "../../../lib/cart";
+import { fetchNicepayViewOnlyCenter } from "../../../lib/nicepayReviewScope";
 import { availabilityLabel, computeBaseAmount, countOptionLabel, isCountSelectable, priceSummary, sortedTiers } from "../../../lib/selectableCount";
 import {
   EMPTY_CATALOG_FILTER, catalogEmptyMessage, filterCatalog, isFilterActive, nextFilterOnKind, uniqueGroupLabels,
@@ -77,6 +78,9 @@ export default function CenterDetailPage() {
 function CenterDetailContent() {
   const params = useParams();
   const centerId = String(params.id);
+  // NICEPAY 심사관의 "조회 전용" 실제 센터 — 상품명·가격·이용조건만 보이고 구매·담기·예약 버튼은 숨긴다(서버도 같은 규칙으로 거부).
+  const [viewOnly, setViewOnly] = useState(false);
+  useEffect(() => { let on = true; fetchNicepayViewOnlyCenter(centerId).then((v) => { if (on) setViewOnly(v); }).catch(() => {}); return () => { on = false; }; }, [centerId]);
   const searchParams = useSearchParams();
   // 예약창에서 "수강권 구매하기"로 넘어온 경우: 구매 후 바로 예약할 수업 정보
   const reserveClassId = searchParams.get("reserveClassId");
@@ -419,15 +423,19 @@ function CenterDetailContent() {
         <SheetOverlay className="sheet-overlay" onClick={() => setBuySheet(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">
-              수강권 · 상품 구매
+              {viewOnly ? "수강권 · 상품 안내" : "수강권 · 상품 구매"}
               <button type="button" className="sheet-close-btn" aria-label="닫기" onClick={() => setBuySheet(false)}>
                 <UiIcon name="close" size={20} />
               </button>
             </div>
-            <Link href="/cart" className="cart-link-btn" prefetch={false}>
-              <UiIcon name="cart" size={16} /> 장바구니 보기{cartItemCount > 0 ? ` (${cartItemCount})` : ""}
-            </Link>
-            <p className="center-buy-help">수강권을 선택하고 바로 구매하거나 장바구니에 담을 수 있어요.</p>
+            {viewOnly ? (
+              <p className="center-buy-help" data-testid="view-only-notice">심사 확인용으로 상품명·가격·이용조건을 조회만 할 수 있어요. 이 화면에서는 구매할 수 없어요.</p>
+            ) : (<>
+              <Link href="/cart" className="cart-link-btn" prefetch={false}>
+                <UiIcon name="cart" size={16} /> 장바구니 보기{cartItemCount > 0 ? ` (${cartItemCount})` : ""}
+              </Link>
+              <p className="center-buy-help">수강권을 선택하고 바로 구매하거나 장바구니에 담을 수 있어요.</p>
+            </>)}
             {/* 이용기간 안내: 상품별 날짜를 알 수 없는 상품(비로그인 공개 목록 등)이 하나라도 있으면 공통 안내를 한 번 보인다 */}
             {visibleProducts.some((p) => !p.periodSource) && <ServicePeriodGenericNote />}
             {rulesLoadFailed && <div className="rule-load-error" role="status">예약조건을 불러오지 못했어요. 새로고침하면 다시 시도해요.</div>}
@@ -476,7 +484,7 @@ function CenterDetailContent() {
                         )}
                         <div className="center-products">
                           {group.items.map((p) => (
-                            <CenterProductRow key={p.id} p={p} rules={passRules[p.id]} value={selections[p.id]} onChange={changeSelection} onDesc={setDescProduct} onAddCart={handleAddCart} onBuy={handlePurchase} />
+                            <CenterProductRow key={p.id} p={p} rules={passRules[p.id]} value={selections[p.id]} onChange={changeSelection} onDesc={setDescProduct} onAddCart={handleAddCart} onBuy={handlePurchase} viewOnly={viewOnly} checkoutHref={`/checkout?center=${centerId}&product=${p.id}`} />
                           ))}
                         </div>
                       </div>
@@ -488,7 +496,7 @@ function CenterDetailContent() {
                     <div className="menu-section-label" style={{ padding: "10px 0 6px" }}>상품</div>
                     <div className="center-products">
                       {visibleProducts.filter((p) => p.kind === "goods").map((p) => (
-                        <CenterProductRow key={p.id} p={p} value={selections[p.id]} onChange={changeSelection} onDesc={setDescProduct} onAddCart={handleAddCart} onBuy={handlePurchase} />
+                        <CenterProductRow key={p.id} p={p} value={selections[p.id]} onChange={changeSelection} onDesc={setDescProduct} onAddCart={handleAddCart} onBuy={handlePurchase} viewOnly={viewOnly} checkoutHref={`/checkout?center=${centerId}&product=${p.id}`} />
                       ))}
                     </div>
                   </>
@@ -613,7 +621,7 @@ function CenterDetailContent() {
             <ServicePeriodNotice source={descProduct.periodSource} />
             <div className="add-profile-actions" style={{ marginTop: 14 }}>
               <button className="ghost-btn" onClick={() => setDescProduct(null)}>닫기</button>
-              <button className="primary-btn" onClick={() => { const p = descProduct; setDescProduct(null); handlePurchase(p); }}>구매하기</button>
+              {!viewOnly && <button className="primary-btn" onClick={() => { const p = descProduct; setDescProduct(null); handlePurchase(p); }}>구매하기</button>}
             </div>
           </div>
         </SheetOverlay>
@@ -816,8 +824,8 @@ function CenterDetailContent() {
       {/* 하단 고정 바: 예약하기 + 구매하기 */}
       <div className="center-bottom-bar">
         {/* 버튼 위계: 지금 해야 할 일이 주(Primary, 네이비), 다른 하나는 보조(Secondary, 테두리). 수강권이 없으면 구매가, 있으면 예약이 주 동작이다. */}
-        <button type="button" className={`center-bar-btn buy ${hasPass ? "secondary" : "primary"}`} onClick={() => setBuySheet(true)}>수강권 구매하기</button>
-        <button type="button" className={`center-bar-btn reserve ${hasPass ? "primary" : "secondary"}`} onClick={handleReserveClick}>예약하기</button>
+        <button type="button" className={`center-bar-btn buy ${hasPass ? "secondary" : "primary"}`} onClick={() => setBuySheet(true)}>{viewOnly ? "수강권 안내 보기" : "수강권 구매하기"}</button>
+        {!viewOnly && <button type="button" className={`center-bar-btn reserve ${hasPass ? "primary" : "secondary"}`} onClick={handleReserveClick}>예약하기</button>}
       </div>
 
       <ConfirmDialog
@@ -842,7 +850,7 @@ function CenterDetailContent() {
 type ProductSelection = { count: number | null; size: string | null };
 const won = (n: number) => n.toLocaleString("ko-KR") + "원";
 
-function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy }: {
+function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy, viewOnly = false, checkoutHref }: {
   p: CenterProduct;
   rules?: ScheduleRule[];
   value?: Partial<ProductSelection>;
@@ -850,6 +858,8 @@ function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy 
   onDesc: (p: CenterProduct) => void;
   onAddCart: (p: CenterProduct, sel?: ProductSelection) => void;
   onBuy: (p: CenterProduct, sel?: ProductSelection) => void;
+  viewOnly?: boolean;   // 조회 전용: 담기·구매 버튼을 만들지 않는다
+  checkoutHref?: string;   // 조회 전용에서만: 결제 화면(카드 결제창 확인, 승인 없음)으로 가는 링크
 }) {
   const selectable = isCountSelectable(p);
   const tiers = selectable ? sortedTiers(p) : [];
@@ -888,10 +898,11 @@ function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy 
           <div className="center-product-total">{count != null ? `${count}회` : "-"} · {total != null ? won(total) : "-"}</div>
         </div>
       )}
-      <div className="center-product-actions">
+      {viewOnly && checkoutHref && !soldOut && <div className="center-product-actions"><a className="app-button app-button-secondary" href={checkoutHref}>결제 화면 · 카드 결제창 확인</a></div>}
+      {!viewOnly && <div className="center-product-actions">
         {!soldOut && <AppButton variant="secondary" className="center-product-cart" disabled={blocked} onClick={() => onAddCart(p, sel)}>담기</AppButton>}
         {!soldOut && <AppButton className="center-product-buy" disabled={blocked} onClick={() => onBuy(p, sel)}>구매</AppButton>}
-      </div>
+      </div>}
       {p.periodSource && <div className="center-product-period"><ServicePeriodNotice source={p.periodSource} variant="compact" /></div>}
       <ProductRuleAccordion rules={rules} />
     </div>

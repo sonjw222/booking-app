@@ -8,7 +8,7 @@
     - 시스템 설정 따르기 → 실제 시스템 상태를 그대로 따라감
 */
 import { describe, expect, it } from "vitest";
-import { resolveThemePreviewMode } from "../../app/settings/theme/page";
+import { resolveThemePreviewMode } from "../../lib/themeSettings";
 
 describe("resolveThemePreviewMode", () => {
   it("시스템 dark + 시스템따르기 → dark preview", () => {

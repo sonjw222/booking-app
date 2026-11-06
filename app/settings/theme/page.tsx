@@ -10,8 +10,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { syncNativeWebViewBackground, syncNativeStatusBarStyle } from "../../../lib/nativeTheme";
 
-type Theme = "system" | "burgundy" | "charcoal";
-type PreviewMode = "light" | "dark";
+import { resolveThemePreviewMode, isThemeOptionSelected, type Theme, type PreviewMode } from "../../../lib/themeSettings";
 
 const OPTIONS: { id: Theme; label: string; desc: string }[] = [
   { id: "system", label: "시스템 설정 따르기", desc: "기기 다크모드 설정에 맞춰 자동 전환" },
@@ -30,10 +29,7 @@ const OPTIONS: { id: Theme; label: string; desc: string }[] = [
 // var(--bg)를 참조하지 않음 — 그래서 지금 앱에 적용된 테마와 완전히 독립적) — "기본(라이트)"
 // 은 시스템이 뭐든 항상 라이트, "다크 모드"는 항상 다크, "시스템 설정 따르기"만 아래
 // resolveThemePreviewMode()로 실제 OS 설정을 읽어 그 결과를 그린다.
-export function resolveThemePreviewMode(id: Theme, systemDark: boolean): PreviewMode {
-  if (id === "system") return systemDark ? "dark" : "light";
-  return id === "charcoal" ? "dark" : "light";
-}
+
 
 // app/globals.css :root/[data-theme="charcoal"]의 실제 토큰 값과 동일(라이트=기본 :root,
 // 다크=charcoal) — 미리보기가 실제 화면 색과 어긋나지 않도록 그대로 가져다 쓴다.
@@ -54,11 +50,9 @@ function resolveEffectiveTheme(theme: Theme): "burgundy" | "charcoal" {
 
 // 선택 표시(라디오/테두리)는 저장된 테마 id와 정확히 일치할 때만 — 미리보기 색(mode)과는
 // 완전히 독립(시스템 다크에서 "다크 모드" 옵션이 자동으로 선택돼 보이면 안 됨).
-export function isThemeOptionSelected(current: Theme, optionId: Theme): boolean {
-  return current === optionId;
-}
 
-export function applyTheme(theme: Theme) {
+
+function applyTheme(theme: Theme) {
   const effective = resolveEffectiveTheme(theme);
   document.documentElement.setAttribute("data-theme", effective);
   document.documentElement.style.colorScheme = effective === "charcoal" ? "dark" : "light";   // 첫 paint 스크립트(app/layout.tsx)와 동일 — canvas 기본색 일치

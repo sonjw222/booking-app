@@ -5,6 +5,7 @@
   로그인 없이도 볼 수 있는 공개 조회
 */
 
+import { nicepayDiscoveryScope } from "./nicepayReviewScope";
 import { supabase } from "./supabaseClient";
 import { isFixedExpiryPassed, type PeriodSource } from "./servicePeriod";
 import { sanitizeRichText } from "./security";
@@ -266,7 +267,10 @@ export async function fetchPublicStorefrontProducts(centerId?: string | null): P
   );
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
   const periods = await fetchPublicProductPeriods(centerId);
-  return ((data ?? []) as any[]).map((p) => ({
+  // NICEPAY 심사관: 허용된 실제 센터가 있으면 전체 상품 목록(/products)도 그 센터 상품만 보인다(별도 심사 센터의 테스트 상품은 탐색과 같은 기준으로 제외). 센터 지정 조회·일반 회원은 영향 없음.
+  const reviewScope = centerId ? null : await nicepayDiscoveryScope().catch(() => null);
+  const allowed = reviewScope && reviewScope.extraCenterIds.length > 0 ? new Set(reviewScope.extraCenterIds) : null;
+  return ((data ?? []) as any[]).filter((p) => !allowed || allowed.has(p.center_id)).map((p) => ({
     periodSource: periods.get(p.id) ?? null,
     id: p.id, centerId: p.center_id, centerName: p.center_name, name: p.name, price: p.price,
     kind: p.product_kind === "goods" ? "goods" : "pass",
