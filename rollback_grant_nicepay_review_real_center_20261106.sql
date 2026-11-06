@@ -5,7 +5,7 @@ declare
     c_center constant uuid := '8965e09c-0d2b-44c6-ab26-40a85507f8b5';
     c_auth   constant uuid := '7ffcf57d-b6d1-4562-a260-33be15f66ee5';
     v_account uuid;
-    v_row nicepay_review_center_grants%rowtype;
+    v_row record;   -- %rowtype 은 테이블이 없으면 선언 단계에서 오류가 나므로 record 사용(테이블이 없는 상태에서도 정상 종료)
     v_n int;
 begin
     perform pg_advisory_xact_lock(hashtext('nicepay-review-grant-20261106'));

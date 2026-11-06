@@ -55,6 +55,18 @@ test('다른 허용 행·다른 계정/센터는 롤백이 건드리지 않는�
   assert.match(await run(db, ROLLBACK), /구매 허용\(can_purchase=true\)/); assert.equal((await grants(db)).length, 2, '중단 시 삭제 없음');
 });
 
+test('롤백: 허용 테이블이 없는 상태에서도 오류 없이 종료(이미 정리됨)하고 다른 객체를 만들지 않는다', async () => {
+  const db = await world(); await db.exec('drop table nicepay_review_center_grants cascade');
+  assert.match(ROLLBACK, /v_row record;/); assert.doesNotMatch(ROLLBACK, /nicepay_review_center_grants%rowtype/);
+  assert.equal(await run(db, ROLLBACK), ''); assert.equal(await run(db, ROLLBACK), '');
+  assert.equal((await q(db, `select to_regclass('public.nicepay_review_center_grants') t`))[0].t, null);
+});
+test('롤백: 심사 계정이 없거나 허용 행이 없으면 중단 없이 변경 없이 종료/명시적 중단', async () => {
+  const db = await world();
+  assert.equal(await run(db, ROLLBACK), '');   // 행 없음 → 변경 없이 종료
+  await db.exec(`delete from accounts where id='${ACC}'`);
+  assert.match(await run(db, ROLLBACK), /심사 계정을 찾지 못했어요/);
+});
 const guards = [
   ['허용 목록 테이블 없음', async (db) => { await db.exec('drop table nicepay_review_center_grants cascade'); }, /허용 목록 테이블이 없어요/],
   ['이메일이 niceqa 가 아님', (db) => db.exec(`update auth.users set email='x@test.invalid' where id='${AUTH}'`), /예상 조건/],
