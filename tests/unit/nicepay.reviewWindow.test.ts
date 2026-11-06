@@ -68,3 +68,23 @@ describe("existing App Store app: read-only review window",()=>{
   expect(validateReviewWindowParams(params,"https://preview.test")).toBeNull();expect(validateReviewWindowParams({...params,MerchantKey:"injected"},"https://mwhabit.com")).not.toHaveProperty("MerchantKey");
  });
 });
+
+// ── 실제 센터 상품 허용(centerId 포함 Target) — 시도 토큰은 상품의 센터를 담고, 반환 시 같은 센터로 다시 검증한다 ──
+import { prepareReviewWindow as _prepare, finishReviewWindow as _finish, verifyReviewAttempt as _verify, REVIEW_UID as _UID } from "../../lib/payments/server/nicepay/reviewWindow";
+describe("실제 센터 상품 시도 토큰", () => {
+  const cfg = { merchantKey: "k".repeat(86) + "==", secret: "s".repeat(40) };
+  const RC = "8965e09c-0d2b-44c6-ab26-40a85507f8b5", RP = "44444444-4444-4444-8444-444444444444";
+  const mk = (centerId?: string) => ({ authenticatedUid: async () => _UID, target: async () => ({ productId: RP, name: "11월 수강권", amount: 80000, ...(centerId ? { centerId } : {}) }) });
+  it("토큰에 센터가 들어가고 반환 시 같은 센터·금액이어야 통과, 다른 센터로 바뀌면 무효", async () => {
+    const now = new Date("2026-11-06T03:00:00Z");
+    const r = await _prepare({ token: "t", productId: RP, open: true }, cfg, mk(RC), now) as { params: { Amt: string; Moid: string; ReturnURL: string } };
+    expect(r.params.Amt).toBe("80000"); const rt = new URL(r.params.ReturnURL).searchParams.get("rt")!;
+    expect(_verify(rt, cfg, Math.floor(now.getTime() / 1000) + 1)?.center).toBe(RC);
+    const ok = await _finish({ AuthResultCode: "2001", Moid: r.params.Moid }, rt, cfg, mk(RC), Math.floor(now.getTime() / 1000) + 1);
+    expect(ok).toContain("/result?rt=");
+    const bad = await _finish({ AuthResultCode: "2001", Moid: r.params.Moid }, rt, cfg, mk("99999999-9999-4999-8999-999999999999"), Math.floor(now.getTime() / 1000) + 1);
+    expect(bad.endsWith("/result")).toBe(true);
+    const legacy = await _finish({ AuthResultCode: "2001", Moid: r.params.Moid }, rt, cfg, mk(undefined), Math.floor(now.getTime() / 1000) + 1);
+    expect(legacy.endsWith("/result")).toBe(true);   // 센터 id 가 없는(심사 센터) 대상으로는 실제 센터 토큰이 통과하지 못한다
+  });
+});

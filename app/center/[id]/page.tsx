@@ -484,7 +484,7 @@ function CenterDetailContent() {
                         )}
                         <div className="center-products">
                           {group.items.map((p) => (
-                            <CenterProductRow key={p.id} p={p} rules={passRules[p.id]} value={selections[p.id]} onChange={changeSelection} onDesc={setDescProduct} onAddCart={handleAddCart} onBuy={handlePurchase} viewOnly={viewOnly} />
+                            <CenterProductRow key={p.id} p={p} rules={passRules[p.id]} value={selections[p.id]} onChange={changeSelection} onDesc={setDescProduct} onAddCart={handleAddCart} onBuy={handlePurchase} viewOnly={viewOnly} checkoutHref={`/checkout?center=${centerId}&product=${p.id}`} />
                           ))}
                         </div>
                       </div>
@@ -496,7 +496,7 @@ function CenterDetailContent() {
                     <div className="menu-section-label" style={{ padding: "10px 0 6px" }}>상품</div>
                     <div className="center-products">
                       {visibleProducts.filter((p) => p.kind === "goods").map((p) => (
-                        <CenterProductRow key={p.id} p={p} value={selections[p.id]} onChange={changeSelection} onDesc={setDescProduct} onAddCart={handleAddCart} onBuy={handlePurchase} viewOnly={viewOnly} />
+                        <CenterProductRow key={p.id} p={p} value={selections[p.id]} onChange={changeSelection} onDesc={setDescProduct} onAddCart={handleAddCart} onBuy={handlePurchase} viewOnly={viewOnly} checkoutHref={`/checkout?center=${centerId}&product=${p.id}`} />
                       ))}
                     </div>
                   </>
@@ -850,7 +850,7 @@ function CenterDetailContent() {
 type ProductSelection = { count: number | null; size: string | null };
 const won = (n: number) => n.toLocaleString("ko-KR") + "원";
 
-function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy, viewOnly = false }: {
+function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy, viewOnly = false, checkoutHref }: {
   p: CenterProduct;
   rules?: ScheduleRule[];
   value?: Partial<ProductSelection>;
@@ -859,6 +859,7 @@ function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy,
   onAddCart: (p: CenterProduct, sel?: ProductSelection) => void;
   onBuy: (p: CenterProduct, sel?: ProductSelection) => void;
   viewOnly?: boolean;   // 조회 전용: 담기·구매 버튼을 만들지 않는다
+  checkoutHref?: string;   // 조회 전용에서만: 결제 화면(카드 결제창 확인, 승인 없음)으로 가는 링크
 }) {
   const selectable = isCountSelectable(p);
   const tiers = selectable ? sortedTiers(p) : [];
@@ -897,6 +898,7 @@ function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy,
           <div className="center-product-total">{count != null ? `${count}회` : "-"} · {total != null ? won(total) : "-"}</div>
         </div>
       )}
+      {viewOnly && checkoutHref && !soldOut && <div className="center-product-actions"><a className="app-button app-button-secondary" href={checkoutHref}>결제 화면 · 카드 결제창 확인</a></div>}
       {!viewOnly && <div className="center-product-actions">
         {!soldOut && <AppButton variant="secondary" className="center-product-cart" disabled={blocked} onClick={() => onAddCart(p, sel)}>담기</AppButton>}
         {!soldOut && <AppButton className="center-product-buy" disabled={blocked} onClick={() => onBuy(p, sel)}>구매</AppButton>}

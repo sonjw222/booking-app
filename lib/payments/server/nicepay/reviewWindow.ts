@@ -19,7 +19,8 @@ export function reviewWindowConfig(env: Record<string, string | undefined>): Rev
   if (!merchantKey || !/^[A-Za-z0-9+/]{86}==$/.test(merchantKey) || !secret || secret.length < 32) return null;
   return { merchantKey, secret };
 }
-export type Target = { productId: string; name: string; amount: number };
+/* centerId: 이 상품이 속한 센터. 생략하면 심사 센터(REVIEW_CENTER). 심사관에게 허용된 실제 센터 상품(nicepay_review_center_grants)도 인증창 확인 대상이 될 수 있다 — 승인·주문·이용권 발급은 어느 경우에도 없다. */
+export type Target = { productId: string; name: string; amount: number; centerId?: string };
 export type ReviewReadPort = {
   authenticatedUid(token: string): Promise<string | null>;
   // Must recheck the pinned auth UID/email, account flag, center and live product on each request.
@@ -40,7 +41,7 @@ export function verifyReviewAttempt(raw: unknown, c: ReviewConfig, now: number):
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
   try {
     const a = JSON.parse(Buffer.from(parts[0], "base64url").toString()) as Attempt;
-    if (a.purpose !== "nicepay-review-window-v1" || a.uid !== REVIEW_UID || a.center !== REVIEW_CENTER || !UUID.test(a.product) || !UUID.test(a.moid)) return null;
+    if (a.purpose !== "nicepay-review-window-v1" || a.uid !== REVIEW_UID || typeof a.center !== "string" || !UUID.test(a.center) || !UUID.test(a.product) || !UUID.test(a.moid)) return null;
     if (!Number.isSafeInteger(a.amount) || a.amount <= 0 || !Number.isSafeInteger(a.iat) || a.iat > now || a.exp !== a.iat + TTL || now >= a.exp) return null;
     if (a.outcome !== undefined && !["closed", "verified-not-approved", "invalid"].includes(a.outcome)) return null;
     return a;
@@ -54,7 +55,7 @@ export async function prepareReviewWindow(input: { token: string | null; product
   if (!t || t.productId !== input.productId || !Number.isSafeInteger(t.amount) || t.amount <= 0 || !t.name.trim()) return null;
   if (!input.open) return { allowed: true as const };
   const iat = Math.floor(now.getTime() / 1000);
-  const a: Attempt = { purpose: "nicepay-review-window-v1", uid, center: REVIEW_CENTER, product: t.productId, moid: randomUUID(), amount: t.amount, iat, exp: iat + TTL };
+  const a: Attempt = { purpose: "nicepay-review-window-v1", uid, center: t.centerId ?? REVIEW_CENTER, product: t.productId, moid: randomUUID(), amount: t.amount, iat, exp: iat + TTL };
   const rt = signAttempt(a, c), ediDate = ediDateOf(now), amt = String(t.amount);
   return { allowed: true as const, params: {
     MID: REVIEW_MID, Moid: a.moid, Amt: amt, GoodsName: Array.from(t.name.trim()).slice(0, 20).join(""), EdiDate: ediDate,
@@ -67,7 +68,7 @@ export async function finishReviewWindow(form: Record<string, unknown>, rt: unkn
   const a = verifyReviewAttempt(rt, c, now);
   if (!a || a.outcome !== undefined || form.Moid !== a.moid) return invalid;
   const target = await port.target(a.uid, a.product);
-  if (!target || target.productId !== a.product || target.amount !== a.amount) return invalid;
+  if (!target || target.productId !== a.product || target.amount !== a.amount || (target.centerId ?? REVIEW_CENTER) !== a.center) return invalid;
   let outcome: Outcome = "closed";
   if (form.AuthResultCode === "0000") {
     if (form.MID !== REVIEW_MID || form.Amt !== String(a.amount) || typeof form.AuthToken !== "string" || !form.AuthToken || typeof form.TxTid !== "string" || !form.TxTid) return invalid;

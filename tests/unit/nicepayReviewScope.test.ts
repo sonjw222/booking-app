@@ -28,9 +28,9 @@ describe("narrowToReviewCenters — 쿼리 좁히기", () => {
     let b = builder(); narrowToReviewCenters(b.q, { extraCenterIds: [], viewOnlyCenterIds: [] }); expect(b.calls).toEqual([["eq", "is_nicepay_review", true]]);
     b = builder(); narrowToReviewCenters(b.q, { extraCenterIds: [], viewOnlyCenterIds: [] }, "centers"); expect(b.calls).toEqual([["eq", "centers.is_nicepay_review", true]]);
   });
-  it("허용 센터가 있으면 (심사 센터 OR id ∈ 허용) — 전체 해제가 아니라 목록만 추가", () => {
-    let b = builder(); narrowToReviewCenters(b.q, { extraCenterIds: [ID1], viewOnlyCenterIds: [] }); expect(b.calls).toEqual([["or", `is_nicepay_review.eq.true,id.in.(${ID1})`]]);
-    b = builder(); narrowToReviewCenters(b.q, { extraCenterIds: [ID1, ID2], viewOnlyCenterIds: [] }, "centers"); expect(b.calls).toEqual([["or", `is_nicepay_review.eq.true,id.in.(${ID1},${ID2})`, { referencedTable: "centers" }]]);
+  it("허용 센터가 있으면 id ∈ 허용 센터만(별도 심사 센터는 탐색에서 제외 — 실제 상품으로 심사 경로 구성), 전체 해제가 아니라 허용 목록만", () => {
+    let b = builder(); narrowToReviewCenters(b.q, { extraCenterIds: [ID1], viewOnlyCenterIds: [] }); expect(b.calls).toEqual([["or", `id.in.(${ID1})`]]);
+    b = builder(); narrowToReviewCenters(b.q, { extraCenterIds: [ID1, ID2], viewOnlyCenterIds: [] }, "centers"); expect(b.calls).toEqual([["or", `id.in.(${ID1},${ID2})`, { referencedTable: "centers" }]]);
   });
 });
 

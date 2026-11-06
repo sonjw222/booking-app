@@ -1,5 +1,8 @@
 # TODO
 
+- **P0(승인)**: NICEPAY 심사 경로(실제 센터 상품) 운영 적용 — A10TION 운영자 동의 → audit → 허용 목록 SQL(+verify) → 허용 1행 SQL → 앱 배포. 순서·롤백: `docs/payments/NICEPAY_REVIEW_PATH_20261106.md`. 심사 계정 비밀번호는 사용자가 NICEPAY 에 직접 전달.
+- **P1**: NICEPAY 기술팀 답변 대기 — 인증창 생년월일·카드 비밀번호 앞 2자리 누락(코드 변경 없음, MID 계약/인증 방식 설정 확인). A10TION 11월 상품 11/28 만료 이후 보여 줄 상품 계획.
+
 - **P0(승인)**: 실제 센터 허용 SQL(`add_nicepay_review_real_center_grants_20261103.sql`) 운영 적용 → 허용 행 추가(조회만) — 절차 `docs/payments/NICEPAY_REAL_CENTER_REVIEW_20261103.md` §4. 먼저 읽기 전용 점검 SQL 실행, 만료 상품 숨김 SQL 적용 여부 확인.
 - **P1(결정)**: 실제 상품으로 카드 결제 시험이 필요한지(게이트·실거래 설계 필요), 기존 심사 센터 종료 시점(`close_nicepay_review_20261029.sql`), A10TION 11월 상품 11/28 만료 이후 노출 방안.
 - **P3**: 조회 전용 허용에서 구매 시도 시 안내 문구 개선.

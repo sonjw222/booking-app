@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-11-06 — NICEPAY 심사 경로: 실제 센터 상품 조회 + 카드 결제창 확인 (통합 브랜치 `integration/nicepay-review-path-20261106`, 운영 미반영)
+- 인증창 확인(review-window) 대상을 심사 센터 상품 외에 **심사관에게 허용된 실제 센터 상품**(`nicepay_review_center_grants` 행·승인된 비내부 센터·판매 중 미만료 상품)으로 확장(시도 토큰에 센터 포함, 반환 시 같은 센터로 재검증). 승인·주문·이용권 없음, 허용 테이블이 없으면 기존 동작.
+- 허용 센터가 있으면 심사관 탐색(홈·검색 등)은 그 센터만 보임(별도 심사 센터 제외). 조회 전용 센터 상품 행에 "결제 화면 · 카드 결제창 확인" 진입 추가.
+- 신규 SQL(미실행): `audit_nicepay_review_path_readonly_20261106.sql`, `grant_nicepay_review_real_center_20261106_proposed.sql`, `rollback_grant_nicepay_review_real_center_20261106.sql`. 설계·순서: `docs/payments/NICEPAY_REVIEW_PATH_20261106.md`.
+
 ## 2026-11-05 — 결제창 확인 UI 보완 3건 (커밋 e522248 검토 반영, 로컬 `fix/nicepay-review-window-ui-20261105`, 운영 미반영)
 - 계정 판별 중(resolving) 상태 추가: 초기값·인증 변경 직후는 hidden 이 아니라 resolving — checkout 은 세션 확인이 끝나 일반 회원(hidden)으로 확정되기 전에는 카드(비-direct) 실제 결제 버튼을 잠그고 handlePay 는 주문 생성 전에 중단(ref 로 클릭 시점 최신값). 세션 조회 실패는 denied(잠금). 직접결제는 그대로.
 - review-window 요청(check/open)에 12초 제한 시간(AbortController)과 "준비 취소" 버튼. 열기 시도마다 식별자·abort 를 두어 초기화·취소·재시도 뒤에 늦게 도착한 이전 응답/오류가 goPay 호출이나 새 상태 덮어쓰기를 하지 못한다.
