@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-11-08 — iOS 실기기 NICEPAY 결제창이 외부 Safari 로 나가 오류 나는 문제 진단·최소 수정 (`qa/nicepay-ios-nav-20261108`, 기준 `fd659321`, 운영 미반영)
+- 원인: goPay 모바일 결제창은 `pg-web.nicepay.co.kr/v3/gwPayment.jsp` 로의 form POST 최상위 이동인데, 설치 앱의 Capacitor 는 allowNavigation 에 없는 호스트를 `UIApplication.open(URL)`+취소 처리해 POST 본문이 사라진다.
+- 수정: `capacitor.config.ts` allowNavigation 에 정확한 호스트 `pg-web`·`dc1-web`·`web`(.nicepay.co.kr) 추가(와일드카드 없음). **iOS(·Android) 앱 재빌드·재설치 필요.** 상세·검증·실기기 QA 절차: `docs/qa/nicepay-ios-webview-nav-20261108/REPORT.md`.
+
 ## 2026-11-08 — PR #265 Lint 신규 오류 3건 수정 (`integration/nicepay-review-path-20261106`)
 - `NicepayReviewWindow.tsx`: 렌더 중 `notify.current` 대입(react-hooks/refs) → effect 로 이동, effect 본문의 동기 `setState`(react-hooks/set-state-in-effect) 제거(초기 상태·로그인 변경 처리기가 이미 같은 값으로 맞춤). `lib/center.ts`: `any[]` → 응답 행 타입(`PublicStorefrontRow`). ESLint 규칙 비활성화·baseline 추가 없음. 상태 전달·중복 호출 차단·비동기 취소·조회 전용 구매 차단 동작 불변(테스트 보강, 격리 브라우저 QA 27/27 재통과).
 

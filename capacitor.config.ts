@@ -51,9 +51,17 @@ const config: CapacitorConfig = {
       "appleid.apple.com",
       "*.apple.com",
       "bxntqggkfwnhcczsbqtj.supabase.co",
-      // NICEPAY v3 결제창(pg-web.nicepay.co.kr SDK·web.nicepay.co.kr 결제 페이지) — 앱(WebView) 안에서 결제창을 열기 위한 목록(2026-10-30, #255). 이 목록에 없으면 Capacitor 가 결제창 이동을 바깥 브라우저로 넘긴다.
-      // 결제는 코드 상수·DB 게이트 OFF 라 지금은 이 호스트로 이동하는 일이 없다. 카드사 인증 페이지 도메인은 NICEPAY 확인 전이라 추가하지 않았다(와일드카드 "*" 금지) — docs/payments/NICEPAY_NATIVE_WEBVIEW_RETURN_20261030.md BLOCKED.
-      "*.nicepay.co.kr",
+      // (통합 결정 2026-11-09) PR #264 의 와일드카드 "*.nicepay.co.kr" 대신 아래 정확한 호스트만 허용한다 — 와일드카드 확대 금지(카드사 인증 도메인은 NICEPAY 확인 전).
+      // NICEPAY 결제창(심사 인증창 확인) — 2026-11-08 실기기(iOS) 진단: NICEPAY 모바일 결제창은 SDK(goPay)가 form 을 target="_top" 으로 **POST** 제출해 열린다.
+      // 이 목록에 없는 호스트로의 최상위 이동을 Capacitor(iOS WebViewDelegationHandler)는 "UIApplication.open(url) + 취소" 로 처리하는데, 외부로 넘기는 것은 URL 뿐이라
+      // POST 본문(MID·Moid·Amt·SignData …)이 사라져 Safari 에서 NICEPAY 가 "일시적인 오류"를 보여 준다. 와일드카드(*.nicepay.co.kr)는 쓰지 않고, 확인된 호스트만 정확히 허용한다:
+      //   pg-web.nicepay.co.kr  — gwPayment.jsp (SDK 가 form 을 보내는 곳, 자동 POST HTML 응답)
+      //   dc1-web.nicepay.co.kr — smartPayment.jsp / billing·payment.jsp (GSLB 로 배정되는 결제창 본체; 자동 POST 가 같은 호스트에서 이어짐)
+      //   web.nicepay.co.kr     — 실기기에서 관찰된 NICEPAY 오류/안내 페이지 호스트
+      // 카드사·ISP 앱 이동·인증 호스트는 이 범위(결제창 첫 화면 확인)에 필요하지 않아 추가하지 않는다. ⚠ 이 값은 네이티브 번들(capacitor.config.json)에 포함되므로 앱 재빌드·재설치가 필요하다.
+      "pg-web.nicepay.co.kr",
+      "dc1-web.nicepay.co.kr",
+      "web.nicepay.co.kr",
     ],
   },
   ios: {
