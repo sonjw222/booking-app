@@ -40,21 +40,40 @@ export function nicepayV3FormFields(params: NicepayV3Params): Array<[string, str
 type V3Win = Window & { goPay?: (form: HTMLFormElement) => void; nicepaySubmit?: () => void; nicepayClose?: () => void };
 export type OpenV3Deps = { doc: Document; win: V3Win; onClosedBeforeSubmit?: () => void; closeGraceMs?: number };
 
-/** 결제창을 연다(goPay 호출까지). 승인은 하지 않는다. 반환: 정리 함수. goPay 가 없으면 throw(SDK 로드 실패). */
+/* 창 열기 시도별 식별자 — 같은 window 에서 시도가 겹쳐도(닫기 → 초기화 → 새 창 열기) 이전 시도의 늦은 콜백·정리가 새 시도를 건드리지 않게 한다.
+   · 전역 핸들러(nicepaySubmit/nicepayClose)는 NICEPAY SDK 가 이름으로 찾으므로 하나뿐이다 → 정리 시 "내 핸들러일 때만" 지운다(소유권 확인).
+   · 닫기 유예 타이머는 id 를 보관해 정리 시 취소하고, 콜백도 attempt 가 폐기됐으면 아무것도 하지 않는다. */
+let attemptSeq = 0;
+const activeByWindow = new WeakMap<object, { id: number; dispose: () => void }>();
+
+/** 결제창을 연다(goPay 호출까지). 승인은 하지 않는다. 반환: 정리 함수(여러 번 불러도 안전). goPay 가 없으면 throw(SDK 로드 실패). */
 export function openNicepayV3Window(params: NicepayV3Params, d: OpenV3Deps): () => void {
   const { doc, win } = d;
   if (typeof win.goPay !== "function") throw new Error("결제창을 불러오지 못했어요");
+  activeByWindow.get(win)?.dispose();   // 이전 시도가 남아 있으면 먼저 폐기(타이머·폼·전역 핸들러) — 늦은 콜백이 새 시도에 섞이지 않게
+  const id = ++attemptSeq;
   const form = doc.createElement("form");
   form.name = "nicepayV3Form"; form.method = "post"; form.action = params.ReturnURL; form.setAttribute("accept-charset", "euc-kr"); form.style.display = "none";
   for (const [k, v] of nicepayV3FormFields(params)) { const i = doc.createElement("input"); i.type = "hidden"; i.name = k; i.value = v; form.appendChild(i); }
   doc.body.appendChild(form);
-  let submitted = false; let cleaned = false;
-  const cleanup = () => { if (cleaned) return; cleaned = true; form.remove(); delete win.nicepaySubmit; delete win.nicepayClose; };
-  win.nicepaySubmit = () => { submitted = true; form.submit(); };   // 인증 결과 필드가 붙은 form 을 우리 서버 ReturnURL 로 제출 — 승인은 서버가 한다
-  win.nicepayClose = () => {
+  let submitted = false; let disposed = false; let closeTimer: ReturnType<typeof setTimeout> | null = null;
+  const onSubmit = () => { if (disposed) return; submitted = true; form.submit(); };   // 인증 결과 필드가 붙은 form 을 우리 서버 ReturnURL 로 제출 — 승인은 서버가 한다
+  const onClose = () => {
+    if (disposed) return;
+    if (closeTimer) clearTimeout(closeTimer);
     // 인증을 마치고 제출하는 중이면 닫기 이벤트가 이어서 올 수 있다 — 유예 후에도 제출이 없었을 때만 "사용자가 닫음"으로 본다.
-    setTimeout(() => { if (!submitted) { cleanup(); d.onClosedBeforeSubmit?.(); } }, d.closeGraceMs ?? 1500);
+    closeTimer = setTimeout(() => { closeTimer = null; if (disposed || submitted) return; dispose(); d.onClosedBeforeSubmit?.(); }, d.closeGraceMs ?? 1500);
   };
-  win.goPay(form);
-  return cleanup;
+  function dispose() {
+    if (disposed) return; disposed = true;
+    if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+    form.remove();
+    if (win.nicepaySubmit === onSubmit) delete win.nicepaySubmit;   // 새 시도가 덮어쓴 핸들러는 지우지 않는다
+    if (win.nicepayClose === onClose) delete win.nicepayClose;
+    if (activeByWindow.get(win)?.id === id) activeByWindow.delete(win);
+  }
+  win.nicepaySubmit = onSubmit; win.nicepayClose = onClose;
+  activeByWindow.set(win, { id, dispose });
+  try { win.goPay(form); } catch (e) { dispose(); throw e; }
+  return dispose;
 }

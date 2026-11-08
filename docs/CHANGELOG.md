@@ -1,5 +1,41 @@
 # CHANGELOG
 
+## 2026-11-08 — PR #265 Lint 신규 오류 3건 수정 (`integration/nicepay-review-path-20261106`)
+- `NicepayReviewWindow.tsx`: 렌더 중 `notify.current` 대입(react-hooks/refs) → effect 로 이동, effect 본문의 동기 `setState`(react-hooks/set-state-in-effect) 제거(초기 상태·로그인 변경 처리기가 이미 같은 값으로 맞춤). `lib/center.ts`: `any[]` → 응답 행 타입(`PublicStorefrontRow`). ESLint 규칙 비활성화·baseline 추가 없음. 상태 전달·중복 호출 차단·비동기 취소·조회 전용 구매 차단 동작 불변(테스트 보강, 격리 브라우저 QA 27/27 재통과).
+
+## 2026-11-07 — 심사 경로 격리 브라우저 QA 27/27 PASS + 결함 2건 수정 (`integration/nicepay-review-path-20261106`, 운영 미반영)
+- `/products` 전체 상품 목록: 허용 센터가 있는 심사관에게는 허용 센터 상품만(별도 심사 센터 테스트 상품 제외). 인증창 대상 판정이 심사 센터 행 존재에 의존하지 않도록 분리.
+- QA 도구: `scripts/qa/reviewPath/{stack.sh,httpsProxy.mjs}`, `tests/qa/reviewPath/browserQa.mjs`(운영 연결 없는 세 번째 격리 스택·실제 Chromium). `setupLocal.sh`/`setupRealCenter.sh` 는 `ISO_DB_CONTAINER` 로 컨테이너 이름을 바꿀 수 있다(기본값 불변). 결과: `docs/qa/nicepay-review-path-20261106/`.
+
+## 2026-11-06 — NICEPAY 심사 경로: 실제 센터 상품 조회 + 카드 결제창 확인 (통합 브랜치 `integration/nicepay-review-path-20261106`, 운영 미반영)
+- 인증창 확인(review-window) 대상을 심사 센터 상품 외에 **심사관에게 허용된 실제 센터 상품**(`nicepay_review_center_grants` 행·승인된 비내부 센터·판매 중 미만료 상품)으로 확장(시도 토큰에 센터 포함, 반환 시 같은 센터로 재검증). 승인·주문·이용권 없음, 허용 테이블이 없으면 기존 동작.
+- 허용 센터가 있으면 심사관 탐색(홈·검색 등)은 그 센터만 보임(별도 심사 센터 제외). 조회 전용 센터 상품 행에 "결제 화면 · 카드 결제창 확인" 진입 추가.
+- 신규 SQL(미실행): `audit_nicepay_review_path_readonly_20261106.sql`, `grant_nicepay_review_real_center_20261106_proposed.sql`, `rollback_grant_nicepay_review_real_center_20261106.sql`. 설계·순서: `docs/payments/NICEPAY_REVIEW_PATH_20261106.md`.
+
+## 2026-11-05 — 결제창 확인 UI 보완 3건 (커밋 e522248 검토 반영, 로컬 `fix/nicepay-review-window-ui-20261105`, 운영 미반영)
+- 계정 판별 중(resolving) 상태 추가: 초기값·인증 변경 직후는 hidden 이 아니라 resolving — checkout 은 세션 확인이 끝나 일반 회원(hidden)으로 확정되기 전에는 카드(비-direct) 실제 결제 버튼을 잠그고 handlePay 는 주문 생성 전에 중단(ref 로 클릭 시점 최신값). 세션 조회 실패는 denied(잠금). 직접결제는 그대로.
+- review-window 요청(check/open)에 12초 제한 시간(AbortController)과 "준비 취소" 버튼. 열기 시도마다 식별자·abort 를 두어 초기화·취소·재시도 뒤에 늦게 도착한 이전 응답/오류가 goPay 호출이나 새 상태 덮어쓰기를 하지 못한다.
+- `nicepayV3Window.ts`: 열기 시도별 id, 닫기 유예 타이머를 정리 시 취소, 전역 핸들러(nicepaySubmit/nicepayClose)는 소유자만 삭제, 정리된 시도의 submit 무시, 새 창 열기 시 이전 시도 폐기.
+- 서버 route·HMAC·MID·게이트·결제 비활성화는 변경 없음. 승인·망취소·환불 호출 0회.
+
+## 2026-11-05 — 기존 앱 NICEPAY 결제창 확인 UI·버튼 충돌·로딩 복구 수정 (로컬 `fix/nicepay-review-window-ui-20261105`, 운영 미반영)
+- UI: 테스트 영역을 주문 상품 카드와 같은 여백·테두리·라운드의 안내 카드로 정리하고 버튼은 AppButton 사용(정의 없던 `secondary-btn`/`menu-section` 제거). 준비 중/열림/닫음/복귀/오류/확인 중/사용 불가 상태를 구분.
+- 충돌: 지정 심사 계정이 카드 결제를 고르면 하단 실제 결제 버튼을 잠그고 handlePay 도 주문 생성 전에 중단 — 권한 확인 중·허용·확인 실패 모두 실제 결제 경로로 fallback 하지 않는다(직접결제·일반 회원은 그대로).
+- 복구: goPay 후 닫기 콜백이 없어도 앱/탭 복귀(visibility)·bfcache(pageshow)·수동 "상태 초기화"로 준비 중에서 빠져나온다(성공 처리 아님). 서명 발급 응답 오류·창 열기 예외는 오류 문구 + "다시 시도".
+- 서버 route·HMAC·MID·승인 관련 코드는 변경 없음. 승인·망취소·환불 호출 0회.
+## 2026-11-06 — 홈 NICEPAY 심사관 전용 섹션 문구 정리 (로컬 `fix/nicepay-home-wording-20261106`, 운영 미배포)
+- 심사관에게만 보이는 홈 섹션: 제목·aria-label "심사 전용 센터" → "수강권 및 결제 확인 센터", 부제 "심사용 수강권 및 결제 과정 확인" → "테스트 센터 · 수강권 및 결제 과정 확인". 노출 조건(`fetchMyNicepayReviewAccess`)·접근 제어·결제 플래그·상품 데이터는 변경 없음.
+- 운영 DB 센터·상품 문구는 `fix_nicepay_review_wording_20261105.sql` 로 이미 승인 후 적용 완료 — 이 변경에 SQL 은 없고 재실행하지 않는다.
+- 회귀 테스트: 이용자 화면 코드의 '심사용' 계열 문구 재유입 방지(`nicepayReviewWording.test.ts`), 홈 렌더(심사관/일반 회원/비로그인/빈 목록, `nicepayHomeReviewSection.render.test.ts`).
+## 2026-11-03 — 실제 센터 허용 롤백 SQL 보완 (로컬, 운영 SQL 미실행)
+- 롤백: 복원 전 함수 3개 현재 MD5 가 (적용본|이미 복원된 원본)이 아니면 변경 없이 중단, 복원 후 MD5 가 원본과 다르면 WARNING 이 아니라 EXCEPTION(트랜잭션 전체 취소), 허용 행이 있으면 계정/센터 목록을 보여 주며 중단하고 전체 삭제 대신 계정·센터를 지정한 개별 해제 절차 문서화. PGlite SQL 시험 6건(적용·롤백·재적용·변조 중단·원자적 취소).
+
+## 2026-11-03 — 실제 센터 허용 목록 SQL 2차 보완 (로컬, 운영 SQL 미실행)
+- preflight 를 함수 정의 MD5 전체 비교(운영 기준값)로 강화, 허용 센터가 승인 취소·내부 전환되면 허용 즉시 무효, 조회 전용 UI(구매·담기·예약 버튼 숨김·결제 화면 비활성), 롤백이 목록 RPC 를 되돌리던 결함 수정(함수 3개만 복원), 생애주기 시험 30건·접근 시험 57건·브라우저 6건 추가.
+
+## 2026-11-03 — NICEPAY 심사관에게 실제 센터(A10TION) 상품을 보여 주는 허용 목록 (로컬 `feat/nicepay-real-products-review-20261103`, 운영 SQL 미실행)
+- 신규 `add_nicepay_review_real_center_grants_20261103.sql`(+rollback·verify·읽기 전용 점검 SQL): 심사관 계정↔실제 센터 허용 목록(`nicepay_review_center_grants`, 기본 조회 전용·`can_purchase` 별도), 가시성·구매 가드 함수 교체. 카드 결제 게이트는 불변(허용 센터 카드 결제 불가). 앱: `nicepayDiscoveryScope()`/`narrowToReviewCenters()`(허용 센터 id 는 DB RPC 로 중앙 관리, SQL 전 배포 안전), 홈 심사관 섹션 문구. 격리 DB 41건·브라우저 5건·기존 회귀 통과. 문서 `docs/payments/NICEPAY_REAL_CENTER_REVIEW_20261103.md`.
+
 ## 2026-10-30 — 만료 주문 처리 E2E 격리 CI 추가·QA 증빙 정리 (PR #253 QA 보완, 운영 SQL 미실행)
 - 신규 workflow `.github/workflows/expired-order-qa.yml`: `tests/expired-order-qa/member-to-manager.spec.ts`(desktop+mobile 16 tests)를 러너 안의 일회용 Supabase 스택에서만 자동 실행. Secrets·공유 DEV·운영·실제 PG/알림 자격증명 없음, 앱 서버 :3021(기본 :3000 과 분리), 별도 러너·concurrency 그룹이라 기존 test.yml 과 무관. 운영과 같은 함수 정의 상태는 `scripts/isolated/expiredOrder/applyProdParity.sh` 가 러너의 로컬 컨테이너에만 적용.
 - spec 이 새 스택에서도 돌도록 센터 매니저 행을 없으면 생성(기존엔 사전 시드 가정). playwright 설정에 로컬 Supabase·실결제 자격증명 가드와 CI 전용 webServer 추가. 계약 테스트 `tests/unit/expiredOrderQaWorkflow.contract.test.ts` 추가, workflow 분류 목록(`liveTestEntrypoints.audit`)에 등록.

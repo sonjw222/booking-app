@@ -14,6 +14,7 @@ restore() { [ -n "$DEV_PID" ] && kill "$DEV_PID" 2>/dev/null || true; lsof -ti t
 trap restore EXIT INT TERM
 set -a; . "$ISO_ENV_FILE"; set +a
 export NPQA_OUT="${NPQA_OUT:-docs/qa/nicepay-main-integration-20261031/qa}"; mkdir -p "$NPQA_OUT"
+rm -rf test-results-nicepayqa/.auth   # 로그인 세션 캐시는 스택별이라 실행마다 새로 만든다(이전 스택의 세션이 남아 생기는 거짓 실패 방지)
 export NICEPAY_QA_CONTROL="$NPQA_OUT/control.json" NICEPAY_QA_LOG="$NPQA_OUT/nicepay-calls.jsonl"; echo '{}' > "$NICEPAY_QA_CONTROL"; : > "$NICEPAY_QA_LOG"
 # 로컬 전용 가짜 자격(무작위, 커밋·출력 금지)
 export NICEPAY_MID="QA$(head -c 6 /dev/urandom | xxd -p | cut -c1-8)m" NICEPAY_MERCHANT_KEY="$(head -c 24 /dev/urandom | xxd -p)" PAYMENT_RETURN_TOKEN_SECRET="$(head -c 24 /dev/urandom | xxd -p)"
