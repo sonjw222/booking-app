@@ -52,7 +52,8 @@ export default function NicepayReviewWindow({ productId, onStatusChange }: { pro
   const generation = useRef(0), windowOpen = useRef(false), hiddenSinceOpen = useRef(false), cleanupRef = useRef<null | (() => void)>(null);
   // 열기 시도별 식별자 + 취소 — 초기화·재시도·취소 뒤에 늦게 도착한 이전 응답이 goPay 를 부르거나 새 상태를 덮어쓰지 않게 한다.
   const attemptSeq = useRef(0), attempt = useRef<{ id: number; ctrl: AbortController } | null>(null), openedId = useRef(0);
-  const notify = useRef(onStatusChange); notify.current = onStatusChange;
+  const notify = useRef(onStatusChange);
+  useEffect(() => { notify.current = onStatusChange; });   // 렌더 중 ref 를 바꾸지 않고, 커밋 뒤에 최신 콜백을 보관한다
   const setStatus = (s: ReviewWindowStatus) => { setStatusState(s); notify.current?.(s); };
   useEffect(() => { notify.current?.("resolving"); }, []);   // 마운트 즉시 "판별 중"을 알린다(부모 초기값과 같음) — 세션 확인 전에도 실제 카드 결제가 열리지 않는다
   const cancelAttempt = () => { const a = attempt.current; attempt.current = null; a?.ctrl.abort(); };
@@ -64,7 +65,8 @@ export default function NicepayReviewWindow({ productId, onStatusChange }: { pro
   }, []);
   useEffect(() => {
     const g = ++generation.current, ctrl = new AbortController();
-    setStatus("resolving"); setPhase("idle"); setMessage("");
+    // 초기 상태(resolving·idle)는 마운트 때 이미 그 값이고, 로그인 변경 시에는 아래 onAuthStateChange 처리기가 먼저 같은 값으로 되돌린다 — effect 본문에서 동기 setState 를 하지 않는다.
+    //(productId 가 바뀌면 부모가 key 로 다시 마운트한다)
     void (async () => {
       try {
         const session = await sessionNow();

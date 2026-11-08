@@ -124,3 +124,33 @@ describe("결제 화면 — 테스트 CTA 와 실제 결제 CTA 충돌 방지(�
     const direct = src.indexOf('if (effectivePayMethod === "direct") {', guard); expect(direct).toBeGreaterThan(guard);   // 직접결제 분기는 가드 뒤에서 그대로 유지
   });
 });
+
+describe("Lint 수정(렌더 중 ref 변경·effect 동기 setState 제거) 후에도 상태 전달이 유지된다", () => {
+  it("부모가 콜백을 바꿔 다시 렌더하면 이후 상태 변화는 새 콜백으로만 전달된다(최신 콜백 보관)", async () => {
+    const first: ReviewWindowStatus[] = [], second: ReviewWindowStatus[] = [];
+    await render((s) => first.push(s)); expect(first.at(-1)).toBe("allowed");
+    const n1 = first.length; await render((s) => second.push(s));   // 같은 컴포넌트에 새 콜백(재렌더)
+    await act(async () => { h.callback!(); });                       // 로그인 변경 → resolving → 재확인 → allowed
+    expect(first.length).toBe(n1); expect(second[0]).toBe("resolving"); expect(second.at(-1)).toBe("allowed");
+  });
+  it("로그인 변경 시 resolving 을 먼저 알리고(실제 결제 잠금 유지) 재확인 결과로 갱신한다", async () => {
+    const seen: ReviewWindowStatus[] = []; await render((s) => seen.push(s)); seen.length = 0;
+    h.token = "other"; await act(async () => { h.callback!(); });
+    expect(seen[0]).toBe("resolving"); expect(seen.at(-1)).toBe("hidden"); expect(seen).not.toContain("allowed");
+  });
+  it("재확인 중 늦게 도착한 이전 확인 응답은 새 상태를 덮어쓰지 않는다(세대 검사)", async () => {
+    let release!: (v: unknown) => void; let n = 0;
+    h.fetch.mockImplementation(async (_u: string, init: RequestInit) => actionOf(init) === "check" ? (++n === 1 ? new Promise((r) => { release = r; }) : response({ allowed: false })) : response({ allowed: true, params: h.params }));
+    const seen: ReviewWindowStatus[] = []; await render((s) => seen.push(s));   // 첫 check 가 대기 중
+    await act(async () => { h.callback!(); });                                   // 로그인 변경 → 두 번째 check(거부)
+    await act(async () => { release(response({ allowed: true })); });           // 첫 응답이 뒤늦게 도착
+    expect(seen.at(-1)).toBe("denied"); expect(seen).not.toContain("allowed");
+  });
+  it("정적: 렌더 중 ref.current 대입과 effect 본문의 동기 setState 가 없다", () => {
+    const src = readFileSync(join(__dirname, "../../app/components/NicepayReviewWindow.tsx"), "utf-8");
+    expect(src).toMatch(/useEffect\(\(\) => \{ notify\.current = onStatusChange; \}\);/);
+    expect(src.match(/notify\.current = onStatusChange/g)?.length).toBe(1);
+    expect(src).not.toMatch(/const g = \+\+generation\.current, ctrl = new AbortController\(\);\s*setStatus\(/);
+    expect(src).not.toMatch(/eslint-disable[^\n]*(refs|set-state-in-effect)/);
+  });
+});

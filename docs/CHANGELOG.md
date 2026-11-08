@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-11-08 — PR #265 Lint 신규 오류 3건 수정 (`integration/nicepay-review-path-20261106`)
+- `NicepayReviewWindow.tsx`: 렌더 중 `notify.current` 대입(react-hooks/refs) → effect 로 이동, effect 본문의 동기 `setState`(react-hooks/set-state-in-effect) 제거(초기 상태·로그인 변경 처리기가 이미 같은 값으로 맞춤). `lib/center.ts`: `any[]` → 응답 행 타입(`PublicStorefrontRow`). ESLint 규칙 비활성화·baseline 추가 없음. 상태 전달·중복 호출 차단·비동기 취소·조회 전용 구매 차단 동작 불변(테스트 보강, 격리 브라우저 QA 27/27 재통과).
+
 ## 2026-11-07 — 심사 경로 격리 브라우저 QA 27/27 PASS + 결함 2건 수정 (`integration/nicepay-review-path-20261106`, 운영 미반영)
 - `/products` 전체 상품 목록: 허용 센터가 있는 심사관에게는 허용 센터 상품만(별도 심사 센터 테스트 상품 제외). 인증창 대상 판정이 심사 센터 행 존재에 의존하지 않도록 분리.
 - QA 도구: `scripts/qa/reviewPath/{stack.sh,httpsProxy.mjs}`, `tests/qa/reviewPath/browserQa.mjs`(운영 연결 없는 세 번째 격리 스택·실제 Chromium). `setupLocal.sh`/`setupRealCenter.sh` 는 `ISO_DB_CONTAINER` 로 컨테이너 이름을 바꿀 수 있다(기본값 불변). 결과: `docs/qa/nicepay-review-path-20261106/`.

@@ -226,6 +226,13 @@ export async function fetchCenterProducts(centerId: string): Promise<CenterProdu
   }
 }
 
+// fetch_public_storefront_products RPC 응답 행(snake_case) — 이 파일이 읽는 열만 선언한다.
+type PublicStorefrontRow = {
+  id: string; center_id: string; center_name: string; name: string; price: number; product_kind?: string | null;
+  description?: string | null; total_count?: number | null; unlimited?: boolean | null; unlimited_pass?: boolean | null; group_label?: string | null;
+  remaining?: number | null; purchase_count_selectable?: boolean | null; min_purchase_count?: number | null; max_purchase_count?: number | null; min_tier_price?: number | null;
+};
+
 export type PublicStorefrontProduct = {
   id: string; centerId: string; centerName: string; name: string; price: number;
   kind: "pass" | "goods"; description: string | null; totalCount: number | null;
@@ -270,7 +277,7 @@ export async function fetchPublicStorefrontProducts(centerId?: string | null): P
   // NICEPAY 심사관: 허용된 실제 센터가 있으면 전체 상품 목록(/products)도 그 센터 상품만 보인다(별도 심사 센터의 테스트 상품은 탐색과 같은 기준으로 제외). 센터 지정 조회·일반 회원은 영향 없음.
   const reviewScope = centerId ? null : await nicepayDiscoveryScope().catch(() => null);
   const allowed = reviewScope && reviewScope.extraCenterIds.length > 0 ? new Set(reviewScope.extraCenterIds) : null;
-  return ((data ?? []) as any[]).filter((p) => !allowed || allowed.has(p.center_id)).map((p) => ({
+  return ((data ?? []) as PublicStorefrontRow[]).filter((p) => !allowed || allowed.has(p.center_id)).map((p) => ({
     periodSource: periods.get(p.id) ?? null,
     id: p.id, centerId: p.center_id, centerName: p.center_name, name: p.name, price: p.price,
     kind: p.product_kind === "goods" ? "goods" : "pass",

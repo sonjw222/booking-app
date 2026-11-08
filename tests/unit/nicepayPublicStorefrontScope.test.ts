@@ -22,3 +22,12 @@ describe("/products 전체 목록의 NICEPAY 심사 범위", () => {
     expect((await fetchPublicStorefrontProducts("C-REVIEW")).length).toBe(3);
   });
 });
+
+describe("fetchPublicStorefrontProducts 행 매핑(any 제거 후에도 동일)", () => {
+  it("snake_case 응답을 PublicStorefrontProduct 로 매핑하고 누락 값은 안전한 기본값", async () => {
+    h.rows = [{ id: "p1", center_id: "c1", center_name: "센터", name: "수강권", price: 5000, product_kind: "goods", total_count: 3, purchase_count_selectable: true, min_purchase_count: 1, max_purchase_count: 12, min_tier_price: 4000 }, { id: "p2", center_id: "c1", center_name: "센터", name: "기본", price: 1000 }];
+    const r = await fetchPublicStorefrontProducts();
+    expect(r[0]).toMatchObject({ id: "p1", centerId: "c1", kind: "goods", totalCount: 3, countSelectable: true, minCount: 1, maxCount: 12, minTierPrice: 4000 });
+    expect(r[1]).toMatchObject({ kind: "pass", totalCount: null, unlimited: false, unlimitedPass: false, remaining: null, countSelectable: false, groupLabel: null, description: null });
+  });
+});
