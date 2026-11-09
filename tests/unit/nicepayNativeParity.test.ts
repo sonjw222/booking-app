@@ -55,7 +55,10 @@ describe("기존 로그인·보안 설정 보호", () => {
   });
   it("ATS 전체 허용·와일드카드 네비게이션·cleartext 허용이 없다", () => {
     expect(plist).not.toMatch(/NSAppTransportSecurity|NSAllowsArbitraryLoads/);
-    const cap = rd("capacitor.config.ts"); expect(cap).toContain("cleartext: false"); expect(cap).not.toMatch(/allowNavigation:[^\]]*"\*"[,\]]/); expect(cap).toContain('"*.nicepay.co.kr"');
+    const cap = rd("capacitor.config.ts"); expect(cap).toContain("cleartext: false"); expect(cap).not.toMatch(/allowNavigation:[^\]]*"\*"[,\]]/);
+    // 통합 결정(2026-11-09): NICEPAY 는 정확한 호스트 3개만(주석 제외한 실제 항목) — 와일드카드(*.nicepay.co.kr)·그 밖의 호스트 추가 금지
+    const entries = [...cap.replace(/\/\/[^\n]*/g, "").matchAll(/"([^"]*nicepay[^"]*)"/gi)].map((m) => m[1]).sort();
+    expect(entries).toEqual(["dc1-web.nicepay.co.kr", "pg-web.nicepay.co.kr", "web.nicepay.co.kr"]);
     expect(manifest).not.toMatch(/usesCleartextTraffic="true"/); expect(manifest).toContain("android:allowBackup=\"false\"");
   });
   it("Android: 기존 Activity 설정 유지 + deep link 는 VIEW/BROWSABLE 한 개, 복귀는 검증 함수만 호출", () => {

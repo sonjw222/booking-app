@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-// @ts-expect-error — 순수 .mjs 스크립트(타입 선언 없음)
 import { runPreflight } from "../../scripts/qa/nicepayAuthOnlyPreflight.mjs";
 
 const good = {

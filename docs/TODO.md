@@ -3,7 +3,7 @@
 - **P2(결정)**: PR #264 의 `*.nicepay.co.kr` 와일드카드 대신 정확한 호스트 3개(pg-web/dc1-web/web)만 허용하도록 통합했다(`integration/ux-native-review-20261109`). 카드사 앱 복귀 중 다른 NICEPAY 호스트(dc2 등)가 필요하면 NICEPAY 확인 후 호스트를 추가할 것. origin/main 에 없는 운영 배포 커밋(`61b10ab9` 계열 정기상품 카탈로그 3개)이 이 브랜치에 포함되어 있다 — main 반영 순서 확인 필요.
 - **P3**: 센터 수업 탭의 같은 제목 수업 카드는 대표 수업의 허용 수강권만 보여 준다(상세는 정확). 필요하면 카드에서 합집합 표시를 검토.
 
-- **P2(SQL·승인 필요)**: 주문 생성 서버측 옵션 검증 — 현재 `orders` 직접 INSERT 는 `selected_size` 가 `products.sizes` 에 속하는지/사이즈 필수 상품에서 비어 있지 않은지 서버가 검사하지 않는다(클라이언트 `lib/orderOptions.ts` 가 막지만 조작된 클라이언트는 우회 가능). 해결은 orders 트리거 SQL(새 migration 파일 + 롤백 + 검증)이라 이번 QA 범위 밖.
+- **P2(SQL·승인 필요, 제안 작성됨)**: `add_orders_selected_size_validation_20261109_proposed.sql`(+rollback/verify, 격리 DB 검증 완료) 운영 적용 여부 결정. [이전 메모] 주문 생성 서버측 옵션 검증 — 현재 `orders` 직접 INSERT 는 `selected_size` 가 `products.sizes` 에 속하는지/사이즈 필수 상품에서 비어 있지 않은지 서버가 검사하지 않는다(클라이언트 `lib/orderOptions.ts` 가 막지만 조작된 클라이언트는 우회 가능). 해결은 orders 트리거 SQL(새 migration 파일 + 롤백 + 검증)이라 이번 QA 범위 밖.
 - **P2**: 격리 브라우저 QA(`tests/qa/reviewPath/browserQa.mjs`) 재실행 — 2026-11-09 Colima 에서 세 번째 Supabase 스택(`stack.sh up`)의 DB 호스트 포트 연결이 계속 거부되어(ECONNREFUSED 54622) 실행하지 못함(BLOCKED). 환경 복구 후 실행.
 
 - **P0(승인)**: NICEPAY 심사 경로(실제 센터 상품) 운영 적용 — A10TION 운영자 동의 → audit → 허용 목록 SQL(+verify) → 허용 1행 SQL → 앱 배포. 순서·롤백: `docs/payments/NICEPAY_REVIEW_PATH_20261106.md`. 심사 계정 비밀번호는 사용자가 NICEPAY 에 직접 전달.

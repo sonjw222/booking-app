@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-11-09 — 릴리스 전 최종 점검 (`integration/ux-native-review-20261109`, 운영 미반영)
+- 운영 배포본(`61b10ab9`)과 origin/main 비교: main 에 없던 운영 커밋 3개(`d23eac7c`·`5843e1e2`·`61b10ab9`, 정기상품 카탈로그)는 통합 브랜치에 patch-id 동일로 보존(`git cherry` 3건 모두 `-`), 해당 파일 3개 동일. 운영 대비 삭제된 파일 0.
+- #264 유입 TypeScript 오류 1건(`nicepay.qaPreflight.test.ts` 불필요한 `@ts-expect-error`) 제거 → tsc 63건(전부 기존 `tests/` 오류, 신규 0). `nicepayNativeParity` 가 주석의 `"*.nicepay.co.kr"` 문자열로 우연히 통과하던 것을 실제 항목 3개 고정으로 교체.
+- NICEPAY 호스트 정책 점검: `docs/payments/NICEPAY_NATIVE_HOST_POLICY_20261109.md`. SQL 점검: `docs/payments/RELEASE_SQL_REVIEW_20261109.md`(새 SQL 필요 없음; 주문 selected_size 서버 검증은 별도 제안 SQL + PGlite·격리 DB 검증, 미실행). 읽기 전용 상태 점검 SQL: `audit_release_sql_status_readonly_20261109.sql`.
+- iOS 1.0.3 (11).
+
 ## 2026-11-09 — 통합 브랜치 `integration/ux-native-review-20261109` (운영 미반영)
 - `origin/main` + PR #265 + PR #264 + UX 변경(결제창 복귀·구매 시트 역할 분리·수강권 이름 병합·뒤로가기 단일 정책·옵션 검증·TestFlight 1.0.3(10) 버전). 충돌: `capacitor.config.ts` 는 #264 의 `*.nicepay.co.kr` 와일드카드 대신 정확한 호스트 3개만 유지, CHANGELOG/TODO 는 양쪽 기록 보존.
 - QA: `scripts/qa/uxPreview/localUxFixture.sql` 시험 데이터 + `tests/qa/uxIntegration/*.mjs`(격리 브라우저 QA 61항목) + 심사경로 27항목 통과. `scripts/qa/reviewPath/stack.sh` 에 `REVIEWPATH_PORT_OFFSET` 추가(5462x 임시 포트 충돌로 Colima 포워딩이 실패하던 원인 회피). 결과: `docs/qa/ux-integration-20261109/REPORT.md`.
