@@ -78,7 +78,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             // (홈/예약/내예약/알림/마이, 수업/회원/알림/더보기, 운영 홈)에서는 false로 꺼서
             // edge swipe로 로그인 화면·이전 모드가 뒤에서 보이는 문제를 막고, 상세 화면에서는
             // true로 켜서 기존 정상 back은 그대로 유지한다.
-            webView.allowsBackForwardNavigationGestures = true
+            // 2026-11-09(UX 내비게이션 4번) — 내장 양방향 제스처는 끄고(오른쪽 "앞으로" 차단) 왼쪽 가장자리 back 인식기만 설치한다
+            // (NavigationPolicyPlugin.swift 의 EdgeBackGesture). root 화면에서의 on/off 는 위 설명대로 NavigationPolicyPlugin 이 계속 담당한다.
+            EdgeBackGesture.shared.install(on: webView)
 
             // NICEPAY 결제창 안전 영역 보정(상단 헤더·X 버튼이 상태바 뒤에 가려지는 문제). 앱 origin 의 호스트로 돌아오면 원래 값으로 복원한다.
             // DEBUG 빌드에서만 QA 용으로 호스트 목록을 capacitor.config 의 plugins.NicepaySafeArea.hosts 로 바꿀 수 있다(출시 빌드는 고정 목록).

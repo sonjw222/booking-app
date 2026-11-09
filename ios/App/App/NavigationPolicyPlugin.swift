@@ -27,7 +27,8 @@ public class NavigationPolicyPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func setEdgeSwipeEnabled(_ call: CAPPluginCall) {
         let enabled = call.getBool("enabled") ?? true
         DispatchQueue.main.async { [weak self] in
-            self?.bridge?.webView?.allowsBackForwardNavigationGestures = enabled
+            // 내장 양방향 제스처는 SceneDelegate 에서 영구히 꺼져 있다(오른쪽 "앞으로" 차단). 왼쪽 가장자리 back 인식기만 켜고 끈다.
+            EdgeBackGesture.shared.setEnabled(enabled)
             call.resolve()
         }
     }
@@ -88,4 +89,57 @@ final class NicepaySafeAreaObserver: NSObject {
             break
         }
     }
+}
+
+/*
+  앱 전체 "왼쪽 가장자리 뒤로가기만" 허용 (2026-11-09, UX 내비게이션 4번).
+  WKWebView.allowsBackForwardNavigationGestures 는 왼쪽(뒤로)/오른쪽(앞으로)을 한 스위치로 켜서 방향 분리가 불가능하다.
+  그래서 내장 제스처는 끄고(SceneDelegate), 공개 API UIScreenEdgePanGestureRecognizer(.left) 하나만 붙여 웹의 단일 back 정책
+  (window.__mwhabitBack — 오버레이 먼저 닫기 / ‹ 버튼과 같은 도착 화면)을 호출한다. 비공개 API 없음.
+  웹 정책이 없는 페이지(외부 호스트: NICEPAY 결제창, 로드 실패 화면)에서는 WebView 히스토리 뒤로가기로 폴백한다.
+  가장자리 인식기는 화면 왼쪽 가장자리에서 시작한 터치만 가져가므로 가로 스크롤·캐러셀·캘린더·지도·시트 드래그·텍스트 선택에는 영향이 없다.
+*/
+enum EdgeBackPolicy {
+    enum Action: Equatable { case none, webViewGoBack }
+
+    /// JS 호출 결과(window.__mwhabitBack() 의 판정 문자열, 정책이 없으면 nil)를 받아 네이티브가 추가로 할 일을 정한다.
+    static func action(bridgeResult: String?, canGoBack: Bool) -> Action {
+        if bridgeResult != nil { return .none }   // 웹 정책이 이미 처리(오버레이 닫기/이동/root 무시)
+        return canGoBack ? .webViewGoBack : .none
+    }
+}
+
+final class EdgeBackGesture: NSObject, UIGestureRecognizerDelegate {
+    static let shared = EdgeBackGesture()
+    private(set) var recognizer: UIScreenEdgePanGestureRecognizer?
+    private weak var webView: WKWebView?
+
+    func install(on webView: WKWebView) {
+        guard recognizer == nil else { return }
+        self.webView = webView
+        webView.allowsBackForwardNavigationGestures = false
+        let r = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handle(_:)))
+        r.edges = .left
+        r.delegate = self
+        webView.addGestureRecognizer(r)
+        recognizer = r
+    }
+
+    func setEnabled(_ enabled: Bool) { recognizer?.isEnabled = enabled }
+
+    @objc private func handle(_ g: UIScreenEdgePanGestureRecognizer) {
+        guard g.state == .ended, let webView = webView else { return }
+        // 충분히 오른쪽으로 끌었거나 빠르게 밀었을 때만 back 으로 인정(우발 터치 방지).
+        let x = g.translation(in: webView).x
+        let vx = g.velocity(in: webView).x
+        guard x > 60 || vx > 500 else { return }
+        webView.evaluateJavaScript("window.__mwhabitBack ? window.__mwhabitBack() : null") { [weak webView] result, _ in
+            guard let webView = webView else { return }
+            if EdgeBackPolicy.action(bridgeResult: result as? String, canGoBack: webView.canGoBack) == .webViewGoBack {
+                webView.goBack()
+            }
+        }
+    }
+
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 }
