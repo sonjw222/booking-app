@@ -179,9 +179,9 @@ function CheckoutContent() {
       const found = products.find((p) => p.id === productId) ?? null;
       setProduct(found);
       if (found && isCountSelectable(found)) {
-        // URL의 count/size를 유효한 값이면 그대로, 아니면 최소 횟수로 시작(구매 sheet → checkout 선택 보존)
+        // URL의 count를 가격표에 있는 값이면 그대로, 아니면 가격표의 최소 횟수로 시작(횟수 선택은 이 화면에서만 한다)
         const want = Number(sp.get("count"));
-        setSelectedCount(computeBaseAmount(found, want) != null ? want : found.minCount);
+        setSelectedCount(computeBaseAmount(found, want) != null ? want : (sortedTiers(found)[0]?.count ?? null));
       }
       const wantSize = sp.get("size");
       if (found?.sizes && wantSize && found.sizes.includes(wantSize)) setSelectedSize(wantSize);
@@ -209,7 +209,6 @@ function CheckoutContent() {
       .catch(() => { if (mounted) setApplicableCoupons([]); });
     return () => { mounted = false; };
   }, [product, baseAmount]);
-
   // 실제 PG(토스) 결제창은 app/checkout/success로 리다이렉트된 뒤 이 페이지로 다시
   // 돌아온다(같은 조회 쿼리 + paymentDone/paymentError 추가) — 그때 기존 "결제 완료"
   // 화면을 그대로 재사용한다(Mock의 즉시-확정 흐름과 화면을 공유). 최초 마운트 시
@@ -599,8 +598,9 @@ function CheckoutContent() {
           <div className="checkout-count-select">
             <label>
               <span>구매 횟수</span>
+              {/* 금액이 바뀌면 쿠폰 자격도 달라질 수 있어 선택을 풀고 목록을 다시 받는다(포인트는 금액 상한으로 자동 보정) */}
               <select aria-label="구매 횟수" value={selectedCount ?? ""} disabled={busy}
-                onChange={(e) => setSelectedCount(Number(e.target.value))}>
+                onChange={(e) => { setSelectedCount(Number(e.target.value)); setSelectedMemberCouponId(null); }}>
                 {sortedTiers(product).map((t) => <option key={t.count} value={t.count}>{countOptionLabel(t)}</option>)}
               </select>
             </label>

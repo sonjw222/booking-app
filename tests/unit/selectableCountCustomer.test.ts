@@ -25,7 +25,7 @@ vi.mock("../../lib/authAccount", () => ({ getMyAccountId: async () => "acct-1" }
 
 import {
   availabilityLabel, cartItemAmount, computeBaseAmount, countOptionLabel, countOptions, isCountSelectable, isValidSelectedCount,
-  priceSummary, tierPriceFor, type CountSelectableInfo,
+  minPriceLabel, priceSummary, tierPriceFor, type CountSelectableInfo,
 } from "../../lib/selectableCount";
 import { previewDiscount } from "../../lib/coupons";
 import { createOrder } from "../../lib/orders";
@@ -154,22 +154,30 @@ describe("[Q] 320~430px 겹침 방지 CSS 계약", () => {
   });
 });
 
-describe("센터 구매 sheet — 선택형은 한 번만, 횟수/사이즈 선택 후 담기·구매", () => {
+describe("센터 구매 sheet — 선택형은 한 번만, 최저가 요약만(횟수·사이즈 선택은 결제 화면/장바구니)", () => {
   const src = read("app/center/[id]/page.tsx");
-  it("상품마다 같은 CenterProductRow로 렌더(12줄 반복 없음)하고 횟수 select를 제공한다", () => {
+  const row = src.slice(src.indexOf("function CenterProductRow"));
+  it("상품마다 같은 CenterProductRow로 렌더(12줄 반복 없음)하고 횟수/사이즈 select·합계 줄이 없다", () => {
     expect(src).toContain("<CenterProductRow key={p.id}");
-    expect(src).toContain("sortedTiers(p)");
-    expect(src).toContain("countOptionLabel(t)");
-    expect(src).toContain("priceSummary(p)");
+    expect(row).toContain("minPriceLabel(p)");
+    expect(row).not.toMatch(/<select|countOptionLabel|center-product-select|center-product-total/);
+    expect(src).not.toMatch(/useState<Record<string, Partial<ProductSelection>>>|changeSelection/);
   });
-  it("사이즈 있는 선택형은 횟수+사이즈 둘 다 필요(사이즈 미선택 시 담기/구매 비활성)", () => {
-    expect(src).toContain("const needsSize = selectable && !!p.sizes && p.sizes.length > 0;");
-    expect(src).toContain("const blocked = (needsSize && !size) || (selectable && count == null);");
-    expect(src).toContain("disabled={blocked}");
+  it("선택형 상품은 안내 문구만 보이고 담기/구매는 가격표가 비었을 때만 비활성", () => {
+    expect(row).toContain("const blocked = selectable && sortedTiers(p).length === 0;");
+    expect(row).toContain("disabled={blocked}");
+    expect(src).toContain("횟수·옵션은 결제 화면에서 선택해요");
   });
-  it("구매는 count/size를 checkout URL로 넘기고, 담기는 selectedCount/selectedSize를 함께 저장", () => {
-    expect(src).toContain("url += `&count=${sel.count}`");
-    expect(src).toContain("selectedSize: sel?.size ?? null, selectedCount: sel?.count ?? null");
+  it("구매는 count/size 없이 checkout으로 이동하고, 담기는 최저 횟수 기본값 + 기존 row 보존(keepExisting)으로 저장", () => {
+    const fn = src.slice(src.indexOf("function handlePurchase"), src.indexOf("async function handleWriteReview"));
+    expect(fn).not.toMatch(/&count=|&size=/);
+    expect(src).toContain("const defaultCount = tiers[0]?.count ?? null;");
+    expect(src).toContain("selectedSize: null, selectedCount: defaultCount");
+    expect(src).toContain("keepExisting: true");
+  });
+  it("minPriceLabel은 가격표의 최저가를 'N원부터'로, 고정 상품은 null", () => {
+    expect(minPriceLabel({ countSelectable: true, countPrices: [{ count: 4, price: 300000 }, { count: 1, price: 80000 }], price: 0 } as never)).toBe("80,000원부터");
+    expect(minPriceLabel({ countSelectable: false, countPrices: [], price: 24000 } as never)).toBeNull();
   });
 });
 
@@ -212,6 +220,15 @@ describe("[장바구니] 한 상품(+사이즈)당 한 선택 row, 다시 담으
     expect(inserts.filter((i) => i.table === "cart_items")).toHaveLength(0);
     expect(updates.find((u) => u.table === "cart_items")!.row).toEqual({ selected_count: 3, price: 18000 });
   });
+  it("keepExisting: 이미 담긴 선택형 row가 있으면 count/price를 덮어쓰지 않는다('exists'), 없으면 기본 count로 insert('added')", async () => {
+    existingCartRows = [{ id: "ci-1" }];
+    expect(await addToCart({ centerId: "c1", productId: "g1", productName: "x", price: 6000, selectedCount: 1, keepExisting: true })).toBe("exists");
+    expect(updates.filter((u) => u.table === "cart_items")).toHaveLength(0);
+    expect(inserts.filter((i) => i.table === "cart_items")).toHaveLength(0);
+    existingCartRows = [];
+    expect(await addToCart({ centerId: "c1", productId: "g1", productName: "x", price: 6000, selectedCount: 1, keepExisting: true })).toBe("added");
+    expect(inserts.find((i) => i.table === "cart_items")!.row).toMatchObject({ selected_count: 1, price: 6000 });
+  });
   it("처음 담으면 product_id/selected_count/selected_size를 모두 보존해 insert", async () => {
     await addToCart({ centerId: "c1", productId: "g1", productName: "피겨화 대여", price: 30000, selectedSize: "240", selectedCount: 5 });
     expect(inserts.find((i) => i.table === "cart_items")!.row).toMatchObject({ product_id: "g1", selected_count: 5, selected_size: "240", price: 30000 });
@@ -245,5 +262,16 @@ describe("구매내역 — 선택 횟수/사이즈 표시", () => {
     const orders = read("lib/orders.ts");
     expect(orders).toContain("selectedSize: (m as any).selected_size ?? null");
     expect(orders).toContain("selected_count, selected_size");
+  });
+});
+
+describe("결제 화면 — 횟수 선택·재계산(구매 sheet에서 넘어온 기본값)", () => {
+  const checkout = stripTs(read("app/checkout/page.tsx"));
+  it("count 쿼리가 가격표에 없으면 가격표의 최소 횟수(sortedTiers[0])로 시작한다", () => {
+    expect(checkout).toContain("sortedTiers(found)[0]?.count ?? null");
+  });
+  it("금액이 바뀌면 쿠폰 목록을 다시 받고, 횟수를 바꾸면 고른 쿠폰 선택을 푼다", () => {
+    expect(checkout).toContain("fetchApplicableCoupons(product.id, baseAmount, centerId)");
+    expect(checkout).toContain("setSelectedCount(Number(e.target.value)); setSelectedMemberCouponId(null);");
   });
 });

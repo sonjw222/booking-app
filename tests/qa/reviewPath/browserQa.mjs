@@ -47,7 +47,7 @@ const REVIEW_SECTION = 'section[aria-label="수강권 및 결제 확인 센터"]
   await page.goto(`${BASE}/center/${A10}?buy=1`); await settle(page);
   const rows = await page.locator(".center-product-row").count(); check("R5", "조회 전용 센터 상세: 상품 3종 행", rows === 3, rows);
   check("R6", "조회 전용: 구매·담기·예약 버튼 없음, 안내 문구 표시", (await page.locator(".center-product-buy").count()) === 0 && (await page.locator(".center-product-cart").count()) === 0 && (await page.getByText("수강권 · 상품 안내").count()) > 0 && (await page.getByText("예약하기").count()) === 0);
-  const links = page.getByText("결제 화면 · 카드 결제창 확인"); check("R7", "상품 행마다 '결제 화면 · 카드 결제창 확인' 링크 3개", (await links.count()) === 3, await links.count());
+  const links = page.getByText("결제 화면 확인 (구매 불가)"); check("R7", "상품 행마다 '결제 화면 확인 (구매 불가)' 링크 3개", (await links.count()) === 3, await links.count());
   await shot(page, "03-reviewer-center-viewonly");
   await links.first().click(); await page.waitForURL(/\/checkout\?center=/, { timeout: 20_000 }); await settle(page, 2500);
   const payBtn = page.locator("button.checkout-pay-btn"); const payText = await payBtn.innerText();
@@ -84,7 +84,7 @@ const REVIEW_SECTION = 'section[aria-label="수강권 및 결제 확인 센터"]
   check("G1", "일반 회원 홈: 심사관 섹션·'결제 확인 센터' 없음, 심사 센터 미노출", (await page.locator(REVIEW_SECTION).count()) === 0 && !body.includes("MWHABIT NICEPAY") && !body.includes("수강권 및 결제 확인 센터"));
   await shot(page, "06-member-home");
   await page.goto(`${BASE}/center/${A10}?buy=1`); await settle(page);
-  const buy = await page.locator(".center-product-buy").count(); check("G2", "일반 회원: 실제 센터(A10TION)는 정상(구매 버튼 있음·조회 전용 아님·결제창 확인 링크 없음)", buy > 0 && (await page.getByText("결제 화면 · 카드 결제창 확인").count()) === 0 && (await page.getByTestId("view-only-notice").count()) === 0, buy);
+  const buy = await page.locator(".center-product-buy").count(); check("G2", "일반 회원: 실제 센터(A10TION)는 정상(구매 버튼 있음·조회 전용 아님·결제창 확인 링크 없음)", buy > 0 && (await page.getByText("결제 화면 확인 (구매 불가)").count()) === 0 && (await page.getByTestId("view-only-notice").count()) === 0, buy);
   const rc = psql("select id from centers where is_nicepay_review limit 1"); await page.goto(`${BASE}/center/${rc}`); await settle(page);
   const rb = await page.locator("body").innerText(); check("G3", "일반 회원: 심사 센터 직접 URL 은 센터 정보를 보여 주지 않음", !rb.includes("MWHABIT NICEPAY") && (await page.locator(".center-product-row").count()) === 0, rb.slice(0, 60));
   await shot(page, "07-member-review-center-direct");

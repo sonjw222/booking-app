@@ -68,16 +68,15 @@ describe("빈 section header 없음 / 정렬 유지", () => {
 });
 
 describe("[24] 필터/검색을 바꿔도 장바구니·선택 count/size 유지", () => {
-  it("상품별 선택(횟수/사이즈)은 row 안이 아니라 상위 state(selections)에 있고 row는 value/onChange로 제어된다", () => {
-    expect(page).toContain("const [selections, setSelections] = useState<Record<string, Partial<ProductSelection>>>({});");
-    expect(page).toContain("value={selections[p.id]}");
-    expect(page).toContain("onChange={changeSelection}");
+  it("구매 sheet row에는 횟수/사이즈 선택 state가 없다(선택은 결제 화면/장바구니에서만) — 필터로 row가 사라져도 잃을 선택이 없다", () => {
+    expect(page).not.toContain("setSelections");
+    expect(page).not.toContain("changeSelection");
     const row = page.slice(page.indexOf("function CenterProductRow"));
     expect(row).not.toMatch(/useState/);   // row가 unmount돼도 잃을 로컬 선택 state가 없다
   });
   it("필터 state를 바꾸는 코드는 장바구니/선택 state를 건드리지 않는다(cart는 서버 row, selections는 별도)", () => {
     const handlers = page.slice(page.indexOf("<CatalogSearchFilter"), page.indexOf("classScopedProducts.length === 0 ? ("));
-    expect(handlers).not.toMatch(/setSelections|addToCart|clearCart|removeFromCart/);
+    expect(handlers).not.toMatch(/addToCart|clearCart|removeFromCart/);
   });
 });
 

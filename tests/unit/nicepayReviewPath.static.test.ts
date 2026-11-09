@@ -7,7 +7,7 @@ const read = (f: string) => readFileSync(join(__dirname, "../..", f), "utf-8");
 describe("심사 경로 구조 계약", () => {
   it("조회 전용 센터의 상품 행은 담기·구매 대신 결제 화면(결제창 확인) 링크만 갖는다", () => {
     const src = read("app/center/[id]/page.tsx");
-    expect(src).toMatch(/viewOnly && checkoutHref && !soldOut/); expect(src).toContain("결제 화면 · 카드 결제창 확인");
+    expect(src).toMatch(/viewOnly && checkoutHref && !soldOut/); expect(src).toContain("결제 화면 확인 (구매 불가)");
     expect(src).toMatch(/\{!viewOnly && <div className="center-product-actions">/);   // 구매 버튼 블록은 조회 전용에서 렌더되지 않는다
     expect(src.match(/checkoutHref=\{`\/checkout\?center=\$\{centerId\}&product=\$\{p\.id\}`\}/g)?.length).toBe(2);
   });

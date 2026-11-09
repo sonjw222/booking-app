@@ -21,7 +21,7 @@ import {
 import { ZoomableImage } from "../../components/ImageViewer";
 import { addToCart, cartCount } from "../../../lib/cart";
 import { fetchNicepayViewOnlyCenter } from "../../../lib/nicepayReviewScope";
-import { availabilityLabel, computeBaseAmount, countOptionLabel, isCountSelectable, priceSummary, sortedTiers } from "../../../lib/selectableCount";
+import { availabilityLabel, computeBaseAmount, isCountSelectable, minPriceLabel, priceSummary, sortedTiers } from "../../../lib/selectableCount";
 import {
   EMPTY_CATALOG_FILTER, catalogEmptyMessage, filterCatalog, isFilterActive, nextFilterOnKind, uniqueGroupLabels,
   type CatalogFilterState, type KindFilter,
@@ -114,11 +114,6 @@ function CenterDetailContent() {
   const [descProduct, setDescProduct] = useState<CenterProduct | null>(null);
   // 구매 sheet 검색/필터(2026-10-01) — 이미 받아 온 상품 배열을 클라이언트에서 거르기만 한다(새 API 없음).
   const [catalogFilter, setCatalogFilter] = useState<CatalogFilterState>(EMPTY_CATALOG_FILTER);
-  // 상품별 선택(횟수/사이즈)은 row 밖(상위 state)에 둔다 — 필터/검색으로 row가 사라졌다 돌아와도 선택이 유지된다.
-  const [selections, setSelections] = useState<Record<string, Partial<ProductSelection>>>({});
-  const changeSelection = useCallback((productId: string, patch: Partial<ProductSelection>) => {
-    setSelections((prev) => ({ ...prev, [productId]: { ...prev[productId], ...patch } }));
-  }, []);
   // 후기
   const [reviews, setReviews] = useState<Review[]>([]);
   const [myReview, setMyReview] = useState<Review | null>(null);
@@ -216,13 +211,11 @@ function CenterDetailContent() {
     window.location.href = `/reservation?center=${centerId}`;
   }
 
-  function handlePurchase(p: CenterProduct, sel?: ProductSelection) {
+  function handlePurchase(p: CenterProduct) {
     // 결제 화면으로 이동 (예약창에서 넘어온 경우, 예약할 수업/필터 상태도 함께 전달해
     // 결제 완료 후 또는 뒤로가기 시 지금 이 화면 상태로 되돌아올 수 있게 함)
     let url = `/checkout?center=${centerId}&product=${p.id}`;
-    // 구매 횟수 선택형 상품은 고른 횟수/사이즈를 checkout까지 그대로 넘긴다(최종 금액·횟수는 서버가 다시 확정).
-    if (sel?.count != null) url += `&count=${sel.count}`;
-    if (sel?.size) url += `&size=${encodeURIComponent(sel.size)}`;
+    // 횟수·사이즈는 여기서 고르지 않는다 — 결제 화면에서만 선택한다(최종 금액·횟수는 서버가 다시 확정).
     if (reserveClassId && reserveDate) {
       url += `&reserveClassId=${reserveClassId}&reserveDate=${encodeURIComponent(reserveDate)}`;
       if (reserveCenter) url += `&reserveCenter=${reserveCenter}`;
@@ -287,16 +280,19 @@ function CenterDetailContent() {
     } finally { setReportBusy(false); }
   }
 
-  async function handleAddCart(p: CenterProduct, sel?: ProductSelection) {
-    // 사이즈 있는 고정 상품은 결제화면에서 선택하도록 안내(장바구니는 사이즈 없는 것 위주).
-    // 횟수 선택형 상품은 고른 횟수/사이즈를 그대로 담는다(같은 상품+사이즈는 한 row, 다시 담으면 선택 변경).
+  async function handleAddCart(p: CenterProduct) {
+    // 구매 sheet에서는 횟수·사이즈를 고르지 않는다. 횟수 선택형은 가격표의 최소 횟수(=최저가)로 담고, 이미 담긴 row가 있으면
+    // 장바구니에서 고른 횟수/사이즈를 그대로 둔다. 횟수·사이즈는 장바구니/결제 화면에서 고른다.
     try {
-      await addToCart({
+      const tiers = isCountSelectable(p) ? sortedTiers(p) : [];
+      const defaultCount = tiers[0]?.count ?? null;
+      const result = await addToCart({
         centerId, productId: p.id, productName: p.name,
-        price: computeBaseAmount(p, sel?.count) ?? p.price,
-        selectedSize: sel?.size ?? null, selectedCount: sel?.count ?? null,
+        price: computeBaseAmount(p, defaultCount) ?? p.price,
+        selectedSize: null, selectedCount: defaultCount,
+        keepExisting: true,
       });
-      showToast(`'${p.name}' 장바구니에 담았어요`);
+      showToast(result === "exists" ? `'${p.name}'은(는) 이미 장바구니에 있어요` : `'${p.name}' 장바구니에 담았어요${defaultCount != null ? " · 횟수는 장바구니에서 선택해요" : ""}`);
       cartCount().then(setCartItemCount);
     } catch (e: any) { setError(e.message); }
   }
@@ -484,7 +480,7 @@ function CenterDetailContent() {
                         )}
                         <div className="center-products">
                           {group.items.map((p) => (
-                            <CenterProductRow key={p.id} p={p} rules={passRules[p.id]} value={selections[p.id]} onChange={changeSelection} onDesc={setDescProduct} onAddCart={handleAddCart} onBuy={handlePurchase} viewOnly={viewOnly} checkoutHref={`/checkout?center=${centerId}&product=${p.id}`} />
+                            <CenterProductRow key={p.id} p={p} rules={passRules[p.id]} onDesc={setDescProduct} onAddCart={handleAddCart} onBuy={handlePurchase} viewOnly={viewOnly} checkoutHref={`/checkout?center=${centerId}&product=${p.id}`} />
                           ))}
                         </div>
                       </div>
@@ -496,7 +492,7 @@ function CenterDetailContent() {
                     <div className="menu-section-label" style={{ padding: "10px 0 6px" }}>상품</div>
                     <div className="center-products">
                       {visibleProducts.filter((p) => p.kind === "goods").map((p) => (
-                        <CenterProductRow key={p.id} p={p} value={selections[p.id]} onChange={changeSelection} onDesc={setDescProduct} onAddCart={handleAddCart} onBuy={handlePurchase} viewOnly={viewOnly} checkoutHref={`/checkout?center=${centerId}&product=${p.id}`} />
+                        <CenterProductRow key={p.id} p={p} onDesc={setDescProduct} onAddCart={handleAddCart} onBuy={handlePurchase} viewOnly={viewOnly} checkoutHref={`/checkout?center=${centerId}&product=${p.id}`} />
                       ))}
                     </div>
                   </>
@@ -612,7 +608,7 @@ function CenterDetailContent() {
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">{descProduct.name}</div>
             <div className="checkout-order-detail" style={{ marginBottom: 8 }}>
-              {descProduct.unlimited ? "무제한" : descProduct.totalCount ? `${descProduct.totalCount}회` : ""} · {won(descProduct.price)}
+              {isCountSelectable(descProduct) ? (minPriceLabel(descProduct) ?? "") : <>{descProduct.unlimited ? "무제한" : descProduct.totalCount ? `${descProduct.totalCount}회` : ""} · {won(descProduct.price)}</>}
             </div>
             <div className="center-intro-text" style={{ whiteSpace: "pre-wrap" }}>{descProduct.description}</div>
             {descProduct.sizes && descProduct.sizes.length > 0 && (
@@ -843,65 +839,37 @@ function CenterDetailContent() {
 }
 
 
-// 구매 sheet의 상품 한 줄. 구매 횟수 선택형(회차별 가격표) 수강권/상품은 목록에 한 번만 나오고, 횟수(+사이즈) 선택 후 즉시 그 회차의
-// 가격을 보여준다. 가격은 미리보기일 뿐 — 서버가 주문 생성 시 가격표에서 다시 확정한다. "판매 가능 N개"(max_quantity)는 이용 횟수와
-// 무관한 판매 수량이라 제목 옆 badge가 아니라 보조 줄의 작은 글씨로만 표시한다. 선택값(횟수/사이즈)은 부모 state(value/onChange)에 있어
-// 검색/필터로 row가 사라졌다 돌아와도 유지된다.
-type ProductSelection = { count: number | null; size: string | null };
-const won = (n: number) => n.toLocaleString("ko-KR") + "원";
+// 구매 sheet의 상품 한 줄. 이 화면은 "어떤 수강권/상품을 살지"만 고른다. 구매 횟수 선택형(회차별 가격표) 상품은 목록에 한 번만 나오고
+// 최저가("N원부터")만 보여준다 — 횟수·사이즈 선택과 최종 금액은 결제 화면/장바구니에서만 한다(선택 시점 단일화). 가격표는 건드리지 않고
+// 서버가 주문 생성 시 가격표에서 다시 확정한다. "판매 가능 N개"(max_quantity)는 이용 횟수와 무관한 판매 수량이라 보조 줄의 작은 글씨로만 표시한다.
+const SELECT_AT_CHECKOUT_HINT = "횟수·옵션은 결제 화면에서 선택해요";
 
-function CenterProductRow({ p, rules, value, onChange, onDesc, onAddCart, onBuy, viewOnly = false, checkoutHref }: {
+function CenterProductRow({ p, rules, onDesc, onAddCart, onBuy, viewOnly = false, checkoutHref }: {
   p: CenterProduct;
   rules?: ScheduleRule[];
-  value?: Partial<ProductSelection>;
-  onChange: (productId: string, patch: Partial<ProductSelection>) => void;
   onDesc: (p: CenterProduct) => void;
-  onAddCart: (p: CenterProduct, sel?: ProductSelection) => void;
-  onBuy: (p: CenterProduct, sel?: ProductSelection) => void;
+  onAddCart: (p: CenterProduct) => void;
+  onBuy: (p: CenterProduct) => void;
   viewOnly?: boolean;   // 조회 전용: 담기·구매 버튼을 만들지 않는다
   checkoutHref?: string;   // 조회 전용에서만: 결제 화면(카드 결제창 확인, 승인 없음)으로 가는 링크
 }) {
   const selectable = isCountSelectable(p);
-  const tiers = selectable ? sortedTiers(p) : [];
-  const count = value?.count != null && tiers.some((t) => t.count === value.count) ? value.count : (tiers[0]?.count ?? null);
-  const needsSize = selectable && !!p.sizes && p.sizes.length > 0;
-  const size = value?.size ?? "";
-  const total = selectable ? computeBaseAmount(p, count) : null;
   const avail = availabilityLabel(p.remaining);
   const soldOut = p.remaining === 0;
-  const sel: ProductSelection | undefined = selectable ? { count, size: needsSize ? size : null } : undefined;
-  const blocked = (needsSize && !size) || (selectable && count == null);
+  const blocked = selectable && sortedTiers(p).length === 0;   // 가격표가 비어 있으면 결제 화면에서도 고를 수 없다
+  const price = selectable ? (minPriceLabel(p) ?? priceSummary(p)) : priceSummary(p);
   return (
-    <div className={`center-product-row${selectable ? " is-selectable" : ""}`}>
+    <div className={`center-product-row is-sheet${selectable ? " is-selectable" : ""}`}>
       <button className="center-product-info" style={{ background: "none", border: "none", textAlign: "left", flex: 1, cursor: p.description ? "pointer" : "default" }} onClick={() => p.description && onDesc(p)}>
         <div className="center-product-name">{p.name}{p.description ? " ⓘ" : ""}</div>
-        <div className="center-product-detail">{priceSummary(p)}</div>
+        {selectable && <div className="center-product-hint">{SELECT_AT_CHECKOUT_HINT}</div>}
+        <div className="center-product-detail">{price}</div>
         {avail && <div className={`center-product-avail${soldOut ? " is-soldout" : ""}`}>{avail}</div>}
       </button>
-      {selectable && !soldOut && (
-        <div className="center-product-select">
-          <label className="center-product-select-field">
-            <span>횟수</span>
-            <select aria-label={`${p.name} 구매 횟수`} value={count ?? ""} onChange={(e) => onChange(p.id, { count: Number(e.target.value) })}>
-              {tiers.map((t) => <option key={t.count} value={t.count}>{countOptionLabel(t)}</option>)}
-            </select>
-          </label>
-          {needsSize && (
-            <label className="center-product-select-field">
-              <span>사이즈</span>
-              <select aria-label={`${p.name} 사이즈`} value={size} onChange={(e) => onChange(p.id, { size: e.target.value })}>
-                <option value="">선택</option>
-                {p.sizes!.map((sz) => <option key={sz} value={sz}>{sz}</option>)}
-              </select>
-            </label>
-          )}
-          <div className="center-product-total">{count != null ? `${count}회` : "-"} · {total != null ? won(total) : "-"}</div>
-        </div>
-      )}
-      {viewOnly && checkoutHref && !soldOut && <div className="center-product-actions"><a className="app-button app-button-secondary" href={checkoutHref}>결제 화면 · 카드 결제창 확인</a></div>}
+      {viewOnly && checkoutHref && !soldOut && <div className="center-product-actions"><a className="app-button app-button-secondary" href={checkoutHref}>결제 화면 확인 (구매 불가)</a></div>}
       {!viewOnly && <div className="center-product-actions">
-        {!soldOut && <AppButton variant="secondary" className="center-product-cart" disabled={blocked} onClick={() => onAddCart(p, sel)}>담기</AppButton>}
-        {!soldOut && <AppButton className="center-product-buy" disabled={blocked} onClick={() => onBuy(p, sel)}>구매</AppButton>}
+        {!soldOut && <AppButton variant="secondary" className="center-product-cart" disabled={blocked} onClick={() => onAddCart(p)}>담기</AppButton>}
+        {!soldOut && <AppButton className="center-product-buy" disabled={blocked} onClick={() => onBuy(p)}>구매</AppButton>}
       </div>}
       {p.periodSource && <div className="center-product-period"><ServicePeriodNotice source={p.periodSource} variant="compact" /></div>}
       <ProductRuleAccordion rules={rules} />

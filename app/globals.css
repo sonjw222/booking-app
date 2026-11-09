@@ -6703,3 +6703,20 @@ a.center-bar-btn { display: flex; align-items: center; justify-content: center; 
 .copy-sheet .copy-sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: 8px; }
 .copy-sheet .copy-select-list, .copy-sheet .copy-preview { max-height: none; overflow: visible; }
 .copy-sheet .copy-sheet-footer { flex: 0 0 auto; margin: 0; padding: 12px 0 max(16px, env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--line); }
+
+/* ===== 센터 "수강권 · 상품 안내/구매" 시트 상품 카드(2026-11-09) — .is-sheet 행(app/center/[id]/page.tsx)에만 적용.
+   이 시트는 "무엇을 살지"만 고른다: ① 상품명(+ⓘ, 긴 이름은 줄바꿈) ② 안내 문구 ③ 가격("N원부터") ④ 버튼(항상 같은 위치·같은 크기, 최소 44px).
+   횟수·옵션 선택과 최종 금액은 결제 화면/장바구니에서만 한다. /products 공개 목록 등 같은 클래스를 쓰는 다른 화면은 영향 없음. 기존 색 토큰만 사용. */
+.center-products .center-product-row.is-sheet { display: flex; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; padding: 14px 20px; }
+.center-products .center-product-row.is-sheet > * { min-width: 0; }
+.center-products .center-product-row.is-sheet .center-product-info { flex: 0 0 auto; width: 100%; padding: 0; margin: 0; }
+.center-products .center-product-row.is-sheet .center-product-name { font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; word-break: keep-all; }
+.center-products .center-product-row.is-sheet .center-product-hint { margin-top: 3px; font-size: 12px; color: var(--ink-soft); }
+.center-products .center-product-row.is-sheet .center-product-detail { margin-top: 4px; font-size: 15px; font-weight: 800; color: var(--ink); }
+.center-products .center-product-row.is-sheet .center-product-avail { margin-top: 3px; white-space: normal; }
+.center-products .center-product-row.is-sheet .center-product-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 8px; width: 100%; flex: 0 0 auto; }
+.center-products .center-product-row.is-sheet .center-product-actions:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+.center-products .center-product-row.is-sheet .center-product-actions .app-button { width: 100%; min-width: 0; min-height: 44px; padding-inline: 12px; font-size: 14px; font-weight: 700; white-space: normal; text-align: center; display: inline-flex; align-items: center; justify-content: center; }
+.center-products .center-product-row.is-sheet .center-product-actions .center-product-cart { border-radius: 12px; }
+.center-products .center-product-row.is-sheet .center-product-period { flex: 0 0 auto; margin: 0; }
+.center-products .center-product-row.is-sheet .rule-acc { flex: 0 0 auto; }
