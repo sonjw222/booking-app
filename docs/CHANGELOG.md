@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-11-09 — NICEPAY 결제창 종료 후 "결제 화면으로 돌아가기" (`feat/ux-nicepay-return-20261109`, 운영 미반영)
+- 문제: 심사 결제창을 X로 닫으면 앱 종료 화면의 주 버튼이 "마이페이지로 돌아가기"라 구매 흐름(센터·상품·옵션)이 끊겼다.
+- 수정: 결제창을 열기 직전 현재 `/checkout?…` 경로를 허용 목록(센터·상품·횟수·옵션·예약 진입·필터 키, 값 형식 제한)으로 검증해 localStorage(30분)에 저장하고, 서버가 만드는 종료 화면의 해시 고정 스크립트가 같은 규칙으로 재검증해 `location.replace` 로 복귀한다(NICEPAY 재호출·주문·결제 생성 없음). 저장 경로가 없으면 서명된 시도의 센터 상세(`/center/<id>`), 그것도 없으면 홈. 서명 토큰(ReturnURL 500B 제한)·외부 DOM은 건드리지 않는다. 취소/인증확인/확인불가 문구는 그대로 구분, 성공 표현 없음. SQL·네이티브 변경 없음.
+
 ## 2026-11-09 — iOS NICEPAY 결제창 상단 Safe Area 잘림 수정 (`qa/nicepay-ios-safearea-20261109`, 기준 `c2c59bf5`, 운영 미반영)
 - 원인: `contentInset=never`+`StatusBar.overlaysWebView=true` 로 WebView 가 상태바 뒤까지 덮는데 NICEPAY 외부 페이지는 안전 영역을 처리하지 않아 상단 헤더·X 버튼이 가려짐(시뮬레이터 실측 재현).
 - 수정: NICEPAY 호스트(정확히 3개)에 있는 동안에만 `contentInsetAdjustmentBehavior=.always`, 앱으로 돌아오면 `.never` 복원(`NicepaySafeAreaObserver`). 전역 StatusBar/모하빗 CSS 불변, iOS 전용. **iOS 앱 재빌드 필요.** `docs/qa/nicepay-ios-safearea-20261109/REPORT.md`.

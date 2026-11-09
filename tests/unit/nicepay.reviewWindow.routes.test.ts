@@ -25,10 +25,10 @@ describe("isolated review HTTP routes",()=>{
  it("uses server product/price regardless of submitted amount/center/name and never calls fetch",async()=>{
   const r=await POST(request({productId:PRODUCT,action:"open",amount:1,centerId:"other",orderName:"forged"}));expect(r.status).toBe(200);const body=await r.json();expect(body.params.Amt).toBe("1000");expect(body.params.GoodsName).toBe("상품");expect(body.params.MID).toBe("nicepay00m");expect(fetch).not.toHaveBeenCalled();
  });
- it("result accepts signed server outcomes only, omits tokens/form values, and disables scripts",async()=>{
+ it("result accepts signed server outcomes only, omits tokens/form values, and allows only the hashed return script",async()=>{
   const opened=await POST(request({productId:PRODUCT,action:"open"}));const {params}=await opened.json();
   const response=await RETURN(new Request(params.ReturnURL,{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({Moid:params.Moid,AuthResultCode:"9999",GoodsName:"<script>evil</script>"})}));
-  const result=await RESULT(new Request(response.headers.get("location")!));const html=await result.text();expect(html).toContain("테스트 결제창 종료");expect(html).not.toContain("evil");expect(html).not.toContain("rt=");expect(html).not.toContain("<script");expect(result.headers.get("cache-control")).toBe("no-store");expect(result.headers.get("content-security-policy")).toContain("default-src 'none'");
+  const result=await RESULT(new Request(response.headers.get("location")!));const html=await result.text();expect(html).toContain("테스트 결제창 종료");expect(html).not.toContain("evil");expect(html).not.toContain("rt=");expect(html.match(/<script/g)).toHaveLength(1);expect(html).not.toContain("evil");expect(html).not.toContain("/mypage");expect(html).toContain("센터 화면으로 돌아가기");expect(result.headers.get("content-security-policy")).toMatch(/script-src 'sha256-[A-Za-z0-9+\/=]+'/);expect(result.headers.get("cache-control")).toBe("no-store");expect(result.headers.get("content-security-policy")).toContain("default-src 'none'");
   const forged=await RESULT(new Request("https://mwhabit.com/api/payments/nicepay/review-window/result?rt=forged&status=paid"));expect(await forged.text()).toContain("테스트 복귀 정보 확인 불가");expect(fetch).not.toHaveBeenCalled();
  });
  it("untrusted return URLs/tokens cannot redirect outside the generic test result or call approval",async()=>{
