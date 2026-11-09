@@ -15,7 +15,7 @@ import Loading from "../../components/Loading";
 import { useParams, useSearchParams } from "next/navigation";
 import {
   fetchCenterDetail, fetchCenterClasses, centerPhotoUrl,
-  settle, unwrap, fetchCenterProducts, hasActivePassAtCenter, requestPurchase, fetchClassAllowedPasses,
+  settle, unwrap, fetchCenterProducts, hasActivePassAtCenter, requestPurchase, fetchClassAllowedPasses, type ClassPassInfo,
   type CenterDetail, type CenterClass, type CenterProduct,
 } from "../../../lib/center";
 import { ZoomableImage } from "../../components/ImageViewer";
@@ -103,7 +103,7 @@ function CenterDetailContent() {
   const [classes, setClasses] = useState<CenterClass[]>([]);
   const [products, setProducts] = useState<CenterProduct[]>([]);
   const kstTodayStr = useKstToday();   // 화면을 열어 둔 채 KST 자정이 지나면 갱신 — 고정 만료일이 지난 상품이 새로고침 없이 사라진다
-  const [allowedPasses, setAllowedPasses] = useState<Record<string, string[]>>({});
+  const [allowedPasses, setAllowedPasses] = useState<Record<string, ClassPassInfo>>({});
   const [hasPass, setHasPass] = useState(false);
   const [buySheet, setBuySheet] = useState(false);
   // 수강권이 없는 회원이 예약하기를 눌렀을 때의 안내 다이얼로그(클라이언트 안내일 뿐 — 실제 예약 가능 여부는 서버가 다시 검증한다).
@@ -736,16 +736,16 @@ function CenterDetailContent() {
         <div className="center-class-list">
           {classes.map((c) => {
             const full = c.reserved >= c.capacity;
-            const passes = allowedPasses[c.title];
+            const passInfo = allowedPasses[c.id];
             return (
               <Link key={c.id} className="center-class-row" href={`/center/${centerId}/class/${c.id}`} prefetch={false}>
                 <div className="center-class-main">
                   <div className="center-class-title">{c.title}</div>
                   <div className="center-class-when">가장 빠른 일정 · {c.startText}</div>
                   <div className="center-class-passes">
-                    {passes && passes.length > 0
-                      ? passes.map((p) => <span key={p} className="class-pass-chip">{p}</span>)
-                      : <span className="class-pass-chip all">모든 수강권 가능</span>}
+                    {passInfo?.kind === "all" && <span className="class-pass-chip all">모든 수강권 가능</span>}
+                    {passInfo?.kind === "list" && passInfo.names.map((p) => <span key={p} className="class-pass-chip">{p}</span>)}
+                    {(!passInfo || passInfo.kind === "unknown") && <span className="class-pass-chip">수강권은 수업 상세에서 확인</span>}
                   </div>
                 </div>
                 <div className={`center-class-cap ${full ? "full" : ""}`}>

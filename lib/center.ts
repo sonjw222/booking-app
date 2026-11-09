@@ -6,6 +6,7 @@
 */
 
 import { nicepayDiscoveryScope } from "./nicepayReviewScope";
+import { mergePassNamesForDisplay } from "./passNameDisplay";
 import { supabase } from "./supabaseClient";
 import { isFixedExpiryPassed, type PeriodSource } from "./servicePeriod";
 import { sanitizeRichText } from "./security";
@@ -488,30 +489,41 @@ export async function requestPurchase(centerId: string, productId: string, produ
      없으면 "모든 수강권" 으로 간주
    ============================================================ */
 
-export async function fetchClassAllowedPasses(centerId: string): Promise<Record<string, string[]>> {
-  // 이 센터 수업들의 title → 허용 수강권 이름 목록
-  const { data: classes } = await supabase
-    .from("classes").select("id, title").eq("center_id", centerId);
-  const classIds = (classes ?? []).map((c: any) => c.id);
-  const titleById: Record<string, string> = {};
-  for (const c of classes ?? []) titleById[(c as any).id] = (c as any).title;
-  if (classIds.length === 0) return {};
+/** 수업 목록에서 보여줄 수강권 정보 — class_id 기준. 읽을 수 없는 경우를 "모든 수강권 가능"으로 말하지 않는다. */
+export type ClassPassInfo =
+  | { kind: "all" }
+  | { kind: "list"; names: string[] }
+  | { kind: "unknown" };
 
-  const { data: links } = await supabase
+export async function fetchClassAllowedPasses(centerId: string): Promise<Record<string, ClassPassInfo>> {
+  const { data: classes, error: classErr } = await supabase
+    .from("classes").select("id, pass_selection_mode").eq("center_id", centerId);
+  if (classErr) throw new Error("수업 정보를 불러오지 못했어요: " + classErr.message);
+  const selectedIds: string[] = [];
+  const out: Record<string, ClassPassInfo> = {};
+  for (const c of classes ?? []) {
+    const row = c as { id: string; pass_selection_mode: string | null };
+    if (row.pass_selection_mode === "selected") { selectedIds.push(row.id); out[row.id] = { kind: "unknown" }; }
+    else out[row.id] = { kind: "all" };
+  }
+  if (selectedIds.length === 0) return out;
+
+  // 비로그인은 RLS 가 행을 숨기므로 빈 결과를 "없음"으로 단정하지 않는다(unknown 유지).
+  const { data: links, error } = await supabase
     .from("class_allowed_products")
     .select("class_id, products(name)")
-    .in("class_id", classIds);
+    .in("class_id", selectedIds);
+  if (error) throw new Error("수강권 정보를 불러오지 못했어요: " + error.message);
 
-  // title → set(수강권명)
-  const byTitle: Record<string, Set<string>> = {};
+  const byClass: Record<string, string[]> = {};
   for (const l of links ?? []) {
-    const title = titleById[(l as any).class_id];
-    const pname = (l as any).products?.name;
-    if (!title || !pname) continue;
-    (byTitle[title] ??= new Set()).add(pname);
+    const link = l as unknown as { class_id: string; products: { name: string | null } | { name: string | null }[] | null };
+    const classId = link.class_id;
+    const pname = (Array.isArray(link.products) ? link.products[0] : link.products)?.name;
+    if (!classId || !pname) continue;
+    (byClass[classId] ??= []).push(pname);
   }
-  const out: Record<string, string[]> = {};
-  for (const t of Object.keys(byTitle)) out[t] = Array.from(byTitle[t]);
+  for (const id of Object.keys(byClass)) out[id] = { kind: "list", names: mergePassNamesForDisplay(byClass[id]) };
   return out;
 }
 

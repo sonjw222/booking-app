@@ -1,5 +1,6 @@
 "use client";
 import { bookingHint } from "../../lib/bookingHints";
+import { mergePassNamesForDisplay } from "@/lib/passNameDisplay";
 import { todayKstYmd } from "../../lib/membershipExpiry";
 import { fetchCancellationNotice } from "../../lib/cancelPreview";
 
@@ -406,7 +407,7 @@ function ReservationCalendarContent() {
     for (const [classId, list] of Object.entries(usablePassesByClass)) {
       const seen = new Set<string>();
       for (const m of list) seen.add(m.productName);
-      map.set(classId, Array.from(seen));
+      map.set(classId, mergePassNamesForDisplay(Array.from(seen)));
     }
     return map;
   }, [usablePassesByClass]);

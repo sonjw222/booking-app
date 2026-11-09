@@ -5,6 +5,7 @@
   - 읽기 전용 조회다. 예약/구매/재고/권한 판단은 기존 화면·서버 함수가 그대로 맡는다.
 */
 import { supabase } from "./supabaseClient";
+import { mergePassNamesForDisplay } from "./passNameDisplay";
 import { appendTrainerNames } from "./instructorDisplay";
 
 export type ClassDetail = {
@@ -138,7 +139,7 @@ export async function fetchCenterClassDetail(centerId: string, classId: string):
   else {
     const products = ((passRes.data ?? []) as unknown as { products: Embedded<{ id: string; name: string | null }> }[])
       .map((l) => one(l.products)).filter((p): p is { id: string; name: string | null } => !!p && !!p.name);
-    const names = Array.from(new Set(products.map((p) => p.name as string)));
+    const names = mergePassNamesForDisplay(products.map((p) => p.name as string));
     const productIds = Array.from(new Set(products.map((p) => p.id)));
     allowedPasses = names.length > 0 ? { kind: "list", names, productIds } : { kind: "unknown_empty" };
   }
