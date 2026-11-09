@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-11-09 — iOS NICEPAY 결제창 상단 Safe Area 잘림 수정 (`qa/nicepay-ios-safearea-20261109`, 기준 `c2c59bf5`, 운영 미반영)
+- 원인: `contentInset=never`+`StatusBar.overlaysWebView=true` 로 WebView 가 상태바 뒤까지 덮는데 NICEPAY 외부 페이지는 안전 영역을 처리하지 않아 상단 헤더·X 버튼이 가려짐(시뮬레이터 실측 재현).
+- 수정: NICEPAY 호스트(정확히 3개)에 있는 동안에만 `contentInsetAdjustmentBehavior=.always`, 앱으로 돌아오면 `.never` 복원(`NicepaySafeAreaObserver`). 전역 StatusBar/모하빗 CSS 불변, iOS 전용. **iOS 앱 재빌드 필요.** `docs/qa/nicepay-ios-safearea-20261109/REPORT.md`.
+
 ## 2026-11-08 — iOS 실기기 NICEPAY 결제창이 외부 Safari 로 나가 오류 나는 문제 진단·최소 수정 (`qa/nicepay-ios-nav-20261108`, 기준 `fd659321`, 운영 미반영)
 - 원인: goPay 모바일 결제창은 `pg-web.nicepay.co.kr/v3/gwPayment.jsp` 로의 form POST 최상위 이동인데, 설치 앱의 Capacitor 는 allowNavigation 에 없는 호스트를 `UIApplication.open(URL)`+취소 처리해 POST 본문이 사라진다.
 - 수정: `capacitor.config.ts` allowNavigation 에 정확한 호스트 `pg-web`·`dc1-web`·`web`(.nicepay.co.kr) 추가(와일드카드 없음). **iOS(·Android) 앱 재빌드·재설치 필요.** 상세·검증·실기기 QA 절차: `docs/qa/nicepay-ios-webview-nav-20261108/REPORT.md`.

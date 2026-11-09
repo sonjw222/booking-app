@@ -1,5 +1,6 @@
 import Foundation
 import Capacitor
+import WebKit
 
 /*
   iOS 전용 — 릴리스 폴리시 배치 8차(2026-09-17): WKWebView의
@@ -28,6 +29,63 @@ public class NavigationPolicyPlugin: CAPPlugin, CAPBridgedPlugin {
         DispatchQueue.main.async { [weak self] in
             self?.bridge?.webView?.allowsBackForwardNavigationGestures = enabled
             call.resolve()
+        }
+    }
+}
+
+/*
+  NICEPAY 결제창 전용 안전 영역(Safe Area) 보정 — iOS 실기기 QA(TestFlight 1.0.3, 2026-11-09): 결제창 상단 헤더·X 닫기 버튼이 상태바/Dynamic Island 아래에 가려진다.
+
+  원인: 이 앱은 capacitor.config.ts 의 ios.contentInset="never" + StatusBar.overlaysWebView=true 로 WKWebView 가 화면 전체(상태바 뒤)를 덮고, 안전 영역은 모하빗 페이지가
+  env(safe-area-inset-*) 로 직접 처리한다(app/globals.css). NICEPAY 결제창은 외부 페이지라 그 처리가 없고 viewport-fit 도 없어서, 상단 고정 헤더가 y=0(상태바 뒤)에 그려진다.
+  (시뮬레이터 하니스 실측: 수정 전 X 버튼 영역 y=6~50 < 안전 영역 상단 62 → 겹침.)
+
+  수정: WebView 의 현재 주소(KVO)를 보고, NICEPAY 호스트에 있는 동안에만 scrollView.contentInsetAdjustmentBehavior 를 .always 로 바꿔 시스템이 상단/하단(홈 인디케이터)/가로 회전 시 좌우 안전 영역을
+  WebView 콘텐츠에 적용하게 한다. 모하빗(앱 origin)으로 돌아오면 시작 시점의 값(.never)으로 복원한다. 그 밖의 호스트(소셜 로그인 등)에서는 아무것도 바꾸지 않는다.
+  전역 StatusBar 설정·capacitor.config·모하빗 화면 CSS 는 건드리지 않고, NICEPAY 페이지의 DOM/폼/카드 입력 영역에는 접근하지 않는다. iOS 전용(Android 는 이 파일을 쓰지 않는다).
+*/
+enum NicepaySafeAreaPolicy {
+    enum Action: Equatable { case applySystemInset, restoreAppDefault, keep }
+
+    /// allowNavigation(capacitor.config.ts)에 넣은 NICEPAY 결제창 호스트와 같은 정확한 목록 — 와일드카드 없음.
+    static let nicepayHosts: Set<String> = ["pg-web.nicepay.co.kr", "dc1-web.nicepay.co.kr", "web.nicepay.co.kr"]
+
+    static func action(forHost host: String?, appHost: String?, hosts: Set<String> = nicepayHosts) -> Action {
+        guard let h = host?.lowercased(), !h.isEmpty else { return .keep }
+        if hosts.contains(h) { return .applySystemInset }
+        if let a = appHost?.lowercased(), !a.isEmpty, h == a { return .restoreAppDefault }
+        return .keep
+    }
+}
+
+final class NicepaySafeAreaObserver: NSObject {
+    private weak var webView: WKWebView?
+    private let appHost: String?
+    private let hosts: Set<String>
+    private let appDefault: UIScrollView.ContentInsetAdjustmentBehavior
+    private var observation: NSKeyValueObservation?
+
+    init(webView: WKWebView, appHost: String?, hosts: Set<String> = NicepaySafeAreaPolicy.nicepayHosts) {
+        self.webView = webView
+        self.appHost = appHost
+        self.hosts = hosts
+        self.appDefault = webView.scrollView.contentInsetAdjustmentBehavior   // 앱의 기본값(.never) — Capacitor 가 config 로 이미 적용한 뒤의 값을 저장
+        super.init()
+        observation = webView.observe(\.url, options: [.initial, .new]) { [weak self] wv, _ in
+            self?.apply(url: wv.url)
+        }
+    }
+
+    private func apply(url: URL?) {
+        guard let webView = webView else { return }
+        let scroll = webView.scrollView
+        switch NicepaySafeAreaPolicy.action(forHost: url?.host, appHost: appHost, hosts: hosts) {
+        case .applySystemInset:
+            if scroll.contentInsetAdjustmentBehavior != .always { scroll.contentInsetAdjustmentBehavior = .always }
+        case .restoreAppDefault:
+            if scroll.contentInsetAdjustmentBehavior != appDefault { scroll.contentInsetAdjustmentBehavior = appDefault }
+        case .keep:
+            break
         }
     }
 }

@@ -4,6 +4,8 @@ import GoogleSignIn
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
+    // NICEPAY 결제창(외부 페이지) 이동 중에만 WebView 에 시스템 안전 영역을 적용한다(NavigationPolicyPlugin.swift 의 NicepaySafeAreaObserver).
+    private var nicepaySafeAreaObserver: NicepaySafeAreaObserver?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
@@ -77,6 +79,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             // edge swipe로 로그인 화면·이전 모드가 뒤에서 보이는 문제를 막고, 상세 화면에서는
             // true로 켜서 기존 정상 back은 그대로 유지한다.
             webView.allowsBackForwardNavigationGestures = true
+
+            // NICEPAY 결제창 안전 영역 보정(상단 헤더·X 버튼이 상태바 뒤에 가려지는 문제). 앱 origin 의 호스트로 돌아오면 원래 값으로 복원한다.
+            // DEBUG 빌드에서만 QA 용으로 호스트 목록을 capacitor.config 의 plugins.NicepaySafeArea.hosts 로 바꿀 수 있다(출시 빌드는 고정 목록).
+            var hosts = NicepaySafeAreaPolicy.nicepayHosts
+            #if DEBUG
+            if let extra = bridgeViewController.bridge?.config.getPluginConfig("NicepaySafeArea").getArray("hosts") as? [String], !extra.isEmpty {
+                hosts = Set(extra.map { $0.lowercased() })
+            }
+            #endif
+            nicepaySafeAreaObserver = NicepaySafeAreaObserver(webView: webView, appHost: bridgeViewController.bridge?.config.serverURL.host, hosts: hosts)
         }
 
         // NICEPAY 앱 결제 복귀(콜드 스타트): 카드사 앱 인증 중 모하빗 앱이 종료됐다가 복귀 scheme 으로 다시 열린 경우. 검증을 통과한 URL 만 처리(NicepayAppBridgePlugin.swift).
