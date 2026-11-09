@@ -21,3 +21,7 @@
 ## 관찰
 - 센터 수업 탭은 같은 제목 수업을 한 카드로 묶고 대표(가장 빠른) 수업의 허용 수강권을 보여 준다(기존 동작). 상세 화면은 class_id 기준으로 정확하다.
 - 실기기 전용(BLOCKED): iOS 가장자리 제스처·오른쪽 앞으로 차단, Android 시스템 back, 소셜 로그인 실동작, 카드사 앱 복귀.
+
+## 통합 Preview 스모크 (읽기 전용)
+- 배포: `dpl_61k3sM5nGzZyAP5XNt95ircek9ND` · https://booking-9wmrzl5b8-sonjw.vercel.app · READY(Preview, Production 아님) · 소스 = `git archive e9329902`(ios/android 제외). 기존 Preview(`dpl_3ZiHrzxZ8hAS28SJegCEPkCvY9Pj`)는 수정하지 않음.
+- Preview 환경은 별도 호스팅 Supabase(테스트 센터 2곳)로 보이지만 Production 과 다르다는 것은 직접 확인하지 못해 로그인·주문·결제 없이 읽기만 했다: 홈, 구매 시트(드롭다운 0·넘침 없음), 시트 back, 종료 화면(CSP·폴백), 페이지 오류 없음 → 5/5 PASS. 스크린샷 `preview/screenshots/`.
