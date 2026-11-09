@@ -7,6 +7,7 @@
   - 결제 수단 연동 전이므로 "결제하기" 시 주문 생성(pending) 후 완료 안내
 */
 
+import { orderOptionIssue } from "../../lib/orderOptions";
 import ServicePeriodNotice from "../components/ServicePeriodNotice";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -297,6 +298,8 @@ function CheckoutContent() {
       setError("사이즈를 선택해주세요");
       return;
     }
+    const optionIssue = orderOptionIssue({ productName: product.name, sizes: product.sizes, selectedSize, countSelectable, countPrices: product.countPrices, selectedCount });
+    if (optionIssue) { setError(optionIssue.message); return; }
     // 공개(비로그인) 목록으로 만든 모델은 요일/시간 선택 설정을 알 수 없다 — 이 상태로 결제하지 않는다.
     if (product.publicFallback) {
       // 세션이 아예 없는 비로그인 방문자는 "확인 실패"가 아니라 "로그인 필요" 상태다 — 이 문구일 때만 아래 토스트가 "로그인 하러 가기" 링크(현재 checkout URL을

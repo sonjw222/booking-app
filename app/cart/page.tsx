@@ -6,6 +6,7 @@
   - 주문 정보 + 쿠폰 + 결제수단까지 확인 후 한 번에 결제
 */
 
+import { firstOrderOptionIssue } from "../../lib/orderOptions";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { fetchCart, addToCart, removeFromCart, clearCart, updateCartSize, updateCartCount, type CartItem } from "../../lib/cart";
@@ -156,8 +157,9 @@ export default function CartPage() {
   async function handleCheckoutAll() {
     if (items.length === 0) return;
     // 사이즈 필요한데 안 고른 항목 확인
-    const missing = items.find((i) => i.sizes && i.sizes.length > 0 && !i.selectedSize);
-    if (missing) { setError(`'${missing.productName}'의 사이즈를 선택해주세요`); return; }
+    // 사이즈·횟수 옵션이 현재 상품 정의와 맞는지 한 번에 확인(미선택/옛 값/불필요한 값 모두 주문 전에 막는다)
+    const issue = firstOrderOptionIssue(items);
+    if (issue) { setError(issue.message); return; }
 
     setBusy(true);
     try {
