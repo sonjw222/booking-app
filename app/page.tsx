@@ -363,6 +363,11 @@ export default function Home() {
         {isNicepayReviewer && centers.length > 0 && (
           <section aria-label="수강권 및 결제 확인 센터">
             <div className="home-class-head"><h2>수강권 및 결제 확인 센터</h2></div>
+            <div style={{ padding: "0 20px 12px" }}>
+              <Link href="/center-subscription" prefetch={false} style={{ color: "var(--accent)", fontSize: 13, fontWeight: 700 }}>
+                센터 운영자용 월 구독 상품 확인 ›
+              </Link>
+            </div>
             <div className="home-class-list">
               {centers.map((c) => (
                 <Link key={c.id} className="home-class-row" href={`/center/${c.id}`} prefetch={false}>
