@@ -40,3 +40,22 @@ describe("연결(소스 계약)", () => {
     expect(chk).toContain("found.sizes.includes(wantSize)");
   });
 });
+
+import { checkoutSearchWithSelection } from "../../lib/orderOptions";
+import { sanitizeCheckoutReturnPath } from "../../lib/payments/reviewReturnPath";
+describe("결제 화면 선택값 → 주소 반영(결제창 복귀용)", () => {
+  const C = "11111111-1111-4111-8111-111111111111", P = "22222222-2222-4222-8222-222222222222";
+  it("횟수·사이즈를 넣고 다른 쿼리는 보존, 복귀 경로 검증을 통과", () => {
+    const s = checkoutSearchWithSelection(`?center=${C}&product=${P}&reserveDate=2026-11-10`, { count: 8, size: "M" });
+    expect(s).toContain("count=8"); expect(s).toContain("size=M"); expect(s).toContain("reserveDate=2026-11-10");
+    expect(sanitizeCheckoutReturnPath("/checkout" + s)).toBe("/checkout" + s);
+  });
+  it("선택이 없으면 키를 지운다 / 바꾸면 갱신", () => {
+    expect(checkoutSearchWithSelection(`?center=${C}&product=${P}&count=4&size=S`, { count: null, size: null })).toBe(`?center=${C}&product=${P}`);
+    expect(checkoutSearchWithSelection(`?center=${C}&product=${P}&count=4`, { count: 6, size: undefined })).toContain("count=6");
+  });
+  it("같은 선택이면 문자열이 변하지 않아 replaceState 가 반복되지 않는다", () => {
+    const once = checkoutSearchWithSelection(`?center=${C}&product=${P}`, { count: 8, size: "M" });
+    expect(checkoutSearchWithSelection(once, { count: 8, size: "M" })).toBe(once);
+  });
+});

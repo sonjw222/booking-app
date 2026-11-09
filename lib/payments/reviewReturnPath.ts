@@ -9,7 +9,7 @@ export const REVIEW_RETURN_STORAGE_KEY = "mwhabit.nicepayReviewReturn";
 export const REVIEW_RETURN_TTL_MS = 30 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VALUE_RULES: Record<string, RegExp> = {
-  center: UUID, product: UUID, count: /^\d{1,3}$/, size: /^[^\s<>"'`\\&#%]{1,40}$/, day: /^[0-6]$/, time: /^\d{2}:\d{2}$/,
+  center: UUID, product: UUID, count: /^\d{1,3}$/, size: /^[^<>"'`\\&#%\u0000-\u001f]{1,40}$/, day: /^[0-6]$/, time: /^\d{2}:\d{2}$/,
   reserveClassId: UUID, reserveCenter: UUID, reserveDate: /^\d{4}-\d{2}-\d{2}$/, productIds: /^[0-9a-f,-]{1,400}$/i, showAll: /^1$/,
 };
 export const REVIEW_RETURN_KEYS = Object.keys(VALUE_RULES);

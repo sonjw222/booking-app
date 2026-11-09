@@ -13,7 +13,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const RETURN_SCRIPT = `(function(){try{
 var KEY=${JSON.stringify(REVIEW_RETURN_STORAGE_KEY)},TTL=${REVIEW_RETURN_TTL_MS},ALLOW=${JSON.stringify(REVIEW_RETURN_KEYS)};
 var UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-var R={center:UUID,product:UUID,count:/^\\d{1,3}$/,size:/^[^\\s<>"'\`\\\\&#%]{1,40}$/,day:/^[0-6]$/,time:/^\\d{2}:\\d{2}$/,reserveClassId:UUID,reserveCenter:UUID,reserveDate:/^\\d{4}-\\d{2}-\\d{2}$/,productIds:/^[0-9a-f,-]{1,400}$/i,showAll:/^1$/};
+var R={center:UUID,product:UUID,count:/^\\d{1,3}$/,size:/^[^<>"'\`\\\\&#%\\u0000-\\u001f]{1,40}$/,day:/^[0-6]$/,time:/^\\d{2}:\\d{2}$/,reserveClassId:UUID,reserveCenter:UUID,reserveDate:/^\\d{4}-\\d{2}-\\d{2}$/,productIds:/^[0-9a-f,-]{1,400}$/i,showAll:/^1$/};
 function clean(raw){if(typeof raw!=="string"||!raw||raw.length>900||raw.indexOf("/checkout")!==0)return null;if(/[\\u0000-\\u001f\\u007f\\\\]/.test(raw)||raw.indexOf("//")>=0)return null;
 var u;try{u=new URL(raw,"https://app.invalid")}catch(e){return null}
 if(u.origin!=="https://app.invalid"||u.pathname!=="/checkout"||u.hash)return null;var out=new URLSearchParams(),seen={},bad=false;
@@ -24,7 +24,7 @@ var now=Date.now();if(typeof v.at!=="number"||now-v.at<0||now-v.at>TTL)return;va
 var q=new URL(p,"https://app.invalid").searchParams,ep=a.getAttribute("data-product"),ec=a.getAttribute("data-center");
 if(ep&&q.get("product")!==ep)return;if(ec&&q.get("center")!==ec)return;
 a.setAttribute("href",p);a.textContent="결제 화면으로 돌아가기";
-a.addEventListener("click",function(e){e.preventDefault();location.replace(p)});
+a.addEventListener("click",function(e){e.preventDefault();try{localStorage.removeItem(KEY)}catch(x){}location.replace(p)});
 }catch(e){}})();`;
 
 export const returnScriptHash = (): string => createHash("sha256").update(RETURN_SCRIPT, "utf8").digest("base64");

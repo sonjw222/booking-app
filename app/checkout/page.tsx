@@ -7,7 +7,7 @@
   - 결제 수단 연동 전이므로 "결제하기" 시 주문 생성(pending) 후 완료 안내
 */
 
-import { orderOptionIssue } from "../../lib/orderOptions";
+import { checkoutSearchWithSelection, orderOptionIssue } from "../../lib/orderOptions";
 import ServicePeriodNotice from "../components/ServicePeriodNotice";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -210,6 +210,12 @@ function CheckoutContent() {
       .catch(() => { if (mounted) setApplicableCoupons([]); });
     return () => { mounted = false; };
   }, [product, baseAmount]);
+  // 고른 횟수·사이즈를 주소에 반영(history.replaceState — 이력 항목을 늘리지 않는다): NICEPAY 결제창을 닫고 돌아올 때 같은 선택으로 복원된다.
+  useEffect(() => {
+    if (loading || !product || typeof window === "undefined") return;
+    const next = checkoutSearchWithSelection(window.location.search, { count: countSelectable ? selectedCount : null, size: selectedSize });
+    if (next !== window.location.search) window.history.replaceState(window.history.state, "", window.location.pathname + next + window.location.hash);
+  }, [loading, product, countSelectable, selectedCount, selectedSize]);
   // 실제 PG(토스) 결제창은 app/checkout/success로 리다이렉트된 뒤 이 페이지로 다시
   // 돌아온다(같은 조회 쿼리 + paymentDone/paymentError 추가) — 그때 기존 "결제 완료"
   // 화면을 그대로 재사용한다(Mock의 즉시-확정 흐름과 화면을 공유). 최초 마운트 시

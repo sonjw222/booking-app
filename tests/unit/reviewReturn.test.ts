@@ -52,6 +52,17 @@ describe("복귀 화면", () => {
     expect(a.textContent).toBe("결제 화면으로 돌아가기"); expect(a.getAttribute("href")!.startsWith("/checkout?")).toBe(true);
     expect(a.getAttribute("href")).toBe(sanitizeCheckoutReturnPath(good));
   });
+  it("복귀 버튼을 누르면 저장 값을 지워 재진입 때 재사용되지 않고, 결제창을 다시 열지 않는다", () => {
+    const a = render("closed", undefined, JSON.stringify({ p: good, at: Date.now() }));
+    const loc = window.location; // jsdom: replace 는 구현되지 않음 → 호출 여부만 확인하기 위해 감시
+    let replaced: string | null = null;
+    Object.defineProperty(window, "location", { configurable: true, value: { ...loc, replace: (u: string) => { replaced = u; } } });
+    a.click();
+    Object.defineProperty(window, "location", { configurable: true, value: loc });
+    expect(replaced).toBe(sanitizeCheckoutReturnPath(good));
+    expect(localStorage.getItem(REVIEW_RETURN_STORAGE_KEY)).toBeNull();
+    expect((window as unknown as { __GOPAY?: number }).__GOPAY).toBeUndefined();
+  });
   it("조작된/만료/다른 상품 값은 무시하고 폴백 유지", () => {
     for (const v of [JSON.stringify({ p: "https://evil.com", at: Date.now() }), JSON.stringify({ p: good, at: 1 }), JSON.stringify({ p: `/checkout?center=${C}&product=${C}`, at: Date.now() }), "{x"]) {
       const a = render("closed", undefined, v); expect(a.getAttribute("href")).toBe(`/center/${C}`);
@@ -67,4 +78,30 @@ describe("복귀 화면", () => {
     const h = reviewReturnHtml("closed", { center: '"><script>x', product: "p" }); expect(h).not.toContain('"><script>x'); expect(h).toContain('href="/"');
   });
   it("CSP 해시가 실제 스크립트와 일치", () => { expect(returnScriptHash()).toBe(createHash("sha256").update(RETURN_SCRIPT).digest("base64")); });
+});
+
+describe("사이즈 값 형식", () => {
+  it("공백·슬래시가 있는 사이즈도 복원(두 구현 동일), 위험 문자는 거부", () => {
+    for (const sz of ["Free Size", "L/XL", "250"]) {
+      const raw = `/checkout?center=${C}&product=${P}&size=${encodeURIComponent(sz)}`;
+      const want = sanitizeCheckoutReturnPath(raw); expect(want).not.toBeNull();
+      const a = render("closed", undefined, JSON.stringify({ p: raw, at: Date.now() })); expect(a.getAttribute("href")).toBe(want);
+    }
+    expect(sanitizeCheckoutReturnPath(`/checkout?center=${C}&product=${P}&size=${encodeURIComponent("<b>")}`)).toBeNull();
+    expect(sanitizeCheckoutReturnPath(`/checkout?center=${C}&product=${P}&size=${encodeURIComponent("a&b")}`)).toBeNull();
+  });
+});
+
+import { readFileSync } from "node:fs";
+describe("재진입 시 중복 결제창 호출 없음(소스 계약)", () => {
+  const src = readFileSync("app/components/NicepayReviewWindow.tsx", "utf8");
+  it("open() 은 버튼 클릭에서만 호출되고 effect/마운트에서 자동 호출되지 않는다", () => {
+    const calls = [...src.matchAll(/\bopen\(\)/g)].length;
+    expect(src.match(/onClick=\{\(\) => void open\(\)\}/g)).toHaveLength(1);
+    expect(calls).toBe(2);   // 선언 1 + 버튼 onClick 1
+  });
+  it("복귀 화면 스크립트는 결제창을 부르지 않고(goPay/form/fetch 없음) 이동만 한다", () => {
+    expect(RETURN_SCRIPT).not.toMatch(/goPay|\.submit\(|fetch\(|XMLHttpRequest/);
+    expect(RETURN_SCRIPT).toContain("location.replace");
+  });
 });

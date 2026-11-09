@@ -40,3 +40,16 @@ export function firstOrderOptionIssue(items: OrderOptionInput[]): OrderOptionIss
   for (const it of items) { const x = orderOptionIssue(it); if (x) return x; }
   return null;
 }
+
+/*
+  결제 화면에서 고른 횟수·사이즈를 현재 주소(?count=&size=)에 반영한 새 쿼리 문자열을 만든다.
+  → NICEPAY 결제창을 열었다 닫은 뒤 "결제 화면으로 돌아가기"가 센터·상품뿐 아니라 선택값도 복원한다.
+  다른 쿼리(센터·상품·예약 진입 정보 등)는 그대로 두고, 선택이 없으면 해당 키를 지운다.
+*/
+export function checkoutSearchWithSelection(search: string, sel: { count: number | null | undefined; size: string | null | undefined }): string {
+  const q = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  if (sel.count != null) q.set("count", String(sel.count)); else q.delete("count");
+  if (sel.size) q.set("size", sel.size); else q.delete("size");
+  const out = q.toString();
+  return out ? `?${out}` : "";
+}
