@@ -4,6 +4,10 @@
 - 문제: 심사 결제창을 X로 닫으면 앱 종료 화면의 주 버튼이 "마이페이지로 돌아가기"라 구매 흐름(센터·상품·옵션)이 끊겼다.
 - 수정: 결제창을 열기 직전 현재 `/checkout?…` 경로를 허용 목록(센터·상품·횟수·옵션·예약 진입·필터 키, 값 형식 제한)으로 검증해 localStorage(30분)에 저장하고, 서버가 만드는 종료 화면의 해시 고정 스크립트가 같은 규칙으로 재검증해 `location.replace` 로 복귀한다(NICEPAY 재호출·주문·결제 생성 없음). 저장 경로가 없으면 서명된 시도의 센터 상세(`/center/<id>`), 그것도 없으면 홈. 서명 토큰(ReturnURL 500B 제한)·외부 DOM은 건드리지 않는다. 취소/인증확인/확인불가 문구는 그대로 구분, 성공 표현 없음. SQL·네이티브 변경 없음.
 
+## 2026-11-09 — 수강권 선택 화면/결제 화면 역할 분리 (`feat/ux-purchase-sheet-20261109`, 운영 미반영)
+- 문제: 센터 구매 Bottom Sheet 와 결제 화면(·장바구니)이 모두 횟수 dropdown 을 가져 선택 시점이 중복(sheet 에서 고른 횟수가 URL/장바구니로 흘러가 어긋날 여지, 장바구니 재담기는 고른 횟수를 덮어씀).
+- 수정: sheet 는 "무엇을 살지"만 — 횟수/사이즈 select·합계 제거, "N원부터"(가격표 최저가)+안내문구만, 담기=최저 횟수 기본값(이미 담긴 row 는 `keepExisting` 으로 보존), 구매=count/size 없이 checkout. checkout 은 가격표에 없는 count 면 가격표 최소 횟수로 시작하고 횟수 변경 시 쿠폰 선택을 풀어 재계산. 조회 전용 링크 문구 "결제 화면 확인 (구매 불가)". `product_count_prices`·서버 검증·SQL·PG 불변. 정적 하니스 `tests/qa/purchaseSheet/shots.mjs`, `docs/qa/ux-purchase-sheet-20261109/`.
+
 ## 2026-11-09 — iOS NICEPAY 결제창 상단 Safe Area 잘림 수정 (`qa/nicepay-ios-safearea-20261109`, 기준 `c2c59bf5`, 운영 미반영)
 - 원인: `contentInset=never`+`StatusBar.overlaysWebView=true` 로 WebView 가 상태바 뒤까지 덮는데 NICEPAY 외부 페이지는 안전 영역을 처리하지 않아 상단 헤더·X 버튼이 가려짐(시뮬레이터 실측 재현).
 - 수정: NICEPAY 호스트(정확히 3개)에 있는 동안에만 `contentInsetAdjustmentBehavior=.always`, 앱으로 돌아오면 `.never` 복원(`NicepaySafeAreaObserver`). 전역 StatusBar/모하빗 CSS 불변, iOS 전용. **iOS 앱 재빌드 필요.** `docs/qa/nicepay-ios-safearea-20261109/REPORT.md`.
