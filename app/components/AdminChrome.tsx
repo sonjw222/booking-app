@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { navigateBack, registerScreenBack } from "../../lib/backPolicy";
 import UiIcon from "./UiIcon";
 import { replaceTabNavigation } from "../../lib/navState";
 
@@ -13,9 +15,10 @@ const TITLES: Record<string, string> = {
 export default function AdminChrome() {
   const pathname = usePathname();
   const router = useRouter();
+  useEffect(() => registerScreenBack(() => navigateBack(router, { fallbackHref: "/admin" })), [router, pathname]);
   return <header className="admin-chrome">
     <div className="app-chrome-title">
-      {pathname !== "/admin" && <button type="button" className="app-back-btn" onClick={() => router.back()} aria-label="뒤로가기">‹</button>}
+      {pathname !== "/admin" && <button type="button" className="app-back-btn" onClick={() => navigateBack(router, { fallbackHref: "/admin" })} aria-label="뒤로가기">‹</button>}
       <h1>{TITLES[pathname] ?? "플랫폼 운영"}</h1>
     </div>
     {/* 릴리스 폴리시 배치 8차(2026-09-17) — 기존엔 이 버튼이 "/admin"(운영 홈)로 이동하는

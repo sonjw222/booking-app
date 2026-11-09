@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { navigateBack, registerScreenBack } from "../../lib/backPolicy";
 import UiIcon from "./UiIcon";
 import { replaceTabNavigation } from "../../lib/navState";
 import { confirmDiscardChanges } from "../../lib/useUnsavedChanges";
@@ -24,11 +26,16 @@ const TITLES: Record<string, string> = {
 export default function ManagerChrome() {
   const pathname = usePathname();
   const router = useRouter();
+  const goBack = async () => {
+    if (!(await confirmDiscardChanges())) return;
+    if (pathname === "/manager/settings") router.push("/manager"); else navigateBack(router, { fallbackHref: "/manager" });
+  };
+  useEffect(() => registerScreenBack(goBack), [router, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
   const rootScreens = new Set(["/manager", "/manager/classes", "/manager/members", "/manager/notifications"]);
   return <header className="manager-chrome">
     <div className="manager-chrome-main">
       <div className="app-chrome-title">
-        {!rootScreens.has(pathname) && <button type="button" className="app-back-btn" onClick={async () => { if (!(await confirmDiscardChanges())) return; if (pathname === "/manager/settings") router.push("/manager"); else router.back(); }} aria-label="뒤로가기">‹</button>}
+        {!rootScreens.has(pathname) && <button type="button" className="app-back-btn" onClick={goBack} aria-label="뒤로가기">‹</button>}
         <h1>{TITLES[pathname] ?? "관리자"}</h1>
       </div>
       {/* 릴리스 폴리시 배치 8차(2026-09-17) — 둘 다 root destination("/", "/manager")으로
