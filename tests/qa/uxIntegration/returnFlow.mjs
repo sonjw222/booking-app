@@ -1,0 +1,41 @@
+import { BASE, OUT, browser, env, psql, settle, check, save } from "./lib.mjs";
+const SDK = "https://pg-web.nicepay.co.kr/v3/common/js/nicepay-pgweb.js";
+const SDK_JS = `window.goPay=function(form){window.__GOPAY=(window.__GOPAY||0)+1;var g=function(n){var e=form.elements[n];return e?e.value:undefined};window.__FORM={ReturnURL:form.action,Moid:g('Moid')};};`;
+const A10 = psql("select id from centers where name = 'A10TION 피겨팀'"), PROD = psql(`select id from products where center_id='${A10}' and name='[로컬] 11월 요일고정 수강권'`);
+const orders0 = Number(psql("select count(*) from orders")), mem0 = Number(psql("select count(*) from memberships"));
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); const p = await ctx.newPage();
+let sdkAfter = 0, afterReturn = false;
+await ctx.route("**/*", (r) => { const u = new URL(r.request().url()); if (r.request().url() === SDK) { if (afterReturn) sdkAfter++; return r.fulfill({ contentType: "application/javascript", body: SDK_JS }); } if (["mwhabit.com", "127.0.0.1"].includes(u.hostname)) return r.continue(); return r.abort(); });
+await p.goto(`${BASE}/login`); await p.locator('input[type="email"]').fill(env.NICEQA_EMAIL); await p.locator('input[type="password"]').fill(env.NICEQA_PASSWORD); await p.locator("button.login-submit").click(); await p.waitForURL(`${BASE}/`, { timeout: 30000 });
+await p.goto(`${BASE}/checkout?center=${A10}&product=${PROD}`, { waitUntil: "domcontentloaded" }); await settle(p, 4000);
+await p.locator("select").first().selectOption({ label: /8회/.test(await p.locator("select").first().innerText()) ? (await p.$$eval("select option", (o) => o.map((x) => x.text).find((t) => t.startsWith("8회")))) : undefined }); await settle(p, 800);
+const pre = new URL(p.url());
+check("A-pre", "심사 센터 결제 화면에서 8회 선택 → 주소 count=8", pre.searchParams.get("count") === "8" ? "PASS" : "FAIL", pre.search.slice(-30));
+await p.getByRole("button", { name: /카드 결제창 확인/ }).first().click(); await settle(p, 4000);
+const opened = await p.evaluate(() => ({ n: window.__GOPAY || 0, f: window.__FORM || null, ls: localStorage.getItem("mwhabit.nicepayReviewReturn") }));
+check("A-open", "결제창 확인 열기 → goPay 1회, 복귀 경로(/checkout?…count=8) 저장", opened.n === 1 && /count=8/.test(opened.ls || "") && /product=/.test(opened.ls || "") ? "PASS" : "FAIL", `${opened.n} ${(opened.ls || "").slice(0, 90)}`);
+// NICEPAY 가 X 로 닫혔을 때처럼 ReturnURL 로 최상위 POST(인증 실패/취소 코드)
+afterReturn = true;
+await Promise.all([p.waitForURL(/review-window\/result/, { timeout: 20000 }), p.evaluate(({ url, moid }) => { const f = document.createElement("form"); f.method = "POST"; f.action = url; for (const [k, v] of Object.entries({ Moid: moid, AuthResultCode: "9999", AuthResultMsg: "user cancel" })) { const i = document.createElement("input"); i.type = "hidden"; i.name = k; i.value = v; f.appendChild(i); } document.body.appendChild(f); f.submit(); }, { url: opened.f.ReturnURL, moid: opened.f.Moid })]);
+await settle(p, 1200);
+const h1 = await p.locator("h1").innerText(), btn = p.locator("#back");
+check("A-closed", "X 종료 → '테스트 결제창 종료' 화면, 성공 표현 없음", h1.includes("테스트 결제창 종료") && !/결제가 완료|승인되었/.test(await p.locator("body").innerText()) ? "PASS" : "FAIL", h1);
+const href = await btn.getAttribute("href");
+check("A-btn", "주 버튼 '결제 화면으로 돌아가기'(마이페이지 아님), 센터·상품·횟수 유지", (await btn.innerText()).trim() === "결제 화면으로 돌아가기" && href.includes(`center=${A10}`) && href.includes(`product=${PROD}`) && href.includes("count=8") ? "PASS" : "FAIL", `${(await btn.innerText()).trim()} ${href.slice(0, 120)}`);
+await p.screenshot({ path: `${OUT}/return-screen-signed.png` });
+await Promise.all([p.waitForURL(/\/checkout\?/, { timeout: 20000 }), btn.click()]); await settle(p, 4000);
+const u = new URL(p.url());
+check("A-return", "복귀 → 같은 상품 결제 화면, 8회 복원, NICEPAY 재호출(SDK 로드·goPay) 없음", u.pathname === "/checkout" && u.searchParams.get("product") === PROD && (await p.locator("select").first().inputValue()) === "8" && sdkAfter === 0 && ((await p.evaluate(() => window.__GOPAY || 0)) === 0) ? "PASS" : "FAIL", `${u.search.slice(-30)} sdkAfter=${sdkAfter}`);
+check("A-cleared", "복귀 후 저장 값 삭제, 뒤로가기해도 종료 화면으로 돌아가지 않음", (await p.evaluate(() => localStorage.getItem("mwhabit.nicepayReviewReturn"))) === null ? "PASS" : "FAIL");
+await p.screenshot({ path: `${OUT}/return-restored-checkout.png` });
+check("A-noorder", "주문·수강권(memberships) 신규 생성 없음(격리 DB 전/후 비교)", Number(psql("select count(*) from orders")) === orders0 && Number(psql("select count(*) from memberships")) === mem0 ? "PASS" : "FAIL", `orders ${orders0}->${psql("select count(*) from orders")} memberships ${mem0}->${psql("select count(*) from memberships")}`);
+// 직접 진입(저장 경로 없음) → 서명 시도의 센터 상세 폴백
+await p.evaluate(() => localStorage.removeItem("mwhabit.nicepayReviewReturn"));
+await p.goto(`${BASE}/checkout?center=${A10}&product=${PROD}`, { waitUntil: "domcontentloaded" }); await settle(p, 3500);
+await p.evaluate(() => localStorage.removeItem("mwhabit.nicepayReviewReturn"));   // open 이 저장하기 전 상태를 만들기 위해 열기 직후 삭제는 불가 → 아래에서 열고 즉시 삭제
+await p.getByRole("button", { name: /카드 결제창 확인/ }).first().click(); await settle(p, 3000);
+const o2 = await p.evaluate(() => { localStorage.removeItem("mwhabit.nicepayReviewReturn"); return { f: window.__FORM }; });
+await Promise.all([p.waitForURL(/review-window\/result/, { timeout: 20000 }), p.evaluate(({ url, moid }) => { const f = document.createElement("form"); f.method = "POST"; f.action = url; for (const [k, v] of Object.entries({ Moid: moid, AuthResultCode: "9999" })) { const i = document.createElement("input"); i.type = "hidden"; i.name = k; i.value = v; f.appendChild(i); } document.body.appendChild(f); f.submit(); }, { url: o2.f.ReturnURL, moid: o2.f.Moid })]); await settle(p, 1000);
+const hb = await p.locator("#back").getAttribute("href");
+check("A-fallback", "직접 진입(저장 경로 없음) → 센터 상세로 안전 복귀", hb === `/center/${A10}` && (await p.locator("#back").innerText()).includes("센터") ? "PASS" : "FAIL", hb);
+save("A2"); await browser.close();

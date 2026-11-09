@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-11-09 — 통합 브랜치 `integration/ux-native-review-20261109` (운영 미반영)
+- `origin/main` + PR #265 + PR #264 + UX 변경(결제창 복귀·구매 시트 역할 분리·수강권 이름 병합·뒤로가기 단일 정책·옵션 검증·TestFlight 1.0.3(10) 버전). 충돌: `capacitor.config.ts` 는 #264 의 `*.nicepay.co.kr` 와일드카드 대신 정확한 호스트 3개만 유지, CHANGELOG/TODO 는 양쪽 기록 보존.
+- QA: `scripts/qa/uxPreview/localUxFixture.sql` 시험 데이터 + `tests/qa/uxIntegration/*.mjs`(격리 브라우저 QA 61항목) + 심사경로 27항목 통과. `scripts/qa/reviewPath/stack.sh` 에 `REVIEWPATH_PORT_OFFSET` 추가(5462x 임시 포트 충돌로 Colima 포워딩이 실패하던 원인 회피). 결과: `docs/qa/ux-integration-20261109/REPORT.md`.
+
 ## 2026-11-09 — 릴리스 전 QA: 주문 옵션 검증 강화·결제창 복귀 선택값 유지 (운영 미반영)
 - 사이즈·횟수 옵션을 주문 생성 전에 현재 상품 정의와 대조(`lib/orderOptions.ts`): 장바구니 일괄 주문·결제 화면 공통. 사이즈 미선택/옛 사이즈/불필요한 사이즈·횟수 미선택/가격표에 없는 횟수/고정 상품의 횟수를 모두 막는다(DB·상품·가격 데이터 변경 없음, 최종 금액·횟수는 기존대로 서버가 확정).
 - 결제 화면에서 고른 횟수·사이즈를 주소(`?count=&size=`)에 `history.replaceState` 로 반영 → NICEPAY 결제창 종료 후 "결제 화면으로 돌아가기"가 같은 선택으로 복원. 복귀 버튼은 저장 값을 지워 재진입 시 재사용하지 않는다. 사이즈에 공백·슬래시 허용.
