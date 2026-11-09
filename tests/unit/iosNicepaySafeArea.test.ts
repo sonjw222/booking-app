@@ -25,7 +25,8 @@ describe("NICEPAY 결제창 안전 영역 보정 — 소스 계약", () => {
     for (const h of ["kauth.kakao.com", "*.kakao.com", "nid.naver.com", "*.naver.com", "accounts.google.com", "*.google.com", "appleid.apple.com", "*.apple.com", "bxntqggkfwnhcczsbqtj.supabase.co"]) expect(hosts).toContain(h);
   });
   it("관찰자는 contentInsetAdjustmentBehavior 하나만 바꾸고(StatusBar·frame·CSS·DOM 주입 없음), 시작 값으로 복원하며, 호스트 목록 재정의는 DEBUG 에서만 가능", () => {
-    const body = nav.slice(nav.indexOf("final class NicepaySafeAreaObserver"));
+    const start = nav.indexOf("final class NicepaySafeAreaObserver");
+    const body = nav.slice(start, nav.indexOf("\n}\n", start) + 3);   // 이 클래스 본문만(뒤에 오는 EdgeBackGesture 는 별도 정책)
     expect(body).toContain("scroll.contentInsetAdjustmentBehavior = .always"); expect(body).toContain("scroll.contentInsetAdjustmentBehavior = appDefault");
     expect(body).toContain("webView.scrollView.contentInsetAdjustmentBehavior   // 앱의 기본값");
     for (const forbidden of ["evaluateJavaScript", "StatusBar", "setNeedsStatusBarAppearanceUpdate", "additionalSafeAreaInsets", ".frame =", "WKUserScript", "addUserScript"]) expect(body, forbidden).not.toContain(forbidden);
