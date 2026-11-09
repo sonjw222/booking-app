@@ -15,6 +15,7 @@ import { handleNicepayAuthReturn, classifyNicepayWebhook, type NicepayDeps } fro
 import type { NicepayConfig } from "./config";
 import { maskId } from "./redact";
 import { isMemberPassMoid } from "../../domains";
+import { buildAppReturnUrls, parseAppClient } from "../../nicepayAppReturn";
 
 export type Reply = { status: number; body: Record<string, unknown> };
 export type OrderView = { orderId: string; status: string; amount: number; provider: string | null };
@@ -51,7 +52,7 @@ async function uidFrom(input: { token?: string | null; returnToken?: unknown; or
 
 const goodsNameOf = (raw: unknown) => (typeof raw === "string" && raw.trim() ? Array.from(raw.trim()).slice(0, 20).join("") : "모하빗 수강권");   // 표시용(최대 40바이트 이내로 짧게). 금액/상품 결정에 쓰지 않는다
 
-export async function handlePrepare(input: { token: string | null; orderId?: unknown; orderName?: unknown }, d: FlowDeps, now: Date = new Date()): Promise<Reply> {
+export async function handlePrepare(input: { token: string | null; orderId?: unknown; orderName?: unknown; client?: unknown }, d: FlowDeps, now: Date = new Date()): Promise<Reply> {
   if (!isMemberPassMoid(input.orderId)) return { status: 400, body: { error: "orderId가 올바르지 않아요" } };   // 회원 수강권 주문(UUID)만 — 구독 결제 주문번호는 이 도메인에 들어오지 못한다
   const uid = input.token ? await d.getAuthUid(input.token) : null;
   if (!uid) return { status: 401, body: { error: "로그인이 필요해요" } };
@@ -68,7 +69,10 @@ export async function handlePrepare(input: { token: string | null; orderId?: unk
     return { status: 200, body: { ok: true, family: "rest_v1", sdkUrl: c.sdkUrl, resultUrl, params: { clientId: c.clientId, method: "card", orderId: ctx.orderId, amount: ctx.amount, goodsName: goodsNameOf(input.orderName), returnUrl } } };
   }
   const ediDate = ediDateOf(now), amt = String(ctx.amount);
-  return { status: 200, body: { ok: true, family: "v3_mid", resultUrl, params: { MID: c.mid, Moid: ctx.orderId, Amt: amt, GoodsName: goodsNameOf(input.orderName), EdiDate: ediDate, SignData: nicepaySign.payRequest({ ediDate, mid: c.mid, amt }, c.merchantKey), ReturnURL: returnUrl, PayMethod: "CARD", CharSet: "utf-8" } } };
+  // 앱(WebView) 결제: 서버 설정(appReturn)이 켜져 있고 클라이언트가 ios/android 앱이라고 알릴 때만 WapUrl/IspCancelUrl 을 싣는다. 클라이언트 값은 "어느 앱인지" 힌트일 뿐 — URL 은 서버 설정의 scheme + DB 주문 UUID 로만 만든다.
+  const appReturnUrls = c.appReturn && parseAppClient(input.client) ? buildAppReturnUrls(c.appReturn.scheme, ctx.orderId) : null;
+  const appReturnParams = appReturnUrls ?? {};
+  return { status: 200, body: { ok: true, family: "v3_mid", resultUrl, params: { MID: c.mid, Moid: ctx.orderId, Amt: amt, GoodsName: goodsNameOf(input.orderName), EdiDate: ediDate, SignData: nicepaySign.payRequest({ ediDate, mid: c.mid, amt }, c.merchantKey), ReturnURL: returnUrl, PayMethod: "CARD", CharSet: "utf-8", ...appReturnParams } } };
 }
 
 /** NICEPAY → returnUrl POST. 항상 결과 화면 경로를 돌려준다(상태는 쿼리에 싣지 않는다 — 결과 화면이 status로 DB 진실을 읽는다). */
@@ -88,14 +92,16 @@ export async function handleReturnPost(form: Record<string, unknown>, rt: string
     await d.cancelPendingOrder(orderId).catch(() => false);
     return where("&failed=1");
   }
+  let qaAuthOnly = false;   // QA 인증만 모드에서 서버가 "승인하지 않고 멈췄다"고 답했다 — 대기 주문을 정리하고 결과 화면에 QA 안내를 보인다
   let rejected = false;   // 서버가 이 인증 결과를 명확히 거절했다(서명/금액/MID 불일치·승인 거절 등) — 결과 화면이 오래 기다리지 않고 바로 실패 안내를 보이게 한다. 진행 중(in_progress)·예외(상태 불명)는 계속 확인한다.
   try {
     const rep = family === "rest_v1" && d.rest ? await handleNicepayRestAuthReturn(form, d.rest) : family === "v3_mid" && d.v3 ? await handleNicepayAuthReturn(form, d.v3) : null;
-    if (rep && rep.status >= 400 && (rep.body as { code?: unknown }).code !== "in_progress") rejected = true;
+    if (rep && (rep.body as { qa_auth_only?: unknown }).qa_auth_only === true) { qaAuthOnly = true; await d.cancelPendingOrder(orderId).catch(() => false); }
+    else if (rep && rep.status >= 400 && (rep.body as { code?: unknown }).code !== "in_progress") rejected = true;
   } catch (e) {
     d.log("error", "PG_NICEPAY_RETURN_HANDLER_THROW", { orderId: maskId(orderId), error: e instanceof Error ? e.message.slice(0, 120) : "unknown" });
   }
-  return where(rejected ? "&failed=1" : "");
+  return where(qaAuthOnly ? "&qa=auth_only" : rejected ? "&failed=1" : "");
 }
 
 export async function handleStatus(input: { token: string | null; returnToken?: unknown; orderId?: unknown }, d: FlowDeps): Promise<Reply> {

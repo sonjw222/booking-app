@@ -7,16 +7,17 @@
   MerchantKey/서명 원본은 브라우저에 없다: 서버(handlePrepare)가 만든 SignData(= sha256(EdiDate+MID+Amt+MerchantKey) 의 hex)만 받는다.
   fail-closed: 서버가 준 파라미터의 주문번호·금액이 화면의 주문과 다르거나, 허용되지 않은 필드/주소가 있으면 결제창을 열지 않는다.
 */
+import { isValidAppReturnScheme, parseAppReturnUrl } from "./nicepayAppReturn";
 export const NICEPAY_V3_SDK_URL = "https://pg-web.nicepay.co.kr/v3/common/js/nicepay-pgweb.js";
 
 /** 서버가 내려주는 v3 결제창 파라미터(handlePrepare 의 v3_mid 응답). 이 목록 밖의 필드는 form 에 넣지 않는다. */
 export type NicepayV3Params = {
-  MID: string; Moid: string; Amt: string; GoodsName: string; EdiDate: string; SignData: string; ReturnURL: string; PayMethod: string; CharSet?: string;
+  MID: string; Moid: string; Amt: string; GoodsName: string; EdiDate: string; SignData: string; ReturnURL: string; PayMethod: string; CharSet?: string; WapUrl?: string; IspCancelUrl?: string;
 };
-const FIELD_ORDER = ["MID", "Moid", "Amt", "GoodsName", "EdiDate", "SignData", "ReturnURL", "PayMethod", "CharSet"] as const;
+const FIELD_ORDER = ["MID", "Moid", "Amt", "GoodsName", "EdiDate", "SignData", "ReturnURL", "PayMethod", "CharSet", "WapUrl", "IspCancelUrl"] as const;
 const FORBIDDEN_KEY = /merchant.?key|secret|private/i;   // 서버가 실수로 비밀값을 내려도 form 에 싣지 않는다
 
-export function validateNicepayV3Params(raw: unknown, expected: { orderId: string; amount: number }, origin: string): { ok: true; params: NicepayV3Params } | { ok: false; reason: string } {
+export function validateNicepayV3Params(raw: unknown, expected: { orderId: string; amount: number }, origin: string, opts: { nativeApp?: boolean } = {}): { ok: true; params: NicepayV3Params } | { ok: false; reason: string } {
   if (!raw || typeof raw !== "object") return { ok: false, reason: "결제 정보가 없어요" };
   const p = raw as Record<string, unknown>;
   for (const k of Object.keys(p)) if (FORBIDDEN_KEY.test(k)) return { ok: false, reason: "허용되지 않은 결제 필드가 있어요" };
@@ -28,7 +29,18 @@ export function validateNicepayV3Params(raw: unknown, expected: { orderId: strin
   if (p.PayMethod !== "CARD") return { ok: false, reason: "지원하지 않는 결제 방식이에요" };
   let u: URL; try { u = new URL(p.ReturnURL as string); } catch { return { ok: false, reason: "복귀 주소가 올바르지 않아요" }; }
   if (u.origin !== new URL(origin).origin || u.pathname !== "/api/payments/nicepay/return" || u.protocol !== "https:" && !/^http:\/\/localhost(:\d+)?$/.test(u.origin)) return { ok: false, reason: "복귀 주소가 허용되지 않아요" };
-  const params: NicepayV3Params = { MID: p.MID as string, Moid: p.Moid as string, Amt: p.Amt as string, GoodsName: p.GoodsName as string, EdiDate: p.EdiDate as string, SignData: p.SignData as string, ReturnURL: p.ReturnURL as string, PayMethod: "CARD", ...(typeof p.CharSet === "string" ? { CharSet: p.CharSet } : {}) };
+  // 앱(WebView) 복귀 필드: 앱 안(nativeApp)에서만 허용되고, 둘이 함께 있어야 하며, 같은 scheme·이 주문 UUID 와 정확히 일치해야 한다(그 밖의 값은 결제창을 열지 않는다). 웹 브라우저에서는 있어도 form 에 싣지 않는다.
+  let appReturn: { WapUrl: string; IspCancelUrl: string } | null = null;
+  if (typeof p.WapUrl === "string" || typeof p.IspCancelUrl === "string") {
+    if (opts.nativeApp) {
+      const wap = typeof p.WapUrl === "string" ? p.WapUrl : "", isp = typeof p.IspCancelUrl === "string" ? p.IspCancelUrl : "";
+      const scheme = /^([a-z][a-z0-9+.-]*):\/\//.exec(wap)?.[1] ?? "";
+      const w = parseAppReturnUrl(wap, scheme), c = parseAppReturnUrl(isp, scheme);
+      if (!isValidAppReturnScheme(scheme) || !w || !c || w.kind !== "wap" || c.kind !== "cancel" || w.orderId !== expected.orderId || c.orderId !== expected.orderId) return { ok: false, reason: "앱 복귀 주소가 올바르지 않아요" };
+      appReturn = { WapUrl: wap, IspCancelUrl: isp };
+    }
+  }
+  const params: NicepayV3Params = { MID: p.MID as string, Moid: p.Moid as string, Amt: p.Amt as string, GoodsName: p.GoodsName as string, EdiDate: p.EdiDate as string, SignData: p.SignData as string, ReturnURL: p.ReturnURL as string, PayMethod: "CARD", ...(typeof p.CharSet === "string" ? { CharSet: p.CharSet } : {}), ...(appReturn ?? {}) };
   return { ok: true, params };
 }
 

@@ -25,4 +25,4 @@ export async function pollNicepayStatus(p: { orderId: string; returnToken?: stri
   return r;
 }
 export const abandonNicepayOrder = (p: { orderId: string; returnToken?: string | null; bearer?: string | null }) => post("/api/payments/nicepay/abandon", { orderId: p.orderId, returnToken: p.returnToken ?? undefined }, p.bearer);
-export const prepareNicepay = (p: { orderId: string; orderName?: string; bearer: string }) => post("/api/payments/nicepay/prepare", { orderId: p.orderId, orderName: p.orderName }, p.bearer);
+export const prepareNicepay = (p: { orderId: string; orderName?: string; bearer: string; client?: "ios" | "android" | null }) => post("/api/payments/nicepay/prepare", { orderId: p.orderId, orderName: p.orderName, client: p.client ?? undefined }, p.bearer);

@@ -287,7 +287,9 @@ describe("심사 준비 상태 / 카드정보 미수집 (정적)", () => {
   it("NICEPAY 키/설정 환경변수는 lib/payments/server/nicepay/config.ts 한 곳에서만 읽는다(라우트·클라이언트·다른 모듈에서 직접 읽지 않음), NEXT_PUBLIC_에는 NICEPAY 비밀이 없다", () => {
     const norm = (f: string) => f.split(path.sep).join("/");
     const hits = walk("lib").concat(walk("app")).filter((f) => /process\.env\.NICEPAY|NICEPAY_(MID|MERCHANT|KEY|SECRET|CLIENT)/.test(readFileSync(f, "utf8"))).map(norm);
-    expect(hits).toEqual(["lib/payments/server/nicepay/config.ts"]);
+    // qaAuthOnly.ts 는 config.ts 가 넘겨준 env 객체만 판정하는 순수 함수(process.env 직접 접근 없음) — 변수 "이름" 만 참조한다.
+    expect(hits).toEqual(["lib/payments/server/nicepay/config.ts", "lib/payments/server/nicepay/qaAuthOnly.ts"]);
+    expect(readFileSync("lib/payments/server/nicepay/qaAuthOnly.ts", "utf8")).not.toMatch(/process\.env/);
     expect(walk("lib").concat(walk("app")).filter((f) => /NEXT_PUBLIC_NICEPAY/.test(readFileSync(f, "utf8")))).toEqual([]);
   });
 });

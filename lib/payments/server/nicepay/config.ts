@@ -9,14 +9,20 @@
   심사 계정 override가 NICEPAY 비활성 상태를 우회하지는 못한다(위 4조건이 먼저).
 */
 import { NICEPAY_CHECKOUT_ACTIVATED } from "../../PaymentProviderFactory";
+import { evaluateQaAuthOnly } from "./qaAuthOnly";
+import { isValidAppReturnScheme } from "../../nicepayAppReturn";
 
 export type NicepayFamily = "rest_v1" | "v3_mid";
 export type NicepayEnvName = "sandbox" | "production";
 export type NicepayConfig =
   | { family: "rest_v1"; clientId: string; secretKey: string; env: NicepayEnvName; apiBase: string; sdkUrl: string; returnBaseUrl: string }
-  | { family: "v3_mid"; mid: string; merchantKey: string; env: NicepayEnvName; returnBaseUrl: string };
+  | { family: "v3_mid"; mid: string; merchantKey: string; env: NicepayEnvName; returnBaseUrl: string;
+      /** 격리 QA 인증만(auth-only) 모드 — 승인·망취소·취소·환불 호출 차단(qaAuthOnly.ts). 공용 테스트 MID(nicepay00m)이거나 NICEPAY_QA_AUTH_ONLY=true 이면 항상 true. */
+      qaAuthOnly?: true;
+      /** 앱(WebView) 결제 복귀 — NICEPAY 확인·사용자 승인 전에는 undefined(WapUrl/IspCancelUrl 미전송). NICEPAY_APP_RETURN_ENABLED==="true" + 유효한 NICEPAY_APP_RETURN_SCHEME 일 때만 생긴다. */
+      appReturn?: { scheme: string } };
 
-export type ConfigResult = { ok: true; config: NicepayConfig } | { ok: false; reason: "code_flag_off" | "disabled" | "incomplete"; missing: string[] };
+export type ConfigResult = { ok: true; config: NicepayConfig } | { ok: false; reason: "code_flag_off" | "disabled" | "incomplete" | "qa_unsafe"; missing: string[] };
 
 export const REST_HOSTS = { production: { api: "https://api.nicepay.co.kr", sdk: "https://pay.nicepay.co.kr/v1/js/" }, sandbox: { api: "https://sandbox-api.nicepay.co.kr", sdk: "https://sandbox-pay.nicepay.co.kr/v1/js/" } } as const;
 
@@ -26,6 +32,9 @@ const present = (v: string | undefined) => typeof v === "string" && v.trim().len
 export function loadNicepayConfig(env: Env = process.env, opts: { codeFlag?: boolean } = {}): ConfigResult {
   if (!(opts.codeFlag ?? NICEPAY_CHECKOUT_ACTIVATED)) return { ok: false, reason: "code_flag_off", missing: [] };
   if (env.NICEPAY_CHECKOUT_ENABLED !== "true") return { ok: false, reason: "disabled", missing: [] };
+  // QA 인증만 모드 안전 검사(운영 MID·운영 DB·운영 도메인·production 환경 차단). 어긋나면 NICEPAY 전체 비활성(fail-closed) — 문제 항목 "이름"만 돌려준다.
+  const qa = evaluateQaAuthOnly(env);
+  if (qa.requested && !qa.ok) return { ok: false, reason: "qa_unsafe", missing: qa.problems };
   const missing: string[] = [];
   const family = env.NICEPAY_API_FAMILY;
   if (family !== "rest_v1" && family !== "v3_mid") missing.push("NICEPAY_API_FAMILY");
@@ -43,7 +52,10 @@ export function loadNicepayConfig(env: Env = process.env, opts: { codeFlag?: boo
     const h = REST_HOSTS[envName];
     return { ok: true, config: { family, clientId: env.NICEPAY_CLIENT_ID!.trim(), secretKey: env.NICEPAY_SECRET_KEY!.trim(), env: envName, apiBase: h.api, sdkUrl: h.sdk, returnBaseUrl } };
   }
-  return { ok: true, config: { family: "v3_mid", mid: env.NICEPAY_MID!.trim(), merchantKey: env.NICEPAY_MERCHANT_KEY!.trim(), env: envName, returnBaseUrl } };
+  // 앱 복귀(선택): 둘 다 맞을 때만 켠다. 값이 이상하면 조용히 꺼 둔다(결제 자체는 막지 않는다 — 앱 복귀 없이도 기존 웹 결제 흐름은 그대로).
+  const scheme = (env.NICEPAY_APP_RETURN_SCHEME ?? "").trim();
+  const appReturn = env.NICEPAY_APP_RETURN_ENABLED === "true" && isValidAppReturnScheme(scheme) ? { scheme } : undefined;
+  return { ok: true, config: { family: "v3_mid", mid: env.NICEPAY_MID!.trim(), merchantKey: env.NICEPAY_MERCHANT_KEY!.trim(), env: envName, returnBaseUrl, ...(appReturn ? { appReturn } : {}), ...(qa.requested ? { qaAuthOnly: true as const } : {}) } };
 }
 
 /** 응답/로그에 내려도 되는 설정 상태(값 없음) */

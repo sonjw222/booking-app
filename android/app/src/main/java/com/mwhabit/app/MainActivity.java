@@ -2,6 +2,7 @@ package com.mwhabit.app;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.graphics.Color;
@@ -54,6 +55,8 @@ public class MainActivity extends BridgeActivity {
         // CalendarEventPlugin.java — "캘린더에 추가"(2026-09-26). 시스템 캘린더 일정 추가 인텐트,
         // iOS의 CalendarEventPlugin과 동일한 jsName/계약(lib/calendarAdd.ts).
         registerPlugin(CalendarEventPlugin.class);
+        // NicepayAppBridgePlugin.java — NICEPAY 카드사 앱(intent://·scheme) 호출·결제 문맥 scheme 차단(shouldOverrideLoad)과 앱 복귀(deep link). 결제 OFF/설정 OFF 동안은 호출되지 않는다.
+        registerPlugin(NicepayAppBridgePlugin.class);
 
         // 채널 importance는 한 번 생성되면 코드로 다시 못 올린다(OS 정책 — 사용자가
         // 시스템 설정에서 직접 바꾸는 것만 허용). 이미 같은 ID로 만들어져 있으면
@@ -92,6 +95,21 @@ public class MainActivity extends BridgeActivity {
             v.setPadding(insets.left, insets.top, insets.right, insets.bottom);
             return WindowInsetsCompat.CONSUMED;
         });
+
+        // NICEPAY 앱 결제 복귀(콜드 스타트): 카드사 앱 인증 중 앱이 종료됐다가 복귀 scheme 으로 다시 열린 경우(NicepayAppBridgePlugin.handleReturn — 검증을 통과한 URL 만).
+        handleNicepayReturn(getIntent(), true);
+    }
+
+    // singleTask: 이미 떠 있는 앱이 복귀 scheme 으로 다시 열릴 때. 우리 scheme 이 아니면 Capacitor 기존 처리(super) 그대로.
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleNicepayReturn(intent, false);
+    }
+
+    private void handleNicepayReturn(Intent intent, boolean coldStart) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction()) || intent.getData() == null) return;
+        NicepayAppBridgePlugin.handleReturn(intent.getData(), getBridge(), coldStart);
     }
 
     private void createHighImportanceNotificationChannel() {

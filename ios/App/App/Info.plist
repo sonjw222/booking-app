@@ -54,6 +54,51 @@
 				<string>com.googleusercontent.apps.544111273413-dita3qop20ut2t24dkqgidp6qj8h9qna</string>
 			</array>
 		</dict>
+		<!-- NICEPAY v3 앱 결제 복귀(WapUrl/IspCancelUrl) — 제안 scheme(미확정): NICEPAY 기술지원 확인 + 사용자 승인 전에는 서버 설정이 꺼져 있어 이 scheme 으로 오는 URL 이 없다.
+		     lib/payments/nicepayAppReturn.ts(NICEPAY_APP_RETURN_PROPOSED_SCHEME)·NicepayAppReturn.swift·AndroidManifest.xml 과 같은 값이어야 한다(테스트가 고정). -->
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>NicepayAppReturn</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>mwhabitnicepay</string>
+			</array>
+		</dict>
+	</array>
+	<!-- NICEPAY 카드사 앱 호출(canOpenURL) 허용 scheme — 공식 문서 "3rd 앱 호출 등록" 중 신용카드·공동인증 구분만(소셜 로그인과 겹치는 scheme 은 제외). NicepayAppReturn.swift 의 목록과 같다. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>mpocket.online.ansimclick</string>
+		<string>scardcertiapp</string>
+		<string>monimopay</string>
+		<string>monimopayauth</string>
+		<string>shinhan-sr-ansimclick</string>
+		<string>smshinhanansimclick</string>
+		<string>hdcardappcardansimclick</string>
+		<string>smhyundaiansimclick</string>
+		<string>kb-acp</string>
+		<string>kbbank</string>
+		<string>newliiv</string>
+		<string>ispmobile</string>
+		<string>cloudpay</string>
+		<string>hanaskcardmobileportal</string>
+		<string>hanawalletmembers</string>
+		<string>lotteappcard</string>
+		<string>lottesmartpay</string>
+		<string>lpayapp</string>
+		<string>lmslpay</string>
+		<string>nhappcardansimclick</string>
+		<string>nhallonepayansimclick</string>
+		<string>nonghyupcardansimclick</string>
+		<string>wooripay</string>
+		<string>com.wooricard.wcard</string>
+		<string>newsmartpib</string>
+		<string>citispay</string>
+		<string>citimobileapp</string>
+		<string>kakaobank</string>
+		<string>qhanamopmoasign</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
