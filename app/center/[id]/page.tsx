@@ -12,7 +12,7 @@ import SheetOverlay from "../../components/SheetOverlay";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Loading from "../../components/Loading";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   fetchCenterDetail, fetchCenterClasses, centerPhotoUrl,
   settle, unwrap, fetchCenterProducts, hasActivePassAtCenter, requestPurchase, fetchClassAllowedPasses, type ClassPassInfo,
@@ -81,6 +81,7 @@ function CenterDetailContent() {
   // NICEPAY 심사관의 "조회 전용" 실제 센터 — 상품명·가격·이용조건만 보이고 구매·담기·예약 버튼은 숨긴다(서버도 같은 규칙으로 거부).
   const [viewOnly, setViewOnly] = useState(false);
   useEffect(() => { let on = true; fetchNicepayViewOnlyCenter(centerId).then((v) => { if (on) setViewOnly(v); }).catch(() => {}); return () => { on = false; }; }, [centerId]);
+  const router = useRouter();
   const searchParams = useSearchParams();
   // 예약창에서 "수강권 구매하기"로 넘어온 경우: 구매 후 바로 예약할 수업 정보
   const reserveClassId = searchParams.get("reserveClassId");
@@ -222,7 +223,8 @@ function CenterDetailContent() {
       if (filterProductIds) url += `&productIds=${Array.from(filterProductIds).join(",")}`;
       if (showAllProducts) url += `&showAll=1`;
     }
-    window.location.href = url;
+    // SPA 이동(router.push): 전체 문서 로드(window.location.href)는 앱 안 이동 기록(lib/appHistory.ts)을 지워, 결제에서 ‹ 로 돌아온 센터의 ‹ 가 실제 직전 화면(검색·목록) 대신 홈 폴백으로 가게 했다.
+    router.push(url);
   }
 
   async function handleWriteReview() {
@@ -866,7 +868,7 @@ function CenterProductRow({ p, rules, onDesc, onAddCart, onBuy, viewOnly = false
         <div className="center-product-detail">{price}</div>
         {avail && <div className={`center-product-avail${soldOut ? " is-soldout" : ""}`}>{avail}</div>}
       </button>
-      {viewOnly && checkoutHref && !soldOut && <div className="center-product-actions"><a className="app-button app-button-secondary" href={checkoutHref}>결제 화면 확인 (구매 불가)</a></div>}
+      {viewOnly && checkoutHref && !soldOut && <div className="center-product-actions"><Link className="app-button app-button-secondary" href={checkoutHref} prefetch={false}>결제 화면 확인 (구매 불가)</Link></div>}
       {!viewOnly && <div className="center-product-actions">
         {!soldOut && <AppButton variant="secondary" className="center-product-cart" disabled={blocked} onClick={() => onAddCart(p)}>담기</AppButton>}
         {!soldOut && <AppButton className="center-product-buy" disabled={blocked} onClick={() => onBuy(p)}>구매</AppButton>}

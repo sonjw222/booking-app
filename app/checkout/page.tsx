@@ -7,6 +7,7 @@
   - 결제 수단 연동 전이므로 "결제하기" 시 주문 생성(pending) 후 완료 안내
 */
 
+import BackButton from "../components/BackButton";
 import { checkoutSearchWithSelection, orderOptionIssue } from "../../lib/orderOptions";
 import ServicePeriodNotice from "../components/ServicePeriodNotice";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -477,7 +478,7 @@ function CheckoutContent() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href={centerBackHref}>‹</a>
+          <BackButton fallbackHref={centerBackHref} />
           <div className="title">결제</div>
           <div className="side" />
         </div>
@@ -551,7 +552,7 @@ function CheckoutContent() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href={centerBackHref}>‹</a>
+          <BackButton fallbackHref={centerBackHref} />
           <div className="title">결제</div>
           <div className="side" />
         </div>
@@ -582,7 +583,7 @@ function CheckoutContent() {
       )}
 
       <div className="back-header">
-        <a className="side" href={centerBackHref}>‹</a>
+        <BackButton fallbackHref={centerBackHref} />
         <div className="title">결제</div>
         <div className="side" />
       </div>

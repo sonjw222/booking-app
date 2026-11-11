@@ -6,6 +6,7 @@ const h=vi.hoisted(()=>({token:"jwt",callback:null as null|(()=>void),open:vi.fn
 vi.mock("../../lib/supabaseClient",()=>({supabase:{auth:{getSession:async()=>({data:{session:h.token?{access_token:h.token,user:{email:h.token==="jwt"?"niceqa@mwhabit.com":"other@test.invalid"}}:null}}),onAuthStateChange:(f:()=>void)=>{h.callback=f;return {data:{subscription:{unsubscribe:vi.fn()}}}}}}}));
 vi.mock("../../lib/payments/nicepayV3Window",()=>({NICEPAY_V3_SDK_URL:"https://pg-web.nicepay.co.kr/v3/common/js/nicepay-pgweb.js",openNicepayV3Window:h.open}));
 // Pure response validation is tested separately; this suite isolates async UI/session behavior.
+vi.mock("../../lib/payments/reviewHistory", () => ({ prepareHistoryForPayment: async () => true }));   // history 보정은 reviewHistory.test.ts 에서 따로 검증
 vi.mock("../../lib/payments/reviewWindowClient",()=>({validateReviewWindowParams:(p:unknown)=>p}));
 import NicepayReviewWindow from "../../app/components/NicepayReviewWindow";
 let root:Root, host:HTMLDivElement;

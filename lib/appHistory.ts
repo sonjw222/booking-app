@@ -10,24 +10,30 @@ let lastPath: string | null = null;
 let inAppNavigations = 0;
 let lastPopAt = 0;
 let listening = false;
+let suppressNextPathChange = false;   // 다음 경로 변경이 router.replace(폴백 이동)임 — "앱 안 이동 이력"으로 세지 않는다
 
 export function trackAppHistory(pathname: string): void {
   if (typeof window !== "undefined" && !listening) {
     listening = true;
     window.addEventListener("popstate", () => { lastPopAt = Date.now(); });
   }
-  if (lastPath !== null && pathname !== lastPath) inAppNavigations++;
+  const replaced = lastPath !== null && pathname !== lastPath && suppressNextPathChange;
+  if (lastPath !== null && pathname !== lastPath) { if (replaced) suppressNextPathChange = false; else inAppNavigations++; }
   // 새로고침으로 문서가 새로 만들어져도 같은 경로면 이전 기록(직전 화면)을 유지한다. 다른 경로로 새로 들어왔으면(주소 직접 입력/외부 링크) 기록을 새로 시작한다.
   try {
     const raw = sessionStorage.getItem(STORE_KEY);
     const stored = raw ? (JSON.parse(raw) as { prev?: string | null; current?: string }) : null;
-    if (lastPath !== null && pathname !== lastPath) sessionStorage.setItem(STORE_KEY, JSON.stringify({ prev: lastPath, current: pathname }));
+    if (replaced) sessionStorage.setItem(STORE_KEY, JSON.stringify({ prev: stored?.prev ?? null, current: pathname }));   // 대체 이동: 직전 화면 기록은 그대로(딥링크면 null 유지)
+    else if (lastPath !== null && pathname !== lastPath) sessionStorage.setItem(STORE_KEY, JSON.stringify({ prev: lastPath, current: pathname }));
     else if (lastPath === null) {
       if (!(stored && stored.current === pathname && stored.prev)) sessionStorage.setItem(STORE_KEY, JSON.stringify({ prev: null, current: pathname }));
     }
   } catch { /* 사생활 모드 */ }
   lastPath = pathname;
 }
+
+/** 폴백 이동을 router.replace 로 할 때 호출 — 그 이동은 새 history entry 가 아니므로 "되돌아갈 앱 안 화면"이 생긴 것으로 세지 않는다. */
+export function noteReplaceNavigation(): void { suppressNextPathChange = true; }
 
 /** 이 문서(페이지 로드) 안에서 앱 내부 이동이 한 번이라도 있었으면 router.back()이 앱 안의 이전 화면으로 간다. */
 export function hasInAppBackTarget(): boolean {
@@ -44,4 +50,4 @@ export function hasInAppBackTarget(): boolean {
 export function arrivedByHistoryBack(withinMs = 1500): boolean { return Date.now() - lastPopAt < withinMs; }
 
 /** 테스트용 초기화 */
-export function __resetAppHistoryForTests(): void { lastPath = null; inAppNavigations = 0; lastPopAt = 0; try { sessionStorage.removeItem(STORE_KEY); } catch { /* 무시 */ } }
+export function __resetAppHistoryForTests(): void { lastPath = null; inAppNavigations = 0; lastPopAt = 0; suppressNextPathChange = false; try { sessionStorage.removeItem(STORE_KEY); } catch { /* 무시 */ } }

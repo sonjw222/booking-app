@@ -6,7 +6,7 @@
     2. root 화면(탭)이면 아무것도 하지 않는다(iOS 스와이프는 네이티브가 이미 꺼짐, Android 는 앱 종료 관례).
     3. 앱 안에서 온 이전 화면이 있으면 그 화면으로(router.back), 딥링크 첫 진입이면 안전한 fallback 으로.
 */
-import { hasInAppBackTarget } from "./appHistory";
+import { hasInAppBackTarget, noteReplaceNavigation } from "./appHistory";
 import { rootNavState } from "./navState";
 
 export type BackDecision = "close-overlay" | "blocked-by-dialog" | "none" | "history-back" | "fallback";
@@ -26,7 +26,7 @@ export function defaultBackFallback(pathname: string): string {
   return "/";
 }
 
-export type BackRouter = { back: () => void; push: (href: string) => void };
+export type BackRouter = { back: () => void; push: (href: string) => void; replace?: (href: string) => void };
 
 export function hasKnownBackTarget(): boolean {
   if (typeof window === "undefined") return false;
@@ -50,8 +50,11 @@ export function readBackState(): { overlayOpen: boolean; dialogOpen: boolean; is
 
 /** 화면별 이동(‹ 버튼이 하는 일). 오버레이/root 판정은 호출 전에 끝났다. */
 export function navigateBack(router: BackRouter, opts: { fallbackHref: string; preferFallback?: boolean }) {
-  if (!opts.preferFallback && hasKnownBackTarget()) router.back();
-  else router.push(opts.fallbackHref);
+  if (!opts.preferFallback && hasKnownBackTarget()) { router.back(); return; }
+  if (opts.preferFallback || !router.replace) { router.push(opts.fallbackHref); return; }   // 예약 복귀처럼 "정해진 곳"으로 가는 경우는 기존 이동 유지
+  // 되돌아갈 앱 안 화면이 없는 첫 진입(딥링크 등): 폴백으로 **대체**한다. push 하면 [첫 화면, 폴백] 두 entry 가 생겨 폴백의 ‹ 가 다시 첫 화면으로 돌아가는 왕복이 생긴다.
+  noteReplaceNavigation();
+  router.replace(opts.fallbackHref);
 }
 
 type BackHandler = () => void | Promise<void>;

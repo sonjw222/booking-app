@@ -5,12 +5,14 @@
 */
 import { createHash } from "node:crypto";
 import { REVIEW_RETURN_KEYS, REVIEW_RETURN_STORAGE_KEY, REVIEW_RETURN_TTL_MS } from "../../reviewReturnPath";
+import { REVIEW_HISTORY_KEY, REVIEW_HISTORY_MAX_STEPS, REVIEW_HISTORY_TTL_MS } from "../../reviewHistory";
 
 export type ReturnOutcome = "closed" | "verified-not-approved" | "invalid" | undefined;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // reviewReturnPath.ts 의 sanitizeCheckoutReturnPath 와 같은 규칙(테스트가 두 구현의 결과를 대조한다).
 export const RETURN_SCRIPT = `(function(){try{
+var HK=${JSON.stringify(REVIEW_HISTORY_KEY)},HTTL=${REVIEW_HISTORY_TTL_MS},HMAX=${REVIEW_HISTORY_MAX_STEPS};
 var KEY=${JSON.stringify(REVIEW_RETURN_STORAGE_KEY)},TTL=${REVIEW_RETURN_TTL_MS},ALLOW=${JSON.stringify(REVIEW_RETURN_KEYS)};
 var UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var R={center:UUID,product:UUID,count:/^\\d{1,3}$/,size:/^[^<>"'\`\\\\&#%\\u0000-\\u001f]{1,40}$/,day:/^[0-6]$/,time:/^\\d{2}:\\d{2}$/,reserveClassId:UUID,reserveCenter:UUID,reserveDate:/^\\d{4}-\\d{2}-\\d{2}$/,productIds:/^[0-9a-f,-]{1,400}$/i,showAll:/^1$/};
@@ -24,7 +26,8 @@ var now=Date.now();if(typeof v.at!=="number"||now-v.at<0||now-v.at>TTL)return;va
 var q=new URL(p,"https://app.invalid").searchParams,ep=a.getAttribute("data-product"),ec=a.getAttribute("data-center");
 if(ep&&q.get("product")!==ep)return;if(ec&&q.get("center")!==ec)return;
 a.setAttribute("href",p);a.textContent="결제 화면으로 돌아가기";
-a.addEventListener("click",function(e){e.preventDefault();try{localStorage.removeItem(KEY)}catch(x){}location.replace(p)});
+function steps(){try{var h=JSON.parse(sessionStorage.getItem(HK)||"null");if(!h||typeof h.anchor!=="number"||h.anchor%1!==0||h.anchor<0||typeof h.at!=="number")return 0;var t=Date.now();if(t-h.at<0||t-h.at>HTTL)return 0;var L=history.length;if(L>=50)return 0;var n=L-1-h.anchor;return n>=1&&n<=HMAX?n:0}catch(x){return 0}}
+a.addEventListener("click",function(e){e.preventDefault();var n=steps();try{localStorage.removeItem(KEY)}catch(x){}try{sessionStorage.removeItem(HK)}catch(x){}if(n>0)history.go(-n);else location.replace(p)});
 }catch(e){}})();`;
 
 export const returnScriptHash = (): string => createHash("sha256").update(RETURN_SCRIPT, "utf8").digest("base64");

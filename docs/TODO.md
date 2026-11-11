@@ -1,5 +1,6 @@
 # TODO
 
+- **P2**: 고정 `href` ‹ 링크(`<Link className="side" href=…>` 58곳: /mypage·/admin·/manager 등 root 로 가는 링크)는 뒤로가기가 아니라 push 라 entry 가 하나 더 생긴다 — 목적지가 root 라 왕복 루프는 없으나, 공통 처리(이전 경로와 같으면 router.back)로 정리 검토. 실기기: NICEPAY 결제창 위에서 `history.go(-n)` 복귀(entry 수·bfcache) 확인.
 - **P2(결정)**: PR #264 의 `*.nicepay.co.kr` 와일드카드 대신 정확한 호스트 3개(pg-web/dc1-web/web)만 허용하도록 통합했다(`integration/ux-native-review-20261109`). 카드사 앱 복귀 중 다른 NICEPAY 호스트(dc2 등)가 필요하면 NICEPAY 확인 후 호스트를 추가할 것. origin/main 에 없는 운영 배포 커밋(`61b10ab9` 계열 정기상품 카탈로그 3개)이 이 브랜치에 포함되어 있다 — main 반영 순서 확인 필요.
 - **P3**: 센터 수업 탭의 같은 제목 수업 카드는 대표 수업의 허용 수강권만 보여 준다(상세는 정확). 필요하면 카드에서 합집합 표시를 검토.
 

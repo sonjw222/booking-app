@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-11-11 — 결제 ↔ 센터 뒤로가기 무한 반복 수정 (`fix/checkout-back-loop-20261111`, 기준 `eca9e24f`, 운영 미반영)
+- 원인: 결제 화면 헤더 ‹ 가 고정 href 앵커(push)라 센터 ‹(router.back)와 왕복. 구매 시트 이동이 전체 문서 로드라 이동 기록 소실, 딥링크 폴백이 push 였고, NICEPAY 종료 후 `location.replace` 가 결제창 entry 뒤에 결제 화면을 놓음.
+- 수정: 결제 ‹ → `BackButton`, 구매 이동 `router.push`, 폴백 `router.replace`, NICEPAY 종료 시 `history.go(-n)`(열기 직전 anchor 기록). 네이티브·SQL·결제 로직 변경 없음(웹 배포만). 상세: `docs/qa/back-loop-20261111/ANALYSIS.md`.
+
 ## 2026-11-09 — 릴리스 전 최종 점검 (`integration/ux-native-review-20261109`, 운영 미반영)
 - 운영 배포본(`61b10ab9`)과 origin/main 비교: main 에 없던 운영 커밋 3개(`d23eac7c`·`5843e1e2`·`61b10ab9`, 정기상품 카탈로그)는 통합 브랜치에 patch-id 동일로 보존(`git cherry` 3건 모두 `-`), 해당 파일 3개 동일. 운영 대비 삭제된 파일 0.
 - #264 유입 TypeScript 오류 1건(`nicepay.qaPreflight.test.ts` 불필요한 `@ts-expect-error`) 제거 → tsc 63건(전부 기존 `tests/` 오류, 신규 0). `nicepayNativeParity` 가 주석의 `"*.nicepay.co.kr"` 문자열로 우연히 통과하던 것을 실제 항목 3개 고정으로 교체.

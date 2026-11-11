@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { NICEPAY_V3_SDK_URL, openNicepayV3Window } from "../../lib/payments/nicepayV3Window";
 import { validateReviewWindowParams } from "../../lib/payments/reviewWindowClient";
 import { rememberCheckoutReturn } from "../../lib/payments/reviewReturnPath";
+import { prepareHistoryForPayment } from "../../lib/payments/reviewHistory";
 import AppButton from "./AppButton";
 
 const REVIEW_ACCOUNT_EMAIL = "niceqa@mwhabit.com";
@@ -108,6 +109,8 @@ export default function NicepayReviewWindow({ productId, onStatusChange }: { pro
       if (!current()) return;
       if (await tokenNow() !== token || !current()) { if (current()) throw new Error("로그인 상태가 변경됐어요. 다시 확인해 주세요"); return; }
       windowOpen.current = true; hiddenSinceOpen.current = false;
+      await prepareHistoryForPayment(window);   // 열기 직전 결제 화면 entry 위치 기록(종료 안내에서 history.go 로 정확히 되돌아가기 위함 — 실패해도 열기는 계속)
+      if (!current()) { windowOpen.current = false; return; }
       try { rememberCheckoutReturn(window.location, window.localStorage); } catch { /* 저장 실패해도 결제창 열기는 계속 — 복귀 화면은 센터 상세로 안전하게 돌아간다 */ }
       cleanupRef.current = openNicepayV3Window(params, { doc: document, win: window as unknown as Window & { goPay: (f: HTMLFormElement) => void }, onClosedBeforeSubmit: () => { if (generation.current === g && openedId.current === id) { resetWindow(); setPhase("closed"); setMessage("테스트 결제창을 닫았습니다. 주문과 이용권을 생성하지 않았습니다."); } } });
       if (current() && windowOpen.current) { attempt.current = null; openedId.current = id; setPhase("opened"); }   // 열림 이후는 창 이벤트가 상태를 정한다(요청 취소는 더 필요 없다)

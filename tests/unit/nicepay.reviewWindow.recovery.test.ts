@@ -7,6 +7,7 @@ import { createRoot, type Root } from "react-dom/client";
 const h = vi.hoisted(() => ({ session: { wait: null as null | Promise<void>, fail: false }, token: "jwt", callback: null as null | (() => void), open: vi.fn(), fetch: vi.fn(), cleanup: vi.fn(), params: { MID: "nicepay00m", Moid: "33333333-3333-4333-8333-333333333333", Amt: "15000", GoodsName: "상품", EdiDate: "20261105140000", SignData: "a".repeat(64), ReturnURL: "https://mwhabit.com/api/payments/nicepay/review-window/return?rt=fake", PayMethod: "CARD", CharSet: "utf-8" } }));
 vi.mock("../../lib/supabaseClient", () => ({ supabase: { auth: { getSession: async () => { if (h.session.fail) throw new Error("session"); if (h.session.wait) await h.session.wait; return { data: { session: h.token ? { access_token: h.token, user: { email: h.token === "jwt" ? "niceqa@mwhabit.com" : "other@test.invalid" } } : null } }; }, onAuthStateChange: (f: () => void) => { h.callback = f; return { data: { subscription: { unsubscribe: vi.fn() } } }; } } } }));
 vi.mock("../../lib/payments/nicepayV3Window", () => ({ NICEPAY_V3_SDK_URL: "https://pg-web.nicepay.co.kr/v3/common/js/nicepay-pgweb.js", openNicepayV3Window: h.open }));
+vi.mock("../../lib/payments/reviewHistory", () => ({ prepareHistoryForPayment: async () => true }));   // history 보정은 reviewHistory.test.ts 에서 따로 검증
 vi.mock("../../lib/payments/reviewWindowClient", () => ({ validateReviewWindowParams: (p: unknown) => p }));
 import NicepayReviewWindow, { type ReviewWindowStatus } from "../../app/components/NicepayReviewWindow";
 let root: Root, host: HTMLDivElement;

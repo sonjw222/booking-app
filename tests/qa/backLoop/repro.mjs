@@ -16,6 +16,7 @@ const trail = [];
 await toCheckoutFromHome(); trail.push("결제: " + label(path()) + `  [history.length=${await hlen()}]`);
 for (let i = 1; i <= 5; i++) {
   if (await sheetOpen()) { await p.evaluate(() => window.__mwhabitBack?.()); await settle(p, 800); trail.push("(시트 닫기) " + label(path())); }
+  if (!(await backBtn().count())) { trail.push(`(‹ 없음 — root: ${label(path())})`); break; }
   await backBtn().click(); await settle(p, 2500); trail.push(`‹ ${i}: ` + label(path()) + `  [history.length=${await hlen()}]`);
 }
 console.log(trail.join("\n"));

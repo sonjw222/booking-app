@@ -10,7 +10,7 @@ const h = vi.hoisted(() => ({
   reviewAccess: true, pg: false, createOrder: vi.fn(), createPayment: vi.fn(), returnToken: vi.fn(), fetch: vi.fn(),
   product: { id: "33333333-3333-4333-8333-333333333333", name: "1회 이용권", price: 15000, kind: "pass", totalCount: 1, unlimited: false, validDays: 30, description: null, sizes: null, autoBookDays: null, groupLabel: null, remaining: null, couponEligible: false, weekdaySelectable: false, timeSelectable: false, countSelectable: false, countPrices: [], minCount: null, maxCount: null, minTierPrice: null, periodSource: null },
 }));
-vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams("center=1c02c063-8da4-43b5-b88a-514434371c46&product=33333333-3333-4333-8333-333333333333") }));
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams("center=1c02c063-8da4-43b5-b88a-514434371c46&product=33333333-3333-4333-8333-333333333333"), useRouter: () => ({ back() {}, push() {}, replace() {} }) }));
 vi.mock("../../lib/supabaseClient", () => ({ supabase: { auth: {
   getSession: async () => { if (h.sessionGate) await h.sessionGate; if (h.sessionFail) throw new Error("session"); return { data: { session: h.sessionEmail ? { access_token: "jwt", user: { id: "u1", email: h.sessionEmail } } : null } }; },
   getUser: async () => ({ data: { user: { id: "u1", email: h.sessionEmail } } }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe: vi.fn() } } }),
