@@ -112,7 +112,7 @@
   "actualCardAuthentication": "NOT_RUN",
   "actualBidIssuance": "NOT_RUN",
   "actualApproval": "NOT_RUN",
-  "operatingIphoneRecheck": "BLOCKED_PENDING_USER",
+  "operatingIphoneRecheck": "PASS_USER_REPORTED",
   "iosSourceChanged": false,
   "androidSourceChanged": false,
   "nativeBuild": "NOT_RERUN_WEB_ONLY_PURE_SWIFT_CHECKS_PASS_IN_VITEST",
@@ -233,5 +233,33 @@
     "tests/unit/nicepay.subscriptionReview.test.ts",
     "tests/unit/nicepay.subscriptionReview.window.test.ts",
     "tests/unit/nicepayReviewWording.test.ts"
-  ]
+  ],
+  "operatingIphoneReport": {
+    "date": "2026-11-16",
+    "app": "existing operating MWHABIT app",
+    "deviceModel": "NOT_RECORDED",
+    "osVersion": "NOT_RECORDED",
+    "appVersion": "NOT_RECORDED",
+    "source": "user_chat",
+    "directlyObserved": false,
+    "hostedWindowOpened": true,
+    "closeAndReturn": true,
+    "closeButtonAndNoticeUnclipped": true,
+    "cardInputOrTermsOrAuthenticationRequested": false,
+    "actualAuthenticationVerified": false
+  },
+  "submissionDraft": {
+    "status": "DRAFT_NOT_SENT",
+    "date": "2026-11-16",
+    "recipient": "pghelp@nicevan.co.kr",
+    "draftId": "r2844126527254795094",
+    "messageId": "1a1e30faf890c0a1",
+    "threadId": "1a1befff5baa02e7",
+    "attachment": "MWHABIT_NICEPAY_Production_Review_DeviceConfirmed_20261116.pptx",
+    "attachmentVerified": true,
+    "attachmentBytes": 140861,
+    "scope": "Operating reviewer access + hosted field display + PC direct check + iPhone user-reported close/return; no actual auth/BID/charge claim",
+    "newRepliesFound": false
+  },
+  "latestEvidenceSha256": "3e3d33c3d1e465321297bc33a2a8264f8c8c9a151bf921c74e58c745d704f1e9"
 }

@@ -23,7 +23,7 @@
 
 - PC 창 경로: NICEPAY 공식 SDK → dc1-web의 `webstd/billing/payment.jsp`.
 - 브라우저 기본 IAB319px에서는 데스크톱 PG 창이 가로로 잘렸다. 이를 모바일/iPhone 결과로 기록하지 않았다. PC 창 검증에 필요한 1280×900 크기로 확인한 뒤 원래 viewport로 복원했다.
-- 실제 운영 iPhone WKWebView 재검사는 아직 **BLOCKED / 사용자 확인 필요**다. 별도 QA 앱1.0(8)의 이전 실기기 PASS와 구분한다. 이번 변경은 웹 기능이며 iOS/Android나 TestFlight 빌드를 변경하지 않았다.
+- 실제 운영 iPhone 앱 재검사는 **PASS_USER_REPORTED (2026-11-16)**로 갱신했다. 사용자가 운영 앱에서 창 열기, X 종료/복귀, 상단 버튼·안내 잘림 없음에 모두 정상이라고 답했다. 기기 화면을 직접 관찰한 결과가 아니며 모델/OS/앱 버전은 미기록이다. 별도 QA 앱1.0(8)의 이전 실기기 PASS와 구분한다. 이번 변경은 웹 기능이며 iOS/Android나 TestFlight 빌드를 변경하지 않았다.
 
 ## 구현과 결제 경계
 
@@ -66,7 +66,7 @@
 | 운영 niceqa 권한/진입 | PASS — 사용자가 로그인 후 서버 조건 판정, 전용 링크/버튼 확인 |
 | 운영 다른 오너 거부 | PASS — 지정 계정이 아닌 기존 오너 계정에서 기능 잠김 확인 |
 | 실제 PG PC 창/X 종료/복귀 | PASS — 카드 입력·동의·인증 없이 수행 |
-| 운영 iPhone 재검사 | BLOCKED — 별도 QA 앱의 실기기 결과와 구분 |
+| 운영 iPhone 재검사 | PASS_USER_REPORTED — 창 표시·X 종료·복귀·상단 잘림 없음. 모델/OS/앱 버전 미기록 |
 | 실제 인증 결과/BID/승인/cron/첫 결제 | BLOCKED/미실행. 게이트 계속 OFF |
 | iOS build | 웹만 변경해 재빌드 미실행. 전체 단위 테스트의 Swift 순수 검사 PASS. 기존 QA8 archive 검증은 별도 기록 |
 | 비밀 스캔 | PASS — 변경 소스와 갱신 PPTX에 private MID/KEY 없음 |
@@ -88,7 +88,7 @@
 
 원본 Claude UX 워크트리/브랜치, PR264/265, main은 수정하지 않았다. GitHub push·PR생성·main병합 없음. 운영 SQL/업무 DB 쓰기 없음. QA센터/오너/billing_review_override 변경 없음. 추가 NICEPAY 메일 없음. 이번에는 사용자가 승인한 전용 환경설정과 Production 배포만 실행했다.
 
-최신 심사 PPT는 프로젝트 출력 폴더의 `MWHABIT_NICEPAY_Production_Review_20261116.pptx`다. 이전 QA 전용 미반영 자료를 발송하지 않고, 운영 경로/실제 캡처/QA 실기기 결과와 운영 iPhone 미검증 상태를 구분해 갱신했다. 아직 메일 첨부로 보내지 않았다. 원문 MID/KEY/비밀번호/일회성 링크 없음.
+최신 심사 PPT는 프로젝트 출력 폴더의 `MWHABIT_NICEPAY_Production_Review_DeviceConfirmed_20261116.pptx`다. 이전 QA 전용 미반영 자료를 발송하지 않고, 운영 경로/실제 PC 캡처/운영 iPhone 사용자 보고를 구분해 갱신했다. 아직 메일 첨부로 보내지 않았다. 원문 MID/KEY/비밀번호/일회성 링크 없음.
 
 신규 MID로 BillAuthYN=Y 호스팅 창 호출 가능은 운영에서 확인했다. 실제 BID 발급 서비스 활성, 카드사 심사 승인, 실제 청구 가능 여부는 미확인이다. BID 발급/저장/실청구 단계는 별도 설계와 승인 전까지 진행하지 않는다.
 
@@ -115,3 +115,13 @@
 - `tests/unit/nicepay.subscriptionReview.test.ts`
 - `tests/unit/nicepay.subscriptionReview.window.test.ts`
 - `tests/unit/nicepayReviewWording.test.ts`
+
+## 운영 iPhone 사용자 확인 완료
+
+2026-11-16 사용자가 기존 모하빗 앱 로그인 후 NICEPAY 창 열림을 보고했고, X→종료 후 복귀와 상단 잘림 여부를 확인한 뒤 모두 잘 된다고 답했다. 이번 심사 창 표시/종료/복귀 범위의 실기기 검증은 PASS_USER_REPORTED다. 카드 입력·동의·인증은 요청하지 않았으며 실제 인증/BID/청구 성공으로 해석하지 않는다. 문서/PPT 갱신만 수행하며 코드·DB·환경·배포를 다시 변경하지 않는다.
+
+## 최종 보완 회신 초안
+
+운영 iPhone 확인 후 NICEPAY 수신/발신을 다시 검색했고 새 회신은 없었다. 기존 계약팀 요청 스레드에 `pghelp@nicevan.co.kr` 수신으로 최종 보완 회신을 **DRAFT / 미발송** 저장했다. 이전 문의의 취소 요청이 있었으므로 이번 보완 회신은 사용자 검토 전 자동 발송하지 않았다. 새 운영 접근 경로, 기존 심사 계정, 요구된 네 입력 항목, PC 직접 검증과 iPhone 사용자 보고, 실제 인증/BID/청구 미실행·OFF 상태를 명시했다. 중복 기술 요건 문의는 넣지 않았다. 로그인 비밀번호·MID/KEY 원문은 넣지 않았다.
+
+초안 `r2844126527254795094`, 메시지 `1a1e30faf890c0a1`, 기존 계약팀 스레드 `1a1befff5baa02e7`. 최종 PPTX 1개(140,861bytes)가 첨부된 것과 수신자를 Gmail에서 다시 확인했다. 자료 SHA256: `3e3d33c3d1e465321297bc33a2a8264f8c8c9a151bf921c74e58c745d704f1e9`. 코드·DB·환경·배포 재변경 없음. SQL NO, 파일/순서/전문은 해당 없음.
