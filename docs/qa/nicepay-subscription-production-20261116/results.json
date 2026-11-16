@@ -119,7 +119,7 @@
   "push": false,
   "prCreated": false,
   "mainMerged": false,
-  "emailSentThisStep": false,
+  "emailSentThisStep": true,
   "protectedShareLinkCreated": false,
   "protectedSharingRejected": true,
   "saferAuthenticatedStagingChecks": "PASS",
@@ -249,7 +249,7 @@
     "actualAuthenticationVerified": false
   },
   "submissionDraft": {
-    "status": "DRAFT_NOT_SENT",
+    "status": "SENT",
     "date": "2026-11-16",
     "recipient": "pghelp@nicevan.co.kr",
     "draftId": "r2844126527254795094",
@@ -259,7 +259,10 @@
     "attachmentVerified": true,
     "attachmentBytes": 140861,
     "scope": "Operating reviewer access + hosted field display + PC direct check + iPhone user-reported close/return; no actual auth/BID/charge claim",
-    "newRepliesFound": false
+    "newRepliesFound": false,
+    "sentMessageId": "1a1e314607193fe9",
+    "sentLabelVerified": true,
+    "sendAuthorizedByUser": true
   },
   "latestEvidenceSha256": "3e3d33c3d1e465321297bc33a2a8264f8c8c9a151bf921c74e58c745d704f1e9"
 }

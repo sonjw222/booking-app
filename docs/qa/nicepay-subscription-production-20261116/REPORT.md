@@ -86,7 +86,7 @@
 
 ## 격리·자료·남은 확인
 
-원본 Claude UX 워크트리/브랜치, PR264/265, main은 수정하지 않았다. GitHub push·PR생성·main병합 없음. 운영 SQL/업무 DB 쓰기 없음. QA센터/오너/billing_review_override 변경 없음. 추가 NICEPAY 메일 없음. 이번에는 사용자가 승인한 전용 환경설정과 Production 배포만 실행했다.
+원본 Claude UX 워크트리/브랜치, PR264/265, main은 수정하지 않았다. GitHub push·PR생성·main병합 없음. 운영 SQL/업무 DB 쓰기 없음. QA센터/오너/billing_review_override 변경 없음. 최종 NICEPAY 보완 메일 발송은 아래에 별도 기록한다. 이번에는 사용자가 승인한 전용 환경설정과 Production 배포만 실행했다.
 
 최신 심사 PPT는 프로젝트 출력 폴더의 `MWHABIT_NICEPAY_Production_Review_DeviceConfirmed_20261116.pptx`다. 이전 QA 전용 미반영 자료를 발송하지 않고, 운영 경로/실제 PC 캡처/운영 iPhone 사용자 보고를 구분해 갱신했다. 아직 메일 첨부로 보내지 않았다. 원문 MID/KEY/비밀번호/일회성 링크 없음.
 
@@ -125,3 +125,7 @@
 운영 iPhone 확인 후 NICEPAY 수신/발신을 다시 검색했고 새 회신은 없었다. 기존 계약팀 요청 스레드에 `pghelp@nicevan.co.kr` 수신으로 최종 보완 회신을 **DRAFT / 미발송** 저장했다. 이전 문의의 취소 요청이 있었으므로 이번 보완 회신은 사용자 검토 전 자동 발송하지 않았다. 새 운영 접근 경로, 기존 심사 계정, 요구된 네 입력 항목, PC 직접 검증과 iPhone 사용자 보고, 실제 인증/BID/청구 미실행·OFF 상태를 명시했다. 중복 기술 요건 문의는 넣지 않았다. 로그인 비밀번호·MID/KEY 원문은 넣지 않았다.
 
 초안 `r2844126527254795094`, 메시지 `1a1e30faf890c0a1`, 기존 계약팀 스레드 `1a1befff5baa02e7`. 최종 PPTX 1개(140,861bytes)가 첨부된 것과 수신자를 Gmail에서 다시 확인했다. 자료 SHA256: `3e3d33c3d1e465321297bc33a2a8264f8c8c9a151bf921c74e58c745d704f1e9`. 코드·DB·환경·배포 재변경 없음. SQL NO, 파일/순서/전문은 해당 없음.
+
+## 최종 보완 회신 발송 완료 — 2026-11-16
+
+사용자가 초안 검토 후 진행을 지시했다. 저장된 초안의 수신자 `pghelp@nicevan.co.kr`, CC/BCC 없음, 최종 PPTX 1개(140,861bytes), 운영 심사 경로 포함 및 DRAFT 상태를 다시 확인한 뒤 해당 초안을 그대로 발송했다. Gmail이 메시지 `1a1e314607193fe9`, 스레드 `1a1befff5baa02e7`, **SENT**를 반환했다. [발송 메일](https://mail.google.com/mail/u/?authuser=sonjw8030%40gmail.com#all/1a1e314607193fe9). 실제 인증/BID/청구가 완료됐다고 표현하지 않았다. 코드·DB·환경·배포 변경이나 추가 PG 호출은 없다.
