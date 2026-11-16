@@ -72,11 +72,12 @@ describe("B-9/B-10/B-11 — drag-to-dismiss는 공용 SheetOverlay/lib/sheetDrag
     expect(sheetOverlaySource).toContain("sheet-drag-handle");
   });
 
-  it("아래로만 반응 + 거리(sheet 높이의 35%)만으로 닫힘 여부를 정한다(velocity 없음)", () => {
+  it("아래로만 반응 + 거리(sheet 높이의 35%) 또는 아래 방향 플릭(속도+최소 거리)으로 닫힘 여부를 정한다", () => {
     expect(sheetDragSource).toContain("export const DISMISS_RATIO = 0.35;");
     expect(sheetDragSource).toContain("dy > 0 ? dy : 0");
-    const code = sheetDragSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-    expect(code).not.toMatch(/velocity|speed/i);
+    // 2026-11-16 정책 변경(실기기 QA: 빠른 플릭이 닫히지 않음) — 느리고 짧은 드래그의 민감도는 거리 기준 그대로라 늘지 않는다.
+    expect(sheetDragSource).toMatch(/export const FLICK_VELOCITY = 0\.5;/);
+    expect(sheetDragSource).toMatch(/export const FLICK_MIN_DISTANCE = 32;/);
   });
 
   it("닫기는 배경 탭/ESC와 같은 경로(overlay.click → closeFormSheet)를 탄다", () => {

@@ -13,14 +13,14 @@ async function login(w) {
 const open = async (p) => { await p.goto(`${BASE}/center/${UX}`, { waitUntil: "domcontentloaded" }); await settle(p, 3000); await p.getByRole("button", { name: /수강권 구매하기|수강권 안내/ }).first().click(); await settle(p, 900); };
 const isOpen = (p) => p.evaluate(() => !!document.querySelector("[data-sheet-overlay]"));
 const metrics = (p) => p.evaluate((S) => { const s = document.querySelector(S); if (!s) return null; const r = s.getBoundingClientRect(); return { top: Math.round(r.top), h: Math.round(r.height), tf: s.style.transform, scrollTop: s.scrollTop, canScroll: s.scrollHeight > s.clientHeight + 4, bg: document.querySelector("[data-sheet-overlay]").style.backgroundColor, bodyOv: document.body.style.overflow, winY: window.scrollY, vvTop: window.visualViewport?.offsetTop ?? 0 }; }, SHEET);
-async function swipe(cdp, x, y0, y1, { steps = 12, end = true } = {}) {
+async function swipe(cdp, x, y0, y1, { steps = 12, end = true, gap = 0 } = {}) {
   const pt = (y) => [{ x, y: Math.round(y) }];
   await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: pt(y0) });
-  for (let i = 1; i <= steps; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: pt(y0 + ((y1 - y0) * i) / steps) });
+  for (let i = 1; i <= steps; i++) { await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: pt(y0 + ((y1 - y0) * i) / steps) }); if (gap) await new Promise((r) => setTimeout(r, gap)); }
   if (end) await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
 }
 const hswipe = async (cdp, y, x0, x1) => { await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: x0, y }] }); for (let i = 1; i <= 10; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x0 + ((x1 - x0) * i) / 10, y }] }); await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }); };
-const watch = (p) => p.evaluate(() => { window.__tm = []; document.addEventListener("touchmove", (e) => window.__tm.push({ prevented: e.defaultPrevented, inSheet: !!e.target.closest?.(".sheet") }), { passive: false }); });
+const watch = (p) => p.evaluate(() => { window.__tm = []; document.addEventListener("touchmove", (e) => { const r = { prevented: false, inSheet: !!e.target.closest?.(".sheet") }; window.__tm.push(r); setTimeout(() => { r.prevented = e.defaultPrevented; }, 0); }, { passive: false }); });
 
 {
   const { ctx, p, cdp } = await login(390); await open(p); await watch(p);
@@ -29,7 +29,7 @@ const watch = (p) => p.evaluate(() => { window.__tm = []; document.addEventListe
   await p.screenshot({ path: `${OUT}/sheet-open-390.png` });
   const hb = await p.locator(".sheet-drag-handle").boundingBox(); const hx = hb.x + hb.width / 2, hy = hb.y + hb.height / 2;
   // Q3 조금만 드래그 → 원위치
-  await swipe(cdp, hx, hy, hy + 70, { end: false }); await settle(p, 200); const mid = await metrics(p); await p.screenshot({ path: `${OUT}/sheet-dragging-handle-390.png` });
+  await swipe(cdp, hx, hy, hy + 70, { end: false, gap: 40 }); await settle(p, 200); const mid = await metrics(p); await p.screenshot({ path: `${OUT}/sheet-dragging-handle-390.png` });
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }); await settle(p, 700); const back = await metrics(p);
   check("Q3", "핸들을 조금만 끌면 시트 전체가 따라 내려가다가(딤도 옅어짐) 놓으면 원위치로 복귀", mid && mid.tf.includes("translateY") && back && back.tf === "" && back.top === m0.top && (await isOpen(p)) ? "PASS" : "FAIL", `mid=${mid?.tf} bg=${mid?.bg} → top ${back?.top}/${m0.top}`);
   // Q2 핸들 아래로 충분히 → 닫힘

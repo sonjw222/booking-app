@@ -1,5 +1,6 @@
 # TODO
 
+- **P1(실기기)**: 수강권 안내창 — 새 iOS 빌드(네이티브 `setVerticalBounceEnabled` 포함)로 흰 레터박스 재발 여부·드래그 부드러움·플릭 닫기 확인. 재발 시 `localStorage.mwhabit_sheet_debug="1"` 후 `window.__sheetDragLog` 수집(Safari 웹 인스펙터). 같은 문제가 다른 바텀시트에도 있으면 `contentDrag` opt-in.
 - **P2(실기기)**: 수강권 안내창 — iOS WKWebView 에서 본문 드래그 닫기·흰 빈 영역(바운스) 차단·왼쪽 가장자리 스와이프 무시를 실기기로 확인(웹 코드 변경만이라 TestFlight 재빌드 불필요). 다른 바텀시트에도 같은 처리가 필요하면 `contentDrag`(+`data-edge-swipe-block`)를 해당 시트에 opt-in.
 - **P2**: 고정 `href` ‹ 링크(`<Link className="side" href=…>` 58곳: /mypage·/admin·/manager 등 root 로 가는 링크)는 뒤로가기가 아니라 push 라 entry 가 하나 더 생긴다 — 목적지가 root 라 왕복 루프는 없으나, 공통 처리(이전 경로와 같으면 router.back)로 정리 검토. 실기기: NICEPAY 결제창 위에서 `history.go(-n)` 복귀(entry 수·bfcache) 확인.
 - **P2(결정)**: PR #264 의 `*.nicepay.co.kr` 와일드카드 대신 정확한 호스트 3개(pg-web/dc1-web/web)만 허용하도록 통합했다(`integration/ux-native-review-20261109`). 카드사 앱 복귀 중 다른 NICEPAY 호스트(dc2 등)가 필요하면 NICEPAY 확인 후 호스트를 추가할 것. origin/main 에 없는 운영 배포 커밋(`61b10ab9` 계열 정기상품 카탈로그 3개)이 이 브랜치에 포함되어 있다 — main 반영 순서 확인 필요.

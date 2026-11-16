@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 2026-11-16 — 수강권 안내창 드래그 부드러움·간헐적 흰 레터박스 (`fix/product-sheet-ios-bounce-smooth-20261116`, 기준 `4093ee62`, 운영 미반영)
+- 웹: 드래그 이벤트를 window 에서 수신(요소 소실·touchend 누락 시에도 종료)+복구 장치(touchcancel/blur/pagehide/정지 타임아웃/새 터치), 아래 플릭 닫기(≥0.5px/ms), 레이아웃 읽기 제거·transform 기반·본문 overflow 잠금·감속 곡선, snap-back 중 재드래그, 키보드 때만 visualViewport 보정, 진단 로그(옵션).
+- 네이티브(iOS): 기존 NavigationPolicy 플러그인에 `setVerticalBounceEnabled` — 시트가 열린 동안만 WebView 세로 바운스 off, 닫힘/로드/백그라운드에서 복원(앱 전역 bounces=true 유지). **새 iOS 빌드 필요**(1.0.3 (12) 이상). SQL·결제 변경 없음. 상세·한계: `docs/qa/sheet-bounce-20261116/ANALYSIS.md`.
+
 ## 2026-11-16 — 수강권 안내창 드래그 닫기·가장자리 스와이프·오버스크롤 (`fix/product-sheet-drag-dismiss-20261116`, 기준 `132ec548`, 운영 미반영)
 - 왼쪽 가장자리 스와이프가 안내창을 닫던 동작 제거(`data-edge-swipe-block` + edge 입구 `blocked-by-overlay`; Android back·‹·다른 시트·일반 화면 back 은 기존 그대로). 본문 맨 위에서 아래로 끌면 시트 전체가 따라 내려가 닫힘(35% 규칙), 시트 밖·스크롤 끝단 touchmove 는 막아 WebView 바운스(흰 빈 영역)를 차단. 수강권 안내창에만 적용(`contentDrag` opt-in). 네이티브·SQL·결제 변경 없음(웹 배포만). 상세: `docs/qa/sheet-drag-20261116/ANALYSIS.md`.
 

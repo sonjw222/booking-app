@@ -21,7 +21,8 @@ public class NavigationPolicyPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "NavigationPolicyPlugin"
     public let jsName = "NavigationPolicy"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "setEdgeSwipeEnabled", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "setEdgeSwipeEnabled", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setVerticalBounceEnabled", returnType: CAPPluginReturnPromise)
     ]
 
     @objc func setEdgeSwipeEnabled(_ call: CAPPluginCall) {
@@ -31,6 +32,68 @@ public class NavigationPolicyPlugin: CAPPlugin, CAPBridgedPlugin {
             EdgeBackGesture.shared.setEnabled(enabled)
             call.resolve()
         }
+    }
+
+    /// 수강권 안내창(웹 lib/nativeBounce.ts)이 열려 있는 동안만 WebView 문서의 세로 바운스를 끄고(enabled=false), 닫히면 원래 값으로 복원(enabled=true).
+    @objc func setVerticalBounceEnabled(_ call: CAPPluginCall) {
+        let enabled = call.getBool("enabled") ?? true
+        DispatchQueue.main.async {
+            VerticalBounceController.shared.setEnabled(enabled)
+            call.resolve()
+        }
+    }
+}
+
+/*
+  수강권 안내창 전용 — WKWebView 문서의 세로 바운스(rubber-band)를 "시트가 열린 동안만" 끈다(2026-11-16, 실기기 QA: 시트를 끌 때 간헐적으로 문서 전체가 튕겨 흰 빈 영역이 생김).
+  SceneDelegate 가 앱 전역으로 bounces=true / alwaysBounceVertical=true 를 켜 둔 것(당겨서 튕기는 느낌, 실기기 QA 항목)은 그대로 두고, 끄기 직전의 값을 저장했다가 복원한다.
+  복원 조건: 웹이 enabled=true 를 호출 / 새 문서 로드 시작(WebView isLoading → 시트가 남은 채 화면이 전환되는 예외) / 앱이 비활성화(백그라운드) — 웹이 다시 보이면 필요 시 재적용한다.
+  비공개 API 없음. 새 플러그인 없이 기존 NavigationPolicy 플러그인에 메서드만 추가했다.
+*/
+struct VerticalBounceState {
+    private(set) var saved: (bounces: Bool, alwaysBounceVertical: Bool)?
+
+    /// 끈다. 처음 끌 때만 현재 값을 저장한다(중복 호출이 이미 꺼진 값을 "원래 값"으로 덮어쓰지 않는다). 적용할 값(false, false)을 돌려준다.
+    mutating func disable(currentBounces: Bool, currentAlwaysBounceVertical: Bool) -> (bounces: Bool, alwaysBounceVertical: Bool) {
+        if saved == nil { saved = (currentBounces, currentAlwaysBounceVertical) }
+        return (false, false)
+    }
+
+    /// 복원할 값(저장돼 있을 때만)을 돌려주고 저장을 비운다 — 끈 적이 없으면 nil(아무것도 바꾸지 않는다).
+    mutating func restore() -> (bounces: Bool, alwaysBounceVertical: Bool)? {
+        defer { saved = nil }
+        return saved
+    }
+}
+
+final class VerticalBounceController {
+    static let shared = VerticalBounceController()
+    private weak var webView: WKWebView?
+    private var state = VerticalBounceState()
+    private var loadingObservation: NSKeyValueObservation?
+    private var resignObserver: NSObjectProtocol?
+
+    func install(on webView: WKWebView) {
+        guard self.webView == nil else { return }
+        self.webView = webView
+        loadingObservation = webView.observe(\.isLoading, options: [.new]) { [weak self] _, change in
+            if change.newValue == true { DispatchQueue.main.async { self?.restore() } }   // 새 문서 로드 시작 — 시트가 열린 채 화면이 바뀌어도 바운스가 꺼진 채 남지 않게
+        }
+        resignObserver = NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in self?.restore() }
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        if enabled { restore(); return }
+        guard let scroll = webView?.scrollView else { return }
+        let apply = state.disable(currentBounces: scroll.bounces, currentAlwaysBounceVertical: scroll.alwaysBounceVertical)
+        scroll.bounces = apply.bounces
+        scroll.alwaysBounceVertical = apply.alwaysBounceVertical
+    }
+
+    func restore() {
+        guard let scroll = webView?.scrollView, let original = state.restore() else { return }
+        scroll.bounces = original.bounces
+        scroll.alwaysBounceVertical = original.alwaysBounceVertical
     }
 }
 

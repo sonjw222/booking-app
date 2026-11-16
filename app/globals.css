@@ -890,6 +890,8 @@ button.side { background: transparent; border: 0; padding: 0; color: var(--ink);
   font: inherit; font-size: 15.5px; font-weight: 800; padding: 15px; border-radius: 14px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 50;
 }
+/* 수강권 안내창(contentDrag)이 열린 동안: 문서 레벨 overscroll 전파 차단(지원 브라우저). iOS WKWebView 네이티브 바운스는 lib/nativeBounce.ts 가 별도로 끈다. */
+html.sheet-no-bounce, html.sheet-no-bounce body { overscroll-behavior: none; }
 .sheet-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 60;
   display: flex; align-items: flex-end; justify-content: center;

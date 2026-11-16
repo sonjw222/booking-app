@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useId, type HTMLAttributes } from "react";
 import { attachSheetDrag, type SheetDragController } from "../../lib/sheetDrag";
+import { acquireNoVerticalBounce } from "../../lib/nativeBounce";
 
 let locks = 0;
 let previousOverflow = "";
@@ -57,6 +58,13 @@ export default function SheetOverlay({ children, className = "sheet-overlay", sw
     mo.observe(overlay, { childList: true });
     return () => { mo.disconnect(); detach(); };
   }, [canSwipe, contentDrag]);
+  // (opt-in) 수강권 안내창이 열린 동안만 iOS WebView 문서 세로 바운스를 끄고(네이티브 NavigationPolicy.setVerticalBounceEnabled), 닫히면/언마운트되면 복원한다.
+  useEffect(() => {
+    if (!contentDrag) return;
+    const release = acquireNoVerticalBounce();
+    document.documentElement.classList.add("sheet-no-bounce");
+    return () => { release(); if (!document.querySelector("[data-sheet-overlay][data-edge-swipe-block]")) document.documentElement.classList.remove("sheet-no-bounce"); };
+  }, [contentDrag]);
   useEffect(() => {
     const overlay = ref.current;
     if (!overlay) return;
@@ -90,6 +98,8 @@ export default function SheetOverlay({ children, className = "sheet-overlay", sw
     const viewport = window.visualViewport;
     const fit = () => {
       if (!viewport) return;
+      // contentDrag 시트: 키보드가 올라온 경우(보이는 영역이 확연히 줄었을 때)만 보정한다 — 바운스·주소창 변화로 visualViewport 가 잠깐 흔들려도 오버레이가 화면 아래에서 떨어져 흰 영역이 생기지 않게.
+      if (contentDrag && viewport.height >= window.innerHeight - 100) { overlay.style.top = ""; overlay.style.height = ""; overlay.style.bottom = ""; return; }
       overlay.style.top = `${viewport.offsetTop}px`;
       overlay.style.height = `${viewport.height}px`;
       overlay.style.bottom = "auto";
@@ -111,6 +121,6 @@ export default function SheetOverlay({ children, className = "sheet-overlay", sw
       if (--locks === 0) document.body.style.overflow = previousOverflow;
       if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     };
-  }, [titleId]);
+  }, [titleId, contentDrag]);
   return <div {...props} ref={ref} className={className} data-sheet-overlay {...(contentDrag ? { "data-edge-swipe-block": "" } : {})} role="dialog" aria-modal="true" tabIndex={-1}>{children}</div>;
 }
