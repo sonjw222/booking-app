@@ -1,0 +1,237 @@
+{
+  "date": "2026-11-16",
+  "sourceCommit": "33bc408c8b31babddd0d78c84760b0aa2e70f92c",
+  "branch": "feat/nicepay-subscription-production-review-20261116",
+  "baseCommit": "4093ee62",
+  "deploymentId": "dpl_A9qKXh6tgptX2dsUNjmR8RCoAp5C",
+  "deploymentUrl": "https://booking-dxh81ucwd-sonjw.vercel.app",
+  "productionUrl": "https://mwhabit.com",
+  "state": "READY",
+  "rollbackDeploymentId": "dpl_Dx7S76kMzpUNJcJVE4Kvn3KyHFrv",
+  "vitest": {
+    "passed": 3295,
+    "skipped": 10,
+    "failed": 0
+  },
+  "lint": {
+    "newErrors": 0,
+    "existingErrors": 1481
+  },
+  "typescript": {
+    "existingErrors": 63,
+    "newErrors": 0,
+    "logIdenticalToCurrentProductionBaseline": true
+  },
+  "nextBuild": "PASS_LOCAL_AND_REMOTE",
+  "sqlRequired": false,
+  "sqlExecuted": false,
+  "dbWrites": false,
+  "environmentAdded": [
+    {
+      "key": "NICEPAY_SUBSCRIPTION_REVIEW_STATE_SECRET",
+      "type": "sensitive",
+      "target": [
+        "production"
+      ],
+      "value": "NOT_PRINTED"
+    },
+    {
+      "key": "NICEPAY_SUBSCRIPTION_MERCHANT_KEY",
+      "type": "sensitive",
+      "target": [
+        "production"
+      ],
+      "value": "NOT_PRINTED"
+    },
+    {
+      "key": "NICEPAY_SUBSCRIPTION_MID",
+      "type": "sensitive",
+      "target": [
+        "production"
+      ],
+      "value": "NOT_PRINTED"
+    },
+    {
+      "key": "NICEPAY_SUBSCRIPTION_REVIEW_ENABLED",
+      "type": "plain",
+      "target": [
+        "production"
+      ],
+      "value": "true"
+    },
+    {
+      "key": "NICEPAY_SUBSCRIPTION_REVIEW_ORIGIN",
+      "type": "plain",
+      "target": [
+        "production"
+      ],
+      "value": "https://mwhabit.com"
+    },
+    {
+      "key": "NICEPAY_SUBSCRIPTION_HOSTED_REVIEW_ENABLED",
+      "type": "plain",
+      "target": [
+        "production"
+      ],
+      "value": "true"
+    },
+    {
+      "key": "NICEPAY_BID_ISSUANCE_ENABLED",
+      "type": "plain",
+      "target": [
+        "production"
+      ],
+      "value": "false"
+    },
+    {
+      "key": "NICEPAY_BILLING_ENABLED",
+      "type": "plain",
+      "target": [
+        "production"
+      ],
+      "value": "false"
+    },
+    {
+      "key": "NEXT_PUBLIC_BILLING_ENABLED",
+      "type": "plain",
+      "target": [
+        "production"
+      ],
+      "value": "false"
+    }
+  ],
+  "reviewerOwnerAccess": "PASS_LIVE",
+  "otherOwnerDenied": "PASS_LIVE",
+  "hostedWindow": "PASS_LIVE_BROWSER_PC",
+  "closeAndReturn": "PASS_LIVE_BROWSER_PC",
+  "iframeReturn": "PASS_OFFLINE_BROWSER_TRUSTED_PG_ONLY",
+  "bidIssuanceEnabled": false,
+  "chargingEnabled": false,
+  "actualCardInput": false,
+  "termsAgreed": false,
+  "actualCardAuthentication": "NOT_RUN",
+  "actualBidIssuance": "NOT_RUN",
+  "actualApproval": "NOT_RUN",
+  "operatingIphoneRecheck": "BLOCKED_PENDING_USER",
+  "iosSourceChanged": false,
+  "androidSourceChanged": false,
+  "nativeBuild": "NOT_RERUN_WEB_ONLY_PURE_SWIFT_CHECKS_PASS_IN_VITEST",
+  "push": false,
+  "prCreated": false,
+  "mainMerged": false,
+  "emailSentThisStep": false,
+  "protectedShareLinkCreated": false,
+  "protectedSharingRejected": true,
+  "saferAuthenticatedStagingChecks": "PASS",
+  "stagingHttp": [
+    {
+      "name": "home",
+      "status": "200",
+      "expected": 200,
+      "pass": true
+    },
+    {
+      "name": "catalog",
+      "status": "200",
+      "expected": 200,
+      "pass": true
+    },
+    {
+      "name": "registration-page",
+      "status": "200",
+      "expected": 200,
+      "pass": true
+    },
+    {
+      "name": "registration-denies-anonymous",
+      "status": "403",
+      "expected": 403,
+      "pass": true
+    },
+    {
+      "name": "registration-invalid-return",
+      "status": "400",
+      "expected": 400,
+      "pass": true
+    },
+    {
+      "name": "registration-result",
+      "status": "200",
+      "expected": 200,
+      "pass": true
+    },
+    {
+      "name": "member-payment-disabled",
+      "status": "503",
+      "expected": 503,
+      "pass": true
+    }
+  ],
+  "productionHttp": [
+    {
+      "name": "home",
+      "status": 200,
+      "expected": 200,
+      "pass": true
+    },
+    {
+      "name": "catalog",
+      "status": 200,
+      "expected": 200,
+      "pass": true
+    },
+    {
+      "name": "registration-page",
+      "status": 200,
+      "expected": 200,
+      "pass": true
+    },
+    {
+      "name": "registration-denies-anonymous",
+      "status": 401,
+      "expected": 401,
+      "pass": true
+    },
+    {
+      "name": "registration-invalid-return",
+      "status": 400,
+      "expected": 400,
+      "pass": true
+    },
+    {
+      "name": "registration-result",
+      "status": 200,
+      "expected": 200,
+      "pass": true
+    },
+    {
+      "name": "member-payment-disabled",
+      "status": 503,
+      "expected": 503,
+      "pass": true
+    }
+  ],
+  "changedFiles": [
+    "app/api/billing/nicepay/registration-review/result/route.ts",
+    "app/api/billing/nicepay/registration-review/return/route.ts",
+    "app/api/billing/nicepay/registration-review/route.ts",
+    "app/components/ManagerChrome.tsx",
+    "app/components/NicepaySubscriptionReview.tsx",
+    "app/manager/subscription/nicepay-review/page.tsx",
+    "app/manager/subscription/page.tsx",
+    "lib/payments/nicepaySubscriptionReviewProtocol.ts",
+    "lib/payments/nicepaySubscriptionReviewWindow.ts",
+    "lib/payments/server/nicepay/billing.ts",
+    "lib/payments/server/nicepay/subscriptionReview.ts",
+    "lib/payments/server/nicepay/subscriptionReviewHttp.ts",
+    "lib/payments/server/nicepay/subscriptionReviewRuntime.ts",
+    "tests/qa/subscriptionReviewProduction/returnBrowser.mjs",
+    "tests/unit/nicepay.offline.test.ts",
+    "tests/unit/nicepay.subscriptionReview.client.test.ts",
+    "tests/unit/nicepay.subscriptionReview.routes.test.ts",
+    "tests/unit/nicepay.subscriptionReview.runtime.test.ts",
+    "tests/unit/nicepay.subscriptionReview.test.ts",
+    "tests/unit/nicepay.subscriptionReview.window.test.ts",
+    "tests/unit/nicepayReviewWording.test.ts"
+  ]
+}

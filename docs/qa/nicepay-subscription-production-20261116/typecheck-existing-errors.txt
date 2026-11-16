@@ -1,0 +1,78 @@
+tests/expired-product-qa/expired-hide.spec.ts(23,308): error TS2367: This comparison appears to be unintentional because the types '30' and '1' have no overlap.
+tests/integration/manager-permission-gating.test.ts(175,26): error TS2345: Argument of type '{ name: string; memo: string; address: string; latitude: null; longitude: null; }' is not assignable to parameter of type 'RoomInput'.
+  Property 'detailAddress' is missing in type '{ name: string; memo: string; address: string; latitude: null; longitude: null; }' but required in type 'RoomInput'.
+tests/integration/manager-permission-gating.test.ts(184,30): error TS2345: Argument of type '{ name: string; memo: string; address: string; latitude: null; longitude: null; }' is not assignable to parameter of type 'RoomInput'.
+  Property 'detailAddress' is missing in type '{ name: string; memo: string; address: string; latitude: null; longitude: null; }' but required in type 'RoomInput'.
+tests/integration/subscription-plan-limits.test.ts(142,36): error TS2345: Argument of type '{ name: string; memo: string; address: string; latitude: null; longitude: null; }' is not assignable to parameter of type 'RoomInput'.
+  Property 'detailAddress' is missing in type '{ name: string; memo: string; address: string; latitude: null; longitude: null; }' but required in type 'RoomInput'.
+tests/integration/subscription-plan-limits.test.ts(148,29): error TS2345: Argument of type '{ name: string; memo: string; address: string; latitude: null; longitude: null; }' is not assignable to parameter of type 'RoomInput'.
+  Property 'detailAddress' is missing in type '{ name: string; memo: string; address: string; latitude: null; longitude: null; }' but required in type 'RoomInput'.
+tests/integration/subscription-plan-limits.test.ts(149,36): error TS2345: Argument of type '{ name: string; memo: string; address: string; latitude: null; longitude: null; }' is not assignable to parameter of type 'RoomInput'.
+  Property 'detailAddress' is missing in type '{ name: string; memo: string; address: string; latitude: null; longitude: null; }' but required in type 'RoomInput'.
+tests/integration/subscription-plan-limits.test.ts(157,29): error TS2345: Argument of type '{ name: string; memo: string; address: string; latitude: null; longitude: null; }' is not assignable to parameter of type 'RoomInput'.
+  Property 'detailAddress' is missing in type '{ name: string; memo: string; address: string; latitude: null; longitude: null; }' but required in type 'RoomInput'.
+tests/integration/subscription-plan-limits.test.ts(158,29): error TS2345: Argument of type '{ name: string; memo: string; address: string; latitude: null; longitude: null; }' is not assignable to parameter of type 'RoomInput'.
+  Property 'detailAddress' is missing in type '{ name: string; memo: string; address: string; latitude: null; longitude: null; }' but required in type 'RoomInput'.
+tests/unit/center.introSanitize.test.ts(15,44): error TS2556: A spread argument must either have a tuple type or be passed to a rest parameter.
+tests/unit/center.introSanitize.test.ts(35,66): error TS2493: Tuple type '[]' of length '0' has no element at index '0'.
+tests/unit/center.introSanitize.test.ts(49,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(50,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(59,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(68,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(69,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(70,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(79,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(92,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(93,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(94,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(95,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(96,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(106,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(121,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(122,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/center.introSanitize.test.ts(123,12): error TS18048: 'payload' is possibly 'undefined'.
+tests/unit/ciDevBootstrap.test.ts(2,1): error TS2578: Unused '@ts-expect-error' directive.
+tests/unit/errorReporting.test.ts(85,54): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/unit/liveEnvPreflight.parity.test.ts(1,1): error TS2578: Unused '@ts-expect-error' directive.
+tests/unit/longPress.interactiveContract.test.ts(65,32): error TS2345: Argument of type 'FakeEl' is not assignable to parameter of type 'EventTarget'.
+  Type 'FakeEl' is missing the following properties from type 'EventTarget': addEventListener, dispatchEvent, removeEventListener
+tests/unit/longPress.interactiveContract.test.ts(66,32): error TS2345: Argument of type 'FakeEl' is not assignable to parameter of type 'EventTarget'.
+  Type 'FakeEl' is missing the following properties from type 'EventTarget': addEventListener, dispatchEvent, removeEventListener
+tests/unit/longPress.interactiveContract.test.ts(67,32): error TS2345: Argument of type 'FakeEl' is not assignable to parameter of type 'EventTarget'.
+  Type 'FakeEl' is missing the following properties from type 'EventTarget': addEventListener, dispatchEvent, removeEventListener
+tests/unit/nativePush.deviceRegistration.test.ts(36,27): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/unit/nativePush.deviceRegistration.test.ts(37,29): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/unit/nativePush.deviceRegistration.test.ts(51,40): error TS2345: Argument of type '[]' is not assignable to parameter of type 'never'.
+tests/unit/nativePush.deviceRegistration.test.ts(52,42): error TS2345: Argument of type '[]' is not assignable to parameter of type 'never'.
+tests/unit/nativePush.deviceRegistration.test.ts(100,59): error TS2345: Argument of type '{ receive: string; }' is not assignable to parameter of type 'never'.
+tests/unit/nativePush.deviceRegistration.test.ts(101,61): error TS2345: Argument of type '{ receive: string; }' is not assignable to parameter of type 'never'.
+tests/unit/nativePush.deviceRegistration.test.ts(124,49): error TS2345: Argument of type '{ receive: string; }' is not assignable to parameter of type 'never'.
+tests/unit/nativePush.deviceRegistration.test.ts(132,49): error TS2345: Argument of type '{ receive: string; }' is not assignable to parameter of type 'never'.
+tests/unit/nativePush.deviceRegistration.test.ts(133,51): error TS2345: Argument of type '{ receive: string; }' is not assignable to parameter of type 'never'.
+tests/unit/nicepay.reviewWindow.test.ts(14,19): error TS18048: 'r.params' is possibly 'undefined'.
+tests/unit/nicepay.reviewWindow.test.ts(17,84): error TS18048: 'params' is possibly 'undefined'.
+tests/unit/nicepay.reviewWindow.test.ts(38,52): error TS18048: 'a.params' is possibly 'undefined'.
+tests/unit/nicepay.reviewWindow.test.ts(38,124): error TS18048: 'a.params' is possibly 'undefined'.
+tests/unit/nicepay.reviewWindow.test.ts(38,166): error TS18048: 'a.params' is possibly 'undefined'.
+tests/unit/nicepay.reviewWindow.test.ts(38,200): error TS18048: 'a.params' is possibly 'undefined'.
+tests/unit/nicepay.reviewWindow.test.ts(38,248): error TS18048: 'a.params' is possibly 'undefined'.
+tests/unit/nicepay.reviewWindow.test.ts(38,272): error TS18048: 'b.params' is possibly 'undefined'.
+tests/unit/nicepay.reviewWindow.test.ts(39,10): error TS18048: 'a.params' is possibly 'undefined'.
+tests/unit/nicepay.reviewWindow.test.ts(62,78): error TS18048: 'params' is possibly 'undefined'.
+tests/unit/nicepay.reviewWindow.test.ts(67,40): error TS18048: 'params' is possibly 'undefined'.
+tests/unit/nicepay.reviewWindow.test.ts(67,108): error TS18048: 'params' is possibly 'undefined'.
+tests/unit/nicepay.reviewWindow.test.ts(67,206): error TS18048: 'params' is possibly 'undefined'.
+tests/unit/publicStorefront.test.ts(108,49): error TS2739: Type '{ id: string; centerId: string; centerName: string; name: string; price: number; kind: "pass"; description: null; totalCount: null; unlimited: boolean; unlimitedPass: boolean; groupLabel: null; remaining: null; }' is missing the following properties from type 'PublicStorefrontProduct': countSelectable, minCount, maxCount, minTierPrice
+tests/unit/publicStorefront.test.ts(108,69): error TS2739: Type '{ id: string; centerId: string; centerName: string; name: string; price: number; kind: "pass"; description: null; totalCount: null; unlimited: boolean; unlimitedPass: boolean; groupLabel: null; remaining: null; }' is missing the following properties from type 'PublicStorefrontProduct': countSelectable, minCount, maxCount, minTierPrice
+tests/unit/publicStorefront.test.ts(108,89): error TS2739: Type '{ id: string; centerId: string; centerName: string; name: string; price: number; kind: "pass"; description: null; totalCount: null; unlimited: boolean; unlimitedPass: boolean; groupLabel: null; remaining: null; }' is missing the following properties from type 'PublicStorefrontProduct': countSelectable, minCount, maxCount, minTierPrice
+tests/unit/reviews.contentSanitize.test.ts(30,44): error TS2556: A spread argument must either have a tuple type or be passed to a rest parameter.
+tests/unit/reviews.contentSanitize.test.ts(42,33): error TS2345: Argument of type '(table: string) => { select: () => { eq: () => { single: () => Promise<{ data: { id: string; }; }>; }; }; } | { select: () => { eq: () => { is: () => { order: () => { order: () => { limit: () => Promise<{ data: { id: string; }[]; }>; }; }; }; }; }; } | { ...; }' is not assignable to parameter of type '() => { select: Mock<() => { eq: Mock<Procedure>; order: Mock<Procedure>; limit: Mock<Procedure>; maybeSingle: Mock<Procedure>; single: Mock<...>; }>; }'.
+  Target signature provides too few arguments. Expected 1 or more, but got 0.
+tests/unit/reviews.contentSanitize.test.ts(130,9): error TS2322: Type '() => { order: () => { limit: () => Promise<{ data: { id: string; profile_id: string; rating: number; content: string; photos: null; reply: null; created_at: string; profiles: { name: string; nickname: null; }; }[]; error: null; }>; }; }' is not assignable to type 'Mock<Procedure>'.
+  Type '() => { order: () => { limit: () => Promise<{ data: { id: string; profile_id: string; rating: number; content: string; photos: null; reply: null; created_at: string; profiles: { name: string; nickname: null; }; }[]; error: null; }>; }; }' is not assignable to type 'MockInstance<Procedure>'.
+tests/unit/reviews.contentSanitize.test.ts(156,9): error TS2322: Type '() => { order: () => { limit: () => Promise<{ data: { id: string; profile_id: string; rating: number; content: string; photos: null; reply: null; created_at: string; profiles: { name: string; nickname: null; }; }[]; error: null; }>; }; }' is not assignable to type 'Mock<Procedure>'.
+  Type '() => { order: () => { limit: () => Promise<{ data: { id: string; profile_id: string; rating: number; content: string; photos: null; reply: null; created_at: string; profiles: { name: string; nickname: null; }; }[]; error: null; }>; }; }' is not assignable to type 'MockInstance<Procedure>'.
+tests/unit/reviews.contentSanitize.test.ts(181,9): error TS2322: Type '() => { order: () => { limit: () => Promise<{ data: { id: string; profile_id: string; rating: number; content: string; photos: null; reply: null; replied_at: null; created_at: string; profiles: { name: string; nickname: null; }; }[]; error: null; }>; }; }' is not assignable to type 'Mock<Procedure>'.
+  Type '() => { order: () => { limit: () => Promise<{ data: { id: string; profile_id: string; rating: number; content: string; photos: null; reply: null; replied_at: null; created_at: string; profiles: { name: string; nickname: null; }; }[]; error: null; }>; }; }' is not assignable to type 'MockInstance<Procedure>'.
+tests/unit/startupsCompanyVerification.test.ts(117,51): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{ userAgent?: string | string[] | undefined; allow?: string | string[] | undefined; disallow?: string | string[] | undefined; crawlDelay?: number | undefined; } | { userAgent: string | string[]; allow?: string | ... 1 more ... | undefined; disallow?: string | ... 1 more ... | undefined; crawlDelay?: number | undefin...'.
+  Property '0' does not exist on type '{ userAgent?: string | string[] | undefined; allow?: string | string[] | undefined; disallow?: string | string[] | undefined; crawlDelay?: number | undefined; } | { userAgent: string | string[]; allow?: string | ... 1 more ... | undefined; disallow?: string | ... 1 more ... | undefined; crawlDelay?: number | undefin...'.
