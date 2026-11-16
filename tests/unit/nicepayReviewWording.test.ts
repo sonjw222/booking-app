@@ -7,6 +7,9 @@ import { join } from "node:path";
    실제 서비스가 없는 센터라는 사실을 숨기려는 테스트가 아니다 — 문구는 "테스트 센터/테스트 상품"처럼 사실대로 쓴다(SQL: fix_nicepay_review_wording_20261105.sql). */
 const ROOT = join(__dirname, "../..");
 const BANNED = /심사용|심사 전용|심사 안내|카드사 심사/;
+// User-requested wording in the separately authorized owner/reviewer UI only.
+// Visibility and server eligibility are exercised in nicepay.subscriptionReview.*.test.ts.
+const REVIEW_ONLY_FILES = new Set(["app/components/NicepaySubscriptionReview.tsx", "lib/payments/nicepaySubscriptionReviewWindow.ts", "lib/payments/server/nicepay/subscriptionReviewHttp.ts"]);
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -30,6 +33,7 @@ describe("이용자 화면에 노출되는 심사용 문구", () => {
   it("주석을 제외한 문자열·JSX 텍스트에 '심사용/심사 전용/심사 안내/카드사 심사' 가 없다", () => {
     const hits: string[] = [];
     for (const f of files) {
+      if (REVIEW_ONLY_FILES.has(f.replace(ROOT + "/", ""))) continue;
       stripComments(readFileSync(f, "utf-8")).split("\n").forEach((line, i) => { if (BANNED.test(line)) hits.push(`${f.replace(ROOT + "/", "")}:${i + 1}: ${line.trim().slice(0, 100)}`); });
     }
     expect(hits).toEqual([]);
