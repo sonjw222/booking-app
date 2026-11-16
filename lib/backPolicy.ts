@@ -9,7 +9,7 @@
 import { hasInAppBackTarget, noteReplaceNavigation } from "./appHistory";
 import { rootNavState } from "./navState";
 
-export type BackDecision = "close-overlay" | "blocked-by-dialog" | "none" | "history-back" | "fallback";
+export type BackDecision = "close-overlay" | "blocked-by-dialog" | "blocked-by-overlay" | "none" | "history-back" | "fallback";
 
 export function decideBack(s: { overlayOpen: boolean; dialogOpen: boolean; isRoot: boolean; hasBackTarget: boolean; preferFallback?: boolean }): BackDecision {
   if (s.dialogOpen) return "blocked-by-dialog";
@@ -77,8 +77,11 @@ export function findBackControl(): HTMLElement | null {
 }
 
 /** 모든 back 입력의 단일 진입점. 실행한 판정을 돌려준다(Android 는 "none" 일 때 앱 종료). */
-export function runBack(router: BackRouter, pathname: string): BackDecision {
+export function runBack(router: BackRouter, pathname: string, opts: { edgeSwipe?: boolean } = {}): BackDecision {
   const state = readBackState();
+  // iOS 왼쪽 가장자리 스와이프(opts.edgeSwipe): "edge-swipe 차단" 오버레이(수강권 안내창, data-edge-swipe-block)가 맨 위에 열려 있으면 아무것도 하지 않는다 —
+  // 시트를 닫지도, 뒤 화면을 이동시키지도 않는다. Android 시스템 back·‹ 버튼 등 다른 입력과 다른 시트는 기존 정책(오버레이 먼저 닫기) 그대로.
+  if (opts.edgeSwipe && topOverlay()?.hasAttribute("data-edge-swipe-block")) return "blocked-by-overlay";
   const decision = decideBack(state);
   if (decision === "close-overlay") topOverlay()?.click();
   else if (decision === "history-back" || decision === "fallback") {
@@ -90,10 +93,16 @@ export function runBack(router: BackRouter, pathname: string): BackDecision {
   return decision;
 }
 
-declare global { interface Window { __mwhabitBack?: () => BackDecision } }
+declare global { interface Window { __mwhabitBack?: () => BackDecision; __mwhabitBackEdge?: () => BackDecision } }
 
-export function installBackBridge(router: BackRouter, getPathname: () => string): () => void {
-  const fn = () => runBack(router, getPathname());
-  window.__mwhabitBack = fn;
-  return () => { if (window.__mwhabitBack === fn) delete window.__mwhabitBack; };
+/**
+ * 입구 설치. `__mwhabitBack` 은 iOS 네이티브 가장자리 스와이프(이미 배포된 앱이 이 이름을 호출)와 Android 시스템 back 이 쓴다 —
+ * iOS 앱에서는 edge-swipe 판정으로, 그 외(Android·웹)는 기존 판정으로 연결한다. `__mwhabitBackEdge` 는 항상 edge-swipe 판정(검증용).
+ */
+export function installBackBridge(router: BackRouter, getPathname: () => string, opts: { iosNative?: boolean } = {}): () => void {
+  const system = () => runBack(router, getPathname());
+  const edge = () => runBack(router, getPathname(), { edgeSwipe: true });
+  const main = opts.iosNative ? edge : system;
+  window.__mwhabitBack = main; window.__mwhabitBackEdge = edge;
+  return () => { if (window.__mwhabitBack === main) delete window.__mwhabitBack; if (window.__mwhabitBackEdge === edge) delete window.__mwhabitBackEdge; };
 }

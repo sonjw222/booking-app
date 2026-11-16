@@ -418,7 +418,7 @@ function CenterDetailContent() {
         const visibleProducts = catalogProducts;
         const filterActive = isFilterActive(effectiveCatalogFilter);
         return (
-        <SheetOverlay className="sheet-overlay" onClick={() => setBuySheet(false)}>
+        <SheetOverlay className="sheet-overlay" onClick={() => setBuySheet(false)} contentDrag>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-title">
               {viewOnly ? "수강권 · 상품 안내" : "수강권 · 상품 구매"}

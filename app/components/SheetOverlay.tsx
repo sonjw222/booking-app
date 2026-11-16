@@ -14,10 +14,15 @@ type SheetOverlayProps = HTMLAttributes<HTMLDivElement> & {
    * 핵심인 sheet는 false로 넘긴다(handle 자체가 나타나지 않는다). onClick(닫기 핸들러)이 없으면 항상 비활성.
    */
   swipeDismiss?: boolean;
+  /**
+   * (opt-in, 수강권 안내창) 본문에서 시작한 아래 드래그로도 닫기 + 시트 밖/스크롤 끝단 터치로 배경(WebView 문서)이 당겨져 흰 빈 영역이 생기는 것을 차단 +
+   * iOS 왼쪽 가장자리 스와이프(네이티브 → window.__mwhabitBack)로 이 시트가 닫히거나 뒤 화면이 이동하지 않게 한다. 기본 false — 다른 시트는 변경 없음.
+   */
+  contentDrag?: boolean;
 };
 
 /** Shared overlay contract; existing close handlers still decide whether closing is allowed. */
-export default function SheetOverlay({ children, className = "sheet-overlay", swipeDismiss = true, ...props }: SheetOverlayProps) {
+export default function SheetOverlay({ children, className = "sheet-overlay", swipeDismiss = true, contentDrag = false, ...props }: SheetOverlayProps) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const canSwipe = swipeDismiss && !!props.onClick;
@@ -45,13 +50,13 @@ export default function SheetOverlay({ children, className = "sheet-overlay", sw
       handle.appendChild(bar);
       sheet.insertBefore(handle, sheet.firstChild);
       attachedTo = sheet;
-      ctrl = attachSheetDrag({ overlay, sheet, handle, isTop, onDismiss: () => overlay.click() });
+      ctrl = attachSheetDrag({ overlay, sheet, handle, isTop, onDismiss: () => overlay.click(), contentDrag });
     };
     ensure();
     const mo = new MutationObserver(ensure);
     mo.observe(overlay, { childList: true });
     return () => { mo.disconnect(); detach(); };
-  }, [canSwipe]);
+  }, [canSwipe, contentDrag]);
   useEffect(() => {
     const overlay = ref.current;
     if (!overlay) return;
@@ -107,5 +112,5 @@ export default function SheetOverlay({ children, className = "sheet-overlay", sw
       if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     };
   }, [titleId]);
-  return <div {...props} ref={ref} className={className} data-sheet-overlay role="dialog" aria-modal="true" tabIndex={-1}>{children}</div>;
+  return <div {...props} ref={ref} className={className} data-sheet-overlay {...(contentDrag ? { "data-edge-swipe-block": "" } : {})} role="dialog" aria-modal="true" tabIndex={-1}>{children}</div>;
 }

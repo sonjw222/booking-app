@@ -16,6 +16,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { updateRootNavState } from "../../lib/navState";
 import { setEdgeSwipeEnabled } from "../../lib/edgeSwipe";
 import { trackAppHistory } from "../../lib/appHistory";
+import { Capacitor } from "@capacitor/core";
 import { installBackBridge } from "../../lib/backPolicy";
 
 export default function NavigationPolicy() {
@@ -25,7 +26,7 @@ export default function NavigationPolicy() {
   useEffect(() => { pathRef.current = pathname; }, [pathname]);
 
   // 단일 back 정책(lib/backPolicy.ts) 입구 — iOS 네이티브 왼쪽 가장자리 pan 이 window.__mwhabitBack 을 호출한다.
-  useEffect(() => installBackBridge(router, () => pathRef.current), [router]);
+  useEffect(() => installBackBridge(router, () => pathRef.current, { iosNative: Capacitor.getPlatform() === "ios" }), [router]);
 
   useEffect(() => { trackAppHistory(pathname); }, [pathname]);
 

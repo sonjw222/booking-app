@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-11-16 — 수강권 안내창 드래그 닫기·가장자리 스와이프·오버스크롤 (`fix/product-sheet-drag-dismiss-20261116`, 기준 `132ec548`, 운영 미반영)
+- 왼쪽 가장자리 스와이프가 안내창을 닫던 동작 제거(`data-edge-swipe-block` + edge 입구 `blocked-by-overlay`; Android back·‹·다른 시트·일반 화면 back 은 기존 그대로). 본문 맨 위에서 아래로 끌면 시트 전체가 따라 내려가 닫힘(35% 규칙), 시트 밖·스크롤 끝단 touchmove 는 막아 WebView 바운스(흰 빈 영역)를 차단. 수강권 안내창에만 적용(`contentDrag` opt-in). 네이티브·SQL·결제 변경 없음(웹 배포만). 상세: `docs/qa/sheet-drag-20261116/ANALYSIS.md`.
+
 ## 2026-11-11 — 결제 ↔ 센터 뒤로가기 무한 반복 수정 (`fix/checkout-back-loop-20261111`, 기준 `eca9e24f`, 운영 미반영)
 - 원인: 결제 화면 헤더 ‹ 가 고정 href 앵커(push)라 센터 ‹(router.back)와 왕복. 구매 시트 이동이 전체 문서 로드라 이동 기록 소실, 딥링크 폴백이 push 였고, NICEPAY 종료 후 `location.replace` 가 결제창 entry 뒤에 결제 화면을 놓음.
 - 수정: 결제 ‹ → `BackButton`, 구매 이동 `router.push`, 폴백 `router.replace`, NICEPAY 종료 시 `history.go(-n)`(열기 직전 anchor 기록). 네이티브·SQL·결제 로직 변경 없음(웹 배포만). 상세: `docs/qa/back-loop-20261111/ANALYSIS.md`.

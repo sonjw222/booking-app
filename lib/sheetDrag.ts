@@ -31,6 +31,12 @@ export function shouldDismiss(dragY: number, height: number): boolean {
   return height > 0 && dragY > height * DISMISS_RATIO;
 }
 
+/** 요소가 세로로 실제 스크롤 가능한 컨테이너인지. */
+export function isVerticalScroller(el: HTMLElement): boolean {
+  const oy = typeof getComputedStyle === "function" ? getComputedStyle(el).overflowY : "";
+  return (oy === "auto" || oy === "scroll") && el.scrollHeight > el.clientHeight + 1;
+}
+
 /** 끌린 만큼 backdrop을 옅게(0~1 비율 → 알파). */
 export function backdropAlpha(dragY: number, height: number): number {
   if (height <= 0) return BACKDROP_ALPHA;
@@ -49,6 +55,12 @@ export type SheetDragOptions = {
   reducedMotion?: () => boolean;
   /** 테스트/특수 환경용 높이 측정 주입. */
   getHeight?: () => number;
+  /**
+   * 본문에서 시작한 아래 방향 터치 드래그도 시트 닫기로 인정(2026-11-16, 수강권 안내창 등 opt-in — 기본 false라 다른 시트는 변경 없음).
+   * 본문이 맨 위(scrollTop 0)일 때만 드래그로 전환하고, 그 밖에는 본문 스크롤이 우선한다. 시트가 열린 동안 배경(WebView 문서)이 같이 당겨지는
+   * rubber-band(흰 빈 영역)를 막기 위해 시트 밖 터치·스크롤 끝단 터치의 touchmove 는 preventDefault 한다.
+   */
+  contentDrag?: boolean;
 };
 
 export type SheetDragController = { destroy: () => void; phase: () => "idle" | "dragging" | "closing" | "settling" };
@@ -122,10 +134,7 @@ export function attachSheetDrag(opts: SheetDragOptions): SheetDragController {
     setOffset(dragY, null);
   }
 
-  function release(e: PointerEvent, canceled: boolean) {
-    if (phase !== "dragging" || e.pointerId !== pointerId) return;
-    pointerId = null;
-    try { handle.releasePointerCapture?.(e.pointerId); } catch { /* 무시 */ }
+  function finishDrag(canceled: boolean) {
     const height = heightOf();
     if (!canceled && shouldDismiss(dragY, height)) {
       phase = "closing";
@@ -141,11 +150,69 @@ export function attachSheetDrag(opts: SheetDragOptions): SheetDragController {
     }
   }
 
+  function release(e: PointerEvent, canceled: boolean) {
+    if (phase !== "dragging" || e.pointerId !== pointerId) return;
+    pointerId = null;
+    try { handle.releasePointerCapture?.(e.pointerId); } catch { /* 무시 */ }
+    finishDrag(canceled);
+  }
+
   const onUp = (e: PointerEvent) => release(e, false);
   const onCancel = (e: PointerEvent) => release(e, true);
   const onTransitionEnd = (e: TransitionEvent) => {
     if (phase === "closing" && e.target === sheet && e.propertyName === "transform") finishDismiss();
   };
+
+
+  // ── 본문(content) 터치 드래그 — opt-in ──
+  type TouchMode = null | "pending" | "drag" | "scroll" | "horizontal";
+  let tMode: TouchMode = null;
+  let tY0 = 0, tX0 = 0, tScroller: HTMLElement | null = null;
+  const NO_DRAG = "input, textarea, select, [contenteditable='true'], [data-no-sheet-drag], .sheet-drag-handle";
+
+  function nearestScroller(target: EventTarget | null): HTMLElement | null {
+    for (let el = target instanceof HTMLElement ? target : null; el && el !== overlay; el = el.parentElement) { if (isVerticalScroller(el)) return el; if (el === sheet) break; }
+    return isVerticalScroller(sheet) ? sheet : null;
+  }
+  function onTouchStart(e: TouchEvent) {
+    tMode = null;
+    if (phase !== "idle" || pointerId !== null || e.touches.length !== 1 || !isTop()) return;
+    const t = e.target instanceof Element ? e.target : null;
+    if (t && t.closest(NO_DRAG)) return;                        // 입력 요소·핸들(핸들은 포인터 경로)·명시 제외
+    tMode = "pending"; tY0 = e.touches[0].clientY; tX0 = e.touches[0].clientX; tScroller = sheet.contains(t) ? nearestScroller(t) : null;
+  }
+  function onTouchMove(e: TouchEvent) {
+    if (e.touches.length !== 1 || !isTop()) return;
+    const inSheet = e.target instanceof Node && sheet.contains(e.target);
+    if (!inSheet) { if (e.cancelable) e.preventDefault(); return; }   // 시트 밖(딤 영역) 터치: 배경 문서가 당겨지지 않게
+    if (tMode === null) return;
+    const dy = e.touches[0].clientY - tY0, dx = e.touches[0].clientX - tX0;
+    if (tMode === "pending") {
+      if (Math.abs(dy) < 3 && Math.abs(dx) < 3) return;
+      if (Math.abs(dx) > Math.abs(dy)) { tMode = "horizontal"; return; }   // 가로 스크롤·캐러셀은 건드리지 않는다
+      if (dy > 0 && (!tScroller || tScroller.scrollTop <= 0)) { tMode = "drag"; phase = "dragging"; tY0 = e.touches[0].clientY; dragY = 0; }
+      else tMode = "scroll";
+    }
+    if (tMode === "drag") { if (e.cancelable) e.preventDefault(); dragY = clampDrag(e.touches[0].clientY - tY0); setOffset(dragY, null); return; }
+    if (tMode === "scroll") {
+      // 본문이 스크롤 끝단에서 더 밀리면 WebView 문서까지 튕긴다(흰 빈 영역) — 끝단 초과 입력은 막는다.
+      const sc = tScroller;
+      const atBottom = !sc || sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 1, atTop = !!sc && sc.scrollTop <= 0;
+      if (((dy < 0 && atBottom) || (dy > 0 && atTop)) && e.cancelable) e.preventDefault();
+    }
+  }
+  function onTouchEnd(e: TouchEvent) {
+    const was = tMode; tMode = null;
+    if (was !== "drag" || phase !== "dragging") return;
+    if (e.cancelable) e.preventDefault();
+    finishDrag(e.type === "touchcancel");
+  }
+  if (opts.contentDrag) {
+    sheet.addEventListener("touchstart", onTouchStart, { passive: true });
+    overlay.addEventListener("touchmove", onTouchMove, { passive: false });
+    overlay.addEventListener("touchend", onTouchEnd, { passive: false });
+    overlay.addEventListener("touchcancel", onTouchEnd, { passive: false });
+  }
 
   handle.addEventListener("pointerdown", onPointerDown);
   handle.addEventListener("pointermove", onPointerMove);
@@ -162,6 +229,7 @@ export function attachSheetDrag(opts: SheetDragOptions): SheetDragController {
       handle.removeEventListener("pointerup", onUp);
       handle.removeEventListener("pointercancel", onCancel);
       sheet.removeEventListener("transitionend", onTransitionEnd);
+      if (opts.contentDrag) { sheet.removeEventListener("touchstart", onTouchStart); overlay.removeEventListener("touchmove", onTouchMove); overlay.removeEventListener("touchend", onTouchEnd); overlay.removeEventListener("touchcancel", onTouchEnd); }
       if (sheet.isConnected) clearInline();
     },
   };
