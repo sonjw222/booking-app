@@ -24,7 +24,7 @@
   가로 확정은 |dx| ≥ 7px 이면서 |dx| > |dy| × 1.5 일 때만 → 수직 스크롤 중 생긴 작은 x 움직임으로는
   열리지 않는다. 삭제/고정은 오직 버튼 탭으로만 실행된다(스와이프 자체는 열기만 함).
 */
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 
 export const SWIPE_INTENT_PX = 7;          // 이보다 작은 움직임은 무시(방향 판정도 안 함)
 export const SWIPE_AXIS_RATIO = 1.5;       // |dx| > |dy| * 1.5 일 때만 가로로 확정
@@ -127,7 +127,8 @@ export default function SwipeRow({
 
   // 최신 props를 ref로 — pointer 핸들러/애니메이션 루프가 항상 최신 값을 본다.
   const cfg = useRef({ leftW, rightW, isOpen, openId, onOpenChange });
-  cfg.current = { leftW, rightW, isOpen, openId, onOpenChange };
+  // 렌더 중 ref 쓰기 금지 — 커밋 직후(페인트 전) 갱신. 포인터 핸들러/rAF는 커밋 이후에만 실행된다.
+  useLayoutEffect(() => { cfg.current = { leftW, rightW, isOpen, openId, onOpenChange }; });
 
   const openSide = useRef<SwipeSide | null>(null);
   const pos = useRef(0);                       // 현재 표시 위치(px)

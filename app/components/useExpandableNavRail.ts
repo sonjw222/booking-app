@@ -21,7 +21,7 @@
   1360px 이상은 이 훅을 아예 호출하지 않는 쪽으로 사용한다(이미 상시 노출되는
   244px 텍스트 sidebar 정책 — 새 overlay를 또 만들지 않음).
 */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
 /*
@@ -74,7 +74,7 @@ export function useExpandableNavRail(scrollStorageKey: string) {
   const lastPointerType = useRef<string>("mouse");
   const swiped = useRef(false); // 방금 swipe로 처리한 제스처 — 뒤따르는 click을 삼킨다
   const expandedRef = useRef(false);
-  expandedRef.current = expanded;
+  useLayoutEffect(() => { expandedRef.current = expanded; });
 
   // 768–1359px(rail 확장 대상 구간) 여부를 매체 쿼리로 정확히 추적 — 리사이즈/회전에도 반응.
   // 1360px 이상은 이미 상시 244px sidebar라 손대지 않는다(원래 정책).

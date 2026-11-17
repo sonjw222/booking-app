@@ -71,7 +71,6 @@ export default function KakaoCallbackPage() {
         window.location.href = `/login?oauth_error=${encodeURIComponent(reason)}`;
       }, 1200);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return <Loading text={errorText ?? "카카오 로그인 처리 중이에요"} />;

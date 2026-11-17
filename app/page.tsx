@@ -59,10 +59,6 @@ export default function Home() {
   const [catList, setCatList] = useState<ServiceCategory[]>([]);
   const [bannerIdx, setBannerIdx] = useState(0);
   const touchStartX = useRef(0);
-  function goBanner(dir: number) {
-    if (validBanners.length <= 1) return;
-    setBannerIdx((i) => (i + dir + validBanners.length) % validBanners.length);
-  }
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [isManager, setIsManager] = useState(false);
@@ -79,6 +75,10 @@ export default function Home() {
     () => banners.filter((banner) => banner.title?.trim().length >= 2),
     [banners]
   );
+  function goBanner(dir: number) {
+    if (validBanners.length <= 1) return;
+    setBannerIdx((i) => (i + dir + validBanners.length) % validBanners.length);
+  }
   const [showAllCategories, setShowAllCategories] = useState(false);
   const allCategories = useMemo(
     () => (catList.length > 0

@@ -430,7 +430,6 @@ function ReservationCalendarContent() {
     if (!confirmClass) return;
     const list = usablePassesByClass[confirmClass.id] ?? [];
     setPassPick(pickDefaultMembership(list));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [confirmClass, usablePassesByClass]);
 
   async function doReserve() {

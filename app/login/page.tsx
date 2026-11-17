@@ -132,7 +132,6 @@ export default function LoginPage() {
     // 경로(이메일/구글/애플/카카오/네이버)로 완료되든 전부 홈에 도착하므로, 그 값을
     // 세션스토리지에 담아두고 실제 이동은 app/page.tsx가 한 곳에서 처리한다.
     stashPostLoginNext(params.get("next"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 재전송 쿨다운 카운트다운(서버의 60초 제한과 별개로 화면에서도 버튼을 잠가 중복 클릭 방지)

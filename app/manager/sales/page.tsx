@@ -29,6 +29,8 @@ import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/
 import { useCenterPermissionGate } from "../../../lib/permissionGate";
 import PermissionGateShell from "../../components/PermissionGateShell";
 
+const num = (s: string) => parseInt(s.replace(/[^0-9]/g, "") || "0", 10);
+
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 }
@@ -147,7 +149,6 @@ export default function SalesPage() {
     const paid = num(fCard) + num(fCash) + num(fTransfer) + num(fPoint);
     const remaining = computeAutoUnpaid(product.price, paid);
     setFUnpaid(remaining > 0 ? String(remaining) : "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoUnpaidInput, fUnpaidTouched, fProductId, fCard, fCash, fTransfer, fPoint, saleProducts]);
 
   const load = useCallback(async () => {
@@ -228,7 +229,6 @@ export default function SalesPage() {
     } catch (e: any) { setError(e.message); }
   }
 
-  const num = (s: string) => parseInt(s.replace(/[^0-9]/g, "") || "0", 10);
   const formTotal = num(fCard) + num(fCash) + num(fTransfer) + num(fPoint);
 
   function handleSalesCsvDownload() {

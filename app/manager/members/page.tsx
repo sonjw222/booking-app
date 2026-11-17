@@ -10,7 +10,7 @@ import SheetOverlay from "../../components/SheetOverlay";
   - 엑셀(CSV) 내보내기: 내보낼 항목 선택
 */
 
-import { Suspense, useCallback, useEffect, useState, useRef } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useState, useRef } from "react";
 import Loading from "../../components/Loading";
 import { useSearchParams } from "next/navigation";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
@@ -248,7 +248,7 @@ function MembersContent() {
 
   const filtersRef = useRef<{ status: string | null; keyword: string; searchField: "all" | "name" | "phone" | "address" }>(
     { status: null, keyword: "", searchField: "all" });
-  filtersRef.current = { status: statusFilter, keyword, searchField };
+  useLayoutEffect(() => { filtersRef.current = { status: statusFilter, keyword, searchField }; });
 
   // 네트워크 없이 보관 중인 목록만 다시 거른다. 보관본이 현재 센터/등급과 다르면(로딩 중) 아무것도 안 한다 — load()가 끝나며 적용.
   const refilter = useCallback(() => {
