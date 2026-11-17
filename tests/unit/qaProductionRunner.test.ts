@@ -4,6 +4,7 @@
 */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import {
   PRODUCTION_PROJECT_REF, QaGuardError, QA_REQUIRED_ENV_NAMES, assertProductionQaAllowed, missingQaEnvNames, projectRefFromUrl,
@@ -72,7 +73,7 @@ describe("실행 단위 / 정리 범위", () => {
   });
   it("cleanup은 이번 실행의 UUID 목록으로만 삭제(.in(id, ids)), 한 단계 실패가 나머지를 막지 않고, keep이면 아무것도 안 지운다", async () => {
     const calls: { table: string; ids: string[] }[] = [];
-    const fake: any = {
+    const fake = {
       from: (table: string) => ({
         delete: () => ({ in: (col: string, ids: string[]) => ({ select: async () => {
           expect(col).toBe("id");
@@ -84,13 +85,13 @@ describe("실행 단위 / 정리 범위", () => {
     const t = new FixtureTracker("qa-test");
     const u = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
     t.add("reservations", u(1)); t.add("classes", u(2)); t.add("memberships", u(3)); t.add("products", u(4));
-    const res = await cleanupFixtures(fake, t);
+    const res = await cleanupFixtures(fake as unknown as SupabaseClient, t);
     expect(calls.map((c) => c.table)).toEqual(["reservations", "classes", "memberships", "products"]);
     expect(calls.every((c) => c.ids.length === 1)).toBe(true);
     expect(res.failures).toEqual(["classes: boom"]);
     expect(res.deleted.memberships).toBe(1);
     calls.length = 0;
-    expect((await cleanupFixtures(fake, t, { keep: true })).kept).toBe(true);
+    expect((await cleanupFixtures(fake as unknown as SupabaseClient, t, { keep: true })).kept).toBe(true);
     expect(calls).toHaveLength(0);
   });
   it("실패 fixture 보존 옵션: QA_KEEP_FAILED_FIXTURES=1 이고 실패했을 때만 보존(기본은 정리)", () => {
@@ -101,22 +102,27 @@ describe("실행 단위 / 정리 범위", () => {
 });
 
 // 최소한의 PostgREST 체인 fake: from(table)가 호출되면 그 table의 동작별 응답을 반환
-function fakeAdmin(script: Record<string, any>) {
+function fakeAdmin(script: Record<string, unknown>) {
   const log: { table: string; op: string; args?: unknown }[] = [];
   const builder = (table: string) => {
-    const state: any = { op: "select" };
-    const b: any = {
+    const state = { op: "select" };
+    interface Builder {
+      select: () => Builder; eq: () => Builder; order: () => Builder; limit: () => Builder; in: () => Builder;
+      insert: (row: unknown) => Builder; update: (row: unknown) => Builder; upsert: (row: unknown) => Builder;
+      single: () => Promise<unknown>; maybeSingle: () => Promise<unknown>; then: (res: (v: unknown) => unknown) => unknown;
+    }
+    const b: Builder = {
       select: () => { return b; }, eq: () => b, order: () => b, limit: () => b, in: () => b,
       insert: (row: unknown) => { state.op = "insert"; log.push({ table, op: "insert", args: row }); return b; },
       update: (row: unknown) => { state.op = "update"; log.push({ table, op: "update", args: row }); return b; },
       upsert: (row: unknown) => { state.op = "upsert"; log.push({ table, op: "upsert", args: row }); return b; },
       single: async () => script[`${table}.${state.op}.single`] ?? script[`${table}.${state.op}`] ?? { data: null, error: null },
       maybeSingle: async () => script[`${table}.${state.op}.maybe`] ?? script[`${table}.${state.op}`] ?? { data: null, error: null },
-      then: (res: any) => res(script[`${table}.${state.op}`] ?? { data: [], error: null }),
+      then: (res) => res(script[`${table}.${state.op}`] ?? { data: [], error: null }),
     };
     return b;
   };
-  return { admin: { from: (t: string) => builder(t) } as any, log };
+  return { admin: { from: (t: string) => builder(t) } as unknown as SupabaseClient, log };
 }
 
 describe("ensureQaCenter / ensureQaMember (fake admin, 네트워크 없음)", () => {
@@ -130,7 +136,7 @@ describe("ensureQaCenter / ensureQaMember (fake admin, 네트워크 없음)", ()
     });
     const id = await ensureQaCenter(admin, MGR);
     expect(id).toBe("c1");
-    const created = log.find((l) => l.table === "centers" && l.op === "insert")!.args as any;
+    const created = log.find((l) => l.table === "centers" && l.op === "insert")!.args as Record<string, unknown>;
     expect(created).toMatchObject({ name: QA_CENTER_NAME, status: "approved", is_internal: true });
     expect(log.some((l) => l.table === "center_roles" && l.op === "insert")).toBe(false);
     expect(log.find((l) => l.table === "manager_centers" && l.op === "insert")!.args).toMatchObject({ account_id: MGR, role_id: "role1", status: "active" });
@@ -187,7 +193,7 @@ describe("일반 test / integration 실행과 분리", () => {
 
 describe("비밀 값 하드코딩/출력 금지", () => {
   const files: string[] = [];
-  const walk = (dir: string) => { for (const f of readdirSync(join(root, dir))) { const p = `${dir}/${f}`; statSync(join(root, p)).isDirectory() ? walk(p) : files.push(p); } };
+  const walk = (dir: string) => { for (const f of readdirSync(join(root, dir))) { const p = `${dir}/${f}`; if (statSync(join(root, p)).isDirectory()) walk(p); else files.push(p); } };
   walk("tests/qa");
   it("tests/qa 코드에 JWT/이메일/실제 UUID/비밀번호 리터럴이 없다", () => {
     for (const f of files) {

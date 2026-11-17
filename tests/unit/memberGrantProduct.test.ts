@@ -4,14 +4,15 @@
 */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 const rpcMock = vi.fn();
 const fromMock = vi.fn();
-const chain: any = {};
+interface ChainMock { [m: string]: Mock | ((res: (v: unknown) => unknown) => unknown) }
+const chain: ChainMock = {};
 for (const m of ["select", "eq", "neq", "order", "single", "insert", "delete", "in"]) chain[m] = vi.fn(() => chain);
-let chainResult: any = { data: [], error: null };
-chain.then = (res: any) => res(chainResult);
+let chainResult: { data: unknown; error: unknown } = { data: [], error: null };
+chain.then = (res: (v: unknown) => unknown) => res(chainResult);
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: { rpc: (...a: unknown[]) => rpcMock(...a), from: (...a: unknown[]) => { fromMock(...a); return chain; } },
 }));
@@ -36,13 +37,13 @@ describe("[2][3] 시트 목록 분리", () => {
     expect(filterGrantProducts(all, "pass").map((p) => p.id)).toEqual(["p1", "p2"]);
   });
   it("서버 쿼리도 kind별로 나뉜다: goods=활성 goods(판매중지 포함), pass=판매중 non-goods", async () => {
-    fromMock.mockClear(); Object.values(chain).forEach((f: any) => f.mockClear?.());
+    fromMock.mockClear(); Object.values(chain).forEach((f) => (f as Partial<Mock>).mockClear?.());
     chainResult = { data: [], error: null };
     await fetchGrantableProducts("c1", "goods");
     expect(chain.eq).toHaveBeenCalledWith("product_kind", "goods");
     expect(chain.eq).not.toHaveBeenCalledWith("is_on_sale", true);
     expect(chain.eq).toHaveBeenCalledWith("is_active", true);
-    Object.values(chain).forEach((f: any) => f.mockClear?.());
+    Object.values(chain).forEach((f) => (f as Partial<Mock>).mockClear?.());
     await fetchGrantableProducts("c1", "pass");
     expect(chain.neq).toHaveBeenCalledWith("product_kind", "goods");
     expect(chain.eq).toHaveBeenCalledWith("is_on_sale", true);

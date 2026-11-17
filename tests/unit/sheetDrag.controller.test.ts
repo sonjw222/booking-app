@@ -21,8 +21,7 @@ function setup(over?: { isTop?: () => boolean; reduced?: boolean }) {
     isTop: over?.isTop, reducedMotion: () => !!over?.reduced,
   });
   const ev = (type: string, y: number, id = 1) => {
-    const e = new Event(type, { bubbles: true }) as any;
-    e.pointerId = id; e.clientY = y; e.pointerType = "touch"; e.button = 0;
+    const e = Object.assign(new Event(type, { bubbles: true }), { pointerId: id, clientY: y, pointerType: "touch", button: 0 });
     handle.dispatchEvent(e);
   };
   return { overlay, sheet, handle, onDismiss, ctrl, ev };
@@ -78,8 +77,7 @@ describe("컨트롤러", () => {
     ev("pointerdown", 100); ev("pointermove", 300); ev("pointerup", 300);
     expect(onDismiss).not.toHaveBeenCalled();            // 아직 unmount 안 함
     expect(sheet.style.transform).toBe("translateY(400px)"); // 화면 아래까지
-    const te = new Event("transitionend", { bubbles: true }) as any;
-    te.propertyName = "transform";
+    const te = Object.assign(new Event("transitionend", { bubbles: true }), { propertyName: "transform" });
     sheet.dispatchEvent(te);
     expect(onDismiss).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(1000);                          // fallback timer가 중복 호출하지 않는다
@@ -127,7 +125,7 @@ describe("컨트롤러", () => {
     const body = document.createElement("div");
     sheet.appendChild(body);
     for (const [t, y] of [["pointerdown", 100], ["pointermove", 380], ["pointerup", 380]] as const) {
-      const e = new Event(t, { bubbles: true }) as any; e.pointerId = 1; e.clientY = y; body.dispatchEvent(e);
+      body.dispatchEvent(Object.assign(new Event(t, { bubbles: true }), { pointerId: 1, clientY: y }));
     }
     vi.advanceTimersByTime(1000);
     expect(onDismiss).not.toHaveBeenCalled();

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { describe, expect, it } from "vitest";
 import { checkSchemaDump, stripDollarQuoted } from "../../scripts/ci-dev/schemaDumpCheck.mjs";
 

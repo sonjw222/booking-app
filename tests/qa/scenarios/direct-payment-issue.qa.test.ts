@@ -12,6 +12,7 @@ import { createQaPassProduct } from "../fixtures/catalog";
 import { buildDirectOrderInput } from "../fixtures/directOrder";
 import { cleanupFixtures, createRunId, FixtureTracker, shouldKeepFailedFixtures } from "../runContext";
 import type { QaFixtureState } from "../fixtures/center";
+import type { MembershipRow, OrderRow, PaymentRow } from "../fixtures/rows";
 
 const admin = () => getFixtureAdminClient();
 const tracker = new FixtureTracker(createRunId());
@@ -22,21 +23,21 @@ let orderId = "";
 let membershipId = "";
 let failed = false;
 
-async function orderRow() {
+async function orderRow(): Promise<OrderRow> {
   const { data, error } = await admin().from("orders").select("*").eq("id", orderId).single();
   if (error) throw new Error(`주문 조회 실패: ${error.message}`);
-  return data as any;
+  return data as OrderRow;
 }
-async function membershipsForProduct() {
+async function membershipsForProduct(): Promise<MembershipRow[]> {
   const { data, error } = await admin().from("memberships").select("id, product_id, profile_id, center_id, total_count, remaining_count, status")
     .eq("product_id", product.productId).eq("profile_id", state.memberProfileId);
   if (error) throw new Error(`수강권 조회 실패: ${error.message}`);
-  return (data ?? []) as any[];
+  return (data ?? []) as MembershipRow[];
 }
-async function paymentsForOrder() {
+async function paymentsForOrder(): Promise<PaymentRow[]> {
   const { data, error } = await admin().from("payments").select("*").eq("order_id", orderId);
   if (error) throw new Error(`결제 조회 실패: ${error.message}`);
-  return (data ?? []) as any[];
+  return (data ?? []) as PaymentRow[];
 }
 
 describe("QA: 직접결제 주문 → 관리자 확정·발급", () => {
@@ -126,9 +127,9 @@ describe("QA: 직접결제 주문 → 관리자 확정·발급", () => {
 
   step("알림은 QA 센터의 QA 계정에게만 생성된다", async () => {
     const { data: mgr } = await admin().from("manager_centers").select("account_id").eq("center_id", state.centerId).eq("status", "active");
-    const allowed = new Set<string>([state.memberAccountId, ...(mgr ?? []).map((m: any) => m.account_id as string)]);
+    const allowed = new Set<string>([state.memberAccountId, ...(mgr ?? []).map((m) => m.account_id as string)]);
     const { data, error } = await admin().from("notifications").select("recipient_account_id").eq("center_id", state.centerId);
     expect(error).toBeNull();
-    for (const n of data ?? []) expect(allowed.has((n as any).recipient_account_id)).toBe(true);
+    for (const n of data ?? []) expect(allowed.has(n.recipient_account_id)).toBe(true);
   });
 });

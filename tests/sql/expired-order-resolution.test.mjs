@@ -53,7 +53,7 @@ async function seed(db) {
 }
 const order = async (db, n, product, extra = '') => { await db.exec(`insert into orders(id, center_id, profile_id, product_id, amount ${extra ? ',' + extra.split('=')[0] : ''}) values ('${id(n)}','${C1}','${PROF}','${id(product)}', 80000 ${extra ? ',' + extra.split('=')[1] : ''})`); return id(n); };
 const call = (db, oid, action, args = '') => db.query(`select manager_resolve_expired_order('${oid}', '${action}', '사유 입니다' ${args}) as r`);
-const rec = async (db) => ({ recv: `, 80000, ${KST}, 'cash'`, adj: `, 80000, ${KST}, 'cash', ${KST} + 30` });
+const rec = async () => ({ recv: `, 80000, ${KST}, 'cash'`, adj: `, 80000, ${KST}, 'cash', ${KST} + 30` });
 const err = async (p) => { try { await p; return null; } catch (e) { return String(e.message); } };
 const status = async (db, oid) => (await db.query(`select status from orders where id='${oid}'`)).rows[0].status;
 const n = async (db, t, oid) => Number((await db.query(`select count(*)::int c from ${t} where order_id='${oid}'`)).rows[0].c);

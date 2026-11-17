@@ -87,11 +87,12 @@ describe("[6] 관리자 예약자 목록 표시", () => {
   });
 });
 
+type PRow = { id?: string; description: string | null; start_time: string; end_time: string };
 describe("[7] 반복수업 소개(description) 보존", () => {
   beforeEach(() => { rpcMock.mockReset(); rpcMock.mockResolvedValue({ data: ["a", "b"], error: null }); });
   it("공통시간 반복: 모든 행에 description 복제", async () => {
     await createRecurringClasses("c1", { title: "정규반", description: "  초급 · 장비 지참  ", daysOfWeek: [1, 3], fromDate: "2026-10-05", toDate: "2026-10-14", start: "20:00", end: "21:00", capacity: 8 });
-    const rows = rpcMock.mock.calls[0][1].p_rows as any[];
+    const rows = rpcMock.mock.calls[0][1].p_rows as PRow[];
     expect(rows.length).toBe(4);
     expect(rows.every((r) => r.description === "초급 · 장비 지참")).toBe(true);
   });
@@ -100,14 +101,14 @@ describe("[7] 반복수업 소개(description) 보존", () => {
       title: "정규반", description: "수업 소개", fromDate: "2026-10-05", toDate: "2026-10-14",
       days: [{ dow: 1, start: "20:00", end: "21:00", capacity: 8 }, { dow: 3, start: "18:00", end: "19:30", capacity: 6 }],
     });
-    const rows = rpcMock.mock.calls[0][1].p_rows as any[];
+    const rows = rpcMock.mock.calls[0][1].p_rows as PRow[];
     expect(rows.length).toBe(4);
     expect(rows.every((r) => r.description === "수업 소개")).toBe(true);
     expect(new Set(rows.map((r) => r.start_time.slice(11, 16))).size).toBe(2);   // 시간은 요일별로 유지
   });
   it("소개가 비면 null(빈 문자열 아님)", async () => {
     await createRecurringClasses("c1", { title: "t", description: "   ", daysOfWeek: [1], fromDate: "2026-10-05", toDate: "2026-10-05", start: "10:00", end: "11:00", capacity: 1 });
-    expect((rpcMock.mock.calls[0][1].p_rows as any[])[0].description).toBeNull();
+    expect((rpcMock.mock.calls[0][1].p_rows as PRow[])[0].description).toBeNull();
   });
   it("SQL: create_recurring_classes_safe가 JSON description을 classes.description에 저장한다", () => {
     const sql = noComments(read("fix_recurring_class_description_and_group_update.sql"));
@@ -143,10 +144,10 @@ describe("[10] 모든 반복 수업에 적용 — 요일별 시간 보존", () =
     const args = rpcMock.mock.calls[0];
     expect(args[0]).toBe("update_class_group_safe");
     expect(args[1].p_title).toBe("B");
-    const wed = (args[1].p_updates as any[]).find((x) => x.id === "w1");
+    const wed = (args[1].p_updates as PRow[]).find((x) => x.id === "w1")!;
     expect(wed.start_time).toBe("2026-10-07T09:00:00.000Z");   // 18:00 KST
     expect(wed.end_time).toBe("2026-10-07T10:30:00.000Z");     // 19:30 KST
-    const mon = (args[1].p_updates as any[]).find((x) => x.id === "m1");
+    const mon = (args[1].p_updates as PRow[]).find((x) => x.id === "m1")!;
     expect(mon.start_time).toBe("2026-10-05T11:00:00.000Z");   // 20:00 KST
   });
   it("소개를 함께 적용하면 모든 행에 description이 실리고 시간은 그대로", () => {

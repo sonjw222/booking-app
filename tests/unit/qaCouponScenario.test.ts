@@ -110,7 +110,7 @@ describe("시나리오 계약", () => {
     expect(sc).toContain("rejects.toThrow(/이 수강권에는 사용할 수 없는 쿠폰/)");
   });
   it("cleanup: 결제→수강권→주문→지급 쿠폰→쿠폰 적용 대상→쿠폰→상품(FK 순서), 이번 run UUID만, QA 센터/계정 유지, 알림 QA 계정만", () => {
-    const o = (k: string) => CLEANUP_ORDER.indexOf(k as any);
+    const o = (k: string) => (CLEANUP_ORDER as readonly string[]).indexOf(k);
     expect(o("payments")).toBeLessThan(o("memberships"));
     expect(o("memberships")).toBeLessThan(o("orders"));
     expect(o("orders")).toBeLessThan(o("member_coupons"));

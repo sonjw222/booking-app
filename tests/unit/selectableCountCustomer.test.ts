@@ -7,17 +7,18 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const rpcMock = vi.fn();
-const inserts: { table: string; row: any }[] = [];
-const updates: { table: string; row: any }[] = [];
-let existingCartRows: any[] = [];
-const insertResult: any = { error: null, data: { id: "order-1" } };
+type DbRow = Record<string, unknown>;
+const inserts: { table: string; row: DbRow }[] = [];
+const updates: { table: string; row: DbRow }[] = [];
+let existingCartRows: DbRow[] = [];
+const insertResult: { error: { code?: string; message: string } | null; data: { id: string } } = { error: null, data: { id: "order-1" } };
 
 function chain(table: string) {
-  const c: any = {};
+  const c: Record<string, unknown> = {};
   for (const m of ["select", "eq", "is", "not", "order", "limit", "in", "single"]) c[m] = vi.fn(() => c);
-  c.insert = (row: any) => { inserts.push({ table, row }); const r: any = { select: () => ({ single: async () => insertResult }), then: (res: any) => res({ error: insertResult.error }) }; return r; };
-  c.update = (row: any) => { updates.push({ table, row }); return { eq: async () => ({ error: null }) }; };
-  c.then = (res: any) => res({ data: table === "cart_items" ? existingCartRows : [{ id: "p1", is_primary: true }], error: null });
+  c.insert = (row: DbRow) => { inserts.push({ table, row }); const r = { select: () => ({ single: async () => insertResult }), then: (res: (v: unknown) => unknown) => res({ error: insertResult.error }) }; return r; };
+  c.update = (row: DbRow) => { updates.push({ table, row }); return { eq: async () => ({ error: null }) }; };
+  c.then = (res: (v: unknown) => unknown) => res({ data: table === "cart_items" ? existingCartRows : [{ id: "p1", is_primary: true }], error: null });
   return c;
 }
 vi.mock("../../lib/supabaseClient", () => ({ supabase: { rpc: (...a: unknown[]) => rpcMock(...a), from: (t: string) => chain(t) } }));
@@ -58,9 +59,9 @@ describe("[1][2][3] 가격표 계산(미리보기) — 회차별 독립 가격",
   });
   it("[3] 가격표에 없는 회차(0, 2, 5, 13, -1, 소수, null)는 금액 없음 — 유효하지 않음", () => {
     for (const bad of [0, 2, 5, 13, -1, 2.5, null, undefined]) {
-      expect(isValidSelectedCount(shoes, bad as any)).toBe(false);
-      expect(computeBaseAmount(shoes, bad as any)).toBeNull();
-      expect(tierPriceFor(shoes, bad as any)).toBeNull();
+      expect(isValidSelectedCount(shoes, bad)).toBe(false);
+      expect(computeBaseAmount(shoes, bad)).toBeNull();
+      expect(tierPriceFor(shoes, bad)).toBeNull();
     }
   });
   it("[14] 고정 상품은 기존과 동일: 상품가 그대로, 횟수 선택 불가", () => {
@@ -75,9 +76,9 @@ describe("[1][2][3] 가격표 계산(미리보기) — 회차별 독립 가격",
   });
   it("[12] 쿠폰은 선택한 tier 가격 기준: 6회 34,000 - 5,000 = 29,000", () => {
     const base = computeBaseAmount(shoes, 6)!;
-    const coupon = { discountType: "fixed", discountValue: 5000, maxDiscountAmount: null } as any;
+    const coupon: Parameters<typeof previewDiscount>[1] = { discountType: "fixed", discountValue: 5000, maxDiscountAmount: null };
     expect(Math.max(0, base - previewDiscount(base, coupon))).toBe(29000);
-    const pct = { discountType: "percentage", discountValue: 10, maxDiscountAmount: null } as any;
+    const pct: Parameters<typeof previewDiscount>[1] = { discountType: "percentage", discountValue: 10, maxDiscountAmount: null };
     expect(previewDiscount(base, pct)).toBe(3400);   // 34,000의 10% (36,000 기준이 아님)
   });
 });

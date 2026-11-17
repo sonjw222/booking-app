@@ -19,6 +19,7 @@ import {
   type TestUser,
 } from "./setup";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../lib/settings";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 
@@ -42,9 +43,9 @@ afterAll(async () => {
   await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
   const errors: string[] = [];
   for (const classId of createdClassIds) {
-    try { await cleanupTestClass(classId, []); } catch (e: any) { errors.push(e.message); }
+    try { await cleanupTestClass(classId, []); } catch (e) { errors.push(errorMessage(e)); }
   }
-  try { await saveSettings(centerAId, defaultSettings); } catch (e: any) { errors.push(e.message); }
+  try { await saveSettings(centerAId, defaultSettings); } catch (e) { errors.push(errorMessage(e)); }
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 30000);
 

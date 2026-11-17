@@ -33,8 +33,8 @@ async function seedNotification(accountId: string, title: string): Promise<strin
     .select("id")
     .single();
   if (error || !data) throw new Error(describeAdminQueryError("notifications", error));
-  seededIds.push((data as any).id);
-  return (data as any).id as string;
+  seededIds.push(data.id);
+  return data.id as string;
 }
 
 beforeAll(async () => {
@@ -60,7 +60,7 @@ describe("관리자 알림 고정/전체 삭제", () => {
 
     await setNotificationPinned(id, true);
     const { data: row1 } = await supabase.from("notifications").select("pinned").eq("id", id).single();
-    expect((row1 as any)?.pinned).toBe(true);
+    expect(row1?.pinned).toBe(true);
 
     // 세션을 완전히 끊고 다시 로그인해도(=클라이언트 상태를 전부 버려도) 유지되는지 확인
     // — 이게 "영구 저장"의 실질적 증거(로컬 state/localStorage였다면 여기서 사라짐).

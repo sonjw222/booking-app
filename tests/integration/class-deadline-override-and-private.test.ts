@@ -17,6 +17,7 @@ import {
   type TestUser,
 } from "./setup";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../lib/settings";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 
@@ -40,9 +41,9 @@ afterAll(async () => {
   await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
   const errors: string[] = [];
   for (const classId of createdClassIds) {
-    try { await cleanupTestClass(classId, []); } catch (e: any) { errors.push(e.message); }
+    try { await cleanupTestClass(classId, []); } catch (e) { errors.push(errorMessage(e)); }
   }
-  try { await saveSettings(centerAId, defaultSettings); } catch (e: any) { errors.push(e.message); }
+  try { await saveSettings(centerAId, defaultSettings); } catch (e) { errors.push(errorMessage(e)); }
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 30000);
 
@@ -62,10 +63,10 @@ describe("CLASS-001 D-1: 개별 수업 예약마감이 운영설정보다 우선
       })
       .select("id").single();
     if (clsErr || !cls) throw new Error("수업 생성 실패: " + clsErr?.message);
-    createdClassIds.push((cls as any).id);
+    createdClassIds.push(cls.id);
     await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
 
-    const { error } = await supabase.rpc("reserve_class", { p_class_id: (cls as any).id, p_profile_id: managerA.profileId });
+    const { error } = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: managerA.profileId });
     expect(error).not.toBeNull();
     expect(error?.message).toContain("예약 마감시간이 지났어요");
   });
@@ -77,7 +78,7 @@ describe("CLASS-001 D-1: 개별 수업 예약마감이 운영설정보다 우선
 
     const { data, error } = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: managerA.profileId });
     expect(error).toBeNull();
-    expect((data as any).status).toBe("confirmed");
+    expect(data.status).toBe("confirmed");
   });
 });
 
@@ -105,6 +106,6 @@ describe("CLASS-001 D-2: 프라이빗 수업 정원=1 서버 강제", () => {
       })
       .select("id").single();
     expect(error).toBeNull();
-    if (data) createdClassIds.push((data as any).id);
+    if (data) createdClassIds.push(data.id);
   });
 });

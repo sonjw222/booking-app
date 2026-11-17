@@ -21,7 +21,7 @@ type Row = {
 
 const PLAN = { id: "plan-1", name: "모하빗 센터 이용권", monthly_price: 39000 };
 let subs: Row[] = [];
-const charges: any[] = [];
+const charges: Record<string, unknown>[] = [];
 
 function makeRow(overrides: Partial<Row>): Row {
   const defaults: Row = {
@@ -34,16 +34,24 @@ function makeRow(overrides: Partial<Row>): Row {
 function fakeCenterSubscriptionsQuery() {
   let patch: Record<string, unknown> = {};
   const filters: Array<(r: Row) => boolean> = [];
-  const builder: any = {
+  interface Builder {
+    update(p: Record<string, unknown>): Builder;
+    in(field: keyof Row, vals: unknown[]): Builder;
+    eq(field: keyof Row, val: unknown): Builder;
+    or(): Builder;
+    select(): { maybeSingle: () => Promise<{ data: unknown; error: null }> };
+    then(resolve: (v: { data: null; error: null }) => void): void;
+  }
+  const builder: Builder = {
     update(p: Record<string, unknown>) { patch = p; return builder; },
-    in(field: keyof Row, vals: unknown[]) { filters.push((r) => vals.includes(r[field] as any)); return builder; },
+    in(field: keyof Row, vals: unknown[]) { filters.push((r) => vals.includes(r[field])); return builder; },
     eq(field: keyof Row, val: unknown) { filters.push((r) => r[field] === val); return builder; },
-    or(_expr: string) {
+    or() {
       const now = new Date().toISOString();
       filters.push((r) => r.billing_locked_until === null || r.billing_locked_until < now);
       return builder;
     },
-    select(_cols?: string) {
+    select() {
       const matches = subs.filter((r) => filters.every((f) => f(r)));
       matches.forEach((r) => Object.assign(r, patch));
       return {
@@ -53,7 +61,7 @@ function fakeCenterSubscriptionsQuery() {
         }),
       };
     },
-    then(resolve: (v: any) => void) {
+    then(resolve) {
       const matches = subs.filter((r) => filters.every((f) => f(r)));
       matches.forEach((r) => Object.assign(r, patch));
       resolve({ data: null, error: null });
@@ -69,7 +77,7 @@ vi.mock("@supabase/supabase-js", () => ({
     rpc: async (name: string) => (name === "is_center_owner" ? { data: true, error: null } : { data: null, error: null }),
     from(table: string) {
       if (table === "center_subscriptions") return fakeCenterSubscriptionsQuery();
-      if (table === "center_subscription_charges") return { insert: (p: any) => { charges.push(p); return Promise.resolve({ data: null, error: null }); } };
+      if (table === "center_subscription_charges") return { insert: (p: Record<string, unknown>) => { charges.push(p); return Promise.resolve({ data: null, error: null }); } };
       throw new Error(`unexpected table: ${table}`);
     },
   }),

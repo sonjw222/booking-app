@@ -36,7 +36,8 @@ export async function ensureQaCenter(admin: SupabaseClient, managerAccountId: st
     const owners = await admin
       .from("manager_centers").select("account_id, center_roles(is_owner)").eq("center_id", centerId).eq("status", "active");
     if (owners.error) throw new Error(`QA 센터 관리자 조회 실패 — ${describe("manager_centers", owners.error)}`);
-    const ownerIds = (owners.data ?? []).filter((r: any) => r.center_roles?.is_owner).map((r: any) => r.account_id as string);
+    const ownerRows = (owners.data ?? []) as unknown as { account_id: string; center_roles: { is_owner: boolean } | null }[];
+    const ownerIds = ownerRows.filter((r) => r.center_roles?.is_owner).map((r) => r.account_id as string);
     if (ownerIds.length > 0 && !ownerIds.includes(managerAccountId)) {
       throw new Error("이름이 같은 센터의 오너가 QA 매니저가 아닙니다. 실제 센터일 수 있어 QA를 중단합니다(수정하지 않음).");
     }
@@ -94,11 +95,11 @@ export async function auditQaAccountRelations(
   const warnings: string[] = [];
   const mc = await admin.from("manager_centers").select("center_id").eq("account_id", ids.managerAccountId);
   for (const r of mc.data ?? []) {
-    if ((r as any).center_id !== qaCenterId) warnings.push(`QA 매니저가 다른 센터(${(r as any).center_id})의 관리자로 연결돼 있어요(자동 변경 안 함)`);
+    if (r.center_id !== qaCenterId) warnings.push(`QA 매니저가 다른 센터(${r.center_id})의 관리자로 연결돼 있어요(자동 변경 안 함)`);
   }
   const cm = await admin.from("center_members").select("center_id").eq("profile_id", ids.memberProfileId);
   for (const r of cm.data ?? []) {
-    if ((r as any).center_id !== qaCenterId) warnings.push(`QA 회원이 다른 센터(${(r as any).center_id})의 회원으로 등록돼 있어요(자동 변경 안 함)`);
+    if (r.center_id !== qaCenterId) warnings.push(`QA 회원이 다른 센터(${r.center_id})의 회원으로 등록돼 있어요(자동 변경 안 함)`);
   }
   return warnings;
 }

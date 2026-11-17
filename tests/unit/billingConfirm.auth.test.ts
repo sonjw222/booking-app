@@ -25,7 +25,8 @@ describe("authorizeBillingConfirm (순수)", () => {
 const calls = { from: 0, fetch: 0, rpcOwner: 0 };
 let ownerAnswer = true;
 vi.mock("@supabase/supabase-js", () => {
-  const chain: any = { update: () => chain, eq: () => chain, in: () => chain, or: () => chain, select: () => chain, insert: () => chain, maybeSingle: async () => ({ data: null, error: null }) };
+  interface Chain { update: () => Chain; eq: () => Chain; in: () => Chain; or: () => Chain; select: () => Chain; insert: () => Chain; maybeSingle: () => Promise<unknown> }
+  const chain: Chain = { update: () => chain, eq: () => chain, in: () => chain, or: () => chain, select: () => chain, insert: () => chain, maybeSingle: async () => ({ data: null, error: null }) };
   return {
     createClient: () => ({
       auth: { getUser: async (t: string) => (t === "good" ? { data: { user: { id: "uid-1" } }, error: null } : { data: { user: null }, error: { message: "bad" } }) },

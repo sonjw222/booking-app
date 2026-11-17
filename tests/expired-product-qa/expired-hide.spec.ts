@@ -20,7 +20,7 @@ let OP = ""; const ids: Record<string, string> = {};
 test.beforeAll(async () => {
   OP = (await svc.from("centers").select("id").eq("name", "[QA] 심사 시험 스튜디오").single()).data!.id;
   for (const [k, mode, off] of [["어제", "date", -1], ["오늘", "date", 0], ["내일", "date", 1], ["일수", "days", 30]] as const) {
-    const r = await svc.from("products").insert({ center_id: OP, name: nm(k), price: 12000, product_kind: "pass", pass_type: "count", total_count: 5, is_active: true, is_on_sale: true, visibility_type: "all", expiry_mode: mode, expiry_date: mode === "date" ? kst(off) : null, expiry_days: mode === "days" ? off === 1 ? 1 : 30 : null }).select("id").single();
+    const r = await svc.from("products").insert({ center_id: OP, name: nm(k), price: 12000, product_kind: "pass", pass_type: "count", total_count: 5, is_active: true, is_on_sale: true, visibility_type: "all", expiry_mode: mode, expiry_date: mode === "date" ? kst(off) : null, expiry_days: mode === "days" ? off : null }).select("id").single();
     if (r.error) throw new Error(r.error.message); ids[k] = r.data.id;
   }
 });

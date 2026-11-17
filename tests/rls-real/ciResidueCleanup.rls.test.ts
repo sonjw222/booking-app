@@ -83,7 +83,7 @@ describe("사전 대조: 건수가 같아도 내용이 달라지면 중단", () 
     ["수업 행 내용이 바뀜", (s) => sql(`update classes set capacity=capacity+1 where id='${s.c[2]}'`), /행 내용이 계획과 다름/],
     ["연결 수강권의 잔여 횟수가 바뀜", (s) => sql(`update memberships set remaining_count=remaining_count-1 where id='${s.m1}'`), /수강권/],
     ["수업이 다른 센터로 옮겨짐", (s) => sql(`update classes set center_id='${OTHER_CENTER}' where id='${s.c[2]}'`), /행 내용이 계획과 다름/],
-    ["승인 목록 프로필의 계정 번호가 달라짐(이름은 그대로)", (s) => sql(`update profiles set account_id='${ACCT.C}' where id='${P.B1}'`), /계정 번호/],
+    ["승인 목록 프로필의 계정 번호가 달라짐(이름은 그대로)", () => sql(`update profiles set account_id='${ACCT.C}' where id='${P.B1}'`), /계정 번호/],
   ];
   for (const [name, mutate, re] of cases) {
     it(name, async () => {
@@ -215,9 +215,9 @@ describe("복원 — 승인된 계획·허용 테이블·기존 행 대조·복�
     const run = (b: unknown, sha = s.planSha) => runRestore({ client: client(), plan: s.plan, planSha: sha, backup: b, execute: true, acceptNotificationSideEffects: true });
     expect((await run(backup, "f".repeat(64))).state).toBe("backup-invalid");                                             // 다른 계획 해시
     expect((await run({ ...backup, reservations: backup.reservations.slice(1) })).state).toBe("backup-invalid");           // 변조(digest)
-    const evil = { ...backup, children: { ...backup.children, accounts: [{ id: randomUUID(), is_platform_admin: true }] } }; const { digest, ...rest } = evil;
+    const evil = { ...backup, children: { ...backup.children, accounts: [{ id: randomUUID(), is_platform_admin: true }] } }; const rest = Object.fromEntries(Object.entries(evil).filter(([k]) => k !== "digest"));
     evil.digest = sha256(stable({ ...rest, createdAt: undefined })); expect((await run(evil)).errors.join()).toContain("허용되지 않은 테이블");
-    const extra = { ...backup, classes: [...backup.classes, { ...backup.classes[0], id: randomUUID() }] }; const { digest: d2, ...r2 } = extra; extra.digest = sha256(stable({ ...r2, createdAt: undefined }));
+    const extra = { ...backup, classes: [...backup.classes, { ...backup.classes[0], id: randomUUID() }] }; const r2 = Object.fromEntries(Object.entries(extra).filter(([k]) => k !== "digest")); extra.digest = sha256(stable({ ...r2, createdAt: undefined }));
     expect((await run(extra)).state).toBe("backup-invalid");                                                                // 계획 밖 수업 id
     expect(exists("classes", s.c[0])).toBe(false);                                                                          // 어떤 경우에도 쓰기 없음
     expect(verifyBackup(s.plan, s.planSha, backup)).toEqual([]);

@@ -24,6 +24,7 @@ import {
   cleanupTestClassAdmin,
   type TestUser,
 } from "./setup";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
@@ -57,14 +58,14 @@ async function asUserB() { return switchToTestUser(USER_B.email, USER_B.password
 async function reserveAsCurrentUser(classId: string, profileId: string): Promise<{ id: string; status: string }> {
   const { data, error } = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: profileId });
   if (error) throw new Error(`예약 실패: ${error.message}`);
-  return { id: (data as any).reservation_id, status: (data as any).status };
+  return { id: data.reservation_id, status: data.status };
 }
 
 async function fetchReservationStatus(reservationId: string): Promise<string> {
   const admin = getFixtureAdminClient();
   const { data, error } = await admin.from("reservations").select("status").eq("id", reservationId).single();
   if (error) throw new Error(`예약 조회 실패: ${error.message}`);
-  return (data as any).status;
+  return data.status;
 }
 
 // confirmed 예약 1건(잔여 -1 소모된 상태)을 만든다: capacity 넉넉한 수업 + USER_B 멤버십.
@@ -86,8 +87,8 @@ async function makeConfirmedReservation(): Promise<{ reservationId: string; memb
   // 대신 소진돼 remaining_count가 안 바뀐 것처럼 보였다).
   const admin = getFixtureAdminClient();
   const { data: resRow, error: resErr } = await admin.from("reservations").select("membership_id").eq("id", res.id).single();
-  if (resErr || !(resRow as any)?.membership_id) throw new Error(`예약의 membership_id 조회 실패: ${resErr?.message ?? "membership_id가 null"}`);
-  const membershipId = (resRow as any).membership_id as string;
+  if (resErr || !resRow?.membership_id) throw new Error(`예약의 membership_id 조회 실패: ${resErr?.message ?? "membership_id가 null"}`);
+  const membershipId = resRow.membership_id as string;
   const remaining = await fetchMembershipRemaining(membershipId);
   return { reservationId: res.id, membershipId, remainingAfterBooking: remaining ?? 0 };
 }
@@ -137,9 +138,9 @@ afterAll(async () => {
   await asManagerA();
   const errors: string[] = [];
   for (const classId of cleanupClassIds) {
-    try { await cleanupTestClassAdmin(classId); } catch (e: any) { errors.push(e.message); }
+    try { await cleanupTestClassAdmin(classId); } catch (e) { errors.push(errorMessage(e)); }
   }
-  try { await saveSettings(centerAId, originalSettings); } catch (e: any) { errors.push(e.message); }
+  try { await saveSettings(centerAId, originalSettings); } catch (e) { errors.push(errorMessage(e)); }
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 30000);
 
@@ -149,7 +150,7 @@ describe("SEC-115 ATT-SEC-A~B: 취소 시 차감 복구 정확성", () => {
     await asManagerA();
     const { data, error } = await supabase.rpc("manager_set_attendance", { p_reservation_id: reservationId, p_status: "cancelled" });
     expect(error).toBeNull();
-    expect((data as any).restored).toBe(true);
+    expect(data.restored).toBe(true);
     expect(await fetchMembershipRemaining(membershipId)).toBe(remainingAfterBooking + 1);
   });
 
@@ -158,7 +159,7 @@ describe("SEC-115 ATT-SEC-A~B: 취소 시 차감 복구 정확성", () => {
     await asManagerA();
     const { data, error } = await supabase.rpc("manager_set_attendance", { p_reservation_id: reservationId, p_status: "cancelled" });
     expect(error).toBeNull();
-    expect((data as any).restored).toBe(false);
+    expect(data.restored).toBe(false);
     expect(await fetchMembershipRemaining(membershipId)).toBe(remainingBefore);
   });
 });
@@ -250,7 +251,7 @@ describe("SEC-115 ATT-SEC-K [2026-08-14 추가]: ADMIN_FREE 배치는 membership
       p_membership_id: null, p_reason_code: "EVENT", p_reason_detail: null, p_force_capacity: false,
     });
     if (assignErr) throw new Error(`ADMIN_FREE 배치 실패: ${assignErr.message}`);
-    const reservationId = (data as any).reservation_id;
+    const reservationId = data.reservation_id;
 
     // membership_id가 null이므로 SEC-115 fix의 "status in (...) and membership_id is not null"
     // 조건에서 membership_id is not null이 애초에 거짓 — restore 블록 자체가 실행되지 않는다.
@@ -258,6 +259,6 @@ describe("SEC-115 ATT-SEC-K [2026-08-14 추가]: ADMIN_FREE 배치는 membership
     expect(error).toBeNull();
     const admin = getFixtureAdminClient();
     const { data: resRow } = await admin.from("reservations").select("membership_id").eq("id", reservationId).single();
-    expect((resRow as any)?.membership_id).toBeNull();
+    expect(resRow?.membership_id).toBeNull();
   });
 });

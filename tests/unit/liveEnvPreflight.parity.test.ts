@@ -1,4 +1,3 @@
-// @ts-expect-error — 순수 JS(.mjs) 모듈
 import { checkLiveEnv, productionRefInUrl, projectRefFromSupabaseKey } from "../../scripts/ci/liveEnvPreflight.mjs";
 import { describe, expect, it } from "vitest";
 import { assertIntegrationTargetIsNotProduction, productionRefInUrl as tsRefInUrl, projectRefFromSupabaseKey as tsRefFromKey } from "../integration/productionGuard";

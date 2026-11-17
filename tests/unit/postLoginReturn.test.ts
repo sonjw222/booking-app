@@ -7,8 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { consumePostLoginNext, stashPostLoginNext } from "../../lib/postLoginReturn";
 
 beforeEach(() => {
-  (globalThis as any).sessionStorage = (() => {
-    let store: Record<string, string> = {};
+  (globalThis as unknown as { sessionStorage?: unknown }).sessionStorage = (() => {
+    const store: Record<string, string> = {};
     return {
       getItem: (k: string) => store[k] ?? null,
       setItem: (k: string, v: string) => { store[k] = v; },
@@ -18,7 +18,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  delete (globalThis as any).sessionStorage;
+  delete (globalThis as unknown as { sessionStorage?: unknown }).sessionStorage;
 });
 
 describe("stashPostLoginNext / consumePostLoginNext", () => {

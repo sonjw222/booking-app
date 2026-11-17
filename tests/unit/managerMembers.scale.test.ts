@@ -8,7 +8,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const MAX_ROWS_DEFAULT = 1000;
 const URL_LIMIT = 8000;   // 일반적인 프록시/서버 요청 URL 한도를 보수적으로 흉내
 
-type Row = Record<string, any>;
+type Row = Record<string, unknown>;
+type Cell = string | number | null | undefined;
 const state = {
   tables: {} as Record<string, Row[]>,
   maxRows: MAX_ROWS_DEFAULT,
@@ -20,7 +21,7 @@ const state = {
   maxInFlight: 0,
 };
 
-function cmp(a: any, b: any, asc: boolean): number {
+function cmp(a: Cell, b: Cell, asc: boolean): number {
   if (a == null && b == null) return 0;
   if (a == null) return asc ? 1 : -1;      // PostgreSQL: ASC는 NULLS LAST, DESC는 NULLS FIRST
   if (b == null) return asc ? -1 : 1;
@@ -39,19 +40,24 @@ vi.mock("../../lib/supabaseClient", () => ({
     from(table: string) {
       let selectStr = "";
       let wantCount = false;
-      const eqs: [string, any][] = [];
+      const eqs: [string, unknown][] = [];
       const ins: [string, string[]][] = [];
       const orders: [string, boolean][] = [];
       let range: [number, number] | null = null;
       let limitN: number | null = null;
-      const chain: any = {
+      interface Chain {
+        select(s: string, o?: { count?: string }): Chain; eq(c: string, v: unknown): Chain; in(c: string, v: string[]): Chain;
+        order(c: string, o?: { ascending?: boolean }): Chain; range(a: number, b: number): Chain; limit(n: number): Chain;
+        then(res: (v: unknown) => unknown, rej: (e: unknown) => unknown): Promise<unknown>;
+      }
+      const chain: Chain = {
         select(s: string, o?: { count?: string }) { selectStr = s; wantCount = o?.count === "exact"; return chain; },
-        eq(c: string, v: any) { eqs.push([c, v]); return chain; },
+        eq(c: string, v: unknown) { eqs.push([c, v]); return chain; },
         in(c: string, v: string[]) { ins.push([c, v]); return chain; },
         order(c: string, o?: { ascending?: boolean }) { orders.push([c, o?.ascending !== false]); return chain; },
         range(a: number, b: number) { range = [a, b]; return chain; },
         limit(n: number) { limitN = n; return chain; },
-        then(res: any, rej: any) {
+        then(res, rej) {
           const urlLen = 40 + table.length + selectStr.length + eqs.map((e) => `&${e[0]}=eq.${e[1]}`).join("").length
             + ins.map(([c, v]) => `&${c}=in.(${v.join(",")})`).join("").length
             + orders.map((o) => `${o[0]}.${o[1] ? "asc" : "desc"}`).join(",").length;
@@ -60,8 +66,8 @@ vi.mock("../../lib/supabaseClient", () => ({
             state.log.push(entry);
             if (urlLen > URL_LIMIT) { entry.error = true; return { data: null, error: { message: "Bad Request: URI too long" }, count: null }; }
             if (table === "memberships" && state.membershipError) { entry.error = true; return { data: null, error: { message: state.membershipError }, count: null }; }
-            let rows = (state.tables[table] ?? []).filter((r) => eqs.every(([c, v]) => r[c] === v) && ins.every(([c, v]) => v.includes(r[c])));
-            for (const [c, asc] of [...orders].reverse()) rows = [...rows].sort((a, b) => cmp(a[c], b[c], asc));
+            let rows = (state.tables[table] ?? []).filter((r) => eqs.every(([c, v]) => r[c] === v) && ins.every(([c, v]) => v.includes(r[c] as string)));
+            for (const [c, asc] of [...orders].reverse()) rows = [...rows].sort((a, b) => cmp(a[c] as Cell, b[c] as Cell, asc));
             const total = rows.length;
             let cap = state.maxRows;
             if (limitN != null) cap = Math.min(cap, limitN);

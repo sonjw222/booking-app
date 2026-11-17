@@ -131,8 +131,8 @@ describe("프라이빗 수업 — 정원 마감 시 대기예약 없이 바로 �
 
     await asManagerA();
     const { data: rows } = await supabase.from("reservations").select("id, profile_id, status").eq("class_id", cls.id);
-    track.reservationIds.push(...(rows ?? []).map((r: any) => r.id as string));
-    expect((rows ?? []).filter((r: any) => r.status !== "cancelled").length).toBe(1);
+    track.reservationIds.push(...(rows ?? []).map((r) => r.id as string));
+    expect((rows ?? []).filter((r) => r.status !== "cancelled").length).toBe(1);
   });
 
   it("admin_assign_reservation: 정원 초과 강제 배치(force_capacity)가 프라이빗 수업에서는 거부된다", async () => {

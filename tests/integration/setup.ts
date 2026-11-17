@@ -367,7 +367,7 @@ async function sweepStaleTestClasses(centerId: string, centerName: string): Prom
     // 스윕 실패는 이 테스트 실행 자체를 막을 이유가 아니다 — 다음 실행에서 다시 시도된다.
     return;
   }
-  const ids = (staleClasses ?? []).map((c: any) => c.id as string);
+  const ids = (staleClasses ?? []).map((c) => c.id as string);
   if (ids.length === 0) return;
 
   // PostgREST 요청 URL 길이 제한(실측 확인된 패턴, lib/reservations.ts와 동일 관례)을
@@ -457,7 +457,16 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
     .from("manager_centers")
     .select("center_id, role_id, center_roles(is_owner), centers(id, name, created_at, status)")
     .eq("account_id", manager.accountId)
-    .eq("status", "active");
+    .eq("status", "active")
+    .overrideTypes<
+      {
+        center_id: string | null;
+        role_id: string | null;
+        center_roles: { is_owner: boolean } | null;
+        centers: { id: string; name: string; created_at: string; status: string } | null;
+      }[],
+      { merge: false }
+    >();
   if (mcErr) throw new Error(`manager_centers 조회 실패: ${describeAdminQueryError("manager_centers", mcErr)}`);
 
   // created_at 오름차순(+id를 동률 방지용 2차 정렬) — PostgREST의 기본 행 순서는
@@ -466,7 +475,7 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
   // 픽스처 오염) 매 실행마다 다른 센터를 고를 수 있었다 — E2E CI가 간헐적으로 실패하던
   // 원인. 항상 "가장 먼저 만들어진 것" 하나로 고정해 실행마다 결과가 달라지지 않게 한다.
   const candidates = (rows ?? [])
-    .map((r: any) => ({
+    .map((r) => ({
       centerId: r.center_id as string | null,
       isOwner: !!r.center_roles?.is_owner,
       centerName: String(r.centers?.name ?? ""),
@@ -696,7 +705,7 @@ export async function fetchMembershipRemaining(membershipId: string): Promise<nu
     .eq("id", membershipId)
     .single();
   if (error) throw new Error(`수강권 조회 실패: ${error.message}`);
-  return (data as any).remaining_count;
+  return data.remaining_count;
 }
 
 // 정리(best-effort): admin_cancel_reservation으로 취소 → 취소된 예약만 삭제 가능한 RLS를 만족시킨 뒤
@@ -777,10 +786,13 @@ export async function clearProfileReservationsOnKstDates(
     .eq("profile_id", profileId)
     .in("status", ["confirmed", "waitlisted", "attended"]);
   if (centerId) query = query.eq("classes.center_id", centerId);
-  const { data, error } = await query;
+  const { data, error } = await query.overrideTypes<
+    { id: string; status: string; classes: { start_time: string } | null }[],
+    { merge: false }
+  >();
   if (error) throw new Error(`leftover 예약 조회 실패(profile=${profileId}): ${error.message}`);
-  const target = (data ?? []).filter((r: any) => r.classes && kstDates.includes(kstDateStr(r.classes.start_time)));
+  const target = (data ?? []).filter((r) => r.classes && kstDates.includes(kstDateStr(r.classes.start_time)));
   if (target.length === 0) return;
-  const { error: delErr } = await admin.from("reservations").delete().in("id", target.map((r: any) => r.id));
+  const { error: delErr } = await admin.from("reservations").delete().in("id", target.map((r) => r.id));
   if (delErr) throw new Error(`leftover 예약 정리 실패(profile=${profileId}): ${delErr.message}`);
 }

@@ -170,8 +170,8 @@ describe("P1-10: 관리자 직접배치 — 탈퇴/휴면 회원은 customer.mem
       p_reason_code: "MEMBER_REQUEST", p_reason_detail: null, p_force_capacity: false,
     });
     expect(error).toBeNull();
-    expect((data as any).reservation_id).toBeTruthy();
-    entry.reservationIds.push((data as any).reservation_id);
+    expect(data.reservation_id).toBeTruthy();
+    entry.reservationIds.push(data.reservation_id);
 
     await asManagerA();
     await setStaffOverride(staffManagerCenterId!, PERM_KEY, null);
@@ -190,8 +190,8 @@ describe("P1-10: 관리자 직접배치 — 탈퇴/휴면 회원은 customer.mem
       p_reason_code: "MEMBER_REQUEST", p_reason_detail: null, p_force_capacity: false,
     });
     expect(error).toBeNull();
-    expect((data as any).reservation_id).toBeTruthy();
-    entry.reservationIds.push((data as any).reservation_id);
+    expect(data.reservation_id).toBeTruthy();
+    entry.reservationIds.push(data.reservation_id);
   });
 
   it("활성 회원은 권한 없는 스태프도 정상 배치할 수 있다(대조군 — 게이트가 활성 회원까지 막지 않음)", async () => {
@@ -207,7 +207,7 @@ describe("P1-10: 관리자 직접배치 — 탈퇴/휴면 회원은 customer.mem
       p_reason_code: "MEMBER_REQUEST", p_reason_detail: null, p_force_capacity: false,
     });
     expect(error).toBeNull();
-    expect((data as any).reservation_id).toBeTruthy();
-    entry.reservationIds.push((data as any).reservation_id);
+    expect(data.reservation_id).toBeTruthy();
+    entry.reservationIds.push(data.reservation_id);
   });
 });

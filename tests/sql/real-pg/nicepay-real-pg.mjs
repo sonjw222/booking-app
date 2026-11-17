@@ -11,7 +11,7 @@ if (!URL_) { console.log('SKIP: REAL_PG_URL 미설정 (격리 로컬 PostgreSQL�
 const u = new URL(URL_);
 if (!['127.0.0.1', 'localhost', '::1', '[::1]'].includes(u.hostname)) { console.error(`REFUSED: loopback 이외 호스트(${u.hostname})에는 접속하지 않습니다`); process.exit(2); }
 const { default: pg } = await import('pg');
-const { id, C1, CI, P1, ACC, AUTH, MGR, PROD } = W;
+const { id, C1, P1, ACC, AUTH, PROD } = W;
 
 const DB = `qa_nicepay_${Math.random().toString(36).slice(2, 10)}`;
 const adminUrl = URL_;
@@ -43,7 +43,6 @@ const base = await connect(dbUrl);
 const sessions = [base];
 const newSession = async () => { const c = await connect(dbUrl); sessions.push(c); return c; };
 const q1 = async (c, sql, params) => (await c.query(sql, params)).rows[0];
-const asService = c => c;   // JWT 없음(auth.uid() null) = service_role 대리 (슈퍼유저 세션이지만 앱 서버 경로와 동일하게 auth.uid()가 없다)
 
 try {
   // ---- 월드 설치: 롤은 클러스터 단위라 이미 있으면 건너뜀. 나머지는 PGlite 테스트와 동일한 SQL.
@@ -58,7 +57,7 @@ try {
   const snapOriginal = async c => Object.fromEntries(await Promise.all(Object.entries({
     helper: 'public._issue_membership_and_record_payment(orders,text,text)', fulfill: 'public.fulfill_order(uuid)', core: 'public._refund_membership_core(uuid,uuid,boolean,boolean)',
     trigger: 'public.orders_guard_status_transition()', settlement: 'public.admin_center_settlement_summary(date,date)' }).map(async ([k, v]) => [k, (await q1(c, `select pg_get_functiondef('${v}'::regprocedure) d`)).d])));
-  const original = await snapOriginal(base);
+  await snapOriginal(base);
   await base.query(W.refundFix);
   await base.query(W.gateFix);
   await base.query(W.support);
@@ -150,7 +149,7 @@ try {
   await t('R5. 서로 다른 두 주문이 같은 TID를 동시에 승인 기록: 정확히 1건만 성공(TID 재사용 불가)', async () => {
     const [A, B] = [await newSession(), await newSession()];
     const o1 = await mkOrder(base, 'nicepay'), o2 = await mkOrder(base, 'nicepay'); const c1 = await claim(base, o1), c2 = await claim(base, o2);
-    const res = await Promise.all([approve(A, o1, c1, 'TID-R5', 10000).then(() => 'ok', e => 'err'), approve(B, o2, c2, 'TID-R5', 10000).then(() => 'ok', e => 'err')]);
+    const res = await Promise.all([approve(A, o1, c1, 'TID-R5', 10000).then(() => 'ok', () => 'err'), approve(B, o2, c2, 'TID-R5', 10000).then(() => 'ok', () => 'err')]);
     assert.deepEqual(res.slice().sort(), ['err', 'ok']);
     assert.equal(Number((await q1(base, `select count(*)::int c from nicepay_pg_approvals where tid='TID-R5'`)).c), 1);
   });

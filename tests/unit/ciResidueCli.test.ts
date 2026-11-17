@@ -5,8 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import * as coreModule from "../../scripts/ci-residue/core.mjs";
 import * as pinnedModule from "../../scripts/ci-residue/pinned.mjs";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const { sha256, stable } = coreModule as any; const { PINNED_PLAN_SHA256, DEFAULT_PLAN } = pinnedModule as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+const { sha256, stable } = coreModule; const { PINNED_PLAN_SHA256, DEFAULT_PLAN } = pinnedModule;
 
 // CLI 를 실제로 실행하되, 모든 경우가 네트워크 접속 "전에" 중단되는 입력만 쓴다(공유 DEV 접속 없음).
 const run = (script: string, args: string[], env: Record<string, string>) => spawnSync("node", ["--no-warnings", `scripts/ci-residue/${script}`, ...args], { env: { PATH: process.env.PATH ?? "", ...env } as unknown as NodeJS.ProcessEnv, encoding: "utf8" as const, timeout: 20000 });

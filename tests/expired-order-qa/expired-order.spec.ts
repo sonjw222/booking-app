@@ -56,7 +56,7 @@ async function openOrders(page: Page) {
   await expect(page.getByText(nm("정상")).first()).toBeVisible({ timeout: 20_000 });
 }
 const row = (page: Page, k: string) => page.locator(".order-row", { has: page.locator(`text=${nm(k === "정상" ? "정상" : "만료")}`) });
-const rowOf = (page: Page, id: string) => page.locator(".order-row").filter({ hasText: nm("만료") });   // 만료 상품 주문 행 모음
+const rowOf = (page: Page) => page.locator(".order-row").filter({ hasText: nm("만료") });   // 만료 상품 주문 행 모음
 test("로그인 후 주문 화면 — 만료 상품 주문은 수납 확인 안내, 정상 주문 UI는 그대로", async ({ page }, info) => {
   await loginManager(page); await openOrders(page);
   await expect(page.getByTestId("expired-order-notice")).toHaveCount(4);

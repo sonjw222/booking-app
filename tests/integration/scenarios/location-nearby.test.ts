@@ -50,8 +50,8 @@ describe("위치 기반 '내 주변 센터' 반경 필터(수정 후 regression)
       .select("id")
       .single();
     if (error || !data) throw new Error(`테스트 센터 생성 실패: ${error?.message ?? "no data"}`);
-    pendingCenterIds.push((data as any).id);
-    return (data as any).id as string;
+    pendingCenterIds.push(data.id);
+    return data.id as string;
   }
 
   it("요청 원문 fixture 그대로: 회원 위치=제주 → 제주 센터만 표시, 서울/강원/부산 제외", async () => {

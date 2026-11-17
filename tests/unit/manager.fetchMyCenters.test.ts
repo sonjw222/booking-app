@@ -17,7 +17,7 @@ const centersListMock = vi.fn();
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
     rpc: (...args: unknown[]) => rpcMock(...args),
-    from: (_table: string) => {
+    from: () => {
       // manager_centers: getMyAccountId()의 active 소속 count 체크(select(..., {head:true}))와
       // fetchMyCenters()의 실제 목록 조회를 select() 호출 인자로 구분한다.
       return {

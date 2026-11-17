@@ -27,6 +27,7 @@ import {
   createTestMembership,
   type TestUser,
 } from "./setup";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
@@ -68,8 +69,8 @@ beforeAll(async () => {
   const { data: rowsStatus, error: statusErr } = await admin
     .from("centers").select("id, status").in("id", [centerAId, centerBId]);
   if (statusErr || !rowsStatus) throw new Error("센터 상태 조회 실패: " + statusErr?.message);
-  origStatusA = rowsStatus.find((r: any) => r.id === centerAId)!.status;
-  origStatusB = rowsStatus.find((r: any) => r.id === centerBId)!.status;
+  origStatusA = rowsStatus.find((r) => r.id === centerAId)!.status;
+  origStatusB = rowsStatus.find((r) => r.id === centerBId)!.status;
 
   // centerB를 승인 상태로 바꿔, "RLS라서 못 본다"가 아니라 "멤버십이 없어서 제외한다"는
   // fetchMonthData 자체의 필터를 정확히 검증한다(둘 다 승인돼도 안 보여야 진짜 회귀 검증).
@@ -114,12 +115,12 @@ beforeAll(async () => {
 
 afterAll(async () => {
   const errors: string[] = [];
-  try { await deleteFixtureRows(); } catch (e: any) { errors.push(e.message); }
+  try { await deleteFixtureRows(); } catch (e) { errors.push(errorMessage(e)); }
   try {
     const admin = getFixtureAdminClient();
     await admin.from("centers").update({ status: origStatusA }).eq("id", centerAId);
     await admin.from("centers").update({ status: origStatusB }).eq("id", centerBId);
-  } catch (e: any) { errors.push(e.message); }
+  } catch (e) { errors.push(errorMessage(e)); }
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 60000);
 

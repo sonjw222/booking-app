@@ -5,18 +5,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const read = (p: string) => readFileSync(join(__dirname, "../..", p), "utf-8");
 
-const inserts: any[] = [];
+type Rec = Record<string, unknown>;
+const inserts: Rec[] = [];
 let failCode: string | null = null;
-let rows: any[] = [];
+let rows: Rec[] = [];
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
-    from: (_t: string) => {
+    from: () => {
       let selected = "";
-      let insertedRow: any = undefined;
-      const chain: any = {
+      let insertedRow: Rec | undefined = undefined;
+      interface Chain { select(columns?: string): Chain; eq(): Chain; order(): Chain; in(): Chain; insert(row: Rec): Chain; then(res: (v: unknown) => unknown): Promise<unknown> }
+      const chain: Chain = {
         select(columns?: string) { selected = columns ?? ""; return chain; }, eq() { return chain; }, order() { return chain; }, in() { return chain; },
-        insert(row: any) { insertedRow = row; inserts.push(row); return chain; },
-        then(res: any) {
+        insert(row: Rec) { insertedRow = row; inserts.push(row); return chain; },
+        then(res) {
           const nodeTypeAccess =
             insertedRow ? "node_type" in insertedRow : selected.includes("node_type");
           if (failCode && nodeTypeAccess) return Promise.resolve({ data: null, error: { code: failCode, message: "no node_type" } }).then(res);

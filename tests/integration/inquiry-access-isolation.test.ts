@@ -20,7 +20,6 @@ const USER_B = { email: "TEST_USER_B_EMAIL", password: "TEST_USER_B_PASSWORD" };
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
 
-let userA: TestUser;
 let managerA: TestUser;
 let centerAId: string;
 let threadId: string;
@@ -29,7 +28,7 @@ beforeAll(async () => {
   managerA = await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
   centerAId = await getOrCreateOwnedTestCenter(managerA);
 
-  userA = await switchToTestUser(USER_A.email, USER_A.password);
+  await switchToTestUser(USER_A.email, USER_A.password);
   threadId = await openThread(centerAId);
   await sendMessage(threadId, "격리 테스트용 문의 메시지");
 }, 30000);
