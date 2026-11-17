@@ -21,6 +21,7 @@ import {
   type TestUser,
 } from "./setup";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../lib/settings";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 
@@ -44,9 +45,9 @@ afterAll(async () => {
   await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
   const errors: string[] = [];
   for (const classId of createdClassIds) {
-    try { await cleanupTestClass(classId, []); } catch (e: any) { errors.push(e.message); }
+    try { await cleanupTestClass(classId, []); } catch (e) { errors.push(errorMessage(e)); }
   }
-  try { await saveSettings(centerAId, defaultSettings); } catch (e: any) { errors.push(e.message); }
+  try { await saveSettings(centerAId, defaultSettings); } catch (e) { errors.push(errorMessage(e)); }
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 30000);
 
@@ -84,7 +85,7 @@ describe("운영설정 재검증: 관리자 설정 화면과 동일한 저장 �
 
     const { data, error } = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: managerA.profileId });
     expect(error).toBeNull();
-    expect((data as any).status).toBe("confirmed");
+    expect(data.status).toBe("confirmed");
   });
 });
 
@@ -136,7 +137,7 @@ describe("운영설정 재검증: 예약 오픈 시점(그룹)이 취소 마감 
 
     const { data, error } = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: managerA.profileId });
     expect(error).toBeNull();
-    expect((data as any).status).toBe("confirmed");
+    expect(data.status).toBe("confirmed");
   });
 
   it("프라이빗 수업도 그룹과 별개의 오픈 설정(private_open_*)을 쓴다", async () => {
@@ -160,10 +161,10 @@ describe("운영설정 재검증: 예약 오픈 시점(그룹)이 취소 마감 
       })
       .select("id").single();
     if (clsErr || !cls) throw new Error("프라이빗 수업 생성 실패: " + clsErr?.message);
-    createdClassIds.push((cls as any).id);
+    createdClassIds.push(cls.id);
     await createTestMembership(centerAId, managerA.profileId, { remainingCount: 3 });
 
-    const { error } = await supabase.rpc("reserve_class", { p_class_id: (cls as any).id, p_profile_id: managerA.profileId });
+    const { error } = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: managerA.profileId });
     expect(error).not.toBeNull();
     expect(error?.message).toContain("아직 예약이 열리지 않았어요");
   });

@@ -40,6 +40,7 @@ import {
   type TestUser,
 } from "./setup";
 import { fetchSettings, saveSettings } from "../../lib/settings";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
@@ -154,8 +155,8 @@ async function createIsolatedOwnedCenter(manager: TestUser): Promise<string> {
     // delete_test_center_cascade() RPC 하나로 교체 — 앞으로 새 FK 위반이 나오면 이 RPC만
     // 갱신하면 되고, 이 파일이나 다른 테스트 파일을 다시 뒤질 필요가 없다.
     for (const c of staleCenters ?? []) {
-      const { error } = await admin.rpc("delete_test_center_cascade", { p_center_id: (c as any).id });
-      if (error) throw new Error(`이전 격리센터 정리 실패(id=${(c as any).id}): ${error.message}`);
+      const { error } = await admin.rpc("delete_test_center_cascade", { p_center_id: c.id });
+      if (error) throw new Error(`이전 격리센터 정리 실패(id=${c.id}): ${error.message}`);
     }
   }
   // [P0-7/N/O 수정] status가 'approved'가 아니면 reserve_class() 등 여러 RPC가
@@ -255,23 +256,23 @@ afterAll(async () => {
   await asManagerA();
   const errors: string[] = [];
   for (const classId of cleanupClassIds) {
-    try { await cleanupTestClassAdmin(classId); } catch (e: any) { errors.push(e.message); }
+    try { await cleanupTestClassAdmin(classId); } catch (e) { errors.push(errorMessage(e)); }
   }
   const admin = getFixtureAdminClient();
   for (const productId of cleanupScheduleRuleProductIds) {
     try { await admin.from("membership_schedule_rules").delete().eq("product_id", productId); }
-    catch (e: any) { errors.push(e.message); }
+    catch (e) { errors.push(errorMessage(e)); }
   }
   for (const h of cleanupHolidays) {
     try { await admin.from("center_holidays").delete().eq("center_id", h.centerId).eq("holiday_date", h.date); }
-    catch (e: any) { errors.push(e.message); }
+    catch (e) { errors.push(errorMessage(e)); }
   }
   if (cleanupProductIds.length > 0) {
     try {
       const { error } = await admin.from("products").delete().in("id", cleanupProductIds);
       if (error) throw error;
     }
-    catch (e: any) { errors.push(e.message); }
+    catch (e) { errors.push(errorMessage(e)); }
   }
   // [P2-28 근본 수정] 이 파일이 이번 실행에서 만든 격리 센터도, 위 stale 정리와 같은
   // 이유로 manager_centers/center_roles/center_settings 세 테이블만으로는 부족했다
@@ -282,7 +283,7 @@ afterAll(async () => {
       const { error } = await admin.rpc("delete_test_center_cascade", { p_center_id: centerId });
       if (error) throw error;
     }
-    catch (e: any) { errors.push(`격리센터 정리 실패(id=${centerId}): ${e.message}`); }
+    catch (e) { errors.push(`격리센터 정리 실패(id=${centerId}): ${errorMessage(e)}`); }
   }
   // 존재하지 않는 userA를 참조하던 중복 안전장치를 제거함(2026-08-18) — AUTO-SEC-K가
   // 이미 자체 try/finally로 userB의 is_platform_admin을 확실히 원복한다(테스트 본문
@@ -301,10 +302,10 @@ describe("SEC-114 AUTO-SEC-A~E: 권한 경계", () => {
 
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).toBeNull();
-    expect((data as any).booked).toBeGreaterThanOrEqual(1);
+    expect(data.booked).toBeGreaterThanOrEqual(1);
 
     const after = await fetchMembership(mem.id);
-    expect(after.remaining_count).toBe(3 - (data as any).booked);
+    expect(after.remaining_count).toBe(3 - data.booked);
     const res = await fetchReservationsFor(mem.id);
     expect(res.some((r) => r.profile_id === userB.profileId && r.status === "confirmed")).toBe(true);
   });
@@ -406,7 +407,7 @@ describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합)
 
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).toBeNull();
-    expect((data as any).booked).toBe(0);
+    expect(data.booked).toBe(0);
     expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
   });
 
@@ -431,7 +432,7 @@ describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합)
 
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).toBeNull();
-    expect((data as any).booked).toBe(0);
+    expect(data.booked).toBe(0);
     expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
   });
 
@@ -451,7 +452,7 @@ describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합)
 
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).toBeNull();
-    expect((data as any).booked).toBe(0);
+    expect(data.booked).toBe(0);
     expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
   });
 
@@ -477,7 +478,7 @@ describe("SEC-114 AUTO-SEC-F~H: 정책 회귀(현대 예약 정책과의 정합)
 
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).toBeNull();
-    expect((data as any).booked).toBe(0);
+    expect(data.booked).toBe(0);
     expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
   });
 });
@@ -499,7 +500,7 @@ describe("SEC-114 AUTO-SEC-I~J: 정상 동작 정확성", () => {
 
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).toBeNull();
-    const booked = (data as any).booked as number;
+    const booked = data.booked as number;
     expect(booked).toBe(2);
 
     const after = await fetchMembership(mem.id);
@@ -523,12 +524,12 @@ describe("SEC-114 AUTO-SEC-I~J: 정상 동작 정확성", () => {
 
     const second = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(second.error).toBeNull();
-    expect((second.data as any).booked).toBe(0);
+    expect(second.data.booked).toBe(0);
 
     const afterSecond = await fetchMembership(mem.id);
     expect(afterSecond.remaining_count).toBe(afterFirst.remaining_count);
     const res = await fetchReservationsFor(mem.id);
-    expect(res.filter((r) => r.status === "confirmed")).toHaveLength((first.data as any).booked);
+    expect(res.filter((r) => r.status === "confirmed")).toHaveLength(first.data.booked);
   });
 });
 
@@ -549,7 +550,7 @@ describe("SEC-114 AUTO-SEC-K~L: platform admin 허용 + fulfill_order 내부 호
     try {
       const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
       expect(error).toBeNull();
-      expect((data as any).booked).toBeGreaterThanOrEqual(1);
+      expect(data.booked).toBeGreaterThanOrEqual(1);
     } finally {
       const { error: resetErr } = await admin
         .from("accounts")
@@ -590,10 +591,10 @@ describe("SEC-114 AUTO-SEC-K~L: platform admin 허용 + fulfill_order 내부 호
       .single();
     if (orderErr || !order) throw new Error("AUTO-SEC-L 주문 생성 실패: " + orderErr?.message);
 
-    const { data, error } = await supabase.rpc("fulfill_order", { p_order_id: (order as any).id });
+    const { data, error } = await supabase.rpc("fulfill_order", { p_order_id: order.id });
     expect(error).toBeNull();
-    expect((data as any)?.already_done).toBe(false);
-    const newMembershipId = (data as any)?.membership_id as string;
+    expect(data?.already_done).toBe(false);
+    const newMembershipId = data?.membership_id as string;
     expect(newMembershipId).toBeTruthy();
 
     const after = await fetchMembership(newMembershipId);
@@ -642,7 +643,7 @@ describe("SEC-114 AUTO-SEC-M~P: 나머지 정책 회귀 커버리지(이번 배�
     // 지정도 예약조건을 건너뛰지 않는다(AUTO-SEC-F의 'all' 모드와 같은 결과: booked=0, 잔여 변화 없음).
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).toBeNull();
-    expect((data as any).booked).toBe(0);
+    expect(data.booked).toBe(0);
     expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
   });
 
@@ -678,7 +679,7 @@ describe("SEC-114 AUTO-SEC-M~P: 나머지 정책 회귀 커버리지(이번 배�
 
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).toBeNull();
-    expect((data as any).booked).toBe(0);
+    expect(data.booked).toBe(0);
     expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
   });
 
@@ -717,7 +718,7 @@ describe("SEC-114 AUTO-SEC-M~P: 나머지 정책 회귀 커버리지(이번 배�
 
     const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).toBeNull();
-    expect((data as any).booked).toBe(0);
+    expect(data.booked).toBe(0);
     expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
   });
 
@@ -736,7 +737,7 @@ describe("SEC-114 AUTO-SEC-M~P: 나머지 정책 회귀 커버리지(이번 배�
 
       const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
       expect(error).toBeNull();
-      expect((data as any).booked).toBe(0);
+      expect(data.booked).toBe(0);
       expect((await fetchMembership(mem.id)).remaining_count).toBe(3);
     } finally {
       await asManagerA();

@@ -44,7 +44,7 @@ describe("SCN-P2-50: 예약 관련 알림 큐 생성(발송 아님)", () => {
       .eq("center_id", centerAId)
       .single();
     if (readErr) throw new Error(`테스트 센터 설정 조회 실패: ${readErr.message}`);
-    originalWaitlistWeeklyLimit = (existingSettings as any).waitlist_weekly_limit;
+    originalWaitlistWeeklyLimit = existingSettings.waitlist_weekly_limit;
     await admin.from("center_settings").update({ waitlist_weekly_limit: 10 }).eq("center_id", centerAId);
 
     const memberA = await loginMemberA();
@@ -111,7 +111,7 @@ describe("SCN-P2-50: 예약 관련 알림 큐 생성(발송 아님)", () => {
       .select("id")
       .single();
     if (clsErr || !cls) throw new Error(`수업 생성 실패: ${clsErr?.message}`);
-    const classId = (cls as any).id;
+    const classId = cls.id;
     pendingClassIds.push(classId);
 
     await issueMembership(memberAProfileId);
@@ -120,8 +120,8 @@ describe("SCN-P2-50: 예약 관련 알림 큐 생성(발송 아님)", () => {
     await runScenario("SCN-P2-50", ["memberA", "memberB(waitlist)"], async (assertions) => {
       await loginMemberA();
       const rA = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: null });
-      expect((rA.data as any).status).toBe("confirmed");
-      const aReservationId = (rA.data as any).reservation_id as string;
+      expect(rA.data.status).toBe("confirmed");
+      const aReservationId = rA.data.reservation_id as string;
 
       const confirmedNotif = await findNotification(memberAAccountId, "reservation_confirmed", aReservationId);
       assertions.push({ name: "A 예약 확정 시 reservation_confirmed 알림 큐 생성됨", passed: !!confirmedNotif, detail: JSON.stringify(confirmedNotif) });
@@ -130,8 +130,8 @@ describe("SCN-P2-50: 예약 관련 알림 큐 생성(발송 아님)", () => {
       // memberB(capacity=1이라 대기)
       const memberB = await loginMemberB();
       const rB = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: null });
-      expect((rB.data as any).status).toBe("waitlisted");
-      const bReservationId = (rB.data as any).reservation_id as string;
+      expect(rB.data.status).toBe("waitlisted");
+      const bReservationId = rB.data.reservation_id as string;
 
       const waitlistedNotif = await findNotification(memberB.accountId, "reservation_waitlisted", bReservationId);
       assertions.push({ name: "B 대기 등록 시 reservation_waitlisted 알림 큐 생성됨", passed: !!waitlistedNotif, detail: JSON.stringify(waitlistedNotif) });
@@ -140,7 +140,7 @@ describe("SCN-P2-50: 예약 관련 알림 큐 생성(발송 아님)", () => {
       // A 취소 → B 승격
       await loginMemberA();
       const cancelRes = await supabase.rpc("cancel_reservation", { p_reservation_id: aReservationId });
-      expect((cancelRes.data as any).waitlist_promoted).toBe(true);
+      expect(cancelRes.data.waitlist_promoted).toBe(true);
 
       const canceledNotif = await findNotification(memberAAccountId, "reservation_canceled", aReservationId);
       assertions.push({ name: "A 취소 시 reservation_canceled 알림 큐 생성됨", passed: !!canceledNotif, detail: JSON.stringify(canceledNotif) });

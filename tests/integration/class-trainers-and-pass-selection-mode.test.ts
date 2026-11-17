@@ -117,7 +117,7 @@ describe("fetchMonthData()의 instructorNames — 회원 화면에 담당 강사
     await setClassTrainers(cls.id, [managerA.accountId]);
 
     const { data: acc } = await supabase.from("accounts").select("name").eq("id", managerA.accountId).maybeSingle();
-    const expectedName = (acc as any)?.name;
+    const expectedName = acc?.name;
     expect(expectedName).toBeTruthy();
 
     await asMemberA();
@@ -178,7 +178,7 @@ describe("copyByDate(): 스케줄 복사 시 수강권 정책·담당 강사도 
     const admin = getFixtureAdminClient();
     const { data: existingProduct } = await admin
       .from("products").select("id").eq("center_id", centerAId).eq("product_kind", "pass").limit(1).maybeSingle();
-    let productId = (existingProduct as any)?.id as string | undefined;
+    let productId = existingProduct?.id as string | undefined;
     if (!productId) {
       const { data, error } = await admin.from("products").insert({
         center_id: centerAId, name: "강사복사테스트-패스", product_kind: "pass", pass_type: "count",

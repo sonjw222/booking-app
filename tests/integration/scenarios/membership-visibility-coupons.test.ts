@@ -93,15 +93,15 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
     const admin = getFixtureAdminClient();
     const { data, error } = await admin.from("member_grades").insert({ center_id: centerId, name }).select("id").single();
     if (error || !data) throw new Error(`등급 생성 실패: ${error?.message ?? "no data"}`);
-    pendingGradeIds.push((data as any).id);
-    return (data as any).id as string;
+    pendingGradeIds.push(data.id);
+    return data.id as string;
   }
 
   async function setMemberGrade(centerId: string, profileId: string, gradeId: string | null): Promise<void> {
     const admin = getFixtureAdminClient();
     const { data: existing } = await admin.from("center_members").select("id").eq("center_id", centerId).eq("profile_id", profileId).maybeSingle();
     if (existing) {
-      await admin.from("center_members").update({ grade_id: gradeId }).eq("id", (existing as any).id);
+      await admin.from("center_members").update({ grade_id: gradeId }).eq("id", existing.id);
     } else {
       await admin.from("center_members").insert({ center_id: centerId, profile_id: profileId, grade_id: gradeId, status: "active" });
     }
@@ -112,7 +112,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
     const admin = getFixtureAdminClient();
     const { data, error } = await admin.from("center_members").select("id").eq("center_id", centerId).eq("profile_id", profileId).single();
     if (error || !data) throw new Error(`center_members 조회 실패: ${error?.message ?? "no data"}`);
-    return (data as any).id as string;
+    return data.id as string;
   }
 
   async function makeProduct(
@@ -135,7 +135,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       coupon_eligible: couponEligible,
     }).select("id").single();
     if (error || !data) throw new Error(`상품 생성 실패: ${error?.message ?? "no data"}`);
-    const productId = (data as any).id as string;
+    const productId = data.id as string;
     pendingProductIds.push(productId);
 
     if (visibility?.type === "grades" && visibility.gradeIds?.length) {
@@ -183,7 +183,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       status: "active",
     }).select("id").single();
     if (error || !data) throw new Error(`쿠폰 생성 실패: ${error?.message ?? "no data"}`);
-    const couponId = (data as any).id as string;
+    const couponId = data.id as string;
     pendingCouponIds.push(couponId);
     if (input.appliesTo === "selected" && input.productIds?.length) {
       await admin.from("coupon_products").insert(input.productIds.map((productId) => ({ coupon_id: couponId, product_id: productId })));
@@ -195,7 +195,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
     const admin = getFixtureAdminClient();
     const { data, error } = await admin.from("member_coupons").insert({ coupon_id: couponId, center_member_id: centerMemberId, status: "available" }).select("id").single();
     if (error || !data) throw new Error(`쿠폰 지급 실패: ${error?.message ?? "no data"}`);
-    return (data as any).id as string;
+    return data.id as string;
   }
 
   // ============================================================
@@ -218,14 +218,14 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       expect(canBuy.data).toBe(true);
 
       const purchasable = await supabase.rpc("fetch_purchasable_products", { p_center_id: publicCenterId });
-      const ids = (purchasable.data ?? []).map((p: any) => p.id);
+      const ids = (purchasable.data ?? []).map((p: { id: string }) => p.id);
       assertions.push({ name: "구매 가능 목록에도 포함됨", passed: ids.includes(productId) });
       expect(ids).toContain(productId);
 
       const orderRes = await createOrderAs(memberAProfileId, publicCenterId, productId, "QA-전체공개", 10000);
       assertions.push({ name: "주문 생성 성공", passed: !orderRes.error, detail: orderRes.error?.message });
       expect(orderRes.error).toBeNull();
-      if (orderRes.data) pendingOrderIds.push((orderRes.data as any).id);
+      if (orderRes.data) pendingOrderIds.push(orderRes.data.id);
     });
   }, 60000);
 
@@ -244,7 +244,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       const orderOk = await createOrderAs(memberCProfileId, centerAId, productId, "QA-지정회원", 20000);
       assertions.push({ name: "대상 회원 주문 생성 성공", passed: !orderOk.error, detail: orderOk.error?.message });
       expect(orderOk.error).toBeNull();
-      if (orderOk.data) pendingOrderIds.push((orderOk.data as any).id);
+      if (orderOk.data) pendingOrderIds.push(orderOk.data.id);
 
       // 비대상(memberA 본인, 같은 계정이지만 다른 프로필이라 대상 아님) — 개별 프로필
       // 단위 자격 판정은 정확하다(member_can_purchase_product는 profile_id를 그대로 봄).
@@ -262,7 +262,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       // memberA로 검사했다가 "보임"으로 나와 실패했었음, 버그 아니라 테스트 설계 오류).
       await loginMemberB();
       const purchasableForB = await supabase.rpc("fetch_purchasable_products", { p_center_id: centerAId });
-      const idsForB = (purchasableForB.data ?? []).map((p: any) => p.id);
+      const idsForB = (purchasableForB.data ?? []).map((p: { id: string }) => p.id);
       assertions.push({ name: "완전히 무관한 회원(B) 목록에서는 이 상품이 안 보임(숨김)", passed: !idsForB.includes(productId), detail: JSON.stringify({ visibleCount: idsForB.length }) });
       expect(idsForB).not.toContain(productId);
 
@@ -327,11 +327,11 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
     // centerB의 등급을 만들어서, centerA 상품에 매핑을 시도한다(관리자 세션은 managerA로 유지).
     const admin = getFixtureAdminClient();
     const { data: gradeB } = await admin.from("member_grades").insert({ center_id: centerBId, name: `QA-B등급-${newRunId()}` }).select("id").single();
-    pendingGradeIds.push((gradeB as any).id);
+    pendingGradeIds.push(gradeB!.id);
 
     await runScenario("SCN-VIS-06", ["managerA"], async (assertions) => {
       await loginManagerA();
-      const res = await supabase.from("membership_product_grades").insert({ product_id: productId, grade_id: (gradeB as any).id });
+      const res = await supabase.from("membership_product_grades").insert({ product_id: productId, grade_id: gradeB!.id });
       assertions.push({
         name: "[보안] centerA 관리자가 centerB 등급을 자기 상품에 매핑하려는 시도는 RLS가 거부",
         passed: !!res.error,
@@ -357,13 +357,13 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       await loginMemberA();
       const orderRes = await createOrderAs(memberAProfileId, centerAId, productId, "QA-정액테스트", 370000, memberCouponId);
       expect(orderRes.error).toBeNull();
-      const orderId = (orderRes.data as any).id as string;
+      const orderId = orderRes.data!.id as string;
       pendingOrderIds.push(orderId);
 
       const payRes = await payWithMock(orderId);
       assertions.push({ name: "서버가 계산한 할인과 클라이언트가 보낸 370,000원이 일치해 결제 성공", passed: !payRes.error, detail: JSON.stringify({ data: payRes.data, error: payRes.error?.message }) });
       expect(payRes.error).toBeNull();
-      expect((payRes.data as any).amount).toBe(370000);
+      expect(payRes.data.amount).toBe(370000);
     });
   }, 60000);
 
@@ -378,11 +378,11 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       await loginMemberA();
       const orderRes = await createOrderAs(memberAProfileId, centerAId, productId, "QA-정률테스트", 360000, memberCouponId);
       expect(orderRes.error).toBeNull();
-      const orderId = (orderRes.data as any).id as string;
+      const orderId = orderRes.data!.id as string;
       pendingOrderIds.push(orderId);
       const payRes = await payWithMock(orderId);
-      assertions.push({ name: "10% 할인 정확히 계산됨(400,000 -> 360,000)", passed: !payRes.error && (payRes.data as any)?.amount === 360000, detail: JSON.stringify(payRes) });
-      expect((payRes.data as any).amount).toBe(360000);
+      assertions.push({ name: "10% 할인 정확히 계산됨(400,000 -> 360,000)", passed: !payRes.error && payRes.data?.amount === 360000, detail: JSON.stringify(payRes) });
+      expect(payRes.data.amount).toBe(360000);
     });
   }, 60000);
 
@@ -397,15 +397,15 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       await loginMemberA();
       const orderRes = await createOrderAs(memberAProfileId, centerAId, productId, "QA-최대할인테스트", 370000, memberCouponId);
       expect(orderRes.error).toBeNull();
-      const orderId = (orderRes.data as any).id as string;
+      const orderId = orderRes.data!.id as string;
       pendingOrderIds.push(orderId);
       const payRes = await payWithMock(orderId);
       assertions.push({
         name: "20% 계산값(80,000)이 아니라 최대 할인(30,000)이 적용됨(370,000원)",
-        passed: !payRes.error && (payRes.data as any)?.amount === 370000,
+        passed: !payRes.error && payRes.data?.amount === 370000,
         detail: JSON.stringify(payRes),
       });
-      expect((payRes.data as any).amount).toBe(370000);
+      expect(payRes.data.amount).toBe(370000);
     });
   }, 60000);
 
@@ -422,7 +422,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       // 자체는 상품자격만 보고 성공할 수 있다 — 진짜 방어선은 결제 확정 시점.
       const orderRes = await createOrderAs(memberAProfileId, centerAId, productId, "QA-최소금액테스트", 60000, memberCouponId);
       expect(orderRes.error).toBeNull();
-      const orderId = (orderRes.data as any).id as string;
+      const orderId = orderRes.data!.id as string;
       pendingOrderIds.push(orderId);
       const payRes = await payWithMock(orderId);
       assertions.push({
@@ -448,7 +448,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       await loginMemberA();
       const orderRes = await createOrderAs(memberAProfileId, centerAId, productId, "QA-만료테스트", 40000, memberCouponId);
       expect(orderRes.error).toBeNull();
-      const orderId = (orderRes.data as any).id as string;
+      const orderId = orderRes.data!.id as string;
       pendingOrderIds.push(orderId);
       const payRes = await payWithMock(orderId);
       assertions.push({ name: "[보안] 유효기간 지난 쿠폰은 결제 확정 시점에 거부", passed: !!payRes.error, detail: payRes.error?.message });
@@ -477,7 +477,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       // 자체가 차단되는지를 본다.
       const orderRes = await createOrderAs(memberAProfileId, centerAId, productId, "QA-쿠폰불가상품테스트", 90000, memberCouponId);
       expect(orderRes.error).toBeNull(); // orders INSERT는 상품 구매자격만 보므로 일단 통과
-      const orderId = (orderRes.data as any).id as string;
+      const orderId = orderRes.data!.id as string;
       pendingOrderIds.push(orderId);
 
       const payRes = await payWithMock(orderId);
@@ -492,8 +492,8 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       // 쓸 수 있어야 함) — 실패한 결제는 쿠폰 상태를 바꾸지 않는다는 기존 요청 18번
       // 원칙과 동일선상의 회귀 방지.
       const { data: mc } = await getFixtureAdminClient().from("member_coupons").select("status").eq("id", memberCouponId).single();
-      assertions.push({ name: "차단된 시도로 쿠폰이 소비되지 않음(여전히 available)", passed: (mc as any)?.status === "available", detail: JSON.stringify(mc) });
-      expect((mc as any)?.status).toBe("available");
+      assertions.push({ name: "차단된 시도로 쿠폰이 소비되지 않음(여전히 available)", passed: mc?.status === "available", detail: JSON.stringify(mc) });
+      expect(mc?.status).toBe("available");
     });
   }, 60000);
 
@@ -511,7 +511,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       await loginMemberA(); // 공격자 A로 로그인, B의 member_coupon_id를 직접 넣어 주문 시도
       const orderRes = await createOrderAs(memberAProfileId, centerAId, productId, "QA-쿠폰도용테스트", 90000, bMemberCouponId);
       expect(orderRes.error).toBeNull(); // orders INSERT는 상품자격만 봐서 일단 통과할 수 있음
-      const orderId = (orderRes.data as any).id as string;
+      const orderId = orderRes.data!.id as string;
       pendingOrderIds.push(orderId);
 
       const payRes = await payWithMock(orderId);
@@ -524,8 +524,8 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
 
       const admin = getFixtureAdminClient();
       const { data: mcAfter } = await admin.from("member_coupons").select("status").eq("id", bMemberCouponId).single();
-      assertions.push({ name: "B의 쿠폰은 여전히 available(도용 실패로 소모 안 됨)", passed: (mcAfter as any).status === "available" });
-      expect((mcAfter as any).status).toBe("available");
+      assertions.push({ name: "B의 쿠폰은 여전히 available(도용 실패로 소모 안 됨)", passed: mcAfter!.status === "available" });
+      expect(mcAfter!.status).toBe("available");
     });
   }, 60000);
 
@@ -542,7 +542,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       // 문제는 "센터A 쿠폰을 센터B 주문에" 쓰려는 시도 자체.
       const orderRes = await createOrderAs(memberAProfileId, centerBId, productBId, "QA-타센터쿠폰테스트", 40000, memberCouponId);
       expect(orderRes.error).toBeNull();
-      const orderId = (orderRes.data as any).id as string;
+      const orderId = orderRes.data!.id as string;
       pendingOrderIds.push(orderId);
 
       const payRes = await payWithMock(orderId);
@@ -568,8 +568,8 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       const order2 = await createOrderAs(memberAProfileId, centerAId, product2Id, "QA-동시성2", 45000, memberCouponId);
       expect(order1.error).toBeNull();
       expect(order2.error).toBeNull();
-      const order1Id = (order1.data as any).id as string;
-      const order2Id = (order2.data as any).id as string;
+      const order1Id = order1.data!.id as string;
+      const order2Id = order2.data!.id as string;
       pendingOrderIds.push(order1Id, order2Id);
 
       const [clientA1, clientA2] = await Promise.all([
@@ -591,8 +591,8 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
 
       const admin = getFixtureAdminClient();
       const { data: mcFinal } = await admin.from("member_coupons").select("status, order_id").eq("id", memberCouponId).single();
-      assertions.push({ name: "쿠폰은 정확히 한 주문에만 used로 연결됨", passed: (mcFinal as any).status === "used", detail: JSON.stringify(mcFinal) });
-      expect((mcFinal as any).status).toBe("used");
+      assertions.push({ name: "쿠폰은 정확히 한 주문에만 used로 연결됨", passed: mcFinal!.status === "used", detail: JSON.stringify(mcFinal) });
+      expect(mcFinal!.status).toBe("used");
     });
   }, 60000);
 
@@ -610,21 +610,21 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       await loginMemberA();
       const orderRes = await createOrderAs(memberAProfileId, centerAId, productId, "QA-생애주기테스트", 50000, memberCouponId);
       expect(orderRes.error).toBeNull();
-      const orderId = (orderRes.data as any).id as string;
+      const orderId = orderRes.data!.id as string;
       pendingOrderIds.push(orderId);
 
       const admin = getFixtureAdminClient();
       const { data: afterOrderCreate } = await admin.from("member_coupons").select("status").eq("id", memberCouponId).single();
-      assertions.push({ name: "[24-15] 주문 생성(쿠폰 선택)만으로는 아직 available 유지", passed: (afterOrderCreate as any).status === "available", detail: JSON.stringify(afterOrderCreate) });
-      expect((afterOrderCreate as any).status).toBe("available");
+      assertions.push({ name: "[24-15] 주문 생성(쿠폰 선택)만으로는 아직 available 유지", passed: afterOrderCreate!.status === "available", detail: JSON.stringify(afterOrderCreate) });
+      expect(afterOrderCreate!.status).toBe("available");
 
       const payRes = await payWithMock(orderId);
       expect(payRes.error).toBeNull();
 
       const { data: afterPay } = await admin.from("member_coupons").select("status, used_at, order_id").eq("id", memberCouponId).single();
-      assertions.push({ name: "[24-16] 결제 성공 확정 후에야 used로 전환, used_at/order_id 기록됨", passed: (afterPay as any).status === "used" && !!(afterPay as any).used_at && (afterPay as any).order_id === orderId, detail: JSON.stringify(afterPay) });
-      expect((afterPay as any).status).toBe("used");
-      expect((afterPay as any).order_id).toBe(orderId);
+      assertions.push({ name: "[24-16] 결제 성공 확정 후에야 used로 전환, used_at/order_id 기록됨", passed: afterPay!.status === "used" && !!afterPay!.used_at && afterPay!.order_id === orderId, detail: JSON.stringify(afterPay) });
+      expect(afterPay!.status).toBe("used");
+      expect(afterPay!.order_id).toBe(orderId);
     });
   }, 60000);
 
@@ -639,21 +639,21 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       await loginMemberA();
       const orderRes = await createOrderAs(memberAProfileId, centerAId, productId, "QA-환불테스트", 35000, memberCouponId);
       expect(orderRes.error).toBeNull();
-      const orderId = (orderRes.data as any).id as string;
+      const orderId = orderRes.data!.id as string;
       pendingOrderIds.push(orderId);
       const payRes = await payWithMock(orderId);
       expect(payRes.error).toBeNull();
-      const membershipId = (payRes.data as any).membership_id as string;
+      const membershipId = payRes.data.membership_id as string;
 
       const refundRes = await supabase.rpc("refund_membership", { p_membership_id: membershipId });
-      assertions.push({ name: "셀프 환불 성공(24시간 이내, 미사용)", passed: !refundRes.error && (refundRes.data as any)?.refunded === true, detail: JSON.stringify(refundRes) });
+      assertions.push({ name: "셀프 환불 성공(24시간 이내, 미사용)", passed: !refundRes.error && refundRes.data?.refunded === true, detail: JSON.stringify(refundRes) });
       expect(refundRes.error).toBeNull();
 
       const admin = getFixtureAdminClient();
       const { data: mcAfterRefund } = await admin.from("member_coupons").select("status, used_at, order_id").eq("id", memberCouponId).single();
-      assertions.push({ name: "환불 후 쿠폰이 available로 복원됨(used_at/order_id 초기화)", passed: (mcAfterRefund as any).status === "available" && (mcAfterRefund as any).used_at === null, detail: JSON.stringify(mcAfterRefund) });
-      expect((mcAfterRefund as any).status).toBe("available");
-      expect((mcAfterRefund as any).used_at).toBeNull();
+      assertions.push({ name: "환불 후 쿠폰이 available로 복원됨(used_at/order_id 초기화)", passed: mcAfterRefund!.status === "available" && mcAfterRefund!.used_at === null, detail: JSON.stringify(mcAfterRefund) });
+      expect(mcAfterRefund!.status).toBe("available");
+      expect(mcAfterRefund!.used_at).toBeNull();
     });
   }, 60000);
 
@@ -676,7 +676,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       await loginMemberA();
       const orderRes = await createOrderAs(memberAProfileId, centerAId, productId, "QA-회수후사용시도", 15000, memberCouponId);
       expect(orderRes.error).toBeNull();
-      const orderId = (orderRes.data as any).id as string;
+      const orderId = orderRes.data!.id as string;
       pendingOrderIds.push(orderId);
       const payRes = await payWithMock(orderId);
       assertions.push({ name: "[보안] 회수된 쿠폰은 결제 확정 시점에 사용 거부됨", passed: !!payRes.error, detail: payRes.error?.message });
@@ -723,8 +723,8 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
 
       const admin = getFixtureAdminClient();
       const { data: mcAfter } = await admin.from("member_coupons").select("status").eq("id", bMemberCouponId).single();
-      assertions.push({ name: "B의 쿠폰은 공격 시도 후에도 여전히 available(소모 안 됨)", passed: (mcAfter as any).status === "available" });
-      expect((mcAfter as any).status).toBe("available");
+      assertions.push({ name: "B의 쿠폰은 공격 시도 후에도 여전히 available(소모 안 됨)", passed: mcAfter!.status === "available" });
+      expect(mcAfter!.status).toBe("available");
     });
   }, 60000);
 
@@ -742,14 +742,14 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
       is_active: true, is_on_sale: true,
     }).select("id, visibility_type").single();
     if (error || !data) throw new Error(`상품 생성 실패: ${error?.message}`);
-    pendingProductIds.push((data as any).id);
+    pendingProductIds.push(data.id);
 
     await runScenario("SCN-VIS-20", ["memberA"], async (assertions) => {
-      assertions.push({ name: "DB 기본값이 실제로 'all'로 적용됨", passed: (data as any).visibility_type === "all", detail: JSON.stringify(data) });
-      expect((data as any).visibility_type).toBe("all");
+      assertions.push({ name: "DB 기본값이 실제로 'all'로 적용됨", passed: data.visibility_type === "all", detail: JSON.stringify(data) });
+      expect(data.visibility_type).toBe("all");
 
       await loginMemberA();
-      const canBuy = await supabase.rpc("member_can_purchase_product", { p_product_id: (data as any).id, p_profile_id: memberAProfileId });
+      const canBuy = await supabase.rpc("member_can_purchase_product", { p_product_id: data.id, p_profile_id: memberAProfileId });
       assertions.push({ name: "공개범위 지정 안 한 기존 상품도 정상 구매 가능(회귀 없음)", passed: canBuy.data === true, detail: JSON.stringify(canBuy) });
       expect(canBuy.data).toBe(true);
     });

@@ -205,14 +205,14 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
       p_force_capacity: false,
     });
     expect(error).toBeNull();
-    expect((data as any).needs_capacity_confirm).toBeFalsy();
-    expect((data as any).reservation_id).toBeTruthy();
-    entry.reservationIds.push((data as any).reservation_id);
+    expect(data.needs_capacity_confirm).toBeFalsy();
+    expect(data.reservation_id).toBeTruthy();
+    entry.reservationIds.push(data.reservation_id);
 
     const { data: resRow, error: resErr } = await supabase
       .from("reservations")
       .select("reservation_type, reservation_source, membership_id, membership_consumed, status")
-      .eq("id", (data as any).reservation_id)
+      .eq("id", data.reservation_id)
       .single();
     if (resErr) throw new Error(resErr.message);
     expect(resRow.reservation_type).toBe("ADMIN_ASSIGNMENT");
@@ -239,13 +239,13 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
       p_force_capacity: false,
     });
     expect(error).toBeNull();
-    expect((data as any).reservation_id).toBeTruthy();
-    entry.reservationIds.push((data as any).reservation_id);
+    expect(data.reservation_id).toBeTruthy();
+    entry.reservationIds.push(data.reservation_id);
 
     const { data: resRow, error: resErr } = await supabase
       .from("reservations")
       .select("reservation_type, membership_id, membership_consumed, status")
-      .eq("id", (data as any).reservation_id)
+      .eq("id", data.reservation_id)
       .single();
     if (resErr) throw new Error(resErr.message);
     expect(resRow.reservation_type).toBe("ADMIN_FREE");
@@ -271,8 +271,8 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
       p_force_capacity: false,
     });
     expect(error).toBeNull();
-    expect((data as any).reservation_id).toBeTruthy();
-    entry.reservationIds.push((data as any).reservation_id);
+    expect(data.reservation_id).toBeTruthy();
+    entry.reservationIds.push(data.reservation_id);
   });
 
   it("만료된 수강권만 있는 회원도 ADMIN_FREE 배치가 성공하고, 그 수강권은 그대로 유지된다", async () => {
@@ -290,8 +290,8 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
       p_force_capacity: false,
     });
     expect(error).toBeNull();
-    expect((data as any).reservation_id).toBeTruthy();
-    entry.reservationIds.push((data as any).reservation_id);
+    expect(data.reservation_id).toBeTruthy();
+    entry.reservationIds.push(data.reservation_id);
 
     const remaining = await fetchMembershipRemaining(expired.id);
     expect(remaining).toBe(0); // 만료 수강권은 손대지 않음(그대로 0)
@@ -312,7 +312,7 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
       p_force_capacity: false,
     });
     expect(assignErr).toBeNull();
-    const reservationId = (assignData as any).reservation_id as string;
+    const reservationId = assignData.reservation_id as string;
     entry.reservationIds.push(reservationId);
     expect(await fetchMembershipRemaining(membership.id)).toBe(4);
 
@@ -321,7 +321,7 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
       p_cancel_reason: "테스트 취소",
     });
     expect(cancelErr).toBeNull();
-    expect((cancelData as any).restored).toBe(true);
+    expect(cancelData.restored).toBe(true);
     expect(await fetchMembershipRemaining(membership.id)).toBe(5); // 정확히 복구
 
     const { data: resRow, error: resErr } = await supabase
@@ -353,7 +353,7 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
       p_force_capacity: false,
     });
     expect(assignErr).toBeNull();
-    const reservationId = (assignData as any).reservation_id as string;
+    const reservationId = assignData.reservation_id as string;
     entry.reservationIds.push(reservationId);
 
     const { data: cancelData, error: cancelErr } = await supabase.rpc("admin_cancel_reservation", {
@@ -361,7 +361,7 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
       p_cancel_reason: null,
     });
     expect(cancelErr).toBeNull();
-    expect((cancelData as any).restored).toBe(false); // 복구할 것 자체가 없음
+    expect(cancelData.restored).toBe(false); // 복구할 것 자체가 없음
 
     expect(await fetchMembershipRemaining(untouched.id)).toBe(5); // 무관한 수강권은 그대로
   });
@@ -380,7 +380,7 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
       p_force_capacity: false,
     });
     expect(error).toBeNull();
-    const reservationId = (data as any).reservation_id as string;
+    const reservationId = data.reservation_id as string;
     entry.reservationIds.push(reservationId);
 
     const { data: logs, error: logErr } = await supabase
@@ -411,7 +411,7 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
       p_force_capacity: false,
     });
     expect(error).toBeNull();
-    const reservationId = (data as any).reservation_id as string;
+    const reservationId = data.reservation_id as string;
     entry.reservationIds.push(reservationId);
 
     await asMember();
@@ -422,13 +422,13 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
       .order("created_at", { ascending: false })
       .limit(20);
     if (notiErr) throw new Error(notiErr.message);
-    const match = (notis ?? []).find((n: any) => n.data?.reservation_id === reservationId);
+    const match = (notis ?? []).find((n) => n.data?.reservation_id === reservationId);
     expect(match).toBeTruthy();
     expect(match!.title).toBe("관리자가 예약을 등록했습니다");
     // 무료배치 여부/사유/관리자명 등 내부 정보가 회원 알림에 노출되지 않아야 함 —
     // data에 reservation_type 자체가 없어야 함(ADMIN_FREE/ADMIN_ASSIGNMENT 구분이 새어나가면 안 됨)
-    expect((match as any).data.reservation_type).toBeUndefined();
-    expect((match as any).data.reason_code).toBeUndefined();
+    expect(match!.data.reservation_type).toBeUndefined();
+    expect(match!.data.reason_code).toBeUndefined();
     expect(JSON.stringify(match)).not.toContain("EVENT");
     expect(JSON.stringify(match)).not.toContain(managerA.accountId);
   });
@@ -449,12 +449,12 @@ describe("관리자 직접배치/무료 추가 배치 성공 경로", () => {
       });
     const [r1, r2] = await Promise.all([call(), call()]);
 
-    const successes = [r1, r2].filter((r) => !r.error && (r.data as any)?.reservation_id);
+    const successes = [r1, r2].filter((r) => !r.error && r.data?.reservation_id);
     const failures = [r1, r2].filter((r) => !!r.error);
     expect(successes).toHaveLength(1);
     expect(failures).toHaveLength(1);
     expect(failures[0].error!.message).toContain("이미 이 수업에 예약된 회원");
-    entry.reservationIds.push((successes[0].data as any).reservation_id);
+    entry.reservationIds.push(successes[0].data!.reservation_id);
 
     const { count, error: countErr } = await supabase
       .from("reservations")
@@ -484,7 +484,7 @@ describe("관리자 직접배치 — 그룹 수업 정원초과 2단계 흐름(n
       p_reason_code: "MAKEUP_CLASS", p_reason_detail: null, p_force_capacity: false,
     });
     expect(fill.error).toBeNull();
-    entry.reservationIds.push((fill.data as any).reservation_id);
+    entry.reservationIds.push(fill.data.reservation_id);
 
     // 이미 찬 수업에 두 번째 회원을 force_capacity 없이 배치 시도 — 막혀야 하고, 예약이
     // 실제로 생기면 안 된다.
@@ -494,8 +494,8 @@ describe("관리자 직접배치 — 그룹 수업 정원초과 2단계 흐름(n
       p_reason_code: "MAKEUP_CLASS", p_reason_detail: null, p_force_capacity: false,
     });
     expect(attempt.error).toBeNull();
-    expect((attempt.data as any).needs_capacity_confirm).toBe(true);
-    expect((attempt.data as any).reservation_id).toBeUndefined();
+    expect(attempt.data.needs_capacity_confirm).toBe(true);
+    expect(attempt.data.reservation_id).toBeUndefined();
 
     const { count, error: countErr } = await supabase
       .from("reservations")
@@ -521,7 +521,7 @@ describe("관리자 직접배치 — 그룹 수업 정원초과 2단계 흐름(n
       p_reason_code: "MAKEUP_CLASS", p_reason_detail: null, p_force_capacity: false,
     });
     expect(fill.error).toBeNull();
-    entry.reservationIds.push((fill.data as any).reservation_id);
+    entry.reservationIds.push(fill.data.reservation_id);
 
     // 1차 저지(관리자 UI가 실제로 거치는 단계) — 확인만 하고 값은 안 씀.
     const blocked = await supabase.rpc("admin_assign_reservation", {
@@ -529,7 +529,7 @@ describe("관리자 직접배치 — 그룹 수업 정원초과 2단계 흐름(n
       p_assignment_type: "ADMIN_ASSIGNMENT", p_membership_id: membershipB.id,
       p_reason_code: "MAKEUP_CLASS", p_reason_detail: null, p_force_capacity: false,
     });
-    expect((blocked.data as any).needs_capacity_confirm).toBe(true);
+    expect(blocked.data.needs_capacity_confirm).toBe(true);
 
     // 사유를 입력하고 force_capacity=true로 재호출 — 이제 실제로 생성돼야 한다.
     const override = await supabase.rpc("admin_assign_reservation", {
@@ -538,14 +538,14 @@ describe("관리자 직접배치 — 그룹 수업 정원초과 2단계 흐름(n
       p_reason_code: "MAKEUP_CLASS", p_reason_detail: "정원 초과 배치 회귀 테스트", p_force_capacity: true,
     });
     expect(override.error).toBeNull();
-    expect((override.data as any).reservation_id).toBeTruthy();
-    expect((override.data as any).over_capacity).toBe(true);
-    entry.reservationIds.push((override.data as any).reservation_id);
+    expect(override.data.reservation_id).toBeTruthy();
+    expect(override.data.over_capacity).toBe(true);
+    entry.reservationIds.push(override.data.reservation_id);
 
     const { data: resRow, error: resErr } = await supabase
       .from("reservations")
       .select("status, is_capacity_override, membership_id, membership_consumed")
-      .eq("id", (override.data as any).reservation_id)
+      .eq("id", override.data.reservation_id)
       .single();
     if (resErr) throw new Error(resErr.message);
     expect(resRow.status).toBe("confirmed");

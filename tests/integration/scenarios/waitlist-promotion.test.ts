@@ -78,7 +78,7 @@ describe("SCN-P0-23/24/25: 대기 자동 승격", () => {
       .eq("center_id", centerAId)
       .single();
     if (readErr) throw new Error(`테스트 센터 설정 조회 실패: ${readErr.message}`);
-    originalWaitlistWeeklyLimit = (existingSettings as any).waitlist_weekly_limit;
+    originalWaitlistWeeklyLimit = existingSettings.waitlist_weekly_limit;
 
     const { error: settingsErr } = await admin
       .from("center_settings")
@@ -151,23 +151,23 @@ describe("SCN-P0-23/24/25: 대기 자동 승격", () => {
       const rA = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: null });
       assertions.push({ name: "A 예약 성공", passed: !rA.error, detail: rA.error?.message });
       expect(rA.error).toBeNull();
-      expect((rA.data as any).status).toBe("confirmed");
+      expect(rA.data.status).toBe("confirmed");
 
       await loginMemberB();
       const rB = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: null });
       assertions.push({ name: "B 예약 성공(정원 도달)", passed: !rB.error, detail: rB.error?.message });
-      expect((rB.data as any).status).toBe("confirmed");
+      expect(rB.data.status).toBe("confirmed");
 
       await loginMemberA();
       const rC = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: memberCProfileId });
-      assertions.push({ name: "C 대기 등록(정원 초과)", passed: !rC.error && (rC.data as any)?.status === "waitlisted" });
-      expect((rC.data as any).status).toBe("waitlisted");
-      const cReservationId = (rC.data as any).reservation_id as string;
+      assertions.push({ name: "C 대기 등록(정원 초과)", passed: !rC.error && rC.data?.status === "waitlisted" });
+      expect(rC.data.status).toBe("waitlisted");
+      const cReservationId = rC.data.reservation_id as string;
 
-      const aReservationId = (rA.data as any).reservation_id as string;
+      const aReservationId = rA.data.reservation_id as string;
       const cancelRes = await supabase.rpc("cancel_reservation", { p_reservation_id: aReservationId });
-      assertions.push({ name: "A 취소 성공 + 대기 승격 발생", passed: !cancelRes.error && (cancelRes.data as any)?.waitlist_promoted === true });
-      expect((cancelRes.data as any).waitlist_promoted).toBe(true);
+      assertions.push({ name: "A 취소 성공 + 대기 승격 발생", passed: !cancelRes.error && cancelRes.data?.waitlist_promoted === true });
+      expect(cancelRes.data.waitlist_promoted).toBe(true);
 
       const cStatus = await fetchReservationStatus(cReservationId);
       assertions.push({ name: "C가 confirmed로 승격됨", passed: cStatus.status === "confirmed", detail: JSON.stringify(cStatus) });
@@ -186,32 +186,32 @@ describe("SCN-P0-23/24/25: 대기 자동 승격", () => {
     await runScenario("SCN-P0-24", ["managerA", "memberA", "memberB", "memberC", "memberD"], async (assertions) => {
       await loginMemberA();
       const rA = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: null });
-      expect((rA.data as any).status).toBe("confirmed");
+      expect(rA.data.status).toBe("confirmed");
 
       await loginMemberB();
       const rB = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: null });
-      expect((rB.data as any).status).toBe("confirmed");
+      expect(rB.data.status).toBe("confirmed");
 
       await loginMemberA();
       const rC = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: memberCProfileId });
-      expect((rC.data as any).status).toBe("waitlisted");
-      const cReservationId = (rC.data as any).reservation_id as string;
+      expect(rC.data.status).toBe("waitlisted");
+      const cReservationId = rC.data.reservation_id as string;
       const cStatusBefore = await fetchReservationStatus(cReservationId);
       assertions.push({ name: "C 대기순번 1", passed: cStatusBefore.waitlistOrder === 1, detail: JSON.stringify(cStatusBefore) });
       expect(cStatusBefore.waitlistOrder).toBe(1);
 
       await loginMemberB();
       const rD = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: memberDProfileId });
-      expect((rD.data as any).status).toBe("waitlisted");
-      const dReservationId = (rD.data as any).reservation_id as string;
+      expect(rD.data.status).toBe("waitlisted");
+      const dReservationId = rD.data.reservation_id as string;
       const dStatusBefore = await fetchReservationStatus(dReservationId);
       assertions.push({ name: "D 대기순번 2(C 다음)", passed: dStatusBefore.waitlistOrder === 2, detail: JSON.stringify(dStatusBefore) });
       expect(dStatusBefore.waitlistOrder).toBe(2);
 
-      const aReservationId = (rA.data as any).reservation_id as string;
+      const aReservationId = rA.data.reservation_id as string;
       await loginMemberA();
       const cancelRes = await supabase.rpc("cancel_reservation", { p_reservation_id: aReservationId });
-      expect((cancelRes.data as any).waitlist_promoted).toBe(true);
+      expect(cancelRes.data.waitlist_promoted).toBe(true);
 
       const cStatusAfter = await fetchReservationStatus(cReservationId);
       assertions.push({ name: "C가 confirmed로 승격됨", passed: cStatusAfter.status === "confirmed" });
@@ -249,21 +249,21 @@ describe("SCN-P0-23/24/25: 대기 자동 승격", () => {
     await runScenario("SCN-P0-25", ["managerA", "memberA", "memberB", "memberC", "memberD"], async (assertions) => {
       await loginMemberA();
       const rA = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: null });
-      expect((rA.data as any).status).toBe("confirmed");
+      expect(rA.data.status).toBe("confirmed");
 
       await loginMemberB();
       const rB = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: null });
-      expect((rB.data as any).status).toBe("confirmed");
+      expect(rB.data.status).toBe("confirmed");
 
       await loginMemberA();
       const rC = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: memberCProfileId });
-      expect((rC.data as any).status).toBe("waitlisted");
-      const cReservationId = (rC.data as any).reservation_id as string;
+      expect(rC.data.status).toBe("waitlisted");
+      const cReservationId = rC.data.reservation_id as string;
 
       await loginMemberB();
       const rD = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: memberDProfileId });
-      expect((rD.data as any).status).toBe("waitlisted");
-      const dReservationId = (rD.data as any).reservation_id as string;
+      expect(rD.data.status).toBe("waitlisted");
+      const dReservationId = rD.data.reservation_id as string;
       const dOrderBefore = (await fetchReservationStatus(dReservationId)).waitlistOrder;
 
       // C(대기 1순위)가 스스로 취소 — cancel_reservation은 대기 상태였으면 환급/승격
@@ -271,10 +271,10 @@ describe("SCN-P0-23/24/25: 대기 자동 승격", () => {
       // 기준: status='confirmed'일 때만 환급+승격 블록을 탐).
       await loginMemberA();
       const cancelRes = await supabase.rpc("cancel_reservation", { p_reservation_id: cReservationId });
-      assertions.push({ name: "C 자가취소 성공", passed: !cancelRes.error && (cancelRes.data as any)?.cancelled === true });
-      expect((cancelRes.data as any).cancelled).toBe(true);
-      assertions.push({ name: "대기 취소는 승격을 유발하지 않음(정원 변화 없었으므로 당연)", passed: (cancelRes.data as any)?.waitlist_promoted === false });
-      expect((cancelRes.data as any).waitlist_promoted).toBe(false);
+      assertions.push({ name: "C 자가취소 성공", passed: !cancelRes.error && cancelRes.data?.cancelled === true });
+      expect(cancelRes.data.cancelled).toBe(true);
+      assertions.push({ name: "대기 취소는 승격을 유발하지 않음(정원 변화 없었으므로 당연)", passed: cancelRes.data?.waitlist_promoted === false });
+      expect(cancelRes.data.waitlist_promoted).toBe(false);
 
       const cStatusAfter = await fetchReservationStatus(cReservationId);
       assertions.push({ name: "C는 cancelled 상태", passed: cStatusAfter.status === "cancelled" });

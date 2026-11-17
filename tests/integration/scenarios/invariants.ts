@@ -48,7 +48,7 @@ export async function checkCapacityInvariant(classId: string): Promise<Invariant
     fetchClassReservations(classId),
   ]);
   if (clsErr || !cls) throw new Error(`invariant 조회 실패(classes): ${clsErr?.message ?? "no data"}`);
-  const confirmedCount = rows.filter((r: any) => r.status === "confirmed").length;
+  const confirmedCount = rows.filter((r) => r.status === "confirmed").length;
   if (confirmedCount > cls.capacity) {
     return { name: "capacity", detail: `confirmed=${confirmedCount} > capacity=${cls.capacity}` };
   }
@@ -61,7 +61,7 @@ export async function checkCapacityInvariant(classId: string): Promise<Invariant
 export async function checkMembershipNonNegative(membershipId: string): Promise<InvariantViolation | null> {
   const { data, error } = await supabase.from("memberships").select("remaining_count").eq("id", membershipId).single();
   if (error) throw new Error(`invariant 조회 실패(memberships): ${error.message}`);
-  const remaining = (data as any).remaining_count;
+  const remaining = data.remaining_count;
   if (remaining != null && remaining < 0) {
     return { name: "membership-non-negative", detail: `remaining_count=${remaining} < 0` };
   }
@@ -90,8 +90,8 @@ export async function checkNoDuplicateActiveReservation(classId: string, profile
 // 실제 구현상 보장되지 않아 검증 대상에서 제외.
 export async function checkWaitlistOrderNoDuplicates(classId: string): Promise<InvariantViolation | null> {
   const rows = await fetchClassReservations(classId);
-  const waitlisted = rows.filter((r: any) => r.status === "waitlisted");
-  const orders = waitlisted.map((r: any) => r.waitlist_order);
+  const waitlisted = rows.filter((r) => r.status === "waitlisted");
+  const orders = waitlisted.map((r) => r.waitlist_order);
   const unique = new Set(orders);
   if (unique.size !== orders.length) {
     return { name: "waitlist-order-no-duplicates", detail: `waitlist_order 값: ${JSON.stringify(orders)}` };
@@ -102,7 +102,7 @@ export async function checkWaitlistOrderNoDuplicates(classId: string): Promise<I
 export async function fetchReservationStatus(reservationId: string): Promise<{ status: string; waitlistOrder: number | null }> {
   const { data, error } = await supabase.from("reservations").select("status, waitlist_order").eq("id", reservationId).single();
   if (error) throw new Error(`예약 상태 조회 실패: ${error.message}`);
-  return { status: (data as any).status, waitlistOrder: (data as any).waitlist_order };
+  return { status: data.status, waitlistOrder: data.waitlist_order };
 }
 
 /*
@@ -118,7 +118,7 @@ export async function fetchReservationStatus(reservationId: string): Promise<{ s
 export async function fetchReservationMembershipId(reservationId: string): Promise<string | null> {
   const { data, error } = await supabase.from("reservations").select("membership_id").eq("id", reservationId).single();
   if (error) throw new Error(`예약의 membership_id 조회 실패: ${error.message}`);
-  return (data as any).membership_id;
+  return data.membership_id;
 }
 
 // 위 개별 invariant들을 한 번에 실행 — 시나리오 테스트가 끝난 뒤(steps 이후) 한 번씩

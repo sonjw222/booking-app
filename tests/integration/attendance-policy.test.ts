@@ -49,7 +49,7 @@ async function asMemberB() { await switchToTestUser(MEMBER_B.email, MEMBER_B.pas
 async function reserveAndGetId(classId: string, profileId: string): Promise<string> {
   const { data, error } = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: profileId });
   if (error) throw new Error(`예약 실패: ${error.message}`);
-  return (data as any).reservation_id;
+  return data.reservation_id;
 }
 
 beforeAll(async () => {
@@ -89,7 +89,7 @@ beforeAll(async () => {
       .eq("center_id", centerAId)
       .in("title", staleTitles);
     if (staleErr) throw new Error(`P1-14 self-healing 조회 실패: ${staleErr.message}`);
-    const staleClassIds = (staleClasses ?? []).map((c: any) => c.id);
+    const staleClassIds = (staleClasses ?? []).map((c) => c.id);
     if (staleClassIds.length > 0) {
       const { error: resErr } = await admin.from("reservations").delete().in("class_id", staleClassIds);
       if (resErr) throw new Error(`P1-14 self-healing reservations 정리 실패: ${resErr.message}`);
