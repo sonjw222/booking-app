@@ -117,7 +117,7 @@ beforeAll(async () => {
   const { data: existingFc } = await admin
     .from("centers").select("id").eq("name", "P3 통합-타센터").maybeSingle();
   if (existingFc) {
-    foreignCenterId = (existingFc as any).id;
+    foreignCenterId = existingFc.id;
   } else {
     const { data: fc, error: fcErr } = await admin
       .from("centers").insert({ name: "P3 통합-타센터", status: "approved" }).select("id").single();
@@ -127,7 +127,7 @@ beforeAll(async () => {
   const { data: existingFp } = await admin
     .from("products").select("id").eq("center_id", foreignCenterId).eq("name", "P3 통합-타센터패스").maybeSingle();
   if (existingFp) {
-    foreignPassId = (existingFp as any).id;
+    foreignPassId = existingFp.id;
   } else {
     const { data: fp, error: fpErr } = await admin
       .from("products")

@@ -52,7 +52,7 @@ export async function memberCSubProfile(ownerAccountId: string): Promise<Actor> 
     .is("deleted_at", null)
     .maybeSingle();
   if (findErr) throw new Error(`memberC 서브 프로필 조회 실패: ${findErr.message}`);
-  if (existing) return { accountId: ownerAccountId, profileId: (existing as any).id, role: "memberC" };
+  if (existing) return { accountId: ownerAccountId, profileId: existing.id, role: "memberC" };
 
   const { data, error } = await supabase
     .from("profiles")
@@ -60,7 +60,7 @@ export async function memberCSubProfile(ownerAccountId: string): Promise<Actor> 
     .select("id")
     .single();
   if (error || !data) throw new Error(`memberC 서브 프로필 생성 실패: ${error?.message ?? "no data"}`);
-  return { accountId: ownerAccountId, profileId: (data as any).id, role: "memberC" };
+  return { accountId: ownerAccountId, profileId: data.id, role: "memberC" };
 }
 
 // memberD는 TEST_USER_B 계정 안의 서브 프로필 — memberC와 다른 소유 계정을 씀으로써
@@ -75,7 +75,7 @@ export async function memberDSubProfile(ownerAccountId: string): Promise<Actor> 
     .is("deleted_at", null)
     .maybeSingle();
   if (findErr) throw new Error(`memberD 서브 프로필 조회 실패: ${findErr.message}`);
-  if (existing) return { accountId: ownerAccountId, profileId: (existing as any).id, role: "memberD" };
+  if (existing) return { accountId: ownerAccountId, profileId: existing.id, role: "memberD" };
 
   const { data, error } = await supabase
     .from("profiles")
@@ -83,5 +83,5 @@ export async function memberDSubProfile(ownerAccountId: string): Promise<Actor> 
     .select("id")
     .single();
   if (error || !data) throw new Error(`memberD 서브 프로필 생성 실패: ${error?.message ?? "no data"}`);
-  return { accountId: ownerAccountId, profileId: (data as any).id, role: "memberD" };
+  return { accountId: ownerAccountId, profileId: data.id, role: "memberD" };
 }

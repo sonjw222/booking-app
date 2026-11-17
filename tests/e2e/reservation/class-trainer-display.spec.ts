@@ -80,7 +80,7 @@ test.beforeAll(async () => {
   const admin = getFixtureAdminClient();
   const { data, error } = await admin.from("accounts").select("name").eq("id", managerA.accountId).maybeSingle();
   if (error || !data) throw new Error(`계정 이름 조회 실패: ${error?.message ?? "no data"}`);
-  managerAName = (data as any).name;
+  managerAName = data.name;
 });
 
 test.afterAll(async () => {

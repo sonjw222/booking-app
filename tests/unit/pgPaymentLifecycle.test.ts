@@ -35,7 +35,7 @@ function deps(over: Partial<LifecycleDeps> = {}): LifecycleDeps & { calls: Recor
     getAuthUid: async (t: string) => (t === "good" ? "uid-1" : null),
     gateAllows: async () => true,
     ...calls, ...over, calls,
-  } as any;
+  };
 }
 
 describe("[1~4] cancel API — 인증/소유권/상태", () => {
@@ -50,7 +50,7 @@ describe("[1~4] cancel API — 인증/소유권/상태", () => {
     const d = deps({ orderContext: vi.fn(async () => null) });
     const r = await handleCancel({ token: "good", orderId: "someone-elses" }, d);
     expect(r.status).toBe(404);
-    expect((d as any).dbCancelOrder).not.toHaveBeenCalled();
+    expect(d.dbCancelOrder).not.toHaveBeenCalled();
   });
   it("본인 pending PG 주문 → 취소 허용(토스 취소 API는 호출하지 않음)", async () => {
     const d = deps();
@@ -63,10 +63,10 @@ describe("[1~4] cancel API — 인증/소유권/상태", () => {
   it("done(발급된) 주문 → 단순 취소 거부 409, 이미 cancelled → 멱등 200, direct/mock 주문은 이 경로 거부", async () => {
     let d = deps({ orderContext: vi.fn(async () => ({ ...baseOrder, status: "done" })) });
     expect((await handleCancel({ token: "good", orderId: "o1" }, d)).status).toBe(409);
-    expect((d as any).dbCancelOrder).not.toHaveBeenCalled();
+    expect(d.dbCancelOrder).not.toHaveBeenCalled();
     d = deps({ orderContext: vi.fn(async () => ({ ...baseOrder, status: "cancelled" })) });
     expect((await handleCancel({ token: "good", orderId: "o1" }, d)).body).toMatchObject({ cancelled: true, already: true });
-    expect((d as any).dbCancelOrder).not.toHaveBeenCalled();
+    expect(d.dbCancelOrder).not.toHaveBeenCalled();
     d = deps({ orderContext: vi.fn(async () => ({ ...baseOrder, provider: "mock" })) });
     expect((await handleCancel({ token: "good", orderId: "o1" }, d)).status).toBe(400);
     d = deps({ orderContext: vi.fn(async () => ({ ...baseOrder, provider: null })) });
@@ -118,7 +118,7 @@ describe("[5~9][13] confirm — 승인 → DB 확정 → 보상", () => {
     expect(r.status).toBe(500);
     expect(r.body).toMatchObject({ code: "compensation_failed", orderId: "o1", dbError: "db down", cancelError: "toss down" });
     expect(String(r.body.error)).toContain("승인됐지만");
-    const [level, event, fields] = d.calls.log.mock.calls.find((c) => c[1] === "PG_COMPENSATION_FAILED")!;
+    const [level, , fields] = d.calls.log.mock.calls.find((c) => c[1] === "PG_COMPENSATION_FAILED")!;
     expect(level).toBe("error");
     expect(JSON.stringify(fields)).not.toContain("pay_abcdef123456");   // 전체 paymentKey는 로그에 남기지 않는다
     expect(fields.paymentKey).toBe(maskKey("pay_abcdef123456"));
@@ -162,7 +162,7 @@ describe("[5~9][13] confirm — 승인 → DB 확정 → 보상", () => {
     d = deps({ orderContext: vi.fn(async () => ({ ...baseOrder, provider: null })) });
     expect((await handleConfirm(input, d)).status).toBe(400);
     expect(d.calls.tossConfirm).not.toHaveBeenCalled();
-    expect((await handleConfirm({ ...input, paymentKey: 123 as any }, deps())).status).toBe(400);
+    expect((await handleConfirm({ ...input, paymentKey: 123 as unknown as string }, deps())).status).toBe(400);
   });
   it("[14] cancelled 주문은 결제/확정 불가(토스 호출 전 409)", async () => {
     const d = deps({ orderContext: vi.fn(async () => ({ ...baseOrder, status: "cancelled" })) });
@@ -213,8 +213,8 @@ describe("[10~12] 전체 환불", () => {
     const r = await handleRefund(input, d);
     expect(r.status).toBe(200);
     expect(order).toEqual(["toss", "db"]);
-    expect((d as any).tossCancel).toHaveBeenCalledWith("pay_abcdef123456", { cancelReason: "회원 환불 요청", idempotencyKey: "refund:m1" });
-    expect((d as any).dbRefund).toHaveBeenCalledWith("m1", "uid-1", { allowPg: true, skipTimeCheck: true });
+    expect(d.tossCancel).toHaveBeenCalledWith("pay_abcdef123456", { cancelReason: "회원 환불 요청", idempotencyKey: "refund:m1" });
+    expect(d.dbRefund).toHaveBeenCalledWith("m1", "uid-1", { allowPg: true, skipTimeCheck: true });
   });
   it("토스 취소 실패 → DB 환불을 하지 않는다(돈도 수강권도 그대로, 다시 시도 가능)", async () => {
     const d = deps({ tossCancel: vi.fn(async () => ({ ok: false as const, status: 500, code: "FAILED", message: "x" })) });
@@ -272,7 +272,7 @@ describe("[10~12] 전체 환불", () => {
     expect(d.calls.tossCancel).not.toHaveBeenCalled();
     d = deps({ dbRefund: vi.fn(async () => ({ data: null, error: { message: "P0001: 이미 환불된 수강권이에요" } })) });
     expect((await handleRefund(input, d)).body).toMatchObject({ refunded: true, already: true });
-    expect((d as any).dbRefund).toHaveBeenCalledTimes(1);   // '이미 환불'은 재시도하지 않는다
+    expect(d.dbRefund).toHaveBeenCalledTimes(1);   // '이미 환불'은 재시도하지 않는다
   });
 });
 
@@ -387,7 +387,7 @@ describe("[1] DB cancelled + 토스 DONE 복구(취소/승인 경합)", () => {
     expect(d.calls.tossCancel).toHaveBeenCalledTimes(1);
     expect(d.calls.tossCancel).toHaveBeenCalledWith("pay_abcdef123456", expect.objectContaining({ idempotencyKey: "compensate:o1:pay_abcdef123456" }));
     expect(d.calls.dbConfirm).not.toHaveBeenCalled();
-    expect((d as any).tossConfirm).not.toHaveBeenCalled();
+    expect(d.tossConfirm).not.toHaveBeenCalled();
     expect(r.body).toMatchObject({ code: "payment_compensated" });
   });
   it("orderId 불일치 → 토스 취소 0회(남의 결제를 취소하지 않음) + payment_mismatch + 운영 로그", async () => {
@@ -408,7 +408,7 @@ describe("[1] DB cancelled + 토스 DONE 복구(취소/승인 경합)", () => {
     const r = await handleConfirm(input, d);
     expect(r.body).toMatchObject({ code: "payment_canceled", already: true });
     expect(d.calls.tossCancel).not.toHaveBeenCalled();
-    expect((d as any).tossConfirm).not.toHaveBeenCalled();
+    expect(d.tossConfirm).not.toHaveBeenCalled();
     expect(d.calls.dbConfirm).not.toHaveBeenCalled();
     expect(d.calls.dbCancelOrder).not.toHaveBeenCalled();
   });
@@ -538,8 +538,8 @@ describe("[2][4] 예약 트리거 직렬화 / 활성 예약 포함 미사용 판
 describe("[2] 보상 취소 후 DB 주문 정리 실패", () => {
   const input = { token: "good", paymentKey: "pay_abcdef123456", orderId: "o1", amount: 35000 };
   const dbFail = { data: null, error: { message: "P0001: 포인트 사용 내역이 확인되지 않아요" } };
-  const mkFail = (cancelOrder: ReturnType<typeof vi.fn>) => deps({
-    dbConfirm: vi.fn(async () => dbFail), dbCancelOrder: cancelOrder as any,
+  const mkFail = (cancelOrder: LifecycleDeps["dbCancelOrder"]) => deps({
+    dbConfirm: vi.fn(async () => dbFail), dbCancelOrder: cancelOrder,
     orderContext: vi.fn().mockResolvedValueOnce(baseOrder).mockResolvedValueOnce(baseOrder),
   });
   it("토스 취소 성공 + dbCancel 1회 실패 후 2회차 성공 → 일반 payment_compensated(최대 1회 재시도)", async () => {
@@ -597,7 +597,7 @@ describe("[3] PG 환불 TOCTOU — DB 환불 진행 표시", () => {
     });
     expect((await handleRefund(input, d)).status).toBe(200);
     expect(order).toEqual(["begin", "toss", "db"]);
-    expect((d as any).dbRefund).toHaveBeenCalledWith("m1", "uid-1", { allowPg: true, skipTimeCheck: true });
+    expect(d.dbRefund).toHaveBeenCalledWith("m1", "uid-1", { allowPg: true, skipTimeCheck: true });
   });
   it("begin이 '이미 사용함' 등으로 blocked를 돌려주면 토스 취소를 하지 않는다(표시도 걸리지 않음)", async () => {
     const d = deps({ refundBegin: vi.fn(async () => ({ state: "blocked" as const, reason: "이미 사용한 수강권은 셀프 환불이 어려워요. 센터에 문의해주세요." })) });
@@ -641,14 +641,14 @@ describe("[3] PG 환불 TOCTOU — DB 환불 진행 표시", () => {
     expect(d.calls.refundRelease).not.toHaveBeenCalled();
   });
   it("중복 환불 요청: begin이 refunded면 409, 동시 두 요청 중 하나가 먼저 끝나면 두 번째 DB '이미 환불'은 성공으로 수렴(토스 멱등키 동일)", async () => {
-    let d = deps({ refundBegin: vi.fn(async () => ({ state: "refunded" as const })) });
+    const d = deps({ refundBegin: vi.fn(async () => ({ state: "refunded" as const })) });
     expect((await handleRefund(input, d)).body).toMatchObject({ code: "already_refunded" });
     expect(d.calls.tossCancel).not.toHaveBeenCalled();
     const a = deps(); const b = deps({ refundBegin: vi.fn(async () => ({ state: "resumed" as const })), dbRefund: vi.fn(async () => ({ data: null, error: { message: "이미 환불된 수강권이에요" } })) });
     const [ra, rb] = await Promise.all([handleRefund(input, a), handleRefund(input, b)]);
     expect([ra.status, rb.status]).toEqual([200, 200]);
-    expect((a as any).tossCancel.mock.calls[0][1].idempotencyKey).toBe("refund:m1");
-    expect((b as any).tossCancel.mock.calls[0][1].idempotencyKey).toBe("refund:m1");
+    expect(a.calls.tossCancel.mock.calls[0][1].idempotencyKey).toBe("refund:m1");
+    expect(b.calls.tossCancel.mock.calls[0][1].idempotencyKey).toBe("refund:m1");
   });
   it("direct/manual/mock 환불은 환불 표시/토스를 거치지 않는다(회귀)", async () => {
     const d = deps({ refundContext: vi.fn(async () => ({ ...baseRefund, provider: null, paymentKey: null })) });
@@ -735,7 +735,7 @@ describe("provider별 환불 경계 — portone은 fail closed", () => {
       expect(r.body).toMatchObject({ code: "portone_refund_unsupported" });
       expect(String(r.body.error)).toContain("자동 환불은 아직 지원하지 않아요");
       noExternal(d);
-      const [level, event, fields] = d.calls.log.mock.calls.find((c) => c[1] === "PG_REFUND_UNSUPPORTED_PROVIDER")!;
+      const [level, , fields] = d.calls.log.mock.calls.find((c) => c[1] === "PG_REFUND_UNSUPPORTED_PROVIDER")!;
       expect(level).toBe("warn");
       expect(fields).toEqual({ provider: "portone", membershipId: "m1", orderId: "o1" });   // 결제키/비밀값 없음
     }
@@ -794,18 +794,19 @@ describe("provider별 환불 경계 — portone은 fail closed", () => {
 
 describe("토스 API 호출 모듈(fetch 주입 — 실제 호출 없음)", () => {
   it("승인/취소 요청 형식: Basic 인증, Idempotency-Key, 전액 취소(cancelAmount 없음), 네트워크 오류는 status 0", async () => {
-    const f = vi.fn(async () => new Response(JSON.stringify({ ok: 1 }), { status: 200 }));
-    await tossConfirmPayment("sk_test_x", { paymentKey: "pk", orderId: "o", amount: 100, idempotencyKey: "k1" }, f as any);
-    const [url, init] = f.mock.calls[0] as any;
+    const f = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ ok: 1 }), { status: 200 }));
+    type Call = [string, { headers: Record<string, string>; body: string }];
+    await tossConfirmPayment("sk_test_x", { paymentKey: "pk", orderId: "o", amount: 100, idempotencyKey: "k1" }, f);
+    const [url, init] = f.mock.calls[0] as unknown as Call;
     expect(url).toBe("https://api.tosspayments.com/v1/payments/confirm");
     expect(init.headers.Authorization).toBe("Basic " + Buffer.from("sk_test_x:").toString("base64"));
     expect(init.headers["Idempotency-Key"]).toBe("k1");
     expect(JSON.parse(init.body)).toEqual({ paymentKey: "pk", orderId: "o", amount: 100 });
-    await tossCancelPayment("sk_test_x", "pk/1", { cancelReason: "사유", idempotencyKey: "k2" }, f as any);
-    const [curl, cinit] = f.mock.calls[1] as any;
+    await tossCancelPayment("sk_test_x", "pk/1", { cancelReason: "사유", idempotencyKey: "k2" }, f);
+    const [curl, cinit] = f.mock.calls[1] as unknown as Call;
     expect(curl).toBe("https://api.tosspayments.com/v1/payments/pk%2F1/cancel");
     expect(JSON.parse(cinit.body)).toEqual({ cancelReason: "사유" });
-    const net = await tossConfirmPayment("k", { paymentKey: "p", orderId: "o", amount: 1 }, (async () => { throw new Error("boom"); }) as any);
+    const net = await tossConfirmPayment("k", { paymentKey: "p", orderId: "o", amount: 1 }, async (): Promise<Response> => { throw new Error("boom"); });
     expect(net).toMatchObject({ ok: false, status: 0, code: "NETWORK_ERROR" });
   });
 });

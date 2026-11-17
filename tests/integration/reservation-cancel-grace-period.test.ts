@@ -31,6 +31,7 @@ import {
   getFixtureAdminClient,
 } from "./setup";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../lib/settings";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 
@@ -64,7 +65,7 @@ const ALWAYS_PAST_CANCEL_TIME = "00:01";
 async function reserveAndGetId(classId: string): Promise<string> {
   const { data, error } = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: managerA.profileId });
   if (error) throw new Error(`예약 실패: ${error.message}`);
-  return (data as any).reservation_id;
+  return data.reservation_id;
 }
 
 beforeAll(async () => {
@@ -82,9 +83,9 @@ afterAll(async () => {
   await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
   const errors: string[] = [];
   for (const classId of createdClassIds) {
-    try { await cleanupTestClass(classId, []); } catch (e: any) { errors.push(e.message); }
+    try { await cleanupTestClass(classId, []); } catch (e) { errors.push(errorMessage(e)); }
   }
-  try { await saveSettings(centerAId, defaultSettings); } catch (e: any) { errors.push(e.message); }
+  try { await saveSettings(centerAId, defaultSettings); } catch (e) { errors.push(errorMessage(e)); }
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 30000);
 
@@ -99,7 +100,7 @@ describe("RES-001: 예약 후 10분 이내 무료 취소 예외", () => {
 
     const { data, error } = await supabase.rpc("cancel_reservation", { p_reservation_id: resId });
     expect(error).toBeNull();
-    expect((data as any).cancelled).toBe(true);
+    expect(data.cancelled).toBe(true);
     expect(await fetchMembershipRemaining(mem.id)).toBe(3); // 2(예약 소모) → 3(환급)
   });
 
@@ -207,7 +208,7 @@ describe("RES-001: 예약 후 10분 이내 무료 취소 예외", () => {
     const { data: resRow, error: resErr } = await supabase
       .from("reservations").select("membership_id").eq("id", resId).single();
     if (resErr || !resRow) throw new Error("예약의 membership_id 조회 실패: " + resErr?.message);
-    const usedMembershipId = (resRow as any).membership_id as string;
+    const usedMembershipId = resRow.membership_id as string;
     const beforeCancel = await fetchMembershipRemaining(usedMembershipId);
 
     await backdateCreatedAt(resId, 11);

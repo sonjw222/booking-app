@@ -57,6 +57,6 @@ describe("SYNC-001: Mock 결제 확정 시 center_members 자동 등록", () => 
       .maybeSingle();
     expect(error).toBeNull();
     expect(data).not.toBeNull();
-    expect((data as any).status).toBe("active");
+    expect(data!.status).toBe("active");
   });
 });

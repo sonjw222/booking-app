@@ -41,16 +41,16 @@ async function addReservation(classId: string, membershipId: string, status: str
 }
 async function reservationId(classId: string, membershipId: string): Promise<string> {
   const { data } = await admin().from("reservations").select("id").eq("class_id", classId).eq("membership_id", membershipId).single();
-  tracker.add("reservations", (data as any).id);
-  return (data as any).id as string;
+  tracker.add("reservations", data!.id);
+  return data!.id as string;
 }
 
 describe("QA(후보): PG 환불 진행 표시와 예약", () => {
   beforeAll(async () => {
     ({ state } = await bootstrapQa());
     const { data, error } = await admin().from("accounts").select("auth_id").eq("id", state.memberAccountId).single();
-    if (error || !(data as any)?.auth_id) throw new Error(`QA 회원 auth id 조회 실패: ${error?.message}`);
-    authUid = (data as any).auth_id;
+    if (error || !data?.auth_id) throw new Error(`QA 회원 auth id 조회 실패: ${error?.message}`);
+    authUid = data.auth_id;
   });
   afterAll(async () => {
     const keep = shouldKeepFailedFixtures(process.env, failed);
@@ -141,9 +141,9 @@ describe("QA(후보): PG 환불 진행 표시와 예약", () => {
       await Promise.allSettled([begin(mem), addReservation(cls, mem, "confirmed")]);
       const { data: m } = await admin().from("memberships").select("pg_refund_started_at").eq("id", mem).single();
       const { data: rs } = await admin().from("reservations").select("id, status").eq("class_id", cls).eq("membership_id", mem);
-      for (const r of rs ?? []) tracker.add("reservations", (r as any).id);
-      const locked = (m as any).pg_refund_started_at != null;
-      const active = (rs ?? []).some((r: any) => ["confirmed", "waitlisted", "attended", "no_show"].includes(r.status));
+      for (const r of rs ?? []) tracker.add("reservations", r.id);
+      const locked = m!.pg_refund_started_at != null;
+      const active = (rs ?? []).some((r) => ["confirmed", "waitlisted", "attended", "no_show"].includes(r.status));
       expect(locked && active).toBe(false);
       await release(mem);
     }

@@ -4,7 +4,6 @@ import {
   getOrCreateOwnedTestCenter,
   createTestMembershipAdmin,
   createFutureTestClassAdmin,
-  createKstSameDayFutureClassAdmin,
   createClassOnKstDateAdmin,
   cleanupTestClassAdmin,
   fetchSettingsAdmin,

@@ -5,11 +5,10 @@
 // DEV/Production 접속 없음. 실행: node --test tests/sql/nicepay-provider-support.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 const { PGlite } = await import(process.env.PGLITE_MODULE ? pathToFileURL(process.env.PGLITE_MODULE + '/dist/index.js').href : '@electric-sql/pglite');
 import * as W from './helpers/nicepayWorld.mjs';
-const { gateFix, gateRollback, gateVerify, roleGuardFix, roleGuardRollback, amountFix, amountRollback, serverFix, serverRollback, read, slice, lifecycle, kst, issuance, confirmReal, pointLife, settlementSrc, refundFix, refundRollback, cosFix, cosRollback, preflight, support, supportRollback, stripComments, id, C1, CI, P1, ACC, AUTH, MGR, PROD, liveHelper, liveFulfill, liveCore, liveForceInsert, liveStatusGuard, liveRestoreTrigger, liveRefundWrappers, liveRefundContext, liveAccountFor, liveConfirmReal, liveCancelReal, liveConfirmTest, liveSettlement, toCrlf, dropNewComment } = W;
+const { gateFix, gateRollback, gateVerify, roleGuardFix, roleGuardRollback, amountFix, amountRollback, serverFix, serverRollback, read, refundFix, refundRollback, cosFix, cosRollback, preflight, support, supportRollback, stripComments, id, C1, CI, P1, ACC, AUTH, MGR, PROD, liveHelper, liveFulfill, liveCore, liveForceInsert, liveStatusGuard, liveRefundContext, toCrlf } = W;
 
 async function world({ refundFixApplied = true, supportApplied = true, serverFixApplied = true, amountFixApplied = true, roleGuardApplied = true, gateApplied = true, gateMode = 'public', crlf = false, noComment = false } = {}) {
   const db = new PGlite();
@@ -34,7 +33,6 @@ const mkOrder = async (db, provider, { center = C1, amount = 10000, status = 'pe
 const q1 = async (db, sql) => (await db.query(sql)).rows[0];
 const count = async (db, t, where = 'true') => Number((await q1(db, `select count(*)::int c from ${t} where ${where}`)).c);
 const rejects = async (p, re) => { try { await p; } catch (e) { if (re) assert.match(String(e.message), re); return; } assert.fail('예외가 나야 한다'); };
-const asServer = (db, sql) => db.exec(sql);   // service_role 대리: app.uid 없음(auth.uid() null)
 async function paidMembership(db, provider, { amount = 10000 } = {}) {   // 환불 시나리오용: 완료 주문 + 수강권 + 매출을 직접 구성
   const oid = await mkOrder(db, provider, { amount, status: 'done' });
   const mid = id(6, Math.floor(Math.random() * 1e9));
@@ -877,7 +875,7 @@ test('U2. 적용 순서/역순 롤백: 정순서 적용 → 역순 롤백이 전
     assert.equal(v.refund_core_requires_pg_cancel_must_be_true, true);
     const v2 = (await swapped.query(stripComments(read('verify_fix_refund_pg_origin_guard_20261017.sql')))).rows[0];
     assert.ok(Object.values(v2).every(x => x === true), JSON.stringify(v2));
-    const [a1, a2] = [await defOf(swapped, SIGS.core), null];
+    const a1 = await defOf(swapped, SIGS.core);
     await swapped.exec(refundFix);   // 멱등
     assert.equal(await defOf(swapped, SIGS.core), a1);
     const fwd = await world();       // 정순서 결과와 동일한 최종 정의
@@ -1206,7 +1204,6 @@ test('Z2. 출처 불명확 PG 결제(연결 없는 Toss)의 서버 경로: 환�
 });
 
 test('Z3. pg_refund_context: 최근 결제 행이 아니라 PG 원거래 행 기준, 출처 불명확하면 unknown_pg, 직접결제/Mock 출력은 변하지 않는다', async () => {
-  const mkBoth = async (opts) => { const d = await world({ serverFixApplied: opts.fixed }); return d; };
   const snapshotOf = async (db) => {
     const out = {};
     const direct = await paidMembership(db, null); out.direct = await ctxOf(db, direct.mid);

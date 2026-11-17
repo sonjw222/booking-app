@@ -5,7 +5,6 @@
 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-type Row = Record<string, unknown>;
 type Result = { data: unknown; error: null | { message: string }; count?: number };
 
 const state = {

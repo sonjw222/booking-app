@@ -24,6 +24,7 @@ import {
   cleanupTestClass,
   type TestUser,
 } from "./setup";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 
@@ -55,17 +56,17 @@ beforeAll(async () => {
     p_assignment_type: "ADMIN_ASSIGNMENT", p_membership_id: membershipId,
   });
   if (error) throw new Error("예약 fixture 생성 실패: " + error.message);
-  reservationId = (data as any).reservation_id;
+  reservationId = data.reservation_id;
 }, 30000);
 
 afterAll(async () => {
   await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
   const errors: string[] = [];
-  try { await cleanupTestClass(classId, []); } catch (e: any) { errors.push(e.message); }
+  try { await cleanupTestClass(classId, []); } catch (e) { errors.push(errorMessage(e)); }
   if (createdHoliday) {
     try {
       await supabase.from("center_holidays").delete().eq("center_id", centerAId).eq("holiday_date", holidayDate);
-    } catch (e: any) { errors.push(e.message); }
+    } catch (e) { errors.push(errorMessage(e)); }
   }
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 30000);
@@ -76,7 +77,7 @@ describe("NOTIF-001 E-4/E-5: 휴무일 강제취소는 삭제 대신 이력을 �
       p_center_id: centerAId, p_date: holidayDate, p_reason: "NOTIF-001 통합테스트 휴무", p_force: true,
     });
     expect(error).toBeNull();
-    expect((data as any).needs_confirm).toBe(false);
+    expect(data.needs_confirm).toBe(false);
     createdHoliday = true;
 
     const { data: res, error: resErr } = await supabase
@@ -85,17 +86,17 @@ describe("NOTIF-001 E-4/E-5: 휴무일 강제취소는 삭제 대신 이력을 �
       .eq("id", reservationId)
       .single();
     expect(resErr).toBeNull();
-    expect((res as any).status).toBe("cancelled"); // 삭제되지 않고 취소 상태로 존재
-    expect((res as any).cancel_reason).toBe("NOTIF-001 통합테스트 휴무");
-    expect((res as any).cancel_source).toBe("HOLIDAY");
-    expect((res as any).cancelled_by).not.toBeNull();
-    expect((res as any).cancelled_at).not.toBeNull();
+    expect(res!.status).toBe("cancelled"); // 삭제되지 않고 취소 상태로 존재
+    expect(res!.cancel_reason).toBe("NOTIF-001 통합테스트 휴무");
+    expect(res!.cancel_source).toBe("HOLIDAY");
+    expect(res!.cancelled_by).not.toBeNull();
+    expect(res!.cancelled_at).not.toBeNull();
   });
 
   it("수업 행도 삭제되지 않고 status='cancelled'(폐강)로 남는다", async () => {
     const { data, error } = await supabase.from("classes").select("status").eq("id", classId).single();
     expect(error).toBeNull();
-    expect((data as any).status).toBe("cancelled");
+    expect(data!.status).toBe("cancelled");
   });
 
   it("수강권 잔여횟수가 정확히 복구된다(3→2 소모→3 복구)", async () => {
@@ -107,11 +108,11 @@ describe("NOTIF-001 E-4/E-5: 휴무일 강제취소는 삭제 대신 이력을 �
       .from("reservations")
       .select("id, status, cancel_source, classes(title)")
       .eq("id", reservationId)
-      .single();
+      .single<{ id: string; status: string; cancel_source: string; classes: { title: string } | null }>();
     expect(error).toBeNull();
-    expect((data as any).status).toBe("cancelled");
-    expect((data as any).cancel_source).toBe("HOLIDAY");
-    expect((data as any).classes?.title).toBe("NOTIF-001 휴무일 이력 테스트");
+    expect(data!.status).toBe("cancelled");
+    expect(data!.cancel_source).toBe("HOLIDAY");
+    expect(data!.classes?.title).toBe("NOTIF-001 휴무일 이력 테스트");
   });
 
   it("영향받은 회원에게 휴무일 취소 알림이 생성되고 문구에 수업명·취소사유·복구 안내가 포함된다", async () => {
@@ -123,9 +124,9 @@ describe("NOTIF-001 E-4/E-5: 휴무일 강제취소는 삭제 대신 이력을 �
       .order("created_at", { ascending: false })
       .limit(5);
     expect(error).toBeNull();
-    const holidayNotis = (data ?? []).filter((n: any) => n.data?.cancel_source === "HOLIDAY");
+    const holidayNotis = (data ?? []).filter((n) => n.data?.cancel_source === "HOLIDAY");
     expect(holidayNotis.length).toBe(1); // 정확히 1건(중복 알림 없음)
-    const n = holidayNotis[0] as any;
+    const n = holidayNotis[0];
     expect(n.title).toContain("휴무일");
     expect(n.body).toContain("NOTIF-001 휴무일 이력 테스트"); // 수업명
     expect(n.body).toContain("NOTIF-001 통합테스트 휴무"); // 취소사유

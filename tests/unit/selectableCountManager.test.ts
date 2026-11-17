@@ -11,15 +11,15 @@ const rpcMock = vi.fn();
 const insertMock = vi.fn();
 const updateMock = vi.fn();
 const deleteMock = vi.fn();
-let insertResult: any = { data: { id: "p-new" }, error: null };
-let deleteResult: any = { error: null };
-const chain: any = {};
+let insertResult: { data?: { id: string }; error: unknown } = { data: { id: "p-new" }, error: null };
+let deleteResult: { error: unknown } = { error: null };
+const chain: Record<string, unknown> = {};
 for (const m of ["select", "eq", "neq", "order", "in"]) chain[m] = vi.fn(() => chain);
 chain.insert = (...a: unknown[]) => { insertMock(...a); return chain; };
 chain.update = (...a: unknown[]) => { updateMock(...a); return chain; };
 chain.delete = (...a: unknown[]) => { deleteMock(...a); return { eq: () => Promise.resolve(deleteResult) }; };
 chain.single = () => Promise.resolve(insertResult);
-chain.then = (res: any) => res(insertResult);
+chain.then = (res: (v: unknown) => unknown) => res(insertResult);
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: { rpc: (...a: unknown[]) => rpcMock(...a), from: () => chain },
 }));

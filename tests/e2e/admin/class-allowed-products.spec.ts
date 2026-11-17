@@ -47,7 +47,6 @@ let passC: { id: string; name: string };
 let passD: { id: string; name: string };
 let passE: { id: string; name: string };
 let passF: { id: string; name: string };
-let goods: { id: string };
 let originalSettings: Awaited<ReturnType<typeof fetchSettingsAdmin>>;
 const createdClassIds: string[] = [];
 const foreignCenterCleanup: { centerId: string; productId: string } = { centerId: "", productId: "" };
@@ -86,7 +85,7 @@ test.beforeAll(async () => {
   passD = await getOrCreateTestPassProductNamed(centerAId, "P3 패스D");
   passE = await getOrCreateTestPassProductNamed(centerAId, "P3 패스E");
   passF = await getOrCreateTestPassProductNamed(centerAId, "P3 패스F");
-  goods = await getOrCreateTestGoodsProduct(centerAId);
+  await getOrCreateTestGoodsProduct(centerAId);
 
   await createTestMembershipForProduct(centerAId, userA.profileId, passA, { remainingCount: 10 });
   await createTestMembershipForProduct(centerAId, userA.profileId, passB, { remainingCount: 10 });
@@ -121,7 +120,7 @@ test.beforeAll(async () => {
   const { data: existingForeignCenter } = await admin
     .from("centers").select("id").eq("name", "P3 타센터-격리테스트").maybeSingle();
   if (existingForeignCenter) {
-    foreignCenterCleanup.centerId = (existingForeignCenter as any).id;
+    foreignCenterCleanup.centerId = existingForeignCenter.id;
   } else {
     const { data: foreignCenter, error: fcErr } = await admin
       .from("centers").insert({ name: "P3 타센터-격리테스트", status: "approved" }).select("id").single();
@@ -131,7 +130,7 @@ test.beforeAll(async () => {
   const { data: existingForeignProduct } = await admin
     .from("products").select("id").eq("center_id", foreignCenterCleanup.centerId).eq("name", "P3 타센터전용패스").maybeSingle();
   if (existingForeignProduct) {
-    foreignCenterCleanup.productId = (existingForeignProduct as any).id;
+    foreignCenterCleanup.productId = existingForeignProduct.id;
   } else {
     const { data: foreignProduct, error: fpErr } = await admin
       .from("products")
@@ -290,7 +289,6 @@ test("관리자: 전체 선택(전체 허용으로 전환) → 회원 화면에 
 });
 
 test("프라이빗 수업에서도 예약 가능 수강권 선택이 동일하게 동작한다 (실브라우저)", async ({ page, browser }) => {
-  const admin = getFixtureAdminClient();
   // 같은 센터·제목의 다른 실행/사람이 만든 행은 건드리지 않는다 — 실행별 제목으로 만들고(충돌 없음) 이 실행이 만든 id 만 정리한다(Q01).
   const start = new Date(Date.now() + 33 * 3600 * 1000);
   const end = new Date(start.getTime() + 60 * 60 * 1000);

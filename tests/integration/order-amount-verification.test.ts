@@ -88,8 +88,8 @@ describe("SEC-118: 주문 금액 서버 검증", () => {
       p_order_id: orderId, p_provider_ref: "amount-ok",
     });
     expect(error).toBeNull();
-    expect((data as any).already_done).toBe(false);
-    expect((data as any).amount).toBe(product.price);
+    expect(data.already_done).toBe(false);
+    expect(data.amount).toBe(product.price);
   });
 
   it("상품 가격보다 낮게 조작한 금액은 거부된다", async () => {
@@ -171,7 +171,7 @@ describe("SEC-118: 주문 금액 서버 검증", () => {
       p_order_id: orderId, p_provider_ref: "real-points",
     });
     expect(error).toBeNull();
-    expect((data as any).amount).toBe(Math.max(0, product.price - used));
+    expect(data.amount).toBe(Math.max(0, product.price - used));
   });
 
   it("다른 주문에서 실제로 쓴 포인트를 이 주문에 재사용 주장하면 거부된다(주문별 연결 확인)", async () => {

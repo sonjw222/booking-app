@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-// @ts-expect-error mjs 모듈
 import { checkCiDevEnv, REQUIRED_SECRET_NAMES } from "../../scripts/ci-dev/requiredEnv.mjs";
 
 const full = (over: Record<string, string> = {}) => {

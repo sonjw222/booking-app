@@ -23,6 +23,7 @@ import { itPrivileged } from "./privilegedGate"; // 공유 계정 임시 승격 
 import { supabase } from "../../lib/supabaseClient";
 import { switchToTestUser, getOrCreateOwnedTestCenter, getFixtureAdminClient, type TestUser } from "./setup";
 import { createRole, fetchRoles, inviteStaff, removeStaff, deleteRole, setStaffOverride } from "../../lib/roles";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
@@ -143,15 +144,15 @@ afterAll(async () => {
 
   try {
     await clearManagerBOverrides();
-  } catch (e: any) {
-    errors.push(`권한 오버라이드 정리 실패: ${e.message}`);
+  } catch (e) {
+    errors.push(`권한 오버라이드 정리 실패: ${errorMessage(e)}`);
   }
 
   try {
     await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
     await cleanupNoPermRoleAndInvite(centerAId);
-  } catch (e: any) {
-    errors.push(`무권한 역할/초대 정리 실패: ${e.message}`);
+  } catch (e) {
+    errors.push(`무권한 역할/초대 정리 실패: ${errorMessage(e)}`);
   }
 
   if (errors.length > 0) {
@@ -218,7 +219,7 @@ describe("contracts — SELECT만 정책, 본인/권한 보유 스태프만 조�
     // 다른 통합테스트들과 동일 패턴), 에러 유무가 아니라 실제로 안 바뀌었는지로 판정한다.
     await supabase.from("contracts").update({ status: "cancelled" }).eq("id", contractId!);
     const { data: stillSigned } = await getFixtureAdminClient().from("contracts").select("status").eq("id", contractId!).single();
-    expect((stillSigned as any)?.status).toBe("signed");
+    expect(stillSigned?.status).toBe("signed");
 
     await supabase.from("contracts").delete().eq("id", contractId!);
     const { data: stillExists } = await getFixtureAdminClient().from("contracts").select("id").eq("id", contractId!).maybeSingle();
@@ -285,7 +286,7 @@ describe("notification_logs — SELECT만 정책 (message.sms.view/message.push.
 
     await supabase.from("notification_logs").update({ status: "failed" }).eq("id", notifSmsId!);
     const { data: stillSent } = await getFixtureAdminClient().from("notification_logs").select("status").eq("id", notifSmsId!).single();
-    expect((stillSent as any)?.status).toBe("sent");
+    expect(stillSent?.status).toBe("sent");
 
     await supabase.from("notification_logs").delete().eq("id", notifSmsId!);
     const { data: stillExists } = await getFixtureAdminClient().from("notification_logs").select("id").eq("id", notifSmsId!).maybeSingle();

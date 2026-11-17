@@ -72,7 +72,7 @@ function fakeDeps(over: { recordVerifiedApproval?: () => Promise<{ data: Record<
   const fetchImpl: NicepayFetch = async (url, init) => { calls.push({ url, body: new URLSearchParams(init.body) }); return { ok: true, status: 200, async json() { return respond(url); } }; };
   const ctx = over.ctx === undefined ? { orderId: ORDER, status: "pending", amount: AMT, provider: "nicepay" } : over.ctx;
   const claim = vi.fn(over.claimOrder ?? (async () => "claim-1"));
-  const release = vi.fn(async (_o: string, _c: string, _b: string) => over.releaseResult ?? true);
+  const release = vi.fn<NicepayDeps["releaseOrder"]>(async () => over.releaseResult ?? true);
   const recApproval = vi.fn(over.recordVerifiedApproval ?? (async () => ({ data: { already_recorded: false }, error: null })));
   const recCancel = vi.fn(over.recordPgCancel ?? (async () => ({ data: { already_recorded: false }, error: null })));
   const review = vi.fn(async () => {});

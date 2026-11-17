@@ -31,6 +31,7 @@ import {
   type TestUser,
 } from "./setup";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../lib/settings";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const ALWAYS_PAST_CANCEL_TIME = "00:01"; // reservation-cancel-grace-period.test.ts와 동일한 트릭
@@ -49,7 +50,7 @@ async function setClassCancelDeadlineMin(classId: string, minutes: number | null
 async function reserveAndGetId(classId: string): Promise<string> {
   const { data, error } = await supabase.rpc("reserve_class", { p_class_id: classId, p_profile_id: managerA.profileId });
   if (error) throw new Error(`예약 실패: ${error.message}`);
-  return (data as any).reservation_id;
+  return data.reservation_id;
 }
 
 // RES-001(예약 후 10분 이내 무료 취소 예외)이 이 테스트의 관심사(마감 우선순위)를 가려버리는
@@ -78,9 +79,9 @@ afterAll(async () => {
   await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
   const errors: string[] = [];
   for (const classId of createdClassIds) {
-    try { await cleanupTestClass(classId, []); } catch (e: any) { errors.push(e.message); }
+    try { await cleanupTestClass(classId, []); } catch (e) { errors.push(errorMessage(e)); }
   }
-  try { await saveSettings(centerAId, defaultSettings); } catch (e: any) { errors.push(e.message); }
+  try { await saveSettings(centerAId, defaultSettings); } catch (e) { errors.push(errorMessage(e)); }
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 30000);
 
@@ -120,7 +121,7 @@ describe("개별 수업 취소마감(cancel_deadline_min)이 운영설정보다 
     await backdateCreatedAt(resId, 15);
     const { data, error } = await supabase.rpc("cancel_reservation", { p_reservation_id: resId });
     expect(error).toBeNull();
-    expect((data as any)?.cancelled).toBe(true);
+    expect(data?.cancelled).toBe(true);
     expect(await fetchMembershipRemaining(mem.id)).toBe(3);
   });
 });

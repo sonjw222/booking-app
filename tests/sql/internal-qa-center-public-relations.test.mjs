@@ -153,7 +153,6 @@ test('정적: migration은 SELECT 정책 12개 + helper 3개만(쓰기 정책/�
 
 // ---- verify 강화(정규화 일치 / permissive만 / helper 본문 의미) ----
 const FN = (name, arg, body) => `create or replace function public.${name}(${arg}) returns boolean language sql stable security definer set search_path = public as $$ ${body} $$;`;
-const applied = async () => { const db = await world(); return db; };
 
 test('verify: 다른 이름으로 남은 옛 trivial SELECT 정책을 포맷(공백/괄호/대소문자/::text)과 무관하게 감지 → NOT_APPLIED', async () => {
   const db = await world();

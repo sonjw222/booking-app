@@ -65,7 +65,7 @@ describe("본문 터치 드래그(contentDrag, opt-in)", () => {
   it("스크롤 끝단 초과(맨 아래에서 위로)·내용이 짧은 시트에서 위로 밀기는 preventDefault(문서 rubber-band 차단)", () => {
     const a = mkSheet({ contentDrag: true, scrollable: true }); a.sheet.scrollTop = 2000 - 500;   // 맨 아래
     expect(swipe(document.getElementById("p")!, 400, 100).every((m) => m.defaultPrevented)).toBe(true);
-    const b = mkSheet({ contentDrag: true, scrollable: false });
+    mkSheet({ contentDrag: true, scrollable: false });
     expect(swipe(document.getElementById("p")!, 400, 100).every((m) => m.defaultPrevented)).toBe(true);
   });
   it("시트 밖(딤 영역) 터치 이동은 항상 preventDefault", () => {

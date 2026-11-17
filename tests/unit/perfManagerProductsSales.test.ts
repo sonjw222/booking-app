@@ -10,7 +10,7 @@ const calls: Call[] = [];
 let handler: (c: Call) => { data: unknown; error: unknown };
 
 function builder(c: Call) {
-  const b: any = new Proxy({}, {
+  const b: object = new Proxy({}, {
     get(_t, prop: string) {
       if (prop === "then") return (res: (v: unknown) => void) => res(handler(c));
       return (...args: unknown[]) => { c.ops.push([prop, args]); return b; };

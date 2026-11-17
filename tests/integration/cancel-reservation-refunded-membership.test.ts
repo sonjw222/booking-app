@@ -26,6 +26,7 @@ import {
   fetchMembershipRemaining,
   type TestUser,
 } from "./setup";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const PRODUCT_NAME_PREFIX = "통합테스트 유령잔여횟수";
@@ -97,11 +98,11 @@ afterAll(async () => {
   await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
   const errors: string[] = [];
   for (const classId of createdClassIds) {
-    try { await cleanupTestClass(classId, []); } catch (e: any) { errors.push(e.message); }
+    try { await cleanupTestClass(classId, []); } catch (e) { errors.push(errorMessage(e)); }
   }
   const admin = getFixtureAdminClient();
   for (const id of createdMembershipIds) {
-    try { await admin.from("memberships").delete().eq("id", id); } catch (e: any) { errors.push(e.message); }
+    try { await admin.from("memberships").delete().eq("id", id); } catch (e) { errors.push(errorMessage(e)); }
   }
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 30000);
@@ -117,7 +118,7 @@ describe("cancel_reservation(): 환불/양도된 수강권의 유령 잔여횟�
 
     const { data, error } = await supabase.rpc("cancel_reservation", { p_reservation_id: resId });
     expect(error).toBeNull();
-    expect((data as any).cancelled).toBe(true);
+    expect(data.cancelled).toBe(true);
     expect(await fetchMembershipRemaining(memId)).toBe(3); // 정상 환급
   });
 
@@ -132,7 +133,7 @@ describe("cancel_reservation(): 환불/양도된 수강권의 유령 잔여횟�
 
     const { data, error } = await supabase.rpc("cancel_reservation", { p_reservation_id: resId });
     expect(error).toBeNull();
-    expect((data as any).cancelled).toBe(true); // 취소 자체는 정상 처리됨
+    expect(data.cancelled).toBe(true); // 취소 자체는 정상 처리됨
     expect(await fetchMembershipRemaining(memId)).toBe(0); // 유령 잔여횟수가 생기지 않음 (여전히 0)
   });
 
@@ -147,7 +148,7 @@ describe("cancel_reservation(): 환불/양도된 수강권의 유령 잔여횟�
 
     const { data, error } = await supabase.rpc("cancel_reservation", { p_reservation_id: resId });
     expect(error).toBeNull();
-    expect((data as any).cancelled).toBe(true);
+    expect(data.cancelled).toBe(true);
     expect(await fetchMembershipRemaining(memId)).toBe(2); // +1 되지 않고 그대로 유지
   });
 });

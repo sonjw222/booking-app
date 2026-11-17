@@ -12,7 +12,6 @@ test.beforeAll(() => { P1 = reviewProduct("1회"); setGate("off"); cleanNicepayO
 // 이 파일은 알파벳 순서상 nicepayV3.spec.ts 보다 먼저 실행된다 — 그 파일은 "호출 0건·주문 없음"을 절대값으로 단언하므로, 끝나면 이 시험이 만든 주문·모의 서버 호출 기록을 모두 비운다(시험 간 간섭 방지).
 test.afterAll(() => { setGate("off"); control({}); cleanNicepayOrders(); try { fs.writeFileSync(need("NICEPAY_QA_LOG"), ""); } catch { /* 로그 없음 */ } });
 
-const SCHEME = "mwhabitnicepay";
 // Capacitor 공식 훅(CapacitorCustomPlatform)으로 앱 WebView 를 흉내 낸다 — getPlatform()/isNativePlatform() 이 진짜 @capacitor/core 코드로 계산된다(네이티브 브리지는 없음).
 const asCapacitor = (page: Page, platform: "ios" | "android") => page.addInitScript((pf) => { (window as unknown as { CapacitorCustomPlatform: unknown }).CapacitorCustomPlatform = { name: pf }; }, platform);
 const lastOrder = (who: "A" | "B" | "T") => { const rows = orderRows(who).split(",").filter(Boolean); const r = rows[rows.length - 1]; return r ? { id: r.split(":")[0], status: r.split(":")[1] } : null; };

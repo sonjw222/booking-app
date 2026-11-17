@@ -24,7 +24,7 @@ let failed = false;
 async function remaining(membershipId: string): Promise<number | null> {
   const { data, error } = await admin().from("memberships").select("remaining_count").eq("id", membershipId).single();
   if (error) throw new Error(`수강권 조회 실패: ${error.message}`);
-  return (data as any).remaining_count;
+  return data.remaining_count;
 }
 async function usageRows() {
   const { data, error } = await admin().from("reservation_goods_usages")
@@ -57,7 +57,7 @@ describe("QA: 예약 → 대여상품 차감 → 취소 → 복원", () => {
     expect(await remaining(goodsId)).toBe(4);
     expect(await remaining(passId)).toBe(5);
     const { data } = await admin().from("memberships").select("selected_size").eq("id", goodsId).single();
-    expect((data as any).selected_size).toBe("240");
+    expect(data!.selected_size).toBe("240");
   });
 
   step("2~3. QA 회원 세션으로 수강권 + 대여상품을 함께 선택해 예약(reserve_with_goods)", async () => {
@@ -67,9 +67,9 @@ describe("QA: 예약 → 대여상품 차감 → 취소 → 복원", () => {
       .eq("class_id", classId).eq("profile_id", state.memberProfileId);
     expect(error).toBeNull();
     expect(data).toHaveLength(1);
-    reservationId = (data as any[])[0].id;
+    reservationId = data![0].id;
     tracker.add("reservations", reservationId);
-    expect((data as any[])[0].status).toBe("confirmed");
+    expect(data![0].status).toBe("confirmed");
   });
 
   step("4. reservation_goods_usages에 사용 기록(상품명/사이즈 스냅샷, deducted) 생성", async () => {
@@ -88,7 +88,7 @@ describe("QA: 예약 → 대여상품 차감 → 취소 → 복원", () => {
     const res = await cancelReservation(reservationId);
     expect(res.deducted).toBe(false);
     const { data } = await admin().from("reservations").select("status").eq("id", reservationId).single();
-    expect((data as any).status).toBe("cancelled");
+    expect(data!.status).toBe("cancelled");
     expect(await remaining(goodsId)).toBe(4);
     expect(await remaining(passId)).toBe(5);
   });
@@ -109,9 +109,9 @@ describe("QA: 예약 → 대여상품 차감 → 취소 → 복원", () => {
 
   step("알림은 QA 센터의 QA 계정에게만 생성된다(일반 사용자에게 fan-out 없음)", async () => {
     const { data: mgr } = await admin().from("manager_centers").select("account_id").eq("center_id", state.centerId).eq("status", "active");
-    const allowed = new Set<string>([state.memberAccountId, ...(mgr ?? []).map((m: any) => m.account_id as string)]);
+    const allowed = new Set<string>([state.memberAccountId, ...(mgr ?? []).map((m) => m.account_id as string)]);
     const { data, error } = await admin().from("notifications").select("recipient_account_id").eq("center_id", state.centerId);
     expect(error).toBeNull();
-    for (const n of data ?? []) expect(allowed.has((n as any).recipient_account_id)).toBe(true);
+    for (const n of data ?? []) expect(allowed.has(n.recipient_account_id)).toBe(true);
   });
 });

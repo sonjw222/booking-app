@@ -66,9 +66,10 @@ describe("Toss SDK 온디맨드 로드", () => {
     afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.resetModules(); });
     // 최소 가짜 DOM: head에 붙은 script 목록을 유지하고 remove()가 실제로 제거한다.
     function stub(win: Record<string, unknown>) {
-      const scripts: any[] = [];
-      const mk = () => { const el: any = { attrs: {} as Record<string, string>, setAttribute(k: string, v: string) { el.attrs[k] = v; }, remove() { const i = scripts.indexOf(el); if (i >= 0) scripts.splice(i, 1); } }; return el; };
-      const doc = { querySelector: (sel: string) => scripts.find((x) => sel.includes(x.src)) ?? null, head: { appendChild: (el: any) => { scripts.push(el); } }, createElement: () => mk() };
+      interface FakeScript { src?: string; attrs: Record<string, string>; setAttribute(k: string, v: string): void; remove(): void; onload?: () => void; onerror?: () => void }
+      const scripts: FakeScript[] = [];
+      const mk = () => { const el: FakeScript = { attrs: {} as Record<string, string>, setAttribute(k: string, v: string) { el.attrs[k] = v; }, remove() { const i = scripts.indexOf(el); if (i >= 0) scripts.splice(i, 1); } }; return el; };
+      const doc = { querySelector: (sel: string) => scripts.find((x) => x.src !== undefined && sel.includes(x.src)) ?? null, head: { appendChild: (el: FakeScript) => { scripts.push(el); } }, createElement: () => mk() };
       vi.stubGlobal("window", win); vi.stubGlobal("document", doc);
       return scripts;
     }
@@ -87,7 +88,7 @@ describe("Toss SDK 온디맨드 로드", () => {
       expect(sc[0].src).toBe(TOSS_SDK_SRC);
       expect(sc[0].attrs["data-mwhabit-toss-sdk"]).toBe("1");
       win.TossPayments = () => ({});
-      sc[0].onload();
+      sc[0].onload!();
       await expect(Promise.all([a, b])).resolves.toBeDefined();
       await loadTossSdk();
       expect(sc).toHaveLength(1);
@@ -97,13 +98,13 @@ describe("Toss SDK 온디맨드 로드", () => {
       const sc = stub(win);
       const { loadTossSdk } = await import("../../lib/tossSdk");
       const p1 = loadTossSdk(1000);
-      sc[0].onerror();
+      sc[0].onerror!();
       await expect(p1).rejects.toThrow("토스 결제 SDK");
       expect(sc).toHaveLength(0);                       // 실패 script 정리
       const p2 = loadTossSdk(1000);
       expect(sc).toHaveLength(1);                       // 새 script
       win.TossPayments = () => ({});
-      sc[0].onload();
+      sc[0].onload!();
       await expect(p2).resolves.toBeUndefined();
     });
     it("timeout → reject + script 정리, 이후 재호출 가능", async () => {
@@ -119,7 +120,7 @@ describe("Toss SDK 온디맨드 로드", () => {
       const p2 = loadTossSdk(50);
       expect(sc).toHaveLength(1);
       win.TossPayments = () => ({});
-      sc[0].onload();
+      sc[0].onload!();
       await expect(p2).resolves.toBeUndefined();
     });
   });

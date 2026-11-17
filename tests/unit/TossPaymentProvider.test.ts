@@ -25,12 +25,12 @@ beforeEach(() => {
   requestPayment = vi.fn().mockResolvedValue(undefined);
   const paymentInstance = { requestPayment };
   paymentFactory = vi.fn().mockReturnValue(paymentInstance);
-  (globalThis as any).window = { TossPayments: vi.fn().mockReturnValue({ payment: paymentFactory }) };
+  (globalThis as unknown as { window?: unknown }).window = { TossPayments: vi.fn().mockReturnValue({ payment: paymentFactory }) };
 });
 
 afterEach(() => {
   process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY = ORIGINAL_CLIENT_KEY;
-  delete (globalThis as any).window;
+  delete (globalThis as unknown as { window?: unknown }).window;
 });
 
 const baseInput = {

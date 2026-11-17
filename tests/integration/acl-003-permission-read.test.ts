@@ -37,6 +37,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { switchToTestUser, getOrCreateOwnedTestCenter, type TestUser } from "./setup";
 import { createRole, fetchRoles, inviteStaff, removeStaff, deleteRole, setStaffOverride } from "../../lib/roles";
 import { fetchMyCenters } from "../../lib/manager";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
@@ -75,8 +76,8 @@ async function inviteIfNeeded(centerId: string, accountId: string, roleId: strin
   try {
     await inviteStaff(centerId, accountId, roleId);
     return true;
-  } catch (e: any) {
-    if (e.message.includes("이미 이 센터의 스태프")) return false;
+  } catch (e) {
+    if (errorMessage(e).includes("이미 이 센터의 스태프")) return false;
     throw e;
   }
 }
@@ -140,15 +141,15 @@ afterAll(async () => {
   if (createdStaffManagerCenterId) {
     try {
       await removeStaff(createdStaffManagerCenterId);
-    } catch (e: any) {
-      errors.push(`manager_centers 정리 실패(id=${createdStaffManagerCenterId}): ${e.message}`);
+    } catch (e) {
+      errors.push(`manager_centers 정리 실패(id=${createdStaffManagerCenterId}): ${errorMessage(e)}`);
     }
   }
   if (createdRoleId) {
     try {
       await deleteRole(createdRoleId);
-    } catch (e: any) {
-      errors.push(`역할 정리 실패(id=${createdRoleId}): ${e.message}`);
+    } catch (e) {
+      errors.push(`역할 정리 실패(id=${createdRoleId}): ${errorMessage(e)}`);
     }
   }
 
@@ -181,7 +182,7 @@ describe("ACL-003: account_center_permissions SELECT는 본인 것 또는 facili
       .eq("manager_center_id", staffManagerCenterId);
 
     expect(error).toBeNull();
-    expect((data ?? []).some((r: any) => r.permission_key === OVERRIDE_KEY && r.grant_type === "allow")).toBe(true);
+    expect((data ?? []).some((r) => r.permission_key === OVERRIDE_KEY && r.grant_type === "allow")).toBe(true);
   });
 
   it("오너(managerA)는 facility.role_permission 전권으로 다른 스태프(managerB)의 개인 권한 행을 조회할 수 있다", async () => {

@@ -208,7 +208,6 @@ test('범위 계약: migration은 세 함수만 정의하고 current_date를 쓰
 });
 
 // ---- verify: 왕복 + formatting-safe + 조건 하나 제거 시 NOT_APPLIED
-const fnText = (sql, name) => { const a = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`); const b = sql.indexOf('$function$;', sql.indexOf('AS $function$', a)); return sql.slice(a, b + '$function$;'.length); };
 const crlf = s => s.replace(/\r?\n/g, '\r\n');
 const reindent = s => s.split('\n').map((l, i) => (i % 2 ? '\t\t  ' : '        ') + l.trim().replace(/[ \t]{2,}/g, ' ')).join('\n');
 const noComments = s => s.split('\n').map(l => l.replace(/\s*--.*$/, '')).join('\n');

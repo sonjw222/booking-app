@@ -144,7 +144,7 @@ test('verify: 컬럼 없는 환경에서도 오류 없이 NOT_APPLIED → 적용
     await db.exec(migration); await db.exec(`update centers set is_internal = true where id = '${QA}'`);
     r = await v(); assert.equal(r.verdict, 'APPLIED', JSON.stringify(r)); assert.equal(r.internal_centers_now, 1);
     await db.exec(migration); assert.equal((await v()).verdict, 'APPLIED');                              // 재실행 안전
-    for (const [brk, fix] of [
+    for (const [brk] of [
       [`drop policy "승인된 센터 조회" on centers; create policy "승인된 센터 조회" on centers for select using (status = 'approved' or is_platform_admin())`, null],
     ]) { await db.exec(brk); assert.equal((await v()).verdict, 'NOT_APPLIED'); await db.exec(migration); assert.equal((await v()).verdict, 'APPLIED'); }
     await db.exec(`grant execute on function fetch_purchasable_products(uuid) to anon`); assert.equal((await v()).verdict, 'NOT_APPLIED');

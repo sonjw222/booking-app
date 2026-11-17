@@ -53,7 +53,7 @@ describe("매니저 알림 센터 간 격리", () => {
       p_class_id: cls.id, p_profile_id: managerA.profileId,
     });
     expect(error).toBeNull();
-    const reservationId = (data as any).reservation_id as string;
+    const reservationId = data.reservation_id as string;
 
     // centerA의 매니저(managerA 본인)에게는 정상적으로 알림이 생겼는지 대조군으로 확인.
     const { data: ownNotis } = await supabase
@@ -62,9 +62,9 @@ describe("매니저 알림 센터 간 격리", () => {
       .eq("kind", "new_reservation")
       .order("created_at", { ascending: false })
       .limit(20);
-    const ownMatch = (ownNotis ?? []).find((n: any) => n.data?.reservation_id === reservationId);
+    const ownMatch = (ownNotis ?? []).find((n) => n.data?.reservation_id === reservationId);
     expect(ownMatch).toBeTruthy();
-    expect((ownMatch as any).center_id).toBe(centerAId);
+    expect(ownMatch!.center_id).toBe(centerAId);
 
     // centerB의 매니저는 이 알림을 절대 볼 수 없어야 한다(RLS: recipient_account_id로만 필터).
     await switchToTestUser(MANAGER_B.email, MANAGER_B.password);
@@ -74,7 +74,7 @@ describe("매니저 알림 센터 간 격리", () => {
       .eq("kind", "new_reservation")
       .order("created_at", { ascending: false })
       .limit(50);
-    const leaked = (otherNotis ?? []).find((n: any) => n.data?.reservation_id === reservationId);
+    const leaked = (otherNotis ?? []).find((n) => n.data?.reservation_id === reservationId);
     expect(leaked).toBeUndefined();
   });
 });

@@ -86,7 +86,7 @@ beforeAll(async () => {
   // centerA에 필러 memberships 1005건 — managerA의 대표 프로필 소유. 실제 회원 세션은 자기
   // memberships를 직접 insert할 수 없어(RLS) admin(service_role)으로 만든다
   // (class-allowed-products-enforcement.test.ts와 동일 관례).
-  const fillerRows = Array.from({ length: FILLER_COUNT }, (_, i) => ({
+  const fillerRows = Array.from({ length: FILLER_COUNT }, () => ({
     profile_id: managerA.profileId, center_id: centerAId,
     product_name: FILLER_MARKER, pass_type: "count",
     total_count: 5, remaining_count: 5,

@@ -4,12 +4,12 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const read = (p: string) => readFileSync(join(__dirname, "../..", p), "utf-8");
-const rpcCalls: [string, any][] = [];
-let rpcResult: { data: any; error: any } = { data: [], error: null };
+const rpcCalls: [string, unknown][] = [];
+let rpcResult: { data: unknown; error: unknown } = { data: [], error: null };
 const fromCalls: string[] = [];
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
-    rpc: async (name: string, args: any) => { rpcCalls.push([name, args]); return rpcResult; },
+    rpc: async (name: string, args: unknown) => { rpcCalls.push([name, args]); return rpcResult; },
     from: (t: string) => { fromCalls.push(t); throw new Error("accounts 등 테이블 직접 조회 금지"); },
   },
 }));

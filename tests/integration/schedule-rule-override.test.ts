@@ -202,7 +202,7 @@ describe("A~C: '모든 수강권 허용' — schedule_rules는 override와 무�
     await asMemberA();
     const list = await supabase.rpc("usable_memberships_for_classes", { p_class_ids: [cls.id], p_profile_id: memberA.profileId });
     expect(list.error).toBeNull();
-    expect((list.data ?? []).some((r: any) => r.membership_id === mem.id)).toBe(true);
+    expect((list.data ?? []).some((r: { membership_id: string }) => r.membership_id === mem.id)).toBe(true);
 
     // ⚠ reserve_class(자동 매칭)는 어떤 membership을 쓸지 지정할 수 없다 — centerA는 공유
     // 테스트센터라 memberA가 passA 말고 다른 유효한 membership을 이미 보유하고 있으면
@@ -292,7 +292,7 @@ describe("D~F: '특정 수강권 직접 지정' — schedule_rules override(신�
     // 목록(usable_memberships_for_classes)과 실제 RPC가 같은 판정이어야 한다(둘 다 차단).
     const list = await supabase.rpc("usable_memberships_for_classes", { p_class_ids: [cls.id], p_profile_id: memberA.profileId });
     expect(list.error).toBeNull();
-    expect((list.data ?? []).some((r: any) => r.membership_id === mem.id)).toBe(false);
+    expect((list.data ?? []).some((r: { membership_id: string }) => r.membership_id === mem.id)).toBe(false);
 
     const res = await supabase.rpc("reserve_with_membership", { p_class_id: cls.id, p_profile_id: memberA.profileId, p_membership_id: mem.id });
     expect(res.error).not.toBeNull();

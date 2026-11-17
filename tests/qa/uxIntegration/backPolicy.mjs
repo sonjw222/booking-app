@@ -1,8 +1,8 @@
-import { ctxFor, BASE, UX, pid, browser, OUT, settle, check, save } from "./lib.mjs";
+import { ctxFor, BASE, UX, pid, browser, settle, check, save } from "./lib.mjs";
 const FREE = pid("[UX] 자유 선택 수강권");
 const path = (p) => { const u = new URL(p.url()); return u.pathname + u.search; };
 const bridge = (p) => p.evaluate(() => window.__mwhabitBack?.());
-const { ctx, page: p } = await ctxFor();
+const { page: p } = await ctxFor();
 // D1/D2 시트 열림 상태
 await p.goto(`${BASE}/center/${UX}?buy=1`, { waitUntil: "domcontentloaded" }); await settle(p, 3500);
 const open = () => p.evaluate(() => !!document.querySelector("[data-sheet-overlay]"));
@@ -14,11 +14,6 @@ await p.evaluate(() => document.getElementById("fake-confirm")?.remove());
 const dec2 = await bridge(p); await settle(p, 800);
 check("D1", "시트 열림 + back → 시트만 닫힘, 같은 화면(배경 이동 없음)", dec2 === "close-overlay" && !(await open()) && new URL(p.url()).pathname === `/center/${UX}` ? "PASS" : "FAIL", `${dec2} ${path(p)}`);
 // D3 앱 안 이동 후 ‹ 와 bridge(스와이프/Android back)의 도착지가 같다
-async function viaCheckout() {
-  await p.goto(`${BASE}/`, { waitUntil: "domcontentloaded" }); await settle(p, 2000);
-  await p.goto(`${BASE}/center/${UX}`, { waitUntil: "domcontentloaded" }); await settle(p, 1500);   // 새 문서라 앱 이력은 아래 클릭 이동으로 만든다
-  await p.getByRole("link", { name: "수강권 구매하기" }).first().click().catch(() => {}); await settle(p, 1500);
-}
 // 홈 → 센터(클릭 이동) → 결제(시트 구매) 에서 ‹ vs bridge
 async function clickPath() {
   await p.goto(`${BASE}/`, { waitUntil: "domcontentloaded" }); await settle(p, 2500);

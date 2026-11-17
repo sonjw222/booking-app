@@ -17,7 +17,7 @@ export async function createAndIssueQaCoupon(
   });
   t.add("coupons", couponId);
   const cps = await admin.from("coupon_products").select("id").eq("coupon_id", couponId);
-  for (const r of cps.data ?? []) t.add("coupon_products", (r as any).id);
+  for (const r of cps.data ?? []) t.add("coupon_products", r.id);
 
   const issued = await issueCouponToMembers(couponId, [opts.centerMemberId]);
   if (issued.issuedCount !== 1) throw new Error(`QA 쿠폰 지급 실패(지급 ${issued.issuedCount}건)`);

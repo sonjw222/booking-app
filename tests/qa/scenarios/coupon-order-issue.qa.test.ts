@@ -16,6 +16,7 @@ import { createAndIssueQaCoupon } from "../fixtures/coupons";
 import { buildCouponOrderInput } from "../fixtures/directOrder";
 import { cleanupFixtures, createRunId, FixtureTracker, shouldKeepFailedFixtures } from "../runContext";
 import type { QaFixtureState } from "../fixtures/center";
+import type { MemberCouponRow, MembershipRow, OrderRow, PaymentRow } from "../fixtures/rows";
 
 const PRICE = 50000;
 const DISCOUNT = 10000;
@@ -27,32 +28,33 @@ let state: QaFixtureState;
 let main: { productId: string; name: string; price: number; totalCount: number };
 let other: { productId: string; name: string; price: number; totalCount: number };
 let centerMemberId = "";
-const coupons: Record<"c1" | "c2" | "c3", { couponId: string; memberCouponId: string }> = {} as any;
+type CouponKey = "c1" | "c2" | "c3";
+const coupons = {} as Record<CouponKey, { couponId: string; memberCouponId: string }>;
 let orderA = "";
 let orderB = "";
 let membershipA = "";
 let failed = false;
 
-async function orderRow(id: string) {
+async function orderRow(id: string): Promise<OrderRow> {
   const { data, error } = await admin().from("orders").select("*").eq("id", id).single();
   if (error) throw new Error(`주문 조회 실패: ${error.message}`);
-  return data as any;
+  return data as OrderRow;
 }
-async function couponRow(id: string) {
+async function couponRow(id: string): Promise<MemberCouponRow> {
   const { data, error } = await admin().from("member_coupons").select("id, status, used_at, order_id, coupon_id").eq("id", id).single();
   if (error) throw new Error(`지급 쿠폰 조회 실패: ${error.message}`);
-  return data as any;
+  return data as MemberCouponRow;
 }
-async function membershipsForMainProduct() {
+async function membershipsForMainProduct(): Promise<MembershipRow[]> {
   const { data, error } = await admin().from("memberships").select("id, total_count, remaining_count, product_id, profile_id, center_id, status")
     .eq("product_id", main.productId).eq("profile_id", state.memberProfileId);
   if (error) throw new Error(`수강권 조회 실패: ${error.message}`);
-  return (data ?? []) as any[];
+  return (data ?? []) as MembershipRow[];
 }
-async function paymentsForOrder(id: string) {
+async function paymentsForOrder(id: string): Promise<PaymentRow[]> {
   const { data, error } = await admin().from("payments").select("*").eq("order_id", id);
   if (error) throw new Error(`결제 조회 실패: ${error.message}`);
-  return (data ?? []) as any[];
+  return (data ?? []) as PaymentRow[];
 }
 async function memberCreatesOrder(memberCouponId: string, overrides?: { amount?: number; discountAmount?: number; productId?: string; productName?: string }) {
   await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
@@ -194,9 +196,9 @@ describe("QA: 센터 쿠폰 주문 → 서버 검증 → 발급 → 사용 처�
 
   step("알림은 QA 센터의 QA 계정에게만 생성된다(일반 사용자 fan-out 없음)", async () => {
     const { data: mgr } = await admin().from("manager_centers").select("account_id").eq("center_id", state.centerId).eq("status", "active");
-    const allowed = new Set<string>([state.memberAccountId, ...(mgr ?? []).map((m: any) => m.account_id as string)]);
+    const allowed = new Set<string>([state.memberAccountId, ...(mgr ?? []).map((m) => m.account_id as string)]);
     const { data, error } = await admin().from("notifications").select("recipient_account_id").eq("center_id", state.centerId);
     expect(error).toBeNull();
-    for (const n of data ?? []) expect(allowed.has((n as any).recipient_account_id)).toBe(true);
+    for (const n of data ?? []) expect(allowed.has(n.recipient_account_id)).toBe(true);
   });
 });

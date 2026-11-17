@@ -104,6 +104,7 @@ describe("2. fetchCenterProducts — 비로그인은 공개 RPC, 로그인은 �
     const mk = (id: string, centerId: string, centerName: string) => ({
       id, centerId, centerName, name: id, price: 1, kind: "pass" as const, description: null,
       totalCount: null, unlimited: false, unlimitedPass: false, groupLabel: null, remaining: null,
+      countSelectable: false, minCount: null, maxCount: null, minTierPrice: null,
     });
     const groups = groupPublicProductsByCenter([mk("a", "c1", "A"), mk("b", "c1", "A"), mk("c", "c2", "B")]);
     expect(groups.map((g) => [g.centerName, g.items.length])).toEqual([["A", 2], ["B", 1]]);
