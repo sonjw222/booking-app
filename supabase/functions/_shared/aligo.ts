@@ -36,10 +36,21 @@ export function isAligoConfigured(): boolean {
   return isProxyConfigured();
 }
 
+// 프록시가 돌려주는 알리고 응답(provider)에서 이 파일이 읽는 필드만 선언한다(엔드포인트마다 일부만 채워진다).
+type AligoProviderResponse = {
+  code?: number | string;
+  message?: string;
+  list?: AligoTemplateInfo[];
+  data?: AligoTemplateCreateResult;
+  info?: { mid?: string };
+  result_code?: number | string;
+  msg_id?: number | string;
+};
+
 async function callAligoProxy(
   path: string,
   payload: Record<string, unknown>,
-): Promise<any> {
+): Promise<AligoProviderResponse> {
   if (!isProxyConfigured()) {
     throw new Error(
       "알리고 프록시가 아직 연동되지 않았어요 (ALIGO_PROXY_URL / ALIGO_PROXY_TOKEN 미등록)",
@@ -119,7 +130,7 @@ export async function createAligoTemplate(
     throw new Error(provider?.message ?? "템플릿 생성 실패");
   }
 
-  return provider?.data;
+  return provider?.data as AligoTemplateCreateResult;
 }
 
 // 생성된 템플릿을 카카오 사전심사에 올린다.

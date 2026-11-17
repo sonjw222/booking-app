@@ -37,7 +37,6 @@ const order = async (p, extra = {}) => (await svc.from("orders").insert({ center
 const rpc = (cl, id, action, over = {}) => cl.rpc("manager_resolve_expired_order", { p_order_id: id, p_action: action, p_reason: "시험 사유", p_received_amount: null, p_received_at: null, p_received_method: null, p_new_expires_on: null, p_refunded_at: null, ...over });
 const recv = async (over = {}) => ({ p_received_amount: 80000, p_received_at: await kst(0), p_received_method: "cash", ...over });
 const st = async (id) => (await svc.from("orders").select("status").eq("id", id).single()).data.status;
-const nm = (id) => count("memberships", "profile_id", profA, (q) => q.eq("product_name", "EXO")).then(() => 0);
 const msCount = async (oid) => (await svc.from("payments").select("membership_id").eq("order_id", oid)).data?.length ?? 0;
 const guardHashes = () => psql("select md5(pg_get_functiondef('public.orders_guard_nicepay_create()'::regprocedure)) || md5(pg_get_functiondef('public.nicepay_claim_order(uuid)'::regprocedure)) || md5(pg_get_functiondef('public._issue_membership_and_record_payment(orders,text,text)'::regprocedure))");
 const hBefore = guardHashes(); const prodExpiry = PX.expiry_date;

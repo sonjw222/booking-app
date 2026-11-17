@@ -4,7 +4,7 @@
 //   node scripts/ci-dev/verify.mjs --schema   스키마 단계만
 import { pathToFileURL } from "node:url";
 import { requireNonProductionOrExit, FIXTURE_ACCOUNTS } from "./requiredEnv.mjs";
-import { FIXTURE_CENTER_NAME, FIXTURE_PRODUCT_NAME, makeClient, projectRefFromUrl, scanUsage } from "./lib.mjs";
+import { makeClient, projectRefFromUrl, scanUsage } from "./lib.mjs";
 
 // seed가 쓰는 컬럼(없으면 스키마가 다르다는 뜻 → seed 전에 중단해야 함)
 export const SEED_COLUMNS = {

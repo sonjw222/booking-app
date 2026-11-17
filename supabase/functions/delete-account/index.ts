@@ -55,7 +55,10 @@
 // SUPABASE_SERVICE_ROLE_KEY(대부분의 프로젝트에 기본 secret으로 이미 있음)
 // 배포: `supabase functions deploy delete-account`
 
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
+
+// service-role 클라이언트(헬퍼 함수 인자용 — createClient 기본 제네릭과 동일한 타입).
+type AdminClient = SupabaseClient;
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -85,9 +88,8 @@ const UNDEFINED_TABLE = "42P01";
 
 // account_id 기준으로 토큰/구독을 전부 지운다. 실패를 삼키지 않는다(요구사항 2번) —
 // 테이블이 아직 없는 경우만 예외로 취급한다.
-// deno-lint-ignore no-explicit-any
 async function deleteAllTokensFor(
-  admin: any,
+  admin: AdminClient,
   table: "native_push_tokens" | "push_subscriptions",
   accountId: string,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
@@ -124,8 +126,7 @@ function avatarObjectKey(raw: string | null): string | null {
 // best-effort — 실패해도 전체 탈퇴를 막지 않는다(파일 위 주석 "idempotency" 참고).
 // avatar_url 컬럼은 이 함수 호출 *뒤에* profiles UPDATE로 null이 된다 — 순서가
 // 바뀌면 재시도 시 지울 대상을 다시 찾을 방법이 없어진다.
-// deno-lint-ignore no-explicit-any
-async function deleteAvatarObjects(admin: any, accountId: string): Promise<void> {
+async function deleteAvatarObjects(admin: AdminClient, accountId: string): Promise<void> {
   const { data: profs, error } = await admin
     .from("profiles")
     .select("avatar_url")

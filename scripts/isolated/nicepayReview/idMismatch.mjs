@@ -16,7 +16,7 @@ const mkCenter = async (name) => { const c = (await svc.from("centers").insert({
 const OP = await mkCenter(`[IDM] 운영센터1-${tag}`), OP2 = await mkCenter(`[IDM] 운영센터2-${tag}`);
 const mkProd = async (c, n) => (await svc.from("products").insert({ center_id: c, name: n, price: 10000, product_kind: "pass", pass_type: "count", total_count: 5, expiry_mode: "days", expiry_days: 30, is_active: true, is_on_sale: true, visibility_type: "all" }).select("id").single()).data.id;
 const P1 = await mkProd(OP, `IDM상품1-${tag}`), P2 = await mkProd(OP2, `IDM상품2-${tag}`);
-const { data: accA } = await svc.from("accounts").select("id").eq("auth_id", A.uid).single(); const { data: accM } = await svc.from("accounts").select("id").eq("auth_id", MA.uid).single();
+await svc.from("accounts").select("id").eq("auth_id", A.uid).single(); const { data: accM } = await svc.from("accounts").select("id").eq("auth_id", MA.uid).single();
 await svc.from("manager_centers").insert({ account_id: accM.id, center_id: OP, status: "active" });
 const mkMem = async (c, p) => (await svc.from("memberships").insert({ profile_id: A.profile, center_id: c, product_id: p, product_name: "IDM수강권", pass_type: "count", total_count: 5, remaining_count: 5 }).select("id").single()).data.id;
 const M1 = await mkMem(OP, P1), M2 = await mkMem(OP2, P2);
@@ -44,7 +44,7 @@ r = await A.c.from("purchase_requests").insert(pr(OP, null)).select("id").single
 const memTry = (center, product) => { try { psql(`begin; alter table memberships disable row level security; set local role authenticated; select set_config('request.jwt.claims', '{"sub":"${A.uid}","role":"authenticated"}', true); insert into memberships(profile_id, center_id, product_id, product_name, pass_type) values ('${A.profile}', '${center}', ${product ? `'${product}'` : "null"}, 'x', 'count'); rollback;`); return "CREATED"; } catch (e) { return /일치하지|이용할 수 없/.test(String(e.stderr)) ? "DENIED" : "ERR:" + String(e.stderr).slice(0, 80); } };
 expectEq("M1", "수강권 정상(센터=상품 센터)", "CREATED", memTry(OP, P1)); expectEq("M2", "수강권 불일치(center=센터1, product=센터2 상품)", "DENIED", memTry(OP, P2)); expectEq("M3", "수동 발급처럼 product_id NULL 은 허용", "CREATED", memTry(OP, null));
 // ── 예약(매니저 RPC — 클라이언트는 reservations INSERT 권한이 없다) ──
-r = await MA.c.rpc("manager_book_member", { p_class_id: C1, p_profile_id: A.profile, p_membership_id: M1, p_deduct: true }); expectEq("R1", "매니저가 같은 센터 수강권으로 예약(정상)", "CREATED", r.error ? "DENIED" : "CREATED", errOf(r.error)); const resId = r.data?.reservation_id ?? r.data?.id ?? (typeof r.data === "string" ? r.data : null);
+r = await MA.c.rpc("manager_book_member", { p_class_id: C1, p_profile_id: A.profile, p_membership_id: M1, p_deduct: true }); expectEq("R1", "매니저가 같은 센터 수강권으로 예약(정상)", "CREATED", r.error ? "DENIED" : "CREATED", errOf(r.error));
 r = await MA.c.rpc("manager_book_member", { p_class_id: C2, p_profile_id: A.profile, p_membership_id: M2, p_deduct: true }); expectEq("R2", "매니저가 다른 센터 수강권으로 예약 시도(수업 센터 ≠ 수강권 센터)", "DENIED", r.error ? "DENIED" : "CREATED", errOf(r.error));
 r = await MA.c.rpc("manager_book_member", { p_class_id: C3, p_profile_id: A.profile, p_membership_id: null, p_deduct: false }); expectEq("R3", "수강권 없이(membership_id NULL) 예약은 기존대로 허용", "CREATED", r.error ? "DENIED" : "CREATED", errOf(r.error));
 const { data: myRes } = await svc.from("reservations").select("id,status").eq("profile_id", A.profile).eq("class_id", C1).maybeSingle();
