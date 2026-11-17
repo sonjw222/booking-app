@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-11-17 — TypeScript·ESLint 기술 부채 정리 (PR #267~#272, 운영 동작 변경 없음)
+- TypeScript: `tsc --noEmit` 63건(전부 `tests/`) → **0건**(PR #268, 테스트 13개 파일만 변경; `@ts-ignore`/`any`/제외/삭제/strict 완화 없음).
+- ESLint: 에러 **1,481 → 163**, 경고 **196 → 28**(PR #269 tests/unit·#270 tests/integration 외·#271 lib/scripts/supabase·#272 app). 규칙 비활성화·eslint-disable·설정 축소 없음, baseline 은 `scripts/lint/updateBaseline.mjs`(PR #267)로 재생성(증가 0). `no-explicit-any` 1,282 → 26.
+- 검증: tsc 0, Vitest 3,310 통과(10 skip), `next build` 성공, 각 PR CI 전부 통과(E2E 러너 docker 네트워크 flake 2회는 `--failed` 재실행으로 통과). 병합마다 Vercel 운영 배포 Ready·mwhabit.com 200·`/api/payments/nicepay/prepare` 503(결제 OFF 유지) 확인. SQL·RLS·환경변수 변경 없음.
+- 런타임에 닿는 변경(app/): `catch (e)` + `errMsg(e)` 헬퍼, 렌더 중 ref 대입 → `useLayoutEffect`(3곳), 링크 2건 `<Link>`, 미사용 코드 제거. 상세·잔여 부채: `docs/TS_ESLINT_CLEANUP_20261117.md`.
+- GitHub 정리: #264 닫음(#265 와 완전 중복), Draft #254/#260/#263 유지(분류·사유 코멘트), Issue 7건 코멘트(종료 없음). 상세 같은 문서.
+
 ## 2026-11-17 — Production ↔ main 동기화 (`integration/production-main-sync-20261117`)
 - main(368aa3e1)에 운영 소스(Vercel `dpl_6EEzhpHRoHBqj8Qm9ftHgzqkXRUo`, 통합 `1ace864b`)를 병합: NICEPAY 심사 경로(#259/#264/#265)·구독 심사(33bc408c)·iOS Build 12 네이티브·UX 통합·수강권 안내창 개선. 이 문서 이전의 "운영 미반영" 표기 항목들은 이 병합 시점에 운영 반영 상태다. 앱 코드 신규 변경 없음(문서만). 상세: `docs/PRODUCTION_MAIN_SYNC_20261117.md`.
 

@@ -1,5 +1,8 @@
 # TODO
 
+- **P2(ESLint 잔여 163 에러·28 경고, 상세 `docs/TS_ESLINT_CLEANUP_20261117.md`)**: `react-hooks/set-state-in-effect` 88(`useEffect(()=>{load()},[load])`·권한 초기화 패턴 — fetch 흐름 재설계 필요, 별도 Issue), `no-unescaped-entities` 24·`no-explicit-any` 26(소스 문자열을 단언하는 테스트 갱신과 함께: terms/privacy, subscription, calendar, MapPicker, login, lib 5곳, `Notification.data`), `no-html-link-for-pages` 11(`replaceTabNavigation`·back-header 연동 의도), `rules-of-hooks` 2(checkout `usePoints` 오탐 — 별칭 import + `orderPointLifecycle.test.ts:249` 갱신), `purity`/`preserve-manual-memoization` 각 1(my-reservations `Date.now()`), `refs` 1(notifications 오탐), `no-require-imports` 9(`scripts/qa/ui-polish/*.cjs` 의도적 CJS), 경고: `exhaustive-deps` 13·`no-img-element` 11·`jsx-a11y` 3·unused 1.
+- **P3**: lint baseline 이 줄었으므로 새 코드의 `any`·hooks 규칙 위반은 CI(`npm run lint`)가 막는다. 남은 baseline 은 위 항목을 처리할 때마다 `node scripts/lint/updateBaseline.mjs` 로 갱신.
+
 - **P1(병합 후 정리)**: main 동기화(2026-11-17) 후 남은 WIP — Draft PR #254(14커밋)·#260(20커밋)·#263(2커밋)은 운영 미반영. 각각 main 기준으로 rebase/재검토 필요. 열린 Issue: #262·#261·#255·#248·#238·#221·#18. Codex 로컬 브랜치 `feat/nicepay-subscription-production-review-20261116` 는 이제 main 에 포함(push 불필요).
 - **P2**: 병합 후 `graphify update .` 로 그래프 갱신 여부 결정(구조 변경 큼). 주문 사이즈 서버 검증 SQL(제안) 적용 여부 결정.
 - **P1(실기기)**: 수강권 안내창 — 새 iOS 빌드(네이티브 `setVerticalBounceEnabled` 포함)로 흰 레터박스 재발 여부·드래그 부드러움·플릭 닫기 확인. 재발 시 `localStorage.mwhabit_sheet_debug="1"` 후 `window.__sheetDragLog` 수집(Safari 웹 인스펙터). 같은 문제가 다른 바텀시트에도 있으면 `contentDrag` opt-in.
