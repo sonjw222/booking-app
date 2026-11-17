@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { act, createElement as h } from "react";
+import { act, createElement as h, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildClientErrorRecord, registerErrorReporter, reportClientError, sanitizeText, type ClientErrorRecord } from "../../lib/errorReporting";
 
-vi.mock("next/link", () => ({ default: ({ href, children, ...rest }: any) => h("a", { href, ...rest }, children) }));
+vi.mock("next/link", () => ({ default: ({ href, children, ...rest }: { href: string; children?: ReactNode; [k: string]: unknown }) => h("a", { href, ...rest }, children) }));
 import AppError from "../../app/error";
 import GlobalError from "../../app/global-error";
 

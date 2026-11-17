@@ -940,12 +940,5 @@
   "[\"tests/qa/scenarios/reservation-goods-usage.qa.test.ts\",\"@typescript-eslint/no-explicit-any\",\"expect((data as any[])[0].status).toBe(\\\"confirmed\\\");\"]": 1,
   "[\"tests/qa/scenarios/reservation-goods-usage.qa.test.ts\",\"@typescript-eslint/no-explicit-any\",\"expect((data as any).status).toBe(\\\"cancelled\\\");\"]": 1,
   "[\"tests/qa/scenarios/reservation-goods-usage.qa.test.ts\",\"@typescript-eslint/no-explicit-any\",\"const allowed = new Set<string>([state.memberAccountId, ...(mgr ?? []).map((m: any) => m.account_id as string)]);\"]": 1,
-  "[\"tests/qa/scenarios/reservation-goods-usage.qa.test.ts\",\"@typescript-eslint/no-explicit-any\",\"for (const n of data ?? []) expect(allowed.has((n as any).recipient_account_id)).toBe(true);\"]": 1,
-  "[\"tests/unit/errorReporting.test.ts\",\"@typescript-eslint/no-explicit-any\",\"vi.mock(\\\"next/link\\\", () => ({ default: ({ href, children, ...rest }: any) => h(\\\"a\\\", { href, ...rest }, children) }));\"]": 1,
-  "[\"tests/unit/nativePush.deviceRegistration.test.ts\",\"prefer-const\",\"let fakeToken = \\\"fake-fcm-token-value-not-a-real-secret\\\";\"]": 1,
-  "[\"tests/unit/nativePush.deviceRegistration.test.ts\",\"@typescript-eslint/no-explicit-any\",\"checkPermissions: (...a: any[]) => pushMock.checkPermissions(...(a as [])),\"]": 1,
-  "[\"tests/unit/nativePush.deviceRegistration.test.ts\",\"@typescript-eslint/no-explicit-any\",\"requestPermissions: (...a: any[]) => pushMock.requestPermissions(...(a as [])),\"]": 1,
-  "[\"tests/unit/nativePush.deviceRegistration.test.ts\",\"@typescript-eslint/no-explicit-any\",\"register: (...a: any[]) => {\"]": 1,
-  "[\"tests/unit/nativePush.deviceRegistration.test.ts\",\"@typescript-eslint/no-explicit-any\",\"addListener: (event: string, cb: any) => {\"]": 1,
-  "[\"tests/unit/nativePush.deviceRegistration.test.ts\",\"@typescript-eslint/no-explicit-any\",\"upsert: (...a: any[]) => supabaseMock.upsert(...a),\"]": 1
+  "[\"tests/qa/scenarios/reservation-goods-usage.qa.test.ts\",\"@typescript-eslint/no-explicit-any\",\"for (const n of data ?? []) expect(allowed.has((n as any).recipient_account_id)).toBe(true);\"]": 1
 }
