@@ -70,7 +70,7 @@ describe("구매 sheet 통합 계약", () => {
   it("예약조건을 ' / '로 이어붙이지 않고 accordion을 카드 안(버튼 뒤)에 둔다 — 기존 구매 control 유지", () => {
     expect(page).not.toContain('rules.map(ruleToText).join(" / ")');
     expect(page).toContain("<ProductRuleAccordion rules={rules} />");
-    for (const k of ['onAddCart(p, sel)', 'onBuy(p, sel)', "isCountSelectable(p)", "구매 횟수", "<CatalogSearchFilter", "nextFilterOnKind"]) expect(page).toContain(k);
+    for (const k of ['onAddCart(p)', 'onBuy(p)', "isCountSelectable(p)", "횟수·옵션은 결제 화면에서 선택해요", "<CatalogSearchFilter", "nextFilterOnKind"]) expect(page).toContain(k);
   });
   it("검색/필터 띠 원인 수정: sheet 안에서는 sheet 바탕(--bg), chip 행은 같은 규격", () => {
     const css = read("app/globals.css");

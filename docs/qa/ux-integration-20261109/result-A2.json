@@ -1,0 +1,50 @@
+[
+ {
+  "id": "A-pre",
+  "name": "심사 센터 결제 화면에서 8회 선택 → 주소 count=8",
+  "status": "PASS",
+  "detail": "4440-97a6-a5397dd261d8&count=8"
+ },
+ {
+  "id": "A-open",
+  "name": "결제창 확인 열기 → goPay 1회, 복귀 경로(/checkout?…count=8) 저장",
+  "status": "PASS",
+  "detail": "1 {\"p\":\"/checkout?center=8965e09c-0d2b-44c6-ab26-40a85507f8b5&product=d303bff2-e470-4440-97a"
+ },
+ {
+  "id": "A-closed",
+  "name": "X 종료 → '테스트 결제창 종료' 화면, 성공 표현 없음",
+  "status": "PASS",
+  "detail": "테스트 결제창 종료"
+ },
+ {
+  "id": "A-btn",
+  "name": "주 버튼 '결제 화면으로 돌아가기'(마이페이지 아님), 센터·상품·횟수 유지",
+  "status": "PASS",
+  "detail": "결제 화면으로 돌아가기 /checkout?center=8965e09c-0d2b-44c6-ab26-40a85507f8b5&product=d303bff2-e470-4440-97a6-a5397dd261d8&count=8"
+ },
+ {
+  "id": "A-return",
+  "name": "복귀 → 같은 상품 결제 화면, 8회 복원, NICEPAY 재호출(SDK 로드·goPay) 없음",
+  "status": "PASS",
+  "detail": "4440-97a6-a5397dd261d8&count=8 sdkAfter=0"
+ },
+ {
+  "id": "A-cleared",
+  "name": "복귀 후 저장 값 삭제, 뒤로가기해도 종료 화면으로 돌아가지 않음",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "A-noorder",
+  "name": "주문·수강권(memberships) 신규 생성 없음(격리 DB 전/후 비교)",
+  "status": "PASS",
+  "detail": "orders 0->0 memberships 2->2"
+ },
+ {
+  "id": "A-fallback",
+  "name": "직접 진입(저장 경로 없음) → 센터 상세로 안전 복귀",
+  "status": "PASS",
+  "detail": "/center/8965e09c-0d2b-44c6-ab26-40a85507f8b5"
+ }
+]

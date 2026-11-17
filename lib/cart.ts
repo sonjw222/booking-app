@@ -46,8 +46,16 @@ async function myProfileId(): Promise<string> {
 export async function addToCart(input: {
   centerId: string; productId: string; productName: string; price: number; selectedSize?: string | null;
   selectedCount?: number | null;
-}): Promise<void> {
+  // 구매 sheet처럼 횟수를 고르지 않는 곳에서 담을 때: 이미 담긴 횟수 선택형 row(어떤 사이즈든)가 있으면 건드리지 않는다.
+  // (장바구니에서 고른 횟수/사이즈를 기본값으로 되돌리지 않기 위함) 이미 있으면 "exists", 새로 담으면 "added".
+  keepExisting?: boolean;
+}): Promise<"added" | "exists"> {
   const profileId = await myProfileId();
+  if (input.keepExisting && input.selectedCount != null) {
+    const { data: any_ } = await supabase.from("cart_items").select("id")
+      .eq("profile_id", profileId).eq("product_id", input.productId).not("selected_count", "is", null).limit(1);
+    if (any_ && any_.length > 0) return "exists";
+  }
   if (input.selectedCount != null) {
     let q = supabase.from("cart_items").select("id")
       .eq("profile_id", profileId).eq("product_id", input.productId).not("selected_count", "is", null);
@@ -57,7 +65,7 @@ export async function addToCart(input: {
       const { error } = await supabase.from("cart_items")
         .update({ selected_count: input.selectedCount, price: input.price }).eq("id", (existing[0] as any).id);
       if (error) throw new Error("장바구니 담기에 실패했어요: " + error.message);
-      return;
+      return "added";
     }
   }
   const row: Record<string, unknown> = {
@@ -78,6 +86,7 @@ export async function addToCart(input: {
     throw new Error("횟수 선택 상품은 아직 장바구니에 담을 수 없어요. 바로 구매해주세요.");
   }
   if (error) throw new Error("장바구니 담기에 실패했어요: " + error.message);
+  return "added";
 }
 
 export async function fetchCart(): Promise<CartItem[]> {

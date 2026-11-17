@@ -1,5 +1,101 @@
 # CHANGELOG
 
+## 2026-11-17 — Production ↔ main 동기화 (`integration/production-main-sync-20261117`)
+- main(368aa3e1)에 운영 소스(Vercel `dpl_6EEzhpHRoHBqj8Qm9ftHgzqkXRUo`, 통합 `1ace864b`)를 병합: NICEPAY 심사 경로(#259/#264/#265)·구독 심사(33bc408c)·iOS Build 12 네이티브·UX 통합·수강권 안내창 개선. 이 문서 이전의 "운영 미반영" 표기 항목들은 이 병합 시점에 운영 반영 상태다. 앱 코드 신규 변경 없음(문서만). 상세: `docs/PRODUCTION_MAIN_SYNC_20261117.md`.
+
+## 2026-11-16 — 수강권 안내창 드래그 부드러움·간헐적 흰 레터박스 (`fix/product-sheet-ios-bounce-smooth-20261116`, 기준 `4093ee62`, 운영 미반영)
+- 웹: 드래그 이벤트를 window 에서 수신(요소 소실·touchend 누락 시에도 종료)+복구 장치(touchcancel/blur/pagehide/정지 타임아웃/새 터치), 아래 플릭 닫기(≥0.5px/ms), 레이아웃 읽기 제거·transform 기반·본문 overflow 잠금·감속 곡선, snap-back 중 재드래그, 키보드 때만 visualViewport 보정, 진단 로그(옵션).
+- 네이티브(iOS): 기존 NavigationPolicy 플러그인에 `setVerticalBounceEnabled` — 시트가 열린 동안만 WebView 세로 바운스 off, 닫힘/로드/백그라운드에서 복원(앱 전역 bounces=true 유지). **새 iOS 빌드 필요**(1.0.3 (12) 이상). SQL·결제 변경 없음. 상세·한계: `docs/qa/sheet-bounce-20261116/ANALYSIS.md`.
+
+## 2026-11-16 — 수강권 안내창 드래그 닫기·가장자리 스와이프·오버스크롤 (`fix/product-sheet-drag-dismiss-20261116`, 기준 `132ec548`, 운영 미반영)
+- 왼쪽 가장자리 스와이프가 안내창을 닫던 동작 제거(`data-edge-swipe-block` + edge 입구 `blocked-by-overlay`; Android back·‹·다른 시트·일반 화면 back 은 기존 그대로). 본문 맨 위에서 아래로 끌면 시트 전체가 따라 내려가 닫힘(35% 규칙), 시트 밖·스크롤 끝단 touchmove 는 막아 WebView 바운스(흰 빈 영역)를 차단. 수강권 안내창에만 적용(`contentDrag` opt-in). 네이티브·SQL·결제 변경 없음(웹 배포만). 상세: `docs/qa/sheet-drag-20261116/ANALYSIS.md`.
+
+## 2026-11-11 — 결제 ↔ 센터 뒤로가기 무한 반복 수정 (`fix/checkout-back-loop-20261111`, 기준 `eca9e24f`, 운영 미반영)
+- 원인: 결제 화면 헤더 ‹ 가 고정 href 앵커(push)라 센터 ‹(router.back)와 왕복. 구매 시트 이동이 전체 문서 로드라 이동 기록 소실, 딥링크 폴백이 push 였고, NICEPAY 종료 후 `location.replace` 가 결제창 entry 뒤에 결제 화면을 놓음.
+- 수정: 결제 ‹ → `BackButton`, 구매 이동 `router.push`, 폴백 `router.replace`, NICEPAY 종료 시 `history.go(-n)`(열기 직전 anchor 기록). 네이티브·SQL·결제 로직 변경 없음(웹 배포만). 상세: `docs/qa/back-loop-20261111/ANALYSIS.md`.
+
+## 2026-11-09 — 릴리스 전 최종 점검 (`integration/ux-native-review-20261109`, 운영 미반영)
+- 운영 배포본(`61b10ab9`)과 origin/main 비교: main 에 없던 운영 커밋 3개(`d23eac7c`·`5843e1e2`·`61b10ab9`, 정기상품 카탈로그)는 통합 브랜치에 patch-id 동일로 보존(`git cherry` 3건 모두 `-`), 해당 파일 3개 동일. 운영 대비 삭제된 파일 0.
+- #264 유입 TypeScript 오류 1건(`nicepay.qaPreflight.test.ts` 불필요한 `@ts-expect-error`) 제거 → tsc 63건(전부 기존 `tests/` 오류, 신규 0). `nicepayNativeParity` 가 주석의 `"*.nicepay.co.kr"` 문자열로 우연히 통과하던 것을 실제 항목 3개 고정으로 교체.
+- NICEPAY 호스트 정책 점검: `docs/payments/NICEPAY_NATIVE_HOST_POLICY_20261109.md`. SQL 점검: `docs/payments/RELEASE_SQL_REVIEW_20261109.md`(새 SQL 필요 없음; 주문 selected_size 서버 검증은 별도 제안 SQL + PGlite·격리 DB 검증, 미실행). 읽기 전용 상태 점검 SQL: `audit_release_sql_status_readonly_20261109.sql`.
+- iOS 1.0.3 (11).
+
+## 2026-11-09 — 통합 브랜치 `integration/ux-native-review-20261109` (운영 미반영)
+- `origin/main` + PR #265 + PR #264 + UX 변경(결제창 복귀·구매 시트 역할 분리·수강권 이름 병합·뒤로가기 단일 정책·옵션 검증·TestFlight 1.0.3(10) 버전). 충돌: `capacitor.config.ts` 는 #264 의 `*.nicepay.co.kr` 와일드카드 대신 정확한 호스트 3개만 유지, CHANGELOG/TODO 는 양쪽 기록 보존.
+- QA: `scripts/qa/uxPreview/localUxFixture.sql` 시험 데이터 + `tests/qa/uxIntegration/*.mjs`(격리 브라우저 QA 61항목) + 심사경로 27항목 통과. `scripts/qa/reviewPath/stack.sh` 에 `REVIEWPATH_PORT_OFFSET` 추가(5462x 임시 포트 충돌로 Colima 포워딩이 실패하던 원인 회피). 결과: `docs/qa/ux-integration-20261109/REPORT.md`.
+
+## 2026-11-09 — 릴리스 전 QA: 주문 옵션 검증 강화·결제창 복귀 선택값 유지 (운영 미반영)
+- 사이즈·횟수 옵션을 주문 생성 전에 현재 상품 정의와 대조(`lib/orderOptions.ts`): 장바구니 일괄 주문·결제 화면 공통. 사이즈 미선택/옛 사이즈/불필요한 사이즈·횟수 미선택/가격표에 없는 횟수/고정 상품의 횟수를 모두 막는다(DB·상품·가격 데이터 변경 없음, 최종 금액·횟수는 기존대로 서버가 확정).
+- 결제 화면에서 고른 횟수·사이즈를 주소(`?count=&size=`)에 `history.replaceState` 로 반영 → NICEPAY 결제창 종료 후 "결제 화면으로 돌아가기"가 같은 선택으로 복원. 복귀 버튼은 저장 값을 지워 재진입 시 재사용하지 않는다. 사이즈에 공백·슬래시 허용.
+- `back-header` 전수 정적 감사 테스트(`backHeaderAudit`) 추가. 서버측 사이즈 검증(주문 트리거)은 SQL 변경이라 이번 범위 밖 — docs/TODO.md 참고.
+
+## 2026-11-09 — 수강권 횟수별 중복 표시 통합 (표시 전용, 운영 미반영)
+- 고객용 "사용 가능한 수강권" 목록에서 이름 끝 횟수 표기(1·4·8·12회)만 합쳐 한 이름으로 표시(`lib/passNameDisplay.ts`). 개월 수강권은 합치지 않음. 데이터·가격·자격 변경 없음.
+- `fetchClassAllowedPasses` 를 수업 이름이 아닌 class_id 기준으로 조회, 조회 실패/비로그인은 "모든 수강권 가능" 대신 "수업 상세에서 확인"으로 표시.
+
+## 2026-11-09 — NICEPAY 결제창 종료 후 "결제 화면으로 돌아가기" (`feat/ux-nicepay-return-20261109`, 운영 미반영)
+- 문제: 심사 결제창을 X로 닫으면 앱 종료 화면의 주 버튼이 "마이페이지로 돌아가기"라 구매 흐름(센터·상품·옵션)이 끊겼다.
+- 수정: 결제창을 열기 직전 현재 `/checkout?…` 경로를 허용 목록(센터·상품·횟수·옵션·예약 진입·필터 키, 값 형식 제한)으로 검증해 localStorage(30분)에 저장하고, 서버가 만드는 종료 화면의 해시 고정 스크립트가 같은 규칙으로 재검증해 `location.replace` 로 복귀한다(NICEPAY 재호출·주문·결제 생성 없음). 저장 경로가 없으면 서명된 시도의 센터 상세(`/center/<id>`), 그것도 없으면 홈. 서명 토큰(ReturnURL 500B 제한)·외부 DOM은 건드리지 않는다. 취소/인증확인/확인불가 문구는 그대로 구분, 성공 표현 없음. SQL·네이티브 변경 없음.
+
+## 2026-11-09 — 수강권 선택 화면/결제 화면 역할 분리 (`feat/ux-purchase-sheet-20261109`, 운영 미반영)
+- 문제: 센터 구매 Bottom Sheet 와 결제 화면(·장바구니)이 모두 횟수 dropdown 을 가져 선택 시점이 중복(sheet 에서 고른 횟수가 URL/장바구니로 흘러가 어긋날 여지, 장바구니 재담기는 고른 횟수를 덮어씀).
+- 수정: sheet 는 "무엇을 살지"만 — 횟수/사이즈 select·합계 제거, "N원부터"(가격표 최저가)+안내문구만, 담기=최저 횟수 기본값(이미 담긴 row 는 `keepExisting` 으로 보존), 구매=count/size 없이 checkout. checkout 은 가격표에 없는 count 면 가격표 최소 횟수로 시작하고 횟수 변경 시 쿠폰 선택을 풀어 재계산. 조회 전용 링크 문구 "결제 화면 확인 (구매 불가)". `product_count_prices`·서버 검증·SQL·PG 불변. 정적 하니스 `tests/qa/purchaseSheet/shots.mjs`, `docs/qa/ux-purchase-sheet-20261109/`.
+
+## 2026-11-09 — iOS NICEPAY 결제창 상단 Safe Area 잘림 수정 (`qa/nicepay-ios-safearea-20261109`, 기준 `c2c59bf5`, 운영 미반영)
+- 원인: `contentInset=never`+`StatusBar.overlaysWebView=true` 로 WebView 가 상태바 뒤까지 덮는데 NICEPAY 외부 페이지는 안전 영역을 처리하지 않아 상단 헤더·X 버튼이 가려짐(시뮬레이터 실측 재현).
+- 수정: NICEPAY 호스트(정확히 3개)에 있는 동안에만 `contentInsetAdjustmentBehavior=.always`, 앱으로 돌아오면 `.never` 복원(`NicepaySafeAreaObserver`). 전역 StatusBar/모하빗 CSS 불변, iOS 전용. **iOS 앱 재빌드 필요.** `docs/qa/nicepay-ios-safearea-20261109/REPORT.md`.
+
+## 2026-11-08 — iOS 실기기 NICEPAY 결제창이 외부 Safari 로 나가 오류 나는 문제 진단·최소 수정 (`qa/nicepay-ios-nav-20261108`, 기준 `fd659321`, 운영 미반영)
+- 원인: goPay 모바일 결제창은 `pg-web.nicepay.co.kr/v3/gwPayment.jsp` 로의 form POST 최상위 이동인데, 설치 앱의 Capacitor 는 allowNavigation 에 없는 호스트를 `UIApplication.open(URL)`+취소 처리해 POST 본문이 사라진다.
+- 수정: `capacitor.config.ts` allowNavigation 에 정확한 호스트 `pg-web`·`dc1-web`·`web`(.nicepay.co.kr) 추가(와일드카드 없음). **iOS(·Android) 앱 재빌드·재설치 필요.** 상세·검증·실기기 QA 절차: `docs/qa/nicepay-ios-webview-nav-20261108/REPORT.md`.
+
+## 2026-11-08 — PR #265 Lint 신규 오류 3건 수정 (`integration/nicepay-review-path-20261106`)
+- `NicepayReviewWindow.tsx`: 렌더 중 `notify.current` 대입(react-hooks/refs) → effect 로 이동, effect 본문의 동기 `setState`(react-hooks/set-state-in-effect) 제거(초기 상태·로그인 변경 처리기가 이미 같은 값으로 맞춤). `lib/center.ts`: `any[]` → 응답 행 타입(`PublicStorefrontRow`). ESLint 규칙 비활성화·baseline 추가 없음. 상태 전달·중복 호출 차단·비동기 취소·조회 전용 구매 차단 동작 불변(테스트 보강, 격리 브라우저 QA 27/27 재통과).
+
+## 2026-11-07 — 심사 경로 격리 브라우저 QA 27/27 PASS + 결함 2건 수정 (`integration/nicepay-review-path-20261106`, 운영 미반영)
+- `/products` 전체 상품 목록: 허용 센터가 있는 심사관에게는 허용 센터 상품만(별도 심사 센터 테스트 상품 제외). 인증창 대상 판정이 심사 센터 행 존재에 의존하지 않도록 분리.
+- QA 도구: `scripts/qa/reviewPath/{stack.sh,httpsProxy.mjs}`, `tests/qa/reviewPath/browserQa.mjs`(운영 연결 없는 세 번째 격리 스택·실제 Chromium). `setupLocal.sh`/`setupRealCenter.sh` 는 `ISO_DB_CONTAINER` 로 컨테이너 이름을 바꿀 수 있다(기본값 불변). 결과: `docs/qa/nicepay-review-path-20261106/`.
+
+## 2026-11-06 — NICEPAY 심사 경로: 실제 센터 상품 조회 + 카드 결제창 확인 (통합 브랜치 `integration/nicepay-review-path-20261106`, 운영 미반영)
+- 인증창 확인(review-window) 대상을 심사 센터 상품 외에 **심사관에게 허용된 실제 센터 상품**(`nicepay_review_center_grants` 행·승인된 비내부 센터·판매 중 미만료 상품)으로 확장(시도 토큰에 센터 포함, 반환 시 같은 센터로 재검증). 승인·주문·이용권 없음, 허용 테이블이 없으면 기존 동작.
+- 허용 센터가 있으면 심사관 탐색(홈·검색 등)은 그 센터만 보임(별도 심사 센터 제외). 조회 전용 센터 상품 행에 "결제 화면 · 카드 결제창 확인" 진입 추가.
+- 신규 SQL(미실행): `audit_nicepay_review_path_readonly_20261106.sql`, `grant_nicepay_review_real_center_20261106_proposed.sql`, `rollback_grant_nicepay_review_real_center_20261106.sql`. 설계·순서: `docs/payments/NICEPAY_REVIEW_PATH_20261106.md`.
+
+## 2026-11-05 — 결제창 확인 UI 보완 3건 (커밋 e522248 검토 반영, 로컬 `fix/nicepay-review-window-ui-20261105`, 운영 미반영)
+- 계정 판별 중(resolving) 상태 추가: 초기값·인증 변경 직후는 hidden 이 아니라 resolving — checkout 은 세션 확인이 끝나 일반 회원(hidden)으로 확정되기 전에는 카드(비-direct) 실제 결제 버튼을 잠그고 handlePay 는 주문 생성 전에 중단(ref 로 클릭 시점 최신값). 세션 조회 실패는 denied(잠금). 직접결제는 그대로.
+- review-window 요청(check/open)에 12초 제한 시간(AbortController)과 "준비 취소" 버튼. 열기 시도마다 식별자·abort 를 두어 초기화·취소·재시도 뒤에 늦게 도착한 이전 응답/오류가 goPay 호출이나 새 상태 덮어쓰기를 하지 못한다.
+- `nicepayV3Window.ts`: 열기 시도별 id, 닫기 유예 타이머를 정리 시 취소, 전역 핸들러(nicepaySubmit/nicepayClose)는 소유자만 삭제, 정리된 시도의 submit 무시, 새 창 열기 시 이전 시도 폐기.
+- 서버 route·HMAC·MID·게이트·결제 비활성화는 변경 없음. 승인·망취소·환불 호출 0회.
+
+## 2026-11-05 — 기존 앱 NICEPAY 결제창 확인 UI·버튼 충돌·로딩 복구 수정 (로컬 `fix/nicepay-review-window-ui-20261105`, 운영 미반영)
+- UI: 테스트 영역을 주문 상품 카드와 같은 여백·테두리·라운드의 안내 카드로 정리하고 버튼은 AppButton 사용(정의 없던 `secondary-btn`/`menu-section` 제거). 준비 중/열림/닫음/복귀/오류/확인 중/사용 불가 상태를 구분.
+- 충돌: 지정 심사 계정이 카드 결제를 고르면 하단 실제 결제 버튼을 잠그고 handlePay 도 주문 생성 전에 중단 — 권한 확인 중·허용·확인 실패 모두 실제 결제 경로로 fallback 하지 않는다(직접결제·일반 회원은 그대로).
+- 복구: goPay 후 닫기 콜백이 없어도 앱/탭 복귀(visibility)·bfcache(pageshow)·수동 "상태 초기화"로 준비 중에서 빠져나온다(성공 처리 아님). 서명 발급 응답 오류·창 열기 예외는 오류 문구 + "다시 시도".
+- 서버 route·HMAC·MID·승인 관련 코드는 변경 없음. 승인·망취소·환불 호출 0회.
+## 2026-11-06 — 홈 NICEPAY 심사관 전용 섹션 문구 정리 (로컬 `fix/nicepay-home-wording-20261106`, 운영 미배포)
+- 심사관에게만 보이는 홈 섹션: 제목·aria-label "심사 전용 센터" → "수강권 및 결제 확인 센터", 부제 "심사용 수강권 및 결제 과정 확인" → "테스트 센터 · 수강권 및 결제 과정 확인". 노출 조건(`fetchMyNicepayReviewAccess`)·접근 제어·결제 플래그·상품 데이터는 변경 없음.
+- 운영 DB 센터·상품 문구는 `fix_nicepay_review_wording_20261105.sql` 로 이미 승인 후 적용 완료 — 이 변경에 SQL 은 없고 재실행하지 않는다.
+- 회귀 테스트: 이용자 화면 코드의 '심사용' 계열 문구 재유입 방지(`nicepayReviewWording.test.ts`), 홈 렌더(심사관/일반 회원/비로그인/빈 목록, `nicepayHomeReviewSection.render.test.ts`).
+## 2026-11-03 — 실제 센터 허용 롤백 SQL 보완 (로컬, 운영 SQL 미실행)
+- 롤백: 복원 전 함수 3개 현재 MD5 가 (적용본|이미 복원된 원본)이 아니면 변경 없이 중단, 복원 후 MD5 가 원본과 다르면 WARNING 이 아니라 EXCEPTION(트랜잭션 전체 취소), 허용 행이 있으면 계정/센터 목록을 보여 주며 중단하고 전체 삭제 대신 계정·센터를 지정한 개별 해제 절차 문서화. PGlite SQL 시험 6건(적용·롤백·재적용·변조 중단·원자적 취소).
+
+## 2026-11-03 — 실제 센터 허용 목록 SQL 2차 보완 (로컬, 운영 SQL 미실행)
+- preflight 를 함수 정의 MD5 전체 비교(운영 기준값)로 강화, 허용 센터가 승인 취소·내부 전환되면 허용 즉시 무효, 조회 전용 UI(구매·담기·예약 버튼 숨김·결제 화면 비활성), 롤백이 목록 RPC 를 되돌리던 결함 수정(함수 3개만 복원), 생애주기 시험 30건·접근 시험 57건·브라우저 6건 추가.
+
+## 2026-11-03 — NICEPAY 심사관에게 실제 센터(A10TION) 상품을 보여 주는 허용 목록 (로컬 `feat/nicepay-real-products-review-20261103`, 운영 SQL 미실행)
+- 신규 `add_nicepay_review_real_center_grants_20261103.sql`(+rollback·verify·읽기 전용 점검 SQL): 심사관 계정↔실제 센터 허용 목록(`nicepay_review_center_grants`, 기본 조회 전용·`can_purchase` 별도), 가시성·구매 가드 함수 교체. 카드 결제 게이트는 불변(허용 센터 카드 결제 불가). 앱: `nicepayDiscoveryScope()`/`narrowToReviewCenters()`(허용 센터 id 는 DB RPC 로 중앙 관리, SQL 전 배포 안전), 홈 심사관 섹션 문구. 격리 DB 41건·브라우저 5건·기존 회귀 통과. 문서 `docs/payments/NICEPAY_REAL_CENTER_REVIEW_20261103.md`.
+
+## 2026-11-02 — NICEPAY Batch 2: 인증 복귀·앱(WebView) 결합 QA (로컬 `qa/nicepay-native-return-20261102`, SQL·운영 변경 없음)
+- #255 네이티브 구현을 auth-only QA 브랜치 위로 통합(충돌 4건 해결), 앱+auth-only 결합 시험 `authOnlyApp.spec.ts`(5) 추가, #258 이후 낡은 단위 시험 1건 갱신. iOS xcodebuild·Android assembleDebug·JUnit·Swift 검사 통과. 실제 카드 인증·실기기는 BLOCKED. 문서 `docs/payments/NICEPAY_BATCH2_AUTH_RETURN_QA_20261102.md`.
+
+## 2026-10-30 — NICEPAY v3 테스트 결제창 격리 QA(auth-only) 환경 (`qa/nicepay-auth-only-20261030`, SQL·운영 변경 없음)
+- 공용 테스트 MID(`nicepay00m`) 또는 `NICEPAY_QA_AUTH_ONLY=true` 이면 서버가 인증 결과 검증 뒤 승인 API 를 호출하지 않고 주문을 정리(`qaAuthOnly.ts`, lifecycle/flow/result 화면). 운영 MID·운영 Supabase·production 환경·일반회원 결제 ON 이면 NICEPAY 설정 거부, 서버 fetch 는 NICEPAY 호스트로 나가지 못하게 차단(`guardFetch`).
+- 사전 점검 `scripts/qa/nicepayAuthOnlyPreflight.mjs`, 실제 결제창 로컬 러너 `scripts/isolated/nicepayQa/realWindow.sh`(키 미보유 시 BLOCKED), 격리 QA `tests/nicepay-qa/authOnly.spec.ts`(11)·단위 19건. 문서 `docs/payments/NICEPAY_AUTH_ONLY_QA_20261030.md`. 실제 외부 결제창은 테스트 MerchantKey 가 없어 BLOCKED.
+## 2026-10-30 — NICEPAY v3 모바일 앱(WebView) 결제 복귀 구현 — Issue #255 (로컬 커밋, 결제 OFF·앱 복귀 설정 OFF 기본, 운영 SQL 미실행)
+- 공식 문서(결제창 `WapUrl`/`IspCancelUrl`, APP WebView 연동) 기준으로 서버·웹·iOS·Android 구현: 서버 설정이 켜진 앱 요청에만 `WapUrl`/`IspCancelUrl`(서버 scheme + DB 주문 UUID) 전송, 클라이언트는 어느 앱인지 힌트만, 웹 브라우저·설정 OFF(기본)에는 필드 없음(기존 흐름 유지). 앱 복귀는 결제 성공이 아니며 결과 화면이 서버(DB `done`)만 믿는다(rt 없이 로그인 세션, `cancel=1` 은 본인 pending 만 취소).
+- iOS: 기존 Google URL scheme 유지 + 제안 복귀 scheme, `LSApplicationQueriesSchemes` 29개, `NicepayAppBridgePlugin`(카드사 앱 호출·미설치 안내·결제 문맥 임의 scheme 차단), SceneDelegate 는 Google → NICEPAY → Capacitor 순서. Android: `queries` 24개, deep link 1개, `intent://`·`market://` 허용 패키지 검증(component/selector/flags/extras 제거), MainActivity 복귀 처리. ATS·cleartext·와일드카드 허용 없음.
+- 검증: vitest(앱 복귀 17·네이티브 동일성 11 등), Swift 순수 로직 검사, Android JUnit 9 + `assembleDebug`, `xcodebuild`(iOS 시뮬레이터, 코드서명 없음) 성공, 격리 브라우저 QA(앱 모의). 실기기 카드사 인증·복귀는 BLOCKED. scheme·값 형식·카드사 도메인은 NICEPAY 확인 전 미확정. 문서 `docs/payments/NICEPAY_NATIVE_WEBVIEW_RETURN_20261030.md`.
+
 ## 2026-10-30 — 만료 주문 처리 E2E 격리 CI 추가·QA 증빙 정리 (PR #253 QA 보완, 운영 SQL 미실행)
 - 신규 workflow `.github/workflows/expired-order-qa.yml`: `tests/expired-order-qa/member-to-manager.spec.ts`(desktop+mobile 16 tests)를 러너 안의 일회용 Supabase 스택에서만 자동 실행. Secrets·공유 DEV·운영·실제 PG/알림 자격증명 없음, 앱 서버 :3021(기본 :3000 과 분리), 별도 러너·concurrency 그룹이라 기존 test.yml 과 무관. 운영과 같은 함수 정의 상태는 `scripts/isolated/expiredOrder/applyProdParity.sh` 가 러너의 로컬 컨테이너에만 적용.
 - spec 이 새 스택에서도 돌도록 센터 매니저 행을 없으면 생성(기존엔 사전 시드 가정). playwright 설정에 로컬 Supabase·실결제 자격증명 가드와 CI 전용 webServer 추가. 계약 테스트 `tests/unit/expiredOrderQaWorkflow.contract.test.ts` 추가, workflow 분류 목록(`liveTestEntrypoints.audit`)에 등록.

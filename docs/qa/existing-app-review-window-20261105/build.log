@@ -1,0 +1,125 @@
+
+> booking-app@0.1.0 build
+> next build --webpack
+
+▲ Next.js 16.2.10 (webpack)
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 3.5s
+  Running TypeScript ...
+  Finished TypeScript in 7.4s ...
+  Collecting page data using 9 workers ...
+  Generating static pages using 9 workers (0/97) ...
+  Generating static pages using 9 workers (24/97) 
+  Generating static pages using 9 workers (48/97) 
+  Generating static pages using 9 workers (72/97) 
+✓ Generating static pages using 9 workers (97/97) in 293ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /.well-known/apple-app-site-association
+├ ○ /about
+├ ○ /account-deletion
+├ ○ /admin
+├ ○ /admin/banners
+├ ○ /admin/categories
+├ ○ /admin/centers
+├ ○ /admin/marketing
+├ ○ /admin/reviews
+├ ○ /admin/settlement
+├ ○ /admin/subscription-plans
+├ ○ /admin/subscriptions
+├ ƒ /api/billing/charge-due
+├ ƒ /api/billing/confirm
+├ ƒ /api/payments/cancel
+├ ƒ /api/payments/confirm
+├ ƒ /api/payments/nicepay/abandon
+├ ƒ /api/payments/nicepay/prepare
+├ ƒ /api/payments/nicepay/return
+├ ƒ /api/payments/nicepay/review-window
+├ ƒ /api/payments/nicepay/review-window/result
+├ ƒ /api/payments/nicepay/review-window/return
+├ ƒ /api/payments/nicepay/status
+├ ƒ /api/payments/nicepay/webhook
+├ ƒ /api/payments/refund
+├ ƒ /api/payments/return-token
+├ ƒ /api/payments/return/cancel
+├ ƒ /api/payments/return/confirm
+├ ƒ /api/public/business-address
+├ ○ /apple-icon.png
+├ ○ /cart
+├ ƒ /category/[label]
+├ ƒ /center/[id]
+├ ƒ /center/[id]/class/[classId]
+├ ○ /checkout
+├ ○ /checkout/fail
+├ ○ /checkout/nicepay/result
+├ ○ /checkout/success
+├ ○ /icon.png
+├ ○ /inquiries
+├ ○ /legal
+├ ○ /legal/business
+├ ○ /legal/notices/nicepay-20261030
+├ ○ /legal/privacy
+├ ○ /legal/refund
+├ ○ /legal/terms
+├ ○ /login
+├ ○ /login/kakao-callback
+├ ○ /login/naver-callback
+├ ƒ /manager
+├ ƒ /manager/admin-assignments
+├ ƒ /manager/alimtalk
+├ ƒ /manager/alimtalk/rules
+├ ƒ /manager/alimtalk/send
+├ ƒ /manager/alimtalk/settings
+├ ƒ /manager/alimtalk/templates
+├ ƒ /manager/announcements
+├ ƒ /manager/center-info
+├ ƒ /manager/class-revenue
+├ ƒ /manager/classes
+├ ƒ /manager/coupons
+├ ƒ /manager/goods
+├ ƒ /manager/holidays
+├ ƒ /manager/inquiries
+├ ƒ /manager/leads
+├ ƒ /manager/members
+├ ƒ /manager/membership-rules
+├ ƒ /manager/notifications
+├ ƒ /manager/orders
+├ ƒ /manager/progress
+├ ƒ /manager/progress/record
+├ ƒ /manager/reviews
+├ ƒ /manager/rooms
+├ ƒ /manager/sales
+├ ƒ /manager/settings
+├ ƒ /manager/settlement
+├ ƒ /manager/staff
+├ ƒ /manager/staff/permissions
+├ ƒ /manager/subscription
+├ ○ /my-reservations
+├ ○ /mypage
+├ ○ /mypage/calendar
+├ ○ /mypage/coupons
+├ ○ /mypage/info
+├ ○ /mypage/points
+├ ○ /mypage/register-center
+├ ○ /notifications
+├ ○ /products
+├ ○ /profiles
+├ ○ /purchases
+├ ○ /reservation
+├ ○ /reset-password
+├ ○ /reset-password/confirm
+├ ○ /robots.txt
+├ ○ /search
+├ ○ /settings/notifications
+├ ○ /settings/theme
+└ ○ /sitemap.xml
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

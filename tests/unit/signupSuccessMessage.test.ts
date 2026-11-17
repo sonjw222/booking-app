@@ -4,7 +4,7 @@
 */
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { SIGNUP_SUCCESS_MESSAGE } from "../../app/login/page";
+import { SIGNUP_SUCCESS_MESSAGE } from "../../lib/signupMessages";
 
 describe("SIGNUP_SUCCESS_MESSAGE", () => {
   it("이메일/메일/인증을 언급하지 않는다(실제로 발송되지 않으므로 거짓 안내 금지)", () => {

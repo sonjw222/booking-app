@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 /Users/sonjw/.codex/.chatgpt-projects/g-p-6a67982039608191bf1cb4f5d5d173f4/nicepay-existing-app-auth-only
+
+
+ Test Files  4 passed (4)
+      Tests  31 passed (31)
+   Start at  15:05:48
+   Duration  577ms (transform 118ms, setup 0ms, import 203ms, tests 49ms, environment 440ms)
+

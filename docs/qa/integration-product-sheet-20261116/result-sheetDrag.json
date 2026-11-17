@@ -1,0 +1,98 @@
+[
+ {
+  "id": "Q1",
+  "name": "수강권 안내창 열기 + 드래그 핸들·스크롤 가능한 긴 본문",
+  "status": "PASS",
+  "detail": "{\"h\":828,\"canScroll\":true}"
+ },
+ {
+  "id": "Q3",
+  "name": "핸들을 조금만 끌면 시트 전체가 따라 내려가다가(딤도 옅어짐) 놓으면 원위치로 복귀",
+  "status": "PASS",
+  "detail": "mid=translateY(70px) bg=rgba(0, 0, 0, 0.365) → top 16/16"
+ },
+ {
+  "id": "Q2",
+  "name": "핸들을 아래로 충분히 끌면 시트가 아래로 내려가며 닫히고 센터 화면·주소·배경 스크롤 위치 유지",
+  "status": "PASS",
+  "detail": "open=false overflow=''"
+ },
+ {
+  "id": "Q4",
+  "name": "긴 본문에서 손가락을 위로 밀면 본문이 정상 스크롤(시트는 움직이지 않음)",
+  "status": "PASS",
+  "detail": "scrollTop 779 tf=''"
+ },
+ {
+  "id": "Q4b",
+  "name": "스크롤이 맨 위가 아닐 때는 아래로 밀어도 본문이 먼저 스크롤된다(시트 드래그로 전환되지 않음)",
+  "status": "PASS",
+  "detail": "scrollTop 779→586"
+ },
+ {
+  "id": "Q5",
+  "name": "스크롤 최상단에서 본문을 아래로 끌면 시트 드래그로 전환되어 닫힘",
+  "status": "PASS",
+  "detail": "mid=translateY(385px) closed=true"
+ },
+ {
+  "id": "Q6",
+  "name": "열고 닫기를 5회 반복(핸들/본문 번갈아) — 매번 닫히고 body 잠금·오버레이 잔여 없음",
+  "status": "PASS",
+  "detail": "{\"ov\":\"\",\"n\":0}"
+ },
+ {
+  "id": "Q9",
+  "name": "시트 밖(딤 영역) 터치와 스크롤 끝단 초과 터치는 preventDefault — 배경 문서가 당겨져 흰 빈 영역이 생기지 않음",
+  "status": "PASS",
+  "detail": "outside 8/8, end 8/8, winY=0"
+ },
+ {
+  "id": "Q11",
+  "name": "시트 안 가로 스와이프는 시트를 끌거나 닫지 않음(가로 스크롤·텍스트 터치 유지)",
+  "status": "PASS",
+  "detail": "tf=''"
+ },
+ {
+  "id": "Q7",
+  "name": "시트가 열린 동안 왼쪽 가장자리 스와이프(edge 입구)는 시트를 닫지도 화면을 이동시키지도 않음",
+  "status": "PASS",
+  "detail": "blocked-by-overlay open=true"
+ },
+ {
+  "id": "Q7b",
+  "name": "Android 시스템 back(기존 정책)은 시트를 닫는다 — 변경 없음",
+  "status": "PASS",
+  "detail": "close-overlay"
+ },
+ {
+  "id": "Q8",
+  "name": "시트가 닫힌 일반 화면에서는 edge back 이 기존처럼 직전 화면(판매 상품)으로 이동",
+  "status": "PASS",
+  "detail": "history-back /products"
+ },
+ {
+  "id": "Q10-360",
+  "name": "360px: 시트가 화면 안에 있고 가로 넘침 없음·핸들 표시·버튼 높이≥44·하단 고정",
+  "status": "PASS",
+  "detail": "{\"w\":360,\"right\":360,\"ov\":false,\"handle\":true,\"minBtn\":44,\"bottom\":844,\"vh\":844}"
+ },
+ {
+  "id": "Q10-390",
+  "name": "390px: 시트가 화면 안에 있고 가로 넘침 없음·핸들 표시·버튼 높이≥44·하단 고정",
+  "status": "PASS",
+  "detail": "{\"w\":390,\"right\":390,\"ov\":false,\"handle\":true,\"minBtn\":44,\"bottom\":844,\"vh\":844}"
+ },
+ {
+  "id": "Q10-430",
+  "name": "430px: 시트가 화면 안에 있고 가로 넘침 없음·핸들 표시·버튼 높이≥44·하단 고정",
+  "status": "PASS",
+  "detail": "{\"w\":430,\"right\":430,\"ov\":false,\"handle\":true,\"minBtn\":44,\"bottom\":844,\"vh\":844}"
+ },
+ {
+  "id": "Q13",
+  "name": "iOS WKWebView 실제 rubber-band(흰 영역)·네이티브 가장자리 제스처·오른쪽 앞으로 차단·Android 시스템 back 실동작",
+  "status": "BLOCKED",
+  "detail": "실기기 전용 — 웹은 preventDefault 차단·입구 판정까지 검증"
+ }
+]

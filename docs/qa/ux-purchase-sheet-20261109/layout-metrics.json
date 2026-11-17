@@ -1,0 +1,94 @@
+[
+ {
+  "persona": "member",
+  "width": 360,
+  "overflowX": false,
+  "selects": 0,
+  "minBtnH": 44,
+  "maxBtnH": 44,
+  "btnWidths": [
+   120,
+   192
+  ]
+ },
+ {
+  "persona": "member",
+  "width": 390,
+  "overflowX": false,
+  "selects": 0,
+  "minBtnH": 44,
+  "maxBtnH": 44,
+  "btnWidths": [
+   132,
+   210
+  ]
+ },
+ {
+  "persona": "member",
+  "width": 430,
+  "overflowX": false,
+  "selects": 0,
+  "minBtnH": 44,
+  "maxBtnH": 44,
+  "btnWidths": [
+   147,
+   235
+  ]
+ },
+ {
+  "persona": "member",
+  "width": 1024,
+  "overflowX": false,
+  "selects": 0,
+  "minBtnH": 44,
+  "maxBtnH": 44,
+  "btnWidths": [
+   197,
+   315
+  ]
+ },
+ {
+  "persona": "reviewer",
+  "width": 360,
+  "overflowX": false,
+  "selects": 0,
+  "minBtnH": 44,
+  "maxBtnH": 44,
+  "btnWidths": [
+   320
+  ]
+ },
+ {
+  "persona": "reviewer",
+  "width": 390,
+  "overflowX": false,
+  "selects": 0,
+  "minBtnH": 44,
+  "maxBtnH": 44,
+  "btnWidths": [
+   350
+  ]
+ },
+ {
+  "persona": "reviewer",
+  "width": 430,
+  "overflowX": false,
+  "selects": 0,
+  "minBtnH": 44,
+  "maxBtnH": 44,
+  "btnWidths": [
+   390
+  ]
+ },
+ {
+  "persona": "reviewer",
+  "width": 1024,
+  "overflowX": false,
+  "selects": 0,
+  "minBtnH": 44,
+  "maxBtnH": 44,
+  "btnWidths": [
+   520
+  ]
+ }
+]

@@ -9,6 +9,35 @@
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- NICEPAY v3 앱(WebView) 결제: Android 11+ 에서 카드사 앱을 호출(resolve)하려면 대상 패키지를 선언해야 한다(공식 문서 "3rd 앱 호출 등록"). 신용카드·공동인증·백신 구분만 — 소셜 로그인과 겹치는 앱은 제외.
+         NicepayAppReturn.java 의 CARD_APP_PACKAGES 와 같은 목록(테스트가 고정). -->
+    <queries>
+        <package android:name="kr.co.samsungcard.mpocket" />
+        <package android:name="net.ib.android.smcard" />
+        <package android:name="com.shcard.smartpay" />
+        <package android:name="com.shinhancard.smartshinhan" />
+        <package android:name="com.shinhan.smartcaremgr" />
+        <package android:name="com.hyundaicard.appcard" />
+        <package android:name="com.kbcard.cxh.appcard" />
+        <package android:name="com.kbstar.kbbank" />
+        <package android:name="com.kbstar.reboot" />
+        <package android:name="kvp.jjy.MispAndroid320" />
+        <package android:name="com.hanaskcard.paycla" />
+        <package android:name="kr.co.hanamembers.hmscustomer" />
+        <package android:name="com.lcacApp" />
+        <package android:name="com.lottemembers.android" />
+        <package android:name="nh.smart.nhallonepay" />
+        <package android:name="com.wooricard.smartapp" />
+        <package android:name="com.wooribank.smart.npib" />
+        <package android:name="kr.co.citibank.citimobile" />
+        <package android:name="com.kakaobank.channel" />
+        <package android:name="com.hanaskcard.rocomo.potal" />
+        <package android:name="com.lumensoft.touchenappfree" />
+        <package android:name="com.TouchEn.mVaccine.webs" />
+        <package android:name="com.ahnlab.v3mobileplus" />
+        <package android:name="kr.co.shiftworks.vguardweb" />
+    </queries>
+
     <!-- 보안 감사(2026-10-08): allowBackup을 끈다. 백업 규칙(fullBackupContent/dataExtractionRules)이 없어 true면 앱 데이터 전체 — WebView localStorage에 있는 Supabase
          세션 토큰 포함 — 가 클라우드 백업/기기 이전에 실린다. 이 앱은 호스팅된 사이트(server.url)를 띄우고 실제 데이터는 전부 서버에 있어 로컬 백업이 필요 없다
          (재설치/새 기기에서는 다시 로그인하면 된다). -->
@@ -35,6 +64,15 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- NICEPAY v3 앱 결제 복귀(WapUrl/IspCancelUrl) deep link — 제안 scheme(미확정): NICEPAY 기술지원 확인 + 사용자 승인 전에는 서버 설정이 꺼져 있어 이 scheme 으로 오는 URL 이 없다.
+                 이 Activity 는 이미 exported(LAUNCHER)다 — 들어온 URL 은 NicepayAppReturn.parse 로 정확한 형식(host=nicepay, /wap|/cancel, orderId=uuid)만 통과시키고 아무 URL 도 로드하지 않는다(열 화면은 서버의 결제 결과 화면뿐).
+                 NicepayAppReturn.java SCHEME · ios Info.plist · lib/payments/nicepayAppReturn.ts 와 같은 값. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="mwhabitnicepay" android:host="nicepay" />
             </intent-filter>
         </activity>
 

@@ -15,6 +15,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
+import NicepaySubscriptionReview from "../../components/NicepaySubscriptionReview";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import {
   fetchCenterSubscription, requestCenterBillingAuth, confirmCenterBilling, centerChangeOwnSubscriptionPlan,
@@ -207,6 +208,8 @@ function ManagerSubscriptionContent() {
           ))}
         </div>
       )}
+
+      <NicepaySubscriptionReview centerId={centerId} entry />
 
       {error && <div className="error-toast">{error}<button onClick={() => setError(null)}>×</button></div>}
       {billingNotice && (billingNotice.type === "error" ? (

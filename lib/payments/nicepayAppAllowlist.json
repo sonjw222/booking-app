@@ -1,0 +1,22 @@
+{
+  "_source": "developers.nicepay.co.kr/docs/pg/add/app-webview '3rd 앱 호출 등록' 표(2026-10-30 열람). 신용카드·공동인증·백신 구분만 — PayMethod 는 CARD 뿐이다. 간편결제·계좌이체·본인인증 앱(kakaotalk·naversearchthirdlogin·supertoss 등)은 소셜 로그인과 겹치거나 사용하지 않으므로 의도적으로 제외한다. 앱사 정책에 따라 바뀔 수 있어 운영 전 최신 샘플 확인 필요(docs/payments/NICEPAY_NATIVE_WEBVIEW_RETURN_20261030.md).",
+  "iosSchemes": [
+    "mpocket.online.ansimclick", "scardcertiapp", "monimopay", "monimopayauth",
+    "shinhan-sr-ansimclick", "smshinhanansimclick", "hdcardappcardansimclick", "smhyundaiansimclick",
+    "kb-acp", "kbbank", "newliiv", "ispmobile", "cloudpay", "hanaskcardmobileportal", "hanawalletmembers",
+    "lotteappcard", "lottesmartpay", "lpayapp", "lmslpay", "nhappcardansimclick", "nhallonepayansimclick",
+    "nonghyupcardansimclick", "wooripay", "com.wooricard.wcard", "newsmartpib", "citispay", "citimobileapp",
+    "kakaobank", "qhanamopmoasign"
+  ],
+  "androidPackages": [
+    "kr.co.samsungcard.mpocket", "net.ib.android.smcard", "com.shcard.smartpay", "com.shinhancard.smartshinhan",
+    "com.shinhan.smartcaremgr", "com.hyundaicard.appcard", "com.kbcard.cxh.appcard", "com.kbstar.kbbank",
+    "com.kbstar.reboot", "kvp.jjy.MispAndroid320", "com.hanaskcard.paycla", "kr.co.hanamembers.hmscustomer",
+    "com.lcacApp", "com.lottemembers.android", "nh.smart.nhallonepay", "com.wooricard.smartapp",
+    "com.wooribank.smart.npib", "kr.co.citibank.citimobile", "com.kakaobank.channel",
+    "com.hanaskcard.rocomo.potal", "com.lumensoft.touchenappfree",
+    "com.TouchEn.mVaccine.webs", "com.ahnlab.v3mobileplus", "kr.co.shiftworks.vguardweb"
+  ],
+  "iosIspAppStoreId": "369125087",
+  "neverHandleSchemes": ["kakaotalk", "naversearchthirdlogin", "supertoss", "tauthlink", "ktauthexternalcall", "upluscorporation", "payco", "coupang", "rocketpay", "shinsegaeeasypayment", "kftc-bankpay", "kb-bankpay", "liivbank", "ukbanksmartbanknonloginpay"]
+}

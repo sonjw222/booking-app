@@ -890,6 +890,8 @@ button.side { background: transparent; border: 0; padding: 0; color: var(--ink);
   font: inherit; font-size: 15.5px; font-weight: 800; padding: 15px; border-radius: 14px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 50;
 }
+/* 수강권 안내창(contentDrag)이 열린 동안: 문서 레벨 overscroll 전파 차단(지원 브라우저). iOS WKWebView 네이티브 바운스는 lib/nativeBounce.ts 가 별도로 끈다. */
+html.sheet-no-bounce, html.sheet-no-bounce body { overscroll-behavior: none; }
 .sheet-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 60;
   display: flex; align-items: flex-end; justify-content: center;
@@ -2337,6 +2339,17 @@ a.membership-card { text-decoration: none; display: block; }
   .checkout-order-price { align-self: flex-end; }
 }
 .checkout-order-detail { font-size: 12.5px; color: var(--text-dim); margin-top: 6px; }
+/* NICEPAY 심사 계정 전용 "카드 결제창 확인" 카드 — 주문 상품 카드와 같은 좌우 여백·라운드·테두리. 버튼은 AppButton(.app-button). */
+.review-window-card { margin: 14px 20px 0; padding: 16px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 14px; display: flex; flex-direction: column; gap: 10px; }
+.review-window-card.is-error { border-color: var(--danger-line); }
+.review-window-title { margin: 0; font-size: 15px; font-weight: 800; color: var(--text); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; overflow-wrap: anywhere; word-break: keep-all; }
+.review-window-badge { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: var(--info-soft); color: var(--info); white-space: nowrap; }
+.review-window-sub { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-dim); overflow-wrap: anywhere; word-break: keep-all; }
+.review-window-list { padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.review-window-btn { width: 100%; min-height: 48px; }
+.review-window-msg { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-dim); min-height: 0; overflow-wrap: anywhere; word-break: keep-all; }
+.review-window-msg:empty { display: none; }
+.review-window-msg.is-error { color: var(--danger); }
 .pay-methods { display: flex; flex-direction: column; gap: 8px; padding: 0 var(--page-gutter); }
 .pay-method { display: flex; align-items: center; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); cursor: pointer; font-size: 14px; color: var(--text); font-weight: 600; }
 .pay-method.on { border-color: var(--accent); background: var(--surface); }
@@ -6692,3 +6705,20 @@ a.center-bar-btn { display: flex; align-items: center; justify-content: center; 
 .copy-sheet .copy-sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: 8px; }
 .copy-sheet .copy-select-list, .copy-sheet .copy-preview { max-height: none; overflow: visible; }
 .copy-sheet .copy-sheet-footer { flex: 0 0 auto; margin: 0; padding: 12px 0 max(16px, env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--line); }
+
+/* ===== 센터 "수강권 · 상품 안내/구매" 시트 상품 카드(2026-11-09) — .is-sheet 행(app/center/[id]/page.tsx)에만 적용.
+   이 시트는 "무엇을 살지"만 고른다: ① 상품명(+ⓘ, 긴 이름은 줄바꿈) ② 안내 문구 ③ 가격("N원부터") ④ 버튼(항상 같은 위치·같은 크기, 최소 44px).
+   횟수·옵션 선택과 최종 금액은 결제 화면/장바구니에서만 한다. /products 공개 목록 등 같은 클래스를 쓰는 다른 화면은 영향 없음. 기존 색 토큰만 사용. */
+.center-products .center-product-row.is-sheet { display: flex; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; padding: 14px 20px; }
+.center-products .center-product-row.is-sheet > * { min-width: 0; }
+.center-products .center-product-row.is-sheet .center-product-info { flex: 0 0 auto; width: 100%; padding: 0; margin: 0; }
+.center-products .center-product-row.is-sheet .center-product-name { font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; word-break: keep-all; }
+.center-products .center-product-row.is-sheet .center-product-hint { margin-top: 3px; font-size: 12px; color: var(--ink-soft); }
+.center-products .center-product-row.is-sheet .center-product-detail { margin-top: 4px; font-size: 15px; font-weight: 800; color: var(--ink); }
+.center-products .center-product-row.is-sheet .center-product-avail { margin-top: 3px; white-space: normal; }
+.center-products .center-product-row.is-sheet .center-product-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 8px; width: 100%; flex: 0 0 auto; }
+.center-products .center-product-row.is-sheet .center-product-actions:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+.center-products .center-product-row.is-sheet .center-product-actions .app-button { width: 100%; min-width: 0; min-height: 44px; padding-inline: 12px; font-size: 14px; font-weight: 700; white-space: normal; text-align: center; display: inline-flex; align-items: center; justify-content: center; }
+.center-products .center-product-row.is-sheet .center-product-actions .center-product-cart { border-radius: 12px; }
+.center-products .center-product-row.is-sheet .center-product-period { flex: 0 0 auto; margin: 0; }
+.center-products .center-product-row.is-sheet .rule-acc { flex: 0 0 auto; }

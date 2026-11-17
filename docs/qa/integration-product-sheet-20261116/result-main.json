@@ -1,0 +1,248 @@
+[
+ {
+  "id": "B-360-open",
+  "name": "시트 360px 열림",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "B-360-overflow",
+  "name": "시트 360px 가로 넘침 없음",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "B-360-noselect",
+  "name": "시트 360px 횟수 드롭다운 없음",
+  "status": "PASS",
+  "detail": "0"
+ },
+ {
+  "id": "B-360-from",
+  "name": "시트 360px 선택형 2종 'N원부터' + 안내문",
+  "status": "PASS",
+  "detail": "from=2 hint=2"
+ },
+ {
+  "id": "B-360-btn",
+  "name": "시트 360px 버튼 높이≥44·같은 위치(행마다 동일 left)",
+  "status": "PASS",
+  "detail": "[{\"t\":\"담기\",\"h\":44,\"l\":40},{\"t\":\"구매\",\"h\":44,\"l\":153},{\"t\":\"담기\",\"h\":44,\"l\":40},{\"t\":\"구매\",\"h\":44,\"l\":153}]"
+ },
+ {
+  "id": "B-390-open",
+  "name": "시트 390px 열림",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "B-390-overflow",
+  "name": "시트 390px 가로 넘침 없음",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "B-390-noselect",
+  "name": "시트 390px 횟수 드롭다운 없음",
+  "status": "PASS",
+  "detail": "0"
+ },
+ {
+  "id": "B-390-from",
+  "name": "시트 390px 선택형 2종 'N원부터' + 안내문",
+  "status": "PASS",
+  "detail": "from=2 hint=2"
+ },
+ {
+  "id": "B-390-btn",
+  "name": "시트 390px 버튼 높이≥44·같은 위치(행마다 동일 left)",
+  "status": "PASS",
+  "detail": "[{\"t\":\"담기\",\"h\":44,\"l\":40},{\"t\":\"구매\",\"h\":44,\"l\":164},{\"t\":\"담기\",\"h\":44,\"l\":40},{\"t\":\"구매\",\"h\":44,\"l\":164}]"
+ },
+ {
+  "id": "B-430-open",
+  "name": "시트 430px 열림",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "B-430-overflow",
+  "name": "시트 430px 가로 넘침 없음",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "B-430-noselect",
+  "name": "시트 430px 횟수 드롭다운 없음",
+  "status": "PASS",
+  "detail": "0"
+ },
+ {
+  "id": "B-430-from",
+  "name": "시트 430px 선택형 2종 'N원부터' + 안내문",
+  "status": "PASS",
+  "detail": "from=2 hint=2"
+ },
+ {
+  "id": "B-430-btn",
+  "name": "시트 430px 버튼 높이≥44·같은 위치(행마다 동일 left)",
+  "status": "PASS",
+  "detail": "[{\"t\":\"담기\",\"h\":44,\"l\":40},{\"t\":\"구매\",\"h\":44,\"l\":180},{\"t\":\"담기\",\"h\":44,\"l\":40},{\"t\":\"구매\",\"h\":44,\"l\":180}]"
+ },
+ {
+  "id": "B-1024-open",
+  "name": "시트 1024px 열림",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "B-1024-overflow",
+  "name": "시트 1024px 가로 넘침 없음",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "B-1024-noselect",
+  "name": "시트 1024px 횟수 드롭다운 없음",
+  "status": "PASS",
+  "detail": "0"
+ },
+ {
+  "id": "B-1024-from",
+  "name": "시트 1024px 선택형 2종 'N원부터' + 안내문",
+  "status": "PASS",
+  "detail": "from=2 hint=2"
+ },
+ {
+  "id": "B-1024-btn",
+  "name": "시트 1024px 버튼 높이≥44·같은 위치(행마다 동일 left)",
+  "status": "PASS",
+  "detail": "[{\"t\":\"담기\",\"h\":44,\"l\":232},{\"t\":\"구매\",\"h\":44,\"l\":452},{\"t\":\"담기\",\"h\":44,\"l\":232},{\"t\":\"구매\",\"h\":44,\"l\":452}]"
+ },
+ {
+  "id": "B2-nav",
+  "name": "시트 '구매' → 결제 화면(센터·상품 전달, 횟수는 결제 화면에서 선택)",
+  "status": "PASS",
+  "detail": "?center=e63aaf83-af71-4ece-a03a-c4fd22dd4488&product=bc695a2c-8399-47d5-98f7-027272feaae2&"
+ },
+ {
+  "id": "B2-tiers",
+  "name": "결제 화면 횟수 옵션 = 가격표(1/4/8)만",
+  "status": "PASS",
+  "detail": "1회 · 10,000원,4회 · 36,000원,8회 · 64,000원"
+ },
+ {
+  "id": "B2-tier-price",
+  "name": "4회 선택 → 실제 가격표 36,000원(1회×4=40,000 아님), 버튼·합계 재계산",
+  "status": "PASS",
+  "detail": "주문 접수하기 · 36,000원"
+ },
+ {
+  "id": "B2-tier8",
+  "name": "8회 선택 → 64,000원(80,000 아님)",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "B2-url",
+  "name": "선택 횟수가 주소(count=8)에 반영 — 결제창 복귀용",
+  "status": "PASS",
+  "detail": "5a2c-8399-47d5-98f7-027272feaae2&count=8"
+ },
+ {
+  "id": "B2-badcount-3",
+  "name": "주소 count=3(가격표에 없음) → 최소 횟수(1)로 시작",
+  "status": "PASS",
+  "detail": "1"
+ },
+ {
+  "id": "B2-badcount-99",
+  "name": "주소 count=99(가격표에 없음) → 최소 횟수(1)로 시작",
+  "status": "PASS",
+  "detail": "1"
+ },
+ {
+  "id": "B2-badcount-abc",
+  "name": "주소 count=abc(가격표에 없음) → 최소 횟수(1)로 시작",
+  "status": "PASS",
+  "detail": "1"
+ },
+ {
+  "id": "B2-restore",
+  "name": "주소 count=8 → 결제 화면이 8회로 복원",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "B3-nosize",
+  "name": "사이즈 미선택으로 주문 접수 → 막힘('사이즈를 선택해주세요'), 주문 생성 없음",
+  "status": "PASS",
+  "detail": "사이즈를 선택해주세요\n×"
+ },
+ {
+  "id": "B3-url",
+  "name": "사이즈·횟수 선택이 주소에 반영(size=L, count=8)",
+  "status": "PASS",
+  "detail": "b8-ac1766b2d708&count=8&size=L"
+ },
+ {
+  "id": "B3-restore",
+  "name": "새로 열면 사이즈 L·횟수 8회 복원(복귀 시나리오)",
+  "status": "PASS",
+  "detail": "L"
+ },
+ {
+  "id": "B3-badsize",
+  "name": "주소 size=XXL(상품에 없는 사이즈) → 선택되지 않음",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "B3-badsize-block",
+  "name": "잘못된 사이즈 주소로도 주문 불가",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "B4-added",
+  "name": "시트 '담기'(사이즈 패키지) → 장바구니에 담김",
+  "status": "PASS",
+  "detail": "‹ | 장바구니 | 담은 상품 | 1개 | P | [UX] 사이즈 선택 패키지 | 4회 · 76,000원 | 삭제 | 횟수 | 4회 · 76,000원 | 8회 · 140,000원 | 총 76,000원 | 사이즈 | S | M | L | 결제 수단 | 결제 연동 전이라 실제 결"
+ },
+ {
+  "id": "B4-nosize",
+  "name": "장바구니 일괄 주문: 사이즈 미선택 → 막힘, 주문 생성 없음",
+  "status": "PASS",
+  "detail": "'[UX] 사이즈 선택 패키지'의 사이즈를 선택해주세요\n×"
+ },
+ {
+  "id": "B4-persist",
+  "name": "장바구니에서 고른 사이즈·횟수·금액이 저장(M/8/140000)",
+  "status": "PASS",
+  "detail": "M/8/140000"
+ },
+ {
+  "id": "B4-keep",
+  "name": "시트에서 다시 담기 → 기존 선택(M/8) 유지·중복 행 없음",
+  "status": "PASS",
+  "detail": "1:M/8"
+ },
+ {
+  "id": "B4-reload",
+  "name": "장바구니 새로 열어도 8회·M 유지",
+  "status": "PASS",
+  "detail": "8 M"
+ },
+ {
+  "id": "B-orders",
+  "name": "QA 전체에서 격리 DB 주문 신규 생성 없음",
+  "status": "PASS",
+  "detail": "0→0"
+ },
+ {
+  "id": "B-external",
+  "name": "외부 호스트 요청은 모두 차단·집계(허용 외 접속 없음)",
+  "status": "PASS",
+  "detail": "없음"
+ }
+]

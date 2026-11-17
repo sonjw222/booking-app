@@ -75,8 +75,10 @@ export default function CapacitorBootstrap() {
       }
 
       App.addListener("backButton", ({ canGoBack }) => {
-        if (canGoBack && !rootNavState.isRoot) window.history.back();
-        else App.exitApp();
+        // 단일 back 정책(lib/backPolicy.ts): 오버레이 먼저 닫고, ‹ 버튼과 같은 도착 화면으로. 정책 입구가 없거나 root(none)면 기존처럼 종료.
+        const decision = window.__mwhabitBack?.();
+        if (decision === undefined) { if (canGoBack && !rootNavState.isRoot) window.history.back(); else App.exitApp(); }
+        else if (decision === "none") App.exitApp();
       });
 
       // 실기기 진단(2026-09-11) — 이 앱은 server.url 모드라 WebView가 실제 네트워크로

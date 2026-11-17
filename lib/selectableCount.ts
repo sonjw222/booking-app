@@ -57,6 +57,14 @@ export function countOptionLabel(t: CountTier): string {
   return `${t.count}회 · ${won(t.price)}`;
 }
 
+// 구매 sheet용: 횟수는 결제 화면에서 고르므로 최저가만 "6,000원부터"로 보여준다(고정 상품은 기존 priceSummary).
+export function minPriceLabel(p: CountSelectableInfo): string | null {
+  if (!isCountSelectable(p)) return null;
+  const tiers = sortedTiers(p);
+  const minP = tiers.length ? Math.min(...tiers.map((t) => t.price)) : (p.minTierPrice ?? p.price);
+  return `${won(minP)}부터`;
+}
+
 // 목록/공개 페이지용 가격 문구: 선택형 "1~12회 선택 · 6,000원부터" / 고정 "4회 · 24,000원"(totalCount 없으면 금액만)
 export function priceSummary(p: CountSelectableInfo & { totalCount?: number | null; unlimited?: boolean }): string {
   if (isCountSelectable(p)) {

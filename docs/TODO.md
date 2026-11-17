@@ -1,5 +1,31 @@
 # TODO
 
+- **P1(병합 후 정리)**: main 동기화(2026-11-17) 후 남은 WIP — Draft PR #254(14커밋)·#260(20커밋)·#263(2커밋)은 운영 미반영. 각각 main 기준으로 rebase/재검토 필요. 열린 Issue: #262·#261·#255·#248·#238·#221·#18. Codex 로컬 브랜치 `feat/nicepay-subscription-production-review-20261116` 는 이제 main 에 포함(push 불필요).
+- **P2**: 병합 후 `graphify update .` 로 그래프 갱신 여부 결정(구조 변경 큼). 주문 사이즈 서버 검증 SQL(제안) 적용 여부 결정.
+- **P1(실기기)**: 수강권 안내창 — 새 iOS 빌드(네이티브 `setVerticalBounceEnabled` 포함)로 흰 레터박스 재발 여부·드래그 부드러움·플릭 닫기 확인. 재발 시 `localStorage.mwhabit_sheet_debug="1"` 후 `window.__sheetDragLog` 수집(Safari 웹 인스펙터). 같은 문제가 다른 바텀시트에도 있으면 `contentDrag` opt-in.
+- **P2(실기기)**: 수강권 안내창 — iOS WKWebView 에서 본문 드래그 닫기·흰 빈 영역(바운스) 차단·왼쪽 가장자리 스와이프 무시를 실기기로 확인(웹 코드 변경만이라 TestFlight 재빌드 불필요). 다른 바텀시트에도 같은 처리가 필요하면 `contentDrag`(+`data-edge-swipe-block`)를 해당 시트에 opt-in.
+- **P2**: 고정 `href` ‹ 링크(`<Link className="side" href=…>` 58곳: /mypage·/admin·/manager 등 root 로 가는 링크)는 뒤로가기가 아니라 push 라 entry 가 하나 더 생긴다 — 목적지가 root 라 왕복 루프는 없으나, 공통 처리(이전 경로와 같으면 router.back)로 정리 검토. 실기기: NICEPAY 결제창 위에서 `history.go(-n)` 복귀(entry 수·bfcache) 확인.
+- **P2(결정)**: PR #264 의 `*.nicepay.co.kr` 와일드카드 대신 정확한 호스트 3개(pg-web/dc1-web/web)만 허용하도록 통합했다(`integration/ux-native-review-20261109`). 카드사 앱 복귀 중 다른 NICEPAY 호스트(dc2 등)가 필요하면 NICEPAY 확인 후 호스트를 추가할 것. origin/main 에 없는 운영 배포 커밋(`61b10ab9` 계열 정기상품 카탈로그 3개)이 이 브랜치에 포함되어 있다 — main 반영 순서 확인 필요.
+- **P3**: 센터 수업 탭의 같은 제목 수업 카드는 대표 수업의 허용 수강권만 보여 준다(상세는 정확). 필요하면 카드에서 합집합 표시를 검토.
+
+- **P2(SQL·승인 필요, 제안 작성됨)**: `add_orders_selected_size_validation_20261109_proposed.sql`(+rollback/verify, 격리 DB 검증 완료) 운영 적용 여부 결정. [이전 메모] 주문 생성 서버측 옵션 검증 — 현재 `orders` 직접 INSERT 는 `selected_size` 가 `products.sizes` 에 속하는지/사이즈 필수 상품에서 비어 있지 않은지 서버가 검사하지 않는다(클라이언트 `lib/orderOptions.ts` 가 막지만 조작된 클라이언트는 우회 가능). 해결은 orders 트리거 SQL(새 migration 파일 + 롤백 + 검증)이라 이번 QA 범위 밖.
+- **P2**: 격리 브라우저 QA(`tests/qa/reviewPath/browserQa.mjs`) 재실행 — 2026-11-09 Colima 에서 세 번째 Supabase 스택(`stack.sh up`)의 DB 호스트 포트 연결이 계속 거부되어(ECONNREFUSED 54622) 실행하지 못함(BLOCKED). 환경 복구 후 실행.
+
+- **P0(승인)**: NICEPAY 심사 경로(실제 센터 상품) 운영 적용 — A10TION 운영자 동의 → audit → 허용 목록 SQL(+verify) → 허용 1행 SQL → 앱 배포. 순서·롤백: `docs/payments/NICEPAY_REVIEW_PATH_20261106.md`. 심사 계정 비밀번호는 사용자가 NICEPAY 에 직접 전달.
+- **P1**: NICEPAY 기술팀 답변 대기 — 인증창 생년월일·카드 비밀번호 앞 2자리 누락(코드 변경 없음, MID 계약/인증 방식 설정 확인). A10TION 11월 상품 11/28 만료 이후 보여 줄 상품 계획.
+
+- **P0(승인)**: 실제 센터 허용 SQL(`add_nicepay_review_real_center_grants_20261103.sql`) 운영 적용 → 허용 행 추가(조회만) — 절차 `docs/payments/NICEPAY_REAL_CENTER_REVIEW_20261103.md` §4. 먼저 읽기 전용 점검 SQL 실행, 만료 상품 숨김 SQL 적용 여부 확인.
+- **P1(결정)**: 실제 상품으로 카드 결제 시험이 필요한지(게이트·실거래 설계 필요), 기존 심사 센터 종료 시점(`close_nicepay_review_20261029.sql`), A10TION 11월 상품 11/28 만료 이후 노출 방안.
+- **P3**: 조회 전용 허용에서 구매 시도 시 안내 문구 개선.
+
+- **P1(BLOCKED)**: NICEPAY 인증→ReturnURL 실제 복귀·iOS/Android 런타임 QA — NICEPAY 공식 테스트 인증 수단·WapUrl/IspCancelUrl 형식 확인 후, 비운영 HTTPS 테스트 서버(앱은 운영 server.url 을 쓰므로 별도 설정 필요) + 카드사 앱 설치 기기에서. `docs/payments/NICEPAY_BATCH2_AUTH_RETURN_QA_20261102.md` §5~6.
+- **P2**: `qa/nicepay-native-return-20261102` 병합 시 기본 저장소의 미완료 네이티브 수정(Info.plist·pbxproj·build.gradle)과 충돌 가능 — 병합 전 검토.
+
+- **P1(BLOCKED)**: NICEPAY auth-only QA — 테스트 MerchantKey 로 실제 결제창 표시·닫기 확인(`docs/payments/NICEPAY_AUTH_ONLY_QA_20261030.md` §3~4). `nicepay00m` 키 발급 방식·localhost ReturnURL 허용 여부 NICEPAY 확인. Preview 용 비운영 테스트 DB(심사 센터·게이트 포함) 지정 필요.
+
+- **P0(승인·BLOCKED)**: NICEPAY 기술지원 확인 — WapUrl/IspCancelUrl 값 형식(`scheme://nicepay/wap?orderId=`)·가맹점 scheme 확정(제안 `mwhabitnicepay`, 스토어 제출 후 변경 불가)·카드사 인증 페이지 도메인(`allowNavigation`)·앱 호출 목록 최신본. 확정 후 `NICEPAY_APP_RETURN_ENABLED/SCHEME` 운영 설정 + 네이티브 재빌드·스토어 제출(`docs/payments/NICEPAY_NATIVE_WEBVIEW_RETURN_20261030.md`).
+- **P1(BLOCKED)**: 실기기(iOS/Android) 카드사 앱 인증·복귀·콜드 스타트 복귀 확인(실제 PG 샌드박스 필요).
+- **P1**: PR #254 후속 — 공식 문서가 GoodsName 의 "쌍따옴표, 대괄호 등 특수기호는 별도 문의"라 했는데 `toNicepayGoodsName` 은 대괄호를 허용 → NICEPAY 확인 전에는 공백 처리 권장.
 - **P2**: `expired-order-qa.yml` 의 GitHub Actions 실제 실행 결과는 push 후 첫 PR 실행에서 확인(로컬은 같은 단계를 재현해 16/16 통과). `tests/expired-order-qa/expired-order.spec.ts`(12 tests, `playwright.expiredorder.config.ts`)는 아직 CI 에 없음 — 필요하면 같은 workflow 에 추가.
 - **P3**: `applyProdParity.sh` 는 NICEPAY P2/P2b 등 "운영에 이미 적용된 SQL" 목록에 의존한다. 운영 정의가 더 바뀌면(해시 가드가 중단시킴) 이 목록·`prodParity_fulfill_order.sql` 을 같이 갱신해야 함.
 - **P0(승인)**: 만료 상품 기존 주문 처리 SQL(`preflight_/add_/verify_/rollback_add_expired_order_resolution_20261031.sql`) — PR #251 SQL 적용·검증 뒤에만 실행. 운영 pending 주문 2건(80,000원)은 이 기능 적용 후 관리자가 실제 수납 확인을 거쳐 처리(그 전에는 변경 금지). 절차: `docs/EXPIRED_ORDER_RESOLUTION_20261031.md`.

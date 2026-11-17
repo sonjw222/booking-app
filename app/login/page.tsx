@@ -30,6 +30,7 @@ import { stashPostLoginNext } from "../../lib/postLoginReturn";
 import { sendPhoneOtp, verifyPhoneOtp } from "../../lib/phoneVerification";
 import { toUserMessage } from "../../lib/userError";
 import { checkEmailAvailable } from "../../lib/emailSignupCheck";
+import { SIGNUP_SUCCESS_MESSAGE } from "../../lib/signupMessages";
 
 type Mode = "login" | "signup";
 // 내부 키는 그대로 유지(회원=member/센터 운영자=manager) — UI-003은 화면 표시 문구만 바꾼다.
@@ -37,7 +38,6 @@ type Mode = "login" | "signup";
 // 실제로는 이메일 인증(Confirm email)을 쓰지 않는데도 "확인 메일이 발송됐어요"라고 안내하던
 // 문제(섹션 1) — signUp 직후 세션이 바로 확보되는 것 자체가 이 프로젝트에서 이메일 인증이
 // 꺼져 있다는 증거이므로, 발송 여부를 거짓으로 안내하지 않는 문구로 고정한다.
-export const SIGNUP_SUCCESS_MESSAGE = "회원가입이 완료되었습니다. 로그인해주세요.";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("login");

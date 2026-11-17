@@ -1,0 +1,98 @@
+[
+ {
+  "id": "T1",
+  "name": "홈→판매상품→센터→결제 후 ‹: 센터 → 판매상품 → 홈, 결제로 되돌아가지 않음·history 증가 없음",
+  "status": "PASS",
+  "detail": "/center/e63aaf83-af71-4ece-a03a-c4fd22dd4488 /products / ROOT len 5→4"
+ },
+ {
+  "id": "T2",
+  "name": "검색→센터→결제 후 ‹: 센터 → 검색(결제 재방문 없음)",
+  "status": "PASS",
+  "detail": "/center/e63aaf83-af71-4ece-a03a-c4fd22dd4488 /search"
+ },
+ {
+  "id": "T2b",
+  "name": "검색 화면 복귀 시 검색어 보존(가능한 범위)",
+  "status": "PASS",
+  "detail": "보존됨"
+ },
+ {
+  "id": "T3",
+  "name": "화면 ‹ 와 브라우저 back 의 도착지 일치(센터)",
+  "status": "PASS",
+  "detail": "/center/e63aaf83-af71-4ece-a03a-c4fd22dd4488 / /center/e63aaf83-af71-4ece-a03a-c4fd22dd4488"
+ },
+ {
+  "id": "T3b",
+  "name": "같은 센터·결제를 두 번 방문한 뒤 ‹: 센터 → 판매상품 → 홈(무한 반복 없음)",
+  "status": "PASS",
+  "detail": "/center/e63aaf83-af71-4ece-a03a-c4fd22dd4488 /products /"
+ },
+ {
+  "id": "T4",
+  "name": "딥링크 결제 화면: ‹ → 센터 → 홈(두 화면을 왕복하지 않고, 앱 밖으로 나가지 않음)",
+  "status": "PASS",
+  "detail": "/center/e63aaf83-af71-4ece-a03a-c4fd22dd4488 / ROOT len 3→3"
+ },
+ {
+  "id": "T4b",
+  "name": "딥링크 센터 상세: ‹ → 홈",
+  "status": "PASS",
+  "detail": "/"
+ },
+ {
+  "id": "T4c",
+  "name": "딥링크: back 브리지(스와이프·Android) 도 센터 → 홈",
+  "status": "PASS",
+  "detail": "fallback:/center/e63aaf83-af71-4ece-a03a-c4fd22dd4488 fallback:/"
+ },
+ {
+  "id": "T5",
+  "name": "시트 열림 + back → 시트만 닫힘(페이지 이동 없음)",
+  "status": "PASS",
+  "detail": "close-overlay"
+ },
+ {
+  "id": "T6a",
+  "name": "NICEPAY 종료 → 결제 화면으로 돌아가기: 같은 센터·상품·8회 복원",
+  "status": "PASS",
+  "detail": "46fe-9c6f-3d756a979a5c&count=8"
+ },
+ {
+  "id": "T6",
+  "name": "복귀한 결제 화면에서 ‹: 센터 → 원래 화면(홈) — NICEPAY 페이지/종료 안내로 가지 않음",
+  "status": "PASS",
+  "detail": "/center/8965e09c-0d2b-44c6-ab26-40a85507f8b5 / visited=/center/8965e09c-0d2b-44c6-ab26-40a85507f8b5,/"
+ },
+ {
+  "id": "T7a",
+  "name": "NICEPAY 종료·복귀 3회 반복해도 history 가 누적되지 않음(길이 일정)",
+  "status": "PASS",
+  "detail": "7,7,7"
+ },
+ {
+  "id": "T7",
+  "name": "3회 반복 후 ‹: 센터 → 홈(결제·NICEPAY 재방문 없음)",
+  "status": "PASS",
+  "detail": "/center/8965e09c-0d2b-44c6-ab26-40a85507f8b5 / ROOT visited=/center/8965e09c-0d2b-44c6-ab26-40a85507f8b5,/"
+ },
+ {
+  "id": "T8",
+  "name": "가로 스크롤 영역 터치 스와이프",
+  "status": "BLOCKED",
+  "detail": "홈·검색·센터 시트에 가로 스크롤 영역이 없음 — 실기기에서 확인"
+ },
+ {
+  "id": "T8b",
+  "name": "좌·우 가장자리 터치 스와이프(웹 계층): 페이지 이동·상태 변화 없음",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "T9",
+  "name": "iOS 가장자리 스와이프 실동작·오른쪽 앞으로 차단·Android 시스템 back",
+  "status": "BLOCKED",
+  "detail": "실기기(네이티브) 전용 — 웹은 back 브리지 판정까지만 검증"
+ }
+]

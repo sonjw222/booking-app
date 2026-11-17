@@ -8,7 +8,7 @@
   startAt <= now면 더 이상 "예정" 상태로 취급하지 않는다.
 */
 import { describe, expect, it } from "vitest";
-import { classifyReservationDisplay, startAtMs } from "../../app/my-reservations/page";
+import { classifyReservationDisplay, startAtMs } from "../../lib/reservationDisplay";
 
 const NOW = new Date("2026-07-14T20:00:00.000Z").getTime();
 const FUTURE = new Date("2026-07-14T20:00:01.000Z").toISOString(); // now보다 1초 미래

@@ -39,6 +39,8 @@ export type NicepayDeps = {
   markReview(orderId: string, claimId: string, reason: "netcancel_failed" | "confirm_state_unknown"): Promise<void>;
   dbConfirm(orderId: string, claimId: string, tid: string, amount: number): Promise<DbResult>;
   log(level: "info" | "warn" | "error", event: string, fields: Record<string, unknown>): void;
+  /** 격리 QA 인증만 모드(qaAuthOnly.ts): 인증 결과의 서명·금액·주문까지만 확인하고 승인(claim·승인 API·망취소)은 시작하지 않는다. */
+  qaAuthOnly?: boolean;
 };
 export type Reply = { status: number; body: Record<string, unknown> };
 const s = (v: unknown) => (typeof v === "string" ? v : "");
@@ -70,6 +72,11 @@ export async function handleNicepayAuthReturn(input: NicepayAuthResult, d: Nicep
   if (!isAllowedNicepayUrl(input.NextAppURL) || !isAllowedNicepayUrl(input.NetCancelURL)) {
     d.log("error", "PG_NICEPAY_URL_REJECTED", { moid: maskId(moid) });
     return { status: 400, body: { error: "결제 서버 주소가 올바르지 않아요", code: "url_rejected" } };
+  }
+  // QA 인증만: 여기까지(서명·MID·금액·주문·게이트·허용 URL)는 정상 검증했고, 승인은 하지 않는다 — claimOrder 도 하지 않아 주문 상태는 pending 그대로(호출자가 정리). NICEPAY 로는 어떤 요청도 나가지 않는다.
+  if (d.qaAuthOnly) {
+    d.log("warn", "PG_NICEPAY_QA_AUTH_ONLY_NO_APPROVE", { moid: maskId(moid) });
+    return { status: 200, body: { ok: true, qa_auth_only: true, approved: false } };
   }
   const nextAppUrl = input.NextAppURL, netCancelUrl = input.NetCancelURL;
   const claimId = await d.claimOrder(ctx.orderId);

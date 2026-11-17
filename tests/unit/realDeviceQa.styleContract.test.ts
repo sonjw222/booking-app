@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { isThemeOptionSelected } from "../../app/settings/theme/page";
+import { isThemeOptionSelected } from "../../lib/themeSettings";
 
 const css = readFileSync(join(__dirname, "../../app/globals.css"), "utf-8");
 const read = (p: string) => readFileSync(join(__dirname, "../..", p), "utf-8");

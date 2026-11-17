@@ -7,6 +7,8 @@
   - 결제 수단 연동 전이므로 "결제하기" 시 주문 생성(pending) 후 완료 안내
 */
 
+import BackButton from "../components/BackButton";
+import { checkoutSearchWithSelection, orderOptionIssue } from "../../lib/orderOptions";
 import ServicePeriodNotice from "../components/ServicePeriodNotice";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -32,6 +34,8 @@ import { loginHrefWithReturnToHere } from "../../lib/postLoginReturn";
 import UiIcon, { type IconName } from "../components/UiIcon";
 import ErrorState from "../components/ErrorState";
 import { hapticSuccess } from "../../lib/nativeHaptics";
+import NicepayReviewWindow, { type ReviewWindowStatus } from "../components/NicepayReviewWindow";
+import { fetchNicepayViewOnlyCenter } from "../../lib/nicepayReviewScope";
 
 // 카카오페이/토스페이는 로고 자산이 없어 outline 아이콘 하나로 뭉치면 구분이 안 되므로
 // --vendor-* 색 점(dot)으로, 나머지는 의미가 통하는 outline 아이콘으로 구분한다.
@@ -65,6 +69,9 @@ function CheckoutContent() {
   const sp = useSearchParams();
   const centerId = sp.get("center") ?? "";
   const productId = sp.get("product") ?? "";
+  // NICEPAY 심사관의 "조회 전용" 실제 센터 — 직접 URL 로 들어와도 결제·주문 접수 버튼을 쓸 수 없게 하고 이유를 안내한다(서버도 같은 규칙으로 거부).
+  const [viewOnly, setViewOnly] = useState(false);
+  useEffect(() => { let on = true; fetchNicepayViewOnlyCenter(centerId).then((v) => { if (on) setViewOnly(v); }).catch(() => {}); return () => { on = false; }; }, [centerId]);
   // 예약창 → 수강권 구매하기로 넘어온 경우, 구매 후 바로 예약할 수업 정보
   const reserveClassId = sp.get("reserveClassId");
   const reserveDate = sp.get("reserveDate");
@@ -127,6 +134,11 @@ function CheckoutContent() {
   const [usePoint, setUsePoint] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // 지정 NICEPAY 심사 계정(테스트 결제창 카드가 보이는 계정)이면 카드 결제의 실제 결제 버튼은 쓰지 않는다 — 권한 확인 중·허용·확인 실패 모두 실제 결제 경로(주문 생성·PG 준비)로 fallback 하지 않는다.
+  // 초기값 "resolving"(계정 판별 중) — 세션 확인이 끝나 일반 회원("hidden")으로 확정되기 전에는 카드 결제를 열지 않는다. ref 는 클릭 시점에 최신 값을 동기적으로 읽기 위한 것.
+  const [reviewWindowStatus, setReviewWindowStatus] = useState<ReviewWindowStatus>("resolving");
+  const reviewStatusRef = useRef<ReviewWindowStatus>("resolving");
+  const onReviewWindowStatus = useCallback((s: ReviewWindowStatus) => { reviewStatusRef.current = s; setReviewWindowStatus(s); }, []);
   // 앱 복귀 후 PG 주문 상태 확인 중 / 확인 기간이 지나도 pending인 상태(결제 버튼 비활성 + 안내)
   const [pgChecking, setPgChecking] = useState(false);
   const [pgUnresolved, setPgUnresolved] = useState(false);
@@ -169,9 +181,9 @@ function CheckoutContent() {
       const found = products.find((p) => p.id === productId) ?? null;
       setProduct(found);
       if (found && isCountSelectable(found)) {
-        // URL의 count/size를 유효한 값이면 그대로, 아니면 최소 횟수로 시작(구매 sheet → checkout 선택 보존)
+        // URL의 count를 가격표에 있는 값이면 그대로, 아니면 가격표의 최소 횟수로 시작(횟수 선택은 이 화면에서만 한다)
         const want = Number(sp.get("count"));
-        setSelectedCount(computeBaseAmount(found, want) != null ? want : found.minCount);
+        setSelectedCount(computeBaseAmount(found, want) != null ? want : (sortedTiers(found)[0]?.count ?? null));
       }
       const wantSize = sp.get("size");
       if (found?.sizes && wantSize && found.sizes.includes(wantSize)) setSelectedSize(wantSize);
@@ -199,7 +211,12 @@ function CheckoutContent() {
       .catch(() => { if (mounted) setApplicableCoupons([]); });
     return () => { mounted = false; };
   }, [product, baseAmount]);
-
+  // 고른 횟수·사이즈를 주소에 반영(history.replaceState — 이력 항목을 늘리지 않는다): NICEPAY 결제창을 닫고 돌아올 때 같은 선택으로 복원된다.
+  useEffect(() => {
+    if (loading || !product || typeof window === "undefined") return;
+    const next = checkoutSearchWithSelection(window.location.search, { count: countSelectable ? selectedCount : null, size: selectedSize });
+    if (next !== window.location.search) window.history.replaceState(window.history.state, "", window.location.pathname + next + window.location.hash);
+  }, [loading, product, countSelectable, selectedCount, selectedSize]);
   // 실제 PG(토스) 결제창은 app/checkout/success로 리다이렉트된 뒤 이 페이지로 다시
   // 돌아온다(같은 조회 쿼리 + paymentDone/paymentError 추가) — 그때 기존 "결제 완료"
   // 화면을 그대로 재사용한다(Mock의 즉시-확정 흐름과 화면을 공유). 최초 마운트 시
@@ -277,7 +294,7 @@ function CheckoutContent() {
   const scheduleState = purchaseScheduleState(product, scheduleOptions, scheduleOptionsFailed, selectedScheduleDay, selectedScheduleTime);
 
   async function handlePay() {
-    if (!product) return;
+    if (!product || viewOnly) return;
     // 선택형: 가격표에 없는 횟수는 결제를 진행하지 않는다(서버도 같은 기준으로 주문 생성을 거부한다).
     if (countSelectable && computeBaseAmount(product, selectedCount) == null) {
       setError("구매할 횟수를 선택해주세요");
@@ -288,6 +305,8 @@ function CheckoutContent() {
       setError("사이즈를 선택해주세요");
       return;
     }
+    const optionIssue = orderOptionIssue({ productName: product.name, sizes: product.sizes, selectedSize, countSelectable, countPrices: product.countPrices, selectedCount });
+    if (optionIssue) { setError(optionIssue.message); return; }
     // 공개(비로그인) 목록으로 만든 모델은 요일/시간 선택 설정을 알 수 없다 — 이 상태로 결제하지 않는다.
     if (product.publicFallback) {
       // 세션이 아예 없는 비로그인 방문자는 "확인 실패"가 아니라 "로그인 필요" 상태다 — 이 문구일 때만 아래 토스트가 "로그인 하러 가기" 링크(현재 checkout URL을
@@ -305,6 +324,11 @@ function CheckoutContent() {
     // 숨겨진 PG 수단이 선택된 채 결제가 진행되는 일이 없도록 화면에 보이는 수단으로 한 번 더 보정한다.
     const effectivePayMethod = resolveSelectedPayMethod(payMethod, visibleMethodIds);
     if (effectivePayMethod !== payMethod) setPayMethod(effectivePayMethod);
+    // 지정 심사 계정의 카드 결제는 "카드 결제창 확인" 카드로만 진행한다 — 주문 생성·PG 준비를 하지 않고, 권한 확인 중/실패에도 실제 결제로 넘어가지 않는다.
+    if (effectivePayMethod !== "direct" && reviewStatusRef.current !== "hidden") {
+      setError("심사 계정은 위의 ‘카드 결제창 확인’으로만 확인할 수 있어요. 실제 결제와 주문은 진행되지 않아요.");
+      return;
+    }
     // "direct"(직접결제, 센터에서 결제)는 PG 자체를 거치지 않는다 — 실제 PG 연동 전
     // 이 앱의 원래 흐름과 동일하게 주문만 pending으로 만들고, 매니저가 결제를 확인한 뒤
     // 기존 "미발급 주문" 화면(fulfill_order)에서 수동으로 발급한다.
@@ -454,7 +478,7 @@ function CheckoutContent() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href={centerBackHref}>‹</a>
+          <BackButton fallbackHref={centerBackHref} />
           <div className="title">결제</div>
           <div className="side" />
         </div>
@@ -528,7 +552,7 @@ function CheckoutContent() {
     return (
       <div className="app-shell">
         <div className="back-header">
-          <a className="side" href={centerBackHref}>‹</a>
+          <BackButton fallbackHref={centerBackHref} />
           <div className="title">결제</div>
           <div className="side" />
         </div>
@@ -545,6 +569,7 @@ function CheckoutContent() {
   }
 
   const copy = checkoutCopy(effectivePayMethodUi, won(finalTotal));
+  const reviewCardLock = reviewWindowStatus !== "hidden" && effectivePayMethodUi !== "direct";
 
   return (
     <div className="app-shell commerce-page checkout-page-v2">
@@ -558,7 +583,7 @@ function CheckoutContent() {
       )}
 
       <div className="back-header">
-        <a className="side" href={centerBackHref}>‹</a>
+        <BackButton fallbackHref={centerBackHref} />
         <div className="title">결제</div>
         <div className="side" />
       </div>
@@ -583,8 +608,9 @@ function CheckoutContent() {
           <div className="checkout-count-select">
             <label>
               <span>구매 횟수</span>
+              {/* 금액이 바뀌면 쿠폰 자격도 달라질 수 있어 선택을 풀고 목록을 다시 받는다(포인트는 금액 상한으로 자동 보정) */}
               <select aria-label="구매 횟수" value={selectedCount ?? ""} disabled={busy}
-                onChange={(e) => setSelectedCount(Number(e.target.value))}>
+                onChange={(e) => { setSelectedCount(Number(e.target.value)); setSelectedMemberCouponId(null); }}>
                 {sortedTiers(product).map((t) => <option key={t.count} value={t.count}>{countOptionLabel(t)}</option>)}
               </select>
             </label>
@@ -752,6 +778,7 @@ function CheckoutContent() {
         </>
       )}
 
+      <NicepayReviewWindow key={productId} productId={productId} onStatusChange={onReviewWindowStatus} />
       {/* 결제 수단 */}
       <div className="menu-section-label commerce-label">결제 수단</div>
       <div className="pay-methods">
@@ -819,8 +846,9 @@ function CheckoutContent() {
           </div>
         </div>
       )}
-      <button className="primary-btn checkout-pay-btn" disabled={busy || pgUnresolved || (scheduleState.required && ["loading", "load_failed", "no_options", "no_times"].includes(scheduleState.reason))} onClick={handlePay}>
-        {busy ? copy.busyButton : pgUnresolved ? "결제 결과 확인 중" : copy.button}
+      {viewOnly && <div data-testid="view-only-notice" role="status" style={{ margin: "12px 0", padding: "12px 14px", borderRadius: 12, background: "var(--card-bg)", border: "1px solid var(--line)", fontSize: 13, color: "var(--text-dim)" }}>심사 확인용으로 상품 정보를 조회만 할 수 있어요. 이 센터의 상품은 이 화면에서 구매할 수 없어요.</div>}
+      <button className="primary-btn checkout-pay-btn" disabled={busy || pgUnresolved || reviewCardLock || (scheduleState.required && ["loading", "load_failed", "no_options", "no_times"].includes(scheduleState.reason)) || viewOnly} onClick={handlePay}>
+        {viewOnly ? "조회 전용 — 구매할 수 없어요" : busy ? copy.busyButton : pgUnresolved ? "결제 결과 확인 중" : reviewCardLock ? "카드 결제는 ‘결제창 확인’으로만 가능해요" : copy.button}
       </button>
       <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "var(--text-dim)" }}>
         {copy.consent} <a href="/legal/refund" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>환불 정책</a>과{" "}

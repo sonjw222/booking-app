@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { hasInAppBackTarget } from "../../lib/appHistory";
+import { navigateBack, registerScreenBack } from "../../lib/backPolicy";
 
 // UX 감사(C-4) — 여러 화면의 뒤로가기(‹)가 브라우저 히스토리가 아니라 고정 경로(주로 "/")로
 // href가 박혀있어서, 홈이 아닌 다른 화면(검색 결과 등)을 거쳐 들어왔을 때도 항상 그 고정
@@ -19,14 +20,9 @@ export default function BackButton({ fallbackHref, className = "side", label = "
   preferFallback?: boolean;
 }) {
   const router = useRouter();
-  function handleClick() {
-    const cameFromInsideApp = !preferFallback && (hasInAppBackTarget() || (
-      typeof document !== "undefined" &&
-      document.referrer.startsWith(window.location.origin) &&
-      window.history.length > 1));
-    if (cameFromInsideApp) router.back();
-    else router.push(fallbackHref);
-  }
+  // 단일 정책(lib/backPolicy.ts) — iOS 왼쪽 가장자리 스와이프와 Android back 도 이 버튼과 같은 도착 화면으로 간다.
+  const handleClick = () => navigateBack(router, { fallbackHref, preferFallback });
+  useEffect(() => registerScreenBack(handleClick), [fallbackHref, preferFallback]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <button type="button" className={className} aria-label={label} onClick={handleClick}>‹</button>
   );

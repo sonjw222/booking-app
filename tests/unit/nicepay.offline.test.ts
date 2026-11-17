@@ -269,11 +269,13 @@ describe("심사 준비 상태 / 카드정보 미수집 (정적)", () => {
     try { expect(resolveProviderName()).toBe("nicepay"); expect(isOnlinePgCheckoutAvailable()).toBe(true); } finally { if (prev === undefined) delete process.env.NEXT_PUBLIC_PAYMENT_PROVIDER; else process.env.NEXT_PUBLIC_PAYMENT_PROVIDER = prev; }
   });
   const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => { const p = path.join(dir, n); return statSync(p).isDirectory() ? (n === "node_modules" ? [] : walk(p)) : /\.(ts|tsx)$/.test(p) ? [p] : []; });
-  it("서버 NICEPAY 모듈은 허용된 진입점에서만 import된다: app/api/payments/nicepay/** 라우트와 lib/payments/server/deps.ts(환불 핸들러 주입) 뿐 — 그 밖의 app/lib 파일은 import 금지, 클라이언트 번들(app 페이지/컴포넌트)은 서버 모듈을 절대 import하지 않는다", () => {
+  it("서버 NICEPAY 모듈은 허용된 진입점에서만 import된다: 회원결제 라우트·구독 심사 전용 라우트와 lib/payments/server/deps.ts(환불 핸들러 주입) — 그 밖의 app/lib 파일은 import 금지, 클라이언트 번들(app 페이지/컴포넌트)은 서버 모듈을 절대 import하지 않는다", () => {
     const importsServerNicepay = (f: string) => /from\s+["'][^"']*server\/nicepay|from\s+["']\.\/nicepay\//i.test(readFileSync(f, "utf8"));
     const norm = (f: string) => f.split(path.sep).join("/");
     const appHits = walk("app").filter(importsServerNicepay).map(norm);
-    expect(appHits.filter((f) => !f.startsWith("app/api/payments/nicepay/"))).toEqual([]);
+    const subscriptionRoutes = ["app/api/billing/nicepay/registration-review/route.ts", "app/api/billing/nicepay/registration-review/return/route.ts", "app/api/billing/nicepay/registration-review/result/route.ts"];
+    expect(appHits.filter((f) => !f.startsWith("app/api/payments/nicepay/") && !subscriptionRoutes.includes(f))).toEqual([]);
+    for (const f of subscriptionRoutes) expect(readFileSync(f, "utf8")).not.toMatch(/server\/nicepay\/(?!subscriptionReview)/);
     const libHits = walk("lib").filter((f) => !norm(f).startsWith("lib/payments/server/nicepay/")).filter(importsServerNicepay).map(norm);
     expect(libHits).toEqual(["lib/payments/server/deps.ts"]);
     expect(walk("app").filter((f) => /from\s+["'][^"']*NicepayPaymentProvider/.test(readFileSync(f, "utf8")))).toEqual([]);
@@ -287,7 +289,9 @@ describe("심사 준비 상태 / 카드정보 미수집 (정적)", () => {
   it("NICEPAY 키/설정 환경변수는 lib/payments/server/nicepay/config.ts 한 곳에서만 읽는다(라우트·클라이언트·다른 모듈에서 직접 읽지 않음), NEXT_PUBLIC_에는 NICEPAY 비밀이 없다", () => {
     const norm = (f: string) => f.split(path.sep).join("/");
     const hits = walk("lib").concat(walk("app")).filter((f) => /process\.env\.NICEPAY|NICEPAY_(MID|MERCHANT|KEY|SECRET|CLIENT)/.test(readFileSync(f, "utf8"))).map(norm);
-    expect(hits).toEqual(["lib/payments/server/nicepay/config.ts"]);
+    // qaAuthOnly.ts 는 config.ts 가 넘겨준 env 객체만 판정하는 순수 함수(process.env 직접 접근 없음) — 변수 "이름" 만 참조한다.
+    expect(hits).toEqual(["lib/payments/server/nicepay/config.ts", "lib/payments/server/nicepay/qaAuthOnly.ts", "lib/payments/server/nicepay/subscriptionReview.ts"]);
+    expect(readFileSync("lib/payments/server/nicepay/qaAuthOnly.ts", "utf8")).not.toMatch(/process\.env/);
     expect(walk("lib").concat(walk("app")).filter((f) => /NEXT_PUBLIC_NICEPAY/.test(readFileSync(f, "utf8")))).toEqual([]);
   });
 });

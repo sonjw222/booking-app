@@ -1,0 +1,44 @@
+[
+ {
+  "id": "D2",
+  "name": "확인창(alertdialog) 열림 + back → 아무 동작 없음(시트·화면 유지) [DOM 계약 모사]",
+  "status": "PASS",
+  "detail": "blocked-by-dialog open=true"
+ },
+ {
+  "id": "D1",
+  "name": "시트 열림 + back → 시트만 닫힘, 같은 화면(배경 이동 없음)",
+  "status": "PASS",
+  "detail": "close-overlay /center/f1c866e3-97f2-45ef-8207-20e9890bd34e?buy=1"
+ },
+ {
+  "id": "D3",
+  "name": "앱 안 이동 후 ‹ 버튼 도착지 == back 브리지(스와이프/Android) 도착지",
+  "status": "PASS",
+  "detail": "from /center/ac380591-e442-4b99-907 button=/products bridge=/products (history-back)"
+ },
+ {
+  "id": "D4",
+  "name": "딥링크 첫 진입(결제 화면): ‹ 와 브리지가 같은 안전한 fallback 으로 이동(앱 종료/빈 화면 아님)",
+  "status": "PASS",
+  "detail": "button=/center/f1c866e3-97f2-45ef-8207-20e9890b bridge=/center/f1c866e3-97f2-45ef-8207-20e9890b (fallback)"
+ },
+ {
+  "id": "D5",
+  "name": "root(홈): back → 'none'(이동·종료 판정은 네이티브), ‹ 없음",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "D6",
+  "name": "시트 검색 입력은 정상(입력이 back/제스처 정책에 막히지 않음)",
+  "status": "PASS",
+  "detail": ""
+ },
+ {
+  "id": "D7",
+  "name": "iOS 왼쪽 가장자리 제스처 / 오른쪽 앞으로 차단 / Android 시스템 back / 변경사항 버리기 실제 확인창",
+  "status": "BLOCKED",
+  "detail": "실기기(네이티브) 전용 — 브라우저는 브리지 판정까지만 검증"
+ }
+]

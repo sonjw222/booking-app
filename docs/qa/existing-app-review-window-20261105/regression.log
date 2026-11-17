@@ -1,0 +1,14 @@
+
+ RUN  v4.1.10 /Users/sonjw/.codex/.chatgpt-projects/g-p-6a67982039608191bf1cb4f5d5d173f4/nicepay-existing-app-auth-only
+
+Warning: A vi.mock("../../lib/supabaseClient") call in "/Users/sonjw/.codex/.chatgpt-projects/g-p-6a67982039608191bf1cb4f5d5d173f4/nicepay-existing-app-auth-only/tests/unit/nicepayReviewGaps.test.ts" is not at the top level of the module. Although it appears nested, it will be hoisted and executed before any tests run. Move it to the top level to reflect its actual execution order. This will become an error in a future version.
+See: https://vitest.dev/guide/mocking/modules#how-it-works
+3:03:49 PM [vite] (ssr) warning: invalid import "../../app/api/payments/nicepay/${name}/route". A file extension must be included in the static part of the import. For example: import(`./foo/${bar}.js`).
+  Plugin: vite:dynamic-import-vars
+  File: /Users/sonjw/.codex/.chatgpt-projects/g-p-6a67982039608191bf1cb4f5d5d173f4/nicepay-existing-app-auth-only/tests/unit/nicepay.routes.disabledNoExternalCall.test.ts
+
+ Test Files  27 passed | 1 skipped (28)
+      Tests  313 passed | 10 skipped (323)
+   Start at  15:03:49
+   Duration  6.24s (transform 1.21s, setup 0ms, import 1.97s, tests 6.65s, environment 1.71s)
+

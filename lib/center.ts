@@ -5,6 +5,8 @@
   로그인 없이도 볼 수 있는 공개 조회
 */
 
+import { nicepayDiscoveryScope } from "./nicepayReviewScope";
+import { mergePassNamesForDisplay } from "./passNameDisplay";
 import { supabase } from "./supabaseClient";
 import { isFixedExpiryPassed, type PeriodSource } from "./servicePeriod";
 import { sanitizeRichText } from "./security";
@@ -225,6 +227,13 @@ export async function fetchCenterProducts(centerId: string): Promise<CenterProdu
   }
 }
 
+// fetch_public_storefront_products RPC 응답 행(snake_case) — 이 파일이 읽는 열만 선언한다.
+type PublicStorefrontRow = {
+  id: string; center_id: string; center_name: string; name: string; price: number; product_kind?: string | null;
+  description?: string | null; total_count?: number | null; unlimited?: boolean | null; unlimited_pass?: boolean | null; group_label?: string | null;
+  remaining?: number | null; purchase_count_selectable?: boolean | null; min_purchase_count?: number | null; max_purchase_count?: number | null; min_tier_price?: number | null;
+};
+
 export type PublicStorefrontProduct = {
   id: string; centerId: string; centerName: string; name: string; price: number;
   kind: "pass" | "goods"; description: string | null; totalCount: number | null;
@@ -266,7 +275,10 @@ export async function fetchPublicStorefrontProducts(centerId?: string | null): P
   );
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
   const periods = await fetchPublicProductPeriods(centerId);
-  return ((data ?? []) as any[]).map((p) => ({
+  // NICEPAY 심사관: 허용된 실제 센터가 있으면 전체 상품 목록(/products)도 그 센터 상품만 보인다(별도 심사 센터의 테스트 상품은 탐색과 같은 기준으로 제외). 센터 지정 조회·일반 회원은 영향 없음.
+  const reviewScope = centerId ? null : await nicepayDiscoveryScope().catch(() => null);
+  const allowed = reviewScope && reviewScope.extraCenterIds.length > 0 ? new Set(reviewScope.extraCenterIds) : null;
+  return ((data ?? []) as PublicStorefrontRow[]).filter((p) => !allowed || allowed.has(p.center_id)).map((p) => ({
     periodSource: periods.get(p.id) ?? null,
     id: p.id, centerId: p.center_id, centerName: p.center_name, name: p.name, price: p.price,
     kind: p.product_kind === "goods" ? "goods" : "pass",
@@ -477,30 +489,41 @@ export async function requestPurchase(centerId: string, productId: string, produ
      없으면 "모든 수강권" 으로 간주
    ============================================================ */
 
-export async function fetchClassAllowedPasses(centerId: string): Promise<Record<string, string[]>> {
-  // 이 센터 수업들의 title → 허용 수강권 이름 목록
-  const { data: classes } = await supabase
-    .from("classes").select("id, title").eq("center_id", centerId);
-  const classIds = (classes ?? []).map((c: any) => c.id);
-  const titleById: Record<string, string> = {};
-  for (const c of classes ?? []) titleById[(c as any).id] = (c as any).title;
-  if (classIds.length === 0) return {};
+/** 수업 목록에서 보여줄 수강권 정보 — class_id 기준. 읽을 수 없는 경우를 "모든 수강권 가능"으로 말하지 않는다. */
+export type ClassPassInfo =
+  | { kind: "all" }
+  | { kind: "list"; names: string[] }
+  | { kind: "unknown" };
 
-  const { data: links } = await supabase
+export async function fetchClassAllowedPasses(centerId: string): Promise<Record<string, ClassPassInfo>> {
+  const { data: classes, error: classErr } = await supabase
+    .from("classes").select("id, pass_selection_mode").eq("center_id", centerId);
+  if (classErr) throw new Error("수업 정보를 불러오지 못했어요: " + classErr.message);
+  const selectedIds: string[] = [];
+  const out: Record<string, ClassPassInfo> = {};
+  for (const c of classes ?? []) {
+    const row = c as { id: string; pass_selection_mode: string | null };
+    if (row.pass_selection_mode === "selected") { selectedIds.push(row.id); out[row.id] = { kind: "unknown" }; }
+    else out[row.id] = { kind: "all" };
+  }
+  if (selectedIds.length === 0) return out;
+
+  // 비로그인은 RLS 가 행을 숨기므로 빈 결과를 "없음"으로 단정하지 않는다(unknown 유지).
+  const { data: links, error } = await supabase
     .from("class_allowed_products")
     .select("class_id, products(name)")
-    .in("class_id", classIds);
+    .in("class_id", selectedIds);
+  if (error) throw new Error("수강권 정보를 불러오지 못했어요: " + error.message);
 
-  // title → set(수강권명)
-  const byTitle: Record<string, Set<string>> = {};
+  const byClass: Record<string, string[]> = {};
   for (const l of links ?? []) {
-    const title = titleById[(l as any).class_id];
-    const pname = (l as any).products?.name;
-    if (!title || !pname) continue;
-    (byTitle[title] ??= new Set()).add(pname);
+    const link = l as unknown as { class_id: string; products: { name: string | null } | { name: string | null }[] | null };
+    const classId = link.class_id;
+    const pname = (Array.isArray(link.products) ? link.products[0] : link.products)?.name;
+    if (!classId || !pname) continue;
+    (byClass[classId] ??= []).push(pname);
   }
-  const out: Record<string, string[]> = {};
-  for (const t of Object.keys(byTitle)) out[t] = Array.from(byTitle[t]);
+  for (const id of Object.keys(byClass)) out[id] = { kind: "list", names: mergePassNamesForDisplay(byClass[id]) };
   return out;
 }
 

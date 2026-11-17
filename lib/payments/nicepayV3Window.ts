@@ -7,16 +7,17 @@
   MerchantKey/서명 원본은 브라우저에 없다: 서버(handlePrepare)가 만든 SignData(= sha256(EdiDate+MID+Amt+MerchantKey) 의 hex)만 받는다.
   fail-closed: 서버가 준 파라미터의 주문번호·금액이 화면의 주문과 다르거나, 허용되지 않은 필드/주소가 있으면 결제창을 열지 않는다.
 */
+import { isValidAppReturnScheme, parseAppReturnUrl } from "./nicepayAppReturn";
 export const NICEPAY_V3_SDK_URL = "https://pg-web.nicepay.co.kr/v3/common/js/nicepay-pgweb.js";
 
 /** 서버가 내려주는 v3 결제창 파라미터(handlePrepare 의 v3_mid 응답). 이 목록 밖의 필드는 form 에 넣지 않는다. */
 export type NicepayV3Params = {
-  MID: string; Moid: string; Amt: string; GoodsName: string; EdiDate: string; SignData: string; ReturnURL: string; PayMethod: string; CharSet?: string;
+  MID: string; Moid: string; Amt: string; GoodsName: string; EdiDate: string; SignData: string; ReturnURL: string; PayMethod: string; CharSet?: string; WapUrl?: string; IspCancelUrl?: string;
 };
-const FIELD_ORDER = ["MID", "Moid", "Amt", "GoodsName", "EdiDate", "SignData", "ReturnURL", "PayMethod", "CharSet"] as const;
+const FIELD_ORDER = ["MID", "Moid", "Amt", "GoodsName", "EdiDate", "SignData", "ReturnURL", "PayMethod", "CharSet", "WapUrl", "IspCancelUrl"] as const;
 const FORBIDDEN_KEY = /merchant.?key|secret|private/i;   // 서버가 실수로 비밀값을 내려도 form 에 싣지 않는다
 
-export function validateNicepayV3Params(raw: unknown, expected: { orderId: string; amount: number }, origin: string): { ok: true; params: NicepayV3Params } | { ok: false; reason: string } {
+export function validateNicepayV3Params(raw: unknown, expected: { orderId: string; amount: number }, origin: string, opts: { nativeApp?: boolean } = {}): { ok: true; params: NicepayV3Params } | { ok: false; reason: string } {
   if (!raw || typeof raw !== "object") return { ok: false, reason: "결제 정보가 없어요" };
   const p = raw as Record<string, unknown>;
   for (const k of Object.keys(p)) if (FORBIDDEN_KEY.test(k)) return { ok: false, reason: "허용되지 않은 결제 필드가 있어요" };
@@ -28,7 +29,18 @@ export function validateNicepayV3Params(raw: unknown, expected: { orderId: strin
   if (p.PayMethod !== "CARD") return { ok: false, reason: "지원하지 않는 결제 방식이에요" };
   let u: URL; try { u = new URL(p.ReturnURL as string); } catch { return { ok: false, reason: "복귀 주소가 올바르지 않아요" }; }
   if (u.origin !== new URL(origin).origin || u.pathname !== "/api/payments/nicepay/return" || u.protocol !== "https:" && !/^http:\/\/localhost(:\d+)?$/.test(u.origin)) return { ok: false, reason: "복귀 주소가 허용되지 않아요" };
-  const params: NicepayV3Params = { MID: p.MID as string, Moid: p.Moid as string, Amt: p.Amt as string, GoodsName: p.GoodsName as string, EdiDate: p.EdiDate as string, SignData: p.SignData as string, ReturnURL: p.ReturnURL as string, PayMethod: "CARD", ...(typeof p.CharSet === "string" ? { CharSet: p.CharSet } : {}) };
+  // 앱(WebView) 복귀 필드: 앱 안(nativeApp)에서만 허용되고, 둘이 함께 있어야 하며, 같은 scheme·이 주문 UUID 와 정확히 일치해야 한다(그 밖의 값은 결제창을 열지 않는다). 웹 브라우저에서는 있어도 form 에 싣지 않는다.
+  let appReturn: { WapUrl: string; IspCancelUrl: string } | null = null;
+  if (typeof p.WapUrl === "string" || typeof p.IspCancelUrl === "string") {
+    if (opts.nativeApp) {
+      const wap = typeof p.WapUrl === "string" ? p.WapUrl : "", isp = typeof p.IspCancelUrl === "string" ? p.IspCancelUrl : "";
+      const scheme = /^([a-z][a-z0-9+.-]*):\/\//.exec(wap)?.[1] ?? "";
+      const w = parseAppReturnUrl(wap, scheme), c = parseAppReturnUrl(isp, scheme);
+      if (!isValidAppReturnScheme(scheme) || !w || !c || w.kind !== "wap" || c.kind !== "cancel" || w.orderId !== expected.orderId || c.orderId !== expected.orderId) return { ok: false, reason: "앱 복귀 주소가 올바르지 않아요" };
+      appReturn = { WapUrl: wap, IspCancelUrl: isp };
+    }
+  }
+  const params: NicepayV3Params = { MID: p.MID as string, Moid: p.Moid as string, Amt: p.Amt as string, GoodsName: p.GoodsName as string, EdiDate: p.EdiDate as string, SignData: p.SignData as string, ReturnURL: p.ReturnURL as string, PayMethod: "CARD", ...(typeof p.CharSet === "string" ? { CharSet: p.CharSet } : {}), ...(appReturn ?? {}) };
   return { ok: true, params };
 }
 
@@ -40,21 +52,40 @@ export function nicepayV3FormFields(params: NicepayV3Params): Array<[string, str
 type V3Win = Window & { goPay?: (form: HTMLFormElement) => void; nicepaySubmit?: () => void; nicepayClose?: () => void };
 export type OpenV3Deps = { doc: Document; win: V3Win; onClosedBeforeSubmit?: () => void; closeGraceMs?: number };
 
-/** 결제창을 연다(goPay 호출까지). 승인은 하지 않는다. 반환: 정리 함수. goPay 가 없으면 throw(SDK 로드 실패). */
+/* 창 열기 시도별 식별자 — 같은 window 에서 시도가 겹쳐도(닫기 → 초기화 → 새 창 열기) 이전 시도의 늦은 콜백·정리가 새 시도를 건드리지 않게 한다.
+   · 전역 핸들러(nicepaySubmit/nicepayClose)는 NICEPAY SDK 가 이름으로 찾으므로 하나뿐이다 → 정리 시 "내 핸들러일 때만" 지운다(소유권 확인).
+   · 닫기 유예 타이머는 id 를 보관해 정리 시 취소하고, 콜백도 attempt 가 폐기됐으면 아무것도 하지 않는다. */
+let attemptSeq = 0;
+const activeByWindow = new WeakMap<object, { id: number; dispose: () => void }>();
+
+/** 결제창을 연다(goPay 호출까지). 승인은 하지 않는다. 반환: 정리 함수(여러 번 불러도 안전). goPay 가 없으면 throw(SDK 로드 실패). */
 export function openNicepayV3Window(params: NicepayV3Params, d: OpenV3Deps): () => void {
   const { doc, win } = d;
   if (typeof win.goPay !== "function") throw new Error("결제창을 불러오지 못했어요");
+  activeByWindow.get(win)?.dispose();   // 이전 시도가 남아 있으면 먼저 폐기(타이머·폼·전역 핸들러) — 늦은 콜백이 새 시도에 섞이지 않게
+  const id = ++attemptSeq;
   const form = doc.createElement("form");
   form.name = "nicepayV3Form"; form.method = "post"; form.action = params.ReturnURL; form.setAttribute("accept-charset", "euc-kr"); form.style.display = "none";
   for (const [k, v] of nicepayV3FormFields(params)) { const i = doc.createElement("input"); i.type = "hidden"; i.name = k; i.value = v; form.appendChild(i); }
   doc.body.appendChild(form);
-  let submitted = false; let cleaned = false;
-  const cleanup = () => { if (cleaned) return; cleaned = true; form.remove(); delete win.nicepaySubmit; delete win.nicepayClose; };
-  win.nicepaySubmit = () => { submitted = true; form.submit(); };   // 인증 결과 필드가 붙은 form 을 우리 서버 ReturnURL 로 제출 — 승인은 서버가 한다
-  win.nicepayClose = () => {
+  let submitted = false; let disposed = false; let closeTimer: ReturnType<typeof setTimeout> | null = null;
+  const onSubmit = () => { if (disposed) return; submitted = true; form.submit(); };   // 인증 결과 필드가 붙은 form 을 우리 서버 ReturnURL 로 제출 — 승인은 서버가 한다
+  const onClose = () => {
+    if (disposed) return;
+    if (closeTimer) clearTimeout(closeTimer);
     // 인증을 마치고 제출하는 중이면 닫기 이벤트가 이어서 올 수 있다 — 유예 후에도 제출이 없었을 때만 "사용자가 닫음"으로 본다.
-    setTimeout(() => { if (!submitted) { cleanup(); d.onClosedBeforeSubmit?.(); } }, d.closeGraceMs ?? 1500);
+    closeTimer = setTimeout(() => { closeTimer = null; if (disposed || submitted) return; dispose(); d.onClosedBeforeSubmit?.(); }, d.closeGraceMs ?? 1500);
   };
-  win.goPay(form);
-  return cleanup;
+  function dispose() {
+    if (disposed) return; disposed = true;
+    if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+    form.remove();
+    if (win.nicepaySubmit === onSubmit) delete win.nicepaySubmit;   // 새 시도가 덮어쓴 핸들러는 지우지 않는다
+    if (win.nicepayClose === onClose) delete win.nicepayClose;
+    if (activeByWindow.get(win)?.id === id) activeByWindow.delete(win);
+  }
+  win.nicepaySubmit = onSubmit; win.nicepayClose = onClose;
+  activeByWindow.set(win, { id, dispose });
+  try { win.goPay(form); } catch (e) { dispose(); throw e; }
+  return dispose;
 }

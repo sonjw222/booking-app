@@ -361,8 +361,13 @@ export default function Home() {
 
         {/* 전용 심사관에게만 표시. 센터 ID는 조회 결과를 사용하고, 실제 접근은 서버 RLS로 다시 제한한다. */}
         {isNicepayReviewer && centers.length > 0 && (
-          <section aria-label="NICEPAY 심사 전용 센터">
-            <div className="home-class-head"><h2>심사 전용 센터</h2></div>
+          <section aria-label="수강권 및 결제 확인 센터">
+            <div className="home-class-head"><h2>수강권 및 결제 확인 센터</h2></div>
+            <div style={{ padding: "0 20px 12px" }}>
+              <Link href="/center-subscription" prefetch={false} style={{ color: "var(--accent)", fontSize: 13, fontWeight: 700 }}>
+                센터 운영자용 월 구독 상품 확인 ›
+              </Link>
+            </div>
             <div className="home-class-list">
               {centers.map((c) => (
                 <Link key={c.id} className="home-class-row" href={`/center/${c.id}`} prefetch={false}>
@@ -371,7 +376,7 @@ export default function Home() {
                   </div>
                   <div className="home-class-copy">
                     <strong>{c.name}</strong>
-                    <small>심사용 수강권 및 결제 과정 확인</small>
+                    <small>테스트 센터 · 수강권 및 결제 과정 확인</small>
                   </div>
                 </Link>
               ))}

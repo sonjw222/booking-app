@@ -42,7 +42,7 @@ describe("app/page.tsx — 홈의 위치 필터는 자동 적용하지 않는다
 
   it("NICEPAY 전용 바로가기는 심사관에게만 노출한다", () => {
     expect(source).toContain("isNicepayReviewer && centers.length > 0");
-    expect(source).toContain('aria-label="NICEPAY 심사 전용 센터"');
+    expect(source).toContain('aria-label="수강권 및 결제 확인 센터"');
   });
 });
 

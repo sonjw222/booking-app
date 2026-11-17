@@ -87,10 +87,11 @@ describe("[1] white flash — 웹 첫 paint", () => {
     expect(css).toContain("--bg: #FBFBFA;");
     expect(read("app/settings/theme/page.tsx")).toContain('style.colorScheme = effective === "charcoal"');
   });
-  it("native 배경 설정(SceneDelegate)과 edge-swipe 정책은 변경하지 않았다", () => {
+  it("native 배경 설정(SceneDelegate)은 그대로, edge-swipe 는 NavigationPolicyPlugin 의 back 전용 제스처로 대체됐다", () => {
     const sd = read("ios/App/App/SceneDelegate.swift");
     expect(sd).toContain("webView.underPageBackgroundColor = dynamicBg");
-    expect(sd).toContain("allowsBackForwardNavigationGestures = true");
+    expect(sd).not.toContain("allowsBackForwardNavigationGestures = true");   // 양방향 내장 제스처는 끈다(오른쪽 '앞으로' 차단)
+    expect(read("ios/App/App/NavigationPolicyPlugin.swift")).toContain("allowsBackForwardNavigationGestures = false");
   });
 });
 

@@ -14,7 +14,7 @@ export function assertBillingActivated(): void { if (!NICEPAY_BILLING_ACTIVATED)
 
 export type NicepayBillingCreds = { billingMid: string; billingMerchantKey: string; readonly kind: "billing" };
 /** 불투명 빌링키. 로그·화면·에러 메시지에 절대 출력하지 않는다(redactNicepayForLog는 BID를 허용 목록에 두지 않는다). */
-export type BillingKeyRef = { readonly bid: string };
+export type BillingKeyRef = { readonly provider: "nicepay"; readonly bid: string };
 
 export interface NicepayBillingGateway {
   /** 호스팅 카드등록 완료 후 NICEPAY가 돌려준 결과로 BID를 확정한다(카드정보 인자 없음). */
