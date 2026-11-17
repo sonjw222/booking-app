@@ -7,12 +7,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const eqMock = vi.fn().mockResolvedValue({ error: null });
-const updateMock = vi.fn(() => ({ eq: eqMock }));
-const fromMock = vi.fn(() => ({ update: updateMock }));
+type IntroPayload = { [key: string]: unknown; intro_blocks: Array<{ html?: string; [key: string]: unknown }> };
+const updateMock = vi.fn((_payload: IntroPayload) => ({ eq: eqMock }));
+const fromMock = vi.fn((_table: string) => ({ update: updateMock }));
 
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
-    from: (...args: unknown[]) => fromMock(...args),
+    from: (table: string) => fromMock(table),
   },
 }));
 
@@ -31,8 +32,10 @@ const baseFields = {
   reviewPoint: 1000,
 };
 
-function lastUpdatePayload() {
-  return updateMock.mock.calls[updateMock.mock.calls.length - 1][0];
+function lastUpdatePayload(): IntroPayload {
+  const call = updateMock.mock.calls[updateMock.mock.calls.length - 1];
+  expect(call).toBeDefined();
+  return call![0];
 }
 
 describe("updateCenterIntro() sanitizes text blocks before saving (SEC-003)", () => {

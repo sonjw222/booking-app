@@ -50,8 +50,10 @@ describe("interactive control CSS", () => {
 });
 
 describe("InteractiveGuard(contextmenu/dragstart)", () => {
-  class FakeEl {
-    constructor(private flags: { interactive?: boolean; editable?: boolean }) {}
+  class FakeEl extends EventTarget {
+    constructor(private flags: { interactive?: boolean; editable?: boolean }) {
+      super();
+    }
     closest(sel: string) {
       if (sel.includes("input, textarea")) return this.flags.editable ? this : null;
       return this.flags.interactive ? this : null;

@@ -33,8 +33,8 @@ vi.mock("@capacitor/core", () => ({
 
 type PermReceive = "granted" | "denied" | "prompt";
 const pushMock = {
-  checkPermissions: vi.fn<[], Promise<{ receive: PermReceive }>>(),
-  requestPermissions: vi.fn<[], Promise<{ receive: PermReceive }>>(),
+  checkPermissions: vi.fn<() => Promise<{ receive: PermReceive }>>(),
+  requestPermissions: vi.fn<() => Promise<{ receive: PermReceive }>>(),
   register: vi.fn(),
   addListener: vi.fn(),
 };

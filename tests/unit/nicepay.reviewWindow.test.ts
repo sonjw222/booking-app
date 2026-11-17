@@ -10,7 +10,7 @@ const env = { NICEPAY_REVIEW_WINDOW_ENABLED:"true", NICEPAY_CHECKOUT_ENABLED:"fa
 const port = (): ReviewReadPort => ({ authenticatedUid:vi.fn(async()=>REVIEW_UID), target:vi.fn(async()=>({productId:PRODUCT,name:"심사 상품",amount:1000})) });
 async function attempt(p=port()) {
  const r=await prepareReviewWindow({token:"session",productId:PRODUCT,open:true},c,p,now);
- if(!r || !("params" in r)) throw Error("fixture");
+ if(!r || !r.params) throw Error("fixture");
  const rt=new URL(r.params.ReturnURL).searchParams.get("rt")!;
  return {params:r.params,rt};
 }

@@ -12,7 +12,10 @@
 // 적용했다 — 이 부분도 함께 검증한다.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const rpcMock = vi.fn().mockResolvedValue({ data: { point: 100 }, error: null });
+const rpcMock = vi.fn(async (_fn: string, _params: Record<string, unknown>) => ({
+  data: { point: 100 } as unknown,
+  error: null as unknown,
+}));
 const selectChain = {
   eq: vi.fn().mockReturnThis(),
   order: vi.fn().mockReturnThis(),
@@ -20,14 +23,14 @@ const selectChain = {
   maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
   single: vi.fn().mockResolvedValue({ data: { id: "acc-1" }, error: null }),
 };
-const fromMock = vi.fn(() => ({
+const fromMock = vi.fn((_table: string): unknown => ({
   select: vi.fn(() => selectChain),
 }));
 
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
-    rpc: (...args: unknown[]) => rpcMock(...args),
-    from: (...args: unknown[]) => fromMock(...args),
+    rpc: (fn: string, params: Record<string, unknown>) => rpcMock(fn, params),
+    from: (table: string) => fromMock(table),
     auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "auth-1" } } }) },
   },
 }));
