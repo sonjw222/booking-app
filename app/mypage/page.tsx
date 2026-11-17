@@ -5,6 +5,7 @@
   - 프로필, 수강권(잔여횟수/유효기간 프로그레스바), 예약내역, 로그아웃
 */
 
+import { errMsg } from "../components/errorMessage";
 import { FREE_GRANT_LABEL, FREE_GRANT_REFUND_NOTE } from "../../lib/membershipOrigin";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -19,14 +20,6 @@ import UiIcon from "../components/UiIcon";
 
 import { todayKstYmd } from "../../lib/membershipExpiry";
 import { remainingPercent } from "../../lib/membershipStatus";
-const STATUS_LABEL: Record<string, string> = {
-  confirmed: "예약확정",
-  waitlisted: "대기중",
-  cancelled: "취소됨",
-  attended: "출석완료",
-  no_show: "노쇼",
-};
-
 function daysLeft(dateStr: string | null): number | null {
   if (!dateStr) return null; // 기간 무제한
   const today = new Date();
@@ -66,8 +59,8 @@ export default function MyPage() {
       const data = await fetchMyPage();
       setProfile(data.profile);
       setMemberships(data.memberships);
-    } catch (e: any) {
-      if (!opts?.background) setError(e.message ?? "불러오지 못했어요");
+    } catch (e) {
+      if (!opts?.background) setError(errMsg(e) || "불러오지 못했어요");
     } finally {
       if (!opts?.background) setLoading(false);
     }
@@ -100,7 +93,7 @@ export default function MyPage() {
     try {
       await requestRefund(m.id);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
   }
 
   if (loading) {

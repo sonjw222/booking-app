@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../../components/errorMessage";
 import { buildTree, skillGroups, type TreeNode } from "../../../../lib/progressTree";
 import Link from "next/link";
 import SheetOverlay from "../../../components/SheetOverlay";
@@ -19,7 +20,7 @@ import DatePicker from "../../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../../lib/manager";
 import {
   fetchCategories,
-  fetchProgressMembers, fetchMemberProgress, recordProgress, deleteProgressRecord,
+  fetchProgressMembers, fetchMemberProgress, recordProgress,
   deleteProgressByDate,
   type ProgressRecord,
 } from "../../../../lib/progress";
@@ -70,7 +71,7 @@ function ProgressRecordContent() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -98,9 +99,9 @@ function ProgressRecordContent() {
       ]);
       setTree(buildTree(cats));
       setMembers(ms);
-      if (preProfile && ms.some((m: any) => m.profileId === preProfile)) setProfileId(preProfile);
+      if (preProfile && ms.some((m) => m.profileId === preProfile)) setProfileId(preProfile);
       if (ms.length > 0 && !profileId) setProfileId(ms[0].profileId);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -109,7 +110,7 @@ function ProgressRecordContent() {
   const loadHistory = useCallback(async () => {
     if (!profileId) { setHistory([]); return; }
     try { setHistory(await fetchMemberProgress(profileId)); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
   }, [profileId]);
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
@@ -135,15 +136,7 @@ function ProgressRecordContent() {
       setNote("");
       setAddSheet(false);
       await loadHistory();
-    } catch (e: any) { setError(e.message); }
-    finally { setBusy(false); }
-  }
-
-  async function handleDelete(id: string) {
-    if (!(await globalThis.appConfirm("이 진도 기록을 삭제할까요?"))) return;
-    setBusy(true);
-    try { await deleteProgressRecord(id); showToast("삭제했어요"); await loadHistory(); }
-    catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -152,7 +145,7 @@ function ProgressRecordContent() {
     if (!(await globalThis.appConfirm(`${fmtMD(date)} 진도 기록을 삭제할까요?`))) return;
     setBusy(true);
     try { await deleteProgressByDate(profileId, date); showToast("삭제했어요"); await loadHistory(); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 

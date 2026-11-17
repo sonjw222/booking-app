@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../../components/errorMessage";
 import Link from "next/link";
 import SheetOverlay from "../../../components/SheetOverlay";
 
@@ -22,7 +23,7 @@ import {
   fetchMembers, fetchGrades, sendAlimtalkToMembers, type CenterMember, type Grade,
 } from "../../../../lib/members";
 import {
-  fetchAlimtalkTemplates, extractTemplateVariables, hasUnresolvedAlimtalkVariables,
+  fetchAlimtalkTemplates, extractTemplateVariables,
   ALIMTALK_AUTO_VARIABLE_NAMES, type AlimtalkTemplate,
 } from "../../../../lib/alimtalk";
 import { fetchCenterSubscription } from "../../../../lib/centerSubscription";
@@ -64,7 +65,7 @@ export default function AlimtalkSendPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -94,7 +95,7 @@ export default function AlimtalkSendPage() {
     setLoading(true); setError(null);
     try {
       setMembers(await fetchMembers(centerId, { gradeId: gradeFilter, status: statusFilter, keyword, searchField: "all" }));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId, gradeFilter, statusFilter, keyword]);
 
@@ -171,7 +172,7 @@ export default function AlimtalkSendPage() {
       setBlocks(emptyAlimtalkBlocks());
       setTemplateId("");
       setManualVars({});
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setSending(false); }
   }
 

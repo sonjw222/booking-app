@@ -10,6 +10,7 @@
   아직 안 실릴 수 있음 — 안내 문구 참고).
 */
 
+import { errMsg } from "./errorMessage";
 import { useRef, useState, type ChangeEvent } from "react";
 import UiIcon from "./UiIcon";
 import { uploadAlimtalkImage } from "../../lib/alimtalkImages";
@@ -66,8 +67,8 @@ export default function AlimtalkComposer({
       const url = await uploadAlimtalkImage(file);
       // 사진 뒤에 새 텍스트 블록을 자동으로 붙여서 계속 이어 쓸 수 있게 함(텍스트→사진→텍스트)
       onChange([...blocks, { type: "image", url }, { type: "text", value: "" }]);
-    } catch (err: any) {
-      alert(err.message ?? "사진 업로드에 실패했어요");
+    } catch (err) {
+      alert(errMsg(err) || "사진 업로드에 실패했어요");
     } finally {
       setUploading(false);
     }

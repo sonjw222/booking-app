@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
@@ -28,6 +29,8 @@ import { fetchSettings } from "../../../lib/settings";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
 import { useCenterPermissionGate } from "../../../lib/permissionGate";
 import PermissionGateShell from "../../components/PermissionGateShell";
+
+const num = (s: string) => parseInt(s.replace(/[^0-9]/g, "") || "0", 10);
 
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -129,7 +132,7 @@ export default function SalesPage() {
           setCenterId(list.find((c) => c.id === requestedCenter)?.id ?? list[0].id);
         }
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -147,7 +150,6 @@ export default function SalesPage() {
     const paid = num(fCard) + num(fCash) + num(fTransfer) + num(fPoint);
     const remaining = computeAutoUnpaid(product.price, paid);
     setFUnpaid(remaining > 0 ? String(remaining) : "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoUnpaidInput, fUnpaidTouched, fProductId, fCard, fCash, fTransfer, fPoint, saleProducts]);
 
   const load = useCallback(async () => {
@@ -163,7 +165,7 @@ export default function SalesPage() {
       setRows(pay);
       setSummary(summarize(pay));
       setExpenses(exp);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId, from, to]);
 
@@ -207,7 +209,6 @@ export default function SalesPage() {
   // 매출 화면은 메뉴(app/manager/page.tsx)와 같은 pass.sales.view 가 있어야 열린다. 없으면 서버가 가린 0원 화면 대신 안내를 보여 준다. 확인 중·실패는 허용이 아니다.
   const salesGate = useCenterPermissionGate(centers, centerId, "pass.sales.view");
   const canCreatePayment = canDo("pass.payment.create");
-  const canDeletePayment = canDo("pass.payment.delete");
   // registerPayment는 수강권/상품을 고르면 memberships에도 insert하므로(발급),
   // 그 경우엔 pass.payment.create뿐 아니라 customer.member.issue_pass도 필요하다.
   const canIssuePass = canDo("customer.member.issue_pass");
@@ -225,10 +226,9 @@ export default function SalesPage() {
       setFProductId("");
       setFUnpaidTouched(false);
       setSheet(true);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
   }
 
-  const num = (s: string) => parseInt(s.replace(/[^0-9]/g, "") || "0", 10);
   const formTotal = num(fCard) + num(fCash) + num(fTransfer) + num(fPoint);
 
   function handleSalesCsvDownload() {
@@ -272,7 +272,7 @@ export default function SalesPage() {
       setFCard(""); setFCash(""); setFTransfer(""); setFPoint(""); setFUnpaid(""); setFMemo("");
       setFSaleType("new"); setFProductId(""); setFGoodsId(""); setFUnpaidTouched(false);
       await reload();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -300,7 +300,7 @@ export default function SalesPage() {
       setCollectFor(null);
       setPayDetail(null);
       await reload();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setCollecting(false); }
   }
 
@@ -311,7 +311,7 @@ export default function SalesPage() {
       setMembers(ms);
       setPtProfile(ms[0]?.profileId ?? "");
       setPtSheet(true);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
   }
 
   async function handleRegisterExpense() {
@@ -322,7 +322,7 @@ export default function SalesPage() {
       showToast("지출을 등록했어요");
       setExpSheet(false); setEAmount(""); setEMemo("");
       await reload();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -330,7 +330,7 @@ export default function SalesPage() {
     if (!(await globalThis.appConfirm("이 지출을 삭제할까요?"))) return;
     setBusy(true);
     try { await deleteExpense(id); showToast("삭제했어요"); await reload(); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -343,7 +343,7 @@ export default function SalesPage() {
       showToast(ptSign === "earn" ? "포인트를 적립했어요" : "포인트를 사용했어요");
       setPtSheet(false); setPtAmount(""); setPtReason(""); setPtSign("earn");
       await reload();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 

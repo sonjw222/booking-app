@@ -1,5 +1,5 @@
 /* NICEPAY 결제창 인증 결과 수신(returnUrl POST) — 서버 승인 후 결과 화면으로 303. 이 경로에 도달한 것만으로는 어떤 상태도 "성공"이 아니다. 비활성이면 503(승인/취소 호출 없음). */
-import { bearerToken, createAdminClient } from "../../../../../lib/payments/server/deps";
+import { createAdminClient } from "../../../../../lib/payments/server/deps";
 import { buildFlowDeps, getActiveNicepayConfig } from "../../../../../lib/payments/server/nicepay/runtime";
 import { handleReturnPost } from "../../../../../lib/payments/server/nicepay/flow";
 import { readNicepayForm } from "../../../../../lib/payments/server/nicepay/formBody";

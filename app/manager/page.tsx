@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../components/errorMessage";
 import Link from "next/link";
 import SheetOverlay from "../components/SheetOverlay";
 
@@ -86,7 +87,7 @@ export default function ManagerDashboard() {
       ]);
       if (nextRoster) setRoster(nextRoster);
       if (nextToday) setTodayClasses(nextToday);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setAttBusy(false); }
   }
 
@@ -96,10 +97,10 @@ export default function ManagerDashboard() {
     setRosterLoading(true);
     try {
       setRoster(await fetchClassAttendees(cls.id));
-    } catch (e: any) {
+    } catch (e) {
       // 실패 시 빈 명단이 "예약자 없음"으로 오인되지 않도록 시트를 닫고 상단 에러로만 알린다.
       setRosterClass(null);
-      setError(e.message);
+      setError(errMsg(e));
     } finally {
       setRosterLoading(false);
     }
@@ -111,10 +112,10 @@ export default function ManagerDashboard() {
     try {
       const data = await fetchMemberDetail(a.profileId, activeCenterId);
       setMemberInfo({ name: a.name, profileId: a.profileId, data });
-    } catch (e: any) {
+    } catch (e) {
       // 실패 시 로딩 스피너가 무한히 남지 않도록 시트를 닫고 상단 에러로만 알린다.
       setMemberInfo(null);
-      setError(e.message);
+      setError(errMsg(e));
     }
   }
 
@@ -125,8 +126,8 @@ export default function ManagerDashboard() {
       const list = await fetchMyCenters();
       setCenters(list);
       if (list.length > 0) setActiveCenterId(list[0].id);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setLoading(false);
     }

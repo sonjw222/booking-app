@@ -11,6 +11,7 @@
   - 소셜 로그인: 카카오 / 네이버 / 애플
 */
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase, REMEMBER_ME_KEY } from "../../lib/supabaseClient";
 import AppButton from "../components/AppButton";
@@ -132,7 +133,6 @@ export default function LoginPage() {
     // 경로(이메일/구글/애플/카카오/네이버)로 완료되든 전부 홈에 도착하므로, 그 값을
     // 세션스토리지에 담아두고 실제 이동은 app/page.tsx가 한 곳에서 처리한다.
     stashPostLoginNext(params.get("next"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 재전송 쿨다운 카운트다운(서버의 60초 제한과 별개로 화면에서도 버튼을 잠가 중복 클릭 방지)
@@ -383,7 +383,7 @@ export default function LoginPage() {
         // 반환되는 멱등 함수라 중복 호출 비용은 거의 없다.
         await ensureAccountForCurrentUser();
         window.location.replace("/");
-      } catch (e: any) {
+      } catch (e) {
         setSocialLoading(null);
         if (e instanceof AppleSignInCancelledError) return; // 사용자가 직접 취소 — 에러로 안 보여줌
         setMessage({ type: "error", text: toUserMessage(e, "애플 로그인에 실패했어요") });
@@ -407,7 +407,7 @@ export default function LoginPage() {
         // JS 컨텍스트가 파괴되지 않도록 이동 전에 한 번 더 기다린다(멱등 함수).
         await ensureAccountForCurrentUser();
         window.location.replace("/");
-      } catch (e: any) {
+      } catch (e) {
         setSocialLoading(null);
         if (e instanceof GoogleSignInCancelledError) return; // 사용자가 직접 취소 — 에러로 안 보여줌
         setMessage({ type: "error", text: toUserMessage(e, "구글 로그인에 실패했어요") });
@@ -469,7 +469,7 @@ export default function LoginPage() {
   return (
     <div className="app-shell auth-page-v2">
       <div className="auth-scene">
-        <a className="auth-home-link" href="/">모하빗</a>
+        <Link className="auth-home-link" href="/">모하빗</Link>
         <div className="auth-scene-copy">
           <span>MOVE · BOOK · ENJOY</span>
           <h1>오늘의 움직임을<br />가볍게 시작하세요.</h1>

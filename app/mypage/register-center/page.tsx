@@ -38,7 +38,7 @@ export default function RegisterCenterPage() {
 
       await registerCenterForAccount({ ...fields, licenseFile });
       setDone(true);
-    } catch (e: any) {
+    } catch (e) {
       setError(toUserMessage(e));
     } finally {
       setBusy(false);

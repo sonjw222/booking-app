@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
@@ -66,7 +67,7 @@ export default function StaffPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -82,7 +83,7 @@ export default function StaffPage() {
       const editable = rs.find((r) => !r.isOwner);
       // PERF-044: activeRoleId를 deps에 두면 첫 로드 직후 load가 재생성되어 역할/스태프/권한 3요청이 한 번 더 나갔다 → 함수형 갱신으로 의존 제거
       if (editable) setActiveRoleId((prev) => prev ?? editable.id);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -120,7 +121,7 @@ export default function StaffPage() {
         const keys = await fetchRolePermissions(activeRoleId);
         setSelected(new Set(keys));
         setDirty(false);
-      } catch (e: any) { setError(e.message); }
+      } catch (e) { setError(errMsg(e)); }
     })();
   }, [activeRoleId]);
 
@@ -156,7 +157,7 @@ export default function StaffPage() {
       await saveRolePermissions(activeRoleId, Array.from(selected));
       showToast("권한을 저장했어요");
       setDirty(false);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -165,7 +166,7 @@ export default function StaffPage() {
     if (!centerId) return;
     setSearchMsg(null); setFound([]); setSearchedOnce(false);
     try { setFound(await searchAccounts(centerId, searchKw)); setSearchedOnce(true); }
-    catch (e: any) { setSearchMsg(e.message); }
+    catch (e) { setSearchMsg(errMsg(e)); }
   }
 
   async function handleInvite(accountId: string) {
@@ -176,7 +177,7 @@ export default function StaffPage() {
       showToast("스태프를 추가했어요");
       setInviteSheet(false); setSearchKw(""); setFound([]); setSearchedOnce(false); setSearchMsg(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -188,7 +189,7 @@ export default function StaffPage() {
       showToast("역할을 변경했어요");
       setStaffDetail(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -201,7 +202,7 @@ export default function StaffPage() {
       showToast("스태프를 제외했어요");
       setStaffDetail(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -213,7 +214,7 @@ export default function StaffPage() {
       setNewRoleName("");
       showToast("역할을 추가했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -226,7 +227,7 @@ export default function StaffPage() {
       showToast("역할을 삭제했어요");
       if (activeRoleId === r.id) setActiveRoleId(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 

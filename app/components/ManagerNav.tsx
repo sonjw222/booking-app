@@ -102,7 +102,6 @@ export default function ManagerNav({
       // 다음 로드 때 initialNavState.isOwner만으로 canSeeManagerMenu가 true를 반환한다.
       setCachedManagerNavState(isOwner, myPerms ?? new Set());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolved, liveCanSeeMembers, isOwner, myPerms]);
   const canSeeMembers = resolved ? liveCanSeeMembers : (cachedCanSeeMembers ?? false);
   const canSee = (permissionKey: string) => canSeeManagerMenu(isOwner, myPerms, permissionKey);

@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "./errorMessage";
 import { useEffect, useRef, useState } from "react";
 import { searchAccountsForMember, type MemberCandidate } from "../../lib/members";
 import SheetOverlay from "./SheetOverlay";
@@ -53,9 +54,9 @@ export default function MemberAddSheet({ centerId, centerName, busy = false, onC
       if (seq !== seqRef.current) return;               // stale 응답은 버린다
       setResults(r); setSearchedKw(query);
       requestAnimationFrame?.(() => listRef.current?.scrollIntoView?.({ block: "nearest" }));
-    } catch (e: any) {
+    } catch (e) {
       if (seq !== seqRef.current) return;               // stale 오류가 최신 결과를 지우지 않는다
-      setResults([]); setSearchedKw(query); setError(e?.message ?? "검색에 실패했어요");
+      setResults([]); setSearchedKw(query); setError(errMsg(e) || "검색에 실패했어요");
     } finally {
       if (seq === seqRef.current) { setSearching(false); inflightRef.current = null; }
     }

@@ -82,7 +82,6 @@ export default function NaverCallbackPage() {
         window.location.href = `/login?oauth_error=${encodeURIComponent(reason)}`;
       }, 1200);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return <Loading text={errorText ?? "네이버 로그인 처리 중이에요"} />;

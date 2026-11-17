@@ -5,6 +5,7 @@
   - 홈에 뜨는 종목(카테고리) 추가/삭제
 */
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { fetchCategories, addCategory, deleteCategory, type ServiceCategory } from "../../../lib/operator";
@@ -26,7 +27,7 @@ export default function CategoriesPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try { setCats(await fetchCategories()); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => {
@@ -50,7 +51,7 @@ export default function CategoriesPage() {
       setLabel("");
       showToast("종목을 추가했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -58,7 +59,7 @@ export default function CategoriesPage() {
     if (!(await globalThis.appConfirm(`'${c.label}' 종목을 삭제할까요?`))) return;
     setBusy(true);
     try { await deleteCategory(c.id); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 

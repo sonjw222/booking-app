@@ -6,6 +6,7 @@
   - 주문 정보 + 쿠폰 + 결제수단까지 확인 후 한 번에 결제
 */
 
+import { errMsg } from "../components/errorMessage";
 import { firstOrderOptionIssue } from "../../lib/orderOptions";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -102,7 +103,7 @@ export default function CartPage() {
   async function handleRemove(id: string) {
     setBusy(true);
     try { await removeFromCart(id); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -115,7 +116,7 @@ export default function CartPage() {
     try {
       await addToCart({ centerId: g.centerId, productId: g.productId, productName: g.productName, price: g.price });
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -124,14 +125,14 @@ export default function CartPage() {
     if (!last) return;
     setBusy(true);
     try { await removeFromCart(last); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
   async function handleRemoveGroup(ids: string[]) {
     setBusy(true);
     try { await Promise.all(ids.map((id) => removeFromCart(id))); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -141,7 +142,7 @@ export default function CartPage() {
       const price = cartItemAmount({ ...it, selectedCount: count });
       await updateCartCount(it.id, count, price);
       setItems((prev) => prev.map((x) => x.id === it.id ? { ...x, selectedCount: count, price } : x));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -150,7 +151,7 @@ export default function CartPage() {
     try {
       await updateCartSize(it.id, size);
       setItems((prev) => prev.map((x) => x.id === it.id ? { ...x, selectedSize: size } : x));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -175,7 +176,7 @@ export default function CartPage() {
       }
       await clearCart();
       setDone(true);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 

@@ -6,6 +6,7 @@
   - 채팅방에서 답변 (사진/글, 실시간)
 */
 
+import { errMsg } from "../../components/errorMessage";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Loading from "../../components/Loading";
@@ -13,7 +14,7 @@ import InquiryChat from "../../components/InquiryChat";
 import UiIcon from "../../components/UiIcon";
 import { fetchCenterThreads, type InquiryThread } from "../../../lib/inquiries";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { fetchMyEffectivePermissionKeys } from "../../../lib/roles";
 
 export default function ManagerInquiriesPage() {
   return (
@@ -79,10 +80,10 @@ function ManagerInquiriesPageContent() {
             if (found) setActive({ id: found.id, title: found.centerName + " · 회원 문의", centerId: found.centerId });
           }
         }
-      } catch (e: any) {
+      } catch (e) {
         // UX 감사(2026-09-06) — 예전엔 fetchCenterThreads()가 에러를 빈 배열로 삼켜서
         // 진짜 오류와 "문의 없음"을 구분할 수 없었다. 이제 여기서 에러를 그대로 보여준다.
-        setError(e.message);
+        setError(errMsg(e));
       } finally {
         setLoading(false);
       }
@@ -92,7 +93,7 @@ function ManagerInquiriesPageContent() {
 
   async function backToList() {
     setActive(null);
-    try { await loadThreads(); } catch (e: any) { setError(e.message); }
+    try { await loadThreads(); } catch (e) { setError(errMsg(e)); }
   }
 
   if (centers.length === 0 && !loading) {

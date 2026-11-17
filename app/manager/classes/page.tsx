@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
@@ -269,8 +270,8 @@ export default function ClassManagePage() {
       setHolidayDates(holidays);
       if (roomList) setRooms(roomList);
       setUnplaced(unplacedList);
-    } catch (e: any) {
-      if (!stale()) setError(e.message);
+    } catch (e) {
+      if (!stale()) setError(errMsg(e));
     }
   }, []);
 
@@ -284,8 +285,8 @@ export default function ClassManagePage() {
       const to = `${y}-${String(m).padStart(2, "0")}-${new Date(y, m, 0).getDate()}`;
       const cls = await fetchClasses(centerId, from, to);
       if (!stale()) setClasses(cls);
-    } catch (e: any) {
-      if (!stale()) setError(e.message);
+    } catch (e) {
+      if (!stale()) setError(errMsg(e));
     }
   }, []);
 
@@ -309,8 +310,8 @@ export default function ClassManagePage() {
         setCenters(list);
         // 수업 조회는 아래 [activeCenterId] / [year, month] effect가 담당(중복 조회 방지)
         if (list.length > 0) setActiveCenterId(list[0].id);
-      } catch (e: any) {
-        setError(e.message);
+      } catch (e) {
+        setError(errMsg(e));
       } finally {
         setLoading(false);
       }
@@ -386,12 +387,6 @@ export default function ClassManagePage() {
     setSelectedDay(1);
     if (month === 12) { setYear((y) => y + 1); setMonth(1); }
     else setMonth((m) => m + 1);
-  }
-  function goToday() {
-    const t = new Date();
-    setYear(t.getFullYear());
-    setMonth(t.getMonth() + 1);
-    setSelectedDay(t.getDate());
   }
 
   // 일/시간/분 ↔ 분 변환은 lib/deadlineInput.ts의 공용 함수를 쓴다(취소마감/예약마감 동일 규칙,
@@ -474,7 +469,7 @@ export default function ClassManagePage() {
         await loadUnplaced(activeCenterId);
         await loadClasses(activeCenterId, year, month);
       }
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setUnplacedBusy(false); }
   }
 
@@ -483,7 +478,7 @@ export default function ClassManagePage() {
     if (!activeCenterId) return;
     setAssignKw("");
     setAssignMemberSheet(true);
-    fetchBookableMembers(activeCenterId).then(setAssignMembersList).catch((e: any) => setError(e.message));
+    fetchBookableMembers(activeCenterId).then(setAssignMembersList).catch((e: unknown) => setError(errMsg(e)));
   }
 
   function pickAssignMember(m: BookableMember, prefillMembershipId: string | null = null) {
@@ -570,8 +565,8 @@ export default function ClassManagePage() {
         await loadUnplaced(activeCenterId);
         if (rosterClass?.id === classItem.id) setRoster(await fetchClassAttendees(classItem.id));
       }
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setAssignBusy(false);
     }
@@ -587,8 +582,8 @@ export default function ClassManagePage() {
       setAdminCancelReason("");
       if (rosterClass) setRoster(await fetchClassAttendees(rosterClass.id));
       if (activeCenterId) await loadClasses(activeCenterId, year, month);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setAdminCancelBusy(false);
     }
@@ -600,7 +595,7 @@ export default function ClassManagePage() {
     setBookPick(null); setBookMemId(null); setBookKw(""); setBookDeduct(true);
     setBookSheet(true);
     try { setBookMembers(await fetchBookableMembers(activeCenterId)); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
   }
   async function handleBook() {
     if (!rosterClass || !bookPick) return;
@@ -611,7 +606,7 @@ export default function ClassManagePage() {
       setBookSheet(false);
       setRoster(await fetchClassAttendees(rosterClass.id));
       if (activeCenterId) await loadClasses(activeCenterId, year, month);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBookBusy(false); }
   }
 
@@ -679,7 +674,7 @@ export default function ClassManagePage() {
         ? await planCopyByWeekday(activeCenterId, copyTo, copyGroups.filter((g) => copySelected.has(g.key)))
         : await planCopyByDate(activeCenterId, copyTo, copyDateItems.filter((i) => copySelected.has(i.key)));
       setCopyPlan(plan);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setCopyBusy(false); }
   }
 
@@ -697,7 +692,7 @@ export default function ClassManagePage() {
       );
       setCopySheet(false);
       if (activeCenterId) await loadClasses(activeCenterId, year, month);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setCopyBusy(false); }
   }
 
@@ -707,8 +702,8 @@ export default function ClassManagePage() {
     setRosterLoading(true);
     try {
       setRoster(await fetchClassAttendees(c.id));
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setRosterLoading(false);
     }
@@ -742,7 +737,7 @@ export default function ClassManagePage() {
     try {
       await setAttendance(a.reservationId, status);
       if (rosterClass) setRoster(await fetchClassAttendees(rosterClass.id));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { attBusyRef.current = false; setAttBusy(false); }
   }
 
@@ -751,8 +746,8 @@ export default function ClassManagePage() {
     try {
       const data = await fetchMemberDetail(a.profileId, activeCenterId);
       setMemberInfo({ name: a.name, profileId: a.profileId, data });
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     }
   }
 
@@ -816,7 +811,7 @@ export default function ClassManagePage() {
       await createClassMemo(editId, memoInput.trim());
       setMemoInput("");
       setMemos(await fetchClassMemos(editId));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setMemoBusy(false); }
   }
 
@@ -827,7 +822,7 @@ export default function ClassManagePage() {
       await updateClassMemo(editingMemoId, editingMemoContent.trim());
       setEditingMemoId(null);
       setMemos(await fetchClassMemos(editId));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setMemoBusy(false); }
   }
 
@@ -838,7 +833,7 @@ export default function ClassManagePage() {
     try {
       await deleteClassMemo(memoId);
       setMemos(await fetchClassMemos(editId));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setMemoBusy(false); }
   }
 
@@ -953,8 +948,8 @@ export default function ClassManagePage() {
         await loadClasses(activeCenterId, year, month);
         setError(null);
         showToast(`${ids.length}개의 수업을 등록했어요${skipped > 0 ? ` (휴무일 ${skipped}일 제외)` : ""}`);
-      } catch (e: any) {
-        setError(e.message);
+      } catch (e) {
+        setError(errMsg(e));
       } finally {
         setBusy(false);
       }
@@ -1063,8 +1058,8 @@ export default function ClassManagePage() {
       } else if (promotedCount > 0) {
         showToast(`대기자 ${promotedCount}명이 자동으로 확정 예약으로 전환됐어요`);
       }
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -1096,8 +1091,8 @@ export default function ClassManagePage() {
       }
       setDeleteTarget(null);
       await loadClasses(activeCenterId, year, month);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -1783,7 +1778,7 @@ export default function ClassManagePage() {
                   if (filtered.length === 0) {
                     return (
                       <div className="daylist-empty" style={{ padding: "8px 0" }}>
-                        <span style={{ fontSize: 12 }}>"{passSearch}"와 일치하는 수강권이 없어요</span>
+                        <span style={{ fontSize: 12 }}>&quot;{passSearch}&quot;와 일치하는 수강권이 없어요</span>
                       </div>
                     );
                   }
@@ -1869,7 +1864,7 @@ export default function ClassManagePage() {
                   if (filtered.length === 0) {
                     return (
                       <div className="daylist-empty" style={{ padding: "8px 0" }}>
-                        <span style={{ fontSize: 12 }}>"{trainerSearch}"와 일치하는 스태프가 없어요</span>
+                        <span style={{ fontSize: 12 }}>&quot;{trainerSearch}&quot;와 일치하는 스태프가 없어요</span>
                       </div>
                     );
                   }
@@ -2125,7 +2120,7 @@ export default function ClassManagePage() {
             <div className="perm-guide" style={{ margin: "0 0 12px" }}>
               요일반 수강권을 샀지만 정원이 차거나 수업이 없어서
               예약이 다 잡히지 못한 회원이에요. 수강권 만료일 이후의 수업은 횟수가 남아 있어도 자동으로 예약하지 않아요.<br />
-              <b>정원을 늘리거나 수업을 추가한 뒤</b> "다시 배치"를 누르면 자동으로 넣어드려요.
+              <b>정원을 늘리거나 수업을 추가한 뒤</b> &quot;다시 배치&quot;를 누르면 자동으로 넣어드려요.
               보강 예약으로 직접 넣어도 돼요. (먼저 구매한 순서)
             </div>
 

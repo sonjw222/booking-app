@@ -1,5 +1,5 @@
 /* NICEPAY 결제통보(웹훅) 수신 — 서명 검증 + 분류만, 주문/수강권 상태는 바꾸지 않는다. 문서 규격: 200 + text/html "OK". 비활성이면 503. */
-import { bearerToken, createAdminClient } from "../../../../../lib/payments/server/deps";
+import { createAdminClient } from "../../../../../lib/payments/server/deps";
 import { buildFlowDeps, getActiveNicepayConfig } from "../../../../../lib/payments/server/nicepay/runtime";
 import { handleWebhook } from "../../../../../lib/payments/server/nicepay/flow";
 

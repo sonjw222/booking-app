@@ -24,10 +24,6 @@ import {
 } from "../../../../lib/alimtalk";
 import { toUserMessage } from "../../../../lib/userError";
 
-const INSP_STATUS_LABEL: Record<string, string> = {
-  REG: "등록(심사 전)", REQ: "심사 요청중", APR: "승인됨", REJ: "반려됨",
-};
-
 const STATUS_LABEL: Record<AlimtalkTemplateStatus, string> = {
   draft: "초안", pending: "카카오 승인 대기", approved: "승인됨", rejected: "반려됨",
 };
@@ -78,7 +74,7 @@ export default function AlimtalkTemplatesPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(toUserMessage(e, "운영 중인 센터 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")); setLoading(false); }
+      } catch (e) { setError(toUserMessage(e, "운영 중인 센터 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")); setLoading(false); }
     })();
     checkPlatformAdmin().then(setIsAdmin).catch(() => setIsAdmin(false));
   }, []);
@@ -88,7 +84,7 @@ export default function AlimtalkTemplatesPage() {
     setLoading(true); setError(null);
     try {
       setTemplates(await fetchAlimtalkTemplates(centerId));
-    } catch (e: any) { setError(toUserMessage(e, "템플릿 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")); }
+    } catch (e) { setError(toUserMessage(e, "템플릿 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -149,7 +145,7 @@ export default function AlimtalkTemplatesPage() {
       setStatus(nextStatus);
       showToast(`상태가 "${ALIGO_INSP_STATUS_KO[match.inspStatus]}"(으)로 바뀌었어요`);
       await load();
-    } catch (e: any) {
+    } catch (e) {
       setError(toUserMessage(e, "상태를 확인하지 못했어요. 잠시 후 다시 시도해 주세요."));
     } finally {
       setRefreshingStatus(false);
@@ -173,7 +169,7 @@ export default function AlimtalkTemplatesPage() {
     setImportLoading(true); setImportError(null);
     try {
       setImportList(excludeSystemAligoTemplates(await fetchAligoRemoteTemplates(centerId)));
-    } catch (e: any) { setImportError(toUserMessage(e, "알리고 템플릿을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")); }
+    } catch (e) { setImportError(toUserMessage(e, "알리고 템플릿을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.")); }
     finally { setImportLoading(false); }
   }
 
@@ -190,7 +186,7 @@ export default function AlimtalkTemplatesPage() {
       await importAligoTemplateAsLocal(centerId, remote);
       showToast("템플릿을 가져왔어요");
       await load();
-    } catch (e: any) {
+    } catch (e) {
       showToast(toUserMessage(e, "템플릿을 등록하지 못했어요. 잠시 후 다시 시도해 주세요."));
     } finally {
       setImportingCode(null);
@@ -213,7 +209,7 @@ export default function AlimtalkTemplatesPage() {
       setEditing(null);
       showToast("저장했어요");
       await load();
-    } catch (e: any) { setError(toUserMessage(e, "템플릿을 등록하지 못했어요. 잠시 후 다시 시도해 주세요.")); }
+    } catch (e) { setError(toUserMessage(e, "템플릿을 등록하지 못했어요. 잠시 후 다시 시도해 주세요.")); }
     finally { setSaving(false); }
   }
 
@@ -237,7 +233,7 @@ export default function AlimtalkTemplatesPage() {
       setStatus("pending");
       showToast("카카오 승인을 신청했어요");
       await load();
-    } catch (e: any) { setError(toUserMessage(e, "카카오 승인 신청에 실패했어요. 잠시 후 다시 시도해 주세요.")); }
+    } catch (e) { setError(toUserMessage(e, "카카오 승인 신청에 실패했어요. 잠시 후 다시 시도해 주세요.")); }
     finally { setRequestingApproval(false); }
   }
 
@@ -259,7 +255,7 @@ export default function AlimtalkTemplatesPage() {
       await deleteAlimtalkTemplate(t.id);
       showToast(isApproved ? "센터에서 제거했어요" : "삭제했어요");
       await load();
-    } catch (e: any) { setError(toUserMessage(e, "템플릿을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.")); }
+    } catch (e) { setError(toUserMessage(e, "템플릿을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.")); }
   }
 
   if (centers.length === 0 && !loading) {
@@ -355,7 +351,7 @@ export default function AlimtalkTemplatesPage() {
             )}
             {isApprovedDetail && (
               <div className="perm-guide" style={{ margin: "0 0 8px" }}>
-                카카오 승인이 끝난 문구는 그대로 유지돼요. 내용을 바꾸려면 "새 템플릿으로 복제"를 눌러 새로 만들고 다시 승인을 신청해주세요.
+                카카오 승인이 끝난 문구는 그대로 유지돼요. 내용을 바꾸려면 &quot;새 템플릿으로 복제&quot;를 눌러 새로 만들고 다시 승인을 신청해주세요.
               </div>
             )}
             {isLocked && !isApprovedDetail && (

@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
@@ -47,7 +48,7 @@ export default function HolidaysPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -72,7 +73,7 @@ export default function HolidaysPage() {
     if (!centerId) return;
     setLoading(true); setError(null);
     try { setHolidays(await fetchHolidays(centerId)); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -96,7 +97,7 @@ export default function HolidaysPage() {
         : "휴무일을 추가했어요";
       showToast(msg);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -107,7 +108,7 @@ export default function HolidaysPage() {
       await deleteHoliday(h.id);
       showToast("삭제했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 

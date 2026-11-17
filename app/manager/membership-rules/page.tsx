@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
@@ -125,7 +126,7 @@ export default function MembershipRulesPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -167,7 +168,7 @@ export default function MembershipRulesPage() {
       setRulesByProduct(map);
       setGrades(gradeList);
       loadedCenterRef.current = centerId;
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -380,7 +381,7 @@ export default function MembershipRulesPage() {
         const fresh = (await fetchProducts(centerId, "pass")).find((x) => x.id === made.id);
         if (fresh) await openRuleSheet(fresh);
       }
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -388,7 +389,7 @@ export default function MembershipRulesPage() {
     if (!(await globalThis.appConfirm(`'${p.name}' 상품을 삭제할까요?`))) return;
     setBusy(true);
     try { await deleteProduct(p.id); showToast("삭제했어요"); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -403,7 +404,7 @@ export default function MembershipRulesPage() {
       exitSelect();
       showToast(bulkDeleteToast(n));
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -412,7 +413,7 @@ export default function MembershipRulesPage() {
     if (!(await globalThis.appConfirm(next ? `'${p.name}' 판매를 다시 시작할까요?` : `'${p.name}' 판매를 정지할까요? (기존 보유자는 영향 없어요)`))) return;
     setBusy(true);
     try { await toggleProductSale(p.id, next); showToast(next ? "판매를 재개했어요" : "판매를 정지했어요"); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -460,7 +461,7 @@ export default function MembershipRulesPage() {
         showToast(sum.message);
       }
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -477,14 +478,14 @@ export default function MembershipRulesPage() {
       setRuleFor(null);
       showToast("조건을 추가했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
   async function handleDeleteRule(id: string) {
     setBusy(true);
     try { await deleteRule(id); showToast("조건을 삭제했어요"); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -550,7 +551,7 @@ export default function MembershipRulesPage() {
       ) : products.length === 0 ? (
         <div className="daylist-empty" style={{ paddingTop: 30 }}>
           등록된 수강권이 없어요<br />
-          <span style={{ fontSize: 12 }}>우측 상단 '+ 수강권'으로 추가하세요</span>
+          <span style={{ fontSize: 12 }}>우측 상단 &apos;+ 수강권&apos;으로 추가하세요</span>
         </div>
       ) : (() => {
         const filtered = filteredProducts;
@@ -943,7 +944,7 @@ export default function MembershipRulesPage() {
               const schedule = computeSelectableSchedule(candidateRules);
               return schedule.days.length === 0 ? (
                 <div className="perm-guide" style={{ margin: "4px 0 0" }}>
-                  아직 요일이 지정된 예약조건이 없어요 — {editingId ? "아래" : "저장한 뒤"} "예약조건 추가"에서
+                  아직 요일이 지정된 예약조건이 없어요 — {editingId ? "아래" : "저장한 뒤"} &quot;예약조건 추가&quot;에서
                   회원이 고를 수 있는 요일(과 시간)을 먼저 등록해주세요(예: 월 16:00, 월 20:00, 수 16:00).
                 </div>
               ) : (

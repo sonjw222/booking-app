@@ -38,6 +38,7 @@
   코드는 전부 안전하게 기본 7회 재시도 정책으로 처리한다.
 */
 
+import { errMsg } from "../../../components/errorMessage";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export const maxDuration = 60;
@@ -190,7 +191,7 @@ export async function POST(request: Request) {
     const orderId = `sub-recur-${row.center_id}-${dueDate}`;
 
     let chargeRes: Response;
-    let chargeData: any;
+    let chargeData: { message?: string; code?: string; paymentKey?: string } | undefined;
     try {
       chargeRes = await fetch(`https://api.tosspayments.com/v1/billing/${row.billing_key}`, {
         method: "POST",
@@ -201,10 +202,10 @@ export async function POST(request: Request) {
         }),
       });
       chargeData = await chargeRes.json();
-    } catch (e: any) {
+    } catch (e) {
       // 네트워크 오류 등 — 토스 오류코드가 아니므로 항상 기본 재시도 정책(7회)으로 처리.
       const { terminal } = await recordFailure(
-        admin, row, amount, orderId, `요청 실패: ${e?.message ?? "알 수 없는 오류"}`,
+        admin, row, amount, orderId, `요청 실패: ${errMsg(e) || "알 수 없는 오류"}`,
       );
       if (terminal) suspended++; else failed++;
       continue;

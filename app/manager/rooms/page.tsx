@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
@@ -47,7 +48,7 @@ export default function RoomsPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -70,7 +71,7 @@ export default function RoomsPage() {
     if (!centerId) return;
     setLoading(true); setError(null);
     try { setRooms(await fetchRooms(centerId)); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId]);
   useEffect(() => { load(); }, [load]);
@@ -89,7 +90,7 @@ export default function RoomsPage() {
       else { await addRoom(centerId, input); showToast("룸을 추가했어요"); }
       closeSheet();
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -97,7 +98,7 @@ export default function RoomsPage() {
     if (!(await globalThis.appConfirm(`'${r.name}' 룸을 삭제할까요? (이 룸으로 지정된 수업은 장소가 비워져요)`))) return;
     setBusy(true);
     try { await deleteRoom(r.id); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 

@@ -8,6 +8,7 @@
   - URL: /manager/staff/permissions?mc=<manager_center_id>&role=<role_id>&name=<이름>
 */
 
+import { errMsg } from "../../../components/errorMessage";
 import Link from "next/link";
 import { useCallback, useEffect, useState, Suspense } from "react";
 import Loading from "../../../components/Loading";
@@ -36,12 +37,10 @@ function PermInner() {
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
   // null = 확인중, false = 접근 권한 없음(이 센터 소속 아님/오너도 아니고 facility.role_permission도 없음),
   // true = 접근 허용(오너 또는 facility.role_permission 보유자 — 서버 쓰기 정책과 동일 기준)
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
 
-  function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2000); }
 
   const load = useCallback(async () => {
     if (!mcId || !roleId || !centerId) { setError("잘못된 접근이에요"); setLoading(false); setHasAccess(false); return; }
@@ -70,7 +69,7 @@ function PermInner() {
       setPerms(ps);
       setRolePermKeys(new Set(rk));
       setOverrides(ov);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [mcId, roleId, centerId]);
 
@@ -95,7 +94,7 @@ function PermInner() {
         else next[key] = nextGrant;
         return next;
       });
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusyKey(null); }
   }
 
@@ -131,7 +130,6 @@ function PermInner() {
 
   return (
     <div className="app-shell">
-      {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
         <Link className="side" href="/manager/staff" prefetch={false}>‹</Link>

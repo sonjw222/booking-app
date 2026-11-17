@@ -17,7 +17,7 @@ async function loadReviewSdk() {
     if (!script) { script = document.createElement("script"); script.src = NICEPAY_V3_SDK_URL; script.async = true; }
     const s = script;
     const clean = () => { clearTimeout(timer); s.removeEventListener("load", loaded); s.removeEventListener("error", failed); };
-    const loaded = () => { clean(); typeof (window as SdkWindow).goPay === "function" ? resolve() : reject(new Error("결제창을 불러오지 못했어요")); };
+    const loaded = () => { clean(); if (typeof (window as SdkWindow).goPay === "function") resolve(); else reject(new Error("결제창을 불러오지 못했어요")); };
     const failed = () => { clean(); if (created) s.remove(); reject(new Error("결제창을 불러오지 못했어요")); };
     const timer = window.setTimeout(failed, 15000);
     s.addEventListener("load", loaded); s.addEventListener("error", failed);
@@ -81,7 +81,6 @@ export default function NicepayReviewWindow({ productId, onStatusChange }: { pro
       } catch { if (generation.current === g) setStatus("denied"); }   // 세션 조회 실패·확인 시간 초과·오류 = 실제 결제로 넘어가지 않는다
     })();
     return () => { generation.current++; ctrl.abort(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId, authVersion]);
   // 열림 상태 복구: 앱/탭이 백그라운드로 갔다가 돌아오거나(visibility) bfcache 로 복귀(pageshow)하면 "열림"에 머물지 않는다. 성공으로 간주하지 않는다.
   useEffect(() => {

@@ -6,7 +6,6 @@ import ConfirmDialog from "./ConfirmDialog";
 type Request = { message: string; resolve: (value: boolean) => void };
 
 declare global {
-  // eslint-disable-next-line no-var
   var appConfirm: (message: string) => Promise<boolean>;
 }
 

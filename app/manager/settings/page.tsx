@@ -6,6 +6,7 @@
   - 오너 또는 운영정보 설정 권한(facility.operation) 필요
 */
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import SegmentedTabs from "../../components/SegmentedTabs";
@@ -46,7 +47,7 @@ export default function SettingsPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -73,7 +74,7 @@ export default function SettingsPage() {
     try {
       setS(await fetchSettings(centerId));
       setDirty(false);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -100,7 +101,7 @@ export default function SettingsPage() {
       await saveSettings(centerId, s);
       showToast("설정을 저장했어요");
       setDirty(false);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -155,7 +156,6 @@ export default function SettingsPage() {
 
   // Track 4 운영설정 재감사: 스케줄러 인프라가 없어 저장만 되고 실제로 작동하지 않는 항목 —
   // 정상 기능처럼 보이지 않도록 "준비 중" 배지를 붙이고 입력을 비활성화한다(값 자체는 유지).
-  const soonBadge = <span className="set-soon-badge">준비 중</span>;
 
   // 토글 스위치
   // UX 감사(B-9) — numInput은 "준비 중" 필드에 disabled를 넘기는데 toggle은 그런 파라미터
@@ -264,7 +264,7 @@ export default function SettingsPage() {
                 화면에서 수동으로 처리해주세요.</div>
               {(s.autocancelHours ?? 0) === 0 && (s.autocancelMinutes ?? 0) === 0 && (
                 <div className="set-soon-note" style={{ color: "var(--warning)" }}>
-                  시간·분이 모두 0이면 "시작 전"이라는 조건 자체가 성립하지 않아 자동 폐강이 실행되지
+                  시간·분이 모두 0이면 &quot;시작 전&quot;이라는 조건 자체가 성립하지 않아 자동 폐강이 실행되지
                   않아요 — 최소 몇 분 이상으로 설정해주세요.
                 </div>
               )}
@@ -352,9 +352,9 @@ export default function SettingsPage() {
               items={[{ value: "usage_split", label: "이용 횟수로 분배" }, { value: "purchase_date_full", label: "구매일에 전액 표시" }]}
               onChange={(value) => up("unlimitedPassRevenueMode", value)} />
             <div className="set-soon-note">
-              "기간 중 이용 횟수로 분배"는 결제금액을 그 수강권으로 실제 이용한 수업 횟수로
+              &quot;기간 중 이용 횟수로 분배&quot;는 결제금액을 그 수강권으로 실제 이용한 수업 횟수로
               나눠 각 수업 날짜에 배분해요(기간이 끝나기 전에는 지금까지의 이용 횟수 기준
-              추정치로 표시되고, 더 이용할수록 자동으로 다시 계산돼요). "구매일에 전액 표시"는
+              추정치로 표시되고, 더 이용할수록 자동으로 다시 계산돼요). &quot;구매일에 전액 표시&quot;는
               수업별로 나누지 않고 결제한 날 하루에 전체 금액을 표시해요.
             </div>
           </div>
@@ -383,7 +383,7 @@ export default function SettingsPage() {
           ] as [keyof CenterSettings, string][]).map(([key, label]) => (
             <div className="set-row" key={key}>
               <div className="set-label">{label}</div>
-              {toggle(label, s[key] as boolean, (b) => up(key, b as any))}
+              {toggle(label, s[key] as boolean, (b) => up(key, b))}
             </div>
           ))}
           {/* P1-9 완료(2026-09-09): is_membership_eligible_for_class() 공용 SQL 함수를

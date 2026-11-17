@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
@@ -24,7 +25,7 @@ import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/
 import { fetchProducts, won, type Product } from "../../../lib/passes";
 import { fetchMembers, type CenterMember } from "../../../lib/members";
 import {
-  fetchCoupons, createCoupon, archiveCoupon, fetchCouponProductIds,
+  fetchCoupons, createCoupon, archiveCoupon,
   issueCouponToMembers, revokeMemberCoupon, fetchIssuedMemberCoupons,
   type Coupon, type IssuedMemberCoupon, type DiscountType,
 } from "../../../lib/coupons";
@@ -73,7 +74,7 @@ export default function CouponsPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -104,7 +105,7 @@ export default function CouponsPage() {
       const [c, p] = await Promise.all([fetchCoupons(centerId), fetchProducts(centerId)]);
       setCoupons(c);
       setProducts(p);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -139,7 +140,7 @@ export default function CouponsPage() {
       resetSheet();
       showToast("쿠폰을 만들었어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -147,7 +148,7 @@ export default function CouponsPage() {
     if (!(await globalThis.appConfirm(`'${c.name}' 쿠폰을 보관할까요? 이미 지급된 쿠폰에는 영향 없고, 앞으로 새로 지급만 막혀요.`))) return;
     setBusy(true);
     try { await archiveCoupon(c.id); showToast("보관했어요"); await load(); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -187,7 +188,7 @@ export default function CouponsPage() {
           : `${result.issuedCount}명에게 지급했어요`
       );
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -195,7 +196,7 @@ export default function CouponsPage() {
   async function openDetail(c: Coupon) {
     setDetailFor(c); setDetailSearch(""); setDetailLoading(true);
     try { setDetailRows(await fetchIssuedMemberCoupons(c.id)); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setDetailLoading(false); }
   }
 
@@ -206,7 +207,7 @@ export default function CouponsPage() {
       await revokeMemberCoupon(row.id);
       showToast("회수했어요");
       if (detailFor) setDetailRows(await fetchIssuedMemberCoupons(detailFor.id));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 

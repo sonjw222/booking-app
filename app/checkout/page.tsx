@@ -11,6 +11,7 @@ import BackButton from "../components/BackButton";
 import { checkoutSearchWithSelection, orderOptionIssue } from "../../lib/orderOptions";
 import ServicePeriodNotice from "../components/ServicePeriodNotice";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { fetchCenterDetail, fetchCenterProductsForPurchase, fetchPurchaseScheduleOptions, type CenterProduct } from "../../lib/center";
 import { purchaseScheduleState } from "../../lib/purchaseSchedule";
@@ -191,7 +192,7 @@ function CheckoutContent() {
         try { setScheduleOptions(await fetchPurchaseScheduleOptions(found.id)); setScheduleOptionsFailed(false); }
         catch { setScheduleOptionsFailed(true); }   // 조회 실패를 "후보 없음"으로 숨기지 않는다
       }
-    } catch (e: any) { setError(toUserMessage(e)); }
+    } catch (e) { setError(toUserMessage(e)); }
     finally { setLoading(false); }
   }, [centerId, productId]);
   useEffect(() => { load(); }, [load]);
@@ -362,7 +363,7 @@ function CheckoutContent() {
         directOrderIdForCleanup = null;
         setPendingManualPayment(true);
         setDone(true);
-      } catch (e: any) {
+      } catch (e) {
         // 포인트 차감이 실패한 주문이 pending으로 남아 관리자 목록에 보이지 않게 정리(취소 시 DB가 이미 차감된 포인트가 있으면 복원).
         await cancelMyPendingOrderQuietly(directOrderIdForCleanup);
         setError(toUserMessage(e));
@@ -456,7 +457,7 @@ function CheckoutContent() {
         await cancelMyPendingOrderQuietly(pgOrderIdForCleanup);
         setError(result.message ?? "결제에 실패했어요. 다시 시도해주세요.");
       }
-    } catch (e: any) {
+    } catch (e) {
       // createPayment/토큰 발급이 실패한 경우: pending 주문 정리 + 앱 복귀용 marker 제거(포인트 복원은 기존 DB 취소 트리거)
       await cancelMyPendingOrderQuietly(pgOrderIdForCleanup);
       clearPendingPgOrder();
@@ -561,7 +562,7 @@ function CheckoutContent() {
           description="링크가 만료됐거나 상품이 삭제됐을 수 있어요."
           action={<>
             <a className="primary-btn" href="/cart">장바구니로 가기</a>
-            <a className="ghost-btn" style={{ marginTop: 8 }} href="/">홈으로</a>
+            <Link className="ghost-btn" style={{ marginTop: 8 }} href="/">홈으로</Link>
           </>}
         />
       </div>
