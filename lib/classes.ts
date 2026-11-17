@@ -10,7 +10,7 @@ import { toKstIso } from "./kst";
 import { appendTrainerNames } from "./instructorDisplay";
 
 import { todayKstYmd } from "./membershipExpiry";
-import { one, rowsOf } from "./embed";
+import { one, queryOf, rowsOf } from "./embed";
 export type ManagedClass = {
   id: string;
   title: string;
@@ -158,13 +158,21 @@ export function classesOnDate<T extends { date: string; start: string }>(classes
   return classes.filter((c) => c.date === dateKey).sort((a, b) => a.start.localeCompare(b.start));
 }
 
+// fetchClasses 조회 행(select 문자열에 나열한 열).
+interface ManagedClassRow {
+  id: string; title: string; description: string | null; start_time: string; end_time: string; capacity: number;
+  recurring_group_id: string | null; allow_goods: boolean | null; allow_cancel: boolean | null; room_id: string | null;
+  cancel_deadline_min: number | null; booking_deadline_min: number | null; class_format: string | null;
+  status: string | null; pass_selection_mode: string | null;
+}
+
 export async function fetchClasses(centerId: string, fromDate: string, toDate: string): Promise<ManagedClass[]> {
   // ⚠️ center_id로 이미 좁혀서 조회하니 PostgREST 기본 응답 행 수 제한(1000행)에 안 걸릴
   // 거라고 가정했었는데(과거 fetchMonthData 수정 당시의 가정 — lib/reservations.ts 참고),
   // 테스트 데이터가 많이 쌓인 센터 하나만으로도 실제로 걸리는 것을 확인했다(관리자 수업
   // 화면에서 이번 달 앞부분 수업만 1000개까지 보이고 그 뒤 수업은 통째로 안 보임). 같은
   // 이유로 fetchMonthData가 이미 쓰고 있는 .range() 페이지 단위 반복 조회를 여기도 적용한다.
-  const rows: any[] = [];
+  const rows: ManagedClassRow[] = [];
   const PAGE_SIZE = 1000;
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data: page, error } = await supabase
@@ -682,22 +690,30 @@ export function formatGoodsUsageLabel(usages: GoodsUsageRow[] | null | undefined
     .join(", ");
 }
 
+// fetchClassAttendees 조회 행(동적 select — 상품 사용 임베드는 마이그레이션 전 환경에서 빠진다).
+interface ClassAttendeeRow {
+  id: string; profile_id: string; status: ClassAttendee["status"]; waitlist_order: number | null;
+  reservation_type: string | null; is_capacity_override: boolean | null;
+  profiles: { name: string } | null;
+  reservation_goods_usages?: Parameters<typeof formatGoodsUsageLabel>[0];
+}
+
 export async function fetchClassAttendees(classId: string): Promise<ClassAttendee[]> {
   const base = "id, profile_id, status, waitlist_order, reservation_type, is_capacity_override, profiles(name)";
-  const run = (select: string) => supabase
+  const run = async (select: string) => queryOf<ClassAttendeeRow>(await supabase
     .from("reservations")
     .select(select)
     .eq("class_id", classId)
     .in("status", ["confirmed", "waitlisted", "attended", "no_show", "cancelled"])
     .order("status")
-    .order("waitlist_order", { ascending: true, nullsFirst: true });
+    .order("waitlist_order", { ascending: true, nullsFirst: true }));
   let { data, error } = await run(`${base}, reservation_goods_usages(product_name_snapshot, size_snapshot, status)`);
   if (error) {
     // add_reservation_goods_usage.sql 미실행 환경(테이블/관계 없음) 방어 — 명단 자체는 항상 보여준다.
     ({ data, error } = await run(base));
   }
   if (error) throw new Error("예약자 명단을 불러오지 못했어요: " + error.message);
-  return ((data ?? []) as any[]).map((r) => ({
+  return (data ?? []).map((r) => ({
     reservationId: r.id,
     profileId: r.profile_id,
     name: r.profiles?.name ?? "(이름 없음)",
@@ -1166,7 +1182,7 @@ export async function copyByWeekday(
   const [ty, tm] = toMonth.split("-").map(Number);
   const holidays = await fetchCenterHolidayDates(centerId);
   const groupId = crypto.randomUUID();
-  const rows: any[] = [];
+  const rows: CopiedClassRow[] = [];
   const linkPlan: { idx: number; srcClassId: string }[] = [];
 
   for (const g of groups) {
@@ -1193,7 +1209,7 @@ export async function copyByDate(
   const holidays = await fetchCenterHolidayDates(centerId);
   const lastDay = new Date(Date.UTC(ty, tm, 0, 12, 0, 0)).getUTCDate();
   const groupId = crypto.randomUUID();
-  const rows: any[] = [];
+  const rows: CopiedClassRow[] = [];
   const linkPlan: { idx: number; srcClassId: string }[] = [];
 
   for (const it of items) {
@@ -1228,8 +1244,23 @@ export async function fetchClassPassSelectionMode(classId: string): Promise<"all
 // 인자로 넘김) — own 권한(schedule.own.group.create) 판정이 서버에서 이뤄진다.
 export type CopyResult = { count: number; failedCount: number };
 
+// create_recurring_classes_safe RPC로 넘기는 복사 대상 행(center_id는 별도 인자로 빼므로 삽입 직전에 제거).
+interface CopiedClassRow {
+  center_id?: string;
+  title: string;
+  start_time: string;
+  end_time: string;
+  capacity: number;
+  room_id: string | null;
+  cancel_deadline_min: number | null;
+  recurring_group_id: string;
+  status: string;
+  allow_goods: boolean;
+  pass_selection_mode?: "all" | "selected";
+}
+
 async function insertCopiedClasses(
-  centerId: string, rows: any[], linkPlan: { idx: number; srcClassId: string }[]
+  centerId: string, rows: CopiedClassRow[], linkPlan: { idx: number; srcClassId: string }[]
 ): Promise<CopyResult> {
   if (rows.length === 0) return { count: 0, failedCount: 0 };
 

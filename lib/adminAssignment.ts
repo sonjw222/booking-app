@@ -38,7 +38,7 @@ export async function assignReservation(input: AssignReservationInput): Promise<
     p_force_capacity: input.forceCapacity ?? false,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
-  const result = data as any;
+  const result = data as { needs_capacity_confirm?: boolean; reservation_id: string; over_capacity?: boolean };
   if (result?.needs_capacity_confirm) {
     return { needsCapacityConfirm: true };
   }

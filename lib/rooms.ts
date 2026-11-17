@@ -26,7 +26,19 @@ export type Room = {
 
 const MISSING_COLUMN = "42703";
 
-function mapRow(r: any): Room {
+interface RoomRow {
+  id: string;
+  center_id: string;
+  name: string;
+  memo: string | null;
+  address: string | null;
+  detail_address?: string | null;   // add_room_detail_address.sql 미적용 환경에는 없음
+  latitude: number | null;
+  longitude: number | null;
+  sort_order: number;
+}
+
+function mapRow(r: RoomRow): Room {
   return {
     id: r.id, centerId: r.center_id, name: r.name, memo: r.memo,
     address: r.address, detailAddress: r.detail_address ?? null,

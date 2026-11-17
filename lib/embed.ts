@@ -30,3 +30,12 @@ export interface DynamicQueryResult<T> {
 export function queryOf<T>(res: unknown): DynamicQueryResult<T> {
   return res as DynamicQueryResult<T>;
 }
+
+/**
+ * `fetchAllPages<Row>(...)`의 build 콜백이 돌려주는 supabase 빌더를 호출부가 선언한 행 타입의 페이지 결과로 읽는다
+ * (임베드가 배열로 추론되는 문제 때문에 빌더 타입을 그대로 넘기면 Row와 맞지 않는다). 런타임 값은 그대로.
+ */
+export interface PageOf<T> { data: T[] | null; error: { message: string } | null; count?: number | null }
+export function pageOf<T>(builder: PromiseLike<unknown>): PromiseLike<PageOf<T>> {
+  return builder as PromiseLike<PageOf<T>>;
+}

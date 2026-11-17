@@ -6,7 +6,7 @@
   - CSV(엑셀) 내보내기용 데이터
 */
 
-import { one } from "./embed";
+import { one, pageOf, queryOf, rowsOf } from "./embed";
 import { displayMemberName } from "./memberName";
 import { supabase } from "./supabaseClient";
 import { fetchAllPages, fetchByIdChunks } from "./memberList";
@@ -91,11 +91,23 @@ export async function deleteGrade(gradeId: string): Promise<void> {
 // 센터 회원 목록 — 네트워크 조회 부분(등급 필터만 서버에서 적용). 상태·키워드 필터는 filterMembers가 맡는다.
 // PERF-030~033: PostgREST 1000행 상한/.in() URL 길이 때문에 center_members·memberships는 range 페이지네이션(안정 정렬 키
 // + count 검증), profile id 대상 조회는 150개 청크로 나눈다. 세 후속 조회는 서로 독립이라 병렬(직렬 단계 4 → 2).
+// fetchMemberBase 조회 행들(임베드는 런타임상 객체/null — lib/embed.ts 참고).
+interface MemberBaseRow {
+  id: string; profile_id: string; grade_id: string | null; registered_at: string; last_attended_at: string | null;
+  app_linked: boolean | null; memo: string | null; status: string;
+  profiles: { name: string | null; account_id: string | null; accounts: { address: string | null } | null } | null;
+  member_grades: { name: string; color: string | null } | null;
+}
+interface MemberPhoneRow { profile_id: string; account_phone: string | null }
+interface MemberPassRow {
+  id: string; profile_id: string; product_name: string; remaining_count: number | null; expires_at: string; pass_type: string | null; status: string;
+}
+
 export async function fetchMemberBase(centerId: string, filter: Pick<MemberFilter, "gradeId"> = {}): Promise<CenterMember[]> {
   // egress 감사(2026-09-15)에서 넣었던 limit(2000)은 2000명 초과 센터에서 뒷 회원을 조용히 누락시키므로 제거하고
   // 전량 페이지네이션으로 바꿨다(서버 검색 RPC가 생기면 그쪽이 egress 해법 — docs/TODO 참고).
   // 정렬 키: registered_at 단독이면 동률 행이 페이지 경계에서 중복/누락되므로 id를 보조 키로 둔다.
-  const rows = await fetchAllPages<any>(
+  const rows = await fetchAllPages<MemberBaseRow>(
     (from, to, wantCount) => {
       let q = supabase
         .from("center_members")
@@ -107,7 +119,7 @@ export async function fetchMemberBase(centerId: string, filter: Pick<MemberFilte
     `, wantCount ? { count: "exact" } : undefined)
         .eq("center_id", centerId);
       if (filter.gradeId) q = q.eq("grade_id", filter.gradeId);
-      return q.order("registered_at", { ascending: false }).order("id", { ascending: false }).range(from, to);
+      return pageOf<MemberBaseRow>(q.order("registered_at", { ascending: false }).order("id", { ascending: false }).range(from, to));
     },
     { key: (r) => r.id, errorLabel: "회원 목록을 불러오지 못했어요" },
   );
@@ -126,20 +138,20 @@ export async function fetchMemberBase(centerId: string, filter: Pick<MemberFilte
   const passStateByProfile: Record<string, { hasUsable: boolean; hasAny: boolean }> = {};
 
   const [phoneRows, passRows] = await Promise.all([
-    fetchByIdChunks<any>(profileIds, async (chunk) => {
+    fetchByIdChunks<MemberPhoneRow>(profileIds, async (chunk) => {
       const { data, error } = await supabase.rpc("fetch_member_phones_safe", { p_profile_ids: chunk, p_center_id: centerId });
       if (error) throw new Error("회원 연락처를 불러오지 못했어요: " + error.message);
-      return (data ?? []) as any[];
+      return rowsOf<MemberPhoneRow>(data);
     }),
-    fetchByIdChunks<any>(profileIds, (chunk) => fetchAllPages<any>(
-      (from, to, wantCount) => supabase
+    fetchByIdChunks<MemberPassRow>(profileIds, (chunk) => fetchAllPages<MemberPassRow>(
+      (from, to, wantCount) => pageOf<MemberPassRow>(supabase
         .from("memberships")
         .select("id, profile_id, product_name, remaining_count, expires_at, pass_type, status", wantCount ? { count: "exact" } : undefined)
         .eq("center_id", centerId)
         .in("profile_id", chunk)
         .order("expires_at", { ascending: true })
         .order("id", { ascending: true })
-        .range(from, to),
+        .range(from, to)),
       { key: (m) => m.id ?? `${m.profile_id}|${m.expires_at}|${m.product_name}`, errorLabel: "수강권을 불러오지 못했어요", concurrency: 3 },
     )),
   ]);
@@ -281,7 +293,7 @@ export async function extendMembershipExpiry(input: {
     p_reason: input.reason?.trim() ? input.reason.trim() : null,
   });
   if (error) throw new Error(extensionErrorMessage(error));
-  const d = data as any;
+  const d = data as { oldExpiresAt: string; newExpiresAt: string; daysAdded: number };
   return { oldExpiresAt: d.oldExpiresAt, newExpiresAt: d.newExpiresAt, daysAdded: d.daysAdded };
 }
 
@@ -303,7 +315,7 @@ export async function updateMemberStatus(
     .eq("id", memberId)
     .single();
 
-  const patch: any = { status };
+  const patch: { status: "active" | "expired" | "dormant"; dormant_since?: string | null } = { status };
 
   if (status === "dormant") {
     // 휴면 시작 시각 기록 (기간권 차감 정지 기준점)
@@ -398,6 +410,12 @@ export type MemberDetailData = {
   } | null;
 };
 
+// 회원 상세 "보유 수강권" 조회 행(selected_size는 SQL 미적용 환경에서 빠진다).
+interface MemberActivePassRow {
+  id: string; product_id: string | null; product_name: string; remaining_count: number | null; expires_at: string | null; status: string;
+  selected_size?: string | null;
+}
+
 export async function fetchMemberDetail(profileId: string, centerId: string): Promise<MemberDetailData> {
   // 예약 이력
   const { data: resv } = await supabase
@@ -445,9 +463,9 @@ export async function fetchMemberDetail(profileId: string, centerId: string): Pr
     .eq("status", "active")
     .order("expires_at", { ascending: true });
   const memFirst = await memQuery("id, product_id, product_name, remaining_count, expires_at, status, selected_size");
-  let mem: any[] | null = memFirst.data as any[] | null;
+  let mem = queryOf<MemberActivePassRow>(memFirst).data;
   if (memFirst.error?.code === "42703") {
-    mem = (await memQuery("id, product_id, product_name, remaining_count, expires_at, status")).data as any[] | null;
+    mem = queryOf<MemberActivePassRow>(await memQuery("id, product_id, product_name, remaining_count, expires_at, status")).data;
   }
 
   // 각 수강권의 종류(수강권/상품) 파악
@@ -527,7 +545,7 @@ export async function searchAccountsForMember(centerId: string, keyword: string)
     if (error.code === "42883" || error.code === "PGRST202") throw new Error("회원 검색 기능을 사용할 수 없어요. 앱/서버 업데이트 후 다시 시도해주세요");
     throw new Error(/권한|너무 많아요/.test(error.message ?? "") ? error.message : "검색에 실패했어요: " + error.message);   // 권한/rate limit 메시지는 generic이라 그대로 보여준다
   }
-  return ((data ?? []) as any[]).map((r) => ({
+  return rowsOf<{ profile_id: string; name: string | null; phone: string | null; already_member: boolean | null }>(data).map((r) => ({
     profileId: r.profile_id,
     name: displayMemberName(r.name),
     phone: r.phone ?? null,

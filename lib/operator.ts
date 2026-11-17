@@ -108,7 +108,20 @@ export type SubscriptionPlanInput = {
   maxProducts: number | null;
 };
 
-function rowToPlan(r: any): SubscriptionPlan {
+interface SubscriptionPlanRow {
+  id: string;
+  name: string;
+  monthly_price: number;
+  description: string | null;
+  is_active: boolean;
+  is_default: boolean;
+  max_rooms: number | null;
+  max_staff: number | null;
+  max_members: number | null;
+  max_products: number | null;
+}
+
+function rowToPlan(r: SubscriptionPlanRow): SubscriptionPlan {
   return {
     id: r.id, name: r.name, monthlyPrice: r.monthly_price, description: r.description,
     isActive: r.is_active, isDefault: r.is_default,

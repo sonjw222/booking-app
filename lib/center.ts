@@ -15,7 +15,7 @@ import { computeSelectableSchedule, type ScheduleRule, type SelectableSchedule }
 import type { CountTier } from "./selectableCount";
 
 import { todayKstYmd } from "./membershipExpiry";
-import { one } from "./embed";
+import { one, queryOf } from "./embed";
 export type CenterDetail = {
   id: string;
   name: string;
@@ -220,12 +220,21 @@ export async function fetchCenterProducts(centerId: string): Promise<CenterProdu
   if (!sessionData.session) return fetchPublicCenterProducts(centerId);
   try {
     return await fetchMemberCenterProducts(centerId);
-  } catch (e: any) {
+  } catch (e) {
     // 세션 토큰이 만료돼 요청이 anon으로 처리되면 회원용 RPC는 권한 오류(42501)로 실패한다 —
     // 이때만 공개 목록으로 대체한다(그 외 오류는 그대로 던짐).
-    if (e?.code === "42501") return fetchPublicCenterProducts(centerId);
+    if ((e as { code?: string } | null | undefined)?.code === "42501") return fetchPublicCenterProducts(centerId);
     throw e;
   }
+}
+
+// fetch_purchasable_products RPC(setof products) 응답 행 — 이 함수가 읽는 열만 선언한다(컬럼 폴백으로 select 문자열이 동적).
+interface MemberProductRow {
+  id: string; name: string; price: number; product_kind?: string | null;
+  total_count: number | null; unlimited?: boolean | null; description?: string | null;
+  sizes?: string[] | null; auto_book_days?: number[] | null; group_label?: string | null;
+  max_quantity?: number | null; coupon_eligible?: boolean | null;
+  weekday_selectable?: boolean | null; time_selectable?: boolean | null; purchase_count_selectable?: boolean | null;
 }
 
 // fetch_public_storefront_products RPC 응답 행(snake_case) — 이 파일이 읽는 열만 선언한다.
@@ -347,19 +356,19 @@ async function fetchMemberCenterProducts(centerId: string): Promise<CenterProduc
   const first = withPeriod.error?.code === "42703"
     ? await supabase.rpc("fetch_purchasable_products", { p_center_id: centerId }).select(CENTER_PRODUCTS_SELECT_FULL)
     : withPeriod;
-  let data: any[] | null = first.data as any;
+  let data = queryOf<MemberProductRow>(first).data;
   let error = first.error;
   if (error?.code === "42703") {
     const second = await supabase
       .rpc("fetch_purchasable_products", { p_center_id: centerId })
       .select(CENTER_PRODUCTS_SELECT_WEEKDAY);
-    data = second.data as any;
+    data = queryOf<MemberProductRow>(second).data;
     error = second.error;
     if (error?.code === "42703") {
       const fallback = await supabase
         .rpc("fetch_purchasable_products", { p_center_id: centerId })
         .select(CENTER_PRODUCTS_SELECT_BASE);
-      data = fallback.data as any;
+      data = queryOf<MemberProductRow>(fallback).data;
       error = fallback.error;
     }
   }
@@ -367,10 +376,10 @@ async function fetchMemberCenterProducts(centerId: string): Promise<CenterProduc
   // Postgres 함수가 setof products를 반환하는 RPC라 supabase-js의 기본 타입 추론이
   // "단일 행 | 배열" 유니온으로 잡는다(.single() 없이도) — 실제로는 여러 행이 올 수
   // 있으므로 배열로 명시한다.
-  const rows = (data ?? []) as any[];
+  const rows = data ?? [];
 
   const limitedIds = rows.filter((p) => p.max_quantity != null).map((p) => p.id);
-  let soldByProduct: Record<string, number> = {};
+  const soldByProduct: Record<string, number> = {};
   if (limitedIds.length > 0) {
     const { data: counts, error: countErr } = await supabase
       .from("product_sale_counts")
@@ -391,7 +400,7 @@ async function fetchMemberCenterProducts(centerId: string): Promise<CenterProduc
       .select("product_id, count, price")
       .in("product_id", selectableIds);
     if (!tierErr) {
-      for (const t of (tierRows ?? []) as any[]) (tiersByProduct[t.product_id] ??= []).push({ count: t.count, price: t.price });
+      for (const t of tierRows ?? []) (tiersByProduct[t.product_id] ??= []).push({ count: t.count, price: t.price });
     }
     for (const id of Object.keys(tiersByProduct)) tiersByProduct[id].sort((a, b) => a.count - b.count);
   }

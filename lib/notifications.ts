@@ -31,7 +31,7 @@ export type Notification = {
   body: string;
   centerId: string | null;
   link: string | null;
-  data: any;
+  data: any;   // 서버 JSON(kind별로 모양이 다름) — app/ 호출부가 널 체크 없이 읽어서 타입 변경은 app 정리와 함께(남은 진단 참고)
   read: boolean;
   pinned: boolean;
   createdAt: string;
@@ -94,7 +94,20 @@ export function notificationHref(n: Pick<Notification, "kind" | "link" | "data">
   return n.link ?? "/notifications";
 }
 
-function mapRow(r: any): Notification {
+interface NotificationRow {
+  id: string;
+  kind: NotiKind;
+  title: string;
+  body: string | null;
+  center_id: string | null;
+  link: string | null;
+  data: Record<string, unknown> | null;
+  read_at: string | null;
+  pinned: boolean | null;
+  created_at: string;
+}
+
+function mapRow(r: NotificationRow): Notification {
   return {
     id: r.id,
     kind: r.kind,
@@ -217,7 +230,7 @@ function openHubChannel(hub: NotiHub, accountId: string) {
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "notifications", filter: `recipient_account_id=eq.${accountId}` },
       (payload) => {
-        const n = mapRow(payload.new);
+        const n = mapRow(payload.new as NotificationRow);
         for (const fn of Array.from(hub.listeners)) {
           try { fn(n); } catch { /* 한 리스너의 오류가 다른 리스너 전달을 막지 않게 */ }
         }

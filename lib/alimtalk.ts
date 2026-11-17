@@ -24,7 +24,17 @@ export type AlimtalkTemplate = {
   isActive: boolean;
 };
 
-function fromTemplateRow(r: any): AlimtalkTemplate {
+interface AlimtalkTemplateRow {
+  id: string;
+  center_id: string | null;
+  aligo_template_code: string | null;
+  title: string;
+  content: string;
+  status: AlimtalkTemplateStatus;
+  is_active: boolean;
+}
+
+function fromTemplateRow(r: AlimtalkTemplateRow): AlimtalkTemplate {
   // 2026-10-01 — 읽는 시점에 항상 정규화한다(normalize-on-read, A-2). DB에 예전 알리고
   // 원격 템플릿을 그대로 가져와 #{변수} 문법으로 저장된 행이 있을 수 있는데(예: UL_2071),
   // production 데이터 migration 없이 안전하게 고치는 방법으로 이 방식을 택했다 — 이 함수를

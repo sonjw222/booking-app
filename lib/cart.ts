@@ -4,6 +4,7 @@
   - cart_items 테이블 사용 (회원 본인 것만)
 */
 
+import { queryOf } from "./embed";
 import { omitKeys } from "./objectUtil";
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
@@ -64,7 +65,7 @@ export async function addToCart(input: {
     const { data: existing } = await q.limit(1);
     if (existing && existing.length > 0) {
       const { error } = await supabase.from("cart_items")
-        .update({ selected_count: input.selectedCount, price: input.price }).eq("id", (existing[0] as any).id);
+        .update({ selected_count: input.selectedCount, price: input.price }).eq("id", existing[0].id);
       if (error) throw new Error("장바구니 담기에 실패했어요: " + error.message);
       return "added";
     }
@@ -90,24 +91,30 @@ export async function addToCart(input: {
   return "added";
 }
 
+// cart_items 조회 행(컬럼 폴백으로 select 문자열이 동적 — 구버전 DB에는 selected_count/purchase_count_selectable이 없다).
+interface CartRow {
+  id: string; center_id: string; product_id: string; product_name: string; price: number;
+  selected_size: string | null; selected_count?: number | null;
+  products: { sizes?: string[] | null; purchase_count_selectable?: boolean | null } | null;
+}
+
 export async function fetchCart(): Promise<CartItem[]> {
   const run = (cols: string) => supabase.from("cart_items").select(cols).order("created_at", { ascending: true });
   const first = await run("id, center_id, product_id, product_name, price, selected_size, selected_count, products(sizes, purchase_count_selectable)");
-  let data: any[] | null = first.data as any;
-  let error = first.error;
+  let { data, error } = queryOf<CartRow>(first);
   if (error?.code === "42703") {
-    ({ data, error } = (await run("id, center_id, product_id, product_name, price, selected_size, products(sizes)")) as any);
+    ({ data, error } = queryOf<CartRow>(await run("id, center_id, product_id, product_name, price, selected_size, products(sizes)")));
   }
   if (error) throw new Error("장바구니를 불러오지 못했어요: " + error.message);
   // 선택형 상품의 회차별 가격표를 한 번에 조회(없거나 실패하면 빈 가격표 — 그 row는 횟수를 바꿀 수 없고 저장된 금액으로만 표시)
-  const rows = (data ?? []) as any[];
+  const rows = data ?? [];
   const selectableIds = Array.from(new Set(rows.filter((c) => c.products?.purchase_count_selectable).map((c) => c.product_id)));
   const tiersByProduct: Record<string, CountTier[]> = {};
   if (selectableIds.length > 0) {
     const { data: tierRows, error: tierErr } = await supabase
       .from("product_count_prices").select("product_id, count, price").in("product_id", selectableIds);
     if (!tierErr) {
-      for (const t of (tierRows ?? []) as any[]) (tiersByProduct[t.product_id] ??= []).push({ count: t.count, price: t.price });
+      for (const t of tierRows ?? []) (tiersByProduct[t.product_id] ??= []).push({ count: t.count, price: t.price });
       for (const id of Object.keys(tiersByProduct)) tiersByProduct[id].sort((a, b) => a.count - b.count);
     }
   }

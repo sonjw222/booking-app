@@ -24,7 +24,17 @@ export type Announcement = {
   createdAt: string;
 };
 
-function mapRow(r: any): Announcement {
+interface AnnouncementRow {
+  id: string;
+  center_id: string;
+  title: string;
+  body: string | null;
+  photos: string[] | null;
+  pinned: boolean | null;
+  created_at: string;
+}
+
+function mapRow(r: AnnouncementRow): Announcement {
   return {
     id: r.id,
     centerId: r.center_id,

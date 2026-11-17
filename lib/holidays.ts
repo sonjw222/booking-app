@@ -36,7 +36,7 @@ export async function addHoliday(centerId: string, date: string, reason: string,
     p_force: force,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
-  const d = data as any;
+  const d = data as { needs_confirm?: boolean; class_count: number; reservation_count: number; deleted_classes: number; cancelled_reservations: number };
   if (d.needs_confirm) {
     return { needsConfirm: true, classCount: d.class_count, reservationCount: d.reservation_count };
   }
