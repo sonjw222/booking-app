@@ -20,14 +20,6 @@ import UiIcon from "../components/UiIcon";
 
 import { todayKstYmd } from "../../lib/membershipExpiry";
 import { remainingPercent } from "../../lib/membershipStatus";
-const STATUS_LABEL: Record<string, string> = {
-  confirmed: "예약확정",
-  waitlisted: "대기중",
-  cancelled: "취소됨",
-  attended: "출석완료",
-  no_show: "노쇼",
-};
-
 function daysLeft(dateStr: string | null): number | null {
   if (!dateStr) return null; // 기간 무제한
   const today = new Date();

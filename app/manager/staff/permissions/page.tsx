@@ -37,12 +37,10 @@ function PermInner() {
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
   // null = 확인중, false = 접근 권한 없음(이 센터 소속 아님/오너도 아니고 facility.role_permission도 없음),
   // true = 접근 허용(오너 또는 facility.role_permission 보유자 — 서버 쓰기 정책과 동일 기준)
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
 
-  function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2000); }
 
   const load = useCallback(async () => {
     if (!mcId || !roleId || !centerId) { setError("잘못된 접근이에요"); setLoading(false); setHasAccess(false); return; }
@@ -132,7 +130,6 @@ function PermInner() {
 
   return (
     <div className="app-shell">
-      {toast && <div className="toast">{toast}</div>}
 
       <div className="back-header">
         <Link className="side" href="/manager/staff" prefetch={false}>‹</Link>

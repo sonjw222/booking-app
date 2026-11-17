@@ -72,7 +72,6 @@ function ManagerSubscriptionContent() {
     })();
   }, []);
 
-  const activeCenter = centers.find((c) => c.id === centerId);
 
   const loadSubscription = useCallback(async () => {
     if (!centerId) return;

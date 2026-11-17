@@ -156,7 +156,6 @@ export default function SettingsPage() {
 
   // Track 4 운영설정 재감사: 스케줄러 인프라가 없어 저장만 되고 실제로 작동하지 않는 항목 —
   // 정상 기능처럼 보이지 않도록 "준비 중" 배지를 붙이고 입력을 비활성화한다(값 자체는 유지).
-  const soonBadge = <span className="set-soon-badge">준비 중</span>;
 
   // 토글 스위치
   // UX 감사(B-9) — numInput은 "준비 중" 필드에 disabled를 넘기는데 toggle은 그런 파라미터

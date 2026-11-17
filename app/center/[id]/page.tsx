@@ -16,7 +16,7 @@ import Loading from "../../components/Loading";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   fetchCenterDetail, fetchCenterClasses, centerPhotoUrl,
-  settle, unwrap, fetchCenterProducts, hasActivePassAtCenter, requestPurchase, fetchClassAllowedPasses, type ClassPassInfo,
+  settle, unwrap, fetchCenterProducts, hasActivePassAtCenter, fetchClassAllowedPasses, type ClassPassInfo,
   type CenterDetail, type CenterClass, type CenterProduct,
 } from "../../../lib/center";
 import { ZoomableImage } from "../../components/ImageViewer";
@@ -137,7 +137,6 @@ function CenterDetailContent() {
   const [mapSheet, setMapSheet] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 

@@ -127,7 +127,6 @@ function ReservationCalendarContent() {
   const [centerPick, setCenterPick] = useState<string | null>(null); // 로컬 센터 필터
   const [centerSheet, setCenterSheet] = useState(false);
   // 수강권 선택 시트
-  const [passSheet, setPassSheet] = useState<ClassInfo | null>(null);
   const [passPick, setPassPick] = useState<string | null>(null);
   // 선택된 날짜의 수업들에 대해 "사용 가능한 수강권"을 한 번에 조회한 결과 (classId -> 목록)
   const [usablePassesByClass, setUsablePassesByClass] = useState<Record<string, UsableMembership[]>>({});

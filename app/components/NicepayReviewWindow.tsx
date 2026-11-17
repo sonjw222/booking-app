@@ -17,7 +17,7 @@ async function loadReviewSdk() {
     if (!script) { script = document.createElement("script"); script.src = NICEPAY_V3_SDK_URL; script.async = true; }
     const s = script;
     const clean = () => { clearTimeout(timer); s.removeEventListener("load", loaded); s.removeEventListener("error", failed); };
-    const loaded = () => { clean(); typeof (window as SdkWindow).goPay === "function" ? resolve() : reject(new Error("결제창을 불러오지 못했어요")); };
+    const loaded = () => { clean(); if (typeof (window as SdkWindow).goPay === "function") resolve(); else reject(new Error("결제창을 불러오지 못했어요")); };
     const failed = () => { clean(); if (created) s.remove(); reject(new Error("결제창을 불러오지 못했어요")); };
     const timer = window.setTimeout(failed, 15000);
     s.addEventListener("load", loaded); s.addEventListener("error", failed);

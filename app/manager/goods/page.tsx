@@ -15,7 +15,7 @@ import SheetOverlay from "../../components/SheetOverlay";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
-import { fetchProducts, createProduct, updateProduct, deleteProduct, deleteProducts, won, type Product } from "../../../lib/passes";
+import { fetchProducts, createProduct, updateProduct, deleteProduct, deleteProducts, type Product } from "../../../lib/passes";
 import { bulkDeleteConfirmMessage, bulkDeleteToast, effectiveSelection, selectAllVisible, toggleSelected } from "../../../lib/bulkSelect";
 import BulkSelectBar from "../../components/BulkSelectBar";
 import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";

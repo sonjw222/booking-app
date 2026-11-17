@@ -23,7 +23,7 @@ import {
   fetchMembers, fetchGrades, sendAlimtalkToMembers, type CenterMember, type Grade,
 } from "../../../../lib/members";
 import {
-  fetchAlimtalkTemplates, extractTemplateVariables, hasUnresolvedAlimtalkVariables,
+  fetchAlimtalkTemplates, extractTemplateVariables,
   ALIMTALK_AUTO_VARIABLE_NAMES, type AlimtalkTemplate,
 } from "../../../../lib/alimtalk";
 import { fetchCenterSubscription } from "../../../../lib/centerSubscription";

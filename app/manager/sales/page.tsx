@@ -209,7 +209,6 @@ export default function SalesPage() {
   // 매출 화면은 메뉴(app/manager/page.tsx)와 같은 pass.sales.view 가 있어야 열린다. 없으면 서버가 가린 0원 화면 대신 안내를 보여 준다. 확인 중·실패는 허용이 아니다.
   const salesGate = useCenterPermissionGate(centers, centerId, "pass.sales.view");
   const canCreatePayment = canDo("pass.payment.create");
-  const canDeletePayment = canDo("pass.payment.delete");
   // registerPayment는 수강권/상품을 고르면 memberships에도 insert하므로(발급),
   // 그 경우엔 pass.payment.create뿐 아니라 customer.member.issue_pass도 필요하다.
   const canIssuePass = canDo("customer.member.issue_pass");

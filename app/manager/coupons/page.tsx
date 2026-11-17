@@ -25,7 +25,7 @@ import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/
 import { fetchProducts, won, type Product } from "../../../lib/passes";
 import { fetchMembers, type CenterMember } from "../../../lib/members";
 import {
-  fetchCoupons, createCoupon, archiveCoupon, fetchCouponProductIds,
+  fetchCoupons, createCoupon, archiveCoupon,
   issueCouponToMembers, revokeMemberCoupon, fetchIssuedMemberCoupons,
   type Coupon, type IssuedMemberCoupon, type DiscountType,
 } from "../../../lib/coupons";

@@ -388,12 +388,6 @@ export default function ClassManagePage() {
     if (month === 12) { setYear((y) => y + 1); setMonth(1); }
     else setMonth((m) => m + 1);
   }
-  function goToday() {
-    const t = new Date();
-    setYear(t.getFullYear());
-    setMonth(t.getMonth() + 1);
-    setSelectedDay(t.getDate());
-  }
 
   // 일/시간/분 ↔ 분 변환은 lib/deadlineInput.ts의 공용 함수를 쓴다(취소마감/예약마감 동일 규칙,
   // CLASS-001에서 예약마감 추가 시 취소마감과 로직 중복 대신 공용화 + 단위테스트 가능하도록 정리).

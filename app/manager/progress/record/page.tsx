@@ -20,7 +20,7 @@ import DatePicker from "../../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../../lib/manager";
 import {
   fetchCategories,
-  fetchProgressMembers, fetchMemberProgress, recordProgress, deleteProgressRecord,
+  fetchProgressMembers, fetchMemberProgress, recordProgress,
   deleteProgressByDate,
   type ProgressRecord,
 } from "../../../../lib/progress";
@@ -137,14 +137,6 @@ function ProgressRecordContent() {
       setAddSheet(false);
       await loadHistory();
     } catch (e) { setError(errMsg(e)); }
-    finally { setBusy(false); }
-  }
-
-  async function handleDelete(id: string) {
-    if (!(await globalThis.appConfirm("이 진도 기록을 삭제할까요?"))) return;
-    setBusy(true);
-    try { await deleteProgressRecord(id); showToast("삭제했어요"); await loadHistory(); }
-    catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 

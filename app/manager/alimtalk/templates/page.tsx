@@ -24,10 +24,6 @@ import {
 } from "../../../../lib/alimtalk";
 import { toUserMessage } from "../../../../lib/userError";
 
-const INSP_STATUS_LABEL: Record<string, string> = {
-  REG: "등록(심사 전)", REQ: "심사 요청중", APR: "승인됨", REJ: "반려됨",
-};
-
 const STATUS_LABEL: Record<AlimtalkTemplateStatus, string> = {
   draft: "초안", pending: "카카오 승인 대기", approved: "승인됨", rejected: "반려됨",
 };

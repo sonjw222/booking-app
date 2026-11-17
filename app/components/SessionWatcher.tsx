@@ -44,7 +44,7 @@ export default function SessionWatcher() {
   const [mergePassword, setMergePassword] = useState("");
   const [mergeSubmitting, setMergeSubmitting] = useState(false);
   const [mergeMessage, setMergeMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
-  const [mergeDismissed, setMergeDismissedState] = useState(false);
+  const [, setMergeDismissedState] = useState(false);
   // onAuthStateChange 콜백은 마운트 시 한 번만 만들어져(useEffect deps []) mergeDismissed를
   // 클로저로 캡처하면 항상 마운트 시점 값(false)만 본다 — ref로 최신 값을 읽는다.
   const mergeDismissedRef = useRef(false);

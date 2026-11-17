@@ -14,7 +14,7 @@ import InquiryChat from "../../components/InquiryChat";
 import UiIcon from "../../components/UiIcon";
 import { fetchCenterThreads, type InquiryThread } from "../../../lib/inquiries";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { fetchMyEffectivePermissionKeys } from "../../../lib/roles";
 
 export default function ManagerInquiriesPage() {
   return (
