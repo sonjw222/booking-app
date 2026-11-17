@@ -5,6 +5,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { one, rowsOf } from "./embed";
 import { sanitizeRichText } from "./security";
 import { getMyAccountId } from "./authAccount";
 
@@ -47,8 +48,9 @@ export async function fetchReviews(centerId: string): Promise<Review[]> {
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw new Error("후기를 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => {
-    const nm = r.profiles?.nickname || r.profiles?.name || "회원";
+  return (data ?? []).map((r) => {
+    const profile = one<{ name: string; nickname: string | null }>(r.profiles);
+    const nm = profile?.nickname || profile?.name || "회원";
     // 이름 가운데 마스킹 (홍길동 → 홍*동)
     const masked = nm.length <= 1 ? nm
       : nm.length === 2 ? nm[0] + "*"
@@ -85,7 +87,7 @@ export async function myReviewFor(centerId: string): Promise<Review | null> {
       rating: data.rating,
       content: sanitizeRichText(data.content), // 위 fetchReviews와 동일한 이유
       photos: data.photos ?? null,
-      reply: (data as any).reply ?? null,
+      reply: data.reply ?? null,
       createdAt: KST_MD.format(new Date(data.created_at)),
     };
   } catch { return null; }
@@ -100,7 +102,7 @@ export async function writeReview(centerId: string, rating: number, content: str
     p_photos: photos && photos.length > 0 ? photos : null,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
-  return (data as any)?.point ?? 0;
+  return data?.point ?? 0;
 }
 
 // 후기 수정(F13): 같은 행을 수정한다 — 후기 ID·관리자 답변·작성일·보상 이력을 보존하고 보상을 다시 지급하지 않는다.
@@ -148,9 +150,9 @@ export async function fetchAllMyPoints(): Promise<PointBalance[]> {
     const profileId = await myProfileId();
     const { data, error } = await supabase.rpc("my_point_balances", { p_profile_id: profileId });
     if (error) return [];
-    return (data ?? [])
-      .filter((p: any) => p.balance > 0)
-      .map((p: any) => ({
+    return rowsOf<{ center_id: string; center_name: string | null; balance: number }>(data)
+      .filter((p) => p.balance > 0)
+      .map((p) => ({
         centerId: p.center_id,
         centerName: p.center_name ?? "센터",
         balance: p.balance,
@@ -195,9 +197,9 @@ export async function fetchCenterReviewsForManager(centerId: string): Promise<Ma
     .order("created_at", { ascending: false })
     .limit(500);
   if (error) throw new Error("후기를 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => ({
+  return (data ?? []).map((r) => ({
     id: r.id, profileId: r.profile_id,
-    writerName: r.profiles?.nickname || r.profiles?.name || "회원",  // 관리자는 실명 확인
+    writerName: one<{ name: string; nickname: string | null }>(r.profiles)?.nickname || one<{ name: string; nickname: string | null }>(r.profiles)?.name || "회원",  // 관리자는 실명 확인
     rating: r.rating,
     content: sanitizeRichText(r.content), // fetchReviews와 동일한 이유(위 주석 참고)
     photos: r.photos ?? null,
@@ -210,7 +212,7 @@ export async function fetchCenterReviewsForManager(centerId: string): Promise<Ma
 export async function fetchReviewStats(centerId: string): Promise<ReviewStats> {
   const { data, error } = await supabase.rpc("center_review_stats", { p_center_id: centerId });
   if (error) return { total: 0, avgRating: 0, noReply: 0 };
-  const r = (data ?? [])[0] as any;
+  const r = (data ?? [])[0] as { total?: number | string; avg_rating?: number | string; no_reply?: number | string } | undefined;
   return {
     total: Number(r?.total ?? 0),
     avgRating: Number(r?.avg_rating ?? 0),
@@ -285,6 +287,18 @@ export type ReviewReportForAdmin = {
   reporterName: string;
 };
 
+// 신고 목록 조회 행 — `accounts:reporter_account_id(...)` 별칭 힌트 때문에 select 결과 타입이 추론되지 않아 직접 선언.
+interface ReviewReportRow {
+  id: string;
+  review_id: string;
+  reason: ReviewReportReason;
+  detail: string | null;
+  status: ReviewReportStatus;
+  created_at: string;
+  center_reviews: { content: string; rating: number; profiles: { name: string; nickname: string | null } | null } | null;
+  accounts: { name: string } | null;
+}
+
 export async function fetchReviewReportsForAdmin(status?: ReviewReportStatus): Promise<ReviewReportForAdmin[]> {
   let q = supabase
     .from("review_reports")
@@ -297,7 +311,7 @@ export async function fetchReviewReportsForAdmin(status?: ReviewReportStatus): P
   if (status) q = q.eq("status", status);
   const { data, error } = await q;
   if (error) throw new Error("신고 목록을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => ({
+  return rowsOf<ReviewReportRow>(data).map((r) => ({
     id: r.id,
     reviewId: r.review_id,
     reason: r.reason,

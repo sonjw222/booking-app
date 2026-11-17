@@ -9,6 +9,10 @@ import { getMyAccountId } from "./authAccount";
 import { MAX_PROGRESS_DEPTH, checkParentChange } from "./progressTree";
 
 import type { NodeType } from "./progressTree";
+import { omitKeys } from "./objectUtil";
+import { one, queryOf } from "./embed";
+
+type CategoryEmbed = { name: string; parent_id: string | null };
 
 export type ProgressCategory = {
   id: string;
@@ -19,19 +23,22 @@ export type ProgressCategory = {
 };
 
 // 센터의 전체 항목(분류+기술, 평면). node_type 컬럼이 아직 없는 DB(SQL 미적용, 42703)에서는 옛 구조(최상위=분류, 그 아래=기술)로 읽는다 — 읽기 전용 호환일 뿐 새 화면의 의미 추론이 아니다.
+// progress_categories 조회 행(node_type은 SQL 미적용 DB에서 빠진다).
+interface ProgressCategoryRow { id: string; parent_id: string | null; name: string; sort_order: number; node_type?: NodeType }
+
 export async function fetchCategories(centerId: string): Promise<ProgressCategory[]> {
-  let res: { data: any[] | null; error: { code?: string; message: string } | null } = await supabase
+  let res = queryOf<ProgressCategoryRow>(await supabase
     .from("progress_categories")
     .select("id, parent_id, name, sort_order, node_type")
     .eq("center_id", centerId)
-    .order("sort_order");
+    .order("sort_order"));
   let legacy = false;
   if (res.error && res.error.code === "42703") {
     legacy = true;
-    res = await supabase.from("progress_categories").select("id, parent_id, name, sort_order").eq("center_id", centerId).order("sort_order");
+    res = queryOf<ProgressCategoryRow>(await supabase.from("progress_categories").select("id, parent_id, name, sort_order").eq("center_id", centerId).order("sort_order"));
   }
   if (res.error) throw new Error("기술 목록을 불러오지 못했어요: " + res.error.message);
-  return (res.data ?? []).map((c: any) => ({
+  return (res.data ?? []).map((c) => ({
     id: c.id, parentId: c.parent_id, name: c.name, sortOrder: c.sort_order,
     nodeType: (legacy ? (c.parent_id ? "skill" : "category") : c.node_type) as NodeType,
   }));
@@ -45,7 +52,7 @@ async function insertNode(row: { center_id: string; parent_id: string | null; na
   if (error && error.code === "42703") {
     // SQL 미적용 DB: 옛 구조로 표현 가능한 것(최상위 분류 / 최상위 분류 아래 기술)만 node_type 없이 허용한다.
     if (row.node_type === "category" && row.parent_id) throw new Error("하위 분류는 DB 업데이트(진도 분류 SQL) 적용 후 사용할 수 있어요");
-    const { node_type: _t, ...legacy } = row;
+    const legacy = omitKeys(row, ["node_type"]);
     const retry = await supabase.from("progress_categories").insert(legacy);
     if (retry.error) throw new Error("추가에 실패했어요: " + retry.error.message);
     return;
@@ -91,7 +98,7 @@ export async function deleteCategory(id: string): Promise<void> {
   for (let level = 0; level < MAX_PROGRESS_DEPTH + 1 && frontier.length > 0; level++) {   // 분류 7단계 + 그 아래 기술 1단계
     const { data, error } = await supabase.from("progress_categories").select("id").in("parent_id", frontier);
     if (error) throw new Error("삭제에 실패했어요: " + error.message);
-    frontier = (data ?? []).map((r: any) => r.id as string);
+    frontier = (data ?? []).map((r) => r.id as string);
     ids.push(...frontier);
   }
   const { count } = await supabase.from("progress_records").select("id", { count: "exact", head: true }).in("category_id", ids);
@@ -107,10 +114,6 @@ export async function deleteCategory(id: string): Promise<void> {
    - 강사가 회원별로 "오늘 가르친 기술"을 체크
    - 회원의 진도 이력 조회
    ============================================================ */
-
-const KST_MD = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit",
-});
 
 // 진도 기록 한 건 (하루에 여러 기술)
 export type ProgressRecord = {
@@ -141,13 +144,13 @@ export async function fetchMemberProgress(profileId: string): Promise<ProgressRe
   // 대분류 이름을 채우기 위해 parent_id 모으기
   // 조상 경로(최대 7단계)를 단계별로 모아 "점프 › 싱글 점프"처럼 표시한다(기존 1단계 부모는 그대로 부모 이름 하나).
   const known: Record<string, { name: string; parentId: string | null }> = {};
-  let need = Array.from(new Set(rows.map((r: any) => r.progress_categories?.parent_id).filter(Boolean))) as string[];
+  let need = Array.from(new Set(rows.map((r) => one<CategoryEmbed>(r.progress_categories)?.parent_id).filter(Boolean))) as string[];
   for (let level = 0; level < MAX_PROGRESS_DEPTH && need.length > 0; level++) {
     const { data: parents } = await supabase.from("progress_categories").select("id, name, parent_id").in("id", need);
     const next: string[] = [];
     for (const p of parents ?? []) {
-      known[(p as any).id] = { name: (p as any).name, parentId: (p as any).parent_id ?? null };
-      const pp = (p as any).parent_id as string | null;
+      known[p.id] = { name: p.name, parentId: p.parent_id ?? null };
+      const pp = p.parent_id as string | null;
       if (pp && !known[pp]) next.push(pp);
     }
     need = Array.from(new Set(next));
@@ -159,14 +162,14 @@ export async function fetchMemberProgress(profileId: string): Promise<ProgressRe
     parentNames[id] = names.join(" › ");
   }
 
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     id: r.id,
     categoryId: r.category_id,
-    skillName: r.progress_categories?.name ?? "",
-    parentName: r.progress_categories?.parent_id ? (parentNames[r.progress_categories.parent_id] ?? null) : null,
+    skillName: one<CategoryEmbed>(r.progress_categories)?.name ?? "",
+    parentName: one<CategoryEmbed>(r.progress_categories)?.parent_id ? (parentNames[one<CategoryEmbed>(r.progress_categories)!.parent_id!] ?? null) : null,
     lessonDate: r.lesson_date,
     note: r.note,
-    coachName: r.accounts?.name ?? null,
+    coachName: one<{ name: string }>(r.accounts)?.name ?? null,
   }));
 }
 
@@ -222,7 +225,7 @@ export async function fetchProgressMembers(centerId: string): Promise<{ profileI
     .eq("center_id", centerId)
     .limit(2000);
   if (error) throw new Error("회원 목록을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => ({
-    profileId: r.profile_id, name: r.profiles?.name ?? "(이름 없음)",
+  return (data ?? []).map((r) => ({
+    profileId: r.profile_id, name: one<{ name: string }>(r.profiles)?.name ?? "(이름 없음)",
   }));
 }

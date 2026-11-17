@@ -81,8 +81,8 @@ export function consumeSocialNameCandidate(currentProvider: SocialProvider | nul
 }
 
 // stash가 없을 때의 보조 후보: Supabase user_metadata에 이미 실린 provider 이름. 카카오 nickname은 prefill 전용, 애플은 메타에 보통 없다.
-export function metadataNameCandidate(user: { app_metadata?: { provider?: string }; user_metadata?: Record<string, any> } | null | undefined): SocialNameCandidate | null {
-  const provider = socialProviderOf(user as any);
+export function metadataNameCandidate(user: { app_metadata?: { provider?: string }; user_metadata?: { provider?: string; [key: string]: unknown } } | null | undefined): SocialNameCandidate | null {
+  const provider = socialProviderOf(user);
   if (!provider) return null;
   const m = user?.user_metadata ?? {};
   const name = normalizeCandidateName(m.full_name) ?? normalizeCandidateName(m.name) ?? normalizeCandidateName(m.nickname);

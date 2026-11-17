@@ -19,7 +19,7 @@ export async function fetchHolidays(centerId: string): Promise<Holiday[]> {
     .eq("center_id", centerId)
     .order("holiday_date", { ascending: true });
   if (error) throw new Error("휴무일을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((h: any) => ({
+  return (data ?? []).map((h) => ({
     id: h.id, date: h.holiday_date, reason: h.reason,
   }));
 }
@@ -36,7 +36,7 @@ export async function addHoliday(centerId: string, date: string, reason: string,
     p_force: force,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
-  const d = data as any;
+  const d = data as { needs_confirm?: boolean; class_count: number; reservation_count: number; deleted_classes: number; cancelled_reservations: number };
   if (d.needs_confirm) {
     return { needsConfirm: true, classCount: d.class_count, reservationCount: d.reservation_count };
   }

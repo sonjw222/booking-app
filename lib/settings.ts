@@ -81,7 +81,47 @@ export const DEFAULT_SETTINGS: CenterSettings = {
   unlimitedPassRevenueMode: "usage_split",
 };
 
-export function rowToSettings(r: any): CenterSettings {
+// center_settings 행(select("*")) — rowToSettings가 읽는 열만 선언. 일부 열은 DB 기본값 폴백(??)이 있어 null 허용.
+export interface CenterSettingsRow {
+  private_book_days_before: number;
+  private_book_time: string | null;
+  group_book_days_before: number;
+  group_book_time: string | null;
+  private_cancel_days_before: number;
+  private_cancel_time: string | null;
+  group_cancel_days_before: number;
+  group_cancel_time: string | null;
+  allow_same_day_booking: boolean | null;
+  same_day_change_hours: number;
+  same_day_change_minutes: number;
+  autocancel_enabled: boolean | null;
+  autocancel_hours: number;
+  autocancel_minutes: number;
+  waitlist_auto_hours: number;
+  waitlist_auto_minutes: number;
+  waitlist_weekly_limit: number;
+  daily_book_limit_enabled: boolean;
+  daily_book_limit: number | null;
+  private_open_days_before: number;
+  private_open_time: string | null;
+  group_open_days_before: number;
+  group_open_time: string | null;
+  private_slot_unit: string;
+  private_max_concurrent_enabled: boolean;
+  private_max_concurrent: number | null;
+  show_group_reserved_count: boolean;
+  show_group_waitlist_count: boolean;
+  use_inquiry_board: boolean;
+  show_all_classes: boolean;
+  use_locker: boolean;
+  deduct_on_late_cancel: boolean;
+  auto_unpaid_input: boolean;
+  use_lounge: boolean;
+  show_point_history: boolean;
+  unlimited_pass_revenue_mode: "usage_split" | "purchase_date_full" | null;
+}
+
+export function rowToSettings(r: CenterSettingsRow): CenterSettings {
   return {
     privateBookDaysBefore: r.private_book_days_before,
     privateBookTime: (r.private_book_time ?? "22:00").slice(0, 5),

@@ -9,6 +9,7 @@
     더 시도한다(이 경우 detailAddress는 null로 취급, 다른 값은 그대로 저장됨).
 */
 
+import { omitKeys } from "./objectUtil";
 import { supabase } from "./supabaseClient";
 
 export type Room = {
@@ -25,7 +26,19 @@ export type Room = {
 
 const MISSING_COLUMN = "42703";
 
-function mapRow(r: any): Room {
+interface RoomRow {
+  id: string;
+  center_id: string;
+  name: string;
+  memo: string | null;
+  address: string | null;
+  detail_address?: string | null;   // add_room_detail_address.sql 미적용 환경에는 없음
+  latitude: number | null;
+  longitude: number | null;
+  sort_order: number;
+}
+
+function mapRow(r: RoomRow): Room {
   return {
     id: r.id, centerId: r.center_id, name: r.name, memo: r.memo,
     address: r.address, detailAddress: r.detail_address ?? null,
@@ -49,7 +62,7 @@ export async function fetchRooms(centerId: string): Promise<Room[]> {
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: true });
       if (fallback.error) throw new Error("룸을 불러오지 못했어요: " + fallback.error.message);
-      return (fallback.data ?? []).map((r: any) => mapRow({ ...r, detail_address: null }));
+      return (fallback.data ?? []).map((r) => mapRow({ ...r, detail_address: null }));
     }
     throw new Error("룸을 불러오지 못했어요: " + error.message);
   }
@@ -78,7 +91,7 @@ export async function addRoom(centerId: string, input: RoomInput): Promise<void>
   const { error } = await supabase.from("rooms").insert(row);
   if (error) {
     if (error.code === MISSING_COLUMN) {
-      const { detail_address, ...withoutDetail } = row;
+      const withoutDetail = omitKeys(row, ["detail_address"]);
       const retry = await supabase.from("rooms").insert(withoutDetail);
       if (retry.error) throw new Error("룸 추가에 실패했어요: " + retry.error.message);
       return;
@@ -99,7 +112,7 @@ export async function updateRoom(id: string, input: RoomInput): Promise<void> {
   const { error } = await supabase.from("rooms").update(row).eq("id", id);
   if (error) {
     if (error.code === MISSING_COLUMN) {
-      const { detail_address, ...withoutDetail } = row;
+      const withoutDetail = omitKeys(row, ["detail_address"]);
       const retry = await supabase.from("rooms").update(withoutDetail).eq("id", id);
       if (retry.error) throw new Error("룸 수정에 실패했어요: " + retry.error.message);
       return;

@@ -5,7 +5,7 @@
   판정 용어: approvalCandidate = "정황 근거가 있는 일회성 정리 승인 후보". 소유권이 증명됐다는 뜻이 아니다(ownershipProven=false).
 */
 import fs from "node:fs";
-import { assertTarget, buildPlanSnapshot, makeClient, sha256, stable, rowSha } from "./core.mjs";
+import { assertTarget, buildPlanSnapshot, makeClient, sha256, stable } from "./core.mjs";
 
 const SHARED_DEV_REF = "jdglfvwdnkjnraqdxuuj", PRODUCTION_REF = "bxntqggkfwnhcczsbqtj";
 const [idsFile, evFile, outBase] = process.argv.slice(2);

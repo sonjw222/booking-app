@@ -1,6 +1,6 @@
 // 로컬 격리 스택 전용(ISO_ENV_FILE = bootstrapEphemeral 가 쓴 환경 파일, 0600·커밋 금지). 운영/공유 DEV 로 실행하지 않는다. 사용법: docs/payments/NICEPAY_REVIEW_CENTER_20261028.md §6
 
-import { createRequire } from "node:module"; import fs from "node:fs";
+import { createRequire } from "node:module";
 const require = createRequire(process.cwd() + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
 import { loadIsolatedEnv } from "./assertIsolated.mjs";

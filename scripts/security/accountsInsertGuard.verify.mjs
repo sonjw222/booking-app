@@ -35,7 +35,7 @@ if (!code.error && code.data) { const lk = await n3.c.rpc("link_accounts_by_code
 expectEq("A5", "정상 계정 연동(create_account_link_code → link_accounts_by_code)", "LINKED", linkResult); expectEq("A5b", "연동 후 합쳐진 계정의 merged_into 가 코드 발급 계정", n1.uid && (await row(n1.uid))?.id, (await row(n3.uid))?.merged_into);
 // ── B. 승인된 서버 경로 유지 ──
 for (const [col, val] of attack) { const s = await signup("server-" + col.slice(0, 4)); const rr = await svc.from("accounts").insert({ ...appPayload(s.uid, "서버생성"), [col]: val }).select("id").single(); expectEq("B-" + col, `서버(service_role)가 ${col} 지정해 생성`, "CREATED", rr.error ? "DENIED" : "CREATED", errOf(rr.error)); }
-{ const s = await signup("sqleditor"); let o = "CREATED"; try { psql(`insert into accounts(auth_id, name, is_platform_admin, pg_checkout_override, merged_into) values ('${s.uid}', 'sql-editor', true, true, '${victimAccountId}')`); } catch (e) { o = "DENIED"; } expectEq("B-sql", "SQL Editor(postgres, auth.uid() is null)가 특권 값으로 생성", "CREATED", o); }
+{ const s = await signup("sqleditor"); let o = "CREATED"; try { psql(`insert into accounts(auth_id, name, is_platform_admin, pg_checkout_override, merged_into) values ('${s.uid}', 'sql-editor', true, true, '${victimAccountId}')`); } catch { o = "DENIED"; } expectEq("B-sql", "SQL Editor(postgres, auth.uid() is null)가 특권 값으로 생성", "CREATED", o); }
 // ── C. 차단 경로: 직접 INSERT / 신규 upsert / 삭제 후 재생성 / 기존 행 갱신 ──
 for (const [col, val] of attack) {
   const u = await signup("ins-" + col.slice(0, 4)); expectEq("C-ins-" + col, `직접 INSERT 로 ${col} 지정`, "DENIED", await ins(u.c, { ...appPayload(u.uid, "시도"), [col]: val })); expectEq("C-ins-row-" + col, "거부 후 계정 행이 없다", "none", (await row(u.uid)) ? "exists" : "none");

@@ -6,6 +6,7 @@
 
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
+import { one } from "./embed";
 
 export type ScheduleMemo = {
   id: string;
@@ -22,12 +23,12 @@ export async function fetchClassMemos(classId: string): Promise<ScheduleMemo[]> 
     .eq("class_id", classId)
     .order("created_at", { ascending: true });
   if (error) throw new Error("메모를 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((m: any) => ({
+  return (data ?? []).map((m) => ({
     id: m.id,
     content: m.content,
     createdAt: m.created_at,
     authorAccountId: m.author_account_id,
-    authorName: m.accounts?.name ?? "알 수 없음",
+    authorName: one<{ name: string }>(m.accounts)?.name ?? "알 수 없음",
   }));
 }
 

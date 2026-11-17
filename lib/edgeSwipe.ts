@@ -13,7 +13,7 @@ import { Capacitor } from "@capacitor/core";
 export function setEdgeSwipeEnabled(enabled: boolean): void {
   try {
     if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== "ios") return;
-    const plugin = (window as any).Capacitor?.Plugins?.NavigationPolicy;
+    const plugin = (window as Window & { Capacitor?: { Plugins?: { NavigationPolicy?: { setEdgeSwipeEnabled?: (opts: { enabled: boolean }) => Promise<unknown> } } } }).Capacitor?.Plugins?.NavigationPolicy;
     if (!plugin?.setEdgeSwipeEnabled) return;
     plugin.setEdgeSwipeEnabled({ enabled }).catch(() => {});
   } catch {

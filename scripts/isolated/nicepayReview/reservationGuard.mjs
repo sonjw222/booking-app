@@ -1,6 +1,6 @@
 // 로컬 격리 스택 전용(ISO_ENV_FILE = bootstrapEphemeral 가 쓴 환경 파일, 0600·커밋 금지). 운영/공유 DEV 로 실행하지 않는다. 사용법: docs/payments/NICEPAY_REVIEW_CENTER_20261028.md §6
 
-import { createRequire } from "node:module"; import fs from "node:fs";
+import { createRequire } from "node:module";
 const require = createRequire(process.cwd() + "/package.json");
 const { createClient } = require("@supabase/supabase-js");
 import { loadIsolatedEnv } from "./assertIsolated.mjs";
@@ -16,7 +16,7 @@ const who = { "일반회원(A)": [env.TEST_USER_A_EMAIL, env.TEST_USER_A_PASSWOR
 const res = {};
 for (const [n, [e, pw]] of Object.entries(who)) {
   const pid = pidOf(e);
-  for (const [cn, ctr] of [["심사센터", REV], ["운영센터", OP]]) await svc.from("memberships").insert({ profile_id: pid, center_id: ctr.id, product_name: "시험", pass_type: "count", total_count: 5, remaining_count: 5 });
+  for (const [, ctr] of [["심사센터", REV], ["운영센터", OP]]) await svc.from("memberships").insert({ profile_id: pid, center_id: ctr.id, product_name: "시험", pass_type: "count", total_count: 5, remaining_count: 5 });
   const c = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
   await c.auth.signInWithPassword({ email: e, password: pw });
   const r1 = await c.rpc("reserve_class", { p_class_id: revC, p_profile_id: pid }); const r2 = await c.rpc("reserve_class", { p_class_id: opC, p_profile_id: pid });

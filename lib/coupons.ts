@@ -10,6 +10,7 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { one } from "./embed";
 
 export type DiscountType = "fixed" | "percentage";
 export type CouponAppliesTo = "all" | "selected";
@@ -62,7 +63,7 @@ export async function fetchCoupons(centerId: string): Promise<Coupon[]> {
     .order("created_at", { ascending: false });
   if (error) throw new Error("쿠폰을 불러오지 못했어요: " + error.message);
   const rows = data ?? [];
-  const ids = rows.map((c: any) => c.id);
+  const ids = rows.map((c) => c.id);
 
   // 지급/사용 인원 집계 — 쿠폰마다 따로 조회하지 않고 한 번에(요청 23번 N+1 방지)
   const issuedByCoupon: Record<string, number> = {};
@@ -74,13 +75,13 @@ export async function fetchCoupons(centerId: string): Promise<Coupon[]> {
       .in("coupon_id", ids);
     if (mcErr) throw new Error("쿠폰 지급 현황을 불러오지 못했어요: " + mcErr.message);
     for (const mc of mcRows ?? []) {
-      const cid = (mc as any).coupon_id;
+      const cid = mc.coupon_id;
       issuedByCoupon[cid] = (issuedByCoupon[cid] ?? 0) + 1;
-      if ((mc as any).status === "used") usedByCoupon[cid] = (usedByCoupon[cid] ?? 0) + 1;
+      if (mc.status === "used") usedByCoupon[cid] = (usedByCoupon[cid] ?? 0) + 1;
     }
   }
 
-  return rows.map((c: any) => ({
+  return rows.map((c) => ({
     id: c.id, centerId: c.center_id, name: c.name,
     discountType: c.discount_type, discountValue: c.discount_value,
     maxDiscountAmount: c.max_discount_amount, minimumOrderAmount: c.minimum_order_amount,
@@ -112,17 +113,17 @@ export async function createCoupon(centerId: string, input: {
     // coupon_products RLS("매니저 쿠폰적용대상 관리")가 이 센터 소속이 아닌 상품을
     // 넣으려는 시도를 서버에서 거부한다(다른 센터 수강권은 선택 불가 — 요청 12번).
     const { error: cpErr } = await supabase.from("coupon_products").insert(
-      input.productIds.map((productId) => ({ coupon_id: (data as any).id, product_id: productId }))
+      input.productIds.map((productId) => ({ coupon_id: data.id, product_id: productId }))
     );
     if (cpErr) throw new Error("쿠폰 적용 대상 저장에 실패했어요: " + cpErr.message);
   }
-  return (data as any).id;
+  return data.id;
 }
 
 export async function fetchCouponProductIds(couponId: string): Promise<string[]> {
   const { data, error } = await supabase.from("coupon_products").select("product_id").eq("coupon_id", couponId);
   if (error) throw new Error("쿠폰 적용 대상을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => r.product_id);
+  return (data ?? []).map((r) => r.product_id);
 }
 
 // 아직 사용되지 않은 쿠폰 "정의"를 보관(archived) 처리 — 이미 지급된 member_coupons는
@@ -143,7 +144,7 @@ export async function issueCouponToMembers(
     p_coupon_id: couponId, p_center_member_ids: centerMemberIds,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
-  return { issuedCount: (data as any)?.issued_count ?? 0, skippedCount: (data as any)?.skipped_count ?? 0 };
+  return { issuedCount: data?.issued_count ?? 0, skippedCount: data?.skipped_count ?? 0 };
 }
 
 export async function revokeMemberCoupon(memberCouponId: string): Promise<void> {
@@ -168,13 +169,13 @@ export async function fetchIssuedMemberCoupons(couponId: string): Promise<Issued
     .eq("coupon_id", couponId)
     .order("issued_at", { ascending: false });
   if (error) throw new Error("지급 내역을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => ({
+  return (data ?? []).map((r) => ({
     id: r.id,
     status: r.status,
     issuedAt: r.issued_at,
     usedAt: r.used_at,
-    memberName: r.center_members?.profiles?.name ?? "이름없음",
-    memberPhone: r.center_members?.profiles?.accounts?.phone ?? null,
+    memberName: one<{ profiles?: { name: string } | null }>(r.center_members)?.profiles?.name ?? "이름없음",
+    memberPhone: one<{ profiles?: { accounts?: { phone: string | null } | null } | null }>(r.center_members)?.profiles?.accounts?.phone ?? null,
   }));
 }
 
