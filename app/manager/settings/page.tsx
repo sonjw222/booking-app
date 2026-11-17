@@ -6,6 +6,7 @@
   - 오너 또는 운영정보 설정 권한(facility.operation) 필요
 */
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import SegmentedTabs from "../../components/SegmentedTabs";
@@ -46,7 +47,7 @@ export default function SettingsPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -73,7 +74,7 @@ export default function SettingsPage() {
     try {
       setS(await fetchSettings(centerId));
       setDirty(false);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -100,7 +101,7 @@ export default function SettingsPage() {
       await saveSettings(centerId, s);
       showToast("설정을 저장했어요");
       setDirty(false);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -383,7 +384,7 @@ export default function SettingsPage() {
           ] as [keyof CenterSettings, string][]).map(([key, label]) => (
             <div className="set-row" key={key}>
               <div className="set-label">{label}</div>
-              {toggle(label, s[key] as boolean, (b) => up(key, b as any))}
+              {toggle(label, s[key] as boolean, (b) => up(key, b))}
             </div>
           ))}
           {/* P1-9 완료(2026-09-09): is_membership_eligible_for_class() 공용 SQL 함수를

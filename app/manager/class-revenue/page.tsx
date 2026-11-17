@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
@@ -78,7 +79,7 @@ export default function ClassRevenuePage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -109,7 +110,7 @@ export default function ClassRevenuePage() {
     if (!centerId) return;
     setPeriodLoading(true);
     try { setPeriodDaily(await fetchClassRevenueDaily(centerId, from, to)); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setPeriodLoading(false); setLoading(false); }
   }, [centerId, from, to]);
   useEffect(() => { loadPeriod(); }, [loadPeriod]);
@@ -123,7 +124,7 @@ export default function ClassRevenuePage() {
     if (!centerId) return;
     setCalLoading(true);
     try { setCalDaily(await fetchClassRevenueDaily(centerId, calFrom, calTo)); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setCalLoading(false); }
   }, [centerId, calFrom, calTo]);
   useEffect(() => { loadCal(); }, [loadCal]);
@@ -157,7 +158,7 @@ export default function ClassRevenuePage() {
     try {
       const rows = await fetchClassRevenueForDate(centerId!, dateKey);
       setDetailGroups(groupClassRevenueRows(rows));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setDetailLoading(false); }
   }
 
@@ -168,7 +169,7 @@ export default function ClassRevenuePage() {
       const data = await fetchMembershipSessionEditData(membershipId);
       setEditAmounts(data.amounts);
       setEditPaidTotal(data.paidTotal);
-    } catch (e: any) { setError(e.message); setEditTarget(null); }
+    } catch (e) { setError(errMsg(e)); setEditTarget(null); }
     finally { setEditLoading(false); }
   }
 
@@ -183,7 +184,7 @@ export default function ClassRevenuePage() {
       showToast("회차별 금액을 저장했어요");
       setEditTarget(null);
       if (selected) await selectDate(selected); // 재조회로 반영
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setEditSaving(false); }
   }
 

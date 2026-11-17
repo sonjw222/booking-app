@@ -7,6 +7,7 @@
   - is_platform_admin = true 인 계정만 접근 가능
 */
 
+import { errMsg } from "../../components/errorMessage";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
@@ -56,8 +57,8 @@ export default function AdminCentersPage() {
         setCenters(previous => cursor ? [...previous, ...result.centers] : result.centers);
         setNextCursor(result.nextCursor);
       }
-    } catch (e: any) {
-      if (request === requestId.current) setError(e.message);
+    } catch (e) {
+      if (request === requestId.current) setError(errMsg(e));
     } finally {
       if (request === requestId.current) setLoading(false);
     }
@@ -91,8 +92,8 @@ export default function AdminCentersPage() {
       await approveCenter(c.id);
       showToast(`${c.name} 승인 완료`);
       await load(tab, keyword);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -111,8 +112,8 @@ export default function AdminCentersPage() {
       setRejectTarget(null);
       setRejectReason("");
       await load(tab, keyword);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -124,8 +125,8 @@ export default function AdminCentersPage() {
       await resetToPending(c.id);
       showToast("대기 상태로 되돌렸어요");
       await load(tab, keyword);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setBusy(false);
     }

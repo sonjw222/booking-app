@@ -10,6 +10,7 @@
     웹/네이티브 푸시(구독한 회원만)로 전달된다.
 */
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { fetchMarketingMessages, sendMarketingMessage, type MarketingMessage } from "../../../lib/marketing";
@@ -33,7 +34,7 @@ export default function MarketingPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try { setMessages(await fetchMarketingMessages()); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => {
@@ -54,7 +55,7 @@ export default function MarketingPage() {
       setTitle(""); setBody(""); setLink(""); setComposing(false);
       showToast("발송했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 

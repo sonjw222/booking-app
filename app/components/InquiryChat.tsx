@@ -7,6 +7,7 @@
   - 들어오면 읽음 처리
 */
 
+import { errMsg } from "./errorMessage";
 import { useEffect, useRef, useState } from "react";
 import { ZoomableImage } from "./ImageViewer";
 import {
@@ -55,8 +56,8 @@ export default function InquiryChat({
     try {
       const ms = await fetchMessages(threadId, myAccountIdRef.current);
       setMessages(ms);
-    } catch (e: any) {
-      setError("메시지를 불러오지 못했어요: " + e.message);
+    } catch (e) {
+      setError("메시지를 불러오지 못했어요: " + errMsg(e));
     }
   }
 
@@ -99,8 +100,8 @@ export default function InquiryChat({
       // appendMessage()로 처리한다 — 여기서 다시 fetchMessages()를 부르면 메시지
       // 1건 전송에 REST 요청이 두 번(이 reload + 실시간이 유발하던 예전 reload)
       // 나가던 중복이었다.
-    } catch (e: any) {
-      setError("전송에 실패했어요: " + e.message);
+    } catch (e) {
+      setError("전송에 실패했어요: " + errMsg(e));
     } finally { setSending(false); }
   }
 
@@ -113,8 +114,8 @@ export default function InquiryChat({
       // 로컬 state에서 직접 제거한다 — 이 한 건 때문에 스레드 전체를 다시 조회할
       // 필요는 없음.
       setMessages((prev) => prev.filter((m) => m.id !== messageId));
-    } catch (e: any) {
-      setError("삭제에 실패했어요: " + e.message);
+    } catch (e) {
+      setError("삭제에 실패했어요: " + errMsg(e));
     }
   }
 
@@ -124,8 +125,8 @@ export default function InquiryChat({
     try {
       const path = await uploadInquiryPhoto(file);
       setPhotos((prev) => [...prev, path]);
-    } catch (e: any) {
-      setError("사진 업로드에 실패했어요: " + e.message);
+    } catch (e) {
+      setError("사진 업로드에 실패했어요: " + errMsg(e));
     } finally { setUploading(false); }
   }
 

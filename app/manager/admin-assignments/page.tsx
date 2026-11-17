@@ -6,6 +6,7 @@
   - 기본 조회 + 실무 필터만 구현 (통계 대시보드·엑셀 다운로드는 이번 범위 제외)
 */
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
@@ -55,7 +56,7 @@ export default function AdminAssignmentLogPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -71,7 +72,7 @@ export default function AdminAssignmentLogPage() {
       if (capacityOnly) filters.capacityOverrideOnly = true;
       if (reasonFilter !== "all") filters.reasonCode = reasonFilter;
       setLogs(await fetchAdminActionLogs(centerId, filters));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId, fromDate, toDate, typeFilter, actionFilter, capacityOnly, reasonFilter]);
   useEffect(() => { load(); }, [load]);

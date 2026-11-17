@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
@@ -243,7 +244,7 @@ function CenterDetailContent() {
       setRvAlign("left"); setRvFontSize(14);
       setReviews(await fetchReviews(centerId));
       setMyReview(await myReviewFor(centerId));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setRvBusy(false); }
   }
 
@@ -265,7 +266,7 @@ function CenterDetailContent() {
       await deleteReview(myReview.id);
       setReviews(await fetchReviews(centerId));
       setMyReview(null);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setRvBusy(false); }
   }
 
@@ -276,8 +277,8 @@ function CenterDetailContent() {
       await reportReview(reportTargetId, reportReason, reportDetail);
       setReportTargetId(null);
       showToast("신고가 접수됐어요. 운영팀이 확인할게요.");
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
       setReportTargetId(null);
     } finally { setReportBusy(false); }
   }
@@ -296,7 +297,7 @@ function CenterDetailContent() {
       });
       showToast(result === "exists" ? `'${p.name}'은(는) 이미 장바구니에 있어요` : `'${p.name}' 장바구니에 담았어요${defaultCount != null ? " · 횟수는 장바구니에서 선택해요" : ""}`);
       cartCount().then(setCartItemCount);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
   }
 
   useEffect(() => {
@@ -550,7 +551,7 @@ function CenterDetailContent() {
                   const f = e.target.files?.[0]; if (!f) return;
                   setRvUploading(true);
                   try { const path = await uploadReviewPhoto(f); setRvPhotos((prev) => [...prev, path]); }
-                  catch (err: any) { setError(err.message); }
+                  catch (err) { setError(errMsg(err)); }
                   finally { setRvUploading(false); e.target.value = ""; }
                 }} />
               </label>

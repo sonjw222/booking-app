@@ -9,6 +9,7 @@
     최종 할인금액은 결제 확정 시점에 서버가 재계산한다 — 여기 표시는 안내용.
 */
 
+import { errMsg } from "../../components/errorMessage";
 import ErrorState from "../../components/ErrorState";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -38,7 +39,7 @@ export default function MyCouponsPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try { setCoupons(await fetchMyCoupons()); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, []);
 

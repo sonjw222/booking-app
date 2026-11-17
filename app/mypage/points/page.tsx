@@ -7,6 +7,7 @@
     (fetchMyPointHistory 안에서 필터링됨)
 */
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
@@ -34,7 +35,7 @@ export default function PointHistoryPage() {
       setItems(history);
       setBalances(myBalances);
     }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, []);
 

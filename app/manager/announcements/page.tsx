@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../components/errorMessage";
 import SheetOverlay from "../../components/SheetOverlay";
 
 /*
@@ -52,8 +53,8 @@ export default function ManagerAnnouncementsPage() {
       const cid = centerId ?? cs[0]?.id ?? null;
       setCenterId(cid);
       if (cid) setList(await fetchCenterAnnouncements(cid));
-    } catch (e: any) {
-      setError(e.message ?? "불러오지 못했어요");
+    } catch (e) {
+      setError(errMsg(e) || "불러오지 못했어요");
     } finally {
       setLoading(false);
     }
@@ -113,7 +114,7 @@ export default function ManagerAnnouncementsPage() {
       }
       setSheet(false);
       await reloadList(centerId);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -124,7 +125,7 @@ export default function ManagerAnnouncementsPage() {
       await deleteAnnouncement(id);
       showToast("공지를 삭제했어요");
       if (centerId) await reloadList(centerId);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -133,7 +134,7 @@ export default function ManagerAnnouncementsPage() {
     try {
       const path = await uploadAnnouncementPhoto(file);
       setPhotos((prev) => [...prev, path]);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setUploading(false); }
   }
 

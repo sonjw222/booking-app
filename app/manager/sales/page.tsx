@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import SheetOverlay from "../../components/SheetOverlay";
 
@@ -131,7 +132,7 @@ export default function SalesPage() {
           setCenterId(list.find((c) => c.id === requestedCenter)?.id ?? list[0].id);
         }
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -164,7 +165,7 @@ export default function SalesPage() {
       setRows(pay);
       setSummary(summarize(pay));
       setExpenses(exp);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId, from, to]);
 
@@ -226,7 +227,7 @@ export default function SalesPage() {
       setFProductId("");
       setFUnpaidTouched(false);
       setSheet(true);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
   }
 
   const formTotal = num(fCard) + num(fCash) + num(fTransfer) + num(fPoint);
@@ -272,7 +273,7 @@ export default function SalesPage() {
       setFCard(""); setFCash(""); setFTransfer(""); setFPoint(""); setFUnpaid(""); setFMemo("");
       setFSaleType("new"); setFProductId(""); setFGoodsId(""); setFUnpaidTouched(false);
       await reload();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -300,7 +301,7 @@ export default function SalesPage() {
       setCollectFor(null);
       setPayDetail(null);
       await reload();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setCollecting(false); }
   }
 
@@ -311,7 +312,7 @@ export default function SalesPage() {
       setMembers(ms);
       setPtProfile(ms[0]?.profileId ?? "");
       setPtSheet(true);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
   }
 
   async function handleRegisterExpense() {
@@ -322,7 +323,7 @@ export default function SalesPage() {
       showToast("지출을 등록했어요");
       setExpSheet(false); setEAmount(""); setEMemo("");
       await reload();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -330,7 +331,7 @@ export default function SalesPage() {
     if (!(await globalThis.appConfirm("이 지출을 삭제할까요?"))) return;
     setBusy(true);
     try { await deleteExpense(id); showToast("삭제했어요"); await reload(); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -343,7 +344,7 @@ export default function SalesPage() {
       showToast(ptSign === "earn" ? "포인트를 적립했어요" : "포인트를 사용했어요");
       setPtSheet(false); setPtAmount(""); setPtReason(""); setPtSign("earn");
       await reload();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 

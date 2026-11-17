@@ -8,6 +8,7 @@
   - URL: /manager/staff/permissions?mc=<manager_center_id>&role=<role_id>&name=<이름>
 */
 
+import { errMsg } from "../../../components/errorMessage";
 import Link from "next/link";
 import { useCallback, useEffect, useState, Suspense } from "react";
 import Loading from "../../../components/Loading";
@@ -70,7 +71,7 @@ function PermInner() {
       setPerms(ps);
       setRolePermKeys(new Set(rk));
       setOverrides(ov);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [mcId, roleId, centerId]);
 
@@ -95,7 +96,7 @@ function PermInner() {
         else next[key] = nextGrant;
         return next;
       });
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusyKey(null); }
   }
 

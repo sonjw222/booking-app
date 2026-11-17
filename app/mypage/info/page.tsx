@@ -8,6 +8,7 @@
   - 회원 탈퇴
 */
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabaseClient";
@@ -75,7 +76,7 @@ export default function MyInfoPage() {
     });
     fetchMyAccountInfo()
       .then((info) => { setName(info.name); setPhone(info.phone); setMarketingConsentState(info.marketingConsent); })
-      .catch((e: any) => setInfoError(e.message ?? "회원정보를 불러오지 못했어요"));
+      .catch((e: unknown) => setInfoError(errMsg(e) || "회원정보를 불러오지 못했어요"));
   }, []);
 
   async function toggleMarketingConsent() {
@@ -85,8 +86,8 @@ export default function MyInfoPage() {
     try {
       await setMyMarketingConsent(next);
       setMarketingConsentState(next);
-    } catch (e: any) {
-      setInfoError(e.message ?? "마케팅 동의 설정을 저장하지 못했어요");
+    } catch (e) {
+      setInfoError(errMsg(e) || "마케팅 동의 설정을 저장하지 못했어요");
     } finally {
       setMarketingBusy(false);
     }
@@ -144,9 +145,9 @@ export default function MyInfoPage() {
 
     try {
       await deactivateCurrentAccount();
-    } catch (e: any) {
+    } catch (e) {
       setWithdrawing(false);
-      setWithdrawMessage({ type: "error", text: e.message ?? "탈퇴 처리에 실패했어요" });
+      setWithdrawMessage({ type: "error", text: errMsg(e) || "탈퇴 처리에 실패했어요" });
       return;
     }
 
@@ -160,8 +161,8 @@ export default function MyInfoPage() {
     try {
       const code = await createAccountLinkCode();
       setLinkCode(code);
-    } catch (e: any) {
-      setLinkCodeMessage({ type: "error", text: e.message ?? "코드 발급에 실패했어요" });
+    } catch (e) {
+      setLinkCodeMessage({ type: "error", text: errMsg(e) || "코드 발급에 실패했어요" });
     } finally {
       setCreatingCode(false);
     }
@@ -179,8 +180,8 @@ export default function MyInfoPage() {
       const result = await linkAccountsByCode(linkInput.trim());
       setLinked(true);
       setLinkMessage({ type: "ok", text: `"${result.mergedAccountName}" 계정으로 합쳐졌어요. 다시 로그인해주세요.` });
-    } catch (e: any) {
-      setLinkMessage({ type: "error", text: e.message ?? "연동에 실패했어요" });
+    } catch (e) {
+      setLinkMessage({ type: "error", text: errMsg(e) || "연동에 실패했어요" });
     } finally {
       setLinking(false);
     }

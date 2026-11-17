@@ -8,6 +8,7 @@
   - is_platform_admin = true 인 계정만 접근 가능
 */
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
@@ -47,8 +48,8 @@ export default function AdminSubscriptionsPage() {
       const [subs, planList] = await Promise.all([fetchAllCenterSubscriptions(), fetchSubscriptionPlans()]);
       setRows(subs);
       setPlans(planList);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     }
   }, []);
 
@@ -69,7 +70,7 @@ export default function AdminSubscriptionsPage() {
       await adminSetCenterSubscriptionPlan(row.centerId, planId);
       showToast("플랜을 변경했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusyId(null); }
   }
 
@@ -81,7 +82,7 @@ export default function AdminSubscriptionsPage() {
       await adminCancelCenterSubscription(row.centerId);
       showToast("구독을 취소했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusyId(null); }
   }
 
@@ -99,7 +100,7 @@ export default function AdminSubscriptionsPage() {
       await adminSetCenterAlimtalkAddon(row.centerId, true, price);
       showToast("알림톡 애드온을 켰어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusyId(null); }
   }
 
@@ -111,7 +112,7 @@ export default function AdminSubscriptionsPage() {
       await adminSetCenterAlimtalkAddon(row.centerId, false);
       showToast("알림톡 애드온을 껐어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusyId(null); }
   }
 
@@ -123,7 +124,7 @@ export default function AdminSubscriptionsPage() {
       await adminReactivateCenterSubscription(row.centerId);
       showToast("구독을 재개했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusyId(null); }
   }
 

@@ -7,6 +7,7 @@
   - 결제 연동 전이므로 주문은 pending으로 들어옴 → 매니저가 확인 후 발급
 */
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
@@ -59,7 +60,7 @@ export default function ManagerOrdersPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -89,7 +90,7 @@ export default function ManagerOrdersPage() {
       try { setExpiryByProduct(await fetchCenterProductExpiryMap(centerId)); } catch { setExpiryByProduct({}); }
       try { const r = await fetchExpiredOrderResolutions(centerId); setResolutions(r.byOrder); setResolutionsReady(r.serverReady); } catch { setResolutions({}); }
     }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId]);
   useEffect(() => { load(); }, [load]);
@@ -102,7 +103,7 @@ export default function ManagerOrdersPage() {
       // 자동예약 결과(예약 수/미배치 수/사유/오류)를 그대로 보여준다 — 실패 이유가 조용히 묻히지 않게.
       showToast(fulfillResultMessage(result));
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -112,7 +113,7 @@ export default function ManagerOrdersPage() {
     try {
       await updateOrderStatus(o.id, "cancelled");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 

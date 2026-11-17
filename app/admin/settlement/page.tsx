@@ -11,6 +11,7 @@
   - is_platform_admin = true 인 계정만 접근 가능
 */
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import Loading from "../../components/Loading";
@@ -59,8 +60,8 @@ export default function AdminSettlementPage() {
     try {
       setRows(await fetchAdminSettlementSummary(startDate, endDate));
       setSearched(true);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setFetching(false);
     }

@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../components/errorMessage";
 import MemberAddSheet from "../../components/MemberAddSheet";
 import SheetOverlay from "../../components/SheetOverlay";
 
@@ -176,7 +177,7 @@ function MembersContent() {
       showToast("회원을 등록했어요");
       setAddSheet(false);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -195,8 +196,8 @@ function MembersContent() {
     try {
       setDetailData(await fetchMemberDetail(m.profileId, centerId));
       if (canViewMemo) setMemberMemos(await fetchMemberMemos(m.profileId));
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setDetailLoading(false);
     }
@@ -209,7 +210,7 @@ function MembersContent() {
       await createMemberMemo(detail.profileId, centerId, memberMemoInput.trim());
       setMemberMemoInput("");
       setMemberMemos(await fetchMemberMemos(detail.profileId));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setMemberMemoBusy(false); }
   }
 
@@ -220,7 +221,7 @@ function MembersContent() {
       await updateMemberMemoEntry(editingMemberMemoId, editingMemberMemoContent.trim());
       setEditingMemberMemoId(null);
       setMemberMemos(await fetchMemberMemos(detail.profileId));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setMemberMemoBusy(false); }
   }
 
@@ -231,7 +232,7 @@ function MembersContent() {
     try {
       await deleteMemberMemoEntry(memoId);
       setMemberMemos(await fetchMemberMemos(detail.profileId));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setMemberMemoBusy(false); }
   }
 
@@ -242,7 +243,7 @@ function MembersContent() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -275,9 +276,9 @@ function MembersContent() {
       // 조회 도중 바뀐 상태/검색어도 반영되도록 "지금" 필터를 적용한다.
       setMembers(filterMembers(base, filtersRef.current)); setGrades(gs);
       hasLoadedRef.current = true;
-    } catch (e: any) {
+    } catch (e) {
       if (seq !== requestSeqRef.current) return;
-      setError(e.message);
+      setError(errMsg(e));
     } finally {
       if (seq === requestSeqRef.current) { setLoading(false); setListSearching(false); }
     }
@@ -383,7 +384,7 @@ function MembersContent() {
       const n = await syncMembersFromReservations(centerId);
       showToast(n > 0 ? `예약 이력에서 회원 ${n}명을 등록했어요` : "새로 등록할 회원이 없어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -396,7 +397,7 @@ function MembersContent() {
       showToast("저장했어요");
       setDetail(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -408,7 +409,7 @@ function MembersContent() {
       showToast("등급을 변경했어요");
       setDetail(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -420,7 +421,7 @@ function MembersContent() {
       showToast(status === "active" ? "활성 회원으로 전환했어요" : status === "expired" ? "만료 처리했어요" : "휴면 처리했어요");
       setDetail(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -432,7 +433,7 @@ function MembersContent() {
       setNewGradeName("");
       showToast("등급을 추가했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -443,7 +444,7 @@ function MembersContent() {
       await deleteGrade(g.id);
       showToast("등급을 삭제했어요");
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -509,7 +510,7 @@ function MembersContent() {
     try {
       // 수강권 시트에는 goods가 나오지 않고, 상품 시트에는 goods만 나온다(서버 쿼리 + 순수 필터 이중).
       setGrantProducts(await fetchGrantableProducts(centerId, kind));
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
   }
 
   function pickGrantProduct(id: string) {
@@ -559,7 +560,7 @@ function MembersContent() {
       showToast(extensionSuccessMessage(r.newExpiresAt));
       setExtendTarget(null);
       if (detail) await openDetail(detail);   // 회원 상세를 다시 불러와 새 만료일이 바로 보이게
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setExtending(false); }
   }
 
@@ -592,7 +593,7 @@ function MembersContent() {
       // 지급 직후 서버가 회원 상태를 '이용중'으로 바꾸므로, 열려 있는 상세 시트의 회원 상태 칩도 새 목록 값으로 갱신한다
       // (관리자 QA #239: 갱신하지 않으면 지급 전 '만료'가 그대로 표시돼 새로고침 전까지 실제 상태와 어긋났다).
       if (detail?.id === grantTarget.id) { const fresh = baseRef.current?.list.find((x) => x.id === grantTarget.id); if (fresh) setDetail(fresh); }
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setGranting(false); }
   }
 
@@ -626,7 +627,7 @@ function MembersContent() {
       setAlimtalkTargets(null);
       setSelectMode(false);
       setSelectedIds(new Set());
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setSendingAlimtalk(false); }
   }
 
@@ -671,7 +672,7 @@ function MembersContent() {
       {/* 검색 + 필터 */}
       <>
       <div className="mem-search" style={{ display: "flex", gap: 8 }}>
-        <select className="input-field" style={{ flex: "0 0 96px" }} value={searchField} onChange={(e) => setSearchField(e.target.value as any)}>
+        <select className="input-field" style={{ flex: "0 0 96px" }} value={searchField} onChange={(e) => setSearchField(e.target.value as "all" | "name" | "phone" | "address")}>
           <option value="all">전체</option>
           <option value="name">이름</option>
           {canViewPhone && <option value="phone">휴대폰</option>}

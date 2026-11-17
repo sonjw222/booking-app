@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../components/errorMessage";
 import Link from "next/link";
 import SheetOverlay from "../components/SheetOverlay";
 
@@ -50,7 +51,7 @@ export default function ProfilesPage() {
     try {
       const path = await uploadAvatar(file);
       setEdit({ ...edit, avatarUrl: path });
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setUploadingAvatar(false); }
   }
 
@@ -61,7 +62,7 @@ export default function ProfilesPage() {
       await updateProfile(editing.id, edit);
       setEditing(null); setEdit(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -70,8 +71,8 @@ export default function ProfilesPage() {
     setError(null);
     try {
       setProfiles(await fetchProfiles());
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setLoading(false);
     }
@@ -95,8 +96,8 @@ export default function ProfilesPage() {
       setNewBirth("");
       setAdding(false);
       await load();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -108,8 +109,8 @@ export default function ProfilesPage() {
     try {
       await deleteProfile(p.id);
       await load();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setBusy(false);
     }

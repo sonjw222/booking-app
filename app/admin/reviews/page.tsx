@@ -8,6 +8,7 @@
     (새 삭제 경로를 만들지 않음 — 자동 삭제/차단은 이번 범위 밖)
 */
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -37,7 +38,7 @@ export default function AdminReviewReportsPage() {
   const load = useCallback(async (s: ReviewReportStatus) => {
     setLoading(true); setError(null);
     try { setReports(await fetchReviewReportsForAdmin(s)); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, []);
 
@@ -62,7 +63,7 @@ export default function AdminReviewReportsPage() {
       await resolveReviewReport(reportId, next);
       showToast(next === "reviewed" ? "확인 완료로 처리했어요" : "신고를 기각했어요");
       await load(status);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusyId(null); }
   }
 
@@ -74,7 +75,7 @@ export default function AdminReviewReportsPage() {
       await resolveReviewReport(report.id, "reviewed");
       showToast("후기를 삭제하고 신고를 처리했어요");
       await load(status);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusyId(null); }
   }
 

@@ -8,6 +8,7 @@
   두 값을 부모가 합쳐 쓰기 쉽도록 별도 상태로 분리해 넘긴다.
 */
 
+import { errMsg } from "./errorMessage";
 import { useState } from "react";
 import { openDaumPostcode } from "../../lib/daumPostcode";
 
@@ -32,8 +33,8 @@ export default function AddressField({ base, detail, onChangeBase, onChangeDetai
         setSearching(false);
       },
       () => setSearching(false)
-    ).catch((e: any) => {
-      setError(e.message ?? "주소 검색에 실패했어요");
+    ).catch((e: unknown) => {
+      setError(errMsg(e) || "주소 검색에 실패했어요");
       setSearching(false);
     });
   }

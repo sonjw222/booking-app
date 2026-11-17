@@ -383,7 +383,7 @@ export default function LoginPage() {
         // 반환되는 멱등 함수라 중복 호출 비용은 거의 없다.
         await ensureAccountForCurrentUser();
         window.location.replace("/");
-      } catch (e: any) {
+      } catch (e) {
         setSocialLoading(null);
         if (e instanceof AppleSignInCancelledError) return; // 사용자가 직접 취소 — 에러로 안 보여줌
         setMessage({ type: "error", text: toUserMessage(e, "애플 로그인에 실패했어요") });
@@ -407,7 +407,7 @@ export default function LoginPage() {
         // JS 컨텍스트가 파괴되지 않도록 이동 전에 한 번 더 기다린다(멱등 함수).
         await ensureAccountForCurrentUser();
         window.location.replace("/");
-      } catch (e: any) {
+      } catch (e) {
         setSocialLoading(null);
         if (e instanceof GoogleSignInCancelledError) return; // 사용자가 직접 취소 — 에러로 안 보여줌
         setMessage({ type: "error", text: toUserMessage(e, "구글 로그인에 실패했어요") });

@@ -10,6 +10,7 @@
     RLS 정책만 "본인 소유 + 아직 미발급"으로 다르게 좁혀져 있다.)
 */
 
+import { errMsg } from "../components/errorMessage";
 import { FREE_GRANT_LABEL } from "../../lib/membershipOrigin";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -52,7 +53,7 @@ export default function PurchasesPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try { setItems(await fetchMyPurchases()); }
-    catch (e: any) { setError(e.message); }
+    catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -70,7 +71,7 @@ export default function PurchasesPage() {
       showToast("환불 처리했어요");
       setRefundTarget(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -83,7 +84,7 @@ export default function PurchasesPage() {
       showToast("주문을 취소했어요");
       setCancelTarget(null);
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 

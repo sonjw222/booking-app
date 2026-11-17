@@ -16,6 +16,7 @@
        PAYOUTS_ENABLED 플래그로 잠가둠(기존 로직 그대로 유지).
 */
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
@@ -50,7 +51,7 @@ export default function ManagerSettlementPage() {
         setCenters(list.filter((c) => c.isOwner));
         if (list.some((c) => c.isOwner)) setCenterId(list.find((c) => c.isOwner)!.id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -62,7 +63,7 @@ export default function ManagerSettlementPage() {
       setBankName(acc?.bankName ?? "");
       setAccountNumber(acc?.accountNumber ?? "");
       setAccountHolderName(acc?.accountHolderName ?? "");
-    } catch (e: any) { setManualMessage({ type: "error", text: e.message }); }
+    } catch (e) { setManualMessage({ type: "error", text: errMsg(e) }); }
     finally { setManualLoading(false); }
   }, [centerId]);
 
@@ -71,7 +72,7 @@ export default function ManagerSettlementPage() {
     setAcctLoading(true); setAcctError(null);
     try {
       setAccount(await fetchCenterPayoutAccount(centerId));
-    } catch (e: any) { setAcctError(e.message); }
+    } catch (e) { setAcctError(errMsg(e)); }
     finally { setAcctLoading(false); setLoading(false); }
   }, [centerId]);
 
@@ -83,8 +84,8 @@ export default function ManagerSettlementPage() {
     try {
       await saveCenterSettlementAccount(centerId, { bankName, accountNumber, accountHolderName });
       setManualMessage({ type: "ok", text: "정산 계좌를 저장했어요." });
-    } catch (e: any) {
-      setManualMessage({ type: "error", text: e.message });
+    } catch (e) {
+      setManualMessage({ type: "error", text: errMsg(e) });
     } finally {
       setManualSaving(false);
     }

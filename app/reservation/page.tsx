@@ -214,7 +214,7 @@ function ReservationCalendarContent() {
       // 프로필 목록 (예약 주체 선택용). 대표 프로필을 기본 선택
       setProfiles(profs);
       setActiveProfileId((prev) => prev ?? profs.find((p) => p.id === profileParamRef.current)?.id ?? profs.find((p) => p.isPrimary)?.id ?? profs[0]?.id ?? null);
-    } catch (e: any) {
+    } catch (e) {
       if (!opts?.background) setError(toUserMessage(e, "데이터를 불러오지 못했어요"));
     } finally {
       setLoading(false);
@@ -451,7 +451,7 @@ function ReservationCalendarContent() {
       setConfirmClass(null);
       setPassesRefreshKey((k) => k + 1);
       await load({ silent: true });
-    } catch (e: any) {
+    } catch (e) {
       setReservationError(toUserMessage(e, "예약할 수 없어요. 수강권과 수업 상태를 확인해주세요."));
     } finally {
       setBusyClassId(null);
@@ -476,7 +476,7 @@ function ReservationCalendarContent() {
       showToast(deducted ? "취소됐지만 마감 이후라 수강권 1회가 차감됐어요" : "예약이 취소됐어요");
       setPassesRefreshKey((k) => k + 1);
       await load({ silent: true });
-    } catch (e: any) {
+    } catch (e) {
       showToast(toUserMessage(e, "취소하지 못했어요"));
     } finally {
       setBusyClassId(null);

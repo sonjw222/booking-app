@@ -1,5 +1,6 @@
 "use client";
 
+import { errMsg } from "../../../components/errorMessage";
 import Link from "next/link";
 import SheetOverlay from "../../../components/SheetOverlay";
 
@@ -68,7 +69,7 @@ export default function AlimtalkRulesPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -82,7 +83,7 @@ export default function AlimtalkRulesPage() {
       setRules(r);
       setTemplates(t);
       setProducts(p);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -122,7 +123,7 @@ export default function AlimtalkRulesPage() {
       showToast("저장했어요");
       closeSheet();
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setSaving(false); }
   }
 
@@ -136,7 +137,7 @@ export default function AlimtalkRulesPage() {
       showToast("삭제했어요");
       closeSheet();
       await load();
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setSaving(false); }
   }
 

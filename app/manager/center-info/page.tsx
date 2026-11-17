@@ -20,6 +20,7 @@
     권한이 없으면 그 두 필드만 추가로 비활성화한다(DB 레이어가 최종 방어선, UI는 편의).
 */
 
+import { errMsg } from "../../components/errorMessage";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
@@ -80,7 +81,7 @@ export default function CenterInfoPage() {
     try {
       const path = await uploadCenterPhoto(file);
       setIntroBlocks((b) => [...b, { type: "image", value: path }]);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setUploadingBlock(false); }
   }
   // 리치 텍스트 저장 (html + 검색/미리보기용 평문 value 동시 갱신)
@@ -112,7 +113,7 @@ export default function CenterInfoPage() {
         setCenters(list);
         if (list.length > 0) setCenterId(list[0].id);
         else setLoading(false);
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      } catch (e) { setError(errMsg(e)); setLoading(false); }
     })();
   }, []);
 
@@ -137,7 +138,7 @@ export default function CenterInfoPage() {
       setSns(c?.sns ?? "");
       setLat(c?.latitude ?? null);
       setLng(c?.longitude ?? null);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setLoading(false); }
   }, [centerId]);
 
@@ -183,7 +184,7 @@ export default function CenterInfoPage() {
         reviewPoint: parseInt(reviewPoint || "0", 10) || 0,
       });
       showToast("저장했어요");
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(errMsg(e)); }
     finally { setBusy(false); }
   }
 
@@ -275,7 +276,7 @@ export default function CenterInfoPage() {
                 const f = e.target.files?.[0]; if (!f || !centerId) return;
                 setUploadingPhoto(true);
                 try { setPhotoUrl(await uploadCenterPhoto(f)); }
-                catch (err: any) { setError(err.message); }
+                catch (err) { setError(errMsg(err)); }
                 finally { setUploadingPhoto(false); }
               }} />
             </label>
