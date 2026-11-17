@@ -196,7 +196,6 @@ test("관리자: 대기(waitlisted) 예약은 출석/결석 버튼이 보이지 
 });
 
 test("관리자: 프라이빗 수업에서도 출석/결석 처리가 동일하게 동작한다 (실브라우저)", async ({ page, browser }) => {
-  const admin = getFixtureAdminClient();
   // 같은 센터·제목의 다른 실행/사람이 만든 행은 건드리지 않는다 — 실행별 제목으로 만들고(충돌 없음) 이 실행이 만든 id 만 정리한다(Q01).
   const start = new Date(Date.now() + 42 * 3600 * 1000);
   const end = new Date(start.getTime() + 60 * 60 * 1000);

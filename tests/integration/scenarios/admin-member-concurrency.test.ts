@@ -71,7 +71,7 @@ describe("SCN-P1-31/32: 관리자 정원 변경 ↔ 회원 예약 상태 [FIX �
       .eq("center_id", centerAId)
       .single();
     if (readErr) throw new Error(`테스트 센터 설정 조회 실패: ${readErr.message}`);
-    originalWaitlistWeeklyLimit = (existingSettings as any).waitlist_weekly_limit;
+    originalWaitlistWeeklyLimit = existingSettings.waitlist_weekly_limit;
     await admin.from("center_settings").update({ waitlist_weekly_limit: 10 }).eq("center_id", centerAId);
 
     const memberA = await loginMemberA();
@@ -134,8 +134,8 @@ describe("SCN-P1-31/32: 관리자 정원 변경 ↔ 회원 예약 상태 [FIX �
       .select("id, title, description, start_time, end_time, capacity, allow_goods, room_id, cancel_deadline_min, booking_deadline_min, class_format, pass_selection_mode")
       .single();
     if (clsErr || !cls) throw new Error(`수업 생성 실패: ${clsErr?.message}`);
-    pendingClassIds.push((cls as any).id);
-    return cls as any as ClassRow;
+    pendingClassIds.push(cls.id);
+    return cls as ClassRow;
   }
 
   it("SCN-P1-31-A: [FIX] 확정 인원보다 적게 정원을 줄이면 거부되고, 기존 예약/정원 모두 그대로 유지된다", async () => {
@@ -146,10 +146,10 @@ describe("SCN-P1-31/32: 관리자 정원 변경 ↔ 회원 예약 상태 [FIX �
     await runScenario("SCN-P1-31-A", ["managerA", "memberA", "memberB"], async (assertions) => {
       await loginMemberA();
       const rA = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      expect((rA.data as any).status).toBe("confirmed");
+      expect(rA.data.status).toBe("confirmed");
       await loginMemberB();
       const rB = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      expect((rB.data as any).status).toBe("confirmed");
+      expect(rB.data.status).toBe("confirmed");
 
       await loginManagerA();
       const updateRes = await callUpdateClassSafe(cls, 1);
@@ -162,8 +162,8 @@ describe("SCN-P1-31/32: 관리자 정원 변경 ↔ 회원 예약 상태 [FIX �
       expect(updateRes.error?.message).toContain("확정 예약 인원");
 
       const { data: clsAfter } = await supabase.from("classes").select("capacity").eq("id", cls.id).single();
-      assertions.push({ name: "[FIX] capacity는 거부됐으므로 원래 값(2)으로 그대로 유지됨", passed: (clsAfter as any).capacity === 2 });
-      expect((clsAfter as any).capacity).toBe(2);
+      assertions.push({ name: "[FIX] capacity는 거부됐으므로 원래 값(2)으로 그대로 유지됨", passed: clsAfter!.capacity === 2 });
+      expect(clsAfter!.capacity).toBe(2);
 
       const admin = getFixtureAdminClient();
       const { data: stillConfirmed } = await admin.from("reservations").select("id,status").eq("class_id", cls.id).eq("status", "confirmed");
@@ -188,10 +188,10 @@ describe("SCN-P1-31/32: 관리자 정원 변경 ↔ 회원 예약 상태 [FIX �
     await runScenario("SCN-P1-31-B", ["managerA", "memberA", "memberB"], async (assertions) => {
       await loginMemberA();
       const rA = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      expect((rA.data as any).status).toBe("confirmed");
+      expect(rA.data.status).toBe("confirmed");
       await loginMemberB();
       const rB = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      expect((rB.data as any).status).toBe("confirmed");
+      expect(rB.data.status).toBe("confirmed");
 
       await loginManagerA();
       // 확정 인원과 정확히 같은 값(2→2)으로의 "변경"은 축소가 아니므로 항상 성공해야
@@ -210,16 +210,16 @@ describe("SCN-P1-31/32: 관리자 정원 변경 ↔ 회원 예약 상태 [FIX �
     await runScenario("SCN-P1-32-A", ["managerA", "memberA", "memberB(waitlist)"], async (assertions) => {
       await loginMemberA();
       const rA = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      expect((rA.data as any).status).toBe("confirmed");
+      expect(rA.data.status).toBe("confirmed");
 
       await loginMemberB();
       const rB = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      expect((rB.data as any).status).toBe("waitlisted");
-      const bReservationId = (rB.data as any).reservation_id as string;
+      expect(rB.data.status).toBe("waitlisted");
+      const bReservationId = rB.data.reservation_id as string;
       const usedMembershipIdForB = (await fetchReservationMembershipId(bReservationId))!;
       const admin = getFixtureAdminClient();
       const { data: memBefore } = await admin.from("memberships").select("remaining_count").eq("id", usedMembershipIdForB).single();
-      const beforeCount = (memBefore as any).remaining_count;
+      const beforeCount = memBefore!.remaining_count;
 
       await loginManagerA();
       const updateRes = await callUpdateClassSafe(cls, 3);
@@ -227,10 +227,10 @@ describe("SCN-P1-31/32: 관리자 정원 변경 ↔ 회원 예약 상태 [FIX �
       expect(updateRes.error).toBeNull();
       assertions.push({
         name: "[FIX] 응답에 promoted_count=1 포함(요청 3번 검증 항목)",
-        passed: (updateRes.data as any)?.promoted_count === 1,
+        passed: updateRes.data?.promoted_count === 1,
         detail: JSON.stringify(updateRes.data),
       });
-      expect((updateRes.data as any)?.promoted_count).toBe(1);
+      expect(updateRes.data?.promoted_count).toBe(1);
 
       const bAfter = await fetchReservationStatus(bReservationId);
       assertions.push({ name: "[FIX] B가 정원 확대만으로 자동 승격됨(confirmed)", passed: bAfter.status === "confirmed", detail: JSON.stringify(bAfter) });
@@ -240,10 +240,10 @@ describe("SCN-P1-31/32: 관리자 정원 변경 ↔ 회원 예약 상태 [FIX �
       const { data: memAfter } = await admin.from("memberships").select("remaining_count").eq("id", usedMembershipIdForB).single();
       assertions.push({
         name: "[FIX] 승격 시 수강권이 정확히 1회만 차감됨",
-        passed: (memAfter as any).remaining_count === beforeCount - 1,
-        detail: JSON.stringify({ before: beforeCount, after: (memAfter as any).remaining_count }),
+        passed: memAfter!.remaining_count === beforeCount - 1,
+        detail: JSON.stringify({ before: beforeCount, after: memAfter!.remaining_count }),
       });
-      expect((memAfter as any).remaining_count).toBe(beforeCount - 1);
+      expect(memAfter!.remaining_count).toBe(beforeCount - 1);
 
       const violations = await checkCoreInvariants(cls.id, [usedMembershipIdForB]);
       assertions.push({ name: "핵심 invariant 위반 없음", passed: violations.length === 0, detail: JSON.stringify(violations) });
@@ -281,22 +281,22 @@ describe("SCN-P1-31/32: 관리자 정원 변경 ↔ 회원 예약 상태 [FIX �
 
       await loginMemberA();
       const rA = await supabase.rpc("reserve_class", { p_class_id: cls2.id, p_profile_id: null });
-      expect((rA.data as any).status).toBe("confirmed");
+      expect(rA.data.status).toBe("confirmed");
       await loginMemberB();
       const rB = await supabase.rpc("reserve_class", { p_class_id: cls2.id, p_profile_id: null });
-      expect((rB.data as any).status).toBe("confirmed");
+      expect(rB.data.status).toBe("confirmed");
 
       await loginMemberA();
       const rC = await supabase.rpc("reserve_class", { p_class_id: cls2.id, p_profile_id: memberCProfileId });
-      expect((rC.data as any).status).toBe("waitlisted");
-      const cReservationId = (rC.data as any).reservation_id as string;
+      expect(rC.data.status).toBe("waitlisted");
+      const cReservationId = rC.data.reservation_id as string;
       const cStatusBefore = await fetchReservationStatus(cReservationId);
       expect(cStatusBefore.waitlistOrder).toBe(1);
 
       await loginMemberB();
       const rD = await supabase.rpc("reserve_class", { p_class_id: cls2.id, p_profile_id: memberDProfileId });
-      expect((rD.data as any).status).toBe("waitlisted");
-      const dReservationId = (rD.data as any).reservation_id as string;
+      expect(rD.data.status).toBe("waitlisted");
+      const dReservationId = rD.data.reservation_id as string;
       const dStatusBefore = await fetchReservationStatus(dReservationId);
       expect(dStatusBefore.waitlistOrder).toBe(2);
 
@@ -307,10 +307,10 @@ describe("SCN-P1-31/32: 관리자 정원 변경 ↔ 회원 예약 상태 [FIX �
       expect(updateRes.error).toBeNull();
       assertions.push({
         name: "[FIX] 자리 1개만 늘었으므로 promoted_count=1(대기 2명 중 순번이 빠른 1명만)",
-        passed: (updateRes.data as any)?.promoted_count === 1,
+        passed: updateRes.data?.promoted_count === 1,
         detail: JSON.stringify(updateRes.data),
       });
-      expect((updateRes.data as any)?.promoted_count).toBe(1);
+      expect(updateRes.data?.promoted_count).toBe(1);
 
       const cAfter = await fetchReservationStatus(cReservationId);
       assertions.push({ name: "[FIX] 순번이 빠른 C가 승격됨(confirmed)", passed: cAfter.status === "confirmed", detail: JSON.stringify(cAfter) });
@@ -338,19 +338,19 @@ describe("SCN-P1-31/32: 관리자 정원 변경 ↔ 회원 예약 상태 [FIX �
     await runScenario("SCN-P1-32-C", ["managerA", "memberA", "memberB(waitlist)"], async (assertions) => {
       await loginMemberA();
       const rA = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      expect((rA.data as any).status).toBe("confirmed");
-      const aReservationId = (rA.data as any).reservation_id as string;
+      expect(rA.data.status).toBe("confirmed");
+      const aReservationId = rA.data.reservation_id as string;
 
       await loginMemberB();
       const rB = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      expect((rB.data as any).status).toBe("waitlisted");
-      const bReservationId = (rB.data as any).reservation_id as string;
+      expect(rB.data.status).toBe("waitlisted");
+      const bReservationId = rB.data.reservation_id as string;
 
       await loginMemberA();
       const cancelRes = await supabase.rpc("cancel_reservation", { p_reservation_id: aReservationId });
       expect(cancelRes.error).toBeNull();
-      assertions.push({ name: "회귀 없음: 취소 이벤트로도 정상 승격(waitlist_promoted=true)", passed: (cancelRes.data as any)?.waitlist_promoted === true });
-      expect((cancelRes.data as any).waitlist_promoted).toBe(true);
+      assertions.push({ name: "회귀 없음: 취소 이벤트로도 정상 승격(waitlist_promoted=true)", passed: cancelRes.data?.waitlist_promoted === true });
+      expect(cancelRes.data.waitlist_promoted).toBe(true);
 
       const bAfter = await fetchReservationStatus(bReservationId);
       assertions.push({ name: "B가 취소 이벤트로 승격됨", passed: bAfter.status === "confirmed" });
@@ -368,22 +368,22 @@ describe("SCN-P1-31/32: 관리자 정원 변경 ↔ 회원 예약 상태 [FIX �
     await runScenario("SCN-P1-32-D", ["managerA", "memberA", "memberB", "memberC(waitlist)", "memberD(waitlist)"], async (assertions) => {
       await loginMemberA();
       const rA = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      expect((rA.data as any).status).toBe("confirmed");
-      const aReservationId = (rA.data as any).reservation_id as string;
+      expect(rA.data.status).toBe("confirmed");
+      const aReservationId = rA.data.reservation_id as string;
 
       await loginMemberB();
       const rB = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      expect((rB.data as any).status).toBe("confirmed");
+      expect(rB.data.status).toBe("confirmed");
 
       await loginMemberA();
       const rC = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: memberCProfileId });
-      expect((rC.data as any).status).toBe("waitlisted");
-      const cReservationId = (rC.data as any).reservation_id as string;
+      expect(rC.data.status).toBe("waitlisted");
+      const cReservationId = rC.data.reservation_id as string;
 
       await loginMemberB();
       const rD = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: memberDProfileId });
-      expect((rD.data as any).status).toBe("waitlisted");
-      const dReservationId = (rD.data as any).reservation_id as string;
+      expect(rD.data.status).toBe("waitlisted");
+      const dReservationId = rD.data.reservation_id as string;
 
       // 동시에: 관리자가 정원을 2→3으로 확대(자리 1개, C 승격 후보)하는 것과, memberA가
       // 자신의 확정 예약을 취소(자리 1개 더, D 승격 후보)하는 것을 Promise.all로 겹친다.

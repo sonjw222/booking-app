@@ -1,5 +1,5 @@
-import { ctxFor, BASE, UX, pid, browser, OUT, settle, psql, check, save, env, external, apiPosts } from "./lib.mjs";
-const FREE = pid("[UX] 자유 선택 수강권"), SIZED = pid("[UX] 사이즈 선택 패키지"), SHOES = pid("[UX] 대여 슈즈 · 사이즈 필수");
+import { ctxFor, BASE, UX, pid, browser, OUT, settle, psql, check, save, env, external } from "./lib.mjs";
+const FREE = pid("[UX] 자유 선택 수강권"), SIZED = pid("[UX] 사이즈 선택 패키지");
 const orders0 = Number(psql("select count(*) from orders"));
 const ordersNow = () => Number(psql("select count(*) from orders"));
 const sheetInfo = (p) => p.evaluate(() => {
@@ -23,7 +23,6 @@ for (const w of [360, 390, 430, 1024]) {
 {
   const { ctx, page: p } = await ctxFor(); const ck = (q = "") => `${BASE}/checkout?center=${UX}&product=${FREE}${q}`;
   await p.goto(`${BASE}/center/${UX}?buy=1`, { waitUntil: "domcontentloaded" }); await settle(p, 3500);
-  const row = p.locator(".is-sheet, [data-sheet-overlay]").first().locator("*:has(> :text('[UX] 자유 선택 수강권'))").first();
   await p.locator("button:has-text('구매')").first().click(); await p.waitForURL(/\/checkout\?/, { timeout: 15000 }); await settle(p, 3000);
   const u = new URL(p.url());
   check("B2-nav", "시트 '구매' → 결제 화면(센터·상품 전달, 횟수는 결제 화면에서 선택)", u.searchParams.get("center") === UX && /^[0-9a-f-]{36}$/.test(u.searchParams.get("product") || "") && !u.search.includes("size=") ? "PASS" : "FAIL", u.search.slice(0, 90));

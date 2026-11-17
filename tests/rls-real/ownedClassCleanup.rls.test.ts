@@ -227,7 +227,7 @@ describe("Q01 추적: 생성 직후 실패·등록 실패·병렬·수동 정리
     const base = tag(); const N = 6;
     const ctxs = Array.from({ length: N }, () => ctxFor());
     const made = await Promise.all(ctxs.map((c) => track(c, runScopedTitle(base, c.runId))));
-    made.forEach((m, i) => addRes(m.id, OUR_PROFILE));
+    made.forEach((m) => addRes(m.id, OUR_PROFILE));
     const [first, ...rest] = ctxs;
     const r0 = await cleanupOwnedClass(first, made[0].id);
     expect(r0.status).toBe("deleted");

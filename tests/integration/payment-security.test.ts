@@ -8,15 +8,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";
 import { createOrder } from "../../lib/orders";
-import { TEST_CENTER_ID, TEST_PRODUCT_ID, signOutTestSession, switchToTestUser, type TestUser } from "./setup";
+import { TEST_CENTER_ID, TEST_PRODUCT_ID, signOutTestSession, switchToTestUser } from "./setup";
 
 type ProductRow = { id: string; name: string; price: number };
 
-let userA: TestUser;
 let product: ProductRow;
 
 beforeAll(async () => {
-  userA = await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
+  await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
 
   const { data, error } = await supabase
     .from("products")
@@ -33,7 +32,7 @@ beforeAll(async () => {
 // 매 테스트 직전에 기본 계정(A)으로 다시 로그인해 세션을 재확인한다. B로 전환이 필요한
 // 테스트는 그 안에서 명시적으로 다시 전환한다(아래 그대로 유지 — 이미 그렇게 되어 있음).
 beforeEach(async () => {
-  userA = await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
+  await switchToTestUser("TEST_USER_A_EMAIL", "TEST_USER_A_PASSWORD");
 });
 
 afterAll(async () => {

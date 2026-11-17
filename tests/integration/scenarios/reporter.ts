@@ -7,6 +7,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ScenarioResult } from "./types";
+import { errorMessage } from "../../helpers/errorMessage";
 
 const OUT_DIR = join(process.cwd(), "test-results", "business-scenarios");
 
@@ -39,7 +40,7 @@ export async function runScenario(
       assertions,
       cleanup: "PASS",
     });
-  } catch (e: any) {
+  } catch (e) {
     writeScenarioResult({
       scenario: id,
       platform: "shared",
@@ -48,7 +49,7 @@ export async function runScenario(
       actors,
       assertions,
       cleanup: "PASS", // 개별 시나리오 파일의 afterAll/afterEach가 별도로 정리(기존 관례 재사용)
-      error: e?.message ?? String(e),
+      error: errorMessage(e),
     });
     throw e; // vitest 자체 실패 처리는 그대로 유지(리포트만 부가로 남김)
   }

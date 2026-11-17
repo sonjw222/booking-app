@@ -33,6 +33,7 @@ import {
   type TestUser,
 } from "./setup";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../lib/settings";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const USER_A = { email: "TEST_USER_A_EMAIL", password: "TEST_USER_A_PASSWORD" };
@@ -75,12 +76,12 @@ beforeAll(async () => {
 afterAll(async () => {
   const errors: string[] = [];
   for (const id of createdClassIds) {
-    try { await cleanupTestClassAdmin(id); } catch (e: any) { errors.push(e.message); }
+    try { await cleanupTestClassAdmin(id); } catch (e) { errors.push(errorMessage(e)); }
   }
   try {
     await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
     await saveSettings(centerAId, originalSettings);
-  } catch (e: any) { errors.push(e.message); }
+  } catch (e) { errors.push(errorMessage(e)); }
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 30000);
 
@@ -119,8 +120,8 @@ describe("운영설정 재검증: 일일 예약 횟수 제한 — 저장 → DB 
         dailyBookLimit: afterSaveViaFetch.dailyBookLimit,
       },
       step2_dbValueViaAdminRawSelect: {
-        daily_book_limit_enabled: (afterSaveRaw as any)?.daily_book_limit_enabled,
-        daily_book_limit: (afterSaveRaw as any)?.daily_book_limit,
+        daily_book_limit_enabled: afterSaveRaw?.daily_book_limit_enabled,
+        daily_book_limit: afterSaveRaw?.daily_book_limit,
       },
       step3_rpcResults: [
         { attempt: 1, data: r1.data, error: r1.error?.message ?? null },
@@ -131,8 +132,8 @@ describe("운영설정 재검증: 일일 예약 횟수 제한 — 저장 → DB 
 
     expect(afterSaveViaFetch.dailyBookLimitEnabled, JSON.stringify(report)).toBe(true);
     expect(afterSaveViaFetch.dailyBookLimit, JSON.stringify(report)).toBe(2);
-    expect((afterSaveRaw as any)?.daily_book_limit_enabled, JSON.stringify(report)).toBe(true);
-    expect((afterSaveRaw as any)?.daily_book_limit, JSON.stringify(report)).toBe(2);
+    expect(afterSaveRaw?.daily_book_limit_enabled, JSON.stringify(report)).toBe(true);
+    expect(afterSaveRaw?.daily_book_limit, JSON.stringify(report)).toBe(2);
 
     expect(r1.error, JSON.stringify(report)).toBeNull();
     expect(r2.error, JSON.stringify(report)).toBeNull();

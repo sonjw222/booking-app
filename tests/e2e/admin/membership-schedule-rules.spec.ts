@@ -138,7 +138,7 @@ test.afterAll(async () => {
 });
 
 // B: 규칙과 수업(요일/시간/제목)이 정확히 일치 → 기존 pass가 사용 가능하고 예약 성공.
-test("B: schedule rule과 일치하는 수업에서는 그 조건의 pass가 사용 가능하다 (모든 수강권 허용, 실브라우저)", async ({ page, browser }) => {
+test("B: schedule rule과 일치하는 수업에서는 그 조건의 pass가 사용 가능하다 (모든 수강권 허용, 실브라우저)", async ({ browser }) => {
   const uniqueTitle = `P1-15-MATCH-${Date.now()}`;
   const cls = await createFutureTestClassAdmin(centerAId, { title: uniqueTitle, hoursFromNow: 150 });
   createdClassIds.push(cls.id);
@@ -263,7 +263,7 @@ test("J(F2 정책): 방금 새로 발급된 membership도 예약조건 불일치
   const { data: oldMems } = await admin
     .from("memberships").select("id")
     .eq("profile_id", userA.profileId).eq("product_id", restrictedPass.id);
-  const oldMemIds = (oldMems ?? []).map((m: any) => m.id as string);
+  const oldMemIds = (oldMems ?? []).map((m) => m.id as string);
   if (oldMemIds.length > 0) {
     await admin.from("reservations").delete().in("membership_id", oldMemIds);
     await admin.from("memberships").delete().in("id", oldMemIds);

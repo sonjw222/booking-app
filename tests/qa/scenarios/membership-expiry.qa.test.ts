@@ -15,6 +15,7 @@ import { createQaGoodsMembership } from "../fixtures/catalog";
 import { createQaStaff } from "../fixtures/staff";
 import { cleanupFixtures, createRunId, FixtureTracker, qaName, shouldKeepFailedFixtures } from "../runContext";
 import type { QaFixtureState } from "../fixtures/center";
+import type { MembershipExpiryRow } from "../fixtures/rows";
 
 const admin = () => getFixtureAdminClient();
 const tracker = new FixtureTracker(createRunId());
@@ -27,13 +28,13 @@ let startExpires = "";
 let failed = false;
 let snapshot: Record<string, unknown> = {};
 
-async function row(id: string) {
+async function row(id: string): Promise<MembershipExpiryRow> {
   const { data, error } = await admin().from("memberships")
     .select("id, expires_at, remaining_count, total_count, starts_at, status, product_id, profile_id, center_id").eq("id", id).single();
   if (error) throw new Error(`수강권 조회 실패: ${error.message}`);
-  return data as any;
+  return data as MembershipExpiryRow;
 }
-const withoutExpiry = (r: any) => { const { expires_at, ...rest } = r; return rest; };
+const withoutExpiry = (r: MembershipExpiryRow) => { const rest: Partial<MembershipExpiryRow> = { ...r }; delete rest.expires_at; return rest; };
 
 async function asOwner() { await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD"); }
 
@@ -65,7 +66,7 @@ describe("QA: 수강권 만료일 연장", () => {
     const keep = shouldKeepFailedFixtures(process.env, failed);
     // 이번 실행이 남긴 감사 로그(수강권 FK)를 먼저 추적해 정리 대상에 올린다
     const logs = await admin().from("admin_action_logs").select("id").in("membership_id", [membershipId, goodsMembershipId, unlimitedId].filter(Boolean));
-    for (const l of logs.data ?? []) tracker.add("admin_action_logs", (l as any).id);
+    for (const l of logs.data ?? []) tracker.add("admin_action_logs", l.id);
     const res = await cleanupFixtures(admin(), tracker, { keep });
     if (keep) console.warn(`[QA] QA_KEEP_FAILED_FIXTURES=1 — 실패한 fixture를 보존했어요(runId ${tracker.runId}, ${tracker.total()}개)`);
     if (res.failures.length > 0) console.warn(`[QA] 정리 중 일부 실패: ${res.failures.join(" | ")}`);
@@ -121,7 +122,7 @@ describe("QA: 수강권 만료일 연장", () => {
       .eq("membership_id", membershipId).eq("reason_code", "EXPIRY_EXTEND").order("created_at", { ascending: true });
     expect(error).toBeNull();
     expect(data).toHaveLength(2);
-    const [first, second] = data as any[];
+    const [first, second] = data!;
     expect(first).toMatchObject({ center_id: state.centerId, member_profile_id: state.memberProfileId, action_type: "MEMBERSHIP_UPDATE", admin_id: state.managerAccountId });
     expect(first.before_state.expires_at).toBe(startExpires);
     expect(first.after_state).toMatchObject({ expires_at: addDaysToYmd(startExpires, 7), mode: "days", days: 7 });

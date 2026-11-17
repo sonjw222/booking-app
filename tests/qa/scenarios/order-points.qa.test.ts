@@ -9,7 +9,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cancelMyPendingOrderQuietly, createOrder, updateOrderStatus } from "../../../lib/orders";
 import { requestRefund } from "../../../lib/mypage";
-import { fetchMyPoints, usePoints } from "../../../lib/reviews";
+import { fetchMyPoints, usePoints as spendPoints } from "../../../lib/reviews";
 import { supabase } from "../../../lib/supabaseClient";
 import { getFixtureAdminClient, signOutTestSession, switchToTestUser } from "../../integration/setup";
 import { bootstrapQa } from "../fixtures/bootstrap";
@@ -18,6 +18,7 @@ import { createAndIssueQaCoupon } from "../fixtures/coupons";
 import { buildCouponOrderInput, buildDirectOrderInput } from "../fixtures/directOrder";
 import { cleanupFixtures, createRunId, FixtureTracker, qaName, shouldKeepFailedFixtures } from "../runContext";
 import type { QaFixtureState } from "../fixtures/center";
+import type { MembershipRow, OrderRow, PaymentRow, PointTxRow } from "../fixtures/rows";
 
 const PRICE = 50000;
 const SEED = 20000;
@@ -36,28 +37,28 @@ const asManager = () => switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A
 async function balance(): Promise<number> {
   const { data, error } = await admin().from("point_transactions").select("amount").eq("center_id", state.centerId).eq("profile_id", state.memberProfileId);
   if (error) throw new Error(`포인트 원장 조회 실패: ${error.message}`);
-  return (data ?? []).reduce((n, r: any) => n + (r.amount as number), 0);
+  return (data ?? []).reduce((n, r) => n + (r.amount as number), 0);
 }
-async function ledger(orderId: string) {
+async function ledger(orderId: string): Promise<PointTxRow[]> {
   const { data, error } = await admin().from("point_transactions").select("id, amount, reason, order_id, reverses_id").eq("order_id", orderId).order("created_at");
   if (error) throw new Error(`주문 원장 조회 실패: ${error.message}`);
-  for (const r of data ?? []) tracker.add("point_transactions", (r as any).id);
-  return (data ?? []) as any[];
+  for (const r of data ?? []) tracker.add("point_transactions", r.id);
+  return (data ?? []) as PointTxRow[];
 }
-async function orderRow(id: string) {
+async function orderRow(id: string): Promise<OrderRow> {
   const { data, error } = await admin().from("orders").select("*").eq("id", id).single();
   if (error) throw new Error(`주문 조회 실패: ${error.message}`);
-  return data as any;
+  return data as OrderRow;
 }
-async function paymentsForOrder(id: string) {
+async function paymentsForOrder(id: string): Promise<PaymentRow[]> {
   const { data, error } = await admin().from("payments").select("*").eq("order_id", id);
   if (error) throw new Error(`결제 조회 실패: ${error.message}`);
-  return (data ?? []) as any[];
+  return (data ?? []) as PaymentRow[];
 }
-async function membershipsForOrderProfile() {
+async function membershipsForOrderProfile(): Promise<MembershipRow[]> {
   const { data, error } = await admin().from("memberships").select("id, status, remaining_count").eq("product_id", product.productId).eq("profile_id", state.memberProfileId);
   if (error) throw new Error(`수강권 조회 실패: ${error.message}`);
-  return (data ?? []) as any[];
+  return (data ?? []) as MembershipRow[];
 }
 
 // 회원이 앱 checkout direct 분기와 같은 순서로 주문 생성 → 포인트 사용
@@ -68,12 +69,12 @@ async function memberOrderWithPoints(points: number, opts?: { memberCouponId?: s
   const input = opts?.memberCouponId
     ? { ...buildCouponOrderInput({ ...base, discountAmount: opts.discount ?? 0, memberCouponId: opts.memberCouponId, amount }), pointsUsed: points }
     : { ...buildDirectOrderInput(base), amount, pointsUsed: points };
-  const id = await createOrder(input as any);
+  const id = await createOrder(input);
   tracker.add("orders", id);
-  if (points > 0) await usePoints(state.centerId, points, id);
+  if (points > 0) await spendPoints(state.centerId, points, id);
   return id;
 }
-const rowsOf = (rows: any[], kind: "debit" | "restore") => rows.filter((r) => (kind === "debit" ? r.amount < 0 : r.amount > 0));
+const rowsOf = (rows: PointTxRow[], kind: "debit" | "restore") => rows.filter((r) => (kind === "debit" ? r.amount < 0 : r.amount > 0));
 
 describe("QA: 주문 포인트 사용/복원 생명주기", () => {
   beforeAll(async () => {
@@ -195,8 +196,8 @@ describe("QA: 주문 포인트 사용/복원 생명주기", () => {
     expect(mem?.status).toBe("refunded");
     const { data: refunds } = await admin().from("payments").select("id, total_amount, sale_type").eq("membership_id", membershipId).eq("sale_type", "refund");
     expect(refunds ?? []).toHaveLength(1);
-    tracker.add("payments", (refunds as any[])[0].id);
-    expect((refunds as any[])[0].total_amount).toBe(-35000);   // 쿠폰 할인/포인트가 아닌 실제 결제금액만 환불
+    tracker.add("payments", refunds![0].id);
+    expect(refunds![0].total_amount).toBe(-35000);   // 쿠폰 할인/포인트가 아닌 실제 결제금액만 환불
     const { data: mc } = await admin().from("member_coupons").select("status, order_id").eq("id", memberCouponId).single();
     expect(mc).toMatchObject({ status: "available", order_id: null });
     const rows = await ledger(id);
@@ -213,7 +214,7 @@ describe("QA: 주문 포인트 사용/복원 생명주기", () => {
   step("CASE 7 — 변조: points_used만 주장(차감 원장 없음)하면 취소 시 복원되지 않고 확정도 거부", async () => {
     await asMember();
     const before = await balance();
-    const claimed = await createOrder({ ...buildDirectOrderInput({ centerId: state.centerId, productId: product.productId, productName: product.name, price: PRICE }), amount: PRICE - 3000, pointsUsed: 3000 } as any);
+    const claimed = await createOrder({ ...buildDirectOrderInput({ centerId: state.centerId, productId: product.productId, productName: product.name, price: PRICE }), amount: PRICE - 3000, pointsUsed: 3000 });
     tracker.add("orders", claimed);
     await asManager();
     await expect(updateOrderStatus(claimed, "done")).rejects.toThrow();   // 서버 검증: 포인트 사용 내역 미확인
@@ -242,11 +243,11 @@ describe("QA: 주문 포인트 사용/복원 생명주기", () => {
     await asMember();
     const before = await balance();
     const id = await memberOrderWithPoints(4000);
-    await usePoints(state.centerId, 4000, id);   // 같은 주문에 다시 호출
-    await Promise.allSettled([usePoints(state.centerId, 4000, id), usePoints(state.centerId, 4000, id)]);
+    await spendPoints(state.centerId, 4000, id);   // 같은 주문에 다시 호출
+    await Promise.allSettled([spendPoints(state.centerId, 4000, id), spendPoints(state.centerId, 4000, id)]);
     expect(rowsOf(await ledger(id), "debit")).toHaveLength(1);
     expect(await balance()).toBe(before - 4000);
-    await expect(usePoints(state.centerId, 1000, id)).rejects.toThrow();   // 주문의 points_used와 다른 금액은 거부
+    await expect(spendPoints(state.centerId, 1000, id)).rejects.toThrow();   // 주문의 points_used와 다른 금액은 거부
     await updateOrderStatus(id, "cancelled");
     expect(rowsOf(await ledger(id), "restore")).toHaveLength(1);
     expect(await balance()).toBe(before);
@@ -325,7 +326,7 @@ describe("QA: 주문 포인트 사용/복원 생명주기", () => {
   step("다른 주문의 포인트 오염 없음: 이번 실행의 모든 복원 행은 자기 주문의 차감 행만 가리킨다", async () => {
     for (const id of tracker.list("orders")) {
       const rows = await ledger(id);
-      const debitIds = new Set(rowsOf(rows, "debit").map((r) => r.id));
+      const debitIds = new Set<string | null>(rowsOf(rows, "debit").map((r) => r.id));
       for (const r of rowsOf(rows, "restore")) expect(debitIds.has(r.reverses_id)).toBe(true);
       expect(rowsOf(rows, "restore").length).toBeLessThanOrEqual(rowsOf(rows, "debit").length);
     }

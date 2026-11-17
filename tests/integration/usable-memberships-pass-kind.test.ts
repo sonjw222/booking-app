@@ -18,6 +18,7 @@ import {
   getFixtureAdminClient,
   type TestUser,
 } from "./setup";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 
@@ -54,7 +55,7 @@ beforeAll(async () => {
       .insert({ center_id: centerAId, name: "USABLE-PASS-KIND 테스트 대여품", price: 1000, product_kind: "goods" })
       .select("id").single();
     if (prodErr || !product) throw new Error("goods 상품 생성 실패: " + prodErr?.message);
-    goodsProductId = (product as any).id;
+    goodsProductId = product.id;
   }
 
   const { data: existingMem, error: findMemErr } = await admin
@@ -88,16 +89,16 @@ beforeAll(async () => {
       })
       .select("id").single();
     if (memErr || !mem) throw new Error("goods membership 생성 실패: " + memErr?.message);
-    goodsMembershipId = (mem as any).id;
+    goodsMembershipId = mem.id;
   }
 }, 30000);
 
 afterAll(async () => {
   await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
   const errors: string[] = [];
-  try { if (goodsMembershipId) await supabase.from("memberships").delete().eq("id", goodsMembershipId); } catch (e: any) { errors.push(e.message); }
-  try { if (goodsProductId) await supabase.from("products").delete().eq("id", goodsProductId); } catch (e: any) { errors.push(e.message); }
-  try { await cleanupTestClass(classId, []); } catch (e: any) { errors.push(e.message); }
+  try { if (goodsMembershipId) await supabase.from("memberships").delete().eq("id", goodsMembershipId); } catch (e) { errors.push(errorMessage(e)); }
+  try { if (goodsProductId) await supabase.from("products").delete().eq("id", goodsProductId); } catch (e) { errors.push(errorMessage(e)); }
+  try { await cleanupTestClass(classId, []); } catch (e) { errors.push(errorMessage(e)); }
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 30000);
 
@@ -107,7 +108,7 @@ describe("Track 6: usable_memberships_for_classes()가 goods(비예약용) 상�
       p_class_ids: [classId], p_profile_id: managerA.profileId,
     });
     expect(error).toBeNull();
-    const rows = (data ?? []) as any[];
+    const rows: { membership_id: string }[] = data ?? [];
     const hasGoods = rows.some((r) => r.membership_id === goodsMembershipId);
     expect(hasGoods).toBe(false);
   });

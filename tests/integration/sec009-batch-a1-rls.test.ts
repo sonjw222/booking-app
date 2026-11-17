@@ -45,6 +45,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { supabase } from "../../lib/supabaseClient";
 import { switchToTestUser, getOrCreateOwnedTestCenter, type TestUser } from "./setup";
 import { createRole, fetchRoles, inviteStaff, removeStaff, deleteRole, setStaffOverride } from "../../lib/roles";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
@@ -246,8 +247,8 @@ afterAll(async () => {
 
   try {
     await clearManagerBOverrides();
-  } catch (e: any) {
-    errors.push(`권한 오버라이드 정리 실패: ${e.message}`);
+  } catch (e) {
+    errors.push(`권한 오버라이드 정리 실패: ${errorMessage(e)}`);
   }
 
   // ④ afterAll에서도 ①과 동일하게(무조건) 정리 — "이번 실행이 만든 것만" 추적하던
@@ -256,8 +257,8 @@ afterAll(async () => {
   // beforeAll에서 다시 한번 정리를 시도하더라도 이중으로 안전하다.
   try {
     await cleanupNoPermRoleAndInvite(centerAId);
-  } catch (e: any) {
-    errors.push(`무권한 역할/초대 정리 실패: ${e.message}`);
+  } catch (e) {
+    errors.push(`무권한 역할/초대 정리 실패: ${errorMessage(e)}`);
   }
 
   if (errors.length > 0) {

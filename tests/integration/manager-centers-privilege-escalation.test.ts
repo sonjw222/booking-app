@@ -62,7 +62,7 @@ async function sweepStaleFixtureCenters(): Promise<void> {
   const { data: stale, error } = await admin
     .from("centers").select("id").in("name", KNOWN_FIXTURE_CENTER_NAMES);
   if (error) throw new Error(`stale fixture 조회 실패: ${error.message}`);
-  const staleIds = (stale ?? []).map((r: any) => r.id);
+  const staleIds = (stale ?? []).map((r) => r.id);
   if (staleIds.length === 0) return;
   await admin.from("manager_centers").delete().in("center_id", staleIds);
   await admin.from("center_roles").delete().in("center_id", staleIds);
@@ -82,11 +82,11 @@ beforeAll(async () => {
     .select("id, role_key, is_owner")
     .eq("center_id", centerAId);
   if (error || !roles) throw new Error(`centerA 역할 조회 실패: ${error?.message ?? "no data"}`);
-  const ownerRole = roles.find((r: any) => r.is_owner === true);
-  const trainerRole = roles.find((r: any) => r.role_key === "trainer");
+  const ownerRole = roles.find((r) => r.is_owner === true);
+  const trainerRole = roles.find((r) => r.role_key === "trainer");
   if (!ownerRole || !trainerRole) throw new Error("centerA 기본 역할(오너/강사) 조회 실패");
-  ownerRoleIdOfCenterA = (ownerRole as any).id;
-  trainerRoleIdOfCenterA = (trainerRole as any).id;
+  ownerRoleIdOfCenterA = ownerRole.id;
+  trainerRoleIdOfCenterA = trainerRole.id;
 }, 30000);
 
 afterAll(async () => {
@@ -113,7 +113,7 @@ describe("A~C: 일반 회원의 manager_centers self-join(SEC-101) — 반드시
       .from("manager_centers")
       .insert({ account_id: userA.accountId, center_id: centerAId, status: "pending" })
       .select("id");
-    if (!error && data && data.length > 0) cleanupManagerCenterIds.push((data[0] as any).id);
+    if (!error && data && data.length > 0) cleanupManagerCenterIds.push(data[0].id);
     expect(error).not.toBeNull();
   });
 
@@ -122,7 +122,7 @@ describe("A~C: 일반 회원의 manager_centers self-join(SEC-101) — 반드시
       .from("manager_centers")
       .insert({ account_id: userA.accountId, center_id: centerAId, status: "active" })
       .select("id");
-    if (!error && data && data.length > 0) cleanupManagerCenterIds.push((data[0] as any).id);
+    if (!error && data && data.length > 0) cleanupManagerCenterIds.push(data[0].id);
     expect(error).not.toBeNull();
   });
 
@@ -131,7 +131,7 @@ describe("A~C: 일반 회원의 manager_centers self-join(SEC-101) — 반드시
       .from("manager_centers")
       .insert({ account_id: userA.accountId, center_id: centerAId, status: "active", role_id: ownerRoleIdOfCenterA })
       .select("id");
-    if (!error && data && data.length > 0) cleanupManagerCenterIds.push((data[0] as any).id);
+    if (!error && data && data.length > 0) cleanupManagerCenterIds.push(data[0].id);
     expect(error).not.toBeNull();
   });
 });
@@ -161,7 +161,7 @@ describe("D, K: 정상 센터 생성 → 최초 오너 bootstrap은 계속 정�
     // K: null → 이 센터의 오너 role로 전환(부트스트랩 1회 self-UPDATE)
     const { error: updErr } = await supabase
       .from("manager_centers")
-      .update({ role_id: (ownerRole as any).id })
+      .update({ role_id: ownerRole!.id })
       .eq("account_id", userA.accountId)
       .eq("center_id", newCenterId);
     expect(updErr).toBeNull();
@@ -172,8 +172,8 @@ describe("D, K: 정상 센터 생성 → 최초 오너 bootstrap은 계속 정�
       .eq("account_id", userA.accountId)
       .eq("center_id", newCenterId)
       .maybeSingle();
-    expect((check as any)?.role_id).toBe((ownerRole as any).id);
-    expect((check as any)?.status).toBe("active");
+    expect(check?.role_id).toBe(ownerRole!.id);
+    expect(check?.status).toBe("active");
   });
 
   it("부트스트랩 재시도 방지: 이미 자기 오너 행이 있는 센터에 같은 계정으로 다시 self-insert하면 거부된다", async () => {
@@ -182,7 +182,7 @@ describe("D, K: 정상 센터 생성 → 최초 오너 bootstrap은 계속 정�
       .from("manager_centers")
       .insert({ account_id: userA.accountId, center_id: bootstrapCenterId, status: "active" })
       .select("id");
-    if (!error && data && data.length > 0) cleanupManagerCenterIds.push((data[0] as any).id);
+    if (!error && data && data.length > 0) cleanupManagerCenterIds.push(data[0].id);
     expect(error).not.toBeNull();
   });
 });
@@ -195,7 +195,7 @@ describe("E~F: 정상 스태프 초대(오너 스태프 초대 정책)는 그대
       .insert({ account_id: userB.accountId, center_id: centerAId, status: "active", role_id: trainerRoleIdOfCenterA })
       .select("id");
     expect(error).toBeNull();
-    if (data && data.length > 0) cleanupManagerCenterIds.push((data[0] as any).id);
+    if (data && data.length > 0) cleanupManagerCenterIds.push(data[0].id);
   });
 
   it("F: 권한 없는 일반 회원(userA)은 다른 계정(userB)을 centerA에 초대할 수 없다", async () => {
@@ -203,7 +203,7 @@ describe("E~F: 정상 스태프 초대(오너 스태프 초대 정책)는 그대
       .from("manager_centers")
       .insert({ account_id: userB.accountId, center_id: centerAId, status: "active" })
       .select("id");
-    if (!error && data && data.length > 0) cleanupManagerCenterIds.push((data[0] as any).id);
+    if (!error && data && data.length > 0) cleanupManagerCenterIds.push(data[0].id);
     expect(error).not.toBeNull();
   });
 });
@@ -219,7 +219,7 @@ describe("G, H, J: SEC-112 — 이미 초대된 저권한 스태프의 self-prom
     const { data: existing } = await admin
       .from("manager_centers").select("id").eq("account_id", userB.accountId).eq("center_id", centerAId).maybeSingle();
     if (existing) {
-      lowPrivStaffRowId = (existing as any).id;
+      lowPrivStaffRowId = existing.id;
       await admin.from("manager_centers").update({ role_id: trainerRoleIdOfCenterA, status: "active" }).eq("id", lowPrivStaffRowId);
     } else {
       const { data, error } = await supabase
@@ -227,7 +227,7 @@ describe("G, H, J: SEC-112 — 이미 초대된 저권한 스태프의 self-prom
         .insert({ account_id: userB.accountId, center_id: centerAId, status: "active", role_id: trainerRoleIdOfCenterA })
         .select("id").single();
       if (error || !data) throw new Error(`저권한 스태프 fixture 생성 실패: ${error?.message}`);
-      lowPrivStaffRowId = (data as any).id;
+      lowPrivStaffRowId = data.id;
       cleanupManagerCenterIds.push(lowPrivStaffRowId);
     }
   });
@@ -242,7 +242,7 @@ describe("G, H, J: SEC-112 — 이미 초대된 저권한 스태프의 self-prom
     // RLS가 막으면 매칭 0건으로 조용히 실패할 수도 있으므로 실제 반영 여부까지 재확인한다.
     expect((data ?? []).length === 0 || error !== null).toBe(true);
     const { data: check } = await supabase.from("manager_centers").select("role_id").eq("id", lowPrivStaffRowId).maybeSingle();
-    expect((check as any)?.role_id).toBe(trainerRoleIdOfCenterA);
+    expect(check?.role_id).toBe(trainerRoleIdOfCenterA);
   });
 
   it("H: 저권한 스태프(userB)가 자기 role_id를 null로 되돌려 부트스트랩 상태를 재현한 뒤 다시 셀프승격을 노려도(2단계 우회 시도) 첫 단계부터 막힌다", async () => {
@@ -254,7 +254,7 @@ describe("G, H, J: SEC-112 — 이미 초대된 저권한 스태프의 self-prom
     await asUserB();
     await supabase.from("manager_centers").update({ role_id: null }).eq("id", lowPrivStaffRowId);
     const { data: check } = await supabase.from("manager_centers").select("role_id").eq("id", lowPrivStaffRowId).maybeSingle();
-    expect((check as any)?.role_id).toBe(trainerRoleIdOfCenterA);
+    expect(check?.role_id).toBe(trainerRoleIdOfCenterA);
   });
 
   it("I: 권한 있는 오너(managerA)는 저권한 스태프의 role을 정상적으로 변경할 수 있다(허용된 staff role 변경)", async () => {
@@ -263,7 +263,7 @@ describe("G, H, J: SEC-112 — 이미 초대된 저권한 스태프의 self-prom
       .from("center_roles").select("id").eq("center_id", centerAId).eq("role_key", "manager").single();
     const { error } = await supabase
       .from("manager_centers")
-      .update({ role_id: (managerRole as any).id })
+      .update({ role_id: managerRole!.id })
       .eq("id", lowPrivStaffRowId);
     expect(error).toBeNull();
     // 원복(다음 테스트 오염 방지)
@@ -283,7 +283,7 @@ describe("G, H, J: SEC-112 — 이미 초대된 저권한 스태프의 self-prom
       .from("center_roles").select("id").eq("center_id", newCenterId).eq("role_key", "owner").single();
     await supabase
       .from("manager_centers")
-      .update({ role_id: (ownerRoleOfNewCenter as any).id })
+      .update({ role_id: ownerRoleOfNewCenter!.id })
       .eq("account_id", userB.accountId)
       .eq("center_id", newCenterId);
 
@@ -293,11 +293,11 @@ describe("G, H, J: SEC-112 — 이미 초대된 저권한 스태프의 self-prom
     // 테스트들과 동일한 패턴) 에러 유무가 아니라 실제로 안 바뀌었는지로 판정한다.
     await supabase
       .from("manager_centers")
-      .update({ role_id: (ownerRoleOfNewCenter as any).id })
+      .update({ role_id: ownerRoleOfNewCenter!.id })
       .eq("id", lowPrivStaffRowId);
     const admin = getFixtureAdminClient();
     const { data: check } = await admin.from("manager_centers").select("role_id").eq("id", lowPrivStaffRowId).maybeSingle();
-    expect((check as any)?.role_id).not.toBe((ownerRoleOfNewCenter as any).id);
+    expect(check?.role_id).not.toBe(ownerRoleOfNewCenter!.id);
   });
 
   it("L: 한 계정(userB)이 여러 센터에서 서로 다른 역할을 갖는 정상 케이스는 그대로 유지된다", async () => {
@@ -317,7 +317,7 @@ describe("G, H, J: SEC-112 — 이미 초대된 저권한 스태프의 self-prom
       .select("center_id, role_id, status")
       .eq("account_id", userB.accountId);
     expect(error).toBeNull();
-    const centerIds = (data ?? []).map((r: any) => r.center_id);
+    const centerIds = (data ?? []).map((r) => r.center_id);
     expect(centerIds).toContain(centerAId);
     if (secondBootstrapCenterId) expect(centerIds).toContain(secondBootstrapCenterId);
   });
@@ -345,7 +345,7 @@ describe("P~Q [v2, 2026-08-14 추가]: 사용자가 지적한 SEC-112/SEC-101 �
       .single();
     expect(inviteErr).toBeNull();
     if (!invited) throw new Error("role_id=null 초대 fixture 생성 실패");
-    const invitedRowId = (invited as any).id;
+    const invitedRowId = invited.id;
     cleanupManagerCenterIds.push(invitedRowId);
 
     await asUserB();
@@ -357,7 +357,7 @@ describe("P~Q [v2, 2026-08-14 추가]: 사용자가 지적한 SEC-112/SEC-101 �
     // RLS 매칭 실패는 에러 없이 빈 결과로 조용히 끝날 수 있으므로 실제 값도 재확인한다.
     expect((data ?? []).length === 0 || error !== null).toBe(true);
     const { data: check } = await supabase.from("manager_centers").select("role_id, status").eq("id", invitedRowId).maybeSingle();
-    expect((check as any)?.role_id).toBeNull();
+    expect(check?.role_id).toBeNull();
   });
 
   it("Q(SEC-101 v2): manager_centers가 0건인 승인된(orphan) 센터는 self-insert로 재점유할 수 없다", async () => {
@@ -383,7 +383,7 @@ describe("P~Q [v2, 2026-08-14 추가]: 사용자가 지적한 SEC-112/SEC-101 �
         .insert({ account_id: userA.accountId, center_id: orphanCenterId, status: "active" })
         .select("id");
       if (!error && data && data.length > 0) {
-        await admin.from("manager_centers").delete().in("id", data.map((r: any) => r.id));
+        await admin.from("manager_centers").delete().in("id", data.map((r) => r.id));
       }
       expect(error).not.toBeNull();
     } finally {
@@ -444,7 +444,7 @@ describe("K [2026-08-14 추가]: 회원 관계(center_members)와 manager_center
         .insert({ center_id: centerAId, profile_id: userA.profileId, status: "active" })
         .select("id").single();
       expect(memberErr).toBeNull();
-      createdMemberId = (member as any)?.id ?? null;
+      createdMemberId = member?.id ?? null;
     }
 
     try {
@@ -453,7 +453,7 @@ describe("K [2026-08-14 추가]: 회원 관계(center_members)와 manager_center
         .from("manager_centers")
         .insert({ account_id: userA.accountId, center_id: centerAId, status: "active" })
         .select("id");
-      if (!error && data && data.length > 0) cleanupManagerCenterIds.push((data[0] as any).id);
+      if (!error && data && data.length > 0) cleanupManagerCenterIds.push(data[0].id);
       // center_members 존재 여부가 manager_centers RLS 판정에 전혀 관여하지 않으므로
       // A/B/C와 동일하게 거부돼야 한다 — 두 관계가 서로 독립적임을 증명.
       expect(error).not.toBeNull();
@@ -474,7 +474,7 @@ describe("M~O: self-join/self-promote 차단 후 다운스트림 공격 경로 �
   it("N: centerA에 발판을 얻지 못한 userA는 centers(centerA) 정보를 수정할 수 없다", async () => {
     await supabase.from("centers").update({ name: "SEC-N 공격시도" }).eq("id", centerAId);
     const { data: check } = await supabase.from("centers").select("name").eq("id", centerAId).maybeSingle();
-    expect((check as any)?.name).not.toBe("SEC-N 공격시도");
+    expect(check?.name).not.toBe("SEC-N 공격시도");
   });
 
   it("O: centerA에 발판을 얻지 못한 userA는 centerA의 reservations를 조회할 수 없다(매니저 조회 정책 미충족)", async () => {

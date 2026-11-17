@@ -49,10 +49,10 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
       .eq("center_id", centerAId)
       .single();
     if (readErr) throw new Error(`테스트 센터 설정 조회 실패: ${readErr.message}`);
-    originalWaitlistWeeklyLimit = (existingSettings as any).waitlist_weekly_limit;
-    originalGroupBookDaysBefore = (existingSettings as any).group_book_days_before;
-    originalGroupBookTime = (existingSettings as any).group_book_time;
-    originalAllowSameDayBooking = (existingSettings as any).allow_same_day_booking;
+    originalWaitlistWeeklyLimit = existingSettings.waitlist_weekly_limit;
+    originalGroupBookDaysBefore = existingSettings.group_book_days_before;
+    originalGroupBookTime = existingSettings.group_book_time;
+    originalAllowSameDayBooking = existingSettings.allow_same_day_booking;
 
     const memberA = await loginMemberA();
     memberAProfileId = memberA.profileId;
@@ -131,8 +131,8 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
       .select("id")
       .single();
     if (error || !data) throw new Error(`경계값 수강권 생성 실패: ${error?.message ?? "no data"}`);
-    pendingMembershipIds.push((data as any).id);
-    return (data as any).id as string;
+    pendingMembershipIds.push(data.id);
+    return data.id as string;
   }
 
   function kstDateStr(offsetDays: number): string {
@@ -157,7 +157,7 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
       .select("id")
       .single();
     if (clsErr || !cls) throw new Error(`수업 생성 실패: ${clsErr?.message}`);
-    pendingClassIds.push((cls as any).id);
+    pendingClassIds.push(cls.id);
 
     // expires_at은 "오늘(KST) 그 날짜"만 비교한다(m.expires_at >= current_date, date 타입
     // 비교라 시각은 무관) — DB서버(Supabase, UTC)의 current_date 기준과 KST 자정 부근에서
@@ -167,14 +167,14 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
 
     await runScenario("SCN-P1-20", ["memberC"], async (assertions) => {
       await loginMemberA();
-      const res = await supabase.rpc("reserve_class", { p_class_id: (cls as any).id, p_profile_id: memberCProfileId });
+      const res = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: memberCProfileId });
       assertions.push({
         name: "만료일=오늘인 수강권으로 예약 성공(expires_at >= current_date 경계 포함)",
-        passed: !res.error && (res.data as any)?.status === "confirmed",
+        passed: !res.error && res.data?.status === "confirmed",
         detail: JSON.stringify({ data: res.data, error: res.error?.message }),
       });
       expect(res.error).toBeNull();
-      expect((res.data as any).status).toBe("confirmed");
+      expect(res.data.status).toBe("confirmed");
     });
   }, 60000);
 
@@ -194,13 +194,13 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
       .select("id")
       .single();
     if (clsErr || !cls) throw new Error(`수업 생성 실패: ${clsErr?.message}`);
-    pendingClassIds.push((cls as any).id);
+    pendingClassIds.push(cls.id);
 
     await issueMembershipWithExpiry(memberCProfileId, kstDateStr(-1));
 
     await runScenario("SCN-P1-21", ["memberC"], async (assertions) => {
       await loginMemberA();
-      const res = await supabase.rpc("reserve_class", { p_class_id: (cls as any).id, p_profile_id: memberCProfileId });
+      const res = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: memberCProfileId });
       assertions.push({
         name: "만료일=어제인 수강권은 사용 불가(memberC는 다른 유효 수강권이 없음) → 예약 실패",
         passed: !!res.error,
@@ -234,7 +234,7 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
       .select("id")
       .single();
     if (farErr || !clsFar) throw new Error(`수업 생성 실패: ${farErr?.message}`);
-    pendingClassIds.push((clsFar as any).id);
+    pendingClassIds.push(clsFar.id);
 
     // ⚠ MWHABIT Business Logic Fix Batch(2026-09-18) 이후 수정: 당일예약 허용 버그가
     // 고쳐지면서(fix_same_day_booking_deadline.sql), "2시간 뒤 시작하는 당일 수업"은
@@ -258,21 +258,21 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
       .select("id")
       .single();
     if (soonErr || !clsSoon) throw new Error(`수업 생성 실패: ${soonErr?.message}`);
-    pendingClassIds.push((clsSoon as any).id);
+    pendingClassIds.push(clsSoon.id);
 
     await issueMembershipWithExpiry(memberAProfileId, kstDateStr(60));
 
     await runScenario("SCN-P1-22", ["memberA"], async (assertions) => {
       await loginMemberA();
-      const resFar = await supabase.rpc("reserve_class", { p_class_id: (clsFar as any).id, p_profile_id: null });
+      const resFar = await supabase.rpc("reserve_class", { p_class_id: clsFar.id, p_profile_id: null });
       assertions.push({
         name: "마감 전(48시간 뒤 수업) 예약 성공",
-        passed: !resFar.error && (resFar.data as any)?.status === "confirmed",
+        passed: !resFar.error && resFar.data?.status === "confirmed",
         detail: JSON.stringify({ data: resFar.data, error: resFar.error?.message }),
       });
       expect(resFar.error).toBeNull();
 
-      const resSoon = await supabase.rpc("reserve_class", { p_class_id: (clsSoon as any).id, p_profile_id: null });
+      const resSoon = await supabase.rpc("reserve_class", { p_class_id: clsSoon.id, p_profile_id: null });
       assertions.push({
         name: "마감 후(개별 수업 마감 오버라이드가 이미 지난 임박 수업) 예약 거부",
         passed: !!resSoon.error,
@@ -309,11 +309,11 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
       const res = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
       assertions.push({
         name: "[FIX] group_book_days_before=1(기본값) + allow_same_day_booking=true → 당일예약 성공(수정 전에는 항상 거부됐음)",
-        passed: !res.error && (res.data as any)?.status === "confirmed",
+        passed: !res.error && res.data?.status === "confirmed",
         detail: JSON.stringify({ data: res.data, error: res.error?.message, classStart: cls.startTime }),
       });
       expect(res.error).toBeNull();
-      expect((res.data as any).status).toBe("confirmed");
+      expect(res.data.status).toBe("confirmed");
     });
   }, 60000);
 
@@ -360,12 +360,12 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
       .select("id")
       .single();
     if (clsErr || !cls) throw new Error(`수업 생성 실패: ${clsErr?.message}`);
-    pendingClassIds.push((cls as any).id);
+    pendingClassIds.push(cls.id);
     await issueMembershipWithExpiry(memberAProfileId, kstDateStr(60));
 
     await runScenario("SCN-P1-24-STARTED", ["memberA"], async (assertions) => {
       await loginMemberA();
-      const res = await supabase.rpc("reserve_class", { p_class_id: (cls as any).id, p_profile_id: null });
+      const res = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
       assertions.push({
         name: "[FIX] 이미 시작된 수업은 당일예약 허용과 무관하게 차단됨('수업이 시작되었습니다')",
         passed: !!res.error && !!res.error?.message.includes("시작"),
@@ -392,11 +392,11 @@ describe("SCN-P1-20/21/22/24: 날짜/시간 경계(KST)", () => {
         const res = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
         assertions.push({
           name: `[FIX] group_book_days_before=${daysBefore}이어도 당일예약 허용 ON이면 성공(수정 전에는 days_before>=1이면 무조건 실패했음)`,
-          passed: !res.error && (res.data as any)?.status === "confirmed",
+          passed: !res.error && res.data?.status === "confirmed",
           detail: JSON.stringify({ daysBefore, data: res.data, error: res.error?.message }),
         });
         expect(res.error).toBeNull();
-        expect((res.data as any).status).toBe("confirmed");
+        expect(res.data.status).toBe("confirmed");
       });
     },
     60000

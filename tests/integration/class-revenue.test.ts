@@ -7,7 +7,6 @@
   createIsolatedOwnedCenter 패턴을 그대로 채택).
 */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { supabase } from "../../lib/supabaseClient";
 import {
   switchToTestUser, getFixtureAdminClient, createFutureTestClass,
   type TestUser,
@@ -15,13 +14,13 @@ import {
 import {
   fetchClassRevenueDaily, fetchClassRevenueForDate, setMembershipSessionAmounts,
 } from "../../lib/classRevenue";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
 const USER_B = { email: "TEST_USER_B_EMAIL", password: "TEST_USER_B_PASSWORD" };
 
 let managerA: TestUser;
-let managerB: TestUser;
 let userB: TestUser;
 let centerId: string;
 
@@ -42,16 +41,16 @@ async function createIsolatedCenter(manager: TestUser): Promise<string> {
   if (!staleCleaned) {
     staleCleaned = true;
     const { data: stale } = await admin.from("centers").select("id").like("name", "CLASS-REV 격리센터-%");
-    const staleIds = (stale ?? []).map((c: any) => c.id as string);
+    const staleIds = (stale ?? []).map((c) => c.id as string);
     if (staleIds.length > 0) {
       const { data: staleClasses } = await admin.from("classes").select("id").in("center_id", staleIds);
-      const staleClassIds = (staleClasses ?? []).map((c: any) => c.id as string);
+      const staleClassIds = (staleClasses ?? []).map((c) => c.id as string);
       if (staleClassIds.length > 0) {
         await admin.from("reservations").delete().in("class_id", staleClassIds);
         await admin.from("classes").delete().in("id", staleClassIds);
       }
       const { data: staleMemberships } = await admin.from("memberships").select("id").in("center_id", staleIds);
-      const staleMembershipIds = (staleMemberships ?? []).map((m: any) => m.id as string);
+      const staleMembershipIds = (staleMemberships ?? []).map((m) => m.id as string);
       if (staleMembershipIds.length > 0) {
         await admin.from("membership_session_amounts").delete().in("membership_id", staleMembershipIds);
         await admin.from("payments").delete().in("membership_id", staleMembershipIds);
@@ -130,7 +129,7 @@ async function createReservation(classId: string, profileId: string, membershipI
 beforeAll(async () => {
   managerA = await asManagerA();
   centerId = await createIsolatedCenter(managerA);
-  managerB = await asManagerB();
+  await asManagerB();
   userB = await asUserB();
   await asManagerA(); // 이후 admin 아닌 일반 supabase 클라이언트로 classes를 만들 수 있게 매니저 세션 유지
 }, 60000);
@@ -141,13 +140,13 @@ afterAll(async () => {
   for (const id of cleanupCenterIds) {
     try {
       const { data: classes } = await admin.from("classes").select("id").eq("center_id", id);
-      const classIds = (classes ?? []).map((c: any) => c.id as string);
+      const classIds = (classes ?? []).map((c) => c.id as string);
       if (classIds.length > 0) {
         await admin.from("reservations").delete().in("class_id", classIds);
         await admin.from("classes").delete().in("id", classIds);
       }
       const { data: memberships } = await admin.from("memberships").select("id").eq("center_id", id);
-      const membershipIds = (memberships ?? []).map((m: any) => m.id as string);
+      const membershipIds = (memberships ?? []).map((m) => m.id as string);
       if (membershipIds.length > 0) {
         await admin.from("membership_session_amounts").delete().in("membership_id", membershipIds);
         await admin.from("payments").delete().in("membership_id", membershipIds);
@@ -159,7 +158,7 @@ afterAll(async () => {
       await admin.from("center_roles").delete().eq("center_id", id);
       await admin.from("center_settings").delete().eq("center_id", id);
       await admin.from("centers").delete().eq("id", id);
-    } catch (e: any) { errors.push(e.message); }
+    } catch (e) { errors.push(errorMessage(e)); }
   }
   if (errors.length > 0) throw new Error("정리 실패:\n" + errors.join("\n"));
 }, 30000);

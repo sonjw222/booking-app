@@ -72,11 +72,11 @@ describe("P2-45 매출 표시 불일치 — 환불 부호 정합성 + mock 결�
 
       assertions.push({
         name: "환불 행의 card_amount가 음수로 저장됨(total_amount와 부호 일치)",
-        passed: (refundRow as any).card_amount === -20000 && (refundRow as any).total_amount === -20000,
+        passed: refundRow.card_amount === -20000 && refundRow.total_amount === -20000,
         detail: JSON.stringify(refundRow),
       });
-      expect((refundRow as any).card_amount).toBe(-20000);
-      expect((refundRow as any).total_amount).toBe(-20000);
+      expect(refundRow.card_amount).toBe(-20000);
+      expect(refundRow.total_amount).toBe(-20000);
 
       const rows = await fetchPayments(centerId, paidAt, paidAt);
       const tagged = rows.filter((r) => r.memo === memoTag1);

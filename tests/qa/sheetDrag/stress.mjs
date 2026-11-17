@@ -96,7 +96,7 @@ const winListeners = async (cdp, type) => { const { result } = await cdp.send("R
 }
 { // 10 열기/닫기 20회 + 리스너 누적 + 네이티브 호출 배선
   const { ctx, p, cdp } = await login(390, true); await open(p);
-  { const sb0 = await rect(p); const h0 = await handleXY(p); await drag(p, cdp, h0.x, h0.y, 440, { steps: 8, gap: 12 }); await settle(p, 700); }   // 첫 사이클을 돌린 뒤의 리스너 수를 기준으로(앱의 다른 코드가 처음 한 번 추가하는 것 제외)
+  { const h0 = await handleXY(p); await drag(p, cdp, h0.x, h0.y, 440, { steps: 8, gap: 12 }); await settle(p, 700); }   // 첫 사이클을 돌린 뒤의 리스너 수를 기준으로(앱의 다른 코드가 처음 한 번 추가하는 것 제외)
   const base = { move: await winListeners(cdp, "touchmove"), end: await winListeners(cdp, "touchend") };
   await p.evaluate(() => sessionStorage.removeItem("__bounce"));
   let bad = ""; 
@@ -125,7 +125,7 @@ const winListeners = async (cdp, type) => { const { result } = await cdp.send("R
   const e1 = await p.evaluate(() => window.__mwhabitBack?.()); const s1 = await state(p);
   check("13", "시트가 열린 동안 왼쪽 가장자리 스와이프(iOS 입구)는 시트도 화면도 건드리지 않음", e1 === "blocked-by-overlay" && s1.open ? "PASS" : "FAIL", `${e1} open=${s1.open}`);
   await p.evaluate(() => window.__mwhabitBackEdge?.());
-  const sys = await p.evaluate(() => window.__mwhabitBackEdge?.()); await settle(p, 300);
+  await p.evaluate(() => window.__mwhabitBackEdge?.()); await settle(p, 300);
   if (await p.locator("[data-sheet-overlay] .sheet-close-btn").count()) { await p.locator("[data-sheet-overlay] .sheet-close-btn").first().click(); await settle(p, 800); }
   const e2 = await p.evaluate(() => window.__mwhabitBack?.()); await settle(p, 2500);
   check("14", "시트가 닫힌 일반 화면의 왼쪽 가장자리 back 은 기존대로 직전 화면으로", e2 === "history-back" && new URL(p.url()).pathname === "/products" ? "PASS" : "FAIL", `${e2} ${new URL(p.url()).pathname}`);

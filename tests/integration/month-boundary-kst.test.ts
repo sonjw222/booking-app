@@ -40,8 +40,8 @@ async function insertClass(centerId: string, title: string, kstDate: string, kst
     .insert({ center_id: centerId, title, capacity: 8, start_time: startIso, end_time: endIso })
     .select("id").single();
   if (error || !data) throw new Error(`${title} 생성 실패: ` + error?.message);
-  createdClassIds.push((data as any).id);
-  return (data as any).id as string;
+  createdClassIds.push(data.id);
+  return data.id as string;
 }
 
 beforeAll(async () => {
@@ -165,7 +165,7 @@ describe("월 경계(KST) 회귀 테스트: fetchMonthData()가 KST 기준 달�
         })
         .select("id").single();
       if (error || !data) throw new Error("다른 센터 수업 생성 실패: " + error?.message);
-      createdOtherCenterClassIds.push((data as any).id);
+      createdOtherCenterClassIds.push(data.id);
     }
 
     await switchToTestUser(MANAGER_A.email, MANAGER_A.password);

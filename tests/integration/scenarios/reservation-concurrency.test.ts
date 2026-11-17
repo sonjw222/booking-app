@@ -35,7 +35,6 @@ describe("SCN-P1-01/02/03/05/07/11: 예약 동시성/경쟁", () => {
   let centerAId: string;
   let memberAAccountId: string;
   let memberAProfileId: string;
-  let memberBAccountId: string;
   let memberBProfileId: string;
   let memberCProfileId: string;
   let originalWaitlistWeeklyLimit: number | null = null;
@@ -53,7 +52,7 @@ describe("SCN-P1-01/02/03/05/07/11: 예약 동시성/경쟁", () => {
       .eq("center_id", centerAId)
       .single();
     if (readErr) throw new Error(`테스트 센터 설정 조회 실패: ${readErr.message}`);
-    originalWaitlistWeeklyLimit = (existingSettings as any).waitlist_weekly_limit;
+    originalWaitlistWeeklyLimit = existingSettings.waitlist_weekly_limit;
 
     const { error: settingsErr } = await admin
       .from("center_settings")
@@ -68,7 +67,6 @@ describe("SCN-P1-01/02/03/05/07/11: 예약 동시성/경쟁", () => {
     memberCProfileId = memberC.profileId;
 
     const memberB = await loginMemberB();
-    memberBAccountId = memberB.accountId;
     memberBProfileId = memberB.profileId;
   }, 60000);
 
@@ -120,7 +118,7 @@ describe("SCN-P1-01/02/03/05/07/11: 예약 동시성/경쟁", () => {
         clientA2.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null }),
       ]);
 
-      const successes = [r1, r2].filter((r) => !r.error && (r.data as any)?.status === "confirmed");
+      const successes = [r1, r2].filter((r) => !r.error && r.data?.status === "confirmed");
       const failures = [r1, r2].filter((r) => r.error);
       assertions.push({
         name: "동시 요청 중 정확히 1건만 성공",
@@ -174,7 +172,7 @@ describe("SCN-P1-01/02/03/05/07/11: 예약 동시성/경쟁", () => {
         clientB.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null }),
       ]);
 
-      const statuses = [rA, rB].map((r) => (r.error ? "error" : (r.data as any)?.status));
+      const statuses = [rA, rB].map((r) => (r.error ? "error" : r.data?.status));
       const confirmedCount = statuses.filter((s) => s === "confirmed").length;
       const waitlistedCount = statuses.filter((s) => s === "waitlisted").length;
       assertions.push({
@@ -198,8 +196,8 @@ describe("SCN-P1-01/02/03/05/07/11: 예약 동시성/경쟁", () => {
     await runScenario("SCN-P1-05", ["memberA"], async (assertions) => {
       await loginMemberA();
       const reserveRes = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      expect((reserveRes.data as any).status).toBe("confirmed");
-      const reservationId = (reserveRes.data as any).reservation_id as string;
+      expect(reserveRes.data.status).toBe("confirmed");
+      const reservationId = reserveRes.data.reservation_id as string;
 
       // ⚠ 하드닝: membershipA.id가 아니라 예약이 "실제로 사용한" membership을 추적한다
       // (leftover 수강권이 선택될 수 있음 — 위 SCN-P1-01/02 주석 참고). 차감 직후 값을
@@ -218,7 +216,7 @@ describe("SCN-P1-01/02/03/05/07/11: 예약 동시성/경쟁", () => {
         clientA2.rpc("cancel_reservation", { p_reservation_id: reservationId }),
       ]);
 
-      const successes = [c1, c2].filter((r) => !r.error && (r.data as any)?.cancelled === true);
+      const successes = [c1, c2].filter((r) => !r.error && r.data?.cancelled === true);
       assertions.push({
         name: "동시 취소 요청 중 정확히 1건만 성공(나머지는 '이미 취소된 예약' 등으로 거부)",
         passed: successes.length === 1,
@@ -253,18 +251,18 @@ describe("SCN-P1-01/02/03/05/07/11: 예약 동시성/경쟁", () => {
     await runScenario("SCN-P1-07", ["memberA", "memberB", "memberC(waitlist)"], async (assertions) => {
       await loginMemberA();
       const rA = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      expect((rA.data as any).status).toBe("confirmed");
-      const aReservationId = (rA.data as any).reservation_id as string;
+      expect(rA.data.status).toBe("confirmed");
+      const aReservationId = rA.data.reservation_id as string;
 
       await loginMemberB();
       const rB = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      expect((rB.data as any).status).toBe("confirmed");
-      const bReservationId = (rB.data as any).reservation_id as string;
+      expect(rB.data.status).toBe("confirmed");
+      const bReservationId = rB.data.reservation_id as string;
 
       await loginMemberA();
       const rC = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: memberCProfileId });
-      expect((rC.data as any).status).toBe("waitlisted");
-      const cReservationId = (rC.data as any).reservation_id as string;
+      expect(rC.data.status).toBe("waitlisted");
+      const cReservationId = rC.data.reservation_id as string;
 
       // ⚠ 하드닝: membershipC.id가 아니라 C의 예약이 "실제로 붙잡아둔" membership을
       // 추적한다(대기 등록 시점에도 membership_id는 이미 pinned됨 — 승격 때만 차감이
@@ -289,13 +287,13 @@ describe("SCN-P1-01/02/03/05/07/11: 예약 동시성/경쟁", () => {
 
       assertions.push({
         name: "A/B 취소 둘 다 성공(서로 다른 예약이므로 경쟁 대상 아님)",
-        passed: !cancelA.error && !cancelB.error && (cancelA.data as any)?.cancelled && (cancelB.data as any)?.cancelled,
+        passed: !cancelA.error && !cancelB.error && cancelA.data?.cancelled && cancelB.data?.cancelled,
         detail: JSON.stringify({ cancelA: cancelA.data, cancelB: cancelB.data, errA: cancelA.error?.message, errB: cancelB.error?.message }),
       });
       expect(cancelA.error).toBeNull();
       expect(cancelB.error).toBeNull();
 
-      const promotedFlags = [(cancelA.data as any)?.waitlist_promoted, (cancelB.data as any)?.waitlist_promoted];
+      const promotedFlags = [cancelA.data?.waitlist_promoted, cancelB.data?.waitlist_promoted];
       const promotedCount = promotedFlags.filter(Boolean).length;
       assertions.push({
         name: "waitlist_promoted=true가 두 응답 중 정확히 1건",
@@ -329,9 +327,9 @@ describe("SCN-P1-01/02/03/05/07/11: 예약 동시성/경쟁", () => {
     await runScenario("SCN-P1-11", ["memberA"], async (assertions) => {
       await loginMemberA();
       const first = await supabase.rpc("reserve_class", { p_class_id: cls.id, p_profile_id: null });
-      assertions.push({ name: "최초 요청 성공", passed: !first.error && (first.data as any)?.status === "confirmed" });
-      expect((first.data as any).status).toBe("confirmed");
-      const reservationId = (first.data as any).reservation_id as string;
+      assertions.push({ name: "최초 요청 성공", passed: !first.error && first.data?.status === "confirmed" });
+      expect(first.data.status).toBe("confirmed");
+      const reservationId = first.data.reservation_id as string;
 
       // 하드닝: membershipA.id가 아니라 실제 사용된 membership을 추적(위 시나리오들과 동일
       // 근거 — leftover 수강권이 선택될 수 있음).
