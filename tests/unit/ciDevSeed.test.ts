@@ -1,21 +1,21 @@
 // @ts-nocheck — mjs 모듈 + 가짜 서버
 import { describe, expect, it } from "vitest";
-import { assertSeedAllowed, ensureCatalog, ensureFixtures, makeClient, projectRefFromUrl, scanUsage, selectCatalogRows } from "../../scripts/ci-dev/lib.mjs";
-import { runSeed, secretMapText } from "../../scripts/ci-dev/seed.mjs";
+import { assertSeedAllowed, ensureCatalog, makeClient, projectRefFromUrl, scanUsage, selectCatalogRows } from "../../scripts/ci-dev/lib.mjs";
+import { runSeed } from "../../scripts/ci-dev/seed.mjs";
 import { makeReporter, verifyCatalog, verifyFixtures, verifySchema, SEED_COLUMNS, CORE_TABLES } from "../../scripts/ci-dev/verify.mjs";
 import { REQUIRED_SECRET_NAMES } from "../../scripts/ci-dev/requiredEnv.mjs";
 
 const DEV = "https://devprojref123.supabase.co";
-const env = (o = {}) => { const e: any = { NEXT_PUBLIC_SUPABASE_URL: DEV, CI_DEV_TARGET_PROJECT_REF: "devprojref123", CI_DEV_SEED_ACK: "1", SUPABASE_SERVICE_ROLE_KEY: "svc" }; for (const n of REQUIRED_SECRET_NAMES) e[n] ??= n.endsWith("EMAIL") ? `${n.toLowerCase()}@example.com` : "x"; delete e.TEST_CENTER_ID; delete e.TEST_PRODUCT_ID; return { ...e, ...o }; };
+const env = (o = {}) => { const e: Record<string, string> = { NEXT_PUBLIC_SUPABASE_URL: DEV, CI_DEV_TARGET_PROJECT_REF: "devprojref123", CI_DEV_SEED_ACK: "1", SUPABASE_SERVICE_ROLE_KEY: "svc" }; for (const n of REQUIRED_SECRET_NAMES) e[n] ??= n.endsWith("EMAIL") ? `${n.toLowerCase()}@example.com` : "x"; delete e.TEST_CENTER_ID; delete e.TEST_PRODUCT_ID; return { ...e, ...o }; };
 
 // 최소 가짜 Supabase: auth admin + PostgREST(eq 필터, insert) + openapi
 function fakeServer({ failOn = null, schema = true } = {}) {
-  const db = { users: [], accounts: [], profiles: [], centers: [], products: [], center_members: [], permissions: [], subscription_plans: [], service_categories: [], center_subscriptions: [] }; const calls: string[] = []; let n = 0; const id = () => `id-${++n}`;
-  const f = async (url: string, init: any = {}) => {
+  const db: Record<string, Record<string, unknown>[]> = { users: [], accounts: [], profiles: [], centers: [], products: [], center_members: [], permissions: [], subscription_plans: [], service_categories: [], center_subscriptions: [] }; const calls: string[] = []; let n = 0; const id = () => `id-${++n}`;
+  const f = async (url: string, init: { method?: string; body?: string } = {}) => {
     const u = new URL(url), method = init.method ?? "GET", body = init.body ? JSON.parse(init.body) : null; calls.push(`${method} ${u.pathname}`);
-    const res = (status: number, json: any, h: Record<string, string> = {}) => ({ status, ok: status < 400, json: async () => json, headers: { get: (k: string) => h[k.toLowerCase()] ?? null } });
+    const res = (status: number, json: unknown, h: Record<string, string> = {}) => ({ status, ok: status < 400, json: async () => json, headers: { get: (k: string) => h[k.toLowerCase()] ?? null } });
     if (method === "HEAD") return res(200, null, { "content-range": `0-0/${(db[u.pathname.replace("/rest/v1/", "")] ?? []).length}` });
-    if (method === "POST" && u.searchParams.get("on_conflict")) { const pk = u.searchParams.get("on_conflict")!; const t = u.pathname.replace("/rest/v1/", ""); for (const r of body) if (!db[t].some((x: any) => x[pk] === r[pk])) db[t].push({ ...r }); return res(201, null); }
+    if (method === "POST" && u.searchParams.get("on_conflict")) { const pk = u.searchParams.get("on_conflict")!; const t = u.pathname.replace("/rest/v1/", ""); for (const r of body) if (!db[t].some((x) => x[pk] === r[pk])) db[t].push({ ...r }); return res(201, null); }
     if (failOn && `${method} ${u.pathname}` === failOn) { failOn = null; return res(500, { message: "boom" }); }
     if (u.pathname === "/auth/v1/admin/users" && method === "GET") return res(200, { users: db.users });
     if (u.pathname === "/auth/v1/admin/users" && method === "POST") { const x = { id: id(), email: body.email, email_confirmed_at: "now" }; db.users.push(x); return res(200, x); }
@@ -122,7 +122,7 @@ describe("verify", () => {
 describe("catalog(참조 데이터) 적재", () => {
   const catalog = { permissions: [{ key: "a", category: "pass", parent_key: null, label: "A", sort_order: 1 }, { key: "b", category: "pass", parent_key: "a", label: "B", sort_order: 2 }],
     subscription_plans: [{ id: "p1", name: "기본", is_default: true, is_active: true }, { id: "p2", name: "QA", is_default: false, is_active: false }], service_categories: [{ id: "c1", label: "요가", sort_order: 1 }] };
-  it("Production 전용 QA 요금제(비활성·비기본)는 제외한다", () => expect(selectCatalogRows(catalog).subscription_plans.map((p: any) => p.id)).toEqual(["p1"]));
+  it("Production 전용 QA 요금제(비활성·비기본)는 제외한다", () => expect(selectCatalogRows(catalog).subscription_plans.map((p: { id: string }) => p.id)).toEqual(["p1"]));
   it("멱등 적재: 두 번 실행해도 행이 늘지 않는다", async () => {
     const s = fakeServer(); const c = makeClient(env(), s.f);
     await ensureCatalog(c, catalog); await ensureCatalog(c, catalog);
