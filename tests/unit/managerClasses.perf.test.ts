@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const calls: { table: string; op: string; arg?: unknown }[] = [];
-let classRows: Record<string, unknown>[] = [];
+const classRows: Record<string, unknown>[] = [];
 let trainerRows: { class_id: string; account_id: string }[] = [];
 
 vi.mock("../../lib/supabaseClient", () => {

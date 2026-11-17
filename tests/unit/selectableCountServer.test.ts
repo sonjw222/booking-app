@@ -33,8 +33,8 @@ describe("[A][B] 회차별 가격 — unit×count가 아니라 가격표", () =>
   });
   it("[D] 가격표에 없는 회차(0/5/13/소수/null)는 유효하지 않고 금액이 없다", () => {
     for (const bad of [0, 5, 13, -1, 2.5, null, undefined]) {
-      expect(isValidSelectedCount(goods, bad as any)).toBe(false);
-      expect(computeBaseAmount(goods, bad as any)).toBeNull();
+      expect(isValidSelectedCount(goods, bad)).toBe(false);
+      expect(computeBaseAmount(goods, bad)).toBeNull();
     }
   });
   it("가격표에 등록된 회차만 선택지로 나온다(1,6,12만 판매 가능) + 옵션 라벨에 가격", () => {

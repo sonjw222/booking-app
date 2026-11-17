@@ -10,7 +10,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function jsonResponse(body: any, ok = true) {
+function jsonResponse(body: unknown, ok = true) {
   return { ok, json: async () => body } as Response;
 }
 

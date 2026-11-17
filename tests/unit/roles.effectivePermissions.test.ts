@@ -15,7 +15,7 @@ vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
     from: (table: string) => ({
       select: () => ({
-        eq: (_col: string, val: string) => {
+        eq: () => {
           if (table === "role_permissions") {
             return Promise.resolve({ data: rolePermRows, error: null });
           }

@@ -106,7 +106,8 @@ describe("[2] Billing OFF — Toss 시크릿 없이 안전", () => {
     vi.doMock("@supabase/supabase-js", () => ({
       createClient: () => {
         calls.createClient++;
-        const chain: any = {
+        interface Chain { select: () => Chain; eq: () => Chain; update: () => Chain; in: () => Chain; lte: () => Chain; or: () => Chain; maybeSingle: () => Promise<unknown> }
+        const chain: Chain = {
           select: () => chain, eq: () => chain, update: () => chain, in: () => chain, lte: () => chain, or: () => chain,
           maybeSingle: async () => ({ data: { billing_review_override: reviewOverride }, error: null }),
         };

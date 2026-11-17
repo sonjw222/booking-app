@@ -8,8 +8,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const eqMock = vi.fn().mockResolvedValue({ error: null });
 type IntroPayload = { [key: string]: unknown; intro_blocks: Array<{ html?: string; [key: string]: unknown }> };
-const updateMock = vi.fn((_payload: IntroPayload) => ({ eq: eqMock }));
-const fromMock = vi.fn((_table: string) => ({ update: updateMock }));
+const updateMock = vi.fn<(payload: IntroPayload) => { eq: typeof eqMock }>(() => ({ eq: eqMock }));
+const fromMock = vi.fn<(table: string) => { update: typeof updateMock }>(() => ({ update: updateMock }));
 
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: {

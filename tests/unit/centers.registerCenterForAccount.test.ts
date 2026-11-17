@@ -61,7 +61,7 @@ describe("registerCenterForAccount()", () => {
     await registerCenterForAccount({ ...VALID_INPUT, licenseFile: file, licenseFileName: "biz.pdf" });
     expect(uploadBusinessLicenseMock).toHaveBeenCalledWith(file);
     const [, rpcArgs] = rpcMock.mock.calls[0];
-    expect((rpcArgs as any).p_business_license_url).toBe("uploaded/path.pdf");
+    expect((rpcArgs as { p_business_license_url?: string }).p_business_license_url).toBe("uploaded/path.pdf");
   });
 
   it("calls register_center_for_account_safe with the form fields and returns the new centerId", async () => {

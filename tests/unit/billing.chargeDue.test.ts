@@ -22,7 +22,7 @@ type Row = {
 const PLAN = { id: "plan-1", name: "모하빗 센터 이용권", monthly_price: 39000 };
 
 let subs: Row[] = [];
-const charges: any[] = [];
+const charges: Record<string, unknown>[] = [];
 
 function makeRow(overrides: Partial<Row>): Row {
   // 주의: ??로 필드별 기본값을 주면 overrides에 명시적으로 null을 넘긴 케이스(예:
@@ -42,27 +42,36 @@ function makeRow(overrides: Partial<Row>): Row {
 function fakeCenterSubscriptionsQuery() {
   let patch: Record<string, unknown> = {};
   const filters: Array<(r: Row) => boolean> = [];
-  const builder: any = {
+  interface Builder {
+    update(p: Record<string, unknown>): Builder;
+    in(field: keyof Row, vals: unknown[]): Builder;
+    lte(field: keyof Row, val: string): Builder;
+    eq(field: keyof Row, val: unknown): Builder;
+    or(): Builder;
+    select(): Promise<{ data: unknown; error: null }>;
+    then(resolve: (v: { data: Row[]; error: null }) => void, reject?: (e: unknown) => void): void;
+  }
+  const builder: Builder = {
     update(p: Record<string, unknown>) { patch = p; return builder; },
     in(field: keyof Row, vals: unknown[]) {
-      filters.push((r) => vals.includes(r[field] as any));
+      filters.push((r) => vals.includes(r[field]));
       return builder;
     },
     lte(field: keyof Row, val: string) {
-      filters.push((r) => (r[field] as any) !== null && (r[field] as any) <= val);
+      filters.push((r) => r[field] !== null && (r[field] as string) <= val);
       return builder;
     },
     eq(field: keyof Row, val: unknown) {
       filters.push((r) => r[field] === val);
       return builder;
     },
-    or(_expr: string) {
+    or() {
       // 이 라우트가 쓰는 유일한 or() 패턴: 리스가 비었거나 만료됐을 것.
       const now = new Date().toISOString();
       filters.push((r) => r.billing_locked_until === null || r.billing_locked_until < now);
       return builder;
     },
-    select(_cols?: string) {
+    select() {
       const matches = subs.filter((r) => filters.every((f) => f(r)));
       matches.forEach((r) => Object.assign(r, patch));
       return Promise.resolve({
@@ -70,7 +79,7 @@ function fakeCenterSubscriptionsQuery() {
         error: null,
       });
     },
-    then(resolve: (v: any) => void, reject?: (e: any) => void) {
+    then(resolve, reject) {
       try {
         const matches = subs.filter((r) => filters.every((f) => f(r)));
         matches.forEach((r) => Object.assign(r, patch));
@@ -83,7 +92,7 @@ function fakeCenterSubscriptionsQuery() {
 
 function fakeChargesQuery() {
   return {
-    insert(payload: any) { charges.push(payload); return Promise.resolve({ data: null, error: null }); },
+    insert(payload: Record<string, unknown>) { charges.push(payload); return Promise.resolve({ data: null, error: null }); },
   };
 }
 
@@ -105,7 +114,7 @@ function post(headers: Record<string, string> = { "x-cron-secret": CRON_SECRET }
   );
 }
 
-function mockToss(response: { ok: boolean; body: any }) {
+function mockToss(response: { ok: boolean; body: unknown }) {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
     ok: response.ok,
     status: response.ok ? 200 : 400,
@@ -234,7 +243,7 @@ describe("POST /api/billing/charge-due — 재시도 정책(7회/7일)", () => {
     subs.push(makeRow({ next_billing_date: "2026-09-10", retry_count: 6 }));
     mockToss({ ok: false, body: { code: "SOME_UNDOCUMENTED_CODE", message: "정체불명" } });
 
-    const res = await post();
+    await post();
 
     // 목록에 없어도 안전한 쪽(기본 정책)으로만 처리 — retry_count 7 도달이라 여기선 terminal.
     expect(subs[0].status).toBe("payment_failed");

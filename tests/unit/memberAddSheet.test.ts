@@ -69,7 +69,7 @@ describe("결과 표시", () => {
 
 describe("stale response / race", () => {
   it("4. 느린 이전 검색 A 뒤에 빠른 최신 검색 B가 끝나면, A 응답이 늦게 도착해도 B 결과를 덮지 않는다", async () => {
-    const a = deferred<any[]>(), b = deferred<any[]>();
+    const a = deferred<unknown[]>(), b = deferred<unknown[]>();
     search.mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
     render(); setValue("01011111111"); clickSearch();
     setValue("01023265051"); clickSearch();
@@ -81,7 +81,7 @@ describe("stale response / race", () => {
     expect(text()).not.toContain("검색 중...");
   });
   it("5. stale 요청의 오류도 최신 성공 결과를 지우지 않는다", async () => {
-    const a = deferred<any[]>(), b = deferred<any[]>();
+    const a = deferred<unknown[]>(), b = deferred<unknown[]>();
     search.mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
     render(); setValue("01011111111"); clickSearch(); setValue("01023265051"); clickSearch();
     b.resolve([JIYUN]); await flush();
@@ -89,7 +89,7 @@ describe("stale response / race", () => {
     expect(text()).toContain("손지윤"); expect(host.querySelector('[role="alert"]')).toBeNull();
   });
   it("6. Enter 연타/같은 검색의 in-flight 중복은 요청을 만들지 않고, 다른 검색어는 이전 요청을 대체한다", async () => {
-    const a = deferred<any[]>(); search.mockReturnValueOnce(a.promise);
+    const a = deferred<unknown[]>(); search.mockReturnValueOnce(a.promise);
     render(); setValue("01023265051");
     enter(); enter(); clickSearch(); enter();
     expect(search).toHaveBeenCalledTimes(1);                                   // 같은 요청은 한 번만
@@ -100,7 +100,7 @@ describe("stale response / race", () => {
     expect(text()).toContain("홍길동");
   });
   it("검색 시작 시점의 센터/검색어를 snapshot해서 요청한다(공백 trim, 입력이 나중에 바뀌어도 요청값 불변)", async () => {
-    const a = deferred<any[]>(); search.mockReturnValueOnce(a.promise);
+    const a = deferred<unknown[]>(); search.mockReturnValueOnce(a.promise);
     render(); setValue("  010-2326-5051  "); clickSearch();
     setValue("다른 입력");                                                         // 요청 후 입력 변경
     expect(search).toHaveBeenCalledWith("c1", "010-2326-5051");
@@ -108,7 +108,7 @@ describe("stale response / race", () => {
     expect(text()).toContain("손지윤");
   });
   it("7. 센터가 바뀌면 이전 센터 검색 결과/오류/진행 중 응답이 새 센터 시트에 나타나지 않는다", async () => {
-    const a = deferred<any[]>(); search.mockReturnValueOnce(a.promise);
+    const a = deferred<unknown[]>(); search.mockReturnValueOnce(a.promise);
     render({ centerId: "c1" }); setValue("01023265051"); clickSearch();
     render({ centerId: "c2", centerName: "다른 센터" });                          // 센터 전환(진행 중 요청 존재)
     a.resolve([JIYUN]); await flush();
