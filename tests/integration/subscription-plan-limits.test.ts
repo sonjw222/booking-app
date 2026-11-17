@@ -139,14 +139,14 @@ describe("센터 생성 시 기본 플랜 자동 배정", () => {
 describe("룸 개수 제한", () => {
   it("제한 0이면 첫 번째 룸부터 막힌다", async () => {
     await setQaPlanLimits({ maxRooms: 0 });
-    await expect(addRoom(centerId, { name: "테스트룸", memo: "", address: "", latitude: null, longitude: null }))
+    await expect(addRoom(centerId, { name: "테스트룸", memo: "", address: "", detailAddress: "", latitude: null, longitude: null }))
       .rejects.toThrow(/룸.*최대.*0개/);
   });
 
   it("제한 1이면 1개까지 성공하고 2번째부터 막힌다", async () => {
     await setQaPlanLimits({ maxRooms: 1 });
-    await addRoom(centerId, { name: "테스트룸1", memo: "", address: "", latitude: null, longitude: null });
-    await expect(addRoom(centerId, { name: "테스트룸2", memo: "", address: "", latitude: null, longitude: null }))
+    await addRoom(centerId, { name: "테스트룸1", memo: "", address: "", detailAddress: "", latitude: null, longitude: null });
+    await expect(addRoom(centerId, { name: "테스트룸2", memo: "", address: "", detailAddress: "", latitude: null, longitude: null }))
       .rejects.toThrow(/룸.*최대.*1개/);
   });
 
@@ -154,8 +154,8 @@ describe("룸 개수 제한", () => {
     await setQaPlanLimits({ maxRooms: null });
     // 바로 앞 테스트에서 제한 1로 이미 1개가 있는 상태 — 무제한이면 추가로 2개 더 만들어도
     // (총 3개) 에러 없이 전부 성공해야 한다.
-    await addRoom(centerId, { name: "테스트룸3", memo: "", address: "", latitude: null, longitude: null });
-    await addRoom(centerId, { name: "테스트룸4", memo: "", address: "", latitude: null, longitude: null });
+    await addRoom(centerId, { name: "테스트룸3", memo: "", address: "", detailAddress: "", latitude: null, longitude: null });
+    await addRoom(centerId, { name: "테스트룸4", memo: "", address: "", detailAddress: "", latitude: null, longitude: null });
     const admin = getFixtureAdminClient();
     const { data, error } = await admin.from("rooms").select("id").eq("center_id", centerId);
     expect(error).toBeNull();
